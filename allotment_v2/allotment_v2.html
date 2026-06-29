@@ -3,37 +3,78 @@
 <head>
 <meta charset="UTF-8">
 <script>
-/* ════ CLOUD SYNC (Railway Postgres) · auto-load on open + auto-save on change ════
-   Whole-blob, last-write-wins. Degrades silently if /api isn't available (e.g. localhost). */
+/* ════ LOGIN + CLOUD SYNC (Railway Postgres) ════
+   - login gate (/api/me) · data blob in DB with version (optimistic concurrency)
+   - auto-load on open · auto-save on change · 409 = blocked + reload (no silent overwrite)
+   - degrades to plain localStorage when /api isn't there (e.g. localhost old server). */
 (function(){
-  var LS='loveandaman_v2';
-  // 1) AUTO-LOAD latest from cloud BEFORE the app reads localStorage (synchronous gate)
-  try{
-    var xhr=new XMLHttpRequest();
-    xhr.open('GET','/api/load',false);   // sync: must finish before app init
-    xhr.send();
-    if(xhr.status===200){
-      var j=JSON.parse(xhr.responseText||'{}');
-      if(j && typeof j.data==='string' && j.data.length>2){
-        localStorage.setItem(LS, j.data);              // cloud has data → use it
-        window.__cloudLoadedAt=j.updated_at||'';
-      } else {
-        var loc=localStorage.getItem(LS);              // cloud empty → seed from this device (first run)
-        if(loc && loc.length>2){ try{ fetch('/api/save',{method:'POST',headers:{'Content-Type':'text/plain'},body:loc}); }catch(e){} }
-      }
-    }
-  }catch(e){ /* offline / no api (localhost) → keep local */ }
-  // 2) AUTO-SAVE to cloud on any change to the data blob (debounced)
-  var _t=null, _orig=localStorage.setItem.bind(localStorage), _saving=false;
-  function flush(v){ try{ window.__cloudSaving=true; fetch('/api/save',{method:'POST',headers:{'Content-Type':'text/plain'},body:v}).then(function(){window.__cloudSaving=false;window.__cloudSavedAt=new Date().toISOString();}).catch(function(){window.__cloudSaving=false;}); }catch(e){} }
-  localStorage.setItem=function(k,v){
-    _orig(k,v);
-    if(k===LS){ clearTimeout(_t); _t=setTimeout(function(){ flush(v); }, 2500); }
-  };
-  // 3) Flush any pending change on close so nothing is lost
-  window.addEventListener('beforeunload',function(){
-    if(_t){ try{ var v=localStorage.getItem(LS); if(v && navigator.sendBeacon){ navigator.sendBeacon('/api/save', new Blob([v],{type:'text/plain'})); } }catch(e){} }
+  var LS='loveandaman_v2', VER=0, _t=null, _conflict=false, ME=null, LASTBY='';
+  function sx(method,url,body,ct){ var x=new XMLHttpRequest(); try{ x.open(method,url,false); if(ct) x.setRequestHeader('Content-Type',ct); x.send(body!=null?body:null);}catch(e){return{status:0};} var j=null; try{j=JSON.parse(x.responseText);}catch(e){} return {status:x.status,json:j,text:x.responseText}; }
+  function fmt(s){ try{ return new Date(s).toLocaleString('th-TH',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }catch(e){ return s||''; } }
+
+  // 1) AUTH (sync, before app init)
+  var me=sx('GET','/api/me');
+  if(me.status===401){ onReady(showLogin); return; }            // not logged in → login screen, do not load/sync
+  if(me.status!==200){ return; }                                 // no backend (localhost) → plain localStorage, no login
+  ME=me.json||{};
+
+  // 2) LOAD from cloud (sync gate)
+  var ld=sx('GET','/api/load');
+  if(ld.status===200 && ld.json){
+    VER=ld.json.version||0; LASTBY = ld.json.updated_by? (ld.json.updated_by+' · '+fmt(ld.json.updated_at)) : '';
+    if(typeof ld.json.data==='string' && ld.json.data.length>2){ localStorage.setItem(LS, ld.json.data); }   // setItem not overridden yet → no save loop
+    else { var loc=localStorage.getItem(LS); if(loc && loc.length>2) save(loc); }
+  }
+
+  // 3) AUTO-SAVE on change (debounced) with version guard
+  var _orig=localStorage.setItem.bind(localStorage);
+  localStorage.setItem=function(k,v){ _orig(k,v); if(k===LS && !_conflict){ clearTimeout(_t); _t=setTimeout(function(){ save(v); },2500); } };
+  function save(v){ var x=new XMLHttpRequest(); x.open('POST','/api/save',true); x.setRequestHeader('Content-Type','text/plain'); x.setRequestHeader('X-Base-Version',String(VER));
+    x.onload=function(){ if(x.status===200){ try{ VER=JSON.parse(x.responseText).version; }catch(e){} window.__savedAt=Date.now(); badgeTick('saved'); }
+      else if(x.status===409){ _conflict=true; var i={}; try{i=JSON.parse(x.responseText);}catch(e){}
+        alert('⚠ ข้อมูลถูกแก้โดย '+(i.updated_by||'คนอื่น')+' เมื่อ '+fmt(i.updated_at)+'\n\nหยุดบันทึกอัตโนมัติเพื่อกันข้อมูลทับกัน\nกด OK เพื่อโหลดข้อมูลล่าสุด (สิ่งที่แก้ค้างไว้ยังไม่บันทึกจะหาย)');
+        location.reload(); } };
+    try{ x.send(v); }catch(e){} }
+
+  // 4) UI · user badge + logout + (admin) user mgmt
+  function onReady(fn){ if(document.body) fn(); else document.addEventListener('DOMContentLoaded',fn); }
+  onReady(function(){
+    var st=document.createElement('style'); st.textContent='#la-userbadge{position:fixed;top:8px;right:12px;z-index:99998;display:flex;align-items:center;gap:8px;background:rgba(20,40,30,.92);color:#eafff2;border:1px solid rgba(255,255,255,.15);border-radius:20px;padding:5px 6px 5px 12px;font:12px/1.2 "DM Sans",sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.18)}#la-userbadge b{font-weight:700}.la-ub-btn{background:rgba(255,255,255,.14);border:none;color:#eafff2;border-radius:13px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:inherit}.la-ub-btn:hover{background:rgba(255,255,255,.26)}.la-modal{position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-family:"DM Sans",sans-serif}.la-card{background:#fff;border-radius:14px;width:560px;max-width:94vw;max-height:86vh;overflow:auto;box-shadow:0 24px 70px rgba(0,0,0,.3)}';
+    document.head.appendChild(st);
+    var b=document.createElement('div'); b.id='la-userbadge';
+    b.innerHTML='<span>👤 <b>'+esc(ME.name||ME.username)+'</b>'+(ME.role==='admin'?' · admin':'')+(LASTBY?(' <span style="opacity:.7">· แก้ล่าสุด '+esc(LASTBY)+'</span>'):'')+'</span>'+(ME.role==='admin'?'<button class="la-ub-btn" onclick="__laUsers()">ผู้ใช้</button>':'')+'<button class="la-ub-btn" onclick="__laLogout()">ออก</button>';
+    document.body.appendChild(b);
   });
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function badgeTick(){ var b=document.getElementById('la-userbadge'); if(b){ b.style.borderColor='rgba(120,240,170,.7)'; setTimeout(function(){ b.style.borderColor='rgba(255,255,255,.15)'; },600);} }
+  window.__laLogout=function(){ if(!confirm('ออกจากระบบ?')) return; try{ var x=new XMLHttpRequest(); x.open('GET','/api/logout',false); x.send(); }catch(e){} location.reload(); };
+
+  // ── Login screen ──
+  function showLogin(){
+    var ov=document.createElement('div'); ov.className='la-modal'; ov.id='la-login';
+    ov.innerHTML='<div class="la-card" style="width:380px;padding:26px 26px 22px;text-align:center"><div style="font-size:34px">🌊</div><div style="font-size:18px;font-weight:800;color:#15396B;margin:6px 0 2px">LOVE Andaman</div><div style="font-size:12px;color:#888;margin-bottom:18px">เข้าสู่ระบบเพื่อใช้งาน</div><input id="la-u" placeholder="Username" style="width:100%;box-sizing:border-box;border:1px solid #d7d3ca;border-radius:9px;padding:10px 12px;font-size:14px;margin-bottom:9px;font-family:inherit"><input id="la-p" type="password" placeholder="Password" style="width:100%;box-sizing:border-box;border:1px solid #d7d3ca;border-radius:9px;padding:10px 12px;font-size:14px;font-family:inherit"><div id="la-err" style="color:#C0392B;font-size:12px;min-height:16px;margin:8px 0"></div><button id="la-go" style="width:100%;background:#1C4A30;color:#fff;border:none;border-radius:9px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">เข้าสู่ระบบ</button></div>';
+    document.body.appendChild(ov);
+    function go(){ var u=document.getElementById('la-u').value.trim(), p=document.getElementById('la-p').value; var e=document.getElementById('la-err'); e.textContent='กำลังเข้าสู่ระบบ...';
+      var r=sx('POST','/api/login',JSON.stringify({username:u,password:p}),'application/json');
+      if(r.status===200){ location.reload(); } else { e.textContent=(r.json&&r.json.error)||'เข้าสู่ระบบไม่สำเร็จ'; } }
+    document.getElementById('la-go').onclick=go;
+    document.getElementById('la-p').addEventListener('keydown',function(ev){ if(ev.key==='Enter') go(); });
+    document.getElementById('la-u').focus();
+  }
+
+  // ── Admin: user management ──
+  window.__laUsers=function(){
+    var old=document.getElementById('la-umodal'); if(old) old.remove();
+    var ov=document.createElement('div'); ov.className='la-modal'; ov.id='la-umodal'; ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
+    ov.innerHTML='<div class="la-card" style="padding:18px 20px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div style="font-size:16px;font-weight:800;color:#15396B">จัดการผู้ใช้</div><button class="la-ub-btn" style="background:#eee;color:#444" onclick="document.getElementById(\'la-umodal\').remove()">ปิด</button></div><div id="la-ulist" style="font-size:13px;color:#555">กำลังโหลด...</div><div style="border-top:1px solid #eee;margin-top:14px;padding-top:12px"><div style="font-size:12px;font-weight:700;color:#777;margin-bottom:7px">+ เพิ่มผู้ใช้ใหม่</div><div style="display:flex;gap:6px;flex-wrap:wrap"><input id="la-nu" placeholder="username" style="flex:1;min-width:110px;border:1px solid #d7d3ca;border-radius:7px;padding:7px 9px;font-size:13px;font-family:inherit"><input id="la-nn" placeholder="ชื่อ" style="flex:1;min-width:90px;border:1px solid #d7d3ca;border-radius:7px;padding:7px 9px;font-size:13px;font-family:inherit"><input id="la-np" type="password" placeholder="รหัสผ่าน" style="flex:1;min-width:110px;border:1px solid #d7d3ca;border-radius:7px;padding:7px 9px;font-size:13px;font-family:inherit"><select id="la-nr" style="border:1px solid #d7d3ca;border-radius:7px;padding:7px;font-size:13px;font-family:inherit"><option value="staff">staff</option><option value="admin">admin</option></select><button class="la-ub-btn" style="background:#1C4A30" onclick="__laAddUser()">เพิ่ม</button></div></div></div>';
+    document.body.appendChild(ov); __laLoadUsers();
+  };
+  window.__laLoadUsers=function(){ var r=sx('GET','/api/users'); var el=document.getElementById('la-ulist'); if(!el) return; if(r.status!==200||!r.json){ el.textContent='โหลดรายชื่อไม่ได้'; return; }
+    el.innerHTML=(r.json.users||[]).map(function(u){ return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid #f1efe9"><b style="min-width:120px">'+esc(u.username)+'</b><span style="flex:1;color:#888">'+esc(u.name||'')+' · '+esc(u.role)+'</span><button class="la-ub-btn" style="background:#eef;color:#3358d6" onclick="__laReset('+u.id+",'"+esc(u.username)+"'"+')">รีเซ็ตรหัส</button>'+(ME.username===u.username?'':'<button class="la-ub-btn" style="background:#fde8e8;color:#A32D2D" onclick="__laDelUser('+u.id+",'"+esc(u.username)+"'"+')">ลบ</button>')+'</div>'; }).join('')||'ยังไม่มีผู้ใช้'; };
+  window.__laAddUser=function(){ var u=document.getElementById('la-nu').value.trim(), n=document.getElementById('la-nn').value.trim(), p=document.getElementById('la-np').value, role=document.getElementById('la-nr').value; if(!u||!p){ alert('ต้องมี username + รหัสผ่าน'); return; }
+    var r=sx('POST','/api/users',JSON.stringify({username:u,name:n,password:p,role:role}),'application/json'); if(r.status===200){ document.getElementById('la-nu').value='';document.getElementById('la-nn').value='';document.getElementById('la-np').value=''; __laLoadUsers(); } else alert((r.json&&r.json.error)||'เพิ่มไม่สำเร็จ'); };
+  window.__laDelUser=function(id,un){ if(!confirm('ลบผู้ใช้ "'+un+'"?')) return; var r=sx('DELETE','/api/users?id='+id); if(r.status===200) __laLoadUsers(); else alert((r.json&&r.json.error)||'ลบไม่สำเร็จ'); };
+  window.__laReset=function(id,un){ var p=prompt('ตั้งรหัสผ่านใหม่ของ "'+un+'":'); if(!p) return; var r=sx('POST','/api/users/password',JSON.stringify({id:id,password:p}),'application/json'); alert(r.status===200?'เปลี่ยนรหัสแล้ว':((r.json&&r.json.error)||'ไม่สำเร็จ')); };
 })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
