@@ -53,6 +53,20 @@ function session(req){ return verify(cookies(req).sess||''); }
 const MIME = { '.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.svg':'image/svg+xml','.ico':'image/x-icon','.webp':'image/webp','.woff':'font/woff','.woff2':'font/woff2','.ttf':'font/ttf','.xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','.csv':'text/csv; charset=utf-8','.txt':'text/plain; charset=utf-8' };
 function readBody(req, cb){ let ch=[], n=0; req.on('data',c=>{ n+=c.length; if(n>20*1024*1024){req.destroy();return;} ch.push(c); }); req.on('end',()=>cb(Buffer.concat(ch).toString('utf8'))); }
 function J(res, code, obj, extra){ const h=Object.assign({'Content-Type':'application/json; charset=utf-8'}, extra||{}); res.writeHead(code,h); res.end(JSON.stringify(obj)); }
+// Merge a client diff onto the server blob (concurrent-safe per record).
+// diff = { sets:{key:value|null}, cols:{key:{idf,up:[records],del:[ids]}} }
+function applyDiff(blob, diff){
+  const sets = (diff && diff.sets) || {}, cols = (diff && diff.cols) || {};
+  Object.keys(sets).forEach(k=>{ const v=sets[k]; if(v===null) delete blob[k]; else blob[k]=v; });
+  Object.keys(cols).forEach(k=>{ const c=cols[k]||{}; const idf=c.idf||'id';
+    const arr = Array.isArray(blob[k]) ? blob[k] : [];
+    const map = new Map(); let n=0;
+    arr.forEach(x=>{ if(x && x[idf]!=null) map.set(String(x[idf]), x); else map.set('__noid_'+(n++), x); });
+    (c.up||[]).forEach(rec=>{ if(rec && rec[idf]!=null) map.set(String(rec[idf]), rec); });
+    (c.del||[]).forEach(id=>{ map.delete(String(id)); });
+    blob[k] = Array.from(map.values());
+  });
+}
 
 const server = http.createServer((req, res) => {
   const u = (req.url||'/').split('?')[0];
@@ -84,20 +98,28 @@ const server = http.createServer((req, res) => {
       .catch(e=>J(res,500,{error:e.message}));
     return;
   }
+  if(u === '/api/version'){
+    const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(!pool) return J(res,503,{error:'no database'});
+    pool.query('SELECT version,updated_by,updated_at FROM app_state WHERE id=$1',[STATE_KEY])
+      .then(r=>J(res,200, r.rows[0]?{version:r.rows[0].version,updated_by:r.rows[0].updated_by,updated_at:r.rows[0].updated_at}:{version:0}))
+      .catch(e=>J(res,500,{error:e.message}));
+    return;
+  }
   if(u === '/api/save' && req.method === 'POST'){
     const s=session(req); if(!s) return J(res,401,{error:'login required'});
     if(!pool) return J(res,503,{error:'no database'});
-    const base = parseInt(req.headers['x-base-version']||'-1',10);
     readBody(req, body => {
-      try{ JSON.parse(body); }catch(e){ return J(res,400,{error:'invalid JSON'}); }
-      pool.query('SELECT version,updated_by,updated_at FROM app_state WHERE id=$1',[STATE_KEY]).then(r=>{
-        const cur = r.rows[0] ? r.rows[0].version : 0;
-        if(base !== -1 && base !== cur){   // someone else saved since we loaded → block (no silent overwrite)
-          return J(res,409,{conflict:true, version:cur, updated_by:r.rows[0]?r.rows[0].updated_by:null, updated_at:r.rows[0]?r.rows[0].updated_at:null});
-        }
-        const nv = cur+1;
-        pool.query('INSERT INTO app_state(id,data,version,updated_by,updated_at) VALUES($1,$2,$3,$4,now()) ON CONFLICT(id) DO UPDATE SET data=excluded.data, version=$3, updated_by=$4, updated_at=now()',[STATE_KEY,body,nv,s.username])
-          .then(()=>J(res,200,{ok:true,version:nv,updated_by:s.username})).catch(e=>J(res,500,{error:e.message}));
+      let payload; try{ payload=JSON.parse(body); }catch(e){ return J(res,400,{error:'invalid JSON'}); }
+      const base = (payload.baseVersion==null ? -1 : payload.baseVersion);
+      pool.query('SELECT data,version FROM app_state WHERE id=$1',[STATE_KEY]).then(r=>{
+        const curVer = r.rows[0] ? r.rows[0].version : 0;
+        let blob={}; if(r.rows[0] && r.rows[0].data){ try{ blob=JSON.parse(r.rows[0].data); }catch(e){ blob={}; } }
+        const behind = (base !== -1 && base < curVer);   // others saved since this client loaded → recommend refresh
+        if(payload.full && typeof payload.full==='string'){ try{ blob=JSON.parse(payload.full); }catch(e){ return J(res,400,{error:'bad full'}); } }   // seed/first push
+        else { try{ applyDiff(blob, payload.diff||{}); }catch(e){ return J(res,400,{error:'bad diff: '+e.message}); } }
+        const nv = curVer+1, out = JSON.stringify(blob);
+        pool.query('INSERT INTO app_state(id,data,version,updated_by,updated_at) VALUES($1,$2,$3,$4,now()) ON CONFLICT(id) DO UPDATE SET data=excluded.data, version=$3, updated_by=$4, updated_at=now()',[STATE_KEY,out,nv,s.username])
+          .then(()=>J(res,200,{ok:true,version:nv,behind:behind,bytes:out.length})).catch(e=>J(res,500,{error:e.message}));
       }).catch(e=>J(res,500,{error:e.message}));
     }); return;
   }

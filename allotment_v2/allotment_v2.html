@@ -18,23 +18,36 @@
   if(me.status!==200){ return; }                                 // no backend (localhost) → plain localStorage, no login
   ME=me.json||{};
 
-  // 2) LOAD from cloud (sync gate)
+  // 2) LOAD from cloud (sync gate) · BASE = snapshot we loaded (used to diff our changes)
+  var BASE={}, _refreshShown=false;
   var ld=sx('GET','/api/load');
   if(ld.status===200 && ld.json){
     VER=ld.json.version||0; LASTBY = ld.json.updated_by? (ld.json.updated_by+' · '+fmt(ld.json.updated_at)) : '';
-    if(typeof ld.json.data==='string' && ld.json.data.length>2){ localStorage.setItem(LS, ld.json.data); }   // setItem not overridden yet → no save loop
-    else { var loc=localStorage.getItem(LS); if(loc && loc.length>2) save(loc); }
+    if(typeof ld.json.data==='string' && ld.json.data.length>2){ localStorage.setItem(LS, ld.json.data); try{BASE=JSON.parse(ld.json.data);}catch(e){BASE={};} }   // setItem not overridden yet → no save loop
+    else { var loc=localStorage.getItem(LS); if(loc && loc.length>2) seedFull(loc); }
   }
 
-  // 3) AUTO-SAVE on change (debounced) with version guard
+  // 3) AUTO-SAVE on change (debounced) · sends a DIFF that the server MERGES → many people can add/edit at once
   var _orig=localStorage.setItem.bind(localStorage);
-  localStorage.setItem=function(k,v){ _orig(k,v); if(k===LS && !_conflict){ clearTimeout(_t); _t=setTimeout(function(){ save(v); },2500); } };
-  function save(v){ var x=new XMLHttpRequest(); x.open('POST','/api/save',true); x.setRequestHeader('Content-Type','text/plain'); x.setRequestHeader('X-Base-Version',String(VER));
-    x.onload=function(){ if(x.status===200){ try{ VER=JSON.parse(x.responseText).version; }catch(e){} window.__savedAt=Date.now(); badgeTick('saved'); }
-      else if(x.status===409){ _conflict=true; var i={}; try{i=JSON.parse(x.responseText);}catch(e){}
-        alert('⚠ ข้อมูลถูกแก้โดย '+(i.updated_by||'คนอื่น')+' เมื่อ '+fmt(i.updated_at)+'\n\nหยุดบันทึกอัตโนมัติเพื่อกันข้อมูลทับกัน\nกด OK เพื่อโหลดข้อมูลล่าสุด (สิ่งที่แก้ค้างไว้ยังไม่บันทึกจะหาย)');
-        location.reload(); } };
-    try{ x.send(v); }catch(e){} }
+  localStorage.setItem=function(k,v){ _orig(k,v); if(k===LS){ clearTimeout(_t); _t=setTimeout(function(){ save(v); },2500); } };
+  function seedFull(loc){ var cur; try{cur=JSON.parse(loc);}catch(e){return;} var x=new XMLHttpRequest(); x.open('POST','/api/save',true); x.setRequestHeader('Content-Type','application/json'); x.onload=function(){ if(x.status===200){ try{VER=JSON.parse(x.responseText).version;}catch(e){} BASE=cur; } }; try{ x.send(JSON.stringify({baseVersion:0,full:loc})); }catch(e){} }
+  function save(v){ var cur; try{cur=JSON.parse(v);}catch(e){return;} var d=computeDiff(BASE,cur); if(!d._changed) return;
+    var x=new XMLHttpRequest(); x.open('POST','/api/save',true); x.setRequestHeader('Content-Type','application/json');
+    x.onload=function(){ if(x.status===200){ var r={}; try{r=JSON.parse(x.responseText);}catch(e){} VER=r.version||VER; BASE=cur; window.__savedAt=Date.now(); badgeTick(); if(r.behind) showRefresh(); } };
+    try{ x.send(JSON.stringify({baseVersion:VER, diff:{sets:d.sets,cols:d.cols}})); }catch(e){} }
+  function computeDiff(base,cur){ var sets={},cols={},ch=false,keys={};
+    Object.keys(base||{}).forEach(function(k){keys[k]=1;}); Object.keys(cur||{}).forEach(function(k){keys[k]=1;});
+    Object.keys(keys).forEach(function(k){ var b=base?base[k]:undefined, c=cur?cur[k]:undefined;
+      var isCol = Array.isArray(c) && c.length>0 && c.every(function(x){return x&&typeof x==='object'&&x.id!=null;});
+      if(isCol){ var bm={}; if(Array.isArray(b)) b.forEach(function(x){ if(x&&x.id!=null) bm[String(x.id)]=JSON.stringify(x); });
+        var up=[],seen={}; c.forEach(function(x){ var id=String(x.id); seen[id]=1; if(bm[id]!==JSON.stringify(x)) up.push(x); });
+        var del=[]; Object.keys(bm).forEach(function(id){ if(!seen[id]) del.push(id); });
+        if(up.length||del.length){ cols[k]={idf:'id',up:up,del:del}; ch=true; } }
+      else { if(JSON.stringify(b)!==JSON.stringify(c)){ sets[k]=(c===undefined?null:c); ch=true; } } });
+    return {sets:sets,cols:cols,_changed:ch}; }
+  // poll for others' changes → offer refresh (no silent stale, no forced reload mid-edit)
+  setInterval(function(){ if(_refreshShown) return; var x=new XMLHttpRequest(); x.open('GET','/api/version',true); x.onload=function(){ if(x.status===200){ var j={}; try{j=JSON.parse(x.responseText);}catch(e){} if((j.version||0)>VER) showRefresh(j); } }; try{x.send();}catch(e){} }, 25000);
+  function showRefresh(info){ if(_refreshShown) return; _refreshShown=true; onReady(function(){ var d=document.createElement('div'); d.id='la-refresh'; d.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:99999;background:#185FA5;color:#fff;border-radius:24px;padding:8px 8px 8px 16px;font:13px/1.3 "DM Sans",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25);display:flex;align-items:center;gap:10px'; d.innerHTML='🔄 มีข้อมูลใหม่จากคนอื่น'+((info&&info.updated_by)?(' (โดย '+esc(info.updated_by)+')'):'')+' <button onclick="location.reload()" style="background:#fff;color:#185FA5;border:none;border-radius:16px;padding:6px 14px;font-weight:700;cursor:pointer;font-family:inherit">โหลดใหม่</button>'; document.body.appendChild(d); }); }
 
   // 4) UI · user badge + logout + (admin) user mgmt
   function onReady(fn){ if(document.body) fn(); else document.addEventListener('DOMContentLoaded',fn); }
