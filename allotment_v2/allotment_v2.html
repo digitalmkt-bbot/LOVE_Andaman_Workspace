@@ -2496,6 +2496,7 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
     <button class="topbar-btn" onclick="refreshData()">↻ Refresh</button>
     <button class="topbar-btn" onclick="exportHTML()" style="border-color:rgba(100,220,180,.4);color:rgba(150,255,220,.9)">⬇ Export HTML</button>
     <button class="topbar-btn" onclick="flBackupData()" style="border-color:rgba(120,170,255,.45);color:rgba(175,205,255,.95)">💾 Backup</button>
+    <button class="topbar-btn" onclick="flImportData()" style="border-color:rgba(120,200,150,.45);color:rgba(180,235,200,.95)">📥 Import</button>
     <button class="topbar-btn" onclick="resetAllData()" style="border-color:rgba(255,100,80,.4);color:rgba(255,180,170,.9)">↺ Reset</button>
   </div>
   <button class="topbar-toggle" onclick="toggleTopbarTools()" title="เครื่องมือ (กาง/ซ่อน)" aria-label="Toggle tools">
@@ -9826,6 +9827,30 @@ function flBackupData(){
   }catch(e){
     alert('Backup failed: '+e.message);
   }
+}
+// Import a backup JSON (from flBackupData) → overwrites this browser's localStorage[LS_KEY] → reload.
+// Lets you move data between origins/devices (e.g. localhost → the Railway URL). One-way snapshot.
+function flImportData(){
+  const inp=document.createElement('input');
+  inp.type='file'; inp.accept='.json,application/json';
+  inp.onchange=()=>{
+    const f=inp.files&&inp.files[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>{
+      try{
+        const txt=String(r.result||'');
+        const obj=JSON.parse(txt);
+        if(!obj||typeof obj!=='object'||Array.isArray(obj)){ alert('Import failed: ไฟล์นี้ไม่ใช่ข้อมูล backup ที่ถูกต้อง'); return; }
+        const nBk=(obj.sb_bookings||[]).length, nAg=(obj.sb_agents||[]).length, nMj=(obj.fleet_maintenance||[]).length;
+        if(!confirm('นำเข้าข้อมูลจาก "'+f.name+'"?\n\nBookings: '+nBk+'   Agents: '+nAg+'   Maintenance: '+nMj+'   Datasets: '+Object.keys(obj).length+'\n\n⚠ จะเขียนทับข้อมูลทั้งหมดในเบราว์เซอร์นี้')) return;
+        localStorage.setItem(LS_KEY, txt);
+        alert('Import OK ✓\n\nกำลังรีโหลดหน้าเพื่อแสดงข้อมูล');
+        location.reload();
+      }catch(e){ alert('Import failed: '+e.message+'\n\n(ไฟล์ต้องเป็น backup_xxx.json ที่ได้จากปุ่ม Backup)'); }
+    };
+    r.readAsText(f);
+  };
+  inp.click();
 }
 
 updateDate();
