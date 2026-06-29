@@ -2,6 +2,40 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script>
+/* ════ CLOUD SYNC (Railway Postgres) · auto-load on open + auto-save on change ════
+   Whole-blob, last-write-wins. Degrades silently if /api isn't available (e.g. localhost). */
+(function(){
+  var LS='loveandaman_v2';
+  // 1) AUTO-LOAD latest from cloud BEFORE the app reads localStorage (synchronous gate)
+  try{
+    var xhr=new XMLHttpRequest();
+    xhr.open('GET','/api/load',false);   // sync: must finish before app init
+    xhr.send();
+    if(xhr.status===200){
+      var j=JSON.parse(xhr.responseText||'{}');
+      if(j && typeof j.data==='string' && j.data.length>2){
+        localStorage.setItem(LS, j.data);              // cloud has data → use it
+        window.__cloudLoadedAt=j.updated_at||'';
+      } else {
+        var loc=localStorage.getItem(LS);              // cloud empty → seed from this device (first run)
+        if(loc && loc.length>2){ try{ fetch('/api/save',{method:'POST',headers:{'Content-Type':'text/plain'},body:loc}); }catch(e){} }
+      }
+    }
+  }catch(e){ /* offline / no api (localhost) → keep local */ }
+  // 2) AUTO-SAVE to cloud on any change to the data blob (debounced)
+  var _t=null, _orig=localStorage.setItem.bind(localStorage), _saving=false;
+  function flush(v){ try{ window.__cloudSaving=true; fetch('/api/save',{method:'POST',headers:{'Content-Type':'text/plain'},body:v}).then(function(){window.__cloudSaving=false;window.__cloudSavedAt=new Date().toISOString();}).catch(function(){window.__cloudSaving=false;}); }catch(e){} }
+  localStorage.setItem=function(k,v){
+    _orig(k,v);
+    if(k===LS){ clearTimeout(_t); _t=setTimeout(function(){ flush(v); }, 2500); }
+  };
+  // 3) Flush any pending change on close so nothing is lost
+  window.addEventListener('beforeunload',function(){
+    if(_t){ try{ var v=localStorage.getItem(LS); if(v && navigator.sendBeacon){ navigator.sendBeacon('/api/save', new Blob([v],{type:'text/plain'})); } }catch(e){} }
+  });
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LOVE Andaman · Allotment</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
