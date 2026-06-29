@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>LOVE Andaman · Departure Schedule · ตารางเวลาออกเรือ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@500&family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{ --ink:#0E2A3B; --sea:#1683C7; --deep:#0E5A8A; --teal:#0F8C8C; --sand:#F4EFE6; --line:rgba(14,42,59,.10); }
+  html,body{ font-family:'DM Sans','Noto Sans Thai',sans-serif; color:var(--ink); -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .page{ width:210mm; min-height:297mm; margin:0 auto; position:relative; overflow:hidden;
+    background:linear-gradient(170deg,#E8F4FB 0%,#F3FAFD 38%,#FFFFFF 70%); padding:14mm 13mm 12mm; }
+  /* decorative ocean */
+  .wave{ position:absolute; left:0; right:0; bottom:0; height:60mm; pointer-events:none; opacity:.9 }
+  .sun{ position:absolute; top:9mm; right:14mm; width:24mm; height:24mm; border-radius:50%;
+    background:radial-gradient(circle at 50% 50%, #FFD27A, #FF9E45); box-shadow:0 0 30px rgba(255,158,69,.45) }
+  /* header */
+  .brand{ font-size:12px; letter-spacing:.34em; font-weight:700; color:var(--sea) }
+  .h1{ font-size:34px; font-weight:700; line-height:1.05; margin-top:4px; color:var(--ink) }
+  .h1 .th{ display:block; font-family:'Noto Sans Thai',sans-serif; font-size:22px; font-weight:500; color:var(--deep); margin-top:2px }
+  .sub{ font-size:12.5px; color:#4a6577; margin-top:7px; letter-spacing:.01em }
+  .rule{ height:3px; width:100%; margin:13px 0 16px; border-radius:3px;
+    background:linear-gradient(90deg,var(--sea),var(--teal),#FF9E45) }
+  /* pier block */
+  .pier{ margin-bottom:14px; position:relative; z-index:2 }
+  .pier-hd{ display:flex; align-items:baseline; gap:10px; margin-bottom:8px }
+  .pier-dot{ width:11px; height:11px; border-radius:50%; flex:none }
+  .pier-name{ font-size:17px; font-weight:700 }
+  .pier-name .th{ font-family:'Noto Sans Thai',sans-serif; font-weight:500; color:#4a6577; font-size:13px; margin-left:6px }
+  .pier-meta{ margin-left:auto; font-size:10.5px; color:#7a8f9c; letter-spacing:.02em }
+  /* route rows */
+  .grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px }
+  .r{ display:flex; align-items:center; gap:11px; background:#fff; border:1px solid var(--line);
+    border-radius:12px; padding:9px 12px 9px 10px; box-shadow:0 2px 8px rgba(14,42,59,.05) }
+  .bar{ width:5px; align-self:stretch; border-radius:3px; flex:none }
+  .time{ font-family:'DM Mono',monospace; font-weight:500; font-size:21px; letter-spacing:-.01em; flex:none; width:62px }
+  .rinfo{ min-width:0; flex:1 }
+  .rname{ font-size:12.5px; font-weight:700; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  .rth{ font-family:'Noto Sans Thai',sans-serif; font-size:10.5px; color:#5a7283; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+  .foot{ position:relative; z-index:2; margin-top:8px; display:flex; justify-content:space-between; align-items:flex-end;
+    font-size:10px; color:#5a7283; border-top:1px solid var(--line); padding-top:8px }
+  .legend{ font-family:'Noto Sans Thai',sans-serif }
+  @media print{ @page{ size:A4; margin:0 } .page{ box-shadow:none } }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="sun"></div>
+
+  <div class="brand">LOVE&nbsp;ANDAMAN</div>
+  <div class="h1">Boat Departure Schedule<span class="th">ตารางเวลาออกเรือ · รวมทุกเส้นทาง</span></div>
+  <div class="sub">All routes &middot; daily departures by pier &nbsp;|&nbsp; ทุกเส้นทาง · เวลาออกเรือรายวันแยกตามท่า</div>
+  <div class="rule"></div>
+
+  <!-- TUB LAMU -->
+  <div class="pier">
+    <div class="pier-hd">
+      <span class="pier-dot" style="background:#185fa5"></span>
+      <span class="pier-name">Tub Lamu Pier <span class="th">ท่าเรือทับละมุ · พังงา</span></span>
+      <span class="pier-meta">Similan &middot; Surin</span>
+    </div>
+    <div class="grid">
+      <div class="r"><div class="bar" style="background:#1a7fa0"></div><div class="time">05:30</div><div class="rinfo"><div class="rname">Early Tratato Similan</div><div class="rth">สิมิลัน · เรือเช้า Tratato · เกาะ 5-9</div></div></div>
+      <div class="r"><div class="bar" style="background:#378ADD"></div><div class="time">07:00</div><div class="rinfo"><div class="rname">Early Tiger Similan</div><div class="rth">สิมิลัน · เรือเช้า Tiger · เกาะ 5-9</div></div></div>
+      <div class="r"><div class="bar" style="background:#185fa5"></div><div class="time">08:00</div><div class="rinfo"><div class="rname">Similan Islands &middot; PG</div><div class="rth">สิมิลัน · PG · เกาะ 5-9</div></div></div>
+      <div class="r"><div class="bar" style="background:#4a90d9"></div><div class="time">08:30</div><div class="rinfo"><div class="rname">Similan by Catamaran</div><div class="rth">สิมิลัน · เรือใบคาตามารัน · เกาะ 5-9</div></div></div>
+      <div class="r"><div class="bar" style="background:#6aaee0"></div><div class="time">08:30</div><div class="rinfo"><div class="rname">Similan by Speedboat</div><div class="rth">สิมิลัน · สปีดโบ๊ท · เกาะ 5-9</div></div></div>
+      <div class="r"><div class="bar" style="background:#3B6D11"></div><div class="time">08:00</div><div class="rinfo"><div class="rname">Surin by Speedboat</div><div class="rth">หมู่เกาะสุรินทร์ · สปีดโบ๊ท</div></div></div>
+    </div>
+  </div>
+
+  <!-- VISIT PANWA -->
+  <div class="pier">
+    <div class="pier-hd">
+      <span class="pier-dot" style="background:#0F6E56"></span>
+      <span class="pier-name">Visit Panwa Pier <span class="th">ท่าเรือวิสิทธิ์พันวา · ภูเก็ต</span></span>
+      <span class="pier-meta">Phi Phi &middot; Krabi &middot; Whale Shark</span>
+    </div>
+    <div class="grid">
+      <div class="r"><div class="bar" style="background:#c0392b"></div><div class="time">06:30</div><div class="rinfo"><div class="rname">Early OTA Phi Phi Bamboo</div><div class="rth">พีพี · ไม้ไผ่ · เรือเช้า OTA</div></div></div>
+      <div class="r"><div class="bar" style="background:#e74c3c"></div><div class="time">06:30</div><div class="rinfo"><div class="rname">Early SY Phi Phi Bamboo</div><div class="rth">พีพี · ไม้ไผ่ · เรือเช้า SY</div></div></div>
+      <div class="r"><div class="bar" style="background:#e85d5d"></div><div class="time">07:00</div><div class="rinfo"><div class="rname">Phi Phi Bamboo &middot; FS</div><div class="rth">พีพี · ไม้ไผ่ · FS</div></div></div>
+      <div class="r"><div class="bar" style="background:#f08080"></div><div class="time">09:00</div><div class="rinfo"><div class="rname">Phi Phi Bamboo by Speedboat</div><div class="rth">พีพี · ไม้ไผ่ · สปีดโบ๊ท</div></div></div>
+      <div class="r"><div class="bar" style="background:#0F6E56"></div><div class="time">06:30</div><div class="rinfo"><div class="rname">Early Krabi + Phang Nga</div><div class="rth">กระบี่ + อ่าวพังงา · เกาะปอดะ ทะเลแหวก</div></div></div>
+      <div class="r"><div class="bar" style="background:#BA7517"></div><div class="time">10:00</div><div class="rinfo"><div class="rname">Whale Shark Phi Phi Maiton Sunset</div><div class="rth">ฉลามวาฬ · พีพี · ไม้ตอน · พระอาทิตย์ตก</div></div></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="legend">เวลาที่แสดง = เวลาเรือออกจากท่า · รถรับลูกค้าก่อนหน้านั้น<br><span style="color:#7a8f9c">Times shown = boat departure from pier · hotel pickup is earlier</span></div>
+    <div style="text-align:right">LOVE&nbsp;ANDAMAN &middot; Ops<br><span style="color:#9aa">internal use</span></div>
+  </div>
+
+  <svg class="wave" viewBox="0 0 800 220" preserveAspectRatio="none">
+    <path d="M0,120 C140,80 240,160 400,120 C560,80 660,160 800,120 L800,220 L0,220 Z" fill="#9ED5F0" opacity=".55"/>
+    <path d="M0,150 C160,110 260,190 420,150 C580,110 680,180 800,150 L800,220 L0,220 Z" fill="#5BB6E6" opacity=".55"/>
+    <path d="M0,180 C150,150 280,210 440,180 C600,150 700,200 800,180 L800,220 L0,220 Z" fill="#1683C7" opacity=".7"/>
+  </svg>
+</div>
+</body>
+</html>

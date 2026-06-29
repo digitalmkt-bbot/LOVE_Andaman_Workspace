@@ -1,0 +1,12 @@
+{
+  "name": "love-andaman-allotment",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LOVE Andaman · allotment_v2 ops app (static, served by Node for Railway)",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

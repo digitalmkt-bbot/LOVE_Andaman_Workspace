@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>LOVE Andaman · ปฏิทินออกเรือ · มิถุนายน 2569</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;700&family=Noto+Sans+Thai:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'DM Sans','Noto Sans Thai',sans-serif}
+  .canvas{position:relative;width:1080px;height:1080px;margin:0 auto;overflow:hidden;
+    background:url('assets/template_blank.jpg') center/cover no-repeat}
+  /* badge label over the blue tab */
+  .badge{position:absolute;top:142px;left:0;right:0;text-align:center;color:#fff;font-family:'Noto Sans Thai';font-weight:700;font-size:23px;letter-spacing:.01em;z-index:3}
+  /* month title */
+  .month{position:absolute;top:200px;left:0;right:0;text-align:center;font-family:'Noto Sans Thai';font-weight:800;font-style:italic;font-size:46px;color:#0E5A93;z-index:3}
+  /* calendar zone (inside the card, above the mascot) */
+  .cal{position:absolute;left:198px;top:288px;width:690px;z-index:3}
+  .wk{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-weight:700;font-size:15px;color:#5b86a3;margin-bottom:4px}
+  .wk b:first-child,.wk b:last-child{color:#9cb6c8}
+  .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+  .cell{min-height:92px;border-radius:9px;padding:5px 6px;background:rgba(255,255,255,.5);border:1px solid rgba(14,90,147,.10)}
+  .cell.off{background:transparent;border:none}
+  .num{font-family:'DM Sans';font-weight:700;font-size:14px;color:#284a5e;line-height:1;margin-bottom:4px}
+  .ev{display:flex;align-items:center;gap:4px;font-family:'Noto Sans Thai';font-size:9.5px;line-height:1.3;color:#33576e;margin-bottom:2px;white-space:nowrap;overflow:hidden}
+  .ev i{width:6px;height:6px;border-radius:50%;flex:none}
+  /* legend */
+  .legend{position:absolute;left:204px;top:760px;width:520px;z-index:3;
+    background:rgba(255,255,255,.6);border:1px solid rgba(14,90,147,.12);border-radius:12px;padding:11px 14px}
+  .legend .t{font-family:'Noto Sans Thai';font-weight:700;font-size:13px;color:#0E5A93;margin-bottom:7px}
+  .legend .row{display:flex;gap:18px;flex-wrap:wrap}
+  .legend .li{display:flex;align-items:center;gap:6px;font-family:'Noto Sans Thai';font-size:12px;color:#33576e}
+  .legend .li i{width:9px;height:9px;border-radius:50%;flex:none}
+</style>
+</head>
+<body>
+<div class="canvas">
+  <div class="badge">ตารางออกเรือ</div>
+  <div class="month">มิถุนายน 2569</div>
+  <div class="cal">
+    <div class="wk"><b>S</b><b>M</b><b>T</b><b>W</b><b>T</b><b>F</b><b>S</b></div>
+    <div class="grid" id="grid"></div>
+  </div>
+  <div class="legend">
+    <div class="t">เส้นทางที่ออก · Routes</div>
+    <div class="row" id="legend"></div>
+  </div>
+</div>
+<script>
+  // ===== EDIT HERE: routes per day =====
+  const R = {
+    pp:{label:'Phi Phi Bamboo', color:'#c0392b'},
+    ws:{label:'Whale Shark',    color:'#BA7517'},
+    kb:{label:'Krabi + Phang Nga', color:'#0F6E56'},
+    sm:{label:'Similan',        color:'#185fa5'},
+    sr:{label:'Surin',          color:'#3B6D11'}
+  };
+  // June 2026 · 1 = Monday · weekday col = day % 7  (0=Sun)
+  const DAYS = 30, FIRSTCOL = 1;   // June 1 falls on Monday (col 1)
+  // default schedule: Phi Phi + Whale Shark daily · Krabi every Tuesday (day%7===2)
+  function routesFor(day){
+    const r = ['pp','ws'];
+    if(day % 7 === 2) r.push('kb');     // Tuesdays
+    return r;
+  }
+  const g = document.getElementById('grid');
+  let cells = '';
+  for(let i=0;i<FIRSTCOL;i++) cells += '<div class="cell off"></div>';
+  for(let d=1; d<=DAYS; d++){
+    const evs = routesFor(d).map(k=>`<div class="ev"><i style="background:${R[k].color}"></i>${R[k].label.replace('Phi Phi Bamboo','Phi Phi').replace('Krabi + Phang Nga','Krabi')}</div>`).join('');
+    cells += `<div class="cell"><div class="num">${d}</div>${evs}</div>`;
+  }
+  g.innerHTML = cells;
+  // legend = routes actually used this month
+  const used = new Set();
+  for(let d=1; d<=DAYS; d++) routesFor(d).forEach(k=>used.add(k));
+  document.getElementById('legend').innerHTML = [...used].map(k=>`<div class="li"><i style="background:${R[k].color}"></i>${R[k].label}</div>`).join('');
+</script>
+</body>
+</html>

@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tab 2 · By Trip Date — Booking List Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --coral:#ff6b47;
+    --coral-soft:#fff1ed;
+    --ink:#1f2430;
+    --ink-soft:#8b909c;
+    --ink-faint:#b4b8c2;
+    --border:rgba(0,0,0,.08);
+    --border-2:rgba(0,0,0,.05);
+    --bg:#fafafa;
+    --white:#ffffff;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    font-family:'DM Sans',system-ui,-apple-system,sans-serif;
+    color:var(--ink);
+    font-size:14px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'DM Mono',monospace;}
+
+  /* ── mockup note ── */
+  .note{
+    background:var(--coral-soft);
+    border:1px solid #ffd0c2;
+    color:#9a3b21;
+    font-size:12px;
+    padding:9px 16px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .note b{font-weight:700;}
+  .note .tag{background:var(--coral);color:#fff;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:700;letter-spacing:.04em;}
+
+  /* ── shell ── */
+  .shell{
+    display:grid;
+    grid-template-columns:268px 1fr;
+    height:calc(100vh - 39px);
+    min-height:680px;
+  }
+
+  /* ════════ LEFT SIDEBAR ════════ */
+  .side{
+    background:var(--white);
+    border-right:1px solid var(--border);
+    padding:18px 16px;
+    overflow-y:auto;
+  }
+  .side-ttl{
+    font-size:10px;color:var(--ink-soft);font-weight:700;
+    letter-spacing:.1em;text-transform:uppercase;margin:0 0 10px 2px;
+  }
+
+  /* mini calendar */
+  .mc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+  .mc-month{font-size:13px;font-weight:700;}
+  .mc-nav{display:flex;gap:4px;}
+  .mc-nav button{
+    width:24px;height:24px;border:1px solid var(--border);background:var(--white);
+    border-radius:8px;cursor:pointer;color:var(--ink-soft);font-size:13px;line-height:1;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .mc-nav button:hover{border-color:var(--coral);color:var(--coral);}
+  .mc-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+  .mc-dow{font-size:9px;color:var(--ink-faint);font-weight:700;text-align:center;padding:3px 0;text-transform:uppercase;}
+  .mc-day{
+    aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-size:11px;font-family:'DM Mono',monospace;border-radius:8px;cursor:pointer;color:var(--ink);
+    position:relative;border:1px solid transparent;
+  }
+  .mc-day.muted{color:var(--ink-faint);}
+  .mc-day:hover{background:var(--bg);}
+  .mc-day.today{border-color:var(--coral);color:var(--coral);font-weight:700;}
+  .mc-day.sel{background:var(--coral);color:#fff;font-weight:700;}
+  .mc-day .dot{width:4px;height:4px;border-radius:50%;background:var(--coral);position:absolute;bottom:3px;}
+  .mc-day.sel .dot{background:#fff;}
+
+  /* today summary */
+  .side-sec{margin-top:22px;}
+  .today-card{
+    background:var(--coral-soft);border:1px solid #ffd9cd;border-radius:12px;padding:12px 14px;
+  }
+  .today-card .big{font-size:24px;font-weight:700;line-height:1;}
+  .today-card .lab{font-size:11px;color:#b14a2e;margin-top:3px;}
+  .today-mini{display:flex;gap:14px;margin-top:10px;}
+  .today-mini div{font-size:11px;color:var(--ink-soft);}
+  .today-mini b{display:block;font-family:'DM Mono',monospace;font-size:15px;color:var(--ink);}
+
+  /* prev / upcoming */
+  .pu-tabs{display:flex;gap:4px;margin-bottom:10px;}
+  .pu-tab{
+    flex:1;text-align:center;font-size:11px;font-weight:600;padding:6px 0;border-radius:8px;
+    cursor:pointer;color:var(--ink-soft);border:1px solid var(--border);background:var(--white);
+  }
+  .pu-tab.on{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .pu-item{
+    display:flex;align-items:center;gap:9px;padding:8px 2px;border-bottom:1px solid var(--border-2);cursor:pointer;
+  }
+  .pu-item:hover{background:var(--bg);border-radius:8px;}
+  .pu-edge{width:3px;height:30px;border-radius:3px;flex:none;}
+  .pu-body{min-width:0;flex:1;}
+  .pu-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .pu-meta{font-size:10px;color:var(--ink-soft);font-family:'DM Mono',monospace;margin-top:1px;}
+  .pu-pax{font-size:11px;font-family:'DM Mono',monospace;color:var(--ink-soft);flex:none;}
+
+  /* ════════ MAIN ════════ */
+  .main{display:flex;flex-direction:column;overflow:hidden;}
+  .main-head{
+    background:var(--white);border-bottom:1px solid var(--border);
+    padding:14px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  }
+  .date-block{display:flex;align-items:center;gap:10px;}
+  .date-big{font-size:21px;font-weight:700;line-height:1;}
+  .date-sub{font-size:12px;color:var(--ink-soft);margin-top:2px;}
+  .nav-grp{display:flex;align-items:center;gap:4px;}
+  .nav-grp button{
+    width:30px;height:30px;border:1px solid var(--border);background:var(--white);border-radius:9px;
+    cursor:pointer;color:var(--ink-soft);font-size:15px;display:flex;align-items:center;justify-content:center;
+  }
+  .nav-grp button:hover{border-color:var(--coral);color:var(--coral);}
+  .today-btn{
+    border:1px solid var(--border);background:var(--white);border-radius:9px;padding:0 14px;height:30px;
+    font-size:12px;font-weight:600;cursor:pointer;color:var(--ink);font-family:'DM Sans',sans-serif;
+  }
+  .today-btn:hover{border-color:var(--coral);color:var(--coral);}
+
+  .toggle{display:flex;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:3px;gap:2px;}
+  .toggle button{
+    border:none;background:transparent;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;
+    color:var(--ink-soft);padding:5px 13px;border-radius:7px;cursor:pointer;
+  }
+  .toggle button.on{background:var(--white);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.06);}
+
+  .head-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
+  .avs{display:flex;}
+  .av{
+    width:28px;height:28px;border-radius:50%;border:2px solid var(--white);margin-left:-8px;
+    display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;font-family:'DM Mono',monospace;
+  }
+  .av:first-child{margin-left:0;}
+  .av.more{background:var(--bg);color:var(--ink-soft);border-color:var(--white);box-shadow:inset 0 0 0 1px var(--border);}
+  .sort-btn{
+    border:1px solid var(--border);background:var(--white);border-radius:9px;height:30px;padding:0 12px;
+    font-size:12px;font-weight:600;cursor:pointer;color:var(--ink-soft);display:flex;align-items:center;gap:6px;font-family:'DM Sans',sans-serif;
+  }
+  .sort-btn:hover{border-color:var(--coral);color:var(--coral);}
+
+  /* day sub-header */
+  .day-strip{padding:11px 22px;display:flex;align-items:center;gap:10px;color:var(--ink-soft);font-size:12px;border-bottom:1px solid var(--border-2);background:var(--white);}
+  .day-strip .count{font-family:'DM Mono',monospace;color:var(--ink);font-weight:500;}
+  .day-strip .legend{margin-left:auto;display:flex;gap:14px;}
+  .leg{display:flex;align-items:center;gap:5px;font-size:11px;}
+  .leg .sw{width:9px;height:9px;border-radius:3px;}
+
+  /* booking list — single-line rows */
+  .list{flex:1;overflow-y:auto;padding:8px 22px 40px;}
+
+  /* column header (sticky) */
+  .lhead{
+    display:grid;grid-template-columns:var(--cols);align-items:center;gap:12px;
+    padding:8px 14px;position:sticky;top:0;background:var(--bg);z-index:2;
+    font-size:9px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.07em;
+  }
+  .lhead .r{text-align:right;}
+
+  :root{--cols:94px minmax(150px,1.1fr) minmax(206px,auto) 126px minmax(108px,.65fr) 112px 96px 58px;}
+
+  .lrow{
+    display:grid;grid-template-columns:var(--cols);align-items:center;gap:12px;
+    background:var(--white);border:1px solid var(--border);border-left-width:4px;
+    border-radius:11px;padding:9px 14px;margin-bottom:6px;cursor:pointer;min-width:0;
+    transition:border-color .12s,box-shadow .12s;
+  }
+  .lrow:hover{border-color:var(--ink-faint);box-shadow:0 1px 4px rgba(0,0,0,.05);}
+
+  /* col: time */
+  .l-time{font-family:'DM Mono',monospace;line-height:1.2;}
+  .l-time .t1{font-size:14px;font-weight:500;}
+  .l-time .t2{font-size:11px;color:var(--ink-soft);}
+
+  /* col: route */
+  .l-route{min-width:0;}
+  .l-route .nm{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25;}
+  .l-route .sub{font-size:10px;color:var(--ink-faint);font-family:'DM Mono',monospace;margin-top:1px;}
+
+  /* col: chips */
+  .l-chips{display:flex;gap:5px;min-width:0;overflow:hidden;}
+  .chip{font-size:10px;font-weight:600;padding:3px 8px;border-radius:7px;line-height:1.3;white-space:nowrap;flex:none;}
+  .chip-pax{background:#eef0f3;color:#4a5160;}
+  .chip-zone{background:#e7f0fb;color:#1d5fa5;}
+  .chip-zone.kl{background:#e9f3e6;color:#3b6d11;}
+  .chip-zone.nt{background:#f1f1f3;color:#777d8a;}
+  .chip-charter{background:#fff3e0;color:#b06a00;}
+  .chip-seat{background:#f3eefb;color:#6b3fa0;}
+  .chip-foc{background:#ffe9e4;color:#d6452a;}
+  .chip-1st{background:#e6f7f1;color:#0f7a5a;}
+  .chip-unpaid{background:#fdeaea;color:#c0392b;}
+
+  /* col: boat */
+  .l-boat{display:flex;align-items:center;gap:7px;min-width:0;}
+  .bav{width:24px;height:24px;border-radius:7px;display:flex;align-items:center;justify-content:center;
+    font-size:10px;font-weight:700;color:#fff;font-family:'DM Mono',monospace;flex:none;}
+  .bname{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .assign-btn{
+    font-size:11px;font-weight:600;color:var(--ink-soft);border:1px dashed var(--ink-faint);
+    background:transparent;border-radius:8px;padding:4px 9px;cursor:pointer;white-space:nowrap;
+  }
+  .assign-btn:hover{border-color:var(--coral);color:var(--coral);border-style:solid;}
+
+  /* col: agent */
+  .l-agent{min-width:0;}
+  .l-agent .a1{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25;}
+  .l-agent .a2{font-size:10px;color:var(--ink-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+  /* col: status */
+  .st-chip{font-size:10px;font-weight:700;padding:4px 9px;border-radius:8px;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;}
+  .st-chip .dot{width:6px;height:6px;border-radius:50%;flex:none;}
+  .st-confirmed{background:#e6f7f1;color:#0f7a5a;} .st-confirmed .dot{background:#0f7a5a;}
+  .st-pending_foc{background:#fff3e0;color:#b06a00;} .st-pending_foc .dot{background:#e0900a;}
+  .st-quote{background:#eef0f3;color:#6a7180;} .st-quote .dot{background:#9aa0ad;}
+  .st-completed{background:#eaf0fb;color:#2b5fa5;} .st-completed .dot{background:#2b5fa5;}
+  .st-rejected{background:#fdeaea;color:#c0392b;} .st-rejected .dot{background:#c0392b;}
+  .foc-flag{font-size:9px;font-weight:700;color:#d6452a;background:#ffe9e4;border-radius:6px;padding:2px 5px;margin-left:5px;}
+
+  /* col: total */
+  .l-total{text-align:right;}
+  .l-total .amt{font-family:'DM Mono',monospace;font-size:14px;font-weight:500;}
+  .l-total .bk{font-size:9px;color:var(--ink-faint);font-family:'DM Mono',monospace;}
+
+  /* col: actions */
+  .l-act{display:flex;gap:5px;justify-content:flex-end;}
+  .act{width:27px;height:27px;border:1px solid var(--border);background:var(--white);border-radius:8px;
+    cursor:pointer;color:var(--ink-soft);font-size:12px;display:flex;align-items:center;justify-content:center;flex:none;}
+  .act:hover{border-color:var(--coral);color:var(--coral);}
+  .act.ok:hover{border-color:#0f7a5a;color:#0f7a5a;background:#e6f7f1;}
+  .act.no:hover{border-color:#c0392b;color:#c0392b;background:#fdeaea;}
+
+  .time-gap{padding:14px 0 6px 4px;font-size:11px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.08em;}
+  .time-gap:first-child{padding-top:4px;}
+</style>
+</head>
+<body>
+
+<div class="note">
+  <span class="tag">MOCKUP</span>
+  <b>Tab 2 · By Trip Date</b> — fitness-app booking-list redesign (task #357). Standalone preview · not wired to live data. Click days / view toggle / prev-upcoming to explore.
+</div>
+
+<div class="shell">
+
+  <!-- ════════ LEFT SIDEBAR ════════ -->
+  <aside class="side">
+    <div class="side-ttl">Calendar</div>
+    <div class="mc-head">
+      <div class="mc-month" id="mcMonth">June 2026</div>
+      <div class="mc-nav">
+        <button onclick="mcShift(-1)">‹</button>
+        <button onclick="mcShift(1)">›</button>
+      </div>
+    </div>
+    <div class="mc-grid" id="mcGrid"></div>
+
+    <div class="side-sec">
+      <div class="side-ttl">All Events · <span id="selDateLbl">Tue 2 Jun</span></div>
+      <div class="today-card">
+        <div class="big" id="todN">6</div>
+        <div class="lab">trips departing</div>
+        <div class="today-mini">
+          <div><b id="todPax">214</b>pax</div>
+          <div><b id="todFoc">5</b>FOC</div>
+          <div><b id="todChr">2</b>charter</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="side-sec">
+      <div class="pu-tabs">
+        <div class="pu-tab on" id="puUp" onclick="setPU('up')">Upcoming</div>
+        <div class="pu-tab" id="puPrev" onclick="setPU('prev')">Previous</div>
+      </div>
+      <div id="puList"></div>
+    </div>
+  </aside>
+
+  <!-- ════════ MAIN ════════ -->
+  <section class="main">
+    <div class="main-head">
+      <div class="nav-grp">
+        <button onclick="dayShift(-1)">‹</button>
+        <button onclick="dayShift(1)">›</button>
+      </div>
+      <div class="date-block">
+        <div>
+          <div class="date-big" id="mainDate">Tuesday, 2 June</div>
+          <div class="date-sub" id="mainSub">6 trips · 214 pax · 2 piers</div>
+        </div>
+      </div>
+      <button class="today-btn" onclick="goToday()">Today</button>
+
+      <div class="toggle" id="viewToggle">
+        <button data-v="List" class="on" onclick="setView('List')">List</button>
+        <button data-v="Day" onclick="setView('Day')">Day</button>
+        <button data-v="Week" onclick="setView('Week')">Week</button>
+        <button data-v="Month" onclick="setView('Month')">Month</button>
+      </div>
+
+      <div class="head-right">
+        <div class="avs" title="Boats on the water today">
+          <div class="av" style="background:#1a7fa0">AL</div>
+          <div class="av" style="background:#3B6D11">AR</div>
+          <div class="av" style="background:#c0392b">OK</div>
+          <div class="av more">+3</div>
+        </div>
+        <button class="sort-btn" onclick="cycleSort()"><span id="sortLbl">Sort · Time</span> ⇅</button>
+      </div>
+    </div>
+
+    <div class="day-strip">
+      <span class="count" id="stripCount">6 trips</span>
+      <span>·</span>
+      <span>grouped by departure time</span>
+      <div class="legend">
+        <span class="leg"><span class="sw" style="background:#1a7fa0"></span>Similan</span>
+        <span class="leg"><span class="sw" style="background:#3B6D11"></span>Surin</span>
+        <span class="leg"><span class="sw" style="background:#c0392b"></span>Phi Phi</span>
+        <span class="leg"><span class="sw" style="background:#0F6E56"></span>Krabi/PG</span>
+        <span class="leg"><span class="sw" style="background:#BA7517"></span>Whale Shark</span>
+      </div>
+    </div>
+
+    <div class="list" id="bookingList"></div>
+  </section>
+</div>
+
+<script>
+// ───────── sample reference data (from DEFAULT_ROUTES / DEFAULT_BOATS) ─────────
+const FAMILY = {
+  similan:{c:'#1a7fa0'}, surin:{c:'#3B6D11'}, phiphi:{c:'#c0392b'},
+  krabi:{c:'#0F6E56'}, whale:{c:'#BA7517'}
+};
+function av(name,color){return `<div class="pav" style="background:${color}">${name.slice(0,2).toUpperCase()}</div>`;}
+function av2(name,color){return `<div class="bav" style="background:${color}">${name.slice(0,2).toUpperCase()}</div>`;}
+
+// sample bookings for the selected day (Tue 2 Jun 2026)
+// boat:null = ยังไม่ได้ assign  ·  boat assign จะมาทีหลังเมื่อ booking มีรายละเอียดครบ
+const BOOKINGS = [
+  {bk:'BK-2041', dep:'05:30', ret:'17:30', route:'Early Tratato Similan Islands', islands:'เกาะ 5,6,7,8,9', fam:'similan',
+   pax:42, paxBreak:'38A · 4C', zone:'KL', mode:'seat', foc:2, boat:'Aluminous1', boatC:'#1a7fa0',
+   agent:'DMC Russia', status:'confirmed', total:'126,400', tags:['1st']},
+  {bk:'BK-2052', dep:'07:00', ret:'18:00', route:'Early Tiger Similan Islands', islands:'เกาะ 5,6,7,8,9', fam:'similan',
+   pax:18, paxBreak:'16A · 2C', zone:'KL', mode:'seat', foc:0, boat:'Artemis', boatC:'#378ADD',
+   agent:'TUI Germany', status:'confirmed', total:'54,200', tags:[]},
+  {bk:'BK-2068', dep:'08:00', ret:'16:30', route:'Surin Islands by Speedboat', islands:'สุรินทร์ N-S', fam:'surin',
+   pax:30, paxBreak:'28A · 2C', zone:'KL', mode:'charter', foc:0, boat:null, boatC:null,
+   agent:'Siam Travel', status:'pending_foc', total:'168,000', tags:[]},
+  {bk:'BK-2071', dep:'08:30', ret:'17:00', route:'Similan Islands by Speedboat', islands:'เกาะ 5,6,7,8,9', fam:'similan',
+   pax:11, paxBreak:'9A · 2C', zone:'PK', mode:'seat', foc:1, boat:null, boatC:null,
+   agent:'HIS Japan', status:'quote', total:'31,900', tags:['unpaid']},
+  {bk:'BK-2079', dep:'09:00', ret:'16:00', route:'Phi Phi Bamboo by Speedboat', islands:'พีพี, ไม้ไผ่', fam:'phiphi',
+   pax:48, paxBreak:'40A · 8C', zone:'PK', mode:'seat', foc:0, boat:'Irena', boatC:'#f08080',
+   agent:'Ctrip China', status:'confirmed', total:'139,200', tags:['1st']},
+  {bk:'BK-2090', dep:'10:00', ret:'19:30', route:'Whale Shark Phi Phi Maiton Sunset', islands:'Whale Shark, พีพี', fam:'whale',
+   pax:24, paxBreak:'20A · 4C', zone:'PK', mode:'charter', foc:2, boat:null, boatC:null,
+   agent:'Direct / Walk-in', status:'pending_foc', total:'96,000', tags:[]},
+];
+
+const ST_LABEL = {confirmed:'Confirmed', pending_foc:'Pending FOC', quote:'Quote', completed:'Completed', rejected:'Rejected'};
+
+function tagChip(t){
+  if(t==='1st') return '<span class="chip chip-1st">★ 1st visit</span>';
+  if(t==='unpaid') return '<span class="chip chip-unpaid">● Unpaid</span>';
+  return '';
+}
+function durLabel(a,b){
+  const [ah,am]=a.split(':').map(Number),[bh,bm]=b.split(':').map(Number);
+  let m=(bh*60+bm)-(ah*60+am); const h=Math.floor(m/60); m=m%60;
+  return `${h}h${m?(' '+m+'m'):''}`;
+}
+
+let sortMode='time';
+function cycleSort(){
+  const modes=['time','pax','status']; sortMode=modes[(modes.indexOf(sortMode)+1)%3];
+  document.getElementById('sortLbl').textContent='Sort · '+sortMode.charAt(0).toUpperCase()+sortMode.slice(1);
+  renderList();
+}
+
+function renderList(){
+  let rows=[...BOOKINGS];
+  if(sortMode==='pax') rows.sort((a,b)=>b.pax-a.pax);
+  else if(sortMode==='status') rows.sort((a,b)=>a.status.localeCompare(b.status));
+  else rows.sort((a,b)=>a.dep.localeCompare(b.dep));
+
+  // column header
+  let html=`<div class="lhead">
+      <div>Departure</div><div>Route</div><div>Details</div><div>Boat</div>
+      <div>Agent</div><div>Status</div><div class="r">Total</div><div></div>
+    </div>`;
+  let lastSlot='';
+  rows.forEach(b=>{
+    if(sortMode==='time'){
+      const hr=parseInt(b.dep); const slot = hr<8?'Early morning · before 08:00':(hr<10?'Morning · 08:00–10:00':'Late morning · after 10:00');
+      if(slot!==lastSlot){ html+=`<div class="time-gap">${slot}</div>`; lastSlot=slot; }
+    }
+    const fam=FAMILY[b.fam].c;
+    const zoneLbl = b.zone==='PK'?'PK':b.zone==='KL'?'KL':'No transfer';
+    const zoneCls = b.zone==='PK'?'':b.zone==='KL'?'kl':'nt';
+    const modeChip = b.mode==='charter'
+        ? '<span class="chip chip-charter">Charter</span>'
+        : '<span class="chip chip-seat">Seat-in</span>';
+    // boat cell: assigned → avatar+name · unassigned → dashed Assign button
+    const boatCell = b.boat
+        ? `${av2(b.boat,b.boatC)}<span class="bname">${b.boat}</span>`
+        : `<button class="assign-btn" onclick="event.stopPropagation();alert('[mockup] assign boat · ${b.bk}')">+ Assign boat</button>`;
+    html+=`
+      <div class="lrow" style="border-left-color:${fam}" onclick="alert('[mockup] open detail · ${b.bk}')">
+        <div class="l-time"><div class="t1">${b.dep}</div><div class="t2">→ ${b.ret}</div></div>
+        <div class="l-route"><div class="nm">${b.route}</div><div class="sub">${b.islands}</div></div>
+        <div class="l-chips">
+          <span class="chip chip-pax">${b.pax}p · ${b.paxBreak}</span>
+          <span class="chip chip-zone ${zoneCls}">${zoneLbl}</span>
+          ${modeChip}
+          ${b.tags.map(tagChip).join('')}
+        </div>
+        <div class="l-boat">${boatCell}</div>
+        <div class="l-agent"><div class="a1">${b.agent}</div><div class="a2">${b.bk}</div></div>
+        <div><span class="st-chip st-${b.status}"><span class="dot"></span>${ST_LABEL[b.status]}</span>${b.foc>0?`<span class="foc-flag">FOC ${b.foc}</span>`:''}</div>
+        <div class="l-total"><div class="amt">฿${b.total}</div></div>
+        <div class="l-act" onclick="event.stopPropagation()">
+          ${b.status==='pending_foc'
+            ? `<button class="act ok" title="Approve FOC" onclick="alert('[mockup] approve FOC · ${b.bk}')">✓</button>
+               <button class="act no" title="Reject" onclick="alert('[mockup] reject · ${b.bk}')">✕</button>`
+            : `<button class="act" title="More" onclick="alert('[mockup] more · ${b.bk}')">⋯</button>`}
+        </div>
+      </div>`;
+  });
+  document.getElementById('bookingList').innerHTML=html;
+  document.getElementById('stripCount').textContent=rows.length+' trips';
+}
+
+// ───────── mini calendar ─────────
+let viewY=2026, viewM=5; // June 2026 (0-idx)
+const selDate=new Date(2026,5,2);
+const today=new Date(2026,5,2);
+const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DOW=['Su','Mo','Tu','We','Th','Fr','Sa'];
+const tripDays=[2,3,5,6,9,12,14,16,19,22,24,26,29]; // days w/ departures (dot)
+
+function renderCal(){
+  document.getElementById('mcMonth').textContent=MONTHS[viewM]+' '+viewY;
+  const first=new Date(viewY,viewM,1).getDay();
+  const days=new Date(viewY,viewM+1,0).getDate();
+  const prevDays=new Date(viewY,viewM,0).getDate();
+  let h=DOW.map(d=>`<div class="mc-dow">${d}</div>`).join('');
+  for(let i=first-1;i>=0;i--) h+=`<div class="mc-day muted">${prevDays-i}</div>`;
+  for(let d=1;d<=days;d++){
+    const isToday=(viewY===today.getFullYear()&&viewM===today.getMonth()&&d===today.getDate());
+    const isSel=(viewY===selDate.getFullYear()&&viewM===selDate.getMonth()&&d===selDate.getDate());
+    const hasTrip=(viewM===5&&tripDays.includes(d));
+    h+=`<div class="mc-day ${isToday?'today':''} ${isSel?'sel':''}" onclick="pickDay(${d})">${d}${hasTrip?'<span class="dot"></span>':''}</div>`;
+  }
+  document.getElementById('mcGrid').innerHTML=h;
+}
+function mcShift(n){viewM+=n; if(viewM<0){viewM=11;viewY--;} if(viewM>11){viewM=0;viewY++;} renderCal();}
+function pickDay(d){
+  selDate.setFullYear(viewY,viewM,d); renderCal();
+  const lbl=`${DOW[selDate.getDay()]} ${d} ${MONTHS[viewM].slice(0,3)}`;
+  document.getElementById('selDateLbl').textContent=lbl;
+  const dd=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][selDate.getDay()];
+  document.getElementById('mainDate').textContent=`${dd}, ${d} ${MONTHS[viewM]}`;
+}
+function dayShift(n){
+  selDate.setDate(selDate.getDate()+n); viewY=selDate.getFullYear(); viewM=selDate.getMonth();
+  renderCal();
+  const d=selDate.getDate();
+  document.getElementById('selDateLbl').textContent=`${DOW[selDate.getDay()]} ${d} ${MONTHS[viewM].slice(0,3)}`;
+  const dd=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][selDate.getDay()];
+  document.getElementById('mainDate').textContent=`${dd}, ${d} ${MONTHS[viewM]}`;
+}
+function goToday(){viewY=2026;viewM=5;selDate.setFullYear(2026,5,2);renderCal();
+  document.getElementById('selDateLbl').textContent='Tue 2 Jun';
+  document.getElementById('mainDate').textContent='Tuesday, 2 June';}
+
+function setView(v){
+  document.querySelectorAll('#viewToggle button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  // mockup: only List renders cards; others show placeholder hint
+  if(v!=='List'){
+    document.getElementById('bookingList').innerHTML=
+      `<div style="padding:60px 0;text-align:center;color:var(--ink-faint);font-size:13px">
+        <div style="font-size:34px;margin-bottom:10px">📅</div>
+        <b>${v} view</b> — calendar grid mockup (List view is the primary redesign for task #357)
+      </div>`;
+  } else { renderList(); }
+}
+
+// ───────── prev / upcoming ─────────
+const PU={
+  up:[
+    {n:'Early Tratato Similan',m:'Wed 3 Jun · 05:30',pax:'52',c:'#1a7fa0'},
+    {n:'Phi Phi Bamboo Speedboat',m:'Wed 3 Jun · 09:00',pax:'44',c:'#c0392b'},
+    {n:'Surin Islands Speedboat',m:'Thu 4 Jun · 08:00',pax:'30',c:'#3B6D11'},
+    {n:'Whale Shark Sunset',m:'Fri 5 Jun · 10:00',pax:'18',c:'#BA7517'},
+    {n:'Early Krabi + Phang Nga',m:'Sat 6 Jun · 06:30',pax:'36',c:'#0F6E56'},
+  ],
+  prev:[
+    {n:'Similan by Catamaran',m:'Mon 1 Jun · 08:30',pax:'61',c:'#1a7fa0'},
+    {n:'Phi Phi Bamboo - FS',m:'Mon 1 Jun · 07:00',pax:'28',c:'#c0392b'},
+    {n:'Surin Islands Speedboat',m:'Sun 31 May · 08:00',pax:'22',c:'#3B6D11'},
+  ]
+};
+function setPU(k){
+  document.getElementById('puUp').classList.toggle('on',k==='up');
+  document.getElementById('puPrev').classList.toggle('on',k==='prev');
+  document.getElementById('puList').innerHTML=PU[k].map(i=>`
+    <div class="pu-item" onclick="alert('[mockup] jump to ${i.n}')">
+      <div class="pu-edge" style="background:${i.c}"></div>
+      <div class="pu-body"><div class="pu-name">${i.n}</div><div class="pu-meta">${i.m}</div></div>
+      <div class="pu-pax">${i.pax}p</div>
+    </div>`).join('');
+}
+
+renderCal(); renderList(); setPU('up');
+</script>
+</body>
+</html>

@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Fleet Sidebar · Reorder Mockup</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #F4F5F7;
+    font-family: 'Inter','Manrope',system-ui,-apple-system,sans-serif;
+    padding: 24px;
+  }
+  .wrap { max-width: 1380px; margin: 0 auto; }
+  h1 { font-size: 18px; color: #1F2A44; margin: 0 0 18px; font-weight: 700; }
+  .note {
+    background: #FFFBEB;
+    border: 1px solid #FDE68A;
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: #92400E;
+    margin-bottom: 18px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 18px;
+  }
+  .col {
+    background: white;
+    border: 1px solid #E5E7EB;
+    border-radius: 14px;
+    padding: 16px;
+  }
+  .col-title {
+    font-size: 11px;
+    letter-spacing: .08em;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .col-sub {
+    font-size: 11px;
+    color: #94A3B8;
+    margin-bottom: 14px;
+    line-height: 1.4;
+  }
+  .col-pros {
+    margin-top: 10px;
+    font-size: 10px;
+    color: #475569;
+    line-height: 1.5;
+  }
+  .col-pros strong { color: #047857; }
+
+  /* === Mock sidebar (dark navy theme matching real app) === */
+  .sidebar {
+    background: linear-gradient(180deg, #0E1830 0%, #15213D 100%);
+    border-radius: 12px;
+    padding: 16px 0;
+    width: 100%;
+    color: #C7D0E0;
+    font-size: 12px;
+  }
+  .sb-group-label {
+    font-size: 9.5px;
+    letter-spacing: .14em;
+    color: #FFB454;
+    font-weight: 700;
+    padding: 10px 18px 6px;
+    text-transform: uppercase;
+    opacity: .85;
+  }
+  .sb-divider {
+    height: 1px;
+    background: rgba(255,255,255,.06);
+    margin: 6px 14px;
+  }
+  .sb-item {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 8px 18px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #C7D0E0;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: all .12s;
+  }
+  .sb-item:hover { background: rgba(255,255,255,.04); }
+  .sb-item.active {
+    background: rgba(255,255,255,.07);
+    color: white;
+    font-weight: 700;
+    border-left-color: #FFB454;
+  }
+  .sb-item.proj-active {
+    background: rgba(255,180,84,.10);
+    color: white;
+    font-weight: 700;
+    border-left-color: #FFB454;
+  }
+  .sb-icon {
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #8896AB;
+    flex-shrink: 0;
+  }
+  .sb-item.active .sb-icon,
+  .sb-item.proj-active .sb-icon { color: #FFB454; }
+  .sb-section-title {
+    color: #FFB454;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    padding: 14px 18px 8px;
+    text-transform: uppercase;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Fleet Sidebar · Reorder Mockup</h1>
+
+  <div class="note">
+    Order ปัจจุบัน — สลับไปสลับมาตามที่เพิ่ม feature · Variant A/B/C เสนอจัดใหม่ตามตรรกะการใช้งาน · Projects = active (highlighted)
+  </div>
+
+  <div class="grid">
+
+    <!-- ============================================ CURRENT (for reference) -->
+    <div class="col">
+      <div class="col-title">Current · for reference</div>
+      <div class="col-sub">ลำดับปัจจุบัน · กระจัดกระจาย · ไม่มี grouping</div>
+
+      <div class="sidebar">
+        <div class="sb-section-title">Fleet Management</div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
+          FL Dashboard
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 18l3-9h14l3 9"/><path d="M3 18l9 3 9-3"/></svg></span>
+          Boat Status
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+          Daily Report
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg></span>
+          Company Asset
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4.5 4.5 0 1 1 6 6L9 24l-3-3L17.7 9.3"/></svg></span>
+          Maintenance
+        </div>
+        <div class="sb-item proj-active">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l7-3 7 3z"/></svg></span>
+          Projects
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg></span>
+          Job Assignment
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></span>
+          Inventory / Memo
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+          Cost Analytics
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg></span>
+          Fleet Insights
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================ VARIANT A · Grouped headers -->
+    <div class="col">
+      <div class="col-title">Variant A · Grouped with headers</div>
+      <div class="col-sub">แบ่งกลุ่ม 4 หมวด · มี section labels ชัดเจน · ใช้แบบนี้กับ ERP enterprise</div>
+
+      <div class="sidebar">
+        <div class="sb-section-title">Fleet Management</div>
+
+        <div class="sb-group-label">Overview</div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
+          FL Dashboard
+        </div>
+
+        <div class="sb-group-label">Daily Ops</div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 18l3-9h14l3 9"/><path d="M3 18l9 3 9-3"/></svg></span>
+          Boat Status
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+          Daily Report
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg></span>
+          Job Assignment
+        </div>
+
+        <div class="sb-group-label">Work Management</div>
+        <div class="sb-item proj-active">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l7-3 7 3z"/></svg></span>
+          Projects
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4.5 4.5 0 1 1 6 6L9 24l-3-3L17.7 9.3"/></svg></span>
+          Maintenance
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></span>
+          Inventory / Memo
+        </div>
+
+        <div class="sb-group-label">Insights & Registry</div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+          Cost Analytics
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg></span>
+          Fleet Insights
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg></span>
+          Company Asset
+        </div>
+      </div>
+
+      <div class="col-pros">
+        <strong>Pros:</strong> เห็นโครงสร้างชัด · เพิ่ม item ใหม่ใน group ที่ถูกได้ทันที · เหมาะ user ที่ใช้บ่อยและจำตำแหน่งได้<br>
+        <strong>Cons:</strong> Section labels กินพื้นที่ vertical
+      </div>
+    </div>
+
+    <!-- ============================================ VARIANT B · Flat ordered with dividers -->
+    <div class="col">
+      <div class="col-title">Variant B · Flat ordered with dividers</div>
+      <div class="col-sub">ไม่มี section label · ใช้ divider บางๆ คั่นแทน · cleaner · กระชับ</div>
+
+      <div class="sidebar">
+        <div class="sb-section-title">Fleet Management</div>
+
+        <!-- Overview -->
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
+          FL Dashboard
+        </div>
+
+        <div class="sb-divider"></div>
+
+        <!-- Daily Ops -->
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 18l3-9h14l3 9"/><path d="M3 18l9 3 9-3"/></svg></span>
+          Boat Status
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+          Daily Report
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg></span>
+          Job Assignment
+        </div>
+
+        <div class="sb-divider"></div>
+
+        <!-- Work Management -->
+        <div class="sb-item proj-active">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l7-3 7 3z"/></svg></span>
+          Projects
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4.5 4.5 0 1 1 6 6L9 24l-3-3L17.7 9.3"/></svg></span>
+          Maintenance
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></span>
+          Inventory / Memo
+        </div>
+
+        <div class="sb-divider"></div>
+
+        <!-- Reports & Registry -->
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+          Cost Analytics
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg></span>
+          Fleet Insights
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg></span>
+          Company Asset
+        </div>
+      </div>
+
+      <div class="col-pros">
+        <strong>Pros:</strong> กระชับ · ประหยัด vertical space · เห็น item เยอะในจอเดียว · clean<br>
+        <strong>Cons:</strong> ไม่ระบุชัดเจนว่ากลุ่มไหนเป็นอะไร · user ใหม่อาจงงตำแหน่ง
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Second row: Variant C alone with comparison summary -->
+  <div style="margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:18px">
+
+    <!-- ============================================ VARIANT C · Group labels + workflow icons -->
+    <div class="col">
+      <div class="col-title">Variant C · Workflow groupings (recommended)</div>
+      <div class="col-sub">เหมือน Variant A แต่ใช้ wording ตาม workflow ของ user · clearer mental model</div>
+
+      <div class="sidebar">
+        <div class="sb-section-title">Fleet Management</div>
+
+        <div class="sb-group-label">📊 At a glance</div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
+          FL Dashboard
+        </div>
+
+        <div class="sb-group-label">⚓ Today</div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 18l3-9h14l3 9"/><path d="M3 18l9 3 9-3"/></svg></span>
+          Boat Status
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+          Daily Report
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg></span>
+          Job Assignment
+        </div>
+
+        <div class="sb-group-label">🔧 Work</div>
+        <div class="sb-item proj-active">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l7-3 7 3z"/></svg></span>
+          Projects
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4.5 4.5 0 1 1 6 6L9 24l-3-3L17.7 9.3"/></svg></span>
+          Maintenance
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></span>
+          Inventory / Memo
+        </div>
+
+        <div class="sb-group-label">📈 Analytics</div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+          Cost Analytics
+        </div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="14 7 21 7 21 14"/></svg></span>
+          Fleet Insights
+        </div>
+
+        <div class="sb-group-label">📋 Registry</div>
+        <div class="sb-item">
+          <span class="sb-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg></span>
+          Company Asset
+        </div>
+      </div>
+
+      <div class="col-pros">
+        <strong>Pros:</strong> Labels บอก use case ตรงๆ → "ฉันต้องดู Today" / "ฉันจะดู Analytics" · user เปิดมาก็รู้ทันทีว่าจะคลิกที่ไหน<br>
+        <strong>Recommended</strong>
+      </div>
+    </div>
+
+    <!-- ============================================ ORDER LOGIC COMPARISON -->
+    <div class="col">
+      <div class="col-title">Order logic — comparison</div>
+      <div class="col-sub">รวมตารางเปรียบเทียบ · เห็น flow ครบ</div>
+
+      <table style="width:100%;border-collapse:collapse;font-size:11px;color:#475569">
+        <thead>
+          <tr style="background:#F6F7F9">
+            <th style="text-align:left;padding:8px 6px;border-bottom:1px solid #E5E7EB">Order</th>
+            <th style="text-align:left;padding:8px 6px;border-bottom:1px solid #E5E7EB;color:#94A3B8">Current</th>
+            <th style="text-align:left;padding:8px 6px;border-bottom:1px solid #E5E7EB">Variant C ✓</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td style="padding:6px;color:#94A3B8">1</td><td style="padding:6px">FL Dashboard</td><td style="padding:6px;color:#3A6FF7;font-weight:600">FL Dashboard</td></tr>
+          <tr><td style="padding:6px;color:#94A3B8">2</td><td style="padding:6px">Boat Status</td><td style="padding:6px;color:#3A6FF7;font-weight:600">Boat Status</td></tr>
+          <tr><td style="padding:6px;color:#94A3B8">3</td><td style="padding:6px">Daily Report</td><td style="padding:6px;color:#3A6FF7;font-weight:600">Daily Report</td></tr>
+          <tr><td style="padding:6px;color:#94A3B8">4</td><td style="padding:6px"><s>Company Asset</s></td><td style="padding:6px;color:#3A6FF7;font-weight:600">Job Assignment ↑</td></tr>
+          <tr><td style="padding:6px;color:#94A3B8">5</td><td style="padding:6px">Maintenance</td><td style="padding:6px;color:#3A6FF7;font-weight:600">Projects ↑</td></tr>
+          <tr><td style="padding:6px;color:#94A3B8">6</td><td style="padding:6px">Projects</td><td style="padding:6px;color:#3A6FF7;font-weight:600">Maintenance</td></tr>
+          <tr><td style="padding:6px;color:#94A3B8">7</td><td style="padding:6px">Job Assignment</td><td style="padding:6px;color:#3A6FF7;font-weight:600">Inventory / Memo</td></tr>
+          <tr><td style="padding:6px;color:#94A3B8">8</td><td style="padding:6px">Inventory / Memo</td><td style="padding:6px;color:#3A6FF7;font-weight:600">Cost Analytics</td></tr>
+          <tr><td style="padding:6px;color:#94A3B8">9</td><td style="padding:6px">Cost Analytics</td><td style="padding:6px;color:#3A6FF7;font-weight:600">Fleet Insights</td></tr>
+          <tr><td style="padding:6px;color:#94A3B8">10</td><td style="padding:6px">Fleet Insights</td><td style="padding:6px;color:#3A6FF7;font-weight:600">Company Asset ↓</td></tr>
+        </tbody>
+      </table>
+
+      <div style="margin-top:14px;padding:12px;background:#F6F7F9;border-radius:10px;font-size:11px;color:#475569;line-height:1.6">
+        <strong style="color:#1F2A44">Key changes:</strong><br>
+        • <strong>Projects</strong> ขยับมาก่อน Maintenance (project = หลัก · MJ = sub)<br>
+        • <strong>Job Assignment</strong> ขึ้นมาอยู่ใน <em>Today</em> group (เป็น daily ops)<br>
+        • <strong>Company Asset</strong> ลงท้าย (รารับใช้ไม่บ่อย · setup-time)<br>
+        • <strong>Cost + Insights</strong> รวมเป็น Analytics group<br>
+        • เพิ่ม group labels ให้เห็น mental model
+      </div>
+    </div>
+  </div>
+
+  <p style="margin-top:18px;font-size:12px;color:#475569;line-height:1.6">
+    เลือก variant ที่ชอบ · บอกตัวเลข (A · B · C) · จะ implement ทันที · หรือมีอันไหนอยากปรับเล็กน้อยก็บอกได้
+  </p>
+</div>
+</body>
+</html>

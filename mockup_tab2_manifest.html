@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tab 2 · By Trip Date — Trip Header + Manifest Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --coral:#ff6b47; --coral-soft:#fff1ed;
+    --ink:#1f2430; --ink-soft:#8b909c; --ink-faint:#b4b8c2;
+    --border:rgba(0,0,0,.08); --border-2:rgba(0,0,0,.05);
+    --bg:#fafafa; --white:#ffffff;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);font-family:'DM Sans',system-ui,sans-serif;color:var(--ink);font-size:14px;-webkit-font-smoothing:antialiased;}
+  .mono{font-family:'DM Mono',monospace;}
+
+  .note{background:var(--coral-soft);border:1px solid #ffd0c2;color:#9a3b21;font-size:12px;padding:9px 16px;display:flex;align-items:center;gap:8px;}
+  .note .tag{background:var(--coral);color:#fff;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:700;letter-spacing:.04em;}
+
+  /* ── page header ── */
+  .pagehead{background:var(--white);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;gap:14px;}
+  .pagehead .nav button{width:30px;height:30px;border:1px solid var(--border);background:var(--white);border-radius:9px;cursor:pointer;color:var(--ink-soft);font-size:15px;}
+  .ph-date{font-size:20px;font-weight:700;line-height:1;}
+  .ph-sub{font-size:12px;color:var(--ink-soft);margin-top:3px;}
+  .today-btn{border:1px solid var(--border);background:var(--white);border-radius:9px;height:30px;padding:0 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;}
+  .toggle{margin-left:auto;display:flex;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:3px;gap:2px;}
+  .toggle button{border:none;background:transparent;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;color:var(--ink-soft);padding:5px 13px;border-radius:7px;cursor:pointer;}
+  .toggle button.on{background:var(--white);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.06);}
+
+  .wrap{padding:18px 24px 60px;}
+
+  /* ════════ TRIP CARD ════════ */
+  .trip{background:var(--white);border:1px solid var(--border);border-radius:16px;margin-bottom:16px;overflow:hidden;}
+  .trip-head{display:flex;align-items:center;gap:16px;padding:14px 18px;cursor:pointer;border-left:5px solid var(--fam);position:relative;}
+  .trip-head:hover{background:#fcfcfd;}
+  .trip-caret{font-size:13px;color:var(--ink-faint);transition:transform .15s;}
+  .trip.collapsed .trip-caret{transform:rotate(-90deg);}
+  .trip-title{min-width:0;}
+  .trip-title .nm{font-size:16px;font-weight:700;line-height:1.2;}
+  .trip-title .meta{font-size:11px;color:var(--ink-soft);font-family:'DM Mono',monospace;margin-top:2px;}
+
+  /* summary chips */
+  .trip-sum{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .sum-kpi{text-align:center;padding:0 10px;border-left:1px solid var(--border-2);}
+  .sum-kpi:first-child{border-left:none;}
+  .sum-kpi .v{font-family:'DM Mono',monospace;font-size:17px;font-weight:500;line-height:1;}
+  .sum-kpi .l{font-size:9px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em;margin-top:3px;}
+  .sum-kpi.accept .v{color:var(--coral);}
+  .sum-kpi.foc .v{color:#d6452a;}
+  .boat-chip{display:flex;align-items:center;gap:7px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:5px 10px;}
+  .boat-chip .bav{width:24px;height:24px;border-radius:7px;background:var(--fam);color:#fff;font-size:10px;font-weight:700;font-family:'DM Mono',monospace;display:flex;align-items:center;justify-content:center;}
+  .boat-chip .bn{font-size:12px;font-weight:600;}
+  .boat-chip .bn small{display:block;font-size:9px;color:var(--ink-soft);font-weight:400;font-family:'DM Mono',monospace;}
+
+  .trip-body{border-top:1px solid var(--border);}
+  .trip.collapsed .trip-body{display:none;}
+
+  /* zone group */
+  .zgroup{}
+  .zhead{display:flex;align-items:center;gap:8px;padding:9px 18px;background:#f6f7f9;border-bottom:1px solid var(--border-2);}
+  .zhead .zdot{width:8px;height:8px;border-radius:50%;background:var(--coral);}
+  .zhead .zn{font-size:12px;font-weight:700;letter-spacing:.02em;}
+  .zhead .zc{font-size:11px;color:var(--ink-soft);font-family:'DM Mono',monospace;}
+
+  /* manifest table */
+  .mtbl-scroll{overflow-x:auto;}
+  table.mtbl{border-collapse:collapse;width:100%;min-width:1280px;font-size:12px;}
+  table.mtbl th{
+    text-align:left;font-size:9px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.05em;
+    padding:7px 10px;border-bottom:1px solid var(--border);background:var(--white);white-space:nowrap;
+  }
+  table.mtbl th.num,table.mtbl td.num{text-align:right;}
+  table.mtbl th.ctr,table.mtbl td.ctr{text-align:center;}
+  table.mtbl td{padding:9px 10px;border-bottom:1px solid var(--border-2);vertical-align:top;}
+  table.mtbl tr:hover td{background:#fcfcfd;}
+
+  .vchip{width:18px;height:18px;border-radius:5px;display:inline-block;}
+  .v-ok{background:#d8a08f;} /* salmon = voucher attached, matching sheet */
+  .v-none{background:transparent;border:1px dashed var(--ink-faint);}
+  .agency{font-weight:600;color:#0f7a5a;white-space:nowrap;}
+  .cust{font-weight:700;white-space:nowrap;}
+  .cust.foc{background:#fff3a8;border-radius:5px;padding:1px 6px;}
+  .pax-cell{font-family:'DM Mono',monospace;white-space:nowrap;}
+  .pax-cell .foc-b{color:#d6452a;font-weight:500;}
+  .pkg{color:var(--ink-soft);white-space:nowrap;}
+  .bcell{display:flex;align-items:center;gap:6px;white-space:nowrap;}
+  .bcell .d{width:18px;height:18px;border-radius:5px;background:var(--fam);color:#fff;font-size:9px;font-weight:700;font-family:'DM Mono',monospace;display:flex;align-items:center;justify-content:center;}
+  .tcell{font-family:'DM Mono',monospace;font-weight:500;white-space:nowrap;}
+  .tcell.hl{background:#fff3a8;border-radius:5px;padding:2px 6px;}
+  .hotel{max-width:200px;}
+  .zone-tag{font-size:11px;background:#eef0f3;color:#4a5160;border-radius:6px;padding:2px 8px;white-space:nowrap;}
+  .sendback{max-width:180px;color:var(--ink-soft);}
+  .sendback .sb-h{color:var(--ink);font-weight:600;}
+  .special{max-width:190px;color:#c0392b;font-size:11px;line-height:1.35;}
+  .svc{display:flex;flex-direction:column;gap:3px;}
+  .svc .lt{font-size:10px;background:#fbeaf0;color:#993556;border-radius:6px;padding:2px 7px;white-space:nowrap;align-self:flex-start;}
+  .svc .ag{font-size:11px;color:var(--ink-soft);}
+  .pay{white-space:nowrap;}
+  .pay .m{font-size:10px;background:#e7f0fb;color:#1d5fa5;border-radius:6px;padding:2px 7px;}
+  .pay .amt{font-family:'DM Mono',monospace;font-weight:500;margin-top:3px;display:block;}
+  .codes{font-family:'DM Mono',monospace;font-size:10px;color:var(--ink-soft);white-space:nowrap;}
+
+  /* add-row footer in group */
+  .zadd{padding:8px 18px;border-bottom:1px solid var(--border-2);}
+  .zadd button{font-size:11px;color:var(--ink-soft);border:1px dashed var(--ink-faint);background:transparent;border-radius:8px;padding:5px 11px;cursor:pointer;}
+  .zadd button:hover{border-color:var(--coral);color:var(--coral);border-style:solid;}
+
+  .trip-foot{display:flex;align-items:center;padding:10px 18px;font-size:11px;color:var(--ink-soft);font-family:'DM Mono',monospace;gap:14px;background:#fcfcfd;}
+</style>
+</head>
+<body>
+
+<div class="note"><span class="tag">MOCKUP</span><b style="font-weight:700">Tab 2 · By Trip Date</b> &nbsp;—&nbsp; Trip header + passenger manifest (per your ops sheet). Click a trip header to collapse/expand · scroll table sideways for all columns · not wired to live data.</div>
+
+<div class="pagehead">
+  <div class="nav"><button>‹</button> <button>›</button></div>
+  <div>
+    <div class="ph-date">Wednesday, 3 June 2026</div>
+    <div class="ph-sub">2 trips departing · 65 pax · Tub Lamu + Visit Panwa</div>
+  </div>
+  <button class="today-btn">Today</button>
+  <div class="toggle">
+    <button class="on">By trip</button>
+    <button>List</button>
+    <button>Week</button>
+    <button>Month</button>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- ════════ TRIP 1 · WHALE SHARK (expanded, real data from sheet) ════════ -->
+  <div class="trip" style="--fam:#BA7517">
+    <div class="trip-head" onclick="this.parentElement.classList.toggle('collapsed')">
+      <span class="trip-caret">▼</span>
+      <div class="trip-title">
+        <div class="nm">Whale Shark · Phi Phi + Maiton</div>
+        <div class="meta">10:00 departure · Visit Panwa · sunset return ~19:30</div>
+      </div>
+      <div class="trip-sum">
+        <div class="sum-kpi accept"><div class="v">44</div><div class="l">รับ pax</div></div>
+        <div class="sum-kpi"><div class="v">8</div><div class="l">AD</div></div>
+        <div class="sum-kpi"><div class="v">0</div><div class="l">CHD</div></div>
+        <div class="sum-kpi"><div class="v">0</div><div class="l">INF</div></div>
+        <div class="sum-kpi foc"><div class="v">2</div><div class="l">FOC</div></div>
+        <div class="boat-chip"><span class="bav">AL</span><span class="bn">Aluminous1<small>10 seats · longtail 0</small></span></div>
+      </div>
+    </div>
+
+    <div class="trip-body">
+      <!-- ZONE: Phuket -->
+      <div class="zgroup">
+        <div class="zhead"><span class="zdot"></span><span class="zn">Phuket</span><span class="zc">· 3 bookings · 8 pax</span></div>
+        <div class="mtbl-scroll">
+          <table class="mtbl">
+            <thead><tr>
+              <th class="ctr">Vch</th><th>Agency</th><th>Customer</th><th class="ctr">Pax</th><th>Package</th>
+              <th>Boat</th><th class="ctr">Car</th><th>Pickup</th><th>Hotel</th><th>Zone</th>
+              <th>Send back</th><th>Special request</th><th>Service</th><th>Codes</th><th class="num">Payment</th>
+            </tr></thead>
+            <tbody>
+              <tr>
+                <td class="ctr"><span class="vchip v-ok"></span></td>
+                <td><span class="agency">Green Mango</span></td>
+                <td><span class="cust">AHN DONGKYU</span></td>
+                <td class="ctr pax-cell">2A</td>
+                <td><span class="pkg">One Day Tour</span></td>
+                <td><div class="bcell"><span class="d">AL</span>Aluminous1</div></td>
+                <td class="ctr">—</td>
+                <td class="tcell">08:10</td>
+                <td class="hotel">Panphuree Residence</td>
+                <td><span class="zone-tag">Naiyang</span></td>
+                <td class="sendback"><span class="sb-h">The Marina Phuket Hotel</span> · 08:10</td>
+                <td class="special">2 Small Luggages</td>
+                <td><div class="svc"><span class="lt">เรือหางยาว · จอย</span><span class="ag">Love</span></div></td>
+                <td class="codes">AP · PK · VAT · K</td>
+                <td class="num pay"><span class="m">PFM</span><span class="amt">฿6,000</span></td>
+              </tr>
+              <tr>
+                <td class="ctr"><span class="vchip v-ok"></span></td>
+                <td><span class="agency">Green Mango</span></td>
+                <td><span class="cust">AHN MINSUN</span></td>
+                <td class="ctr pax-cell">2A</td>
+                <td><span class="pkg">One Day Tour</span></td>
+                <td><div class="bcell"><span class="d">AL</span>Aluminous1</div></td>
+                <td class="ctr">—</td>
+                <td class="tcell">08:30</td>
+                <td class="hotel">The Royal Paradise Hotel &amp; Spa Patong</td>
+                <td><span class="zone-tag">Patong</span></td>
+                <td class="sendback"><span class="sb-h">Four Points by Sheraton Patong</span> · 08:30</td>
+                <td class="special">1 Big + 1 Small Luggage + 2 Backpack</td>
+                <td><div class="svc"><span class="lt">เรือหางยาว · จอย</span><span class="ag">Love</span></div></td>
+                <td class="codes">AP · PK · VAT · K</td>
+                <td class="num pay"><span class="m">PFM</span><span class="amt">฿6,000</span></td>
+              </tr>
+              <tr>
+                <td class="ctr"><span class="vchip v-ok"></span></td>
+                <td><span class="agency">Green Mango</span></td>
+                <td><span class="cust">MISEON SEO</span></td>
+                <td class="ctr pax-cell">4A</td>
+                <td><span class="pkg">One Day Tour</span></td>
+                <td><div class="bcell"><span class="d">AL</span>Aluminous1</div></td>
+                <td class="ctr">—</td>
+                <td class="tcell">08:40</td>
+                <td class="hotel">Phuket Graceland Resort &amp; Spa</td>
+                <td><span class="zone-tag">Patong</span></td>
+                <td class="sendback">—</td>
+                <td class="special">—</td>
+                <td><div class="svc"><span class="lt">เรือหางยาว · จอย</span><span class="ag">Love</span></div></td>
+                <td class="codes">AP · PK · VAT · K</td>
+                <td class="num pay"><span class="m">PFM</span><span class="amt">฿12,000</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="zadd"><button>+ Add booking to Phuket</button></div>
+      </div>
+
+      <!-- ZONE: Own Transportation -->
+      <div class="zgroup">
+        <div class="zhead"><span class="zdot" style="background:#8b909c"></span><span class="zn">Own Transportation</span><span class="zc">· 1 booking · 2 pax (FOC)</span></div>
+        <div class="mtbl-scroll">
+          <table class="mtbl">
+            <thead><tr>
+              <th class="ctr">Vch</th><th>Agency</th><th>Customer</th><th class="ctr">Pax</th><th>Package</th>
+              <th>Boat</th><th class="ctr">Car</th><th>Pickup</th><th>Hotel</th><th>Zone</th>
+              <th>Send back</th><th>Special request</th><th>Service</th><th>Codes</th><th class="num">Payment</th>
+            </tr></thead>
+            <tbody>
+              <tr>
+                <td class="ctr"><span class="vchip v-none"></span></td>
+                <td><span class="agency" style="color:#4a5160">Me &amp; You</span></td>
+                <td><span class="cust foc">Lee Minhye</span></td>
+                <td class="ctr pax-cell"><span class="foc-b">FOC 2</span></td>
+                <td><span class="pkg">One Day Tour</span></td>
+                <td><div class="bcell"><span class="d">AL</span>Aluminous1</div></td>
+                <td class="ctr">—</td>
+                <td class="tcell hl">09:40</td>
+                <td class="hotel">เดินทางเอง (own travel)</td>
+                <td><span class="zone-tag">พันวา</span></td>
+                <td class="sendback"><span class="sb-h">Korean Agency Inspection</span> · 09:40</td>
+                <td class="special">—</td>
+                <td><div class="svc"><span class="lt">เรือหางยาว · จอย</span><span class="ag">Love</span></div></td>
+                <td class="codes">AP · OWN · VAT · K</td>
+                <td class="num pay"><span class="m" style="background:#f1f1f3;color:#777d8a">INSPECTION</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="zadd"><button>+ Add booking to Own Transportation</button></div>
+      </div>
+
+      <div class="trip-foot">
+        <span>4 bookings · 10 lines</span><span>·</span><span>รับ 44 pax · FOC 2</span><span style="margin-left:auto">Total ฿24,000 · 3 paid (PFM) · 1 inspection</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════ TRIP 2 · SIMILAN (collapsed — shows stacking) ════════ -->
+  <div class="trip collapsed" style="--fam:#1a7fa0">
+    <div class="trip-head" onclick="this.parentElement.classList.toggle('collapsed')">
+      <span class="trip-caret">▼</span>
+      <div class="trip-title">
+        <div class="nm">Early Tratato · Similan Islands</div>
+        <div class="meta">05:30 departure · Tub Lamu · เกาะ 5,6,7,8,9</div>
+      </div>
+      <div class="trip-sum">
+        <div class="sum-kpi accept"><div class="v">21</div><div class="l">รับ pax</div></div>
+        <div class="sum-kpi"><div class="v">19</div><div class="l">AD</div></div>
+        <div class="sum-kpi"><div class="v">2</div><div class="l">CHD</div></div>
+        <div class="sum-kpi"><div class="v">0</div><div class="l">INF</div></div>
+        <div class="sum-kpi foc"><div class="v">0</div><div class="l">FOC</div></div>
+        <div class="boat-chip"><span class="bav">OK</span><span class="bn">Okeanos<small>tap to expand manifest</small></span></div>
+      </div>
+    </div>
+    <div class="trip-body"></div>
+  </div>
+
+</div>
+</body>
+</html>

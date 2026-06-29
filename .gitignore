@@ -1,0 +1,15 @@
+# ── OS / editor junk ──
+.DS_Store
+*~
+.~lock.*#
+
+# ── Node ──
+node_modules/
+npm-debug.log*
+
+# ── PRIVACY: real customer data + bulky backups — NEVER commit (esp. public repo) ──
+allotment_v2/data_exports/
+allotment_v2/BACKUP/
+
+# ── Local lock files ──
+*.lock

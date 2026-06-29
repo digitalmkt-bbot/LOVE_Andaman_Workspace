@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>LOVE Andaman · ปฏิทินออกเรือ · มิถุนายน 2569</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Noto+Sans+Thai:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'DM Sans','Noto Sans Thai',sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  /* ===== 1080x1080 canvas · swap .bg background-image with a real beach photo ===== */
+  .canvas{position:relative;width:1080px;height:1080px;margin:0 auto;overflow:hidden}
+  /* Real photo goes here → save it as  assets/bg.jpg  (the gradient stays as fallback if the file is missing) */
+  .bg{position:absolute;inset:0;background-repeat:no-repeat;background-size:cover;background-position:center;
+      background-image:url('assets/bg.jpg'),
+      linear-gradient(180deg,#7FC3EC 0%,#A9DAF0 18%,#CFEFF3 33%,#7FD4D0 48%,#49B6BE 62%,#E9DCC2 80%,#EFE3CC 100%)}
+  .bg::after{content:"";position:absolute;left:0;right:0;top:46%;height:18%;
+      background:linear-gradient(180deg,rgba(255,255,255,.35),rgba(255,255,255,0));filter:blur(8px)}
+  .leaf{position:absolute;bottom:-10px;font-size:230px;line-height:1;opacity:.9;filter:saturate(1.1)}
+  .leaf.l{left:-30px;transform:rotate(8deg)}
+  .leaf.r{right:-26px;transform:scaleX(-1) rotate(6deg)}
+  /* logo */
+  .logo{position:absolute;top:30px;left:32px;display:flex;align-items:center;gap:9px;z-index:6}
+  .logo .mk{width:42px;height:42px;border-radius:11px;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,60,110,.2)}
+  .logo .mk svg{width:26px;height:26px}
+  .logo .tx b{display:block;font-weight:800;font-size:19px;color:#fff;letter-spacing:.04em;line-height:1;text-shadow:0 1px 4px rgba(0,40,80,.3)}
+  .logo .tx span{font-size:11px;color:#eaf6ff;letter-spacing:.32em;text-shadow:0 1px 3px rgba(0,40,80,.3)}
+  /* glass card */
+  .card{position:absolute;left:140px;right:140px;top:150px;border-radius:30px;
+      background:rgba(255,255,255,.62);backdrop-filter:blur(16px) saturate(150%);-webkit-backdrop-filter:blur(16px) saturate(150%);
+      border:1px solid rgba(255,255,255,.75);box-shadow:0 20px 60px rgba(10,60,100,.18),inset 0 1px 0 rgba(255,255,255,.9);
+      padding:26px 30px 22px;z-index:4}
+  .badge{position:absolute;top:-22px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#1f8fd0,#0E6AA8);
+      color:#fff;font-family:'Noto Sans Thai',sans-serif;font-weight:700;font-size:22px;padding:8px 30px;border-radius:16px;
+      box-shadow:0 8px 18px rgba(14,106,168,.35);border:2px solid rgba(255,255,255,.8)}
+  .month{font-family:'Noto Sans Thai',sans-serif;font-weight:800;font-style:italic;font-size:54px;color:#0E5A93;text-align:center;margin-top:14px;letter-spacing:.01em}
+  .dash{border:none;border-top:2px dashed rgba(14,90,147,.3);margin:14px 4px 12px}
+  .wk{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-weight:700;font-size:21px;color:#0E5A93;margin-bottom:6px}
+  .wk span:first-child,.wk span:last-child{color:#7fa9c4}
+  .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px 0}
+  .d{height:66px;display:flex;align-items:center;justify-content:center;font-size:25px;color:#173b52;font-weight:500}
+  .d.mut{color:#b9c7d0}
+  .d .pill{width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+  .d.prev .pill{background:#F4E2B4;color:#9a8650}
+  .d.today .pill{background:linear-gradient(135deg,#1f8fd0,#0E6AA8);color:#fff;box-shadow:0 6px 14px rgba(14,106,168,.4)}
+  .d.wknd{color:#2f7bb0}
+  /* note */
+  .note{margin-top:14px;background:rgba(255,255,255,.55);border-radius:18px;padding:16px 20px;border:1px solid rgba(255,255,255,.7)}
+  .note h4{font-family:'Noto Sans Thai',sans-serif;font-size:21px;color:#0E5A93;display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .note .row{font-family:'Noto Sans Thai',sans-serif;font-size:16px;color:#234b63;display:flex;gap:10px;margin-bottom:5px;align-items:baseline}
+  .note .tg{flex:none;width:120px;font-weight:700;color:#0E6AA8;display:flex;align-items:center;gap:6px}
+  .note .tg i{width:9px;height:9px;border-radius:50%;display:inline-block}
+  /* mascot */
+  .mascot{position:absolute;right:30px;bottom:8px;width:280px;z-index:5;filter:drop-shadow(0 12px 18px rgba(0,50,90,.25))}
+</style>
+</head>
+<body>
+<div class="canvas">
+  <div class="bg"></div>
+
+  <div class="logo">
+    <div class="mk"><svg viewBox="0 0 24 24" fill="#1683C7"><path d="M12 21s-7.5-4.6-9.7-9.2C.9 8.7 2.3 5.5 5.4 5.1c1.9-.2 3.4.8 4.3 2.1.4.6 1.6.6 2 0 .9-1.3 2.4-2.3 4.3-2.1 3.1.4 4.5 3.6 3.1 6.7C19.5 16.4 12 21 12 21z"/></svg></div>
+    <div class="tx"><b>LOVE</b><span>ANDAMAN</span></div>
+  </div>
+
+  <div class="card">
+    <div class="badge">ตารางออกเรือ</div>
+    <div class="month">มิถุนายน 2569</div>
+    <hr class="dash">
+    <div class="wk"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+    <div class="grid">
+      <div class="d prev mut"><span class="pill">31</span></div>
+      <div class="d"><span class="pill">1</span></div>
+      <div class="d"><span class="pill">2</span></div>
+      <div class="d"><span class="pill">3</span></div>
+      <div class="d"><span class="pill">4</span></div>
+      <div class="d"><span class="pill">5</span></div>
+      <div class="d wknd"><span class="pill">6</span></div>
+
+      <div class="d wknd"><span class="pill">7</span></div>
+      <div class="d today"><span class="pill">8</span></div>
+      <div class="d"><span class="pill">9</span></div>
+      <div class="d"><span class="pill">10</span></div>
+      <div class="d"><span class="pill">11</span></div>
+      <div class="d"><span class="pill">12</span></div>
+      <div class="d wknd"><span class="pill">13</span></div>
+
+      <div class="d wknd"><span class="pill">14</span></div>
+      <div class="d"><span class="pill">15</span></div>
+      <div class="d"><span class="pill">16</span></div>
+      <div class="d"><span class="pill">17</span></div>
+      <div class="d"><span class="pill">18</span></div>
+      <div class="d"><span class="pill">19</span></div>
+      <div class="d wknd"><span class="pill">20</span></div>
+
+      <div class="d wknd"><span class="pill">21</span></div>
+      <div class="d"><span class="pill">22</span></div>
+      <div class="d"><span class="pill">23</span></div>
+      <div class="d"><span class="pill">24</span></div>
+      <div class="d"><span class="pill">25</span></div>
+      <div class="d"><span class="pill">26</span></div>
+      <div class="d wknd"><span class="pill">27</span></div>
+
+      <div class="d wknd"><span class="pill">28</span></div>
+      <div class="d"><span class="pill">29</span></div>
+      <div class="d"><span class="pill">30</span></div>
+      <div class="d"></div><div class="d"></div><div class="d"></div><div class="d"></div>
+    </div>
+
+    <div class="note">
+      <h4>เวลาออกเรือ &middot; ออกทุกวัน 📍</h4>
+      <div class="row"><span class="tg"><i style="background:#185fa5"></i>ทับละมุ</span><span>สิมิลัน / สุรินทร์ &middot; ออก 05:30–08:30</span></div>
+      <div class="row"><span class="tg"><i style="background:#0F6E56"></i>พันวา</span><span>พีพี / กระบี่ / ฉลามวาฬ &middot; ออก 06:30–10:00</span></div>
+      <div class="row" style="font-size:13px;color:#5a7283"><span class="tg" style="color:#5a7283">หมายเหตุ</span><span>เวลา = เรือออกจากท่า · รถรับลูกค้าก่อนหน้า</span></div>
+    </div>
+  </div>
+
+  <!-- Real 3D Captain → save it as  assets/captain.png  (transparent bg). It overlays the SVG placeholder below; if the file is missing nothing shows. -->
+  <img class="mascot" src="assets/captain.png" alt="Captain" style="height:auto" onerror="this.style.display='none'" onload="var s=document.getElementById('mascotSvg');if(s)s.style.display='none'">
+  <!-- SVG placeholder mascot (auto-hidden once the real PNG loads) -->
+  <svg id="mascotSvg" class="mascot" viewBox="0 0 220 230">
+    <ellipse cx="110" cy="150" rx="78" ry="74" fill="#EAF3F8"/>
+    <ellipse cx="110" cy="150" rx="78" ry="74" fill="none" stroke="#cfe0ea" stroke-width="2"/>
+    <path d="M70 120 q40 -26 80 0 M62 150 h96 M70 182 q40 24 80 0" fill="none" stroke="#9fc3d6" stroke-width="3" opacity=".7"/>
+    <circle cx="84" cy="135" r="26" fill="#fff" stroke="#173b52" stroke-width="6"/>
+    <circle cx="136" cy="135" r="26" fill="#fff" stroke="#173b52" stroke-width="6"/>
+    <line x1="110" y1="133" x2="110" y2="133" stroke="#173b52" stroke-width="6"/>
+    <path d="M110 130 h0" stroke="#173b52" stroke-width="6"/>
+    <circle cx="84" cy="137" r="11" fill="#1683C7"/><circle cx="80" cy="133" r="4" fill="#fff"/>
+    <circle cx="136" cy="137" r="11" fill="#1683C7"/><circle cx="132" cy="133" r="4" fill="#fff"/>
+    <path d="M96 168 q14 12 28 0" fill="none" stroke="#173b52" stroke-width="5" stroke-linecap="round"/>
+    <path d="M52 96 q58 -34 116 0 q4 6 -4 8 H56 q-8 -2 -4 -8z" fill="#fff" stroke="#cfe0ea" stroke-width="2"/>
+    <rect x="78" y="86" width="64" height="13" rx="3" fill="#173b52"/>
+    <text x="110" y="96" text-anchor="middle" font-family="DM Sans" font-size="9" font-weight="700" fill="#fff">CAPTAIN</text>
+    <path d="M150 150 q26 -8 30 14 q-18 6 -30 -2z" fill="#fff" stroke="#cfe0ea" stroke-width="2"/>
+    <path d="M86 214 q24 14 48 0" fill="none" stroke="#9fc3d6" stroke-width="3"/>
+  </svg>
+
+  <div class="leaf l">🌿</div>
+  <div class="leaf r">🌿</div>
+</div>
+</body>
+</html>
