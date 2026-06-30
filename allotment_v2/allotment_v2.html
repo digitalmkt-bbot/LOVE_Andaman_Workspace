@@ -37,6 +37,15 @@
       else { setTimeout(function(){ var nv=localStorage.getItem(LS); if(nv) save(nv); }, 5000); } };   // save failed → keep _dirty, retry (no silent data loss)
     x.onerror=function(){ setTimeout(function(){ var nv=localStorage.getItem(LS); if(nv) save(nv); }, 5000); };
     try{ x.send(JSON.stringify({baseVersion:VER, diff:{sets:d.sets,cols:d.cols,objs:d.objs}})); }catch(e){} }
+  // FLUSH pending change before the page unloads (refresh/close) so a fast refresh never loses the last edit
+  function _laFlush(){ if(!_dirty) return; try{ var cur=JSON.parse(localStorage.getItem(LS)||'{}'); var d=computeDiff(BASE,cur); if(!d._changed){ _dirty=false; return; }
+    var payload=JSON.stringify({baseVersion:VER, diff:{sets:d.sets,cols:d.cols,objs:d.objs}});
+    // SYNCHRONOUS save so it commits to cloud BEFORE the page reloads (otherwise the reload reloads stale data → reverts the edit)
+    try{ var x=new XMLHttpRequest(); x.open('POST','/api/save',false); x.setRequestHeader('Content-Type','application/json'); x.send(payload); if(x.status===200){ _dirty=false; try{VER=JSON.parse(x.responseText).version||VER;}catch(_){} BASE=cur; } else if(navigator.sendBeacon){ navigator.sendBeacon('/api/save', new Blob([payload],{type:'application/json'})); } }
+    catch(e){ if(navigator.sendBeacon) navigator.sendBeacon('/api/save', new Blob([payload],{type:'application/json'})); }
+  }catch(e){} }
+  window.addEventListener('beforeunload', _laFlush);
+  window.addEventListener('pagehide', _laFlush);
   function _isPlainObj(x){ return x && typeof x==='object' && !Array.isArray(x); }
   // Deep diff of two plain objects → {p:{key:{v:val}|{m:subdiff}}, d:[deletedKeys]} or null if identical.
   function _deepDiff(b,c){ var p={}, d=[], ch=false;
