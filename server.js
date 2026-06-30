@@ -63,11 +63,20 @@ function session(req){ return verify(cookies(req).sess||''); }
 const MIME = { '.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.svg':'image/svg+xml','.ico':'image/x-icon','.webp':'image/webp','.woff':'font/woff','.woff2':'font/woff2','.ttf':'font/ttf','.xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','.csv':'text/csv; charset=utf-8','.txt':'text/plain; charset=utf-8' };
 function readBody(req, cb){ let ch=[], n=0; req.on('data',c=>{ n+=c.length; if(n>20*1024*1024){req.destroy();return;} ch.push(c); }); req.on('end',()=>cb(Buffer.concat(ch).toString('utf8'))); }
 function J(res, code, obj, extra){ const h=Object.assign({'Content-Type':'application/json; charset=utf-8'}, extra||{}); res.writeHead(code,h); res.end(JSON.stringify(obj)); }
-// Merge a client diff onto the server blob (concurrent-safe per record).
-// diff = { sets:{key:value|null}, cols:{key:{idf,up:[records],del:[ids]}} }
+// Deep-merge a plain-object patch onto target · patch={p:{key:{v:val}|{m:subdiff}}, d:[deletedKeys]}
+function applyObj(target, diff){
+  const p=(diff&&diff.p)||{}, d=(diff&&diff.d)||[];
+  Object.keys(p).forEach(k=>{ const e=p[k]||{};
+    if('v' in e) target[k]=e.v;
+    else if('m' in e){ if(!target[k]||typeof target[k]!=='object'||Array.isArray(target[k])) target[k]={}; applyObj(target[k], e.m); } });
+  d.forEach(k=>{ delete target[k]; });
+}
+// Merge a client diff onto the server blob (concurrent-safe per record + per object sub-key).
+// diff = { sets:{key:value|null}, cols:{key:{idf,up,del}}, objs:{key:{p,d}} }
 function applyDiff(blob, diff){
-  const sets = (diff && diff.sets) || {}, cols = (diff && diff.cols) || {};
+  const sets = (diff && diff.sets) || {}, cols = (diff && diff.cols) || {}, objs = (diff && diff.objs) || {};
   Object.keys(sets).forEach(k=>{ const v=sets[k]; if(v===null) delete blob[k]; else blob[k]=v; });
+  Object.keys(objs).forEach(k=>{ if(!blob[k]||typeof blob[k]!=='object'||Array.isArray(blob[k])) blob[k]={}; applyObj(blob[k], objs[k]); });
   Object.keys(cols).forEach(k=>{ const c=cols[k]||{}; const idf=c.idf||'id';
     const arr = Array.isArray(blob[k]) ? blob[k] : [];
     const map = new Map(); let n=0;
