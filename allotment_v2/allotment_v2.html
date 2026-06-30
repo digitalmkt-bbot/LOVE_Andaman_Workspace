@@ -57,12 +57,29 @@
     if(Date.now()-_laLastInput < 8000) return true;                                     // interacted within last 8s
     return false;
   }
-  function _laTryRefresh(){ if(!_laPending) return; if(_laBusy()) showRefresh(_laPending); else location.reload(); }
+  // remember the current screen (per-tab · NOT synced) so an auto-refresh returns here instead of Dashboard
+  function _laSaveView(){ try{
+    var act=document.querySelector('.nav-item.active'); var view=act&&act.dataset?act.dataset.view:''; if(!view) return;
+    var st={view:view};
+    if(window._bkV2){ st.bk={tab:_bkV2.tab||'', filterDate:_bkV2.filterDate||'', filterRoute:_bkV2.filterRoute||'', detailId:_bkV2.detailId||'', boat:!!_bkV2.boatAssignMode, van:!!_bkV2.vanAssignMode}; if(window._bkV2T2Cursor) st.t2c=_bkV2T2Cursor; }
+    var mn=document.querySelector('main'); st.sc=mn?mn.scrollTop:0; st.scw=window.scrollY||0;
+    sessionStorage.setItem('la_view', JSON.stringify(st));
+  }catch(e){} }
+  window._laReload=function(){ try{_laSaveView();}catch(e){} location.reload(); };
+  function _laRestoreView(){ try{
+    var raw=sessionStorage.getItem('la_view'); if(!raw) return; var st=JSON.parse(raw); if(!st||!st.view) return;
+    if(typeof laAllowed==='function' && !laAllowed(st.view)) return;          // respect role permissions
+    var el=document.querySelector('.nav-item[data-view="'+st.view+'"]'); if(!el || el.style.display==='none') return;
+    if(st.bk && window._bkV2){ if(st.bk.tab)_bkV2.tab=st.bk.tab; if(st.bk.filterDate)_bkV2.filterDate=st.bk.filterDate; if(st.bk.filterRoute)_bkV2.filterRoute=st.bk.filterRoute; if(st.bk.detailId)_bkV2.detailId=st.bk.detailId; _bkV2.boatAssignMode=st.bk.boat; _bkV2.vanAssignMode=st.bk.van; if(st.t2c) window._bkV2T2Cursor=st.t2c; }
+    el.click();
+    setTimeout(function(){ try{ var mn=document.querySelector('main'); if(mn&&st.sc) mn.scrollTop=st.sc; if(st.scw) window.scrollTo(0,st.scw); }catch(e){} }, 220);
+  }catch(e){} }
+  function _laTryRefresh(){ if(!_laPending) return; if(_laBusy()) showRefresh(_laPending); else _laReload(); }
   // poll cloud version
   setInterval(function(){ var x=new XMLHttpRequest(); x.open('GET','/api/version',true); x.onload=function(){ if(x.status===200){ var j={}; try{j=JSON.parse(x.responseText);}catch(e){} if((j.version||0)>VER){ _laPending=j; _laTryRefresh(); } } }; try{x.send();}catch(e){} }, 15000);
-  // once new data is pending, reload the moment the user goes idle (no typing, no open form/dialog)
-  setInterval(function(){ if(_laPending && !_laBusy()) location.reload(); }, 3000);
-  function showRefresh(info){ if(_refreshShown) return; _refreshShown=true; onReady(function(){ var d=document.createElement('div'); d.id='la-refresh'; d.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:99999;background:#185FA5;color:#fff;border-radius:24px;padding:8px 8px 8px 16px;font:13px/1.3 "DM Sans",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25);display:flex;align-items:center;gap:10px'; d.innerHTML='🔄 มีข้อมูลใหม่จากคนอื่น'+((info&&info.updated_by)?(' (โดย '+esc(info.updated_by)+')'):'')+' · จะรีเฟรชอัตโนมัติเมื่อว่าง <button onclick="location.reload()" style="background:#fff;color:#185FA5;border:none;border-radius:16px;padding:6px 14px;font-weight:700;cursor:pointer;font-family:inherit">โหลดเลย</button>'; document.body.appendChild(d); }); }
+  // keep the saved screen fresh · and once new data is pending, reload the moment the user goes idle
+  setInterval(function(){ _laSaveView(); if(_laPending && !_laBusy()) _laReload(); }, 3000);
+  function showRefresh(info){ if(_refreshShown) return; _refreshShown=true; onReady(function(){ var d=document.createElement('div'); d.id='la-refresh'; d.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:99999;background:#185FA5;color:#fff;border-radius:24px;padding:8px 8px 8px 16px;font:13px/1.3 "DM Sans",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25);display:flex;align-items:center;gap:10px'; d.innerHTML='🔄 มีข้อมูลใหม่จากคนอื่น'+((info&&info.updated_by)?(' (โดย '+esc(info.updated_by)+')'):'')+' · จะรีเฟรชอัตโนมัติเมื่อว่าง <button onclick="_laReload()" style="background:#fff;color:#185FA5;border:none;border-radius:16px;padding:6px 14px;font-weight:700;cursor:pointer;font-family:inherit">โหลดเลย</button>'; document.body.appendChild(d); }); }
 
   // 4) UI · user badge + logout + (admin) user mgmt
   function onReady(fn){ if(document.body) fn(); else document.addEventListener('DOMContentLoaded',fn); }
@@ -72,7 +89,7 @@
     var b=document.createElement('div'); b.id='la-userbadge';
     b.innerHTML='<span>👤 <b>'+esc(ME.name||ME.username)+'</b>'+(ME.role==='admin'?' · admin':'')+(LASTBY?(' <span style="opacity:.7">· แก้ล่าสุด '+esc(LASTBY)+'</span>'):'')+'</span>'+(ME.role==='admin'?'<button class="la-ub-btn" onclick="__laUsers()">ผู้ใช้</button>':'')+'<button class="la-ub-btn" onclick="__laLogout()">ออก</button>';
     document.body.appendChild(b);
-    laWrapNav(); laApplyPerms(); setTimeout(laApplyPerms,600);
+    laWrapNav(); laApplyPerms(); setTimeout(laApplyPerms,600); setTimeout(_laRestoreView,850);
   });
   // ── Per-user area access (role-based nav gating) ──
   var LA_AREAS=[{k:'overview',t:'ภาพรวม · Dashboard/Calendar'},{k:'operations',t:'ปฏิบัติการ · Booking/Boat Op/รถ'},{k:'sales',t:'ขาย · Agents/Rate/Demand'},{k:'accounting',t:'บัญชี · Accounting/PFM'},{k:'fleet',t:'เรือ/ช่าง · Fleet/Maintenance'},{k:'config',t:'ตั้งค่า · Programs/Team'}];
