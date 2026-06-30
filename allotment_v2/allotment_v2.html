@@ -33,7 +33,7 @@
   function seedFull(loc){ var cur; try{cur=JSON.parse(loc);}catch(e){return;} var x=new XMLHttpRequest(); x.open('POST','/api/save',true); x.setRequestHeader('Content-Type','application/json'); x.onload=function(){ if(x.status===200){ try{VER=JSON.parse(x.responseText).version;}catch(e){} BASE=cur; } }; try{ x.send(JSON.stringify({baseVersion:0,full:loc})); }catch(e){} }
   function save(v){ var cur; try{cur=JSON.parse(v);}catch(e){return;} var d=computeDiff(BASE,cur); if(!d._changed) return;
     var x=new XMLHttpRequest(); x.open('POST','/api/save',true); x.setRequestHeader('Content-Type','application/json');
-    x.onload=function(){ if(x.status===200){ var r={}; try{r=JSON.parse(x.responseText);}catch(e){} VER=r.version||VER; BASE=cur; window.__savedAt=Date.now(); badgeTick(); if(r.behind) showRefresh(); } };
+    x.onload=function(){ if(x.status===200){ var r={}; try{r=JSON.parse(x.responseText);}catch(e){} VER=r.version||VER; BASE=cur; window.__savedAt=Date.now(); badgeTick(); if(r.behind){ _laPending=r; _laTryRefresh(); } } };
     try{ x.send(JSON.stringify({baseVersion:VER, diff:{sets:d.sets,cols:d.cols}})); }catch(e){} }
   function computeDiff(base,cur){ var sets={},cols={},ch=false,keys={};
     Object.keys(base||{}).forEach(function(k){keys[k]=1;}); Object.keys(cur||{}).forEach(function(k){keys[k]=1;});
@@ -46,8 +46,23 @@
       else { if(JSON.stringify(b)!==JSON.stringify(c)){ sets[k]=(c===undefined?null:c); ch=true; } } });
     return {sets:sets,cols:cols,_changed:ch}; }
   // poll for others' changes → offer refresh (no silent stale, no forced reload mid-edit)
-  setInterval(function(){ if(_refreshShown) return; var x=new XMLHttpRequest(); x.open('GET','/api/version',true); x.onload=function(){ if(x.status===200){ var j={}; try{j=JSON.parse(x.responseText);}catch(e){} if((j.version||0)>VER) showRefresh(j); } }; try{x.send();}catch(e){} }, 25000);
-  function showRefresh(info){ if(_refreshShown) return; _refreshShown=true; onReady(function(){ var d=document.createElement('div'); d.id='la-refresh'; d.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:99999;background:#185FA5;color:#fff;border-radius:24px;padding:8px 8px 8px 16px;font:13px/1.3 "DM Sans",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25);display:flex;align-items:center;gap:10px'; d.innerHTML='🔄 มีข้อมูลใหม่จากคนอื่น'+((info&&info.updated_by)?(' (โดย '+esc(info.updated_by)+')'):'')+' <button onclick="location.reload()" style="background:#fff;color:#185FA5;border:none;border-radius:16px;padding:6px 14px;font-weight:700;cursor:pointer;font-family:inherit">โหลดใหม่</button>'; document.body.appendChild(d); }); }
+  // ── AUTO-REFRESH when others save · seamless when idle · never interrupts typing/editing ──
+  var _laPending=null, _laLastInput=Date.now();
+  ['mousedown','keydown','input','touchstart','wheel'].forEach(function(ev){ try{ document.addEventListener(ev, function(){ _laLastInput=Date.now(); }, true); }catch(e){} });
+  function _laBusy(){
+    if(window._bkV2 && (_bkV2.newBooking || _bkV2.editingId)) return true;              // a booking form is open
+    var ae=document.activeElement;
+    if(ae && (ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT'||ae.isContentEditable)) return true;  // typing in a field
+    if(document.querySelector('.la-modal')||document.getElementById('la-umodal')||document.getElementById('la-pmodal')) return true;  // a dialog is open
+    if(Date.now()-_laLastInput < 8000) return true;                                     // interacted within last 8s
+    return false;
+  }
+  function _laTryRefresh(){ if(!_laPending) return; if(_laBusy()) showRefresh(_laPending); else location.reload(); }
+  // poll cloud version
+  setInterval(function(){ var x=new XMLHttpRequest(); x.open('GET','/api/version',true); x.onload=function(){ if(x.status===200){ var j={}; try{j=JSON.parse(x.responseText);}catch(e){} if((j.version||0)>VER){ _laPending=j; _laTryRefresh(); } } }; try{x.send();}catch(e){} }, 15000);
+  // once new data is pending, reload the moment the user goes idle (no typing, no open form/dialog)
+  setInterval(function(){ if(_laPending && !_laBusy()) location.reload(); }, 3000);
+  function showRefresh(info){ if(_refreshShown) return; _refreshShown=true; onReady(function(){ var d=document.createElement('div'); d.id='la-refresh'; d.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:99999;background:#185FA5;color:#fff;border-radius:24px;padding:8px 8px 8px 16px;font:13px/1.3 "DM Sans",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25);display:flex;align-items:center;gap:10px'; d.innerHTML='🔄 มีข้อมูลใหม่จากคนอื่น'+((info&&info.updated_by)?(' (โดย '+esc(info.updated_by)+')'):'')+' · จะรีเฟรชอัตโนมัติเมื่อว่าง <button onclick="location.reload()" style="background:#fff;color:#185FA5;border:none;border-radius:16px;padding:6px 14px;font-weight:700;cursor:pointer;font-family:inherit">โหลดเลย</button>'; document.body.appendChild(d); }); }
 
   // 4) UI · user badge + logout + (admin) user mgmt
   function onReady(fn){ if(document.body) fn(); else document.addEventListener('DOMContentLoaded',fn); }
