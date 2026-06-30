@@ -63,6 +63,9 @@
   var LA_AREAS=[{k:'overview',t:'ภาพรวม · Dashboard/Calendar'},{k:'operations',t:'ปฏิบัติการ · Booking/Boat Op/รถ'},{k:'sales',t:'ขาย · Agents/Rate/Demand'},{k:'accounting',t:'บัญชี · Accounting/PFM'},{k:'fleet',t:'เรือ/ช่าง · Fleet/Maintenance'},{k:'config',t:'ตั้งค่า · Programs/Team'}];
   var LA_PRESETS={Sales:['overview','sales'],Operations:['overview','operations'],Fleet:['fleet'],Accounting:['overview','accounting']};
   var LA_VIEW_AREA={dashboard:'overview',calendar:'overview',daily:'overview',booking:'operations',operation:'operations',vehicles:'operations',vanjobs:'operations','pickup-setup':'operations',boatassign:'operations',agents:'sales','rate-types':'sales',b2c:'sales',staff:'sales',marketdata:'sales',pickupmap:'sales',accounting:'accounting',dailypfm:'accounting','fl-dashboard':'fleet','fl-boatstatus':'fleet','fl-dailyreport':'fleet','fl-incident':'fleet','fl-projects':'fleet','fl-maintenance':'fleet','fl-inventory':'fleet','fl-consumables':'fleet','fl-cost':'fleet','fl-insights':'fleet','fl-fuel':'fleet','fl-asset':'fleet',settings:'config',teammkt:'config',addonsvc:'config'};
+  // Globally-unique id (multi-user safe): millisecond + 5 random base36 chars.
+  // Use for EVERY new record's id so concurrent users/tabs never collide (the cloud diff-merge keys by id).
+  window.LA_UID=function(p){ return (p||'')+Date.now().toString(36)+Math.random().toString(36).slice(2,7); };
   function laFullAccess(){ return !ME || ME.role==='admin' || !Array.isArray(ME.perms); }
   function laAllowed(view){ if(laFullAccess()) return true; var a=LA_VIEW_AREA[view]; if(!a) return true; return ME.perms.indexOf(a)>=0; }
   function laApplyPerms(){ if(laFullAccess()) return;
@@ -7069,7 +7072,7 @@ function saveBoat(){
     if(typeof flRenderBoatList==='function'){flRenderBoatList();flSelBoat(bid);}
   } else {
     // ADD MODE
-    fields.id='b'+Date.now();
+    fields.id=LA_UID('b');
     fields.log=[{id:'sl'+Date.now(),s:stMap[fmBoatSt],from:TODAY_STR,to:null,loc:locMap[pier]||pier,note:''}];
     BOATS.push(fields);
     closeModal('boat-modal'); renderBoats(); save();
@@ -15472,7 +15475,7 @@ function flLoad(){
     
     const no = 'MO-' + String(FL_MEMOS.length + 1).padStart(3, '0');
     const memo = {
-      id: 'm' + Date.now() + '_' + jobNo,
+      id: LA_UID('m') + '_' + jobNo,
       no,
       title: opts.subject,
       to: 'กรรมการผู้จัดการ',
@@ -15940,7 +15943,7 @@ function flConsumeSubmit(){
   if(qty>have){ if(!confirm('คลังที่ '+loc+' มีแค่ '+have+' '+(it.unit||'')+' (เบิก '+qty+') — ยืนยันเบิกทำให้ติดลบ?')) return; }
   if(typeof invRemoveAt==='function'){ if(!invRemoveAt(it,loc,qty)){ /* allow negative path */ const s=(it.stocks||[]).find(x=>x.location===loc); if(s){ s.qty=(s.qty||0)-qty; invSyncLegacy(it); } else { it.qty=(it.qty||0)-qty; } } }
   else { it.qty=(it.qty||0)-qty; }
-  const id='cons_'+Date.now();
+  const id=LA_UID('cons_');
   const eng=(FL_ENGINES||[]).find(e=>e.id===engId);
   const engLabel=eng?((eng.pos||'')+' · '+(eng.serial||eng.id)):'';
   const cost=qty*(+it.cost||0);
@@ -21603,7 +21606,7 @@ function flSaveMemo(){
     : 0;
   const no='MO-'+String(_moMaxNo+1).padStart(3,'0');
   const memo={
-    id:'m'+Date.now(),no,title:subject,
+    id:LA_UID('m'),no,title:subject,
     to:document.getElementById('memo-to').value,
     from:document.getElementById('memo-from').value,
     proposer:document.getElementById('memo-proposer').value,
@@ -21837,7 +21840,7 @@ function flProjAutoCreateForScheduledMJs(){
     const boatName = boat?boat.name:'(unknown boat)';
     const yr  = m.startDate.slice(0,4);
     const seq = (FL_PROJECTS.length+1).toString().padStart(3,'0');
-    const pid = `proj_${yr}_${m.boatId}_${seq}`;
+    const pid = `proj_${yr}_${m.boatId}_${seq}_${Math.random().toString(36).slice(2,6)}`;
     const planTo = m.endDate || flProjGuessEnd(m.startDate);
     const status = m.status==='done' ? 'completed' : (m.status==='inprogress' ? 'inprogress' : 'planned');
     const proj = {
@@ -21997,7 +22000,7 @@ function flProjMigrate(force){
       // Build project
       const yr  = startDate.slice(0,4);
       const seq = (FL_PROJECTS.length+1).toString().padStart(3,'0');
-      const pid = `proj_${yr}_${b.id}_${seq}`;
+      const pid = `proj_${yr}_${b.id}_${seq}_${Math.random().toString(36).slice(2,6)}`;
       const status = endDate ? 'completed' : (new Date(startDate)<=today ? 'inprogress' : 'planned');
       const name = isDryDock
         ? `Annual Drydock · ${b.name}`
@@ -24307,7 +24310,7 @@ function flProjSaveModal(){
   const yr = planFrom.slice(0,4);
   const _pt = planTo||null;
   const proj = {
-    id: `proj_${yr}_${boatId||'gen'}_${seq}`,
+    id: `proj_${yr}_${boatId||'gen'}_${seq}_${Math.random().toString(36).slice(2,6)}`,
     no: `PRJ-${seq}`,
     name, boatId, type, vendor,
     planFrom, planTo: _pt,
@@ -26896,7 +26899,7 @@ function flEngSplitIntoJobs(jobId){
     _no++;
     const jobNo='MJ-'+String(_no).padStart(3,'0');
     const nj={
-      id:'mj'+Date.now()+'-'+idx,no:jobNo,boatId:m.boatId,type:m.type,
+      id:LA_UID('mj')+idx,no:jobNo,boatId:m.boatId,type:m.type,
       title:`${baseTitle} — ${suffix}`,
       detail:m.detail||'',location:m.location||'',
       status:'pending',startDate:m.startDate,endDate:null,cost:0,
@@ -26949,7 +26952,7 @@ function flSplitExistingJob(jobId){
     _no++;
     const jobNo='MJ-'+String(_no).padStart(3,'0');
     const nj={
-      id:'mj'+Date.now()+'-'+idx,no:jobNo,boatId:m.boatId,type:m.type,
+      id:LA_UID('mj')+idx,no:jobNo,boatId:m.boatId,type:m.type,
       title:`${baseTitle} — ${suffix}`,
       detail:m.detail||'',location:m.location||'',
       status:'pending',startDate:m.startDate,endDate:null,cost:0,
@@ -28080,7 +28083,7 @@ function flSaveCreateJob(){
           const jobAsset={type:a.type,label:a.label||labelFor(a),detail:a.note||a.detail||'',status:'fixing'};
           if(aid&&a.id) jobAsset[aid]=a.id;
           const mj={
-            id:'mj'+Date.now()+'-'+idx,no:jobNo,boatId,type:_jobType,
+            id:LA_UID('mj')+idx,no:jobNo,boatId,type:_jobType,
             title:`${baseTitle} — ${subtitle}`,
             detail,location,status:'pending',startDate,endDate:null,cost:0,
             incidentId:incId,assets:[jobAsset],progressLog:[],setFixing
@@ -28161,7 +28164,7 @@ function flSaveCreateJob(){
     if(!reason){alert('กรุณาเลือกเหตุผลที่ไม่พร้อมใช้งาน');return;}
   }
   const mj={
-    id:'mj'+Date.now(),no,boatId,type:_jobType,title,
+    id:LA_UID('mj'),no,boatId,type:_jobType,title,
     detail:document.getElementById('job-detail').value.trim(),
     location:document.getElementById('job-location').value.trim(),
     status:'pending',startDate,endDate:null,cost:0,
@@ -29380,7 +29383,7 @@ function flSaveIncident(){
   }
 
   const inc={
-    id:'inc'+Date.now(), no, boatId, date, time, title,
+    id:LA_UID('inc'), no, boatId, date, time, title,
     detail, remark:remarkFinal, damagedAssets, priority, severity,
     type:'incident',
     status: isQuickFix ? 'resolved' : 'open',
@@ -30534,7 +30537,7 @@ function flSaveAddStock(){
   const extraNote=document.getElementById('add-inv-note-extra')?.value.trim()||'';
   const combinedNote=[engineModel, extraNote].filter(Boolean).join(' · ');
   FL_INVENTORY.push({
-    id:'i'+Date.now(),name,
+    id:LA_UID('i'),name,
     partNo:document.getElementById('add-inv-partno').value.trim(),
     category:document.getElementById('add-inv-cat').value,
     supplier:document.getElementById('add-inv-supplier').value.trim(),
@@ -30804,7 +30807,7 @@ function flSaveEngine(){
   const pos=document.getElementById('fl-eng-pos-sel').value;
   const spareLocation=(status==='spare'||status==='fixing')?document.getElementById('fl-eng-spare-loc').value:null;
   if(flEditEngId){const e=flGetEng(flEditEngId);if(e)Object.assign(e,{brand,model,serial,hp,buyDate,price,baseHours,serviceInterval,note,status,boatId,pos,spareLocation});}
-  else FL_ENGINES.push({id:'e'+Date.now(),brand,model,serial,hp,buyDate,price,baseHours,serviceInterval,note,status,boatId,pos,spareLocation});
+  else FL_ENGINES.push({id:LA_UID('e'),brand,model,serial,hp,buyDate,price,baseHours,serviceInterval,note,status,boatId,pos,spareLocation});
   flSave();closeModal('fl-modal-engine');
   // preserve the engine-list scroll across the re-render (was jumping back to top after save)
   const _lp=document.getElementById('fl-eng-listpanel'); const _lt=_lp?_lp.scrollTop:0; const _wy=window.scrollY||window.pageYOffset||0;
@@ -30897,7 +30900,7 @@ function flSaveGearbox(){
   const lastServiceDate=document.getElementById('fl-gb-last-svc').value||null;
   const data={brand,model,serial,buyDate,baseHours,note,status,engineId,spareLocation,modelSuffix,shaftLength,rotation,gearRatio,oilCapacity,serviceInterval,lastServiceDate};
   if(flEditGbId){const g=flGetGb(flEditGbId);if(g)Object.assign(g,data);}
-  else FL_GEARBOXES.push({id:'g'+Date.now(),...data});
+  else FL_GEARBOXES.push({id:LA_UID('g'),...data});
   flSave();closeModal('fl-modal-gearbox');
   // ใช้ flRenderAsset() เพื่อ refresh tab ปัจจุบัน (รวม Overview · Gearboxes · etc.)
   if(typeof flRenderAsset==='function') flRenderAsset();
@@ -30979,7 +30982,7 @@ function flSavePropeller(){
   if(status==='spare') gearboxId=null;
   const data={brand,serial,diameter,pitch,size,blades,material,rotation,hubSize,cupping,cost,buyDate,note,status,gearboxId,spareLocation};
   if(flEditPropId){const p=FL_PROPELLERS.find(x=>x.id===flEditPropId);if(p)Object.assign(p,data);}
-  else FL_PROPELLERS.push({id:'p'+Date.now(),...data});
+  else FL_PROPELLERS.push({id:LA_UID('p'),...data});
   flSave();closeModal('fl-modal-propeller');
   if(typeof flRenderAsset==='function') flRenderAsset();
   else flRenderPropList();
@@ -36093,7 +36096,7 @@ function bkV2LockedTotal(routeId, date){ return bkV2LocksFor(routeId,date).reduc
 function bkV2CreateLock(o){
   const today = (typeof bkV2LocalYMD==='function') ? bkV2LocalYMD(new Date()) : new Date().toISOString().slice(0,10);
   const mFrom = o.monthFrom||o.month||'';
-  const l = { id:'lk'+Date.now().toString(36), scope:o.scope||'day', routeId:o.routeId, date:o.date||'',
+  const l = { id:LA_UID('lk'), scope:o.scope||'day', routeId:o.routeId, date:o.date||'',
     monthFrom:mFrom, monthTo:o.monthTo||mFrom, month:mFrom, boatId:o.boatId||null,
     holderType:o.holderType||'office', holderId:o.holderId||null, qty:Number(o.qty)||0, used:0,
     reason:o.reason||'', expiry:o.expiry||'', status:'active', createdAt:today, createdBy:'RM',
@@ -36527,7 +36530,7 @@ function acctCreateInvoice(agentId, bookingIds, dueDays){
   let net=subtotal, vat=0, total=subtotal;
   if(vm==='exclude'){ net=subtotal; vat=Math.round(net*rate); total=net+vat; }
   else if(vm==='include'){ total=subtotal; net=Math.round(subtotal/(1+rate)); vat=subtotal-net; }
-  const inv={ id:'inv_'+Date.now(), number:acctNextInvoiceNo(), agentId, bookingIds:ids, lineItems:[], subtotal, netAmount:net, vatMode:vm, vatRate:rate, vatAmount:vat, depositApplied:0, total, issuedAt:now.toISOString(), dueAt:due.toISOString(), status:'issued', createdBy:'RM' };
+  const inv={ id:LA_UID('inv_'), number:acctNextInvoiceNo(), agentId, bookingIds:ids, lineItems:[], subtotal, netAmount:net, vatMode:vm, vatRate:rate, vatAmount:vat, depositApplied:0, total, issuedAt:now.toISOString(), dueAt:due.toISOString(), status:'issued', createdBy:'RM' };
   SB_INVOICES.push(inv); sbInvoicesPersist();
   ids.forEach(id=>{ const b=SB_BOOKINGS.find(x=>x.id===id); if(b){ b.invoiceId=inv.id; b.paymentStatus='invoiced'; if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'invoice','Invoice '+inv.number+' issued · ฿'+Math.round(total).toLocaleString()+(vat>0?' (incl. VAT)':''),'Invoice'); } });
   acctPersistBookings();
@@ -36537,14 +36540,14 @@ function acctCreateInvoice(agentId, bookingIds, dueDays){
 function acctCreateFeeInvoice(agentId, bookingId, amount, note, feeType){
   const amt=Math.max(0, Math.round(Number(amount)||0)); if(amt<=0) return null;
   const now=new Date();
-  const inv={ id:'inv_'+Date.now()+Math.random().toString(36).slice(2,5), number:acctNextInvoiceNo(), agentId, bookingIds:[bookingId], lineItems:[{label:note||'Cancellation fee', amount:amt}], subtotal:amt, netAmount:amt, vatMode:'none', vatRate:0, vatAmount:0, depositApplied:0, total:amt, issuedAt:now.toISOString(), dueAt:now.toISOString(), status:'issued', createdBy:'RM', feeType:feeType||'cancellation', note:note||'' };
+  const inv={ id:LA_UID('inv_'), number:acctNextInvoiceNo(), agentId, bookingIds:[bookingId], lineItems:[{label:note||'Cancellation fee', amount:amt}], subtotal:amt, netAmount:amt, vatMode:'none', vatRate:0, vatAmount:0, depositApplied:0, total:amt, issuedAt:now.toISOString(), dueAt:now.toISOString(), status:'issued', createdBy:'RM', feeType:feeType||'cancellation', note:note||'' };
   SB_INVOICES.push(inv); sbInvoicesPersist();
   return inv;
 }
 function acctRecordPayment(invoiceId, amount, method){
   const inv=SB_INVOICES.find(i=>i.id===invoiceId); if(!inv) return;
   const amt=Math.max(0, +amount||0); if(amt<=0) return;
-  SB_PAYMENTS.push({ id:'pay_'+Date.now(), invoiceId, agentId:inv.agentId, amount:amt, method:method||'transfer', date:new Date().toISOString(), type:'payment' });
+  SB_PAYMENTS.push({ id:LA_UID('pay_'), invoiceId, agentId:inv.agentId, amount:amt, method:method||'transfer', date:new Date().toISOString(), type:'payment' });
   sbPaymentsPersist();
   const bal=acctInvoiceBalance(inv);
   inv.status = bal<=0 ? 'paid' : 'partial';
@@ -38884,7 +38887,7 @@ function vehStatusOpen(id){
 }
 function vehAdd(){
   let mx=0; SB_VEHICLES.forEach(v=>{ const n=parseInt(String(v.id).replace(/^veh/,''))||0; if(n>mx)mx=n; });
-  const id='veh'+String(mx+1).padStart(2,'0');
+  const id='veh'+String(mx+1).padStart(2,'0')+Math.random().toString(36).slice(2,5);   // +random · multi-user unique (parser reads leading digits)
   SB_VEHICLES.push({id, name:'', plate:'', type:'van', capacity:9, ownership:'own', partnerName:'', zoneBase:'PK', driver:'', driverPhone:'', active:true, note:'', log:[{at:new Date().toISOString(),kind:'created',text:'เพิ่มรถใหม่'}]});
   sbVehiclesPersist(); renderVehicles();
 }
@@ -39695,7 +39698,7 @@ function acctPrintDoc(){
 function acctDepositRemaining(dep){ const used=SB_PAYMENTS.filter(p=>p.depositId===dep.id).reduce((s,p)=>s+(p.amount||0),0); return Math.max(0,(dep.amount||0)-used); }
 function acctAgentDepositAvail(agentId){ return SB_DEPOSITS.filter(d=>d.agentId===agentId).reduce((s,d)=>s+acctDepositRemaining(d),0); }
 function acctDepositHeldTotal(){ return SB_DEPOSITS.reduce((s,d)=>s+acctDepositRemaining(d),0); }
-function acctCreateDeposit(agentId, amount, method, note){ const dep={id:'dep_'+Date.now(), agentId, amount:Math.max(0,+amount||0), method:method||'transfer', note:note||'', date:new Date().toISOString()}; SB_DEPOSITS.push(dep); sbDepositsPersist(); return dep; }
+function acctCreateDeposit(agentId, amount, method, note){ const dep={id:LA_UID('dep_'), agentId, amount:Math.max(0,+amount||0), method:method||'transfer', note:note||'', date:new Date().toISOString()}; SB_DEPOSITS.push(dep); sbDepositsPersist(); return dep; }
 function acctApplyDeposit(agentId, invoiceId, amount){
   let need=Math.max(0,+amount||0); if(need<=0) return 0;
   const inv=SB_INVOICES.find(i=>i.id===invoiceId); if(!inv) return 0;
@@ -39991,7 +39994,7 @@ function bkV2ExtraSave(bkId){
     if(bk && typeof bkV2AddHistory==='function'){ bkV2AddHistory(bk,'extra','Edited extra · '+name+(qty>1?' ×'+qty:'')+' · ฿'+Math.round(total).toLocaleString()+(commission?' · คอม ฿'+Math.round(commission).toLocaleString():''),'Extra'); if(typeof acctPersistBookings==='function') acctPersistBookings(); }
     _bkExtraEditId=null;
   } else {
-    SB_EXTRAS.push({id:'ex_'+Date.now(), bookingId:bkId, tripDate:(bk&&bk.trips&&bk.trips[0]&&bk.trips[0].date)||'', service:name, qty, unitPrice:price, total, toCompany, commission, seller, method:'cash', settle:'pending', date:new Date().toISOString()});
+    SB_EXTRAS.push({id:LA_UID('ex_'), bookingId:bkId, tripDate:(bk&&bk.trips&&bk.trips[0]&&bk.trips[0].date)||'', service:name, qty, unitPrice:price, total, toCompany, commission, seller, method:'cash', settle:'pending', date:new Date().toISOString()});
     if(bk && typeof bkV2AddHistory==='function'){ bkV2AddHistory(bk,'extra','Day-of extra · '+name+(qty>1?' ×'+qty:'')+' · ฿'+Math.round(total).toLocaleString()+(commission?' · คอม ฿'+Math.round(commission).toLocaleString():'')+' (cash)','Extra'); if(typeof acctPersistBookings==='function') acctPersistBookings(); }
   }
   sbExtrasPersist(); bkV2Render(); bkV2ExtraRender();
@@ -41562,7 +41565,7 @@ function rtClone(rtId){
   const rt = getRateType(rtId);
   if(!rt) return;
   _rtDraft = _rtCloneDeep(rt);
-  _rtDraft.id = 'rt' + Date.now().toString().slice(-6);
+  _rtDraft.id = LA_UID('rt');
   _rtDraft.code = (rt.code || 'RT') + '-COPY';
   _rtDraft.name = (rt.name || 'Rate Type') + ' (copy)';
   _rtDraft.createdDate = new Date().toISOString().slice(0,10);
@@ -44799,8 +44802,7 @@ function agNewRender(){
 function agCreateSubmit(){
   const d = _agNewDraft; if(!d) return;
   if(!(d.name||'').trim()){ alert('Please enter an agent name'); return; }
-  let n = 1; while(SB_AGENTS.some(a=>a.id==='a'+String(n).padStart(2,'0'))) n++;
-  const id = 'a'+String(n).padStart(2,'0');
+  const id = LA_UID('a');   // multi-user unique (was first-free 'aNN' → collided across concurrent users)
   const code = (d.code||'').trim() || d.name.trim().toUpperCase().replace(/[^A-Z0-9]+/g,'').slice(0,8) || id.toUpperCase();
   const isCredit = (d.payType==='invoice');
   const a = { id, code, name:d.name.trim(), market:d.market, sub:d.sub||'', sales:d.sales||null, payType:d.payType||'invoice', vatMode:d.vatMode||'none',
