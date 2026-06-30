@@ -46900,8 +46900,8 @@ function bkV2RenderNewBooking(){
             ${sp==='inspection'?`<div style="font-size:10.5px;margin-top:3px;color:#6c5ce7">ตรวจงาน · นับที่นั่งใน manifest · ไม่หักโควต้า</div>`:''}
           </div>`; })() : ''}
           <div class="bkv2-nb-field">
-            <label class="bkv2-nb-label">Submitted by <span style="font-weight:400;color:#9aa">· auto = ผู้ล็อกอิน</span></label>
-            <input class="bkv2-nb-input" type="text" placeholder="auto = ผู้ล็อกอิน" value="${escapeHTML(d.createdBy||'')}" oninput="bkV2SetBookingField('createdBy', this.value)">
+            <label class="bkv2-nb-label">Submitted by</label>
+            <input class="bkv2-nb-input" type="text" placeholder="name / initials" value="${escapeHTML(d.createdBy||'')}" oninput="bkV2SetBookingField('createdBy', this.value)">
           </div>
           <div class="bkv2-nb-field">
             <label class="bkv2-nb-label">Confirmed by <span style="font-weight:400;color:#9aa">· auto เมื่อยืนยัน</span></label>
@@ -50495,7 +50495,7 @@ function bkV2NewBooking(){
   _bkV2.newBooking = {
     code: bkV2GenerateBookingCode(),
     bookingDate: new Date().toISOString().slice(0,10),   // วันที่จอง · default = วันนี้ · editable
-    createdBy: bkV2LoginUser(), // Submitted by · auto = logged-in user (editable)
+    createdBy: '',              // Submitted by · keyed manually (NOT auto)
     confirmedBy: '',            // Confirmed by · auto-stamped = logged-in user when confirmed
     voucherRef: '',             // agent's voucher reference (optional · e.g. 'AT-VC-25060042')
     soldBy: '',                 // salesperson credited (override · for walk-in/direct sales · blank = derive from agent.sales)
@@ -52431,7 +52431,7 @@ function bkV2CommitBooking(status){
   const editing = _bkV2.editingId ? SB_BOOKINGS.find(b => b.id === _bkV2.editingId) : null;
   const bookingId = editing ? editing.id : d.code;
   const createdAt = editing?.createdAt || new Date().toISOString().slice(0,10);
-  const createdBy = (d.createdBy||'').trim() || editing?.createdBy || bkV2LoginUser() || '';
+  const createdBy = (d.createdBy||'').trim() || editing?.createdBy || '';
 
   // Release existing charter locks for this booking before re-applying (edit case)
   if(editing && typeof TRIPS !== 'undefined' && Array.isArray(editing.trips)){
