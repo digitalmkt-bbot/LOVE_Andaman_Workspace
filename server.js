@@ -63,6 +63,9 @@ function session(req){ return verify(cookies(req).sess||''); }
 const MIME = { '.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.svg':'image/svg+xml','.ico':'image/x-icon','.webp':'image/webp','.woff':'font/woff','.woff2':'font/woff2','.ttf':'font/ttf','.xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','.csv':'text/csv; charset=utf-8','.txt':'text/plain; charset=utf-8' };
 function readBody(req, cb){ let ch=[], n=0; req.on('data',c=>{ n+=c.length; if(n>20*1024*1024){req.destroy();return;} ch.push(c); }); req.on('end',()=>cb(Buffer.concat(ch).toString('utf8'))); }
 function J(res, code, obj, extra){ const h=Object.assign({'Content-Type':'application/json; charset=utf-8'}, extra||{}); res.writeHead(code,h); res.end(JSON.stringify(obj)); }
+// ── Server-Sent Events · push "data changed" to all open clients instantly (real-time) ──
+const sseClients = new Set();
+function sseBroadcast(obj){ const msg='data: '+JSON.stringify(obj)+'\n\n'; sseClients.forEach(r=>{ try{ r.write(msg); }catch(e){ sseClients.delete(r); } }); }
 // Deep-merge a plain-object patch onto target · patch={p:{key:{v:val}|{m:subdiff}}, d:[deletedKeys]}
 function applyObj(target, diff){
   const p=(diff&&diff.p)||{}, d=(diff&&diff.d)||[];
@@ -125,6 +128,15 @@ const server = http.createServer((req, res) => {
       .catch(e=>J(res,500,{error:e.message}));
     return;
   }
+  if(u === '/api/events'){   // SSE stream · server pushes version-bump events → clients refresh instantly
+    const s=session(req); if(!s){ res.writeHead(401); return res.end(); }
+    res.writeHead(200, {'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});
+    res.write('retry: 5000\n\n');
+    sseClients.add(res);
+    const hb=setInterval(()=>{ try{ res.write(':hb\n\n'); }catch(e){} }, 25000);
+    req.on('close', ()=>{ clearInterval(hb); sseClients.delete(res); });
+    return;
+  }
   if(u === '/api/save' && req.method === 'POST'){
     const s=session(req); if(!s) return J(res,401,{error:'login required'});
     if(!pool) return J(res,503,{error:'no database'});
@@ -139,7 +151,7 @@ const server = http.createServer((req, res) => {
         else { try{ applyDiff(blob, payload.diff||{}); }catch(e){ return J(res,400,{error:'bad diff: '+e.message}); } }
         const nv = curVer+1, out = JSON.stringify(blob);
         pool.query('INSERT INTO app_state(id,data,version,updated_by,updated_at) VALUES($1,$2,$3,$4,now()) ON CONFLICT(id) DO UPDATE SET data=excluded.data, version=$3, updated_by=$4, updated_at=now()',[STATE_KEY,out,nv,s.username])
-          .then(()=>J(res,200,{ok:true,version:nv,behind:behind,bytes:out.length})).catch(e=>J(res,500,{error:e.message}));
+          .then(()=>{ J(res,200,{ok:true,version:nv,behind:behind,bytes:out.length}); sseBroadcast({version:nv, updated_by:s.username}); }).catch(e=>J(res,500,{error:e.message}));
       }).catch(e=>J(res,500,{error:e.message}));
     }); return;
   }

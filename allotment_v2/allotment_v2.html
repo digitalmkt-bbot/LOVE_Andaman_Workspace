@@ -29,7 +29,7 @@
 
   // 3) AUTO-SAVE on change (debounced) · sends a DIFF that the server MERGES → many people can add/edit at once
   var _orig=localStorage.setItem.bind(localStorage);
-  localStorage.setItem=function(k,v){ _orig(k,v); if(k===LS){ _dirty=true; clearTimeout(_t); _t=setTimeout(function(){ save(v); },2500); } };
+  localStorage.setItem=function(k,v){ _orig(k,v); if(k===LS){ _dirty=true; clearTimeout(_t); _t=setTimeout(function(){ save(v); },1000); } };
   function seedFull(loc){ var cur; try{cur=JSON.parse(loc);}catch(e){return;} var x=new XMLHttpRequest(); x.open('POST','/api/save',true); x.setRequestHeader('Content-Type','application/json'); x.onload=function(){ if(x.status===200){ try{VER=JSON.parse(x.responseText).version;}catch(e){} BASE=cur; } }; try{ x.send(JSON.stringify({baseVersion:0,full:loc})); }catch(e){} }
   function save(v){ var cur; try{cur=JSON.parse(v);}catch(e){return;} var d=computeDiff(BASE,cur); if(!d._changed){ _dirty=false; return; }
     var x=new XMLHttpRequest(); x.open('POST','/api/save',true); x.setRequestHeader('Content-Type','application/json');
@@ -66,7 +66,7 @@
     var ae=document.activeElement;
     if(ae && (ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT'||ae.isContentEditable)) return true;  // typing in a field
     if(document.querySelector('.la-modal')||document.getElementById('la-umodal')||document.getElementById('la-pmodal')) return true;  // a dialog is open
-    if(Date.now()-_laLastInput < 4000) return true;                                     // interacted within last 4s (more real-time)
+    if(Date.now()-_laLastInput < 2000) return true;                                     // interacted within last 2s (snappy · SSE pushes instantly)
     return false;
   }
   // remember the current screen (per-tab · NOT synced) so an auto-refresh returns here instead of Dashboard
@@ -111,6 +111,9 @@
   function _laTryRefresh(){ if(!_laPending) return; if(_laBusy()) showRefresh(_laPending); else _laSoftRefresh(); }
   // poll cloud version
   setInterval(function(){ var x=new XMLHttpRequest(); x.open('GET','/api/version',true); x.onload=function(){ if(x.status===200){ var j={}; try{j=JSON.parse(x.responseText);}catch(e){} if((j.version||0)>VER){ _laPending=j; _laTryRefresh(); } } }; try{x.send();}catch(e){} }, 10000);
+  // Real-time push via SSE · server notifies instantly on any save (poll above is just a fallback)
+  function _laStartSSE(){ if(typeof EventSource==='undefined') return; try{ if(window.__laSSE) window.__laSSE.close(); var es=new EventSource('/api/events'); es.onmessage=function(e){ try{ var j=JSON.parse(e.data); if((j.version||0)>VER){ _laPending=j; _laTryRefresh(); } }catch(_){} }; window.__laSSE=es; }catch(e){} }
+  _laStartSSE();
   // keep the saved screen fresh · once new data is pending, seamlessly refresh the moment the user goes idle
   setInterval(function(){ _laSaveView(); if(_laPending && !_laBusy()) _laSoftRefresh(); }, 3000);
   function showRefresh(info){ if(_refreshShown) return; _refreshShown=true; onReady(function(){ var d=document.createElement('div'); d.id='la-refresh'; d.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:99999;background:#185FA5;color:#fff;border-radius:24px;padding:8px 8px 8px 16px;font:13px/1.3 "DM Sans",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25);display:flex;align-items:center;gap:10px'; d.innerHTML='🔄 มีข้อมูลใหม่จากคนอื่น'+((info&&info.updated_by)?(' (โดย '+esc(info.updated_by)+')'):'')+' · จะรีเฟรชอัตโนมัติเมื่อว่าง <button onclick="_laSoftRefresh()" style="background:#fff;color:#185FA5;border:none;border-radius:16px;padding:6px 14px;font-weight:700;cursor:pointer;font-family:inherit">โหลดเลย</button>'; document.body.appendChild(d); }); }
