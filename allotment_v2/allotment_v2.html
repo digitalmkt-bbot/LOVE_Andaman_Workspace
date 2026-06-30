@@ -46707,7 +46707,10 @@ function bkV2Norm(bk){
       focApproved: !!(bk.focApproval && bk.focApproval.status==='approved'),
       total: bk.total || bk.priceBreakdown?.total || 0,
       status: bk.status,
-      payment: bk.paymentSnapshot?.method || '—'
+      payment: bk.paymentSnapshot?.method || '—',
+      voucherRef: bk.voucherRef || '',
+      leadPax: bk.leadPax || '',
+      leadPhone: bk.leadPhone || ''
     };
   } else {
     // v1 legacy — best effort mapping
@@ -46735,7 +46738,10 @@ function bkV2Norm(bk){
       focCount: 0,
       total: bk.total || 0,
       status: bk.status === 'pending' ? 'quote' : (bk.status || 'confirmed'),
-      payment: bk.payment || '—'
+      payment: bk.payment || '—',
+      voucherRef: bk.voucherRef || '',
+      leadPax: bk.customerName || '',
+      leadPhone: bk.phone || bk.customerPhone || ''
     };
   }
 }
@@ -50397,7 +50403,7 @@ function bkV2RenderTab3(){
     if(_bkV2.statusFilter === 'pending_foc'){ if(!isPendingFoc(b)) return false; }
     else if(_bkV2.statusFilter !== 'all' && b.status !== _bkV2.statusFilter) return false;
     if(q){
-      const blob = `${b.id} ${b.agentName} ${b.agentSub} ${b.tripSummary}`.toLowerCase();
+      const blob = `${b.id} ${b.voucherRef} ${b.leadPax} ${b.leadPhone} ${b.agentName} ${b.agentSub} ${b.tripSummary}`.toLowerCase();
       if(!blob.includes(q)) return false;
     }
     return true;
@@ -50420,7 +50426,7 @@ function bkV2RenderTab3(){
     </div>
     <div class="bkv2-filterbar">
       ${pills.map(p => `<span class="bkv2-pill ${_bkV2.statusFilter===p.k?'on':''}" data-st="${p.k}" onclick="bkV2SetFilter('${p.k}')"><span class="dot"></span>${p.label} &middot; ${p.n}</span>`).join('')}
-      <input class="bkv2-search" id="bkv2-search-input" placeholder="Search &middot; BK &middot; agent &middot; trip" value="${escapeHTML(_bkV2.search)}" oninput="bkV2SetSearch(this.value)">
+      <input class="bkv2-search" id="bkv2-search-input" placeholder="ค้นหา &middot; VC &middot; ชื่อลูกค้า &middot; เบอร์ &middot; BK &middot; agent &middot; trip" value="${escapeHTML(_bkV2.search)}" oninput="bkV2SetSearch(this.value)">
     </div>
     ${filtered.length === 0 ? `
       <div class="bkv2-empty">
