@@ -30,6 +30,7 @@ async function initDb(){
     await pool.query("CREATE TABLE IF NOT EXISTS app_state (id TEXT PRIMARY KEY, data TEXT, version INT DEFAULT 0, updated_by TEXT, updated_at TIMESTAMPTZ DEFAULT now())");
     await pool.query("ALTER TABLE app_state ADD COLUMN IF NOT EXISTS version INT DEFAULT 0");
     await pool.query("ALTER TABLE app_state ADD COLUMN IF NOT EXISTS updated_by TEXT");
+    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS perms TEXT");   // per-user area access (JSON array · null = all)
     // seed first admin from env if there are no users yet
     const c = await pool.query('SELECT count(*)::int n FROM users');
     if (c.rows[0].n === 0 && ADMIN_USER && ADMIN_PASS) {
@@ -39,6 +40,10 @@ async function initDb(){
     dbReady = true; console.log('[db] ready');
   }catch(e){ console.error('[db] init failed:', e.message); }
 }
+
+// ── perms helpers (per-user area access · null/invalid = all areas) ──
+function parsePerms(v){ if(v==null) return null; try{ const a=JSON.parse(v); return Array.isArray(a)?a:null; }catch(e){ return null; } }
+function cleanPerms(a){ const ok=['overview','operations','sales','accounting','fleet','config']; return Array.isArray(a)?a.filter(x=>ok.includes(x)):null; }
 
 // ── password hashing (scrypt) ──
 function hashPw(pw){ const salt = crypto.randomBytes(16).toString('hex'); const h = crypto.scryptSync(String(pw), salt, 32).toString('hex'); return salt+':'+h; }
@@ -80,13 +85,14 @@ const server = http.createServer((req, res) => {
       pool.query('SELECT * FROM users WHERE lower(username)=lower($1)', [String(b.username||'').trim()])
         .then(r => { const usr=r.rows[0];
           if(!usr || !verifyPw(b.password||'', usr.pass_hash)) return J(res,401,{error:'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'});
-          const tok = sign({uid:usr.id, username:usr.username, name:usr.name, role:usr.role, exp:Date.now()+SESS_DAYS*864e5});
-          J(res,200,{username:usr.username,name:usr.name,role:usr.role}, {'Set-Cookie':`sess=${tok}; HttpOnly; Path=/; SameSite=Lax; Secure; Max-Age=${SESS_DAYS*86400}`});
+          const perms = parsePerms(usr.perms);
+          const tok = sign({uid:usr.id, username:usr.username, name:usr.name, role:usr.role, perms:perms, exp:Date.now()+SESS_DAYS*864e5});
+          J(res,200,{username:usr.username,name:usr.name,role:usr.role,perms:perms}, {'Set-Cookie':`sess=${tok}; HttpOnly; Path=/; SameSite=Lax; Secure; Max-Age=${SESS_DAYS*86400}`});
         }).catch(e=>J(res,500,{error:e.message}));
     }); return;
   }
   if(u === '/api/logout'){ J(res,200,{ok:true},{'Set-Cookie':'sess=; HttpOnly; Path=/; Max-Age=0'}); return; }
-  if(u === '/api/me'){ const s=session(req); return s ? J(res,200,{username:s.username,name:s.name,role:s.role}) : J(res,401,{error:'not logged in'}); }
+  if(u === '/api/me'){ const s=session(req); return s ? J(res,200,{username:s.username,name:s.name,role:s.role,perms:(s.perms!==undefined?s.perms:null)}) : J(res,401,{error:'not logged in'}); }
 
   // ───── DATA (require login) ─────
   if(u === '/api/load'){
@@ -128,9 +134,10 @@ const server = http.createServer((req, res) => {
   if(u === '/api/users'){
     const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(s.role!=='admin') return J(res,403,{error:'admin only'});
     if(!pool) return J(res,503,{error:'no database'});
-    if(req.method === 'GET'){ pool.query('SELECT id,username,name,role,created_at FROM users ORDER BY id').then(r=>J(res,200,{users:r.rows})).catch(e=>J(res,500,{error:e.message})); return; }
+    if(req.method === 'GET'){ pool.query('SELECT id,username,name,role,perms,created_at FROM users ORDER BY id').then(r=>J(res,200,{users:r.rows.map(x=>({id:x.id,username:x.username,name:x.name,role:x.role,perms:parsePerms(x.perms),created_at:x.created_at}))})).catch(e=>J(res,500,{error:e.message})); return; }
     if(req.method === 'POST'){ readBody(req, body=>{ let b={}; try{b=JSON.parse(body);}catch(e){} const un=String(b.username||'').trim(); if(!un||!b.password) return J(res,400,{error:'ต้องมี username + password'});
-      pool.query('INSERT INTO users(username,pass_hash,name,role) VALUES($1,$2,$3,$4)',[un,hashPw(b.password),(b.name||un),(b.role==='admin'?'admin':'staff')])
+      const perms = cleanPerms(b.perms); const permsStr = perms ? JSON.stringify(perms) : null;
+      pool.query('INSERT INTO users(username,pass_hash,name,role,perms) VALUES($1,$2,$3,$4,$5)',[un,hashPw(b.password),(b.name||un),(b.role==='admin'?'admin':'staff'),permsStr])
         .then(()=>J(res,200,{ok:true})).catch(e=>J(res, e.code==='23505'?409:500, {error: e.code==='23505'?'username นี้มีอยู่แล้ว':e.message})); }); return; }
     if(req.method === 'DELETE'){ const id=parseInt((q.match(/id=(\d+)/)||[])[1]||'0',10); if(!id) return J(res,400,{error:'no id'}); if(id===s.uid) return J(res,400,{error:'ลบบัญชีตัวเองไม่ได้'});
       pool.query('DELETE FROM users WHERE id=$1',[id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); return; }
@@ -139,6 +146,14 @@ const server = http.createServer((req, res) => {
     const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(s.role!=='admin') return J(res,403,{error:'admin only'});
     readBody(req, body=>{ let b={}; try{b=JSON.parse(body);}catch(e){} if(!b.id||!b.password) return J(res,400,{error:'no id/password'});
       pool.query('UPDATE users SET pass_hash=$1 WHERE id=$2',[hashPw(b.password),parseInt(b.id,10)]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }); return;
+  }
+  if(u === '/api/users/perms' && req.method === 'POST'){   // admin sets a user's area access · role optional
+    const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(s.role!=='admin') return J(res,403,{error:'admin only'});
+    readBody(req, body=>{ let b={}; try{b=JSON.parse(body);}catch(e){} const id=parseInt(b.id,10); if(!id) return J(res,400,{error:'no id'});
+      const perms = cleanPerms(b.perms); const permsStr = perms ? JSON.stringify(perms) : null;
+      if(b.role==='admin'||b.role==='staff'){ pool.query('UPDATE users SET perms=$1, role=$2 WHERE id=$3',[permsStr,b.role,id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
+      else { pool.query('UPDATE users SET perms=$1 WHERE id=$2',[permsStr,id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
+    }); return;
   }
 
   // ───── static files ─────
