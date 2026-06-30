@@ -74,12 +74,34 @@
     el.click();
     setTimeout(function(){ try{ var mn=document.querySelector('main'); if(mn&&st.sc) mn.scrollTop=st.sc; if(st.scw) window.scrollTo(0,st.scw); }catch(e){} }, 220);
   }catch(e){} }
-  function _laTryRefresh(){ if(!_laPending) return; if(_laBusy()) showRefresh(_laPending); else _laReload(); }
+  // SEAMLESS in-place refresh · pulls latest cloud data + re-renders current view · NO page reload (no Dashboard flash)
+  function _laSoftRefresh(){
+    if(_laBusy()){ if(_laPending) showRefresh(_laPending); return; }
+    var x=new XMLHttpRequest(); x.open('GET','/api/load',true);
+    x.onload=function(){ try{
+      if(x.status!==200) return;                                   // keep pending · retry next idle tick
+      var j=JSON.parse(x.responseText);
+      if(typeof j.data!=='string' || j.data.length<2){ _laPending=null; return; }
+      if(_laBusy()) return;                                        // user resumed during fetch → defer
+      _orig(LS, j.data);                                           // write WITHOUT triggering a save
+      VER=j.version||VER; try{BASE=JSON.parse(j.data);}catch(e){BASE={};}
+      _laPending=null;
+      var ok = window._laReloadData ? window._laReloadData() : false;
+      if(!ok){ _laReload(); return; }                             // in-place failed → fall back to full reload
+      if(window._laRerender) window._laRerender();
+      LASTBY = j.updated_by ? (j.updated_by+' · '+fmt(j.updated_at)) : LASTBY;
+      var bn=document.getElementById('la-refresh'); if(bn){ bn.remove(); _refreshShown=false; }
+      try{ badgeTick(); }catch(e){}
+    }catch(e){ _laReload(); } };
+    try{ x.send(); }catch(e){}
+  }
+  window._laSoftRefresh=_laSoftRefresh;   // expose for the banner button's inline onclick
+  function _laTryRefresh(){ if(!_laPending) return; if(_laBusy()) showRefresh(_laPending); else _laSoftRefresh(); }
   // poll cloud version
   setInterval(function(){ var x=new XMLHttpRequest(); x.open('GET','/api/version',true); x.onload=function(){ if(x.status===200){ var j={}; try{j=JSON.parse(x.responseText);}catch(e){} if((j.version||0)>VER){ _laPending=j; _laTryRefresh(); } } }; try{x.send();}catch(e){} }, 15000);
-  // keep the saved screen fresh · and once new data is pending, reload the moment the user goes idle
-  setInterval(function(){ _laSaveView(); if(_laPending && !_laBusy()) _laReload(); }, 3000);
-  function showRefresh(info){ if(_refreshShown) return; _refreshShown=true; onReady(function(){ var d=document.createElement('div'); d.id='la-refresh'; d.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:99999;background:#185FA5;color:#fff;border-radius:24px;padding:8px 8px 8px 16px;font:13px/1.3 "DM Sans",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25);display:flex;align-items:center;gap:10px'; d.innerHTML='🔄 มีข้อมูลใหม่จากคนอื่น'+((info&&info.updated_by)?(' (โดย '+esc(info.updated_by)+')'):'')+' · จะรีเฟรชอัตโนมัติเมื่อว่าง <button onclick="_laReload()" style="background:#fff;color:#185FA5;border:none;border-radius:16px;padding:6px 14px;font-weight:700;cursor:pointer;font-family:inherit">โหลดเลย</button>'; document.body.appendChild(d); }); }
+  // keep the saved screen fresh · once new data is pending, seamlessly refresh the moment the user goes idle
+  setInterval(function(){ _laSaveView(); if(_laPending && !_laBusy()) _laSoftRefresh(); }, 3000);
+  function showRefresh(info){ if(_refreshShown) return; _refreshShown=true; onReady(function(){ var d=document.createElement('div'); d.id='la-refresh'; d.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:99999;background:#185FA5;color:#fff;border-radius:24px;padding:8px 8px 8px 16px;font:13px/1.3 "DM Sans",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25);display:flex;align-items:center;gap:10px'; d.innerHTML='🔄 มีข้อมูลใหม่จากคนอื่น'+((info&&info.updated_by)?(' (โดย '+esc(info.updated_by)+')'):'')+' · จะรีเฟรชอัตโนมัติเมื่อว่าง <button onclick="_laSoftRefresh()" style="background:#fff;color:#185FA5;border:none;border-radius:16px;padding:6px 14px;font-weight:700;cursor:pointer;font-family:inherit">โหลดเลย</button>'; document.body.appendChild(d); }); }
 
   // 4) UI · user badge + logout + (admin) user mgmt
   function onReady(fn){ if(document.body) fn(); else document.addEventListener('DOMContentLoaded',fn); }
@@ -36062,6 +36084,55 @@ function psuPrintExport(){
 let SB_BOOKINGS = [];   // demo/dummy seed removed 2026-06-03 (real bookings live in localStorage sb_bookings)
 // Load persisted bookings (overrides seed once any booking is saved/edited) · read-modify-write key
 (function(){ try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); if(Array.isArray(d.sb_bookings)) SB_BOOKINGS = d.sb_bookings; }catch(e){ console.warn('load sb_bookings failed', e); } })();
+// ── Seamless refresh: reload all in-memory data from localStorage (NO page reload · NO side-effect loaders) ──
+window._laReloadData=function(){
+  var d; try{ d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); }catch(e){ return false; }
+  try{
+    if(Array.isArray(d.sb_bookings)) SB_BOOKINGS=d.sb_bookings;
+    if(Array.isArray(d.sb_invoices)) SB_INVOICES=d.sb_invoices;
+    if(Array.isArray(d.sb_payments)) SB_PAYMENTS=d.sb_payments;
+    if(Array.isArray(d.sb_deposits)) SB_DEPOSITS=d.sb_deposits;
+    if(Array.isArray(d.sb_extras)) SB_EXTRAS=d.sb_extras;
+    if(Array.isArray(d.sb_seat_locks)) SB_SEAT_LOCKS=d.sb_seat_locks;
+    if(Array.isArray(d.sb_agents)) SB_AGENTS=d.sb_agents;
+    if(Array.isArray(d.sb_rate_types)) SB_RATE_TYPES=d.sb_rate_types;
+    if(Array.isArray(d.sb_vehicles)) SB_VEHICLES=d.sb_vehicles;
+    if(Array.isArray(d.sb_markets)) SB_MARKETS=d.sb_markets;
+    if(Array.isArray(d.sb_sales)) SB_SALES=d.sb_sales;
+    if(Array.isArray(d.sb_staff)) SB_STAFF=d.sb_staff;
+    if(Array.isArray(d.sb_addon_types)) SB_ADDON_TYPES=d.sb_addon_types;
+    if(Array.isArray(d.sb_nationalities)) SB_CUSTOM_NATIONALITIES=d.sb_nationalities;
+    if(d.sb_market_stats) SB_MARKET_STATS=d.sb_market_stats;
+    if(d.sb_market_monthly) SB_MARKET_MONTHLY=d.sb_market_monthly;
+    if(d.sb_weather) SB_WEATHER_CLOSURES=d.sb_weather;
+    if(d.trips) TRIPS=d.trips;
+    if(Array.isArray(d.boats)) BOATS=d.boats;
+    if(Array.isArray(d.routes)) ROUTES=d.routes;
+    if(Array.isArray(d.fleet_engines)) FL_ENGINES=d.fleet_engines;
+    if(Array.isArray(d.fleet_gearboxes)) FL_GEARBOXES=d.fleet_gearboxes;
+    if(Array.isArray(d.fleet_propellers)) FL_PROPELLERS=d.fleet_propellers;
+    if(Array.isArray(d.fleet_incidents)) FL_INCIDENTS=d.fleet_incidents;
+    if(Array.isArray(d.fleet_maintenance)) FL_MAINT=d.fleet_maintenance;
+    if(Array.isArray(d.fleet_inventory)) FL_INVENTORY=d.fleet_inventory;
+    if(Array.isArray(d.fleet_memos)) FL_MEMOS=d.fleet_memos;
+    if(Array.isArray(d.fleet_projects)) FL_PROJECTS=d.fleet_projects;
+    if(Array.isArray(d.fleet_safety)) FL_SAFETY=d.fleet_safety;
+    if(Array.isArray(d.fleet_consumable_logs)) FL_CONSUMABLE_LOGS=d.fleet_consumable_logs;
+    if(d.fleet_daily) FL_DAILY=d.fleet_daily;
+    if(d.fleet_drlock) FL_DR_LOCK=d.fleet_drlock;
+    if(d.fleet_fuelprice) FL_FUEL_PRICE=d.fleet_fuelprice;
+    return true;
+  }catch(e){ console.warn('_laReloadData', e); return false; }
+};
+window._laRerender=function(){
+  try{
+    var mn=document.querySelector('main'); var sc=mn?mn.scrollTop:0; var scw=window.scrollY||0;
+    var act=document.querySelector('.nav-item.active'); var v=act&&act.dataset?act.dataset.view:'';
+    if(v==='booking' && typeof bkV2Render==='function') bkV2Render();
+    else if(act && typeof nav==='function') nav(act);
+    setTimeout(function(){ try{ var m2=document.querySelector('main'); if(m2&&sc) m2.scrollTop=sc; if(scw) window.scrollTo(0,scw); }catch(e){} }, 60);
+  }catch(e){}
+};
 // One-time reconcile: FOC already approved but status stuck in pending/quote (e.g. edited after approval) → Confirmed
 (function(){ try{ let n=0; (SB_BOOKINGS||[]).forEach(b=>{ if(b.focApproval && b.focApproval.status==='approved' && (b.status==='pending_foc'||b.status==='pending'||b.status==='quote')){ b.status='confirmed'; if(!b.confirmedAt) b.confirmedAt=b.focApproval.approvedAt||new Date().toISOString(); n++; } });
   if(n>0){ const k=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2'); const o=JSON.parse(localStorage.getItem(k)||'{}'); o.sb_bookings=SB_BOOKINGS; localStorage.setItem(k,JSON.stringify(o)); console.log('[FOC reconcile] fixed',n,'approved-but-not-confirmed booking(s)'); } }catch(e){ console.warn('FOC reconcile failed',e); } })();
