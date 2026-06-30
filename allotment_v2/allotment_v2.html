@@ -46904,8 +46904,8 @@ function bkV2RenderNewBooking(){
             <input class="bkv2-nb-input" type="text" placeholder="name / initials" value="${escapeHTML(d.createdBy||'')}" oninput="bkV2SetBookingField('createdBy', this.value)">
           </div>
           <div class="bkv2-nb-field">
-            <label class="bkv2-nb-label">Confirmed by <span style="font-weight:400;color:#9aa">· auto เมื่อยืนยัน</span></label>
-            <input class="bkv2-nb-input" type="text" placeholder="auto = ผู้ล็อกอิน (ตอนยืนยัน)" value="${escapeHTML(d.confirmedBy||'')}" oninput="bkV2SetBookingField('confirmedBy', this.value)">
+            <label class="bkv2-nb-label">Confirmed by <span style="font-weight:400;color:#9aa">· auto = ผู้ล็อกอิน</span></label>
+            <input class="bkv2-nb-input" type="text" placeholder="auto = ผู้ล็อกอิน" value="${escapeHTML(d.confirmedBy||'')}" oninput="bkV2SetBookingField('confirmedBy', this.value)">
           </div>
         </div>
         ${rtPreview}
@@ -50496,7 +50496,7 @@ function bkV2NewBooking(){
     code: bkV2GenerateBookingCode(),
     bookingDate: new Date().toISOString().slice(0,10),   // วันที่จอง · default = วันนี้ · editable
     createdBy: '',              // Submitted by · keyed manually (NOT auto)
-    confirmedBy: '',            // Confirmed by · auto-stamped = logged-in user when confirmed
+    confirmedBy: bkV2LoginUser(), // Confirmed by · auto = logged-in user from the start (editable)
     voucherRef: '',             // agent's voucher reference (optional · e.g. 'AT-VC-25060042')
     soldBy: '',                 // salesperson credited (override · for walk-in/direct sales · blank = derive from agent.sales)
     priceMode: 'rate',          // 'rate' (from Rate Type) | 'manual' (free-style · type total · walk-in)
