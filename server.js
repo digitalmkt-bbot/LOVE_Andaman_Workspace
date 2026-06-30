@@ -15,7 +15,7 @@ const SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('he
 const ADMIN_USER = (process.env.ADMIN_USER || '').trim();
 const ADMIN_PASS = process.env.ADMIN_PASS || '';
 const STATE_KEY  = 'loveandaman_v2';
-const SESS_DAYS  = 14;
+const SESS_DAYS  = 30;   // session cookie lifetime · long so refresh/redeploy never forces re-login
 
 let pool = null, dbReady = false;
 if (Pool && DB_URL) {
