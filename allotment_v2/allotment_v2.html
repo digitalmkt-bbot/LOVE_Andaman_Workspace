@@ -37822,10 +37822,13 @@ function baAssignedPax(date, boatId){
 // (removed from TRIPS · now chartered · or now serving a different route). Used to flag "จัดเรือใหม่".
 function bkV2BoatPulled(bk, date){
   const bid = bk && bk.ops && bk.ops.boatId; if(!bid) return false;
+  // A CHARTER booking owns its boat for that date → it is never "pulled" (the boat being chartered IS correct).
+  // Without this guard the charter's own boat (op.charterBookingId set) was wrongly flagged "ถอดแล้ว".
+  if((bk.trips||[]).some(t=>(t.date||'')===date && t.bookingMode==='charter')) return false;
   const day = (typeof TRIPS!=='undefined' && TRIPS[date]) ? TRIPS[date] : {};
   const op = day[bid];
   if(!op) return true;                  // boat removed from Boat Op that day
-  if(op.charterBookingId) return true;  // boat now chartered · not running seats
+  if(op.charterBookingId && op.charterBookingId !== bk.id) return true;  // boat chartered by ANOTHER booking → seat boat pulled
   const routes = (bk.trips||[]).filter(t=>(t.date||'')===date && t.bookingMode!=='charter').map(t=>t.routeId);
   if(!routes.length) return false;
   return !routes.includes(op.route);    // boat now serves a different route → pulled from this one
