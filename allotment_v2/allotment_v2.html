@@ -16,7 +16,7 @@
   var me=sx('GET','/api/me');
   if(me.status===401){ onReady(showLogin); return; }            // not logged in → login screen, do not load/sync
   if(me.status!==200){ return; }                                 // no backend (localhost) → plain localStorage, no login
-  ME=me.json||{};
+  ME=me.json||{}; window.LA_ME=ME;                               // expose current user (edit-lock / audit)
 
   // 2) LOAD from cloud (sync gate) · BASE = snapshot we loaded (used to diff our changes)
   var BASE={}, _refreshShown=false;
@@ -49666,7 +49666,7 @@ function bkV2RenderTab2(){
             <td>${(bk.voucherRef && bk.voucherRef.trim().toLowerCase()!==String(lead||'').trim().toLowerCase())?`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)}">${esc(bk.voucherRef)}</span>`:'<span class="t2-dim">—</span>'}</td>
             <td style="${bk.agentId?'padding:0':''}">${bk.agentId?(()=>{const _ac=bkV2AgentColor(bk.agentId);return `<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="${esc(norm.agentName)} · คลิกเปลี่ยนสี · Alt+คลิก = สีอัตโนมัติ" style="background:${_ac};color:${bkV2ContrastInk(_ac)};margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;box-shadow:0 1px 2px rgba(0,0,0,.10)">${esc(norm.agentName)}</div>`;})():`<span class="t2-agency">${esc(norm.agentName)}</span>`}</td>
             <td>
-              <span class="t2-lead">${esc(lead)}</span>${pcBadge}${a.split?`<span title="booking นี้ถูกแยกขึ้นหลายคัน" style="background:#EDE7FB;color:#5B289A;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">&#9986; แยก ${a.head}</span>`:''}${bk.status==='pending_approval'?`<span title="เกิน capacity · รอผจก.อนุมัติ" style="background:#FCEBEB;color:#A32D2D;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">รออนุมัติ</span>`:''}${(function(){ if(r.cxl||typeof bkV2FindDuplicateBookings!=='function')return''; const _dd=bkV2FindDuplicateBookings(bk,bk.id); if(!_dd.length)return''; const _vc=_dd.map(x=>x.bk.voucherRef||x.bk.code||x.bk.id).slice(0,3).join(', '); const _rs=[...new Set(_dd.reduce((a,x)=>a.concat(x.reasons),[]))].join(' · '); return `<span title="อาจเป็นการลงซ้ำกับ: ${esc(_vc)} (${esc(_rs)}) — ตรวจสอบ/ลบตัวซ้ำ" style="background:#FBE9D6;color:#9A5B00;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:help">&#9888; อาจซ้ำ</span>`; })()}${r.cxl?`<span class="t2-cxlbadge" title="${bk.cancellation?('Cancelled · '+(bk.cancellation.chargeType==='full'?'Full charge':bk.cancellation.chargeType==='partial'?'Partial charge':'No charge')+(bk.cancellation.reason?' · '+esc(bk.cancellation.reason):'')):'Cancelled'}">CXL</span>`:''}
+              <span class="t2-lead">${esc(lead)}</span>${pcBadge}${(function(){var _el=(typeof bkV2EditLockActive==='function')&&bkV2EditLockActive(bk);return _el?`<span title="${esc(_el.by)} กำลังแก้ไขอยู่ (~${_el.mins} นาที)" style="background:#E7F0FC;color:#185FA5;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">&#9999; ${esc(_el.by)} แก้อยู่</span>`:'';})()}${a.split?`<span title="booking นี้ถูกแยกขึ้นหลายคัน" style="background:#EDE7FB;color:#5B289A;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">&#9986; แยก ${a.head}</span>`:''}${bk.status==='pending_approval'?`<span title="เกิน capacity · รอผจก.อนุมัติ" style="background:#FCEBEB;color:#A32D2D;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">รออนุมัติ</span>`:''}${(function(){ if(r.cxl||typeof bkV2FindDuplicateBookings!=='function')return''; const _dd=bkV2FindDuplicateBookings(bk,bk.id); if(!_dd.length)return''; const _vc=_dd.map(x=>x.bk.voucherRef||x.bk.code||x.bk.id).slice(0,3).join(', '); const _rs=[...new Set(_dd.reduce((a,x)=>a.concat(x.reasons),[]))].join(' · '); return `<span title="อาจเป็นการลงซ้ำกับ: ${esc(_vc)} (${esc(_rs)}) — ตรวจสอบ/ลบตัวซ้ำ" style="background:#FBE9D6;color:#9A5B00;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:help">&#9888; อาจซ้ำ</span>`; })()}${r.cxl?`<span class="t2-cxlbadge" title="${bk.cancellation?('Cancelled · '+(bk.cancellation.chargeType==='full'?'Full charge':bk.cancellation.chargeType==='partial'?'Partial charge':'No charge')+(bk.cancellation.reason?' · '+esc(bk.cancellation.reason):'')):'Cancelled'}">CXL</span>`:''}
               ${others.length?`<button class="t2-more" onclick="event.stopPropagation();bkV2Tab2TogglePax('${rowId}')"><span id="${rowId}-ic" style="display:inline-block">▾</span> +${others.length}</button>`:'<span class="t2-dim t2-leadonly">lead only</span>'}
               ${(bk.rebook && bk.rebook.to===date)?`<div class="t2-movedin" title="Rescheduled from ${esc(bk.rebook.from)}${bk.rebook.reason==='weather'?' due to weather':(bk.reschedule&&bk.reschedule.reason?(' · '+esc(bk.reschedule.reason)):'')}">&#8617; Moved from ${esc(String(bk.rebook.from).slice(5))}${bk.rebook.reason==='weather'?' · weather':''}</div>`:''}
             </td>
@@ -51867,6 +51867,7 @@ function bkV2CloseNewBooking(){
   }
   // P3d · if was editing · return to detail view of that booking
   const editingId = _bkV2.editingId;
+  if(editingId) bkV2ClearEditLock(editingId);   // release advisory edit-lock
   _bkV2.newBooking = null;
   _bkV2.editingId = null;
   if(editingId){ _bkV2.detailId = editingId; }
@@ -53180,6 +53181,20 @@ function bkV2PartialCancel(bookingId, tripIdx, opts){
 }
 
 // Edit booking · load back into form
+// ── Advisory edit-lock (multi-user · warns when 2 people edit the SAME booking) ──
+// Soft lock written onto the booking record so it syncs to everyone. Auto-expires (stale tab),
+// cleared on commit/close. Not a hard lock — last-write still applies — but it surfaces the conflict.
+const BK_EDITLOCK_TTL = 5*60*1000;   // 5 minutes
+function _bkV2MeUid(){ return (window.LA_ME && window.LA_ME.username) || ''; }
+function _bkV2MeName(){ return (window.LA_ME && (window.LA_ME.name||window.LA_ME.username)) || ''; }
+function bkV2EditLockActive(bk){   // → {by,mins} if someone ELSE holds a fresh lock, else null
+  const L = bk && bk.editLock; if(!L || !L.at) return null;
+  if(Date.now() - L.at > BK_EDITLOCK_TTL) return null;            // stale → ignore
+  const me=_bkV2MeUid(); if(me && L.uid && L.uid===me) return null;   // my own lock
+  return { by:L.by||L.uid||'someone', mins:Math.max(1,Math.round((Date.now()-L.at)/60000)) };
+}
+function bkV2SetEditLock(bkId){ const bk=SB_BOOKINGS.find(b=>b.id===bkId); if(!bk) return; bk.editLock={uid:_bkV2MeUid(), by:_bkV2MeName(), at:Date.now()}; try{acctPersistBookings();}catch(e){} }
+function bkV2ClearEditLock(bkId){ const bk=SB_BOOKINGS.find(b=>b.id===bkId); if(bk && bk.editLock){ delete bk.editLock; try{acctPersistBookings();}catch(e){} } }
 function bkV2EditBooking(bookingId){
   const bk = SB_BOOKINGS.find(b => b.id === bookingId);
   if(!bk){ alert('Booking not found'); return; }
@@ -53187,11 +53202,15 @@ function bkV2EditBooking(bookingId){
   if(['cancelled','completed','rejected'].includes(bk.status)){
     if(!confirm(`This booking is ${bk.status}. Edit anyway?`)) return;
   }
+  const _lk = bkV2EditLockActive(bk);
+  if(_lk && !confirm('⚠ '+_lk.by+' กำลังแก้ไข booking นี้อยู่ (เปิดเมื่อ ~'+_lk.mins+' นาทีที่แล้ว)\n\nถ้าแก้พร้อมกัน คนที่บันทึกทีหลังจะทับงานของอีกคน\n\nเปิดแก้ไขต่อหรือไม่?')) return;
   // Deep-clone bk into _bkV2.newBooking shape
   const clone = JSON.parse(JSON.stringify(bk));
+  delete clone.editLock;
   _bkV2.newBooking = clone;
   _bkV2.editingId = bk.id;
   _bkV2.detailId = null;
+  bkV2SetEditLock(bk.id);   // stamp + sync so others see "being edited"
   bkV2Render();
   try { document.querySelector('main')?.scrollTo({top:0,behavior:'instant'}); } catch(e){}
   window.scrollTo({top:0});
