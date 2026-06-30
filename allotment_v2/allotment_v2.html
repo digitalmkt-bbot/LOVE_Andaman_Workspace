@@ -18055,11 +18055,20 @@ function flRenderDR(){
         <input class="fldr-in" type="number" step="1" value="${fuel!=null?fuel:''}" placeholder="0" ${_DIS} onchange="flSaveFuel('${ds}','${b.id}',this.value)" style="${INP};font-weight:600;color:${isAnomaly?'#A32D2D':(fuelFilled?'#633806':dim.ink3)}">
       </div>`;
 
-    // PAX — soft blue (auto from bookings) / amber (manual actual)
-    const paxIsActual = bp.actual!=null;
-    const paxCard = `<div class="fldr-cell" style="${CARD};width:104px;flex:none;background:${paxIsActual?'#FFF3E0':'#E6F1FB'};border:0.5px solid ${paxIsActual?'#F0D9B0':'#B5D4F4'};--ring:#DCEBFB;--rb:#378ADD" title="auto จากยอดจอง · พิมพ์ทับ = จำนวนจริงที่ขึ้นเรือ${paxIsActual?' · จอง '+bp.booked:''}">
-        <div style="display:flex;justify-content:space-between;line-height:1"><span style="font-size:11px;color:${paxIsActual?'#A35A00':'#185FA5'}">PAX</span>${paxIsActual?'<span style="font-size:11px;color:#A35A00">&#9998; actual</span>':'<span style="font-size:11px;color:#85B7EB">จอง</span>'}</div>
-        <input class="fldr-in" type="number" min="0" step="1" value="${pax||''}" placeholder="0" ${_DIS} onchange="flSavePaxActual('${ds}','${b.id}',this.value)" style="${INP};font-weight:700;color:${paxIsActual?'#A35A00':'#0C447C'}">
+    // Fuel price ฿/L — PER BOAT (override) · blank = use the pier's default price · shows ฿ cost = L × price
+    const _fpPier = flFuelPrice(ds, b.pier);
+    const _fpOwn  = (FL_FUEL_PRICE[ds] && FL_FUEL_PRICE[ds][b.id]!=null) ? FL_FUEL_PRICE[ds][b.id] : null;
+    const _fpEff  = _fpOwn!=null ? _fpOwn : _fpPier;
+    const _fpCost = (_fpEff!=null && fuel) ? Math.round(fuel*_fpEff) : null;
+    const priceCard = `<div class="fldr-cell" style="${CARD};width:110px;flex:none;background:${_fpOwn!=null?'#FFF3E0':'#FBF6EC'};border:0.5px solid ${_fpOwn!=null?'#F0CF9A':'#EAD9B0'}" title="ราคาน้ำมัน ฿/ลิตร ของลำนี้ · เว้นว่าง = ใช้ราคากลางของท่า${_fpPier!=null?(' ('+_fpPier+')'):''}">
+        <div style="display:flex;justify-content:space-between;line-height:1"><span style="font-size:11px;color:#854F0B">฿/L</span>${_fpCost!=null?`<span style="font-size:10px;color:#BA7517">฿${_fpCost.toLocaleString()}</span>`:''}</div>
+        <input class="fldr-in" type="number" step="0.01" min="0" value="${_fpOwn!=null?_fpOwn:''}" placeholder="${_fpPier!=null?_fpPier:'ราคาท่า'}" ${_DIS} onchange="flSaveFuelPrice('${ds}','${b.id}',this.value)" style="${INP};font-size:15px;font-weight:700;color:#854F0B">
+      </div>`;
+
+    // PAX — pulled from bookings · READ-ONLY (จำนวนลูกค้าจากยอดจอง · แก้ไม่ได้)
+    const paxCard = `<div class="fldr-cell" style="${CARD};width:104px;flex:none;background:#E6F1FB;border:0.5px solid #B5D4F4" title="จำนวนลูกค้าจากยอดจอง · แก้ไม่ได้ (ดึงจากระบบ Booking)">
+        <div style="display:flex;justify-content:space-between;line-height:1"><span style="font-size:11px;color:#185FA5">PAX</span><span style="font-size:11px;color:#85B7EB">จอง</span></div>
+        <div style="${INP};font-weight:700;color:#0C447C;display:flex;align-items:center;cursor:default">${pax||0}</div>
       </div>`;
 
     // Engine hours — soft cards · prev as faint placeholder · +Δ hours once entered · green focus ring
@@ -18079,7 +18088,7 @@ function flRenderDR(){
     // Combined entry area — fills the row; '—' note when the boat isn't logging today
     const entryHtml = noEntry
       ? `<div style="display:flex;align-items:center;justify-content:flex-end;color:${dim.ink3};font-size:12px;padding-right:4px">${isNotAvail?'ไม่ต้องกรอก':''}</div>`
-      : `<div style="display:flex;gap:9px;align-items:stretch">${paxCard}${fuelCard}<div style="width:1px;flex:none;background:${dim.line};margin:4px 0"></div><div style="flex:1;display:flex;gap:9px;align-items:stretch;min-width:0">${engCells}</div></div>`;
+      : `<div style="display:flex;gap:9px;align-items:stretch">${paxCard}${fuelCard}${priceCard}<div style="width:1px;flex:none;background:${dim.line};margin:4px 0"></div><div style="flex:1;display:flex;gap:9px;align-items:stretch;min-width:0">${engCells}</div></div>`;
 
     const rowBg=isAnomaly?'#FCEBEB':'transparent';
     const nameColor=isAnomaly?'#A32D2D':dim.ink;
@@ -18203,6 +18212,8 @@ function flSaveFuel(ds,bid,val){
 }
 // Daily Fleet Log · diesel price ฿/L per pier per day (for fuel-cost calc)
 function flFuelPrice(ds, pierKey){ return (FL_FUEL_PRICE[ds] && FL_FUEL_PRICE[ds][pierKey]!=null) ? FL_FUEL_PRICE[ds][pierKey] : null; }
+// Per-BOAT fuel price · per-boat override (FL_FUEL_PRICE[ds][boatId]) → else the pier default. Some boats fill at a different ฿/L.
+function flFuelPriceForBoat(ds, boat){ if(!boat) return null; const m=FL_FUEL_PRICE[ds]; if(!m) return null; if(m[boat.id]!=null) return m[boat.id]; if(m[boat.pier]!=null) return m[boat.pier]; return null; }
 function flSaveFuelPrice(ds, pierKey, val){
   if(!FL_FUEL_PRICE[ds]) FL_FUEL_PRICE[ds]={};
   const v=parseFloat(val);
@@ -25064,7 +25075,7 @@ function _fuelAgg(month){
       const ran=(info.pax>0)||Object.keys(info.routes||{}).length>0||fuel>0; if(!ran) return;
       out.tripDays++;
       const pier=(typeof getBoatCurrentPier==='function')?getBoatCurrentPier(b):b.pier;
-      const price=(typeof flFuelPrice==='function')?flFuelPrice(ds,pier):null;
+      const price=(typeof flFuelPriceForBoat==='function')?flFuelPriceForBoat(ds,b):((typeof flFuelPrice==='function')?flFuelPrice(ds,pier):null);   // per-boat price → pier default
       const cost=(fuel&&price!=null)?fuel*price:0; if(fuel>0&&price==null) out.priceMissing=true;
       let runH=0; (FL_ENGINES||[]).filter(e=>e.boatId===bid).forEach(e=>{ const v=bd.trips&&bd.trips.normal&&bd.trips.normal.engines?bd.trips.normal.engines[e.id]:null; const prev=(typeof flPrevMeter==='function')?flPrevMeter(e.id,ds):null; if(v!=null&&prev!=null){ const dlt=v-prev; if(dlt>runH) runH=dlt; } });
       const bb=out.byBoat[bid]=out.byBoat[bid]||{id:bid,name:b.name,fuel:0,cost:0,pax:0,runH:0,days:0,missing:0,fdays:[],routes:{}};
