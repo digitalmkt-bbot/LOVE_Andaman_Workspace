@@ -58,10 +58,14 @@
     Object.keys(base||{}).forEach(function(k){keys[k]=1;}); Object.keys(cur||{}).forEach(function(k){keys[k]=1;});
     Object.keys(keys).forEach(function(k){ var b=base?base[k]:undefined, c=cur?cur[k]:undefined;
       var isCol = Array.isArray(c) && c.length>0 && c.every(function(x){return x&&typeof x==='object'&&x.id!=null;});
-      if(isCol){ var bm={}; if(Array.isArray(b)) b.forEach(function(x){ if(x&&x.id!=null) bm[String(x.id)]=JSON.stringify(x); });
-        var up=[],seen={}; c.forEach(function(x){ var id=String(x.id); seen[id]=1; if(bm[id]!==JSON.stringify(x)) up.push(x); });
-        var del=[]; Object.keys(bm).forEach(function(id){ if(!seen[id]) del.push(id); });
-        if(up.length||del.length){ cols[k]={idf:'id',up:up,del:del}; ch=true; } }
+      if(isCol){ var bmap={}; if(Array.isArray(b)) b.forEach(function(x){ if(x&&x.id!=null) bmap[String(x.id)]=x; });
+        var up=[],patch=[],seen={}; c.forEach(function(x){ var id=String(x.id); seen[id]=1; var bx=bmap[id];
+          if(bx===undefined){ up.push(x); }                                                       // new record → full insert
+          else if(JSON.stringify(bx)!==JSON.stringify(x)){                                         // changed record → per-FIELD patch (2 users can edit different fields of the same record)
+            var fd=(_isPlainObj(bx)&&_isPlainObj(x))?_deepDiff(bx,x):null;
+            if(fd) patch.push({id:x.id,m:fd}); else up.push(x); } });
+        var del=[]; Object.keys(bmap).forEach(function(id){ if(!seen[id]) del.push(id); });
+        if(up.length||patch.length||del.length){ cols[k]={idf:'id',up:up,patch:patch,del:del}; ch=true; } }
       else if(_isPlainObj(b)&&_isPlainObj(c)){ var od=_deepDiff(b,c); if(od){ objs[k]=od; ch=true; } }   // object map → per-sub-key merge (no clobber)
       else { if(JSON.stringify(b)!==JSON.stringify(c)){ sets[k]=(c===undefined?null:c); ch=true; } } });
     return {sets:sets,cols:cols,objs:objs,_changed:ch}; }

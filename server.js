@@ -90,7 +90,10 @@ function applyDiff(blob, diff){
     const arr = Array.isArray(blob[k]) ? blob[k] : [];
     const map = new Map(); let n=0;
     arr.forEach(x=>{ if(x && x[idf]!=null) map.set(String(x[idf]), x); else map.set('__noid_'+(n++), x); });
-    (c.up||[]).forEach(rec=>{ if(rec && rec[idf]!=null) map.set(String(rec[idf]), rec); });
+    (c.up||[]).forEach(rec=>{ if(rec && rec[idf]!=null) map.set(String(rec[idf]), rec); });   // full insert/replace (new records)
+    (c.patch||[]).forEach(pr=>{ if(pr && pr.id!=null){ const id=String(pr.id); const tgt=map.get(id);   // per-field merge onto server's CURRENT record → concurrent edits to different fields both survive
+      if(tgt && typeof tgt==='object' && !Array.isArray(tgt)) applyObj(tgt, pr.m||{});
+      else if(pr.full!=null) map.set(id, pr.full); } });
     (c.del||[]).forEach(id=>{ map.delete(String(id)); });
     blob[k] = Array.from(map.values());
   });
