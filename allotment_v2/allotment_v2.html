@@ -4345,7 +4345,7 @@ function _dashSeatCalHtml(dx,F){
   var chips=chip('','All'); Object.keys(fams).forEach(function(fid){ chips+=chip(fid,fams[fid]); });
   var wk=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(function(w){return '<div style="text-align:center;font-size:11px;color:#9aa79d;font-weight:600">'+w+'</div>';}).join('');
   var t=dayAgg(TODAY_STR);
-  return '<div style="background:#fff;border-radius:24px;padding:16px 18px;'+F+'box-shadow:0 1px 3px rgba(20,45,35,.06),0 6px 18px rgba(20,45,35,.05)">'
+  return '<div style="background:#fff;border-radius:24px;padding:16px 18px;'+F+'box-shadow:0 2px 4px rgba(20,45,35,.06),0 16px 38px rgba(20,45,35,.12),inset 0 1px 0 rgba(255,255,255,.7);border:1px solid rgba(0,0,0,.05)">'
     +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">'
       +'<span style="width:30px;height:30px;border-radius:9px;background:#EAF3DE;display:inline-flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3B6D11" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>'
       +'<span style="font-size:16px;font-weight:600;color:#1a2e22">Seats available</span>'
@@ -4416,7 +4416,7 @@ function _dashBookingBoardHtml(dx,F){
 function _dashLiveFeedHtml(dx,F){
   var BK=(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]); var CXL=['cancelled','rejected','cancelled_weather'];
   var arr=BK.filter(function(b){return b.schemaVer===2 && b.status!=='rejected';}).map(function(b){return {b:b, ts:_dashBkTs(b)};});
-  arr.sort(function(x,y){return y.ts-x.ts;}); arr=arr.slice(0,8);
+  arr.sort(function(x,y){return y.ts-x.ts;}); arr=arr.slice(0,12);
   var AV=['#E6F1FB|#185FA5','#EEEDFE|#534AB7','#FCEBEB|#A32D2D','#E7F5EC|#0A6B3F','#FAEEDA|#854F0B','#FBEAF0|#993556'];
   var rows='';
   arr.forEach(function(o,i){ var b=o.b; var a=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null; var nm=a?(a.name||a.code||'Agent'):(b.b2cChannel||'B2C / Walk-in');
@@ -4431,7 +4431,7 @@ function _dashLiveFeedHtml(dx,F){
       +'<div style="text-align:right;flex:none">'+(isNew?'<span style="font-size:9.5px;font-weight:700;color:#1C7A43;background:#DFF3C4;border-radius:5px;padding:1px 6px">NEW</span>':'')+'<div style="font-size:10.5px;color:#9a958c;margin-top:3px">'+_dashAgo(o.ts)+'</div></div></div>';
   });
   if(!rows) rows='<div style="font-size:12px;color:#9a958c;text-align:center;padding:14px 0">ยังไม่มี booking</div>';
-  return '<div style="background:'+dx.card+';border-radius:18px;padding:14px 15px;'+F+'">'
+  return '<div style="background:'+dx.card+';border-radius:18px;padding:14px 15px;'+F+'box-shadow:0 1px 2px rgba(20,45,35,.05),0 12px 30px rgba(20,45,35,.11),inset 0 1px 0 rgba(255,255,255,.7);border:1px solid rgba(0,0,0,.05)">'
     +'<div style="display:flex;align-items:center;gap:9px;margin-bottom:11px">'
       +'<span style="width:28px;height:28px;border-radius:8px;background:#E7F5EC;display:inline-flex;align-items:center;justify-content:center;color:#0A6B3F"><i class="ti ti-bolt" style="font-size:16px"></i></span>'
       +'<span style="font-size:14px;font-weight:600;letter-spacing:-.015em;color:#1a1a1a">Live bookings</span>'
@@ -4459,6 +4459,7 @@ function renderDash(){
             yellow:'#F2E534',blue:'#A8D6F7',blueDeep:'#0C447C',
             soft:'#F2EFE8',black:'#1A1A1A',brown:'#27201A',brownDark:'#1A140F',brownText:'#F5EFE5',brownMute:'#9B9590'};
   const F="font-family:Manrope,-apple-system,system-ui,sans-serif;";
+  const GLASS="box-shadow:0 1px 2px rgba(20,45,35,.05),0 12px 30px rgba(20,45,35,.11),inset 0 1px 0 rgba(255,255,255,.7);border:1px solid rgba(0,0,0,.05);";
 
   // ── Selected date state — Dashboard shows data for this date ──
   const _ds = window._dashDate || TODAY_STR;
@@ -4777,7 +4778,7 @@ function renderDash(){
       </div>
     </div>`;
   }).join('');
-  const todoCard=`<div style="background:${dx.card};border-radius:18px;padding:14px 15px;${F}">
+  const todoCard=`<div style="background:${dx.card};border-radius:18px;padding:14px 15px;${F}${GLASS}">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:11px">
       <span style="font-size:14px;font-weight:600;letter-spacing:-.015em">Boat Operating</span>
       <span style="background:${dx.limeSoft};color:${dx.forestLight};padding:2px 8px;border-radius:8px;font-size:9.5px;font-weight:600;font-variant-numeric:tabular-nums">Today</span>
@@ -4820,7 +4821,7 @@ function renderDash(){
     </div>`;
   }).join('');
   const moreOps=Math.max(0,opBoatsAll.length-5);
-  const notifCard=`<div style="background:${dx.card};border-radius:18px;padding:12px 15px;${F}">
+  const notifCard=`<div style="background:${dx.card};border-radius:18px;padding:12px 15px;${F}${GLASS}">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
       <span style="font-size:13px;font-weight:600;letter-spacing:-.015em">Boats operating</span>
       <span style="background:${dx.limeSoft};color:${dx.forestLight};padding:2px 7px;border-radius:7px;font-size:9.5px;font-weight:600;font-variant-numeric:tabular-nums">${opBoatsAll.length}</span>
@@ -4920,7 +4921,7 @@ function renderDash(){
   // Bottom stats
   const bestDt=bestDay?new Date(bestDay.ds):null;
   const slowDt=slowDay?new Date(slowDay.ds):null;
-  const proj=`<div class="dgx-bookings" style="background:${dx.forest};border-radius:24px;padding:22px 24px;color:#fff;${F}">
+  const proj=`<div class="dgx-bookings" style="background:${dx.forest};border-radius:24px;padding:22px 24px;color:#fff;${F}box-shadow:0 2px 4px rgba(10,40,25,.10),0 16px 38px rgba(10,50,30,.20);border:1px solid rgba(255,255,255,.08);">
     <div style="display:flex;align-items:start;justify-content:space-between;gap:14px">
       <div style="flex:1;min-width:0">
         <div style="font-size:17px;font-weight:600;letter-spacing:-.015em">Bookings overview · 7 days</div>
@@ -5044,7 +5045,7 @@ function renderDash(){
   const schedRoute=bestRoute?bestRoute.r:null;
   const schedBoats=heroBoats.length;
   const schedFree=heroTotalFree;
-  const sched=`<div style="background:${dx.card};border-radius:18px;padding:14px;${F}">
+  const sched=`<div style="background:${dx.card};border-radius:18px;padding:14px;${F}${GLASS}">
     <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:10px">
       <div style="min-width:0;flex:1;padding-right:8px">
         <div style="font-size:13px;font-weight:600;color:${dx.ink}">Today's headline</div>
@@ -5101,7 +5102,7 @@ function renderDash(){
       </div>
     </div>`;
   }).join('');
-  const filesCard=`<div style="background:${dx.card};border-radius:18px;padding:14px 15px;${F}">
+  const filesCard=`<div style="background:${dx.card};border-radius:18px;padding:14px 15px;${F}${GLASS}">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
       <div style="font-size:13px;font-weight:600;letter-spacing:-.015em;color:${dx.ink}">Departures · 48h</div>
       <span style="background:${dx.limeSoft};color:${dx.forestLight};padding:2px 8px;border-radius:8px;font-size:9.5px;font-weight:600;font-variant-numeric:tabular-nums">${upcoming48.length} TRIPS</span>
