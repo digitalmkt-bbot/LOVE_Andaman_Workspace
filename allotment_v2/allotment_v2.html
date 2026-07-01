@@ -54,11 +54,16 @@
   var _orig=localStorage.setItem.bind(localStorage);
   localStorage.setItem=function(k,v){ _orig(k,v); if(k===LS && laCanEdit()){ _dirty=true; clearTimeout(_t); _t=setTimeout(function(){ save(v); },1000); } };   // view-only users never sync to cloud
   function seedFull(loc){ var cur; try{cur=JSON.parse(loc);}catch(e){return;} var x=new XMLHttpRequest(); x.open('POST','/api/save',true); x.setRequestHeader('Content-Type','application/json'); x.onload=function(){ if(x.status===200){ try{VER=JSON.parse(x.responseText).version;}catch(e){} BASE=cur; _laMark(VER); } }; try{ x.send(JSON.stringify({baseVersion:0,full:loc})); }catch(e){} }
+  var _laSaveErrShown=false;
+  function _laSaveErr(msg,color){ _laSaveErrShown=true; onReady(function(){ var d=document.getElementById('la-saveerr'); if(!d){ d=document.createElement('div'); d.id='la-saveerr'; d.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:100001;color:#fff;border-radius:22px;padding:9px 18px;font:13px/1.35 "DM Sans",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.3);max-width:82vw;text-align:center'; document.body.appendChild(d);} d.style.background=color||'#A32D2D'; d.innerHTML='⚠ '+msg; }); }
+  function _laSaveErrClear(){ if(!_laSaveErrShown) return; _laSaveErrShown=false; var d=document.getElementById('la-saveerr'); if(d) d.remove(); }
   function save(v){ var cur; try{cur=JSON.parse(v);}catch(e){return;} var d=computeDiff(BASE,cur); if(!d._changed){ _dirty=false; return; }
     var x=new XMLHttpRequest(); x.open('POST','/api/save',true); x.setRequestHeader('Content-Type','application/json');
-    x.onload=function(){ if(x.status===200){ var r={}; try{r=JSON.parse(x.responseText);}catch(e){} VER=r.version||VER; BASE=cur; _laMark(VER); _dirty=false; window.__savedAt=Date.now(); badgeTick(); if(r.behind){ _laPending=r; _laTryRefresh(); } }
-      else { setTimeout(function(){ var nv=localStorage.getItem(LS); if(nv) save(nv); }, 5000); } };   // save failed → keep _dirty, retry (no silent data loss)
-    x.onerror=function(){ setTimeout(function(){ var nv=localStorage.getItem(LS); if(nv) save(nv); }, 5000); };
+    x.onload=function(){ if(x.status===200){ var r={}; try{r=JSON.parse(x.responseText);}catch(e){} VER=r.version||VER; BASE=cur; _laMark(VER); _dirty=false; _laSaveErrClear(); window.__savedAt=Date.now(); badgeTick(); if(r.behind){ _laPending=r; _laTryRefresh(); } }
+      else if(x.status===403){ _laSaveErr('บันทึกขึ้นระบบไม่ได้ · บัญชีนี้ไม่มีสิทธิ์แก้ไข (การเปลี่ยนแปลงยังไม่ถูกบันทึก) — กรุณา login ใหม่ หรือติดต่อ admin'); }   // will never succeed → stop retrying, tell the user
+      else if(x.status===401){ _laSaveErr('เซสชันหมดอายุ · ข้อมูลยังอยู่ในเครื่อง — กรุณาเข้าสู่ระบบใหม่ แล้วระบบจะเซฟให้อัตโนมัติ','#7A4A00'); }
+      else { _laSaveErr('กำลังลองบันทึกขึ้นระบบใหม่… (ข้อมูลยังอยู่ในเครื่อง อย่าเพิ่งปิดหน้า)','#7A4A00'); setTimeout(function(){ var nv=localStorage.getItem(LS); if(nv) save(nv); }, 5000); } };   // transient (5xx/0) → retry + warn
+    x.onerror=function(){ _laSaveErr('เชื่อมต่อระบบไม่ได้ · กำลังลองเซฟใหม่… (ข้อมูลยังอยู่ในเครื่อง อย่าเพิ่งปิดหน้า)','#7A4A00'); setTimeout(function(){ var nv=localStorage.getItem(LS); if(nv) save(nv); }, 5000); };
     try{ x.send(JSON.stringify({baseVersion:VER, diff:{sets:d.sets,cols:d.cols,objs:d.objs}})); }catch(e){} }
   // FLUSH pending change before the page unloads (refresh/close) so a fast refresh never loses the last edit
   function _laFlush(){ if(!_dirty) return; try{ var cur=JSON.parse(localStorage.getItem(LS)||'{}'); var d=computeDiff(BASE,cur); if(!d._changed){ _dirty=false; return; }
