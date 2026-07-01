@@ -4829,13 +4829,7 @@ function renderDash(){
     ${moreOps>0?`<div onclick="nav(document.querySelector('[data-view=op]'))" style="margin-top:6px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:10px;color:${dx.ink2};cursor:pointer"><span style="background:${dx.soft};color:${dx.forestLight};padding:1px 7px;border-radius:7px;font-weight:600;font-variant-numeric:tabular-nums">+${moreOps}</span> more boats <span style="opacity:.5;font-size:13px">›</span></div>`:''}
   </div>`;
 
-  const leftCol=`<div style="display:flex;flex-direction:column;gap:18px">
-    ${profile}
-    ${todoCard}
-    ${notifCard}
-    ${_dashBookingBoardHtml(dx,F)}
-    ${_dashLiveFeedHtml(dx,F)}
-  </div>`;
+  // leftCol assembled below (after sched + filesCard are defined)
 
   // ─── CENTER COLUMN ───
   // Hero card — today's best route
@@ -5117,7 +5111,8 @@ function renderDash(){
     <button onclick="nav(document.querySelector('[data-view=op]'))" style="display:block;width:100%;margin:10px 0 0;background:${dx.forest};color:#fff;border:none;border-radius:16px;padding:8px;font-size:11.5px;font-weight:500;cursor:pointer;${F}">Open Boat Operation</button>
   </div>`;
 
-  const rightCol=`<div style="display:flex;flex-direction:column;gap:18px">${ai}${sched}${filesCard}</div>`;
+  const leftCol=`<div style="display:flex;flex-direction:column;gap:18px">${profile}${todoCard}${notifCard}${sched}${filesCard}</div>`;
+  const rightCol=`<div style="display:flex;flex-direction:column;gap:18px">${ai}${_dashLiveFeedHtml(dx,F)}</div>`;
 
   // ── COMPOSE 3-column layout (match reference: 1 | 1.7 | 1) ──
   wrap.innerHTML = seg + `<div style="display:grid;grid-template-columns:1fr 1.7fr 1fr;gap:14px;align-items:start">${leftCol}${centerCol}${rightCol}</div>`;
