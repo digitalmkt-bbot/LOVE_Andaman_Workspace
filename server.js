@@ -31,7 +31,8 @@ async function initDb(){
     await pool.query("ALTER TABLE app_state ADD COLUMN IF NOT EXISTS version INT DEFAULT 0");
     await pool.query("ALTER TABLE app_state ADD COLUMN IF NOT EXISTS updated_by TEXT");
     await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS perms TEXT");   // per-user area access (JSON array · null = all)
-    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS can_edit BOOLEAN DEFAULT true");   // false = view-only
+    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS can_edit BOOLEAN DEFAULT true");   // legacy global edit flag (fallback)
+    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS edit_areas TEXT");   // per-section edit · JSON array of area keys · null = edit all (uses can_edit)
     // seed first admin from env if there are no users yet
     const c = await pool.query('SELECT count(*)::int n FROM users');
     if (c.rows[0].n === 0 && ADMIN_USER && ADMIN_PASS) {
@@ -50,6 +51,10 @@ const PERM_KEYS=new Set(['overview','operations','sales','accounting','fleet','c
   'fl-dashboard','fl-boatstatus','fl-dailyreport','fl-incident','fl-projects','fl-maintenance','fl-inventory','fl-consumables','fl-cost','fl-insights','fl-fuel','fl-asset',
   'settings','teammkt','addonsvc']);   // 'accounting' already present as a group key
 function cleanPerms(a){ return Array.isArray(a)?a.filter(x=>PERM_KEYS.has(x)):null; }
+const AREA_KEYS=new Set(['overview','operations','sales','accounting','fleet','config']);
+function cleanAreas(a){ return Array.isArray(a)?a.filter(x=>AREA_KEYS.has(x)):null; }
+// A user's editable-areas + "can edit anything" flag · editAreas null → falls back to legacy can_edit
+function editInfo(usr){ const ea=parsePerms(usr.edit_areas); const arr=Array.isArray(ea)?ea.filter(x=>AREA_KEYS.has(x)):null; const any = arr ? arr.length>0 : (usr.can_edit!==false); return {editAreas:arr, canEditAny:any}; }
 
 // ── password hashing (scrypt) ──
 function hashPw(pw){ const salt = crypto.randomBytes(16).toString('hex'); const h = crypto.scryptSync(String(pw), salt, 32).toString('hex'); return salt+':'+h; }
@@ -103,14 +108,14 @@ const server = http.createServer((req, res) => {
       pool.query('SELECT * FROM users WHERE lower(username)=lower($1)', [String(b.username||'').trim()])
         .then(r => { const usr=r.rows[0];
           if(!usr || !verifyPw(b.password||'', usr.pass_hash)) return J(res,401,{error:'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'});
-          const perms = parsePerms(usr.perms); const canEdit = usr.can_edit!==false;
-          const tok = sign({uid:usr.id, username:usr.username, name:usr.name, role:usr.role, perms:perms, edit:canEdit, exp:Date.now()+SESS_DAYS*864e5});
-          J(res,200,{username:usr.username,name:usr.name,role:usr.role,perms:perms,canEdit:canEdit}, {'Set-Cookie':`sess=${tok}; HttpOnly; Path=/; SameSite=Lax; Secure; Max-Age=${SESS_DAYS*86400}`});
+          const perms = parsePerms(usr.perms); const ei = editInfo(usr);
+          const tok = sign({uid:usr.id, username:usr.username, name:usr.name, role:usr.role, perms:perms, edit:ei.canEditAny, editAreas:ei.editAreas, exp:Date.now()+SESS_DAYS*864e5});
+          J(res,200,{username:usr.username,name:usr.name,role:usr.role,perms:perms,canEdit:ei.canEditAny,editAreas:ei.editAreas}, {'Set-Cookie':`sess=${tok}; HttpOnly; Path=/; SameSite=Lax; Secure; Max-Age=${SESS_DAYS*86400}`});
         }).catch(e=>J(res,500,{error:e.message}));
     }); return;
   }
   if(u === '/api/logout'){ J(res,200,{ok:true},{'Set-Cookie':'sess=; HttpOnly; Path=/; Max-Age=0'}); return; }
-  if(u === '/api/me'){ const s=session(req); return s ? J(res,200,{username:s.username,name:s.name,role:s.role,perms:(s.perms!==undefined?s.perms:null),canEdit:(s.edit!==false)}) : J(res,401,{error:'not logged in'}); }
+  if(u === '/api/me'){ const s=session(req); return s ? J(res,200,{username:s.username,name:s.name,role:s.role,perms:(s.perms!==undefined?s.perms:null),canEdit:(s.edit!==false),editAreas:(s.editAreas!==undefined?s.editAreas:null)}) : J(res,401,{error:'not logged in'}); }
 
   // ───── DATA (require login) ─────
   if(u === '/api/load'){
@@ -162,10 +167,11 @@ const server = http.createServer((req, res) => {
   if(u === '/api/users'){
     const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(s.role!=='admin') return J(res,403,{error:'admin only'});
     if(!pool) return J(res,503,{error:'no database'});
-    if(req.method === 'GET'){ pool.query('SELECT id,username,name,role,perms,can_edit,created_at FROM users ORDER BY id').then(r=>J(res,200,{users:r.rows.map(x=>({id:x.id,username:x.username,name:x.name,role:x.role,perms:parsePerms(x.perms),canEdit:x.can_edit!==false,created_at:x.created_at}))})).catch(e=>J(res,500,{error:e.message})); return; }
+    if(req.method === 'GET'){ pool.query('SELECT id,username,name,role,perms,can_edit,edit_areas,created_at FROM users ORDER BY id').then(r=>J(res,200,{users:r.rows.map(x=>{const ei=editInfo(x); return {id:x.id,username:x.username,name:x.name,role:x.role,perms:parsePerms(x.perms),canEdit:ei.canEditAny,editAreas:ei.editAreas,created_at:x.created_at};})})).catch(e=>J(res,500,{error:e.message})); return; }
     if(req.method === 'POST'){ readBody(req, body=>{ let b={}; try{b=JSON.parse(body);}catch(e){} const un=String(b.username||'').trim(); if(!un||!b.password) return J(res,400,{error:'ต้องมี username + password'});
-      const perms = cleanPerms(b.perms); const permsStr = perms ? JSON.stringify(perms) : null; const canEdit = b.canEdit!==false;
-      pool.query('INSERT INTO users(username,pass_hash,name,role,perms,can_edit) VALUES($1,$2,$3,$4,$5,$6)',[un,hashPw(b.password),(b.name||un),(b.role==='admin'?'admin':'staff'),permsStr,canEdit])
+      const perms = cleanPerms(b.perms); const permsStr = perms ? JSON.stringify(perms) : null;
+      const ea = cleanAreas(b.editAreas); const eaStr = ea ? JSON.stringify(ea) : null; const canEdit = ea ? ea.length>0 : (b.canEdit!==false);
+      pool.query('INSERT INTO users(username,pass_hash,name,role,perms,can_edit,edit_areas) VALUES($1,$2,$3,$4,$5,$6,$7)',[un,hashPw(b.password),(b.name||un),(b.role==='admin'?'admin':'staff'),permsStr,canEdit,eaStr])
         .then(()=>J(res,200,{ok:true})).catch(e=>J(res, e.code==='23505'?409:500, {error: e.code==='23505'?'username นี้มีอยู่แล้ว':e.message})); }); return; }
     if(req.method === 'DELETE'){ const id=parseInt((q.match(/id=(\d+)/)||[])[1]||'0',10); if(!id) return J(res,400,{error:'no id'}); if(id===s.uid) return J(res,400,{error:'ลบบัญชีตัวเองไม่ได้'});
       pool.query('DELETE FROM users WHERE id=$1',[id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); return; }
@@ -178,9 +184,10 @@ const server = http.createServer((req, res) => {
   if(u === '/api/users/perms' && req.method === 'POST'){   // admin sets a user's area access · role optional
     const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(s.role!=='admin') return J(res,403,{error:'admin only'});
     readBody(req, body=>{ let b={}; try{b=JSON.parse(body);}catch(e){} const id=parseInt(b.id,10); if(!id) return J(res,400,{error:'no id'});
-      const perms = cleanPerms(b.perms); const permsStr = perms ? JSON.stringify(perms) : null; const canEdit = b.canEdit!==false;
-      if(b.role==='admin'||b.role==='staff'){ pool.query('UPDATE users SET perms=$1, role=$2, can_edit=$3 WHERE id=$4',[permsStr,b.role,canEdit,id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
-      else { pool.query('UPDATE users SET perms=$1, can_edit=$2 WHERE id=$3',[permsStr,canEdit,id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
+      const perms = cleanPerms(b.perms); const permsStr = perms ? JSON.stringify(perms) : null;
+      const ea = cleanAreas(b.editAreas); const eaStr = ea ? JSON.stringify(ea) : null; const canEdit = ea ? ea.length>0 : (b.canEdit!==false);
+      if(b.role==='admin'||b.role==='staff'){ pool.query('UPDATE users SET perms=$1, role=$2, can_edit=$3, edit_areas=$4 WHERE id=$5',[permsStr,b.role,canEdit,eaStr,id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
+      else { pool.query('UPDATE users SET perms=$1, can_edit=$2, edit_areas=$3 WHERE id=$4',[permsStr,canEdit,eaStr,id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
     }); return;
   }
 
