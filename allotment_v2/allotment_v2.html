@@ -36309,6 +36309,10 @@ window._laReloadData=function(){
     if(Array.isArray(d.sb_staff)) SB_STAFF=d.sb_staff;
     if(Array.isArray(d.sb_addon_types)) SB_ADDON_TYPES=d.sb_addon_types;
     if(Array.isArray(d.sb_nationalities)) SB_CUSTOM_NATIONALITIES=d.sb_nationalities;
+    if(Array.isArray(d.sb_pickup_areas) && typeof SB_PICKUP_AREAS!=='undefined') SB_PICKUP_AREAS=d.sb_pickup_areas;
+    if(d.sb_pickup_times && typeof SB_PICKUP_TIMES!=='undefined') SB_PICKUP_TIMES=d.sb_pickup_times;
+    if(Array.isArray(d.sb_pickup_time_profiles) && typeof SB_PICKUP_TIME_PROFILES!=='undefined') SB_PICKUP_TIME_PROFILES=d.sb_pickup_time_profiles;
+    if(d.agent_artifacts && typeof _CT_ARTIFACTS!=='undefined') _CT_ARTIFACTS=d.agent_artifacts;
     if(d.sb_market_stats) SB_MARKET_STATS=d.sb_market_stats;
     if(d.sb_market_monthly) SB_MARKET_MONTHLY=d.sb_market_monthly;
     if(d.sb_weather) SB_WEATHER_CLOSURES=d.sb_weather;
