@@ -4373,6 +4373,79 @@ function _dashSeatCalHtml(dx,F){
 window.dashCalMonthShift=function(delta){ var m=window._dashCalMonth||(window._dashDate||TODAY_STR).slice(0,7); var yy=parseInt(m.slice(0,4),10),mm=parseInt(m.slice(5,7),10); var d=new Date(yy,mm-1+delta,1); window._dashCalMonth=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); if(typeof renderDash==='function') renderDash(); };
 window.dashCalSetFam=function(id){ window._dashCalFam=id||''; if(typeof renderDash==='function') renderDash(); };
 
+// ── Left-column: Booking notice board + real-time Live feed ──
+(function(){ if(document.getElementById('dash-live-anim'))return; try{ var s=document.createElement('style'); s.id='dash-live-anim'; s.textContent='@keyframes dashlvpulse{0%{opacity:.35}50%{opacity:1}100%{opacity:.35}}'; (document.head||document.documentElement).appendChild(s); }catch(e){} })();
+function _dashAgo(ts){ if(!ts) return ''; var d=Date.now()-ts; if(d<0)d=0; var s=Math.floor(d/1000); if(s<60)return s+'s'; var m=Math.floor(s/60); if(m<60)return m+'m'; var h=Math.floor(m/60); if(h<24)return h+'h'; return Math.floor(h/24)+'d'; }
+function _dashBkTs(bk){ var h=(bk.history||[]).find(function(e){return e.tag==='Created'||e.kind==='created';}); var iso=(h&&h.at)||bk.createdAt||(bk.bookingDate?bk.bookingDate+'T12:00:00':''); var t=iso?Date.parse(iso):0; return isNaN(t)?0:t; }
+function _dashDateShort(ds){ try{ return new Date(ds+'T00:00:00').toLocaleDateString('en-GB',{month:'short',day:'numeric'}); }catch(e){ return ds||''; } }
+function _dashBoardData(){
+  var today=TODAY_STR; var BK=(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]); var CXL=['cancelled','rejected','cancelled_weather'];
+  var pend=BK.filter(function(b){return b.status==='pending_approval';}).length;
+  var wxDates=[]; var wx=BK.filter(function(b){ var ok=b.weatherResolve && b.weatherResolve.status && b.weatherResolve.status!=='resolved' && CXL.indexOf(b.status)<0; if(ok){ (b.trips||[]).forEach(function(t){ if(t.date)wxDates.push(t.date); }); } return ok; }).length;
+  wxDates.sort(); var wxDate=wxDates[0]||today;
+  var fin=0;
+  BK.forEach(function(b){ if(CXL.indexOf(b.status)>=0||b.status==='pending_approval')return; var a=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null; var pt=a?a.payType:''; if(pt!=='invoice'&&pt!=='proforma')return; if(typeof acctBookingPaid==='function'&&acctBookingPaid(b))return; var ds=(b.trips||[]).map(function(t){return t.date;}).filter(Boolean).sort(); if(!ds.length)return; var c=(typeof pfmCutoff==='function')?pfmCutoff(ds[0]):null; if(c&&Date.now()>c.getTime())fin++; });
+  var seen={}; BK.forEach(function(b){ if(!b.agentId||seen[b.agentId])return; seen[b.agentId]=1; if(typeof agCreditState==='function'){ var cs=agCreditState(b.agentId); if(cs.limit>0&&cs.available<0)fin++; } });
+  var cxl=BK.filter(function(b){ if(CXL.indexOf(b.status)<0)return false; var at=((b.cancellation&&b.cancellation.at)||b.cancelledAt||'').slice(0,10); return at===today; }).length;
+  return {pend:pend, wx:wx, wxDate:wxDate, fin:fin, cxl:cxl};
+}
+function _dashBoardRow(icon, bg, fg, title, sub, n, onclick){
+  var active=n>0;
+  var chipBg=active?bg:'#F3F2EE', chipFg=active?fg:'#b7b1a6';
+  return '<div onclick="'+onclick+'" style="display:flex;align-items:center;gap:10px;padding:8px 9px;border-radius:11px;background:'+(active?'#FBF9F5':'#FAFAF8')+';cursor:pointer">'
+    +'<span style="width:26px;height:26px;border-radius:7px;background:'+chipBg+';display:inline-flex;align-items:center;justify-content:center;color:'+chipFg+';flex:none"><i class="ti '+icon+'" style="font-size:15px"></i></span>'
+    +'<div style="min-width:0;flex:1"><div style="font-size:12.5px;font-weight:600;color:'+(active?'#1a1a1a':'#9a958c')+'">'+title+'</div><div style="font-size:11px;color:#9a958c">'+sub+'</div></div>'
+    +'<span style="font-size:13px;font-weight:700;color:'+(active?fg:'#c3beb4')+';font-family:Manrope,sans-serif">'+n+'</span>'
+    +'<i class="ti ti-chevron-right" style="font-size:15px;color:#c3beb4"></i></div>';
+}
+function _dashBookingBoardHtml(dx,F){
+  var d=_dashBoardData(); var total=d.pend+d.wx+d.fin+d.cxl;
+  var rows=''
+    +_dashBoardRow('ti-clock-hour-4','#FAEEDA','#854F0B','รออนุมัติ','over-cap · discount · FOC',d.pend,'dashGoApprovals()')
+    +_dashBoardRow('ti-cloud-storm','#FCEBEB','#A32D2D','ทริป Cancel (weather)','รอ resolve',d.wx,"dashGoBytrip('"+d.wxDate+"')")
+    +_dashBoardRow('ti-cash','#EEEDFE','#534AB7','การเงินเสี่ยง','PFM เลย cutoff · เครดิตเกิน',d.fin,'dashGoAccounting()')
+    +_dashBoardRow('ti-ban','#F1EFE8','#5F5E5A','ยกเลิกวันนี้','booking ที่ถูกยกเลิก',d.cxl,'dashGoCancels()');
+  return '<div style="background:'+dx.card+';border-radius:18px;padding:14px 15px;'+F+'">'
+    +'<div style="display:flex;align-items:center;gap:9px;margin-bottom:11px">'
+      +'<span style="width:28px;height:28px;border-radius:8px;background:#FBEAEA;display:inline-flex;align-items:center;justify-content:center;color:#A32D2D"><i class="ti ti-bell" style="font-size:16px"></i></span>'
+      +'<span style="font-size:14px;font-weight:600;letter-spacing:-.015em;color:#1a1a1a">Booking board</span>'
+      +(total>0?'<span style="margin-left:auto;font-size:11px;font-weight:600;color:#A32D2D;background:#FCEBEB;border-radius:20px;padding:2px 9px">'+total+' need action</span>':'<span style="margin-left:auto;font-size:11px;font-weight:600;color:#1C7A43;background:#E7F5EC;border-radius:20px;padding:2px 9px">✓ all clear</span>')
+    +'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:7px">'+rows+'</div></div>';
+}
+function _dashLiveFeedHtml(dx,F){
+  var BK=(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]); var CXL=['cancelled','rejected','cancelled_weather'];
+  var arr=BK.filter(function(b){return b.schemaVer===2 && b.status!=='rejected';}).map(function(b){return {b:b, ts:_dashBkTs(b)};});
+  arr.sort(function(x,y){return y.ts-x.ts;}); arr=arr.slice(0,8);
+  var AV=['#E6F1FB|#185FA5','#EEEDFE|#534AB7','#FCEBEB|#A32D2D','#E7F5EC|#0A6B3F','#FAEEDA|#854F0B','#FBEAF0|#993556'];
+  var rows='';
+  arr.forEach(function(o,i){ var b=o.b; var a=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null; var nm=a?(a.name||a.code||'Agent'):(b.b2cChannel||'B2C / Walk-in');
+    var t0=(b.trips||[])[0]||{}; var fam=(typeof bkV2RouteFamily==='function'&&t0.routeId)?bkV2RouteFamily(t0.routeId):null; var rn=fam?fam.name:(((typeof getRoute==='function'&&t0.routeId)?getRoute(t0.routeId):null)||{}).name||'—';
+    var pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t0.pax||{}):0; var val=(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0);
+    var ini=(nm||'?').replace(/[^A-Za-z0-9ก-๙ ]/g,'').trim().split(/\s+/).map(function(w){return w[0];}).join('').slice(0,2).toUpperCase()||'?';
+    var pair=AV[i%AV.length].split('|'); var isNew=o.ts>0 && (Date.now()-o.ts)<600000; var cx=CXL.indexOf(b.status)>=0;
+    rows+='<div onclick="dashOpenBooking(\''+b.id+'\')" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;border:1px solid '+(isNew?'#CFEBB0':'#eee')+';cursor:pointer;'+(cx?'opacity:.55':'')+'">'
+      +'<span style="width:32px;height:32px;border-radius:50%;background:'+pair[0]+';color:'+pair[1]+';display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none">'+ini+'</span>'
+      +'<div style="min-width:0;flex:1"><div style="font-size:12.5px;font-weight:600;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+nm+' &middot; '+rn+(cx?' <span style="color:#A32D2D">· cancelled</span>':'')+'</div>'
+      +'<div style="font-size:11px;color:#9a958c">'+pax+' pax &middot; '+_dashDateShort(t0.date)+' &middot; ฿'+Math.round(val).toLocaleString()+'</div></div>'
+      +'<div style="text-align:right;flex:none">'+(isNew?'<span style="font-size:9.5px;font-weight:700;color:#1C7A43;background:#DFF3C4;border-radius:5px;padding:1px 6px">NEW</span>':'')+'<div style="font-size:10.5px;color:#9a958c;margin-top:3px">'+_dashAgo(o.ts)+'</div></div></div>';
+  });
+  if(!rows) rows='<div style="font-size:12px;color:#9a958c;text-align:center;padding:14px 0">ยังไม่มี booking</div>';
+  return '<div style="background:'+dx.card+';border-radius:18px;padding:14px 15px;'+F+'">'
+    +'<div style="display:flex;align-items:center;gap:9px;margin-bottom:11px">'
+      +'<span style="width:28px;height:28px;border-radius:8px;background:#E7F5EC;display:inline-flex;align-items:center;justify-content:center;color:#0A6B3F"><i class="ti ti-bolt" style="font-size:16px"></i></span>'
+      +'<span style="font-size:14px;font-weight:600;letter-spacing:-.015em;color:#1a1a1a">Live bookings</span>'
+      +'<span style="margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#1C7A43;background:#E7F5EC;border-radius:20px;padding:3px 10px"><span style="width:8px;height:8px;border-radius:50%;background:#2F9E5B;animation:dashlvpulse 1.4s infinite"></span>live</span>'
+    +'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px">'+rows+'</div>'
+    +'<div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:11px;font-size:10.5px;color:#9a958c"><i class="ti ti-refresh" style="font-size:13px"></i>streams in without refresh</div></div>';
+}
+window.dashGoApprovals=function(){ var el=document.querySelector('[data-view=booking]'); if(el&&typeof nav==='function')nav(el); if(typeof bkV2SwitchTab==='function')bkV2SwitchTab('approvals'); };
+window.dashGoBytrip=function(ds){ if(typeof bkV2OpenFiltered==='function')bkV2OpenFiltered('',ds||TODAY_STR); };
+window.dashGoAccounting=function(){ var el=document.querySelector('[data-view=accounting]'); if(el&&typeof nav==='function')nav(el); };
+window.dashGoCancels=function(){ var el=document.querySelector('[data-view=booking]'); if(el&&typeof nav==='function')nav(el); if(typeof bkV2SwitchTab==='function')bkV2SwitchTab('all'); };
+window.dashOpenBooking=function(id){ var el=document.querySelector('[data-view=booking]'); if(el&&typeof nav==='function')nav(el); if(typeof bkV2OpenDetail==='function')bkV2OpenDetail(id); };
+
 function renderDash(){
   const wrap=document.getElementById('dash-wrap');
   if(!wrap)return;
@@ -4760,6 +4833,8 @@ function renderDash(){
     ${profile}
     ${todoCard}
     ${notifCard}
+    ${_dashBookingBoardHtml(dx,F)}
+    ${_dashLiveFeedHtml(dx,F)}
   </div>`;
 
   // ─── CENTER COLUMN ───
