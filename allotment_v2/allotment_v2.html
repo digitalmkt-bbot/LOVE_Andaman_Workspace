@@ -4354,7 +4354,8 @@ function _dashSeatCalHtml(dx,F){
     if(!a.has){ state=(a.wxN>0)?'wx':'none'; }
     else { var fr=a.cap>0?(a.free/a.cap):0; state=(a.free<=0?'full':(fr>=0.5?'free':'fill')); }
     var col=PAL[state], today=(ds===TODAY_STR);
-    var ring=today?'box-shadow:inset 0 0 0 2px #0F6E56;':'';
+    var _glass='0 1px 2px rgba(20,45,35,.06),0 5px 12px rgba(20,45,35,.08),inset 0 1px 0 rgba(255,255,255,.55)';
+    var ring='box-shadow:'+(today?('inset 0 0 0 2px #0F6E56,'+_glass):_glass)+';border:1px solid rgba(0,0,0,.05);';
     var closedLike=(state==='none'||state==='wx');
     var num=(state==='wx')?'&#9928;':((state==='none')?'&mdash;':a.free);
     var sub=(state==='wx')?'Cancelled':((state==='none')?'Closed':('/'+a.cap+' free'));
