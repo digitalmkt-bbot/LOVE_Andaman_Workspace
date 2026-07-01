@@ -19,21 +19,44 @@
   ME=me.json||{}; window.LA_ME=ME;                               // expose current user (edit-lock / audit)
 
   // 2) LOAD from cloud (sync gate) · BASE = snapshot we loaded (used to diff our changes)
-  var BASE={}, _refreshShown=false, _dirty=false;
+  var BASE={}, _refreshShown=false, _dirty=false, _recoverPush=false;
+  function _laMark(v){ try{ localStorage.setItem(LS+'__v', String(v)); }catch(e){} }   // remember which server version the local data is synced to (survives reload)
+  // Graft LOCAL-ONLY records (ids the server doesn't have) into the server blob · additive only, never overwrites a server record → no revert
+  function _laGraftLocalOnly(srv, loc){ var g=0; Object.keys(loc||{}).forEach(function(k){ var lv=loc[k], sv=srv[k];
+    if(Array.isArray(lv) && lv.length && lv.every(function(x){return x&&typeof x==='object'&&x.id!=null;})){
+      if(!Array.isArray(sv)){ srv[k]=lv.slice(); g+=lv.length; return; }
+      var ids={}; sv.forEach(function(x){ if(x&&x.id!=null) ids[String(x.id)]=1; });
+      lv.forEach(function(x){ if(x&&x.id!=null && !ids[String(x.id)]){ sv.push(x); g++; } }); } });
+    return g; }
   var ld=sx('GET','/api/load');
   if(ld.status===200 && ld.json){
     VER=ld.json.version||0; LASTBY = ld.json.updated_by? (ld.json.updated_by+' · '+fmt(ld.json.updated_at)) : '';
-    if(typeof ld.json.data==='string' && ld.json.data.length>2){ localStorage.setItem(LS, ld.json.data); try{BASE=JSON.parse(ld.json.data);}catch(e){BASE={};} }   // setItem not overridden yet → no save loop
-    else { var loc=localStorage.getItem(LS); if(loc && loc.length>2) seedFull(loc); }
+    var _srvStr=(typeof ld.json.data==='string' && ld.json.data.length>2)?ld.json.data:'';
+    var _loc=localStorage.getItem(LS), _locObj=null, _srvObj=null;
+    try{ if(_loc && _loc.length>2) _locObj=JSON.parse(_loc); }catch(e){}
+    try{ if(_srvStr) _srvObj=JSON.parse(_srvStr); }catch(e){}
+    if(_srvObj){
+      try{BASE=JSON.parse(_srvStr);}catch(e){BASE={};}                                   // BASE = pure server snapshot → a recover-push diffs against this
+      if(_locObj){
+        var _lv=parseInt(localStorage.getItem(LS+'__v')||'-1',10);
+        var _keepLocal=false;
+        if(_lv===VER){ var _d0=computeDiff(_srvObj,_locObj); if(_d0._changed) _keepLocal=true; }   // local was synced to THIS server version → any diff = this user's UNSAVED work → keep it all + push
+        if(_keepLocal){ localStorage.setItem(LS, _loc); _recoverPush=true; }
+        else { var _g=_laGraftLocalOnly(_srvObj, _locObj);                                          // server moved ahead → adopt server, but RESCUE local-only new records (e.g. just-created bookings not yet saved)
+               if(_g>0){ localStorage.setItem(LS, JSON.stringify(_srvObj)); _recoverPush=true; }
+               else { localStorage.setItem(LS, _srvStr); } }
+      } else { localStorage.setItem(LS, _srvStr); }
+      _laMark(VER);
+    } else { if(_loc && _loc.length>2) seedFull(_loc); }
   }
 
   // 3) AUTO-SAVE on change (debounced) · sends a DIFF that the server MERGES → many people can add/edit at once
   var _orig=localStorage.setItem.bind(localStorage);
   localStorage.setItem=function(k,v){ _orig(k,v); if(k===LS && laCanEdit()){ _dirty=true; clearTimeout(_t); _t=setTimeout(function(){ save(v); },1000); } };   // view-only users never sync to cloud
-  function seedFull(loc){ var cur; try{cur=JSON.parse(loc);}catch(e){return;} var x=new XMLHttpRequest(); x.open('POST','/api/save',true); x.setRequestHeader('Content-Type','application/json'); x.onload=function(){ if(x.status===200){ try{VER=JSON.parse(x.responseText).version;}catch(e){} BASE=cur; } }; try{ x.send(JSON.stringify({baseVersion:0,full:loc})); }catch(e){} }
+  function seedFull(loc){ var cur; try{cur=JSON.parse(loc);}catch(e){return;} var x=new XMLHttpRequest(); x.open('POST','/api/save',true); x.setRequestHeader('Content-Type','application/json'); x.onload=function(){ if(x.status===200){ try{VER=JSON.parse(x.responseText).version;}catch(e){} BASE=cur; _laMark(VER); } }; try{ x.send(JSON.stringify({baseVersion:0,full:loc})); }catch(e){} }
   function save(v){ var cur; try{cur=JSON.parse(v);}catch(e){return;} var d=computeDiff(BASE,cur); if(!d._changed){ _dirty=false; return; }
     var x=new XMLHttpRequest(); x.open('POST','/api/save',true); x.setRequestHeader('Content-Type','application/json');
-    x.onload=function(){ if(x.status===200){ var r={}; try{r=JSON.parse(x.responseText);}catch(e){} VER=r.version||VER; BASE=cur; _dirty=false; window.__savedAt=Date.now(); badgeTick(); if(r.behind){ _laPending=r; _laTryRefresh(); } }
+    x.onload=function(){ if(x.status===200){ var r={}; try{r=JSON.parse(x.responseText);}catch(e){} VER=r.version||VER; BASE=cur; _laMark(VER); _dirty=false; window.__savedAt=Date.now(); badgeTick(); if(r.behind){ _laPending=r; _laTryRefresh(); } }
       else { setTimeout(function(){ var nv=localStorage.getItem(LS); if(nv) save(nv); }, 5000); } };   // save failed → keep _dirty, retry (no silent data loss)
     x.onerror=function(){ setTimeout(function(){ var nv=localStorage.getItem(LS); if(nv) save(nv); }, 5000); };
     try{ x.send(JSON.stringify({baseVersion:VER, diff:{sets:d.sets,cols:d.cols,objs:d.objs}})); }catch(e){} }
@@ -41,11 +64,13 @@
   function _laFlush(){ if(!_dirty) return; try{ var cur=JSON.parse(localStorage.getItem(LS)||'{}'); var d=computeDiff(BASE,cur); if(!d._changed){ _dirty=false; return; }
     var payload=JSON.stringify({baseVersion:VER, diff:{sets:d.sets,cols:d.cols,objs:d.objs}});
     // SYNCHRONOUS save so it commits to cloud BEFORE the page reloads (otherwise the reload reloads stale data → reverts the edit)
-    try{ var x=new XMLHttpRequest(); x.open('POST','/api/save',false); x.setRequestHeader('Content-Type','application/json'); x.send(payload); if(x.status===200){ _dirty=false; try{VER=JSON.parse(x.responseText).version||VER;}catch(_){} BASE=cur; } else if(navigator.sendBeacon){ navigator.sendBeacon('/api/save', new Blob([payload],{type:'application/json'})); } }
+    try{ var x=new XMLHttpRequest(); x.open('POST','/api/save',false); x.setRequestHeader('Content-Type','application/json'); x.send(payload); if(x.status===200){ _dirty=false; try{VER=JSON.parse(x.responseText).version||VER;}catch(_){} BASE=cur; _laMark(VER); } else if(navigator.sendBeacon){ navigator.sendBeacon('/api/save', new Blob([payload],{type:'application/json'})); } }
     catch(e){ if(navigator.sendBeacon) navigator.sendBeacon('/api/save', new Blob([payload],{type:'application/json'})); }
   }catch(e){} }
   window.addEventListener('beforeunload', _laFlush);
   window.addEventListener('pagehide', _laFlush);
+  // recover unsaved local work detected at load (new bookings / edits that never reached the cloud) → push it now
+  if(_recoverPush){ _dirty=true; clearTimeout(_t); _t=setTimeout(function(){ try{ var nv=localStorage.getItem(LS); if(nv) save(nv); }catch(e){} }, 1500); }
   function _isPlainObj(x){ return x && typeof x==='object' && !Array.isArray(x); }
   // Deep diff of two plain objects → {p:{key:{v:val}|{m:subdiff}}, d:[deletedKeys]} or null if identical.
   function _deepDiff(b,c){ var p={}, d=[], ch=false;
@@ -109,7 +134,7 @@
       if(typeof j.data!=='string' || j.data.length<2){ _laPending=null; return; }
       if(_laBusy()) return;                                        // user resumed during fetch → defer
       _orig(LS, j.data);                                           // write WITHOUT triggering a save
-      VER=j.version||VER; try{BASE=JSON.parse(j.data);}catch(e){BASE={};}
+      VER=j.version||VER; try{BASE=JSON.parse(j.data);}catch(e){BASE={};} _laMark(VER);
       _laPending=null;
       var ok = window._laReloadData ? window._laReloadData() : false;
       if(!ok){ _laReload(); return; }                             // in-place failed → fall back to full reload
