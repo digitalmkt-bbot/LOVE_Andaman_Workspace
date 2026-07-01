@@ -50619,7 +50619,7 @@ function bkV2RenderTab2(){
 // ── Tab 3 · All bookings (existing Linear list) ──
 function bkV2RenderTab3(){
   const escapeHTML = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
-  const all = SB_BOOKINGS.map(bkV2Norm).sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||''));
+  const all = SB_BOOKINGS.map(bkV2Norm).sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||'') || String(b.id||'').localeCompare(String(a.id||'')));   // newest first · tiebreak by BK number (running counter) so same-day bookings show latest on top
   const kCount = all.length;
   const kConfirmed = all.filter(b=>b.status==='confirmed').length;
   // Pending FOC = any OPEN booking (quote/pending) that has FOC seats and isn't FOC-approved yet · "awaiting approval"
