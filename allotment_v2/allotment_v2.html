@@ -36440,21 +36440,24 @@ function bkV2LocksForAgent(routeId, date, agentId){
   return bkV2LocksFor(routeId, date).filter(l => l.holderType==='office' || l.holderType==='global' || (l.holderType==='agent' && l.holderId===agentId));
 }
 function bkV2LockedTotal(routeId, date){ return bkV2LocksFor(routeId,date).reduce((s,l)=>s+bkV2LockRemaining(l),0); }
+// Current logged-in user for audit stamps (username preferred · falls back to name, then RM for offline/localhost)
+function laBy(){ return (window.LA_ME && (window.LA_ME.username||window.LA_ME.name)) || 'RM'; }
 function bkV2CreateLock(o){
   const today = (typeof bkV2LocalYMD==='function') ? bkV2LocalYMD(new Date()) : new Date().toISOString().slice(0,10);
+  const nowTs = new Date().toISOString();
   const mFrom = o.monthFrom||o.month||'';
   const l = { id:LA_UID('lk'), scope:o.scope||'day', routeId:o.routeId, date:o.date||'',
     monthFrom:mFrom, monthTo:o.monthTo||mFrom, month:mFrom, boatId:o.boatId||null,
     holderType:o.holderType||'office', holderId:o.holderId||null, qty:Number(o.qty)||0, used:0,
-    reason:o.reason||'', expiry:o.expiry||'', status:'active', createdAt:today, createdBy:'RM',
-    log:[{date:today,type:'create',qty:Number(o.qty)||0}] };
+    reason:o.reason||'', expiry:o.expiry||'', status:'active', createdAt:nowTs, createdBy:laBy(),
+    log:[{date:today,at:nowTs,type:'create',qty:Number(o.qty)||0,by:laBy()}] };
   SB_SEAT_LOCKS.push(l); sbSeatLocksPersist(); return l;
 }
 function bkV2DrawLock(lockId, qty, bookingId){
   const l = SB_SEAT_LOCKS.find(x=>x.id===lockId); if(!l) return 0;
   const n = Math.min(Math.max(0, qty|0), bkV2LockRemaining(l)); if(n<=0) return 0;
   const today = (typeof bkV2LocalYMD==='function') ? bkV2LocalYMD(new Date()) : new Date().toISOString().slice(0,10);
-  l.used = (l.used||0) + n; (l.log=l.log||[]).push({date:today,type:'draw',qty:n,bookingId:bookingId||''});
+  l.used = (l.used||0) + n; (l.log=l.log||[]).push({date:today,at:new Date().toISOString(),type:'draw',qty:n,bookingId:bookingId||'',by:laBy()});
   if(bkV2LockRemaining(l) <= 0) l.status='depleted';
   sbSeatLocksPersist(); return n;
 }
@@ -36676,6 +36679,7 @@ function bkV2RenderLocks(){
           <div style="min-width:140px;flex:1">
             <div style="font-size:12px;font-weight:600;color:var(--ink)">${esc(bkV2LockHolderName(l))} ${stChip(l.status)}</div>
             <div style="font-size:10px;color:var(--ink-soft)">${esc(l.reason||'—')}${l.expiry?` · expires ${esc(l.expiry)}`:''}</div>
+            <div style="font-size:9.5px;color:var(--ink-soft);opacity:.85;margin-top:1px">🔒 สร้างโดย ${esc(l.createdBy||'—')}${l.createdAt?` · ${esc((function(){try{return new Date(l.createdAt).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return l.createdAt;}})())}`:''}</div>
           </div>
           <div style="min-width:120px">
             <div style="font-family:Manrope,sans-serif;font-size:12px;font-variant-numeric:tabular-nums"><b>${l.used}</b>/${l.qty} used · <b style="color:#C0392B">${rem}</b> left</div>
@@ -36877,7 +36881,7 @@ function acctCreateInvoice(agentId, bookingIds, dueDays){
   let net=subtotal, vat=0, total=subtotal;
   if(vm==='exclude'){ net=subtotal; vat=Math.round(net*rate); total=net+vat; }
   else if(vm==='include'){ total=subtotal; net=Math.round(subtotal/(1+rate)); vat=subtotal-net; }
-  const inv={ id:LA_UID('inv_'), number:acctNextInvoiceNo(), agentId, bookingIds:ids, lineItems:[], subtotal, netAmount:net, vatMode:vm, vatRate:rate, vatAmount:vat, depositApplied:0, total, issuedAt:now.toISOString(), dueAt:due.toISOString(), status:'issued', createdBy:'RM' };
+  const inv={ id:LA_UID('inv_'), number:acctNextInvoiceNo(), agentId, bookingIds:ids, lineItems:[], subtotal, netAmount:net, vatMode:vm, vatRate:rate, vatAmount:vat, depositApplied:0, total, issuedAt:now.toISOString(), dueAt:due.toISOString(), status:'issued', createdBy:laBy() };
   SB_INVOICES.push(inv); sbInvoicesPersist();
   ids.forEach(id=>{ const b=SB_BOOKINGS.find(x=>x.id===id); if(b){ b.invoiceId=inv.id; b.paymentStatus='invoiced'; if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'invoice','Invoice '+inv.number+' issued · ฿'+Math.round(total).toLocaleString()+(vat>0?' (incl. VAT)':''),'Invoice'); } });
   acctPersistBookings();
@@ -36887,7 +36891,7 @@ function acctCreateInvoice(agentId, bookingIds, dueDays){
 function acctCreateFeeInvoice(agentId, bookingId, amount, note, feeType){
   const amt=Math.max(0, Math.round(Number(amount)||0)); if(amt<=0) return null;
   const now=new Date();
-  const inv={ id:LA_UID('inv_'), number:acctNextInvoiceNo(), agentId, bookingIds:[bookingId], lineItems:[{label:note||'Cancellation fee', amount:amt}], subtotal:amt, netAmount:amt, vatMode:'none', vatRate:0, vatAmount:0, depositApplied:0, total:amt, issuedAt:now.toISOString(), dueAt:now.toISOString(), status:'issued', createdBy:'RM', feeType:feeType||'cancellation', note:note||'' };
+  const inv={ id:LA_UID('inv_'), number:acctNextInvoiceNo(), agentId, bookingIds:[bookingId], lineItems:[{label:note||'Cancellation fee', amount:amt}], subtotal:amt, netAmount:amt, vatMode:'none', vatRate:0, vatAmount:0, depositApplied:0, total:amt, issuedAt:now.toISOString(), dueAt:now.toISOString(), status:'issued', createdBy:laBy(), feeType:feeType||'cancellation', note:note||'' };
   SB_INVOICES.push(inv); sbInvoicesPersist();
   return inv;
 }
@@ -37934,7 +37938,7 @@ function pfmApproveTravel(bkId){
 function pfmHold(bkId){
   const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return;
   if(!confirm('Mark this booking ON HOLD (do not travel until paid)?')) return;
-  b.ops=b.ops||{}; b.ops.pfm={decision:'hold', by:'RM', at:new Date().toISOString()};
+  b.ops=b.ops||{}; b.ops.pfm={decision:'hold', by:laBy(), at:new Date().toISOString()};
   if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'edit','PFM unpaid · put on hold','Cancel');
   acctPersistBookings(); renderDailyPFM();
 }
@@ -38347,9 +38351,9 @@ function bkV2ToggleBoatMode(){ _bkV2.boatAssignMode=!_bkV2.boatAssignMode; if(_b
 function bkV2ToggleVanMode(){ _bkV2.vanAssignMode=!_bkV2.vanAssignMode; if(_bkV2.vanAssignMode){_bkV2.boatAssignMode=false;_bkV2.reconfirmMode=false;} bkV2Render(); }
 function bkV2ToggleReconfirmMode(){ _bkV2.reconfirmMode=!_bkV2.reconfirmMode; if(_bkV2.reconfirmMode){_bkV2.boatAssignMode=false;_bkV2.vanAssignMode=false;} bkV2Render(); }
 // ── Re-confirmation · confirm actual pickup time with the agent ──
-function bkV2Reconfirm(bkId, via){ const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return; b.ops=b.ops||{}; b.ops.reconfirm={status:'done', via:via||'list', at:new Date().toISOString(), by:'RM'}; if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'notify','Re-confirmed pickup ('+(via==='phone'?'phone':'list')+')','Notify'); acctPersistBookings(); if(typeof bkV2Render==='function') bkV2Render(); }
+function bkV2Reconfirm(bkId, via){ const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return; b.ops=b.ops||{}; b.ops.reconfirm={status:'done', via:via||'list', at:new Date().toISOString(), by:laBy()}; if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'notify','Re-confirmed pickup ('+(via==='phone'?'phone':'list')+')','Notify'); acctPersistBookings(); if(typeof bkV2Render==='function') bkV2Render(); }
 function bkV2ReconfirmClear(bkId){ const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b||!b.ops) return; b.ops.reconfirm=null; acctPersistBookings(); if(typeof bkV2Render==='function') bkV2Render(); }
-function bkV2ReconfirmAll(date, rid, via){ if(!confirm('Mark ALL un-confirmed bookings on this trip as re-confirmed ('+(via==='phone'?'phone':'list')+')?')) return; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(b.ops&&b.ops.reconfirm&&b.ops.reconfirm.status==='done')return; if(!(b.trips||[]).some(t=>(t.date||'')===date && t.routeId===rid))return; b.ops=b.ops||{}; b.ops.reconfirm={status:'done',via:via||'list',at:new Date().toISOString(),by:'RM'}; if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'notify','Re-confirmed pickup ('+(via==='phone'?'phone':'list')+') · bulk','Notify'); }); acctPersistBookings(); if(typeof bkV2Render==='function') bkV2Render(); }
+function bkV2ReconfirmAll(date, rid, via){ if(!confirm('Mark ALL un-confirmed bookings on this trip as re-confirmed ('+(via==='phone'?'phone':'list')+')?')) return; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(b.ops&&b.ops.reconfirm&&b.ops.reconfirm.status==='done')return; if(!(b.trips||[]).some(t=>(t.date||'')===date && t.routeId===rid))return; b.ops=b.ops||{}; b.ops.reconfirm={status:'done',via:via||'list',at:new Date().toISOString(),by:laBy()}; if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'notify','Re-confirmed pickup ('+(via==='phone'?'phone':'list')+') · bulk','Notify'); }); acctPersistBookings(); if(typeof bkV2Render==='function') bkV2Render(); }
 function bkV2GoBoatAssign(){
   const bnav=[...document.querySelectorAll('.nav-item')].find(n=>n.dataset.view==='booking');
   if(bnav && typeof nav==='function') nav(bnav);
@@ -38983,7 +38987,7 @@ function bkV2BoatUpgrade(bkId){
   if(reason===null) return;
   const chargeStr=prompt('Upgrade charge (THB) · 0 = goodwill/free', '0'); if(chargeStr===null) return;
   const charge=Math.max(0,Number(chargeStr)||0);
-  b.ops=b.ops||{}; b.ops.upgrade={reason:(reason||'').trim(), charge, by:'RM', at:new Date().toISOString()};
+  b.ops=b.ops||{}; b.ops.upgrade={reason:(reason||'').trim(), charge, by:laBy(), at:new Date().toISOString()};
   if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'edit','Upgrade · '+(reason||'')+(charge>0?(' · ฿'+charge.toLocaleString()):' · free'),'Edit');
   acctPersistBookings(); _rerender();   // now the boat dropdown lists ALL day boats
 }
@@ -40480,7 +40484,7 @@ function bkV2WeatherCancel(routeId,date){
 function bkV2AddHistory(bk, kind, text, tag){
   if(!bk) return;
   if(!Array.isArray(bk.history)) bk.history=[];
-  bk.history.push({at:new Date().toISOString(), kind:kind||'note', text:text||'', tag:tag||'', by:'RM'});
+  bk.history.push({at:new Date().toISOString(), kind:kind||'note', text:text||'', tag:tag||'', by:laBy()});
 }
 // Tag → [bg,fg] chip colors for the booking history timeline
 function bkV2HistTagColor(tag){
@@ -52424,7 +52428,7 @@ function bkV2CancelBooking(bookingId, opts){
   const _ctype  = opts.chargeType || 'none';   // 'none' | 'full' | 'partial'
   const _total  = (typeof acctBookingTotal==='function') ? acctBookingTotal(bk) : (bk.total||0);
   const _charge = _ctype==='full' ? _total : (_ctype==='partial' ? Math.max(0, Number(opts.chargeAmount)||0) : 0);
-  bk.cancellation = { category:_cat, categoryLabel:_catLbl, group:(_catObj?_catObj.group:''), note:_note, reason:_reason, chargeType:_ctype, chargeAmount:_charge, at:bk.cancelledAt, by:'RM' };
+  bk.cancellation = { category:_cat, categoryLabel:_catLbl, group:(_catObj?_catObj.group:''), note:_note, reason:_reason, chargeType:_ctype, chargeAmount:_charge, at:bk.cancelledAt, by:laBy() };
   bk.cancelCategory = _cat;
   bk.cancelReason = _reason;
   // Accounting: clean prior invoice, then bill the cancellation fee if any (becomes a real receivable)
@@ -53367,7 +53371,7 @@ function bkV2RescheduleBooking(bookingId, opts){
     }
     t.date=to; moved++;
   });
-  bk.reschedule={ fromDate:from, toDate:to, reason:_reason, chargeType:_ctype, chargeAmount:_charge, collect:(_charge>0?_collect:'none'), at:new Date().toISOString(), by:'RM' };
+  bk.reschedule={ fromDate:from, toDate:to, reason:_reason, chargeType:_ctype, chargeAmount:_charge, collect:(_charge>0?_collect:'none'), at:new Date().toISOString(), by:laBy() };
   bk.rebook={ from, to, reason:'manual', at:bk.reschedule.at };
   // Accounting: trip continues → its own price stands. The reschedule fee is attached to THIS booking's
   // invoice as a labelled line (not a separate invoice). 'separate' = customer pays directly, no invoice.
@@ -53529,7 +53533,7 @@ function bkV2PartialCancel(bookingId, tripIdx, opts){
     note:opts.note||'', refundMode, refund,
     charged:{count:charged.count||0, amount:Math.round(charged.amount||0)},
     waived:{count:waived.count||0, amount:Math.round(waived.amount||0)},
-    at:new Date().toISOString(), by:'RM'
+    at:new Date().toISOString(), by:laBy()
   });
   const moneyLbl = `charge ${charged.count||0} (฿${Math.round(charged.amount||0).toLocaleString()}) · waive ${waived.count||0} (฿${Math.round(refund).toLocaleString()})`;
   if(typeof bkV2AddHistory==='function') bkV2AddHistory(bk,'cancel',`Partial cancel · −${opts.totalRem} pax · ${catLbl} · ${moneyLbl}${opts.note?' · '+opts.note:''}`,'Cancel');
