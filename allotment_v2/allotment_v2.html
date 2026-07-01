@@ -4304,7 +4304,11 @@ function _dashSeatCalHtml(dx,F){
   var allRoutes=(typeof ROUTES!=='undefined'?ROUTES:[]);
   var routes=allRoutes.filter(function(r){ return !famFilter || (((typeof bkV2RouteFamily==='function'&&bkV2RouteFamily(r.id))||{}).id===famFilter); });
   var fams={}; allRoutes.forEach(function(r){ var f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(r.id):null; if(f&&!fams[f.id]) fams[f.id]=f.name; });
-  function dayAgg(ds){ var cap=0,free=0,has=false; routes.forEach(function(r){ var al=(typeof getAllotment==='function')?getAllotment(r.id,ds):null; if(al&&al.hasAllotment){ has=true; cap+=al.availableCapacity||0; free+=Math.max(0,al.seatsAvailable||0); } }); return {cap:cap,free:free,has:has}; }
+  function dayAgg(ds){ var cap=0,free=0,has=false; routes.forEach(function(r){
+    // respect the program's open/closed schedule (seasons + per-day overrides) — a route marked closed that day is not running
+    if(typeof bkV2IsRouteOpenOn==='function' && !bkV2IsRouteOpenOn(r.id,ds)) return;
+    var al=(typeof getAllotment==='function')?getAllotment(r.id,ds):null; if(al&&al.hasAllotment){ has=true; cap+=al.availableCapacity||0; free+=Math.max(0,al.seatsAvailable||0); }
+  }); return {cap:cap,free:free,has:has}; }
   var yy=parseInt(month.slice(0,4),10), mm=parseInt(month.slice(5,7),10);
   var first=new Date(yy,mm-1,1);
   var startDow=(first.getDay()+6)%7;   // Monday = 0
