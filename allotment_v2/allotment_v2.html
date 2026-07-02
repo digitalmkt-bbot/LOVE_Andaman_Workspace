@@ -19904,14 +19904,16 @@ function flRenderEngList(){
   // (boat dropdown is a "jump to boat" navigator · it does NOT filter/hide — see flSetEngBoat)
 
   const all=FL_ENGINES;
-  const totalEng=all.length;
-  const honda=all.filter(e=>e.brand==='Honda').length;
-  const suzuki=all.filter(e=>e.brand==='Suzuki').length;
-  const ready=all.filter(e=>(e.status||'ready')==='ready').length;
-  const fixing=all.filter(e=>e.status==='fixing').length;
-  const broken=all.filter(e=>e.status==='broken').length;
-  // Spare = status==='spare' OR no boat assigned (orphan) — covers both UI status-flag and unassign-flow
-  const spareEngs=all.filter(e=>e.status==='spare' || !e.boatId).length;
+  const _isRet=(e)=>e.retired===true || e.status==='broken';    // ปลดระวาง (decommissioned) · นับแยก ไม่รวมใน fleet
+  const retired=all.filter(_isRet).length;
+  const totalEng=all.length-retired;                            // fleet = เครื่องที่ยังใช้งาน (พร้อม + ซ่อม + สำรอง)
+  const honda=all.filter(e=>!_isRet(e)&&e.brand==='Honda').length;
+  const suzuki=all.filter(e=>!_isRet(e)&&e.brand==='Suzuki').length;
+  const ready=all.filter(e=>!_isRet(e)&&(e.status||'ready')==='ready').length;
+  const fixing=all.filter(e=>!_isRet(e)&&e.status==='fixing').length;
+  const broken=retired;                                         // (legacy var) = จำนวนปลดระวาง
+  // Spare = status==='spare' OR no boat assigned (orphan) · ไม่รวมตัวที่ปลดระวาง
+  const spareEngs=all.filter(e=>!_isRet(e)&&(e.status==='spare' || !e.boatId)).length;
 
   const totalHours=all.reduce((s,e)=>s+(typeof flEngHours==='function'?flEngHours(e.id):(e.baseHours||0)),0);
   const avgHours=all.length?Math.round(totalHours/all.length):0;
@@ -19950,7 +19952,7 @@ function flRenderEngList(){
         <span style="display:inline-flex;align-items:center;background:${SVG_PINK.accent};color:white;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">▴ ${ready} ready</span>
         ${fixing?`<span style="display:inline-flex;align-items:center;background:${SVG_PINK.soft};color:${SVG_PINK.text};padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">${fixing} fixing</span>`:''}
       </div>
-      <div style="font-size:11px;color:${dim.ink3}">${honda} Honda · ${suzuki} Suzuki · ${spareEngs} spare</div>
+      <div style="font-size:11px;color:${dim.ink3}">${honda} Honda · ${suzuki} Suzuki · ${spareEngs} spare${retired?` · <span style="color:#5B289A;font-weight:600">${retired} ปลดระวาง</span>`:''}</div>
     </div>
 
     <div style="grid-column:2;background:white;border-radius:14px;padding:11px 13px;border:1px solid ${dim.line}">
@@ -19973,8 +19975,8 @@ function flRenderEngList(){
 
     <div style="grid-column:5;background:${dim.ink};color:white;border-radius:14px;padding:11px 13px">
       <div style="font-size:10px;color:#aaa">Issues</div>
-      <div style="display:flex;align-items:baseline;gap:3px;margin-top:2px"><span style="font-size:18px;font-weight:700;line-height:1.2;color:${(fixing+broken)?'#FF8FA8':'white'}">${fixing+broken}</span><span style="font-size:11px;color:#aaa;font-weight:500">need attention</span></div>
-      <div style="font-size:11px;color:#aaa;margin-top:6px">${fixing} fixing · ${broken} broken</div>
+      <div style="display:flex;align-items:baseline;gap:3px;margin-top:2px"><span style="font-size:18px;font-weight:700;line-height:1.2;color:${fixing?'#FF8FA8':'white'}">${fixing}</span><span style="font-size:11px;color:#aaa;font-weight:500">need attention</span></div>
+      <div style="font-size:11px;color:#aaa;margin-top:6px">${fixing} fixing · ${retired} ปลดระวาง</div>
     </div>
   </div>`;
 
@@ -20013,7 +20015,7 @@ function flRenderEngList(){
   const buildEngRow=(e)=>{
     const isSel=e.id===flSelEngId;
     const b=getBoat(e.boatId);
-    const ss=STATUS_STYLE[e.status||'ready']||STATUS_STYLE.ready;
+    const ss=_isRet(e)?{bg:'#EEEBF6',color:'#5B289A',label:'ปลดระวาง'}:(STATUS_STYLE[e.status||'ready']||STATUS_STYLE.ready);
     const isSuzuki=e.brand==='Suzuki';
     const posBg=e.boatId?(isSuzuki?'#A32D2D':'#185FA5'):'#999';
     const posLbl=e.boatId?flPosLabel(e.pos||'EN'):'SPARE';
@@ -20042,8 +20044,8 @@ function flRenderEngList(){
   // Group by BOAT · positions ordered Port→C.Port→Center→C.Std→Std · Spare/off-boat last
   const POS_ORDER=['Port','C.Port','Center','C.Std','Std'];
   const posIdx=p=>flPosRank(p);
-  const byBoat={}; const spareList=[];
-  engs.forEach(e=>{ if(e.boatId){ (byBoat[e.boatId]=byBoat[e.boatId]||[]).push(e); } else spareList.push(e); });
+  const byBoat={}; const spareList=[]; const retiredList=[];
+  engs.forEach(e=>{ if(_isRet(e)){ retiredList.push(e); } else if(e.boatId){ (byBoat[e.boatId]=byBoat[e.boatId]||[]).push(e); } else spareList.push(e); });
   Object.values(byBoat).forEach(arr=>arr.sort((a,b)=>posIdx(a.pos)-posIdx(b.pos)));
   const boatIds=Object.keys(byBoat).sort((a,b)=>String((getBoat(a)||{}).name||a).localeCompare(String((getBoat(b)||{}).name||b)));
   const boatHeader=(bid,name,n,sub,sz)=>`<div id="fl-eng-grp-${bid}" style="display:flex;align-items:center;gap:7px;margin:13px 0 5px;padding:0 4px 7px;border-bottom:1.5px solid rgba(0,0,0,.10);scroll-margin-top:6px">
@@ -20058,6 +20060,7 @@ function flRenderEngList(){
   } else {
     boatIds.forEach(bid=>{ const b=getBoat(bid)||{}; const arr=byBoat[bid]; const brands=[...new Set(arr.map(x=>x.brand))]; listHtml+=boatHeader(bid, b.name||bid, arr.length, brands.join('/'), brands[0]==='Suzuki'); arr.forEach(e=>{listHtml+=buildEngRow(e);}); });
     if(spareList.length){ spareList.sort((a,b)=>String(a.serial).localeCompare(String(b.serial))); listHtml+=`<div style="display:flex;align-items:center;gap:7px;margin:13px 0 5px;padding:0 4px 7px;border-bottom:1.5px solid rgba(0,0,0,.10)"><span style="width:7px;height:7px;border-radius:50%;background:#999;flex-shrink:0"></span><span style="font-size:13px;font-weight:700;color:#666">Spare · ไม่อยู่เรือ</span><span style="margin-left:auto;background:#EEF1F5;color:#5a6b7a;padding:1px 9px;border-radius:9px;font-size:10px;font-weight:600">${spareList.length} eng</span></div>`; spareList.forEach(e=>{listHtml+=buildEngRow(e);}); }
+    if(retiredList.length){ retiredList.sort((a,b)=>String(a.serial).localeCompare(String(b.serial))); listHtml+=`<div style="display:flex;align-items:center;gap:7px;margin:13px 0 5px;padding:0 4px 7px;border-bottom:1.5px solid rgba(91,40,154,.20)"><span style="width:7px;height:7px;border-radius:50%;background:#5B289A;flex-shrink:0"></span><span style="font-size:13px;font-weight:700;color:#5B289A">ปลดระวาง · Retired</span><span style="margin-left:auto;background:#EEEBF6;color:#5B289A;padding:1px 9px;border-radius:9px;font-size:10px;font-weight:600">${retiredList.length} eng</span></div>`; retiredList.forEach(e=>{listHtml+=buildEngRow(e);}); }
   }
 
   const listPanel=`<div id="fl-eng-listpanel" style="background:white;border-radius:14px;padding:0 14px 13px;border:1px solid ${dim.line};max-height:calc(100vh - 360px);overflow-y:auto">
@@ -27863,6 +27866,7 @@ function flMaintClose(id,outcome,note,awaitInvoice){
         else if(eng.status==='fixing') eng.status='ready';
         // ปลดระวางเครื่อง → ถอดเกียร์ (+ใบจักรที่ติดกับเกียร์) ออกจากเครื่องที่ตายแล้ว
         // เกียร์/ใบจักรมีงานของตัวเอง → ให้ไปตามสถานะ/งานของมันเอง ไม่ผูกกับเครื่องปลดระวาง
+        if(outcome==='decommission'){ eng.retired=true; eng.retiredDate=TODAY_STR; eng.retiredReason=note||''; }
         if(outcome==='decommission' && typeof FL_GEARBOXES!=='undefined'){
           FL_GEARBOXES.forEach(gb=>{ if(gb.engineId===eng.id){
             gb.engineId=null;
