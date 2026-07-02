@@ -2,9 +2,8 @@
   "name": "erp-api",
   "private": true,
   "type": "commonjs",
-  "description": "ERP backend (Express over operation_schemas) + serves the built Vue SPA",
+  "description": "ERP backend (Express over operation_schemas) + static HTML front",
   "scripts": {
-    "build": "npm --prefix web install && npm --prefix web run build",
     "start": "node server.js"
   },
   "dependencies": {

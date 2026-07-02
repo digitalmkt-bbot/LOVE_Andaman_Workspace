@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ERP dev</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 520px; margin: 48px auto; line-height: 1.6; padding: 0 16px; }
+    fieldset { margin-top: 24px; }
+    input { padding: 2px 4px; }
+    .msg { min-height: 1.4em; }
+  </style>
+</head>
+<body>
+  <h1>ERP dev · Express (no framework)</h1>
+  <p>API health: <b id="health">…</b> · bookings in DB: <b id="bookings">…</b></p>
+  <fieldset>
+    <legend>Draw seat lock (concurrency-safe RPC)</legend>
+    lock <input id="lockId" value="lk002" size="8" />
+    qty <input id="qty" type="number" min="1" value="1" style="width:56px" />
+    <button id="draw">draw</button>
+    <p class="msg" id="drawMsg"></p>
+  </fieldset>
+
+  <script>
+    const $ = id => document.getElementById(id);
+
+    async function load() {
+      try {
+        $('health').textContent = (await (await fetch('/api/health')).json()).ok ? 'ok' : 'down';
+        $('bookings').textContent = (await (await fetch('/api/bookings')).json()).count;
+      } catch (e) { $('health').textContent = 'unreachable'; }
+    }
+
+    $('draw').addEventListener('click', async () => {
+      const r = await fetch(`/api/seat-locks/${$('lockId').value}/draw`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ qty: Number($('qty').value) }),
+      });
+      const j = await r.json();
+      $('drawMsg').textContent = r.ok ? `✓ drawn · ${j.used}/${j.qty} used` : `✗ ${r.status} · ${j.error}`;
+    });
+
+    load();
+  </script>
+</body>
+</html>

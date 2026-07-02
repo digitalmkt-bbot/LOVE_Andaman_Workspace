@@ -41,10 +41,10 @@ app.post('/api/seat-locks/:id/draw', async (req, res) => {
   }
 });
 
-// serve the built Vue SPA
-const dist = path.join(__dirname, 'web', 'dist');
-app.use(express.static(dist));
-app.get('*', (req, res) => res.sendFile(path.join(dist, 'index.html')));
+// serve the static front (plain HTML/JS — no build step)
+const pub = path.join(__dirname, 'public');
+app.use(express.static(pub));
+app.get('*', (req, res) => res.sendFile(path.join(pub, 'index.html')));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log('erp-api on ' + PORT + (DB_URL ? ' · db on' : ' · NO DATABASE_URL')));
