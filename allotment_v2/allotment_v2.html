@@ -38493,7 +38493,7 @@ function bkV2VanAutoAssign(date, routeId){
   const rows=baSeatBookingsForRoute(date,routeId).filter(({b,t})=>{ const z=t.zone||b.pickupZone||'NoTransfer'; return z!=='NoTransfer'&&z!=='NT'; });
   if(!rows.length){ alert('No transfer bookings to group on this program (all self-arrive or none).'); return; }
   const z=(typeof _vehRouteZone==='function')?_vehRouteZone(routeId):null;
-  const dayVans=(SB_VEHICLES||[]).filter(v=>v.active && v.dayRoute && v.dayRoute[date]===routeId);
+  const dayVans=(SB_VEHICLES||[]).filter(v=>v.active && _vehDayRoutes(v,date).includes(routeId));
   const pool = dayVans.length?dayVans:((typeof vanVehiclesForZone==='function')?vanVehiclesForZone(z,date):[]);
   if(!pool.length){ alert('No van available for this program today.\nAssign vans to this program in Transfer Fleet > month matrix, or add a vehicle in the zone.'); return; }
   const load={}; pool.forEach(v=>load[v.id]=0);
@@ -38646,7 +38646,7 @@ function vanVehiclesForZone(zone, date){ if(zone==='NoTransfer'||zone==='NT') re
 // Vans assigned to THIS program (route) that day via the month-matrix; if none assigned yet, fall back to all active vans in the zone
 // Vans selectable for a route+date = ONLY those assigned to this route in the Transfer-Fleet month matrix (v.dayRoute[date]===routeId).
 // (No zone fallback · per user: a van not assigned in the month matrix must NOT be pickable here — assign it in the matrix first.)
-function vanVehiclesForRoute(date, routeId, zone){ return (SB_VEHICLES||[]).filter(v=>_vehUsableOn(v,date) && v.dayRoute && v.dayRoute[date]===routeId); }
+function vanVehiclesForRoute(date, routeId, zone){ return (SB_VEHICLES||[]).filter(v=>_vehUsableOn(v,date) && _vehDayRoutes(v,date).includes(routeId)); }
 // Van Job Order · bilingual (EN/TH) printable sheet for one vehicle on a date
 // ── Van Job Orders · dedicated sidebar page (nav: vanjobs · under Transfer Fleet) ──
 let _vanJobsDate = (typeof bkV2LocalYMD==='function') ? bkV2LocalYMD(new Date()) : new Date().toISOString().slice(0,10);
@@ -38995,7 +38995,7 @@ function vanJobsOrderInner(date, vanId, legIgnored){
   const out=_section(false), ret=_section(true);
   // ⚠ Late-booking guard — bookings on THIS van's route(s) that day with NO van yet (likely a booking added after the van was arranged → would silently drop off this sheet)
   const _vanRoutes=new Set(); out.rows.forEach(x=>{ if(x.t&&x.t.routeId) _vanRoutes.add(x.t.routeId); });
-  if(v.dayRoute&&v.dayRoute[date]) _vanRoutes.add(v.dayRoute[date]);
+  _vehDayRoutes(v,date).forEach(r=>_vanRoutes.add(r));
   let _unaPax=0,_unaBk=0; const _unaTrip={};
   if(_vanRoutes.size){ (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(b.pickupSelf)return;
     (b.trips||[]).forEach(t=>{ if((t.date||'')!==date) return; if(!_vanRoutes.has(t.routeId)) return; const z=t.zone||b.pickupZone||''; if(z==='NoTransfer'||z==='NT') return;
@@ -39197,18 +39197,30 @@ function vehMonthShift(n){ const [y,m]=_vehMonth.split('-').map(Number); const d
 function _vehDayJobN(id,date){ let jb=0; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(!(b.ops&&b.ops.vanId===id))return; (b.trips||[]).forEach(t=>{ if((t.date||'')===date) jb++; }); }); return jb; }
 function _vehDayCellInner(v,date){
   const st=(typeof vehStatusOn==='function')?vehStatusOn(v,date):((v.dayStatus&&v.dayStatus[date])||'');
-  const dr=(v.dayRoute&&v.dayRoute[date])||'';
+  const routes=_vehDayRoutes(v,date);
   const jb=_vehDayJobN(v.id,date);
-  const rt=dr&&typeof _vehRoute==='function'?_vehRoute(dr):null; const rc=rt?rt.color:null;
-  let bg='transparent',bd='1px solid #eceae3',fg='#888',txt='';
+  let bg='transparent',bd='1px solid #eceae3',fg='#888',txt='',ttl='';
   if(st==='off'){ bg='#FCEBEB';bd='1px solid #E6C9C3';fg='#A32D2D';txt='&#9941;'; }
   else if(st==='maintenance'){ bg='#FAEEDA';bd='1px solid #EAD9B0';fg='#854F0B';txt='&#128295;'; }
-  else if(rc){ bg=rc;bd='1px solid '+rc;fg='#fff';txt=(typeof _vehRouteAbbr==='function'?_vehRouteAbbr(dr):dr); }
+  else if(routes.length>=2){
+    // van runs 2+ programs this day → split-colour cell + program count
+    const cols=routes.map(rid=>{ const rt=_vehRoute(rid); return (rt&&rt.color)?rt.color:'#9AA3AF'; });
+    const n=cols.length;
+    const stops=cols.map((c,i)=>`${c} ${Math.round(i/n*100)}%, ${c} ${Math.round((i+1)/n*100)}%`).join(', ');
+    bg=`linear-gradient(135deg, ${stops})`; bd='1px solid rgba(0,0,0,.12)'; fg='#fff'; txt=n;
+    ttl=routes.map(rid=>(typeof _vehRouteAbbr==='function'?_vehRouteAbbr(rid):rid)).join(' + ');
+  }
+  else if(routes.length===1){
+    const dr=routes[0]; const rt=_vehRoute(dr); const rc=rt?rt.color:null;
+    if(rc){ bg=rc;bd='1px solid '+rc;fg='#fff';txt=(typeof _vehRouteAbbr==='function'?_vehRouteAbbr(dr):dr); }
+    else if(jb>0){ bg='#1D9E75';bd='none';fg='#fff';txt=jb; }
+    else if(st==='available'){ bg='#E9F7EF';bd='1px solid #C4E6D5';fg='#0F6E56';txt=''; }
+  }
   else if(jb>0){ bg='#1D9E75';bd='none';fg='#fff';txt=jb; }
   else if(st==='available'){ bg='#E9F7EF';bd='1px solid #C4E6D5';fg='#0F6E56';txt=''; }   // no ✓ mark · availability shown by colour
-  const jbBadge=(rc&&jb>0)?`<span style="position:absolute;top:-4px;right:-4px;min-width:13px;height:13px;padding:0 2px;border-radius:7px;background:#1B2A55;color:#fff;font-size:8px;line-height:13px;text-align:center;font-weight:700">${jb}</span>`:'';
+  const jbBadge=(routes.length>0&&jb>0)?`<span style="position:absolute;top:-4px;right:-4px;min-width:13px;height:13px;padding:0 2px;border-radius:7px;background:#1B2A55;color:#fff;font-size:8px;line-height:13px;text-align:center;font-weight:700">${jb}</span>`:'';
   const warn=(jb>0 && (st==='maintenance'||st==='off'))?'<span style="position:absolute;top:-3px;right:-3px;font-size:9px">&#9888;</span>':'';
-  return `<div style="position:relative;margin:3px auto;width:28px;height:24px;border-radius:5px;background:${bg};border:${bd};color:${fg};display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-weight:700;font-size:10px;cursor:pointer">${txt}${jbBadge}${warn}</div>`;
+  return `<div ${ttl?`title="${ttl}"`:''} style="position:relative;margin:3px auto;width:28px;height:24px;border-radius:5px;background:${bg};border:${bd};color:${fg};display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-weight:700;font-size:10px;cursor:pointer">${txt}${jbBadge}${warn}</div>`;
 }
 // Per-day popup · set zone + status + see trips
 function vehDayPopup(id,date){
@@ -39219,9 +39231,9 @@ function vehDayPopup(id,date){
   // trips today for this van
   const jobs=[]; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(!(b.ops&&b.ops.vanId===id))return; (b.trips||[]).forEach(t=>{ if((t.date||'')===date) jobs.push({b,t}); }); });
   const jrows=jobs.length?jobs.map(x=>{ const a=sbGetAgent(x.b.agentId); const tm=(x.b.ops&&x.b.ops.pickupTimeFinal)||x.t.pickupTime||x.b.pickupTime||'—'; const px=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(x.t.pax||{}):0; return `<div style="display:flex;gap:8px;padding:5px 0;border-top:1px solid #f3f1ea;font-size:11.5px"><span style="font-family:'DM Mono',monospace;color:#185FA5;min-width:50px">${e(tm)}</span><span style="flex:1;min-width:0">${e(x.b.leadPax||x.b.voucherRef||x.b.id)} <span style="color:#8a8a82">· ${e(a?a.name:'')}</span></span><span style="font-family:'DM Mono',monospace">${px} pax</span></div>`; }).join(''):'<div style="font-size:11px;color:#c7c5bb;padding:6px 0">ไม่มีงานวันนี้</div>';
-  const dr=(v.dayRoute&&v.dayRoute[date])||'';
+  const routes=_vehDayRoutes(v,date);
   const fams=(typeof _vehRoutesOpenOn==='function')?_vehRoutesOpenOn(date):[];
-  const rBtn=f=>{ const on=dr===f.id; const z=(typeof _vehRouteZone==='function')?_vehRouteZone(f.id):null; const zl=z==='PK'?'ภูเก็ต':z==='KL'?'เขาหลัก':'—'; const dm=(typeof _vehRouteDemand==='function')?_vehRouteDemand(f.id,date):{pax:0,pickup:0}; const paxChip=dm.pax?`<span style="font-size:10px;font-family:'DM Mono',monospace;font-weight:700;padding:1px 6px;border-radius:6px;background:${on?'rgba(255,255,255,.22)':'#EEF5FC'};color:${on?'#fff':'#185FA5'}">ลค ${dm.pax}</span>`:''; return `<button onclick="vehDaySetRoute('${id}','${date}','${f.id}')" style="display:flex;align-items:center;gap:7px;width:100%;text-align:left;border:1px solid ${on?f.color:'#e3e1da'};background:${on?f.color:'#fff'};color:${on?'#fff':'#444'};border-radius:8px;padding:8px 11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:5px"><span style="width:9px;height:9px;border-radius:50%;background:${on?'#fff':f.color};flex:none"></span><span style="flex:1">${e(f.name)}</span>${paxChip}<span style="font-size:10px;font-family:'DM Mono',monospace;opacity:.85">${(typeof _vehRouteAbbr==='function'?_vehRouteAbbr(f.id):'')} · ${zl}</span></button>`; };
+  const rBtn=f=>{ const on=routes.includes(f.id); const z=(typeof _vehRouteZone==='function')?_vehRouteZone(f.id):null; const zl=z==='PK'?'ภูเก็ต':z==='KL'?'เขาหลัก':'—'; const dm=(typeof _vehRouteDemand==='function')?_vehRouteDemand(f.id,date):{pax:0,pickup:0}; const paxChip=dm.pax?`<span style="font-size:10px;font-family:'DM Mono',monospace;font-weight:700;padding:1px 6px;border-radius:6px;background:${on?'rgba(255,255,255,.22)':'#EEF5FC'};color:${on?'#fff':'#185FA5'}">ลค ${dm.pax}</span>`:''; const chk=on?'<span style="width:15px;height:15px;border-radius:4px;background:#fff;color:'+f.color+';font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:none">&#10003;</span>':'<span style="width:15px;height:15px;border-radius:4px;border:1.5px solid '+f.color+';flex:none"></span>'; return `<button onclick="vehDayToggleRoute('${id}','${date}','${f.id}')" style="display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:1px solid ${on?f.color:'#e3e1da'};background:${on?f.color:'#fff'};color:${on?'#fff':'#444'};border-radius:8px;padding:8px 11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:5px">${chk}<span style="flex:1">${e(f.name)}</span>${paxChip}<span style="font-size:10px;font-family:'DM Mono',monospace;opacity:.85">${(typeof _vehRouteAbbr==='function'?_vehRouteAbbr(f.id):'')} · ${zl}</span></button>`; };
   const sBtn=(val,lbl,col)=>`<button onclick="vehDaySetStatus('${id}','${date}','${val}')" style="flex:1;border:1px solid ${st===val?col:'#ddd'};background:${st===val?col:'#fff'};color:${st===val?'#fff':'#555'};border-radius:7px;padding:7px 0;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">${lbl}</button>`;
   const ov=document.createElement('div'); ov.id='veh-day-modal';
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:600;display:flex;align-items:center;justify-content:center;padding:20px;font-family:"DM Sans",sans-serif';
@@ -39237,8 +39249,9 @@ function vehDayPopup(id,date){
         <button onclick="vehDayClose();vehStatusOpen('${id}')" style="margin-left:auto;background:#fff;border:1px solid #ddd;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;color:#185FA5">จัดการช่วงสถานะ (จาก–ถึง)</button>
       </div>
       ${(st==='off'||st==='maintenance')?`<div style="background:#FCF4F2;border:1px solid #F0D9D2;border-radius:8px;padding:9px 11px;font-size:11.5px;color:#A32D2D;margin-bottom:4px">รถ${st==='maintenance'?'ติดซ่อม':'หยุดวิ่ง'}วันนี้ — แนะนำไม่จัดเส้นทาง (แก้สถานะที่หน้าสถานะก่อน)</div>`:`
-      <div style="font-size:11px;color:#8a8a82;font-weight:600;margin-bottom:6px">วิ่งเส้นทางไหนวันนี้ <span style="color:#bbb;font-weight:500">· โซนอนุมานจากท่า</span></div>
-      <div style="margin-bottom:4px;max-height:280px;overflow:auto">${fams.length?fams.map(rBtn).join(''):'<div style="font-size:11px;color:#c7c5bb;padding:4px 0">ไม่มีโปรแกรมเปิดวันนี้</div>'}${dr?`<button onclick="vehDaySetRoute('${id}','${date}','')" style="border:1px solid #ddd;background:#fff;color:#A32D2D;border-radius:7px;padding:6px 11px;font-size:11px;cursor:pointer;font-family:inherit;margin-top:2px">ล้างเส้นทาง</button>`:''}</div>`}
+      <div style="font-size:11px;color:#8a8a82;font-weight:600;margin-bottom:6px">วิ่งเส้นทางไหนวันนี้ <span style="color:#bbb;font-weight:500">· เลือกได้หลายเส้นทางถ้าวิ่งหลายงาน</span></div>
+      ${routes.length>=2?`<div style="background:#EEF5FC;border:1px solid #CFE3F5;border-radius:8px;padding:7px 10px;font-size:11.5px;color:#185FA5;margin-bottom:8px;font-weight:600">🚐 วันนี้วิ่ง ${routes.length} เส้นทาง — จะเลือกได้ในทุกเส้นทางตอนจัดรถ (Van Assign)</div>`:''}
+      <div style="margin-bottom:4px;max-height:280px;overflow:auto">${fams.length?fams.map(rBtn).join(''):'<div style="font-size:11px;color:#c7c5bb;padding:4px 0">ไม่มีโปรแกรมเปิดวันนี้</div>'}${routes.length?`<button onclick="vehDayClearRoutes('${id}','${date}')" style="border:1px solid #ddd;background:#fff;color:#A32D2D;border-radius:7px;padding:6px 11px;font-size:11px;cursor:pointer;font-family:inherit;margin-top:2px">ล้างทั้งหมด</button>`:''}</div>`}
       <div style="font-size:11px;color:#185FA5;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-top:12px">งานวันนี้ · ${jobs.length}</div>
       ${jrows}
     </div>
@@ -39263,9 +39276,14 @@ function _vehRouteShort(rid){ const r=_vehRoute(rid); if(!r)return rid; return S
 function _vehRoutesOpenOn(date){ const rs=(typeof ROUTES!=='undefined'&&ROUTES)||[]; const open=rs.filter(r=> typeof bkV2IsRouteOpenOn!=='function' || bkV2IsRouteOpenOn(r.id,date)); return open.length?open:rs; }
 // Customer demand on a route+date · pax = total seat pax · pickup = pax needing transfer (zone PK/KL, not No-Transfer)
 function _vehRouteDemand(routeId,date){ let pax=0,pickup=0; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; (b.trips||[]).forEach(t=>{ if(t.routeId!==routeId||t.date!==date)return; if(t.bookingMode==='charter')return; const p=(typeof getTripPaxTotal==='function')?getTripPaxTotal(t):((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0); pax+=p; const z=t.zone||b.pickupZone||''; if(z&&z!=='NoTransfer'&&z!=='NT')pickup+=p; }); }); return {pax,pickup}; }
-function vehDaySetRoute(id,date,fid){ const v=vehGet(id); if(!v)return; v.dayRoute=v.dayRoute||{}; if(fid){ v.dayRoute[date]=fid; } else { delete v.dayRoute[date]; } const f=_vehFam(fid); vehLog(id,'zone',date+' · เส้นทาง '+(f?f.name:'ล้าง')); sbVehiclesPersist(); _vehDayRefresh(id,date); _vehSumRefresh(); }
+// A van can run MORE THAN ONE program in a day (2 jobs) → dayRoute[date] may be a single routeId (legacy) OR an array of routeIds. Always read via this normalizer.
+function _vehDayRoutes(v,date){ const dr=v&&v.dayRoute&&v.dayRoute[date]; if(!dr)return []; return Array.isArray(dr)?dr.filter(Boolean):[dr]; }
+function vehDaySetRoute(id,date,fid){ const v=vehGet(id); if(!v)return; v.dayRoute=v.dayRoute||{}; if(fid){ v.dayRoute[date]=fid; } else { delete v.dayRoute[date]; } const f=_vehRoute(fid); vehLog(id,'zone',date+' · เส้นทาง '+(f?f.name:'ล้าง')); sbVehiclesPersist(); _vehDayRefresh(id,date); _vehSumRefresh(); }
+// Toggle one route in/out of the day's list (for vans running multiple programs that day)
+function vehDayToggleRoute(id,date,rid){ const v=vehGet(id); if(!v||!rid)return; v.dayRoute=v.dayRoute||{}; const arr=_vehDayRoutes(v,date); const i=arr.indexOf(rid); if(i>=0) arr.splice(i,1); else arr.push(rid); if(arr.length){ v.dayRoute[date]=arr.length===1?arr[0]:arr; } else { delete v.dayRoute[date]; } const f=_vehRoute(rid); vehLog(id,'zone',date+' · '+(i>=0?'เอาออก':'เพิ่ม')+'เส้นทาง '+(f?f.name:rid)); sbVehiclesPersist(); _vehDayRefresh(id,date); _vehSumRefresh(); }
+function vehDayClearRoutes(id,date){ const v=vehGet(id); if(!v||!v.dayRoute)return; delete v.dayRoute[date]; vehLog(id,'zone',date+' · ล้างเส้นทาง'); sbVehiclesPersist(); _vehDayRefresh(id,date); _vehSumRefresh(); }
 // Click cell = cycle program fast (blank → fam1 → fam2 … → blank). Off/maintenance → open detail popup instead.
-function vehDayCellClick(id,date){ const v=vehGet(id); if(!v)return; const st=(typeof vehStatusOn==='function')?vehStatusOn(v,date):''; if(st==='off'||st==='maintenance'){ vehDayPopup(id,date); return; } const rts=(typeof _vehRoutesOpenOn==='function')?_vehRoutesOpenOn(date):[]; if(!rts.length){ vehDayPopup(id,date); return; } const order=['',...rts.map(r=>r.id)]; const cur=(v.dayRoute&&v.dayRoute[date])||''; let i=order.indexOf(cur); if(i<0)i=0; const nx=order[(i+1)%order.length]; vehDaySetRoute(id,date,nx); }
+function vehDayCellClick(id,date){ const v=vehGet(id); if(!v)return; const st=(typeof vehStatusOn==='function')?vehStatusOn(v,date):''; if(st==='off'||st==='maintenance'){ vehDayPopup(id,date); return; } const routes=_vehDayRoutes(v,date); if(routes.length>=2){ vehDayPopup(id,date); return; } /* multi-route day → manage in popup */ const rts=(typeof _vehRoutesOpenOn==='function')?_vehRoutesOpenOn(date):[]; if(!rts.length){ vehDayPopup(id,date); return; } const order=['',...rts.map(r=>r.id)]; const cur=routes[0]||''; let i=order.indexOf(cur); if(i<0)i=0; const nx=order[(i+1)%order.length]; vehDaySetRoute(id,date,nx); }
 function vehSumSelectDay(date){ window._vehSumDay=date; if(typeof renderVehicles==='function') renderVehicles(); }
 function _vehSumRefresh(){ const el=document.getElementById('veh-matrix-summary'); if(el && window._vehSumDay) el.innerHTML=_vehMatrixSummaryHTML(window._vehSumDay); }
 // Summary cards — vehicles per real PROGRAM (route) on the selected day
@@ -39287,7 +39305,7 @@ function _vehGroupsForDay(routeId,day){
 function _vehMatrixSummaryHTML(day){
   const rts=(typeof ROUTES!=='undefined'&&ROUTES)||[];
   const counts={}; let avail=0, busy=0;
-  (SB_VEHICLES||[]).forEach(v=>{ if(!v.active)return; const st=(typeof vehStatusOn==='function')?vehStatusOn(v,day):''; if(st==='off'||st==='maintenance'){ busy++; return; } const r=(v.dayRoute&&v.dayRoute[day])||''; if(r){ counts[r]=(counts[r]||0)+1; } else if(st==='available'){ avail++; } });
+  (SB_VEHICLES||[]).forEach(v=>{ if(!v.active)return; const st=(typeof vehStatusOn==='function')?vehStatusOn(v,day):''; if(st==='off'||st==='maintenance'){ busy++; return; } const rs=_vehDayRoutes(v,day); if(rs.length){ rs.forEach(r=>counts[r]=(counts[r]||0)+1); } else if(st==='available'){ avail++; } });
   let dlbl=day; try{ dlbl=new Date(day+'T12:00:00').toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'short'}); }catch(_){}
   const cards=rts.filter(r=>{ const dm=_vehRouteDemand(r.id,day); return counts[r.id]||dm.pax; }).map(r=>{ const z=(typeof _vehRouteZone==='function')?_vehRouteZone(r.id):null; const zl=z==='PK'?'ภูเก็ต':z==='KL'?'เขาหลัก':'—'; const nv=counts[r.id]||0; const dm=_vehRouteDemand(r.id,day); const grp=_vehGroupsForDay(r.id,day); const needFlag=(dm.pickup>0&&nv===0)?'<span style="font-size:9px;color:#A32D2D;background:#FCEBEB;border-radius:5px;padding:1px 5px;margin-left:4px;font-weight:700">ยังไม่จัดรถ</span>':''; const grpChip=grp.total?`<div style="font-size:10px;color:#534AB7;font-weight:700;margin-top:1px"><span style="font-family:'DM Mono',monospace;font-size:13px">${grp.total}</span> กรุ๊ป${grp.woVan?` <span style="color:#A32D2D;font-weight:700">· ${grp.woVan} ยังไม่มีรถ</span>`:''}</div>`:''; const _ok=grp.total>0&&grp.woVan===0&&!(dm.pickup>0&&nv===0); const _corner=(grp.total>0||dm.pickup>0)?`<span title="${_ok?'จัดรถครบ':'ยังจัดรถไม่ครบ'}" style="position:absolute;top:-6px;left:-6px;width:16px;height:16px;border-radius:50%;background:${_ok?'#1D9E75':'#C0392B'};color:#fff;font-size:10px;line-height:16px;text-align:center;font-weight:700;box-shadow:0 0 0 2px #fff">${_ok?'&#10003;':'&#10005;'}</span>`:''; return `<div style="position:relative;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid ${dm.pickup>0&&nv===0?'#F0D0C8':'rgba(0,0,0,.07)'};border-left:3px solid ${r.color};border-radius:9px;padding:8px 12px">${_corner}<span style="width:18px;height:18px;border-radius:5px;background:${r.color};color:#fff;font-family:'DM Mono',monospace;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">${_vehRouteAbbr(r.id)}</span><div style="min-width:0;flex:1"><div style="font-size:11.5px;font-weight:700;color:#1B2A55;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.name}${needFlag}</div><div style="font-size:10px;color:#8a8a82">${zl} · <span style="color:#185FA5;font-weight:600">ลค ${dm.pax}</span>${dm.pickup<dm.pax?` <span style="color:#aaa">(รับ ${dm.pickup})</span>`:''}</div></div><div style="text-align:right;flex:none"><div><span style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:${r.color}">${nv}</span> <span style="font-size:10px;color:#8a8a82">คัน</span></div>${grpChip}</div></div>`; }).join('');
   const extras=[];
