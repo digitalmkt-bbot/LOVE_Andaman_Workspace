@@ -4605,10 +4605,11 @@ function renderDash(){
   // ── Bookings overview — reusable per-day aggregation (day / month / year modes) ──
   const _bkDay=(ds)=>{
     const dOps=TRIPS[ds]||{};
-    let booked=0, capacity=0;
+    let booked=0, capacity=0, charter=0;
     const routeBooked={};
     const _seatRoutes=new Set();   // seat-mode routes operating this day (count via actual sales bookings, once per route)
     const _capBoats=new Set();     // boats already counted toward capacity (avoid double-count)
+    const _charterBkIds=new Set(); // charter bookings already counted (avoid double-count vs SB_BOOKINGS)
     Object.entries(dOps).forEach(([bid,op])=>{
       if(!op.route) return;
       const b=getBoat(bid); if(!b) return;
@@ -4618,7 +4619,7 @@ function renderDash(){
       if(_s && _s.type==='closed') return;
       capacity+=(b.cap||0); _capBoats.add(bid);
       const isCharter = op.type==='charter' || op.charterBookingId;
-      if(isCharter){ const bk=op.booked||0; booked+=bk; routeBooked[op.route]=(routeBooked[op.route]||0)+bk; }
+      if(isCharter){ charter+=(op.booked||0); if(op.charterBookingId) _charterBkIds.add(op.charterBookingId); }  // charter kept SEPARATE (own segment)
       else { _seatRoutes.add(op.route); }
     });
     // Seat bookings from actual sales (SB_BOOKINGS v2 + legacy) · once per route
@@ -4626,16 +4627,26 @@ function renderDash(){
       const sc=(typeof getSeatsConsumed==='function')?getSeatsConsumed(rid,ds):0;
       booked+=sc; routeBooked[rid]=(routeBooked[rid]||0)+sc;
     });
-    // Bookings on this day → (i) count demand for routes with no Boat-Op boat · (ii) capacity of the boat each booking actually rides
+    // Weather-cancelled routes this day (Boat-Op weather closures) → surfaced as a marker, not counted
+    let wx=0;
+    (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(r=>{ if(typeof bkV2IsWeatherClosed==='function' && bkV2IsWeatherClosed(r.id,ds)) wx++; });
+    // Bookings on this day → seat demand + charter pax + capacity of the boat each booking actually rides
     (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(bk=>{
       if(['cancelled','rejected','cancelled_weather'].includes(bk.status)) return;
       if(bk.schemaVer!==2 || !Array.isArray(bk.trips)) return;
       bk.trips.forEach(t=>{
-        if((t.date||'')!==ds || t.bookingMode==='charter') return;
+        if((t.date||'')!==ds) return;
         const rid=t.routeId; if(!rid) return;
         const r=getRoute(rid); if(!r) return;
         const _s=(typeof getDayStatus==='function')?getDayStatus(r,ds):null;
         if(_s && _s.type==='closed') return;   // off-season / closed → don't count
+        if(t.bookingMode==='charter'){
+          // charter pax from sales (dedupe against Boat-Op charter already counted)
+          if(!_charterBkIds.has(bk.id)){ charter+=(typeof bkV2PaxAllTot==='function'?bkV2PaxAllTot(t.pax||{}):0); _charterBkIds.add(bk.id); }
+          const cbid=t.charterBoatId||(bk.ops&&bk.ops.boatId);
+          if(cbid && !_capBoats.has(cbid)){ const cb=getBoat(cbid); if(cb){ capacity+=(cb.cap||0); _capBoats.add(cbid); } }
+          return;
+        }
         if(!_seatRoutes.has(rid) && routeBooked[rid]==null){
           _seatRoutes.add(rid);
           const sc=(typeof getSeatsConsumed==='function')?getSeatsConsumed(rid,ds):0;
@@ -4648,8 +4659,9 @@ function renderDash(){
         }
       });
     });
-    return {ds,booked,capacity,routeBooked};
+    return {ds,booked,capacity,routeBooked,charter,wx};
   };
+  const CHARTER_COLOR='#B69CE8';   // distinct purple for the Charter (เหมาลำ) segment
   // Active mode — 'day' (today · bar per route) | 'month' (30 days · stacked) | 'year' (12 months · stacked)
   const _bkMode = ['day','month','year'].includes(window._dashBkMode) ? window._dashBkMode : 'day';
   const _todayDS = _dsAt(0);
@@ -4663,32 +4675,36 @@ function renderDash(){
     for(let mOff=-11;mOff<=0;mOff++){
       const md=new Date(anchor.getFullYear(), anchor.getMonth()+mOff, 1);
       const y=md.getFullYear(), mo=md.getMonth();
-      let booked=0, capacity=0; const routeBooked={};
+      let booked=0, capacity=0, charter=0, wx=0; const routeBooked={};
       const nDays=new Date(y,mo+1,0).getDate();
       for(let dd=1;dd<=nDays;dd++){
         const ds=y+'-'+String(mo+1).padStart(2,'0')+'-'+String(dd).padStart(2,'0');
         if(ds>_todayDS) break;   // don't count future days
-        const a=_bkDay(ds); booked+=a.booked; capacity+=a.capacity;
+        const a=_bkDay(ds); booked+=a.booked; capacity+=a.capacity; charter+=a.charter; wx+=a.wx;
         Object.entries(a.routeBooked).forEach(([rid,v])=>routeBooked[rid]=(routeBooked[rid]||0)+v);
       }
-      bkBuckets.push({dt:md, booked, capacity, routeBooked, isToday:mOff===0});
+      bkBuckets.push({dt:md, booked, capacity, routeBooked, charter, wx, isToday:mOff===0});
     }
   }
+  // total pax per bucket = seat booked + charter
+  bkBuckets.forEach(b=>{ b.tot=(b.booked||0)+(b.charter||0); });
   // Route totals over the active period → top 3 + Other
   const routeWeekTotals={};
   bkBuckets.forEach(bt=>Object.entries(bt.routeBooked).forEach(([rid,v])=>routeWeekTotals[rid]=(routeWeekTotals[rid]||0)+v));
   const topRouteIds=Object.entries(routeWeekTotals).sort((a,b)=>b[1]-a[1]).slice(0,3).map(e=>e[0]);
   const otherRouteIds=Object.keys(routeWeekTotals).filter(id=>!topRouteIds.includes(id));
   const otherWeekTotal=otherRouteIds.reduce((s,id)=>s+routeWeekTotals[id],0);
+  const charterWeekTotal=bkBuckets.reduce((s,d)=>s+(d.charter||0),0);
+  const wxWeekTotal=bkBuckets.reduce((s,d)=>s+(d.wx||0),0);
   // Fixed palette so segments stay readable on forest green
   const segPalette=['#B8E89A','#F5E84F','#F4B89F','#9FB89E'];
   const topRoutes=topRouteIds.map((id,i)=>({id,r:getRoute(id),total:routeWeekTotals[id],color:segPalette[i]}));
-  const trendMax=Math.max(...bkBuckets.map(d=>Math.max(d.capacity,d.booked)),1);
-  const totalBookedWeek=bkBuckets.reduce((s,d)=>s+d.booked,0);
+  const trendMax=Math.max(...bkBuckets.map(d=>Math.max(d.capacity,d.tot)),1);
+  const totalBookedWeek=bkBuckets.reduce((s,d)=>s+d.tot,0);
   const totalCapWeek=bkBuckets.reduce((s,d)=>s+d.capacity,0);
   const fillWeekPct=totalCapWeek>0?Math.round(totalBookedWeek/totalCapWeek*100):0;
   // Peak / slow bucket by fill % (month/year only) + avg per bucket
-  const bktFills=bkBuckets.map(d=>({dt:d.dt,booked:d.booked,cap:d.capacity,pct:d.capacity>0?Math.round(d.booked/d.capacity*100):0}));
+  const bktFills=bkBuckets.map(d=>({dt:d.dt,booked:d.tot,cap:d.capacity,pct:d.capacity>0?Math.round(d.tot/d.capacity*100):0}));
   const bktsWithCap=bktFills.filter(d=>d.cap>0);
   const bestDay=bktsWithCap.length?bktsWithCap.reduce((b,c)=>c.pct>b.pct?c:b,bktsWithCap[0]):null;
   const slowDay=bktsWithCap.length?bktsWithCap.reduce((b,c)=>c.pct<b.pct?c:b,bktsWithCap[0]):null;
@@ -4942,21 +4958,24 @@ function renderDash(){
   const dayRows = Object.entries(dayRB).filter(([id,v])=>v>0).sort((a,b)=>b[1]-a[1]);
   // ── build the plot (mode-aware) ──
   let plotHtml, plotCols, plotGap;
+  const dayCharter = bkBuckets[0] ? (bkBuckets[0].charter||0) : 0;
+  const dayWx = bkBuckets[0] ? (bkBuckets[0].wx||0) : 0;
   if(_bkMode==='day'){
-    // TODAY only — one bar per route (separated), tallest→shortest
-    const dayMax=Math.max(...dayRows.map(r=>r[1]),1);
+    // TODAY only — one bar per route (separated) + a Charter bar, tallest→shortest
     const dayPal=['#B8E89A','#F5E84F','#F4B89F','#9DC7E6','#C9B6E8','#7FD0A0','#F0A5C0','#E8C97F','#8FD9C8'];
-    plotCols='repeat('+Math.max(dayRows.length,1)+',1fr)'; plotGap='12px';
-    plotHtml = dayRows.length ? dayRows.map(([id,v],i)=>{
-      const r=getRoute(id); const nm=r?_shortName(r.name):id; const col=dayPal[i%dayPal.length];
-      const h=Math.max((v/dayMax)*100,3);
+    const dayEntries = dayRows.map(([id,v],i)=>{ const r=getRoute(id); return {label:r?_shortName(r.name):id, val:v, color:dayPal[i%dayPal.length]}; });
+    if(dayCharter>0) dayEntries.push({label:'เหมาลำ Charter', val:dayCharter, color:CHARTER_COLOR});
+    const dayMax=Math.max(...dayEntries.map(e=>e.val),1);
+    plotCols='repeat('+Math.max(dayEntries.length,1)+',1fr)'; plotGap='12px';
+    plotHtml = dayEntries.length ? dayEntries.map(e=>{
+      const h=Math.max((e.val/dayMax)*100,3);
       return `<div style="display:flex;flex-direction:column;align-items:center;min-width:0">
         <div style="width:100%;height:150px;display:flex;align-items:flex-end;justify-content:center">
-          <div style="position:relative;width:62%;max-width:48px;height:${h}%;background:${col};border-radius:6px 6px 0 0">
-            <div style="position:absolute;left:50%;transform:translateX(-50%);top:-19px;font-size:12px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums">${v}</div>
+          <div style="position:relative;width:62%;max-width:48px;height:${h}%;background:${e.color};border-radius:6px 6px 0 0">
+            <div style="position:absolute;left:50%;transform:translateX(-50%);top:-19px;font-size:12px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums">${e.val}</div>
           </div>
         </div>
-        <div style="text-align:center;margin-top:9px;font-size:10px;color:#DDEBD8;font-weight:600;line-height:1.25;word-break:break-word">${nm}</div>
+        <div style="text-align:center;margin-top:9px;font-size:10px;color:#DDEBD8;font-weight:600;line-height:1.25;word-break:break-word">${e.label}</div>
       </div>`;
     }).join('') : `<div style="grid-column:1/-1;text-align:center;color:#9FB89E;font-size:12.5px;padding:54px 0">ยังไม่มี booking วันนี้</div>`;
   } else {
@@ -4965,25 +4984,28 @@ function renderDash(){
     plotGap=_bkMode==='month'?'3px':'6px';
     plotHtml=bkBuckets.map((d,i)=>{
       const isTdy=d.isToday;
+      const tot=d.tot||0;
       const capH=(d.capacity/trendMax)*100;
-      const bookedH=(d.booked/trendMax)*100;
-      const noBoat = d.capacity===0 && d.booked>0;
+      const totH=(tot/trendMax)*100;
+      const noBoat = d.capacity===0 && tot>0;
       const segs=[];
       topRoutes.forEach(tr=>{ const v=d.routeBooked[tr.id]||0; if(v>0) segs.push({v,color:tr.color,label:_shortName(tr.r.name)}); });
       const otherV=otherRouteIds.reduce((s,id)=>s+(d.routeBooked[id]||0),0);
       if(otherV>0) segs.push({v:otherV,color:segPalette[3],label:'Other'});
+      if((d.charter||0)>0) segs.push({v:d.charter,color:CHARTER_COLOR,label:'Charter เหมาลำ'});
       const segDivs = noBoat
-        ? `<div style="flex:1;background:rgba(157,199,230,.40)" title="${d.booked} จอง · ยังไม่จัดเรือ"></div>`
-        : segs.map(s=>`<div style="flex:0 0 ${bookedH>0?(s.v/d.booked*100):0}%;background:${s.color}" title="${s.label}: ${s.v}"></div>`).join('');
+        ? `<div style="flex:1;background:rgba(157,199,230,.40)" title="${tot} จอง · ยังไม่จัดเรือ"></div>`
+        : segs.map(s=>`<div style="flex:0 0 ${tot>0?(s.v/tot*100):0}%;background:${s.color}" title="${s.label}: ${s.v}"></div>`).join('');
       const barW=_bkMode==='month'?'86%':'70%';
       const barMax=_bkMode==='month'?'13px':'34px';
       const showLbl=_bkMode==='year' || isTdy || (i%5===0);
+      const wxMark=(d.wx||0)>0?`<div title="${d.wx} เส้นทางถูกยกเลิกเพราะสภาพอากาศ" style="position:absolute;left:50%;transform:translateX(-50%);top:-14px;font-size:9px;line-height:1">⛈</div>`:'';
       return `<div style="position:relative;display:flex;flex-direction:column;align-items:center;min-width:0">
         <div style="position:relative;width:100%;height:150px;display:flex;align-items:flex-end;justify-content:center">
           <div style="position:relative;width:${barW};max-width:${barMax};height:100%">
-            <div style="position:absolute;left:0;right:0;bottom:0;height:${noBoat?bookedH:capH}%;border:1.5px dashed ${noBoat?'rgba(157,199,230,.85)':'rgba(255,255,255,'+(isTdy?.55:.18)+')'};border-radius:4px;pointer-events:none"></div>
-            <div style="position:absolute;left:0;right:0;bottom:0;height:${bookedH}%;display:flex;flex-direction:column-reverse;border-radius:3px;overflow:hidden">${segDivs}</div>
-            ${isTdy?`<div style="position:absolute;left:50%;transform:translateX(-50%);top:-20px;background:#fff;color:${dx.forestDark};font-size:8.5px;font-weight:700;padding:2px 5px;border-radius:6px;font-variant-numeric:tabular-nums;white-space:nowrap">${d.booked}</div>`:''}
+            <div style="position:absolute;left:0;right:0;bottom:0;height:${noBoat?totH:capH}%;border:1.5px dashed ${noBoat?'rgba(157,199,230,.85)':'rgba(255,255,255,'+(isTdy?.55:.18)+')'};border-radius:4px;pointer-events:none"></div>
+            <div style="position:absolute;left:0;right:0;bottom:0;height:${totH}%;display:flex;flex-direction:column-reverse;border-radius:3px;overflow:hidden">${segDivs}</div>
+            ${isTdy?`<div style="position:absolute;left:50%;transform:translateX(-50%);top:-20px;background:#fff;color:${dx.forestDark};font-size:8.5px;font-weight:700;padding:2px 5px;border-radius:6px;font-variant-numeric:tabular-nums;white-space:nowrap">${tot}</div>`:wxMark}
           </div>
         </div>
         <div style="text-align:center;margin-top:7px;font-size:${_bkMode==='month'?'8px':'9.5px'};color:${isTdy?dx.lime:'#9FB89E'};font-weight:${isTdy?'700':'500'};font-variant-numeric:tabular-nums;height:12px;white-space:nowrap">${showLbl?_bkLabel(d):''}</div>
@@ -4993,6 +5015,8 @@ function renderDash(){
   // Legend (month/year only — day mode labels each bar directly)
   const legendItems=(_bkMode==='day')?'':topRoutes.map(tr=>`<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:${tr.color}"></span><span style="color:#fff;font-weight:500">${_shortName(tr.r.name)}</span><span style="color:#9FB89E;font-variant-numeric:tabular-nums">${tr.total}</span></span>`).join('');
   const otherLegend=(_bkMode!=='day'&&otherWeekTotal>0)?`<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:${segPalette[3]}"></span><span style="color:#fff;font-weight:500">Other</span><span style="color:#9FB89E;font-variant-numeric:tabular-nums">${otherWeekTotal}</span></span>`:'';
+  const charterLegend=(_bkMode!=='day'&&charterWeekTotal>0)?`<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:${CHARTER_COLOR}"></span><span style="color:#fff;font-weight:500">Charter เหมาลำ</span><span style="color:#9FB89E;font-variant-numeric:tabular-nums">${charterWeekTotal}</span></span>`:'';
+  const wxLegend=(_bkMode!=='day'&&wxWeekTotal>0)?`<span style="display:inline-flex;align-items:center;gap:5px"><span style="font-size:11px;line-height:1">⛈</span><span style="color:#9FB89E">ยกเลิกจากอากาศ ${wxWeekTotal}</span></span>`:'';
   const capLegend=(_bkMode==='day')?'':`<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:14px;height:8px;border:1.2px dashed rgba(255,255,255,.55);border-radius:2px"></span><span style="color:#9FB89E">Capacity</span></span>`;
   // ── period toggle (วัน / เดือน / ปี) ──
   const _bkSeg=(m,lbl)=>`<button onclick="dashBkSetMode('${m}')" style="border:none;cursor:pointer;font-size:10.5px;font-weight:600;padding:5px 12px;border-radius:8px;${F}${_bkMode===m?'background:'+dx.lime+';color:'+dx.forestDark:'background:transparent;color:#9FB89E'}">${lbl}</button>`;
@@ -5002,7 +5026,9 @@ function renderDash(){
   const bkSub=`รวม <span style="color:#fff;font-weight:600">${fmtN(totalBookedWeek)}</span> seats${totalCapWeek>0?' / <span style="color:#fff;font-weight:600">'+fmtN(totalCapWeek)+'</span> cap · <span style="color:'+dx.lime+';font-weight:600">'+fillWeekPct+'%</span> fill':''} · ${_periodLbl} · วันนี้ ${deltaSign?'+':''}${deltaSeats} vs เมื่อวาน`;
   // ── stats footer (mode-aware) ──
   const _fmtDt=(dt)=> _bkMode==='year' ? TH_MON[dt.getMonth()] : dt.getDate()+' '+TH_MON[dt.getMonth()];
-  const _statCard=(lbl,val,valCol,sub)=>`<div style="background:rgba(255,255,255,.06);border-radius:11px;padding:8px 11px"><div style="font-size:8.5px;color:#9FB89E;letter-spacing:.05em;text-transform:uppercase">${lbl}</div><div style="font-size:13px;font-weight:600;margin-top:2px;color:${valCol};font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${val}</div><div style="font-size:9px;color:#9FB89E;margin-top:1px">${sub||''}</div></div>`;
+  // liquid-glass surfaces (inner cards + plot) — gradient sheen + inset highlight + depth shadow
+  const GLASS_IN="background-image:linear-gradient(155deg,rgba(255,255,255,.14),rgba(255,255,255,.03));box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 1px 2px rgba(0,0,0,.18),0 8px 18px rgba(0,0,0,.14);backdrop-filter:blur(6px) saturate(1.2);-webkit-backdrop-filter:blur(6px) saturate(1.2);border:1px solid rgba(255,255,255,.10);";
+  const _statCard=(lbl,val,valCol,sub)=>`<div style="background:rgba(255,255,255,.06);${GLASS_IN}border-radius:11px;padding:8px 11px"><div style="font-size:8.5px;color:#9FB89E;letter-spacing:.05em;text-transform:uppercase">${lbl}</div><div style="font-size:13px;font-weight:600;margin-top:2px;color:${valCol};font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${val}</div><div style="font-size:9px;color:#9FB89E;margin-top:1px">${sub||''}</div></div>`;
   let statsHtml;
   if(_bkMode==='day'){
     statsHtml =
@@ -5018,16 +5044,18 @@ function renderDash(){
     + _statCard('Top route', topRouteWeek?_shortName(topRouteWeek.r.name):'—', '#fff', topRouteWeek?topRouteWeek.total+' seats':'')
     + _statCard('Avg / '+perLbl, fmtN(avgPerDay), '#fff', 'seats');
   }
-  const legendRow=(legendItems||otherLegend||capLegend)?`<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;font-size:10.5px;font-variant-numeric:tabular-nums">${legendItems}${otherLegend}${capLegend}</div>`:'';
+  const legendRow=(legendItems||otherLegend||charterLegend||wxLegend||capLegend)?`<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;font-size:10.5px;font-variant-numeric:tabular-nums">${legendItems}${otherLegend}${charterLegend}${wxLegend}${capLegend}</div>`:'';
+  // day-mode weather note (chip next to title)
+  const dayWxChip=(_bkMode==='day'&&dayWx>0)?`<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(232,74,63,.18);color:#FFB4AC;padding:3px 9px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0">⛈ ยกเลิกจากอากาศ ${dayWx}</span>`:'';
   const proj=`<div class="dgx-bookings" style="background:${dx.forest};border-radius:24px;padding:22px 24px;color:#fff;${F}box-shadow:0 2px 4px rgba(10,40,25,.10),0 16px 38px rgba(10,50,30,.20);border:1px solid rgba(255,255,255,.08);">
     <div style="display:flex;align-items:start;justify-content:space-between;gap:14px">
       <div style="flex:1;min-width:0">
-        <div style="font-size:17px;font-weight:600;letter-spacing:-.015em">${bkTitle}</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:17px;font-weight:600;letter-spacing:-.015em">${bkTitle}</span>${dayWxChip}</div>
         <p style="font-size:12px;color:#9FB89E;margin:5px 0 0;line-height:1.55">${bkSub}</p>
       </div>
       ${bkToggle}
     </div>
-    <div style="margin-top:20px;position:relative;background:rgba(255,255,255,.04);border-radius:14px;padding:18px 10px 8px">
+    <div style="margin-top:20px;position:relative;background:rgba(255,255,255,.05);${GLASS_IN}border-radius:14px;padding:18px 10px 8px">
       <div style="display:grid;grid-template-columns:${plotCols};gap:${plotGap};align-items:end">${plotHtml}</div>
     </div>
     ${legendRow}
