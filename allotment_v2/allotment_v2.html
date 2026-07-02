@@ -49945,7 +49945,9 @@ function bkV2RenderTab2(){
     // zone subgroups · CHARTER (เหมาลำ) bookings get their own pseudo-zone '__CHARTER__' rendered FIRST
     //   (full manifest table · boat-assign + all columns work the same · header restyled as a Charter card)
     const zg = {};
-    grp.forEach(r=>{ const zk=(r.charter && !r.cxl)?'__CHARTER__':r.zone; (zg[zk]=zg[zk]||[]).push(r); });
+    // Charter (เหมาลำ) → own pseudo-zone card in normal/boat view. In VAN mode, keep them in their REAL pickup zone
+    // so van grouping works (the group ops match on the booking's real zone via _bkV2InZone; '__CHARTER__' would never match → couldn't pick a van + pool wasn't route-filtered).
+    grp.forEach(r=>{ const zk=(r.charter && !r.cxl && !vanMode)?'__CHARTER__':r.zone; (zg[zk]=zg[zk]||[]).push(r); });
     const _zord=z=> z==='__CHARTER__'? -100 : bkV2ZoneOrder(z);
     const zones = Object.keys(zg).sort((a,b)=>_zord(a)-_zord(b));
     // When this trip is split across 2+ boats, color-code each row by its assigned boat (left accent + faint tint)
