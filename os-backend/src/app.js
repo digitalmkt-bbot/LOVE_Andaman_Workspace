@@ -33,11 +33,29 @@ app.put('/api/state', async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// diagnostics (relational only)
+// diagnostics — work against operation_schemas regardless of the active flag (read-only)
+const relstore = require('./relationalStore');
 app.get('/api/_rowcounts', async (req, res) => {
+  try { res.json(await relstore.rowCounts()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// full round-trip validation in the browser: assemble live tables -> blob -> decompose,
+// compare per-table row counts + re-assemble stability. Read-only.
+app.get('/api/_roundtrip', async (req, res) => {
   try {
-    if (cfg.DATA_BACKEND !== 'relational' || !store.rowCounts) return res.status(400).json({ error: 'relational backend only' });
-    res.json(await store.rowCounts());
+    const { decomposeBlob, assembleBlob } = require('./mapping/os_repo');
+    const live = await relstore.rowCounts();
+    const blob = await relstore.loadState();
+    const rt = decomposeBlob(blob);
+    const diffs = [];
+    let rowCountParity = true;
+    for (const t of relstore.TABLES) {
+      const a = live[t] || 0, b = (rt[t] || []).length;
+      if (a !== b) { rowCountParity = false; diffs.push({ table: t, live: a, roundtrip: b }); }
+    }
+    const stable = JSON.stringify(assembleBlob(rt)) === JSON.stringify(blob);
+    res.json({ rowCountParity, stable, tables: relstore.TABLES.length, diffCount: diffs.length, diffs });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
