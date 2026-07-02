@@ -27778,7 +27778,7 @@ function flMaintClose(id,outcome,note,awaitInvoice){
     success:    {label:'สำเร็จ',         engStatus:'ready',  gbStatus:'ready',  prStatus:'active',     boatStatus:'available', icon:'✓', tag:''},
     limited:    {label:'ใช้งานจำกัด',     engStatus:'limited',gbStatus:'limited',prStatus:'limited',    boatStatus:'available', icon:'⚠', tag:' · ใช้งานจำกัด'},
     rework:     {label:'ต้องซ่อมซ้ำ',     engStatus:'fixing', gbStatus:'fixing', prStatus:'fixing',     boatStatus:'fixing',    icon:'↻', tag:' · ต้องซ่อมซ้ำ'},
-    decommission:{label:'ปลดระวาง',       engStatus:'broken', gbStatus:'broken', prStatus:'broken',     boatStatus:'fixing',    icon:'✕', tag:' · ปลดระวาง'},
+    decommission:{label:'ปลดระวาง',       engStatus:'broken', gbStatus:'broken', prStatus:'broken',     boatStatus:'available', icon:'✕', tag:' · ปลดระวาง'},
     cancelled:  {label:'ยกเลิก',          engStatus:null,     gbStatus:null,     prStatus:null,         boatStatus:'available', icon:'⊘', tag:' · ยกเลิก Job'}
   };
   const out=OUTCOME[outcome]||OUTCOME.success;
@@ -27804,8 +27804,8 @@ function flMaintClose(id,outcome,note,awaitInvoice){
 
     // ─── เคารพเจตนาเดิมของ MJ ───
     // ถ้า MJ มี setFixing:false (เรือยังใช้งานได้ระหว่างซ่อม) → ตอนปิดก็ไม่ควร force boat status
-    // กรณีเดียวที่จะ override คือ outcome=decommission (เรือเสียหายถาวร)
-    if(m.setFixing===false && outcome!=='decommission'){
+    // ปลดระวาง = ปลด "อะไหล่ตัวนั้น" (broken) เท่านั้น · ไม่ไปยุ่งสถานะเรือ (เรืออาจมีเครื่องอื่นใช้ได้)
+    if(m.setFixing===false){
       // เก็บ boat status ปัจจุบันไว้ (ไม่ override)
       finalBoatStatus = cur.s || 'available';
       finalReason = cur.reason || '';
@@ -27926,14 +27926,8 @@ function flMaintClose(id,outcome,note,awaitInvoice){
 
   flSave();flRenderMaint();renderBoats();flRenderEngList&&flRenderEngList();
 
-  // ─── Auto-prompt to retire boat on decommission ───
-  if(outcome==='decommission'&&b&&!b.retired){
-    setTimeout(()=>{
-      if(confirm(`เรือ ${b.name} ถูกปิด Job ด้วยสถานะ "ปลดระวาง"\n\nต้องการ Mark เรือเป็น Retired (ออกจากระบบใช้งาน) หรือไม่?\n\n• เรือจะไม่แสดงใน Boat Status calendar\n• ไม่นับใน Fleet Dashboard\n• ประวัติยังเก็บไว้ดูย้อนหลังได้\n\n(กด OK เพื่อปลดระวางเรือ · Cancel เพื่อเก็บไว้)`)){
-        flRetireBoat(b.id,note);
-      }
-    },300);
-  }
+  // NOTE: decommission = ปลด "อะไหล่ตัวที่อยู่ใน Job นี้" (broken) เท่านั้น — ไม่ auto-prompt ปลดระวางเรือ
+  // ถ้าต้องการปลดระวางทั้งลำ ทำได้จากหน้ารายละเอียดเรือ (flRetireBoat) โดยตรง
 }
 
 function flRetireBoat(boatId,reason){
