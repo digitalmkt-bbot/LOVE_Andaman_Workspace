@@ -4997,22 +4997,22 @@ function renderDash(){
     const sc=availD>0?Math.min(100,Math.round(opCount/availD*100)):0;
     return {score:sc,op:opCount,avail:availD};
   };
+  // ── Bookings + pax per day (counted by bookingDate = creation date) ──
+  const _bkForDay=(ds)=>{ let pax=0,bk=0; (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
+    if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
+    const cd=String(b.bookingDate||b.createdAt||'').slice(0,10); if(cd!==ds) return;
+    bk++; const t0=(b.trips||[])[0]; pax += (t0 && typeof bkV2PaxAllTot==='function') ? bkV2PaxAllTot(t0.pax||{}) : 0;
+  }); return {pax:pax,bk:bk}; };
   // Last 7 days
   const fleetScoreData=[];
-  for(let dOff=-6;dOff<=0;dOff++){
-    const ds=_dsAt(dOff);
-    const dt=new Date(ds);
-    const r=_fsForDay(ds);
-    fleetScoreData.push({ds,dt,...r});
-  }
-  // Previous 7 days (-13 .. -7) for WoW trend
-  const prevWeekScores=[];
-  for(let dOff=-13;dOff<=-7;dOff++){
-    prevWeekScores.push(_fsForDay(_dsAt(dOff)).score);
-  }
+  for(let dOff=-6;dOff<=0;dOff++){ const ds=_dsAt(dOff); fleetScoreData.push({ds,dt:new Date(ds),..._bkForDay(ds)}); }
+  // Previous 7 days (-13 .. -7) for WoW trend (avg pax)
+  const prevWeekPax=[];
+  for(let dOff=-13;dOff<=-7;dOff++){ prevWeekPax.push(_bkForDay(_dsAt(dOff)).pax); }
   const todayIdxFS=fleetScoreData.length-1;
-  const weekAvgFS=Math.round(fleetScoreData.reduce((s,d)=>s+d.score,0)/fleetScoreData.length);
-  const prevWeekAvg=Math.round(prevWeekScores.reduce((s,sc)=>s+sc,0)/prevWeekScores.length);
+  const weekMaxPax=Math.max(1,...fleetScoreData.map(d=>d.pax));        // for bar scaling (relative to busiest day)
+  const weekAvgFS=Math.round(fleetScoreData.reduce((s,d)=>s+d.pax,0)/fleetScoreData.length);
+  const prevWeekAvg=Math.round(prevWeekPax.reduce((s,p)=>s+p,0)/prevWeekPax.length);
   const trendDelta=weekAvgFS-prevWeekAvg;
   const trendUp=trendDelta>=0;
   const trendPct=prevWeekAvg>0?Math.round(Math.abs(trendDelta)/prevWeekAvg*100):(weekAvgFS>0?100:0);
@@ -5042,19 +5042,25 @@ function renderDash(){
   };
   const fsCells=fleetScoreData.map((d,i)=>{
     const isTdy=i===todayIdxFS;
-    const c=fsColor(d.score);
-    const isAlert=d.score<30 && d.score>0;
-    return `<div class="dgx-fcell" style="position:relative;background:${fsBg(d.score,isTdy)};border:1px solid ${fsBorder(d.score,isTdy)};border-radius:9px;padding:7px 3px 6px;text-align:center;min-width:0">
+    const pct=weekMaxPax>0?Math.round(d.pax/weekMaxPax*100):0;   // relative fill vs busiest day → same colour tiers
+    const c=fsColor(pct);
+    const isAlert=pct<30 && d.pax>0;
+    return `<div class="dgx-fcell" style="position:relative;background:${fsBg(pct,isTdy)};border:1px solid ${fsBorder(pct,isTdy)};border-radius:9px;padding:7px 3px 6px;text-align:center;min-width:0">
       ${isAlert?`<span style="position:absolute;top:3px;right:3px;width:5px;height:5px;background:#E84A3F;border-radius:50%;box-shadow:0 0 4px rgba(232,74,63,.6)"></span>`:''}
       <div style="font-size:8px;color:${isTdy?dx.lime:isAlert?'#FF8B7F':dx.brownMute};letter-spacing:.06em;text-transform:uppercase;font-weight:600">${WD_EN[d.dt.getDay()].slice(0,3)}</div>
       <div style="font-size:8.5px;color:${dx.brownMute};margin-top:1px;font-variant-numeric:tabular-nums">${d.dt.getDate()}</div>
-      <div style="font-size:14px;font-weight:700;color:${fsNumColor(d.score,isTdy)};margin-top:5px;font-variant-numeric:tabular-nums;letter-spacing:-.02em">${d.score}</div>
+      <div style="font-size:14px;font-weight:700;color:${fsNumColor(pct,isTdy)};margin-top:5px;font-variant-numeric:tabular-nums;letter-spacing:-.02em">${d.pax}</div>
       <div style="margin-top:5px;height:3px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden">
-        <div style="width:${d.score}%;height:100%;background:${c};border-radius:2px"></div>
+        <div style="width:${pct}%;height:100%;background:${c};border-radius:2px"></div>
       </div>
-      <div style="font-size:7.5px;color:${dx.brownMute};margin-top:3px;font-variant-numeric:tabular-nums">${d.op}/${d.avail}</div>
+      <div style="font-size:7.5px;color:${dx.brownMute};margin-top:3px;font-variant-numeric:tabular-nums">${d.bk} bk</div>
     </div>`;
   }).join('');
+  // today volume label/colour for the header chip + footer (same tiers as the cells)
+  const _tdBk=fleetScoreData[todayIdxFS]||{pax:0,bk:0};
+  const _tdPct=weekMaxPax>0?Math.round(_tdBk.pax/weekMaxPax*100):0;
+  const volColor=fsColor(_tdPct);
+  const volLabel=_tdBk.pax<=0?'—':_tdPct>=70?'Busy':_tdPct>=30?'OK':'Quiet';
   // Trend pill colors
   const trendIsFlat=trendDelta===0;
   const trendBg=trendIsFlat?'rgba(255,255,255,.08)':trendUp?'rgba(184,232,154,.16)':'rgba(232,74,63,.18)';
@@ -5062,16 +5068,16 @@ function renderDash(){
   const trendArrow=trendIsFlat?'→':trendUp?'↗':'↘';
   const ai=`<div class="dgx-fleet" style="background:${dx.brown};border-radius:18px;padding:14px 14px 13px;color:${dx.brownText};${F}">
     <div style="display:flex;align-items:center;justify-content:space-between">
-      <div style="display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:${dx.lime}"><span>✦</span> Fleet Score</div>
-      <span style="font-size:9px;color:${scoreColor};background:rgba(255,255,255,.08);padding:2px 8px;border-radius:7px;font-weight:600;letter-spacing:.04em;text-transform:uppercase">${fleetLabel}</span>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:${dx.lime}"><span>✦</span> Bookings/day</div>
+      <span style="font-size:9px;color:${volColor};background:rgba(255,255,255,.08);padding:2px 8px;border-radius:7px;font-weight:600;letter-spacing:.04em;text-transform:uppercase">${volLabel}</span>
     </div>
     <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:11px">${fsCells}</div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:11px;font-size:10px;color:${dx.brownMute};font-weight:500">
       <div style="display:inline-flex;align-items:center;gap:6px">
-        <span>7-day avg <span style="color:${dx.brownText};font-weight:700;font-variant-numeric:tabular-nums">${weekAvgFS}</span></span>
+        <span>7-day avg <span style="color:${dx.brownText};font-weight:700;font-variant-numeric:tabular-nums">${weekAvgFS}</span> pax</span>
         <span style="display:inline-flex;align-items:center;gap:3px;background:${trendBg};color:${trendFg};padding:2px 7px;border-radius:7px;font-size:9.5px;font-weight:700;font-variant-numeric:tabular-nums">${trendArrow} ${trendIsFlat?'flat':(trendUp?'+':'−')+trendPct+'%'}</span>
       </div>
-      <span>Today <span style="color:${scoreColor};font-weight:700;font-variant-numeric:tabular-nums">${fleetScore}</span><span style="color:${dx.brownMute}">/100</span></span>
+      <span>Today <span style="color:${volColor};font-weight:700;font-variant-numeric:tabular-nums">${_tdBk.pax}</span> pax · <span style="color:${dx.brownText};font-weight:700;font-variant-numeric:tabular-nums">${_tdBk.bk}</span> bk</span>
     </div>
     ${trendDelta!==0?`<div style="font-size:9px;color:${dx.brownMute};margin-top:4px;text-align:left">vs prev week <span style="color:${dx.brownText};font-weight:600;font-variant-numeric:tabular-nums">${prevWeekAvg}</span></div>`:''}
   </div>`;
