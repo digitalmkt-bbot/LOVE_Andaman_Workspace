@@ -38519,7 +38519,9 @@ function bkV2VanClearRoute(date, routeId){
 function bkV2VanSelToggle(bkId){ window._bkV2VanSel=window._bkV2VanSel||{}; if(window._bkV2VanSel[bkId]) delete window._bkV2VanSel[bkId]; else { window._bkV2VanSelN=(window._bkV2VanSelN||0)+1; window._bkV2VanSel[bkId]=window._bkV2VanSelN; } if(typeof bkV2Render==='function') bkV2Render(); }   // value = tick order (for pickup sequencing)
 function bkV2VanSelClear(){ window._bkV2VanSel={}; if(typeof bkV2Render==='function') bkV2Render(); }
 // ── Allocation-aware grouping · a booking can be split (bk.ops.vanSplits[]) across vans · selection key = bkId or bkId@splitIndex ──
-function _bkV2InZone(b,date,routeId,zone){ return (b.trips||[]).some(t=>t.date===date&&t.routeId===routeId&&((t.zone||b.pickupZone)===zone)); }
+// Zone membership for van grouping. Charter (เหมาลำ) rows live in a dedicated '__CHARTER__' namespace so their
+// van groups don't collide with seat groups in the same pickup zone (charter is shown in its own card).
+function _bkV2InZone(b,date,routeId,zone){ return (b.trips||[]).some(t=>{ if(t.date!==date||t.routeId!==routeId) return false; const isCh=t.bookingMode==='charter'; return zone==='__CHARTER__' ? isCh : (!isCh && (t.zone||b.pickupZone)===zone); }); }
 function _bkV2VanNextGroup(date, routeId, zone){ let mx=0; (SB_BOOKINGS||[]).forEach(b=>{ if(!b.ops)return; if(!_bkV2InZone(b,date,routeId,zone))return; if(Array.isArray(b.ops.vanSplits)){ b.ops.vanSplits.forEach(s=>{ const g=+s.vanGroup||0; if(g>mx)mx=g; }); } else { const g=+b.ops.vanGroup||0; if(g>mx)mx=g; } }); return mx+1; }
 function bkV2VanGroupSelected(date, routeId, zone, groupId){
   const sel=Object.keys(window._bkV2VanSel||{}).filter(k=>window._bkV2VanSel[k]);
@@ -38536,7 +38538,7 @@ function bkV2VanGroupSelected(date, routeId, zone, groupId){
     const v=(typeof vehGet==='function')?vehGet(_gVan):null; const cap=(v&&v.capacity)||0;
     if(cap){
       let addPax=0;
-      ordered.forEach(key=>{ const p=String(key).split('@'); const b=SB_BOOKINGS.find(x=>x.id===p[0]); if(!b)return; if(p.length>1&&Array.isArray(b.ops.vanSplits)&&b.ops.vanSplits[+p[1]]){ addPax+=(+b.ops.vanSplits[+p[1]].pax||0); } else { let n=0;(b.trips||[]).forEach(t=>{ if((t.date||'')!==date||(t.routeId||'')!==routeId)return; const z=t.zone||b.pickupZone||''; if(z!==zone)return; const px=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; if(px>n)n=px; }); addPax+=n; } });
+      ordered.forEach(key=>{ const p=String(key).split('@'); const b=SB_BOOKINGS.find(x=>x.id===p[0]); if(!b)return; if(p.length>1&&Array.isArray(b.ops.vanSplits)&&b.ops.vanSplits[+p[1]]){ addPax+=(+b.ops.vanSplits[+p[1]].pax||0); } else { let n=0;(b.trips||[]).forEach(t=>{ if((t.date||'')!==date||(t.routeId||'')!==routeId)return; const z=(t.bookingMode==='charter')?'__CHARTER__':(t.zone||b.pickupZone||''); if(z!==zone)return; const px=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; if(px>n)n=px; }); addPax+=n; } });
       const cur=bkV2VanGroupPax(date,routeId,zone,gid);
       if(cur+addPax>cap){ alert('ที่นั่งไม่พอ · กรุ๊ป '+gid+' ใช้รถ '+((v&&v.name)||_gVan)+' ('+cap+' ที่นั่ง)\nมีอยู่ '+cur+' + เพิ่ม '+addPax+' = '+(cur+addPax)+' คน\n\nสร้างกรุ๊ปใหม่ · แยกคน (✂) · หรือเลือกรถใหญ่กว่า'); return; }
     }
@@ -38551,7 +38553,7 @@ function bkV2VanGroupSelected(date, routeId, zone, groupId){
 function bkV2VanGroupHeal(date){
   const isC=b=>['cancelled','rejected','cancelled_weather'].includes(b.status);
   const grp={};   // key → {van, ret}
-  const walk=(fn)=>{ (SB_BOOKINGS||[]).forEach(b=>{ if(isC(b)||!b.ops)return; (b.trips||[]).forEach(t=>{ if(date&&(t.date||'')!==date)return; const z=t.zone||b.pickupZone||''; const k=(t.date||'')+'|'+(t.routeId||'')+'|'+z; if(Array.isArray(b.ops.vanSplits)&&b.ops.vanSplits.length){ b.ops.vanSplits.forEach(s=>fn(b,k,s)); } else { fn(b,k,null); } }); }); };
+  const walk=(fn)=>{ (SB_BOOKINGS||[]).forEach(b=>{ if(isC(b)||!b.ops)return; (b.trips||[]).forEach(t=>{ if(date&&(t.date||'')!==date)return; const z=(t.bookingMode==='charter')?'__CHARTER__':(t.zone||b.pickupZone||''); const k=(t.date||'')+'|'+(t.routeId||'')+'|'+z; if(Array.isArray(b.ops.vanSplits)&&b.ops.vanSplits.length){ b.ops.vanSplits.forEach(s=>fn(b,k,s)); } else { fn(b,k,null); } }); }); };
   walk((b,k,s)=>{ const g=s?+s.vanGroup||0:+(b.ops.vanGroup)||0; if(!g)return; const van=s?s.vanId:b.ops.vanId; const e=grp[k+'|'+g]=grp[k+'|'+g]||{van:null}; if(van&&!e.van)e.van=van; });
   let healed=0;
   // heal ONLY the outbound van (ป้องกันตกบุคกิ้ง) · vanReturnId เป็น per-booking (ว่าง = กลับคันเดิม) → ไม่กระจายทั้งกรุ๊ป
@@ -38566,7 +38568,7 @@ function bkV2VanGroupHeal(date){
 function bkV2VanGroupConflicts(date){
   const isC=b=>['cancelled','rejected','cancelled_weather'].includes(b.status);
   const G={};
-  (SB_BOOKINGS||[]).forEach(b=>{ if(isC(b)||!b.ops)return; (b.trips||[]).forEach(t=>{ if(date&&(t.date||'')!==date)return; const z=t.zone||b.pickupZone||''; if(z==='NoTransfer'||z==='NT')return;
+  (SB_BOOKINGS||[]).forEach(b=>{ if(isC(b)||!b.ops)return; (b.trips||[]).forEach(t=>{ if(date&&(t.date||'')!==date)return; const z=(t.bookingMode==='charter')?'__CHARTER__':(t.zone||b.pickupZone||''); if(z==='NoTransfer'||z==='NT')return;
     const add=(g,van,pax)=>{ if(!g)return; const k=(t.date||'')+'|'+(t.routeId||'')+'|'+z+'|'+g; const e=G[k]=G[k]||{date:t.date,routeId:t.routeId,zone:z,gid:+g,vans:{},pax:0}; e.pax+=pax||0; if(van){ e.vans[van]=(e.vans[van]||0)+1; } };
     const tp=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
     if(Array.isArray(b.ops.vanSplits)&&b.ops.vanSplits.length) b.ops.vanSplits.forEach(s=>add(+s.vanGroup||0,s.vanId,+s.pax||0)); else add(+b.ops.vanGroup||0,b.ops.vanId,tp);
@@ -38581,7 +38583,7 @@ function bkV2VanGroupPax(date, routeId, zone, gid){
   _bkV2GrpApply(date,routeId,zone,gid,(b,s)=>{
     if(s){ tot += (+s.pax||0); return; }
     let n=0;
-    (b.trips||[]).forEach(t=>{ if((t.date||'')!==date||(t.routeId||'')!==routeId) return; const z=t.zone||b.pickupZone||''; if(z!==zone) return; const p=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; if(p>n)n=p; });
+    (b.trips||[]).forEach(t=>{ if((t.date||'')!==date||(t.routeId||'')!==routeId) return; const z=(t.bookingMode==='charter')?'__CHARTER__':(t.zone||b.pickupZone||''); if(z!==zone) return; const p=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; if(p>n)n=p; });
     tot += n;
   });
   return tot;
@@ -49945,9 +49947,9 @@ function bkV2RenderTab2(){
     // zone subgroups · CHARTER (เหมาลำ) bookings get their own pseudo-zone '__CHARTER__' rendered FIRST
     //   (full manifest table · boat-assign + all columns work the same · header restyled as a Charter card)
     const zg = {};
-    // Charter (เหมาลำ) → own pseudo-zone card in normal/boat view. In VAN mode, keep them in their REAL pickup zone
-    // so van grouping works (the group ops match on the booking's real zone via _bkV2InZone; '__CHARTER__' would never match → couldn't pick a van + pool wasn't route-filtered).
-    grp.forEach(r=>{ const zk=(r.charter && !r.cxl && !vanMode)?'__CHARTER__':r.zone; (zg[zk]=zg[zk]||[]).push(r); });
+    // Charter (เหมาลำ) → own pseudo-zone card (all modes · shown at top). Van grouping for charter uses the
+    // '__CHARTER__' namespace consistently (see _bkV2InZone / heal), so picking a van works here too.
+    grp.forEach(r=>{ const zk=(r.charter && !r.cxl)?'__CHARTER__':r.zone; (zg[zk]=zg[zk]||[]).push(r); });
     const _zord=z=> z==='__CHARTER__'? -100 : bkV2ZoneOrder(z);
     const zones = Object.keys(zg).sort((a,b)=>_zord(a)-_zord(b));
     // When this trip is split across 2+ boats, color-code each row by its assigned boat (left accent + faint tint)
