@@ -4955,6 +4955,8 @@ function renderDash(){
     .replace('Early Krabi + Phang Nga','Krabi+PgNga')
     .replace('Whale Shark Phi Phi Maiton Sunset','Whale Shark');
   const _bkLabel=(d)=> _bkMode==='year' ? TH_MON[d.dt.getMonth()] : (_bkMode==='month' ? String(d.dt.getDate()) : 'Today');
+  // liquid-glass bar fill — diagonal light streak over the solid colour
+  const _glassBar=(c)=>`linear-gradient(118deg,rgba(255,255,255,.34) 0%,rgba(255,255,255,.12) 20%,rgba(255,255,255,0) 44%,rgba(0,0,0,.10) 100%),${c}`;
   // today's per-route rows (for day mode + its stats)
   const dayRB = bkBuckets[0] ? bkBuckets[0].routeBooked : {};
   const dayRows = Object.entries(dayRB).filter(([id,v])=>v>0).sort((a,b)=>b[1]-a[1]);
@@ -4973,7 +4975,7 @@ function renderDash(){
       const h=Math.max((e.val/dayMax)*100,3);
       return `<div style="display:flex;flex-direction:column;align-items:center;min-width:0">
         <div style="width:100%;height:150px;display:flex;align-items:flex-end;justify-content:center">
-          <div style="position:relative;width:62%;max-width:48px;height:${h}%;background:${e.color};border-radius:6px 6px 0 0">
+          <div style="position:relative;width:62%;max-width:48px;height:${h}%;background:${_glassBar(e.color)};border-radius:6px 6px 0 0;box-shadow:inset 0 1px 0 rgba(255,255,255,.6),inset -1px 0 0 rgba(0,0,0,.07),0 2px 6px rgba(0,0,0,.16);border:1px solid rgba(255,255,255,.18)">
             <div style="position:absolute;left:50%;transform:translateX(-50%);top:-19px;font-size:12px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums">${e.val}</div>
           </div>
         </div>
@@ -4996,8 +4998,8 @@ function renderDash(){
       if(otherV>0) segs.push({v:otherV,color:segPalette[3],label:'Other'});
       if((d.charter||0)>0) segs.push({v:d.charter,color:CHARTER_COLOR,label:'Charter เหมาลำ'});
       const segDivs = noBoat
-        ? `<div style="flex:1;background:rgba(157,199,230,.40)" title="${tot} จอง · ยังไม่จัดเรือ"></div>`
-        : segs.map(s=>`<div style="flex:0 0 ${tot>0?(s.v/tot*100):0}%;background:${s.color}" title="${s.label}: ${s.v}"></div>`).join('');
+        ? `<div style="flex:1;background:${_glassBar('rgba(157,199,230,.55)')}" title="${tot} จอง · ยังไม่จัดเรือ"></div>`
+        : segs.map(s=>`<div style="flex:0 0 ${tot>0?(s.v/tot*100):0}%;background:${_glassBar(s.color)}" title="${s.label}: ${s.v}"></div>`).join('');
       const barW=_bkMode==='month'?'86%':'70%';
       const barMax=_bkMode==='month'?'13px':'34px';
       const _wx=(d.wx||0)>0;
@@ -5010,7 +5012,7 @@ function renderDash(){
         <div style="position:relative;width:100%;height:150px;display:flex;align-items:flex-end;justify-content:center">
           <div style="position:relative;width:${barW};max-width:${barMax};height:100%">
             <div style="position:absolute;left:0;right:0;bottom:0;height:${noBoat?totH:capH}%;border:1.5px dashed ${noBoat?'rgba(157,199,230,.85)':(_wx?'rgba(232,74,63,.6)':'rgba(255,255,255,'+(isTdy?.55:.18)+')')};border-radius:4px;pointer-events:none"></div>
-            <div style="position:absolute;left:0;right:0;bottom:0;height:${totH}%;display:flex;flex-direction:column-reverse;border-radius:3px;overflow:hidden">${segDivs}</div>
+            <div style="position:absolute;left:0;right:0;bottom:0;height:${totH}%;display:flex;flex-direction:column-reverse;border-radius:3px;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.5),inset -1px 0 0 rgba(0,0,0,.06),0 1px 4px rgba(0,0,0,.14);border:1px solid rgba(255,255,255,.14)">${segDivs}</div>
             ${isTdy?`<div style="position:absolute;left:50%;transform:translateX(-50%);top:-20px;background:#fff;color:${dx.forestDark};font-size:8.5px;font-weight:700;padding:2px 5px;border-radius:6px;font-variant-numeric:tabular-nums;white-space:nowrap">${tot}</div>`:''}
           </div>
         </div>
