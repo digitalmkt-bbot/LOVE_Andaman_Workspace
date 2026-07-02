@@ -4408,6 +4408,7 @@ function _dashSeatCalHtml(dx,F){
 }
 window.dashCalMonthShift=function(delta){ var m=window._dashCalMonth||(window._dashDate||TODAY_STR).slice(0,7); var yy=parseInt(m.slice(0,4),10),mm=parseInt(m.slice(5,7),10); var d=new Date(yy,mm-1+delta,1); window._dashCalMonth=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); if(typeof renderDash==='function') renderDash(); };
 window.dashCalSetFam=function(id){ window._dashCalFam=id||''; if(typeof renderDash==='function') renderDash(); };
+window.dashBkSetMode=function(m){ window._dashBkMode=(['day','month','year'].includes(m)?m:'day'); if(typeof renderDash==='function') renderDash(); };
 
 // ── Left-column: Booking notice board + real-time Live feed ──
 (function(){ if(document.getElementById('dash-live-anim'))return; try{ var s=document.createElement('style'); s.id='dash-live-anim'; s.textContent='@keyframes dashlvpulse{0%{opacity:.35}50%{opacity:1}100%{opacity:.35}}'; (document.head||document.documentElement).appendChild(s); }catch(e){} })();
@@ -4601,11 +4602,8 @@ function renderDash(){
   const deltaPct=yBooked>0?Math.round(Math.abs(deltaSeats)/yBooked*100):(totBooked>0?100:0);
   const deltaSign=deltaSeats>=0;
 
-  // 7-day trend (booked per day) + per-route breakdown + capacity
-  const trendData=[];
-  const routeWeekTotals={}; // routeId -> total booked over 7 days
-  for(let d=-6;d<=0;d++){
-    const ds=_dsAt(d);
+  // ── Bookings overview — reusable per-day aggregation (day / month / year modes) ──
+  const _bkDay=(ds)=>{
     const dOps=TRIPS[ds]||{};
     let booked=0, capacity=0;
     const routeBooked={};
@@ -4620,15 +4618,15 @@ function renderDash(){
       if(_s && _s.type==='closed') return;
       capacity+=(b.cap||0); _capBoats.add(bid);
       const isCharter = op.type==='charter' || op.charterBookingId;
-      if(isCharter){ const bk=op.booked||0; booked+=bk; routeBooked[op.route]=(routeBooked[op.route]||0)+bk; routeWeekTotals[op.route]=(routeWeekTotals[op.route]||0)+bk; }
+      if(isCharter){ const bk=op.booked||0; booked+=bk; routeBooked[op.route]=(routeBooked[op.route]||0)+bk; }
       else { _seatRoutes.add(op.route); }
     });
-    // Seat bookings from actual sales (SB_BOOKINGS v2 + legacy) · once per route · was op.booked (always 0)
+    // Seat bookings from actual sales (SB_BOOKINGS v2 + legacy) · once per route
     _seatRoutes.forEach(rid=>{
       const sc=(typeof getSeatsConsumed==='function')?getSeatsConsumed(rid,ds):0;
-      booked+=sc; routeBooked[rid]=(routeBooked[rid]||0)+sc; routeWeekTotals[rid]=(routeWeekTotals[rid]||0)+sc;
+      booked+=sc; routeBooked[rid]=(routeBooked[rid]||0)+sc;
     });
-    // Bookings on this day → (i) count demand for routes with no Boat-Op boat · (ii) count capacity of the boat each booking is actually assigned to (bk.ops.boatId), even if it isn't in Boat Operation TRIPS
+    // Bookings on this day → (i) count demand for routes with no Boat-Op boat · (ii) capacity of the boat each booking actually rides
     (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(bk=>{
       if(['cancelled','rejected','cancelled_weather'].includes(bk.status)) return;
       if(bk.schemaVer!==2 || !Array.isArray(bk.trips)) return;
@@ -4638,13 +4636,11 @@ function renderDash(){
         const r=getRoute(rid); if(!r) return;
         const _s=(typeof getDayStatus==='function')?getDayStatus(r,ds):null;
         if(_s && _s.type==='closed') return;   // off-season / closed → don't count
-        // (i) route demand · once per route
         if(!_seatRoutes.has(rid) && routeBooked[rid]==null){
           _seatRoutes.add(rid);
           const sc=(typeof getSeatsConsumed==='function')?getSeatsConsumed(rid,ds):0;
-          booked+=sc; routeBooked[rid]=(routeBooked[rid]||0)+sc; routeWeekTotals[rid]=(routeWeekTotals[rid]||0)+sc;
+          booked+=sc; routeBooked[rid]=(routeBooked[rid]||0)+sc;
         }
-        // (ii) capacity of the boat this booking actually rides (count it even if its status flag isn't 'available' — real guests are on it)
         const abid=bk.ops&&bk.ops.boatId;
         if(abid && !_capBoats.has(abid)){
           const ab=getBoat(abid);
@@ -4652,27 +4648,51 @@ function renderDash(){
         }
       });
     });
-    trendData.push({ds,booked,capacity,routeBooked});
+    return {ds,booked,capacity,routeBooked};
+  };
+  // Active mode — 'day' (today · bar per route) | 'month' (30 days · stacked) | 'year' (12 months · stacked)
+  const _bkMode = ['day','month','year'].includes(window._dashBkMode) ? window._dashBkMode : 'day';
+  const _todayDS = _dsAt(0);
+  const bkBuckets=[];   // {dt, booked, capacity, routeBooked, isToday}
+  if(_bkMode==='day'){
+    const a=_bkDay(_todayDS); bkBuckets.push({...a, dt:new Date(_todayDS), isToday:true});
+  } else if(_bkMode==='month'){
+    for(let d=-29;d<=0;d++){ const a=_bkDay(_dsAt(d)); bkBuckets.push({...a, dt:new Date(a.ds), isToday:d===0}); }
+  } else { // year — last 12 calendar months (sum of days, per route)
+    const anchor=new Date(_ds);
+    for(let mOff=-11;mOff<=0;mOff++){
+      const md=new Date(anchor.getFullYear(), anchor.getMonth()+mOff, 1);
+      const y=md.getFullYear(), mo=md.getMonth();
+      let booked=0, capacity=0; const routeBooked={};
+      const nDays=new Date(y,mo+1,0).getDate();
+      for(let dd=1;dd<=nDays;dd++){
+        const ds=y+'-'+String(mo+1).padStart(2,'0')+'-'+String(dd).padStart(2,'0');
+        if(ds>_todayDS) break;   // don't count future days
+        const a=_bkDay(ds); booked+=a.booked; capacity+=a.capacity;
+        Object.entries(a.routeBooked).forEach(([rid,v])=>routeBooked[rid]=(routeBooked[rid]||0)+v);
+      }
+      bkBuckets.push({dt:md, booked, capacity, routeBooked, isToday:mOff===0});
+    }
   }
-  // Top 3 routes by weekly booked, rest grouped as "Other"
-  const topRouteIds=Object.entries(routeWeekTotals)
-    .sort((a,b)=>b[1]-a[1]).slice(0,3).map(e=>e[0]);
+  // Route totals over the active period → top 3 + Other
+  const routeWeekTotals={};
+  bkBuckets.forEach(bt=>Object.entries(bt.routeBooked).forEach(([rid,v])=>routeWeekTotals[rid]=(routeWeekTotals[rid]||0)+v));
+  const topRouteIds=Object.entries(routeWeekTotals).sort((a,b)=>b[1]-a[1]).slice(0,3).map(e=>e[0]);
   const otherRouteIds=Object.keys(routeWeekTotals).filter(id=>!topRouteIds.includes(id));
   const otherWeekTotal=otherRouteIds.reduce((s,id)=>s+routeWeekTotals[id],0);
   // Fixed palette so segments stay readable on forest green
   const segPalette=['#B8E89A','#F5E84F','#F4B89F','#9FB89E'];
   const topRoutes=topRouteIds.map((id,i)=>({id,r:getRoute(id),total:routeWeekTotals[id],color:segPalette[i]}));
-  const trendMax=Math.max(...trendData.map(d=>Math.max(d.capacity,d.booked)),1);
-  const lastBooked=trendData[trendData.length-1].booked;
-  const totalBookedWeek=trendData.reduce((s,d)=>s+d.booked,0);
-  const totalCapWeek=trendData.reduce((s,d)=>s+d.capacity,0);
+  const trendMax=Math.max(...bkBuckets.map(d=>Math.max(d.capacity,d.booked)),1);
+  const totalBookedWeek=bkBuckets.reduce((s,d)=>s+d.booked,0);
+  const totalCapWeek=bkBuckets.reduce((s,d)=>s+d.capacity,0);
   const fillWeekPct=totalCapWeek>0?Math.round(totalBookedWeek/totalCapWeek*100):0;
-  // Day stats — best fill, slow day, avg
-  const dayFills=trendData.map(d=>({ds:d.ds,booked:d.booked,cap:d.capacity,pct:d.capacity>0?Math.round(d.booked/d.capacity*100):0}));
-  const daysWithCap=dayFills.filter(d=>d.cap>0);
-  const bestDay=daysWithCap.length?daysWithCap.reduce((b,c)=>c.pct>b.pct?c:b,daysWithCap[0]):null;
-  const slowDay=daysWithCap.length?daysWithCap.reduce((b,c)=>c.pct<b.pct?c:b,daysWithCap[0]):null;
-  const avgPerDay=Math.round(totalBookedWeek/7);
+  // Peak / slow bucket by fill % (month/year only) + avg per bucket
+  const bktFills=bkBuckets.map(d=>({dt:d.dt,booked:d.booked,cap:d.capacity,pct:d.capacity>0?Math.round(d.booked/d.capacity*100):0}));
+  const bktsWithCap=bktFills.filter(d=>d.cap>0);
+  const bestDay=bktsWithCap.length?bktsWithCap.reduce((b,c)=>c.pct>b.pct?c:b,bktsWithCap[0]):null;
+  const slowDay=bktsWithCap.length?bktsWithCap.reduce((b,c)=>c.pct<b.pct?c:b,bktsWithCap[0]):null;
+  const avgPerDay=Math.round(totalBookedWeek/Math.max(1,bkBuckets.length));
   const topRouteWeek=topRoutes[0]||null;
 
   // Ticker per pier (today vs yesterday)
@@ -4904,8 +4924,7 @@ function renderDash(){
     </div>
   </div>`;
 
-  // Bookings overview (forest green) — 7-day stacked bars + capacity outline
-  const todayIdx=trendData.length-1;
+  // Bookings overview (forest green) — day / month / year modes
   // Short route labels for legend
   const _shortName=(name)=>name
     .replace('Phi Phi Bamboo by Speedboat','Phi Phi Spd')
@@ -4917,64 +4936,102 @@ function renderDash(){
     .replace('Surin Islands by Speedboat','Surin Spd')
     .replace('Early Krabi + Phang Nga','Krabi+PgNga')
     .replace('Whale Shark Phi Phi Maiton Sunset','Whale Shark');
-  // Build per-day bar HTML
-  const barsHtml=trendData.map((d,i)=>{
-    const dt=new Date(d.ds);
-    const isTdy=i===todayIdx;
-    const capH=(d.capacity/trendMax)*100;
-    const noBoat = d.capacity===0 && d.booked>0;   // bookings exist but no boat assigned yet
-    // Build stacked segments for this day in topRoutes order, plus "Other"
-    const segs=[];
-    topRoutes.forEach((tr,idx)=>{
-      const v=d.routeBooked[tr.id]||0;
-      if(v>0) segs.push({v,color:tr.color,label:_shortName(tr.r.name)});
-    });
-    const otherV=otherRouteIds.reduce((s,id)=>s+(d.routeBooked[id]||0),0);
-    if(otherV>0) segs.push({v:otherV,color:segPalette[3],label:'Other'});
-    const bookedH=(d.booked/trendMax)*100;
-    const segDivs = noBoat
-      ? `<div style="flex:1;background:rgba(157,199,230,.40)" title="${d.booked} จอง · ยังไม่จัดเรือ"></div>`
-      : segs.map(s=>`<div style="flex:0 0 ${bookedH>0?(s.v/d.booked*100):0}%;background:${s.color}" title="${s.label}: ${s.v}"></div>`).join('');
-    const pct=d.capacity>0?Math.round(d.booked/d.capacity*100):null;
-    const _pctCol = pct!=null ? (pct>=75?dx.lime : pct>=45?'#F2E534' : '#F0792B') : (d.booked>0?'#9DC7E6':'rgba(255,255,255,.4)');
-    const _pctTxt = pct!=null ? pct+'%' : (d.booked>0 ? d.booked+' จอง' : '0%');
-    return `<div style="position:relative;display:flex;flex-direction:column;align-items:center;min-width:0">
-      <div style="position:relative;width:100%;height:140px;display:flex;align-items:flex-end;justify-content:center">
-        <div style="position:relative;width:80%;max-width:34px;height:100%">
-          <div style="position:absolute;left:0;right:0;bottom:0;height:${noBoat?bookedH:capH}%;border:1.5px dashed ${noBoat?'rgba(157,199,230,.85)':'rgba(255,255,255,'+(isTdy?.55:.22)+')'};border-radius:5px;pointer-events:none"></div>
-          <div style="position:absolute;left:0;right:0;bottom:0;height:${bookedH}%;display:flex;flex-direction:column-reverse;border-radius:4px;overflow:hidden">${segDivs}</div>
-          ${isTdy?`<div style="position:absolute;left:50%;transform:translateX(-50%);top:-22px;background:#fff;color:${dx.forestDark};font-size:9px;font-weight:700;padding:2px 6px;border-radius:6px;font-variant-numeric:tabular-nums;white-space:nowrap">${d.booked}/${d.capacity||'-'}</div>`:''}
+  const _bkLabel=(d)=> _bkMode==='year' ? TH_MON[d.dt.getMonth()] : (_bkMode==='month' ? String(d.dt.getDate()) : 'Today');
+  // today's per-route rows (for day mode + its stats)
+  const dayRB = bkBuckets[0] ? bkBuckets[0].routeBooked : {};
+  const dayRows = Object.entries(dayRB).filter(([id,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  // ── build the plot (mode-aware) ──
+  let plotHtml, plotCols, plotGap;
+  if(_bkMode==='day'){
+    // TODAY only — one bar per route (separated), tallest→shortest
+    const dayMax=Math.max(...dayRows.map(r=>r[1]),1);
+    const dayPal=['#B8E89A','#F5E84F','#F4B89F','#9DC7E6','#C9B6E8','#7FD0A0','#F0A5C0','#E8C97F','#8FD9C8'];
+    plotCols='repeat('+Math.max(dayRows.length,1)+',1fr)'; plotGap='12px';
+    plotHtml = dayRows.length ? dayRows.map(([id,v],i)=>{
+      const r=getRoute(id); const nm=r?_shortName(r.name):id; const col=dayPal[i%dayPal.length];
+      const h=Math.max((v/dayMax)*100,3);
+      return `<div style="display:flex;flex-direction:column;align-items:center;min-width:0">
+        <div style="width:100%;height:150px;display:flex;align-items:flex-end;justify-content:center">
+          <div style="position:relative;width:62%;max-width:48px;height:${h}%;background:${col};border-radius:6px 6px 0 0">
+            <div style="position:absolute;left:50%;transform:translateX(-50%);top:-19px;font-size:12px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums">${v}</div>
+          </div>
         </div>
-      </div>
-      <div style="text-align:center;margin-top:7px;font-size:9.5px;color:${isTdy?dx.lime:'#9FB89E'};font-weight:${isTdy?'700':'500'};font-variant-numeric:tabular-nums;letter-spacing:-.005em">${isTdy?'Today':dt.getDate()+' '+TH_MON[dt.getMonth()]}</div>
-      <div style="text-align:center;font-size:9px;font-weight:600;color:${_pctCol};margin-top:2px;font-variant-numeric:tabular-nums">${_pctTxt}</div>
-    </div>`;
-  }).join('');
-  // Legend: top routes + Other (if any) + capacity indicator
-  const legendItems=topRoutes.map(tr=>`<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:${tr.color}"></span><span style="color:#fff;font-weight:500">${_shortName(tr.r.name)}</span><span style="color:#9FB89E;font-variant-numeric:tabular-nums">${tr.total}</span></span>`).join('');
-  const otherLegend=otherWeekTotal>0?`<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:${segPalette[3]}"></span><span style="color:#fff;font-weight:500">Other</span><span style="color:#9FB89E;font-variant-numeric:tabular-nums">${otherWeekTotal}</span></span>`:'';
-  const capLegend=`<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:14px;height:8px;border:1.2px dashed rgba(255,255,255,.55);border-radius:2px"></span><span style="color:#9FB89E">Capacity</span></span>`;
-  // Bottom stats
-  const bestDt=bestDay?new Date(bestDay.ds):null;
-  const slowDt=slowDay?new Date(slowDay.ds):null;
+        <div style="text-align:center;margin-top:9px;font-size:10px;color:#DDEBD8;font-weight:600;line-height:1.25;word-break:break-word">${nm}</div>
+      </div>`;
+    }).join('') : `<div style="grid-column:1/-1;text-align:center;color:#9FB89E;font-size:12.5px;padding:54px 0">ยังไม่มี booking วันนี้</div>`;
+  } else {
+    // MONTH (30 days) / YEAR (12 months) — stacked route bars + capacity outline
+    plotCols='repeat('+bkBuckets.length+',1fr)';
+    plotGap=_bkMode==='month'?'3px':'6px';
+    plotHtml=bkBuckets.map((d,i)=>{
+      const isTdy=d.isToday;
+      const capH=(d.capacity/trendMax)*100;
+      const bookedH=(d.booked/trendMax)*100;
+      const noBoat = d.capacity===0 && d.booked>0;
+      const segs=[];
+      topRoutes.forEach(tr=>{ const v=d.routeBooked[tr.id]||0; if(v>0) segs.push({v,color:tr.color,label:_shortName(tr.r.name)}); });
+      const otherV=otherRouteIds.reduce((s,id)=>s+(d.routeBooked[id]||0),0);
+      if(otherV>0) segs.push({v:otherV,color:segPalette[3],label:'Other'});
+      const segDivs = noBoat
+        ? `<div style="flex:1;background:rgba(157,199,230,.40)" title="${d.booked} จอง · ยังไม่จัดเรือ"></div>`
+        : segs.map(s=>`<div style="flex:0 0 ${bookedH>0?(s.v/d.booked*100):0}%;background:${s.color}" title="${s.label}: ${s.v}"></div>`).join('');
+      const barW=_bkMode==='month'?'86%':'70%';
+      const barMax=_bkMode==='month'?'13px':'34px';
+      const showLbl=_bkMode==='year' || isTdy || (i%5===0);
+      return `<div style="position:relative;display:flex;flex-direction:column;align-items:center;min-width:0">
+        <div style="position:relative;width:100%;height:150px;display:flex;align-items:flex-end;justify-content:center">
+          <div style="position:relative;width:${barW};max-width:${barMax};height:100%">
+            <div style="position:absolute;left:0;right:0;bottom:0;height:${noBoat?bookedH:capH}%;border:1.5px dashed ${noBoat?'rgba(157,199,230,.85)':'rgba(255,255,255,'+(isTdy?.55:.18)+')'};border-radius:4px;pointer-events:none"></div>
+            <div style="position:absolute;left:0;right:0;bottom:0;height:${bookedH}%;display:flex;flex-direction:column-reverse;border-radius:3px;overflow:hidden">${segDivs}</div>
+            ${isTdy?`<div style="position:absolute;left:50%;transform:translateX(-50%);top:-20px;background:#fff;color:${dx.forestDark};font-size:8.5px;font-weight:700;padding:2px 5px;border-radius:6px;font-variant-numeric:tabular-nums;white-space:nowrap">${d.booked}</div>`:''}
+          </div>
+        </div>
+        <div style="text-align:center;margin-top:7px;font-size:${_bkMode==='month'?'8px':'9.5px'};color:${isTdy?dx.lime:'#9FB89E'};font-weight:${isTdy?'700':'500'};font-variant-numeric:tabular-nums;height:12px;white-space:nowrap">${showLbl?_bkLabel(d):''}</div>
+      </div>`;
+    }).join('');
+  }
+  // Legend (month/year only — day mode labels each bar directly)
+  const legendItems=(_bkMode==='day')?'':topRoutes.map(tr=>`<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:${tr.color}"></span><span style="color:#fff;font-weight:500">${_shortName(tr.r.name)}</span><span style="color:#9FB89E;font-variant-numeric:tabular-nums">${tr.total}</span></span>`).join('');
+  const otherLegend=(_bkMode!=='day'&&otherWeekTotal>0)?`<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:${segPalette[3]}"></span><span style="color:#fff;font-weight:500">Other</span><span style="color:#9FB89E;font-variant-numeric:tabular-nums">${otherWeekTotal}</span></span>`:'';
+  const capLegend=(_bkMode==='day')?'':`<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:14px;height:8px;border:1.2px dashed rgba(255,255,255,.55);border-radius:2px"></span><span style="color:#9FB89E">Capacity</span></span>`;
+  // ── period toggle (วัน / เดือน / ปี) ──
+  const _bkSeg=(m,lbl)=>`<button onclick="dashBkSetMode('${m}')" style="border:none;cursor:pointer;font-size:10.5px;font-weight:600;padding:5px 12px;border-radius:8px;${F}${_bkMode===m?'background:'+dx.lime+';color:'+dx.forestDark:'background:transparent;color:#9FB89E'}">${lbl}</button>`;
+  const bkToggle=`<div style="display:inline-flex;background:rgba(255,255,255,.08);border-radius:10px;padding:2px;flex-shrink:0">${_bkSeg('day','วัน')}${_bkSeg('month','เดือน')}${_bkSeg('year','ปี')}</div>`;
+  const bkTitle=_bkMode==='day'?'Bookings overview · วันนี้':_bkMode==='month'?'Bookings overview · 30 วัน':'Bookings overview · 12 เดือน';
+  const _periodLbl=_bkMode==='day'?'วันนี้':_bkMode==='month'?'30 วัน':'12 เดือน';
+  const bkSub=`รวม <span style="color:#fff;font-weight:600">${fmtN(totalBookedWeek)}</span> seats${totalCapWeek>0?' / <span style="color:#fff;font-weight:600">'+fmtN(totalCapWeek)+'</span> cap · <span style="color:'+dx.lime+';font-weight:600">'+fillWeekPct+'%</span> fill':''} · ${_periodLbl} · วันนี้ ${deltaSign?'+':''}${deltaSeats} vs เมื่อวาน`;
+  // ── stats footer (mode-aware) ──
+  const _fmtDt=(dt)=> _bkMode==='year' ? TH_MON[dt.getMonth()] : dt.getDate()+' '+TH_MON[dt.getMonth()];
+  const _statCard=(lbl,val,valCol,sub)=>`<div style="background:rgba(255,255,255,.06);border-radius:11px;padding:8px 11px"><div style="font-size:8.5px;color:#9FB89E;letter-spacing:.05em;text-transform:uppercase">${lbl}</div><div style="font-size:13px;font-weight:600;margin-top:2px;color:${valCol};font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${val}</div><div style="font-size:9px;color:#9FB89E;margin-top:1px">${sub||''}</div></div>`;
+  let statsHtml;
+  if(_bkMode==='day'){
+    statsHtml =
+      _statCard('ที่นั่งวันนี้', fmtN(totalBookedWeek), dx.lime, 'seats booked')
+    + _statCard('Fill', fillWeekPct+'%', '#fff', totalBookedWeek+' / '+(totalCapWeek||'-'))
+    + _statCard('Top route', topRouteWeek?_shortName(topRouteWeek.r.name):'—', '#fff', topRouteWeek?topRouteWeek.total+' seats':'')
+    + _statCard('เส้นทาง', dayRows.length, '#fff', 'routes today');
+  } else {
+    const perLbl=_bkMode==='year'?'เดือน':'วัน';
+    statsHtml =
+      _statCard(_bkMode==='year'?'Peak month':'Peak day', bestDay?_fmtDt(bestDay.dt):'—', dx.lime, bestDay?bestDay.pct+'% fill':'—')
+    + _statCard(_bkMode==='year'?'Slow month':'Slow day', slowDay?_fmtDt(slowDay.dt):'—', dx.coralBg, slowDay?slowDay.pct+'% fill':'—')
+    + _statCard('Top route', topRouteWeek?_shortName(topRouteWeek.r.name):'—', '#fff', topRouteWeek?topRouteWeek.total+' seats':'')
+    + _statCard('Avg / '+perLbl, fmtN(avgPerDay), '#fff', 'seats');
+  }
+  const legendRow=(legendItems||otherLegend||capLegend)?`<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;font-size:10.5px;font-variant-numeric:tabular-nums">${legendItems}${otherLegend}${capLegend}</div>`:'';
   const proj=`<div class="dgx-bookings" style="background:${dx.forest};border-radius:24px;padding:22px 24px;color:#fff;${F}box-shadow:0 2px 4px rgba(10,40,25,.10),0 16px 38px rgba(10,50,30,.20);border:1px solid rgba(255,255,255,.08);">
     <div style="display:flex;align-items:start;justify-content:space-between;gap:14px">
       <div style="flex:1;min-width:0">
-        <div style="font-size:17px;font-weight:600;letter-spacing:-.015em">Bookings overview · 7 days</div>
-        <p style="font-size:12px;color:#9FB89E;margin:5px 0 0;line-height:1.55">รวม <span style="color:#fff;font-weight:600">${fmtN(totalBookedWeek)}</span> seats / <span style="color:#fff;font-weight:600">${fmtN(totalCapWeek)}</span> capacity · <span style="color:${dx.lime};font-weight:600">${fillWeekPct}%</span> fill · วันนี้ ${deltaSign?'+':''}${deltaSeats} vs เมื่อวาน</p>
+        <div style="font-size:17px;font-weight:600;letter-spacing:-.015em">${bkTitle}</div>
+        <p style="font-size:12px;color:#9FB89E;margin:5px 0 0;line-height:1.55">${bkSub}</p>
       </div>
-      <div style="display:inline-flex;align-items:center;gap:5px;background:${deltaSign?dx.lime:dx.coralBg};color:${deltaSign?dx.forestDark:dx.coralDeep};padding:4px 10px;border-radius:10px;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;flex-shrink:0">${deltaSign?'↗':'↘'} ${deltaPct}%</div>
+      ${bkToggle}
     </div>
-    <div style="margin-top:22px;position:relative;background:rgba(255,255,255,.04);border-radius:14px;padding:18px 10px 8px">
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;align-items:end">${barsHtml}</div>
+    <div style="margin-top:20px;position:relative;background:rgba(255,255,255,.04);border-radius:14px;padding:18px 10px 8px">
+      <div style="display:grid;grid-template-columns:${plotCols};gap:${plotGap};align-items:end">${plotHtml}</div>
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;font-size:10.5px;font-variant-numeric:tabular-nums">${legendItems}${otherLegend}${capLegend}</div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:14px">
-      <div style="background:rgba(255,255,255,.06);border-radius:11px;padding:8px 11px"><div style="font-size:8.5px;color:#9FB89E;letter-spacing:.05em;text-transform:uppercase">Best day</div><div style="font-size:13px;font-weight:600;margin-top:2px;color:${dx.lime};font-variant-numeric:tabular-nums">${bestDt?bestDt.getDate()+' '+TH_MON[bestDt.getMonth()]:'—'}</div><div style="font-size:9px;color:#9FB89E;margin-top:1px">${bestDay?bestDay.pct+'% fill':'no trip'}</div></div>
-      <div style="background:rgba(255,255,255,.06);border-radius:11px;padding:8px 11px"><div style="font-size:8.5px;color:#9FB89E;letter-spacing:.05em;text-transform:uppercase">Slow day</div><div style="font-size:13px;font-weight:600;margin-top:2px;color:${dx.coralBg};font-variant-numeric:tabular-nums">${slowDt?slowDt.getDate()+' '+TH_MON[slowDt.getMonth()]:'—'}</div><div style="font-size:9px;color:#9FB89E;margin-top:1px">${slowDay?slowDay.pct+'% fill':'—'}</div></div>
-      <div style="background:rgba(255,255,255,.06);border-radius:11px;padding:8px 11px"><div style="font-size:8.5px;color:#9FB89E;letter-spacing:.05em;text-transform:uppercase">Top route</div><div style="font-size:13px;font-weight:600;margin-top:2px;color:#fff;letter-spacing:-.005em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${topRouteWeek?topRouteWeek.r.name:''}">${topRouteWeek?_shortName(topRouteWeek.r.name):'—'}</div><div style="font-size:9px;color:#9FB89E;margin-top:1px;font-variant-numeric:tabular-nums">${topRouteWeek?topRouteWeek.total+' seats':''}</div></div>
-      <div style="background:rgba(255,255,255,.06);border-radius:11px;padding:8px 11px"><div style="font-size:8.5px;color:#9FB89E;letter-spacing:.05em;text-transform:uppercase">Avg / day</div><div style="font-size:15px;font-weight:600;margin-top:2px;color:#fff;font-variant-numeric:tabular-nums">${avgPerDay}</div><div style="font-size:9px;color:#9FB89E;margin-top:1px">${operatingCount} ops today</div></div>
-    </div>
+    ${legendRow}
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:14px">${statsHtml}</div>
   </div>`;
 
   const centerCol=`<div style="display:flex;flex-direction:column;gap:12px">${_dashSeatCalHtml(dx,F)}${proj}</div>`;
