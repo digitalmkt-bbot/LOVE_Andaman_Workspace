@@ -27861,6 +27861,15 @@ function flMaintClose(id,outcome,note,awaitInvoice){
           detail:m.detail||'',cost:totalCost,hours:flEngHours(eng.id),outcome});
         if(out.engStatus) eng.status=out.engStatus;
         else if(eng.status==='fixing') eng.status='ready';
+        // ปลดระวางเครื่อง → ถอดเกียร์ (+ใบจักรที่ติดกับเกียร์) ออกจากเครื่องที่ตายแล้ว
+        // เกียร์/ใบจักรมีงานของตัวเอง → ให้ไปตามสถานะ/งานของมันเอง ไม่ผูกกับเครื่องปลดระวาง
+        if(outcome==='decommission' && typeof FL_GEARBOXES!=='undefined'){
+          FL_GEARBOXES.forEach(gb=>{ if(gb.engineId===eng.id){
+            gb.engineId=null;
+            if(!gb.log)gb.log=[]; gb.log.push({date:TODAY_STR,type:'remove',desc:`✕ ถอดออกจากเครื่องปลดระวาง · ${m.no} (${a.label})`});
+            if(typeof FL_PROPELLERS!=='undefined') FL_PROPELLERS.forEach(pr=>{ if(pr.gearboxId===gb.id){ if(!pr.log)pr.log=[]; pr.log.push({date:TODAY_STR,type:'note',desc:`เครื่องปลดระวาง · ${m.no} · เกียร์ถูกถอดออก`}); } });
+          }});
+        }
       }
     }
     if(a.type==='gearbox'&&a.gbId){
