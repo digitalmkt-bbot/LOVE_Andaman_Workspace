@@ -39085,6 +39085,9 @@ function renderBoatAssign(){
 // ════════════════════════════════════════════════════════════════════
 let _vehTab='status';   // 'status' | 'registry' | 'daily'
 let _vehSel=null, _vehZoneF='all', _vehStatusF='all';
+let _vehOwnerF='all';   // matrix ownership filter: 'all' | 'company' (own+rented) | 'partner' (รถร่วม)
+function vehSetOwnerF(o){ _vehOwnerF=o; renderVehicles(); }
+function _vehOwnerMatch(v){ return _vehOwnerF==='all' ? true : _vehOwnerF==='partner' ? (v.ownership==='partner') : (v.ownership!=='partner'); }
 function vehSelect(id){ _vehSel=(_vehSel===id?null:id); renderVehicles(); }
 function vehSetZoneF(z){ _vehZoneF=z; renderVehicles(); }
 function vehSetStatusF(s){ _vehStatusF=s; renderVehicles(); }
@@ -39107,20 +39110,10 @@ function _vehDayCellInner(v,date){
   else if(st==='maintenance'){ bg='#FAEEDA';bd='1px solid #EAD9B0';fg='#854F0B';txt='&#128295;'; }
   else if(rc){ bg=rc;bd='1px solid '+rc;fg='#fff';txt=(typeof _vehRouteAbbr==='function'?_vehRouteAbbr(dr):dr); }
   else if(jb>0){ bg='#1D9E75';bd='none';fg='#fff';txt=jb; }
-  else if(st==='available'){ bg='#E9F7EF';bd='1px solid #C4E6D5';fg='#0F6E56';txt='&#10003;'; }
+  else if(st==='available'){ bg='#E9F7EF';bd='1px solid #C4E6D5';fg='#0F6E56';txt=''; }   // no ✓ mark · availability shown by colour
   const jbBadge=(rc&&jb>0)?`<span style="position:absolute;top:-4px;right:-4px;min-width:13px;height:13px;padding:0 2px;border-radius:7px;background:#1B2A55;color:#fff;font-size:8px;line-height:13px;text-align:center;font-weight:700">${jb}</span>`:'';
   const warn=(jb>0 && (st==='maintenance'||st==='off'))?'<span style="position:absolute;top:-3px;right:-3px;font-size:9px">&#9888;</span>':'';
-  // top-left ✓/✗ = van groups of this route+day fully assigned a vehicle or not
-  let cornerL='';
-  if(rc && st!=='off' && st!=='maintenance'){
-    const g=(typeof _vehGroupsForDay==='function')?_vehGroupsForDay(dr,date):null;
-    const dm=(typeof _vehRouteDemand==='function')?_vehRouteDemand(dr,date):{pickup:0};
-    if((g&&g.total>0) || (dm&&dm.pickup>0)){
-      const ok = g && g.total>0 && g.woVan===0;
-      cornerL=`<span title="${ok?'จัดรถครบ':'ยังจัดรถไม่ครบ'} · กรุ๊ป ${g?g.withVan:0}/${g?g.total:0}" style="position:absolute;top:-4px;left:-4px;width:13px;height:13px;border-radius:50%;background:${ok?'#1D9E75':'#C0392B'};color:#fff;font-size:8px;line-height:13px;text-align:center;font-weight:700;box-shadow:0 0 0 1.5px #fff">${ok?'&#10003;':'&#10005;'}</span>`;
-    }
-  }
-  return `<div style="position:relative;margin:3px auto;width:28px;height:24px;border-radius:5px;background:${bg};border:${bd};color:${fg};display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-weight:700;font-size:10px;cursor:pointer">${txt}${cornerL}${jbBadge}${warn}</div>`;
+  return `<div style="position:relative;margin:3px auto;width:28px;height:24px;border-radius:5px;background:${bg};border:${bd};color:${fg};display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-weight:700;font-size:10px;cursor:pointer">${txt}${jbBadge}${warn}</div>`;
 }
 // Per-day popup · set zone + status + see trips
 function vehDayPopup(id,date){
@@ -39632,7 +39625,7 @@ function renderVehicles(){
     const colspanN=dates.length+1;
     const gHd=(col,lbl,n)=>`<tr><td colspan="${colspanN}" style="position:sticky;left:0;padding:8px 11px;background:#fbfbfc;border-bottom:0.5px solid rgba(0,0,0,.05)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${col};vertical-align:1px"></span> <span style="font-weight:700;font-size:12.5px;color:#1B2A55">${lbl}</span> <span style="color:#8a8a82;font-size:11px">· ${n}</span></td></tr>`;
     const gSub=(s,n)=>`<tr><td colspan="${colspanN}" style="position:sticky;left:0;padding:6px 11px 4px 24px;background:#fff"><span style="font-size:11.5px;font-weight:700;color:#534AB7">&#9679; ${esc(s)}</span> <span style="font-size:9.5px;color:#8a8a82">${n}</span></td></tr>`;
-    const matrixRows=vehBuildGrouped(SB_VEHICLES, rowFn, gHd, gSub);
+    const matrixRows=vehBuildGrouped(SB_VEHICLES.filter(_vehOwnerMatch), rowFn, gHd, gSub);
     body=`
       <div id="veh-matrix-scroll" style="overflow:auto;border:1px solid rgba(0,0,0,.08);border-radius:12px;background:#fff;max-height:calc(100vh - var(--topbar,0) - 232px)">
       <div id="veh-matrix-stickytop" style="position:sticky;top:0;z-index:45;background:#fff;padding:10px 12px 8px;box-shadow:0 5px 8px -7px rgba(0,0,0,.22)">
@@ -39643,6 +39636,7 @@ function renderVehicles(){
           <b style="font-size:13px;color:#1B2A55">${esc(monthLbl)}</b>
           <button onclick="vehMonthShift(1)" style="border:none;background:transparent;cursor:pointer;font-size:15px;color:#666;padding:0 6px">&rsaquo;</button>
         </div>
+        ${(function(){ const b=(val,lbl)=>{ const on=_vehOwnerF===val; return `<button onclick="vehSetOwnerF('${val}')" style="border:none;background:${on?'#0F6E56':'transparent'};color:${on?'#fff':'#3F4654'};font-size:11px;font-weight:${on?700:500};padding:5px 12px;cursor:pointer;font-family:inherit">${lbl}</button>`; }; return `<span style="display:inline-flex;border:1px solid #cfe0d8;border-radius:18px;overflow:hidden">${b('all','ทั้งหมด')}${b('company','รถบริษัท+เช่า')}${b('partner','รถร่วม')}</span>`; })()}
         <div style="margin-left:auto;display:flex;gap:9px;font-size:10.5px;color:#8a8a82;flex-wrap:wrap;align-items:center">
           ${((typeof ROUTES!=='undefined'&&ROUTES)||[]).map(r=>`<span title="${esc(r.name)}"><span style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:14px;border-radius:3px;background:${r.color};color:#fff;font-family:'DM Mono',monospace;font-size:8px;font-weight:700;vertical-align:-2px">${_vehRouteAbbr(r.id)}</span> ${esc(_vehRouteShort(r.id))}</span>`).join('')}
           <span style="border-left:1px solid #e5e5e5;padding-left:9px"><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#E9F7EF;border:1px solid #C4E6D5;vertical-align:-1px"></span> พร้อม</span>
