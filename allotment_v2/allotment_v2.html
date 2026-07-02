@@ -4609,7 +4609,6 @@ function renderDash(){
     const routeBooked={};
     const _seatRoutes=new Set();   // seat-mode routes operating this day (count via actual sales bookings, once per route)
     const _capBoats=new Set();     // boats already counted toward capacity (avoid double-count)
-    const _charterBkIds=new Set(); // charter bookings already counted (avoid double-count vs SB_BOOKINGS)
     Object.entries(dOps).forEach(([bid,op])=>{
       if(!op.route) return;
       const b=getBoat(bid); if(!b) return;
@@ -4619,7 +4618,10 @@ function renderDash(){
       if(_s && _s.type==='closed') return;
       capacity+=(b.cap||0); _capBoats.add(bid);
       const isCharter = op.type==='charter' || op.charterBookingId;
-      if(isCharter){ charter+=(op.booked||0); if(op.charterBookingId) _charterBkIds.add(op.charterBookingId); }  // charter kept SEPARATE (own segment)
+      // ⚠ Boat-Op charter ops carry pax on the sales booking (op.booked is usually 0). A LINKED charter
+      // (has charterBookingId) is counted from SB_BOOKINGS below (real pax) — only an UNLINKED manual
+      // Boat-Op charter falls back to op.booked. Boat capacity is already counted above either way.
+      if(isCharter){ if(!op.charterBookingId) charter+=(op.booked||0); }
       else { _seatRoutes.add(op.route); }
     });
     // Seat bookings from actual sales (SB_BOOKINGS v2 + legacy) · once per route
@@ -4638,15 +4640,15 @@ function renderDash(){
         if((t.date||'')!==ds) return;
         const rid=t.routeId; if(!rid) return;
         const r=getRoute(rid); if(!r) return;
-        const _s=(typeof getDayStatus==='function')?getDayStatus(r,ds):null;
-        if(_s && _s.type==='closed') return;   // off-season / closed → don't count
         if(t.bookingMode==='charter'){
-          // charter pax from sales (dedupe against Boat-Op charter already counted)
-          if(!_charterBkIds.has(bk.id)){ charter+=(typeof bkV2PaxAllTot==='function'?bkV2PaxAllTot(t.pax||{}):0); _charterBkIds.add(bk.id); }
+          // charter pax always from the sales booking (source of truth) — counts even if seat-season closed
+          charter+=(typeof bkV2PaxAllTot==='function'?bkV2PaxAllTot(t.pax||{}):0);
           const cbid=t.charterBoatId||(bk.ops&&bk.ops.boatId);
           if(cbid && !_capBoats.has(cbid)){ const cb=getBoat(cbid); if(cb){ capacity+=(cb.cap||0); _capBoats.add(cbid); } }
           return;
         }
+        const _s=(typeof getDayStatus==='function')?getDayStatus(r,ds):null;
+        if(_s && _s.type==='closed') return;   // off-season / closed → don't count seat demand
         if(!_seatRoutes.has(rid) && routeBooked[rid]==null){
           _seatRoutes.add(rid);
           const sc=(typeof getSeatsConsumed==='function')?getSeatsConsumed(rid,ds):0;
