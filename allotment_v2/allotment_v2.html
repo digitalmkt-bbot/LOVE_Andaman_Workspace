@@ -38678,7 +38678,7 @@ function vanJobsSentAt(date,key){ return VANJOB_SENT[date+'::'+key]||null; }
 function vanJobsToggleSent(date,key){ const k=date+'::'+key; if(VANJOB_SENT[k]) delete VANJOB_SENT[k]; else VANJOB_SENT[k]=new Date().toISOString(); vanJobsSentPersist(); const sy=window.scrollY; renderVanJobs(); window.scrollTo(0,sy); }
 function vanJobsSentLbl(iso){ if(!iso)return ''; const dt=new Date(iso); const th=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']; return dt.getDate()+' '+th[dt.getMonth()]+' '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0'); }
 function vanJobsSentCellInner(date,key){ var s=vanJobsSentAt(date,key); return '<label onclick="event.stopPropagation()" style="display:inline-flex;flex-direction:column;align-items:center;gap:1px;cursor:pointer"><input type="checkbox" '+(s?'checked':'')+' onchange="event.stopPropagation();vanJobsToggleSent(\''+date+'\',\''+key+'\')" style="width:17px;height:17px;cursor:pointer;accent-color:#0F6E56"><span style="font-size:8.5px;'+(s?'color:#0F6E56;font-weight:700':'color:#c2c0b7')+';white-space:nowrap;margin-top:1px">'+(s?vanJobsSentLbl(s):'ยังไม่ส่ง')+'</span></label>'; }
-function vanJobsBookingsFor(date, vid, leg){ const ret=leg==='ret'; const out=[]; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; const has=(b.trips||[]).some(t=>(t.date||'')===date); if(!has)return; let inVan; if(ret){ inVan=(b.ops&&Array.isArray(b.ops.vanSplits)&&b.ops.vanSplits.length)?b.ops.vanSplits.some(s=>s.vanReturnId===vid&&s.vanReturnId!==s.vanId):(b.ops&&b.ops.vanReturnId===vid&&b.ops.vanReturnId!==b.ops.vanId); } else { inVan=(b.ops&&Array.isArray(b.ops.vanSplits)&&b.ops.vanSplits.length)?b.ops.vanSplits.some(s=>s.vanId===vid):(b.ops&&b.ops.vanId===vid); } if(inVan&&!out.some(x=>x.id===b.id)) out.push(b); }); return out; }
+function vanJobsBookingsFor(date, vid, routeId, leg){ const ret=leg==='ret'; const out=[]; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; const has=(b.trips||[]).some(t=>(t.date||'')===date && (!routeId||t.routeId===routeId)); if(!has)return; let inVan; if(ret){ inVan=(b.ops&&Array.isArray(b.ops.vanSplits)&&b.ops.vanSplits.length)?b.ops.vanSplits.some(s=>s.vanReturnId===vid&&s.vanReturnId!==s.vanId):(b.ops&&b.ops.vanReturnId===vid&&b.ops.vanReturnId!==b.ops.vanId); } else { inVan=(b.ops&&Array.isArray(b.ops.vanSplits)&&b.ops.vanSplits.length)?b.ops.vanSplits.some(s=>s.vanId===vid):(b.ops&&b.ops.vanId===vid); } if(inVan&&!out.some(x=>x.id===b.id)) out.push(b); }); return out; }
 let _vanJobsExpand={};   // vanId -> expanded? (edit list: Thai pickup + special request)
 let _vanJobsPreview=null;   // preview key: "vanId" (outbound) or "vanId|ret" (return leg)
 function vanJobsOpenPreview(key){ _vanJobsPreview=key; renderVanJobs(); }
@@ -38710,37 +38710,31 @@ function renderVanJobs(){
   (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(!(b.trips||[]).some(t=>(t.date||'')===date))return;
     const t=(b.trips||[]).find(t=>(t.date||'')===date)||{}; const z=t.zone||b.pickupZone||''; const full=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
     const _pk=(b.hotelName||b.pickup||b.pickupArea||'').trim();
-    const _addTo=(map,vid,pax)=>{ (map[vid]=map[vid]||{pax:0,bk:0,zones:{},routes:{},pickups:{}}); map[vid].pax+=pax; map[vid].bk++; if(z)map[vid].zones[z]=1; if(t.routeId)map[vid].routes[t.routeId]=1; if(_pk) map[vid].pickups[_pk]=1; };
+    // a "job" = one van on ONE program(route) that day → key by van~route so a van running 2 programs prints 2 separate job orders
+    const _addTo=(map,vid,pax)=>{ const _k=vid+'~'+(t.routeId||''); (map[_k]=map[_k]||{vid:vid,routeId:t.routeId||'',pax:0,bk:0,zones:{},routes:{},pickups:{}}); map[_k].pax+=pax; map[_k].bk++; if(z)map[_k].zones[z]=1; if(t.routeId)map[_k].routes[t.routeId]=1; if(_pk) map[_k].pickups[_pk]=1; };
     const addVan=(vid,pax)=>_addTo(agg,vid,pax);
     const _selfPick=!!b.pickupSelf;   // ขารับมาเอง → ไม่มีรถไปรับ (ไม่ addVan/ไม่นับ unassigned) · ขากลับยังจัดได้
     if(b.ops&&Array.isArray(b.ops.vanSplits)&&b.ops.vanSplits.length){ b.ops.vanSplits.forEach(s=>{ const hp=+s.pax||0; if(!_selfPick){ if(s.vanId) addVan(s.vanId,hp); else if(z&&z!=='NoTransfer'&&z!=='NT') _addUn(t.routeId,hp); } if(s.vanReturnId && s.vanReturnId!==s.vanId) _addTo(aggRet,s.vanReturnId,hp); }); }
     else { const vid=b.ops&&b.ops.vanId; if(!_selfPick){ if(vid) addVan(vid,full); else if(z&&z!=='NoTransfer'&&z!=='NT') _addUn(t.routeId,full); } const rv=b.ops&&b.ops.vanReturnId; if(rv && rv!==vid) _addTo(aggRet,rv,full); }
   });
-  const allIds=Object.keys(agg);
-  // route options (distinct routeIds across all vans that day)
-  const routeIdSet={}; allIds.forEach(vid=>Object.keys(agg[vid].routes).forEach(r=>routeIdSet[r]=1));
+  const allIds=Object.keys(agg);   // each id = "van~route" job key
+  // route options (distinct routeIds across all jobs that day)
+  const routeIdSet={}; allIds.forEach(k=>{ if(agg[k].routeId) routeIdSet[agg[k].routeId]=1; });
   const rName=r=>((typeof getRoute==='function'?getRoute(r):null)||{}).name||r;
   // unassigned pax broken down by route (which trip still needs a van) · sorted by pax desc
   const unRouteList = Object.keys(unByRoute).sort((a,b)=>unByRoute[b]-unByRoute[a]).map(k=>({name:(k==='_'?'ไม่ระบุเส้นทาง':rName(k)), pax:unByRoute[k]}));
   const unRouteLbl = unRouteList.map(x=>`${x.name} ${x.pax} pax`).join(' · ');
   // apply filters
-  const ids=allIds.filter(vid=>{
-    if(_vanJobsOwner!=='all' && vanJobsOwnerGroup(vid)!==_vanJobsOwner) return false;
-    if(_vanJobsRoute!=='all' && !agg[vid].routes[_vanJobsRoute]) return false;
-    return true;
-  });
+  const _jobMatch=(m)=>{ if(!m) return false; if(_vanJobsOwner!=='all' && vanJobsOwnerGroup(m.vid)!==_vanJobsOwner) return false; if(_vanJobsRoute!=='all' && m.routeId!==_vanJobsRoute) return false; return true; };
+  const ids=allIds.filter(k=>_jobMatch(agg[k]));
   // return-leg jobs (different vehicle than outbound) · same filters
-  const retIds=Object.keys(aggRet).filter(vid=>{
-    if(_vanJobsOwner!=='all' && vanJobsOwnerGroup(vid)!==_vanJobsOwner) return false;
-    if(_vanJobsRoute!=='all' && !aggRet[vid].routes[_vanJobsRoute]) return false;
-    return true;
-  });
-  // one descriptor PER VAN (key = vid) carrying both its outbound (out) and return (ret) legs — unified job order
+  const retIds=Object.keys(aggRet).filter(k=>_jobMatch(aggRet[k]));
+  // one descriptor PER VAN×ROUTE job (key = "van~route") carrying its outbound (out) + return (ret) legs — separate job order per program
   const _vanSeen={}, _vanUnion=[];
-  ids.forEach(vid=>{ if(!_vanSeen[vid]){_vanSeen[vid]=1;_vanUnion.push(vid);} });
-  retIds.forEach(vid=>{ if(!_vanSeen[vid]){_vanSeen[vid]=1;_vanUnion.push(vid);} });
-  const jobList=_vanUnion.map(vid=>({vid, key:vid, out:agg[vid]||null, ret:aggRet[vid]||null, g:agg[vid]||aggRet[vid]}));
-  const totPax=ids.reduce((s,id)=>s+agg[id].pax,0);
+  ids.forEach(k=>{ if(!_vanSeen[k]){_vanSeen[k]=1;_vanUnion.push(k);} });
+  retIds.forEach(k=>{ if(!_vanSeen[k]){_vanSeen[k]=1;_vanUnion.push(k);} });
+  const jobList=_vanUnion.map(k=>{ const _m=agg[k]||aggRet[k]; return {vid:_m.vid, routeId:_m.routeId, key:k, out:agg[k]||null, ret:aggRet[k]||null, g:_m}; });
+  const totPax=ids.reduce((s,k)=>s+agg[k].pax,0);
   let dlbl=date; try{ dlbl=new Date(date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }catch(_){}
   const zoneLbl=z=>(typeof bkV2ZoneLabel==='function'?bkV2ZoneLabel(z):z);
   const PAL=[['#13B96A','#0E9C7F'],['#19A7C9','#1577B0'],['#8B5CF6','#6D3BE0'],['#F25CA2','#E0457F'],['#F2A33C','#E0792B'],['#3B7BE0','#2858C0']];
@@ -38758,7 +38752,7 @@ function renderVanJobs(){
         <th style="${thH};text-align:center;width:90px">ส่งคนขับ</th>
         <th style="${thH};width:104px"></th>
       </tr></thead>
-      <tbody>`+(function(){ const _rowFn=(job,i)=>{ const vid=job.vid; const key=job.key; const v=vehGet(vid)||{}; const _drv=vanJobsDriverInfo(vid,date); const out=job.out, ret=job.ret; const hasOut=!!out, hasRet=!!ret; const g=out||ret; const cap=v.capacity||0; const dispPax=hasOut?out.pax:(ret?ret.pax:0); const over=dispPax>cap; const _zsrc=Object.assign({},(out&&out.zones)||{},(ret&&ret.zones)||{}); const _rsrc=Object.assign({},(out&&out.routes)||{},(ret&&ret.routes)||{}); const zs=Object.keys(_zsrc).map(zoneLbl).join(', '); const rs=Object.keys(_rsrc).map(rName).join(', '); const tag=vanJobsOwnerTag(vid); const expd=!!_vanJobsExpand[key]; const _psrc=Object.assign({},(out&&out.pickups)||{},(ret&&ret.pickups)||{}); const pks=Object.keys(_psrc); const thCount=pks.filter(p=>vanJobsGetPickupTh(p)).length; const gr=hasOut?PAL[i%PAL.length]:['#B07A1F','#9A5B00']; const bks=expd?vanJobsBookingsFor(date,vid,hasOut?'out':'ret'):[]; const outBk=hasOut?out.bk:0, retBk=hasRet?ret.bk:0;
+      <tbody>`+(function(){ const _rowFn=(job,i)=>{ const vid=job.vid; const key=job.key; const routeId=job.routeId; const v=vehGet(vid)||{}; const _drv=vanJobsDriverInfo(vid,date); const out=job.out, ret=job.ret; const hasOut=!!out, hasRet=!!ret; const g=out||ret; const cap=v.capacity||0; const dispPax=hasOut?out.pax:(ret?ret.pax:0); const over=dispPax>cap; const _zsrc=Object.assign({},(out&&out.zones)||{},(ret&&ret.zones)||{}); const _rsrc=Object.assign({},(out&&out.routes)||{},(ret&&ret.routes)||{}); const zs=Object.keys(_zsrc).map(zoneLbl).join(', '); const rs=Object.keys(_rsrc).map(rName).join(', '); const tag=vanJobsOwnerTag(vid); const expd=!!_vanJobsExpand[key]; const _psrc=Object.assign({},(out&&out.pickups)||{},(ret&&ret.pickups)||{}); const pks=Object.keys(_psrc); const thCount=pks.filter(p=>vanJobsGetPickupTh(p)).length; const gr=hasOut?PAL[i%PAL.length]:['#B07A1F','#9A5B00']; const bks=expd?vanJobsBookingsFor(date,vid,routeId,hasOut?'out':'ret'):[]; const outBk=hasOut?out.bk:0, retBk=hasRet?ret.bk:0;
       const bb=expd?'':'border-bottom:1px solid #eef0ec';   // when expanded the panel row carries the divider
       const sel=_vanJobsPreview===key;
       const retBadge=hasRet?`<span style="font-size:9px;font-weight:700;background:#FBE4C9;color:#8a5500;border-radius:5px;padding:1px 7px;margin-left:7px;letter-spacing:.02em">↩ ขากลับ ${retBk}</span>`:'';
@@ -38772,7 +38766,7 @@ function renderVanJobs(){
         <td style="${td};font-size:12.5px;color:#3F4654">${rs?e(rs):'—'}</td>
         <td style="${td};font-size:12.5px;color:#7a7f86">${zs?e(zs):'—'}${over?' <span style="color:#A32D2D;font-weight:700;font-size:10px">เกินจุ</span>':''}</td>
         <td style="${td};text-align:center;padding:0 6px">${vanJobsSentCellInner(date,key)}</td>
-        <td style="${td};text-align:right;padding-right:12px"><button onclick="event.stopPropagation();bkV2VanJobOrder('${date}','${vid}')" title="พิมพ์ใบงาน" onmouseover="this.style.background='#EAF4F0'" onmouseout="this.style.background='transparent'" style="background:transparent;color:#0F6E56;border:none;border-radius:7px;padding:5px 7px;cursor:pointer;font-family:inherit;vertical-align:middle"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 17h2a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2"/><path d="M17 9V5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v4"/><rect x="7" y="13" width="10" height="8" rx="1"/></svg></button> <button onclick="event.stopPropagation();vanJobsToggleExpand('${key}')" title="แก้ไทย/คำขอพิเศษ" style="background:${expd?'#E3F0EA':'#fff'};color:#0F6E56;border:1px solid #cfe0d8;border-radius:8px;padding:6px 9px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">${expd?'▾':'✎'}${thCount?` ${thCount}`:''}</button></td>
+        <td style="${td};text-align:right;padding-right:12px"><button onclick="event.stopPropagation();bkV2VanJobOrder('${date}','${vid}','${routeId}')" title="พิมพ์ใบงาน" onmouseover="this.style.background='#EAF4F0'" onmouseout="this.style.background='transparent'" style="background:transparent;color:#0F6E56;border:none;border-radius:7px;padding:5px 7px;cursor:pointer;font-family:inherit;vertical-align:middle"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 17h2a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2"/><path d="M17 9V5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v4"/><rect x="7" y="13" width="10" height="8" rx="1"/></svg></button> <button onclick="event.stopPropagation();vanJobsToggleExpand('${key}')" title="แก้ไทย/คำขอพิเศษ" style="background:${expd?'#E3F0EA':'#fff'};color:#0F6E56;border:1px solid #cfe0d8;border-radius:8px;padding:6px 9px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">${expd?'▾':'✎'}${thCount?` ${thCount}`:''}</button></td>
       </tr>`;
       const _isPartner=(typeof vanJobsOwnerGroup==='function'?vanJobsOwnerGroup(vid):(v.ownership==='partner'))==='partner'||v.ownership==='partner';
       const _drvO=VANJOB_DRIVER[date+'::'+vid]||{};
@@ -38816,10 +38810,10 @@ function renderVanJobs(){
   const segBtn=(val,lbl)=>`<span onclick="vanJobsSetOwner('${val}')" style="padding:6px 13px;font-size:12px;cursor:pointer;${_vanJobsOwner===val?'background:#0F6E56;color:#fff;font-weight:600':'color:#0F6E56'}${val!=='all'?';border-left:1px solid #cfe0d8':''}">${lbl}</span>`;
   const routeOpts=`<option value="all">ทุกเส้นทาง</option>`+Object.keys(routeIdSet).map(r=>`<option value="${e(r)}" ${_vanJobsRoute===r?'selected':''}>${e(rName(r))}</option>`).join('');
   // ── Fleet-Insights-style header metrics ──
-  const compN=ids.filter(function(v){return vanJobsOwnerGroup(v)==='company';}).length;
-  const partN=ids.filter(function(v){return vanJobsOwnerGroup(v)==='partner';}).length;
-  let thN=0; { const seen={}; ids.forEach(function(vid){ Object.keys((agg[vid]||{}).pickups||{}).forEach(function(pk){ if(seen[pk])return; seen[pk]=1; if(vanJobsGetPickupTh(pk)) thN++; }); }); }
-  const routeVan={}; ids.forEach(function(vid){ Object.keys((agg[vid]||{}).routes||{}).forEach(function(r){ routeVan[r]=(routeVan[r]||0)+1; }); });
+  const compN=ids.filter(function(k){return vanJobsOwnerGroup((agg[k]||{}).vid)==='company';}).length;
+  const partN=ids.filter(function(k){return vanJobsOwnerGroup((agg[k]||{}).vid)==='partner';}).length;
+  let thN=0; { const seen={}; ids.forEach(function(k){ Object.keys((agg[k]||{}).pickups||{}).forEach(function(pk){ if(seen[pk])return; seen[pk]=1; if(vanJobsGetPickupTh(pk)) thN++; }); }); }
+  const routeVan={}; ids.forEach(function(k){ Object.keys((agg[k]||{}).routes||{}).forEach(function(r){ routeVan[r]=(routeVan[r]||0)+1; }); });
   const routeSeg=Object.keys(routeVan).sort(function(a,b){return routeVan[b]-routeVan[a];});
   const _routeColors=['#13B96A','#19A7C9','#8B5CF6','#F25CA2','#BA7517'];
   const _dateStep=`<div style="display:inline-flex;align-items:center;gap:8px;background:#F1EFEA;border-radius:16px;padding:4px 8px"><button onclick="vanJobsDateShift(-1)" style="border:none;background:transparent;cursor:pointer;font-size:15px;color:#888;padding:0 4px">&lsaquo;</button><b style="font-size:12.5px;color:#1A1A1A;min-width:185px;text-align:center">${e(dlbl)}</b><button onclick="vanJobsDateShift(1)" style="border:none;background:transparent;cursor:pointer;font-size:15px;color:#888;padding:0 4px">&rsaquo;</button></div>`;
@@ -38835,7 +38829,7 @@ function renderVanJobs(){
     <div style="display:flex;align-items:flex-start;gap:13px;margin-bottom:14px;flex-wrap:wrap">
       <div style="flex:1;min-width:230px">
         <div style="font-size:13px;color:#bbb;margin-bottom:2px">ใบงานวันนี้</div>
-        <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap"><span style="font-size:40px;font-weight:500;color:#1A1A1A;line-height:1">${ids.length}</span><span style="font-size:14px;color:#888">คัน · ${totPax} pax</span>
+        <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap"><span style="font-size:40px;font-weight:500;color:#1A1A1A;line-height:1">${ids.length}</span><span style="font-size:14px;color:#888">งาน · ${totPax} pax</span>
           <span style="font-size:11px;font-weight:600;background:#E7F5D8;color:#3B6D11;padding:3px 9px;border-radius:11px">▲ ${compN} บริษัท+เช่า</span>${partN?`<span style="font-size:11px;font-weight:600;color:#9A6B00">${partN} รถร่วม</span>`:''}${unTot>0?`<span style="font-size:11px;font-weight:600;color:#C2185B">${unTot} pax ยังไม่จัด</span>`:''}</div>
         <div style="font-size:11.5px;color:#999;margin-top:7px">บริษัท+เช่า ${compN} · รถร่วม ${partN} · กำกับไทย ${thN} จุดรับ · ${Object.keys(routeIdSet).length} เส้นทาง</div>
       </div>
@@ -38851,21 +38845,24 @@ function renderVanJobs(){
     </div>
     ${_segBar?`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:${unTot>0?'12px':'14px'}">${_segBar}</div>`:''}
     ${unTot>0?`<div style="background:#1A1A1A;border-radius:12px;padding:11px 16px;display:flex;align-items:center;gap:10px;margin-bottom:14px"><span style="color:#C8F47C;font-size:11px;font-weight:700;letter-spacing:.04em">◆ ต้องจัดรถ</span><span style="color:#fff;font-size:12.5px">${unTot} pax ยังไม่จัดรถวันนี้ · <b style="color:#C8F47C">${e(unRouteLbl)}</b> — ไปจับกลุ่ม/เลือกรถที่ By trip date</span><button onclick="nav(document.querySelector('[data-view=booking]'))" style="margin-left:auto;background:#C8F47C;color:#1A1A1A;border:none;border-radius:13px;padding:5px 14px;font-size:11px;font-weight:600;cursor:pointer">จัดรถ</button></div>`:''}`;
-  const _pvVid=_vanJobsPreview?String(_vanJobsPreview).split('|')[0]:null;
+  const _pvKey=_vanJobsPreview?String(_vanJobsPreview).split('|')[0]:null;   // "van~route"
+  const _pvVid=_pvKey?_pvKey.split('~')[0]:null;
+  const _pvRoute=_pvKey?(_pvKey.split('~')[1]||''):'';
   const _pvLeg=(_vanJobsPreview&&String(_vanJobsPreview).indexOf('|ret')>=0)?'ret':'out';
+  const _pvRouteNm=_pvRoute?(((typeof getRoute==='function'?getRoute(_pvRoute):null)||{}).name||_pvRoute):'';
   host.innerHTML = `<div style="${_vanJobsPreview?'max-width:none;margin-right:1060px':'max-width:1280px'};transition:margin .15s">
     ${headerFull}
     ${cards}
   </div>${_vanJobsPreview?`
   <div style="position:fixed;top:0;right:0;bottom:0;width:min(1040px,94vw);background:#fff;z-index:601;box-shadow:-12px 0 44px -14px rgba(0,0,0,.28);border-left:1px solid #e3e6e1;display:flex;flex-direction:column">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid #eef0ec;flex:none">
-      <b style="font-size:14px;color:#1B2A55">&#128424; ใบงานรถ · ${e((vehGet(_pvVid)||{}).name||_pvVid)}${_pvLeg==='ret'?' <span style="color:#9A5B00">· ขากลับ</span>':''}</b>
+      <b style="font-size:14px;color:#1B2A55">&#128424; ใบงานรถ · ${e((vehGet(_pvVid)||{}).name||_pvVid)}${_pvRouteNm?` <span style="color:#15396B">· ${e(_pvRouteNm)}</span>`:''}${_pvLeg==='ret'?' <span style="color:#9A5B00">· ขากลับ</span>':''}</b>
       <div style="display:flex;gap:8px">
-        <button onclick="bkV2VanJobOrder('${date}','${_pvVid}','${_pvLeg}')" style="background:#0F6E56;color:#fff;border:none;border-radius:8px;padding:8px 15px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">&#128424; พิมพ์</button>
+        <button onclick="bkV2VanJobOrder('${date}','${_pvVid}','${_pvRoute}','${_pvLeg}')" style="background:#0F6E56;color:#fff;border:none;border-radius:8px;padding:8px 15px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">&#128424; พิมพ์</button>
         <button onclick="vanJobsClosePreview()" title="ปิด" style="background:#fff;border:1px solid #d7dbe2;border-radius:8px;padding:7px 12px;font-size:14px;cursor:pointer;font-family:inherit;color:#666">&#10005;</button>
       </div>
     </div>
-    <div style="flex:1;overflow:auto;padding:20px;background:#EDEFF2">${vanJobsOrderCss(true)}<div class="vjo" id="vjo-page" style="width:1120px;margin:0 auto;background:#fff;padding:24px 26px;border-radius:8px;box-shadow:0 3px 16px rgba(20,40,70,.12)">${vanJobsOrderInner(date,_pvVid,_pvLeg)}</div></div>
+    <div style="flex:1;overflow:auto;padding:20px;background:#EDEFF2">${vanJobsOrderCss(true)}<div class="vjo" id="vjo-page" style="width:1120px;margin:0 auto;background:#fff;padding:24px 26px;border-radius:8px;box-shadow:0 3px 16px rgba(20,40,70,.12)">${vanJobsOrderInner(date,_pvVid,_pvRoute,_pvLeg)}</div></div>
   </div>`:''}`;
   if(_vanJobsPreview){ requestAnimationFrame(function(){ var pg=document.getElementById('vjo-page'); if(pg&&pg.parentElement){ var avail=pg.parentElement.clientWidth-40; var s=Math.min(1, avail/pg.offsetWidth); pg.style.zoom=s; } }); }
 }
@@ -38900,7 +38897,7 @@ function vanJobsOrderCss(scoped){ const p=scoped?'.vjo ':'';
     +'</style>';
 }
 // Inner job-order HTML (header + big route/date band + table + note) · reused by the print popup and the inline right-panel preview
-function vanJobsOrderInner(date, vanId, legIgnored){
+function vanJobsOrderInner(date, vanId, routeId, legIgnored){
   if(typeof bkV2VanGroupHeal==='function') bkV2VanGroupHeal(date);   // ensure grouped bookings have their group's vanId before building the sheet (prevents ตกบุคกิ้งในใบงาน)
   const v=vehGet(vanId)||{};
   const _drv=(typeof vanJobsDriverInfo==='function')?vanJobsDriverInfo(vanId,date):{driver:v.driver||'',phone:v.driverPhone||'',override:false};
@@ -38911,7 +38908,7 @@ function vanJobsOrderInner(date, vanId, legIgnored){
   // OUTBOUND leg = bookings this van picks up (vanId). outVid carried so the return row can show กลับคันเดิม / มาจากรถอื่น.
   const _collect=isRet=>{ const rows=[]; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return; if(isRet && typeof bkV2RetInfo==='function' && bkV2RetInfo(b).selfRet) return;   // ขากลับ "กลับเอง" (drop-off ท่า self-arrive) → ไม่ต้องมีรถไปส่ง → ไม่ขึ้นในใบงานขากลับ
       if(!isRet && b.pickupSelf) return;   // ขารับ "มาเอง" (self-arrive) → ไม่มีรถไปรับ → ไม่ขึ้นในใบงานขาไป
-    (b.trips||[]).forEach(t=>{ if((t.date||'')!==date) return;
+    (b.trips||[]).forEach(t=>{ if((t.date||'')!==date) return; if(routeId && t.routeId!==routeId) return;   // this sheet = one program(route) only
       if(b.ops&&Array.isArray(b.ops.vanSplits)&&b.ops.vanSplits.length){ b.ops.vanSplits.forEach(s=>{ const ov=s.vanId||null; const rv=s.vanReturnId||ov; const hit=isRet?(rv===vanId):(ov===vanId); if(hit) rows.push({b,t,splitPax:+s.pax||0,retId:s.vanReturnId||null,outVid:ov,seq:+s.vanSeq||0}); }); }
       else { const o=b.ops||{}; const ov=o.vanId||null; const rv=o.vanReturnId||ov; const hit=isRet?(rv===vanId):(ov===vanId); if(hit) rows.push({b,t,splitPax:null,retId:o.vanReturnId||null,outVid:ov,seq:+(o.vanSeq)||0}); }
     }); });
@@ -38996,8 +38993,7 @@ function vanJobsOrderInner(date, vanId, legIgnored){
   };
   const out=_section(false), ret=_section(true);
   // ⚠ Late-booking guard — bookings on THIS van's route(s) that day with NO van yet (likely a booking added after the van was arranged → would silently drop off this sheet)
-  const _vanRoutes=new Set(); out.rows.forEach(x=>{ if(x.t&&x.t.routeId) _vanRoutes.add(x.t.routeId); });
-  _vehDayRoutes(v,date).forEach(r=>_vanRoutes.add(r));
+  const _vanRoutes=new Set(); if(routeId){ _vanRoutes.add(routeId); } else { out.rows.forEach(x=>{ if(x.t&&x.t.routeId) _vanRoutes.add(x.t.routeId); }); _vehDayRoutes(v,date).forEach(r=>_vanRoutes.add(r)); }
   let _unaPax=0,_unaBk=0; const _unaTrip={};
   if(_vanRoutes.size){ (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(b.pickupSelf)return;
     (b.trips||[]).forEach(t=>{ if((t.date||'')!==date) return; if(!_vanRoutes.has(t.routeId)) return; const z=t.zone||b.pickupZone||''; if(z==='NoTransfer'||z==='NT') return;
@@ -39035,11 +39031,12 @@ function vanJobsOrderInner(date, vanId, legIgnored){
     ${body}
     <div class="note">หมายเหตุ / Notes: ① ขาไป = รถคันนี้รับจากโรงแรมส่งท่าเรือ · ② ขากลับ = รถคันนี้รับจากท่าเรือส่งจุดหมาย · รายที่ป้าย "↩ ขากลับ โดย ‹รถ›" = ขากลับใช้รถคันอื่น (ดูใบงานของรถคันนั้น)</div>`;
 }
-function bkV2VanJobOrder(date, vanId, leg){
+function bkV2VanJobOrder(date, vanId, routeId, leg){
   const v=vehGet(vanId); if(!v){ alert('Vehicle not found'); return; }
   const e=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const legTitle=leg==='ret'?' · ขากลับ':'';
-  const html='<!doctype html><html><head><meta charset="utf-8"><title>Van Job Order · '+e(v.name||vanId)+legTitle+' · '+e(date)+'</title>'+vanJobsOrderCss(false)+'</head><body>'+vanJobsOrderInner(date,vanId,leg)+'<script>setTimeout(function(){try{window.print()}catch(e){}},350)<\/script></body></html>';
+  const _rn=routeId?(((typeof getRoute==='function'?getRoute(routeId):null)||{}).name||routeId):'';
+  const legTitle=(_rn?(' · '+_rn):'')+(leg==='ret'?' · ขากลับ':'');
+  const html='<!doctype html><html><head><meta charset="utf-8"><title>Van Job Order · '+e(v.name||vanId)+legTitle+' · '+e(date)+'</title>'+vanJobsOrderCss(false)+'</head><body>'+vanJobsOrderInner(date,vanId,routeId,leg)+'<script>setTimeout(function(){try{window.print()}catch(e){}},350)<\/script></body></html>';
   const w=window.open('','_blank'); if(!w){ alert('Please allow pop-ups to print the van job order'); return; }
   w.document.write(html); w.document.close(); w.focus();
 }
