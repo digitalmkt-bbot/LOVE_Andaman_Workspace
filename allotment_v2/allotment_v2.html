@@ -2621,10 +2621,11 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
   border:1px solid rgba(255,255,255,.10) !important;
   box-shadow:0 16px 44px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.10) !important;
 }
-/* day cells → raised glass · keep their state tint/border, just add depth */
+/* day cells → raised liquid glass · gradient sheen over state tint + depth */
 #dash-wrap .dgx-fcell{
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.13), 0 3px 9px rgba(0,0,0,.24) !important;
-  backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
+  background-image:linear-gradient(160deg,rgba(255,255,255,.11),rgba(255,255,255,.02)) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.20), 0 2px 5px rgba(0,0,0,.30), 0 9px 18px rgba(0,0,0,.22) !important;
+  backdrop-filter:blur(5px) saturate(1.15);-webkit-backdrop-filter:blur(5px) saturate(1.15);
 }
 </style>
 <style id="bop-glass-skin">
@@ -5040,6 +5041,7 @@ function renderDash(){
     if(sc<30 && sc>0) return 'rgba(232,74,63,.08)';
     return 'transparent';
   };
+  const THAI_DAY=['#FF6B5E','#F5D84A','#FF7FB0','#6FD07F','#FFA24D','#5FB4F0','#B98BE0'];   // สีประจำวัน อา·จ·อ·พ·พฤ·ศ·ส (ปรับให้อ่านบนพื้นเข้ม)
   const fsCells=fleetScoreData.map((d,i)=>{
     const isTdy=i===todayIdxFS;
     const pct=weekMaxPax>0?Math.round(d.pax/weekMaxPax*100):0;   // relative fill vs busiest day → same colour tiers
@@ -5047,7 +5049,7 @@ function renderDash(){
     const isAlert=pct<30 && d.pax>0;
     return `<div class="dgx-fcell" style="position:relative;background:${fsBg(pct,isTdy)};border:1px solid ${fsBorder(pct,isTdy)};border-radius:9px;padding:7px 3px 6px;text-align:center;min-width:0">
       ${isAlert?`<span style="position:absolute;top:3px;right:3px;width:5px;height:5px;background:#E84A3F;border-radius:50%;box-shadow:0 0 4px rgba(232,74,63,.6)"></span>`:''}
-      <div style="font-size:8px;color:${isTdy?dx.lime:isAlert?'#FF8B7F':dx.brownMute};letter-spacing:.06em;text-transform:uppercase;font-weight:600">${WD_EN[d.dt.getDay()].slice(0,3)}</div>
+      <div style="font-size:8px;color:${THAI_DAY[d.dt.getDay()]};letter-spacing:.06em;text-transform:uppercase;font-weight:700">${WD_EN[d.dt.getDay()].slice(0,3)}</div>
       <div style="font-size:8.5px;color:${dx.brownMute};margin-top:1px;font-variant-numeric:tabular-nums">${d.dt.getDate()}</div>
       <div style="font-size:14px;font-weight:700;color:${fsNumColor(pct,isTdy)};margin-top:5px;font-variant-numeric:tabular-nums;letter-spacing:-.02em">${d.pax}</div>
       <div style="margin-top:5px;height:3px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden">
