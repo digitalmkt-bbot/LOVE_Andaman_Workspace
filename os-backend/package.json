@@ -1,0 +1,17 @@
+{
+  "name": "os-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "Blob <-> operation_schemas adapter backend (option 1). Client stays on the JSON blob; data lives in relational tables.",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test",
+    "test:staging": "node scripts/roundtrip_staging.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.11.5",
+    "dotenv": "^16.4.5"
+  }
+}
