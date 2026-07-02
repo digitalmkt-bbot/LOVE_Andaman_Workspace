@@ -1,0 +1,12 @@
+{
+  "name": "love-andaman-db",
+  "private": true,
+  "type": "module",
+  "description": "Relational DB layer (migrations + concurrency checks) for the PostgREST backend",
+  "scripts": {
+    "test": "node test_seat_lock_race.mjs"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  }
+}

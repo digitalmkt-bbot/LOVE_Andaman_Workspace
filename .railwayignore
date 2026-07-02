@@ -1,0 +1,14 @@
+# server.js runtime only — skip everything it doesn't serve
+db/
+os-backend/
+database_migration/
+BACKUP/
+data_exports/
+allotment_v2/BACKUP/
+allotment_v2/data_exports/
+*.bak
+server.js.bak
+mockup_*.html
+MOCKUP_*.html
+departure_*.html
+*.xlsx
