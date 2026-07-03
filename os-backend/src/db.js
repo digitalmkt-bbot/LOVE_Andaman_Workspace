@@ -1,5 +1,7 @@
 'use strict';
-const { Pool } = require('pg');
+const pg = require('pg');
+const { Pool } = pg;
+pg.types.setTypeParser(20, (v) => (v == null ? null : Number(v)));   // int8 -> Number (default string breaks blob math)
 const cfg = require('./config');
 
 let pool = null;

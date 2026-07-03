@@ -6,7 +6,10 @@ const path   = require('path');
 const crypto = require('crypto');
 
 let Pool = null;
-try { Pool = require('pg').Pool; } catch(e){ console.warn('[db] pg not installed'); }
+try {
+  const pg = require('pg'); Pool = pg.Pool;
+  pg.types.setTypeParser(20, v => v == null ? null : Number(v));   // int8 -> Number (default is string → the app string-concatenates caps/pax)
+} catch(e){ console.warn('[db] pg not installed'); }
 
 const ROOT   = __dirname;
 const PORT   = process.env.PORT || 3000;
