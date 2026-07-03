@@ -52491,7 +52491,7 @@ function renderDocCheck(){
     const sel=_docCheck.openId===b.id;
     return `<tr onclick="docCheckOpen('${e(b.id)}')" style="cursor:pointer;border-bottom:1px solid #eef0ec;${sel?'background:#EAF3FB':''}">
       <td style="padding:9px 11px;font-size:12.5px;font-weight:600;color:#15396B">${e(b.voucherRef||b.code||b.id)}</td>
-      <td style="padding:9px 11px;font-size:12.5px;color:#3F4654">${e(ag?ag.name:'-')}</td>
+      <td style="padding:6px 11px">${ag?(function(){var _c=(typeof bkV2AgentColor==='function')?bkV2AgentColor(b.agentId):'#EAF3FB';var _i=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(_c):'#1B2A55';return `<span style="background:${_c};color:${_i};padding:5px 11px;border-radius:8px;font-size:12px;font-weight:600;display:inline-block;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e(ag.name)}</span>`;})():'<span style="color:#3F4654">-</span>'}</td>
       <td style="padding:9px 11px;font-size:12.5px;color:#1B2A55;font-weight:600">${e(b.leadPax||'-')}</td>
       <td style="padding:9px 11px;font-size:12px;color:#5a6b62">${e(rName(t.routeId))}</td>
       <td style="padding:9px 11px;text-align:center;font-size:13px;font-weight:700;color:#15396B">${pax}</td>
@@ -52522,6 +52522,8 @@ function _docCheckDrawer(bkId, e, rName){
   const dc=b.docCheck||{items:{}}; const items=dc.items||{};
   const files=(b.attachments||[]);
   const _pt=ag&&ag.payType; const payLbl=_pt==='proforma'?'Pro Forma':_pt==='cot'?'Cash on tour':_pt==='invoice'?'Invoice (credit)':(_pt?String(_pt):'-');
+  const _agc=(typeof bkV2AgentColor==='function')?bkV2AgentColor(b.agentId):'#EAF3FB'; const _agi=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(_agc):'#1B2A55';
+  const sm=b.specialMeals||{}; const _diet=[]; if(+sm.veg)_diet.push('มังสวิรัติ '+sm.veg); if(+sm.vegan)_diet.push('วีแกน '+sm.vegan); if(+sm.halal)_diet.push('ฮาลาล '+sm.halal); const _al=((typeof bkV2AllergyText==='function')?bkV2AllergyText(sm):'')||sm.allergies||''; if(_al)_diet.push('แพ้: '+_al); const dietStr=_diet.length?e(_diet.join(' · ')):'-';
   const fld=(lbl,val)=>`<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid #f0f2ee"><span style="flex:0 0 84px;font-size:10px;color:#8a8a82;text-transform:uppercase;letter-spacing:.03em;font-weight:600">${e(lbl)}</span><span style="flex:1;font-size:13px;color:#1B2A55;font-weight:600">${val}</span></div>`;
   const subrow=(l,v)=>`<div style="display:flex;gap:10px;margin-bottom:3px"><span style="flex:0 0 60px;font-size:10px;color:#8a8a82;text-transform:uppercase;letter-spacing:.03em;font-weight:600">${l}</span><span style="flex:1;font-size:13px;color:#1B2A55;font-weight:600">${v}</span></div>`;
   const tripsBlock=(b.trips||[]).map((t,i)=>{ const rn=rName(t.routeId); const p=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; return (i>0?'<div style="border-top:1px dashed #e8eae6;margin:7px 0"></div>':'')+subrow('วันที่',e(t.date||'-'))+subrow('ทริป',e(rn))+subrow('จำนวน',p+' pax'); }).join('')||'-';
@@ -52534,7 +52536,7 @@ function _docCheckDrawer(bkId, e, rName){
   const allTicked=DOCCHK_ITEMS.every(it=>items[it.k]);
   const st=docCheckStatus(b); const bd=_docBadge(st);
   return `<div onclick="docCheckClose()" style="position:fixed;inset:0;background:rgba(15,25,40,.20);z-index:600"></div>
-    <div style="position:fixed;top:0;right:0;bottom:0;width:min(1180px,90vw);background:#fff;z-index:601;box-shadow:-16px 0 54px -12px rgba(0,0,0,.34);border-left:1px solid #e3e6e1;display:flex;flex-direction:column">
+    <div style="position:fixed;top:0;right:0;bottom:0;width:min(1357px,95vw);background:#fff;z-index:601;box-shadow:-16px 0 54px -12px rgba(0,0,0,.34);border-left:1px solid #e3e6e1;display:flex;flex-direction:column">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid #eef0ec;flex:none">
       <div><b style="font-size:14px;color:#1B2A55">${e(b.voucherRef||b.code||b.id)}</b> <span style="font-size:11px;font-weight:700;background:${bd.bg};color:${bd.c};padding:2px 9px;border-radius:8px;margin-left:6px">${bd.t}</span></div>
       <button onclick="docCheckClose()" style="background:#fff;border:1px solid #d7dbe2;border-radius:8px;padding:6px 11px;font-size:14px;cursor:pointer;color:#666">&#10005;</button>
@@ -52544,11 +52546,14 @@ function _docCheckDrawer(bkId, e, rName){
       <div style="overflow-y:auto;padding:16px;border-right:1px solid #e6e8e3">
           <div style="font-size:11px;font-weight:700;color:#185FA5;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">ข้อมูล booking (ในระบบ)</div>
           <div style="background:#fff;border:1px solid #e3e6e1;border-radius:11px;padding:11px 13px">
-            ${fld('Agent',e(ag?ag.name:'-'))}
+            ${fld('Voucher',e(b.voucherRef||b.code||b.id))}
+            ${fld('Agent', ag?`<span style="background:${_agc};color:${_agi};padding:3px 10px;border-radius:7px;display:inline-block;font-weight:600">${e(ag.name)}</span>`:'-')}
             ${fld('Lead',e(b.leadPax||'-')+(b.leadNationality?(' · '+e(b.leadNationality)):''))}
             <div style="padding:8px 0;border-bottom:1px solid #f0f2ee">${tripsBlock}</div>
             ${fld('Pickup',e(b.hotelName||b.pickupArea||'-'))}
             ${fld('Payment',e(payLbl))}
+            ${fld('อาหาร',dietStr)}
+            ${fld('Request',e(b.notes||'-'))}
           </div>
           <div style="font-size:11px;font-weight:700;color:#185FA5;text-transform:uppercase;letter-spacing:.05em;margin:15px 0 6px">ติ๊กตรวจทีละช่อง (เทียบกับเอกสาร)</div>
           ${chkHtml}
