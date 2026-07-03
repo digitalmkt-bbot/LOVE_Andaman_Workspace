@@ -52503,7 +52503,7 @@ function renderDocCheck(){
     const sel=_docCheck.openId===b.id;
     const rowBg=sel?'#EAF3FB':(st==='verified'?'#E7F6EC':'');
     const _sr=e(((b.voucherRef||'')+' '+(b.code||'')+' '+(ag?ag.name:'')+' '+(b.leadPax||'')+' '+rn).toLowerCase());
-    if(rn!==prevR){ prevR=rn; body+=`<tr data-dghdr="${e(rn)}"><td colspan="14" style="background:#EEF3F8;padding:9px 14px;border-top:2px solid #d3deea;border-bottom:1px solid #e3e9f0"><span style="font-size:13px;font-weight:700;color:#15396B">&#128676; ${e(rn)}</span> <span style="font-size:11px;color:#7a8696;font-weight:500">· ${rc[rn]} booking</span></td></tr>`; }
+    if(rn!==prevR){ prevR=rn; body+=`<tr data-dghdr="${e(rn)}"><td colspan="13" style="background:#EEF3F8;padding:9px 14px;border-top:2px solid #d3deea;border-bottom:1px solid #e3e9f0"><span style="font-size:13px;font-weight:700;color:#15396B">&#128676; ${e(rn)}</span> <span style="font-size:11px;color:#7a8696;font-weight:500">· ${rc[rn]} booking</span></td></tr>`; }
     const _agchip=ag?(function(){var _c=(typeof bkV2AgentColor==='function')?bkV2AgentColor(b.agentId):'#EAF3FB';var _i=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(_c):'#1B2A55';return `<span style="background:${_c};color:${_i};padding:5px 11px;border-radius:8px;font-size:12px;font-weight:600;display:inline-block;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e(ag.name)}</span>`;})():'<span style="color:#3F4654">-</span>';
     const stCell=cxl?`<span style="font-size:11px;font-weight:700;background:#FBE3E1;color:#B5271F;padding:3px 10px;border-radius:9px;white-space:nowrap">✕ ยกเลิก</span>`:`<span style="font-size:11px;font-weight:700;background:${bd.bg};color:${bd.c};padding:3px 10px;border-radius:9px;white-space:nowrap">${bd.t}</span>`;
     body+=`<tr data-drow="${_sr}" data-drg="${e(rn)}" onclick="docCheckOpen('${e(b.id)}')" style="cursor:pointer;border-bottom:1px solid #eef0ec;${rowBg?'background:'+rowBg+';':''}${cxl?'opacity:.55;':''}">
@@ -52514,7 +52514,6 @@ function renderDocCheck(){
       <td style="padding:9px 6px;text-align:center;font-size:12.5px;color:#5a6b62">${P('chd')||'·'}</td>
       <td style="padding:9px 6px;text-align:center;font-size:12.5px;color:#5a6b62">${P('inf')||'·'}</td>
       <td style="padding:9px 6px;text-align:center;font-size:12.5px;color:#5a6b62">${P('foc')||'·'}</td>
-      <td style="padding:9px 11px;font-size:12px;font-family:'DM Mono',monospace;color:#3F4654;white-space:nowrap">${e(tm)}</td>
       <td style="padding:9px 11px;font-size:12px;color:#3F4654;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e(b.hotelName||b.pickupArea||'-')}</td>
       <td style="padding:9px 11px;text-align:center;font-size:12px;color:#5a6b62">${e(b.roomNumber||'-')}</td>
       <td style="padding:9px 11px;font-size:12px;color:#5a6b62;white-space:nowrap">${e(zl)}</td>
@@ -52523,10 +52522,10 @@ function renderDocCheck(){
       <td style="padding:9px 11px;text-align:right"><button onclick="event.stopPropagation();docCheckOpen('${e(b.id)}')" style="background:#0F6E56;color:#fff;border:none;border-radius:7px;padding:5px 13px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">ตรวจ</button></td>
     </tr>`;
   });
-  const rowHtml = rows.length ? body : `<tr><td colspan="14" style="padding:40px;text-align:center;color:#b7bcc2;font-size:13px">ไม่มี booking B2B ที่ต้องตรวจในวันนี้</td></tr>`;
+  const rowHtml = rows.length ? body : `<tr><td colspan="13" style="padding:40px;text-align:center;color:#b7bcc2;font-size:13px">ไม่มี booking B2B ที่ต้องตรวจในวันนี้</td></tr>`;
   const table=`<div style="background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:12px;overflow:hidden;overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;min-width:1040px">
-      <thead><tr style="background:#F4F7F5"><th style="${th}">Voucher</th><th style="${th}">Agency</th><th style="${th}">Customer</th><th style="${thc}">AD</th><th style="${thc}">CHD</th><th style="${thc}">INF</th><th style="${thc}">FOC</th><th style="${th}">Time</th><th style="${th}">Pickup</th><th style="${thc}">Room</th><th style="${th}">Zone</th><th style="${thc}">ไฟล์</th><th style="${th}">สถานะ</th><th style="${th}"></th></tr></thead>
+      <thead><tr style="background:#F4F7F5"><th style="${th}">Voucher</th><th style="${th}">Agency</th><th style="${th}">Customer</th><th style="${thc}">AD</th><th style="${thc}">CHD</th><th style="${thc}">INF</th><th style="${thc}">FOC</th><th style="${th}">Pickup</th><th style="${thc}">Room</th><th style="${th}">Zone</th><th style="${thc}">ไฟล์</th><th style="${th}">สถานะ</th><th style="${th}"></th></tr></thead>
       <tbody>${rowHtml}</tbody>
     </table></div>`;
   const header=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;flex-wrap:wrap">
