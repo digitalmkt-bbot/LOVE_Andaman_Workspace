@@ -109,6 +109,7 @@
     var ae=document.activeElement;
     if(ae && (ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT'||ae.isContentEditable)) return true;  // typing in a field
     if(document.querySelector('.la-modal')||document.getElementById('la-umodal')||document.getElementById('la-pmodal')) return true;  // a dialog is open
+    if(document.getElementById('dc-panel-docs')) return true;                           // Document-Check drawer open (reading details) → don't interrupt
     if(Date.now()-_laLastInput < 2000) return true;                                     // interacted within last 2s (snappy · SSE pushes instantly)
     return false;
   }
@@ -52475,7 +52476,25 @@ function _docOcrGetWorker(){
   return window._docOcrWorkerP;
 }
 var _docPreRenderT=null;
-function _docPreThrottleRender(){ if(_docPreRenderT) return; _docPreRenderT=setTimeout(function(){ _docPreRenderT=null; if(_docCheck.openId) renderDocCheck(); },380); }
+// Surgical: update ONLY the #dc-prebar element during OCR (keeps the drawer's document
+// scroll position — no full re-render, no image reflow). Falls back to full render.
+function _docPreThrottleRender(){ if(_docPreRenderT) return; _docPreRenderT=setTimeout(function(){ _docPreRenderT=null;
+  var id=_docPre.activeId, bar=document.getElementById('dc-prebar');
+  if(id && _docCheck.openId===id && bar){ var b=SB_BOOKINGS.find(function(x){return x.id===id;}); if(b){ bar.innerHTML=_docPreBarHTML(b, id); return; } }
+  if(_docCheck.openId) renderDocCheck();
+},380); }
+// Build just the Pre-Check bar (self-contained · used by the drawer + surgical progress updates).
+function _docPreBarHTML(b, bkId){
+  var e=function(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];}); };
+  var dc=b.docCheck||{}, _pre=dc.pre||null, files=(b.attachments||[]);
+  var _running=!!_docPre.running[bkId], _hasImg=files.some(function(a){return /^image\//.test(a.mime||'');});
+  if(_running){ return `<div style="background:#EAF3FB;border:1px solid #BFDCF2;border-radius:9px;padding:9px 11px;margin-bottom:9px;font-size:12px;color:#185FA5;font-weight:600;display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:14px;height:14px;border:2px solid #BFDCF2;border-top-color:#185FA5;border-radius:50%;animation:docspin .8s linear infinite"></span>กำลังอ่านเอกสารด้วย OCR… ${Math.round((_docPre.prog||0)*100)}%</div>`; }
+  if(_pre&&_pre.error){ return `<div style="background:#FBE7E5;border:1px solid #E7B3AE;border-radius:9px;padding:9px 11px;margin-bottom:9px;font-size:12px;color:#B5271F"><b>Pre-Check ไม่สำเร็จ:</b> ${e(_pre.error)} <button onclick="docCheckRunPre('${e(bkId)}')" style="margin-left:6px;background:#fff;border:1px solid #E7B3AE;border-radius:7px;padding:3px 9px;font-size:11px;font-weight:700;color:#B5271F;cursor:pointer;font-family:inherit">ลองใหม่</button></div>`; }
+  if(_pre&&_pre.summary){ var s=_pre.summary; return `<div style="background:#F0F7F3;border:1px solid #CFE7DA;border-radius:9px;padding:9px 11px;margin-bottom:9px"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><span style="font-size:12px;color:#0F6E56;font-weight:700">⚡ Pre-Check (OCR): ตรง ${s.match} · อาจตรง ${s.maybe} · ไม่ตรง ${s.mismatch} · ไม่พบ ${s.none}</span><button onclick="docCheckRunPre('${e(bkId)}')" style="background:#fff;border:1px solid #CFE7DA;border-radius:7px;padding:3px 10px;font-size:11px;font-weight:700;color:#0F6E56;cursor:pointer;font-family:inherit">🔄 ตรวจใหม่</button></div><div style="font-size:10.5px;color:#6b7280;margin-top:4px">ระบบติ๊กช่องที่ตรงให้อัตโนมัติ — โปรดตรวจขั้นสุดท้ายก่อนกด ✅${_pre.autoTick===false?' · (โหมดดูอย่างเดียว: ไม่ติ๊กให้)':''}</div></div>`; }
+  if(_hasImg){ return `<div style="margin-bottom:9px"><button onclick="docCheckRunPre('${e(bkId)}')" style="width:100%;background:#0F6E56;color:#fff;border:none;border-radius:9px;padding:9px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">⚡ Pre-Check ด้วย OCR (เทียบเอกสารอัตโนมัติ)</button></div>`; }
+  if(files.length){ return `<div style="background:#F1F2EF;border:1px solid #e3e6e1;border-radius:9px;padding:8px 11px;margin-bottom:9px;font-size:11.5px;color:#8a8a82">Pre-Check รองรับเฉพาะเอกสารรูปภาพ (PDF ต้องตรวจมือ)</div>`; }
+  return '';
+}
 
 // Run OCR + match for one booking (async · re-renders when done).
 function docCheckRunPre(bkId){
@@ -52624,6 +52643,14 @@ function docCheckFilterRows(){ const host=document.getElementById('doccheck-host
 function docCheckNav(dir){ const ids=_docCheckOrdered(_docCheck.date).map(r=>r.bk.id); const i=ids.indexOf(_docCheck.openId); if(i<0) return; const ni=i+dir; if(ni<0||ni>=ids.length) return; _docCheck.openId=ids[ni]; renderDocCheck(); }
 function renderDocCheck(){
   const host=document.getElementById('doccheck-host'); if(!host) return;
+  // ── scroll-keep: remember where the user was reading so a re-render (cloud soft-refresh,
+  //    filter, tick, OCR done) does NOT bounce the page/drawer to the top ──
+  const _mn=document.querySelector('main'); const _scMn=_mn?_mn.scrollTop:0, _scW=window.scrollY||0;
+  const _pL=document.getElementById('dc-panel-left'), _pR=document.getElementById('dc-panel-docs');
+  const _scL=_pL?_pL.scrollTop:0, _scR=_pR?_pR.scrollTop:0;
+  const _restoreScroll=()=>{ try{ if(_mn&&_scMn) _mn.scrollTop=_scMn; if(_scW) window.scrollTo(0,_scW);
+    const l=document.getElementById('dc-panel-left'); if(l&&_scL) l.scrollTop=_scL;
+    const r=document.getElementById('dc-panel-docs'); if(r&&_scR) r.scrollTop=_scR; }catch(_){} };
   const e=s=>String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
   const date=_docCheck.date;
   const allRows=_docCheckList(date);
@@ -52683,6 +52710,7 @@ function renderDocCheck(){
   </div>`;
   const drawer = _docCheck.openId ? _docCheckDrawer(_docCheck.openId, e, rName) : '';
   host.innerHTML = `<div>${header}${table}</div>${drawer}`;
+  _restoreScroll(); requestAnimationFrame(_restoreScroll);   // keep reading position across re-render
   if(_docCheck.search) docCheckFilterRows();
   // Auto-run Pre-Check once when a booking with image attachments is opened (cached on bk.docCheck.pre).
   if(_docCheck.openId){ const _ob=SB_BOOKINGS.find(x=>x.id===_docCheck.openId);
@@ -52716,13 +52744,8 @@ function _docCheckDrawer(bkId, e, rName){
     const evTxt=r?(r.ev?('“'+e(r.ev)+'”'):(r.detail?e(r.detail):'')):'';
     return `<label style="display:flex;align-items:flex-start;gap:9px;padding:7px 9px;border:1px solid ${bc};border-radius:9px;background:${bg};cursor:pointer;margin-bottom:6px"><span onclick="docCheckToggleItem('${e(bkId)}','${it.k}')" style="width:19px;height:19px;border-radius:5px;flex:none;margin-top:1px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;${on?'background:#1B7F4B;color:#fff':'border:1.5px solid #c3c8cf;color:transparent'}">✓</span><span style="flex:1"><span style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span style="font-size:12.5px;color:#1B2A55;font-weight:600">${e(it.label)}</span>${r?_preChip(r.s):''}</span>${evTxt?`<div style="font-size:10.5px;color:#6b7280;margin-top:2px;line-height:1.35">${evTxt}</div>`:''}</span></label>`; }).join('');
   const allTicked=DOCCHK_ITEMS.every(it=>items[it.k]);
-  // ── Pre-Check bar (above the checklist) ──
-  let preBar='';
-  if(_running){ preBar=`<div style="background:#EAF3FB;border:1px solid #BFDCF2;border-radius:9px;padding:9px 11px;margin-bottom:9px;font-size:12px;color:#185FA5;font-weight:600;display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:14px;height:14px;border:2px solid #BFDCF2;border-top-color:#185FA5;border-radius:50%;animation:docspin .8s linear infinite"></span>กำลังอ่านเอกสารด้วย OCR… ${Math.round((_docPre.prog||0)*100)}%</div>`; }
-  else if(_pre&&_pre.error){ preBar=`<div style="background:#FBE7E5;border:1px solid #E7B3AE;border-radius:9px;padding:9px 11px;margin-bottom:9px;font-size:12px;color:#B5271F"><b>Pre-Check ไม่สำเร็จ:</b> ${e(_pre.error)} <button onclick="docCheckRunPre('${e(bkId)}')" style="margin-left:6px;background:#fff;border:1px solid #E7B3AE;border-radius:7px;padding:3px 9px;font-size:11px;font-weight:700;color:#B5271F;cursor:pointer;font-family:inherit">ลองใหม่</button></div>`; }
-  else if(_pre&&_pre.summary){ const s=_pre.summary; preBar=`<div style="background:#F0F7F3;border:1px solid #CFE7DA;border-radius:9px;padding:9px 11px;margin-bottom:9px"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><span style="font-size:12px;color:#0F6E56;font-weight:700">⚡ Pre-Check (OCR): ตรง ${s.match} · อาจตรง ${s.maybe} · ไม่ตรง ${s.mismatch} · ไม่พบ ${s.none}</span><button onclick="docCheckRunPre('${e(bkId)}')" style="background:#fff;border:1px solid #CFE7DA;border-radius:7px;padding:3px 10px;font-size:11px;font-weight:700;color:#0F6E56;cursor:pointer;font-family:inherit">🔄 ตรวจใหม่</button></div><div style="font-size:10.5px;color:#6b7280;margin-top:4px">ระบบติ๊กช่องที่ตรงให้อัตโนมัติ — โปรดตรวจขั้นสุดท้ายก่อนกด ✅${_pre.autoTick===false?' · (โหมดดูอย่างเดียว: ไม่ติ๊กให้)':''}</div></div>`; }
-  else if(_hasImg){ preBar=`<div style="margin-bottom:9px"><button onclick="docCheckRunPre('${e(bkId)}')" style="width:100%;background:#0F6E56;color:#fff;border:none;border-radius:9px;padding:9px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">⚡ Pre-Check ด้วย OCR (เทียบเอกสารอัตโนมัติ)</button></div>`; }
-  else if(files.length){ preBar=`<div style="background:#F1F2EF;border:1px solid #e3e6e1;border-radius:9px;padding:8px 11px;margin-bottom:9px;font-size:11.5px;color:#8a8a82">Pre-Check รองรับเฉพาะเอกสารรูปภาพ (PDF ต้องตรวจมือ)</div>`; }
+  // ── Pre-Check bar (surgical-updatable · id="dc-prebar") ──
+  const preBar=`<div id="dc-prebar">${_docPreBarHTML(b, bkId)}</div>`;
   const st=docCheckStatus(b); const bd=_docBadge(st);
   const _ids=_docCheckOrdered(_docCheck.date).map(r=>r.bk.id); const _idx=_ids.indexOf(bkId); const _hasP=_idx>0, _hasN=_idx>=0&&_idx<_ids.length-1;
   return `<div onclick="docCheckClose()" style="position:fixed;inset:0;background:rgba(15,25,40,.20);z-index:600"></div>
@@ -52738,7 +52761,7 @@ function _docCheckDrawer(bkId, e, rName){
     </div>
     <div style="flex:1;display:grid;grid-template-columns:360px 1fr;overflow:hidden;background:#F6F7F5">
       <!-- LEFT · pinned (short content · does not scroll with the docs) -->
-      <div style="overflow-y:auto;padding:16px;border-right:1px solid #e6e8e3">
+      <div id="dc-panel-left" style="overflow-y:auto;padding:16px;border-right:1px solid #e6e8e3">
           <div style="font-size:11px;font-weight:700;color:#185FA5;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">ข้อมูล booking (ในระบบ)</div>
           <div style="background:#fff;border:1px solid #e3e6e1;border-radius:11px;padding:11px 13px">
             ${fld('Voucher',e(b.voucherRef||b.code||b.id))}
@@ -52761,7 +52784,7 @@ function _docCheckDrawer(bkId, e, rName){
           ${(dc.by)?`<div style="font-size:10.5px;color:#8a8a82;margin-top:8px;text-align:center">ล่าสุดโดย ${e(dc.by)}${dc.at?(' · '+e(String(dc.at).slice(0,16).replace('T',' '))):''}</div>`:''}
       </div>
       <!-- RIGHT · documents (scrolls) -->
-      <div style="overflow-y:auto;padding:16px">
+      <div id="dc-panel-docs" style="overflow-y:auto;padding:16px">
           <div style="font-size:11px;font-weight:700;color:#185FA5;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">เอกสารแนบ (${files.length})</div>
           ${fileHtml}
       </div>
