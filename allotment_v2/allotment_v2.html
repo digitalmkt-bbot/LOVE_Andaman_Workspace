@@ -3482,7 +3482,7 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
     <div id="view-boatassign" class="view"><div id="boatassign-host"></div></div>
     <div id="view-vehicles" class="view"><div id="vehicles-host"></div></div>
     <div id="view-vanjobs" class="view"><div id="vanjobs-host"></div></div>
-    <div id="view-doccheck" class="view"><div id="doccheck-host"></div></div>
+    <div id="view-doccheck" class="view"><style>@keyframes docspin{to{transform:rotate(360deg)}}</style><div id="doccheck-host"></div></div>
     <div id="view-accounting" class="view">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px;padding:6px 4px 14px">
         <div><h1 style="font-size:24px;font-weight:700;letter-spacing:-.02em;color:var(--fd-ink);margin:0">Accounting <span style="font-size:11px;font-weight:500;color:var(--fd-ink-soft);background:#fff;padding:3px 10px;border-radius:14px;border:1px solid var(--fd-line);margin-left:8px;text-transform:uppercase;letter-spacing:.06em;vertical-align:middle">Finance</span></h1>
@@ -52442,6 +52442,150 @@ document.addEventListener('paste', function(e){ try{ if(typeof _bkV2==='undefine
 // ════════ Document Check (sidebar · verify B2B/agent bookings against attached documents) ════════
 const _docCheck = { date: (typeof TODAY_STR!=='undefined'?TODAY_STR:new Date().toISOString().slice(0,10)), filter:'all', openId:null };
 const DOCCHK_ITEMS = [ {k:'route',label:'เส้นทาง / โปรแกรม'},{k:'date',label:'วันเดินทาง'},{k:'lead',label:'ชื่อ'},{k:'pax',label:'จำนวนคน'},{k:'voucher',label:'Voucher / Ref'},{k:'payment',label:'Payment'} ];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// §Doc-Check Pre-Check (OCR auto-compare) · reads the attached image with
+// Tesseract.js then fuzzy-matches each of the 6 checklist fields against the
+// system booking. Auto-ticks high-confidence matches; the user still does the
+// final ✅/⚠ decision. Result cached on bk.docCheck.pre (never re-OCRs on reopen).
+// ─────────────────────────────────────────────────────────────────────────────
+const _docPre = { running:{}, prog:0, activeId:null };
+// Lazy-load the OCR library (network needed · only on first Pre-Check).
+function _docOcrEnsureLib(){
+  if(window.Tesseract) return Promise.resolve();
+  if(window._docOcrLibP) return window._docOcrLibP;
+  window._docOcrLibP = new Promise(function(res,rej){
+    var s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+    s.onload=function(){ res(); };
+    s.onerror=function(){ window._docOcrLibP=null; rej(new Error('OCR library load failed (no network?)')); };
+    document.head.appendChild(s);
+  });
+  return window._docOcrLibP;
+}
+// One shared worker (eng) reused across bookings.
+function _docOcrGetWorker(){
+  if(window._docOcrWorker) return Promise.resolve(window._docOcrWorker);
+  if(window._docOcrWorkerP) return window._docOcrWorkerP;
+  window._docOcrWorkerP = _docOcrEnsureLib().then(function(){
+    return window.Tesseract.createWorker('eng', 1, {
+      logger:function(m){ if(m&&m.status==='recognizing text'){ _docPre.prog=m.progress||0; _docPreThrottleRender(); } }
+    });
+  }).then(function(w){ window._docOcrWorker=w; return w; });
+  return window._docOcrWorkerP;
+}
+var _docPreRenderT=null;
+function _docPreThrottleRender(){ if(_docPreRenderT) return; _docPreRenderT=setTimeout(function(){ _docPreRenderT=null; if(_docCheck.openId) renderDocCheck(); },380); }
+
+// Run OCR + match for one booking (async · re-renders when done).
+function docCheckRunPre(bkId){
+  var b=SB_BOOKINGS.find(function(x){return x.id===bkId;}); if(!b) return;
+  var imgs=(b.attachments||[]).filter(function(a){return /^image\//.test(a.mime||'');});
+  if(!imgs.length){ alert('Pre-Check supports image attachments only (PDF must be checked manually).'); return; }
+  if(_docPre.running[bkId]) return;
+  _docPre.running[bkId]=true; _docPre.prog=0; _docPre.activeId=bkId;
+  renderDocCheck();
+  _docOcrGetWorker().then(function(worker){
+    var chain=Promise.resolve('');
+    imgs.forEach(function(a){ chain=chain.then(function(acc){
+      return worker.recognize('/api/attach/'+encodeURIComponent(a.id)).then(function(r){
+        return acc+'\n'+((r&&r.data&&r.data.text)||'');
+      });
+    }); });
+    return chain;
+  }).then(function(text){
+    var results=_docPreCheckMatch(b, text);
+    var summary={match:0,maybe:0,mismatch:0,none:0};
+    DOCCHK_ITEMS.forEach(function(it){ var s=(results[it.k]||{}).s||'none'; summary[s]=(summary[s]||0)+1; });
+    b.docCheck=b.docCheck||{status:'pending',items:{}};
+    b.docCheck.items=b.docCheck.items||{};
+    var canWrite = !(typeof window.laCanEditArea==='function') || window.laCanEditArea('operations');
+    if(canWrite){ DOCCHK_ITEMS.forEach(function(it){ if(results[it.k]&&results[it.k].s==='match') b.docCheck.items[it.k]=true; }); }
+    b.docCheck.pre={ at:new Date().toISOString(), lang:'eng', autoTick:canWrite, results:results, summary:summary, text:String(text||'').slice(0,3000) };
+    if(canWrite) _docCheckPersist();
+  }).catch(function(err){
+    b.docCheck=b.docCheck||{items:{}};
+    b.docCheck.pre={ at:new Date().toISOString(), error:(err&&err.message)||'OCR failed' };
+  }).then(function(){
+    _docPre.running[bkId]=false; _docPre.activeId=null; renderDocCheck();
+  });
+}
+
+// ── Matcher · returns {key:{s:'match'|'maybe'|'mismatch'|'none', ev, detail}} ──
+function _docPreCheckMatch(b, ocrText){
+  var rName=function(id){ var r=(typeof getRoute==='function'?getRoute(id):null)||{}; return r.name||id||''; };
+  var norm=function(s){ return String(s||'').toLowerCase().replace(/\s+/g,' ').trim(); };
+  var alnum=function(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]/g,''); };
+  var ocrN=norm(ocrText), ocrA=alnum(ocrText);
+  // system side
+  var trips=(b.trips||[]);
+  var chkT = trips.find(function(t){return (t.date||'')===_docCheck.date;}) || trips[0] || {};
+  var paxSys = (typeof bkV2PaxAllTot==='function') ? bkV2PaxAllTot(chkT.pax||{}) : 0;
+  var ag=(typeof sbGetAgent==='function'?sbGetAgent(b.agentId):null);
+  var out={};
+
+  // voucher / ref
+  (function(){ var v=alnum(b.voucherRef||b.code||b.id); if(v.length<4){ out.voucher={s:'none'}; return; }
+    if(ocrA.indexOf(v)>=0){ out.voucher={s:'match', ev:(b.voucherRef||b.code||b.id)}; return; }
+    var tail=v.slice(-8); if(tail.length>=6 && ocrA.indexOf(tail)>=0){ out.voucher={s:'maybe', ev:'…'+tail}; return; }
+    out.voucher={s:'none'};
+  })();
+
+  // date (any trip date found in the doc)
+  (function(){ var months=['january','february','march','april','may','june','july','august','september','october','november','december'];
+    var cands=[];
+    trips.forEach(function(t){ var iso=(t.date||''); var mm=iso.match(/^(\d{4})-(\d{2})-(\d{2})$/); if(!mm) return;
+      var Y=+mm[1], M=+mm[2], D=+mm[3], mon=months[M-1], mon3=mon.slice(0,3);
+      var d=String(D), dd=mm[3], mo=mm[2];
+      cands.push(iso, d+' '+mon+' '+Y, dd+' '+mon+' '+Y, d+' '+mon3+' '+Y, dd+' '+mon3+' '+Y,
+        mon+' '+d+' '+Y, mon3+' '+d+' '+Y, mon+' '+d, mon3+' '+d,
+        dd+'/'+mo+'/'+Y, d+'/'+M+'/'+Y, mo+'/'+dd+'/'+Y, M+'/'+d+'/'+Y, dd+'.'+mo+'.'+Y);
+    });
+    var hit=cands.find(function(c){ return c && ocrN.indexOf(norm(c))>=0; });
+    out.date = hit ? {s:'match', ev:hit} : {s:'none'};
+  })();
+
+  // lead name (token-based · order-independent)
+  (function(){ var toks=norm(b.leadPax).split(' ').filter(function(t){return t.length>=2;});
+    if(!toks.length){ out.lead={s:'none'}; return; }
+    var hit=toks.filter(function(t){return ocrN.indexOf(t)>=0;});
+    if(hit.length===toks.length) out.lead={s:'match', ev:b.leadPax};
+    else if(hit.length>0) out.lead={s:'maybe', ev:hit.join(' ')+' (บางส่วน)'};
+    else out.lead={s:'none'};
+  })();
+
+  // pax count (parse adults/children/infants or total)
+  (function(){ var num=function(re){ var m=ocrN.match(re); return m?parseInt(m[1],10):null; };
+    var ad=num(/(\d+)\s*adult/), ch=num(/(\d+)\s*child/)||num(/(\d+)\s*children/), inf=num(/(\d+)\s*infant/);
+    var docTot=null, evTxt='';
+    if(ad!=null){ docTot=ad+(ch||0)+(inf||0); evTxt=ad+' adult'+(ch?' '+ch+' child':'')+(inf?' '+inf+' infant':''); }
+    else { var px=num(/(\d+)\s*(?:pax|persons?|people|pers\b|ท่าน|คน)/); if(px!=null){ docTot=px; evTxt=px+' pax'; } }
+    if(docTot==null){ out.pax={s:'none', detail:'ระบบ '+paxSys+' pax'}; return; }
+    if(docTot===paxSys) out.pax={s:'match', ev:evTxt};
+    else out.pax={s:'mismatch', detail:'เอกสาร '+docTot+' · ระบบ '+paxSys+' pax'};
+  })();
+
+  // route / program (keyword score)
+  (function(){ var stop={by:1,the:1,and:1,'of':1,to:1,a:1,an:1,trip:1,day:1,tour:1,tours:1,program:1,'&':1,daytrip:1};
+    var kws=[]; trips.forEach(function(t){ norm(rName(t.routeId)).split(/[^a-z0-9]+/).forEach(function(w){ if(w.length>=3 && !stop[w] && kws.indexOf(w)<0) kws.push(w); }); });
+    if(!kws.length){ out.route={s:'none'}; return; }
+    var hit=kws.filter(function(w){ return ocrN.indexOf(w)>=0 || ocrA.indexOf(w)>=0; });
+    var score=hit.length/kws.length;
+    if(score>=0.5) out.route={s:'match', ev:hit.join(' · ')};
+    else if(score>0) out.route={s:'maybe', ev:hit.join(' · ')+' (บางส่วน)'};
+    else out.route={s:'none'};
+  })();
+
+  // payment terms
+  (function(){ var pt=ag&&ag.payType; var kw={ invoice:['invoice','credit'], proforma:['pro forma','proforma','pro-forma'], cot:['cash on tour','cash-on-tour','cash on board','pay on tour'] }[pt]||[];
+    if(!kw.length){ out.payment={s:'none'}; return; }
+    var hit=kw.find(function(k){ return ocrN.indexOf(k)>=0; });
+    out.payment = hit ? {s:'match', ev:hit} : {s:'none'};
+  })();
+
+  return out;
+}
+
 function _docIsB2B(b){ return !!(b && b.schemaVer===2 && b.agentId); }   // B2B/agent bookings only
 function docCheckStatus(bk){ const dc=bk&&bk.docCheck; if(dc&&dc.status) return dc.status; const n=((bk&&bk.attachments)||[]).length; return n?'pending':'nofiles'; }
 function _docBadge(st){ if(st==='verified') return {t:'✅ ตรวจแล้ว',bg:'#E6F5EA',c:'#1B7F4B'}; if(st==='issue') return {t:'⚠ มีปัญหา',bg:'#FCEBEB',c:'#B5271F'}; if(st==='pending') return {t:'⏳ รอตรวจ',bg:'#FFF6E0',c:'#8A5B00'}; return {t:'📄 ยังไม่แนบ',bg:'#F0F0EC',c:'#8a8a82'}; }
@@ -52540,6 +52684,12 @@ function renderDocCheck(){
   const drawer = _docCheck.openId ? _docCheckDrawer(_docCheck.openId, e, rName) : '';
   host.innerHTML = `<div>${header}${table}</div>${drawer}`;
   if(_docCheck.search) docCheckFilterRows();
+  // Auto-run Pre-Check once when a booking with image attachments is opened (cached on bk.docCheck.pre).
+  if(_docCheck.openId){ const _ob=SB_BOOKINGS.find(x=>x.id===_docCheck.openId);
+    if(_ob && !(_ob.docCheck&&_ob.docCheck.pre) && !_docPre.running[_ob.id] && (_ob.attachments||[]).some(a=>/^image\//.test(a.mime||''))){
+      setTimeout(()=>docCheckRunPre(_ob.id),120);
+    }
+  }
 }
 function _docCheckDrawer(bkId, e, rName){
   const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return '';
@@ -52557,8 +52707,22 @@ function _docCheckDrawer(bkId, e, rName){
       <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 11px;background:#F7F8F6;border-bottom:1px solid #eef0ec"><span style="font-size:12px;color:#3F4654;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.kind==='capture'?'🖥':a.kind==='paste'?'📋':'📎'} ${e(a.name||'file')}</span><a href="${url}" target="_blank" rel="noopener" style="font-size:11.5px;color:#185FA5;text-decoration:none;flex:none;margin-left:8px">เปิดเต็ม ↗</a></div>
       ${isImg?`<a href="${url}" target="_blank" rel="noopener"><img src="${url}" style="width:100%;display:block"></a>`:isPdf?`<iframe src="${url}" style="width:100%;height:640px;border:none"></iframe>`:`<div style="padding:24px;text-align:center;font-size:12px;color:#8a8a82">📄 ${e(a.name||'file')} — <a href="${url}" target="_blank">เปิด</a></div>`}
     </div>`; }).join('') : `<div style="padding:34px;text-align:center;color:#b7bcc2;font-size:13px;border:1px dashed #d7dbe2;border-radius:10px">ยังไม่มีเอกสารแนบ<br><span style="font-size:11px">แนบได้ในหน้า New Booking (แก้ไข booking นี้)</span></div>`;
-  const chkHtml = DOCCHK_ITEMS.map(it=>{ const on=!!items[it.k]; return `<label style="display:flex;align-items:center;gap:9px;padding:7px 9px;border:1px solid ${on?'#BFE3CC':'#e3e6e1'};border-radius:9px;background:${on?'#EAF7EF':'#fff'};cursor:pointer;margin-bottom:6px"><span onclick="docCheckToggleItem('${e(bkId)}','${it.k}')" style="width:19px;height:19px;border-radius:5px;flex:none;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;${on?'background:#1B7F4B;color:#fff':'border:1.5px solid #c3c8cf;color:transparent'}">✓</span><span style="font-size:12.5px;color:#1B2A55;font-weight:600">${e(it.label)}</span></label>`; }).join('');
+  // ── Pre-Check (OCR) state for this booking ──
+  const _pre = dc.pre||null; const _preRes=(_pre&&_pre.results)||{};
+  const _running=!!_docPre.running[bkId];
+  const _hasImg=files.some(a=>/^image\//.test(a.mime||''));
+  const _preChip=(s)=>{ const M={match:['✓ ตรง','#1B7F4B','#EAF7EF'],maybe:['~ อาจตรง','#8A6D00','#FCF3D6'],mismatch:['✕ ไม่ตรง','#B5271F','#FBE7E5'],none:['— ไม่พบในเอกสาร','#8a8a82','#F1F2EF']}; const c=M[s]||M.none; return `<span style="font-size:10px;font-weight:700;color:${c[1]};background:${c[2]};padding:1px 7px;border-radius:7px;white-space:nowrap">${c[0]}</span>`; };
+  const chkHtml = DOCCHK_ITEMS.map(it=>{ const on=!!items[it.k]; const r=_preRes[it.k]; const bc=on?'#BFE3CC':(r&&r.s==='mismatch'?'#E7B3AE':(r&&r.s==='maybe'?'#E9D9A2':'#e3e6e1')); const bg=on?'#EAF7EF':(r&&r.s==='mismatch'?'#FDF1F0':'#fff');
+    const evTxt=r?(r.ev?('“'+e(r.ev)+'”'):(r.detail?e(r.detail):'')):'';
+    return `<label style="display:flex;align-items:flex-start;gap:9px;padding:7px 9px;border:1px solid ${bc};border-radius:9px;background:${bg};cursor:pointer;margin-bottom:6px"><span onclick="docCheckToggleItem('${e(bkId)}','${it.k}')" style="width:19px;height:19px;border-radius:5px;flex:none;margin-top:1px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;${on?'background:#1B7F4B;color:#fff':'border:1.5px solid #c3c8cf;color:transparent'}">✓</span><span style="flex:1"><span style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span style="font-size:12.5px;color:#1B2A55;font-weight:600">${e(it.label)}</span>${r?_preChip(r.s):''}</span>${evTxt?`<div style="font-size:10.5px;color:#6b7280;margin-top:2px;line-height:1.35">${evTxt}</div>`:''}</span></label>`; }).join('');
   const allTicked=DOCCHK_ITEMS.every(it=>items[it.k]);
+  // ── Pre-Check bar (above the checklist) ──
+  let preBar='';
+  if(_running){ preBar=`<div style="background:#EAF3FB;border:1px solid #BFDCF2;border-radius:9px;padding:9px 11px;margin-bottom:9px;font-size:12px;color:#185FA5;font-weight:600;display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:14px;height:14px;border:2px solid #BFDCF2;border-top-color:#185FA5;border-radius:50%;animation:docspin .8s linear infinite"></span>กำลังอ่านเอกสารด้วย OCR… ${Math.round((_docPre.prog||0)*100)}%</div>`; }
+  else if(_pre&&_pre.error){ preBar=`<div style="background:#FBE7E5;border:1px solid #E7B3AE;border-radius:9px;padding:9px 11px;margin-bottom:9px;font-size:12px;color:#B5271F"><b>Pre-Check ไม่สำเร็จ:</b> ${e(_pre.error)} <button onclick="docCheckRunPre('${e(bkId)}')" style="margin-left:6px;background:#fff;border:1px solid #E7B3AE;border-radius:7px;padding:3px 9px;font-size:11px;font-weight:700;color:#B5271F;cursor:pointer;font-family:inherit">ลองใหม่</button></div>`; }
+  else if(_pre&&_pre.summary){ const s=_pre.summary; preBar=`<div style="background:#F0F7F3;border:1px solid #CFE7DA;border-radius:9px;padding:9px 11px;margin-bottom:9px"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><span style="font-size:12px;color:#0F6E56;font-weight:700">⚡ Pre-Check (OCR): ตรง ${s.match} · อาจตรง ${s.maybe} · ไม่ตรง ${s.mismatch} · ไม่พบ ${s.none}</span><button onclick="docCheckRunPre('${e(bkId)}')" style="background:#fff;border:1px solid #CFE7DA;border-radius:7px;padding:3px 10px;font-size:11px;font-weight:700;color:#0F6E56;cursor:pointer;font-family:inherit">🔄 ตรวจใหม่</button></div><div style="font-size:10.5px;color:#6b7280;margin-top:4px">ระบบติ๊กช่องที่ตรงให้อัตโนมัติ — โปรดตรวจขั้นสุดท้ายก่อนกด ✅${_pre.autoTick===false?' · (โหมดดูอย่างเดียว: ไม่ติ๊กให้)':''}</div></div>`; }
+  else if(_hasImg){ preBar=`<div style="margin-bottom:9px"><button onclick="docCheckRunPre('${e(bkId)}')" style="width:100%;background:#0F6E56;color:#fff;border:none;border-radius:9px;padding:9px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">⚡ Pre-Check ด้วย OCR (เทียบเอกสารอัตโนมัติ)</button></div>`; }
+  else if(files.length){ preBar=`<div style="background:#F1F2EF;border:1px solid #e3e6e1;border-radius:9px;padding:8px 11px;margin-bottom:9px;font-size:11.5px;color:#8a8a82">Pre-Check รองรับเฉพาะเอกสารรูปภาพ (PDF ต้องตรวจมือ)</div>`; }
   const st=docCheckStatus(b); const bd=_docBadge(st);
   const _ids=_docCheckOrdered(_docCheck.date).map(r=>r.bk.id); const _idx=_ids.indexOf(bkId); const _hasP=_idx>0, _hasN=_idx>=0&&_idx<_ids.length-1;
   return `<div onclick="docCheckClose()" style="position:fixed;inset:0;background:rgba(15,25,40,.20);z-index:600"></div>
@@ -52587,6 +52751,7 @@ function _docCheckDrawer(bkId, e, rName){
             ${fld('Request',e(b.notes||'-'))}
           </div>
           <div style="font-size:11px;font-weight:700;color:#185FA5;text-transform:uppercase;letter-spacing:.05em;margin:15px 0 6px">ติ๊กตรวจทีละช่อง (เทียบกับเอกสาร)</div>
+          ${preBar}
           ${chkHtml}
           <textarea placeholder="โน้ต / สิ่งที่ไม่ตรง (ถ้ามี)" oninput="docCheckSetNote('${e(bkId)}',this.value)" style="width:100%;box-sizing:border-box;margin-top:8px;border:1px solid #d7dbe2;border-radius:9px;padding:8px 11px;font-size:12.5px;font-family:inherit;resize:vertical" rows="2">${e(dc.note||'')}</textarea>
           <div style="display:flex;gap:8px;margin-top:11px">
