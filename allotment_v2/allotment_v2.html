@@ -2797,6 +2797,10 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2z"/><path d="M9 11l2 2 4-4"/></svg>
       Booking
     </div>
+    <div class="nav-item" data-view="doccheck" onclick="nav(this)" style="border-left:2px solid rgba(130,210,170,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/></svg>
+      ตรวจเอกสาร
+    </div>
     <div class="nav-item" data-view="operation" onclick="nav(this)" style="border-left:2px solid rgba(130,210,170,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
       Boat Operation
@@ -3478,6 +3482,7 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
     <div id="view-boatassign" class="view"><div id="boatassign-host"></div></div>
     <div id="view-vehicles" class="view"><div id="vehicles-host"></div></div>
     <div id="view-vanjobs" class="view"><div id="vanjobs-host"></div></div>
+    <div id="view-doccheck" class="view"><div id="doccheck-host"></div></div>
     <div id="view-accounting" class="view">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px;padding:6px 4px 14px">
         <div><h1 style="font-size:24px;font-weight:700;letter-spacing:-.02em;color:var(--fd-ink);margin:0">Accounting <span style="font-size:11px;font-weight:500;color:var(--fd-ink-soft);background:#fff;padding:3px 10px;border-radius:14px;border:1px solid var(--fd-line);margin-left:8px;text-transform:uppercase;letter-spacing:.06em;vertical-align:middle">Finance</span></h1>
@@ -4299,6 +4304,7 @@ function nav(el){
     else if(view==='rate-types') renderRateTypes();
     else if(view==='b2c') renderB2C();
     else if(view==='booking') renderBooking();
+    else if(view==='doccheck') renderDocCheck();
     else if(view==='pickup-setup') renderPickupSetup();
     else if(view==='staff') renderStaff();
     else if(view==='teammkt') renderTeamMkt();
@@ -47380,6 +47386,9 @@ function bkV2RenderNewBooking(){
         <textarea class="bkv2-nb-input" rows="3" placeholder="e.g. VIP family · prefers speedboat · notify guide for life vest sizes" style="width:100%;box-sizing:border-box;font-family:inherit;resize:vertical;margin-top:4px" oninput="bkV2SetBookingField('notes', this.value)">${(d.notes||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c])}</textarea>
       </div>
 
+      <!-- Document attachments (B2B/agent) -->
+      ${bkV2RenderAttachSection()}
+
       <!-- Combined: Payment + Cash on Tour in ONE card -->
       ${bkV2RenderPaymentSection()}
 
@@ -50151,7 +50160,7 @@ function bkV2RenderTab2(){
             <td>${(bk.voucherRef && bk.voucherRef.trim().toLowerCase()!==String(lead||'').trim().toLowerCase())?`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)}">${esc(bk.voucherRef)}</span>`:'<span class="t2-dim">—</span>'}</td>
             <td style="${bk.agentId?'padding:0':''}">${bk.agentId?(()=>{const _ac=bkV2AgentColor(bk.agentId);return `<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="${esc(norm.agentName)} · คลิกเปลี่ยนสี · Alt+คลิก = สีอัตโนมัติ" style="background:${_ac};color:${bkV2ContrastInk(_ac)};margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;box-shadow:0 1px 2px rgba(0,0,0,.10)">${esc(norm.agentName)}</div>`;})():`<span class="t2-agency">${esc(norm.agentName)}</span>`}</td>
             <td>
-              <span class="t2-lead">${esc(lead)}</span>${pcBadge}${(function(){var _el=(typeof bkV2EditLockActive==='function')&&bkV2EditLockActive(bk);return _el?`<span title="${esc(_el.by)} กำลังแก้ไขอยู่ (~${_el.mins} นาที)" style="background:#E7F0FC;color:#185FA5;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">&#9999; ${esc(_el.by)} แก้อยู่</span>`:'';})()}${a.split?`<span title="booking นี้ถูกแยกขึ้นหลายคัน" style="background:#EDE7FB;color:#5B289A;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">&#9986; แยก ${a.head}</span>`:''}${bk.status==='pending_approval'?`<span title="เกิน capacity · รอผจก.อนุมัติ" style="background:#FCEBEB;color:#A32D2D;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">รออนุมัติ</span>`:''}${(function(){ if(r.cxl||typeof bkV2FindDuplicateBookings!=='function')return''; const _dd=bkV2FindDuplicateBookings(bk,bk.id); if(!_dd.length)return''; const _vc=_dd.map(x=>x.bk.voucherRef||x.bk.code||x.bk.id).slice(0,3).join(', '); const _rs=[...new Set(_dd.reduce((a,x)=>a.concat(x.reasons),[]))].join(' · '); return `<span title="อาจเป็นการลงซ้ำกับ: ${esc(_vc)} (${esc(_rs)}) — ตรวจสอบ/ลบตัวซ้ำ" style="background:#FBE9D6;color:#9A5B00;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:help">&#9888; อาจซ้ำ</span>`; })()}${r.cxl?`<span class="t2-cxlbadge" title="${bk.cancellation?('Cancelled · '+(bk.cancellation.chargeType==='full'?'Full charge':bk.cancellation.chargeType==='partial'?'Partial charge':'No charge')+(bk.cancellation.reason?' · '+esc(bk.cancellation.reason):'')):'Cancelled'}">CXL</span>`:''}
+              <span class="t2-lead">${esc(lead)}</span>${pcBadge}${(function(){var _el=(typeof bkV2EditLockActive==='function')&&bkV2EditLockActive(bk);return _el?`<span title="${esc(_el.by)} กำลังแก้ไขอยู่ (~${_el.mins} นาที)" style="background:#E7F0FC;color:#185FA5;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">&#9999; ${esc(_el.by)} แก้อยู่</span>`:'';})()}${a.split?`<span title="booking นี้ถูกแยกขึ้นหลายคัน" style="background:#EDE7FB;color:#5B289A;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">&#9986; แยก ${a.head}</span>`:''}${bk.status==='pending_approval'?`<span title="เกิน capacity · รอผจก.อนุมัติ" style="background:#FCEBEB;color:#A32D2D;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">รออนุมัติ</span>`:''}${(function(){ if(r.cxl||!bk.agentId||typeof docCheckStatus!=='function') return ''; var _st=docCheckStatus(bk); var _nf=(bk.attachments||[]).length; var _m={verified:['#E6F5EA','#1B7F4B','✅','เอกสารตรวจแล้ว'],issue:['#FCEBEB','#B5271F','⚠','เอกสารมีปัญหา'],pending:['#FFF6E0','#8A5B00','📎','รอตรวจเอกสาร ('+_nf+' ไฟล์)']}[_st]; if(!_m) return ''; return `<span onclick="event.stopPropagation();window._docCheck&&(_docCheck.date='${esc(date)}',_docCheck.openId='${esc(bk.id)}');nav(document.querySelector('[data-view=doccheck]'))" title="${esc(_m[3])} · คลิกไปตรวจเอกสาร" style="background:${_m[0]};color:${_m[1]};font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:pointer">${_m[2]}${_st==='pending'?(' '+_nf):''}</span>`; })()}${(function(){ if(r.cxl||typeof bkV2FindDuplicateBookings!=='function')return''; const _dd=bkV2FindDuplicateBookings(bk,bk.id); if(!_dd.length)return''; const _vc=_dd.map(x=>x.bk.voucherRef||x.bk.code||x.bk.id).slice(0,3).join(', '); const _rs=[...new Set(_dd.reduce((a,x)=>a.concat(x.reasons),[]))].join(' · '); return `<span title="อาจเป็นการลงซ้ำกับ: ${esc(_vc)} (${esc(_rs)}) — ตรวจสอบ/ลบตัวซ้ำ" style="background:#FBE9D6;color:#9A5B00;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:help">&#9888; อาจซ้ำ</span>`; })()}${r.cxl?`<span class="t2-cxlbadge" title="${bk.cancellation?('Cancelled · '+(bk.cancellation.chargeType==='full'?'Full charge':bk.cancellation.chargeType==='partial'?'Partial charge':'No charge')+(bk.cancellation.reason?' · '+esc(bk.cancellation.reason):'')):'Cancelled'}">CXL</span>`:''}
               ${others.length?`<button class="t2-more" onclick="event.stopPropagation();bkV2Tab2TogglePax('${rowId}')"><span id="${rowId}-ic" style="display:inline-block">▾</span> +${others.length}</button>`:'<span class="t2-dim t2-leadonly">lead only</span>'}
               ${(bk.rebook && bk.rebook.to===date)?`<div class="t2-movedin" title="Rescheduled from ${esc(bk.rebook.from)}${bk.rebook.reason==='weather'?' due to weather':(bk.reschedule&&bk.reschedule.reason?(' · '+esc(bk.reschedule.reason)):'')}">&#8617; Moved from ${esc(String(bk.rebook.from).slice(5))}${bk.rebook.reason==='weather'?' · weather':''}</div>`:''}
             </td>
@@ -52377,6 +52386,166 @@ function bkV2GenerateBookingCode(){
   const rand = (Math.random().toString(36).slice(2,6)+'0000').slice(0,4).toUpperCase();
   return `${prefix}${seq}-${rand}`;
 }
+// ── Document attachments (New Booking · B2B/agent) · files stored server-side, booking keeps only refs ──
+function bkV2AttachDraftId(){ return _bkV2.editingId || (_bkV2.newBooking && _bkV2.newBooking.code) || ''; }
+function bkV2AttachListHTML(){
+  const d=_bkV2.newBooking; const list=(d&&Array.isArray(d.attachments))?d.attachments:[];
+  const esc=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+  if(!list.length) return '<div style="font-size:12px;color:var(--ink-soft);padding:12px;border:1px dashed var(--border);border-radius:10px;text-align:center">ยังไม่มีเอกสารแนบ — อัปโหลด / Capture หน้าจอ / วางรูป (Cmd+V)</div>';
+  return '<div style="display:flex;flex-wrap:wrap;gap:10px">'+list.map(a=>{
+    const isImg=/^image\//.test(a.mime||''); const url='/api/attach/'+encodeURIComponent(a.id);
+    const thumb=isImg?`<img src="${url}" loading="lazy" style="width:100%;height:84px;object-fit:cover;display:block">`:`<div style="width:100%;height:84px;display:flex;align-items:center;justify-content:center;background:#F4F2EC;font-size:26px">📄</div>`;
+    const kindLbl=a.kind==='capture'?'🖥':a.kind==='paste'?'📋':'📎';
+    return `<div style="width:120px;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:#fff">
+      <a href="${url}" target="_blank" rel="noopener" title="เปิดดูเต็ม">${thumb}</a>
+      <div style="padding:5px 7px">
+        <div style="font-size:10px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(a.name)}">${kindLbl} ${esc(a.name||'file')}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:3px">
+          <span style="font-size:9px;color:var(--ink-soft)">${a.size?Math.round(a.size/1024)+'KB':''}</span>
+          <button type="button" onclick="bkV2AttachRemove('${esc(a.id)}')" title="ลบ" style="border:none;background:transparent;color:#C0392B;font-size:11px;font-weight:600;cursor:pointer">ลบ</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('')+'</div>';
+}
+function bkV2RenderAttachSection(){
+  const d=_bkV2.newBooking; if(!d) return '';
+  if(!d.agentId) return '';   // เฉพาะ B2B/agent
+  return `<div class="bkv2-nb-sec" id="bkv2-attach-sec">
+    <div class="bkv2-nb-sec-hd"><span class="bkv2-nb-sec-dot"></span><span class="bkv2-nb-sec-ttl">เอกสารแนบ · Documents</span><span style="font-size:10px;font-weight:700;color:#185FA5;background:#EAF3FB;padding:2px 8px;border-radius:10px">B2B</span></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:11px">
+      <label style="display:inline-flex;align-items:center;gap:6px;background:var(--bk-navy);color:#fff;border-radius:9px;padding:7px 13px;font-size:12px;font-weight:600;cursor:pointer">📎 อัปโหลดไฟล์<input type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="bkV2AttachFromInput(this)"></label>
+      <button type="button" onclick="bkV2AttachCapture()" style="display:inline-flex;align-items:center;gap:6px;background:#fff;color:var(--bk-navy);border:1px solid var(--border);border-radius:9px;padding:7px 13px;font-size:12px;font-weight:600;cursor:pointer">🖥 Capture หน้าจอ</button>
+      <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-soft)">📋 ถ่ายหน้าจอ (Cmd+Shift+4) แล้วกด <b style="color:var(--ink)">Cmd+V</b> ตรงนี้ได้เลย</span>
+    </div>
+    <div id="bkv2-attach-list">${bkV2AttachListHTML()}</div>
+  </div>`;
+}
+function bkV2RefreshAttachSection(){ const el=document.getElementById('bkv2-attach-list'); if(el) el.innerHTML=bkV2AttachListHTML(); }
+function _bkV2DownscaleImage(file,maxDim,cb){ try{ const img=new Image(); const url=URL.createObjectURL(file); img.onload=()=>{ let w=img.naturalWidth||img.width,h=img.naturalHeight||img.height; const sc=Math.min(1,maxDim/Math.max(w,h||1)); const cw=Math.max(1,Math.round(w*sc)),ch=Math.max(1,Math.round(h*sc)); const c=document.createElement('canvas'); c.width=cw; c.height=ch; c.getContext('2d').drawImage(img,0,0,cw,ch); c.toBlob(b=>{ URL.revokeObjectURL(url); cb(b,'image/jpeg'); },'image/jpeg',0.85); }; img.onerror=()=>{ URL.revokeObjectURL(url); cb(null); }; img.src=url; }catch(e){ cb(null); } }
+function bkV2AttachUpload(file,kind){
+  const d=_bkV2.newBooking; if(!d||!file) return;
+  const bid=bkV2AttachDraftId(); if(!bid){ alert('เปิดฟอร์ม booking ก่อนแนบไฟล์'); return; }
+  const post=(blob,mime,name)=>{ if(blob&&blob.size>6*1024*1024){ alert('ไฟล์ใหญ่เกิน 6MB · กรุณาย่อ/บีบอัดก่อน'); return; } const fr=new FileReader(); fr.onload=()=>{ const b64=String(fr.result).split(',')[1]||''; fetch('/api/attach',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bookingId:bid,filename:name,mime:mime,dataB64:b64})}).then(r=>r.json()).then(j=>{ if(j&&j.error){ alert('อัปโหลดไม่สำเร็จ: '+j.error); return; } d.attachments=Array.isArray(d.attachments)?d.attachments:[]; d.attachments.push({id:j.id,name:j.filename,mime:j.mime,size:j.size,kind:kind||'upload',by:(window.LA_ME&&(LA_ME.name||LA_ME.username))||'',at:new Date().toISOString()}); bkV2RefreshAttachSection(); }).catch(e=>alert('อัปโหลดไม่สำเร็จ: '+e.message)); }; fr.readAsDataURL(blob); };
+  if(/^image\//.test(file.type||'')){ _bkV2DownscaleImage(file,1600,(b,m)=>{ if(b) post(b,m,((file.name||'image').replace(/\.[^.]+$/,''))+'.jpg'); else post(file,file.type,file.name||'image'); }); }
+  else { post(file,file.type||'application/octet-stream',file.name||'file'); }
+}
+function bkV2AttachFromInput(inp){ const fs=(inp&&inp.files)?Array.prototype.slice.call(inp.files):[]; fs.forEach(f=>bkV2AttachUpload(f,'upload')); if(inp) inp.value=''; }
+function bkV2AttachCapture(){
+  if(!(navigator.mediaDevices&&navigator.mediaDevices.getDisplayMedia)){ alert('เบราว์เซอร์นี้ไม่รองรับ Capture · ใช้ อัปโหลด หรือ วางรูป (Cmd+V) แทน'); return; }
+  navigator.mediaDevices.getDisplayMedia({video:true}).then(stream=>{ const v=document.createElement('video'); v.srcObject=stream; v.muted=true; v.play(); setTimeout(()=>{ try{ const c=document.createElement('canvas'); c.width=v.videoWidth||1280; c.height=v.videoHeight||720; c.getContext('2d').drawImage(v,0,0,c.width,c.height); stream.getTracks().forEach(t=>t.stop()); c.toBlob(b=>{ if(b) bkV2AttachUpload(new File([b],'capture-'+Date.now()+'.jpg',{type:'image/jpeg'}),'capture'); },'image/jpeg',0.9); }catch(e){ try{stream.getTracks().forEach(t=>t.stop());}catch(_){} } },350); }).catch(e=>{});
+}
+function bkV2AttachRemove(id){ const d=_bkV2.newBooking; if(!d) return; if(!confirm('ลบเอกสารนี้?')) return; fetch('/api/attach/'+encodeURIComponent(id),{method:'DELETE'}).catch(()=>{}); d.attachments=(d.attachments||[]).filter(a=>a.id!==id); bkV2RefreshAttachSection(); }
+// paste-to-attach · active only while the New Booking attach section is on screen
+document.addEventListener('paste', function(e){ try{ if(typeof _bkV2==='undefined'||!_bkV2||!_bkV2.newBooking) return; if(!document.getElementById('bkv2-attach-sec')) return; const items=(e.clipboardData&&e.clipboardData.items)||[]; for(let i=0;i<items.length;i++){ const it=items[i]; if(it.type&&it.type.indexOf('image')===0){ const f=it.getAsFile(); if(f){ e.preventDefault(); bkV2AttachUpload(f,'paste'); } } } }catch(_){}; });
+
+// ════════ Document Check (sidebar · verify B2B/agent bookings against attached documents) ════════
+const _docCheck = { date: (typeof TODAY_STR!=='undefined'?TODAY_STR:new Date().toISOString().slice(0,10)), filter:'all', openId:null };
+const DOCCHK_ITEMS = [ {k:'lead',label:'ชื่อลูกค้า'},{k:'pax',label:'จำนวนคน'},{k:'date',label:'วันเดินทาง'},{k:'route',label:'เส้นทาง/โปรแกรม'},{k:'price',label:'ราคา'},{k:'voucher',label:'Voucher / Ref'} ];
+function _docIsB2B(b){ return !!(b && b.schemaVer===2 && b.agentId); }   // B2B/agent bookings only
+function docCheckStatus(bk){ const dc=bk&&bk.docCheck; if(dc&&dc.status) return dc.status; const n=((bk&&bk.attachments)||[]).length; return n?'pending':'nofiles'; }
+function _docBadge(st){ if(st==='verified') return {t:'✅ ตรวจแล้ว',bg:'#E6F5EA',c:'#1B7F4B'}; if(st==='issue') return {t:'⚠ มีปัญหา',bg:'#FCEBEB',c:'#B5271F'}; if(st==='pending') return {t:'⏳ รอตรวจ',bg:'#FFF6E0',c:'#8A5B00'}; return {t:'📄 ยังไม่แนบ',bg:'#F0F0EC',c:'#8a8a82'}; }
+function _docCheckPersist(){ try{ acctPersistBookings(); }catch(e){ try{ const k=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2'); const o=JSON.parse(localStorage.getItem(k)||'{}'); o.sb_bookings=SB_BOOKINGS; localStorage.setItem(k,JSON.stringify(o)); }catch(_){} } }
+function docCheckSetDate(shift){ const d=new Date(_docCheck.date+'T12:00:00'); d.setDate(d.getDate()+shift); _docCheck.date=d.toISOString().slice(0,10); renderDocCheck(); }
+function docCheckToday(){ _docCheck.date=(typeof TODAY_STR!=='undefined'?TODAY_STR:new Date().toISOString().slice(0,10)); renderDocCheck(); }
+function docCheckSetFilter(f){ _docCheck.filter=f; renderDocCheck(); }
+function docCheckOpen(bkId){ _docCheck.openId=bkId; renderDocCheck(); }
+function docCheckClose(){ _docCheck.openId=null; renderDocCheck(); }
+function docCheckToggleItem(bkId,k){ if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return; const bk=SB_BOOKINGS.find(b=>b.id===bkId); if(!bk) return; bk.docCheck=bk.docCheck||{status:'pending',items:{}}; bk.docCheck.items=bk.docCheck.items||{}; bk.docCheck.items[k]=!bk.docCheck.items[k]; _docCheckPersist(); renderDocCheck(); }
+function docCheckSetStatus(bkId,status){ if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return; const bk=SB_BOOKINGS.find(b=>b.id===bkId); if(!bk) return; bk.docCheck=bk.docCheck||{items:{}}; bk.docCheck.status=status; bk.docCheck.by=(typeof laBy==='function'?laBy():'') ; bk.docCheck.at=new Date().toISOString(); _docCheckPersist(); if(typeof bkV2AddHistory==='function') bkV2AddHistory(bk,'edit','Document check · '+(status==='verified'?'✅ verified':status==='issue'?'⚠ issue':status)+((bk.docCheck.note)?(' · '+bk.docCheck.note):''),'DocCheck'); renderDocCheck(); }
+function docCheckSetNote(bkId,val){ const bk=SB_BOOKINGS.find(b=>b.id===bkId); if(!bk) return; bk.docCheck=bk.docCheck||{items:{}}; bk.docCheck.note=val; _docCheckPersist(); }   // no re-render (keep focus)
+function _docCheckList(date){ const out=[]; (SB_BOOKINGS||[]).forEach(b=>{ if(!_docIsB2B(b)) return; if(b.status==='rejected') return; const t=(b.trips||[]).find(tt=>(tt.date||'')===date); if(!t) return; out.push({bk:b,trip:t}); }); out.sort((a,b)=>String(a.bk.voucherRef||a.bk.id).localeCompare(String(b.bk.voucherRef||b.bk.id))); return out; }
+function renderDocCheck(){
+  const host=document.getElementById('doccheck-host'); if(!host) return;
+  const e=s=>String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
+  const date=_docCheck.date;
+  let rows=_docCheckList(date);
+  const cnt={all:rows.length,pending:0,verified:0,issue:0,nofiles:0};
+  rows.forEach(r=>{ cnt[docCheckStatus(r.bk)]=(cnt[docCheckStatus(r.bk)]||0)+1; });
+  if(_docCheck.filter!=='all') rows=rows.filter(r=>docCheckStatus(r.bk)===_docCheck.filter);
+  let dlbl=date; try{ dlbl=new Date(date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }catch(_){}
+  const rName=id=>((typeof getRoute==='function'?getRoute(id):null)||{}).name||id;
+  const chip=(f,lbl,n,col)=>`<span onclick="docCheckSetFilter('${f}')" style="cursor:pointer;font-size:12px;padding:5px 12px;border-radius:16px;font-weight:600;${_docCheck.filter===f?'background:'+(col||'#1B2A55')+';color:#fff':'background:#fff;border:1px solid #dfe3e8;color:#5a6b62'}">${lbl} <b style="font-variant-numeric:tabular-nums">${n}</b></span>`;
+  const th='padding:9px 11px;font-size:10px;color:#7a8088;font-weight:700;text-transform:uppercase;letter-spacing:.04em;text-align:left;border-bottom:1px solid #e6e8e3;white-space:nowrap';
+  const rowHtml = rows.length ? rows.map(r=>{
+    const b=r.bk, t=r.trip; const ag=(typeof sbGetAgent==='function'?sbGetAgent(b.agentId):null);
+    const st=docCheckStatus(b); const bd=_docBadge(st); const nf=(b.attachments||[]).length;
+    const pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
+    const sel=_docCheck.openId===b.id;
+    return `<tr onclick="docCheckOpen('${e(b.id)}')" style="cursor:pointer;border-bottom:1px solid #eef0ec;${sel?'background:#EAF3FB':''}">
+      <td style="padding:9px 11px;font-size:12.5px;font-weight:600;color:#15396B">${e(b.voucherRef||b.code||b.id)}</td>
+      <td style="padding:9px 11px;font-size:12.5px;color:#3F4654">${e(ag?ag.name:'-')}</td>
+      <td style="padding:9px 11px;font-size:12.5px;color:#1B2A55;font-weight:600">${e(b.leadPax||'-')}</td>
+      <td style="padding:9px 11px;font-size:12px;color:#5a6b62">${e(rName(t.routeId))}</td>
+      <td style="padding:9px 11px;text-align:center;font-size:13px;font-weight:700;color:#15396B">${pax}</td>
+      <td style="padding:9px 11px;text-align:center;font-size:12px;color:${nf?'#185FA5':'#c00'}">📎 ${nf}</td>
+      <td style="padding:9px 11px"><span style="font-size:11px;font-weight:700;background:${bd.bg};color:${bd.c};padding:3px 10px;border-radius:9px;white-space:nowrap">${bd.t}</span></td>
+      <td style="padding:9px 11px;text-align:right"><button onclick="event.stopPropagation();docCheckOpen('${e(b.id)}')" style="background:#0F6E56;color:#fff;border:none;border-radius:7px;padding:5px 13px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">ตรวจ</button></td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="8" style="padding:40px;text-align:center;color:#b7bcc2;font-size:13px">ไม่มี booking B2B ที่ต้องตรวจในวันนี้</td></tr>`;
+  const table=`<div style="background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:12px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="background:#F4F7F5"><th style="${th}">Voucher</th><th style="${th}">Agent</th><th style="${th}">Lead</th><th style="${th}">เส้นทาง</th><th style="${th};text-align:center">Pax</th><th style="${th};text-align:center">ไฟล์</th><th style="${th}">สถานะ</th><th style="${th}"></th></tr></thead>
+      <tbody>${rowHtml}</tbody>
+    </table></div>`;
+  const header=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+    <div><div style="font-size:22px;font-weight:700;color:#1A1A1A">📑 ตรวจเอกสาร · Document Check <span style="font-size:11px;font-weight:600;color:#185FA5;background:#EAF3FB;padding:3px 10px;border-radius:12px;vertical-align:middle">B2B / Agent</span></div>
+      <div style="display:flex;gap:8px;margin-top:11px;flex-wrap:wrap">${chip('all','ทั้งหมด',cnt.all)}${chip('pending','⏳ รอตรวจ',cnt.pending||0,'#8A5B00')}${chip('verified','✅ ตรวจแล้ว',cnt.verified||0,'#1B7F4B')}${chip('issue','⚠ มีปัญหา',cnt.issue||0,'#B5271F')}${chip('nofiles','ยังไม่แนบ',cnt.nofiles||0,'#8a8a82')}</div></div>
+    <div style="display:inline-flex;align-items:center;gap:8px;background:#F1EFEA;border-radius:16px;padding:4px 8px"><button onclick="docCheckSetDate(-1)" style="border:none;background:transparent;cursor:pointer;font-size:16px;color:#888;padding:0 5px">&lsaquo;</button><b style="font-size:13px;color:#1A1A1A;min-width:210px;text-align:center">${e(dlbl)}</b><button onclick="docCheckSetDate(1)" style="border:none;background:transparent;cursor:pointer;font-size:16px;color:#888;padding:0 5px">&rsaquo;</button><button onclick="docCheckToday()" style="border:1px solid #d7dbe2;background:#fff;border-radius:12px;padding:4px 11px;font-size:11px;font-weight:600;cursor:pointer;color:#185FA5;margin-left:2px">วันนี้</button></div>
+  </div>`;
+  const drawer = _docCheck.openId ? _docCheckDrawer(_docCheck.openId, e, rName) : '';
+  host.innerHTML = `<div style="${_docCheck.openId?'margin-right:640px;':''}transition:margin .15s">${header}${table}</div>${drawer}`;
+}
+function _docCheckDrawer(bkId, e, rName){
+  const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return '';
+  const ag=(typeof sbGetAgent==='function'?sbGetAgent(b.agentId):null);
+  const dc=b.docCheck||{items:{}}; const items=dc.items||{};
+  const files=(b.attachments||[]);
+  const total=(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0);
+  const paxStr=(b.trips||[]).map(t=>{ const rn=rName(t.routeId); const p=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; return `${e(t.date||'')} · ${e(rn)} · ${p} pax`; }).join('<br>');
+  const fld=(lbl,val)=>`<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid #f0f2ee"><span style="flex:0 0 118px;font-size:11px;color:#8a8a82;text-transform:uppercase;letter-spacing:.03em;font-weight:600">${e(lbl)}</span><span style="flex:1;font-size:13px;color:#1B2A55;font-weight:600">${val}</span></div>`;
+  const fileHtml = files.length ? files.map(a=>{ const url='/api/attach/'+encodeURIComponent(a.id); const isImg=/^image\//.test(a.mime||''); const isPdf=/pdf/i.test(a.mime||'');
+    return `<div style="margin-bottom:12px;border:1px solid #e3e6e1;border-radius:10px;overflow:hidden;background:#fff">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:#F7F8F6;border-bottom:1px solid #eef0ec"><span style="font-size:11.5px;color:#3F4654;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.kind==='capture'?'🖥':a.kind==='paste'?'📋':'📎'} ${e(a.name||'file')}</span><a href="${url}" target="_blank" rel="noopener" style="font-size:11px;color:#185FA5;text-decoration:none;flex:none;margin-left:8px">เปิดเต็ม ↗</a></div>
+      ${isImg?`<a href="${url}" target="_blank" rel="noopener"><img src="${url}" style="width:100%;display:block"></a>`:isPdf?`<iframe src="${url}" style="width:100%;height:420px;border:none"></iframe>`:`<div style="padding:20px;text-align:center;font-size:12px;color:#8a8a82">📄 ${e(a.name||'file')} — <a href="${url}" target="_blank">เปิด</a></div>`}
+    </div>`; }).join('') : `<div style="padding:30px;text-align:center;color:#b7bcc2;font-size:13px;border:1px dashed #d7dbe2;border-radius:10px">ยังไม่มีเอกสารแนบ<br><span style="font-size:11px">แนบได้ในหน้า New Booking (แก้ไข booking นี้)</span></div>`;
+  const chkHtml = DOCCHK_ITEMS.map(it=>{ const on=!!items[it.k]; return `<label style="display:flex;align-items:center;gap:9px;padding:7px 9px;border:1px solid ${on?'#BFE3CC':'#e3e6e1'};border-radius:9px;background:${on?'#EAF7EF':'#fff'};cursor:pointer;margin-bottom:6px"><span onclick="docCheckToggleItem('${e(bkId)}','${it.k}')" style="width:19px;height:19px;border-radius:5px;flex:none;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;${on?'background:#1B7F4B;color:#fff':'border:1.5px solid #c3c8cf;color:transparent'}">✓</span><span style="font-size:12.5px;color:#1B2A55;font-weight:600">${e(it.label)}</span></label>`; }).join('');
+  const allTicked=DOCCHK_ITEMS.every(it=>items[it.k]);
+  const st=docCheckStatus(b); const bd=_docBadge(st);
+  return `<div style="position:fixed;top:0;right:0;bottom:0;width:min(624px,94vw);background:#fff;z-index:601;box-shadow:-12px 0 44px -14px rgba(0,0,0,.28);border-left:1px solid #e3e6e1;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid #eef0ec;flex:none">
+      <div><b style="font-size:14px;color:#1B2A55">${e(b.voucherRef||b.code||b.id)}</b> <span style="font-size:11px;font-weight:700;background:${bd.bg};color:${bd.c};padding:2px 9px;border-radius:8px;margin-left:6px">${bd.t}</span></div>
+      <button onclick="docCheckClose()" style="background:#fff;border:1px solid #d7dbe2;border-radius:8px;padding:6px 11px;font-size:14px;cursor:pointer;color:#666">&#10005;</button>
+    </div>
+    <div style="flex:1;overflow:auto;padding:16px 18px;background:#F6F7F5">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:#185FA5;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">ข้อมูล booking (ในระบบ)</div>
+          <div style="background:#fff;border:1px solid #e3e6e1;border-radius:11px;padding:11px 13px">
+            ${fld('Agent',e(ag?ag.name:'-'))}
+            ${fld('Rate type',e(b.rateTypeRef||'-'))}
+            ${fld('Lead',e(b.leadPax||'-')+(b.leadNationality?(' · '+e(b.leadNationality)):''))}
+            ${fld('Trips / Pax',paxStr||'-')}
+            ${fld('Pickup',e(b.hotelName||b.pickupArea||'-'))}
+            ${fld('Total','฿ '+Math.round(total).toLocaleString())}
+          </div>
+          <div style="font-size:11px;font-weight:700;color:#185FA5;text-transform:uppercase;letter-spacing:.05em;margin:15px 0 6px">ติ๊กตรวจทีละช่อง (เทียบกับเอกสาร)</div>
+          ${chkHtml}
+          <textarea placeholder="โน้ต / สิ่งที่ไม่ตรง (ถ้ามี)" oninput="docCheckSetNote('${e(bkId)}',this.value)" style="width:100%;box-sizing:border-box;margin-top:8px;border:1px solid #d7dbe2;border-radius:9px;padding:8px 11px;font-size:12.5px;font-family:inherit;resize:vertical" rows="2">${e(dc.note||'')}</textarea>
+          <div style="display:flex;gap:8px;margin-top:11px">
+            <button onclick="docCheckSetStatus('${e(bkId)}','verified')" style="flex:1;background:${allTicked?'#1B7F4B':'#9fd3b3'};color:#fff;border:none;border-radius:9px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">✅ ถูกต้อง</button>
+            <button onclick="docCheckSetStatus('${e(bkId)}','issue')" style="flex:1;background:#fff;color:#B5271F;border:1.5px solid #E7B3AE;border-radius:9px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">⚠ มีปัญหา</button>
+          </div>
+          ${(dc.by)?`<div style="font-size:10.5px;color:#8a8a82;margin-top:8px;text-align:center">ล่าสุดโดย ${e(dc.by)}${dc.at?(' · '+e(String(dc.at).slice(0,16).replace('T',' '))):''}</div>`:''}
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:#185FA5;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">เอกสารแนบ (${files.length})</div>
+          ${fileHtml}
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
 // Updates state · only re-renders when key affects UI structure
 // Text inputs use this to avoid losing focus on every keystroke
 const _BKV2_NO_RENDER_KEYS = new Set([
@@ -52826,6 +52995,8 @@ function bkV2CommitBooking(status){
     leadFoc: !!d.leadFoc,
     leadPhone: d.leadPhone,
     leadEmail: d.leadEmail,
+    attachments: Array.isArray(d.attachments) ? d.attachments : [],   // document files (refs · data on server) · §doc-check
+    docCheck: d.docCheck || null,                                      // verification state (set in Document Check view)
     pickupAreaId: d.pickupAreaId,
     pickupSelf: !!d.pickupSelf,
     pickupArea: pickupArea?.name || '',  // denormalized for easy display
