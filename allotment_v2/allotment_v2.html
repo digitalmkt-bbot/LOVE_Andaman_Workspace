@@ -52412,12 +52412,12 @@ function bkV2RenderAttachSection(){
   if(!d.agentId) return '';   // เฉพาะ B2B/agent
   const _mac=_bkV2IsMac(); const _shot=_mac?'Cmd+Shift+4':'Win+Shift+S'; const _paste=_mac?'Cmd+V':'Ctrl+V';
   return `<div class="bkv2-nb-sec" id="bkv2-attach-sec">
-    <div class="bkv2-nb-sec-hd"><span class="bkv2-nb-sec-dot"></span><span class="bkv2-nb-sec-ttl">เอกสารแนบ · Documents</span><span style="font-size:10px;font-weight:700;color:#185FA5;background:#EAF3FB;padding:2px 8px;border-radius:10px">B2B</span></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:11px">
-      <label style="display:inline-flex;align-items:center;gap:6px;background:var(--bk-navy);color:#fff;border-radius:9px;padding:7px 13px;font-size:12px;font-weight:600;cursor:pointer">📎 อัปโหลดไฟล์<input type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="bkV2AttachFromInput(this)"></label>
-      <button type="button" onclick="bkV2AttachCapture()" style="display:inline-flex;align-items:center;gap:6px;background:#fff;color:var(--bk-navy);border:1px solid var(--border);border-radius:9px;padding:7px 13px;font-size:12px;font-weight:600;cursor:pointer">🖥 Capture หน้าจอ</button>
-      <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-soft)">📋 ถ่ายหน้าจอ (${_shot}) แล้วกด <b style="color:var(--ink)">${_paste}</b> ตรงนี้ได้เลย</span>
+    <div class="bkv2-nb-sec-hd"><span class="bkv2-nb-sec-dot"></span><span class="bkv2-nb-sec-ttl">Documents</span><span style="font-size:10px;font-weight:700;color:#185FA5;background:#EAF3FB;padding:2px 8px;border-radius:10px">B2B</span></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <label title="อัปโหลดไฟล์ (PDF / รูป)" style="display:inline-flex;align-items:center;justify-content:center;background:var(--bk-navy);color:#fff;border-radius:9px;width:42px;height:36px;font-size:17px;cursor:pointer">📎<input type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="bkV2AttachFromInput(this)"></label>
+      <button type="button" title="Capture หน้าจอ" onclick="bkV2AttachCapture()" style="display:inline-flex;align-items:center;justify-content:center;background:#fff;color:var(--bk-navy);border:1px solid var(--border);border-radius:9px;width:42px;height:36px;font-size:17px;cursor:pointer">🖥</button>
     </div>
+    <div style="font-size:10.5px;color:var(--ink-soft);line-height:1.5;margin-bottom:10px">📋 ถ่ายหน้าจอ (${_shot}) แล้วกด <b style="color:var(--ink)">${_paste}</b> วางตรงนี้ได้เลย</div>
     <div id="bkv2-attach-list">${bkV2AttachListHTML()}</div>
   </div>`;
 }
@@ -52441,7 +52441,7 @@ document.addEventListener('paste', function(e){ try{ if(typeof _bkV2==='undefine
 
 // ════════ Document Check (sidebar · verify B2B/agent bookings against attached documents) ════════
 const _docCheck = { date: (typeof TODAY_STR!=='undefined'?TODAY_STR:new Date().toISOString().slice(0,10)), filter:'all', openId:null };
-const DOCCHK_ITEMS = [ {k:'lead',label:'ชื่อลูกค้า'},{k:'pax',label:'จำนวนคน'},{k:'date',label:'วันเดินทาง'},{k:'route',label:'เส้นทาง/โปรแกรม'},{k:'price',label:'ราคา'},{k:'voucher',label:'Voucher / Ref'} ];
+const DOCCHK_ITEMS = [ {k:'route',label:'เส้นทาง / โปรแกรม'},{k:'date',label:'วันเดินทาง'},{k:'lead',label:'ชื่อ'},{k:'pax',label:'จำนวนคน'},{k:'voucher',label:'Voucher / Ref'},{k:'payment',label:'Payment'} ];
 function _docIsB2B(b){ return !!(b && b.schemaVer===2 && b.agentId); }   // B2B/agent bookings only
 function docCheckStatus(bk){ const dc=bk&&bk.docCheck; if(dc&&dc.status) return dc.status; const n=((bk&&bk.attachments)||[]).length; return n?'pending':'nofiles'; }
 function _docBadge(st){ if(st==='verified') return {t:'✅ ตรวจแล้ว',bg:'#E6F5EA',c:'#1B7F4B'}; if(st==='issue') return {t:'⚠ มีปัญหา',bg:'#FCEBEB',c:'#B5271F'}; if(st==='pending') return {t:'⏳ รอตรวจ',bg:'#FFF6E0',c:'#8A5B00'}; return {t:'📄 ยังไม่แนบ',bg:'#F0F0EC',c:'#8a8a82'}; }
@@ -52491,17 +52491,17 @@ function renderDocCheck(){
   const header=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;flex-wrap:wrap">
     <div><div style="font-size:22px;font-weight:700;color:#1A1A1A">📑 ตรวจเอกสาร · Document Check <span style="font-size:11px;font-weight:600;color:#185FA5;background:#EAF3FB;padding:3px 10px;border-radius:12px;vertical-align:middle">B2B / Agent</span></div>
       <div style="display:flex;gap:8px;margin-top:11px;flex-wrap:wrap">${chip('all','ทั้งหมด',cnt.all)}${chip('pending','⏳ รอตรวจ',cnt.pending||0,'#8A5B00')}${chip('verified','✅ ตรวจแล้ว',cnt.verified||0,'#1B7F4B')}${chip('issue','⚠ มีปัญหา',cnt.issue||0,'#B5271F')}${chip('nofiles','ยังไม่แนบ',cnt.nofiles||0,'#8a8a82')}</div></div>
-    <div style="display:inline-flex;align-items:center;gap:8px;background:#F1EFEA;border-radius:16px;padding:4px 8px"><button onclick="docCheckSetDate(-1)" style="border:none;background:transparent;cursor:pointer;font-size:16px;color:#888;padding:0 5px">&lsaquo;</button><b style="font-size:13px;color:#1A1A1A;min-width:210px;text-align:center">${e(dlbl)}</b><button onclick="docCheckSetDate(1)" style="border:none;background:transparent;cursor:pointer;font-size:16px;color:#888;padding:0 5px">&rsaquo;</button><button onclick="docCheckToday()" style="border:1px solid #d7dbe2;background:#fff;border-radius:12px;padding:4px 11px;font-size:11px;font-weight:600;cursor:pointer;color:#185FA5;margin-left:2px">วันนี้</button></div>
+    <div style="display:inline-flex;align-items:center;gap:10px;background:#F1EFEA;border-radius:18px;padding:5px 10px"><button onclick="docCheckSetDate(-1)" style="border:none;background:transparent;cursor:pointer;font-size:19px;color:#888;padding:0 5px">&lsaquo;</button><b style="font-size:18px;font-weight:700;color:#1A1A1A;min-width:230px;text-align:center;letter-spacing:-.01em">${e(dlbl)}</b><button onclick="docCheckSetDate(1)" style="border:none;background:transparent;cursor:pointer;font-size:19px;color:#888;padding:0 5px">&rsaquo;</button><button onclick="docCheckToday()" style="border:1px solid #d7dbe2;background:#fff;border-radius:12px;padding:5px 12px;font-size:11.5px;font-weight:600;cursor:pointer;color:#185FA5;margin-left:2px">วันนี้</button></div>
   </div>`;
   const drawer = _docCheck.openId ? _docCheckDrawer(_docCheck.openId, e, rName) : '';
-  host.innerHTML = `<div style="${_docCheck.openId?'margin-right:640px;':''}transition:margin .15s">${header}${table}</div>${drawer}`;
+  host.innerHTML = `<div>${header}${table}</div>${drawer}`;
 }
 function _docCheckDrawer(bkId, e, rName){
   const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return '';
   const ag=(typeof sbGetAgent==='function'?sbGetAgent(b.agentId):null);
   const dc=b.docCheck||{items:{}}; const items=dc.items||{};
   const files=(b.attachments||[]);
-  const total=(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0);
+  const _pt=ag&&ag.payType; const payLbl=_pt==='proforma'?'Pro Forma':_pt==='cot'?'Cash on tour':_pt==='invoice'?'Invoice (credit)':(_pt?String(_pt):'-');
   const paxStr=(b.trips||[]).map(t=>{ const rn=rName(t.routeId); const p=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; return `${e(t.date||'')} · ${e(rn)} · ${p} pax`; }).join('<br>');
   const fld=(lbl,val)=>`<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid #f0f2ee"><span style="flex:0 0 118px;font-size:11px;color:#8a8a82;text-transform:uppercase;letter-spacing:.03em;font-weight:600">${e(lbl)}</span><span style="flex:1;font-size:13px;color:#1B2A55;font-weight:600">${val}</span></div>`;
   const fileHtml = files.length ? files.map(a=>{ const url='/api/attach/'+encodeURIComponent(a.id); const isImg=/^image\//.test(a.mime||''); const isPdf=/pdf/i.test(a.mime||'');
@@ -52512,13 +52512,14 @@ function _docCheckDrawer(bkId, e, rName){
   const chkHtml = DOCCHK_ITEMS.map(it=>{ const on=!!items[it.k]; return `<label style="display:flex;align-items:center;gap:9px;padding:7px 9px;border:1px solid ${on?'#BFE3CC':'#e3e6e1'};border-radius:9px;background:${on?'#EAF7EF':'#fff'};cursor:pointer;margin-bottom:6px"><span onclick="docCheckToggleItem('${e(bkId)}','${it.k}')" style="width:19px;height:19px;border-radius:5px;flex:none;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;${on?'background:#1B7F4B;color:#fff':'border:1.5px solid #c3c8cf;color:transparent'}">✓</span><span style="font-size:12.5px;color:#1B2A55;font-weight:600">${e(it.label)}</span></label>`; }).join('');
   const allTicked=DOCCHK_ITEMS.every(it=>items[it.k]);
   const st=docCheckStatus(b); const bd=_docBadge(st);
-  return `<div style="position:fixed;top:0;right:0;bottom:0;width:min(624px,94vw);background:#fff;z-index:601;box-shadow:-12px 0 44px -14px rgba(0,0,0,.28);border-left:1px solid #e3e6e1;display:flex;flex-direction:column">
+  return `<div onclick="docCheckClose()" style="position:fixed;inset:0;background:rgba(15,25,40,.20);z-index:600"></div>
+    <div style="position:fixed;top:0;right:0;bottom:0;width:min(1180px,88vw);background:#fff;z-index:601;box-shadow:-16px 0 54px -12px rgba(0,0,0,.34);border-left:1px solid #e3e6e1;display:flex;flex-direction:column">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid #eef0ec;flex:none">
       <div><b style="font-size:14px;color:#1B2A55">${e(b.voucherRef||b.code||b.id)}</b> <span style="font-size:11px;font-weight:700;background:${bd.bg};color:${bd.c};padding:2px 9px;border-radius:8px;margin-left:6px">${bd.t}</span></div>
       <button onclick="docCheckClose()" style="background:#fff;border:1px solid #d7dbe2;border-radius:8px;padding:6px 11px;font-size:14px;cursor:pointer;color:#666">&#10005;</button>
     </div>
     <div style="flex:1;overflow:auto;padding:16px 18px;background:#F6F7F5">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div style="display:grid;grid-template-columns:0.85fr 1.15fr;gap:16px">
         <div>
           <div style="font-size:11px;font-weight:700;color:#185FA5;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">ข้อมูล booking (ในระบบ)</div>
           <div style="background:#fff;border:1px solid #e3e6e1;border-radius:11px;padding:11px 13px">
@@ -52527,7 +52528,7 @@ function _docCheckDrawer(bkId, e, rName){
             ${fld('Lead',e(b.leadPax||'-')+(b.leadNationality?(' · '+e(b.leadNationality)):''))}
             ${fld('Trips / Pax',paxStr||'-')}
             ${fld('Pickup',e(b.hotelName||b.pickupArea||'-'))}
-            ${fld('Total','฿ '+Math.round(total).toLocaleString())}
+            ${fld('Payment',e(payLbl))}
           </div>
           <div style="font-size:11px;font-weight:700;color:#185FA5;text-transform:uppercase;letter-spacing:.05em;margin:15px 0 6px">ติ๊กตรวจทีละช่อง (เทียบกับเอกสาร)</div>
           ${chkHtml}
