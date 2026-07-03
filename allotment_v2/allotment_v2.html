@@ -109,6 +109,7 @@
     var ae=document.activeElement;
     if(ae && (ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT'||ae.isContentEditable)) return true;  // typing in a field
     if(document.querySelector('.la-modal')||document.getElementById('la-umodal')||document.getElementById('la-pmodal')) return true;  // a dialog is open
+    if(document.getElementById('dc-panel-docs')) return true;                           // Document-Check drawer open (reading details) → don't interrupt
     if(Date.now()-_laLastInput < 2000) return true;                                     // interacted within last 2s (snappy · SSE pushes instantly)
     return false;
   }
@@ -3482,7 +3483,7 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
     <div id="view-boatassign" class="view"><div id="boatassign-host"></div></div>
     <div id="view-vehicles" class="view"><div id="vehicles-host"></div></div>
     <div id="view-vanjobs" class="view"><div id="vanjobs-host"></div></div>
-    <div id="view-doccheck" class="view"><div id="doccheck-host"></div></div>
+    <div id="view-doccheck" class="view"><style>@keyframes docspin{to{transform:rotate(360deg)}}</style><div id="doccheck-host"></div></div>
     <div id="view-accounting" class="view">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px;padding:6px 4px 14px">
         <div><h1 style="font-size:24px;font-weight:700;letter-spacing:-.02em;color:var(--fd-ink);margin:0">Accounting <span style="font-size:11px;font-weight:500;color:var(--fd-ink-soft);background:#fff;padding:3px 10px;border-radius:14px;border:1px solid var(--fd-line);margin-left:8px;text-transform:uppercase;letter-spacing:.06em;vertical-align:middle">Finance</span></h1>
@@ -52442,6 +52443,168 @@ document.addEventListener('paste', function(e){ try{ if(typeof _bkV2==='undefine
 // ════════ Document Check (sidebar · verify B2B/agent bookings against attached documents) ════════
 const _docCheck = { date: (typeof TODAY_STR!=='undefined'?TODAY_STR:new Date().toISOString().slice(0,10)), filter:'all', openId:null };
 const DOCCHK_ITEMS = [ {k:'route',label:'เส้นทาง / โปรแกรม'},{k:'date',label:'วันเดินทาง'},{k:'lead',label:'ชื่อ'},{k:'pax',label:'จำนวนคน'},{k:'voucher',label:'Voucher / Ref'},{k:'payment',label:'Payment'} ];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// §Doc-Check Pre-Check (OCR auto-compare) · reads the attached image with
+// Tesseract.js then fuzzy-matches each of the 6 checklist fields against the
+// system booking. Auto-ticks high-confidence matches; the user still does the
+// final ✅/⚠ decision. Result cached on bk.docCheck.pre (never re-OCRs on reopen).
+// ─────────────────────────────────────────────────────────────────────────────
+const _docPre = { running:{}, prog:0, activeId:null };
+// Lazy-load the OCR library (network needed · only on first Pre-Check).
+function _docOcrEnsureLib(){
+  if(window.Tesseract) return Promise.resolve();
+  if(window._docOcrLibP) return window._docOcrLibP;
+  window._docOcrLibP = new Promise(function(res,rej){
+    var s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+    s.onload=function(){ res(); };
+    s.onerror=function(){ window._docOcrLibP=null; rej(new Error('OCR library load failed (no network?)')); };
+    document.head.appendChild(s);
+  });
+  return window._docOcrLibP;
+}
+// One shared worker (eng) reused across bookings.
+function _docOcrGetWorker(){
+  if(window._docOcrWorker) return Promise.resolve(window._docOcrWorker);
+  if(window._docOcrWorkerP) return window._docOcrWorkerP;
+  window._docOcrWorkerP = _docOcrEnsureLib().then(function(){
+    return window.Tesseract.createWorker('eng', 1, {
+      logger:function(m){ if(m&&m.status==='recognizing text'){ _docPre.prog=m.progress||0; _docPreThrottleRender(); } }
+    });
+  }).then(function(w){ window._docOcrWorker=w; return w; });
+  return window._docOcrWorkerP;
+}
+var _docPreRenderT=null;
+// Surgical: update ONLY the #dc-prebar element during OCR (keeps the drawer's document
+// scroll position — no full re-render, no image reflow). Falls back to full render.
+function _docPreThrottleRender(){ if(_docPreRenderT) return; _docPreRenderT=setTimeout(function(){ _docPreRenderT=null;
+  var id=_docPre.activeId, bar=document.getElementById('dc-prebar');
+  if(id && _docCheck.openId===id && bar){ var b=SB_BOOKINGS.find(function(x){return x.id===id;}); if(b){ bar.innerHTML=_docPreBarHTML(b, id); return; } }
+  if(_docCheck.openId) renderDocCheck();
+},380); }
+// Build just the Pre-Check bar (self-contained · used by the drawer + surgical progress updates).
+function _docPreBarHTML(b, bkId){
+  var e=function(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];}); };
+  var dc=b.docCheck||{}, _pre=dc.pre||null, files=(b.attachments||[]);
+  var _running=!!_docPre.running[bkId], _hasImg=files.some(function(a){return /^image\//.test(a.mime||'');});
+  if(_running){ return `<div style="background:#EAF3FB;border:1px solid #BFDCF2;border-radius:9px;padding:9px 11px;margin-bottom:9px;font-size:12px;color:#185FA5;font-weight:600;display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:14px;height:14px;border:2px solid #BFDCF2;border-top-color:#185FA5;border-radius:50%;animation:docspin .8s linear infinite"></span>กำลังอ่านเอกสารด้วย OCR… ${Math.round((_docPre.prog||0)*100)}%</div>`; }
+  if(_pre&&_pre.error){ return `<div style="background:#FBE7E5;border:1px solid #E7B3AE;border-radius:9px;padding:9px 11px;margin-bottom:9px;font-size:12px;color:#B5271F"><b>Pre-Check ไม่สำเร็จ:</b> ${e(_pre.error)} <button onclick="docCheckRunPre('${e(bkId)}')" style="margin-left:6px;background:#fff;border:1px solid #E7B3AE;border-radius:7px;padding:3px 9px;font-size:11px;font-weight:700;color:#B5271F;cursor:pointer;font-family:inherit">ลองใหม่</button></div>`; }
+  if(_pre&&_pre.summary){ var s=_pre.summary; return `<div style="background:#F0F7F3;border:1px solid #CFE7DA;border-radius:9px;padding:9px 11px;margin-bottom:9px"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><span style="font-size:12px;color:#0F6E56;font-weight:700">⚡ Pre-Check (OCR): ตรง ${s.match} · อาจตรง ${s.maybe} · ไม่ตรง ${s.mismatch} · ไม่พบ ${s.none}</span><button onclick="docCheckRunPre('${e(bkId)}')" style="background:#fff;border:1px solid #CFE7DA;border-radius:7px;padding:3px 10px;font-size:11px;font-weight:700;color:#0F6E56;cursor:pointer;font-family:inherit">🔄 ตรวจใหม่</button></div><div style="font-size:10.5px;color:#6b7280;margin-top:4px">ระบบติ๊กช่องที่ตรงให้อัตโนมัติ — โปรดตรวจขั้นสุดท้ายก่อนกด ✅${_pre.autoTick===false?' · (โหมดดูอย่างเดียว: ไม่ติ๊กให้)':''}</div></div>`; }
+  if(_hasImg){ return `<div style="margin-bottom:9px"><button onclick="docCheckRunPre('${e(bkId)}')" style="width:100%;background:#0F6E56;color:#fff;border:none;border-radius:9px;padding:9px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">⚡ Pre-Check ด้วย OCR (เทียบเอกสารอัตโนมัติ)</button></div>`; }
+  if(files.length){ return `<div style="background:#F1F2EF;border:1px solid #e3e6e1;border-radius:9px;padding:8px 11px;margin-bottom:9px;font-size:11.5px;color:#8a8a82">Pre-Check รองรับเฉพาะเอกสารรูปภาพ (PDF ต้องตรวจมือ)</div>`; }
+  return '';
+}
+
+// Run OCR + match for one booking (async · re-renders when done).
+function docCheckRunPre(bkId){
+  var b=SB_BOOKINGS.find(function(x){return x.id===bkId;}); if(!b) return;
+  var imgs=(b.attachments||[]).filter(function(a){return /^image\//.test(a.mime||'');});
+  if(!imgs.length){ alert('Pre-Check supports image attachments only (PDF must be checked manually).'); return; }
+  if(_docPre.running[bkId]) return;
+  _docPre.running[bkId]=true; _docPre.prog=0; _docPre.activeId=bkId;
+  renderDocCheck();
+  _docOcrGetWorker().then(function(worker){
+    var chain=Promise.resolve('');
+    imgs.forEach(function(a){ chain=chain.then(function(acc){
+      return worker.recognize('/api/attach/'+encodeURIComponent(a.id)).then(function(r){
+        return acc+'\n'+((r&&r.data&&r.data.text)||'');
+      });
+    }); });
+    return chain;
+  }).then(function(text){
+    var results=_docPreCheckMatch(b, text);
+    var summary={match:0,maybe:0,mismatch:0,none:0};
+    DOCCHK_ITEMS.forEach(function(it){ var s=(results[it.k]||{}).s||'none'; summary[s]=(summary[s]||0)+1; });
+    b.docCheck=b.docCheck||{status:'pending',items:{}};
+    b.docCheck.items=b.docCheck.items||{};
+    var canWrite = !(typeof window.laCanEditArea==='function') || window.laCanEditArea('operations');
+    if(canWrite){ DOCCHK_ITEMS.forEach(function(it){ if(results[it.k]&&results[it.k].s==='match') b.docCheck.items[it.k]=true; }); }
+    b.docCheck.pre={ at:new Date().toISOString(), lang:'eng', autoTick:canWrite, results:results, summary:summary, text:String(text||'').slice(0,3000) };
+    if(canWrite) _docCheckPersist();
+  }).catch(function(err){
+    b.docCheck=b.docCheck||{items:{}};
+    b.docCheck.pre={ at:new Date().toISOString(), error:(err&&err.message)||'OCR failed' };
+  }).then(function(){
+    _docPre.running[bkId]=false; _docPre.activeId=null; renderDocCheck();
+  });
+}
+
+// ── Matcher · returns {key:{s:'match'|'maybe'|'mismatch'|'none', ev, detail}} ──
+function _docPreCheckMatch(b, ocrText){
+  var rName=function(id){ var r=(typeof getRoute==='function'?getRoute(id):null)||{}; return r.name||id||''; };
+  var norm=function(s){ return String(s||'').toLowerCase().replace(/\s+/g,' ').trim(); };
+  var alnum=function(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]/g,''); };
+  var ocrN=norm(ocrText), ocrA=alnum(ocrText);
+  // system side
+  var trips=(b.trips||[]);
+  var chkT = trips.find(function(t){return (t.date||'')===_docCheck.date;}) || trips[0] || {};
+  var paxSys = (typeof bkV2PaxAllTot==='function') ? bkV2PaxAllTot(chkT.pax||{}) : 0;
+  var ag=(typeof sbGetAgent==='function'?sbGetAgent(b.agentId):null);
+  var out={};
+
+  // voucher / ref
+  (function(){ var v=alnum(b.voucherRef||b.code||b.id); if(v.length<4){ out.voucher={s:'none'}; return; }
+    if(ocrA.indexOf(v)>=0){ out.voucher={s:'match', ev:(b.voucherRef||b.code||b.id)}; return; }
+    var tail=v.slice(-8); if(tail.length>=6 && ocrA.indexOf(tail)>=0){ out.voucher={s:'maybe', ev:'…'+tail}; return; }
+    out.voucher={s:'none'};
+  })();
+
+  // date (any trip date found in the doc)
+  (function(){ var months=['january','february','march','april','may','june','july','august','september','october','november','december'];
+    var cands=[];
+    trips.forEach(function(t){ var iso=(t.date||''); var mm=iso.match(/^(\d{4})-(\d{2})-(\d{2})$/); if(!mm) return;
+      var Y=+mm[1], M=+mm[2], D=+mm[3], mon=months[M-1], mon3=mon.slice(0,3);
+      var d=String(D), dd=mm[3], mo=mm[2];
+      cands.push(iso, d+' '+mon+' '+Y, dd+' '+mon+' '+Y, d+' '+mon3+' '+Y, dd+' '+mon3+' '+Y,
+        mon+' '+d+' '+Y, mon3+' '+d+' '+Y, mon+' '+d, mon3+' '+d,
+        dd+'/'+mo+'/'+Y, d+'/'+M+'/'+Y, mo+'/'+dd+'/'+Y, M+'/'+d+'/'+Y, dd+'.'+mo+'.'+Y);
+    });
+    var hit=cands.find(function(c){ return c && ocrN.indexOf(norm(c))>=0; });
+    out.date = hit ? {s:'match', ev:hit} : {s:'none'};
+  })();
+
+  // lead name (token-based · order-independent)
+  (function(){ var toks=norm(b.leadPax).split(' ').filter(function(t){return t.length>=2;});
+    if(!toks.length){ out.lead={s:'none'}; return; }
+    var hit=toks.filter(function(t){return ocrN.indexOf(t)>=0;});
+    if(hit.length===toks.length) out.lead={s:'match', ev:b.leadPax};
+    else if(hit.length>0) out.lead={s:'maybe', ev:hit.join(' ')+' (บางส่วน)'};
+    else out.lead={s:'none'};
+  })();
+
+  // pax count (parse adults/children/infants or total)
+  (function(){ var num=function(re){ var m=ocrN.match(re); return m?parseInt(m[1],10):null; };
+    var ad=num(/(\d+)\s*adult/), ch=num(/(\d+)\s*child/)||num(/(\d+)\s*children/), inf=num(/(\d+)\s*infant/);
+    var docTot=null, evTxt='';
+    if(ad!=null){ docTot=ad+(ch||0)+(inf||0); evTxt=ad+' adult'+(ch?' '+ch+' child':'')+(inf?' '+inf+' infant':''); }
+    else { var px=num(/(\d+)\s*(?:pax|persons?|people|pers\b|ท่าน|คน)/); if(px!=null){ docTot=px; evTxt=px+' pax'; } }
+    if(docTot==null){ out.pax={s:'none', detail:'ระบบ '+paxSys+' pax'}; return; }
+    if(docTot===paxSys) out.pax={s:'match', ev:evTxt};
+    else out.pax={s:'mismatch', detail:'เอกสาร '+docTot+' · ระบบ '+paxSys+' pax'};
+  })();
+
+  // route / program (keyword score)
+  (function(){ var stop={by:1,the:1,and:1,'of':1,to:1,a:1,an:1,trip:1,day:1,tour:1,tours:1,program:1,'&':1,daytrip:1};
+    var kws=[]; trips.forEach(function(t){ norm(rName(t.routeId)).split(/[^a-z0-9]+/).forEach(function(w){ if(w.length>=3 && !stop[w] && kws.indexOf(w)<0) kws.push(w); }); });
+    if(!kws.length){ out.route={s:'none'}; return; }
+    var hit=kws.filter(function(w){ return ocrN.indexOf(w)>=0 || ocrA.indexOf(w)>=0; });
+    var score=hit.length/kws.length;
+    if(score>=0.5) out.route={s:'match', ev:hit.join(' · ')};
+    else if(score>0) out.route={s:'maybe', ev:hit.join(' · ')+' (บางส่วน)'};
+    else out.route={s:'none'};
+  })();
+
+  // payment terms
+  (function(){ var pt=ag&&ag.payType; var kw={ invoice:['invoice','credit'], proforma:['pro forma','proforma','pro-forma'], cot:['cash on tour','cash-on-tour','cash on board','pay on tour'] }[pt]||[];
+    if(!kw.length){ out.payment={s:'none'}; return; }
+    var hit=kw.find(function(k){ return ocrN.indexOf(k)>=0; });
+    out.payment = hit ? {s:'match', ev:hit} : {s:'none'};
+  })();
+
+  return out;
+}
+
 function _docIsB2B(b){ return !!(b && b.schemaVer===2 && b.agentId); }   // B2B/agent bookings only
 function docCheckStatus(bk){ const dc=bk&&bk.docCheck; if(dc&&dc.status) return dc.status; const n=((bk&&bk.attachments)||[]).length; return n?'pending':'nofiles'; }
 function _docBadge(st){ if(st==='verified') return {t:'✅ ตรวจแล้ว',bg:'#E6F5EA',c:'#1B7F4B'}; if(st==='issue') return {t:'⚠ มีปัญหา',bg:'#FCEBEB',c:'#B5271F'}; if(st==='pending') return {t:'⏳ รอตรวจ',bg:'#FFF6E0',c:'#8A5B00'}; return {t:'📄 ยังไม่แนบ',bg:'#F0F0EC',c:'#8a8a82'}; }
@@ -52471,43 +52634,75 @@ function docCheckClose(){ _docCheck.openId=null; renderDocCheck(); }
 function docCheckToggleItem(bkId,k){ if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return; const bk=SB_BOOKINGS.find(b=>b.id===bkId); if(!bk) return; bk.docCheck=bk.docCheck||{status:'pending',items:{}}; bk.docCheck.items=bk.docCheck.items||{}; bk.docCheck.items[k]=!bk.docCheck.items[k]; _docCheckPersist(); renderDocCheck(); }
 function docCheckSetStatus(bkId,status){ if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return; const bk=SB_BOOKINGS.find(b=>b.id===bkId); if(!bk) return; bk.docCheck=bk.docCheck||{items:{}}; bk.docCheck.status=status; bk.docCheck.by=(typeof laBy==='function'?laBy():'') ; bk.docCheck.at=new Date().toISOString(); _docCheckPersist(); if(typeof bkV2AddHistory==='function') bkV2AddHistory(bk,'edit','Document check · '+(status==='verified'?'✅ verified':status==='issue'?'⚠ issue':status)+((bk.docCheck.note)?(' · '+bk.docCheck.note):''),'DocCheck'); renderDocCheck(); }
 function docCheckSetNote(bkId,val){ const bk=SB_BOOKINGS.find(b=>b.id===bkId); if(!bk) return; bk.docCheck=bk.docCheck||{items:{}}; bk.docCheck.note=val; _docCheckPersist(); }   // no re-render (keep focus)
-function _docCheckList(date){ const out=[]; (SB_BOOKINGS||[]).forEach(b=>{ if(!_docIsB2B(b)) return; if(b.status==='rejected') return; const t=(b.trips||[]).find(tt=>(tt.date||'')===date); if(!t) return; out.push({bk:b,trip:t}); }); out.sort((a,b)=>String(a.bk.voucherRef||a.bk.id).localeCompare(String(b.bk.voucherRef||b.bk.id))); return out; }
+function _docCheckList(date){ const out=[]; (SB_BOOKINGS||[]).forEach(b=>{ if(!_docIsB2B(b)) return; if(b.status==='rejected') return; const t=(b.trips||[]).find(tt=>(tt.date||'')===date); if(!t) return; out.push({bk:b,trip:t}); }); return out; }   // cancelled kept (shown · linked to booking) · rescheduled follow their trip.date automatically
+// Ordered as displayed: grouped by route (program), voucher within · honours the status filter
+function _docCheckOrdered(date){ const rN=id=>((typeof getRoute==='function'?getRoute(id):null)||{}).name||id; let rows=_docCheckList(date); if(_docCheck.filter!=='all') rows=rows.filter(r=>docCheckStatus(r.bk)===_docCheck.filter); rows.sort((a,b)=>{ const ra=rN(a.trip.routeId), rb=rN(b.trip.routeId); if(ra!==rb) return ra<rb?-1:1; return String(a.bk.voucherRef||a.bk.id).localeCompare(String(b.bk.voucherRef||b.bk.id)); }); return rows; }
+// Search box · DOM-filter (no re-render → keeps focus) · hides route headers whose group is empty
+function docCheckFilterRows(){ const host=document.getElementById('doccheck-host'); if(!host) return; const q=String(_docCheck.search||'').trim().toLowerCase(); const gv={}; host.querySelectorAll('tr[data-drow]').forEach(tr=>{ const txt=tr.getAttribute('data-drow')||''; const g=tr.getAttribute('data-drg')||''; const show=!q||txt.indexOf(q)>=0; tr.style.display=show?'':'none'; if(show)gv[g]=true; }); host.querySelectorAll('tr[data-dghdr]').forEach(h=>{ const g=h.getAttribute('data-dghdr')||''; h.style.display=gv[g]?'':'none'; }); }
+// Drawer Next / Previous · step through the displayed order without closing
+function docCheckNav(dir){ const ids=_docCheckOrdered(_docCheck.date).map(r=>r.bk.id); const i=ids.indexOf(_docCheck.openId); if(i<0) return; const ni=i+dir; if(ni<0||ni>=ids.length) return; _docCheck.openId=ids[ni]; renderDocCheck(); }
 function renderDocCheck(){
   const host=document.getElementById('doccheck-host'); if(!host) return;
+  // ── scroll-keep: remember where the user was reading so a re-render (cloud soft-refresh,
+  //    filter, tick, OCR done) does NOT bounce the page/drawer to the top ──
+  const _mn=document.querySelector('main'); const _scMn=_mn?_mn.scrollTop:0, _scW=window.scrollY||0;
+  const _pL=document.getElementById('dc-panel-left'), _pR=document.getElementById('dc-panel-docs');
+  const _scL=_pL?_pL.scrollTop:0, _scR=_pR?_pR.scrollTop:0;
+  const _restoreScroll=()=>{ try{ if(_mn&&_scMn) _mn.scrollTop=_scMn; if(_scW) window.scrollTo(0,_scW);
+    const l=document.getElementById('dc-panel-left'); if(l&&_scL) l.scrollTop=_scL;
+    const r=document.getElementById('dc-panel-docs'); if(r&&_scR) r.scrollTop=_scR; }catch(_){} };
   const e=s=>String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
   const date=_docCheck.date;
-  let rows=_docCheckList(date);
-  const cnt={all:rows.length,pending:0,verified:0,issue:0,nofiles:0};
-  rows.forEach(r=>{ cnt[docCheckStatus(r.bk)]=(cnt[docCheckStatus(r.bk)]||0)+1; });
-  if(_docCheck.filter!=='all') rows=rows.filter(r=>docCheckStatus(r.bk)===_docCheck.filter);
+  const allRows=_docCheckList(date);
+  const cnt={all:allRows.length,pending:0,verified:0,issue:0,nofiles:0};
+  allRows.forEach(r=>{ cnt[docCheckStatus(r.bk)]=(cnt[docCheckStatus(r.bk)]||0)+1; });
+  const rows=_docCheckOrdered(date);
   let dlbl=date; try{ dlbl=new Date(date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }catch(_){}
   const rName=id=>((typeof getRoute==='function'?getRoute(id):null)||{}).name||id;
   const chip=(f,lbl,n,col)=>`<span onclick="docCheckSetFilter('${f}')" style="cursor:pointer;font-size:12px;padding:5px 12px;border-radius:16px;font-weight:600;${_docCheck.filter===f?'background:'+(col||'#1B2A55')+';color:#fff':'background:#fff;border:1px solid #dfe3e8;color:#5a6b62'}">${lbl} <b style="font-variant-numeric:tabular-nums">${n}</b></span>`;
   const th='padding:9px 11px;font-size:10px;color:#7a8088;font-weight:700;text-transform:uppercase;letter-spacing:.04em;text-align:left;border-bottom:1px solid #e6e8e3;white-space:nowrap';
-  const rowHtml = rows.length ? rows.map(r=>{
-    const b=r.bk, t=r.trip; const ag=(typeof sbGetAgent==='function'?sbGetAgent(b.agentId):null);
+  const thc=th+';text-align:center';
+  const rc={}; rows.forEach(r=>{ const rn=rName(r.trip.routeId); rc[rn]=(rc[rn]||0)+1; });
+  let prevR=null, body='';
+  rows.forEach(r=>{
+    const b=r.bk, t=r.trip; const ag=(typeof sbGetAgent==='function'?sbGetAgent(b.agentId):null); const rn=rName(t.routeId);
     const st=docCheckStatus(b); const bd=_docBadge(st); const nf=(b.attachments||[]).length;
-    const pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
+    const cxl=['cancelled','cancelled_weather'].includes(b.status);
+    const P=k=>(typeof bkV2PaxTot==='function'?bkV2PaxTot(t.pax||{},k):0);
+    const tm=(b.ops&&b.ops.pickupTimeFinal)||t.pickupTime||b.pickupTime||'-';
+    const zl=(typeof bkV2ZoneLabel==='function')?bkV2ZoneLabel(t.zone||b.pickupZone||''):(t.zone||b.pickupZone||'-');
     const sel=_docCheck.openId===b.id;
-    return `<tr onclick="docCheckOpen('${e(b.id)}')" style="cursor:pointer;border-bottom:1px solid #eef0ec;${sel?'background:#EAF3FB':''}">
-      <td style="padding:9px 11px;font-size:12.5px;font-weight:600;color:#15396B">${e(b.voucherRef||b.code||b.id)}</td>
-      <td style="padding:6px 11px">${ag?(function(){var _c=(typeof bkV2AgentColor==='function')?bkV2AgentColor(b.agentId):'#EAF3FB';var _i=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(_c):'#1B2A55';return `<span style="background:${_c};color:${_i};padding:5px 11px;border-radius:8px;font-size:12px;font-weight:600;display:inline-block;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e(ag.name)}</span>`;})():'<span style="color:#3F4654">-</span>'}</td>
+    const rowBg=sel?'#EAF3FB':(st==='verified'?'#E7F6EC':'');
+    const _sr=e(((b.voucherRef||'')+' '+(b.code||'')+' '+(ag?ag.name:'')+' '+(b.leadPax||'')+' '+rn).toLowerCase());
+    if(rn!==prevR){ prevR=rn; body+=`<tr data-dghdr="${e(rn)}"><td colspan="13" style="background:#EEF3F8;padding:9px 14px;border-top:2px solid #d3deea;border-bottom:1px solid #e3e9f0"><span style="font-size:13px;font-weight:700;color:#15396B">&#128676; ${e(rn)}</span> <span style="font-size:11px;color:#7a8696;font-weight:500">· ${rc[rn]} booking</span></td></tr>`; }
+    const _agchip=ag?(function(){var _c=(typeof bkV2AgentColor==='function')?bkV2AgentColor(b.agentId):'#EAF3FB';var _i=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(_c):'#1B2A55';return `<span style="background:${_c};color:${_i};padding:5px 11px;border-radius:8px;font-size:12px;font-weight:600;display:inline-block;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e(ag.name)}</span>`;})():'<span style="color:#3F4654">-</span>';
+    const stCell=cxl?`<span style="font-size:11px;font-weight:700;background:#FBE3E1;color:#B5271F;padding:3px 10px;border-radius:9px;white-space:nowrap">✕ ยกเลิก</span>`:`<span style="font-size:11px;font-weight:700;background:${bd.bg};color:${bd.c};padding:3px 10px;border-radius:9px;white-space:nowrap">${bd.t}</span>`;
+    body+=`<tr data-drow="${_sr}" data-drg="${e(rn)}" onclick="docCheckOpen('${e(b.id)}')" style="cursor:pointer;border-bottom:1px solid #eef0ec;${rowBg?'background:'+rowBg+';':''}${cxl?'opacity:.55;':''}">
+      <td style="padding:9px 11px;font-size:12.5px;font-weight:600;color:#15396B${cxl?';text-decoration:line-through':''}">${st==='verified'?'✅ ':''}${e(b.voucherRef||b.code||b.id)}</td>
+      <td style="padding:6px 11px">${_agchip}</td>
       <td style="padding:9px 11px;font-size:12.5px;color:#1B2A55;font-weight:600">${e(b.leadPax||'-')}</td>
-      <td style="padding:9px 11px;font-size:12px;color:#5a6b62">${e(rName(t.routeId))}</td>
-      <td style="padding:9px 11px;text-align:center;font-size:13px;font-weight:700;color:#15396B">${pax}</td>
+      <td style="padding:9px 6px;text-align:center;font-size:12.5px;font-weight:700;color:#15396B">${P('ad')||'·'}</td>
+      <td style="padding:9px 6px;text-align:center;font-size:12.5px;color:#5a6b62">${P('chd')||'·'}</td>
+      <td style="padding:9px 6px;text-align:center;font-size:12.5px;color:#5a6b62">${P('inf')||'·'}</td>
+      <td style="padding:9px 6px;text-align:center;font-size:12.5px;color:#5a6b62">${P('foc')||'·'}</td>
+      <td style="padding:9px 11px;font-size:12px;color:#3F4654;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e(b.hotelName||b.pickupArea||'-')}</td>
+      <td style="padding:9px 11px;text-align:center;font-size:12px;color:#5a6b62">${e(b.roomNumber||'-')}</td>
+      <td style="padding:9px 11px;font-size:12px;color:#5a6b62;white-space:nowrap">${e(zl)}</td>
       <td style="padding:9px 11px;text-align:center;font-size:12px;color:${nf?'#185FA5':'#c00'}">📎 ${nf}</td>
-      <td style="padding:9px 11px"><span style="font-size:11px;font-weight:700;background:${bd.bg};color:${bd.c};padding:3px 10px;border-radius:9px;white-space:nowrap">${bd.t}</span></td>
+      <td style="padding:9px 11px">${stCell}</td>
       <td style="padding:9px 11px;text-align:right"><button onclick="event.stopPropagation();docCheckOpen('${e(b.id)}')" style="background:#0F6E56;color:#fff;border:none;border-radius:7px;padding:5px 13px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">ตรวจ</button></td>
     </tr>`;
-  }).join('') : `<tr><td colspan="8" style="padding:40px;text-align:center;color:#b7bcc2;font-size:13px">ไม่มี booking B2B ที่ต้องตรวจในวันนี้</td></tr>`;
-  const table=`<div style="background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:12px;overflow:hidden">
-    <table style="width:100%;border-collapse:collapse">
-      <thead><tr style="background:#F4F7F5"><th style="${th}">Voucher</th><th style="${th}">Agent</th><th style="${th}">Lead</th><th style="${th}">เส้นทาง</th><th style="${th};text-align:center">Pax</th><th style="${th};text-align:center">ไฟล์</th><th style="${th}">สถานะ</th><th style="${th}"></th></tr></thead>
+  });
+  const rowHtml = rows.length ? body : `<tr><td colspan="13" style="padding:40px;text-align:center;color:#b7bcc2;font-size:13px">ไม่มี booking B2B ที่ต้องตรวจในวันนี้</td></tr>`;
+  const table=`<div style="background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:12px;overflow:hidden;overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;min-width:1040px">
+      <thead><tr style="background:#F4F7F5"><th style="${th}">Voucher</th><th style="${th}">Agency</th><th style="${th}">Customer</th><th style="${thc}">AD</th><th style="${thc}">CHD</th><th style="${thc}">INF</th><th style="${thc}">FOC</th><th style="${th}">Pickup</th><th style="${thc}">Room</th><th style="${th}">Zone</th><th style="${thc}">ไฟล์</th><th style="${th}">สถานะ</th><th style="${th}"></th></tr></thead>
       <tbody>${rowHtml}</tbody>
     </table></div>`;
   const header=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;flex-wrap:wrap">
     <div><div style="font-size:22px;font-weight:700;color:#1A1A1A">📑 ตรวจเอกสาร · Document Check <span style="font-size:11px;font-weight:600;color:#185FA5;background:#EAF3FB;padding:3px 10px;border-radius:12px;vertical-align:middle">B2B / Agent</span></div>
-      <div style="display:flex;gap:8px;margin-top:11px;flex-wrap:wrap">${chip('all','ทั้งหมด',cnt.all)}${chip('pending','⏳ รอตรวจ',cnt.pending||0,'#8A5B00')}${chip('verified','✅ ตรวจแล้ว',cnt.verified||0,'#1B7F4B')}${chip('issue','⚠ มีปัญหา',cnt.issue||0,'#B5271F')}${chip('nofiles','ยังไม่แนบ',cnt.nofiles||0,'#8a8a82')}</div></div>
+      <div style="display:flex;gap:8px;margin-top:11px;flex-wrap:wrap">${chip('all','ทั้งหมด',cnt.all)}${chip('pending','⏳ รอตรวจ',cnt.pending||0,'#8A5B00')}${chip('verified','✅ ตรวจแล้ว',cnt.verified||0,'#1B7F4B')}${chip('issue','⚠ มีปัญหา',cnt.issue||0,'#B5271F')}${chip('nofiles','ยังไม่แนบ',cnt.nofiles||0,'#8a8a82')}</div>
+      <div style="margin-top:10px"><input id="docSearch" value="${e(_docCheck.search||'')}" oninput="_docCheck.search=this.value;docCheckFilterRows()" placeholder="&#128269; ค้นหา voucher / agent / ลูกค้า / เส้นทาง" style="width:380px;max-width:62vw;border:1px solid #d7dbe2;border-radius:18px;padding:7px 15px;font-size:12.5px;font-family:inherit"></div></div>
     <div style="position:relative">
       <div style="display:inline-flex;align-items:center;gap:10px;background:#F1EFEA;border-radius:18px;padding:5px 10px"><button onclick="docCheckSetDate(-1)" style="border:none;background:transparent;cursor:pointer;font-size:19px;color:#888;padding:0 5px">&lsaquo;</button><b onclick="docCheckToggleCal()" title="เลือกวันจากปฏิทิน" style="font-size:18px;font-weight:700;color:#1A1A1A;min-width:230px;text-align:center;letter-spacing:-.01em;cursor:pointer">📅 ${e(dlbl)}</b><button onclick="docCheckSetDate(1)" style="border:none;background:transparent;cursor:pointer;font-size:19px;color:#888;padding:0 5px">&rsaquo;</button><button onclick="docCheckToday()" style="border:1px solid #d7dbe2;background:#fff;border-radius:12px;padding:5px 12px;font-size:11.5px;font-weight:600;cursor:pointer;color:#185FA5;margin-left:2px">วันนี้</button></div>
       ${_docCheck.calOpen?_docCheckCalHTML(e):''}
@@ -52515,6 +52710,14 @@ function renderDocCheck(){
   </div>`;
   const drawer = _docCheck.openId ? _docCheckDrawer(_docCheck.openId, e, rName) : '';
   host.innerHTML = `<div>${header}${table}</div>${drawer}`;
+  _restoreScroll(); requestAnimationFrame(_restoreScroll);   // keep reading position across re-render
+  if(_docCheck.search) docCheckFilterRows();
+  // Auto-run Pre-Check once when a booking with image attachments is opened (cached on bk.docCheck.pre).
+  if(_docCheck.openId){ const _ob=SB_BOOKINGS.find(x=>x.id===_docCheck.openId);
+    if(_ob && !(_ob.docCheck&&_ob.docCheck.pre) && !_docPre.running[_ob.id] && (_ob.attachments||[]).some(a=>/^image\//.test(a.mime||''))){
+      setTimeout(()=>docCheckRunPre(_ob.id),120);
+    }
+  }
 }
 function _docCheckDrawer(bkId, e, rName){
   const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return '';
@@ -52532,18 +52735,33 @@ function _docCheckDrawer(bkId, e, rName){
       <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 11px;background:#F7F8F6;border-bottom:1px solid #eef0ec"><span style="font-size:12px;color:#3F4654;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.kind==='capture'?'🖥':a.kind==='paste'?'📋':'📎'} ${e(a.name||'file')}</span><a href="${url}" target="_blank" rel="noopener" style="font-size:11.5px;color:#185FA5;text-decoration:none;flex:none;margin-left:8px">เปิดเต็ม ↗</a></div>
       ${isImg?`<a href="${url}" target="_blank" rel="noopener"><img src="${url}" style="width:100%;display:block"></a>`:isPdf?`<iframe src="${url}" style="width:100%;height:640px;border:none"></iframe>`:`<div style="padding:24px;text-align:center;font-size:12px;color:#8a8a82">📄 ${e(a.name||'file')} — <a href="${url}" target="_blank">เปิด</a></div>`}
     </div>`; }).join('') : `<div style="padding:34px;text-align:center;color:#b7bcc2;font-size:13px;border:1px dashed #d7dbe2;border-radius:10px">ยังไม่มีเอกสารแนบ<br><span style="font-size:11px">แนบได้ในหน้า New Booking (แก้ไข booking นี้)</span></div>`;
-  const chkHtml = DOCCHK_ITEMS.map(it=>{ const on=!!items[it.k]; return `<label style="display:flex;align-items:center;gap:9px;padding:7px 9px;border:1px solid ${on?'#BFE3CC':'#e3e6e1'};border-radius:9px;background:${on?'#EAF7EF':'#fff'};cursor:pointer;margin-bottom:6px"><span onclick="docCheckToggleItem('${e(bkId)}','${it.k}')" style="width:19px;height:19px;border-radius:5px;flex:none;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;${on?'background:#1B7F4B;color:#fff':'border:1.5px solid #c3c8cf;color:transparent'}">✓</span><span style="font-size:12.5px;color:#1B2A55;font-weight:600">${e(it.label)}</span></label>`; }).join('');
+  // ── Pre-Check (OCR) state for this booking ──
+  const _pre = dc.pre||null; const _preRes=(_pre&&_pre.results)||{};
+  const _running=!!_docPre.running[bkId];
+  const _hasImg=files.some(a=>/^image\//.test(a.mime||''));
+  const _preChip=(s)=>{ const M={match:['✓ ตรง','#1B7F4B','#EAF7EF'],maybe:['~ อาจตรง','#8A6D00','#FCF3D6'],mismatch:['✕ ไม่ตรง','#B5271F','#FBE7E5'],none:['— ไม่พบในเอกสาร','#8a8a82','#F1F2EF']}; const c=M[s]||M.none; return `<span style="font-size:10px;font-weight:700;color:${c[1]};background:${c[2]};padding:1px 7px;border-radius:7px;white-space:nowrap">${c[0]}</span>`; };
+  const chkHtml = DOCCHK_ITEMS.map(it=>{ const on=!!items[it.k]; const r=_preRes[it.k]; const bc=on?'#BFE3CC':(r&&r.s==='mismatch'?'#E7B3AE':(r&&r.s==='maybe'?'#E9D9A2':'#e3e6e1')); const bg=on?'#EAF7EF':(r&&r.s==='mismatch'?'#FDF1F0':'#fff');
+    const evTxt=r?(r.ev?('“'+e(r.ev)+'”'):(r.detail?e(r.detail):'')):'';
+    return `<label style="display:flex;align-items:flex-start;gap:9px;padding:7px 9px;border:1px solid ${bc};border-radius:9px;background:${bg};cursor:pointer;margin-bottom:6px"><span onclick="docCheckToggleItem('${e(bkId)}','${it.k}')" style="width:19px;height:19px;border-radius:5px;flex:none;margin-top:1px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;${on?'background:#1B7F4B;color:#fff':'border:1.5px solid #c3c8cf;color:transparent'}">✓</span><span style="flex:1"><span style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span style="font-size:12.5px;color:#1B2A55;font-weight:600">${e(it.label)}</span>${r?_preChip(r.s):''}</span>${evTxt?`<div style="font-size:10.5px;color:#6b7280;margin-top:2px;line-height:1.35">${evTxt}</div>`:''}</span></label>`; }).join('');
   const allTicked=DOCCHK_ITEMS.every(it=>items[it.k]);
+  // ── Pre-Check bar (surgical-updatable · id="dc-prebar") ──
+  const preBar=`<div id="dc-prebar">${_docPreBarHTML(b, bkId)}</div>`;
   const st=docCheckStatus(b); const bd=_docBadge(st);
+  const _ids=_docCheckOrdered(_docCheck.date).map(r=>r.bk.id); const _idx=_ids.indexOf(bkId); const _hasP=_idx>0, _hasN=_idx>=0&&_idx<_ids.length-1;
   return `<div onclick="docCheckClose()" style="position:fixed;inset:0;background:rgba(15,25,40,.20);z-index:600"></div>
     <div style="position:fixed;top:0;right:0;bottom:0;width:min(1357px,95vw);background:#fff;z-index:601;box-shadow:-16px 0 54px -12px rgba(0,0,0,.34);border-left:1px solid #e3e6e1;display:flex;flex-direction:column">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid #eef0ec;flex:none">
-      <div><b style="font-size:14px;color:#1B2A55">${e(b.voucherRef||b.code||b.id)}</b> <span style="font-size:11px;font-weight:700;background:${bd.bg};color:${bd.c};padding:2px 9px;border-radius:8px;margin-left:6px">${bd.t}</span></div>
-      <button onclick="docCheckClose()" style="background:#fff;border:1px solid #d7dbe2;border-radius:8px;padding:6px 11px;font-size:14px;cursor:pointer;color:#666">&#10005;</button>
+      <div><b style="font-size:14px;color:#1B2A55">${e(b.voucherRef||b.code||b.id)}</b> <span style="font-size:11px;font-weight:700;background:${bd.bg};color:${bd.c};padding:2px 9px;border-radius:8px;margin-left:6px">${bd.t}</span>${st==='verified'?'<span style="font-size:11px;color:#1B7F4B;font-weight:700;margin-left:6px">&#10004; เสร็จสมบูรณ์</span>':''}</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button onclick="docCheckNav(-1)" ${_hasP?'':'disabled'} title="ก่อนหน้า" style="background:#fff;border:1px solid #d7dbe2;border-radius:8px;padding:6px 11px;font-size:12px;cursor:${_hasP?'pointer':'default'};color:${_hasP?'#185FA5':'#c9cdd3'};font-family:inherit;font-weight:600">&lsaquo; ก่อนหน้า</button>
+        <span style="font-size:11px;color:#8a8a82;font-variant-numeric:tabular-nums;min-width:52px;text-align:center">${_idx+1} / ${_ids.length}</span>
+        <button onclick="docCheckNav(1)" ${_hasN?'':'disabled'} title="ถัดไป" style="background:#fff;border:1px solid #d7dbe2;border-radius:8px;padding:6px 11px;font-size:12px;cursor:${_hasN?'pointer':'default'};color:${_hasN?'#185FA5':'#c9cdd3'};font-family:inherit;font-weight:600">ถัดไป &rsaquo;</button>
+        <button onclick="docCheckClose()" style="background:#fff;border:1px solid #d7dbe2;border-radius:8px;padding:6px 11px;font-size:14px;cursor:pointer;color:#666">&#10005;</button>
+      </div>
     </div>
     <div style="flex:1;display:grid;grid-template-columns:360px 1fr;overflow:hidden;background:#F6F7F5">
       <!-- LEFT · pinned (short content · does not scroll with the docs) -->
-      <div style="overflow-y:auto;padding:16px;border-right:1px solid #e6e8e3">
+      <div id="dc-panel-left" style="overflow-y:auto;padding:16px;border-right:1px solid #e6e8e3">
           <div style="font-size:11px;font-weight:700;color:#185FA5;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">ข้อมูล booking (ในระบบ)</div>
           <div style="background:#fff;border:1px solid #e3e6e1;border-radius:11px;padding:11px 13px">
             ${fld('Voucher',e(b.voucherRef||b.code||b.id))}
@@ -52556,6 +52774,7 @@ function _docCheckDrawer(bkId, e, rName){
             ${fld('Request',e(b.notes||'-'))}
           </div>
           <div style="font-size:11px;font-weight:700;color:#185FA5;text-transform:uppercase;letter-spacing:.05em;margin:15px 0 6px">ติ๊กตรวจทีละช่อง (เทียบกับเอกสาร)</div>
+          ${preBar}
           ${chkHtml}
           <textarea placeholder="โน้ต / สิ่งที่ไม่ตรง (ถ้ามี)" oninput="docCheckSetNote('${e(bkId)}',this.value)" style="width:100%;box-sizing:border-box;margin-top:8px;border:1px solid #d7dbe2;border-radius:9px;padding:8px 11px;font-size:12.5px;font-family:inherit;resize:vertical" rows="2">${e(dc.note||'')}</textarea>
           <div style="display:flex;gap:8px;margin-top:11px">
@@ -52565,7 +52784,7 @@ function _docCheckDrawer(bkId, e, rName){
           ${(dc.by)?`<div style="font-size:10.5px;color:#8a8a82;margin-top:8px;text-align:center">ล่าสุดโดย ${e(dc.by)}${dc.at?(' · '+e(String(dc.at).slice(0,16).replace('T',' '))):''}</div>`:''}
       </div>
       <!-- RIGHT · documents (scrolls) -->
-      <div style="overflow-y:auto;padding:16px">
+      <div id="dc-panel-docs" style="overflow-y:auto;padding:16px">
           <div style="font-size:11px;font-weight:700;color:#185FA5;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">เอกสารแนบ (${files.length})</div>
           ${fileHtml}
       </div>
