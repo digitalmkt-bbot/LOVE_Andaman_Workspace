@@ -36558,9 +36558,33 @@ function bkV2LocksFor(routeId, date){
 }
 // Locks a given booking/agent may draw from · agent's own + office + global
 function bkV2LocksForAgent(routeId, date, agentId){
-  return bkV2LocksFor(routeId, date).filter(l => l.holderType==='office' || l.holderType==='global' || (l.holderType==='agent' && l.holderId===agentId));
+  return bkV2LocksFor(routeId, date).filter(l => !l.parentId && (l.holderType==='office' || l.holderType==='global' || (l.holderType==='agent' && l.holderId===agentId)));
 }
-function bkV2LockedTotal(routeId, date){ return bkV2LocksFor(routeId,date).reduce((s,l)=>s+bkV2LockRemaining(l),0); }
+// Drawable SOURCES for a booking · expands each parent into its sub-groups (A/B/C) + the parent's unallocated remainder
+function bkV2DrawSources(routeId, date, agentId){
+  const out=[];
+  bkV2LocksForAgent(routeId,date,agentId).forEach(l=>{
+    const kids=bkV2LockChildren(l.id);
+    if(kids.length){
+      kids.forEach(c=>{ const r=bkV2LockRemaining(c); if(r>0) out.push({lockId:c.id, label:bkV2LockHolderName(l)+' · '+(c.subName||'ย่อย'), remaining:r}); });
+      const ur=bkV2LockUnallocDrawable(l); if(ur>0) out.push({lockId:l.id, label:bkV2LockHolderName(l)+' · ยังไม่จัด', remaining:ur});
+    } else {
+      const r=bkV2LockRemaining(l); if(r>0) out.push({lockId:l.id, label:bkV2LockHolderName(l), remaining:r});
+    }
+  });
+  return out;
+}
+// ── Parent / child sub-locks (Option A) · a lock with children is an umbrella; children carve out its qty ──
+function bkV2LockChildren(parentId){ return SB_SEAT_LOCKS.filter(x=>x.parentId===parentId); }
+function bkV2LockAllocated(parent){ return bkV2LockChildren(parent.id).reduce((s,c)=>s+(c.qty||0),0); }            // seats carved into sub-groups
+function bkV2LockUnalloc(parent){ return Math.max(0, (parent.qty||0) - bkV2LockAllocated(parent)); }              // parent qty not yet in a sub-group
+function bkV2LockUsedTotal(l){ return (l.used||0) + bkV2LockChildren(l.id).reduce((s,c)=>s+(c.used||0),0); }      // draws incl. children
+function bkV2LockHeldRemaining(l){ return Math.max(0, (l.qty||0) - bkV2LockUsedTotal(l)); }                       // seats still held off the pool (parent-aware)
+function bkV2LockUnallocDrawable(parent){ return Math.max(0, bkV2LockUnalloc(parent) - (parent.used||0)); }       // unallocated seats the PARENT itself can still draw
+function bkV2LockDrawable(l){ return l.parentId ? bkV2LockRemaining(l) : bkV2LockUnallocDrawable(l); }            // seats a source (child OR parent-unalloc) can still draw
+// Contribution to the sellable-pool reduction · counted at the parent/standalone level ONLY (children live inside the parent → 0)
+function bkV2LockPoolHold(l){ return l.parentId ? 0 : bkV2LockHeldRemaining(l); }
+function bkV2LockedTotal(routeId, date){ return bkV2LocksFor(routeId,date).reduce((s,l)=>s+bkV2LockPoolHold(l),0); }
 // Current logged-in user for audit stamps (username preferred · falls back to name, then RM for offline/localhost)
 function laBy(){ return (window.LA_ME && (window.LA_ME.username||window.LA_ME.name)) || 'RM'; }
 function bkV2CreateLock(o){
@@ -36576,22 +36600,24 @@ function bkV2CreateLock(o){
 }
 function bkV2DrawLock(lockId, qty, bookingId){
   const l = SB_SEAT_LOCKS.find(x=>x.id===lockId); if(!l) return 0;
-  const n = Math.min(Math.max(0, qty|0), bkV2LockRemaining(l)); if(n<=0) return 0;
+  const n = Math.min(Math.max(0, qty|0), bkV2LockDrawable(l)); if(n<=0) return 0;   // parent draws only its unallocated remainder
   const today = (typeof bkV2LocalYMD==='function') ? bkV2LocalYMD(new Date()) : new Date().toISOString().slice(0,10);
   l.used = (l.used||0) + n; (l.log=l.log||[]).push({date:today,at:new Date().toISOString(),type:'draw',qty:n,bookingId:bookingId||'',by:laBy()});
-  if(bkV2LockRemaining(l) <= 0) l.status='depleted';
+  if(bkV2LockDrawable(l) <= 0 && (l.parentId || !bkV2LockChildren(l.id).length)) l.status='depleted';
   sbSeatLocksPersist(); return n;
 }
 // Release seats back to pool · qty omitted = release all remaining · partial keeps lock active
 function bkV2ReleaseLock(lockId, qty){
   const l = SB_SEAT_LOCKS.find(x=>x.id===lockId); if(!l) return;
   const today = (typeof bkV2LocalYMD==='function') ? bkV2LocalYMD(new Date()) : new Date().toISOString().slice(0,10);
-  const rem = bkV2LockRemaining(l);
+  // parent releases only its UNALLOCATED remainder (seats sitting in sub-groups are released from the child); child releases its own remainder
+  const rem = l.parentId ? bkV2LockRemaining(l) : bkV2LockUnallocDrawable(l);
   const n = (qty==null) ? rem : Math.min(Math.max(0, qty|0), rem);
   if(n <= 0) return;
-  l.qty = Math.max(l.used||0, (l.qty||0) - n);   // return n held seats · never below used
+  const floor = l.parentId ? (l.used||0) : Math.max(l.used||0, bkV2LockAllocated(l));   // never drop below used, and (parent) never below what's allocated to children
+  l.qty = Math.max(floor, (l.qty||0) - n);
   (l.log=l.log||[]).push({date:today, type:'release', qty:n});
-  if(bkV2LockRemaining(l) <= 0) l.status = (l.used>0) ? 'depleted' : 'released';
+  if(bkV2LockDrawable(l) <= 0 && (l.parentId || !bkV2LockChildren(l.id).length)) l.status = (l.used>0) ? 'depleted' : 'released';
   sbSeatLocksPersist();
 }
 // KPI · per agent · locked vs converted (drawn)
@@ -36613,14 +36639,14 @@ let _bkV2ReleaseModal = null;   // { lockId, max, value }
 let _bkV2LockModalOpen = false; // inline create-lock modal (from Calendar)
 // Day-specific locked seats (exact date · scope==='day') · used for calendar cell badge
 function bkV2DayLockedExact(date){
-  return SB_SEAT_LOCKS.filter(l => l.status==='active' && l.scope!=='month' && l.date===date).reduce((s,l)=>s+bkV2LockRemaining(l), 0);
+  return SB_SEAT_LOCKS.filter(l => l.status==='active' && l.scope!=='month' && l.date===date).reduce((s,l)=>s+bkV2LockPoolHold(l), 0);
 }
 // Total applicable locked seats on a date (day-locks + any month-range pool covering it)
 function bkV2DayLockedTotal(date){
   const ym = String(date).slice(0,7);
   return SB_SEAT_LOCKS.filter(l => l.status==='active' && (
     l.scope==='month' ? (function(){ const fr=l.monthFrom||l.month, to=l.monthTo||l.month||fr; return fr && ym>=fr && ym<=to; })() : l.date===date
-  )).reduce((s,l)=>s+bkV2LockRemaining(l), 0);
+  )).reduce((s,l)=>s+bkV2LockPoolHold(l), 0);
 }
 // Shared create-lock form fields (used by the Seat Locks tab + Calendar modal)
 function bkV2LockFormFields(){
@@ -36706,10 +36732,32 @@ function bkV2LockFromCalendar(routeId, date){
 // Release · custom modal (replaces native prompt)
 function bkV2LockReleaseConfirm(id){
   const l = SB_SEAT_LOCKS.find(x=>x.id===id); if(!l) return;
-  const rem = bkV2LockRemaining(l);
+  const rem = l.parentId ? bkV2LockRemaining(l) : bkV2LockUnallocDrawable(l);   // parent releases only its unallocated remainder
   _bkV2ReleaseModal = { lockId:id, max:rem, value:rem };
   bkV2Render();
 }
+// Create a sub-group (child) under a parent lock · carves from the parent's unallocated qty
+function bkV2CreateSubLock(parentId, subName, qty, opt){
+  opt = opt||{};
+  const p = SB_SEAT_LOCKS.find(x=>x.id===parentId); if(!p){ return null; }
+  const q = Number(qty)||0; if(q<=0){ alert('Enter the number of seats for this sub-group'); return null; }
+  const room = bkV2LockUnalloc(p);
+  if(q > room){ alert('เกินจำนวนที่เหลือแบ่งได้ (เหลือ '+room+' ที่)'); return null; }
+  const today = (typeof bkV2LocalYMD==='function') ? bkV2LocalYMD(new Date()) : new Date().toISOString().slice(0,10);
+  const nowTs = new Date().toISOString();
+  const c = { id:LA_UID('lk'), parentId:parentId, subName:String(subName||'').trim()||'ย่อย',
+    scope:p.scope, routeId:p.routeId, date:p.date||'', monthFrom:p.monthFrom||'', monthTo:p.monthTo||'', month:p.month||'', boatId:p.boatId||null,
+    holderType:p.holderType, holderId:p.holderId, qty:q, used:0,
+    reason:opt.reason||'', expiry:opt.expiry||p.expiry||'', status:'active', createdAt:nowTs, createdBy:laBy(),
+    log:[{date:today, at:nowTs, type:'create', qty:q, by:laBy(), sub:true}] };
+  SB_SEAT_LOCKS.push(c); sbSeatLocksPersist(); return c;
+}
+// Sub-group create modal (inline · in the Seat Locks tab)
+let _bkV2SubModal = null;   // { parentId, name, qty, expiry, reason }
+function bkV2SubOpen(parentId){ const p=SB_SEAT_LOCKS.find(x=>x.id===parentId); if(!p) return; _bkV2SubModal={ parentId, name:'', qty:'', expiry:p.expiry||'', reason:'' }; bkV2Render(); }
+function bkV2SubSet(k,v){ if(!_bkV2SubModal) return; _bkV2SubModal[k]=v; }
+function bkV2SubCancel(){ _bkV2SubModal=null; bkV2Render(); }
+function bkV2SubCommit(){ const m=_bkV2SubModal; if(!m) return; if(!String(m.name||'').trim()){ alert('Type a sub-group name (e.g. A)'); return; } const c=bkV2CreateSubLock(m.parentId, m.name, m.qty, {expiry:m.expiry, reason:m.reason}); if(c){ _bkV2SubModal=null; bkV2Render(); } }
 function bkV2ReleaseModalSet(val){
   if(!_bkV2ReleaseModal) return;
   _bkV2ReleaseModal.value = Math.min(Math.max(0, Number(val)||0), _bkV2ReleaseModal.max);
@@ -36733,10 +36781,10 @@ function bkV2RenderLocks(){
   const f = _bkV2LockForm;
   const routeName = rid => (typeof ROUTES!=='undefined' ? (ROUTES.find(r=>r.id===rid)?.name||rid) : rid);
   // KPI
-  const active = SB_SEAT_LOCKS.filter(l=>l.status==='active');
-  const heldRem = active.reduce((s,l)=>s+bkV2LockRemaining(l),0);
-  const lockedQty = SB_SEAT_LOCKS.reduce((s,l)=>s+(l.qty||0),0);
-  const usedQty = SB_SEAT_LOCKS.reduce((s,l)=>s+(l.used||0),0);
+  const active = SB_SEAT_LOCKS.filter(l=>l.status==='active' && !l.parentId);   // count umbrella/standalone locks (children live inside)
+  const heldRem = SB_SEAT_LOCKS.filter(l=>l.status==='active').reduce((s,l)=>s+bkV2LockPoolHold(l),0);
+  const lockedQty = SB_SEAT_LOCKS.filter(l=>!l.parentId).reduce((s,l)=>s+(l.qty||0),0);   // parent qty already includes its children
+  const usedQty = SB_SEAT_LOCKS.reduce((s,l)=>s+(l.used||0),0);   // total drawn (parent-direct + all sub-groups)
   const conv = lockedQty ? Math.round(usedQty/lockedQty*100) : 0;
   const kpi = `
     <div class="bkv2-stats" style="grid-template-columns:repeat(4,1fr)">
@@ -36792,22 +36840,48 @@ function bkV2RenderLocks(){
           <span style="color:#0F7A5A">${avail} available</span>
         </div>` : `<div style="margin-top:5px;font-size:10px;color:#A05A1A">No boat assigned for this trip yet · locked ${bkV2LockedTotal(rid,date)}</div>`;
     }
-    const rows = locks.map(l => {
-      const rem = bkV2LockRemaining(l);
-      const pct = l.qty ? Math.round(l.used/l.qty*100) : 0;
+    // child row (sub-group · indented)
+    const childRow = c => {
+      const rem = bkV2LockRemaining(c); const pct = c.qty ? Math.round(c.used/c.qty*100) : 0;
       return `
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 12px 7px 30px;border-top:1px dashed var(--border-2);flex-wrap:wrap;background:#FCFBFA">
+          <div style="min-width:130px;flex:1">
+            <div style="font-size:11.5px;font-weight:600;color:var(--ink)">↳ ${esc(c.subName||'ย่อย')} ${stChip(c.status)}</div>
+            <div style="font-size:9.5px;color:var(--ink-soft)">${esc(c.reason||'')}${c.expiry?` · หมดอายุ ${esc(c.expiry)}`:''}</div>
+          </div>
+          <div style="min-width:110px">
+            <div style="font-family:Manrope,sans-serif;font-size:11.5px;font-variant-numeric:tabular-nums"><b>${c.used}</b>/${c.qty} ดึงแล้ว · <b style="color:#C0392B">${rem}</b> เหลือ</div>
+            <div style="height:5px;border-radius:4px;background:#EEF0F3;margin-top:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:#0F7A5A"></div></div>
+          </div>
+          ${(c.status==='active') ? `<button onclick="bkV2LockReleaseConfirm('${c.id}')" style="font-size:10.5px;font-weight:600;color:#A32D2D;background:#FDECEA;border:1px solid #F5C9C4;border-radius:6px;padding:4px 9px;cursor:pointer;font-family:inherit">คืน</button>` : ''}
+        </div>`;
+    };
+    const rows = locks.filter(l=>!l.parentId).map(l => {
+      const kids = bkV2LockChildren(l.id);
+      const hasKids = kids.length>0;
+      const usedTot = bkV2LockUsedTotal(l);
+      const heldRem = bkV2LockHeldRemaining(l);
+      const unalloc = bkV2LockUnalloc(l);
+      const pct = l.qty ? Math.round(usedTot/l.qty*100) : 0;
+      const allocLine = hasKids ? `<div style="font-size:10px;color:var(--ink-soft);margin-top:2px">แบ่งย่อย ${bkV2LockAllocated(l)} · ยังไม่จัด <b style="color:${unalloc>0?'#A05A1A':'var(--ink-soft)'}">${unalloc}</b></div>` : '';
+      const parentBlock = `
         <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-top:1px solid var(--border-2);flex-wrap:wrap">
           <div style="min-width:140px;flex:1">
-            <div style="font-size:12px;font-weight:600;color:var(--ink)">${esc(bkV2LockHolderName(l))} ${stChip(l.status)}</div>
+            <div style="font-size:12px;font-weight:600;color:var(--ink)">${esc(bkV2LockHolderName(l))} ${hasKids?`<span style="font-size:9px;font-weight:700;color:#534AB7;background:#EEEDFE;padding:1px 6px;border-radius:5px">UMBRELLA · ${kids.length} ย่อย</span>`:''} ${stChip(l.status)}</div>
             <div style="font-size:10px;color:var(--ink-soft)">${esc(l.reason||'—')}${l.expiry?` · expires ${esc(l.expiry)}`:''}</div>
+            ${allocLine}
             <div style="font-size:9.5px;color:var(--ink-soft);opacity:.85;margin-top:1px">🔒 สร้างโดย ${esc(l.createdBy||'—')}${l.createdAt?` · ${esc((function(){try{return new Date(l.createdAt).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return l.createdAt;}})())}`:''}</div>
           </div>
           <div style="min-width:120px">
-            <div style="font-family:Manrope,sans-serif;font-size:12px;font-variant-numeric:tabular-nums"><b>${l.used}</b>/${l.qty} used · <b style="color:#C0392B">${rem}</b> left</div>
+            <div style="font-family:Manrope,sans-serif;font-size:12px;font-variant-numeric:tabular-nums"><b>${usedTot}</b>/${l.qty} used · <b style="color:#C0392B">${heldRem}</b> left</div>
             <div style="height:6px;border-radius:4px;background:#EEF0F3;margin-top:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:#0F7A5A"></div></div>
           </div>
-          ${(l.status==='active') ? `<button onclick="bkV2LockReleaseConfirm('${l.id}')" style="font-size:11px;font-weight:600;color:#A32D2D;background:#FDECEA;border:1px solid #F5C9C4;border-radius:6px;padding:5px 10px;cursor:pointer;font-family:inherit">Release</button>` : ''}
+          <div style="display:flex;gap:6px;align-items:center">
+            ${(l.status==='active' && unalloc>0) ? `<button onclick="bkV2SubOpen('${l.id}')" style="font-size:11px;font-weight:600;color:#534AB7;background:#EEEDFE;border:1px solid #CECBF6;border-radius:6px;padding:5px 10px;cursor:pointer;font-family:inherit">+ กรุ๊ปย่อย</button>` : ''}
+            ${(l.status==='active') ? `<button onclick="bkV2LockReleaseConfirm('${l.id}')" title="${hasKids?'คืนเฉพาะที่ยังไม่จัด':'คืนที่นั่ง'}" style="font-size:11px;font-weight:600;color:#A32D2D;background:#FDECEA;border:1px solid #F5C9C4;border-radius:6px;padding:5px 10px;cursor:pointer;font-family:inherit">Release</button>` : ''}
+          </div>
         </div>`;
+      return parentBlock + kids.map(childRow).join('');
     }).join('');
     return `
       <div class="bkv2-stat" style="margin:0;padding:12px 14px;border-radius:var(--r-sm)">
@@ -36825,7 +36899,9 @@ function bkV2RenderLocks(){
     const key = l.holderType==='agent' ? ('a:'+l.holderId) : l.holderType;
     const label = l.holderType==='agent' ? bkV2LockHolderName(l) : (l.holderType==='office'?'Office hold':'Global pool');
     const h = holders[key] = holders[key] || { label, type:l.holderType, lockCount:0, qty:0, used:0, active:0, released:0, expired:0 };
-    h.lockCount++; h.qty += l.qty||0; h.used += l.used||0;
+    h.used += l.used||0;                              // count draws from every level (parent-direct + sub-groups)
+    if(l.parentId) return;                            // qty / lockCount / status counted at the umbrella level only (child qty lives inside parent)
+    h.lockCount++; h.qty += l.qty||0;
     if(l.status==='active') h.active++; else if(l.status==='released') h.released++; else if(l.status==='expired') h.expired++;
   });
   const hRows = Object.values(holders).sort((a,b)=> b.qty - a.qty).map(h => {
@@ -36883,6 +36959,32 @@ function bkV2RenderLocks(){
         </div>
       </div>
     </div>` : '';
+  // Sub-group create modal
+  const sm = _bkV2SubModal;
+  const subParent = sm ? SB_SEAT_LOCKS.find(x=>x.id===sm.parentId) : null;
+  const subRoom = subParent ? bkV2LockUnalloc(subParent) : 0;
+  const subModal = (sm && subParent) ? `
+    <div onclick="bkV2SubCancel()" style="position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9999;display:flex;align-items:center;justify-content:center">
+      <div onclick="event.stopPropagation()" style="background:#fff;border-radius:14px;width:360px;max-width:92vw;box-shadow:0 14px 44px rgba(0,0,0,.28);overflow:hidden">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--border)">
+          <div style="font-size:9px;font-weight:700;letter-spacing:.06em;color:#534AB7;text-transform:uppercase">Sub-group · กรุ๊ปย่อย</div>
+          <div style="font-size:15px;font-weight:700;color:var(--ink);margin-top:2px">แบ่งที่นั่งใต้ ${esc(bkV2LockHolderName(subParent))}</div>
+          <div style="font-size:11px;color:var(--ink-soft);margin-top:2px">ยังไม่จัด <b style="color:#A05A1A">${subRoom}</b> ที่ · แบ่งได้ไม่เกินนี้</div>
+        </div>
+        <div style="padding:16px 18px;display:flex;flex-direction:column;gap:10px">
+          <div><div style="font-size:10px;color:var(--ink-soft);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em">ชื่อกรุ๊ป *</div><input value="${esc(sm.name)}" oninput="bkV2SubSet('name',this.value)" placeholder="เช่น A" style="width:100%;box-sizing:border-box;height:34px;border:1px solid var(--border);border-radius:8px;padding:0 11px;font-family:inherit;font-size:13px"></div>
+          <div style="display:flex;gap:10px">
+            <div style="flex:1"><div style="font-size:10px;color:var(--ink-soft);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em">จำนวนที่นั่ง *</div><input type="number" min="1" max="${subRoom}" value="${esc(sm.qty)}" oninput="bkV2SubSet('qty',this.value)" style="width:100%;box-sizing:border-box;height:34px;border:1px solid var(--border);border-radius:8px;padding:0 11px;font-family:Manrope,sans-serif;font-size:14px;font-variant-numeric:tabular-nums"></div>
+            <div style="flex:1"><div style="font-size:10px;color:var(--ink-soft);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em">หมดอายุ</div><input type="date" value="${esc(sm.expiry)}" oninput="bkV2SubSet('expiry',this.value)" style="width:100%;box-sizing:border-box;height:34px;border:1px solid var(--border);border-radius:8px;padding:0 9px;font-family:inherit;font-size:12px"></div>
+          </div>
+          <div><div style="font-size:10px;color:var(--ink-soft);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em">หมายเหตุ</div><input value="${esc(sm.reason)}" oninput="bkV2SubSet('reason',this.value)" placeholder="เช่น sub-agent A" style="width:100%;box-sizing:border-box;height:34px;border:1px solid var(--border);border-radius:8px;padding:0 11px;font-family:inherit;font-size:13px"></div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 18px;background:#fafafa;border-top:1px solid var(--border)">
+          <button onclick="bkV2SubCancel()" style="font-size:12px;font-weight:600;color:var(--ink-soft);background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 14px;cursor:pointer;font-family:inherit">ยกเลิก</button>
+          <button onclick="bkV2SubCommit()" style="font-size:12px;font-weight:700;color:#fff;background:#534AB7;border:none;border-radius:8px;padding:8px 16px;cursor:pointer;font-family:inherit">+ เพิ่มกรุ๊ปย่อย</button>
+        </div>
+      </div>
+    </div>` : '';
   return `
     <div class="bkv2-locks">
     ${kpi}
@@ -36892,6 +36994,7 @@ function bkV2RenderLocks(){
       ${groups || '<div class="bkv2-selday-empty">No seat locks yet · create one above</div>'}
     </div>
     ${releaseModal}
+    ${subModal}
     </div>
   `;
 }
@@ -47692,31 +47795,36 @@ function bkV2RenderTripsSection(){
     } else if(isCharter && t.charterBoatId && subtotal.error){
       charterBreakdownHtml = `<div style="margin-top:6px;padding:6px 10px;background:#FDE7E7;color:#a32d2d;font-size:10px;border:1px solid #F5B7B7;border-radius:var(--r-sm)">⚠ ${escapeHTML(subtotal.error)} for this boat type · check Rate Type charter rates</div>`;
     }
-    // ── Seat-lock draw banner (Step 3c · seat mode · ask before using) ──
+    // ── Seat-lock draw banner (Step 3c · seat mode · pick which sub-group to draw from) ──
     let lockBannerHtml = '';
-    if(!isCharter && t.routeId && t.date && d.agentId && typeof bkV2LocksForAgent==='function'){
-      const locks = bkV2LocksForAgent(t.routeId, t.date, d.agentId);
-      const remTotal = locks.reduce((s,l)=>s+bkV2LockRemaining(l),0);
+    if(!isCharter && t.routeId && t.date && d.agentId && typeof bkV2DrawSources==='function'){
+      const srcs = bkV2DrawSources(t.routeId, t.date, d.agentId);
+      const remTotal = srcs.reduce((s,x)=>s+x.remaining,0);
       if(remTotal > 0){
         const pax = bkV2PaxAllTot(t.pax);
-        const maxUse = Math.min(remTotal, pax);
-        const use = Math.min(Number(t.lockUse)||0, maxUse);
-        const general = Math.max(0, pax - use);
-        const holders = locks.map(l => `${escapeHTML(bkV2LockHolderName(l))} (${bkV2LockRemaining(l)})`).join(' · ');
+        const sel = t.lockDrawSel || {};
+        const drawnTot = srcs.reduce((s,x)=> s + Math.min(Number(sel[x.lockId])||0, x.remaining), 0);
+        const general = Math.max(0, pax - drawnTot);
+        const stepBtn = 'width:22px;height:22px;border:1px solid #C7D8F7;background:#fff;border-radius:5px;cursor:pointer;color:#2952C8;font-weight:700';
+        const srcRows = srcs.map(x=>{
+          const v = Math.min(Number(sel[x.lockId])||0, x.remaining);
+          const canInc = drawnTot < pax && v < x.remaining;
+          return `
+            <div style="display:flex;align-items:center;gap:6px;margin-top:5px">
+              <span style="font-size:10.5px;color:#2952C8;flex:1;min-width:120px">${escapeHTML(x.label)} <span style="color:#7C93C9">· เหลือ ${x.remaining}</span></span>
+              <button onclick="bkV2SetTripLockDraw(${idx},'${x.lockId}',${Math.max(0,v-1)})" ${v<=0?'disabled':''} style="${stepBtn}">&minus;</button>
+              <span style="font-family:Manrope,sans-serif;font-weight:800;color:#2952C8;min-width:18px;text-align:center;font-variant-numeric:tabular-nums">${v}</span>
+              <button onclick="bkV2SetTripLockDraw(${idx},'${x.lockId}',${v+1})" ${canInc?'':'disabled'} style="${stepBtn}">+</button>
+            </div>`;
+        }).join('');
         lockBannerHtml = `
           <div style="margin-top:8px;padding:9px 11px;background:#EAF1FE;border:1px solid #C7D8F7;border-radius:var(--r-sm)">
             <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
               <span style="font-size:13px">🔒</span>
-              <span style="font-size:11px;font-weight:700;color:#2952C8">${remTotal} locked seat${remTotal===1?'':'s'} available</span>
-              <span style="font-size:10px;color:#3A6FF7">${holders}</span>
-              <div style="margin-left:auto;display:flex;align-items:center;gap:5px">
-                <span style="font-size:10px;color:#475569;font-weight:600">Use locked</span>
-                <button onclick="bkV2SetTripLockUse(${idx}, ${Math.max(0,use-1)})" ${use<=0?'disabled':''} style="width:22px;height:22px;border:1px solid #C7D8F7;background:#fff;border-radius:5px;cursor:pointer;color:#2952C8;font-weight:700">&minus;</button>
-                <span style="font-family:Manrope,sans-serif;font-weight:800;color:#2952C8;min-width:18px;text-align:center;font-variant-numeric:tabular-nums">${use}</span>
-                <button onclick="bkV2SetTripLockUse(${idx}, ${Math.min(maxUse,use+1)})" ${use>=maxUse?'disabled':''} style="width:22px;height:22px;border:1px solid #C7D8F7;background:#fff;border-radius:5px;cursor:pointer;color:#2952C8;font-weight:700">+</button>
-              </div>
+              <span style="font-size:11px;font-weight:700;color:#2952C8">${remTotal} locked seat${remTotal===1?'':'s'} · เลือกดึงจากกรุ๊ป</span>
             </div>
-            ${use>0 ? `<div style="margin-top:6px;font-size:10px;color:#2952C8">Will draw <b>${use}</b> from lock (no pool impact) + <b>${general}</b> new seat${general===1?'':'s'} · confirmed on save</div>` : `<div style="margin-top:6px;font-size:10px;color:#64748B">All ${pax} pax from general pool · tap + to draw from lock first</div>`}
+            ${srcRows}
+            ${drawnTot>0 ? `<div style="margin-top:6px;font-size:10px;color:#2952C8">ดึงจากล็อค <b>${drawnTot}</b> ที่ (ไม่กระทบ pool) + <b>${general}</b> ที่นั่งใหม่ · ยืนยันตอนบันทึก</div>` : `<div style="margin-top:6px;font-size:10px;color:#64748B">ทั้ง ${pax} pax จาก pool ทั่วไป · กด + เพื่อดึงจากล็อคก่อน</div>`}
           </div>`;
       }
     }
@@ -50922,6 +51030,7 @@ function bkV2NewTrip(){
     ovnCharge: 0,              // OVN · ค่าค้างคืน (extra) · บวกเข้ายอดรวม
     ovnLeg: false,             // = trip ขากลับ (auto-สร้าง) · ราคา 0 · กันที่นั่งวันกลับ
     lockUse: 0,                // seats this booking will draw from seat-locks (Step 3c)
+    lockDrawSel: {},           // staff-picked draw sources {lockId:qty} (Option A sub-groups)
     pickupTime: '',            // auto-resolved · user can edit
     pickupTimeEdited: false    // track if user manually overrode
   };
@@ -52117,6 +52226,21 @@ function bkV2SetTripLockUse(idx, val){
   t.lockUse = Math.max(0, Math.min(Number(val)||0, pax, rem));
   bkV2Render();
 }
+// Per-source draw picker (Option A · sub-groups) · stores t.lockDrawSel = {lockId:qty}
+function bkV2SetTripLockDraw(idx, lockId, qty){
+  const t = _bkV2.newBooking && _bkV2.newBooking.trips[idx]; if(!t) return;
+  const pax = bkV2PaxAllTot(t.pax);
+  t.lockDrawSel = t.lockDrawSel || {};
+  const srcs = (typeof bkV2DrawSources==='function') ? bkV2DrawSources(t.routeId, t.date, _bkV2.newBooking.agentId) : [];
+  const src = srcs.find(s=>s.lockId===lockId);
+  const srcMax = src ? src.remaining : 0;
+  let v = Math.max(0, Math.min(Number(qty)||0, srcMax));
+  const others = Object.keys(t.lockDrawSel).reduce((s,k)=> s + (k===lockId?0:(Number(t.lockDrawSel[k])||0)), 0);
+  v = Math.min(v, Math.max(0, pax - others));   // total across sources never exceeds pax
+  if(v<=0) delete t.lockDrawSel[lockId]; else t.lockDrawSel[lockId]=v;
+  t.lockUse = Object.values(t.lockDrawSel).reduce((s,x)=>s+(Number(x)||0),0);   // back-compat total
+  bkV2Render();
+}
 function bkV2SetTripBookingMode(idx, mode){
   if(!_bkV2.newBooking) return;
   const t = _bkV2.newBooking.trips[idx];
@@ -53281,6 +53405,7 @@ function bkV2CommitBooking(status){
         const lu = (t.bookingMode==='charter') ? 0 : Math.min(Number(t.lockUse)||0, paxT);
         return { locked: lu, general: Math.max(0, paxT - lu) };
       })(),
+      lockDrawSel: (t.bookingMode==='charter') ? {} : { ...(t.lockDrawSel||{}) },   // staff-picked draw sources {lockId:qty} (Option A sub-groups)
       lockDraws: [],   // filled after save · [{lockId, qty}]
       subtotal: bkV2TripSubtotal(t).total
     })),
@@ -53397,22 +53522,26 @@ function bkV2CommitBooking(status){
     SB_BOOKINGS.unshift(newBk);
   }
 
-  // ── Step 3c · draw locked seats (own agent → office → global priority) ──
+  // ── Step 3c · draw locked seats from the STAFF-PICKED sources (sub-groups A/B/C or parent-unalloc) ──
   if(typeof bkV2DrawLock === 'function'){
     const rank = l => l.holderType==='agent' ? 0 : (l.holderType==='office' ? 1 : 2);
-    newBk.trips.forEach((nt, i) => {
-      const src = nt.seatSource || {};
-      let need = (nt.bookingMode==='charter') ? 0 : (Number(src.locked)||0);
-      if(need <= 0) return;
-      const locks = bkV2LocksForAgent(nt.routeId, nt.date, newBk.agentId).sort((a,b)=>rank(a)-rank(b));
+    newBk.trips.forEach((nt) => {
+      if(nt.bookingMode==='charter'){ nt.lockDraws=[]; return; }
       const draws = [];
-      for(const l of locks){
-        if(need <= 0) break;
-        const n = bkV2DrawLock(l.id, Math.min(need, bkV2LockRemaining(l)), newBk.id);
-        if(n > 0){ draws.push({ lockId:l.id, qty:n }); need -= n; }
+      const sel = nt.lockDrawSel || {};
+      const picked = Object.keys(sel).filter(id => (Number(sel[id])||0) > 0);
+      if(picked.length){
+        // explicit picks (Option A) · draw exactly what the user chose, per source
+        picked.forEach(id => { const n = bkV2DrawLock(id, Number(sel[id])||0, newBk.id); if(n>0) draws.push({ lockId:id, qty:n }); });
+      } else {
+        // fallback (no explicit pick · legacy) · draw seatSource.locked by priority
+        let need = Number((nt.seatSource||{}).locked)||0;
+        if(need > 0 && typeof bkV2DrawSources==='function'){
+          const srcs = bkV2DrawSources(nt.routeId, nt.date, newBk.agentId).sort((a,b)=>{ const la=SB_SEAT_LOCKS.find(x=>x.id===a.lockId)||{}, lb=SB_SEAT_LOCKS.find(x=>x.id===b.lockId)||{}; return rank(la)-rank(lb); });
+          for(const s of srcs){ if(need<=0) break; const n = bkV2DrawLock(s.lockId, Math.min(need, s.remaining), newBk.id); if(n>0){ draws.push({ lockId:s.lockId, qty:n }); need -= n; } }
+        }
       }
       nt.lockDraws = draws;
-      // reconcile in case fewer were actually available
       const drawn = draws.reduce((s,x)=>s+x.qty,0);
       const paxT = bkV2PaxAllTot(nt.pax);
       nt.seatSource = { locked: drawn, general: Math.max(0, paxT - drawn) };
