@@ -13724,7 +13724,7 @@ function flLoad(){
       const no = 'MO-' + String(maxNo + 1).padStart(3,'0');
 
       d.fleet_memos.push({
-        id: 'm'+Date.now()+'_krisada',
+        id: 'm1779690941880_krisada',   /* static — Date.now() id made every re-seed a duplicate */
         no: no,
         title: 'ขออนุมัติจัดซื้ออะไหล่สแปร์ · ท่าเรือภูเก็ต',
         to: 'กรรมการผู้จัดการ',
@@ -14215,8 +14215,8 @@ function flLoad(){
     
     if(!incExists && !mjExists){
       // STEP 1: Create incident (mimics flSaveIncident)
-      const incId = 'inc_zeus_'+Date.now();
-      const mjId = 'mj_zeus_'+Date.now();
+      const incId = 'inc_zeus_1779690941893';   /* static — Date.now() ids made every re-seed a duplicate */
+      const mjId = 'mj_zeus_1779690941893';
       const damagedAssets = [
         {type:'engine', id:'e26', label:'BBNJ-1000049 · Port'}
       ];
@@ -14587,7 +14587,7 @@ function flLoad(){
       ];
       
       const mj = {
-        id: 'mj_al1_divot_'+Date.now(), no:'MJ-025',
+        id: 'mj_al1_divot_1779690941897', no:'MJ-025',   /* static — Date.now() id made every re-seed a duplicate */
         boatId: 'b1',
         type:'preventive',
         title: 'เปลี่ยน ไดโว่ 12V',
