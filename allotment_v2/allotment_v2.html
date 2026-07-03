@@ -52471,43 +52471,68 @@ function docCheckClose(){ _docCheck.openId=null; renderDocCheck(); }
 function docCheckToggleItem(bkId,k){ if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return; const bk=SB_BOOKINGS.find(b=>b.id===bkId); if(!bk) return; bk.docCheck=bk.docCheck||{status:'pending',items:{}}; bk.docCheck.items=bk.docCheck.items||{}; bk.docCheck.items[k]=!bk.docCheck.items[k]; _docCheckPersist(); renderDocCheck(); }
 function docCheckSetStatus(bkId,status){ if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return; const bk=SB_BOOKINGS.find(b=>b.id===bkId); if(!bk) return; bk.docCheck=bk.docCheck||{items:{}}; bk.docCheck.status=status; bk.docCheck.by=(typeof laBy==='function'?laBy():'') ; bk.docCheck.at=new Date().toISOString(); _docCheckPersist(); if(typeof bkV2AddHistory==='function') bkV2AddHistory(bk,'edit','Document check · '+(status==='verified'?'✅ verified':status==='issue'?'⚠ issue':status)+((bk.docCheck.note)?(' · '+bk.docCheck.note):''),'DocCheck'); renderDocCheck(); }
 function docCheckSetNote(bkId,val){ const bk=SB_BOOKINGS.find(b=>b.id===bkId); if(!bk) return; bk.docCheck=bk.docCheck||{items:{}}; bk.docCheck.note=val; _docCheckPersist(); }   // no re-render (keep focus)
-function _docCheckList(date){ const out=[]; (SB_BOOKINGS||[]).forEach(b=>{ if(!_docIsB2B(b)) return; if(b.status==='rejected') return; const t=(b.trips||[]).find(tt=>(tt.date||'')===date); if(!t) return; out.push({bk:b,trip:t}); }); out.sort((a,b)=>String(a.bk.voucherRef||a.bk.id).localeCompare(String(b.bk.voucherRef||b.bk.id))); return out; }
+function _docCheckList(date){ const out=[]; (SB_BOOKINGS||[]).forEach(b=>{ if(!_docIsB2B(b)) return; if(b.status==='rejected') return; const t=(b.trips||[]).find(tt=>(tt.date||'')===date); if(!t) return; out.push({bk:b,trip:t}); }); return out; }   // cancelled kept (shown · linked to booking) · rescheduled follow their trip.date automatically
+// Ordered as displayed: grouped by route (program), voucher within · honours the status filter
+function _docCheckOrdered(date){ const rN=id=>((typeof getRoute==='function'?getRoute(id):null)||{}).name||id; let rows=_docCheckList(date); if(_docCheck.filter!=='all') rows=rows.filter(r=>docCheckStatus(r.bk)===_docCheck.filter); rows.sort((a,b)=>{ const ra=rN(a.trip.routeId), rb=rN(b.trip.routeId); if(ra!==rb) return ra<rb?-1:1; return String(a.bk.voucherRef||a.bk.id).localeCompare(String(b.bk.voucherRef||b.bk.id)); }); return rows; }
+// Search box · DOM-filter (no re-render → keeps focus) · hides route headers whose group is empty
+function docCheckFilterRows(){ const host=document.getElementById('doccheck-host'); if(!host) return; const q=String(_docCheck.search||'').trim().toLowerCase(); const gv={}; host.querySelectorAll('tr[data-drow]').forEach(tr=>{ const txt=tr.getAttribute('data-drow')||''; const g=tr.getAttribute('data-drg')||''; const show=!q||txt.indexOf(q)>=0; tr.style.display=show?'':'none'; if(show)gv[g]=true; }); host.querySelectorAll('tr[data-dghdr]').forEach(h=>{ const g=h.getAttribute('data-dghdr')||''; h.style.display=gv[g]?'':'none'; }); }
+// Drawer Next / Previous · step through the displayed order without closing
+function docCheckNav(dir){ const ids=_docCheckOrdered(_docCheck.date).map(r=>r.bk.id); const i=ids.indexOf(_docCheck.openId); if(i<0) return; const ni=i+dir; if(ni<0||ni>=ids.length) return; _docCheck.openId=ids[ni]; renderDocCheck(); }
 function renderDocCheck(){
   const host=document.getElementById('doccheck-host'); if(!host) return;
   const e=s=>String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
   const date=_docCheck.date;
-  let rows=_docCheckList(date);
-  const cnt={all:rows.length,pending:0,verified:0,issue:0,nofiles:0};
-  rows.forEach(r=>{ cnt[docCheckStatus(r.bk)]=(cnt[docCheckStatus(r.bk)]||0)+1; });
-  if(_docCheck.filter!=='all') rows=rows.filter(r=>docCheckStatus(r.bk)===_docCheck.filter);
+  const allRows=_docCheckList(date);
+  const cnt={all:allRows.length,pending:0,verified:0,issue:0,nofiles:0};
+  allRows.forEach(r=>{ cnt[docCheckStatus(r.bk)]=(cnt[docCheckStatus(r.bk)]||0)+1; });
+  const rows=_docCheckOrdered(date);
   let dlbl=date; try{ dlbl=new Date(date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }catch(_){}
   const rName=id=>((typeof getRoute==='function'?getRoute(id):null)||{}).name||id;
   const chip=(f,lbl,n,col)=>`<span onclick="docCheckSetFilter('${f}')" style="cursor:pointer;font-size:12px;padding:5px 12px;border-radius:16px;font-weight:600;${_docCheck.filter===f?'background:'+(col||'#1B2A55')+';color:#fff':'background:#fff;border:1px solid #dfe3e8;color:#5a6b62'}">${lbl} <b style="font-variant-numeric:tabular-nums">${n}</b></span>`;
   const th='padding:9px 11px;font-size:10px;color:#7a8088;font-weight:700;text-transform:uppercase;letter-spacing:.04em;text-align:left;border-bottom:1px solid #e6e8e3;white-space:nowrap';
-  const rowHtml = rows.length ? rows.map(r=>{
-    const b=r.bk, t=r.trip; const ag=(typeof sbGetAgent==='function'?sbGetAgent(b.agentId):null);
+  const thc=th+';text-align:center';
+  const rc={}; rows.forEach(r=>{ const rn=rName(r.trip.routeId); rc[rn]=(rc[rn]||0)+1; });
+  let prevR=null, body='';
+  rows.forEach(r=>{
+    const b=r.bk, t=r.trip; const ag=(typeof sbGetAgent==='function'?sbGetAgent(b.agentId):null); const rn=rName(t.routeId);
     const st=docCheckStatus(b); const bd=_docBadge(st); const nf=(b.attachments||[]).length;
-    const pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
+    const cxl=['cancelled','cancelled_weather'].includes(b.status);
+    const P=k=>(typeof bkV2PaxTot==='function'?bkV2PaxTot(t.pax||{},k):0);
+    const tm=(b.ops&&b.ops.pickupTimeFinal)||t.pickupTime||b.pickupTime||'-';
+    const zl=(typeof bkV2ZoneLabel==='function')?bkV2ZoneLabel(t.zone||b.pickupZone||''):(t.zone||b.pickupZone||'-');
     const sel=_docCheck.openId===b.id;
-    return `<tr onclick="docCheckOpen('${e(b.id)}')" style="cursor:pointer;border-bottom:1px solid #eef0ec;${sel?'background:#EAF3FB':''}">
-      <td style="padding:9px 11px;font-size:12.5px;font-weight:600;color:#15396B">${e(b.voucherRef||b.code||b.id)}</td>
-      <td style="padding:6px 11px">${ag?(function(){var _c=(typeof bkV2AgentColor==='function')?bkV2AgentColor(b.agentId):'#EAF3FB';var _i=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(_c):'#1B2A55';return `<span style="background:${_c};color:${_i};padding:5px 11px;border-radius:8px;font-size:12px;font-weight:600;display:inline-block;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e(ag.name)}</span>`;})():'<span style="color:#3F4654">-</span>'}</td>
+    const rowBg=sel?'#EAF3FB':(st==='verified'?'#E7F6EC':'');
+    const _sr=e(((b.voucherRef||'')+' '+(b.code||'')+' '+(ag?ag.name:'')+' '+(b.leadPax||'')+' '+rn).toLowerCase());
+    if(rn!==prevR){ prevR=rn; body+=`<tr data-dghdr="${e(rn)}"><td colspan="14" style="background:#EEF3F8;padding:9px 14px;border-top:2px solid #d3deea;border-bottom:1px solid #e3e9f0"><span style="font-size:13px;font-weight:700;color:#15396B">&#128676; ${e(rn)}</span> <span style="font-size:11px;color:#7a8696;font-weight:500">· ${rc[rn]} booking</span></td></tr>`; }
+    const _agchip=ag?(function(){var _c=(typeof bkV2AgentColor==='function')?bkV2AgentColor(b.agentId):'#EAF3FB';var _i=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(_c):'#1B2A55';return `<span style="background:${_c};color:${_i};padding:5px 11px;border-radius:8px;font-size:12px;font-weight:600;display:inline-block;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e(ag.name)}</span>`;})():'<span style="color:#3F4654">-</span>';
+    const stCell=cxl?`<span style="font-size:11px;font-weight:700;background:#FBE3E1;color:#B5271F;padding:3px 10px;border-radius:9px;white-space:nowrap">✕ ยกเลิก</span>`:`<span style="font-size:11px;font-weight:700;background:${bd.bg};color:${bd.c};padding:3px 10px;border-radius:9px;white-space:nowrap">${bd.t}</span>`;
+    body+=`<tr data-drow="${_sr}" data-drg="${e(rn)}" onclick="docCheckOpen('${e(b.id)}')" style="cursor:pointer;border-bottom:1px solid #eef0ec;${rowBg?'background:'+rowBg+';':''}${cxl?'opacity:.55;':''}">
+      <td style="padding:9px 11px;font-size:12.5px;font-weight:600;color:#15396B${cxl?';text-decoration:line-through':''}">${st==='verified'?'✅ ':''}${e(b.voucherRef||b.code||b.id)}</td>
+      <td style="padding:6px 11px">${_agchip}</td>
       <td style="padding:9px 11px;font-size:12.5px;color:#1B2A55;font-weight:600">${e(b.leadPax||'-')}</td>
-      <td style="padding:9px 11px;font-size:12px;color:#5a6b62">${e(rName(t.routeId))}</td>
-      <td style="padding:9px 11px;text-align:center;font-size:13px;font-weight:700;color:#15396B">${pax}</td>
+      <td style="padding:9px 6px;text-align:center;font-size:12.5px;font-weight:700;color:#15396B">${P('ad')||'·'}</td>
+      <td style="padding:9px 6px;text-align:center;font-size:12.5px;color:#5a6b62">${P('chd')||'·'}</td>
+      <td style="padding:9px 6px;text-align:center;font-size:12.5px;color:#5a6b62">${P('inf')||'·'}</td>
+      <td style="padding:9px 6px;text-align:center;font-size:12.5px;color:#5a6b62">${P('foc')||'·'}</td>
+      <td style="padding:9px 11px;font-size:12px;font-family:'DM Mono',monospace;color:#3F4654;white-space:nowrap">${e(tm)}</td>
+      <td style="padding:9px 11px;font-size:12px;color:#3F4654;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e(b.hotelName||b.pickupArea||'-')}</td>
+      <td style="padding:9px 11px;text-align:center;font-size:12px;color:#5a6b62">${e(b.roomNumber||'-')}</td>
+      <td style="padding:9px 11px;font-size:12px;color:#5a6b62;white-space:nowrap">${e(zl)}</td>
       <td style="padding:9px 11px;text-align:center;font-size:12px;color:${nf?'#185FA5':'#c00'}">📎 ${nf}</td>
-      <td style="padding:9px 11px"><span style="font-size:11px;font-weight:700;background:${bd.bg};color:${bd.c};padding:3px 10px;border-radius:9px;white-space:nowrap">${bd.t}</span></td>
+      <td style="padding:9px 11px">${stCell}</td>
       <td style="padding:9px 11px;text-align:right"><button onclick="event.stopPropagation();docCheckOpen('${e(b.id)}')" style="background:#0F6E56;color:#fff;border:none;border-radius:7px;padding:5px 13px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">ตรวจ</button></td>
     </tr>`;
-  }).join('') : `<tr><td colspan="8" style="padding:40px;text-align:center;color:#b7bcc2;font-size:13px">ไม่มี booking B2B ที่ต้องตรวจในวันนี้</td></tr>`;
-  const table=`<div style="background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:12px;overflow:hidden">
-    <table style="width:100%;border-collapse:collapse">
-      <thead><tr style="background:#F4F7F5"><th style="${th}">Voucher</th><th style="${th}">Agent</th><th style="${th}">Lead</th><th style="${th}">เส้นทาง</th><th style="${th};text-align:center">Pax</th><th style="${th};text-align:center">ไฟล์</th><th style="${th}">สถานะ</th><th style="${th}"></th></tr></thead>
+  });
+  const rowHtml = rows.length ? body : `<tr><td colspan="14" style="padding:40px;text-align:center;color:#b7bcc2;font-size:13px">ไม่มี booking B2B ที่ต้องตรวจในวันนี้</td></tr>`;
+  const table=`<div style="background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:12px;overflow:hidden;overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;min-width:1040px">
+      <thead><tr style="background:#F4F7F5"><th style="${th}">Voucher</th><th style="${th}">Agency</th><th style="${th}">Customer</th><th style="${thc}">AD</th><th style="${thc}">CHD</th><th style="${thc}">INF</th><th style="${thc}">FOC</th><th style="${th}">Time</th><th style="${th}">Pickup</th><th style="${thc}">Room</th><th style="${th}">Zone</th><th style="${thc}">ไฟล์</th><th style="${th}">สถานะ</th><th style="${th}"></th></tr></thead>
       <tbody>${rowHtml}</tbody>
     </table></div>`;
   const header=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;flex-wrap:wrap">
     <div><div style="font-size:22px;font-weight:700;color:#1A1A1A">📑 ตรวจเอกสาร · Document Check <span style="font-size:11px;font-weight:600;color:#185FA5;background:#EAF3FB;padding:3px 10px;border-radius:12px;vertical-align:middle">B2B / Agent</span></div>
-      <div style="display:flex;gap:8px;margin-top:11px;flex-wrap:wrap">${chip('all','ทั้งหมด',cnt.all)}${chip('pending','⏳ รอตรวจ',cnt.pending||0,'#8A5B00')}${chip('verified','✅ ตรวจแล้ว',cnt.verified||0,'#1B7F4B')}${chip('issue','⚠ มีปัญหา',cnt.issue||0,'#B5271F')}${chip('nofiles','ยังไม่แนบ',cnt.nofiles||0,'#8a8a82')}</div></div>
+      <div style="display:flex;gap:8px;margin-top:11px;flex-wrap:wrap">${chip('all','ทั้งหมด',cnt.all)}${chip('pending','⏳ รอตรวจ',cnt.pending||0,'#8A5B00')}${chip('verified','✅ ตรวจแล้ว',cnt.verified||0,'#1B7F4B')}${chip('issue','⚠ มีปัญหา',cnt.issue||0,'#B5271F')}${chip('nofiles','ยังไม่แนบ',cnt.nofiles||0,'#8a8a82')}</div>
+      <div style="margin-top:10px"><input id="docSearch" value="${e(_docCheck.search||'')}" oninput="_docCheck.search=this.value;docCheckFilterRows()" placeholder="&#128269; ค้นหา voucher / agent / ลูกค้า / เส้นทาง" style="width:380px;max-width:62vw;border:1px solid #d7dbe2;border-radius:18px;padding:7px 15px;font-size:12.5px;font-family:inherit"></div></div>
     <div style="position:relative">
       <div style="display:inline-flex;align-items:center;gap:10px;background:#F1EFEA;border-radius:18px;padding:5px 10px"><button onclick="docCheckSetDate(-1)" style="border:none;background:transparent;cursor:pointer;font-size:19px;color:#888;padding:0 5px">&lsaquo;</button><b onclick="docCheckToggleCal()" title="เลือกวันจากปฏิทิน" style="font-size:18px;font-weight:700;color:#1A1A1A;min-width:230px;text-align:center;letter-spacing:-.01em;cursor:pointer">📅 ${e(dlbl)}</b><button onclick="docCheckSetDate(1)" style="border:none;background:transparent;cursor:pointer;font-size:19px;color:#888;padding:0 5px">&rsaquo;</button><button onclick="docCheckToday()" style="border:1px solid #d7dbe2;background:#fff;border-radius:12px;padding:5px 12px;font-size:11.5px;font-weight:600;cursor:pointer;color:#185FA5;margin-left:2px">วันนี้</button></div>
       ${_docCheck.calOpen?_docCheckCalHTML(e):''}
@@ -52515,6 +52540,7 @@ function renderDocCheck(){
   </div>`;
   const drawer = _docCheck.openId ? _docCheckDrawer(_docCheck.openId, e, rName) : '';
   host.innerHTML = `<div>${header}${table}</div>${drawer}`;
+  if(_docCheck.search) docCheckFilterRows();
 }
 function _docCheckDrawer(bkId, e, rName){
   const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return '';
@@ -52535,11 +52561,17 @@ function _docCheckDrawer(bkId, e, rName){
   const chkHtml = DOCCHK_ITEMS.map(it=>{ const on=!!items[it.k]; return `<label style="display:flex;align-items:center;gap:9px;padding:7px 9px;border:1px solid ${on?'#BFE3CC':'#e3e6e1'};border-radius:9px;background:${on?'#EAF7EF':'#fff'};cursor:pointer;margin-bottom:6px"><span onclick="docCheckToggleItem('${e(bkId)}','${it.k}')" style="width:19px;height:19px;border-radius:5px;flex:none;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;${on?'background:#1B7F4B;color:#fff':'border:1.5px solid #c3c8cf;color:transparent'}">✓</span><span style="font-size:12.5px;color:#1B2A55;font-weight:600">${e(it.label)}</span></label>`; }).join('');
   const allTicked=DOCCHK_ITEMS.every(it=>items[it.k]);
   const st=docCheckStatus(b); const bd=_docBadge(st);
+  const _ids=_docCheckOrdered(_docCheck.date).map(r=>r.bk.id); const _idx=_ids.indexOf(bkId); const _hasP=_idx>0, _hasN=_idx>=0&&_idx<_ids.length-1;
   return `<div onclick="docCheckClose()" style="position:fixed;inset:0;background:rgba(15,25,40,.20);z-index:600"></div>
     <div style="position:fixed;top:0;right:0;bottom:0;width:min(1357px,95vw);background:#fff;z-index:601;box-shadow:-16px 0 54px -12px rgba(0,0,0,.34);border-left:1px solid #e3e6e1;display:flex;flex-direction:column">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid #eef0ec;flex:none">
-      <div><b style="font-size:14px;color:#1B2A55">${e(b.voucherRef||b.code||b.id)}</b> <span style="font-size:11px;font-weight:700;background:${bd.bg};color:${bd.c};padding:2px 9px;border-radius:8px;margin-left:6px">${bd.t}</span></div>
-      <button onclick="docCheckClose()" style="background:#fff;border:1px solid #d7dbe2;border-radius:8px;padding:6px 11px;font-size:14px;cursor:pointer;color:#666">&#10005;</button>
+      <div><b style="font-size:14px;color:#1B2A55">${e(b.voucherRef||b.code||b.id)}</b> <span style="font-size:11px;font-weight:700;background:${bd.bg};color:${bd.c};padding:2px 9px;border-radius:8px;margin-left:6px">${bd.t}</span>${st==='verified'?'<span style="font-size:11px;color:#1B7F4B;font-weight:700;margin-left:6px">&#10004; เสร็จสมบูรณ์</span>':''}</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button onclick="docCheckNav(-1)" ${_hasP?'':'disabled'} title="ก่อนหน้า" style="background:#fff;border:1px solid #d7dbe2;border-radius:8px;padding:6px 11px;font-size:12px;cursor:${_hasP?'pointer':'default'};color:${_hasP?'#185FA5':'#c9cdd3'};font-family:inherit;font-weight:600">&lsaquo; ก่อนหน้า</button>
+        <span style="font-size:11px;color:#8a8a82;font-variant-numeric:tabular-nums;min-width:52px;text-align:center">${_idx+1} / ${_ids.length}</span>
+        <button onclick="docCheckNav(1)" ${_hasN?'':'disabled'} title="ถัดไป" style="background:#fff;border:1px solid #d7dbe2;border-radius:8px;padding:6px 11px;font-size:12px;cursor:${_hasN?'pointer':'default'};color:${_hasN?'#185FA5':'#c9cdd3'};font-family:inherit;font-weight:600">ถัดไป &rsaquo;</button>
+        <button onclick="docCheckClose()" style="background:#fff;border:1px solid #d7dbe2;border-radius:8px;padding:6px 11px;font-size:14px;cursor:pointer;color:#666">&#10005;</button>
+      </div>
     </div>
     <div style="flex:1;display:grid;grid-template-columns:360px 1fr;overflow:hidden;background:#F6F7F5">
       <!-- LEFT · pinned (short content · does not scroll with the docs) -->
