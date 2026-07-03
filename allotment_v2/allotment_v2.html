@@ -34914,7 +34914,7 @@ function _seedAgentPrices(){
   const prices = {};
   SB_AGENTS.forEach(ag=>{
     prices[ag.id] = {};
-    ag.programs.forEach(rId=>{
+    (ag.programs||[]).forEach(rId=>{ /* UI-created agents have no programs array */
       const r = ROUTES.find(x=>x.id===rId);
       if(!r) return;
       // Base prices vary by market & route type
