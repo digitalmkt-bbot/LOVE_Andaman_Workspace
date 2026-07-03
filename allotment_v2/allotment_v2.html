@@ -52389,7 +52389,7 @@ function bkV2AttachDraftId(){ return _bkV2.editingId || (_bkV2.newBooking && _bk
 function bkV2AttachListHTML(){
   const d=_bkV2.newBooking; const list=(d&&Array.isArray(d.attachments))?d.attachments:[];
   const esc=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
-  if(!list.length) return '<div style="font-size:12px;color:var(--ink-soft);padding:12px;border:1px dashed var(--border);border-radius:10px;text-align:center">ยังไม่มีเอกสารแนบ — อัปโหลด / Capture หน้าจอ / วางรูป (Cmd+V)</div>';
+  if(!list.length) return '<div style="font-size:12px;color:var(--ink-soft);padding:12px;border:1px dashed var(--border);border-radius:10px;text-align:center">ยังไม่มีเอกสารแนบ — อัปโหลด / Capture หน้าจอ / วางรูป ('+(_bkV2IsMac()?'Cmd+V':'Ctrl+V')+')</div>';
   return '<div style="display:flex;flex-wrap:wrap;gap:10px">'+list.map(a=>{
     const isImg=/^image\//.test(a.mime||''); const url='/api/attach/'+encodeURIComponent(a.id);
     const thumb=isImg?`<img src="${url}" loading="lazy" style="width:100%;height:84px;object-fit:cover;display:block">`:`<div style="width:100%;height:84px;display:flex;align-items:center;justify-content:center;background:#F4F2EC;font-size:26px">📄</div>`;
@@ -52406,15 +52406,17 @@ function bkV2AttachListHTML(){
     </div>`;
   }).join('')+'</div>';
 }
+function _bkV2IsMac(){ try{ const p=(navigator.userAgentData&&navigator.userAgentData.platform)||navigator.platform||navigator.userAgent||''; return /mac|iphone|ipad|ipod/i.test(p); }catch(e){ return true; } }
 function bkV2RenderAttachSection(){
   const d=_bkV2.newBooking; if(!d) return '';
   if(!d.agentId) return '';   // เฉพาะ B2B/agent
+  const _mac=_bkV2IsMac(); const _shot=_mac?'Cmd+Shift+4':'Win+Shift+S'; const _paste=_mac?'Cmd+V':'Ctrl+V';
   return `<div class="bkv2-nb-sec" id="bkv2-attach-sec">
     <div class="bkv2-nb-sec-hd"><span class="bkv2-nb-sec-dot"></span><span class="bkv2-nb-sec-ttl">เอกสารแนบ · Documents</span><span style="font-size:10px;font-weight:700;color:#185FA5;background:#EAF3FB;padding:2px 8px;border-radius:10px">B2B</span></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:11px">
       <label style="display:inline-flex;align-items:center;gap:6px;background:var(--bk-navy);color:#fff;border-radius:9px;padding:7px 13px;font-size:12px;font-weight:600;cursor:pointer">📎 อัปโหลดไฟล์<input type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="bkV2AttachFromInput(this)"></label>
       <button type="button" onclick="bkV2AttachCapture()" style="display:inline-flex;align-items:center;gap:6px;background:#fff;color:var(--bk-navy);border:1px solid var(--border);border-radius:9px;padding:7px 13px;font-size:12px;font-weight:600;cursor:pointer">🖥 Capture หน้าจอ</button>
-      <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-soft)">📋 ถ่ายหน้าจอ (Cmd+Shift+4) แล้วกด <b style="color:var(--ink)">Cmd+V</b> ตรงนี้ได้เลย</span>
+      <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--ink-soft)">📋 ถ่ายหน้าจอ (${_shot}) แล้วกด <b style="color:var(--ink)">${_paste}</b> ตรงนี้ได้เลย</span>
     </div>
     <div id="bkv2-attach-list">${bkV2AttachListHTML()}</div>
   </div>`;
@@ -52430,7 +52432,7 @@ function bkV2AttachUpload(file,kind){
 }
 function bkV2AttachFromInput(inp){ const fs=(inp&&inp.files)?Array.prototype.slice.call(inp.files):[]; fs.forEach(f=>bkV2AttachUpload(f,'upload')); if(inp) inp.value=''; }
 function bkV2AttachCapture(){
-  if(!(navigator.mediaDevices&&navigator.mediaDevices.getDisplayMedia)){ alert('เบราว์เซอร์นี้ไม่รองรับ Capture · ใช้ อัปโหลด หรือ วางรูป (Cmd+V) แทน'); return; }
+  if(!(navigator.mediaDevices&&navigator.mediaDevices.getDisplayMedia)){ alert('เบราว์เซอร์นี้ไม่รองรับ Capture · ใช้ อัปโหลด หรือ วางรูป ('+(_bkV2IsMac()?'Cmd+V':'Ctrl+V')+') แทน'); return; }
   navigator.mediaDevices.getDisplayMedia({video:true}).then(stream=>{ const v=document.createElement('video'); v.srcObject=stream; v.muted=true; v.play(); setTimeout(()=>{ try{ const c=document.createElement('canvas'); c.width=v.videoWidth||1280; c.height=v.videoHeight||720; c.getContext('2d').drawImage(v,0,0,c.width,c.height); stream.getTracks().forEach(t=>t.stop()); c.toBlob(b=>{ if(b) bkV2AttachUpload(new File([b],'capture-'+Date.now()+'.jpg',{type:'image/jpeg'}),'capture'); },'image/jpeg',0.9); }catch(e){ try{stream.getTracks().forEach(t=>t.stop());}catch(_){} } },350); }).catch(e=>{});
 }
 function bkV2AttachRemove(id){ const d=_bkV2.newBooking; if(!d) return; if(!confirm('ลบเอกสารนี้?')) return; fetch('/api/attach/'+encodeURIComponent(id),{method:'DELETE'}).catch(()=>{}); d.attachments=(d.attachments||[]).filter(a=>a.id!==id); bkV2RefreshAttachSection(); }
