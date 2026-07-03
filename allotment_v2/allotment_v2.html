@@ -47386,9 +47386,6 @@ function bkV2RenderNewBooking(){
         <textarea class="bkv2-nb-input" rows="3" placeholder="e.g. VIP family · prefers speedboat · notify guide for life vest sizes" style="width:100%;box-sizing:border-box;font-family:inherit;resize:vertical;margin-top:4px" oninput="bkV2SetBookingField('notes', this.value)">${(d.notes||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c])}</textarea>
       </div>
 
-      <!-- Document attachments (B2B/agent) -->
-      ${bkV2RenderAttachSection()}
-
       <!-- Combined: Payment + Cash on Tour in ONE card -->
       ${bkV2RenderPaymentSection()}
 
@@ -47401,6 +47398,7 @@ function bkV2RenderNewBooking(){
              <div class="bkv2-nb-sec-h" style="margin-bottom:10px;color:var(--bk-navy)">&#9679; Booking Review</div>
              ${bkV2RenderReviewPanel()}
              <div style="height:1px;background:var(--border);margin:14px 0 12px"></div>
+             ${bkV2RenderAttachSection()}
              <div style="margin-bottom:10px">${bkV2RenderActionMeta()}</div>
              <div style="display:flex;flex-direction:column;gap:6px">
                ${bkV2RenderSubmitButton()}
