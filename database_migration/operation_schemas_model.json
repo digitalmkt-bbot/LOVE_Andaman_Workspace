@@ -1,0 +1,6556 @@
+{
+ "app_meta": {
+  "columns": [
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "value",
+    "type": "text"
+   }
+  ],
+  "primary_key": null,
+  "foreign_keys": [],
+  "rows": 6
+ },
+ "routes": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "name",
+    "type": "text"
+   },
+   {
+    "name": "islands",
+    "type": "text"
+   },
+   {
+    "name": "color",
+    "type": "text"
+   },
+   {
+    "name": "pier",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_05_31",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_05_30",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_07",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_14",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_21",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_28",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_29",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_22",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_15",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_08",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_01",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_02",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_09",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_16",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_23",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_30",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_25",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_18",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_11",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_04",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_05",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_19",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_12",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_26",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_27",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_20",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_13",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_06",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_03",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_10",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_17",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_06_24",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_05",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_06",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_13",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_12",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_19",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_20",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_27",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_26",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_01",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_08",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_15",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_22",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_29",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_30",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_23",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_16",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_09",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_02",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_03",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_10",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_17",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_31",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_24",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_25",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_18",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_11",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_07_04",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_08_01",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_08_15",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_08_22",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_08_29",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_08_03",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_08_10",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_08_17",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_08_24",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_08_05",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_08_06",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_08_12",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_08_13",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_08_19",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_08_20",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_08_26",
+    "type": "text"
+   },
+   {
+    "name": "overrides_2026_08_27",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 12
+ },
+ "routes__times": {
+  "columns": [
+   {
+    "name": "routes_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "value",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "routes_id",
+    "references": "routes.id"
+   }
+  ],
+  "rows": 12
+ },
+ "routes__seasons": {
+  "columns": [
+   {
+    "name": "routes_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "type",
+    "type": "text"
+   },
+   {
+    "name": "from",
+    "type": "text"
+   },
+   {
+    "name": "to",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "routes_id",
+    "references": "routes.id"
+   }
+  ],
+  "rows": 26
+ },
+ "boats": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "name",
+    "type": "text"
+   },
+   {
+    "name": "type",
+    "type": "text"
+   },
+   {
+    "name": "pier",
+    "type": "text"
+   },
+   {
+    "name": "cap",
+    "type": "bigint"
+   },
+   {
+    "name": "enginecount",
+    "type": "bigint"
+   },
+   {
+    "name": "use",
+    "type": "text"
+   },
+   {
+    "name": "material",
+    "type": "text"
+   },
+   {
+    "name": "reg",
+    "type": "text"
+   },
+   {
+    "name": "callsign",
+    "type": "text"
+   },
+   {
+    "name": "imo",
+    "type": "text"
+   },
+   {
+    "name": "year",
+    "type": "text"
+   },
+   {
+    "name": "homeportcity",
+    "type": "text"
+   },
+   {
+    "name": "gt",
+    "type": "double precision"
+   },
+   {
+    "name": "nt",
+    "type": "double precision"
+   },
+   {
+    "name": "dwt",
+    "type": "text"
+   },
+   {
+    "name": "loa",
+    "type": "double precision"
+   },
+   {
+    "name": "beam",
+    "type": "double precision"
+   },
+   {
+    "name": "depth",
+    "type": "double precision"
+   },
+   {
+    "name": "draft",
+    "type": "text"
+   },
+   {
+    "name": "lbp",
+    "type": "double precision"
+   },
+   {
+    "name": "bhp",
+    "type": "double precision"
+   },
+   {
+    "name": "licensepax",
+    "type": "bigint"
+   },
+   {
+    "name": "crew",
+    "type": "bigint"
+   },
+   {
+    "name": "fishcrew",
+    "type": "text"
+   },
+   {
+    "name": "totalcap",
+    "type": "bigint"
+   },
+   {
+    "name": "owner",
+    "type": "text"
+   },
+   {
+    "name": "homeport",
+    "type": "text"
+   },
+   {
+    "name": "owneraddr",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 15
+ },
+ "boats__docs": {
+  "columns": [
+   {
+    "name": "boats_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "name",
+    "type": "text"
+   },
+   {
+    "name": "exp",
+    "type": "text"
+   },
+   {
+    "name": "renewstatus",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "boats_id",
+    "references": "boats.id"
+   }
+  ],
+  "rows": 57
+ },
+ "boats__log": {
+  "columns": [
+   {
+    "name": "boats_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "s",
+    "type": "text"
+   },
+   {
+    "name": "from",
+    "type": "text"
+   },
+   {
+    "name": "to",
+    "type": "text"
+   },
+   {
+    "name": "loc",
+    "type": "text"
+   },
+   {
+    "name": "note",
+    "type": "text"
+   },
+   {
+    "name": "province",
+    "type": "text"
+   },
+   {
+    "name": "loctype",
+    "type": "text"
+   },
+   {
+    "name": "detail",
+    "type": "text"
+   },
+   {
+    "name": "reason",
+    "type": "text"
+   },
+   {
+    "name": "projectid",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "boats_id",
+    "references": "boats.id"
+   }
+  ],
+  "rows": 93
+ },
+ "boats__repairhistory": {
+  "columns": [
+   {
+    "name": "boats_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "date",
+    "type": "text"
+   },
+   {
+    "name": "jobno",
+    "type": "text"
+   },
+   {
+    "name": "title",
+    "type": "text"
+   },
+   {
+    "name": "detail",
+    "type": "text"
+   },
+   {
+    "name": "type",
+    "type": "text"
+   },
+   {
+    "name": "location",
+    "type": "text"
+   },
+   {
+    "name": "cost",
+    "type": "double precision"
+   },
+   {
+    "name": "startdate",
+    "type": "text"
+   },
+   {
+    "name": "enddate",
+    "type": "text"
+   },
+   {
+    "name": "outcome",
+    "type": "text"
+   },
+   {
+    "name": "closenote",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "boats_id",
+    "references": "boats.id"
+   }
+  ],
+  "rows": 32
+ },
+ "boats__repairhistory__assets": {
+  "columns": [
+   {
+    "name": "boats_repairhistory_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "value",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [],
+  "rows": 35
+ },
+ "boats__assignments": {
+  "columns": [
+   {
+    "name": "boats_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "type",
+    "type": "text"
+   },
+   {
+    "name": "frompier",
+    "type": "text"
+   },
+   {
+    "name": "topier",
+    "type": "text"
+   },
+   {
+    "name": "startdate",
+    "type": "text"
+   },
+   {
+    "name": "enddate",
+    "type": "text"
+   },
+   {
+    "name": "reason",
+    "type": "text"
+   },
+   {
+    "name": "cost",
+    "type": "bigint"
+   },
+   {
+    "name": "status",
+    "type": "text"
+   },
+   {
+    "name": "createddate",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "boats_id",
+    "references": "boats.id"
+   }
+  ],
+  "rows": 6
+ },
+ "trips": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "b1_route",
+    "type": "text"
+   },
+   {
+    "name": "b1_type",
+    "type": "text"
+   },
+   {
+    "name": "b1_booked",
+    "type": "bigint"
+   },
+   {
+    "name": "b3_route",
+    "type": "text"
+   },
+   {
+    "name": "b3_type",
+    "type": "text"
+   },
+   {
+    "name": "b3_booked",
+    "type": "bigint"
+   },
+   {
+    "name": "b4_route",
+    "type": "text"
+   },
+   {
+    "name": "b4_type",
+    "type": "text"
+   },
+   {
+    "name": "b4_booked",
+    "type": "bigint"
+   },
+   {
+    "name": "b5_route",
+    "type": "text"
+   },
+   {
+    "name": "b5_type",
+    "type": "text"
+   },
+   {
+    "name": "b5_booked",
+    "type": "bigint"
+   },
+   {
+    "name": "b6_route",
+    "type": "text"
+   },
+   {
+    "name": "b6_type",
+    "type": "text"
+   },
+   {
+    "name": "b6_booked",
+    "type": "bigint"
+   },
+   {
+    "name": "b7_route",
+    "type": "text"
+   },
+   {
+    "name": "b7_type",
+    "type": "text"
+   },
+   {
+    "name": "b7_booked",
+    "type": "bigint"
+   },
+   {
+    "name": "b9_route",
+    "type": "text"
+   },
+   {
+    "name": "b9_type",
+    "type": "text"
+   },
+   {
+    "name": "b9_booked",
+    "type": "bigint"
+   },
+   {
+    "name": "b10_route",
+    "type": "text"
+   },
+   {
+    "name": "b10_type",
+    "type": "text"
+   },
+   {
+    "name": "b10_booked",
+    "type": "bigint"
+   },
+   {
+    "name": "b12_route",
+    "type": "text"
+   },
+   {
+    "name": "b12_type",
+    "type": "text"
+   },
+   {
+    "name": "b12_booked",
+    "type": "bigint"
+   },
+   {
+    "name": "b11_route",
+    "type": "text"
+   },
+   {
+    "name": "b11_type",
+    "type": "text"
+   },
+   {
+    "name": "b11_booked",
+    "type": "bigint"
+   },
+   {
+    "name": "b13_route",
+    "type": "text"
+   },
+   {
+    "name": "b13_type",
+    "type": "text"
+   },
+   {
+    "name": "b13_booked",
+    "type": "bigint"
+   },
+   {
+    "name": "b2_route",
+    "type": "text"
+   },
+   {
+    "name": "b2_type",
+    "type": "text"
+   },
+   {
+    "name": "b2_booked",
+    "type": "bigint"
+   },
+   {
+    "name": "b13_charterbookingid",
+    "type": "text"
+   },
+   {
+    "name": "b6_charterbookingid",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 63
+ },
+ "fleet_engines": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "brand",
+    "type": "text"
+   },
+   {
+    "name": "model",
+    "type": "text"
+   },
+   {
+    "name": "serial",
+    "type": "text"
+   },
+   {
+    "name": "hp",
+    "type": "bigint"
+   },
+   {
+    "name": "boatid",
+    "type": "text"
+   },
+   {
+    "name": "pos",
+    "type": "text"
+   },
+   {
+    "name": "status",
+    "type": "text"
+   },
+   {
+    "name": "basehours",
+    "type": "double precision"
+   },
+   {
+    "name": "serviceinterval",
+    "type": "bigint"
+   },
+   {
+    "name": "buydate",
+    "type": "text"
+   },
+   {
+    "name": "note",
+    "type": "text"
+   },
+   {
+    "name": "sparelocation",
+    "type": "text"
+   },
+   {
+    "name": "price",
+    "type": "text"
+   },
+   {
+    "name": "lastservicehours",
+    "type": "double precision"
+   },
+   {
+    "name": "lastservicedate",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 53
+ },
+ "fleet_engines__log": {
+  "columns": [
+   {
+    "name": "fleet_engines_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "date",
+    "type": "text"
+   },
+   {
+    "name": "type",
+    "type": "text"
+   },
+   {
+    "name": "desc",
+    "type": "text"
+   },
+   {
+    "name": "detail",
+    "type": "text"
+   },
+   {
+    "name": "hours",
+    "type": "double precision"
+   },
+   {
+    "name": "by",
+    "type": "text"
+   },
+   {
+    "name": "cost",
+    "type": "double precision"
+   },
+   {
+    "name": "outcome",
+    "type": "text"
+   },
+   {
+    "name": "enginehours",
+    "type": "bigint"
+   },
+   {
+    "name": "text",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "fleet_engines_id",
+    "references": "fleet_engines.id"
+   }
+  ],
+  "rows": 89
+ },
+ "fleet_gearboxes": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "boatid",
+    "type": "text"
+   },
+   {
+    "name": "engineid",
+    "type": "text"
+   },
+   {
+    "name": "brand",
+    "type": "text"
+   },
+   {
+    "name": "model",
+    "type": "text"
+   },
+   {
+    "name": "serial",
+    "type": "text"
+   },
+   {
+    "name": "status",
+    "type": "text"
+   },
+   {
+    "name": "basehours",
+    "type": "bigint"
+   },
+   {
+    "name": "buydate",
+    "type": "text"
+   },
+   {
+    "name": "note",
+    "type": "text"
+   },
+   {
+    "name": "sparelocation",
+    "type": "text"
+   },
+   {
+    "name": "shaftlength",
+    "type": "text"
+   },
+   {
+    "name": "modelsuffix",
+    "type": "text"
+   },
+   {
+    "name": "installhours",
+    "type": "double precision"
+   },
+   {
+    "name": "rotation",
+    "type": "text"
+   },
+   {
+    "name": "gearratio",
+    "type": "text"
+   },
+   {
+    "name": "oilcapacity",
+    "type": "text"
+   },
+   {
+    "name": "serviceinterval",
+    "type": "bigint"
+   },
+   {
+    "name": "lastservicedate",
+    "type": "text"
+   },
+   {
+    "name": "onboatid",
+    "type": "text"
+   },
+   {
+    "name": "onboatpos",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 58
+ },
+ "fleet_gearboxes__log": {
+  "columns": [
+   {
+    "name": "fleet_gearboxes_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "date",
+    "type": "text"
+   },
+   {
+    "name": "type",
+    "type": "text"
+   },
+   {
+    "name": "desc",
+    "type": "text"
+   },
+   {
+    "name": "enginehours",
+    "type": "double precision"
+   },
+   {
+    "name": "fromloc",
+    "type": "text"
+   },
+   {
+    "name": "toloc",
+    "type": "text"
+   },
+   {
+    "name": "usedhours",
+    "type": "bigint"
+   },
+   {
+    "name": "incidentid",
+    "type": "text"
+   },
+   {
+    "name": "outcome",
+    "type": "text"
+   },
+   {
+    "name": "detail",
+    "type": "text"
+   },
+   {
+    "name": "text",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "fleet_gearboxes_id",
+    "references": "fleet_gearboxes.id"
+   }
+  ],
+  "rows": 107
+ },
+ "fleet_propellers": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "boatid",
+    "type": "text"
+   },
+   {
+    "name": "gearboxid",
+    "type": "text"
+   },
+   {
+    "name": "brand",
+    "type": "text"
+   },
+   {
+    "name": "serial",
+    "type": "text"
+   },
+   {
+    "name": "diameter",
+    "type": "double precision"
+   },
+   {
+    "name": "pitch",
+    "type": "double precision"
+   },
+   {
+    "name": "size",
+    "type": "text"
+   },
+   {
+    "name": "blades",
+    "type": "text"
+   },
+   {
+    "name": "material",
+    "type": "text"
+   },
+   {
+    "name": "rotation",
+    "type": "text"
+   },
+   {
+    "name": "hubsize",
+    "type": "text"
+   },
+   {
+    "name": "cupping",
+    "type": "text"
+   },
+   {
+    "name": "cost",
+    "type": "bigint"
+   },
+   {
+    "name": "status",
+    "type": "text"
+   },
+   {
+    "name": "buydate",
+    "type": "text"
+   },
+   {
+    "name": "note",
+    "type": "text"
+   },
+   {
+    "name": "sparelocation",
+    "type": "text"
+   },
+   {
+    "name": "oldserial",
+    "type": "text"
+   },
+   {
+    "name": "proppos",
+    "type": "text"
+   },
+   {
+    "name": "engineid",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 62
+ },
+ "fleet_propellers__log": {
+  "columns": [
+   {
+    "name": "fleet_propellers_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "date",
+    "type": "text"
+   },
+   {
+    "name": "type",
+    "type": "text"
+   },
+   {
+    "name": "desc",
+    "type": "text"
+   },
+   {
+    "name": "enginehours",
+    "type": "bigint"
+   },
+   {
+    "name": "fromloc",
+    "type": "text"
+   },
+   {
+    "name": "toloc",
+    "type": "text"
+   },
+   {
+    "name": "incidentid",
+    "type": "text"
+   },
+   {
+    "name": "detail",
+    "type": "text"
+   },
+   {
+    "name": "outcome",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "fleet_propellers_id",
+    "references": "fleet_propellers.id"
+   }
+  ],
+  "rows": 152
+ },
+ "fleet_daily": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "b2_fuel",
+    "type": "double precision"
+   },
+   {
+    "name": "b10_fuel",
+    "type": "double precision"
+   },
+   {
+    "name": "b6_fuel",
+    "type": "double precision"
+   },
+   {
+    "name": "b13_fuel",
+    "type": "double precision"
+   },
+   {
+    "name": "b12_fuel",
+    "type": "double precision"
+   },
+   {
+    "name": "b10_paxactual",
+    "type": "bigint"
+   },
+   {
+    "name": "b2_paxactual",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 27
+ },
+ "fleet_daily__trips": {
+  "columns": [
+   {
+    "name": "fleet_daily_id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "engines_e6",
+    "type": "double precision"
+   },
+   {
+    "name": "engines_e33",
+    "type": "bigint"
+   },
+   {
+    "name": "engines_e34",
+    "type": "bigint"
+   },
+   {
+    "name": "engines_e35",
+    "type": "bigint"
+   },
+   {
+    "name": "engines_e36",
+    "type": "bigint"
+   },
+   {
+    "name": "engines_e7",
+    "type": "double precision"
+   },
+   {
+    "name": "engines_e8",
+    "type": "double precision"
+   },
+   {
+    "name": "engines_e20",
+    "type": "double precision"
+   },
+   {
+    "name": "engines_e26",
+    "type": "double precision"
+   },
+   {
+    "name": "engines_e27",
+    "type": "double precision"
+   },
+   {
+    "name": "engines_e28",
+    "type": "double precision"
+   },
+   {
+    "name": "engines_e43",
+    "type": "bigint"
+   },
+   {
+    "name": "engines_e44",
+    "type": "bigint"
+   },
+   {
+    "name": "engines_e51",
+    "type": "bigint"
+   },
+   {
+    "name": "engines_e52",
+    "type": "bigint"
+   },
+   {
+    "name": "engines_e45",
+    "type": "double precision"
+   },
+   {
+    "name": "engines_e46",
+    "type": "double precision"
+   },
+   {
+    "name": "engines_e47",
+    "type": "double precision"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "fleet_daily_id",
+    "references": "fleet_daily.id"
+   }
+  ],
+  "rows": 39
+ },
+ "fleet_maintenance": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "no",
+    "type": "text"
+   },
+   {
+    "name": "boatid",
+    "type": "text"
+   },
+   {
+    "name": "type",
+    "type": "text"
+   },
+   {
+    "name": "title",
+    "type": "text"
+   },
+   {
+    "name": "detail",
+    "type": "text"
+   },
+   {
+    "name": "location",
+    "type": "text"
+   },
+   {
+    "name": "status",
+    "type": "text"
+   },
+   {
+    "name": "startdate",
+    "type": "text"
+   },
+   {
+    "name": "enddate",
+    "type": "text"
+   },
+   {
+    "name": "cost",
+    "type": "double precision"
+   },
+   {
+    "name": "incidentid",
+    "type": "text"
+   },
+   {
+    "name": "boatstatus",
+    "type": "text"
+   },
+   {
+    "name": "boatstatusreason",
+    "type": "text"
+   },
+   {
+    "name": "setfixing",
+    "type": "boolean"
+   },
+   {
+    "name": "outcome",
+    "type": "text"
+   },
+   {
+    "name": "parentprojectid",
+    "type": "text"
+   },
+   {
+    "name": "awaitinginvoice",
+    "type": "boolean"
+   },
+   {
+    "name": "closenote",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 62
+ },
+ "fleet_maintenance__assets": {
+  "columns": [
+   {
+    "name": "fleet_maintenance_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "type",
+    "type": "text"
+   },
+   {
+    "name": "engid",
+    "type": "text"
+   },
+   {
+    "name": "label",
+    "type": "text"
+   },
+   {
+    "name": "detail",
+    "type": "text"
+   },
+   {
+    "name": "status",
+    "type": "text"
+   },
+   {
+    "name": "gbid",
+    "type": "text"
+   },
+   {
+    "name": "propid",
+    "type": "text"
+   },
+   {
+    "name": "id",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "fleet_maintenance_id",
+    "references": "fleet_maintenance.id"
+   }
+  ],
+  "rows": 62
+ },
+ "fleet_maintenance__progresslog": {
+  "columns": [
+   {
+    "name": "fleet_maintenance_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "date",
+    "type": "text"
+   },
+   {
+    "name": "text",
+    "type": "text"
+   },
+   {
+    "name": "by",
+    "type": "text"
+   },
+   {
+    "name": "createdat",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "fleet_maintenance_id",
+    "references": "fleet_maintenance.id"
+   }
+  ],
+  "rows": 327
+ },
+ "fleet_maintenance__parts": {
+  "columns": [
+   {
+    "name": "fleet_maintenance_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "invid",
+    "type": "text"
+   },
+   {
+    "name": "name",
+    "type": "text"
+   },
+   {
+    "name": "qty",
+    "type": "bigint"
+   },
+   {
+    "name": "unit",
+    "type": "text"
+   },
+   {
+    "name": "cost",
+    "type": "double precision"
+   },
+   {
+    "name": "location",
+    "type": "text"
+   },
+   {
+    "name": "date",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "fleet_maintenance_id",
+    "references": "fleet_maintenance.id"
+   }
+  ],
+  "rows": 83
+ },
+ "fleet_incidents": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "no",
+    "type": "text"
+   },
+   {
+    "name": "boatid",
+    "type": "text"
+   },
+   {
+    "name": "date",
+    "type": "text"
+   },
+   {
+    "name": "time",
+    "type": "text"
+   },
+   {
+    "name": "title",
+    "type": "text"
+   },
+   {
+    "name": "detail",
+    "type": "text"
+   },
+   {
+    "name": "remark",
+    "type": "text"
+   },
+   {
+    "name": "priority",
+    "type": "bigint"
+   },
+   {
+    "name": "severity",
+    "type": "text"
+   },
+   {
+    "name": "type",
+    "type": "text"
+   },
+   {
+    "name": "status",
+    "type": "text"
+   },
+   {
+    "name": "maintid",
+    "type": "text"
+   },
+   {
+    "name": "closeddate",
+    "type": "text"
+   },
+   {
+    "name": "quickfix",
+    "type": "boolean"
+   },
+   {
+    "name": "resolveddate",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 35
+ },
+ "fleet_incidents__damagedassets": {
+  "columns": [
+   {
+    "name": "fleet_incidents_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "type",
+    "type": "text"
+   },
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "label",
+    "type": "text"
+   },
+   {
+    "name": "swapped",
+    "type": "boolean"
+   },
+   {
+    "name": "swappedto",
+    "type": "text"
+   },
+   {
+    "name": "swappeddate",
+    "type": "text"
+   },
+   {
+    "name": "engid",
+    "type": "text"
+   },
+   {
+    "name": "gbid",
+    "type": "text"
+   },
+   {
+    "name": "propid",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "fleet_incidents_id",
+    "references": "fleet_incidents.id"
+   }
+  ],
+  "rows": 46
+ },
+ "fleet_incidents__progresslog": {
+  "columns": [
+   {
+    "name": "fleet_incidents_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "date",
+    "type": "text"
+   },
+   {
+    "name": "text",
+    "type": "text"
+   },
+   {
+    "name": "by",
+    "type": "text"
+   },
+   {
+    "name": "createdat",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "fleet_incidents_id",
+    "references": "fleet_incidents.id"
+   }
+  ],
+  "rows": 246
+ },
+ "fleet_incidents__relatedmaintids": {
+  "columns": [
+   {
+    "name": "fleet_incidents_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "value",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "fleet_incidents_id",
+    "references": "fleet_incidents.id"
+   }
+  ],
+  "rows": 12
+ },
+ "fleet_inventory": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "name",
+    "type": "text"
+   },
+   {
+    "name": "partno",
+    "type": "text"
+   },
+   {
+    "name": "category",
+    "type": "text"
+   },
+   {
+    "name": "supplier",
+    "type": "text"
+   },
+   {
+    "name": "location",
+    "type": "text"
+   },
+   {
+    "name": "unit",
+    "type": "text"
+   },
+   {
+    "name": "qty",
+    "type": "bigint"
+   },
+   {
+    "name": "minqty",
+    "type": "bigint"
+   },
+   {
+    "name": "cost",
+    "type": "double precision"
+   },
+   {
+    "name": "note",
+    "type": "text"
+   },
+   {
+    "name": "totalqty",
+    "type": "bigint"
+   },
+   {
+    "name": "primarylocation",
+    "type": "text"
+   },
+   {
+    "name": "createddate",
+    "type": "text"
+   },
+   {
+    "name": "createdfrom",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 131
+ },
+ "fleet_inventory__history": {
+  "columns": [
+   {
+    "name": "fleet_inventory_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "date",
+    "type": "text"
+   },
+   {
+    "name": "type",
+    "type": "text"
+   },
+   {
+    "name": "qty",
+    "type": "bigint"
+   },
+   {
+    "name": "note",
+    "type": "text"
+   },
+   {
+    "name": "by",
+    "type": "text"
+   },
+   {
+    "name": "location",
+    "type": "text"
+   },
+   {
+    "name": "jobid",
+    "type": "text"
+   },
+   {
+    "name": "consumeid",
+    "type": "text"
+   },
+   {
+    "name": "desc",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "fleet_inventory_id",
+    "references": "fleet_inventory.id"
+   }
+  ],
+  "rows": 281
+ },
+ "fleet_inventory__stocks": {
+  "columns": [
+   {
+    "name": "fleet_inventory_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "location",
+    "type": "text"
+   },
+   {
+    "name": "qty",
+    "type": "bigint"
+   },
+   {
+    "name": "minqty",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "fleet_inventory_id",
+    "references": "fleet_inventory.id"
+   }
+  ],
+  "rows": 157
+ },
+ "fleet_inventory__history__changes": {
+  "columns": [
+   {
+    "name": "fleet_inventory_history_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "field",
+    "type": "text"
+   },
+   {
+    "name": "from",
+    "type": "text"
+   },
+   {
+    "name": "to",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [],
+  "rows": 21
+ },
+ "fleet_memos": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "no",
+    "type": "text"
+   },
+   {
+    "name": "title",
+    "type": "text"
+   },
+   {
+    "name": "boatid",
+    "type": "text"
+   },
+   {
+    "name": "memotype",
+    "type": "text"
+   },
+   {
+    "name": "proposer",
+    "type": "text"
+   },
+   {
+    "name": "from",
+    "type": "text"
+   },
+   {
+    "name": "to",
+    "type": "text"
+   },
+   {
+    "name": "cc",
+    "type": "text"
+   },
+   {
+    "name": "createddate",
+    "type": "text"
+   },
+   {
+    "name": "status",
+    "type": "text"
+   },
+   {
+    "name": "currentstep",
+    "type": "bigint"
+   },
+   {
+    "name": "vatenabled",
+    "type": "boolean"
+   },
+   {
+    "name": "vatrate",
+    "type": "bigint"
+   },
+   {
+    "name": "refnote",
+    "type": "text"
+   },
+   {
+    "name": "subtotal",
+    "type": "double precision"
+   },
+   {
+    "name": "discount",
+    "type": "double precision"
+   },
+   {
+    "name": "vat",
+    "type": "double precision"
+   },
+   {
+    "name": "amount",
+    "type": "double precision"
+   },
+   {
+    "name": "approvedby",
+    "type": "text"
+   },
+   {
+    "name": "approveddate",
+    "type": "text"
+   },
+   {
+    "name": "approvenote",
+    "type": "text"
+   },
+   {
+    "name": "ordereddate",
+    "type": "text"
+   },
+   {
+    "name": "receiveddate",
+    "type": "text"
+   },
+   {
+    "name": "supplier",
+    "type": "text"
+   },
+   {
+    "name": "discountpct",
+    "type": "bigint"
+   },
+   {
+    "name": "maintid",
+    "type": "text"
+   },
+   {
+    "name": "scope",
+    "type": "text"
+   },
+   {
+    "name": "generalcategory",
+    "type": "text"
+   },
+   {
+    "name": "note",
+    "type": "text"
+   },
+   {
+    "name": "orderedby",
+    "type": "text"
+   },
+   {
+    "name": "receivedby",
+    "type": "text"
+   },
+   {
+    "name": "paiddate",
+    "type": "text"
+   },
+   {
+    "name": "paidby",
+    "type": "text"
+   },
+   {
+    "name": "paidvia",
+    "type": "text"
+   },
+   {
+    "name": "discountamt",
+    "type": "bigint"
+   },
+   {
+    "name": "afterdiscount",
+    "type": "double precision"
+   },
+   {
+    "name": "receivedlocation",
+    "type": "text"
+   },
+   {
+    "name": "receivedsummary",
+    "type": "text"
+   },
+   {
+    "name": "projectid",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 66
+ },
+ "fleet_memos__items": {
+  "columns": [
+   {
+    "name": "fleet_memos_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "name",
+    "type": "text"
+   },
+   {
+    "name": "qty",
+    "type": "bigint"
+   },
+   {
+    "name": "price",
+    "type": "double precision"
+   },
+   {
+    "name": "category",
+    "type": "text"
+   },
+   {
+    "name": "partno",
+    "type": "text"
+   },
+   {
+    "name": "invid",
+    "type": "text"
+   },
+   {
+    "name": "unit",
+    "type": "text"
+   },
+   {
+    "name": "frominventory",
+    "type": "boolean"
+   },
+   {
+    "name": "discountpct",
+    "type": "bigint"
+   },
+   {
+    "name": "autoregister",
+    "type": "boolean"
+   },
+   {
+    "name": "inventorysnapshot_cost",
+    "type": "double precision"
+   },
+   {
+    "name": "inventorysnapshot_primarylocation",
+    "type": "text"
+   },
+   {
+    "name": "inventorysnapshot_qtyatselection",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "fleet_memos_id",
+    "references": "fleet_memos.id"
+   }
+  ],
+  "rows": 235
+ },
+ "app_hooks": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "value",
+    "type": "boolean"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 84
+ },
+ "sb_rate_types": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "code",
+    "type": "text"
+   },
+   {
+    "name": "name",
+    "type": "text"
+   },
+   {
+    "name": "note",
+    "type": "text"
+   },
+   {
+    "name": "color",
+    "type": "text"
+   },
+   {
+    "name": "createddate",
+    "type": "text"
+   },
+   {
+    "name": "validfrom",
+    "type": "text"
+   },
+   {
+    "name": "validto",
+    "type": "text"
+   },
+   {
+    "name": "active",
+    "type": "boolean"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 7
+ },
+ "sb_rate_types__routes": {
+  "columns": [
+   {
+    "name": "sb_rate_types_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "value",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_rate_types_id",
+    "references": "sb_rate_types.id"
+   }
+  ],
+  "rows": 35
+ },
+ "sb_rate_types__seatrates": {
+  "columns": [
+   {
+    "name": "sb_rate_types_id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "pk_adult_thai",
+    "type": "bigint"
+   },
+   {
+    "name": "pk_adult_fr",
+    "type": "bigint"
+   },
+   {
+    "name": "pk_child_thai",
+    "type": "bigint"
+   },
+   {
+    "name": "pk_child_fr",
+    "type": "bigint"
+   },
+   {
+    "name": "pk_infant_thai",
+    "type": "bigint"
+   },
+   {
+    "name": "pk_infant_fr",
+    "type": "bigint"
+   },
+   {
+    "name": "kl_adult_thai",
+    "type": "bigint"
+   },
+   {
+    "name": "kl_adult_fr",
+    "type": "bigint"
+   },
+   {
+    "name": "kl_child_thai",
+    "type": "bigint"
+   },
+   {
+    "name": "kl_child_fr",
+    "type": "bigint"
+   },
+   {
+    "name": "kl_infant_thai",
+    "type": "bigint"
+   },
+   {
+    "name": "kl_infant_fr",
+    "type": "bigint"
+   },
+   {
+    "name": "notransfer_adult_thai",
+    "type": "bigint"
+   },
+   {
+    "name": "notransfer_adult_fr",
+    "type": "bigint"
+   },
+   {
+    "name": "notransfer_child_thai",
+    "type": "bigint"
+   },
+   {
+    "name": "notransfer_child_fr",
+    "type": "bigint"
+   },
+   {
+    "name": "notransfer_infant_thai",
+    "type": "bigint"
+   },
+   {
+    "name": "notransfer_infant_fr",
+    "type": "bigint"
+   },
+   {
+    "name": "kl",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_rate_types_id",
+    "references": "sb_rate_types.id"
+   }
+  ],
+  "rows": 35
+ },
+ "sb_rate_types__charterrates": {
+  "columns": [
+   {
+    "name": "sb_rate_types_id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "speedboat_starterprice",
+    "type": "bigint"
+   },
+   {
+    "name": "speedboat_starterincludes",
+    "type": "bigint"
+   },
+   {
+    "name": "speedboat_extraperpax",
+    "type": "bigint"
+   },
+   {
+    "name": "catamaran_starterprice",
+    "type": "bigint"
+   },
+   {
+    "name": "catamaran_starterincludes",
+    "type": "bigint"
+   },
+   {
+    "name": "catamaran_extraperpax",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_rate_types_id",
+    "references": "sb_rate_types.id"
+   }
+  ],
+  "rows": 18
+ },
+ "sb_rate_types__addons": {
+  "columns": [
+   {
+    "name": "sb_rate_types_id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "adult",
+    "type": "bigint"
+   },
+   {
+    "name": "child",
+    "type": "bigint"
+   },
+   {
+    "name": "unit",
+    "type": "text"
+   },
+   {
+    "name": "join_adult",
+    "type": "bigint"
+   },
+   {
+    "name": "join_child",
+    "type": "bigint"
+   },
+   {
+    "name": "charter_price",
+    "type": "bigint"
+   },
+   {
+    "name": "charter_capacity",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_rate_types_id",
+    "references": "sb_rate_types.id"
+   }
+  ],
+  "rows": 10
+ },
+ "sb_rate_types__addons__applies": {
+  "columns": [
+   {
+    "name": "sb_rate_types_addons_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "value",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [],
+  "rows": 8
+ },
+ "sb_rate_types__addons__r5": {
+  "columns": [
+   {
+    "name": "sb_rate_types_addons_id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "sedan",
+    "type": "bigint"
+   },
+   {
+    "name": "van",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [],
+  "rows": 9
+ },
+ "sb_rate_types__addons__r6": {
+  "columns": [
+   {
+    "name": "sb_rate_types_addons_id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "sedan",
+    "type": "bigint"
+   },
+   {
+    "name": "van",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [],
+  "rows": 6
+ },
+ "sb_rate_types__addons__r10": {
+  "columns": [
+   {
+    "name": "sb_rate_types_addons_id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "sedan",
+    "type": "bigint"
+   },
+   {
+    "name": "van",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [],
+  "rows": 9
+ },
+ "sb_rate_types__addons__r11": {
+  "columns": [
+   {
+    "name": "sb_rate_types_addons_id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "sedan",
+    "type": "bigint"
+   },
+   {
+    "name": "van",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [],
+  "rows": 8
+ },
+ "sb_rate_types__addons__r12": {
+  "columns": [
+   {
+    "name": "sb_rate_types_addons_id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "sedan",
+    "type": "bigint"
+   },
+   {
+    "name": "van",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [],
+  "rows": 9
+ },
+ "sb_rate_types__routevalidity": {
+  "columns": [
+   {
+    "name": "sb_rate_types_id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "from",
+    "type": "text"
+   },
+   {
+    "name": "to",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_rate_types_id",
+    "references": "sb_rate_types.id"
+   }
+  ],
+  "rows": 20
+ },
+ "sb_rate_types__addons__byroute": {
+  "columns": [
+   {
+    "name": "sb_rate_types_addons_id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "join_adult",
+    "type": "bigint"
+   },
+   {
+    "name": "join_child",
+    "type": "bigint"
+   },
+   {
+    "name": "charter_price",
+    "type": "bigint"
+   },
+   {
+    "name": "charter_capacity",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [],
+  "rows": 4
+ },
+ "sb_rate_types__addons__r4": {
+  "columns": [
+   {
+    "name": "sb_rate_types_addons_id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "sedan",
+    "type": "bigint"
+   },
+   {
+    "name": "van",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [],
+  "rows": 4
+ },
+ "sb_rate_types__routebundles": {
+  "columns": [
+   {
+    "name": "sb_rate_types_id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "longtail_mode",
+    "type": "text"
+   },
+   {
+    "name": "longtail_adult",
+    "type": "bigint"
+   },
+   {
+    "name": "longtail_child",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_rate_types_id",
+    "references": "sb_rate_types.id"
+   }
+  ],
+  "rows": 3
+ },
+ "sb_agents_rate_bindings": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "ratetypeid",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 84
+ },
+ "fleet_safety": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "boatid",
+    "type": "text"
+   },
+   {
+    "name": "category",
+    "type": "text"
+   },
+   {
+    "name": "name",
+    "type": "text"
+   },
+   {
+    "name": "brand",
+    "type": "text"
+   },
+   {
+    "name": "model",
+    "type": "text"
+   },
+   {
+    "name": "serial",
+    "type": "text"
+   },
+   {
+    "name": "qty",
+    "type": "bigint"
+   },
+   {
+    "name": "installdate",
+    "type": "text"
+   },
+   {
+    "name": "expirydate",
+    "type": "text"
+   },
+   {
+    "name": "nextpm",
+    "type": "text"
+   },
+   {
+    "name": "lastinspect",
+    "type": "text"
+   },
+   {
+    "name": "status",
+    "type": "text"
+   },
+   {
+    "name": "location",
+    "type": "text"
+   },
+   {
+    "name": "note",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 94
+ },
+ "fleet_safety__log": {
+  "columns": [
+   {
+    "name": "fleet_safety_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "date",
+    "type": "text"
+   },
+   {
+    "name": "type",
+    "type": "text"
+   },
+   {
+    "name": "desc",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "fleet_safety_id",
+    "references": "fleet_safety.id"
+   }
+  ],
+  "rows": 98
+ },
+ "fleet_safety__inspections": {
+  "columns": [
+   {
+    "name": "fleet_safety_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "date",
+    "type": "text"
+   },
+   {
+    "name": "result",
+    "type": "text"
+   },
+   {
+    "name": "note",
+    "type": "text"
+   },
+   {
+    "name": "by",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "fleet_safety_id",
+    "references": "fleet_safety.id"
+   }
+  ],
+  "rows": 4
+ },
+ "sb_pickup_areas": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "name",
+    "type": "text"
+   },
+   {
+    "name": "zone",
+    "type": "text"
+   },
+   {
+    "name": "region",
+    "type": "text"
+   },
+   {
+    "name": "timegroup",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 48
+ },
+ "sb_pickup_times": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "pk_n1",
+    "type": "text"
+   },
+   {
+    "name": "pk_n2",
+    "type": "text"
+   },
+   {
+    "name": "pk_e1",
+    "type": "text"
+   },
+   {
+    "name": "pk_e2",
+    "type": "text"
+   },
+   {
+    "name": "pk_wn1",
+    "type": "text"
+   },
+   {
+    "name": "pk_w1",
+    "type": "text"
+   },
+   {
+    "name": "pk_w2",
+    "type": "text"
+   },
+   {
+    "name": "pk_s1",
+    "type": "text"
+   },
+   {
+    "name": "pk_s2",
+    "type": "text"
+   },
+   {
+    "name": "pk_c1",
+    "type": "text"
+   },
+   {
+    "name": "pk_c2",
+    "type": "text"
+   },
+   {
+    "name": "pk_pa1",
+    "type": "text"
+   },
+   {
+    "name": "nt_vp",
+    "type": "text"
+   },
+   {
+    "name": "pk_pn1",
+    "type": "text"
+   },
+   {
+    "name": "nt_tl",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 3
+ },
+ "sb_pickup_time_profiles": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "name",
+    "type": "text"
+   },
+   {
+    "name": "from",
+    "type": "text"
+   },
+   {
+    "name": "to",
+    "type": "text"
+   },
+   {
+    "name": "notes",
+    "type": "text"
+   },
+   {
+    "name": "clonedfrom",
+    "type": "text"
+   },
+   {
+    "name": "createdat",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 1
+ },
+ "sb_pickup_time_profiles__times": {
+  "columns": [
+   {
+    "name": "sb_pickup_time_profiles_id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "pk_maikhao",
+    "type": "text"
+   },
+   {
+    "name": "pk_naithon",
+    "type": "text"
+   },
+   {
+    "name": "pk_naiyang",
+    "type": "text"
+   },
+   {
+    "name": "pk_airport",
+    "type": "text"
+   },
+   {
+    "name": "pk_talang",
+    "type": "text"
+   },
+   {
+    "name": "pk_aopor",
+    "type": "text"
+   },
+   {
+    "name": "pk_pakhlok",
+    "type": "text"
+   },
+   {
+    "name": "pk_yamu",
+    "type": "text"
+   },
+   {
+    "name": "pk_monument",
+    "type": "text"
+   },
+   {
+    "name": "pk_kokaeo",
+    "type": "text"
+   },
+   {
+    "name": "pk_sapam",
+    "type": "text"
+   },
+   {
+    "name": "pk_layan",
+    "type": "text"
+   },
+   {
+    "name": "pk_laguna",
+    "type": "text"
+   },
+   {
+    "name": "pk_bangtao",
+    "type": "text"
+   },
+   {
+    "name": "pk_cherngtalay",
+    "type": "text"
+   },
+   {
+    "name": "pk_surin",
+    "type": "text"
+   },
+   {
+    "name": "pk_kamala",
+    "type": "text"
+   },
+   {
+    "name": "pk_kalim",
+    "type": "text"
+   },
+   {
+    "name": "pk_tritrang",
+    "type": "text"
+   },
+   {
+    "name": "pk_patong",
+    "type": "text"
+   },
+   {
+    "name": "pk_karon",
+    "type": "text"
+   },
+   {
+    "name": "pk_kata",
+    "type": "text"
+   },
+   {
+    "name": "pk_rawai",
+    "type": "text"
+   },
+   {
+    "name": "pk_naiharn",
+    "type": "text"
+   },
+   {
+    "name": "pk_saiyuan",
+    "type": "text"
+   },
+   {
+    "name": "pk_chalong",
+    "type": "text"
+   },
+   {
+    "name": "pk_chaofa",
+    "type": "text"
+   },
+   {
+    "name": "pk_siray",
+    "type": "text"
+   },
+   {
+    "name": "pk_town",
+    "type": "text"
+   },
+   {
+    "name": "pk_aoyon",
+    "type": "text"
+   },
+   {
+    "name": "pk_panwa",
+    "type": "text"
+   },
+   {
+    "name": "nt_panwa_pier",
+    "type": "text"
+   },
+   {
+    "name": "pk_kathu",
+    "type": "text"
+   },
+   {
+    "name": "pk_khokkloi",
+    "type": "text"
+   },
+   {
+    "name": "pk_natai",
+    "type": "text"
+   },
+   {
+    "name": "nt_tublamu_pier",
+    "type": "text"
+   },
+   {
+    "name": "kl_numkhem",
+    "type": "text"
+   },
+   {
+    "name": "kl_bangsak",
+    "type": "text"
+   },
+   {
+    "name": "kl_pakwip",
+    "type": "text"
+   },
+   {
+    "name": "kl_pakarang",
+    "type": "text"
+   },
+   {
+    "name": "kl_khukkhak",
+    "type": "text"
+   },
+   {
+    "name": "kl_bangniang",
+    "type": "text"
+   },
+   {
+    "name": "kl_nanglao",
+    "type": "text"
+   },
+   {
+    "name": "kl_center",
+    "type": "text"
+   },
+   {
+    "name": "kl_khaolak",
+    "type": "text"
+   },
+   {
+    "name": "kl_merlin",
+    "type": "text"
+   },
+   {
+    "name": "kl_poseidon",
+    "type": "text"
+   },
+   {
+    "name": "kl_tublamuhotel",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_pickup_time_profiles_id",
+    "references": "sb_pickup_time_profiles.id"
+   }
+  ],
+  "rows": 12
+ },
+ "fleet_projects": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "no",
+    "type": "text"
+   },
+   {
+    "name": "name",
+    "type": "text"
+   },
+   {
+    "name": "boatid",
+    "type": "text"
+   },
+   {
+    "name": "type",
+    "type": "text"
+   },
+   {
+    "name": "vendor",
+    "type": "text"
+   },
+   {
+    "name": "planfrom",
+    "type": "text"
+   },
+   {
+    "name": "planto",
+    "type": "text"
+   },
+   {
+    "name": "actualfrom",
+    "type": "text"
+   },
+   {
+    "name": "actualto",
+    "type": "text"
+   },
+   {
+    "name": "status",
+    "type": "text"
+   },
+   {
+    "name": "plannedbudget",
+    "type": "bigint"
+   },
+   {
+    "name": "notes",
+    "type": "text"
+   },
+   {
+    "name": "createdat",
+    "type": "text"
+   },
+   {
+    "name": "createdby",
+    "type": "text"
+   },
+   {
+    "name": "originalplanto",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 16
+ },
+ "fleet_projects__log": {
+  "columns": [
+   {
+    "name": "fleet_projects_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "date",
+    "type": "text"
+   },
+   {
+    "name": "text",
+    "type": "text"
+   },
+   {
+    "name": "by",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "fleet_projects_id",
+    "references": "fleet_projects.id"
+   }
+  ],
+  "rows": 85
+ },
+ "fleet_projects__plan": {
+  "columns": [
+   {
+    "name": "fleet_projects_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "text",
+    "type": "text"
+   },
+   {
+    "name": "done",
+    "type": "boolean"
+   },
+   {
+    "name": "addedat",
+    "type": "text"
+   },
+   {
+    "name": "donedate",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "fleet_projects_id",
+    "references": "fleet_projects.id"
+   }
+  ],
+  "rows": 20
+ },
+ "sb_seat_locks": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "routeid",
+    "type": "text"
+   },
+   {
+    "name": "date",
+    "type": "text"
+   },
+   {
+    "name": "boatid",
+    "type": "text"
+   },
+   {
+    "name": "holdertype",
+    "type": "text"
+   },
+   {
+    "name": "holderid",
+    "type": "text"
+   },
+   {
+    "name": "qty",
+    "type": "bigint"
+   },
+   {
+    "name": "used",
+    "type": "bigint"
+   },
+   {
+    "name": "reason",
+    "type": "text"
+   },
+   {
+    "name": "expiry",
+    "type": "text"
+   },
+   {
+    "name": "status",
+    "type": "text"
+   },
+   {
+    "name": "createdat",
+    "type": "text"
+   },
+   {
+    "name": "createdby",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 1
+ },
+ "sb_seat_locks__log": {
+  "columns": [
+   {
+    "name": "sb_seat_locks_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "date",
+    "type": "text"
+   },
+   {
+    "name": "type",
+    "type": "text"
+   },
+   {
+    "name": "qty",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_seat_locks_id",
+    "references": "sb_seat_locks.id"
+   }
+  ],
+  "rows": 2
+ },
+ "sb_sales": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "code",
+    "type": "text"
+   },
+   {
+    "name": "name",
+    "type": "text"
+   },
+   {
+    "name": "color",
+    "type": "text"
+   },
+   {
+    "name": "email",
+    "type": "text"
+   },
+   {
+    "name": "fullname",
+    "type": "text"
+   },
+   {
+    "name": "designation",
+    "type": "text"
+   },
+   {
+    "name": "tel",
+    "type": "text"
+   },
+   {
+    "name": "signature",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 5
+ },
+ "sb_agents": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "code",
+    "type": "text"
+   },
+   {
+    "name": "name",
+    "type": "text"
+   },
+   {
+    "name": "market",
+    "type": "text"
+   },
+   {
+    "name": "sub",
+    "type": "text"
+   },
+   {
+    "name": "sales",
+    "type": "text"
+   },
+   {
+    "name": "paytype",
+    "type": "text"
+   },
+   {
+    "name": "vatmode",
+    "type": "text"
+   },
+   {
+    "name": "creditdays",
+    "type": "bigint"
+   },
+   {
+    "name": "creditlimit",
+    "type": "bigint"
+   },
+   {
+    "name": "creditbalance",
+    "type": "bigint"
+   },
+   {
+    "name": "contact",
+    "type": "text"
+   },
+   {
+    "name": "email",
+    "type": "text"
+   },
+   {
+    "name": "phone",
+    "type": "text"
+   },
+   {
+    "name": "note",
+    "type": "text"
+   },
+   {
+    "name": "contractstatus",
+    "type": "text"
+   },
+   {
+    "name": "contractversion",
+    "type": "text"
+   },
+   {
+    "name": "companyinfo_legalname",
+    "type": "text"
+   },
+   {
+    "name": "companyinfo_tatlicense",
+    "type": "text"
+   },
+   {
+    "name": "companyinfo_address",
+    "type": "text"
+   },
+   {
+    "name": "companyinfo_tel",
+    "type": "text"
+   },
+   {
+    "name": "companyinfo_hotline",
+    "type": "text"
+   },
+   {
+    "name": "companyinfo_fax",
+    "type": "text"
+   },
+   {
+    "name": "companyinfo_website",
+    "type": "text"
+   },
+   {
+    "name": "agentsignatory_name",
+    "type": "text"
+   },
+   {
+    "name": "agentsignatory_designation",
+    "type": "text"
+   },
+   {
+    "name": "agentsignatory_tel",
+    "type": "text"
+   },
+   {
+    "name": "agentsignatory_signeddate",
+    "type": "text"
+   },
+   {
+    "name": "bookingchannel_method",
+    "type": "text"
+   },
+   {
+    "name": "bookingchannel_cutoff",
+    "type": "text"
+   },
+   {
+    "name": "bookingchannel_cancelpolicy",
+    "type": "text"
+   },
+   {
+    "name": "bookingchannel_email",
+    "type": "text"
+   },
+   {
+    "name": "bookingchannel_phone",
+    "type": "text"
+   },
+   {
+    "name": "contractstart",
+    "type": "text"
+   },
+   {
+    "name": "contractend",
+    "type": "text"
+   },
+   {
+    "name": "ratetypeid",
+    "type": "text"
+   },
+   {
+    "name": "color",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 84
+ },
+ "sb_agents__programs": {
+  "columns": [
+   {
+    "name": "sb_agents_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "value",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_agents_id",
+    "references": "sb_agents.id"
+   }
+  ],
+  "rows": 497
+ },
+ "sb_agents__programperiods": {
+  "columns": [
+   {
+    "name": "sb_agents_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "routeid",
+    "type": "text"
+   },
+   {
+    "name": "bookfrom",
+    "type": "text"
+   },
+   {
+    "name": "bookto",
+    "type": "text"
+   },
+   {
+    "name": "travelfrom",
+    "type": "text"
+   },
+   {
+    "name": "travelto",
+    "type": "text"
+   },
+   {
+    "name": "note",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_agents_id",
+    "references": "sb_agents.id"
+   }
+  ],
+  "rows": 497
+ },
+ "sb_agents__activity": {
+  "columns": [
+   {
+    "name": "sb_agents_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "at",
+    "type": "text"
+   },
+   {
+    "name": "by",
+    "type": "text"
+   },
+   {
+    "name": "kind",
+    "type": "text"
+   },
+   {
+    "name": "text",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_agents_id",
+    "references": "sb_agents.id"
+   }
+  ],
+  "rows": 174
+ },
+ "sb_agents__contracthistory": {
+  "columns": [
+   {
+    "name": "sb_agents_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "version",
+    "type": "text"
+   },
+   {
+    "name": "archivedat",
+    "type": "text"
+   },
+   {
+    "name": "contractstart",
+    "type": "text"
+   },
+   {
+    "name": "contractend",
+    "type": "text"
+   },
+   {
+    "name": "snapshot_agentsignatory_name",
+    "type": "text"
+   },
+   {
+    "name": "snapshot_agentsignatory_designation",
+    "type": "text"
+   },
+   {
+    "name": "snapshot_agentsignatory_tel",
+    "type": "text"
+   },
+   {
+    "name": "snapshot_agentsignatory_signeddate",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_agents_id",
+    "references": "sb_agents.id"
+   }
+  ],
+  "rows": 2
+ },
+ "sb_agents__contracthistory__programperiods": {
+  "columns": [
+   {
+    "name": "sb_agents_contracthistory_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "routeid",
+    "type": "text"
+   },
+   {
+    "name": "bookfrom",
+    "type": "text"
+   },
+   {
+    "name": "bookto",
+    "type": "text"
+   },
+   {
+    "name": "travelfrom",
+    "type": "text"
+   },
+   {
+    "name": "travelto",
+    "type": "text"
+   },
+   {
+    "name": "note",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [],
+  "rows": 8
+ },
+ "sb_agents__contracthistory__addonservices": {
+  "columns": [
+   {
+    "name": "sb_agents_contracthistory_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "svcid",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [],
+  "rows": 3
+ },
+ "sb_agents__contracthistory__addonservices__variants": {
+  "columns": [
+   {
+    "name": "sb_agents_contracthistory_addonservices_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "varid",
+    "type": "text"
+   },
+   {
+    "name": "selling",
+    "type": "bigint"
+   },
+   {
+    "name": "net",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [],
+  "rows": 6
+ },
+ "sb_agents__contracthistory__prices": {
+  "columns": [
+   {
+    "name": "sb_agents_contracthistory_id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "pk_adult_thai",
+    "type": "bigint"
+   },
+   {
+    "name": "pk_adult_fr",
+    "type": "bigint"
+   },
+   {
+    "name": "pk_child_thai",
+    "type": "bigint"
+   },
+   {
+    "name": "pk_child_fr",
+    "type": "bigint"
+   },
+   {
+    "name": "pk_infant_thai",
+    "type": "bigint"
+   },
+   {
+    "name": "pk_infant_fr",
+    "type": "bigint"
+   },
+   {
+    "name": "kl_adult_thai",
+    "type": "bigint"
+   },
+   {
+    "name": "kl_adult_fr",
+    "type": "bigint"
+   },
+   {
+    "name": "kl_child_thai",
+    "type": "bigint"
+   },
+   {
+    "name": "kl_child_fr",
+    "type": "bigint"
+   },
+   {
+    "name": "kl_infant_thai",
+    "type": "bigint"
+   },
+   {
+    "name": "kl_infant_fr",
+    "type": "bigint"
+   },
+   {
+    "name": "notransfer_adult_thai",
+    "type": "bigint"
+   },
+   {
+    "name": "notransfer_adult_fr",
+    "type": "bigint"
+   },
+   {
+    "name": "notransfer_child_thai",
+    "type": "bigint"
+   },
+   {
+    "name": "notransfer_child_fr",
+    "type": "bigint"
+   },
+   {
+    "name": "notransfer_infant_thai",
+    "type": "bigint"
+   },
+   {
+    "name": "notransfer_infant_fr",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [],
+  "rows": 8
+ },
+ "sb_bookings": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "schemaver",
+    "type": "bigint"
+   },
+   {
+    "name": "createdat",
+    "type": "text"
+   },
+   {
+    "name": "createdby",
+    "type": "text"
+   },
+   {
+    "name": "voucherref",
+    "type": "text"
+   },
+   {
+    "name": "agentid",
+    "type": "text"
+   },
+   {
+    "name": "ratetyperef",
+    "type": "text"
+   },
+   {
+    "name": "leadpax",
+    "type": "text"
+   },
+   {
+    "name": "leadnationality",
+    "type": "text"
+   },
+   {
+    "name": "leadtype",
+    "type": "text"
+   },
+   {
+    "name": "leadfoc",
+    "type": "boolean"
+   },
+   {
+    "name": "leadphone",
+    "type": "text"
+   },
+   {
+    "name": "leademail",
+    "type": "text"
+   },
+   {
+    "name": "pickupareaid",
+    "type": "text"
+   },
+   {
+    "name": "pickupself",
+    "type": "boolean"
+   },
+   {
+    "name": "pickuparea",
+    "type": "text"
+   },
+   {
+    "name": "pickupzone",
+    "type": "text"
+   },
+   {
+    "name": "hotelname",
+    "type": "text"
+   },
+   {
+    "name": "roomnumber",
+    "type": "text"
+   },
+   {
+    "name": "dropoffsame",
+    "type": "boolean"
+   },
+   {
+    "name": "dropoffareaid",
+    "type": "text"
+   },
+   {
+    "name": "dropoffarea",
+    "type": "text"
+   },
+   {
+    "name": "dropoffhotelname",
+    "type": "text"
+   },
+   {
+    "name": "guides_english",
+    "type": "boolean"
+   },
+   {
+    "name": "guides_russian",
+    "type": "boolean"
+   },
+   {
+    "name": "guides_chinese",
+    "type": "boolean"
+   },
+   {
+    "name": "guides_otherlang",
+    "type": "text"
+   },
+   {
+    "name": "notes",
+    "type": "text"
+   },
+   {
+    "name": "specialmeals_veg",
+    "type": "bigint"
+   },
+   {
+    "name": "specialmeals_vegan",
+    "type": "bigint"
+   },
+   {
+    "name": "specialmeals_halal",
+    "type": "bigint"
+   },
+   {
+    "name": "specialmeals_allergies",
+    "type": "text"
+   },
+   {
+    "name": "largeluggage",
+    "type": "bigint"
+   },
+   {
+    "name": "cashontour",
+    "type": "text"
+   },
+   {
+    "name": "focapproval",
+    "type": "text"
+   },
+   {
+    "name": "paymentsnapshot_method",
+    "type": "text"
+   },
+   {
+    "name": "paymentsnapshot_netdays",
+    "type": "bigint"
+   },
+   {
+    "name": "paymentsnapshot_source",
+    "type": "text"
+   },
+   {
+    "name": "paymentsnapshot_contractversion",
+    "type": "text"
+   },
+   {
+    "name": "pricebreakdown_seat",
+    "type": "bigint"
+   },
+   {
+    "name": "pricebreakdown_addon",
+    "type": "bigint"
+   },
+   {
+    "name": "pricebreakdown_focdiscount",
+    "type": "bigint"
+   },
+   {
+    "name": "pricebreakdown_discount",
+    "type": "bigint"
+   },
+   {
+    "name": "pricebreakdown_extra",
+    "type": "bigint"
+   },
+   {
+    "name": "pricebreakdown_total",
+    "type": "bigint"
+   },
+   {
+    "name": "status",
+    "type": "text"
+   },
+   {
+    "name": "total",
+    "type": "bigint"
+   },
+   {
+    "name": "soldby",
+    "type": "text"
+   },
+   {
+    "name": "pricemode",
+    "type": "text"
+   },
+   {
+    "name": "manualtotal",
+    "type": "bigint"
+   },
+   {
+    "name": "purpose",
+    "type": "text"
+   },
+   {
+    "name": "staffid",
+    "type": "text"
+   },
+   {
+    "name": "staffpurpose",
+    "type": "text"
+   },
+   {
+    "name": "note",
+    "type": "text"
+   },
+   {
+    "name": "bookedat",
+    "type": "text"
+   },
+   {
+    "name": "bookingdate",
+    "type": "text"
+   },
+   {
+    "name": "marketsnapshot_market",
+    "type": "text"
+   },
+   {
+    "name": "marketsnapshot_sub",
+    "type": "text"
+   },
+   {
+    "name": "marketsnapshot_agentid",
+    "type": "text"
+   },
+   {
+    "name": "marketsnapshot_at",
+    "type": "text"
+   },
+   {
+    "name": "confirmedby",
+    "type": "text"
+   },
+   {
+    "name": "confirmedat",
+    "type": "text"
+   },
+   {
+    "name": "ops_boatid",
+    "type": "text"
+   },
+   {
+    "name": "updatedat",
+    "type": "text"
+   },
+   {
+    "name": "updatedby",
+    "type": "text"
+   },
+   {
+    "name": "focapproval_count",
+    "type": "bigint"
+   },
+   {
+    "name": "focapproval_reason",
+    "type": "text"
+   },
+   {
+    "name": "focapproval_status",
+    "type": "text"
+   },
+   {
+    "name": "focapproval_requestedat",
+    "type": "text"
+   },
+   {
+    "name": "focapproval_requestedby",
+    "type": "text"
+   },
+   {
+    "name": "focapproval_approvedat",
+    "type": "text"
+   },
+   {
+    "name": "focapproval_approvedby",
+    "type": "text"
+   },
+   {
+    "name": "focreason",
+    "type": "text"
+   },
+   {
+    "name": "ops_vangroup",
+    "type": "bigint"
+   },
+   {
+    "name": "ops_vanseq",
+    "type": "bigint"
+   },
+   {
+    "name": "ops_vanreturnid",
+    "type": "text"
+   },
+   {
+    "name": "ops_vanid",
+    "type": "text"
+   },
+   {
+    "name": "invoiceid",
+    "type": "text"
+   },
+   {
+    "name": "paymentstatus",
+    "type": "text"
+   },
+   {
+    "name": "ops_returnsamevan",
+    "type": "boolean"
+   },
+   {
+    "name": "cashontour_amount",
+    "type": "bigint"
+   },
+   {
+    "name": "cashontour_currency",
+    "type": "text"
+   },
+   {
+    "name": "cashontour_handling",
+    "type": "text"
+   },
+   {
+    "name": "cashontour_note",
+    "type": "text"
+   },
+   {
+    "name": "cancelledat",
+    "type": "text"
+   },
+   {
+    "name": "cancellation_category",
+    "type": "text"
+   },
+   {
+    "name": "cancellation_categorylabel",
+    "type": "text"
+   },
+   {
+    "name": "cancellation_group",
+    "type": "text"
+   },
+   {
+    "name": "cancellation_note",
+    "type": "text"
+   },
+   {
+    "name": "cancellation_reason",
+    "type": "text"
+   },
+   {
+    "name": "cancellation_chargetype",
+    "type": "text"
+   },
+   {
+    "name": "cancellation_chargeamount",
+    "type": "bigint"
+   },
+   {
+    "name": "cancellation_at",
+    "type": "text"
+   },
+   {
+    "name": "cancellation_by",
+    "type": "text"
+   },
+   {
+    "name": "cancelcategory",
+    "type": "text"
+   },
+   {
+    "name": "cancelreason",
+    "type": "text"
+   },
+   {
+    "name": "reschedule_fromdate",
+    "type": "text"
+   },
+   {
+    "name": "reschedule_todate",
+    "type": "text"
+   },
+   {
+    "name": "reschedule_reason",
+    "type": "text"
+   },
+   {
+    "name": "reschedule_chargetype",
+    "type": "text"
+   },
+   {
+    "name": "reschedule_chargeamount",
+    "type": "bigint"
+   },
+   {
+    "name": "reschedule_collect",
+    "type": "text"
+   },
+   {
+    "name": "reschedule_at",
+    "type": "text"
+   },
+   {
+    "name": "reschedule_by",
+    "type": "text"
+   },
+   {
+    "name": "rebook_from",
+    "type": "text"
+   },
+   {
+    "name": "rebook_to",
+    "type": "text"
+   },
+   {
+    "name": "rebook_reason",
+    "type": "text"
+   },
+   {
+    "name": "rebook_at",
+    "type": "text"
+   },
+   {
+    "name": "ops_pickuptimefinal",
+    "type": "text"
+   },
+   {
+    "name": "approval_status",
+    "type": "text"
+   },
+   {
+    "name": "approval_reason",
+    "type": "text"
+   },
+   {
+    "name": "approval_targetstatus",
+    "type": "text"
+   },
+   {
+    "name": "approval_totover",
+    "type": "bigint"
+   },
+   {
+    "name": "approval_requestedby",
+    "type": "text"
+   },
+   {
+    "name": "approval_requestedat",
+    "type": "text"
+   },
+   {
+    "name": "approval_approvedby",
+    "type": "text"
+   },
+   {
+    "name": "approval_approvedat",
+    "type": "text"
+   },
+   {
+    "name": "approval_note",
+    "type": "text"
+   },
+   {
+    "name": "ops_reconfirm",
+    "type": "text"
+   },
+   {
+    "name": "weatherresolve_event",
+    "type": "text"
+   },
+   {
+    "name": "weatherresolve_status",
+    "type": "text"
+   },
+   {
+    "name": "weatherresolve_notifiedat",
+    "type": "text"
+   },
+   {
+    "name": "weatherresolve_outcome",
+    "type": "text"
+   },
+   {
+    "name": "weatherresolve_resolvedat",
+    "type": "text"
+   },
+   {
+    "name": "weatherresolve_newdate",
+    "type": "text"
+   },
+   {
+    "name": "editlock_uid",
+    "type": "text"
+   },
+   {
+    "name": "editlock_by",
+    "type": "text"
+   },
+   {
+    "name": "editlock_at",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 762
+ },
+ "sb_bookings__passengers": {
+  "columns": [
+   {
+    "name": "sb_bookings_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "name",
+    "type": "text"
+   },
+   {
+    "name": "nationality",
+    "type": "text"
+   },
+   {
+    "name": "type",
+    "type": "text"
+   },
+   {
+    "name": "foc",
+    "type": "boolean"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_bookings_id",
+    "references": "sb_bookings.id"
+   }
+  ],
+  "rows": 711
+ },
+ "sb_bookings__trips": {
+  "columns": [
+   {
+    "name": "sb_bookings_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "routeid",
+    "type": "text"
+   },
+   {
+    "name": "date",
+    "type": "text"
+   },
+   {
+    "name": "zone",
+    "type": "text"
+   },
+   {
+    "name": "pax_ad_fr",
+    "type": "bigint"
+   },
+   {
+    "name": "pax_chd_fr",
+    "type": "bigint"
+   },
+   {
+    "name": "pax_inf_fr",
+    "type": "bigint"
+   },
+   {
+    "name": "pax_foc_fr",
+    "type": "bigint"
+   },
+   {
+    "name": "pax_ad_th",
+    "type": "bigint"
+   },
+   {
+    "name": "pax_chd_th",
+    "type": "bigint"
+   },
+   {
+    "name": "pax_inf_th",
+    "type": "bigint"
+   },
+   {
+    "name": "pax_foc_th",
+    "type": "bigint"
+   },
+   {
+    "name": "pax_ad",
+    "type": "bigint"
+   },
+   {
+    "name": "pickuptime",
+    "type": "text"
+   },
+   {
+    "name": "bookingmode",
+    "type": "text"
+   },
+   {
+    "name": "charterboatid",
+    "type": "text"
+   },
+   {
+    "name": "charterpricemode",
+    "type": "text"
+   },
+   {
+    "name": "charterpricemanual",
+    "type": "bigint"
+   },
+   {
+    "name": "charterpricenote",
+    "type": "text"
+   },
+   {
+    "name": "charterdisplacementack",
+    "type": "boolean"
+   },
+   {
+    "name": "ovn",
+    "type": "text"
+   },
+   {
+    "name": "ovnreturndate",
+    "type": "text"
+   },
+   {
+    "name": "ovncharge",
+    "type": "bigint"
+   },
+   {
+    "name": "ovnleg",
+    "type": "boolean"
+   },
+   {
+    "name": "ovnof",
+    "type": "text"
+   },
+   {
+    "name": "seatsource_locked",
+    "type": "bigint"
+   },
+   {
+    "name": "seatsource_general",
+    "type": "bigint"
+   },
+   {
+    "name": "subtotal",
+    "type": "bigint"
+   },
+   {
+    "name": "pax_foc",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_bookings_id",
+    "references": "sb_bookings.id"
+   }
+  ],
+  "rows": 762
+ },
+ "sb_bookings__addons": {
+  "columns": [
+   {
+    "name": "sb_bookings_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "type",
+    "type": "text"
+   },
+   {
+    "name": "label",
+    "type": "text"
+   },
+   {
+    "name": "amount",
+    "type": "bigint"
+   },
+   {
+    "name": "qty",
+    "type": "bigint"
+   },
+   {
+    "name": "note",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_bookings_id",
+    "references": "sb_bookings.id"
+   }
+  ],
+  "rows": 45
+ },
+ "sb_bookings__history": {
+  "columns": [
+   {
+    "name": "sb_bookings_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "at",
+    "type": "text"
+   },
+   {
+    "name": "kind",
+    "type": "text"
+   },
+   {
+    "name": "text",
+    "type": "text"
+   },
+   {
+    "name": "tag",
+    "type": "text"
+   },
+   {
+    "name": "by",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_bookings_id",
+    "references": "sb_bookings.id"
+   }
+  ],
+  "rows": 1049
+ },
+ "sb_bookings__upgrades": {
+  "columns": [
+   {
+    "name": "sb_bookings_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "label",
+    "type": "text"
+   },
+   {
+    "name": "sellprice",
+    "type": "bigint"
+   },
+   {
+    "name": "tocompany",
+    "type": "bigint"
+   },
+   {
+    "name": "commission",
+    "type": "bigint"
+   },
+   {
+    "name": "collected",
+    "type": "boolean"
+   },
+   {
+    "name": "note",
+    "type": "text"
+   },
+   {
+    "name": "seller",
+    "type": "text"
+   },
+   {
+    "name": "settle",
+    "type": "text"
+   },
+   {
+    "name": "at",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_bookings_id",
+    "references": "sb_bookings.id"
+   }
+  ],
+  "rows": 2
+ },
+ "sb_bookings__feeitems": {
+  "columns": [
+   {
+    "name": "sb_bookings_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "type",
+    "type": "text"
+   },
+   {
+    "name": "label",
+    "type": "text"
+   },
+   {
+    "name": "amount",
+    "type": "bigint"
+   },
+   {
+    "name": "at",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_bookings_id",
+    "references": "sb_bookings.id"
+   }
+  ],
+  "rows": 4
+ },
+ "sb_bookings__partialcancels": {
+  "columns": [
+   {
+    "name": "sb_bookings_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "date",
+    "type": "text"
+   },
+   {
+    "name": "tripidx",
+    "type": "bigint"
+   },
+   {
+    "name": "paxremoved_foc_th",
+    "type": "bigint"
+   },
+   {
+    "name": "count",
+    "type": "bigint"
+   },
+   {
+    "name": "category",
+    "type": "text"
+   },
+   {
+    "name": "categorylabel",
+    "type": "text"
+   },
+   {
+    "name": "group",
+    "type": "text"
+   },
+   {
+    "name": "note",
+    "type": "text"
+   },
+   {
+    "name": "refundmode",
+    "type": "text"
+   },
+   {
+    "name": "refund",
+    "type": "bigint"
+   },
+   {
+    "name": "charged_count",
+    "type": "bigint"
+   },
+   {
+    "name": "charged_amount",
+    "type": "bigint"
+   },
+   {
+    "name": "waived_count",
+    "type": "bigint"
+   },
+   {
+    "name": "waived_amount",
+    "type": "bigint"
+   },
+   {
+    "name": "at",
+    "type": "text"
+   },
+   {
+    "name": "by",
+    "type": "text"
+   },
+   {
+    "name": "paxremoved_ad_fr",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_bookings_id",
+    "references": "sb_bookings.id"
+   }
+  ],
+  "rows": 6
+ },
+ "sb_bookings__adjustments": {
+  "columns": [
+   {
+    "name": "sb_bookings_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "kind",
+    "type": "text"
+   },
+   {
+    "name": "mode",
+    "type": "text"
+   },
+   {
+    "name": "value",
+    "type": "bigint"
+   },
+   {
+    "name": "label",
+    "type": "text"
+   },
+   {
+    "name": "note",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_bookings_id",
+    "references": "sb_bookings.id"
+   }
+  ],
+  "rows": 27
+ },
+ "sb_bookings__over": {
+  "columns": [
+   {
+    "name": "sb_bookings_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "routeid",
+    "type": "text"
+   },
+   {
+    "name": "date",
+    "type": "text"
+   },
+   {
+    "name": "name",
+    "type": "text"
+   },
+   {
+    "name": "need",
+    "type": "bigint"
+   },
+   {
+    "name": "capfree",
+    "type": "bigint"
+   },
+   {
+    "name": "overby",
+    "type": "bigint"
+   },
+   {
+    "name": "licfree",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_bookings_id",
+    "references": "sb_bookings.id"
+   }
+  ],
+  "rows": 1
+ },
+ "nat_learn": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "il",
+    "type": "bigint"
+   },
+   {
+    "name": "sa",
+    "type": "bigint"
+   },
+   {
+    "name": "th",
+    "type": "bigint"
+   },
+   {
+    "name": "in",
+    "type": "bigint"
+   },
+   {
+    "name": "sg",
+    "type": "bigint"
+   },
+   {
+    "name": "my",
+    "type": "bigint"
+   },
+   {
+    "name": "au",
+    "type": "bigint"
+   },
+   {
+    "name": "de",
+    "type": "bigint"
+   },
+   {
+    "name": "us",
+    "type": "bigint"
+   },
+   {
+    "name": "om",
+    "type": "bigint"
+   },
+   {
+    "name": "eg",
+    "type": "bigint"
+   },
+   {
+    "name": "ae",
+    "type": "bigint"
+   },
+   {
+    "name": "br",
+    "type": "bigint"
+   },
+   {
+    "name": "cn",
+    "type": "bigint"
+   },
+   {
+    "name": "es",
+    "type": "bigint"
+   },
+   {
+    "name": "mx",
+    "type": "bigint"
+   },
+   {
+    "name": "kr",
+    "type": "bigint"
+   },
+   {
+    "name": "bar2",
+    "type": "bigint"
+   },
+   {
+    "name": "bar",
+    "type": "bigint"
+   },
+   {
+    "name": "nl",
+    "type": "bigint"
+   },
+   {
+    "name": "ru",
+    "type": "bigint"
+   },
+   {
+    "name": "jo",
+    "type": "bigint"
+   },
+   {
+    "name": "jp",
+    "type": "bigint"
+   },
+   {
+    "name": "gb",
+    "type": "bigint"
+   },
+   {
+    "name": "ca",
+    "type": "bigint"
+   },
+   {
+    "name": "qa",
+    "type": "bigint"
+   },
+   {
+    "name": "irq",
+    "type": "bigint"
+   },
+   {
+    "name": "za",
+    "type": "bigint"
+   },
+   {
+    "name": "cub",
+    "type": "bigint"
+   },
+   {
+    "name": "fr",
+    "type": "bigint"
+   },
+   {
+    "name": "eth",
+    "type": "bigint"
+   },
+   {
+    "name": "ie",
+    "type": "bigint"
+   },
+   {
+    "name": "kz",
+    "type": "bigint"
+   },
+   {
+    "name": "uz",
+    "type": "bigint"
+   },
+   {
+    "name": "tw",
+    "type": "bigint"
+   },
+   {
+    "name": "it",
+    "type": "bigint"
+   },
+   {
+    "name": "se",
+    "type": "bigint"
+   },
+   {
+    "name": "nig",
+    "type": "bigint"
+   },
+   {
+    "name": "ge",
+    "type": "bigint"
+   },
+   {
+    "name": "ph",
+    "type": "bigint"
+   },
+   {
+    "name": "ar",
+    "type": "bigint"
+   },
+   {
+    "name": "gha",
+    "type": "bigint"
+   },
+   {
+    "name": "nz",
+    "type": "bigint"
+   },
+   {
+    "name": "pk",
+    "type": "bigint"
+   },
+   {
+    "name": "kw",
+    "type": "bigint"
+   },
+   {
+    "name": "lk",
+    "type": "bigint"
+   },
+   {
+    "name": "mon",
+    "type": "bigint"
+   },
+   {
+    "name": "by",
+    "type": "bigint"
+   },
+   {
+    "name": "aus",
+    "type": "bigint"
+   },
+   {
+    "name": "cl",
+    "type": "bigint"
+   },
+   {
+    "name": "dk",
+    "type": "bigint"
+   },
+   {
+    "name": "kh",
+    "type": "bigint"
+   },
+   {
+    "name": "tr",
+    "type": "bigint"
+   },
+   {
+    "name": "rs",
+    "type": "bigint"
+   },
+   {
+    "name": "pt",
+    "type": "bigint"
+   },
+   {
+    "name": "gr",
+    "type": "bigint"
+   },
+   {
+    "name": "lit",
+    "type": "bigint"
+   },
+   {
+    "name": "be",
+    "type": "bigint"
+   },
+   {
+    "name": "fi",
+    "type": "bigint"
+   },
+   {
+    "name": "no",
+    "type": "bigint"
+   },
+   {
+    "name": "usa",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 2320
+ },
+ "sb_nationalities": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "code",
+    "type": "text"
+   },
+   {
+    "name": "name",
+    "type": "text"
+   },
+   {
+    "name": "custom",
+    "type": "boolean"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 11
+ },
+ "sb_invoices": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "number",
+    "type": "text"
+   },
+   {
+    "name": "agentid",
+    "type": "text"
+   },
+   {
+    "name": "subtotal",
+    "type": "bigint"
+   },
+   {
+    "name": "depositapplied",
+    "type": "bigint"
+   },
+   {
+    "name": "total",
+    "type": "bigint"
+   },
+   {
+    "name": "issuedat",
+    "type": "text"
+   },
+   {
+    "name": "dueat",
+    "type": "text"
+   },
+   {
+    "name": "status",
+    "type": "text"
+   },
+   {
+    "name": "createdby",
+    "type": "text"
+   },
+   {
+    "name": "netamount",
+    "type": "bigint"
+   },
+   {
+    "name": "vatmode",
+    "type": "text"
+   },
+   {
+    "name": "vatrate",
+    "type": "double precision"
+   },
+   {
+    "name": "vatamount",
+    "type": "bigint"
+   },
+   {
+    "name": "feetype",
+    "type": "text"
+   },
+   {
+    "name": "note",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 23
+ },
+ "sb_invoices__bookingids": {
+  "columns": [
+   {
+    "name": "sb_invoices_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "value",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_invoices_id",
+    "references": "sb_invoices.id"
+   }
+  ],
+  "rows": 23
+ },
+ "sb_invoices__lineitems": {
+  "columns": [
+   {
+    "name": "sb_invoices_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "label",
+    "type": "text"
+   },
+   {
+    "name": "amount",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_invoices_id",
+    "references": "sb_invoices.id"
+   }
+  ],
+  "rows": 15
+ },
+ "sb_weather": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "routeid",
+    "type": "text"
+   },
+   {
+    "name": "date",
+    "type": "text"
+   },
+   {
+    "name": "reason",
+    "type": "text"
+   },
+   {
+    "name": "at",
+    "type": "text"
+   },
+   {
+    "name": "note",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 4
+ },
+ "sb_payments": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "invoiceid",
+    "type": "text"
+   },
+   {
+    "name": "agentid",
+    "type": "text"
+   },
+   {
+    "name": "amount",
+    "type": "bigint"
+   },
+   {
+    "name": "method",
+    "type": "text"
+   },
+   {
+    "name": "date",
+    "type": "text"
+   },
+   {
+    "name": "type",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 3
+ },
+ "sb_markets": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "name",
+    "type": "text"
+   },
+   {
+    "name": "color",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 10
+ },
+ "sb_markets__subs": {
+  "columns": [
+   {
+    "name": "sb_markets_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "value",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_markets_id",
+    "references": "sb_markets.id"
+   }
+  ],
+  "rows": 35
+ },
+ "sb_market_stats": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "date",
+    "type": "text"
+   },
+   {
+    "name": "in_col",
+    "type": "bigint"
+   },
+   {
+    "name": "in_zwe",
+    "type": "bigint"
+   },
+   {
+    "name": "in_overseas",
+    "type": "bigint"
+   },
+   {
+    "name": "out_col",
+    "type": "bigint"
+   },
+   {
+    "name": "out_zwe",
+    "type": "bigint"
+   },
+   {
+    "name": "out_overseas",
+    "type": "bigint"
+   },
+   {
+    "name": "out_1951_convention",
+    "type": "bigint"
+   },
+   {
+    "name": "inat",
+    "type": "text"
+   },
+   {
+    "name": "outat",
+    "type": "text"
+   },
+   {
+    "name": "intotal",
+    "type": "bigint"
+   },
+   {
+    "name": "outtotal",
+    "type": "bigint"
+   },
+   {
+    "name": "in_1951_convention",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 26
+ },
+ "sb_market_monthly": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "value",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 17
+ },
+ "sb_staff": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "code",
+    "type": "text"
+   },
+   {
+    "name": "name",
+    "type": "text"
+   },
+   {
+    "name": "dept",
+    "type": "text"
+   },
+   {
+    "name": "active",
+    "type": "boolean"
+   },
+   {
+    "name": "quota_2026",
+    "type": "bigint"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 14
+ },
+ "sb_vehicles": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "name",
+    "type": "text"
+   },
+   {
+    "name": "plate",
+    "type": "text"
+   },
+   {
+    "name": "type",
+    "type": "text"
+   },
+   {
+    "name": "capacity",
+    "type": "bigint"
+   },
+   {
+    "name": "ownership",
+    "type": "text"
+   },
+   {
+    "name": "partnername",
+    "type": "text"
+   },
+   {
+    "name": "zonebase",
+    "type": "text"
+   },
+   {
+    "name": "active",
+    "type": "boolean"
+   },
+   {
+    "name": "note",
+    "type": "text"
+   },
+   {
+    "name": "driver",
+    "type": "text"
+   },
+   {
+    "name": "driverphone",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_06_01",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_06_02",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_06_03",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_06_04",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_06_05",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_06_06",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_06_23",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_07_01",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_07_02",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_07_03",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_07_04",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_07_05",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_07_06",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_07_07",
+    "type": "text"
+   },
+   {
+    "name": "dayzone_2026_06_12",
+    "type": "text"
+   },
+   {
+    "name": "dayroute_2026_06_11",
+    "type": "text"
+   },
+   {
+    "name": "dayroute_2026_06_12",
+    "type": "text"
+   },
+   {
+    "name": "dayroute_2026_06_13",
+    "type": "text"
+   },
+   {
+    "name": "dayroute_2026_06_14",
+    "type": "text"
+   },
+   {
+    "name": "dayroute_2026_06_15",
+    "type": "text"
+   },
+   {
+    "name": "dayroute_2026_06_21",
+    "type": "text"
+   },
+   {
+    "name": "dayroute_2026_06_22",
+    "type": "text"
+   },
+   {
+    "name": "dayroute_2026_06_23",
+    "type": "text"
+   },
+   {
+    "name": "dayroute_2026_06_24",
+    "type": "text"
+   },
+   {
+    "name": "dayroute_2026_06_26",
+    "type": "text"
+   },
+   {
+    "name": "dayroute_2026_07_01",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_06_12",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_06_13",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_06_11",
+    "type": "text"
+   },
+   {
+    "name": "dayroute_2026_06_19",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_06_26",
+    "type": "text"
+   },
+   {
+    "name": "dayroute_2026_06_20",
+    "type": "text"
+   },
+   {
+    "name": "dayroute_2026_06_25",
+    "type": "text"
+   },
+   {
+    "name": "dayroute_2026_06_28",
+    "type": "text"
+   },
+   {
+    "name": "dayroute_2026_06_29",
+    "type": "text"
+   },
+   {
+    "name": "dayroute_2026_06_18",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_06_22",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_06_24",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_06_25",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_06_27",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_06_28",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_06_29",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_06_30",
+    "type": "text"
+   },
+   {
+    "name": "daystatus_2026_06_21",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 13
+ },
+ "sb_vehicles__log": {
+  "columns": [
+   {
+    "name": "sb_vehicles_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "at",
+    "type": "text"
+   },
+   {
+    "name": "kind",
+    "type": "text"
+   },
+   {
+    "name": "text",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_vehicles_id",
+    "references": "sb_vehicles.id"
+   }
+  ],
+  "rows": 551
+ },
+ "sb_vehicles__statusranges": {
+  "columns": [
+   {
+    "name": "sb_vehicles_id",
+    "type": "text"
+   },
+   {
+    "name": "idx",
+    "type": "bigint"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "s",
+    "type": "text"
+   },
+   {
+    "name": "from",
+    "type": "text"
+   },
+   {
+    "name": "to",
+    "type": "text"
+   },
+   {
+    "name": "note",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_vehicles_id",
+    "references": "sb_vehicles.id"
+   }
+  ],
+  "rows": 9
+ },
+ "sb_extras": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "bookingid",
+    "type": "text"
+   },
+   {
+    "name": "tripdate",
+    "type": "text"
+   },
+   {
+    "name": "service",
+    "type": "text"
+   },
+   {
+    "name": "qty",
+    "type": "bigint"
+   },
+   {
+    "name": "unitprice",
+    "type": "bigint"
+   },
+   {
+    "name": "total",
+    "type": "bigint"
+   },
+   {
+    "name": "tocompany",
+    "type": "bigint"
+   },
+   {
+    "name": "commission",
+    "type": "bigint"
+   },
+   {
+    "name": "seller",
+    "type": "text"
+   },
+   {
+    "name": "method",
+    "type": "text"
+   },
+   {
+    "name": "settle",
+    "type": "text"
+   },
+   {
+    "name": "date",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 5
+ },
+ "fleet_fuelprice": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "panwa",
+    "type": "double precision"
+   },
+   {
+    "name": "b10",
+    "type": "double precision"
+   },
+   {
+    "name": "b2",
+    "type": "double precision"
+   },
+   {
+    "name": "b13",
+    "type": "double precision"
+   },
+   {
+    "name": "b6",
+    "type": "double precision"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 24
+ },
+ "fleet_drlock": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "panwa",
+    "type": "boolean"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 24
+ },
+ "vanjob_pickup_th": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "value",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 15
+ },
+ "vanjob_driver": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "driver",
+    "type": "text"
+   },
+   {
+    "name": "phone",
+    "type": "text"
+   },
+   {
+    "name": "plate",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 1
+ },
+ "fleet_consumable_logs": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "date",
+    "type": "text"
+   },
+   {
+    "name": "itemid",
+    "type": "text"
+   },
+   {
+    "name": "itemname",
+    "type": "text"
+   },
+   {
+    "name": "unit",
+    "type": "text"
+   },
+   {
+    "name": "qty",
+    "type": "bigint"
+   },
+   {
+    "name": "unitcost",
+    "type": "double precision"
+   },
+   {
+    "name": "cost",
+    "type": "double precision"
+   },
+   {
+    "name": "location",
+    "type": "text"
+   },
+   {
+    "name": "boatid",
+    "type": "text"
+   },
+   {
+    "name": "engineid",
+    "type": "text"
+   },
+   {
+    "name": "enginelabel",
+    "type": "text"
+   },
+   {
+    "name": "by",
+    "type": "text"
+   },
+   {
+    "name": "note",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 1
+ }
+}
