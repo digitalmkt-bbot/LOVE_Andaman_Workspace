@@ -43,6 +43,19 @@ function getPath(obj, keys) {
   return o;
 }
 function reMapKeyName(src) { const m = /^(.*?) map key/.exec(src); return m ? m[1].trim() : null; }
+// Real (case-correct) blob field name for a child table, read from its columns' sources
+// (the table name is lowercased, so byRoute -> "byroute" etc. — derive from source instead).
+function lastPathSeg(path) { const s = String(path).split('.').pop(); return s.replace(/\[key\]$/, '').replace(/\[\]$/, ''); }
+function childFieldFromCols(cols) {
+  for (const info of Object.values(cols)) {                                   // keyed map: "(map key of PATH)"
+    if (info.kind === 'map_key') { const m = /map key of (.+?)\)\s*$/.exec(info.source); if (m) return lastPathSeg(m[1]); }
+  }
+  for (const info of Object.values(cols)) {                                   // array: "position in PATH[]" / "PATH[] (element)"
+    if (info.kind === 'synthetic' && /position in/.test(info.source)) { const m = /position in (.+)$/.exec(info.source); if (m) return lastPathSeg(m[1].trim()); }
+    if (info.kind === 'array_scalar') { const m = /^(.+?)\[\]\s*\(element\)/.exec(info.source); if (m) return lastPathSeg(m[1] + '[]'); }
+  }
+  return null;
+}
 
 // ---------- build a plan from the mapping (once) ----------
 function buildPlan() {
@@ -79,7 +92,7 @@ function buildPlan() {
       || '';
     if (isChild) {
       const segs = arraySegs(anySrc);
-      p.field = segs.length ? segs[segs.length - 1] : table.split('__').pop();
+      p.field = segs.length ? segs[segs.length - 1] : (childFieldFromCols(cols) || table.split('__').pop());
       p.parentTable = table.split('__').slice(0, -1).join('__');
       p.container = p.isMap ? 'map' : 'array';
     } else {
@@ -95,6 +108,49 @@ function buildPlan() {
   return { plan, childrenOf };
 }
 const { plan: PLAN, childrenOf: CHILDREN } = buildPlan();
+
+// ---------- fleet_daily__trips special-case ----------
+// The mapping flattened per-boat trips (fleet_daily[day][boat].trips) into one table keyed only by
+// (day, tripKey), dropping the boat. The boat is recoverable from which engine columns are non-null
+// (engines_e6 -> b2, engines_e33 -> b10, ...). Rebuild the boat dimension so it round-trips.
+const FD_TRIPS = 'fleet_daily__trips';
+const FD_ENGINE_BOAT = {};   // e6 -> b2
+const FD_ENGINE_COL = {};    // e6 -> "engines_e6"
+for (const [col, info] of Object.entries(MAP[FD_TRIPS] || {})) {
+  const m = /\.(b\d+)\.trips\[key\]\.engines\.(e\d+)/.exec(info.source || '');
+  if (m) { FD_ENGINE_BOAT[m[2]] = m[1]; FD_ENGINE_COL[m[2]] = col; }
+}
+function fleetDailyAssembleFix(blob, tablesData) {
+  const fd = blob.fleet_daily; if (!fd || typeof fd !== 'object') return;
+  const idToDay = {}; for (const r of (tablesData.fleet_daily || [])) idToDay[r.id] = r.key;
+  for (const day of Object.values(fd)) { if (day && typeof day === 'object') delete day.trips; }   // drop the bogus merged day-level trips
+  for (const row of (tablesData[FD_TRIPS] || [])) {
+    const day = idToDay[row.fleet_daily_id]; if (day == null) continue;
+    for (const [eng, boat] of Object.entries(FD_ENGINE_BOAT)) {
+      const v = row[FD_ENGINE_COL[eng]];
+      if (v === null || v === undefined) continue;
+      const b = ((fd[day] ||= {})[boat] ||= {});
+      (((b.trips ||= {})[row.key] ||= { engines: {} }).engines)[eng] = v;
+    }
+  }
+}
+function fleetDailyDecompose(blob, out) {
+  out[FD_TRIPS] = [];
+  const fd = blob.fleet_daily; if (!fd || typeof fd !== 'object') return;
+  for (const [day, dayObj] of Object.entries(fd)) {
+    if (!dayObj || typeof dayObj !== 'object') continue;
+    for (const bObj of Object.values(dayObj)) {
+      if (!bObj || typeof bObj !== 'object' || !bObj.trips) continue;
+      for (const [tripKey, trip] of Object.entries(bObj.trips)) {
+        const row = { fleet_daily_id: day, key: tripKey, row_pk: rowPk(FD_TRIPS) };
+        for (const [eng, v] of Object.entries((trip && trip.engines) || {})) {
+          if (FD_ENGINE_COL[eng] && v !== null && v !== undefined) row[FD_ENGINE_COL[eng]] = v;
+        }
+        out[FD_TRIPS].push(row);
+      }
+    }
+  }
+}
 
 // ---------- ASSEMBLE: rows -> blob ----------
 function buildElement(p, row) {
@@ -121,7 +177,9 @@ function attachChildren(table, parentEl, parentPkVal, tablesData, pkIndex) {
       for (const r of rows) {
         const val = cp.valueCol ? r[cp.valueCol] : buildElement(cp, r);
         mapObj[r[cp.keyCol]] = val;
-        if (cp.rowPkCol && r[cp.rowPkCol] != null) { pkIndex[childT] ??= {}; pkIndex[childT][r[cp.rowPkCol]] = val; }
+        const pk = cp.rowPkCol ? r[cp.rowPkCol] : r[cp.pkCol];
+        if (pk != null) { pkIndex[childT] ??= {}; pkIndex[childT][pk] = val;
+          if (!cp.valueCol && val && typeof val === 'object') attachChildren(childT, val, pk, tablesData, pkIndex); }  // recurse into map-value grandchildren
       }
       parentEl[cp.field] = mapObj;
     } else {
@@ -170,6 +228,7 @@ function assembleBlob(tablesData) {
       blob[p.appKey] = arr;
     }
   }
+  fleetDailyAssembleFix(blob, tablesData);   // rebuild the boat dimension the mapping dropped
   return blob;
 }
 
@@ -199,8 +258,9 @@ function decomposeChildren(table, parentEl, parentPkVal, out) {
         const row = cp.valueCol ? {} : rowFromElement(cp, val);
         row[cp.fkCol] = parentPkVal; row[cp.keyCol] = k;
         if (cp.valueCol) row[cp.valueCol] = val;
-        if (cp.rowPkCol) row[cp.rowPkCol] = rowPk(childT);
+        const pk = rowPk(childT); if (cp.rowPkCol) row[cp.rowPkCol] = pk;
         out[childT].push(row);
+        if (!cp.valueCol && val && typeof val === 'object') decomposeChildren(childT, val, pk, out);  // recurse into map-value grandchildren
       }
     } else {
       const arr = Array.isArray(container) ? container : [];
@@ -246,6 +306,7 @@ function decomposeBlob(blob) {
       }
     }
   }
+  fleetDailyDecompose(blob, out);   // emit one row per (day, boat, trip) — overrides the generic (which can't see boats)
   return out;
 }
 
