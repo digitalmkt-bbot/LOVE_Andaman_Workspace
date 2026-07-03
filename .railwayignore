@@ -1,6 +1,9 @@
 # server.js runtime only — skip everything it doesn't serve
+# (os-backend kept: server.js requires its os_repo mapping engine in relational mode)
 db/
-os-backend/
+os-backend/node_modules/
+os-backend/test/
+os-backend/scripts/
 database_migration/
 BACKUP/
 data_exports/

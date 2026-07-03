@@ -17,9 +17,68 @@ const ADMIN_PASS = process.env.ADMIN_PASS || '';
 const STATE_KEY  = 'loveandaman_v2';
 const SESS_DAYS  = 30;   // session cookie lifetime · long so refresh/redeploy never forces re-login
 
+// ── relational backend (DATA_BACKEND=relational): app_state blob is assembled from / decomposed
+//    into the operation_schemas tables via os_repo. blob mode (default) is unchanged. ──
+const DATA_BACKEND = (process.env.DATA_BACKEND || 'blob').toLowerCase();
+const OS_SCHEMA = 'operation_schemas';
+let osRepo = null, osModel = null, OS_TABLES = [], OS_COLS = {}, OS_ASC = [], OS_DESC = [];
+if (DATA_BACKEND === 'relational') {
+  osRepo  = require('./os-backend/src/mapping/os_repo.js');
+  osModel = require('./os-backend/src/mapping/operation_schemas_model.json');
+  OS_TABLES = Object.keys(osModel);
+  for (const t of OS_TABLES) OS_COLS[t] = osModel[t].columns.map(c => c.name);
+  const depth = t => t.split('__').length - 1;                       // children deeper than parents
+  OS_ASC  = [...OS_TABLES].sort((a, b) => depth(a) - depth(b));       // parents first (insert)
+  OS_DESC = [...OS_TABLES].sort((a, b) => depth(b) - depth(a));       // children first (delete)
+}
+const qic = id => '"' + String(id).replace(/"/g, '""') + '"';
+const fqt = t => qic(OS_SCHEMA) + '.' + qic(t);
+
+async function relLoad() {                                           // operation_schemas -> blob
+  const data = {};
+  for (const t of OS_TABLES) { const r = await pool.query(`SELECT * FROM ${fqt(t)}`); data[t] = r.rows; }
+  return osRepo.assembleBlob(data);
+}
+// read-modify-write the whole schema in ONE transaction, serialized by an advisory lock (no lost saves).
+// ponytail: full DELETE+INSERT of all tables per save; fine at this data size, switch to targeted upserts if slow.
+async function relApplyAndSave(payload, username, base) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('SELECT pg_advisory_xact_lock(918273645)');
+    const vr = await client.query('SELECT version FROM app_state WHERE id=$1', [STATE_KEY]);
+    const curVer = vr.rows[0] ? vr.rows[0].version : 0;
+    const behind = (base !== -1 && base < curVer);
+    const data = {};
+    for (const t of OS_TABLES) { const r = await client.query(`SELECT * FROM ${fqt(t)}`); data[t] = r.rows; }
+    let blob = osRepo.assembleBlob(data);
+    if (payload.full && typeof payload.full === 'string') blob = JSON.parse(payload.full);
+    else applyDiff(blob, payload.diff || {});
+    const tables = osRepo.decomposeBlob(blob);
+    for (const t of OS_DESC) await client.query(`DELETE FROM ${fqt(t)}`);
+    for (const t of OS_ASC) {                                        // batched multi-row insert (fast: ~1-2 queries/table)
+      const rows = tables[t] || []; if (!rows.length) continue;
+      const cols = OS_COLS[t]; const colSql = cols.map(qic).join(',');
+      const perChunk = Math.max(1, Math.floor(60000 / cols.length));  // stay under the 65535 bound-param limit
+      for (let i = 0; i < rows.length; i += perChunk) {
+        const params = [], tuples = [];
+        for (const row of rows.slice(i, i + perChunk)) {
+          tuples.push('(' + cols.map(c => { params.push(row[c] === undefined ? null : row[c]); return '$' + params.length; }).join(',') + ')');
+        }
+        await client.query(`INSERT INTO ${fqt(t)} (${colSql}) VALUES ${tuples.join(',')}`, params);
+      }
+    }
+    const nv = curVer + 1;
+    await client.query('INSERT INTO app_state(id,data,version,updated_by,updated_at) VALUES($1,NULL,$2,$3,now()) ON CONFLICT(id) DO UPDATE SET version=$2, updated_by=$3, updated_at=now()', [STATE_KEY, nv, username]);
+    await client.query('COMMIT');
+    return { version: nv, behind };
+  } catch (e) { await client.query('ROLLBACK'); throw e; } finally { client.release(); }
+}
+
 let pool = null, dbReady = false;
 if (Pool && DB_URL) {
   pool = new Pool({ connectionString: DB_URL, ssl: (DB_URL.includes('rlwy')||DB_URL.includes('railway')||process.env.PGSSL) ? { rejectUnauthorized:false } : false });
+  pool.on('error', e => console.error('[db] idle client error (ignored):', e.message));   // a dropped idle connection must not crash the process
   initDb();
 } else {
   console.warn('[db] no DATABASE_URL — login & sync disabled');
@@ -124,6 +183,12 @@ const server = http.createServer((req, res) => {
   if(u === '/api/load'){
     const s=session(req); if(!s) return J(res,401,{error:'login required'});
     if(!pool) return J(res,503,{error:'no database'});
+    if(DATA_BACKEND==='relational'){
+      Promise.all([relLoad(), pool.query('SELECT version,updated_by,updated_at FROM app_state WHERE id=$1',[STATE_KEY])])
+        .then(([blob,r])=>{ const m=r.rows[0]||{}; J(res,200,{data:JSON.stringify(blob),version:m.version||0,updated_by:m.updated_by,updated_at:m.updated_at}); })
+        .catch(e=>J(res,500,{error:e.message}));
+      return;
+    }
     pool.query('SELECT data,version,updated_by,updated_at FROM app_state WHERE id=$1',[STATE_KEY])
       .then(r => r.rows[0] ? J(res,200,{data:r.rows[0].data,version:r.rows[0].version,updated_by:r.rows[0].updated_by,updated_at:r.rows[0].updated_at})
                            : J(res,200,{data:null,version:0}))
@@ -153,6 +218,12 @@ const server = http.createServer((req, res) => {
     readBody(req, body => {
       let payload; try{ payload=JSON.parse(body); }catch(e){ return J(res,400,{error:'invalid JSON'}); }
       const base = (payload.baseVersion==null ? -1 : payload.baseVersion);
+      if(DATA_BACKEND==='relational'){
+        relApplyAndSave(payload, s.username, base)
+          .then(({version,behind})=>{ J(res,200,{ok:true,version,behind}); sseBroadcast({version, updated_by:s.username}); })
+          .catch(e=>J(res,500,{error:e.message}));
+        return;
+      }
       pool.query('SELECT data,version FROM app_state WHERE id=$1',[STATE_KEY]).then(r=>{
         const curVer = r.rows[0] ? r.rows[0].version : 0;
         let blob={}; if(r.rows[0] && r.rows[0].data){ try{ blob=JSON.parse(r.rows[0].data); }catch(e){ blob={}; } }
