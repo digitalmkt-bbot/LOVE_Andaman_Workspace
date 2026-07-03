@@ -92,6 +92,9 @@ async function initDb(){
     await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS perms TEXT");   // per-user area access (JSON array · null = all)
     await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS can_edit BOOLEAN DEFAULT true");   // legacy global edit flag (fallback)
     await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS edit_areas TEXT");   // per-section edit · JSON array of area keys · null = edit all (uses can_edit)
+    // document attachments · files stored server-side (bytea) · booking keeps only a ref in the app blob
+    await pool.query("CREATE TABLE IF NOT EXISTS attachments (id TEXT PRIMARY KEY, booking_id TEXT, filename TEXT, mime TEXT, size INT, data BYTEA, uploaded_by TEXT, created_at TIMESTAMPTZ DEFAULT now())");
+    await pool.query("CREATE INDEX IF NOT EXISTS idx_attach_booking ON attachments(booking_id)");
     // seed first admin from env if there are no users yet
     const c = await pool.query('SELECT count(*)::int n FROM users');
     if (c.rows[0].n === 0 && ADMIN_USER && ADMIN_PASS) {
@@ -105,7 +108,7 @@ async function initDb(){
 // ── perms helpers (per-user area access · null/invalid = all areas) ──
 function parsePerms(v){ if(v==null) return null; try{ const a=JSON.parse(v); return Array.isArray(a)?a:null; }catch(e){ return null; } }
 const PERM_KEYS=new Set(['overview','operations','sales','accounting','fleet','config',  // group keys (back-compat)
-  'dashboard','calendar','daily','booking','operation','vehicles','vanjobs','pickup-setup',
+  'dashboard','calendar','daily','booking','doccheck','operation','vehicles','vanjobs','pickup-setup',
   'agents','rate-types','b2c','staff','marketdata','pickupmap','dailypfm',
   'fl-dashboard','fl-boatstatus','fl-dailyreport','fl-incident','fl-projects','fl-maintenance','fl-inventory','fl-consumables','fl-cost','fl-insights','fl-fuel','fl-asset',
   'settings','teammkt','addonsvc']);   // 'accounting' already present as a group key
@@ -235,6 +238,48 @@ const server = http.createServer((req, res) => {
           .then(()=>{ J(res,200,{ok:true,version:nv,behind:behind,bytes:out.length}); sseBroadcast({version:nv, updated_by:s.username}); }).catch(e=>J(res,500,{error:e.message}));
       }).catch(e=>J(res,500,{error:e.message}));
     }); return;
+  }
+
+  // ───── ATTACHMENTS (document files · stored server-side · booking keeps only a ref in the app blob) ─────
+  if(u === '/api/attach' && req.method === 'POST'){   // upload one file (base64 JSON)
+    const s=session(req); if(!s) return J(res,401,{error:'login required'});
+    if(s.role!=='admin' && s.edit===false) return J(res,403,{error:'view only · ไม่มีสิทธิ์แนบไฟล์'});
+    if(!pool) return J(res,503,{error:'no database'});
+    readBody(req, body=>{
+      let b={}; try{ b=JSON.parse(body); }catch(e){ return J(res,400,{error:'invalid JSON'}); }
+      let buf=null; try{ buf=Buffer.from(String(b.dataB64||''),'base64'); }catch(e){ buf=null; }
+      if(!buf || !buf.length) return J(res,400,{error:'no file data'});
+      if(buf.length > 6*1024*1024) return J(res,413,{error:'ไฟล์ใหญ่เกิน 6MB'});
+      const id = 'att_'+Date.now().toString(36)+'_'+crypto.randomBytes(5).toString('hex');
+      const mime = String(b.mime||'application/octet-stream').slice(0,100);
+      const fn   = String(b.filename||'file').slice(0,200);
+      const bkId = String(b.bookingId||'').slice(0,80);
+      pool.query('INSERT INTO attachments(id,booking_id,filename,mime,size,data,uploaded_by) VALUES($1,$2,$3,$4,$5,$6,$7)',[id,bkId,fn,mime,buf.length,buf,s.username])
+        .then(()=>J(res,200,{id:id,filename:fn,mime:mime,size:buf.length,uploaded_by:s.username})).catch(e=>J(res,500,{error:e.message}));
+    }); return;
+  }
+  if(u === '/api/attach' && req.method === 'GET'){   // list metadata for a booking (?booking=<id>)
+    const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(!pool) return J(res,503,{error:'no database'});
+    const bk=decodeURIComponent((q.match(/booking=([^&]*)/)||[])[1]||'');
+    pool.query('SELECT id,filename,mime,size,uploaded_by,created_at FROM attachments WHERE booking_id=$1 ORDER BY created_at',[bk])
+      .then(r=>J(res,200,{files:r.rows})).catch(e=>J(res,500,{error:e.message})); return;
+  }
+  if(u.startsWith('/api/attach/') && req.method === 'GET'){   // stream one file inline
+    const s=session(req); if(!s){ res.writeHead(401); return res.end('login required'); } if(!pool){ res.writeHead(503); return res.end('no db'); }
+    const id=decodeURIComponent(u.slice('/api/attach/'.length));
+    pool.query('SELECT filename,mime,data FROM attachments WHERE id=$1',[id]).then(r=>{
+      const row=r.rows[0]; if(!row){ res.writeHead(404); return res.end('not found'); }
+      const buf = Buffer.isBuffer(row.data)?row.data:Buffer.from(row.data||'');
+      res.writeHead(200,{'Content-Type':row.mime||'application/octet-stream','Content-Length':buf.length,'Content-Disposition':'inline; filename="'+encodeURIComponent(row.filename||'file')+'"','Cache-Control':'private, max-age=86400'});
+      res.end(buf);
+    }).catch(e=>{ res.writeHead(500); res.end(e.message); }); return;
+  }
+  if(u.startsWith('/api/attach/') && req.method === 'DELETE'){
+    const s=session(req); if(!s) return J(res,401,{error:'login required'});
+    if(s.role!=='admin' && s.edit===false) return J(res,403,{error:'view only'});
+    if(!pool) return J(res,503,{error:'no database'});
+    const id=decodeURIComponent(u.slice('/api/attach/'.length));
+    pool.query('DELETE FROM attachments WHERE id=$1',[id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); return;
   }
 
   // ───── ADMIN: user management (admin only) ─────

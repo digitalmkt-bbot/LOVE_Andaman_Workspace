@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node src/server.js",
     "test": "node --test",
-    "test:staging": "node scripts/roundtrip_staging.js"
+    "test:staging": "node scripts/roundtrip_staging.js",
+    "clone:users": "node scripts/clone_users.js"
   },
   "dependencies": {
     "express": "^4.19.2",

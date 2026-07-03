@@ -2621,10 +2621,11 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
   border:1px solid rgba(255,255,255,.10) !important;
   box-shadow:0 16px 44px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.10) !important;
 }
-/* day cells → raised glass · keep their state tint/border, just add depth */
+/* day cells → raised liquid glass · gradient sheen over state tint + depth */
 #dash-wrap .dgx-fcell{
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.13), 0 3px 9px rgba(0,0,0,.24) !important;
-  backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
+  background-image:linear-gradient(160deg,rgba(255,255,255,.11),rgba(255,255,255,.02)) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.20), 0 2px 5px rgba(0,0,0,.30), 0 9px 18px rgba(0,0,0,.22) !important;
+  backdrop-filter:blur(5px) saturate(1.15);-webkit-backdrop-filter:blur(5px) saturate(1.15);
 }
 </style>
 <style id="bop-glass-skin">
@@ -2795,6 +2796,10 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
     <div class="nav-item" data-view="booking" onclick="nav(this)" style="border-left:2px solid rgba(130,210,170,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2z"/><path d="M9 11l2 2 4-4"/></svg>
       Booking
+    </div>
+    <div class="nav-item" data-view="doccheck" onclick="nav(this)" style="border-left:2px solid rgba(130,210,170,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/></svg>
+      ตรวจเอกสาร
     </div>
     <div class="nav-item" data-view="operation" onclick="nav(this)" style="border-left:2px solid rgba(130,210,170,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
@@ -3477,6 +3482,7 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
     <div id="view-boatassign" class="view"><div id="boatassign-host"></div></div>
     <div id="view-vehicles" class="view"><div id="vehicles-host"></div></div>
     <div id="view-vanjobs" class="view"><div id="vanjobs-host"></div></div>
+    <div id="view-doccheck" class="view"><div id="doccheck-host"></div></div>
     <div id="view-accounting" class="view">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px;padding:6px 4px 14px">
         <div><h1 style="font-size:24px;font-weight:700;letter-spacing:-.02em;color:var(--fd-ink);margin:0">Accounting <span style="font-size:11px;font-weight:500;color:var(--fd-ink-soft);background:#fff;padding:3px 10px;border-radius:14px;border:1px solid var(--fd-line);margin-left:8px;text-transform:uppercase;letter-spacing:.06em;vertical-align:middle">Finance</span></h1>
@@ -4298,6 +4304,7 @@ function nav(el){
     else if(view==='rate-types') renderRateTypes();
     else if(view==='b2c') renderB2C();
     else if(view==='booking') renderBooking();
+    else if(view==='doccheck') renderDocCheck();
     else if(view==='pickup-setup') renderPickupSetup();
     else if(view==='staff') renderStaff();
     else if(view==='teammkt') renderTeamMkt();
@@ -4407,6 +4414,7 @@ function _dashSeatCalHtml(dx,F){
 }
 window.dashCalMonthShift=function(delta){ var m=window._dashCalMonth||(window._dashDate||TODAY_STR).slice(0,7); var yy=parseInt(m.slice(0,4),10),mm=parseInt(m.slice(5,7),10); var d=new Date(yy,mm-1+delta,1); window._dashCalMonth=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); if(typeof renderDash==='function') renderDash(); };
 window.dashCalSetFam=function(id){ window._dashCalFam=id||''; if(typeof renderDash==='function') renderDash(); };
+window.dashBkSetMode=function(m){ window._dashBkMode=(['day','month','year'].includes(m)?m:'day'); if(typeof renderDash==='function') renderDash(); };
 
 // ── Left-column: Booking notice board + real-time Live feed ──
 (function(){ if(document.getElementById('dash-live-anim'))return; try{ var s=document.createElement('style'); s.id='dash-live-anim'; s.textContent='@keyframes dashlvpulse{0%{opacity:.35}50%{opacity:1}100%{opacity:.35}}'; (document.head||document.documentElement).appendChild(s); }catch(e){} })();
@@ -4600,13 +4608,10 @@ function renderDash(){
   const deltaPct=yBooked>0?Math.round(Math.abs(deltaSeats)/yBooked*100):(totBooked>0?100:0);
   const deltaSign=deltaSeats>=0;
 
-  // 7-day trend (booked per day) + per-route breakdown + capacity
-  const trendData=[];
-  const routeWeekTotals={}; // routeId -> total booked over 7 days
-  for(let d=-6;d<=0;d++){
-    const ds=_dsAt(d);
+  // ── Bookings overview — reusable per-day aggregation (day / month / year modes) ──
+  const _bkDay=(ds)=>{
     const dOps=TRIPS[ds]||{};
-    let booked=0, capacity=0;
+    let booked=0, capacity=0, charter=0;
     const routeBooked={};
     const _seatRoutes=new Set();   // seat-mode routes operating this day (count via actual sales bookings, once per route)
     const _capBoats=new Set();     // boats already counted toward capacity (avoid double-count)
@@ -4619,31 +4624,42 @@ function renderDash(){
       if(_s && _s.type==='closed') return;
       capacity+=(b.cap||0); _capBoats.add(bid);
       const isCharter = op.type==='charter' || op.charterBookingId;
-      if(isCharter){ const bk=op.booked||0; booked+=bk; routeBooked[op.route]=(routeBooked[op.route]||0)+bk; routeWeekTotals[op.route]=(routeWeekTotals[op.route]||0)+bk; }
+      // ⚠ Boat-Op charter ops carry pax on the sales booking (op.booked is usually 0). A LINKED charter
+      // (has charterBookingId) is counted from SB_BOOKINGS below (real pax) — only an UNLINKED manual
+      // Boat-Op charter falls back to op.booked. Boat capacity is already counted above either way.
+      if(isCharter){ if(!op.charterBookingId) charter+=(op.booked||0); }
       else { _seatRoutes.add(op.route); }
     });
-    // Seat bookings from actual sales (SB_BOOKINGS v2 + legacy) · once per route · was op.booked (always 0)
+    // Seat bookings from actual sales (SB_BOOKINGS v2 + legacy) · once per route
     _seatRoutes.forEach(rid=>{
       const sc=(typeof getSeatsConsumed==='function')?getSeatsConsumed(rid,ds):0;
-      booked+=sc; routeBooked[rid]=(routeBooked[rid]||0)+sc; routeWeekTotals[rid]=(routeWeekTotals[rid]||0)+sc;
+      booked+=sc; routeBooked[rid]=(routeBooked[rid]||0)+sc;
     });
-    // Bookings on this day → (i) count demand for routes with no Boat-Op boat · (ii) count capacity of the boat each booking is actually assigned to (bk.ops.boatId), even if it isn't in Boat Operation TRIPS
+    // Weather-cancelled routes this day (Boat-Op weather closures) → surfaced as a marker, not counted
+    let wx=0;
+    (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(r=>{ if(typeof bkV2IsWeatherClosed==='function' && bkV2IsWeatherClosed(r.id,ds)) wx++; });
+    // Bookings on this day → seat demand + charter pax + capacity of the boat each booking actually rides
     (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(bk=>{
       if(['cancelled','rejected','cancelled_weather'].includes(bk.status)) return;
       if(bk.schemaVer!==2 || !Array.isArray(bk.trips)) return;
       bk.trips.forEach(t=>{
-        if((t.date||'')!==ds || t.bookingMode==='charter') return;
+        if((t.date||'')!==ds) return;
         const rid=t.routeId; if(!rid) return;
         const r=getRoute(rid); if(!r) return;
+        if(t.bookingMode==='charter'){
+          // charter pax always from the sales booking (source of truth) — counts even if seat-season closed
+          charter+=(typeof bkV2PaxAllTot==='function'?bkV2PaxAllTot(t.pax||{}):0);
+          const cbid=t.charterBoatId||(bk.ops&&bk.ops.boatId);
+          if(cbid && !_capBoats.has(cbid)){ const cb=getBoat(cbid); if(cb){ capacity+=(cb.cap||0); _capBoats.add(cbid); } }
+          return;
+        }
         const _s=(typeof getDayStatus==='function')?getDayStatus(r,ds):null;
-        if(_s && _s.type==='closed') return;   // off-season / closed → don't count
-        // (i) route demand · once per route
+        if(_s && _s.type==='closed') return;   // off-season / closed → don't count seat demand
         if(!_seatRoutes.has(rid) && routeBooked[rid]==null){
           _seatRoutes.add(rid);
           const sc=(typeof getSeatsConsumed==='function')?getSeatsConsumed(rid,ds):0;
-          booked+=sc; routeBooked[rid]=(routeBooked[rid]||0)+sc; routeWeekTotals[rid]=(routeWeekTotals[rid]||0)+sc;
+          booked+=sc; routeBooked[rid]=(routeBooked[rid]||0)+sc;
         }
-        // (ii) capacity of the boat this booking actually rides (count it even if its status flag isn't 'available' — real guests are on it)
         const abid=bk.ops&&bk.ops.boatId;
         if(abid && !_capBoats.has(abid)){
           const ab=getBoat(abid);
@@ -4651,27 +4667,56 @@ function renderDash(){
         }
       });
     });
-    trendData.push({ds,booked,capacity,routeBooked});
+    return {ds,booked,capacity,routeBooked,charter,wx};
+  };
+  const CHARTER_COLOR='#B69CE8';   // distinct purple for the Charter (เหมาลำ) segment
+  // Active mode — 'day' (today · bar per route) | 'month' (30 days · stacked) | 'year' (12 months · stacked)
+  const _bkMode = ['day','month','year'].includes(window._dashBkMode) ? window._dashBkMode : 'day';
+  const _todayDS = _dsAt(0);
+  const bkBuckets=[];   // {dt, booked, capacity, routeBooked, isToday}
+  if(_bkMode==='day'){
+    const a=_bkDay(_todayDS); bkBuckets.push({...a, dt:new Date(_todayDS), isToday:true});
+  } else if(_bkMode==='month'){
+    for(let d=-29;d<=0;d++){ const a=_bkDay(_dsAt(d)); bkBuckets.push({...a, dt:new Date(a.ds), isToday:d===0}); }
+  } else { // year — last 12 calendar months (sum of days, per route)
+    const anchor=new Date(_ds);
+    for(let mOff=-11;mOff<=0;mOff++){
+      const md=new Date(anchor.getFullYear(), anchor.getMonth()+mOff, 1);
+      const y=md.getFullYear(), mo=md.getMonth();
+      let booked=0, capacity=0, charter=0, wx=0; const routeBooked={};
+      const nDays=new Date(y,mo+1,0).getDate();
+      for(let dd=1;dd<=nDays;dd++){
+        const ds=y+'-'+String(mo+1).padStart(2,'0')+'-'+String(dd).padStart(2,'0');
+        if(ds>_todayDS) break;   // don't count future days
+        const a=_bkDay(ds); booked+=a.booked; capacity+=a.capacity; charter+=a.charter; wx+=a.wx;
+        Object.entries(a.routeBooked).forEach(([rid,v])=>routeBooked[rid]=(routeBooked[rid]||0)+v);
+      }
+      bkBuckets.push({dt:md, booked, capacity, routeBooked, charter, wx, isToday:mOff===0});
+    }
   }
-  // Top 3 routes by weekly booked, rest grouped as "Other"
-  const topRouteIds=Object.entries(routeWeekTotals)
-    .sort((a,b)=>b[1]-a[1]).slice(0,3).map(e=>e[0]);
+  // total pax per bucket = seat booked + charter
+  bkBuckets.forEach(b=>{ b.tot=(b.booked||0)+(b.charter||0); });
+  // Route totals over the active period → top 3 + Other
+  const routeWeekTotals={};
+  bkBuckets.forEach(bt=>Object.entries(bt.routeBooked).forEach(([rid,v])=>routeWeekTotals[rid]=(routeWeekTotals[rid]||0)+v));
+  const topRouteIds=Object.entries(routeWeekTotals).sort((a,b)=>b[1]-a[1]).slice(0,3).map(e=>e[0]);
   const otherRouteIds=Object.keys(routeWeekTotals).filter(id=>!topRouteIds.includes(id));
   const otherWeekTotal=otherRouteIds.reduce((s,id)=>s+routeWeekTotals[id],0);
+  const charterWeekTotal=bkBuckets.reduce((s,d)=>s+(d.charter||0),0);
+  const wxWeekTotal=bkBuckets.reduce((s,d)=>s+(d.wx||0),0);
   // Fixed palette so segments stay readable on forest green
   const segPalette=['#B8E89A','#F5E84F','#F4B89F','#9FB89E'];
   const topRoutes=topRouteIds.map((id,i)=>({id,r:getRoute(id),total:routeWeekTotals[id],color:segPalette[i]}));
-  const trendMax=Math.max(...trendData.map(d=>Math.max(d.capacity,d.booked)),1);
-  const lastBooked=trendData[trendData.length-1].booked;
-  const totalBookedWeek=trendData.reduce((s,d)=>s+d.booked,0);
-  const totalCapWeek=trendData.reduce((s,d)=>s+d.capacity,0);
+  const trendMax=Math.max(...bkBuckets.map(d=>Math.max(d.capacity,d.tot)),1);
+  const totalBookedWeek=bkBuckets.reduce((s,d)=>s+d.tot,0);
+  const totalCapWeek=bkBuckets.reduce((s,d)=>s+d.capacity,0);
   const fillWeekPct=totalCapWeek>0?Math.round(totalBookedWeek/totalCapWeek*100):0;
-  // Day stats — best fill, slow day, avg
-  const dayFills=trendData.map(d=>({ds:d.ds,booked:d.booked,cap:d.capacity,pct:d.capacity>0?Math.round(d.booked/d.capacity*100):0}));
-  const daysWithCap=dayFills.filter(d=>d.cap>0);
-  const bestDay=daysWithCap.length?daysWithCap.reduce((b,c)=>c.pct>b.pct?c:b,daysWithCap[0]):null;
-  const slowDay=daysWithCap.length?daysWithCap.reduce((b,c)=>c.pct<b.pct?c:b,daysWithCap[0]):null;
-  const avgPerDay=Math.round(totalBookedWeek/7);
+  // Peak / slow bucket by fill % (month/year only) + avg per bucket
+  const bktFills=bkBuckets.map(d=>({dt:d.dt,booked:d.tot,cap:d.capacity,pct:d.capacity>0?Math.round(d.tot/d.capacity*100):0}));
+  const bktsWithCap=bktFills.filter(d=>d.cap>0);
+  const bestDay=bktsWithCap.length?bktsWithCap.reduce((b,c)=>c.pct>b.pct?c:b,bktsWithCap[0]):null;
+  const slowDay=bktsWithCap.length?bktsWithCap.reduce((b,c)=>c.pct<b.pct?c:b,bktsWithCap[0]):null;
+  const avgPerDay=Math.round(totalBookedWeek/Math.max(1,bkBuckets.length));
   const topRouteWeek=topRoutes[0]||null;
 
   // Ticker per pier (today vs yesterday)
@@ -4903,8 +4948,7 @@ function renderDash(){
     </div>
   </div>`;
 
-  // Bookings overview (forest green) — 7-day stacked bars + capacity outline
-  const todayIdx=trendData.length-1;
+  // Bookings overview (forest green) — day / month / year modes
   // Short route labels for legend
   const _shortName=(name)=>name
     .replace('Phi Phi Bamboo by Speedboat','Phi Phi Spd')
@@ -4916,64 +4960,120 @@ function renderDash(){
     .replace('Surin Islands by Speedboat','Surin Spd')
     .replace('Early Krabi + Phang Nga','Krabi+PgNga')
     .replace('Whale Shark Phi Phi Maiton Sunset','Whale Shark');
-  // Build per-day bar HTML
-  const barsHtml=trendData.map((d,i)=>{
-    const dt=new Date(d.ds);
-    const isTdy=i===todayIdx;
-    const capH=(d.capacity/trendMax)*100;
-    const noBoat = d.capacity===0 && d.booked>0;   // bookings exist but no boat assigned yet
-    // Build stacked segments for this day in topRoutes order, plus "Other"
-    const segs=[];
-    topRoutes.forEach((tr,idx)=>{
-      const v=d.routeBooked[tr.id]||0;
-      if(v>0) segs.push({v,color:tr.color,label:_shortName(tr.r.name)});
-    });
-    const otherV=otherRouteIds.reduce((s,id)=>s+(d.routeBooked[id]||0),0);
-    if(otherV>0) segs.push({v:otherV,color:segPalette[3],label:'Other'});
-    const bookedH=(d.booked/trendMax)*100;
-    const segDivs = noBoat
-      ? `<div style="flex:1;background:rgba(157,199,230,.40)" title="${d.booked} จอง · ยังไม่จัดเรือ"></div>`
-      : segs.map(s=>`<div style="flex:0 0 ${bookedH>0?(s.v/d.booked*100):0}%;background:${s.color}" title="${s.label}: ${s.v}"></div>`).join('');
-    const pct=d.capacity>0?Math.round(d.booked/d.capacity*100):null;
-    const _pctCol = pct!=null ? (pct>=75?dx.lime : pct>=45?'#F2E534' : '#F0792B') : (d.booked>0?'#9DC7E6':'rgba(255,255,255,.4)');
-    const _pctTxt = pct!=null ? pct+'%' : (d.booked>0 ? d.booked+' จอง' : '0%');
-    return `<div style="position:relative;display:flex;flex-direction:column;align-items:center;min-width:0">
-      <div style="position:relative;width:100%;height:140px;display:flex;align-items:flex-end;justify-content:center">
-        <div style="position:relative;width:80%;max-width:34px;height:100%">
-          <div style="position:absolute;left:0;right:0;bottom:0;height:${noBoat?bookedH:capH}%;border:1.5px dashed ${noBoat?'rgba(157,199,230,.85)':'rgba(255,255,255,'+(isTdy?.55:.22)+')'};border-radius:5px;pointer-events:none"></div>
-          <div style="position:absolute;left:0;right:0;bottom:0;height:${bookedH}%;display:flex;flex-direction:column-reverse;border-radius:4px;overflow:hidden">${segDivs}</div>
-          ${isTdy?`<div style="position:absolute;left:50%;transform:translateX(-50%);top:-22px;background:#fff;color:${dx.forestDark};font-size:9px;font-weight:700;padding:2px 6px;border-radius:6px;font-variant-numeric:tabular-nums;white-space:nowrap">${d.booked}/${d.capacity||'-'}</div>`:''}
+  const _bkLabel=(d)=> _bkMode==='year' ? TH_MON[d.dt.getMonth()] : (_bkMode==='month' ? String(d.dt.getDate()) : 'Today');
+  // liquid-glass bar fill — diagonal light streak over the solid colour
+  const _glassBar=(c)=>`linear-gradient(118deg,rgba(255,255,255,.34) 0%,rgba(255,255,255,.12) 20%,rgba(255,255,255,0) 44%,rgba(0,0,0,.10) 100%),${c}`;
+  // today's per-route rows (for day mode + its stats)
+  const dayRB = bkBuckets[0] ? bkBuckets[0].routeBooked : {};
+  const dayRows = Object.entries(dayRB).filter(([id,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  // ── build the plot (mode-aware) ──
+  let plotHtml, plotCols, plotGap;
+  const dayCharter = bkBuckets[0] ? (bkBuckets[0].charter||0) : 0;
+  const dayWx = bkBuckets[0] ? (bkBuckets[0].wx||0) : 0;
+  if(_bkMode==='day'){
+    // TODAY only — one bar per route (separated) + a Charter bar, tallest→shortest
+    const dayPal=['#B8E89A','#F5E84F','#F4B89F','#9DC7E6','#C9B6E8','#7FD0A0','#F0A5C0','#E8C97F','#8FD9C8'];
+    const dayEntries = dayRows.map(([id,v],i)=>{ const r=getRoute(id); return {label:r?_shortName(r.name):id, val:v, color:dayPal[i%dayPal.length]}; });
+    if(dayCharter>0) dayEntries.push({label:'เหมาลำ Charter', val:dayCharter, color:CHARTER_COLOR});
+    const dayMax=Math.max(...dayEntries.map(e=>e.val),1);
+    plotCols='repeat('+Math.max(dayEntries.length,1)+',1fr)'; plotGap='12px';
+    plotHtml = dayEntries.length ? dayEntries.map(e=>{
+      const h=Math.max((e.val/dayMax)*100,3);
+      return `<div style="display:flex;flex-direction:column;align-items:center;min-width:0">
+        <div style="width:100%;height:150px;display:flex;align-items:flex-end;justify-content:center">
+          <div style="position:relative;width:62%;max-width:48px;height:${h}%;background:${_glassBar(e.color)};border-radius:6px 6px 0 0;box-shadow:inset 0 1px 0 rgba(255,255,255,.6),inset -1px 0 0 rgba(0,0,0,.07),0 2px 6px rgba(0,0,0,.16);border:1px solid rgba(255,255,255,.18)">
+            <div style="position:absolute;left:50%;transform:translateX(-50%);top:-19px;font-size:12px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums">${e.val}</div>
+          </div>
         </div>
-      </div>
-      <div style="text-align:center;margin-top:7px;font-size:9.5px;color:${isTdy?dx.lime:'#9FB89E'};font-weight:${isTdy?'700':'500'};font-variant-numeric:tabular-nums;letter-spacing:-.005em">${isTdy?'Today':dt.getDate()+' '+TH_MON[dt.getMonth()]}</div>
-      <div style="text-align:center;font-size:9px;font-weight:600;color:${_pctCol};margin-top:2px;font-variant-numeric:tabular-nums">${_pctTxt}</div>
-    </div>`;
-  }).join('');
-  // Legend: top routes + Other (if any) + capacity indicator
-  const legendItems=topRoutes.map(tr=>`<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:${tr.color}"></span><span style="color:#fff;font-weight:500">${_shortName(tr.r.name)}</span><span style="color:#9FB89E;font-variant-numeric:tabular-nums">${tr.total}</span></span>`).join('');
-  const otherLegend=otherWeekTotal>0?`<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:${segPalette[3]}"></span><span style="color:#fff;font-weight:500">Other</span><span style="color:#9FB89E;font-variant-numeric:tabular-nums">${otherWeekTotal}</span></span>`:'';
-  const capLegend=`<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:14px;height:8px;border:1.2px dashed rgba(255,255,255,.55);border-radius:2px"></span><span style="color:#9FB89E">Capacity</span></span>`;
-  // Bottom stats
-  const bestDt=bestDay?new Date(bestDay.ds):null;
-  const slowDt=slowDay?new Date(slowDay.ds):null;
+        <div style="text-align:center;margin-top:9px;font-size:10px;color:#DDEBD8;font-weight:600;line-height:1.25;word-break:break-word">${e.label}</div>
+      </div>`;
+    }).join('') : `<div style="grid-column:1/-1;text-align:center;color:#9FB89E;font-size:12.5px;padding:54px 0">ยังไม่มี booking วันนี้</div>`;
+  } else {
+    // MONTH (30 days) / YEAR (12 months) — stacked route bars + capacity outline
+    plotCols='repeat('+bkBuckets.length+',1fr)';
+    plotGap=_bkMode==='month'?'3px':'6px';
+    plotHtml=bkBuckets.map((d,i)=>{
+      const isTdy=d.isToday;
+      const tot=d.tot||0;
+      const capH=(d.capacity/trendMax)*100;
+      const totH=(tot/trendMax)*100;
+      const noBoat = d.capacity===0 && tot>0;
+      const segs=[];
+      topRoutes.forEach(tr=>{ const v=d.routeBooked[tr.id]||0; if(v>0) segs.push({v,color:tr.color,label:_shortName(tr.r.name)}); });
+      const otherV=otherRouteIds.reduce((s,id)=>s+(d.routeBooked[id]||0),0);
+      if(otherV>0) segs.push({v:otherV,color:segPalette[3],label:'Other'});
+      if((d.charter||0)>0) segs.push({v:d.charter,color:CHARTER_COLOR,label:'Charter เหมาลำ'});
+      const segDivs = noBoat
+        ? `<div style="flex:1;background:${_glassBar('rgba(157,199,230,.55)')}" title="${tot} จอง · ยังไม่จัดเรือ"></div>`
+        : segs.map(s=>`<div style="flex:0 0 ${tot>0?(s.v/tot*100):0}%;background:${_glassBar(s.color)}" title="${s.label}: ${s.v}"></div>`).join('');
+      const barW=_bkMode==='month'?'86%':'70%';
+      const barMax=_bkMode==='month'?'13px':'34px';
+      const _wx=(d.wx||0)>0;
+      const showLbl=_bkMode==='year' || isTdy || _wx || (i%5===0);
+      // weather-cancelled column → red tinted band + red ⛈ badge on top (clearly visible)
+      const wxWrap=_wx?`background:rgba(232,74,63,.20);box-shadow:inset 0 0 0 1px rgba(232,74,63,.45);border-radius:7px;padding-top:16px`:'';
+      const wxBadge=_wx?`<div title="${d.wx} เส้นทางถูกยกเลิกเพราะสภาพอากาศ" style="position:absolute;left:50%;transform:translateX(-50%);top:-1px;font-size:13px;line-height:1;text-shadow:0 0 6px rgba(232,74,63,.9);z-index:2">⛈</div>`:'';
+      return `<div style="position:relative;display:flex;flex-direction:column;align-items:center;min-width:0;${wxWrap}">
+        ${wxBadge}
+        <div style="position:relative;width:100%;height:150px;display:flex;align-items:flex-end;justify-content:center">
+          <div style="position:relative;width:${barW};max-width:${barMax};height:100%">
+            <div style="position:absolute;left:0;right:0;bottom:0;height:${noBoat?totH:capH}%;border:1.5px dashed ${noBoat?'rgba(157,199,230,.85)':(_wx?'rgba(232,74,63,.6)':'rgba(255,255,255,'+(isTdy?.55:.18)+')')};border-radius:4px;pointer-events:none"></div>
+            <div style="position:absolute;left:0;right:0;bottom:0;height:${totH}%;display:flex;flex-direction:column-reverse;border-radius:3px;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.5),inset -1px 0 0 rgba(0,0,0,.06),0 1px 4px rgba(0,0,0,.14);border:1px solid rgba(255,255,255,.14)">${segDivs}</div>
+            ${isTdy?`<div style="position:absolute;left:50%;transform:translateX(-50%);top:-20px;background:#fff;color:${dx.forestDark};font-size:8.5px;font-weight:700;padding:2px 5px;border-radius:6px;font-variant-numeric:tabular-nums;white-space:nowrap">${tot}</div>`:''}
+          </div>
+        </div>
+        <div style="text-align:center;margin-top:7px;font-size:${_bkMode==='month'?'8px':'9.5px'};color:${_wx?'#FF8B7F':(isTdy?dx.lime:'#9FB89E')};font-weight:${(isTdy||_wx)?'700':'500'};font-variant-numeric:tabular-nums;height:12px;white-space:nowrap">${showLbl?_bkLabel(d):''}</div>
+      </div>`;
+    }).join('');
+  }
+  // Legend (month/year only — day mode labels each bar directly)
+  const legendItems=(_bkMode==='day')?'':topRoutes.map(tr=>`<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:${tr.color}"></span><span style="color:#fff;font-weight:500">${_shortName(tr.r.name)}</span><span style="color:#9FB89E;font-variant-numeric:tabular-nums">${tr.total}</span></span>`).join('');
+  const otherLegend=(_bkMode!=='day'&&otherWeekTotal>0)?`<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:${segPalette[3]}"></span><span style="color:#fff;font-weight:500">Other</span><span style="color:#9FB89E;font-variant-numeric:tabular-nums">${otherWeekTotal}</span></span>`:'';
+  const charterLegend=(_bkMode!=='day'&&charterWeekTotal>0)?`<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:${CHARTER_COLOR}"></span><span style="color:#fff;font-weight:500">Charter เหมาลำ</span><span style="color:#9FB89E;font-variant-numeric:tabular-nums">${charterWeekTotal}</span></span>`:'';
+  const wxLegend=(_bkMode!=='day'&&wxWeekTotal>0)?`<span style="display:inline-flex;align-items:center;gap:5px"><span style="font-size:11px;line-height:1">⛈</span><span style="color:#9FB89E">ยกเลิกจากอากาศ ${wxWeekTotal}</span></span>`:'';
+  const capLegend=(_bkMode==='day')?'':`<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:14px;height:8px;border:1.2px dashed rgba(255,255,255,.55);border-radius:2px"></span><span style="color:#9FB89E">Capacity</span></span>`;
+  // ── period toggle (วัน / เดือน / ปี) ──
+  const _bkSeg=(m,lbl)=>`<button onclick="dashBkSetMode('${m}')" style="border:none;cursor:pointer;font-size:10.5px;font-weight:600;padding:5px 12px;border-radius:8px;${F}${_bkMode===m?'background:'+dx.lime+';color:'+dx.forestDark:'background:transparent;color:#9FB89E'}">${lbl}</button>`;
+  const bkToggle=`<div style="display:inline-flex;background:rgba(255,255,255,.08);border-radius:10px;padding:2px;flex-shrink:0">${_bkSeg('day','วัน')}${_bkSeg('month','เดือน')}${_bkSeg('year','ปี')}</div>`;
+  const bkTitle=_bkMode==='day'?'Bookings overview · วันนี้':_bkMode==='month'?'Bookings overview · 30 วัน':'Bookings overview · 12 เดือน';
+  const _periodLbl=_bkMode==='day'?'วันนี้':_bkMode==='month'?'30 วัน':'12 เดือน';
+  const bkSub=`รวม <span style="color:#fff;font-weight:600">${fmtN(totalBookedWeek)}</span> seats${totalCapWeek>0?' / <span style="color:#fff;font-weight:600">'+fmtN(totalCapWeek)+'</span> cap · <span style="color:'+dx.lime+';font-weight:600">'+fillWeekPct+'%</span> fill':''} · ${_periodLbl} · วันนี้ ${deltaSign?'+':''}${deltaSeats} vs เมื่อวาน`;
+  // ── stats footer (mode-aware) ──
+  const _fmtDt=(dt)=> _bkMode==='year' ? TH_MON[dt.getMonth()] : dt.getDate()+' '+TH_MON[dt.getMonth()];
+  // liquid-glass surfaces (inner cards + plot) — gradient sheen + inset highlight + depth shadow
+  const GLASS_IN="background-image:linear-gradient(155deg,rgba(255,255,255,.14),rgba(255,255,255,.03));box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 1px 2px rgba(0,0,0,.18),0 8px 18px rgba(0,0,0,.14);backdrop-filter:blur(6px) saturate(1.2);-webkit-backdrop-filter:blur(6px) saturate(1.2);border:1px solid rgba(255,255,255,.10);";
+  const _statCard=(lbl,val,valCol,sub)=>`<div style="background:rgba(255,255,255,.06);${GLASS_IN}border-radius:11px;padding:8px 11px"><div style="font-size:8.5px;color:#9FB89E;letter-spacing:.05em;text-transform:uppercase">${lbl}</div><div style="font-size:13px;font-weight:600;margin-top:2px;color:${valCol};font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${val}</div><div style="font-size:9px;color:#9FB89E;margin-top:1px">${sub||''}</div></div>`;
+  let statsHtml;
+  if(_bkMode==='day'){
+    statsHtml =
+      _statCard('ที่นั่งวันนี้', fmtN(totalBookedWeek), dx.lime, 'seats booked')
+    + _statCard('Fill', fillWeekPct+'%', '#fff', totalBookedWeek+' / '+(totalCapWeek||'-'))
+    + _statCard('Top route', topRouteWeek?_shortName(topRouteWeek.r.name):'—', '#fff', topRouteWeek?topRouteWeek.total+' seats':'')
+    + _statCard('เส้นทาง', dayRows.length, '#fff', 'routes today');
+  } else {
+    const perLbl=_bkMode==='year'?'เดือน':'วัน';
+    statsHtml =
+      _statCard(_bkMode==='year'?'Peak month':'Peak day', bestDay?_fmtDt(bestDay.dt):'—', dx.lime, bestDay?bestDay.pct+'% fill':'—')
+    + _statCard(_bkMode==='year'?'Slow month':'Slow day', slowDay?_fmtDt(slowDay.dt):'—', dx.coralBg, slowDay?slowDay.pct+'% fill':'—')
+    + _statCard('Top route', topRouteWeek?_shortName(topRouteWeek.r.name):'—', '#fff', topRouteWeek?topRouteWeek.total+' seats':'')
+    + _statCard('Avg / '+perLbl, fmtN(avgPerDay), '#fff', 'seats');
+  }
+  const legendRow=(legendItems||otherLegend||charterLegend||wxLegend||capLegend)?`<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;font-size:10.5px;font-variant-numeric:tabular-nums">${legendItems}${otherLegend}${charterLegend}${wxLegend}${capLegend}</div>`:'';
+  // day-mode weather note (chip next to title)
+  const dayWxChip=(_bkMode==='day'&&dayWx>0)?`<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(232,74,63,.18);color:#FFB4AC;padding:3px 9px;border-radius:8px;font-size:10px;font-weight:600;flex-shrink:0">⛈ ยกเลิกจากอากาศ ${dayWx}</span>`:'';
   const proj=`<div class="dgx-bookings" style="background:${dx.forest};border-radius:24px;padding:22px 24px;color:#fff;${F}box-shadow:0 2px 4px rgba(10,40,25,.10),0 16px 38px rgba(10,50,30,.20);border:1px solid rgba(255,255,255,.08);">
     <div style="display:flex;align-items:start;justify-content:space-between;gap:14px">
       <div style="flex:1;min-width:0">
-        <div style="font-size:17px;font-weight:600;letter-spacing:-.015em">Bookings overview · 7 days</div>
-        <p style="font-size:12px;color:#9FB89E;margin:5px 0 0;line-height:1.55">รวม <span style="color:#fff;font-weight:600">${fmtN(totalBookedWeek)}</span> seats / <span style="color:#fff;font-weight:600">${fmtN(totalCapWeek)}</span> capacity · <span style="color:${dx.lime};font-weight:600">${fillWeekPct}%</span> fill · วันนี้ ${deltaSign?'+':''}${deltaSeats} vs เมื่อวาน</p>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:17px;font-weight:600;letter-spacing:-.015em">${bkTitle}</span>${dayWxChip}</div>
+        <p style="font-size:12px;color:#9FB89E;margin:5px 0 0;line-height:1.55">${bkSub}</p>
       </div>
-      <div style="display:inline-flex;align-items:center;gap:5px;background:${deltaSign?dx.lime:dx.coralBg};color:${deltaSign?dx.forestDark:dx.coralDeep};padding:4px 10px;border-radius:10px;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;flex-shrink:0">${deltaSign?'↗':'↘'} ${deltaPct}%</div>
+      ${bkToggle}
     </div>
-    <div style="margin-top:22px;position:relative;background:rgba(255,255,255,.04);border-radius:14px;padding:18px 10px 8px">
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;align-items:end">${barsHtml}</div>
+    <div style="margin-top:20px;position:relative;background:rgba(255,255,255,.05);${GLASS_IN}border-radius:14px;padding:18px 10px 8px">
+      <div style="display:grid;grid-template-columns:${plotCols};gap:${plotGap};align-items:end">${plotHtml}</div>
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;font-size:10.5px;font-variant-numeric:tabular-nums">${legendItems}${otherLegend}${capLegend}</div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:14px">
-      <div style="background:rgba(255,255,255,.06);border-radius:11px;padding:8px 11px"><div style="font-size:8.5px;color:#9FB89E;letter-spacing:.05em;text-transform:uppercase">Best day</div><div style="font-size:13px;font-weight:600;margin-top:2px;color:${dx.lime};font-variant-numeric:tabular-nums">${bestDt?bestDt.getDate()+' '+TH_MON[bestDt.getMonth()]:'—'}</div><div style="font-size:9px;color:#9FB89E;margin-top:1px">${bestDay?bestDay.pct+'% fill':'no trip'}</div></div>
-      <div style="background:rgba(255,255,255,.06);border-radius:11px;padding:8px 11px"><div style="font-size:8.5px;color:#9FB89E;letter-spacing:.05em;text-transform:uppercase">Slow day</div><div style="font-size:13px;font-weight:600;margin-top:2px;color:${dx.coralBg};font-variant-numeric:tabular-nums">${slowDt?slowDt.getDate()+' '+TH_MON[slowDt.getMonth()]:'—'}</div><div style="font-size:9px;color:#9FB89E;margin-top:1px">${slowDay?slowDay.pct+'% fill':'—'}</div></div>
-      <div style="background:rgba(255,255,255,.06);border-radius:11px;padding:8px 11px"><div style="font-size:8.5px;color:#9FB89E;letter-spacing:.05em;text-transform:uppercase">Top route</div><div style="font-size:13px;font-weight:600;margin-top:2px;color:#fff;letter-spacing:-.005em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${topRouteWeek?topRouteWeek.r.name:''}">${topRouteWeek?_shortName(topRouteWeek.r.name):'—'}</div><div style="font-size:9px;color:#9FB89E;margin-top:1px;font-variant-numeric:tabular-nums">${topRouteWeek?topRouteWeek.total+' seats':''}</div></div>
-      <div style="background:rgba(255,255,255,.06);border-radius:11px;padding:8px 11px"><div style="font-size:8.5px;color:#9FB89E;letter-spacing:.05em;text-transform:uppercase">Avg / day</div><div style="font-size:15px;font-weight:600;margin-top:2px;color:#fff;font-variant-numeric:tabular-nums">${avgPerDay}</div><div style="font-size:9px;color:#9FB89E;margin-top:1px">${operatingCount} ops today</div></div>
-    </div>
+    ${legendRow}
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:14px">${statsHtml}</div>
   </div>`;
 
   const centerCol=`<div style="display:flex;flex-direction:column;gap:12px">${_dashSeatCalHtml(dx,F)}${proj}</div>`;
@@ -4997,22 +5097,22 @@ function renderDash(){
     const sc=availD>0?Math.min(100,Math.round(opCount/availD*100)):0;
     return {score:sc,op:opCount,avail:availD};
   };
+  // ── Bookings + pax per day (counted by bookingDate = creation date) ──
+  const _bkForDay=(ds)=>{ let pax=0,bk=0; (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
+    if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
+    const cd=String(b.bookingDate||b.createdAt||'').slice(0,10); if(cd!==ds) return;
+    bk++; const t0=(b.trips||[])[0]; pax += (t0 && typeof bkV2PaxAllTot==='function') ? bkV2PaxAllTot(t0.pax||{}) : 0;
+  }); return {pax:pax,bk:bk}; };
   // Last 7 days
   const fleetScoreData=[];
-  for(let dOff=-6;dOff<=0;dOff++){
-    const ds=_dsAt(dOff);
-    const dt=new Date(ds);
-    const r=_fsForDay(ds);
-    fleetScoreData.push({ds,dt,...r});
-  }
-  // Previous 7 days (-13 .. -7) for WoW trend
-  const prevWeekScores=[];
-  for(let dOff=-13;dOff<=-7;dOff++){
-    prevWeekScores.push(_fsForDay(_dsAt(dOff)).score);
-  }
+  for(let dOff=-6;dOff<=0;dOff++){ const ds=_dsAt(dOff); fleetScoreData.push({ds,dt:new Date(ds),..._bkForDay(ds)}); }
+  // Previous 7 days (-13 .. -7) for WoW trend (avg pax)
+  const prevWeekPax=[];
+  for(let dOff=-13;dOff<=-7;dOff++){ prevWeekPax.push(_bkForDay(_dsAt(dOff)).pax); }
   const todayIdxFS=fleetScoreData.length-1;
-  const weekAvgFS=Math.round(fleetScoreData.reduce((s,d)=>s+d.score,0)/fleetScoreData.length);
-  const prevWeekAvg=Math.round(prevWeekScores.reduce((s,sc)=>s+sc,0)/prevWeekScores.length);
+  const weekMaxPax=Math.max(1,...fleetScoreData.map(d=>d.pax));        // for bar scaling (relative to busiest day)
+  const weekAvgFS=Math.round(fleetScoreData.reduce((s,d)=>s+d.pax,0)/fleetScoreData.length);
+  const prevWeekAvg=Math.round(prevWeekPax.reduce((s,p)=>s+p,0)/prevWeekPax.length);
   const trendDelta=weekAvgFS-prevWeekAvg;
   const trendUp=trendDelta>=0;
   const trendPct=prevWeekAvg>0?Math.round(Math.abs(trendDelta)/prevWeekAvg*100):(weekAvgFS>0?100:0);
@@ -5040,21 +5140,28 @@ function renderDash(){
     if(sc<30 && sc>0) return 'rgba(232,74,63,.08)';
     return 'transparent';
   };
+  const THAI_DAY=['#FF6B5E','#F5D84A','#FF7FB0','#6FD07F','#FFA24D','#5FB4F0','#B98BE0'];   // สีประจำวัน อา·จ·อ·พ·พฤ·ศ·ส (ปรับให้อ่านบนพื้นเข้ม)
   const fsCells=fleetScoreData.map((d,i)=>{
     const isTdy=i===todayIdxFS;
-    const c=fsColor(d.score);
-    const isAlert=d.score<30 && d.score>0;
-    return `<div class="dgx-fcell" style="position:relative;background:${fsBg(d.score,isTdy)};border:1px solid ${fsBorder(d.score,isTdy)};border-radius:9px;padding:7px 3px 6px;text-align:center;min-width:0">
+    const pct=weekMaxPax>0?Math.round(d.pax/weekMaxPax*100):0;   // relative fill vs busiest day → same colour tiers
+    const c=fsColor(pct);
+    const isAlert=pct<30 && d.pax>0;
+    return `<div class="dgx-fcell" style="position:relative;background:${fsBg(pct,isTdy)};border:1px solid ${fsBorder(pct,isTdy)};border-radius:9px;padding:7px 3px 6px;text-align:center;min-width:0">
       ${isAlert?`<span style="position:absolute;top:3px;right:3px;width:5px;height:5px;background:#E84A3F;border-radius:50%;box-shadow:0 0 4px rgba(232,74,63,.6)"></span>`:''}
-      <div style="font-size:8px;color:${isTdy?dx.lime:isAlert?'#FF8B7F':dx.brownMute};letter-spacing:.06em;text-transform:uppercase;font-weight:600">${WD_EN[d.dt.getDay()].slice(0,3)}</div>
+      <div style="font-size:8px;color:${THAI_DAY[d.dt.getDay()]};letter-spacing:.06em;text-transform:uppercase;font-weight:700">${WD_EN[d.dt.getDay()].slice(0,3)}</div>
       <div style="font-size:8.5px;color:${dx.brownMute};margin-top:1px;font-variant-numeric:tabular-nums">${d.dt.getDate()}</div>
-      <div style="font-size:14px;font-weight:700;color:${fsNumColor(d.score,isTdy)};margin-top:5px;font-variant-numeric:tabular-nums;letter-spacing:-.02em">${d.score}</div>
+      <div style="font-size:14px;font-weight:700;color:${fsNumColor(pct,isTdy)};margin-top:5px;font-variant-numeric:tabular-nums;letter-spacing:-.02em">${d.pax}</div>
       <div style="margin-top:5px;height:3px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden">
-        <div style="width:${d.score}%;height:100%;background:${c};border-radius:2px"></div>
+        <div style="width:${pct}%;height:100%;background:${c};border-radius:2px"></div>
       </div>
-      <div style="font-size:7.5px;color:${dx.brownMute};margin-top:3px;font-variant-numeric:tabular-nums">${d.op}/${d.avail}</div>
+      <div style="font-size:7.5px;color:${dx.brownMute};margin-top:3px;font-variant-numeric:tabular-nums">${d.bk} bk</div>
     </div>`;
   }).join('');
+  // today volume label/colour for the header chip + footer (same tiers as the cells)
+  const _tdBk=fleetScoreData[todayIdxFS]||{pax:0,bk:0};
+  const _tdPct=weekMaxPax>0?Math.round(_tdBk.pax/weekMaxPax*100):0;
+  const volColor=fsColor(_tdPct);
+  const volLabel=_tdBk.pax<=0?'—':_tdPct>=70?'Busy':_tdPct>=30?'OK':'Quiet';
   // Trend pill colors
   const trendIsFlat=trendDelta===0;
   const trendBg=trendIsFlat?'rgba(255,255,255,.08)':trendUp?'rgba(184,232,154,.16)':'rgba(232,74,63,.18)';
@@ -5062,16 +5169,16 @@ function renderDash(){
   const trendArrow=trendIsFlat?'→':trendUp?'↗':'↘';
   const ai=`<div class="dgx-fleet" style="background:${dx.brown};border-radius:18px;padding:14px 14px 13px;color:${dx.brownText};${F}">
     <div style="display:flex;align-items:center;justify-content:space-between">
-      <div style="display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:${dx.lime}"><span>✦</span> Fleet Score</div>
-      <span style="font-size:9px;color:${scoreColor};background:rgba(255,255,255,.08);padding:2px 8px;border-radius:7px;font-weight:600;letter-spacing:.04em;text-transform:uppercase">${fleetLabel}</span>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:${dx.lime}"><span>✦</span> Bookings/day</div>
+      <span style="font-size:9px;color:${volColor};background:rgba(255,255,255,.08);padding:2px 8px;border-radius:7px;font-weight:600;letter-spacing:.04em;text-transform:uppercase">${volLabel}</span>
     </div>
     <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:11px">${fsCells}</div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:11px;font-size:10px;color:${dx.brownMute};font-weight:500">
       <div style="display:inline-flex;align-items:center;gap:6px">
-        <span>7-day avg <span style="color:${dx.brownText};font-weight:700;font-variant-numeric:tabular-nums">${weekAvgFS}</span></span>
+        <span>7-day avg <span style="color:${dx.brownText};font-weight:700;font-variant-numeric:tabular-nums">${weekAvgFS}</span> pax</span>
         <span style="display:inline-flex;align-items:center;gap:3px;background:${trendBg};color:${trendFg};padding:2px 7px;border-radius:7px;font-size:9.5px;font-weight:700;font-variant-numeric:tabular-nums">${trendArrow} ${trendIsFlat?'flat':(trendUp?'+':'−')+trendPct+'%'}</span>
       </div>
-      <span>Today <span style="color:${scoreColor};font-weight:700;font-variant-numeric:tabular-nums">${fleetScore}</span><span style="color:${dx.brownMute}">/100</span></span>
+      <span>Today <span style="color:${volColor};font-weight:700;font-variant-numeric:tabular-nums">${_tdBk.pax}</span> pax · <span style="color:${dx.brownText};font-weight:700;font-variant-numeric:tabular-nums">${_tdBk.bk}</span> bk</span>
     </div>
     ${trendDelta!==0?`<div style="font-size:9px;color:${dx.brownMute};margin-top:4px;text-align:left">vs prev week <span style="color:${dx.brownText};font-weight:600;font-variant-numeric:tabular-nums">${prevWeekAvg}</span></div>`:''}
   </div>`;
@@ -19904,14 +20011,16 @@ function flRenderEngList(){
   // (boat dropdown is a "jump to boat" navigator · it does NOT filter/hide — see flSetEngBoat)
 
   const all=FL_ENGINES;
-  const totalEng=all.length;
-  const honda=all.filter(e=>e.brand==='Honda').length;
-  const suzuki=all.filter(e=>e.brand==='Suzuki').length;
-  const ready=all.filter(e=>(e.status||'ready')==='ready').length;
-  const fixing=all.filter(e=>e.status==='fixing').length;
-  const broken=all.filter(e=>e.status==='broken').length;
-  // Spare = status==='spare' OR no boat assigned (orphan) — covers both UI status-flag and unassign-flow
-  const spareEngs=all.filter(e=>e.status==='spare' || !e.boatId).length;
+  const _isRet=(e)=>e.retired===true || e.status==='broken';    // ปลดระวาง (decommissioned) · นับแยก ไม่รวมใน fleet
+  const retired=all.filter(_isRet).length;
+  const totalEng=all.length-retired;                            // fleet = เครื่องที่ยังใช้งาน (พร้อม + ซ่อม + สำรอง)
+  const honda=all.filter(e=>!_isRet(e)&&e.brand==='Honda').length;
+  const suzuki=all.filter(e=>!_isRet(e)&&e.brand==='Suzuki').length;
+  const ready=all.filter(e=>!_isRet(e)&&(e.status||'ready')==='ready').length;
+  const fixing=all.filter(e=>!_isRet(e)&&e.status==='fixing').length;
+  const broken=retired;                                         // (legacy var) = จำนวนปลดระวาง
+  // Spare = status==='spare' OR no boat assigned (orphan) · ไม่รวมตัวที่ปลดระวาง
+  const spareEngs=all.filter(e=>!_isRet(e)&&(e.status==='spare' || !e.boatId)).length;
 
   const totalHours=all.reduce((s,e)=>s+(typeof flEngHours==='function'?flEngHours(e.id):(e.baseHours||0)),0);
   const avgHours=all.length?Math.round(totalHours/all.length):0;
@@ -19950,7 +20059,7 @@ function flRenderEngList(){
         <span style="display:inline-flex;align-items:center;background:${SVG_PINK.accent};color:white;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">▴ ${ready} ready</span>
         ${fixing?`<span style="display:inline-flex;align-items:center;background:${SVG_PINK.soft};color:${SVG_PINK.text};padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">${fixing} fixing</span>`:''}
       </div>
-      <div style="font-size:11px;color:${dim.ink3}">${honda} Honda · ${suzuki} Suzuki · ${spareEngs} spare</div>
+      <div style="font-size:11px;color:${dim.ink3}">${honda} Honda · ${suzuki} Suzuki · ${spareEngs} spare${retired?` · <span style="color:#5B289A;font-weight:600">${retired} ปลดระวาง</span>`:''}</div>
     </div>
 
     <div style="grid-column:2;background:white;border-radius:14px;padding:11px 13px;border:1px solid ${dim.line}">
@@ -19973,8 +20082,8 @@ function flRenderEngList(){
 
     <div style="grid-column:5;background:${dim.ink};color:white;border-radius:14px;padding:11px 13px">
       <div style="font-size:10px;color:#aaa">Issues</div>
-      <div style="display:flex;align-items:baseline;gap:3px;margin-top:2px"><span style="font-size:18px;font-weight:700;line-height:1.2;color:${(fixing+broken)?'#FF8FA8':'white'}">${fixing+broken}</span><span style="font-size:11px;color:#aaa;font-weight:500">need attention</span></div>
-      <div style="font-size:11px;color:#aaa;margin-top:6px">${fixing} fixing · ${broken} broken</div>
+      <div style="display:flex;align-items:baseline;gap:3px;margin-top:2px"><span style="font-size:18px;font-weight:700;line-height:1.2;color:${fixing?'#FF8FA8':'white'}">${fixing}</span><span style="font-size:11px;color:#aaa;font-weight:500">need attention</span></div>
+      <div style="font-size:11px;color:#aaa;margin-top:6px">${fixing} fixing · ${retired} ปลดระวาง</div>
     </div>
   </div>`;
 
@@ -20013,7 +20122,7 @@ function flRenderEngList(){
   const buildEngRow=(e)=>{
     const isSel=e.id===flSelEngId;
     const b=getBoat(e.boatId);
-    const ss=STATUS_STYLE[e.status||'ready']||STATUS_STYLE.ready;
+    const ss=_isRet(e)?{bg:'#EEEBF6',color:'#5B289A',label:'ปลดระวาง'}:(STATUS_STYLE[e.status||'ready']||STATUS_STYLE.ready);
     const isSuzuki=e.brand==='Suzuki';
     const posBg=e.boatId?(isSuzuki?'#A32D2D':'#185FA5'):'#999';
     const posLbl=e.boatId?flPosLabel(e.pos||'EN'):'SPARE';
@@ -20042,8 +20151,8 @@ function flRenderEngList(){
   // Group by BOAT · positions ordered Port→C.Port→Center→C.Std→Std · Spare/off-boat last
   const POS_ORDER=['Port','C.Port','Center','C.Std','Std'];
   const posIdx=p=>flPosRank(p);
-  const byBoat={}; const spareList=[];
-  engs.forEach(e=>{ if(e.boatId){ (byBoat[e.boatId]=byBoat[e.boatId]||[]).push(e); } else spareList.push(e); });
+  const byBoat={}; const spareList=[]; const retiredList=[];
+  engs.forEach(e=>{ if(_isRet(e)){ retiredList.push(e); } else if(e.boatId){ (byBoat[e.boatId]=byBoat[e.boatId]||[]).push(e); } else spareList.push(e); });
   Object.values(byBoat).forEach(arr=>arr.sort((a,b)=>posIdx(a.pos)-posIdx(b.pos)));
   const boatIds=Object.keys(byBoat).sort((a,b)=>String((getBoat(a)||{}).name||a).localeCompare(String((getBoat(b)||{}).name||b)));
   const boatHeader=(bid,name,n,sub,sz)=>`<div id="fl-eng-grp-${bid}" style="display:flex;align-items:center;gap:7px;margin:13px 0 5px;padding:0 4px 7px;border-bottom:1.5px solid rgba(0,0,0,.10);scroll-margin-top:6px">
@@ -20058,6 +20167,7 @@ function flRenderEngList(){
   } else {
     boatIds.forEach(bid=>{ const b=getBoat(bid)||{}; const arr=byBoat[bid]; const brands=[...new Set(arr.map(x=>x.brand))]; listHtml+=boatHeader(bid, b.name||bid, arr.length, brands.join('/'), brands[0]==='Suzuki'); arr.forEach(e=>{listHtml+=buildEngRow(e);}); });
     if(spareList.length){ spareList.sort((a,b)=>String(a.serial).localeCompare(String(b.serial))); listHtml+=`<div style="display:flex;align-items:center;gap:7px;margin:13px 0 5px;padding:0 4px 7px;border-bottom:1.5px solid rgba(0,0,0,.10)"><span style="width:7px;height:7px;border-radius:50%;background:#999;flex-shrink:0"></span><span style="font-size:13px;font-weight:700;color:#666">Spare · ไม่อยู่เรือ</span><span style="margin-left:auto;background:#EEF1F5;color:#5a6b7a;padding:1px 9px;border-radius:9px;font-size:10px;font-weight:600">${spareList.length} eng</span></div>`; spareList.forEach(e=>{listHtml+=buildEngRow(e);}); }
+    if(retiredList.length){ retiredList.sort((a,b)=>String(a.serial).localeCompare(String(b.serial))); listHtml+=`<div style="display:flex;align-items:center;gap:7px;margin:13px 0 5px;padding:0 4px 7px;border-bottom:1.5px solid rgba(91,40,154,.20)"><span style="width:7px;height:7px;border-radius:50%;background:#5B289A;flex-shrink:0"></span><span style="font-size:13px;font-weight:700;color:#5B289A">ปลดระวาง · Retired</span><span style="margin-left:auto;background:#EEEBF6;color:#5B289A;padding:1px 9px;border-radius:9px;font-size:10px;font-weight:600">${retiredList.length} eng</span></div>`; retiredList.forEach(e=>{listHtml+=buildEngRow(e);}); }
   }
 
   const listPanel=`<div id="fl-eng-listpanel" style="background:white;border-radius:14px;padding:0 14px 13px;border:1px solid ${dim.line};max-height:calc(100vh - 360px);overflow-y:auto">
@@ -27778,7 +27888,7 @@ function flMaintClose(id,outcome,note,awaitInvoice){
     success:    {label:'สำเร็จ',         engStatus:'ready',  gbStatus:'ready',  prStatus:'active',     boatStatus:'available', icon:'✓', tag:''},
     limited:    {label:'ใช้งานจำกัด',     engStatus:'limited',gbStatus:'limited',prStatus:'limited',    boatStatus:'available', icon:'⚠', tag:' · ใช้งานจำกัด'},
     rework:     {label:'ต้องซ่อมซ้ำ',     engStatus:'fixing', gbStatus:'fixing', prStatus:'fixing',     boatStatus:'fixing',    icon:'↻', tag:' · ต้องซ่อมซ้ำ'},
-    decommission:{label:'ปลดระวาง',       engStatus:'broken', gbStatus:'broken', prStatus:'broken',     boatStatus:'fixing',    icon:'✕', tag:' · ปลดระวาง'},
+    decommission:{label:'ปลดระวาง',       engStatus:'broken', gbStatus:'broken', prStatus:'broken',     boatStatus:'available', icon:'✕', tag:' · ปลดระวาง'},
     cancelled:  {label:'ยกเลิก',          engStatus:null,     gbStatus:null,     prStatus:null,         boatStatus:'available', icon:'⊘', tag:' · ยกเลิก Job'}
   };
   const out=OUTCOME[outcome]||OUTCOME.success;
@@ -27804,8 +27914,8 @@ function flMaintClose(id,outcome,note,awaitInvoice){
 
     // ─── เคารพเจตนาเดิมของ MJ ───
     // ถ้า MJ มี setFixing:false (เรือยังใช้งานได้ระหว่างซ่อม) → ตอนปิดก็ไม่ควร force boat status
-    // กรณีเดียวที่จะ override คือ outcome=decommission (เรือเสียหายถาวร)
-    if(m.setFixing===false && outcome!=='decommission'){
+    // ปลดระวาง = ปลด "อะไหล่ตัวนั้น" (broken) เท่านั้น · ไม่ไปยุ่งสถานะเรือ (เรืออาจมีเครื่องอื่นใช้ได้)
+    if(m.setFixing===false){
       // เก็บ boat status ปัจจุบันไว้ (ไม่ override)
       finalBoatStatus = cur.s || 'available';
       finalReason = cur.reason || '';
@@ -27861,6 +27971,16 @@ function flMaintClose(id,outcome,note,awaitInvoice){
           detail:m.detail||'',cost:totalCost,hours:flEngHours(eng.id),outcome});
         if(out.engStatus) eng.status=out.engStatus;
         else if(eng.status==='fixing') eng.status='ready';
+        // ปลดระวางเครื่อง → ถอดเกียร์ (+ใบจักรที่ติดกับเกียร์) ออกจากเครื่องที่ตายแล้ว
+        // เกียร์/ใบจักรมีงานของตัวเอง → ให้ไปตามสถานะ/งานของมันเอง ไม่ผูกกับเครื่องปลดระวาง
+        if(outcome==='decommission'){ eng.retired=true; eng.retiredDate=TODAY_STR; eng.retiredReason=note||''; }
+        if(outcome==='decommission' && typeof FL_GEARBOXES!=='undefined'){
+          FL_GEARBOXES.forEach(gb=>{ if(gb.engineId===eng.id){
+            gb.engineId=null;
+            if(!gb.log)gb.log=[]; gb.log.push({date:TODAY_STR,type:'remove',desc:`✕ ถอดออกจากเครื่องปลดระวาง · ${m.no} (${a.label})`});
+            if(typeof FL_PROPELLERS!=='undefined') FL_PROPELLERS.forEach(pr=>{ if(pr.gearboxId===gb.id){ if(!pr.log)pr.log=[]; pr.log.push({date:TODAY_STR,type:'note',desc:`เครื่องปลดระวาง · ${m.no} · เกียร์ถูกถอดออก`}); } });
+          }});
+        }
       }
     }
     if(a.type==='gearbox'&&a.gbId){
@@ -27926,14 +28046,8 @@ function flMaintClose(id,outcome,note,awaitInvoice){
 
   flSave();flRenderMaint();renderBoats();flRenderEngList&&flRenderEngList();
 
-  // ─── Auto-prompt to retire boat on decommission ───
-  if(outcome==='decommission'&&b&&!b.retired){
-    setTimeout(()=>{
-      if(confirm(`เรือ ${b.name} ถูกปิด Job ด้วยสถานะ "ปลดระวาง"\n\nต้องการ Mark เรือเป็น Retired (ออกจากระบบใช้งาน) หรือไม่?\n\n• เรือจะไม่แสดงใน Boat Status calendar\n• ไม่นับใน Fleet Dashboard\n• ประวัติยังเก็บไว้ดูย้อนหลังได้\n\n(กด OK เพื่อปลดระวางเรือ · Cancel เพื่อเก็บไว้)`)){
-        flRetireBoat(b.id,note);
-      }
-    },300);
-  }
+  // NOTE: decommission = ปลด "อะไหล่ตัวที่อยู่ใน Job นี้" (broken) เท่านั้น — ไม่ auto-prompt ปลดระวางเรือ
+  // ถ้าต้องการปลดระวางทั้งลำ ทำได้จากหน้ารายละเอียดเรือ (flRetireBoat) โดยตรง
 }
 
 function flRetireBoat(boatId,reason){
@@ -38385,7 +38499,7 @@ function bkV2VanAutoAssign(date, routeId){
   const rows=baSeatBookingsForRoute(date,routeId).filter(({b,t})=>{ const z=t.zone||b.pickupZone||'NoTransfer'; return z!=='NoTransfer'&&z!=='NT'; });
   if(!rows.length){ alert('No transfer bookings to group on this program (all self-arrive or none).'); return; }
   const z=(typeof _vehRouteZone==='function')?_vehRouteZone(routeId):null;
-  const dayVans=(SB_VEHICLES||[]).filter(v=>v.active && v.dayRoute && v.dayRoute[date]===routeId);
+  const dayVans=(SB_VEHICLES||[]).filter(v=>v.active && _vehDayRoutes(v,date).includes(routeId));
   const pool = dayVans.length?dayVans:((typeof vanVehiclesForZone==='function')?vanVehiclesForZone(z,date):[]);
   if(!pool.length){ alert('No van available for this program today.\nAssign vans to this program in Transfer Fleet > month matrix, or add a vehicle in the zone.'); return; }
   const load={}; pool.forEach(v=>load[v.id]=0);
@@ -38411,7 +38525,9 @@ function bkV2VanClearRoute(date, routeId){
 function bkV2VanSelToggle(bkId){ window._bkV2VanSel=window._bkV2VanSel||{}; if(window._bkV2VanSel[bkId]) delete window._bkV2VanSel[bkId]; else { window._bkV2VanSelN=(window._bkV2VanSelN||0)+1; window._bkV2VanSel[bkId]=window._bkV2VanSelN; } if(typeof bkV2Render==='function') bkV2Render(); }   // value = tick order (for pickup sequencing)
 function bkV2VanSelClear(){ window._bkV2VanSel={}; if(typeof bkV2Render==='function') bkV2Render(); }
 // ── Allocation-aware grouping · a booking can be split (bk.ops.vanSplits[]) across vans · selection key = bkId or bkId@splitIndex ──
-function _bkV2InZone(b,date,routeId,zone){ return (b.trips||[]).some(t=>t.date===date&&t.routeId===routeId&&((t.zone||b.pickupZone)===zone)); }
+// Zone membership for van grouping. Charter (เหมาลำ) rows live in a dedicated '__CHARTER__' namespace so their
+// van groups don't collide with seat groups in the same pickup zone (charter is shown in its own card).
+function _bkV2InZone(b,date,routeId,zone){ return (b.trips||[]).some(t=>{ if(t.date!==date||t.routeId!==routeId) return false; const isCh=t.bookingMode==='charter'; return zone==='__CHARTER__' ? isCh : (!isCh && (t.zone||b.pickupZone)===zone); }); }
 function _bkV2VanNextGroup(date, routeId, zone){ let mx=0; (SB_BOOKINGS||[]).forEach(b=>{ if(!b.ops)return; if(!_bkV2InZone(b,date,routeId,zone))return; if(Array.isArray(b.ops.vanSplits)){ b.ops.vanSplits.forEach(s=>{ const g=+s.vanGroup||0; if(g>mx)mx=g; }); } else { const g=+b.ops.vanGroup||0; if(g>mx)mx=g; } }); return mx+1; }
 function bkV2VanGroupSelected(date, routeId, zone, groupId){
   const sel=Object.keys(window._bkV2VanSel||{}).filter(k=>window._bkV2VanSel[k]);
@@ -38428,7 +38544,7 @@ function bkV2VanGroupSelected(date, routeId, zone, groupId){
     const v=(typeof vehGet==='function')?vehGet(_gVan):null; const cap=(v&&v.capacity)||0;
     if(cap){
       let addPax=0;
-      ordered.forEach(key=>{ const p=String(key).split('@'); const b=SB_BOOKINGS.find(x=>x.id===p[0]); if(!b)return; if(p.length>1&&Array.isArray(b.ops.vanSplits)&&b.ops.vanSplits[+p[1]]){ addPax+=(+b.ops.vanSplits[+p[1]].pax||0); } else { let n=0;(b.trips||[]).forEach(t=>{ if((t.date||'')!==date||(t.routeId||'')!==routeId)return; const z=t.zone||b.pickupZone||''; if(z!==zone)return; const px=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; if(px>n)n=px; }); addPax+=n; } });
+      ordered.forEach(key=>{ const p=String(key).split('@'); const b=SB_BOOKINGS.find(x=>x.id===p[0]); if(!b)return; if(p.length>1&&Array.isArray(b.ops.vanSplits)&&b.ops.vanSplits[+p[1]]){ addPax+=(+b.ops.vanSplits[+p[1]].pax||0); } else { let n=0;(b.trips||[]).forEach(t=>{ if((t.date||'')!==date||(t.routeId||'')!==routeId)return; const z=(t.bookingMode==='charter')?'__CHARTER__':(t.zone||b.pickupZone||''); if(z!==zone)return; const px=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; if(px>n)n=px; }); addPax+=n; } });
       const cur=bkV2VanGroupPax(date,routeId,zone,gid);
       if(cur+addPax>cap){ alert('ที่นั่งไม่พอ · กรุ๊ป '+gid+' ใช้รถ '+((v&&v.name)||_gVan)+' ('+cap+' ที่นั่ง)\nมีอยู่ '+cur+' + เพิ่ม '+addPax+' = '+(cur+addPax)+' คน\n\nสร้างกรุ๊ปใหม่ · แยกคน (✂) · หรือเลือกรถใหญ่กว่า'); return; }
     }
@@ -38443,7 +38559,7 @@ function bkV2VanGroupSelected(date, routeId, zone, groupId){
 function bkV2VanGroupHeal(date){
   const isC=b=>['cancelled','rejected','cancelled_weather'].includes(b.status);
   const grp={};   // key → {van, ret}
-  const walk=(fn)=>{ (SB_BOOKINGS||[]).forEach(b=>{ if(isC(b)||!b.ops)return; (b.trips||[]).forEach(t=>{ if(date&&(t.date||'')!==date)return; const z=t.zone||b.pickupZone||''; const k=(t.date||'')+'|'+(t.routeId||'')+'|'+z; if(Array.isArray(b.ops.vanSplits)&&b.ops.vanSplits.length){ b.ops.vanSplits.forEach(s=>fn(b,k,s)); } else { fn(b,k,null); } }); }); };
+  const walk=(fn)=>{ (SB_BOOKINGS||[]).forEach(b=>{ if(isC(b)||!b.ops)return; (b.trips||[]).forEach(t=>{ if(date&&(t.date||'')!==date)return; const z=(t.bookingMode==='charter')?'__CHARTER__':(t.zone||b.pickupZone||''); const k=(t.date||'')+'|'+(t.routeId||'')+'|'+z; if(Array.isArray(b.ops.vanSplits)&&b.ops.vanSplits.length){ b.ops.vanSplits.forEach(s=>fn(b,k,s)); } else { fn(b,k,null); } }); }); };
   walk((b,k,s)=>{ const g=s?+s.vanGroup||0:+(b.ops.vanGroup)||0; if(!g)return; const van=s?s.vanId:b.ops.vanId; const e=grp[k+'|'+g]=grp[k+'|'+g]||{van:null}; if(van&&!e.van)e.van=van; });
   let healed=0;
   // heal ONLY the outbound van (ป้องกันตกบุคกิ้ง) · vanReturnId เป็น per-booking (ว่าง = กลับคันเดิม) → ไม่กระจายทั้งกรุ๊ป
@@ -38458,7 +38574,7 @@ function bkV2VanGroupHeal(date){
 function bkV2VanGroupConflicts(date){
   const isC=b=>['cancelled','rejected','cancelled_weather'].includes(b.status);
   const G={};
-  (SB_BOOKINGS||[]).forEach(b=>{ if(isC(b)||!b.ops)return; (b.trips||[]).forEach(t=>{ if(date&&(t.date||'')!==date)return; const z=t.zone||b.pickupZone||''; if(z==='NoTransfer'||z==='NT')return;
+  (SB_BOOKINGS||[]).forEach(b=>{ if(isC(b)||!b.ops)return; (b.trips||[]).forEach(t=>{ if(date&&(t.date||'')!==date)return; const z=(t.bookingMode==='charter')?'__CHARTER__':(t.zone||b.pickupZone||''); if(z==='NoTransfer'||z==='NT')return;
     const add=(g,van,pax)=>{ if(!g)return; const k=(t.date||'')+'|'+(t.routeId||'')+'|'+z+'|'+g; const e=G[k]=G[k]||{date:t.date,routeId:t.routeId,zone:z,gid:+g,vans:{},pax:0}; e.pax+=pax||0; if(van){ e.vans[van]=(e.vans[van]||0)+1; } };
     const tp=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
     if(Array.isArray(b.ops.vanSplits)&&b.ops.vanSplits.length) b.ops.vanSplits.forEach(s=>add(+s.vanGroup||0,s.vanId,+s.pax||0)); else add(+b.ops.vanGroup||0,b.ops.vanId,tp);
@@ -38473,7 +38589,7 @@ function bkV2VanGroupPax(date, routeId, zone, gid){
   _bkV2GrpApply(date,routeId,zone,gid,(b,s)=>{
     if(s){ tot += (+s.pax||0); return; }
     let n=0;
-    (b.trips||[]).forEach(t=>{ if((t.date||'')!==date||(t.routeId||'')!==routeId) return; const z=t.zone||b.pickupZone||''; if(z!==zone) return; const p=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; if(p>n)n=p; });
+    (b.trips||[]).forEach(t=>{ if((t.date||'')!==date||(t.routeId||'')!==routeId) return; const z=(t.bookingMode==='charter')?'__CHARTER__':(t.zone||b.pickupZone||''); if(z!==zone) return; const p=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; if(p>n)n=p; });
     tot += n;
   });
   return tot;
@@ -38531,14 +38647,14 @@ function bkV2BoatAvatarColor(boatId){ const palette=['#185FA5','#534AB7','#1D9E7
 function _bkV2Soft(hex, amt){ hex=String(hex||'').replace('#',''); if(hex.length===3) hex=hex.split('').map(c=>c+c).join(''); if(hex.length!==6) return '#'+hex; const a=(amt==null?0.5:amt); const r=parseInt(hex.slice(0,2),16),g=parseInt(hex.slice(2,4),16),b=parseInt(hex.slice(4,6),16); const m=x=>Math.round(x+(255-x)*a); return 'rgb('+m(r)+','+m(g)+','+m(b)+')'; }
 function bkV2SetPickupFinal(bkId, val){ const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return; b.ops=b.ops||{}; b.ops.pickupTimeFinal=(val||'').trim(); acctPersistBookings(); }   // no re-render · keep input focus
 // Effective zone of a vehicle on a date · honors temporary zone overrides ({zone,from,to})
-function vehEffectiveZone(v, date){ if(!v) return null; if(date && v.dayRoute && v.dayRoute[date]){ const rid=v.dayRoute[date]; let z=(typeof _vehRouteZone==='function')?_vehRouteZone(rid):null; if(!z && typeof _vehFamZone==='function') z=_vehFamZone(rid); if(z) return z; } if(date && v.dayZone && v.dayZone[date]) return v.dayZone[date]; if(date && Array.isArray(v.zoneOverrides)){ const o=v.zoneOverrides.find(o=>o.zone && (!o.from||date>=o.from) && (!o.to||date<=o.to)); if(o) return o.zone; } return v.zoneBase; }
+function vehEffectiveZone(v, date){ if(!v) return null; const _dr=(typeof _vehDayRoutes==='function')?_vehDayRoutes(v,date):((v.dayRoute&&v.dayRoute[date])?[].concat(v.dayRoute[date]):[]); if(date && _dr.length){ for(const rid of _dr){ let z=(typeof _vehRouteZone==='function')?_vehRouteZone(rid):null; if(!z && typeof _vehFamZone==='function') z=_vehFamZone(rid); if(z) return z; } } if(date && v.dayZone && v.dayZone[date]) return v.dayZone[date]; if(date && Array.isArray(v.zoneOverrides)){ const o=v.zoneOverrides.find(o=>o.zone && (!o.from||date>=o.from) && (!o.to||date<=o.to)); if(o) return o.zone; } return v.zoneBase; }
 // _vehUsableOn = active AND not หยุด/ซ่อม on that date (vehStatusOn: ''/'available' = OK · 'off'/'maintenance' = excluded from van pools)
 function _vehUsableOn(v, date){ if(!v||!v.active) return false; const st=(typeof vehStatusOn==='function')?vehStatusOn(v,date):''; return st!=='off' && st!=='maintenance'; }
 function vanVehiclesForZone(zone, date){ if(zone==='NoTransfer'||zone==='NT') return []; const z=(zone==='PK')?'PK':(zone==='KL')?'KL':null; return (SB_VEHICLES||[]).filter(v=>_vehUsableOn(v,date) && (!z || vehEffectiveZone(v,date)===z)); }
 // Vans assigned to THIS program (route) that day via the month-matrix; if none assigned yet, fall back to all active vans in the zone
 // Vans selectable for a route+date = ONLY those assigned to this route in the Transfer-Fleet month matrix (v.dayRoute[date]===routeId).
 // (No zone fallback · per user: a van not assigned in the month matrix must NOT be pickable here — assign it in the matrix first.)
-function vanVehiclesForRoute(date, routeId, zone){ return (SB_VEHICLES||[]).filter(v=>_vehUsableOn(v,date) && v.dayRoute && v.dayRoute[date]===routeId); }
+function vanVehiclesForRoute(date, routeId, zone){ return (SB_VEHICLES||[]).filter(v=>_vehUsableOn(v,date) && _vehDayRoutes(v,date).includes(routeId)); }
 // Van Job Order · bilingual (EN/TH) printable sheet for one vehicle on a date
 // ── Van Job Orders · dedicated sidebar page (nav: vanjobs · under Transfer Fleet) ──
 let _vanJobsDate = (typeof bkV2LocalYMD==='function') ? bkV2LocalYMD(new Date()) : new Date().toISOString().slice(0,10);
@@ -38568,7 +38684,7 @@ function vanJobsSentAt(date,key){ return VANJOB_SENT[date+'::'+key]||null; }
 function vanJobsToggleSent(date,key){ const k=date+'::'+key; if(VANJOB_SENT[k]) delete VANJOB_SENT[k]; else VANJOB_SENT[k]=new Date().toISOString(); vanJobsSentPersist(); const sy=window.scrollY; renderVanJobs(); window.scrollTo(0,sy); }
 function vanJobsSentLbl(iso){ if(!iso)return ''; const dt=new Date(iso); const th=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']; return dt.getDate()+' '+th[dt.getMonth()]+' '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0'); }
 function vanJobsSentCellInner(date,key){ var s=vanJobsSentAt(date,key); return '<label onclick="event.stopPropagation()" style="display:inline-flex;flex-direction:column;align-items:center;gap:1px;cursor:pointer"><input type="checkbox" '+(s?'checked':'')+' onchange="event.stopPropagation();vanJobsToggleSent(\''+date+'\',\''+key+'\')" style="width:17px;height:17px;cursor:pointer;accent-color:#0F6E56"><span style="font-size:8.5px;'+(s?'color:#0F6E56;font-weight:700':'color:#c2c0b7')+';white-space:nowrap;margin-top:1px">'+(s?vanJobsSentLbl(s):'ยังไม่ส่ง')+'</span></label>'; }
-function vanJobsBookingsFor(date, vid, leg){ const ret=leg==='ret'; const out=[]; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; const has=(b.trips||[]).some(t=>(t.date||'')===date); if(!has)return; let inVan; if(ret){ inVan=(b.ops&&Array.isArray(b.ops.vanSplits)&&b.ops.vanSplits.length)?b.ops.vanSplits.some(s=>s.vanReturnId===vid&&s.vanReturnId!==s.vanId):(b.ops&&b.ops.vanReturnId===vid&&b.ops.vanReturnId!==b.ops.vanId); } else { inVan=(b.ops&&Array.isArray(b.ops.vanSplits)&&b.ops.vanSplits.length)?b.ops.vanSplits.some(s=>s.vanId===vid):(b.ops&&b.ops.vanId===vid); } if(inVan&&!out.some(x=>x.id===b.id)) out.push(b); }); return out; }
+function vanJobsBookingsFor(date, vid, routeId, leg){ const ret=leg==='ret'; const out=[]; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; const has=(b.trips||[]).some(t=>(t.date||'')===date && (!routeId||t.routeId===routeId)); if(!has)return; let inVan; if(ret){ inVan=(b.ops&&Array.isArray(b.ops.vanSplits)&&b.ops.vanSplits.length)?b.ops.vanSplits.some(s=>s.vanReturnId===vid&&s.vanReturnId!==s.vanId):(b.ops&&b.ops.vanReturnId===vid&&b.ops.vanReturnId!==b.ops.vanId); } else { inVan=(b.ops&&Array.isArray(b.ops.vanSplits)&&b.ops.vanSplits.length)?b.ops.vanSplits.some(s=>s.vanId===vid):(b.ops&&b.ops.vanId===vid); } if(inVan&&!out.some(x=>x.id===b.id)) out.push(b); }); return out; }
 let _vanJobsExpand={};   // vanId -> expanded? (edit list: Thai pickup + special request)
 let _vanJobsPreview=null;   // preview key: "vanId" (outbound) or "vanId|ret" (return leg)
 function vanJobsOpenPreview(key){ _vanJobsPreview=key; renderVanJobs(); }
@@ -38600,37 +38716,31 @@ function renderVanJobs(){
   (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(!(b.trips||[]).some(t=>(t.date||'')===date))return;
     const t=(b.trips||[]).find(t=>(t.date||'')===date)||{}; const z=t.zone||b.pickupZone||''; const full=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
     const _pk=(b.hotelName||b.pickup||b.pickupArea||'').trim();
-    const _addTo=(map,vid,pax)=>{ (map[vid]=map[vid]||{pax:0,bk:0,zones:{},routes:{},pickups:{}}); map[vid].pax+=pax; map[vid].bk++; if(z)map[vid].zones[z]=1; if(t.routeId)map[vid].routes[t.routeId]=1; if(_pk) map[vid].pickups[_pk]=1; };
+    // a "job" = one van on ONE program(route) that day → key by van~route so a van running 2 programs prints 2 separate job orders
+    const _addTo=(map,vid,pax)=>{ const _k=vid+'~'+(t.routeId||''); (map[_k]=map[_k]||{vid:vid,routeId:t.routeId||'',pax:0,bk:0,zones:{},routes:{},pickups:{}}); map[_k].pax+=pax; map[_k].bk++; if(z)map[_k].zones[z]=1; if(t.routeId)map[_k].routes[t.routeId]=1; if(_pk) map[_k].pickups[_pk]=1; };
     const addVan=(vid,pax)=>_addTo(agg,vid,pax);
     const _selfPick=!!b.pickupSelf;   // ขารับมาเอง → ไม่มีรถไปรับ (ไม่ addVan/ไม่นับ unassigned) · ขากลับยังจัดได้
     if(b.ops&&Array.isArray(b.ops.vanSplits)&&b.ops.vanSplits.length){ b.ops.vanSplits.forEach(s=>{ const hp=+s.pax||0; if(!_selfPick){ if(s.vanId) addVan(s.vanId,hp); else if(z&&z!=='NoTransfer'&&z!=='NT') _addUn(t.routeId,hp); } if(s.vanReturnId && s.vanReturnId!==s.vanId) _addTo(aggRet,s.vanReturnId,hp); }); }
     else { const vid=b.ops&&b.ops.vanId; if(!_selfPick){ if(vid) addVan(vid,full); else if(z&&z!=='NoTransfer'&&z!=='NT') _addUn(t.routeId,full); } const rv=b.ops&&b.ops.vanReturnId; if(rv && rv!==vid) _addTo(aggRet,rv,full); }
   });
-  const allIds=Object.keys(agg);
-  // route options (distinct routeIds across all vans that day)
-  const routeIdSet={}; allIds.forEach(vid=>Object.keys(agg[vid].routes).forEach(r=>routeIdSet[r]=1));
+  const allIds=Object.keys(agg);   // each id = "van~route" job key
+  // route options (distinct routeIds across all jobs that day)
+  const routeIdSet={}; allIds.forEach(k=>{ if(agg[k].routeId) routeIdSet[agg[k].routeId]=1; });
   const rName=r=>((typeof getRoute==='function'?getRoute(r):null)||{}).name||r;
   // unassigned pax broken down by route (which trip still needs a van) · sorted by pax desc
   const unRouteList = Object.keys(unByRoute).sort((a,b)=>unByRoute[b]-unByRoute[a]).map(k=>({name:(k==='_'?'ไม่ระบุเส้นทาง':rName(k)), pax:unByRoute[k]}));
   const unRouteLbl = unRouteList.map(x=>`${x.name} ${x.pax} pax`).join(' · ');
   // apply filters
-  const ids=allIds.filter(vid=>{
-    if(_vanJobsOwner!=='all' && vanJobsOwnerGroup(vid)!==_vanJobsOwner) return false;
-    if(_vanJobsRoute!=='all' && !agg[vid].routes[_vanJobsRoute]) return false;
-    return true;
-  });
+  const _jobMatch=(m)=>{ if(!m) return false; if(_vanJobsOwner!=='all' && vanJobsOwnerGroup(m.vid)!==_vanJobsOwner) return false; if(_vanJobsRoute!=='all' && m.routeId!==_vanJobsRoute) return false; return true; };
+  const ids=allIds.filter(k=>_jobMatch(agg[k]));
   // return-leg jobs (different vehicle than outbound) · same filters
-  const retIds=Object.keys(aggRet).filter(vid=>{
-    if(_vanJobsOwner!=='all' && vanJobsOwnerGroup(vid)!==_vanJobsOwner) return false;
-    if(_vanJobsRoute!=='all' && !aggRet[vid].routes[_vanJobsRoute]) return false;
-    return true;
-  });
-  // one descriptor PER VAN (key = vid) carrying both its outbound (out) and return (ret) legs — unified job order
+  const retIds=Object.keys(aggRet).filter(k=>_jobMatch(aggRet[k]));
+  // one descriptor PER VAN×ROUTE job (key = "van~route") carrying its outbound (out) + return (ret) legs — separate job order per program
   const _vanSeen={}, _vanUnion=[];
-  ids.forEach(vid=>{ if(!_vanSeen[vid]){_vanSeen[vid]=1;_vanUnion.push(vid);} });
-  retIds.forEach(vid=>{ if(!_vanSeen[vid]){_vanSeen[vid]=1;_vanUnion.push(vid);} });
-  const jobList=_vanUnion.map(vid=>({vid, key:vid, out:agg[vid]||null, ret:aggRet[vid]||null, g:agg[vid]||aggRet[vid]}));
-  const totPax=ids.reduce((s,id)=>s+agg[id].pax,0);
+  ids.forEach(k=>{ if(!_vanSeen[k]){_vanSeen[k]=1;_vanUnion.push(k);} });
+  retIds.forEach(k=>{ if(!_vanSeen[k]){_vanSeen[k]=1;_vanUnion.push(k);} });
+  const jobList=_vanUnion.map(k=>{ const _m=agg[k]||aggRet[k]; return {vid:_m.vid, routeId:_m.routeId, key:k, out:agg[k]||null, ret:aggRet[k]||null, g:_m}; });
+  const totPax=ids.reduce((s,k)=>s+agg[k].pax,0);
   let dlbl=date; try{ dlbl=new Date(date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }catch(_){}
   const zoneLbl=z=>(typeof bkV2ZoneLabel==='function'?bkV2ZoneLabel(z):z);
   const PAL=[['#13B96A','#0E9C7F'],['#19A7C9','#1577B0'],['#8B5CF6','#6D3BE0'],['#F25CA2','#E0457F'],['#F2A33C','#E0792B'],['#3B7BE0','#2858C0']];
@@ -38648,7 +38758,7 @@ function renderVanJobs(){
         <th style="${thH};text-align:center;width:90px">ส่งคนขับ</th>
         <th style="${thH};width:104px"></th>
       </tr></thead>
-      <tbody>`+(function(){ const _rowFn=(job,i)=>{ const vid=job.vid; const key=job.key; const v=vehGet(vid)||{}; const _drv=vanJobsDriverInfo(vid,date); const out=job.out, ret=job.ret; const hasOut=!!out, hasRet=!!ret; const g=out||ret; const cap=v.capacity||0; const dispPax=hasOut?out.pax:(ret?ret.pax:0); const over=dispPax>cap; const _zsrc=Object.assign({},(out&&out.zones)||{},(ret&&ret.zones)||{}); const _rsrc=Object.assign({},(out&&out.routes)||{},(ret&&ret.routes)||{}); const zs=Object.keys(_zsrc).map(zoneLbl).join(', '); const rs=Object.keys(_rsrc).map(rName).join(', '); const tag=vanJobsOwnerTag(vid); const expd=!!_vanJobsExpand[key]; const _psrc=Object.assign({},(out&&out.pickups)||{},(ret&&ret.pickups)||{}); const pks=Object.keys(_psrc); const thCount=pks.filter(p=>vanJobsGetPickupTh(p)).length; const gr=hasOut?PAL[i%PAL.length]:['#B07A1F','#9A5B00']; const bks=expd?vanJobsBookingsFor(date,vid,hasOut?'out':'ret'):[]; const outBk=hasOut?out.bk:0, retBk=hasRet?ret.bk:0;
+      <tbody>`+(function(){ const _rowFn=(job,i)=>{ const vid=job.vid; const key=job.key; const routeId=job.routeId; const v=vehGet(vid)||{}; const _drv=vanJobsDriverInfo(vid,date); const out=job.out, ret=job.ret; const hasOut=!!out, hasRet=!!ret; const g=out||ret; const cap=v.capacity||0; const dispPax=hasOut?out.pax:(ret?ret.pax:0); const over=dispPax>cap; const _zsrc=Object.assign({},(out&&out.zones)||{},(ret&&ret.zones)||{}); const _rsrc=Object.assign({},(out&&out.routes)||{},(ret&&ret.routes)||{}); const zs=Object.keys(_zsrc).map(zoneLbl).join(', '); const rs=Object.keys(_rsrc).map(rName).join(', '); const tag=vanJobsOwnerTag(vid); const expd=!!_vanJobsExpand[key]; const _psrc=Object.assign({},(out&&out.pickups)||{},(ret&&ret.pickups)||{}); const pks=Object.keys(_psrc); const thCount=pks.filter(p=>vanJobsGetPickupTh(p)).length; const gr=hasOut?PAL[i%PAL.length]:['#B07A1F','#9A5B00']; const bks=expd?vanJobsBookingsFor(date,vid,routeId,hasOut?'out':'ret'):[]; const outBk=hasOut?out.bk:0, retBk=hasRet?ret.bk:0;
       const bb=expd?'':'border-bottom:1px solid #eef0ec';   // when expanded the panel row carries the divider
       const sel=_vanJobsPreview===key;
       const retBadge=hasRet?`<span style="font-size:9px;font-weight:700;background:#FBE4C9;color:#8a5500;border-radius:5px;padding:1px 7px;margin-left:7px;letter-spacing:.02em">↩ ขากลับ ${retBk}</span>`:'';
@@ -38662,7 +38772,7 @@ function renderVanJobs(){
         <td style="${td};font-size:12.5px;color:#3F4654">${rs?e(rs):'—'}</td>
         <td style="${td};font-size:12.5px;color:#7a7f86">${zs?e(zs):'—'}${over?' <span style="color:#A32D2D;font-weight:700;font-size:10px">เกินจุ</span>':''}</td>
         <td style="${td};text-align:center;padding:0 6px">${vanJobsSentCellInner(date,key)}</td>
-        <td style="${td};text-align:right;padding-right:12px"><button onclick="event.stopPropagation();bkV2VanJobOrder('${date}','${vid}')" title="พิมพ์ใบงาน" onmouseover="this.style.background='#EAF4F0'" onmouseout="this.style.background='transparent'" style="background:transparent;color:#0F6E56;border:none;border-radius:7px;padding:5px 7px;cursor:pointer;font-family:inherit;vertical-align:middle"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 17h2a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2"/><path d="M17 9V5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v4"/><rect x="7" y="13" width="10" height="8" rx="1"/></svg></button> <button onclick="event.stopPropagation();vanJobsToggleExpand('${key}')" title="แก้ไทย/คำขอพิเศษ" style="background:${expd?'#E3F0EA':'#fff'};color:#0F6E56;border:1px solid #cfe0d8;border-radius:8px;padding:6px 9px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">${expd?'▾':'✎'}${thCount?` ${thCount}`:''}</button></td>
+        <td style="${td};text-align:right;padding-right:12px"><button onclick="event.stopPropagation();bkV2VanJobOrder('${date}','${vid}','${routeId}')" title="พิมพ์ใบงาน" onmouseover="this.style.background='#EAF4F0'" onmouseout="this.style.background='transparent'" style="background:transparent;color:#0F6E56;border:none;border-radius:7px;padding:5px 7px;cursor:pointer;font-family:inherit;vertical-align:middle"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 17h2a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2"/><path d="M17 9V5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v4"/><rect x="7" y="13" width="10" height="8" rx="1"/></svg></button> <button onclick="event.stopPropagation();vanJobsToggleExpand('${key}')" title="แก้ไทย/คำขอพิเศษ" style="background:${expd?'#E3F0EA':'#fff'};color:#0F6E56;border:1px solid #cfe0d8;border-radius:8px;padding:6px 9px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">${expd?'▾':'✎'}${thCount?` ${thCount}`:''}</button></td>
       </tr>`;
       const _isPartner=(typeof vanJobsOwnerGroup==='function'?vanJobsOwnerGroup(vid):(v.ownership==='partner'))==='partner'||v.ownership==='partner';
       const _drvO=VANJOB_DRIVER[date+'::'+vid]||{};
@@ -38706,10 +38816,10 @@ function renderVanJobs(){
   const segBtn=(val,lbl)=>`<span onclick="vanJobsSetOwner('${val}')" style="padding:6px 13px;font-size:12px;cursor:pointer;${_vanJobsOwner===val?'background:#0F6E56;color:#fff;font-weight:600':'color:#0F6E56'}${val!=='all'?';border-left:1px solid #cfe0d8':''}">${lbl}</span>`;
   const routeOpts=`<option value="all">ทุกเส้นทาง</option>`+Object.keys(routeIdSet).map(r=>`<option value="${e(r)}" ${_vanJobsRoute===r?'selected':''}>${e(rName(r))}</option>`).join('');
   // ── Fleet-Insights-style header metrics ──
-  const compN=ids.filter(function(v){return vanJobsOwnerGroup(v)==='company';}).length;
-  const partN=ids.filter(function(v){return vanJobsOwnerGroup(v)==='partner';}).length;
-  let thN=0; { const seen={}; ids.forEach(function(vid){ Object.keys((agg[vid]||{}).pickups||{}).forEach(function(pk){ if(seen[pk])return; seen[pk]=1; if(vanJobsGetPickupTh(pk)) thN++; }); }); }
-  const routeVan={}; ids.forEach(function(vid){ Object.keys((agg[vid]||{}).routes||{}).forEach(function(r){ routeVan[r]=(routeVan[r]||0)+1; }); });
+  const compN=ids.filter(function(k){return vanJobsOwnerGroup((agg[k]||{}).vid)==='company';}).length;
+  const partN=ids.filter(function(k){return vanJobsOwnerGroup((agg[k]||{}).vid)==='partner';}).length;
+  let thN=0; { const seen={}; ids.forEach(function(k){ Object.keys((agg[k]||{}).pickups||{}).forEach(function(pk){ if(seen[pk])return; seen[pk]=1; if(vanJobsGetPickupTh(pk)) thN++; }); }); }
+  const routeVan={}; ids.forEach(function(k){ Object.keys((agg[k]||{}).routes||{}).forEach(function(r){ routeVan[r]=(routeVan[r]||0)+1; }); });
   const routeSeg=Object.keys(routeVan).sort(function(a,b){return routeVan[b]-routeVan[a];});
   const _routeColors=['#13B96A','#19A7C9','#8B5CF6','#F25CA2','#BA7517'];
   const _dateStep=`<div style="display:inline-flex;align-items:center;gap:8px;background:#F1EFEA;border-radius:16px;padding:4px 8px"><button onclick="vanJobsDateShift(-1)" style="border:none;background:transparent;cursor:pointer;font-size:15px;color:#888;padding:0 4px">&lsaquo;</button><b style="font-size:12.5px;color:#1A1A1A;min-width:185px;text-align:center">${e(dlbl)}</b><button onclick="vanJobsDateShift(1)" style="border:none;background:transparent;cursor:pointer;font-size:15px;color:#888;padding:0 4px">&rsaquo;</button></div>`;
@@ -38725,7 +38835,7 @@ function renderVanJobs(){
     <div style="display:flex;align-items:flex-start;gap:13px;margin-bottom:14px;flex-wrap:wrap">
       <div style="flex:1;min-width:230px">
         <div style="font-size:13px;color:#bbb;margin-bottom:2px">ใบงานวันนี้</div>
-        <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap"><span style="font-size:40px;font-weight:500;color:#1A1A1A;line-height:1">${ids.length}</span><span style="font-size:14px;color:#888">คัน · ${totPax} pax</span>
+        <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap"><span style="font-size:40px;font-weight:500;color:#1A1A1A;line-height:1">${ids.length}</span><span style="font-size:14px;color:#888">งาน · ${totPax} pax</span>
           <span style="font-size:11px;font-weight:600;background:#E7F5D8;color:#3B6D11;padding:3px 9px;border-radius:11px">▲ ${compN} บริษัท+เช่า</span>${partN?`<span style="font-size:11px;font-weight:600;color:#9A6B00">${partN} รถร่วม</span>`:''}${unTot>0?`<span style="font-size:11px;font-weight:600;color:#C2185B">${unTot} pax ยังไม่จัด</span>`:''}</div>
         <div style="font-size:11.5px;color:#999;margin-top:7px">บริษัท+เช่า ${compN} · รถร่วม ${partN} · กำกับไทย ${thN} จุดรับ · ${Object.keys(routeIdSet).length} เส้นทาง</div>
       </div>
@@ -38741,21 +38851,24 @@ function renderVanJobs(){
     </div>
     ${_segBar?`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:${unTot>0?'12px':'14px'}">${_segBar}</div>`:''}
     ${unTot>0?`<div style="background:#1A1A1A;border-radius:12px;padding:11px 16px;display:flex;align-items:center;gap:10px;margin-bottom:14px"><span style="color:#C8F47C;font-size:11px;font-weight:700;letter-spacing:.04em">◆ ต้องจัดรถ</span><span style="color:#fff;font-size:12.5px">${unTot} pax ยังไม่จัดรถวันนี้ · <b style="color:#C8F47C">${e(unRouteLbl)}</b> — ไปจับกลุ่ม/เลือกรถที่ By trip date</span><button onclick="nav(document.querySelector('[data-view=booking]'))" style="margin-left:auto;background:#C8F47C;color:#1A1A1A;border:none;border-radius:13px;padding:5px 14px;font-size:11px;font-weight:600;cursor:pointer">จัดรถ</button></div>`:''}`;
-  const _pvVid=_vanJobsPreview?String(_vanJobsPreview).split('|')[0]:null;
+  const _pvKey=_vanJobsPreview?String(_vanJobsPreview).split('|')[0]:null;   // "van~route"
+  const _pvVid=_pvKey?_pvKey.split('~')[0]:null;
+  const _pvRoute=_pvKey?(_pvKey.split('~')[1]||''):'';
   const _pvLeg=(_vanJobsPreview&&String(_vanJobsPreview).indexOf('|ret')>=0)?'ret':'out';
+  const _pvRouteNm=_pvRoute?(((typeof getRoute==='function'?getRoute(_pvRoute):null)||{}).name||_pvRoute):'';
   host.innerHTML = `<div style="${_vanJobsPreview?'max-width:none;margin-right:1060px':'max-width:1280px'};transition:margin .15s">
     ${headerFull}
     ${cards}
   </div>${_vanJobsPreview?`
   <div style="position:fixed;top:0;right:0;bottom:0;width:min(1040px,94vw);background:#fff;z-index:601;box-shadow:-12px 0 44px -14px rgba(0,0,0,.28);border-left:1px solid #e3e6e1;display:flex;flex-direction:column">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid #eef0ec;flex:none">
-      <b style="font-size:14px;color:#1B2A55">&#128424; ใบงานรถ · ${e((vehGet(_pvVid)||{}).name||_pvVid)}${_pvLeg==='ret'?' <span style="color:#9A5B00">· ขากลับ</span>':''}</b>
+      <b style="font-size:14px;color:#1B2A55">&#128424; ใบงานรถ · ${e((vehGet(_pvVid)||{}).name||_pvVid)}${_pvRouteNm?` <span style="color:#15396B">· ${e(_pvRouteNm)}</span>`:''}${_pvLeg==='ret'?' <span style="color:#9A5B00">· ขากลับ</span>':''}</b>
       <div style="display:flex;gap:8px">
-        <button onclick="bkV2VanJobOrder('${date}','${_pvVid}','${_pvLeg}')" style="background:#0F6E56;color:#fff;border:none;border-radius:8px;padding:8px 15px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">&#128424; พิมพ์</button>
+        <button onclick="bkV2VanJobOrder('${date}','${_pvVid}','${_pvRoute}','${_pvLeg}')" style="background:#0F6E56;color:#fff;border:none;border-radius:8px;padding:8px 15px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">&#128424; พิมพ์</button>
         <button onclick="vanJobsClosePreview()" title="ปิด" style="background:#fff;border:1px solid #d7dbe2;border-radius:8px;padding:7px 12px;font-size:14px;cursor:pointer;font-family:inherit;color:#666">&#10005;</button>
       </div>
     </div>
-    <div style="flex:1;overflow:auto;padding:20px;background:#EDEFF2">${vanJobsOrderCss(true)}<div class="vjo" id="vjo-page" style="width:1120px;margin:0 auto;background:#fff;padding:24px 26px;border-radius:8px;box-shadow:0 3px 16px rgba(20,40,70,.12)">${vanJobsOrderInner(date,_pvVid,_pvLeg)}</div></div>
+    <div style="flex:1;overflow:auto;padding:20px;background:#EDEFF2">${vanJobsOrderCss(true)}<div class="vjo" id="vjo-page" style="width:1120px;margin:0 auto;background:#fff;padding:24px 26px;border-radius:8px;box-shadow:0 3px 16px rgba(20,40,70,.12)">${vanJobsOrderInner(date,_pvVid,_pvRoute,_pvLeg)}</div></div>
   </div>`:''}`;
   if(_vanJobsPreview){ requestAnimationFrame(function(){ var pg=document.getElementById('vjo-page'); if(pg&&pg.parentElement){ var avail=pg.parentElement.clientWidth-40; var s=Math.min(1, avail/pg.offsetWidth); pg.style.zoom=s; } }); }
 }
@@ -38790,7 +38903,7 @@ function vanJobsOrderCss(scoped){ const p=scoped?'.vjo ':'';
     +'</style>';
 }
 // Inner job-order HTML (header + big route/date band + table + note) · reused by the print popup and the inline right-panel preview
-function vanJobsOrderInner(date, vanId, legIgnored){
+function vanJobsOrderInner(date, vanId, routeId, legIgnored){
   if(typeof bkV2VanGroupHeal==='function') bkV2VanGroupHeal(date);   // ensure grouped bookings have their group's vanId before building the sheet (prevents ตกบุคกิ้งในใบงาน)
   const v=vehGet(vanId)||{};
   const _drv=(typeof vanJobsDriverInfo==='function')?vanJobsDriverInfo(vanId,date):{driver:v.driver||'',phone:v.driverPhone||'',override:false};
@@ -38801,7 +38914,7 @@ function vanJobsOrderInner(date, vanId, legIgnored){
   // OUTBOUND leg = bookings this van picks up (vanId). outVid carried so the return row can show กลับคันเดิม / มาจากรถอื่น.
   const _collect=isRet=>{ const rows=[]; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return; if(isRet && typeof bkV2RetInfo==='function' && bkV2RetInfo(b).selfRet) return;   // ขากลับ "กลับเอง" (drop-off ท่า self-arrive) → ไม่ต้องมีรถไปส่ง → ไม่ขึ้นในใบงานขากลับ
       if(!isRet && b.pickupSelf) return;   // ขารับ "มาเอง" (self-arrive) → ไม่มีรถไปรับ → ไม่ขึ้นในใบงานขาไป
-    (b.trips||[]).forEach(t=>{ if((t.date||'')!==date) return;
+    (b.trips||[]).forEach(t=>{ if((t.date||'')!==date) return; if(routeId && t.routeId!==routeId) return;   // this sheet = one program(route) only
       if(b.ops&&Array.isArray(b.ops.vanSplits)&&b.ops.vanSplits.length){ b.ops.vanSplits.forEach(s=>{ const ov=s.vanId||null; const rv=s.vanReturnId||ov; const hit=isRet?(rv===vanId):(ov===vanId); if(hit) rows.push({b,t,splitPax:+s.pax||0,retId:s.vanReturnId||null,outVid:ov,seq:+s.vanSeq||0}); }); }
       else { const o=b.ops||{}; const ov=o.vanId||null; const rv=o.vanReturnId||ov; const hit=isRet?(rv===vanId):(ov===vanId); if(hit) rows.push({b,t,splitPax:null,retId:o.vanReturnId||null,outVid:ov,seq:+(o.vanSeq)||0}); }
     }); });
@@ -38886,8 +38999,7 @@ function vanJobsOrderInner(date, vanId, legIgnored){
   };
   const out=_section(false), ret=_section(true);
   // ⚠ Late-booking guard — bookings on THIS van's route(s) that day with NO van yet (likely a booking added after the van was arranged → would silently drop off this sheet)
-  const _vanRoutes=new Set(); out.rows.forEach(x=>{ if(x.t&&x.t.routeId) _vanRoutes.add(x.t.routeId); });
-  if(v.dayRoute&&v.dayRoute[date]) _vanRoutes.add(v.dayRoute[date]);
+  const _vanRoutes=new Set(); if(routeId){ _vanRoutes.add(routeId); } else { out.rows.forEach(x=>{ if(x.t&&x.t.routeId) _vanRoutes.add(x.t.routeId); }); _vehDayRoutes(v,date).forEach(r=>_vanRoutes.add(r)); }
   let _unaPax=0,_unaBk=0; const _unaTrip={};
   if(_vanRoutes.size){ (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(b.pickupSelf)return;
     (b.trips||[]).forEach(t=>{ if((t.date||'')!==date) return; if(!_vanRoutes.has(t.routeId)) return; const z=t.zone||b.pickupZone||''; if(z==='NoTransfer'||z==='NT') return;
@@ -38925,11 +39037,12 @@ function vanJobsOrderInner(date, vanId, legIgnored){
     ${body}
     <div class="note">หมายเหตุ / Notes: ① ขาไป = รถคันนี้รับจากโรงแรมส่งท่าเรือ · ② ขากลับ = รถคันนี้รับจากท่าเรือส่งจุดหมาย · รายที่ป้าย "↩ ขากลับ โดย ‹รถ›" = ขากลับใช้รถคันอื่น (ดูใบงานของรถคันนั้น)</div>`;
 }
-function bkV2VanJobOrder(date, vanId, leg){
+function bkV2VanJobOrder(date, vanId, routeId, leg){
   const v=vehGet(vanId); if(!v){ alert('Vehicle not found'); return; }
   const e=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const legTitle=leg==='ret'?' · ขากลับ':'';
-  const html='<!doctype html><html><head><meta charset="utf-8"><title>Van Job Order · '+e(v.name||vanId)+legTitle+' · '+e(date)+'</title>'+vanJobsOrderCss(false)+'</head><body>'+vanJobsOrderInner(date,vanId,leg)+'<script>setTimeout(function(){try{window.print()}catch(e){}},350)<\/script></body></html>';
+  const _rn=routeId?(((typeof getRoute==='function'?getRoute(routeId):null)||{}).name||routeId):'';
+  const legTitle=(_rn?(' · '+_rn):'')+(leg==='ret'?' · ขากลับ':'');
+  const html='<!doctype html><html><head><meta charset="utf-8"><title>Van Job Order · '+e(v.name||vanId)+legTitle+' · '+e(date)+'</title>'+vanJobsOrderCss(false)+'</head><body>'+vanJobsOrderInner(date,vanId,routeId,leg)+'<script>setTimeout(function(){try{window.print()}catch(e){}},350)<\/script></body></html>';
   const w=window.open('','_blank'); if(!w){ alert('Please allow pop-ups to print the van job order'); return; }
   w.document.write(html); w.document.close(); w.focus();
 }
@@ -39072,6 +39185,9 @@ function renderBoatAssign(){
 // ════════════════════════════════════════════════════════════════════
 let _vehTab='status';   // 'status' | 'registry' | 'daily'
 let _vehSel=null, _vehZoneF='all', _vehStatusF='all';
+let _vehOwnerF='all';   // matrix ownership filter: 'all' | 'company' (own+rented) | 'partner' (รถร่วม)
+function vehSetOwnerF(o){ _vehOwnerF=o; renderVehicles(); }
+function _vehOwnerMatch(v){ return _vehOwnerF==='all' ? true : _vehOwnerF==='partner' ? (v.ownership==='partner') : (v.ownership!=='partner'); }
 function vehSelect(id){ _vehSel=(_vehSel===id?null:id); renderVehicles(); }
 function vehSetZoneF(z){ _vehZoneF=z; renderVehicles(); }
 function vehSetStatusF(s){ _vehStatusF=s; renderVehicles(); }
@@ -39086,28 +39202,30 @@ function vehMonthShift(n){ const [y,m]=_vehMonth.split('-').map(Number); const d
 function _vehDayJobN(id,date){ let jb=0; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(!(b.ops&&b.ops.vanId===id))return; (b.trips||[]).forEach(t=>{ if((t.date||'')===date) jb++; }); }); return jb; }
 function _vehDayCellInner(v,date){
   const st=(typeof vehStatusOn==='function')?vehStatusOn(v,date):((v.dayStatus&&v.dayStatus[date])||'');
-  const dr=(v.dayRoute&&v.dayRoute[date])||'';
+  const routes=_vehDayRoutes(v,date);
   const jb=_vehDayJobN(v.id,date);
-  const rt=dr&&typeof _vehRoute==='function'?_vehRoute(dr):null; const rc=rt?rt.color:null;
-  let bg='transparent',bd='1px solid #eceae3',fg='#888',txt='';
+  let bg='transparent',bd='1px solid #eceae3',fg='#888',txt='',ttl='';
   if(st==='off'){ bg='#FCEBEB';bd='1px solid #E6C9C3';fg='#A32D2D';txt='&#9941;'; }
   else if(st==='maintenance'){ bg='#FAEEDA';bd='1px solid #EAD9B0';fg='#854F0B';txt='&#128295;'; }
-  else if(rc){ bg=rc;bd='1px solid '+rc;fg='#fff';txt=(typeof _vehRouteAbbr==='function'?_vehRouteAbbr(dr):dr); }
-  else if(jb>0){ bg='#1D9E75';bd='none';fg='#fff';txt=jb; }
-  else if(st==='available'){ bg='#E9F7EF';bd='1px solid #C4E6D5';fg='#0F6E56';txt='&#10003;'; }
-  const jbBadge=(rc&&jb>0)?`<span style="position:absolute;top:-4px;right:-4px;min-width:13px;height:13px;padding:0 2px;border-radius:7px;background:#1B2A55;color:#fff;font-size:8px;line-height:13px;text-align:center;font-weight:700">${jb}</span>`:'';
-  const warn=(jb>0 && (st==='maintenance'||st==='off'))?'<span style="position:absolute;top:-3px;right:-3px;font-size:9px">&#9888;</span>':'';
-  // top-left ✓/✗ = van groups of this route+day fully assigned a vehicle or not
-  let cornerL='';
-  if(rc && st!=='off' && st!=='maintenance'){
-    const g=(typeof _vehGroupsForDay==='function')?_vehGroupsForDay(dr,date):null;
-    const dm=(typeof _vehRouteDemand==='function')?_vehRouteDemand(dr,date):{pickup:0};
-    if((g&&g.total>0) || (dm&&dm.pickup>0)){
-      const ok = g && g.total>0 && g.woVan===0;
-      cornerL=`<span title="${ok?'จัดรถครบ':'ยังจัดรถไม่ครบ'} · กรุ๊ป ${g?g.withVan:0}/${g?g.total:0}" style="position:absolute;top:-4px;left:-4px;width:13px;height:13px;border-radius:50%;background:${ok?'#1D9E75':'#C0392B'};color:#fff;font-size:8px;line-height:13px;text-align:center;font-weight:700;box-shadow:0 0 0 1.5px #fff">${ok?'&#10003;':'&#10005;'}</span>`;
-    }
+  else if(routes.length>=2){
+    // van runs 2+ programs this day → split-colour cell + program count
+    const cols=routes.map(rid=>{ const rt=_vehRoute(rid); return (rt&&rt.color)?rt.color:'#9AA3AF'; });
+    const n=cols.length;
+    const stops=cols.map((c,i)=>`${c} ${Math.round(i/n*100)}%, ${c} ${Math.round((i+1)/n*100)}%`).join(', ');
+    bg=`linear-gradient(135deg, ${stops})`; bd='1px solid rgba(0,0,0,.12)'; fg='#fff'; txt=n;
+    ttl=routes.map(rid=>(typeof _vehRouteAbbr==='function'?_vehRouteAbbr(rid):rid)).join(' + ');
   }
-  return `<div style="position:relative;margin:3px auto;width:28px;height:24px;border-radius:5px;background:${bg};border:${bd};color:${fg};display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-weight:700;font-size:10px;cursor:pointer">${txt}${cornerL}${jbBadge}${warn}</div>`;
+  else if(routes.length===1){
+    const dr=routes[0]; const rt=_vehRoute(dr); const rc=rt?rt.color:null;
+    if(rc){ bg=rc;bd='1px solid '+rc;fg='#fff';txt=(typeof _vehRouteAbbr==='function'?_vehRouteAbbr(dr):dr); }
+    else if(jb>0){ bg='#1D9E75';bd='none';fg='#fff';txt=jb; }
+    else if(st==='available'){ bg='#E9F7EF';bd='1px solid #C4E6D5';fg='#0F6E56';txt=''; }
+  }
+  else if(jb>0){ bg='#1D9E75';bd='none';fg='#fff';txt=jb; }
+  else if(st==='available'){ bg='#E9F7EF';bd='1px solid #C4E6D5';fg='#0F6E56';txt=''; }   // no ✓ mark · availability shown by colour
+  const jbBadge=(routes.length>0&&jb>0)?`<span style="position:absolute;top:-4px;right:-4px;min-width:13px;height:13px;padding:0 2px;border-radius:7px;background:#1B2A55;color:#fff;font-size:8px;line-height:13px;text-align:center;font-weight:700">${jb}</span>`:'';
+  const warn=(jb>0 && (st==='maintenance'||st==='off'))?'<span style="position:absolute;top:-3px;right:-3px;font-size:9px">&#9888;</span>':'';
+  return `<div ${ttl?`title="${ttl}"`:''} style="position:relative;margin:3px auto;width:28px;height:24px;border-radius:5px;background:${bg};border:${bd};color:${fg};display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-weight:700;font-size:10px;cursor:pointer">${txt}${jbBadge}${warn}</div>`;
 }
 // Per-day popup · set zone + status + see trips
 function vehDayPopup(id,date){
@@ -39118,9 +39236,9 @@ function vehDayPopup(id,date){
   // trips today for this van
   const jobs=[]; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(!(b.ops&&b.ops.vanId===id))return; (b.trips||[]).forEach(t=>{ if((t.date||'')===date) jobs.push({b,t}); }); });
   const jrows=jobs.length?jobs.map(x=>{ const a=sbGetAgent(x.b.agentId); const tm=(x.b.ops&&x.b.ops.pickupTimeFinal)||x.t.pickupTime||x.b.pickupTime||'—'; const px=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(x.t.pax||{}):0; return `<div style="display:flex;gap:8px;padding:5px 0;border-top:1px solid #f3f1ea;font-size:11.5px"><span style="font-family:'DM Mono',monospace;color:#185FA5;min-width:50px">${e(tm)}</span><span style="flex:1;min-width:0">${e(x.b.leadPax||x.b.voucherRef||x.b.id)} <span style="color:#8a8a82">· ${e(a?a.name:'')}</span></span><span style="font-family:'DM Mono',monospace">${px} pax</span></div>`; }).join(''):'<div style="font-size:11px;color:#c7c5bb;padding:6px 0">ไม่มีงานวันนี้</div>';
-  const dr=(v.dayRoute&&v.dayRoute[date])||'';
+  const routes=_vehDayRoutes(v,date);
   const fams=(typeof _vehRoutesOpenOn==='function')?_vehRoutesOpenOn(date):[];
-  const rBtn=f=>{ const on=dr===f.id; const z=(typeof _vehRouteZone==='function')?_vehRouteZone(f.id):null; const zl=z==='PK'?'ภูเก็ต':z==='KL'?'เขาหลัก':'—'; const dm=(typeof _vehRouteDemand==='function')?_vehRouteDemand(f.id,date):{pax:0,pickup:0}; const paxChip=dm.pax?`<span style="font-size:10px;font-family:'DM Mono',monospace;font-weight:700;padding:1px 6px;border-radius:6px;background:${on?'rgba(255,255,255,.22)':'#EEF5FC'};color:${on?'#fff':'#185FA5'}">ลค ${dm.pax}</span>`:''; return `<button onclick="vehDaySetRoute('${id}','${date}','${f.id}')" style="display:flex;align-items:center;gap:7px;width:100%;text-align:left;border:1px solid ${on?f.color:'#e3e1da'};background:${on?f.color:'#fff'};color:${on?'#fff':'#444'};border-radius:8px;padding:8px 11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:5px"><span style="width:9px;height:9px;border-radius:50%;background:${on?'#fff':f.color};flex:none"></span><span style="flex:1">${e(f.name)}</span>${paxChip}<span style="font-size:10px;font-family:'DM Mono',monospace;opacity:.85">${(typeof _vehRouteAbbr==='function'?_vehRouteAbbr(f.id):'')} · ${zl}</span></button>`; };
+  const rBtn=f=>{ const on=routes.includes(f.id); const z=(typeof _vehRouteZone==='function')?_vehRouteZone(f.id):null; const zl=z==='PK'?'ภูเก็ต':z==='KL'?'เขาหลัก':'—'; const dm=(typeof _vehRouteDemand==='function')?_vehRouteDemand(f.id,date):{pax:0,pickup:0}; const paxChip=dm.pax?`<span style="font-size:10px;font-family:'DM Mono',monospace;font-weight:700;padding:1px 6px;border-radius:6px;background:${on?'rgba(255,255,255,.22)':'#EEF5FC'};color:${on?'#fff':'#185FA5'}">ลค ${dm.pax}</span>`:''; const chk=on?'<span style="width:15px;height:15px;border-radius:4px;background:#fff;color:'+f.color+';font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:none">&#10003;</span>':'<span style="width:15px;height:15px;border-radius:4px;border:1.5px solid '+f.color+';flex:none"></span>'; return `<button onclick="vehDayToggleRoute('${id}','${date}','${f.id}')" style="display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:1px solid ${on?f.color:'#e3e1da'};background:${on?f.color:'#fff'};color:${on?'#fff':'#444'};border-radius:8px;padding:8px 11px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:5px">${chk}<span style="flex:1">${e(f.name)}</span>${paxChip}<span style="font-size:10px;font-family:'DM Mono',monospace;opacity:.85">${(typeof _vehRouteAbbr==='function'?_vehRouteAbbr(f.id):'')} · ${zl}</span></button>`; };
   const sBtn=(val,lbl,col)=>`<button onclick="vehDaySetStatus('${id}','${date}','${val}')" style="flex:1;border:1px solid ${st===val?col:'#ddd'};background:${st===val?col:'#fff'};color:${st===val?'#fff':'#555'};border-radius:7px;padding:7px 0;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">${lbl}</button>`;
   const ov=document.createElement('div'); ov.id='veh-day-modal';
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:600;display:flex;align-items:center;justify-content:center;padding:20px;font-family:"DM Sans",sans-serif';
@@ -39136,8 +39254,9 @@ function vehDayPopup(id,date){
         <button onclick="vehDayClose();vehStatusOpen('${id}')" style="margin-left:auto;background:#fff;border:1px solid #ddd;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;color:#185FA5">จัดการช่วงสถานะ (จาก–ถึง)</button>
       </div>
       ${(st==='off'||st==='maintenance')?`<div style="background:#FCF4F2;border:1px solid #F0D9D2;border-radius:8px;padding:9px 11px;font-size:11.5px;color:#A32D2D;margin-bottom:4px">รถ${st==='maintenance'?'ติดซ่อม':'หยุดวิ่ง'}วันนี้ — แนะนำไม่จัดเส้นทาง (แก้สถานะที่หน้าสถานะก่อน)</div>`:`
-      <div style="font-size:11px;color:#8a8a82;font-weight:600;margin-bottom:6px">วิ่งเส้นทางไหนวันนี้ <span style="color:#bbb;font-weight:500">· โซนอนุมานจากท่า</span></div>
-      <div style="margin-bottom:4px;max-height:280px;overflow:auto">${fams.length?fams.map(rBtn).join(''):'<div style="font-size:11px;color:#c7c5bb;padding:4px 0">ไม่มีโปรแกรมเปิดวันนี้</div>'}${dr?`<button onclick="vehDaySetRoute('${id}','${date}','')" style="border:1px solid #ddd;background:#fff;color:#A32D2D;border-radius:7px;padding:6px 11px;font-size:11px;cursor:pointer;font-family:inherit;margin-top:2px">ล้างเส้นทาง</button>`:''}</div>`}
+      <div style="font-size:11px;color:#8a8a82;font-weight:600;margin-bottom:6px">วิ่งเส้นทางไหนวันนี้ <span style="color:#bbb;font-weight:500">· เลือกได้หลายเส้นทางถ้าวิ่งหลายงาน</span></div>
+      ${routes.length>=2?`<div style="background:#EEF5FC;border:1px solid #CFE3F5;border-radius:8px;padding:7px 10px;font-size:11.5px;color:#185FA5;margin-bottom:8px;font-weight:600">🚐 วันนี้วิ่ง ${routes.length} เส้นทาง — จะเลือกได้ในทุกเส้นทางตอนจัดรถ (Van Assign)</div>`:''}
+      <div style="margin-bottom:4px;max-height:280px;overflow:auto">${fams.length?fams.map(rBtn).join(''):'<div style="font-size:11px;color:#c7c5bb;padding:4px 0">ไม่มีโปรแกรมเปิดวันนี้</div>'}${routes.length?`<button onclick="vehDayClearRoutes('${id}','${date}')" style="border:1px solid #ddd;background:#fff;color:#A32D2D;border-radius:7px;padding:6px 11px;font-size:11px;cursor:pointer;font-family:inherit;margin-top:2px">ล้างทั้งหมด</button>`:''}</div>`}
       <div style="font-size:11px;color:#185FA5;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-top:12px">งานวันนี้ · ${jobs.length}</div>
       ${jrows}
     </div>
@@ -39162,9 +39281,14 @@ function _vehRouteShort(rid){ const r=_vehRoute(rid); if(!r)return rid; return S
 function _vehRoutesOpenOn(date){ const rs=(typeof ROUTES!=='undefined'&&ROUTES)||[]; const open=rs.filter(r=> typeof bkV2IsRouteOpenOn!=='function' || bkV2IsRouteOpenOn(r.id,date)); return open.length?open:rs; }
 // Customer demand on a route+date · pax = total seat pax · pickup = pax needing transfer (zone PK/KL, not No-Transfer)
 function _vehRouteDemand(routeId,date){ let pax=0,pickup=0; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; (b.trips||[]).forEach(t=>{ if(t.routeId!==routeId||t.date!==date)return; if(t.bookingMode==='charter')return; const p=(typeof getTripPaxTotal==='function')?getTripPaxTotal(t):((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0); pax+=p; const z=t.zone||b.pickupZone||''; if(z&&z!=='NoTransfer'&&z!=='NT')pickup+=p; }); }); return {pax,pickup}; }
-function vehDaySetRoute(id,date,fid){ const v=vehGet(id); if(!v)return; v.dayRoute=v.dayRoute||{}; if(fid){ v.dayRoute[date]=fid; } else { delete v.dayRoute[date]; } const f=_vehFam(fid); vehLog(id,'zone',date+' · เส้นทาง '+(f?f.name:'ล้าง')); sbVehiclesPersist(); _vehDayRefresh(id,date); _vehSumRefresh(); }
+// A van can run MORE THAN ONE program in a day (2 jobs) → dayRoute[date] may be a single routeId (legacy) OR an array of routeIds. Always read via this normalizer.
+function _vehDayRoutes(v,date){ const dr=v&&v.dayRoute&&v.dayRoute[date]; if(!dr)return []; return Array.isArray(dr)?dr.filter(Boolean):[dr]; }
+function vehDaySetRoute(id,date,fid){ const v=vehGet(id); if(!v)return; v.dayRoute=v.dayRoute||{}; if(fid){ v.dayRoute[date]=fid; } else { delete v.dayRoute[date]; } const f=_vehRoute(fid); vehLog(id,'zone',date+' · เส้นทาง '+(f?f.name:'ล้าง')); sbVehiclesPersist(); _vehDayRefresh(id,date); _vehSumRefresh(); }
+// Toggle one route in/out of the day's list (for vans running multiple programs that day)
+function vehDayToggleRoute(id,date,rid){ const v=vehGet(id); if(!v||!rid)return; v.dayRoute=v.dayRoute||{}; const arr=_vehDayRoutes(v,date); const i=arr.indexOf(rid); if(i>=0) arr.splice(i,1); else arr.push(rid); if(arr.length){ v.dayRoute[date]=arr.length===1?arr[0]:arr; } else { delete v.dayRoute[date]; } const f=_vehRoute(rid); vehLog(id,'zone',date+' · '+(i>=0?'เอาออก':'เพิ่ม')+'เส้นทาง '+(f?f.name:rid)); sbVehiclesPersist(); _vehDayRefresh(id,date); _vehSumRefresh(); }
+function vehDayClearRoutes(id,date){ const v=vehGet(id); if(!v||!v.dayRoute)return; delete v.dayRoute[date]; vehLog(id,'zone',date+' · ล้างเส้นทาง'); sbVehiclesPersist(); _vehDayRefresh(id,date); _vehSumRefresh(); }
 // Click cell = cycle program fast (blank → fam1 → fam2 … → blank). Off/maintenance → open detail popup instead.
-function vehDayCellClick(id,date){ const v=vehGet(id); if(!v)return; const st=(typeof vehStatusOn==='function')?vehStatusOn(v,date):''; if(st==='off'||st==='maintenance'){ vehDayPopup(id,date); return; } const rts=(typeof _vehRoutesOpenOn==='function')?_vehRoutesOpenOn(date):[]; if(!rts.length){ vehDayPopup(id,date); return; } const order=['',...rts.map(r=>r.id)]; const cur=(v.dayRoute&&v.dayRoute[date])||''; let i=order.indexOf(cur); if(i<0)i=0; const nx=order[(i+1)%order.length]; vehDaySetRoute(id,date,nx); }
+function vehDayCellClick(id,date){ const v=vehGet(id); if(!v)return; const st=(typeof vehStatusOn==='function')?vehStatusOn(v,date):''; if(st==='off'||st==='maintenance'){ vehDayPopup(id,date); return; } const routes=_vehDayRoutes(v,date); if(routes.length>=2){ vehDayPopup(id,date); return; } /* multi-route day → manage in popup */ const rts=(typeof _vehRoutesOpenOn==='function')?_vehRoutesOpenOn(date):[]; if(!rts.length){ vehDayPopup(id,date); return; } const order=['',...rts.map(r=>r.id)]; const cur=routes[0]||''; let i=order.indexOf(cur); if(i<0)i=0; const nx=order[(i+1)%order.length]; vehDaySetRoute(id,date,nx); }
 function vehSumSelectDay(date){ window._vehSumDay=date; if(typeof renderVehicles==='function') renderVehicles(); }
 function _vehSumRefresh(){ const el=document.getElementById('veh-matrix-summary'); if(el && window._vehSumDay) el.innerHTML=_vehMatrixSummaryHTML(window._vehSumDay); }
 // Summary cards — vehicles per real PROGRAM (route) on the selected day
@@ -39186,7 +39310,7 @@ function _vehGroupsForDay(routeId,day){
 function _vehMatrixSummaryHTML(day){
   const rts=(typeof ROUTES!=='undefined'&&ROUTES)||[];
   const counts={}; let avail=0, busy=0;
-  (SB_VEHICLES||[]).forEach(v=>{ if(!v.active)return; const st=(typeof vehStatusOn==='function')?vehStatusOn(v,day):''; if(st==='off'||st==='maintenance'){ busy++; return; } const r=(v.dayRoute&&v.dayRoute[day])||''; if(r){ counts[r]=(counts[r]||0)+1; } else if(st==='available'){ avail++; } });
+  (SB_VEHICLES||[]).forEach(v=>{ if(!v.active)return; const st=(typeof vehStatusOn==='function')?vehStatusOn(v,day):''; if(st==='off'||st==='maintenance'){ busy++; return; } const rs=_vehDayRoutes(v,day); if(rs.length){ rs.forEach(r=>counts[r]=(counts[r]||0)+1); } else if(st==='available'){ avail++; } });
   let dlbl=day; try{ dlbl=new Date(day+'T12:00:00').toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'short'}); }catch(_){}
   const cards=rts.filter(r=>{ const dm=_vehRouteDemand(r.id,day); return counts[r.id]||dm.pax; }).map(r=>{ const z=(typeof _vehRouteZone==='function')?_vehRouteZone(r.id):null; const zl=z==='PK'?'ภูเก็ต':z==='KL'?'เขาหลัก':'—'; const nv=counts[r.id]||0; const dm=_vehRouteDemand(r.id,day); const grp=_vehGroupsForDay(r.id,day); const needFlag=(dm.pickup>0&&nv===0)?'<span style="font-size:9px;color:#A32D2D;background:#FCEBEB;border-radius:5px;padding:1px 5px;margin-left:4px;font-weight:700">ยังไม่จัดรถ</span>':''; const grpChip=grp.total?`<div style="font-size:10px;color:#534AB7;font-weight:700;margin-top:1px"><span style="font-family:'DM Mono',monospace;font-size:13px">${grp.total}</span> กรุ๊ป${grp.woVan?` <span style="color:#A32D2D;font-weight:700">· ${grp.woVan} ยังไม่มีรถ</span>`:''}</div>`:''; const _ok=grp.total>0&&grp.woVan===0&&!(dm.pickup>0&&nv===0); const _corner=(grp.total>0||dm.pickup>0)?`<span title="${_ok?'จัดรถครบ':'ยังจัดรถไม่ครบ'}" style="position:absolute;top:-6px;left:-6px;width:16px;height:16px;border-radius:50%;background:${_ok?'#1D9E75':'#C0392B'};color:#fff;font-size:10px;line-height:16px;text-align:center;font-weight:700;box-shadow:0 0 0 2px #fff">${_ok?'&#10003;':'&#10005;'}</span>`:''; return `<div style="position:relative;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid ${dm.pickup>0&&nv===0?'#F0D0C8':'rgba(0,0,0,.07)'};border-left:3px solid ${r.color};border-radius:9px;padding:8px 12px">${_corner}<span style="width:18px;height:18px;border-radius:5px;background:${r.color};color:#fff;font-family:'DM Mono',monospace;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">${_vehRouteAbbr(r.id)}</span><div style="min-width:0;flex:1"><div style="font-size:11.5px;font-weight:700;color:#1B2A55;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.name}${needFlag}</div><div style="font-size:10px;color:#8a8a82">${zl} · <span style="color:#185FA5;font-weight:600">ลค ${dm.pax}</span>${dm.pickup<dm.pax?` <span style="color:#aaa">(รับ ${dm.pickup})</span>`:''}</div></div><div style="text-align:right;flex:none"><div><span style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:${r.color}">${nv}</span> <span style="font-size:10px;color:#8a8a82">คัน</span></div>${grpChip}</div></div>`; }).join('');
   const extras=[];
@@ -39619,7 +39743,7 @@ function renderVehicles(){
     const colspanN=dates.length+1;
     const gHd=(col,lbl,n)=>`<tr><td colspan="${colspanN}" style="position:sticky;left:0;padding:8px 11px;background:#fbfbfc;border-bottom:0.5px solid rgba(0,0,0,.05)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${col};vertical-align:1px"></span> <span style="font-weight:700;font-size:12.5px;color:#1B2A55">${lbl}</span> <span style="color:#8a8a82;font-size:11px">· ${n}</span></td></tr>`;
     const gSub=(s,n)=>`<tr><td colspan="${colspanN}" style="position:sticky;left:0;padding:6px 11px 4px 24px;background:#fff"><span style="font-size:11.5px;font-weight:700;color:#534AB7">&#9679; ${esc(s)}</span> <span style="font-size:9.5px;color:#8a8a82">${n}</span></td></tr>`;
-    const matrixRows=vehBuildGrouped(SB_VEHICLES, rowFn, gHd, gSub);
+    const matrixRows=vehBuildGrouped(SB_VEHICLES.filter(_vehOwnerMatch), rowFn, gHd, gSub);
     body=`
       <div id="veh-matrix-scroll" style="overflow:auto;border:1px solid rgba(0,0,0,.08);border-radius:12px;background:#fff;max-height:calc(100vh - var(--topbar,0) - 232px)">
       <div id="veh-matrix-stickytop" style="position:sticky;top:0;z-index:45;background:#fff;padding:10px 12px 8px;box-shadow:0 5px 8px -7px rgba(0,0,0,.22)">
@@ -39630,6 +39754,7 @@ function renderVehicles(){
           <b style="font-size:13px;color:#1B2A55">${esc(monthLbl)}</b>
           <button onclick="vehMonthShift(1)" style="border:none;background:transparent;cursor:pointer;font-size:15px;color:#666;padding:0 6px">&rsaquo;</button>
         </div>
+        ${(function(){ const b=(val,lbl)=>{ const on=_vehOwnerF===val; return `<button onclick="vehSetOwnerF('${val}')" style="border:none;background:${on?'#0F6E56':'transparent'};color:${on?'#fff':'#3F4654'};font-size:11px;font-weight:${on?700:500};padding:5px 12px;cursor:pointer;font-family:inherit">${lbl}</button>`; }; return `<span style="display:inline-flex;border:1px solid #cfe0d8;border-radius:18px;overflow:hidden">${b('all','ทั้งหมด')}${b('company','รถบริษัท+เช่า')}${b('partner','รถร่วม')}</span>`; })()}
         <div style="margin-left:auto;display:flex;gap:9px;font-size:10.5px;color:#8a8a82;flex-wrap:wrap;align-items:center">
           ${((typeof ROUTES!=='undefined'&&ROUTES)||[]).map(r=>`<span title="${esc(r.name)}"><span style="display:inline-flex;align-items:center;justify-content:center;width:15px;height:14px;border-radius:3px;background:${r.color};color:#fff;font-family:'DM Mono',monospace;font-size:8px;font-weight:700;vertical-align:-2px">${_vehRouteAbbr(r.id)}</span> ${esc(_vehRouteShort(r.id))}</span>`).join('')}
           <span style="border-left:1px solid #e5e5e5;padding-left:9px"><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#E9F7EF;border:1px solid #C4E6D5;vertical-align:-1px"></span> พร้อม</span>
@@ -47273,6 +47398,7 @@ function bkV2RenderNewBooking(){
              <div class="bkv2-nb-sec-h" style="margin-bottom:10px;color:var(--bk-navy)">&#9679; Booking Review</div>
              ${bkV2RenderReviewPanel()}
              <div style="height:1px;background:var(--border);margin:14px 0 12px"></div>
+             ${bkV2RenderAttachSection()}
              <div style="margin-bottom:10px">${bkV2RenderActionMeta()}</div>
              <div style="display:flex;flex-direction:column;gap:6px">
                ${bkV2RenderSubmitButton()}
@@ -49825,6 +49951,8 @@ function bkV2RenderTab2(){
     // zone subgroups · CHARTER (เหมาลำ) bookings get their own pseudo-zone '__CHARTER__' rendered FIRST
     //   (full manifest table · boat-assign + all columns work the same · header restyled as a Charter card)
     const zg = {};
+    // Charter (เหมาลำ) → own pseudo-zone card (all modes · shown at top). Van grouping for charter uses the
+    // '__CHARTER__' namespace consistently (see _bkV2InZone / heal), so picking a van works here too.
     grp.forEach(r=>{ const zk=(r.charter && !r.cxl)?'__CHARTER__':r.zone; (zg[zk]=zg[zk]||[]).push(r); });
     const _zord=z=> z==='__CHARTER__'? -100 : bkV2ZoneOrder(z);
     const zones = Object.keys(zg).sort((a,b)=>_zord(a)-_zord(b));
@@ -50030,7 +50158,7 @@ function bkV2RenderTab2(){
             <td>${(bk.voucherRef && bk.voucherRef.trim().toLowerCase()!==String(lead||'').trim().toLowerCase())?`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)}">${esc(bk.voucherRef)}</span>`:'<span class="t2-dim">—</span>'}</td>
             <td style="${bk.agentId?'padding:0':''}">${bk.agentId?(()=>{const _ac=bkV2AgentColor(bk.agentId);return `<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="${esc(norm.agentName)} · คลิกเปลี่ยนสี · Alt+คลิก = สีอัตโนมัติ" style="background:${_ac};color:${bkV2ContrastInk(_ac)};margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;box-shadow:0 1px 2px rgba(0,0,0,.10)">${esc(norm.agentName)}</div>`;})():`<span class="t2-agency">${esc(norm.agentName)}</span>`}</td>
             <td>
-              <span class="t2-lead">${esc(lead)}</span>${pcBadge}${(function(){var _el=(typeof bkV2EditLockActive==='function')&&bkV2EditLockActive(bk);return _el?`<span title="${esc(_el.by)} กำลังแก้ไขอยู่ (~${_el.mins} นาที)" style="background:#E7F0FC;color:#185FA5;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">&#9999; ${esc(_el.by)} แก้อยู่</span>`:'';})()}${a.split?`<span title="booking นี้ถูกแยกขึ้นหลายคัน" style="background:#EDE7FB;color:#5B289A;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">&#9986; แยก ${a.head}</span>`:''}${bk.status==='pending_approval'?`<span title="เกิน capacity · รอผจก.อนุมัติ" style="background:#FCEBEB;color:#A32D2D;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">รออนุมัติ</span>`:''}${(function(){ if(r.cxl||typeof bkV2FindDuplicateBookings!=='function')return''; const _dd=bkV2FindDuplicateBookings(bk,bk.id); if(!_dd.length)return''; const _vc=_dd.map(x=>x.bk.voucherRef||x.bk.code||x.bk.id).slice(0,3).join(', '); const _rs=[...new Set(_dd.reduce((a,x)=>a.concat(x.reasons),[]))].join(' · '); return `<span title="อาจเป็นการลงซ้ำกับ: ${esc(_vc)} (${esc(_rs)}) — ตรวจสอบ/ลบตัวซ้ำ" style="background:#FBE9D6;color:#9A5B00;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:help">&#9888; อาจซ้ำ</span>`; })()}${r.cxl?`<span class="t2-cxlbadge" title="${bk.cancellation?('Cancelled · '+(bk.cancellation.chargeType==='full'?'Full charge':bk.cancellation.chargeType==='partial'?'Partial charge':'No charge')+(bk.cancellation.reason?' · '+esc(bk.cancellation.reason):'')):'Cancelled'}">CXL</span>`:''}
+              <span class="t2-lead">${esc(lead)}</span>${pcBadge}${(function(){var _el=(typeof bkV2EditLockActive==='function')&&bkV2EditLockActive(bk);return _el?`<span title="${esc(_el.by)} กำลังแก้ไขอยู่ (~${_el.mins} นาที)" style="background:#E7F0FC;color:#185FA5;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">&#9999; ${esc(_el.by)} แก้อยู่</span>`:'';})()}${a.split?`<span title="booking นี้ถูกแยกขึ้นหลายคัน" style="background:#EDE7FB;color:#5B289A;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">&#9986; แยก ${a.head}</span>`:''}${bk.status==='pending_approval'?`<span title="เกิน capacity · รอผจก.อนุมัติ" style="background:#FCEBEB;color:#A32D2D;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">รออนุมัติ</span>`:''}${(function(){ if(r.cxl||!bk.agentId||typeof docCheckStatus!=='function') return ''; var _st=docCheckStatus(bk); var _nf=(bk.attachments||[]).length; var _m={verified:['#E6F5EA','#1B7F4B','✅','เอกสารตรวจแล้ว'],issue:['#FCEBEB','#B5271F','⚠','เอกสารมีปัญหา'],pending:['#FFF6E0','#8A5B00','📎','รอตรวจเอกสาร ('+_nf+' ไฟล์)']}[_st]; if(!_m) return ''; return `<span onclick="event.stopPropagation();window._docCheck&&(_docCheck.date='${esc(date)}',_docCheck.openId='${esc(bk.id)}');nav(document.querySelector('[data-view=doccheck]'))" title="${esc(_m[3])} · คลิกไปตรวจเอกสาร" style="background:${_m[0]};color:${_m[1]};font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:pointer">${_m[2]}${_st==='pending'?(' '+_nf):''}</span>`; })()}${(function(){ if(r.cxl||typeof bkV2FindDuplicateBookings!=='function')return''; const _dd=bkV2FindDuplicateBookings(bk,bk.id); if(!_dd.length)return''; const _vc=_dd.map(x=>x.bk.voucherRef||x.bk.code||x.bk.id).slice(0,3).join(', '); const _rs=[...new Set(_dd.reduce((a,x)=>a.concat(x.reasons),[]))].join(' · '); return `<span title="อาจเป็นการลงซ้ำกับ: ${esc(_vc)} (${esc(_rs)}) — ตรวจสอบ/ลบตัวซ้ำ" style="background:#FBE9D6;color:#9A5B00;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:help">&#9888; อาจซ้ำ</span>`; })()}${r.cxl?`<span class="t2-cxlbadge" title="${bk.cancellation?('Cancelled · '+(bk.cancellation.chargeType==='full'?'Full charge':bk.cancellation.chargeType==='partial'?'Partial charge':'No charge')+(bk.cancellation.reason?' · '+esc(bk.cancellation.reason):'')):'Cancelled'}">CXL</span>`:''}
               ${others.length?`<button class="t2-more" onclick="event.stopPropagation();bkV2Tab2TogglePax('${rowId}')"><span id="${rowId}-ic" style="display:inline-block">▾</span> +${others.length}</button>`:'<span class="t2-dim t2-leadonly">lead only</span>'}
               ${(bk.rebook && bk.rebook.to===date)?`<div class="t2-movedin" title="Rescheduled from ${esc(bk.rebook.from)}${bk.rebook.reason==='weather'?' due to weather':(bk.reschedule&&bk.reschedule.reason?(' · '+esc(bk.reschedule.reason)):'')}">&#8617; Moved from ${esc(String(bk.rebook.from).slice(5))}${bk.rebook.reason==='weather'?' · weather':''}</div>`:''}
             </td>
@@ -52256,6 +52384,194 @@ function bkV2GenerateBookingCode(){
   const rand = (Math.random().toString(36).slice(2,6)+'0000').slice(0,4).toUpperCase();
   return `${prefix}${seq}-${rand}`;
 }
+// ── Document attachments (New Booking · B2B/agent) · files stored server-side, booking keeps only refs ──
+function bkV2AttachDraftId(){ return _bkV2.editingId || (_bkV2.newBooking && _bkV2.newBooking.code) || ''; }
+function bkV2AttachListHTML(){
+  const d=_bkV2.newBooking; const list=(d&&Array.isArray(d.attachments))?d.attachments:[];
+  const esc=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+  if(!list.length) return '<div style="font-size:12px;color:var(--ink-soft);padding:12px;border:1px dashed var(--border);border-radius:10px;text-align:center">ยังไม่มีเอกสารแนบ — อัปโหลด / Capture หน้าจอ / วางรูป ('+(_bkV2IsMac()?'Cmd+V':'Ctrl+V')+')</div>';
+  return '<div style="display:flex;flex-wrap:wrap;gap:10px">'+list.map(a=>{
+    const isImg=/^image\//.test(a.mime||''); const url='/api/attach/'+encodeURIComponent(a.id);
+    const thumb=isImg?`<img src="${url}" loading="lazy" style="width:100%;height:84px;object-fit:cover;display:block">`:`<div style="width:100%;height:84px;display:flex;align-items:center;justify-content:center;background:#F4F2EC;font-size:26px">📄</div>`;
+    const kindLbl=a.kind==='capture'?'🖥':a.kind==='paste'?'📋':'📎';
+    return `<div style="width:120px;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:#fff">
+      <a href="${url}" target="_blank" rel="noopener" title="เปิดดูเต็ม">${thumb}</a>
+      <div style="padding:5px 7px">
+        <div style="font-size:10px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(a.name)}">${kindLbl} ${esc(a.name||'file')}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:3px">
+          <span style="font-size:9px;color:var(--ink-soft)">${a.size?Math.round(a.size/1024)+'KB':''}</span>
+          <button type="button" onclick="bkV2AttachRemove('${esc(a.id)}')" title="ลบ" style="border:none;background:transparent;color:#C0392B;font-size:11px;font-weight:600;cursor:pointer">ลบ</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('')+'</div>';
+}
+function _bkV2IsMac(){ try{ const p=(navigator.userAgentData&&navigator.userAgentData.platform)||navigator.platform||navigator.userAgent||''; return /mac|iphone|ipad|ipod/i.test(p); }catch(e){ return true; } }
+function bkV2RenderAttachSection(){
+  const d=_bkV2.newBooking; if(!d) return '';
+  if(!d.agentId) return '';   // เฉพาะ B2B/agent
+  const _mac=_bkV2IsMac(); const _shot=_mac?'Cmd+Shift+4':'Win+Shift+S'; const _paste=_mac?'Cmd+V':'Ctrl+V';
+  return `<div class="bkv2-nb-sec" id="bkv2-attach-sec">
+    <div class="bkv2-nb-sec-hd"><span class="bkv2-nb-sec-dot"></span><span class="bkv2-nb-sec-ttl">Documents</span><span style="font-size:10px;font-weight:700;color:#185FA5;background:#EAF3FB;padding:2px 8px;border-radius:10px">B2B</span></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <label title="อัปโหลดไฟล์ (PDF / รูป)" style="display:inline-flex;align-items:center;justify-content:center;background:var(--bk-navy);color:#fff;border-radius:9px;width:42px;height:36px;font-size:17px;cursor:pointer">📎<input type="file" accept="image/*,application/pdf" multiple style="display:none" onchange="bkV2AttachFromInput(this)"></label>
+      <button type="button" title="Capture หน้าจอ" onclick="bkV2AttachCapture()" style="display:inline-flex;align-items:center;justify-content:center;background:#fff;color:var(--bk-navy);border:1px solid var(--border);border-radius:9px;width:42px;height:36px;font-size:17px;cursor:pointer">🖥</button>
+    </div>
+    <div style="font-size:10.5px;color:var(--ink-soft);line-height:1.5;margin-bottom:10px">📋 ถ่ายหน้าจอ (${_shot}) แล้วกด <b style="color:var(--ink)">${_paste}</b> วางตรงนี้ได้เลย</div>
+    <div id="bkv2-attach-list">${bkV2AttachListHTML()}</div>
+  </div>`;
+}
+function bkV2RefreshAttachSection(){ const el=document.getElementById('bkv2-attach-list'); if(el) el.innerHTML=bkV2AttachListHTML(); }
+function _bkV2DownscaleImage(file,maxDim,cb){ try{ const img=new Image(); const url=URL.createObjectURL(file); img.onload=()=>{ let w=img.naturalWidth||img.width,h=img.naturalHeight||img.height; const sc=Math.min(1,maxDim/Math.max(w,h||1)); const cw=Math.max(1,Math.round(w*sc)),ch=Math.max(1,Math.round(h*sc)); const c=document.createElement('canvas'); c.width=cw; c.height=ch; c.getContext('2d').drawImage(img,0,0,cw,ch); c.toBlob(b=>{ URL.revokeObjectURL(url); cb(b,'image/jpeg'); },'image/jpeg',0.85); }; img.onerror=()=>{ URL.revokeObjectURL(url); cb(null); }; img.src=url; }catch(e){ cb(null); } }
+function bkV2AttachUpload(file,kind){
+  const d=_bkV2.newBooking; if(!d||!file) return;
+  const bid=bkV2AttachDraftId(); if(!bid){ alert('เปิดฟอร์ม booking ก่อนแนบไฟล์'); return; }
+  const post=(blob,mime,name)=>{ if(blob&&blob.size>6*1024*1024){ alert('ไฟล์ใหญ่เกิน 6MB · กรุณาย่อ/บีบอัดก่อน'); return; } const fr=new FileReader(); fr.onload=()=>{ const b64=String(fr.result).split(',')[1]||''; fetch('/api/attach',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bookingId:bid,filename:name,mime:mime,dataB64:b64})}).then(r=>r.json()).then(j=>{ if(j&&j.error){ alert('อัปโหลดไม่สำเร็จ: '+j.error); return; } d.attachments=Array.isArray(d.attachments)?d.attachments:[]; d.attachments.push({id:j.id,name:j.filename,mime:j.mime,size:j.size,kind:kind||'upload',by:(window.LA_ME&&(LA_ME.name||LA_ME.username))||'',at:new Date().toISOString()}); bkV2RefreshAttachSection(); }).catch(e=>alert('อัปโหลดไม่สำเร็จ: '+e.message)); }; fr.readAsDataURL(blob); };
+  if(/^image\//.test(file.type||'')){ _bkV2DownscaleImage(file,1600,(b,m)=>{ if(b) post(b,m,((file.name||'image').replace(/\.[^.]+$/,''))+'.jpg'); else post(file,file.type,file.name||'image'); }); }
+  else { post(file,file.type||'application/octet-stream',file.name||'file'); }
+}
+function bkV2AttachFromInput(inp){ const fs=(inp&&inp.files)?Array.prototype.slice.call(inp.files):[]; fs.forEach(f=>bkV2AttachUpload(f,'upload')); if(inp) inp.value=''; }
+function bkV2AttachCapture(){
+  if(!(navigator.mediaDevices&&navigator.mediaDevices.getDisplayMedia)){ alert('เบราว์เซอร์นี้ไม่รองรับ Capture · ใช้ อัปโหลด หรือ วางรูป ('+(_bkV2IsMac()?'Cmd+V':'Ctrl+V')+') แทน'); return; }
+  navigator.mediaDevices.getDisplayMedia({video:true}).then(stream=>{ const v=document.createElement('video'); v.srcObject=stream; v.muted=true; v.play(); setTimeout(()=>{ try{ const c=document.createElement('canvas'); c.width=v.videoWidth||1280; c.height=v.videoHeight||720; c.getContext('2d').drawImage(v,0,0,c.width,c.height); stream.getTracks().forEach(t=>t.stop()); c.toBlob(b=>{ if(b) bkV2AttachUpload(new File([b],'capture-'+Date.now()+'.jpg',{type:'image/jpeg'}),'capture'); },'image/jpeg',0.9); }catch(e){ try{stream.getTracks().forEach(t=>t.stop());}catch(_){} } },350); }).catch(e=>{});
+}
+function bkV2AttachRemove(id){ const d=_bkV2.newBooking; if(!d) return; if(!confirm('ลบเอกสารนี้?')) return; fetch('/api/attach/'+encodeURIComponent(id),{method:'DELETE'}).catch(()=>{}); d.attachments=(d.attachments||[]).filter(a=>a.id!==id); bkV2RefreshAttachSection(); }
+// paste-to-attach · active only while the New Booking attach section is on screen
+document.addEventListener('paste', function(e){ try{ if(typeof _bkV2==='undefined'||!_bkV2||!_bkV2.newBooking) return; if(!document.getElementById('bkv2-attach-sec')) return; const items=(e.clipboardData&&e.clipboardData.items)||[]; for(let i=0;i<items.length;i++){ const it=items[i]; if(it.type&&it.type.indexOf('image')===0){ const f=it.getAsFile(); if(f){ e.preventDefault(); bkV2AttachUpload(f,'paste'); } } } }catch(_){}; });
+
+// ════════ Document Check (sidebar · verify B2B/agent bookings against attached documents) ════════
+const _docCheck = { date: (typeof TODAY_STR!=='undefined'?TODAY_STR:new Date().toISOString().slice(0,10)), filter:'all', openId:null };
+const DOCCHK_ITEMS = [ {k:'route',label:'เส้นทาง / โปรแกรม'},{k:'date',label:'วันเดินทาง'},{k:'lead',label:'ชื่อ'},{k:'pax',label:'จำนวนคน'},{k:'voucher',label:'Voucher / Ref'},{k:'payment',label:'Payment'} ];
+function _docIsB2B(b){ return !!(b && b.schemaVer===2 && b.agentId); }   // B2B/agent bookings only
+function docCheckStatus(bk){ const dc=bk&&bk.docCheck; if(dc&&dc.status) return dc.status; const n=((bk&&bk.attachments)||[]).length; return n?'pending':'nofiles'; }
+function _docBadge(st){ if(st==='verified') return {t:'✅ ตรวจแล้ว',bg:'#E6F5EA',c:'#1B7F4B'}; if(st==='issue') return {t:'⚠ มีปัญหา',bg:'#FCEBEB',c:'#B5271F'}; if(st==='pending') return {t:'⏳ รอตรวจ',bg:'#FFF6E0',c:'#8A5B00'}; return {t:'📄 ยังไม่แนบ',bg:'#F0F0EC',c:'#8a8a82'}; }
+function _docCheckPersist(){ try{ acctPersistBookings(); }catch(e){ try{ const k=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2'); const o=JSON.parse(localStorage.getItem(k)||'{}'); o.sb_bookings=SB_BOOKINGS; localStorage.setItem(k,JSON.stringify(o)); }catch(_){} } }
+function docCheckSetDate(shift){ const d=new Date(_docCheck.date+'T12:00:00'); d.setDate(d.getDate()+shift); _docCheck.date=d.toISOString().slice(0,10); _docCheck.calOpen=false; renderDocCheck(); }
+function docCheckToday(){ _docCheck.date=(typeof TODAY_STR!=='undefined'?TODAY_STR:new Date().toISOString().slice(0,10)); _docCheck.calOpen=false; renderDocCheck(); }
+function docCheckToggleCal(){ _docCheck.calOpen=!_docCheck.calOpen; if(_docCheck.calOpen) _docCheck.calMonth=_docCheck.date.slice(0,7); renderDocCheck(); }
+function docCheckCalShift(n){ const m=_docCheck.calMonth||_docCheck.date.slice(0,7); const d=new Date(+m.slice(0,4),+m.slice(5,7)-1+n,1); _docCheck.calMonth=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); renderDocCheck(); }
+function docCheckPickDate(ds){ _docCheck.date=ds; _docCheck.calOpen=false; renderDocCheck(); }
+function _docCheckCalHTML(e){
+  const m=_docCheck.calMonth||_docCheck.date.slice(0,7); const yy=+m.slice(0,4), mm=+m.slice(5,7);
+  const first=new Date(yy,mm-1,1); const startDow=(first.getDay()+6)%7; const dim=new Date(yy,mm,0).getDate();
+  const monLbl=first.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+  const today=(typeof TODAY_STR!=='undefined'?TODAY_STR:new Date().toISOString().slice(0,10));
+  let cells=''; for(let i=0;i<startDow;i++) cells+='<div></div>';
+  for(let d=1;d<=dim;d++){ const ds=yy+'-'+String(mm).padStart(2,'0')+'-'+String(d).padStart(2,'0'); const sel=ds===_docCheck.date; const isT=ds===today;
+    cells+=`<div onclick="docCheckPickDate('${ds}')" style="text-align:center;font-size:11px;padding:5px 0;border-radius:6px;cursor:pointer;${sel?'background:#1B2A55;color:#fff;font-weight:700':(isT?'background:#EAF3FB;color:#185FA5;font-weight:700':'color:#3F4654')}">${d}</div>`; }
+  return `<div onclick="event.stopPropagation()" style="position:absolute;right:0;top:48px;background:#fff;border:1px solid #e3e6e1;border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.18);padding:12px;z-index:20;width:252px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><button onclick="docCheckCalShift(-1)" style="border:none;background:transparent;cursor:pointer;font-size:16px;color:#888">&lsaquo;</button><span style="font-size:13px;font-weight:700">${monLbl}</span><button onclick="docCheckCalShift(1)" style="border:none;background:transparent;cursor:pointer;font-size:16px;color:#888">&rsaquo;</button></div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;font-size:10px;color:#9aa0aa;text-align:center;margin-bottom:3px"><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div><div>S</div></div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">${cells}</div>
+  </div>`;
+}
+function docCheckSetFilter(f){ _docCheck.filter=f; renderDocCheck(); }
+function docCheckOpen(bkId){ _docCheck.openId=bkId; renderDocCheck(); }
+function docCheckClose(){ _docCheck.openId=null; renderDocCheck(); }
+function docCheckToggleItem(bkId,k){ if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return; const bk=SB_BOOKINGS.find(b=>b.id===bkId); if(!bk) return; bk.docCheck=bk.docCheck||{status:'pending',items:{}}; bk.docCheck.items=bk.docCheck.items||{}; bk.docCheck.items[k]=!bk.docCheck.items[k]; _docCheckPersist(); renderDocCheck(); }
+function docCheckSetStatus(bkId,status){ if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return; const bk=SB_BOOKINGS.find(b=>b.id===bkId); if(!bk) return; bk.docCheck=bk.docCheck||{items:{}}; bk.docCheck.status=status; bk.docCheck.by=(typeof laBy==='function'?laBy():'') ; bk.docCheck.at=new Date().toISOString(); _docCheckPersist(); if(typeof bkV2AddHistory==='function') bkV2AddHistory(bk,'edit','Document check · '+(status==='verified'?'✅ verified':status==='issue'?'⚠ issue':status)+((bk.docCheck.note)?(' · '+bk.docCheck.note):''),'DocCheck'); renderDocCheck(); }
+function docCheckSetNote(bkId,val){ const bk=SB_BOOKINGS.find(b=>b.id===bkId); if(!bk) return; bk.docCheck=bk.docCheck||{items:{}}; bk.docCheck.note=val; _docCheckPersist(); }   // no re-render (keep focus)
+function _docCheckList(date){ const out=[]; (SB_BOOKINGS||[]).forEach(b=>{ if(!_docIsB2B(b)) return; if(b.status==='rejected') return; const t=(b.trips||[]).find(tt=>(tt.date||'')===date); if(!t) return; out.push({bk:b,trip:t}); }); out.sort((a,b)=>String(a.bk.voucherRef||a.bk.id).localeCompare(String(b.bk.voucherRef||b.bk.id))); return out; }
+function renderDocCheck(){
+  const host=document.getElementById('doccheck-host'); if(!host) return;
+  const e=s=>String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
+  const date=_docCheck.date;
+  let rows=_docCheckList(date);
+  const cnt={all:rows.length,pending:0,verified:0,issue:0,nofiles:0};
+  rows.forEach(r=>{ cnt[docCheckStatus(r.bk)]=(cnt[docCheckStatus(r.bk)]||0)+1; });
+  if(_docCheck.filter!=='all') rows=rows.filter(r=>docCheckStatus(r.bk)===_docCheck.filter);
+  let dlbl=date; try{ dlbl=new Date(date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }catch(_){}
+  const rName=id=>((typeof getRoute==='function'?getRoute(id):null)||{}).name||id;
+  const chip=(f,lbl,n,col)=>`<span onclick="docCheckSetFilter('${f}')" style="cursor:pointer;font-size:12px;padding:5px 12px;border-radius:16px;font-weight:600;${_docCheck.filter===f?'background:'+(col||'#1B2A55')+';color:#fff':'background:#fff;border:1px solid #dfe3e8;color:#5a6b62'}">${lbl} <b style="font-variant-numeric:tabular-nums">${n}</b></span>`;
+  const th='padding:9px 11px;font-size:10px;color:#7a8088;font-weight:700;text-transform:uppercase;letter-spacing:.04em;text-align:left;border-bottom:1px solid #e6e8e3;white-space:nowrap';
+  const rowHtml = rows.length ? rows.map(r=>{
+    const b=r.bk, t=r.trip; const ag=(typeof sbGetAgent==='function'?sbGetAgent(b.agentId):null);
+    const st=docCheckStatus(b); const bd=_docBadge(st); const nf=(b.attachments||[]).length;
+    const pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
+    const sel=_docCheck.openId===b.id;
+    return `<tr onclick="docCheckOpen('${e(b.id)}')" style="cursor:pointer;border-bottom:1px solid #eef0ec;${sel?'background:#EAF3FB':''}">
+      <td style="padding:9px 11px;font-size:12.5px;font-weight:600;color:#15396B">${e(b.voucherRef||b.code||b.id)}</td>
+      <td style="padding:6px 11px">${ag?(function(){var _c=(typeof bkV2AgentColor==='function')?bkV2AgentColor(b.agentId):'#EAF3FB';var _i=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(_c):'#1B2A55';return `<span style="background:${_c};color:${_i};padding:5px 11px;border-radius:8px;font-size:12px;font-weight:600;display:inline-block;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e(ag.name)}</span>`;})():'<span style="color:#3F4654">-</span>'}</td>
+      <td style="padding:9px 11px;font-size:12.5px;color:#1B2A55;font-weight:600">${e(b.leadPax||'-')}</td>
+      <td style="padding:9px 11px;font-size:12px;color:#5a6b62">${e(rName(t.routeId))}</td>
+      <td style="padding:9px 11px;text-align:center;font-size:13px;font-weight:700;color:#15396B">${pax}</td>
+      <td style="padding:9px 11px;text-align:center;font-size:12px;color:${nf?'#185FA5':'#c00'}">📎 ${nf}</td>
+      <td style="padding:9px 11px"><span style="font-size:11px;font-weight:700;background:${bd.bg};color:${bd.c};padding:3px 10px;border-radius:9px;white-space:nowrap">${bd.t}</span></td>
+      <td style="padding:9px 11px;text-align:right"><button onclick="event.stopPropagation();docCheckOpen('${e(b.id)}')" style="background:#0F6E56;color:#fff;border:none;border-radius:7px;padding:5px 13px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">ตรวจ</button></td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="8" style="padding:40px;text-align:center;color:#b7bcc2;font-size:13px">ไม่มี booking B2B ที่ต้องตรวจในวันนี้</td></tr>`;
+  const table=`<div style="background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:12px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="background:#F4F7F5"><th style="${th}">Voucher</th><th style="${th}">Agent</th><th style="${th}">Lead</th><th style="${th}">เส้นทาง</th><th style="${th};text-align:center">Pax</th><th style="${th};text-align:center">ไฟล์</th><th style="${th}">สถานะ</th><th style="${th}"></th></tr></thead>
+      <tbody>${rowHtml}</tbody>
+    </table></div>`;
+  const header=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+    <div><div style="font-size:22px;font-weight:700;color:#1A1A1A">📑 ตรวจเอกสาร · Document Check <span style="font-size:11px;font-weight:600;color:#185FA5;background:#EAF3FB;padding:3px 10px;border-radius:12px;vertical-align:middle">B2B / Agent</span></div>
+      <div style="display:flex;gap:8px;margin-top:11px;flex-wrap:wrap">${chip('all','ทั้งหมด',cnt.all)}${chip('pending','⏳ รอตรวจ',cnt.pending||0,'#8A5B00')}${chip('verified','✅ ตรวจแล้ว',cnt.verified||0,'#1B7F4B')}${chip('issue','⚠ มีปัญหา',cnt.issue||0,'#B5271F')}${chip('nofiles','ยังไม่แนบ',cnt.nofiles||0,'#8a8a82')}</div></div>
+    <div style="position:relative">
+      <div style="display:inline-flex;align-items:center;gap:10px;background:#F1EFEA;border-radius:18px;padding:5px 10px"><button onclick="docCheckSetDate(-1)" style="border:none;background:transparent;cursor:pointer;font-size:19px;color:#888;padding:0 5px">&lsaquo;</button><b onclick="docCheckToggleCal()" title="เลือกวันจากปฏิทิน" style="font-size:18px;font-weight:700;color:#1A1A1A;min-width:230px;text-align:center;letter-spacing:-.01em;cursor:pointer">📅 ${e(dlbl)}</b><button onclick="docCheckSetDate(1)" style="border:none;background:transparent;cursor:pointer;font-size:19px;color:#888;padding:0 5px">&rsaquo;</button><button onclick="docCheckToday()" style="border:1px solid #d7dbe2;background:#fff;border-radius:12px;padding:5px 12px;font-size:11.5px;font-weight:600;cursor:pointer;color:#185FA5;margin-left:2px">วันนี้</button></div>
+      ${_docCheck.calOpen?_docCheckCalHTML(e):''}
+    </div>
+  </div>`;
+  const drawer = _docCheck.openId ? _docCheckDrawer(_docCheck.openId, e, rName) : '';
+  host.innerHTML = `<div>${header}${table}</div>${drawer}`;
+}
+function _docCheckDrawer(bkId, e, rName){
+  const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return '';
+  const ag=(typeof sbGetAgent==='function'?sbGetAgent(b.agentId):null);
+  const dc=b.docCheck||{items:{}}; const items=dc.items||{};
+  const files=(b.attachments||[]);
+  const _pt=ag&&ag.payType; const payLbl=_pt==='proforma'?'Pro Forma':_pt==='cot'?'Cash on tour':_pt==='invoice'?'Invoice (credit)':(_pt?String(_pt):'-');
+  const _agc=(typeof bkV2AgentColor==='function')?bkV2AgentColor(b.agentId):'#EAF3FB'; const _agi=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(_agc):'#1B2A55';
+  const sm=b.specialMeals||{}; const _diet=[]; if(+sm.veg)_diet.push('มังสวิรัติ '+sm.veg); if(+sm.vegan)_diet.push('วีแกน '+sm.vegan); if(+sm.halal)_diet.push('ฮาลาล '+sm.halal); const _al=((typeof bkV2AllergyText==='function')?bkV2AllergyText(sm):'')||sm.allergies||''; if(_al)_diet.push('แพ้: '+_al); const dietStr=_diet.length?e(_diet.join(' · ')):'-';
+  const fld=(lbl,val)=>`<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid #f0f2ee"><span style="flex:0 0 84px;font-size:10px;color:#8a8a82;text-transform:uppercase;letter-spacing:.03em;font-weight:600">${e(lbl)}</span><span style="flex:1;font-size:13px;color:#1B2A55;font-weight:600">${val}</span></div>`;
+  const subrow=(l,v)=>`<div style="display:flex;gap:10px;margin-bottom:3px"><span style="flex:0 0 60px;font-size:10px;color:#8a8a82;text-transform:uppercase;letter-spacing:.03em;font-weight:600">${l}</span><span style="flex:1;font-size:13px;color:#1B2A55;font-weight:600">${v}</span></div>`;
+  const tripsBlock=(b.trips||[]).map((t,i)=>{ const rn=rName(t.routeId); const p=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; return (i>0?'<div style="border-top:1px dashed #e8eae6;margin:7px 0"></div>':'')+subrow('วันที่',e(t.date||'-'))+subrow('ทริป',e(rn))+subrow('จำนวน',p+' pax'); }).join('')||'-';
+  const fileHtml = files.length ? files.map(a=>{ const url='/api/attach/'+encodeURIComponent(a.id); const isImg=/^image\//.test(a.mime||''); const isPdf=/pdf/i.test(a.mime||'');
+    return `<div style="margin-bottom:14px;border:1px solid #e3e6e1;border-radius:10px;overflow:hidden;background:#fff">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 11px;background:#F7F8F6;border-bottom:1px solid #eef0ec"><span style="font-size:12px;color:#3F4654;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.kind==='capture'?'🖥':a.kind==='paste'?'📋':'📎'} ${e(a.name||'file')}</span><a href="${url}" target="_blank" rel="noopener" style="font-size:11.5px;color:#185FA5;text-decoration:none;flex:none;margin-left:8px">เปิดเต็ม ↗</a></div>
+      ${isImg?`<a href="${url}" target="_blank" rel="noopener"><img src="${url}" style="width:100%;display:block"></a>`:isPdf?`<iframe src="${url}" style="width:100%;height:640px;border:none"></iframe>`:`<div style="padding:24px;text-align:center;font-size:12px;color:#8a8a82">📄 ${e(a.name||'file')} — <a href="${url}" target="_blank">เปิด</a></div>`}
+    </div>`; }).join('') : `<div style="padding:34px;text-align:center;color:#b7bcc2;font-size:13px;border:1px dashed #d7dbe2;border-radius:10px">ยังไม่มีเอกสารแนบ<br><span style="font-size:11px">แนบได้ในหน้า New Booking (แก้ไข booking นี้)</span></div>`;
+  const chkHtml = DOCCHK_ITEMS.map(it=>{ const on=!!items[it.k]; return `<label style="display:flex;align-items:center;gap:9px;padding:7px 9px;border:1px solid ${on?'#BFE3CC':'#e3e6e1'};border-radius:9px;background:${on?'#EAF7EF':'#fff'};cursor:pointer;margin-bottom:6px"><span onclick="docCheckToggleItem('${e(bkId)}','${it.k}')" style="width:19px;height:19px;border-radius:5px;flex:none;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;${on?'background:#1B7F4B;color:#fff':'border:1.5px solid #c3c8cf;color:transparent'}">✓</span><span style="font-size:12.5px;color:#1B2A55;font-weight:600">${e(it.label)}</span></label>`; }).join('');
+  const allTicked=DOCCHK_ITEMS.every(it=>items[it.k]);
+  const st=docCheckStatus(b); const bd=_docBadge(st);
+  return `<div onclick="docCheckClose()" style="position:fixed;inset:0;background:rgba(15,25,40,.20);z-index:600"></div>
+    <div style="position:fixed;top:0;right:0;bottom:0;width:min(1357px,95vw);background:#fff;z-index:601;box-shadow:-16px 0 54px -12px rgba(0,0,0,.34);border-left:1px solid #e3e6e1;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid #eef0ec;flex:none">
+      <div><b style="font-size:14px;color:#1B2A55">${e(b.voucherRef||b.code||b.id)}</b> <span style="font-size:11px;font-weight:700;background:${bd.bg};color:${bd.c};padding:2px 9px;border-radius:8px;margin-left:6px">${bd.t}</span></div>
+      <button onclick="docCheckClose()" style="background:#fff;border:1px solid #d7dbe2;border-radius:8px;padding:6px 11px;font-size:14px;cursor:pointer;color:#666">&#10005;</button>
+    </div>
+    <div style="flex:1;display:grid;grid-template-columns:360px 1fr;overflow:hidden;background:#F6F7F5">
+      <!-- LEFT · pinned (short content · does not scroll with the docs) -->
+      <div style="overflow-y:auto;padding:16px;border-right:1px solid #e6e8e3">
+          <div style="font-size:11px;font-weight:700;color:#185FA5;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">ข้อมูล booking (ในระบบ)</div>
+          <div style="background:#fff;border:1px solid #e3e6e1;border-radius:11px;padding:11px 13px">
+            ${fld('Voucher',e(b.voucherRef||b.code||b.id))}
+            ${fld('Agent', ag?`<span style="background:${_agc};color:${_agi};padding:3px 10px;border-radius:7px;display:inline-block;font-weight:600">${e(ag.name)}</span>`:'-')}
+            ${fld('Lead',e(b.leadPax||'-')+(b.leadNationality?(' · '+e(b.leadNationality)):''))}
+            <div style="padding:8px 0;border-bottom:1px solid #f0f2ee">${tripsBlock}</div>
+            ${fld('Pickup',e(b.hotelName||b.pickupArea||'-'))}
+            ${fld('Payment',e(payLbl))}
+            ${fld('อาหาร',dietStr)}
+            ${fld('Request',e(b.notes||'-'))}
+          </div>
+          <div style="font-size:11px;font-weight:700;color:#185FA5;text-transform:uppercase;letter-spacing:.05em;margin:15px 0 6px">ติ๊กตรวจทีละช่อง (เทียบกับเอกสาร)</div>
+          ${chkHtml}
+          <textarea placeholder="โน้ต / สิ่งที่ไม่ตรง (ถ้ามี)" oninput="docCheckSetNote('${e(bkId)}',this.value)" style="width:100%;box-sizing:border-box;margin-top:8px;border:1px solid #d7dbe2;border-radius:9px;padding:8px 11px;font-size:12.5px;font-family:inherit;resize:vertical" rows="2">${e(dc.note||'')}</textarea>
+          <div style="display:flex;gap:8px;margin-top:11px">
+            <button onclick="docCheckSetStatus('${e(bkId)}','verified')" style="flex:1;background:${allTicked?'#1B7F4B':'#9fd3b3'};color:#fff;border:none;border-radius:9px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">✅ ถูกต้อง</button>
+            <button onclick="docCheckSetStatus('${e(bkId)}','issue')" style="flex:1;background:#fff;color:#B5271F;border:1.5px solid #E7B3AE;border-radius:9px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">⚠ มีปัญหา</button>
+          </div>
+          ${(dc.by)?`<div style="font-size:10.5px;color:#8a8a82;margin-top:8px;text-align:center">ล่าสุดโดย ${e(dc.by)}${dc.at?(' · '+e(String(dc.at).slice(0,16).replace('T',' '))):''}</div>`:''}
+      </div>
+      <!-- RIGHT · documents (scrolls) -->
+      <div style="overflow-y:auto;padding:16px">
+          <div style="font-size:11px;font-weight:700;color:#185FA5;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">เอกสารแนบ (${files.length})</div>
+          ${fileHtml}
+      </div>
+    </div>
+  </div>`;
+}
 // Updates state · only re-renders when key affects UI structure
 // Text inputs use this to avoid losing focus on every keystroke
 const _BKV2_NO_RENDER_KEYS = new Set([
@@ -52705,6 +53021,8 @@ function bkV2CommitBooking(status){
     leadFoc: !!d.leadFoc,
     leadPhone: d.leadPhone,
     leadEmail: d.leadEmail,
+    attachments: Array.isArray(d.attachments) ? d.attachments : [],   // document files (refs · data on server) · §doc-check
+    docCheck: d.docCheck || null,                                      // verification state (set in Document Check view)
     pickupAreaId: d.pickupAreaId,
     pickupSelf: !!d.pickupSelf,
     pickupArea: pickupArea?.name || '',  // denormalized for easy display
