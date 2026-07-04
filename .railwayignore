@@ -15,3 +15,5 @@ mockup_*.html
 MOCKUP_*.html
 departure_*.html
 *.xlsx
+
+os-backend/data_snapshots/

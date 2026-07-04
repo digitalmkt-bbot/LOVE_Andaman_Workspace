@@ -13,3 +13,6 @@ allotment_v2/BACKUP/
 
 # ── Local lock files ──
 *.lock
+
+# real prod data pulled for dev seeding — never commit
+os-backend/data_snapshots/
