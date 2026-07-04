@@ -24,16 +24,15 @@ const SESS_DAYS  = 30;   // session cookie lifetime · long so refresh/redeploy 
 //    into the operation_schemas tables via os_repo. blob mode (default) is unchanged. ──
 const DATA_BACKEND = (process.env.DATA_BACKEND || 'blob').toLowerCase();
 const OS_SCHEMA = 'operation_schemas';
-let osRepo = null, osModel = null, OS_TABLES = [], OS_COLS = {}, OS_ASC = [], OS_DESC = [];
-if (DATA_BACKEND === 'relational') {
-  osRepo  = require('./os-backend/src/mapping/os_repo.js');
-  osModel = require('./os-backend/src/mapping/operation_schemas_model.json');
-  OS_TABLES = Object.keys(osModel);
-  for (const t of OS_TABLES) OS_COLS[t] = osModel[t].columns.map(c => c.name);
-  const depth = t => t.split('__').length - 1;                       // children deeper than parents
-  OS_ASC  = [...OS_TABLES].sort((a, b) => depth(a) - depth(b));       // parents first (insert)
-  OS_DESC = [...OS_TABLES].sort((a, b) => depth(b) - depth(a));       // children first (delete)
-}
+// os_repo mapping engine + schema model — used by the relational save path AND the per-entity REST API.
+const osRepo  = require('./os-backend/src/mapping/os_repo.js');
+const osModel = require('./os-backend/src/mapping/operation_schemas_model.json');
+const OS_TABLES = Object.keys(osModel);
+const OS_COLS = {};
+for (const t of OS_TABLES) OS_COLS[t] = osModel[t].columns.map(c => c.name);
+const _osDepth = t => t.split('__').length - 1;                       // children deeper than parents
+const OS_ASC  = [...OS_TABLES].sort((a, b) => _osDepth(a) - _osDepth(b));   // parents first (insert)
+const OS_DESC = [...OS_TABLES].sort((a, b) => _osDepth(b) - _osDepth(a));   // children first (delete)
 const qic = id => '"' + String(id).replace(/"/g, '""') + '"';
 const fqt = t => qic(OS_SCHEMA) + '.' + qic(t);
 
@@ -162,6 +161,78 @@ function applyDiff(blob, diff){
     (c.del||[]).forEach(id=>{ map.delete(String(id)); });
     blob[k] = Array.from(map.values());
   });
+}
+
+// ═══════════════ Per-entity REST API (v1) over operation_schemas ═══════════════
+// Generic CRUD for every top-level entity, driven by the os_repo PLAN. One record (+ its nested
+// children) per request via the same assemble/decompose engine, scoped to that entity's subtree.
+// Requires DATA_BACKEND=relational (operation_schemas is the store). Auth = session, writes = edit right.
+const REST_PLAN = osRepo._plan, REST_KIDS = osRepo._children;
+const REST_RES = {};                       // resourceName (appKey) -> { table, pkCol, container }
+for (const [t, pl] of Object.entries(REST_PLAN)) {
+  if (!pl.isChild && (pl.container === 'array' || pl.container === 'map') && pl.appKey)
+    REST_RES[pl.appKey] = { table: t, pkCol: pl.pkCol || pl.keyCol, container: pl.container };
+}
+function restDescendants(table){ const out = []; (function rec(t){ for (const c of (REST_KIDS[t]||[])){ out.push(c); rec(c); } })(table); return out; }
+// scoped load: parent rows (all, or one id) + every descendant child row linked by the FK chain
+async function restLoad(table, id){
+  const pl = REST_PLAN[table], pkc = pl.pkCol || pl.keyCol, data = {};
+  const pr = id == null ? await pool.query(`SELECT * FROM ${fqt(table)}`)
+                        : await pool.query(`SELECT * FROM ${fqt(table)} WHERE ${qic(pkc)}=$1`, [id]);
+  data[table] = pr.rows;
+  async function kids(t, pkvals){
+    if (!pkvals.length) return;
+    for (const c of (REST_KIDS[t]||[])){
+      const cp = REST_PLAN[c];
+      const r = await pool.query(`SELECT * FROM ${fqt(c)} WHERE ${qic(cp.fkCol)} = ANY($1)`, [pkvals]);
+      data[c] = (data[c]||[]).concat(r.rows);
+      await kids(c, r.rows.map(x => x[cp.rowPkCol != null ? cp.rowPkCol : cp.pkCol]).filter(v => v != null));
+    }
+  }
+  await kids(table, data[table].map(r => r[pkc]).filter(v => v != null));
+  return data;
+}
+async function restHandle(req, res, resName, id, method, bodyStr){
+  const R = REST_RES[resName]; if (!R) return J(res, 404, { error: 'unknown resource: ' + resName });
+  const { table, pkCol, container } = R, appKey = REST_PLAN[table].appKey;
+  if (method === 'GET'){
+    const blob = osRepo.assembleBlob(await restLoad(table, id));
+    const val = blob[appKey];
+    if (id == null) return J(res, 200, { [resName]: val === undefined ? (container === 'map' ? {} : []) : val });
+    const rec = container === 'array' ? (Array.isArray(val) ? val.find(x => x && String(x.id) === String(id)) : null) : (val ? val[id] : null);
+    return rec ? J(res, 200, rec) : J(res, 404, { error: 'not found' });
+  }
+  if (method === 'DELETE'){
+    const r = await pool.query(`DELETE FROM ${fqt(table)} WHERE ${qic(pkCol)}=$1`, [id]);   // children cascade (ON DELETE CASCADE)
+    return J(res, 200, { ok: true, deleted: id, rows: r.rowCount });
+  }
+  // POST (create) / PUT (replace)
+  let body; try { body = JSON.parse(bodyStr || '{}'); } catch(e){ return J(res, 400, { error: 'invalid JSON' }); }
+  if (body == null || typeof body !== 'object' || Array.isArray(body)) return J(res, 400, { error: 'body must be a single record object' });
+  if (method === 'PUT' && id != null && container === 'array') body.id = id;
+  const recKey = container === 'array' ? (body.id != null ? body.id : id) : (id != null ? id : body.__key);
+  if (container === 'map' && recKey == null) return J(res, 400, { error: 'map resource needs an id in the URL' });
+  const mini = {}; mini[appKey] = container === 'array' ? [body] : { [recKey]: body };
+  const rows = osRepo.decomposeBlob(mini);                       // parent + child rows for this subtree
+  const subtree = [table, ...restDescendants(table)].sort((a, b) => _osDepth(a) - _osDepth(b));   // parents first
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    if (method === 'PUT') await client.query(`DELETE FROM ${fqt(table)} WHERE ${qic(pkCol)}=$1`, [id]);   // replace: clear old (children cascade)
+    for (const t of subtree){
+      const rws = rows[t] || []; if (!rws.length) continue;
+      const cols = OS_COLS[t], colSql = cols.map(qic).join(','), per = Math.max(1, Math.floor(60000 / cols.length));
+      for (let i = 0; i < rws.length; i += per){
+        const params = [], tuples = [];
+        for (const row of rws.slice(i, i + per)) tuples.push('(' + cols.map(c => { params.push(row[c] === undefined ? null : row[c]); return '$' + params.length; }).join(',') + ')');
+        await client.query(`INSERT INTO ${fqt(t)} (${colSql}) VALUES ${tuples.join(',')}`, params);
+      }
+    }
+    await client.query('COMMIT');
+  } catch(e){ await client.query('ROLLBACK').catch(()=>{}); client.release(); return J(res, 500, { error: e.message }); }
+  client.release();
+  const outId = container === 'array' ? ((rows[table][0] && rows[table][0][pkCol]) || body.id) : recKey;
+  return J(res, method === 'POST' ? 201 : 200, { ok: true, id: outId });
 }
 
 const server = http.createServer((req, res) => {
@@ -311,6 +382,22 @@ const server = http.createServer((req, res) => {
       if(b.role==='admin'||b.role==='staff'){ pool.query('UPDATE users SET perms=$1, role=$2, can_edit=$3, edit_areas=$4 WHERE id=$5',[permsStr,b.role,canEdit,eaStr,id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
       else { pool.query('UPDATE users SET perms=$1, can_edit=$2, edit_areas=$3 WHERE id=$4',[permsStr,canEdit,eaStr,id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
     }); return;
+  }
+
+  // ───── Per-entity REST API (v1) ─────  /api/v1/<entity>[/<id>]  · GET list/one · POST create · PUT replace · DELETE
+  if(u.startsWith('/api/v1/')){
+    const s=session(req); if(!s) return J(res,401,{error:'login required'});
+    if(!pool) return J(res,503,{error:'no database'});
+    if(DATA_BACKEND!=='relational') return J(res,503,{error:'REST API requires DATA_BACKEND=relational'});
+    const seg = u.slice('/api/v1/'.length).split('/').filter(Boolean).map(decodeURIComponent);
+    const resName = seg[0], id = seg.length>1 ? seg[1] : null, m = req.method;
+    if(!resName) return J(res,404,{error:'no resource'});
+    if((m==='POST'||m==='PUT'||m==='DELETE') && s.role!=='admin' && s.edit===false) return J(res,403,{error:'view only · ไม่มีสิทธิ์แก้ไข'});
+    const done=e=>J(res,500,{error:e.message});
+    if(m==='GET') { restHandle(req,res,resName,id,'GET',null).catch(done); return; }
+    if(m==='DELETE'){ if(id==null) return J(res,400,{error:'id required'}); restHandle(req,res,resName,id,'DELETE',null).catch(done); return; }
+    if(m==='POST'||m==='PUT'){ if(m==='PUT'&&id==null) return J(res,400,{error:'id required for PUT'}); readBody(req,body=>restHandle(req,res,resName,id,m,body).catch(done)); return; }
+    return J(res,405,{error:'method not allowed'});
   }
 
   // ───── static files ─────
