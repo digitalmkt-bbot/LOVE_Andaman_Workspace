@@ -192,47 +192,79 @@ async function restLoad(table, id){
   await kids(table, data[table].map(r => r[pkc]).filter(v => v != null));
   return data;
 }
-async function restHandle(req, res, resName, id, method, bodyStr){
+async function restGet(res, resName, id){
   const R = REST_RES[resName]; if (!R) return J(res, 404, { error: 'unknown resource: ' + resName });
+  const { table, container } = R, appKey = REST_PLAN[table].appKey;
+  const blob = osRepo.assembleBlob(await restLoad(table, id));
+  const val = blob[appKey];
+  if (id == null) return J(res, 200, { [resName]: val === undefined ? (container === 'map' ? {} : []) : val });
+  const rec = container === 'array' ? (Array.isArray(val) ? val.find(x => x && String(x.id) === String(id)) : null) : (val ? val[id] : null);
+  return rec !== undefined && rec !== null ? J(res, 200, rec) : J(res, 404, { error: 'not found' });
+}
+async function _restInsertRows(client, tables, rows){          // parents first, batched multi-row
+  for (const t of tables){
+    const rws = rows[t] || []; if (!rws.length) continue;
+    const cols = OS_COLS[t], colSql = cols.map(qic).join(','), per = Math.max(1, Math.floor(60000 / cols.length));
+    for (let i = 0; i < rws.length; i += per){
+      const params = [], tuples = [];
+      for (const row of rws.slice(i, i + per)) tuples.push('(' + cols.map(c => { params.push(row[c] === undefined ? null : row[c]); return '$' + params.length; }).join(',') + ')');
+      await client.query(`INSERT INTO ${fqt(t)} (${colSql}) VALUES ${tuples.join(',')}`, params);
+    }
+  }
+}
+// Apply ONE write op inside an open transaction. Ops:
+//   {op:'put',    r, id, body}  replace/create one record (nested children re-inserted; map value may be any JSON)
+//   {op:'del',    r, id}        delete one record (children cascade)
+//   {op:'putall', r, body}      replace the whole collection (id-less wholesale sets · body null/[]/{}= clear)
+//   {op:'meta',   id, body}     upsert one top-level scalar in app_meta (body null = delete the key)
+async function restApplyOp(client, op){
+  if (op.op === 'meta'){
+    await client.query(`DELETE FROM ${fqt('app_meta')} WHERE ${qic('key')}=$1`, [op.id]);
+    if (op.body !== null && op.body !== undefined)
+      await client.query(`INSERT INTO ${fqt('app_meta')} (${qic('key')},${qic('value')}) VALUES ($1,$2)`, [op.id, JSON.stringify(op.body)]);
+    return op.id;
+  }
+  const R = REST_RES[op.r]; if (!R) throw new Error('unknown resource: ' + op.r);
   const { table, pkCol, container } = R, appKey = REST_PLAN[table].appKey;
-  if (method === 'GET'){
-    const blob = osRepo.assembleBlob(await restLoad(table, id));
-    const val = blob[appKey];
-    if (id == null) return J(res, 200, { [resName]: val === undefined ? (container === 'map' ? {} : []) : val });
-    const rec = container === 'array' ? (Array.isArray(val) ? val.find(x => x && String(x.id) === String(id)) : null) : (val ? val[id] : null);
-    return rec ? J(res, 200, rec) : J(res, 404, { error: 'not found' });
+  const subtree = [table, ...restDescendants(table)].sort((a, b) => _osDepth(a) - _osDepth(b));
+  if (op.op === 'del'){ await client.query(`DELETE FROM ${fqt(table)} WHERE ${qic(pkCol)}=$1`, [op.id]); return op.id; }
+  if (op.op === 'putall'){
+    await client.query(`DELETE FROM ${fqt(table)}`);                     // children cascade
+    if (op.body == null) return op.r;
+    const rows = osRepo.decomposeBlob({ [appKey]: op.body });
+    await _restInsertRows(client, subtree, rows);
+    return op.r;
   }
-  if (method === 'DELETE'){
-    const r = await pool.query(`DELETE FROM ${fqt(table)} WHERE ${qic(pkCol)}=$1`, [id]);   // children cascade (ON DELETE CASCADE)
-    return J(res, 200, { ok: true, deleted: id, rows: r.rowCount });
-  }
-  // POST (create) / PUT (replace)
-  let body; try { body = JSON.parse(bodyStr || '{}'); } catch(e){ return J(res, 400, { error: 'invalid JSON' }); }
-  if (body == null || typeof body !== 'object' || Array.isArray(body)) return J(res, 400, { error: 'body must be a single record object' });
-  if (method === 'PUT' && id != null && container === 'array') body.id = id;
-  const recKey = container === 'array' ? (body.id != null ? body.id : id) : (id != null ? id : body.__key);
-  if (container === 'map' && recKey == null) return J(res, 400, { error: 'map resource needs an id in the URL' });
-  const mini = {}; mini[appKey] = container === 'array' ? [body] : { [recKey]: body };
-  const rows = osRepo.decomposeBlob(mini);                       // parent + child rows for this subtree
-  const subtree = [table, ...restDescendants(table)].sort((a, b) => _osDepth(a) - _osDepth(b));   // parents first
+  // put — single record
+  let body = op.body;
+  if (container === 'array'){
+    if (body == null || typeof body !== 'object' || Array.isArray(body)) throw new Error(op.r + ': body must be a record object');
+    if (op.id != null) body.id = op.id;
+    if (body.id == null) throw new Error(op.r + ': record needs an id');
+  } else if (op.id == null) throw new Error(op.r + ': map resource needs an id');
+  const recKey = container === 'array' ? body.id : op.id;
+  const rows = osRepo.decomposeBlob({ [appKey]: container === 'array' ? [body] : { [recKey]: body } });
+  await client.query(`DELETE FROM ${fqt(table)} WHERE ${qic(pkCol)}=$1`, [recKey]);   // replace (children cascade)
+  await _restInsertRows(client, subtree, rows);
+  return recKey;
+}
+// Run a batch of ops in ONE transaction (serialized with the legacy save path via the same advisory
+// lock), bump the app_state version once, return {version, behind} — same contract as /api/save.
+async function restTxn(username, baseVersion, ops){
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    if (method === 'PUT') await client.query(`DELETE FROM ${fqt(table)} WHERE ${qic(pkCol)}=$1`, [id]);   // replace: clear old (children cascade)
-    for (const t of subtree){
-      const rws = rows[t] || []; if (!rws.length) continue;
-      const cols = OS_COLS[t], colSql = cols.map(qic).join(','), per = Math.max(1, Math.floor(60000 / cols.length));
-      for (let i = 0; i < rws.length; i += per){
-        const params = [], tuples = [];
-        for (const row of rws.slice(i, i + per)) tuples.push('(' + cols.map(c => { params.push(row[c] === undefined ? null : row[c]); return '$' + params.length; }).join(',') + ')');
-        await client.query(`INSERT INTO ${fqt(t)} (${colSql}) VALUES ${tuples.join(',')}`, params);
-      }
-    }
+    await client.query('SELECT pg_advisory_xact_lock(918273645)');
+    const vr = await client.query('SELECT version FROM app_state WHERE id=$1', [STATE_KEY]);
+    const curVer = vr.rows[0] ? vr.rows[0].version : 0;
+    const behind = (baseVersion !== -1 && baseVersion != null && baseVersion < curVer);
+    const applied = [];
+    for (const op of ops) applied.push(await restApplyOp(client, op));
+    const nv = curVer + 1;
+    await client.query('INSERT INTO app_state(id,data,version,updated_by,updated_at) VALUES($1,NULL,$2,$3,now()) ON CONFLICT(id) DO UPDATE SET version=$2, updated_by=$3, updated_at=now()', [STATE_KEY, nv, username]);
     await client.query('COMMIT');
-  } catch(e){ await client.query('ROLLBACK').catch(()=>{}); client.release(); return J(res, 500, { error: e.message }); }
-  client.release();
-  const outId = container === 'array' ? ((rows[table][0] && rows[table][0][pkCol]) || body.id) : recKey;
-  return J(res, method === 'POST' ? 201 : 200, { ok: true, id: outId });
+    return { version: nv, behind, applied };
+  } catch (e){ await client.query('ROLLBACK').catch(()=>{}); throw e; } finally { client.release(); }
 }
 
 const server = http.createServer((req, res) => {
@@ -384,19 +416,44 @@ const server = http.createServer((req, res) => {
     }); return;
   }
 
-  // ───── Per-entity REST API (v1) ─────  /api/v1/<entity>[/<id>]  · GET list/one · POST create · PUT replace · DELETE
-  if(u.startsWith('/api/v1/')){
+  // ───── Per-entity REST API (v1) ─────
+  //   GET  /api/v1                     resource index {resources:{name:container}}
+  //   GET  /api/v1/<entity>[/<id>]     list / one record (nested children assembled)
+  //   POST/PUT/DELETE /api/v1/<entity>[/<id>]   create / replace / delete one record
+  //   POST /api/v1/_batch              {baseVersion, ops:[{op,r,id,body}]} — many ops, ONE transaction
+  // Every write bumps the app_state version + broadcasts on SSE (same live-refresh contract as /api/save).
+  if(u === '/api/v1' || u.startsWith('/api/v1/')){
     const s=session(req); if(!s) return J(res,401,{error:'login required'});
     if(!pool) return J(res,503,{error:'no database'});
     if(DATA_BACKEND!=='relational') return J(res,503,{error:'REST API requires DATA_BACKEND=relational'});
-    const seg = u.slice('/api/v1/'.length).split('/').filter(Boolean).map(decodeURIComponent);
+    const seg = u === '/api/v1' ? [] : u.slice('/api/v1/'.length).split('/').filter(Boolean).map(decodeURIComponent);
     const resName = seg[0], id = seg.length>1 ? seg[1] : null, m = req.method;
-    if(!resName) return J(res,404,{error:'no resource'});
-    if((m==='POST'||m==='PUT'||m==='DELETE') && s.role!=='admin' && s.edit===false) return J(res,403,{error:'view only · ไม่มีสิทธิ์แก้ไข'});
     const done=e=>J(res,500,{error:e.message});
-    if(m==='GET') { restHandle(req,res,resName,id,'GET',null).catch(done); return; }
-    if(m==='DELETE'){ if(id==null) return J(res,400,{error:'id required'}); restHandle(req,res,resName,id,'DELETE',null).catch(done); return; }
-    if(m==='POST'||m==='PUT'){ if(m==='PUT'&&id==null) return J(res,400,{error:'id required for PUT'}); readBody(req,body=>restHandle(req,res,resName,id,m,body).catch(done)); return; }
+    if(!resName){ const out={}; for(const [n,r] of Object.entries(REST_RES)) out[n]=r.container; return J(res,200,{resources:out}); }
+    const canWrite = s.role==='admin' || s.edit!==false;
+    if(resName==='_batch'){
+      if(m!=='POST') return J(res,405,{error:'method not allowed'});
+      if(!canWrite) return J(res,403,{error:'view only · ไม่มีสิทธิ์แก้ไข'});
+      readBody(req, body=>{
+        let p; try{ p=JSON.parse(body); }catch(e){ return J(res,400,{error:'invalid JSON'}); }
+        const ops = Array.isArray(p.ops) ? p.ops : null;
+        if(!ops || !ops.length) return J(res,400,{error:'ops required'});
+        if(!ops.every(o=>o && (o.op==='meta' ? o.id!=null : (o.op==='put'||o.op==='del'||o.op==='putall') && o.r))) return J(res,400,{error:'bad op shape'});
+        restTxn(s.username, p.baseVersion==null?-1:p.baseVersion, ops)
+          .then(({version,behind})=>{ J(res,200,{ok:true,version,behind,applied:ops.length}); sseBroadcast({version, updated_by:s.username}); })
+          .catch(e=>J(res, /unknown resource|needs an id|record object/.test(e.message)?400:500, {error:e.message}));
+      }); return;
+    }
+    if(m==='GET'){ restGet(res,resName,id).catch(done); return; }
+    if(!canWrite) return J(res,403,{error:'view only · ไม่มีสิทธิ์แก้ไข'});
+    const one = op => restTxn(s.username, -1, [op])
+      .then(({version,applied})=>{ J(res, m==='POST'?201:200, {ok:true, id:applied[0], version}); sseBroadcast({version, updated_by:s.username}); })
+      .catch(e=>J(res, /unknown resource|needs an id|record object/.test(e.message)?400:500, {error:e.message}));
+    if(m==='DELETE'){ if(id==null) return J(res,400,{error:'id required'}); one({op:'del', r:resName, id}); return; }
+    if(m==='POST'||m==='PUT'){
+      if(m==='PUT'&&id==null) return J(res,400,{error:'id required for PUT'});
+      readBody(req, body=>{ let b; try{ b=JSON.parse(body||'{}'); }catch(e){ return J(res,400,{error:'invalid JSON'}); } one({op:'put', r:resName, id, body:b}); }); return;
+    }
     return J(res,405,{error:'method not allowed'});
   }
 
