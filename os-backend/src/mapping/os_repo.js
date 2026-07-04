@@ -75,6 +75,7 @@ function buildPlan() {
         case 'synthetic': if (/position in/.test(source)) p.idxCol = col; break;
         case 'map_key': p.keyCol = col; p.isMap = true; if (/top-level key/.test(source)) p.isScalarsTable = true; break;
         case 'map_value': p.valueCol = col; break;
+        case 'map_value_json': p.valueCol = col; p.valueJson = true; break;   // whole map value stored as JSON text (open-ended/object values → lossless)
         case 'array_scalar': p.elementScalar = col; p.dataCols.push({ col, kind, source, path: null }); break;
         case 'scalar':
         case 'json_text': {
@@ -110,28 +111,19 @@ function buildPlan() {
 const { plan: PLAN, childrenOf: CHILDREN } = buildPlan();
 
 // ---------- fleet_daily__trips special-case ----------
-// The mapping flattened per-boat trips (fleet_daily[day][boat].trips) into one table keyed only by
-// (day, tripKey), dropping the boat. The boat is recoverable from which engine columns are non-null
-// (engines_e6 -> b2, engines_e33 -> b10, ...). Rebuild the boat dimension so it round-trips.
+// Per-boat trips (fleet_daily[day][boat].trips[tripKey]) are 3 levels of open-ended maps — beyond the
+// generic engine. Stored as one row per (day, boat, tripKey) with the whole trip value as JSON: lossless
+// for any boat/engine/field, past or future. (Replaces the old fixed engines_e* column scheme, which
+// silently dropped trips for engines that weren't in the generated column list.)
 const FD_TRIPS = 'fleet_daily__trips';
-const FD_ENGINE_BOAT = {};   // e6 -> b2
-const FD_ENGINE_COL = {};    // e6 -> "engines_e6"
-for (const [col, info] of Object.entries(MAP[FD_TRIPS] || {})) {
-  const m = /\.(b\d+)\.trips\[key\]\.engines\.(e\d+)/.exec(info.source || '');
-  if (m) { FD_ENGINE_BOAT[m[2]] = m[1]; FD_ENGINE_COL[m[2]] = col; }
-}
 function fleetDailyAssembleFix(blob, tablesData) {
   const fd = blob.fleet_daily; if (!fd || typeof fd !== 'object') return;
   const idToDay = {}; for (const r of (tablesData.fleet_daily || [])) idToDay[r.id] = r.key;
-  for (const day of Object.values(fd)) { if (day && typeof day === 'object') delete day.trips; }   // drop the bogus merged day-level trips
+  for (const day of Object.values(fd)) { if (day && typeof day === 'object') delete day.trips; }   // drop the bogus merged day-level trips (generic artifact)
   for (const row of (tablesData[FD_TRIPS] || [])) {
-    const day = idToDay[row.fleet_daily_id]; if (day == null) continue;
-    for (const [eng, boat] of Object.entries(FD_ENGINE_BOAT)) {
-      const v = row[FD_ENGINE_COL[eng]];
-      if (v === null || v === undefined) continue;
-      const b = ((fd[day] ||= {})[boat] ||= {});
-      (((b.trips ||= {})[row.key] ||= { engines: {} }).engines)[eng] = v;
-    }
+    const day = idToDay[row.fleet_daily_id]; if (day == null || !row.boat) continue;
+    const b = ((fd[day] ||= {})[row.boat] ||= {});
+    (b.trips ||= {})[row.key] = safeParse(row.value);
   }
 }
 function fleetDailyDecompose(blob, out) {
@@ -139,14 +131,11 @@ function fleetDailyDecompose(blob, out) {
   const fd = blob.fleet_daily; if (!fd || typeof fd !== 'object') return;
   for (const [day, dayObj] of Object.entries(fd)) {
     if (!dayObj || typeof dayObj !== 'object') continue;
-    for (const bObj of Object.values(dayObj)) {
+    for (const [boatId, bObj] of Object.entries(dayObj)) {
       if (!bObj || typeof bObj !== 'object' || !bObj.trips) continue;
       for (const [tripKey, trip] of Object.entries(bObj.trips)) {
-        const row = { fleet_daily_id: day, key: tripKey, row_pk: rowPk(FD_TRIPS) };
-        for (const [eng, v] of Object.entries((trip && trip.engines) || {})) {
-          if (FD_ENGINE_COL[eng] && v !== null && v !== undefined) row[FD_ENGINE_COL[eng]] = v;
-        }
-        out[FD_TRIPS].push(row);
+        out[FD_TRIPS].push({ fleet_daily_id: day, boat: boatId, key: tripKey,
+                             value: JSON.stringify(trip), row_pk: rowPk(FD_TRIPS) });
       }
     }
   }
@@ -158,7 +147,7 @@ function buildElement(p, row) {
   const el = {};
   for (const dc of p.dataCols) {
     const v = row[dc.col];
-    if (v === undefined) continue;
+    if (v === undefined || v === null) continue;   // skip SQL NULLs: all-null flattened cols must not fabricate {a:null,...} where the blob had null/missing
     const val = dc.kind === 'json_text' && typeof v === 'string' ? safeParse(v) : v;
     setPath(el, dc.path, val);
   }
@@ -175,7 +164,7 @@ function attachChildren(table, parentEl, parentPkVal, tablesData, pkIndex) {
     if (cp.container === 'map') {
       const mapObj = {};
       for (const r of rows) {
-        const val = cp.valueCol ? r[cp.valueCol] : buildElement(cp, r);
+        const val = cp.valueCol ? (cp.valueJson ? safeParse(r[cp.valueCol]) : r[cp.valueCol]) : buildElement(cp, r);
         mapObj[r[cp.keyCol]] = val;
         const pk = cp.rowPkCol ? r[cp.rowPkCol] : r[cp.pkCol];
         if (pk != null) { pkIndex[childT] ??= {}; pkIndex[childT][pk] = val;
@@ -204,13 +193,13 @@ function assembleBlob(tablesData) {
     const rows = tablesData[table] || [];
     if (p.container === 'scalars') {                 // app_meta -> top-level scalar keys
       for (const r of rows) {
-        const v = p.valueCol ? r[p.valueCol] : undefined;
+        const v = p.valueCol ? (p.valueJson ? safeParse(r[p.valueCol]) : r[p.valueCol]) : undefined;
         blob[r[p.keyCol]] = v;
       }
     } else if (p.container === 'map') {              // top-level keyed map
       const obj = {};
       for (const r of rows) {
-        const val = p.valueCol ? r[p.valueCol] : buildElement(p, r);
+        const val = p.valueCol ? (p.valueJson ? safeParse(r[p.valueCol]) : r[p.valueCol]) : buildElement(p, r);
         obj[r[p.keyCol]] = val;
         if (!p.valueCol) { const key = p.pkCol ? r[p.pkCol] : r[p.keyCol]; pkIndex[table] ??= {}; pkIndex[table][key] = val; attachChildren(table, val, key, tablesData, pkIndex); }
       }
@@ -257,7 +246,7 @@ function decomposeChildren(table, parentEl, parentPkVal, out) {
       for (const [k, val] of Object.entries(container)) {
         const row = cp.valueCol ? {} : rowFromElement(cp, val);
         row[cp.fkCol] = parentPkVal; row[cp.keyCol] = k;
-        if (cp.valueCol) row[cp.valueCol] = val;
+        if (cp.valueCol) row[cp.valueCol] = cp.valueJson ? (val === undefined ? null : JSON.stringify(val)) : val;
         const pk = rowPk(childT); if (cp.rowPkCol) row[cp.rowPkCol] = pk;
         out[childT].push(row);
         if (!cp.valueCol && val && typeof val === 'object') decomposeChildren(childT, val, pk, out);  // recurse into map-value grandchildren
@@ -283,14 +272,15 @@ function decomposeBlob(blob) {
     if (p.container === 'scalars') {
       for (const [k, v] of Object.entries(blob)) {
         if (!isScalarTop(k, blob)) continue; // only leaf top-level values belong here
-        out[table].push({ [p.keyCol]: k, ...(p.valueCol ? { [p.valueCol]: v } : {}) });
+        const sv = p.valueJson ? (v === undefined ? null : JSON.stringify(v)) : v;
+        out[table].push({ [p.keyCol]: k, ...(p.valueCol ? { [p.valueCol]: sv } : {}) });
       }
     } else if (p.container === 'map') {
       const obj = blob[p.appKey]; if (obj == null || typeof obj !== 'object') continue;
       for (const [k, val] of Object.entries(obj)) {
         const row = p.valueCol ? {} : rowFromElement(p, val);
         row[p.keyCol] = k;
-        if (p.valueCol) row[p.valueCol] = val;
+        if (p.valueCol) row[p.valueCol] = p.valueJson ? (val === undefined ? null : JSON.stringify(val)) : val;
         if (p.pkCol) row[p.pkCol] = String(k);          // map id is generated; use key (deterministic, unique per map)
         out[table].push(row);
         if (!p.valueCol) decomposeChildren(table, val, String(k), out);

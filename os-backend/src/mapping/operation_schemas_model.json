@@ -35,306 +35,6 @@
    {
     "name": "pier",
     "type": "text"
-   },
-   {
-    "name": "overrides_2026_05_31",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_05_30",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_07",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_14",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_21",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_28",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_29",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_22",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_15",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_08",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_01",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_02",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_09",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_16",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_23",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_30",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_25",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_18",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_11",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_04",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_05",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_19",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_12",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_26",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_27",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_20",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_13",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_06",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_03",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_10",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_17",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_06_24",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_05",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_06",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_13",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_12",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_19",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_20",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_27",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_26",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_01",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_08",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_15",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_22",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_29",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_30",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_23",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_16",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_09",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_02",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_03",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_10",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_17",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_31",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_24",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_25",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_18",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_11",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_07_04",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_08_01",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_08_15",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_08_22",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_08_29",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_08_03",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_08_10",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_08_17",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_08_24",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_08_05",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_08_06",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_08_12",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_08_13",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_08_19",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_08_20",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_08_26",
-    "type": "text"
-   },
-   {
-    "name": "overrides_2026_08_27",
-    "type": "text"
    }
   ],
   "primary_key": "id",
@@ -1453,6 +1153,10 @@
     "type": "text"
    },
    {
+    "name": "boat",
+    "type": "text"
+   },
+   {
     "name": "key",
     "type": "text"
    },
@@ -1461,76 +1165,8 @@
     "type": "text"
    },
    {
-    "name": "engines_e6",
-    "type": "double precision"
-   },
-   {
-    "name": "engines_e33",
-    "type": "bigint"
-   },
-   {
-    "name": "engines_e34",
-    "type": "bigint"
-   },
-   {
-    "name": "engines_e35",
-    "type": "bigint"
-   },
-   {
-    "name": "engines_e36",
-    "type": "bigint"
-   },
-   {
-    "name": "engines_e7",
-    "type": "double precision"
-   },
-   {
-    "name": "engines_e8",
-    "type": "double precision"
-   },
-   {
-    "name": "engines_e20",
-    "type": "double precision"
-   },
-   {
-    "name": "engines_e26",
-    "type": "double precision"
-   },
-   {
-    "name": "engines_e27",
-    "type": "double precision"
-   },
-   {
-    "name": "engines_e28",
-    "type": "double precision"
-   },
-   {
-    "name": "engines_e43",
-    "type": "bigint"
-   },
-   {
-    "name": "engines_e44",
-    "type": "bigint"
-   },
-   {
-    "name": "engines_e51",
-    "type": "bigint"
-   },
-   {
-    "name": "engines_e52",
-    "type": "bigint"
-   },
-   {
-    "name": "engines_e45",
-    "type": "double precision"
-   },
-   {
-    "name": "engines_e46",
-    "type": "double precision"
-   },
-   {
-    "name": "engines_e47",
-    "type": "double precision"
+    "name": "value",
+    "type": "text"
    }
   ],
   "primary_key": "row_pk",
@@ -1540,7 +1176,7 @@
     "references": "fleet_daily.id"
    }
   ],
-  "rows": 39
+  "rows": 0
  },
  "fleet_maintenance": {
   "columns": [
@@ -3706,6 +3342,38 @@
    {
     "name": "createdby",
     "type": "text"
+   },
+   {
+    "name": "scope",
+    "type": "text"
+   },
+   {
+    "name": "month",
+    "type": "text"
+   },
+   {
+    "name": "monthfrom",
+    "type": "text"
+   },
+   {
+    "name": "monthto",
+    "type": "text"
+   },
+   {
+    "name": "parentid",
+    "type": "text"
+   },
+   {
+    "name": "subname",
+    "type": "text"
+   },
+   {
+    "name": "releasedaysbefore",
+    "type": "bigint"
+   },
+   {
+    "name": "releasetime",
+    "type": "text"
    }
   ],
   "primary_key": "id",
@@ -3737,6 +3405,26 @@
    {
     "name": "qty",
     "type": "bigint"
+   },
+   {
+    "name": "at",
+    "type": "text"
+   },
+   {
+    "name": "by",
+    "type": "text"
+   },
+   {
+    "name": "bookingid",
+    "type": "text"
+   },
+   {
+    "name": "sub",
+    "type": "boolean"
+   },
+   {
+    "name": "note",
+    "type": "text"
    }
   ],
   "primary_key": "row_pk",
@@ -4107,6 +3795,18 @@
    {
     "name": "snapshot_agentsignatory_signeddate",
     "type": "text"
+   },
+   {
+    "name": "snapshot_programperiods",
+    "type": "text"
+   },
+   {
+    "name": "snapshot_addonservices",
+    "type": "text"
+   },
+   {
+    "name": "snapshot_prices",
+    "type": "text"
    }
   ],
   "primary_key": "row_pk",
@@ -4117,194 +3817,6 @@
    }
   ],
   "rows": 2
- },
- "sb_agents__contracthistory__programperiods": {
-  "columns": [
-   {
-    "name": "sb_agents_contracthistory_id",
-    "type": "text"
-   },
-   {
-    "name": "idx",
-    "type": "bigint"
-   },
-   {
-    "name": "row_pk",
-    "type": "text"
-   },
-   {
-    "name": "routeid",
-    "type": "text"
-   },
-   {
-    "name": "bookfrom",
-    "type": "text"
-   },
-   {
-    "name": "bookto",
-    "type": "text"
-   },
-   {
-    "name": "travelfrom",
-    "type": "text"
-   },
-   {
-    "name": "travelto",
-    "type": "text"
-   },
-   {
-    "name": "note",
-    "type": "text"
-   }
-  ],
-  "primary_key": "row_pk",
-  "foreign_keys": [],
-  "rows": 8
- },
- "sb_agents__contracthistory__addonservices": {
-  "columns": [
-   {
-    "name": "sb_agents_contracthistory_id",
-    "type": "text"
-   },
-   {
-    "name": "idx",
-    "type": "bigint"
-   },
-   {
-    "name": "row_pk",
-    "type": "text"
-   },
-   {
-    "name": "svcid",
-    "type": "text"
-   }
-  ],
-  "primary_key": "row_pk",
-  "foreign_keys": [],
-  "rows": 3
- },
- "sb_agents__contracthistory__addonservices__variants": {
-  "columns": [
-   {
-    "name": "sb_agents_contracthistory_addonservices_id",
-    "type": "text"
-   },
-   {
-    "name": "idx",
-    "type": "bigint"
-   },
-   {
-    "name": "row_pk",
-    "type": "text"
-   },
-   {
-    "name": "varid",
-    "type": "text"
-   },
-   {
-    "name": "selling",
-    "type": "bigint"
-   },
-   {
-    "name": "net",
-    "type": "bigint"
-   }
-  ],
-  "primary_key": "row_pk",
-  "foreign_keys": [],
-  "rows": 6
- },
- "sb_agents__contracthistory__prices": {
-  "columns": [
-   {
-    "name": "sb_agents_contracthistory_id",
-    "type": "text"
-   },
-   {
-    "name": "key",
-    "type": "text"
-   },
-   {
-    "name": "row_pk",
-    "type": "text"
-   },
-   {
-    "name": "pk_adult_thai",
-    "type": "bigint"
-   },
-   {
-    "name": "pk_adult_fr",
-    "type": "bigint"
-   },
-   {
-    "name": "pk_child_thai",
-    "type": "bigint"
-   },
-   {
-    "name": "pk_child_fr",
-    "type": "bigint"
-   },
-   {
-    "name": "pk_infant_thai",
-    "type": "bigint"
-   },
-   {
-    "name": "pk_infant_fr",
-    "type": "bigint"
-   },
-   {
-    "name": "kl_adult_thai",
-    "type": "bigint"
-   },
-   {
-    "name": "kl_adult_fr",
-    "type": "bigint"
-   },
-   {
-    "name": "kl_child_thai",
-    "type": "bigint"
-   },
-   {
-    "name": "kl_child_fr",
-    "type": "bigint"
-   },
-   {
-    "name": "kl_infant_thai",
-    "type": "bigint"
-   },
-   {
-    "name": "kl_infant_fr",
-    "type": "bigint"
-   },
-   {
-    "name": "notransfer_adult_thai",
-    "type": "bigint"
-   },
-   {
-    "name": "notransfer_adult_fr",
-    "type": "bigint"
-   },
-   {
-    "name": "notransfer_child_thai",
-    "type": "bigint"
-   },
-   {
-    "name": "notransfer_child_fr",
-    "type": "bigint"
-   },
-   {
-    "name": "notransfer_infant_thai",
-    "type": "bigint"
-   },
-   {
-    "name": "notransfer_infant_fr",
-    "type": "bigint"
-   }
-  ],
-  "primary_key": "row_pk",
-  "foreign_keys": [],
-  "rows": 8
  },
  "sb_bookings": {
   "columns": [
@@ -4819,6 +4331,26 @@
    {
     "name": "editlock_at",
     "type": "bigint"
+   },
+   {
+    "name": "doccheck",
+    "type": "text"
+   },
+   {
+    "name": "attachments",
+    "type": "text"
+   },
+   {
+    "name": "paymentslips",
+    "type": "text"
+   },
+   {
+    "name": "incomplete",
+    "type": "text"
+   },
+   {
+    "name": "approval_over",
+    "type": "text"
    }
   ],
   "primary_key": "id",
@@ -4990,6 +4522,14 @@
    {
     "name": "pax_foc",
     "type": "bigint"
+   },
+   {
+    "name": "lockdrawsel",
+    "type": "text"
+   },
+   {
+    "name": "lockdraws",
+    "type": "text"
    }
   ],
   "primary_key": "row_pk",
@@ -5392,253 +4932,13 @@
     "type": "text"
    },
    {
-    "name": "il",
-    "type": "bigint"
-   },
-   {
-    "name": "sa",
-    "type": "bigint"
-   },
-   {
-    "name": "th",
-    "type": "bigint"
-   },
-   {
-    "name": "in",
-    "type": "bigint"
-   },
-   {
-    "name": "sg",
-    "type": "bigint"
-   },
-   {
-    "name": "my",
-    "type": "bigint"
-   },
-   {
-    "name": "au",
-    "type": "bigint"
-   },
-   {
-    "name": "de",
-    "type": "bigint"
-   },
-   {
-    "name": "us",
-    "type": "bigint"
-   },
-   {
-    "name": "om",
-    "type": "bigint"
-   },
-   {
-    "name": "eg",
-    "type": "bigint"
-   },
-   {
-    "name": "ae",
-    "type": "bigint"
-   },
-   {
-    "name": "br",
-    "type": "bigint"
-   },
-   {
-    "name": "cn",
-    "type": "bigint"
-   },
-   {
-    "name": "es",
-    "type": "bigint"
-   },
-   {
-    "name": "mx",
-    "type": "bigint"
-   },
-   {
-    "name": "kr",
-    "type": "bigint"
-   },
-   {
-    "name": "bar2",
-    "type": "bigint"
-   },
-   {
-    "name": "bar",
-    "type": "bigint"
-   },
-   {
-    "name": "nl",
-    "type": "bigint"
-   },
-   {
-    "name": "ru",
-    "type": "bigint"
-   },
-   {
-    "name": "jo",
-    "type": "bigint"
-   },
-   {
-    "name": "jp",
-    "type": "bigint"
-   },
-   {
-    "name": "gb",
-    "type": "bigint"
-   },
-   {
-    "name": "ca",
-    "type": "bigint"
-   },
-   {
-    "name": "qa",
-    "type": "bigint"
-   },
-   {
-    "name": "irq",
-    "type": "bigint"
-   },
-   {
-    "name": "za",
-    "type": "bigint"
-   },
-   {
-    "name": "cub",
-    "type": "bigint"
-   },
-   {
-    "name": "fr",
-    "type": "bigint"
-   },
-   {
-    "name": "eth",
-    "type": "bigint"
-   },
-   {
-    "name": "ie",
-    "type": "bigint"
-   },
-   {
-    "name": "kz",
-    "type": "bigint"
-   },
-   {
-    "name": "uz",
-    "type": "bigint"
-   },
-   {
-    "name": "tw",
-    "type": "bigint"
-   },
-   {
-    "name": "it",
-    "type": "bigint"
-   },
-   {
-    "name": "se",
-    "type": "bigint"
-   },
-   {
-    "name": "nig",
-    "type": "bigint"
-   },
-   {
-    "name": "ge",
-    "type": "bigint"
-   },
-   {
-    "name": "ph",
-    "type": "bigint"
-   },
-   {
-    "name": "ar",
-    "type": "bigint"
-   },
-   {
-    "name": "gha",
-    "type": "bigint"
-   },
-   {
-    "name": "nz",
-    "type": "bigint"
-   },
-   {
-    "name": "pk",
-    "type": "bigint"
-   },
-   {
-    "name": "kw",
-    "type": "bigint"
-   },
-   {
-    "name": "lk",
-    "type": "bigint"
-   },
-   {
-    "name": "mon",
-    "type": "bigint"
-   },
-   {
-    "name": "by",
-    "type": "bigint"
-   },
-   {
-    "name": "aus",
-    "type": "bigint"
-   },
-   {
-    "name": "cl",
-    "type": "bigint"
-   },
-   {
-    "name": "dk",
-    "type": "bigint"
-   },
-   {
-    "name": "kh",
-    "type": "bigint"
-   },
-   {
-    "name": "tr",
-    "type": "bigint"
-   },
-   {
-    "name": "rs",
-    "type": "bigint"
-   },
-   {
-    "name": "pt",
-    "type": "bigint"
-   },
-   {
-    "name": "gr",
-    "type": "bigint"
-   },
-   {
-    "name": "lit",
-    "type": "bigint"
-   },
-   {
-    "name": "be",
-    "type": "bigint"
-   },
-   {
-    "name": "fi",
-    "type": "bigint"
-   },
-   {
-    "name": "no",
-    "type": "bigint"
-   },
-   {
-    "name": "usa",
-    "type": "bigint"
+    "name": "value",
+    "type": "text"
    }
   ],
   "primary_key": "id",
   "foreign_keys": [],
-  "rows": 2320
+  "rows": 0
  },
  "sb_nationalities": {
   "columns": [
@@ -5854,6 +5154,10 @@
    {
     "name": "type",
     "type": "text"
+   },
+   {
+    "name": "slips",
+    "type": "text"
    }
   ],
   "primary_key": "id",
@@ -5918,61 +5222,13 @@
     "type": "text"
    },
    {
-    "name": "date",
+    "name": "value",
     "type": "text"
-   },
-   {
-    "name": "in_col",
-    "type": "bigint"
-   },
-   {
-    "name": "in_zwe",
-    "type": "bigint"
-   },
-   {
-    "name": "in_overseas",
-    "type": "bigint"
-   },
-   {
-    "name": "out_col",
-    "type": "bigint"
-   },
-   {
-    "name": "out_zwe",
-    "type": "bigint"
-   },
-   {
-    "name": "out_overseas",
-    "type": "bigint"
-   },
-   {
-    "name": "out_1951_convention",
-    "type": "bigint"
-   },
-   {
-    "name": "inat",
-    "type": "text"
-   },
-   {
-    "name": "outat",
-    "type": "text"
-   },
-   {
-    "name": "intotal",
-    "type": "bigint"
-   },
-   {
-    "name": "outtotal",
-    "type": "bigint"
-   },
-   {
-    "name": "in_1951_convention",
-    "type": "bigint"
    }
   ],
   "primary_key": "id",
   "foreign_keys": [],
-  "rows": 26
+  "rows": 0
  },
  "sb_market_monthly": {
   "columns": [
@@ -6075,179 +5331,7 @@
     "type": "text"
    },
    {
-    "name": "daystatus_2026_06_01",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_06_02",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_06_03",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_06_04",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_06_05",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_06_06",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_06_23",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_07_01",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_07_02",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_07_03",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_07_04",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_07_05",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_07_06",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_07_07",
-    "type": "text"
-   },
-   {
     "name": "dayzone_2026_06_12",
-    "type": "text"
-   },
-   {
-    "name": "dayroute_2026_06_11",
-    "type": "text"
-   },
-   {
-    "name": "dayroute_2026_06_12",
-    "type": "text"
-   },
-   {
-    "name": "dayroute_2026_06_13",
-    "type": "text"
-   },
-   {
-    "name": "dayroute_2026_06_14",
-    "type": "text"
-   },
-   {
-    "name": "dayroute_2026_06_15",
-    "type": "text"
-   },
-   {
-    "name": "dayroute_2026_06_21",
-    "type": "text"
-   },
-   {
-    "name": "dayroute_2026_06_22",
-    "type": "text"
-   },
-   {
-    "name": "dayroute_2026_06_23",
-    "type": "text"
-   },
-   {
-    "name": "dayroute_2026_06_24",
-    "type": "text"
-   },
-   {
-    "name": "dayroute_2026_06_26",
-    "type": "text"
-   },
-   {
-    "name": "dayroute_2026_07_01",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_06_12",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_06_13",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_06_11",
-    "type": "text"
-   },
-   {
-    "name": "dayroute_2026_06_19",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_06_26",
-    "type": "text"
-   },
-   {
-    "name": "dayroute_2026_06_20",
-    "type": "text"
-   },
-   {
-    "name": "dayroute_2026_06_25",
-    "type": "text"
-   },
-   {
-    "name": "dayroute_2026_06_28",
-    "type": "text"
-   },
-   {
-    "name": "dayroute_2026_06_29",
-    "type": "text"
-   },
-   {
-    "name": "dayroute_2026_06_18",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_06_22",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_06_24",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_06_25",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_06_27",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_06_28",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_06_29",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_06_30",
-    "type": "text"
-   },
-   {
-    "name": "daystatus_2026_06_21",
     "type": "text"
    }
   ],
@@ -6552,5 +5636,184 @@
   "primary_key": "id",
   "foreign_keys": [],
   "rows": 1
+ },
+ "insurance_overrides": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "value",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 0
+ },
+ "vanjob_sreq": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "value",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 0
+ },
+ "vanjob_th_flag": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "value",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 0
+ },
+ "vanjob_sent": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "value",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 0
+ },
+ "agent_artifacts": {
+  "columns": [
+   {
+    "name": "id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "value",
+    "type": "text"
+   }
+  ],
+  "primary_key": "id",
+  "foreign_keys": [],
+  "rows": 0
+ },
+ "routes__overrides": {
+  "columns": [
+   {
+    "name": "routes_id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "value",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "routes_id",
+    "references": "routes.id"
+   }
+  ],
+  "rows": 0
+ },
+ "sb_vehicles__dayroute": {
+  "columns": [
+   {
+    "name": "sb_vehicles_id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "value",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_vehicles_id",
+    "references": "sb_vehicles.id"
+   }
+  ],
+  "rows": 0
+ },
+ "sb_vehicles__daystatus": {
+  "columns": [
+   {
+    "name": "sb_vehicles_id",
+    "type": "text"
+   },
+   {
+    "name": "key",
+    "type": "text"
+   },
+   {
+    "name": "row_pk",
+    "type": "text"
+   },
+   {
+    "name": "value",
+    "type": "text"
+   }
+  ],
+  "primary_key": "row_pk",
+  "foreign_keys": [
+   {
+    "column": "sb_vehicles_id",
+    "references": "sb_vehicles.id"
+   }
+  ],
+  "rows": 0
  }
 }

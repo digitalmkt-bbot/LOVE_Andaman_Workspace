@@ -7,7 +7,7 @@
   },
   "value": {
    "source": "top-level value of 'version'",
-   "kind": "map_value",
+   "kind": "map_value_json",
    "db_type": "text"
   }
  },
@@ -34,381 +34,6 @@
   },
   "pier": {
    "source": "pier",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_05_31": {
-   "source": "overrides.2026-05-31",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_05_30": {
-   "source": "overrides.2026-05-30",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_07": {
-   "source": "overrides.2026-06-07",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_14": {
-   "source": "overrides.2026-06-14",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_21": {
-   "source": "overrides.2026-06-21",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_28": {
-   "source": "overrides.2026-06-28",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_29": {
-   "source": "overrides.2026-06-29",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_22": {
-   "source": "overrides.2026-06-22",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_15": {
-   "source": "overrides.2026-06-15",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_08": {
-   "source": "overrides.2026-06-08",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_01": {
-   "source": "overrides.2026-06-01",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_02": {
-   "source": "overrides.2026-06-02",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_09": {
-   "source": "overrides.2026-06-09",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_16": {
-   "source": "overrides.2026-06-16",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_23": {
-   "source": "overrides.2026-06-23",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_30": {
-   "source": "overrides.2026-06-30",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_25": {
-   "source": "overrides.2026-06-25",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_18": {
-   "source": "overrides.2026-06-18",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_11": {
-   "source": "overrides.2026-06-11",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_04": {
-   "source": "overrides.2026-06-04",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_05": {
-   "source": "overrides.2026-06-05",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_19": {
-   "source": "overrides.2026-06-19",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_12": {
-   "source": "overrides.2026-06-12",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_26": {
-   "source": "overrides.2026-06-26",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_27": {
-   "source": "overrides.2026-06-27",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_20": {
-   "source": "overrides.2026-06-20",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_13": {
-   "source": "overrides.2026-06-13",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_06": {
-   "source": "overrides.2026-06-06",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_03": {
-   "source": "overrides.2026-06-03",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_10": {
-   "source": "overrides.2026-06-10",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_17": {
-   "source": "overrides.2026-06-17",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_06_24": {
-   "source": "overrides.2026-06-24",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_05": {
-   "source": "overrides.2026-07-05",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_06": {
-   "source": "overrides.2026-07-06",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_13": {
-   "source": "overrides.2026-07-13",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_12": {
-   "source": "overrides.2026-07-12",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_19": {
-   "source": "overrides.2026-07-19",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_20": {
-   "source": "overrides.2026-07-20",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_27": {
-   "source": "overrides.2026-07-27",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_26": {
-   "source": "overrides.2026-07-26",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_01": {
-   "source": "overrides.2026-07-01",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_08": {
-   "source": "overrides.2026-07-08",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_15": {
-   "source": "overrides.2026-07-15",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_22": {
-   "source": "overrides.2026-07-22",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_29": {
-   "source": "overrides.2026-07-29",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_30": {
-   "source": "overrides.2026-07-30",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_23": {
-   "source": "overrides.2026-07-23",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_16": {
-   "source": "overrides.2026-07-16",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_09": {
-   "source": "overrides.2026-07-09",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_02": {
-   "source": "overrides.2026-07-02",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_03": {
-   "source": "overrides.2026-07-03",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_10": {
-   "source": "overrides.2026-07-10",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_17": {
-   "source": "overrides.2026-07-17",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_31": {
-   "source": "overrides.2026-07-31",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_24": {
-   "source": "overrides.2026-07-24",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_25": {
-   "source": "overrides.2026-07-25",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_18": {
-   "source": "overrides.2026-07-18",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_11": {
-   "source": "overrides.2026-07-11",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_07_04": {
-   "source": "overrides.2026-07-04",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_08_01": {
-   "source": "overrides.2026-08-01",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_08_15": {
-   "source": "overrides.2026-08-15",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_08_22": {
-   "source": "overrides.2026-08-22",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_08_29": {
-   "source": "overrides.2026-08-29",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_08_03": {
-   "source": "overrides.2026-08-03",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_08_10": {
-   "source": "overrides.2026-08-10",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_08_17": {
-   "source": "overrides.2026-08-17",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_08_24": {
-   "source": "overrides.2026-08-24",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_08_05": {
-   "source": "overrides.2026-08-05",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_08_06": {
-   "source": "overrides.2026-08-06",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_08_12": {
-   "source": "overrides.2026-08-12",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_08_13": {
-   "source": "overrides.2026-08-13",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_08_19": {
-   "source": "overrides.2026-08-19",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_08_20": {
-   "source": "overrides.2026-08-20",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_08_26": {
-   "source": "overrides.2026-08-26",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "overrides_2026_08_27": {
-   "source": "overrides.2026-08-27",
    "kind": "scalar",
    "db_type": "text"
   }
@@ -1636,8 +1261,13 @@
    "kind": "fk",
    "db_type": "text"
   },
+  "boat": {
+   "source": "fleet_daily[key].trips[key].boat",
+   "kind": "scalar",
+   "db_type": "text"
+  },
   "key": {
-   "source": "(map key of fleet_daily[key].b2.trips)",
+   "source": "(map key of fleet_daily[key].boat.trips)",
    "kind": "map_key",
    "db_type": "text"
   },
@@ -1646,95 +1276,10 @@
    "kind": "synthetic-pk",
    "db_type": "text"
   },
-  "engines_e6": {
-   "source": "fleet_daily[key].b2.trips[key].engines.e6",
-   "kind": "scalar",
-   "db_type": "double precision"
-  },
-  "engines_e33": {
-   "source": "fleet_daily[key].b10.trips[key].engines.e33",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "engines_e34": {
-   "source": "fleet_daily[key].b10.trips[key].engines.e34",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "engines_e35": {
-   "source": "fleet_daily[key].b10.trips[key].engines.e35",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "engines_e36": {
-   "source": "fleet_daily[key].b10.trips[key].engines.e36",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "engines_e7": {
-   "source": "fleet_daily[key].b2.trips[key].engines.e7",
-   "kind": "scalar",
-   "db_type": "double precision"
-  },
-  "engines_e8": {
-   "source": "fleet_daily[key].b2.trips[key].engines.e8",
-   "kind": "scalar",
-   "db_type": "double precision"
-  },
-  "engines_e20": {
-   "source": "fleet_daily[key].b2.trips[key].engines.e20",
-   "kind": "scalar",
-   "db_type": "double precision"
-  },
-  "engines_e26": {
-   "source": "fleet_daily[key].b6.trips[key].engines.e26",
-   "kind": "scalar",
-   "db_type": "double precision"
-  },
-  "engines_e27": {
-   "source": "fleet_daily[key].b6.trips[key].engines.e27",
-   "kind": "scalar",
-   "db_type": "double precision"
-  },
-  "engines_e28": {
-   "source": "fleet_daily[key].b6.trips[key].engines.e28",
-   "kind": "scalar",
-   "db_type": "double precision"
-  },
-  "engines_e43": {
-   "source": "fleet_daily[key].b12.trips[key].engines.e43",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "engines_e44": {
-   "source": "fleet_daily[key].b12.trips[key].engines.e44",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "engines_e51": {
-   "source": "fleet_daily[key].b12.trips[key].engines.e51",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "engines_e52": {
-   "source": "fleet_daily[key].b12.trips[key].engines.e52",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "engines_e45": {
-   "source": "fleet_daily[key].b13.trips[key].engines.e45",
-   "kind": "scalar",
-   "db_type": "double precision"
-  },
-  "engines_e46": {
-   "source": "fleet_daily[key].b13.trips[key].engines.e46",
-   "kind": "scalar",
-   "db_type": "double precision"
-  },
-  "engines_e47": {
-   "source": "fleet_daily[key].b13.trips[key].engines.e47",
-   "kind": "scalar",
-   "db_type": "double precision"
+  "value": {
+   "source": "fleet_daily[key].trips[key] value",
+   "kind": "json_text",
+   "db_type": "text"
   }
  },
  "fleet_maintenance": {
@@ -2864,7 +2409,7 @@
   },
   "kl": {
    "source": "seatRates[key].KL",
-   "kind": "scalar",
+   "kind": "json_text",
    "db_type": "text"
   }
  },
@@ -4039,6 +3584,46 @@
    "source": "createdBy",
    "kind": "scalar",
    "db_type": "text"
+  },
+  "scope": {
+   "source": "scope",
+   "kind": "scalar",
+   "db_type": "text"
+  },
+  "month": {
+   "source": "month",
+   "kind": "scalar",
+   "db_type": "text"
+  },
+  "monthfrom": {
+   "source": "monthFrom",
+   "kind": "scalar",
+   "db_type": "text"
+  },
+  "monthto": {
+   "source": "monthTo",
+   "kind": "scalar",
+   "db_type": "text"
+  },
+  "parentid": {
+   "source": "parentId",
+   "kind": "scalar",
+   "db_type": "text"
+  },
+  "subname": {
+   "source": "subName",
+   "kind": "scalar",
+   "db_type": "text"
+  },
+  "releasedaysbefore": {
+   "source": "releaseDaysBefore",
+   "kind": "scalar",
+   "db_type": "bigint"
+  },
+  "releasetime": {
+   "source": "releaseTime",
+   "kind": "scalar",
+   "db_type": "text"
   }
  },
  "sb_seat_locks__log": {
@@ -4071,6 +3656,31 @@
    "source": "log[].qty",
    "kind": "scalar",
    "db_type": "bigint"
+  },
+  "at": {
+   "source": "sb_seat_locks[].log[].at",
+   "kind": "scalar",
+   "db_type": "text"
+  },
+  "by": {
+   "source": "sb_seat_locks[].log[].by",
+   "kind": "scalar",
+   "db_type": "text"
+  },
+  "bookingid": {
+   "source": "sb_seat_locks[].log[].bookingId",
+   "kind": "scalar",
+   "db_type": "text"
+  },
+  "sub": {
+   "source": "sb_seat_locks[].log[].sub",
+   "kind": "scalar",
+   "db_type": "boolean"
+  },
+  "note": {
+   "source": "sb_seat_locks[].log[].note",
+   "kind": "scalar",
+   "db_type": "text"
   }
  },
  "sb_sales": {
@@ -4468,214 +4078,21 @@
    "source": "contractHistory[].snapshot.agentSignatory.signedDate",
    "kind": "scalar",
    "db_type": "text"
-  }
- },
- "sb_agents__contracthistory__programperiods": {
-  "sb_agents_contracthistory_id": {
-   "source": "(link) sb_agents__contracthistory.id",
-   "kind": "fk",
+  },
+  "snapshot_programperiods": {
+   "source": "contractHistory[].snapshot.programPeriods",
+   "kind": "json_text",
    "db_type": "text"
   },
-  "idx": {
-   "source": "(order) position in contractHistory[].snapshot.programPeriods[]",
-   "kind": "synthetic",
-   "db_type": "bigint"
-  },
-  "row_pk": {
-   "source": "(generated child key)",
-   "kind": "synthetic-pk",
+  "snapshot_addonservices": {
+   "source": "contractHistory[].snapshot.addonServices",
+   "kind": "json_text",
    "db_type": "text"
   },
-  "routeid": {
-   "source": "contractHistory[].snapshot.programPeriods[].routeId",
-   "kind": "scalar",
+  "snapshot_prices": {
+   "source": "contractHistory[].snapshot.prices",
+   "kind": "json_text",
    "db_type": "text"
-  },
-  "bookfrom": {
-   "source": "contractHistory[].snapshot.programPeriods[].bookFrom",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "bookto": {
-   "source": "contractHistory[].snapshot.programPeriods[].bookTo",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "travelfrom": {
-   "source": "contractHistory[].snapshot.programPeriods[].travelFrom",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "travelto": {
-   "source": "contractHistory[].snapshot.programPeriods[].travelTo",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "note": {
-   "source": "contractHistory[].snapshot.programPeriods[].note",
-   "kind": "scalar",
-   "db_type": "text"
-  }
- },
- "sb_agents__contracthistory__addonservices": {
-  "sb_agents_contracthistory_id": {
-   "source": "(link) sb_agents__contracthistory.id",
-   "kind": "fk",
-   "db_type": "text"
-  },
-  "idx": {
-   "source": "(order) position in contractHistory[].snapshot.addonServices[]",
-   "kind": "synthetic",
-   "db_type": "bigint"
-  },
-  "row_pk": {
-   "source": "(generated child key)",
-   "kind": "synthetic-pk",
-   "db_type": "text"
-  },
-  "svcid": {
-   "source": "contractHistory[].snapshot.addonServices[].svcId",
-   "kind": "scalar",
-   "db_type": "text"
-  }
- },
- "sb_agents__contracthistory__addonservices__variants": {
-  "sb_agents_contracthistory_addonservices_id": {
-   "source": "(link) sb_agents__contracthistory__addonservices.id",
-   "kind": "fk",
-   "db_type": "text"
-  },
-  "idx": {
-   "source": "(order) position in contractHistory[].snapshot.addonServices[].variants[]",
-   "kind": "synthetic",
-   "db_type": "bigint"
-  },
-  "row_pk": {
-   "source": "(generated child key)",
-   "kind": "synthetic-pk",
-   "db_type": "text"
-  },
-  "varid": {
-   "source": "contractHistory[].snapshot.addonServices[].variants[].varId",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "selling": {
-   "source": "contractHistory[].snapshot.addonServices[].variants[].selling",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "net": {
-   "source": "contractHistory[].snapshot.addonServices[].variants[].net",
-   "kind": "scalar",
-   "db_type": "bigint"
-  }
- },
- "sb_agents__contracthistory__prices": {
-  "sb_agents_contracthistory_id": {
-   "source": "(link) sb_agents__contracthistory.id",
-   "kind": "fk",
-   "db_type": "text"
-  },
-  "key": {
-   "source": "(map key of contractHistory[].snapshot.prices)",
-   "kind": "map_key",
-   "db_type": "text"
-  },
-  "row_pk": {
-   "source": "(generated child key)",
-   "kind": "synthetic-pk",
-   "db_type": "text"
-  },
-  "pk_adult_thai": {
-   "source": "contractHistory[].snapshot.prices[key].PK.adult-thai",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "pk_adult_fr": {
-   "source": "contractHistory[].snapshot.prices[key].PK.adult-fr",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "pk_child_thai": {
-   "source": "contractHistory[].snapshot.prices[key].PK.child-thai",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "pk_child_fr": {
-   "source": "contractHistory[].snapshot.prices[key].PK.child-fr",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "pk_infant_thai": {
-   "source": "contractHistory[].snapshot.prices[key].PK.infant-thai",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "pk_infant_fr": {
-   "source": "contractHistory[].snapshot.prices[key].PK.infant-fr",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "kl_adult_thai": {
-   "source": "contractHistory[].snapshot.prices[key].KL.adult-thai",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "kl_adult_fr": {
-   "source": "contractHistory[].snapshot.prices[key].KL.adult-fr",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "kl_child_thai": {
-   "source": "contractHistory[].snapshot.prices[key].KL.child-thai",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "kl_child_fr": {
-   "source": "contractHistory[].snapshot.prices[key].KL.child-fr",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "kl_infant_thai": {
-   "source": "contractHistory[].snapshot.prices[key].KL.infant-thai",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "kl_infant_fr": {
-   "source": "contractHistory[].snapshot.prices[key].KL.infant-fr",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "notransfer_adult_thai": {
-   "source": "contractHistory[].snapshot.prices[key].NoTransfer.adult-thai",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "notransfer_adult_fr": {
-   "source": "contractHistory[].snapshot.prices[key].NoTransfer.adult-fr",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "notransfer_child_thai": {
-   "source": "contractHistory[].snapshot.prices[key].NoTransfer.child-thai",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "notransfer_child_fr": {
-   "source": "contractHistory[].snapshot.prices[key].NoTransfer.child-fr",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "notransfer_infant_thai": {
-   "source": "contractHistory[].snapshot.prices[key].NoTransfer.infant-thai",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "notransfer_infant_fr": {
-   "source": "contractHistory[].snapshot.prices[key].NoTransfer.infant-fr",
-   "kind": "scalar",
-   "db_type": "bigint"
   }
  },
  "sb_bookings": {
@@ -5318,6 +4735,31 @@
    "source": "editLock.at",
    "kind": "scalar",
    "db_type": "bigint"
+  },
+  "doccheck": {
+   "source": "docCheck",
+   "kind": "json_text",
+   "db_type": "text"
+  },
+  "attachments": {
+   "source": "attachments",
+   "kind": "json_text",
+   "db_type": "text"
+  },
+  "paymentslips": {
+   "source": "paymentSlips",
+   "kind": "json_text",
+   "db_type": "text"
+  },
+  "incomplete": {
+   "source": "incomplete",
+   "kind": "json_text",
+   "db_type": "text"
+  },
+  "approval_over": {
+   "source": "approval.over",
+   "kind": "json_text",
+   "db_type": "text"
   }
  },
  "sb_bookings__passengers": {
@@ -5512,6 +4954,16 @@
    "source": "trips[].pax.foc",
    "kind": "scalar",
    "db_type": "bigint"
+  },
+  "lockdrawsel": {
+   "source": "trips[].lockDrawSel",
+   "kind": "json_text",
+   "db_type": "text"
+  },
+  "lockdraws": {
+   "source": "trips[].lockDraws",
+   "kind": "json_text",
+   "db_type": "text"
   }
  },
  "sb_bookings__addons": {
@@ -5909,310 +5361,10 @@
    "kind": "map_key",
    "db_type": "text"
   },
-  "il": {
-   "source": "nat_learn[key].IL",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "sa": {
-   "source": "nat_learn[key].SA",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "th": {
-   "source": "nat_learn[key].TH",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "in": {
-   "source": "nat_learn[key].IN",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "sg": {
-   "source": "nat_learn[key].SG",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "my": {
-   "source": "nat_learn[key].MY",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "au": {
-   "source": "nat_learn[key].AU",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "de": {
-   "source": "nat_learn[key].DE",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "us": {
-   "source": "nat_learn[key].US",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "om": {
-   "source": "nat_learn[key].OM",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "eg": {
-   "source": "nat_learn[key].EG",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "ae": {
-   "source": "nat_learn[key].AE",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "br": {
-   "source": "nat_learn[key].BR",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "cn": {
-   "source": "nat_learn[key].CN",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "es": {
-   "source": "nat_learn[key].ES",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "mx": {
-   "source": "nat_learn[key].MX",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "kr": {
-   "source": "nat_learn[key].KR",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "bar2": {
-   "source": "nat_learn[key].BAR2",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "bar": {
-   "source": "nat_learn[key].BAR",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "nl": {
-   "source": "nat_learn[key].NL",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "ru": {
-   "source": "nat_learn[key].RU",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "jo": {
-   "source": "nat_learn[key].JO",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "jp": {
-   "source": "nat_learn[key].JP",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "gb": {
-   "source": "nat_learn[key].GB",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "ca": {
-   "source": "nat_learn[key].CA",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "qa": {
-   "source": "nat_learn[key].QA",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "irq": {
-   "source": "nat_learn[key].IRQ",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "za": {
-   "source": "nat_learn[key].ZA",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "cub": {
-   "source": "nat_learn[key].CUB",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "fr": {
-   "source": "nat_learn[key].FR",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "eth": {
-   "source": "nat_learn[key].ETH",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "ie": {
-   "source": "nat_learn[key].IE",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "kz": {
-   "source": "nat_learn[key].KZ",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "uz": {
-   "source": "nat_learn[key].UZ",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "tw": {
-   "source": "nat_learn[key].TW",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "it": {
-   "source": "nat_learn[key].IT",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "se": {
-   "source": "nat_learn[key].SE",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "nig": {
-   "source": "nat_learn[key].NIG",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "ge": {
-   "source": "nat_learn[key].GE",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "ph": {
-   "source": "nat_learn[key].PH",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "ar": {
-   "source": "nat_learn[key].AR",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "gha": {
-   "source": "nat_learn[key].GHA",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "nz": {
-   "source": "nat_learn[key].NZ",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "pk": {
-   "source": "nat_learn[key].PK",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "kw": {
-   "source": "nat_learn[key].KW",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "lk": {
-   "source": "nat_learn[key].LK",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "mon": {
-   "source": "nat_learn[key].MON",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "by": {
-   "source": "nat_learn[key].BY",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "aus": {
-   "source": "nat_learn[key].AUS",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "cl": {
-   "source": "nat_learn[key].CL",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "dk": {
-   "source": "nat_learn[key].DK",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "kh": {
-   "source": "nat_learn[key].KH",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "tr": {
-   "source": "nat_learn[key].TR",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "rs": {
-   "source": "nat_learn[key].RS",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "pt": {
-   "source": "nat_learn[key].PT",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "gr": {
-   "source": "nat_learn[key].GR",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "lit": {
-   "source": "nat_learn[key].LIT",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "be": {
-   "source": "nat_learn[key].BE",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "fi": {
-   "source": "nat_learn[key].FI",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "no": {
-   "source": "nat_learn[key].NO",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "usa": {
-   "source": "nat_learn[key].USA",
-   "kind": "scalar",
-   "db_type": "bigint"
+  "value": {
+   "source": "nat_learn[key] value",
+   "kind": "map_value_json",
+   "db_type": "text"
   }
  },
  "sb_nationalities": {
@@ -6435,6 +5587,11 @@
    "source": "type",
    "kind": "scalar",
    "db_type": "text"
+  },
+  "slips": {
+   "source": "slips",
+   "kind": "json_text",
+   "db_type": "text"
   }
  },
  "sb_markets": {
@@ -6487,70 +5644,10 @@
    "kind": "map_key",
    "db_type": "text"
   },
-  "date": {
-   "source": "sb_market_stats[key].date",
-   "kind": "scalar",
+  "value": {
+   "source": "sb_market_stats[key] value",
+   "kind": "map_value_json",
    "db_type": "text"
-  },
-  "in_col": {
-   "source": "sb_market_stats[key].in.รัสเซีย",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "in_zwe": {
-   "source": "sb_market_stats[key].in.ซิมบับเว (ZWE)",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "in_overseas": {
-   "source": "sb_market_stats[key].in.บริติช (OVERSEAS)",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "out_col": {
-   "source": "sb_market_stats[key].out.อินเดีย",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "out_zwe": {
-   "source": "sb_market_stats[key].out.ซิมบับเว (ZWE)",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "out_overseas": {
-   "source": "sb_market_stats[key].out.บริติช (OVERSEAS)",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "out_1951_convention": {
-   "source": "sb_market_stats[key].out.ผู้อพยพ (1951 CONVENTION)",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "inat": {
-   "source": "sb_market_stats[key].inAt",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "outat": {
-   "source": "sb_market_stats[key].outAt",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "intotal": {
-   "source": "sb_market_stats[key].inTotal",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "outtotal": {
-   "source": "sb_market_stats[key].outTotal",
-   "kind": "scalar",
-   "db_type": "bigint"
-  },
-  "in_1951_convention": {
-   "source": "sb_market_stats[key].in.ผู้อพยพ (1951 CONVENTION)",
-   "kind": "scalar",
-   "db_type": "bigint"
   }
  },
  "sb_market_monthly": {
@@ -6663,223 +5760,8 @@
    "kind": "scalar",
    "db_type": "text"
   },
-  "daystatus_2026_06_01": {
-   "source": "dayStatus.2026-06-01",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_06_02": {
-   "source": "dayStatus.2026-06-02",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_06_03": {
-   "source": "dayStatus.2026-06-03",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_06_04": {
-   "source": "dayStatus.2026-06-04",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_06_05": {
-   "source": "dayStatus.2026-06-05",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_06_06": {
-   "source": "dayStatus.2026-06-06",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_06_23": {
-   "source": "dayStatus.2026-06-23",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_07_01": {
-   "source": "dayStatus.2026-07-01",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_07_02": {
-   "source": "dayStatus.2026-07-02",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_07_03": {
-   "source": "dayStatus.2026-07-03",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_07_04": {
-   "source": "dayStatus.2026-07-04",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_07_05": {
-   "source": "dayStatus.2026-07-05",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_07_06": {
-   "source": "dayStatus.2026-07-06",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_07_07": {
-   "source": "dayStatus.2026-07-07",
-   "kind": "scalar",
-   "db_type": "text"
-  },
   "dayzone_2026_06_12": {
    "source": "dayZone.2026-06-12",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "dayroute_2026_06_11": {
-   "source": "dayRoute.2026-06-11",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "dayroute_2026_06_12": {
-   "source": "dayRoute.2026-06-12",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "dayroute_2026_06_13": {
-   "source": "dayRoute.2026-06-13",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "dayroute_2026_06_14": {
-   "source": "dayRoute.2026-06-14",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "dayroute_2026_06_15": {
-   "source": "dayRoute.2026-06-15",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "dayroute_2026_06_21": {
-   "source": "dayRoute.2026-06-21",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "dayroute_2026_06_22": {
-   "source": "dayRoute.2026-06-22",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "dayroute_2026_06_23": {
-   "source": "dayRoute.2026-06-23",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "dayroute_2026_06_24": {
-   "source": "dayRoute.2026-06-24",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "dayroute_2026_06_26": {
-   "source": "dayRoute.2026-06-26",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "dayroute_2026_07_01": {
-   "source": "dayRoute.2026-07-01",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_06_12": {
-   "source": "dayStatus.2026-06-12",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_06_13": {
-   "source": "dayStatus.2026-06-13",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_06_11": {
-   "source": "dayStatus.2026-06-11",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "dayroute_2026_06_19": {
-   "source": "dayRoute.2026-06-19",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_06_26": {
-   "source": "dayStatus.2026-06-26",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "dayroute_2026_06_20": {
-   "source": "dayRoute.2026-06-20",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "dayroute_2026_06_25": {
-   "source": "dayRoute.2026-06-25",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "dayroute_2026_06_28": {
-   "source": "dayRoute.2026-06-28",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "dayroute_2026_06_29": {
-   "source": "dayRoute.2026-06-29",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "dayroute_2026_06_18": {
-   "source": "dayRoute.2026-06-18",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_06_22": {
-   "source": "dayStatus.2026-06-22",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_06_24": {
-   "source": "dayStatus.2026-06-24",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_06_25": {
-   "source": "dayStatus.2026-06-25",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_06_27": {
-   "source": "dayStatus.2026-06-27",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_06_28": {
-   "source": "dayStatus.2026-06-28",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_06_29": {
-   "source": "dayStatus.2026-06-29",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_06_30": {
-   "source": "dayStatus.2026-06-30",
-   "kind": "scalar",
-   "db_type": "text"
-  },
-  "daystatus_2026_06_21": {
-   "source": "dayStatus.2026-06-21",
    "kind": "scalar",
    "db_type": "text"
   }
@@ -7187,6 +6069,157 @@
   "note": {
    "source": "note",
    "kind": "scalar",
+   "db_type": "text"
+  }
+ },
+ "insurance_overrides": {
+  "id": {
+   "source": "insurance_overrides map key (generated id)",
+   "kind": "pk",
+   "db_type": "text"
+  },
+  "key": {
+   "source": "insurance_overrides map key (original)",
+   "kind": "map_key",
+   "db_type": "text"
+  },
+  "value": {
+   "source": "insurance_overrides[key] value",
+   "kind": "map_value_json",
+   "db_type": "text"
+  }
+ },
+ "vanjob_sreq": {
+  "id": {
+   "source": "vanjob_sreq map key (generated id)",
+   "kind": "pk",
+   "db_type": "text"
+  },
+  "key": {
+   "source": "vanjob_sreq map key (original)",
+   "kind": "map_key",
+   "db_type": "text"
+  },
+  "value": {
+   "source": "vanjob_sreq[key] value",
+   "kind": "map_value_json",
+   "db_type": "text"
+  }
+ },
+ "vanjob_th_flag": {
+  "id": {
+   "source": "vanjob_th_flag map key (generated id)",
+   "kind": "pk",
+   "db_type": "text"
+  },
+  "key": {
+   "source": "vanjob_th_flag map key (original)",
+   "kind": "map_key",
+   "db_type": "text"
+  },
+  "value": {
+   "source": "vanjob_th_flag[key] value",
+   "kind": "map_value_json",
+   "db_type": "text"
+  }
+ },
+ "vanjob_sent": {
+  "id": {
+   "source": "vanjob_sent map key (generated id)",
+   "kind": "pk",
+   "db_type": "text"
+  },
+  "key": {
+   "source": "vanjob_sent map key (original)",
+   "kind": "map_key",
+   "db_type": "text"
+  },
+  "value": {
+   "source": "vanjob_sent[key] value",
+   "kind": "map_value_json",
+   "db_type": "text"
+  }
+ },
+ "agent_artifacts": {
+  "id": {
+   "source": "agent_artifacts map key (generated id)",
+   "kind": "pk",
+   "db_type": "text"
+  },
+  "key": {
+   "source": "agent_artifacts map key (original)",
+   "kind": "map_key",
+   "db_type": "text"
+  },
+  "value": {
+   "source": "agent_artifacts[key] value",
+   "kind": "map_value_json",
+   "db_type": "text"
+  }
+ },
+ "routes__overrides": {
+  "routes_id": {
+   "source": "(link) routes.id",
+   "kind": "fk",
+   "db_type": "text"
+  },
+  "key": {
+   "source": "(map key of routes.overrides)",
+   "kind": "map_key",
+   "db_type": "text"
+  },
+  "row_pk": {
+   "source": "(generated child key)",
+   "kind": "synthetic-pk",
+   "db_type": "text"
+  },
+  "value": {
+   "source": "routes.overrides[key] value",
+   "kind": "map_value_json",
+   "db_type": "text"
+  }
+ },
+ "sb_vehicles__dayroute": {
+  "sb_vehicles_id": {
+   "source": "(link) sb_vehicles.id",
+   "kind": "fk",
+   "db_type": "text"
+  },
+  "key": {
+   "source": "(map key of sb_vehicles.dayRoute)",
+   "kind": "map_key",
+   "db_type": "text"
+  },
+  "row_pk": {
+   "source": "(generated child key)",
+   "kind": "synthetic-pk",
+   "db_type": "text"
+  },
+  "value": {
+   "source": "sb_vehicles.dayRoute[key] value",
+   "kind": "map_value_json",
+   "db_type": "text"
+  }
+ },
+ "sb_vehicles__daystatus": {
+  "sb_vehicles_id": {
+   "source": "(link) sb_vehicles.id",
+   "kind": "fk",
+   "db_type": "text"
+  },
+  "key": {
+   "source": "(map key of sb_vehicles.dayStatus)",
+   "kind": "map_key",
+   "db_type": "text"
+  },
+  "row_pk": {
+   "source": "(generated child key)",
+   "kind": "synthetic-pk",
+   "db_type": "text"
+  },
+  "value": {
+   "source": "sb_vehicles.dayStatus[key] value",
+   "kind": "map_value_json",
    "db_type": "text"
   }
  }
