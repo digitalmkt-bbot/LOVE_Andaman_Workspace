@@ -49,8 +49,8 @@ async function initDb(){
 // ── perms helpers (per-user area access · null/invalid = all areas) ──
 function parsePerms(v){ if(v==null) return null; try{ const a=JSON.parse(v); return Array.isArray(a)?a:null; }catch(e){ return null; } }
 const PERM_KEYS=new Set(['overview','operations','sales','accounting','fleet','config',  // group keys (back-compat)
-  'dashboard','calendar','daily','booking','doccheck','operation','vehicles','vanjobs','pickup-setup',
-  'agents','rate-types','b2c','staff','marketdata','pickupmap','dailypfm',
+  'dashboard','calendar','daily','booking','doccheck','operation','insurance','vehicles','vanjobs','pickup-setup',
+  'agents','rate-types','b2c','staff','marketdata','focdetail','pickupmap','dailypfm',
   'fl-dashboard','fl-boatstatus','fl-dailyreport','fl-incident','fl-projects','fl-maintenance','fl-inventory','fl-consumables','fl-cost','fl-insights','fl-fuel','fl-asset',
   'settings','teammkt','addonsvc']);   // 'accounting' already present as a group key
 function cleanPerms(a){ return Array.isArray(a)?a.filter(x=>PERM_KEYS.has(x)):null; }
