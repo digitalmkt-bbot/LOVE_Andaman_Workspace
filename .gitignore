@@ -14,5 +14,10 @@ allotment_v2/BACKUP/
 # ── Local lock files ──
 *.lock
 
+# ── Claude Code local tooling (per-machine, not project code) ──
+.agents/
+.claude/
+skills-lock.json
+
 # real prod data pulled for dev seeding — never commit
 os-backend/data_snapshots/
