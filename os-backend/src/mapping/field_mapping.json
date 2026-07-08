@@ -4760,6 +4760,16 @@
    "source": "approval.over",
    "kind": "json_text",
    "db_type": "text"
+  },
+  "altpickups": {
+   "source": "altPickups",
+   "kind": "json_text",
+   "db_type": "text"
+  },
+  "ops_vansplits": {
+   "source": "ops.vanSplits",
+   "kind": "json_text",
+   "db_type": "text"
   }
  },
  "sb_bookings__passengers": {

@@ -4351,6 +4351,14 @@
    {
     "name": "approval_over",
     "type": "text"
+   },
+   {
+    "name": "altpickups",
+    "type": "text"
+   },
+   {
+    "name": "ops_vansplits",
+    "type": "text"
    }
   ],
   "primary_key": "id",
