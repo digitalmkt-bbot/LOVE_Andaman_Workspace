@@ -178,16 +178,18 @@ for (const [t, pl] of Object.entries(REST_PLAN)) {
 }
 function restDescendants(table){ const out = []; (function rec(t){ for (const c of (REST_KIDS[t]||[])){ out.push(c); rec(c); } })(table); return out; }
 // scoped load: parent rows (all, or one id) + every descendant child row linked by the FK chain
-async function restLoad(table, id){
+// db = pool (default) or an open transaction client (patch reads must see earlier ops in the same txn)
+async function restLoad(table, id, db){
+  db = db || pool;
   const pl = REST_PLAN[table], pkc = pl.pkCol || pl.keyCol, data = {};
-  const pr = id == null ? await pool.query(`SELECT * FROM ${fqt(table)}`)
-                        : await pool.query(`SELECT * FROM ${fqt(table)} WHERE ${qic(pkc)}=$1`, [id]);
+  const pr = id == null ? await db.query(`SELECT * FROM ${fqt(table)}`)
+                        : await db.query(`SELECT * FROM ${fqt(table)} WHERE ${qic(pkc)}=$1`, [id]);
   data[table] = pr.rows;
   async function kids(t, pkvals){
     if (!pkvals.length) return;
     for (const c of (REST_KIDS[t]||[])){
       const cp = REST_PLAN[c];
-      const r = await pool.query(`SELECT * FROM ${fqt(c)} WHERE ${qic(cp.fkCol)} = ANY($1)`, [pkvals]);
+      const r = await db.query(`SELECT * FROM ${fqt(c)} WHERE ${qic(cp.fkCol)} = ANY($1)`, [pkvals]);
       data[c] = (data[c]||[]).concat(r.rows);
       await kids(c, r.rows.map(x => x[cp.rowPkCol != null ? cp.rowPkCol : cp.pkCol]).filter(v => v != null));
     }
@@ -217,6 +219,9 @@ async function _restInsertRows(client, tables, rows){          // parents first,
 }
 // Apply ONE write op inside an open transaction. Ops:
 //   {op:'put',    r, id, body}  replace/create one record (nested children re-inserted; map value may be any JSON)
+//   {op:'patch',  r, id, body:{m,full}}  per-FIELD merge onto the record's CURRENT server state (m = deep diff
+//                               {p,d} · applyObj) — two users editing different fields of the same record both
+//                               survive. Record missing / not an object → falls back to body.full (full replace).
 //   {op:'del',    r, id}        delete one record (children cascade)
 //   {op:'putall', r, body}      replace the whole collection (id-less wholesale sets · body null/[]/{}= clear)
 //   {op:'meta',   id, body}     upsert one top-level scalar in app_meta (body null = delete the key)
@@ -231,6 +236,19 @@ async function restApplyOp(client, op){
   const { table, pkCol, container } = R, appKey = REST_PLAN[table].appKey;
   const subtree = [table, ...restDescendants(table)].sort((a, b) => _osDepth(a) - _osDepth(b));
   if (op.op === 'del'){ await client.query(`DELETE FROM ${fqt(table)} WHERE ${qic(pkCol)}=$1`, [op.id]); return op.id; }
+  if (op.op === 'patch'){
+    if (op.id == null) throw new Error(op.r + ': patch needs an id');
+    const b = op.body || {};
+    const blob = osRepo.assembleBlob(await restLoad(table, op.id, client));
+    const val = blob[appKey];
+    const cur = container === 'array' ? (Array.isArray(val) ? val.find(x => x && String(x.id) === String(op.id)) : null)
+                                      : (val ? val[op.id] : null);
+    let merged;
+    if (cur && typeof cur === 'object' && !Array.isArray(cur)) { applyObj(cur, b.m || {}); merged = cur; }
+    else if (b.full !== undefined && b.full !== null) merged = b.full;      // record gone / not an object → full replace
+    else throw new Error(op.r + '/' + op.id + ': patch target not found (no full fallback)');
+    return restApplyOp(client, { op: 'put', r: op.r, id: op.id, body: merged });
+  }
   if (op.op === 'putall'){
     await client.query(`DELETE FROM ${fqt(table)}`);                     // children cascade
     if (op.body == null) return op.r;
@@ -332,6 +350,11 @@ const server = http.createServer((req, res) => {
       let payload; try{ payload=JSON.parse(body); }catch(e){ return J(res,400,{error:'invalid JSON'}); }
       const base = (payload.baseVersion==null ? -1 : payload.baseVersion);
       if(DATA_BACKEND==='relational'){
+        // visibility: normal saves go through /api/v1/_batch (per-entity). Landing here means the legacy
+        // whole-blob rewrite path was used — seed, old client, or MAPPING DRIFT (a key /api/v1 doesn't know).
+        try{ const d=payload.diff||{}; console.warn('[save] LEGACY whole-blob path · user='+s.username
+          +(payload.full?' · FULL seed':' · diff sets=['+Object.keys(d.sets||{}).join(',')+'] cols=['+Object.keys(d.cols||{}).join(',')+'] objs=['+Object.keys(d.objs||{}).join(',')+']')
+          +' — run os-backend/scripts/check_mapping_drift.js if this repeats'); }catch(e){}
         relApplyAndSave(payload, s.username, base)
           .then(({version,behind})=>{ J(res,200,{ok:true,version,behind}); sseBroadcast({version, updated_by:s.username}); })
           .catch(e=>J(res,500,{error:e.message}));
@@ -442,17 +465,17 @@ const server = http.createServer((req, res) => {
         let p; try{ p=JSON.parse(body); }catch(e){ return J(res,400,{error:'invalid JSON'}); }
         const ops = Array.isArray(p.ops) ? p.ops : null;
         if(!ops || !ops.length) return J(res,400,{error:'ops required'});
-        if(!ops.every(o=>o && (o.op==='meta' ? o.id!=null : (o.op==='put'||o.op==='del'||o.op==='putall') && o.r))) return J(res,400,{error:'bad op shape'});
+        if(!ops.every(o=>o && (o.op==='meta' ? o.id!=null : (o.op==='put'||o.op==='patch'||o.op==='del'||o.op==='putall') && o.r))) return J(res,400,{error:'bad op shape'});
         restTxn(s.username, p.baseVersion==null?-1:p.baseVersion, ops)
           .then(({version,behind})=>{ J(res,200,{ok:true,version,behind,applied:ops.length}); sseBroadcast({version, updated_by:s.username}); })
-          .catch(e=>J(res, /unknown resource|needs an id|record object/.test(e.message)?400:500, {error:e.message}));
+          .catch(e=>J(res, /unknown resource|needs an id|record object|patch target not found/.test(e.message)?400:500, {error:e.message}));
       }); return;
     }
     if(m==='GET'){ restGet(res,resName,id).catch(done); return; }
     if(!canWrite) return J(res,403,{error:'view only · ไม่มีสิทธิ์แก้ไข'});
     const one = op => restTxn(s.username, -1, [op])
       .then(({version,applied})=>{ J(res, m==='POST'?201:200, {ok:true, id:applied[0], version}); sseBroadcast({version, updated_by:s.username}); })
-      .catch(e=>J(res, /unknown resource|needs an id|record object/.test(e.message)?400:500, {error:e.message}));
+      .catch(e=>J(res, /unknown resource|needs an id|record object|patch target not found/.test(e.message)?400:500, {error:e.message}));
     if(m==='DELETE'){ if(id==null) return J(res,400,{error:'id required'}); one({op:'del', r:resName, id}); return; }
     if(m==='POST'||m==='PUT'){
       if(m==='PUT'&&id==null) return J(res,400,{error:'id required for PUT'});
