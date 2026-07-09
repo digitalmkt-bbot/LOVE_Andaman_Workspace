@@ -4688,7 +4688,7 @@
   },
   "ops_reconfirm": {
    "source": "ops.reconfirm",
-   "kind": "scalar",
+   "kind": "json_text",
    "db_type": "text"
   },
   "weatherresolve_event": {
