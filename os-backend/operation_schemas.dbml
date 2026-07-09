@@ -1,110 +1,26 @@
-// operation_schemas — generated from operation_schemas_structure.sql
-// 103 tables · 49 refs
+// generated from operation_schemas_structure.sql (live dump 2026-07-09)
+// 107 tables · 52 refs
+// Separated by real database schema (see dbml_groups.js for the layout)
+
+// ████████████████████████████████████████████████████████████
+// ██  DATABASE SCHEMA: operation_schemas
+// ██  app data · 107 tables · accessed as role allotment_app
+// ████████████████████████████████████████████████████████████
+
+// ──────── app / meta ────────
+
+Table app_hooks {
+  id text [pk]
+  key text
+  value boolean
+}
 
 Table app_meta {
   key text
   value text
 }
 
-Table routes {
-  id text [pk]
-  name text
-  islands text
-  color text
-  pier text
-  overrides_2026_05_31 text
-  overrides_2026_05_30 text
-  overrides_2026_06_07 text
-  overrides_2026_06_14 text
-  overrides_2026_06_21 text
-  overrides_2026_06_28 text
-  overrides_2026_06_29 text
-  overrides_2026_06_22 text
-  overrides_2026_06_15 text
-  overrides_2026_06_08 text
-  overrides_2026_06_01 text
-  overrides_2026_06_02 text
-  overrides_2026_06_09 text
-  overrides_2026_06_16 text
-  overrides_2026_06_23 text
-  overrides_2026_06_30 text
-  overrides_2026_06_25 text
-  overrides_2026_06_18 text
-  overrides_2026_06_11 text
-  overrides_2026_06_04 text
-  overrides_2026_06_05 text
-  overrides_2026_06_19 text
-  overrides_2026_06_12 text
-  overrides_2026_06_26 text
-  overrides_2026_06_27 text
-  overrides_2026_06_20 text
-  overrides_2026_06_13 text
-  overrides_2026_06_06 text
-  overrides_2026_06_03 text
-  overrides_2026_06_10 text
-  overrides_2026_06_17 text
-  overrides_2026_06_24 text
-  overrides_2026_07_05 text
-  overrides_2026_07_06 text
-  overrides_2026_07_13 text
-  overrides_2026_07_12 text
-  overrides_2026_07_19 text
-  overrides_2026_07_20 text
-  overrides_2026_07_27 text
-  overrides_2026_07_26 text
-  overrides_2026_07_01 text
-  overrides_2026_07_08 text
-  overrides_2026_07_15 text
-  overrides_2026_07_22 text
-  overrides_2026_07_29 text
-  overrides_2026_07_30 text
-  overrides_2026_07_23 text
-  overrides_2026_07_16 text
-  overrides_2026_07_09 text
-  overrides_2026_07_02 text
-  overrides_2026_07_03 text
-  overrides_2026_07_10 text
-  overrides_2026_07_17 text
-  overrides_2026_07_31 text
-  overrides_2026_07_24 text
-  overrides_2026_07_25 text
-  overrides_2026_07_18 text
-  overrides_2026_07_11 text
-  overrides_2026_07_04 text
-  overrides_2026_08_01 text
-  overrides_2026_08_15 text
-  overrides_2026_08_22 text
-  overrides_2026_08_29 text
-  overrides_2026_08_03 text
-  overrides_2026_08_10 text
-  overrides_2026_08_17 text
-  overrides_2026_08_24 text
-  overrides_2026_08_05 text
-  overrides_2026_08_06 text
-  overrides_2026_08_12 text
-  overrides_2026_08_13 text
-  overrides_2026_08_19 text
-  overrides_2026_08_20 text
-  overrides_2026_08_26 text
-  overrides_2026_08_27 text
-}
-
-Table routes__times {
-  routes_id text
-  idx bigint
-  row_pk text [pk]
-  value text
-}
-
-Table routes__seasons {
-  routes_id text
-  idx bigint
-  row_pk text [pk]
-  id text
-  type text
-  from text
-  to text
-}
+// ──────── operations · routes / boats / trips ────────
 
 Table boats {
   id text [pk]
@@ -136,6 +52,22 @@ Table boats {
   owner text
   homeport text
   owneraddr text
+}
+
+Table boats__assignments {
+  boats_id text
+  idx bigint
+  row_pk text [pk]
+  id text
+  type text
+  frompier text
+  topier text
+  startdate text
+  enddate text
+  reason text
+  cost bigint
+  status text
+  createddate text
 }
 
 Table boats__docs {
@@ -188,20 +120,36 @@ Table boats__repairhistory__assets {
   value text
 }
 
-Table boats__assignments {
-  boats_id text
+Table routes {
+  id text [pk]
+  name text
+  islands text
+  color text
+  pier text
+}
+
+Table routes__overrides {
+  routes_id text
+  key text
+  row_pk text [pk]
+  value text
+}
+
+Table routes__seasons {
+  routes_id text
   idx bigint
   row_pk text [pk]
   id text
   type text
-  frompier text
-  topier text
-  startdate text
-  enddate text
-  reason text
-  cost bigint
-  status text
-  createddate text
+  from text
+  to text
+}
+
+Table routes__times {
+  routes_id text
+  idx bigint
+  row_pk text [pk]
+  value text
 }
 
 Table trips {
@@ -247,6 +195,51 @@ Table trips {
   b6_charterbookingid text
 }
 
+// ──────── fleet maintenance ────────
+
+Table fleet_consumable_logs {
+  id text [pk]
+  date text
+  itemid text
+  itemname text
+  unit text
+  qty bigint
+  unitcost double
+  cost double
+  location text
+  boatid text
+  engineid text
+  enginelabel text
+  by text
+  note text
+}
+
+Table fleet_daily {
+  id text [pk]
+  key text
+  b2_fuel double
+  b10_fuel double
+  b6_fuel double
+  b13_fuel double
+  b12_fuel double
+  b10_paxactual bigint
+  b2_paxactual bigint
+}
+
+Table fleet_daily__trips {
+  fleet_daily_id text
+  boat text
+  key text
+  row_pk text [pk]
+  value text
+}
+
+Table fleet_drlock {
+  id text [pk]
+  key text
+  panwa boolean
+}
+
 Table fleet_engines {
   id text [pk]
   brand text
@@ -280,6 +273,16 @@ Table fleet_engines__log {
   outcome text
   enginehours bigint
   text text
+}
+
+Table fleet_fuelprice {
+  id text [pk]
+  key text
+  panwa double
+  b10 double
+  b2 double
+  b13 double
+  b6 double
 }
 
 Table fleet_gearboxes {
@@ -321,140 +324,6 @@ Table fleet_gearboxes__log {
   outcome text
   detail text
   text text
-}
-
-Table fleet_propellers {
-  id text [pk]
-  boatid text
-  gearboxid text
-  brand text
-  serial text
-  diameter double
-  pitch double
-  size text
-  blades text
-  material text
-  rotation text
-  hubsize text
-  cupping text
-  cost bigint
-  status text
-  buydate text
-  note text
-  sparelocation text
-  oldserial text
-  proppos text
-  engineid text
-}
-
-Table fleet_propellers__log {
-  fleet_propellers_id text
-  idx bigint
-  row_pk text [pk]
-  date text
-  type text
-  desc text
-  enginehours bigint
-  fromloc text
-  toloc text
-  incidentid text
-  detail text
-  outcome text
-}
-
-Table fleet_daily {
-  id text [pk]
-  key text
-  b2_fuel double
-  b10_fuel double
-  b6_fuel double
-  b13_fuel double
-  b12_fuel double
-  b10_paxactual bigint
-  b2_paxactual bigint
-}
-
-Table fleet_daily__trips {
-  fleet_daily_id text
-  key text
-  row_pk text [pk]
-  engines_e6 double
-  engines_e33 bigint
-  engines_e34 bigint
-  engines_e35 bigint
-  engines_e36 bigint
-  engines_e7 double
-  engines_e8 double
-  engines_e20 double
-  engines_e26 double
-  engines_e27 double
-  engines_e28 double
-  engines_e43 bigint
-  engines_e44 bigint
-  engines_e51 bigint
-  engines_e52 bigint
-  engines_e45 double
-  engines_e46 double
-  engines_e47 double
-}
-
-Table fleet_maintenance {
-  id text [pk]
-  no text
-  boatid text
-  type text
-  title text
-  detail text
-  location text
-  status text
-  startdate text
-  enddate text
-  cost double
-  incidentid text
-  boatstatus text
-  boatstatusreason text
-  setfixing boolean
-  outcome text
-  parentprojectid text
-  awaitinginvoice boolean
-  closenote text
-}
-
-Table fleet_maintenance__assets {
-  fleet_maintenance_id text
-  idx bigint
-  row_pk text [pk]
-  type text
-  engid text
-  label text
-  detail text
-  status text
-  gbid text
-  propid text
-  id text
-}
-
-Table fleet_maintenance__progresslog {
-  fleet_maintenance_id text
-  idx bigint
-  row_pk text [pk]
-  date text
-  text text
-  by text
-  createdat text
-}
-
-Table fleet_maintenance__parts {
-  fleet_maintenance_id text
-  idx bigint
-  row_pk text [pk]
-  invid text
-  name text
-  qty bigint
-  unit text
-  cost double
-  location text
-  date text
 }
 
 Table fleet_incidents {
@@ -541,6 +410,15 @@ Table fleet_inventory__history {
   desc text
 }
 
+Table fleet_inventory__history__changes {
+  fleet_inventory_history_id text
+  idx bigint
+  row_pk text [pk]
+  field text
+  from text
+  to text
+}
+
 Table fleet_inventory__stocks {
   fleet_inventory_id text
   idx bigint
@@ -550,13 +428,63 @@ Table fleet_inventory__stocks {
   minqty bigint
 }
 
-Table fleet_inventory__history__changes {
-  fleet_inventory_history_id text
+Table fleet_maintenance {
+  id text [pk]
+  no text
+  boatid text
+  type text
+  title text
+  detail text
+  location text
+  status text
+  startdate text
+  enddate text
+  cost double
+  incidentid text
+  boatstatus text
+  boatstatusreason text
+  setfixing boolean
+  outcome text
+  parentprojectid text
+  awaitinginvoice boolean
+  closenote text
+}
+
+Table fleet_maintenance__assets {
+  fleet_maintenance_id text
   idx bigint
   row_pk text [pk]
-  field text
-  from text
-  to text
+  type text
+  engid text
+  label text
+  detail text
+  status text
+  gbid text
+  propid text
+  id text
+}
+
+Table fleet_maintenance__parts {
+  fleet_maintenance_id text
+  idx bigint
+  row_pk text [pk]
+  invid text
+  name text
+  qty bigint
+  unit text
+  cost double
+  location text
+  date text
+}
+
+Table fleet_maintenance__progresslog {
+  fleet_maintenance_id text
+  idx bigint
+  row_pk text [pk]
+  date text
+  text text
+  by text
+  createdat text
 }
 
 Table fleet_memos {
@@ -621,298 +549,6 @@ Table fleet_memos__items {
   inventorysnapshot_qtyatselection bigint
 }
 
-Table app_hooks {
-  id text [pk]
-  key text
-  value boolean
-}
-
-Table sb_rate_types {
-  id text [pk]
-  code text
-  name text
-  note text
-  color text
-  createddate text
-  validfrom text
-  validto text
-  active boolean
-}
-
-Table sb_rate_types__routes {
-  sb_rate_types_id text
-  idx bigint
-  row_pk text [pk]
-  value text
-}
-
-Table sb_rate_types__seatrates {
-  sb_rate_types_id text
-  key text
-  row_pk text [pk]
-  pk_adult_thai bigint
-  pk_adult_fr bigint
-  pk_child_thai bigint
-  pk_child_fr bigint
-  pk_infant_thai bigint
-  pk_infant_fr bigint
-  kl_adult_thai bigint
-  kl_adult_fr bigint
-  kl_child_thai bigint
-  kl_child_fr bigint
-  kl_infant_thai bigint
-  kl_infant_fr bigint
-  notransfer_adult_thai bigint
-  notransfer_adult_fr bigint
-  notransfer_child_thai bigint
-  notransfer_child_fr bigint
-  notransfer_infant_thai bigint
-  notransfer_infant_fr bigint
-  kl text
-}
-
-Table sb_rate_types__charterrates {
-  sb_rate_types_id text
-  key text
-  row_pk text [pk]
-  speedboat_starterprice bigint
-  speedboat_starterincludes bigint
-  speedboat_extraperpax bigint
-  catamaran_starterprice bigint
-  catamaran_starterincludes bigint
-  catamaran_extraperpax bigint
-}
-
-Table sb_rate_types__addons {
-  sb_rate_types_id text
-  key text
-  row_pk text [pk]
-  adult bigint
-  child bigint
-  unit text
-  join_adult bigint
-  join_child bigint
-  charter_price bigint
-  charter_capacity bigint
-}
-
-Table sb_rate_types__addons__applies {
-  sb_rate_types_addons_id text
-  idx bigint
-  row_pk text [pk]
-  value text
-}
-
-Table sb_rate_types__addons__r5 {
-  sb_rate_types_addons_id text
-  key text
-  row_pk text [pk]
-  sedan bigint
-  van bigint
-}
-
-Table sb_rate_types__addons__r6 {
-  sb_rate_types_addons_id text
-  key text
-  row_pk text [pk]
-  sedan bigint
-  van bigint
-}
-
-Table sb_rate_types__addons__r10 {
-  sb_rate_types_addons_id text
-  key text
-  row_pk text [pk]
-  sedan bigint
-  van bigint
-}
-
-Table sb_rate_types__addons__r11 {
-  sb_rate_types_addons_id text
-  key text
-  row_pk text [pk]
-  sedan bigint
-  van bigint
-}
-
-Table sb_rate_types__addons__r12 {
-  sb_rate_types_addons_id text
-  key text
-  row_pk text [pk]
-  sedan bigint
-  van bigint
-}
-
-Table sb_rate_types__routevalidity {
-  sb_rate_types_id text
-  key text
-  row_pk text [pk]
-  from text
-  to text
-}
-
-Table sb_rate_types__addons__byroute {
-  sb_rate_types_addons_id text
-  key text
-  row_pk text [pk]
-  join_adult bigint
-  join_child bigint
-  charter_price bigint
-  charter_capacity bigint
-}
-
-Table sb_rate_types__addons__r4 {
-  sb_rate_types_addons_id text
-  key text
-  row_pk text [pk]
-  sedan bigint
-  van bigint
-}
-
-Table sb_rate_types__routebundles {
-  sb_rate_types_id text
-  key text
-  row_pk text [pk]
-  longtail_mode text
-  longtail_adult bigint
-  longtail_child bigint
-}
-
-Table sb_agents_rate_bindings {
-  id text [pk]
-  ratetypeid text
-}
-
-Table fleet_safety {
-  id text [pk]
-  boatid text
-  category text
-  name text
-  brand text
-  model text
-  serial text
-  qty bigint
-  installdate text
-  expirydate text
-  nextpm text
-  lastinspect text
-  status text
-  location text
-  note text
-}
-
-Table fleet_safety__log {
-  fleet_safety_id text
-  idx bigint
-  row_pk text [pk]
-  date text
-  type text
-  desc text
-}
-
-Table fleet_safety__inspections {
-  fleet_safety_id text
-  idx bigint
-  row_pk text [pk]
-  id text
-  date text
-  result text
-  note text
-  by text
-}
-
-Table sb_pickup_areas {
-  id text [pk]
-  name text
-  zone text
-  region text
-  timegroup text
-}
-
-Table sb_pickup_times {
-  id text [pk]
-  key text
-  pk_n1 text
-  pk_n2 text
-  pk_e1 text
-  pk_e2 text
-  pk_wn1 text
-  pk_w1 text
-  pk_w2 text
-  pk_s1 text
-  pk_s2 text
-  pk_c1 text
-  pk_c2 text
-  pk_pa1 text
-  nt_vp text
-  pk_pn1 text
-  nt_tl text
-}
-
-Table sb_pickup_time_profiles {
-  id text [pk]
-  name text
-  from text
-  to text
-  notes text
-  clonedfrom text
-  createdat text
-}
-
-Table sb_pickup_time_profiles__times {
-  sb_pickup_time_profiles_id text
-  key text
-  row_pk text [pk]
-  pk_maikhao text
-  pk_naithon text
-  pk_naiyang text
-  pk_airport text
-  pk_talang text
-  pk_aopor text
-  pk_pakhlok text
-  pk_yamu text
-  pk_monument text
-  pk_kokaeo text
-  pk_sapam text
-  pk_layan text
-  pk_laguna text
-  pk_bangtao text
-  pk_cherngtalay text
-  pk_surin text
-  pk_kamala text
-  pk_kalim text
-  pk_tritrang text
-  pk_patong text
-  pk_karon text
-  pk_kata text
-  pk_rawai text
-  pk_naiharn text
-  pk_saiyuan text
-  pk_chalong text
-  pk_chaofa text
-  pk_siray text
-  pk_town text
-  pk_aoyon text
-  pk_panwa text
-  nt_panwa_pier text
-  pk_kathu text
-  pk_khokkloi text
-  pk_natai text
-  nt_tublamu_pier text
-  kl_numkhem text
-  kl_bangsak text
-  kl_pakwip text
-  kl_pakarang text
-  kl_khukkhak text
-  kl_bangniang text
-  kl_nanglao text
-  kl_center text
-  kl_khaolak text
-  kl_merlin text
-  kl_poseidon text
-  kl_tublamuhotel text
-}
-
 Table fleet_projects {
   id text [pk]
   no text
@@ -952,42 +588,242 @@ Table fleet_projects__plan {
   donedate text
 }
 
-Table sb_seat_locks {
+Table fleet_propellers {
   id text [pk]
-  routeid text
-  date text
   boatid text
-  holdertype text
-  holderid text
-  qty bigint
-  used bigint
-  reason text
-  expiry text
+  gearboxid text
+  brand text
+  serial text
+  diameter double
+  pitch double
+  size text
+  blades text
+  material text
+  rotation text
+  hubsize text
+  cupping text
+  cost bigint
   status text
-  createdat text
-  createdby text
+  buydate text
+  note text
+  sparelocation text
+  oldserial text
+  proppos text
+  engineid text
 }
 
-Table sb_seat_locks__log {
-  sb_seat_locks_id text
+Table fleet_propellers__log {
+  fleet_propellers_id text
   idx bigint
   row_pk text [pk]
   date text
   type text
-  qty bigint
+  desc text
+  enginehours bigint
+  fromloc text
+  toloc text
+  incidentid text
+  detail text
+  outcome text
 }
 
-Table sb_sales {
+Table fleet_safety {
+  id text [pk]
+  boatid text
+  category text
+  name text
+  brand text
+  model text
+  serial text
+  qty bigint
+  installdate text
+  expirydate text
+  nextpm text
+  lastinspect text
+  status text
+  location text
+  note text
+}
+
+Table fleet_safety__inspections {
+  fleet_safety_id text
+  idx bigint
+  row_pk text [pk]
+  id text
+  date text
+  result text
+  note text
+  by text
+}
+
+Table fleet_safety__log {
+  fleet_safety_id text
+  idx bigint
+  row_pk text [pk]
+  date text
+  type text
+  desc text
+}
+
+// ──────── sales · rate types ────────
+
+Table sb_agents_rate_bindings {
+  id text [pk]
+  ratetypeid text
+}
+
+Table sb_rate_types {
   id text [pk]
   code text
   name text
+  note text
   color text
-  email text
-  fullname text
-  designation text
-  tel text
-  signature text
+  createddate text
+  validfrom text
+  validto text
+  active boolean
 }
+
+Table sb_rate_types__addons {
+  sb_rate_types_id text
+  key text
+  row_pk text [pk]
+  adult bigint
+  child bigint
+  unit text
+  join_adult bigint
+  join_child bigint
+  charter_price bigint
+  charter_capacity bigint
+}
+
+Table sb_rate_types__addons__applies {
+  sb_rate_types_addons_id text
+  idx bigint
+  row_pk text [pk]
+  value text
+}
+
+Table sb_rate_types__addons__byroute {
+  sb_rate_types_addons_id text
+  key text
+  row_pk text [pk]
+  join_adult bigint
+  join_child bigint
+  charter_price bigint
+  charter_capacity bigint
+}
+
+Table sb_rate_types__addons__r10 {
+  sb_rate_types_addons_id text
+  key text
+  row_pk text [pk]
+  sedan bigint
+  van bigint
+}
+
+Table sb_rate_types__addons__r11 {
+  sb_rate_types_addons_id text
+  key text
+  row_pk text [pk]
+  sedan bigint
+  van bigint
+}
+
+Table sb_rate_types__addons__r12 {
+  sb_rate_types_addons_id text
+  key text
+  row_pk text [pk]
+  sedan bigint
+  van bigint
+}
+
+Table sb_rate_types__addons__r4 {
+  sb_rate_types_addons_id text
+  key text
+  row_pk text [pk]
+  sedan bigint
+  van bigint
+}
+
+Table sb_rate_types__addons__r5 {
+  sb_rate_types_addons_id text
+  key text
+  row_pk text [pk]
+  sedan bigint
+  van bigint
+}
+
+Table sb_rate_types__addons__r6 {
+  sb_rate_types_addons_id text
+  key text
+  row_pk text [pk]
+  sedan bigint
+  van bigint
+}
+
+Table sb_rate_types__charterrates {
+  sb_rate_types_id text
+  key text
+  row_pk text [pk]
+  speedboat_starterprice bigint
+  speedboat_starterincludes bigint
+  speedboat_extraperpax bigint
+  catamaran_starterprice bigint
+  catamaran_starterincludes bigint
+  catamaran_extraperpax bigint
+}
+
+Table sb_rate_types__routebundles {
+  sb_rate_types_id text
+  key text
+  row_pk text [pk]
+  longtail_mode text
+  longtail_adult bigint
+  longtail_child bigint
+}
+
+Table sb_rate_types__routes {
+  sb_rate_types_id text
+  idx bigint
+  row_pk text [pk]
+  value text
+}
+
+Table sb_rate_types__routevalidity {
+  sb_rate_types_id text
+  key text
+  row_pk text [pk]
+  from text
+  to text
+}
+
+Table sb_rate_types__seatrates {
+  sb_rate_types_id text
+  key text
+  row_pk text [pk]
+  pk_adult_thai bigint
+  pk_adult_fr bigint
+  pk_child_thai bigint
+  pk_child_fr bigint
+  pk_infant_thai bigint
+  pk_infant_fr bigint
+  kl_adult_thai bigint
+  kl_adult_fr bigint
+  kl_child_thai bigint
+  kl_child_fr bigint
+  kl_infant_thai bigint
+  kl_infant_fr bigint
+  notransfer_adult_thai bigint
+  notransfer_adult_fr bigint
+  notransfer_child_thai bigint
+  notransfer_child_fr bigint
+  notransfer_infant_thai bigint
+  notransfer_infant_fr bigint
+  kl text
+}
+
+// ──────── sales · agents & team ────────
 
 Table sb_agents {
   id text [pk]
@@ -1029,25 +865,6 @@ Table sb_agents {
   color text
 }
 
-Table sb_agents__programs {
-  sb_agents_id text
-  idx bigint
-  row_pk text [pk]
-  value text
-}
-
-Table sb_agents__programperiods {
-  sb_agents_id text
-  idx bigint
-  row_pk text [pk]
-  routeid text
-  bookfrom text
-  bookto text
-  travelfrom text
-  travelto text
-  note text
-}
-
 Table sb_agents__activity {
   sb_agents_id text
   idx bigint
@@ -1070,10 +887,13 @@ Table sb_agents__contracthistory {
   snapshot_agentsignatory_designation text
   snapshot_agentsignatory_tel text
   snapshot_agentsignatory_signeddate text
+  snapshot_programperiods text
+  snapshot_addonservices text
+  snapshot_prices text
 }
 
-Table sb_agents__contracthistory__programperiods {
-  sb_agents_contracthistory_id text
+Table sb_agents__programperiods {
+  sb_agents_id text
   idx bigint
   row_pk text [pk]
   routeid text
@@ -1084,44 +904,40 @@ Table sb_agents__contracthistory__programperiods {
   note text
 }
 
-Table sb_agents__contracthistory__addonservices {
-  sb_agents_contracthistory_id text
+Table sb_agents__programs {
+  sb_agents_id text
   idx bigint
   row_pk text [pk]
-  svcid text
+  value text
 }
 
-Table sb_agents__contracthistory__addonservices__variants {
-  sb_agents_contracthistory_addonservices_id text
-  idx bigint
-  row_pk text [pk]
-  varid text
-  selling bigint
-  net bigint
+Table sb_sales {
+  id text [pk]
+  code text
+  name text
+  color text
+  email text
+  fullname text
+  designation text
+  tel text
+  signature text
 }
 
-Table sb_agents__contracthistory__prices {
-  sb_agents_contracthistory_id text
+Table sb_staff {
+  id text [pk]
+  code text
+  name text
+  dept text
+  active boolean
+  quota_2026 bigint
+}
+
+// ──────── booking ────────
+
+Table nat_learn {
+  id text [pk]
   key text
-  row_pk text [pk]
-  pk_adult_thai bigint
-  pk_adult_fr bigint
-  pk_child_thai bigint
-  pk_child_fr bigint
-  pk_infant_thai bigint
-  pk_infant_fr bigint
-  kl_adult_thai bigint
-  kl_adult_fr bigint
-  kl_child_thai bigint
-  kl_child_fr bigint
-  kl_infant_thai bigint
-  kl_infant_fr bigint
-  notransfer_adult_thai bigint
-  notransfer_adult_fr bigint
-  notransfer_child_thai bigint
-  notransfer_child_fr bigint
-  notransfer_infant_thai bigint
-  notransfer_infant_fr bigint
+  value text
 }
 
 Table sb_bookings {
@@ -1253,6 +1069,92 @@ Table sb_bookings {
   editlock_uid text
   editlock_by text
   editlock_at bigint
+  doccheck text
+  attachments text
+  paymentslips text
+  incomplete text
+  approval_over text
+  altpickups text
+  ops_vansplits text
+}
+
+Table sb_bookings__addons {
+  sb_bookings_id text
+  idx bigint
+  row_pk text [pk]
+  type text
+  label text
+  amount bigint
+  qty bigint
+  note text
+}
+
+Table sb_bookings__adjustments {
+  sb_bookings_id text
+  idx bigint
+  row_pk text [pk]
+  kind text
+  mode text
+  value bigint
+  label text
+  note text
+}
+
+Table sb_bookings__feeitems {
+  sb_bookings_id text
+  idx bigint
+  row_pk text [pk]
+  type text
+  label text
+  amount bigint
+  at text
+}
+
+Table sb_bookings__history {
+  sb_bookings_id text
+  idx bigint
+  row_pk text [pk]
+  at text
+  kind text
+  text text
+  tag text
+  by text
+}
+
+Table sb_bookings__over {
+  sb_bookings_id text
+  idx bigint
+  row_pk text [pk]
+  routeid text
+  date text
+  name text
+  need bigint
+  capfree bigint
+  overby bigint
+  licfree bigint
+}
+
+Table sb_bookings__partialcancels {
+  sb_bookings_id text
+  idx bigint
+  row_pk text [pk]
+  date text
+  tripidx bigint
+  paxremoved_foc_th bigint
+  count bigint
+  category text
+  categorylabel text
+  group text
+  note text
+  refundmode text
+  refund bigint
+  charged_count bigint
+  charged_amount bigint
+  waived_count bigint
+  waived_amount bigint
+  at text
+  by text
+  paxremoved_ad_fr bigint
 }
 
 Table sb_bookings__passengers {
@@ -1297,28 +1199,8 @@ Table sb_bookings__trips {
   seatsource_general bigint
   subtotal bigint
   pax_foc bigint
-}
-
-Table sb_bookings__addons {
-  sb_bookings_id text
-  idx bigint
-  row_pk text [pk]
-  type text
-  label text
-  amount bigint
-  qty bigint
-  note text
-}
-
-Table sb_bookings__history {
-  sb_bookings_id text
-  idx bigint
-  row_pk text [pk]
-  at text
-  kind text
-  text text
-  tag text
-  by text
+  lockdrawsel text
+  lockdraws text
 }
 
 Table sb_bookings__upgrades {
@@ -1337,127 +1219,20 @@ Table sb_bookings__upgrades {
   at text
 }
 
-Table sb_bookings__feeitems {
-  sb_bookings_id text
-  idx bigint
-  row_pk text [pk]
-  type text
-  label text
-  amount bigint
-  at text
-}
-
-Table sb_bookings__partialcancels {
-  sb_bookings_id text
-  idx bigint
-  row_pk text [pk]
-  date text
-  tripidx bigint
-  paxremoved_foc_th bigint
-  count bigint
-  category text
-  categorylabel text
-  group text
-  note text
-  refundmode text
-  refund bigint
-  charged_count bigint
-  charged_amount bigint
-  waived_count bigint
-  waived_amount bigint
-  at text
-  by text
-  paxremoved_ad_fr bigint
-}
-
-Table sb_bookings__adjustments {
-  sb_bookings_id text
-  idx bigint
-  row_pk text [pk]
-  kind text
-  mode text
-  value bigint
-  label text
-  note text
-}
-
-Table sb_bookings__over {
-  sb_bookings_id text
-  idx bigint
-  row_pk text [pk]
-  routeid text
-  date text
-  name text
-  need bigint
-  capfree bigint
-  overby bigint
-  licfree bigint
-}
-
-Table nat_learn {
+Table sb_extras {
   id text [pk]
-  key text
-  il bigint
-  sa bigint
-  th bigint
-  in bigint
-  sg bigint
-  my bigint
-  au bigint
-  de bigint
-  us bigint
-  om bigint
-  eg bigint
-  ae bigint
-  br bigint
-  cn bigint
-  es bigint
-  mx bigint
-  kr bigint
-  bar2 bigint
-  bar bigint
-  nl bigint
-  ru bigint
-  jo bigint
-  jp bigint
-  gb bigint
-  ca bigint
-  qa bigint
-  irq bigint
-  za bigint
-  cub bigint
-  fr bigint
-  eth bigint
-  ie bigint
-  kz bigint
-  uz bigint
-  tw bigint
-  it bigint
-  se bigint
-  nig bigint
-  ge bigint
-  ph bigint
-  ar bigint
-  gha bigint
-  nz bigint
-  pk bigint
-  kw bigint
-  lk bigint
-  mon bigint
-  by bigint
-  aus bigint
-  cl bigint
-  dk bigint
-  kh bigint
-  tr bigint
-  rs bigint
-  pt bigint
-  gr bigint
-  lit bigint
-  be bigint
-  fi bigint
-  no bigint
-  usa bigint
+  bookingid text
+  tripdate text
+  service text
+  qty bigint
+  unitprice bigint
+  total bigint
+  tocompany bigint
+  commission bigint
+  seller text
+  method text
+  settle text
+  date text
 }
 
 Table sb_nationalities {
@@ -1466,6 +1241,55 @@ Table sb_nationalities {
   name text
   custom boolean
 }
+
+Table sb_seat_locks {
+  id text [pk]
+  routeid text
+  date text
+  boatid text
+  holdertype text
+  holderid text
+  qty bigint
+  used bigint
+  reason text
+  expiry text
+  status text
+  createdat text
+  createdby text
+  scope text
+  month text
+  monthfrom text
+  monthto text
+  parentid text
+  subname text
+  releasedaysbefore bigint
+  releasetime text
+}
+
+Table sb_seat_locks__log {
+  sb_seat_locks_id text
+  idx bigint
+  row_pk text [pk]
+  date text
+  type text
+  qty bigint
+  at text
+  by text
+  bookingid text
+  sub boolean
+  note text
+}
+
+Table sb_weather {
+  id text [pk]
+  routeid text
+  date text
+  reason text
+  at text
+  note text
+}
+
+// ──────── accounting ────────
 
 Table sb_invoices {
   id text [pk]
@@ -1501,15 +1325,6 @@ Table sb_invoices__lineitems {
   amount bigint
 }
 
-Table sb_weather {
-  id text [pk]
-  routeid text
-  date text
-  reason text
-  at text
-  note text
-}
-
 Table sb_payments {
   id text [pk]
   invoiceid text
@@ -1518,52 +1333,101 @@ Table sb_payments {
   method text
   date text
   type text
+  slips text
 }
 
-Table sb_markets {
+// ──────── transfer / pickup ────────
+
+Table sb_pickup_areas {
   id text [pk]
   name text
-  color text
+  zone text
+  region text
+  timegroup text
 }
 
-Table sb_markets__subs {
-  sb_markets_id text
-  idx bigint
+Table sb_pickup_time_profiles {
+  id text [pk]
+  name text
+  from text
+  to text
+  notes text
+  clonedfrom text
+  createdat text
+}
+
+Table sb_pickup_time_profiles__times {
+  sb_pickup_time_profiles_id text
+  key text
   row_pk text [pk]
-  value text
+  pk_maikhao text
+  pk_naithon text
+  pk_naiyang text
+  pk_airport text
+  pk_talang text
+  pk_aopor text
+  pk_pakhlok text
+  pk_yamu text
+  pk_monument text
+  pk_kokaeo text
+  pk_sapam text
+  pk_layan text
+  pk_laguna text
+  pk_bangtao text
+  pk_cherngtalay text
+  pk_surin text
+  pk_kamala text
+  pk_kalim text
+  pk_tritrang text
+  pk_patong text
+  pk_karon text
+  pk_kata text
+  pk_rawai text
+  pk_naiharn text
+  pk_saiyuan text
+  pk_chalong text
+  pk_chaofa text
+  pk_siray text
+  pk_town text
+  pk_aoyon text
+  pk_panwa text
+  nt_panwa_pier text
+  pk_kathu text
+  pk_khokkloi text
+  pk_natai text
+  nt_tublamu_pier text
+  kl_numkhem text
+  kl_bangsak text
+  kl_pakwip text
+  kl_pakarang text
+  kl_khukkhak text
+  kl_bangniang text
+  kl_nanglao text
+  kl_center text
+  kl_khaolak text
+  kl_merlin text
+  kl_poseidon text
+  kl_tublamuhotel text
 }
 
-Table sb_market_stats {
+Table sb_pickup_times {
   id text [pk]
   key text
-  date text
-  in_col bigint
-  in_zwe bigint
-  in_overseas bigint
-  out_col bigint
-  out_zwe bigint
-  out_overseas bigint
-  out_1951_convention bigint
-  inat text
-  outat text
-  intotal bigint
-  outtotal bigint
-  in_1951_convention bigint
-}
-
-Table sb_market_monthly {
-  id text [pk]
-  key text
-  value bigint
-}
-
-Table sb_staff {
-  id text [pk]
-  code text
-  name text
-  dept text
-  active boolean
-  quota_2026 bigint
+  pk_n1 text
+  pk_n2 text
+  pk_e1 text
+  pk_e2 text
+  pk_wn1 text
+  pk_w1 text
+  pk_w2 text
+  pk_s1 text
+  pk_s2 text
+  pk_c1 text
+  pk_c2 text
+  pk_pa1 text
+  nt_vp text
+  pk_pn1 text
+  nt_tl text
 }
 
 Table sb_vehicles {
@@ -1579,50 +1443,21 @@ Table sb_vehicles {
   note text
   driver text
   driverphone text
-  daystatus_2026_06_01 text
-  daystatus_2026_06_02 text
-  daystatus_2026_06_03 text
-  daystatus_2026_06_04 text
-  daystatus_2026_06_05 text
-  daystatus_2026_06_06 text
-  daystatus_2026_06_23 text
-  daystatus_2026_07_01 text
-  daystatus_2026_07_02 text
-  daystatus_2026_07_03 text
-  daystatus_2026_07_04 text
-  daystatus_2026_07_05 text
-  daystatus_2026_07_06 text
-  daystatus_2026_07_07 text
   dayzone_2026_06_12 text
-  dayroute_2026_06_11 text
-  dayroute_2026_06_12 text
-  dayroute_2026_06_13 text
-  dayroute_2026_06_14 text
-  dayroute_2026_06_15 text
-  dayroute_2026_06_21 text
-  dayroute_2026_06_22 text
-  dayroute_2026_06_23 text
-  dayroute_2026_06_24 text
-  dayroute_2026_06_26 text
-  dayroute_2026_07_01 text
-  daystatus_2026_06_12 text
-  daystatus_2026_06_13 text
-  daystatus_2026_06_11 text
-  dayroute_2026_06_19 text
-  daystatus_2026_06_26 text
-  dayroute_2026_06_20 text
-  dayroute_2026_06_25 text
-  dayroute_2026_06_28 text
-  dayroute_2026_06_29 text
-  dayroute_2026_06_18 text
-  daystatus_2026_06_22 text
-  daystatus_2026_06_24 text
-  daystatus_2026_06_25 text
-  daystatus_2026_06_27 text
-  daystatus_2026_06_28 text
-  daystatus_2026_06_29 text
-  daystatus_2026_06_30 text
-  daystatus_2026_06_21 text
+}
+
+Table sb_vehicles__dayroute {
+  sb_vehicles_id text
+  key text
+  row_pk text [pk]
+  value text
+}
+
+Table sb_vehicles__daystatus {
+  sb_vehicles_id text
+  key text
+  row_pk text [pk]
+  value text
 }
 
 Table sb_vehicles__log {
@@ -1644,44 +1479,6 @@ Table sb_vehicles__statusranges {
   note text
 }
 
-Table sb_extras {
-  id text [pk]
-  bookingid text
-  tripdate text
-  service text
-  qty bigint
-  unitprice bigint
-  total bigint
-  tocompany bigint
-  commission bigint
-  seller text
-  method text
-  settle text
-  date text
-}
-
-Table fleet_fuelprice {
-  id text [pk]
-  key text
-  panwa double
-  b10 double
-  b2 double
-  b13 double
-  b6 double
-}
-
-Table fleet_drlock {
-  id text [pk]
-  key text
-  panwa boolean
-}
-
-Table vanjob_pickup_th {
-  id text [pk]
-  key text
-  value text
-}
-
 Table vanjob_driver {
   id text [pk]
   key text
@@ -1690,69 +1487,299 @@ Table vanjob_driver {
   plate text
 }
 
-Table fleet_consumable_logs {
+Table vanjob_pickup_th {
   id text [pk]
-  date text
-  itemid text
-  itemname text
-  unit text
-  qty bigint
-  unitcost double
-  cost double
-  location text
-  boatid text
-  engineid text
-  enginelabel text
-  by text
-  note text
+  key text
+  value text
 }
 
-Ref: routes__times.routes_id > routes.id
-Ref: routes__seasons.routes_id > routes.id
+Table vanjob_sent {
+  id text [pk]
+  key text
+  value text
+}
+
+Table vanjob_sreq {
+  id text [pk]
+  key text
+  value text
+}
+
+Table vanjob_th_flag {
+  id text [pk]
+  key text
+  value text
+}
+
+// ──────── market intelligence (demand) ────────
+
+Table sb_market_monthly {
+  id text [pk]
+  key text
+  value bigint
+}
+
+Table sb_market_stats {
+  id text [pk]
+  key text
+  value text
+}
+
+Table sb_markets {
+  id text [pk]
+  name text
+  color text
+}
+
+Table sb_markets__subs {
+  sb_markets_id text
+  idx bigint
+  row_pk text [pk]
+  value text
+}
+
+// ──────── other ────────
+
+Table agent_artifacts {
+  id text [pk]
+  key text
+  value text
+}
+
+Table insurance_overrides {
+  id text [pk]
+  key text
+  value text
+}
+
+// ████████████████████████████████████████████████████████████
+// ██  DATABASE SCHEMA: allotment
+// ██  auth / session / file store · created by server.js boot
+// ████████████████████████████████████████████████████████████
+
+Table users {
+  id serial [pk]
+  username text [unique, not null]
+  pass_hash text [not null]
+  name text
+  role text [default: 'staff']
+  created_at timestamptz [default: `now()`]
+}
+
+Table app_state {
+  id text [pk, note: 'blob-mode state store · prod source of truth (public.app_state) · unused in relational mode']
+  data text
+  version int [default: 0]
+  updated_by text
+  updated_at timestamptz [default: `now()`]
+}
+
+Table attachments {
+  id text [pk]
+  booking_id text
+  filename text
+  mime text
+  size int
+  data bytea
+  uploaded_by text
+  created_at timestamptz [default: `now()`]
+}
+
+// (schema `public` = a different app's tables — not modeled here)
+// (schema `norm` = prod-only stale snapshot — ignore)
+
+TableGroup app_meta {
+  app_hooks
+  app_meta
+}
+
+TableGroup operations_core {
+  boats
+  boats__assignments
+  boats__docs
+  boats__log
+  boats__repairhistory
+  boats__repairhistory__assets
+  routes
+  routes__overrides
+  routes__seasons
+  routes__times
+  trips
+}
+
+TableGroup fleet {
+  fleet_consumable_logs
+  fleet_daily
+  fleet_daily__trips
+  fleet_drlock
+  fleet_engines
+  fleet_engines__log
+  fleet_fuelprice
+  fleet_gearboxes
+  fleet_gearboxes__log
+  fleet_incidents
+  fleet_incidents__damagedassets
+  fleet_incidents__progresslog
+  fleet_incidents__relatedmaintids
+  fleet_inventory
+  fleet_inventory__history
+  fleet_inventory__history__changes
+  fleet_inventory__stocks
+  fleet_maintenance
+  fleet_maintenance__assets
+  fleet_maintenance__parts
+  fleet_maintenance__progresslog
+  fleet_memos
+  fleet_memos__items
+  fleet_projects
+  fleet_projects__log
+  fleet_projects__plan
+  fleet_propellers
+  fleet_propellers__log
+  fleet_safety
+  fleet_safety__inspections
+  fleet_safety__log
+}
+
+TableGroup rate_types {
+  sb_agents_rate_bindings
+  sb_rate_types
+  sb_rate_types__addons
+  sb_rate_types__addons__applies
+  sb_rate_types__addons__byroute
+  sb_rate_types__addons__r10
+  sb_rate_types__addons__r11
+  sb_rate_types__addons__r12
+  sb_rate_types__addons__r4
+  sb_rate_types__addons__r5
+  sb_rate_types__addons__r6
+  sb_rate_types__charterrates
+  sb_rate_types__routebundles
+  sb_rate_types__routes
+  sb_rate_types__routevalidity
+  sb_rate_types__seatrates
+}
+
+TableGroup agents_team {
+  sb_agents
+  sb_agents__activity
+  sb_agents__contracthistory
+  sb_agents__programperiods
+  sb_agents__programs
+  sb_sales
+  sb_staff
+}
+
+TableGroup booking {
+  nat_learn
+  sb_bookings
+  sb_bookings__addons
+  sb_bookings__adjustments
+  sb_bookings__feeitems
+  sb_bookings__history
+  sb_bookings__over
+  sb_bookings__partialcancels
+  sb_bookings__passengers
+  sb_bookings__trips
+  sb_bookings__upgrades
+  sb_extras
+  sb_nationalities
+  sb_seat_locks
+  sb_seat_locks__log
+  sb_weather
+}
+
+TableGroup accounting {
+  sb_invoices
+  sb_invoices__bookingids
+  sb_invoices__lineitems
+  sb_payments
+}
+
+TableGroup transfer_pickup {
+  sb_pickup_areas
+  sb_pickup_time_profiles
+  sb_pickup_time_profiles__times
+  sb_pickup_times
+  sb_vehicles
+  sb_vehicles__dayroute
+  sb_vehicles__daystatus
+  sb_vehicles__log
+  sb_vehicles__statusranges
+  vanjob_driver
+  vanjob_pickup_th
+  vanjob_sent
+  vanjob_sreq
+  vanjob_th_flag
+}
+
+TableGroup market_intel {
+  sb_market_monthly
+  sb_market_stats
+  sb_markets
+  sb_markets__subs
+}
+
+TableGroup other {
+  agent_artifacts
+  insurance_overrides
+}
+
+TableGroup allotment_schema {
+  users
+  app_state
+  attachments
+}
+
+Ref: boats__assignments.boats_id > boats.id
 Ref: boats__docs.boats_id > boats.id
 Ref: boats__log.boats_id > boats.id
 Ref: boats__repairhistory.boats_id > boats.id
-Ref: boats__assignments.boats_id > boats.id
+Ref: fleet_daily__trips.fleet_daily_id > fleet_daily.id
 Ref: fleet_engines__log.fleet_engines_id > fleet_engines.id
 Ref: fleet_gearboxes__log.fleet_gearboxes_id > fleet_gearboxes.id
-Ref: fleet_propellers__log.fleet_propellers_id > fleet_propellers.id
-Ref: fleet_daily__trips.fleet_daily_id > fleet_daily.id
-Ref: fleet_maintenance__assets.fleet_maintenance_id > fleet_maintenance.id
-Ref: fleet_maintenance__progresslog.fleet_maintenance_id > fleet_maintenance.id
-Ref: fleet_maintenance__parts.fleet_maintenance_id > fleet_maintenance.id
 Ref: fleet_incidents__damagedassets.fleet_incidents_id > fleet_incidents.id
 Ref: fleet_incidents__progresslog.fleet_incidents_id > fleet_incidents.id
 Ref: fleet_incidents__relatedmaintids.fleet_incidents_id > fleet_incidents.id
 Ref: fleet_inventory__history.fleet_inventory_id > fleet_inventory.id
 Ref: fleet_inventory__stocks.fleet_inventory_id > fleet_inventory.id
+Ref: fleet_maintenance__assets.fleet_maintenance_id > fleet_maintenance.id
+Ref: fleet_maintenance__parts.fleet_maintenance_id > fleet_maintenance.id
+Ref: fleet_maintenance__progresslog.fleet_maintenance_id > fleet_maintenance.id
 Ref: fleet_memos__items.fleet_memos_id > fleet_memos.id
-Ref: sb_rate_types__routes.sb_rate_types_id > sb_rate_types.id
-Ref: sb_rate_types__seatrates.sb_rate_types_id > sb_rate_types.id
-Ref: sb_rate_types__charterrates.sb_rate_types_id > sb_rate_types.id
-Ref: sb_rate_types__addons.sb_rate_types_id > sb_rate_types.id
-Ref: sb_rate_types__routevalidity.sb_rate_types_id > sb_rate_types.id
-Ref: sb_rate_types__routebundles.sb_rate_types_id > sb_rate_types.id
-Ref: fleet_safety__log.fleet_safety_id > fleet_safety.id
-Ref: fleet_safety__inspections.fleet_safety_id > fleet_safety.id
-Ref: sb_pickup_time_profiles__times.sb_pickup_time_profiles_id > sb_pickup_time_profiles.id
 Ref: fleet_projects__log.fleet_projects_id > fleet_projects.id
 Ref: fleet_projects__plan.fleet_projects_id > fleet_projects.id
-Ref: sb_seat_locks__log.sb_seat_locks_id > sb_seat_locks.id
-Ref: sb_agents__programs.sb_agents_id > sb_agents.id
-Ref: sb_agents__programperiods.sb_agents_id > sb_agents.id
+Ref: fleet_propellers__log.fleet_propellers_id > fleet_propellers.id
+Ref: fleet_safety__inspections.fleet_safety_id > fleet_safety.id
+Ref: fleet_safety__log.fleet_safety_id > fleet_safety.id
+Ref: routes__overrides.routes_id > routes.id
+Ref: routes__seasons.routes_id > routes.id
+Ref: routes__times.routes_id > routes.id
 Ref: sb_agents__activity.sb_agents_id > sb_agents.id
 Ref: sb_agents__contracthistory.sb_agents_id > sb_agents.id
+Ref: sb_agents__programperiods.sb_agents_id > sb_agents.id
+Ref: sb_agents__programs.sb_agents_id > sb_agents.id
+Ref: sb_bookings__addons.sb_bookings_id > sb_bookings.id
+Ref: sb_bookings__adjustments.sb_bookings_id > sb_bookings.id
+Ref: sb_bookings__feeitems.sb_bookings_id > sb_bookings.id
+Ref: sb_bookings__history.sb_bookings_id > sb_bookings.id
+Ref: sb_bookings__over.sb_bookings_id > sb_bookings.id
+Ref: sb_bookings__partialcancels.sb_bookings_id > sb_bookings.id
 Ref: sb_bookings__passengers.sb_bookings_id > sb_bookings.id
 Ref: sb_bookings__trips.sb_bookings_id > sb_bookings.id
-Ref: sb_bookings__addons.sb_bookings_id > sb_bookings.id
-Ref: sb_bookings__history.sb_bookings_id > sb_bookings.id
 Ref: sb_bookings__upgrades.sb_bookings_id > sb_bookings.id
-Ref: sb_bookings__feeitems.sb_bookings_id > sb_bookings.id
-Ref: sb_bookings__partialcancels.sb_bookings_id > sb_bookings.id
-Ref: sb_bookings__adjustments.sb_bookings_id > sb_bookings.id
-Ref: sb_bookings__over.sb_bookings_id > sb_bookings.id
 Ref: sb_invoices__bookingids.sb_invoices_id > sb_invoices.id
 Ref: sb_invoices__lineitems.sb_invoices_id > sb_invoices.id
 Ref: sb_markets__subs.sb_markets_id > sb_markets.id
+Ref: sb_pickup_time_profiles__times.sb_pickup_time_profiles_id > sb_pickup_time_profiles.id
+Ref: sb_rate_types__addons.sb_rate_types_id > sb_rate_types.id
+Ref: sb_rate_types__charterrates.sb_rate_types_id > sb_rate_types.id
+Ref: sb_rate_types__routebundles.sb_rate_types_id > sb_rate_types.id
+Ref: sb_rate_types__routes.sb_rate_types_id > sb_rate_types.id
+Ref: sb_rate_types__routevalidity.sb_rate_types_id > sb_rate_types.id
+Ref: sb_rate_types__seatrates.sb_rate_types_id > sb_rate_types.id
+Ref: sb_seat_locks__log.sb_seat_locks_id > sb_seat_locks.id
+Ref: sb_vehicles__dayroute.sb_vehicles_id > sb_vehicles.id
+Ref: sb_vehicles__daystatus.sb_vehicles_id > sb_vehicles.id
 Ref: sb_vehicles__log.sb_vehicles_id > sb_vehicles.id
 Ref: sb_vehicles__statusranges.sb_vehicles_id > sb_vehicles.id
