@@ -36,9 +36,10 @@ const OS_DESC = [...OS_TABLES].sort((a, b) => _osDepth(b) - _osDepth(a));   // c
 const qic = id => '"' + String(id).replace(/"/g, '""') + '"';
 const fqt = t => qic(OS_SCHEMA) + '.' + qic(t);
 
-async function relLoad() {                                           // operation_schemas -> blob
+async function relLoad() {                                           // operation_schemas -> blob (parallel)
+  const results = await Promise.all(OS_TABLES.map(t => pool.query(`SELECT * FROM ${fqt(t)}`)));
   const data = {};
-  for (const t of OS_TABLES) { const r = await pool.query(`SELECT * FROM ${fqt(t)}`); data[t] = r.rows; }
+  OS_TABLES.forEach((t, i) => { data[t] = results[i].rows; });
   return osRepo.assembleBlob(data);
 }
 // read-modify-write the whole schema in ONE transaction, serialized by an advisory lock (no lost saves).
