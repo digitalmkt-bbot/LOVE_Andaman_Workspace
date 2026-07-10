@@ -6232,5 +6232,22 @@
    "kind": "map_value_json",
    "db_type": "text"
   }
+ },
+ "lk_product_map": {
+  "id": {
+   "source": "lk_product_map map key (generated id)",
+   "kind": "pk",
+   "db_type": "text"
+  },
+  "key": {
+   "source": "lk_product_map map key (original)",
+   "kind": "map_key",
+   "db_type": "text"
+  },
+  "value": {
+   "source": "lk_product_map[key] value",
+   "kind": "map_value_json",
+   "db_type": "text"
+  }
  }
 }
