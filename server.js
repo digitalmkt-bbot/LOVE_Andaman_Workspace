@@ -443,42 +443,6 @@ const server = http.createServer((req, res) => {
     }); return;
   }
 
-  // ───── LK Inbox: read-only feed of love_kingdom bookings (Phase 1) ─────
-  //   love_kingdom is พี่ซัน's B2C sales system in the SAME Postgres (separate schema).
-  //   Ops staff import these as drafts in the app (LK Inbox view) and complete the
-  //   operation-required fields there — love_kingdom itself is never written to.
-  //   Requires: GRANT SELECT on love_kingdom.bookings/booking_items/customers to allotment_app
-  //   (scripts/add_lk_inbox_2026_07.js). Only day_trip + private_own items are returned
-  //   (hotels / third-party don't concern the operation).
-  if(u === '/api/lk/bookings' && req.method === 'GET'){
-    const s=session(req); if(!s) return J(res,401,{error:'login required'});
-    if(!pool) return J(res,503,{error:'no database'});
-    Promise.all([
-      pool.query(`SELECT b.id, b.channel_name, b.travel_date::text, b.status, b.total::float8 AS total,
-                         b.remark, b.passengers, b.created_at, b.booked_by_name,
-                         c.name AS cust_name, c.phone AS cust_phone, c.email AS cust_email, c.nationality AS cust_nat
-                  FROM love_kingdom.bookings b LEFT JOIN love_kingdom.customers c ON c.id=b.customer_id
-                  ORDER BY b.created_at DESC LIMIT 200`),
-      pool.query(`SELECT booking_id, line_no, type, product_id, route_id, boat_name, travel_date::text,
-                         pax_adult, pax_child, pax_infant, pax_foc, pax_thai, pax_foreign,
-                         special_request, remark, details->>'pickupLocation' AS pickup_location,
-                         (details->>'dropoffSame')::boolean AS dropoff_same
-                  FROM love_kingdom.booking_items
-                  WHERE type IN ('day_trip','private_own')
-                  ORDER BY booking_id, line_no`)
-    ]).then(([bk, it])=>{
-      const items={}; it.rows.forEach(r=>{ (items[r.booking_id] ||= []).push(r); });
-      const out = bk.rows
-        .map(b=>({ id:b.id, channel:b.channel_name, travelDate:b.travel_date, status:b.status, total:b.total,
-                   remark:b.remark, passengers:b.passengers||[], createdAt:b.created_at, bookedBy:b.booked_by_name,
-                   customer:{name:b.cust_name, phone:b.cust_phone, email:b.cust_email, nationality:b.cust_nat},
-                   items:items[b.id]||[] }))
-        .filter(b=>b.items.length);                       // hotel-only bookings never reach the operation
-      J(res,200,{bookings:out});
-    }).catch(e=>J(res,500,{error:e.message}));
-    return;
-  }
-
   // ───── Per-entity REST API (v1) ─────
   //   GET  /api/v1                     resource index {resources:{name:container}}
   //   GET  /api/v1/<entity>[/<id>]     list / one record (nested children assembled)
