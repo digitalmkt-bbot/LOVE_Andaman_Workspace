@@ -36,6 +36,25 @@ const OS_DESC = [...OS_TABLES].sort((a, b) => _osDepth(b) - _osDepth(a));   // c
 const qic = id => '"' + String(id).replace(/"/g, '""') + '"';
 const fqt = t => qic(OS_SCHEMA) + '.' + qic(t);
 
+// ── save-safety guard (2026-07-10 · feat/validation-deprecate-blob) ──────────────────────────────
+// A stale / old whole-blob client can post data whose collections are empty or drastically shorter than
+// what the DB already holds; the relational save then DELETEs the table and re-INSERTs ~nothing → records
+// silently revert to DEFAULT_* seeds (e.g. boat pier, agent name). This guard refuses any save that would
+// wipe or heavily shrink a top-level table that currently has data. Protects every main entity table.
+// Bypass an INTENTIONAL bulk clear with payload.confirm (whole-blob) / op.confirm (per-entity putall).
+const OS_TOP = OS_TABLES.filter(t => !t.includes('__') && t !== 'app_meta');   // all main entity tables
+const GUARD_MINROWS = 5, GUARD_LOSS_ABS = 20, GUARD_LOSS_FRAC = 0.5;
+function shrinkGuard(curCount, incCount){                                       // -> [{table,from,to}] that would be wiped/shrunk
+  const bad = [];
+  for (const t of OS_TOP){
+    const cur = curCount[t] || 0, inc = incCount[t] || 0;
+    if (cur >= GUARD_MINROWS && (inc === 0 || (cur - inc >= GUARD_LOSS_ABS && inc < cur * GUARD_LOSS_FRAC)))
+      bad.push({ table: t, from: cur, to: inc });
+  }
+  return bad;
+}
+function shrinkErr(bad){ const e = new Error('SHRINK_GUARD'); e.code = 'SHRINK_GUARD'; e.detail = bad; return e; }
+
 async function relLoad() {                                           // operation_schemas -> blob
   const data = {};
   for (const t of OS_TABLES) { const r = await pool.query(`SELECT * FROM ${fqt(t)}`); data[t] = r.rows; }
@@ -57,6 +76,12 @@ async function relApplyAndSave(payload, username, base) {
     if (payload.full && typeof payload.full === 'string') blob = JSON.parse(payload.full);
     else applyDiff(blob, payload.diff || {});
     const tables = osRepo.decomposeBlob(blob);
+    if (!payload.confirm) {                                            // save-safety: refuse a stale/whole-blob overwrite that would wipe existing data
+      const curCount = {}, incCount = {};
+      for (const t of OS_TOP) { curCount[t] = (data[t] || []).length; incCount[t] = (tables[t] || []).length; }
+      const bad = shrinkGuard(curCount, incCount);
+      if (bad.length) throw shrinkErr(bad);                            // rolled back by the catch below · handler returns 409
+    }
     for (const t of OS_DESC) await client.query(`DELETE FROM ${fqt(t)}`);
     for (const t of OS_ASC) {                                        // batched multi-row insert (fast: ~1-2 queries/table)
       const rows = tables[t] || []; if (!rows.length) continue;
@@ -250,6 +275,12 @@ async function restApplyOp(client, op){
     return restApplyOp(client, { op: 'put', r: op.r, id: op.id, body: merged });
   }
   if (op.op === 'putall'){
+    if (!op.confirm && OS_TOP.indexOf(table) >= 0){                      // save-safety: refuse wiping an existing collection wholesale
+      const curN = (await client.query(`SELECT count(*)::int n FROM ${fqt(table)}`)).rows[0].n;
+      let incN = 0; if (op.body != null){ const rr = osRepo.decomposeBlob({ [appKey]: op.body }); incN = (rr[table] || []).length; }
+      const bad = shrinkGuard({ [table]: curN }, { [table]: incN });
+      if (bad.length) throw shrinkErr(bad);
+    }
     await client.query(`DELETE FROM ${fqt(table)}`);                     // children cascade
     if (op.body == null) return op.r;
     const rows = osRepo.decomposeBlob({ [appKey]: op.body });
@@ -357,7 +388,9 @@ const server = http.createServer((req, res) => {
           +' — run os-backend/scripts/check_mapping_drift.js if this repeats'); }catch(e){}
         relApplyAndSave(payload, s.username, base)
           .then(({version,behind})=>{ J(res,200,{ok:true,version,behind}); sseBroadcast({version, updated_by:s.username}); })
-          .catch(e=>J(res,500,{error:e.message}));
+          .catch(e=> e.code==='SHRINK_GUARD'
+            ? J(res,409,{error:'save_would_delete_data', code:'SHRINK_GUARD', detail:e.detail})
+            : J(res,500,{error:e.message}));
         return;
       }
       pool.query('SELECT data,version FROM app_state WHERE id=$1',[STATE_KEY]).then(r=>{
@@ -504,14 +537,18 @@ const server = http.createServer((req, res) => {
         if(!ops.every(o=>o && (o.op==='meta' ? o.id!=null : (o.op==='put'||o.op==='patch'||o.op==='del'||o.op==='putall') && o.r))) return J(res,400,{error:'bad op shape'});
         restTxn(s.username, p.baseVersion==null?-1:p.baseVersion, ops)
           .then(({version,behind})=>{ J(res,200,{ok:true,version,behind,applied:ops.length}); sseBroadcast({version, updated_by:s.username}); })
-          .catch(e=>J(res, /unknown resource|needs an id|record object|patch target not found/.test(e.message)?400:500, {error:e.message}));
+          .catch(e=> e.code==='SHRINK_GUARD'
+            ? J(res,409,{error:'save_would_delete_data', code:'SHRINK_GUARD', detail:e.detail})
+            : J(res, /unknown resource|needs an id|record object|patch target not found/.test(e.message)?400:500, {error:e.message}));
       }); return;
     }
     if(m==='GET'){ restGet(res,resName,id).catch(done); return; }
     if(!canWrite) return J(res,403,{error:'view only · ไม่มีสิทธิ์แก้ไข'});
     const one = op => restTxn(s.username, -1, [op])
       .then(({version,applied})=>{ J(res, m==='POST'?201:200, {ok:true, id:applied[0], version}); sseBroadcast({version, updated_by:s.username}); })
-      .catch(e=>J(res, /unknown resource|needs an id|record object|patch target not found/.test(e.message)?400:500, {error:e.message}));
+      .catch(e=> e.code==='SHRINK_GUARD'
+        ? J(res,409,{error:'save_would_delete_data', code:'SHRINK_GUARD', detail:e.detail})
+        : J(res, /unknown resource|needs an id|record object|patch target not found/.test(e.message)?400:500, {error:e.message}));
     if(m==='DELETE'){ if(id==null) return J(res,400,{error:'id required'}); one({op:'del', r:resName, id}); return; }
     if(m==='POST'||m==='PUT'){
       if(m==='PUT'&&id==null) return J(res,400,{error:'id required for PUT'});
