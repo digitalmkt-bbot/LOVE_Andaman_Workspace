@@ -332,7 +332,7 @@ const server = http.createServer((req, res) => {
         .then(r => { const usr=r.rows[0];
           if(!usr || !verifyPw(b.password||'', usr.pass_hash)) return J(res,401,{error:'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'});
           const perms = parsePerms(usr.perms); const ei = editInfo(usr);
-          const EXP = nextDailyExpiry();
+          const EXP = Date.now() + SESS_DAYS*864e5;   // §102 REVERTED 2026-07-10: back to 30-day session. The daily 03:00 re-login forced every client to reload each morning, which is what fired the latent loadData version-mismatch reseed. nextDailyExpiry() kept for reference (unused).
           const tok = sign({uid:usr.id, username:usr.username, name:usr.name, role:usr.role, perms:perms, edit:ei.canEditAny, editAreas:ei.editAreas, exp:EXP});
           J(res,200,{username:usr.username,name:usr.name,role:usr.role,perms:perms,canEdit:ei.canEditAny,editAreas:ei.editAreas}, {'Set-Cookie':`sess=${tok}; HttpOnly; Path=/; SameSite=Lax; Secure; Max-Age=${Math.max(60,Math.floor((EXP-Date.now())/1000))}`});
         }).catch(e=>J(res,500,{error:e.message}));
@@ -536,7 +536,8 @@ const server = http.createServer((req, res) => {
         if(!ops || !ops.length) return J(res,400,{error:'ops required'});
         if(!ops.every(o=>o && (o.op==='meta' ? o.id!=null : (o.op==='put'||o.op==='patch'||o.op==='del'||o.op==='putall') && o.r))) return J(res,400,{error:'bad op shape'});
         restTxn(s.username, p.baseVersion==null?-1:p.baseVersion, ops)
-          .then(({version,behind})=>{ J(res,200,{ok:true,version,behind,applied:ops.length}); sseBroadcast({version, updated_by:s.username}); })
+          .then(({version,behind})=>{ try{ const summ=ops.slice(0,25).map(o=>o.op+':'+(o.r||o.id||'')).join(','); console.log('[batch] user='+s.username+' v'+version+' ops='+ops.length+' ['+summ+']'); }catch(e){}   // 2026-07-10: log who saved what (per-entity saves had no username trail — the incident was untraceable)
+            J(res,200,{ok:true,version,behind,applied:ops.length}); sseBroadcast({version, updated_by:s.username}); })
           .catch(e=> e.code==='SHRINK_GUARD'
             ? J(res,409,{error:'save_would_delete_data', code:'SHRINK_GUARD', detail:e.detail})
             : J(res, /unknown resource|needs an id|record object|patch target not found/.test(e.message)?400:500, {error:e.message}));
