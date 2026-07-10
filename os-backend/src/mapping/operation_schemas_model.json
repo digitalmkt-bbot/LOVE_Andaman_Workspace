@@ -5823,24 +5823,5 @@
    }
   ],
   "rows": 0
- },
- "lk_product_map": {
-  "columns": [
-   {
-    "name": "id",
-    "type": "text"
-   },
-   {
-    "name": "key",
-    "type": "text"
-   },
-   {
-    "name": "value",
-    "type": "text"
-   }
-  ],
-  "primary_key": "id",
-  "foreign_keys": [],
-  "rows": 0
  }
 }
