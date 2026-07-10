@@ -24,6 +24,11 @@ const SESS_DAYS  = 30;   // session cookie lifetime · long so refresh/redeploy 
 //    into the operation_schemas tables via os_repo. blob mode (default) is unchanged. ──
 const DATA_BACKEND = (process.env.DATA_BACKEND || 'blob').toLowerCase();
 const OS_SCHEMA = 'operation_schemas';
+// users auth table (2026-07-10 · feat/validation-deprecate-blob): relational backend keeps it in
+// operation_schemas (migrated via os-backend/scripts/migrate_users_to_os_schema.js — run BEFORE
+// deploying this); blob mode keeps the legacy unqualified `users` (resolves via the role's search_path,
+// e.g. allotment.users on prod). app_state + attachments stay unqualified in both modes.
+const USERS_T = DATA_BACKEND === 'relational' ? OS_SCHEMA + '.users' : 'users';
 // os_repo mapping engine + schema model — used by the relational save path AND the per-entity REST API.
 const osRepo  = require('./os-backend/src/mapping/os_repo.js');
 const osModel = require('./os-backend/src/mapping/operation_schemas_model.json');
@@ -113,20 +118,20 @@ if (Pool && DB_URL) {
 }
 async function initDb(){
   try{
-    await pool.query("CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, username TEXT UNIQUE NOT NULL, pass_hash TEXT NOT NULL, name TEXT, role TEXT DEFAULT 'staff', created_at TIMESTAMPTZ DEFAULT now())");
+    await pool.query(`CREATE TABLE IF NOT EXISTS ${USERS_T} (id SERIAL PRIMARY KEY, username TEXT UNIQUE NOT NULL, pass_hash TEXT NOT NULL, name TEXT, role TEXT DEFAULT 'staff', created_at TIMESTAMPTZ DEFAULT now())`);
     await pool.query("CREATE TABLE IF NOT EXISTS app_state (id TEXT PRIMARY KEY, data TEXT, version INT DEFAULT 0, updated_by TEXT, updated_at TIMESTAMPTZ DEFAULT now())");
     await pool.query("ALTER TABLE app_state ADD COLUMN IF NOT EXISTS version INT DEFAULT 0");
     await pool.query("ALTER TABLE app_state ADD COLUMN IF NOT EXISTS updated_by TEXT");
-    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS perms TEXT");   // per-user area access (JSON array · null = all)
-    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS can_edit BOOLEAN DEFAULT true");   // legacy global edit flag (fallback)
-    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS edit_areas TEXT");   // per-section edit · JSON array of area keys · null = edit all (uses can_edit)
+    await pool.query(`ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS perms TEXT`);   // per-user area access (JSON array · null = all)
+    await pool.query(`ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS can_edit BOOLEAN DEFAULT true`);   // legacy global edit flag (fallback)
+    await pool.query(`ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS edit_areas TEXT`);   // per-section edit · JSON array of area keys · null = edit all (uses can_edit)
     // document attachments · files stored server-side (bytea) · booking keeps only a ref in the app blob
     await pool.query("CREATE TABLE IF NOT EXISTS attachments (id TEXT PRIMARY KEY, booking_id TEXT, filename TEXT, mime TEXT, size INT, data BYTEA, uploaded_by TEXT, created_at TIMESTAMPTZ DEFAULT now())");
     await pool.query("CREATE INDEX IF NOT EXISTS idx_attach_booking ON attachments(booking_id)");
     // seed first admin from env if there are no users yet
-    const c = await pool.query('SELECT count(*)::int n FROM users');
+    const c = await pool.query(`SELECT count(*)::int n FROM ${USERS_T}`);
     if (c.rows[0].n === 0 && ADMIN_USER && ADMIN_PASS) {
-      await pool.query('INSERT INTO users(username,pass_hash,name,role) VALUES($1,$2,$3,$4)', [ADMIN_USER, hashPw(ADMIN_PASS), 'Admin', 'admin']);
+      await pool.query(`INSERT INTO ${USERS_T}(username,pass_hash,name,role) VALUES($1,$2,$3,$4)`, [ADMIN_USER, hashPw(ADMIN_PASS), 'Admin', 'admin']);
       console.log('[db] seeded admin user:', ADMIN_USER);
     }
     dbReady = true; console.log('[db] ready');
@@ -343,7 +348,7 @@ const server = http.createServer((req, res) => {
     if(!pool) return J(res,503,{error:'no database'});
     readBody(req, body => {
       let b={}; try{ b=JSON.parse(body); }catch(e){}
-      pool.query('SELECT * FROM users WHERE lower(username)=lower($1)', [String(b.username||'').trim()])
+      pool.query(`SELECT * FROM ${USERS_T} WHERE lower(username)=lower($1)`, [String(b.username||'').trim()])
         .then(r => { const usr=r.rows[0];
           if(!usr || !verifyPw(b.password||'', usr.pass_hash)) return J(res,401,{error:'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'});
           const perms = parsePerms(usr.perms); const ei = editInfo(usr);
@@ -467,27 +472,27 @@ const server = http.createServer((req, res) => {
   if(u === '/api/users'){
     const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(s.role!=='admin') return J(res,403,{error:'admin only'});
     if(!pool) return J(res,503,{error:'no database'});
-    if(req.method === 'GET'){ pool.query('SELECT id,username,name,role,perms,can_edit,edit_areas,created_at FROM users ORDER BY id').then(r=>J(res,200,{users:r.rows.map(x=>{const ei=editInfo(x); return {id:x.id,username:x.username,name:x.name,role:x.role,perms:parsePerms(x.perms),canEdit:ei.canEditAny,editAreas:ei.editAreas,created_at:x.created_at};})})).catch(e=>J(res,500,{error:e.message})); return; }
+    if(req.method === 'GET'){ pool.query(`SELECT id,username,name,role,perms,can_edit,edit_areas,created_at FROM ${USERS_T} ORDER BY id`).then(r=>J(res,200,{users:r.rows.map(x=>{const ei=editInfo(x); return {id:x.id,username:x.username,name:x.name,role:x.role,perms:parsePerms(x.perms),canEdit:ei.canEditAny,editAreas:ei.editAreas,created_at:x.created_at};})})).catch(e=>J(res,500,{error:e.message})); return; }
     if(req.method === 'POST'){ readBody(req, body=>{ let b={}; try{b=JSON.parse(body);}catch(e){} const un=String(b.username||'').trim(); if(!un||!b.password) return J(res,400,{error:'ต้องมี username + password'});
       const perms = cleanPerms(b.perms); const permsStr = perms ? JSON.stringify(perms) : null;
       const ea = cleanAreas(b.editAreas); const eaStr = ea ? JSON.stringify(ea) : null; const canEdit = ea ? ea.length>0 : (b.canEdit!==false);
-      pool.query('INSERT INTO users(username,pass_hash,name,role,perms,can_edit,edit_areas) VALUES($1,$2,$3,$4,$5,$6,$7)',[un,hashPw(b.password),(b.name||un),(b.role==='admin'?'admin':'staff'),permsStr,canEdit,eaStr])
+      pool.query(`INSERT INTO ${USERS_T}(username,pass_hash,name,role,perms,can_edit,edit_areas) VALUES($1,$2,$3,$4,$5,$6,$7)`,[un,hashPw(b.password),(b.name||un),(b.role==='admin'?'admin':'staff'),permsStr,canEdit,eaStr])
         .then(()=>J(res,200,{ok:true})).catch(e=>J(res, e.code==='23505'?409:500, {error: e.code==='23505'?'username นี้มีอยู่แล้ว':e.message})); }); return; }
     if(req.method === 'DELETE'){ const id=parseInt((q.match(/id=(\d+)/)||[])[1]||'0',10); if(!id) return J(res,400,{error:'no id'}); if(id===s.uid) return J(res,400,{error:'ลบบัญชีตัวเองไม่ได้'});
-      pool.query('DELETE FROM users WHERE id=$1',[id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); return; }
+      pool.query(`DELETE FROM ${USERS_T} WHERE id=$1`,[id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); return; }
   }
   if(u === '/api/users/password' && req.method === 'POST'){
     const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(s.role!=='admin') return J(res,403,{error:'admin only'});
     readBody(req, body=>{ let b={}; try{b=JSON.parse(body);}catch(e){} if(!b.id||!b.password) return J(res,400,{error:'no id/password'});
-      pool.query('UPDATE users SET pass_hash=$1 WHERE id=$2',[hashPw(b.password),parseInt(b.id,10)]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }); return;
+      pool.query(`UPDATE ${USERS_T} SET pass_hash=$1 WHERE id=$2`,[hashPw(b.password),parseInt(b.id,10)]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }); return;
   }
   if(u === '/api/users/perms' && req.method === 'POST'){   // admin sets a user's area access · role optional
     const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(s.role!=='admin') return J(res,403,{error:'admin only'});
     readBody(req, body=>{ let b={}; try{b=JSON.parse(body);}catch(e){} const id=parseInt(b.id,10); if(!id) return J(res,400,{error:'no id'});
       const perms = cleanPerms(b.perms); const permsStr = perms ? JSON.stringify(perms) : null;
       const ea = cleanAreas(b.editAreas); const eaStr = ea ? JSON.stringify(ea) : null; const canEdit = ea ? ea.length>0 : (b.canEdit!==false);
-      if(b.role==='admin'||b.role==='staff'){ pool.query('UPDATE users SET perms=$1, role=$2, can_edit=$3, edit_areas=$4 WHERE id=$5',[permsStr,b.role,canEdit,eaStr,id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
-      else { pool.query('UPDATE users SET perms=$1, can_edit=$2, edit_areas=$3 WHERE id=$4',[permsStr,canEdit,eaStr,id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
+      if(b.role==='admin'||b.role==='staff'){ pool.query(`UPDATE ${USERS_T} SET perms=$1, role=$2, can_edit=$3, edit_areas=$4 WHERE id=$5`,[permsStr,b.role,canEdit,eaStr,id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
+      else { pool.query(`UPDATE ${USERS_T} SET perms=$1, can_edit=$2, edit_areas=$3 WHERE id=$4`,[permsStr,canEdit,eaStr,id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
     }); return;
   }
 
