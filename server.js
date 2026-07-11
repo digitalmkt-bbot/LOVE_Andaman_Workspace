@@ -126,6 +126,14 @@ async function initDb(){
     await pool.query(`ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS can_edit BOOLEAN DEFAULT true`);   // legacy global edit flag (fallback)
     await pool.query(`ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS edit_areas TEXT`);   // per-section edit · JSON array of area keys · null = edit all (uses can_edit)
     await pool.query(`ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS dept TEXT`);   // department key (UI grouping) · null = auto-guess from username
+    // §sort (2026-07-11): top-level lists had NO ordering column — os_repo only preserves order for CHILD
+    // tables (via idx), so a drag-reorder of the markets / routes list never survived a reload. `sort` is a
+    // plain scalar in the mapping, so decompose/assemble carry it with zero changes to os_repo, and the
+    // client diff sees it as an ordinary changed field (→ patch ops). Additive: existing rows get NULL.
+    if(DATA_BACKEND === 'relational'){
+      await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_markets" ADD COLUMN IF NOT EXISTS "sort" bigint`);
+      await pool.query(`ALTER TABLE ${OS_SCHEMA}."routes"     ADD COLUMN IF NOT EXISTS "sort" bigint`);
+    }
     // document attachments · files stored server-side (bytea) · booking keeps only a ref in the app blob
     await pool.query("CREATE TABLE IF NOT EXISTS attachments (id TEXT PRIMARY KEY, booking_id TEXT, filename TEXT, mime TEXT, size INT, data BYTEA, uploaded_by TEXT, created_at TIMESTAMPTZ DEFAULT now())");
     await pool.query("CREATE INDEX IF NOT EXISTS idx_attach_booking ON attachments(booking_id)");
