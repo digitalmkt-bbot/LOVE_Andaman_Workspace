@@ -543,7 +543,7 @@ const server = http.createServer((req, res) => {
   }
 
   // ───── static files ─────
-  let p = decodeURIComponent(u); if(p==='/'||p==='') p='/allotment_v2/allotment_v2.html';
+  let p = decodeURIComponent(u); if(p==='/'||p==='') p=fs.existsSync(path.join(ROOT,'allotment_v2/dist/index.html'))?'/allotment_v2/dist/index.html':'/allotment_v2/allotment_v2.html';
   const fp = path.normalize(path.join(ROOT,p));
   if(!fp.startsWith(ROOT)){ res.writeHead(403); return res.end('Forbidden'); }
   fs.readFile(fp,(err,data)=>{ if(err){ res.writeHead(404,{'Content-Type':'text/plain; charset=utf-8'}); return res.end('Not found'); }

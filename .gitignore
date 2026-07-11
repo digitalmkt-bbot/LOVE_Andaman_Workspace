@@ -7,6 +7,9 @@
 node_modules/
 npm-debug.log*
 
+# ── Vue build output ──
+allotment_v2/dist/
+
 # ── PRIVACY: real customer data + bulky backups — NEVER commit (esp. public repo) ──
 allotment_v2/data_exports/
 allotment_v2/BACKUP/
@@ -21,3 +24,8 @@ skills-lock.json
 
 # real prod data pulled for dev seeding — never commit
 os-backend/data_snapshots/
+
+# scratch / temp files
+*.tmp
+*.dump
+restored_attachments/

@@ -4,7 +4,8 @@
   "private": true,
   "description": "LOVE Andaman · allotment_v2 ops app (static + cloud-sync via Postgres on Railway)",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node --env-file=allotment_v2/.env server.js"
   },
   "dependencies": {
     "pg": "^8.13.1"
