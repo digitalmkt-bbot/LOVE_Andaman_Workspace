@@ -3920,6 +3920,11 @@
       "source": "color",
       "kind": "scalar",
       "db_type": "text"
+    },
+    "companyinfo_taxid": {
+      "source": "companyInfo.taxId",
+      "kind": "scalar",
+      "db_type": "text"
     }
   },
   "sb_agents__programs": {

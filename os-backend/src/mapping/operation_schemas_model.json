@@ -3558,6 +3558,10 @@
         "type": "text"
       },
       {
+        "name": "companyinfo_taxid",
+        "type": "text"
+      },
+      {
         "name": "companyinfo_tatlicense",
         "type": "text"
       },
