@@ -136,6 +136,16 @@ async function initDb(){
       // §taxId (2026-07-11): the app reads companyInfo.taxId ("Tax No." on contracts/invoices) but the table
       // had no column for it, so every value was silently dropped on save. Additive: existing rows get NULL.
       await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_agents" ADD COLUMN IF NOT EXISTS "companyinfo_taxid" text`);
+      // §per-trip ops (2026-07-12): boat/van assignment lived ONLY on the booking (ops_*), so a booking with
+      // two travel days (an overnight, or a B2C order with two programmes) could hold exactly one boat and one
+      // van — day 2 silently inherited day 1's. Ops now also live on the trip row. Day 1 keeps using the
+      // booking-level block (1,058 of 1,059 bookings are single-day and are completely untouched).
+      const _tripOps = [['ops_boatid','text'],['ops_vanid','text'],['ops_vanreturnid','text'],
+                        ['ops_returnsamevan','boolean'],['ops_vangroup','bigint'],['ops_vanseq','bigint'],
+                        ['ops_pickuptimefinal','text'],['ops_vansplits','text'],['ops_reconfirm','text']];
+      for(const [c,t] of _tripOps){
+        await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_bookings__trips" ADD COLUMN IF NOT EXISTS "${c}" ${t}`);
+      }
     }
     // document attachments · files stored server-side (bytea) · booking keeps only a ref in the app blob
     await pool.query("CREATE TABLE IF NOT EXISTS attachments (id TEXT PRIMARY KEY, booking_id TEXT, filename TEXT, mime TEXT, size INT, data BYTEA, uploaded_by TEXT, created_at TIMESTAMPTZ DEFAULT now())");

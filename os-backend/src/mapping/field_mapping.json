@@ -4984,6 +4984,51 @@
       "source": "trips[].lockDraws",
       "kind": "json_text",
       "db_type": "text"
+    },
+    "ops_boatid": {
+      "source": "trips[].ops.boatId",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "ops_vanid": {
+      "source": "trips[].ops.vanId",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "ops_vanreturnid": {
+      "source": "trips[].ops.vanReturnId",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "ops_returnsamevan": {
+      "source": "trips[].ops.returnSameVan",
+      "kind": "scalar",
+      "db_type": "boolean"
+    },
+    "ops_vangroup": {
+      "source": "trips[].ops.vanGroup",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "ops_vanseq": {
+      "source": "trips[].ops.vanSeq",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "ops_pickuptimefinal": {
+      "source": "trips[].ops.pickupTimeFinal",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "ops_vansplits": {
+      "source": "trips[].ops.vanSplits",
+      "kind": "json_text",
+      "db_type": "text"
+    },
+    "ops_reconfirm": {
+      "source": "trips[].ops.reconfirm",
+      "kind": "json_text",
+      "db_type": "text"
     }
   },
   "sb_bookings__addons": {

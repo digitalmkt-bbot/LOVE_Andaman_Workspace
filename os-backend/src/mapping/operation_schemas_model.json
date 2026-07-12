@@ -4546,6 +4546,42 @@
       {
         "name": "lockdraws",
         "type": "text"
+      },
+      {
+        "name": "ops_boatid",
+        "type": "text"
+      },
+      {
+        "name": "ops_vanid",
+        "type": "text"
+      },
+      {
+        "name": "ops_vanreturnid",
+        "type": "text"
+      },
+      {
+        "name": "ops_returnsamevan",
+        "type": "boolean"
+      },
+      {
+        "name": "ops_vangroup",
+        "type": "bigint"
+      },
+      {
+        "name": "ops_vanseq",
+        "type": "bigint"
+      },
+      {
+        "name": "ops_pickuptimefinal",
+        "type": "text"
+      },
+      {
+        "name": "ops_vansplits",
+        "type": "text"
+      },
+      {
+        "name": "ops_reconfirm",
+        "type": "text"
       }
     ],
     "primary_key": "row_pk",
