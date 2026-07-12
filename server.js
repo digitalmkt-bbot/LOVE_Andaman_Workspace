@@ -146,6 +146,11 @@ async function initDb(){
       for(const [c,t] of _tripOps){
         await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_bookings__trips" ADD COLUMN IF NOT EXISTS "${c}" ${t}`);
       }
+      // §vehicle identity colour (2026-07-12): the van-job list coloured rows by POSITION (PAL[i%6]), so a
+      // van's colour changed from day to day. The colour now belongs to the vehicle and is printed on the
+      // job-sheet header, so a driver recognises his own sheet at a glance. Additive: existing rows get NULL
+      // and fall back to a stable hash-of-id colour on the client.
+      await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_vehicles" ADD COLUMN IF NOT EXISTS "color" text`);
     }
     // document attachments · files stored server-side (bytea) · booking keeps only a ref in the app blob
     await pool.query("CREATE TABLE IF NOT EXISTS attachments (id TEXT PRIMARY KEY, booking_id TEXT, filename TEXT, mime TEXT, size INT, data BYTEA, uploaded_by TEXT, created_at TIMESTAMPTZ DEFAULT now())");

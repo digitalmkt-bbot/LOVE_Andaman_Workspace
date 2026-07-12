@@ -5379,6 +5379,10 @@
         "type": "text"
       },
       {
+        "name": "color",
+        "type": "text"
+      },
+      {
         "name": "driver",
         "type": "text"
       },
