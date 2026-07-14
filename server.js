@@ -66,6 +66,203 @@ async function relLoad() {                                           // operatio
   OS_TABLES.forEach((t, i) => { data[t] = results[i].rows; });
   return osRepo.assembleBlob(data);
 }
+
+// ── B2C external database sync ──────────────────────────────────────────────────────────────────
+// Called on every login (relational mode only). Upserts B2C bookings into operation_schemas so
+// they appear as native bookings in allotment (editable, boat/van assignable). Ops columns (boat,
+// van, pickup) are always preserved on conflict — only B2C-owned fields are overwritten.
+//
+// Fill in null entries when the allotment route for each B2C product is decided:
+const B2C_ROUTE_MAP = {
+  'POW-001': null,   // Similan — pending route decision
+  'POW-002': 'r6',   // Surin Islands (unique match)
+  'POW-003': null,   // Phi Phi — pending route decision
+  'POW-004': 'r12',  // Phi Phi + Maiton (unique match)
+  'PR-001':  null,   // Private Similan — pending
+  'PR-002':  null,   // Private Surin — pending
+  'PR-003':  null,   // Private Phi Phi — pending
+  'PR-004':  'r12',  // Private Phi Phi + Maiton (unique match)
+};
+const B2C_OPS_BK   = new Set(['ops_boatid','ops_vangroup','ops_vanseq','ops_vanreturnid','ops_vanid','ops_returnsamevan','ops_pickuptimefinal','ops_reconfirm','ops_vansplits']);
+const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_returnsamevan','ops_vangroup','ops_vanseq','ops_pickuptimefinal','ops_vansplits','ops_reconfirm']);
+
+function mapB2CStatus(s) {
+  if (s === 'cancelled') return 'cancelled';
+  if (s === 'pending')   return 'pending_approval';
+  return 'confirmed';
+}
+
+function mapB2CBooking(row, items) {
+  const td = d => d ? String(d).slice(0, 10) : null;
+  const dayTrips = items.filter(i => i.type === 'day_trip');
+  const trips = dayTrips.map((item, idx) => ({
+    id: 'b2c_' + row.id + '_t' + idx,
+    routeId: B2C_ROUTE_MAP[item.product_id] || null,
+    date: td(item.travel_date) || td(row.travel_date),
+    bookingMode: 'seat',
+    pax: {
+      ad_fr: Number(item.pax_adult) || 0,
+      ad_th: 0,
+      chd_fr: Number(item.pax_child) || 0,
+      chd_th: 0,
+      inf_fr: Number(item.pax_infant) || 0,
+      inf_th: 0,
+      foc: Number(item.pax_foc) || 0,
+    },
+    seatSource: { locked: 0, general: 0 },
+    lockDrawSel: {},
+  }));
+  return {
+    id: 'b2c_' + row.id,
+    schemaVer: 2,
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+    createdBy: 'b2c_sync',
+    voucherRef: row.id,
+    agentId: null,
+    leadPax: row.booked_by_name || '',
+    leadNationality: '',
+    leadPhone: row.customer_phone || '',
+    leadEmail: row.booked_by_email || '',
+    status: mapB2CStatus(row.status),
+    bookingDate: td(row.travel_date),
+    note: ['B2C', row.channel_name, row.id].filter(Boolean).join(' · '),
+    trips,
+    passengers: Array.isArray(row.passengers) ? row.passengers : [],
+    addOns: [],
+    adjustments: [],
+    priceBreakdown: {
+      seat: Number(row.subtotal) || 0,
+      addOn: 0,
+      focDiscount: 0,
+      discount: Number(row.discount) || 0,
+      extra: Number(row.surcharge) || 0,
+      total: Number(row.total) || 0,
+    },
+    paymentSnapshot: {
+      deposit: Number(row.deposit) || 0,
+      balance: Number(row.balance) || 0,
+      method: row.payment_method_id || '',
+    },
+    ops: {},
+    history: [],
+  };
+}
+
+async function relSyncB2C() {
+  if (!b2cPool || !pool || DATA_BACKEND !== 'relational') return;
+  try {
+    const { rows: bkRows } = await b2cPool.query(`
+      SELECT b.*, c.phone AS customer_phone
+      FROM bookings b
+      LEFT JOIN customers c ON c.id = b.customer_id
+      WHERE b.travel_date >= CURRENT_DATE - INTERVAL '90 days'
+      ORDER BY b.created_at DESC
+      LIMIT 500
+    `);
+    if (!bkRows.length) return;
+
+    const extIds = bkRows.map(r => r.id);
+    const { rows: itemRows } = await b2cPool.query(
+      `SELECT * FROM booking_items WHERE booking_id = ANY($1) ORDER BY booking_id, line_no`, [extIds]
+    );
+    const byId = {};
+    for (const item of itemRows) { (byId[item.booking_id] = byId[item.booking_id] || []).push(item); }
+
+    const b2cBks  = bkRows.map(r => mapB2CBooking(r, byId[r.id] || []));
+    const tables  = osRepo.decomposeBlob({ sb_bookings: b2cBks });
+    const b2cIds  = b2cBks.map(b => b.id);
+
+    const BK_COLS   = OS_COLS['sb_bookings'];
+    const TRIP_COLS = OS_COLS['sb_bookings__trips'];
+    const PAX_COLS  = OS_COLS['sb_bookings__passengers'];
+    const ADN_COLS  = OS_COLS['sb_bookings__addons'];
+    const BK_UPDATE = BK_COLS.filter(c => c !== 'id' && c !== 'createdat' && c !== 'createdby' && !B2C_OPS_BK.has(c));
+
+    const bkColSql  = BK_COLS.map(qic).join(', ');
+    const bkPh      = BK_COLS.map((_, i) => '$' + (i + 1)).join(', ');
+    const bkSet     = BK_UPDATE.map(c => `${qic(c)} = EXCLUDED.${qic(c)}`).join(', ');
+    const tripColSql = TRIP_COLS.map(qic).join(', ');
+    const tripPh    = TRIP_COLS.map((_, i) => '$' + (i + 1)).join(', ');
+    const paxColSql = PAX_COLS.map(qic).join(', ');
+    const paxPh     = PAX_COLS.map((_, i) => '$' + (i + 1)).join(', ');
+    const adnColSql = ADN_COLS.map(qic).join(', ');
+    const adnPh     = ADN_COLS.map((_, i) => '$' + (i + 1)).join(', ');
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // 1. Upsert main booking rows — ops columns preserved on conflict
+      for (const row of tables['sb_bookings'] || []) {
+        await client.query(
+          `INSERT INTO ${fqt('sb_bookings')} (${bkColSql}) VALUES (${bkPh})
+           ON CONFLICT (id) DO UPDATE SET ${bkSet}`,
+          BK_COLS.map(c => row[c] === undefined ? null : row[c])
+        );
+      }
+
+      // 2. Refresh trips: save per-trip ops → delete → re-insert → restore ops by idx
+      const { rows: existingTrips } = await client.query(
+        `SELECT sb_bookings_id, idx, ops_boatid, ops_vanid, ops_vanreturnid, ops_returnsamevan,
+                ops_vangroup, ops_vanseq, ops_pickuptimefinal, ops_vansplits, ops_reconfirm
+         FROM ${fqt('sb_bookings__trips')} WHERE sb_bookings_id = ANY($1)`, [b2cIds]
+      );
+      const savedTripOps = {};
+      for (const r of existingTrips) {
+        (savedTripOps[r.sb_bookings_id] = savedTripOps[r.sb_bookings_id] || {})[r.idx] = r;
+      }
+      await client.query(`DELETE FROM ${fqt('sb_bookings__trips')} WHERE sb_bookings_id = ANY($1)`, [b2cIds]);
+      for (const row of tables['sb_bookings__trips'] || []) {
+        await client.query(
+          `INSERT INTO ${fqt('sb_bookings__trips')} (${tripColSql}) VALUES (${tripPh})`,
+          TRIP_COLS.map(c => row[c] === undefined ? null : row[c])
+        );
+      }
+      for (const [bkId, byIdx] of Object.entries(savedTripOps)) {
+        for (const [idx, ops] of Object.entries(byIdx)) {
+          if (ops.ops_boatid == null && ops.ops_vanid == null) continue;
+          await client.query(
+            `UPDATE ${fqt('sb_bookings__trips')} SET
+               ops_boatid=$1, ops_vanid=$2, ops_vanreturnid=$3, ops_returnsamevan=$4,
+               ops_vangroup=$5, ops_vanseq=$6, ops_pickuptimefinal=$7, ops_vansplits=$8, ops_reconfirm=$9
+             WHERE sb_bookings_id=$10 AND idx=$11`,
+            [ops.ops_boatid, ops.ops_vanid, ops.ops_vanreturnid, ops.ops_returnsamevan,
+             ops.ops_vangroup, ops.ops_vanseq, ops.ops_pickuptimefinal, ops.ops_vansplits, ops.ops_reconfirm,
+             bkId, Number(idx)]
+          );
+        }
+      }
+
+      // 3. Refresh passengers + addons (B2C is source of truth for these)
+      await client.query(`DELETE FROM ${fqt('sb_bookings__passengers')} WHERE sb_bookings_id = ANY($1)`, [b2cIds]);
+      for (const row of tables['sb_bookings__passengers'] || []) {
+        await client.query(
+          `INSERT INTO ${fqt('sb_bookings__passengers')} (${paxColSql}) VALUES (${paxPh})`,
+          PAX_COLS.map(c => row[c] === undefined ? null : row[c])
+        );
+      }
+      await client.query(`DELETE FROM ${fqt('sb_bookings__addons')} WHERE sb_bookings_id = ANY($1)`, [b2cIds]);
+      for (const row of tables['sb_bookings__addons'] || []) {
+        await client.query(
+          `INSERT INTO ${fqt('sb_bookings__addons')} (${adnColSql}) VALUES (${adnPh})`,
+          ADN_COLS.map(c => row[c] === undefined ? null : row[c])
+        );
+      }
+      // NOTE: history, upgrades, feeitems, partialcancels, adjustments, over are allotment-owned — never touched here.
+
+      await client.query('COMMIT');
+      console.log(`[b2c-sync] synced ${b2cBks.length} bookings`);
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error('[b2c-sync] failed:', e.message);
+    // Non-fatal: relLoad proceeds even if sync fails
+  }
+}
 // read-modify-write the whole schema in ONE transaction, serialized by an advisory lock (no lost saves).
 // ponytail: full DELETE+INSERT of all tables per save; fine at this data size, switch to targeted upserts if slow.
 async function relApplyAndSave(payload, username, base) {
@@ -116,6 +313,13 @@ if (Pool && DB_URL) {
 } else {
   console.warn('[db] no DATABASE_URL — login & sync disabled');
 }
+const B2C_DB_URL = process.env.B2C_DB_URL || '';
+let b2cPool = null;
+if (Pool && B2C_DB_URL) {
+  b2cPool = new Pool({ connectionString: B2C_DB_URL, ssl: /railway|rlwy/.test(B2C_DB_URL) ? { rejectUnauthorized: false } : false, max: 3 });
+  b2cPool.on('error', e => console.error('[b2c] idle client error:', e.message));
+  console.log('[b2c] pool ready');
+}
 async function initDb(){
   try{
     await pool.query(`CREATE TABLE IF NOT EXISTS ${USERS_T} (id SERIAL PRIMARY KEY, username TEXT UNIQUE NOT NULL, pass_hash TEXT NOT NULL, name TEXT, role TEXT DEFAULT 'staff', created_at TIMESTAMPTZ DEFAULT now())`);
@@ -151,6 +355,20 @@ async function initDb(){
       // job-sheet header, so a driver recognises his own sheet at a glance. Additive: existing rows get NULL
       // and fall back to a stable hash-of-id colour on the client.
       await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_vehicles" ADD COLUMN IF NOT EXISTS "color" text`);
+      // §b2c-sync: ON CONFLICT (id) in relSyncB2C requires a PK on sb_bookings.id
+      await pool.query(`
+        DO $do$ BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conrelid = '${OS_SCHEMA}.sb_bookings'::regclass AND contype IN ('p','u')
+              AND array_length(conkey,1) = 1
+              AND conkey[1] = (SELECT attnum FROM pg_attribute
+                               WHERE attrelid='${OS_SCHEMA}.sb_bookings'::regclass AND attname='id')
+          ) THEN
+            ALTER TABLE ${OS_SCHEMA}."sb_bookings" ADD CONSTRAINT sb_bookings_pkey PRIMARY KEY (id);
+          END IF;
+        END $do$
+      `);
     }
     // document attachments · files stored server-side (bytea) · booking keeps only a ref in the app blob
     await pool.query("CREATE TABLE IF NOT EXISTS attachments (id TEXT PRIMARY KEY, booking_id TEXT, filename TEXT, mime TEXT, size INT, data BYTEA, uploaded_by TEXT, created_at TIMESTAMPTZ DEFAULT now())");
@@ -395,7 +613,8 @@ const server = http.createServer((req, res) => {
     const s=session(req); if(!s) return J(res,401,{error:'login required'});
     if(!pool) return J(res,503,{error:'no database'});
     if(DATA_BACKEND==='relational'){
-      Promise.all([relLoad(), pool.query('SELECT version,updated_by,updated_at FROM app_state WHERE id=$1',[STATE_KEY])])
+      relSyncB2C()
+        .then(() => Promise.all([relLoad(), pool.query('SELECT version,updated_by,updated_at FROM app_state WHERE id=$1',[STATE_KEY])]))
         .then(([blob,r])=>{ const m=r.rows[0]||{}; JZ(req,res,200,{data:JSON.stringify(blob),version:m.version||0,updated_by:m.updated_by,updated_at:m.updated_at}); })
         .catch(e=>J(res,500,{error:e.message}));
       return;
