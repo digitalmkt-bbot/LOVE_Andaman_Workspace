@@ -24,6 +24,11 @@ const SESS_DAYS  = 30;   // session cookie lifetime · long so refresh/redeploy 
 //    into the operation_schemas tables via os_repo. blob mode (default) is unchanged. ──
 const DATA_BACKEND = (process.env.DATA_BACKEND || 'blob').toLowerCase();
 const OS_SCHEMA = 'operation_schemas';
+// users auth table (2026-07-10 · feat/validation-deprecate-blob): relational backend keeps it in
+// operation_schemas (migrated via os-backend/scripts/migrate_users_to_os_schema.js — run BEFORE
+// deploying this); blob mode keeps the legacy unqualified `users` (resolves via the role's search_path,
+// e.g. allotment.users on prod). app_state + attachments stay unqualified in both modes.
+const USERS_T = DATA_BACKEND === 'relational' ? OS_SCHEMA + '.users' : 'users';
 // os_repo mapping engine + schema model — used by the relational save path AND the per-entity REST API.
 const osRepo  = require('./os-backend/src/mapping/os_repo.js');
 const osModel = require('./os-backend/src/mapping/operation_schemas_model.json');
@@ -36,9 +41,29 @@ const OS_DESC = [...OS_TABLES].sort((a, b) => _osDepth(b) - _osDepth(a));   // c
 const qic = id => '"' + String(id).replace(/"/g, '""') + '"';
 const fqt = t => qic(OS_SCHEMA) + '.' + qic(t);
 
-async function relLoad() {                                           // operation_schemas -> blob
+// ── save-safety guard (2026-07-10 · feat/validation-deprecate-blob) ──────────────────────────────
+// A stale / old whole-blob client can post data whose collections are empty or drastically shorter than
+// what the DB already holds; the relational save then DELETEs the table and re-INSERTs ~nothing → records
+// silently revert to DEFAULT_* seeds (e.g. boat pier, agent name). This guard refuses any save that would
+// wipe or heavily shrink a top-level table that currently has data. Protects every main entity table.
+// Bypass an INTENTIONAL bulk clear with payload.confirm (whole-blob) / op.confirm (per-entity putall).
+const OS_TOP = OS_TABLES.filter(t => !t.includes('__') && t !== 'app_meta');   // all main entity tables
+const GUARD_MINROWS = 5, GUARD_LOSS_ABS = 20, GUARD_LOSS_FRAC = 0.5;
+function shrinkGuard(curCount, incCount){                                       // -> [{table,from,to}] that would be wiped/shrunk
+  const bad = [];
+  for (const t of OS_TOP){
+    const cur = curCount[t] || 0, inc = incCount[t] || 0;
+    if (cur >= GUARD_MINROWS && (inc === 0 || (cur - inc >= GUARD_LOSS_ABS && inc < cur * GUARD_LOSS_FRAC)))
+      bad.push({ table: t, from: cur, to: inc });
+  }
+  return bad;
+}
+function shrinkErr(bad){ const e = new Error('SHRINK_GUARD'); e.code = 'SHRINK_GUARD'; e.detail = bad; return e; }
+
+async function relLoad() {                                           // operation_schemas -> blob (parallel)
+  const results = await Promise.all(OS_TABLES.map(t => pool.query(`SELECT * FROM ${fqt(t)}`)));
   const data = {};
-  for (const t of OS_TABLES) { const r = await pool.query(`SELECT * FROM ${fqt(t)}`); data[t] = r.rows; }
+  OS_TABLES.forEach((t, i) => { data[t] = results[i].rows; });
   return osRepo.assembleBlob(data);
 }
 // read-modify-write the whole schema in ONE transaction, serialized by an advisory lock (no lost saves).
@@ -57,6 +82,12 @@ async function relApplyAndSave(payload, username, base) {
     if (payload.full && typeof payload.full === 'string') blob = JSON.parse(payload.full);
     else applyDiff(blob, payload.diff || {});
     const tables = osRepo.decomposeBlob(blob);
+    if (!payload.confirm) {                                            // save-safety: refuse a stale/whole-blob overwrite that would wipe existing data
+      const curCount = {}, incCount = {};
+      for (const t of OS_TOP) { curCount[t] = (data[t] || []).length; incCount[t] = (tables[t] || []).length; }
+      const bad = shrinkGuard(curCount, incCount);
+      if (bad.length) throw shrinkErr(bad);                            // rolled back by the catch below · handler returns 409
+    }
     for (const t of OS_DESC) await client.query(`DELETE FROM ${fqt(t)}`);
     for (const t of OS_ASC) {                                        // batched multi-row insert (fast: ~1-2 queries/table)
       const rows = tables[t] || []; if (!rows.length) continue;
@@ -87,26 +118,55 @@ if (Pool && DB_URL) {
 }
 async function initDb(){
   try{
-    await pool.query("CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, username TEXT UNIQUE NOT NULL, pass_hash TEXT NOT NULL, name TEXT, role TEXT DEFAULT 'staff', created_at TIMESTAMPTZ DEFAULT now())");
+    await pool.query(`CREATE TABLE IF NOT EXISTS ${USERS_T} (id SERIAL PRIMARY KEY, username TEXT UNIQUE NOT NULL, pass_hash TEXT NOT NULL, name TEXT, role TEXT DEFAULT 'staff', created_at TIMESTAMPTZ DEFAULT now())`);
     await pool.query("CREATE TABLE IF NOT EXISTS app_state (id TEXT PRIMARY KEY, data TEXT, version INT DEFAULT 0, updated_by TEXT, updated_at TIMESTAMPTZ DEFAULT now())");
     await pool.query("ALTER TABLE app_state ADD COLUMN IF NOT EXISTS version INT DEFAULT 0");
     await pool.query("ALTER TABLE app_state ADD COLUMN IF NOT EXISTS updated_by TEXT");
-    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS perms TEXT");   // per-user area access (JSON array · null = all)
-    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS can_edit BOOLEAN DEFAULT true");   // legacy global edit flag (fallback)
-    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS edit_areas TEXT");   // per-section edit · JSON array of area keys · null = edit all (uses can_edit)
+    await pool.query(`ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS perms TEXT`);   // per-user area access (JSON array · null = all)
+    await pool.query(`ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS can_edit BOOLEAN DEFAULT true`);   // legacy global edit flag (fallback)
+    await pool.query(`ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS edit_areas TEXT`);   // per-section edit · JSON array of area keys · null = edit all (uses can_edit)
+    await pool.query(`ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS dept TEXT`);   // department key (UI grouping) · null = auto-guess from username
+    // §sort (2026-07-11): top-level lists had NO ordering column — os_repo only preserves order for CHILD
+    // tables (via idx), so a drag-reorder of the markets / routes list never survived a reload. `sort` is a
+    // plain scalar in the mapping, so decompose/assemble carry it with zero changes to os_repo, and the
+    // client diff sees it as an ordinary changed field (→ patch ops). Additive: existing rows get NULL.
+    if(DATA_BACKEND === 'relational'){
+      await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_markets" ADD COLUMN IF NOT EXISTS "sort" bigint`);
+      await pool.query(`ALTER TABLE ${OS_SCHEMA}."routes"     ADD COLUMN IF NOT EXISTS "sort" bigint`);
+      // §taxId (2026-07-11): the app reads companyInfo.taxId ("Tax No." on contracts/invoices) but the table
+      // had no column for it, so every value was silently dropped on save. Additive: existing rows get NULL.
+      await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_agents" ADD COLUMN IF NOT EXISTS "companyinfo_taxid" text`);
+      // §per-trip ops (2026-07-12): boat/van assignment lived ONLY on the booking (ops_*), so a booking with
+      // two travel days (an overnight, or a B2C order with two programmes) could hold exactly one boat and one
+      // van — day 2 silently inherited day 1's. Ops now also live on the trip row. Day 1 keeps using the
+      // booking-level block (1,058 of 1,059 bookings are single-day and are completely untouched).
+      const _tripOps = [['ops_boatid','text'],['ops_vanid','text'],['ops_vanreturnid','text'],
+                        ['ops_returnsamevan','boolean'],['ops_vangroup','bigint'],['ops_vanseq','bigint'],
+                        ['ops_pickuptimefinal','text'],['ops_vansplits','text'],['ops_reconfirm','text']];
+      for(const [c,t] of _tripOps){
+        await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_bookings__trips" ADD COLUMN IF NOT EXISTS "${c}" ${t}`);
+      }
+      // §vehicle identity colour (2026-07-12): the van-job list coloured rows by POSITION (PAL[i%6]), so a
+      // van's colour changed from day to day. The colour now belongs to the vehicle and is printed on the
+      // job-sheet header, so a driver recognises his own sheet at a glance. Additive: existing rows get NULL
+      // and fall back to a stable hash-of-id colour on the client.
+      await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_vehicles" ADD COLUMN IF NOT EXISTS "color" text`);
+    }
     // document attachments · files stored server-side (bytea) · booking keeps only a ref in the app blob
     await pool.query("CREATE TABLE IF NOT EXISTS attachments (id TEXT PRIMARY KEY, booking_id TEXT, filename TEXT, mime TEXT, size INT, data BYTEA, uploaded_by TEXT, created_at TIMESTAMPTZ DEFAULT now())");
     await pool.query("CREATE INDEX IF NOT EXISTS idx_attach_booking ON attachments(booking_id)");
     // seed first admin from env if there are no users yet
-    const c = await pool.query('SELECT count(*)::int n FROM users');
+    const c = await pool.query(`SELECT count(*)::int n FROM ${USERS_T}`);
     if (c.rows[0].n === 0 && ADMIN_USER && ADMIN_PASS) {
-      await pool.query('INSERT INTO users(username,pass_hash,name,role) VALUES($1,$2,$3,$4)', [ADMIN_USER, hashPw(ADMIN_PASS), 'Admin', 'admin']);
+      await pool.query(`INSERT INTO ${USERS_T}(username,pass_hash,name,role) VALUES($1,$2,$3,$4)`, [ADMIN_USER, hashPw(ADMIN_PASS), 'Admin', 'admin']);
       console.log('[db] seeded admin user:', ADMIN_USER);
     }
     dbReady = true; console.log('[db] ready');
   }catch(e){ console.error('[db] init failed:', e.message); }
 }
 
+// dept: short free-text department key used only for UI grouping · null = auto-guess from username
+function cleanDept(d){ d=(d==null?'':String(d)).trim(); return d ? d.slice(0,40) : null; }
 // ── perms helpers (per-user area access · null/invalid = all areas) ──
 function parsePerms(v){ if(v==null) return null; try{ const a=JSON.parse(v); return Array.isArray(a)?a:null; }catch(e){ return null; } }
 const PERM_KEYS=new Set(['overview','operations','sales','accounting','fleet','config',  // group keys (back-compat)
@@ -136,6 +196,20 @@ function nextDailyExpiry(){ const nowIct = Date.now()+ICT_OFFSET_MS; const d = n
 const MIME = { '.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.svg':'image/svg+xml','.ico':'image/x-icon','.webp':'image/webp','.woff':'font/woff','.woff2':'font/woff2','.ttf':'font/ttf','.xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','.csv':'text/csv; charset=utf-8','.txt':'text/plain; charset=utf-8' };
 function readBody(req, cb){ let ch=[], n=0; req.on('data',c=>{ n+=c.length; if(n>20*1024*1024){req.destroy();return;} ch.push(c); }); req.on('end',()=>cb(Buffer.concat(ch).toString('utf8'))); }
 function J(res, code, obj, extra){ const h=Object.assign({'Content-Type':'application/json; charset=utf-8'}, extra||{}); res.writeHead(code,h); res.end(JSON.stringify(obj)); }
+// gzip variant for large payloads (/api/load) — falls back to plain when the client doesn't accept gzip
+function JZ(req, res, code, obj){
+  const body = JSON.stringify(obj);
+  if (body.length > 50*1024 && /\bgzip\b/.test(req.headers['accept-encoding']||'')){
+    const zlib = require('zlib');
+    return zlib.gzip(body, (err, buf)=>{
+      if (err){ res.writeHead(code,{'Content-Type':'application/json; charset=utf-8'}); return res.end(body); }
+      res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Content-Encoding':'gzip'});
+      res.end(buf);
+    });
+  }
+  res.writeHead(code,{'Content-Type':'application/json; charset=utf-8'});
+  res.end(body);
+}
 // ── Server-Sent Events · push "data changed" to all open clients instantly (real-time) ──
 const sseClients = new Set();
 function sseBroadcast(obj){ const msg='data: '+JSON.stringify(obj)+'\n\n'; sseClients.forEach(r=>{ try{ r.write(msg); }catch(e){ sseClients.delete(r); } }); }
@@ -250,6 +324,12 @@ async function restApplyOp(client, op){
     return restApplyOp(client, { op: 'put', r: op.r, id: op.id, body: merged });
   }
   if (op.op === 'putall'){
+    if (!op.confirm && OS_TOP.indexOf(table) >= 0){                      // save-safety: refuse wiping an existing collection wholesale
+      const curN = (await client.query(`SELECT count(*)::int n FROM ${fqt(table)}`)).rows[0].n;
+      let incN = 0; if (op.body != null){ const rr = osRepo.decomposeBlob({ [appKey]: op.body }); incN = (rr[table] || []).length; }
+      const bad = shrinkGuard({ [table]: curN }, { [table]: incN });
+      if (bad.length) throw shrinkErr(bad);
+    }
     await client.query(`DELETE FROM ${fqt(table)}`);                     // children cascade
     if (op.body == null) return op.r;
     const rows = osRepo.decomposeBlob({ [appKey]: op.body });
@@ -297,11 +377,11 @@ const server = http.createServer((req, res) => {
     if(!pool) return J(res,503,{error:'no database'});
     readBody(req, body => {
       let b={}; try{ b=JSON.parse(body); }catch(e){}
-      pool.query('SELECT * FROM users WHERE lower(username)=lower($1)', [String(b.username||'').trim()])
+      pool.query(`SELECT * FROM ${USERS_T} WHERE lower(username)=lower($1)`, [String(b.username||'').trim()])
         .then(r => { const usr=r.rows[0];
           if(!usr || !verifyPw(b.password||'', usr.pass_hash)) return J(res,401,{error:'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'});
           const perms = parsePerms(usr.perms); const ei = editInfo(usr);
-          const EXP = nextDailyExpiry();
+          const EXP = Date.now() + SESS_DAYS*864e5;   // §102 REVERTED 2026-07-10: back to 30-day session. The daily 03:00 re-login forced every client to reload each morning, which is what fired the latent loadData version-mismatch reseed. nextDailyExpiry() kept for reference (unused).
           const tok = sign({uid:usr.id, username:usr.username, name:usr.name, role:usr.role, perms:perms, edit:ei.canEditAny, editAreas:ei.editAreas, exp:EXP});
           J(res,200,{username:usr.username,name:usr.name,role:usr.role,perms:perms,canEdit:ei.canEditAny,editAreas:ei.editAreas}, {'Set-Cookie':`sess=${tok}; HttpOnly; Path=/; SameSite=Lax; Secure; Max-Age=${Math.max(60,Math.floor((EXP-Date.now())/1000))}`});
         }).catch(e=>J(res,500,{error:e.message}));
@@ -316,12 +396,12 @@ const server = http.createServer((req, res) => {
     if(!pool) return J(res,503,{error:'no database'});
     if(DATA_BACKEND==='relational'){
       Promise.all([relLoad(), pool.query('SELECT version,updated_by,updated_at FROM app_state WHERE id=$1',[STATE_KEY])])
-        .then(([blob,r])=>{ const m=r.rows[0]||{}; J(res,200,{data:JSON.stringify(blob),version:m.version||0,updated_by:m.updated_by,updated_at:m.updated_at}); })
+        .then(([blob,r])=>{ const m=r.rows[0]||{}; JZ(req,res,200,{data:JSON.stringify(blob),version:m.version||0,updated_by:m.updated_by,updated_at:m.updated_at}); })
         .catch(e=>J(res,500,{error:e.message}));
       return;
     }
     pool.query('SELECT data,version,updated_by,updated_at FROM app_state WHERE id=$1',[STATE_KEY])
-      .then(r => r.rows[0] ? J(res,200,{data:r.rows[0].data,version:r.rows[0].version,updated_by:r.rows[0].updated_by,updated_at:r.rows[0].updated_at})
+      .then(r => r.rows[0] ? JZ(req,res,200,{data:r.rows[0].data,version:r.rows[0].version,updated_by:r.rows[0].updated_by,updated_at:r.rows[0].updated_at})
                            : J(res,200,{data:null,version:0}))
       .catch(e=>J(res,500,{error:e.message}));
     return;
@@ -357,7 +437,9 @@ const server = http.createServer((req, res) => {
           +' — run os-backend/scripts/check_mapping_drift.js if this repeats'); }catch(e){}
         relApplyAndSave(payload, s.username, base)
           .then(({version,behind})=>{ J(res,200,{ok:true,version,behind}); sseBroadcast({version, updated_by:s.username}); })
-          .catch(e=>J(res,500,{error:e.message}));
+          .catch(e=> e.code==='SHRINK_GUARD'
+            ? J(res,409,{error:'save_would_delete_data', code:'SHRINK_GUARD', detail:e.detail})
+            : J(res,500,{error:e.message}));
         return;
       }
       pool.query('SELECT data,version FROM app_state WHERE id=$1',[STATE_KEY]).then(r=>{
@@ -419,27 +501,27 @@ const server = http.createServer((req, res) => {
   if(u === '/api/users'){
     const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(s.role!=='admin') return J(res,403,{error:'admin only'});
     if(!pool) return J(res,503,{error:'no database'});
-    if(req.method === 'GET'){ pool.query('SELECT id,username,name,role,perms,can_edit,edit_areas,created_at FROM users ORDER BY id').then(r=>J(res,200,{users:r.rows.map(x=>{const ei=editInfo(x); return {id:x.id,username:x.username,name:x.name,role:x.role,perms:parsePerms(x.perms),canEdit:ei.canEditAny,editAreas:ei.editAreas,created_at:x.created_at};})})).catch(e=>J(res,500,{error:e.message})); return; }
+    if(req.method === 'GET'){ pool.query(`SELECT id,username,name,role,perms,can_edit,edit_areas,dept,created_at FROM ${USERS_T} ORDER BY id`).then(r=>J(res,200,{users:r.rows.map(x=>{const ei=editInfo(x); return {id:x.id,username:x.username,name:x.name,role:x.role,perms:parsePerms(x.perms),canEdit:ei.canEditAny,editAreas:ei.editAreas,dept:x.dept||null,created_at:x.created_at};})})).catch(e=>J(res,500,{error:e.message})); return; }
     if(req.method === 'POST'){ readBody(req, body=>{ let b={}; try{b=JSON.parse(body);}catch(e){} const un=String(b.username||'').trim(); if(!un||!b.password) return J(res,400,{error:'ต้องมี username + password'});
       const perms = cleanPerms(b.perms); const permsStr = perms ? JSON.stringify(perms) : null;
       const ea = cleanAreas(b.editAreas); const eaStr = ea ? JSON.stringify(ea) : null; const canEdit = ea ? ea.length>0 : (b.canEdit!==false);
-      pool.query('INSERT INTO users(username,pass_hash,name,role,perms,can_edit,edit_areas) VALUES($1,$2,$3,$4,$5,$6,$7)',[un,hashPw(b.password),(b.name||un),(b.role==='admin'?'admin':'staff'),permsStr,canEdit,eaStr])
+      pool.query(`INSERT INTO ${USERS_T}(username,pass_hash,name,role,perms,can_edit,edit_areas,dept) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[un,hashPw(b.password),(b.name||un),(b.role==='admin'?'admin':'staff'),permsStr,canEdit,eaStr,cleanDept(b.dept)])
         .then(()=>J(res,200,{ok:true})).catch(e=>J(res, e.code==='23505'?409:500, {error: e.code==='23505'?'username นี้มีอยู่แล้ว':e.message})); }); return; }
     if(req.method === 'DELETE'){ const id=parseInt((q.match(/id=(\d+)/)||[])[1]||'0',10); if(!id) return J(res,400,{error:'no id'}); if(id===s.uid) return J(res,400,{error:'ลบบัญชีตัวเองไม่ได้'});
-      pool.query('DELETE FROM users WHERE id=$1',[id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); return; }
+      pool.query(`DELETE FROM ${USERS_T} WHERE id=$1`,[id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); return; }
   }
   if(u === '/api/users/password' && req.method === 'POST'){
     const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(s.role!=='admin') return J(res,403,{error:'admin only'});
     readBody(req, body=>{ let b={}; try{b=JSON.parse(body);}catch(e){} if(!b.id||!b.password) return J(res,400,{error:'no id/password'});
-      pool.query('UPDATE users SET pass_hash=$1 WHERE id=$2',[hashPw(b.password),parseInt(b.id,10)]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }); return;
+      pool.query(`UPDATE ${USERS_T} SET pass_hash=$1 WHERE id=$2`,[hashPw(b.password),parseInt(b.id,10)]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }); return;
   }
   if(u === '/api/users/perms' && req.method === 'POST'){   // admin sets a user's area access · role optional
     const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(s.role!=='admin') return J(res,403,{error:'admin only'});
     readBody(req, body=>{ let b={}; try{b=JSON.parse(body);}catch(e){} const id=parseInt(b.id,10); if(!id) return J(res,400,{error:'no id'});
       const perms = cleanPerms(b.perms); const permsStr = perms ? JSON.stringify(perms) : null;
       const ea = cleanAreas(b.editAreas); const eaStr = ea ? JSON.stringify(ea) : null; const canEdit = ea ? ea.length>0 : (b.canEdit!==false);
-      if(b.role==='admin'||b.role==='staff'){ pool.query('UPDATE users SET perms=$1, role=$2, can_edit=$3, edit_areas=$4 WHERE id=$5',[permsStr,b.role,canEdit,eaStr,id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
-      else { pool.query('UPDATE users SET perms=$1, can_edit=$2, edit_areas=$3 WHERE id=$4',[permsStr,canEdit,eaStr,id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
+      if(b.role==='admin'||b.role==='staff'){ pool.query(`UPDATE ${USERS_T} SET perms=$1, role=$2, can_edit=$3, edit_areas=$4, dept=$6 WHERE id=$5`,[permsStr,b.role,canEdit,eaStr,id,cleanDept(b.dept)]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
+      else { pool.query(`UPDATE ${USERS_T} SET perms=$1, can_edit=$2, edit_areas=$3, dept=$5 WHERE id=$4`,[permsStr,canEdit,eaStr,id,cleanDept(b.dept)]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
     }); return;
   }
 
@@ -467,15 +549,20 @@ const server = http.createServer((req, res) => {
         if(!ops || !ops.length) return J(res,400,{error:'ops required'});
         if(!ops.every(o=>o && (o.op==='meta' ? o.id!=null : (o.op==='put'||o.op==='patch'||o.op==='del'||o.op==='putall') && o.r))) return J(res,400,{error:'bad op shape'});
         restTxn(s.username, p.baseVersion==null?-1:p.baseVersion, ops)
-          .then(({version,behind})=>{ J(res,200,{ok:true,version,behind,applied:ops.length}); sseBroadcast({version, updated_by:s.username}); })
-          .catch(e=>J(res, /unknown resource|needs an id|record object|patch target not found/.test(e.message)?400:500, {error:e.message}));
+          .then(({version,behind})=>{ try{ const summ=ops.slice(0,25).map(o=>o.op+':'+(o.r||o.id||'')).join(','); console.log('[batch] user='+s.username+' v'+version+' ops='+ops.length+' ['+summ+']'); }catch(e){}   // 2026-07-10: log who saved what (per-entity saves had no username trail — the incident was untraceable)
+            J(res,200,{ok:true,version,behind,applied:ops.length}); sseBroadcast({version, updated_by:s.username}); })
+          .catch(e=> e.code==='SHRINK_GUARD'
+            ? J(res,409,{error:'save_would_delete_data', code:'SHRINK_GUARD', detail:e.detail})
+            : J(res, /unknown resource|needs an id|record object|patch target not found/.test(e.message)?400:500, {error:e.message}));
       }); return;
     }
     if(m==='GET'){ restGet(res,resName,id).catch(done); return; }
     if(!canWrite) return J(res,403,{error:'view only · ไม่มีสิทธิ์แก้ไข'});
     const one = op => restTxn(s.username, -1, [op])
       .then(({version,applied})=>{ J(res, m==='POST'?201:200, {ok:true, id:applied[0], version}); sseBroadcast({version, updated_by:s.username}); })
-      .catch(e=>J(res, /unknown resource|needs an id|record object|patch target not found/.test(e.message)?400:500, {error:e.message}));
+      .catch(e=> e.code==='SHRINK_GUARD'
+        ? J(res,409,{error:'save_would_delete_data', code:'SHRINK_GUARD', detail:e.detail})
+        : J(res, /unknown resource|needs an id|record object|patch target not found/.test(e.message)?400:500, {error:e.message}));
     if(m==='DELETE'){ if(id==null) return J(res,400,{error:'id required'}); one({op:'del', r:resName, id}); return; }
     if(m==='POST'||m==='PUT'){
       if(m==='PUT'&&id==null) return J(res,400,{error:'id required for PUT'});
