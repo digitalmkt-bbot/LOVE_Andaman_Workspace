@@ -2105,6 +2105,10 @@
       {
         "name": "active",
         "type": "boolean"
+      },
+      {
+        "name": "pricetiers",
+        "type": "text"
       }
     ],
     "primary_key": "id",

@@ -146,6 +146,15 @@ async function initDb(){
       for(const [c,t] of _tripOps){
         await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_bookings__trips" ADD COLUMN IF NOT EXISTS "${c}" ${t}`);
       }
+      // §3-tier contract pricing (2026-07-14): agent contracts quote three numbers per seat — Selling (what
+      // the agent should charge the guest), Min. Selling (the floor they may not go under) and Net (what they
+      // pay us). Only Net exists in the app: seatRates, and it is the number every booking, invoice and report
+      // bills from. sb_rate_types__seatrates is a FLAT table — one column per zone×paxType — so adding two
+      // more tiers there means 24 more columns and a rewrite of the decompose path that prices live bookings.
+      // Not worth it for two numbers that are only ever printed on a contract. The extra tiers ride in one
+      // json_text column instead: {route:{zone:{paxType:{sell,minSell}}}}. seatRates is untouched, the billing
+      // path is untouched, and a rate type with no priceTiers simply prints "—" in those columns.
+      await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_rate_types" ADD COLUMN IF NOT EXISTS "pricetiers" text`);
       // §vehicle identity colour (2026-07-12): the van-job list coloured rows by POSITION (PAL[i%6]), so a
       // van's colour changed from day to day. The colour now belongs to the vehicle and is printed on the
       // job-sheet header, so a driver recognises his own sheet at a glance. Additive: existing rows get NULL
