@@ -3931,6 +3931,12 @@
       "source": "companyInfo.taxId",
       "kind": "scalar",
       "db_type": "text"
+    },
+    "contracttemplateid": {
+      "source": "contractTemplateId",
+      "kind": "scalar",
+      "db_type": "text",
+      "note": "which contract template this agent's contract is generated from · empty = the default template"
     }
   },
   "sb_agents__programs": {
@@ -6302,6 +6308,24 @@
       "source": "sb_vehicles.dayStatus[key] value",
       "kind": "map_value_json",
       "db_type": "text"
+    }
+  },
+  "contract_templates": {
+    "id": {
+      "source": "contract_templates map key (generated id)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "key": {
+      "source": "contract_templates map key (original)",
+      "kind": "map_key",
+      "db_type": "text"
+    },
+    "value": {
+      "source": "contract_templates[key] value",
+      "kind": "map_value_json",
+      "db_type": "text",
+      "note": "whole template object as JSON: {id,code,name,active,isDefault,sections{},text{en{},th{}}} — new template fields need no DB change"
     }
   }
 }

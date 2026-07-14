@@ -155,6 +155,19 @@ async function initDb(){
       // json_text column instead: {route:{zone:{paxType:{sell,minSell}}}}. seatRates is untouched, the billing
       // path is untouched, and a rate type with no priceTiers simply prints "—" in those columns.
       await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_rate_types" ADD COLUMN IF NOT EXISTS "pricetiers" text`);
+      // §contract templates (2026-07-14): every word of the agent contract — the cancellation clause, the
+      // health restrictions, the governing-law paragraph — was a string literal in CT_DOC_I18N. Changing a
+      // comma meant a code edit and a deploy. Templates move that text into the database so sales can edit it.
+      //
+      // Same shape as agent_artifacts: a map {templateId -> template}, one row per key, the whole template
+      // object as JSON in `value`. Deliberate — a template will grow fields (new clauses, new sections) and
+      // this way none of them need a migration. os_repo already knows the pk/map_key/map_value_json trio.
+      //
+      // The table has to exist before os_repo can write to it, and operation_schemas_structure.sql only runs
+      // on a fresh install, so create it here too. Idempotent.
+      await pool.query(`CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."contract_templates" (id text PRIMARY KEY, key text, value text)`);
+      // Which template an agent's contract is generated from. Empty = whichever template is marked default.
+      await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_agents" ADD COLUMN IF NOT EXISTS "contracttemplateid" text`);
       // §vehicle identity colour (2026-07-12): the van-job list coloured rows by POSITION (PAL[i%6]), so a
       // van's colour changed from day to day. The colour now belongs to the vehicle and is printed on the
       // job-sheet header, so a driver recognises his own sheet at a glance. Additive: existing rows get NULL
@@ -185,7 +198,7 @@ const PERM_KEYS=new Set(['overview','operations','sales','accounting','fleet','c
   // cleanPerms() filters against this Set, so an admin ticking "Booking Flow" would have had the tick
   // silently dropped on save and the box would come back empty.
   'dashboard','calendar','daily','booking','reconfirm','bookingflow','doccheck','operation','insurance','vehicles','vanjobs','pickup-setup',
-  'agents','rate-types','b2c','staff','marketdata','focdetail','pickupmap','dailypfm',
+  'agents','rate-types','contract-tmpl','b2c','staff','marketdata','focdetail','pickupmap','dailypfm',
   'fl-dashboard','fl-boatstatus','fl-dailyreport','fl-incident','fl-projects','fl-maintenance','fl-inventory','fl-consumables','fl-cost','fl-insights','fl-fuel','fl-asset',
   'settings','teammkt','addonsvc']);   // 'accounting' already present as a group key
 function cleanPerms(a){ return Array.isArray(a)?a.filter(x=>PERM_KEYS.has(x)):null; }

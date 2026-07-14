@@ -8,6 +8,16 @@ CREATE TABLE operation_schemas."agent_artifacts" (
   PRIMARY KEY ("id")
 );
 
+-- §contract templates (2026-07-14) · same map->KV shape as agent_artifacts: the whole template object
+-- (sections, EN/TH clause text, active/default flags) is JSON in `value`, so new clauses never need a
+-- migration. server.js also creates this at boot (CREATE TABLE IF NOT EXISTS) for existing databases.
+CREATE TABLE operation_schemas."contract_templates" (
+  "id" text,
+  "key" text,
+  "value" text,
+  PRIMARY KEY ("id")
+);
+
 CREATE TABLE operation_schemas."app_hooks" (
   "id" text,
   "key" text,
