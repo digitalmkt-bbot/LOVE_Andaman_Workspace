@@ -164,6 +164,10 @@ async function initDb(){
       // target. Targets vary month to month (high season vs low), so it's a {"YYYY-MM": pax} map, stored as one
       // json_text column on the salesperson — no new table, and next month's number needs no migration.
       await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_sales" ADD COLUMN IF NOT EXISTS "targets" text`);
+      // §sales follow-up (2026-07-14): on the per-salesperson board, staff tick agents they've already
+      // actioned (called the one that dropped, etc). Stored per salesperson as {"YYYY-MM::agentId": true} so
+      // it syncs across their devices and the daily re-login, and a manager sees what's been handled.
+      await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_sales" ADD COLUMN IF NOT EXISTS "followup" text`);
       // §contract templates (2026-07-14): every word of the agent contract — the cancellation clause, the
       // health restrictions, the governing-law paragraph — was a string literal in CT_DOC_I18N. Changing a
       // comma meant a code edit and a deploy. Templates move that text into the database so sales can edit it.

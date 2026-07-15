@@ -3745,6 +3745,12 @@
       "kind": "json_text",
       "db_type": "text",
       "note": "monthly pax target per salesperson · {\"YYYY-MM\": pax} · Sales Board finish line"
+    },
+    "followup": {
+      "source": "followup",
+      "kind": "json_text",
+      "db_type": "text",
+      "note": "agents this salesperson marked handled · {\"YYYY-MM::agentId\": true} · Sales Board follow-up"
     }
   },
   "sb_agents": {

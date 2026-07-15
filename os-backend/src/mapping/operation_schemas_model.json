@@ -3485,6 +3485,10 @@
       {
         "name": "targets",
         "type": "text"
+      },
+      {
+        "name": "followup",
+        "type": "text"
       }
     ],
     "primary_key": "id",
