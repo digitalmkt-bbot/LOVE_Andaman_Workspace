@@ -5,9 +5,9 @@ const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
 
-let Pool = null;
+let Pool = null, PgClient = null;
 try {
-  const pg = require('pg'); Pool = pg.Pool;
+  const pg = require('pg'); Pool = pg.Pool; PgClient = pg.Client;
   pg.types.setTypeParser(20, v => v == null ? null : Number(v));   // int8 -> Number (default is string → the app string-concatenates caps/pax)
 } catch(e){ console.warn('[db] pg not installed'); }
 
@@ -148,23 +148,36 @@ function mapB2CBooking(row, items) {
   };
 }
 
-async function relSyncB2C() {
+async function relSyncB2C(singleExtId = null) {
   if (!b2cPool || !pool || DATA_BACKEND !== 'relational') return;
   try {
-    const { rows: bkRows } = await b2cPool.query(`
-      SELECT b.*, c.phone AS customer_phone
-      FROM bookings b
-      LEFT JOIN customers c ON c.id = b.customer_id
-      WHERE b.travel_date >= CURRENT_DATE - INTERVAL '90 days'
-      ORDER BY b.created_at DESC
-      LIMIT 500
-    `);
-    if (!bkRows.length) return;
-
-    const extIds = bkRows.map(r => r.id);
-    const { rows: itemRows } = await b2cPool.query(
-      `SELECT * FROM booking_items WHERE booking_id = ANY($1) ORDER BY booking_id, line_no`, [extIds]
-    );
+    let bkRows, itemRows;
+    if (singleExtId) {
+      // Single-booking sync triggered by LISTEN/NOTIFY
+      ({ rows: bkRows } = await b2cPool.query(
+        `SELECT b.*, c.phone AS customer_phone FROM bookings b
+         LEFT JOIN customers c ON c.id = b.customer_id WHERE b.id = $1`, [singleExtId]
+      ));
+      if (!bkRows.length) return;
+      ({ rows: itemRows } = await b2cPool.query(
+        `SELECT * FROM booking_items WHERE booking_id = $1 ORDER BY line_no`, [singleExtId]
+      ));
+    } else {
+      // Full sync on login — rolling 90-day window
+      ({ rows: bkRows } = await b2cPool.query(`
+        SELECT b.*, c.phone AS customer_phone
+        FROM bookings b
+        LEFT JOIN customers c ON c.id = b.customer_id
+        WHERE b.travel_date >= CURRENT_DATE - INTERVAL '90 days'
+        ORDER BY b.created_at DESC
+        LIMIT 500
+      `));
+      if (!bkRows.length) return;
+      const extIds = bkRows.map(r => r.id);
+      ({ rows: itemRows } = await b2cPool.query(
+        `SELECT * FROM booking_items WHERE booking_id = ANY($1) ORDER BY booking_id, line_no`, [extIds]
+      ));
+    }
     const byId = {};
     for (const item of itemRows) { (byId[item.booking_id] = byId[item.booking_id] || []).push(item); }
 
@@ -320,6 +333,41 @@ if (Pool && B2C_DB_URL) {
   b2cPool.on('error', e => console.error('[b2c] idle client error:', e.message));
   console.log('[b2c] pool ready');
 }
+
+// LISTEN/NOTIFY listener — receives instant push from B2C DB when a booking changes.
+// Uses a dedicated persistent pg.Client (not the pool) as required by LISTEN.
+// Auto-reconnects on disconnect (Railway restarts, network blips).
+function startB2CListener() {
+  if (!PgClient || !B2C_DB_URL) return;
+  const ssl = /railway|rlwy/.test(B2C_DB_URL) ? { rejectUnauthorized: false } : false;
+  function connect() {
+    const client = new PgClient({ connectionString: B2C_DB_URL, ssl });
+    client.connect()
+      .then(() => client.query('LISTEN booking_changed'))
+      .then(() => {
+        console.log('[b2c-listen] listening for booking_changed');
+        client.on('notification', async (msg) => {
+          const extId = msg.payload;
+          console.log('[b2c-listen] booking changed:', extId);
+          try {
+            await relSyncB2C(extId);
+            // Bump version so all logged-in clients refresh via SSE
+            const vr = await pool.query('SELECT version FROM app_state WHERE id=$1', [STATE_KEY]);
+            const nv = (vr.rows[0] ? vr.rows[0].version : 0) + 1;
+            await pool.query(
+              'INSERT INTO app_state(id,data,version,updated_by,updated_at) VALUES($1,NULL,$2,$3,now()) ON CONFLICT(id) DO UPDATE SET version=$2, updated_by=$3, updated_at=now()',
+              [STATE_KEY, nv, 'b2c_notify']
+            );
+            sseBroadcast({ version: nv, source: 'b2c' });
+          } catch(e) { console.error('[b2c-listen] sync error:', e.message); }
+        });
+        client.on('error', e => { console.error('[b2c-listen] error:', e.message); client.end().catch(()=>{}); });
+        client.on('end', () => { console.warn('[b2c-listen] disconnected — reconnecting in 5s'); setTimeout(connect, 5000); });
+      })
+      .catch(e => { console.error('[b2c-listen] connect failed:', e.message); setTimeout(connect, 5000); });
+  }
+  connect();
+}
 async function initDb(){
   try{
     await pool.query(`CREATE TABLE IF NOT EXISTS ${USERS_T} (id SERIAL PRIMARY KEY, username TEXT UNIQUE NOT NULL, pass_hash TEXT NOT NULL, name TEXT, role TEXT DEFAULT 'staff', created_at TIMESTAMPTZ DEFAULT now())`);
@@ -380,6 +428,7 @@ async function initDb(){
       console.log('[db] seeded admin user:', ADMIN_USER);
     }
     dbReady = true; console.log('[db] ready');
+    startB2CListener();
   }catch(e){ console.error('[db] init failed:', e.message); }
 }
 
