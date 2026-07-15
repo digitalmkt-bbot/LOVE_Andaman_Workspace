@@ -35,6 +35,27 @@ const osModel = require('./os-backend/src/mapping/operation_schemas_model.json')
 const OS_TABLES = Object.keys(osModel);
 const OS_COLS = {};
 for (const t of OS_TABLES) OS_COLS[t] = osModel[t].columns.map(c => c.name);
+// column type map · used by _bindVal to coerce bad scalars (e.g. "" into a bigint col) → null.
+// One bad value used to throw mid-transaction and wedge the ENTIRE batch on retry forever
+// (2026-07-15: a bulk agent import shipped creditDays:"" → "invalid input syntax for type bigint").
+const OS_COLTYPE = {};
+for (const t of OS_TABLES){ OS_COLTYPE[t] = {}; for (const c of osModel[t].columns) OS_COLTYPE[t][c.name] = c.type || ''; }
+function _bindVal(t, c, row){
+  let v = row[c] === undefined ? null : row[c];
+  const ty = (OS_COLTYPE[t] && OS_COLTYPE[t][c]) || '';
+  if (/^(bigint|integer|int|smallint|numeric|decimal|double|real|float)/i.test(ty)){
+    if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+    if (typeof v === 'string'){ const s = v.trim(); if (s === '') return null; const n = Number(s); return Number.isFinite(n) ? n : null; }
+    return null;                                   // "", null, boolean, object → null (never a valid number)
+  }
+  if (/^bool/i.test(ty)){
+    if (typeof v === 'boolean') return v;
+    if (v === 'true' || v === 1 || v === '1') return true;
+    if (v === 'false' || v === 0 || v === '0') return false;
+    return null;                                   // "" etc → null (avoids "invalid input syntax for type boolean")
+  }
+  return v;
+}
 const _osDepth = t => t.split('__').length - 1;                       // children deeper than parents
 const OS_ASC  = [...OS_TABLES].sort((a, b) => _osDepth(a) - _osDepth(b));   // parents first (insert)
 const OS_DESC = [...OS_TABLES].sort((a, b) => _osDepth(b) - _osDepth(a));   // children first (delete)
@@ -96,7 +117,7 @@ async function relApplyAndSave(payload, username, base) {
       for (let i = 0; i < rows.length; i += perChunk) {
         const params = [], tuples = [];
         for (const row of rows.slice(i, i + perChunk)) {
-          tuples.push('(' + cols.map(c => { params.push(row[c] === undefined ? null : row[c]); return '$' + params.length; }).join(',') + ')');
+          tuples.push('(' + cols.map(c => { params.push(_bindVal(t, c, row)); return '$' + params.length; }).join(',') + ')');
         }
         await client.query(`INSERT INTO ${fqt(t)} (${colSql}) VALUES ${tuples.join(',')}`, params);
       }
@@ -327,7 +348,7 @@ async function _restInsertRows(client, tables, rows){          // parents first,
     const cols = OS_COLS[t], colSql = cols.map(qic).join(','), per = Math.max(1, Math.floor(60000 / cols.length));
     for (let i = 0; i < rws.length; i += per){
       const params = [], tuples = [];
-      for (const row of rws.slice(i, i + per)) tuples.push('(' + cols.map(c => { params.push(row[c] === undefined ? null : row[c]); return '$' + params.length; }).join(',') + ')');
+      for (const row of rws.slice(i, i + per)) tuples.push('(' + cols.map(c => { params.push(_bindVal(t, c, row)); return '$' + params.length; }).join(',') + ')');
       await client.query(`INSERT INTO ${fqt(t)} (${colSql}) VALUES ${tuples.join(',')}`, params);
     }
   }
