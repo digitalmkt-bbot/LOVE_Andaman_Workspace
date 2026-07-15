@@ -160,6 +160,10 @@ async function initDb(){
       // json_text column instead: {route:{zone:{paxType:{sell,minSell}}}}. seatRates is untouched, the billing
       // path is untouched, and a rate type with no priceTiers simply prints "—" in those columns.
       await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_rate_types" ADD COLUMN IF NOT EXISTS "pricetiers" text`);
+      // §sales targets (2026-07-14): the Sales Board leaderboard races each salesperson toward a monthly pax
+      // target. Targets vary month to month (high season vs low), so it's a {"YYYY-MM": pax} map, stored as one
+      // json_text column on the salesperson — no new table, and next month's number needs no migration.
+      await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_sales" ADD COLUMN IF NOT EXISTS "targets" text`);
       // §contract templates (2026-07-14): every word of the agent contract — the cancellation clause, the
       // health restrictions, the governing-law paragraph — was a string literal in CT_DOC_I18N. Changing a
       // comma meant a code edit and a deploy. Templates move that text into the database so sales can edit it.
@@ -204,7 +208,7 @@ const PERM_KEYS=new Set(['overview','operations','sales','accounting','fleet','c
   // cleanPerms() filters against this Set, so an admin ticking "Booking Flow" would have had the tick
   // silently dropped on save and the box would come back empty.
   'dashboard','calendar','daily','booking','reconfirm','bookingflow','doccheck','operation','insurance','vehicles','vanjobs','pickup-setup',
-  'agents','rate-types','contract-tmpl','b2c','staff','marketdata','focdetail','pickupmap','dailypfm',
+  'agents','sales-board','rate-types','contract-tmpl','b2c','staff','marketdata','focdetail','pickupmap','dailypfm',
   'fl-dashboard','fl-boatstatus','fl-dailyreport','fl-incident','fl-projects','fl-maintenance','fl-inventory','fl-consumables','fl-cost','fl-insights','fl-fuel','fl-asset',
   'settings','teammkt','addonsvc']);   // 'accounting' already present as a group key
 function cleanPerms(a){ return Array.isArray(a)?a.filter(x=>PERM_KEYS.has(x)):null; }

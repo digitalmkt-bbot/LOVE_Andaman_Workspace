@@ -3739,6 +3739,12 @@
       "source": "signature",
       "kind": "scalar",
       "db_type": "text"
+    },
+    "targets": {
+      "source": "targets",
+      "kind": "json_text",
+      "db_type": "text",
+      "note": "monthly pax target per salesperson · {\"YYYY-MM\": pax} · Sales Board finish line"
     }
   },
   "sb_agents": {

@@ -3481,6 +3481,10 @@
       {
         "name": "signature",
         "type": "text"
+      },
+      {
+        "name": "targets",
+        "type": "text"
       }
     ],
     "primary_key": "id",
