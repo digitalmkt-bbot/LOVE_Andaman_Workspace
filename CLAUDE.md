@@ -9,7 +9,7 @@
 
 **Starting a new chat:**
 1. Do NOT dump the changelog back at the user or re-read the whole file.
-2. Greet in Thai and ask what to work on. The user (RM@loveandaman.com) speaks Thai; keep replies concise.
+2. Greet in Thai and ask what to work on. The user (RM@loveandaman.com) keep replies concise.
 3. On a task: `grep` for the relevant function → read a small window → targeted `Edit` → verify.
 
 **Deploy workflow (CRITICAL — the sandbox CANNOT git-push):**
