@@ -202,10 +202,12 @@ async function relSyncB2C(singleExtId = null) {
     const adnPh     = ADN_COLS.map((_, i) => '$' + (i + 1)).join(', ');
 
     const client = await pool.connect();
+    let _phase = 'begin';
     try {
       await client.query('BEGIN');
 
       // 1. Upsert main booking rows — ops columns preserved on conflict
+      _phase = 'upsert sb_bookings';
       for (const row of tables['sb_bookings'] || []) {
         await client.query(
           `INSERT INTO ${fqt('sb_bookings')} (${bkColSql}) VALUES (${bkPh})
@@ -215,6 +217,7 @@ async function relSyncB2C(singleExtId = null) {
       }
 
       // 2. Refresh trips: save per-trip ops → delete → re-insert → restore ops by idx
+      _phase = 'save existing trip ops';
       const { rows: existingTrips } = await client.query(
         `SELECT sb_bookings_id, idx, ops_boatid, ops_vanid, ops_vanreturnid, ops_returnsamevan,
                 ops_vangroup, ops_vanseq, ops_pickuptimefinal, ops_vansplits, ops_reconfirm
@@ -224,6 +227,7 @@ async function relSyncB2C(singleExtId = null) {
       for (const r of existingTrips) {
         (savedTripOps[r.sb_bookings_id] = savedTripOps[r.sb_bookings_id] || {})[r.idx] = r;
       }
+      _phase = 'delete+re-insert trips';
       await client.query(`DELETE FROM ${fqt('sb_bookings__trips')} WHERE sb_bookings_id = ANY($1)`, [b2cIds]);
       for (const row of tables['sb_bookings__trips'] || []) {
         await client.query(
@@ -231,6 +235,7 @@ async function relSyncB2C(singleExtId = null) {
           TRIP_COLS.map(c => row[c] === undefined ? null : row[c])
         );
       }
+      _phase = 'restore trip ops';
       for (const [bkId, byIdx] of Object.entries(savedTripOps)) {
         for (const [idx, ops] of Object.entries(byIdx)) {
           if (ops.ops_boatid == null && ops.ops_vanid == null) continue;
@@ -247,6 +252,7 @@ async function relSyncB2C(singleExtId = null) {
       }
 
       // 3. Refresh passengers + addons (B2C is source of truth for these)
+      _phase = 'refresh passengers';
       await client.query(`DELETE FROM ${fqt('sb_bookings__passengers')} WHERE sb_bookings_id = ANY($1)`, [b2cIds]);
       for (const row of tables['sb_bookings__passengers'] || []) {
         await client.query(
@@ -254,6 +260,7 @@ async function relSyncB2C(singleExtId = null) {
           PAX_COLS.map(c => row[c] === undefined ? null : row[c])
         );
       }
+      _phase = 'refresh addons';
       await client.query(`DELETE FROM ${fqt('sb_bookings__addons')} WHERE sb_bookings_id = ANY($1)`, [b2cIds]);
       for (const row of tables['sb_bookings__addons'] || []) {
         await client.query(
@@ -264,15 +271,16 @@ async function relSyncB2C(singleExtId = null) {
       // NOTE: history, upgrades, feeitems, partialcancels, adjustments, over are allotment-owned — never touched here.
 
       await client.query('COMMIT');
-      console.log(`[b2c-sync] synced ${b2cBks.length} bookings`);
+      const label = singleExtId ? `b2c_${singleExtId}` : `${b2cBks.length} bookings`;
+      console.log(`[b2c-sync] synced ${label}`);
     } catch (e) {
       await client.query('ROLLBACK');
-      throw e;
+      throw Object.assign(e, { _phase });
     } finally {
       client.release();
     }
   } catch (e) {
-    console.error('[b2c-sync] failed:', e.message);
+    console.error(`[b2c-sync] failed at "${e._phase || 'fetch'}" — ${e.message}`);
     // Non-fatal: relLoad proceeds even if sync fails
   }
 }
@@ -369,42 +377,34 @@ function startB2CListener() {
   connect();
 }
 async function initDb(){
+  let _step = 'start';
+  const sq = async (label, q, ...args) => { _step = label; await pool.query(q, ...args); };
   try{
-    await pool.query(`CREATE TABLE IF NOT EXISTS ${USERS_T} (id SERIAL PRIMARY KEY, username TEXT UNIQUE NOT NULL, pass_hash TEXT NOT NULL, name TEXT, role TEXT DEFAULT 'staff', created_at TIMESTAMPTZ DEFAULT now())`);
-    await pool.query("CREATE TABLE IF NOT EXISTS app_state (id TEXT PRIMARY KEY, data TEXT, version INT DEFAULT 0, updated_by TEXT, updated_at TIMESTAMPTZ DEFAULT now())");
-    await pool.query("ALTER TABLE app_state ADD COLUMN IF NOT EXISTS version INT DEFAULT 0");
-    await pool.query("ALTER TABLE app_state ADD COLUMN IF NOT EXISTS updated_by TEXT");
-    await pool.query(`ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS perms TEXT`);   // per-user area access (JSON array · null = all)
-    await pool.query(`ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS can_edit BOOLEAN DEFAULT true`);   // legacy global edit flag (fallback)
-    await pool.query(`ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS edit_areas TEXT`);   // per-section edit · JSON array of area keys · null = edit all (uses can_edit)
-    await pool.query(`ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS dept TEXT`);   // department key (UI grouping) · null = auto-guess from username
+    if(DATA_BACKEND === 'relational') await sq('create schema', `CREATE SCHEMA IF NOT EXISTS ${OS_SCHEMA}`);
+    await sq('create users table', `CREATE TABLE IF NOT EXISTS ${USERS_T} (id SERIAL PRIMARY KEY, username TEXT UNIQUE NOT NULL, pass_hash TEXT NOT NULL, name TEXT, role TEXT DEFAULT 'staff', created_at TIMESTAMPTZ DEFAULT now())`);
+    await sq('create app_state', "CREATE TABLE IF NOT EXISTS app_state (id TEXT PRIMARY KEY, data TEXT, version INT DEFAULT 0, updated_by TEXT, updated_at TIMESTAMPTZ DEFAULT now())");
+    await sq('app_state.version col', "ALTER TABLE app_state ADD COLUMN IF NOT EXISTS version INT DEFAULT 0");
+    await sq('app_state.updated_by col', "ALTER TABLE app_state ADD COLUMN IF NOT EXISTS updated_by TEXT");
+    await sq('users.perms col', `ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS perms TEXT`);
+    await sq('users.can_edit col', `ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS can_edit BOOLEAN DEFAULT true`);
+    await sq('users.edit_areas col', `ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS edit_areas TEXT`);
+    await sq('users.dept col', `ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS dept TEXT`);
     // §sort (2026-07-11): top-level lists had NO ordering column — os_repo only preserves order for CHILD
     // tables (via idx), so a drag-reorder of the markets / routes list never survived a reload. `sort` is a
     // plain scalar in the mapping, so decompose/assemble carry it with zero changes to os_repo, and the
     // client diff sees it as an ordinary changed field (→ patch ops). Additive: existing rows get NULL.
     if(DATA_BACKEND === 'relational'){
-      await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_markets" ADD COLUMN IF NOT EXISTS "sort" bigint`);
-      await pool.query(`ALTER TABLE ${OS_SCHEMA}."routes"     ADD COLUMN IF NOT EXISTS "sort" bigint`);
-      // §taxId (2026-07-11): the app reads companyInfo.taxId ("Tax No." on contracts/invoices) but the table
-      // had no column for it, so every value was silently dropped on save. Additive: existing rows get NULL.
-      await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_agents" ADD COLUMN IF NOT EXISTS "companyinfo_taxid" text`);
-      // §per-trip ops (2026-07-12): boat/van assignment lived ONLY on the booking (ops_*), so a booking with
-      // two travel days (an overnight, or a B2C order with two programmes) could hold exactly one boat and one
-      // van — day 2 silently inherited day 1's. Ops now also live on the trip row. Day 1 keeps using the
-      // booking-level block (1,058 of 1,059 bookings are single-day and are completely untouched).
+      await sq('sb_markets.sort col', `ALTER TABLE ${OS_SCHEMA}."sb_markets" ADD COLUMN IF NOT EXISTS "sort" bigint`);
+      await sq('routes.sort col',     `ALTER TABLE ${OS_SCHEMA}."routes"     ADD COLUMN IF NOT EXISTS "sort" bigint`);
+      await sq('sb_agents.companyinfo_taxid col', `ALTER TABLE ${OS_SCHEMA}."sb_agents" ADD COLUMN IF NOT EXISTS "companyinfo_taxid" text`);
       const _tripOps = [['ops_boatid','text'],['ops_vanid','text'],['ops_vanreturnid','text'],
                         ['ops_returnsamevan','boolean'],['ops_vangroup','bigint'],['ops_vanseq','bigint'],
                         ['ops_pickuptimefinal','text'],['ops_vansplits','text'],['ops_reconfirm','text']];
       for(const [c,t] of _tripOps){
-        await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_bookings__trips" ADD COLUMN IF NOT EXISTS "${c}" ${t}`);
+        await sq(`sb_bookings__trips.${c} col`, `ALTER TABLE ${OS_SCHEMA}."sb_bookings__trips" ADD COLUMN IF NOT EXISTS "${c}" ${t}`);
       }
-      // §vehicle identity colour (2026-07-12): the van-job list coloured rows by POSITION (PAL[i%6]), so a
-      // van's colour changed from day to day. The colour now belongs to the vehicle and is printed on the
-      // job-sheet header, so a driver recognises his own sheet at a glance. Additive: existing rows get NULL
-      // and fall back to a stable hash-of-id colour on the client.
-      await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_vehicles" ADD COLUMN IF NOT EXISTS "color" text`);
-      // §b2c-sync: ON CONFLICT (id) in relSyncB2C requires a PK on sb_bookings.id
-      await pool.query(`
+      await sq('sb_vehicles.color col', `ALTER TABLE ${OS_SCHEMA}."sb_vehicles" ADD COLUMN IF NOT EXISTS "color" text`);
+      await sq('sb_bookings pkey', `
         DO $do$ BEGIN
           IF NOT EXISTS (
             SELECT 1 FROM pg_constraint
@@ -418,10 +418,9 @@ async function initDb(){
         END $do$
       `);
     }
-    // document attachments · files stored server-side (bytea) · booking keeps only a ref in the app blob
-    await pool.query("CREATE TABLE IF NOT EXISTS attachments (id TEXT PRIMARY KEY, booking_id TEXT, filename TEXT, mime TEXT, size INT, data BYTEA, uploaded_by TEXT, created_at TIMESTAMPTZ DEFAULT now())");
-    await pool.query("CREATE INDEX IF NOT EXISTS idx_attach_booking ON attachments(booking_id)");
-    // seed first admin from env if there are no users yet
+    await sq('create attachments table', "CREATE TABLE IF NOT EXISTS attachments (id TEXT PRIMARY KEY, booking_id TEXT, filename TEXT, mime TEXT, size INT, data BYTEA, uploaded_by TEXT, created_at TIMESTAMPTZ DEFAULT now())");
+    await sq('attachments index', "CREATE INDEX IF NOT EXISTS idx_attach_booking ON attachments(booking_id)");
+    _step = 'seed admin';
     const c = await pool.query(`SELECT count(*)::int n FROM ${USERS_T}`);
     if (c.rows[0].n === 0 && ADMIN_USER && ADMIN_PASS) {
       await pool.query(`INSERT INTO ${USERS_T}(username,pass_hash,name,role) VALUES($1,$2,$3,$4)`, [ADMIN_USER, hashPw(ADMIN_PASS), 'Admin', 'admin']);
@@ -429,7 +428,7 @@ async function initDb(){
     }
     dbReady = true; console.log('[db] ready');
     startB2CListener();
-  }catch(e){ console.error('[db] init failed:', e.message); }
+  }catch(e){ console.error(`[db] init failed at step "${_step}": ${e.message}`); }
 }
 
 // dept: short free-text department key used only for UI grouping · null = auto-guess from username
@@ -819,9 +818,12 @@ const server = http.createServer((req, res) => {
         restTxn(s.username, p.baseVersion==null?-1:p.baseVersion, ops)
           .then(({version,behind})=>{ try{ const summ=ops.slice(0,25).map(o=>o.op+':'+(o.r||o.id||'')).join(','); console.log('[batch] user='+s.username+' v'+version+' ops='+ops.length+' ['+summ+']'); }catch(e){}   // 2026-07-10: log who saved what (per-entity saves had no username trail — the incident was untraceable)
             J(res,200,{ok:true,version,behind,applied:ops.length}); sseBroadcast({version, updated_by:s.username}); })
-          .catch(e=> e.code==='SHRINK_GUARD'
-            ? J(res,409,{error:'save_would_delete_data', code:'SHRINK_GUARD', detail:e.detail})
-            : J(res, /unknown resource|needs an id|record object|patch target not found/.test(e.message)?400:500, {error:e.message}));
+          .catch(e=> {
+            if(e.code!=='SHRINK_GUARD') console.error('[batch] error user='+s.username+' ops='+ops.length+' —', e.message);
+            return e.code==='SHRINK_GUARD'
+              ? J(res,409,{error:'save_would_delete_data', code:'SHRINK_GUARD', detail:e.detail})
+              : J(res, /unknown resource|needs an id|record object|patch target not found/.test(e.message)?400:500, {error:e.message});
+          });
       }); return;
     }
     if(m==='GET'){ restGet(res,resName,id).catch(done); return; }
