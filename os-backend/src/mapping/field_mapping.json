@@ -247,6 +247,11 @@
       "source": "ownerAddr",
       "kind": "scalar",
       "db_type": "text"
+    },
+    "color": {
+      "source": "color",
+      "kind": "scalar",
+      "db_type": "text"
     }
   },
   "boats__docs": {
@@ -2282,6 +2287,12 @@
       "source": "active",
       "kind": "scalar",
       "db_type": "boolean"
+    },
+    "pricetiers": {
+      "source": "priceTiers",
+      "kind": "json_text",
+      "db_type": "text",
+      "note": "3-tier contract pricing · {route:{zone:{paxType:{sell,minSell}}}} · seatRates stays the NET tier that booking bills from"
     }
   },
   "sb_rate_types__routes": {
@@ -3733,6 +3744,18 @@
       "source": "signature",
       "kind": "scalar",
       "db_type": "text"
+    },
+    "targets": {
+      "source": "targets",
+      "kind": "json_text",
+      "db_type": "text",
+      "note": "monthly pax target per salesperson · {\"YYYY-MM\": pax} · Sales Board finish line"
+    },
+    "followup": {
+      "source": "followup",
+      "kind": "json_text",
+      "db_type": "text",
+      "note": "agents this salesperson marked handled · {\"YYYY-MM::agentId\": true} · Sales Board follow-up"
     }
   },
   "sb_agents": {
@@ -3925,6 +3948,12 @@
       "source": "companyInfo.taxId",
       "kind": "scalar",
       "db_type": "text"
+    },
+    "contracttemplateid": {
+      "source": "contractTemplateId",
+      "kind": "scalar",
+      "db_type": "text",
+      "note": "which contract template this agent's contract is generated from · empty = the default template"
     }
   },
   "sb_agents__programs": {
@@ -6296,6 +6325,24 @@
       "source": "sb_vehicles.dayStatus[key] value",
       "kind": "map_value_json",
       "db_type": "text"
+    }
+  },
+  "contract_templates": {
+    "id": {
+      "source": "contract_templates map key (generated id)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "key": {
+      "source": "contract_templates map key (original)",
+      "kind": "map_key",
+      "db_type": "text"
+    },
+    "value": {
+      "source": "contract_templates[key] value",
+      "kind": "map_value_json",
+      "db_type": "text",
+      "note": "whole template object as JSON: {id,code,name,active,isDefault,sections{},text{en{},th{}}} — new template fields need no DB change"
     }
   }
 }
