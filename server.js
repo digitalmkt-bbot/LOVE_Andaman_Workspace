@@ -74,14 +74,16 @@ async function relLoad() {                                           // operatio
 //
 // Fill in null entries when the allotment route for each B2C product is decided:
 const B2C_ROUTE_MAP = {
-  'POW-001': null,   // Similan — pending route decision
-  'POW-002': 'r6',   // Surin Islands (unique match)
-  'POW-003': null,   // Phi Phi — pending route decision
-  'POW-004': 'r12',  // Phi Phi + Maiton (unique match)
-  'PR-001':  null,   // Private Similan — pending
-  'PR-002':  null,   // Private Surin — pending
-  'PR-003':  null,   // Private Phi Phi — pending
-  'PR-004':  'r12',  // Private Phi Phi + Maiton (unique match)
+  // Day trip programs (matched via product_id)
+  'POW-001': 'r5',   // Day Trip - Similan Island → Similan Islands by Speedboat
+  'POW-002': 'r6',   // Day Trip - Surin Island → Surin Islands by Speedboat
+  'POW-003': 'r10',  // Day Trip - Phi Phi Island → Phi Phi Bamboo by Speedboat
+  'POW-004': 'r12',  // Day Trip - Phi Phi - Maiton → Whale Shark Phi Phi Maiton Sunset
+  // Private routes (matched via route_id on private_own items)
+  'PR-001':  'r5',   // Private Similan → Similan Islands by Speedboat
+  'PR-002':  'r6',   // Private Surin → Surin Islands by Speedboat
+  'PR-003':  'r10',  // Private Phi Phi + Bamboo → Phi Phi Bamboo by Speedboat
+  'PR-004':  'r12',  // Private Phi Phi + Maiton → Whale Shark Phi Phi Maiton Sunset
 };
 const B2C_OPS_BK   = new Set(['ops_boatid','ops_vangroup','ops_vanseq','ops_vanreturnid','ops_vanid','ops_returnsamevan','ops_pickuptimefinal','ops_reconfirm','ops_vansplits']);
 const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_returnsamevan','ops_vangroup','ops_vanseq','ops_pickuptimefinal','ops_vansplits','ops_reconfirm']);
@@ -97,7 +99,7 @@ function mapB2CBooking(row, items) {
   const td = d => d ? String(d).slice(0, 10) : null;
   const trips = items.map((item, idx) => ({
     id: 'b2c_' + row.id + '_t' + idx,
-    routeId: item.route_id || B2C_ROUTE_MAP[item.product_id] || null,
+    routeId: B2C_ROUTE_MAP[item.product_id] || B2C_ROUTE_MAP[item.route_id] || null,
     date: td(item.travel_date) || null,
     bookingMode: 'seat',
     pax: {
