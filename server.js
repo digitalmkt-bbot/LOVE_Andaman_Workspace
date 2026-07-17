@@ -35,6 +35,27 @@ const osModel = require('./os-backend/src/mapping/operation_schemas_model.json')
 const OS_TABLES = Object.keys(osModel);
 const OS_COLS = {};
 for (const t of OS_TABLES) OS_COLS[t] = osModel[t].columns.map(c => c.name);
+// column type map · used by _bindVal to coerce bad scalars (e.g. "" into a bigint col) → null.
+// One bad value used to throw mid-transaction and wedge the ENTIRE batch on retry forever
+// (2026-07-15: a bulk agent import shipped creditDays:"" → "invalid input syntax for type bigint").
+const OS_COLTYPE = {};
+for (const t of OS_TABLES){ OS_COLTYPE[t] = {}; for (const c of osModel[t].columns) OS_COLTYPE[t][c.name] = c.type || ''; }
+function _bindVal(t, c, row){
+  let v = row[c] === undefined ? null : row[c];
+  const ty = (OS_COLTYPE[t] && OS_COLTYPE[t][c]) || '';
+  if (/^(bigint|integer|int|smallint|numeric|decimal|double|real|float)/i.test(ty)){
+    if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+    if (typeof v === 'string'){ const s = v.trim(); if (s === '') return null; const n = Number(s); return Number.isFinite(n) ? n : null; }
+    return null;                                   // "", null, boolean, object → null (never a valid number)
+  }
+  if (/^bool/i.test(ty)){
+    if (typeof v === 'boolean') return v;
+    if (v === 'true' || v === 1 || v === '1') return true;
+    if (v === 'false' || v === 0 || v === '0') return false;
+    return null;                                   // "" etc → null (avoids "invalid input syntax for type boolean")
+  }
+  return v;
+}
 const _osDepth = t => t.split('__').length - 1;                       // children deeper than parents
 const OS_ASC  = [...OS_TABLES].sort((a, b) => _osDepth(a) - _osDepth(b));   // parents first (insert)
 const OS_DESC = [...OS_TABLES].sort((a, b) => _osDepth(b) - _osDepth(a));   // children first (delete)
@@ -338,7 +359,7 @@ async function relApplyAndSave(payload, username, base) {
       for (let i = 0; i < rows.length; i += perChunk) {
         const params = [], tuples = [];
         for (const row of rows.slice(i, i + perChunk)) {
-          tuples.push('(' + cols.map(c => { params.push(row[c] === undefined ? null : row[c]); return '$' + params.length; }).join(',') + ')');
+          tuples.push('(' + cols.map(c => { params.push(_bindVal(t, c, row)); return '$' + params.length; }).join(',') + ')');
         }
         await client.query(`INSERT INTO ${fqt(t)} (${colSql}) VALUES ${tuples.join(',')}`, params);
       }
@@ -413,6 +434,7 @@ async function initDb(){
     await sq('users.can_edit col', `ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS can_edit BOOLEAN DEFAULT true`);
     await sq('users.edit_areas col', `ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS edit_areas TEXT`);
     await sq('users.dept col', `ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS dept TEXT`);
+    await sq('users.sales_id col', `ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS sales_id TEXT`);
     // §sort (2026-07-11): top-level lists had NO ordering column — os_repo only preserves order for CHILD
     // tables (via idx), so a drag-reorder of the markets / routes list never survived a reload. `sort` is a
     // plain scalar in the mapping, so decompose/assemble carry it with zero changes to os_repo, and the
@@ -427,7 +449,13 @@ async function initDb(){
       for(const [c,t] of _tripOps){
         await sq(`sb_bookings__trips.${c} col`, `ALTER TABLE ${OS_SCHEMA}."sb_bookings__trips" ADD COLUMN IF NOT EXISTS "${c}" ${t}`);
       }
+      await sq('sb_rate_types.pricetiers col', `ALTER TABLE ${OS_SCHEMA}."sb_rate_types" ADD COLUMN IF NOT EXISTS "pricetiers" text`);
+      await sq('sb_sales.targets col', `ALTER TABLE ${OS_SCHEMA}."sb_sales" ADD COLUMN IF NOT EXISTS "targets" text`);
+      await sq('sb_sales.followup col', `ALTER TABLE ${OS_SCHEMA}."sb_sales" ADD COLUMN IF NOT EXISTS "followup" text`);
+      await sq('contract_templates table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."contract_templates" (id text PRIMARY KEY, key text, value text)`);
+      await sq('sb_agents.contracttemplateid col', `ALTER TABLE ${OS_SCHEMA}."sb_agents" ADD COLUMN IF NOT EXISTS "contracttemplateid" text`);
       await sq('sb_vehicles.color col', `ALTER TABLE ${OS_SCHEMA}."sb_vehicles" ADD COLUMN IF NOT EXISTS "color" text`);
+      await sq('boats.color col', `ALTER TABLE ${OS_SCHEMA}."boats" ADD COLUMN IF NOT EXISTS "color" text`);
       await sq('sb_bookings pkey', `
         DO $do$ BEGIN
           IF NOT EXISTS (
@@ -457,11 +485,17 @@ async function initDb(){
 
 // dept: short free-text department key used only for UI grouping · null = auto-guess from username
 function cleanDept(d){ d=(d==null?'':String(d)).trim(); return d ? d.slice(0,40) : null; }
+function cleanSalesId(s){ s=(s==null?'':String(s)).trim(); return s ? s.slice(0,40) : null; }   // §user→sales · SB_SALES id or null
 // ── perms helpers (per-user area access · null/invalid = all areas) ──
 function parsePerms(v){ if(v==null) return null; try{ const a=JSON.parse(v); return Array.isArray(a)?a:null; }catch(e){ return null; } }
 const PERM_KEYS=new Set(['overview','operations','sales','accounting','fleet','config',  // group keys (back-compat)
-  'dashboard','calendar','daily','booking','doccheck','operation','insurance','vehicles','vanjobs','pickup-setup',
-  'agents','rate-types','b2c','staff','marketdata','focdetail','pickupmap','dailypfm',
+  // §2026-07-13: 'reconfirm' and 'bookingflow' were missing here AND from LA_NAV on the client, so the two
+  // pages were outside the permission system entirely — laAllowed() lets an unknown view through, meaning
+  // every user could open them regardless of their ticks. Adding them to the client alone is not enough:
+  // cleanPerms() filters against this Set, so an admin ticking "Booking Flow" would have had the tick
+  // silently dropped on save and the box would come back empty.
+  'dashboard','calendar','daily','booking','reconfirm','bookingflow','doccheck','operation','insurance','vehicles','vanjobs','pickup-setup',
+  'agents','sales-board','rate-types','contract-tmpl','b2c','staff','marketdata','focdetail','pickupmap','dailypfm',
   'fl-dashboard','fl-boatstatus','fl-dailyreport','fl-incident','fl-projects','fl-maintenance','fl-inventory','fl-consumables','fl-cost','fl-insights','fl-fuel','fl-asset',
   'settings','teammkt','addonsvc']);   // 'accounting' already present as a group key
 function cleanPerms(a){ return Array.isArray(a)?a.filter(x=>PERM_KEYS.has(x)):null; }
@@ -484,6 +518,11 @@ const ICT_OFFSET_MS = 7*3600e3, DAILY_RESET_HOUR = 3;
 function nextDailyExpiry(){ const nowIct = Date.now()+ICT_OFFSET_MS; const d = new Date(nowIct); d.setUTCHours(DAILY_RESET_HOUR,0,0,0); let exp = d.getTime(); if(exp <= nowIct) exp += 864e5; return exp - ICT_OFFSET_MS; }
 
 const MIME = { '.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.svg':'image/svg+xml','.ico':'image/x-icon','.webp':'image/webp','.woff':'font/woff','.woff2':'font/woff2','.ttf':'font/ttf','.xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','.csv':'text/csv; charset=utf-8','.txt':'text/plain; charset=utf-8' };
+// §static gzip (2026-07-18): compress text assets (HTML/JS/CSS/JSON/SVG/CSV/TXT) — the ~5MB app file was sent
+// raw on every load / after each deploy. gzip cuts it ~5x. Buffer cached per (path,etag) so it compresses once,
+// not on every request. Images/fonts (.png/.woff2/…) are already compressed → skipped.
+const GZIP_EXT = new Set(['.html','.js','.css','.json','.svg','.csv','.txt']);
+const _gzCache = new Map();   // fp -> { etag, buf }
 function readBody(req, cb){ let ch=[], n=0; req.on('data',c=>{ n+=c.length; if(n>20*1024*1024){req.destroy();return;} ch.push(c); }); req.on('end',()=>cb(Buffer.concat(ch).toString('utf8'))); }
 function J(res, code, obj, extra){ const h=Object.assign({'Content-Type':'application/json; charset=utf-8'}, extra||{}); res.writeHead(code,h); res.end(JSON.stringify(obj)); }
 // gzip variant for large payloads (/api/load) — falls back to plain when the client doesn't accept gzip
@@ -576,7 +615,7 @@ async function _restInsertRows(client, tables, rows){          // parents first,
     const cols = OS_COLS[t], colSql = cols.map(qic).join(','), per = Math.max(1, Math.floor(60000 / cols.length));
     for (let i = 0; i < rws.length; i += per){
       const params = [], tuples = [];
-      for (const row of rws.slice(i, i + per)) tuples.push('(' + cols.map(c => { params.push(row[c] === undefined ? null : row[c]); return '$' + params.length; }).join(',') + ')');
+      for (const row of rws.slice(i, i + per)) tuples.push('(' + cols.map(c => { params.push(_bindVal(t, c, row)); return '$' + params.length; }).join(',') + ')');
       await client.query(`INSERT INTO ${fqt(t)} (${colSql}) VALUES ${tuples.join(',')}`, params);
     }
   }
@@ -672,13 +711,13 @@ const server = http.createServer((req, res) => {
           if(!usr || !verifyPw(b.password||'', usr.pass_hash)) return J(res,401,{error:'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'});
           const perms = parsePerms(usr.perms); const ei = editInfo(usr);
           const EXP = Date.now() + SESS_DAYS*864e5;   // §102 REVERTED 2026-07-10: back to 30-day session. The daily 03:00 re-login forced every client to reload each morning, which is what fired the latent loadData version-mismatch reseed. nextDailyExpiry() kept for reference (unused).
-          const tok = sign({uid:usr.id, username:usr.username, name:usr.name, role:usr.role, perms:perms, edit:ei.canEditAny, editAreas:ei.editAreas, exp:EXP});
-          J(res,200,{username:usr.username,name:usr.name,role:usr.role,perms:perms,canEdit:ei.canEditAny,editAreas:ei.editAreas}, {'Set-Cookie':`sess=${tok}; HttpOnly; Path=/; SameSite=Lax; Secure; Max-Age=${Math.max(60,Math.floor((EXP-Date.now())/1000))}`});
+          const tok = sign({uid:usr.id, username:usr.username, name:usr.name, role:usr.role, perms:perms, edit:ei.canEditAny, editAreas:ei.editAreas, salesId:usr.sales_id||null, exp:EXP});
+          J(res,200,{username:usr.username,name:usr.name,role:usr.role,perms:perms,canEdit:ei.canEditAny,editAreas:ei.editAreas,salesId:usr.sales_id||null}, {'Set-Cookie':`sess=${tok}; HttpOnly; Path=/; SameSite=Lax; Secure; Max-Age=${Math.max(60,Math.floor((EXP-Date.now())/1000))}`});
         }).catch(e=>J(res,500,{error:e.message}));
     }); return;
   }
   if(u === '/api/logout'){ J(res,200,{ok:true},{'Set-Cookie':'sess=; HttpOnly; Path=/; Max-Age=0'}); return; }
-  if(u === '/api/me'){ const s=session(req); return s ? J(res,200,{username:s.username,name:s.name,role:s.role,perms:(s.perms!==undefined?s.perms:null),canEdit:(s.edit!==false),editAreas:(s.editAreas!==undefined?s.editAreas:null)}) : J(res,401,{error:'not logged in'}); }
+  if(u === '/api/me'){ const s=session(req); return s ? J(res,200,{username:s.username,name:s.name,role:s.role,perms:(s.perms!==undefined?s.perms:null),canEdit:(s.edit!==false),editAreas:(s.editAreas!==undefined?s.editAreas:null),salesId:(s.salesId!==undefined?s.salesId:null)}) : J(res,401,{error:'not logged in'}); }
 
   // ───── DATA (require login) ─────
   if(u === '/api/load'){
@@ -792,11 +831,11 @@ const server = http.createServer((req, res) => {
   if(u === '/api/users'){
     const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(s.role!=='admin') return J(res,403,{error:'admin only'});
     if(!pool) return J(res,503,{error:'no database'});
-    if(req.method === 'GET'){ pool.query(`SELECT id,username,name,role,perms,can_edit,edit_areas,dept,created_at FROM ${USERS_T} ORDER BY id`).then(r=>J(res,200,{users:r.rows.map(x=>{const ei=editInfo(x); return {id:x.id,username:x.username,name:x.name,role:x.role,perms:parsePerms(x.perms),canEdit:ei.canEditAny,editAreas:ei.editAreas,dept:x.dept||null,created_at:x.created_at};})})).catch(e=>J(res,500,{error:e.message})); return; }
+    if(req.method === 'GET'){ pool.query(`SELECT id,username,name,role,perms,can_edit,edit_areas,dept,sales_id,created_at FROM ${USERS_T} ORDER BY id`).then(r=>J(res,200,{users:r.rows.map(x=>{const ei=editInfo(x); return {id:x.id,username:x.username,name:x.name,role:x.role,perms:parsePerms(x.perms),canEdit:ei.canEditAny,editAreas:ei.editAreas,dept:x.dept||null,salesId:x.sales_id||null,created_at:x.created_at};})})).catch(e=>J(res,500,{error:e.message})); return; }
     if(req.method === 'POST'){ readBody(req, body=>{ let b={}; try{b=JSON.parse(body);}catch(e){} const un=String(b.username||'').trim(); if(!un||!b.password) return J(res,400,{error:'ต้องมี username + password'});
       const perms = cleanPerms(b.perms); const permsStr = perms ? JSON.stringify(perms) : null;
       const ea = cleanAreas(b.editAreas); const eaStr = ea ? JSON.stringify(ea) : null; const canEdit = ea ? ea.length>0 : (b.canEdit!==false);
-      pool.query(`INSERT INTO ${USERS_T}(username,pass_hash,name,role,perms,can_edit,edit_areas,dept) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[un,hashPw(b.password),(b.name||un),(b.role==='admin'?'admin':'staff'),permsStr,canEdit,eaStr,cleanDept(b.dept)])
+      pool.query(`INSERT INTO ${USERS_T}(username,pass_hash,name,role,perms,can_edit,edit_areas,dept,sales_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[un,hashPw(b.password),(b.name||un),(b.role==='admin'?'admin':'staff'),permsStr,canEdit,eaStr,cleanDept(b.dept),cleanSalesId(b.salesId)])
         .then(()=>J(res,200,{ok:true})).catch(e=>J(res, e.code==='23505'?409:500, {error: e.code==='23505'?'username นี้มีอยู่แล้ว':e.message})); }); return; }
     if(req.method === 'DELETE'){ const id=parseInt((q.match(/id=(\d+)/)||[])[1]||'0',10); if(!id) return J(res,400,{error:'no id'}); if(id===s.uid) return J(res,400,{error:'ลบบัญชีตัวเองไม่ได้'});
       pool.query(`DELETE FROM ${USERS_T} WHERE id=$1`,[id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); return; }
@@ -811,8 +850,8 @@ const server = http.createServer((req, res) => {
     readBody(req, body=>{ let b={}; try{b=JSON.parse(body);}catch(e){} const id=parseInt(b.id,10); if(!id) return J(res,400,{error:'no id'});
       const perms = cleanPerms(b.perms); const permsStr = perms ? JSON.stringify(perms) : null;
       const ea = cleanAreas(b.editAreas); const eaStr = ea ? JSON.stringify(ea) : null; const canEdit = ea ? ea.length>0 : (b.canEdit!==false);
-      if(b.role==='admin'||b.role==='staff'){ pool.query(`UPDATE ${USERS_T} SET perms=$1, role=$2, can_edit=$3, edit_areas=$4, dept=$6 WHERE id=$5`,[permsStr,b.role,canEdit,eaStr,id,cleanDept(b.dept)]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
-      else { pool.query(`UPDATE ${USERS_T} SET perms=$1, can_edit=$2, edit_areas=$3, dept=$5 WHERE id=$4`,[permsStr,canEdit,eaStr,id,cleanDept(b.dept)]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
+      if(b.role==='admin'||b.role==='staff'){ pool.query(`UPDATE ${USERS_T} SET perms=$1, role=$2, can_edit=$3, edit_areas=$4, dept=$6, sales_id=$7 WHERE id=$5`,[permsStr,b.role,canEdit,eaStr,id,cleanDept(b.dept),cleanSalesId(b.salesId)]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
+      else { pool.query(`UPDATE ${USERS_T} SET perms=$1, can_edit=$2, edit_areas=$3, dept=$5, sales_id=$6 WHERE id=$4`,[permsStr,canEdit,eaStr,id,cleanDept(b.dept),cleanSalesId(b.salesId)]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
     }); return;
   }
 
@@ -947,6 +986,16 @@ const server = http.createServer((req, res) => {
   fs.readFile(fp,(err,data)=>{ if(err){ res.writeHead(404,{'Content-Type':'text/plain; charset=utf-8'}); return res.end('Not found'); }
     const etag = '"'+crypto.createHash('sha1').update(data).digest('hex').slice(0,20)+'"';
     if((req.headers['if-none-match']||'') === etag){ res.writeHead(304,{'ETag':etag,'Cache-Control':'no-cache'}); return res.end(); }
-    res.writeHead(200,{'Content-Type':MIME[path.extname(fp).toLowerCase()]||'application/octet-stream','ETag':etag,'Cache-Control':'no-cache'}); res.end(data); });
+    const ext = path.extname(fp).toLowerCase();
+    const ctype = MIME[ext]||'application/octet-stream';
+    const acceptsGzip = /\bgzip\b/.test(req.headers['accept-encoding']||'');
+    if(acceptsGzip && GZIP_EXT.has(ext) && data.length > 1024){
+      const send=(buf)=>{ res.writeHead(200,{'Content-Type':ctype,'ETag':etag,'Cache-Control':'no-cache','Vary':'Accept-Encoding','Content-Encoding':'gzip'}); res.end(buf); };
+      const cached=_gzCache.get(fp); if(cached && cached.etag===etag) return send(cached.buf);
+      const zlib=require('zlib');
+      return zlib.gzip(data,(gzErr,buf)=>{ if(gzErr){ res.writeHead(200,{'Content-Type':ctype,'ETag':etag,'Cache-Control':'no-cache','Vary':'Accept-Encoding'}); return res.end(data); }
+        _gzCache.set(fp,{etag,buf}); send(buf); });
+    }
+    res.writeHead(200,{'Content-Type':ctype,'ETag':etag,'Cache-Control':'no-cache','Vary':'Accept-Encoding'}); res.end(data); });
 });
 server.listen(PORT, ()=>console.log('LOVE Andaman on '+PORT+(pool?' · db on':' · db off')));
