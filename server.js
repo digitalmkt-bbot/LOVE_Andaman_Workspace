@@ -85,6 +85,16 @@ const B2C_ROUTE_MAP = {
   'PR-003':  'r10',  // Private Phi Phi + Bamboo → Phi Phi Bamboo by Speedboat
   'PR-004':  'r12',  // Private Phi Phi + Maiton → Whale Shark Phi Phi Maiton Sunset
 };
+const B2C_PRODUCT_NAME = {
+  'POW-001': 'Day Trip - Similan Island',
+  'POW-002': 'Day Trip - Surin Island',
+  'POW-003': 'Day Trip - Phi Phi Island',
+  'POW-004': 'Day Trip - Phi Phi - Maiton',
+  'PR-001':  'Private - Similan Island',
+  'PR-002':  'Private - Surin Islands',
+  'PR-003':  'Private - Phi Phi + Bamboo Islands',
+  'PR-004':  'Private - Phi Phi + Maiton (Sunset)',
+};
 const B2C_OPS_BK   = new Set(['ops_boatid','ops_vangroup','ops_vanseq','ops_vanreturnid','ops_vanid','ops_returnsamevan','ops_pickuptimefinal','ops_reconfirm','ops_vansplits']);
 const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_returnsamevan','ops_vangroup','ops_vanseq','ops_pickuptimefinal','ops_vansplits','ops_reconfirm']);
 
@@ -128,7 +138,7 @@ function mapB2CBooking(row, items) {
     leadEmail: row.booked_by_email || '',
     status: mapB2CStatus(row.status),
     bookingDate: firstDate,
-    note: ['B2C', row.channel_name, String(row.id)].filter(Boolean).join(' · '),
+    note: ['B2C', row.channel_name, String(row.id), items.map(i => B2C_PRODUCT_NAME[i.product_id] || B2C_PRODUCT_NAME[i.route_id] || i.product_id).filter(Boolean).join(', ')].filter(Boolean).join(' · '),
     trips,
     passengers: Array.isArray(row.passengers) ? row.passengers : [],
     addOns: [],
