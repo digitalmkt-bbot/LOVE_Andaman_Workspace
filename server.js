@@ -98,7 +98,7 @@ function mapB2CBooking(row, items) {
   const trips = dayTrips.map((item, idx) => ({
     id: 'b2c_' + row.id + '_t' + idx,
     routeId: B2C_ROUTE_MAP[item.product_id] || null,
-    date: td(item.travel_date) || td(row.travel_date),
+    date: td(item.travel_date) || td(row.travel_date) || td(row.created_at),
     bookingMode: 'seat',
     pax: {
       ad_fr: Number(item.pax_adult) || 0,
@@ -124,7 +124,7 @@ function mapB2CBooking(row, items) {
     leadPhone: row.customer_phone || '',
     leadEmail: row.booked_by_email || '',
     status: mapB2CStatus(row.status),
-    bookingDate: td(row.travel_date),
+    bookingDate: td(row.travel_date) || td(row.created_at),
     note: ['B2C', row.channel_name, row.id].filter(Boolean).join(' · '),
     trips,
     passengers: Array.isArray(row.passengers) ? row.passengers : [],
@@ -172,12 +172,11 @@ async function relSyncB2C(singleExtId = null) {
         `SELECT * FROM booking_items WHERE booking_id = $1 ORDER BY line_no`, [singleExtId]
       ));
     } else {
-      // Full sync on login — all bookings from the past year by creation date (no travel_date filter — items may have varied/null dates)
+      // Full sync on login — all bookings, no date filter (travel_date is often null; created_at used as fallback)
       ({ rows: bkRows } = await b2cPool.query(`
         SELECT b.*, c.phone AS customer_phone
         FROM bookings b
         LEFT JOIN customers c ON c.id = b.customer_id
-        WHERE b.created_at >= CURRENT_DATE - INTERVAL '365 days'
         ORDER BY b.created_at DESC
         LIMIT 500
       `));
