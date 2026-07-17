@@ -168,7 +168,7 @@ async function relSyncB2C(singleExtId = null) {
          FROM booking_items bi
          LEFT JOIN bookings b ON b.id = bi.booking_id
          LEFT JOIN customers c ON c.id = b.customer_id
-         WHERE bi.booking_id = $1 AND bi.type = 'day_trip'
+         WHERE bi.booking_id = $1
          ORDER BY bi.line_no`, [singleExtId]
       ));
       if (!itemRows.length) {
@@ -188,7 +188,6 @@ async function relSyncB2C(singleExtId = null) {
         FROM booking_items bi
         LEFT JOIN bookings b ON b.id = bi.booking_id
         LEFT JOIN customers c ON c.id = b.customer_id
-        WHERE bi.type = 'day_trip'
         ORDER BY bi.id DESC
         LIMIT 500
       `));
