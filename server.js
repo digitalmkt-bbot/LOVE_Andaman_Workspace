@@ -96,7 +96,7 @@ function mapB2CStatus(s) {
 // booking_id + line_no gives a stable unique ID. Customer/payment info is joined from bookings.
 function mapB2CItem(item) {
   const td = d => d ? String(d).slice(0, 10) : null;
-  const date = td(item.travel_date) || td(item.booking_created_at);
+  const date = td(item.travel_date);   // null if not set — don't fake it with created_at
   return {
     id: 'b2c_' + item.booking_id + '_' + item.line_no,
     schemaVer: 2,
