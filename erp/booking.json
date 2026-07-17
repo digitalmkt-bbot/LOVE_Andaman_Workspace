@@ -1,0 +1,64 @@
+{
+  "id": "BK-TEST-001",
+  "customer": {
+    "name": "Ivan Petrov",
+    "phone": "+7 912 345 6789",
+    "email": "ivan.petrov@example.com",
+    "nationality": "Russian",
+    "socialMedia": "@ivanpetrov"
+  },
+  "channelId": "CH-FB",
+  "channelName": "Facebook",
+  "travelDate": "2026-07-20",
+  "items": [
+    {
+      "type": "day_trip",
+      "programId": "r5",
+      "travelDate": "2026-07-20",
+      "paxAdult": 3,
+      "paxChild": 1,
+      "paxInfant": 0,
+      "paxFoc": 0,
+      "paxThai": 0,
+      "paxForeign": 4,
+      "specialRequest": "Vegetarian meal for 1 adult",
+      "remark": "",
+      "addonsSelected": [
+        { "addonId": "longtail-join", "qty": 4 }
+      ],
+      "_unitPrices": { "adult": 3500, "child": 2500 },
+      "_promoApplied": null,
+      "_usedSeason": "high"
+    }
+  ],
+  "netPromoCodes": [],
+  "subtotal": 13000,
+  "discount": {
+    "amount": 0,
+    "name": "",
+    "note": "",
+    "reason": ""
+  },
+  "surcharge": {
+    "amount": 0,
+    "name": "",
+    "note": "",
+    "reason": ""
+  },
+  "total": 13000,
+  "deposit": 0,
+  "balance": 13000,
+  "paymentMethod": "PM-TRANSFER",
+  "paymentMethodName": "Bank Transfer",
+  "slipUrl": "",
+  "remark": "Please arrange early pickup from Patong area",
+  "passengers": [
+    { "name": "Ivan Petrov",    "nationality": "Russian" },
+    { "name": "Anna Petrova",   "nationality": "Russian" },
+    { "name": "Sergei Petrov",  "nationality": "Russian" },
+    { "name": "Masha Petrova",  "nationality": "Russian" }
+  ],
+  "status": "confirmed",
+  "createdAt": "2026-07-14T08:30:00.000Z",
+  "updatedAt": "2026-07-14T08:30:00.000Z"
+}

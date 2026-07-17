@@ -5,9 +5,9 @@ const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
 
-let Pool = null;
+let Pool = null, PgClient = null;
 try {
-  const pg = require('pg'); Pool = pg.Pool;
+  const pg = require('pg'); Pool = pg.Pool; PgClient = pg.Client;
   pg.types.setTypeParser(20, v => v == null ? null : Number(v));   // int8 -> Number (default is string → the app string-concatenates caps/pax)
 } catch(e){ console.warn('[db] pg not installed'); }
 
@@ -24,6 +24,11 @@ const SESS_DAYS  = 30;   // session cookie lifetime · long so refresh/redeploy 
 //    into the operation_schemas tables via os_repo. blob mode (default) is unchanged. ──
 const DATA_BACKEND = (process.env.DATA_BACKEND || 'blob').toLowerCase();
 const OS_SCHEMA = 'operation_schemas';
+// users auth table (2026-07-10 · feat/validation-deprecate-blob): relational backend keeps it in
+// operation_schemas (migrated via os-backend/scripts/migrate_users_to_os_schema.js — run BEFORE
+// deploying this); blob mode keeps the legacy unqualified `users` (resolves via the role's search_path,
+// e.g. allotment.users on prod). app_state + attachments stay unqualified in both modes.
+const USERS_T = DATA_BACKEND === 'relational' ? OS_SCHEMA + '.users' : 'users';
 // os_repo mapping engine + schema model — used by the relational save path AND the per-entity REST API.
 const osRepo  = require('./os-backend/src/mapping/os_repo.js');
 const osModel = require('./os-backend/src/mapping/operation_schemas_model.json');
@@ -36,10 +41,272 @@ const OS_DESC = [...OS_TABLES].sort((a, b) => _osDepth(b) - _osDepth(a));   // c
 const qic = id => '"' + String(id).replace(/"/g, '""') + '"';
 const fqt = t => qic(OS_SCHEMA) + '.' + qic(t);
 
-async function relLoad() {                                           // operation_schemas -> blob
+// ── save-safety guard (2026-07-10 · feat/validation-deprecate-blob) ──────────────────────────────
+// A stale / old whole-blob client can post data whose collections are empty or drastically shorter than
+// what the DB already holds; the relational save then DELETEs the table and re-INSERTs ~nothing → records
+// silently revert to DEFAULT_* seeds (e.g. boat pier, agent name). This guard refuses any save that would
+// wipe or heavily shrink a top-level table that currently has data. Protects every main entity table.
+// Bypass an INTENTIONAL bulk clear with payload.confirm (whole-blob) / op.confirm (per-entity putall).
+const OS_TOP = OS_TABLES.filter(t => !t.includes('__') && t !== 'app_meta');   // all main entity tables
+const GUARD_MINROWS = 5, GUARD_LOSS_ABS = 20, GUARD_LOSS_FRAC = 0.5;
+function shrinkGuard(curCount, incCount){                                       // -> [{table,from,to}] that would be wiped/shrunk
+  const bad = [];
+  for (const t of OS_TOP){
+    const cur = curCount[t] || 0, inc = incCount[t] || 0;
+    if (cur >= GUARD_MINROWS && (inc === 0 || (cur - inc >= GUARD_LOSS_ABS && inc < cur * GUARD_LOSS_FRAC)))
+      bad.push({ table: t, from: cur, to: inc });
+  }
+  return bad;
+}
+function shrinkErr(bad){ const e = new Error('SHRINK_GUARD'); e.code = 'SHRINK_GUARD'; e.detail = bad; return e; }
+
+async function relLoad() {                                           // operation_schemas -> blob (parallel)
+  const results = await Promise.all(OS_TABLES.map(t => pool.query(`SELECT * FROM ${fqt(t)}`)));
   const data = {};
-  for (const t of OS_TABLES) { const r = await pool.query(`SELECT * FROM ${fqt(t)}`); data[t] = r.rows; }
+  OS_TABLES.forEach((t, i) => { data[t] = results[i].rows; });
   return osRepo.assembleBlob(data);
+}
+
+// ── B2C external database sync ──────────────────────────────────────────────────────────────────
+// Called on every login (relational mode only). Upserts B2C bookings into operation_schemas so
+// they appear as native bookings in allotment (editable, boat/van assignable). Ops columns (boat,
+// van, pickup) are always preserved on conflict — only B2C-owned fields are overwritten.
+//
+// Fill in null entries when the allotment route for each B2C product is decided:
+const B2C_ROUTE_MAP = {
+  // Day trip programs (matched via product_id)
+  'POW-001': 'r5',   // Day Trip - Similan Island → Similan Islands by Speedboat
+  'POW-002': 'r6',   // Day Trip - Surin Island → Surin Islands by Speedboat
+  'POW-003': 'r10',  // Day Trip - Phi Phi Island → Phi Phi Bamboo by Speedboat
+  'POW-004': 'r12',  // Day Trip - Phi Phi - Maiton → Whale Shark Phi Phi Maiton Sunset
+  // Private routes (matched via route_id on private_own items)
+  'PR-001':  'r5',   // Private Similan → Similan Islands by Speedboat
+  'PR-002':  'r6',   // Private Surin → Surin Islands by Speedboat
+  'PR-003':  'r10',  // Private Phi Phi + Bamboo → Phi Phi Bamboo by Speedboat
+  'PR-004':  'r12',  // Private Phi Phi + Maiton → Whale Shark Phi Phi Maiton Sunset
+};
+const B2C_PRODUCT_NAME = {
+  'POW-001': 'Day Trip - Similan Island',
+  'POW-002': 'Day Trip - Surin Island',
+  'POW-003': 'Day Trip - Phi Phi Island',
+  'POW-004': 'Day Trip - Phi Phi - Maiton',
+  'PR-001':  'Private - Similan Island',
+  'PR-002':  'Private - Surin Islands',
+  'PR-003':  'Private - Phi Phi + Bamboo Islands',
+  'PR-004':  'Private - Phi Phi + Maiton (Sunset)',
+};
+const B2C_OPS_BK   = new Set(['ops_boatid','ops_vangroup','ops_vanseq','ops_vanreturnid','ops_vanid','ops_returnsamevan','ops_pickuptimefinal','ops_reconfirm','ops_vansplits']);
+const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_returnsamevan','ops_vangroup','ops_vanseq','ops_pickuptimefinal','ops_vansplits','ops_reconfirm']);
+
+function mapB2CStatus(s) {
+  if (s === 'cancelled') return 'cancelled';
+  if (s === 'pending')   return 'pending_approval';
+  return 'confirmed';
+}
+
+// One allotment booking per B2C booking row; booking_items become trips inside it.
+function mapB2CBooking(row, items) {
+  const td = d => d ? String(d).slice(0, 10) : null;
+  const trips = items.map((item, idx) => ({
+    id: 'b2c_' + row.id + '_t' + idx,
+    routeId: B2C_ROUTE_MAP[item.product_id] || B2C_ROUTE_MAP[item.route_id] || null,
+    date: td(item.travel_date) || null,
+    bookingMode: 'seat',
+    pax: {
+      ad_fr: Number(item.pax_foreign) || Number(item.pax_adult) || 0,
+      ad_th: Number(item.pax_thai) || 0,
+      chd_fr: Number(item.pax_child) || 0,
+      chd_th: 0,
+      inf_fr: Number(item.pax_infant) || 0,
+      inf_th: 0,
+      foc: Number(item.pax_foc) || 0,
+    },
+    seatSource: { locked: 0, general: 0 },
+    lockDrawSel: {},
+  }));
+  const firstDate = trips.find(t => t.date)?.date || null;
+  return {
+    id: 'b2c_' + row.id,
+    schemaVer: 2,
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+    createdBy: 'b2c_sync',
+    voucherRef: String(row.id),
+    agentId: null,
+    leadPax: row.booked_by_name || '',
+    leadNationality: '',
+    leadPhone: row.customer_phone || '',
+    leadEmail: row.booked_by_email || '',
+    status: mapB2CStatus(row.status),
+    bookingDate: firstDate,
+    note: ['B2C', row.channel_name, String(row.id), items.map(i => B2C_PRODUCT_NAME[i.product_id] || B2C_PRODUCT_NAME[i.route_id] || i.product_id).filter(Boolean).join(', ')].filter(Boolean).join(' · '),
+    trips,
+    passengers: Array.isArray(row.passengers) ? row.passengers : [],
+    addOns: [],
+    adjustments: [],
+    priceBreakdown: {
+      seat: Number(row.subtotal) || 0,
+      addOn: 0,
+      focDiscount: 0,
+      discount: Number(row.discount_amount) || 0,
+      extra: Number(row.surcharge_amount) || 0,
+      total: Number(row.total) || 0,
+    },
+    paymentSnapshot: {
+      deposit: Number(row.deposit) || 0,
+      balance: Number(row.balance) || 0,
+      method: row.payment_method_id || '',
+    },
+    ops: {},
+    history: [],
+  };
+}
+
+async function relSyncB2C(singleExtId = null) {
+  if (!b2cPool || !pool || DATA_BACKEND !== 'relational') return;
+  try {
+    let bkRows, itemRows;
+    if (singleExtId) {
+      // Single-booking sync triggered by LISTEN/NOTIFY
+      ({ rows: bkRows } = await b2cPool.query(
+        `SELECT b.*, c.phone AS customer_phone FROM bookings b
+         LEFT JOIN customers c ON c.id = b.customer_id WHERE b.id = $1`, [singleExtId]
+      ));
+      if (!bkRows.length) {
+        const allotId = 'b2c_' + singleExtId;
+        await pool.query(
+          `UPDATE ${fqt('sb_bookings')} SET status='cancelled' WHERE id=$1 AND status NOT IN ('cancelled','cancelled_weather','rejected')`,
+          [allotId]
+        );
+        console.log(`[b2c-sync] booking ${allotId} removed in B2C — marked cancelled`);
+        return;
+      }
+      ({ rows: itemRows } = await b2cPool.query(
+        `SELECT * FROM booking_items WHERE booking_id = $1 AND type IN ('day_trip','private_own') ORDER BY line_no`, [singleExtId]
+      ));
+    } else {
+      // Full sync on login — get all booking_ids that have items (no date filter), then fetch bookings
+      const { rows: idRows } = await b2cPool.query(`SELECT DISTINCT booking_id FROM booking_items WHERE type IN ('day_trip','private_own')`);
+      if (!idRows.length) return;
+      const extIds = idRows.map(r => r.booking_id);
+      ({ rows: bkRows } = await b2cPool.query(
+        `SELECT b.*, c.phone AS customer_phone
+         FROM bookings b
+         LEFT JOIN customers c ON c.id = b.customer_id
+         WHERE b.id = ANY($1)
+         ORDER BY b.created_at DESC
+         LIMIT 500`, [extIds]
+      ));
+      if (!bkRows.length) return;
+      const fetchedIds = bkRows.map(r => r.id);
+      ({ rows: itemRows } = await b2cPool.query(
+        `SELECT * FROM booking_items WHERE booking_id = ANY($1) AND type IN ('day_trip','private_own') ORDER BY booking_id, line_no`, [fetchedIds]
+      ));
+    }
+    const byId = {};
+    for (const item of itemRows) { (byId[item.booking_id] = byId[item.booking_id] || []).push(item); }
+
+    const b2cBks  = bkRows.map(r => mapB2CBooking(r, byId[r.id] || []));
+    const tables  = osRepo.decomposeBlob({ sb_bookings: b2cBks });
+    const b2cIds  = b2cBks.map(b => b.id);
+
+    const BK_COLS   = OS_COLS['sb_bookings'];
+    const TRIP_COLS = OS_COLS['sb_bookings__trips'];
+    const PAX_COLS  = OS_COLS['sb_bookings__passengers'];
+    const ADN_COLS  = OS_COLS['sb_bookings__addons'];
+    const BK_UPDATE = BK_COLS.filter(c => c !== 'id' && c !== 'createdat' && c !== 'createdby' && !B2C_OPS_BK.has(c));
+
+    const bkColSql  = BK_COLS.map(qic).join(', ');
+    const bkPh      = BK_COLS.map((_, i) => '$' + (i + 1)).join(', ');
+    const bkSet     = BK_UPDATE.map(c => `${qic(c)} = EXCLUDED.${qic(c)}`).join(', ');
+    const tripColSql = TRIP_COLS.map(qic).join(', ');
+    const tripPh    = TRIP_COLS.map((_, i) => '$' + (i + 1)).join(', ');
+    const paxColSql = PAX_COLS.map(qic).join(', ');
+    const paxPh     = PAX_COLS.map((_, i) => '$' + (i + 1)).join(', ');
+    const adnColSql = ADN_COLS.map(qic).join(', ');
+    const adnPh     = ADN_COLS.map((_, i) => '$' + (i + 1)).join(', ');
+
+    const client = await pool.connect();
+    let _phase = 'begin';
+    try {
+      await client.query('BEGIN');
+
+      // 1. Upsert main booking rows — ops columns preserved on conflict
+      _phase = 'upsert sb_bookings';
+      for (const row of tables['sb_bookings'] || []) {
+        await client.query(
+          `INSERT INTO ${fqt('sb_bookings')} (${bkColSql}) VALUES (${bkPh})
+           ON CONFLICT (id) DO UPDATE SET ${bkSet}`,
+          BK_COLS.map(c => row[c] === undefined ? null : row[c])
+        );
+      }
+
+      // 2. Refresh trips: save per-trip ops → delete → re-insert → restore ops by idx
+      _phase = 'save existing trip ops';
+      const { rows: existingTrips } = await client.query(
+        `SELECT sb_bookings_id, idx, ops_boatid, ops_vanid, ops_vanreturnid, ops_returnsamevan,
+                ops_vangroup, ops_vanseq, ops_pickuptimefinal, ops_vansplits, ops_reconfirm
+         FROM ${fqt('sb_bookings__trips')} WHERE sb_bookings_id = ANY($1)`, [b2cIds]
+      );
+      const savedTripOps = {};
+      for (const r of existingTrips) {
+        (savedTripOps[r.sb_bookings_id] = savedTripOps[r.sb_bookings_id] || {})[r.idx] = r;
+      }
+      _phase = 'delete+re-insert trips';
+      await client.query(`DELETE FROM ${fqt('sb_bookings__trips')} WHERE sb_bookings_id = ANY($1)`, [b2cIds]);
+      for (const row of tables['sb_bookings__trips'] || []) {
+        await client.query(
+          `INSERT INTO ${fqt('sb_bookings__trips')} (${tripColSql}) VALUES (${tripPh})`,
+          TRIP_COLS.map(c => row[c] === undefined ? null : row[c])
+        );
+      }
+      _phase = 'restore trip ops';
+      for (const [bkId, byIdx] of Object.entries(savedTripOps)) {
+        for (const [idx, ops] of Object.entries(byIdx)) {
+          if (ops.ops_boatid == null && ops.ops_vanid == null) continue;
+          await client.query(
+            `UPDATE ${fqt('sb_bookings__trips')} SET
+               ops_boatid=$1, ops_vanid=$2, ops_vanreturnid=$3, ops_returnsamevan=$4,
+               ops_vangroup=$5, ops_vanseq=$6, ops_pickuptimefinal=$7, ops_vansplits=$8, ops_reconfirm=$9
+             WHERE sb_bookings_id=$10 AND idx=$11`,
+            [ops.ops_boatid, ops.ops_vanid, ops.ops_vanreturnid, ops.ops_returnsamevan,
+             ops.ops_vangroup, ops.ops_vanseq, ops.ops_pickuptimefinal, ops.ops_vansplits, ops.ops_reconfirm,
+             bkId, Number(idx)]
+          );
+        }
+      }
+
+      // 3. Refresh passengers + addons (B2C is source of truth for these)
+      _phase = 'refresh passengers';
+      await client.query(`DELETE FROM ${fqt('sb_bookings__passengers')} WHERE sb_bookings_id = ANY($1)`, [b2cIds]);
+      for (const row of tables['sb_bookings__passengers'] || []) {
+        await client.query(
+          `INSERT INTO ${fqt('sb_bookings__passengers')} (${paxColSql}) VALUES (${paxPh})`,
+          PAX_COLS.map(c => row[c] === undefined ? null : row[c])
+        );
+      }
+      _phase = 'refresh addons';
+      await client.query(`DELETE FROM ${fqt('sb_bookings__addons')} WHERE sb_bookings_id = ANY($1)`, [b2cIds]);
+      for (const row of tables['sb_bookings__addons'] || []) {
+        await client.query(
+          `INSERT INTO ${fqt('sb_bookings__addons')} (${adnColSql}) VALUES (${adnPh})`,
+          ADN_COLS.map(c => row[c] === undefined ? null : row[c])
+        );
+      }
+      // NOTE: history, upgrades, feeitems, partialcancels, adjustments, over are allotment-owned — never touched here.
+
+      await client.query('COMMIT');
+      const label = singleExtId ? `b2c_${singleExtId}` : `${b2cBks.length} bookings`;
+      console.log(`[b2c-sync] synced ${label}`);
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw Object.assign(e, { _phase });
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error(`[b2c-sync] failed at "${e._phase || 'fetch'}" — ${e.message}`);
+    // Non-fatal: relLoad proceeds even if sync fails
+  }
 }
 // read-modify-write the whole schema in ONE transaction, serialized by an advisory lock (no lost saves).
 // ponytail: full DELETE+INSERT of all tables per save; fine at this data size, switch to targeted upserts if slow.
@@ -57,6 +324,12 @@ async function relApplyAndSave(payload, username, base) {
     if (payload.full && typeof payload.full === 'string') blob = JSON.parse(payload.full);
     else applyDiff(blob, payload.diff || {});
     const tables = osRepo.decomposeBlob(blob);
+    if (!payload.confirm) {                                            // save-safety: refuse a stale/whole-blob overwrite that would wipe existing data
+      const curCount = {}, incCount = {};
+      for (const t of OS_TOP) { curCount[t] = (data[t] || []).length; incCount[t] = (tables[t] || []).length; }
+      const bad = shrinkGuard(curCount, incCount);
+      if (bad.length) throw shrinkErr(bad);                            // rolled back by the catch below · handler returns 409
+    }
     for (const t of OS_DESC) await client.query(`DELETE FROM ${fqt(t)}`);
     for (const t of OS_ASC) {                                        // batched multi-row insert (fast: ~1-2 queries/table)
       const rows = tables[t] || []; if (!rows.length) continue;
@@ -85,28 +358,105 @@ if (Pool && DB_URL) {
 } else {
   console.warn('[db] no DATABASE_URL — login & sync disabled');
 }
+const B2C_DB_URL = process.env.B2C_DB_URL || '';
+let b2cPool = null;
+if (Pool && B2C_DB_URL) {
+  b2cPool = new Pool({ connectionString: B2C_DB_URL, ssl: /railway|rlwy/.test(B2C_DB_URL) ? { rejectUnauthorized: false } : false, max: 3 });
+  b2cPool.on('error', e => console.error('[b2c] idle client error:', e.message));
+  console.log('[b2c] pool ready');
+}
+
+// LISTEN/NOTIFY listener — receives instant push from B2C DB when a booking changes.
+// Uses a dedicated persistent pg.Client (not the pool) as required by LISTEN.
+// Auto-reconnects on disconnect (Railway restarts, network blips).
+function startB2CListener() {
+  if (!PgClient || !B2C_DB_URL) return;
+  const ssl = /railway|rlwy/.test(B2C_DB_URL) ? { rejectUnauthorized: false } : false;
+  function connect() {
+    const client = new PgClient({ connectionString: B2C_DB_URL, ssl });
+    client.connect()
+      .then(() => client.query('LISTEN booking_changed'))
+      .then(() => {
+        console.log('[b2c-listen] listening for booking_changed');
+        client.on('notification', async (msg) => {
+          const extId = msg.payload;
+          console.log('[b2c-listen] booking changed:', extId);
+          try {
+            await relSyncB2C(extId);
+            // Bump version so all logged-in clients refresh via SSE
+            const vr = await pool.query('SELECT version FROM app_state WHERE id=$1', [STATE_KEY]);
+            const nv = (vr.rows[0] ? vr.rows[0].version : 0) + 1;
+            await pool.query(
+              'INSERT INTO app_state(id,data,version,updated_by,updated_at) VALUES($1,NULL,$2,$3,now()) ON CONFLICT(id) DO UPDATE SET version=$2, updated_by=$3, updated_at=now()',
+              [STATE_KEY, nv, 'b2c_notify']
+            );
+            sseBroadcast({ version: nv, source: 'b2c' });
+          } catch(e) { console.error('[b2c-listen] sync error:', e.message); }
+        });
+        client.on('error', e => { console.error('[b2c-listen] error:', e.message); client.end().catch(()=>{}); });
+        client.on('end', () => { console.warn('[b2c-listen] disconnected — reconnecting in 5s'); setTimeout(connect, 5000); });
+      })
+      .catch(e => { console.error('[b2c-listen] connect failed:', e.message); setTimeout(connect, 5000); });
+  }
+  connect();
+}
 async function initDb(){
+  let _step = 'start';
+  const sq = async (label, q, ...args) => { _step = label; await pool.query(q, ...args); };
   try{
-    await pool.query("CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, username TEXT UNIQUE NOT NULL, pass_hash TEXT NOT NULL, name TEXT, role TEXT DEFAULT 'staff', created_at TIMESTAMPTZ DEFAULT now())");
-    await pool.query("CREATE TABLE IF NOT EXISTS app_state (id TEXT PRIMARY KEY, data TEXT, version INT DEFAULT 0, updated_by TEXT, updated_at TIMESTAMPTZ DEFAULT now())");
-    await pool.query("ALTER TABLE app_state ADD COLUMN IF NOT EXISTS version INT DEFAULT 0");
-    await pool.query("ALTER TABLE app_state ADD COLUMN IF NOT EXISTS updated_by TEXT");
-    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS perms TEXT");   // per-user area access (JSON array · null = all)
-    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS can_edit BOOLEAN DEFAULT true");   // legacy global edit flag (fallback)
-    await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS edit_areas TEXT");   // per-section edit · JSON array of area keys · null = edit all (uses can_edit)
-    // document attachments · files stored server-side (bytea) · booking keeps only a ref in the app blob
-    await pool.query("CREATE TABLE IF NOT EXISTS attachments (id TEXT PRIMARY KEY, booking_id TEXT, filename TEXT, mime TEXT, size INT, data BYTEA, uploaded_by TEXT, created_at TIMESTAMPTZ DEFAULT now())");
-    await pool.query("CREATE INDEX IF NOT EXISTS idx_attach_booking ON attachments(booking_id)");
-    // seed first admin from env if there are no users yet
-    const c = await pool.query('SELECT count(*)::int n FROM users');
+    if(DATA_BACKEND === 'relational') await sq('create schema', `CREATE SCHEMA IF NOT EXISTS ${OS_SCHEMA}`);
+    await sq('create users table', `CREATE TABLE IF NOT EXISTS ${USERS_T} (id SERIAL PRIMARY KEY, username TEXT UNIQUE NOT NULL, pass_hash TEXT NOT NULL, name TEXT, role TEXT DEFAULT 'staff', created_at TIMESTAMPTZ DEFAULT now())`);
+    await sq('create app_state', "CREATE TABLE IF NOT EXISTS app_state (id TEXT PRIMARY KEY, data TEXT, version INT DEFAULT 0, updated_by TEXT, updated_at TIMESTAMPTZ DEFAULT now())");
+    await sq('app_state.version col', "ALTER TABLE app_state ADD COLUMN IF NOT EXISTS version INT DEFAULT 0");
+    await sq('app_state.updated_by col', "ALTER TABLE app_state ADD COLUMN IF NOT EXISTS updated_by TEXT");
+    await sq('users.perms col', `ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS perms TEXT`);
+    await sq('users.can_edit col', `ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS can_edit BOOLEAN DEFAULT true`);
+    await sq('users.edit_areas col', `ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS edit_areas TEXT`);
+    await sq('users.dept col', `ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS dept TEXT`);
+    // §sort (2026-07-11): top-level lists had NO ordering column — os_repo only preserves order for CHILD
+    // tables (via idx), so a drag-reorder of the markets / routes list never survived a reload. `sort` is a
+    // plain scalar in the mapping, so decompose/assemble carry it with zero changes to os_repo, and the
+    // client diff sees it as an ordinary changed field (→ patch ops). Additive: existing rows get NULL.
+    if(DATA_BACKEND === 'relational'){
+      await sq('sb_markets.sort col', `ALTER TABLE ${OS_SCHEMA}."sb_markets" ADD COLUMN IF NOT EXISTS "sort" bigint`);
+      await sq('routes.sort col',     `ALTER TABLE ${OS_SCHEMA}."routes"     ADD COLUMN IF NOT EXISTS "sort" bigint`);
+      await sq('sb_agents.companyinfo_taxid col', `ALTER TABLE ${OS_SCHEMA}."sb_agents" ADD COLUMN IF NOT EXISTS "companyinfo_taxid" text`);
+      const _tripOps = [['ops_boatid','text'],['ops_vanid','text'],['ops_vanreturnid','text'],
+                        ['ops_returnsamevan','boolean'],['ops_vangroup','bigint'],['ops_vanseq','bigint'],
+                        ['ops_pickuptimefinal','text'],['ops_vansplits','text'],['ops_reconfirm','text']];
+      for(const [c,t] of _tripOps){
+        await sq(`sb_bookings__trips.${c} col`, `ALTER TABLE ${OS_SCHEMA}."sb_bookings__trips" ADD COLUMN IF NOT EXISTS "${c}" ${t}`);
+      }
+      await sq('sb_vehicles.color col', `ALTER TABLE ${OS_SCHEMA}."sb_vehicles" ADD COLUMN IF NOT EXISTS "color" text`);
+      await sq('sb_bookings pkey', `
+        DO $do$ BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conrelid = '${OS_SCHEMA}.sb_bookings'::regclass AND contype IN ('p','u')
+              AND array_length(conkey,1) = 1
+              AND conkey[1] = (SELECT attnum FROM pg_attribute
+                               WHERE attrelid='${OS_SCHEMA}.sb_bookings'::regclass AND attname='id')
+          ) THEN
+            ALTER TABLE ${OS_SCHEMA}."sb_bookings" ADD CONSTRAINT sb_bookings_pkey PRIMARY KEY (id);
+          END IF;
+        END $do$
+      `);
+    }
+    await sq('create attachments table', "CREATE TABLE IF NOT EXISTS attachments (id TEXT PRIMARY KEY, booking_id TEXT, filename TEXT, mime TEXT, size INT, data BYTEA, uploaded_by TEXT, created_at TIMESTAMPTZ DEFAULT now())");
+    await sq('attachments index', "CREATE INDEX IF NOT EXISTS idx_attach_booking ON attachments(booking_id)");
+    _step = 'seed admin';
+    const c = await pool.query(`SELECT count(*)::int n FROM ${USERS_T}`);
     if (c.rows[0].n === 0 && ADMIN_USER && ADMIN_PASS) {
-      await pool.query('INSERT INTO users(username,pass_hash,name,role) VALUES($1,$2,$3,$4)', [ADMIN_USER, hashPw(ADMIN_PASS), 'Admin', 'admin']);
+      await pool.query(`INSERT INTO ${USERS_T}(username,pass_hash,name,role) VALUES($1,$2,$3,$4)`, [ADMIN_USER, hashPw(ADMIN_PASS), 'Admin', 'admin']);
       console.log('[db] seeded admin user:', ADMIN_USER);
     }
     dbReady = true; console.log('[db] ready');
-  }catch(e){ console.error('[db] init failed:', e.message); }
+    startB2CListener();
+  }catch(e){ console.error(`[db] init failed at step "${_step}": ${e.message}`); }
 }
 
+// dept: short free-text department key used only for UI grouping · null = auto-guess from username
+function cleanDept(d){ d=(d==null?'':String(d)).trim(); return d ? d.slice(0,40) : null; }
 // ── perms helpers (per-user area access · null/invalid = all areas) ──
 function parsePerms(v){ if(v==null) return null; try{ const a=JSON.parse(v); return Array.isArray(a)?a:null; }catch(e){ return null; } }
 const PERM_KEYS=new Set(['overview','operations','sales','accounting','fleet','config',  // group keys (back-compat)
@@ -136,6 +486,20 @@ function nextDailyExpiry(){ const nowIct = Date.now()+ICT_OFFSET_MS; const d = n
 const MIME = { '.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.svg':'image/svg+xml','.ico':'image/x-icon','.webp':'image/webp','.woff':'font/woff','.woff2':'font/woff2','.ttf':'font/ttf','.xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','.csv':'text/csv; charset=utf-8','.txt':'text/plain; charset=utf-8' };
 function readBody(req, cb){ let ch=[], n=0; req.on('data',c=>{ n+=c.length; if(n>20*1024*1024){req.destroy();return;} ch.push(c); }); req.on('end',()=>cb(Buffer.concat(ch).toString('utf8'))); }
 function J(res, code, obj, extra){ const h=Object.assign({'Content-Type':'application/json; charset=utf-8'}, extra||{}); res.writeHead(code,h); res.end(JSON.stringify(obj)); }
+// gzip variant for large payloads (/api/load) — falls back to plain when the client doesn't accept gzip
+function JZ(req, res, code, obj){
+  const body = JSON.stringify(obj);
+  if (body.length > 50*1024 && /\bgzip\b/.test(req.headers['accept-encoding']||'')){
+    const zlib = require('zlib');
+    return zlib.gzip(body, (err, buf)=>{
+      if (err){ res.writeHead(code,{'Content-Type':'application/json; charset=utf-8'}); return res.end(body); }
+      res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Content-Encoding':'gzip'});
+      res.end(buf);
+    });
+  }
+  res.writeHead(code,{'Content-Type':'application/json; charset=utf-8'});
+  res.end(body);
+}
 // ── Server-Sent Events · push "data changed" to all open clients instantly (real-time) ──
 const sseClients = new Set();
 function sseBroadcast(obj){ const msg='data: '+JSON.stringify(obj)+'\n\n'; sseClients.forEach(r=>{ try{ r.write(msg); }catch(e){ sseClients.delete(r); } }); }
@@ -250,6 +614,12 @@ async function restApplyOp(client, op){
     return restApplyOp(client, { op: 'put', r: op.r, id: op.id, body: merged });
   }
   if (op.op === 'putall'){
+    if (!op.confirm && OS_TOP.indexOf(table) >= 0){                      // save-safety: refuse wiping an existing collection wholesale
+      const curN = (await client.query(`SELECT count(*)::int n FROM ${fqt(table)}`)).rows[0].n;
+      let incN = 0; if (op.body != null){ const rr = osRepo.decomposeBlob({ [appKey]: op.body }); incN = (rr[table] || []).length; }
+      const bad = shrinkGuard({ [table]: curN }, { [table]: incN });
+      if (bad.length) throw shrinkErr(bad);
+    }
     await client.query(`DELETE FROM ${fqt(table)}`);                     // children cascade
     if (op.body == null) return op.r;
     const rows = osRepo.decomposeBlob({ [appKey]: op.body });
@@ -297,11 +667,11 @@ const server = http.createServer((req, res) => {
     if(!pool) return J(res,503,{error:'no database'});
     readBody(req, body => {
       let b={}; try{ b=JSON.parse(body); }catch(e){}
-      pool.query('SELECT * FROM users WHERE lower(username)=lower($1)', [String(b.username||'').trim()])
+      pool.query(`SELECT * FROM ${USERS_T} WHERE lower(username)=lower($1)`, [String(b.username||'').trim()])
         .then(r => { const usr=r.rows[0];
           if(!usr || !verifyPw(b.password||'', usr.pass_hash)) return J(res,401,{error:'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'});
           const perms = parsePerms(usr.perms); const ei = editInfo(usr);
-          const EXP = nextDailyExpiry();
+          const EXP = Date.now() + SESS_DAYS*864e5;   // §102 REVERTED 2026-07-10: back to 30-day session. The daily 03:00 re-login forced every client to reload each morning, which is what fired the latent loadData version-mismatch reseed. nextDailyExpiry() kept for reference (unused).
           const tok = sign({uid:usr.id, username:usr.username, name:usr.name, role:usr.role, perms:perms, edit:ei.canEditAny, editAreas:ei.editAreas, exp:EXP});
           J(res,200,{username:usr.username,name:usr.name,role:usr.role,perms:perms,canEdit:ei.canEditAny,editAreas:ei.editAreas}, {'Set-Cookie':`sess=${tok}; HttpOnly; Path=/; SameSite=Lax; Secure; Max-Age=${Math.max(60,Math.floor((EXP-Date.now())/1000))}`});
         }).catch(e=>J(res,500,{error:e.message}));
@@ -315,13 +685,14 @@ const server = http.createServer((req, res) => {
     const s=session(req); if(!s) return J(res,401,{error:'login required'});
     if(!pool) return J(res,503,{error:'no database'});
     if(DATA_BACKEND==='relational'){
-      Promise.all([relLoad(), pool.query('SELECT version,updated_by,updated_at FROM app_state WHERE id=$1',[STATE_KEY])])
-        .then(([blob,r])=>{ const m=r.rows[0]||{}; J(res,200,{data:JSON.stringify(blob),version:m.version||0,updated_by:m.updated_by,updated_at:m.updated_at}); })
+      relSyncB2C()
+        .then(() => Promise.all([relLoad(), pool.query('SELECT version,updated_by,updated_at FROM app_state WHERE id=$1',[STATE_KEY])]))
+        .then(([blob,r])=>{ const m=r.rows[0]||{}; JZ(req,res,200,{data:JSON.stringify(blob),version:m.version||0,updated_by:m.updated_by,updated_at:m.updated_at}); })
         .catch(e=>J(res,500,{error:e.message}));
       return;
     }
     pool.query('SELECT data,version,updated_by,updated_at FROM app_state WHERE id=$1',[STATE_KEY])
-      .then(r => r.rows[0] ? J(res,200,{data:r.rows[0].data,version:r.rows[0].version,updated_by:r.rows[0].updated_by,updated_at:r.rows[0].updated_at})
+      .then(r => r.rows[0] ? JZ(req,res,200,{data:r.rows[0].data,version:r.rows[0].version,updated_by:r.rows[0].updated_by,updated_at:r.rows[0].updated_at})
                            : J(res,200,{data:null,version:0}))
       .catch(e=>J(res,500,{error:e.message}));
     return;
@@ -357,7 +728,9 @@ const server = http.createServer((req, res) => {
           +' — run os-backend/scripts/check_mapping_drift.js if this repeats'); }catch(e){}
         relApplyAndSave(payload, s.username, base)
           .then(({version,behind})=>{ J(res,200,{ok:true,version,behind}); sseBroadcast({version, updated_by:s.username}); })
-          .catch(e=>J(res,500,{error:e.message}));
+          .catch(e=> e.code==='SHRINK_GUARD'
+            ? J(res,409,{error:'save_would_delete_data', code:'SHRINK_GUARD', detail:e.detail})
+            : J(res,500,{error:e.message}));
         return;
       }
       pool.query('SELECT data,version FROM app_state WHERE id=$1',[STATE_KEY]).then(r=>{
@@ -419,27 +792,27 @@ const server = http.createServer((req, res) => {
   if(u === '/api/users'){
     const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(s.role!=='admin') return J(res,403,{error:'admin only'});
     if(!pool) return J(res,503,{error:'no database'});
-    if(req.method === 'GET'){ pool.query('SELECT id,username,name,role,perms,can_edit,edit_areas,created_at FROM users ORDER BY id').then(r=>J(res,200,{users:r.rows.map(x=>{const ei=editInfo(x); return {id:x.id,username:x.username,name:x.name,role:x.role,perms:parsePerms(x.perms),canEdit:ei.canEditAny,editAreas:ei.editAreas,created_at:x.created_at};})})).catch(e=>J(res,500,{error:e.message})); return; }
+    if(req.method === 'GET'){ pool.query(`SELECT id,username,name,role,perms,can_edit,edit_areas,dept,created_at FROM ${USERS_T} ORDER BY id`).then(r=>J(res,200,{users:r.rows.map(x=>{const ei=editInfo(x); return {id:x.id,username:x.username,name:x.name,role:x.role,perms:parsePerms(x.perms),canEdit:ei.canEditAny,editAreas:ei.editAreas,dept:x.dept||null,created_at:x.created_at};})})).catch(e=>J(res,500,{error:e.message})); return; }
     if(req.method === 'POST'){ readBody(req, body=>{ let b={}; try{b=JSON.parse(body);}catch(e){} const un=String(b.username||'').trim(); if(!un||!b.password) return J(res,400,{error:'ต้องมี username + password'});
       const perms = cleanPerms(b.perms); const permsStr = perms ? JSON.stringify(perms) : null;
       const ea = cleanAreas(b.editAreas); const eaStr = ea ? JSON.stringify(ea) : null; const canEdit = ea ? ea.length>0 : (b.canEdit!==false);
-      pool.query('INSERT INTO users(username,pass_hash,name,role,perms,can_edit,edit_areas) VALUES($1,$2,$3,$4,$5,$6,$7)',[un,hashPw(b.password),(b.name||un),(b.role==='admin'?'admin':'staff'),permsStr,canEdit,eaStr])
+      pool.query(`INSERT INTO ${USERS_T}(username,pass_hash,name,role,perms,can_edit,edit_areas,dept) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[un,hashPw(b.password),(b.name||un),(b.role==='admin'?'admin':'staff'),permsStr,canEdit,eaStr,cleanDept(b.dept)])
         .then(()=>J(res,200,{ok:true})).catch(e=>J(res, e.code==='23505'?409:500, {error: e.code==='23505'?'username นี้มีอยู่แล้ว':e.message})); }); return; }
     if(req.method === 'DELETE'){ const id=parseInt((q.match(/id=(\d+)/)||[])[1]||'0',10); if(!id) return J(res,400,{error:'no id'}); if(id===s.uid) return J(res,400,{error:'ลบบัญชีตัวเองไม่ได้'});
-      pool.query('DELETE FROM users WHERE id=$1',[id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); return; }
+      pool.query(`DELETE FROM ${USERS_T} WHERE id=$1`,[id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); return; }
   }
   if(u === '/api/users/password' && req.method === 'POST'){
     const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(s.role!=='admin') return J(res,403,{error:'admin only'});
     readBody(req, body=>{ let b={}; try{b=JSON.parse(body);}catch(e){} if(!b.id||!b.password) return J(res,400,{error:'no id/password'});
-      pool.query('UPDATE users SET pass_hash=$1 WHERE id=$2',[hashPw(b.password),parseInt(b.id,10)]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }); return;
+      pool.query(`UPDATE ${USERS_T} SET pass_hash=$1 WHERE id=$2`,[hashPw(b.password),parseInt(b.id,10)]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }); return;
   }
   if(u === '/api/users/perms' && req.method === 'POST'){   // admin sets a user's area access · role optional
     const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(s.role!=='admin') return J(res,403,{error:'admin only'});
     readBody(req, body=>{ let b={}; try{b=JSON.parse(body);}catch(e){} const id=parseInt(b.id,10); if(!id) return J(res,400,{error:'no id'});
       const perms = cleanPerms(b.perms); const permsStr = perms ? JSON.stringify(perms) : null;
       const ea = cleanAreas(b.editAreas); const eaStr = ea ? JSON.stringify(ea) : null; const canEdit = ea ? ea.length>0 : (b.canEdit!==false);
-      if(b.role==='admin'||b.role==='staff'){ pool.query('UPDATE users SET perms=$1, role=$2, can_edit=$3, edit_areas=$4 WHERE id=$5',[permsStr,b.role,canEdit,eaStr,id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
-      else { pool.query('UPDATE users SET perms=$1, can_edit=$2, edit_areas=$3 WHERE id=$4',[permsStr,canEdit,eaStr,id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
+      if(b.role==='admin'||b.role==='staff'){ pool.query(`UPDATE ${USERS_T} SET perms=$1, role=$2, can_edit=$3, edit_areas=$4, dept=$6 WHERE id=$5`,[permsStr,b.role,canEdit,eaStr,id,cleanDept(b.dept)]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
+      else { pool.query(`UPDATE ${USERS_T} SET perms=$1, can_edit=$2, edit_areas=$3, dept=$5 WHERE id=$4`,[permsStr,canEdit,eaStr,id,cleanDept(b.dept)]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); }
     }); return;
   }
 
@@ -467,21 +840,104 @@ const server = http.createServer((req, res) => {
         if(!ops || !ops.length) return J(res,400,{error:'ops required'});
         if(!ops.every(o=>o && (o.op==='meta' ? o.id!=null : (o.op==='put'||o.op==='patch'||o.op==='del'||o.op==='putall') && o.r))) return J(res,400,{error:'bad op shape'});
         restTxn(s.username, p.baseVersion==null?-1:p.baseVersion, ops)
-          .then(({version,behind})=>{ J(res,200,{ok:true,version,behind,applied:ops.length}); sseBroadcast({version, updated_by:s.username}); })
-          .catch(e=>J(res, /unknown resource|needs an id|record object|patch target not found/.test(e.message)?400:500, {error:e.message}));
+          .then(({version,behind})=>{ try{ const summ=ops.slice(0,25).map(o=>o.op+':'+(o.r||o.id||'')).join(','); console.log('[batch] user='+s.username+' v'+version+' ops='+ops.length+' ['+summ+']'); }catch(e){}   // 2026-07-10: log who saved what (per-entity saves had no username trail — the incident was untraceable)
+            J(res,200,{ok:true,version,behind,applied:ops.length}); sseBroadcast({version, updated_by:s.username}); })
+          .catch(e=> {
+            if(e.code!=='SHRINK_GUARD') console.error('[batch] error user='+s.username+' ops='+ops.length+' —', e.message);
+            return e.code==='SHRINK_GUARD'
+              ? J(res,409,{error:'save_would_delete_data', code:'SHRINK_GUARD', detail:e.detail})
+              : J(res, /unknown resource|needs an id|record object|patch target not found/.test(e.message)?400:500, {error:e.message});
+          });
       }); return;
     }
     if(m==='GET'){ restGet(res,resName,id).catch(done); return; }
     if(!canWrite) return J(res,403,{error:'view only · ไม่มีสิทธิ์แก้ไข'});
     const one = op => restTxn(s.username, -1, [op])
       .then(({version,applied})=>{ J(res, m==='POST'?201:200, {ok:true, id:applied[0], version}); sseBroadcast({version, updated_by:s.username}); })
-      .catch(e=>J(res, /unknown resource|needs an id|record object|patch target not found/.test(e.message)?400:500, {error:e.message}));
+      .catch(e=> e.code==='SHRINK_GUARD'
+        ? J(res,409,{error:'save_would_delete_data', code:'SHRINK_GUARD', detail:e.detail})
+        : J(res, /unknown resource|needs an id|record object|patch target not found/.test(e.message)?400:500, {error:e.message}));
     if(m==='DELETE'){ if(id==null) return J(res,400,{error:'id required'}); one({op:'del', r:resName, id}); return; }
     if(m==='POST'||m==='PUT'){
       if(m==='PUT'&&id==null) return J(res,400,{error:'id required for PUT'});
       readBody(req, body=>{ let b; try{ b=JSON.parse(body||'{}'); }catch(e){ return J(res,400,{error:'invalid JSON'}); } one({op:'put', r:resName, id, body:b}); }); return;
     }
     return J(res,405,{error:'method not allowed'});
+  }
+
+  // ───── B2C availability API (no session — API key auth) ─────
+  // GET /api/b2c/availability?route=r6&dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD[&rateTypeId=xxx]
+  // Returns booked+locked seat counts + pricing for the requested route/date range.
+  // Secured via X-Api-Key header matched against B2C_API_KEY env var.
+  if (u === '/api/b2c/availability' && req.method === 'GET') {
+    const B2C_API_KEY = process.env.B2C_API_KEY || '';
+    if (!B2C_API_KEY || (req.headers['x-api-key'] || '') !== B2C_API_KEY)
+      return J(res, 401, { error: 'invalid or missing X-Api-Key' });
+    if (!pool) return J(res, 503, { error: 'no database' });
+    if (DATA_BACKEND !== 'relational') return J(res, 503, { error: 'requires relational backend' });
+    const routeId    = (q.match(/route=([^&]*)/)    || [])[1] ? decodeURIComponent((q.match(/route=([^&]*)/)||[])[1]) : null;
+    const dateFrom   = (q.match(/dateFrom=([^&]*)/) || [])[1] ? decodeURIComponent((q.match(/dateFrom=([^&]*)/)||[])[1]) : null;
+    const dateTo     = (q.match(/dateTo=([^&]*)/)   || [])[1] ? decodeURIComponent((q.match(/dateTo=([^&]*)/)||[])[1]) : null;
+    const rateTypeId = (q.match(/rateTypeId=([^&]*)/)||[])[1] ? decodeURIComponent((q.match(/rateTypeId=([^&]*)/)||[])[1]) : null;
+    if (!routeId || !dateFrom || !dateTo) return J(res, 400, { error: 'route, dateFrom, dateTo required' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) return J(res, 400, { error: 'dates must be YYYY-MM-DD' });
+    if (dateTo < dateFrom) return J(res, 400, { error: 'dateTo must be >= dateFrom' });
+    const CANCELLED = ['cancelled','cancelled_weather','rejected'];
+    Promise.all([
+      // booked seats per date (seat-mode trips only, non-cancelled bookings)
+      pool.query(
+        `SELECT t.date,
+                COALESCE(SUM(t.pax_ad_fr + t.pax_chd_fr + t.pax_inf_fr + t.pax_foc_fr
+                           + t.pax_ad_th + t.pax_chd_th + t.pax_inf_th + t.pax_foc_th), 0)::int AS booked
+         FROM ${fqt('sb_bookings__trips')} t
+         JOIN ${fqt('sb_bookings')} b ON b.id = t.sb_bookings_id
+         WHERE t.routeid=$1 AND t.date>=$2 AND t.date<=$3
+           AND t.bookingmode='seat'
+           AND b.status != ALL($4::text[])
+         GROUP BY t.date`,
+        [routeId, dateFrom, dateTo, CANCELLED]
+      ),
+      // locked seats per date (active locks, respecting qty-used)
+      pool.query(
+        `SELECT date,
+                COALESCE(SUM(GREATEST(qty - used, 0)), 0)::int AS locked
+         FROM ${fqt('sb_seat_locks')}
+         WHERE routeid=$1 AND date>=$2 AND date<=$3 AND status='active'
+         GROUP BY date`,
+        [routeId, dateFrom, dateTo]
+      ),
+      // pricing — seat rates for this route from active rate type(s)
+      pool.query(
+        `SELECT rt.id AS rate_type_id, rt.code, rt.name,
+                s.pk_adult_fr, s.pk_adult_thai, s.pk_child_fr, s.pk_child_thai, s.pk_infant_fr, s.pk_infant_thai,
+                s.kl_adult_fr, s.kl_adult_thai, s.kl_child_fr, s.kl_child_thai, s.kl_infant_fr, s.kl_infant_thai,
+                s.notransfer_adult_fr, s.notransfer_adult_thai, s.notransfer_child_fr, s.notransfer_child_thai
+         FROM ${fqt('sb_rate_types')} rt
+         JOIN ${fqt('sb_rate_types__seatrates')} s ON s.sb_rate_types_id = rt.id
+         WHERE rt.active = true AND s.key=$1 ${rateTypeId ? 'AND rt.id=$2' : ''}`,
+        rateTypeId ? [routeId, rateTypeId] : [routeId]
+      ),
+    ]).then(([bkRes, lockRes, rtRes]) => {
+      const bookedMap = {}, lockedMap = {};
+      for (const r of bkRes.rows)   bookedMap[r.date]  = r.booked;
+      for (const r of lockRes.rows) lockedMap[r.date]  = r.locked;
+      // build all dates in range
+      const dates = [];
+      for (let d = new Date(dateFrom + 'T00:00:00Z'); d.toISOString().slice(0,10) <= dateTo; d.setUTCDate(d.getUTCDate()+1)) {
+        const dk = d.toISOString().slice(0, 10);
+        const booked = bookedMap[dk] || 0, locked = lockedMap[dk] || 0;
+        dates.push({ date: dk, bookedSeats: booked, lockedSeats: locked, totalConsumed: booked + locked });
+      }
+      // shape pricing by rate type
+      const pricing = rtRes.rows.map(r => ({
+        rateTypeId: r.rate_type_id, code: r.code, name: r.name,
+        PK: { adult_fr: r.pk_adult_fr, adult_th: r.pk_adult_thai, child_fr: r.pk_child_fr, child_th: r.pk_child_thai, infant_fr: r.pk_infant_fr, infant_th: r.pk_infant_thai },
+        KL: { adult_fr: r.kl_adult_fr, adult_th: r.kl_adult_thai, child_fr: r.kl_child_fr, child_th: r.kl_child_thai, infant_fr: r.kl_infant_fr, infant_th: r.kl_infant_thai },
+        NoTransfer: { adult_fr: r.notransfer_adult_fr, adult_th: r.notransfer_adult_thai, child_fr: r.notransfer_child_fr, child_th: r.notransfer_child_thai },
+      }));
+      J(res, 200, { route: routeId, dateFrom, dateTo, dates, pricing });
+    }).catch(e => J(res, 500, { error: e.message }));
+    return;
   }
 
   // ───── static files ─────
