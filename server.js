@@ -158,7 +158,16 @@ async function relSyncB2C(singleExtId = null) {
         `SELECT b.*, c.phone AS customer_phone FROM bookings b
          LEFT JOIN customers c ON c.id = b.customer_id WHERE b.id = $1`, [singleExtId]
       ));
-      if (!bkRows.length) return;
+      if (!bkRows.length) {
+        // Booking deleted in B2C — soft-cancel it in allotment so history/ops are preserved
+        const allotId = 'b2c_' + singleExtId;
+        await pool.query(
+          `UPDATE ${fqt('sb_bookings')} SET status='cancelled' WHERE id=$1 AND status NOT IN ('cancelled','cancelled_weather','rejected')`,
+          [allotId]
+        );
+        console.log(`[b2c-sync] booking ${allotId} removed in B2C — marked cancelled in allotment`);
+        return;
+      }
       ({ rows: itemRows } = await b2cPool.query(
         `SELECT * FROM booking_items WHERE booking_id = $1 ORDER BY line_no`, [singleExtId]
       ));
@@ -839,6 +848,81 @@ const server = http.createServer((req, res) => {
       readBody(req, body=>{ let b; try{ b=JSON.parse(body||'{}'); }catch(e){ return J(res,400,{error:'invalid JSON'}); } one({op:'put', r:resName, id, body:b}); }); return;
     }
     return J(res,405,{error:'method not allowed'});
+  }
+
+  // ───── B2C availability API (no session — API key auth) ─────
+  // GET /api/b2c/availability?route=r6&dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD[&rateTypeId=xxx]
+  // Returns booked+locked seat counts + pricing for the requested route/date range.
+  // Secured via X-Api-Key header matched against B2C_API_KEY env var.
+  if (u === '/api/b2c/availability' && req.method === 'GET') {
+    const B2C_API_KEY = process.env.B2C_API_KEY || '';
+    if (!B2C_API_KEY || (req.headers['x-api-key'] || '') !== B2C_API_KEY)
+      return J(res, 401, { error: 'invalid or missing X-Api-Key' });
+    if (!pool) return J(res, 503, { error: 'no database' });
+    if (DATA_BACKEND !== 'relational') return J(res, 503, { error: 'requires relational backend' });
+    const routeId    = (q.match(/route=([^&]*)/)    || [])[1] ? decodeURIComponent((q.match(/route=([^&]*)/)||[])[1]) : null;
+    const dateFrom   = (q.match(/dateFrom=([^&]*)/) || [])[1] ? decodeURIComponent((q.match(/dateFrom=([^&]*)/)||[])[1]) : null;
+    const dateTo     = (q.match(/dateTo=([^&]*)/)   || [])[1] ? decodeURIComponent((q.match(/dateTo=([^&]*)/)||[])[1]) : null;
+    const rateTypeId = (q.match(/rateTypeId=([^&]*)/)||[])[1] ? decodeURIComponent((q.match(/rateTypeId=([^&]*)/)||[])[1]) : null;
+    if (!routeId || !dateFrom || !dateTo) return J(res, 400, { error: 'route, dateFrom, dateTo required' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) return J(res, 400, { error: 'dates must be YYYY-MM-DD' });
+    if (dateTo < dateFrom) return J(res, 400, { error: 'dateTo must be >= dateFrom' });
+    const CANCELLED = ['cancelled','cancelled_weather','rejected'];
+    Promise.all([
+      // booked seats per date (seat-mode trips only, non-cancelled bookings)
+      pool.query(
+        `SELECT t.date,
+                COALESCE(SUM(t.pax_ad_fr + t.pax_chd_fr + t.pax_inf_fr + t.pax_foc_fr
+                           + t.pax_ad_th + t.pax_chd_th + t.pax_inf_th + t.pax_foc_th), 0)::int AS booked
+         FROM ${fqt('sb_bookings__trips')} t
+         JOIN ${fqt('sb_bookings')} b ON b.id = t.sb_bookings_id
+         WHERE t.routeid=$1 AND t.date>=$2 AND t.date<=$3
+           AND t.bookingmode='seat'
+           AND b.status != ALL($4::text[])
+         GROUP BY t.date`,
+        [routeId, dateFrom, dateTo, CANCELLED]
+      ),
+      // locked seats per date (active locks, respecting qty-used)
+      pool.query(
+        `SELECT date,
+                COALESCE(SUM(GREATEST(qty - used, 0)), 0)::int AS locked
+         FROM ${fqt('sb_seat_locks')}
+         WHERE routeid=$1 AND date>=$2 AND date<=$3 AND status='active'
+         GROUP BY date`,
+        [routeId, dateFrom, dateTo]
+      ),
+      // pricing — seat rates for this route from active rate type(s)
+      pool.query(
+        `SELECT rt.id AS rate_type_id, rt.code, rt.name,
+                s.pk_adult_fr, s.pk_adult_thai, s.pk_child_fr, s.pk_child_thai, s.pk_infant_fr, s.pk_infant_thai,
+                s.kl_adult_fr, s.kl_adult_thai, s.kl_child_fr, s.kl_child_thai, s.kl_infant_fr, s.kl_infant_thai,
+                s.notransfer_adult_fr, s.notransfer_adult_thai, s.notransfer_child_fr, s.notransfer_child_thai
+         FROM ${fqt('sb_rate_types')} rt
+         JOIN ${fqt('sb_rate_types__seatrates')} s ON s.sb_rate_types_id = rt.id
+         WHERE rt.active = true AND s.key=$1 ${rateTypeId ? 'AND rt.id=$2' : ''}`,
+        rateTypeId ? [routeId, rateTypeId] : [routeId]
+      ),
+    ]).then(([bkRes, lockRes, rtRes]) => {
+      const bookedMap = {}, lockedMap = {};
+      for (const r of bkRes.rows)   bookedMap[r.date]  = r.booked;
+      for (const r of lockRes.rows) lockedMap[r.date]  = r.locked;
+      // build all dates in range
+      const dates = [];
+      for (let d = new Date(dateFrom + 'T00:00:00Z'); d.toISOString().slice(0,10) <= dateTo; d.setUTCDate(d.getUTCDate()+1)) {
+        const dk = d.toISOString().slice(0, 10);
+        const booked = bookedMap[dk] || 0, locked = lockedMap[dk] || 0;
+        dates.push({ date: dk, bookedSeats: booked, lockedSeats: locked, totalConsumed: booked + locked });
+      }
+      // shape pricing by rate type
+      const pricing = rtRes.rows.map(r => ({
+        rateTypeId: r.rate_type_id, code: r.code, name: r.name,
+        PK: { adult_fr: r.pk_adult_fr, adult_th: r.pk_adult_thai, child_fr: r.pk_child_fr, child_th: r.pk_child_thai, infant_fr: r.pk_infant_fr, infant_th: r.pk_infant_thai },
+        KL: { adult_fr: r.kl_adult_fr, adult_th: r.kl_adult_thai, child_fr: r.kl_child_fr, child_th: r.kl_child_thai, infant_fr: r.kl_infant_fr, infant_th: r.kl_infant_thai },
+        NoTransfer: { adult_fr: r.notransfer_adult_fr, adult_th: r.notransfer_adult_thai, child_fr: r.notransfer_child_fr, child_th: r.notransfer_child_thai },
+      }));
+      J(res, 200, { route: routeId, dateFrom, dateTo, dates, pricing });
+    }).catch(e => J(res, 500, { error: e.message }));
+    return;
   }
 
   // ───── static files ─────
