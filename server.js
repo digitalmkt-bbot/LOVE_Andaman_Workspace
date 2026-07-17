@@ -260,6 +260,11 @@ const ICT_OFFSET_MS = 7*3600e3, DAILY_RESET_HOUR = 3;
 function nextDailyExpiry(){ const nowIct = Date.now()+ICT_OFFSET_MS; const d = new Date(nowIct); d.setUTCHours(DAILY_RESET_HOUR,0,0,0); let exp = d.getTime(); if(exp <= nowIct) exp += 864e5; return exp - ICT_OFFSET_MS; }
 
 const MIME = { '.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.svg':'image/svg+xml','.ico':'image/x-icon','.webp':'image/webp','.woff':'font/woff','.woff2':'font/woff2','.ttf':'font/ttf','.xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','.csv':'text/csv; charset=utf-8','.txt':'text/plain; charset=utf-8' };
+// §static gzip (2026-07-18): compress text assets (HTML/JS/CSS/JSON/SVG/CSV/TXT) — the ~5MB app file was sent
+// raw on every load / after each deploy. gzip cuts it ~5x. Buffer cached per (path,etag) so it compresses once,
+// not on every request. Images/fonts (.png/.woff2/…) are already compressed → skipped.
+const GZIP_EXT = new Set(['.html','.js','.css','.json','.svg','.csv','.txt']);
+const _gzCache = new Map();   // fp -> { etag, buf }
 function readBody(req, cb){ let ch=[], n=0; req.on('data',c=>{ n+=c.length; if(n>20*1024*1024){req.destroy();return;} ch.push(c); }); req.on('end',()=>cb(Buffer.concat(ch).toString('utf8'))); }
 function J(res, code, obj, extra){ const h=Object.assign({'Content-Type':'application/json; charset=utf-8'}, extra||{}); res.writeHead(code,h); res.end(JSON.stringify(obj)); }
 // gzip variant for large payloads (/api/load) — falls back to plain when the client doesn't accept gzip
@@ -644,6 +649,16 @@ const server = http.createServer((req, res) => {
   fs.readFile(fp,(err,data)=>{ if(err){ res.writeHead(404,{'Content-Type':'text/plain; charset=utf-8'}); return res.end('Not found'); }
     const etag = '"'+crypto.createHash('sha1').update(data).digest('hex').slice(0,20)+'"';
     if((req.headers['if-none-match']||'') === etag){ res.writeHead(304,{'ETag':etag,'Cache-Control':'no-cache'}); return res.end(); }
-    res.writeHead(200,{'Content-Type':MIME[path.extname(fp).toLowerCase()]||'application/octet-stream','ETag':etag,'Cache-Control':'no-cache'}); res.end(data); });
+    const ext = path.extname(fp).toLowerCase();
+    const ctype = MIME[ext]||'application/octet-stream';
+    const acceptsGzip = /\bgzip\b/.test(req.headers['accept-encoding']||'');
+    if(acceptsGzip && GZIP_EXT.has(ext) && data.length > 1024){
+      const send=(buf)=>{ res.writeHead(200,{'Content-Type':ctype,'ETag':etag,'Cache-Control':'no-cache','Vary':'Accept-Encoding','Content-Encoding':'gzip'}); res.end(buf); };
+      const cached=_gzCache.get(fp); if(cached && cached.etag===etag) return send(cached.buf);
+      const zlib=require('zlib');
+      return zlib.gzip(data,(gzErr,buf)=>{ if(gzErr){ res.writeHead(200,{'Content-Type':ctype,'ETag':etag,'Cache-Control':'no-cache','Vary':'Accept-Encoding'}); return res.end(data); }
+        _gzCache.set(fp,{etag,buf}); send(buf); });
+    }
+    res.writeHead(200,{'Content-Type':ctype,'ETag':etag,'Cache-Control':'no-cache','Vary':'Accept-Encoding'}); res.end(data); });
 });
 server.listen(PORT, ()=>console.log('LOVE Andaman on '+PORT+(pool?' · db on':' · db off')));
