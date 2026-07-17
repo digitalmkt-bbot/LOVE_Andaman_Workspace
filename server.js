@@ -178,7 +178,7 @@ async function relSyncB2C(singleExtId = null) {
         FROM booking_items bi
         JOIN bookings b ON b.id = bi.booking_id
         LEFT JOIN customers c ON c.id = b.customer_id
-        WHERE bi.travel_date >= CURRENT_DATE - INTERVAL '90 days'
+        WHERE COALESCE(bi.travel_date, b.travel_date) >= CURRENT_DATE - INTERVAL '90 days'
         ORDER BY b.created_at DESC
         LIMIT 500
       `));
