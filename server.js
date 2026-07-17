@@ -207,6 +207,10 @@ async function initDb(){
       // job-sheet header, so a driver recognises his own sheet at a glance. Additive: existing rows get NULL
       // and fall back to a stable hash-of-id colour on the client.
       await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_vehicles" ADD COLUMN IF NOT EXISTS "color" text`);
+      // §boat identity colour (2026-07-18): editable per-boat colour set on Boat Asset, flows to every
+      // getBoatColor consumer (Boat Status, By-trip, n8n canvas, van/re-confirm). Additive: existing rows
+      // NULL and fall back to the baked BOAT_COLORS on the client.
+      await pool.query(`ALTER TABLE ${OS_SCHEMA}."boats" ADD COLUMN IF NOT EXISTS "color" text`);
     }
     // document attachments · files stored server-side (bytea) · booking keeps only a ref in the app blob
     await pool.query("CREATE TABLE IF NOT EXISTS attachments (id TEXT PRIMARY KEY, booking_id TEXT, filename TEXT, mime TEXT, size INT, data BYTEA, uploaded_by TEXT, created_at TIMESTAMPTZ DEFAULT now())");

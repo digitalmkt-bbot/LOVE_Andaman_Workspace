@@ -247,6 +247,11 @@
       "source": "ownerAddr",
       "kind": "scalar",
       "db_type": "text"
+    },
+    "color": {
+      "source": "color",
+      "kind": "scalar",
+      "db_type": "text"
     }
   },
   "boats__docs": {

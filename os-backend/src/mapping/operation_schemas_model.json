@@ -230,6 +230,10 @@
       {
         "name": "owneraddr",
         "type": "text"
+      },
+      {
+        "name": "color",
+        "type": "text"
       }
     ],
     "primary_key": "id",
