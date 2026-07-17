@@ -172,12 +172,13 @@ async function relSyncB2C(singleExtId = null) {
         `SELECT * FROM booking_items WHERE booking_id = $1 ORDER BY line_no`, [singleExtId]
       ));
     } else {
-      // Full sync on login — rolling 90-day window
+      // Full sync on login — rolling 90-day window (filter by item travel_date so multi-item bookings aren't missed)
       ({ rows: bkRows } = await b2cPool.query(`
-        SELECT b.*, c.phone AS customer_phone
-        FROM bookings b
+        SELECT DISTINCT b.*, c.phone AS customer_phone
+        FROM booking_items bi
+        JOIN bookings b ON b.id = bi.booking_id
         LEFT JOIN customers c ON c.id = b.customer_id
-        WHERE b.travel_date >= CURRENT_DATE - INTERVAL '90 days'
+        WHERE bi.travel_date >= CURRENT_DATE - INTERVAL '90 days'
         ORDER BY b.created_at DESC
         LIMIT 500
       `));
