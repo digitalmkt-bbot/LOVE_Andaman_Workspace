@@ -173,11 +173,18 @@ function mapB2CItemBooking(item, isFirstLine) {
     if (typeof ps === 'string') ps = JSON.parse(ps);
     if (Array.isArray(ps) && ps[0] && ps[0].name) leadFromPax = String(ps[0].name).trim();
   } catch (_) {}
+  // private_own = whole-boat charter; day_trip = shared seat. B2C is the source of truth for product
+  // type, so derive the mode here — a charter must NOT consume the day-trip seat pool
+  // (getSeatsConsumed / baCharterBoatIds exclude bookingMode==='charter'). Detect from BOTH signals:
+  // the item type AND a PR-xxx product/route id (private items carry PR-*; day trips carry POW-*/r*),
+  // so a private booking is caught however B2C tags it.
+  const isPrivateId = id => /^PR-/i.test(String(id || ''));
+  const isCharter = h.type === 'private_own' || isPrivateId(h.product_id) || isPrivateId(h.route_id);
   const trip = {
     id: 'b2c_' + h.booking_id + '_' + h.line_no + '_t0',
     routeId: B2C_ROUTE_MAP[h.product_id] || B2C_ROUTE_MAP[h.route_id] || null,
     date: date,
-    bookingMode: 'seat',
+    bookingMode: isCharter ? 'charter' : 'seat',
     pax: {
       ad_fr: adFr,
       ad_th: adTh,
@@ -191,6 +198,13 @@ function mapB2CItemBooking(item, isFirstLine) {
     lockDrawSel: {},
     subtotal: seat,
   };
+  // Charter: keep the B2C-paid amount as a manual charter price so it isn't recomputed from the
+  // rate card once ops assigns a boat. charterBoatId stays null — ops picks the boat in-app.
+  if (isCharter) {
+    trip.charterBoatId = null;
+    trip.charterPriceMode = 'manual';
+    trip.charterPriceManual = seat;
+  }
   return {
     id: 'b2c_' + h.booking_id + '_' + h.line_no,
     schemaVer: 2,
