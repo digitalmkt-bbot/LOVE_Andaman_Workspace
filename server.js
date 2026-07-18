@@ -139,7 +139,8 @@ function b2cLineSeat(item) {
 }
 
 // One allotment booking PER B2C booking_item — items sit at booking level, not nested as trips.
-// id = b2c_<booking_id>_<line_no>; voucher shared as LOV-<booking_id>; each carries a single trip.
+// id = b2c_<booking_id>_<line_no>; voucher = the B2C booking_id verbatim (no added prefix —
+// new B2C ids already carry their own LOV- prefix); each carries a single trip.
 // isFirstLine: order-level payment (deposit/balance) attaches only to the first line of the order,
 // so a multi-item order's payment isn't multiplied across its item-bookings.
 function mapB2CItemBooking(item, isFirstLine) {
@@ -170,7 +171,7 @@ function mapB2CItemBooking(item, isFirstLine) {
     schemaVer: 2,
     createdAt: h.bk_created_at ? new Date(h.bk_created_at).toISOString() : new Date().toISOString(),
     createdBy: 'b2c_sync',
-    voucherRef: 'LOV-' + h.booking_id,
+    voucherRef: String(h.booking_id),
     agentId: 'a_b2c',
     leadPax: h.customer_name || h.booked_by_name || '',
     leadNationality: '',
