@@ -480,9 +480,9 @@ function startB2CListener() {
             const nv = (vr.rows[0] ? vr.rows[0].version : 0) + 1;
             await pool.query(
               'INSERT INTO app_state(id,data,version,updated_by,updated_at) VALUES($1,NULL,$2,$3,now()) ON CONFLICT(id) DO UPDATE SET version=$2, updated_by=$3, updated_at=now()',
-              [STATE_KEY, nv, 'b2c_notify']
+              [STATE_KEY, nv, 'B2C']
             );
-            sseBroadcast({ version: nv, source: 'b2c' });
+            sseBroadcast({ version: nv, updated_by: 'B2C', source: 'b2c' });
           } catch(e) { console.error('[b2c-listen] sync error:', e.message); }
         });
         client.on('error', e => { console.error('[b2c-listen] error:', e.message); client.end().catch(()=>{}); });
@@ -838,8 +838,8 @@ const server = http.createServer((req, res) => {
       try {
         const vr = await pool.query('SELECT version FROM app_state WHERE id=$1',[STATE_KEY]);
         nv = (vr.rows[0] ? vr.rows[0].version : 0) + 1;
-        await pool.query('INSERT INTO app_state(id,data,version,updated_by,updated_at) VALUES($1,NULL,$2,$3,now()) ON CONFLICT(id) DO UPDATE SET version=$2, updated_by=$3, updated_at=now()',[STATE_KEY,nv,'b2c_reset']);
-        sseBroadcast({ version: nv, source: 'b2c_reset' });
+        await pool.query('INSERT INTO app_state(id,data,version,updated_by,updated_at) VALUES($1,NULL,$2,$3,now()) ON CONFLICT(id) DO UPDATE SET version=$2, updated_by=$3, updated_at=now()',[STATE_KEY,nv,'B2C']);
+        sseBroadcast({ version: nv, updated_by: 'B2C', source: 'b2c_reset' });
       } catch(e){ console.error('[b2c-reset] version bump failed:', e.message); }
       console.log(`[b2c-reset] wiped ${deleted} b2c bookings, re-synced, version=${nv}`);
       J(res,200,{ok:true, deleted, version:nv});
