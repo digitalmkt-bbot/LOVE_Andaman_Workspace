@@ -125,58 +125,74 @@ function mapB2CStatus(s) {
   return 'confirmed';
 }
 
-// One allotment booking per B2C booking_id; items (already filtered to LA types) become trips.
-// items carry booking-level fields via LEFT JOIN aliases (bk_status, bk_created_at, etc.).
-function mapB2CBooking(bookingId, items) {
-  const h = items[0] || {};
+// Line-item seat price = Σ(pax_<cat> × details.unitPrices.<cat>) over adult/child/infant/foc.
+// details is jsonb (parsed by pg); falls back to the stored subtotal column if rates are missing.
+function b2cLineSeat(item) {
+  let det = item.details;
+  if (typeof det === 'string') { try { det = JSON.parse(det); } catch (_) { det = null; } }
+  const up = (det && det.unitPrices) || {};
+  const seat = (Number(item.pax_adult)  || 0) * (Number(up.adult)  || 0)
+             + (Number(item.pax_child)  || 0) * (Number(up.child)  || 0)
+             + (Number(item.pax_infant) || 0) * (Number(up.infant) || 0)
+             + (Number(item.pax_foc)    || 0) * (Number(up.foc)    || 0);
+  return seat || Number(item.subtotal) || 0;
+}
+
+// One allotment booking PER B2C booking_item — items sit at booking level, not nested as trips.
+// id = b2c_<booking_id>_<line_no>; voucher shared as LOV-<booking_id>; each carries a single trip.
+// isFirstLine: order-level payment (deposit/balance) attaches only to the first line of the order,
+// so a multi-item order's payment isn't multiplied across its item-bookings.
+function mapB2CItemBooking(item, isFirstLine) {
+  const h = item;
   const td = d => d ? String(d).slice(0, 10) : null;
-  const trips = items.map((item, idx) => ({
-    id: 'b2c_' + bookingId + '_t' + idx,
-    routeId: B2C_ROUTE_MAP[item.product_id] || B2C_ROUTE_MAP[item.route_id] || null,
-    date: td(item.travel_date) || null,
+  const date = td(h.travel_date) || null;
+  const seat = b2cLineSeat(h);
+  const trip = {
+    id: 'b2c_' + h.booking_id + '_' + h.line_no + '_t0',
+    routeId: B2C_ROUTE_MAP[h.product_id] || B2C_ROUTE_MAP[h.route_id] || null,
+    date: date,
     bookingMode: 'seat',
     pax: {
-      ad_fr: Number(item.pax_foreign) || Number(item.pax_adult) || 0,
-      ad_th: Number(item.pax_thai) || 0,
-      chd_fr: Number(item.pax_child) || 0,
+      ad_fr: Number(h.pax_foreign) || Number(h.pax_adult) || 0,
+      ad_th: Number(h.pax_thai) || 0,
+      chd_fr: Number(h.pax_child) || 0,
       chd_th: 0,
-      inf_fr: Number(item.pax_infant) || 0,
+      inf_fr: Number(h.pax_infant) || 0,
       inf_th: 0,
-      foc: Number(item.pax_foc) || 0,
+      foc: Number(h.pax_foc) || 0,
     },
     seatSource: { locked: 0, general: 0 },
     lockDrawSel: {},
-  }));
-  const firstDate = trips.find(t => t.date)?.date || null;
+  };
   return {
-    id: 'b2c_' + bookingId,
+    id: 'b2c_' + h.booking_id + '_' + h.line_no,
     schemaVer: 2,
     createdAt: h.bk_created_at ? new Date(h.bk_created_at).toISOString() : new Date().toISOString(),
     createdBy: 'b2c_sync',
-    voucherRef: String(bookingId),
-    agentId: null,
-    leadPax: h.booked_by_name || '',
+    voucherRef: 'LOV-' + h.booking_id,
+    agentId: 'a_b2c',
+    leadPax: h.customer_name || h.booked_by_name || '',
     leadNationality: '',
     leadPhone: h.customer_phone || '',
     leadEmail: h.booked_by_email || '',
     status: mapB2CStatus(h.bk_status),
-    bookingDate: firstDate,
-    note: ['B2C', h.channel_name, String(bookingId), items.map(i => B2C_PRODUCT_NAME[i.product_id] || B2C_PRODUCT_NAME[i.route_id] || i.product_id).filter(Boolean).join(', ')].filter(Boolean).join(' · '),
-    trips,
+    bookingDate: date,
+    note: ['B2C', h.channel_name, String(h.booking_id), B2C_PRODUCT_NAME[h.product_id] || B2C_PRODUCT_NAME[h.route_id] || h.product_id].filter(Boolean).join(' · '),
+    trips: [trip],
     passengers: [],
     addOns: [],
     adjustments: [],
     priceBreakdown: {
-      seat: Number(h.bk_subtotal) || 0,
+      seat: seat,
       addOn: 0,
       focDiscount: 0,
-      discount: Number(h.bk_discount) || 0,
-      extra: Number(h.bk_surcharge) || 0,
-      total: Number(h.bk_total) || 0,
+      discount: 0,
+      extra: 0,
+      total: seat,
     },
     paymentSnapshot: {
-      deposit: Number(h.bk_deposit) || 0,
-      balance: Number(h.bk_balance) || 0,
+      deposit: isFirstLine ? (Number(h.bk_deposit) || 0) : 0,
+      balance: isFirstLine ? (Number(h.bk_balance) || 0) : 0,
       method: h.payment_method_id || '',
     },
     ops: {},
@@ -198,6 +214,7 @@ const B2C_ITEM_JOIN = `
          b.payment_method_id,
          b.created_at    AS bk_created_at,
          ch.name         AS channel_name,
+         c.name          AS customer_name,
          c.phone         AS customer_phone
   FROM booking_items bi
   LEFT JOIN bookings b       ON b.id  = bi.booking_id
@@ -214,12 +231,12 @@ async function relSyncB2C(singleExtId = null) {
         B2C_ITEM_JOIN + ` AND bi.booking_id = $1 ORDER BY bi.line_no`, [singleExtId]
       ));
       if (!itemRows.length) {
-        const allotId = 'b2c_' + singleExtId;
-        await pool.query(
-          `UPDATE ${fqt('sb_bookings')} SET status='cancelled' WHERE id=$1 AND status NOT IN ('cancelled','cancelled_weather','rejected')`,
-          [allotId]
+        const r = await pool.query(
+          `UPDATE ${fqt('sb_bookings')} SET status='cancelled'
+           WHERE id ~ ('^b2c_' || $1::text || '(_[0-9]+)?$') AND status NOT IN ('cancelled','cancelled_weather','rejected')`,
+          [String(singleExtId)]
         );
-        console.log(`[b2c-sync] booking ${allotId} removed in B2C — marked cancelled`);
+        console.log(`[b2c-sync] booking ${singleExtId} removed in B2C — ${r.rowCount} line(s) marked cancelled`);
         return;
       }
     } else {
@@ -229,10 +246,15 @@ async function relSyncB2C(singleExtId = null) {
       if (!itemRows.length) return;
     }
 
+    // Flatten: one allotment booking per line item. Group only to flag the first line of each
+    // B2C order (order-level payment attaches to that line — see mapB2CItemBooking).
     const byId = {};
     for (const item of itemRows) { (byId[item.booking_id] = byId[item.booking_id] || []).push(item); }
-
-    const b2cBks  = Object.entries(byId).map(([bookingId, items]) => mapB2CBooking(bookingId, items));
+    const b2cBks = [];
+    for (const items of Object.values(byId)) {
+      items.sort((a, b) => Number(a.line_no) - Number(b.line_no));
+      items.forEach((it, i) => b2cBks.push(mapB2CItemBooking(it, i === 0)));
+    }
     const tables  = osRepo.decomposeBlob({ sb_bookings: b2cBks });
     const b2cIds  = b2cBks.map(b => b.id);
 
@@ -319,6 +341,19 @@ async function relSyncB2C(singleExtId = null) {
           ADN_COLS.map(c => row[c] === undefined ? null : row[c])
         );
       }
+      // 4. Cancel line-bookings whose line disappeared from a synced order (per-item cancellation).
+      //    Scoped to the B2C order_ids present in this run; keeps lines we just upserted (b2cIds).
+      _phase = 'cancel removed lines';
+      const presentOrderIds = [...new Set(itemRows.map(i => String(i.booking_id)))];
+      await client.query(
+        `UPDATE ${fqt('sb_bookings')} SET status='cancelled'
+         WHERE id ~ '^b2c_[0-9]+(_[0-9]+)?$'
+           AND split_part(id, '_', 2) = ANY($1)
+           AND id <> ALL($2)
+           AND status NOT IN ('cancelled','cancelled_weather','rejected')`,
+        [presentOrderIds, b2cIds]
+      );
+
       // NOTE: history, upgrades, feeitems, partialcancels, adjustments, over are allotment-owned — never touched here.
 
       await client.query('COMMIT');
