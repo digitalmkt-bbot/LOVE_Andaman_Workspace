@@ -779,6 +779,43 @@ const server = http.createServer((req, res) => {
       .catch(e=>J(res,500,{error:e.message}));
     return;
   }
+  // Hard-reset the B2C-synced bookings: wipe every b2c_ row (+ child tables) then full re-sync.
+  // Session-authed + POST-only (so accidental navigation can't trigger it). Ops on b2c bookings
+  // are intentionally discarded — B2C is the source of truth for these records.
+  if(u === '/api/b2c/reset' && req.method === 'POST'){
+    const s=session(req); if(!s) return J(res,401,{error:'login required'});
+    if(!pool) return J(res,503,{error:'no database'});
+    if(DATA_BACKEND!=='relational' || !b2cPool) return J(res,400,{error:'B2C sync not configured'});
+    (async () => {
+      const CHILD = ['sb_bookings__trips','sb_bookings__passengers','sb_bookings__addons',
+        'sb_bookings__adjustments','sb_bookings__feeitems','sb_bookings__history',
+        'sb_bookings__over','sb_bookings__partialcancels','sb_bookings__upgrades'];
+      const client = await pool.connect();
+      let deleted = 0;
+      try {
+        await client.query('BEGIN');
+        await client.query('SELECT pg_advisory_xact_lock(918273645)');
+        for (const t of CHILD) {
+          await client.query(`DELETE FROM ${fqt(t)} WHERE substr(sb_bookings_id,1,4) = 'b2c_'`);
+        }
+        const r = await client.query(`DELETE FROM ${fqt('sb_bookings')} WHERE substr(id,1,4) = 'b2c_'`);
+        deleted = r.rowCount || 0;
+        await client.query('COMMIT');
+      } catch(e){ await client.query('ROLLBACK').catch(()=>{}); client.release(); return J(res,500,{error:'delete failed: '+e.message}); }
+      client.release();
+      try { await relSyncB2C(); } catch(e){ return J(res,500,{error:`deleted ${deleted} rows but re-sync failed: ${e.message}`}); }
+      let nv = 0;
+      try {
+        const vr = await pool.query('SELECT version FROM app_state WHERE id=$1',[STATE_KEY]);
+        nv = (vr.rows[0] ? vr.rows[0].version : 0) + 1;
+        await pool.query('INSERT INTO app_state(id,data,version,updated_by,updated_at) VALUES($1,NULL,$2,$3,now()) ON CONFLICT(id) DO UPDATE SET version=$2, updated_by=$3, updated_at=now()',[STATE_KEY,nv,'b2c_reset']);
+        sseBroadcast({ version: nv, source: 'b2c_reset' });
+      } catch(e){ console.error('[b2c-reset] version bump failed:', e.message); }
+      console.log(`[b2c-reset] wiped ${deleted} b2c bookings, re-synced, version=${nv}`);
+      J(res,200,{ok:true, deleted, version:nv});
+    })();
+    return;
+  }
   if(u === '/api/version'){
     const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(!pool) return J(res,503,{error:'no database'});
     pool.query('SELECT version,updated_by,updated_at FROM app_state WHERE id=$1',[STATE_KEY])
