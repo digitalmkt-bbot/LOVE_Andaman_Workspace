@@ -145,17 +145,42 @@ function b2cLineSeat(item) {
 // so a multi-item order's payment isn't multiplied across its item-bookings.
 function mapB2CItemBooking(item, isFirstLine) {
   const h = item;
-  const td = d => d ? String(d).slice(0, 10) : null;
-  const date = td(h.travel_date) || null;
+  // pg returns date columns as JS Date objects — String(d).slice(0,10) gives "Sat Jul 18",
+  // not YYYY-MM-DD, which the frontend cannot parse. Format in local time explicitly.
+  const td = d => {
+    if (!d) return null;
+    if (d instanceof Date) {
+      const p = n => String(n).padStart(2, '0');
+      return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+    }
+    const s = String(d).slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+  };
+  // Item-level travel_date first; order-level (bookings.travel_date) as fallback — the B2C
+  // checkout sometimes stores the trip date only on the order header.
+  const date = td(h.travel_date) || td(h.bk_travel_date) || null;
   const seat = b2cLineSeat(h);
+  // pax_adult = total adults; pax_thai/pax_foreign = nationality split (may be 0/0 when unknown).
+  // Never use pax_foreign||pax_adult — a Thai-only booking (fr=0, th=5, ad=5) double-counts to 10.
+  const adTh = Number(h.pax_thai) || 0;
+  const adFrRaw = Number(h.pax_foreign) || 0;
+  const adFr = adFrRaw > 0 ? adFrRaw : Math.max(0, (Number(h.pax_adult) || 0) - adTh);
+  // Lead name: the booking's own passenger/booker name beats the CRM customers row — the B2C
+  // backend dedupes customers by email, so customers.name can be a stale earlier customer.
+  let leadFromPax = '';
+  try {
+    let ps = h.bk_passengers;
+    if (typeof ps === 'string') ps = JSON.parse(ps);
+    if (Array.isArray(ps) && ps[0] && ps[0].name) leadFromPax = String(ps[0].name).trim();
+  } catch (_) {}
   const trip = {
     id: 'b2c_' + h.booking_id + '_' + h.line_no + '_t0',
     routeId: B2C_ROUTE_MAP[h.product_id] || B2C_ROUTE_MAP[h.route_id] || null,
     date: date,
     bookingMode: 'seat',
     pax: {
-      ad_fr: Number(h.pax_foreign) || Number(h.pax_adult) || 0,
-      ad_th: Number(h.pax_thai) || 0,
+      ad_fr: adFr,
+      ad_th: adTh,
       chd_fr: Number(h.pax_child) || 0,
       chd_th: 0,
       inf_fr: Number(h.pax_infant) || 0,
@@ -173,7 +198,7 @@ function mapB2CItemBooking(item, isFirstLine) {
     createdBy: 'b2c_sync',
     voucherRef: String(h.booking_id),
     agentId: 'a_b2c',
-    leadPax: h.customer_name || h.booked_by_name || '',
+    leadPax: leadFromPax || h.customer_name || h.booked_by_name || '',
     leadNationality: '',
     leadPhone: h.customer_phone || '',
     leadEmail: h.booked_by_email || '',
@@ -207,6 +232,8 @@ function mapB2CItemBooking(item, isFirstLine) {
 const B2C_ITEM_JOIN = `
   SELECT bi.*,
          b.status        AS bk_status,
+         b.travel_date   AS bk_travel_date,
+         b.passengers    AS bk_passengers,
          b.booked_by_name, b.booked_by_email,
          b.subtotal      AS bk_subtotal,
          b.discount_amount AS bk_discount,
