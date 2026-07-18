@@ -181,6 +181,8 @@ async function initDb(){
       // json_text column instead: {route:{zone:{paxType:{sell,minSell}}}}. seatRates is untouched, the billing
       // path is untouched, and a rate type with no priceTiers simply prints "—" in those columns.
       await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_rate_types" ADD COLUMN IF NOT EXISTS "pricetiers" text`);
+      // §per-rate-type nationality scope (2026-07-18): both | thai | fr — filters price columns, contract, and booking pax fields. NULL/absent → 'both' on the client.
+      await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_rate_types" ADD COLUMN IF NOT EXISTS "nationalityscope" text`);
       // §sales targets (2026-07-14): the Sales Board leaderboard races each salesperson toward a monthly pax
       // target. Targets vary month to month (high season vs low), so it's a {"YYYY-MM": pax} map, stored as one
       // json_text column on the salesperson — no new table, and next month's number needs no migration.
