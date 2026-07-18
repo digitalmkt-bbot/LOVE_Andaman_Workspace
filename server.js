@@ -135,7 +135,7 @@ function b2cLineSeat(item) {
              + (Number(item.pax_child)  || 0) * (Number(up.child)  || 0)
              + (Number(item.pax_infant) || 0) * (Number(up.infant) || 0)
              + (Number(item.pax_foc)    || 0) * (Number(up.foc)    || 0);
-  return seat || Number(item.subtotal) || 0;
+  return Math.round(seat || Number(item.subtotal) || 0);
 }
 
 // One allotment booking PER B2C booking_item — items sit at booking level, not nested as trips.
@@ -163,6 +163,7 @@ function mapB2CItemBooking(item, isFirstLine) {
     },
     seatSource: { locked: 0, general: 0 },
     lockDrawSel: {},
+    subtotal: seat,
   };
   return {
     id: 'b2c_' + h.booking_id + '_' + h.line_no,
@@ -182,6 +183,7 @@ function mapB2CItemBooking(item, isFirstLine) {
     passengers: [],
     addOns: [],
     adjustments: [],
+    total: seat,
     priceBreakdown: {
       seat: seat,
       addOn: 0,
