@@ -2113,6 +2113,10 @@
       {
         "name": "pricetiers",
         "type": "text"
+      },
+      {
+        "name": "nationalityscope",
+        "type": "text"
       }
     ],
     "primary_key": "id",

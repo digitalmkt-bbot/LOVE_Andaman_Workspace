@@ -2293,6 +2293,11 @@
       "kind": "json_text",
       "db_type": "text",
       "note": "3-tier contract pricing · {route:{zone:{paxType:{sell,minSell}}}} · seatRates stays the NET tier that booking bills from"
+    },
+    "nationalityscope": {
+      "source": "nationalityScope",
+      "kind": "scalar",
+      "db_type": "text"
     }
   },
   "sb_rate_types__routes": {
