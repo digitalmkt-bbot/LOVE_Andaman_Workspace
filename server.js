@@ -5,9 +5,9 @@ const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
 
-let Pool = null;
+let Pool = null, PgClient = null;
 try {
-  const pg = require('pg'); Pool = pg.Pool;
+  const pg = require('pg'); Pool = pg.Pool; PgClient = pg.Client;
   pg.types.setTypeParser(20, v => v == null ? null : Number(v));   // int8 -> Number (default is string → the app string-concatenates caps/pax)
 } catch(e){ console.warn('[db] pg not installed'); }
 
@@ -87,6 +87,333 @@ async function relLoad() {                                           // operatio
   OS_TABLES.forEach((t, i) => { data[t] = results[i].rows; });
   return osRepo.assembleBlob(data);
 }
+
+// ── B2C external database sync ──────────────────────────────────────────────────────────────────
+// Called on every login (relational mode only). Upserts B2C bookings into operation_schemas so
+// they appear as native bookings in allotment (editable, boat/van assignable). Ops columns (boat,
+// van, pickup) are always preserved on conflict — only B2C-owned fields are overwritten.
+//
+// Fill in null entries when the allotment route for each B2C product is decided:
+const B2C_ROUTE_MAP = {
+  // Day trip programs (matched via product_id)
+  'POW-001': 'r5',   // Day Trip - Similan Island → Similan Islands by Speedboat
+  'POW-002': 'r6',   // Day Trip - Surin Island → Surin Islands by Speedboat
+  'POW-003': 'r10',  // Day Trip - Phi Phi Island → Phi Phi Bamboo by Speedboat
+  'POW-004': 'r12',  // Day Trip - Phi Phi - Maiton → Whale Shark Phi Phi Maiton Sunset
+  // Private routes (matched via route_id on private_own items)
+  'PR-001':  'r5',   // Private Similan → Similan Islands by Speedboat
+  'PR-002':  'r6',   // Private Surin → Surin Islands by Speedboat
+  'PR-003':  'r10',  // Private Phi Phi + Bamboo → Phi Phi Bamboo by Speedboat
+  'PR-004':  'r12',  // Private Phi Phi + Maiton → Whale Shark Phi Phi Maiton Sunset
+};
+const B2C_PRODUCT_NAME = {
+  'POW-001': 'Day Trip - Similan Island',
+  'POW-002': 'Day Trip - Surin Island',
+  'POW-003': 'Day Trip - Phi Phi Island',
+  'POW-004': 'Day Trip - Phi Phi - Maiton',
+  'PR-001':  'Private - Similan Island',
+  'PR-002':  'Private - Surin Islands',
+  'PR-003':  'Private - Phi Phi + Bamboo Islands',
+  'PR-004':  'Private - Phi Phi + Maiton (Sunset)',
+};
+const B2C_OPS_BK   = new Set(['ops_boatid','ops_vangroup','ops_vanseq','ops_vanreturnid','ops_vanid','ops_returnsamevan','ops_pickuptimefinal','ops_reconfirm','ops_vansplits']);
+const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_returnsamevan','ops_vangroup','ops_vanseq','ops_pickuptimefinal','ops_vansplits','ops_reconfirm']);
+
+function mapB2CStatus(s) {
+  if (s === 'cancelled') return 'cancelled';
+  if (s === 'pending')   return 'pending_approval';
+  return 'confirmed';
+}
+
+// Line-item seat price = Σ(pax_<cat> × details.unitPrices.<cat>) over adult/child/infant/foc.
+// details is jsonb (parsed by pg); falls back to the stored subtotal column if rates are missing.
+function b2cLineSeat(item) {
+  let det = item.details;
+  if (typeof det === 'string') { try { det = JSON.parse(det); } catch (_) { det = null; } }
+  const up = (det && det.unitPrices) || {};
+  const seat = (Number(item.pax_adult)  || 0) * (Number(up.adult)  || 0)
+             + (Number(item.pax_child)  || 0) * (Number(up.child)  || 0)
+             + (Number(item.pax_infant) || 0) * (Number(up.infant) || 0)
+             + (Number(item.pax_foc)    || 0) * (Number(up.foc)    || 0);
+  return Math.round(seat || Number(item.subtotal) || 0);
+}
+
+// One allotment booking PER B2C booking_item — items sit at booking level, not nested as trips.
+// id = b2c_<booking_id>_<line_no>; voucher = the B2C booking_id verbatim (no added prefix —
+// new B2C ids already carry their own LOV- prefix); each carries a single trip.
+// isFirstLine: order-level payment (deposit/balance) attaches only to the first line of the order,
+// so a multi-item order's payment isn't multiplied across its item-bookings.
+function mapB2CItemBooking(item, isFirstLine) {
+  const h = item;
+  // pg returns date columns as JS Date objects — String(d).slice(0,10) gives "Sat Jul 18",
+  // not YYYY-MM-DD, which the frontend cannot parse. Format in local time explicitly.
+  const td = d => {
+    if (!d) return null;
+    if (d instanceof Date) {
+      const p = n => String(n).padStart(2, '0');
+      return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+    }
+    const s = String(d).slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+  };
+  // Item-level travel_date first; order-level (bookings.travel_date) as fallback — the B2C
+  // checkout sometimes stores the trip date only on the order header.
+  const date = td(h.travel_date) || td(h.bk_travel_date) || null;
+  const seat = b2cLineSeat(h);
+  // pax_adult = total adults; pax_thai/pax_foreign = nationality split (may be 0/0 when unknown).
+  // Never use pax_foreign||pax_adult — a Thai-only booking (fr=0, th=5, ad=5) double-counts to 10.
+  const adTh = Number(h.pax_thai) || 0;
+  const adFrRaw = Number(h.pax_foreign) || 0;
+  const adFr = adFrRaw > 0 ? adFrRaw : Math.max(0, (Number(h.pax_adult) || 0) - adTh);
+  // Lead name: the booking's own passenger/booker name beats the CRM customers row — the B2C
+  // backend dedupes customers by email, so customers.name can be a stale earlier customer.
+  let leadFromPax = '';
+  try {
+    let ps = h.bk_passengers;
+    if (typeof ps === 'string') ps = JSON.parse(ps);
+    if (Array.isArray(ps) && ps[0] && ps[0].name) leadFromPax = String(ps[0].name).trim();
+  } catch (_) {}
+  // private_own = whole-boat charter; day_trip = shared seat. B2C is the source of truth for product
+  // type, so derive the mode here — a charter must NOT consume the day-trip seat pool
+  // (getSeatsConsumed / baCharterBoatIds exclude bookingMode==='charter'). Detect from BOTH signals:
+  // the item type AND a PR-xxx product/route id (private items carry PR-*; day trips carry POW-*/r*),
+  // so a private booking is caught however B2C tags it.
+  const isPrivateId = id => /^PR-/i.test(String(id || ''));
+  const isCharter = h.type === 'private_own' || isPrivateId(h.product_id) || isPrivateId(h.route_id);
+  const trip = {
+    id: 'b2c_' + h.booking_id + '_' + h.line_no + '_t0',
+    routeId: B2C_ROUTE_MAP[h.product_id] || B2C_ROUTE_MAP[h.route_id] || null,
+    date: date,
+    bookingMode: isCharter ? 'charter' : 'seat',
+    pax: {
+      ad_fr: adFr,
+      ad_th: adTh,
+      chd_fr: Number(h.pax_child) || 0,
+      chd_th: 0,
+      inf_fr: Number(h.pax_infant) || 0,
+      inf_th: 0,
+      foc: Number(h.pax_foc) || 0,
+    },
+    seatSource: { locked: 0, general: 0 },
+    lockDrawSel: {},
+    subtotal: seat,
+  };
+  // Charter: keep the B2C-paid amount as a manual charter price so it isn't recomputed from the
+  // rate card once ops assigns a boat. charterBoatId stays null — ops picks the boat in-app.
+  if (isCharter) {
+    trip.charterBoatId = null;
+    trip.charterPriceMode = 'manual';
+    trip.charterPriceManual = seat;
+  }
+  return {
+    id: 'b2c_' + h.booking_id + '_' + h.line_no,
+    schemaVer: 2,
+    createdAt: h.bk_created_at ? new Date(h.bk_created_at).toISOString() : new Date().toISOString(),
+    createdBy: 'b2c_sync',
+    voucherRef: String(h.booking_id),
+    agentId: 'a_b2c',
+    leadPax: leadFromPax || h.customer_name || h.booked_by_name || '',
+    leadNationality: '',
+    leadPhone: h.customer_phone || '',
+    leadEmail: h.booked_by_email || '',
+    status: mapB2CStatus(h.bk_status),
+    bookingDate: date,
+    note: ['B2C', h.channel_name, String(h.booking_id), B2C_PRODUCT_NAME[h.product_id] || B2C_PRODUCT_NAME[h.route_id] || h.product_id].filter(Boolean).join(' · '),
+    trips: [trip],
+    passengers: [],
+    addOns: [],
+    adjustments: [],
+    total: seat,
+    priceBreakdown: {
+      seat: seat,
+      addOn: 0,
+      focDiscount: 0,
+      discount: 0,
+      extra: 0,
+      total: seat,
+    },
+    paymentSnapshot: {
+      deposit: isFirstLine ? (Number(h.bk_deposit) || 0) : 0,
+      balance: isFirstLine ? (Number(h.bk_balance) || 0) : 0,
+      method: h.payment_method_id || '',
+    },
+    ops: {},
+    history: [],
+  };
+}
+
+// booking_items JOIN query — drives everything from items, bookings table is optional enrichment only
+const B2C_ITEM_JOIN = `
+  SELECT bi.*,
+         b.status        AS bk_status,
+         b.travel_date   AS bk_travel_date,
+         b.passengers    AS bk_passengers,
+         b.booked_by_name, b.booked_by_email,
+         b.subtotal      AS bk_subtotal,
+         b.discount_amount AS bk_discount,
+         b.surcharge_amount AS bk_surcharge,
+         b.total         AS bk_total,
+         b.deposit       AS bk_deposit,
+         b.balance       AS bk_balance,
+         b.payment_method_id,
+         b.created_at    AS bk_created_at,
+         ch.name         AS channel_name,
+         c.name          AS customer_name,
+         c.phone         AS customer_phone
+  FROM booking_items bi
+  LEFT JOIN bookings b       ON b.id  = bi.booking_id
+  LEFT JOIN b2c_channels ch  ON ch.id = b.channel_id
+  LEFT JOIN customers c      ON c.id  = b.customer_id
+  WHERE bi.type IN ('day_trip','private_own')`;
+
+async function relSyncB2C(singleExtId = null) {
+  if (!b2cPool || !pool || DATA_BACKEND !== 'relational') return;
+  try {
+    let itemRows;
+    if (singleExtId) {
+      ({ rows: itemRows } = await b2cPool.query(
+        B2C_ITEM_JOIN + ` AND bi.booking_id = $1 ORDER BY bi.line_no`, [singleExtId]
+      ));
+      if (!itemRows.length) {
+        const r = await pool.query(
+          `UPDATE ${fqt('sb_bookings')} SET status='cancelled'
+           WHERE id ~ ('^b2c_' || $1::text || '(_[0-9]+)?$') AND status NOT IN ('cancelled','cancelled_weather','rejected')`,
+          [String(singleExtId)]
+        );
+        console.log(`[b2c-sync] booking ${singleExtId} removed in B2C — ${r.rowCount} line(s) marked cancelled`);
+        return;
+      }
+    } else {
+      ({ rows: itemRows } = await b2cPool.query(
+        B2C_ITEM_JOIN + ` ORDER BY bi.booking_id, bi.line_no LIMIT 2000`
+      ));
+      if (!itemRows.length) return;
+    }
+
+    // Flatten: one allotment booking per line item. Group only to flag the first line of each
+    // B2C order (order-level payment attaches to that line — see mapB2CItemBooking).
+    const byId = {};
+    for (const item of itemRows) { (byId[item.booking_id] = byId[item.booking_id] || []).push(item); }
+    const b2cBks = [];
+    for (const items of Object.values(byId)) {
+      items.sort((a, b) => Number(a.line_no) - Number(b.line_no));
+      items.forEach((it, i) => b2cBks.push(mapB2CItemBooking(it, i === 0)));
+    }
+    const tables  = osRepo.decomposeBlob({ sb_bookings: b2cBks });
+    const b2cIds  = b2cBks.map(b => b.id);
+
+    const BK_COLS   = OS_COLS['sb_bookings'];
+    const TRIP_COLS = OS_COLS['sb_bookings__trips'];
+    const PAX_COLS  = OS_COLS['sb_bookings__passengers'];
+    const ADN_COLS  = OS_COLS['sb_bookings__addons'];
+    const BK_UPDATE = BK_COLS.filter(c => c !== 'id' && c !== 'createdat' && c !== 'createdby' && !B2C_OPS_BK.has(c));
+
+    const bkColSql  = BK_COLS.map(qic).join(', ');
+    const bkPh      = BK_COLS.map((_, i) => '$' + (i + 1)).join(', ');
+    const bkSet     = BK_UPDATE.map(c => `${qic(c)} = EXCLUDED.${qic(c)}`).join(', ');
+    const tripColSql = TRIP_COLS.map(qic).join(', ');
+    const tripPh    = TRIP_COLS.map((_, i) => '$' + (i + 1)).join(', ');
+    const paxColSql = PAX_COLS.map(qic).join(', ');
+    const paxPh     = PAX_COLS.map((_, i) => '$' + (i + 1)).join(', ');
+    const adnColSql = ADN_COLS.map(qic).join(', ');
+    const adnPh     = ADN_COLS.map((_, i) => '$' + (i + 1)).join(', ');
+
+    const client = await pool.connect();
+    let _phase = 'begin';
+    try {
+      await client.query('BEGIN');
+
+      // 1. Upsert main booking rows — ops columns preserved on conflict
+      _phase = 'upsert sb_bookings';
+      for (const row of tables['sb_bookings'] || []) {
+        await client.query(
+          `INSERT INTO ${fqt('sb_bookings')} (${bkColSql}) VALUES (${bkPh})
+           ON CONFLICT (id) DO UPDATE SET ${bkSet}`,
+          BK_COLS.map(c => row[c] === undefined ? null : row[c])
+        );
+      }
+
+      // 2. Refresh trips: save per-trip ops → delete → re-insert → restore ops by idx
+      _phase = 'save existing trip ops';
+      const { rows: existingTrips } = await client.query(
+        `SELECT sb_bookings_id, idx, ops_boatid, ops_vanid, ops_vanreturnid, ops_returnsamevan,
+                ops_vangroup, ops_vanseq, ops_pickuptimefinal, ops_vansplits, ops_reconfirm
+         FROM ${fqt('sb_bookings__trips')} WHERE sb_bookings_id = ANY($1)`, [b2cIds]
+      );
+      const savedTripOps = {};
+      for (const r of existingTrips) {
+        (savedTripOps[r.sb_bookings_id] = savedTripOps[r.sb_bookings_id] || {})[r.idx] = r;
+      }
+      _phase = 'delete+re-insert trips';
+      await client.query(`DELETE FROM ${fqt('sb_bookings__trips')} WHERE sb_bookings_id = ANY($1)`, [b2cIds]);
+      for (const row of tables['sb_bookings__trips'] || []) {
+        await client.query(
+          `INSERT INTO ${fqt('sb_bookings__trips')} (${tripColSql}) VALUES (${tripPh})`,
+          TRIP_COLS.map(c => row[c] === undefined ? null : row[c])
+        );
+      }
+      _phase = 'restore trip ops';
+      for (const [bkId, byIdx] of Object.entries(savedTripOps)) {
+        for (const [idx, ops] of Object.entries(byIdx)) {
+          if (ops.ops_boatid == null && ops.ops_vanid == null) continue;
+          await client.query(
+            `UPDATE ${fqt('sb_bookings__trips')} SET
+               ops_boatid=$1, ops_vanid=$2, ops_vanreturnid=$3, ops_returnsamevan=$4,
+               ops_vangroup=$5, ops_vanseq=$6, ops_pickuptimefinal=$7, ops_vansplits=$8, ops_reconfirm=$9
+             WHERE sb_bookings_id=$10 AND idx=$11`,
+            [ops.ops_boatid, ops.ops_vanid, ops.ops_vanreturnid, ops.ops_returnsamevan,
+             ops.ops_vangroup, ops.ops_vanseq, ops.ops_pickuptimefinal, ops.ops_vansplits, ops.ops_reconfirm,
+             bkId, Number(idx)]
+          );
+        }
+      }
+
+      // 3. Refresh passengers + addons (B2C is source of truth for these)
+      _phase = 'refresh passengers';
+      await client.query(`DELETE FROM ${fqt('sb_bookings__passengers')} WHERE sb_bookings_id = ANY($1)`, [b2cIds]);
+      for (const row of tables['sb_bookings__passengers'] || []) {
+        await client.query(
+          `INSERT INTO ${fqt('sb_bookings__passengers')} (${paxColSql}) VALUES (${paxPh})`,
+          PAX_COLS.map(c => row[c] === undefined ? null : row[c])
+        );
+      }
+      _phase = 'refresh addons';
+      await client.query(`DELETE FROM ${fqt('sb_bookings__addons')} WHERE sb_bookings_id = ANY($1)`, [b2cIds]);
+      for (const row of tables['sb_bookings__addons'] || []) {
+        await client.query(
+          `INSERT INTO ${fqt('sb_bookings__addons')} (${adnColSql}) VALUES (${adnPh})`,
+          ADN_COLS.map(c => row[c] === undefined ? null : row[c])
+        );
+      }
+      // 4. Cancel line-bookings whose line disappeared from a synced order (per-item cancellation).
+      //    Scoped to the B2C order_ids present in this run; keeps lines we just upserted (b2cIds).
+      _phase = 'cancel removed lines';
+      const presentOrderIds = [...new Set(itemRows.map(i => String(i.booking_id)))];
+      await client.query(
+        `UPDATE ${fqt('sb_bookings')} SET status='cancelled'
+         WHERE id ~ '^b2c_[0-9]+(_[0-9]+)?$'
+           AND split_part(id, '_', 2) = ANY($1)
+           AND id <> ALL($2)
+           AND status NOT IN ('cancelled','cancelled_weather','rejected')`,
+        [presentOrderIds, b2cIds]
+      );
+
+      // NOTE: history, upgrades, feeitems, partialcancels, adjustments, over are allotment-owned — never touched here.
+
+      await client.query('COMMIT');
+      const label = singleExtId ? `b2c_${singleExtId}` : `${b2cBks.length} bookings`;
+      console.log(`[b2c-sync] synced ${label}`);
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw Object.assign(e, { _phase });
+    } finally {
+      client.release();
+    }
+  } catch (e) {
+    console.error(`[b2c-sync] failed at "${e._phase || 'fetch'}" — ${e.message}`);
+    // Non-fatal: relLoad proceeds even if sync fails
+  }
+}
 // read-modify-write the whole schema in ONE transaction, serialized by an advisory lock (no lost saves).
 // ponytail: full DELETE+INSERT of all tables per save; fine at this data size, switch to targeted upserts if slow.
 async function relApplyAndSave(payload, username, base) {
@@ -137,94 +464,110 @@ if (Pool && DB_URL) {
 } else {
   console.warn('[db] no DATABASE_URL — login & sync disabled');
 }
+const B2C_DB_URL = process.env.B2C_DB_URL || '';
+let b2cPool = null;
+if (Pool && B2C_DB_URL) {
+  b2cPool = new Pool({ connectionString: B2C_DB_URL, ssl: /railway|rlwy/.test(B2C_DB_URL) ? { rejectUnauthorized: false } : false, max: 3 });
+  b2cPool.on('error', e => console.error('[b2c] idle client error:', e.message));
+  console.log('[b2c] pool ready');
+}
+
+// LISTEN/NOTIFY listener — receives instant push from B2C DB when a booking changes.
+// Uses a dedicated persistent pg.Client (not the pool) as required by LISTEN.
+// Auto-reconnects on disconnect (Railway restarts, network blips).
+function startB2CListener() {
+  if (!PgClient || !B2C_DB_URL) return;
+  const ssl = /railway|rlwy/.test(B2C_DB_URL) ? { rejectUnauthorized: false } : false;
+  function connect() {
+    const client = new PgClient({ connectionString: B2C_DB_URL, ssl });
+    client.connect()
+      .then(() => client.query('LISTEN booking_changed'))
+      .then(() => {
+        console.log('[b2c-listen] listening for booking_changed');
+        client.on('notification', async (msg) => {
+          const extId = msg.payload;
+          console.log('[b2c-listen] booking changed:', extId);
+          try {
+            await relSyncB2C(extId);
+            // Bump version so all logged-in clients refresh via SSE
+            const vr = await pool.query('SELECT version FROM app_state WHERE id=$1', [STATE_KEY]);
+            const nv = (vr.rows[0] ? vr.rows[0].version : 0) + 1;
+            await pool.query(
+              'INSERT INTO app_state(id,data,version,updated_by,updated_at) VALUES($1,NULL,$2,$3,now()) ON CONFLICT(id) DO UPDATE SET version=$2, updated_by=$3, updated_at=now()',
+              [STATE_KEY, nv, 'B2C']
+            );
+            sseBroadcast({ version: nv, updated_by: 'B2C', source: 'b2c' });
+          } catch(e) { console.error('[b2c-listen] sync error:', e.message); }
+        });
+        client.on('error', e => { console.error('[b2c-listen] error:', e.message); client.end().catch(()=>{}); });
+        client.on('end', () => { console.warn('[b2c-listen] disconnected — reconnecting in 5s'); setTimeout(connect, 5000); });
+      })
+      .catch(e => { console.error('[b2c-listen] connect failed:', e.message); setTimeout(connect, 5000); });
+  }
+  connect();
+}
 async function initDb(){
+  let _step = 'start';
+  const sq = async (label, q, ...args) => { _step = label; await pool.query(q, ...args); };
   try{
-    await pool.query(`CREATE TABLE IF NOT EXISTS ${USERS_T} (id SERIAL PRIMARY KEY, username TEXT UNIQUE NOT NULL, pass_hash TEXT NOT NULL, name TEXT, role TEXT DEFAULT 'staff', created_at TIMESTAMPTZ DEFAULT now())`);
-    await pool.query("CREATE TABLE IF NOT EXISTS app_state (id TEXT PRIMARY KEY, data TEXT, version INT DEFAULT 0, updated_by TEXT, updated_at TIMESTAMPTZ DEFAULT now())");
-    await pool.query("ALTER TABLE app_state ADD COLUMN IF NOT EXISTS version INT DEFAULT 0");
-    await pool.query("ALTER TABLE app_state ADD COLUMN IF NOT EXISTS updated_by TEXT");
-    await pool.query(`ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS perms TEXT`);   // per-user area access (JSON array · null = all)
-    await pool.query(`ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS can_edit BOOLEAN DEFAULT true`);   // legacy global edit flag (fallback)
-    await pool.query(`ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS edit_areas TEXT`);   // per-section edit · JSON array of area keys · null = edit all (uses can_edit)
-    await pool.query(`ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS dept TEXT`);   // department key (UI grouping) · null = auto-guess from username
-    // §user→sales (2026-07-14): sales staff should see only their own agents. Permissions so far gate WHICH
-    // PAGE a user sees; this scopes WHICH ROWS. The identity lives on the user record (next to role/perms),
-    // so the client can match agent.sales === my sales id. null = not a scoped salesperson (admins, ops, etc.
-    // see everything). Assigned in the admin user modal, same place role and department are set.
-    await pool.query(`ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS sales_id TEXT`);
+    if(DATA_BACKEND === 'relational') await sq('create schema', `CREATE SCHEMA IF NOT EXISTS ${OS_SCHEMA}`);
+    await sq('create users table', `CREATE TABLE IF NOT EXISTS ${USERS_T} (id SERIAL PRIMARY KEY, username TEXT UNIQUE NOT NULL, pass_hash TEXT NOT NULL, name TEXT, role TEXT DEFAULT 'staff', created_at TIMESTAMPTZ DEFAULT now())`);
+    await sq('create app_state', "CREATE TABLE IF NOT EXISTS app_state (id TEXT PRIMARY KEY, data TEXT, version INT DEFAULT 0, updated_by TEXT, updated_at TIMESTAMPTZ DEFAULT now())");
+    await sq('app_state.version col', "ALTER TABLE app_state ADD COLUMN IF NOT EXISTS version INT DEFAULT 0");
+    await sq('app_state.updated_by col', "ALTER TABLE app_state ADD COLUMN IF NOT EXISTS updated_by TEXT");
+    await sq('users.perms col', `ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS perms TEXT`);
+    await sq('users.can_edit col', `ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS can_edit BOOLEAN DEFAULT true`);
+    await sq('users.edit_areas col', `ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS edit_areas TEXT`);
+    await sq('users.dept col', `ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS dept TEXT`);
+    await sq('users.sales_id col', `ALTER TABLE ${USERS_T} ADD COLUMN IF NOT EXISTS sales_id TEXT`);
     // §sort (2026-07-11): top-level lists had NO ordering column — os_repo only preserves order for CHILD
     // tables (via idx), so a drag-reorder of the markets / routes list never survived a reload. `sort` is a
     // plain scalar in the mapping, so decompose/assemble carry it with zero changes to os_repo, and the
     // client diff sees it as an ordinary changed field (→ patch ops). Additive: existing rows get NULL.
     if(DATA_BACKEND === 'relational'){
-      await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_markets" ADD COLUMN IF NOT EXISTS "sort" bigint`);
-      await pool.query(`ALTER TABLE ${OS_SCHEMA}."routes"     ADD COLUMN IF NOT EXISTS "sort" bigint`);
-      // §taxId (2026-07-11): the app reads companyInfo.taxId ("Tax No." on contracts/invoices) but the table
-      // had no column for it, so every value was silently dropped on save. Additive: existing rows get NULL.
-      await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_agents" ADD COLUMN IF NOT EXISTS "companyinfo_taxid" text`);
-      // §per-trip ops (2026-07-12): boat/van assignment lived ONLY on the booking (ops_*), so a booking with
-      // two travel days (an overnight, or a B2C order with two programmes) could hold exactly one boat and one
-      // van — day 2 silently inherited day 1's. Ops now also live on the trip row. Day 1 keeps using the
-      // booking-level block (1,058 of 1,059 bookings are single-day and are completely untouched).
+      await sq('sb_markets.sort col', `ALTER TABLE ${OS_SCHEMA}."sb_markets" ADD COLUMN IF NOT EXISTS "sort" bigint`);
+      await sq('routes.sort col',     `ALTER TABLE ${OS_SCHEMA}."routes"     ADD COLUMN IF NOT EXISTS "sort" bigint`);
+      await sq('sb_agents.companyinfo_taxid col', `ALTER TABLE ${OS_SCHEMA}."sb_agents" ADD COLUMN IF NOT EXISTS "companyinfo_taxid" text`);
       const _tripOps = [['ops_boatid','text'],['ops_vanid','text'],['ops_vanreturnid','text'],
                         ['ops_returnsamevan','boolean'],['ops_vangroup','bigint'],['ops_vanseq','bigint'],
                         ['ops_pickuptimefinal','text'],['ops_vansplits','text'],['ops_reconfirm','text']];
       for(const [c,t] of _tripOps){
-        await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_bookings__trips" ADD COLUMN IF NOT EXISTS "${c}" ${t}`);
+        await sq(`sb_bookings__trips.${c} col`, `ALTER TABLE ${OS_SCHEMA}."sb_bookings__trips" ADD COLUMN IF NOT EXISTS "${c}" ${t}`);
       }
-      // §3-tier contract pricing (2026-07-14): agent contracts quote three numbers per seat — Selling (what
-      // the agent should charge the guest), Min. Selling (the floor they may not go under) and Net (what they
-      // pay us). Only Net exists in the app: seatRates, and it is the number every booking, invoice and report
-      // bills from. sb_rate_types__seatrates is a FLAT table — one column per zone×paxType — so adding two
-      // more tiers there means 24 more columns and a rewrite of the decompose path that prices live bookings.
-      // Not worth it for two numbers that are only ever printed on a contract. The extra tiers ride in one
-      // json_text column instead: {route:{zone:{paxType:{sell,minSell}}}}. seatRates is untouched, the billing
-      // path is untouched, and a rate type with no priceTiers simply prints "—" in those columns.
-      await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_rate_types" ADD COLUMN IF NOT EXISTS "pricetiers" text`);
-      // §per-rate-type nationality scope (2026-07-18): both | thai | fr — filters price columns, contract, and booking pax fields. NULL/absent → 'both' on the client.
-      await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_rate_types" ADD COLUMN IF NOT EXISTS "nationalityscope" text`);
-      // §sales targets (2026-07-14): the Sales Board leaderboard races each salesperson toward a monthly pax
-      // target. Targets vary month to month (high season vs low), so it's a {"YYYY-MM": pax} map, stored as one
-      // json_text column on the salesperson — no new table, and next month's number needs no migration.
-      await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_sales" ADD COLUMN IF NOT EXISTS "targets" text`);
-      // §sales follow-up (2026-07-14): on the per-salesperson board, staff tick agents they've already
-      // actioned (called the one that dropped, etc). Stored per salesperson as {"YYYY-MM::agentId": true} so
-      // it syncs across their devices and the daily re-login, and a manager sees what's been handled.
-      await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_sales" ADD COLUMN IF NOT EXISTS "followup" text`);
-      // §contract templates (2026-07-14): every word of the agent contract — the cancellation clause, the
-      // health restrictions, the governing-law paragraph — was a string literal in CT_DOC_I18N. Changing a
-      // comma meant a code edit and a deploy. Templates move that text into the database so sales can edit it.
-      //
-      // Same shape as agent_artifacts: a map {templateId -> template}, one row per key, the whole template
-      // object as JSON in `value`. Deliberate — a template will grow fields (new clauses, new sections) and
-      // this way none of them need a migration. os_repo already knows the pk/map_key/map_value_json trio.
-      //
-      // The table has to exist before os_repo can write to it, and operation_schemas_structure.sql only runs
-      // on a fresh install, so create it here too. Idempotent.
-      await pool.query(`CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."contract_templates" (id text PRIMARY KEY, key text, value text)`);
-      // Which template an agent's contract is generated from. Empty = whichever template is marked default.
-      await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_agents" ADD COLUMN IF NOT EXISTS "contracttemplateid" text`);
-      // §vehicle identity colour (2026-07-12): the van-job list coloured rows by POSITION (PAL[i%6]), so a
-      // van's colour changed from day to day. The colour now belongs to the vehicle and is printed on the
-      // job-sheet header, so a driver recognises his own sheet at a glance. Additive: existing rows get NULL
-      // and fall back to a stable hash-of-id colour on the client.
-      await pool.query(`ALTER TABLE ${OS_SCHEMA}."sb_vehicles" ADD COLUMN IF NOT EXISTS "color" text`);
-      // §boat identity colour (2026-07-18): editable per-boat colour set on Boat Asset, flows to every
-      // getBoatColor consumer (Boat Status, By-trip, n8n canvas, van/re-confirm). Additive: existing rows
-      // NULL and fall back to the baked BOAT_COLORS on the client.
-      await pool.query(`ALTER TABLE ${OS_SCHEMA}."boats" ADD COLUMN IF NOT EXISTS "color" text`);
+      await sq('sb_rate_types.pricetiers col', `ALTER TABLE ${OS_SCHEMA}."sb_rate_types" ADD COLUMN IF NOT EXISTS "pricetiers" text`);
+      // §per-rate-type nationality scope (2026-07-18, from lk-inbox): both | thai | fr — filters price columns, contract, and booking pax fields. NULL/absent → 'both' on the client.
+      await sq('sb_rate_types.nationalityscope col', `ALTER TABLE ${OS_SCHEMA}."sb_rate_types" ADD COLUMN IF NOT EXISTS "nationalityscope" text`);
+      await sq('sb_sales.targets col', `ALTER TABLE ${OS_SCHEMA}."sb_sales" ADD COLUMN IF NOT EXISTS "targets" text`);
+      await sq('sb_sales.followup col', `ALTER TABLE ${OS_SCHEMA}."sb_sales" ADD COLUMN IF NOT EXISTS "followup" text`);
+      await sq('contract_templates table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."contract_templates" (id text PRIMARY KEY, key text, value text)`);
+      await sq('sb_agents.contracttemplateid col', `ALTER TABLE ${OS_SCHEMA}."sb_agents" ADD COLUMN IF NOT EXISTS "contracttemplateid" text`);
+      await sq('sb_vehicles.color col', `ALTER TABLE ${OS_SCHEMA}."sb_vehicles" ADD COLUMN IF NOT EXISTS "color" text`);
+      await sq('boats.color col', `ALTER TABLE ${OS_SCHEMA}."boats" ADD COLUMN IF NOT EXISTS "color" text`);
+      await sq('sb_bookings pkey', `
+        DO $do$ BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint
+            WHERE conrelid = '${OS_SCHEMA}.sb_bookings'::regclass AND contype IN ('p','u')
+              AND array_length(conkey,1) = 1
+              AND conkey[1] = (SELECT attnum FROM pg_attribute
+                               WHERE attrelid='${OS_SCHEMA}.sb_bookings'::regclass AND attname='id')
+          ) THEN
+            ALTER TABLE ${OS_SCHEMA}."sb_bookings" ADD CONSTRAINT sb_bookings_pkey PRIMARY KEY (id);
+          END IF;
+        END $do$
+      `);
     }
-    // document attachments · files stored server-side (bytea) · booking keeps only a ref in the app blob
-    await pool.query("CREATE TABLE IF NOT EXISTS attachments (id TEXT PRIMARY KEY, booking_id TEXT, filename TEXT, mime TEXT, size INT, data BYTEA, uploaded_by TEXT, created_at TIMESTAMPTZ DEFAULT now())");
-    await pool.query("CREATE INDEX IF NOT EXISTS idx_attach_booking ON attachments(booking_id)");
-    // seed first admin from env if there are no users yet
+    await sq('create attachments table', "CREATE TABLE IF NOT EXISTS attachments (id TEXT PRIMARY KEY, booking_id TEXT, filename TEXT, mime TEXT, size INT, data BYTEA, uploaded_by TEXT, created_at TIMESTAMPTZ DEFAULT now())");
+    await sq('attachments index', "CREATE INDEX IF NOT EXISTS idx_attach_booking ON attachments(booking_id)");
+    _step = 'seed admin';
     const c = await pool.query(`SELECT count(*)::int n FROM ${USERS_T}`);
     if (c.rows[0].n === 0 && ADMIN_USER && ADMIN_PASS) {
       await pool.query(`INSERT INTO ${USERS_T}(username,pass_hash,name,role) VALUES($1,$2,$3,$4)`, [ADMIN_USER, hashPw(ADMIN_PASS), 'Admin', 'admin']);
       console.log('[db] seeded admin user:', ADMIN_USER);
     }
     dbReady = true; console.log('[db] ready');
-  }catch(e){ console.error('[db] init failed:', e.message); }
+    startB2CListener();
+  }catch(e){ console.error(`[db] init failed at step "${_step}": ${e.message}`); }
 }
 
 // dept: short free-text department key used only for UI grouping · null = auto-guess from username
@@ -268,19 +611,19 @@ const MIME = { '.html':'text/html; charset=utf-8','.js':'text/javascript; charse
 const GZIP_EXT = new Set(['.html','.js','.css','.json','.svg','.csv','.txt']);
 const _gzCache = new Map();   // fp -> { etag, buf }
 function readBody(req, cb){ let ch=[], n=0; req.on('data',c=>{ n+=c.length; if(n>20*1024*1024){req.destroy();return;} ch.push(c); }); req.on('end',()=>cb(Buffer.concat(ch).toString('utf8'))); }
-function J(res, code, obj, extra){ const h=Object.assign({'Content-Type':'application/json; charset=utf-8'}, extra||{}); res.writeHead(code,h); res.end(JSON.stringify(obj)); }
+function J(res, code, obj, extra){ const h=Object.assign({'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}, extra||{}); res.writeHead(code,h); res.end(JSON.stringify(obj)); }
 // gzip variant for large payloads (/api/load) — falls back to plain when the client doesn't accept gzip
 function JZ(req, res, code, obj){
   const body = JSON.stringify(obj);
   if (body.length > 50*1024 && /\bgzip\b/.test(req.headers['accept-encoding']||'')){
     const zlib = require('zlib');
     return zlib.gzip(body, (err, buf)=>{
-      if (err){ res.writeHead(code,{'Content-Type':'application/json; charset=utf-8'}); return res.end(body); }
-      res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Content-Encoding':'gzip'});
+      if (err){ res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}); return res.end(body); }
+      res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Content-Encoding':'gzip','Cache-Control':'no-store'});
       res.end(buf);
     });
   }
-  res.writeHead(code,{'Content-Type':'application/json; charset=utf-8'});
+  res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
   res.end(body);
 }
 // ── Server-Sent Events · push "data changed" to all open clients instantly (real-time) ──
@@ -468,7 +811,8 @@ const server = http.createServer((req, res) => {
     const s=session(req); if(!s) return J(res,401,{error:'login required'});
     if(!pool) return J(res,503,{error:'no database'});
     if(DATA_BACKEND==='relational'){
-      Promise.all([relLoad(), pool.query('SELECT version,updated_by,updated_at FROM app_state WHERE id=$1',[STATE_KEY])])
+      relSyncB2C()
+        .then(() => Promise.all([relLoad(), pool.query('SELECT version,updated_by,updated_at FROM app_state WHERE id=$1',[STATE_KEY])]))
         .then(([blob,r])=>{ const m=r.rows[0]||{}; JZ(req,res,200,{data:JSON.stringify(blob),version:m.version||0,updated_by:m.updated_by,updated_at:m.updated_at}); })
         .catch(e=>J(res,500,{error:e.message}));
       return;
@@ -477,6 +821,43 @@ const server = http.createServer((req, res) => {
       .then(r => r.rows[0] ? JZ(req,res,200,{data:r.rows[0].data,version:r.rows[0].version,updated_by:r.rows[0].updated_by,updated_at:r.rows[0].updated_at})
                            : J(res,200,{data:null,version:0}))
       .catch(e=>J(res,500,{error:e.message}));
+    return;
+  }
+  // Hard-reset the B2C-synced bookings: wipe every b2c_ row (+ child tables) then full re-sync.
+  // Session-authed + POST-only (so accidental navigation can't trigger it). Ops on b2c bookings
+  // are intentionally discarded — B2C is the source of truth for these records.
+  if(u === '/api/b2c/reset' && req.method === 'POST'){
+    const s=session(req); if(!s) return J(res,401,{error:'login required'});
+    if(!pool) return J(res,503,{error:'no database'});
+    if(DATA_BACKEND!=='relational' || !b2cPool) return J(res,400,{error:'B2C sync not configured'});
+    (async () => {
+      const CHILD = ['sb_bookings__trips','sb_bookings__passengers','sb_bookings__addons',
+        'sb_bookings__adjustments','sb_bookings__feeitems','sb_bookings__history',
+        'sb_bookings__over','sb_bookings__partialcancels','sb_bookings__upgrades'];
+      const client = await pool.connect();
+      let deleted = 0;
+      try {
+        await client.query('BEGIN');
+        await client.query('SELECT pg_advisory_xact_lock(918273645)');
+        for (const t of CHILD) {
+          await client.query(`DELETE FROM ${fqt(t)} WHERE substr(sb_bookings_id,1,4) = 'b2c_'`);
+        }
+        const r = await client.query(`DELETE FROM ${fqt('sb_bookings')} WHERE substr(id,1,4) = 'b2c_'`);
+        deleted = r.rowCount || 0;
+        await client.query('COMMIT');
+      } catch(e){ await client.query('ROLLBACK').catch(()=>{}); client.release(); return J(res,500,{error:'delete failed: '+e.message}); }
+      client.release();
+      try { await relSyncB2C(); } catch(e){ return J(res,500,{error:`deleted ${deleted} rows but re-sync failed: ${e.message}`}); }
+      let nv = 0;
+      try {
+        const vr = await pool.query('SELECT version FROM app_state WHERE id=$1',[STATE_KEY]);
+        nv = (vr.rows[0] ? vr.rows[0].version : 0) + 1;
+        await pool.query('INSERT INTO app_state(id,data,version,updated_by,updated_at) VALUES($1,NULL,$2,$3,now()) ON CONFLICT(id) DO UPDATE SET version=$2, updated_by=$3, updated_at=now()',[STATE_KEY,nv,'B2C']);
+        sseBroadcast({ version: nv, updated_by: 'B2C', source: 'b2c_reset' });
+      } catch(e){ console.error('[b2c-reset] version bump failed:', e.message); }
+      console.log(`[b2c-reset] wiped ${deleted} b2c bookings, re-synced, version=${nv}`);
+      J(res,200,{ok:true, deleted, version:nv});
+    })();
     return;
   }
   if(u === '/api/version'){
@@ -624,9 +1005,12 @@ const server = http.createServer((req, res) => {
         restTxn(s.username, p.baseVersion==null?-1:p.baseVersion, ops)
           .then(({version,behind})=>{ try{ const summ=ops.slice(0,25).map(o=>o.op+':'+(o.r||o.id||'')).join(','); console.log('[batch] user='+s.username+' v'+version+' ops='+ops.length+' ['+summ+']'); }catch(e){}   // 2026-07-10: log who saved what (per-entity saves had no username trail — the incident was untraceable)
             J(res,200,{ok:true,version,behind,applied:ops.length}); sseBroadcast({version, updated_by:s.username}); })
-          .catch(e=> e.code==='SHRINK_GUARD'
-            ? J(res,409,{error:'save_would_delete_data', code:'SHRINK_GUARD', detail:e.detail})
-            : J(res, /unknown resource|needs an id|record object|patch target not found/.test(e.message)?400:500, {error:e.message}));
+          .catch(e=> {
+            if(e.code!=='SHRINK_GUARD') console.error('[batch] error user='+s.username+' ops='+ops.length+' —', e.message);
+            return e.code==='SHRINK_GUARD'
+              ? J(res,409,{error:'save_would_delete_data', code:'SHRINK_GUARD', detail:e.detail})
+              : J(res, /unknown resource|needs an id|record object|patch target not found/.test(e.message)?400:500, {error:e.message});
+          });
       }); return;
     }
     if(m==='GET'){ restGet(res,resName,id).catch(done); return; }
@@ -642,6 +1026,81 @@ const server = http.createServer((req, res) => {
       readBody(req, body=>{ let b; try{ b=JSON.parse(body||'{}'); }catch(e){ return J(res,400,{error:'invalid JSON'}); } one({op:'put', r:resName, id, body:b}); }); return;
     }
     return J(res,405,{error:'method not allowed'});
+  }
+
+  // ───── B2C availability API (no session — API key auth) ─────
+  // GET /api/b2c/availability?route=r6&dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD[&rateTypeId=xxx]
+  // Returns booked+locked seat counts + pricing for the requested route/date range.
+  // Secured via X-Api-Key header matched against B2C_API_KEY env var.
+  if (u === '/api/b2c/availability' && req.method === 'GET') {
+    const B2C_API_KEY = process.env.B2C_API_KEY || '';
+    if (!B2C_API_KEY || (req.headers['x-api-key'] || '') !== B2C_API_KEY)
+      return J(res, 401, { error: 'invalid or missing X-Api-Key' });
+    if (!pool) return J(res, 503, { error: 'no database' });
+    if (DATA_BACKEND !== 'relational') return J(res, 503, { error: 'requires relational backend' });
+    const routeId    = (q.match(/route=([^&]*)/)    || [])[1] ? decodeURIComponent((q.match(/route=([^&]*)/)||[])[1]) : null;
+    const dateFrom   = (q.match(/dateFrom=([^&]*)/) || [])[1] ? decodeURIComponent((q.match(/dateFrom=([^&]*)/)||[])[1]) : null;
+    const dateTo     = (q.match(/dateTo=([^&]*)/)   || [])[1] ? decodeURIComponent((q.match(/dateTo=([^&]*)/)||[])[1]) : null;
+    const rateTypeId = (q.match(/rateTypeId=([^&]*)/)||[])[1] ? decodeURIComponent((q.match(/rateTypeId=([^&]*)/)||[])[1]) : null;
+    if (!routeId || !dateFrom || !dateTo) return J(res, 400, { error: 'route, dateFrom, dateTo required' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateFrom) || !/^\d{4}-\d{2}-\d{2}$/.test(dateTo)) return J(res, 400, { error: 'dates must be YYYY-MM-DD' });
+    if (dateTo < dateFrom) return J(res, 400, { error: 'dateTo must be >= dateFrom' });
+    const CANCELLED = ['cancelled','cancelled_weather','rejected'];
+    Promise.all([
+      // booked seats per date (seat-mode trips only, non-cancelled bookings)
+      pool.query(
+        `SELECT t.date,
+                COALESCE(SUM(t.pax_ad_fr + t.pax_chd_fr + t.pax_inf_fr + t.pax_foc_fr
+                           + t.pax_ad_th + t.pax_chd_th + t.pax_inf_th + t.pax_foc_th), 0)::int AS booked
+         FROM ${fqt('sb_bookings__trips')} t
+         JOIN ${fqt('sb_bookings')} b ON b.id = t.sb_bookings_id
+         WHERE t.routeid=$1 AND t.date>=$2 AND t.date<=$3
+           AND t.bookingmode='seat'
+           AND b.status != ALL($4::text[])
+         GROUP BY t.date`,
+        [routeId, dateFrom, dateTo, CANCELLED]
+      ),
+      // locked seats per date (active locks, respecting qty-used)
+      pool.query(
+        `SELECT date,
+                COALESCE(SUM(GREATEST(qty - used, 0)), 0)::int AS locked
+         FROM ${fqt('sb_seat_locks')}
+         WHERE routeid=$1 AND date>=$2 AND date<=$3 AND status='active'
+         GROUP BY date`,
+        [routeId, dateFrom, dateTo]
+      ),
+      // pricing — seat rates for this route from active rate type(s)
+      pool.query(
+        `SELECT rt.id AS rate_type_id, rt.code, rt.name,
+                s.pk_adult_fr, s.pk_adult_thai, s.pk_child_fr, s.pk_child_thai, s.pk_infant_fr, s.pk_infant_thai,
+                s.kl_adult_fr, s.kl_adult_thai, s.kl_child_fr, s.kl_child_thai, s.kl_infant_fr, s.kl_infant_thai,
+                s.notransfer_adult_fr, s.notransfer_adult_thai, s.notransfer_child_fr, s.notransfer_child_thai
+         FROM ${fqt('sb_rate_types')} rt
+         JOIN ${fqt('sb_rate_types__seatrates')} s ON s.sb_rate_types_id = rt.id
+         WHERE rt.active = true AND s.key=$1 ${rateTypeId ? 'AND rt.id=$2' : ''}`,
+        rateTypeId ? [routeId, rateTypeId] : [routeId]
+      ),
+    ]).then(([bkRes, lockRes, rtRes]) => {
+      const bookedMap = {}, lockedMap = {};
+      for (const r of bkRes.rows)   bookedMap[r.date]  = r.booked;
+      for (const r of lockRes.rows) lockedMap[r.date]  = r.locked;
+      // build all dates in range
+      const dates = [];
+      for (let d = new Date(dateFrom + 'T00:00:00Z'); d.toISOString().slice(0,10) <= dateTo; d.setUTCDate(d.getUTCDate()+1)) {
+        const dk = d.toISOString().slice(0, 10);
+        const booked = bookedMap[dk] || 0, locked = lockedMap[dk] || 0;
+        dates.push({ date: dk, bookedSeats: booked, lockedSeats: locked, totalConsumed: booked + locked });
+      }
+      // shape pricing by rate type
+      const pricing = rtRes.rows.map(r => ({
+        rateTypeId: r.rate_type_id, code: r.code, name: r.name,
+        PK: { adult_fr: r.pk_adult_fr, adult_th: r.pk_adult_thai, child_fr: r.pk_child_fr, child_th: r.pk_child_thai, infant_fr: r.pk_infant_fr, infant_th: r.pk_infant_thai },
+        KL: { adult_fr: r.kl_adult_fr, adult_th: r.kl_adult_thai, child_fr: r.kl_child_fr, child_th: r.kl_child_thai, infant_fr: r.kl_infant_fr, infant_th: r.kl_infant_thai },
+        NoTransfer: { adult_fr: r.notransfer_adult_fr, adult_th: r.notransfer_adult_thai, child_fr: r.notransfer_child_fr, child_th: r.notransfer_child_thai },
+      }));
+      J(res, 200, { route: routeId, dateFrom, dateTo, dates, pricing });
+    }).catch(e => J(res, 500, { error: e.message }));
+    return;
   }
 
   // ───── static files ─────

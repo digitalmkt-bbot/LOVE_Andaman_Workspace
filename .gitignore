@@ -11,8 +11,27 @@ npm-debug.log*
 allotment_v2/data_exports/
 allotment_v2/BACKUP/
 
+# ── Env files (contain secrets) ──
+.env
+.env.*
+!.env.example
+allotment_v2/.env
+
 # ── Local lock files ──
 *.lock
+
+# ── Temp / scratch files ──
+*.tmp
+
+# ── DB dumps ──
+*.dump
+*.sql.gz
+
+# ── Build output ──
+allotment_v2/dist/
+
+# ── Attachment files (real customer docs — never commit) ──
+restored_attachments/
 
 # ── Claude Code local tooling (per-machine, not project code) ──
 .agents/
@@ -21,3 +40,4 @@ skills-lock.json
 
 # real prod data pulled for dev seeding — never commit
 os-backend/data_snapshots/
+BACKUP/server.js.bak_20260718_b2c-flatten-items
