@@ -267,6 +267,11 @@ const MIME = { '.html':'text/html; charset=utf-8','.js':'text/javascript; charse
 // not on every request. Images/fonts (.png/.woff2/…) are already compressed → skipped.
 const GZIP_EXT = new Set(['.html','.js','.css','.json','.svg','.csv','.txt']);
 const _gzCache = new Map();   // fp -> { etag, buf }
+// §/api/load cache (perf): assembling the ~6MB blob from 103 tables + stringify + gzip on EVERY login was the
+// bottleneck (morning stampede: all users re-login at 03:00 reset → server rebuilds the same payload N times).
+// Cache the built payload (plain string + gzipped buffer) keyed by app_state.version. A cheap version query gates
+// each request; any write bumps version → next load rebuilds. Cache hit = serve the prebuilt buffer instantly.
+let _loadCache = null;   // { version, str, gz }
 function readBody(req, cb){ let ch=[], n=0; req.on('data',c=>{ n+=c.length; if(n>20*1024*1024){req.destroy();return;} ch.push(c); }); req.on('end',()=>cb(Buffer.concat(ch).toString('utf8'))); }
 function J(res, code, obj, extra){ const h=Object.assign({'Content-Type':'application/json; charset=utf-8'}, extra||{}); res.writeHead(code,h); res.end(JSON.stringify(obj)); }
 // gzip variant for large payloads (/api/load) — falls back to plain when the client doesn't accept gzip
@@ -282,6 +287,22 @@ function JZ(req, res, code, obj){
   }
   res.writeHead(code,{'Content-Type':'application/json; charset=utf-8'});
   res.end(body);
+}
+// Send a cached /api/load payload · gzip on first send then reuse the buffer (so a version's payload is gzipped once)
+function sendLoadPayload(req, res, cache){
+  const acceptsGz = /\bgzip\b/.test(req.headers['accept-encoding']||'');
+  if(acceptsGz){
+    if(cache.gz){ res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Content-Encoding':'gzip'}); return res.end(cache.gz); }
+    const zlib = require('zlib');
+    return zlib.gzip(cache.str, (err,buf)=>{
+      if(err){ res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'}); return res.end(cache.str); }
+      cache.gz = buf;   // remember the gzipped buffer → every later hit on this version is instant
+      res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Content-Encoding':'gzip'});
+      res.end(buf);
+    });
+  }
+  res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
+  res.end(cache.str);
 }
 // ── Server-Sent Events · push "data changed" to all open clients instantly (real-time) ──
 const sseClients = new Set();
@@ -468,8 +489,17 @@ const server = http.createServer((req, res) => {
     const s=session(req); if(!s) return J(res,401,{error:'login required'});
     if(!pool) return J(res,503,{error:'no database'});
     if(DATA_BACKEND==='relational'){
-      Promise.all([relLoad(), pool.query('SELECT version,updated_by,updated_at FROM app_state WHERE id=$1',[STATE_KEY])])
-        .then(([blob,r])=>{ const m=r.rows[0]||{}; JZ(req,res,200,{data:JSON.stringify(blob),version:m.version||0,updated_by:m.updated_by,updated_at:m.updated_at}); })
+      // Cheap gate: read only the version first. If our cached payload is for the same version, serve it (no
+      // relLoad / assemble / stringify / gzip). Otherwise rebuild once and cache for the next reader.
+      pool.query('SELECT version,updated_by,updated_at FROM app_state WHERE id=$1',[STATE_KEY])
+        .then(async r => {
+          const m = r.rows[0]||{}; const version = m.version||0;
+          if(_loadCache && _loadCache.version === version){ return sendLoadPayload(req,res,_loadCache); }   // cache hit
+          const blob = await relLoad();
+          const str = JSON.stringify({data:JSON.stringify(blob),version,updated_by:m.updated_by,updated_at:m.updated_at});
+          _loadCache = { version, str, gz:null };
+          return sendLoadPayload(req,res,_loadCache);
+        })
         .catch(e=>J(res,500,{error:e.message}));
       return;
     }
