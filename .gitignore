@@ -40,3 +40,4 @@ skills-lock.json
 
 # real prod data pulled for dev seeding — never commit
 os-backend/data_snapshots/
+BACKUP/server.js.bak_20260718_b2c-flatten-items

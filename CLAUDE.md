@@ -9,8 +9,8 @@
 
 **Starting a new chat:**
 1. Do NOT dump the changelog back at the user or re-read the whole file.
-2. Greet in Thai and ask what to work on. The user (RM@loveandaman.com) keep replies concise.
-3. On a task: `grep` for the relevant function → read a small window → targeted `Edit` → verify.
+
+2. On a task: `grep` for the relevant function → read a small window → targeted `Edit` → verify.
 
 **Deploy workflow (CRITICAL — the sandbox CANNOT git-push):**
 - Edit → extract the main `<script>` and run `node --check` → back up to `BACKUP/`.
@@ -46,30 +46,12 @@ LOVE_Andaman_Workspace/
 
 **Backend = Postgres via `server.js` (`DATA_BACKEND=relational`, ~103 tables).** The single-file client keeps a working copy in **localStorage `loveandaman_v2` (`LS_KEY`)** — seeded from HTML default constants on first run, refreshed from the cloud blob on login — and syncs every change to Postgres through a REST API. localStorage is the in-browser working store; Postgres is the durable source of truth.
 
-**Sync mechanics:**
-- **Primary write = per-entity `/api/v1/_batch`.** The frontend `laDiffToOps` translates a record diff into ops (`put` / `del` / `putall` / `meta` / `patch`).
-- **`patch` op = per-FIELD merge** (server `restApplyOp` → `restLoad` → `applyObj` → re-put). This is what prevents last-write-wins clobber when two users edit different fields of the same record. Missing/non-object record → `body.full` full-replace fallback.
-- **Fallback = whole-blob `/api/save`** (`relApplyAndSave`, DELETE+INSERT all tables) — used only for seed / unknown key / old server. It `console.warn`s `[save] LEGACY whole-blob path` so mapping drift shows in Railway logs.
-- **Daily session reset:** login token/cookie expire at the next **03:00 ICT**, so every user is logged out pre-dawn and reloads a fresh cloud blob each morning.
-
-**Seeding — there is no separate seed script.** The `DEFAULT_*` constants baked into `allotment_v2.html` ARE the seed:
-- Fleet/config data (boats, engines, routes, inventory…) → hardcoded in `DEFAULT_*` → seeded into localStorage on first load → pushed to Postgres on first save.
-- Sales/booking data (agents, rate types, bookings…) → starts empty, grows through real usage.
-- For local dev: see options below.
-
-| Local dev scenario | How |
-|---|---|
-| Fresh DB (no data) | Run `db/migrations/002_add_operation_schemas.sql` → open app with `DATA_BACKEND=blob` → login → DEFAULT_* seeds localStorage → save pushes to Postgres |
-| With snapshot | Restore a dump via `pg_restore` → `DATA_BACKEND=relational` → login loads all data into localStorage |
-| Live prod data | Point `DATABASE_URL` at the Railway DB ⚠ writes affect prod |
-
-The dump is NOT just for manual inspection — with `DATA_BACKEND=relational` the server calls `relLoad()` on every login, reading all 103 relational tables and assembling the full blob for the client.
 
 Key default constants (grep for line): `DEFAULT_ROUTES`, `DEFAULT_BOATS`, `FL_DEFAULT_ENGINES`, `FL_DEFAULT_GEARBOXES`, `FL_DEFAULT_PROPELLERS`, `FL_DEFAULT_MAINTENANCE`, `FL_DEFAULT_INCIDENTS`, `FL_DEFAULT_INVENTORY`, `FL_DEFAULT_MEMOS`.
 
 The blob's sub-keys (each maps to relational table(s) on the backend): Sales/Booking — `sb_rate_types`, `sb_pickup_zones`, `sb_pickup_areas`, `sb_pickup_time_profiles`, `agent_artifacts`, `sb_bookings`, `sb_seat_locks`, `sb_nationalities`, `sb_markets`, `sb_sales`, `sb_addon_types`, `sb_agents`, `sb_market_stats`, `sb_invoices`, `sb_payments`, `sb_deposits`; Fleet — `fleet_inventory`, `fleet_consumable_logs`, `fleet_fuelbudget`, `vanjob_*` (`vanjob_pickup_th`, `vanjob_sreq`, `vanjob_driver`). The blob is shared by `save()` (operations) AND `flSave()` (fleet) — **always read-modify-write** (parse → update only your keys → write back); never clobber.
 
-⚠ **Version counter is `allotment.app_state`.** Role `allotment_app` has `search_path=allotment, public`; `server.js` queries `app_state`/`users`/`attachments` UNQUALIFIED. `public.app_state` is DEAD on prod. A local test server run as the `postgres` role writes `public` instead (harmless, but clean up).
+p_state` is DEAD on prod. A local test server run as the `postgres` role writes `public` instead (harmless, but clean up).
 
 ⚠ **Set `SESSION_SECRET` on Railway** so re-logins are predictable (daily + on deploy). If unset, every redeploy invalidates all sessions. Session/expiry changes only affect NEW logins.
 
