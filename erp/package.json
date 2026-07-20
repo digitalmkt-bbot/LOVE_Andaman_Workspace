@@ -4,7 +4,7 @@
   "type": "commonjs",
   "description": "ERP backend (Express over operation_schemas) + static HTML front",
   "scripts": {
-    "start": "node server.js"
+    "start": "node --env-file=.env server.js"
   },
   "dependencies": {
     "express": "^4.19.2",
