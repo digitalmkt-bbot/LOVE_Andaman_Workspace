@@ -611,19 +611,19 @@ const MIME = { '.html':'text/html; charset=utf-8','.js':'text/javascript; charse
 const GZIP_EXT = new Set(['.html','.js','.css','.json','.svg','.csv','.txt']);
 const _gzCache = new Map();   // fp -> { etag, buf }
 function readBody(req, cb){ let ch=[], n=0; req.on('data',c=>{ n+=c.length; if(n>20*1024*1024){req.destroy();return;} ch.push(c); }); req.on('end',()=>cb(Buffer.concat(ch).toString('utf8'))); }
-function J(res, code, obj, extra){ const h=Object.assign({'Content-Type':'application/json; charset=utf-8'}, extra||{}); res.writeHead(code,h); res.end(JSON.stringify(obj)); }
+function J(res, code, obj, extra){ const h=Object.assign({'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}, extra||{}); res.writeHead(code,h); res.end(JSON.stringify(obj)); }
 // gzip variant for large payloads (/api/load) — falls back to plain when the client doesn't accept gzip
 function JZ(req, res, code, obj){
   const body = JSON.stringify(obj);
   if (body.length > 50*1024 && /\bgzip\b/.test(req.headers['accept-encoding']||'')){
     const zlib = require('zlib');
     return zlib.gzip(body, (err, buf)=>{
-      if (err){ res.writeHead(code,{'Content-Type':'application/json; charset=utf-8'}); return res.end(body); }
-      res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Content-Encoding':'gzip'});
+      if (err){ res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}); return res.end(body); }
+      res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Content-Encoding':'gzip','Cache-Control':'no-store'});
       res.end(buf);
     });
   }
-  res.writeHead(code,{'Content-Type':'application/json; charset=utf-8'});
+  res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
   res.end(body);
 }
 // ── Server-Sent Events · push "data changed" to all open clients instantly (real-time) ──
