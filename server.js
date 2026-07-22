@@ -93,6 +93,11 @@ async function relLoad() {                                           // operatio
 // they appear as native bookings in allotment (editable, boat/van assignable). Ops columns (boat,
 // van, pickup) are always preserved on conflict — only B2C-owned fields are overwritten.
 //
+// B2C tables live in a named schema (love_kingdom on the shared dev Postgres, whose search_path
+// is `allotment, public` — an unqualified `booking_items` there fails). Set B2C_SCHEMA to match.
+const B2C_SCHEMA = (process.env.B2C_SCHEMA || 'public').replace(/[^a-zA-Z0-9_]/g, '');
+const b2cT = t => `"${B2C_SCHEMA}"."${t}"`;
+//
 // Fill in null entries when the allotment route for each B2C product is decided:
 const B2C_ROUTE_MAP = {
   // Day trip programs (matched via product_id)
@@ -260,10 +265,10 @@ const B2C_ITEM_JOIN = `
          ch.name         AS channel_name,
          c.name          AS customer_name,
          c.phone         AS customer_phone
-  FROM booking_items bi
-  LEFT JOIN bookings b       ON b.id  = bi.booking_id
-  LEFT JOIN b2c_channels ch  ON ch.id = b.channel_id
-  LEFT JOIN customers c      ON c.id  = b.customer_id
+  FROM ${b2cT('booking_items')} bi
+  LEFT JOIN ${b2cT('bookings')} b       ON b.id  = bi.booking_id
+  LEFT JOIN ${b2cT('b2c_channels')} ch  ON ch.id = b.channel_id
+  LEFT JOIN ${b2cT('customers')} c      ON c.id  = b.customer_id
   WHERE bi.type IN ('day_trip','private_own')`;
 
 async function relSyncB2C(singleExtId = null) {
