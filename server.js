@@ -121,7 +121,9 @@ const B2C_PRODUCT_NAME = {
   'PR-003':  'Private - Phi Phi + Bamboo Islands',
   'PR-004':  'Private - Phi Phi + Maiton (Sunset)',
 };
-const B2C_OPS_BK   = new Set(['ops_boatid','ops_vangroup','ops_vanseq','ops_vanreturnid','ops_vanid','ops_returnsamevan','ops_pickuptimefinal','ops_reconfirm','ops_vansplits']);
+// pickupareaid rides along here: matched best-effort from the B2C free-text location on first sync,
+// then owned by ops (staff re-assignment must survive resyncs) — excluded from conflict-update.
+const B2C_OPS_BK   = new Set(['ops_boatid','ops_vangroup','ops_vanseq','ops_vanreturnid','ops_vanid','ops_returnsamevan','ops_pickuptimefinal','ops_reconfirm','ops_vansplits','pickupareaid']);
 const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_returnsamevan','ops_vangroup','ops_vanseq','ops_pickuptimefinal','ops_vansplits','ops_reconfirm']);
 
 function mapB2CStatus(s) {
@@ -148,7 +150,7 @@ function b2cLineSeat(item) {
 // new B2C ids already carry their own LOV- prefix); each carries a single trip.
 // isFirstLine: order-level payment (deposit/balance) attaches only to the first line of the order,
 // so a multi-item order's payment isn't multiplied across its item-bookings.
-function mapB2CItemBooking(item, isFirstLine) {
+function mapB2CItemBooking(item, isFirstLine, findAreaId) {
   const h = item;
   // pg returns date columns as JS Date objects — String(d).slice(0,10) gives "Sat Jul 18",
   // not YYYY-MM-DD, which the frontend cannot parse. Format in local time explicitly.
@@ -185,6 +187,18 @@ function mapB2CItemBooking(item, isFirstLine) {
   // so a private booking is caught however B2C tags it.
   const isPrivateId = id => /^PR-/i.test(String(id || ''));
   const isCharter = h.type === 'private_own' || isPrivateId(h.product_id) || isPrivateId(h.route_id);
+  // Pickup (details jsonb): B2C only knows the 3 coarse transfer zones (PK/KL/NoTransfer) plus a
+  // free-text pickupLocation — the 37 ops pickup areas never cross the API (B2C_PICKUP_ZONE_DATA.md).
+  // hotelName/pickupZone/pickupSelf are B2C-owned (refreshed every sync); pickupAreaId is matched
+  // best-effort against sb_pickup_areas and preserved on conflict (see B2C_OPS_BK).
+  let det = h.details;
+  if (typeof det === 'string') { try { det = JSON.parse(det); } catch (_) { det = null; } }
+  det = det || {};
+  const pickupLoc  = String(det.pickupLocation || '').trim();
+  const noTransfer = det.noTransfer === true;
+  const pickupZone = noTransfer ? 'NoTransfer' : String(det.pickupZone || '').trim();
+  const areaId = (typeof findAreaId === 'function') ? findAreaId(pickupLoc, pickupZone) : null;
+  const dropoffLoc = (det.dropoffSame === false) ? String(det.dropoffLocation || '').trim() : '';
   const trip = {
     id: 'b2c_' + h.booking_id + '_' + h.line_no + '_t0',
     routeId: B2C_ROUTE_MAP[h.product_id] || B2C_ROUTE_MAP[h.route_id] || null,
@@ -223,7 +237,13 @@ function mapB2CItemBooking(item, isFirstLine) {
     leadEmail: h.booked_by_email || '',
     status: mapB2CStatus(h.bk_status),
     bookingDate: date,
-    note: ['B2C', h.channel_name, String(h.booking_id), B2C_PRODUCT_NAME[h.product_id] || B2C_PRODUCT_NAME[h.route_id] || h.product_id].filter(Boolean).join(' · '),
+    hotelName: pickupLoc,
+    pickupZone: pickupZone,
+    pickupSelf: noTransfer,
+    pickupAreaId: areaId,
+    dropoffHotelName: dropoffLoc,
+    note: ['B2C', h.channel_name, String(h.booking_id), B2C_PRODUCT_NAME[h.product_id] || B2C_PRODUCT_NAME[h.route_id] || h.product_id,
+           (pickupLoc && !areaId && !noTransfer) ? `Pickup: ${pickupLoc}${pickupZone ? ' (' + pickupZone + ')' : ''} — area unassigned` : null].filter(Boolean).join(' · '),
     trips: [trip],
     passengers: [],
     addOns: [],
@@ -295,6 +315,22 @@ async function relSyncB2C(singleExtId = null) {
       if (!itemRows.length) return;
     }
 
+    // Pickup-area matcher: B2C sends a free-text pickupLocation; resolve it to an ops pickup area
+    // only when the match is unambiguous (exact name, else a single substring hit, zone-compatible).
+    // No match → area stays unassigned for ops staff (flagged in the booking note).
+    let areaRows = [];
+    try { ({ rows: areaRows } = await pool.query(`SELECT id, name, zone FROM ${fqt('sb_pickup_areas')}`)); }
+    catch (e) { console.warn('[b2c-sync] pickup areas unavailable — skipping area match:', e.message); }
+    const _norm = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const findAreaId = (loc, zone) => {
+      const L = _norm(loc);
+      if (!L) return null;
+      const cand = areaRows.filter(a => !zone || !a.zone || a.zone === zone);
+      let hit = cand.filter(a => _norm(a.name) === L);
+      if (!hit.length) hit = cand.filter(a => { const N = _norm(a.name); return N.includes(L) || L.includes(N); });
+      return hit.length === 1 ? hit[0].id : null;
+    };
+
     // Flatten: one allotment booking per line item. Group only to flag the first line of each
     // B2C order (order-level payment attaches to that line — see mapB2CItemBooking).
     const byId = {};
@@ -302,7 +338,7 @@ async function relSyncB2C(singleExtId = null) {
     const b2cBks = [];
     for (const items of Object.values(byId)) {
       items.sort((a, b) => Number(a.line_no) - Number(b.line_no));
-      items.forEach((it, i) => b2cBks.push(mapB2CItemBooking(it, i === 0)));
+      items.forEach((it, i) => b2cBks.push(mapB2CItemBooking(it, i === 0, findAreaId)));
     }
     const tables  = osRepo.decomposeBlob({ sb_bookings: b2cBks });
     const b2cIds  = b2cBks.map(b => b.id);
