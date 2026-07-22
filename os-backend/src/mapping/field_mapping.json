@@ -2298,6 +2298,12 @@
       "source": "nationalityScope",
       "kind": "scalar",
       "db_type": "text"
+    },
+    "owner": {
+      "source": "owner",
+      "kind": "scalar",
+      "db_type": "text",
+      "note": "rate-type owner = sales id · '' = Shared/central (visible to all)"
     }
   },
   "sb_rate_types__routes": {

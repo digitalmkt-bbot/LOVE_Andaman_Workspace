@@ -2117,6 +2117,10 @@
       {
         "name": "nationalityscope",
         "type": "text"
+      },
+      {
+        "name": "owner",
+        "type": "text"
       }
     ],
     "primary_key": "id",
