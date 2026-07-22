@@ -315,6 +315,20 @@ async function relSyncB2C(singleExtId = null) {
       if (!itemRows.length) return;
     }
 
+    // Change detection (full runs only): hash the raw source rows and compare with the last synced
+    // hash. Unchanged → skip the whole upsert (fast path — this runs on EVERY /api/load). Changed →
+    // upsert, then bump app_state version + SSE so clients actually reload the new data. Without the
+    // bump, /api/load saw "version unchanged" and served the pre-sync cached blob — new B2C bookings
+    // sat in the tables but never reached the app until an unrelated save bumped the version.
+    let srcHash = null;
+    if (!singleExtId) {
+      srcHash = crypto.createHash('sha1').update(JSON.stringify(itemRows)).digest('hex');
+      try {
+        const hr = await pool.query('SELECT data FROM app_state WHERE id=$1', ['b2c_sync_hash']);
+        if (hr.rows[0] && hr.rows[0].data === srcHash) return;   // B2C unchanged since last sync
+      } catch (_) {}
+    }
+
     // Pickup-area matcher: B2C sends a free-text pickupLocation; resolve it to an ops pickup area
     // only when the match is unambiguous (exact name, else a single substring hit, zone-compatible).
     // No match → area stays unassigned for ops staff (flagged in the booking note).
@@ -444,6 +458,15 @@ async function relSyncB2C(singleExtId = null) {
       await client.query('COMMIT');
       const label = singleExtId ? `b2c_${singleExtId}` : `${b2cBks.length} bookings`;
       console.log(`[b2c-sync] synced ${label}`);
+      if (srcHash) {
+        await pool.query(`INSERT INTO app_state(id,data,version) VALUES('b2c_sync_hash',$1,0)
+                          ON CONFLICT(id) DO UPDATE SET data=$1, updated_at=now()`, [srcHash]);
+        const vr = await pool.query('SELECT version FROM app_state WHERE id=$1', [STATE_KEY]);
+        const nv = (vr.rows[0] ? vr.rows[0].version : 0) + 1;
+        await pool.query(`INSERT INTO app_state(id,data,version,updated_by,updated_at) VALUES($1,NULL,$2,$3,now())
+                          ON CONFLICT(id) DO UPDATE SET version=$2, updated_by=$3, updated_at=now()`, [STATE_KEY, nv, 'B2C']);
+        sseBroadcast({ version: nv, updated_by: 'B2C', source: 'b2c' });
+      }
     } catch (e) {
       await client.query('ROLLBACK');
       throw Object.assign(e, { _phase });
