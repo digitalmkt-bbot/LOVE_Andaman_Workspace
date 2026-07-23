@@ -5922,5 +5922,112 @@
     "primary_key": "id",
     "foreign_keys": [],
     "rows": 0
+  },
+  "sb_contracts": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "text"
+      },
+      {
+        "name": "agentid",
+        "type": "text"
+      },
+      {
+        "name": "kind",
+        "type": "text"
+      },
+      {
+        "name": "ratetypeid",
+        "type": "text"
+      },
+      {
+        "name": "activefrom",
+        "type": "text"
+      },
+      {
+        "name": "activeto",
+        "type": "text"
+      },
+      {
+        "name": "priority",
+        "type": "bigint"
+      },
+      {
+        "name": "version",
+        "type": "text"
+      },
+      {
+        "name": "status",
+        "type": "text"
+      },
+      {
+        "name": "createddate",
+        "type": "text"
+      },
+      {
+        "name": "createdby",
+        "type": "text"
+      },
+      {
+        "name": "note",
+        "type": "text"
+      },
+      {
+        "name": "docid",
+        "type": "text"
+      }
+    ],
+    "primary_key": "id",
+    "foreign_keys": [],
+    "rows": 0
+  },
+  "sb_contracts__programperiods": {
+    "columns": [
+      {
+        "name": "sb_contracts_id",
+        "type": "text"
+      },
+      {
+        "name": "idx",
+        "type": "bigint"
+      },
+      {
+        "name": "row_pk",
+        "type": "text"
+      },
+      {
+        "name": "routeid",
+        "type": "text"
+      },
+      {
+        "name": "bookfrom",
+        "type": "text"
+      },
+      {
+        "name": "bookto",
+        "type": "text"
+      },
+      {
+        "name": "travelfrom",
+        "type": "text"
+      },
+      {
+        "name": "travelto",
+        "type": "text"
+      },
+      {
+        "name": "note",
+        "type": "text"
+      }
+    ],
+    "primary_key": "row_pk",
+    "foreign_keys": [
+      {
+        "column": "sb_contracts_id",
+        "references": "sb_contracts.id"
+      }
+    ],
+    "rows": 0
   }
 }

@@ -6355,5 +6355,119 @@
       "db_type": "text",
       "note": "whole template object as JSON: {id,code,name,active,isDefault,sections{},text{en{},th{}}} — new template fields need no DB change"
     }
+  },
+  "sb_contracts": {
+    "id": {
+      "source": "sb_contracts[].id (record id; generated if absent)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "agentid": {
+      "source": "agentId",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "kind": {
+      "source": "kind",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "ratetypeid": {
+      "source": "rateTypeId",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "activefrom": {
+      "source": "activeFrom",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "activeto": {
+      "source": "activeTo",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "priority": {
+      "source": "priority",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "version": {
+      "source": "version",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "status": {
+      "source": "status",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "createddate": {
+      "source": "createdDate",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "createdby": {
+      "source": "createdBy",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "note": {
+      "source": "note",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "docid": {
+      "source": "docId",
+      "kind": "scalar",
+      "db_type": "text"
+    }
+  },
+  "sb_contracts__programperiods": {
+    "sb_contracts_id": {
+      "source": "(link) sb_contracts.id",
+      "kind": "fk",
+      "db_type": "text"
+    },
+    "idx": {
+      "source": "(order) position in programPeriods[]",
+      "kind": "synthetic",
+      "db_type": "bigint"
+    },
+    "row_pk": {
+      "source": "(generated child key)",
+      "kind": "synthetic-pk",
+      "db_type": "text"
+    },
+    "routeid": {
+      "source": "programPeriods[].routeId",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "bookfrom": {
+      "source": "programPeriods[].bookFrom",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "bookto": {
+      "source": "programPeriods[].bookTo",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "travelfrom": {
+      "source": "programPeriods[].travelFrom",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "travelto": {
+      "source": "programPeriods[].travelTo",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "note": {
+      "source": "programPeriods[].note",
+      "kind": "scalar",
+      "db_type": "text"
+    }
   }
 }

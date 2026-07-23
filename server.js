@@ -668,6 +668,11 @@ async function initDb(){
       await sq('sb_sales.followup col', `ALTER TABLE ${OS_SCHEMA}."sb_sales" ADD COLUMN IF NOT EXISTS "followup" text`);
       await sq('contract_templates table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."contract_templates" (id text PRIMARY KEY, key text, value text)`);
       await sq('sb_agents.contracttemplateid col', `ALTER TABLE ${OS_SCHEMA}."sb_agents" ADD COLUMN IF NOT EXISTS "contracttemplateid" text`);
+      // §Rate/Contract model (2026-07-23 · Phase 1): multiple contracts per agent (main + time-boxed promo
+      // overlays). No auto-create for osModel entity tables → create explicitly here. Client store = SB_CONTRACTS.
+      await sq('sb_contracts table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."sb_contracts" (id text PRIMARY KEY, agentid text, kind text, ratetypeid text, activefrom text, activeto text, priority bigint, version text, status text, createddate text, createdby text, note text, docid text)`);
+      await sq('sb_contracts__programperiods table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."sb_contracts__programperiods" (sb_contracts_id text, idx bigint, row_pk text PRIMARY KEY, routeid text, bookfrom text, bookto text, travelfrom text, travelto text, note text)`);
+      await sq('sb_contracts__programperiods index', `CREATE INDEX IF NOT EXISTS idx_sbcontracts_pp ON ${OS_SCHEMA}."sb_contracts__programperiods"(sb_contracts_id)`);
       await sq('sb_vehicles.color col', `ALTER TABLE ${OS_SCHEMA}."sb_vehicles" ADD COLUMN IF NOT EXISTS "color" text`);
       await sq('boats.color col', `ALTER TABLE ${OS_SCHEMA}."boats" ADD COLUMN IF NOT EXISTS "color" text`);
       await sq('sb_bookings pkey', `
