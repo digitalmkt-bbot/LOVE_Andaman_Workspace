@@ -365,7 +365,11 @@ async function relSyncB2C(singleExtId = null) {
 
     const bkColSql  = BK_COLS.map(qic).join(', ');
     const bkPh      = BK_COLS.map((_, i) => '$' + (i + 1)).join(', ');
-    const bkSet     = BK_UPDATE.map(c => `${qic(c)} = EXCLUDED.${qic(c)}`).join(', ');
+    // Sticky cancel: an ops-side cancellation must survive B2C re-sync. B2C can still MOVE a booking INTO
+    // a cancelled state (existing not-cancelled → takes EXCLUDED), but can never resurrect one ops cancelled.
+    const bkSet     = BK_UPDATE.map(c => c === 'status'
+      ? `${qic(c)} = CASE WHEN ${qic('sb_bookings')}.${qic(c)} IN ('cancelled','cancelled_weather','rejected') THEN ${qic('sb_bookings')}.${qic(c)} ELSE EXCLUDED.${qic(c)} END`
+      : `${qic(c)} = EXCLUDED.${qic(c)}`).join(', ');
     const tripColSql = TRIP_COLS.map(qic).join(', ');
     const tripPh    = TRIP_COLS.map((_, i) => '$' + (i + 1)).join(', ');
     const paxColSql = PAX_COLS.map(qic).join(', ');
