@@ -457,6 +457,62 @@ async function relSyncB2C(singleExtId = null) {
         [presentOrderIds, b2cIds]
       );
 
+      // 5. Oversell safety net. B2C bypasses the ops capacity guard (relSyncB2C writes rows directly, never
+      //    through bkV2CommitBooking), so a sale past the deployed seat capacity can land here. For each
+      //    route/date touched in this run that HAS boats deployed, flag the OVERFLOW B2C bookings
+      //    (oldest kept confirmed, newest pushed to pending_approval) so ops must add a boat / fix capacity.
+      //    Idempotent: re-applied every sync until capacity covers demand; dates with no deployment
+      //    (capacity 0 — e.g. far-future advance bookings) are skipped so normal bookings aren't flagged.
+      _phase = 'oversell flag';
+      const NUL = ' ';
+      const affPairs = [...new Set((tables['sb_bookings__trips'] || [])
+        .filter(t => t.bookingmode === 'seat' && t.routeid && t.date)
+        .map(t => t.routeid + NUL + t.date))];
+      if (affPairs.length) {
+        const affDates = [...new Set(affPairs.map(p => p.split(NUL)[1]))];
+        const { rows: capBoats } = await client.query(`SELECT id, cap FROM ${fqt('boats')}`);
+        const boatCap2 = {}, boatIds2 = [];
+        for (const b of capBoats) { boatCap2[b.id] = Number(b.cap) || 0; boatIds2.push(b.id); }
+        const tripByDate = {};
+        for (const r of (await client.query(`SELECT * FROM ${fqt('trips')} WHERE ${qic('key')} = ANY($1)`, [affDates])).rows) tripByDate[r.key] = r;
+        const lockByKey = {};
+        for (const r of (await client.query(
+          `SELECT routeid, date, COALESCE(SUM(GREATEST(qty - used, 0)), 0)::int AS n
+           FROM ${fqt('sb_seat_locks')} WHERE date = ANY($1) AND status='active' GROUP BY routeid, date`, [affDates])).rows)
+          lockByKey[r.routeid + NUL + r.date] = r.n;
+        const bkByKey = {};
+        for (const r of (await client.query(
+          `SELECT t.routeid, t.date, b.id, b.status,
+                  (t.pax_ad_fr + t.pax_chd_fr + t.pax_inf_fr + t.pax_foc_fr
+                 + t.pax_ad_th + t.pax_chd_th + t.pax_inf_th + t.pax_foc_th)::int AS pax
+           FROM ${fqt('sb_bookings__trips')} t JOIN ${fqt('sb_bookings')} b ON b.id = t.sb_bookings_id
+           WHERE t.date = ANY($1) AND t.bookingmode='seat' AND b.status <> ALL($2::text[])
+           ORDER BY b.createdat ASC NULLS FIRST, b.id ASC`,
+          [affDates, ['cancelled','cancelled_weather','rejected']])).rows)
+          (bkByKey[r.routeid + NUL + r.date] = bkByKey[r.routeid + NUL + r.date] || []).push(r);
+        const toFlag = [];
+        for (const pair of affPairs) {
+          const [rid, dk] = pair.split(NUL);
+          const trow = tripByDate[dk] || {};
+          let capacity = 0;
+          for (const bid of boatIds2) {
+            if (trow[bid + '_route'] === rid && trow[bid + '_type'] !== 'charter') capacity += boatCap2[bid] || 0;
+          }
+          if (capacity <= 0) continue;                          // no boats deployed yet → no constraint
+          const fillLine = capacity - (lockByKey[pair] || 0);   // seats sellable to bookings after locks
+          let cum = 0;
+          for (const r of (bkByKey[pair] || [])) {
+            if (cum + r.pax > fillLine && /^b2c_/.test(r.id) && r.status === 'confirmed') toFlag.push(r.id);
+            cum += r.pax;
+          }
+        }
+        if (toFlag.length) {
+          const fr = await client.query(
+            `UPDATE ${fqt('sb_bookings')} SET status='pending_approval' WHERE id = ANY($1) AND status='confirmed'`, [toFlag]);
+          console.log(`[b2c-sync] oversell — flagged ${fr.rowCount} B2C booking(s) pending_approval across ${affPairs.length} route/date(s)`);
+        }
+      }
+
       // NOTE: history, upgrades, feeitems, partialcancels, adjustments, over are allotment-owned — never touched here.
 
       await client.query('COMMIT');
@@ -1179,16 +1235,30 @@ const server = http.createServer((req, res) => {
          WHERE rt.active = true AND s.key=$1 ${rateTypeId ? 'AND rt.id=$2' : ''}`,
         rateTypeId ? [routeId, rateTypeId] : [routeId]
       ),
-    ]).then(([bkRes, lockRes, rtRes]) => {
+      // deployed seat capacity per date: boats.cap × which boats run this route in trips (charter excluded).
+      // Mirrors the client getAllotment: a charter deployment (bN_type='charter') does NOT add seat capacity.
+      pool.query(`SELECT id, cap FROM ${fqt('boats')}`),
+      pool.query(`SELECT * FROM ${fqt('trips')} WHERE ${qic('key')} >= $1 AND ${qic('key')} <= $2`, [dateFrom, dateTo]),
+    ]).then(([bkRes, lockRes, rtRes, boatRes, tripRes]) => {
       const bookedMap = {}, lockedMap = {};
       for (const r of bkRes.rows)   bookedMap[r.date]  = r.booked;
       for (const r of lockRes.rows) lockedMap[r.date]  = r.locked;
+      const boatCap = {}, boatIds = [];
+      for (const b of boatRes.rows) { boatCap[b.id] = Number(b.cap) || 0; boatIds.push(b.id); }
+      const tripsByDate = {};
+      for (const r of tripRes.rows) tripsByDate[r.key] = r;
       // build all dates in range
       const dates = [];
       for (let d = new Date(dateFrom + 'T00:00:00Z'); d.toISOString().slice(0,10) <= dateTo; d.setUTCDate(d.getUTCDate()+1)) {
         const dk = d.toISOString().slice(0, 10);
         const booked = bookedMap[dk] || 0, locked = lockedMap[dk] || 0;
-        dates.push({ date: dk, bookedSeats: booked, lockedSeats: locked, totalConsumed: booked + locked });
+        const trow = tripsByDate[dk] || {};
+        let capacity = 0;
+        for (const bid of boatIds) {
+          if (trow[bid + '_route'] === routeId && trow[bid + '_type'] !== 'charter') capacity += boatCap[bid] || 0;
+        }
+        const seatsAvailable = Math.max(0, capacity - booked - locked);
+        dates.push({ date: dk, capacity, bookedSeats: booked, lockedSeats: locked, totalConsumed: booked + locked, seatsAvailable });
       }
       // shape pricing by rate type
       const pricing = rtRes.rows.map(r => ({
