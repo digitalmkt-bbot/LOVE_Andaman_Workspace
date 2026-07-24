@@ -110,6 +110,7 @@ const B2C_ROUTE_MAP = {
   'POW-002': 'r6',   // Day Trip - Surin Island → Surin Islands by Speedboat
   'POW-003': 'r10',  // Day Trip - Phi Phi Island → Phi Phi Bamboo by Speedboat
   'POW-004': 'r12',  // Day Trip - Phi Phi - Maiton → Whale Shark Phi Phi Maiton Sunset
+  'POW-005': 'r1784542898734',  // Day Trip - Se La Va (Ranong) → r1784542898734
   // Private routes (matched via route_id on private_own items)
   'PR-001':  'r5',   // Private Similan → Similan Islands by Speedboat
   'PR-002':  'r6',   // Private Surin → Surin Islands by Speedboat
@@ -121,6 +122,7 @@ const B2C_PRODUCT_NAME = {
   'POW-002': 'Day Trip - Surin Island',
   'POW-003': 'Day Trip - Phi Phi Island',
   'POW-004': 'Day Trip - Phi Phi - Maiton',
+  'POW-005': 'Day Trip - Se La Va',
   'PR-001':  'Private - Similan Island',
   'PR-002':  'Private - Surin Islands',
   'PR-003':  'Private - Phi Phi + Bamboo Islands',
