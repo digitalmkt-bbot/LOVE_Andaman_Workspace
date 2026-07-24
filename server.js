@@ -1315,3 +1315,20 @@ const server = http.createServer((req, res) => {
     res.writeHead(200,{'Content-Type':ctype,'ETag':etag,'Cache-Control':'no-cache','Vary':'Accept-Encoding'}); res.end(data); });
 });
 server.listen(PORT, ()=>console.log('LOVE Andaman on '+PORT+(pool?' · db on':' · db off')));
+
+// §B2C background poller (2026-07-24): relSyncB2C only ran on /api/load, so a new B2C booking sat in
+// the source pool until someone manually refreshed. Poll it on a timer so new bookings are pulled in,
+// which bumps app_state.version + SSE (updated_by:'B2C') → connected clients auto-refresh + alert.
+// Guarded so a slow run never overlaps itself; skipped entirely when the B2C source DB isn't configured.
+let _b2cPolling = false;
+const B2C_POLL_MS = Number(process.env.B2C_POLL_MS) || 45000;
+if (pool && b2cPool) {
+  setInterval(async () => {
+    if (_b2cPolling) return;
+    _b2cPolling = true;
+    try { await relSyncB2C(); }
+    catch (e) { try { console.warn('[b2c-poll] sync failed:', e.message); } catch(_){} }
+    finally { _b2cPolling = false; }
+  }, B2C_POLL_MS);
+  console.log('[b2c-poll] background B2C sync every ' + Math.round(B2C_POLL_MS/1000) + 's');
+}
