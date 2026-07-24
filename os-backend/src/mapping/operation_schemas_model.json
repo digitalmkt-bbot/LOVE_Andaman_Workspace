@@ -234,6 +234,14 @@
       {
         "name": "color",
         "type": "text"
+      },
+      {
+        "name": "ownership",
+        "type": "text"
+      },
+      {
+        "name": "retired",
+        "type": "boolean"
       }
     ],
     "primary_key": "id",

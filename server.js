@@ -675,6 +675,11 @@ async function initDb(){
       await sq('sb_sales.followup col', `ALTER TABLE ${OS_SCHEMA}."sb_sales" ADD COLUMN IF NOT EXISTS "followup" text`);
       await sq('contract_templates table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."contract_templates" (id text PRIMARY KEY, key text, value text)`);
       await sq('sb_agents.contracttemplateid col', `ALTER TABLE ${OS_SCHEMA}."sb_agents" ADD COLUMN IF NOT EXISTS "contracttemplateid" text`);
+      // §Boat charter/retired flags (2026-07-24): boats table had no ownership/retired columns, so
+      // ownership='charter' (rented boats) and retired were dropped on sync → charter boats reverted to
+      // company/Tub Lamu after a refresh. Add the columns so the flags persist through the round-trip.
+      await sq('boats.ownership col', `ALTER TABLE ${OS_SCHEMA}."boats" ADD COLUMN IF NOT EXISTS "ownership" text`);
+      await sq('boats.retired col', `ALTER TABLE ${OS_SCHEMA}."boats" ADD COLUMN IF NOT EXISTS "retired" boolean`);
       // §Rate/Contract model (2026-07-23 · Phase 1): multiple contracts per agent (main + time-boxed promo
       // overlays). No auto-create for osModel entity tables → create explicitly here. Client store = SB_CONTRACTS.
       await sq('sb_contracts table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."sb_contracts" (id text PRIMARY KEY, agentid text, kind text, ratetypeid text, activefrom text, activeto text, priority bigint, version text, status text, createddate text, createdby text, note text, docid text)`);

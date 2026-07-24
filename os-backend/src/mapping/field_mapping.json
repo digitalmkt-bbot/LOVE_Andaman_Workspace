@@ -252,6 +252,16 @@
       "source": "color",
       "kind": "scalar",
       "db_type": "text"
+    },
+    "ownership": {
+      "source": "ownership",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "retired": {
+      "source": "retired",
+      "kind": "scalar",
+      "db_type": "boolean"
     }
   },
   "boats__docs": {
