@@ -43,10 +43,15 @@ for (const t of OS_TABLES){ OS_COLTYPE[t] = {}; for (const c of osModel[t].colum
 function _bindVal(t, c, row){
   let v = row[c] === undefined ? null : row[c];
   const ty = (OS_COLTYPE[t] && OS_COLTYPE[t][c]) || '';
-  if (/^(bigint|integer|int|smallint|numeric|decimal|double|real|float)/i.test(ty)){
+  if (/^(bigint|integer|int|smallint)/i.test(ty)){   // whole-number columns → ROUND (a stray decimal like a qty "3.6" must never abort the whole batch)
+    if (typeof v === 'number') return Number.isFinite(v) ? Math.round(v) : null;
+    if (typeof v === 'string'){ const s = v.trim(); if (s === '') return null; const n = Number(s); return Number.isFinite(n) ? Math.round(n) : null; }
+    return null;                                   // "", null, boolean, object → null (never a valid number)
+  }
+  if (/^(numeric|decimal|double|real|float)/i.test(ty)){   // decimal columns → keep the fractional value as-is
     if (typeof v === 'number') return Number.isFinite(v) ? v : null;
     if (typeof v === 'string'){ const s = v.trim(); if (s === '') return null; const n = Number(s); return Number.isFinite(n) ? n : null; }
-    return null;                                   // "", null, boolean, object → null (never a valid number)
+    return null;
   }
   if (/^bool/i.test(ty)){
     if (typeof v === 'boolean') return v;
@@ -673,6 +678,12 @@ async function initDb(){
       await sq('sb_contracts table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."sb_contracts" (id text PRIMARY KEY, agentid text, kind text, ratetypeid text, activefrom text, activeto text, priority bigint, version text, status text, createddate text, createdby text, note text, docid text)`);
       await sq('sb_contracts__programperiods table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."sb_contracts__programperiods" (sb_contracts_id text, idx bigint, row_pk text PRIMARY KEY, routeid text, bookfrom text, bookto text, travelfrom text, travelto text, note text)`);
       await sq('sb_contracts__programperiods index', `CREATE INDEX IF NOT EXISTS idx_sbcontracts_pp ON ${OS_SCHEMA}."sb_contracts__programperiods"(sb_contracts_id)`);
+      // §fractional memo-item quantities (2026-07-24): qty can be liters/kg (e.g. oil "3.6") and per-item
+      // discountpct can be "10.5" — these were bigint → "invalid input syntax for type bigint: 3.6" 500'd the
+      // WHOLE sync batch, wedging a user's save. Widen to double precision so the fraction is kept as-is.
+      for(const col of ['qty','discountpct','inventorysnapshot_qtyatselection']){
+        await sq(`fleet_memos__items.${col} -> double`, `ALTER TABLE ${OS_SCHEMA}."fleet_memos__items" ALTER COLUMN "${col}" TYPE double precision USING "${col}"::double precision`);
+      }
       await sq('sb_vehicles.color col', `ALTER TABLE ${OS_SCHEMA}."sb_vehicles" ADD COLUMN IF NOT EXISTS "color" text`);
       await sq('boats.color col', `ALTER TABLE ${OS_SCHEMA}."boats" ADD COLUMN IF NOT EXISTS "color" text`);
       await sq('sb_bookings pkey', `
