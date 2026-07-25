@@ -739,8 +739,11 @@ const PERM_KEYS=new Set(['overview','operations','sales','accounting','fleet','c
   // every user could open them regardless of their ticks. Adding them to the client alone is not enough:
   // cleanPerms() filters against this Set, so an admin ticking "Booking Flow" would have had the tick
   // silently dropped on save and the box would come back empty.
-  'dashboard','calendar','daily','booking','reconfirm','bookingflow','doccheck','operation','insurance','vehicles','vanjobs','pickup-setup',
-  'agents','sales-board','rate-types','contract-tmpl','b2c','staff','marketdata','focdetail','pickupmap','dailypfm',
+  // §2026-07-25: same trap again — 'vancheckin' (added 07-21), 'piercheckin' (added today) and
+  // 'b2b-dash' (added 07-20) existed in the client's LA_NAV but not here, so cleanPerms() silently
+  // dropped those ticks on save and the boxes came back empty. Keep this Set in step with LA_NAV.
+  'dashboard','calendar','daily','booking','reconfirm','bookingflow','doccheck','operation','insurance','vehicles','vanjobs','vancheckin','piercheckin','pickup-setup',
+  'agents','sales-board','b2b-dash','rate-types','contract-tmpl','b2c','staff','marketdata','focdetail','pickupmap','dailypfm',
   'fl-dashboard','fl-boatstatus','fl-dailyreport','fl-incident','fl-projects','fl-maintenance','fl-inventory','fl-consumables','fl-cost','fl-insights','fl-fuel','fl-asset',
   'settings','teammkt','addonsvc']);   // 'accounting' already present as a group key
 function cleanPerms(a){ return Array.isArray(a)?a.filter(x=>PERM_KEYS.has(x)):null; }
