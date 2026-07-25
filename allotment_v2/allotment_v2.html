@@ -42399,7 +42399,7 @@ function ckSharedCSS(scope){
   +scope+' .ck-prog{height:6px;background:#EAE7DF;border-radius:5px;overflow:hidden;margin-top:11px}'
   +scope+' .ck-prog>div{height:100%;border-radius:5px;transition:width .2s}'
   +scope+' .ck-pillbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:12px}'
-  +scope+' .ck-card{background:#fff;border:1px solid var(--border,#E7E4DC);border-radius:14px;overflow:hidden}'
+  +scope+' .ck-card{background:#fff;border:1px solid var(--border,#E7E4DC);border-radius:14px;overflow:visible}'
   +scope+' table.ck-tbl{border-collapse:collapse;width:100%;min-width:1420px;font-size:12px}'
   +scope+' table.ck-tbl th{text-align:left;font-size:9px;font-weight:700;color:#a5a49d;text-transform:uppercase;letter-spacing:.04em;padding:7px 10px;border-bottom:1px solid var(--border,#E7E4DC);white-space:nowrap;position:sticky;top:var(--ck-th-top,0px);z-index:35;background:#fff;box-shadow:inset 0 -1px 0 var(--border,#E7E4DC)}'
   /* หัวรถ/หัวเรือตรึงใต้หัวคอลัมน์ · แถวข้อมูลอยู่ layer ต่ำกว่า วาดทับไม่ได้ */
@@ -42758,7 +42758,7 @@ function renderVanCheckin(){
                   kpiHtml:kpi, pillsHtml:pills.html, totalPax:pills.total,
                   totalBreak:pills.dA+'A·'+pills.dC+'C·'+pills.dI+'I·'+pills.dF+'F'})
     +ckUnitBar(groups, gkeys, 'van', 'vckg-')
-    +'<div class="ck-card" style="overflow-x:auto"><table class="ck-tbl"><thead><tr>'
+    +'<div class="ck-card"><table class="ck-tbl"><thead><tr>'
     +'<th>Voucher</th><th>Agency</th><th>Submitted by</th><th>Customer (lead) · โทร</th><th class="ck-c">AD</th><th class="ck-c">CHD</th><th class="ck-c">INF</th><th class="ck-c">FOC</th><th>Time</th><th>Pickup</th><th class="ck-c">Room</th><th>Pickup area</th><th>Special request</th>'
     +'<th class="ck-c ck-in" style="border-left:2px solid #BFE3CC;color:#0F6E56">ขึ้นรถจริง</th><th class="ck-in"></th><th class="ck-c ck-in">&#10003;</th><th class="ck-in">เหตุผล</th>'
     +'</tr></thead><tbody>'+bodyHtml+'</tbody></table></div>';
@@ -42877,7 +42877,7 @@ function renderPierCheckin(){
                   kpiHtml:kpi, pillsHtml:pills.html, totalPax:pills.total,
                   totalBreak:pills.dA+'A·'+pills.dC+'C·'+pills.dI+'I·'+pills.dF+'F'})
     +ckUnitBar(groups, gkeys, 'pier', 'pckg-')
-    +'<div class="ck-card" style="overflow-x:auto"><table class="ck-tbl"><thead><tr>'
+    +'<div class="ck-card"><table class="ck-tbl"><thead><tr>'
     +'<th>Voucher</th><th>Agency</th><th>Submitted by</th><th>Customer (lead) · โทร</th><th class="ck-c">AD</th><th class="ck-c">CHD</th><th class="ck-c">INF</th><th class="ck-c">FOC</th><th>Time</th><th>Pickup</th><th class="ck-c">Room</th><th>Pickup area</th><th>Special request</th><th>มาถึงท่าโดย</th>'
     +'<th class="ck-c ck-in" style="border-left:2px solid #BFE3CC;color:#0F6E56">ขึ้นเรือจริง</th><th class="ck-in"></th><th class="ck-c ck-in">&#10003;</th><th class="ck-in">เหตุผล</th>'
     +'</tr></thead><tbody>'+bodyHtml+'</tbody></table></div>';
