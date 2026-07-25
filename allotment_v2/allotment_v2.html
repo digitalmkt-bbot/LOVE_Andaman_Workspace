@@ -42337,10 +42337,15 @@ function ckSyncSticky(host){
   requestAnimationFrame(function(){
     var tb=52;
     try{ var v=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--topbar'),10); if(!isNaN(v)&&v>=0) tb=v; }catch(_){}   // --topbar อาจเป็น 0 (ถอด topbar ออกแล้ว) · ต้องรับค่า 0 ด้วย
+    var hd=host.querySelector('.ck-hd');      var hH=hd?hd.offsetHeight:0;
+    var ub=host.querySelector('.ck-unitbar'); var uH=ub?ub.offsetHeight:0;
     var th=host.querySelector('table.ck-tbl thead th');
     var thH=th?th.offsetHeight:26;
-    host.style.setProperty('--ck-th-top', tb+'px');
-    host.style.setProperty('--ck-grp-top', (tb+thH)+'px');
+    if(hH+uH > Math.max(240, (window.innerHeight||800)*0.45)){ hH=0; uH=0; }   // กันค่าเพี้ยน · ถ้าแถบตรึงสูงเกินไปให้เลิกตรึงชั้นบน ดีกว่าดันตารางหล่น
+    host.style.setProperty('--ck-hd-top',   tb+'px');
+    host.style.setProperty('--ck-unit-top', (tb+hH)+'px');
+    host.style.setProperty('--ck-th-top',   (tb+hH+uH)+'px');
+    host.style.setProperty('--ck-grp-top',  (tb+hH+uH+thH)+'px');
   });
 }
 function ckStep(bkId, date, kind, delta){
@@ -42377,7 +42382,7 @@ function bkVCkToggle(bkId,date){ ckToggle(bkId,date,'van'); }
 // ── CSS ร่วม · ยกสไตล์หัวหน้า + ตารางมาจาก By-trip (t2-*) ─────────────────
 function ckSharedCSS(scope){
   return ''
-  +scope+' .ck-hd{padding:9px 14px;background:#fff;border:1px solid var(--border,#E7E4DC);border-radius:14px;box-shadow:0 2px 6px -3px rgba(15,23,42,.18);margin-bottom:12px}'
+  +scope+' .ck-hd{padding:9px 14px;background:#fff;border:1px solid var(--border,#E7E4DC);border-radius:14px;box-shadow:0 2px 6px -3px rgba(15,23,42,.18);margin-bottom:12px;position:sticky;top:var(--ck-hd-top,0px);z-index:45}'
   +scope+' .ck-hd-top{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}'
   +scope+' .ck-hd-nav{display:flex;gap:5px;padding-top:6px;flex:none}'
   +scope+' .ck-navbtn{width:27px;height:27px;border-radius:50%;border:none;background:#F0EEE8;color:#5F5E5A;font-size:15px;line-height:1;cursor:pointer;font-family:inherit}'
@@ -42438,7 +42443,7 @@ function ckSharedCSS(scope){
   +scope+' .ck-gav{width:44px;height:44px;border-radius:12px;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;flex:none;letter-spacing:.3px}'
   +scope+' .ck-gnm{font-size:17px;font-weight:800;color:#15201a;line-height:1.05}'
   +scope+' .ck-gsub{font-size:12.5px;color:#3F4654;margin-top:4px}'
-  +scope+' .ck-unitbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;margin-bottom:12px;background:#fff;border:1px solid var(--border,#E7E4DC);border-radius:12px}'
+  +scope+' .ck-unitbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;margin-bottom:12px;background:#fff;border:1px solid var(--border,#E7E4DC);border-radius:12px;position:sticky;top:var(--ck-unit-top,0px);z-index:40;box-shadow:0 2px 6px -4px rgba(15,23,42,.30)}'
   +scope+' .ck-unitbar-lbl{font-size:10px;font-weight:700;color:#8a8a82;text-transform:uppercase;letter-spacing:.05em;flex:none}'
   +scope+' .ck-pick{display:inline-block;max-width:230px;min-width:96px;white-space:normal;overflow-wrap:break-word;line-height:1.25;vertical-align:middle}'
   +scope+' .ck-vch{display:inline-block;max-width:128px;white-space:normal;overflow-wrap:anywhere;word-break:break-word;line-height:1.3;font-family:\'DM Mono\',monospace;vertical-align:middle}'
