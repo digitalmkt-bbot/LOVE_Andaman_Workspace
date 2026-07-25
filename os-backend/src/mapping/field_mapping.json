@@ -4830,6 +4830,16 @@
       "source": "ops.vanSplits",
       "kind": "json_text",
       "db_type": "text"
+    },
+    "ops_vancheckin": {
+      "source": "ops.vanCheckin",
+      "kind": "json_text",
+      "db_type": "text"
+    },
+    "ops_piercheckin": {
+      "source": "ops.pierCheckin",
+      "kind": "json_text",
+      "db_type": "text"
     }
   },
   "sb_bookings__passengers": {
@@ -5077,6 +5087,16 @@
     },
     "ops_reconfirm": {
       "source": "trips[].ops.reconfirm",
+      "kind": "json_text",
+      "db_type": "text"
+    },
+    "ops_vancheckin": {
+      "source": "trips[].ops.vanCheckin",
+      "kind": "json_text",
+      "db_type": "text"
+    },
+    "ops_piercheckin": {
+      "source": "trips[].ops.pierCheckin",
       "kind": "json_text",
       "db_type": "text"
     }

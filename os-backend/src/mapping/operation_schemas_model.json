@@ -4403,6 +4403,14 @@
       {
         "name": "ops_vansplits",
         "type": "text"
+      },
+      {
+        "name": "ops_vancheckin",
+        "type": "text"
+      },
+      {
+        "name": "ops_piercheckin",
+        "type": "text"
       }
     ],
     "primary_key": "id",
@@ -4617,6 +4625,14 @@
       },
       {
         "name": "ops_reconfirm",
+        "type": "text"
+      },
+      {
+        "name": "ops_vancheckin",
+        "type": "text"
+      },
+      {
+        "name": "ops_piercheckin",
         "type": "text"
       }
     ],

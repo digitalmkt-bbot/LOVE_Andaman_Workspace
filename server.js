@@ -665,6 +665,14 @@ async function initDb(){
       for(const [c,t] of _tripOps){
         await sq(`sb_bookings__trips.${c} col`, `ALTER TABLE ${OS_SCHEMA}."sb_bookings__trips" ADD COLUMN IF NOT EXISTS "${c}" ${t}`);
       }
+      // §Check-in หน้างาน (2026-07-25): ops.vanCheckin / ops.pierCheckin เก็บผลเช็คอินขึ้นรถ-ขึ้นเรือ
+      // (actualPax / noShow / at / by / reasonCode / reasonNote / reasonAt) เป็น json_text เหมือน ops.vanSplits.
+      // ไม่มีคอลัมน์ = ข้อมูลเช็คอินหายทุกครั้งที่ refresh จาก cloud และเครื่องอื่นมองไม่เห็น.
+      for(const _t of ['sb_bookings','sb_bookings__trips']){
+        for(const _c of ['ops_vancheckin','ops_piercheckin']){
+          await sq(`${_t}.${_c} col`, `ALTER TABLE ${OS_SCHEMA}."${_t}" ADD COLUMN IF NOT EXISTS "${_c}" text`);
+        }
+      }
       await sq('sb_rate_types.pricetiers col', `ALTER TABLE ${OS_SCHEMA}."sb_rate_types" ADD COLUMN IF NOT EXISTS "pricetiers" text`);
       // §per-rate-type nationality scope (2026-07-18, from lk-inbox): both | thai | fr — filters price columns, contract, and booking pax fields. NULL/absent → 'both' on the client.
       await sq('sb_rate_types.nationalityscope col', `ALTER TABLE ${OS_SCHEMA}."sb_rate_types" ADD COLUMN IF NOT EXISTS "nationalityscope" text`);
