@@ -42402,7 +42402,8 @@ function ckSharedCSS(scope){
   +scope+' table.ck-tbl th{text-align:left;font-size:9px;font-weight:700;color:#a5a49d;text-transform:uppercase;letter-spacing:.04em;padding:7px 10px;border-bottom:1px solid var(--border,#E7E4DC);white-space:nowrap;position:sticky;top:var(--ck-th-top,52px);z-index:35;background:#fff;box-shadow:inset 0 -1px 0 var(--border,#E7E4DC)}'
   /* หัวรถ/หัวเรือตรึงใต้หัวคอลัมน์ · แถวข้อมูลอยู่ layer ต่ำกว่า วาดทับไม่ได้ */
   +scope+' table.ck-tbl tr.ck-ghd>td{position:sticky;top:var(--ck-grp-top,78px);z-index:30}'
-  +scope+' table.ck-tbl tbody{position:relative}'
+  +scope+' table.ck-tbl tr.ck-row>td,'+scope+' table.ck-tbl tr.ck-zhead>td,'+scope+' table.ck-tbl tr.ck-warn>td{position:relative;z-index:0}'
+  +scope+' table.ck-tbl tr.ck-ghd>td{box-shadow:0 2px 5px -3px rgba(15,23,42,.35)}'
   +scope+' table.ck-tbl td{padding:13px 8px;border-bottom:1px solid #F4F2ED;vertical-align:middle;white-space:nowrap}'
   +scope+' table.ck-tbl tr.ck-row:hover td{background:#fcfcfd}'
   +scope+' table.ck-tbl tr.ck-row.ck-nsfull td{background:#FDF3F2}'
