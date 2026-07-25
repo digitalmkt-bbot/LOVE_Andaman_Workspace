@@ -42331,6 +42331,8 @@ function ckSharedCSS(scope){
   +scope+' .ck-gav{width:44px;height:44px;border-radius:12px;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;flex:none;letter-spacing:.3px}'
   +scope+' .ck-gnm{font-size:17px;font-weight:800;color:#15201a;line-height:1.05}'
   +scope+' .ck-gsub{font-size:12.5px;color:#3F4654;margin-top:4px}'
+  +scope+' .ck-unitbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;margin-bottom:12px;background:#fff;border:1px solid var(--border,#E7E4DC);border-radius:12px}'
+  +scope+' .ck-unitbar-lbl{font-size:10px;font-weight:700;color:#8a8a82;text-transform:uppercase;letter-spacing:.05em;flex:none}'
   +scope+' .ck-pick{display:inline-block;max-width:230px;min-width:96px;white-space:normal;overflow-wrap:break-word;line-height:1.25;vertical-align:middle}'
   +scope+' .ck-vch{display:inline-block;max-width:128px;white-space:normal;overflow-wrap:anywhere;word-break:break-word;line-height:1.3;font-family:\'DM Mono\',monospace;vertical-align:middle}'
   +scope+' .ck-tel{display:inline-block;margin-top:4px;font-family:\'DM Mono\',monospace;font-size:13px;font-weight:700;letter-spacing:-.2px;line-height:1.3;color:#0C4E8A;text-decoration:none;white-space:normal;overflow-wrap:anywhere;max-width:190px}'
@@ -42380,20 +42382,31 @@ function ckDayHeader(o){
   +'</div>';
 }
 // แถบการ์ดโปรแกรม/ทริป (เหมือน By-trip) · famFilter/routeFilter + ชื่อฟังก์ชันกรองส่งเข้ามา
-function ckRoutePills(date, famSel, routeSel, famFn, routeFn){
+// การ์ดโปรแกรม/ทริป · ตัวเลขบนการ์ด = "รับลูกค้า" แยกโซน PK / KL / มาเอง และสะท้อนผลเช็คอินจริง
+// (done/tot = pax ที่เช็คอินแล้ว / pax ทั้งหมดของโซนนั้นในทริปนั้น) · kind = 'van' | 'pier'
+function ckRoutePills(date, famSel, routeSel, famFn, routeFn, kind){
   var e=ckEsc;
+  kind=kind||'van';
   var P=function(pax,k){ return (typeof bkV2PaxTot==='function')?bkV2PaxTot(pax||{},k):0; };
   var ABBR={speedboat:'SB',catamaran:'CAT',sunset:'SS',premium:'PREM',longtail:'LT',private:'PRIV',early:'EARLY',whale:'WS'};
   var abbr=function(s){ var k=String(s||'').toLowerCase().trim(); if(!k) return ''; for(var w in ABBR){ if(k.indexOf(w)>=0) return ABBR[w]; } var ws=String(s).trim().split(/\s+/); return (ws.length>1?ws.map(function(x){return x[0]||'';}).join(''):String(s).slice(0,4)).toUpperCase(); };
-  var fam={}, dA=0,dC=0,dI=0,dF=0;
+  var fam={}, rst={}, dA=0,dC=0,dI=0,dF=0;
   (SB_BOOKINGS||[]).forEach(function(b){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     (b.trips||[]).forEach(function(t){ if((t.date||'')!==date) return;
-      var p=t.pax||{}, ad=P(p,'ad'),chd=P(p,'chd'),inf=P(p,'inf'),foc=P(p,'foc');
+      var p=t.pax||{}, ad=P(p,'ad'),chd=P(p,'chd'),inf=P(p,'inf'),foc=P(p,'foc'), pax=ad+chd+inf+foc;
       dA+=ad;dC+=chd;dI+=inf;dF+=foc;
-      var f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(t.routeId):null; if(!f) return;
-      var a=fam[f.id]=fam[f.id]||{fam:f,pax:0,rids:{},locked:0};
-      a.pax+=ad+chd+inf+foc; a.rids[t.routeId]=1;
+      var f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(t.routeId):null;
+      if(f){ var a=fam[f.id]=fam[f.id]||{fam:f,pax:0,rids:{},locked:0}; a.pax+=pax; a.rids[t.routeId]=1; }
+      if(typeof bkIsOvnReturn==='function' && bkIsOvnReturn(t)) return;   // ขากลับ OVN · ไม่มีการรับขึ้นรถ
+      var R=rst[t.routeId]=rst[t.routeId]||{PK:{tot:0,done:0},KL:{tot:0,done:0},OWN:{tot:0,done:0}};
+      var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
+      var z=(typeof bkV2EffZone==='function')?bkV2EffZone(b,t):(t.zone||b.pickupZone||'NoTransfer');
+      var own=(b.pickupSelf || z==='NoTransfer' || z==='NT' || !O.vanId);
+      var ck=(kind==='pier')?O.pierCheckin:O.vanCheckin;
+      var done=(ck&&ck.at)?(ck.actualPax!=null?ck.actualPax:pax):0;
+      var key = own ? 'OWN' : (R[z]?z:'PK');
+      R[key].tot+=pax; R[key].done+=done;
     });
   });
   (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(function(rr){
@@ -42401,6 +42414,17 @@ function ckRoutePills(date, famSel, routeSel, famFn, routeFn){
     var f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(rr.id):null; if(!f) return;
     var a=fam[f.id]=fam[f.id]||{fam:f,pax:0,rids:{},locked:0}; a.locked+=lk; a.rids[rr.id]=1;
   });
+  // บล็อกตัวเลขต่อโซน · เขียว = ครบ · เหลือง = ยังไม่ครบ · เทา = ยังไม่เริ่ม · ม่วง = มาเอง (ไม่มีรถรับ)
+  var zoneBlock=function(lbl, o, isOwn){
+    if(!o || o.tot<=0) return '';
+    var full=(o.done>=o.tot), part=(o.done>0&&!full);
+    var C = isOwn ? {bg:'#F4E8FB',num:'#6B289A',lab:'#8b5cb0'}
+          : full  ? {bg:'#DCF4E8',num:'#0C6B47',lab:'#3f8b6c'}
+          : part  ? {bg:'#FAEEDA',num:'#854F0B',lab:'#a37d3a'}
+          :         {bg:'#F1EFE8',num:'#5F5E5A',lab:'#8a8a82'};
+    var val = isOwn ? String(o.tot) : (o.done+'/'+o.tot);
+    return '<span title="'+e(lbl)+' · '+(isOwn?('มาเอง '+o.tot+' pax · ไม่มีรถรับ'):('เช็คอินแล้ว '+o.done+' จาก '+o.tot+' pax'))+'" style="display:inline-flex;flex-direction:column;align-items:center;line-height:1;background:'+C.bg+';border-radius:9px;padding:4px 10px"><span style="font-family:\'DM Mono\',monospace;font-size:16px;font-weight:700;color:'+C.num+'">'+val+'</span><span style="font-size:9px;font-weight:700;color:'+C.lab+';margin-top:2px">'+e(lbl)+'</span></span>';
+  };
   var list=Object.keys(fam).map(function(k){ return fam[k]; }).sort(function(a,b){ return b.pax-a.pax||(b.locked-a.locked); });
   var none=(!famSel && !routeSel);
   var html=(list.length>1?'<button onclick="'+famFn+'(null)" title="แสดงทุกโปรแกรม" style="font-size:12px;border:1px solid '+(none?'#185FA5':'#E7E4DC')+';background:'+(none?'#E6F1FB':'#fff')+';color:'+(none?'#0C447C':'#5F5E5A')+';border-radius:999px;padding:6px 13px;font-weight:'+(none?'700':'600')+';white-space:nowrap;cursor:pointer;font-family:inherit">ทั้งหมด <span style="font-family:\'DM Mono\',monospace">'+(dA+dC+dI+dF)+'</span></button>':'');
@@ -42413,15 +42437,53 @@ function ckRoutePills(date, famSel, routeSel, famFn, routeFn){
       var open=(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(rid,date);
       var lblFull=subLbl(rid), lbl=e(abbr(lblFull)||lblFull||'trip');
       if(!open) return '<span title="'+e(lblFull)+' · ไม่ออกวันนี้" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;border-left:1px solid '+col+'33;background:#FCEBEB;color:#A32D2D;padding:8px 12px;white-space:nowrap">'+lbl+' <span style="font-size:10px;font-weight:600;opacity:.85">ไม่ออก</span></span>';
-      var al=(typeof getAllotment==='function')?getAllotment(rid,date):null;
-      var bk=al?(al.seatsConsumed||0):0, cap=al?(al.availableCapacity||0):0, av=al?(al.seatsAvailable||0):0;
-      var fr=cap>0?av/cap:0, ron=(routeSel===rid);
-      var F=av<=0?{bg:'#FCEBEB',num:'#A32D2D',lab:'#c07070'}:fr<0.20?{bg:'#FAEEDA',num:'#854F0B',lab:'#a37d3a'}:{bg:'#DCF4E8',num:'#0C6B47',lab:'#3f8b6c'};
-      return '<button onclick="'+routeFn+'(\''+rid+'\')" title="'+e(lblFull)+' · จอง '+bk+'/'+cap+' · ว่าง '+av+' · คลิกกรองเฉพาะทริปนี้" style="display:inline-flex;align-items:center;gap:8px;border:none;border-left:1px solid '+col+'33;background:'+(ron?'#EFEAFB':'#fff')+';white-space:nowrap;padding:8px 12px;cursor:pointer;font-family:inherit"><span style="font-size:12.5px;font-weight:700;color:'+(ron?'#4A2E86':'#5A5A52')+'">'+lbl+'</span><span style="font-family:\'DM Mono\',monospace;font-size:12px;color:#a09a90">'+bk+'/'+cap+'</span><span style="display:inline-flex;flex-direction:column;align-items:center;line-height:1;background:'+F.bg+';border-radius:9px;padding:4px 11px"><span style="font-family:\'DM Mono\',monospace;font-size:20px;font-weight:700;color:'+F.num+'">'+av+'</span><span style="font-size:9px;font-weight:600;color:'+F.lab+';margin-top:2px">ว่าง</span></span></button>';
+      var R=rst[rid]||{PK:{tot:0,done:0},KL:{tot:0,done:0},OWN:{tot:0,done:0}};
+      var tot=R.PK.tot+R.KL.tot+R.OWN.tot, done=R.PK.done+R.KL.done;
+      var blocks=zoneBlock('PK',R.PK)+zoneBlock('KL',R.KL)+zoneBlock('มาเอง',R.OWN,true);
+      if(!blocks) blocks='<span style="font-size:11px;color:#b0aea6">ไม่มี booking</span>';
+      var ron=(routeSel===rid);
+      return '<button onclick="'+routeFn+'(\''+rid+'\')" title="'+e(lblFull)+' · '+(kind==='pier'?'ขึ้นเรือ':'ขึ้นรถ')+'แล้ว '+done+' จาก '+(R.PK.tot+R.KL.tot)+' pax ที่มีรถรับ'+(R.OWN.tot?(' · มาเอง '+R.OWN.tot+' pax'):'')+' · คลิกกรองเฉพาะทริปนี้" style="display:inline-flex;align-items:center;gap:8px;border:none;border-left:1px solid '+col+'33;background:'+(ron?'#EFEAFB':'#fff')+';white-space:nowrap;padding:8px 12px;cursor:pointer;font-family:inherit"><span style="font-size:12.5px;font-weight:700;color:'+(ron?'#4A2E86':'#5A5A52')+'">'+lbl+'</span><span style="font-family:\'DM Mono\',monospace;font-size:12px;color:#a09a90">'+tot+' pax</span>'+blocks+'</button>';
     }).join('');
     return '<div style="display:inline-flex;align-items:stretch;border:1.5px solid '+(famOn?col:col+'aa')+';background:#fff;border-radius:14px;overflow:hidden;flex-wrap:wrap;'+(famOn?'box-shadow:0 0 0 2px '+col+'33;':'')+'"><button onclick="'+famFn+'(\''+a.fam.id+'\')" title="กรองเฉพาะ '+e(a.fam.name)+'" style="display:inline-flex;align-items:center;gap:7px;border:none;background:'+col+'14;font-size:14px;font-weight:700;color:'+col+';white-space:nowrap;padding:9px 13px;cursor:pointer;font-family:inherit"><span style="width:9px;height:9px;border-radius:50%;background:'+col+';flex:none"></span>'+e(a.fam.name)+' <span style="font-family:\'DM Mono\',monospace;font-weight:600;opacity:.85;font-size:13px">'+a.pax+'</span>'+(a.locked>0?' <span style="font-size:10px;color:#C0392B">&#128274;'+a.locked+'</span>':'')+'</button>'+subs+'</div>';
   }).join('');
   return {html:html, dA:dA, dC:dC, dI:dI, dF:dF, total:dA+dC+dI+dF};
+}
+
+// เด้งไปที่แถวหัวรถ/หัวเรือที่กด · เลื่อนให้พ้นหัวตารางที่ตรึงไว้ แล้วไฮไลต์สั้นๆ
+function ckJump(id){
+  var el=document.getElementById(id); if(!el) return;
+  var top=(window.pageYOffset||0)+el.getBoundingClientRect().top-170;
+  try{ window.scrollTo({top:Math.max(0,top), behavior:'smooth'}); }catch(_){ window.scrollTo(0,Math.max(0,top)); }
+  var prev=el.style.boxShadow;
+  el.style.transition='box-shadow .18s'; el.style.boxShadow='inset 0 0 0 2px #0F6E56';
+  setTimeout(function(){ el.style.boxShadow=prev||''; }, 1500);
+}
+// การ์ดรถ/เรือของเส้นทางที่กำลังดูอยู่ · สร้างจาก groups ก้อนเดียวกับตาราง → ตัวเลขตรงกันเสมอ
+// กดแล้วเด้งไปที่หัวคันนั้นในตาราง
+function ckUnitBar(groups, gkeys, kind, anchorPrefix){
+  var e=ckEsc, isPier=(kind==='pier');
+  if(!gkeys.length) return '';
+  var chips=gkeys.map(function(k){
+    var g=groups[k], uid=isPier?g.bid:g.vid;
+    var tot=g.rows.reduce(function(s,r){ return s+(r.expect!=null?r.expect:r.booked); },0);
+    var done=g.rows.reduce(function(s,r){ var c=r.ck; return s+((c&&c.at)?(c.actualPax!=null?c.actualPax:0):0); },0);
+    var nm, col;
+    if(isPier){ var bo=(typeof getBoat==='function'?getBoat(uid):null)||{}; var bc=(typeof getBoatColor==='function')?getBoatColor(uid):null;
+      nm=bo.name||uid; col=bo.color||(bc&&bc.text&&bc.text!=='#666'?bc.text:'')||'#185FA5'; }
+    else { var v=(typeof vehGet==='function'?vehGet(uid):null)||{}; var cp=(typeof vehChipPair==='function')?vehChipPair(uid):['#EEEDF0','#555'];
+      nm=v.name||uid; col=cp[1]||'#5F5E5A'; }
+    var full=(tot>0&&done>=tot), part=(done>0&&!full);
+    var numCol=full?'#0C6B47':part?'#854F0B':'#5F5E5A';
+    var numBg =full?'#DCF4E8':part?'#FAEEDA':'#F1EFE8';
+    var rt=(typeof getRoute==='function'?getRoute(g.routeId):null)||{};
+    return '<button onclick="ckJump(\''+anchorPrefix+k.replace(/[^A-Za-z0-9_-]/g,'_')+'\')" title="'+e(nm)+' · '+e(rt.name||'')+' · '+(isPier?'ขึ้นเรือ':'ขึ้นรถ')+'แล้ว '+done+'/'+tot+' pax · คลิกเพื่อเด้งไปที่คันนี้" style="display:inline-flex;align-items:center;gap:7px;border:1.5px solid '+col+'55;background:#fff;border-radius:11px;padding:5px 10px 5px 6px;cursor:pointer;font-family:inherit;white-space:nowrap">'
+      +'<span style="width:8px;height:8px;border-radius:50%;background:'+col+';flex:none"></span>'
+      +'<span style="font-size:12px;font-weight:700;color:#3a3a36">'+e(nm)+'</span>'
+      +'<span style="font-family:\'DM Mono\',monospace;font-size:12.5px;font-weight:700;color:'+numCol+';background:'+numBg+';border-radius:7px;padding:2px 8px">'+done+'/'+tot+'</span></button>';
+  }).join('');
+  return '<div class="ck-unitbar">'
+    +'<span class="ck-unitbar-lbl">'+(isPier?'&#128676; เรือวันนี้':'&#128656; รถวันนี้')+'</span>'+chips
+    +'<span style="margin-left:auto;font-size:10.5px;color:#a5a49d;white-space:nowrap">คลิกการ์ดเพื่อเด้งไปที่'+(isPier?'ลำ':'คัน')+'นั้น</span></div>';
 }
 // แถวลูกค้า · ใช้ร่วม 2 หน้า (kind='van'|'pier') · extra = html คอลัมน์เพิ่ม (แทรกก่อนบล็อกเช็คอิน)
 function ckRowHtml(r, date, kind, extraHtml){
@@ -42547,7 +42609,7 @@ function renderVanCheckin(){
     var infoHtml=info.length?'<span style="display:inline-flex;align-items:center;gap:13px;flex-wrap:wrap">'+info.join('<span style="width:1px;height:12px;background:#dcdad3"></span>')+'</span>':'';
     var soft=(typeof _bkV2Soft==='function')?_bkV2Soft(c[0],0.92):c[0];
     bodyHtml+='<tr><td colspan="17" style="background:'+soft+';padding:7px 12px">'
-      +'<div style="display:flex;align-items:center;gap:11px;flex-wrap:wrap">'+vanPill+infoHtml
+      +'<div id="vckg-'+k.replace(/[^A-Za-z0-9_-]/g,'_')+'" style="display:flex;align-items:center;gap:11px;flex-wrap:wrap;border-radius:8px">'+vanPill+infoHtml
       +'<span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:'+(rt.color||'#5F5E5A')+'"><span style="width:8px;height:8px;border-radius:50%;background:'+(rt.color||'#999')+'"></span>'+e(rt.name||g.routeId||'—')+'</span>'
       +'<span style="margin-left:auto;font-size:11px;color:#8a8a82;font-family:\'DM Mono\',monospace;white-space:nowrap">ขึ้นรถ '+vChecked+'/'+g.rows.length+' · '+vPax+' pax'+(vNo>0?' · <span style="color:#A32D2D;font-weight:700">No-show '+vNo+'</span>':'')+'</span>'
       +'</div></td></tr>';
@@ -42566,7 +42628,7 @@ function renderVanCheckin(){
   }
   if(!bodyHtml) bodyHtml='<tr class="ck-empty"><td colspan="17">ไม่มี booking ที่ต้องเช็คอินรถในวันนี้</td></tr>';
 
-  var pills=ckRoutePills(date, _vckFam, _vckRoute, 'vckSetFam', 'vckSetRoute');
+  var pills=ckRoutePills(date, _vckFam, _vckRoute, 'vckSetFam', 'vckSetRoute', 'van');
   var kpi='<span style="background:#E1F5EE;color:#0F6E56">ขึ้นรถแล้ว '+tChecked+'/'+tRows+'</span>'
         +(tNoShow>0?'<span style="background:#FCEBEB;color:#A32D2D">No-show '+tNoShow+'</span>':'')
         +'<span style="background:#F1EFE8;color:#5F5E5A">เหลือ '+(tRows-tChecked)+'</span>';
@@ -42576,6 +42638,7 @@ function renderVanCheckin(){
     +ckDayHeader({date:date, shiftFn:'vanCkDateShift', todayFn:'vanCkToday', pickFn:'vckPickDay',
                   kpiHtml:kpi, pillsHtml:pills.html, totalPax:pills.total,
                   totalBreak:pills.dA+'A·'+pills.dC+'C·'+pills.dI+'I·'+pills.dF+'F'})
+    +ckUnitBar(groups, gkeys, 'van', 'vckg-')
     +'<div class="ck-card" style="overflow-x:auto"><table class="ck-tbl"><thead><tr>'
     +'<th>Voucher</th><th>Agency</th><th>Submitted by</th><th>Customer (lead) · โทร</th><th class="ck-c">AD</th><th class="ck-c">CHD</th><th class="ck-c">INF</th><th class="ck-c">FOC</th><th>Time</th><th>Pickup</th><th class="ck-c">Room</th><th>Pickup area</th><th>Special request</th>'
     +'<th class="ck-c ck-in" style="border-left:2px solid #BFE3CC;color:#0F6E56">ขึ้นรถจริง</th><th class="ck-in"></th><th class="ck-c ck-in">&#10003;</th><th class="ck-in">เหตุผล</th>'
@@ -42663,7 +42726,7 @@ function renderPierCheckin(){
     if(boat.type) binfo.push('<span style="display:inline-flex;align-items:center;gap:4px"><span style="font-size:9px;color:#a3a39b;text-transform:uppercase;letter-spacing:.03em">type</span><b style="font-weight:700;color:#3a3a36">'+e(boat.type)+'</b></span>');
     var binfoHtml=binfo.length?'<span style="display:inline-flex;align-items:center;gap:13px;flex-wrap:wrap">'+binfo.join('<span style="width:1px;height:12px;background:#dcdad3"></span>')+'</span>':'';
     bodyHtml+='<tr><td colspan="18" style="background:'+softBg+';padding:7px 12px">'
-      +'<div style="display:flex;align-items:center;gap:11px;flex-wrap:wrap">'+boatPill+binfoHtml
+      +'<div id="pckg-'+k.replace(/[^A-Za-z0-9_-]/g,'_')+'" style="display:flex;align-items:center;gap:11px;flex-wrap:wrap;border-radius:8px">'+boatPill+binfoHtml
       +'<span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:'+(rt.color||'#5F5E5A')+'"><span style="width:8px;height:8px;border-radius:50%;background:'+(rt.color||'#999')+'"></span>'+e(rt.name||g.routeId||'—')+'</span>'
       +'<span style="margin-left:auto;font-size:11px;color:#8a8a82;font-family:\'DM Mono\',monospace;white-space:nowrap">ขึ้นเรือ '+gChecked+'/'+g.rows.length+' · รอรับ '+gExp+' pax'+(gNo>0?' · <span style="color:#A32D2D;font-weight:700">No-show '+gNo+'</span>':'')+'</span>'
       +'</div></td></tr>';
@@ -42681,7 +42744,7 @@ function renderPierCheckin(){
   }
   if(!bodyHtml) bodyHtml='<tr class="ck-empty"><td colspan="18">ไม่มี booking ที่ต้องเช็คอินหน้าท่าในวันนี้</td></tr>';
 
-  var pills=ckRoutePills(date, _pckFam, _pckRoute, 'pckSetFam', 'pckSetRoute');
+  var pills=ckRoutePills(date, _pckFam, _pckRoute, 'pckSetFam', 'pckSetRoute', 'pier');
   var kpi='<span style="background:#E6F1FB;color:#0C447C">ขึ้นเรือแล้ว '+tChecked+'/'+tRows+'</span>'
         +(tNoShow>0?'<span style="background:#FCEBEB;color:#A32D2D">No-show '+tNoShow+'</span>':'')
         +'<span style="background:#F1EFE8;color:#5F5E5A">รอรับ '+tExpect+' pax</span>';
@@ -42691,6 +42754,7 @@ function renderPierCheckin(){
     +ckDayHeader({date:date, shiftFn:'pckDateShift', todayFn:'pckToday', pickFn:'pckPickDay',
                   kpiHtml:kpi, pillsHtml:pills.html, totalPax:pills.total,
                   totalBreak:pills.dA+'A·'+pills.dC+'C·'+pills.dI+'I·'+pills.dF+'F'})
+    +ckUnitBar(groups, gkeys, 'pier', 'pckg-')
     +'<div class="ck-card" style="overflow-x:auto"><table class="ck-tbl"><thead><tr>'
     +'<th>Voucher</th><th>Agency</th><th>Submitted by</th><th>Customer (lead) · โทร</th><th class="ck-c">AD</th><th class="ck-c">CHD</th><th class="ck-c">INF</th><th class="ck-c">FOC</th><th>Time</th><th>Pickup</th><th class="ck-c">Room</th><th>Pickup area</th><th>Special request</th><th>มาถึงท่าโดย</th>'
     +'<th class="ck-c ck-in" style="border-left:2px solid #BFE3CC;color:#0F6E56">ขึ้นเรือจริง</th><th class="ck-in"></th><th class="ck-c ck-in">&#10003;</th><th class="ck-in">เหตุผล</th>'
