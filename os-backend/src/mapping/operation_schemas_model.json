@@ -668,6 +668,54 @@
       {
         "name": "b6_charterbookingid",
         "type": "text"
+      },
+      {
+        "name": "b8_route",
+        "type": "text"
+      },
+      {
+        "name": "b8_type",
+        "type": "text"
+      },
+      {
+        "name": "b8_booked",
+        "type": "bigint"
+      },
+      {
+        "name": "b8_charterbookingid",
+        "type": "text"
+      },
+      {
+        "name": "b14_route",
+        "type": "text"
+      },
+      {
+        "name": "b14_type",
+        "type": "text"
+      },
+      {
+        "name": "b14_booked",
+        "type": "bigint"
+      },
+      {
+        "name": "b14_charterbookingid",
+        "type": "text"
+      },
+      {
+        "name": "b15_route",
+        "type": "text"
+      },
+      {
+        "name": "b15_type",
+        "type": "text"
+      },
+      {
+        "name": "b15_booked",
+        "type": "bigint"
+      },
+      {
+        "name": "b15_charterbookingid",
+        "type": "text"
       }
     ],
     "primary_key": "id",
@@ -6053,5 +6101,33 @@
       }
     ],
     "rows": 0
+  },
+  "boat_capovr": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "text"
+      },
+      {
+        "name": "key",
+        "type": "text"
+      },
+      {
+        "name": "cap",
+        "type": "bigint"
+      },
+      {
+        "name": "reason",
+        "type": "text"
+      },
+      {
+        "name": "by",
+        "type": "text"
+      },
+      {
+        "name": "at",
+        "type": "text"
+      }
+    ]
   }
 }

@@ -8324,7 +8324,10 @@ function bop2OpenCellPopover(routeId, dateStr, anchorEl){
       const ic = x.isCharter ? '⚓ ' : '';
       // per-boat load = pax actually assigned to THIS boat (bk.ops.boatId) · 0 = user hasn't assigned the bookings yet
       const _boatLoad = (typeof baAssignedPax==='function') ? baAssignedPax(dateStr, x.boat.id) : 0;
-      const seats = x.isCharter ? 'charter · ' + x.boat.cap : _boatLoad + '/' + x.boat.cap;
+      const _capD = (typeof boatCapFor==='function') ? boatCapFor(x.boat.id, dateStr) : x.boat.cap;
+      const _capB = (typeof boatCapBadge==='function') ? boatCapBadge(x.boat.id, dateStr, 'sm') : '';
+      const seats = (x.isCharter ? 'charter · ' + _capD : _boatLoad + '/' + _capD) + _capB
+        + '<button onclick="event.stopPropagation();boatCapModalOpen(\''+x.boat.id+'\',\''+dateStr+'\',function(){ if(typeof renderOp===\'function\') renderOp(); });bop2CloseCellPopover();" title="ปรับที่นั่งของลำนี้ เฉพาะวันนี้" style="margin-left:5px;border:1px solid #cfd8e3;background:#fff;color:#185FA5;border-radius:5px;padding:0 5px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">cap</button>';
       const removeBtn = x.isCharter
         ? '<span style="font-size:10px;color:var(--ink-soft);font-style:italic">locked</span>'
         : '<button onclick="if(confirm(\'Unassign '+esc(x.boat.name)+'?\')){bop2UnassignBoat(\''+dateStr+'\',\''+x.boat.id+'\');bop2CloseCellPopover();}" title="Unassign" style="font-size:13px;color:#a32d2d;background:none;border:none;cursor:pointer;padding:0 4px;line-height:1">×</button>';
@@ -9992,7 +9995,7 @@ function getAssignedBoatsForRouteDate(routeId, dateStr){
       route: op.route,
       type: op.type || 'normal',
       charterBookingId: op.charterBookingId || null,
-      capacity: boat.cap || 0
+      capacity: (typeof boatCapFor==='function') ? boatCapFor(bid, dateStr) : (boat.cap || 0)   // §cap override รายวัน
     });
   });
   return out;
@@ -37931,6 +37934,7 @@ window._laReloadData=function(){
     if(typeof VANJOB_SREQ!=='undefined' && d.vanjob_sreq) VANJOB_SREQ=d.vanjob_sreq;
     if(typeof VANJOB_SENT!=='undefined' && d.vanjob_sent) VANJOB_SENT=d.vanjob_sent;
     if(typeof VANJOB_DRIVER!=='undefined' && d.vanjob_driver) VANJOB_DRIVER=d.vanjob_driver;
+    if(typeof BOAT_CAP_OVR!=='undefined' && d.boat_capovr) BOAT_CAP_OVR=d.boat_capovr;   // §cap override รายวัน
     return true;
   }catch(e){ console.warn('_laReloadData', e); return false; }
 };
@@ -40956,7 +40960,7 @@ function bkV2AssignBoat(bkId, boatId, date){
     const _chDates=[...new Set((b.trips||[]).map(t=>t.date).filter(Boolean))];
     for(let ci=0; ci<_chDates.length; ci++){ if(baCharterBoatIds(_chDates[ci]).has(boatId)){ const _bo=(BOATS||[]).find(x=>x.id===boatId); alert('เรือ '+((_bo&&_bo.name)||boatId)+' ถูกใช้เป็นเหมาลำ (Charter) วันที่ '+_chDates[ci]+' · เลือกให้ลูกค้า seat ไม่ได้'); return; } }
     const bo=(BOATS||[]).find(x=>x.id===boatId);
-    const cap=bo?(+bo.cap||0):0;
+    const cap=(typeof boatCapFor==='function')?boatCapFor(boatId,_d):(bo?(+bo.cap||0):0);   // §cap override รายวัน
     if(cap>0){
       // The boat is being assigned for ONE travel day — only that day's load can overflow it.
       // (It used to loop every date of the booking, which was right when one boat served all days.)
@@ -40988,7 +40992,7 @@ function bkV2BoatAssignSelected(date, routeId, boatId){
   if(baCharterBoatIds(date).has(boatId)){ const _bo=(BOATS||[]).find(x=>x.id===boatId); alert('เรือ '+((_bo&&_bo.name)||boatId)+' ถูกใช้เป็นเหมาลำ (Charter) วันนี้ · เลือกให้ลูกค้า seat ไม่ได้'); return; }
   const sel=window._bkV2BoatSel||{}; const ids=Object.keys(sel).filter(k=>sel[k]);
   if(!ids.length){ alert('Tick at least one row first.'); return; }
-  const bo=(BOATS||[]).find(x=>x.id===boatId); const cap=bo?(+bo.cap||0):0;
+  const bo=(BOATS||[]).find(x=>x.id===boatId); const cap=(typeof boatCapFor==='function')?boatCapFor(boatId,date):(bo?(+bo.cap||0):0);   // §cap override รายวัน
   const TOL=(typeof BA_CAP_TOL!=='undefined')?BA_CAP_TOL:2;
   let done=0; const skipped=[];
   ids.forEach(id=>{
@@ -42119,6 +42123,110 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
     <div class="note">หมายเหตุ / Notes: ① ขาไป = รถคันนี้รับจากโรงแรมส่งท่าเรือ · ② ขากลับ = รถคันนี้รับจากท่าเรือส่งจุดหมาย · รายที่ป้าย "↩ ขากลับ โดย ‹รถ›" = ขากลับใช้รถคันอื่น (ดูใบงานของรถคันนั้น)</div>
     <div class="callnote">&#9742; หาลูกค้าไม่เจอ ให้รอไม่เกิน <b>5 นาที</b> · มีปัญหาในการรับลูกค้า ติดต่อ <b>088-765-4678</b> · <b>081-970-9977</b> · <b>093-583-7962</b></div>`;
 }
+// ══ §Boat capacity override (2026-07-25) · ปรับที่นั่งของเรือลำนั้น "เฉพาะวันนั้น" ══
+// เก็บเป็น keyed map BOAT_CAP_OVR['YYYY-MM-DD::boatId'] = {cap, reason, by, at}
+// (แพทเทิร์นเดียวกับ VANJOB_DRIVER · ไม่ยัดลง TRIPS เพราะตาราง trips map ไว้แบบระบุชื่อเรือตายตัว)
+// ผูกกับวันเดียว → วันถัดไปกลับไปใช้ cap ปกติเอง ไม่ต้องจำมาแก้คืน
+// เพดานแข็ง = licensePax (ที่นั่งจดทะเบียนจริง) · เกินกว่านั้นไม่อนุญาต ไม่ว่าใครกด
+let BOAT_CAP_OVR={};
+(function(){ try{ const lsKey=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2'); const d=JSON.parse(localStorage.getItem(lsKey)||'{}'); if(d&&d.boat_capovr&&typeof d.boat_capovr==='object') BOAT_CAP_OVR=d.boat_capovr; }catch(_){} })();
+function boatCapPersist(){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */
+  try{ const lsKey=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2'); const d=JSON.parse(localStorage.getItem(lsKey)||'{}'); d.boat_capovr=BOAT_CAP_OVR; localStorage.setItem(lsKey,JSON.stringify(d)); }catch(_){}
+}
+function _boatCapKey(boatId,date){ return String(date||'')+'::'+String(boatId||''); }
+function boatCapBase(boatId){ const b=(typeof getBoat==='function')?getBoat(boatId):null; return b?(+b.cap||0):0; }
+function boatCapLicense(boatId){ const b=(typeof getBoat==='function')?getBoat(boatId):null; if(!b) return 0; return (+b.licensePax||+b.cap||0); }
+// ข้อมูลเต็มของวันนั้น · {cap, base, license, overridden, reason, by, at, delta}
+function boatCapInfo(boatId, date){
+  const base=boatCapBase(boatId), lic=boatCapLicense(boatId);
+  const o=BOAT_CAP_OVR[_boatCapKey(boatId,date)];
+  if(!o || o.cap==null || o.cap==='' || isNaN(+o.cap)) return {cap:base, base:base, license:lic, overridden:false, delta:0};
+  let c=Math.max(0, Math.round(+o.cap));
+  if(lic>0) c=Math.min(c, lic);            // เพดานแข็ง · ห้ามเกินที่นั่งจดทะเบียน
+  return {cap:c, base:base, license:lic, overridden:(c!==base), reason:o.reason||'', by:o.by||'', at:o.at||'', delta:c-base};
+}
+// ที่นั่งที่ใช้ได้จริงของเรือลำนั้นในวันนั้น · ทุกที่ที่เคยอ่าน boat.cap ตรงๆ ควรเรียกตัวนี้แทน
+function boatCapFor(boatId, date){ return boatCapInfo(boatId, date).cap; }
+// ป้ายเล็กๆ ไว้แปะข้างตัวเลข cap
+function boatCapBadge(boatId, date, size){
+  const i=boatCapInfo(boatId,date); if(!i.overridden) return '';
+  const up=i.delta>0, e=(typeof ckEsc==='function')?ckEsc:(s=>String(s==null?'':s));
+  const tip='cap วันนี้ '+i.cap+' (ปกติ '+i.base+')'+(i.reason?(' · '+i.reason):'')+(i.by?(' · '+i.by):'');
+  return '<span title="'+e(tip)+'" style="display:inline-block;font-size:'+(size==='sm'?'8.5':'9.5')+'px;font-weight:800;letter-spacing:.02em;border-radius:4px;padding:0 4px;margin-left:4px;vertical-align:middle;'
+    +(up?'background:#E6F1FB;color:#0C447C':'background:#FBEAE6;color:#A32D2D')+'">'+(up?'+':'')+i.delta+'</span>';
+}
+function boatCapSet(boatId, date, cap, reason){
+  const k=_boatCapKey(boatId,date);
+  if(cap==null || cap===''){ delete BOAT_CAP_OVR[k]; }
+  else {
+    const lic=boatCapLicense(boatId); let c=Math.max(0,Math.round(+cap||0));
+    if(lic>0 && c>lic) c=lic;
+    BOAT_CAP_OVR[k]={cap:c, reason:String(reason||''), by:((typeof ME!=='undefined'&&ME&&(ME.name||ME.username))||'—'), at:new Date().toISOString()};
+  }
+  boatCapPersist();
+}
+// ── modal ตั้ง cap รายวัน · เรียกได้จากทั้ง Boat Operation และ By-trip ──
+function boatCapModalClose(){ const h=document.getElementById('bcap-host'); if(h) h.innerHTML=''; }
+function boatCapModalOpen(boatId, date, afterFn){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')){ alert('ต้องมีสิทธิ์แก้ไข Operations จึงจะปรับ cap ได้'); return; }
+  const b=(typeof getBoat==='function')?getBoat(boatId):null; if(!b) return;
+  const e=(typeof ckEsc==='function')?ckEsc:(s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]));
+  const i=boatCapInfo(boatId,date);
+  const load=(typeof baAssignedPax==='function')?baAssignedPax(date,boatId):0;
+  window._bcapAfter=afterFn||null;
+  let host=document.getElementById('bcap-host');
+  if(!host){ host=document.createElement('div'); host.id='bcap-host'; document.body.appendChild(host); }
+  let dlbl=date; try{ dlbl=new Date(date+'T12:00:00').toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'short',year:'2-digit'}); }catch(_){}
+  const quick=[-4,-2,2,4].map(n=>'<button type="button" onclick="_bcapBump('+n+')" style="border:1px solid #E4E1D9;background:#fff;color:#4a4a45;border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">'+(n>0?'+':'')+n+'</button>').join('');
+  host.innerHTML=''
+   +'<div id="bcap-ov" onclick="if(event.target===this)boatCapModalClose()" style="position:fixed;inset:0;background:rgba(20,24,22,.42);backdrop-filter:blur(2px);z-index:9100;display:flex;align-items:center;justify-content:center;padding:20px">'
+   +'<div style="background:#fff;border-radius:16px;width:min(460px,96vw);box-shadow:0 18px 50px rgba(0,0,0,.28);overflow:hidden">'
+   +'  <div style="padding:16px 20px;border-bottom:1px solid #EFECE4;display:flex;align-items:center;justify-content:space-between;gap:12px">'
+   +'    <div><div style="font-size:15px;font-weight:800;color:#15201a">&#128676; ที่นั่ง '+e(b.name||boatId)+' · เฉพาะวันนี้</div>'
+   +'    <div style="font-size:11.5px;color:#8a8a82;margin-top:2px">'+e(dlbl)+' · cap ปกติ <b>'+i.base+'</b> · จดทะเบียน <b>'+i.license+'</b> ที่นั่ง · ตอนนี้จัดไปแล้ว <b>'+load+'</b> pax</div></div>'
+   +'    <button onclick="boatCapModalClose()" style="background:transparent;border:none;font-size:20px;color:#9a9a92;cursor:pointer;line-height:1">&times;</button>'
+   +'  </div>'
+   +'  <div style="padding:18px 20px">'
+   +'    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">'
+   +'      <input id="bcap-val" type="number" min="0" max="'+i.license+'" value="'+i.cap+'" oninput="_bcapPreview()" style="width:110px;border:1.5px solid #E4E1D9;border-radius:10px;padding:10px 12px;font-size:22px;font-weight:800;font-family:\'DM Mono\',monospace;text-align:center;box-sizing:border-box">'
+   +'      <div style="display:flex;gap:6px;flex-wrap:wrap">'+quick+'</div>'
+   +'    </div>'
+   +'    <div id="bcap-hint" style="font-size:11.5px;margin-top:9px;min-height:17px"></div>'
+   +'    <div style="margin-top:12px"><div style="font-size:10px;font-weight:700;color:#8a8a82;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">เหตุผล</div>'
+   +'    <input id="bcap-reason" type="text" value="'+e(i.reason||'')+'" placeholder="เช่น เสริมเก้าอี้ 4 ตัว · เครื่องซ้ายมีปัญหา รับได้น้อยลง" style="width:100%;border:1px solid #E4E1D9;border-radius:9px;padding:9px 11px;font-size:13px;box-sizing:border-box;font-family:inherit"></div>'
+   +'    <div style="font-size:11px;color:#8a8a82;margin-top:11px;line-height:1.5">มีผลกับ <b>ที่นั่งว่างของเส้นทางวันนั้น</b> · <b>เพดานตอนจัด booking</b> · และ <b>การ์ดเรือในเช็คอินหน้าท่า</b> · ใช้เฉพาะวันนี้ วันอื่นยังเป็น cap ปกติ</div>'
+   +(i.overridden?('    <div style="font-size:11px;color:#8a8a82;margin-top:6px">ตั้งไว้โดย <b>'+e(i.by)+'</b>'+(i.at?(' · '+e(String(i.at).slice(0,16).replace('T',' '))):'')+'</div>'):'')
+   +'  </div>'
+   +'  <div style="padding:12px 20px 18px;display:flex;gap:9px;justify-content:flex-end">'
+   +(i.overridden?'<button onclick="_bcapClear(\''+boatId+'\',\''+date+'\')" style="border:1px solid #E6C9C3;background:#fff;color:#A32D2D;border-radius:9px;padding:9px 16px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;margin-right:auto">คืนค่าปกติ ('+i.base+')</button>':'')
+   +'    <button onclick="boatCapModalClose()" style="border:1px solid #E4E1D9;background:#fff;color:#5F5E5A;border-radius:9px;padding:9px 16px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">ยกเลิก</button>'
+   +'    <button onclick="_bcapSave(\''+boatId+'\',\''+date+'\')" style="border:none;background:#185FA5;color:#fff;border-radius:9px;padding:9px 20px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">บันทึก</button>'
+   +'  </div>'
+   +'</div></div>';
+  _bcapPreview();
+  setTimeout(function(){ const el=document.getElementById('bcap-val'); if(el){ el.focus(); el.select(); } },30);
+}
+function _bcapBump(n){ const el=document.getElementById('bcap-val'); if(!el) return; el.value=Math.max(0,(parseInt(el.value,10)||0)+n); _bcapPreview(); }
+function _bcapPreview(){
+  const el=document.getElementById('bcap-val'), h=document.getElementById('bcap-hint'); if(!el||!h) return;
+  const lic=parseInt(el.getAttribute('max'),10)||0, v=parseInt(el.value,10)||0;
+  if(lic>0 && v>lic){ el.value=lic; h.innerHTML='<span style="color:#A32D2D;font-weight:700">&#9888; เกินที่นั่งจดทะเบียน ('+lic+') ไม่ได้ — ปรับให้เป็น '+lic+' แล้ว</span>'; return; }
+  if(lic>0 && v===lic){ h.innerHTML='<span style="color:#854F0B;font-weight:700">เต็มที่นั่งจดทะเบียนพอดี ('+lic+')</span>'; return; }
+  h.innerHTML='<span style="color:#8a8a82">เพดานสูงสุดของลำนี้คือ '+lic+' ที่นั่ง (ตามทะเบียน)</span>';
+}
+function _bcapSave(boatId,date){
+  const el=document.getElementById('bcap-val'), r=document.getElementById('bcap-reason');
+  const v=el?parseInt(el.value,10):null;
+  if(v==null||isNaN(v)){ alert('ใส่จำนวนที่นั่งก่อน'); return; }
+  const base=boatCapBase(boatId);
+  if(v!==base && !(r&&r.value.trim())){ alert('ใส่เหตุผลด้วยครับ · จะได้รู้ทีหลังว่าทำไมวันนั้น cap ไม่เท่าปกติ'); if(r) r.focus(); return; }
+  if(v===base) boatCapSet(boatId,date,null); else boatCapSet(boatId,date,v,r?r.value.trim():'');
+  boatCapModalClose();
+  const f=window._bcapAfter; window._bcapAfter=null; if(typeof f==='function'){ try{ f(); }catch(_){} }
+}
+function _bcapClear(boatId,date){ boatCapSet(boatId,date,null); boatCapModalClose(); const f=window._bcapAfter; window._bcapAfter=null; if(typeof f==='function'){ try{ f(); }catch(_){} } }
+
 // ══ §Check-in (van + pier) · 2026-07-21 · redesigned 2026-07-25 ══
 // หน้าเช็คอินรถ = manifest แบบ By-trip · จัดกลุ่มตามคันรถ × เส้นทาง · เช็คแขกขึ้นรถจริง vs จอง → No-show + เหตุผล
 // หน้า Pier Check-in = รับช่วงต่อ · จัดกลุ่มตามเรือ × เส้นทาง · เช็คแขกขึ้นเรือจริง
@@ -42839,10 +42947,11 @@ function renderPierCheckin(){
     var gChecked=g.rows.filter(function(r){ return r.ck&&r.ck.at; }).length;
     var gNo=g.rows.reduce(function(s,r){ return s+((r.ck&&r.ck.at)?(r.ck.noShow||0):0); },0);
     var gExp=g.rows.reduce(function(s,r){ return s+r.expect; },0);
-    var cap=boat.cap||boat.licensePax||0;
+    var cap=(typeof boatCapFor==='function')?boatCapFor(g.bid,date):(boat.cap||boat.licensePax||0);
+    var capBadge=(typeof boatCapBadge==='function')?boatCapBadge(g.bid,date):'';
     var boatPill='<span style="display:inline-flex;align-items:center;gap:7px;background:'+pillBg+';color:#fff;border-radius:999px;padding:4px 13px 4px 5px;font-size:12px;font-weight:700;white-space:nowrap"><span style="width:19px;height:19px;border-radius:50%;background:rgba(255,255,255,.28);display:flex;align-items:center;justify-content:center;font-size:10px">&#128676;</span>'+e(boat.name||g.bid||'—')+'</span>';
     var binfo=[];
-    if(cap) binfo.push('<span style="display:inline-flex;align-items:center;gap:4px"><span style="font-size:9px;color:#a3a39b;text-transform:uppercase;letter-spacing:.03em">cap</span><b style="font-weight:700;color:#3a3a36;font-family:\'DM Mono\',monospace">'+cap+'</b></span>');
+    if(cap) binfo.push('<span style="display:inline-flex;align-items:center;gap:4px"><span style="font-size:9px;color:#a3a39b;text-transform:uppercase;letter-spacing:.03em">cap</span><b style="font-weight:700;color:#3a3a36;font-family:\'DM Mono\',monospace">'+cap+'</b>'+capBadge+'</span>');
     if(boat.type) binfo.push('<span style="display:inline-flex;align-items:center;gap:4px"><span style="font-size:9px;color:#a3a39b;text-transform:uppercase;letter-spacing:.03em">type</span><b style="font-weight:700;color:#3a3a36">'+e(boat.type)+'</b></span>');
     var binfoHtml=binfo.length?'<span style="display:inline-flex;align-items:center;gap:13px;flex-wrap:wrap">'+binfo.join('<span style="width:1px;height:12px;background:#dcdad3"></span>')+'</span>':'';
     var gt=ckGroupTime(g.rows, date);
@@ -57021,8 +57130,9 @@ function bkV2RenderTab2(){
         const _miniUn = uTot>0 ? `<span class="t2-mchip t2-mchip-un"><span class="t2-mav" style="background:#9A5B00">&#9888;</span>ยังไม่ assign <b>${uTot}</b></span>` : '';
         const _langOf=(o)=>Object.keys(o.lang||{}).map(code=>{ const lc=bkV2LangColors(code); return `<span class="t2-dchip" style="background:${lc[0]};color:${lc[1]}">${esc(code)} ${o.lang[code]}</span>`; });
         const _foodOf=(o)=>{ const out=[]; if(o.veg||o.vegan) out.push(`<span class="t2-dchip" style="background:#EAF3DE;color:#3B6D11">${(o.veg||0)+(o.vegan||0)} veg</span>`); if(o.halal) out.push(`<span class="t2-dchip" style="background:#E1F5EE;color:#0F6E56">${o.halal} halal</span>`); if(o.allerg) out.push(`<span class="t2-dchip" style="background:#FCEBEB;color:#A32D2D">&#9888; ${o.allerg}</span>`); return out; };
-        const _gridCells = baBoats.map(x=>{ const g=agg[x.boatId]; const cap=x.boat.cap||0; const over=(cap-g.tot)<0; const col=boatColor[x.boatId]||['#E6F1FB','#185FA5']; const ch=[].concat(_langOf(g),_foodOf(g));
-          return `<div class="t2-bcell${over?' t2-bcell-over':''}"><span class="t2-mav" style="background:${over?'#C0392B':col[1]};flex:none">${initials(x.boat.name||x.boatId)}</span><span class="t2-bcell-nm">${esc(x.boat.name||x.boatId)}</span><span class="t2-bcell-cap"${over?' style="color:#A32D2D"':''}>${g.tot}/${cap}</span><span class="t2-bcell-chips">${ch.join('')||'<span style="color:#b0b0a8;font-size:10px">&mdash;</span>'}</span></div>`; }).join('');
+        const _gridCells = baBoats.map(x=>{ const g=agg[x.boatId]; const cap=(typeof boatCapFor==='function')?boatCapFor(x.boatId,date):(x.boat.cap||0); const over=(cap-g.tot)<0; const col=boatColor[x.boatId]||['#E6F1FB','#185FA5']; const ch=[].concat(_langOf(g),_foodOf(g));
+          const _capB=(typeof boatCapBadge==='function')?boatCapBadge(x.boatId,date,'sm'):'';   // §cap override รายวัน · คลิกที่ตัวเลขเพื่อแก้
+          return `<div class="t2-bcell${over?' t2-bcell-over':''}"><span class="t2-mav" style="background:${over?'#C0392B':col[1]};flex:none">${initials(x.boat.name||x.boatId)}</span><span class="t2-bcell-nm">${esc(x.boat.name||x.boatId)}</span><span class="t2-bcell-cap" onclick="event.stopPropagation();boatCapModalOpen('${x.boatId}','${date}',function(){ if(typeof bkV2Render==='function') bkV2Render(); })" title="คลิกเพื่อปรับที่นั่งของลำนี้ เฉพาะวันนี้"${over?' style="color:#A32D2D;cursor:pointer"':' style="cursor:pointer"'}>${g.tot}/${cap}${_capB}</span><span class="t2-bcell-chips">${ch.join('')||'<span style="color:#b0b0a8;font-size:10px">&mdash;</span>'}</span></div>`; }).join('');
         const _ovChips=[].concat(_guideChips,_foodChips,_bagChips);
         const _ovAll=_ovChips.concat(_addonSum);   // Add-ons folded into the "รวม" row (per user · saves a row)
         const ovSummary = _ovAll.length ? `<div class="t2-boatsum"><span class="t2-boatsum-lbl">รวม</span>${_ovAll.join('')}</div>` : '';

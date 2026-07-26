@@ -729,6 +729,66 @@
       "source": "trips[key].b6.charterBookingId",
       "kind": "scalar",
       "db_type": "text"
+    },
+    "b8_route": {
+      "source": "trips[key].b8.route",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "b8_type": {
+      "source": "trips[key].b8.type",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "b8_booked": {
+      "source": "trips[key].b8.booked",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "b8_charterbookingid": {
+      "source": "trips[key].b8.charterBookingId",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "b14_route": {
+      "source": "trips[key].b14.route",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "b14_type": {
+      "source": "trips[key].b14.type",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "b14_booked": {
+      "source": "trips[key].b14.booked",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "b14_charterbookingid": {
+      "source": "trips[key].b14.charterBookingId",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "b15_route": {
+      "source": "trips[key].b15.route",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "b15_type": {
+      "source": "trips[key].b15.type",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "b15_booked": {
+      "source": "trips[key].b15.booked",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "b15_charterbookingid": {
+      "source": "trips[key].b15.charterBookingId",
+      "kind": "scalar",
+      "db_type": "text"
     }
   },
   "fleet_engines": {
@@ -6496,6 +6556,38 @@
     },
     "note": {
       "source": "programPeriods[].note",
+      "kind": "scalar",
+      "db_type": "text"
+    }
+  },
+  "boat_capovr": {
+    "id": {
+      "source": "boat_capovr map key (generated id)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "key": {
+      "source": "boat_capovr map key (original)",
+      "kind": "map_key",
+      "db_type": "text"
+    },
+    "cap": {
+      "source": "boat_capovr[key].cap",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "reason": {
+      "source": "boat_capovr[key].reason",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "by": {
+      "source": "boat_capovr[key].by",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "at": {
+      "source": "boat_capovr[key].at",
       "kind": "scalar",
       "db_type": "text"
     }

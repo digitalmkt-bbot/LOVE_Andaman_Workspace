@@ -673,6 +673,17 @@ async function initDb(){
           await sq(`${_t}.${_c} col`, `ALTER TABLE ${OS_SCHEMA}."${_t}" ADD COLUMN IF NOT EXISTS "${_c}" text`);
         }
       }
+      // §Boat capacity override รายวัน (2026-07-25): BOAT_CAP_OVR['YYYY-MM-DD::boatId'] = {cap,reason,by,at}
+      // keyed map เหมือน vanjob_driver → 1 ตาราง รองรับทุกลำทุกวัน ไม่ต้องเพิ่มคอลัมน์ตอนมีเรือลำใหม่
+      await sq('boat_capovr table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."boat_capovr" (id text PRIMARY KEY, key text, cap bigint, reason text, "by" text, at text)`);
+      // §trips: ตารางนี้ map แบบระบุชื่อเรือตายตัว (b1_route, b2_route, …) และตกหล่น b8/b14/b15 ไปตั้งแต่ต้น
+      // → ถ้าจัด Tadeo / Juliet / Rolanda ลงเส้นทาง การจัดนั้นจะหายตอน sync. เติมคอลัมน์ให้ครบ.
+      // ⚠ โครงนี้ยังเปราะ — เรือลำใหม่หลังจากนี้ก็ต้องมาเติมมืออีก (ดู BACKLOG)
+      for(const _b of ['b8','b14','b15']){
+        for(const [_c,_t] of [['route','text'],['type','text'],['booked','bigint'],['charterbookingid','text']]){
+          await sq(`trips.${_b}_${_c} col`, `ALTER TABLE ${OS_SCHEMA}."trips" ADD COLUMN IF NOT EXISTS "${_b}_${_c}" ${_t}`);
+        }
+      }
       await sq('sb_rate_types.pricetiers col', `ALTER TABLE ${OS_SCHEMA}."sb_rate_types" ADD COLUMN IF NOT EXISTS "pricetiers" text`);
       // §per-rate-type nationality scope (2026-07-18, from lk-inbox): both | thai | fr — filters price columns, contract, and booking pax fields. NULL/absent → 'both' on the client.
       await sq('sb_rate_types.nationalityscope col', `ALTER TABLE ${OS_SCHEMA}."sb_rate_types" ADD COLUMN IF NOT EXISTS "nationalityscope" text`);
