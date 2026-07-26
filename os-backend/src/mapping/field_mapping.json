@@ -6591,5 +6591,42 @@
       "kind": "scalar",
       "db_type": "text"
     }
+  },
+  "travel_sum": {
+    "id": {
+      "source": "travel_sum map key (generated id)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "key": {
+      "source": "travel_sum map key (original)",
+      "kind": "map_key",
+      "db_type": "text"
+    },
+    "decision": {
+      "source": "travel_sum[key].decision",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "amount": {
+      "source": "travel_sum[key].amount",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "note": {
+      "source": "travel_sum[key].note",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "by": {
+      "source": "travel_sum[key].by",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "at": {
+      "source": "travel_sum[key].at",
+      "kind": "scalar",
+      "db_type": "text"
+    }
   }
 }

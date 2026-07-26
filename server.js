@@ -676,6 +676,8 @@ async function initDb(){
       // §Boat capacity override รายวัน (2026-07-25): BOAT_CAP_OVR['YYYY-MM-DD::boatId'] = {cap,reason,by,at}
       // keyed map เหมือน vanjob_driver → 1 ตาราง รองรับทุกลำทุกวัน ไม่ต้องเพิ่มคอลัมน์ตอนมีเรือลำใหม่
       await sq('boat_capovr table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."boat_capovr" (id text PRIMARY KEY, key text, cap bigint, reason text, "by" text, at text)`);
+      // §Travel Summary (2026-07-26): TRAVEL_SUM['YYYY-MM-DD::bookingId'] = {decision,amount,note,by,at}
+      await sq('travel_sum table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."travel_sum" (id text PRIMARY KEY, key text, decision text, amount bigint, note text, "by" text, at text)`);
       // §trips: ตารางนี้ map แบบระบุชื่อเรือตายตัว (b1_route, b2_route, …) และตกหล่น b8/b14/b15 ไปตั้งแต่ต้น
       // → ถ้าจัด Tadeo / Juliet / Rolanda ลงเส้นทาง การจัดนั้นจะหายตอน sync. เติมคอลัมน์ให้ครบ.
       // ⚠ โครงนี้ยังเปราะ — เรือลำใหม่หลังจากนี้ก็ต้องมาเติมมืออีก (ดู BACKLOG)
@@ -753,7 +755,7 @@ const PERM_KEYS=new Set(['overview','operations','sales','accounting','fleet','c
   // §2026-07-25: same trap again — 'vancheckin' (added 07-21), 'piercheckin' (added today) and
   // 'b2b-dash' (added 07-20) existed in the client's LA_NAV but not here, so cleanPerms() silently
   // dropped those ticks on save and the boxes came back empty. Keep this Set in step with LA_NAV.
-  'dashboard','calendar','daily','booking','reconfirm','bookingflow','doccheck','operation','insurance','vehicles','vanjobs','vancheckin','piercheckin','pickup-setup',
+  'dashboard','calendar','daily','booking','reconfirm','bookingflow','doccheck','operation','insurance','vehicles','vanjobs','vancheckin','piercheckin','travelsum','pickup-setup',
   'agents','sales-board','b2b-dash','rate-types','contract-tmpl','b2c','staff','marketdata','focdetail','pickupmap','dailypfm',
   'fl-dashboard','fl-boatstatus','fl-dailyreport','fl-incident','fl-projects','fl-maintenance','fl-inventory','fl-consumables','fl-cost','fl-insights','fl-fuel','fl-asset',
   'settings','teammkt','addonsvc']);   // 'accounting' already present as a group key

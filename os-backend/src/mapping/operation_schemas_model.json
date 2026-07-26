@@ -6129,5 +6129,37 @@
         "type": "text"
       }
     ]
+  },
+  "travel_sum": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "text"
+      },
+      {
+        "name": "key",
+        "type": "text"
+      },
+      {
+        "name": "decision",
+        "type": "text"
+      },
+      {
+        "name": "amount",
+        "type": "bigint"
+      },
+      {
+        "name": "note",
+        "type": "text"
+      },
+      {
+        "name": "by",
+        "type": "text"
+      },
+      {
+        "name": "at",
+        "type": "text"
+      }
+    ]
   }
 }
