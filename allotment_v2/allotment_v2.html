@@ -43169,24 +43169,39 @@ function tsPolicyText(b){
   const p=ag&&ag.bookingChannel&&ag.bookingChannel.cancelPolicy;
   return p?String(p):'';
 }
-// เคสที่ต้องตัดสินของวันนั้น
-function tsCases(date){
+// ── ทุก booking ของวันนั้น พร้อมข้อมูลครบสาย: จอง → รถ → เช็คอินรถ → เรือ → เช็คอินหน้าท่า → เดินทางจริง ──
+function tsRows(date){
   const out=[];
   (SB_BOOKINGS||[]).forEach(function(b){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     const t=ckTripOn(b,date); if(!t) return;
-    const s=ckSummary(b,date); if(!s) return;
+    if(typeof bkIsOvnReturn==='function' && bkIsOvnReturn(t)) return;
     const O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
-    const evV=ckEventTally(O.vanCheckin), evP=ckEventTally(O.pierCheckin);
-    const ev=[].concat((O.vanCheckin&&O.vanCheckin.events)||[], (O.pierCheckin&&O.pierCheckin.events)||[]);
-    const noShow=s.noShow||0, cxl=evV.cxl+evP.cxl, ns=evV.no_show+evP.no_show;
-    if(noShow<=0 && !ev.length) return;             // ไม่มีอะไรผิดปกติ = ไม่ต้องตัดสิน
-    out.push({b:b, t:t, sum:s, booked:s.booked, actual:Math.max(0,s.booked-noShow),
-              noShow:noShow, ns:ns, cxl:cxl, events:ev,
-              amount:tsTripAmount(b,t), policy:tsPolicyText(b), dec:tsGet(b.id,date)});
+    const s=ckSummary(b,date)||{booked:ckBookedPax(t),noShow:0};
+    const v=O.vanCheckin||null, pcv=O.pierCheckin||null;
+    const evV=ckEventTally(v), evP=ckEventTally(pcv);
+    const events=[].concat((v&&v.events)||[], (pcv&&pcv.events)||[]);
+    const booked=s.booked, noShow=s.noShow||0;
+    out.push({
+      b:b, t:t, O:O, routeId:t.routeId||'',
+      booked:booked, travelled:Math.max(0,booked-noShow), noShow:noShow,
+      ns:evV.no_show+evP.no_show, cxl:evV.cxl+evP.cxl, events:events,
+      van:O.vanId||'', vanCk:v, vanDone:!!(v&&v.at), vanActual:(v&&v.actualPax!=null)?v.actualPax:null,
+      boat:O.boatId||t.charterBoatId||'', pierCk:pcv, pierDone:!!(pcv&&pcv.at),
+      pierActual:(pcv&&pcv.actualPax!=null)?pcv.actualPax:null, pierExp:(pcv&&pcv.expected!=null)?pcv.expected:null,
+      issue:(noShow>0||events.length>0), amount:tsTripAmount(b,t), policy:tsPolicyText(b), dec:tsGet(b.id,date)
+    });
   });
-  return out.sort(function(a,c){ return (c.noShow-a.noShow)||String(a.b.voucherRef||'').localeCompare(String(c.b.voucherRef||'')); });
+  return out.sort(function(x,y){
+    const rx=((typeof getRoute==='function'?getRoute(x.routeId):null)||{}).name||x.routeId;
+    const ry=((typeof getRoute==='function'?getRoute(y.routeId):null)||{}).name||y.routeId;
+    return String(rx).localeCompare(String(ry))
+      || String((x.O&&x.O.pickupTimeFinal)||x.t.pickupTime||'').localeCompare(String((y.O&&y.O.pickupTimeFinal)||y.t.pickupTime||''))
+      || String(x.b.voucherRef||'').localeCompare(String(y.b.voucherRef||''));
+  });
 }
+var _tsOnlyIssue=false;
+function tsToggleFilter(){ _tsOnlyIssue=!_tsOnlyIssue; tsAfter(); }
 function tsPick(bkId,date,kind,amt){
   const el=document.getElementById('ts-note-'+bkId);
   tsSet(bkId,date,kind,amt,el?el.value:'');
@@ -43209,54 +43224,96 @@ function tsPostpone(bkId,date){
 function renderTravelSum(){
   const host=document.getElementById('travelsum-host'); if(!host) return;
   const e=ckEsc, date=_tsDate, money=n=>'฿'+Number(n||0).toLocaleString('en-US');
-  const cases=tsCases(date);
-  let done=0, charge=0, postponed=0;
-  cases.forEach(function(c){ if(c.dec){ done++; if(c.dec.decision==='postpone') postponed++; else charge+=(+c.dec.amount||0); } });
+  const all=tsRows(date);
+  const rows=_tsOnlyIssue?all.filter(r=>r.issue):all;
+  let tBooked=0,tTrav=0,tNs=0,tCxl=0,nIssue=0,nDecided=0,charge=0,nPostpone=0;
+  all.forEach(function(r){ tBooked+=r.booked; tTrav+=r.travelled; tNs+=r.ns; tCxl+=r.cxl;
+    if(r.issue){ nIssue++; if(r.dec){ nDecided++; if(r.dec.decision==='postpone') nPostpone++; else charge+=(+r.dec.amount||0); } } });
   const DEC={full:['เก็บเต็ม','#0C6B47','#DCF4E8'], partial:['เก็บบางส่วน','#854F0B','#FAEEDA'], none:['ไม่ชาร์จ','#5F5E5A','#F1EFE8'], postpone:['เลื่อนวัน','#4A2E86','#EFEAFB']};
-  const rows=cases.map(function(c){
-    const b=c.b, id=b.id, dec=c.dec;
+  const COLN=15;
+  let body='', prevRoute=null;
+  rows.forEach(function(r){
+    const b=r.b, id=b.id, dec=r.dec;
+    if(r.routeId!==prevRoute){
+      prevRoute=r.routeId;
+      const rt=(typeof getRoute==='function'?getRoute(r.routeId):null)||{};
+      const grp=rows.filter(x=>x.routeId===r.routeId);
+      const gB=grp.reduce((a,x)=>a+x.booked,0), gT=grp.reduce((a,x)=>a+x.travelled,0);
+      body+='<tr class="ck-ghd"><td colspan="'+COLN+'" style="background:'+((rt.color||'#8b909c')+'12')+';padding:7px 12px">'
+        +'<div style="display:flex;align-items:center;gap:11px;flex-wrap:wrap">'
+        +'<span style="display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:800;color:'+(rt.color||'#5F5E5A')+'"><span style="width:9px;height:9px;border-radius:50%;background:'+(rt.color||'#999')+'"></span>'+e(rt.name||r.routeId||'—')+'</span>'
+        +'<span style="margin-left:auto;font-size:11px;color:#8a8a82;font-family:\'DM Mono\',monospace">'+grp.length+' booking · จอง '+gB+' → เดินทางจริง '+gT+(gB-gT>0?(' · หาย '+(gB-gT)):'')+'</span>'
+        +'</div></td></tr>';
+    }
     const ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
-    const evChips=c.events.map(function(x){
+    const agName=ag?(ag.name||ag.code||'—'):(b.channel||'walk-in');
+    const agColor=(b.agentId&&typeof bkV2AgentColor==='function')?bkV2AgentColor(b.agentId):'#64748B';
+    const agInk=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(agColor):'#fff';
+    const phone=b.leadPhone||b.phone||'';
+    const time=r.O.pickupTimeFinal||r.t.pickupTime||'';
+    const pb=ckPaxBreak(r.t.pax);
+    const veh=r.van?((typeof vehGet==='function'?vehGet(r.van):null)||{}):null;
+    const boat=r.boat?((typeof getBoat==='function'?getBoat(r.boat):null)||{}):null;
+    const stg=function(done,actual,total,lbl){
+      if(!done) return '<span style="font-size:10.5px;color:#a5a49d">ยังไม่เช็คอิน</span>';
+      const ok=(actual>=total);
+      return '<span style="display:inline-block;font-family:\'DM Mono\',monospace;font-size:12.5px;font-weight:700;color:'+(ok?'#0C6B47':'#A32D2D')+';background:'+(ok?'#DCF4E8':'#FCEBEB')+';border-radius:6px;padding:2px 8px" title="'+lbl+'">'+actual+'/'+total+'</span>';
+    };
+    const evChips=r.events.map(function(x){
       const T=(CK_EVENT_TYPES[x.type]||CK_EVENT_TYPES.no_show);
-      return '<span title="'+e((x.at?x.at+' · ':'')+ckReasonLabel(x.reasonCode)+(x.note?(' · '+x.note):'')+(x.by?(' · '+x.by):''))+'" style="display:inline-block;font-size:10px;font-weight:700;color:'+T.color+';background:'+T.bg+';border:1px solid '+T.bd+';border-radius:6px;padding:2px 7px;margin:2px 3px 0 0;white-space:nowrap">'+T.label+' '+x.pax+' · '+e(ckReasonLabel(x.reasonCode))+'</span>';
-    }).join('')||'<span style="font-size:10.5px;color:#b0aea6">ลดจำนวนโดยไม่ระบุเหตุ</span>';
-    const half=Math.round(c.amount/2);
+      return '<span title="'+e((x.at?x.at+' · ':'')+ckReasonLabel(x.reasonCode)+(x.note?(' · '+x.note):'')+(x.by?(' · '+x.by):''))+'" style="display:inline-block;font-size:10px;font-weight:700;color:'+T.color+';background:'+T.bg+';border:1px solid '+T.bd+';border-radius:6px;padding:1px 6px;margin:1px 3px 1px 0;white-space:nowrap">'+T.label+' '+x.pax+'</span>';
+    }).join('')||(r.noShow>0?'<span class="ck-ns">หาย '+r.noShow+' · ไม่ระบุเหตุ</span>':'<span style="font-size:10.5px;color:#0F6E56;font-weight:700">&#10003; ครบ</span>');
+    const half=Math.round(r.amount/2);
     const btn=(k,lbl,amt,fn)=>{ const on=dec&&dec.decision===k; const D=DEC[k];
-      return '<button onclick="'+(fn||("tsPick('"+id+"','"+date+"','"+k+"',"+amt+")"))+'" style="border:1.5px solid '+(on?D[1]:'#E4E1D9')+';background:'+(on?D[2]:'#fff')+';color:'+(on?D[1]:'#4a4a45')+';border-radius:9px;padding:7px 12px;font-size:12px;font-weight:'+(on?'800':'600')+';cursor:pointer;font-family:inherit;white-space:nowrap">'+lbl+'</button>'; };
-    const decChip=dec?('<span style="display:inline-block;font-size:11px;font-weight:800;color:'+DEC[dec.decision][1]+';background:'+DEC[dec.decision][2]+';border-radius:7px;padding:4px 10px;white-space:nowrap">'+DEC[dec.decision][0]+(dec.decision==='postpone'?'':' · '+money(dec.amount))+'</span>'
-        +'<div style="font-size:10px;color:#a5a49d;margin-top:3px">'+e(dec.by||'')+(dec.at?(' · '+e(String(dec.at).slice(0,16).replace('T',' '))):'')+'</div>')
-      :'<span style="font-size:11px;font-weight:700;color:#A32D2D;background:#FCEBEB;border-radius:7px;padding:4px 10px">รอตัดสิน</span>';
-    return '<tr class="ck-row'+(dec?' ck-done':' ck-plain')+'">'
-      +'<td><span class="ck-vch">'+e(b.voucherRef||b.code||'—')+'</span>'
-        +'<div style="margin-top:4px"><span style="font-size:10.5px;font-weight:700;color:#5F5E5A">'+e(ag?(ag.name||ag.code):(b.channel||'walk-in'))+'</span></div>'
-        +'<div style="margin-top:3px"><span class="ck-lead" style="background:#F6E27A">'+e(b.leadPax||'—')+'</span></div></td>'
-      +'<td class="ck-c ck-mono" style="font-size:14px">'+c.booked+'</td>'
-      +'<td class="ck-c ck-mono" style="font-size:14px;color:#0F6E56;font-weight:700">'+c.actual+'</td>'
-      +'<td>'+evChips+(c.policy?('<div style="font-size:10px;color:#8a8a82;margin-top:5px;line-height:1.35" title="นโยบายยกเลิกของเอเยนต์">&#128220; '+e(c.policy)+'</div>'):'')+'</td>'
-      +'<td class="ck-c ck-mono" style="font-size:14px;font-weight:700">'+money(c.amount)+'</td>'
-      +'<td><div style="display:flex;gap:6px;flex-wrap:wrap">'
-        +btn('full','เต็ม '+money(c.amount),c.amount)
-        +btn('partial','50% '+money(half),half)
-        +btn('none','ไม่ชาร์จ',0)
-        +btn('partial','ระบุเอง',0,"tsCustom('"+id+"','"+date+"')")
-        +btn('postpone','เลื่อนวัน',0,"tsPostpone('"+id+"','"+date+"')")
-        +(dec?'<button onclick="tsClear(\''+id+'\',\''+date+'\')" title="ล้างการตัดสิน" style="border:1px solid #E6C9C3;background:#fff;color:#A32D2D;border-radius:9px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">ล้าง</button>':'')
-        +'</div>'
-        +'<input id="ts-note-'+id+'" type="text" value="'+e(dec?dec.note:'')+'" placeholder="หมายเหตุ · เช่น ตกลงกับเอเยนต์แล้ว" onchange="tsPick(\''+id+'\',\''+date+'\',\''+(dec?dec.decision:'none')+'\','+(dec?dec.amount:0)+')" style="margin-top:7px;width:100%;max-width:340px;border:1px solid #E4E1D9;border-radius:8px;padding:6px 9px;font-size:12px;box-sizing:border-box;font-family:inherit"></td>'
-      +'<td>'+decChip+'</td>'
+      return '<button onclick="'+(fn||("tsPick('"+id+"','"+date+"','"+k+"',"+amt+")"))+'" style="border:1.5px solid '+(on?D[1]:'#E4E1D9')+';background:'+(on?D[2]:'#fff')+';color:'+(on?D[1]:'#4a4a45')+';border-radius:8px;padding:5px 9px;font-size:11px;font-weight:'+(on?'800':'600')+';cursor:pointer;font-family:inherit;white-space:nowrap;margin:1px 2px 1px 0">'+lbl+'</button>'; };
+    const decideCell = r.issue
+      ? ('<div style="display:flex;flex-wrap:wrap;max-width:290px">'
+          +btn('full','เต็ม '+money(r.amount),r.amount)+btn('partial','50%',half)+btn('none','ไม่ชาร์จ',0)
+          +btn('partial','ระบุเอง',0,"tsCustom('"+id+"','"+date+"')")+btn('postpone','เลื่อนวัน',0,"tsPostpone('"+id+"','"+date+"')")
+          +(dec?'<button onclick="tsClear(\''+id+'\',\''+date+'\')" style="border:1px solid #E6C9C3;background:#fff;color:#A32D2D;border-radius:8px;padding:5px 8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin:1px 0">ล้าง</button>':'')
+          +'</div><input id="ts-note-'+id+'" type="text" value="'+e(dec?dec.note:'')+'" placeholder="หมายเหตุ" onchange="tsPick(\''+id+'\',\''+date+'\',\''+(dec?dec.decision:'none')+'\','+(dec?dec.amount:0)+')" style="margin-top:5px;width:100%;max-width:290px;border:1px solid #E4E1D9;border-radius:7px;padding:5px 8px;font-size:11.5px;box-sizing:border-box;font-family:inherit">')
+      : '<span style="font-size:11px;color:#0C6B47;background:#DCF4E8;border-radius:7px;padding:4px 10px;font-weight:700;white-space:nowrap">เดินทางครบ · ไม่ต้องตัดสิน</span>';
+    const resCell = r.issue
+      ? (dec?('<span style="display:inline-block;font-size:11px;font-weight:800;color:'+DEC[dec.decision][1]+';background:'+DEC[dec.decision][2]+';border-radius:7px;padding:4px 10px;white-space:nowrap">'+DEC[dec.decision][0]+(dec.decision==='postpone'?'':' · '+money(dec.amount))+'</span>'
+          +'<div style="font-size:9.5px;color:#a5a49d;margin-top:3px">'+e(dec.by||'')+(dec.at?(' · '+e(String(dec.at).slice(0,16).replace('T',' '))):'')+'</div>')
+        :'<span style="font-size:11px;font-weight:700;color:#A32D2D;background:#FCEBEB;border-radius:7px;padding:4px 10px;white-space:nowrap">รอตัดสิน</span>')
+      : '<span style="font-family:\'DM Mono\',monospace;font-size:12px;color:#8a8a82">'+money(r.amount)+'</span>';
+    body+='<tr class="ck-row'+(r.issue?(dec?' ck-done':' ck-plain'):'')+'">'
+      +'<td><span class="ck-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'
+      +(b.agentId?('<td style="padding:0"><div class="ck-agblk" title="'+e(agName)+'" style="background:'+agColor+';color:'+agInk+';margin:2px 3px;padding:9px;border-radius:8px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px">'+e(agName)+'</div></td>')
+        :('<td><span style="color:#8a8a82;font-weight:600">'+e(agName)+'</span></td>'))
+      +'<td><span class="ck-lead" style="background:#F6E27A">'+e(b.leadPax||'—')+'</span>'+(phone?'<div><a class="ck-tel" href="tel:'+e(String(phone).split(/[,;\/]/)[0].replace(/[^0-9+]/g,''))+'">&#128222; '+e(phone)+'</a></div>':'')+'</td>'
+      +'<td class="ck-c ck-mono" style="font-size:14px" title="'+pb.ad+' ผู้ใหญ่ · '+pb.chd+' เด็ก · '+pb.inf+' ทารก · '+pb.foc+' FOC">'+r.booked+'</td>'
+      +'<td class="ck-mono">'+(e(time)||'—')+'</td>'
+      +'<td><span class="ck-pick">'+e(b.hotelName||b.pickup||'—')+'</span></td>'
+      +'<td>'+(veh?('<span style="font-size:11.5px;font-weight:700;color:#3a3a36">&#128656; '+e(veh.name||r.van)+'</span>'):'<span style="font-size:10.5px;color:#5B289A;background:#F3E8FF;border-radius:6px;padding:2px 7px;font-weight:700">มาเอง</span>')+'</td>'
+      +'<td class="ck-c">'+(veh?stg(r.vanDone, r.vanActual!=null?r.vanActual:r.booked, r.booked, 'ขึ้นรถจริง / ที่ต้องรับ'):'<span style="color:#c8c6be">—</span>')+'</td>'
+      +'<td>'+(boat?('<span style="font-size:11.5px;font-weight:700;color:#3a3a36">&#128676; '+e(boat.name||r.boat)+'</span>'):'<span style="font-size:10.5px;color:#A32D2D">ยังไม่จัดเรือ</span>')+'</td>'
+      +'<td class="ck-c">'+(boat?stg(r.pierDone, r.pierActual!=null?r.pierActual:0, r.pierExp!=null?r.pierExp:r.booked, 'ขึ้นเรือจริง / ที่รอรับ'):'<span style="color:#c8c6be">—</span>')+'</td>'
+      +'<td class="ck-c"><span style="font-family:\'DM Mono\',monospace;font-size:17px;font-weight:800;color:'+(r.travelled<r.booked?'#A32D2D':'#0C6B47')+'">'+r.travelled+'</span></td>'
+      +'<td>'+evChips+'</td>'
+      +'<td class="ck-c ck-mono" style="font-weight:700">'+money(r.amount)+'</td>'
+      +'<td>'+decideCell+'</td>'
+      +'<td>'+resCell+'</td>'
       +'</tr>';
-  }).join('');
-  const body=rows||'<tr class="ck-empty"><td colspan="7">วันนี้ไม่มีเคสที่ต้องตัดสิน · ทุก booking ขึ้นครบตามจอง</td></tr>';
-  const kpi='<span style="background:'+(cases.length&&done<cases.length?'#FCEBEB':'#DCF4E8')+';color:'+(cases.length&&done<cases.length?'#A32D2D':'#0C6B47')+'">ตัดสินแล้ว '+done+'/'+cases.length+'</span>'
-    +'<span style="background:#E6F1FB;color:#0C447C">เก็บรวม '+money(charge)+'</span>'
-    +(postponed?'<span style="background:#EFEAFB;color:#4A2E86">เลื่อนวัน '+postponed+'</span>':'');
-  host.innerHTML='<style id="ts-style">'+ckSharedCSS('#travelsum-host')+'#travelsum-host table.ck-tbl{min-width:1120px}</style>'
+  });
+  if(!body) body='<tr class="ck-empty"><td colspan="'+COLN+'">'+(_tsOnlyIssue?'วันนี้ไม่มีเคสที่ต้องตัดสิน · ทุก booking เดินทางครบ':'ไม่มี booking ในวันนี้')+'</td></tr>';
+  const kpi='<span style="background:#F1EFE8;color:#5F5E5A">จอง '+tBooked+' → เดินทาง '+tTrav+'</span>'
+    +(tNs>0?'<span style="background:#FCEBEB;color:#A32D2D">No-show '+tNs+'</span>':'')
+    +(tCxl>0?'<span style="background:#FBF3E6;color:#8A5B00">CXL '+tCxl+'</span>':'')
+    +'<span style="background:'+((nIssue&&nDecided<nIssue)?'#FCEBEB':'#DCF4E8')+';color:'+((nIssue&&nDecided<nIssue)?'#A32D2D':'#0C6B47')+'">ตัดสินแล้ว '+nDecided+'/'+nIssue+'</span>'
+    +'<span style="background:#E6F1FB;color:#0C447C">เก็บเพิ่ม '+money(charge)+'</span>'
+    +(nPostpone?'<span style="background:#EFEAFB;color:#4A2E86">เลื่อนวัน '+nPostpone+'</span>':'')
+    +'<button onclick="tsToggleFilter()" style="border:1px solid '+(_tsOnlyIssue?'#A32D2D':'#E7E4DC')+';background:'+(_tsOnlyIssue?'#FCEBEB':'#fff')+';color:'+(_tsOnlyIssue?'#A32D2D':'#5F5E5A')+';border-radius:999px;padding:5px 12px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">'+(_tsOnlyIssue?'กำลังดูเฉพาะเคสมีปัญหา':'ดูเฉพาะเคสมีปัญหา')+'</button>';
+  host.innerHTML='<style id="ts-style">'+ckSharedCSS('#travelsum-host')+'#travelsum-host table.ck-tbl{min-width:1720px}</style>'
     +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px"><h1 style="margin:0;font-size:19px;font-weight:700">Travel Summary</h1>'
-    +'<span style="font-size:11px;color:#8a8a82">สรุปเคสหน้างานของวันนั้น → ตัดสินว่าเก็บเท่าไร หรือเลื่อนวัน · ระบบเสนอให้ แต่คนกดยืนยัน</span></div>'
+    +'<span style="font-size:11px;color:#8a8a82">รวมทุกอย่างของวันนั้น: จอง → รถ → เช็คอินรถ → เรือ → เช็คอินหน้าท่า → เดินทางจริง → เก็บเท่าไร</span></div>'
     +ckDayHeader({date:date, shiftFn:'tsDateShift', todayFn:'tsToday', pickFn:'tsPickDay',
-                  kpiHtml:kpi, pillsHtml:'', totalPax:cases.length, totalBreak:'เคสที่ต้องตัดสิน'})
+                  kpiHtml:kpi, pillsHtml:'', totalPax:tTrav, totalBreak:'เดินทางจริง (จอง '+tBooked+')'})
     +'<div class="ck-card"><table class="ck-tbl"><thead><tr>'
-    +'<th>Booking</th><th class="ck-c">จอง</th><th class="ck-c">เดินทางจริง</th><th>เกิดอะไรหน้างาน</th><th class="ck-c">ราคาเต็ม</th><th>ตัดสิน</th><th>ผล</th>'
+    +'<th>Voucher</th><th>Agency</th><th>Customer (lead) · โทร</th><th class="ck-c">จอง</th><th>Time</th><th>Pickup</th>'
+    +'<th>รถ</th><th class="ck-c">ขึ้นรถ</th><th>เรือ</th><th class="ck-c">ขึ้นเรือ</th><th class="ck-c">เดินทางจริง</th>'
+    +'<th>เกิดอะไรหน้างาน</th><th class="ck-c">ราคาเต็ม</th><th>ตัดสิน</th><th>ผล</th>'
     +'</tr></thead><tbody>'+body+'</tbody></table></div>';
   ckSyncSticky(host);
 }
