@@ -45681,28 +45681,80 @@ function agTblKey(ev){
 function agTblProgramsOpen(id){
   if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('sales')) return;
   const a=(SB_AGENTS||[]).find(x=>x.id===id); if(!a) return;
-  agProgPicker(a.programs||[], sel=>{ a.programs = sel; agTblPersist(); agRenderTable(); }, 'Programs · '+a.name);
+  agProgPicker(a.programs||[], sel=>{ a.programs = sel; agTblPersist(); agRenderTable(); }, 'Programs · '+a.name, a.rateTypeId||null);
 }
-function agProgPicker(current, onOk, title){
+// §autoFromRateType · The rate type IS the contract: it lists exactly the routes this agent has an
+// agreed price for, and each route carries its own active period (rt.routeValidity, falling back to
+// the rate type's own validFrom/validTo). So open the picker pre-ticked from the rate type when the
+// agent has no programs yet, show each route's period and state inline, and push routes outside the
+// rate type into their own section — ticking one there means selling a route with no agreed price,
+// which should be a deliberate act rather than an accident of alphabetical order.
+// rtId is optional: the bulk picker has no single agent and keeps the plain flat list.
+function agProgPicker(current, onOk, title, rtId){
   const cur=new Set(current||[]);
   const e=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const rt = (rtId && typeof getRateType==='function') ? getRateType(rtId) : null;
+  const rtIds = rt ? (rt.routes||[]).slice() : [];
+  const inRt = new Set(rtIds);
+  const autoFilled = !!(rt && rtIds.length && !cur.size);
+  if(autoFilled) rtIds.forEach(id=>cur.add(id));
+  const fmtD = v => (typeof _rtFmtDate==='function' ? _rtFmtDate(v) : (v||''));
+  const _rv = (rt && rt.routeValidity) || {};
+  const periodOf = rId => {
+    const v = _rv[rId] || {};
+    return { from: v.from || (rt&&rt.validFrom) || '', to: v.to || (rt&&rt.validTo) || '' };
+  };
+  const stateOf = (from,to) => {
+    if(!from && !to) return {lbl:'Always', bg:'#F1EFE8', fg:'#5F5E5A'};
+    const t=new Date(); t.setHours(0,0,0,0);
+    if(from && t < new Date(from)) return {lbl:'Upcoming', bg:'#E6F1FB', fg:'#0C447C'};
+    if(to   && t > new Date(to))   return {lbl:'Expired',  bg:'#FDECEA', fg:'#A32D2D'};
+    return {lbl:'Active', bg:'#E1F5EE', fg:'#0F6E56'};
+  };
   const old=document.getElementById('agprog-modal'); if(old) old.remove();
   const ov=document.createElement('div'); ov.id='agprog-modal';
   ov.style.cssText='position:fixed;inset:0;z-index:100002;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-family:"DM Sans",sans-serif';
   ov.onclick=ev=>{ if(ev.target===ov) ov.remove(); };
   const PIER={tublamu:'Tub Lamu', panwa:'Visit Panwa'};
-  ov.innerHTML='<div style="background:#fff;border-radius:14px;width:460px;max-width:94vw;max-height:80vh;display:flex;flex-direction:column;padding:16px 18px">'
+  const ALL = (ROUTES||[]);
+  const byId = id => ALL.find(r=>r.id===id);
+  const row = (r, outside) => {
+    const p = periodOf(r.id), st = stateOf(p.from,p.to);
+    const dateTxt = (p.from||p.to) ? ((fmtD(p.from)||'…')+' – '+(fmtD(p.to)||'…')) : '';
+    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 7px;border-radius:7px;cursor:pointer;font-size:12.5px'+(outside?';opacity:.6':'')+'">'
+      +'<input type="checkbox" value="'+e(r.id)+'" '+(cur.has(r.id)?'checked':'')+'>'
+      +'<span style="width:6px;height:6px;border-radius:50%;background:'+e(r.color||'#ccc')+';flex:none"></span>'
+      +'<span style="flex:1;min-width:0"><span style="display:block">'+e(r.name)+'</span>'
+        + (!rt ? '' : outside
+            ? '<span style="display:block;font-size:9.5px;color:#a0784f">ไม่อยู่ใน rate type — ยังไม่มีราคา</span>'
+            : (dateTxt ? '<span style="display:block;font-size:9.5px;color:#8b9a94;font-variant-numeric:tabular-nums">'+e(dateTxt)+'</span>' : ''))
+      +'</span>'
+      + (rt && !outside ? '<span style="font-size:9px;font-weight:700;letter-spacing:.04em;padding:1px 6px;border-radius:6px;flex:none;background:'+st.bg+';color:'+st.fg+'">'+e(st.lbl)+'</span>' : '')
+      +'<span style="font-size:10px;color:#a8b0aa;flex:none">'+e(PIER[r.pier]||r.pier||'')+'</span></label>';
+  };
+  const sec = (lbl,n) => '<div style="font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#8b9a94;padding:9px 7px 3px">'+e(lbl)+' <span style="color:#c3bdb3">'+n+'</span></div>';
+  let listHtml;
+  if(rt && rtIds.length){
+    const mine = rtIds.map(byId).filter(Boolean);
+    const rest = ALL.filter(r=>!inRt.has(r.id));
+    listHtml = sec('จาก Rate Type · '+(rt.code||''), mine.length) + mine.map(r=>row(r,false)).join('')
+             + (rest.length ? sec('นอก Rate Type', rest.length) + rest.map(r=>row(r,true)).join('') : '');
+  } else {
+    listHtml = ALL.map(r=>row(r,false)).join('');
+  }
+  const sub = rt
+    ? (autoFilled?'ติ๊กมาให้ตาม Rate Type แล้ว · ':'')+'Rate Type: '+e(rt.code||'')+' · '+e(rt.name||'')
+      + ((rt.validFrom||rt.validTo) ? ' · '+e((fmtD(rt.validFrom)||'…')+' – '+(fmtD(rt.validTo)||'…')) : ' · Always')
+    // rtId === null means a specific agent was opened but has no rate type bound; undefined means
+    // there is no single agent at all (bulk picker), where the hint would make no sense.
+    : 'ติ๊กโปรแกรมที่เอเจ้นนี้ขายได้'+(rtId===null?' · เอเจ้นนี้ยังไม่ผูก rate type':'');
+  ov.innerHTML='<div style="background:#fff;border-radius:14px;width:540px;max-width:94vw;max-height:80vh;display:flex;flex-direction:column;padding:16px 18px">'
    +'<div style="font-size:15px;font-weight:800;color:#15396B;margin-bottom:4px">'+e(title||'เลือก Programs')+'</div>'
-   +'<div style="font-size:11.5px;color:#8b9a94;margin-bottom:10px">ติ๊กโปรแกรมที่เอเจ้นนี้ขายได้</div>'
-   +'<div style="flex:1;overflow:auto;border:1px solid #eee9e0;border-radius:9px;padding:6px">'
-   + (ROUTES||[]).map(r=>'<label style="display:flex;align-items:center;gap:8px;padding:6px 7px;border-radius:7px;cursor:pointer;font-size:12.5px">'
-       +'<input type="checkbox" value="'+e(r.id)+'" '+(cur.has(r.id)?'checked':'')+'>'
-       +'<span style="width:6px;height:6px;border-radius:50%;background:'+e(r.color||'#ccc')+';flex:none"></span>'
-       +'<span style="flex:1">'+e(r.name)+'</span>'
-       +'<span style="font-size:10px;color:#a8b0aa">'+e(PIER[r.pier]||r.pier||'')+'</span></label>').join('')
-   +'</div>'
-   +'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:11px">'
-     +'<div style="display:flex;gap:6px">'
+   +'<div style="font-size:11.5px;color:#8b9a94;margin-bottom:10px">'+sub+'</div>'
+   +'<div style="flex:1;overflow:auto;border:1px solid #eee9e0;border-radius:9px;padding:6px">'+listHtml+'</div>'
+   +'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:11px;gap:8px">'
+     +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+       + (rt&&rtIds.length?'<button id="agprog-rt" style="border:1px solid #1C4A30;background:#fff;color:#1C4A30;border-radius:7px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit">ตาม Rate Type ('+rtIds.length+')</button>':'')
        +'<button id="agprog-all" style="border:1px solid #cfcabf;background:#fff;border-radius:7px;padding:5px 10px;font-size:11.5px;cursor:pointer;font-family:inherit">เลือกทั้งหมด</button>'
        +'<button id="agprog-none" style="border:1px solid #cfcabf;background:#fff;border-radius:7px;padding:5px 10px;font-size:11.5px;cursor:pointer;font-family:inherit">ล้าง</button></div>'
      +'<div style="display:flex;gap:6px">'
@@ -45711,6 +45763,8 @@ function agProgPicker(current, onOk, title){
    +'</div></div>';
   document.body.appendChild(ov);
   const boxes=()=>[...ov.querySelectorAll('input[type=checkbox]')];
+  const rtBtn=ov.querySelector('#agprog-rt');
+  if(rtBtn) rtBtn.onclick=()=>boxes().forEach(b=>b.checked=inRt.has(b.value));
   ov.querySelector('#agprog-all').onclick=()=>boxes().forEach(b=>b.checked=true);
   ov.querySelector('#agprog-none').onclick=()=>boxes().forEach(b=>b.checked=false);
   ov.querySelector('#agprog-cancel').onclick=()=>ov.remove();
