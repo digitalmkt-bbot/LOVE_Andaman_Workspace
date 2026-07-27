@@ -142,7 +142,9 @@ const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_re
 // are untouched — folding this version into the hash forces exactly one corrective re-upsert.
 // The re-upsert goes through the normal ON CONFLICT path, so ops fields (B2C_OPS_BK) are preserved.
 // v4: mapper now reads bookings.payment_type and details.pickupHotel / bi.pickuphotel.
-const B2C_MAP_VER = 4;
+// v5: corrects v4 — pickupLocation is the AREA name, not a fallback hotel. v4 matched the area
+//     against the hotel string, so every booking carrying pickupHotel resolved to no area at all.
+const B2C_MAP_VER = 5;
 
 function mapB2CStatus(s) {
   if (s === 'cancelled') return 'cancelled';
@@ -212,21 +214,31 @@ function mapB2CItemBooking(item, isFirstLine, findAreaId) {
   // so a private booking is caught however B2C tags it.
   const isPrivateId = id => /^PR-/i.test(String(id || ''));
   const isCharter = h.type === 'private_own' || isPrivateId(h.product_id) || isPrivateId(h.route_id);
-  // Pickup (details jsonb): B2C only knows the 3 coarse transfer zones (PK/KL/NoTransfer) plus
-  // free text — the 37 ops pickup areas never cross the API (B2C_PICKUP_ZONE_DATA.md).
+  // Pickup (details jsonb) — THREE distinct keys, do not collapse them:
+  //   pickupZone     'PK' | 'KL' | 'NoTransfer'  — the coarse transfer region. Casing is
+  //                  deliberately inconsistent (two codes, one CamelCase word); match the literal
+  //                  string, never a case-normalised one.
+  //   pickupLocation the AREA name from that zone's list — 'Phuket Town', 'Laguna', 'Patong'…
+  //                  This is what resolves to one of the 37 ops pickup areas. Now a required
+  //                  dropdown on B2C, so new rows always carry one; older rows may hold a typed
+  //                  address, which simply won't match and leaves the area unassigned.
+  //   pickupHotel    the hotel itself, free text, never linked to a hotels table.
+  //
+  // Feeding the hotel into findAreaId cannot work — 'Blu Monkey Hub Hotel Phuket' matches no area,
+  // while 'Phuket Town' matches exactly. Match on the area, store the hotel.
   // hotelName/pickupZone/pickupSelf are B2C-owned (refreshed every sync); pickupAreaId is matched
   // best-effort against sb_pickup_areas and preserved on conflict (see B2C_OPS_BK).
-  // pickupHotel is the newer, more specific hotel field and wins over the legacy free-text
-  // pickupLocation; older orders only carry pickupLocation, so keep it as the fallback.
   let det = h.details;
   if (typeof det === 'string') { try { det = JSON.parse(det); } catch (_) { det = null; } }
   det = det || {};
-  // (h.pickuphotel covers the case where B2C stores it as a booking_items column instead of a
-  // details key — bi.* already selects it; unquoted pg identifiers arrive lowercased.)
-  const pickupLoc  = String(det.pickupHotel || h.pickuphotel || det.pickupLocation || '').trim();
+  const pickupArea  = String(det.pickupLocation || '').trim();   // area name  → matches sb_pickup_areas
+  const pickupHotel = String(det.pickupHotel || '').trim();      // hotel      → hotelName
+  // Rows predating the pickupHotel field carry only pickupLocation, so fall back to it rather than
+  // showing ops an empty pickup.
+  const pickupLoc  = pickupHotel || pickupArea;
   const noTransfer = det.noTransfer === true;
   const pickupZone = noTransfer ? 'NoTransfer' : String(det.pickupZone || '').trim();
-  const areaId = (typeof findAreaId === 'function') ? findAreaId(pickupLoc, pickupZone) : null;
+  const areaId = (typeof findAreaId === 'function') ? findAreaId(pickupArea, pickupZone) : null;
   const dropoffLoc = (det.dropoffSame === false) ? String(det.dropoffHotel || det.dropoffLocation || '').trim() : '';
   const trip = {
     id: 'b2c_' + h.booking_id + '_' + h.line_no + '_t0',
@@ -276,7 +288,10 @@ function mapB2CItemBooking(item, isFirstLine, findAreaId) {
     pickupAreaId: areaId,
     dropoffHotelName: dropoffLoc,
     note: ['B2C', h.channel_name, String(h.booking_id), B2C_PRODUCT_NAME[h.product_id] || B2C_PRODUCT_NAME[h.route_id] || h.product_id,
-           (pickupLoc && !areaId && !noTransfer) ? `Pickup: ${pickupLoc}${pickupZone ? ' (' + pickupZone + ')' : ''} — area unassigned` : null].filter(Boolean).join(' · '),
+           // Show ops the AREA that failed to match, not the hotel — the area is what they need to
+           // pick by hand, and naming it makes a missing sb_pickup_areas entry obvious.
+           (!areaId && !noTransfer && (pickupArea || pickupLoc))
+             ? `Pickup: ${pickupArea || pickupLoc}${pickupZone ? ' (' + pickupZone + ')' : ''} — area unassigned` : null].filter(Boolean).join(' · '),
     trips: [trip],
     passengers: [],
     addOns: [],
