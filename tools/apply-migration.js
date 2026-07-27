@@ -45,10 +45,13 @@ const pool = new Pool({
 const CHECKS = [
   ['view exists',
    `SELECT to_regclass('operation_schemas.v_seat_availability') IS NOT NULL AS ok`],
-  ['r10 / 2026-07-27 (the failing B2C case)',
+  // Every route on the date the B2C form was failing on, not one route: POW-003 is r10 and
+  // POW-004 is r12, and whichever is being tested, seeing the whole day makes a wrong number obvious.
+  [(process.env.CHECK_DATE || '2026-07-27') + ' — all routes',
    `SELECT date, routeid, capacity, booked, locked, available, boats, board_exists
       FROM operation_schemas.v_seat_availability
-     WHERE routeid = 'r10' AND date = '2026-07-27'`],
+     WHERE date = $1 ORDER BY routeid`,
+   [process.env.CHECK_DATE || '2026-07-27']],
   ['unmapped trip rows (must be 0)',
    `SELECT count(*)::int AS unmapped, COALESCE(SUM(uncounted_pax), 0)::int AS uncounted_pax
       FROM operation_schemas.v_seat_availability_unmapped`],
@@ -59,10 +62,10 @@ const CHECKS = [
 ];
 
 async function runChecks(c) {
-  for (const [label, sql] of CHECKS) {
+  for (const [label, sql, params] of CHECKS) {
     process.stdout.write('\n-- ' + label + '\n');
     try {
-      const { rows } = await c.query(sql);
+      const { rows } = await c.query(sql, params || []);
       console.table(rows.length ? rows : [{ '(no rows)': '' }]);
     } catch (e) {
       console.log('   failed:', e.message, e.code ? '(' + e.code + ')' : '');
