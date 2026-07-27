@@ -4,6 +4,7 @@ const http   = require('http');
 const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
+const zlib   = require('zlib');
 
 let Pool = null, PgClient = null;
 try {
@@ -130,6 +131,9 @@ const B2C_PRODUCT_NAME = {
 };
 // pickupareaid rides along here: matched best-effort from the B2C free-text location on first sync,
 // then owned by ops (staff re-assignment must survive resyncs) — excluded from conflict-update.
+// B2C bookings.payment_type — mirrors SB_PAYMENT_TYPES ids in the app. Whitelisted so an unexpected
+// value can't leak into the Pay column (bkV2PayLabel falls through to the raw string).
+const B2C_PAY_TYPES = new Set(['proforma', 'invoice', 'bt', 'cot']);
 const B2C_OPS_BK   = new Set(['ops_boatid','ops_vangroup','ops_vanseq','ops_vanreturnid','ops_vanid','ops_returnsamevan','ops_pickuptimefinal','ops_reconfirm','ops_vansplits','pickupareaid']);
 const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_returnsamevan','ops_vangroup','ops_vanseq','ops_pickuptimefinal','ops_vansplits','ops_reconfirm']);
 
@@ -137,7 +141,8 @@ const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_re
 // hashes the source rows, so a mapper fix alone would never re-apply to bookings whose source rows
 // are untouched — folding this version into the hash forces exactly one corrective re-upsert.
 // The re-upsert goes through the normal ON CONFLICT path, so ops fields (B2C_OPS_BK) are preserved.
-const B2C_MAP_VER = 3;
+// v4: mapper now reads bookings.payment_type and details.pickupHotel / bi.pickuphotel.
+const B2C_MAP_VER = 4;
 
 function mapB2CStatus(s) {
   if (s === 'cancelled') return 'cancelled';
@@ -182,6 +187,13 @@ function mapB2CItemBooking(item, isFirstLine, findAreaId) {
   const seat = b2cLineSeat(h);
   // pax_adult = total adults; pax_thai/pax_foreign = nationality split (may be 0/0 when unknown).
   // Never use pax_foreign||pax_adult — a Thai-only booking (fr=0, th=5, ad=5) double-counts to 10.
+  // Pay type: bookings.payment_type (nullable) uses the SAME ids as the app's SB_PAYMENT_TYPES
+  // (proforma | invoice | bt | cot), so it drops straight into paymentSnapshot.method — which is the
+  // pay-TYPE slot the UI reads (bkV2PayLabel / bkV2PayChip), NOT a payment instrument. Deliberately
+  // not payment_method_id: that's an instrument id and would render as raw text in the Pay column.
+  // Null/unknown → '' so the chip falls back to the a_b2c agent default.
+  const payType = B2C_PAY_TYPES.has(String(h.bk_payment_type || '').toLowerCase())
+    ? String(h.bk_payment_type).toLowerCase() : '';
   const adTh = Number(h.pax_thai) || 0;
   const adFrRaw = Number(h.pax_foreign) || 0;
   const adFr = adFrRaw > 0 ? adFrRaw : Math.max(0, (Number(h.pax_adult) || 0) - adTh);
@@ -200,18 +212,22 @@ function mapB2CItemBooking(item, isFirstLine, findAreaId) {
   // so a private booking is caught however B2C tags it.
   const isPrivateId = id => /^PR-/i.test(String(id || ''));
   const isCharter = h.type === 'private_own' || isPrivateId(h.product_id) || isPrivateId(h.route_id);
-  // Pickup (details jsonb): B2C only knows the 3 coarse transfer zones (PK/KL/NoTransfer) plus a
-  // free-text pickupLocation — the 37 ops pickup areas never cross the API (B2C_PICKUP_ZONE_DATA.md).
+  // Pickup (details jsonb): B2C only knows the 3 coarse transfer zones (PK/KL/NoTransfer) plus
+  // free text — the 37 ops pickup areas never cross the API (B2C_PICKUP_ZONE_DATA.md).
   // hotelName/pickupZone/pickupSelf are B2C-owned (refreshed every sync); pickupAreaId is matched
   // best-effort against sb_pickup_areas and preserved on conflict (see B2C_OPS_BK).
+  // pickupHotel is the newer, more specific hotel field and wins over the legacy free-text
+  // pickupLocation; older orders only carry pickupLocation, so keep it as the fallback.
   let det = h.details;
   if (typeof det === 'string') { try { det = JSON.parse(det); } catch (_) { det = null; } }
   det = det || {};
-  const pickupLoc  = String(det.pickupLocation || '').trim();
+  // (h.pickuphotel covers the case where B2C stores it as a booking_items column instead of a
+  // details key — bi.* already selects it; unquoted pg identifiers arrive lowercased.)
+  const pickupLoc  = String(det.pickupHotel || h.pickuphotel || det.pickupLocation || '').trim();
   const noTransfer = det.noTransfer === true;
   const pickupZone = noTransfer ? 'NoTransfer' : String(det.pickupZone || '').trim();
   const areaId = (typeof findAreaId === 'function') ? findAreaId(pickupLoc, pickupZone) : null;
-  const dropoffLoc = (det.dropoffSame === false) ? String(det.dropoffLocation || '').trim() : '';
+  const dropoffLoc = (det.dropoffSame === false) ? String(det.dropoffHotel || det.dropoffLocation || '').trim() : '';
   const trip = {
     id: 'b2c_' + h.booking_id + '_' + h.line_no + '_t0',
     routeId: B2C_ROUTE_MAP[h.product_id] || B2C_ROUTE_MAP[h.route_id] || null,
@@ -277,7 +293,7 @@ function mapB2CItemBooking(item, isFirstLine, findAreaId) {
     paymentSnapshot: {
       deposit: isFirstLine ? (Number(h.bk_deposit) || 0) : 0,
       balance: isFirstLine ? (Number(h.bk_balance) || 0) : 0,
-      method: h.payment_method_id || '',
+      method: payType,
     },
     ops: {},
     history: [],
@@ -298,6 +314,7 @@ const B2C_ITEM_JOIN = `
          b.deposit       AS bk_deposit,
          b.balance       AS bk_balance,
          b.payment_method_id,
+         b.payment_type  AS bk_payment_type,
          b.created_at    AS bk_created_at,
          ch.name         AS channel_name,
          c.name          AS customer_name,
@@ -797,43 +814,61 @@ const MIME = { '.html':'text/html; charset=utf-8','.js':'text/javascript; charse
 // raw on every load / after each deploy. gzip cuts it ~5x. Buffer cached per (path,etag) so it compresses once,
 // not on every request. Images/fonts (.png/.woff2/…) are already compressed → skipped.
 const GZIP_EXT = new Set(['.html','.js','.css','.json','.svg','.csv','.txt']);
-const _gzCache = new Map();   // fp -> { etag, buf }
+const _gzCache = new Map();   // fp -> { etag, br?, gzip? }  (one buffer per encoding)
+// §brotli (2026-07-27): measured on the 4.89MB app HTML —
+//   gzip -6 1.18MB (87ms) · gzip -9 1.17MB (124ms) · brotli q5 0.98MB (97ms) · brotli q11 0.83MB (7153ms)
+// Raising the GZIP level is pointless (0.5% for 40% more CPU); brotli is the real win. Quality is picked
+// per call site by HOW LONG THE BUFFER STAYS CACHED, not by payload size:
+//   static assets → q11. Cache key is the file etag, so this is paid once per DEPLOY, and the startup
+//                   pre-warm below pays it before any user connects. 1.18MB → 0.83MB (-30%).
+//   /api/load     → q5.  Cache key is app_state.version, which ANY write bumps — during working hours
+//                   this recompresses constantly, so q11 would burn 7s of CPU over and over. q5 costs
+//                   about what gzip -6 did and still beats it on size.
+const BR_STATIC = 11, BR_DYNAMIC = 5;
+// NB: a `br;q=0` / `gzip;q=0` explicit refusal is not parsed — no browser sends it, and the pre-brotli
+// code had the same simplification. Everything falls back to plain bytes when neither token is present.
+function _accepts(req, enc){ return new RegExp('\\b'+enc+'\\b').test(req.headers['accept-encoding']||''); }
+function pickEncoding(req){ return _accepts(req,'br') ? 'br' : _accepts(req,'gzip') ? 'gzip' : null; }
+function compress(enc, data, quality, cb){
+  if(enc !== 'br') return zlib.gzip(data, cb);
+  return zlib.brotliCompress(data, { params: {
+    [zlib.constants.BROTLI_PARAM_QUALITY]:  quality,
+    [zlib.constants.BROTLI_PARAM_MODE]:     zlib.constants.BROTLI_MODE_TEXT,
+    [zlib.constants.BROTLI_PARAM_SIZE_HINT]: Buffer.byteLength(data)
+  }}, cb);
+}
 // §/api/load cache (perf): assembling the ~6MB blob from 103 tables + stringify + gzip on EVERY login was the
 // bottleneck (morning stampede: all users re-login at 03:00 reset → server rebuilds the same payload N times).
 // Cache the built payload (plain string + gzipped buffer) keyed by app_state.version. A cheap version query gates
 // each request; any write bumps version → next load rebuilds. Cache hit = serve the prebuilt buffer instantly.
-let _loadCache = null;   // { version, str, gz }
+let _loadCache = null;   // { version, str, br?, gzip? }  (compressed buffers filled in lazily per encoding)
 function readBody(req, cb){ let ch=[], n=0; req.on('data',c=>{ n+=c.length; if(n>20*1024*1024){req.destroy();return;} ch.push(c); }); req.on('end',()=>cb(Buffer.concat(ch).toString('utf8'))); }
 function J(res, code, obj, extra){ const h=Object.assign({'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}, extra||{}); res.writeHead(code,h); res.end(JSON.stringify(obj)); }
-// gzip variant for large payloads (/api/load) — falls back to plain when the client doesn't accept gzip
+// JSON headers · Vary matters as soon as more than one encoding is on offer: without it a proxy can
+// hand a brotli body to a client that only asked for gzip.
+function _jsonHead(enc){ const h={'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','Vary':'Accept-Encoding'};
+  if(enc) h['Content-Encoding']=enc; return h; }
+// Compressed variant for large payloads — falls back to plain when the client accepts neither encoding
 function JZ(req, res, code, obj){
   const body = JSON.stringify(obj);
-  if (body.length > 50*1024 && /\bgzip\b/.test(req.headers['accept-encoding']||'')){
-    const zlib = require('zlib');
-    return zlib.gzip(body, (err, buf)=>{
-      if (err){ res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}); return res.end(body); }
-      res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Content-Encoding':'gzip','Cache-Control':'no-store'});
-      res.end(buf);
-    });
-  }
-  res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
-  res.end(body);
+  const enc = body.length > 50*1024 ? pickEncoding(req) : null;
+  if(!enc){ res.writeHead(code,_jsonHead(null)); return res.end(body); }
+  compress(enc, body, BR_DYNAMIC, (err, buf)=>{
+    if(err){ res.writeHead(code,_jsonHead(null)); return res.end(body); }
+    res.writeHead(code,_jsonHead(enc)); res.end(buf);
+  });
 }
-// Send a cached /api/load payload · gzip on first send then reuse the buffer (so a version's payload is gzipped once)
+// Send a cached /api/load payload · compress on first send, then reuse the buffer, one per encoding
+// (so a version's payload is compressed at most once per encoding, not once per request).
 function sendLoadPayload(req, res, cache){
-  const acceptsGz = /\bgzip\b/.test(req.headers['accept-encoding']||'');
-  if(acceptsGz){
-    if(cache.gz){ res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Content-Encoding':'gzip'}); return res.end(cache.gz); }
-    const zlib = require('zlib');
-    return zlib.gzip(cache.str, (err,buf)=>{
-      if(err){ res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'}); return res.end(cache.str); }
-      cache.gz = buf;   // remember the gzipped buffer → every later hit on this version is instant
-      res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Content-Encoding':'gzip'});
-      res.end(buf);
-    });
-  }
-  res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
-  res.end(cache.str);
+  const enc = pickEncoding(req);
+  if(!enc){ res.writeHead(200,_jsonHead(null)); return res.end(cache.str); }
+  if(cache[enc]){ res.writeHead(200,_jsonHead(enc)); return res.end(cache[enc]); }
+  compress(enc, cache.str, BR_DYNAMIC, (err,buf)=>{
+    if(err){ res.writeHead(200,_jsonHead(null)); return res.end(cache.str); }
+    cache[enc] = buf;   // remember it → every later hit on this version is instant
+    res.writeHead(200,_jsonHead(enc)); res.end(buf);
+  });
 }
 // ── Server-Sent Events · push "data changed" to all open clients instantly (real-time) ──
 const sseClients = new Set();
@@ -1027,7 +1062,7 @@ const server = http.createServer((req, res) => {
           if(_loadCache && _loadCache.version === version){ return sendLoadPayload(req,res,_loadCache); }
           const blob = await relLoad();
           const str = JSON.stringify({data:JSON.stringify(blob),version,updated_by:m.updated_by,updated_at:m.updated_at});
-          _loadCache = { version, str, gz:null };
+          _loadCache = { version, str };
           return sendLoadPayload(req,res,_loadCache);
         })
         .catch(e=>J(res,500,{error:e.message}));
@@ -1288,17 +1323,21 @@ const server = http.createServer((req, res) => {
     if (dateTo < dateFrom) return J(res, 400, { error: 'dateTo must be >= dateFrom' });
     const CANCELLED = ['cancelled','cancelled_weather','rejected'];
     Promise.all([
-      // booked seats per date (seat-mode trips only, non-cancelled bookings)
+      // booked seats per date (seat-mode trips only, non-cancelled bookings).
+      // Every term MUST be COALESCE'd: in Postgres a + b is NULL if either side is NULL, and SUM()
+      // skips NULLs — so a single unset pax column silently reported booked = 0 for the whole day.
+      // pax_foc_fr/pax_foc_th are never written (client and B2C mapper both store a flat pax.foc), so
+      // they were NULL on every trip row and zeroed the count — every B2C booking went invisible here
+      // and the endpoint reported seats that were in fact already sold.
+      // Column set + double-count semantics mirror the client's getTripPaxTotal (allotment_v2.html:9843):
+      // flat pax_ad/pax_foc are legacy shapes, mutually exclusive with the _fr/_th split.
+      // (Fixed twice independently — local 5fbfa57 and remote bd0e1b5; same 10 columns, merged here.)
       pool.query(
-        // Every term MUST be COALESCEd. In Postgres a + b is NULL if either side is NULL, and SUM()
-        // skips NULLs — so one unwritten pax column made the whole booking count as zero booked seats.
-        // B2C never writes pax_foc_fr / pax_foc_th, so every B2C booking was invisible here and the
-        // endpoint reported seats that were already sold. pax_ad and pax_foc are separate legacy
-        // columns; include them so this matches the client's bkV2PaxTot (kind + kind_fr + kind_th).
         `SELECT t.date,
-                COALESCE(SUM(COALESCE(t.pax_ad_fr,0)+COALESCE(t.pax_chd_fr,0)+COALESCE(t.pax_inf_fr,0)+COALESCE(t.pax_foc_fr,0)
-                    +COALESCE(t.pax_ad_th,0)+COALESCE(t.pax_chd_th,0)+COALESCE(t.pax_inf_th,0)+COALESCE(t.pax_foc_th,0)
-                    +COALESCE(t.pax_ad,0)+COALESCE(t.pax_foc,0)), 0)::int AS booked
+                COALESCE(SUM(COALESCE(t.pax_ad,0)     + COALESCE(t.pax_ad_fr,0)  + COALESCE(t.pax_ad_th,0)
+                           + COALESCE(t.pax_chd_fr,0) + COALESCE(t.pax_chd_th,0)
+                           + COALESCE(t.pax_inf_fr,0) + COALESCE(t.pax_inf_th,0)
+                           + COALESCE(t.pax_foc,0)    + COALESCE(t.pax_foc_fr,0) + COALESCE(t.pax_foc_th,0)), 0)::int AS booked
          FROM ${fqt('sb_bookings__trips')} t
          JOIN ${fqt('sb_bookings')} b ON b.id = t.sb_bookings_id
          WHERE t.routeid=$1 AND t.date>=$2 AND t.date<=$3
@@ -1373,17 +1412,38 @@ const server = http.createServer((req, res) => {
     if((req.headers['if-none-match']||'') === etag){ res.writeHead(304,{'ETag':etag,'Cache-Control':'no-cache'}); return res.end(); }
     const ext = path.extname(fp).toLowerCase();
     const ctype = MIME[ext]||'application/octet-stream';
-    const acceptsGzip = /\bgzip\b/.test(req.headers['accept-encoding']||'');
-    if(acceptsGzip && GZIP_EXT.has(ext) && data.length > 1024){
-      const send=(buf)=>{ res.writeHead(200,{'Content-Type':ctype,'ETag':etag,'Cache-Control':'no-cache','Vary':'Accept-Encoding','Content-Encoding':'gzip'}); res.end(buf); };
-      const cached=_gzCache.get(fp); if(cached && cached.etag===etag) return send(cached.buf);
-      const zlib=require('zlib');
-      return zlib.gzip(data,(gzErr,buf)=>{ if(gzErr){ res.writeHead(200,{'Content-Type':ctype,'ETag':etag,'Cache-Control':'no-cache','Vary':'Accept-Encoding'}); return res.end(data); }
-        _gzCache.set(fp,{etag,buf}); send(buf); });
+    const head=(enc)=>{ const h={'Content-Type':ctype,'ETag':etag,'Cache-Control':'no-cache','Vary':'Accept-Encoding'};
+      if(enc) h['Content-Encoding']=enc; return h; };
+    const enc = (GZIP_EXT.has(ext) && data.length > 1024) ? pickEncoding(req) : null;
+    if(enc){
+      // Cache entry holds one buffer per encoding, both keyed on the same etag — a br client and a
+      // gzip client hitting the same file must not evict each other's buffer.
+      const hit=_gzCache.get(fp), fresh = hit && hit.etag===etag;
+      if(fresh && hit[enc]){ res.writeHead(200,head(enc)); return res.end(hit[enc]); }
+      return compress(enc, data, BR_STATIC, (cErr,buf)=>{
+        if(cErr){ res.writeHead(200,head(null)); return res.end(data); }
+        const slot = fresh ? hit : {etag};
+        slot[enc]=buf; _gzCache.set(fp,slot);
+        res.writeHead(200,head(enc)); res.end(buf); });
     }
-    res.writeHead(200,{'Content-Type':ctype,'ETag':etag,'Cache-Control':'no-cache','Vary':'Accept-Encoding'}); res.end(data); });
+    res.writeHead(200,head(null)); res.end(data); });
 });
-server.listen(PORT, ()=>console.log('LOVE Andaman on '+PORT+(pool?' · db on':' · db off')));
+// Pre-warm the app HTML's brotli buffer at startup. q11 takes ~7s on the 4.9MB file — cheap once per
+// deploy, but only if nobody is waiting on it, so pay it here rather than on the first user's request.
+// Same fp/etag derivation as the static handler above, or the cache would not be hit.
+function prewarmStatic(){
+  const fp = path.normalize(path.join(ROOT,'/allotment_v2/allotment_v2.html'));
+  fs.readFile(fp,(err,data)=>{ if(err||!data) return;
+    const etag='"'+crypto.createHash('sha1').update(data).digest('hex').slice(0,20)+'"';
+    const t0=Date.now();
+    compress('br', data, BR_STATIC, (cErr,buf)=>{ if(cErr) return;
+      const hit=_gzCache.get(fp), slot=(hit&&hit.etag===etag)?hit:{etag};
+      slot.br=buf; _gzCache.set(fp,slot);
+      console.log('[prewarm] app html br: '+(data.length/1048576).toFixed(2)+'MB -> '
+        +(buf.length/1048576).toFixed(2)+'MB in '+(Date.now()-t0)+'ms'); });
+  });
+}
+server.listen(PORT, ()=>{ console.log('LOVE Andaman on '+PORT+(pool?' · db on':' · db off')); prewarmStatic(); });
 
 // §B2C background poller (2026-07-24): relSyncB2C only ran on /api/load, so a new B2C booking sat in
 // the source pool until someone manually refreshed. Poll it on a timer so new bookings are pulled in,

@@ -45180,7 +45180,11 @@ function bkV2PayChip(bk){
   }
   if(inv){ const st=acctInvoiceState(inv); const m=({issued:['Awaiting','#FBF0DD','#7A4A00'],partial:['Partial','#E6F1FB','#185FA5'],paid:['Paid','#E1F5EE','#0F6E56'],void:['Void','#F1EFE8','#5F5E5A']})[st]||['—','#F1EFE8','#5F5E5A']; txt=m[0];bg=m[1];fg=m[2]; }
   else {
-    const pt=(a&&a.payType)|| bk.payment || (bk.paymentSnapshot&&bk.paymentSnapshot.method);
+    // B2C: every synced booking hangs off the a_b2c house agent (payType 'cot'), so the agent default
+    // would mask the customer's real choice — B2C sends a per-booking payment_type into
+    // paymentSnapshot.method. Booking-level wins for B2C only; B2B still follows the agent contract.
+    const _b2cPt = (bk.agentId==='a_b2c') ? (bk.paymentSnapshot&&bk.paymentSnapshot.method) : '';
+    const pt=_b2cPt || (a&&a.payType)|| bk.payment || (bk.paymentSnapshot&&bk.paymentSnapshot.method);
     txt=bkV2PayLabel(pt);
     // Color by payment type: Invoice=blue · Proforma/PFM=amber · COT=cyan · Bank=neutral
     const pm=({invoice:['#E6F1FB','#185FA5','#BBD7F0'],credit:['#E6F1FB','#185FA5','#BBD7F0'],proforma:['#FBF0DD','#7A4A00','#EAD7A8'],prepaid:['#FBF0DD','#7A4A00','#EAD7A8'],cot:['#E0F7FA','#00838F','#9FE3EC'],bt:['#F1EFE8','#5F5E5A','#E0DDD4']})[pt]||['#fff','#5F5E5A','var(--border)'];

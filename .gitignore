@@ -10,6 +10,12 @@ npm-debug.log*
 # ── PRIVACY: real customer data + bulky backups — NEVER commit (esp. public repo) ──
 allotment_v2/data_exports/
 allotment_v2/BACKUP/
+# The root BACKUP/ was NOT covered by the line above, so pre-edit copies were landing in history
+# (7 server.js.bak_* are already tracked; a 5.1MB allotment_v2 HTML copy was one commit away on a
+# 21MB repo). Ignore the directory itself + the loose root-level *.bak_<date>_<desc> files.
+BACKUP/
+*.bak
+*.bak_*
 
 # ── Env files (contain secrets) ──
 .env
@@ -40,4 +46,3 @@ skills-lock.json
 
 # real prod data pulled for dev seeding — never commit
 os-backend/data_snapshots/
-BACKUP/server.js.bak_20260718_b2c-flatten-items
