@@ -42800,25 +42800,30 @@ function ckRoutePills(date, famSel, routeSel, famFn, routeFn, kind){
   (SB_BOOKINGS||[]).forEach(function(b){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     (b.trips||[]).forEach(function(t){ if((t.date||'')!==date) return;
-      var p=t.pax||{}, ad=P(p,'ad'),chd=P(p,'chd'),inf=P(p,'inf'),foc=P(p,'foc'), pax=ad+chd+inf+foc;
+      var p=t.pax||{};
+      // §check-in · ทุกตัวเลขบนการ์ด = "เดินทางจริง" · หักคนที่ No-show / CXL ออกรายประเภท
+      var L=(typeof ckLostByType==='function')?ckLostByType(b,date):null;
+      var _g=function(k){ var v=P(p,k); if(!L||L.total<=0) return v; return (typeof ckPaxLeft==='function')?ckPaxLeft(b,date,k,v):Math.max(0,v-L.total); };
+      var ad=_g('ad'),chd=_g('chd'),inf=_g('inf'),foc=_g('foc'), pax=ad+chd+inf+foc;
+      var bkPax=P(p,'ad')+P(p,'chd')+P(p,'inf')+P(p,'foc');
       dA+=ad;dC+=chd;dI+=inf;dF+=foc;
       var f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(t.routeId):null;
-      if(f){ var a=fam[f.id]=fam[f.id]||{fam:f,pax:0,rids:{},locked:0}; a.pax+=pax; a.rids[t.routeId]=1; }
+      if(f){ var a=fam[f.id]=fam[f.id]||{fam:f,pax:0,booked:0,rids:{},locked:0}; a.pax+=pax; a.booked+=bkPax; a.rids[t.routeId]=1; }
       if(typeof bkIsOvnReturn==='function' && bkIsOvnReturn(t)) return;   // ขากลับ OVN · ไม่มีการรับขึ้นรถ
-      var R=rst[t.routeId]=rst[t.routeId]||{PK:{tot:0,done:0},KL:{tot:0,done:0},OWN:{tot:0,done:0}};
+      var R=rst[t.routeId]=rst[t.routeId]||{PK:{tot:0,done:0,bk:0},KL:{tot:0,done:0,bk:0},OWN:{tot:0,done:0,bk:0}};
       var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
       var z=(typeof bkV2EffZone==='function')?bkV2EffZone(b,t):(t.zone||b.pickupZone||'NoTransfer');
       var own=(b.pickupSelf || z==='NoTransfer' || z==='NT' || !O.vanId);
       var ck=(kind==='pier')?O.pierCheckin:O.vanCheckin;
       var done=(ck&&ck.at)?(ck.actualPax!=null?ck.actualPax:pax):0;
       var key = own ? 'OWN' : (R[z]?z:'PK');
-      R[key].tot+=pax; R[key].done+=done;
+      R[key].tot+=pax; R[key].done+=done; R[key].bk+=bkPax;
     });
   });
   (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(function(rr){
     var lk=(typeof bkV2LockedTotal==='function')?bkV2LockedTotal(rr.id,date):0; if(lk<=0) return;
     var f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(rr.id):null; if(!f) return;
-    var a=fam[f.id]=fam[f.id]||{fam:f,pax:0,rids:{},locked:0}; a.locked+=lk; a.rids[rr.id]=1;
+    var a=fam[f.id]=fam[f.id]||{fam:f,pax:0,booked:0,rids:{},locked:0}; a.locked+=lk; a.rids[rr.id]=1;
   });
   // บล็อกตัวเลขต่อโซน · เขียว = ครบ · เหลือง = ยังไม่ครบ · เทา = ยังไม่เริ่ม · ม่วง = มาเอง (ไม่มีรถรับ)
   var zoneBlock=function(lbl, o, isOwn){
@@ -42829,7 +42834,8 @@ function ckRoutePills(date, famSel, routeSel, famFn, routeFn, kind){
           : part  ? {bg:'#FAEEDA',num:'#854F0B',lab:'#a37d3a'}
           :         {bg:'#F1EFE8',num:'#5F5E5A',lab:'#8a8a82'};
     var val = isOwn ? String(o.tot) : (o.done+'/'+o.tot);
-    return '<span title="'+e(lbl)+' · '+(isOwn?('มาเอง '+o.tot+' pax · ไม่มีรถรับ'):('เช็คอินแล้ว '+o.done+' จาก '+o.tot+' pax'))+'" style="display:inline-flex;flex-direction:column;align-items:center;line-height:1;background:'+C.bg+';border-radius:9px;padding:4px 10px"><span style="font-family:\'DM Mono\',monospace;font-size:16px;font-weight:700;color:'+C.num+'">'+val+'</span><span style="font-size:9px;font-weight:700;color:'+C.lab+';margin-top:2px">'+e(lbl)+'</span></span>';
+    var lostHere = Math.max(0,(o.bk||o.tot)-o.tot);
+    return '<span title="'+e(lbl)+' · '+(isOwn?('มาเอง '+o.tot+' pax · ไม่มีรถรับ'):('เช็คอินแล้ว '+o.done+' จาก '+o.tot+' pax'))+'" style="display:inline-flex;flex-direction:column;align-items:center;line-height:1;background:'+C.bg+';border-radius:9px;padding:4px 10px"><span style="font-family:\'DM Mono\',monospace;font-size:16px;font-weight:700;color:'+C.num+'">'+val+'</span><span style="font-size:9px;font-weight:700;color:'+C.lab+';margin-top:2px">'+e(lbl)+(lostHere>0?(' <s style="opacity:.65">'+(o.bk||0)+'</s>'):'')+'</span></span>';
   };
   // §check-in · ยอดรวมทั้งวันต้องเป็น "เดินทางจริง" · เก็บยอดจองเดิมไว้เทียบ
   var _lostAll=0;
@@ -42852,12 +42858,13 @@ function ckRoutePills(date, famSel, routeSel, famFn, routeFn, kind){
       if(!open) return '<span title="'+e(lblFull)+' · ไม่ออกวันนี้" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;border-left:1px solid '+col+'33;background:#FCEBEB;color:#A32D2D;padding:8px 12px;white-space:nowrap">'+lbl+' <span style="font-size:10px;font-weight:600;opacity:.85">ไม่ออก</span></span>';
       var R=rst[rid]||{PK:{tot:0,done:0},KL:{tot:0,done:0},OWN:{tot:0,done:0}};
       var tot=R.PK.tot+R.KL.tot+R.OWN.tot, done=R.PK.done+R.KL.done;
+      var totBk=(R.PK.bk||0)+(R.KL.bk||0)+(R.OWN.bk||0);
       var blocks=zoneBlock('PK',R.PK)+zoneBlock('KL',R.KL)+zoneBlock('มาเอง',R.OWN,true);
       if(!blocks) blocks='<span style="font-size:11px;color:#b0aea6">ไม่มี booking</span>';
       var ron=(routeSel===rid);
-      return '<button onclick="'+routeFn+'(\''+rid+'\')" title="'+e(lblFull)+' · '+(kind==='pier'?'ขึ้นเรือ':'ขึ้นรถ')+'แล้ว '+done+' จาก '+(R.PK.tot+R.KL.tot)+' pax ที่มีรถรับ'+(R.OWN.tot?(' · มาเอง '+R.OWN.tot+' pax'):'')+' · คลิกกรองเฉพาะทริปนี้" style="display:inline-flex;align-items:center;gap:8px;border:none;border-left:1px solid '+col+'33;background:'+(ron?'#EFEAFB':'#fff')+';white-space:nowrap;padding:8px 12px;cursor:pointer;font-family:inherit"><span style="font-size:12.5px;font-weight:700;color:'+(ron?'#4A2E86':'#5A5A52')+'">'+lbl+'</span><span style="font-family:\'DM Mono\',monospace;font-size:12px;color:#a09a90">'+tot+' pax</span>'+blocks+'</button>';
+      return '<button onclick="'+routeFn+'(\''+rid+'\')" title="'+e(lblFull)+' · '+(kind==='pier'?'ขึ้นเรือ':'ขึ้นรถ')+'แล้ว '+done+' จาก '+(R.PK.tot+R.KL.tot)+' pax ที่มีรถรับ'+(R.OWN.tot?(' · มาเอง '+R.OWN.tot+' pax'):'')+' · คลิกกรองเฉพาะทริปนี้" style="display:inline-flex;align-items:center;gap:8px;border:none;border-left:1px solid '+col+'33;background:'+(ron?'#EFEAFB':'#fff')+';white-space:nowrap;padding:8px 12px;cursor:pointer;font-family:inherit"><span style="font-size:12.5px;font-weight:700;color:'+(ron?'#4A2E86':'#5A5A52')+'">'+lbl+'</span><span style="font-family:\'DM Mono\',monospace;font-size:12px;color:#a09a90">'+tot+' pax'+(totBk>tot?('<s style="opacity:.65;margin-left:3px">'+totBk+'</s>'):'')+'</span>'+blocks+'</button>';
     }).join('');
-    return '<div style="display:inline-flex;align-items:stretch;border:1.5px solid '+(famOn?col:col+'aa')+';background:#fff;border-radius:14px;overflow:hidden;flex-wrap:wrap;'+(famOn?'box-shadow:0 0 0 2px '+col+'33;':'')+'"><button onclick="'+famFn+'(\''+a.fam.id+'\')" title="กรองเฉพาะ '+e(a.fam.name)+'" style="display:inline-flex;align-items:center;gap:7px;border:none;background:'+col+'14;font-size:14px;font-weight:700;color:'+col+';white-space:nowrap;padding:9px 13px;cursor:pointer;font-family:inherit"><span style="width:9px;height:9px;border-radius:50%;background:'+col+';flex:none"></span>'+e(a.fam.name)+' <span style="font-family:\'DM Mono\',monospace;font-weight:600;opacity:.85;font-size:13px">'+a.pax+'</span>'+(a.locked>0?' <span style="font-size:10px;color:#C0392B">&#128274;'+a.locked+'</span>':'')+'</button>'+subs+'</div>';
+    return '<div style="display:inline-flex;align-items:stretch;border:1.5px solid '+(famOn?col:col+'aa')+';background:#fff;border-radius:14px;overflow:hidden;flex-wrap:wrap;'+(famOn?'box-shadow:0 0 0 2px '+col+'33;':'')+'"><button onclick="'+famFn+'(\''+a.fam.id+'\')" title="กรองเฉพาะ '+e(a.fam.name)+'" style="display:inline-flex;align-items:center;gap:7px;border:none;background:'+col+'14;font-size:14px;font-weight:700;color:'+col+';white-space:nowrap;padding:9px 13px;cursor:pointer;font-family:inherit"><span style="width:9px;height:9px;border-radius:50%;background:'+col+';flex:none"></span>'+e(a.fam.name)+' <span style="font-family:\'DM Mono\',monospace;font-weight:600;opacity:.85;font-size:13px">'+a.pax+((a.booked||0)>a.pax?('<s style="opacity:.6;font-size:11px;margin-left:3px">'+a.booked+'</s>'):'')+'</span>'+(a.locked>0?' <span style="font-size:10px;color:#C0392B">&#128274;'+a.locked+'</span>':'')+'</button>'+subs+'</div>';
   }).join('');
   return {html:html, dA:dA, dC:dC, dI:dI, dF:dF, total:Math.max(0,(dA+dC+dI+dF)-_lostAll), booked:dA+dC+dI+dF, lost:_lostAll};
 }
