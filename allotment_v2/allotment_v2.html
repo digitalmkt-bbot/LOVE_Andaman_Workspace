@@ -46159,11 +46159,17 @@ function rtRenderList(){
     (rt.note||'').toLowerCase().includes(q)
   );
 
-  // Sort: active first, then alphabetical by name
+  // Sort: enabled before disabled, then by validity state so the rate types in force today sit at
+  // the top of every group — Active · Expiring · Always · Upcoming · Expired — then by name.
+  // The old sort keyed only on the on/off flag, so an Upcoming card could sit above an Active one.
+  const _RT_STATE_RANK = {active:0, expiring:1, always:2, upcoming:3, expired:4};
+  const _rtRank = rt => { const st = _rtValidityStatus(rt).state; const r = _RT_STATE_RANK[st]; return r === undefined ? 9 : r; };
   filtered.sort((a,b) => {
     const aAct = a.active !== false ? 0 : 1;
     const bAct = b.active !== false ? 0 : 1;
     if(aAct !== bAct) return aAct - bAct;
+    const aR = _rtRank(a), bR = _rtRank(b);
+    if(aR !== bR) return aR - bR;
     return (a.name||'').localeCompare(b.name||'','en',{sensitivity:'base'});
   });
 
