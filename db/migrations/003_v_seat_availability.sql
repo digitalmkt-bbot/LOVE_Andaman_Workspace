@@ -30,7 +30,7 @@ CREATE OR REPLACE FUNCTION operation_schemas.f_trip_date_iso(raw text, created t
 RETURNS text
 LANGUAGE plpgsql
 IMMUTABLE
-AS $$
+AS $fn$
 DECLARE
   -- Explicit arrays, not to_char/to_date with 'Dy'/'Mon': those honour lc_time, so a server with a
   -- non-English locale would silently stop matching. These are locale-proof.
@@ -75,7 +75,7 @@ BEGIN
 
   RETURN NULL;                             -- unrecognised shape
 END
-$$;
+$fn$;
 
 COMMENT ON FUNCTION operation_schemas.f_trip_date_iso(text, text) IS
   'TEMPORARY. Normalises legacy weekday-format trip dates to ISO. Drop after backfilling sb_bookings__trips.date.';
