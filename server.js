@@ -1139,11 +1139,20 @@ const server = http.createServer((req, res) => {
     if (dateTo < dateFrom) return J(res, 400, { error: 'dateTo must be >= dateFrom' });
     const CANCELLED = ['cancelled','cancelled_weather','rejected'];
     Promise.all([
-      // booked seats per date (seat-mode trips only, non-cancelled bookings)
+      // booked seats per date (seat-mode trips only, non-cancelled bookings).
+      // Every term MUST be COALESCE'd: in Postgres a + b is NULL when either side is NULL, and SUM()
+      // then skips the row entirely. The B2C mapper writes pax as ad/chd/inf _fr/_th plus a flat foc
+      // and never writes foc_fr/foc_th, so those columns are NULL on every B2C trip row — which made
+      // this endpoint, the one B2C calls before selling, report zero for all of its own bookings and
+      // hand back seats that were already sold.
+      // pax_ad and pax_foc are separate legacy columns neither side counted; including them matches
+      // the client's own tally (getTripPaxTotal, allotment_v2.html).
       pool.query(
         `SELECT t.date,
-                COALESCE(SUM(t.pax_ad_fr + t.pax_chd_fr + t.pax_inf_fr + t.pax_foc_fr
-                           + t.pax_ad_th + t.pax_chd_th + t.pax_inf_th + t.pax_foc_th), 0)::int AS booked
+                COALESCE(SUM(COALESCE(t.pax_ad,0)     + COALESCE(t.pax_ad_fr,0)  + COALESCE(t.pax_ad_th,0)
+                           + COALESCE(t.pax_chd_fr,0) + COALESCE(t.pax_chd_th,0)
+                           + COALESCE(t.pax_inf_fr,0) + COALESCE(t.pax_inf_th,0)
+                           + COALESCE(t.pax_foc,0)    + COALESCE(t.pax_foc_fr,0) + COALESCE(t.pax_foc_th,0)), 0)::int AS booked
          FROM ${fqt('sb_bookings__trips')} t
          JOIN ${fqt('sb_bookings')} b ON b.id = t.sb_bookings_id
          WHERE t.routeid=$1 AND t.date>=$2 AND t.date<=$3
