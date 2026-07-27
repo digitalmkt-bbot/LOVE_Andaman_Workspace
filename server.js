@@ -4,6 +4,7 @@ const http   = require('http');
 const fs     = require('fs');
 const path   = require('path');
 const crypto = require('crypto');
+const zlib   = require('zlib');
 
 let Pool = null, PgClient = null;
 try {
@@ -813,43 +814,61 @@ const MIME = { '.html':'text/html; charset=utf-8','.js':'text/javascript; charse
 // raw on every load / after each deploy. gzip cuts it ~5x. Buffer cached per (path,etag) so it compresses once,
 // not on every request. Images/fonts (.png/.woff2/…) are already compressed → skipped.
 const GZIP_EXT = new Set(['.html','.js','.css','.json','.svg','.csv','.txt']);
-const _gzCache = new Map();   // fp -> { etag, buf }
+const _gzCache = new Map();   // fp -> { etag, br?, gzip? }  (one buffer per encoding)
+// §brotli (2026-07-27): measured on the 4.89MB app HTML —
+//   gzip -6 1.18MB (87ms) · gzip -9 1.17MB (124ms) · brotli q5 0.98MB (97ms) · brotli q11 0.83MB (7153ms)
+// Raising the GZIP level is pointless (0.5% for 40% more CPU); brotli is the real win. Quality is picked
+// per call site by HOW LONG THE BUFFER STAYS CACHED, not by payload size:
+//   static assets → q11. Cache key is the file etag, so this is paid once per DEPLOY, and the startup
+//                   pre-warm below pays it before any user connects. 1.18MB → 0.83MB (-30%).
+//   /api/load     → q5.  Cache key is app_state.version, which ANY write bumps — during working hours
+//                   this recompresses constantly, so q11 would burn 7s of CPU over and over. q5 costs
+//                   about what gzip -6 did and still beats it on size.
+const BR_STATIC = 11, BR_DYNAMIC = 5;
+// NB: a `br;q=0` / `gzip;q=0` explicit refusal is not parsed — no browser sends it, and the pre-brotli
+// code had the same simplification. Everything falls back to plain bytes when neither token is present.
+function _accepts(req, enc){ return new RegExp('\\b'+enc+'\\b').test(req.headers['accept-encoding']||''); }
+function pickEncoding(req){ return _accepts(req,'br') ? 'br' : _accepts(req,'gzip') ? 'gzip' : null; }
+function compress(enc, data, quality, cb){
+  if(enc !== 'br') return zlib.gzip(data, cb);
+  return zlib.brotliCompress(data, { params: {
+    [zlib.constants.BROTLI_PARAM_QUALITY]:  quality,
+    [zlib.constants.BROTLI_PARAM_MODE]:     zlib.constants.BROTLI_MODE_TEXT,
+    [zlib.constants.BROTLI_PARAM_SIZE_HINT]: Buffer.byteLength(data)
+  }}, cb);
+}
 // §/api/load cache (perf): assembling the ~6MB blob from 103 tables + stringify + gzip on EVERY login was the
 // bottleneck (morning stampede: all users re-login at 03:00 reset → server rebuilds the same payload N times).
 // Cache the built payload (plain string + gzipped buffer) keyed by app_state.version. A cheap version query gates
 // each request; any write bumps version → next load rebuilds. Cache hit = serve the prebuilt buffer instantly.
-let _loadCache = null;   // { version, str, gz }
+let _loadCache = null;   // { version, str, br?, gzip? }  (compressed buffers filled in lazily per encoding)
 function readBody(req, cb){ let ch=[], n=0; req.on('data',c=>{ n+=c.length; if(n>20*1024*1024){req.destroy();return;} ch.push(c); }); req.on('end',()=>cb(Buffer.concat(ch).toString('utf8'))); }
 function J(res, code, obj, extra){ const h=Object.assign({'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}, extra||{}); res.writeHead(code,h); res.end(JSON.stringify(obj)); }
-// gzip variant for large payloads (/api/load) — falls back to plain when the client doesn't accept gzip
+// JSON headers · Vary matters as soon as more than one encoding is on offer: without it a proxy can
+// hand a brotli body to a client that only asked for gzip.
+function _jsonHead(enc){ const h={'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','Vary':'Accept-Encoding'};
+  if(enc) h['Content-Encoding']=enc; return h; }
+// Compressed variant for large payloads — falls back to plain when the client accepts neither encoding
 function JZ(req, res, code, obj){
   const body = JSON.stringify(obj);
-  if (body.length > 50*1024 && /\bgzip\b/.test(req.headers['accept-encoding']||'')){
-    const zlib = require('zlib');
-    return zlib.gzip(body, (err, buf)=>{
-      if (err){ res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}); return res.end(body); }
-      res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Content-Encoding':'gzip','Cache-Control':'no-store'});
-      res.end(buf);
-    });
-  }
-  res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
-  res.end(body);
+  const enc = body.length > 50*1024 ? pickEncoding(req) : null;
+  if(!enc){ res.writeHead(code,_jsonHead(null)); return res.end(body); }
+  compress(enc, body, BR_DYNAMIC, (err, buf)=>{
+    if(err){ res.writeHead(code,_jsonHead(null)); return res.end(body); }
+    res.writeHead(code,_jsonHead(enc)); res.end(buf);
+  });
 }
-// Send a cached /api/load payload · gzip on first send then reuse the buffer (so a version's payload is gzipped once)
+// Send a cached /api/load payload · compress on first send, then reuse the buffer, one per encoding
+// (so a version's payload is compressed at most once per encoding, not once per request).
 function sendLoadPayload(req, res, cache){
-  const acceptsGz = /\bgzip\b/.test(req.headers['accept-encoding']||'');
-  if(acceptsGz){
-    if(cache.gz){ res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Content-Encoding':'gzip'}); return res.end(cache.gz); }
-    const zlib = require('zlib');
-    return zlib.gzip(cache.str, (err,buf)=>{
-      if(err){ res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'}); return res.end(cache.str); }
-      cache.gz = buf;   // remember the gzipped buffer → every later hit on this version is instant
-      res.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Content-Encoding':'gzip'});
-      res.end(buf);
-    });
-  }
-  res.writeHead(200,{'Content-Type':'application/json; charset=utf-8'});
-  res.end(cache.str);
+  const enc = pickEncoding(req);
+  if(!enc){ res.writeHead(200,_jsonHead(null)); return res.end(cache.str); }
+  if(cache[enc]){ res.writeHead(200,_jsonHead(enc)); return res.end(cache[enc]); }
+  compress(enc, cache.str, BR_DYNAMIC, (err,buf)=>{
+    if(err){ res.writeHead(200,_jsonHead(null)); return res.end(cache.str); }
+    cache[enc] = buf;   // remember it → every later hit on this version is instant
+    res.writeHead(200,_jsonHead(enc)); res.end(buf);
+  });
 }
 // ── Server-Sent Events · push "data changed" to all open clients instantly (real-time) ──
 const sseClients = new Set();
@@ -1043,7 +1062,7 @@ const server = http.createServer((req, res) => {
           if(_loadCache && _loadCache.version === version){ return sendLoadPayload(req,res,_loadCache); }
           const blob = await relLoad();
           const str = JSON.stringify({data:JSON.stringify(blob),version,updated_by:m.updated_by,updated_at:m.updated_at});
-          _loadCache = { version, str, gz:null };
+          _loadCache = { version, str };
           return sendLoadPayload(req,res,_loadCache);
         })
         .catch(e=>J(res,500,{error:e.message}));
@@ -1393,17 +1412,38 @@ const server = http.createServer((req, res) => {
     if((req.headers['if-none-match']||'') === etag){ res.writeHead(304,{'ETag':etag,'Cache-Control':'no-cache'}); return res.end(); }
     const ext = path.extname(fp).toLowerCase();
     const ctype = MIME[ext]||'application/octet-stream';
-    const acceptsGzip = /\bgzip\b/.test(req.headers['accept-encoding']||'');
-    if(acceptsGzip && GZIP_EXT.has(ext) && data.length > 1024){
-      const send=(buf)=>{ res.writeHead(200,{'Content-Type':ctype,'ETag':etag,'Cache-Control':'no-cache','Vary':'Accept-Encoding','Content-Encoding':'gzip'}); res.end(buf); };
-      const cached=_gzCache.get(fp); if(cached && cached.etag===etag) return send(cached.buf);
-      const zlib=require('zlib');
-      return zlib.gzip(data,(gzErr,buf)=>{ if(gzErr){ res.writeHead(200,{'Content-Type':ctype,'ETag':etag,'Cache-Control':'no-cache','Vary':'Accept-Encoding'}); return res.end(data); }
-        _gzCache.set(fp,{etag,buf}); send(buf); });
+    const head=(enc)=>{ const h={'Content-Type':ctype,'ETag':etag,'Cache-Control':'no-cache','Vary':'Accept-Encoding'};
+      if(enc) h['Content-Encoding']=enc; return h; };
+    const enc = (GZIP_EXT.has(ext) && data.length > 1024) ? pickEncoding(req) : null;
+    if(enc){
+      // Cache entry holds one buffer per encoding, both keyed on the same etag — a br client and a
+      // gzip client hitting the same file must not evict each other's buffer.
+      const hit=_gzCache.get(fp), fresh = hit && hit.etag===etag;
+      if(fresh && hit[enc]){ res.writeHead(200,head(enc)); return res.end(hit[enc]); }
+      return compress(enc, data, BR_STATIC, (cErr,buf)=>{
+        if(cErr){ res.writeHead(200,head(null)); return res.end(data); }
+        const slot = fresh ? hit : {etag};
+        slot[enc]=buf; _gzCache.set(fp,slot);
+        res.writeHead(200,head(enc)); res.end(buf); });
     }
-    res.writeHead(200,{'Content-Type':ctype,'ETag':etag,'Cache-Control':'no-cache','Vary':'Accept-Encoding'}); res.end(data); });
+    res.writeHead(200,head(null)); res.end(data); });
 });
-server.listen(PORT, ()=>console.log('LOVE Andaman on '+PORT+(pool?' · db on':' · db off')));
+// Pre-warm the app HTML's brotli buffer at startup. q11 takes ~7s on the 4.9MB file — cheap once per
+// deploy, but only if nobody is waiting on it, so pay it here rather than on the first user's request.
+// Same fp/etag derivation as the static handler above, or the cache would not be hit.
+function prewarmStatic(){
+  const fp = path.normalize(path.join(ROOT,'/allotment_v2/allotment_v2.html'));
+  fs.readFile(fp,(err,data)=>{ if(err||!data) return;
+    const etag='"'+crypto.createHash('sha1').update(data).digest('hex').slice(0,20)+'"';
+    const t0=Date.now();
+    compress('br', data, BR_STATIC, (cErr,buf)=>{ if(cErr) return;
+      const hit=_gzCache.get(fp), slot=(hit&&hit.etag===etag)?hit:{etag};
+      slot.br=buf; _gzCache.set(fp,slot);
+      console.log('[prewarm] app html br: '+(data.length/1048576).toFixed(2)+'MB -> '
+        +(buf.length/1048576).toFixed(2)+'MB in '+(Date.now()-t0)+'ms'); });
+  });
+}
+server.listen(PORT, ()=>{ console.log('LOVE Andaman on '+PORT+(pool?' · db on':' · db off')); prewarmStatic(); });
 
 // §B2C background poller (2026-07-24): relSyncB2C only ran on /api/load, so a new B2C booking sat in
 // the source pool until someone manually refreshed. Poll it on a timer so new bookings are pulled in,
