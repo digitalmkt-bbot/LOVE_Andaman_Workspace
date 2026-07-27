@@ -154,6 +154,12 @@ keys AS (
 )
 SELECT k.date,
        k.routeid,
+       -- 'closed' | 'open' | 'unknown'. A seasonally closed route (Similan/Surin shut for the
+       -- monsoon, e.g. 2026-05-16..2026-10-14) has no boats deployed, so capacity is 0 — identical
+       -- to a route nobody has scheduled yet. Without this a consumer tells the customer "no boat
+       -- assigned" when the truth is "closed for the season". Dates are ISO text, so lexicographic
+       -- comparison is chronological. "from"/"to" are reserved words and must stay quoted.
+       COALESCE(se.type, 'unknown')                                               AS season_state,
        COALESCE(c.capacity, 0)                                                    AS capacity,
        COALESCE(d.booked,   0)                                                    AS booked,
        COALESCE(l.locked,   0)                                                    AS locked,
@@ -163,7 +169,16 @@ SELECT k.date,
 FROM keys k
 LEFT JOIN cap    c ON c.date = k.date AND c.routeid = k.routeid
 LEFT JOIN demand d ON d.date = k.date AND d.routeid = k.routeid
-LEFT JOIN locks  l ON l.date = k.date AND l.routeid = k.routeid;
+LEFT JOIN locks  l ON l.date = k.date AND l.routeid = k.routeid
+LEFT JOIN LATERAL (
+  SELECT s.type
+  FROM operation_schemas.routes__seasons s
+  WHERE s.routes_id = k.routeid
+    AND s."from" IS NOT NULL AND s."to" IS NOT NULL
+    AND k.date >= s."from" AND k.date <= s."to"
+  ORDER BY s.idx
+  LIMIT 1
+) se ON true;
 
 COMMENT ON VIEW operation_schemas.v_seat_availability IS
   'Single source of truth for seat availability by (date, routeid). Consumers SELECT from this, never from the base tables.';

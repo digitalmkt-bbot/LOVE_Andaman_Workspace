@@ -48,7 +48,7 @@ const CHECKS = [
   // Every route on the date the B2C form was failing on, not one route: POW-003 is r10 and
   // POW-004 is r12, and whichever is being tested, seeing the whole day makes a wrong number obvious.
   [(process.env.CHECK_DATE || '2026-07-27') + ' — all routes',
-   `SELECT date, routeid, capacity, booked, locked, available, boats, board_exists
+   `SELECT date, routeid, season_state, capacity, booked, locked, available, boats, board_exists
       FROM operation_schemas.v_seat_availability
      WHERE date = $1 ORDER BY routeid`,
    [process.env.CHECK_DATE || '2026-07-27']],
