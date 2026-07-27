@@ -130,6 +130,9 @@ const B2C_PRODUCT_NAME = {
 };
 // pickupareaid rides along here: matched best-effort from the B2C free-text location on first sync,
 // then owned by ops (staff re-assignment must survive resyncs) — excluded from conflict-update.
+// B2C bookings.payment_type — mirrors SB_PAYMENT_TYPES ids in the app. Whitelisted so an unexpected
+// value can't leak into the Pay column (bkV2PayLabel falls through to the raw string).
+const B2C_PAY_TYPES = new Set(['proforma', 'invoice', 'bt', 'cot']);
 const B2C_OPS_BK   = new Set(['ops_boatid','ops_vangroup','ops_vanseq','ops_vanreturnid','ops_vanid','ops_returnsamevan','ops_pickuptimefinal','ops_reconfirm','ops_vansplits','pickupareaid']);
 const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_returnsamevan','ops_vangroup','ops_vanseq','ops_pickuptimefinal','ops_vansplits','ops_reconfirm']);
 
@@ -176,6 +179,13 @@ function mapB2CItemBooking(item, isFirstLine, findAreaId) {
   const seat = b2cLineSeat(h);
   // pax_adult = total adults; pax_thai/pax_foreign = nationality split (may be 0/0 when unknown).
   // Never use pax_foreign||pax_adult — a Thai-only booking (fr=0, th=5, ad=5) double-counts to 10.
+  // Pay type: bookings.payment_type (nullable) uses the SAME ids as the app's SB_PAYMENT_TYPES
+  // (proforma | invoice | bt | cot), so it drops straight into paymentSnapshot.method — which is the
+  // pay-TYPE slot the UI reads (bkV2PayLabel / bkV2PayChip), NOT a payment instrument. Deliberately
+  // not payment_method_id: that's an instrument id and would render as raw text in the Pay column.
+  // Null/unknown → '' so the chip falls back to the a_b2c agent default.
+  const payType = B2C_PAY_TYPES.has(String(h.bk_payment_type || '').toLowerCase())
+    ? String(h.bk_payment_type).toLowerCase() : '';
   const adTh = Number(h.pax_thai) || 0;
   const adFrRaw = Number(h.pax_foreign) || 0;
   const adFr = adFrRaw > 0 ? adFrRaw : Math.max(0, (Number(h.pax_adult) || 0) - adTh);
@@ -194,18 +204,22 @@ function mapB2CItemBooking(item, isFirstLine, findAreaId) {
   // so a private booking is caught however B2C tags it.
   const isPrivateId = id => /^PR-/i.test(String(id || ''));
   const isCharter = h.type === 'private_own' || isPrivateId(h.product_id) || isPrivateId(h.route_id);
-  // Pickup (details jsonb): B2C only knows the 3 coarse transfer zones (PK/KL/NoTransfer) plus a
-  // free-text pickupLocation — the 37 ops pickup areas never cross the API (B2C_PICKUP_ZONE_DATA.md).
+  // Pickup (details jsonb): B2C only knows the 3 coarse transfer zones (PK/KL/NoTransfer) plus
+  // free text — the 37 ops pickup areas never cross the API (B2C_PICKUP_ZONE_DATA.md).
   // hotelName/pickupZone/pickupSelf are B2C-owned (refreshed every sync); pickupAreaId is matched
   // best-effort against sb_pickup_areas and preserved on conflict (see B2C_OPS_BK).
+  // pickupHotel is the newer, more specific hotel field and wins over the legacy free-text
+  // pickupLocation; older orders only carry pickupLocation, so keep it as the fallback.
   let det = h.details;
   if (typeof det === 'string') { try { det = JSON.parse(det); } catch (_) { det = null; } }
   det = det || {};
-  const pickupLoc  = String(det.pickupLocation || '').trim();
+  // (h.pickuphotel covers the case where B2C stores it as a booking_items column instead of a
+  // details key — bi.* already selects it; unquoted pg identifiers arrive lowercased.)
+  const pickupLoc  = String(det.pickupHotel || h.pickuphotel || det.pickupLocation || '').trim();
   const noTransfer = det.noTransfer === true;
   const pickupZone = noTransfer ? 'NoTransfer' : String(det.pickupZone || '').trim();
   const areaId = (typeof findAreaId === 'function') ? findAreaId(pickupLoc, pickupZone) : null;
-  const dropoffLoc = (det.dropoffSame === false) ? String(det.dropoffLocation || '').trim() : '';
+  const dropoffLoc = (det.dropoffSame === false) ? String(det.dropoffHotel || det.dropoffLocation || '').trim() : '';
   const trip = {
     id: 'b2c_' + h.booking_id + '_' + h.line_no + '_t0',
     routeId: B2C_ROUTE_MAP[h.product_id] || B2C_ROUTE_MAP[h.route_id] || null,
@@ -267,7 +281,7 @@ function mapB2CItemBooking(item, isFirstLine, findAreaId) {
     paymentSnapshot: {
       deposit: isFirstLine ? (Number(h.bk_deposit) || 0) : 0,
       balance: isFirstLine ? (Number(h.bk_balance) || 0) : 0,
-      method: h.payment_method_id || '',
+      method: payType,
     },
     ops: {},
     history: [],
@@ -288,6 +302,7 @@ const B2C_ITEM_JOIN = `
          b.deposit       AS bk_deposit,
          b.balance       AS bk_balance,
          b.payment_method_id,
+         b.payment_type  AS bk_payment_type,
          b.created_at    AS bk_created_at,
          ch.name         AS channel_name,
          c.name          AS customer_name,
@@ -1249,11 +1264,19 @@ const server = http.createServer((req, res) => {
     if (dateTo < dateFrom) return J(res, 400, { error: 'dateTo must be >= dateFrom' });
     const CANCELLED = ['cancelled','cancelled_weather','rejected'];
     Promise.all([
-      // booked seats per date (seat-mode trips only, non-cancelled bookings)
+      // booked seats per date (seat-mode trips only, non-cancelled bookings).
+      // Every term MUST be COALESCE'd: in SQL one NULL makes the whole row's sum NULL, and SUM then
+      // skips that row — so a single unset pax column silently reported booked = 0 for the day.
+      // pax_foc_fr/pax_foc_th are never written (client and B2C mapper both store a flat pax.foc),
+      // so they were NULL on every trip row and zeroed out the entire count.
+      // Column set + double-count semantics mirror the client's getTripPaxTotal (allotment_v2.html:9843):
+      // flat pax_ad/pax_foc are legacy shapes, mutually exclusive with the _fr/_th split.
       pool.query(
         `SELECT t.date,
-                COALESCE(SUM(t.pax_ad_fr + t.pax_chd_fr + t.pax_inf_fr + t.pax_foc_fr
-                           + t.pax_ad_th + t.pax_chd_th + t.pax_inf_th + t.pax_foc_th), 0)::int AS booked
+                COALESCE(SUM(COALESCE(t.pax_ad,0)     + COALESCE(t.pax_ad_fr,0)  + COALESCE(t.pax_ad_th,0)
+                           + COALESCE(t.pax_chd_fr,0) + COALESCE(t.pax_chd_th,0)
+                           + COALESCE(t.pax_inf_fr,0) + COALESCE(t.pax_inf_th,0)
+                           + COALESCE(t.pax_foc,0)    + COALESCE(t.pax_foc_fr,0) + COALESCE(t.pax_foc_th,0)), 0)::int AS booked
          FROM ${fqt('sb_bookings__trips')} t
          JOIN ${fqt('sb_bookings')} b ON b.id = t.sb_bookings_id
          WHERE t.routeid=$1 AND t.date>=$2 AND t.date<=$3
