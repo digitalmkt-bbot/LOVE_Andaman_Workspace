@@ -43167,6 +43167,9 @@ var _pckDate = (typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new D
 var _pckFam=null, _pckRoute=null;
 // §pierFilter (2026-07-27) · หน้าท่าต้องกรองได้จริง — เรือลำไหน รถคันไหน มาจากโซนไหน ใครยังไม่เคลียร์
 var _pckBoat='', _pckVan='', _pckArr='', _pckStat='', _pckQ='';
+// คอลัมน์ Submitted by · หน้าท่าไม่ได้ใช้ทุกวัน ปกติซ่อน · จำค่าที่เลือกไว้ข้ามการเปิดหน้า
+var _pckShowBy=(function(){ try{ return localStorage.getItem('pck_showby')==='1'; }catch(_){ return false; } })();
+function pckToggleBy(){ _pckShowBy=!_pckShowBy; try{ localStorage.setItem('pck_showby', _pckShowBy?'1':'0'); }catch(_){} renderPierCheckin(); }
 function pckSetBoat(v){ _pckBoat=v||''; renderPierCheckin(); }
 function pckSetVan(v){ _pckVan=v||''; renderPierCheckin(); }
 function pckSetArr(v){ _pckArr=(_pckArr===v)?'':v; renderPierCheckin(); }
@@ -43292,6 +43295,7 @@ function pckFilterBar(all, cnt, nHidden){
     +sel('pck-van',_pckVan,'pckSetVan','\u{1F68C} ทุกคัน',vans,function(id){ var v=(typeof vehGet==='function'?vehGet(id):null)||{}; return (v.name||id)+' ('+cnt.van[id]+')'; })
     +'<span class="ck-fsep"></span>'+arrHtml
     +'<span class="ck-fsep"></span>'+statHtml
+    +'<button onclick="pckToggleBy()" title="'+(_pckShowBy?'ซ่อน':'แสดง')+'คอลัมน์ Submitted by (ผู้บันทึก booking)" style="border:1.5px solid '+(_pckShowBy?'#185FA5':'#E7E4DC')+';background:'+(_pckShowBy?'#E6F1FB':'#fff')+';color:'+(_pckShowBy?'#0C447C':'#a5a49d')+';border-radius:999px;padding:4px 11px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">'+(_pckShowBy?'\u{1F441} Submitted by':'\u{1F648} Submitted by')+'</button>'
     +(any?'<button onclick="pckClearFilters()" style="margin-left:auto;border:1px solid #E6C9C3;background:#fff;color:#A32D2D;border-radius:8px;padding:4px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">&#10005; ล้างตัวกรอง'+(nHidden>0?(' · ซ่อน '+nHidden):'')+'</button>':'')
     +'</div>';
 }
@@ -43519,7 +43523,7 @@ function renderPierCheckin(){
       var b=r.b, t=r.t, ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
       var agName=ag?(ag.name||ag.code||'—'):(b.channel||'walk-in'), pb=ckPaxBreak(t.pax);
       var agColor=(b.agentId&&typeof bkV2AgentColor==='function')?bkV2AgentColor(b.agentId):((ag&&ag.color)||'#64748B');
-      bodyHtml+='<tr style="opacity:.6"><td><span class="ck-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'+(b.agentId?('<td style="padding:0"><div style="background:'+agColor+';color:'+((typeof bkV2ContrastInk==='function')?bkV2ContrastInk(agColor):'#fff')+';margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">'+e(agName)+'</div></td>'):('<td><span style="color:#8a8a82;font-weight:600">'+e(agName)+'</span></td>'))+'<td>'+(b.createdBy?('<span class="ck-by">'+e(b.createdBy)+'</span>'):'<span class="ck-dim">—</span>')+'</td><td><span class="ck-lead" style="background:#F6E27A">'+e(b.leadPax||'—')+'</span>'+((b.leadPhone||b.phone||'')?('<div><a class="ck-tel" href="tel:'+e(String(b.leadPhone||b.phone).split(/[,;\/]/)[0].replace(/[^0-9+]/g,''))+'">&#128222; '+e(b.leadPhone||b.phone)+'</a></div>'):'')+'</td><td class="ck-c">'+(pb.ad||0)+'</td><td class="ck-c">'+(pb.chd||0)+'</td><td class="ck-c">'+(pb.inf||0)+'</td><td class="ck-c">'+(pb.foc||0)+'</td><td class="ck-mono">'+e(r.O.pickupTimeFinal||t.pickupTime||'—')+'</td><td><span class="ck-pick">'+e(b.hotelName||b.pickup||'—')+'</span></td><td class="ck-c ck-mono">'+e(b.roomNo||b.roomNumber||'—')+'</td><td><span class="ck-dim">—</span></td><td>'+(((typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim()))?('<span class="ck-sreq">'+e((typeof vanJobsSreqFinal==='function')?vanJobsSreqFinal(b):(b.notes||''))+'</span>'):'<span class="ck-dim">—</span>')+'</td><td><span class="ck-dim">—</span></td><td><span class="ck-dim">—</span></td><td>'+pckMoneyCell(b,date)+'</td><td class="ck-c ck-in" style="border-left:2px solid #EBD9BE;color:#b0aea6">—</td><td class="ck-in"></td><td class="ck-c ck-in" style="color:#b0aea6">—</td><td class="ck-in"></td></tr>';
+      bodyHtml+='<tr class="pck-nb" style="opacity:.6"><td><span class="ck-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'+(b.agentId?('<td style="padding:0"><div style="background:'+agColor+';color:'+((typeof bkV2ContrastInk==='function')?bkV2ContrastInk(agColor):'#fff')+';margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">'+e(agName)+'</div></td>'):('<td><span style="color:#8a8a82;font-weight:600">'+e(agName)+'</span></td>'))+'<td>'+(b.createdBy?('<span class="ck-by">'+e(b.createdBy)+'</span>'):'<span class="ck-dim">—</span>')+'</td><td><span class="ck-lead" style="background:#F6E27A">'+e(b.leadPax||'—')+'</span>'+((b.leadPhone||b.phone||'')?('<div><a class="ck-tel" href="tel:'+e(String(b.leadPhone||b.phone).split(/[,;\/]/)[0].replace(/[^0-9+]/g,''))+'">&#128222; '+e(b.leadPhone||b.phone)+'</a></div>'):'')+'</td><td class="ck-c">'+(pb.ad||0)+'</td><td class="ck-c">'+(pb.chd||0)+'</td><td class="ck-c">'+(pb.inf||0)+'</td><td class="ck-c">'+(pb.foc||0)+'</td><td class="ck-mono">'+e(r.O.pickupTimeFinal||t.pickupTime||'—')+'</td><td><span class="ck-pick">'+e(b.hotelName||b.pickup||'—')+'</span></td><td class="ck-c ck-mono">'+e(b.roomNo||b.roomNumber||'—')+'</td><td><span class="ck-dim">—</span></td><td>'+(((typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim()))?('<span class="ck-sreq">'+e((typeof vanJobsSreqFinal==='function')?vanJobsSreqFinal(b):(b.notes||''))+'</span>'):'<span class="ck-dim">—</span>')+'</td><td><span class="ck-dim">—</span></td><td><span class="ck-dim">—</span></td><td>'+pckMoneyCell(b,date)+'</td><td class="ck-c ck-in" style="border-left:2px solid #EBD9BE;color:#b0aea6">—</td><td class="ck-in"></td><td class="ck-c ck-in" style="color:#b0aea6">—</td><td class="ck-in"></td></tr>';
     });
   }
   if(!bodyHtml) bodyHtml='<tr class="ck-empty"><td colspan="20">'+(nHidden>0?('ไม่มีแถวที่ตรงตัวกรอง · ซ่อนอยู่ '+nHidden+' รายการ &nbsp; <a onclick="pckClearFilters()" style="color:#185FA5;cursor:pointer">ล้างตัวกรอง</a>'):'ไม่มี booking ที่ต้องเช็คอินหน้าท่าในวันนี้')+'</td></tr>';
@@ -43532,7 +43536,10 @@ function renderPierCheckin(){
         +(tDue>0?'<span style="background:#FBF0DD;color:#7A4A00">ค้างเก็บ &#3647;'+Math.round(tDue).toLocaleString()+'</span>':'')
         +(tNoShow>0?'<span style="background:#FCEBEB;color:#A32D2D">No-show '+tNoShow+'</span>':'')
         +'<span style="background:#F1EFE8;color:#5F5E5A">รอรับ '+tExpect+' pax</span>';
-  host.innerHTML='<style id="pck-style">'+ckSharedCSS('#piercheckin-host')+pckExtraCSS()+'#piercheckin-host table.ck-tbl{min-width:1680px}</style>'
+  host.innerHTML='<style id="pck-style">'+ckSharedCSS('#piercheckin-host')+pckExtraCSS()
+    +'#piercheckin-host table.ck-tbl{min-width:'+(_pckShowBy?1680:1560)+'px}'
+    +(_pckShowBy?'':'#piercheckin-host table.ck-tbl>thead>tr>th:nth-child(3),#piercheckin-host table.ck-tbl>tbody>tr.ck-row>td:nth-child(3),#piercheckin-host table.ck-tbl>tbody>tr.pck-nb>td:nth-child(3){display:none}')
+    +'</style>'
     +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px"><h1 style="margin:0;font-size:19px;font-weight:700">เช็คอินหน้าท่า (Pier Check-in)</h1>'
     +'<span style="font-size:11px;color:#8a8a82">รับช่วงต่อจากเช็คอินรถ · คนที่ No-show ตอนรถรับจะถูกหักออกจากยอดรอรับ (ยกเว้นแจ้งว่าไปเองที่ท่า)</span></div>'
     +ckDayHeader({date:date, shiftFn:'pckDateShift', todayFn:'pckToday', pickFn:'pckPickDay',
