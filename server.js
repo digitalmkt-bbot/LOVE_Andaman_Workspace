@@ -133,6 +133,12 @@ const B2C_PRODUCT_NAME = {
 const B2C_OPS_BK   = new Set(['ops_boatid','ops_vangroup','ops_vanseq','ops_vanreturnid','ops_vanid','ops_returnsamevan','ops_pickuptimefinal','ops_reconfirm','ops_vansplits','pickupareaid']);
 const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_returnsamevan','ops_vangroup','ops_vanseq','ops_pickuptimefinal','ops_vansplits','ops_reconfirm']);
 
+// Bump whenever mapB2CItemBooking changes how it reads the source. The full-sync change detector
+// hashes the source rows, so a mapper fix alone would never re-apply to bookings whose source rows
+// are untouched — folding this version into the hash forces exactly one corrective re-upsert.
+// The re-upsert goes through the normal ON CONFLICT path, so ops fields (B2C_OPS_BK) are preserved.
+const B2C_MAP_VER = 2;
+
 function mapB2CStatus(s) {
   if (s === 'cancelled') return 'cancelled';
   if (s === 'pending')   return 'pending_approval';
@@ -241,9 +247,9 @@ function mapB2CItemBooking(item, isFirstLine, findAreaId) {
     leadPax: leadFromPax || h.customer_name || h.booked_by_name || '',
     leadNationality: '',
     leadPhone: h.customer_phone || '',
-    leadEmail: h.booked_by_email || '',
+    leadEmail: h.customer_email || h.booked_by_email || '',
     status: mapB2CStatus(h.bk_status),
-    bookingDate: date,
+    bookingDate: td(h.bk_created_at) || date,
     hotelName: pickupLoc,
     pickupZone: pickupZone,
     pickupSelf: noTransfer,
@@ -291,7 +297,8 @@ const B2C_ITEM_JOIN = `
          b.created_at    AS bk_created_at,
          ch.name         AS channel_name,
          c.name          AS customer_name,
-         c.phone         AS customer_phone
+         c.phone         AS customer_phone,
+         c.email         AS customer_email
   FROM ${b2cT('booking_items')} bi
   LEFT JOIN ${b2cT('bookings')} b       ON b.id  = bi.booking_id
   LEFT JOIN ${b2cT('b2c_channels')} ch  ON ch.id = b.channel_id
@@ -329,7 +336,7 @@ async function relSyncB2C(singleExtId = null) {
     // sat in the tables but never reached the app until an unrelated save bumped the version.
     let srcHash = null;
     if (!singleExtId) {
-      srcHash = crypto.createHash('sha1').update(JSON.stringify(itemRows)).digest('hex');
+      srcHash = crypto.createHash('sha1').update('v' + B2C_MAP_VER + '|' + JSON.stringify(itemRows)).digest('hex');
       try {
         const hr = await pool.query('SELECT data FROM app_state WHERE id=$1', ['b2c_sync_hash']);
         if (hr.rows[0] && hr.rows[0].data === srcHash) return;   // B2C unchanged since last sync
@@ -1060,6 +1067,31 @@ const server = http.createServer((req, res) => {
       console.log(`[b2c-reset] wiped ${deleted} b2c bookings, re-synced, version=${nv}`);
       J(res,200,{ok:true, deleted, version:nv});
     })();
+    return;
+  }
+  // Read-only B2C source inspector · GET /api/b2c/raw?id=LOV-1234567
+  // Returns the source rows for one B2C booking exactly as the sync sees them (full rows, not the
+  // JOIN's projection) alongside what mapB2CItemBooking produces from them. Diagnostic only — used
+  // to trace "synced details don't match" reports without guessing at the source schema.
+  if(u === '/api/b2c/raw' && req.method === 'GET'){
+    const s=session(req); if(!s) return J(res,401,{error:'login required'});
+    if(!b2cPool) return J(res,400,{error:'B2C sync not configured'});
+    const id = ((q.match(/id=([^&]*)/)||[])[1]) ? decodeURIComponent((q.match(/id=([^&]*)/)||[])[1]) : '';
+    if(!id) return J(res,400,{error:'id required'});
+    (async () => {
+      const out = { id };
+      const it = await b2cPool.query(`SELECT row_to_json(bi) AS r FROM ${b2cT('booking_items')} bi WHERE bi.booking_id = $1 ORDER BY bi.line_no`, [id]);
+      out.booking_items = it.rows.map(x => x.r);
+      const bk = await b2cPool.query(`SELECT row_to_json(b) AS r FROM ${b2cT('bookings')} b WHERE b.id = $1`, [id]);
+      out.booking = bk.rows[0] ? bk.rows[0].r : null;
+      if (out.booking && out.booking.customer_id != null) {
+        const c = await b2cPool.query(`SELECT row_to_json(c) AS r FROM ${b2cT('customers')} c WHERE c.id = $1`, [out.booking.customer_id]);
+        out.customer = c.rows[0] ? c.rows[0].r : null;
+      }
+      const j = await b2cPool.query(B2C_ITEM_JOIN + ` AND bi.booking_id = $1 ORDER BY bi.line_no`, [id]);
+      out.mapped = j.rows.map((r, i) => mapB2CItemBooking(r, i === 0, null));
+      J(res,200,out);
+    })().catch(e => J(res,500,{error:e.message}));
     return;
   }
   if(u === '/api/version'){
