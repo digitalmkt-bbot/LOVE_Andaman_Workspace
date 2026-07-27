@@ -136,6 +136,13 @@ const B2C_PAY_TYPES = new Set(['proforma', 'invoice', 'bt', 'cot']);
 const B2C_OPS_BK   = new Set(['ops_boatid','ops_vangroup','ops_vanseq','ops_vanreturnid','ops_vanid','ops_returnsamevan','ops_pickuptimefinal','ops_reconfirm','ops_vansplits','pickupareaid']);
 const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_returnsamevan','ops_vangroup','ops_vanseq','ops_pickuptimefinal','ops_vansplits','ops_reconfirm']);
 
+// Bump whenever mapB2CItemBooking changes how it reads the source. The full-sync change detector
+// hashes the source rows, so a mapper fix alone would never re-apply to bookings whose source rows
+// are untouched — folding this version into the hash forces exactly one corrective re-upsert.
+// The re-upsert goes through the normal ON CONFLICT path, so ops fields (B2C_OPS_BK) are preserved.
+// v4: mapper now reads bookings.payment_type and details.pickupHotel / bi.pickuphotel.
+const B2C_MAP_VER = 4;
+
 function mapB2CStatus(s) {
   if (s === 'cancelled') return 'cancelled';
   if (s === 'pending')   return 'pending_approval';
@@ -233,6 +240,10 @@ function mapB2CItemBooking(item, isFirstLine, findAreaId) {
       inf_fr: Number(h.pax_infant) || 0,
       inf_th: 0,
       foc: Number(h.pax_foc) || 0,
+      // B2C has no nationality split for FOC, but these columns must not be NULL: the seat-count
+      // queries add the pax columns together, and one NULL makes the whole booking count as zero.
+      foc_fr: 0,
+      foc_th: 0,
     },
     seatSource: { locked: 0, general: 0 },
     lockDrawSel: {},
@@ -255,9 +266,9 @@ function mapB2CItemBooking(item, isFirstLine, findAreaId) {
     leadPax: leadFromPax || h.customer_name || h.booked_by_name || '',
     leadNationality: '',
     leadPhone: h.customer_phone || '',
-    leadEmail: h.booked_by_email || '',
+    leadEmail: h.customer_email || h.booked_by_email || '',
     status: mapB2CStatus(h.bk_status),
-    bookingDate: date,
+    bookingDate: td(h.bk_created_at) || date,
     hotelName: pickupLoc,
     pickupZone: pickupZone,
     pickupSelf: noTransfer,
@@ -306,7 +317,8 @@ const B2C_ITEM_JOIN = `
          b.created_at    AS bk_created_at,
          ch.name         AS channel_name,
          c.name          AS customer_name,
-         c.phone         AS customer_phone
+         c.phone         AS customer_phone,
+         c.email         AS customer_email
   FROM ${b2cT('booking_items')} bi
   LEFT JOIN ${b2cT('bookings')} b       ON b.id  = bi.booking_id
   LEFT JOIN ${b2cT('b2c_channels')} ch  ON ch.id = b.channel_id
@@ -344,7 +356,7 @@ async function relSyncB2C(singleExtId = null) {
     // sat in the tables but never reached the app until an unrelated save bumped the version.
     let srcHash = null;
     if (!singleExtId) {
-      srcHash = crypto.createHash('sha1').update(JSON.stringify(itemRows)).digest('hex');
+      srcHash = crypto.createHash('sha1').update('v' + B2C_MAP_VER + '|' + JSON.stringify(itemRows)).digest('hex');
       try {
         const hr = await pool.query('SELECT data FROM app_state WHERE id=$1', ['b2c_sync_hash']);
         if (hr.rows[0] && hr.rows[0].data === srcHash) return;   // B2C unchanged since last sync
@@ -504,9 +516,12 @@ async function relSyncB2C(singleExtId = null) {
           lockByKey[r.routeid + NUL + r.date] = r.n;
         const bkByKey = {};
         for (const r of (await client.query(
+          // Same COALESCE requirement as the availability query — without it a B2C row's pax came back
+          // NULL, `cum + null > fillLine` was never true, and the oversell net silently never fired.
           `SELECT t.routeid, t.date, b.id, b.status,
-                  (t.pax_ad_fr + t.pax_chd_fr + t.pax_inf_fr + t.pax_foc_fr
-                 + t.pax_ad_th + t.pax_chd_th + t.pax_inf_th + t.pax_foc_th)::int AS pax
+                  (COALESCE(t.pax_ad_fr,0)+COALESCE(t.pax_chd_fr,0)+COALESCE(t.pax_inf_fr,0)+COALESCE(t.pax_foc_fr,0)
+                    +COALESCE(t.pax_ad_th,0)+COALESCE(t.pax_chd_th,0)+COALESCE(t.pax_inf_th,0)+COALESCE(t.pax_foc_th,0)
+                    +COALESCE(t.pax_ad,0)+COALESCE(t.pax_foc,0))::int AS pax
            FROM ${fqt('sb_bookings__trips')} t JOIN ${fqt('sb_bookings')} b ON b.id = t.sb_bookings_id
            WHERE t.date = ANY($1) AND t.bookingmode='seat' AND b.status <> ALL($2::text[])
            ORDER BY b.createdat ASC NULLS FIRST, b.id ASC`,
@@ -1077,6 +1092,31 @@ const server = http.createServer((req, res) => {
     })();
     return;
   }
+  // Read-only B2C source inspector · GET /api/b2c/raw?id=LOV-1234567
+  // Returns the source rows for one B2C booking exactly as the sync sees them (full rows, not the
+  // JOIN's projection) alongside what mapB2CItemBooking produces from them. Diagnostic only — used
+  // to trace "synced details don't match" reports without guessing at the source schema.
+  if(u === '/api/b2c/raw' && req.method === 'GET'){
+    const s=session(req); if(!s) return J(res,401,{error:'login required'});
+    if(!b2cPool) return J(res,400,{error:'B2C sync not configured'});
+    const id = ((q.match(/id=([^&]*)/)||[])[1]) ? decodeURIComponent((q.match(/id=([^&]*)/)||[])[1]) : '';
+    if(!id) return J(res,400,{error:'id required'});
+    (async () => {
+      const out = { id };
+      const it = await b2cPool.query(`SELECT row_to_json(bi) AS r FROM ${b2cT('booking_items')} bi WHERE bi.booking_id = $1 ORDER BY bi.line_no`, [id]);
+      out.booking_items = it.rows.map(x => x.r);
+      const bk = await b2cPool.query(`SELECT row_to_json(b) AS r FROM ${b2cT('bookings')} b WHERE b.id = $1`, [id]);
+      out.booking = bk.rows[0] ? bk.rows[0].r : null;
+      if (out.booking && out.booking.customer_id != null) {
+        const c = await b2cPool.query(`SELECT row_to_json(c) AS r FROM ${b2cT('customers')} c WHERE c.id = $1`, [out.booking.customer_id]);
+        out.customer = c.rows[0] ? c.rows[0].r : null;
+      }
+      const j = await b2cPool.query(B2C_ITEM_JOIN + ` AND bi.booking_id = $1 ORDER BY bi.line_no`, [id]);
+      out.mapped = j.rows.map((r, i) => mapB2CItemBooking(r, i === 0, null));
+      J(res,200,out);
+    })().catch(e => J(res,500,{error:e.message}));
+    return;
+  }
   if(u === '/api/version'){
     const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(!pool) return J(res,503,{error:'no database'});
     pool.query('SELECT version,updated_by,updated_at FROM app_state WHERE id=$1',[STATE_KEY])
@@ -1265,12 +1305,14 @@ const server = http.createServer((req, res) => {
     const CANCELLED = ['cancelled','cancelled_weather','rejected'];
     Promise.all([
       // booked seats per date (seat-mode trips only, non-cancelled bookings).
-      // Every term MUST be COALESCE'd: in SQL one NULL makes the whole row's sum NULL, and SUM then
-      // skips that row — so a single unset pax column silently reported booked = 0 for the day.
-      // pax_foc_fr/pax_foc_th are never written (client and B2C mapper both store a flat pax.foc),
-      // so they were NULL on every trip row and zeroed out the entire count.
+      // Every term MUST be COALESCE'd: in Postgres a + b is NULL if either side is NULL, and SUM()
+      // skips NULLs — so a single unset pax column silently reported booked = 0 for the whole day.
+      // pax_foc_fr/pax_foc_th are never written (client and B2C mapper both store a flat pax.foc), so
+      // they were NULL on every trip row and zeroed the count — every B2C booking went invisible here
+      // and the endpoint reported seats that were in fact already sold.
       // Column set + double-count semantics mirror the client's getTripPaxTotal (allotment_v2.html:9843):
       // flat pax_ad/pax_foc are legacy shapes, mutually exclusive with the _fr/_th split.
+      // (Fixed twice independently — local 5fbfa57 and remote bd0e1b5; same 10 columns, merged here.)
       pool.query(
         `SELECT t.date,
                 COALESCE(SUM(COALESCE(t.pax_ad,0)     + COALESCE(t.pax_ad_fr,0)  + COALESCE(t.pax_ad_th,0)
