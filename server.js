@@ -137,7 +137,7 @@ const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_re
 // hashes the source rows, so a mapper fix alone would never re-apply to bookings whose source rows
 // are untouched — folding this version into the hash forces exactly one corrective re-upsert.
 // The re-upsert goes through the normal ON CONFLICT path, so ops fields (B2C_OPS_BK) are preserved.
-const B2C_MAP_VER = 2;
+const B2C_MAP_VER = 3;
 
 function mapB2CStatus(s) {
   if (s === 'cancelled') return 'cancelled';
@@ -225,6 +225,10 @@ function mapB2CItemBooking(item, isFirstLine, findAreaId) {
       inf_fr: Number(h.pax_infant) || 0,
       inf_th: 0,
       foc: Number(h.pax_foc) || 0,
+      // B2C has no nationality split for FOC, but these columns must not be NULL: the seat-count
+      // queries add the pax columns together, and one NULL makes the whole booking count as zero.
+      foc_fr: 0,
+      foc_th: 0,
     },
     seatSource: { locked: 0, general: 0 },
     lockDrawSel: {},
@@ -496,9 +500,12 @@ async function relSyncB2C(singleExtId = null) {
           lockByKey[r.routeid + NUL + r.date] = r.n;
         const bkByKey = {};
         for (const r of (await client.query(
+          // Same COALESCE requirement as the availability query — without it a B2C row's pax came back
+          // NULL, `cum + null > fillLine` was never true, and the oversell net silently never fired.
           `SELECT t.routeid, t.date, b.id, b.status,
-                  (t.pax_ad_fr + t.pax_chd_fr + t.pax_inf_fr + t.pax_foc_fr
-                 + t.pax_ad_th + t.pax_chd_th + t.pax_inf_th + t.pax_foc_th)::int AS pax
+                  (COALESCE(t.pax_ad_fr,0)+COALESCE(t.pax_chd_fr,0)+COALESCE(t.pax_inf_fr,0)+COALESCE(t.pax_foc_fr,0)
+                    +COALESCE(t.pax_ad_th,0)+COALESCE(t.pax_chd_th,0)+COALESCE(t.pax_inf_th,0)+COALESCE(t.pax_foc_th,0)
+                    +COALESCE(t.pax_ad,0)+COALESCE(t.pax_foc,0))::int AS pax
            FROM ${fqt('sb_bookings__trips')} t JOIN ${fqt('sb_bookings')} b ON b.id = t.sb_bookings_id
            WHERE t.date = ANY($1) AND t.bookingmode='seat' AND b.status <> ALL($2::text[])
            ORDER BY b.createdat ASC NULLS FIRST, b.id ASC`,
@@ -1283,9 +1290,15 @@ const server = http.createServer((req, res) => {
     Promise.all([
       // booked seats per date (seat-mode trips only, non-cancelled bookings)
       pool.query(
+        // Every term MUST be COALESCEd. In Postgres a + b is NULL if either side is NULL, and SUM()
+        // skips NULLs — so one unwritten pax column made the whole booking count as zero booked seats.
+        // B2C never writes pax_foc_fr / pax_foc_th, so every B2C booking was invisible here and the
+        // endpoint reported seats that were already sold. pax_ad and pax_foc are separate legacy
+        // columns; include them so this matches the client's bkV2PaxTot (kind + kind_fr + kind_th).
         `SELECT t.date,
-                COALESCE(SUM(t.pax_ad_fr + t.pax_chd_fr + t.pax_inf_fr + t.pax_foc_fr
-                           + t.pax_ad_th + t.pax_chd_th + t.pax_inf_th + t.pax_foc_th), 0)::int AS booked
+                COALESCE(SUM(COALESCE(t.pax_ad_fr,0)+COALESCE(t.pax_chd_fr,0)+COALESCE(t.pax_inf_fr,0)+COALESCE(t.pax_foc_fr,0)
+                    +COALESCE(t.pax_ad_th,0)+COALESCE(t.pax_chd_th,0)+COALESCE(t.pax_inf_th,0)+COALESCE(t.pax_foc_th,0)
+                    +COALESCE(t.pax_ad,0)+COALESCE(t.pax_foc,0)), 0)::int AS booked
          FROM ${fqt('sb_bookings__trips')} t
          JOIN ${fqt('sb_bookings')} b ON b.id = t.sb_bookings_id
          WHERE t.routeid=$1 AND t.date>=$2 AND t.date<=$3
