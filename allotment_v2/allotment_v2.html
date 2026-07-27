@@ -47095,7 +47095,7 @@ function rtAgentPickerClose(){
 function rtAgentPickerToggle(agentId){
   if(_rtAgentPickerSelected.has(agentId)) _rtAgentPickerSelected.delete(agentId);
   else _rtAgentPickerSelected.add(agentId);
-  rtAgentPickerRender();
+  rtAgentPickerRender(true);
 }
 
 function rtAgentPickerToggleGroup(market, agentIds){
@@ -47103,10 +47103,10 @@ function rtAgentPickerToggleGroup(market, agentIds){
   const allSelected = agentIds.every(id => _rtAgentPickerSelected.has(id));
   if(allSelected) agentIds.forEach(id => _rtAgentPickerSelected.delete(id));
   else agentIds.forEach(id => _rtAgentPickerSelected.add(id));
-  rtAgentPickerRender();
+  rtAgentPickerRender(true);
 }
 
-function rtAgentPickerSearch(q){ _rtAgentPickerQuery = (q||'').toLowerCase(); _rtAgentPickerResetScroll = true; rtAgentPickerRender(); }
+function rtAgentPickerSearch(q){ _rtAgentPickerQuery = (q||'').toLowerCase(); _rtAgentPickerResetScroll = true; rtAgentPickerRender(true); }
 
 function rtAgentPickerApply(){
   const rtId = _rtAgentPickerRtId;
@@ -47129,7 +47129,10 @@ function rtAgentPickerApply(){
   console.log('[Rate Type] Bulk assign:', {bound, unbound, total:_rtAgentPickerSelected.size});
 }
 
-function rtAgentPickerRender(){
+// listOnly · repaint just the agent list + the three live counters. The search box and the modal
+// chrome are left untouched, so typing keeps the caret and the list keeps its scroll position.
+// Only rtOpenAgentPicker builds the whole modal.
+function rtAgentPickerRender(listOnly){
   const rtId = _rtAgentPickerRtId;
   if(!rtId) return;
   const rt = getRateType(rtId);
@@ -47193,15 +47196,26 @@ function rtAgentPickerRender(){
     </div>`;
   }).join('');
 
-  // §scroll · ticking an agent re-renders the whole modal, which replaces the scroll container and
-  // the search box — the list jumped back to the top on every tick and typing lost the caret.
-  // Capture both, rebuild, put them back. Open and search intentionally start at the top.
-  const _prevList = document.getElementById('rt-agent-picker-list');
-  const _prevTop  = _prevList ? _prevList.scrollTop : 0;
-  const _prevQ    = document.getElementById('rt-agent-picker-search');
-  const _hadFocus = !!(_prevQ && document.activeElement === _prevQ);
-  const _selA = _hadFocus ? _prevQ.selectionStart : 0;
-  const _selB = _hadFocus ? _prevQ.selectionEnd   : 0;
+  const _emptyHtml = '<div style="padding:24px;text-align:center;color:var(--fd-ink-soft);font-size:12px">ไม่พบ agent ที่ตรงคำค้น</div>';
+  const _applyLbl = 'Apply ' + totalSelected + ' agent' + (totalSelected !== 1 ? 's' : '');
+  const _conflictHtml = conflictCount > 0
+    ? '<span style="color:#854F0B;font-weight:600">⚠ ' + conflictCount + ' agent จะถูกย้ายมาจาก rate type อื่น</span>'
+    : 'ไม่มี conflict';
+
+  // §scroll/§focus · in-place repaint. Replacing the list's children still zeroes scrollTop, so
+  // capture and restore it; the container element itself survives, and the search input is never
+  // re-created, which is what used to force a re-click after every keystroke.
+  const _list = document.getElementById('rt-agent-picker-list');
+  if(listOnly && _list){
+    const _top = _list.scrollTop;
+    _list.innerHTML = groupsHtml || _emptyHtml;
+    _list.scrollTop = _rtAgentPickerResetScroll ? 0 : _top;
+    _rtAgentPickerResetScroll = false;
+    const _c = document.getElementById('rt-agent-picker-count');    if(_c) _c.textContent = totalSelected;
+    const _f = document.getElementById('rt-agent-picker-conflict'); if(_f) _f.innerHTML = _conflictHtml;
+    const _a = document.getElementById('rt-agent-picker-apply');    if(_a) _a.textContent = _applyLbl;
+    return;
+  }
 
   host.innerHTML = `
     <div style="padding:16px 22px 12px;border-bottom:1px solid var(--fd-line);background:${tint}">
@@ -47218,28 +47232,22 @@ function rtAgentPickerRender(){
       </div>
       <div style="margin-top:10px;display:flex;align-items:center;gap:8px">
         <input id="rt-agent-picker-search" placeholder="ค้นหา agent · code / name / sub..." value="${q.replace(/"/g,'&quot;')}" oninput="rtAgentPickerSearch(this.value)" style="flex:1;height:32px;font-size:11.5px;font-family:inherit;border:1px solid var(--fd-line);border-radius:7px;padding:4px 10px;background:#fff">
-        <span style="font-size:10.5px;color:var(--fd-ink-soft);white-space:nowrap"><span style="color:${rt.color};font-weight:700">${totalSelected}</span> / ${totalAvailable} selected</span>
+        <span style="font-size:10.5px;color:var(--fd-ink-soft);white-space:nowrap"><span id="rt-agent-picker-count" style="color:${rt.color};font-weight:700">${totalSelected}</span> / ${totalAvailable} selected</span>
       </div>
     </div>
     <div id="rt-agent-picker-list" style="max-height:55vh;overflow-y:auto;background:#fff">${groupsHtml || '<div style="padding:24px;text-align:center;color:var(--fd-ink-soft);font-size:12px">ไม่พบ agent ที่ตรงคำค้น</div>'}</div>
     <div style="padding:12px 22px;display:flex;align-items:center;justify-content:space-between;background:#fafaf8">
-      <div style="font-size:10.5px;color:var(--fd-ink-soft)">
+      <div id="rt-agent-picker-conflict" style="font-size:10.5px;color:var(--fd-ink-soft)">
         ${conflictCount>0?'<span style="color:#854F0B;font-weight:600">⚠ '+conflictCount+' agent จะถูกย้ายมาจาก rate type อื่น</span>':'ไม่มี conflict'}
       </div>
       <div style="display:flex;gap:8px">
         <button onclick="rtAgentPickerClose()" style="font-family:inherit;font-size:11.5px;font-weight:500;background:transparent;border:1px solid var(--fd-line);color:var(--fd-ink);padding:7px 14px;border-radius:8px;cursor:pointer">Cancel</button>
-        <button onclick="rtAgentPickerApply()" style="font-family:inherit;font-size:11.5px;font-weight:600;background:${rt.color};color:#fff;border:none;padding:7px 18px;border-radius:8px;cursor:pointer">Apply ${totalSelected} agent${totalSelected!==1?'s':''}</button>
+        <button id="rt-agent-picker-apply" onclick="rtAgentPickerApply()" style="font-family:inherit;font-size:11.5px;font-weight:600;background:${rt.color};color:#fff;border:none;padding:7px 18px;border-radius:8px;cursor:pointer">Apply ${totalSelected} agent${totalSelected!==1?'s':''}</button>
       </div>
     </div>
   `;
 
-  const _list = document.getElementById('rt-agent-picker-list');
-  if(_list) _list.scrollTop = _rtAgentPickerResetScroll ? 0 : _prevTop;
   _rtAgentPickerResetScroll = false;
-  if(_hadFocus){
-    const _q2 = document.getElementById('rt-agent-picker-search');
-    if(_q2){ _q2.focus(); try { _q2.setSelectionRange(_selA, _selB); } catch(_){} }
-  }
 }
 
 function rtUnbindAgent(agentId, rtId, ev){
