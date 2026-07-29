@@ -432,6 +432,14 @@ async function relSyncB2C(singleExtId = null) {
     try {
       await client.query('BEGIN');
 
+      // 0. Snapshot which of these ids already existed BEFORE this run. The closed-day net (step 5b)
+      //    needs to tell a brand-new sale apart from a booking we have merely re-synced, so that an
+      //    ad-hoc day closure (weather) does not flip a whole day of already-confirmed bookings.
+      _phase = 'snapshot existing ids';
+      const preExisting = new Set(
+        (await client.query(`SELECT id FROM ${fqt('sb_bookings')} WHERE id = ANY($1)`, [b2cIds])).rows.map(r => r.id)
+      );
+
       // 1. Upsert main booking rows — ops columns preserved on conflict
       _phase = 'upsert sb_bookings';
       for (const row of tables['sb_bookings'] || []) {
@@ -563,6 +571,57 @@ async function relSyncB2C(singleExtId = null) {
           const fr = await client.query(
             `UPDATE ${fqt('sb_bookings')} SET status='pending_approval' WHERE id = ANY($1) AND status='confirmed'`, [toFlag]);
           console.log(`[b2c-sync] oversell — flagged ${fr.rowCount} B2C booking(s) pending_approval across ${affPairs.length} route/date(s)`);
+        }
+        // 5b. §closedDay safety net (2026-07-29). The "route does not run that day" guard lives ONLY in the
+        //     client wizard (bkV2CommitBooking → missHard). B2C writes straight to Postgres and never sees it,
+        //     so a Similan seat was sold for 30 Jul 2026 — inside the 16 May–14 Oct monsoon closure — and
+        //     surfaced in By-trip as a normal open trip. /api/b2c/availability cannot help either: it reports
+        //     capacity only, and capacity is 0 on nearly every future date because boats are deployed a few
+        //     days ahead, so B2C must be ignoring seatsAvailable entirely.
+        //     Same treatment as oversell: hold at pending_approval, never delete — B2C may already have taken
+        //     the customer's money, and a vanished record is the worse problem.
+        //     Reads the very same source of truth as the client: routes__seasons + routes__overrides.
+        const affRoutes = [...new Set(affPairs.map(p => p.split(NUL)[0]))];
+        const seasonBy = {}, ovrBy = {};
+        for (const r of (await client.query(
+          `SELECT routes_id, ${qic('type')} AS ty, ${qic('from')} AS f, ${qic('to')} AS t
+           FROM ${fqt('routes__seasons')} WHERE routes_id = ANY($1)`, [affRoutes])).rows)
+          (seasonBy[r.routes_id] = seasonBy[r.routes_id] || []).push(r);
+        for (const r of (await client.query(
+          `SELECT routes_id, ${qic('key')} AS k, ${qic('value')} AS v
+           FROM ${fqt('routes__overrides')} WHERE routes_id = ANY($1)`, [affRoutes])).rows)
+          (ovrBy[r.routes_id] = ovrBy[r.routes_id] || {})[r.k] = String(r.v == null ? '' : r.v).replace(/^"|"$/g, '');
+        // Mirrors the client getDayStatus() exactly (allotment_v2.html · §getDayStatus) — including the
+        // "outside every declared open season = closed" rule, which is how an expired season list reads.
+        const dayStatus = (rid, dk) => {
+          const ov = (ovrBy[rid] || {})[dk];
+          if (ov) return { type: ov, source: 'override' };
+          const ss = seasonBy[rid] || [];
+          if (!ss.length) return null;
+          const hit = ss.find(x => x.f <= dk && x.t >= dk);
+          if (hit) return { type: hit.ty, source: 'season' };
+          if (ss.some(x => x.ty === 'open')) return { type: 'closed', source: 'outside-season' };
+          return null;
+        };
+        const closedFlag = [], closedWhy = [];
+        for (const pair of affPairs) {
+          const [rid, dk] = pair.split(NUL);
+          const st = dayStatus(rid, dk);
+          if (!st || st.type === 'open') continue;
+          for (const r of (bkByKey[pair] || [])) {
+            if (!/^b2c_/.test(r.id) || r.status !== 'confirmed') continue;
+            // A season closure is published months ahead, so a sale inside one is wrong no matter when we
+            // notice it → flag every sync (idempotent). A per-day override normally appears AFTER the
+            // bookings do (weather call on the morning), so only a sale created in THIS run is flagged.
+            if (st.source === 'override' && preExisting.has(r.id)) continue;
+            closedFlag.push(r.id);
+            closedWhy.push(`${r.id} ${rid}/${dk} (${st.source})`);
+          }
+        }
+        if (closedFlag.length) {
+          const cf = await client.query(
+            `UPDATE ${fqt('sb_bookings')} SET status='pending_approval' WHERE id = ANY($1) AND status='confirmed'`, [closedFlag]);
+          console.log(`[b2c-sync] closed-day — flagged ${cf.rowCount} B2C booking(s) pending_approval: ${closedWhy.join(', ')}`);
         }
       }
 
@@ -1385,7 +1444,15 @@ const server = http.createServer((req, res) => {
       // Mirrors the client getAllotment: a charter deployment (bN_type='charter') does NOT add seat capacity.
       pool.query(`SELECT id, cap FROM ${fqt('boats')}`),
       pool.query(`SELECT * FROM ${fqt('trips')} WHERE ${qic('key')} >= $1 AND ${qic('key')} <= $2`, [dateFrom, dateTo]),
-    ]).then(([bkRes, lockRes, rtRes, boatRes, tripRes]) => {
+      // §closedDay (2026-07-29) · the open/closed calendar. Until now this endpoint answered with capacity
+      // ONLY, and capacity is 0 on almost every future date (boats get deployed a few days ahead), so a
+      // caller cannot tell "not deployed yet" from "route does not run at all" — which is how a Similan seat
+      // was sold for 30 Jul 2026, right inside the 16 May–14 Oct monsoon closure.
+      pool.query(`SELECT routes_id, ${qic('type')} AS ty, ${qic('from')} AS f, ${qic('to')} AS t
+                  FROM ${fqt('routes__seasons')} WHERE routes_id = $1`, [routeId]),
+      pool.query(`SELECT ${qic('key')} AS k, ${qic('value')} AS v
+                  FROM ${fqt('routes__overrides')} WHERE routes_id = $1`, [routeId]),
+    ]).then(([bkRes, lockRes, rtRes, boatRes, tripRes, seasonRes, ovrRes]) => {
       const bookedMap = {}, lockedMap = {};
       for (const r of bkRes.rows)   bookedMap[r.date]  = r.booked;
       for (const r of lockRes.rows) lockedMap[r.date]  = r.locked;
@@ -1393,6 +1460,19 @@ const server = http.createServer((req, res) => {
       for (const b of boatRes.rows) { boatCap[b.id] = Number(b.cap) || 0; boatIds.push(b.id); }
       const tripsByDate = {};
       for (const r of tripRes.rows) tripsByDate[r.key] = r;
+      // Mirrors the client getDayStatus() (allotment_v2.html · §getDayStatus) 1:1, including the
+      // "outside every declared open season = closed" rule — that is how an expired season list reads,
+      // and it is what makes a route whose seasons stop at 31 Dec look shut for the whole following year.
+      const _seasons = seasonRes.rows, _ovr = {};
+      for (const r of ovrRes.rows) _ovr[r.k] = String(r.v == null ? '' : r.v).replace(/^"|"$/g, '');
+      const dayStatus = dk => {
+        if (_ovr[dk]) return { type: _ovr[dk], source: 'override' };
+        if (!_seasons.length) return null;
+        const hit = _seasons.find(x => x.f <= dk && x.t >= dk);
+        if (hit) return { type: hit.ty, source: 'season' };
+        if (_seasons.some(x => x.ty === 'open')) return { type: 'closed', source: 'outside-season' };
+        return null;
+      };
       // build all dates in range
       const dates = [];
       for (let d = new Date(dateFrom + 'T00:00:00Z'); d.toISOString().slice(0,10) <= dateTo; d.setUTCDate(d.getUTCDate()+1)) {
@@ -1403,8 +1483,13 @@ const server = http.createServer((req, res) => {
         for (const bid of boatIds) {
           if (trow[bid + '_route'] === routeId && trow[bid + '_type'] !== 'charter') capacity += boatCap[bid] || 0;
         }
-        const seatsAvailable = Math.max(0, capacity - booked - locked);
-        dates.push({ date: dk, capacity, bookedSeats: booked, lockedSeats: locked, totalConsumed: booked + locked, seatsAvailable });
+        const st = dayStatus(dk);
+        const closed = !!(st && st.type !== 'open');
+        // A closed day has no sellable seat by definition — report 0 even if boats happen to be deployed,
+        // so a caller that only reads seatsAvailable is still protected.
+        const seatsAvailable = closed ? 0 : Math.max(0, capacity - booked - locked);
+        dates.push({ date: dk, capacity, bookedSeats: booked, lockedSeats: locked, totalConsumed: booked + locked, seatsAvailable,
+                     closed, closedReason: closed ? st.source : null });
       }
       // shape pricing by rate type
       const pricing = rtRes.rows.map(r => ({

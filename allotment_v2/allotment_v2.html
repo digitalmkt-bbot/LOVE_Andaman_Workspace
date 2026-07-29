@@ -57850,7 +57850,11 @@ function bkV2RenderTab2(){
     const _fid = fam?.id || 'zzz';
     let _famHead = '';
     if(_fid !== _prevFam){
-      const _runCount = routeIds.filter(x => (bkV2RouteFamily(x)?.id||'zzz')===_fid).length;
+      const _famAllIds = routeIds.filter(x => (bkV2RouteFamily(x)?.id||'zzz')===_fid);
+      // ทริปที่มีแถวอยู่แต่ปิดวันนั้น ต้องนับเป็น not running ไม่งั้นหัว family โกหก (เคยขึ้น "1 running" ทั้งที่
+      // ตัวที่ running คือ Similan ที่ปิดยาวทั้งมรสุม และถูกดึงขึ้นมาด้วย booking ที่ยกเลิกไปแล้ว)
+      const _famShut  = _famAllIds.filter(x => !bkV2IsRouteOpenOn(x, date));
+      const _runCount = _famAllIds.length - _famShut.length;
       const _famVariants = (typeof ROUTES!=='undefined'?ROUTES:[]).filter(rr => (bkV2RouteFamily(rr.id)?.id||'zzz')===_fid);
       const _closedV = _famVariants.filter(rr => !routeIds.includes(rr.id) && !bkV2IsRouteOpenOn(rr.id, date) && (pierF==='all' || rr.pier===pierF));
       const _closedChips = _closedV.map(rr => `<span class="t2-closedchip">${esc(rr.name)}</span>`).join('');
@@ -57894,7 +57898,7 @@ function bkV2RenderTab2(){
         }).join('');
         const unRow=uTot>0?`<div class="t2-vbrow" style="background:#FFF9F0"><div class="t2-vbtop"><span class="t2-mav" style="background:#9A5B00;flex:none">&#9888;</span><span class="t2-vbnm" style="color:#9A5B00">ยังไม่ assign</span><span class="t2-vbcap" style="color:#9A5B00">${uTot}</span></div></div>`:'';
         const _pierLbl=route2?.pier?(' · '+(route2.pier==='tublamu'?'Tub Lamu':route2.pier==='panwa'?'Visit Panwa':esc(route2.pier))):'';
-        return `<div class="t2-vcard"><div class="t2-vcard-hd" style="border-top-color:${_vacc[1]};background:${_vacc[0]}"><div class="t2-vcard-nm" style="color:${_vacc[1]}">${esc(route2?.name||rid2)}</div><div class="t2-vcard-sub"><span>${esc(dep2)}${_pierLbl}</span><span class="t2-vcard-px" style="color:${_vacc[1]}">${vPax} · ${_bOrder.length} เรือ</span></div></div><div class="t2-vcard-body">${rows}${unRow}</div></div>`;
+        return `<div class="t2-vcard"><div class="t2-vcard-hd" style="border-top-color:${_vacc[1]};background:${_vacc[0]}"><div class="t2-vcard-nm" style="color:${_vacc[1]}">${esc(route2?.name||rid2)}</div><div class="t2-vcard-sub"><span>${esc(dep2)}${_pierLbl}</span>${bkV2IsRouteOpenOn(rid2,date)?`<span class="t2-vcard-px" style="color:${_vacc[1]}">${vPax} · ${_bOrder.length} เรือ</span>`:`<span class="t2-vcard-px" style="color:#A32D2D">not running</span>`}</div></div><div class="t2-vcard-body">${rows}${unRow}</div></div>`;
       }).join('');
       const _famGuide=Object.keys(_famLang).map(code=>{ const lc=bkV2LangColors(code); return `<span class="t2-dchip" style="background:${lc[0]};color:${lc[1]}">${esc(code)} ${_famLang[code]}</span>`; });
       const _famFood=[]; if(_fVeg||_fVegan)_famFood.push(`<span class="t2-dchip" style="background:#EAF3DE;color:#3B6D11">${_fVeg+_fVegan} veg</span>`); if(_fHalal)_famFood.push(`<span class="t2-dchip" style="background:#E1F5EE;color:#0F6E56">${_fHalal} halal</span>`); if(_fAllerg)_famFood.push(`<span class="t2-dchip" style="background:#FCEBEB;color:#A32D2D">&#9888; ${_fAllerg}</span>`);
@@ -57904,7 +57908,7 @@ function bkV2RenderTab2(){
       const _closedCards = _closedV.map(rr=>{ const _cd=rr.times?.[0]||''; const _cp=rr.pier?(' · '+(rr.pier==='tublamu'?'Tub Lamu':rr.pier==='panwa'?'Visit Panwa':esc(rr.pier))):'';
         return `<div class="t2-vcard t2-vcard-closed"><div class="t2-vcard-hd" style="border-top-color:#D98C82;background:#FCEBEB"><div class="t2-vcard-nm" style="color:#A32D2D">${esc(rr.name)}</div><div class="t2-vcard-sub"><span>${esc(_cd)}${_cp}</span><span class="t2-vcard-px" style="color:#A32D2D">not running</span></div></div><div class="t2-vcard-body"><div class="t2-vclosed-note">ไม่ออกวันนี้</div></div></div>`; }).join('');
       _famHead = `<details class="t2-famcard" style="border-left-color:${fam?.color||'#8b909c'}">`
-        + `<summary class="t2-famcard-hd"><span class="t2-famnm">${esc(fam?.name||route?.name||'Other')}</span><span class="t2-fampill t2-fampill-run">${_runCount} running</span>${_closedV.length?`<span class="t2-fampill t2-fampill-closed">${_closedV.length} not running</span>`:''}<span class="t2-fam-tot">รวม <b>${_famPax}</b> pax · ${_famBoatN} เรือ</span><span class="t2-famcaret">&#9662;</span></summary>`
+        + `<summary class="t2-famcard-hd"><span class="t2-famnm">${esc(fam?.name||route?.name||'Other')}</span><span class="t2-fampill t2-fampill-run">${_runCount} running</span>${(_closedV.length+_famShut.length)?`<span class="t2-fampill t2-fampill-closed">${_closedV.length+_famShut.length} not running</span>`:''}<span class="t2-fam-tot">รวม <b>${_famPax}</b> pax · ${_famBoatN} เรือ</span><span class="t2-famcaret">&#9662;</span></summary>`
         + `<div class="t2-fambody"><div class="t2-famvgrid">${_variantSections}${_closedCards}</div>${_famSum.length?`<div class="t2-boatsum"><span class="t2-boatsum-lbl">รวมทั้ง family</span>${_famSum.join('')}</div>`:''}</div>`
         + `</details>`;
     }
@@ -57913,6 +57917,17 @@ function bkV2RenderTab2(){
     const dep = route?.times?.[0] || (grp.find(r=>r.pickupTime)?.pickupTime) || '';
     const boats = bkV2Tab2Boats(rid, date, grp.filter(r=>r.charterBoatId).map(r=>r.charterBoatId));
     const wxClosed = (typeof bkV2IsWeatherClosed==='function' && bkV2IsWeatherClosed(rid, date));
+    // §notRunning (2026-07-29) · route ที่ "ปิด" ตามตารางเปิด-ปิด แต่ยังมีแถวอยู่ในวันนี้
+    //   เดิมการ์ดทริปขึ้นมาเหมือนทริปเปิดปกติทุกอย่าง (มีปุ่ม + Assign boat · นับเป็น running) เพราะ routeIds
+    //   สร้างจาก Object.keys(groups) ตรงๆ ซึ่งรวม booking ที่ยกเลิกแล้วด้วย — ใบที่ยกเลิกใบเดียวก็ดึงทริป
+    //   ที่ปิดทั้งฤดูกาลขึ้นมาได้ (Similan · 30 ก.ค. 2026) ที่นี่ไม่ได้ซ่อนทริป แต่ติดป้ายให้เห็นทันทีว่าไม่ออก
+    const _dayS   = (typeof getDayStatus==='function' && route) ? getDayStatus(route, date) : null;
+    const _notRun = !!(_dayS && _dayS.type !== 'open');
+    const _notRunWhy = !_notRun ? '' :
+      (_dayS.source === 'override'       ? 'ปิดเฉพาะวันนี้ (ตั้ง override ไว้)'
+     : _dayS.source === 'outside-season' ? 'อยู่นอกทุกช่วง season ที่ตั้งไว้ — น่าจะยังไม่ได้ตั้ง season ของปีนี้'
+     :                                     'ปิดตามฤดูกาล (season)');
+    const _notRunLive = grp.filter(r=>!r.cxl).length;
     const COLN = (18 - (vanMode?4:0)) + (vanMode?1:0) + (rcMode?1:0) + (wxClosed?1:0);   // vanMode hides add-on/pay/total/voucher (−4) + adds van (+1)
     const _wxc = wxClosed && typeof bkV2WeatherCountsFor==='function' ? bkV2WeatherCountsFor(rid, date) : null;
 
@@ -57962,7 +57977,8 @@ function bkV2RenderTab2(){
     const _bdStr=(a,c,i,f)=>`(${a}+${c}+${i}+${f}FOC)`;
     const boatChip = boats.length
       ? boats.map(b=>`<span class="t2-boatchip"><span class="t2-bav" style="background:${famColor}">${esc(b.name).slice(0,2).toUpperCase()}</span>${esc(b.name)}</span>`).join('')
-      : `<button class="t2-assign" onclick="event.stopPropagation();alert('Assign boat to this trip (open Boat Operation)')">+ Assign boat</button>`;
+      : (_notRun ? `<span class="t2-assign-off" title="${esc(_notRunWhy)}">ไม่ออกวันนี้</span>`
+                 : `<button class="t2-assign" onclick="event.stopPropagation();alert('Assign boat to this trip (open Boat Operation)')">+ Assign boat</button>`);
     // Prep grouped by category · Guide together · Food + allergy together · Bags separate
     const _guideChips = Object.keys(langCnt).map(code=>{ const lc=bkV2LangColors(code); return `<span class="t2-prep" style="background:${lc[0]};color:${lc[1]}">${code} · ${langCnt[code]}</span>`; });
     const _foodChips = [];
@@ -58538,7 +58554,8 @@ function bkV2RenderTab2(){
       </div>`;
     }
     return _famHead + `
-      <div class="t2-trip t2-trip-variant${(typeof bkV2IsWeatherClosed==='function'&&bkV2IsWeatherClosed(rid,date))?' t2-trip-wx':''}" style="--fam:${famColor}">
+      <div class="t2-trip t2-trip-variant${(typeof bkV2IsWeatherClosed==='function'&&bkV2IsWeatherClosed(rid,date))?' t2-trip-wx':''}${_notRun?' t2-trip-closed':''}" style="--fam:${famColor}">
+        ${_notRun?`<div class="t2-notrun"><span class="t2-notrun-ic">&#9888;</span><div style="flex:1;min-width:0"><div class="t2-notrun-t">ทริปนี้ไม่ออกวันนี้ · ${esc(_notRunWhy)}</div><div class="t2-notrun-s">${_notRunLive>0?`ยังมี <b>${_notRunLive}</b> booking ค้างอยู่บนวันนี้ — ต้องเลื่อนวันหรือยกเลิกให้เรียบร้อย`:'เหลือแต่รายการที่ยกเลิกแล้ว (เก็บไว้เป็นประวัติ)'}</div></div></div>`:''}
         ${(typeof bkV2IsWeatherClosed==='function'&&bkV2IsWeatherClosed(rid,date))?`<div style="background:#FCEBEB;border:1.5px solid #E89A92;border-radius:9px;padding:11px 14px;margin-bottom:10px;display:flex;align-items:center;gap:12px"><span style="font-size:20px">&#9928;</span><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:#A32D2D">This trip is cancelled due to weather</div><div style="font-size:11px;color:#8a3a30;margin-top:1px">${bkV2WeatherNote(rid,date)?esc(bkV2WeatherNote(rid,date)):'Cannot depart'} · resolve booking by booking</div></div><button onclick="event.stopPropagation();bkV2WeatherPanel('${rid}','${date}')" style="background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:11.5px;font-weight:600;padding:8px 14px;border-radius:8px;cursor:pointer;white-space:nowrap">Resolve by booking</button></div>`:''}
         <div class="t2-tripcard">
         <div class="t2-triphead">
@@ -58664,6 +58681,13 @@ function bkV2RenderTab2(){
     .t2-boatchip{display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:4px 9px;font-size:12px;font-weight:600}
     .t2-bav{width:22px;height:22px;border-radius:6px;color:#fff;font-size:9px;font-weight:700;font-family:'DM Mono',monospace;display:flex;align-items:center;justify-content:center}
     .t2-assign{font-size:11px;color:var(--ink-soft);border:1px dashed var(--ink-faint);background:transparent;border-radius:9px;padding:5px 10px;cursor:pointer;font-family:inherit}
+    .t2-assign-off{font-size:11px;font-weight:700;color:#A32D2D;background:#FCEBEB;border:1px solid #E6C9C3;border-radius:9px;padding:5px 10px;white-space:nowrap}
+    .t2-notrun{background:#FBF3E6;border:1.5px solid #E0C79A;border-radius:9px;padding:11px 14px;margin-bottom:10px;display:flex;align-items:center;gap:12px}
+    .t2-notrun-ic{font-size:19px;color:#8A5B00;flex:none}
+    .t2-notrun-t{font-size:13px;font-weight:700;color:#8A5B00}
+    .t2-notrun-s{font-size:11px;color:#9a7433;margin-top:1px}
+    .t2-trip-closed .t2-tripcard,.t2-trip-closed .t2-listcard{background:#FDFAF3;border-color:#E7D6B4}
+    .t2-trip-closed .t2-tnm{color:#8A5B00}
     .t2-assign:hover{border-color:var(--coral);color:var(--coral);border-style:solid}
     .t2-boatstrip{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:6px 14px 6px 18px;background:#F7FAFE;border-top:1px solid var(--border-2)}
     .t2-boatpin{position:sticky;top:var(--t2-vangroup-top,52px);z-index:46;box-shadow:0 4px 10px rgba(0,0,0,.10);border-radius:14px 14px 0 0;overflow:hidden}
