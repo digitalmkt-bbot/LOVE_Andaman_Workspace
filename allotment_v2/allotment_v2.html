@@ -42726,6 +42726,8 @@ function ckToggle(bkId, date, kind){
   var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
   var t=ckTripOn(b,date)||{}, booked=ckBookedPax(t), cap=ckCap(b,date,kind,booked);
   var cur=ckRead(b,date,kind)||{};
+  // §pierPay · จะติ๊กขึ้นเรือทั้งที่ยังค้างเงิน → เตือนก่อน · ไม่บล็อก (เรือรอไม่ได้) แต่ต้องเป็นการตัดสินใจข้าม ไม่ใช่ลืม
+  if(kind==='pier' && !cur.at && typeof pckPayGuard==='function' && pckPayGuard(bkId, date)) return;
   if(cur.at){   // กดซ้ำ = ยกเลิกการเช็คอิน (ค่าที่นับไว้ยังอยู่)
     ckWrite(b,date,kind,{actualPax:(cur.actualPax!=null?cur.actualPax:cap), noShow:(cur.noShow!=null?cur.noShow:0), expected:(cur.expected!=null?cur.expected:cap), at:null, by:null,
       events:(Array.isArray(cur.events)?cur.events:[]),
@@ -43305,9 +43307,16 @@ function pckMoney(b, date){
   ups.forEach(function(u){ var v=+u.sellPrice||0; if(u.collected) upGot+=v; else upDue+=v; });
   var bal=(b.paymentSnapshot && +b.paymentSnapshot.balance>0) ? +b.paymentSnapshot.balance : 0;
   var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
+  // §pierPay · เงินที่เก็บหน้าท่าไปแล้ว (bk.pierPayments) หักออกจากยอดค้างทันที
+  // fee ไม่เข้า got เพราะไม่ใช่รายได้เรา — เป็นเงินที่ส่งต่อธนาคาร (ดูคอมเมนต์ §pierPay)
+  var pierPaid=(typeof pckPaidSum==='function')?pckPaidSum(b,date):0;
+  var pierFee =(typeof pckFeeSum==='function') ?pckFeeSum(b,date) :0;
+  var gross=cot+upDue+bal;
   return { cot:cot, cur:(b.cashOnTour&&b.cashOnTour.currency)||'THB', handling:(b.cashOnTour&&b.cashOnTour.handling)||'',
            note:(b.cashOnTour&&b.cashOnTour.note)||'', extras:ex, extrasTot:exTot, upgrades:ups, upDue:upDue, upGot:upGot,
-           balance:bal, due:cot+upDue+bal, got:exTot+upGot, payType:(ag&&ag.payType)||'' };
+           balance:bal, gross:gross, pierPaid:pierPaid, pierFee:pierFee,
+           noSlip:(typeof pckNoSlip==='function')?pckNoSlip(b,date):0,
+           due:Math.max(0, gross-pierPaid), got:exTot+upGot+pierPaid, payType:(ag&&ag.payType)||'' };
 }
 function pckMoneyCell(b, date){
   var e=ckEsc, M=pckMoney(b,date);
@@ -43318,15 +43327,380 @@ function pckMoneyCell(b, date){
     if(M.cot>0) parts.push('COT '+m(M.cot));
     if(M.balance>0) parts.push('ค้าง '+m(M.balance));
     if(M.upDue>0) parts.push('upgrade '+m(M.upDue));
+    if(M.pierPaid>0) parts.push('เก็บแล้ว '+m(M.pierPaid));
     out+='<div title="'+e(parts.join(' · ')+(M.note?(' · '+M.note):''))+'" style="display:inline-block;background:#FBF0DD;color:#7A4A00;border:1px solid #EAD9B0;border-radius:7px;padding:3px 9px;font-weight:800;font-family:\'DM Mono\',monospace;font-size:12.5px;white-space:nowrap">'+m(M.due)+'</div>'
        +'<div style="font-size:9px;color:#a08a5f;margin-top:2px;white-space:nowrap">'+e(parts.join(' · '))+'</div>';
+  } else if(M.pierPaid>0){
+    out+='<span style="font-size:10px;font-weight:800;color:#0F6E56;background:#DCF4E8;border-radius:6px;padding:2px 8px;white-space:nowrap">&#10003; เก็บครบ '+m(M.pierPaid)+'</span>';
   } else if(M.payType==='cot'){
     out+='<span style="font-size:10px;color:#a5a49d">COT · ยังไม่ระบุยอด</span>';
   } else {
     out+='<span style="font-size:10px;font-weight:700;color:#0F6E56;background:#DCF4E8;border-radius:6px;padding:2px 7px;white-space:nowrap">เครดิต · ไม่เก็บ</span>';
   }
-  if(M.got>0) out+='<div style="font-size:9.5px;color:#0F6E56;font-weight:700;margin-top:3px;white-space:nowrap">&#10003; เก็บหน้างาน '+m(M.got)+'</div>';
+  out+=pckFeeLine(b,date);
+  if(M.pierPaid>0){
+    var ms=[]; pckPaysFor(b,date).forEach(function(p){ ms.push(pckMLabel(p.method)+' '+pckHHMMloc(p.at)); });
+    out+='<div style="font-size:9px;color:#a5a49d;margin-top:2px;white-space:nowrap">'+e(ms.join(' · '))+'</div>';
+  }
+  if(M.noSlip>0) out+='<div style="margin-top:4px"><span class="pckp-wait">&#9888; รอสลิป '+M.noSlip+'</span></div>';
+  if(M.got>0 && M.pierPaid<M.got) out+='<div style="font-size:9.5px;color:#0F6E56;font-weight:700;margin-top:3px;white-space:nowrap">&#10003; เก็บหน้างาน '+m(M.got-M.pierPaid)+'</div>';
+  // ปุ่มเดียวทำสองหน้าที่ · ยังค้าง = เก็บเงิน · เก็บครบแล้วแต่ขาดสลิป = แนบสลิป
+  if(M.due>0 || M.noSlip>0 || M.pierPaid>0){
+    var lbl=(M.due>0)?'เก็บเงิน':(M.noSlip>0?'แนบสลิป':'ดูรายการ');
+    var hot=(M.due>0||M.noSlip>0);
+    out+='<div style="margin-top:5px"><button onclick="event.stopPropagation();pckPayOpen(\''+b.id+'\')" style="border:1px solid '+(hot?'#EAD9B0':'#D8D4CA')+';background:'+(hot?'#FBF0DD':'#fff')+';color:'+(hot?'#7A4A00':'#4a4a45')+';border-radius:999px;padding:4px 11px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">'+lbl+'</button></div>';
+  }
   return out;
+}
+
+// ══ §pierPay (2026-07-30) · เก็บเงินหน้าท่า ══
+// เก็บที่ bk.pierPayments[] เท่านั้น · ยังไม่แตะ SB_PAYMENTS — เงินหน้าท่าเป็นคนละก้อนกับบิลเครดิตของ agent
+// และต้องผ่านการกระทบยอดตอนปิดวันก่อนถึงจะเข้าบัญชี (ตกลงกันไว้ 30 ก.ค. 2026)
+//   { id, date, amount, method:'cash'|'transfer'|'card', fee, feePct, note, slips:[{id,name,mime,size}], by, at }
+// ค่าธรรมเนียมบัตร (fee) แยกจาก amount เสมอ · amount = ยอดที่ตัดหนี้ booking (รายได้เรา)
+// fee = เงินที่ลูกค้าจ่ายเพิ่มแล้วส่งต่อธนาคาร (ไม่ใช่รายได้) · amount+fee = ยอดที่ขึ้นบนเครื่อง EDC
+// ซึ่งเป็นตัวเดียวที่จะตรงกับ statement — ถ้ารวมสองก้อนเป็นก้อนเดียว หนี้ booking จะเกินและรายได้จะพอง
+function pckPaysFor(b, date){
+  var arr=(b && Array.isArray(b.pierPayments)) ? b.pierPayments : [];
+  return date ? arr.filter(function(p){ return p && p.date===date; }) : arr.slice();
+}
+function pckPaidSum(b,date){ return pckPaysFor(b,date).reduce(function(s,p){ return s+(+p.amount||0); },0); }
+function pckFeeSum(b,date){  return pckPaysFor(b,date).reduce(function(s,p){ return s+(+p.fee||0); },0); }
+function pckFeeBase(b,date){ return pckPaysFor(b,date).filter(function(p){ return (+p.fee||0)>0; }).reduce(function(s,p){ return s+(+p.amount||0); },0); }
+// เงินสดตรวจได้จากลิ้นชัก · โอน/บัตรถ้าไม่มีสลิปจะกระทบยอดกับ statement ไม่ได้ → ต้องตามให้ครบก่อนปิดวัน
+function pckNoSlip(b,date){ return pckPaysFor(b,date).filter(function(p){ return p.method!=='cash' && !(Array.isArray(p.slips)&&p.slips.length); }).length; }
+function pckB(n){ return '&#3647;'+Math.round(+n||0).toLocaleString(); }
+function pckMLabel(m){ return m==='cash'?'เงินสด':m==='transfer'?'โอนเงิน':m==='card'?'บัตรเครดิต':m||'—'; }
+function pckHHMMloc(iso){ try{ return new Date(iso).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}); }catch(_){ return ''; } }
+
+function pckFeeLine(b, date){
+  var f=pckFeeSum(b,date); if(f<=0) return '';
+  var base=pckFeeBase(b,date), pcts=[];
+  pckPaysFor(b,date).forEach(function(p){ if(p.feePct && pcts.indexOf(p.feePct)<0) pcts.push(p.feePct); });
+  return '<div class="pckp-feeline">+ ค่าธรรมเนียมบัตร <b>'+pckB(f)+'</b>'+(pcts.length?(' ('+pcts.join('/')+'%)'):'')
+    +'<div class="pckp-feeswipe">รูดจริง '+pckB(base+f)+'</div></div>';
+}
+
+// ── อัปโหลดสลิป · ใช้ /api/attach ตัวเดียวกับสลิปฝั่งบัญชี (รับทุก mime · ย่อรูปก่อนส่ง) ──
+function pckSlipUpload(file, bkId, cb){
+  if(!file || !bkId) return;
+  var post=function(blob, mime, name){
+    if(blob && blob.size > 6*1024*1024){ alert('ไฟล์ "'+name+'" ใหญ่เกิน 6MB · ย่อ/บีบอัดก่อน'); return; }
+    var fr=new FileReader();
+    fr.onload=function(){
+      var b64=String(fr.result).split(',')[1]||'';
+      fetch('/api/attach',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({bookingId:bkId, filename:name, mime:mime, dataB64:b64})})
+        .then(function(r){ return r.json(); })
+        .then(function(j){
+          if(j&&j.error){ alert('อัปโหลดไม่สำเร็จ: '+j.error); return; }
+          var meta={ id:j.id, name:j.filename, mime:j.mime, size:j.size };
+          // ลงทะเบียนไว้ที่ b.paymentSlips ด้วย เพื่อให้หน้าดูสลิปเดิม (pfmSlipsRender) เห็นไฟล์นี้เหมือนกัน
+          var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; });
+          if(b){ b.paymentSlips=Array.isArray(b.paymentSlips)?b.paymentSlips:[];
+                 b.paymentSlips.push({id:meta.id,name:meta.name,mime:meta.mime,size:meta.size,kind:'pier',amount:0,
+                                      at:new Date().toISOString(), by:(typeof laBy==='function'?laBy():'')}); }
+          cb(meta);
+        })
+        .catch(function(err){ alert('อัปโหลดไม่สำเร็จ: '+err.message); });
+    };
+    fr.readAsDataURL(blob);
+  };
+  if(/^image\//.test(file.type||'')){
+    var dn=(typeof _bkV2DownscaleImage==='function')?_bkV2DownscaleImage:function(f,m,c){ c(f,f.type); };
+    dn(file, 1600, function(bl,mi){ if(bl) post(bl, mi, ((file.name||'slip').replace(/\.[^.]+$/,''))+'.jpg'); else post(file, file.type, file.name||'slip'); });
+  } else post(file, file.type||'application/octet-stream', file.name||'file');
+}
+
+// ── popup เตือนตอนกดติ๊กขึ้นเรือทั้งที่ยังค้างเงิน ──
+// ไม่บล็อกการขึ้นเรือ (เรือรอไม่ได้) แต่ต้องเป็นการ "ตัดสินใจข้าม" ไม่ใช่ลืม
+var _pckPaySkip={};
+function pckPayGuard(bkId, date){
+  var k=date+'::'+bkId;
+  if(_pckPaySkip[k]){ delete _pckPaySkip[k]; return false; }
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return false;
+  var M=pckMoney(b,date); if(!(M.due>0)) return false;
+  pckPayWarn(bkId, date); return true;
+}
+function pckPaySkipOn(bkId, date){ _pckPaySkip[date+'::'+bkId]=1; acctModalClose(); ckToggle(bkId, date, 'pier'); }
+function pckPayWarn(bkId, date){
+  var e=ckEsc, b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
+  var M=pckMoney(b,date), rows=[];
+  if(M.cot>0)     rows.push(['Cash on Tour (ระบุตอนจอง)', M.cot]);
+  if(M.balance>0) rows.push(['ยอดค้างจาก B2C', M.balance]);
+  if(M.upDue>0)   rows.push(['Upgrade หน้างาน ยังไม่เก็บ', M.upDue]);
+  if(M.pierPaid>0)rows.push(['เก็บไปแล้วหน้าท่า', -M.pierPaid]);
+  acctModal(''
+   +'<div class="pckp-hd"><div><div class="pckp-tt">ยังเก็บเงินไม่ครบ</div>'
+   +'<div class="pckp-sub">'+e(b.voucherRef||b.code||b.id)+' · '+e(b.leadPax||'')+'</div></div>'
+   +'<button class="pckp-x" onclick="acctModalClose()">&#10005;</button></div>'
+   +'<div class="pckp-bd">'
+   +'<div class="pckp-warn"><span class="ic">&#9888;</span><div><div class="t">มีรายการค้างเก็บเงิน '+pckB(M.due)+'</div>'
+   +'<div class="s">กำลังจะเช็คอินขึ้นเรือ แต่ยอดนี้ยังไม่ได้เก็บ<br>ถ้าปล่อยขึ้นเรือไปก่อน กด “ขึ้นเรือก่อน” — ระบบจะคงยอดค้างไว้ให้ตามเก็บทีหลัง</div></div></div>'
+   +'<div class="pckp-brk">'
+   + rows.map(function(r){ return '<div class="r"><span class="k">'+e(r[0])+'</span><span class="v">'+(r[1]<0?('&minus; '+pckB(-r[1])):pckB(r[1]))+'</span></div>'; }).join('')
+   +'<div class="r tot"><span class="k">ต้องเก็บ</span><span class="v">'+pckB(M.due)+'</span></div></div>'
+   +'</div>'
+   +'<div class="pckp-ft">'
+   +'<button class="pckp-btn" onclick="pckPaySkipOn(\''+bkId+'\',\''+date+'\')">ขึ้นเรือก่อน · ยังไม่เก็บ</button>'
+   +'<button class="pckp-btn pri" onclick="pckPayOpen(\''+bkId+'\')">เก็บเงินเลย</button>'
+   +'</div>');
+}
+
+// ── popup เก็บเงิน ──
+var _pckPay=null;
+function pckPayOpen(bkId){
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
+  var M=pckMoney(b,_pckDate);
+  _pckPay={ bkId:bkId, date:_pckDate, m:'cash', amt:Math.round(M.due||0), feeMode:'pct', feePct:3, fee:0, note:'', slips:[] };
+  pckPayRender();
+}
+function pckPaySet(k,v){ if(!_pckPay) return; _pckPay[k]=v; pckPayRender(); }
+function pckPaySetM(m){ if(!_pckPay) return; _pckPay.m=m; if(m!=='card'){ _pckPay.fee=0; } pckPayRender(); }
+// ค่าธรรมเนียมบัตร · กรอกเป็นบาทตรงๆ หรือกรอกเป็น % แล้วให้ระบบคูณให้ (ปัดเป็นบาทเต็ม)
+function pckPayFee(){
+  if(!_pckPay || _pckPay.m!=='card') return 0;
+  return _pckPay.feeMode==='pct'
+    ? Math.round((+_pckPay.amt||0)*(+_pckPay.feePct||0)/100)
+    : Math.round(+_pckPay.fee||0);
+}
+function pckPayPickSlip(inp){
+  var f=(inp&&inp.files&&inp.files[0])||null; if(inp) inp.value='';
+  if(!f||!_pckPay) return;
+  pckSlipUpload(f, _pckPay.bkId, function(meta){ if(_pckPay){ _pckPay.slips.push(meta); } try{ acctPersistBookings(); }catch(_){} pckPayRender(); });
+}
+function pckPayRmSlip(i){ if(!_pckPay) return; _pckPay.slips.splice(i,1); pckPayRender(); }
+// แนบสลิปย้อนหลังให้รายการที่บันทึกไปแล้ว (หน้าท่าเร่ง ถ่ายไม่ทันก็บันทึกก่อนได้)
+function pckPayAddSlip(payId, inp){
+  var f=(inp&&inp.files&&inp.files[0])||null; if(inp) inp.value='';
+  if(!f||!_pckPay) return;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===_pckPay.bkId; }); if(!b) return;
+  pckSlipUpload(f, b.id, function(meta){
+    var p=(b.pierPayments||[]).find(function(x){ return x.id===payId; });
+    if(p){ p.slips=Array.isArray(p.slips)?p.slips:[]; p.slips.push(meta); }
+    try{ acctPersistBookings(); }catch(_){}
+    pckPayRender(); if(typeof renderPierCheckin==='function') renderPierCheckin();
+  });
+}
+function pckPaySave(){
+  if(!_pckPay) return;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===_pckPay.bkId; }); if(!b) return;
+  var amt=Math.round(+_pckPay.amt||0); if(amt<=0){ alert('ใส่จำนวนเงินก่อน'); return; }
+  var fee=pckPayFee();
+  b.pierPayments=Array.isArray(b.pierPayments)?b.pierPayments:[];
+  b.pierPayments.push({
+    id:(typeof LA_UID==='function'?LA_UID('pp_'):('pp_'+Date.now()+'_'+Math.random().toString(36).slice(2,6))),
+    date:_pckPay.date, amount:amt, method:_pckPay.m, fee:fee,
+    feePct:(_pckPay.m==='card' && _pckPay.feeMode==='pct') ? (+_pckPay.feePct||0) : null,
+    note:String(_pckPay.note||''), slips:_pckPay.slips.slice(),
+    by:(typeof ckMe==='function'?ckMe():''), at:new Date().toISOString()
+  });
+  try{ acctPersistBookings(); }catch(_){}
+  if(typeof bkV2AddHistory==='function')
+    bkV2AddHistory(b,'payment','เก็บเงินหน้าท่า '+pckB(amt).replace('&#3647;','฿')+' ('+pckMLabel(_pckPay.m)+')'
+      +(fee>0?(' + ค่าธรรมเนียม ฿'+fee):''),'Pier');
+  _pckPay.m='cash'; _pckPay.amt=0; _pckPay.fee=0; _pckPay.note=''; _pckPay.slips=[];
+  var M=pckMoney(b,_pckPay.date);
+  if(M.due>0) pckPayRender(); else acctModalClose();
+  if(typeof renderPierCheckin==='function') renderPierCheckin();
+}
+function pckPayDel(payId){
+  if(!_pckPay) return;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===_pckPay.bkId; }); if(!b) return;
+  if(!confirm('ลบรายการรับเงินนี้?')) return;
+  b.pierPayments=(b.pierPayments||[]).filter(function(p){ return p.id!==payId; });
+  try{ acctPersistBookings(); }catch(_){}
+  pckPayRender(); if(typeof renderPierCheckin==='function') renderPierCheckin();
+}
+function pckPayRender(){
+  if(!_pckPay) return;
+  var e=ckEsc, b=(SB_BOOKINGS||[]).find(function(x){ return x.id===_pckPay.bkId; }); if(!b) return;
+  var date=_pckPay.date, M=pckMoney(b,date);
+  var due=M.due, fee=pckPayFee(), needSlip=(_pckPay.m!=='cash');
+  var rows=[];
+  if(M.cot>0)     rows.push(['Cash on Tour (ระบุตอนจอง)', M.cot]);
+  if(M.balance>0) rows.push(['ยอดค้างจาก B2C', M.balance]);
+  if(M.upDue>0)   rows.push(['Upgrade หน้างาน', M.upDue]);
+
+  var brk='<div class="pckp-brk">'
+    + rows.map(function(r){ return '<div class="r"><span class="k">'+e(r[0])+'</span><span class="v">'+pckB(r[1])+'</span></div>'; }).join('')
+    + (M.pierPaid>0?'<div class="r paid"><span class="k">เก็บไปแล้ว</span><span class="v">&minus; '+pckB(M.pierPaid)+'</span></div>':'')
+    + '<div class="r tot"><span class="k">'+(due>0?'คงเหลือต้องเก็บ':'เก็บครบแล้ว')+'</span>'
+    + '<span class="v"'+(due>0?'':' style="color:#0F6E56"')+'>'+pckB(due)+'</span></div></div>';
+
+  var form='';
+  if(due<=0){
+    form='<div class="pckp-done">&#10003; เก็บเงินครบแล้ว ไม่มียอดค้าง</div>';
+  } else {
+    form+='<label class="pckp-lbl">วิธีรับเงิน</label><div class="pckp-seg">';
+    [['cash','เงินสด','ไม่ต้องแนบสลิป'],['transfer','โอนเงิน','ต้องแนบสลิป'],['card','บัตรเครดิต','ต้องแนบสลิป']].forEach(function(x){
+      form+='<button class="'+(_pckPay.m===x[0]?'on':'')+'" onclick="pckPaySetM(\''+x[0]+'\')">'
+        +'<span class="n">'+x[1]+'</span><span class="d">'+x[2]+'</span></button>';
+    });
+    form+='</div>';
+
+    form+='<div class="'+(_pckPay.m==='card'?'pckp-g2':'')+'">';
+    form+='<div class="pckp-fld"><label class="pckp-lbl">จำนวนเงินที่รับ &#3647;</label>'
+      +'<input class="pckp-amt" type="number" min="0" value="'+(_pckPay.amt||0)+'" oninput="_pckPay.amt=this.value;pckPayRender()">'
+      +'<div class="pckp-hint">ใส่น้อยกว่ายอดค้างได้ ส่วนที่เหลือจะคงเป็นยอดค้างต่อ</div></div>';
+    if(_pckPay.m==='card'){
+      form+='<div class="pckp-fld"><label class="pckp-lbl">ค่าธรรมเนียมบัตร'
+        +'<span class="pckp-unit">'
+        +'<button class="'+(_pckPay.feeMode==='pct'?'on':'')+'" onclick="pckPaySet(\'feeMode\',\'pct\')">%</button>'
+        +'<button class="'+(_pckPay.feeMode==='baht'?'on':'')+'" onclick="pckPaySet(\'feeMode\',\'baht\')">&#3647;</button>'
+        +'</span></label>';
+      if(_pckPay.feeMode==='pct'){
+        form+='<input class="pckp-amt" type="number" step="0.1" min="0" value="'+(_pckPay.feePct||0)+'" oninput="_pckPay.feePct=this.value;pckPayRender()">'
+          +'<div class="pckp-pct">'
+          + [1.5,2,2.5,3,3.5,4,4.5,5].map(function(x){ return '<button class="'+((+_pckPay.feePct===x)?'on':'')+'" onclick="pckPaySet(\'feePct\','+x+')">'+x+'%</button>'; }).join('')
+          + '<button class="'+((+_pckPay.feePct===0)?'on':'')+'" onclick="pckPaySet(\'feePct\',0)">ไม่ชาร์จ</button></div>'
+          +'<div class="pckp-hint">คิดจาก '+pckB(_pckPay.amt)+' &times; '+(+_pckPay.feePct||0)+'% = <b style="color:#5B289A;font-family:\'DM Mono\',monospace">'+pckB(fee)+'</b> (ปัดเป็นบาทเต็ม)</div>'
+          +((+_pckPay.feePct||0)>5?'<div class="pckp-hint" style="color:#A32D2D;font-weight:700">&#9888; เกิน 5% แล้ว — เช็คอีกทีว่ากรอกถูกไหม (บันทึกได้ ไม่บล็อก)</div>':'');
+      } else {
+        form+='<input class="pckp-amt" type="number" min="0" value="'+(_pckPay.fee||0)+'" oninput="_pckPay.fee=this.value;pckPayRender()">'
+          +'<div class="pckp-hint">กรอกยอดบาทตามที่เครื่องคิดจริง'
+          +(((+_pckPay.amt>0)&&fee>0)?(' · เท่ากับ <b style="color:#5B289A">'+(Math.round(fee/(+_pckPay.amt)*1000)/10)+'%</b> ของยอดที่รับ'):'')+'</div>'
+          +(((+_pckPay.amt>0)&&(fee/(+_pckPay.amt)*100>5))?'<div class="pckp-hint" style="color:#A32D2D;font-weight:700">&#9888; เกิน 5% แล้ว — เช็คอีกทีว่ากรอกถูกไหม (บันทึกได้ ไม่บล็อก)</div>':'');
+      }
+      form+='</div>';
+    }
+    form+='</div>';
+
+    if(_pckPay.m==='card' && fee>0)
+      form+='<div class="pckp-sum"><span>ลูกค้ารูดจริงทั้งหมด <span style="color:#a5a49d">('+pckB(_pckPay.amt)+' + ค่าธรรมเนียม '+pckB(fee)
+        +(_pckPay.feeMode==='pct'?(' · '+(+_pckPay.feePct||0)+'%'):'')+')</span></span>'
+        +'<b style="color:#5B289A">'+pckB((+_pckPay.amt||0)+fee)+'</b></div>';
+
+    var nHint=_pckPay.m==='transfer'?' — โอนเข้าบัญชีไหน / เลขอ้างอิง':_pckPay.m==='card'?' — เครื่องไหน / เลข approve':'';
+    var nPh  =_pckPay.m==='transfer'?'เช่น กสิกร xxx-x-x1234 (บ.เลิฟอันดามัน) · ref 2607291042'
+             :_pckPay.m==='card'    ?'เช่น เครื่อง KBank EDC เครื่อง 2 · approve 004512'
+             :                       'เช่น รับเงินที่ท่าเรือ · ทอน 300';
+    form+='<div class="pckp-fld"><label class="pckp-lbl">หมายเหตุ'
+      +(nHint?('<span class="pckp-soft">'+e(nHint)+'</span>'):'')+'</label>'
+      +'<textarea rows="2" class="pckp-ta" oninput="_pckPay.note=this.value" placeholder="'+e(nPh)+'">'+e(_pckPay.note||'')+'</textarea></div>';
+
+    form+='<div class="pckp-fld"><label class="pckp-lbl">สลิป '
+      +(needSlip?'<span style="color:#A32D2D;font-weight:800">*ต้องมี</span><span class="pckp-soft"> — แนบทีหลังได้</span>'
+                :'<span class="pckp-soft">— ไม่ต้องแนบสำหรับเงินสด</span>')+'</label>';
+    form+=_pckPay.slips.map(function(s,i){
+      return '<div class="pckp-slip"><span>&#128206;</span><span class="nm">'+e(s.name||'slip')+'</span>'
+        +'<button class="rm" onclick="pckPayRmSlip('+i+')">&#10005;</button></div>';
+    }).join('');
+    form+='<label class="pckp-drop'+((needSlip&&!_pckPay.slips.length)?' need':'')+'">'
+      +'<input type="file" accept="image/*,application/pdf" style="display:none" onchange="pckPayPickSlip(this)">'
+      +'<div class="t">&#128247; ถ่ายรูป / เลือกไฟล์สลิป</div>'
+      +'<div class="s">'+(_pckPay.m==='transfer'?'สลิปโอนจากแอปธนาคาร':_pckPay.m==='card'?'สลิปจากเครื่องรูดบัตร':'เช่น รูปใบเสร็จที่ออกให้ลูกค้า')+' · jpg / png / pdf</div></label>';
+    if(needSlip && !_pckPay.slips.length)
+      form+='<div class="pckp-hint">หน้าท่าเร่ง ถ่ายไม่ทันก็บันทึกไปก่อนได้ — ระบบจะติดธง <b style="color:#7A4A00">รอสลิป</b> ไว้ให้ตามแนบทีหลัง</div>';
+    form+='</div>';
+  }
+
+  var paid=pckPaysFor(b,date), hist='';
+  if(paid.length){
+    hist='<div class="pckp-hist"><div class="pckp-lbl" style="margin-bottom:7px">รายการที่เก็บไปแล้ว</div>';
+    paid.forEach(function(p){
+      var noSlip=(p.method!=='cash' && !(p.slips&&p.slips.length));
+      hist+='<div class="pckp-hrow"><span class="pckp-mchip m-'+p.method+'">'+pckMLabel(p.method)+'</span>'
+        +'<span style="flex:1;min-width:0"><b style="font-family:\'DM Mono\',monospace">'+pckB(p.amount)+'</b>'
+        +((+p.fee||0)?('<span style="color:#a5a49d"> + ค่าธรรมเนียม '+pckB(p.fee)+(p.feePct?(' ('+p.feePct+'%)'):'')+'</span>'):'')
+        +(p.note?('<div class="pckp-hnote">'+e(p.note)+'</div>'):'')
+        +((p.slips&&p.slips.length)?('<div class="pckp-hslip">&#128206; '+p.slips.map(function(s){ return e(s.name||'slip'); }).join(' · ')+'</div>'):'')
+        +(noSlip?('<div style="margin-top:4px"><span class="pckp-wait">&#9888; รอสลิป</span>'
+           +'<label class="pckp-late"><input type="file" accept="image/*,application/pdf" style="display:none" onchange="pckPayAddSlip(\''+p.id+'\',this)">แนบสลิป</label></div>'):'')
+        +'</span>'
+        +'<span class="pckp-hmeta">'+e(pckHHMMloc(p.at))+' · '+e(p.by||'')+'</span>'
+        +'<button class="pckp-hdel" onclick="pckPayDel(\''+p.id+'\')" title="ลบรายการนี้">&#10005;</button></div>';
+    });
+    hist+='</div>';
+  }
+
+  acctModal(''
+    +'<div class="pckp-hd"><div><div class="pckp-tt">เก็บเงินหน้าท่า</div>'
+    +'<div class="pckp-sub">'+e(b.voucherRef||b.code||b.id)+' · '+e(b.leadPax||'')+'</div></div>'
+    +'<button class="pckp-x" onclick="acctModalClose()">&#10005;</button></div>'
+    +'<div class="pckp-bd">'+brk+form+hist+'</div>'
+    +'<div class="pckp-ft"><button class="pckp-btn" onclick="acctModalClose()">ปิด</button>'
+    +(due>0?'<button class="pckp-btn pri" onclick="pckPaySave()">บันทึกการรับเงิน</button>':'')
+    +'</div>');
+}
+
+function pckPayCSS(){ return ''
+  +'.pckp-feeline{font-size:10px;color:#5B289A;background:#F6F2FD;border:1px solid #E2D8F5;border-radius:7px;padding:3px 8px;margin-top:4px;display:inline-block;line-height:1.5}'
+  +'.pckp-feeline b{font-family:\'DM Mono\',monospace;font-weight:800}'
+  +'.pckp-feeswipe{font-size:9.5px;color:#7d6aa8;font-family:\'DM Mono\',monospace}'
+  +'.pckp-wait{display:inline-block;font-size:9.5px;font-weight:800;color:#7A4A00;background:#FBF0DD;border:1px solid #EAD9B0;border-radius:999px;padding:2px 8px;white-space:nowrap}'
+  +'#acct-modal .pckp-hd{padding:15px 20px;border-bottom:1px solid #E7E4DC;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;font-family:\'DM Sans\',sans-serif}'
+  +'#acct-modal .pckp-tt{font-size:15px;font-weight:800;color:#2f2f2b}'
+  +'#acct-modal .pckp-sub{font-size:11px;color:#8a8a82;margin-top:2px}'
+  +'#acct-modal .pckp-x{background:transparent;border:none;font-size:18px;color:#a5a49d;cursor:pointer;line-height:1;font-family:inherit}'
+  +'#acct-modal .pckp-bd{padding:16px 20px;font-family:\'DM Sans\',sans-serif;color:#2f2f2b}'
+  +'#acct-modal .pckp-ft{padding:12px 20px;border-top:1px solid #E7E4DC;background:#FAF9F6;display:flex;gap:9px}'
+  +'#acct-modal .pckp-btn{flex:1;border:1px solid #D8D4CA;background:#fff;color:#4a4a45;border-radius:9px;padding:9px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}'
+  +'#acct-modal .pckp-btn:hover{border-color:#5F5E5A}'
+  +'#acct-modal .pckp-btn.pri{background:#0F6E56;border-color:#0F6E56;color:#fff}'
+  +'#acct-modal .pckp-btn.pri:hover{background:#0c5a46;border-color:#0c5a46}'
+  +'#acct-modal .pckp-warn{background:#FBF0DD;border:1.5px solid #EAD9B0;border-radius:12px;padding:13px 15px;display:flex;gap:12px;align-items:flex-start;margin-bottom:14px}'
+  +'#acct-modal .pckp-warn .ic{font-size:20px;color:#7A4A00;line-height:1}'
+  +'#acct-modal .pckp-warn .t{font-size:13px;font-weight:800;color:#7A4A00}'
+  +'#acct-modal .pckp-warn .s{font-size:11.5px;color:#9a7433;margin-top:3px;line-height:1.6}'
+  +'#acct-modal .pckp-brk{border:1px solid #E7E4DC;border-radius:12px;overflow:hidden;margin-bottom:14px}'
+  +'#acct-modal .pckp-brk .r{display:flex;align-items:center;justify-content:space-between;padding:8px 13px;font-size:12px;border-bottom:1px solid #F1F0EC}'
+  +'#acct-modal .pckp-brk .r:last-child{border-bottom:none}'
+  +'#acct-modal .pckp-brk .r.tot{background:#FAF9F6;font-weight:800}'
+  +'#acct-modal .pckp-brk .k{color:#5F5E5A}'
+  +'#acct-modal .pckp-brk .v{font-family:\'DM Mono\',monospace;font-weight:700}'
+  +'#acct-modal .pckp-brk .r.tot .v{font-size:16px;color:#7A4A00}'
+  +'#acct-modal .pckp-brk .r.paid .v{color:#0F6E56}'
+  +'#acct-modal .pckp-done{background:#DCF4E8;border:1.5px solid #BFE3CC;border-radius:12px;padding:13px 15px;font-size:12.5px;font-weight:700;color:#0F6E56;text-align:center}'
+  +'#acct-modal .pckp-lbl{font-size:10px;font-weight:700;color:#8a8a82;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px}'
+  +'#acct-modal .pckp-soft{color:#a5a49d;font-weight:600;text-transform:none;letter-spacing:0}'
+  +'#acct-modal .pckp-seg{display:flex;gap:7px;margin-bottom:13px}'
+  +'#acct-modal .pckp-seg button{flex:1;border:1.5px solid #E7E4DC;background:#FAF9F6;border-radius:11px;padding:11px 8px;cursor:pointer;font-family:inherit;text-align:center}'
+  +'#acct-modal .pckp-seg button .n{display:block;font-size:12.5px;font-weight:800;color:#2f2f2b}'
+  +'#acct-modal .pckp-seg button .d{display:block;font-size:9.5px;color:#a5a49d;margin-top:2px}'
+  +'#acct-modal .pckp-seg button:hover{border-color:#a5a49d}'
+  +'#acct-modal .pckp-seg button.on{border-color:#0F6E56;background:#DCF4E8}'
+  +'#acct-modal .pckp-seg button.on .n{color:#0F6E56}'
+  +'#acct-modal .pckp-seg button.on .d{color:#3f8a74}'
+  +'#acct-modal .pckp-fld{margin-bottom:13px}'
+  +'#acct-modal .pckp-g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}'
+  +'#acct-modal .pckp-amt{width:100%;border:1.5px solid #E7E4DC;border-radius:9px;font-family:\'DM Mono\',monospace;font-size:19px;font-weight:800;text-align:right;padding:10px 13px;background:#fff;color:#2f2f2b}'
+  +'#acct-modal .pckp-amt:focus{outline:none;border-color:#185FA5}'
+  +'#acct-modal .pckp-ta{width:100%;border:1.5px solid #E7E4DC;border-radius:9px;padding:9px 11px;font-family:inherit;font-size:13px;background:#fff;color:#2f2f2b}'
+  +'#acct-modal .pckp-ta:focus{outline:none;border-color:#185FA5}'
+  +'#acct-modal .pckp-hint{font-size:10.5px;color:#a5a49d;margin-top:4px;line-height:1.5}'
+  +'#acct-modal .pckp-unit{display:inline-flex;margin-left:8px;border:1px solid #E7E4DC;border-radius:999px;overflow:hidden;vertical-align:middle}'
+  +'#acct-modal .pckp-unit button{border:none;background:#fff;color:#a5a49d;font-family:\'DM Mono\',monospace;font-size:11px;font-weight:700;padding:2px 10px;cursor:pointer;line-height:1.6}'
+  +'#acct-modal .pckp-unit button.on{background:#5B289A;color:#fff}'
+  +'#acct-modal .pckp-pct{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}'
+  +'#acct-modal .pckp-pct button{border:1.5px solid #E7E4DC;background:#fff;color:#5F5E5A;border-radius:999px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}'
+  +'#acct-modal .pckp-pct button:hover{border-color:#5B289A;color:#5B289A}'
+  +'#acct-modal .pckp-pct button.on{background:#EDE7FB;border-color:#5B289A;color:#5B289A}'
+  +'#acct-modal .pckp-sum{background:#FAF9F6;border:1px solid #E7E4DC;border-radius:10px;padding:10px 13px;display:flex;align-items:center;justify-content:space-between;font-size:12px;margin-bottom:13px}'
+  +'#acct-modal .pckp-sum b{font-family:\'DM Mono\',monospace;font-size:16px;font-weight:800}'
+  +'#acct-modal .pckp-drop{display:block;border:1.5px dashed #E7E4DC;border-radius:11px;padding:14px;text-align:center;background:#FCFCFB;cursor:pointer}'
+  +'#acct-modal .pckp-drop:hover{border-color:#185FA5;background:#E6F1FB}'
+  +'#acct-modal .pckp-drop.need{border-color:#E6C9C3;background:#FFF7F6}'
+  +'#acct-modal .pckp-drop .t{font-size:12px;font-weight:700;color:#5F5E5A}'
+  +'#acct-modal .pckp-drop.need .t{color:#A32D2D}'
+  +'#acct-modal .pckp-drop .s{font-size:10.5px;color:#a5a49d;margin-top:3px}'
+  +'#acct-modal .pckp-slip{display:flex;align-items:center;gap:10px;border:1px solid #BFE3CC;background:#DCF4E8;border-radius:10px;padding:9px 12px;margin-bottom:8px}'
+  +'#acct-modal .pckp-slip .nm{flex:1;min-width:0;font-size:11.5px;font-weight:700;color:#0F6E56;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+  +'#acct-modal .pckp-slip .rm{background:transparent;border:none;color:#A32D2D;cursor:pointer;font-size:13px;font-family:inherit}'
+  +'#acct-modal .pckp-hist{border-top:1px solid #E7E4DC;margin-top:16px;padding-top:13px}'
+  +'#acct-modal .pckp-hrow{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid #F1F0EC;font-size:11.5px}'
+  +'#acct-modal .pckp-hrow:last-child{border-bottom:none}'
+  +'#acct-modal .pckp-mchip{font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap;flex:none;margin-top:1px}'
+  +'#acct-modal .pckp-mchip.m-cash{background:#DCF4E8;color:#0F6E56}'
+  +'#acct-modal .pckp-mchip.m-transfer{background:#E6F1FB;color:#185FA5}'
+  +'#acct-modal .pckp-mchip.m-card{background:#EDE7FB;color:#5B289A}'
+  +'#acct-modal .pckp-hnote{font-size:10.5px;color:#a5a49d;margin-top:2px}'
+  +'#acct-modal .pckp-hslip{font-size:10.5px;color:#0F6E56;margin-top:2px}'
+  +'#acct-modal .pckp-hmeta{font-family:\'DM Mono\',monospace;color:#a5a49d;font-size:10.5px;white-space:nowrap;flex:none}'
+  +'#acct-modal .pckp-hdel{background:none;border:none;color:#A32D2D;cursor:pointer;font-family:inherit;flex:none}'
+  +'#acct-modal .pckp-late{display:inline-block;margin-left:6px;background:#FBF0DD;border:1px solid #EAD9B0;color:#7A4A00;border-radius:999px;padding:3px 10px;font-size:10px;font-weight:700;cursor:pointer}'
+  +'#acct-modal .pckp-late:hover{background:#F7E6C8;border-color:#D9B978}'
+  ;
 }
 function pckDateShift(delta){ var d=new Date(_pckDate+'T12:00:00'); d.setDate(d.getDate()+delta); _pckDate=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(d):d.toISOString().slice(0,10); renderPierCheckin(); }
 function pckToday(){ _pckDate=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10); renderPierCheckin(); }
@@ -43859,7 +44233,7 @@ function renderPierCheckin(){
     all.push(row);
   });
   var cnt={boat:{},van:{},arr:{},stat:{wait:0,arr:0,clr:0,on:0,due:0,ns:0}};
-  var tExpect=0, tNoShow=0, tDue=0;
+  var tExpect=0, tNoShow=0, tDue=0, tSlip=0, tFee=0, tGot=0;
   all.forEach(function(r){
     if(r.bid) cnt.boat[r.bid]=(cnt.boat[r.bid]||0)+1;
     if(r.vanId) cnt.van[r.vanId]=(cnt.van[r.vanId]||0)+1;
@@ -43869,6 +44243,7 @@ function renderPierCheckin(){
     if(r.money.due>0 && r.stage!=='on'){ cnt.stat.due++; tDue+=r.money.due; }
     tExpect+=r.expect;
     if(r.ck && r.ck.at) tNoShow+=(r.ck.noShow||0);
+    tSlip+=(r.money.noSlip||0); tFee+=(r.money.pierFee||0); tGot+=(r.money.pierPaid||0);
     var L=(typeof ckLostByType==='function')?ckLostByType(r.b,date):null;
     if((L&&L.total>0)||(r.stage==='on'&&(r.ck.noShow||0)>0)) cnt.stat.ns++;
   });
@@ -44020,8 +44395,11 @@ function renderPierCheckin(){
   // (แต่ละโปรแกรมออกคนละเวลา ยอดรวมทั้งวันตอบไม่ได้ว่าลำที่กำลังจะออกพร้อมหรือยัง)
   var kpi='<span style="background:#F1EFE8;color:#5F5E5A">ทั้งท่า '+all.length+' booking · รอรับ '+tExpect+' pax</span>'
         +(tDue>0?'<span style="background:#FBF0DD;color:#7A4A00">ค้างเก็บทั้งวัน &#3647;'+Math.round(tDue).toLocaleString()+'</span>':'')
+        +(tGot>0?'<span style="background:#DCF4E8;color:#0F6E56">เก็บแล้ว &#3647;'+Math.round(tGot).toLocaleString()+'</span>':'')
+        +(tFee>0?'<span style="background:#F6F2FD;color:#5B289A" title="ค่าธรรมเนียมบัตรที่ลูกค้าจ่ายเพิ่ม · ไม่ใช่รายได้ · ยอดที่ต้องตรงกับ statement คือยอดตัดหนี้ + ค่าธรรมเนียม">ค่าธรรมเนียมบัตร &#3647;'+Math.round(tFee).toLocaleString()+'</span>':'')
+        +(tSlip>0?'<span style="background:#FBF0DD;color:#7A4A00" title="รับเงินโอน/บัตรไปแล้วแต่ยังไม่ได้แนบสลิป — ตามให้ครบก่อนปิดวัน">&#9888; รอสลิป '+tSlip+'</span>':'')
         +(tNoShow>0?'<span style="background:#FCEBEB;color:#A32D2D">No-show '+tNoShow+'</span>':'');
-  host.innerHTML='<style id="pck-style">'+ckSharedCSS('#piercheckin-host')+pckExtraCSS()+pckCardCSS('#piercheckin-host')+'</style>'
+  host.innerHTML='<style id="pck-style">'+ckSharedCSS('#piercheckin-host')+pckExtraCSS()+pckCardCSS('#piercheckin-host')+pckPayCSS()+'</style>'
     +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px"><h1 style="margin:0;font-size:19px;font-weight:700">เช็คอินหน้าท่า (Pier Check-in)</h1>'
     +'<span style="font-size:11px;color:#8a8a82">รับช่วงต่อจากเช็คอินรถ · คนที่ No-show ตอนรถรับจะถูกหักออกจากยอดรอรับ (ยกเว้นแจ้งว่าไปเองที่ท่า)</span></div>'
     +ckDayHeader({date:date, shiftFn:'pckDateShift', todayFn:'pckToday', pickFn:'pckPickDay',
