@@ -43390,7 +43390,7 @@ function pckFeeBase(b,date){ return pckPaysFor(b,date).filter(function(p){ retur
 function pckNoSlip(b,date){ return pckPaysFor(b,date).filter(function(p){ return p.method!=='cash' && !(Array.isArray(p.slips)&&p.slips.length); }).length; }
 function pckB(n){ return '&#3647;'+Math.round(+n||0).toLocaleString(); }
 function pckMLabel(m){ return m==='cash'?'เงินสด':m==='transfer'?'โอนเงิน':m==='card'?'บัตรเครดิต':m||'—'; }
-function pckHHMMloc(iso){ try{ return new Date(iso).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}); }catch(_){ return ''; } }
+function pckHHMMloc(iso){ return pckHHMM(iso); }   // §localTime · ใช้ helper ตัวเดียวกันทั้งหน้า
 
 function pckFeeLine(b, date){
   var f=pckFeeSum(b,date); if(f<=0) return '';
@@ -43740,7 +43740,7 @@ function pckExpected(b, date, booked){
 function pckStageCell(r, date){
   var e=ckEsc, ck=r.ck||{}, st=pckStage(ck);
   var due=(r.money?r.money.due:0)||0;
-  var hhmm=function(iso){ return iso?String(iso).slice(11,16):''; };
+  var hhmm=function(iso){ return pckHHMM(iso); };   // §localTime · ห้ามตัดสตริง ISO ตรงๆ มันเป็น UTC
   var btn=function(S){
     var done=pckStageRank(st)>=pckStageRank(S.k);
     var when=(S.k==='arr'?hhmm(ck.arrivedAt):hhmm(ck.clearedAt));
@@ -43911,7 +43911,7 @@ function pckDetailOpen(bkId){
            var stp=function(S,i,when,who){ var done=rk>=i;
              return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0"><span style="width:15px;height:15px;border-radius:50%;flex:none;background:'+(done?S.col:'#EDEAE2')+';color:#fff;font-size:9px;display:flex;align-items:center;justify-content:center">'+(done?'&#10003;':'')+'</span>'
                +'<span style="font-size:12px;color:'+(done?'#2f2f2b':'#a5a49d')+';font-weight:'+(done?'700':'500')+'">'+S.lbl+'</span>'
-               +(done&&when?'<span style="font-size:10.5px;color:#8a8a82;font-family:monospace">'+String(when).slice(11,16)+'</span>':'')
+               +(done&&when?'<span style="font-size:10.5px;color:#8a8a82;font-family:monospace">'+pckHHMM(when)+'</span>':'')
                +(done&&who?'<span style="font-size:10.5px;color:#a5a49d">'+ckEsc(who)+'</span>':'')+'</div>'; };
            return '<div class="pd-r"><span class="pd-k">ขั้นตอนหน้าท่า</span><span class="pd-v">'
              +stp(PCK_STAGES[0],1,pck&&pck.arrivedAt,pck&&pck.arrivedBy)
@@ -43942,7 +43942,17 @@ function pckDetailOpen(bkId){
 var PCK_MAX_NAMES=4;
 var _pckOpenNames={};
 function pckNamesToggle(id){ if(_pckOpenNames[id]) delete _pckOpenNames[id]; else _pckOpenNames[id]=1; renderPierCheckin(); }
-function pckHHMM(iso){ return iso?String(iso).slice(11,16):''; }
+// §localTime (2026-07-30) · เวลาเช็คอินเก็บเป็น ISO ซึ่งเป็น UTC เสมอ (new Date().toISOString())
+// การตัด slice(11,16) จึงได้เวลา UTC ดิบ → หน้าท่าเห็น "01:29" ทั้งที่กดตอน 08:29 (ช้าไป 7 ชม.)
+// ต้องแปลงผ่าน Date ให้เป็นเวลาเครื่องก่อนเสมอ · รองรับค่าที่เก็บมาเป็น HH:MM อยู่แล้วด้วย
+function pckHHMM(iso){
+  if(!iso) return '';
+  var s=String(iso);
+  if(/^\d{1,2}:\d{2}$/.test(s)) return s;                 // เก็บมาเป็น HH:MM อยู่แล้ว (เช่น reasonAt ที่พิมพ์เอง)
+  var d=new Date(s);
+  if(isNaN(d.getTime())) return s.slice(11,16);            // parse ไม่ได้ → คืนของเดิม ดีกว่าคืนค่าว่าง
+  return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+}
 function pckBoatName(id){ var b=(typeof getBoat==='function'?getBoat(id):null)||{}; return b.name||id||'—'; }
 function pckBoatColor(id){
   var b=(typeof getBoat==='function'?getBoat(id):null)||{};
