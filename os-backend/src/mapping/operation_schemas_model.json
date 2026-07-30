@@ -4069,6 +4069,14 @@
         "type": "text"
       },
       {
+        "name": "paymentsnapshot_paid",
+        "type": "bigint"
+      },
+      {
+        "name": "paymentsnapshot_paidstatus",
+        "type": "text"
+      },
+      {
         "name": "pricebreakdown_seat",
         "type": "bigint"
       },

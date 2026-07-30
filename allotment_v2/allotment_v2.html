@@ -45205,6 +45205,7 @@ function bkV2PayChip(bk){
   const a=(typeof sbGetAgent==='function')?sbGetAgent(bk.agentId):null;
   let txt,bg,fg;
   let bd='var(--border)';
+  let paidChip='';
   // Staff trips that carry no charge (FOC within quota / inspection) → label FREE clearly, not "COT"
   const _staffTotal = bk.total || (bk.priceBreakdown&&bk.priceBreakdown.total) || 0;
   const _isStaffFree = (bk.purpose==='staff_welfare' || bk.purpose==='staff_inspection' || bk.staffId) && !inv && _staffTotal<=0;
@@ -45243,8 +45244,22 @@ function bkV2PayChip(bk){
     // Color by payment type: Invoice=blue · Proforma/PFM=amber · COT=cyan · Bank=neutral
     const pm=({invoice:['#E6F1FB','#185FA5','#BBD7F0'],credit:['#E6F1FB','#185FA5','#BBD7F0'],proforma:['#FBF0DD','#7A4A00','#EAD7A8'],prepaid:['#FBF0DD','#7A4A00','#EAD7A8'],cot:['#E0F7FA','#00838F','#9FE3EC'],bt:['#F1EFE8','#5F5E5A','#E0DDD4']})[pt]||['#fff','#5F5E5A','var(--border)'];
     bg=pm[0];fg=pm[1];bd=pm[2];
+    // ...but that chip is the BILLING TERM only ("cot" = pay on tour, not "collected"). Whether money
+    // actually arrived is derived server-side (paymentSnapshot.paidStatus = total vs payments +
+    // credits applied) and gets its own chip, so the term is never read as a payment state.
+    if(bk.agentId==='a_b2c'){
+      const _ps=(bk.paymentSnapshot&&bk.paymentSnapshot.paidStatus)||'';
+      const _sm=({paid:['Paid','#E1F5EE','#0F6E56','#9FE1CB'],deposit:['Deposit','#E6F1FB','#185FA5','#BBD7F0'],unpaid:['Unpaid','#FCEBEB','#A32D2D','#E6C9C3']})[_ps];
+      if(_sm){
+        // Amount is order-level and rides on the first line only — a multi-item order would otherwise
+        // report its money once per line. The STATUS is on every line.
+        const _amt=Number(bk.paymentSnapshot&&bk.paymentSnapshot.paid)||0;
+        const _tip=`B2C received ${_amt?'THB '+_amt.toLocaleString():'THB 0'} of the order total (payments + credits). Billing term is ${txt}.`;
+        paidChip=`<span class="t2-pay" style="background:${_sm[1]};color:${_sm[2]};border:1px solid ${_sm[3]};font-weight:600;margin-left:3px" title="${_tip}">${_sm[0]}</span>`;
+      }
+    }
   }
-  return `<span class="t2-pay" style="background:${bg};color:${fg};border:1px solid ${bd};cursor:pointer;font-weight:600" onclick="event.stopPropagation();bkV2RowPayAction('${bk.id}')" title="จัดการการชำระเงิน">${txt}</span>`;
+  return `<span class="t2-pay" style="background:${bg};color:${fg};border:1px solid ${bd};cursor:pointer;font-weight:600" onclick="event.stopPropagation();bkV2RowPayAction('${bk.id}')" title="จัดการการชำระเงิน">${txt}</span>${paidChip}`;
 }
 // Cash-on-Tour chip for the Pay column · from structured cashOnTour OR a "cash on tour ..." line in notes
 function bkV2CotChip(bk, noteTxt){
@@ -45273,7 +45288,11 @@ function bkV2RowPayAction(bkId){
   if(!bk.agentId){
     body=`<div style="font-size:12px;color:var(--fd-ink-soft)">Booking นี้เป็น B2C (ไม่มี agent) — จัดการชำระเงินที่หน้า Accounting หรือ booking detail</div>`;
   } else if(!inv){
-    body=`<div style="font-size:12px;color:var(--fd-ink-soft);margin-bottom:12px">ยังไม่ได้ออกใบแจ้งหนี้ · ยอด ${fmt(acctBookingTotal(bk))}</div>
+    // B2C carries its own settled amount from the webshop (payments + credits, synced server-side).
+    // Show it here, otherwise this modal reads "no invoice yet" on a booking the customer already paid.
+    const _bps=(bk.agentId==='a_b2c'&&bk.paymentSnapshot&&bk.paymentSnapshot.paidStatus)?bk.paymentSnapshot:null;
+    const _bl=_bps?`<div style="font-size:12px;margin-bottom:8px">B2C · ${({paid:'ชำระครบแล้ว',deposit:'มัดจำ/ชำระบางส่วน',unpaid:'ยังไม่ชำระ'})[_bps.paidStatus]||_bps.paidStatus} · รับแล้ว ${fmt(_bps.paid)} <span style="color:var(--fd-ink-soft)">(ยอดระดับ order)</span></div>`:'';
+    body=_bl+`<div style="font-size:12px;color:var(--fd-ink-soft);margin-bottom:12px">ยังไม่ได้ออกใบแจ้งหนี้ · ยอด ${fmt(acctBookingTotal(bk))}</div>
       <button onclick="bkV2PayDoCreate('${bkId}')" style="background:var(--fd-coral);color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:600;padding:9px 16px;border-radius:9px;cursor:pointer">ออก${isPF?' Pro Forma':'ใบแจ้งหนี้'}</button>`;
   } else {
     const bal=acctInvoiceBalance(inv), paid=acctInvoicePaid(inv);

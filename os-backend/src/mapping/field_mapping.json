@@ -4411,6 +4411,16 @@
       "kind": "scalar",
       "db_type": "text"
     },
+    "paymentsnapshot_paid": {
+      "source": "paymentSnapshot.paid",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "paymentsnapshot_paidstatus": {
+      "source": "paymentSnapshot.paidStatus",
+      "kind": "scalar",
+      "db_type": "text"
+    },
     "pricebreakdown_seat": {
       "source": "priceBreakdown.seat",
       "kind": "scalar",

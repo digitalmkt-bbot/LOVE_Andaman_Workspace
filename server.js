@@ -144,7 +144,9 @@ const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_re
 // v4: mapper now reads bookings.payment_type and details.pickupHotel / bi.pickuphotel.
 // v5: corrects v4 — pickupLocation is the AREA name, not a fallback hotel. v4 matched the area
 //     against the hotel string, so every booking carrying pickupHotel resolved to no area at all.
-const B2C_MAP_VER = 5;
+// v6: adds the derived paid state (paymentSnapshot.paid / .paidStatus) from Σpayments +
+//     Σcredits_applied vs bookings.total — payment_type alone never says whether money arrived.
+const B2C_MAP_VER = 6;
 
 function mapB2CStatus(s) {
   if (s === 'cancelled') return 'cancelled';
@@ -196,6 +198,15 @@ function mapB2CItemBooking(item, isFirstLine, findAreaId) {
   // Null/unknown → '' so the chip falls back to the a_b2c agent default.
   const payType = B2C_PAY_TYPES.has(String(h.bk_payment_type || '').toLowerCase())
     ? String(h.bk_payment_type).toLowerCase() : '';
+  // Paid state — derived, never read off payment_type. bk_paid is Σpayments + Σcredits_applied
+  // computed in B2C_ITEM_JOIN; the thresholds mirror the B2C team's reference SQL exactly:
+  // paid<=0 → unpaid · paid>=total → paid · otherwise → deposit (part-paid).
+  // Both figures are ORDER-level. The amount attaches to the first line only (same rule as
+  // deposit/balance, so a 3-item order doesn't report 3× the money), but the STATUS is a property
+  // of the whole order and rides on every line — ops reading line 2 must still see "paid".
+  const bkTotal    = Number(h.bk_total) || 0;
+  const paidAmt    = Math.round(Number(h.bk_paid) || 0);
+  const paidStatus = paidAmt <= 0 ? 'unpaid' : (paidAmt >= bkTotal ? 'paid' : 'deposit');
   const adTh = Number(h.pax_thai) || 0;
   const adFrRaw = Number(h.pax_foreign) || 0;
   const adFr = adFrRaw > 0 ? adFrRaw : Math.max(0, (Number(h.pax_adult) || 0) - adTh);
@@ -309,6 +320,8 @@ function mapB2CItemBooking(item, isFirstLine, findAreaId) {
       deposit: isFirstLine ? (Number(h.bk_deposit) || 0) : 0,
       balance: isFirstLine ? (Number(h.bk_balance) || 0) : 0,
       method: payType,
+      paid: isFirstLine ? paidAmt : 0,
+      paidStatus: paidStatus,
     },
     ops: {},
     history: [],
@@ -334,11 +347,26 @@ const B2C_ITEM_JOIN = `
          ch.name         AS channel_name,
          c.name          AS customer_name,
          c.phone         AS customer_phone,
-         c.email         AS customer_email
+         c.email         AS customer_email,
+         COALESCE(pay.paid, 0) AS bk_paid
   FROM ${b2cT('booking_items')} bi
   LEFT JOIN ${b2cT('bookings')} b       ON b.id  = bi.booking_id
   LEFT JOIN ${b2cT('b2c_channels')} ch  ON ch.id = b.channel_id
   LEFT JOIN ${b2cT('customers')} c      ON c.id  = b.customer_id
+  -- How much of the order has actually been settled. B2C's payment_type is a BILLING TERM
+  -- (proforma/invoice/bt/cot), never a paid state — the only way to know a booking is paid is
+  -- total vs Σpayments + Σcredits_applied. Both are jsonb arrays of {amount,...} on bookings.
+  -- Read through to_jsonb(b) rather than b.payments so a column that does not exist yet on the
+  -- B2C side degrades to 0 instead of erroring the whole sync query; jsonb_typeof guards a
+  -- null/object value the same way.
+  LEFT JOIN LATERAL (
+    SELECT COALESCE((SELECT SUM((pmt->>'amount')::numeric) FROM jsonb_array_elements(
+             CASE WHEN jsonb_typeof(to_jsonb(b)->'payments') = 'array'
+                  THEN to_jsonb(b)->'payments' ELSE '[]'::jsonb END) pmt), 0)
+         + COALESCE((SELECT SUM((crd->>'amount')::numeric) FROM jsonb_array_elements(
+             CASE WHEN jsonb_typeof(to_jsonb(b)->'credits_applied') = 'array'
+                  THEN to_jsonb(b)->'credits_applied' ELSE '[]'::jsonb END) crd), 0) AS paid
+  ) pay ON TRUE
   WHERE bi.type IN ('day_trip','private_own')`;
 
 async function relSyncB2C(singleExtId = null) {
@@ -363,6 +391,13 @@ async function relSyncB2C(singleExtId = null) {
         B2C_ITEM_JOIN + ` ORDER BY bi.booking_id, bi.line_no LIMIT 2000`
       ));
       if (!itemRows.length) return;
+    }
+
+    // Paid-amount sanity: the payments/credits sum is read defensively (to_jsonb + jsonb_typeof), so a
+    // missing column or a text-typed json value degrades to 0 instead of erroring — which would make
+    // every B2C booking read "Unpaid" with nothing to show it was a read failure. Say so in the log.
+    if (itemRows.length && itemRows.every(r => !(Number(r.bk_paid) > 0)) && itemRows.some(r => Number(r.bk_total) > 0)) {
+      console.warn('[b2c-sync] paid amount is 0 on every row — check bookings.payments / credits_applied exist and are json/jsonb; all B2C bookings will show Unpaid');
     }
 
     // Change detection (full runs only): hash the raw source rows and compare with the last synced
@@ -760,6 +795,15 @@ async function initDb(){
       }
       await sq('sb_vehicles.color col', `ALTER TABLE ${OS_SCHEMA}."sb_vehicles" ADD COLUMN IF NOT EXISTS "color" text`);
       await sq('boats.color col', `ALTER TABLE ${OS_SCHEMA}."boats" ADD COLUMN IF NOT EXISTS "color" text`);
+      // §B2C paid state (2026-07-30, from lk-inbox): B2C's payment_type is a BILLING TERM
+      // (proforma/invoice/bt/cot) and says nothing about whether money arrived — paid state must be
+      // derived from total vs Σpayments + Σcredits_applied (done in B2C_ITEM_JOIN, see B2C_MAP_VER 6).
+      // paymentSnapshot.deposit/.balance were already being mapped with no column to land in, so they
+      // were silently dropped by decomposeBlob and the ERP had no paid figure for B2C at all.
+      // These two columns must exist BEFORE the app boots with them in the mapping: OS_COLS drives the
+      // INSERT column list for every save, so this DDL runs in the same boot path that adds them.
+      await sq('sb_bookings.paymentsnapshot_paid col', `ALTER TABLE ${OS_SCHEMA}."sb_bookings" ADD COLUMN IF NOT EXISTS "paymentsnapshot_paid" bigint`);
+      await sq('sb_bookings.paymentsnapshot_paidstatus col', `ALTER TABLE ${OS_SCHEMA}."sb_bookings" ADD COLUMN IF NOT EXISTS "paymentsnapshot_paidstatus" text`);
       await sq('sb_bookings pkey', `
         DO $do$ BEGIN
           IF NOT EXISTS (
