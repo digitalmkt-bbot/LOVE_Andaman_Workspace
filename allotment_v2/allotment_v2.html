@@ -309,7 +309,35 @@
   window._laSoftRefresh=_laSoftRefresh;   // expose for the banner button's inline onclick
   function _laTryRefresh(){ if(!_laPending) return; if(_laBusy()) showRefresh(_laPending); else _laSoftRefresh(); }
   // poll cloud version
-  setInterval(function(){ var x=new XMLHttpRequest(); x.open('GET',bust('/api/version'),true); x.onload=function(){ if(x.status===200){ var j={}; try{j=JSON.parse(x.responseText);}catch(e){} if((j.version||0)>VER){ _laPending=j; _laTryRefresh(); } } }; try{x.send();}catch(e){} }, 10000);
+  setInterval(function(){ var x=new XMLHttpRequest(); x.open('GET',bust('/api/version'),true); x.onload=function(){ if(x.status===200){ var j={}; try{j=JSON.parse(x.responseText);}catch(e){} if((j.version||0)>VER){ _laPending=j; _laTryRefresh(); } try{ _laB2CHealth(j.b2c); }catch(e){} } }; try{x.send();}catch(e){} }, 10000);
+  // §B2C sync-down alert (2026-07-31): a failed B2C sync is non-fatal on the server — it logs and moves
+  // on — so without this the app looks perfectly healthy while orders silently stop arriving. Server
+  // side only reports a fault after 3 consecutive failed runs (~2 min) or 10 min with no successful
+  // run at all, so a restart or one dropped connection never puts this on screen.
+  // NOT dismissible on purpose: bookings are still being taken on the website while this is up.
+  function _laB2CHealth(h){
+    var el=document.getElementById('la-b2c-down');
+    if(!h || !h.configured || h.ok){ if(el) el.remove(); return; }
+    var why = h.neverOk ? 'ยังไม่เคยดึงสำเร็จตั้งแต่เซิร์ฟเวอร์เริ่มทำงาน'
+            : (h.staleMin!=null && h.staleMin>=10 ? ('ดึงสำเร็จครั้งล่าสุดเมื่อ '+h.staleMin+' นาทีที่แล้ว')
+            : ('ล้มเหลวติดกัน '+(h.consecutive||0)+' ครั้ง'));
+    var det = h.phase ? (' · ขั้นตอน '+h.phase) : '';
+    var msg = h.message ? ('\n'+h.message) : '';
+    if(!el){
+      el=document.createElement('div'); el.id='la-b2c-down';
+      // Anchored to the BOTTOM, not the top: sticky headers all over the app compute their offset from
+      // the --topbar CSS var, so a fixed bar at the top would sit on top of every one of them.
+      el.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:100000;background:#A32D2D;color:#fff;'
+        +'font:13px/1.4 "DM Sans",sans-serif;padding:9px 16px;text-align:center;box-shadow:0 -2px 10px rgba(0,0,0,.25)';
+      document.body.appendChild(el);
+    }
+    // Booking ids are not shown because we do not know them — that is the whole problem. Point staff at
+    // the B2C admin, which is the only place the missing orders can be read while the sync is down.
+    el.innerHTML='&#9888; <b>ดึงข้อมูล B2C ไม่ได้</b> — '+esc(why)+esc(det)
+      +' · booking ที่ลูกค้าจองเข้ามาช่วงนี้จะยังไม่ขึ้นในระบบ ให้เช็คที่หน้า B2C admin โดยตรง'
+      +(msg?('<span title="'+esc(msg)+'" style="opacity:.75;cursor:help"> &#9432;</span>'):'');
+  }
+  window._laB2CHealth=_laB2CHealth;
   // Real-time push via SSE · server notifies instantly on any save (poll above is just a fallback)
   function _laStartSSE(){ if(typeof EventSource==='undefined') return; try{ if(window.__laSSE) window.__laSSE.close(); var es=new EventSource('/api/events'); es.onmessage=function(e){ try{ var j=JSON.parse(e.data); if((j.version||0)>VER){ _laPending=j; _laTryRefresh(); } }catch(_){} }; window.__laSSE=es; }catch(e){} }
   _laStartSSE();

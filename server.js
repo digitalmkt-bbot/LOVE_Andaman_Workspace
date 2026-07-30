@@ -148,6 +148,57 @@ const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_re
 //     Σcredits_applied vs bookings.total — payment_type alone never says whether money arrived.
 const B2C_MAP_VER = 6;
 
+// ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
+// A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
+// row anywhere saying an order never arrived. Ops would only notice when a customer phoned about a
+// booking nobody could see. This tracks the state so the app can say so out loud.
+//
+// consecutive counts FAILED RUNS, not failed fetches — a run that fetches fine but dies during the
+// upsert is just as broken from ops' point of view. A run with nothing to do (no rows, or the hash
+// says B2C is unchanged) is a SUCCESS: the connection worked and there was nothing to import.
+const B2C_HEALTH = { lastOk: null, lastFail: null, consecutive: 0, message: '', phase: '' };
+function _b2cHealthOk() {
+  B2C_HEALTH.lastOk = Date.now();
+  B2C_HEALTH.consecutive = 0;
+  B2C_HEALTH.message = '';
+  B2C_HEALTH.phase = '';
+}
+function _b2cHealthFail(e) {
+  B2C_HEALTH.lastFail = Date.now();
+  B2C_HEALTH.consecutive++;
+  B2C_HEALTH.message = String((e && e.message) || e || 'unknown error');
+  B2C_HEALTH.phase = String((e && e._phase) || '');
+}
+// What /api/version reports to the client. Two independent ways this goes wrong:
+//   consecutive >= 3  — the sync is erroring. 3 runs at the 45s poll ≈ 2 min, so a single blip
+//                       (a restart, a dropped connection) never nags anyone.
+//   stale             — no successful run in 10 min while the poller should have managed ~13.
+//                       Catches the failure mode a counter cannot see: a query that hangs instead
+//                       of throwing, so nothing ever increments and nothing ever succeeds either.
+const B2C_STALE_MS = 10 * 60 * 1000;
+const _b2cBootAt = Date.now();
+function b2cHealthReport() {
+  // Mirrors relSyncB2C's own guard exactly. If any of these is false the sync never runs at all, so
+  // there is nothing to be unhealthy about — and reporting stale-ness would raise a false alarm ten
+  // minutes after every boot on a deployment that simply has no B2C source.
+  const configured = !!b2cPool && !!pool && DATA_BACKEND === 'relational';
+  if (!configured) return { configured: false, ok: true };
+  const now = Date.now();
+  const sinceOk = B2C_HEALTH.lastOk ? now - B2C_HEALTH.lastOk : null;
+  // Never-succeeded-since-boot only counts as stale once the window has actually elapsed, otherwise
+  // every deploy would alert for its first few seconds.
+  const stale = sinceOk === null ? (now - _b2cBootAt > B2C_STALE_MS) : (sinceOk > B2C_STALE_MS);
+  return {
+    configured: true,
+    ok: B2C_HEALTH.consecutive < 3 && !stale,
+    consecutive: B2C_HEALTH.consecutive,
+    staleMin: sinceOk === null ? null : Math.round(sinceOk / 60000),
+    neverOk: B2C_HEALTH.lastOk === null,
+    message: B2C_HEALTH.message,
+    phase: B2C_HEALTH.phase,
+  };
+}
+
 function mapB2CStatus(s) {
   if (s === 'cancelled') return 'cancelled';
   if (s === 'pending')   return 'pending_approval';
@@ -384,13 +435,14 @@ async function relSyncB2C(singleExtId = null) {
           [String(singleExtId)]
         );
         console.log(`[b2c-sync] booking ${singleExtId} removed in B2C — ${r.rowCount} line(s) marked cancelled`);
+        _b2cHealthOk();
         return;
       }
     } else {
       ({ rows: itemRows } = await b2cPool.query(
         B2C_ITEM_JOIN + ` ORDER BY bi.booking_id, bi.line_no LIMIT 2000`
       ));
-      if (!itemRows.length) return;
+      if (!itemRows.length) { _b2cHealthOk(); return; }
     }
 
     // Paid-amount sanity: the payments/credits sum is read defensively (to_jsonb + jsonb_typeof), so a
@@ -410,7 +462,7 @@ async function relSyncB2C(singleExtId = null) {
       srcHash = crypto.createHash('sha1').update('v' + B2C_MAP_VER + '|' + JSON.stringify(itemRows)).digest('hex');
       try {
         const hr = await pool.query('SELECT data FROM app_state WHERE id=$1', ['b2c_sync_hash']);
-        if (hr.rows[0] && hr.rows[0].data === srcHash) return;   // B2C unchanged since last sync
+        if (hr.rows[0] && hr.rows[0].data === srcHash) { _b2cHealthOk(); return; }   // B2C unchanged since last sync
       } catch (_) {}
     }
 
@@ -663,6 +715,7 @@ async function relSyncB2C(singleExtId = null) {
       // NOTE: history, upgrades, feeitems, partialcancels, adjustments, over are allotment-owned — never touched here.
 
       await client.query('COMMIT');
+      _b2cHealthOk();
       const label = singleExtId ? `b2c_${singleExtId}` : `${b2cBks.length} bookings`;
       console.log(`[b2c-sync] synced ${label}`);
       if (srcHash) {
@@ -681,8 +734,9 @@ async function relSyncB2C(singleExtId = null) {
       client.release();
     }
   } catch (e) {
-    console.error(`[b2c-sync] failed at "${e._phase || 'fetch'}" — ${e.message}`);
-    // Non-fatal: relLoad proceeds even if sync fails
+    _b2cHealthFail(e);
+    console.error(`[b2c-sync] failed at "${e._phase || 'fetch'}" — ${e.message} (consecutive: ${B2C_HEALTH.consecutive})`);
+    // Non-fatal: relLoad proceeds even if sync fails — but the app is now told, via /api/version.
   }
 }
 // read-modify-write the whole schema in ONE transaction, serialized by an advisory lock (no lost saves).
@@ -1256,10 +1310,24 @@ const server = http.createServer((req, res) => {
   }
   if(u === '/api/version'){
     const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(!pool) return J(res,503,{error:'no database'});
+    // b2c rides along here rather than on its own endpoint or on SSE: the client already polls this
+    // every 10s, and — the reason it must NOT be SSE — a broken B2C sync bumps no version, so an
+    // event-driven channel is silent during exactly the outage we need to report.
     pool.query('SELECT version,updated_by,updated_at FROM app_state WHERE id=$1',[STATE_KEY])
-      .then(r=>J(res,200, r.rows[0]?{version:r.rows[0].version,updated_by:r.rows[0].updated_by,updated_at:r.rows[0].updated_at}:{version:0}))
+      .then(r=>J(res,200, Object.assign(
+        r.rows[0]?{version:r.rows[0].version,updated_by:r.rows[0].updated_by,updated_at:r.rows[0].updated_at}:{version:0},
+        { b2c: b2cHealthReport() })))
       .catch(e=>J(res,500,{error:e.message}));
     return;
+  }
+  // Same payload on its own, for uptime checks / curl. 200 when healthy, 503 when not, so an external
+  // monitor can watch it without parsing anything. Open to unauthenticated callers — that's the point
+  // of a health endpoint — but the raw error text is withheld unless you're logged in: a pg failure
+  // message can name internal hosts ("getaddrinfo ENOTFOUND ...railway.internal").
+  if(u === '/api/b2c/health'){
+    const h = b2cHealthReport();
+    if(!session(req)){ delete h.message; delete h.phase; }
+    return J(res, h.ok ? 200 : 503, h);
   }
   if(u === '/api/events'){   // SSE stream · server pushes version-bump events → clients refresh instantly
     const s=session(req); if(!s){ res.writeHead(401); return res.end(); }
