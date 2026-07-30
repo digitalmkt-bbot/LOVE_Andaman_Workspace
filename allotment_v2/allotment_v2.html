@@ -58769,7 +58769,16 @@ function bkV2RenderTab2(){
             <td>${(function(){ if(a.split && a.pick && !a.pick.main && (a.pick.hotel||a.pick.areaId)){ const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null; const _pl=a.pick.hotel||(_pa?_pa.name:'')||'—'; return `<span class="t2-pickcell" title="แยกรับ${a.pick.who?(' · '+esc(a.pick.who)):''} @ ${esc(_pl)}" style="color:#5B289A;font-weight:600">&#128652; ${esc(_pl)}</span>`; } if(_ovTrip && _ovTrip.ovnLeg) return '<span class="t2-pickcell" title="ขากลับ OVN · ลูกค้ากลับจากเกาะโดยเรือ · ไม่มีรถไปรับ" style="color:#8a5500;font-weight:600">&#8617; ไม่มีขารับ · มาจากเกาะ</span>';
               return (bk.hotelName||bk.pickup)?`<span class="t2-pickcell" title="${esc(bk.hotelName||bk.pickup)}">${esc(bk.hotelName||bk.pickup)}</span>`:'<span class="t2-needpickup" title="ยังไม่ได้ระบุจุดรับ · กดแก้ไขเพื่อเพิ่ม">&#9888; no pickup</span>'; })()}</td>
             <td class="t2-c t2-mono">${esc(bk.roomNumber||'')||'<span class="t2-dim">—</span>'}</td>
-            <td>${(a.split&&a.pick&&!a.pick.main)?(function(){const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null;const _zn=_pa?_pa.name:(a.pick.zone||'');return _zn?`<span class="t2-zonetag">${esc(_zn)}</span>`:'<span class="t2-dim">—</span>';})():(bk.pickupArea?`<span class="t2-zonetag">${esc(bk.pickupArea)}</span>`:'<span class="t2-dim">—</span>')}</td>
+            <td>${(a.split&&a.pick&&!a.pick.main)?(function(){const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null;const _zn=_pa?_pa.name:(a.pick.zone||'');return _zn?`<span class="t2-zonetag">${esc(_zn)}</span>`:'<span class="t2-dim">—</span>';})():(function(){
+              // §Zone cell · เดิมอ่าน bk.pickupArea อย่างเดียว → booking B2C ที่ชื่อ area ไม่ตรงกับ sb_pickup_areas
+              // ขึ้น "—" ทั้งที่ลูกค้าเลือก area มาแล้ว. อ่าน pickupAreaId ก่อน (ops แก้เองได้ · sync ไม่ทับ)
+              // แล้วค่อย fallback เป็นข้อความดิบจาก B2C (โชว์แบบจาง = ยังไม่ผูกกับ area ในระบบ)
+              const _pa=(bk.pickupAreaId&&typeof bkV2GetArea==='function')?bkV2GetArea(bk.pickupAreaId):null;
+              if(_pa&&_pa.name) return `<span class="t2-zonetag">${esc(_pa.name)}</span>`;
+              const _raw=(bk.pickupArea||'').trim();
+              if(!_raw) return '<span class="t2-dim">—</span>';
+              return `<span class="t2-zonetag" style="background:#F4F3EF;color:#8A887F;font-style:italic" title="จาก B2C · ยังไม่ผูกกับ pickup area ในระบบ · แก้ไข booking เพื่อเลือก area">${esc(_raw)}</span>`;
+            })()}</td>
             <td>${sendBack==='—'?'<span class="t2-dim">—</span>':sendBack}</td>
             ${vanMode?'':(_2nd?'<td class="t2-req"></td>':`<td class="t2-req"><div class="t2-addoncell"><div class="t2-addoncell-badges">${addonBadges.join('')}${extrasChips}${upgradeChips}${feeChips}</div><div class="t2-addoncell-acts"><button onclick="event.stopPropagation();bkV2ExtraAdd('${esc(bk.id)}')" title="เพิ่ม extra วันเดินทาง (ขายหน้างาน)" class="t2-addbtn" style="color:var(--ink-soft);font-weight:700">+</button><button onclick="event.stopPropagation();bkV2UpgradeOpen('${esc(bk.id)}')" title="อัพเกรด/ขายเพิ่มหน้างาน" class="t2-addbtn t2-addbtn-up">&#11014;</button></div></div></td>`)}
             <td class="t2-req">

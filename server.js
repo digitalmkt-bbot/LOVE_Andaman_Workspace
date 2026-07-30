@@ -146,7 +146,9 @@ const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_re
 //     against the hotel string, so every booking carrying pickupHotel resolved to no area at all.
 // v6: adds the derived paid state (paymentSnapshot.paid / .paidStatus) from Σpayments +
 //     Σcredits_applied vs bookings.total — payment_type alone never says whether money arrived.
-const B2C_MAP_VER = 6;
+// v7: carries the pickup AREA NAME through as pickupArea (ops area name when matched, else B2C's
+//     raw text) — the ops Zone column prints that field, so unmatched rows showed a bare dash.
+const B2C_MAP_VER = 7;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -223,7 +225,7 @@ function b2cLineSeat(item) {
 // new B2C ids already carry their own LOV- prefix); each carries a single trip.
 // isFirstLine: order-level payment (deposit/balance) attaches only to the first line of the order,
 // so a multi-item order's payment isn't multiplied across its item-bookings.
-function mapB2CItemBooking(item, isFirstLine, findAreaId) {
+function mapB2CItemBooking(item, isFirstLine, findArea) {
   const h = item;
   // pg returns date columns as JS Date objects — String(d).slice(0,10) gives "Sat Jul 18",
   // not YYYY-MM-DD, which the frontend cannot parse. Format in local time explicitly.
@@ -286,7 +288,7 @@ function mapB2CItemBooking(item, isFirstLine, findAreaId) {
   //                  address, which simply won't match and leaves the area unassigned.
   //   pickupHotel    the hotel itself, free text, never linked to a hotels table.
   //
-  // Feeding the hotel into findAreaId cannot work — 'Blu Monkey Hub Hotel Phuket' matches no area,
+  // Feeding the hotel into findArea cannot work — 'Blu Monkey Hub Hotel Phuket' matches no area,
   // while 'Phuket Town' matches exactly. Match on the area, store the hotel.
   // hotelName/pickupZone/pickupSelf are B2C-owned (refreshed every sync); pickupAreaId is matched
   // best-effort against sb_pickup_areas and preserved on conflict (see B2C_OPS_BK).
@@ -300,7 +302,12 @@ function mapB2CItemBooking(item, isFirstLine, findAreaId) {
   const pickupLoc  = pickupHotel || pickupArea;
   const noTransfer = det.noTransfer === true;
   const pickupZone = noTransfer ? 'NoTransfer' : String(det.pickupZone || '').trim();
-  const areaId = (typeof findAreaId === 'function') ? findAreaId(pickupArea, pickupZone) : null;
+  const areaHit = (typeof findArea === 'function') ? findArea(pickupArea, pickupZone) : null;
+  const areaId  = areaHit ? areaHit.id : null;
+  // The ops Zone column prints the area NAME (bk.pickupArea), so a B2C row that carried an area but
+  // matched nothing showed a bare dash. Pass the name through either way: the ops area's own wording
+  // when it matched, else B2C's raw text so staff at least see what the customer picked.
+  const areaName = areaHit ? areaHit.name : pickupArea;
   const dropoffLoc = (det.dropoffSame === false) ? String(det.dropoffHotel || det.dropoffLocation || '').trim() : '';
   const trip = {
     id: 'b2c_' + h.booking_id + '_' + h.line_no + '_t0',
@@ -348,6 +355,7 @@ function mapB2CItemBooking(item, isFirstLine, findAreaId) {
     pickupZone: pickupZone,
     pickupSelf: noTransfer,
     pickupAreaId: areaId,
+    pickupArea: areaName,
     dropoffHotelName: dropoffLoc,
     note: ['B2C', h.channel_name, String(h.booking_id), B2C_PRODUCT_NAME[h.product_id] || B2C_PRODUCT_NAME[h.route_id] || h.product_id,
            // Show ops the AREA that failed to match, not the hotel — the area is what they need to
@@ -473,13 +481,15 @@ async function relSyncB2C(singleExtId = null) {
     try { ({ rows: areaRows } = await pool.query(`SELECT id, name, zone FROM ${fqt('sb_pickup_areas')}`)); }
     catch (e) { console.warn('[b2c-sync] pickup areas unavailable — skipping area match:', e.message); }
     const _norm = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
-    const findAreaId = (loc, zone) => {
+    // Returns the matched area ROW (id + name), not just the id — the mapper needs the name for the
+    // ops Zone column as well.
+    const findArea = (loc, zone) => {
       const L = _norm(loc);
       if (!L) return null;
       const cand = areaRows.filter(a => !zone || !a.zone || a.zone === zone);
       let hit = cand.filter(a => _norm(a.name) === L);
       if (!hit.length) hit = cand.filter(a => { const N = _norm(a.name); return N.includes(L) || L.includes(N); });
-      return hit.length === 1 ? hit[0].id : null;
+      return hit.length === 1 ? hit[0] : null;
     };
 
     // Flatten: one allotment booking per line item. Group only to flag the first line of each
@@ -489,7 +499,7 @@ async function relSyncB2C(singleExtId = null) {
     const b2cBks = [];
     for (const items of Object.values(byId)) {
       items.sort((a, b) => Number(a.line_no) - Number(b.line_no));
-      items.forEach((it, i) => b2cBks.push(mapB2CItemBooking(it, i === 0, findAreaId)));
+      items.forEach((it, i) => b2cBks.push(mapB2CItemBooking(it, i === 0, findArea)));
     }
     const tables  = osRepo.decomposeBlob({ sb_bookings: b2cBks });
     const b2cIds  = b2cBks.map(b => b.id);
