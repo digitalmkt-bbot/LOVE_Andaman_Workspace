@@ -28195,7 +28195,13 @@ function _flMaintPartsInner(m){
     + (parts.length?`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 4px;margin-top:4px">
       <span style="font-size:11px;color:${dim.ink2};font-weight:500">Subtotal parts</span>
       <span style="font-size:13px;font-weight:700;font-family:'DM Mono',monospace">฿${partsTotal.toLocaleString()}</span>
-    </div>`:'');
+    </div>`:'')
+    // §costDoubleCount · อะไหล่ที่ซื้อผ่าน memo ของงานนี้ จ่ายเงินไปแล้วตอนตั้ง memo
+    // ถ้าไม่บอกตรงนี้ คนอ่านจะงงว่าทำไมยอดรวมงานไม่เท่ากับ Subtotal parts + memo
+    + (function(){ const cov=(typeof flMaintPartsCoveredByMemo==='function')?flMaintPartsCoveredByMemo(m):0;
+        return cov>0?`<div style="display:flex;align-items:flex-start;gap:6px;padding:7px 10px;margin-top:2px;background:#FBF6EE;border:0.5px solid #EBDCC2;border-radius:8px">
+          <span style="font-size:11px;line-height:1.5;color:#8A5B00">ในนี้ <b style="font-family:'DM Mono',monospace">฿${cov.toLocaleString()}</b> เป็นอะไหล่ที่ซื้อผ่าน memo ของงานนี้ — จ่ายเงินไปแล้วตอนตั้ง memo จึงไม่ถูกนับซ้ำในต้นทุนงาน</span>
+        </div>`:''; })();
 }
 // Surgically refresh ONLY the parts list + subtotal + timeline + count badge — WITHOUT
 // re-rendering the whole detail mount. This keeps the +Withdraw button (and the part picker)
@@ -29471,13 +29477,45 @@ function flMaintRemoveAsset(jobId,idx){
   flSave();flRenderMaintDetail(jobId);
 }
 
+// §costDoubleCount (2026-07-30) · ต้นทุนงานซ่อมเคยนับเงินก้อนเดียวสองรอบ
+//   เส้นทางปกติของอะไหล่คือ  ตั้ง memo ขออนุมัติซื้อ → รับของเข้าคลัง → เบิกออกมาใช้กับงาน
+//   สูตรเดิมบวก partsCost (มูลค่าที่เบิก) + memoCost (เงินที่จ่ายซื้อ) ทั้งที่เป็นของก้อนเดียวกัน
+//   MJ-070 เกียร์มีน้ำเข้า · MO-089 มีอะไหล่ 21 รายการ · เบิกจากคลัง 21 รายการ · ชื่อตรงกันครบ 21/21
+//   → ฿49,434 + ฿53,703.94 = ฿103,138 ทั้งที่จ่ายจริง ฿53,703.94
+//   สแกนทั้งระบบพบ 18 งาน ยอดเกินจริงรวม ฿271,041 (YTD spend เกือบเท่าตัว)
+//   กติกาที่ตกลง: นับจาก memo ที่อนุมัติแล้วเป็นหลัก (เป็นเงินที่จ่ายจริง รวม VAT/ส่วนลด)
+//   อะไหล่ที่เบิกจะนับก็ต่อเมื่อ "ไม่ได้มาจาก memo ของงานนี้" เช่นเบิกของเก่าในคลังที่ซื้อไว้นานแล้ว
+//   จับคู่ด้วยชื่อที่ normalize แล้วแบบตรงตัวเท่านั้น (ตรวจข้อมูลจริง 196/197 รายการเข้าเงื่อนไขนี้
+//   ไม่มีเคสที่ต้องเดา) — ไม่ใช้ substring เพราะชื่อสั้นอย่าง "Key" จะไปชนของอื่นแล้วหักเกิน
+function _flCostNorm(s){ return String(s||'').toLowerCase().replace(/[\s,\.\-_()\/]/g,''); }
 function flMaintCalcCost(id){
   const m=FL_MAINT.find(x=>x.id===id);if(!m)return 0;
-  const partsCost=(m.parts||[]).reduce((s,p)=>s+p.qty*p.cost,0);
-  const memoCost=FL_MEMOS.filter(mo=>mo.maintId===id&&(mo.status==='paid'||mo.status==='received'||mo.status==='approved')).reduce((s,mo)=>s+(mo.amount||0),0);
+  const CNT=['paid','received','approved'];
+  const memos=(FL_MEMOS||[]).filter(mo=>mo.maintId===id && CNT.indexOf(mo.status)>=0);
+  const memoCost=memos.reduce((s,mo)=>s+(mo.amount||0),0);
+  const paidNames=new Set();
+  memos.forEach(mo=>{ if(String(mo.memoType||'')!=='parts') return;
+    (mo.items||[]).forEach(i=>{ const n=_flCostNorm(i.name||i.desc||i.title); if(n) paidNames.add(n); }); });
+  const partsCost=(m.parts||[]).reduce((s,p)=>{
+    const n=_flCostNorm(p.name);
+    if(n && paidNames.has(n)) return s;          // จ่ายไปแล้วผ่าน memo ของงานนี้ · นับซ้ำไม่ได้
+    return s+((p.qty||0)*(p.cost||0));
+  },0);
   const total=partsCost+memoCost;
   m.cost=total; // keep cost synced
   return total;
+}
+// มูลค่าอะไหล่ที่เบิก ซึ่งถูกหักออกเพราะจ่ายผ่าน memo ไปแล้ว · ใช้อธิบายในหน้าจอ
+function flMaintPartsCoveredByMemo(m){
+  if(!m) return 0;
+  const CNT=['paid','received','approved'];
+  const paidNames=new Set();
+  (FL_MEMOS||[]).filter(mo=>mo.maintId===m.id && CNT.indexOf(mo.status)>=0 && String(mo.memoType||'')==='parts')
+    .forEach(mo=>(mo.items||[]).forEach(i=>{ const n=_flCostNorm(i.name||i.desc||i.title); if(n) paidNames.add(n); }));
+  return (m.parts||[]).reduce((s,p)=>{
+    const n=_flCostNorm(p.name);
+    return (n && paidNames.has(n)) ? s+((p.qty||0)*(p.cost||0)) : s;
+  },0);
 }
 
 // Fill the warehouse dropdown based on the selected part's stocks[]
