@@ -159,7 +159,10 @@ const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_re
 //      total — LOV-9930593 imported at 55,984 against a real 54,400.
 // v11: a line with no nationality split of its own (pax_thai = pax_foreign = 0) follows the LEAD's
 //      nationality instead of counting everyone as foreign.
-const B2C_MAP_VER = 11;
+// v12: ignore promo ids like PR-001 on day_trip rows. B2C promoId shares the PR-* prefix used by
+//      private routes; if it leaks into product_id, keep the item as a seat booking and recover the
+//      real day-trip program from details.programId / route_id instead.
+const B2C_MAP_VER = 12;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -309,7 +312,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows) {
   // the item type AND a PR-xxx product/route id (private items carry PR-*; day trips carry POW-*/r*),
   // so a private booking is caught however B2C tags it.
   const isPrivateId = id => /^PR-/i.test(String(id || ''));
-  const isCharter = h.type === 'private_own' || isPrivateId(h.product_id) || isPrivateId(h.route_id);
+  const isPowId = id => /^POW-/i.test(String(id || ''));
   // Pickup (details jsonb) — THREE distinct keys, do not collapse them:
   //   pickupZone     'PK' | 'KL' | 'NoTransfer'  — the coarse transfer region. Casing is
   //                  deliberately inconsistent (two codes, one CamelCase word); match the literal
@@ -327,6 +330,11 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows) {
   let det = h.details;
   if (typeof det === 'string') { try { det = JSON.parse(det); } catch (_) { det = null; } }
   det = det || {};
+  const isCharter = h.type === 'private_own' || (h.type !== 'day_trip' && (isPrivateId(h.product_id) || isPrivateId(h.route_id)));
+  const detailProgramId = String(det.programId || det.productId || det.routeId || '').trim();
+  const routeLookupId = isCharter
+    ? (isPrivateId(h.product_id) ? h.product_id : (isPrivateId(h.route_id) ? h.route_id : detailProgramId))
+    : (isPowId(h.product_id) ? h.product_id : (isPowId(h.route_id) ? h.route_id : detailProgramId));
   const pickupArea  = String(det.pickupLocation || '').trim();   // area name  → matches sb_pickup_areas
   const pickupHotel = String(det.pickupHotel || '').trim();      // hotel      → hotelName
   // Rows predating the pickupHotel field carry only pickupLocation, so fall back to it rather than
@@ -343,7 +351,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows) {
   const dropoffLoc = (det.dropoffSame === false) ? String(det.dropoffHotel || det.dropoffLocation || '').trim() : '';
   const trip = {
     id: 'b2c_' + h.booking_id + '_' + h.line_no + '_t0',
-    routeId: B2C_ROUTE_MAP[h.product_id] || B2C_ROUTE_MAP[h.route_id] || null,
+    routeId: B2C_ROUTE_MAP[routeLookupId] || null,
     date: date,
     bookingMode: isCharter ? 'charter' : 'seat',
     pax: {
@@ -433,8 +441,8 @@ const B2C_ITEM_JOIN = `
          b.passengers    AS bk_passengers,
          b.booked_by_name, b.booked_by_email,
          b.subtotal      AS bk_subtotal,
-         b.discount_amount AS bk_discount,
-         b.surcharge_amount AS bk_surcharge,
+         COALESCE(b.discount_amount, CASE WHEN (to_jsonb(b)->'discount'->>'amount') ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (to_jsonb(b)->'discount'->>'amount')::numeric ELSE 0 END) AS bk_discount,
+         COALESCE(b.surcharge_amount, CASE WHEN (to_jsonb(b)->'surcharge'->>'amount') ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (to_jsonb(b)->'surcharge'->>'amount')::numeric ELSE 0 END) AS bk_surcharge,
          -- Labels for the two adjustment rows ops sees. Same defensive read as the customer block:
          -- flat column or nested object, absent shape degrades to NULL instead of erroring.
          COALESCE(to_jsonb(b)->>'discount_name',  to_jsonb(b)->'discount'->>'name',
@@ -582,6 +590,28 @@ async function b2cPassengerRows(ids) {
   return map;
 }
 
+// Fallback for bookings the view did not supply — because it does not exist yet, or because the
+// read failed. bookings.passengers is already selected by the JOIN as bk_passengers, so the same
+// travellers can be had without any DDL; this mirrors the view's own normalisation (btrim, blanks
+// to empty, ordinal from array position). The view stays the primary path: it is the contract, and
+// it keeps working if B2C ever moves the list off the column.
+function b2cPassengersFromJson(itemRows) {
+  const map = new Map();
+  for (const r of itemRows) {
+    const k = String(r.booking_id);
+    if (map.has(k)) continue;                    // booking-level — the first line of an order has it
+    let ps = r.bk_passengers;
+    if (typeof ps === 'string') { try { ps = JSON.parse(ps); } catch (_) { ps = null; } }
+    if (!Array.isArray(ps)) continue;            // absent / not an array → nothing to import
+    map.set(k, ps.map((p, i) => ({
+      paxNo: i + 1,
+      name: String((p && p.name) || '').trim(),
+      nationality: b2cNatCode(p && p.nationality),
+    })));
+  }
+  return map;
+}
+
 // The list is booking-level with no link back to a booking_item, so it cannot be split per trip.
 // Attach it to line 0 only — the same rule the order-level payment follows — instead of repeating
 // every traveller on each line of a multi-item order.
@@ -656,6 +686,15 @@ async function relSyncB2C(singleExtId = null) {
     // alone meant a list typed in later never synced: booking_items was untouched, so the fast path
     // below skipped the whole upsert.
     const paxByBooking = await b2cPassengerRows([...new Set(itemRows.map(r => String(r.booking_id)))]);
+    // Whatever the view did not answer for, read off the column instead — so traveller names import
+    // with or without the DDL. Merged per booking, never overwriting a view answer.
+    if (paxByBooking.size < new Set(itemRows.map(r => String(r.booking_id))).size) {
+      let filled = 0;
+      for (const [k, v] of b2cPassengersFromJson(itemRows)) {
+        if (!paxByBooking.has(k)) { paxByBooking.set(k, v); if (v.length) filled++; }
+      }
+      if (filled) console.log(`[b2c-sync] traveller list read off bookings.passengers for ${filled} booking(s) the view did not cover`);
+    }
 
     let srcHash = null;
     if (!singleExtId) {
@@ -1509,8 +1548,12 @@ const server = http.createServer((req, res) => {
         out.customer = c.rows[0] ? c.rows[0].r : null;
       }
       const paxMap = await b2cPassengerRows([id]);
-      out.passengers = paxMap.get(String(id)) || [];     // as the view returns them, before mapping
+      out.paxSource = paxMap.has(String(id)) ? B2C_PAX_VIEW : 'bookings.passengers (view unavailable)';
       const j = await b2cPool.query(B2C_ITEM_JOIN + ` AND bi.booking_id = $1 ORDER BY bi.line_no`, [id]);
+      if (!paxMap.has(String(id))) {
+        for (const [k, v] of b2cPassengersFromJson(j.rows)) if (!paxMap.has(k)) paxMap.set(k, v);
+      }
+      out.passengers = paxMap.get(String(id)) || [];     // normalised rows, before mapping
       out.mapped = j.rows.map((r, i) => mapB2CItemBooking(r, i === 0, null, paxMap.get(String(id))));
       J(res,200,out);
     })().catch(e => J(res,500,{error:e.message}));
