@@ -44539,16 +44539,10 @@ function pckGuideJobCss(){ return '<style>'
   +'.sheet.d4 .num{font-size:10.3px}.sheet.d4 .ao{font-size:8.6px;padding:0 4px}.sheet.d4 .tel{font-size:8.6px}.sheet.d4 .lg{font-size:8.2px;padding:0 3px}'
   +'.sheet.d4 .jsbig{font-size:15px}.sheet.d4 th{padding:2px 4px}'
   // ── ปากกาเน้นข้อความ · แถบเครื่องมือไม่ติดไปกับกระดาษ ──
-  +'.hlbar{display:flex;align-items:center;gap:5px;margin-left:20px}'
-  +'.hlbar .lb{font-size:11px;color:#6b7280;font-weight:700}'
-  +'.hlbar button{margin-left:0 !important;width:24px;height:24px;padding:0;border:2px solid #d1d5db;border-radius:50%;cursor:pointer;background:#fff;color:#374151}'
-  +'.hlbar button.on{border-color:#111827;box-shadow:0 0 0 2px rgba(17,24,39,.18)}'
-  +'.hlbar .txt{width:auto !important;border-radius:8px;padding:4px 10px;font:700 11px inherit}'
-  +'tbody tr{cursor:pointer}'
-  +'.jlgd{display:none;gap:7px;margin-top:5px;flex:none;align-items:center;flex-wrap:wrap}'
-  +'.jlgd.on{display:flex}'
-  +'.jlgd .lgi{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;border:1px solid #9ca3af;border-radius:999px;padding:1px 10px 1px 3px}'
-  +'.jlgd .lgd{width:14px;height:14px;border-radius:50%;border:1px solid rgba(0,0,0,.22)}'
+  +'.svc{display:inline-block;border:1.5px solid #111827;border-radius:3px;padding:1px 6px;font-size:10.5px;font-weight:700;margin:0 2px 2px 0;white-space:nowrap}'
+  +'.svc.join{background:#FDE047;border-color:#A16207}'
+  +'.svc.chtr{background:#86EFAC;border-color:#15803D}'
+  +'.nt{line-height:1.3}.nt b{font-weight:700}.nt .n2{color:#374151;font-size:10.5px}'
   +'@media print{body{background:#fff}.tools{display:none}'
     +'.sheet{width:100%;height:210mm;margin:0;box-shadow:none;page-break-after:always}'
     +'.sheet:last-child{page-break-after:auto}}'
@@ -44571,8 +44565,8 @@ function pckGuideJobSheet(bid, date, rows, vd){
   if(M.veg+M.vegan) ml.push('มังสวิรัติ '+(M.veg+M.vegan));
   if(M.halal) ml.push('ฮาลาล '+M.halal);
   var lt=[];
-  if(S.ltJoin) lt.push('จอย '+S.ltJoin+' คน');
-  if(S.ltChtr) lt.push('เหมา '+S.ltChtr+' ลำ');
+  if(S.ltJoin) lt.push('Join '+S.ltJoin+' คน');
+  if(S.ltChtr) lt.push('Charter '+S.ltChtr+' ลำ');
   var vans={}; rows.forEach(function(r){ if(r.vanId) vans[r.vanId]=1; });
 
   // §autoFit (2026-08-01) · เลิกเดาจำนวนบรรทัดจากจำนวนตัวอักษร
@@ -44610,8 +44604,8 @@ function pckGuideJobSheet(bid, date, rows, vd){
     var pickup=b.hotelName||b.pickup||'';
     var room=b.roomNo||b.room||b.roomNumber||'';
     var area=b.pickupArea||(b.pickupAreaId&&typeof bkV2GetArea==='function'?((bkV2GetArea(b.pickupAreaId)||{}).name||''):'')||'';
-    var ao=pckJobAddons(r);
-    var sq=(typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim());
+    var ao=pckJobService(r, date);
+    var nt=pckJobNote(b);
     return '<tr>'
       +'<td><span class="ck"></span></td>'
       +'<td><span class="vc">'+e(b.voucherRef||b.code||'—')+'</span></td>'
@@ -44621,9 +44615,9 @@ function pckGuideJobSheet(bid, date, rows, vd){
       +'<td class="pk">'+e(pickup||area||'ท่าเรือ (มาเอง)')
         +(room?('<span class="pl2"> ห้อง '+e(room)+'</span>'):'')
         +((pickup&&area)?('<span class="pl2"> &middot; '+e(area)+'</span>'):'')+'</td>'
-      +'<td>'+(ao.length?ao.map(function(a){ return '<span class="ao">'+e(a)+'</span>'; }).join(''):'<span class="dash">ไม่มี</span>')+'</td>'
+      +'<td>'+(ao.length?ao.map(function(a){ return '<span class="svc'+(a.k?(' '+a.k):'')+'">'+e(a.t)+'</span>'; }).join(''):'<span class="dash">&mdash;</span>')+'</td>'
       +'<td class="lgc">'+lgHtml+'</td>'
-      +'<td>'+(sq?('<span class="sq">'+e(sq)+'</span>'):'<span class="dash">—</span>')+'</td>'
+      +'<td class="nt">'+(nt.length?nt.map(function(x){ return x.w?('<b>'+e(x.t)+'</b>'):('<span class="n2">'+e(x.t)+'</span>'); }).join('<br>'):'<span class="dash">&mdash;</span>')+'</td>'
       +'</tr>';
   };
 
@@ -44662,13 +44656,13 @@ function pckGuideJobSheet(bid, date, rows, vd){
   });
 
   var THEAD='<thead><tr><th style="width:18px">&#10003;</th><th style="width:7%">Voucher</th>'
-    +'<th style="width:33%">ลูกค้า &middot; ผู้โดยสารทั้งหมด</th>'
+    +'<th style="width:31%">ลูกค้า &middot; ผู้โดยสารทั้งหมด</th>'
     +'<th class="num" style="width:2.8%">AD</th><th class="num" style="width:2.8%">CHD</th>'
     +'<th class="num" style="width:2.8%">INF</th><th class="num" style="width:2.8%">FOC</th>'
-    +'<th style="width:9%">เวลารับ</th><th style="width:19%">สถานที่รับ &middot; โซน</th>'
-    +'<th style="width:9%">Add-on</th>'
+    +'<th style="width:9%">เวลารับ</th><th style="width:18%">สถานที่รับ &middot; โซน</th>'
+    +'<th style="width:10%">Service</th>'
     +'<th class="lgc" style="width:4%">ไกด์</th>'
-    +'<th style="width:8%">Special request</th></tr></thead>';
+    +'<th style="width:9%">Note</th></tr></thead>';
 
   // §sheetColor (2026-08-01) · หัวใบใช้สีประจำเรือชุดเดียวกับหน้าจอ
   //   วางใบงาน 5 ลำเรียงกันบนโต๊ะแล้วต้องหยิบถูกลำโดยไม่ต้องอ่านชื่อ — สีคือตัวช่วยนั้น
@@ -44693,9 +44687,8 @@ function pckGuideJobSheet(bid, date, rows, vd){
     +'<div class="jsc"><span class="jslab">อาหาร</span>'
       +(ml.length?('<span class="jsv">'+ml.join(J)+'</span>'):(M.allergy?'':'<span class="jsnone">ไม่มี</span>'))
       +(M.allergy?('<span class="jwarn">&#9888; แพ้อาหาร '+M.allergy+'</span>'):'')+'</div>'
-    +'<div class="jsc"><span class="jslab">หางยาว</span>'+(lt.length?('<span class="jsv">'+lt.join(J)+'</span>'):'<span class="jsnone">ไม่มี</span>')+'</div>'
+    +'<div class="jsc"><span class="jslab">Longtail</span>'+(lt.length?('<span class="jsv">'+lt.join(J)+'</span>'):'<span class="jsnone">ไม่มี</span>')+'</div>'
     +'</div>'
-    +'<div class="jlgd"></div>'
     +'<div class="tw"><table>'+THEAD+'<tbody>'+body+'</tbody></table></div>'
     +'</div>';
 }
@@ -44710,23 +44703,37 @@ function pckGuideLangs(b){
   var ol=String(gd.otherLang||'').trim(); if(ol) out.push(ol);
   return out;
 }
-// §svcMark · สีบนใบงานไม่ได้มีไว้ตกแต่ง — มันคือการทำเครื่องหมายว่าใครได้ service อะไร
-//   "ไกด์" เฉยๆ ไม่พอ ต้องแยกทีละภาษา เพราะไกด์คนละคนมารับคนละกลุ่ม
-//   ปุ่มจึงสร้างจากภาษาที่มีจริงในวันนั้น ไม่ใช่รายการตายตัว — วันไหนไม่มีรัสเซียก็ไม่มีปุ่มรัสเซีย
-//   ภาษาหลักล็อกสีไว้ เพื่อให้สีเดิมแปลว่าเรื่องเดิมทุกวัน · ภาษาอื่นหยิบจากสีสำรองตามลำดับ
-var PCK_LANG_HL={EN:'#BFDBFE', RU:'#DDD6FE', CN:'#FECACA'};
-var PCK_LANG_HL_POOL=['#CFFAFE','#E9D5FF','#D9F99D','#F5D0FE'];
-function pckHlPalette(rows){
-  var cnt={}, order=[];
-  (rows||[]).forEach(function(r){
-    pckGuideLangs(r.b).forEach(function(c){ if(cnt[c]==null){ cnt[c]=0; order.push(c); } cnt[c]++; });
-  });
-  order.sort(function(a,b){ return cnt[b]-cnt[a] || String(a).localeCompare(String(b)); });
-  var pool=PCK_LANG_HL_POOL.slice(), out=[];
-  order.forEach(function(c){ out.push({c:(PCK_LANG_HL[c]||pool.shift()||'#E5E7EB'), t:'ไกด์ '+c}); });
-  out.push({c:'#FED7AA', t:'หางยาวเหมา'});
-  out.push({c:'#FDE68A', t:'หางยาวจอย'});
-  out.push({c:'#BBF7D0', t:'อื่นๆ'});
+// §svcCol (2026-08-01) · ช่อง Service · สีมาจากข้อมูล ไม่ใช่คนแต้มเอง
+//   ใบงานเดิมของทีม (ไฟล์ Excel เกาะพีพี-เกาะไผ่) ระบายสีที่ "ช่อง Service" ช่องเดียว
+//   เหลือง = เรือหางยาวจอย · เขียว = เรือหางยาวเหมา — ไม่ได้ระบายทั้งแถว
+//   ระบบรู้อยู่แล้วว่าใบไหนมีหางยาวอะไรจาก bkV2AddOnFlags() จึงเติมสีให้เองได้ ไม่ต้องมีใครมานั่งแต้ม
+//   รวมของที่ขายเพิ่มหน้างานด้วย (bkV2LongtailExtraPax / bkV2LongtailCharterExtraBoats)
+function pckJobService(r, date){
+  var b=r.b, rid=(r.t&&r.t.routeId)||'', out=[];
+  var af=(typeof bkV2AddOnFlags==='function')?bkV2AddOnFlags(b,rid):{};
+  var xPax=(typeof bkV2LongtailExtraPax==='function')?(bkV2LongtailExtraPax(b.id,date)||0):0;
+  var xBoat=(typeof bkV2LongtailCharterExtraBoats==='function')?(bkV2LongtailCharterExtraBoats(b.id,date)||0):0;
+  var nBoat=(af.charter?(af.charterQty||1):0)+xBoat;
+  if(nBoat>0) out.push({k:'chtr', t:'Longtail Charter \u00b7 '+nBoat+' \u0e25\u0e33'});
+  else if(af.join || xPax>0) out.push({k:'join', t:'Longtail Join'+(xPax>0?(' +'+xPax):'')});
+  // add-on อื่นที่ไม่ใช่หางยาว · ไม่ลงสี เพราะสีสงวนไว้ให้เรื่องที่ต้องจัดเรือจริง
+  try{ (ckAddonList(b,rid)||[]).forEach(function(a){
+    if(a.kind==='longtail') return;
+    out.push({k:'', t:a.label+(a.note?(' ('+a.note+')'):'')});
+  }); }catch(_){}
+  return out;
+}
+// ช่อง Note · เรื่องที่ไกด์ต้องรู้ก่อนถึงเรือ — อาหารพิเศษมาก่อน แล้วค่อยข้อความอิสระ
+//   อาหารเคยอยู่แต่ยอดรวมหัวใบ ซึ่งบอกว่า "มี 2 คน" แต่ไม่บอกว่าคนไหน
+function pckJobNote(b){
+  var mm=b.specialMeals||{}, out=[];
+  var veg=(+mm.veg||0)+(+mm.vegan||0);
+  if(veg) out.push({w:1, t:'มังสวิรัติ '+veg});
+  if(+mm.halal) out.push({w:1, t:'ฮาลาล '+(+mm.halal)});
+  var al=String(mm.allergies||'').trim();
+  if(al) out.push({w:1, t:'แพ้อาหาร: '+al});
+  var sq=(typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim());
+  if(sq) out.push({w:0, t:sq});
   return out;
 }
 // bid = รหัสเรือ หรือ 'all' (ทุกลำของวันนั้น · 1 ลำ = 1 หน้า)
@@ -44759,19 +44766,11 @@ function pckGuideJobOrder(bid){
     return String(ta||'99').localeCompare(String(tb||'99')) || String(pckBoatName(a)).localeCompare(String(pckBoatName(b)));
   });
   var sheets=order.map(function(k){ return pckGuideJobSheet(k, date, byBoat[k], voidBy[k]); }).join('');
-  var HLP=pckHlPalette(all);
   var title='ใบงานไกด์ · '+(bid==='all'?('ทุกลำ '+order.length+' ใบ'):pckBoatName(bid))+' · '+date;
   var html='<!doctype html><html lang="th"><head><meta charset="utf-8"><title>'+e(title)+'</title>'
     +'<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500;700&display=swap" rel="stylesheet">'
     +pckGuideJobCss()+'</head><body>'
     +'<div class="tools"><b>ใบงานไกด์</b><span class="h">'+e(title)+' · A4 แนวนอน · 1 ลำ = 1 ใบ</span>'
-    // §highlight · ปากกาเน้นข้อความบนจอ · เลือกสี แล้วคลิกแถว · คลิกหัวกลุ่มรถ = ทั้งกลุ่ม
-    //   สีติดไปกับกระดาษตอนพิมพ์ (print-color-adjust:exact ตั้งไว้แล้วที่ body)
-    //   ไม่เก็บลงระบบ — เป็นการทำเครื่องหมายก่อนพิมพ์รอบนั้น เหมือนจับปากกาเน้นบนกระดาษจริง
-    +'<div class="hlbar"><span class="lb">แต้มสี</span>'
-    +HLP.map(function(c){ return '<button class="sw txt" data-c="'+c.c+'" title="คลิกแถวเพื่อทำเครื่องหมาย '+c.t+'" style="background:'+c.c+'">'+e(c.t)+'</button>'; }).join('')
-    +'<button class="sw txt" data-c="" title="ลบสีทีละแถว">ลบ</button>'
-    +'<button class="txt clrall" title="ล้างสีทั้งใบ">ล้างทั้งหมด</button></div>'
     +'<button onclick="window.print()">พิมพ์ / บันทึก PDF</button></div>'
     +sheets
     // §onePage · ตาข่ายสุดท้าย · วัดจริงหลังเรนเดอร์ ถ้าตารางยังล้นกรอบค่อยย่อทั้งใบ
@@ -44790,26 +44789,6 @@ function pckGuideJobOrder(bid){
     +'if(tb.scrollHeight<=tw.clientHeight){ ok=true; break; } }'
     +'if(!ok){ tb.style.zoom=Math.max(.45,(tw.clientHeight-2)/tb.scrollHeight); }});}'
     +'setTimeout(fit,60); window.addEventListener("load",function(){setTimeout(fit,40);});'
-    // ปากกาเน้นข้อความ · เก็บสีที่แต้มไว้ใน data-hl เทียบตรงๆ ได้ ไม่ต้องแปลง rgb กลับเป็น hex
-    +'var LB='+JSON.stringify((function(){ var o={}; HLP.forEach(function(x){ o[x.c]=x.t; }); return o; })())+';'
-    // คำอธิบายสีต้องอยู่บนกระดาษด้วย ไม่งั้นคนถือใบไม่รู้ว่าสีไหนแปลว่าอะไร · ขึ้นเฉพาะสีที่ถูกใช้จริงบนใบนั้น
-    +'function sync(){ Array.prototype.forEach.call(document.querySelectorAll(".sheet"),function(sh){'
-    +'var lg=sh.querySelector(".jlgd"); if(!lg) return; var seen=[], h="";'
-    +'Array.prototype.forEach.call(sh.querySelectorAll("tbody tr[data-hl]"),function(t){ var c=t.getAttribute("data-hl"); if(c&&seen.indexOf(c)<0) seen.push(c); });'
-    +'seen.forEach(function(c){ h+=\'<span class="lgi"><span class="lgd" style="background:\'+c+\'"></span>\'+(LB[c]||"")+"</span>"; });'
-    +'lg.innerHTML=h; if(h) lg.classList.add("on"); else lg.classList.remove("on"); }); fit(); }'
-    +'var C="";document.addEventListener("click",function(ev){'
-    +'var el=ev.target; if(!el||!el.closest) return;'
-    +'var sw=el.closest(".sw");'
-    +'if(sw){ C=sw.getAttribute("data-c")||"";'
-    +'Array.prototype.forEach.call(document.querySelectorAll(".sw"),function(b){ if(b===sw) b.classList.add("on"); else b.classList.remove("on"); }); return; }'
-    +'if(el.closest(".clrall")){ Array.prototype.forEach.call(document.querySelectorAll("tbody tr"),function(t){ t.style.background=""; t.removeAttribute("data-hl"); }); sync(); return; }'
-    +'var tr=el.closest("tbody tr"); if(!tr) return;'
-    +'var put=function(t,c){ t.style.background=c||""; if(c) t.setAttribute("data-hl",c); else t.removeAttribute("data-hl"); };'
-    +'if(tr.classList.contains("grp")){ var n=tr.nextElementSibling;'
-    +'while(n && !n.classList.contains("grp")){ put(n,C); n=n.nextElementSibling; } sync(); return; }'
-    +'put(tr, ((tr.getAttribute("data-hl")||"")===C)?"":C); sync();'
-    +'});'
     +'if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){setTimeout(fit,20);});}'
     +'window.addEventListener("beforeprint",fit);})();<\/script>'
     +'</body></html>';
