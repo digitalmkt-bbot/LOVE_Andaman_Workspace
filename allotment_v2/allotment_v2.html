@@ -44431,7 +44431,7 @@ function pckGuideJobCss(){ return '<style>'
   +'.jsnone{font-size:11px;color:#9ca3af}'
   +'.jwarn{border:1.5px solid #111827;border-radius:999px;padding:0 8px;font-size:10.5px;font-weight:700}'
   // ── ตาราง · 1 บุ๊คกิ้ง = 1 แถว ──
-  +'.tw{flex:1;min-height:0;margin-top:6px}'
+  +'.tw{flex:1;min-height:0;margin-top:6px;overflow:hidden}'
   +'table{width:100%;border-collapse:collapse}'
   +'th{font-size:8px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:3px 5px;border-bottom:1.5px solid #111827}'
   +'td{padding:2.5px 5px;border-bottom:1px solid #e5e7eb;vertical-align:middle;font-size:10.5px;line-height:1.32}'
@@ -44446,7 +44446,7 @@ function pckGuideJobCss(){ return '<style>'
   +'.cnt{color:#9ca3af;font-size:9px;font-family:"DM Mono",monospace;white-space:nowrap}'
   +'.wn{color:#b45309;font-size:9px;font-weight:700;white-space:nowrap}'
   +'.tel{color:#6b7280;font-size:9.5px;white-space:nowrap}'
-  +'.one{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0}'
+  +'.pk{line-height:1.3}'
   +'.num{text-align:center;font-family:"DM Mono",monospace;font-size:11.5px;font-weight:700;padding-left:1px !important;padding-right:1px !important}'
   +'.num.z{color:#d1d5db;font-weight:400}'
   +'.tm{font-family:"DM Mono",monospace;font-weight:700}'
@@ -44536,12 +44536,10 @@ function pckGuideJobSheet(bid, date, rows){
       +'<td><span class="vc">'+e(b.voucherRef||b.code||'—')+'</span></td>'
       +'<td class="nmc">'+names+'</td>'
       +num(pb.ad)+num(pb.chd)+num(pb.inf)+num(pb.foc)
-      +'<td class="one">'+(veh?('<b>'+e(veh.name||r.vanId)+'</b>'+(rd.plate?(' <span class="pl2 mono">'+e(rd.plate)+'</span>'):''))
-                              :'<b>มาเอง</b>')
-        +' <span class="tm">'+e(time)+'</span></td>'
-      +'<td class="one">'+e(pickup||'ท่าเรือ (มาเอง)')
+      +'<td><span class="tm">'+e(time)+'</span>'+(veh?'':'<span class="pl2"> มาเอง</span>')+'</td>'
+      +'<td class="pk">'+e(pickup||area||'ท่าเรือ (มาเอง)')
         +(room?('<span class="pl2"> ห้อง '+e(room)+'</span>'):'')
-        +(area?('<span class="pl2"> &middot; '+e(area)+'</span>'):'')+'</td>'
+        +((pickup&&area)?('<span class="pl2"> &middot; '+e(area)+'</span>'):'')+'</td>'
       +'<td>'+(ao.length?ao.map(function(a){ return '<span class="ao">'+e(a)+'</span>'; }).join(''):'<span class="dash">ไม่มี</span>')+'</td>'
       +'<td>'+(sq?('<span class="sq">'+e(sq)+'</span>'):'<span class="dash">—</span>')+'</td>'
       +'</tr>';
@@ -44582,10 +44580,10 @@ function pckGuideJobSheet(bid, date, rows){
   });
 
   var THEAD='<thead><tr><th style="width:18px">&#10003;</th><th style="width:7%">Voucher</th>'
-    +'<th style="width:33%">ลูกค้า &middot; ผู้โดยสารทั้งหมด</th>'
+    +'<th style="width:34%">ลูกค้า &middot; ผู้โดยสารทั้งหมด</th>'
     +'<th class="num" style="width:2.8%">AD</th><th class="num" style="width:2.8%">CHD</th>'
     +'<th class="num" style="width:2.8%">INF</th><th class="num" style="width:2.8%">FOC</th>'
-    +'<th style="width:13%">รถ &middot; ทะเบียน &middot; เวลา</th><th style="width:16%">สถานที่รับ &middot; โซน</th>'
+    +'<th style="width:7%">เวลารับ</th><th style="width:21%">สถานที่รับ &middot; โซน</th>'
     +'<th style="width:10%">Add-on</th><th style="width:10%">Special request</th></tr></thead>';
 
   return '<div class="sheet d'+dens+'">'
@@ -44655,10 +44653,17 @@ function pckGuideJobOrder(bid){
     +sheets
     // §onePage · ตาข่ายสุดท้าย · วัดจริงหลังเรนเดอร์ ถ้าตารางยังล้นกรอบค่อยย่อทั้งใบ
     // (ระดับความหนาแน่นด้านบนจัดการได้เกือบทุกกรณีแล้ว อันนี้กันเคสสุดโต่ง เช่นชื่อยาวผิดปกติ)
-    +'<script>(function(){setTimeout(function(){'
+    // §onePage · ย่อ "ตาราง" ให้พอดีกรอบที่เหลือ · ห้ามย่อทั้งใบ เพราะย่อทั้งใบจะย่อกรอบลงไปด้วย
+    // สัดส่วนเท่าเดิม แก้อะไรไม่ได้ (บั๊กที่เจอ 1 ส.ค. · ตารางทะลุไปทับช่องลงชื่อท้ายใบ)
+    // รันซ้ำตอนฟอนต์โหลดเสร็จและตอนสั่งพิมพ์ เพราะความสูงจะเปลี่ยนหลังฟอนต์จริงมาถึง
+    +'<script>(function(){function fit(){'
     +'Array.prototype.forEach.call(document.querySelectorAll(".sheet"),function(el){'
     +'var tw=el.querySelector(".tw"), tb=tw&&tw.querySelector("table"); if(!tb) return;'
-    +'if(tb.scrollHeight>tw.clientHeight){ el.style.zoom=Math.max(.55, tw.clientHeight/tb.scrollHeight); }});},80);})();<\\/script>'
+    +'tb.style.zoom=1; var av=tw.clientHeight, need=tb.scrollHeight;'
+    +'if(need>av+1){ tb.style.zoom=Math.max(.45,(av-2)/need); }});}'
+    +'setTimeout(fit,60); window.addEventListener("load",function(){setTimeout(fit,40);});'
+    +'if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){setTimeout(fit,20);});}'
+    +'window.addEventListener("beforeprint",fit);})();<\/script>'
     +'</body></html>';
   var w=window.open('','_blank');
   if(!w){ alert('เบราว์เซอร์บล็อกป๊อปอัป — อนุญาตป๊อปอัปของเว็บนี้ก่อน แล้วกดใหม่'); return; }
