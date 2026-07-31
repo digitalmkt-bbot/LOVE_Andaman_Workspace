@@ -44449,6 +44449,7 @@ function pckGuideJobCss(){ return '<style>'
   +'.pk{line-height:1.3}'
   +'.num{text-align:center;font-family:"DM Mono",monospace;font-size:11.5px;font-weight:700;padding-left:1px !important;padding-right:1px !important}'
   +'.num.z{color:#d1d5db;font-weight:400}'
+  +'.num s{font-size:8px;color:#9ca3af;font-weight:400;margin-left:2px}'
   +'.tm{font-family:"DM Mono",monospace;font-weight:700}'
   +'.pl2{font-size:9.5px;color:#6b7280}'
   +'.ao{display:inline-block;border:1.5px solid #111827;border-radius:3px;padding:0 5px;font-size:9.5px;font-weight:700;margin:0 2px 2px 0;white-space:normal}'
@@ -44512,9 +44513,16 @@ function pckGuideJobSheet(bid, date, rows){
   });
   var dens = _lines<=17 ? 1 : _lines<=24 ? 2 : _lines<=34 ? 3 : 4;
 
-  var num=function(n){ return '<td class="num'+(n?'':' z')+'">'+n+'</td>'; };
   var rowHtml=function(r){
     var b=r.b, pb=ckPaxBreak(r.t.pax), NM=pckJobNames(b);
+    // §sameBasis · แถวต้องใช้ฐานเดียวกับแถบสรุปและหัวกลุ่ม = เดินทางจริง (จอง − ที่หายไปแล้ว)
+    // ถ้ามีคนหาย โชว์ยอดจองเดิมขีดฆ่าไว้ข้างๆ ไกด์จะได้เห็นทั้งสองตัวเลขบนกระดาษ
+    var num=function(k){
+      var bkd=pb[k]||0;
+      var left=(typeof ckPaxLeft==='function')?ckPaxLeft(b,date,k,bkd):bkd;
+      if(left===bkd) return '<td class="num'+(bkd?'':' z')+'">'+bkd+'</td>';
+      return '<td class="num"><b>'+left+'</b><s>'+bkd+'</s></td>';
+    };
     // ทุกอย่างอยู่บรรทัดเดียว · รายชื่อไหลต่อจากชื่อ lead ในช่องเดียวกัน
     // บุ๊คกิ้งปกติ 1-4 ชื่อ = 1 บรรทัดจริง · กรุ๊ปใหญ่ไหลลงบรรทัดถัดไปเท่าที่จำเป็น ไม่ตัดชื่อทิ้ง
     var ph=b.leadPhone||b.phone||'';
@@ -44535,7 +44543,7 @@ function pckGuideJobSheet(bid, date, rows){
       +'<td><span class="ck"></span></td>'
       +'<td><span class="vc">'+e(b.voucherRef||b.code||'—')+'</span></td>'
       +'<td class="nmc">'+names+'</td>'
-      +num(pb.ad)+num(pb.chd)+num(pb.inf)+num(pb.foc)
+      +num('ad')+num('chd')+num('inf')+num('foc')
       +'<td><span class="tm">'+e(time)+'</span>'+(veh?'':'<span class="pl2"> มาเอง</span>')+'</td>'
       +'<td class="pk">'+e(pickup||area||'ท่าเรือ (มาเอง)')
         +(room?('<span class="pl2"> ห้อง '+e(room)+'</span>'):'')
