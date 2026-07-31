@@ -42463,6 +42463,46 @@ var PCK_STAGES=[
 ];
 function pckStage(ck){ if(!ck) return 'wait'; if(ck.at) return 'on'; if(ck.clearedAt) return 'clr'; if(ck.arrivedAt) return 'arr'; return 'wait'; }
 function pckStageRank(k){ return {wait:0, arr:1, clr:2, on:3}[k]||0; }
+// §onsiteVoid (2026-08-01) · ยกเลิกหน้างานจนไม่เหลือคน = ปิดรายการ ไม่ใช่ "รอเช็คอิน"
+//   เดิม CXL/No-show เขียนแค่ events[] ส่วน pckStage() ดูแค่ ck.at / arrivedAt / clearedAt ที่ไม่มีใครแตะ
+//   แถวที่ยกเลิกครบใบจึงค้างเป็น "ยังไม่เช็คอิน" ตลอด พร้อมปุ่มเช็คอินที่ยังกดได้ (เจอจริง 31 ก.ค. · EXC/Queen1)
+//   ตัดสินจาก "เหลือกี่คน" ไม่ใช่ "กด CXL ไหม" — ยกเลิกบางส่วนยังต้องเช็คอินคนที่เหลือตามปกติ
+//   เงินค้างไม่แตะเลย (นโยบายค่าปรับ/ไม่คืนเงิน) ยอดยังโชว์และยังเก็บได้
+function pckVoidInfo(b, date, t){
+  if(!b || !t) return null;
+  var pb=ckPaxBreak(t.pax), booked=0, left=0;
+  ['ad','chd','inf','foc'].forEach(function(k){ var n=pb[k]||0; booked+=n; left+=ckPaxLeft(b,date,k,n); });
+  if(booked<=0 || left>0) return null;
+  var L=ckLostByType(b,date), last=null;
+  var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):((b&&b.ops)||{});
+  [O.vanCheckin,O.pierCheckin].forEach(function(ck){
+    ((ck&&ck.events)||[]).forEach(function(x){ if(!last || String(x.ts||'')>String(last.ts||'')) last=x; });
+  });
+  return { pax:booked, cxl:L.cxl, ns:L.ns, kind:((L.cxl>=L.ns)?'cxl':'ns'),
+           at:(last&&last.at)||'', by:(last&&last.by)||'',
+           reason:(last&&last.reasonCode)?ckReasonLabel(last.reasonCode):'',
+           note:(last&&last.note)||'' };
+}
+function pckVoidOf(r, date){ if(!r) return null; if(r._vd===undefined) r._vd=pckVoidInfo(r.b, date, r.t); return r._vd; }
+function pckVoidLabel(vd){ return (vd&&vd.kind==='ns')?'ไม่มาทั้งใบ':'ยกเลิกหน้างาน'; }
+// ทางกลับของ CXL / No-show ที่กดพลาด · ถอนเหตุการณ์ล่าสุดของด่านนั้นแล้วคืนจำนวนให้
+function ckEventUndo(bkId, date, kind){
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
+  var cur=ckRead(b,date,kind)||{};
+  var ev=(Array.isArray(cur.events)?cur.events.slice():[]);
+  if(!ev.length){ alert('ไม่มีรายการให้ถอน'); return; }
+  var last=ev[ev.length-1];
+  if(!confirm('ถอนรายการล่าสุด?\n'+((last.type==='cxl')?'CXL':'No-show')+' '+(last.pax||0)+' คน · '+((last.at||'')+' '+(last.by||'')))) return;
+  ev.pop();
+  var t=ckTripOn(b,date)||{}, booked=ckBookedPax(t);
+  var cap=(typeof ckCap==='function')?ckCap(b,date,kind,booked):booked;
+  var back=Math.min(cap, ((cur.actualPax!=null)?cur.actualPax:0)+Math.max(0,+last.pax||0));
+  var prev=ev.length?ev[ev.length-1]:null;
+  ckWrite(b, date, kind, { actualPax:back, noShow:Math.max(0,cap-back), expected:cap,
+    at:cur.at||null, by:cur.by||null, events:ev,
+    reasonCode:prev?(prev.reasonCode||''):'', reasonNote:prev?(prev.note||''):'', reasonAt:prev?(prev.at||''):'' });
+  ckPersist(); ckAfter(kind);
+}
 // กดขั้นไหน = ไปถึงขั้นนั้น (ขั้นก่อนหน้าเติมให้อัตโนมัติ) · กดขั้นที่ทำแล้ว = ถอยกลับหนึ่งขั้น
 function pckStageSet(bkId, date, stage){
   var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
@@ -42605,7 +42645,9 @@ function ckEventOpen(bkId, date, kind, type){
   var actual=(cur.actualPax!=null?cur.actualPax:cap);
   if(actual<=0){ alert('ไม่มีคนเหลือให้บันทึกแล้ว (ตอนนี้ 0 คน)'); return; }
   var _pbAll=ckPaxBreak(t.pax); _ckEvBooked=_pbAll;
-  _ckEvMixed=(['ad','chd','inf','foc'].filter(function(k){ return (_pbAll[k]||0)>0; }).length>1);
+  // §evAlwaysSplit (2026-08-01) · บังคับระบุ AD/CHD/INF/FOC ทุกครั้ง
+  //   เดิมใบที่มีประเภทเดียวให้กรอกรวม แล้วเดาประเภทให้ตอนบันทึก — เดาผิดเมื่อไรตัวเลขแยกประเภทเพี้ยนทันที
+  _ckEvMixed=(['ad','chd','inf','foc'].filter(function(k){ return (_pbAll[k]||0)>0; }).length>0);
   _ckEv={bkId:bkId, date:date, kind:kind||'van', type:T.key, code:(T.key==='cxl'?'cancel_onsite':''), note:'', at:ckNowHM()};
   var host=document.getElementById('ck-reason-host');
   if(!host){ host=document.createElement('div'); host.id='ck-reason-host'; document.body.appendChild(host); }
@@ -42682,7 +42724,9 @@ function ckEvSave(){
   var cap=(typeof ckCap==='function')?ckCap(b,st.date,st.kind,booked):booked;
   var cur=ckRead(b,st.date,st.kind)||{};
   var actual=(cur.actualPax!=null?cur.actualPax:cap);
-  var n=Math.max(1,Math.min(actual,_ckEvPax()));
+  var _n0=_ckEvPax();
+  if(_ckEvMixed && _n0<=0){ alert('ระบุจำนวนก่อนครับ — กด + ที่ประเภทที่ยกเลิก (AD / CHD / INF / FOC)'); return; }
+  var n=Math.max(1,Math.min(actual,_n0));
   var atEl=document.getElementById('ck-reason-at'), noteEl=document.getElementById('ck-reason-note');
   var ev=(Array.isArray(cur.events)?cur.events.slice():[]);
   var _pk;
@@ -43817,6 +43861,11 @@ function pckExpected(b, date, booked){
 // จะได้ไม่มีปุ่มสองที่ทำเรื่องเดียวกัน
 function pckStageCell(r, date){
   var e=ckEsc, ck=r.ck||{}, st=pckStage(ck);
+  var _vd=pckVoidOf(r, date);
+  if(_vd) return '<div class="pck-void"><b>&#10007; '+e(pckVoidLabel(_vd))+'</b>'
+    +'<span>'+_vd.pax+' คน · ไม่ต้องเช็คอิน</span>'
+    +((_vd.at||_vd.by)?('<span class="w">'+e((_vd.at||'')+(_vd.by?(' · '+_vd.by):''))+'</span>'):'')
+    +(_vd.reason?('<span>'+e(_vd.reason)+'</span>'):'')+'</div>';
   var due=(r.money?r.money.due:0)||0;
   var hhmm=function(iso){ return pckHHMM(iso); };   // §localTime · ห้ามตัดสตริง ISO ตรงๆ มันเป็น UTC
   var btn=function(S){
@@ -43904,7 +43953,8 @@ function pckFilterBar(all, cnt, nHidden){
     +chip(_pckStat==='on','ขึ้นเรือแล้ว',"pckSetStat('on')",cnt.stat.on,'#0F6E56')
     +'<span class="ck-fsep"></span>'
     +chip(_pckStat==='due','ค้างจ่าย',"pckSetStat('due')",cnt.stat.due,'#7A4A00')
-    +(cnt.stat.ns?chip(_pckStat==='ns','No-show / CXL',"pckSetStat('ns')",cnt.stat.ns,'#A32D2D'):'');
+    +(cnt.stat.ns?chip(_pckStat==='ns','No-show / CXL',"pckSetStat('ns')",cnt.stat.ns,'#A32D2D'):'')
+    +(cnt.stat.vd?chip(_pckStat==='vd','ยกเลิกหน้างาน · ปิดแล้ว',"pckSetStat('vd')",cnt.stat.vd,'#8a8a82'):'');
   var any=(_pckBoat||_pckVan||_pckArr||_pckStat||_pckQ);
   return '<div class="ck-fbar">'
     +'<input id="pck-q" value="'+e(_pckQ)+'" oninput="pckSetQ(this.value)" placeholder="&#128269; voucher / ชื่อ / เบอร์ / โรงแรม" style="height:30px;font-size:11.5px;font-family:inherit;border:1.5px solid '+(_pckQ?'#185FA5':'#E7E4DC')+';border-radius:8px;padding:2px 10px;background:#fff;min-width:210px">'
@@ -44063,8 +44113,10 @@ function pckZoneSub(k){
   return (PCK_ARR_LBL[k]||'')+' · รถของเรารับ';
 }
 function pckAgg(rows){
-  var a={n:rows.length, pax:0, arr:0, clr:0, on:0, due:0, ns:0};
+  var a={n:0, pax:0, arr:0, clr:0, on:0, due:0, ns:0, vd:0};
   rows.forEach(function(r){
+    if(r._vd){ if(r.money && r.money.due>0) a.due+=r.money.due; a.vd++; return; }   // §onsiteVoid · ปิดรายการแล้ว ไม่นับใน ถึงท่า/เคลียร์/ขึ้นเรือ/ที่นั่ง · เงินค้างยังนับ
+    a.n++;
     a.pax+=(r.expect!=null?r.expect:r.booked);
     var s=pckStage(r.ck), k=pckStageRank(s);
     if(k>=1) a.arr++; if(k>=2) a.clr++; if(k>=3) a.on++;
@@ -44098,6 +44150,13 @@ function pckCardCSS(scope){ return ''
   +scope+' .pck-bchip .k{display:block;font-size:10px;opacity:.85;white-space:nowrap}'
   +scope+' .pck-bchip .v{font-family:\'DM Mono\',monospace;font-size:16px;font-weight:800;white-space:nowrap}'
   +scope+' .pck-bbody{padding:0 12px;display:flex;flex-direction:column;gap:12px}'
+  +scope+' .pck-rvoid{background:#FAF9F6}'
+  +scope+' .pck-rvoid td{opacity:.66}'
+  +scope+' .pck-void{display:flex;flex-direction:column;gap:2px;font-size:10.5px;color:#8a8a82;line-height:1.3}'
+  +scope+' .pck-void b{font-size:11px;font-weight:800;color:#A32D2D}'
+  +scope+' .pck-void .w{font-family:\'DM Mono\',monospace;font-size:9.5px;color:#a5a49d}'
+  +scope+' .pck-vdchip{display:inline-block;background:#FBE9E9;color:#A32D2D;border:1px solid #F0C9C9;border-radius:999px;padding:5px 12px;font-size:10.5px;font-weight:800;white-space:nowrap}'
+  +scope+' .pck-undo{border:1px solid #D8D4CA;background:#fff;color:#5F5E5A;border-radius:999px;padding:5px 11px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}'
   +scope+' .pck-jobbtn{align-self:center;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.42);color:inherit;border-radius:12px;padding:9px 14px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}'
   +scope+' .pck-jobbtn:hover{background:rgba(255,255,255,.30)}'
   +scope+' .pck-joball{margin-left:auto;background:#2f2f2b;border:1.5px solid #2f2f2b;color:#fff;border-radius:999px;padding:6px 14px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}'
@@ -44220,10 +44279,11 @@ function pckRowHtml(r, date){
   var tst=ckTimeState(time, date, on);
   var _lost=(typeof ckLostByType==='function')?ckLostByType(b,date):null;
   var _stg=on?'on':pckStage(ck);
+  var _vd=pckVoidOf(r,date);
   var cls='ck-row'+(on?' ck-done':(_stg==='clr'?' ck-plain ck-clr':(_stg==='arr'?' ck-plain ck-arr':' ck-plain')))
     +(((_lost&&_lost.total>0)||noShow>0)?' ck-lost':'')
     +((noShow>=booked&&booked>0&&(on||(_lost&&_lost.total>0)))?' ck-nsfull':'')
-    +(tst.k==='late'?' ck-late':'');
+    +((tst.k==='late'&&!_vd)?' ck-late':'')+(_vd?' pck-rvoid':'');
   var rsn='';
   if(noShow>0){
     var lbl=ck.reasonCode?((ck.reasonAt?ck.reasonAt+' · ':'')+ckReasonLabel(ck.reasonCode)+(ck.reasonNote?(' · '+ck.reasonNote):'')):'⚠ ใส่เหตุผล';
@@ -44259,11 +44319,14 @@ function pckRowHtml(r, date){
    +'<td>'+pckStageCell(r,date)+'</td>'
    +'<td>'+pckMoneyCell(b,date)+'</td>'
    +'<td><div class="pck-acts">'
-     +'<span class="ck-stp" title="จำนวนคนที่ขึ้นเรือจริง"><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\'pier\',-1)">&minus;</button><span class="ck-n">'+actual+'</span><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\'pier\',1)">+</button></span>'
+     +(_vd?('<span class="pck-vdchip" title="'+e(pckVoidLabel(_vd)+' · '+_vd.pax+' คน'+(_vd.reason?(' · '+_vd.reason):''))+'">&#10007; '+e(pckVoidLabel(_vd))+' · ไม่ต้องเช็คอิน</span>'
+       +'<button class="pck-undo" onclick="event.stopPropagation();ckEventUndo(\''+b.id+'\',\''+date+'\',\'pier\')" title="กดผิด? ถอนรายการล่าสุดคืน">&#8630; ถอน</button>'):(
+      '<span class="ck-stp" title="จำนวนคนที่ขึ้นเรือจริง"><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\'pier\',-1)">&minus;</button><span class="ck-n">'+actual+'</span><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\'pier\',1)">+</button></span>'
      +'<span style="display:inline-flex;gap:4px"><button class="ck-ev ck-ev-ns" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'no_show\')" title="ลูกค้าไม่มา · ไม่แจ้งล่วงหน้า">No-show</button>'
      +'<button class="ck-ev ck-ev-cx" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'cxl\')" title="ลูกค้าแจ้งยกเลิกหน้างาน">CXL</button></span>'
      +'<button class="pck-ok'+(on?'':' off')+'" onclick="event.stopPropagation();ckToggle(\''+b.id+'\',\''+date+'\',\'pier\')" title="'+e(on?('เช็คอินขึ้นเรือแล้ว · '+(ck.by||'')+' '+pckHHMM(ck.at)):'กดเพื่อเช็คอินขึ้นเรือ')+'">'
        +'<span class="tk">&#10003;</span><span class="lb">'+(on?e(pckHHMM(ck.at)||'ขึ้นเรือ'):'เช็คอิน')+'</span></button>'
+     ))
      +'<button onclick="event.stopPropagation();pckDetailOpen(\''+b.id+'\')" title="ดูรายละเอียดทั้งหมดของ booking นี้" style="border:1px solid #D8D4CA;background:#fff;color:#4a4a45;border-radius:999px;padding:5px 11px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">รายละเอียด</button>'
      +'</div>'
      +'<div style="text-align:right;font-size:9px;color:#a5a49d;font-family:\'DM Mono\',monospace;margin-top:4px">จอง '+r.booked+(booked!==r.booked?(' · รอรับ '+booked):'')+'</div>'
@@ -44713,18 +44776,19 @@ function renderPierCheckin(){
     row.bid=O.boatId||t.charterBoatId||'';
     row.arr=pckArrivalOf(row);
     row.money=pckMoney(b,date);
+    row._vd=pckVoidInfo(b,date,t);
     all.push(row);
   });
-  var cnt={boat:{},van:{},arr:{},stat:{wait:0,arr:0,clr:0,on:0,due:0,ns:0}};
+  var cnt={boat:{},van:{},arr:{},stat:{wait:0,arr:0,clr:0,on:0,due:0,ns:0,vd:0}};
   var tExpect=0, tNoShow=0, tDue=0, tSlip=0, tFee=0, tGot=0;
   all.forEach(function(r){
     if(r.bid) cnt.boat[r.bid]=(cnt.boat[r.bid]||0)+1;
     if(r.vanId) cnt.van[r.vanId]=(cnt.van[r.vanId]||0)+1;
     cnt.arr[r.arr]=(cnt.arr[r.arr]||0)+1;
-    r.stage=pckStage(r.ck);
+    r.stage=(r._vd?'vd':pckStage(r.ck));
     cnt.stat[r.stage]++;
     if(r.money.due>0 && r.stage!=='on'){ cnt.stat.due++; tDue+=r.money.due; }
-    tExpect+=r.expect;
+    if(r.stage!=='vd') tExpect+=r.expect;
     if(r.ck && r.ck.at) tNoShow+=(r.ck.noShow||0);
     tSlip+=(r.money.noSlip||0); tFee+=(r.money.pierFee||0); tGot+=(r.money.pierPaid||0);
     var L=(typeof ckLostByType==='function')?ckLostByType(r.b,date):null;
@@ -44737,7 +44801,7 @@ function renderPierCheckin(){
     if(_pckArr && r.arr!==_pckArr) return false;
     if(_pckStat){
       var stg=r.stage||pckStage(r.ck);
-      if(['wait','arr','clr','on'].indexOf(_pckStat)>=0 && stg!==_pckStat) return false;
+      if(['wait','arr','clr','on','vd'].indexOf(_pckStat)>=0 && stg!==_pckStat) return false;
       if(_pckStat==='due' && !(r.money.due>0 && stg!=='on')) return false;
       if(_pckStat==='ns'){
         var L=(typeof ckLostByType==='function')?ckLostByType(r.b,date):null;
