@@ -441,8 +441,10 @@ const B2C_ITEM_JOIN = `
          b.passengers    AS bk_passengers,
          b.booked_by_name, b.booked_by_email,
          b.subtotal      AS bk_subtotal,
-         COALESCE(b.discount_amount, CASE WHEN (to_jsonb(b)->'discount'->>'amount') ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (to_jsonb(b)->'discount'->>'amount')::numeric ELSE 0 END) AS bk_discount,
-         COALESCE(b.surcharge_amount, CASE WHEN (to_jsonb(b)->'surcharge'->>'amount') ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (to_jsonb(b)->'surcharge'->>'amount')::numeric ELSE 0 END) AS bk_surcharge,
+         CASE WHEN COALESCE(to_jsonb(b)->>'discount_amount',  to_jsonb(b)->'discount'->>'amount',  '0') ~ '^-?[0-9]+(\\.[0-9]+)?$'
+              THEN COALESCE(to_jsonb(b)->>'discount_amount',  to_jsonb(b)->'discount'->>'amount',  '0')::numeric ELSE 0 END AS bk_discount,
+         CASE WHEN COALESCE(to_jsonb(b)->>'surcharge_amount', to_jsonb(b)->'surcharge'->>'amount', '0') ~ '^-?[0-9]+(\\.[0-9]+)?$'
+              THEN COALESCE(to_jsonb(b)->>'surcharge_amount', to_jsonb(b)->'surcharge'->>'amount', '0')::numeric ELSE 0 END AS bk_surcharge,
          -- Labels for the two adjustment rows ops sees. Same defensive read as the customer block:
          -- flat column or nested object, absent shape degrades to NULL instead of erroring.
          COALESCE(to_jsonb(b)->>'discount_name',  to_jsonb(b)->'discount'->>'name',
