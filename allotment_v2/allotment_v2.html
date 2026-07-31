@@ -44515,8 +44515,6 @@ function pckGuideJobCss(){ return '<style>'
   +'.vc{font-family:"DM Mono",monospace;font-weight:700;font-size:11.5px;word-break:break-all}'
   +'.nmc{line-height:1.35}.nmc b{font-weight:700;font-size:12.2px}'
   +'.ex{color:#374151;font-size:10px}'
-  +'.cnt{color:#9ca3af;font-size:9px;font-family:"DM Mono",monospace;white-space:nowrap}'
-  +'.wn{color:#b45309;font-size:9px;font-weight:700;white-space:nowrap}'
   +'.tel{color:#6b7280;font-size:11px;white-space:nowrap;margin-left:4px}'
   +'.lg{display:inline-block;border:1.5px solid #111827;border-radius:3px;padding:0 5px;margin-right:5px;font-family:"DM Mono",monospace;font-size:9.5px;font-weight:700;vertical-align:1px;white-space:nowrap}'
   +'.pk{line-height:1.3}'
@@ -44594,7 +44592,6 @@ function pckGuideJobSheet(bid, date, rows, vd){
     var lgHtml=_lgs.length?('<span class="lg" title="ไกด์">'+_lgs.map(e).join('/')+'</span>'):'';
     var names=lgHtml+'<b>'+e(NM.lead||'—')+'</b>'
       +(NM.ex.length?('<span class="ex"> &middot; '+NM.ex.map(e).join(' &middot; ')+'</span>'):'')
-      +((NM.tot<=1 && r.booked>1)?('<span class="wn"> มีชื่อเดียว &middot; '+r.booked+' pax</span>'):'')
       +(ph?('<span class="tel mono"> '+e(ph)+'</span>'):'');
     var veh=r.vanId?((typeof vehGet==='function'?vehGet(r.vanId):null)||{}):null;
     var rd=(r.vanId&&typeof vanJobsDriverInfo==='function')?vanJobsDriverInfo(r.vanId,date):{plate:(veh&&veh.plate)||''};
