@@ -44344,14 +44344,19 @@ function pckBoatMeta(rows, date){
     +'<div class="pck-mg"><span class="pck-mlab">หางยาว</span>'+(lt.length?lt.join(J):'<span class="pck-mnone">ไม่มี</span>')+'</div>'
     +'</div>';
 }
-// ══ §guideJob (2026-07-31) · ใบงานไกด์ · Job Order ══
+// ══ §guideJob (2026-07-31 · rev 2026-08-01) · ใบงานไกด์ · Job Order ══
 // กระดาษที่ไกด์ถือขึ้นเรือ — คนละโจทย์กับหน้าจอ จึงออกแบบคนละชุด:
 //   A4 แนวนอน 1 ลำ = 1 ใบ · ขาวดำล้วน (เครื่องพิมพ์ท่าเรือส่วนใหญ่เป็นขาวดำ ถ้าใช้สีแยกความหมาย
 //   พอพิมพ์ออกมาจะกลายเป็นเทาเหมือนกันหมด) · ใช้เส้นกรอบกับน้ำหนักตัวอักษรจัดลำดับแทน
 // เดินตามแบบเดียวกับ bkV2VanJobOrder ของใบงานรถ (css + inner + window.open)
+//
+// §onePage + ข้อมูลครบ · เงื่อนไขสองข้อนี้ชนกันตรงรายชื่อผู้โดยสาร แก้ด้วยการเปลี่ยน "ทิศทางที่ชื่อไหล"
+//   เดิมเรียงชื่อละบรรทัดในคอลัมน์แคบ → 32 ชื่อ = 32 บรรทัด ทั้งที่ใช้ความกว้างจริงไม่ถึง 1 ใน 5
+//   ตอนนี้ไหลต่อกันในช่องเดียวที่กว้าง 33% → 32 ชื่อเหลือ ~2 บรรทัด ไม่ต้องตัดชื่อทิ้งสักคน
+//   1 บุ๊คกิ้ง = 1 แถว · ทุกช่องเป็นบรรทัดเดียว (รถ·ทะเบียน·เวลา / สถานที่·ห้อง·โซน อยู่บรรทัดเดียว)
 
 // ยอดสรุปของกลุ่มแถว · ใช้ร่วมกันระหว่างแถบหัวเรือบนหน้าจอกับใบงานไกด์
-// แยกออกมาเพื่อไม่ให้สองที่คำนวณคนละทางแล้วเลขไม่ตรงกัน (บทเรียนจาก add-on ที่เคยอ่านคนละแหล่ง)
+// แยกออกมาเพื่อไม่ให้สองที่คำนวณคนละทางแล้วเลขไม่ตรงกัน — ไกด์ถือกระดาษออกทะเลไปแล้วแก้ไม่ได้
 function pckTripStats(rows, date){
   var real={ad:0,chd:0,inf:0,foc:0}, book=0, lost=0;
   var lang={}, meal={veg:0,vegan:0,halal:0,allergy:0}, ltJoin=0, ltChtr=0;
@@ -44387,6 +44392,13 @@ function pckJobAddons(r){
     out.push(a.label+(a.note?(' ('+a.note+')'):'')); }); }catch(_){}
   return out;
 }
+// รายชื่อผู้โดยสารทั้งหมดของบุ๊คกิ้ง · ครบทุกคน ไม่ตัด
+function pckJobNames(b){
+  var lead=String((b&&b.leadPax)||'').trim();
+  var ex=((b&&b.passengers)||[]).map(function(p){ return String((p&&p.name)||'').trim(); })
+         .filter(function(n){ return n && n!==lead; });
+  return { lead:lead, ex:ex, tot:(lead?1:0)+ex.length };
+}
 
 function pckGuideJobCss(){ return '<style>'
   +'@page{size:A4 landscape;margin:0}'
@@ -44397,78 +44409,73 @@ function pckGuideJobCss(){ return '<style>'
   +'.tools{position:sticky;top:0;z-index:9;background:#fff;border-bottom:1px solid #d1d5db;padding:10px 18px;display:flex;gap:10px;align-items:center}'
   +'.tools b{font-size:13px}.tools .h{font-size:11px;color:#6b7280}'
   +'.tools button{margin-left:auto;background:#111827;color:#fff;border:none;border-radius:9px;padding:9px 18px;font:700 12px inherit;cursor:pointer}'
-  +'.sheet{width:297mm;height:210mm;overflow:hidden;margin:14px auto;background:#fff;padding:8mm 9mm;box-shadow:0 4px 18px rgba(0,0,0,.12);position:relative}'
-  +'.sheet.d2 td{padding:4px 5px;font-size:10.5px}.sheet.d2 .nm{font-size:11px}.sheet.d2 .nm2{font-size:10px}'
-  +'.sheet.d2 tr.grp td{padding:4px 8px}.sheet.d2 .jline{height:13px}'
-  +'.sheet.d3 td{padding:2.5px 5px;font-size:9.8px;line-height:1.3}.sheet.d3 .nm{font-size:10.5px}.sheet.d3 .nm2{font-size:9.5px}'
-  +'.sheet.d3 tr.grp td{padding:3px 8px}.sheet.d3 .gvan{font-size:11.5px}.sheet.d3 .num{font-size:11.5px}'
-  +'.sheet.d3 .pl2{display:none}.sheet.d3 .ao{font-size:9.5px;padding:0 5px}.sheet.d3 .aoitem{padding:3px 9px;font-size:10px}'
-  +'.sheet.d4 td{padding:1.5px 4px;font-size:9px;line-height:1.25}.sheet.d4 .nm{font-size:9.8px}.sheet.d4 .nm2{display:none}'
-  +'.sheet.d4 tr.grp td{padding:2px 7px}.sheet.d4 .gvan{font-size:10.5px}.sheet.d4 .gmeta{font-size:9.5px}'
-  +'.sheet.d4 .num{font-size:10.5px}.sheet.d4 .pl2{display:none}.sheet.d4 .zn{display:none}'
-  +'.sheet.d4 .ao{font-size:8.8px;padding:0 4px}.sheet.d4 .jsbig{font-size:16px}.sheet.d4 th{padding:3px 4px}'
-  +'.jh{display:flex;align-items:stretch;gap:14px;border-bottom:2.5px solid #111827;padding-bottom:9px}'
-  +'.jlogo{width:46px;height:46px;border:2px solid #111827;border-radius:11px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:none}'
-  +'.jt1{font-size:16px;font-weight:700;line-height:1.15}'
-  +'.jt2{font-size:10.5px;color:#6b7280;margin-top:2px;letter-spacing:.06em;text-transform:uppercase}'
-  +'.jboat{margin-left:auto;text-align:right}'
-  +'.jbname{font-size:22px;font-weight:700;line-height:1;letter-spacing:-.3px}'
-  +'.jbsub{font-size:12px;color:#374151;margin-top:4px}'
-  +'.jdep{display:inline-block;border:2px solid #111827;border-radius:7px;padding:2px 10px;font-weight:700;font-size:14px;margin-left:8px}'
-  +'.jdate{border-left:1px solid #d1d5db;padding-left:14px;margin-left:14px;text-align:right;min-width:150px}'
-  +'.jdlab{font-size:9px;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;font-weight:700}'
-  +'.jdval{font-size:13.5px;font-weight:700;margin-top:1px}'
-  +'.jfill{border-bottom:1px dotted #6b7280;min-width:112px;display:inline-block;height:15px}'
-  +'.jsum{display:flex;align-items:stretch;border:1.5px solid #111827;border-radius:9px;margin-top:9px;overflow:hidden}'
-  +'.jsc{padding:7px 13px;border-right:1px solid #d1d5db;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}'
+  +'.sheet{width:297mm;height:210mm;overflow:hidden;margin:14px auto;background:#fff;padding:7mm 8mm;'
+    +'box-shadow:0 4px 18px rgba(0,0,0,.12);position:relative;display:flex;flex-direction:column}'
+  // ── หัวใบ · ยุบเหลือแถวเดียว ──
+  +'.jh{display:flex;align-items:center;gap:12px;border-bottom:2.5px solid #111827;padding-bottom:6px;flex:none}'
+  +'.jlogo{width:38px;height:38px;border:2px solid #111827;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none}'
+  +'.jt1{font-size:14px;font-weight:700;line-height:1.1}'
+  +'.jt2{font-size:9px;color:#6b7280;letter-spacing:.07em;text-transform:uppercase}'
+  +'.jbname{font-size:19px;font-weight:700;line-height:1;letter-spacing:-.3px}'
+  +'.jbsub{font-size:11px;color:#374151;margin-top:2px}'
+  +'.jdep{display:inline-block;border:2px solid #111827;border-radius:6px;padding:1px 8px;font-weight:700;font-size:12.5px;margin-left:6px}'
+  +'.jdate{margin-left:auto;text-align:right;font-size:11px}'
+  +'.jfill{border-bottom:1px dotted #6b7280;min-width:98px;display:inline-block;height:13px}'
+  // ── แถบสรุป ──
+  +'.jsum{display:flex;border:1.5px solid #111827;border-radius:8px;margin-top:6px;overflow:hidden;flex:none}'
+  +'.jsc{padding:5px 11px;border-right:1px solid #d1d5db;display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}'
   +'.jsc:last-child{border-right:none}'
-  +'.jslab{font-size:8.5px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em}'
-  +'.jsbig{font-size:19px;font-weight:700;line-height:1;font-family:"DM Mono",monospace}'
-  +'.jsv{font-size:12px;font-weight:600}.jsv i{font-style:normal;color:#9ca3af;padding:0 4px}'
-  +'.jsnone{font-size:11.5px;color:#9ca3af}'
-  +'.jwarn{border:1.5px solid #111827;border-radius:999px;padding:1px 9px;font-size:11px;font-weight:700}'
-  +'.aobox{border:1.5px solid #111827;border-radius:9px;margin-top:9px;overflow:hidden}'
-  +'.aohd{background:#111827;color:#fff;font-size:9px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;padding:4px 11px}'
-  +'.aolist{display:grid;grid-template-columns:1fr 1fr}'
-  +'.aoitem{display:flex;align-items:flex-start;gap:8px;padding:5px 11px;border-bottom:1px solid #e5e7eb;font-size:11px}'
-  +'.aoitem:nth-child(odd){border-right:1px solid #e5e7eb}'
-  +'.aovc{font-weight:700;font-size:11px;flex:none;min-width:62px;font-family:"DM Mono",monospace}'
-  +'.aonm{flex:1;min-width:0;color:#374151}'
-  +'.aoval{font-weight:700;text-align:right;flex:none;max-width:47%}'
-  +'table{width:100%;border-collapse:collapse;margin-top:9px}'
-  +'th{font-size:8.5px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:5px 6px;border-bottom:1.5px solid #111827}'
-  +'td{padding:6px;border-bottom:1px solid #e5e7eb;vertical-align:top;font-size:11.5px;line-height:1.4}'
-  +'tr.grp td{background:#f9fafb;border-top:1.5px solid #111827;border-bottom:1px solid #d1d5db;padding:6px 8px}'
-  +'.gvan{display:inline-flex;align-items:center;gap:7px;font-weight:700;font-size:12.5px}'
-  +'.gdot{width:10px;height:10px;border-radius:2px;border:1px solid #111827}'
-  +'.gmeta{font-size:11px;color:#374151}.gmeta b{font-family:"DM Mono",monospace}'
-  +'.gtot{float:right;font-size:11.5px;font-weight:700}'
-  +'.ck{width:15px;height:15px;border:1.5px solid #111827;border-radius:3px;display:block;margin:1px auto 0}'
-  +'.vc{font-family:"DM Mono",monospace;font-weight:700;font-size:11.5px;word-break:break-all}'
-  +'.nm{font-weight:700;font-size:12px}'
-  +'.nm2{font-size:11px;color:#374151;line-height:1.45}'
-  +'.nmore{font-size:10px;color:#6b7280;font-style:italic}'
-  +'.num{text-align:center;font-family:"DM Mono",monospace;font-size:13px;font-weight:700;padding-left:2px !important;padding-right:2px !important}'
+  +'.jslab{font-size:8px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em}'
+  +'.jsbig{font-size:17px;font-weight:700;line-height:1;font-family:"DM Mono",monospace}'
+  +'.jsv{font-size:11.5px;font-weight:600}.jsv i{font-style:normal;color:#9ca3af;padding:0 4px}'
+  +'.jsnone{font-size:11px;color:#9ca3af}'
+  +'.jwarn{border:1.5px solid #111827;border-radius:999px;padding:0 8px;font-size:10.5px;font-weight:700}'
+  // ── ตาราง · 1 บุ๊คกิ้ง = 1 แถว ──
+  +'.tw{flex:1;min-height:0;margin-top:6px}'
+  +'table{width:100%;border-collapse:collapse}'
+  +'th{font-size:8px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:3px 5px;border-bottom:1.5px solid #111827}'
+  +'td{padding:2.5px 5px;border-bottom:1px solid #e5e7eb;vertical-align:middle;font-size:10.5px;line-height:1.32}'
+  +'tr.grp td{background:#f3f4f6;border-top:1.5px solid #111827;border-bottom:1px solid #d1d5db;padding:3px 8px}'
+  +'.gvan{font-weight:700;font-size:11.5px}'
+  +'.gmeta{font-size:10px;color:#374151}.gmeta b{font-family:"DM Mono",monospace}'
+  +'.gtot{float:right;font-size:10.5px;font-weight:700}'
+  +'.ck{width:12px;height:12px;border:1.5px solid #111827;border-radius:2px;display:block;margin:1px auto 0}'
+  +'.vc{font-family:"DM Mono",monospace;font-weight:700;font-size:10.5px;word-break:break-all}'
+  +'.nmc{line-height:1.35}.nmc b{font-weight:700;font-size:10.8px}'
+  +'.ex{color:#374151;font-size:10px}'
+  +'.cnt{color:#9ca3af;font-size:9px;font-family:"DM Mono",monospace;white-space:nowrap}'
+  +'.wn{color:#b45309;font-size:9px;font-weight:700;white-space:nowrap}'
+  +'.tel{color:#6b7280;font-size:9.5px;white-space:nowrap}'
+  +'.one{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0}'
+  +'.num{text-align:center;font-family:"DM Mono",monospace;font-size:11.5px;font-weight:700;padding-left:1px !important;padding-right:1px !important}'
   +'.num.z{color:#d1d5db;font-weight:400}'
-  +'.tm{font-family:"DM Mono",monospace;font-weight:700;font-size:11.5px}'
-  +'.pl{font-weight:600}.pl2{font-size:10.5px;color:#6b7280;margin-top:2px}'
-  +'.zn{display:inline-block;border:1px solid #d1d5db;border-radius:4px;padding:0 6px;font-size:10px;font-weight:700;margin-top:3px}'
-  +'.ao{display:inline-block;border:1.5px solid #111827;border-radius:4px;padding:1px 7px;font-size:10.5px;font-weight:700;margin:0 3px 3px 0;line-height:1.5}'
-  +'.sq{font-weight:600;font-size:11px}'
-  +'.dash{color:#9ca3af}'
-  +'.jf{display:flex;gap:12px;margin-top:12px;align-items:stretch}'
-  +'.jnote{flex:1;border:1.5px solid #111827;border-radius:9px;padding:8px 11px}'
-  +'.jnlab{font-size:8.5px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em}'
-  +'.jline{border-bottom:1px dotted #d1d5db;height:16px;margin-top:6px}'
-  +'.jsign{width:210px;border:1.5px solid #111827;border-radius:9px;padding:8px 11px;text-align:center}'
-  +'.jsbox{height:36px;border-bottom:1px dotted #6b7280;margin:6px 0 4px}'
-  +'.jsname{font-size:10.5px;font-weight:700}'
-  +'.jemg{margin-top:9px;display:flex;gap:16px;flex-wrap:wrap;font-size:10.5px;border-top:1px solid #d1d5db;padding-top:7px;color:#374151}'
+  +'.tm{font-family:"DM Mono",monospace;font-weight:700}'
+  +'.pl2{font-size:9.5px;color:#6b7280}'
+  +'.ao{display:inline-block;border:1.5px solid #111827;border-radius:3px;padding:0 5px;font-size:9.5px;font-weight:700;margin:0 2px 2px 0;white-space:normal}'
+  +'.sq{font-weight:600}.dash{color:#9ca3af}'
+  // ── ท้ายใบ ──
+  +'.jf{display:flex;gap:10px;margin-top:6px;align-items:stretch;flex:none}'
+  +'.jnote{flex:1;border:1.5px solid #111827;border-radius:8px;padding:5px 10px}'
+  +'.jnlab{font-size:8px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em}'
+  +'.jline{border-bottom:1px dotted #d1d5db;height:13px;margin-top:4px}'
+  +'.jsign{width:180px;border:1.5px solid #111827;border-radius:8px;padding:5px 10px;text-align:center}'
+  +'.jsbox{height:26px;border-bottom:1px dotted #6b7280;margin:4px 0 3px}'
+  +'.jsname{font-size:9.5px;font-weight:700}'
+  +'.jemg{margin-top:5px;display:flex;gap:14px;flex-wrap:wrap;font-size:9.5px;border-top:1px solid #d1d5db;padding-top:4px;color:#374151;flex:none}'
   +'.jemg b{font-family:"DM Mono",monospace}'
-  +'.jpage{position:absolute;bottom:5mm;right:10mm;font-size:9px;color:#9ca3af}'
+  // ── ระดับความหนาแน่น · เลือกตามจำนวนบรรทัดที่ต้องวาง ไม่ตัดข้อมูล แค่บีบระยะ ──
+  +'.sheet.d2 td{padding:1.8px 4px;font-size:10px}.sheet.d2 .nmc b{font-size:10.3px}.sheet.d2 .ex{font-size:9.5px}'
+  +'.sheet.d2 tr.grp td{padding:2px 7px}.sheet.d2 .num{font-size:11px}'
+  +'.sheet.d3 td{padding:1.2px 4px;font-size:9.3px;line-height:1.28}.sheet.d3 .nmc b{font-size:9.6px}.sheet.d3 .ex{font-size:8.9px}'
+  +'.sheet.d3 tr.grp td{padding:1.5px 7px}.sheet.d3 .gvan{font-size:10.5px}.sheet.d3 .gmeta{font-size:9px}'
+  +'.sheet.d3 .num{font-size:10.3px}.sheet.d3 .ao{font-size:8.8px;padding:0 4px}.sheet.d3 .tel{display:none}'
+  +'.sheet.d4 td{padding:.8px 3px;font-size:8.6px;line-height:1.24}.sheet.d4 .nmc b{font-size:8.9px}.sheet.d4 .ex{font-size:8.2px}'
+  +'.sheet.d4 tr.grp td{padding:1px 6px}.sheet.d4 .gvan{font-size:9.8px}.sheet.d4 .gmeta{font-size:8.5px}'
+  +'.sheet.d4 .num{font-size:9.6px}.sheet.d4 .ao{font-size:8px;padding:0 3px}.sheet.d4 .tel{display:none}'
+  +'.sheet.d4 .jsbig{font-size:15px}.sheet.d4 th{padding:2px 4px}'
   +'@media print{body{background:#fff}.tools{display:none}'
-    +'.sheet{width:100%;height:210mm;margin:0;box-shadow:none;padding:8mm 9mm;page-break-after:always;overflow:hidden}'
-    +'.sheet:last-child{page-break-after:auto}tr{page-break-inside:avoid}}'
+    +'.sheet{width:100%;height:210mm;margin:0;box-shadow:none;page-break-after:always}'
+    +'.sheet:last-child{page-break-after:auto}}'
   +'</style>';
 }
 
@@ -44492,42 +44499,30 @@ function pckGuideJobSheet(bid, date, rows){
   if(S.ltChtr) lt.push('เหมา '+S.ltChtr+' ลำ');
   var vans={}; rows.forEach(function(r){ if(r.vanId) vans[r.vanId]=1; });
 
-  // กล่องเตรียม add-on · ไกด์เตรียมของก่อนขึ้นเรือได้จบในที่เดียว ไม่ต้องไล่หาทีละแถว
-  var withAo=rows.map(function(r){ return {r:r, a:pckJobAddons(r)}; }).filter(function(x){ return x.a.length; });
-  var aoBox='';
-  if(withAo.length){
-    aoBox='<div class="aobox"><div class="aohd">Add-on ที่ต้องเตรียม · '+withAo.length+' booking</div><div class="aolist">'
-      +withAo.map(function(x){ return '<div class="aoitem"><span class="ck"></span>'
-        +'<span class="aovc">'+e(x.r.b.voucherRef||x.r.b.code||'—')+'</span>'
-        +'<span class="aonm">'+e(x.r.b.leadPax||'')+'</span>'
-        +'<span class="aoval">'+e(x.a.join(' + '))+'</span></div>'; }).join('')
-      +'</div></div>';
-  }
-
-  // §onePage · A4 แนวนอนสูง 210mm · หัว+สรุป+ท้ายใบกินคงที่ ที่เหลือคือแถว
-  //   จำนวน "บรรทัด" ที่ต้องวาง = แถวลูกค้า + หัวกลุ่มรถ (แต่ละกลุ่มกินราวหนึ่งแถว)
-  //   เลือกระดับความหนาแน่นตั้งแต่ตอนสร้าง จะได้ไม่ต้องพึ่งการย่อทั้งหน้าซึ่งทำให้อ่านยาก
+  // §onePage · ประมาณจำนวนบรรทัดที่ต้องวาง แล้วเลือกระดับความหนาแน่น
+  //   ชื่อไหลต่อกันในช่องกว้าง 33% (~92mm) รับได้ราว 95 ตัวอักษรต่อบรรทัด
+  //   ไม่ตัดข้อมูล — บีบระยะกับขนาดตัวอักษรอย่างเดียว
   var _ngrp=(function(){ var seen={}, n=0;
     rows.forEach(function(r){ var k=r.arr+'|'+(r.vanId||'own'); if(!seen[k]){ seen[k]=1; n++; } }); return n; })();
-  var _lines=rows.length+_ngrp;
-  var dens = _lines<=13 ? 1 : _lines<=20 ? 2 : _lines<=30 ? 3 : 4;
-  // ชื่อผู้โดยสารกินความสูงมากที่สุด · ลำที่คนเยอะจึงเหลือชื่อ lead แล้วแนบใบรายชื่อไปต่างหาก
-  var SHOW = dens===1 ? 6 : dens===2 ? 3 : dens===3 ? 1 : 0;
+  var _lines=_ngrp;
+  rows.forEach(function(r){
+    var NM=pckJobNames(r.b);
+    var chars=NM.lead.length+NM.ex.reduce(function(s2,n){ return s2+n.length+3; },0);
+    _lines += Math.max(1, Math.ceil(chars/95));
+  });
+  var dens = _lines<=17 ? 1 : _lines<=24 ? 2 : _lines<=34 ? 3 : 4;
+
   var num=function(n){ return '<td class="num'+(n?'':' z')+'">'+n+'</td>'; };
   var rowHtml=function(r){
-    var b=r.b, pb=ckPaxBreak(r.t.pax);
-    var lead=String(b.leadPax||'').trim();
-    var ex=(b.passengers||[]).map(function(p){ return String((p&&p.name)||'').trim(); })
-            .filter(function(n){ return n && n!==lead; });
-    var shown=ex.slice(0,SHOW);
-    var nm='<div class="nm">'+e(lead||'—')+'</div>'
-      +(shown.length?('<div class="nm2">'+shown.map(e).join('<br>')+'</div>'):'');
-    var totNames=(lead?1:0)+ex.length;
-    if(ex.length>SHOW) nm+='<div class="nmore">+ อีก '+(ex.length-SHOW)+' ชื่อ (ดูใบรายชื่อแนบ)</div>';
-    else if(totNames<=1 && r.booked>1) nm+='<div class="nmore">มีชื่อเดียว · '+r.booked+' pax</div>';
+    var b=r.b, pb=ckPaxBreak(r.t.pax), NM=pckJobNames(b);
+    // ทุกอย่างอยู่บรรทัดเดียว · รายชื่อไหลต่อจากชื่อ lead ในช่องเดียวกัน
+    // บุ๊คกิ้งปกติ 1-4 ชื่อ = 1 บรรทัดจริง · กรุ๊ปใหญ่ไหลลงบรรทัดถัดไปเท่าที่จำเป็น ไม่ตัดชื่อทิ้ง
     var ph=b.leadPhone||b.phone||'';
-    if(ph) nm+='<div class="pl2 mono">'+e(ph)+'</div>';
-
+    var names='<b>'+e(NM.lead||'—')+'</b>'
+      +(NM.ex.length?('<span class="ex"> &middot; '+NM.ex.map(e).join(' &middot; ')+'</span>'):'')
+      +(NM.tot>1?('<span class="cnt"> '+NM.tot+' ชื่อ</span>'):'')
+      +((NM.tot<=1 && r.booked>1)?('<span class="wn"> มีชื่อเดียว &middot; '+r.booked+' pax</span>'):'')
+      +(ph?('<span class="tel mono"> '+e(ph)+'</span>'):'');
     var veh=r.vanId?((typeof vehGet==='function'?vehGet(r.vanId):null)||{}):null;
     var rd=(r.vanId&&typeof vanJobsDriverInfo==='function')?vanJobsDriverInfo(r.vanId,date):{plate:(veh&&veh.plate)||''};
     var time=r.O.pickupTimeFinal||r.t.pickupTime||'—';
@@ -44538,15 +44533,15 @@ function pckGuideJobSheet(bid, date, rows){
     var sq=(typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim());
     return '<tr>'
       +'<td><span class="ck"></span></td>'
-      +'<td><div class="vc">'+e(b.voucherRef||b.code||'—')+'</div></td>'
-      +'<td>'+nm+'</td>'
+      +'<td><span class="vc">'+e(b.voucherRef||b.code||'—')+'</span></td>'
+      +'<td class="nmc">'+names+'</td>'
       +num(pb.ad)+num(pb.chd)+num(pb.inf)+num(pb.foc)
-      +'<td>'+(veh?('<div class="pl">'+e(veh.name||r.vanId)+'</div>'+(rd.plate?('<div class="pl2 mono">'+e(rd.plate)+'</div>'):''))
-                  :'<div class="pl">มาเอง</div>')
-        +'<div class="tm" style="margin-top:3px">'+e(time)+'</div></td>'
-      +'<td><div class="pl">'+e(pickup||'ท่าเรือ (มาเอง)')+'</div>'
-        +(room?('<div class="pl2">ห้อง <b class="mono">'+e(room)+'</b></div>'):'')
-        +(area?('<div class="zn">'+e(area)+'</div>'):'')+'</td>'
+      +'<td class="one">'+(veh?('<b>'+e(veh.name||r.vanId)+'</b>'+(rd.plate?(' <span class="pl2 mono">'+e(rd.plate)+'</span>'):''))
+                              :'<b>มาเอง</b>')
+        +' <span class="tm">'+e(time)+'</span></td>'
+      +'<td class="one">'+e(pickup||'ท่าเรือ (มาเอง)')
+        +(room?('<span class="pl2"> ห้อง '+e(room)+'</span>'):'')
+        +(area?('<span class="pl2"> &middot; '+e(area)+'</span>'):'')+'</td>'
       +'<td>'+(ao.length?ao.map(function(a){ return '<span class="ao">'+e(a)+'</span>'; }).join(''):'<span class="dash">ไม่มี</span>')+'</td>'
       +'<td>'+(sq?('<span class="sq">'+e(sq)+'</span>'):'<span class="dash">—</span>')+'</td>'
       +'</tr>';
@@ -44569,62 +44564,59 @@ function pckGuideJobSheet(bid, date, rows){
         || String(pckVanName(vgs[a].vid)).localeCompare(String(pckVanName(vgs[b].vid)));
     });
     vord.forEach(function(vk){
-      var vg=vgs[vk], st=pckTripStats(vg.rows, date);
-      var head;
+      var vg=vgs[vk], st=pckTripStats(vg.rows, date), head;
       if(vg.vid){
         var veh=(typeof vehGet==='function'?vehGet(vg.vid):null)||{};
         var rd=(typeof vanJobsDriverInfo==='function')?vanJobsDriverInfo(vg.vid,date):{driver:'',phone:'',plate:veh.plate||''};
-        head='<span class="gvan"><span class="gdot"></span>'+e(veh.name||vg.vid)+'</span>'
-          +' <span class="gmeta">'+(rd.plate?('ทะเบียน <b>'+e(rd.plate)+'</b>'):'')
-          +(rd.driver?(' · คนขับ '+e(rd.driver)):'')+(rd.phone?(' · <b>'+e(rd.phone)+'</b>'):'')+'</span>';
+        head='<span class="gvan">'+e(veh.name||vg.vid)+'</span> <span class="gmeta">'
+          +(rd.plate?('ทะเบียน <b>'+e(rd.plate)+'</b>'):'')
+          +(rd.driver?(' &middot; '+e(rd.driver)):'')+(rd.phone?(' &middot; <b>'+e(rd.phone)+'</b>'):'')+'</span>';
       } else {
-        head='<span class="gvan"><span class="gdot"></span>'+(zk==='NOVAN'?'ยังไม่จัดรถ':'มาเอง / เอเย่นต์ส่งเอง')+'</span>'
+        head='<span class="gvan">'+(zk==='NOVAN'?'ยังไม่จัดรถ':'มาเอง / เอเย่นต์ส่งเอง')+'</span>'
           +' <span class="gmeta">ไม่มีรถของเรา — เช็คว่ามาถึงท่าหรือยัง</span>';
       }
       body+='<tr class="grp"><td colspan="11">'+head
-        +'<span class="gtot">'+e(pckZoneLabel(zk))+' · '+vg.rows.length+' booking · '+st.real.all+' pax</span></td></tr>';
+        +'<span class="gtot">'+e(pckZoneLabel(zk))+' &middot; '+vg.rows.length+' booking &middot; '+st.real.all+' pax</span></td></tr>';
       vg.rows.forEach(function(r){ body+=rowHtml(r); });
     });
   });
 
-  var THEAD='<thead><tr>'
-    +'<th style="width:22px">&#10003;</th><th style="width:8%">Voucher</th><th style="width:18%">ลูกค้า</th>'
-    +'<th class="num" style="width:3.4%">AD</th><th class="num" style="width:3.4%">CHD</th>'
-    +'<th class="num" style="width:3.4%">INF</th><th class="num" style="width:3.4%">FOC</th>'
-    +'<th style="width:11%">รถที่รับ / เวลา</th><th style="width:17%">สถานที่รับ · โซน</th>'
-    +'<th style="width:13%">Add-on ที่ต้องเตรียม</th><th style="width:12%">Special request</th></tr></thead>';
+  var THEAD='<thead><tr><th style="width:18px">&#10003;</th><th style="width:7%">Voucher</th>'
+    +'<th style="width:33%">ลูกค้า &middot; ผู้โดยสารทั้งหมด</th>'
+    +'<th class="num" style="width:2.8%">AD</th><th class="num" style="width:2.8%">CHD</th>'
+    +'<th class="num" style="width:2.8%">INF</th><th class="num" style="width:2.8%">FOC</th>'
+    +'<th style="width:13%">รถ &middot; ทะเบียน &middot; เวลา</th><th style="width:16%">สถานที่รับ &middot; โซน</th>'
+    +'<th style="width:10%">Add-on</th><th style="width:10%">Special request</th></tr></thead>';
 
   return '<div class="sheet d'+dens+'">'
     +'<div class="jh"><div class="jlogo">LA</div>'
     +'<div><div class="jt1">ใบงานไกด์</div><div class="jt2">Guide Job Order</div></div>'
-    +'<div class="jboat"><div class="jbname">'+e(boat.name||bid)+'</div>'
+    +'<div style="margin-left:22px"><div class="jbname">'+e(boat.name||bid)+'</div>'
       +'<div class="jbsub">'+e(rt.name||rid||'—')+(dep?('<span class="jdep">ออก '+e(dep)+'</span>'):'')+'</div></div>'
-    +'<div class="jdate"><div class="jdlab">วันเดินทาง</div><div class="jdval">'+e(dTh)+'</div>'
-      +'<div class="jdlab" style="margin-top:7px">ไกด์ผู้รับงาน</div><div><span class="jfill"></span></div></div></div>'
+    +'<div class="jdate"><div>'+e(dTh)+'</div>'
+      +'<div style="margin-top:3px">ไกด์ <span class="jfill"></span></div></div></div>'
     +'<div class="jsum">'
     +'<div class="jsc"><span class="jslab">รวม</span><span class="jsbig">'+t.all+'</span><span class="jsv" style="color:#6b7280">pax</span>'
       +'<span class="jsv">AD '+t.ad+J+'CHD '+t.chd+J+'INF '+t.inf+J+'FOC '+t.foc+'</span>'
-      +(S.lost>0?('<span class="jwarn">จอง '+S.book+' · หาย '+S.lost+'</span>'):'')+'</div>'
-    +'<div class="jsc"><span class="jslab">booking</span><span class="jsv">'+rows.length+' ใบ</span>'
-      +'<span class="jslab" style="margin-left:6px">รถ</span><span class="jsv">'+Object.keys(vans).length+' คัน</span></div>'
+      +(S.lost>0?('<span class="jwarn">จอง '+S.book+' &middot; หาย '+S.lost+'</span>'):'')+'</div>'
+    +'<div class="jsc"><span class="jslab">booking</span><span class="jsv">'+rows.length+'</span>'
+      +'<span class="jslab" style="margin-left:5px">รถ</span><span class="jsv">'+Object.keys(vans).length+' คัน</span></div>'
     +'<div class="jsc"><span class="jslab">ไกด์</span>'+(langs?('<span class="jsv">'+langs+'</span>'):'<span class="jsnone">—</span>')+'</div>'
-    +'<div class="jsc"><span class="jslab">อาหารพิเศษ</span>'
+    +'<div class="jsc"><span class="jslab">อาหาร</span>'
       +(ml.length?('<span class="jsv">'+ml.join(J)+'</span>'):(M.allergy?'':'<span class="jsnone">ไม่มี</span>'))
       +(M.allergy?('<span class="jwarn">&#9888; แพ้อาหาร '+M.allergy+'</span>'):'')+'</div>'
     +'<div class="jsc"><span class="jslab">หางยาว</span>'+(lt.length?('<span class="jsv">'+lt.join(J)+'</span>'):'<span class="jsnone">ไม่มี</span>')+'</div>'
     +'</div>'
-    +aoBox
-    +'<table>'+THEAD+'<tbody>'+body+'</tbody></table>'
+    +'<div class="tw"><table>'+THEAD+'<tbody>'+body+'</tbody></table></div>'
     +'<div class="jf">'
-    +'<div class="jnote"><div class="jnlab">บันทึกระหว่างเดินทาง / เหตุการณ์ที่ต้องรายงาน</div>'
-      +new Array(dens>=3?2:4).join('<div class="jline"></div>')+'</div>'
+    +'<div class="jnote"><div class="jnlab">บันทึกระหว่างเดินทาง</div>'
+      +new Array(dens>=3?2:3).join('<div class="jline"></div>')+'</div>'
     +'<div class="jsign"><div class="jnlab">ไกด์ผู้รับงาน</div><div class="jsbox"></div><div class="jsname">ลงชื่อ / วันที่</div></div>'
-    +'<div class="jsign"><div class="jnlab">กัปตันเรือ</div><div class="jsbox"></div><div class="jsname">ลงชื่อรับผู้โดยสารครบ</div></div>'
+    +'<div class="jsign"><div class="jnlab">กัปตันเรือ</div><div class="jsbox"></div><div class="jsname">รับผู้โดยสารครบ</div></div>'
     +'</div>'
     +'<div class="jemg"><span>ศูนย์ปฏิบัติการ <b>076-XXX-XXX</b></span><span>ฉุกเฉินทางทะเล <b>1196</b></span>'
       +'<span>กู้ชีพ <b>1669</b></span><span>ตำรวจท่องเที่ยว <b>1155</b></span>'
-      +'<span style="margin-left:auto;color:#9ca3af">พิมพ์จากระบบ LOVE Andaman · ใบงานนี้ต้องส่งคืนพร้อมลายเซ็นกัปตัน</span></div>'
-    +'<div class="jpage">'+e(boat.name||bid)+' · '+e(dTh)+'</div>'
+      +'<span style="margin-left:auto;color:#9ca3af">ส่งคืนพร้อมลายเซ็นกัปตัน &middot; '+e(boat.name||bid)+'</span></div>'
     +'</div>';
 }
 
@@ -44661,11 +44653,12 @@ function pckGuideJobOrder(bid){
     +'<div class="tools"><b>ใบงานไกด์</b><span class="h">'+e(title)+' · A4 แนวนอน · 1 ลำ = 1 ใบ</span>'
     +'<button onclick="window.print()">พิมพ์ / บันทึก PDF</button></div>'
     +sheets
-    // §onePage · ตาข่ายสุดท้าย · วัดจริงหลังเรนเดอร์ ถ้ายังเกิน 210mm ค่อยย่อทั้งใบ
-    // (ระดับความหนาแน่นด้านบนควรจัดการได้เกือบทุกกรณีแล้ว อันนี้ไว้กันเคสสุดโต่ง)
-    +'<script>(function(){var PAGE=Math.round(210*96/25.4)-2;'
+    // §onePage · ตาข่ายสุดท้าย · วัดจริงหลังเรนเดอร์ ถ้าตารางยังล้นกรอบค่อยย่อทั้งใบ
+    // (ระดับความหนาแน่นด้านบนจัดการได้เกือบทุกกรณีแล้ว อันนี้กันเคสสุดโต่ง เช่นชื่อยาวผิดปกติ)
+    +'<script>(function(){setTimeout(function(){'
     +'Array.prototype.forEach.call(document.querySelectorAll(".sheet"),function(el){'
-    +'var h=el.scrollHeight; if(h>PAGE){ el.style.zoom=Math.max(.5,PAGE/h); }});})();<\/script>'
+    +'var tw=el.querySelector(".tw"), tb=tw&&tw.querySelector("table"); if(!tb) return;'
+    +'if(tb.scrollHeight>tw.clientHeight){ el.style.zoom=Math.max(.55, tw.clientHeight/tb.scrollHeight); }});},80);})();<\\/script>'
     +'</body></html>';
   var w=window.open('','_blank');
   if(!w){ alert('เบราว์เซอร์บล็อกป๊อปอัป — อนุญาตป๊อปอัปของเว็บนี้ก่อน แล้วกดใหม่'); return; }
