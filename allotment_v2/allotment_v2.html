@@ -44543,7 +44543,7 @@ function pckGuideJobCss(){ return '<style>'
   +'</style>';
 }
 
-function pckGuideJobSheet(bid, date, rows){
+function pckGuideJobSheet(bid, date, rows, vd){
   var e=ckEsc;
   var boat=(typeof getBoat==='function'?getBoat(bid):null)||{};
   var rid=(rows[0]&&rows[0].t&&rows[0].t.routeId)||'';
@@ -44660,7 +44660,8 @@ function pckGuideJobSheet(bid, date, rows){
     +'<div class="jsum">'
     +'<div class="jsc"><span class="jslab">รวม</span><span class="jsbig">'+t.all+'</span><span class="jsv" style="color:#6b7280">pax</span>'
       +'<span class="jsv">AD '+t.ad+J+'CHD '+t.chd+J+'INF '+t.inf+J+'FOC '+t.foc+'</span>'
-      +(S.lost>0?('<span class="jwarn">จอง '+S.book+' &middot; หาย '+S.lost+'</span>'):'')+'</div>'
+      +(S.lost>0?('<span class="jwarn">จอง '+S.book+' &middot; หาย '+S.lost+'</span>'):'')
+      +((vd&&vd.n)?('<span class="jwarn">ยกเลิกหน้างาน '+vd.n+' ใบ &middot; '+vd.pax+' คน</span>'):'')+'</div>'
     +'<div class="jsc"><span class="jslab">booking</span><span class="jsv">'+rows.length+'</span>'
       +'<span class="jslab" style="margin-left:5px">รถ</span><span class="jsv">'+Object.keys(vans).length+' คัน</span></div>'
     +'<div class="jsc"><span class="jslab">ไกด์</span>'+(langs?('<span class="jsv">'+langs+'</span>'):'<span class="jsnone">—</span>')+'</div>'
@@ -44676,7 +44677,9 @@ function pckGuideJobSheet(bid, date, rows){
 // bid = รหัสเรือ หรือ 'all' (ทุกลำของวันนั้น · 1 ลำ = 1 หน้า)
 function pckGuideJobOrder(bid){
   var date=_pckDate, e=ckEsc;
-  var all=[];
+  // §onsiteVoid · ใบที่ยกเลิกจนไม่เหลือคนไม่ต้องพิมพ์ลงใบงาน — ไกด์จะได้ไม่ยืนรอคนที่ไม่มาแล้ว
+  //   เก็บแค่ยอดรวมไว้ขึ้นหัวใบ เผื่อพิมพ์ซ้ำหลังเกิดเรื่องแล้วเลขจะได้อธิบายตัวเองได้
+  var all=[], voidBy={};
   (SB_BOOKINGS||[]).forEach(function(b){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
@@ -44689,6 +44692,8 @@ function pckGuideJobOrder(bid){
     row.arr=pckArrivalOf(row);
     if(!row.bid) return;                       // ยังไม่จัดเรือ = ยังไม่มีใบงาน
     if(bid!=='all' && row.bid!==bid) return;
+    var _vd=pckVoidInfo(b,date,t);
+    if(_vd){ var V=voidBy[row.bid]=(voidBy[row.bid]||{n:0,pax:0}); V.n++; V.pax+=_vd.pax; return; }
     all.push(row);
   });
   if(!all.length){ alert('ยังไม่มี booking ที่จัดเรือแล้วในวันนี้ — จัดเรือก่อนถึงพิมพ์ใบงานได้'); return; }
@@ -44698,7 +44703,7 @@ function pckGuideJobOrder(bid){
     var ta=pckDepOf((byBoat[a][0].t||{}).routeId||''), tb=pckDepOf((byBoat[b][0].t||{}).routeId||'');
     return String(ta||'99').localeCompare(String(tb||'99')) || String(pckBoatName(a)).localeCompare(String(pckBoatName(b)));
   });
-  var sheets=order.map(function(k){ return pckGuideJobSheet(k, date, byBoat[k]); }).join('');
+  var sheets=order.map(function(k){ return pckGuideJobSheet(k, date, byBoat[k], voidBy[k]); }).join('');
   var title='ใบงานไกด์ · '+(bid==='all'?('ทุกลำ '+order.length+' ใบ'):pckBoatName(bid))+' · '+date;
   var html='<!doctype html><html lang="th"><head><meta charset="utf-8"><title>'+e(title)+'</title>'
     +'<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500;700&display=swap" rel="stylesheet">'
