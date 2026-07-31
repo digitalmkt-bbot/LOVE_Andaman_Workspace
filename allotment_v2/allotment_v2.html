@@ -44484,15 +44484,15 @@ function pckGuideJobCss(){ return '<style>'
   +'.sheet{width:297mm;height:210mm;overflow:hidden;margin:14px auto;background:#fff;padding:7mm 8mm;'
     +'box-shadow:0 4px 18px rgba(0,0,0,.12);position:relative;display:flex;flex-direction:column}'
   // ── หัวใบ · ยุบเหลือแถวเดียว ──
-  +'.jh{display:flex;align-items:center;gap:12px;border-bottom:2.5px solid #111827;padding-bottom:6px;flex:none}'
-  +'.jlogo{width:38px;height:38px;border:2px solid #111827;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none}'
+  +'.jh{display:flex;align-items:center;gap:12px;padding:7px 12px;border-radius:11px;flex:none}'
+  +'.jlogo{width:38px;height:38px;border:2px solid currentColor;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none}'
   +'.jt1{font-size:14px;font-weight:700;line-height:1.1}'
-  +'.jt2{font-size:9px;color:#6b7280;letter-spacing:.07em;text-transform:uppercase}'
+  +'.jt2{font-size:9px;opacity:.72;letter-spacing:.07em;text-transform:uppercase}'
   +'.jbname{font-size:22px;font-weight:700;line-height:1;letter-spacing:-.3px}'
-  +'.jbsub{font-size:11px;color:#374151;margin-top:2px}'
-  +'.jdep{display:inline-block;border:2px solid #111827;border-radius:6px;padding:1px 8px;font-weight:700;font-size:12.5px;margin-left:6px}'
+  +'.jbsub{font-size:11px;opacity:.92;margin-top:2px}'
+  +'.jdep{display:inline-block;border:2px solid currentColor;border-radius:6px;padding:1px 8px;font-weight:700;font-size:12.5px;margin-left:6px}'
   +'.jdate{margin-left:auto;text-align:right;font-size:11px}'
-  +'.jfill{border-bottom:1px dotted #6b7280;min-width:98px;display:inline-block;height:13px}'
+  +'.jfill{border-bottom:1px dotted currentColor;opacity:.75;min-width:98px;display:inline-block;height:13px}'
   // ── แถบสรุป ──
   +'.jsum{display:flex;border:1.5px solid #111827;border-radius:8px;margin-top:6px;overflow:hidden;flex:none}'
   +'.jsc{padding:5px 11px;border-right:1px solid #d1d5db;display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}'
@@ -44538,6 +44538,17 @@ function pckGuideJobCss(){ return '<style>'
   +'.sheet.d4 tr.grp td{padding:1px 6px}.sheet.d4 .gvan{font-size:10px}.sheet.d4 .gmeta{font-size:9px}'
   +'.sheet.d4 .num{font-size:10.3px}.sheet.d4 .ao{font-size:8.6px;padding:0 4px}.sheet.d4 .tel{font-size:8.6px}.sheet.d4 .lg{font-size:8.2px;padding:0 3px}'
   +'.sheet.d4 .jsbig{font-size:15px}.sheet.d4 th{padding:2px 4px}'
+  // ── ปากกาเน้นข้อความ · แถบเครื่องมือไม่ติดไปกับกระดาษ ──
+  +'.hlbar{display:flex;align-items:center;gap:5px;margin-left:20px}'
+  +'.hlbar .lb{font-size:11px;color:#6b7280;font-weight:700}'
+  +'.hlbar button{margin-left:0 !important;width:24px;height:24px;padding:0;border:2px solid #d1d5db;border-radius:50%;cursor:pointer;background:#fff;color:#374151}'
+  +'.hlbar button.on{border-color:#111827;box-shadow:0 0 0 2px rgba(17,24,39,.18)}'
+  +'.hlbar .txt{width:auto !important;border-radius:8px;padding:4px 10px;font:700 11px inherit}'
+  +'tbody tr{cursor:pointer}'
+  +'.jlgd{display:none;gap:7px;margin-top:5px;flex:none;align-items:center;flex-wrap:wrap}'
+  +'.jlgd.on{display:flex}'
+  +'.jlgd .lgi{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;border:1px solid #9ca3af;border-radius:999px;padding:1px 10px 1px 3px}'
+  +'.jlgd .lgd{width:14px;height:14px;border-radius:50%;border:1px solid rgba(0,0,0,.22)}'
   +'@media print{body{background:#fff}.tools{display:none}'
     +'.sheet{width:100%;height:210mm;margin:0;box-shadow:none;page-break-after:always}'
     +'.sheet:last-child{page-break-after:auto}}'
@@ -44586,11 +44597,7 @@ function pckGuideJobSheet(bid, date, rows, vd){
     // §jobGuideLang (2026-08-01) · ไกด์ต้องรู้ตั้งแต่บนกระดาษว่าใบไหนต้องพูดภาษาอะไร
     //   แถบสรุปหัวใบบอกแค่ยอดรวม (EN 12 · RU 4) ซึ่งไม่ช่วยตอนยืนเรียกชื่อทีละกลุ่ม
     //   อ่านจาก bk.guides ชุดเดียวกับที่ pckTripStats ใช้นับหัวใบ เลขสองที่จะได้ตรงกันเสมอ
-    var _gd=b.guides||{}, _lgs=[];
-    if(_gd.english) _lgs.push('EN');
-    if(_gd.russian) _lgs.push('RU');
-    if(_gd.chinese) _lgs.push('CN');
-    var _ol=String(_gd.otherLang||'').trim(); if(_ol) _lgs.push(_ol);
+    var _lgs=pckGuideLangs(b);
     //   ป้ายทึบ = ไม่ใช่อังกฤษ · ใบงานเป็นขาวดำ จะใช้สีแยกไม่ได้ ต้องใช้น้ำหนักหมึกแทน
     var _alt=!(_lgs.length===1 && _lgs[0]==='EN');
     var lgHtml=_lgs.length?('<span class="lg'+(_alt?' alt':'')+'" title="ไกด์">'+_lgs.map(e).join('/')+'</span>'):'<span class="dash">&mdash;</span>';
@@ -44663,14 +44670,19 @@ function pckGuideJobSheet(bid, date, rows, vd){
     +'<th class="lgc" style="width:4%">ไกด์</th>'
     +'<th style="width:8%">Special request</th></tr></thead>';
 
+  // §sheetColor (2026-08-01) · หัวใบใช้สีประจำเรือชุดเดียวกับหน้าจอ
+  //   วางใบงาน 5 ลำเรียงกันบนโต๊ะแล้วต้องหยิบถูกลำโดยไม่ต้องอ่านชื่อ — สีคือตัวช่วยนั้น
+  //   ลงสีเฉพาะหัวใบกับกรอบสรุป ตารางยังขาวดำล้วน เพราะตัวหนังสือบนพื้นสีอ่านยากและเปลืองหมึก
+  var _col=(typeof pckBoatColor==='function')?(pckBoatColor(bid)||'#111827'):'#111827';
+  var _ink=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(_col):'#fff';
   return '<div class="sheet d'+dens+'">'
-    +'<div class="jh"><div class="jlogo">LA</div>'
+    +'<div class="jh" style="background:'+_col+';color:'+_ink+'"><div class="jlogo">LA</div>'
     +'<div><div class="jt1">ใบงานไกด์</div><div class="jt2">Guide Job Order</div></div>'
     +'<div style="margin-left:22px"><div class="jbname">'+e(boat.name||bid)+'</div>'
       +'<div class="jbsub">'+e(rt.name||rid||'—')+(dep?('<span class="jdep">ออก '+e(dep)+'</span>'):'')+'</div></div>'
     +'<div class="jdate"><div>'+e(dTh)+'</div>'
       +'<div style="margin-top:3px">ไกด์ <span class="jfill"></span></div></div></div>'
-    +'<div class="jsum">'
+    +'<div class="jsum" style="border-color:'+_col+'">'
     +'<div class="jsc"><span class="jslab">รวม</span><span class="jsbig">'+t.all+'</span><span class="jsv" style="color:#6b7280">pax</span>'
       +'<span class="jsv">AD '+t.ad+J+'CHD '+t.chd+J+'INF '+t.inf+J+'FOC '+t.foc+'</span>'
       +(S.lost>0?('<span class="jwarn">จอง '+S.book+' &middot; หาย '+S.lost+'</span>'):'')
@@ -44683,10 +44695,40 @@ function pckGuideJobSheet(bid, date, rows, vd){
       +(M.allergy?('<span class="jwarn">&#9888; แพ้อาหาร '+M.allergy+'</span>'):'')+'</div>'
     +'<div class="jsc"><span class="jslab">หางยาว</span>'+(lt.length?('<span class="jsv">'+lt.join(J)+'</span>'):'<span class="jsnone">ไม่มี</span>')+'</div>'
     +'</div>'
+    +'<div class="jlgd"></div>'
     +'<div class="tw"><table>'+THEAD+'<tbody>'+body+'</tbody></table></div>'
     +'</div>';
 }
 
+// ภาษาไกด์ของบุ๊คกิ้งหนึ่งใบ · ที่เดียวที่ตัดสินว่าใบนี้ต้องใช้ภาษาอะไร
+//   ทั้งป้ายในคอลัมน์ไกด์ · ชุดสีปากกา · ยอดรวมหัวใบ อ่านจากฟังก์ชันนี้ตัวเดียว
+function pckGuideLangs(b){
+  var gd=(b&&b.guides)||{}, out=[];
+  if(gd.english) out.push('EN');
+  if(gd.russian) out.push('RU');
+  if(gd.chinese) out.push('CN');
+  var ol=String(gd.otherLang||'').trim(); if(ol) out.push(ol);
+  return out;
+}
+// §svcMark · สีบนใบงานไม่ได้มีไว้ตกแต่ง — มันคือการทำเครื่องหมายว่าใครได้ service อะไร
+//   "ไกด์" เฉยๆ ไม่พอ ต้องแยกทีละภาษา เพราะไกด์คนละคนมารับคนละกลุ่ม
+//   ปุ่มจึงสร้างจากภาษาที่มีจริงในวันนั้น ไม่ใช่รายการตายตัว — วันไหนไม่มีรัสเซียก็ไม่มีปุ่มรัสเซีย
+//   ภาษาหลักล็อกสีไว้ เพื่อให้สีเดิมแปลว่าเรื่องเดิมทุกวัน · ภาษาอื่นหยิบจากสีสำรองตามลำดับ
+var PCK_LANG_HL={EN:'#BFDBFE', RU:'#DDD6FE', CN:'#FECACA'};
+var PCK_LANG_HL_POOL=['#CFFAFE','#E9D5FF','#D9F99D','#F5D0FE'];
+function pckHlPalette(rows){
+  var cnt={}, order=[];
+  (rows||[]).forEach(function(r){
+    pckGuideLangs(r.b).forEach(function(c){ if(cnt[c]==null){ cnt[c]=0; order.push(c); } cnt[c]++; });
+  });
+  order.sort(function(a,b){ return cnt[b]-cnt[a] || String(a).localeCompare(String(b)); });
+  var pool=PCK_LANG_HL_POOL.slice(), out=[];
+  order.forEach(function(c){ out.push({c:(PCK_LANG_HL[c]||pool.shift()||'#E5E7EB'), t:'ไกด์ '+c}); });
+  out.push({c:'#FED7AA', t:'หางยาวเหมา'});
+  out.push({c:'#FDE68A', t:'หางยาวจอย'});
+  out.push({c:'#BBF7D0', t:'อื่นๆ'});
+  return out;
+}
 // bid = รหัสเรือ หรือ 'all' (ทุกลำของวันนั้น · 1 ลำ = 1 หน้า)
 function pckGuideJobOrder(bid){
   var date=_pckDate, e=ckEsc;
@@ -44717,11 +44759,19 @@ function pckGuideJobOrder(bid){
     return String(ta||'99').localeCompare(String(tb||'99')) || String(pckBoatName(a)).localeCompare(String(pckBoatName(b)));
   });
   var sheets=order.map(function(k){ return pckGuideJobSheet(k, date, byBoat[k], voidBy[k]); }).join('');
+  var HLP=pckHlPalette(all);
   var title='ใบงานไกด์ · '+(bid==='all'?('ทุกลำ '+order.length+' ใบ'):pckBoatName(bid))+' · '+date;
   var html='<!doctype html><html lang="th"><head><meta charset="utf-8"><title>'+e(title)+'</title>'
     +'<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500;700&display=swap" rel="stylesheet">'
     +pckGuideJobCss()+'</head><body>'
     +'<div class="tools"><b>ใบงานไกด์</b><span class="h">'+e(title)+' · A4 แนวนอน · 1 ลำ = 1 ใบ</span>'
+    // §highlight · ปากกาเน้นข้อความบนจอ · เลือกสี แล้วคลิกแถว · คลิกหัวกลุ่มรถ = ทั้งกลุ่ม
+    //   สีติดไปกับกระดาษตอนพิมพ์ (print-color-adjust:exact ตั้งไว้แล้วที่ body)
+    //   ไม่เก็บลงระบบ — เป็นการทำเครื่องหมายก่อนพิมพ์รอบนั้น เหมือนจับปากกาเน้นบนกระดาษจริง
+    +'<div class="hlbar"><span class="lb">แต้มสี</span>'
+    +HLP.map(function(c){ return '<button class="sw txt" data-c="'+c.c+'" title="คลิกแถวเพื่อทำเครื่องหมาย '+c.t+'" style="background:'+c.c+'">'+e(c.t)+'</button>'; }).join('')
+    +'<button class="sw txt" data-c="" title="ลบสีทีละแถว">ลบ</button>'
+    +'<button class="txt clrall" title="ล้างสีทั้งใบ">ล้างทั้งหมด</button></div>'
     +'<button onclick="window.print()">พิมพ์ / บันทึก PDF</button></div>'
     +sheets
     // §onePage · ตาข่ายสุดท้าย · วัดจริงหลังเรนเดอร์ ถ้าตารางยังล้นกรอบค่อยย่อทั้งใบ
@@ -44740,6 +44790,26 @@ function pckGuideJobOrder(bid){
     +'if(tb.scrollHeight<=tw.clientHeight){ ok=true; break; } }'
     +'if(!ok){ tb.style.zoom=Math.max(.45,(tw.clientHeight-2)/tb.scrollHeight); }});}'
     +'setTimeout(fit,60); window.addEventListener("load",function(){setTimeout(fit,40);});'
+    // ปากกาเน้นข้อความ · เก็บสีที่แต้มไว้ใน data-hl เทียบตรงๆ ได้ ไม่ต้องแปลง rgb กลับเป็น hex
+    +'var LB='+JSON.stringify((function(){ var o={}; HLP.forEach(function(x){ o[x.c]=x.t; }); return o; })())+';'
+    // คำอธิบายสีต้องอยู่บนกระดาษด้วย ไม่งั้นคนถือใบไม่รู้ว่าสีไหนแปลว่าอะไร · ขึ้นเฉพาะสีที่ถูกใช้จริงบนใบนั้น
+    +'function sync(){ Array.prototype.forEach.call(document.querySelectorAll(".sheet"),function(sh){'
+    +'var lg=sh.querySelector(".jlgd"); if(!lg) return; var seen=[], h="";'
+    +'Array.prototype.forEach.call(sh.querySelectorAll("tbody tr[data-hl]"),function(t){ var c=t.getAttribute("data-hl"); if(c&&seen.indexOf(c)<0) seen.push(c); });'
+    +'seen.forEach(function(c){ h+=\'<span class="lgi"><span class="lgd" style="background:\'+c+\'"></span>\'+(LB[c]||"")+"</span>"; });'
+    +'lg.innerHTML=h; if(h) lg.classList.add("on"); else lg.classList.remove("on"); }); fit(); }'
+    +'var C="";document.addEventListener("click",function(ev){'
+    +'var el=ev.target; if(!el||!el.closest) return;'
+    +'var sw=el.closest(".sw");'
+    +'if(sw){ C=sw.getAttribute("data-c")||"";'
+    +'Array.prototype.forEach.call(document.querySelectorAll(".sw"),function(b){ if(b===sw) b.classList.add("on"); else b.classList.remove("on"); }); return; }'
+    +'if(el.closest(".clrall")){ Array.prototype.forEach.call(document.querySelectorAll("tbody tr"),function(t){ t.style.background=""; t.removeAttribute("data-hl"); }); sync(); return; }'
+    +'var tr=el.closest("tbody tr"); if(!tr) return;'
+    +'var put=function(t,c){ t.style.background=c||""; if(c) t.setAttribute("data-hl",c); else t.removeAttribute("data-hl"); };'
+    +'if(tr.classList.contains("grp")){ var n=tr.nextElementSibling;'
+    +'while(n && !n.classList.contains("grp")){ put(n,C); n=n.nextElementSibling; } sync(); return; }'
+    +'put(tr, ((tr.getAttribute("data-hl")||"")===C)?"":C); sync();'
+    +'});'
     +'if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){setTimeout(fit,20);});}'
     +'window.addEventListener("beforeprint",fit);})();<\/script>'
     +'</body></html>';
