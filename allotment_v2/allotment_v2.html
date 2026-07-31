@@ -44086,6 +44086,18 @@ function pckCardCSS(scope){ return ''
   +scope+' .pck-bchip .k{display:block;font-size:10px;opacity:.85;white-space:nowrap}'
   +scope+' .pck-bchip .v{font-family:\'DM Mono\',monospace;font-size:16px;font-weight:800;white-space:nowrap}'
   +scope+' .pck-bbody{padding:0 12px;display:flex;flex-direction:column;gap:12px}'
+  // แถบสรุปเที่ยวนี้ · พื้นขาวชุดเดียวกับการ์ดโซนข้างล่าง เว้นขอบเท่ากัน สีเรือจึงยังครอบเป็นกรอบ
+  +scope+' .pck-bmeta{background:#fff;border-radius:15px;margin:0 12px 12px;padding:11px 15px;display:flex;flex-wrap:wrap;align-items:center;row-gap:9px}'
+  +scope+' .pck-mg{display:flex;align-items:baseline;gap:9px;padding-right:20px;margin-right:20px;border-right:1px solid #E7E4DC}'
+  +scope+' .pck-mg:last-child{border-right:none;margin-right:0;padding-right:0}'
+  +scope+' .pck-mlab{font-size:9.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#a5a49d;white-space:nowrap}'
+  +scope+' .pck-mbig{font-family:\'DM Mono\',monospace;font-size:21px;font-weight:800;line-height:1;letter-spacing:-.5px;color:#2f2f2b}'
+  +scope+' .pck-munit{font-size:10.5px;color:#a5a49d;font-weight:600;margin-left:-4px}'
+  +scope+' .pck-mv{font-family:\'DM Mono\',monospace;font-size:13px;font-weight:700;white-space:nowrap}'
+  +scope+' .pck-mv i{font-style:normal;font-weight:500;opacity:.55;padding:0 6px;color:#a5a49d}'
+  +scope+' .pck-mk{font-size:11.5px;font-weight:600;white-space:nowrap}'
+  +scope+' .pck-mdim{font-size:11px;color:#cfccc4;font-family:\'DM Mono\',monospace}'
+  +scope+' .pck-mnone{font-size:12px;color:#cfccc4}'
   +scope+' .pck-trip{border-radius:19px;overflow:hidden}'
   +scope+' .pck-trip.multi{background:rgba(255,255,255,.55)}'
   +scope+' .pck-thead{padding:11px 15px;display:flex;align-items:center;gap:11px;flex-wrap:wrap;background:#fff;border-left:5px solid;border-bottom:1px solid #F1F0EC}'
@@ -44278,6 +44290,64 @@ function pckVanHead(vg, date){
   h+='<span class="pck-vstat '+stCls+'">'+stTxt+'</span></div>';
   return h;
 }
+// §boatMeta (2026-07-31) · สรุปเที่ยวนี้บนหัวเรือ · เดินทางจริง / ไกด์ / อาหารพิเศษ / หางยาว
+//   ทุกตัวอ่านจากบุ๊คกิ้งที่มีอยู่แล้ว ไม่มี field ใหม่ — bk.guides · bk.specialMeals · bkV2AddOnFlags()
+//   ชุดเดียวกับที่หัวโปรแกรมของ By-trip ใช้ ตัวเลขสองหน้าจึงตรงกันเสมอ
+//   "เดินทางจริง" = ยอดจอง − คนที่หายไปแล้ว (no-show ตอนรถรับ / หน้าท่า) แยกตามประเภท ผ่าน ckPaxLeft()
+//   ใส่สีที่ตัวเลข ไม่ทำเป็นชิปพื้นสี · ป้ายกำกับเทาเสมอ สายตาจะได้กวาดหาตัวเลขก่อน
+var PCK_PX_INK={ad:'#2f2f2b', chd:'#854F0B', inf:'#4338CA', foc:'#a5a49d'};
+function pckBoatMeta(rows, date){
+  var e=ckEsc;
+  var real={ad:0,chd:0,inf:0,foc:0}, book=0, lost=0;
+  var lang={}, meal={veg:0,vegan:0,halal:0,allergy:0}, ltJoin=0, ltChtr=0;
+  rows.forEach(function(r){
+    var b=r.b, t=r.t, pb=ckPaxBreak(t.pax), tot=0;
+    ['ad','chd','inf','foc'].forEach(function(k){
+      var bk=pb[k]||0; book+=bk; tot+=bk;
+      var left=(typeof ckPaxLeft==='function')?ckPaxLeft(b,date,k,bk):bk;
+      real[k]+=left; lost+=Math.max(0,bk-left);
+    });
+    var gd=b.guides||{};
+    var addL=function(c,n){ if(!c) return; lang[c]=(lang[c]||0)+n; };
+    if(gd.english) addL('EN',tot);
+    if(gd.russian) addL('RU',tot);
+    if(gd.chinese) addL('CN',tot);
+    var ol=String(gd.otherLang||'').trim(); if(ol) addL(ol,tot);
+    var mm=b.specialMeals||{};
+    meal.veg+=+mm.veg||0; meal.vegan+=+mm.vegan||0; meal.halal+=+mm.halal||0;
+    meal.allergy+=(typeof bkV2AllergyCount==='function')?bkV2AllergyCount(mm):(String(mm.allergies||'').trim()?1:0);
+    var af=(typeof bkV2AddOnFlags==='function')?bkV2AddOnFlags(b,t.routeId):{};
+    if(af.charter) ltChtr+=(af.charterQty||1); else if(af.join) ltJoin+=tot;
+    if(typeof bkV2LongtailExtraPax==='function') ltJoin+=(bkV2LongtailExtraPax(b.id,date)||0);
+    if(typeof bkV2LongtailCharterExtraBoats==='function') ltChtr+=(bkV2LongtailCharterExtraBoats(b.id,date)||0);
+  });
+  var realTot=real.ad+real.chd+real.inf+real.foc;
+  var J='<i>&middot;</i>';
+  var px=function(k,lbl){ var n=real[k]||0, col=n?PCK_PX_INK[k]:'#cfccc4';
+    return '<span class="pck-mv" style="color:'+col+'">'+n+'<span class="pck-mk" style="font-weight:600;color:'+col+';opacity:.62"> '+lbl+'</span></span>'; };
+  var langs=Object.keys(lang).sort(function(a,b){ return lang[b]-lang[a]; }).map(function(c){
+    var lc=(typeof bkV2LangColors==='function')?bkV2LangColors(c):['#F1EFE8','#5F5E5A'];
+    return '<span class="pck-mv" style="color:'+(lc[1]||'#5F5E5A')+'">'+e(c)+' '+lang[c]+'</span>'; }).join(J);
+  var mono=' style="font-family:\'DM Mono\',monospace"';
+  var ml=[];
+  if(meal.veg+meal.vegan) ml.push('<span class="pck-mk" style="color:#3B6D11">มังสวิรัติ <b'+mono+'>'+(meal.veg+meal.vegan)+'</b></span>');
+  if(meal.halal)          ml.push('<span class="pck-mk" style="color:#0F6E56">ฮาลาล <b'+mono+'>'+meal.halal+'</b></span>');
+  if(meal.allergy)        ml.push('<span class="pck-mk" style="color:#C0392B">&#9888; แพ้อาหาร <b'+mono+'>'+meal.allergy+'</b></span>');
+  var lt=[];
+  if(ltJoin) lt.push('<span class="pck-mk" style="color:#1565A8">จอย <b'+mono+'>'+ltJoin+'</b> คน</span>');
+  if(ltChtr) lt.push('<span class="pck-mk" style="color:#5B289A">เหมา <b'+mono+'>'+ltChtr+'</b> ลำ</span>');
+  return '<div class="pck-bmeta">'
+    +'<div class="pck-mg"><span class="pck-mlab">เดินทางจริง</span>'
+      +'<span class="pck-mbig">'+realTot+'</span><span class="pck-munit">pax</span>'
+      +'<span style="display:flex;align-items:baseline">'+px('ad','AD')+J+px('chd','CHD')+J+px('inf','INF')+J+px('foc','FOC')+'</span>'
+      +(lost>0?('<span class="pck-mk" style="color:#C0392B">จอง '+book+' · หาย <b'+mono+'>'+lost+'</b></span>')
+              :'<span class="pck-mdim">ครบตามจอง</span>')
+    +'</div>'
+    +'<div class="pck-mg"><span class="pck-mlab">ไกด์</span>'+(langs||'<span class="pck-mnone">&mdash;</span>')+'</div>'
+    +'<div class="pck-mg"><span class="pck-mlab">อาหารพิเศษ</span>'+(ml.length?ml.join(J):'<span class="pck-mnone">ไม่มี</span>')+'</div>'
+    +'<div class="pck-mg"><span class="pck-mlab">หางยาว</span>'+(lt.length?lt.join(J):'<span class="pck-mnone">ไม่มี</span>')+'</div>'
+    +'</div>';
+}
 // แถบแท็บเรือ · ทำหน้าที่เป็นตัวกรองเรือไปในตัว (แทน select เดิมในแถบตัวกรอง)
 function pckBoatTabs(all){
   var e=ckEsc, m={}, ks=[];
@@ -44406,7 +44476,7 @@ function renderPierCheckin(){
       +'<div class="pck-bstat">'+bchip('ถึงท่า',a.arr+'/'+a.n)+bchip('เคลียร์',a.clr)+bchip('ขึ้นเรือ',a.on)
         +(a.due>0?bchip('ค้างเก็บ','&#3647;'+Math.round(a.due).toLocaleString()):'')
         +'<div class="pck-bchip" style="background:#fff;border:1px solid #fff;color:'+col+'"><span class="k" style="opacity:.75">ที่นั่ง</span><span class="v">'+a.pax+(cap?('/'+cap):'')+'</span></div>'
-      +'</div></div><div class="pck-bbody">';
+      +'</div></div>'+pckBoatMeta(B.rows, date)+'<div class="pck-bbody">';
     B.torder.forEach(function(rk){
       var T=B.trips[rk];
       var rt=(typeof getRoute==='function'?getRoute(rk):null)||{}, dep=pckDepOf(rk), at=pckAgg(T.rows);
