@@ -154,7 +154,10 @@ const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_re
 //     leadPax now comes from the booking's own customer block (was passengers[0].name, which put
 //     traveller #2 in the lead slot and then dropped them from the list, leaving "lead only" on a
 //     booking that had a second guest). Also carries customer.nationality into leadNationality.
-const B2C_MAP_VER = 9;
+// v10: applies the ORDER-level discount / surcharge (bookings.discount_amount, surcharge_amount)
+//      to line 0. They were selected but never read, so the line seat price stood in for the whole
+//      total — LOV-9930593 imported at 55,984 against a real 54,400.
+const B2C_MAP_VER = 10;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -266,6 +269,13 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows) {
   const bkTotal    = Number(h.bk_total) || 0;
   const paidAmt    = Math.round(Number(h.bk_paid) || 0);
   const paidStatus = paidAmt <= 0 ? 'unpaid' : (paidAmt >= bkTotal ? 'paid' : 'deposit');
+  // The discount / surcharge are ORDER-level too, so they attach to line 0 like the payment does.
+  // Until this was read, the line seat price WAS the whole total: LOV-9930593 imported at 55,984
+  // (16 × 3,499) against a real total of 54,400 after a 1,584 discount — every revenue aggregate
+  // over-reported the sale, while paidStatus (which compares bk_total) still said fully paid.
+  const discAmt  = isFirstLine ? Math.max(0, Math.round(Number(h.bk_discount)  || 0)) : 0;
+  const extraAmt = isFirstLine ? Math.max(0, Math.round(Number(h.bk_surcharge) || 0)) : 0;
+  const lineTotal = Math.max(0, seat - discAmt + extraAmt);   // Σ lines = the order total
   const adTh = Number(h.pax_thai) || 0;
   const adFrRaw = Number(h.pax_foreign) || 0;
   const adFr = adFrRaw > 0 ? adFrRaw : Math.max(0, (Number(h.pax_adult) || 0) - adTh);
@@ -376,15 +386,21 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows) {
     trips: [trip],
     passengers: isFirstLine ? b2cPassengerList(paxRows) : [],
     addOns: [],
-    adjustments: [],
-    total: seat,
+    // Display rows for the Total panel. bkV2 stores adjustments as positive values with a kind, and
+    // acctBookingTotal never re-applies them (the total already accounts for them) — so these are
+    // presentational only and cannot double-count.
+    adjustments: [
+      ...(discAmt  ? [{ kind: 'discount', mode: 'amount', value: discAmt,  label: String(h.bk_discount_label  || 'Discount'),  note: '' }] : []),
+      ...(extraAmt ? [{ kind: 'extra',    mode: 'amount', value: extraAmt, label: String(h.bk_surcharge_label || 'Surcharge'), note: '' }] : []),
+    ],
+    total: lineTotal,
     priceBreakdown: {
       seat: seat,
       addOn: 0,
       focDiscount: 0,
-      discount: 0,
-      extra: 0,
-      total: seat,
+      discount: -discAmt,      // negative, matching bkV2CommitBooking's own priceBreakdown
+      extra: extraAmt,
+      total: lineTotal,
     },
     paymentSnapshot: {
       deposit: isFirstLine ? (Number(h.bk_deposit) || 0) : 0,
@@ -408,6 +424,12 @@ const B2C_ITEM_JOIN = `
          b.subtotal      AS bk_subtotal,
          b.discount_amount AS bk_discount,
          b.surcharge_amount AS bk_surcharge,
+         -- Labels for the two adjustment rows ops sees. Same defensive read as the customer block:
+         -- flat column or nested object, absent shape degrades to NULL instead of erroring.
+         COALESCE(to_jsonb(b)->>'discount_name',  to_jsonb(b)->'discount'->>'name',
+                  to_jsonb(b)->>'discount_reason', to_jsonb(b)->'discount'->>'reason')   AS bk_discount_label,
+         COALESCE(to_jsonb(b)->>'surcharge_name', to_jsonb(b)->'surcharge'->>'name',
+                  to_jsonb(b)->>'surcharge_reason', to_jsonb(b)->'surcharge'->>'reason') AS bk_surcharge_label,
          b.total         AS bk_total,
          b.deposit       AS bk_deposit,
          b.balance       AS bk_balance,
