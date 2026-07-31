@@ -150,7 +150,11 @@ const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_re
 //     raw text) — the ops Zone column prints that field, so unmatched rows showed a bare dash.
 // v8: imports the traveller list (bookings.passengers via v_booking_passengers) into
 //     passengers[] — name + nationality only. Until v8 the array was always empty.
-const B2C_MAP_VER = 8;
+// v9: corrects v8 and earlier — bookings.passengers EXCLUDES the lead, it is the other travellers.
+//     leadPax now comes from the booking's own customer block (was passengers[0].name, which put
+//     traveller #2 in the lead slot and then dropped them from the list, leaving "lead only" on a
+//     booking that had a second guest). Also carries customer.nationality into leadNationality.
+const B2C_MAP_VER = 9;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -265,15 +269,19 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows) {
   const adTh = Number(h.pax_thai) || 0;
   const adFrRaw = Number(h.pax_foreign) || 0;
   const adFr = adFrRaw > 0 ? adFrRaw : Math.max(0, (Number(h.pax_adult) || 0) - adTh);
-  // Lead name: the booking's own passenger/booker name beats the CRM customers row — the B2C
-  // backend dedupes customers by email, so customers.name can be a stale earlier customer.
+  // Lead = the booking's own customer block, exactly as B2C's own webhook mapper reads it
+  // (erp/src/mapExternalBooking.js: leadPax = ext.customer.name). bookings.passengers is NOT the
+  // lead — it holds the OTHER travellers, so a 2-adult booking is customer + 1 passenger row.
+  // Order: the booking's own customer, then the CRM customers row (deduped by email, so it can be
+  // a stale earlier customer), then the booker, and only as a last resort the first traveller.
   let leadFromPax = '';
   try {
     let ps = h.bk_passengers;
     if (typeof ps === 'string') ps = JSON.parse(ps);
     if (Array.isArray(ps) && ps[0] && ps[0].name) leadFromPax = String(ps[0].name).trim();
   } catch (_) {}
-  const leadName = leadFromPax || h.customer_name || h.booked_by_name || '';
+  const leadName = String(h.bk_customer_name || h.customer_name || h.booked_by_name || leadFromPax || '').trim();
+  const leadNat  = b2cNatCode(h.bk_customer_nat || h.crm_nationality);
   // private_own = whole-boat charter; day_trip = shared seat. B2C is the source of truth for product
   // type, so derive the mode here — a charter must NOT consume the day-trip seat pool
   // (getSeatsConsumed / baCharterBoatIds exclude bookingMode==='charter'). Detect from BOTH signals:
@@ -349,7 +357,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows) {
     voucherRef: String(h.booking_id),
     agentId: 'a_b2c',
     leadPax: leadName,
-    leadNationality: '',
+    leadNationality: leadNat,
     leadPhone: h.customer_phone || '',
     leadEmail: h.customer_email || h.booked_by_email || '',
     status: mapB2CStatus(h.bk_status),
@@ -366,7 +374,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows) {
            (!areaId && !noTransfer && (pickupArea || pickupLoc))
              ? `Pickup: ${pickupArea || pickupLoc}${pickupZone ? ' (' + pickupZone + ')' : ''} — area unassigned` : null].filter(Boolean).join(' · '),
     trips: [trip],
-    passengers: isFirstLine ? b2cPassengerList(paxRows, leadName) : [],
+    passengers: isFirstLine ? b2cPassengerList(paxRows) : [],
     addOns: [],
     adjustments: [],
     total: seat,
@@ -407,6 +415,12 @@ const B2C_ITEM_JOIN = `
          b.payment_type  AS bk_payment_type,
          b.created_at    AS bk_created_at,
          ch.name         AS channel_name,
+         -- The booking's OWN customer block is the lead. Read through to_jsonb so this works whether
+         -- B2C keeps it as flat columns or as a customer jsonb, and so a shape that isn't there
+         -- degrades to NULL instead of erroring the whole sync query (same trick as pay below).
+         COALESCE(to_jsonb(b)->>'customer_name', to_jsonb(b)->'customer'->>'name')               AS bk_customer_name,
+         COALESCE(to_jsonb(b)->>'customer_nationality', to_jsonb(b)->'customer'->>'nationality') AS bk_customer_nat,
+         to_jsonb(c)->>'nationality' AS crm_nationality,
          c.name          AS customer_name,
          c.phone         AS customer_phone,
          c.email         AS customer_email,
@@ -530,16 +544,17 @@ async function b2cPassengerRows(ids) {
 // The list is booking-level with no link back to a booking_item, so it cannot be split per trip.
 // Attach it to line 0 only — the same rule the order-level payment follows — instead of repeating
 // every traveller on each line of a multi-item order.
-// Row 1 fed leadPax; ops passengers[] holds the OTHERS only (the lead is rendered as guest #1).
-function b2cPassengerList(rows, leadName) {
+//
+// Maps 1:1, no row dropped as "the lead": B2C's passengers[] already EXCLUDES the lead (that is
+// bookings.customer), so a 2-adult booking is customer + one passenger row. This mirrors B2C's own
+// webhook mapper — erp/src/mapExternalBooking.js maps ext.passengers straight through as AD — and
+// matches ops semantics, where passengers[] is the guests after the lead (rendered from #2).
+function b2cPassengerList(rows) {
   if (!Array.isArray(rows) || !rows.length) return [];
-  const lead = String(leadName || '').trim().toLowerCase();
-  let leadDropped = false;
   const out = [];
   for (const r of rows) {
-    if (!leadDropped && (r.paxNo === 1 || (lead && r.name.toLowerCase() === lead))) { leadDropped = true; continue; }
     if (!r.name && !r.nationality) continue;     // fully blank row — nothing for ops to show
-    out.push({ name: r.name, nationality: r.nationality, type: '', foc: false });
+    out.push({ name: r.name, nationality: r.nationality, type: 'AD', foc: false });
   }
   return out;
 }
