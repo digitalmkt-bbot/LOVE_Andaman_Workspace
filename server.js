@@ -164,7 +164,8 @@ const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_re
 //      real day-trip program from details.programId / route_id instead.
 // v13: if B2C did not fan out bookings.items into booking_items, synthesize item rows directly from
 //      bookings.items[] so discount/map bookings still import.
-const B2C_MAP_VER = 13;
+// v14: normalize B2C paymentMethod/paymentType labels (PM-BANK, Bank transfer) to app pay code 'bt'.
+const B2C_MAP_VER = 14;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -223,6 +224,21 @@ function mapB2CStatus(s) {
   return 'confirmed';
 }
 
+function b2cPayCode(h) {
+  const vals = [h && h.bk_payment_type, h && h.payment_method_id, h && h.bk_payment_method, h && h.bk_payment_method_name]
+    .map(v => String(v || '').trim()).filter(Boolean);
+  for (const raw of vals) {
+    const s = raw.toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+    if (B2C_PAY_TYPES.has(s)) return s;
+    if (/^(pm )?(bank|transfer|bank transfer|banktransfer)$/.test(s) || s === 'pm bank' || s === 'pm transfer') return 'bt';
+    if (s.includes('bank') || s.includes('transfer')) return 'bt';
+    if (s.includes('cash') || s === 'cot') return 'cot';
+    if (s.includes('proforma') || s.includes('pro forma')) return 'proforma';
+    if (s.includes('invoice') || s === 'credit') return 'invoice';
+  }
+  return '';
+}
+
 // Line-item seat price = Σ(pax_<cat> × details.unitPrices.<cat>) over adult/child/infant/foc.
 // details is jsonb (parsed by pg); falls back to the stored subtotal column if rates are missing.
 function b2cLineSeat(item) {
@@ -260,13 +276,10 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows) {
   const seat = b2cLineSeat(h);
   // pax_adult = total adults; pax_thai/pax_foreign = nationality split (may be 0/0 when unknown).
   // Never use pax_foreign||pax_adult — a Thai-only booking (fr=0, th=5, ad=5) double-counts to 10.
-  // Pay type: bookings.payment_type (nullable) uses the SAME ids as the app's SB_PAYMENT_TYPES
-  // (proforma | invoice | bt | cot), so it drops straight into paymentSnapshot.method — which is the
-  // pay-TYPE slot the UI reads (bkV2PayLabel / bkV2PayChip), NOT a payment instrument. Deliberately
-  // not payment_method_id: that's an instrument id and would render as raw text in the Pay column.
-  // Null/unknown → '' so the chip falls back to the a_b2c agent default.
-  const payType = B2C_PAY_TYPES.has(String(h.bk_payment_type || '').toLowerCase())
-    ? String(h.bk_payment_type).toLowerCase() : '';
+  // Pay type: bookings.paymentType/paymentMethod can be either app ids (bt/cot) or B2C labels
+  // (Bank transfer / PM-BANK). Normalize to the app pay code so B2C does not fall back to contract
+  // credit/prepaid wording in booking detail/accounting chips.
+  const payType = b2cPayCode(h);
   // Paid state — derived, never read off payment_type. bk_paid is Σpayments + Σcredits_applied
   // computed in B2C_ITEM_JOIN; the thresholds mirror the B2C team's reference SQL exactly:
   // paid<=0 → unpaid · paid>=total → paid · otherwise → deposit (part-paid).
@@ -494,8 +507,9 @@ const B2C_ITEM_JOIN = `
          b.total         AS bk_total,
          b.deposit       AS bk_deposit,
          b.balance       AS bk_balance,
-         b.payment_method_id,
-         b.payment_type  AS bk_payment_type,
+         COALESCE(to_jsonb(b)->>'payment_method_id', to_jsonb(b)->>'paymentMethod') AS payment_method_id,
+         COALESCE(to_jsonb(b)->>'payment_type', to_jsonb(b)->>'paymentType') AS bk_payment_type,
+         COALESCE(to_jsonb(b)->>'payment_method_name', to_jsonb(b)->>'paymentMethodName') AS bk_payment_method_name,
          b.created_at    AS bk_created_at,
          ch.name         AS channel_name,
          -- The booking's OWN customer block is the lead. Read through to_jsonb so this works whether
