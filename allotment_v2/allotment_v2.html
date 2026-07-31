@@ -44162,6 +44162,8 @@ function pckCardCSS(scope){ return ''
   +scope+' .pck-svcset{margin-left:auto;background:#fff;border:1.5px solid #D8D4CA;color:#5F5E5A;border-radius:999px;padding:6px 13px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}'
   +scope+' .pck-svcset:hover{border-color:#2f2f2b;color:#2f2f2b}'
   +scope+' .pck-svcprev{display:inline-block;border:1.5px solid #111827;border-radius:3px;padding:1px 8px;font-size:10.5px;font-weight:700;white-space:nowrap}'
+  +' .lg{display:inline-block;border:1.5px solid #111827;border-radius:3px;padding:0 6px;font-family:\'DM Mono\',monospace;font-size:11px;font-weight:700;white-space:nowrap;line-height:1.6}'
+  +' .lg.alt{background:#111827;color:#fff}'
   +scope+' .pck-joball{margin-left:8px;background:#2f2f2b;border:1.5px solid #2f2f2b;color:#fff;border-radius:999px;padding:6px 14px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}'
   +scope+' .pck-joball:hover{background:#15201a;border-color:#15201a}'
   // แถบสรุปเที่ยวนี้ · พื้นขาวชุดเดียวกับการ์ดโซนข้างล่าง เว้นขอบเท่ากัน สีเรือจึงยังครอบเป็นกรอบ
@@ -44561,7 +44563,7 @@ function pckGuideJobSheet(bid, date, rows, vd){
   var J='<i>&middot;</i>';
 
   var langs=Object.keys(S.lang).sort(function(a,b){ return S.lang[b]-S.lang[a]; })
-    .map(function(c){ return '<span class="lg'+(c==='EN'?'':' alt')+'">'+e(c)+'</span> '+S.lang[c]; }).join(J);
+    .map(function(c){ return pckGuideBadge([c])+' '+S.lang[c]; }).join(J);
   var M=S.meal, ml=[];
   if(M.veg+M.vegan) ml.push('มังสวิรัติ '+(M.veg+M.vegan));
   if(M.halal) ml.push('ฮาลาล '+M.halal);
@@ -44593,9 +44595,8 @@ function pckGuideJobSheet(bid, date, rows, vd){
     //   แถบสรุปหัวใบบอกแค่ยอดรวม (EN 12 · RU 4) ซึ่งไม่ช่วยตอนยืนเรียกชื่อทีละกลุ่ม
     //   อ่านจาก bk.guides ชุดเดียวกับที่ pckTripStats ใช้นับหัวใบ เลขสองที่จะได้ตรงกันเสมอ
     var _lgs=pckGuideLangs(b);
-    //   ป้ายทึบ = ไม่ใช่อังกฤษ · ใบงานเป็นขาวดำ จะใช้สีแยกไม่ได้ ต้องใช้น้ำหนักหมึกแทน
-    var _alt=!(_lgs.length===1 && _lgs[0]==='EN');
-    var lgHtml=_lgs.length?('<span class="lg'+(_alt?' alt':'')+'" title="ไกด์">'+_lgs.map(e).join('/')+'</span>'):'<span class="dash">&mdash;</span>';
+    //   ไม่ได้ตั้งสีไว้ = ใช้กติกาหมึกทึบเหมือนเดิม (ทึบ = ไม่ใช่อังกฤษ) · ตั้งสีแล้วสีชนะ
+    var lgHtml=pckGuideBadge(_lgs);
     var names='<b>'+e(NM.lead||'—')+'</b>'
       +(NM.ex.length?('<span class="ex"> &middot; '+NM.ex.map(e).join(' &middot; ')+'</span>'):'')
       +(ph?('<span class="tel mono"> '+e(ph)+'</span>'):'');
@@ -44729,6 +44730,37 @@ function pckSvcRules(){ var u=_pckSvcRead('pck_svc_rules'); return Array.isArray
 function pckSvcRuleAdd(){ var a=pckSvcRules(); a.push({id:'r'+Date.now(), kw:'', c:'#BFDBFE'}); _pckSvcWrite('pck_svc_rules',a); pckSvcSetRender(); }
 function pckSvcRuleSet(id,f,v){ var a=pckSvcRules(), i; for(i=0;i<a.length;i++){ if(a[i].id===id){ a[i][f]=v; break; } } _pckSvcWrite('pck_svc_rules',a); }
 function pckSvcRuleDel(id){ _pckSvcWrite('pck_svc_rules', pckSvcRules().filter(function(x){ return x.id!==id; })); pckSvcSetRender(); }
+// §gdColor (2026-08-01) · สีป้ายภาษาไกด์ · แยกที่เก็บจากกติกา add-on
+//   กติกา add-on จับ "ชื่อ add-on" ส่วนภาษาไกด์มาจาก bk.guides คนละที่กัน
+//   ตั้งค่า "RU" ในกติกา add-on จึงไม่มีทางไปโดนป้ายไกด์ (เจอจริง 1 ส.ค.)
+function pckGuideLangList(){
+  var out=['EN','RU','CN'], seen={EN:1,RU:1,CN:1};
+  try{ (SB_BOOKINGS||[]).forEach(function(b){
+    var ol=String(((b&&b.guides)||{}).otherLang||'').trim();
+    if(ol && !seen[ol]){ seen[ol]=1; out.push(ol); }
+  }); }catch(_){}
+  return out;
+}
+function pckGuideColors(){ var u=_pckSvcRead('pck_guide_colors'); return (u&&typeof u==='object')?u:{}; }
+function pckGuideColorSave(c,hex){
+  var u=pckGuideColors(); if(hex) u[c]=hex; else delete u[c];
+  _pckSvcWrite('pck_guide_colors',u); pckSvcSetRender();
+}
+// ใบที่ขอสองภาษา ใช้สีของภาษาแรกที่ตั้งไว้ · ไม่ตั้งเลย = คืนค่าว่าง แล้วกลับไปใช้กติกาหมึกทึบเหมือนเดิม
+function pckGuideColorOf(codes){
+  var G=pckGuideColors(), i;
+  for(i=0;i<(codes||[]).length;i++){ if(G[codes[i]]) return G[codes[i]]; }
+  return '';
+}
+function pckGuideBadge(codes){
+  var e=ckEsc, c=pckGuideColorOf(codes);
+  if(!(codes||[]).length) return '<span class="dash">&mdash;</span>';
+  var alt=!(codes.length===1 && codes[0]==='EN');
+  var ink=(c && typeof bkV2ContrastInk==='function')?bkV2ContrastInk(c):'#fff';
+  return '<span class="lg'+((alt&&!c)?' alt':'')+'"'
+    +(c?(' style="background:'+c+';border-color:'+c+';color:'+ink+'"'):'')
+    +' title="ไกด์">'+codes.map(e).join('/')+'</span>';
+}
 function pckSvcRuleColor(label){
   var t=String(label||'').toLowerCase(), a=pckSvcRules(), i, k;
   for(i=0;i<a.length;i++){ k=String(a[i].kw||'').trim().toLowerCase(); if(k && t.indexOf(k)>=0) return a[i].c||''; }
@@ -44754,6 +44786,16 @@ function pckSvcSetRender(){
       +'</div>';
   };
   var built=PCK_SVC_DEF.map(function(x){ return swat(x.k, x.l, C[x.k], !u[x.k]); }).join('');
+  var G=pckGuideColors();
+  var gds=pckGuideLangList().map(function(c){
+    var on=!!G[c], col=G[c]||'#E5E7EB';
+    return '<div style="display:flex;align-items:center;gap:11px;margin-bottom:9px">'
+      +'<input type="color" value="'+col+'" onchange="pckGuideColorSave(\''+c+'\',this.value)" style="width:40px;height:30px;border:1px solid #E4E1D9;border-radius:7px;padding:1px;cursor:pointer;flex:none">'
+      +'<span style="flex:1;font-size:12.5px;font-weight:700;color:#2c2c2a">ไกด์ '+e(c)+'</span>'
+      +pckGuideBadge([c])
+      +(on?'<button onclick="pckGuideColorSave(\''+c+'\',\'\')" title="เลิกใช้สี กลับไปใช้ป้ายขาวดำ" style="border:1px solid #E4E1D9;background:#fff;color:#8a8a82;border-radius:7px;padding:4px 9px;font-size:10.5px;cursor:pointer;font-family:inherit">ไม่ใช้สี</button>':'<span style="font-size:10.5px;color:#c2c0b7">ยังไม่ตั้งสี</span>')
+      +'</div>';
+  }).join('');
   var rules=pckSvcRules().map(function(r){
     var c=r.c||'#BFDBFE';
     return '<div style="display:flex;align-items:center;gap:9px;margin-bottom:8px">'
@@ -44770,6 +44812,8 @@ function pckSvcSetRender(){
    +'<button onclick="pckSvcSetClose()" style="background:transparent;border:none;font-size:20px;color:#9a9a92;cursor:pointer;line-height:1">&times;</button></div>'
    +'<div style="padding:16px 20px">'
    +'<div style="'+lbl+';margin-bottom:9px">บริการหลัก</div>'+built
+   +'<div style="'+lbl+';margin:18px 0 4px">ป้ายภาษาไกด์</div>'
+   +'<div style="font-size:11.5px;color:#8a8a82;margin-bottom:9px;line-height:1.5">ไม่ตั้งสี = ป้ายขาวดำตามเดิม (ทึบ = ไม่ใช่อังกฤษ) · ตั้งสีแล้วสีชนะ</div>'+gds
    +'<div style="'+lbl+';margin:18px 0 4px">บริการอื่นที่อยากให้มีสี</div>'
    +'<div style="font-size:11.5px;color:#8a8a82;margin-bottom:9px;line-height:1.5">พิมพ์คำที่อยู่ในชื่อ add-on แล้วเลือกสี · ใบไหนมี add-on ที่ชื่อมีคำนั้น จะได้สีนี้ในช่อง Service<br>ไม่ต้องพิมพ์ให้ตรงเป๊ะ และไม่สนตัวพิมพ์เล็กใหญ่</div>'
    +(rules||'<div style="font-size:11.5px;color:#c2c0b7;margin-bottom:9px">ยังไม่มีกติกา</div>')
