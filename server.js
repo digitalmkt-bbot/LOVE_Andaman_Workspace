@@ -162,7 +162,9 @@ const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_re
 // v12: ignore promo ids like PR-001 on day_trip rows. B2C promoId shares the PR-* prefix used by
 //      private routes; if it leaks into product_id, keep the item as a seat booking and recover the
 //      real day-trip program from details.programId / route_id instead.
-const B2C_MAP_VER = 12;
+// v13: if B2C did not fan out bookings.items into booking_items, synthesize item rows directly from
+//      bookings.items[] so discount/map bookings still import.
+const B2C_MAP_VER = 13;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -433,7 +435,45 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows) {
   };
 }
 
-// booking_items JOIN query — drives everything from items, bookings table is optional enrichment only
+// booking_items JOIN query — drives everything from items, bookings table is optional enrichment only.
+// Some B2C writes keep the line items only in bookings.items[] (JSON) and never fan them out to the
+// booking_items table. The importer needs one row per item either way, so this source prefers the
+// normalized table and falls back to bookings.items[] for orders with no normalized rows.
+const B2C_ITEM_SOURCE = `(
+  SELECT bi.booking_id::text AS booking_id, COALESCE(bi.line_no,0)::int AS line_no,
+         bi.type::text AS type, bi.travel_date::text AS travel_date,
+         bi.product_id::text AS product_id, bi.route_id::text AS route_id,
+         COALESCE(bi.pax_adult,0)::numeric AS pax_adult,
+         COALESCE(bi.pax_child,0)::numeric AS pax_child,
+         COALESCE(bi.pax_infant,0)::numeric AS pax_infant,
+         COALESCE(bi.pax_foc,0)::numeric AS pax_foc,
+         COALESCE(bi.pax_thai,0)::numeric AS pax_thai,
+         COALESCE(bi.pax_foreign,0)::numeric AS pax_foreign,
+         COALESCE(bi.subtotal,0)::numeric AS subtotal,
+         to_jsonb(bi.details) AS details,
+         'booking_items'::text AS _sync_source
+  FROM ${b2cT('booking_items')} bi
+  UNION ALL
+  SELECT b.id::text AS booking_id, (it.ord - 1)::int AS line_no,
+         (it.obj->>'type')::text AS type,
+         COALESCE(it.obj->>'travelDate', b.travel_date::text) AS travel_date,
+         COALESCE(it.obj->>'programId', it.obj->>'productId') AS product_id,
+         (it.obj->>'routeId')::text AS route_id,
+         CASE WHEN COALESCE(it.obj->>'paxAdult','0')  ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (it.obj->>'paxAdult')::numeric  ELSE 0 END AS pax_adult,
+         CASE WHEN COALESCE(it.obj->>'paxChild','0')  ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (it.obj->>'paxChild')::numeric  ELSE 0 END AS pax_child,
+         CASE WHEN COALESCE(it.obj->>'paxInfant','0') ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (it.obj->>'paxInfant')::numeric ELSE 0 END AS pax_infant,
+         CASE WHEN COALESCE(it.obj->>'paxFoc','0')    ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (it.obj->>'paxFoc')::numeric    ELSE 0 END AS pax_foc,
+         CASE WHEN COALESCE(it.obj->>'paxThai','0')   ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (it.obj->>'paxThai')::numeric   ELSE 0 END AS pax_thai,
+         CASE WHEN COALESCE(it.obj->>'paxForeign','0')~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (it.obj->>'paxForeign')::numeric ELSE 0 END AS pax_foreign,
+         CASE WHEN COALESCE(it.obj->>'subtotal','0')  ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (it.obj->>'subtotal')::numeric  ELSE 0 END AS subtotal,
+         it.obj AS details,
+         'bookings.items'::text AS _sync_source
+  FROM ${b2cT('bookings')} b
+  CROSS JOIN LATERAL jsonb_array_elements(
+    CASE WHEN jsonb_typeof(to_jsonb(b)->'items') = 'array' THEN to_jsonb(b)->'items' ELSE '[]'::jsonb END
+  ) WITH ORDINALITY AS it(obj, ord)
+  WHERE NOT EXISTS (SELECT 1 FROM ${b2cT('booking_items')} x WHERE x.booking_id = b.id)
+) bi`;
 const B2C_ITEM_JOIN = `
   SELECT bi.*,
          b.status        AS bk_status,
@@ -468,7 +508,7 @@ const B2C_ITEM_JOIN = `
          c.phone         AS customer_phone,
          c.email         AS customer_email,
          COALESCE(pay.paid, 0) AS bk_paid
-  FROM ${b2cT('booking_items')} bi
+  FROM ${B2C_ITEM_SOURCE}
   LEFT JOIN ${b2cT('bookings')} b       ON b.id  = bi.booking_id
   LEFT JOIN ${b2cT('b2c_channels')} ch  ON ch.id = b.channel_id
   LEFT JOIN ${b2cT('customers')} c      ON c.id  = b.customer_id
@@ -657,7 +697,7 @@ async function relSyncB2C(singleExtId = null) {
       // ops actually works in (recent + all future travel dates), and never truncate silently.
       // Compared as text so it holds whether travel_date is a date, timestamp or ISO string.
       ({ rows: itemRows } = await b2cPool.query(
-        B2C_ITEM_JOIN + ` AND COALESCE(bi.travel_date, b.travel_date)::text >= $1
+        B2C_ITEM_JOIN + ` AND COALESCE(bi.travel_date::text, b.travel_date::text) >= $1
                           ORDER BY bi.booking_id, bi.line_no LIMIT $2`,
         [B2C_SYNC_FROM(), B2C_SYNC_MAX_ROWS + 1]
       ));
@@ -1541,7 +1581,7 @@ const server = http.createServer((req, res) => {
     if(!id) return J(res,400,{error:'id required'});
     (async () => {
       const out = { id };
-      const it = await b2cPool.query(`SELECT row_to_json(bi) AS r FROM ${b2cT('booking_items')} bi WHERE bi.booking_id = $1 ORDER BY bi.line_no`, [id]);
+      const it = await b2cPool.query(`SELECT row_to_json(bi) AS r FROM ${B2C_ITEM_SOURCE} WHERE bi.booking_id = $1 ORDER BY bi.line_no`, [id]);
       out.booking_items = it.rows.map(x => x.r);
       const bk = await b2cPool.query(`SELECT row_to_json(b) AS r FROM ${b2cT('bookings')} b WHERE b.id = $1`, [id]);
       out.booking = bk.rows[0] ? bk.rows[0].r : null;
