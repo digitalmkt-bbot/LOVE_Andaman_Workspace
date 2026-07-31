@@ -44516,7 +44516,9 @@ function pckGuideJobCss(){ return '<style>'
   +'.nmc{line-height:1.35}.nmc b{font-weight:700;font-size:12.2px}'
   +'.ex{color:#374151;font-size:10px}'
   +'.tel{color:#6b7280;font-size:11px;white-space:nowrap;margin-left:4px}'
-  +'.lg{display:inline-block;border:1.5px solid #111827;border-radius:3px;padding:0 5px;margin-right:5px;font-family:"DM Mono",monospace;font-size:9.5px;font-weight:700;vertical-align:1px;white-space:nowrap}'
+  +'.lg{display:inline-block;border:1.5px solid #111827;border-radius:3px;padding:0 5px;font-family:"DM Mono",monospace;font-size:10px;font-weight:700;white-space:nowrap;line-height:1.5}'
+  +'.lg.alt{background:#111827;color:#fff}'
+  +'.lgc{text-align:center;padding-left:2px !important;padding-right:2px !important}'
   +'.pk{line-height:1.3}'
   +'.num{text-align:center;font-family:"DM Mono",monospace;font-size:13.5px;font-weight:700;padding-left:1px !important;padding-right:1px !important}'
   +'.num.z{color:#d1d5db;font-weight:400}'
@@ -44553,7 +44555,7 @@ function pckGuideJobSheet(bid, date, rows, vd){
   var J='<i>&middot;</i>';
 
   var langs=Object.keys(S.lang).sort(function(a,b){ return S.lang[b]-S.lang[a]; })
-    .map(function(c){ return e(c)+' '+S.lang[c]; }).join(J);
+    .map(function(c){ return '<span class="lg'+(c==='EN'?'':' alt')+'">'+e(c)+'</span> '+S.lang[c]; }).join(J);
   var M=S.meal, ml=[];
   if(M.veg+M.vegan) ml.push('มังสวิรัติ '+(M.veg+M.vegan));
   if(M.halal) ml.push('ฮาลาล '+M.halal);
@@ -44589,8 +44591,10 @@ function pckGuideJobSheet(bid, date, rows, vd){
     if(_gd.russian) _lgs.push('RU');
     if(_gd.chinese) _lgs.push('CN');
     var _ol=String(_gd.otherLang||'').trim(); if(_ol) _lgs.push(_ol);
-    var lgHtml=_lgs.length?('<span class="lg" title="ไกด์">'+_lgs.map(e).join('/')+'</span>'):'';
-    var names=lgHtml+'<b>'+e(NM.lead||'—')+'</b>'
+    //   ป้ายทึบ = ไม่ใช่อังกฤษ · ใบงานเป็นขาวดำ จะใช้สีแยกไม่ได้ ต้องใช้น้ำหนักหมึกแทน
+    var _alt=!(_lgs.length===1 && _lgs[0]==='EN');
+    var lgHtml=_lgs.length?('<span class="lg'+(_alt?' alt':'')+'" title="ไกด์">'+_lgs.map(e).join('/')+'</span>'):'<span class="dash">&mdash;</span>';
+    var names='<b>'+e(NM.lead||'—')+'</b>'
       +(NM.ex.length?('<span class="ex"> &middot; '+NM.ex.map(e).join(' &middot; ')+'</span>'):'')
       +(ph?('<span class="tel mono"> '+e(ph)+'</span>'):'');
     var veh=r.vanId?((typeof vehGet==='function'?vehGet(r.vanId):null)||{}):null;
@@ -44604,6 +44608,7 @@ function pckGuideJobSheet(bid, date, rows, vd){
     return '<tr>'
       +'<td><span class="ck"></span></td>'
       +'<td><span class="vc">'+e(b.voucherRef||b.code||'—')+'</span></td>'
+      +'<td class="lgc">'+lgHtml+'</td>'
       +'<td class="nmc">'+names+'</td>'
       +num('ad')+num('chd')+num('inf')+num('foc')
       +'<td class="tmc"><span class="tm">'+e(pckJobTime(time, r.arr))+'</span></td>'
@@ -44643,18 +44648,19 @@ function pckGuideJobSheet(bid, date, rows, vd){
         head='<span class="gvan">'+(zk==='NOVAN'?'ยังไม่จัดรถ':'มาเอง / เอเย่นต์ส่งเอง')+'</span>'
           +' <span class="gmeta">ไม่มีรถของเรา — เช็คว่ามาถึงท่าหรือยัง</span>';
       }
-      body+='<tr class="grp"><td colspan="11">'+head
+      body+='<tr class="grp"><td colspan="12">'+head
         +'<span class="gtot">'+e(pckZoneLabel(zk))+' &middot; '+vg.rows.length+' booking &middot; '+st.real.all+' pax</span></td></tr>';
       vg.rows.forEach(function(r){ body+=rowHtml(r); });
     });
   });
 
   var THEAD='<thead><tr><th style="width:18px">&#10003;</th><th style="width:7%">Voucher</th>'
-    +'<th style="width:34%">ลูกค้า &middot; ผู้โดยสารทั้งหมด</th>'
+    +'<th class="lgc" style="width:4%">ไกด์</th>'
+    +'<th style="width:32%">ลูกค้า &middot; ผู้โดยสารทั้งหมด</th>'
     +'<th class="num" style="width:2.8%">AD</th><th class="num" style="width:2.8%">CHD</th>'
     +'<th class="num" style="width:2.8%">INF</th><th class="num" style="width:2.8%">FOC</th>'
     +'<th style="width:9%">เวลารับ</th><th style="width:19%">สถานที่รับ &middot; โซน</th>'
-    +'<th style="width:10%">Add-on</th><th style="width:10%">Special request</th></tr></thead>';
+    +'<th style="width:9%">Add-on</th><th style="width:8%">Special request</th></tr></thead>';
 
   return '<div class="sheet d'+dens+'">'
     +'<div class="jh"><div class="jlogo">LA</div>'
