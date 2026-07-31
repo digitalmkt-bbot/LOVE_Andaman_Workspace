@@ -44490,19 +44490,11 @@ function pckGuideJobSheet(bid, date, rows){
   if(S.ltChtr) lt.push('เหมา '+S.ltChtr+' ลำ');
   var vans={}; rows.forEach(function(r){ if(r.vanId) vans[r.vanId]=1; });
 
-  // §onePage · ประมาณจำนวนบรรทัดที่ต้องวาง แล้วเลือกระดับความหนาแน่น
-  //   ชื่อไหลต่อกันในช่องกว้าง 33% (~92mm) รับได้ราว 95 ตัวอักษรต่อบรรทัด
-  //   ไม่ตัดข้อมูล — บีบระยะกับขนาดตัวอักษรอย่างเดียว
-  var _ngrp=(function(){ var seen={}, n=0;
-    rows.forEach(function(r){ var k=r.arr+'|'+(r.vanId||'own'); if(!seen[k]){ seen[k]=1; n++; } }); return n; })();
-  var _lines=_ngrp;
-  rows.forEach(function(r){
-    var NM=pckJobNames(r.b);
-    var chars=NM.lead.length+NM.ex.reduce(function(s2,n){ return s2+n.length+3; },0);
-    _lines += Math.max(1, Math.ceil(chars/95));
-  });
-  // ตัดท้ายใบออกแล้วได้ความสูงคืนราว 28mm ≈ 8-10 บรรทัด · เกณฑ์จึงเลื่อนขึ้นตาม
-  var dens = _lines<=21 ? 1 : _lines<=29 ? 2 : _lines<=39 ? 3 : 4;
+  // §autoFit (2026-08-01) · เลิกเดาจำนวนบรรทัดจากจำนวนตัวอักษร
+  //   การเดาพลาดได้สองทางและเสียทั้งคู่ — เดาน้อยไปตารางล้นทับ เดามากไปตัวหนังสือเล็กเกินจำเป็น
+  //   (เจอจริง 1 ส.ค. · 28 booking ได้ d3 ตัวเล็ก แต่พิมพ์ออกมาเหลือที่ว่างล่างเกือบ 40%)
+  //   เริ่มที่ระดับใหญ่สุดเสมอ แล้วให้สคริปต์วัดความสูงจริงหลังเรนเดอร์เป็นคนลดให้เท่าที่จำเป็น
+  var dens = 1;
 
   var rowHtml=function(r){
     var b=r.b, pb=ckPaxBreak(r.t.pax), NM=pckJobNames(b);
@@ -44646,11 +44638,16 @@ function pckGuideJobOrder(bid){
     // §onePage · ย่อ "ตาราง" ให้พอดีกรอบที่เหลือ · ห้ามย่อทั้งใบ เพราะย่อทั้งใบจะย่อกรอบลงไปด้วย
     // สัดส่วนเท่าเดิม แก้อะไรไม่ได้ (บั๊กที่เจอ 1 ส.ค. · ตารางทะลุไปทับช่องลงชื่อท้ายใบ)
     // รันซ้ำตอนฟอนต์โหลดเสร็จและตอนสั่งพิมพ์ เพราะความสูงจะเปลี่ยนหลังฟอนต์จริงมาถึง
-    +'<script>(function(){function fit(){'
+    // §autoFit · หาระดับที่ "ใหญ่ที่สุดที่ยังพอดีหน้า" ด้วยการวัดจริง ไม่ใช่การเดา
+    // ไล่ d1 → d4 หยุดทันทีที่ตารางไม่ล้นกรอบ · ถ้า d4 ยังล้นค่อยย่อตารางเป็นทางสุดท้าย
+    // (ห้ามย่อทั้งใบ เพราะจะย่อกรอบลงไปด้วย สัดส่วนเท่าเดิม แก้อะไรไม่ได้)
+    +'<script>(function(){var T=["d1","d2","d3","d4"];function fit(){'
     +'Array.prototype.forEach.call(document.querySelectorAll(".sheet"),function(el){'
     +'var tw=el.querySelector(".tw"), tb=tw&&tw.querySelector("table"); if(!tb) return;'
-    +'tb.style.zoom=1; var av=tw.clientHeight, need=tb.scrollHeight;'
-    +'if(need>av+1){ tb.style.zoom=Math.max(.45,(av-2)/need); }});}'
+    +'tb.style.zoom=1; var i, ok=false;'
+    +'for(i=0;i<T.length;i++){ T.forEach(function(c){ el.classList.remove(c); }); el.classList.add(T[i]);'
+    +'if(tb.scrollHeight<=tw.clientHeight){ ok=true; break; } }'
+    +'if(!ok){ tb.style.zoom=Math.max(.45,(tw.clientHeight-2)/tb.scrollHeight); }});}'
     +'setTimeout(fit,60); window.addEventListener("load",function(){setTimeout(fit,40);});'
     +'if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){setTimeout(fit,20);});}'
     +'window.addEventListener("beforeprint",fit);})();<\/script>'
