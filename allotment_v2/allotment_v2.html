@@ -44608,7 +44608,6 @@ function pckGuideJobSheet(bid, date, rows, vd){
     return '<tr>'
       +'<td><span class="ck"></span></td>'
       +'<td><span class="vc">'+e(b.voucherRef||b.code||'—')+'</span></td>'
-      +'<td class="lgc">'+lgHtml+'</td>'
       +'<td class="nmc">'+names+'</td>'
       +num('ad')+num('chd')+num('inf')+num('foc')
       +'<td class="tmc"><span class="tm">'+e(pckJobTime(time, r.arr))+'</span></td>'
@@ -44616,6 +44615,7 @@ function pckGuideJobSheet(bid, date, rows, vd){
         +(room?('<span class="pl2"> ห้อง '+e(room)+'</span>'):'')
         +((pickup&&area)?('<span class="pl2"> &middot; '+e(area)+'</span>'):'')+'</td>'
       +'<td>'+(ao.length?ao.map(function(a){ return '<span class="ao">'+e(a)+'</span>'; }).join(''):'<span class="dash">ไม่มี</span>')+'</td>'
+      +'<td class="lgc">'+lgHtml+'</td>'
       +'<td>'+(sq?('<span class="sq">'+e(sq)+'</span>'):'<span class="dash">—</span>')+'</td>'
       +'</tr>';
   };
@@ -44655,12 +44655,13 @@ function pckGuideJobSheet(bid, date, rows, vd){
   });
 
   var THEAD='<thead><tr><th style="width:18px">&#10003;</th><th style="width:7%">Voucher</th>'
-    +'<th class="lgc" style="width:4%">ไกด์</th>'
-    +'<th style="width:32%">ลูกค้า &middot; ผู้โดยสารทั้งหมด</th>'
+    +'<th style="width:33%">ลูกค้า &middot; ผู้โดยสารทั้งหมด</th>'
     +'<th class="num" style="width:2.8%">AD</th><th class="num" style="width:2.8%">CHD</th>'
     +'<th class="num" style="width:2.8%">INF</th><th class="num" style="width:2.8%">FOC</th>'
     +'<th style="width:9%">เวลารับ</th><th style="width:19%">สถานที่รับ &middot; โซน</th>'
-    +'<th style="width:9%">Add-on</th><th style="width:8%">Special request</th></tr></thead>';
+    +'<th style="width:9%">Add-on</th>'
+    +'<th class="lgc" style="width:4%">ไกด์</th>'
+    +'<th style="width:8%">Special request</th></tr></thead>';
 
   return '<div class="sheet d'+dens+'">'
     +'<div class="jh"><div class="jlogo">LA</div>'
