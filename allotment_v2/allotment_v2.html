@@ -44454,16 +44454,6 @@ function pckGuideJobCss(){ return '<style>'
   +'.pl2{font-size:9.5px;color:#6b7280}'
   +'.ao{display:inline-block;border:1.5px solid #111827;border-radius:3px;padding:0 5px;font-size:9.5px;font-weight:700;margin:0 2px 2px 0;white-space:normal}'
   +'.sq{font-weight:600}.dash{color:#9ca3af}'
-  // ── ท้ายใบ ──
-  +'.jf{display:flex;gap:10px;margin-top:6px;align-items:stretch;flex:none}'
-  +'.jnote{flex:1;border:1.5px solid #111827;border-radius:8px;padding:5px 10px}'
-  +'.jnlab{font-size:8px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em}'
-  +'.jline{border-bottom:1px dotted #d1d5db;height:13px;margin-top:4px}'
-  +'.jsign{width:180px;border:1.5px solid #111827;border-radius:8px;padding:5px 10px;text-align:center}'
-  +'.jsbox{height:26px;border-bottom:1px dotted #6b7280;margin:4px 0 3px}'
-  +'.jsname{font-size:9.5px;font-weight:700}'
-  +'.jemg{margin-top:5px;display:flex;gap:14px;flex-wrap:wrap;font-size:9.5px;border-top:1px solid #d1d5db;padding-top:4px;color:#374151;flex:none}'
-  +'.jemg b{font-family:"DM Mono",monospace}'
   // ── ระดับความหนาแน่น · เลือกตามจำนวนบรรทัดที่ต้องวาง ไม่ตัดข้อมูล แค่บีบระยะ ──
   +'.sheet.d2 td{padding:1.8px 4px;font-size:10px}.sheet.d2 .nmc b{font-size:10.3px}.sheet.d2 .ex{font-size:9.5px}'
   +'.sheet.d2 tr.grp td{padding:2px 7px}.sheet.d2 .num{font-size:11px}'
@@ -44511,7 +44501,8 @@ function pckGuideJobSheet(bid, date, rows){
     var chars=NM.lead.length+NM.ex.reduce(function(s2,n){ return s2+n.length+3; },0);
     _lines += Math.max(1, Math.ceil(chars/95));
   });
-  var dens = _lines<=17 ? 1 : _lines<=24 ? 2 : _lines<=34 ? 3 : 4;
+  // ตัดท้ายใบออกแล้วได้ความสูงคืนราว 28mm ≈ 8-10 บรรทัด · เกณฑ์จึงเลื่อนขึ้นตาม
+  var dens = _lines<=26 ? 1 : _lines<=34 ? 2 : _lines<=44 ? 3 : 4;
 
   var rowHtml=function(r){
     var b=r.b, pb=ckPaxBreak(r.t.pax), NM=pckJobNames(b);
@@ -44614,15 +44605,6 @@ function pckGuideJobSheet(bid, date, rows){
     +'<div class="jsc"><span class="jslab">หางยาว</span>'+(lt.length?('<span class="jsv">'+lt.join(J)+'</span>'):'<span class="jsnone">ไม่มี</span>')+'</div>'
     +'</div>'
     +'<div class="tw"><table>'+THEAD+'<tbody>'+body+'</tbody></table></div>'
-    +'<div class="jf">'
-    +'<div class="jnote"><div class="jnlab">บันทึกระหว่างเดินทาง</div>'
-      +new Array(dens>=3?2:3).join('<div class="jline"></div>')+'</div>'
-    +'<div class="jsign"><div class="jnlab">ไกด์ผู้รับงาน</div><div class="jsbox"></div><div class="jsname">ลงชื่อ / วันที่</div></div>'
-    +'<div class="jsign"><div class="jnlab">กัปตันเรือ</div><div class="jsbox"></div><div class="jsname">รับผู้โดยสารครบ</div></div>'
-    +'</div>'
-    +'<div class="jemg"><span>ศูนย์ปฏิบัติการ <b>076-XXX-XXX</b></span><span>ฉุกเฉินทางทะเล <b>1196</b></span>'
-      +'<span>กู้ชีพ <b>1669</b></span><span>ตำรวจท่องเที่ยว <b>1155</b></span>'
-      +'<span style="margin-left:auto;color:#9ca3af">ส่งคืนพร้อมลายเซ็นกัปตัน &middot; '+e(boat.name||bid)+'</span></div>'
     +'</div>';
 }
 
