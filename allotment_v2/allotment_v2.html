@@ -42486,6 +42486,22 @@ function pckVanBoatSplit(vanId, date){
   out.sort(function(a,b){ return b.pax-a.pax; });
   return out;
 }
+// §vanJoin · การ์ด/ใบงานหนึ่งอันเป็นของเรือลำเดียว · ลำอื่นที่รถคันเดียวกันต้องไปส่งคือสิ่งที่มองไม่เห็น
+//   บอกแค่ "จอยรถกับลำไหน" พอ · จำนวนคนอยู่ใน title ไว้ให้จิ้มดูตอนอยากรู้ ไม่เอามารกบนป้าย
+//   ใช้สีประจำเรือของ "ลำที่ไปจอย" ไม่ใช่ลำที่กำลังเปิดอยู่ — สายตาจะได้โยงไปถูกการ์ด
+function pckVanJoinHtml(vanId, date, curBid, cls){
+  if(!vanId || typeof pckVanBoatSplit!=='function') return '';
+  var e=ckEsc;
+  var o=pckVanBoatSplit(vanId,date).filter(function(x){ return x.bid && x.bid!==curBid; });
+  if(!o.length) return '';
+  return o.map(function(x){
+    var c=(typeof pckBoatColor==='function')?(pckBoatColor(x.bid)||'#185FA5'):'#185FA5';
+    var ink=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(c):'#fff';
+    var nm=(typeof pckBoatName==='function')?pckBoatName(x.bid):x.bid;
+    return '<span class="'+cls+'" style="background:'+c+';color:'+ink+';border-color:'+c+'"'
+      +' title="รถคันนี้ต้องไปส่งขึ้นเรือ '+e(nm)+' อีก '+x.pax+' คน ('+x.n+' booking)">จอยรถกับ '+e(nm)+'</span>';
+  }).join('');
+}
 // §onsiteVoid (2026-08-01) · ยกเลิกหน้างานจนไม่เหลือคน = ปิดรายการ ไม่ใช่ "รอเช็คอิน"
 //   เดิม CXL/No-show เขียนแค่ events[] ส่วน pckStage() ดูแค่ ck.at / arrivedAt / clearedAt ที่ไม่มีใครแตะ
 //   แถวที่ยกเลิกครบใบจึงค้างเป็น "ยังไม่เช็คอิน" ตลอด พร้อมปุ่มเช็คอินที่ยังกดได้ (เจอจริง 31 ก.ค. · EXC/Queen1)
@@ -44229,7 +44245,7 @@ function pckCardCSS(scope){ return ''
   +scope+' .pck-vmeta{font-size:12px;color:#5F5E5A;white-space:nowrap}'
   +scope+' .pck-vmeta b{color:#2f2f2b;font-weight:700}'
   +scope+' .pck-vtel{font-size:12px;padding:3px 11px;border-radius:999px;border:1px solid;text-decoration:none;font-family:\'DM Mono\',monospace;background:#fff;font-weight:700;white-space:nowrap}'
-  +scope+' .pck-vsplit{background:#FBE9E9;color:#A32D2D;border:1px solid #F0C9C9;border-radius:999px;padding:3px 11px;font-size:10.5px;font-weight:800;white-space:nowrap}'
+  +scope+' .pck-vjoin{border:1px solid;border-radius:999px;padding:3px 12px;font-size:10.5px;font-weight:800;white-space:nowrap}'
   +scope+' .pck-vstat{margin-left:auto;font-size:11.5px;padding:4px 13px;border-radius:999px;font-weight:700;border:1px solid #E7E4DC;background:#F1EFE8;color:#5F5E5A;white-space:nowrap}'
   +scope+' .pck-vstat.ok{background:#DCF4E8;color:#0C6B47;border-color:#BFE3CC}'
   +scope+' .pck-vstat.money{background:#FBF0DD;color:#7A4A00;border-color:#EAD9B0}'
@@ -44368,7 +44384,7 @@ function pckRowHtml(r, date){
    +'</tr>';
 }
 // หัวกล่องรถในการ์ดเรือ · กรอบกล่องใช้สีประจำรถ (เดียวกับ By-trip) · ข้อมูลอยู่บนพื้นขาว
-function pckVanHead(vg, date){
+function pckVanHead(vg, date, curBid){
   var e=ckEsc, vid=vg.vid, own=!vid;
   var veh=(!own && typeof vehGet==='function')?(vehGet(vid)||{}):{};
   var c=(!own && typeof vehChipPair==='function')?vehChipPair(vid):['#F4E8FB','#6B289A'];
@@ -44393,15 +44409,8 @@ function pckVanHead(vg, date){
       +'<span style="font-size:10.5px;font-weight:700;white-space:nowrap;color:'+(vck===vg.rows.length?'#0F6E56':'#a5a49d')+'">'
         +(vck===vg.rows.length?'&#10003; เช็คอินรถครบ':('เช็คอินรถแล้ว '+vck+'/'+vg.rows.length))+'</span>';
   }
-  // §vanBoatSplit · รถคันนี้รับมาแล้วแยกลงคนละลำหรือเปล่า · การ์ดนี้กรองตามเรือแล้ว
-  //   คนอ่านจึงเห็นแค่ส่วนของเรือลำนี้ ไม่รู้เลยว่าคันเดียวกันยังมีคนไปอีกลำ
-  if(vid){
-    var _sp=(typeof pckVanBoatSplit==='function')?pckVanBoatSplit(vid,date):[];
-    if(_sp.length>1){
-      h+='<span class="pck-vsplit" title="รถคันนี้รับมาแล้วแยกลงคนละลำ — เช็คให้ชัดว่าใครลงลำไหนก่อนปล่อยขึ้นเรือ">&#9888; แยกลง '+_sp.length+' ลำ &middot; '
-        +_sp.map(function(x){ return e(x.bid?pckBoatName(x.bid):'ยังไม่จัดเรือ')+' '+x.pax; }).join(' &middot; ')+'</span>';
-    }
-  }
+  // §vanJoin · การ์ดนี้กรองตามเรือแล้ว คนอ่านเห็นแค่ส่วนของลำนี้ ไม่รู้ว่าคันเดียวกันยังต้องไปส่งอีกลำ
+  if(vid) h+=pckVanJoinHtml(vid, date, curBid, 'pck-vjoin');
   var stCls=(a.due>0)?'money':((a.on===a.n)?'ok':'');
   var stTxt=(a.due>0)?('เก็บหน้าท่า &#3647;'+Math.round(a.due).toLocaleString()+' · '+a.pax+' pax')
         :((a.on===a.n)?('&#10003; ขึ้นเรือครบ · '+a.pax+' pax'):('ขึ้นเรือ '+a.on+'/'+a.n+' · '+a.pax+' pax'));
@@ -44550,7 +44559,7 @@ function pckGuideJobCss(){ return '<style>'
   +'.gvan{font-weight:700;font-size:13px}'
   +'.gmeta{font-size:11.5px;color:#374151}.gmeta b{font-family:"DM Mono",monospace}'
   +'.gtot{float:right;font-size:12px;font-weight:700}'
-  +'.gsplit{display:inline-block;border:1.5px solid #111827;border-radius:4px;padding:0 7px;font-size:10.5px;font-weight:700;margin-left:6px;white-space:nowrap}'
+  +'.gjoin{display:inline-block;border:1.5px solid;border-radius:4px;padding:0 8px;font-size:10.5px;font-weight:700;margin-left:7px;white-space:nowrap}'
   +'.ck{width:14px;height:14px;border:1.5px solid #111827;border-radius:2px;display:block;margin:1px auto 0}'
   +'.vc{font-family:"DM Mono",monospace;font-weight:700;font-size:11.5px;word-break:break-all;line-height:1.15;display:inline-block}'
   +'.nmc{line-height:1.35}.nmc b{font-weight:700;font-size:12.2px}'
@@ -44705,12 +44714,8 @@ function pckGuideJobSheet(bid, date, rows, vd){
         head='<span class="gvan">'+e(veh.name||vg.vid)+'</span> <span class="gmeta">'
           +(rd.plate?('ทะเบียน <b>'+e(rd.plate)+'</b>'):'')
           +(rd.driver?(' &middot; '+e(rd.driver)):'')+(rd.phone?(' &middot; <b>'+e(rd.phone)+'</b>'):'')+'</span>';
-        // §vanBoatSplit · คันนี้ส่งคนขึ้นมากกว่าหนึ่งลำ → บอกบนกระดาษ ไกด์จะได้ไม่รอคนที่ไปอีกลำ
-        var _sp=(typeof pckVanBoatSplit==='function')?pckVanBoatSplit(vg.vid,date):[];
-        if(_sp.length>1){
-          head+=' <span class="gsplit">&#9888; คันนี้แยกลง '+_sp.length+' ลำ &middot; '
-            +_sp.map(function(x){ return e(x.bid?pckBoatName(x.bid):'ยังไม่จัดเรือ')+' '+x.pax; }).join(' &middot; ')+'</span>';
-        }
+        // §vanJoin · ไกด์ที่ถือใบนี้จะได้ไม่ยืนรอคนที่รถคันเดียวกันพาไปลงอีกลำ
+        head+=pckVanJoinHtml(vg.vid, date, bid, 'gjoin');
       } else {
         head='<span class="gvan">'+(zk==='NOVAN'?'ยังไม่จัดรถ':'มาเอง / เอเย่นต์ส่งเอง')+'</span>'
           +' <span class="gmeta">ไม่มีรถของเรา — เช็คว่ามาถึงท่าหรือยัง</span>';
@@ -45171,7 +45176,7 @@ function renderPierCheckin(){
         vord.forEach(function(vk){
           var vg=vgs[vk];
           var vcol=vg.vid?((((typeof vehChipPair==='function')?vehChipPair(vg.vid):['#EEEDF0','#6B289A'])[1])||'#6B289A'):zc;
-          cardsHtml+='<div class="pck-van" style="border-color:'+vcol+'66">'+pckVanHead(vg,date)
+          cardsHtml+='<div class="pck-van" style="border-color:'+vcol+'66">'+pckVanHead(vg,date,bid)
             +'<div class="pck-tw"><table class="ck-tbl pck-tbl">'+PCK_THEAD+'<tbody>'
             +vg.rows.map(function(r){ return pckRowHtml(r,date); }).join('')
             +'</tbody></table></div></div>';
