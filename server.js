@@ -148,7 +148,13 @@ const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_re
 //     Σcredits_applied vs bookings.total — payment_type alone never says whether money arrived.
 // v7: carries the pickup AREA NAME through as pickupArea (ops area name when matched, else B2C's
 //     raw text) — the ops Zone column prints that field, so unmatched rows showed a bare dash.
-const B2C_MAP_VER = 7;
+// v8: imports the traveller list (bookings.passengers via v_booking_passengers) into
+//     passengers[] — name + nationality only. Until v8 the array was always empty.
+// v9: corrects v8 and earlier — bookings.passengers EXCLUDES the lead, it is the other travellers.
+//     leadPax now comes from the booking's own customer block (was passengers[0].name, which put
+//     traveller #2 in the lead slot and then dropped them from the list, leaving "lead only" on a
+//     booking that had a second guest). Also carries customer.nationality into leadNationality.
+const B2C_MAP_VER = 9;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -225,7 +231,7 @@ function b2cLineSeat(item) {
 // new B2C ids already carry their own LOV- prefix); each carries a single trip.
 // isFirstLine: order-level payment (deposit/balance) attaches only to the first line of the order,
 // so a multi-item order's payment isn't multiplied across its item-bookings.
-function mapB2CItemBooking(item, isFirstLine, findArea) {
+function mapB2CItemBooking(item, isFirstLine, findArea, paxRows) {
   const h = item;
   // pg returns date columns as JS Date objects — String(d).slice(0,10) gives "Sat Jul 18",
   // not YYYY-MM-DD, which the frontend cannot parse. Format in local time explicitly.
@@ -263,14 +269,19 @@ function mapB2CItemBooking(item, isFirstLine, findArea) {
   const adTh = Number(h.pax_thai) || 0;
   const adFrRaw = Number(h.pax_foreign) || 0;
   const adFr = adFrRaw > 0 ? adFrRaw : Math.max(0, (Number(h.pax_adult) || 0) - adTh);
-  // Lead name: the booking's own passenger/booker name beats the CRM customers row — the B2C
-  // backend dedupes customers by email, so customers.name can be a stale earlier customer.
+  // Lead = the booking's own customer block, exactly as B2C's own webhook mapper reads it
+  // (erp/src/mapExternalBooking.js: leadPax = ext.customer.name). bookings.passengers is NOT the
+  // lead — it holds the OTHER travellers, so a 2-adult booking is customer + 1 passenger row.
+  // Order: the booking's own customer, then the CRM customers row (deduped by email, so it can be
+  // a stale earlier customer), then the booker, and only as a last resort the first traveller.
   let leadFromPax = '';
   try {
     let ps = h.bk_passengers;
     if (typeof ps === 'string') ps = JSON.parse(ps);
     if (Array.isArray(ps) && ps[0] && ps[0].name) leadFromPax = String(ps[0].name).trim();
   } catch (_) {}
+  const leadName = String(h.bk_customer_name || h.customer_name || h.booked_by_name || leadFromPax || '').trim();
+  const leadNat  = b2cNatCode(h.bk_customer_nat || h.crm_nationality);
   // private_own = whole-boat charter; day_trip = shared seat. B2C is the source of truth for product
   // type, so derive the mode here — a charter must NOT consume the day-trip seat pool
   // (getSeatsConsumed / baCharterBoatIds exclude bookingMode==='charter'). Detect from BOTH signals:
@@ -345,8 +356,8 @@ function mapB2CItemBooking(item, isFirstLine, findArea) {
     createdBy: 'b2c_sync',
     voucherRef: String(h.booking_id),
     agentId: 'a_b2c',
-    leadPax: leadFromPax || h.customer_name || h.booked_by_name || '',
-    leadNationality: '',
+    leadPax: leadName,
+    leadNationality: leadNat,
     leadPhone: h.customer_phone || '',
     leadEmail: h.customer_email || h.booked_by_email || '',
     status: mapB2CStatus(h.bk_status),
@@ -363,7 +374,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea) {
            (!areaId && !noTransfer && (pickupArea || pickupLoc))
              ? `Pickup: ${pickupArea || pickupLoc}${pickupZone ? ' (' + pickupZone + ')' : ''} — area unassigned` : null].filter(Boolean).join(' · '),
     trips: [trip],
-    passengers: [],
+    passengers: isFirstLine ? b2cPassengerList(paxRows) : [],
     addOns: [],
     adjustments: [],
     total: seat,
@@ -404,6 +415,12 @@ const B2C_ITEM_JOIN = `
          b.payment_type  AS bk_payment_type,
          b.created_at    AS bk_created_at,
          ch.name         AS channel_name,
+         -- The booking's OWN customer block is the lead. Read through to_jsonb so this works whether
+         -- B2C keeps it as flat columns or as a customer jsonb, and so a shape that isn't there
+         -- degrades to NULL instead of erroring the whole sync query (same trick as pay below).
+         COALESCE(to_jsonb(b)->>'customer_name', to_jsonb(b)->'customer'->>'name')               AS bk_customer_name,
+         COALESCE(to_jsonb(b)->>'customer_nationality', to_jsonb(b)->'customer'->>'nationality') AS bk_customer_nat,
+         to_jsonb(c)->>'nationality' AS crm_nationality,
          c.name          AS customer_name,
          c.phone         AS customer_phone,
          c.email         AS customer_email,
@@ -427,6 +444,120 @@ const B2C_ITEM_JOIN = `
                   THEN to_jsonb(b)->'credits_applied' ELSE '[]'::jsonb END) crd), 0) AS paid
   ) pay ON TRUE
   WHERE bi.type IN ('day_trip','private_own')`;
+
+// ── B2C traveller list ──────────────────────────────────────────────────────────────────────────
+// bookings.passengers is a BOOKING-level jsonb array, one object per traveller:
+//   [{name, passport, dob, nationality, phone, remark}]
+// Read it through the B2C-side view v_booking_passengers (jsonb_array_elements WITH ORDINALITY —
+// the ordinal is the only stable identity, the objects carry no id) rather than off the column
+// here, so the B2C side can change how it stores the list without breaking this sync.
+// DDL for the view + its GIN index: database_migration/b2c_v_booking_passengers.sql.
+//
+// Only name + nationality are imported. sb_bookings__passengers holds {name, nationality, type,
+// foc} and nothing more; passport / dob / phone / remark are left in B2C on purpose — that is
+// passport-level PII, no ops screen reads it today, and copying it here would spread the exposure
+// into a second database. Adding it later = 4 columns + a migration + a deliberate PII decision.
+//
+// NOT a headcount. The list is optional and may be filled in any time before travel, so a booking
+// with pax_adult = 4 can legitimately have 0 rows here. Seat counts stay on booking_items.pax_*.
+const B2C_PAX_VIEW = 'v_booking_passengers';
+let _b2cPaxViewMissingAt = 0;
+const B2C_PAX_VIEW_RETRY_MS = 10 * 60 * 1000;   // re-probe, so creating the view needs no restart
+
+// B2C nationality is free text off a datalist — 'Thailand', 'Thai' and 'TH' all occur. Ops stores an
+// alpha-2 CODE (the client's mdValidNat accepts /^[A-Z]{2}$/ or a custom code). Map what we can and
+// drop the rest: an unmatched value would land in the column as a code nothing can read, and the
+// client already falls back to guessing the nationality from the name when the field is empty.
+const B2C_NAT_ALIAS = {
+  thai:'TH', thailand:'TH', british:'GB', english:'GB', uk:'GB', 'united kingdom':'GB',
+  'great britain':'GB', american:'US', usa:'US', us:'US', 'united states':'US',
+  chinese:'CN', china:'CN', korean:'KR', 'south korea':'KR', korea:'KR', japanese:'JP', japan:'JP',
+  russian:'RU', russia:'RU', german:'DE', germany:'DE', french:'FR', france:'FR',
+  italian:'IT', italy:'IT', spanish:'ES', spain:'ES', dutch:'NL', netherlands:'NL', holland:'NL',
+  australian:'AU', australia:'AU', 'new zealand':'NZ', indian:'IN', india:'IN',
+  malaysian:'MY', malaysia:'MY', singaporean:'SG', singapore:'SG', taiwanese:'TW', taiwan:'TW',
+  'hong kong':'HK', israeli:'IL', israel:'IL', swedish:'SE', sweden:'SE', swiss:'CH',
+  switzerland:'CH', canadian:'CA', canada:'CA', kazakh:'KZ', kazakhstan:'KZ',
+  burmese:'MM', myanmar:'MM', vietnamese:'VN', vietnam:'VN', indonesian:'ID', indonesia:'ID',
+  filipino:'PH', philippines:'PH', polish:'PL', poland:'PL', czech:'CZ', danish:'DK', denmark:'DK',
+  norwegian:'NO', norway:'NO', finnish:'FI', finland:'FI', belgian:'BE', belgium:'BE',
+  austrian:'AT', austria:'AT', portuguese:'PT', portugal:'PT', turkish:'TR', turkey:'TR',
+  ukrainian:'UA', ukraine:'UA', emirati:'AE', uae:'AE', 'united arab emirates':'AE',
+  saudi:'SA', 'saudi arabia':'SA', irish:'IE', ireland:'IE', greek:'GR', greece:'GR',
+  brazilian:'BR', brazil:'BR', mexican:'MX', mexico:'MX', 'south african':'ZA', 'south africa':'ZA',
+  lao:'LA', laos:'LA', cambodian:'KH', cambodia:'KH',
+};
+let _b2cNatByName = null;
+function b2cNatCode(txt) {
+  const s = String(txt || '').trim();
+  if (!s) return '';
+  if (/^[A-Za-z]{2}$/.test(s)) return s.toUpperCase();
+  const k = s.toLowerCase();
+  if (B2C_NAT_ALIAS[k]) return B2C_NAT_ALIAS[k];
+  if (!_b2cNatByName) {
+    // Formal country names ('United Kingdom', 'Viet Nam') straight from ICU; the alias table above
+    // covers the demonyms and short forms ICU does not know. No full-icu build → aliases only.
+    _b2cNatByName = {};
+    try {
+      const dn = new Intl.DisplayNames(['en'], { type: 'region' });
+      for (let a = 65; a <= 90; a++) for (let b = 65; b <= 90; b++) {
+        const cc = String.fromCharCode(a, b);
+        let nm = ''; try { nm = dn.of(cc) || ''; } catch (_) {}
+        if (nm && nm !== cc) _b2cNatByName[nm.toLowerCase()] = cc;
+      }
+    } catch (_) {}
+  }
+  return _b2cNatByName[k] || '';
+}
+
+// booking_id → [{paxNo, name, nationality}] for a batch of B2C orders. A missing view or a failed
+// read must never kill the sync: bookings then import exactly as before, with counts and no names.
+async function b2cPassengerRows(ids) {
+  const map = new Map();
+  if (!b2cPool || !ids.length) return map;
+  if (_b2cPaxViewMissingAt && Date.now() - _b2cPaxViewMissingAt < B2C_PAX_VIEW_RETRY_MS) return map;
+  try {
+    const { rows } = await b2cPool.query(
+      `SELECT booking_id, pax_no, name, nationality FROM ${b2cT(B2C_PAX_VIEW)}
+        WHERE booking_id::text = ANY($1) ORDER BY booking_id, pax_no`, [ids.map(String)]);
+    _b2cPaxViewMissingAt = 0;
+    for (const r of rows) {
+      const k = String(r.booking_id);
+      if (!map.has(k)) map.set(k, []);
+      map.get(k).push({
+        paxNo: Number(r.pax_no) || 0,
+        name: String(r.name || '').trim(),        // the view already nullifs blank-but-present ''
+        nationality: b2cNatCode(r.nationality),
+      });
+    }
+  } catch (e) {
+    if (e && e.code === '42P01') {               // undefined_table — view not created yet
+      _b2cPaxViewMissingAt = Date.now();
+      console.warn(`[b2c-sync] ${B2C_SCHEMA}.${B2C_PAX_VIEW} not found — importing pax counts only, no traveller names. Create it with database_migration/b2c_v_booking_passengers.sql`);
+    } else {
+      console.warn('[b2c-sync] traveller list read failed — counts only this run:', e.message);
+    }
+  }
+  return map;
+}
+
+// The list is booking-level with no link back to a booking_item, so it cannot be split per trip.
+// Attach it to line 0 only — the same rule the order-level payment follows — instead of repeating
+// every traveller on each line of a multi-item order.
+//
+// Maps 1:1, no row dropped as "the lead": B2C's passengers[] already EXCLUDES the lead (that is
+// bookings.customer), so a 2-adult booking is customer + one passenger row. This mirrors B2C's own
+// webhook mapper — erp/src/mapExternalBooking.js maps ext.passengers straight through as AD — and
+// matches ops semantics, where passengers[] is the guests after the lead (rendered from #2).
+function b2cPassengerList(rows) {
+  if (!Array.isArray(rows) || !rows.length) return [];
+  const out = [];
+  for (const r of rows) {
+    if (!r.name && !r.nationality) continue;     // fully blank row — nothing for ops to show
+    out.push({ name: r.name, nationality: r.nationality, type: 'AD', foc: false });
+  }
+  return out;
+}
 
 async function relSyncB2C(singleExtId = null) {
   if (!b2cPool || !pool || DATA_BACKEND !== 'relational') return;
@@ -465,9 +596,17 @@ async function relSyncB2C(singleExtId = null) {
     // upsert, then bump app_state version + SSE so clients actually reload the new data. Without the
     // bump, /api/load saw "version unchanged" and served the pre-sync cached blob — new B2C bookings
     // sat in the tables but never reached the app until an unrelated save bumped the version.
+    // Traveller names live on bookings.passengers, not on booking_items, and are typically filled in
+    // AFTER the order is placed — so they must feed the change hash as well. Hashing the item rows
+    // alone meant a list typed in later never synced: booking_items was untouched, so the fast path
+    // below skipped the whole upsert.
+    const paxByBooking = await b2cPassengerRows([...new Set(itemRows.map(r => String(r.booking_id)))]);
+
     let srcHash = null;
     if (!singleExtId) {
-      srcHash = crypto.createHash('sha1').update('v' + B2C_MAP_VER + '|' + JSON.stringify(itemRows)).digest('hex');
+      srcHash = crypto.createHash('sha1')
+        .update('v' + B2C_MAP_VER + '|' + JSON.stringify(itemRows) + '|' + JSON.stringify([...paxByBooking]))
+        .digest('hex');
       try {
         const hr = await pool.query('SELECT data FROM app_state WHERE id=$1', ['b2c_sync_hash']);
         if (hr.rows[0] && hr.rows[0].data === srcHash) { _b2cHealthOk(); return; }   // B2C unchanged since last sync
@@ -499,7 +638,7 @@ async function relSyncB2C(singleExtId = null) {
     const b2cBks = [];
     for (const items of Object.values(byId)) {
       items.sort((a, b) => Number(a.line_no) - Number(b.line_no));
-      items.forEach((it, i) => b2cBks.push(mapB2CItemBooking(it, i === 0, findArea)));
+      items.forEach((it, i) => b2cBks.push(mapB2CItemBooking(it, i === 0, findArea, paxByBooking.get(String(it.booking_id)))));
     }
     const tables  = osRepo.decomposeBlob({ sb_bookings: b2cBks });
     const b2cIds  = b2cBks.map(b => b.id);
@@ -1312,8 +1451,10 @@ const server = http.createServer((req, res) => {
         const c = await b2cPool.query(`SELECT row_to_json(c) AS r FROM ${b2cT('customers')} c WHERE c.id = $1`, [out.booking.customer_id]);
         out.customer = c.rows[0] ? c.rows[0].r : null;
       }
+      const paxMap = await b2cPassengerRows([id]);
+      out.passengers = paxMap.get(String(id)) || [];     // as the view returns them, before mapping
       const j = await b2cPool.query(B2C_ITEM_JOIN + ` AND bi.booking_id = $1 ORDER BY bi.line_no`, [id]);
-      out.mapped = j.rows.map((r, i) => mapB2CItemBooking(r, i === 0, null));
+      out.mapped = j.rows.map((r, i) => mapB2CItemBooking(r, i === 0, null, paxMap.get(String(id))));
       J(res,200,out);
     })().catch(e => J(res,500,{error:e.message}));
     return;
