@@ -157,7 +157,9 @@ const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_re
 // v10: applies the ORDER-level discount / surcharge (bookings.discount_amount, surcharge_amount)
 //      to line 0. They were selected but never read, so the line seat price stood in for the whole
 //      total — LOV-9930593 imported at 55,984 against a real 54,400.
-const B2C_MAP_VER = 10;
+// v11: a line with no nationality split of its own (pax_thai = pax_foreign = 0) follows the LEAD's
+//      nationality instead of counting everyone as foreign.
+const B2C_MAP_VER = 11;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -292,6 +294,15 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows) {
   } catch (_) {}
   const leadName = String(h.bk_customer_name || h.customer_name || h.booked_by_name || leadFromPax || '').trim();
   const leadNat  = b2cNatCode(h.bk_customer_nat || h.crm_nationality);
+  // Nationality split: B2C carries pax_thai / pax_foreign per item, but leaves BOTH 0 when the split
+  // was never captured — and the fallback then charged the whole line to foreigners. A Thai group
+  // booked in Thai (LOV-9930593: lead "คุณชุติกาญจน์", 16 adults, split 0/0) read as 16 FR in the
+  // market mix. With no split of its own, the line follows the LEAD's nationality; children and
+  // infants follow it too, since they are the same party.
+  const splitKnown = adTh > 0 || adFrRaw > 0;
+  const paxAllThai = !splitKnown && leadNat === 'TH';
+  const chd = Number(h.pax_child) || 0;
+  const inf = Number(h.pax_infant) || 0;
   // private_own = whole-boat charter; day_trip = shared seat. B2C is the source of truth for product
   // type, so derive the mode here — a charter must NOT consume the day-trip seat pool
   // (getSeatsConsumed / baCharterBoatIds exclude bookingMode==='charter'). Detect from BOTH signals:
@@ -336,12 +347,12 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows) {
     date: date,
     bookingMode: isCharter ? 'charter' : 'seat',
     pax: {
-      ad_fr: adFr,
-      ad_th: adTh,
-      chd_fr: Number(h.pax_child) || 0,
-      chd_th: 0,
-      inf_fr: Number(h.pax_infant) || 0,
-      inf_th: 0,
+      ad_fr: paxAllThai ? 0 : adFr,
+      ad_th: paxAllThai ? (Number(h.pax_adult) || 0) : adTh,
+      chd_fr: paxAllThai ? 0 : chd,
+      chd_th: paxAllThai ? chd : 0,
+      inf_fr: paxAllThai ? 0 : inf,
+      inf_th: paxAllThai ? inf : 0,
       foc: Number(h.pax_foc) || 0,
       // B2C has no nationality split for FOC, but these columns must not be NULL: the seat-count
       // queries add the pax columns together, and one NULL makes the whole booking count as zero.
@@ -482,6 +493,14 @@ const B2C_ITEM_JOIN = `
 //
 // NOT a headcount. The list is optional and may be filled in any time before travel, so a booking
 // with pax_adult = 4 can legitimately have 0 rows here. Seat counts stay on booking_items.pax_*.
+// Full-sync scope. Ops works in a window — upcoming trips plus a tail of recent ones for
+// reconciliation — so the sync does not have to carry the entire B2C history on every poll.
+// Bookings that fall out of the window keep the rows they already have in ops; they simply stop
+// being refreshed. A targeted webhook re-sync (relSyncB2C(id)) ignores the window entirely.
+const B2C_SYNC_DAYS_BACK = Number(process.env.B2C_SYNC_DAYS_BACK) || 90;
+const B2C_SYNC_MAX_ROWS  = Number(process.env.B2C_SYNC_MAX_ROWS)  || 20000;
+const B2C_SYNC_FROM = () => new Date(Date.now() - B2C_SYNC_DAYS_BACK * 86400000).toISOString().slice(0, 10);
+
 const B2C_PAX_VIEW = 'v_booking_passengers';
 let _b2cPaxViewMissingAt = 0;
 const B2C_PAX_VIEW_RETRY_MS = 10 * 60 * 1000;   // re-probe, so creating the view needs no restart
@@ -600,10 +619,24 @@ async function relSyncB2C(singleExtId = null) {
         return;
       }
     } else {
+      // The cap orders by booking_id, which is a RANDOM id (LOV-9930593), not a date — so once the
+      // source passed the old 2000-row cap, every item sorting after the cut became permanently
+      // invisible, newest bookings included, with nothing logged. Two changes: only sync the window
+      // ops actually works in (recent + all future travel dates), and never truncate silently.
+      // Compared as text so it holds whether travel_date is a date, timestamp or ISO string.
       ({ rows: itemRows } = await b2cPool.query(
-        B2C_ITEM_JOIN + ` ORDER BY bi.booking_id, bi.line_no LIMIT 2000`
+        B2C_ITEM_JOIN + ` AND COALESCE(bi.travel_date, b.travel_date)::text >= $1
+                          ORDER BY bi.booking_id, bi.line_no LIMIT $2`,
+        [B2C_SYNC_FROM(), B2C_SYNC_MAX_ROWS + 1]
       ));
       if (!itemRows.length) { _b2cHealthOk(); return; }
+      if (itemRows.length > B2C_SYNC_MAX_ROWS) {
+        // Drop the last order whole: a cut mid-order would leave lines behind, and step 4 cancels
+        // any line of a present order that this run did not upsert.
+        const lastId = String(itemRows[itemRows.length - 1].booking_id);
+        itemRows = itemRows.filter(r => String(r.booking_id) !== lastId);
+        console.warn(`[b2c-sync] row cap hit — synced ${itemRows.length} of >${B2C_SYNC_MAX_ROWS} items from ${B2C_SYNC_FROM()}; bookings sorting after "${lastId}" were NOT imported. Raise B2C_SYNC_MAX_ROWS or shorten B2C_SYNC_DAYS_BACK.`);
+      }
     }
 
     // Paid-amount sanity: the payments/credits sum is read defensively (to_jsonb + jsonb_typeof), so a
@@ -762,11 +795,13 @@ async function relSyncB2C(singleExtId = null) {
       }
       // 4. Cancel line-bookings whose line disappeared from a synced order (per-item cancellation).
       //    Scoped to the B2C order_ids present in this run; keeps lines we just upserted (b2cIds).
+      //    The id pattern was '^b2c_[0-9]+...', which stopped matching when B2C ids became
+      //    LOV-prefixed — so this step quietly did nothing and removed lines stayed confirmed.
       _phase = 'cancel removed lines';
       const presentOrderIds = [...new Set(itemRows.map(i => String(i.booking_id)))];
       await client.query(
         `UPDATE ${fqt('sb_bookings')} SET status='cancelled'
-         WHERE id ~ '^b2c_[0-9]+(_[0-9]+)?$'
+         WHERE id LIKE 'b2c\\_%'
            AND split_part(id, '_', 2) = ANY($1)
            AND id <> ALL($2)
            AND status NOT IN ('cancelled','cancelled_weather','rejected')`,
