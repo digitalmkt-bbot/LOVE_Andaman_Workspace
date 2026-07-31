@@ -144,7 +144,62 @@ const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_re
 // v4: mapper now reads bookings.payment_type and details.pickupHotel / bi.pickuphotel.
 // v5: corrects v4 — pickupLocation is the AREA name, not a fallback hotel. v4 matched the area
 //     against the hotel string, so every booking carrying pickupHotel resolved to no area at all.
-const B2C_MAP_VER = 5;
+// v6: adds the derived paid state (paymentSnapshot.paid / .paidStatus) from Σpayments +
+//     Σcredits_applied vs bookings.total — payment_type alone never says whether money arrived.
+// v7: carries the pickup AREA NAME through as pickupArea (ops area name when matched, else B2C's
+//     raw text) — the ops Zone column prints that field, so unmatched rows showed a bare dash.
+const B2C_MAP_VER = 7;
+
+// ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
+// A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
+// row anywhere saying an order never arrived. Ops would only notice when a customer phoned about a
+// booking nobody could see. This tracks the state so the app can say so out loud.
+//
+// consecutive counts FAILED RUNS, not failed fetches — a run that fetches fine but dies during the
+// upsert is just as broken from ops' point of view. A run with nothing to do (no rows, or the hash
+// says B2C is unchanged) is a SUCCESS: the connection worked and there was nothing to import.
+const B2C_HEALTH = { lastOk: null, lastFail: null, consecutive: 0, message: '', phase: '' };
+function _b2cHealthOk() {
+  B2C_HEALTH.lastOk = Date.now();
+  B2C_HEALTH.consecutive = 0;
+  B2C_HEALTH.message = '';
+  B2C_HEALTH.phase = '';
+}
+function _b2cHealthFail(e) {
+  B2C_HEALTH.lastFail = Date.now();
+  B2C_HEALTH.consecutive++;
+  B2C_HEALTH.message = String((e && e.message) || e || 'unknown error');
+  B2C_HEALTH.phase = String((e && e._phase) || '');
+}
+// What /api/version reports to the client. Two independent ways this goes wrong:
+//   consecutive >= 3  — the sync is erroring. 3 runs at the 45s poll ≈ 2 min, so a single blip
+//                       (a restart, a dropped connection) never nags anyone.
+//   stale             — no successful run in 10 min while the poller should have managed ~13.
+//                       Catches the failure mode a counter cannot see: a query that hangs instead
+//                       of throwing, so nothing ever increments and nothing ever succeeds either.
+const B2C_STALE_MS = 10 * 60 * 1000;
+const _b2cBootAt = Date.now();
+function b2cHealthReport() {
+  // Mirrors relSyncB2C's own guard exactly. If any of these is false the sync never runs at all, so
+  // there is nothing to be unhealthy about — and reporting stale-ness would raise a false alarm ten
+  // minutes after every boot on a deployment that simply has no B2C source.
+  const configured = !!b2cPool && !!pool && DATA_BACKEND === 'relational';
+  if (!configured) return { configured: false, ok: true };
+  const now = Date.now();
+  const sinceOk = B2C_HEALTH.lastOk ? now - B2C_HEALTH.lastOk : null;
+  // Never-succeeded-since-boot only counts as stale once the window has actually elapsed, otherwise
+  // every deploy would alert for its first few seconds.
+  const stale = sinceOk === null ? (now - _b2cBootAt > B2C_STALE_MS) : (sinceOk > B2C_STALE_MS);
+  return {
+    configured: true,
+    ok: B2C_HEALTH.consecutive < 3 && !stale,
+    consecutive: B2C_HEALTH.consecutive,
+    staleMin: sinceOk === null ? null : Math.round(sinceOk / 60000),
+    neverOk: B2C_HEALTH.lastOk === null,
+    message: B2C_HEALTH.message,
+    phase: B2C_HEALTH.phase,
+  };
+}
 
 function mapB2CStatus(s) {
   if (s === 'cancelled') return 'cancelled';
@@ -170,7 +225,7 @@ function b2cLineSeat(item) {
 // new B2C ids already carry their own LOV- prefix); each carries a single trip.
 // isFirstLine: order-level payment (deposit/balance) attaches only to the first line of the order,
 // so a multi-item order's payment isn't multiplied across its item-bookings.
-function mapB2CItemBooking(item, isFirstLine, findAreaId) {
+function mapB2CItemBooking(item, isFirstLine, findArea) {
   const h = item;
   // pg returns date columns as JS Date objects — String(d).slice(0,10) gives "Sat Jul 18",
   // not YYYY-MM-DD, which the frontend cannot parse. Format in local time explicitly.
@@ -196,6 +251,15 @@ function mapB2CItemBooking(item, isFirstLine, findAreaId) {
   // Null/unknown → '' so the chip falls back to the a_b2c agent default.
   const payType = B2C_PAY_TYPES.has(String(h.bk_payment_type || '').toLowerCase())
     ? String(h.bk_payment_type).toLowerCase() : '';
+  // Paid state — derived, never read off payment_type. bk_paid is Σpayments + Σcredits_applied
+  // computed in B2C_ITEM_JOIN; the thresholds mirror the B2C team's reference SQL exactly:
+  // paid<=0 → unpaid · paid>=total → paid · otherwise → deposit (part-paid).
+  // Both figures are ORDER-level. The amount attaches to the first line only (same rule as
+  // deposit/balance, so a 3-item order doesn't report 3× the money), but the STATUS is a property
+  // of the whole order and rides on every line — ops reading line 2 must still see "paid".
+  const bkTotal    = Number(h.bk_total) || 0;
+  const paidAmt    = Math.round(Number(h.bk_paid) || 0);
+  const paidStatus = paidAmt <= 0 ? 'unpaid' : (paidAmt >= bkTotal ? 'paid' : 'deposit');
   const adTh = Number(h.pax_thai) || 0;
   const adFrRaw = Number(h.pax_foreign) || 0;
   const adFr = adFrRaw > 0 ? adFrRaw : Math.max(0, (Number(h.pax_adult) || 0) - adTh);
@@ -224,7 +288,7 @@ function mapB2CItemBooking(item, isFirstLine, findAreaId) {
   //                  address, which simply won't match and leaves the area unassigned.
   //   pickupHotel    the hotel itself, free text, never linked to a hotels table.
   //
-  // Feeding the hotel into findAreaId cannot work — 'Blu Monkey Hub Hotel Phuket' matches no area,
+  // Feeding the hotel into findArea cannot work — 'Blu Monkey Hub Hotel Phuket' matches no area,
   // while 'Phuket Town' matches exactly. Match on the area, store the hotel.
   // hotelName/pickupZone/pickupSelf are B2C-owned (refreshed every sync); pickupAreaId is matched
   // best-effort against sb_pickup_areas and preserved on conflict (see B2C_OPS_BK).
@@ -238,7 +302,12 @@ function mapB2CItemBooking(item, isFirstLine, findAreaId) {
   const pickupLoc  = pickupHotel || pickupArea;
   const noTransfer = det.noTransfer === true;
   const pickupZone = noTransfer ? 'NoTransfer' : String(det.pickupZone || '').trim();
-  const areaId = (typeof findAreaId === 'function') ? findAreaId(pickupArea, pickupZone) : null;
+  const areaHit = (typeof findArea === 'function') ? findArea(pickupArea, pickupZone) : null;
+  const areaId  = areaHit ? areaHit.id : null;
+  // The ops Zone column prints the area NAME (bk.pickupArea), so a B2C row that carried an area but
+  // matched nothing showed a bare dash. Pass the name through either way: the ops area's own wording
+  // when it matched, else B2C's raw text so staff at least see what the customer picked.
+  const areaName = areaHit ? areaHit.name : pickupArea;
   const dropoffLoc = (det.dropoffSame === false) ? String(det.dropoffHotel || det.dropoffLocation || '').trim() : '';
   const trip = {
     id: 'b2c_' + h.booking_id + '_' + h.line_no + '_t0',
@@ -286,6 +355,7 @@ function mapB2CItemBooking(item, isFirstLine, findAreaId) {
     pickupZone: pickupZone,
     pickupSelf: noTransfer,
     pickupAreaId: areaId,
+    pickupArea: areaName,
     dropoffHotelName: dropoffLoc,
     note: ['B2C', h.channel_name, String(h.booking_id), B2C_PRODUCT_NAME[h.product_id] || B2C_PRODUCT_NAME[h.route_id] || h.product_id,
            // Show ops the AREA that failed to match, not the hotel — the area is what they need to
@@ -309,6 +379,8 @@ function mapB2CItemBooking(item, isFirstLine, findAreaId) {
       deposit: isFirstLine ? (Number(h.bk_deposit) || 0) : 0,
       balance: isFirstLine ? (Number(h.bk_balance) || 0) : 0,
       method: payType,
+      paid: isFirstLine ? paidAmt : 0,
+      paidStatus: paidStatus,
     },
     ops: {},
     history: [],
@@ -334,11 +406,26 @@ const B2C_ITEM_JOIN = `
          ch.name         AS channel_name,
          c.name          AS customer_name,
          c.phone         AS customer_phone,
-         c.email         AS customer_email
+         c.email         AS customer_email,
+         COALESCE(pay.paid, 0) AS bk_paid
   FROM ${b2cT('booking_items')} bi
   LEFT JOIN ${b2cT('bookings')} b       ON b.id  = bi.booking_id
   LEFT JOIN ${b2cT('b2c_channels')} ch  ON ch.id = b.channel_id
   LEFT JOIN ${b2cT('customers')} c      ON c.id  = b.customer_id
+  -- How much of the order has actually been settled. B2C's payment_type is a BILLING TERM
+  -- (proforma/invoice/bt/cot), never a paid state — the only way to know a booking is paid is
+  -- total vs Σpayments + Σcredits_applied. Both are jsonb arrays of {amount,...} on bookings.
+  -- Read through to_jsonb(b) rather than b.payments so a column that does not exist yet on the
+  -- B2C side degrades to 0 instead of erroring the whole sync query; jsonb_typeof guards a
+  -- null/object value the same way.
+  LEFT JOIN LATERAL (
+    SELECT COALESCE((SELECT SUM((pmt->>'amount')::numeric) FROM jsonb_array_elements(
+             CASE WHEN jsonb_typeof(to_jsonb(b)->'payments') = 'array'
+                  THEN to_jsonb(b)->'payments' ELSE '[]'::jsonb END) pmt), 0)
+         + COALESCE((SELECT SUM((crd->>'amount')::numeric) FROM jsonb_array_elements(
+             CASE WHEN jsonb_typeof(to_jsonb(b)->'credits_applied') = 'array'
+                  THEN to_jsonb(b)->'credits_applied' ELSE '[]'::jsonb END) crd), 0) AS paid
+  ) pay ON TRUE
   WHERE bi.type IN ('day_trip','private_own')`;
 
 async function relSyncB2C(singleExtId = null) {
@@ -356,13 +443,21 @@ async function relSyncB2C(singleExtId = null) {
           [String(singleExtId)]
         );
         console.log(`[b2c-sync] booking ${singleExtId} removed in B2C — ${r.rowCount} line(s) marked cancelled`);
+        _b2cHealthOk();
         return;
       }
     } else {
       ({ rows: itemRows } = await b2cPool.query(
         B2C_ITEM_JOIN + ` ORDER BY bi.booking_id, bi.line_no LIMIT 2000`
       ));
-      if (!itemRows.length) return;
+      if (!itemRows.length) { _b2cHealthOk(); return; }
+    }
+
+    // Paid-amount sanity: the payments/credits sum is read defensively (to_jsonb + jsonb_typeof), so a
+    // missing column or a text-typed json value degrades to 0 instead of erroring — which would make
+    // every B2C booking read "Unpaid" with nothing to show it was a read failure. Say so in the log.
+    if (itemRows.length && itemRows.every(r => !(Number(r.bk_paid) > 0)) && itemRows.some(r => Number(r.bk_total) > 0)) {
+      console.warn('[b2c-sync] paid amount is 0 on every row — check bookings.payments / credits_applied exist and are json/jsonb; all B2C bookings will show Unpaid');
     }
 
     // Change detection (full runs only): hash the raw source rows and compare with the last synced
@@ -375,7 +470,7 @@ async function relSyncB2C(singleExtId = null) {
       srcHash = crypto.createHash('sha1').update('v' + B2C_MAP_VER + '|' + JSON.stringify(itemRows)).digest('hex');
       try {
         const hr = await pool.query('SELECT data FROM app_state WHERE id=$1', ['b2c_sync_hash']);
-        if (hr.rows[0] && hr.rows[0].data === srcHash) return;   // B2C unchanged since last sync
+        if (hr.rows[0] && hr.rows[0].data === srcHash) { _b2cHealthOk(); return; }   // B2C unchanged since last sync
       } catch (_) {}
     }
 
@@ -386,13 +481,15 @@ async function relSyncB2C(singleExtId = null) {
     try { ({ rows: areaRows } = await pool.query(`SELECT id, name, zone FROM ${fqt('sb_pickup_areas')}`)); }
     catch (e) { console.warn('[b2c-sync] pickup areas unavailable — skipping area match:', e.message); }
     const _norm = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
-    const findAreaId = (loc, zone) => {
+    // Returns the matched area ROW (id + name), not just the id — the mapper needs the name for the
+    // ops Zone column as well.
+    const findArea = (loc, zone) => {
       const L = _norm(loc);
       if (!L) return null;
       const cand = areaRows.filter(a => !zone || !a.zone || a.zone === zone);
       let hit = cand.filter(a => _norm(a.name) === L);
       if (!hit.length) hit = cand.filter(a => { const N = _norm(a.name); return N.includes(L) || L.includes(N); });
-      return hit.length === 1 ? hit[0].id : null;
+      return hit.length === 1 ? hit[0] : null;
     };
 
     // Flatten: one allotment booking per line item. Group only to flag the first line of each
@@ -402,7 +499,7 @@ async function relSyncB2C(singleExtId = null) {
     const b2cBks = [];
     for (const items of Object.values(byId)) {
       items.sort((a, b) => Number(a.line_no) - Number(b.line_no));
-      items.forEach((it, i) => b2cBks.push(mapB2CItemBooking(it, i === 0, findAreaId)));
+      items.forEach((it, i) => b2cBks.push(mapB2CItemBooking(it, i === 0, findArea)));
     }
     const tables  = osRepo.decomposeBlob({ sb_bookings: b2cBks });
     const b2cIds  = b2cBks.map(b => b.id);
@@ -628,6 +725,7 @@ async function relSyncB2C(singleExtId = null) {
       // NOTE: history, upgrades, feeitems, partialcancels, adjustments, over are allotment-owned — never touched here.
 
       await client.query('COMMIT');
+      _b2cHealthOk();
       const label = singleExtId ? `b2c_${singleExtId}` : `${b2cBks.length} bookings`;
       console.log(`[b2c-sync] synced ${label}`);
       if (srcHash) {
@@ -646,8 +744,9 @@ async function relSyncB2C(singleExtId = null) {
       client.release();
     }
   } catch (e) {
-    console.error(`[b2c-sync] failed at "${e._phase || 'fetch'}" — ${e.message}`);
-    // Non-fatal: relLoad proceeds even if sync fails
+    _b2cHealthFail(e);
+    console.error(`[b2c-sync] failed at "${e._phase || 'fetch'}" — ${e.message} (consecutive: ${B2C_HEALTH.consecutive})`);
+    // Non-fatal: relLoad proceeds even if sync fails — but the app is now told, via /api/version.
   }
 }
 // read-modify-write the whole schema in ONE transaction, serialized by an advisory lock (no lost saves).
@@ -819,6 +918,15 @@ async function initDb(){
       }
       await sq('sb_vehicles.color col', `ALTER TABLE ${OS_SCHEMA}."sb_vehicles" ADD COLUMN IF NOT EXISTS "color" text`);
       await sq('boats.color col', `ALTER TABLE ${OS_SCHEMA}."boats" ADD COLUMN IF NOT EXISTS "color" text`);
+      // §B2C paid state (2026-07-30, from lk-inbox): B2C's payment_type is a BILLING TERM
+      // (proforma/invoice/bt/cot) and says nothing about whether money arrived — paid state must be
+      // derived from total vs Σpayments + Σcredits_applied (done in B2C_ITEM_JOIN, see B2C_MAP_VER 6).
+      // paymentSnapshot.deposit/.balance were already being mapped with no column to land in, so they
+      // were silently dropped by decomposeBlob and the ERP had no paid figure for B2C at all.
+      // These two columns must exist BEFORE the app boots with them in the mapping: OS_COLS drives the
+      // INSERT column list for every save, so this DDL runs in the same boot path that adds them.
+      await sq('sb_bookings.paymentsnapshot_paid col', `ALTER TABLE ${OS_SCHEMA}."sb_bookings" ADD COLUMN IF NOT EXISTS "paymentsnapshot_paid" bigint`);
+      await sq('sb_bookings.paymentsnapshot_paidstatus col', `ALTER TABLE ${OS_SCHEMA}."sb_bookings" ADD COLUMN IF NOT EXISTS "paymentsnapshot_paidstatus" text`);
       await sq('sb_bookings pkey', `
         DO $do$ BEGIN
           IF NOT EXISTS (
@@ -1212,10 +1320,24 @@ const server = http.createServer((req, res) => {
   }
   if(u === '/api/version'){
     const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(!pool) return J(res,503,{error:'no database'});
+    // b2c rides along here rather than on its own endpoint or on SSE: the client already polls this
+    // every 10s, and — the reason it must NOT be SSE — a broken B2C sync bumps no version, so an
+    // event-driven channel is silent during exactly the outage we need to report.
     pool.query('SELECT version,updated_by,updated_at FROM app_state WHERE id=$1',[STATE_KEY])
-      .then(r=>J(res,200, r.rows[0]?{version:r.rows[0].version,updated_by:r.rows[0].updated_by,updated_at:r.rows[0].updated_at}:{version:0}))
+      .then(r=>J(res,200, Object.assign(
+        r.rows[0]?{version:r.rows[0].version,updated_by:r.rows[0].updated_by,updated_at:r.rows[0].updated_at}:{version:0},
+        { b2c: b2cHealthReport() })))
       .catch(e=>J(res,500,{error:e.message}));
     return;
+  }
+  // Same payload on its own, for uptime checks / curl. 200 when healthy, 503 when not, so an external
+  // monitor can watch it without parsing anything. Open to unauthenticated callers — that's the point
+  // of a health endpoint — but the raw error text is withheld unless you're logged in: a pg failure
+  // message can name internal hosts ("getaddrinfo ENOTFOUND ...railway.internal").
+  if(u === '/api/b2c/health'){
+    const h = b2cHealthReport();
+    if(!session(req)){ delete h.message; delete h.phase; }
+    return J(res, h.ok ? 200 : 503, h);
   }
   if(u === '/api/events'){   // SSE stream · server pushes version-bump events → clients refresh instantly
     const s=session(req); if(!s){ res.writeHead(401); return res.end(); }

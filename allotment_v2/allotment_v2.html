@@ -309,7 +309,35 @@
   window._laSoftRefresh=_laSoftRefresh;   // expose for the banner button's inline onclick
   function _laTryRefresh(){ if(!_laPending) return; if(_laBusy()) showRefresh(_laPending); else _laSoftRefresh(); }
   // poll cloud version
-  setInterval(function(){ var x=new XMLHttpRequest(); x.open('GET',bust('/api/version'),true); x.onload=function(){ if(x.status===200){ var j={}; try{j=JSON.parse(x.responseText);}catch(e){} if((j.version||0)>VER){ _laPending=j; _laTryRefresh(); } } }; try{x.send();}catch(e){} }, 10000);
+  setInterval(function(){ var x=new XMLHttpRequest(); x.open('GET',bust('/api/version'),true); x.onload=function(){ if(x.status===200){ var j={}; try{j=JSON.parse(x.responseText);}catch(e){} if((j.version||0)>VER){ _laPending=j; _laTryRefresh(); } try{ _laB2CHealth(j.b2c); }catch(e){} } }; try{x.send();}catch(e){} }, 10000);
+  // §B2C sync-down alert (2026-07-31): a failed B2C sync is non-fatal on the server — it logs and moves
+  // on — so without this the app looks perfectly healthy while orders silently stop arriving. Server
+  // side only reports a fault after 3 consecutive failed runs (~2 min) or 10 min with no successful
+  // run at all, so a restart or one dropped connection never puts this on screen.
+  // NOT dismissible on purpose: bookings are still being taken on the website while this is up.
+  function _laB2CHealth(h){
+    var el=document.getElementById('la-b2c-down');
+    if(!h || !h.configured || h.ok){ if(el) el.remove(); return; }
+    var why = h.neverOk ? 'ยังไม่เคยดึงสำเร็จตั้งแต่เซิร์ฟเวอร์เริ่มทำงาน'
+            : (h.staleMin!=null && h.staleMin>=10 ? ('ดึงสำเร็จครั้งล่าสุดเมื่อ '+h.staleMin+' นาทีที่แล้ว')
+            : ('ล้มเหลวติดกัน '+(h.consecutive||0)+' ครั้ง'));
+    var det = h.phase ? (' · ขั้นตอน '+h.phase) : '';
+    var msg = h.message ? ('\n'+h.message) : '';
+    if(!el){
+      el=document.createElement('div'); el.id='la-b2c-down';
+      // Anchored to the BOTTOM, not the top: sticky headers all over the app compute their offset from
+      // the --topbar CSS var, so a fixed bar at the top would sit on top of every one of them.
+      el.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:100000;background:#A32D2D;color:#fff;'
+        +'font:13px/1.4 "DM Sans",sans-serif;padding:9px 16px;text-align:center;box-shadow:0 -2px 10px rgba(0,0,0,.25)';
+      document.body.appendChild(el);
+    }
+    // Booking ids are not shown because we do not know them — that is the whole problem. Point staff at
+    // the B2C admin, which is the only place the missing orders can be read while the sync is down.
+    el.innerHTML='&#9888; <b>ดึงข้อมูล B2C ไม่ได้</b> — '+esc(why)+esc(det)
+      +' · booking ที่ลูกค้าจองเข้ามาช่วงนี้จะยังไม่ขึ้นในระบบ ให้เช็คที่หน้า B2C admin โดยตรง'
+      +(msg?('<span title="'+esc(msg)+'" style="opacity:.75;cursor:help"> &#9432;</span>'):'');
+  }
+  window._laB2CHealth=_laB2CHealth;
   // Real-time push via SSE · server notifies instantly on any save (poll above is just a fallback)
   function _laStartSSE(){ if(typeof EventSource==='undefined') return; try{ if(window.__laSSE) window.__laSSE.close(); var es=new EventSource('/api/events'); es.onmessage=function(e){ try{ var j=JSON.parse(e.data); if((j.version||0)>VER){ _laPending=j; _laTryRefresh(); } }catch(_){} }; window.__laSSE=es; }catch(e){} }
   _laStartSSE();
@@ -45963,6 +45991,7 @@ function bkV2PayChip(bk){
   const a=(typeof sbGetAgent==='function')?sbGetAgent(bk.agentId):null;
   let txt,bg,fg;
   let bd='var(--border)';
+  let paidChip='';
   // Staff trips that carry no charge (FOC within quota / inspection) → label FREE clearly, not "COT"
   const _staffTotal = bk.total || (bk.priceBreakdown&&bk.priceBreakdown.total) || 0;
   const _isStaffFree = (bk.purpose==='staff_welfare' || bk.purpose==='staff_inspection' || bk.staffId) && !inv && _staffTotal<=0;
@@ -46001,8 +46030,27 @@ function bkV2PayChip(bk){
     // Color by payment type: Invoice=blue · Proforma/PFM=amber · COT=cyan · Bank=neutral
     const pm=({invoice:['#E6F1FB','#185FA5','#BBD7F0'],credit:['#E6F1FB','#185FA5','#BBD7F0'],proforma:['#FBF0DD','#7A4A00','#EAD7A8'],prepaid:['#FBF0DD','#7A4A00','#EAD7A8'],cot:['#E0F7FA','#00838F','#9FE3EC'],bt:['#F1EFE8','#5F5E5A','#E0DDD4']})[pt]||['#fff','#5F5E5A','var(--border)'];
     bg=pm[0];fg=pm[1];bd=pm[2];
+    // ...but that chip is the BILLING TERM only ("cot" = pay on tour, not "collected"). Whether money
+    // actually arrived is derived server-side (paymentSnapshot.paidStatus = total vs payments +
+    // credits applied) and gets its own chip, so the term is never read as a payment state.
+    if(bk.agentId==='a_b2c'){
+      const _ps=(bk.paymentSnapshot&&bk.paymentSnapshot.paidStatus)||'';
+      const _sm=({paid:['Paid','#E1F5EE','#0F6E56','#9FE1CB'],deposit:['Deposit','#E6F1FB','#185FA5','#BBD7F0'],unpaid:['Unpaid','#FCEBEB','#A32D2D','#E6C9C3']})[_ps];
+      if(_sm){
+        // Amount is order-level and rides on the first line only — a multi-item order would otherwise
+        // report its money once per line. The STATUS is on every line.
+        const _amt=Number(bk.paymentSnapshot&&bk.paymentSnapshot.paid)||0;
+        const _tip=`B2C received ${_amt?'THB '+_amt.toLocaleString():'THB 0'} of the order total (payments + credits). Billing term is ${txt}.`;
+        // §จ่ายครบแล้ว = ทิ้งป้าย term ไปเลย · "COT" บน booking ที่จ่ายครบ สั่งให้ไกด์ไปเก็บเงินที่เข้ามา
+        // แล้ว. เหลือแค่ป้าย Paid (term ยังดูได้ใน tooltip). Deposit/Unpaid ยังโชว์ COT เพราะยังมี
+        // ยอดค้างต้องเก็บจริง.
+        const _paidOnly=(_ps==='paid');
+        paidChip=`<span class="t2-pay" style="background:${_sm[1]};color:${_sm[2]};border:1px solid ${_sm[3]};font-weight:600;${_paidOnly?'cursor:pointer':'margin-left:3px'}" title="${_tip}"${_paidOnly?` onclick="event.stopPropagation();bkV2RowPayAction('${bk.id}')"`:''}>${_sm[0]}</span>`;
+        if(_paidOnly) return paidChip;
+      }
+    }
   }
-  return `<span class="t2-pay" style="background:${bg};color:${fg};border:1px solid ${bd};cursor:pointer;font-weight:600" onclick="event.stopPropagation();bkV2RowPayAction('${bk.id}')" title="จัดการการชำระเงิน">${txt}</span>`;
+  return `<span class="t2-pay" style="background:${bg};color:${fg};border:1px solid ${bd};cursor:pointer;font-weight:600" onclick="event.stopPropagation();bkV2RowPayAction('${bk.id}')" title="จัดการการชำระเงิน">${txt}</span>${paidChip}`;
 }
 // Cash-on-Tour chip for the Pay column · from structured cashOnTour OR a "cash on tour ..." line in notes
 function bkV2CotChip(bk, noteTxt){
@@ -46031,7 +46079,11 @@ function bkV2RowPayAction(bkId){
   if(!bk.agentId){
     body=`<div style="font-size:12px;color:var(--fd-ink-soft)">Booking นี้เป็น B2C (ไม่มี agent) — จัดการชำระเงินที่หน้า Accounting หรือ booking detail</div>`;
   } else if(!inv){
-    body=`<div style="font-size:12px;color:var(--fd-ink-soft);margin-bottom:12px">ยังไม่ได้ออกใบแจ้งหนี้ · ยอด ${fmt(acctBookingTotal(bk))}</div>
+    // B2C carries its own settled amount from the webshop (payments + credits, synced server-side).
+    // Show it here, otherwise this modal reads "no invoice yet" on a booking the customer already paid.
+    const _bps=(bk.agentId==='a_b2c'&&bk.paymentSnapshot&&bk.paymentSnapshot.paidStatus)?bk.paymentSnapshot:null;
+    const _bl=_bps?`<div style="font-size:12px;margin-bottom:8px">B2C · ${({paid:'ชำระครบแล้ว',deposit:'มัดจำ/ชำระบางส่วน',unpaid:'ยังไม่ชำระ'})[_bps.paidStatus]||_bps.paidStatus} · รับแล้ว ${fmt(_bps.paid)} <span style="color:var(--fd-ink-soft)">(ยอดระดับ order)</span></div>`:'';
+    body=_bl+`<div style="font-size:12px;color:var(--fd-ink-soft);margin-bottom:12px">ยังไม่ได้ออกใบแจ้งหนี้ · ยอด ${fmt(acctBookingTotal(bk))}</div>
       <button onclick="bkV2PayDoCreate('${bkId}')" style="background:var(--fd-coral);color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:600;padding:9px 16px;border-radius:9px;cursor:pointer">ออก${isPF?' Pro Forma':'ใบแจ้งหนี้'}</button>`;
   } else {
     const bal=acctInvoiceBalance(inv), paid=acctInvoicePaid(inv);
@@ -58756,7 +58808,16 @@ function bkV2RenderTab2(){
             <td>${(function(){ if(a.split && a.pick && !a.pick.main && (a.pick.hotel||a.pick.areaId)){ const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null; const _pl=a.pick.hotel||(_pa?_pa.name:'')||'—'; return `<span class="t2-pickcell" title="แยกรับ${a.pick.who?(' · '+esc(a.pick.who)):''} @ ${esc(_pl)}" style="color:#5B289A;font-weight:600">&#128652; ${esc(_pl)}</span>`; } if(_ovTrip && _ovTrip.ovnLeg) return '<span class="t2-pickcell" title="ขากลับ OVN · ลูกค้ากลับจากเกาะโดยเรือ · ไม่มีรถไปรับ" style="color:#8a5500;font-weight:600">&#8617; ไม่มีขารับ · มาจากเกาะ</span>';
               return (bk.hotelName||bk.pickup)?`<span class="t2-pickcell" title="${esc(bk.hotelName||bk.pickup)}">${esc(bk.hotelName||bk.pickup)}</span>`:'<span class="t2-needpickup" title="ยังไม่ได้ระบุจุดรับ · กดแก้ไขเพื่อเพิ่ม">&#9888; no pickup</span>'; })()}</td>
             <td class="t2-c t2-mono">${esc(bk.roomNumber||'')||'<span class="t2-dim">—</span>'}</td>
-            <td>${(a.split&&a.pick&&!a.pick.main)?(function(){const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null;const _zn=_pa?_pa.name:(a.pick.zone||'');return _zn?`<span class="t2-zonetag">${esc(_zn)}</span>`:'<span class="t2-dim">—</span>';})():(bk.pickupArea?`<span class="t2-zonetag">${esc(bk.pickupArea)}</span>`:'<span class="t2-dim">—</span>')}</td>
+            <td>${(a.split&&a.pick&&!a.pick.main)?(function(){const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null;const _zn=_pa?_pa.name:(a.pick.zone||'');return _zn?`<span class="t2-zonetag">${esc(_zn)}</span>`:'<span class="t2-dim">—</span>';})():(function(){
+              // §Zone cell · เดิมอ่าน bk.pickupArea อย่างเดียว → booking B2C ที่ชื่อ area ไม่ตรงกับ sb_pickup_areas
+              // ขึ้น "—" ทั้งที่ลูกค้าเลือก area มาแล้ว. อ่าน pickupAreaId ก่อน (ops แก้เองได้ · sync ไม่ทับ)
+              // แล้วค่อย fallback เป็นข้อความดิบจาก B2C (โชว์แบบจาง = ยังไม่ผูกกับ area ในระบบ)
+              const _pa=(bk.pickupAreaId&&typeof bkV2GetArea==='function')?bkV2GetArea(bk.pickupAreaId):null;
+              if(_pa&&_pa.name) return `<span class="t2-zonetag">${esc(_pa.name)}</span>`;
+              const _raw=(bk.pickupArea||'').trim();
+              if(!_raw) return '<span class="t2-dim">—</span>';
+              return `<span class="t2-zonetag" style="background:#F4F3EF;color:#8A887F;font-style:italic" title="จาก B2C · ยังไม่ผูกกับ pickup area ในระบบ · แก้ไข booking เพื่อเลือก area">${esc(_raw)}</span>`;
+            })()}</td>
             <td>${sendBack==='—'?'<span class="t2-dim">—</span>':sendBack}</td>
             ${vanMode?'':(_2nd?'<td class="t2-req"></td>':`<td class="t2-req"><div class="t2-addoncell"><div class="t2-addoncell-badges">${addonBadges.join('')}${extrasChips}${upgradeChips}${feeChips}</div><div class="t2-addoncell-acts"><button onclick="event.stopPropagation();bkV2ExtraAdd('${esc(bk.id)}')" title="เพิ่ม extra วันเดินทาง (ขายหน้างาน)" class="t2-addbtn" style="color:var(--ink-soft);font-weight:700">+</button><button onclick="event.stopPropagation();bkV2UpgradeOpen('${esc(bk.id)}')" title="อัพเกรด/ขายเพิ่มหน้างาน" class="t2-addbtn t2-addbtn-up">&#11014;</button></div></div></td>`)}
             <td class="t2-req">
