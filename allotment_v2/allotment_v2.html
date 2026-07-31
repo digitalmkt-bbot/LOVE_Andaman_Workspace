@@ -44392,6 +44392,15 @@ function pckJobAddons(r){
     out.push(a.label+(a.note?(' ('+a.note+')'):'')); }); }catch(_){}
   return out;
 }
+// §timeCol (2026-08-01) · เวลารับต้องอยู่บรรทัดเดียว ไม่งั้นแถวสูงเป็นสองเท่าและกินที่ฟรี
+//   แถวมาเองเคยขึ้นว่า "Before 08:30 at pier มาเอง" ยาวจนตัดสองบรรทัดทั้งบล็อก (เจอจริง 1 ส.ค. · 12 แถว)
+//   ตัดสองส่วนที่ซ้ำกับช่องอื่นบนแถวเดียวกันออก — "มาเอง" หัวกลุ่มบอกแล้ว
+//   ส่วน "at pier / ที่ท่า" ช่องสถานที่รับข้างๆ เขียน Visit Panwa Pier อยู่แล้ว
+function pckJobTime(t, arr){
+  var x=String(t||'—').trim();
+  if(arr==='OWN'||arr==='NOVAN') x=x.replace(/\s*(at\s+the\s+pier|at\s+pier|ที่\s*ท่า(เรือ)?)\s*$/i,'').trim();
+  return x||'—';
+}
 // รายชื่อผู้โดยสารทั้งหมดของบุ๊คกิ้ง · ครบทุกคน ไม่ตัด
 function pckJobNames(b){
   var lead=String((b&&b.leadPax)||'').trim();
@@ -44451,6 +44460,7 @@ function pckGuideJobCss(){ return '<style>'
   +'.num.z{color:#d1d5db;font-weight:400}'
   +'.num s{font-size:8px;color:#9ca3af;font-weight:400;margin-left:2px}'
   +'.tm{font-family:"DM Mono",monospace;font-weight:700}'
+  +'.tmc{white-space:nowrap}'
   +'.pl2{font-size:10.5px;color:#6b7280}'
   +'.ao{display:inline-block;border:1.5px solid #111827;border-radius:3px;padding:1px 6px;font-size:10.5px;font-weight:700;margin:0 2px 2px 0;white-space:normal}'
   +'.sq{font-weight:600}.dash{color:#9ca3af}'
@@ -44527,7 +44537,7 @@ function pckGuideJobSheet(bid, date, rows){
       +'<td><span class="vc">'+e(b.voucherRef||b.code||'—')+'</span></td>'
       +'<td class="nmc">'+names+'</td>'
       +num('ad')+num('chd')+num('inf')+num('foc')
-      +'<td><span class="tm">'+e(time)+'</span>'+(veh?'':'<span class="pl2"> มาเอง</span>')+'</td>'
+      +'<td class="tmc"><span class="tm">'+e(pckJobTime(time, r.arr))+'</span></td>'
       +'<td class="pk">'+e(pickup||area||'ท่าเรือ (มาเอง)')
         +(room?('<span class="pl2"> ห้อง '+e(room)+'</span>'):'')
         +((pickup&&area)?('<span class="pl2"> &middot; '+e(area)+'</span>'):'')+'</td>'
@@ -44574,7 +44584,7 @@ function pckGuideJobSheet(bid, date, rows){
     +'<th style="width:34%">ลูกค้า &middot; ผู้โดยสารทั้งหมด</th>'
     +'<th class="num" style="width:2.8%">AD</th><th class="num" style="width:2.8%">CHD</th>'
     +'<th class="num" style="width:2.8%">INF</th><th class="num" style="width:2.8%">FOC</th>'
-    +'<th style="width:7%">เวลารับ</th><th style="width:21%">สถานที่รับ &middot; โซน</th>'
+    +'<th style="width:9%">เวลารับ</th><th style="width:19%">สถานที่รับ &middot; โซน</th>'
     +'<th style="width:10%">Add-on</th><th style="width:10%">Special request</th></tr></thead>';
 
   return '<div class="sheet d'+dens+'">'
