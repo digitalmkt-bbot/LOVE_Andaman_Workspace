@@ -57066,6 +57066,8 @@ function bkV2RenderApprovals(){
         <span style="font-family:'DM Mono',monospace;font-weight:700;color:#1B2A55">${esc(b.id)}</span>
         <span style="font-size:12px;color:#555">${esc(b.leadPax||'—')} · ${esc(a?a.name:'')}</span>
         ${hasCap?`<span style="font-size:11px;font-weight:700;color:#A32D2D;background:#FCEBEB;border-radius:6px;padding:2px 9px">เกิน cap +${ap.totOver||0} ที่นั่ง</span>`:''}
+        ${(!hasCap&&!hasDisc)?(function(){ const w=ap.reason||((typeof bkV2PendReason==='function')?bkV2PendReason(b):'');
+            const cl=w==='closed_day'; return `<span style="font-size:11px;font-weight:700;color:${cl?'#A32D2D':'#7A4A00'};background:${cl?'#FCEBEB':'#FBF0DD'};border-radius:6px;padding:2px 9px" title="${cl?'ขายเข้ามาบนวันที่เส้นทางไม่ออก':'ระบบพักไว้อัตโนมัติตอน B2C sync'}">${esc(bkV2PendLabel(w))}</span>`; })():''}
         ${hasDisc?`<span style="font-size:11px;font-weight:700;color:#854F0B;background:#FAEEDA;border-radius:6px;padding:2px 9px" title="รอเซลล์${ap.saleName?(' ('+esc(ap.saleName)+')'):''}ยืนยันส่วนลด">ส่วนลด ฿${(ap.discount||0).toLocaleString()} · รอเซลล์ยืนยัน</span>`:''}
         <span style="margin-left:auto;font-size:10px;color:#999">ขอโดย ${esc(ap.requestedBy||'-')} · ${esc((ap.requestedAt||'').slice(0,10))}</span>
       </div>
@@ -57088,9 +57090,39 @@ function bkV2RenderApprovals(){
     ${recent.length?`<div style="margin-top:18px"><div style="font-size:11px;font-weight:700;color:#8a8a82;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">ประวัติล่าสุด</div>${recent.map(histRow).join('')}</div>`:''}
   </div>`;
 }
+// §pendNoApproval (2026-07-31) · ปุ่ม อนุมัติ / ไม่อนุมัติ กดแล้วเงียบ ไม่มีอะไรเกิดขึ้น
+//   ทั้งสองฟังก์ชันขึ้นต้นด้วย  if(!b||!b.approval) return;  แต่รายการที่ b2c_sync พักไว้
+//   ไม่เคยมี b.approval เลย — ฝั่งเซิร์ฟเวอร์ทำแค่ UPDATE sb_bookings SET status='pending_approval'
+//   ไม่มี mapper ตัวไหนเขียนคอลัมน์ approval_* (ดูได้จากการ์ดที่ขึ้น "ขอโดย -" ว่างทั้งชื่อและวันที่)
+//   รายการเข้ามาอยู่ในหน้านี้ได้เพราะลิสต์กรองด้วย status อย่างเดียว ไม่ได้เช็ค approval
+//   → สร้าง approval ให้ตอนกดปุ่มแทนที่จะ return ทิ้ง · ของเดิมที่มี approval อยู่แล้วไม่ถูกแตะ
+function bkV2PendReason(b){
+  if(!b) return 'over_cap';
+  var closed=(b.trips||[]).some(function(t){
+    return t && t.date && t.routeId && typeof bkV2IsRouteOpenOn==='function' && !bkV2IsRouteOpenOn(t.routeId, t.date); });
+  if(closed) return 'closed_day';
+  return /^b2c_/.test(String(b.id||'')) ? 'b2c_hold' : 'over_cap';
+}
+function bkV2PendLabel(reason){
+  return reason==='closed_day' ? 'ทริปไม่ออกวันนั้น'
+       : reason==='b2c_hold'   ? 'B2C · ระบบพักไว้'
+       : 'เกิน capacity';
+}
+function bkV2EnsureApproval(b){
+  if(!b) return null;
+  if(!b.approval || typeof b.approval!=='object'){
+    var why=bkV2PendReason(b);
+    b.approval={ status:'pending', reason:why,
+      requestedBy:(/^b2c_/.test(String(b.id||''))?'B2C · ระบบพักไว้':'ระบบ'),
+      requestedAt:(b.createdAt||b.bookingDate||new Date().toISOString()) };
+  }
+  return b.approval;
+}
 function bkV2ApproveBooking(id){
-  const b=(SB_BOOKINGS||[]).find(x=>x.id===id); if(!b||!b.approval) return;
-  const _r=b.approval.reason||''; const _isDisc=/discount/.test(_r); const _lbl=_isDisc?(/over_cap/.test(_r)?'เกิน cap + ส่วนลด':'ส่วนลด'):'เกิน capacity';
+  const b=(SB_BOOKINGS||[]).find(x=>x.id===id); if(!b) return;
+  bkV2EnsureApproval(b);
+  const _r=b.approval.reason||''; const _isDisc=/discount/.test(_r);
+  const _lbl=_isDisc?(/over_cap/.test(_r)?'เกิน cap + ส่วนลด':'ส่วนลด'):bkV2PendLabel(_r);
   const by=prompt('อนุมัติบุคกิ้ง '+id+' ('+_lbl+')\nชื่อผู้อนุมัติ ('+(_isDisc?'เซลล์ที่ดูแล':'ผจก.')+'):',''); if(by===null) return;
   if(!by.trim()){ alert('กรุณาใส่ชื่อผู้อนุมัติ'); return; }
   b.approval.status='approved'; b.approval.approvedBy=by.trim(); b.approval.approvedAt=new Date().toISOString();
@@ -57101,10 +57133,12 @@ function bkV2ApproveBooking(id){
   if(typeof laSaveToast==='function') laSaveToast({kind:'success', title:'อนุมัติแล้ว', id, status:(b.status||'').toUpperCase(), sub:'โดย '+by.trim()});
 }
 function bkV2RejectBooking(id){
-  const b=(SB_BOOKINGS||[]).find(x=>x.id===id); if(!b||!b.approval) return;
-  const by=prompt('Reject over-capacity booking '+id+'\nManager name:',''); if(by===null) return;
-  if(!by.trim()){ alert('Please enter the name'); return; }
-  const note=prompt('Reason (optional):','')||'';
+  const b=(SB_BOOKINGS||[]).find(x=>x.id===id); if(!b) return;
+  bkV2EnsureApproval(b);
+  const _rr=b.approval.reason||'';
+  const by=prompt('ไม่อนุมัติบุคกิ้ง '+id+' ('+bkV2PendLabel(_rr)+')\nชื่อผู้ไม่อนุมัติ:',''); if(by===null) return;
+  if(!by.trim()){ alert('กรุณาใส่ชื่อผู้ไม่อนุมัติ'); return; }
+  const note=prompt('เหตุผล (ไม่บังคับ):','')||'';
   b.approval.status='rejected'; b.approval.approvedBy=by.trim(); b.approval.approvedAt=new Date().toISOString(); b.approval.note=note.trim();
   b.status='rejected';
   if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'cancel','Over-capacity rejected by '+by.trim()+(note.trim()?(' · '+note.trim()):''),'Approval');
