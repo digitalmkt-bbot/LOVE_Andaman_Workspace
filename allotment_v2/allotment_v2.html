@@ -44397,7 +44397,16 @@ function pckGuideJobCss(){ return '<style>'
   +'.tools{position:sticky;top:0;z-index:9;background:#fff;border-bottom:1px solid #d1d5db;padding:10px 18px;display:flex;gap:10px;align-items:center}'
   +'.tools b{font-size:13px}.tools .h{font-size:11px;color:#6b7280}'
   +'.tools button{margin-left:auto;background:#111827;color:#fff;border:none;border-radius:9px;padding:9px 18px;font:700 12px inherit;cursor:pointer}'
-  +'.sheet{width:297mm;min-height:210mm;margin:14px auto;background:#fff;padding:9mm 10mm;box-shadow:0 4px 18px rgba(0,0,0,.12);position:relative}'
+  +'.sheet{width:297mm;height:210mm;overflow:hidden;margin:14px auto;background:#fff;padding:8mm 9mm;box-shadow:0 4px 18px rgba(0,0,0,.12);position:relative}'
+  +'.sheet.d2 td{padding:4px 5px;font-size:10.5px}.sheet.d2 .nm{font-size:11px}.sheet.d2 .nm2{font-size:10px}'
+  +'.sheet.d2 tr.grp td{padding:4px 8px}.sheet.d2 .jline{height:13px}'
+  +'.sheet.d3 td{padding:2.5px 5px;font-size:9.8px;line-height:1.3}.sheet.d3 .nm{font-size:10.5px}.sheet.d3 .nm2{font-size:9.5px}'
+  +'.sheet.d3 tr.grp td{padding:3px 8px}.sheet.d3 .gvan{font-size:11.5px}.sheet.d3 .num{font-size:11.5px}'
+  +'.sheet.d3 .pl2{display:none}.sheet.d3 .ao{font-size:9.5px;padding:0 5px}.sheet.d3 .aoitem{padding:3px 9px;font-size:10px}'
+  +'.sheet.d4 td{padding:1.5px 4px;font-size:9px;line-height:1.25}.sheet.d4 .nm{font-size:9.8px}.sheet.d4 .nm2{display:none}'
+  +'.sheet.d4 tr.grp td{padding:2px 7px}.sheet.d4 .gvan{font-size:10.5px}.sheet.d4 .gmeta{font-size:9.5px}'
+  +'.sheet.d4 .num{font-size:10.5px}.sheet.d4 .pl2{display:none}.sheet.d4 .zn{display:none}'
+  +'.sheet.d4 .ao{font-size:8.8px;padding:0 4px}.sheet.d4 .jsbig{font-size:16px}.sheet.d4 th{padding:3px 4px}'
   +'.jh{display:flex;align-items:stretch;gap:14px;border-bottom:2.5px solid #111827;padding-bottom:9px}'
   +'.jlogo{width:46px;height:46px;border:2px solid #111827;border-radius:11px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:none}'
   +'.jt1{font-size:16px;font-weight:700;line-height:1.15}'
@@ -44458,7 +44467,7 @@ function pckGuideJobCss(){ return '<style>'
   +'.jemg b{font-family:"DM Mono",monospace}'
   +'.jpage{position:absolute;bottom:5mm;right:10mm;font-size:9px;color:#9ca3af}'
   +'@media print{body{background:#fff}.tools{display:none}'
-    +'.sheet{width:auto;min-height:auto;margin:0;box-shadow:none;padding:8mm 9mm;page-break-after:always}'
+    +'.sheet{width:100%;height:210mm;margin:0;box-shadow:none;padding:8mm 9mm;page-break-after:always;overflow:hidden}'
     +'.sheet:last-child{page-break-after:auto}tr{page-break-inside:avoid}}'
   +'</style>';
 }
@@ -44495,13 +44504,22 @@ function pckGuideJobSheet(bid, date, rows){
       +'</div></div>';
   }
 
+  // §onePage · A4 แนวนอนสูง 210mm · หัว+สรุป+ท้ายใบกินคงที่ ที่เหลือคือแถว
+  //   จำนวน "บรรทัด" ที่ต้องวาง = แถวลูกค้า + หัวกลุ่มรถ (แต่ละกลุ่มกินราวหนึ่งแถว)
+  //   เลือกระดับความหนาแน่นตั้งแต่ตอนสร้าง จะได้ไม่ต้องพึ่งการย่อทั้งหน้าซึ่งทำให้อ่านยาก
+  var _ngrp=(function(){ var seen={}, n=0;
+    rows.forEach(function(r){ var k=r.arr+'|'+(r.vanId||'own'); if(!seen[k]){ seen[k]=1; n++; } }); return n; })();
+  var _lines=rows.length+_ngrp;
+  var dens = _lines<=13 ? 1 : _lines<=20 ? 2 : _lines<=30 ? 3 : 4;
+  // ชื่อผู้โดยสารกินความสูงมากที่สุด · ลำที่คนเยอะจึงเหลือชื่อ lead แล้วแนบใบรายชื่อไปต่างหาก
+  var SHOW = dens===1 ? 6 : dens===2 ? 3 : dens===3 ? 1 : 0;
   var num=function(n){ return '<td class="num'+(n?'':' z')+'">'+n+'</td>'; };
   var rowHtml=function(r){
     var b=r.b, pb=ckPaxBreak(r.t.pax);
     var lead=String(b.leadPax||'').trim();
     var ex=(b.passengers||[]).map(function(p){ return String((p&&p.name)||'').trim(); })
             .filter(function(n){ return n && n!==lead; });
-    var SHOW=6, shown=ex.slice(0,SHOW);
+    var shown=ex.slice(0,SHOW);
     var nm='<div class="nm">'+e(lead||'—')+'</div>'
       +(shown.length?('<div class="nm2">'+shown.map(e).join('<br>')+'</div>'):'');
     var totNames=(lead?1:0)+ex.length;
@@ -44576,7 +44594,7 @@ function pckGuideJobSheet(bid, date, rows){
     +'<th style="width:11%">รถที่รับ / เวลา</th><th style="width:17%">สถานที่รับ · โซน</th>'
     +'<th style="width:13%">Add-on ที่ต้องเตรียม</th><th style="width:12%">Special request</th></tr></thead>';
 
-  return '<div class="sheet">'
+  return '<div class="sheet d'+dens+'">'
     +'<div class="jh"><div class="jlogo">LA</div>'
     +'<div><div class="jt1">ใบงานไกด์</div><div class="jt2">Guide Job Order</div></div>'
     +'<div class="jboat"><div class="jbname">'+e(boat.name||bid)+'</div>'
@@ -44599,7 +44617,7 @@ function pckGuideJobSheet(bid, date, rows){
     +'<table>'+THEAD+'<tbody>'+body+'</tbody></table>'
     +'<div class="jf">'
     +'<div class="jnote"><div class="jnlab">บันทึกระหว่างเดินทาง / เหตุการณ์ที่ต้องรายงาน</div>'
-      +'<div class="jline"></div><div class="jline"></div><div class="jline"></div></div>'
+      +new Array(dens>=3?2:4).join('<div class="jline"></div>')+'</div>'
     +'<div class="jsign"><div class="jnlab">ไกด์ผู้รับงาน</div><div class="jsbox"></div><div class="jsname">ลงชื่อ / วันที่</div></div>'
     +'<div class="jsign"><div class="jnlab">กัปตันเรือ</div><div class="jsbox"></div><div class="jsname">ลงชื่อรับผู้โดยสารครบ</div></div>'
     +'</div>'
@@ -44642,7 +44660,13 @@ function pckGuideJobOrder(bid){
     +pckGuideJobCss()+'</head><body>'
     +'<div class="tools"><b>ใบงานไกด์</b><span class="h">'+e(title)+' · A4 แนวนอน · 1 ลำ = 1 ใบ</span>'
     +'<button onclick="window.print()">พิมพ์ / บันทึก PDF</button></div>'
-    +sheets+'</body></html>';
+    +sheets
+    // §onePage · ตาข่ายสุดท้าย · วัดจริงหลังเรนเดอร์ ถ้ายังเกิน 210mm ค่อยย่อทั้งใบ
+    // (ระดับความหนาแน่นด้านบนควรจัดการได้เกือบทุกกรณีแล้ว อันนี้ไว้กันเคสสุดโต่ง)
+    +'<script>(function(){var PAGE=Math.round(210*96/25.4)-2;'
+    +'Array.prototype.forEach.call(document.querySelectorAll(".sheet"),function(el){'
+    +'var h=el.scrollHeight; if(h>PAGE){ el.style.zoom=Math.max(.5,PAGE/h); }});})();<\/script>'
+    +'</body></html>';
   var w=window.open('','_blank');
   if(!w){ alert('เบราว์เซอร์บล็อกป๊อปอัป — อนุญาตป๊อปอัปของเว็บนี้ก่อน แล้วกดใหม่'); return; }
   w.document.open(); w.document.write(html); w.document.close(); w.focus();
