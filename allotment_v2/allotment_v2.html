@@ -44229,6 +44229,7 @@ function pckCardCSS(scope){ return ''
   +scope+' .pck-vmeta{font-size:12px;color:#5F5E5A;white-space:nowrap}'
   +scope+' .pck-vmeta b{color:#2f2f2b;font-weight:700}'
   +scope+' .pck-vtel{font-size:12px;padding:3px 11px;border-radius:999px;border:1px solid;text-decoration:none;font-family:\'DM Mono\',monospace;background:#fff;font-weight:700;white-space:nowrap}'
+  +scope+' .pck-vsplit{background:#FBE9E9;color:#A32D2D;border:1px solid #F0C9C9;border-radius:999px;padding:3px 11px;font-size:10.5px;font-weight:800;white-space:nowrap}'
   +scope+' .pck-vstat{margin-left:auto;font-size:11.5px;padding:4px 13px;border-radius:999px;font-weight:700;border:1px solid #E7E4DC;background:#F1EFE8;color:#5F5E5A;white-space:nowrap}'
   +scope+' .pck-vstat.ok{background:#DCF4E8;color:#0C6B47;border-color:#BFE3CC}'
   +scope+' .pck-vstat.money{background:#FBF0DD;color:#7A4A00;border-color:#EAD9B0}'
@@ -44391,6 +44392,15 @@ function pckVanHead(vg, date){
       +(rd.phone?'<a class="pck-vtel" style="color:'+col+';border-color:'+col+'66" href="tel:'+e(String(rd.phone).replace(/[^0-9+]/g,''))+'" onclick="event.stopPropagation()">'+e(rd.phone)+'</a>':'')
       +'<span style="font-size:10.5px;font-weight:700;white-space:nowrap;color:'+(vck===vg.rows.length?'#0F6E56':'#a5a49d')+'">'
         +(vck===vg.rows.length?'&#10003; เช็คอินรถครบ':('เช็คอินรถแล้ว '+vck+'/'+vg.rows.length))+'</span>';
+  }
+  // §vanBoatSplit · รถคันนี้รับมาแล้วแยกลงคนละลำหรือเปล่า · การ์ดนี้กรองตามเรือแล้ว
+  //   คนอ่านจึงเห็นแค่ส่วนของเรือลำนี้ ไม่รู้เลยว่าคันเดียวกันยังมีคนไปอีกลำ
+  if(vid){
+    var _sp=(typeof pckVanBoatSplit==='function')?pckVanBoatSplit(vid,date):[];
+    if(_sp.length>1){
+      h+='<span class="pck-vsplit" title="รถคันนี้รับมาแล้วแยกลงคนละลำ — เช็คให้ชัดว่าใครลงลำไหนก่อนปล่อยขึ้นเรือ">&#9888; แยกลง '+_sp.length+' ลำ &middot; '
+        +_sp.map(function(x){ return e(x.bid?pckBoatName(x.bid):'ยังไม่จัดเรือ')+' '+x.pax; }).join(' &middot; ')+'</span>';
+    }
   }
   var stCls=(a.due>0)?'money':((a.on===a.n)?'ok':'');
   var stTxt=(a.due>0)?('เก็บหน้าท่า &#3647;'+Math.round(a.due).toLocaleString()+' · '+a.pax+' pax')
