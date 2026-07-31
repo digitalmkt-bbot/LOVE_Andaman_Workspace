@@ -697,7 +697,7 @@ async function relSyncB2C(singleExtId = null) {
       // ops actually works in (recent + all future travel dates), and never truncate silently.
       // Compared as text so it holds whether travel_date is a date, timestamp or ISO string.
       ({ rows: itemRows } = await b2cPool.query(
-        B2C_ITEM_JOIN + ` AND COALESCE(bi.travel_date, b.travel_date)::text >= $1
+        B2C_ITEM_JOIN + ` AND COALESCE(bi.travel_date::text, b.travel_date::text) >= $1
                           ORDER BY bi.booking_id, bi.line_no LIMIT $2`,
         [B2C_SYNC_FROM(), B2C_SYNC_MAX_ROWS + 1]
       ));
