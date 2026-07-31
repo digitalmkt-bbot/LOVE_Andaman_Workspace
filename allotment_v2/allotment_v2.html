@@ -44542,7 +44542,7 @@ function pckGuideJobCss(){ return '<style>'
   +'.gtot{float:right;font-size:12px;font-weight:700}'
   +'.gsplit{display:inline-block;border:1.5px solid #111827;border-radius:4px;padding:0 7px;font-size:10.5px;font-weight:700;margin-left:6px;white-space:nowrap}'
   +'.ck{width:14px;height:14px;border:1.5px solid #111827;border-radius:2px;display:block;margin:1px auto 0}'
-  +'.vc{font-family:"DM Mono",monospace;font-weight:700;font-size:11.5px;word-break:break-all}'
+  +'.vc{font-family:"DM Mono",monospace;font-weight:700;font-size:11.5px;word-break:break-all;line-height:1.15;display:inline-block}'
   +'.nmc{line-height:1.35}.nmc b{font-weight:700;font-size:12.2px}'
   +'.ex{color:#374151;font-size:10px}'
   +'.tel{color:#6b7280;font-size:11px;white-space:nowrap;margin-left:4px}'
@@ -44597,6 +44597,26 @@ function pckGuideJobSheet(bid, date, rows, vd){
   if(S.ltChtr) lt.push('Charter '+S.ltChtr+' ลำ');
   var vans={}; rows.forEach(function(r){ if(r.vanId) vans[r.vanId]=1; });
 
+  // §uniform (2026-08-01) · ค่าที่เหมือนกันทุกแถว ไม่ใช่ข้อมูล มันคือพื้นหลัง
+  //   เทียบใบ Artemis (31 ก.ค.) กับ Hermetis วันเดียวกัน — Artemis มี Longtail Join 20/27 แถว
+  //   และ RU ทั้ง 27 แถว ป้ายเลยกลายเป็นกำแพงสีที่ไม่ได้บอกอะไร ส่วน Hermetis มีแค่ 2 แถว จึงเด้งออกมาทันที
+  //   สีจะทำงานได้ต่อเมื่อมันเป็นของหายาก · ค่าที่ทุกใบมีเหมือนกันให้ย้ายขึ้นหัวใบ แล้วยุบคอลัมน์ทิ้ง
+  //   คืนความกว้างให้ชื่อกับสถานที่รับ ซึ่งเป็นสองช่องที่ตัดบรรทัดบ่อยที่สุด
+  var _sigOf=function(a){ return (a||[]).map(function(x){ return x.t; }).join(' | '); };
+  var uniSvc='', uniLang='';
+  (function(){
+    if(rows.length<6) return;                       // ใบเล็กเก็บป้ายไว้ ยุบแล้วไม่ได้อะไรคืนมา
+    var sv={}, lg={}, ks, kl;
+    rows.forEach(function(r){ sv[_sigOf(pckJobService(r,date))]=1; lg[pckGuideLangs(r.b).join('/')]=1; });
+    ks=Object.keys(sv); kl=Object.keys(lg);
+    if(ks.length===1 && ks[0]) uniSvc=ks[0];
+    if(kl.length===1 && kl[0]) uniLang=kl[0];
+  })();
+  var showSvc=!uniSvc, showLang=!uniLang;
+  var wName=31, wPick=18;
+  if(!showSvc){ wName+=6; wPick+=4; }
+  if(!showLang){ wName+=2; wPick+=2; }
+
   // §autoFit (2026-08-01) · เลิกเดาจำนวนบรรทัดจากจำนวนตัวอักษร
   //   การเดาพลาดได้สองทางและเสียทั้งคู่ — เดาน้อยไปตารางล้นทับ เดามากไปตัวหนังสือเล็กเกินจำเป็น
   //   (เจอจริง 1 ส.ค. · 28 booking ได้ d3 ตัวเล็ก แต่พิมพ์ออกมาเหลือที่ว่างล่างเกือบ 40%)
@@ -44642,11 +44662,11 @@ function pckGuideJobSheet(bid, date, rows, vd){
       +'<td class="pk">'+e(pickup||area||'ท่าเรือ (มาเอง)')
         +(room?('<span class="pl2"> ห้อง '+e(room)+'</span>'):'')
         +((pickup&&area)?('<span class="pl2"> &middot; '+e(area)+'</span>'):'')+'</td>'
-      +'<td>'+(ao.length?ao.map(function(a){
+      +(showSvc?('<td>'+(ao.length?ao.map(function(a){
           var _c=a.c||'', _i=(_c&&typeof bkV2ContrastInk==='function')?bkV2ContrastInk(_c):'#111827';
           return '<span class="svc"'+(_c?(' style="background:'+_c+';color:'+_i+'"'):'')+'>'+e(a.t)+'</span>';
-        }).join(''):'<span class="dash">&mdash;</span>')+'</td>'
-      +'<td class="lgc">'+lgHtml+'</td>'
+        }).join(''):'<span class="dash">&mdash;</span>')+'</td>'):'')
+      +(showLang?('<td class="lgc">'+lgHtml+'</td>'):'')
       +'<td class="nt">'+(nt.length?nt.map(function(x){ return x.w?('<b>'+e(x.t)+'</b>'):('<span class="n2">'+e(x.t)+'</span>'); }).join('<br>'):'<span class="dash">&mdash;</span>')+'</td>'
       +'</tr>';
   };
@@ -44685,19 +44705,19 @@ function pckGuideJobSheet(bid, date, rows, vd){
         head='<span class="gvan">'+(zk==='NOVAN'?'ยังไม่จัดรถ':'มาเอง / เอเย่นต์ส่งเอง')+'</span>'
           +' <span class="gmeta">ไม่มีรถของเรา — เช็คว่ามาถึงท่าหรือยัง</span>';
       }
-      body+='<tr class="grp"><td colspan="12">'+head
+      body+='<tr class="grp"><td colspan="'+(10+(showSvc?1:0)+(showLang?1:0))+'">'+head
         +'<span class="gtot">'+e(pckZoneLabel(zk))+' &middot; '+vg.rows.length+' booking &middot; '+st.real.all+' pax</span></td></tr>';
       vg.rows.forEach(function(r){ body+=rowHtml(r); });
     });
   });
 
   var THEAD='<thead><tr><th style="width:18px">&#10003;</th><th style="width:7%">Voucher</th>'
-    +'<th style="width:31%">ลูกค้า &middot; ผู้โดยสารทั้งหมด</th>'
+    +'<th style="width:'+wName+'%">ลูกค้า &middot; ผู้โดยสารทั้งหมด</th>'
     +'<th class="num" style="width:2.8%">AD</th><th class="num" style="width:2.8%">CHD</th>'
     +'<th class="num" style="width:2.8%">INF</th><th class="num" style="width:2.8%">FOC</th>'
-    +'<th style="width:9%">เวลารับ</th><th style="width:18%">สถานที่รับ &middot; โซน</th>'
-    +'<th style="width:10%">Service</th>'
-    +'<th class="lgc" style="width:4%">ไกด์</th>'
+    +'<th style="width:9%">เวลารับ</th><th style="width:'+wPick+'%">สถานที่รับ &middot; โซน</th>'
+    +(showSvc?'<th style="width:10%">Service</th>':'')
+    +(showLang?'<th class="lgc" style="width:4%">ไกด์</th>':'')
     +'<th style="width:9%">Note</th></tr></thead>';
 
   // §sheetColor (2026-08-01) · หัวใบใช้สีประจำเรือชุดเดียวกับหน้าจอ
@@ -44719,11 +44739,13 @@ function pckGuideJobSheet(bid, date, rows, vd){
       +((vd&&vd.n)?('<span class="jwarn">ยกเลิกหน้างาน '+vd.n+' ใบ &middot; '+vd.pax+' คน</span>'):'')+'</div>'
     +'<div class="jsc"><span class="jslab">booking</span><span class="jsv">'+rows.length+'</span>'
       +'<span class="jslab" style="margin-left:5px">รถ</span><span class="jsv">'+Object.keys(vans).length+' คัน</span></div>'
-    +'<div class="jsc"><span class="jslab">ไกด์</span>'+(langs?('<span class="jsv">'+langs+'</span>'):'<span class="jsnone">—</span>')+'</div>'
+    +'<div class="jsc"><span class="jslab">ไกด์</span>'+(langs?('<span class="jsv">'+langs+'</span>'):'<span class="jsnone">—</span>')
+      +(uniLang?'<span class="jwarn">ทุกใบ</span>':'')+'</div>'
     +'<div class="jsc"><span class="jslab">อาหาร</span>'
       +(ml.length?('<span class="jsv">'+ml.join(J)+'</span>'):(M.allergy?'':'<span class="jsnone">ไม่มี</span>'))
       +(M.allergy?('<span class="jwarn">&#9888; แพ้อาหาร '+M.allergy+'</span>'):'')+'</div>'
-    +'<div class="jsc"><span class="jslab">Longtail</span>'+(lt.length?('<span class="jsv">'+lt.join(J)+'</span>'):'<span class="jsnone">ไม่มี</span>')+'</div>'
+    +'<div class="jsc"><span class="jslab">Longtail</span>'+(lt.length?('<span class="jsv">'+lt.join(J)+'</span>'):'<span class="jsnone">ไม่มี</span>')
+      +(uniSvc?('<span class="jwarn">'+e(uniSvc)+' &middot; ทุกใบ</span>'):'')+'</div>'
     +'</div>'
     +'<div class="tw"><table>'+THEAD+'<tbody>'+body+'</tbody></table></div>'
     +'</div>';
