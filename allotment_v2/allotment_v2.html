@@ -42426,7 +42426,19 @@ function ckMe(){ return (typeof ME!=='undefined' && ME && (ME.name||ME.username)
 function ckEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function ckPersist(){ if(typeof acctPersistBookings==='function') acctPersistBookings(); }
 function ckBookedPax(t){ return (typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot((t&&t.pax)||{}):0; }
-function ckPaxBreak(p){ p=p||{}; return { ad:(p.ad||0)+(p.ad_fr||0)+(p.ad_th||0), chd:(p.chd||0)+(p.chd_fr||0)+(p.chd_th||0), inf:(p.inf||0)+(p.inf_fr||0)+(p.inf_th||0), foc:(p.foc||0) }; }
+// §focSplit (2026-07-31) · FOC ที่แยก FR/TH ถูกลืมอีกแล้ว
+//   ad / chd / inf บวกครบทั้ง 3 ทรง (flat + _fr + _th) แต่ foc อ่านแค่ p.foc ตัวเดียว
+//   บุ๊คกิ้งที่เก็บ FOC เป็น foc_fr / foc_th จึงขึ้น 0 ทุกที่ที่ใช้ฟังก์ชันนี้ —
+//   คอลัมน์ FOC ของเช็คอินรถ + หน้าท่า และยอด "เดินทางจริง" บนหัวเรือ
+//   เจอจริง 31 ก.ค. · Zeus · Threeland Asia 38 AD + 2 FOC = 40 pax แต่แถบหัวเรือขึ้น 38 pax · FOC 0
+//   ยอดรวมถูกอยู่แล้วเพราะ ckBookedPax ใช้ bkV2PaxAllTot ที่บวกครบ — เพี้ยนเฉพาะตอนแยกประเภท
+//   พันธุ์เดียวกับบั๊ก pax_foc_fr / pax_foc_th ฝั่งเซิร์ฟเวอร์ที่เคยทำให้ B2C ล่องหนทั้งชุด
+//   คราวนี้ไล่ทีละประเภทด้วยลูปเดียว จะได้ไม่มีทางลืมประเภทใดประเภทหนึ่งอีก + coerce เป็นตัวเลขกันค่าที่มาเป็นสตริง
+function ckPaxBreak(p){
+  p=p||{};
+  var t=function(k){ return (+p[k]||0)+(+p[k+'_fr']||0)+(+p[k+'_th']||0); };
+  return { ad:t('ad'), chd:t('chd'), inf:t('inf'), foc:t('foc') };
+}
 function ckTripOn(b, date){ return ((b&&b.trips)||[]).find(function(x){ return (x.date||'')===date; }) || null; }
 // อ่านบล็อกเช็คอินของวันนั้น · kind = 'van' | 'pier'
 function ckRead(b, date, kind){ var o=(typeof bkOpsRead==='function')?bkOpsRead(b,date):((b&&b.ops)||{}); return (kind==='pier'?o.pierCheckin:o.vanCheckin)||null; }
