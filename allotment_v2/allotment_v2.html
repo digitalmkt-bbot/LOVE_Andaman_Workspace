@@ -46856,7 +46856,8 @@ function ctRender(){
   var a = document.activeElement, fk = (a && a.getAttribute) ? a.getAttribute('data-fk') : null;
   var ss = (a && a.selectionStart != null) ? a.selectionStart : null;
   ctPaintTabs();
-  host.innerHTML = (_ct.tab === 'tpl') ? ctTplHtml() : (_ct.tab === 'ovr') ? ctOvrHtml() : ctPlanHtml();
+  host.innerHTML = '<div style="max-width:1280px">'
+    + ((_ct.tab === 'tpl') ? ctTplHtml() : (_ct.tab === 'ovr') ? ctOvrHtml() : ctPlanHtml()) + '</div>';
   if(fk){ var el = host.querySelector('[data-fk="' + fk + '"]'); if(el){ el.focus(); try{ el.setSelectionRange(ss, ss); }catch(_){ } } }
 }
 function ctNum(v, fk, oninput, w){
@@ -46889,7 +46890,7 @@ function ctPlanHtml(){
       + (x.famId ? '<div style="font-size:9.5px;color:#185FA5;margin-top:3px">&#128279; ' + ctE(ctFamName(x.famId)) + '</div>' : '')
       + '</button>';
   }).join('');
-  var left = '<div style="width:230px;flex:none">'
+  var left = '<div style="width:250px;flex:none">'
     + '<div style="font-size:9.5px;font-weight:700;color:var(--fd-ink-soft);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px">แผนคำนวณ · ' + P.length + '</div>'
     + items
     + '<button onclick="ctAddPlan()" style="width:100%;border:1.5px dashed #C9DFD5;background:transparent;color:#0F6E56;border-radius:10px;padding:8px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit">+ เพิ่มเส้นทาง / แผนคำนวณ</button>'
@@ -46934,16 +46935,24 @@ function ctPlanHtml(){
     + '</div>';
 
   // ตารางต้นทุนรายบรรทัด
-  var lastG = '', tr = '', gSum = {};
-  cur.c.rows.forEach(function(r){ gSum[r.g] = (gSum[r.g] || 0) + r.amt; });
+  var lastG = '', tr = '', gAgg = {};
+  cur.c.rows.forEach(function(r){
+    var a = gAgg[r.g] = gAgg[r.g] || { fix:0, varr:0, amt:0, vat:0, net:0 };
+    a.fix += r.fix; a.varr += r.varr; a.amt += r.amt; a.vat += r.vatAmt; a.net += r.net;
+  });
   var gTot = cur.c.gross || 1;
   cur.c.rows.forEach(function(r){
     if(r.g !== lastG){
-      var gp = ctGrpCfg(pl, r.g), pct = +gp.pct || 0;
-      tr += '<tr><td colspan="4" style="background:#F0EEE7;font-weight:800;font-size:10.5px;color:#4a4a45;padding:5px 11px">' + ctE(r.g)
+      // §alignCols · ทุกช่องต้องตรงคอลัมน์เดียวกับแถวรายการ (เดิม colspan=4 ทำให้ยอดไปตกใต้ "ภาษีซื้อ")
+      var gp = ctGrpCfg(pl, r.g), pct = +gp.pct || 0, A = gAgg[r.g];
+      var gh = 'background:#EDEAE2;padding:5px 11px;text-align:right;font-family:\'DM Mono\',monospace;font-weight:800;font-size:11.5px;color:#4a4a45';
+      var gnum = function(v){ return '<td style="' + gh + '">' + (v ? Math.round(v).toLocaleString() : '') + '</td>'; };
+      tr += '<tr><td style="background:#EDEAE2;padding:5px 11px;font-weight:800;font-size:11px;color:#4a4a45">' + ctE(r.g)
+        + '<span style="font-family:\'DM Mono\',monospace;font-size:9.5px;font-weight:700;color:#8a8a82;margin-left:7px">' + Math.round(A.amt / gTot * 100) + '% ของต้นทุน</span>'
         + (pct ? ('<span style="background:#FFF3D8;color:#7A5A12;border-radius:5px;padding:0 6px;font-size:9px;font-weight:800;margin-left:6px">' + (pct > 0 ? '+' : '') + pct + '%</span>') : '')
-        + '</td><td style="background:#F0EEE7;padding:5px 11px;text-align:right;font-family:\'DM Mono\',monospace;font-weight:800;font-size:11.5px;color:#4a4a45">' + Math.round(gSum[r.g]).toLocaleString() + '</td>'
-        + '<td style="background:#F0EEE7;padding:5px 11px;text-align:right;font-size:10px;font-weight:700;color:#8a8a82">' + Math.round(gSum[r.g] / gTot * 100) + '%</td></tr>';
+        + '</td>' + gnum(A.fix) + gnum(A.varr) + gnum(A.amt)
+        + '<td style="' + gh + ';color:#185FA5">' + (A.vat ? Math.round(A.vat).toLocaleString() : '') + '</td>'
+        + gnum(A.net) + '</tr>';
       lastG = r.g;
     }
     var td = 'padding:5px 11px;border-bottom:1px solid #F3F1EA;font-family:\'DM Mono\',monospace;font-variant-numeric:tabular-nums;text-align:right;font-size:12px';
@@ -47040,8 +47049,8 @@ function ctTplHtml(){
   ctLinesByGroup(T).forEach(function(X){
     var ln = X.ln, li = X.i, g = ln.g || 'อื่นๆ';
     if(g !== lastG){
-      h += '<tr><td colspan="4" style="background:#F7F5EF;padding:4px 10px">'
-        + '<span style="font-weight:800;font-size:10.5px;color:#5F5E5A">' + ctE(g) + '</span>'
+      h += '<tr><td colspan="3" style="background:#EDEAE2;padding:5px 10px">'
+        + '<span style="font-weight:800;font-size:11px;color:#4a4a45">' + ctE(g) + '</span>'
         + '<button onclick="ctRenameGroup(\'' + ctE(g) + '\')" title="เปลี่ยนชื่อหมวดนี้ (มีผลกับทุกบรรทัดในหมวด)" style="border:none;background:transparent;color:var(--fd-ink-soft);cursor:pointer;font-size:11px;padding:0 4px">&#9998;</button>'
         + '</td></tr>';
       lastG = g;
@@ -47080,21 +47089,26 @@ function ctTplHtml(){
       pp += '<span onclick="ctDelPart(' + li + ',' + pi + ')" title="ลบส่วนนี้" style="color:#C0392B;cursor:pointer;font-size:13px;padding:0 3px;opacity:.55">&times;</span></div>';
     });
     pp += '<button onclick="ctAddPart(' + li + ')" style="' + dash + ';margin-top:2px">+ เพิ่มส่วนประกอบ</button>';
-    h += '<tr><td style="' + td + ';width:24%">'
-      + '<input data-fk="n' + li + '" value="' + ctE(ln.l) + '" oninput="ctLineName(' + li + ',this.value)" style="width:100%;border:1px solid transparent;border-radius:6px;padding:3px 5px;font-family:inherit;font-size:12px;font-weight:600;background:transparent">'
-      + '<select onchange="ctLineGroup(' + li + ',this.value)" title="ย้ายบรรทัดนี้ไปหมวดอื่น" style="margin-top:2px;margin-left:5px;font-family:inherit;font-size:10px;color:var(--fd-ink-soft);border:1px solid var(--fd-line);border-radius:6px;padding:1px 3px;background:#fff;max-width:96%">'
+    h += '<tr><td style="' + td + '">'
+      + '<input data-fk="n' + li + '" value="' + ctE(ln.l) + '" oninput="ctLineName(' + li + ',this.value)" style="width:100%;border:1px solid transparent;border-radius:6px;padding:3px 6px;font-family:inherit;font-size:12.5px;font-weight:600;background:transparent">'
+      + '<div style="display:flex;align-items:center;gap:7px;margin:4px 0 0 6px;flex-wrap:wrap">'
+      + '<select onchange="ctLineGroup(' + li + ',this.value)" title="ย้ายบรรทัดนี้ไปหมวดอื่น" style="font-family:inherit;font-size:10px;color:var(--fd-ink-soft);border:1px solid var(--fd-line);border-radius:999px;padding:1px 6px;background:#FBFAF7;max-width:118px">'
       + GL.map(function(x){ return '<option value="' + ctE(x) + '"' + (x === g ? ' selected' : '') + '>' + ctE(x) + '</option>'; }).join('')
-      + '<option value="__new">+ หมวดใหม่…</option></select></td>'
-      + '<td style="' + td + ';width:56%">' + pp + '</td>'
-      + '<td style="' + td + ';width:11%;text-align:center"><label style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--fd-ink-soft)"><input type="checkbox"' + (ln.vat ? ' checked' : '') + ' onchange="ctLineVat(' + li + ',this.checked)" style="width:15px;height:15px;accent-color:#0F7A5A;cursor:pointer">ขอคืนได้</label></td>'
-      + '<td style="' + td + ';width:9%;text-align:center"><button onclick="ctDelLine(' + li + ')" title="ลบรายการ" style="border:none;background:transparent;color:#C0392B;cursor:pointer;font-size:14px;opacity:.5">&#128465;</button></td></tr>';
+      + '<option value="__new">+ หมวดใหม่…</option></select>'
+      + '<label title="บรรทัดนี้มีใบกำกับภาษีเต็มรูป · เอาภาษีซื้อไปหักภาษีขายได้" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-size:10px;white-space:nowrap;color:' + (ln.vat ? '#185FA5' : '#b9b6ae') + ';font-weight:' + (ln.vat ? '700' : '500') + '">'
+      + '<input type="checkbox"' + (ln.vat ? ' checked' : '') + ' onchange="ctLineVat(' + li + ',this.checked)" style="width:13px;height:13px;accent-color:#185FA5;cursor:pointer">ขอคืน VAT</label>'
+      + '</div></td>'
+      + '<td style="' + td + '">' + pp + '</td>'
+      + '<td style="' + td + ';text-align:center;vertical-align:top;padding-top:9px"><button onclick="ctDelLine(' + li + ')" title="ลบรายการ" style="border:none;background:transparent;color:#C0392B;cursor:pointer;font-size:14px;opacity:.5">&#128465;</button></td></tr>';
   });
   var thh = 'text-align:left;font-size:9px;font-weight:700;color:var(--fd-ink-soft);text-transform:uppercase;letter-spacing:.06em;padding:7px 10px;background:#FBFAF7;border-bottom:1.5px solid var(--fd-line)';
   return '<div style="font-size:12px;color:var(--fd-ink-soft);margin-bottom:10px;line-height:1.6">1 บรรทัดประกอบจากหลายส่วนได้ · '
     + '<b style="color:#5B289A">คงที่</b> ต่อลำ/ทริป · <b style="color:#185FA5">ผันแปร</b> ต่อคน · <b style="color:#7A5A12">ขั้นบันได</b> เพิ่มเป็นช่วง<br>'
     + 'ช่อง <b>ขอคืนได้</b> = บรรทัดนี้มีใบกำกับภาษีเต็มรูป เอาภาษีซื้อไปหักภาษีขายได้ · สูตรนี้ใช้เป็นค่าตั้งต้นของทุกแผน</div>'
-    + '<div style="background:#fff;border:1px solid var(--fd-line);border-radius:12px;overflow:hidden">'
-    + '<table style="width:100%;border-collapse:collapse"><thead><tr><th style="' + thh + '">รายการ</th><th style="' + thh + '">ส่วนประกอบ</th><th style="' + thh + ';text-align:center">ภาษีซื้อ</th><th style="' + thh + '"></th></tr></thead><tbody>' + h + '</tbody></table>'
+    + '<div class="ct-tplcol" style="background:#fff;border:1px solid var(--fd-line);border-radius:12px;overflow:auto">'
+    + '<table style="border-collapse:collapse;table-layout:fixed;width:100%;min-width:860px">'
+    + '<colgroup><col style="width:225px"><col><col style="width:44px"></colgroup>'
+    + '<thead><tr><th style="' + thh + '">รายการ · หมวด · ภาษีซื้อ</th><th style="' + thh + '">ส่วนประกอบ · วิธีคิด</th><th style="' + thh + '"></th></tr></thead><tbody>' + h + '</tbody></table>'
     + '<div style="padding:10px 12px;background:#FBFAF7;border-top:1px solid #F3F1EA;display:flex;gap:14px;align-items:center;flex-wrap:wrap">'
     + '<button onclick="ctAddLine()" style="' + dash + ';padding:4px 12px;font-size:11.5px">+ เพิ่มรายการต้นทุน</button>'
     + '<span style="font-size:11px;color:var(--fd-ink-soft)">VAT ของกิจการ ' + ctNum(T.vatRate, 'vat', 'ctVatSet(this.value)', 52) + ' %</span>'
@@ -47106,11 +47120,21 @@ function ctTplHtml(){
 //   จัดกลุ่มตามหมวด · ปรับได้ 2 ระดับ
 //     ระดับหมวด  · ปิดทั้งหมวด หรือ ±% ทั้งหมวด (เช่น เส้นทางนี้ค่าอาหารแพงกว่า 20%)
 //     ระดับบรรทัด · ปิดบรรทัด หรือพิมพ์ค่าทับ
+// §alignCols · ทุกช่องในตารางนี้ใช้กริดเดียวกัน — ติ๊กอยู่คอลัมน์แรกเสมอ ช่องกรอกอยู่คอลัมน์ที่สองเสมอ
+//   เดิมใช้ flex + center ทำให้แถวหัวหมวด (เนื้อหายาวกว่า) เยื้องจากแถวรายการ ดูไม่ตรงกัน
+function ctCell(a, b, c){
+  return '<div style="display:grid;grid-template-columns:20px 108px 1fr;align-items:center;gap:7px">'
+    + '<div style="display:flex;justify-content:center">' + (a || '') + '</div>'
+    + '<div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">' + (b || '') + '</div>'
+    + '<div style="display:flex;align-items:center;gap:4px;font-size:10.5px;color:#6b6b64">' + (c || '') + '</div></div>';
+}
 function ctOvrHtml(){
   var T = ctTpl(), P = ctPlans(), G = ctGroups(T);
-  var colW = Math.max(190, Math.min(300, Math.floor(940 / Math.max(1, P.length))));
+  var need = 260 + P.length * 250;                 // ความกว้างขั้นต่ำที่อ่านสบาย
+  var fit = need <= 1240;                          // พอดีจอ → ยืดเต็ม · ไม่พอ → เลื่อนแนวนอน
+  var colW = fit ? Math.floor((1240 - 260) / Math.max(1, P.length)) : 250;
   var thh = 'font-size:9px;font-weight:700;color:var(--fd-ink-soft);text-transform:uppercase;letter-spacing:.06em;padding:8px 10px;background:#FBFAF7;border-bottom:1.5px solid var(--fd-line);white-space:nowrap';
-  var h = '<table style="border-collapse:collapse;table-layout:fixed;width:' + (260 + P.length * colW) + 'px;max-width:100%">'
+  var h = '<table style="border-collapse:collapse;table-layout:fixed;' + (fit ? 'width:100%' : ('width:' + (260 + P.length * colW) + 'px')) + '">'
     + '<colgroup><col style="width:260px">' + P.map(function(){ return '<col style="width:' + colW + 'px">'; }).join('') + '</colgroup>'
     + '<thead><tr><th style="' + thh + ';text-align:left;position:sticky;left:0;z-index:2">รายการ</th>'
     + P.map(function(p){
@@ -47131,19 +47155,15 @@ function ctOvrHtml(){
         var ctx = { eng:pl.eng, boats:Math.max(1, +pl.boats || 1), fuel:+pl.fuel || 0, pax:pax, paxTH:th2, paxFR:pax - th2 };
         ctCalc(pl, ctx, T).rows.forEach(function(r){ if(r.g === g) sub += r.amt; });
       }
-      h += '<td style="background:#F0EEE7;padding:5px 10px;text-align:center">'
-        + '<div style="display:flex;align-items:center;gap:6px;justify-content:center">'
-        + '<label title="ปิด/เปิดทั้งหมวดในแผนนี้" style="cursor:pointer;display:inline-flex"><input type="checkbox"' + (c.off ? '' : ' checked')
-        + ' onchange="ctGrpToggle(\'' + pl.id + '\',\'' + ctE(g) + '\',this.checked)" style="width:15px;height:15px;accent-color:#0F7A5A;cursor:pointer"></label>'
-        + (c.off
-            ? '<span style="background:#FCEBEB;color:#A32D2D;border-radius:5px;padding:0 7px;font-size:9.5px;font-weight:800">ปิดทั้งหมวด</span>'
-            : '<span style="font-size:9.5px;color:#6b6b64">ปรับ</span>'
-              + '<input data-fk="gp.' + pl.id + '.' + g + '" value="' + (pct || '') + '" placeholder="0"'
-              + ' oninput="ctGrpPct(\'' + pl.id + '\',\'' + ctE(g) + '\',this.value)"'
-              + ' style="width:46px;text-align:right;font-family:\'DM Mono\',monospace;font-size:11px;border:1px solid ' + (pct ? '#E8B94A' : 'var(--fd-line)') + ';border-radius:6px;padding:1px 5px;background:' + (pct ? '#FFFBF0' : '#fff') + '">'
-              + '<span style="font-size:9.5px;color:#6b6b64">%</span>'
-              + '<span style="font-family:\'DM Mono\',monospace;font-size:10.5px;font-weight:700;color:#5F5E5A;margin-left:2px">' + ctB(sub) + '</span>')
-        + '</div></td>';
+      var gTick = '<label title="ปิด/เปิดทั้งหมวดในแผนนี้" style="cursor:pointer;display:inline-flex"><input type="checkbox"' + (c.off ? '' : ' checked')
+        + ' onchange="ctGrpToggle(\'' + pl.id + '\',\'' + ctE(g) + '\',this.checked)" style="width:15px;height:15px;accent-color:#0F7A5A;cursor:pointer"></label>';
+      var gMid = c.off ? '<span style="background:#FCEBEB;color:#A32D2D;border-radius:5px;padding:0 7px;font-size:9.5px;font-weight:800;white-space:nowrap">ปิดทั้งหมวด</span>'
+        : '<input data-fk="gp.' + pl.id + '.' + g + '" value="' + (pct || '') + '" placeholder="0" title="คูณทุกบรรทัดในหมวดนี้ · เช่น แพงกว่า 20% ใส่ 20"'
+          + ' oninput="ctGrpPct(\'' + pl.id + '\',\'' + ctE(g) + '\',this.value)"'
+          + ' style="width:52px;text-align:right;font-family:\'DM Mono\',monospace;font-size:11.5px;font-weight:700;border:1px solid ' + (pct ? '#E8B94A' : 'var(--fd-line)') + ';border-radius:6px;padding:2px 6px;background:' + (pct ? '#FFFBF0' : '#fff') + ';color:' + (pct ? '#7A5A12' : 'var(--fd-ink)') + '">'
+          + '<span style="font-size:10px;font-weight:700;color:' + (pct ? '#7A5A12' : '#a5a49d') + '">%</span>';
+      var gEnd = c.off ? '' : '<span style="font-family:\'DM Mono\',monospace;font-size:11px;font-weight:800;color:#4a4a45">' + ctB(sub) + '</span>';
+      h += '<td style="background:#EDEAE2;padding:6px 10px">' + ctCell(gTick, gMid, gEnd) + '</td>';
     });
     h += '</tr>';
 
@@ -47155,23 +47175,23 @@ function ctOvrHtml(){
       P.forEach(function(pl){
         var grpOff = !!ctGrpCfg(pl, g).off;
         var o = (pl.ovr || {})[ln.id] || {};
-        h += '<td style="padding:5px 10px;border-bottom:1px solid #F3F1EA;text-align:center' + (grpOff ? ';opacity:.35' : '') + '">'
-          + '<div style="display:flex;align-items:center;gap:5px;justify-content:center">'
-          + '<label title="เปิด/ปิดบรรทัดนี้ในแผนนี้" style="cursor:pointer;display:inline-flex"><input type="checkbox"' + (o.off ? '' : ' checked') + (grpOff ? ' disabled' : '')
+        var tick = '<label title="เปิด/ปิดบรรทัดนี้ในแผนนี้" style="cursor:pointer;display:inline-flex"><input type="checkbox"' + (o.off ? '' : ' checked') + (grpOff ? ' disabled' : '')
           + ' onchange="ctOvrToggle(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',this.checked)" style="width:15px;height:15px;accent-color:#0F7A5A;cursor:pointer"></label>';
-        if(o.off) h += '<span style="background:#FCEBEB;color:#A32D2D;border-radius:5px;padding:0 6px;font-size:9px;font-weight:800">ปิด</span>';
+        var mid = '', end = '';
+        if(o.off) mid = '<span style="background:#FCEBEB;color:#A32D2D;border-radius:5px;padding:0 7px;font-size:9.5px;font-weight:800">ปิด</span>';
         else {
           var p0 = ln.parts[0] || {};
           var key = (p0.k === 'step') ? (p0.mode === 'over' ? 'over' : 'every') : (p0.fuel ? 'q' : 'u');
           var bse = p0[key], cur = ((o.p || [])[0] || {})[key];
           var has = (cur != null && cur !== '');
-          if(has) h += '<span style="color:#c2c0b7;text-decoration:line-through;font-size:10px;font-family:\'DM Mono\',monospace">' + bse + '</span>';
-          h += '<input data-fk="o.' + pl.id + '.' + ln.id + '" value="' + (has ? cur : '') + '" placeholder="' + (bse == null ? '' : bse) + '"' + (grpOff ? ' disabled' : '')
+          mid = '<input data-fk="o.' + pl.id + '.' + ln.id + '" value="' + (has ? cur : '') + '" placeholder="' + (bse == null ? '' : bse) + '"' + (grpOff ? ' disabled' : '')
+            + ' title="' + (has ? ('ค่าสูตรกลางคือ ' + bse) : 'ว่าง = ใช้ค่าจากสูตรกลาง') + '"'
             + ' oninput="ctOvrSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',\'' + key + '\',this.value)"'
-            + ' style="width:56px;text-align:right;font-family:\'DM Mono\',monospace;font-size:11.5px;border:1px solid ' + (has ? '#9FE1CB' : 'var(--fd-line)') + ';border-radius:6px;padding:2px 6px;background:' + (has ? '#F4FCF8' : '#fff') + '">';
-          if(has) h += '<button onclick="ctOvrSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',\'' + key + '\',\'\')" title="ย้อนกลับเป็นค่าสูตร" style="border:none;background:transparent;color:var(--fd-ink-soft);cursor:pointer;font-size:12px;padding:0 2px">&#8635;</button>';
+            + ' style="width:66px;text-align:right;font-family:\'DM Mono\',monospace;font-size:11.5px;border:1px solid ' + (has ? '#9FE1CB' : 'var(--fd-line)') + ';border-radius:6px;padding:2px 6px;background:' + (has ? '#F4FCF8' : '#fff') + ';font-weight:' + (has ? '700' : '400') + '">';
+          if(has) end = '<span style="color:#c2c0b7;text-decoration:line-through;font-family:\'DM Mono\',monospace;font-size:10px">' + bse + '</span>'
+            + '<button onclick="ctOvrSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',\'' + key + '\',\'\')" title="ย้อนกลับเป็นค่าสูตร" style="border:none;background:transparent;color:#0F6E56;cursor:pointer;font-size:12px;padding:0">&#8635;</button>';
         }
-        h += '</div></td>';
+        h += '<td style="padding:4px 10px;border-bottom:1px solid #F3F1EA' + (grpOff ? ';opacity:.35' : '') + '">' + ctCell(tick, mid, end) + '</td>';
       });
       h += '</tr>';
     });
