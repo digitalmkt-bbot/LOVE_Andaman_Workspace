@@ -636,7 +636,267 @@
 <link rel="icon" type="image/png" sizes="16x16" href="/allotment_v2/assets/favicon-16.png">
 <link rel="icon" href="/allotment_v2/assets/favicon.ico">
 <link rel="apple-touch-icon" sizes="180x180" href="/allotment_v2/assets/favicon-180.png">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&family=Prompt:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* §ctSkin · ดีไซน์ ต้นทุน & จุดคุ้มทุน · scoped ใต้ #view-costing เท่านั้น ไม่กระทบหน้าจออื่น */
+#view-costing{
+  --b50:#fff5f0; --b100:#ffe8dc; --b200:#ffd0b8; --b300:#ffab88; --b500:#ff4c00; --b600:#e63b00;
+  --cr50:#faf8f5; --cr200:#eae0d2;
+  --sd50:#fdfbf7; --sd100:#f7f2ea; --sd200:#ebe3d5; --sd300:#ded2bf; --sd400:#cebc9f;
+  --es700:#4a3e36; --es800:#382d26; --es900:#2b221d; --es950:#1d1612;
+  --mt50:#e6f7f0; --mt100:#ccefe1; --mt500:#10b981; --mt700:#0d7a5f;
+  font-family:'Prompt','IBM Plex Sans Thai',system-ui,sans-serif; color:var(--es900);
+}
+#view-costing *{box-sizing:border-box}
+#view-costing input,#view-costing select,#view-costing button{font-family:inherit}
+
+/* หัวหน้า + แท็บ */
+#view-costing .ct-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+#view-costing .ct-brand{display:flex;align-items:center;gap:12px}
+#view-costing .ct-logo{width:40px;height:40px;border-radius:14px;background:var(--b500);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(255,76,0,.22);flex:none}
+#view-costing .ct-h1{display:flex;align-items:center;gap:9px}
+#view-costing .ct-h1 h1{font-size:20px;font-weight:700;margin:0;letter-spacing:-.02em;color:var(--es900)}
+#view-costing .ct-pill{font-size:10px;padding:2px 9px;border-radius:999px;background:var(--b100);color:#be2b00;font-weight:600;letter-spacing:.04em}
+#view-costing .ct-h2{font-size:12px;color:rgba(74,62,54,.72);margin:2px 0 0}
+#view-costing #ct-tabs{display:inline-flex;gap:2px;background:var(--sd100);padding:4px;border-radius:16px;border:1px solid var(--sd200)}
+#view-costing .ct-tab{display:inline-flex;align-items:center;gap:7px;border:none;background:transparent;color:rgba(74,62,54,.8);
+  border-radius:12px;padding:8px 15px;font-size:12px;font-weight:500;cursor:pointer;transition:.15s;white-space:nowrap}
+#view-costing .ct-tab:hover{color:var(--es900)}
+#view-costing .ct-tab.on{background:#fff;color:var(--es900);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+#view-costing .ct-tab.on svg{color:var(--b500)}
+
+/* โครงหน้า */
+#view-costing .ct-wrap{display:flex;gap:22px;align-items:flex-start}
+#view-costing .ct-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:18px}
+#view-costing .ct-card{background:#fff;border:1px solid rgba(235,227,213,.9);border-radius:22px;box-shadow:0 1px 2px rgba(43,34,29,.04)}
+#view-costing .ct-card-h{display:flex;align-items:center;gap:9px;padding:14px 20px;border-bottom:1px solid var(--sd100);color:var(--b500)}
+#view-costing .ct-card-h.split{justify-content:space-between;background:rgba(253,251,247,.6)}
+#view-costing .ct-card-h b{font-size:11.5px;font-weight:700;letter-spacing:.03em;color:var(--es900)}
+#view-costing .ct-card-h .ct-sub{display:block;font-size:11.5px;font-weight:400;color:rgba(74,62,54,.6);margin-top:2px;letter-spacing:0}
+#view-costing .ct-hint{font-size:11px;color:rgba(74,62,54,.5);margin-left:auto;font-weight:400}
+
+/* แถบซ้าย · รายการแผน */
+#view-costing .ct-side{width:252px;flex:none;display:flex;flex-direction:column;gap:10px}
+#view-costing .ct-side-h{font-size:11.5px;color:rgba(74,62,54,.7);font-weight:500;padding:0 4px}
+#view-costing .ct-rt{display:flex;gap:11px;align-items:flex-start;width:100%;text-align:left;cursor:pointer;
+  padding:13px 14px;border-radius:18px;border:1px solid var(--sd200);background:rgba(255,255,255,.7);color:var(--es900);transition:.15s}
+#view-costing .ct-rt:hover{background:#fff;border-color:var(--sd300)}
+#view-costing .ct-rt.on{background:var(--b500);border-color:var(--b500);color:#fff;box-shadow:0 8px 20px rgba(255,76,0,.22)}
+#view-costing .ct-rt-ic{margin-top:1px;color:var(--sd400)}
+#view-costing .ct-rt.on .ct-rt-ic{color:#fff}
+#view-costing .ct-rt-body{flex:1;min-width:0;display:block}
+#view-costing .ct-rt-nm{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:12.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#view-costing .ct-dot{width:7px;height:7px;border-radius:50%;background:#fff;flex:none}
+#view-costing .ct-rt-sub{display:block;font-size:11px;margin-top:3px;color:rgba(74,62,54,.6)}
+#view-costing .ct-rt.on .ct-rt-sub{color:rgba(255,255,255,.9)}
+#view-costing .ct-rt-badge{display:inline-block;margin-top:8px;font-size:10px;font-weight:600;padding:2px 8px;border-radius:7px;background:var(--mt50);color:var(--mt700);border:1px solid var(--mt100)}
+#view-costing .ct-rt-badge.warn{background:#fffbeb;color:#a16207;border-color:#fde68a}
+#view-costing .ct-rt.on .ct-rt-badge,#view-costing .ct-rt.on .ct-rt-badge.warn{background:rgba(255,255,255,.22);color:#fff;border-color:transparent}
+#view-costing .ct-addrt{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;cursor:pointer;
+  padding:11px;border-radius:16px;border:1px dashed var(--sd300);background:rgba(255,255,255,.4);
+  color:rgba(74,62,54,.7);font-size:11.5px;font-weight:600;transition:.15s}
+#view-costing .ct-addrt:hover{border-color:var(--b500);color:var(--b500);background:rgba(255,245,240,.5)}
+
+/* แถบชื่อแผน */
+#view-costing .ct-namebar{display:flex;align-items:center;gap:10px;padding:12px 14px;flex-wrap:wrap}
+#view-costing .ct-title{flex:1;min-width:180px;max-width:340px;font-size:17px;font-weight:700;color:var(--es900);
+  background:transparent;border:1px solid transparent;border-radius:12px;padding:5px 10px;transition:.15s}
+#view-costing .ct-title:hover{background:var(--sd50)}
+#view-costing .ct-title:focus{background:#fff;border-color:var(--b500);outline:none;box-shadow:0 0 0 3px rgba(255,76,0,.12)}
+#view-costing .ct-linkbox{display:flex;align-items:center;gap:7px;background:var(--sd50);border:1px solid var(--sd200);
+  border-radius:12px;padding:7px 11px;font-size:11.5px;color:rgba(74,62,54,.7)}
+#view-costing .ct-linkbox svg{color:var(--sd400)}
+#view-costing .ct-linkbox select{background:transparent;border:none;font-size:11.5px;font-weight:500;color:var(--es900);outline:none;max-width:200px}
+#view-costing .ct-ib{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:12px;
+  border:1px solid var(--sd200);background:#fff;color:var(--es700);cursor:pointer;transition:.15s;flex:none}
+#view-costing .ct-ib:hover{color:var(--b500);border-color:var(--b300)}
+#view-costing .ct-ib.danger{border-color:#fecdd3;background:rgba(255,241,242,.5);color:#e11d48}
+#view-costing .ct-ib.danger:hover{background:#ffe4e6}
+
+/* พารามิเตอร์ */
+#view-costing .ct-grid8{display:grid;grid-template-columns:repeat(auto-fit,minmax(122px,1fr));gap:11px;padding:16px 20px}
+#view-costing .ct-f{display:block}
+#view-costing .ct-f>span{display:block;font-size:11px;font-weight:500;color:rgba(74,62,54,.7);margin-bottom:5px}
+#view-costing .ct-f.hot>span{color:var(--b600);font-weight:700}
+#view-costing .ct-in{background:#fff;border:1px solid var(--cr200);border-radius:10px;padding:7px 9px;font-size:12px;
+  color:var(--es900);text-align:right;font-variant-numeric:tabular-nums;transition:.15s}
+#view-costing .ct-in:focus{border-color:var(--b500);box-shadow:0 0 0 3px rgba(255,76,0,.12);outline:none}
+#view-costing .ct-in.wide{width:100%;font-weight:500}
+#view-costing .ct-in.hot{color:var(--b600);font-weight:700;background:rgba(255,245,240,.6);border-color:var(--b300)}
+#view-costing select.ct-in.wide{text-align:left}
+
+/* การ์ดตัวเลข */
+#view-costing .ct-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+#view-costing .ct-k{border-radius:22px;padding:18px 20px;display:flex;flex-direction:column;justify-content:space-between;gap:12px}
+#view-costing .ct-k.mint{background:rgba(230,247,240,.9);border:1px solid var(--mt100)}
+#view-costing .ct-k.brand{background:rgba(255,245,240,.85);border:1px solid var(--b100)}
+#view-costing .ct-k.plain{background:#fff;border:1px solid var(--sd200)}
+#view-costing .ct-k-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+#view-costing .ct-k-lb{font-size:10.5px;font-weight:700;letter-spacing:.05em}
+#view-costing .ct-k.mint .ct-k-lb{color:var(--mt700)}
+#view-costing .ct-k.brand .ct-k-lb{color:var(--b600)}
+#view-costing .ct-k.plain .ct-k-lb{color:var(--es700)}
+#view-costing .ct-k-v{font-size:32px;font-weight:800;letter-spacing:-.02em;line-height:1.15;margin-top:3px;font-variant-numeric:tabular-nums}
+#view-costing .ct-k-v em{font-size:17px;font-weight:700;font-style:normal;margin-left:5px}
+#view-costing .ct-k.mint .ct-k-v{color:var(--mt700)}
+#view-costing .ct-k.brand .ct-k-v{color:var(--b500)}
+#view-costing .ct-k.brand .ct-k-v.neg{color:#e11d48}
+#view-costing .ct-k.plain .ct-k-v{color:var(--es900)}
+#view-costing .ct-k-ic{width:38px;height:38px;border-radius:14px;display:flex;align-items:center;justify-content:center;flex:none}
+#view-costing .ct-k.mint .ct-k-ic{background:var(--mt100);color:var(--mt700)}
+#view-costing .ct-k.brand .ct-k-ic{background:var(--b100);color:var(--b500)}
+#view-costing .ct-k.plain .ct-k-ic{background:var(--sd100);color:var(--es800)}
+#view-costing .ct-k-row{display:flex;justify-content:space-between;gap:8px;font-size:10.5px;font-weight:600;color:var(--mt700);margin-bottom:6px}
+#view-costing .ct-bar{height:8px;border-radius:999px;background:var(--mt100);overflow:hidden}
+#view-costing .ct-bar i{display:block;height:100%;border-radius:999px;background:var(--mt500);transition:width .25s}
+#view-costing .ct-k-note{font-size:11px;color:rgba(74,62,54,.8);font-weight:500;display:flex;align-items:center;gap:7px}
+#view-costing .ct-k-note i{width:7px;height:7px;border-radius:50%;background:var(--b500);flex:none}
+#view-costing .ct-k-note b{color:var(--es900);font-weight:700}
+#view-costing .ct-k-split{display:flex;justify-content:space-between;gap:6px;font-size:10.5px;color:rgba(74,62,54,.7);
+  padding-top:9px;border-top:1px solid var(--sd100)}
+
+/* ตาราง */
+#view-costing .ct-tblcard{overflow:hidden}
+#view-costing .ct-scroll{overflow-x:auto}
+#view-costing .ct-legend{display:flex;gap:13px;font-size:11px;color:rgba(74,62,54,.7)}
+#view-costing .ct-legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+#view-costing .ct-legend i.s{background:var(--sd300)} #view-costing .ct-legend i.b{background:var(--b500)}
+#view-costing .ct-tbl{width:100%;border-collapse:collapse;font-size:12px}
+#view-costing .ct-tbl th{background:rgba(247,242,234,.75);color:var(--es800);font-size:10px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.05em;padding:12px 16px;text-align:left;border-bottom:1px solid var(--sd200)}
+#view-costing .ct-tbl th.ct-r{text-align:right}
+#view-costing .ct-tbl th.vat{color:var(--b600);font-weight:700}
+#view-costing .ct-tbl td{padding:9px 16px;border-bottom:1px solid rgba(247,242,234,.8)}
+#view-costing .ct-r{text-align:right;font-variant-numeric:tabular-nums}
+#view-costing .ct-tbl td.dim{color:var(--sd300)}
+#view-costing .ct-tbl td.b{font-weight:700;color:var(--es900)}
+#view-costing .ct-tbl td.vat{color:var(--b600);font-weight:600}
+#view-costing .ct-gr td{background:rgba(235,227,213,.6);font-weight:700;color:var(--es900)}
+#view-costing .ct-lr:hover td{background:rgba(253,251,247,.85)}
+#view-costing .ct-share{font-size:10px;font-weight:400;color:rgba(74,62,54,.5);margin-left:8px}
+#view-costing .ct-pct{background:#fef3c7;color:#92400e;border-radius:6px;padding:1px 7px;font-size:9.5px;font-weight:700;margin-left:7px}
+#view-costing .ct-bullet{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--sd400);margin-right:9px;vertical-align:2px}
+#view-costing .ct-tbl tfoot td{background:var(--es950);color:var(--cr200);font-weight:600;padding:14px 16px;border:none;border-top:2px solid var(--b500)}
+#view-costing .ct-tbl tfoot td.w{color:#fff;font-weight:700}
+#view-costing .ct-tbl tfoot td.o{color:var(--b300);font-weight:700}
+#view-costing .ct-tbl tfoot td.big{color:#ff7b52;font-weight:800;font-size:13.5px}
+
+/* สรุปกำไร */
+#view-costing .ct-pnl{padding:16px 20px}
+#view-costing .ct-sr{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:5px 0;font-size:12.5px;color:var(--es800)}
+#view-costing .ct-sr span:last-child{font-variant-numeric:tabular-nums;font-weight:600;color:var(--es900)}
+#view-costing .ct-sr.tot{border-top:1px solid var(--sd200);margin-top:7px;padding-top:11px;font-size:15px;font-weight:800}
+#view-costing .ct-sr.tot span:last-child{color:var(--mt700);font-weight:800}
+#view-costing .ct-sr.tot.neg span:last-child{color:#e11d48}
+
+/* กราฟ */
+#view-costing .ct-chart{padding-bottom:14px}
+#view-costing .ct-plot{position:relative;display:flex;align-items:stretch;gap:1px;margin:14px 20px 0;
+  border-left:1px solid var(--sd200);border-bottom:1px solid var(--sd200)}
+#view-costing .ct-zero{position:absolute;left:0;right:0;border-top:1px dashed var(--sd300)}
+#view-costing .ct-cb{flex:1;position:relative;min-width:0}
+#view-costing .ct-cb i{position:absolute;left:0;right:0;border-radius:2px;display:block}
+#view-costing .ct-cb i.neg{background:#fda4a4} #view-costing .ct-cb i.pos{background:#7adbb5}
+#view-costing .ct-cb i.be{background:var(--mt700)} #view-costing .ct-cb i.st{background:#f59e0b}
+#view-costing .ct-xax{display:flex;justify-content:space-between;font-size:10px;color:rgba(74,62,54,.5);margin:5px 20px 0}
+#view-costing .ct-lg{display:flex;gap:14px;flex-wrap:wrap;font-size:10.5px;color:rgba(74,62,54,.7);margin:9px 20px 0}
+#view-costing .ct-lg i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+#view-costing .ct-lg i.neg{background:#fda4a4} #view-costing .ct-lg i.pos{background:#7adbb5}
+#view-costing .ct-lg i.be{background:var(--mt700)} #view-costing .ct-lg i.st{background:#f59e0b}
+
+/* แถบหัวของแท็บ 2 / 3 */
+#view-costing .ct-bar2{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:16px 20px;margin-bottom:16px}
+#view-costing .ct-bar2 b{font-size:14.5px;font-weight:700;color:var(--es900)}
+#view-costing .ct-bar2 .ct-sub{display:block;font-size:11.5px;color:rgba(74,62,54,.7);margin-top:3px;line-height:1.6}
+#view-costing .ct-bar2 em{font-style:normal;font-weight:700}
+#view-costing .ct-bar2 em.fix{color:#7c3aed} #view-costing .ct-bar2 em.var{color:#1d4ed8} #view-costing .ct-bar2 em.step{color:#a16207}
+#view-costing .ct-bar2r{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#view-costing .ct-vatset{font-size:11.5px;color:rgba(74,62,54,.7)}
+#view-costing .ct-btn{display:inline-flex;align-items:center;gap:7px;border:none;background:var(--b500);color:#fff;
+  border-radius:14px;padding:9px 16px;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 6px 14px rgba(255,76,0,.2);transition:.15s}
+#view-costing .ct-btn:hover{background:var(--b600)}
+#view-costing .ct-btn.ghost{background:#fff;color:rgba(74,62,54,.75);border:1px solid var(--sd200);box-shadow:none;font-weight:500}
+#view-costing .ct-btn.ghost:hover{background:var(--sd50);color:var(--es900)}
+
+/* แท็บ 2 · การ์ดหมวด */
+#view-costing .ct-catcard{overflow:hidden;margin-bottom:14px}
+#view-costing .ct-cath{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 18px;
+  background:rgba(247,242,234,.75);border-bottom:1px solid var(--sd200);font-size:12px}
+#view-costing .ct-cath>span:first-child{display:flex;align-items:center;gap:8px;color:var(--b500)}
+#view-costing .ct-cath b{color:var(--es900);font-weight:700;font-size:12.5px}
+#view-costing .ct-ren{border:none;background:transparent;color:rgba(74,62,54,.45);cursor:pointer;font-size:12px;padding:0 3px}
+#view-costing .ct-ren:hover{color:var(--b500)}
+#view-costing .ct-cnt{font-size:11px;color:rgba(74,62,54,.6)}
+#view-costing .ct-mtbl{width:100%;border-collapse:collapse;table-layout:fixed;min-width:860px}
+#view-costing .ct-mtbl td{padding:9px 14px;border-bottom:1px solid rgba(247,242,234,.9);vertical-align:top}
+#view-costing .ct-mtbl tr:last-child td{border-bottom:none}
+#view-costing .ct-mtbl tr:hover td{background:rgba(253,251,247,.7)}
+#view-costing .ct-lname{width:100%;border:1px solid transparent;border-radius:9px;padding:4px 7px;font-size:12.5px;font-weight:600;background:transparent;color:var(--es900)}
+#view-costing .ct-lname:hover{background:var(--sd50)}
+#view-costing .ct-lname:focus{background:#fff;border-color:var(--b500);outline:none}
+#view-costing .ct-nmsub{display:flex;align-items:center;gap:9px;margin:5px 0 0 7px;flex-wrap:wrap}
+#view-costing .ct-catsel{font-size:10px;color:rgba(74,62,54,.7);border:1px solid var(--sd200);border-radius:999px;
+  padding:2px 7px;background:var(--sd50);max-width:120px}
+#view-costing .ct-vat{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--sd400);font-weight:500;cursor:pointer;white-space:nowrap}
+#view-costing .ct-vat.on{color:var(--mt700);font-weight:700}
+#view-costing .ct-vat input{width:13px;height:13px;accent-color:var(--mt500);cursor:pointer}
+#view-costing .ct-part{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:2px 0}
+#view-costing .ct-sel{font-size:10.5px;border:1px solid var(--cr200);border-radius:8px;padding:3px 5px;background:#fff;color:var(--es900)}
+#view-costing .ct-tag{border-radius:6px;padding:1px 7px;font-size:9px;font-weight:700;white-space:nowrap}
+#view-costing .ct-tag.fix{background:#ede9fe;color:#6d28d9}
+#view-costing .ct-tag.var{background:#dbeafe;color:#1d4ed8}
+#view-costing .ct-tag.step{background:#fef3c7;color:#92400e}
+#view-costing .ct-u{font-size:10.5px;color:rgba(74,62,54,.6);white-space:nowrap}
+#view-costing .ct-u.en4{color:#6d28d9;font-weight:700} #view-costing .ct-u.th{color:#1d4ed8;font-weight:600}
+#view-costing .ct-mini{border:1px dashed var(--mt100);background:rgba(230,247,240,.5);color:var(--mt700);border-radius:8px;
+  padding:2px 8px;font-size:9.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+#view-costing .ct-mini:hover{border-color:var(--mt500)}
+#view-costing .ct-mini.dash{margin-top:4px;border-color:var(--sd300);background:transparent;color:rgba(74,62,54,.7)}
+#view-costing .ct-mini.dash:hover{border-color:var(--b500);color:var(--b500)}
+#view-costing .ct-x{border:none;background:transparent;color:#e11d48;cursor:pointer;font-size:14px;padding:0 3px;opacity:.5;display:inline-flex;align-items:center}
+#view-costing .ct-x:hover{opacity:1}
+#view-costing .ct-del{text-align:center;padding-top:12px!important}
+
+/* แท็บ 3 · เมทริกซ์ */
+#view-costing .ct-otbl{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;min-width:640px}
+#view-costing .ct-otbl th{background:rgba(247,242,234,.85);padding:13px 14px;text-align:left;border-bottom:1px solid var(--sd200);vertical-align:top}
+#view-costing .ct-otbl th.ct-stick{width:250px;font-size:10.5px;font-weight:600;color:var(--es800);text-transform:uppercase;letter-spacing:.04em}
+#view-costing .ct-pcol{border-left:1px solid var(--sd200);text-align:center}
+#view-costing .ct-pcol.on{background:rgba(255,245,240,.55)}
+#view-costing .ct-pnm{font-size:13px;font-weight:700;color:var(--es900)}
+#view-costing .ct-pcol.on .ct-pnm{color:var(--b600)}
+#view-costing .ct-psub{font-size:10.5px;color:rgba(74,62,54,.6);font-weight:400;margin-top:2px}
+#view-costing .ct-pbe{font-size:10.5px;font-weight:700;color:var(--mt700);margin-top:3px}
+#view-costing .ct-pbe.warn{color:#b45309}
+#view-costing .ct-otbl td{padding:7px 14px;border-bottom:1px solid rgba(247,242,234,.9);border-left:1px solid var(--sd200)}
+#view-costing .ct-otbl td.ct-stick{border-left:none;font-weight:500}
+#view-costing .ct-grow td{background:rgba(235,227,213,.6)}
+#view-costing .ct-gtd{font-weight:700;color:var(--es900)}
+#view-costing .ct-ltd.dis{opacity:.35}
+#view-costing .ct-otbl tbody tr:not(.ct-grow):hover td{background:rgba(253,251,247,.8)}
+#view-costing .ct-cell{display:grid;grid-template-columns:22px 92px 1fr;align-items:center;gap:8px;max-width:272px;margin:0 auto}
+#view-costing .ct-cell .c1{display:flex;justify-content:center}
+#view-costing .ct-cell .c2{display:flex;align-items:center;justify-content:flex-end;gap:3px}
+#view-costing .ct-cell .c3{display:flex;align-items:center;gap:5px;font-size:10.5px;color:rgba(74,62,54,.55)}
+#view-costing .ct-ck input{width:15px;height:15px;accent-color:var(--b500);cursor:pointer}
+#view-costing .ct-off{background:#ffe4e6;color:#be123c;border-radius:6px;padding:1px 8px;font-size:9.5px;font-weight:700;white-space:nowrap}
+#view-costing .ct-pctwrap{display:inline-flex;align-items:center;gap:2px}
+#view-costing .ct-in.pct{width:54px;font-weight:700}
+#view-costing .ct-pctwrap.on .ct-in.pct{border-color:#f59e0b;background:#fffbeb;color:#92400e}
+#view-costing .ct-pctwrap i{font-style:normal;font-size:10px;font-weight:700;color:rgba(74,62,54,.4)}
+#view-costing .ct-pctwrap.on i{color:#92400e}
+#view-costing .ct-in.ovr{width:68px}
+#view-costing .ct-in.ovr.on{border-color:var(--mt500);background:var(--mt50);font-weight:700;color:var(--mt700)}
+#view-costing .ct-gsum{font-family:inherit;font-size:11px;font-weight:800;color:var(--es800);font-variant-numeric:tabular-nums}
+#view-costing .ct-cell .c3 s{color:var(--sd400);font-variant-numeric:tabular-nums}
+#view-costing .ct-undo{border:none;background:transparent;color:var(--mt700);cursor:pointer;padding:0;display:inline-flex}
+#view-costing .ct-unit{color:rgba(74,62,54,.45)}
+
+@media (max-width:900px){
+  #view-costing .ct-wrap{flex-direction:column}
+  #view-costing .ct-side{width:100%}
+}
+</style>
 <style>
 :root{
   --ocean:#1a6a8a;--ocean-mid:#2196be;--ocean-light:#c8eaf5;--ocean-50:#edf7fc;
@@ -4019,14 +4279,19 @@ body.sb-collapsed .sidebar.sb-collapsed ~ #la-userbadge, body.sb-collapsed .la-u
       <div id="acct-body"></div>
     </div>
     <div id="view-costing" class="view">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:16px;padding:6px 4px 12px">
-        <div><h1 style="font-size:24px;font-weight:700;letter-spacing:-.02em;color:var(--fd-ink);margin:0">ต้นทุน &amp; จุดคุ้มทุน <span style="font-size:11px;font-weight:500;color:var(--fd-ink-soft);background:#fff;padding:3px 10px;border-radius:14px;border:1px solid var(--fd-line);vertical-align:5px">TEMPLATE</span></h1>
-        <p style="font-size:13px;color:var(--fd-ink-soft);margin-top:3px">สร้างแม่แบบต้นทุนของแต่ละเส้นทาง · หาจุดคุ้มทุนก่อนเปิดขาย · เก็บไว้ผูกกับการออกเรือในอนาคต</p></div>
-      </div>
-      <div id="ct-tabs" style="display:inline-flex;gap:3px;background:#EFEDE6;border-radius:10px;padding:3px;margin-bottom:16px">
-        <button data-t="plan" onclick="ctSetTab('plan')" style="border:none;border-radius:8px;padding:6px 15px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:#fff;color:#0F6E56">แผนคำนวณ</button>
-        <button data-t="tpl" onclick="ctSetTab('tpl')" style="border:none;border-radius:8px;padding:6px 15px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:transparent;color:var(--fd-ink-soft)">สูตรกลาง</button>
-        <button data-t="ovr" onclick="ctSetTab('ovr')" style="border:none;border-radius:8px;padding:6px 15px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;background:transparent;color:var(--fd-ink-soft)">ปรับ / ปิด รายแผน</button>
+      <div class="ct-head">
+        <div class="ct-brand">
+          <div class="ct-logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"><path d="M3 16l1.6-5.4a2 2 0 0 1 1.9-1.6h11a2 2 0 0 1 1.9 1.6L21 16"/><path d="M12 9V5H8"/><path d="M2 18.5c1.6 0 1.6 1.5 3.2 1.5s1.6-1.5 3.2-1.5 1.6 1.5 3.2 1.5 1.6-1.5 3.2-1.5 1.6 1.5 3.2 1.5 1.6-1.5 3.2-1.5"/></svg></div>
+          <div>
+            <div class="ct-h1"><h1>ต้นทุน &amp; จุดคุ้มทุน</h1><span class="ct-pill">TEMPLATE</span></div>
+            <p class="ct-h2">สร้างแม่แบบต้นทุนของแต่ละเส้นทาง · หาจุดคุ้มทุนก่อนเปิดขาย · เก็บไว้ผูกกับการออกเรือในอนาคต</p>
+          </div>
+        </div>
+        <nav id="ct-tabs">
+          <button class="ct-tab on" data-t="plan" onclick="ctSetTab('plan')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><rect x="4" y="3" width="16" height="18" rx="2.5"/><path d="M8 7h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h4"/></svg>แผนคำนวณ</button>
+          <button class="ct-tab" data-t="tpl" onclick="ctSetTab('tpl')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M18 18h2"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="16" cy="18" r="2"/></svg>สูตรกลาง</button>
+          <button class="ct-tab" data-t="ovr" onclick="ctSetTab('ovr')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M9 6h11M9 12h11M9 18h11M4 6l1.5 1.5L8 5M4 12l1.5 1.5L8 11M4 18l1.5 1.5L8 17"/></svg>ปรับ / ปิด รายแผน</button>
+        </nav>
       </div>
       <div id="ct-body"></div>
     </div>
@@ -46837,18 +47102,40 @@ function ctBreakEven(pl, cap, tpl){
 }
 
 // ── UI ──────────────────────────────────────────────────────────────────────────────────────────
-var _ct = { tab:'plan', pid:'' };
+// §ctSkin (2026-08-02) · ดีไซน์ตามที่ทีมส่งมา (brand orange + cream/sandy/espresso/mint)
+//   พอร์ตเป็น CSS scoped ใต้ #view-costing แทนการดึง Tailwind CDN — preflight ของ Tailwind
+//   จะ reset CSS ทั้งหน้าและทำให้ทุกหน้าจอเดิมของแอปพัง · ไอคอนใช้ inline SVG ไม่พึ่ง Font Awesome
+//   ตรรกะคำนวณยังเป็นตัวเดิมทั้งหมด (ขั้นบันได · ราคาไทย/ต่างชาติ · 4EN · %หมวด · VAT รายบรรทัด)
+var _ct = { tab:'plan', pid:'' };   // สถานะหน้าจอ · แท็บที่เปิด + แผนที่เลือก
 function ctE(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function ctB(n){ return '฿' + Math.round(n || 0).toLocaleString(); }
+function ctN(n){ return Math.round(n || 0).toLocaleString(); }
+var CT_ICON = {
+  compass:'<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
+  anchor:'<circle cx="12" cy="5" r="2.4"/><path d="M12 8v12M5 13a7 7 0 0 0 14 0M4 13h2M18 13h2"/>',
+  calc:'<rect x="4" y="3" width="16" height="18" rx="2.5"/><path d="M8 7h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h4"/>',
+  sliders:'<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M18 18h2"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="16" cy="18" r="2"/>',
+  list:'<path d="M9 6h11M9 12h11M9 18h11M4 6l1.5 1.5L8 5M4 12l1.5 1.5L8 11M4 18l1.5 1.5L8 17"/>',
+  chart:'<path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/>',
+  coins:'<ellipse cx="9" cy="6" rx="6" ry="2.6"/><path d="M3 6v5c0 1.4 2.7 2.6 6 2.6s6-1.2 6-2.6V6"/><path d="M15 12.5c3.3 0 6 1.2 6 2.6v3c0 1.4-2.7 2.6-6 2.6s-6-1.2-6-2.6"/>',
+  receipt:'<path d="M5 3v18l2.5-1.6L10 21l2-1.6L14 21l2.5-1.6L19 21V3z"/><path d="M9 8h6M9 12h6"/>',
+  folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  copy:'<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/>',
+  trash:'<path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/>',
+  link:'<path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/>',
+  info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+  undo:'<path d="M3 10h11a5 5 0 0 1 0 10H8"/><path d="M7 6l-4 4 4 4"/>'
+};
+function ctIcon(k, sz, sw){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' + (sw || 2)
+  + '" stroke-linecap="round" stroke-linejoin="round" style="width:' + (sz || 16) + 'px;height:' + (sz || 16) + 'px;flex:none">' + (CT_ICON[k] || '') + '</svg>'; }
+
 function ctSetTab(t){ _ct.tab = t; ctRender(); }
 // §staticTabs · แถบแท็บอยู่นอกส่วนที่ re-render · เดิมแท็บถูกลบทิ้งกลางคลิก ทำให้ "กดหัวข้อไม่ลง"
 function ctPaintTabs(){
   var bar = document.getElementById('ct-tabs'); if(!bar) return;
   [].slice.call(bar.querySelectorAll('button[data-t]')).forEach(function(b){
-    var on = (b.getAttribute('data-t') === _ct.tab);
-    b.style.background = on ? '#fff' : 'transparent';
-    b.style.color = on ? '#0F6E56' : 'var(--fd-ink-soft)';
-    b.style.boxShadow = on ? '0 1px 3px rgba(0,0,0,.10)' : 'none';
+    b.className = 'ct-tab' + ((b.getAttribute('data-t') === _ct.tab) ? ' on' : '');
   });
 }
 function ctRender(){
@@ -46856,13 +47143,12 @@ function ctRender(){
   var a = document.activeElement, fk = (a && a.getAttribute) ? a.getAttribute('data-fk') : null;
   var ss = (a && a.selectionStart != null) ? a.selectionStart : null;
   ctPaintTabs();
-  host.innerHTML = '<div style="max-width:1280px">'
-    + ((_ct.tab === 'tpl') ? ctTplHtml() : (_ct.tab === 'ovr') ? ctOvrHtml() : ctPlanHtml()) + '</div>';
+  host.innerHTML = (_ct.tab === 'tpl') ? ctTplHtml() : (_ct.tab === 'ovr') ? ctOvrHtml() : ctPlanHtml();
   if(fk){ var el = host.querySelector('[data-fk="' + fk + '"]'); if(el){ el.focus(); try{ el.setSelectionRange(ss, ss); }catch(_){ } } }
 }
 function ctNum(v, fk, oninput, w){
-  return '<input data-fk="' + fk + '" value="' + (v == null ? '' : v) + '" oninput="' + oninput
-    + '" style="width:' + (w || 68) + 'px;text-align:right;font-family:\'DM Mono\',monospace;font-variant-numeric:tabular-nums;font-size:12px;border:1px solid var(--fd-line);border-radius:7px;padding:3px 7px;background:#fff">';
+  return '<input class="ct-in" data-fk="' + fk + '" value="' + (v == null ? '' : v) + '" oninput="' + oninput
+    + '" style="width:' + (w || 68) + 'px">';
 }
 
 // ── แท็บ 1 · แผนคำนวณ ───────────────────────────────────────────────────────────────────────────
@@ -46875,146 +47161,124 @@ function ctPlanHtml(){
   var cur = ctProfitAt(pl, pax, T);
   var vout = pax * (+pl.price || 0) * R;
   var be = ctBreakEven(pl, cap, T);
+  var bePct = be ? Math.min(100, Math.round(be / cap * 100)) : 100;
 
-  // รายการแผนทางซ้าย
+  // ── แถบซ้าย · รายการแผน ──
   var items = P.map(function(x){
     var on = (x.id === _ct.pid);
-    var b = ctBreakEven(x, Math.max(1, (+x.cap || 65) * Math.max(1, +x.boats || 1)), T);
-    return '<button onclick="ctPickPlan(\'' + x.id + '\')" style="display:block;width:100%;text-align:left;border:1.5px solid ' + (on ? '#0F7A5A' : 'var(--fd-line)')
-      + ';background:' + (on ? '#F4FCF8' : '#fff') + ';border-radius:10px;padding:9px 11px;margin-bottom:7px;cursor:pointer;font-family:inherit">'
-      + '<div style="font-size:12.5px;font-weight:700;color:' + (on ? '#0F6E56' : 'var(--fd-ink)') + '">' + ctE(x.name) + '</div>'
-      + '<div style="font-size:10.5px;color:var(--fd-ink-soft);margin-top:2px">' + ctE(x.eng) + ' · จุ ' + (+x.cap || 0) + (+x.boats > 1 ? (' × ' + x.boats + ' ลำ') : '')
-      + ' · ' + ctB(x.price) + '/หัว' + ((+x.comm) ? (' · คอม ' + x.comm + '%') : '')
-      + '</div><div style="font-size:11px;font-weight:700;margin-top:3px;color:' + (b ? '#0F6E56' : '#A32D2D') + '">'
-      + (b ? ('คุ้มทุน ' + b + ' คน') : 'เต็มลำยังไม่คุ้ม') + '</div>'
-      + (x.famId ? '<div style="font-size:9.5px;color:#185FA5;margin-top:3px">&#128279; ' + ctE(ctFamName(x.famId)) + '</div>' : '')
-      + '</button>';
+    var xcap = Math.max(1, (+x.cap || 65) * Math.max(1, +x.boats || 1));
+    var b = ctBreakEven(x, xcap, T);
+    return '<button class="ct-rt' + (on ? ' on' : '') + '" onclick="ctPickPlan(\'' + x.id + '\')">'
+      + '<span class="ct-rt-ic">' + ctIcon(on ? 'compass' : 'anchor', 17) + '</span>'
+      + '<span class="ct-rt-body"><span class="ct-rt-nm">' + ctE(x.name) + (on ? '<i class="ct-dot"></i>' : '') + '</span>'
+      + '<span class="ct-rt-sub">' + ctE(x.eng) + ' · จุ ' + (+x.cap || 0) + (+x.boats > 1 ? (' × ' + x.boats + ' ลำ') : '') + ' · ' + ctB(x.price) + '/หัว</span>'
+      + '<span class="ct-rt-badge' + (b ? '' : ' warn') + '">' + (b ? ('คุ้มทุน ' + b + ' คน') : 'เต็มลำยังไม่คุ้ม') + '</span></span></button>';
   }).join('');
-  var left = '<div style="width:250px;flex:none">'
-    + '<div style="font-size:9.5px;font-weight:700;color:var(--fd-ink-soft);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px">แผนคำนวณ · ' + P.length + '</div>'
-    + items
-    + '<button onclick="ctAddPlan()" style="width:100%;border:1.5px dashed #C9DFD5;background:transparent;color:#0F6E56;border-radius:10px;padding:8px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit">+ เพิ่มเส้นทาง / แผนคำนวณ</button>'
-    + '</div>';
+  var side = '<aside class="ct-side"><div class="ct-side-h">แผนคำนวณ · ' + P.length + '</div>' + items
+    + '<button class="ct-addrt" onclick="ctAddPlan()">' + ctIcon('plus', 13) + ' เพิ่มเส้นทาง / แผนคำนวณ</button></aside>';
 
-  // พารามิเตอร์ของแผน
-  var lbl = function(t){ return '<div style="font-size:9px;font-weight:700;color:var(--fd-ink-soft);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">' + t + '</div>'; };
-  var inp = function(k){ return '<input data-fk="pl.' + k + '" value="' + ctE(pl[k]) + '" oninput="ctPlanSet(\'' + k + '\',this.value)" style="width:100%;text-align:right;font-family:\'DM Mono\',monospace;font-variant-numeric:tabular-nums;font-size:12.5px;border:1px solid var(--fd-line);border-radius:8px;padding:5px 8px;background:#fff">'; };
-  var fld = function(t, inner){ return '<label style="display:block">' + lbl(t) + inner + '</label>'; };
+  // ── หัว · ชื่อแผน + ผูกเส้นทาง + ปุ่ม ──
   var fams = ctFamList();
-  var head = '<div style="display:flex;gap:9px;align-items:flex-end;flex-wrap:wrap;margin-bottom:11px">'
-    + '<div style="flex:1;min-width:220px">' + lbl('ชื่อแผน') + '<input data-fk="pl.name" value="' + ctE(pl.name) + '" oninput="ctPlanSet(\'name\',this.value)" style="width:100%;font-family:inherit;font-size:14px;font-weight:700;border:1px solid var(--fd-line);border-radius:8px;padding:6px 9px;background:#fff"></div>'
-    + '<div style="min-width:210px">' + lbl('ผูกกับเส้นทางในระบบ (ไม่บังคับ)')
-      + '<select onchange="ctPlanSet(\'famId\',this.value)" style="width:100%;font-family:inherit;font-size:12.5px;border:1px solid var(--fd-line);border-radius:8px;padding:5px 6px;background:#fff">'
-      + '<option value="">— ยังไม่ผูก —</option>'
-      + fams.map(function(f){ return '<option value="' + ctE(f.id) + '"' + (pl.famId === f.id ? ' selected' : '') + '>' + ctE(f.name) + '</option>'; }).join('')
-      + '</select></div>'
-    + '<button onclick="ctDupPlan()" style="border:1px solid var(--fd-line);background:#fff;color:var(--fd-ink-soft);border-radius:8px;padding:6px 12px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit">คัดลอกแผน</button>'
-    + '<button onclick="ctDelPlan()" style="border:1px solid #F0BDB5;background:#fff;color:#A32D2D;border-radius:8px;padding:6px 12px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit">ลบแผน</button>'
-    + '</div>';
-  var ctl = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:9px;padding:12px 13px;background:#fff;border:1px solid var(--fd-line);border-radius:12px;margin-bottom:12px">'
-    + fld('เครื่องยนต์', '<select onchange="ctPlanSet(\'eng\',this.value)" style="width:100%;font-family:inherit;font-size:12.5px;border:1px solid var(--fd-line);border-radius:8px;padding:5px 6px;background:#fff">'
+  var head = '<div class="ct-card ct-namebar">'
+    + '<input class="ct-title" data-fk="pl.name" value="' + ctE(pl.name) + '" oninput="ctPlanSet(\'name\',this.value)">'
+    + '<div class="ct-linkbox">' + ctIcon('link', 13) + '<span>ผูกกับเส้นทาง:</span>'
+    + '<select onchange="ctPlanSet(\'famId\',this.value)"><option value="">— ยังไม่ผูก —</option>'
+    + fams.map(function(f){ return '<option value="' + ctE(f.id) + '"' + (pl.famId === f.id ? ' selected' : '') + '>' + ctE(f.name) + '</option>'; }).join('')
+    + '</select></div>'
+    + '<button class="ct-ib" title="คัดลอกแผน" onclick="ctDupPlan()">' + ctIcon('copy', 15) + '</button>'
+    + '<button class="ct-ib danger" title="ลบแผน" onclick="ctDelPlan()">' + ctIcon('trash', 15) + '</button></div>';
+
+  // ── พารามิเตอร์ ──
+  var fld = function(t, inner, hot){ return '<label class="ct-f' + (hot ? ' hot' : '') + '"><span>' + t + '</span>' + inner + '</label>'; };
+  var inp = function(k, hot){ return '<input class="ct-in wide' + (hot ? ' hot' : '') + '" data-fk="pl.' + k + '" value="' + ctE(pl[k]) + '" oninput="ctPlanSet(\'' + k + '\',this.value)">'; };
+  var params = '<div class="ct-card ct-params"><div class="ct-card-h">' + ctIcon('sliders', 15)
+    + '<b>พารามิเตอร์การตั้งราคา &amp; กำลังการผลิต</b><span class="ct-hint">ปรับแล้วคำนวณจุดคุ้มทุนใหม่ทันที</span></div>'
+    + '<div class="ct-grid8">'
+    + fld('เครื่องยนต์', '<select class="ct-in wide" onchange="ctPlanSet(\'eng\',this.value)">'
         + ['3EN','4EN'].map(function(e){ return '<option' + (pl.eng === e ? ' selected' : '') + '>' + e + '</option>'; }).join('') + '</select>')
-    + fld('จำนวนลำ', inp('boats')) + fld('ความจุ/ลำ', inp('cap'))
-    + fld('จำนวนคนที่คาด', inp('pax')) + fld('คนไทยกี่คน', inp('paxTH'))
-    + fld('ราคา/หัว (รวม VAT)', inp('price')) + fld('คอมเอเย่นต์ %', inp('comm')) + fld('ราคาน้ำมัน ฿/ลิตร', inp('fuel'))
+    + fld('จำนวนลำ', inp('boats')) + fld('ความจุ/ลำ (คน)', inp('cap'))
+    + fld('จำนวนคนที่คาด', inp('pax', 1), 1) + fld('คนไทยกี่คน', inp('paxTH'))
+    + fld('ราคา/หัว (รวม VAT)', inp('price')) + fld('คอมมิชชั่น %', inp('comm')) + fld('ราคาน้ำมัน ฿/ลิตร', inp('fuel'))
+    + '</div></div>';
+
+  // ── การ์ดตัวเลขสำคัญ ──
+  var kpi = '<div class="ct-kpis">'
+    + '<div class="ct-k mint"><div class="ct-k-top"><div><span class="ct-k-lb">จุดคุ้มทุน · BREAK-EVEN</span>'
+      + '<div class="ct-k-v">' + (be ? (be + '<em>คน</em>') : '<span style="font-size:26px">ไม่ถึง</span>') + '</div></div>'
+      + '<span class="ct-k-ic">' + ctIcon('chart', 17) + '</span></div>'
+      + '<div class="ct-k-foot"><div class="ct-k-row"><span>อัตราส่วนความจุเรือ</span><span>' + (be ? (bePct + '% ของความจุ ' + cap + ' ที่นั่ง') : ('เต็มลำ ' + cap + ' ที่นั่งก็ยังขาดทุน')) + '</span></div>'
+      + '<div class="ct-bar"><i style="width:' + bePct + '%' + (be ? '' : ';background:#e11d48') + '"></i></div></div></div>'
+    + '<div class="ct-k brand"><div class="ct-k-top"><div><span class="ct-k-lb">กำไรที่คาดการณ์ · ' + pax + ' คน</span>'
+      + '<div class="ct-k-v' + (cur.p < 0 ? ' neg' : '') + '">' + (cur.p >= 0 ? '+' : '') + ctN(cur.p) + '<em>฿</em></div></div>'
+      + '<span class="ct-k-ic">' + ctIcon('coins', 17) + '</span></div>'
+      + '<div class="ct-k-note"><i></i>Margin <b>' + (cur.rev ? Math.round(cur.p / cur.rev * 100) : 0) + '%</b> ของรายได้สุทธิ</div></div>'
+    + '<div class="ct-k plain"><div class="ct-k-top"><div><span class="ct-k-lb">VAT ต้องนำส่ง · NET VAT</span>'
+      + '<div class="ct-k-v">' + ctB(Math.max(0, vout - cur.c.vin)) + '</div></div>'
+      + '<span class="ct-k-ic">' + ctIcon('receipt', 17) + '</span></div>'
+      + '<div class="ct-k-split"><span>ภาษีขาย ' + ctB(vout) + '</span><span>·</span><span>ภาษีซื้อ ' + ctB(cur.c.vin) + '</span></div></div>'
     + '</div>';
 
-  var okBe = (be && pax >= be);
-  var kbox = function(k, v, d, good){
-    return '<div style="flex:1;min-width:165px;background:' + (good ? '#F4FCF8' : '#FEF7F6') + ';border:1.5px solid ' + (good ? '#9FE1CB' : '#F0BDB5')
-      + ';border-radius:12px;padding:11px 14px"><div style="font-size:9.5px;font-weight:700;color:var(--fd-ink-soft);text-transform:uppercase;letter-spacing:.05em">' + k + '</div>'
-      + '<div style="font-size:26px;font-weight:800;font-family:\'DM Mono\',monospace;line-height:1.15;color:' + (good ? '#0F6E56' : '#A32D2D') + '">' + v + '</div>'
-      + '<div style="font-size:10.5px;color:var(--fd-ink-soft);line-height:1.5">' + d + '</div></div>';
-  };
-  var kpis = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">'
-    + kbox('จุดคุ้มทุน', be ? (be + ' คน') : 'ไม่ถึง',
-        be ? ((be / cap * 100).toFixed(0) + '% ของความจุ ' + cap + ' ที่นั่ง') : 'เต็มลำก็ยังขาดทุน · ต้องขึ้นราคา หรือลดต้นทุน', !!be)
-    + kbox('กำไรที่ ' + pax + ' คน', (cur.p >= 0 ? '+' : '') + Math.round(cur.p).toLocaleString(),
-        'margin ' + (cur.rev ? Math.round(cur.p / cur.rev * 100) : 0) + '% ของรายได้สุทธิ', cur.p >= 0)
-    + kbox('VAT ต้องนำส่ง', ctB(Math.max(0, vout - cur.c.vin)), 'ภาษีขาย ' + ctB(vout) + ' − ภาษีซื้อ ' + ctB(cur.c.vin), true)
-    + '</div>';
-
-  // ตารางต้นทุนรายบรรทัด
-  var lastG = '', tr = '', gAgg = {};
+  // ── ตารางต้นทุน ──
+  var gAgg = {}, gOrder = [];
   cur.c.rows.forEach(function(r){
-    var a = gAgg[r.g] = gAgg[r.g] || { fix:0, varr:0, amt:0, vat:0, net:0 };
-    a.fix += r.fix; a.varr += r.varr; a.amt += r.amt; a.vat += r.vatAmt; a.net += r.net;
+    if(!gAgg[r.g]){ gAgg[r.g] = { fix:0, varr:0, amt:0, vat:0, net:0 }; gOrder.push(r.g); }
+    var a = gAgg[r.g]; a.fix += r.fix; a.varr += r.varr; a.amt += r.amt; a.vat += r.vatAmt; a.net += r.net;
   });
-  var gTot = cur.c.gross || 1;
+  var gTot = cur.c.gross || 1, lastG = '', tr = '';
+  var num = function(v, cls){ return '<td class="ct-r' + (cls ? (' ' + cls) : '') + (v ? '' : ' dim') + '">' + (v ? ctN(v) : '—') + '</td>'; };
   cur.c.rows.forEach(function(r){
     if(r.g !== lastG){
-      // §alignCols · ทุกช่องต้องตรงคอลัมน์เดียวกับแถวรายการ (เดิม colspan=4 ทำให้ยอดไปตกใต้ "ภาษีซื้อ")
       var gp = ctGrpCfg(pl, r.g), pct = +gp.pct || 0, A = gAgg[r.g];
-      var gh = 'background:#EDEAE2;padding:5px 11px;text-align:right;font-family:\'DM Mono\',monospace;font-weight:800;font-size:11.5px;color:#4a4a45';
-      var gnum = function(v){ return '<td style="' + gh + '">' + (v ? Math.round(v).toLocaleString() : '') + '</td>'; };
-      tr += '<tr><td style="background:#EDEAE2;padding:5px 11px;font-weight:800;font-size:11px;color:#4a4a45">' + ctE(r.g)
-        + '<span style="font-family:\'DM Mono\',monospace;font-size:9.5px;font-weight:700;color:#8a8a82;margin-left:7px">' + Math.round(A.amt / gTot * 100) + '% ของต้นทุน</span>'
-        + (pct ? ('<span style="background:#FFF3D8;color:#7A5A12;border-radius:5px;padding:0 6px;font-size:9px;font-weight:800;margin-left:6px">' + (pct > 0 ? '+' : '') + pct + '%</span>') : '')
-        + '</td>' + gnum(A.fix) + gnum(A.varr) + gnum(A.amt)
-        + '<td style="' + gh + ';color:#185FA5">' + (A.vat ? Math.round(A.vat).toLocaleString() : '') + '</td>'
-        + gnum(A.net) + '</tr>';
+      tr += '<tr class="ct-gr"><td>' + ctE(r.g) + '<span class="ct-share">' + Math.round(A.amt / gTot * 100) + '% ของต้นทุน</span>'
+        + (pct ? ('<span class="ct-pct">' + (pct > 0 ? '+' : '') + pct + '%</span>') : '') + '</td>'
+        + num(A.fix) + num(A.varr) + num(A.amt) + num(A.vat, 'vat') + num(A.net) + '</tr>';
       lastG = r.g;
     }
-    var td = 'padding:5px 11px;border-bottom:1px solid #F3F1EA;font-family:\'DM Mono\',monospace;font-variant-numeric:tabular-nums;text-align:right;font-size:12px';
-    tr += '<tr' + (r.amt ? '' : ' style="opacity:.45"') + '><td style="padding:5px 11px;border-bottom:1px solid #F3F1EA;font-size:12px">' + ctE(r.l) + '</td>'
-      + '<td style="' + td + '">' + (r.fix ? Math.round(r.fix).toLocaleString() : '—') + '</td>'
-      + '<td style="' + td + '">' + (r.varr ? Math.round(r.varr).toLocaleString() : '—') + '</td>'
-      + '<td style="' + td + ';font-weight:700">' + Math.round(r.amt).toLocaleString() + '</td>'
-      + '<td style="' + td + ';color:#185FA5">' + (r.vatAmt ? Math.round(r.vatAmt).toLocaleString() : '—') + '</td>'
-      + '<td style="' + td + '">' + Math.round(r.net).toLocaleString() + '</td></tr>';
+    tr += '<tr class="ct-lr"><td><i class="ct-bullet"></i>' + ctE(r.l) + '</td>'
+      + num(r.fix) + num(r.varr) + num(r.amt, 'b') + num(r.vatAmt, 'vat') + num(r.net, 'b') + '</tr>';
   });
-  var th = 'text-align:right;font-size:9px;font-weight:700;color:var(--fd-ink-soft);text-transform:uppercase;letter-spacing:.06em;padding:7px 11px;background:#FBFAF7;border-bottom:1.5px solid var(--fd-line)';
-  var tot = 'padding:7px 11px;text-align:right;font-family:\'DM Mono\',monospace;font-variant-numeric:tabular-nums;font-size:12.5px';
   var sf = cur.c.rows.reduce(function(s, r){ return s + r.fix; }, 0);
   var sv = cur.c.rows.reduce(function(s, r){ return s + r.varr; }, 0);
-  var tbl = '<div style="background:#fff;border:1px solid var(--fd-line);border-radius:12px;overflow:hidden;margin-bottom:12px">'
-    + '<table style="width:100%;border-collapse:collapse"><thead><tr><th style="' + th + ';text-align:left">รายการ · ที่ ' + pax + ' คน</th><th style="' + th + '">คงที่</th><th style="' + th + '">ผันแปร</th><th style="' + th + '">จ่ายจริง</th><th style="' + th + '">ภาษีซื้อ</th><th style="' + th + '">ต้นทุนสุทธิ</th></tr></thead><tbody>'
-    + tr
-    + '<tr style="font-weight:800;background:#FBFAF7"><td style="padding:7px 11px">รวม</td>'
-    + '<td style="' + tot + '">' + Math.round(sf).toLocaleString() + '</td><td style="' + tot + '">' + Math.round(sv).toLocaleString() + '</td>'
-    + '<td style="' + tot + '">' + Math.round(cur.c.gross).toLocaleString() + '</td>'
-    + '<td style="' + tot + ';color:#185FA5">' + Math.round(cur.c.vin).toLocaleString() + '</td>'
-    + '<td style="' + tot + '">' + Math.round(cur.c.net).toLocaleString() + '</td></tr></tbody></table></div>';
+  var tbl = '<div class="ct-card ct-tblcard"><div class="ct-card-h split">'
+    + '<div><b>ตารางรายละเอียดต้นทุนตามหมวด · ที่ ' + pax + ' คน</b><span class="ct-sub">แยกต้นทุนคงที่ · ผันแปร · ภาษีซื้อ · ต้นทุนสุทธิ</span></div>'
+    + '<div class="ct-legend"><span><i class="s"></i>คงที่</span><span><i class="b"></i>ผันแปร</span></div></div>'
+    + '<div class="ct-scroll"><table class="ct-tbl"><thead><tr>'
+    + '<th>รายการ / สัดส่วน</th><th class="ct-r">ต้นทุนคงที่</th><th class="ct-r">ต้นทุนผันแปร</th>'
+    + '<th class="ct-r">จ่ายจริงรวม</th><th class="ct-r vat">ภาษีซื้อ (VAT)</th><th class="ct-r">ต้นทุนสุทธิ</th></tr></thead>'
+    + '<tbody>' + tr + '</tbody><tfoot><tr>'
+    + '<td>รวมต้นทุนทั้งหมด</td><td class="ct-r">' + ctN(sf) + '</td><td class="ct-r">' + ctN(sv) + '</td>'
+    + '<td class="ct-r w">' + ctN(cur.c.gross) + '</td><td class="ct-r o">' + ctN(cur.c.vin) + '</td>'
+    + '<td class="ct-r big">' + ctN(cur.c.net) + '</td></tr></tfoot></table></div></div>';
 
-  var sr = function(a, b, big, col){
-    return '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:3px 0;font-size:' + (big ? '14px' : '12.5px')
-      + (big ? ';border-top:1px solid var(--fd-line);margin-top:5px;padding-top:8px;font-weight:800' : '') + '"><span>' + a
-      + '</span><span style="font-family:\'DM Mono\',monospace;font-variant-numeric:tabular-nums;font-weight:700' + (col ? ';color:' + col : '') + '">' + b + '</span></div>';
-  };
-  var pl2 = '<div style="background:#fff;border:1px solid var(--fd-line);border-radius:12px;padding:13px 16px;margin-bottom:12px">'
+  // ── สรุปกำไร ──
+  var sr = function(a, b, cls){ return '<div class="ct-sr' + (cls ? (' ' + cls) : '') + '"><span>' + a + '</span><span>' + b + '</span></div>'; };
+  var pnl = '<div class="ct-card ct-pnl">'
     + sr('รายได้ (รวม VAT)', ctB(pax * (+pl.price || 0)))
     + sr('− ภาษีขาย', '−' + ctB(vout))
     + sr('= รายได้สุทธิ' + ((+pl.comm) ? (' (หลังคอม ' + pl.comm + '%)') : ''), ctB(cur.rev))
     + sr('ต้นทุนสุทธิ · คงที่ ' + ctB(cur.c.fixNet) + ' + ผันแปร ' + ctB(pax ? cur.c.varNet / pax : 0) + '/คน', '−' + ctB(cur.c.net))
-    + sr('กำไร', (cur.p >= 0 ? '+' : '') + ctB(cur.p), 1, cur.p >= 0 ? '#0F6E56' : '#A32D2D')
-    + '</div>';
+    + sr('กำไร', (cur.p >= 0 ? '+' : '') + ctB(cur.p), 'tot' + (cur.p < 0 ? ' neg' : '')) + '</div>';
 
-  // กราฟ
+  // ── กราฟกำไรตามจำนวนคน ──
   var pts = [], mx = 0, mn = 0, prev = ctStepCount(pl, 1, T);
   for(var i = 1; i <= cap; i++){
-    var pr = ctProfitAt(pl, i, T).p, s = ctStepCount(pl, i, T);
-    pts.push({ n:i, p:pr, jump:(i > 1 && s > prev) }); prev = s;
+    var pr = ctProfitAt(pl, i, T).p, st = ctStepCount(pl, i, T);
+    pts.push({ n:i, p:pr, jump:(i > 1 && st > prev) }); prev = st;
     if(pr > mx) mx = pr; if(pr < mn) mn = pr;
   }
-  var H = 140, span = (mx - mn) || 1, z = H * (mx / span), bars = '';
+  var H = 150, span = (mx - mn) || 1, z = H * (mx / span), bars = '';
   pts.forEach(function(o){
     var hgt = Math.abs(o.p) / span * H, top = o.p >= 0 ? (z - hgt) : z;
-    var col = (be && o.n === be) ? '#0F7A5A' : (o.jump ? '#E8B94A' : (o.p >= 0 ? '#8FD9BC' : '#F0BDB5'));
-    bars += '<div style="flex:1;position:relative;min-width:0" title="' + o.n + ' คน · ' + (o.p >= 0 ? '+' : '') + Math.round(o.p).toLocaleString()
-      + '"><i style="position:absolute;left:0;right:0;top:' + top.toFixed(1) + 'px;height:' + Math.max(1, hgt).toFixed(1) + 'px;background:' + col + ';border-radius:2px;display:block"></i></div>';
+    var cls = (be && o.n === be) ? 'be' : (o.jump ? 'st' : (o.p >= 0 ? 'pos' : 'neg'));
+    bars += '<div class="ct-cb" title="' + o.n + ' คน · ' + (o.p >= 0 ? '+' : '') + ctN(o.p) + '"><i class="' + cls
+      + '" style="top:' + top.toFixed(1) + 'px;height:' + Math.max(1.5, hgt).toFixed(1) + 'px"></i></div>';
   });
-  var chart = '<div style="background:#fff;border:1px solid var(--fd-line);border-radius:12px;padding:13px 16px">'
-    + '<div style="font-size:9.5px;font-weight:700;color:var(--fd-ink-soft);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">กำไรตามจำนวนคน · 1 ถึง ' + cap + '</div>'
-    + '<div style="position:relative;height:' + H + 'px;border-left:1.5px solid var(--fd-line);border-bottom:1.5px solid var(--fd-line);display:flex;align-items:stretch;gap:1px">'
-    + '<div style="position:absolute;left:0;right:0;top:' + z.toFixed(1) + 'px;border-top:1.5px dashed #C9C6BC"></div>' + bars + '</div>'
-    + '<div style="display:flex;justify-content:space-between;font-size:9.5px;color:#a5a49d;margin-top:3px"><span>1</span><span>' + (be ? (be + ' ← คุ้มทุน') : '') + '</span><span>' + cap + ' เต็มลำ</span></div>'
-    + '<div style="display:flex;gap:13px;font-size:10px;color:#6b6b64;margin-top:7px;flex-wrap:wrap">'
-    + [['#F0BDB5','ขาดทุน'],['#0F7A5A','จุดคุ้มทุน'],['#8FD9BC','กำไร'],['#E8B94A','ขั้นบันไดเพิ่ม (ไกด์/เด็กเรือ)']]
-        .map(function(x){ return '<span><i style="display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px;background:' + x[0] + '"></i>' + x[1] + '</span>'; }).join('')
-    + '</div></div>';
+  var chart = '<div class="ct-card ct-chart"><div class="ct-card-h"><b>กำไรตามจำนวนคน · 1 ถึง ' + cap + '</b></div>'
+    + '<div class="ct-plot" style="height:' + H + 'px"><div class="ct-zero" style="top:' + z.toFixed(1) + 'px"></div>' + bars + '</div>'
+    + '<div class="ct-xax"><span>1</span><span>' + (be ? (be + ' ← คุ้มทุน') : '') + '</span><span>' + cap + ' เต็มลำ</span></div>'
+    + '<div class="ct-lg"><span><i class="neg"></i>ขาดทุน</span><span><i class="be"></i>จุดคุ้มทุน</span><span><i class="pos"></i>กำไร</span><span><i class="st"></i>ขั้นบันไดเพิ่ม (ไกด์/เด็กเรือ)</span></div></div>';
 
-  return '<div style="display:flex;gap:16px;align-items:flex-start">' + left
-    + '<div style="flex:1;min-width:0">' + head + ctl + kpis + tbl + pl2 + chart + '</div></div>';
+  return '<div class="ct-wrap">' + side + '<div class="ct-main">' + head + params + kpi + tbl + pnl + chart + '</div></div>';
 }
 function ctPickPlan(id){ _ct.pid = id; ctRender(); }
 function ctPlanSet(k, v){
@@ -47022,7 +47286,7 @@ function ctPlanSet(k, v){
   pl[k] = (k === 'name' || k === 'eng' || k === 'famId' || k === 'note') ? v : ((v === '') ? 0 : (+v || 0));
   ctPlanPut(pl); ctRender();
 }
-function ctAddPlan(){ var p = ctBlankPlan('เส้นทางใหม่'); var P = ctPlans(); P.push(p); ctPlansSave(P); _ct.pid = p.id; ctRender(); }
+function ctAddPlan(){ var p = ctBlankPlan('เส้นทางที่ ' + (ctPlans().length + 1)); var P = ctPlans(); P.push(p); ctPlansSave(P); _ct.pid = p.id; ctRender(); }
 function ctDupPlan(){
   var src = ctPlan(_ct.pid); if(!src) return;
   var q = JSON.parse(JSON.stringify(src)); q.id = ctNewId(); q.name = src.name + ' (คัดลอก)';
@@ -47034,173 +47298,145 @@ function ctDelPlan(){
   P = P.filter(function(x){ return x.id !== pl.id; }); ctPlansSave(P); _ct.pid = P[0].id; ctRender();
 }
 
-// ── แท็บ 2 · สูตรกลาง ───────────────────────────────────────────────────────────────────────────
+// ── แท็บ 2 · สูตรกลาง · การ์ดต่อหมวด ─────────────────────────────────────────────────────────────
 function ctTplHtml(){
-  var T = ctTpl(), h = '', lastG = '';
-  var td = 'padding:5px 10px;border-bottom:1px solid #F3F1EA;vertical-align:middle';
-  var sel = function(v, opts, on){
-    return '<select onchange="' + on + '" style="font-family:inherit;font-size:10.5px;border:1px solid var(--fd-line);border-radius:6px;padding:2px 4px;background:#fff">'
+  var T = ctTpl(), GL = ctGroups(T);
+  var sel = function(v, opts, on, cls){
+    return '<select class="ct-sel' + (cls ? (' ' + cls) : '') + '" onchange="' + on + '">'
       + opts.map(function(o){ return '<option value="' + o[0] + '"' + (v === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>';
   };
-  var tag = function(t, bg, c){ return '<span style="display:inline-block;border-radius:5px;padding:1px 6px;font-size:8.5px;font-weight:800;background:' + bg + ';color:' + c + ';white-space:nowrap">' + t + '</span>'; };
-  var sm = 'font-size:10.5px;color:var(--fd-ink-soft)';
-  var dash = 'border:1px dashed #C9DFD5;background:transparent;color:#0F6E56;border-radius:6px;padding:1px 7px;font-size:9.5px;font-weight:700;cursor:pointer;font-family:inherit';
-  var GL = ctGroups(T);
-  ctLinesByGroup(T).forEach(function(X){
-    var ln = X.ln, li = X.i, g = ln.g || 'อื่นๆ';
-    if(g !== lastG){
-      h += '<tr><td colspan="3" style="background:#EDEAE2;padding:5px 10px">'
-        + '<span style="font-weight:800;font-size:11px;color:#4a4a45">' + ctE(g) + '</span>'
-        + '<button onclick="ctRenameGroup(\'' + ctE(g) + '\')" title="เปลี่ยนชื่อหมวดนี้ (มีผลกับทุกบรรทัดในหมวด)" style="border:none;background:transparent;color:var(--fd-ink-soft);cursor:pointer;font-size:11px;padding:0 4px">&#9998;</button>'
-        + '</td></tr>';
-      lastG = g;
-    }
-    var pp = '';
-    (ln.parts || []).forEach(function(p, pi){
-      var F = 'p' + li + '.' + pi + '.';
-      pp += '<div style="display:flex;align-items:center;gap:5px;padding:2px 0;flex-wrap:wrap">'
-        + sel(p.k, [['fix','คงที่'],['var','ผันแปร'],['step','ขั้นบันได']], 'ctPartKind(' + li + ',' + pi + ',this.value)');
-      if(p.k === 'fix'){
-        pp += tag('คงที่', '#F1ECFB', '#5B289A')
-          + sel(p.per || 'boat', [['boat','ต่อลำ'],['trip','ต่อทริป']], 'ctPartSet(' + li + ',' + pi + ',\'per\',this.value)')
-          + '<span style="' + sm + '">จำนวน</span>' + ctNum(p.q, F + 'q', 'ctPartSet(' + li + ',' + pi + ',\'q\',this.value)', 56)
-          + (p.fuel ? '<span style="' + sm + '">ลิตร × ฿/L</span>'
-                    : '<span style="' + sm + '">×</span>' + ctNum(p.u, F + 'u', 'ctPartSet(' + li + ',' + pi + ',\'u\',this.value)'))
-          + ((p.q4 != null || p.u4 != null)
-              ? '<span style="' + sm + ';color:#5B289A">4EN:</span>'
-                + (p.q4 != null ? ctNum(p.q4, F + 'q4', 'ctPartSet(' + li + ',' + pi + ',\'q4\',this.value)', 56) : '')
-                + (p.u4 != null ? ctNum(p.u4, F + 'u4', 'ctPartSet(' + li + ',' + pi + ',\'u4\',this.value)') : '')
-              : '<button onclick="ctAddEng(' + li + ',' + pi + ')" style="' + dash + '">+ ค่า 4EN</button>');
-      } else if(p.k === 'var'){
-        pp += tag('ผันแปร', '#E6F1FB', '#185FA5') + '<span style="' + sm + '">ต่อคน</span>'
-          + (p.fuel ? ctNum(p.q, F + 'q', 'ctPartSet(' + li + ',' + pi + ',\'q\',this.value)', 56) + '<span style="' + sm + '">ลิตร × ฿/L</span>'
-                    : ctNum(p.u, F + 'u', 'ctPartSet(' + li + ',' + pi + ',\'u\',this.value)')
-                      + (p.uTH != null ? '<span style="' + sm + ';color:#185FA5">คนไทย</span>' + ctNum(p.uTH, F + 'uTH', 'ctPartSet(' + li + ',' + pi + ',\'uTH\',this.value)')
-                                       : '<button onclick="ctAddTH(' + li + ',' + pi + ')" style="' + dash + '">+ ราคาคนไทย</button>'));
-      } else {
-        pp += tag('ขั้นบันได', '#FDF3D8', '#7A5A12')
-          + sel(p.mode || 'every', [['every','ทุกๆ N คน'],['over','เมื่อเกิน N คน']], 'ctPartSet(' + li + ',' + pi + ',\'mode\',this.value)');
-        if(p.mode === 'over') pp += '<span style="' + sm + '">เกิน</span>' + ctNum(p.over, F + 'over', 'ctPartSet(' + li + ',' + pi + ',\'over\',this.value)', 56)
-              + '<span style="' + sm + '">คน → +</span>' + ctNum(p.add, F + 'add', 'ctPartSet(' + li + ',' + pi + ',\'add\',this.value)', 46);
-        else pp += '<span style="' + sm + '">1 คนต่อทุก</span>' + ctNum(p.every, F + 'every', 'ctPartSet(' + li + ',' + pi + ',\'every\',this.value)', 56)
-              + '<span style="' + sm + '">คน · ขั้นต่ำ</span>' + ctNum(p.min, F + 'min', 'ctPartSet(' + li + ',' + pi + ',\'min\',this.value)', 46);
-        pp += '<span style="' + sm + '">×</span>' + ctNum(p.u, F + 'u', 'ctPartSet(' + li + ',' + pi + ',\'u\',this.value)');
-      }
-      pp += '<span onclick="ctDelPart(' + li + ',' + pi + ')" title="ลบส่วนนี้" style="color:#C0392B;cursor:pointer;font-size:13px;padding:0 3px;opacity:.55">&times;</span></div>';
+  var body = GL.map(function(g){
+    var rows = '';
+    (T.lines || []).forEach(function(ln, li){
+      if((ln.g || 'อื่นๆ') !== g) return;
+      var pp = '';
+      (ln.parts || []).forEach(function(p, pi){
+        var F = 'p' + li + '.' + pi + '.';
+        pp += '<div class="ct-part">'
+          + sel(p.k, [['fix','คงที่'],['var','ผันแปร'],['step','ขั้นบันได']], 'ctPartKind(' + li + ',' + pi + ',this.value)');
+        if(p.k === 'fix'){
+          pp += '<span class="ct-tag fix">คงที่</span>'
+            + sel(p.per || 'boat', [['boat','ต่อลำ'],['trip','ต่อทริป']], 'ctPartSet(' + li + ',' + pi + ',\'per\',this.value)')
+            + '<span class="ct-u">จำนวน</span>' + ctNum(p.q, F + 'q', 'ctPartSet(' + li + ',' + pi + ',\'q\',this.value)', 58)
+            + (p.fuel ? '<span class="ct-u">ลิตร × ฿/L</span>' : '<span class="ct-u">×</span>' + ctNum(p.u, F + 'u', 'ctPartSet(' + li + ',' + pi + ',\'u\',this.value)'))
+            + ((p.q4 != null || p.u4 != null)
+                ? '<span class="ct-u en4">4EN</span>'
+                  + (p.q4 != null ? ctNum(p.q4, F + 'q4', 'ctPartSet(' + li + ',' + pi + ',\'q4\',this.value)', 58) : '')
+                  + (p.u4 != null ? ctNum(p.u4, F + 'u4', 'ctPartSet(' + li + ',' + pi + ',\'u4\',this.value)') : '')
+                : '<button class="ct-mini" onclick="ctAddEng(' + li + ',' + pi + ')">+ ค่า 4EN</button>');
+        } else if(p.k === 'var'){
+          pp += '<span class="ct-tag var">ผันแปร</span><span class="ct-u">ต่อคน</span>'
+            + (p.fuel ? ctNum(p.q, F + 'q', 'ctPartSet(' + li + ',' + pi + ',\'q\',this.value)', 58) + '<span class="ct-u">ลิตร × ฿/L</span>'
+                      : ctNum(p.u, F + 'u', 'ctPartSet(' + li + ',' + pi + ',\'u\',this.value)')
+                        + (p.uTH != null ? '<span class="ct-u th">คนไทย</span>' + ctNum(p.uTH, F + 'uTH', 'ctPartSet(' + li + ',' + pi + ',\'uTH\',this.value)')
+                                         : '<button class="ct-mini" onclick="ctAddTH(' + li + ',' + pi + ')">+ ราคาคนไทย</button>'));
+        } else {
+          pp += '<span class="ct-tag step">ขั้นบันได</span>'
+            + sel(p.mode || 'every', [['every','ทุกๆ N คน'],['over','เมื่อเกิน N คน']], 'ctPartSet(' + li + ',' + pi + ',\'mode\',this.value)');
+          if(p.mode === 'over') pp += '<span class="ct-u">เกิน</span>' + ctNum(p.over, F + 'over', 'ctPartSet(' + li + ',' + pi + ',\'over\',this.value)', 58)
+                + '<span class="ct-u">คน → +</span>' + ctNum(p.add, F + 'add', 'ctPartSet(' + li + ',' + pi + ',\'add\',this.value)', 48);
+          else pp += '<span class="ct-u">1 คนต่อทุก</span>' + ctNum(p.every, F + 'every', 'ctPartSet(' + li + ',' + pi + ',\'every\',this.value)', 58)
+                + '<span class="ct-u">คน · ขั้นต่ำ</span>' + ctNum(p.min, F + 'min', 'ctPartSet(' + li + ',' + pi + ',\'min\',this.value)', 48);
+          pp += '<span class="ct-u">×</span>' + ctNum(p.u, F + 'u', 'ctPartSet(' + li + ',' + pi + ',\'u\',this.value)');
+        }
+        pp += '<button class="ct-x" title="ลบส่วนนี้" onclick="ctDelPart(' + li + ',' + pi + ')">&times;</button></div>';
+      });
+      pp += '<button class="ct-mini dash" onclick="ctAddPart(' + li + ')">+ เพิ่มส่วนประกอบ</button>';
+      rows += '<tr><td class="ct-nm">'
+        + '<input class="ct-lname" data-fk="n' + li + '" value="' + ctE(ln.l) + '" oninput="ctLineName(' + li + ',this.value)">'
+        + '<div class="ct-nmsub">'
+        + '<select class="ct-catsel" onchange="ctLineGroup(' + li + ',this.value)" title="ย้ายบรรทัดนี้ไปหมวดอื่น">'
+        + GL.map(function(x){ return '<option value="' + ctE(x) + '"' + (x === g ? ' selected' : '') + '>' + ctE(x) + '</option>'; }).join('')
+        + '<option value="__new">+ หมวดใหม่…</option></select>'
+        + '<label class="ct-vat' + (ln.vat ? ' on' : '') + '" title="บรรทัดนี้มีใบกำกับภาษีเต็มรูป · เอาภาษีซื้อไปหักภาษีขายได้">'
+        + '<input type="checkbox"' + (ln.vat ? ' checked' : '') + ' onchange="ctLineVat(' + li + ',this.checked)">ขอคืน VAT</label>'
+        + '</div></td><td>' + pp + '</td>'
+        + '<td class="ct-del"><button class="ct-x" title="ลบรายการ" onclick="ctDelLine(' + li + ')">' + ctIcon('trash', 14) + '</button></td></tr>';
     });
-    pp += '<button onclick="ctAddPart(' + li + ')" style="' + dash + ';margin-top:2px">+ เพิ่มส่วนประกอบ</button>';
-    h += '<tr><td style="' + td + '">'
-      + '<input data-fk="n' + li + '" value="' + ctE(ln.l) + '" oninput="ctLineName(' + li + ',this.value)" style="width:100%;border:1px solid transparent;border-radius:6px;padding:3px 6px;font-family:inherit;font-size:12.5px;font-weight:600;background:transparent">'
-      + '<div style="display:flex;align-items:center;gap:7px;margin:4px 0 0 6px;flex-wrap:wrap">'
-      + '<select onchange="ctLineGroup(' + li + ',this.value)" title="ย้ายบรรทัดนี้ไปหมวดอื่น" style="font-family:inherit;font-size:10px;color:var(--fd-ink-soft);border:1px solid var(--fd-line);border-radius:999px;padding:1px 6px;background:#FBFAF7;max-width:118px">'
-      + GL.map(function(x){ return '<option value="' + ctE(x) + '"' + (x === g ? ' selected' : '') + '>' + ctE(x) + '</option>'; }).join('')
-      + '<option value="__new">+ หมวดใหม่…</option></select>'
-      + '<label title="บรรทัดนี้มีใบกำกับภาษีเต็มรูป · เอาภาษีซื้อไปหักภาษีขายได้" style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-size:10px;white-space:nowrap;color:' + (ln.vat ? '#185FA5' : '#b9b6ae') + ';font-weight:' + (ln.vat ? '700' : '500') + '">'
-      + '<input type="checkbox"' + (ln.vat ? ' checked' : '') + ' onchange="ctLineVat(' + li + ',this.checked)" style="width:13px;height:13px;accent-color:#185FA5;cursor:pointer">ขอคืน VAT</label>'
-      + '</div></td>'
-      + '<td style="' + td + '">' + pp + '</td>'
-      + '<td style="' + td + ';text-align:center;vertical-align:top;padding-top:9px"><button onclick="ctDelLine(' + li + ')" title="ลบรายการ" style="border:none;background:transparent;color:#C0392B;cursor:pointer;font-size:14px;opacity:.5">&#128465;</button></td></tr>';
-  });
-  var thh = 'text-align:left;font-size:9px;font-weight:700;color:var(--fd-ink-soft);text-transform:uppercase;letter-spacing:.06em;padding:7px 10px;background:#FBFAF7;border-bottom:1.5px solid var(--fd-line)';
-  return '<div style="font-size:12px;color:var(--fd-ink-soft);margin-bottom:10px;line-height:1.6">1 บรรทัดประกอบจากหลายส่วนได้ · '
-    + '<b style="color:#5B289A">คงที่</b> ต่อลำ/ทริป · <b style="color:#185FA5">ผันแปร</b> ต่อคน · <b style="color:#7A5A12">ขั้นบันได</b> เพิ่มเป็นช่วง<br>'
-    + 'ช่อง <b>ขอคืนได้</b> = บรรทัดนี้มีใบกำกับภาษีเต็มรูป เอาภาษีซื้อไปหักภาษีขายได้ · สูตรนี้ใช้เป็นค่าตั้งต้นของทุกแผน</div>'
-    + '<div class="ct-tplcol" style="background:#fff;border:1px solid var(--fd-line);border-radius:12px;overflow:auto">'
-    + '<table style="border-collapse:collapse;table-layout:fixed;width:100%;min-width:860px">'
-    + '<colgroup><col style="width:225px"><col><col style="width:44px"></colgroup>'
-    + '<thead><tr><th style="' + thh + '">รายการ · หมวด · ภาษีซื้อ</th><th style="' + thh + '">ส่วนประกอบ · วิธีคิด</th><th style="' + thh + '"></th></tr></thead><tbody>' + h + '</tbody></table>'
-    + '<div style="padding:10px 12px;background:#FBFAF7;border-top:1px solid #F3F1EA;display:flex;gap:14px;align-items:center;flex-wrap:wrap">'
-    + '<button onclick="ctAddLine()" style="' + dash + ';padding:4px 12px;font-size:11.5px">+ เพิ่มรายการต้นทุน</button>'
-    + '<span style="font-size:11px;color:var(--fd-ink-soft)">VAT ของกิจการ ' + ctNum(T.vatRate, 'vat', 'ctVatSet(this.value)', 52) + ' %</span>'
-    + '<button onclick="ctResetTpl()" style="border:1px solid var(--fd-line);background:#fff;color:var(--fd-ink-soft);border-radius:8px;padding:4px 12px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;margin-left:auto">คืนค่าเริ่มต้นทั้งหมด</button>'
-    + '</div></div>';
+    var cnt = (T.lines || []).filter(function(l){ return (l.g || 'อื่นๆ') === g; }).length;
+    return '<div class="ct-card ct-catcard"><div class="ct-cath">'
+      + '<span>' + ctIcon('folder', 15) + '<b>' + ctE(g) + '</b>'
+      + '<button class="ct-ren" title="เปลี่ยนชื่อหมวด (มีผลทุกบรรทัดในหมวด)" onclick="ctRenameGroup(\'' + ctE(g) + '\')">&#9998;</button></span>'
+      + '<span class="ct-cnt">' + cnt + ' รายการ</span></div>'
+      + '<div class="ct-scroll"><table class="ct-mtbl"><colgroup><col style="width:230px"><col><col style="width:44px"></colgroup><tbody>' + rows + '</tbody></table></div></div>';
+  }).join('');
+
+  return '<div class="ct-card ct-bar2"><div><b>จัดการสูตรกลาง</b>'
+    + '<span class="ct-sub">สูตรนี้เป็นค่าตั้งต้นของทุกแผน · 1 บรรทัดประกอบจากหลายส่วนได้ '
+    + '<em class="fix">คงที่</em> ต่อลำ/ทริป · <em class="var">ผันแปร</em> ต่อคน · <em class="step">ขั้นบันได</em> เพิ่มเป็นช่วง</span></div>'
+    + '<div class="ct-bar2r"><span class="ct-vatset">VAT ของกิจการ ' + ctNum(T.vatRate, 'vat', 'ctVatSet(this.value)', 52) + ' %</span>'
+    + '<button class="ct-btn ghost" onclick="ctResetTpl()">คืนค่าเริ่มต้น</button>'
+    + '<button class="ct-btn" onclick="ctAddLine()">' + ctIcon('plus', 13) + ' เพิ่มรายการต้นทุน</button></div></div>'
+    + body;
 }
 
 // ── แท็บ 3 · ปรับ / ปิด รายแผน ───────────────────────────────────────────────────────────────────
-//   จัดกลุ่มตามหมวด · ปรับได้ 2 ระดับ
-//     ระดับหมวด  · ปิดทั้งหมวด หรือ ±% ทั้งหมวด (เช่น เส้นทางนี้ค่าอาหารแพงกว่า 20%)
-//     ระดับบรรทัด · ปิดบรรทัด หรือพิมพ์ค่าทับ
-// §alignCols · ทุกช่องในตารางนี้ใช้กริดเดียวกัน — ติ๊กอยู่คอลัมน์แรกเสมอ ช่องกรอกอยู่คอลัมน์ที่สองเสมอ
-//   เดิมใช้ flex + center ทำให้แถวหัวหมวด (เนื้อหายาวกว่า) เยื้องจากแถวรายการ ดูไม่ตรงกัน
 function ctCell(a, b, c){
-  return '<div style="display:grid;grid-template-columns:20px 108px 1fr;align-items:center;gap:7px">'
-    + '<div style="display:flex;justify-content:center">' + (a || '') + '</div>'
-    + '<div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">' + (b || '') + '</div>'
-    + '<div style="display:flex;align-items:center;gap:4px;font-size:10.5px;color:#6b6b64">' + (c || '') + '</div></div>';
+  return '<div class="ct-cell"><div class="c1">' + (a || '') + '</div><div class="c2">' + (b || '') + '</div><div class="c3">' + (c || '') + '</div></div>';
 }
 function ctOvrHtml(){
   var T = ctTpl(), P = ctPlans(), G = ctGroups(T);
-  var need = 260 + P.length * 250;                 // ความกว้างขั้นต่ำที่อ่านสบาย
-  var fit = need <= 1240;                          // พอดีจอ → ยืดเต็ม · ไม่พอ → เลื่อนแนวนอน
-  var colW = fit ? Math.floor((1240 - 260) / Math.max(1, P.length)) : 250;
-  var thh = 'font-size:9px;font-weight:700;color:var(--fd-ink-soft);text-transform:uppercase;letter-spacing:.06em;padding:8px 10px;background:#FBFAF7;border-bottom:1.5px solid var(--fd-line);white-space:nowrap';
-  var h = '<table style="border-collapse:collapse;table-layout:fixed;' + (fit ? 'width:100%' : ('width:' + (260 + P.length * colW) + 'px')) + '">'
-    + '<colgroup><col style="width:260px">' + P.map(function(){ return '<col style="width:' + colW + 'px">'; }).join('') + '</colgroup>'
-    + '<thead><tr><th style="' + thh + ';text-align:left;position:sticky;left:0;z-index:2">รายการ</th>'
+  var head = '<tr><th class="ct-stick">รายการต้นทุน / หมวดหมู่</th>'
     + P.map(function(p){
         var cap = Math.max(1, (+p.cap || 65) * Math.max(1, +p.boats || 1));
         var be = ctBreakEven(p, cap, T);
-        return '<th style="' + thh + ';text-align:center"><div style="font-size:11.5px;font-weight:800;color:var(--fd-ink);text-transform:none;letter-spacing:0">' + ctE(p.name) + '</div>'
-          + '<div style="font-weight:600;text-transform:none;letter-spacing:0;color:' + (be ? '#0F6E56' : '#A32D2D') + '">' + (be ? ('คุ้มทุน ' + be + ' คน') : 'ยังไม่คุ้ม') + '</div></th>';
-      }).join('') + '</tr></thead><tbody>';
+        var on = (p.id === _ct.pid);
+        return '<th class="ct-pcol' + (on ? ' on' : '') + '"><div class="ct-pnm">' + ctE(p.name) + '</div>'
+          + '<div class="ct-psub">' + ctE(p.eng) + ' · จุ ' + (+p.cap || 0) + ' · ' + ctB(p.price) + '/หัว</div>'
+          + '<div class="ct-pbe' + (be ? '' : ' warn') + '">' + (be ? ('คุ้มทุน ' + be + ' คน') : 'เต็มลำยังไม่คุ้ม') + '</div></th>';
+      }).join('') + '</tr>';
 
+  var body = '';
   G.forEach(function(g){
-    // ── แถวหัวหมวด ──
-    h += '<tr><td style="background:#F0EEE7;font-weight:800;font-size:11px;color:#4a4a45;padding:6px 10px;position:sticky;left:0;z-index:1">' + ctE(g) + '</td>';
+    var cells = '<td class="ct-stick ct-gtd">' + ctE(g) + '</td>';
     P.forEach(function(pl){
-      var c = ctGrpCfg(pl, g), pct = +c.pct || 0;
-      var sub = 0;
+      var c = ctGrpCfg(pl, g), pct = +c.pct || 0, sub = 0;
       if(!c.off){
         var pax = Math.max(1, +pl.pax || 1), th2 = Math.min(Math.max(0, +pl.paxTH || 0), pax);
-        var ctx = { eng:pl.eng, boats:Math.max(1, +pl.boats || 1), fuel:+pl.fuel || 0, pax:pax, paxTH:th2, paxFR:pax - th2 };
-        ctCalc(pl, ctx, T).rows.forEach(function(r){ if(r.g === g) sub += r.amt; });
+        ctCalc(pl, { eng:pl.eng, boats:Math.max(1, +pl.boats || 1), fuel:+pl.fuel || 0, pax:pax, paxTH:th2, paxFR:pax - th2 }, T)
+          .rows.forEach(function(r){ if(r.g === g) sub += r.amt; });
       }
-      var gTick = '<label title="ปิด/เปิดทั้งหมวดในแผนนี้" style="cursor:pointer;display:inline-flex"><input type="checkbox"' + (c.off ? '' : ' checked')
-        + ' onchange="ctGrpToggle(\'' + pl.id + '\',\'' + ctE(g) + '\',this.checked)" style="width:15px;height:15px;accent-color:#0F7A5A;cursor:pointer"></label>';
-      var gMid = c.off ? '<span style="background:#FCEBEB;color:#A32D2D;border-radius:5px;padding:0 7px;font-size:9.5px;font-weight:800;white-space:nowrap">ปิดทั้งหมวด</span>'
-        : '<input data-fk="gp.' + pl.id + '.' + g + '" value="' + (pct || '') + '" placeholder="0" title="คูณทุกบรรทัดในหมวดนี้ · เช่น แพงกว่า 20% ใส่ 20"'
-          + ' oninput="ctGrpPct(\'' + pl.id + '\',\'' + ctE(g) + '\',this.value)"'
-          + ' style="width:52px;text-align:right;font-family:\'DM Mono\',monospace;font-size:11.5px;font-weight:700;border:1px solid ' + (pct ? '#E8B94A' : 'var(--fd-line)') + ';border-radius:6px;padding:2px 6px;background:' + (pct ? '#FFFBF0' : '#fff') + ';color:' + (pct ? '#7A5A12' : 'var(--fd-ink)') + '">'
-          + '<span style="font-size:10px;font-weight:700;color:' + (pct ? '#7A5A12' : '#a5a49d') + '">%</span>';
-      var gEnd = c.off ? '' : '<span style="font-family:\'DM Mono\',monospace;font-size:11px;font-weight:800;color:#4a4a45">' + ctB(sub) + '</span>';
-      h += '<td style="background:#EDEAE2;padding:6px 10px">' + ctCell(gTick, gMid, gEnd) + '</td>';
+      var tick = '<label class="ct-ck"><input type="checkbox"' + (c.off ? '' : ' checked')
+        + ' onchange="ctGrpToggle(\'' + pl.id + '\',\'' + ctE(g) + '\',this.checked)"></label>';
+      var mid = c.off ? '<span class="ct-off">ปิดทั้งหมวด</span>'
+        : '<span class="ct-pctwrap' + (pct ? ' on' : '') + '"><input class="ct-in pct" data-fk="gp.' + pl.id + '.' + g + '" value="' + (pct || '') + '" placeholder="0"'
+          + ' title="คูณทุกบรรทัดในหมวดนี้ · แพงกว่า 20% ใส่ 20" oninput="ctGrpPct(\'' + pl.id + '\',\'' + ctE(g) + '\',this.value)"><i>%</i></span>';
+      cells += '<td class="ct-gtd">' + ctCell(tick, mid, c.off ? '' : '<b class="ct-gsum">' + ctB(sub) + '</b>') + '</td>';
     });
-    h += '</tr>';
+    body += '<tr class="ct-grow">' + cells + '</tr>';
 
-    // ── บรรทัดในหมวด ──
     (T.lines || []).forEach(function(ln, li){
       if((ln.g || 'อื่นๆ') !== g) return;
-      h += '<tr' + (li % 2 ? ' style="background:#FBFCFE"' : '') + '>'
-        + '<td style="padding:5px 10px 5px 20px;border-bottom:1px solid #F3F1EA;font-size:12px;position:sticky;left:0;background:inherit">' + ctE(ln.l) + '</td>';
+      var rc = '<td class="ct-stick ct-ltd"><i class="ct-bullet"></i>' + ctE(ln.l) + '</td>';
       P.forEach(function(pl){
-        var grpOff = !!ctGrpCfg(pl, g).off;
-        var o = (pl.ovr || {})[ln.id] || {};
-        var tick = '<label title="เปิด/ปิดบรรทัดนี้ในแผนนี้" style="cursor:pointer;display:inline-flex"><input type="checkbox"' + (o.off ? '' : ' checked') + (grpOff ? ' disabled' : '')
-          + ' onchange="ctOvrToggle(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',this.checked)" style="width:15px;height:15px;accent-color:#0F7A5A;cursor:pointer"></label>';
+        var grpOff = !!ctGrpCfg(pl, g).off, o = (pl.ovr || {})[ln.id] || {};
+        var tick = '<label class="ct-ck"><input type="checkbox"' + (o.off ? '' : ' checked') + (grpOff ? ' disabled' : '')
+          + ' onchange="ctOvrToggle(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',this.checked)"></label>';
         var mid = '', end = '';
-        if(o.off) mid = '<span style="background:#FCEBEB;color:#A32D2D;border-radius:5px;padding:0 7px;font-size:9.5px;font-weight:800">ปิด</span>';
+        if(o.off) mid = '<span class="ct-off">ปิด</span>';
         else {
           var p0 = ln.parts[0] || {};
           var key = (p0.k === 'step') ? (p0.mode === 'over' ? 'over' : 'every') : (p0.fuel ? 'q' : 'u');
-          var bse = p0[key], cur = ((o.p || [])[0] || {})[key];
-          var has = (cur != null && cur !== '');
-          mid = '<input data-fk="o.' + pl.id + '.' + ln.id + '" value="' + (has ? cur : '') + '" placeholder="' + (bse == null ? '' : bse) + '"' + (grpOff ? ' disabled' : '')
+          var bse = p0[key], cv = ((o.p || [])[0] || {})[key];
+          var has = (cv != null && cv !== '');
+          mid = '<input class="ct-in ovr' + (has ? ' on' : '') + '" data-fk="o.' + pl.id + '.' + ln.id + '" value="' + (has ? cv : '') + '"'
+            + ' placeholder="' + (bse == null ? '' : bse) + '"' + (grpOff ? ' disabled' : '')
             + ' title="' + (has ? ('ค่าสูตรกลางคือ ' + bse) : 'ว่าง = ใช้ค่าจากสูตรกลาง') + '"'
-            + ' oninput="ctOvrSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',\'' + key + '\',this.value)"'
-            + ' style="width:66px;text-align:right;font-family:\'DM Mono\',monospace;font-size:11.5px;border:1px solid ' + (has ? '#9FE1CB' : 'var(--fd-line)') + ';border-radius:6px;padding:2px 6px;background:' + (has ? '#F4FCF8' : '#fff') + ';font-weight:' + (has ? '700' : '400') + '">';
-          if(has) end = '<span style="color:#c2c0b7;text-decoration:line-through;font-family:\'DM Mono\',monospace;font-size:10px">' + bse + '</span>'
-            + '<button onclick="ctOvrSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',\'' + key + '\',\'\')" title="ย้อนกลับเป็นค่าสูตร" style="border:none;background:transparent;color:#0F6E56;cursor:pointer;font-size:12px;padding:0">&#8635;</button>';
+            + ' oninput="ctOvrSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',\'' + key + '\',this.value)">';
+          end = has ? ('<s>' + bse + '</s><button class="ct-undo" title="ย้อนกลับเป็นค่าสูตร" onclick="ctOvrSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',\'' + key + '\',\'\')">' + ctIcon('undo', 12) + '</button>')
+            : '<span class="ct-unit">' + ((p0.k === 'var') ? '/คน' : (p0.k === 'step') ? 'คน' : (p0.per === 'trip' ? '/ทริป' : '/ลำ')) + '</span>';
         }
-        h += '<td style="padding:4px 10px;border-bottom:1px solid #F3F1EA' + (grpOff ? ';opacity:.35' : '') + '">' + ctCell(tick, mid, end) + '</td>';
+        rc += '<td class="ct-ltd' + (grpOff ? ' dis' : '') + '">' + ctCell(tick, mid, end) + '</td>';
       });
-      h += '</tr>';
+      body += '<tr>' + rc + '</tr>';
     });
   });
 
-  return '<div style="font-size:12px;color:var(--fd-ink-soft);margin-bottom:10px;line-height:1.65">1 คอลัมน์ = 1 แผนคำนวณ · ปรับได้ 2 ระดับ<br>'
-    + '<b style="color:#4a4a45">แถวหัวหมวด</b> — ปิดทั้งหมวด หรือใส่ <b>±%</b> คูณทุกบรรทัดในหมวดนั้น (เช่น เส้นทางนี้ค่าอาหารแพงกว่า 20% ใส่ 20) · ตัวเลขท้ายแถวคือยอดรวมของหมวด<br>'
-    + '<b style="color:#4a4a45">แถวรายการ</b> — ปิดเฉพาะบรรทัด หรือพิมพ์ค่าทับ (กด &#8635; ย้อนกลับ) · ช่องว่าง = ใช้ค่าจากสูตรกลาง</div>'
-    + '<div style="background:#fff;border:1px solid var(--fd-line);border-radius:12px;overflow:auto">' + h + '</tbody></table></div>';
+  return '<div class="ct-card ct-bar2"><div><b>ปรับ / ปิด รายการต้นทุนแยกตามแผน</b>'
+    + '<span class="ct-sub">' + ctIcon('info', 12) + ' <em class="fix">แถวหัวหมวด</em> ปิดทั้งหมวด หรือใส่ ±% คูณทุกบรรทัดในหมวด · '
+    + '<em class="var">แถวรายการ</em> ปิดเฉพาะบรรทัด หรือพิมพ์ค่าทับ (ว่าง = ใช้ค่าจากสูตรกลาง)</span></div>'
+    + '<div class="ct-bar2r"><span class="ct-hint">1 คอลัมน์ = 1 แผนคำนวณ</span></div></div>'
+    + '<div class="ct-card ct-tblcard"><div class="ct-scroll"><table class="ct-otbl"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div></div>';
 }
 
 // ── mutators ────────────────────────────────────────────────────────────────────────────────────
