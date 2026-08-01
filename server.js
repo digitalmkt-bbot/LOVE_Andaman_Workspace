@@ -134,13 +134,31 @@ const B2C_PRODUCT_NAME = {
 // B2C bookings.payment_type — mirrors SB_PAYMENT_TYPES ids in the app. Whitelisted so an unexpected
 // value can't leak into the Pay column (bkV2PayLabel falls through to the raw string).
 const B2C_PAY_TYPES = new Set(['proforma', 'invoice', 'bt', 'cot']);
-const B2C_OPS_BK   = new Set(['ops_boatid','ops_vangroup','ops_vanseq','ops_vanreturnid','ops_vanid','ops_returnsamevan','ops_pickuptimefinal','ops_reconfirm','ops_vansplits','pickupareaid']);
-const B2C_OPS_TRIP = new Set(['ops_boatid','ops_vanid','ops_vanreturnid','ops_returnsamevan','ops_vangroup','ops_vanseq','ops_pickuptimefinal','ops_vansplits','ops_reconfirm']);
+// ── B2C re-sync · ฟิลด์ไหน B2C ทับได้ (2026-08-02) ──────────────────────────────────────────────
+// เดิมเป็น "บัญชีดำ": ทับทุกคอลัมน์ ยกเว้นชุด ops ที่ระบุไว้ — ซึ่งกลับด้านผิด เพราะทุกครั้งที่มี
+// ฟิลด์ใหม่ฝั่ง ops ("ค่าเริ่มต้นคือโดนทับ") มันจะถูกล้างเงียบๆ ตอน B2C sync โดยไม่มีใครรู้
+// ตรวจจริงเมื่อ 2 ส.ค. พบว่ามี 97 คอลัมน์ในสถานะนั้น รวมของที่เสียหายหนัก:
+//   pierpayments (เงินที่เก็บหน้าท่า + สลิป) · ops_piercheckin / ops_vancheckin (ผลเช็คอิน)
+//   ops_boatsplits (การแยกลงเรือ) · cancellation_* (เหตุผล/ค่าปรับการยกเลิก) · reschedule_* · rebook_*
+//   guides_* (ภาษาไกด์) · specialmeals_* · altpickups (รับหลายจุด) · doccheck · attachments · paymentslips
+// ตอนนี้เป็น "บัญชีขาว": ทับได้เฉพาะคอลัมน์ที่ mapB2CItemBooking สร้างจริงเท่านั้น
+// ฟิลด์ใหม่ = ถูกคุ้มครองโดยอัตโนมัติ · ถ้าลืมใส่ลิสต์ ผลคือค่าไม่อัปเดต (ไม่ใช่ข้อมูลหาย) ซึ่งปลอดภัยกว่ามาก
+// ไม่มี pickupareaid ในลิสต์ตั้งใจ — ฝั่ง ops แก้การจับคู่โซนเอง B2C ต้องไม่ทับ (เหมือนกติกาเดิม)
+const B2C_OWN_BK = new Set([
+  'schemaver','voucherref','agentid',
+  'leadpax','leadnationality','leadphone','leademail',
+  'status','total','note','bookingdate',
+  'pickupself','pickuparea','pickupzone','hotelname','dropoffhotelname',
+  'paymentsnapshot_method','paymentsnapshot_netdays','paymentsnapshot_source',
+  'paymentsnapshot_contractversion','paymentsnapshot_paid','paymentsnapshot_paidstatus',
+  'pricebreakdown_seat','pricebreakdown_addon','pricebreakdown_focdiscount',
+  'pricebreakdown_discount','pricebreakdown_extra','pricebreakdown_total',
+]);
 
 // Bump whenever mapB2CItemBooking changes how it reads the source. The full-sync change detector
 // hashes the source rows, so a mapper fix alone would never re-apply to bookings whose source rows
 // are untouched — folding this version into the hash forces exactly one corrective re-upsert.
-// The re-upsert goes through the normal ON CONFLICT path, so ops fields (B2C_OPS_BK) are preserved.
+// The re-upsert goes through the normal ON CONFLICT path, so only B2C_OWN_BK columns are touched.
 // v4: mapper now reads bookings.payment_type and details.pickupHotel / bi.pickuphotel.
 // v5: corrects v4 — pickupLocation is the AREA name, not a fallback hotel. v4 matched the area
 //     against the hotel string, so every booking carrying pickupHotel resolved to no area at all.
@@ -341,7 +359,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows) {
   // Feeding the hotel into findArea cannot work — 'Blu Monkey Hub Hotel Phuket' matches no area,
   // while 'Phuket Town' matches exactly. Match on the area, store the hotel.
   // hotelName/pickupZone/pickupSelf are B2C-owned (refreshed every sync); pickupAreaId is matched
-  // best-effort against sb_pickup_areas and preserved on conflict (see B2C_OPS_BK).
+  // best-effort against sb_pickup_areas and preserved on conflict (pickupareaid is NOT in B2C_OWN_BK).
   let det = h.details;
   if (typeof det === 'string') { try { det = JSON.parse(det); } catch (_) { det = null; } }
   det = det || {};
@@ -797,7 +815,10 @@ async function relSyncB2C(singleExtId = null) {
     const TRIP_COLS = OS_COLS['sb_bookings__trips'];
     const PAX_COLS  = OS_COLS['sb_bookings__passengers'];
     const ADN_COLS  = OS_COLS['sb_bookings__addons'];
-    const BK_UPDATE = BK_COLS.filter(c => c !== 'id' && c !== 'createdat' && c !== 'createdby' && !B2C_OPS_BK.has(c));
+    // §b2cOwn · ทับได้เฉพาะที่ B2C เป็นเจ้าของ · ที่เหลือทั้งหมดเป็นของ ops และต้องรอดทุกรอบ sync
+    const BK_UPDATE = BK_COLS.filter(c => c !== 'id' && B2C_OWN_BK.has(c));
+    // ops ของ trip: เก็บทุกคอลัมน์ที่ขึ้นต้น ops_ แบบไดนามิก → ฟิลด์ ops ใหม่รอดเองโดยไม่ต้องมาแก้ที่นี่อีก
+    const TRIP_OPS  = TRIP_COLS.filter(c => c.indexOf('ops_') === 0);
 
     const bkColSql  = BK_COLS.map(qic).join(', ');
     const bkPh      = BK_COLS.map((_, i) => '$' + (i + 1)).join(', ');
@@ -839,8 +860,7 @@ async function relSyncB2C(singleExtId = null) {
       // 2. Refresh trips: save per-trip ops → delete → re-insert → restore ops by idx
       _phase = 'save existing trip ops';
       const { rows: existingTrips } = await client.query(
-        `SELECT sb_bookings_id, idx, ops_boatid, ops_vanid, ops_vanreturnid, ops_returnsamevan,
-                ops_vangroup, ops_vanseq, ops_pickuptimefinal, ops_vansplits, ops_reconfirm
+        `SELECT sb_bookings_id, idx, ${TRIP_OPS.map(qic).join(', ')}
          FROM ${fqt('sb_bookings__trips')} WHERE sb_bookings_id = ANY($1)`, [b2cIds]
       );
       const savedTripOps = {};
@@ -858,15 +878,12 @@ async function relSyncB2C(singleExtId = null) {
       _phase = 'restore trip ops';
       for (const [bkId, byIdx] of Object.entries(savedTripOps)) {
         for (const [idx, ops] of Object.entries(byIdx)) {
-          if (ops.ops_boatid == null && ops.ops_vanid == null) continue;
+          // เดิมเช็คแค่ boat/van · trip ที่มีแต่ผลเช็คอิน (ยังไม่จัดเรือ/รถ) เลยไม่ถูกคืนค่า
+          if (TRIP_OPS.every(c => ops[c] == null)) continue;
           await client.query(
-            `UPDATE ${fqt('sb_bookings__trips')} SET
-               ops_boatid=$1, ops_vanid=$2, ops_vanreturnid=$3, ops_returnsamevan=$4,
-               ops_vangroup=$5, ops_vanseq=$6, ops_pickuptimefinal=$7, ops_vansplits=$8, ops_reconfirm=$9
-             WHERE sb_bookings_id=$10 AND idx=$11`,
-            [ops.ops_boatid, ops.ops_vanid, ops.ops_vanreturnid, ops.ops_returnsamevan,
-             ops.ops_vangroup, ops.ops_vanseq, ops.ops_pickuptimefinal, ops.ops_vansplits, ops.ops_reconfirm,
-             bkId, Number(idx)]
+            `UPDATE ${fqt('sb_bookings__trips')} SET ${TRIP_OPS.map((c, i) => `${qic(c)}=$${i + 1}`).join(', ')}
+             WHERE sb_bookings_id=$${TRIP_OPS.length + 1} AND idx=$${TRIP_OPS.length + 2}`,
+            [...TRIP_OPS.map(c => ops[c]), bkId, Number(idx)]
           );
         }
       }
