@@ -43503,6 +43503,15 @@ function pckMoneyCell(b, date){
   var e=ckEsc, M=pckMoney(b,date);
   var m=function(n){ return '฿'+Math.round(n||0).toLocaleString(); };
   var out='';
+  // §payChips (2026-08-02) · เงื่อนไขการชำระเงินอ่านจากป้ายชุดเดียวกับหน้า By-trip
+  //   Invoice / Pro Forma / COT / Paid — หน้าท่าเคยเห็นแค่ "ยอดที่ต้องเก็บ" ซึ่งไม่บอกว่าใบนี้เป็นเครดิต
+  //   หรือจ่ายมาแล้ว คนหน้าท่าเลยต้องเปิดอีกหน้าไปเช็ค · ป้ายกดได้ ไปหน้าจัดการชำระเงินชุดเดียวกัน
+  try{
+    var _chips='';
+    if(typeof bkV2PayChip==='function') _chips+=bkV2PayChip(b);
+    if(typeof bkV2CotChip==='function'){ var _c=bkV2CotChip(b,''); if(_c&&_c.chip) _chips+=_c.chip; }
+    if(_chips) out+='<div class="pck-paychips">'+_chips+'</div>';
+  }catch(_){}
   if(M.due>0){
     var parts=[];
     if(M.cot>0) parts.push('COT '+m(M.cot));
@@ -43515,9 +43524,9 @@ function pckMoneyCell(b, date){
     out+='<span style="font-size:10px;font-weight:800;color:#0F6E56;background:#DCF4E8;border-radius:6px;padding:2px 8px;white-space:nowrap">&#10003; เก็บครบ '+m(M.pierPaid)+'</span>';
   } else if(M.payType==='cot'){
     out+='<span style="font-size:10px;color:#a5a49d">COT · ยังไม่ระบุยอด</span>';
-  } else {
-    out+='<span style="font-size:10px;font-weight:700;color:#0F6E56;background:#DCF4E8;border-radius:6px;padding:2px 7px;white-space:nowrap">เครดิต · ไม่เก็บ</span>';
   }
+  // §payChips · เดิมปิดท้ายด้วยป้าย "เครดิต ไม่เก็บ" · ตัดออกแล้ว เพราะป้ายเงื่อนไขด้านบน
+  //   (Invoice / Pro Forma / Paid / FOC) บอกละเอียดกว่าและตรงกับหน้า By-trip ป้ายเดิมเหมารวมทุกกรณีเป็นก้อนเดียว
   out+=pckFeeLine(b,date);
   if(M.pierPaid>0){
     var ms=[]; pckPaysFor(b,date).forEach(function(p){ ms.push(pckMLabel(p.method)+' '+pckHHMMloc(p.at)); });
@@ -43624,16 +43633,19 @@ function pckPayWarn(bkId, date){
    +'</div>'
    +'<div class="pckp-ft">'
    +'<button class="pckp-btn" onclick="pckPaySkipOn(\''+bkId+'\',\''+date+'\')">ขึ้นเรือก่อน · ยังไม่เก็บ</button>'
-   +'<button class="pckp-btn pri" onclick="pckPayOpen(\''+bkId+'\')">เก็บเงินเลย</button>'
+   +'<button class="pckp-btn pri" onclick="pckPayOpen(\''+bkId+'\',1)">เก็บเงินเลย</button>'
    +'</div>');
 }
 
 // ── popup เก็บเงิน ──
 var _pckPay=null;
-function pckPayOpen(bkId){
+// §autoCheckIn (2026-08-02) · เปิดกล่องนี้จากการกดเช็คอิน = ตั้งใจจะขึ้นเรืออยู่แล้ว
+//   เดิมพอเก็บเงินครบ กล่องปิดแล้วต้องกลับไปกดเช็คอินอีกรอบ ทั้งที่ไม่มีทางเลือกอื่นให้กด
+//   thenCk จำไว้ว่ามาจากทางไหน · เก็บครบเมื่อไรก็เช็คอินต่อให้เลย · เปิดจากปุ่ม "เก็บเงิน" ในคอลัมน์เงินไม่เช็คอินให้
+function pckPayOpen(bkId, thenCk){
   var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
   var M=pckMoney(b,_pckDate);
-  _pckPay={ bkId:bkId, date:_pckDate, m:'cash', amt:Math.round(M.due||0), feeMode:'pct', feePct:3, fee:0, note:'', slips:[] };
+  _pckPay={ bkId:bkId, date:_pckDate, m:'cash', amt:Math.round(M.due||0), feeMode:'pct', feePct:3, fee:0, note:'', slips:[], thenCk:!!thenCk };
   pckPayRender();
 }
 function pckPaySet(k,v){ if(!_pckPay) return; _pckPay[k]=v; pckPayRender(); }
@@ -43681,8 +43693,18 @@ function pckPaySave(){
     bkV2AddHistory(b,'payment','เก็บเงินหน้าท่า '+pckB(amt).replace('&#3647;','฿')+' ('+pckMLabel(_pckPay.m)+')'
       +(fee>0?(' + ค่าธรรมเนียม ฿'+fee):''),'Pier');
   _pckPay.m='cash'; _pckPay.amt=0; _pckPay.fee=0; _pckPay.note=''; _pckPay.slips=[];
-  var M=pckMoney(b,_pckPay.date);
-  if(M.due>0) pckPayRender(); else acctModalClose();
+  var _thenCk=!!_pckPay.thenCk, _bkId=_pckPay.bkId, _dt=_pckPay.date;
+  var M=pckMoney(b,_dt);
+  if(M.due>0){ pckPayRender(); if(typeof renderPierCheckin==='function') renderPierCheckin(); return; }
+  acctModalClose();
+  // §autoCheckIn · เก็บครบแล้วและมาจากปุ่มเช็คอิน → เช็คอินต่อให้เลย ไม่ต้องกลับไปกดซ้ำ
+  //   ตั้ง skip ก่อนเรียก เพราะ guard อ่านยอดใหม่อยู่แล้วก็จริง แต่กันไว้ให้แน่ว่าไม่เด้งกล่องซ้ำ
+  var _ck=ckRead(b,_dt,'pier')||{};
+  if(_thenCk && !_ck.at){
+    _pckPaySkip[_dt+'::'+_bkId]=1;
+    ckToggle(_bkId,_dt,'pier');
+    return;
+  }
   if(typeof renderPierCheckin==='function') renderPierCheckin();
 }
 function pckPayDel(payId){
@@ -44246,6 +44268,9 @@ function pckCardCSS(scope){ return ''
   +scope+' .pck-vmeta{font-size:12px;color:#5F5E5A;white-space:nowrap}'
   +scope+' .pck-vmeta b{color:#2f2f2b;font-weight:700}'
   +scope+' .pck-vtel{font-size:12px;padding:3px 11px;border-radius:999px;border:1px solid;text-decoration:none;font-family:\'DM Mono\',monospace;background:#fff;font-weight:700;white-space:nowrap}'
+  +scope+' .pck-paychips{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:5px}'
+  +scope+' .pck-paychips .t2-pay,'+scope+' .pck-paychips .t2-cot{display:inline-block;border-radius:6px;padding:2px 7px;font-size:9.5px;line-height:1.5;white-space:nowrap}'
+  +scope+' .pck-paychips .t2-cot{background:#E0F7FA;color:#00838F;border:1px solid #9FE3EC;font-weight:600}'
   +scope+' .pck-vjoin{border:1px solid;border-radius:999px;padding:3px 12px;font-size:10.5px;font-weight:800;white-space:nowrap}'
   +scope+' .pck-vstat{margin-left:auto;font-size:11.5px;padding:4px 13px;border-radius:999px;font-weight:700;border:1px solid #E7E4DC;background:#F1EFE8;color:#5F5E5A;white-space:nowrap}'
   +scope+' .pck-vstat.ok{background:#DCF4E8;color:#0C6B47;border-color:#BFE3CC}'
