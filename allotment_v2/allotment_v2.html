@@ -5262,8 +5262,10 @@ function renderDash(){
         if(t.bookingMode==='charter'){
           // charter pax always from the sales booking (source of truth) — counts even if seat-season closed
           charter+=(typeof bkV2PaxAllTot==='function'?bkV2PaxAllTot(t.pax||{}):0);
-          const cbid=t.charterBoatId||(bk.ops&&bk.ops.boatId);
-          if(cbid && !_capBoats.has(cbid)){ const cb=getBoat(cbid); if(cb){ capacity+=(cb.cap||0); _capBoats.add(cbid); } }
+          // §boatSplit · เหมา 1 ใบอาจกินหลายลำ · เดิมนับความจุแค่ลำแรก
+          let _cbids=(typeof bkBoatIdsOn==='function')?bkBoatIdsOn(bk,ds):[];
+          if(!_cbids.length){ const _one=t.charterBoatId||(bk.ops&&bk.ops.boatId); if(_one) _cbids=[_one]; }
+          _cbids.forEach(cbid=>{ if(cbid && !_capBoats.has(cbid)){ const cb=getBoat(cbid); if(cb){ capacity+=(cb.cap||0); _capBoats.add(cbid); } } });
           return;
         }
         const _s=(typeof getDayStatus==='function')?getDayStatus(r,ds):null;
@@ -5988,7 +5990,10 @@ function _calTripsFor(ds, pier){
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(bk=>{
     if(['cancelled','rejected','cancelled_weather'].includes(bk.status)) return;
     if(bk.schemaVer!==2 || !Array.isArray(bk.trips)) return;
-    bk.trips.forEach(t=>{ if((t.date||'')!==ds || t.bookingMode!=='charter') return; const bid=t.charterBoatId||(bk.ops&&bk.ops.boatId); if(!bid) return; const k=t.routeId+'|'+bid; _chtrBoat[k]=(_chtrBoat[k]||0)+((typeof getTripPaxTotal==='function')?getTripPaxTotal(t):0); });
+    bk.trips.forEach(t=>{ if((t.date||'')!==ds || t.bookingMode!=='charter') return;
+      const _sp=(typeof bkBoatSplits==='function')?bkBoatSplits(bk,ds):null;
+      if(_sp){ _sp.forEach(x=>{ if(!x||!x.boatId) return; const k=t.routeId+'|'+x.boatId; _chtrBoat[k]=(_chtrBoat[k]||0)+bkPaxSum(bkSplitPax(x)); }); return; }   // §boatSplit
+      const bid=t.charterBoatId||(bk.ops&&bk.ops.boatId); if(!bid) return; const k=t.routeId+'|'+bid; _chtrBoat[k]=(_chtrBoat[k]||0)+((typeof getTripPaxTotal==='function')?getTripPaxTotal(t):0); });
   });
   const out=[];
   raw.forEach(x=>{
@@ -10045,12 +10050,16 @@ function getAssignedBoatsForRouteDate(routeId, dateStr){
     if(!op || op.route !== routeId) return;
     const boat = (typeof BOATS !== 'undefined') ? BOATS.find(b => b.id === bid) : null;
     if(!boat) return;
+    // §boatSplit · เรือที่ถูกเหมาจริงอาจยังไม่ถูกธงใน Boat Operation (ลำที่ 2+ ของใบที่แยกลำ)
+    //   ไม่เช็คตรงนี้ = getAllotment นับลำที่เหมาไปแล้วเป็นที่นั่งว่าง แล้วขายซ้ำ
+    const _chMap=(typeof baCharterBoatMapMemo==='function')?baCharterBoatMapMemo(dateStr):new Map();
+    const _chBk=_chMap.get(bid)||null;
     out.push({
       boatId: bid,
       boat,
       route: op.route,
-      type: op.type || 'normal',
-      charterBookingId: op.charterBookingId || null,
+      type: (op.type === 'charter' || _chBk) ? 'charter' : (op.type || 'normal'),
+      charterBookingId: op.charterBookingId || _chBk,
       capacity: (typeof boatCapFor==='function') ? boatCapFor(bid, dateStr) : (boat.cap || 0)   // §cap override รายวัน
     });
   });
@@ -19251,7 +19260,11 @@ function flRenderDR(){
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(bk=>{
     if(['cancelled','rejected','cancelled_weather'].includes(bk.status))return;
     if(bk.schemaVer===2 && Array.isArray(bk.trips)) bk.trips.forEach(t=>{
-      if(t.date===ds && t.bookingMode==='charter'){ const cb=t.charterBoatId||(bk.ops&&bk.ops.boatId); if(cb&&!charters.includes(cb))charters.push(cb); }
+      if(t.date===ds && t.bookingMode==='charter'){   // §boatSplit · นับทุกลำที่ใบนี้ใช้
+        let _cbs=(typeof bkBoatIdsOn==='function')?bkBoatIdsOn(bk,ds):[];
+        if(!_cbs.length){ const _one=t.charterBoatId||(bk.ops&&bk.ops.boatId); if(_one) _cbs=[_one]; }
+        _cbs.forEach(cb=>{ if(cb&&!charters.includes(cb))charters.push(cb); });
+      }
     });
   });
   const avgLPP=totalPAX>0?(totalFuel/totalPAX).toFixed(2):'—';
@@ -40938,7 +40951,30 @@ function baSetDate(delta){ const d=new Date(_baDate+'T12:00:00'); d.setDate(d.ge
 // Boats committed to a CHARTER (เหมาลำ) booking on this date — these whole boats are taken and must NOT be
 // offered/assignable for seat-share customers (rule: a chartered boat can't carry seat pax). Reads bookings
 // directly (via t.charterBoatId / charter booking's ops.boatId) so it works even if Boat-Op didn't flag it.
-function baCharterBoatIds(date){ const s=new Set(); (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; (b.trips||[]).forEach(t=>{ if((t.date||'')!==date||t.bookingMode!=='charter')return; const _sp=(typeof bkBoatSplits==='function')?bkBoatSplits(b,date):null; if(_sp){ _sp.forEach(x=>{ if(x&&x.boatId) s.add(x.boatId); }); return; } const bid=t.charterBoatId||bkOpsRead(b,date).boatId; if(bid)s.add(bid); }); }); return s; }
+// §boatSplit · เรือลำไหนถูกเหมาในวันนั้น → บุคกิ้งไหน · เหมา 1 ใบกินได้หลายลำ (ops.boatSplits)
+//   ต้นทางความจริงคือ "บุคกิ้ง" ไม่ใช่ TRIPS — TRIPS ถูกเขียนตอนจอง ซึ่งรู้จักแค่ charterBoatId ลำเดียว
+//   ลำที่ 2+ ของใบที่แยกลำ จึงไม่เคยถูกธงใน Boat Operation และถูกนับเป็นที่นั่งว่างขายต่อ
+function baCharterBoatMap(date){
+  const m=new Map();
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
+    if(['cancelled','rejected','cancelled_weather'].includes(b.status))return;
+    (b.trips||[]).forEach(t=>{
+      if((t.date||'')!==date||t.bookingMode!=='charter')return;
+      let ids=(typeof bkBoatIdsOn==='function')?bkBoatIdsOn(b,date):[];
+      if(!ids.length && t.charterBoatId) ids=[t.charterBoatId];
+      ids.forEach(id=>{ if(id && !m.has(id)) m.set(id,b.id); });
+    });
+  });
+  return m;
+}
+// memo อายุ 1 render · render เป็น synchronous ทั้งก้อน แคชจึงหมดอายุก่อนข้อมูลจะเปลี่ยนได้เสมอ
+let _baChMemo=null;
+function baCharterBoatMapMemo(date){
+  if(!_baChMemo){ _baChMemo={}; Promise.resolve().then(()=>{ _baChMemo=null; }); }
+  if(!(date in _baChMemo)) _baChMemo[date]=baCharterBoatMap(date);
+  return _baChMemo[date];
+}
+function baCharterBoatIds(date){ return new Set(baCharterBoatMapMemo(date).keys()); }
 // A charter booking IS its boat (trip.charterBoatId). Mirror that onto ops.boatId so it counts as "assigned"
 // everywhere that keys off ops.boatId (Daily log flBoatBookingsFor, manifest "ยังไม่ assign", Boat-Op) — the charter
 // boat usually isn't a seat-boat in the assign picker, so it could never be picked manually. Idempotent · per-booking.
@@ -59683,16 +59719,31 @@ function bkV2RenderTab2(){
     grp.forEach(r=>{ if(r.cxl) return; const a=P(r.pax,'ad'),c=P(r.pax,'chd'),i=P(r.pax,'inf'),f=P(r.pax,'foc'); if(r.charter){_cAd+=a;_cChd+=c;_cInf+=i;_cFoc+=f;} else {_sAd+=a;_sChd+=c;_sInf+=i;_sFoc+=f;} });
     const _seatPax=_sAd+_sChd+_sInf+_sFoc, _chtrPax=_cAd+_cChd+_cInf+_cFoc;
     // Charter detail strip (trip header) — which boat is chartered, pax/cap, agency, lead
-    const _chtrItems = grp.filter(r=>r.charter && !r.cxl).map(r=>{ const bk=r.bk; const bid=r.charterBoatId||bkOpsRead(bk,date).boatId||''; const bo=bid?((BOATS||[]).find(b=>b.id===bid)||{}):{}; const bn=bo.name||(bid?bid:''); const cap=+bo.cap||0; const px=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(r.pax||{}):0; const ag=(bk.agentId?(((typeof SB_AGENTS!=='undefined'?SB_AGENTS:[]).find(a=>a.id===bk.agentId)||{}).name||''):'')||bk.agentName||bk.channel||''; const lead=bk.leadPax||''; const ltime=(r.t&&r.t.pickupTime)||bk.pickupTime||''; return {bn,cap,px,ag,lead,ltime,bid}; });
+    // §boatSplit · ใบที่แยกลง N ลำ ต้องได้ N ชิป · ยอดเป็นของลำนั้น ไม่ใช่ยอดทั้งใบ
+    const _chtrItems = [];
+    grp.filter(r=>r.charter && !r.cxl).forEach(r=>{ const bk=r.bk;
+      const ag=(bk.agentId?(((typeof SB_AGENTS!=='undefined'?SB_AGENTS:[]).find(a=>a.id===bk.agentId)||{}).name||''):'')||bk.agentName||bk.channel||'';
+      const lead=bk.leadPax||''; const ltime=(r.t&&r.t.pickupTime)||bk.pickupTime||'';
+      const push=(bid,px,nOf)=>{ const bo=bid?((BOATS||[]).find(b=>b.id===bid)||{}):{};
+        _chtrItems.push({bn:bo.name||(bid||''), cap:+bo.cap||0, px:px, ag, lead, ltime, bid, nOf:nOf||''}); };
+      const sp=(typeof bkBoatSplits==='function')?bkBoatSplits(bk,date):null;
+      if(sp) sp.forEach((x,i)=>push(x.boatId||'', bkPaxSum(bkSplitPax(x)), (i+1)+'/'+sp.length));
+      else push(r.charterBoatId||bkOpsRead(bk,date).boatId||'', (typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(r.pax||{}):0, '');
+    });
     const chtrStrip = _chtrItems.length ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 16px 8px 21px;background:#FAF8FF;border-top:1px solid #ECE4F8">
         <span style="font-size:10px;font-weight:700;color:#5B289A;text-transform:uppercase;letter-spacing:.05em;flex:none">&#128676; เหมาลำ</span>
-        ${_chtrItems.map(it=>`<span style="display:inline-flex;align-items:center;gap:7px;background:#F4EFFC;border:1px solid #DDD0F2;border-radius:9px;padding:4px 11px;font-size:11.5px;white-space:nowrap"><b style="color:#5B289A">&#128676; ${esc(it.bn||'ยังไม่ระบุเรือ')}</b>${it.cap?`<span style="color:#7A6FA8;font-family:'DM Mono',monospace">${it.px}/${it.cap}</span>`:`<span style="color:#7A6FA8;font-family:'DM Mono',monospace">${it.px} pax</span>`}${it.ag?`<span style="color:#6a6a64">· ${esc(it.ag)}</span>`:''}${it.lead?`<span style="color:#9a9a92">· ${esc(it.lead)}</span>`:''}</span>`).join('')}
+        ${_chtrItems.map(it=>`<span style="display:inline-flex;align-items:center;gap:7px;background:#F4EFFC;border:1px solid #DDD0F2;border-radius:9px;padding:4px 11px;font-size:11.5px;white-space:nowrap"><b style="color:#5B289A">&#128676; ${esc(it.bn||'ยังไม่ระบุเรือ')}</b>${it.nOf?`<span style="background:#EBE2FA;color:#5B289A;border-radius:4px;padding:0 5px;font-size:9px;font-weight:800">ลำ ${it.nOf}</span>`:''}${it.cap?`<span style="color:#7A6FA8;font-family:'DM Mono',monospace">${it.px}/${it.cap}</span>`:`<span style="color:#7A6FA8;font-family:'DM Mono',monospace">${it.px} pax</span>`}${it.ag?`<span style="color:#6a6a64">· ${esc(it.ag)}</span>`:''}${it.lead?`<span style="color:#9a9a92">· ${esc(it.lead)}</span>`:''}</span>`).join('')}
       </div>` : '';
     const _al=(typeof getAllotment==='function')?getAllotment(rid,date):null;
     // Availability = seats on the OPEN boats that are NOT taken by a charter − SEAT bookings − locks.
     //   · charter pax are NOT counted (a chartered boat is removed whole from the pool, via the booking's charterBoatId — no need to wait for Boat-Op flagging)
     const _openBoats=(typeof baBoatsForRoute==='function')?baBoatsForRoute(date,rid):[];
-    const _chtrBoatSet=new Set(grp.filter(r=>r.charter && !r.cxl && r.charterBoatId).map(r=>r.charterBoatId));
+    // §boatSplit · อ่านจาก bkBoatIdsOn — ครอบคลุมทั้งใบที่แยกลำ และใบที่ไม่ได้ระบุ charterBoatId ตอนจอง
+    const _chtrBoatSet=new Set();
+    grp.filter(r=>r.charter && !r.cxl).forEach(r=>{
+      const ids=(typeof bkBoatIdsOn==='function')?bkBoatIdsOn(r.bk,date):[];
+      (ids.length?ids:[r.charterBoatId]).forEach(id=>{ if(id) _chtrBoatSet.add(id); });
+    });
     const _seatCap=_openBoats.filter(x=>!_chtrBoatSet.has(x.boatId)).reduce((s,x)=>s+((x.boat&&(x.boat.cap||x.boat.licensePax))||0),0);
     const _lockedSeats=(_al&&_al.lockedSeats)||0;
     const _seatLeft=_openBoats.length?Math.max(0, _seatCap - _seatPax - _lockedSeats):null;
