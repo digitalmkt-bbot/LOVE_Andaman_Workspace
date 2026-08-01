@@ -43476,7 +43476,8 @@ var PCK_ARR_LBL={PK:'PK · ภูเก็ต', KL:'KL · เขาหลัก'
 
 // เงินที่เกี่ยวกับหน้าท่า · อ่านจากของที่มีอยู่แล้ว ไม่ได้สร้าง field ใหม่
 //   ต้องเก็บ  = Cash on Tour ที่ระบุตอน New Booking + upgrade ที่ยังไม่ได้เก็บ + ยอดค้างของ B2C
-//   เก็บแล้ว = extra ที่ขายหน้างาน (SB_EXTRAS · เงินสด) + upgrade ที่ติ๊กว่าเก็บแล้ว
+//   เก็บแล้ว = extra ที่ขายหน้างาน (SB_EXTRAS · เงินสด/โอน/บัตร) + upgrade ที่ติ๊กว่าเก็บแล้ว
+//   §extraPay · ค่าธรรมเนียมบัตรของ extra ไม่ถูกนับเป็นรายได้ (เก็บไว้ที่ x.fee เฉยๆ) กติกาเดียวกับ pierFee
 // ยังเป็นแค่การ "แสดงผล" · ยังไม่เขียนลงบัญชี — รอตัดสินใจว่าจะลง SB_PAYMENTS ด้วยไหม
 function pckMoney(b, date){
   var cot=(b.cashOnTour && +b.cashOnTour.amount>0) ? +b.cashOnTour.amount : 0;
@@ -43954,7 +43955,7 @@ function pckAddonCell(r, date){
     return '<span class="ck-ao" style="background:'+bg+';color:'+fg+'" title="'+e(a.note?('หมายเหตุ: '+a.note):'จองมาล่วงหน้า')+'">'+e(a.label)+(a.note?' &#128221;':'')+'</span>';
   }).join('');
   var ex=((typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(b.id):[]).map(function(x){
-    return '<span class="ck-ao" style="background:#E1F5EE;color:#0F6E56" title="'+e(x.service+(x.qty>1?(' ×'+x.qty):'')+' · ขายหน้างาน เงินสด'+(x.seller?(' · '+x.seller):''))+'">'+e(x.service)+(x.qty>1?(' ×'+x.qty):'')+' +'+m(x.total)+'</span>';
+    return '<span class="ck-ao" style="background:#E1F5EE;color:#0F6E56" title="'+e(x.service+(x.qty>1?(' ×'+x.qty):'')+' · ขายหน้างาน '+({cash:'เงินสด',transfer:'โอนเงิน',card:'บัตรเครดิต'}[x.method||'cash']||'เงินสด')+((+x.fee||0)?(' · ค่าธรรมเนียม '+Math.round(x.fee).toLocaleString()):'')+((x.method&&x.method!=='cash'&&!((x.slips||[]).length))?' · ยังไม่มีสลิป':'')+(x.seller?(' · '+x.seller):''))+'">'+e(x.service)+(x.qty>1?(' ×'+x.qty):'')+' +'+m(x.total)+'</span>';
   }).join('');
   var up=(Array.isArray(b.upgrades)?b.upgrades:[]).map(function(u){
     var got=!!u.collected;
@@ -46853,15 +46854,82 @@ function acctExtrasMonthTotal(){ const ym=new Date().toISOString().slice(0,7); r
 
 let _bkExtraBk=null;
 let _bkExtraEditId=null;   // id of the extra currently being edited (null = add-new mode)
-function bkV2ExtraAdd(bkId){ _bkExtraBk=bkId; _bkExtraEditId=null; bkV2ExtraRender(); }
-function bkV2ExtraEditLoad(id, bkId){ _bkExtraEditId=id; _bkExtraBk=bkId; bkV2ExtraRender(); }
-function bkV2ExtraEditCancel(){ _bkExtraEditId=null; bkV2ExtraRender(); }
+// §extraPay (2026-08-02) · ขายหน้างานไม่ได้รับแต่เงินสดแล้ว · ใช้ชุดเดียวกับหน้าเก็บเงินหน้าท่า
+//   เก็บสถานะแยกจาก DOM เพราะกล่องนี้วาดใหม่ทั้งใบทุกครั้ง ถ้าอ่านจาก DOM ค่าจะหายตอนสลับวิธีจ่าย
+//   และห้ามเรียก bkV2ExtraRender() ตอนสลับวิธี ไม่งั้นชื่อรายการ/ราคาที่พิมพ์ค้างไว้จะถูกล้าง
+var BKX_PAY_WAYS=[['cash','เงินสด','ไม่ต้องแนบสลิป'],['transfer','โอนเงิน','ต้องแนบสลิป'],['card','บัตรเครดิต','ต้องแนบสลิป']];
+var _bkExtraPay={m:'cash', feePct:3, slips:[]};
+function _bkxPayReset(e){
+  _bkExtraPay = e
+    ? {m:e.method||'cash', feePct:(e.feePct!=null?+e.feePct:3), slips:Array.isArray(e.slips)?e.slips.slice():[]}
+    : {m:'cash', feePct:3, slips:[]};
+}
+// ค่าธรรมเนียมบัตรคิดบนยอดขาย · ลูกค้าจ่ายจริง = ยอดขาย + ค่าธรรมเนียม (กติกาเดียวกับหน้าเก็บเงิน)
+function bkV2ExtraFee(){
+  if(_bkExtraPay.m!=='card') return 0;
+  var qty=Math.max(1,+(document.getElementById('bkx-qty')||{}).value||1);
+  var price=Math.max(0,+(document.getElementById('bkx-price')||{}).value||0);
+  return Math.round(qty*price*(+_bkExtraPay.feePct||0)/100);
+}
+function bkV2ExtraSetM(m){ _bkExtraPay.m=m; if(m!=='card') _bkExtraPay.feePct=_bkExtraPay.feePct; bkV2ExtraPayRender(); }
+function bkV2ExtraSetPct(v){ _bkExtraPay.feePct=Math.max(0,Math.min(5,+v||0)); bkV2ExtraPayRender(); }
+function bkV2ExtraPickSlip(inp){
+  var f=(inp&&inp.files&&inp.files[0])||null; if(inp) inp.value='';
+  if(!f) return;
+  if(typeof pckSlipUpload!=='function'){ alert('อัปโหลดสลิปไม่ได้ในหน้านี้'); return; }
+  pckSlipUpload(f, _bkExtraBk, function(meta){ _bkExtraPay.slips.push(meta); bkV2ExtraPayRender(); });
+}
+function bkV2ExtraRmSlip(i){ _bkExtraPay.slips.splice(i,1); bkV2ExtraPayRender(); }
+// วาดเฉพาะบล็อกการรับเงิน · ไม่แตะช่องอื่นในฟอร์ม
+function bkV2ExtraPayRender(){
+  var host=document.getElementById('bkx-pay'); if(!host) return;
+  var esc=function(x){ return String(x||'').replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var P=_bkExtraPay, h='';
+  h+='<label style="font-size:10px;color:var(--fd-ink-soft)">วิธีรับเงิน</label>';
+  h+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:4px 0 10px">';
+  BKX_PAY_WAYS.forEach(function(x){
+    var on=(P.m===x[0]);
+    h+='<button type="button" onclick="bkV2ExtraSetM(\''+x[0]+'\')" style="border:1.5px solid '+(on?'#0F7A5A':'var(--fd-line)')+';background:'+(on?'#E8F5EF':'#fff')+';color:'+(on?'#0F6E56':'var(--fd-ink)')+';border-radius:9px;padding:7px 4px;cursor:pointer;font-family:inherit;line-height:1.25">'
+      +'<span style="display:block;font-size:12px;font-weight:'+(on?'700':'600')+'">'+x[1]+'</span>'
+      +'<span style="display:block;font-size:9.5px;color:'+(on?'#0F6E56':'var(--fd-ink-soft)')+';opacity:.85">'+x[2]+'</span></button>';
+  });
+  h+='</div>';
+  if(P.m==='card'){
+    var qty=Math.max(1,+(document.getElementById('bkx-qty')||{}).value||1);
+    var price=Math.max(0,+(document.getElementById('bkx-price')||{}).value||0);
+    var base=qty*price, fee=bkV2ExtraFee();
+    h+='<div style="display:grid;grid-template-columns:1fr 1.6fr;gap:8px;margin-bottom:10px">'
+      +'<div><label style="font-size:10px;color:var(--fd-ink-soft)">ค่าธรรมเนียมบัตร %</label>'
+      +'<input type="number" min="0" max="5" step="0.5" value="'+(+P.feePct||0)+'" oninput="bkV2ExtraSetPct(this.value)" style="width:100%;height:32px;font-size:12px;text-align:right;border:1px solid var(--fd-line);border-radius:7px;padding:2px 8px"></div>'
+      +'<div><label style="font-size:10px;color:#7A4A00">ลูกค้าจ่ายจริง</label>'
+      +'<div style="height:32px;display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:0 9px;background:#FCF8F0;border:1px solid #854F0B33;border-radius:7px">'
+      +'<span style="font-size:10px;color:#7A4A00">ค่าธรรมเนียม &#3647;'+Math.round(fee).toLocaleString()+'</span>'
+      +'<b style="font-size:13.5px;font-variant-numeric:tabular-nums;color:#7A4A00">&#3647;'+Math.round(base+fee).toLocaleString()+'</b></div></div></div>';
+  }
+  if(P.m!=='cash'){
+    h+='<label style="font-size:10px;color:var(--fd-ink-soft)">สลิป — แนบทีหลังได้</label>';
+    h+='<div style="margin:4px 0 4px">';
+    P.slips.forEach(function(sp,i){
+      h+='<div style="display:flex;align-items:center;gap:8px;font-size:11.5px;padding:4px 0;border-bottom:0.5px solid var(--fd-line-soft)">'
+        +'<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">&#128206; '+esc(sp.name||sp.url||'slip')+'</span>'
+        +'<button type="button" onclick="bkV2ExtraRmSlip('+i+')" style="background:transparent;border:none;color:#A32D2D;cursor:pointer;font-size:12px">&#10005;</button></div>';
+    });
+    h+='<label style="display:block;border:1.5px dashed var(--fd-line);border-radius:9px;padding:10px;text-align:center;font-size:11.5px;color:var(--fd-ink-soft);cursor:pointer;margin-top:4px">'
+      +'&#128247; ถ่ายรูป / เลือกไฟล์สลิป'
+      +'<input type="file" accept="image/*,application/pdf" onchange="bkV2ExtraPickSlip(this)" style="display:none"></label>';
+    h+='</div>';
+  }
+  host.innerHTML=h;
+}
+function bkV2ExtraAdd(bkId){ _bkExtraBk=bkId; _bkExtraEditId=null; _bkxPayReset(null); bkV2ExtraRender(); }
+function bkV2ExtraEditLoad(id, bkId){ _bkExtraEditId=id; _bkExtraBk=bkId; _bkxPayReset(bkV2ExtrasFor(bkId).find(function(x){ return x.id===id; })); bkV2ExtraRender(); }
+function bkV2ExtraEditCancel(){ _bkExtraEditId=null; _bkxPayReset(null); bkV2ExtraRender(); }
 function bkV2ExtraRender(){
   const esc = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
   const bkId=_bkExtraBk; const bk=(SB_BOOKINGS||[]).find(x=>x.id===bkId); if(!bk) return;
   const list=bkV2ExtrasFor(bkId); const fmt=n=>'฿'+Math.round(n||0).toLocaleString();
   const editing=_bkExtraEditId?list.find(e=>e.id===_bkExtraEditId):null;
-  const rows=list.map(e=>{ const on=(e.id===_bkExtraEditId); return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:0.5px solid var(--fd-line-soft);${on?'background:#F0F7FF;border-radius:7px;padding:7px 8px':''}"><div style="flex:1;min-width:0"><div style="font-size:12px">${e.service}${e.qty>1?` ×${e.qty} @ ${fmt(e.unitPrice)}`:''}</div>${((+e.commission||0)||e.seller)?`<div style="font-size:10px;color:var(--fd-ink-soft)">${(+e.commission||0)?`บริษัท ${fmt(e.toCompany)} · คอม ${fmt(e.commission)}`:''}${e.seller?`${(+e.commission||0)?' · ':''}<b style="color:#854F0B">${esc(e.seller)}</b>`:''}</div>`:''}</div><span style="font-size:12px;font-variant-numeric:tabular-nums;font-weight:600">${fmt(e.total)}</span><button onclick="bkV2ExtraEditLoad('${e.id}','${bkId}')" title="แก้ไข" style="background:transparent;border:none;color:#185FA5;cursor:pointer;font-size:13px">&#9998;</button><button onclick="bkV2ExtraDelete('${e.id}','${bkId}')" title="ลบ" style="background:transparent;border:none;color:#A32D2D;cursor:pointer;font-size:13px">✕</button></div>`; }).join('') || '<div style="font-size:11.5px;color:var(--fd-ink-soft);font-style:italic;padding:6px 0">ยังไม่มีรายการ</div>';
+  const rows=list.map(e=>{ const on=(e.id===_bkExtraEditId); return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:0.5px solid var(--fd-line-soft);${on?'background:#F0F7FF;border-radius:7px;padding:7px 8px':''}"><div style="flex:1;min-width:0"><div style="font-size:12px">${e.service}${e.qty>1?` ×${e.qty} @ ${fmt(e.unitPrice)}`:''}</div>${((+e.commission||0)||e.seller)?`<div style="font-size:10px;color:var(--fd-ink-soft)">${(+e.commission||0)?`บริษัท ${fmt(e.toCompany)} · คอม ${fmt(e.commission)}`:''}${e.seller?`${(+e.commission||0)?' · ':''}<b style="color:#854F0B">${esc(e.seller)}</b>`:''}${(e.method&&e.method!=='cash')?` · <b style="color:#0C447C">${e.method==='card'?'บัตร':'โอน'}</b>${(+e.fee||0)?` (ค่าธรรมเนียม ฿${Math.round(e.fee).toLocaleString()})`:''}${(!(e.slips||[]).length)?' <span style="color:#A32D2D">⚠ ยังไม่มีสลิป</span>':''}`:''}</div>`:''}</div><span style="font-size:12px;font-variant-numeric:tabular-nums;font-weight:600">${fmt(e.total)}</span><button onclick="bkV2ExtraEditLoad('${e.id}','${bkId}')" title="แก้ไข" style="background:transparent;border:none;color:#185FA5;cursor:pointer;font-size:13px">&#9998;</button><button onclick="bkV2ExtraDelete('${e.id}','${bkId}')" title="ลบ" style="background:transparent;border:none;color:#A32D2D;cursor:pointer;font-size:13px">✕</button></div>`; }).join('') || '<div style="font-size:11.5px;color:var(--fd-ink-soft);font-style:italic;padding:6px 0">ยังไม่มีรายการ</div>';
   const _selIdx=editing?Math.max(0,BKV2_EXTRA_PRESETS.findIndex(p=>p.name===editing.service)):0;
   const presetOpts=BKV2_EXTRA_PRESETS.map((p,i)=>`<option value="${i}"${i===_selIdx?' selected':''}>${p.name}</option>`).join('');
   const _fName=editing?editing.service:BKV2_EXTRA_PRESETS[0].name;
@@ -46873,10 +46941,10 @@ function bkV2ExtraRender(){
   const _sellerOpts=(typeof SB_SALES!=='undefined'?SB_SALES:[]).map(s=>`<option value="${esc(s.name)}">`).join('');
   acctModal(`
     <datalist id="bkv2-sellers">${_sellerOpts}</datalist>
-    <div style="padding:16px 20px;border-bottom:1px solid var(--fd-line);display:flex;align-items:center;justify-content:space-between"><div><div style="font-size:15px;font-weight:700">Extra วันเดินทาง · ${bk.code||bk.id}</div><div style="font-size:11px;color:var(--fd-ink-soft)">ขายหน้างาน · เงินสด · ไม่เกี่ยวกับเครดิต/บิล agent</div></div><button onclick="acctModalClose()" style="background:transparent;border:none;font-size:20px;color:var(--fd-ink-soft);cursor:pointer">✕</button></div>
+    <div style="padding:16px 20px;border-bottom:1px solid var(--fd-line);display:flex;align-items:center;justify-content:space-between"><div><div style="font-size:15px;font-weight:700">Extra วันเดินทาง · ${bk.code||bk.id}</div><div style="font-size:11px;color:var(--fd-ink-soft)">ขายหน้างาน · เงินสด / โอน / บัตร · ไม่เกี่ยวกับเครดิต/บิล agent</div></div><button onclick="acctModalClose()" style="background:transparent;border:none;font-size:20px;color:var(--fd-ink-soft);cursor:pointer">✕</button></div>
     <div style="padding:16px 20px">
       ${rows}
-      <div style="display:flex;align-items:center;justify-content:space-between;margin:8px 0 14px;padding-top:8px;border-top:1px solid var(--fd-line)"><span style="font-size:11px;color:var(--fd-ink-soft)">รวมเก็บเงินสด</span><span style="font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;color:#0F6E56">${fmt(bkV2ExtraTotal(bkId))}</span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:8px 0 14px;padding-top:8px;border-top:1px solid var(--fd-line)"><span style="font-size:11px;color:var(--fd-ink-soft)">รวมขายหน้างาน</span><span style="font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;color:#0F6E56">${fmt(bkV2ExtraTotal(bkId))}</span></div>
       <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-bottom:8px">
         <div><label style="font-size:10px;color:var(--fd-ink-soft)">เลือกบริการ</label><select id="bkx-preset" onchange="bkV2ExtraPreset()" style="width:100%;height:32px;font-size:12px;font-family:inherit;border:1px solid var(--fd-line);border-radius:7px;padding:2px 6px;background:#fff">${presetOpts}</select></div>
         <div><label style="font-size:10px;color:var(--fd-ink-soft)">จำนวน</label><input id="bkx-qty" type="number" min="1" value="${_fQty}" oninput="bkV2ExtraRecalc()" style="width:100%;height:32px;font-size:12px;text-align:right;border:1px solid var(--fd-line);border-radius:7px;padding:2px 8px"></div>
@@ -46889,12 +46957,14 @@ function bkV2ExtraRender(){
         <div><label style="font-size:10px;color:var(--fd-ink-soft)">จ่ายบริษัท ฿ (รวม)</label><input id="bkx-company" type="number" min="0" value="${_fCompany}" oninput="bkV2ExtraRecalc()" title="ยอดที่ต้องส่งคืนบริษัท · ที่เหลือ = คอมมิชชั่นคนขาย" style="width:100%;height:32px;font-size:12px;text-align:right;border:1px solid var(--fd-line);border-radius:7px;padding:2px 8px"></div>
         <div><label style="font-size:10px;color:#854F0B">คอมมิชชั่น (= ขาย − บริษัท)</label><div style="height:32px;display:flex;align-items:center;justify-content:flex-end;padding:0 8px;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;color:#854F0B;background:#FCF8F0;border:1px solid #854F0B33;border-radius:7px"><span id="bkx-comm">${fmt(_fComm)}</span></div></div>
       </div>
+      <div id="bkx-pay" style="margin:2px 0 12px;padding-top:10px;border-top:1px solid var(--fd-line)"></div>
       <div style="margin-bottom:12px"><label style="font-size:10px;color:#854F0B">คนขาย (คอมมิชชั่นของใคร)</label><input id="bkx-seller" list="bkv2-sellers" type="text" value="${esc(_fSeller)}" placeholder="เลือก/พิมพ์ชื่อคนขาย" style="width:100%;height:32px;font-size:12px;border:1px solid var(--fd-line);border-radius:7px;padding:2px 8px"></div>
       <div style="display:flex;justify-content:flex-end;gap:8px">${editing?`<button onclick="bkV2ExtraEditCancel()" style="background:#fff;border:1px solid var(--fd-line);color:var(--fd-ink);font-family:inherit;font-size:12px;padding:9px 15px;border-radius:9px;cursor:pointer">ยกเลิกแก้ไข</button>`:''}<button onclick="bkV2ExtraSave('${bkId}')" style="background:${editing?'#185FA5':'#0F7A5A'};color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:600;padding:9px 18px;border-radius:9px;cursor:pointer">${editing?'บันทึกการแก้ไข':'+ เพิ่มรายการ'}</button></div>
     </div>`);
+  setTimeout(bkV2ExtraPayRender,0);
 }
 function bkV2ExtraPreset(){ const i=+(document.getElementById('bkx-preset')||{}).value||0; const p=BKV2_EXTRA_PRESETS[i]||{}; const n=document.getElementById('bkx-name'); const pr=document.getElementById('bkx-price'); if(n)n.value=p.name||''; if(pr)pr.value=p.price||0; bkV2ExtraRecalc(); }
-function bkV2ExtraRecalc(){ const qty=Math.max(1,+(document.getElementById('bkx-qty')||{}).value||1); const price=Math.max(0,+(document.getElementById('bkx-price')||{}).value||0); const comp=Math.max(0,+(document.getElementById('bkx-company')||{}).value||0); const comm=Math.max(0,(qty*price)-comp); const el=document.getElementById('bkx-comm'); if(el) el.textContent='฿'+Math.round(comm).toLocaleString(); }
+function bkV2ExtraRecalc(){ const qty=Math.max(1,+(document.getElementById('bkx-qty')||{}).value||1); const price=Math.max(0,+(document.getElementById('bkx-price')||{}).value||0); const comp=Math.max(0,+(document.getElementById('bkx-company')||{}).value||0); const comm=Math.max(0,(qty*price)-comp); const el=document.getElementById('bkx-comm'); if(el) el.textContent='฿'+Math.round(comm).toLocaleString(); if(_bkExtraPay.m==='card') bkV2ExtraPayRender(); }
 function bkV2ExtraSave(bkId){
   const name=((document.getElementById('bkx-name')||{}).value||'Extra').trim();
   const qty=Math.max(1,+(document.getElementById('bkx-qty')||{}).value||1);
@@ -46904,17 +46974,25 @@ function bkV2ExtraSave(bkId){
   const toCompany=Math.min(total,Math.max(0,+(document.getElementById('bkx-company')||{}).value||0));
   const commission=Math.max(0,total-toCompany);
   const seller=((document.getElementById('bkx-seller')||{}).value||'').trim();
+  const _pm=_bkExtraPay.m||'cash';
+  const _fee=bkV2ExtraFee();
+  const _slips=(_bkExtraPay.slips||[]).slice();
+  if(_pm!=='cash' && !_slips.length && !confirm('ยังไม่ได้แนบสลิป\n\nบันทึกก่อนแล้วแนบทีหลังได้ · กด OK เพื่อบันทึกเลย')) return;
   const bk=(SB_BOOKINGS||[]).find(x=>x.id===bkId);
   if(_bkExtraEditId){
     // update existing record (no duplicate)
     const e=SB_EXTRAS.find(x=>x.id===_bkExtraEditId);
-    if(e){ e.service=name; e.qty=qty; e.unitPrice=price; e.total=total; e.toCompany=toCompany; e.commission=commission; e.seller=seller; }
+    if(e){ e.service=name; e.qty=qty; e.unitPrice=price; e.total=total; e.toCompany=toCompany; e.commission=commission; e.seller=seller;
+           e.method=_pm; e.feePct=(_pm==='card'?(+_bkExtraPay.feePct||0):0); e.fee=_fee; e.customerPaid=total+_fee; e.slips=_slips; }
     if(bk && typeof bkV2AddHistory==='function'){ bkV2AddHistory(bk,'extra','Edited extra · '+name+(qty>1?' ×'+qty:'')+' · ฿'+Math.round(total).toLocaleString()+(commission?' · คอม ฿'+Math.round(commission).toLocaleString():''),'Extra'); if(typeof acctPersistBookings==='function') acctPersistBookings(); }
     _bkExtraEditId=null;
   } else {
-    SB_EXTRAS.push({id:LA_UID('ex_'), bookingId:bkId, tripDate:(bk&&bk.trips&&bk.trips[0]&&bk.trips[0].date)||'', service:name, qty, unitPrice:price, total, toCompany, commission, seller, method:'cash', settle:'pending', date:new Date().toISOString()});
-    if(bk && typeof bkV2AddHistory==='function'){ bkV2AddHistory(bk,'extra','Day-of extra · '+name+(qty>1?' ×'+qty:'')+' · ฿'+Math.round(total).toLocaleString()+(commission?' · คอม ฿'+Math.round(commission).toLocaleString():'')+' (cash)','Extra'); if(typeof acctPersistBookings==='function') acctPersistBookings(); }
+    SB_EXTRAS.push({id:LA_UID('ex_'), bookingId:bkId, tripDate:(bk&&bk.trips&&bk.trips[0]&&bk.trips[0].date)||'', service:name, qty, unitPrice:price, total, toCompany, commission, seller,
+      method:_pm, feePct:(_pm==='card'?(+_bkExtraPay.feePct||0):0), fee:_fee, customerPaid:total+_fee, slips:_slips,
+      settle:'pending', date:new Date().toISOString()});
+    if(bk && typeof bkV2AddHistory==='function'){ bkV2AddHistory(bk,'extra','Day-of extra · '+name+(qty>1?' ×'+qty:'')+' · ฿'+Math.round(total).toLocaleString()+(commission?' · คอม ฿'+Math.round(commission).toLocaleString():'')+' ('+_pm+(_fee?(' · fee ฿'+Math.round(_fee).toLocaleString()):'')+')','Extra'); if(typeof acctPersistBookings==='function') acctPersistBookings(); }
   }
+  _bkxPayReset(null);
   sbExtrasPersist(); bkV2Render(); bkV2ExtraRender();
 }
 function bkV2ExtraDelete(id,bkId){ SB_EXTRAS=SB_EXTRAS.filter(e=>e.id!==id); sbExtrasPersist(); bkV2Render(); bkV2ExtraRender(); }
@@ -59418,7 +59496,7 @@ function bkV2RenderTab2(){
         }
         if(_ltLabel) addonBadges.unshift(`<span class="t2-rb" style="background:#E6F1FB;color:#1683C7" title="${_ltNote?('หมายเหตุหางยาว: '+esc(_ltNote)):'Longtail'}">${esc(_ltLabel)}${_ltNote?` &#128221; ${esc(_ltNote)}`:''}</span>`);
         const _extras=(typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(bk.id):[];
-        const extrasChips=_extras.map(e=>`<span class="t2-rb" style="background:#E1F5EE;color:#0F6E56;cursor:pointer" title="${esc(e.service)}${e.qty>1?(' ×'+e.qty):''} +฿${(e.total||0).toLocaleString()} · กดเพื่อแก้ไข/ลบ · ขายหน้างาน เงินสด" onclick="event.stopPropagation();bkV2ExtraAdd('${esc(bk.id)}')"><span style="display:inline-block;max-width:50px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">${esc(e.service)}</span>${e.qty>1?` ×${e.qty}`:''} +&#3647;${(e.total||0).toLocaleString()}</span>`).join('');
+        const extrasChips=_extras.map(e=>`<span class="t2-rb" style="background:#E1F5EE;color:#0F6E56;cursor:pointer" title="${esc(e.service)}${e.qty>1?(' ×'+e.qty):''} +฿${(e.total||0).toLocaleString()} · กดเพื่อแก้ไข/ลบ · ขายหน้างาน ${({cash:'เงินสด',transfer:'โอนเงิน',card:'บัตรเครดิต'})[e.method||'cash']||'เงินสด'}" onclick="event.stopPropagation();bkV2ExtraAdd('${esc(bk.id)}')"><span style="display:inline-block;max-width:50px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">${esc(e.service)}</span>${e.qty>1?` ×${e.qty}`:''} +&#3647;${(e.total||0).toLocaleString()}</span>`).join('');
         const feeChips=(bk.feeItems||[]).map(f=>{ const amt=Math.round(+f.amount||0); if(!amt) return ''; return `<span class="t2-rb" style="background:#FAEEDA;color:#854F0B" title="${esc(f.label||(f.type==='reschedule'?'Reschedule fee':'Fee'))} · บน invoice">&#8635; +&#3647;${amt.toLocaleString()}</span>`; }).join('');
         // reschedule fee collected as CASH (separate · not on invoice) → surface as "collect cash" on the moved-to date
         const _rsch=bk.reschedule; const _reschCash=(_rsch && _rsch.collect==='separate' && (+_rsch.chargeAmount>0))?Math.round(+_rsch.chargeAmount):0;
