@@ -64890,9 +64890,36 @@ function bkV2RenderBookingDetail(){
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;padding-top:4px">
               <div>
                 <div class="bkv2-dt-lab">Method</div>
-                <div class="bkv2-dt-val">${escapeHTML(bk.paymentSnapshot?.method || bk.payment || '—')}</div>
-                ${bk.paymentSnapshot?.netDays?`<div class="bkv2-dt-sub">Net ${bk.paymentSnapshot.netDays} days</div>`:''}
-                ${bk.paymentSnapshot?.source?`<div class="bkv2-dt-sub">From: ${escapeHTML(bk.paymentSnapshot.source)}${bk.paymentSnapshot.contractVersion?` · ${escapeHTML(bk.paymentSnapshot.contractVersion)}`:''}</div>`:''}
+                ${(function(){
+                  // §B2C payment card (2026-08-01): B2C bookings carry their settlement on
+                  // paymentSnapshot (paid / paidStatus / deposit / balance, derived server-side from
+                  // Σpayments + Σcredits on the B2C order) but this card only ever printed .method —
+                  // so a booking the customer had already paid in full read as a bare "bt".
+                  // Derived label: settled in full -> prepaid · anything outstanding -> deposit.
+                  // NOT "credit": no terms were extended, the balance is due before travel.
+                  // B2B is untouched — it keeps the contract method / Net days / contract version.
+                  const ps = bk.paymentSnapshot || {};
+                  if(bk.agentId !== 'a_b2c'){
+                    return `<div class="bkv2-dt-val">${escapeHTML(ps.method || bk.payment || '—')}</div>`
+                      + (ps.netDays?`<div class="bkv2-dt-sub">Net ${ps.netDays} days</div>`:'')
+                      + (ps.source?`<div class="bkv2-dt-sub">From: ${escapeHTML(ps.source)}${ps.contractVersion?` · ${escapeHTML(ps.contractVersion)}`:''}</div>`:'');
+                  }
+                  const st   = String(ps.paidStatus||'');
+                  const lbl  = st==='paid' ? 'prepaid' : (st ? 'deposit' : (ps.method || '—'));
+                  const term = (typeof bkV2PayLabel==='function' && ps.method) ? bkV2PayLabel(ps.method) : (ps.method||'');
+                  const paid = Number(ps.paid)||0, bal = Number(ps.balance)||0;
+                  // Amounts are ORDER-level and ride on the first line of a multi-item order only
+                  // (see mapB2CItemBooking · isFirstLine) — the status is on every line. So show
+                  // figures when we have them and say what they cover; never print "THB 0 received"
+                  // on a sibling line that simply carries no amount.
+                  const money = st==='paid' ? 'paid in full'
+                    : (paid||bal) ? [paid?`THB ${paid.toLocaleString()} received`:null,
+                                     bal ?`balance THB ${bal.toLocaleString()}`:null].filter(Boolean).join(' · ') + ' · order-level'
+                    : (st==='unpaid' ? 'not yet paid' : '');
+                  return `<div class="bkv2-dt-val">${escapeHTML(lbl)}</div>`
+                    + ((term||money)?`<div class="bkv2-dt-sub">${escapeHTML([term,money].filter(Boolean).join(' · '))}</div>`:'')
+                    + `<div class="bkv2-dt-sub">From: B2C sync</div>`;
+                })()}
               </div>
               <div>
                 <div class="bkv2-dt-lab">Cash on Tour</div>
