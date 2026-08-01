@@ -47653,7 +47653,14 @@ const AG_COLS = [
   {k:'vatMode',                t:'VAT',         w:96,  type:'select', opts:()=>[{v:'none',t:'ไม่มี VAT'},{v:'include',t:'รวม VAT'},{v:'exclude',t:'แยก VAT'}]},
   {k:'creditDays',             t:'เครดิต (วัน)', w:82, type:'num'},
   {k:'creditLimit',            t:'วงเงิน',      w:98,  type:'num'},
-  {k:'rateTypeId',             t:'Rate Type',   w:140, type:'select', opts:()=>(SB_RATE_TYPES||[]).map(r=>({v:r.id,t:r.name}))},
+  // §rtBySales · ตัวเลือกขึ้นกับเซลล์เจ้าของ agent แถวนั้น · opts รับ row มาอยู่แล้ว
+  {k:'rateTypeId',             t:'Rate Type',   w:140, type:'select', opts:(a)=>{
+      const G=rtForSales((a&&a.sales)||'', a&&a.rateTypeId);
+      if(G.noSales) return G.all.map(r=>({v:r.id,t:r.name}));
+      return G.own.map(r=>({v:r.id,t:r.name}))
+        .concat(G.shared.map(r=>({v:r.id,t:r.name+' · กลาง'})))
+        .concat(G.other.map(r=>({v:r.id,t:r.name+' · เรทของ '+_rtOwnerLabel(r)})));
+    }},
   /* §template · เว้นว่าง = ใช้ template ที่ตั้งเป็น default (ไม่ใช่ "ไม่มีสัญญา") */
   {k:'contractTemplateId',     t:'Contract Tmpl', w:150, type:'select', opts:()=>(typeof ctTmplAll==='function'?ctTmplAll():[]).filter(t=>t.active).map(t=>({v:t.id,t:t.name}))},
   {k:'programs',               t:'Programs',    w:112, type:'programs'},
@@ -48330,6 +48337,24 @@ function _rtAutoCode(name, ownerSalesId){
   return code;
 }
 function _rtOwnerId(rt){ return (rt && rt.owner) ? rt.owner : ''; }
+// §rtBySales (2026-08-02) · เรทของเซลล์คนอื่นไม่ควรโผล่ให้เลือก
+//   เดิมลิสต์ยาว 35 รายการปนกันทุกเซลล์ · คนขายต้องไล่หาเองว่าอันไหนของตัวเอง และเลือกผิดเจ้าได้ง่าย
+//   กติกา: เรทของเซลล์เจ้าของ agent + เรทส่วนกลาง (ไม่มี owner) เท่านั้น
+//   ข้อยกเว้นสำคัญ — ถ้า agent ผูกเรทของเซลล์อื่นไว้อยู่แล้ว ต้องยังเห็น ไม่งั้นค่าเดิมจะหายเงียบตอนแก้
+//   agent ที่ยังไม่ระบุเซลล์ = กรองไม่ได้ ให้เห็นทั้งหมดไปก่อน
+function rtForSales(salesId, keepId){
+  var act=(SB_RATE_TYPES||[]).filter(function(r){ return r.active!==false || r.id===keepId; });
+  act.sort(function(a,b){ return String(a.name||'').localeCompare(String(b.name||'')); });
+  if(!salesId) return {own:[], shared:[], other:[], all:act, noSales:true};
+  var own=[], shared=[], other=[];
+  act.forEach(function(r){
+    var o=_rtOwnerId(r);
+    if(!o) shared.push(r);
+    else if(o===salesId) own.push(r);
+    else if(r.id===keepId) other.push(r);
+  });
+  return {own:own, shared:shared, other:other, all:own.concat(shared,other), noSales:false};
+}
 function _rtOwnerLabel(rt){ const id=_rtOwnerId(rt); if(!id) return 'Shared · กลาง'; const s=(typeof sbGetSales==='function')?sbGetSales(id):null; return s?(s.name||id):id; }
 function _rtInScope(rt){ if(typeof laSalesScoped!=='function' || !laSalesScoped()) return true; const my=(typeof laMySalesId==='function')?laMySalesId():''; const o=_rtOwnerId(rt); return !o || o===my; }   // scoped sales เห็น: ของตัวเอง + Shared
 function rtSetOwner(rtId, salesId){
@@ -50951,14 +50976,21 @@ function agEditBuildTmplPicker(){
 }
 
 // Build a clickable list of Rate Type options
+var _agEditRTAll=false;
+function agEditRTToggleAll(){ _agEditRTAll=!_agEditRTAll; agEditRender(); }
 function agEditBuildRateTypePicker(){
   const d = _agEditDraft;
   const currentId = d.rateTypeId;
-  const items = (SB_RATE_TYPES||[]).slice().sort((a,b) => {
-    // active first, then inactive
-    if((a.active!==false) !== (b.active!==false)) return (a.active!==false) ? -1 : 1;
-    return (a.code||'').localeCompare(b.code||'');
-  });
+  // §rtBySales · เห็นเฉพาะเรทของเซลล์เจ้าของ + ส่วนกลาง · เรทของเซลล์อื่นซ่อนไว้ กดดูได้
+  const _G = rtForSales(d.sales||'', currentId);
+  const _salesNm = (d.sales && typeof sbGetSales==='function') ? ((sbGetSales(d.sales)||{}).name||'') : '';
+  const _hidden = _G.noSales ? 0 : (SB_RATE_TYPES||[]).filter(r=>r.active!==false && _rtOwnerId(r) && _rtOwnerId(r)!==d.sales && r.id!==currentId).length;
+  const items = (_G.noSales || _agEditRTAll)
+    ? (SB_RATE_TYPES||[]).slice().sort((a,b) => {
+        if((a.active!==false) !== (b.active!==false)) return (a.active!==false) ? -1 : 1;
+        return (a.code||'').localeCompare(b.code||'');
+      })
+    : _G.all;
   const rows = items.map(rt => {
     const isInactive = rt.active === false;
     const isSel = rt.id === currentId;
@@ -51026,7 +51058,13 @@ function agEditBuildRateTypePicker(){
       <div style="border:1px solid var(--fd-line);border-radius:8px;overflow:hidden;background:#fff">
         ${rows}${noneRow}
       </div>
-      <div class="ag-fld-hint">เลือก Rate Type ที่ Agent นี้ใช้ — ราคาทั้งหมด (seat/charter/add-ons) จะ resolve จาก rate type นี้</div>
+      <div class="ag-fld-hint">${_G.noSales
+        ? '<b style="color:#854F0B">&#9888; Agent นี้ยังไม่ได้ระบุเซลล์ผู้ดูแล</b> — เลยกรองให้ไม่ได้ กำลังแสดงเรททั้งหมด ตั้งเซลล์ก่อนแล้วลิสต์จะสั้นลงเอง'
+        : ('แสดงเฉพาะ <b>เรทของ '+esc(_salesNm||'เซลล์ผู้ดูแล')+'</b> ('+_G.own.length+') และ <b>ส่วนกลาง</b> ('+_G.shared.length+')'
+           + (_G.other.length?' · รวมเรทของเซลล์อื่นที่ผูกไว้อยู่แล้ว '+_G.other.length:'')
+           + (_hidden?(' · ซ่อนเรทของเซลล์อื่นอยู่ '+_hidden+' รายการ'):''))}
+        <br>ราคาทั้งหมด (seat/charter/add-ons) จะ resolve จาก rate type นี้</div>
+      ${(!_G.noSales && (_hidden||_agEditRTAll))?`<div style="margin-top:7px"><button onclick="agEditRTToggleAll()" style="border:1px solid var(--fd-line);background:#fff;color:var(--fd-ink-soft);border-radius:8px;padding:6px 12px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit">${_agEditRTAll?'ซ่อนเรทของเซลล์อื่น':('แสดงเรทของเซลล์อื่นด้วย ('+_hidden+')')}</button></div>`:''}
     </div>
     ${previewHtml}
   `;
