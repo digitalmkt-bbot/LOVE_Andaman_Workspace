@@ -38753,7 +38753,9 @@ function laBlobSave(){
   }catch(e){ console.warn('[perf] blob save failed', e && e.message); }
 }
 
-function acctPersistBookings(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return; try{ laBlob().sb_bookings=SB_BOOKINGS; laBlobSave(); }catch(e){ console.warn('persist sb_bookings failed',e);} }
+function acctPersistBookings(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;
+  if(typeof baChMemoClear==='function') baChMemoClear();   // §boatSplit · ข้อมูลเปลี่ยนแล้ว แคชเรือเหมาต้องหมดอายุทันที
+  try{ laBlob().sb_bookings=SB_BOOKINGS; laBlobSave(); }catch(e){ console.warn('persist sb_bookings failed',e);} }
 
 const ACCT_PAID_STATES = ['cancelled','rejected','cancelled_weather'];
 function acctBookingBase(bk){ return (bk&&(bk.total || (bk.priceBreakdown&&bk.priceBreakdown.total)))||0; }
@@ -40969,6 +40971,7 @@ function baCharterBoatMap(date){
 }
 // memo อายุ 1 render · render เป็น synchronous ทั้งก้อน แคชจึงหมดอายุก่อนข้อมูลจะเปลี่ยนได้เสมอ
 let _baChMemo=null;
+function baChMemoClear(){ _baChMemo=null; }   // เรียกทุกครั้งที่บุคกิ้งถูกบันทึก · กัน memo ค้างข้ามการแก้ข้อมูล
 function baCharterBoatMapMemo(date){
   if(!_baChMemo){ _baChMemo={}; Promise.resolve().then(()=>{ _baChMemo=null; }); }
   if(!(date in _baChMemo)) _baChMemo[date]=baCharterBoatMap(date);
@@ -41636,7 +41639,20 @@ function bkSplitPax(s){
 // กติกาความเข้ากันได้: ก้อนแรก = ลำหลัก และเราคง ops.boatId = ก้อนแรกไว้เสมอ
 //   → โค้ดเก่าทุกจุดที่อ่าน ops.boatId ยังทำงานได้ ไม่มีที่ไหนกลายเป็น "ยังไม่ assign"
 // ════════════════════════════════════════════════════════════════════════════════
+// §boatSplitDateGuard (2026-08-02) · กับดักที่ทำให้ยอดคนบนเรือบวมข้ามวัน
+//   bkIsFirstDay() คืน true สำหรับ "ทุกวันที่" เมื่อบุคกิ้งมีทริปวันเดียว (ds.length<=1)
+//   → bkOpsRead(b, วันไหนก็ได้) คืน b.ops ของบุคกิ้งนั้นมาเสมอ
+//   โค้ดเดิมรอดเพราะรวม pax โดยกรอง t.date===date อีกชั้น แต่สาขา splits อ่านยอดจาก
+//   ops.boatSplits ตรงๆ ไม่ผ่านตัวกรองนั้น → บุคกิ้งที่แยกลำวันหนึ่ง ถูกนับทุกวัน
+//   (ของจริง: เหมาลำ 24 ต.ค. แยก 60 คนลง Artemis ไปโผล่ในยอดวันที่ 2 ส.ค. → 42 กลายเป็น 102)
+//   ทางแก้: เช็คก่อนเสมอว่าบุคกิ้งนี้มีทริปในวันนั้นจริง
+function bkHasTripOn(b, date){
+  if(!b) return false;
+  if(!date) return true;
+  return ((b.trips||[]).some(function(t){ return (t.date||'')===date; }));
+}
 function bkBoatSplits(b, date){
+  if(!bkHasTripOn(b, date)) return null;
   const o=(typeof bkOpsRead==='function')?bkOpsRead(b,date):((b&&b.ops)||{});
   return (o && Array.isArray(o.boatSplits) && o.boatSplits.length) ? o.boatSplits : null;
 }
@@ -41648,6 +41664,7 @@ function bkBoatPoolOn(b, date){
 }
 // เรือลำเดียวแบบเดิม (ไม่สนใจ splits) · เหมาลำอ่าน charterBoatId เผื่อ heal ยังไม่วิ่ง
 function bkBoatIdOf(b, date){
+  if(!bkHasTripOn(b, date)) return '';   // §boatSplitDateGuard · ops ของวันอื่นต้องไม่รั่วมา
   const O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):((b&&b.ops)||{});
   if(O.boatId) return O.boatId;
   const t=((b&&b.trips)||[]).find(x=>(x.date||'')===date);
