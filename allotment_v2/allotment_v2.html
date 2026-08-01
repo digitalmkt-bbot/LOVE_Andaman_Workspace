@@ -891,6 +891,15 @@
 #view-costing .ct-cell .c3 s{color:var(--sd400);font-variant-numeric:tabular-nums}
 #view-costing .ct-undo{border:none;background:transparent;color:var(--mt700);cursor:pointer;padding:0;display:inline-flex}
 #view-costing .ct-unit{color:rgba(74,62,54,.45)}
+#view-costing .ct-more{border:1px solid var(--sd200);background:#fff;color:rgba(74,62,54,.6);border-radius:7px;
+  padding:1px 6px;font-size:9.5px;font-weight:700;cursor:pointer;white-space:nowrap;font-variant-numeric:tabular-nums}
+#view-costing .ct-more:hover{border-color:var(--b300);color:var(--b500)}
+#view-costing .ct-more.on{border-color:var(--b500);color:var(--b500);background:var(--b50)}
+#view-costing .ct-more.has{border-color:var(--mt500);color:var(--mt700);background:var(--mt50)}
+#view-costing .ct-xtra{display:flex;flex-direction:column;gap:5px;margin:7px auto 2px;max-width:272px;padding-left:30px}
+#view-costing .ct-xrow{display:grid;grid-template-columns:1fr 74px;align-items:center;gap:8px;font-size:10px;color:rgba(74,62,54,.62)}
+#view-costing .ct-in.xin{width:74px;font-size:11px;padding:2px 6px}
+#view-costing .ct-in.xin.on{border-color:var(--mt500);background:var(--mt50);font-weight:700;color:var(--mt700)}
 
 @media (max-width:900px){
   #view-costing .ct-wrap{flex-direction:column}
@@ -47371,6 +47380,31 @@ function ctTplHtml(){
 }
 
 // ── แท็บ 3 · ปรับ / ปิด รายแผน ───────────────────────────────────────────────────────────────────
+// §ctOvrAll (2026-08-02) · ค่าที่ทับรายแผนได้ของ 1 บรรทัด
+//   เดิมหน้าจอเปิดให้ทับแค่ "ค่าแรกของส่วนประกอบแรก" ซึ่งไม่พอกับของจริง —
+//   อุทยานทับได้แต่ราคาต่างชาติ (ราคาไทยทับไม่ได้) · น้ำมันทับได้แต่ลิตรคงที่
+//   (4EN กับส่วนผันแปรต่อคนทับไม่ได้) · ไกด์ทับได้แต่ช่วงคน (ค่าจ้างทับไม่ได้)
+//   เครื่องคำนวณ (ctEffLine) รองรับ o.p[i][key] ทุกตัวอยู่แล้ว ขาดแค่หน้าจอ
+//   ตัวแรกของลิสต์ = ค่าหลักที่โชว์ในช่องกะทัดรัด · ที่เหลือซ่อนใต้ปุ่มกดขยาย
+function ctPartKeys(p){
+  if(p.k === 'fix') return p.fuel ? [['q','ลิตร/ลำ'],['q4','ลิตร/ลำ · 4EN']]
+                                  : [['u','ราคา/หน่วย'],['q','จำนวน'],['u4','ราคา · 4EN'],['q4','จำนวน · 4EN']];
+  if(p.k === 'var') return p.fuel ? [['q','ลิตร/คน']]
+                                  : [['u','ต่อคน · ต่างชาติ'],['uTH','ต่อคน · ไทย']];
+  return (p.mode === 'over') ? [['over','เกิน N คน'],['add','เพิ่มกี่คน'],['u','ราคา/คน']]
+                             : [['every','ทุกๆ N คน'],['u','ราคา/คน'],['min','ขั้นต่ำ']];
+}
+function ctLineKeys(ln){
+  var out = [], multi = ((ln.parts || []).length > 1);
+  (ln.parts || []).forEach(function(p, i){
+    ctPartKeys(p).forEach(function(kv){
+      if(p[kv[0]] == null) return;               // ค่าที่สูตรกลางไม่ได้ตั้งไว้ ก็ไม่ควรทับรายแผน
+      out.push({ i:i, k:kv[0], lb:(multi ? ('ส่วน ' + (i + 1) + ' · ') : '') + kv[1], base:p[kv[0]] });
+    });
+  });
+  return out;
+}
+function ctToggleExp(lineId){ _ct.exp = _ct.exp || {}; if(_ct.exp[lineId]) delete _ct.exp[lineId]; else _ct.exp[lineId] = 1; ctRender(); }
 function ctCell(a, b, c){
   return '<div class="ct-cell"><div class="c1">' + (a || '') + '</div><div class="c2">' + (b || '') + '</div><div class="c3">' + (c || '') + '</div></div>';
 }
@@ -47412,21 +47446,31 @@ function ctOvrHtml(){
         var grpOff = !!ctGrpCfg(pl, g).off, o = (pl.ovr || {})[ln.id] || {};
         var tick = '<label class="ct-ck"><input type="checkbox"' + (o.off ? '' : ' checked') + (grpOff ? ' disabled' : '')
           + ' onchange="ctOvrToggle(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',this.checked)"></label>';
-        var mid = '', end = '';
+        var mid = '', end = '', xtra = '';
+        var KEYS = ctLineKeys(ln), exp = !!((_ct.exp || {})[ln.id]);
+        var box = function(kv, cls){
+          var cv2 = ((o.p || [])[kv.i] || {})[kv.k];
+          var h2 = (cv2 != null && cv2 !== '');
+          return '<input class="ct-in ' + cls + (h2 ? ' on' : '') + '" data-fk="o.' + pl.id + '.' + ln.id + '.' + kv.i + '.' + kv.k + '"'
+            + ' value="' + (h2 ? cv2 : '') + '" placeholder="' + kv.base + '"' + (grpOff ? ' disabled' : '')
+            + ' title="' + (h2 ? ('ค่าสูตรกลางคือ ' + kv.base) : 'ว่าง = ใช้ค่าจากสูตรกลาง (' + kv.base + ')') + '"'
+            + ' oninput="ctOvrSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',' + kv.i + ',\'' + kv.k + '\',this.value)">';
+        };
         if(o.off) mid = '<span class="ct-off">ปิด</span>';
-        else {
-          var p0 = ln.parts[0] || {};
-          var key = (p0.k === 'step') ? (p0.mode === 'over' ? 'over' : 'every') : (p0.fuel ? 'q' : 'u');
-          var bse = p0[key], cv = ((o.p || [])[0] || {})[key];
-          var has = (cv != null && cv !== '');
-          mid = '<input class="ct-in ovr' + (has ? ' on' : '') + '" data-fk="o.' + pl.id + '.' + ln.id + '" value="' + (has ? cv : '') + '"'
-            + ' placeholder="' + (bse == null ? '' : bse) + '"' + (grpOff ? ' disabled' : '')
-            + ' title="' + (has ? ('ค่าสูตรกลางคือ ' + bse) : 'ว่าง = ใช้ค่าจากสูตรกลาง') + '"'
-            + ' oninput="ctOvrSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',\'' + key + '\',this.value)">';
-          end = has ? ('<s>' + bse + '</s><button class="ct-undo" title="ย้อนกลับเป็นค่าสูตร" onclick="ctOvrSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',\'' + key + '\',\'\')">' + ctIcon('undo', 12) + '</button>')
-            : '<span class="ct-unit">' + ((p0.k === 'var') ? '/คน' : (p0.k === 'step') ? 'คน' : (p0.per === 'trip' ? '/ทริป' : '/ลำ')) + '</span>';
+        else if(KEYS.length){
+          var m0 = KEYS[0], c0 = ((o.p || [])[m0.i] || {})[m0.k], has = (c0 != null && c0 !== '');
+          mid = box(m0, 'ovr');
+          end = (has ? ('<s>' + m0.base + '</s><button class="ct-undo" title="ย้อนกลับเป็นค่าสูตร" onclick="ctOvrSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',' + m0.i + ',\'' + m0.k + '\',\'\')">' + ctIcon('undo', 12) + '</button>')
+                 : '<span class="ct-unit">' + m0.lb.replace(/^ส่วน \d+ · /, '') + '</span>');
+          if(KEYS.length > 1){
+            var nOvr = 0; KEYS.slice(1).forEach(function(kv){ var v = ((o.p || [])[kv.i] || {})[kv.k]; if(v != null && v !== '') nOvr++; });
+            end += '<button class="ct-more' + (exp ? ' on' : '') + (nOvr ? ' has' : '') + '" title="แก้ค่าอื่นของบรรทัดนี้ · กางพร้อมกันทุกแผน"'
+                 + ' onclick="ctToggleExp(\'' + ctE(ln.id) + '\')">' + (exp ? '−' : '+') + (KEYS.length - 1) + (nOvr ? ' •' : '') + '</button>';
+            if(exp) xtra = '<div class="ct-xtra">' + KEYS.slice(1).map(function(kv){
+              return '<div class="ct-xrow"><span>' + ctE(kv.lb) + '</span>' + box(kv, 'xin') + '</div>'; }).join('') + '</div>';
+          }
         }
-        rc += '<td class="ct-ltd' + (grpOff ? ' dis' : '') + '">' + ctCell(tick, mid, end) + '</td>';
+        rc += '<td class="ct-ltd' + (grpOff ? ' dis' : '') + '">' + ctCell(tick, mid, end) + xtra + '</td>';
       });
       body += '<tr>' + rc + '</tr>';
     });
@@ -47434,7 +47478,7 @@ function ctOvrHtml(){
 
   return '<div class="ct-card ct-bar2"><div><b>ปรับ / ปิด รายการต้นทุนแยกตามแผน</b>'
     + '<span class="ct-sub">' + ctIcon('info', 12) + ' <em class="fix">แถวหัวหมวด</em> ปิดทั้งหมวด หรือใส่ ±% คูณทุกบรรทัดในหมวด · '
-    + '<em class="var">แถวรายการ</em> ปิดเฉพาะบรรทัด หรือพิมพ์ค่าทับ (ว่าง = ใช้ค่าจากสูตรกลาง)</span></div>'
+    + '<em class="var">แถวรายการ</em> ปิดเฉพาะบรรทัด หรือพิมพ์ค่าทับ (ว่าง = ใช้ค่าจากสูตรกลาง) · ปุ่ม <b>+N</b> กางค่าที่เหลือของบรรทัดนั้น เช่น ราคาคนไทย · ค่า 4EN · ส่วนผันแปร</span></div>'
     + '<div class="ct-bar2r"><span class="ct-hint">1 คอลัมน์ = 1 แผนคำนวณ</span></div></div>'
     + '<div class="ct-card ct-tblcard"><div class="ct-scroll"><table class="ct-otbl"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div></div>';
 }
@@ -47504,11 +47548,12 @@ function ctOvrToggle(pid, lineId, on){
   if(on) delete pl.ovr[lineId].off; else pl.ovr[lineId].off = 1;
   ctPlanPut(pl); ctRender();
 }
-function ctOvrSet(pid, lineId, key, val){
+function ctOvrSet(pid, lineId, pi, key, val){
+  if(val === undefined){ val = key; key = pi; pi = 0; }   // เข้ากันได้กับการเรียกแบบเดิม (ไม่ระบุส่วนประกอบ)
   var pl = ctPlan(pid); if(!pl) return;
   pl.ovr = pl.ovr || {}; var o = pl.ovr[lineId] = pl.ovr[lineId] || {};
-  o.p = o.p || []; o.p[0] = o.p[0] || {};
-  if(val === '' || val == null) delete o.p[0][key]; else o.p[0][key] = +val || 0;
+  o.p = o.p || []; o.p[pi] = o.p[pi] || {};
+  if(val === '' || val == null) delete o.p[pi][key]; else o.p[pi][key] = +val || 0;
   ctPlanPut(pl); ctRender();
 }
 
