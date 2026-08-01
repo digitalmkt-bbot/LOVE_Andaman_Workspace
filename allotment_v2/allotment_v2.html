@@ -46695,6 +46695,23 @@ function ctTpl(){
 }
 function ctTplSave(t){ ctWrite('cost_template', t); }
 function ctVatR(t){ var r = +((t || ctTpl()).vatRate); if(!(r > 0)) r = 0; return r / (100 + r); }
+// ── หมวดหมู่ ────────────────────────────────────────────────────────────────────────────────────
+// ลำดับหมวดยึดตามลำดับที่โผล่ครั้งแรกในสูตร · ย้ายบรรทัดข้ามหมวดแล้วตารางจัดกลุ่มให้เองทันที
+function ctGroups(T){
+  var out = [], seen = {};
+  ((T || ctTpl()).lines || []).forEach(function(l){ var g = l.g || 'อื่นๆ'; if(!seen[g]){ seen[g] = 1; out.push(g); } });
+  return out;
+}
+// บรรทัดทั้งหมดเรียงตามหมวด · ทุกที่ที่วนบรรทัดใช้ตัวนี้ จะได้ลำดับตรงกันเสมอ
+function ctLinesByGroup(T){
+  var t = T || ctTpl(), out = [];
+  ctGroups(t).forEach(function(g){ (t.lines || []).forEach(function(l, i){ if((l.g || 'อื่นๆ') === g) out.push({ ln:l, i:i }); }); });
+  return out;
+}
+// ตั้งค่าระดับหมวดของแต่ละแผน · pl.grp[หมวด] = {off:1, pct:±%}
+//   off = ตัดทั้งหมวดออกจากแผนนี้ · pct = คูณทุกบรรทัดในหมวด (เช่น เส้นทางนี้ค่าอาหารแพงกว่า 20%)
+function ctGrpCfg(pl, g){ return ((pl && pl.grp) || {})[g] || {}; }
+function ctGrpMul(pl, g){ var c = ctGrpCfg(pl, g); return 1 + ((+c.pct || 0) / 100); }
 
 // ── แผนคำนวณ · ผู้ใช้สร้างเองกี่แผนก็ได้ ─────────────────────────────────────────────────────────
 function ctNewId(){ return 'p' + Math.random().toString(36).slice(2, 8); }
@@ -46774,10 +46791,14 @@ function ctPartAmt(p, ctx){
 function ctCalc(pl, ctx, tpl){
   var T = tpl || ctTpl(), R = ctVatR(T);
   var out = { gross:0, vin:0, net:0, fixNet:0, varNet:0, rows:[] };
-  T.lines.forEach(function(ln){
+  ctLinesByGroup(T).forEach(function(x){
+    var ln = x.ln, g = ln.g || 'อื่นๆ';
+    if(ctGrpCfg(pl, g).off) return;                       // §category · ปิดทั้งหมวด
     var L = ctEffLine(ln, pl); if(L.off) return;
     var amt = 0, fx = 0, vr = 0;
     L.parts.forEach(function(p){ var a = ctPartAmt(p, ctx); amt += a; if(p.k === 'var') vr += a; else fx += a; });
+    var m = ctGrpMul(pl, g);                              // §category · ปรับ ±% ทั้งหมวด
+    if(m !== 1){ amt *= m; fx *= m; vr *= m; }
     var v = L.vat ? amt * R : 0;
     out.gross += amt; out.vin += v;
     out.fixNet += fx - (L.vat ? fx * R : 0);
@@ -46798,6 +46819,7 @@ function ctProfitAt(pl, n, tpl){
 function ctStepCount(pl, n, tpl){
   var T = tpl || ctTpl(), t = 0;
   T.lines.forEach(function(ln){
+    if(ctGrpCfg(pl, ln.g || 'อื่นๆ').off) return;   // §category
     var L = ctEffLine(ln, pl); if(L.off) return;
     L.parts.forEach(function(p){
       if(p.k !== 'step') return;
@@ -46912,9 +46934,18 @@ function ctPlanHtml(){
     + '</div>';
 
   // ตารางต้นทุนรายบรรทัด
-  var lastG = '', tr = '';
+  var lastG = '', tr = '', gSum = {};
+  cur.c.rows.forEach(function(r){ gSum[r.g] = (gSum[r.g] || 0) + r.amt; });
+  var gTot = cur.c.gross || 1;
   cur.c.rows.forEach(function(r){
-    if(r.g !== lastG){ tr += '<tr><td colspan="6" style="background:#F7F5EF;font-weight:800;font-size:10.5px;color:#5F5E5A;padding:4px 11px">' + ctE(r.g) + '</td></tr>'; lastG = r.g; }
+    if(r.g !== lastG){
+      var gp = ctGrpCfg(pl, r.g), pct = +gp.pct || 0;
+      tr += '<tr><td colspan="4" style="background:#F0EEE7;font-weight:800;font-size:10.5px;color:#4a4a45;padding:5px 11px">' + ctE(r.g)
+        + (pct ? ('<span style="background:#FFF3D8;color:#7A5A12;border-radius:5px;padding:0 6px;font-size:9px;font-weight:800;margin-left:6px">' + (pct > 0 ? '+' : '') + pct + '%</span>') : '')
+        + '</td><td style="background:#F0EEE7;padding:5px 11px;text-align:right;font-family:\'DM Mono\',monospace;font-weight:800;font-size:11.5px;color:#4a4a45">' + Math.round(gSum[r.g]).toLocaleString() + '</td>'
+        + '<td style="background:#F0EEE7;padding:5px 11px;text-align:right;font-size:10px;font-weight:700;color:#8a8a82">' + Math.round(gSum[r.g] / gTot * 100) + '%</td></tr>';
+      lastG = r.g;
+    }
     var td = 'padding:5px 11px;border-bottom:1px solid #F3F1EA;font-family:\'DM Mono\',monospace;font-variant-numeric:tabular-nums;text-align:right;font-size:12px';
     tr += '<tr' + (r.amt ? '' : ' style="opacity:.45"') + '><td style="padding:5px 11px;border-bottom:1px solid #F3F1EA;font-size:12px">' + ctE(r.l) + '</td>'
       + '<td style="' + td + '">' + (r.fix ? Math.round(r.fix).toLocaleString() : '—') + '</td>'
@@ -47005,8 +47036,16 @@ function ctTplHtml(){
   var tag = function(t, bg, c){ return '<span style="display:inline-block;border-radius:5px;padding:1px 6px;font-size:8.5px;font-weight:800;background:' + bg + ';color:' + c + ';white-space:nowrap">' + t + '</span>'; };
   var sm = 'font-size:10.5px;color:var(--fd-ink-soft)';
   var dash = 'border:1px dashed #C9DFD5;background:transparent;color:#0F6E56;border-radius:6px;padding:1px 7px;font-size:9.5px;font-weight:700;cursor:pointer;font-family:inherit';
-  T.lines.forEach(function(ln, li){
-    if(ln.g !== lastG){ h += '<tr><td colspan="4" style="background:#F7F5EF;font-weight:800;font-size:10.5px;color:#5F5E5A;padding:4px 10px">' + ctE(ln.g) + '</td></tr>'; lastG = ln.g; }
+  var GL = ctGroups(T);
+  ctLinesByGroup(T).forEach(function(X){
+    var ln = X.ln, li = X.i, g = ln.g || 'อื่นๆ';
+    if(g !== lastG){
+      h += '<tr><td colspan="4" style="background:#F7F5EF;padding:4px 10px">'
+        + '<span style="font-weight:800;font-size:10.5px;color:#5F5E5A">' + ctE(g) + '</span>'
+        + '<button onclick="ctRenameGroup(\'' + ctE(g) + '\')" title="เปลี่ยนชื่อหมวดนี้ (มีผลกับทุกบรรทัดในหมวด)" style="border:none;background:transparent;color:var(--fd-ink-soft);cursor:pointer;font-size:11px;padding:0 4px">&#9998;</button>'
+        + '</td></tr>';
+      lastG = g;
+    }
     var pp = '';
     (ln.parts || []).forEach(function(p, pi){
       var F = 'p' + li + '.' + pi + '.';
@@ -47041,7 +47080,11 @@ function ctTplHtml(){
       pp += '<span onclick="ctDelPart(' + li + ',' + pi + ')" title="ลบส่วนนี้" style="color:#C0392B;cursor:pointer;font-size:13px;padding:0 3px;opacity:.55">&times;</span></div>';
     });
     pp += '<button onclick="ctAddPart(' + li + ')" style="' + dash + ';margin-top:2px">+ เพิ่มส่วนประกอบ</button>';
-    h += '<tr><td style="' + td + ';width:24%"><input data-fk="n' + li + '" value="' + ctE(ln.l) + '" oninput="ctLineName(' + li + ',this.value)" style="width:100%;border:1px solid transparent;border-radius:6px;padding:3px 5px;font-family:inherit;font-size:12px;font-weight:600;background:transparent"></td>'
+    h += '<tr><td style="' + td + ';width:24%">'
+      + '<input data-fk="n' + li + '" value="' + ctE(ln.l) + '" oninput="ctLineName(' + li + ',this.value)" style="width:100%;border:1px solid transparent;border-radius:6px;padding:3px 5px;font-family:inherit;font-size:12px;font-weight:600;background:transparent">'
+      + '<select onchange="ctLineGroup(' + li + ',this.value)" title="ย้ายบรรทัดนี้ไปหมวดอื่น" style="margin-top:2px;margin-left:5px;font-family:inherit;font-size:10px;color:var(--fd-ink-soft);border:1px solid var(--fd-line);border-radius:6px;padding:1px 3px;background:#fff;max-width:96%">'
+      + GL.map(function(x){ return '<option value="' + ctE(x) + '"' + (x === g ? ' selected' : '') + '>' + ctE(x) + '</option>'; }).join('')
+      + '<option value="__new">+ หมวดใหม่…</option></select></td>'
       + '<td style="' + td + ';width:56%">' + pp + '</td>'
       + '<td style="' + td + ';width:11%;text-align:center"><label style="cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--fd-ink-soft)"><input type="checkbox"' + (ln.vat ? ' checked' : '') + ' onchange="ctLineVat(' + li + ',this.checked)" style="width:15px;height:15px;accent-color:#0F7A5A;cursor:pointer">ขอคืนได้</label></td>'
       + '<td style="' + td + ';width:9%;text-align:center"><button onclick="ctDelLine(' + li + ')" title="ลบรายการ" style="border:none;background:transparent;color:#C0392B;cursor:pointer;font-size:14px;opacity:.5">&#128465;</button></td></tr>';
@@ -47060,36 +47103,83 @@ function ctTplHtml(){
 }
 
 // ── แท็บ 3 · ปรับ / ปิด รายแผน ───────────────────────────────────────────────────────────────────
+//   จัดกลุ่มตามหมวด · ปรับได้ 2 ระดับ
+//     ระดับหมวด  · ปิดทั้งหมวด หรือ ±% ทั้งหมวด (เช่น เส้นทางนี้ค่าอาหารแพงกว่า 20%)
+//     ระดับบรรทัด · ปิดบรรทัด หรือพิมพ์ค่าทับ
 function ctOvrHtml(){
-  var T = ctTpl(), P = ctPlans();
-  var thh = 'font-size:9px;font-weight:700;color:var(--fd-ink-soft);text-transform:uppercase;letter-spacing:.06em;padding:7px 9px;background:#FBFAF7;border-bottom:1.5px solid var(--fd-line);white-space:nowrap';
-  var h = '<table style="width:100%;border-collapse:collapse;min-width:' + (240 + P.length * 155) + 'px"><thead><tr><th style="' + thh + ';text-align:left;position:sticky;left:0;background:#FBFAF7">รายการ</th>'
-    + P.map(function(p){ return '<th style="' + thh + ';text-align:center">' + ctE(p.name) + '</th>'; }).join('') + '</tr></thead><tbody>';
-  T.lines.forEach(function(ln, li){
-    h += '<tr' + (li % 2 ? ' style="background:#FBFCFE"' : '') + '><td style="padding:5px 9px;border-bottom:1px solid #F3F1EA;font-size:12px;font-weight:600;position:sticky;left:0;background:inherit">' + ctE(ln.l) + '</td>';
+  var T = ctTpl(), P = ctPlans(), G = ctGroups(T);
+  var colW = Math.max(190, Math.min(300, Math.floor(940 / Math.max(1, P.length))));
+  var thh = 'font-size:9px;font-weight:700;color:var(--fd-ink-soft);text-transform:uppercase;letter-spacing:.06em;padding:8px 10px;background:#FBFAF7;border-bottom:1.5px solid var(--fd-line);white-space:nowrap';
+  var h = '<table style="border-collapse:collapse;table-layout:fixed;width:' + (260 + P.length * colW) + 'px;max-width:100%">'
+    + '<colgroup><col style="width:260px">' + P.map(function(){ return '<col style="width:' + colW + 'px">'; }).join('') + '</colgroup>'
+    + '<thead><tr><th style="' + thh + ';text-align:left;position:sticky;left:0;z-index:2">รายการ</th>'
+    + P.map(function(p){
+        var cap = Math.max(1, (+p.cap || 65) * Math.max(1, +p.boats || 1));
+        var be = ctBreakEven(p, cap, T);
+        return '<th style="' + thh + ';text-align:center"><div style="font-size:11.5px;font-weight:800;color:var(--fd-ink);text-transform:none;letter-spacing:0">' + ctE(p.name) + '</div>'
+          + '<div style="font-weight:600;text-transform:none;letter-spacing:0;color:' + (be ? '#0F6E56' : '#A32D2D') + '">' + (be ? ('คุ้มทุน ' + be + ' คน') : 'ยังไม่คุ้ม') + '</div></th>';
+      }).join('') + '</tr></thead><tbody>';
+
+  G.forEach(function(g){
+    // ── แถวหัวหมวด ──
+    h += '<tr><td style="background:#F0EEE7;font-weight:800;font-size:11px;color:#4a4a45;padding:6px 10px;position:sticky;left:0;z-index:1">' + ctE(g) + '</td>';
     P.forEach(function(pl){
-      var o = (pl.ovr || {})[ln.id] || {};
-      h += '<td style="padding:5px 9px;border-bottom:1px solid #F3F1EA;text-align:center"><div style="display:flex;align-items:center;gap:5px;justify-content:center">'
-        + '<label title="เปิด/ปิดบรรทัดนี้ในแผนนี้" style="cursor:pointer"><input type="checkbox"' + (o.off ? '' : ' checked')
-        + ' onchange="ctOvrToggle(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',this.checked)" style="width:15px;height:15px;accent-color:#0F7A5A;cursor:pointer"></label>';
-      if(o.off) h += '<span style="background:#FCEBEB;color:#A32D2D;border-radius:5px;padding:0 6px;font-size:9px;font-weight:800">ปิด</span>';
-      else {
-        var p0 = ln.parts[0] || {};
-        var key = (p0.k === 'step') ? (p0.mode === 'over' ? 'over' : 'every') : (p0.fuel ? 'q' : 'u');
-        var bse = p0[key], cur = ((o.p || [])[0] || {})[key];
-        var has = (cur != null && cur !== '');
-        if(has) h += '<span style="color:#c2c0b7;text-decoration:line-through;font-size:10px;font-family:\'DM Mono\',monospace">' + bse + '</span>';
-        h += '<input data-fk="o.' + pl.id + '.' + ln.id + '" value="' + (has ? cur : '') + '" placeholder="' + (bse == null ? '' : bse) + '"'
-          + ' oninput="ctOvrSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',\'' + key + '\',this.value)"'
-          + ' style="width:56px;text-align:right;font-family:\'DM Mono\',monospace;font-size:11.5px;border:1px solid ' + (has ? '#9FE1CB' : 'var(--fd-line)') + ';border-radius:6px;padding:2px 6px;background:' + (has ? '#F4FCF8' : '#fff') + '">';
-        if(has) h += '<button onclick="ctOvrSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',\'' + key + '\',\'\')" title="ย้อนกลับเป็นค่าสูตร" style="border:none;background:transparent;color:var(--fd-ink-soft);cursor:pointer;font-size:12px;padding:0 2px">&#8635;</button>';
+      var c = ctGrpCfg(pl, g), pct = +c.pct || 0;
+      var sub = 0;
+      if(!c.off){
+        var pax = Math.max(1, +pl.pax || 1), th2 = Math.min(Math.max(0, +pl.paxTH || 0), pax);
+        var ctx = { eng:pl.eng, boats:Math.max(1, +pl.boats || 1), fuel:+pl.fuel || 0, pax:pax, paxTH:th2, paxFR:pax - th2 };
+        ctCalc(pl, ctx, T).rows.forEach(function(r){ if(r.g === g) sub += r.amt; });
       }
-      h += '</div></td>';
+      h += '<td style="background:#F0EEE7;padding:5px 10px;text-align:center">'
+        + '<div style="display:flex;align-items:center;gap:6px;justify-content:center">'
+        + '<label title="ปิด/เปิดทั้งหมวดในแผนนี้" style="cursor:pointer;display:inline-flex"><input type="checkbox"' + (c.off ? '' : ' checked')
+        + ' onchange="ctGrpToggle(\'' + pl.id + '\',\'' + ctE(g) + '\',this.checked)" style="width:15px;height:15px;accent-color:#0F7A5A;cursor:pointer"></label>'
+        + (c.off
+            ? '<span style="background:#FCEBEB;color:#A32D2D;border-radius:5px;padding:0 7px;font-size:9.5px;font-weight:800">ปิดทั้งหมวด</span>'
+            : '<span style="font-size:9.5px;color:#6b6b64">ปรับ</span>'
+              + '<input data-fk="gp.' + pl.id + '.' + g + '" value="' + (pct || '') + '" placeholder="0"'
+              + ' oninput="ctGrpPct(\'' + pl.id + '\',\'' + ctE(g) + '\',this.value)"'
+              + ' style="width:46px;text-align:right;font-family:\'DM Mono\',monospace;font-size:11px;border:1px solid ' + (pct ? '#E8B94A' : 'var(--fd-line)') + ';border-radius:6px;padding:1px 5px;background:' + (pct ? '#FFFBF0' : '#fff') + '">'
+              + '<span style="font-size:9.5px;color:#6b6b64">%</span>'
+              + '<span style="font-family:\'DM Mono\',monospace;font-size:10.5px;font-weight:700;color:#5F5E5A;margin-left:2px">' + ctB(sub) + '</span>')
+        + '</div></td>';
     });
     h += '</tr>';
+
+    // ── บรรทัดในหมวด ──
+    (T.lines || []).forEach(function(ln, li){
+      if((ln.g || 'อื่นๆ') !== g) return;
+      h += '<tr' + (li % 2 ? ' style="background:#FBFCFE"' : '') + '>'
+        + '<td style="padding:5px 10px 5px 20px;border-bottom:1px solid #F3F1EA;font-size:12px;position:sticky;left:0;background:inherit">' + ctE(ln.l) + '</td>';
+      P.forEach(function(pl){
+        var grpOff = !!ctGrpCfg(pl, g).off;
+        var o = (pl.ovr || {})[ln.id] || {};
+        h += '<td style="padding:5px 10px;border-bottom:1px solid #F3F1EA;text-align:center' + (grpOff ? ';opacity:.35' : '') + '">'
+          + '<div style="display:flex;align-items:center;gap:5px;justify-content:center">'
+          + '<label title="เปิด/ปิดบรรทัดนี้ในแผนนี้" style="cursor:pointer;display:inline-flex"><input type="checkbox"' + (o.off ? '' : ' checked') + (grpOff ? ' disabled' : '')
+          + ' onchange="ctOvrToggle(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',this.checked)" style="width:15px;height:15px;accent-color:#0F7A5A;cursor:pointer"></label>';
+        if(o.off) h += '<span style="background:#FCEBEB;color:#A32D2D;border-radius:5px;padding:0 6px;font-size:9px;font-weight:800">ปิด</span>';
+        else {
+          var p0 = ln.parts[0] || {};
+          var key = (p0.k === 'step') ? (p0.mode === 'over' ? 'over' : 'every') : (p0.fuel ? 'q' : 'u');
+          var bse = p0[key], cur = ((o.p || [])[0] || {})[key];
+          var has = (cur != null && cur !== '');
+          if(has) h += '<span style="color:#c2c0b7;text-decoration:line-through;font-size:10px;font-family:\'DM Mono\',monospace">' + bse + '</span>';
+          h += '<input data-fk="o.' + pl.id + '.' + ln.id + '" value="' + (has ? cur : '') + '" placeholder="' + (bse == null ? '' : bse) + '"' + (grpOff ? ' disabled' : '')
+            + ' oninput="ctOvrSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',\'' + key + '\',this.value)"'
+            + ' style="width:56px;text-align:right;font-family:\'DM Mono\',monospace;font-size:11.5px;border:1px solid ' + (has ? '#9FE1CB' : 'var(--fd-line)') + ';border-radius:6px;padding:2px 6px;background:' + (has ? '#F4FCF8' : '#fff') + '">';
+          if(has) h += '<button onclick="ctOvrSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',\'' + key + '\',\'\')" title="ย้อนกลับเป็นค่าสูตร" style="border:none;background:transparent;color:var(--fd-ink-soft);cursor:pointer;font-size:12px;padding:0 2px">&#8635;</button>';
+        }
+        h += '</div></td>';
+      });
+      h += '</tr>';
+    });
   });
-  return '<div style="font-size:12px;color:var(--fd-ink-soft);margin-bottom:10px;line-height:1.6">1 คอลัมน์ = 1 แผนคำนวณ · ช่องว่าง = ใช้ค่าจากสูตรกลาง · พิมพ์ทับ = ใช้เฉพาะแผนนี้ (กด &#8635; ย้อนกลับ) · ปิดติ๊ก = ตัดบรรทัดนั้นออกจากแผนนี้<br>'
-    + 'ช่องที่แก้ได้คือ<b>ส่วนประกอบแรก</b>ของบรรทัด (ค่าที่เปลี่ยนบ่อยสุด) · ส่วนอื่นแก้ที่สูตรกลาง</div>'
+
+  return '<div style="font-size:12px;color:var(--fd-ink-soft);margin-bottom:10px;line-height:1.65">1 คอลัมน์ = 1 แผนคำนวณ · ปรับได้ 2 ระดับ<br>'
+    + '<b style="color:#4a4a45">แถวหัวหมวด</b> — ปิดทั้งหมวด หรือใส่ <b>±%</b> คูณทุกบรรทัดในหมวดนั้น (เช่น เส้นทางนี้ค่าอาหารแพงกว่า 20% ใส่ 20) · ตัวเลขท้ายแถวคือยอดรวมของหมวด<br>'
+    + '<b style="color:#4a4a45">แถวรายการ</b> — ปิดเฉพาะบรรทัด หรือพิมพ์ค่าทับ (กด &#8635; ย้อนกลับ) · ช่องว่าง = ใช้ค่าจากสูตรกลาง</div>'
     + '<div style="background:#fff;border:1px solid var(--fd-line);border-radius:12px;overflow:auto">' + h + '</tbody></table></div>';
 }
 
@@ -47113,6 +47203,20 @@ function ctDelPart(li, pi){ var T = ctTpl(); if(!T.lines[li] || T.lines[li].part
 function ctAddEng(li, pi){ var T = ctTpl(); var p = T.lines[li] && T.lines[li].parts[pi]; if(!p) return; if(p.fuel) p.q4 = p.q; else { p.q4 = p.q; p.u4 = p.u; } ctTplSave(T); ctRender(); }
 function ctAddTH(li, pi){ var T = ctTpl(); var p = T.lines[li] && T.lines[li].parts[pi]; if(!p) return; p.uTH = p.u; ctTplSave(T); ctRender(); }
 function ctLineName(li, v){ var T = ctTpl(); if(!T.lines[li]) return; T.lines[li].l = v; ctTplSave(T); ctRender(); }
+function ctLineGroup(li, v){
+  var T = ctTpl(); if(!T.lines[li]) return;
+  if(v === '__new'){ var nm = prompt('ชื่อหมวดใหม่', ''); if(!nm || !String(nm).trim()){ ctRender(); return; } v = String(nm).trim(); }
+  T.lines[li].g = v; ctTplSave(T); ctRender();
+}
+function ctRenameGroup(g){
+  var nm = prompt('เปลี่ยนชื่อหมวด "' + g + '" เป็น', g);
+  if(!nm || !String(nm).trim() || String(nm).trim() === g) return;
+  nm = String(nm).trim();
+  var T = ctTpl(); T.lines.forEach(function(l){ if((l.g || 'อื่นๆ') === g) l.g = nm; }); ctTplSave(T);
+  // ย้ายการตั้งค่าระดับหมวดของทุกแผนตามไปด้วย ไม่งั้น %/ปิดหมวด จะหลุด
+  var Pl = ctPlans(); Pl.forEach(function(p){ if(p.grp && p.grp[g]){ p.grp[nm] = p.grp[g]; delete p.grp[g]; } }); ctPlansSave(Pl);
+  ctRender();
+}
 function ctLineVat(li, on){ var T = ctTpl(); if(!T.lines[li]) return; T.lines[li].vat = !!on; ctTplSave(T); ctRender(); }
 function ctAddLine(){ var T = ctTpl(); T.lines.push({ id:'x' + Math.random().toString(36).slice(2, 8), g:'อื่นๆ', l:'รายการใหม่', vat:false, parts:[{ k:'var', u:0 }] }); ctTplSave(T); ctRender(); }
 function ctDelLine(li){
@@ -47126,6 +47230,18 @@ function ctVatSet(v){ var T = ctTpl(); T.vatRate = +v || 0; ctTplSave(T); ctRend
 function ctResetTpl(){ if(!confirm('คืนสูตรกลางกลับเป็นค่าเริ่มต้นทั้งหมด? · ค่าที่ตั้งไว้รายแผนจะถูกล้างด้วย')) return;
   ctTplSave(JSON.parse(JSON.stringify(CT_DEFAULT)));
   var P = ctPlans(); P.forEach(function(p){ p.ovr = {}; }); ctPlansSave(P); ctRender(); }
+function ctGrpToggle(pid, g, on){
+  var pl = ctPlan(pid); if(!pl) return;
+  pl.grp = pl.grp || {}; pl.grp[g] = pl.grp[g] || {};
+  if(on) delete pl.grp[g].off; else pl.grp[g].off = 1;
+  ctPlanPut(pl); ctRender();
+}
+function ctGrpPct(pid, g, v){
+  var pl = ctPlan(pid); if(!pl) return;
+  pl.grp = pl.grp || {}; pl.grp[g] = pl.grp[g] || {};
+  if(v === '' || v == null || +v === 0) delete pl.grp[g].pct; else pl.grp[g].pct = +v || 0;
+  ctPlanPut(pl); ctRender();
+}
 function ctOvrToggle(pid, lineId, on){
   var pl = ctPlan(pid); if(!pl) return;
   pl.ovr = pl.ovr || {}; pl.ovr[lineId] = pl.ovr[lineId] || {};
