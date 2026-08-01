@@ -1160,6 +1160,16 @@ async function initDb(){
       for(const [c,t] of _tripOps){
         await sq(`sb_bookings__trips.${c} col`, `ALTER TABLE ${OS_SCHEMA}."sb_bookings__trips" ADD COLUMN IF NOT EXISTS "${c}" ${t}`);
       }
+      // §เก็บเงินหน้าท่า (2026-08-02): bk.pierPayments[] และฟิลด์การรับเงินของ sb_extras
+      //   อาการที่เจอ — บันทึกแล้วหน้าจอเปลี่ยน แต่พอ refresh กลับมาเหมือนเดิม
+      //   สาเหตุเดียวกับ check-in เมื่อ 25 ก.ค. เป๊ะ: ฟิลด์ใหม่ไม่มีคอลัมน์ → decompose ทิ้ง แล้ว assemble
+      //   ก็ไม่มีอะไรจะคืนมา ข้อมูลเลยหายเงียบทุกครั้งที่โหลดจาก cloud
+      //   pierPayments เป็น array ที่มี slips[] ซ้อนข้างใน → json_text ทั้งก้อน ไม่ต้องแตกตารางลูก
+      await sq('sb_bookings.pierpayments col',
+        `ALTER TABLE ${OS_SCHEMA}."sb_bookings" ADD COLUMN IF NOT EXISTS "pierpayments" text`);
+      for(const [c,t] of [['feepct','double precision'],['fee','bigint'],['customerpaid','bigint'],['slips','text']]){
+        await sq(`sb_extras.${c} col`, `ALTER TABLE ${OS_SCHEMA}."sb_extras" ADD COLUMN IF NOT EXISTS "${c}" ${t}`);
+      }
       // §Check-in หน้างาน (2026-07-25): ops.vanCheckin / ops.pierCheckin เก็บผลเช็คอินขึ้นรถ-ขึ้นเรือ
       // (actualPax / noShow / at / by / reasonCode / reasonNote / reasonAt) เป็น json_text เหมือน ops.vanSplits.
       // ไม่มีคอลัมน์ = ข้อมูลเช็คอินหายทุกครั้งที่ refresh จาก cloud และเครื่องอื่นมองไม่เห็น.

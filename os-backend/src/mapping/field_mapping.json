@@ -4910,6 +4910,11 @@
       "source": "ops.pierCheckin",
       "kind": "json_text",
       "db_type": "text"
+    },
+    "pierpayments": {
+      "source": "pierPayments",
+      "kind": "json_text",
+      "db_type": "text"
     }
   },
   "sb_bookings__passengers": {
@@ -6114,6 +6119,26 @@
     "date": {
       "source": "date",
       "kind": "scalar",
+      "db_type": "text"
+    },
+    "feepct": {
+      "source": "feePct",
+      "kind": "scalar",
+      "db_type": "double precision"
+    },
+    "fee": {
+      "source": "fee",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "customerpaid": {
+      "source": "customerPaid",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "slips": {
+      "source": "slips",
+      "kind": "json_text",
       "db_type": "text"
     }
   },
