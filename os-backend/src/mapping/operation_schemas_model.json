@@ -4461,6 +4461,10 @@
         "type": "text"
       },
       {
+        "name": "ops_boatsplits",
+        "type": "text"
+      },
+      {
         "name": "ops_vancheckin",
         "type": "text"
       },
@@ -4681,6 +4685,10 @@
       },
       {
         "name": "ops_vansplits",
+        "type": "text"
+      },
+      {
+        "name": "ops_boatsplits",
         "type": "text"
       },
       {

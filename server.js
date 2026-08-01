@@ -1178,6 +1178,12 @@ async function initDb(){
           await sq(`${_t}.${_c} col`, `ALTER TABLE ${OS_SCHEMA}."${_t}" ADD COLUMN IF NOT EXISTS "${_c}" text`);
         }
       }
+      // §boatSplit (2026-08-02): ops.boatSplits[] — หนึ่งบุคกิ้งลงได้หลายลำ (กรุ๊ปใหญ่ที่ลำเดียวไม่พอ
+      // เช่นเหมาลำ 120 คน แต่เรือใหญ่สุดจุ 65) · โครงเดียวกับ ops.vanSplits เป๊ะ → json_text ทั้งก้อน
+      // ต้องมาคู่กับ field_mapping.json + operation_schemas_model.json เสมอ — ขาดที่ใดที่หนึ่ง = ข้อมูลหายเงียบ
+      for(const _tb of ['sb_bookings','sb_bookings__trips']){
+        await sq(`${_tb}.ops_boatsplits col`, `ALTER TABLE ${OS_SCHEMA}."${_tb}" ADD COLUMN IF NOT EXISTS "ops_boatsplits" text`);
+      }
       // §Boat capacity override รายวัน (2026-07-25): BOAT_CAP_OVR['YYYY-MM-DD::boatId'] = {cap,reason,by,at}
       // keyed map เหมือน vanjob_driver → 1 ตาราง รองรับทุกลำทุกวัน ไม่ต้องเพิ่มคอลัมน์ตอนมีเรือลำใหม่
       await sq('boat_capovr table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."boat_capovr" (id text PRIMARY KEY, key text, cap bigint, reason text, "by" text, at text)`);

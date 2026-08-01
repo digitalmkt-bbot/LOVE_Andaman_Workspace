@@ -4901,6 +4901,11 @@
       "kind": "json_text",
       "db_type": "text"
     },
+    "ops_boatsplits": {
+      "source": "ops.boatSplits",
+      "kind": "json_text",
+      "db_type": "text"
+    },
     "ops_vancheckin": {
       "source": "ops.vanCheckin",
       "kind": "json_text",
@@ -5157,6 +5162,11 @@
     },
     "ops_vansplits": {
       "source": "trips[].ops.vanSplits",
+      "kind": "json_text",
+      "db_type": "text"
+    },
+    "ops_boatsplits": {
+      "source": "trips[].ops.boatSplits",
       "kind": "json_text",
       "db_type": "text"
     },
