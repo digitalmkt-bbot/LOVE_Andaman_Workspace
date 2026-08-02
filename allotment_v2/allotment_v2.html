@@ -850,9 +850,17 @@
 #view-costing .ct-tbl tfoot td.big{color:var(--b500);font-size:13.5px}
 
 /* ตาราง Tier */
-#view-costing .ct-ttbl th:nth-child(1){width:25%} #view-costing .ct-ttbl th:nth-child(2){width:15%}
-#view-costing .ct-ttbl th:nth-child(3){width:13%} #view-costing .ct-ttbl th:nth-child(4){width:17%}
-#view-costing .ct-ttbl th:nth-child(5){width:17%} #view-costing .ct-ttbl th:nth-child(6){width:13%}
+#view-costing .ct-ttbl th:nth-child(1){width:21%} #view-costing .ct-ttbl th:nth-child(2){width:13%}
+#view-costing .ct-ttbl th:nth-child(3){width:12%} #view-costing .ct-ttbl th:nth-child(4){width:16%}
+#view-costing .ct-ttbl th:nth-child(5){width:16%} #view-costing .ct-ttbl th:nth-child(6){width:12%}
+#view-costing .ct-ttbl th:nth-child(7){width:10%}
+#view-costing .ct-pf.full{color:var(--mt700)}
+#view-costing .ct-pf.full.neg{color:#d63b3b}
+#view-costing .ct-duo .ct-in.tp{width:56px}
+#view-costing .ct-duo .ct-use{padding:2px 4px;font-size:8px}
+#view-costing .ct-duo .ct-ttbl td{padding:5px 7px}
+#view-costing .ct-duo .ct-mgb{display:none}
+#view-costing .ct-duo .ct-mg{gap:0}
 #view-costing .ct-duo .ct-mgb{width:26px;flex:0 0 26px}
 #view-costing .ct-duo .ct-cap2{width:36px}
 #view-costing .ct-duo .ct-tbl td{overflow:hidden}
@@ -47378,6 +47386,7 @@ function ctPlanHtml(){
     for(var kk in pl){ if(Object.prototype.hasOwnProperty.call(pl, kk)) pl2[kk] = pl[kk]; }
     pl2.price = pr;
     var b2 = ctBreakEven(pl2, cap, T), r2 = ctProfitAt(pl2, pax, T);
+    var rF = ctProfitAt(pl2, cap, T);                       // §ctTierFull · กำไรตอนเต็มลำ
     var mg = r2.rev ? (r2.p / r2.rev * 100) : 0;
     var on = (pr === (+pl.price || 0)), bp = b2 ? Math.min(100, Math.round(b2 / cap * 100)) : 100;
     return '<tr' + (on ? ' class="on"' : '') + '>'
@@ -47387,6 +47396,7 @@ function ctPlanHtml(){
       + '<td class="ct-r"><span class="ct-bev' + (b2 ? '' : ' bad') + '">' + (b2 ? (b2 + ' <em>คน</em>') : 'ไม่คุ้ม') + '</span>'
       + '<span class="ct-cap2' + (b2 ? '' : ' bad') + '"><i style="width:' + bp + '%"></i></span></td>'
       + '<td class="ct-r"><b class="ct-pf' + (r2.p < 0 ? ' neg' : '') + '">' + (r2.p >= 0 ? '+' : '−') + ctB(Math.abs(r2.p)) + '</b></td>'
+      + '<td class="ct-r"><b class="ct-pf full' + (rF.p < 0 ? ' neg' : '') + '">' + (rF.p >= 0 ? '+' : '−') + ctB(Math.abs(rF.p)) + '</b></td>'
       + '<td class="ct-r"><span class="ct-mg"><span class="ct-mgb' + (mg < 0 ? ' neg' : '') + '"><i style="width:' + Math.min(100, Math.abs(mg)).toFixed(0) + '%"></i></span>'
       + '<b class="ct-mgv' + (mg < 0 ? ' neg' : '') + '">' + (mg >= 0 ? '' : '−') + Math.abs(mg).toFixed(0) + '%</b></span></td>'
       + '<td class="ct-c">' + (on ? '<span class="ct-nowtx">ใช้อยู่</span>'
@@ -47396,9 +47406,10 @@ function ctPlanHtml(){
     + '<div><b>Tier ราคา · 5 ระดับ</b><span class="ct-sub">ต้นทุนชุดเดียวกัน เทียบ 5 ราคาพร้อมกัน</span></div>'
     + '<button class="ct-mini" title="เติมราคา 5 ระดับจากราคาปัจจุบัน" onclick="ctTierSpread()">กระจายจากราคาปัจจุบัน</button></div>'
     + '<div class="ct-scroll"><table class="ct-tbl ct-ttbl"><thead><tr><th>Tier</th><th class="ct-r">ราคา/หัว</th>'
-    + '<th class="ct-r">จุดคุ้มทุน</th><th class="ct-r">กำไร · ที่ ' + pax + ' คน</th><th class="ct-r">Margin</th><th class="ct-c"></th></tr></thead>'
+    + '<th class="ct-r">จุดคุ้มทุน</th><th class="ct-r">กำไร · ที่ ' + pax + ' คน</th>'
+    + '<th class="ct-r">กำไร · เต็มลำ ' + cap + ' คน</th><th class="ct-r">Margin</th><th class="ct-c"></th></tr></thead>'
     + '<tbody>' + trows + '</tbody></table></div>'
-    + '<div class="ct-foot2">คุ้มทุน = จำนวนคนน้อยที่สุดที่กำไรเป็นบวก (ไล่ทีละคน เพราะค่าจ้างเป็นขั้นบันได) · Margin = กำไร ÷ รายได้สุทธิ</div></div>';
+    + '<div class="ct-foot2">คุ้มทุน = จำนวนคนน้อยที่สุดที่กำไรเป็นบวก (ไล่ทีละคน เพราะค่าจ้างเป็นขั้นบันได) · เต็มลำ = ' + cap + ' คน คือเพดานกำไรของราคานั้น · Margin = กำไร ÷ รายได้สุทธิ ที่ ' + pax + ' คน</div></div>';
 
   // ── สรุปกำไร ──
   var sr = function(a, b, cls){ return '<div class="ct-sr' + (cls ? (' ' + cls) : '') + '"><span>' + a + '</span><span>' + b + '</span></div>'; };
