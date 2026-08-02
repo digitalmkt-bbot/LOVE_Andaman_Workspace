@@ -804,6 +804,20 @@
 #view-costing .ct-lg i.neg{background:#fda4a4} #view-costing .ct-lg i.pos{background:#7adbb5}
 #view-costing .ct-lg i.be{background:var(--mt700)} #view-costing .ct-lg i.st{background:#f59e0b}
 
+/* §ctFx · สูตรใต้ชื่อรายการ */
+#view-costing .ct-fx{display:block;font-size:9px;color:rgba(74,62,54,.42);font-weight:400;margin-top:1px;
+  font-variant-numeric:tabular-nums;line-height:1.35}
+
+/* §ctPnl3 · บีบบรรทัดการ์ดสรุปรายได้ */
+#view-costing .ct-trio .ct-pnl{padding:12px 14px}
+#view-costing .ct-trio .ct-pnl .ct-sr{padding:3px 0;font-size:11.5px}
+#view-costing .ct-trio .ct-pnl .ct-sr small{font-size:9px;margin-top:0}
+#view-costing .ct-trio .ct-pnl .ct-sr.sm{padding:1.5px 0;font-size:10px}
+#view-costing .ct-trio .ct-pnl .ct-pblk{margin-top:7px;padding-top:6px}
+#view-costing .ct-trio .ct-pnl .ct-pblkh{font-size:8.5px;margin-bottom:2px}
+#view-costing .ct-trio .ct-pnl .ct-phl{padding:5px 9px;margin-top:6px}
+#view-costing .ct-trio .ct-pnl .ct-sr.tot{padding:9px 11px;font-size:13.5px;margin-top:7px}
+
 /* §ctPnl2 · รายละเอียดเพิ่มในการ์ดสรุปรายได้ */
 #view-costing .ct-sr.sm{font-size:10.5px;padding:3px 0;color:rgba(74,62,54,.75)}
 #view-costing .ct-sr.sm span:last-child{font-weight:600}
@@ -47297,6 +47311,37 @@ function ctHeat(t){
   return 'rgb(' + o.join(',') + ')';
 }
 function ctHeatW(t){ t = +t || 0; return (t > 0.75) ? 700 : ((t > 0.45) ? 600 : 500); }
+// §ctFx · อธิบายว่ายอดนั้นมาจากอะไรคูณอะไร
+function _ctFxN(v){ return (Math.round((+v || 0) * 100) / 100).toLocaleString(); }
+function ctPartDesc(p, ctx){
+  if(!p) return '';
+  var boats = Math.max(1, +ctx.boats || 1), perBoat = (p.per === 'boat' && boats > 1) ? (' × ' + boats + ' ลำ') : '';
+  if(p.k === 'fix'){
+    var q = (ctx.eng === '4EN' && p.q4 != null) ? p.q4 : p.q;
+    var u = (ctx.eng === '4EN' && p.u4 != null) ? p.u4 : p.u;
+    if(p.fuel) return _ctFxN(q) + ' ล. × ฿' + _ctFxN(ctx.fuel) + perBoat;
+    return _ctFxN(q) + ' × ฿' + _ctFxN(u) + perBoat;
+  }
+  if(p.k === 'var'){
+    if(p.fuel) return _ctFxN(p.q) + ' ล./คน × ฿' + _ctFxN(ctx.fuel) + ' × ' + (+ctx.pax || 0) + ' คน';
+    if(p.uTH != null && (+ctx.paxTH || 0) > 0)
+      return '฿' + _ctFxN(p.u) + ' × ' + (+ctx.paxFR || 0) + ' ตปท. + ฿' + _ctFxN(p.uTH) + ' × ' + (+ctx.paxTH || 0) + ' ไทย';
+    return '฿' + _ctFxN(p.u) + ' × ' + (+ctx.pax || 0) + ' คน';
+  }
+  if(p.mode === 'over'){
+    var on = ((+ctx.pax || 0) > (+p.over || 0)) ? (+p.add || 1) : 0;
+    return 'เกิน ' + _ctFxN(p.over) + ' คน → ' + on + ' × ฿' + _ctFxN(p.u);
+  }
+  var cnt = Math.max(+p.min || 0, Math.ceil((+ctx.pax || 0) / Math.max(1, +p.every || 1)));
+  return 'ทุกๆ ' + _ctFxN(p.every) + ' คน → ' + cnt + ' × ฿' + _ctFxN(p.u);
+}
+function ctLineFx(ln, pl, ctx, mul){
+  if(!ln) return '';
+  var L = ctEffLine(ln, pl);
+  var txt = (L.parts || []).map(function(p){ return ctPartDesc(p, ctx); }).filter(Boolean).join('  +  ');
+  if(mul && mul !== 1) txt += '  ·  ปรับ ' + (mul > 1 ? '+' : '−') + Math.round(Math.abs(mul - 1) * 100) + '%';
+  return txt;
+}
 function ctN(n){ return Math.round(n || 0).toLocaleString(); }
 var CT_ICON = {
   compass:'<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
@@ -47414,6 +47459,9 @@ function ctPlanHtml(){
     gLn[r.g].push(r);
   });
   var gTot = cur.c.gross || 1;
+  var _th  = Math.min(Math.max(0, +pl.paxTH || 0), pax);
+  var fxCtx = { eng:pl.eng, boats:Math.max(1, +pl.boats || 1), fuel:+pl.fuel || 0, pax:pax, paxTH:_th, paxFR:pax - _th };
+  var fxLn = {}; (T.lines || []).forEach(function(l){ fxLn[l.id] = l; });   // §ctFx
   var maxSh = 0;                                       // §ctHeat · เทียบกับหมวดที่กินเงินมากที่สุดของแผนนี้
   gOrder.forEach(function(g){ var v = gAgg[g].amt / gTot * 100; if(v > maxSh) maxSh = v; });
   var KL = { f:'คงที่', v:'ผันแปร', m:'ผสม' };
@@ -47433,7 +47481,9 @@ function ctPlanHtml(){
        +  '<td>' + tag(kOf(A.fix, A.varr)) + '</td><td class="ct-r">' + nz(A.amt) + '</td>'
        +  '<td class="ct-r vat">' + nz(A.vat) + '</td><td class="ct-r">' + nz(A.net) + '</td></tr>';
     gLn[g].forEach(function(r){
-      tr += '<tr class="ct-lr' + (op ? ' on' : '') + '"><td>' + ctE(r.l) + '</td><td>' + tag(kOf(r.fix, r.varr)) + '</td>'
+      var fx = ctLineFx(fxLn[r.id], pl, fxCtx, ctGrpMul(pl, g));            // §ctFx
+      tr += '<tr class="ct-lr' + (op ? ' on' : '') + '"><td>' + ctE(r.l)
+         +  (fx ? ('<span class="ct-fx">' + ctE(fx) + '</span>') : '') + '</td><td>' + tag(kOf(r.fix, r.varr)) + '</td>'
          +  '<td class="ct-r">' + nz(r.amt) + '</td><td class="ct-r vat">' + nz(r.vatAmt) + '</td>'
          +  '<td class="ct-r">' + nz(r.net) + '</td></tr>';
     });
