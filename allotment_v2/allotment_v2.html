@@ -804,6 +804,43 @@
 #view-costing .ct-lg i.neg{background:#fda4a4} #view-costing .ct-lg i.pos{background:#7adbb5}
 #view-costing .ct-lg i.be{background:var(--mt700)} #view-costing .ct-lg i.st{background:#f59e0b}
 
+/* §ctItin · เส้นทาง | กราฟ | สรุปรายได้ · สูงเท่ากันทั้งสามใบ */
+#view-costing .ct-trio{display:grid;grid-template-columns:328px 1fr 274px;gap:18px;align-items:stretch}
+#view-costing .ct-trio > .ct-card{display:flex;flex-direction:column;min-height:0;max-height:560px;overflow:hidden}
+#view-costing .ct-trio .ct-card-h{flex:none;padding:12px 15px}
+#view-costing .ct-chartbody{display:flex;flex-direction:column;flex:1;min-height:0;padding-bottom:12px}
+#view-costing .ct-plot{flex:1;min-height:90px;margin:14px 20px 0}
+#view-costing .ct-xax,#view-costing .ct-lg{flex:none}
+#view-costing .ct-itbody{display:flex;flex-direction:column;flex:1;min-height:0}
+#view-costing .ct-ihead{display:grid;grid-template-columns:58px 1fr 40px 14px;gap:5px;padding:5px 13px;flex:none;
+  background:rgba(253,251,247,.8);border-bottom:1px solid var(--sd100);font-size:8.5px;font-weight:600;
+  color:rgba(74,62,54,.5);letter-spacing:.04em;text-transform:uppercase}
+#view-costing .ct-ihead .r{text-align:right}
+#view-costing .ct-itscroll{flex:1;min-height:0;overflow-y:auto;padding:4px 13px}
+#view-costing .ct-itscroll::-webkit-scrollbar{width:5px}
+#view-costing .ct-itscroll::-webkit-scrollbar-thumb{background:var(--sd300);border-radius:3px}
+#view-costing .ct-ir{display:grid;grid-template-columns:58px 1fr 40px 14px;gap:5px;align-items:center}
+#view-costing .ct-iin{border:1px solid transparent;background:transparent;border-radius:5px;padding:1px 4px;height:20px;
+  font-family:inherit;font-size:10.5px;font-weight:500;color:var(--es900);outline:none;width:100%;min-width:0}
+#view-costing .ct-iin.t{font-variant-numeric:tabular-nums;font-weight:600;color:var(--b600);text-align:right;font-size:10px}
+#view-costing .ct-iin.km{font-variant-numeric:tabular-nums;text-align:right;color:rgba(74,62,54,.7);font-size:10px}
+#view-costing .ct-iin:hover{border-color:var(--sd200);background:#fff}
+#view-costing .ct-iin:focus{border-color:var(--b500);background:#fff;box-shadow:0 0 0 2px var(--b50)}
+#view-costing .ct-iin::placeholder{color:var(--sd400);font-weight:400}
+#view-costing .ct-ir.hi .ct-iin{font-weight:700}
+#view-costing .ct-ix{border:none;background:transparent;color:var(--sd400);cursor:pointer;font-size:12px;padding:0;opacity:0;line-height:1}
+#view-costing .ct-ir:hover .ct-ix{opacity:1}
+#view-costing .ct-ix:hover{color:#d63b3b}
+#view-costing .ct-iempty{padding:16px 6px;text-align:center;color:rgba(74,62,54,.4);font-size:10.5px}
+#view-costing .ct-iadd{width:100%;border:none;border-top:1px dashed var(--sd200);background:transparent;flex:none;
+  color:rgba(74,62,54,.55);padding:7px;font-family:inherit;font-size:9.5px;font-weight:600;cursor:pointer}
+#view-costing .ct-iadd:hover{color:var(--b500);background:rgba(253,251,247,.8)}
+#view-costing .ct-ifoot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 13px;flex:none;
+  background:var(--b50);border-top:1px solid var(--b100);font-size:10px;color:var(--b600);font-weight:600}
+#view-costing .ct-ifoot b{font-variant-numeric:tabular-nums;font-size:11.5px}
+#view-costing .ct-trio .ct-pnl{display:flex;flex-direction:column;flex:1;min-height:0;padding:14px 16px}
+#view-costing .ct-trio .ct-sr.tot{margin-top:auto}
+
 /* §ctPair · กราฟ + สรุปรายได้ อยู่คู่กัน */
 #view-costing .ct-pair{display:grid;grid-template-columns:1fr 300px;gap:18px;align-items:start}
 #view-costing .ct-pair .ct-chart{padding-bottom:6px}
@@ -894,6 +931,9 @@
 @media (max-width:1180px){
   #view-costing .ct-duo{grid-template-columns:1fr}
   #view-costing .ct-pair{grid-template-columns:1fr}
+  #view-costing .ct-trio{grid-template-columns:1fr}
+  #view-costing .ct-trio > .ct-card{max-height:none}
+  #view-costing .ct-plot{min-height:130px}
 }
 
 /* แถบหัวของแท็บ 2 / 3 */
@@ -47427,20 +47467,41 @@ function ctPlanHtml(){
     pts.push({ n:i, p:pr3, jump:(i > 1 && st > prev) }); prev = st;
     if(pr3 > mx) mx = pr3; if(pr3 < mn) mn = pr3;
   }
-  var H = 138, span = (mx - mn) || 1, z = H * (mx / span), bars = '';
+  // §ctItin · คิดเป็น % แทน px เพื่อให้กราฟยืดตามความสูงแถวได้
+  var span = (mx - mn) || 1, z = mx / span * 100, bars = '';
   pts.forEach(function(o){
-    var hgt = Math.abs(o.p) / span * H, top = o.p >= 0 ? (z - hgt) : z;
+    var hgt = Math.abs(o.p) / span * 100, top = o.p >= 0 ? (z - hgt) : z;
     var cls = (be && o.n === be) ? 'be' : (o.jump ? 'st' : (o.p >= 0 ? 'pos' : 'neg'));
     bars += '<div class="ct-cb" title="' + o.n + ' คน · ' + ctB(o.p) + '"><i class="' + cls
-         +  '" style="top:' + top.toFixed(1) + 'px;height:' + Math.max(1, hgt).toFixed(1) + 'px"></i></div>';
+         +  '" style="top:' + top.toFixed(2) + '%;height:' + Math.max(0.4, hgt).toFixed(2) + '%"></i></div>';
   });
   var chart = '<div class="ct-card ct-chart"><div class="ct-card-h"><b>กำไรตามจำนวนคน · 1 ถึง ' + cap + '</b></div>'
-    + '<div class="ct-plot" style="height:' + H + 'px"><div class="ct-zero" style="top:' + z.toFixed(1) + 'px"></div>' + bars + '</div>'
+    + '<div class="ct-chartbody">'
+    + '<div class="ct-plot"><div class="ct-zero" style="top:' + z.toFixed(2) + '%"></div>' + bars + '</div>'
     + '<div class="ct-xax"><span>1</span><span>' + (be ? (be + ' ← คุ้มทุน') : '') + '</span><span>' + cap + ' เต็มลำ</span></div>'
-    + '<div class="ct-lg"><span><i class="neg"></i>ขาดทุน</span><span><i class="be"></i>จุดคุ้มทุน</span><span><i class="pos"></i>กำไร</span><span><i class="st"></i>ขั้นบันไดเพิ่ม (ไกด์/เด็กเรือ)</span></div></div>';
+    + '<div class="ct-lg"><span><i class="neg"></i>ขาดทุน</span><span><i class="be"></i>จุดคุ้มทุน</span><span><i class="pos"></i>กำไร</span><span><i class="st"></i>ขั้นบันไดเพิ่ม (ไกด์/เด็กเรือ)</span></div></div></div>';
+
+  // ── รายละเอียดเส้นทาง (§ctItin) ──
+  var IA = ctItin(pl), km = ctItinKm(IA);
+  var irows = IA.length ? IA.map(function(r, i){
+    return '<div class="ct-ir' + (i === IA.length - 1 ? ' hi' : '') + '">'
+      + '<input class="ct-iin t" data-fk="it.' + i + '.t" value="' + ctE(r.t) + '" placeholder="เวลา" oninput="ctItinSet(' + i + ',\'t\',this.value)">'
+      + '<input class="ct-iin" data-fk="it.' + i + '.a" value="' + ctE(r.a) + '" placeholder="กิจกรรม" oninput="ctItinSet(' + i + ',\'a\',this.value)">'
+      + '<input class="ct-iin km" data-fk="it.' + i + '.k" value="' + ctE(r.k) + '" placeholder="—" oninput="ctItinSet(' + i + ',\'k\',this.value)">'
+      + '<button class="ct-ix" title="ลบบรรทัดนี้" onclick="ctItinDel(' + i + ')">×</button></div>';
+  }).join('') : '<div class="ct-iempty">ยังไม่มีรายการ · กด “เพิ่มบรรทัด”</div>';
+  var itin = '<div class="ct-card ct-itcard"><div class="ct-card-h split">'
+    + '<div><b>รายละเอียดเส้นทาง</b></div>'
+    + '<button class="ct-mini" title="จัดลำดับตามเวลา" onclick="ctItinSort()">เรียงเวลา</button></div>'
+    + '<div class="ct-itbody">'
+    + '<div class="ct-ihead"><span class="r">เวลา</span><span>กิจกรรม</span><span class="r">กม.</span><span></span></div>'
+    + '<div class="ct-itscroll">' + irows + '</div>'
+    + '<button class="ct-iadd" onclick="ctItinAdd()">+ เพิ่มบรรทัด</button>'
+    + '<div class="ct-ifoot"><span>รวมระยะทาง</span><b>' + (km == null ? '—' : km.toLocaleString()) + ' กม.</b></div>'
+    + '</div></div>';
 
   return '<div class="ct-wrap">' + side + '<div class="ct-main">' + head + params + kpi
-    + '<div class="ct-pair">' + chart + pnl + '</div>'
+    + '<div class="ct-trio">' + itin + chart + pnl + '</div>'
     + '<div class="ct-duo">' + tier + tbl + '</div></div></div>';
 }
 function ctPickPlan(id){ _ct.pid = id; ctRender(); }
@@ -47469,6 +47530,37 @@ function ctTierSpread(){
   ctPlanPut(pl); ctRender();
 }
 function ctTierUse(p){ ctPlanSet('price', p); }
+// §ctItin · รายละเอียดเส้นทางรายแผน · [{t:เวลา, a:กิจกรรม, k:กม.}]
+function ctItin(pl){ return (pl && Array.isArray(pl.itin)) ? pl.itin : []; }
+function _ctItinPut(A){ var pl = ctPlan(_ct.pid); if(!pl) return; pl.itin = A; ctPlanPut(pl); ctRender(); }
+function ctItinSet(i, k, v){
+  var pl = ctPlan(_ct.pid); if(!pl) return;
+  var A = ctItin(pl).map(function(x){ return { t:x.t, a:x.a, k:x.k }; });
+  if(!A[i]) return;
+  A[i][k] = String(v == null ? '' : v);
+  _ctItinPut(A);
+}
+function ctItinAdd(){
+  var pl = ctPlan(_ct.pid); if(!pl) return;
+  var A = ctItin(pl).map(function(x){ return { t:x.t, a:x.a, k:x.k }; });
+  A.push({ t:'', a:'', k:'' }); _ctItinPut(A);
+}
+function ctItinDel(i){
+  var pl = ctPlan(_ct.pid); if(!pl) return;
+  var A = ctItin(pl).map(function(x){ return { t:x.t, a:x.a, k:x.k }; });
+  A.splice(i, 1); _ctItinPut(A);
+}
+function ctItinSort(){
+  var pl = ctPlan(_ct.pid); if(!pl) return;
+  var A = ctItin(pl).map(function(x){ return { t:x.t, a:x.a, k:x.k }; });
+  A.sort(function(a, b){ return String(a.t || '').localeCompare(String(b.t || '')); });
+  _ctItinPut(A);
+}
+function ctItinKm(A){
+  var t = 0, n = 0;
+  (A || []).forEach(function(r){ var v = parseFloat(r.k); if(!isNaN(v)){ t += v; n++; } });
+  return n ? (Math.round(t * 10) / 10) : null;
+}
 // §ctCompact · กาง/หุบหมวดในตารางรายละเอียด
 function ctGrpOpen(g){ _ct.gop = _ct.gop || {}; if(_ct.gop[g]) delete _ct.gop[g]; else _ct.gop[g] = 1; ctRender(); }
 function ctGrpOpenAll(){
