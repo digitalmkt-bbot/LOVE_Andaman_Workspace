@@ -804,6 +804,26 @@
 #view-costing .ct-lg i.neg{background:#fda4a4} #view-costing .ct-lg i.pos{background:#7adbb5}
 #view-costing .ct-lg i.be{background:var(--mt700)} #view-costing .ct-lg i.st{background:#f59e0b}
 
+/* §ctPnl2 · รายละเอียดเพิ่มในการ์ดสรุปรายได้ */
+#view-costing .ct-sr.sm{font-size:10.5px;padding:3px 0;color:rgba(74,62,54,.75)}
+#view-costing .ct-sr.sm span:last-child{font-weight:600}
+#view-costing .ct-sr.sm em{font-style:normal;display:inline-flex;align-items:center;justify-content:center;
+  width:12px;height:12px;border-radius:50%;background:var(--sd100);color:rgba(74,62,54,.45);
+  font-size:8px;font-weight:700;margin-left:5px;cursor:help;vertical-align:1px}
+#view-costing .ct-pblk{border-top:1px dashed var(--sd200);margin-top:9px;padding-top:8px}
+#view-costing .ct-pblkh{font-size:9px;font-weight:700;color:rgba(74,62,54,.45);letter-spacing:.06em;
+  text-transform:uppercase;margin-bottom:3px}
+#view-costing .ct-pn{color:var(--mt700);font-weight:700} #view-costing .ct-pn.neg{color:#d63b3b}
+#view-costing .ct-phl{background:var(--mt50);border:1px solid var(--mt100);border-radius:10px;padding:7px 10px;margin-top:8px}
+#view-costing .ct-phl .ct-sr.sm{color:var(--mt700);padding:2px 0}
+#view-costing .ct-phl .ct-sr.sm span:last-child{color:var(--mt700);font-weight:700}
+#view-costing .ct-phl .ct-sr.sm em{background:rgba(255,255,255,.75);color:var(--mt700)}
+#view-costing .ct-phl.warn{background:#fff7ed;border-color:#fed7aa}
+#view-costing .ct-phl.warn .ct-sr.sm,#view-costing .ct-phl.warn .ct-sr.sm span:last-child{color:#c2410c}
+#view-costing .ct-phl.bad{background:#fdf0ee;border-color:#f6cfc7}
+#view-costing .ct-phl.bad .ct-sr.sm,#view-costing .ct-phl.bad .ct-sr.sm span:last-child{color:#d63b3b}
+#view-costing .ct-phl.ok{background:var(--mt50);border-color:var(--mt100)}
+
 /* §ctItin · เส้นทาง | กราฟ | สรุปรายได้ · สูงเท่ากันทั้งสามใบ */
 #view-costing .ct-trio{display:grid;grid-template-columns:328px 1fr 274px;gap:18px;align-items:stretch}
 #view-costing .ct-trio > .ct-card{display:flex;flex-direction:column;min-height:0;max-height:560px;overflow:hidden}
@@ -47269,6 +47289,14 @@ function ctBreakEven(pl, cap, tpl){
 var _ct = { tab:'plan', pid:'' };   // สถานะหน้าจอ · แท็บที่เปิด + แผนที่เลือก
 function ctE(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function ctB(n){ return '฿' + Math.round(n || 0).toLocaleString(); }
+// §ctHeat · ไล่สีทราย → ส้มแบรนด์ ตามสัดส่วน 0..1
+function ctHeat(t){
+  t = Math.max(0, Math.min(1, +t || 0));
+  var a = [201, 188, 174], b = [255, 76, 0], o = [];
+  for(var i = 0; i < 3; i++) o.push(Math.round(a[i] + (b[i] - a[i]) * t));
+  return 'rgb(' + o.join(',') + ')';
+}
+function ctHeatW(t){ t = +t || 0; return (t > 0.75) ? 700 : ((t > 0.45) ? 600 : 500); }
 function ctN(n){ return Math.round(n || 0).toLocaleString(); }
 var CT_ICON = {
   compass:'<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
@@ -47386,6 +47414,8 @@ function ctPlanHtml(){
     gLn[r.g].push(r);
   });
   var gTot = cur.c.gross || 1;
+  var maxSh = 0;                                       // §ctHeat · เทียบกับหมวดที่กินเงินมากที่สุดของแผนนี้
+  gOrder.forEach(function(g){ var v = gAgg[g].amt / gTot * 100; if(v > maxSh) maxSh = v; });
   var KL = { f:'คงที่', v:'ผันแปร', m:'ผสม' };
   var kOf = function(f, v){ return (f > 0 && v > 0) ? 'm' : (v > 0 ? 'v' : 'f'); };
   var tag = function(k){ return '<span class="ct-tag ' + k + '">' + KL[k] + '</span>'; };
@@ -47396,7 +47426,9 @@ function ctPlanHtml(){
     var gp = ctGrpCfg(pl, g), pct = +gp.pct || 0, sh = Math.round(A.amt / gTot * 100);
     tr += '<tr class="ct-gr' + (op ? ' op' : '') + '" onclick="ctGrpOpen(\'' + ctE(g) + '\')">'
        +  '<td><span class="ct-gnm"><i class="ct-chev">▶</i>' + ctE(g) + '</span>'
-       +  '<span class="ct-pbar"><i style="width:' + sh + '%"></i></span><span class="ct-share">' + sh + '%</span>'
+       +  '<span class="ct-pbar"><i style="width:' + sh + '%"></i></span>'
+       +  '<span class="ct-share" style="color:' + ctHeat(maxSh ? (A.amt / gTot * 100 / maxSh) : 0)
+       +  ';font-weight:' + ctHeatW(maxSh ? (A.amt / gTot * 100 / maxSh) : 0) + '">' + sh + '%</span>'
        +  (pct ? ('<span class="ct-pct">' + (pct > 0 ? '+' : '') + pct + '%</span>') : '') + '</td>'
        +  '<td>' + tag(kOf(A.fix, A.varr)) + '</td><td class="ct-r">' + nz(A.amt) + '</td>'
        +  '<td class="ct-r vat">' + nz(A.vat) + '</td><td class="ct-r">' + nz(A.net) + '</td></tr>';
@@ -47451,13 +47483,32 @@ function ctPlanHtml(){
     + '<tbody>' + trows + '</tbody></table></div>'
     + '<div class="ct-foot2">คุ้มทุน = จำนวนคนน้อยที่สุดที่กำไรเป็นบวก (ไล่ทีละคน เพราะค่าจ้างเป็นขั้นบันได) · เต็มลำ = ' + cap + ' คน คือเพดานกำไรของราคานั้น · Margin = กำไร ÷ รายได้สุทธิ ที่ ' + pax + ' คน</div></div>';
 
-  // ── สรุปกำไร ──
-  var sr = function(a, b, cls){ return '<div class="ct-sr' + (cls ? (' ' + cls) : '') + '"><span>' + a + '</span><span>' + b + '</span></div>'; };
+  // ── สรุปกำไร (§ctPnl2) ──
+  var sr  = function(a, b, cls){ return '<div class="ct-sr' + (cls ? (' ' + cls) : '') + '"><span>' + a + '</span><span>' + b + '</span></div>'; };
+  var sr2 = function(a, b){ return '<div class="ct-sr sm"><span>' + a + '</span><span>' + b + '</span></div>'; };
+  var pn      = Math.max(1, pax);
+  var revPer  = cur.rev / pn, cstPer = cur.c.net / pn, pfPer = cur.p / pn;
+  var varPer  = cur.c.varNet / pn, contrib = revPer - varPer;
+  var denom   = pn * (1 - R) * (1 - (+pl.comm || 0) / 100);
+  var bePrice = (denom > 0) ? (cur.c.net / denom) : 0;
+  var sfCls = 'warn', sfTx = 'อยู่พอดีจุดคุ้มทุน';
+  if(be == null){ sfCls = 'bad'; sfTx = 'เต็มลำยังไม่คุ้ม'; }
+  else if(pax > be){ sfCls = 'ok'; sfTx = 'เกินคุ้มทุน ' + (pax - be) + ' คน (' + Math.round((pax - be) / cap * 100) + '% ของความจุ)'; }
+  else if(pax < be){ sfCls = 'bad'; sfTx = 'ขาดอีก ' + (be - pax) + ' คน'; }
   var pnl = '<div class="ct-card ct-pnl">'
     + sr('รายได้ (รวม VAT)', ctB(pax * (+pl.price || 0)))
     + sr('− ภาษีขาย', '−' + ctB(vout))
     + sr('= รายได้สุทธิ' + ((+pl.comm) ? (' (หลังคอม ' + pl.comm + '%)') : ''), ctB(cur.rev))
-    + sr('ต้นทุนสุทธิ<small>คงที่ ' + ctB(cur.c.fixNet) + ' + ผันแปร ' + ctB(pax ? cur.c.varNet / pax : 0) + '/คน</small>', '−' + ctB(cur.c.net))
+    + sr('ต้นทุนสุทธิ<small>คงที่ ' + ctB(cur.c.fixNet) + ' + ผันแปร ' + ctB(varPer) + '/คน</small>', '−' + ctB(cur.c.net))
+    + '<div class="ct-pblk"><div class="ct-pblkh">ต่อหัว · ' + pax + ' คน</div>'
+    +   sr2('รายได้สุทธิ', ctB(revPer)) + sr2('ต้นทุน', ctB(cstPer))
+    +   sr2('กำไร', '<b class="ct-pn' + (cur.p < 0 ? ' neg' : '') + '">' + (cur.p >= 0 ? '+' : '−') + ctB(Math.abs(pfPer)) + '</b>')
+    + '</div>'
+    + '<div class="ct-phl">'
+    +   sr2('เหลือจ่ายค่าคงที่ / คน<em title="รายได้สุทธิต่อหัว ลบ ต้นทุนผันแปรต่อหัว · เรือออกอยู่แล้ว รับเพิ่ม 1 คนได้เท่านี้">?</em>', ctB(contrib))
+    +   sr2('ราคาต่ำสุดที่ไม่ขาดทุน<em title="ที่ ' + pax + ' คนนี้ ต่ำกว่านี้ขาดทุนทันที">?</em>', ctB(bePrice))
+    + '</div>'
+    + '<div class="ct-phl ' + sfCls + '">' + sr2('ห่างจุดคุ้มทุน', sfTx) + '</div>'
     + sr('กำไร', (cur.p >= 0 ? '+' : '') + ctB(cur.p), 'tot' + (cur.p < 0 ? ' neg' : '')) + '</div>';
 
   // ── กราฟกำไรตามจำนวนคน ──
