@@ -804,6 +804,90 @@
 #view-costing .ct-lg i.neg{background:#fda4a4} #view-costing .ct-lg i.pos{background:#7adbb5}
 #view-costing .ct-lg i.be{background:var(--mt700)} #view-costing .ct-lg i.st{background:#f59e0b}
 
+/* §ctPair · กราฟ + สรุปรายได้ อยู่คู่กัน */
+#view-costing .ct-pair{display:grid;grid-template-columns:1fr 300px;gap:18px;align-items:start}
+#view-costing .ct-pair .ct-chart{padding-bottom:6px}
+#view-costing .ct-sr small{display:block;font-size:10px;color:rgba(74,62,54,.45);font-weight:400;margin-top:1px}
+#view-costing .ct-sr.tot{border-top:none;margin-top:9px;padding:10px 12px;background:var(--b50);border:1px solid var(--b100);border-radius:12px}
+#view-costing .ct-sr.tot span:last-child{color:var(--b500)}
+#view-costing .ct-sr.tot.neg span:last-child{color:#d63b3b}
+
+/* §ctTier + §ctCompact · สองตารางเรียงคู่ */
+#view-costing .ct-duo{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+#view-costing .ct-duo .ct-card-h{padding:12px 15px}
+#view-costing .ct-duo .ct-card-h .ct-sub{display:none}
+#view-costing .ct-duo table{table-layout:fixed;font-size:11px}
+#view-costing .ct-duo .ct-tbl th{padding:8px 10px;font-size:9px}
+#view-costing .ct-duo .ct-tbl td{padding:5px 10px}
+#view-costing .ct-fv{display:flex;gap:8px;align-items:center;font-size:10.5px;color:rgba(74,62,54,.6);white-space:nowrap}
+#view-costing .ct-fv b{color:var(--es900);font-variant-numeric:tabular-nums}
+#view-costing .ct-foot2{padding:8px 15px;background:rgba(253,251,247,.7);border-top:1px solid var(--sd100);
+  font-size:10px;color:rgba(74,62,54,.5);border-radius:0 0 22px 22px;line-height:1.6}
+
+/* ตารางกระชับ */
+#view-costing .ct-tbl2 th.ct-kd{width:13%}
+#view-costing .ct-tbl2 th:nth-child(1){width:44%}
+#view-costing .ct-tbl2 th:nth-child(3),#view-costing .ct-tbl2 th:nth-child(4),#view-costing .ct-tbl2 th:nth-child(5){width:14.3%}
+#view-costing .ct-gr td{cursor:pointer}
+#view-costing .ct-gr:hover td{background:var(--b50)}
+#view-costing .ct-gr.op td{background:var(--b50)}
+#view-costing .ct-gnm{display:inline-flex;align-items:center;gap:6px}
+#view-costing .ct-chev{font-style:normal;font-size:6.5px;color:rgba(74,62,54,.35);display:inline-block;width:8px;transition:transform .15s;flex:0 0 8px}
+#view-costing .ct-gr.op .ct-chev{transform:rotate(90deg);color:var(--b500)}
+#view-costing .ct-pbar{display:inline-block;width:30px;height:4px;border-radius:2px;background:var(--sd200);overflow:hidden;vertical-align:middle;margin:0 5px 0 7px}
+#view-costing .ct-pbar i{display:block;height:100%;background:var(--b300)}
+#view-costing .ct-lr{display:none} #view-costing .ct-lr.on{display:table-row}
+#view-costing .ct-lr td{color:rgba(74,62,54,.75);font-weight:400}
+#view-costing .ct-lr td:first-child{padding-left:32px}
+#view-costing .ct-tag{display:inline-block;font-size:8.5px;font-weight:700;padding:0 6px;border-radius:5px;line-height:16px;white-space:nowrap}
+#view-costing .ct-tag.f{background:var(--sd100);color:#7a6c5f;border:1px solid var(--sd200)}
+#view-costing .ct-tag.v{background:var(--b50);color:var(--b600);border:1px solid var(--b100)}
+#view-costing .ct-tag.m{background:var(--mt50);color:var(--mt700);border:1px solid var(--mt100)}
+#view-costing .ct-dm{color:var(--sd400)}
+#view-costing .ct-tbl tfoot td{background:var(--b50);color:var(--es900);border-top:1.5px solid var(--b300);padding:10px 14px}
+#view-costing .ct-tbl tfoot td.w{color:var(--es900)}
+#view-costing .ct-tbl tfoot td.o{color:var(--b600)}
+#view-costing .ct-tbl tfoot td.big{color:var(--b500);font-size:13.5px}
+
+/* ตาราง Tier */
+#view-costing .ct-ttbl th:nth-child(1){width:25%} #view-costing .ct-ttbl th:nth-child(2){width:15%}
+#view-costing .ct-ttbl th:nth-child(3){width:13%} #view-costing .ct-ttbl th:nth-child(4){width:17%}
+#view-costing .ct-ttbl th:nth-child(5){width:17%} #view-costing .ct-ttbl th:nth-child(6){width:13%}
+#view-costing .ct-duo .ct-mgb{width:26px;flex:0 0 26px}
+#view-costing .ct-duo .ct-cap2{width:36px}
+#view-costing .ct-duo .ct-tbl td{overflow:hidden}
+#view-costing .ct-duo .ct-pbar{display:none}
+#view-costing .ct-bev.bad{white-space:nowrap}
+#view-costing .ct-ttbl tr.on td{background:var(--b50)}
+#view-costing .ct-c{text-align:center}
+#view-costing .ct-tnm{display:inline-flex;align-items:center;gap:6px;width:100%}
+#view-costing .ct-nowdot{width:6px;height:6px;border-radius:50%;background:var(--b500);flex:0 0 6px}
+#view-costing .ct-nowtx{font-size:8.5px;font-weight:700;color:var(--b600)}
+#view-costing .ct-in.tn{width:100%;min-width:0;border-color:transparent;background:transparent;font-weight:600;text-align:left;padding:2px 6px}
+#view-costing .ct-in.tn:hover{border-color:var(--sd200);background:#fff}
+#view-costing .ct-in.tp{width:64px;height:25px;font-weight:700;text-align:right;font-size:11px;padding:0 7px}
+#view-costing .ct-bev{font-weight:700;font-variant-numeric:tabular-nums}
+#view-costing .ct-bev.bad{color:#d63b3b;font-size:10px}
+#view-costing .ct-bev em{font-style:normal;font-size:8.5px;color:rgba(74,62,54,.45);font-weight:500}
+#view-costing .ct-cap2{display:block;width:42px;height:4px;border-radius:2px;background:var(--sd200);overflow:hidden;margin:3px 0 0 auto}
+#view-costing .ct-cap2 i{display:block;height:100%;background:var(--mt500)}
+#view-costing .ct-cap2.bad i{background:#e88a8a}
+#view-costing .ct-pf{color:var(--mt700);font-weight:700;font-variant-numeric:tabular-nums}
+#view-costing .ct-pf.neg{color:#d63b3b}
+#view-costing .ct-mg{display:inline-flex;align-items:center;gap:5px;justify-content:flex-end}
+#view-costing .ct-mgb{width:34px;height:5px;border-radius:3px;background:var(--sd200);overflow:hidden;flex:0 0 34px}
+#view-costing .ct-mgb i{display:block;height:100%;background:var(--mt500)}
+#view-costing .ct-mgb.neg i{background:#d63b3b}
+#view-costing .ct-mgv{color:var(--mt700);font-weight:700} #view-costing .ct-mgv.neg{color:#d63b3b}
+#view-costing .ct-use{border:1px solid var(--sd200);background:#fff;color:rgba(74,62,54,.6);border-radius:7px;
+  padding:2px 6px;font-family:inherit;font-size:8.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+#view-costing .ct-use:hover{border-color:var(--b500);color:var(--b500);background:var(--b50)}
+
+@media (max-width:1180px){
+  #view-costing .ct-duo{grid-template-columns:1fr}
+  #view-costing .ct-pair{grid-template-columns:1fr}
+}
+
 /* แถบหัวของแท็บ 2 / 3 */
 #view-costing .ct-bar2{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:16px 20px;margin-bottom:16px}
 #view-costing .ct-bar2 b{font-size:14.5px;font-weight:700;color:var(--es900)}
@@ -46965,21 +47049,21 @@ function ctWrite(k, val){ try{ var d = laBlob(); d[k] = JSON.stringify(val); laB
 
 // ── สูตรกลางเริ่มต้น · ทีมแก้เองได้ทุกช่องในแท็บ "สูตรกลาง" ──────────────────────────────────────
 var CT_DEFAULT = { vatRate: 7, lines: [
-  { id:'park',  g:'อุทยาน',     l:'ค่าเข้าอุทยาน',           vat:false, parts:[{k:'var', u:500, uTH:100}] },
-  { id:'meal',  g:'ค่าอาหาร',   l:'ค่าอาหารบนเกาะ',          vat:false, parts:[{k:'var', u:280}] },
-  { id:'meal2', g:'ค่าอาหาร',   l:'อาหารเช้า / เย็น',        vat:false, parts:[{k:'var', u:100}] },
-  { id:'ob',    g:'ค่าอาหาร',   l:'ของบนเรือ',               vat:true,  parts:[{k:'var', u:31}] },
-  { id:'snk',   g:'ค่าอาหาร',   l:'ขนมเปี๊ยะ',                vat:false, parts:[{k:'var', u:19}] },
-  { id:'fuel',  g:'ค่าน้ำมัน',  l:'น้ำมันเรือ',              vat:true,  parts:[{k:'fix', per:'boat', q:360, q4:520, fuel:true}, {k:'var', q:0.4, fuel:true}] },
-  { id:'guide', g:'ค่าจ้าง',    l:'ไกด์',                    vat:false, parts:[{k:'step', mode:'every', every:25, min:1, u:1500}] },
-  { id:'cap',   g:'ค่าจ้าง',    l:'กัปตัน',                  vat:false, parts:[{k:'fix', per:'boat', q:1, u:900}] },
-  { id:'crew',  g:'ค่าจ้าง',    l:'เด็กเรือ',                vat:false, parts:[{k:'fix', per:'boat', q:2, q4:3, u:500}, {k:'step', mode:'over', over:40, add:1, u:500}] },
-  { id:'pier',  g:'ค่าเทียบท่า', l:'ค่าเรือเทียบท่า',        vat:true,  parts:[{k:'fix', per:'boat', q:1, u:400}] },
-  { id:'dep',   g:'อื่นๆ',       l:'ค่าเสื่อมเรือ',           vat:false, parts:[{k:'fix', per:'boat', q:1, u:3000, u4:5000}] },
-  { id:'con',   g:'อื่นๆ',       l:'วัสดุสิ้นเปลือง',         vat:true,  parts:[{k:'var', u:15}] },
-  { id:'ins',   g:'อื่นๆ',       l:'ประกันอุบัติเหตุลูกค้า',  vat:false, parts:[{k:'var', u:15}] },
-  { id:'gear',  g:'อื่นๆ',       l:'มาส์ก + ตีนกบ',           vat:true,  parts:[{k:'var', u:10}] },
-  { id:'med',   g:'อื่นๆ',       l:'ยาเมาเรือ + เสื้อกันฝน',  vat:true,  parts:[{k:'var', u:15}] }
+  { id:'park',  g:'ค่าธรรมเนียมอุทยานแห่งชาติ',     l:'ค่าเข้าอุทยาน',           vat:false, parts:[{k:'var', u:500, uTH:100}] },
+  { id:'meal',  g:'ค่าอาหารและเครื่องดื่ม',   l:'ค่าอาหารบนเกาะ',          vat:false, parts:[{k:'var', u:280}] },
+  { id:'meal2', g:'ค่าอาหารและเครื่องดื่ม',   l:'อาหารเช้า / เย็น',        vat:false, parts:[{k:'var', u:100}] },
+  { id:'ob',    g:'ค่าอาหารและเครื่องดื่ม',   l:'ของบนเรือ',               vat:true,  parts:[{k:'var', u:31}] },
+  { id:'snk',   g:'ค่าอาหารและเครื่องดื่ม',   l:'ขนมเปี๊ยะ',                vat:false, parts:[{k:'var', u:19}] },
+  { id:'fuel',  g:'ค่าเชื้อเพลิง',  l:'น้ำมันเรือ',              vat:true,  parts:[{k:'fix', per:'boat', q:360, q4:520, fuel:true}, {k:'var', q:0.4, fuel:true}] },
+  { id:'guide', g:'ค่าตอบแทนลูกเรือและไกด์',    l:'ไกด์',                    vat:false, parts:[{k:'step', mode:'every', every:25, min:1, u:1500}] },
+  { id:'cap',   g:'ค่าตอบแทนลูกเรือและไกด์',    l:'กัปตัน',                  vat:false, parts:[{k:'fix', per:'boat', q:1, u:900}] },
+  { id:'crew',  g:'ค่าตอบแทนลูกเรือและไกด์',    l:'เด็กเรือ',                vat:false, parts:[{k:'fix', per:'boat', q:2, q4:3, u:500}, {k:'step', mode:'over', over:40, add:1, u:500}] },
+  { id:'pier',  g:'ค่าธรรมเนียมท่าเทียบเรือ', l:'ค่าเรือเทียบท่า',        vat:true,  parts:[{k:'fix', per:'boat', q:1, u:400}] },
+  { id:'dep',   g:'ค่าใช้จ่ายดำเนินงานอื่น',       l:'ค่าเสื่อมเรือ',           vat:false, parts:[{k:'fix', per:'boat', q:1, u:3000, u4:5000}] },
+  { id:'con',   g:'ค่าใช้จ่ายดำเนินงานอื่น',       l:'วัสดุสิ้นเปลือง',         vat:true,  parts:[{k:'var', u:15}] },
+  { id:'ins',   g:'ค่าใช้จ่ายดำเนินงานอื่น',       l:'ประกันอุบัติเหตุลูกค้า',  vat:false, parts:[{k:'var', u:15}] },
+  { id:'gear',  g:'ค่าใช้จ่ายดำเนินงานอื่น',       l:'มาส์ก + ตีนกบ',           vat:true,  parts:[{k:'var', u:10}] },
+  { id:'med',   g:'ค่าใช้จ่ายดำเนินงานอื่น',       l:'ยาเมาเรือ + เสื้อกันฝน',  vat:true,  parts:[{k:'var', u:15}] }
 ]};
 function ctTpl(){
   var t = ctRead('cost_template');
@@ -47246,37 +47330,75 @@ function ctPlanHtml(){
       + '<div class="ct-k-split"><span>ภาษีขาย ' + ctB(vout) + '</span><span>·</span><span>ภาษีซื้อ ' + ctB(cur.c.vin) + '</span></div></div>'
     + '</div>';
 
-  // ── ตารางต้นทุน ──
-  var gAgg = {}, gOrder = [];
+  // ── ตารางต้นทุน · แบบกระชับ (§ctCompact) ──
+  var gAgg = {}, gOrder = [], gLn = {};
   cur.c.rows.forEach(function(r){
-    if(!gAgg[r.g]){ gAgg[r.g] = { fix:0, varr:0, amt:0, vat:0, net:0 }; gOrder.push(r.g); }
+    if(!gAgg[r.g]){ gAgg[r.g] = { fix:0, varr:0, amt:0, vat:0, net:0 }; gOrder.push(r.g); gLn[r.g] = []; }
     var a = gAgg[r.g]; a.fix += r.fix; a.varr += r.varr; a.amt += r.amt; a.vat += r.vatAmt; a.net += r.net;
+    gLn[r.g].push(r);
   });
-  var gTot = cur.c.gross || 1, lastG = '', tr = '';
-  var num = function(v, cls){ return '<td class="ct-r' + (cls ? (' ' + cls) : '') + (v ? '' : ' dim') + '">' + (v ? ctN(v) : '—') + '</td>'; };
-  cur.c.rows.forEach(function(r){
-    if(r.g !== lastG){
-      var gp = ctGrpCfg(pl, r.g), pct = +gp.pct || 0, A = gAgg[r.g];
-      tr += '<tr class="ct-gr"><td>' + ctE(r.g) + '<span class="ct-share">' + Math.round(A.amt / gTot * 100) + '% ของต้นทุน</span>'
-        + (pct ? ('<span class="ct-pct">' + (pct > 0 ? '+' : '') + pct + '%</span>') : '') + '</td>'
-        + num(A.fix) + num(A.varr) + num(A.amt) + num(A.vat, 'vat') + num(A.net) + '</tr>';
-      lastG = r.g;
-    }
-    tr += '<tr class="ct-lr"><td><i class="ct-bullet"></i>' + ctE(r.l) + '</td>'
-      + num(r.fix) + num(r.varr) + num(r.amt, 'b') + num(r.vatAmt, 'vat') + num(r.net, 'b') + '</tr>';
+  var gTot = cur.c.gross || 1;
+  var KL = { f:'คงที่', v:'ผันแปร', m:'ผสม' };
+  var kOf = function(f, v){ return (f > 0 && v > 0) ? 'm' : (v > 0 ? 'v' : 'f'); };
+  var tag = function(k){ return '<span class="ct-tag ' + k + '">' + KL[k] + '</span>'; };
+  var nz  = function(v){ return v ? ctN(v) : '<span class="ct-dm">—</span>'; };
+  var tr = '';
+  gOrder.forEach(function(g){
+    var A = gAgg[g], op = !!((_ct.gop || {})[g]);
+    var gp = ctGrpCfg(pl, g), pct = +gp.pct || 0, sh = Math.round(A.amt / gTot * 100);
+    tr += '<tr class="ct-gr' + (op ? ' op' : '') + '" onclick="ctGrpOpen(\'' + ctE(g) + '\')">'
+       +  '<td><span class="ct-gnm"><i class="ct-chev">▶</i>' + ctE(g) + '</span>'
+       +  '<span class="ct-pbar"><i style="width:' + sh + '%"></i></span><span class="ct-share">' + sh + '%</span>'
+       +  (pct ? ('<span class="ct-pct">' + (pct > 0 ? '+' : '') + pct + '%</span>') : '') + '</td>'
+       +  '<td>' + tag(kOf(A.fix, A.varr)) + '</td><td class="ct-r">' + nz(A.amt) + '</td>'
+       +  '<td class="ct-r vat">' + nz(A.vat) + '</td><td class="ct-r">' + nz(A.net) + '</td></tr>';
+    gLn[g].forEach(function(r){
+      tr += '<tr class="ct-lr' + (op ? ' on' : '') + '"><td>' + ctE(r.l) + '</td><td>' + tag(kOf(r.fix, r.varr)) + '</td>'
+         +  '<td class="ct-r">' + nz(r.amt) + '</td><td class="ct-r vat">' + nz(r.vatAmt) + '</td>'
+         +  '<td class="ct-r">' + nz(r.net) + '</td></tr>';
+    });
   });
-  var sf = cur.c.rows.reduce(function(s, r){ return s + r.fix; }, 0);
-  var sv = cur.c.rows.reduce(function(s, r){ return s + r.varr; }, 0);
+  var sf = cur.c.rows.reduce(function(a, r){ return a + r.fix; }, 0);
+  var sv = cur.c.rows.reduce(function(a, r){ return a + r.varr; }, 0);
+  var allOp = gOrder.length && gOrder.every(function(g){ return (_ct.gop || {})[g]; });
   var tbl = '<div class="ct-card ct-tblcard"><div class="ct-card-h split">'
-    + '<div><b>ตารางรายละเอียดต้นทุนตามหมวด · ที่ ' + pax + ' คน</b><span class="ct-sub">แยกต้นทุนคงที่ · ผันแปร · ภาษีซื้อ · ต้นทุนสุทธิ</span></div>'
-    + '<div class="ct-legend"><span><i class="s"></i>คงที่</span><span><i class="b"></i>ผันแปร</span></div></div>'
-    + '<div class="ct-scroll"><table class="ct-tbl"><thead><tr>'
-    + '<th>รายการ / สัดส่วน</th><th class="ct-r">ต้นทุนคงที่</th><th class="ct-r">ต้นทุนผันแปร</th>'
-    + '<th class="ct-r">จ่ายจริงรวม</th><th class="ct-r vat">ภาษีซื้อ (VAT)</th><th class="ct-r">ต้นทุนสุทธิ</th></tr></thead>'
-    + '<tbody>' + tr + '</tbody><tfoot><tr>'
-    + '<td>รวมต้นทุนทั้งหมด</td><td class="ct-r">' + ctN(sf) + '</td><td class="ct-r">' + ctN(sv) + '</td>'
+    + '<div><b>ต้นทุนตามหมวด · ' + pax + ' คน</b><span class="ct-sub">คลิกหมวดเพื่อดูรายการ</span></div>'
+    + '<div class="ct-fv"><span>คงที่ <b>' + ctN(sf) + '</b></span><span>·</span><span>ผันแปร <b>' + ctN(sv) + '</b></span>'
+    + '<button class="ct-mini" onclick="ctGrpOpenAll()">' + (allOp ? 'หุบทั้งหมด' : 'กางทั้งหมด') + '</button></div></div>'
+    + '<div class="ct-scroll"><table class="ct-tbl ct-tbl2"><thead><tr>'
+    + '<th>หมวด / รายการ</th><th class="ct-kd">ชนิด</th><th class="ct-r">จ่ายจริง</th>'
+    + '<th class="ct-r vat">ภาษีซื้อ</th><th class="ct-r">ต้นทุนสุทธิ</th></tr></thead>'
+    + '<tbody>' + tr + '</tbody><tfoot><tr><td>รวมต้นทุนทั้งหมด</td><td></td>'
     + '<td class="ct-r w">' + ctN(cur.c.gross) + '</td><td class="ct-r o">' + ctN(cur.c.vin) + '</td>'
     + '<td class="ct-r big">' + ctN(cur.c.net) + '</td></tr></tfoot></table></div></div>';
+
+  // ── Tier ราคา 5 ระดับ (§ctTier) ──
+  var trows = ctTiers(pl).map(function(t, i){
+    var pr = +t.p || 0, pl2 = {};
+    for(var kk in pl){ if(Object.prototype.hasOwnProperty.call(pl, kk)) pl2[kk] = pl[kk]; }
+    pl2.price = pr;
+    var b2 = ctBreakEven(pl2, cap, T), r2 = ctProfitAt(pl2, pax, T);
+    var mg = r2.rev ? (r2.p / r2.rev * 100) : 0;
+    var on = (pr === (+pl.price || 0)), bp = b2 ? Math.min(100, Math.round(b2 / cap * 100)) : 100;
+    return '<tr' + (on ? ' class="on"' : '') + '>'
+      + '<td><span class="ct-tnm">' + (on ? '<i class="ct-nowdot"></i>' : '')
+      + '<input class="ct-in tn" data-fk="tn.' + i + '" value="' + ctE(t.n) + '" oninput="ctTierSet(' + i + ',\'n\',this.value)"></span></td>'
+      + '<td class="ct-r"><input class="ct-in tp" data-fk="tp.' + i + '" value="' + pr + '" oninput="ctTierSet(' + i + ',\'p\',this.value)"></td>'
+      + '<td class="ct-r"><span class="ct-bev' + (b2 ? '' : ' bad') + '">' + (b2 ? (b2 + ' <em>คน</em>') : 'ไม่คุ้ม') + '</span>'
+      + '<span class="ct-cap2' + (b2 ? '' : ' bad') + '"><i style="width:' + bp + '%"></i></span></td>'
+      + '<td class="ct-r"><b class="ct-pf' + (r2.p < 0 ? ' neg' : '') + '">' + (r2.p >= 0 ? '+' : '−') + ctB(Math.abs(r2.p)) + '</b></td>'
+      + '<td class="ct-r"><span class="ct-mg"><span class="ct-mgb' + (mg < 0 ? ' neg' : '') + '"><i style="width:' + Math.min(100, Math.abs(mg)).toFixed(0) + '%"></i></span>'
+      + '<b class="ct-mgv' + (mg < 0 ? ' neg' : '') + '">' + (mg >= 0 ? '' : '−') + Math.abs(mg).toFixed(0) + '%</b></span></td>'
+      + '<td class="ct-c">' + (on ? '<span class="ct-nowtx">ใช้อยู่</span>'
+          : '<button class="ct-use" title="สลับแผนนี้ไปใช้ราคานั้น" onclick="ctTierUse(' + pr + ')">ใช้ราคานี้</button>') + '</td></tr>';
+  }).join('');
+  var tier = '<div class="ct-card ct-tblcard"><div class="ct-card-h split">'
+    + '<div><b>Tier ราคา · 5 ระดับ</b><span class="ct-sub">ต้นทุนชุดเดียวกัน เทียบ 5 ราคาพร้อมกัน</span></div>'
+    + '<button class="ct-mini" title="เติมราคา 5 ระดับจากราคาปัจจุบัน" onclick="ctTierSpread()">กระจายจากราคาปัจจุบัน</button></div>'
+    + '<div class="ct-scroll"><table class="ct-tbl ct-ttbl"><thead><tr><th>Tier</th><th class="ct-r">ราคา/หัว</th>'
+    + '<th class="ct-r">จุดคุ้มทุน</th><th class="ct-r">กำไร · ที่ ' + pax + ' คน</th><th class="ct-r">Margin</th><th class="ct-c"></th></tr></thead>'
+    + '<tbody>' + trows + '</tbody></table></div>'
+    + '<div class="ct-foot2">คุ้มทุน = จำนวนคนน้อยที่สุดที่กำไรเป็นบวก (ไล่ทีละคน เพราะค่าจ้างเป็นขั้นบันได) · Margin = กำไร ÷ รายได้สุทธิ</div></div>';
 
   // ── สรุปกำไร ──
   var sr = function(a, b, cls){ return '<div class="ct-sr' + (cls ? (' ' + cls) : '') + '"><span>' + a + '</span><span>' + b + '</span></div>'; };
@@ -47284,31 +47406,66 @@ function ctPlanHtml(){
     + sr('รายได้ (รวม VAT)', ctB(pax * (+pl.price || 0)))
     + sr('− ภาษีขาย', '−' + ctB(vout))
     + sr('= รายได้สุทธิ' + ((+pl.comm) ? (' (หลังคอม ' + pl.comm + '%)') : ''), ctB(cur.rev))
-    + sr('ต้นทุนสุทธิ · คงที่ ' + ctB(cur.c.fixNet) + ' + ผันแปร ' + ctB(pax ? cur.c.varNet / pax : 0) + '/คน', '−' + ctB(cur.c.net))
+    + sr('ต้นทุนสุทธิ<small>คงที่ ' + ctB(cur.c.fixNet) + ' + ผันแปร ' + ctB(pax ? cur.c.varNet / pax : 0) + '/คน</small>', '−' + ctB(cur.c.net))
     + sr('กำไร', (cur.p >= 0 ? '+' : '') + ctB(cur.p), 'tot' + (cur.p < 0 ? ' neg' : '')) + '</div>';
 
   // ── กราฟกำไรตามจำนวนคน ──
   var pts = [], mx = 0, mn = 0, prev = ctStepCount(pl, 1, T);
   for(var i = 1; i <= cap; i++){
-    var pr = ctProfitAt(pl, i, T).p, st = ctStepCount(pl, i, T);
-    pts.push({ n:i, p:pr, jump:(i > 1 && st > prev) }); prev = st;
-    if(pr > mx) mx = pr; if(pr < mn) mn = pr;
+    var pr3 = ctProfitAt(pl, i, T).p, st = ctStepCount(pl, i, T);
+    pts.push({ n:i, p:pr3, jump:(i > 1 && st > prev) }); prev = st;
+    if(pr3 > mx) mx = pr3; if(pr3 < mn) mn = pr3;
   }
-  var H = 150, span = (mx - mn) || 1, z = H * (mx / span), bars = '';
+  var H = 138, span = (mx - mn) || 1, z = H * (mx / span), bars = '';
   pts.forEach(function(o){
     var hgt = Math.abs(o.p) / span * H, top = o.p >= 0 ? (z - hgt) : z;
     var cls = (be && o.n === be) ? 'be' : (o.jump ? 'st' : (o.p >= 0 ? 'pos' : 'neg'));
-    bars += '<div class="ct-cb" title="' + o.n + ' คน · ' + (o.p >= 0 ? '+' : '') + ctN(o.p) + '"><i class="' + cls
-      + '" style="top:' + top.toFixed(1) + 'px;height:' + Math.max(1.5, hgt).toFixed(1) + 'px"></i></div>';
+    bars += '<div class="ct-cb" title="' + o.n + ' คน · ' + ctB(o.p) + '"><i class="' + cls
+         +  '" style="top:' + top.toFixed(1) + 'px;height:' + Math.max(1, hgt).toFixed(1) + 'px"></i></div>';
   });
   var chart = '<div class="ct-card ct-chart"><div class="ct-card-h"><b>กำไรตามจำนวนคน · 1 ถึง ' + cap + '</b></div>'
     + '<div class="ct-plot" style="height:' + H + 'px"><div class="ct-zero" style="top:' + z.toFixed(1) + 'px"></div>' + bars + '</div>'
     + '<div class="ct-xax"><span>1</span><span>' + (be ? (be + ' ← คุ้มทุน') : '') + '</span><span>' + cap + ' เต็มลำ</span></div>'
     + '<div class="ct-lg"><span><i class="neg"></i>ขาดทุน</span><span><i class="be"></i>จุดคุ้มทุน</span><span><i class="pos"></i>กำไร</span><span><i class="st"></i>ขั้นบันไดเพิ่ม (ไกด์/เด็กเรือ)</span></div></div>';
 
-  return '<div class="ct-wrap">' + side + '<div class="ct-main">' + head + params + kpi + tbl + pnl + chart + '</div></div>';
+  return '<div class="ct-wrap">' + side + '<div class="ct-main">' + head + params + kpi
+    + '<div class="ct-pair">' + chart + pnl + '</div>'
+    + '<div class="ct-duo">' + tier + tbl + '</div></div></div>';
 }
 function ctPickPlan(id){ _ct.pid = id; ctRender(); }
+// §ctTier · Tier ราคา 5 ระดับต่อแผน · ไม่เคยตั้ง = กระจายจากราคาปัจจุบันให้ก่อน
+var CT_TIER_NAMES = ['B2C · หน้าร้าน', 'Agent Tier 1', 'Agent Tier 2', 'OTA / Wholesale', 'Charter / Group'];
+var CT_TIER_MULT  = [1.25, 1.10, 1.00, 0.92, 0.85];
+function ctTierSeed(price){
+  var p = +price || 0;
+  return CT_TIER_NAMES.map(function(nm, i){ return { n:nm, p:Math.round(p * CT_TIER_MULT[i] / 10) * 10 }; });
+}
+function ctTiers(pl){
+  if(pl && Array.isArray(pl.tiers) && pl.tiers.length === 5) return pl.tiers;
+  return ctTierSeed(pl && pl.price);
+}
+function ctTierSet(i, k, v){
+  var pl = ctPlan(_ct.pid); if(!pl) return;
+  var A = ctTiers(pl).map(function(x){ return { n:x.n, p:x.p }; });
+  if(!A[i]) return;
+  A[i][k] = (k === 'n') ? String(v || '') : (+v || 0);
+  pl.tiers = A; ctPlanPut(pl); ctRender();
+}
+function ctTierSpread(){
+  var pl = ctPlan(_ct.pid); if(!pl) return;
+  var old = ctTiers(pl), fresh = ctTierSeed(pl.price);
+  pl.tiers = fresh.map(function(x, i){ return { n:(old[i] && old[i].n) || x.n, p:x.p }; });   // เก็บชื่อเดิมไว้
+  ctPlanPut(pl); ctRender();
+}
+function ctTierUse(p){ ctPlanSet('price', p); }
+// §ctCompact · กาง/หุบหมวดในตารางรายละเอียด
+function ctGrpOpen(g){ _ct.gop = _ct.gop || {}; if(_ct.gop[g]) delete _ct.gop[g]; else _ct.gop[g] = 1; ctRender(); }
+function ctGrpOpenAll(){
+  var T = ctTpl(), G = ctGroups(T), o = _ct.gop || {};
+  var every = G.length && G.every(function(g){ return o[g]; });
+  _ct.gop = {}; if(!every) G.forEach(function(g){ _ct.gop[g] = 1; });
+  ctRender();
+}
 function ctPlanSet(k, v){
   var pl = ctPlan(_ct.pid); if(!pl) return;
   pl[k] = (k === 'name' || k === 'eng' || k === 'famId' || k === 'note') ? v : ((v === '') ? 0 : (+v || 0));
