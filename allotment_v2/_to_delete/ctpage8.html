@@ -891,34 +891,15 @@
 #view-costing .ct-cell .c3 s{color:var(--sd400);font-variant-numeric:tabular-nums}
 #view-costing .ct-undo{border:none;background:transparent;color:var(--mt700);cursor:pointer;padding:0;display:inline-flex}
 #view-costing .ct-unit{color:rgba(74,62,54,.45)}
-/* §ctAllKeys · แถวรายการแบบกดกางทั้งแถว · ทุกค่าทับได้ */
-#view-costing .ct-lname{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;margin:-7px -14px;padding:9px 14px;border-radius:9px}
-#view-costing .ct-lname:hover{background:var(--b50)}
-#view-costing .ct-chev{font-style:normal;font-size:8px;color:rgba(74,62,54,.32);transition:transform .15s;display:inline-block;flex:0 0 9px}
-#view-costing .ct-lname.open .ct-chev{transform:rotate(90deg);color:var(--b500)}
-#view-costing .ct-lname.open span{color:var(--b600);font-weight:600}
-#view-costing .ct-lcell{display:flex;align-items:flex-start;gap:9px;max-width:330px;margin:0 auto}
-#view-costing .ct-lbody{flex:1;min-width:0}
-#view-costing .ct-peek{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:rgba(74,62,54,.5);cursor:pointer;min-height:22px;font-variant-numeric:tabular-nums}
-#view-costing .ct-peek b{font-size:12.5px;font-weight:600;color:var(--es900)}
-#view-costing .ct-peek b.ov{color:var(--mt700);font-weight:700}
-#view-costing .ct-peek b.mut{color:var(--sd400);font-weight:400}
-#view-costing .ct-peek .n{font-size:9.5px;color:var(--mt700);font-weight:700}
-#view-costing .ct-dot{width:5px;height:5px;border-radius:50%;background:var(--mt500);display:inline-block;flex:0 0 5px}
-#view-costing .ct-flds{display:flex;flex-direction:column;gap:5px;padding:1px 0 3px}
-#view-costing .ct-f{display:grid;grid-template-columns:1fr 76px;align-items:center;gap:9px}
-#view-costing .ct-flb{font-size:10.5px;color:rgba(74,62,54,.6);line-height:1.3}
-#view-costing .ct-in.fin{width:76px;font-size:11.5px;padding:2px 7px;text-align:right}
-#view-costing .ct-in.fin.on{border-color:var(--mt500);background:var(--mt50);font-weight:700;color:var(--mt700)}
-#view-costing .ct-in.fin.unset{border-style:dashed;border-color:var(--sd300)}
-#view-costing .ct-fhint{grid-column:1/-1;display:flex;align-items:center;justify-content:flex-end;gap:6px;font-size:9.5px;color:rgba(74,62,54,.4);margin-top:-3px}
-#view-costing .ct-fhint s{color:var(--sd400);font-variant-numeric:tabular-nums}
-#view-costing .ct-warn{background:#fff7ed;border:1px solid #fed7aa;color:#c2410c;font-size:9px;font-weight:700;padding:1px 6px;border-radius:5px;white-space:nowrap}
-#view-costing .ct-newk{background:var(--sd100);border:1px dashed var(--sd400);color:rgba(74,62,54,.5);font-size:9px;padding:1px 6px;border-radius:5px;white-space:nowrap}
-#view-costing .ct-paxbar{display:flex;gap:6px;justify-content:center;margin-top:8px;flex-wrap:wrap}
-#view-costing .ct-paxf{display:inline-flex;align-items:center;gap:5px;background:#fff;border:1px solid var(--sd300);border-radius:8px;padding:2px 4px 2px 8px}
-#view-costing .ct-paxf span{font-size:9.5px;color:rgba(74,62,54,.55);font-weight:500}
-#view-costing .ct-in.px{width:42px;height:22px;font-size:11px;font-weight:600;text-align:center;padding:0 4px}
+#view-costing .ct-more{border:1px solid var(--sd200);background:#fff;color:rgba(74,62,54,.6);border-radius:7px;
+  padding:1px 6px;font-size:9.5px;font-weight:700;cursor:pointer;white-space:nowrap;font-variant-numeric:tabular-nums}
+#view-costing .ct-more:hover{border-color:var(--b300);color:var(--b500)}
+#view-costing .ct-more.on{border-color:var(--b500);color:var(--b500);background:var(--b50)}
+#view-costing .ct-more.has{border-color:var(--mt500);color:var(--mt700);background:var(--mt50)}
+#view-costing .ct-xtra{display:flex;flex-direction:column;gap:5px;margin:7px auto 2px;max-width:272px;padding-left:30px}
+#view-costing .ct-xrow{display:grid;grid-template-columns:1fr 74px;align-items:center;gap:8px;font-size:10px;color:rgba(74,62,54,.62)}
+#view-costing .ct-in.xin{width:74px;font-size:11px;padding:2px 6px}
+#view-costing .ct-in.xin.on{border-color:var(--mt500);background:var(--mt50);font-weight:700;color:var(--mt700)}
 
 @media (max-width:900px){
   #view-costing .ct-wrap{flex-direction:column}
@@ -47314,14 +47295,6 @@ function ctPlanSet(k, v){
   pl[k] = (k === 'name' || k === 'eng' || k === 'famId' || k === 'note') ? v : ((v === '') ? 0 : (+v || 0));
   ctPlanPut(pl); ctRender();
 }
-// §ctAllKeys · ตั้งค่าของแผนที่ระบุ pid ตรงๆ ใช้จากหัวคอลัมน์ในแท็บปรับ/ปิด
-function ctPlanSetOn(pid, k, v){
-  var pl = ctPlan(pid); if(!pl) return;
-  pl[k] = (v === '') ? 0 : (+v || 0);
-  if(k === 'pax' && pl.pax < 1) pl.pax = 1;
-  if(+pl.paxTH > +pl.pax) pl.paxTH = +pl.pax;
-  ctPlanPut(pl); ctRender();
-}
 function ctAddPlan(){ var p = ctBlankPlan('เส้นทางที่ ' + (ctPlans().length + 1)); var P = ctPlans(); P.push(p); ctPlansSave(P); _ct.pid = p.id; ctRender(); }
 function ctDupPlan(){
   var src = ctPlan(_ct.pid); if(!src) return;
@@ -47422,13 +47395,11 @@ function ctPartKeys(p){
                              : [['every','ทุกๆ N คน'],['u','ราคา/คน'],['min','ขั้นต่ำ']];
 }
 function ctLineKeys(ln){
-  // §ctAllKeys · คืนทุกค่าที่ทับได้ รวมค่าที่สูตรกลางยังไม่ได้ตั้ง (unset)
-  // ตัวคำนวด ctEffLine มีค่าไหนก็ทับค่านั้นเข้าไป จึงตั้งเฉพาะเส้นทางเดียวได้จริง
   var out = [], multi = ((ln.parts || []).length > 1);
   (ln.parts || []).forEach(function(p, i){
     ctPartKeys(p).forEach(function(kv){
-      out.push({ i:i, k:kv[0], lb:(multi ? ('ส่วน ' + (i + 1) + ' · ') : '') + kv[1],
-                 base:p[kv[0]], unset:(p[kv[0]] == null) });
+      if(p[kv[0]] == null) return;               // ค่าที่สูตรกลางไม่ได้ตั้งไว้ ก็ไม่ควรทับรายแผน
+      out.push({ i:i, k:kv[0], lb:(multi ? ('ส่วน ' + (i + 1) + ' · ') : '') + kv[1], base:p[kv[0]] });
     });
   });
   return out;
@@ -47439,11 +47410,6 @@ function ctCell(a, b, c){
 }
 function ctOvrHtml(){
   var T = ctTpl(), P = ctPlans(), G = ctGroups(T);
-  var pxf = function(pl, k, lb){
-    return '<label class="ct-paxf" title="แก้ได้ที่นี่เลย · มีผลกับทุกยอดในคอลัมน์นี้"><span>' + lb + '</span>'
-      + '<input class="ct-in px" data-fk="pp.' + pl.id + '.' + k + '" value="' + (+pl[k] || 0) + '"'
-      + ' oninput="ctPlanSetOn(\'' + pl.id + '\',\'' + k + '\',this.value)"></label>';
-  };
   var head = '<tr><th class="ct-stick">รายการต้นทุน / หมวดหมู่</th>'
     + P.map(function(p){
         var cap = Math.max(1, (+p.cap || 65) * Math.max(1, +p.boats || 1));
@@ -47451,8 +47417,7 @@ function ctOvrHtml(){
         var on = (p.id === _ct.pid);
         return '<th class="ct-pcol' + (on ? ' on' : '') + '"><div class="ct-pnm">' + ctE(p.name) + '</div>'
           + '<div class="ct-psub">' + ctE(p.eng) + ' · จุ ' + (+p.cap || 0) + ' · ' + ctB(p.price) + '/หัว</div>'
-          + '<div class="ct-pbe' + (be ? '' : ' warn') + '">' + (be ? ('คุ้มทุน ' + be + ' คน') : 'เต็มลำยังไม่คุ้ม') + '</div>'
-          + '<div class="ct-paxbar">' + pxf(p, 'pax', 'คนทั้งหมด') + pxf(p, 'paxTH', 'คนไทย') + '</div></th>';
+          + '<div class="ct-pbe' + (be ? '' : ' warn') + '">' + (be ? ('คุ้มทุน ' + be + ' คน') : 'เต็มลำยังไม่คุ้ม') + '</div></th>';
       }).join('') + '</tr>';
 
   var body = '';
@@ -47474,50 +47439,38 @@ function ctOvrHtml(){
     });
     body += '<tr class="ct-grow">' + cells + '</tr>';
 
-    (T.lines || []).forEach(function(ln){
+    (T.lines || []).forEach(function(ln, li){
       if((ln.g || 'อื่นๆ') !== g) return;
-      var exp = !!((_ct.exp || {})[ln.id]), KEYS = ctLineKeys(ln);
-      var rc = '<td class="ct-stick ct-ltd"><div class="ct-lname' + (exp ? ' open' : '') + '"'
-             + ' title="คลิกเพื่อกางค่าทั้งหมดของบรรทัดนี้ · กางพร้อมกันทุกแผน"'
-             + ' onclick="ctToggleExp(\'' + ctE(ln.id) + '\')"><i class="ct-chev">▶</i><span>' + ctE(ln.l) + '</span></div></td>';
+      var rc = '<td class="ct-stick ct-ltd"><i class="ct-bullet"></i>' + ctE(ln.l) + '</td>';
       P.forEach(function(pl){
         var grpOff = !!ctGrpCfg(pl, g).off, o = (pl.ovr || {})[ln.id] || {};
-        var noTH = !(+pl.paxTH > 0);
-        var val = function(kv){ var v = ((o.p || [])[kv.i] || {})[kv.k]; return (v == null || v === '') ? null : v; };
         var tick = '<label class="ct-ck"><input type="checkbox"' + (o.off ? '' : ' checked') + (grpOff ? ' disabled' : '')
           + ' onchange="ctOvrToggle(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',this.checked)"></label>';
-        var bd = '';
-        if(o.off){ bd = '<span class="ct-off">ปิด</span>'; }
-        else if(!KEYS.length){ bd = ''; }
-        else if(exp){
-          bd = '<div class="ct-flds">' + KEYS.map(function(kv){
-            var cv = val(kv), has = (cv != null);
-            var hint = '';
-            if(has){
-              hint = '<s>' + (kv.unset ? '—' : kv.base) + '</s>'
-                   + '<button class="ct-undo" title="คืนค่าสูตรกลาง" onclick="ctOvrSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',' + kv.i + ',\'' + kv.k + '\',\'\')">' + ctIcon('undo', 11) + '</button>';
-              if(kv.k === 'uTH' && noTH) hint += '<span class="ct-warn">แผนนี้ตั้งคนไทย 0 คน · ยังไม่มีผลกับยอด</span>';
-            } else if(kv.unset){
-              hint = '<span class="ct-newk">สูตรกลางยังไม่ตั้ง · ใส่เฉพาะเส้นทางนี้ได้</span>';
-            }
-            return '<div class="ct-f"><span class="ct-flb">' + ctE(kv.lb) + '</span>'
-              + '<input class="ct-in fin' + (has ? ' on' : (kv.unset ? ' unset' : '')) + '"'
-              + ' data-fk="o.' + pl.id + '.' + ln.id + '.' + kv.i + '.' + kv.k + '"'
-              + ' value="' + (has ? cv : '') + '" placeholder="' + (kv.unset ? '—' : kv.base) + '"' + (grpOff ? ' disabled' : '')
-              + ' title="' + (kv.unset ? 'สูตรกลางยังไม่ได้ตั้งค่านี้' : ('ว่าง = ใช้ค่าจากสูตรกลาง (' + kv.base + ')')) + '"'
-              + ' oninput="ctOvrSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',' + kv.i + ',\'' + kv.k + '\',this.value)">'
-              + (hint ? ('<span class="ct-fhint">' + hint + '</span>') : '') + '</div>';
-          }).join('') + '</div>';
-        } else {
-          var m0 = KEYS[0], c0 = val(m0), nOvr = 0;
-          KEYS.forEach(function(kv){ if(val(kv) != null) nOvr++; });
-          var main = (c0 != null) ? ('<b class="ov">' + c0 + '</b>')
-                   : (m0.unset ? '<b class="mut">—</b>' : ('<b>' + m0.base + '</b>'));
-          bd = '<div class="ct-peek" onclick="ctToggleExp(\'' + ctE(ln.id) + '\')">' + main
-             + '<span class="ct-unit">' + ctE(m0.lb.replace(/^ส่วน \d+ · /, '')) + '</span>'
-             + (nOvr ? ('<i class="ct-dot"></i><span class="n">ตั้งเอง ' + nOvr + ' ค่า</span>') : '') + '</div>';
+        var mid = '', end = '', xtra = '';
+        var KEYS = ctLineKeys(ln), exp = !!((_ct.exp || {})[ln.id]);
+        var box = function(kv, cls){
+          var cv2 = ((o.p || [])[kv.i] || {})[kv.k];
+          var h2 = (cv2 != null && cv2 !== '');
+          return '<input class="ct-in ' + cls + (h2 ? ' on' : '') + '" data-fk="o.' + pl.id + '.' + ln.id + '.' + kv.i + '.' + kv.k + '"'
+            + ' value="' + (h2 ? cv2 : '') + '" placeholder="' + kv.base + '"' + (grpOff ? ' disabled' : '')
+            + ' title="' + (h2 ? ('ค่าสูตรกลางคือ ' + kv.base) : 'ว่าง = ใช้ค่าจากสูตรกลาง (' + kv.base + ')') + '"'
+            + ' oninput="ctOvrSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',' + kv.i + ',\'' + kv.k + '\',this.value)">';
+        };
+        if(o.off) mid = '<span class="ct-off">ปิด</span>';
+        else if(KEYS.length){
+          var m0 = KEYS[0], c0 = ((o.p || [])[m0.i] || {})[m0.k], has = (c0 != null && c0 !== '');
+          mid = box(m0, 'ovr');
+          end = (has ? ('<s>' + m0.base + '</s><button class="ct-undo" title="ย้อนกลับเป็นค่าสูตร" onclick="ctOvrSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',' + m0.i + ',\'' + m0.k + '\',\'\')">' + ctIcon('undo', 12) + '</button>')
+                 : '<span class="ct-unit">' + m0.lb.replace(/^ส่วน \d+ · /, '') + '</span>');
+          if(KEYS.length > 1){
+            var nOvr = 0; KEYS.slice(1).forEach(function(kv){ var v = ((o.p || [])[kv.i] || {})[kv.k]; if(v != null && v !== '') nOvr++; });
+            end += '<button class="ct-more' + (exp ? ' on' : '') + (nOvr ? ' has' : '') + '" title="แก้ค่าอื่นของบรรทัดนี้ · กางพร้อมกันทุกแผน"'
+                 + ' onclick="ctToggleExp(\'' + ctE(ln.id) + '\')">' + (exp ? '−' : '+') + (KEYS.length - 1) + (nOvr ? ' •' : '') + '</button>';
+            if(exp) xtra = '<div class="ct-xtra">' + KEYS.slice(1).map(function(kv){
+              return '<div class="ct-xrow"><span>' + ctE(kv.lb) + '</span>' + box(kv, 'xin') + '</div>'; }).join('') + '</div>';
+          }
         }
-        rc += '<td class="ct-ltd' + (grpOff ? ' dis' : '') + '"><div class="ct-lcell">' + tick + '<div class="ct-lbody">' + bd + '</div></div></td>';
+        rc += '<td class="ct-ltd' + (grpOff ? ' dis' : '') + '">' + ctCell(tick, mid, end) + xtra + '</td>';
       });
       body += '<tr>' + rc + '</tr>';
     });
@@ -47525,7 +47478,7 @@ function ctOvrHtml(){
 
   return '<div class="ct-card ct-bar2"><div><b>ปรับ / ปิด รายการต้นทุนแยกตามแผน</b>'
     + '<span class="ct-sub">' + ctIcon('info', 12) + ' <em class="fix">แถวหัวหมวด</em> ปิดทั้งหมวด หรือใส่ ±% คูณทุกบรรทัดในหมวด · '
-    + '<em class="var">คลิกชื่อรายการ</em> เพื่อกางค่าทั้งหมดของบรรทัดนั้น · ทุกค่าทับได้ แม้สูตรกลางยังไม่ได้ตั้ง · ว่าง = ใช้ค่าจากสูตรกลาง</span></div>'
+    + '<em class="var">แถวรายการ</em> ปิดเฉพาะบรรทัด หรือพิมพ์ค่าทับ (ว่าง = ใช้ค่าจากสูตรกลาง) · ปุ่ม <b>+N</b> กางค่าที่เหลือของบรรทัดนั้น เช่น ราคาคนไทย · ค่า 4EN · ส่วนผันแปร</span></div>'
     + '<div class="ct-bar2r"><span class="ct-hint">1 คอลัมน์ = 1 แผนคำนวณ</span></div></div>'
     + '<div class="ct-card ct-tblcard"><div class="ct-scroll"><table class="ct-otbl"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div></div>';
 }
