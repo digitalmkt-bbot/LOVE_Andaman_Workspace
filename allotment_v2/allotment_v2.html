@@ -46457,6 +46457,19 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-rb:hover{border-color:var(--lm600);background:var(--lm50)}'
  +S+' .ts-rb.on{border-color:var(--lm600);background:var(--lm100);color:var(--lm950);font-weight:800}'
  +S+' .ts-rb.on i{color:var(--lm800)}'
+ +S+' .ts-dcol{max-width:215px}'
+ +S+' .ts-dcell{display:flex;flex-direction:column;align-items:flex-start;gap:2px;line-height:1.25}'
+ +S+' .ts-drow{display:flex;align-items:center;gap:5px;flex-wrap:nowrap;max-width:100%}'
+ +S+' .ts-dfile em.w{color:var(--zn400);font-weight:600}'
+ +S+' .ts-dref{font-family:ui-monospace,Menlo,monospace;font-size:9.5px;font-weight:700;color:var(--zn700);'
+   +'background:var(--zn100);border-radius:5px;padding:0 5px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+ +S+' .ts-dchk{font-size:9px;font-weight:700;color:var(--am700)}'
+ +S+' .ts-dchk.ok{color:var(--em600)}'
+ +S+' .ts-dfile{font-size:9px;color:var(--zn500);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+ +S+' .ts-dfile em{font-style:normal;font-weight:700;color:var(--zn700)}'
+ +S+' .ts-dby{font-size:8.5px;color:var(--zn400)}'
+ +S+' .ts-dnote{font-size:9px;color:var(--rs700);font-weight:600;max-width:100%;overflow:hidden;'
+   +'text-overflow:ellipsis;white-space:nowrap}'
  +S+' .ts-doc{cursor:pointer}'+S+' .ts-doc:hover{filter:brightness(.95)}'
  +'@media print{'
    +S+' .ts-noprint{display:none!important}'
@@ -46467,8 +46480,19 @@ function tsCSS(){ var S='#travelsum-host'; return ''
    +S+' .ts-h1{font-size:19px}'+S+' .ts-sub{font-size:9.5px}'
    +S+' .ts-k .kv{font-size:18px}'+S+' .ts-p .pv{font-size:17px}'
    +S+' .ts-tbl{font-size:8.5px}'+S+' .ts-tbl td{padding:3px 5px}'+S+' .ts-tbl th{padding:5px}'
-   +S+' .ts-card,'+S+' .ts-k,'+S+' .ts-p,'+S+' .ts-sg,'+S+' .ts-meta{break-inside:avoid}'
+   // §tsPrint · เดิม .ts-card ห้ามแตกหน้า → ตาราง manifest ยาวๆ กระโดดไปทั้งใบ
+   //   ทำให้หน้าก่อนหน้าโล่งครึ่งหน้า · การ์ดตารางต้องไหลข้ามหน้าได้
+   +S+' .ts-k,'+S+' .ts-p,'+S+' .ts-sg,'+S+' .ts-meta{break-inside:avoid}'
+   +S+' .ts-card{break-inside:auto}'+S+' .ts-sec{break-inside:auto}'
    +S+' .ts-tbl tr{break-inside:avoid}'
+   +S+' .ts-tbl thead{display:table-header-group}'      // หัวตารางซ้ำทุกหน้า
+   +S+' .ts-tbl tbody tr.ts-grow{break-after:avoid}'    // หัวเส้นทางห้ามอยู่ท้ายหน้าเดี่ยวๆ
+   // ตัวเลขฝั่งขวาชนกัน · บังคับไม่ให้ตัดบรรทัดและเว้นช่องให้พอ
+   +S+' .ts-tbl td.c,'+S+' .ts-tbl td.r,'+S+' .ts-tbl th.c,'+S+' .ts-tbl th.r{white-space:nowrap;padding-left:7px;padding-right:7px}'
+   +S+' .ts-chip{white-space:nowrap}'
+   +S+' .ts-ag{max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle}'
+   +S+' .ts-lead{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+   +S+' .ts-dcol{max-width:150px}'
    +S+' .ts-scroll{overflow:visible}'
    +S+' .ts-sign{margin-top:14px;padding-top:12px}'
    +S+' .ts-rt{display:none}'
@@ -46503,11 +46527,39 @@ function tsRouteColor(id){ var r=(typeof getRoute==='function'?getRoute(id):null
 //   ไม่คิดสถานะเอง — เรียก docCheckStatus ตัวเดียวกับหน้าตรวจเอกสาร เลขสองที่จะได้ตรงกันเสมอ
 function tsDocRef(b){
   var st=(typeof docCheckStatus==='function')?docCheckStatus(b):'nofiles';
-  var n=((b&&b.attachments)||[]).length;
+  var att=((b&&b.attachments)||[]), n=att.length;
   var dc=(b&&b.docCheck)||{};
   var M={ verified:['ตรวจแล้ว','g'], issue:['เอกสารมีปัญหา','r'], pending:['รอตรวจ','a'], nofiles:['ยังไม่แนบ','n'] };
   var m=M[st]||M.nofiles;
-  return { st:st, n:n, label:m[0], cls:m[1], by:dc.by||'', at:dc.at||'', note:dc.note||'' };
+  // เช็คลิสต์ 6 ช่องเดียวกับหน้าตรวจเอกสาร · นับเฉพาะที่ติ๊กแล้ว
+  var K=(typeof DOCCHK_ITEMS!=='undefined'&&DOCCHK_ITEMS)?DOCCHK_ITEMS:[];
+  var it=dc.items||{}, done=0;
+  K.forEach(function(x){ if(it[x.k]) done++; });
+  // เลขอ้างอิงที่ "อ่านได้จากตัวเอกสาร" · Pre-Check (OCR) เก็บข้อความที่เจอไว้ที่ ev
+  var pr=((dc.pre||{}).results||{}).voucher||null;
+  var docRef=(pr&&pr.ev)?String(pr.ev).replace(/\s+/g,' ').trim().slice(0,26):'';
+  var missing=K.filter(function(x){ return !it[x.k]; }).map(function(x){ return x.label; });
+  var fname=n?String(att[0].name||'ไฟล์แนบ'):'';
+  var when=''; if(dc.at){ try{ when=new Date(dc.at).toLocaleDateString('th-TH',{day:'2-digit',month:'2-digit'}); }catch(_){ when=String(dc.at).slice(0,10); } }
+  return { st:st, n:n, label:m[0], cls:m[1], by:dc.by||'', at:dc.at||'', when:when, note:dc.note||'',
+           done:done, tot:K.length, missing:missing, docRef:docRef, fname:fname,
+           files:att.map(function(a){ return a.name||'ไฟล์แนบ'; }) };
+}
+// เซลล์ Reference เต็มใบสำหรับ manifest · ป้ายสถานะ + ของจริงที่ดึงมาจากหน้าตรวจเอกสาร
+function tsDocCell(b, date){
+  var d=tsDocRef(b), e=ckEsc, L=[];
+  // บรรทัดเดียวกัน · ป้ายสถานะ + เช็คลิสต์ (แถวในตารางจะได้ไม่สูงเกินจำเป็นตอนพิมพ์)
+  L.push('<span class="ts-drow">'+tsDocChip(b, date)
+    +(d.tot?('<span class="ts-dchk'+((d.done>=d.tot)?' ok':'')+'" title="'
+      +(d.missing.length?('ยังไม่ได้ตรวจ: '+e(d.missing.join(' · '))):'ตรวจครบทุกช่อง')
+      +'">&#10003; '+d.done+'/'+d.tot+'</span>'):'')+'</span>');
+  if(d.docRef) L.push('<span class="ts-dref" title="เลขอ้างอิงที่อ่านได้จากตัวเอกสาร (Pre-Check)">Ref '+e(d.docRef)+'</span>');
+  var who=e([d.by,d.when].filter(Boolean).join(' · '));
+  if(d.n) L.push('<span class="ts-dfile" title="'+e(d.files.join(' · '))+'">&#128206; '+e(d.fname)
+      +(d.n>1?('<em> +'+(d.n-1)+'</em>'):'')+(who?('<em class="w"> &middot; '+who+'</em>'):'')+'</span>');
+  else if(who) L.push('<span class="ts-dby">'+who+'</span>');
+  if(d.note) L.push('<span class="ts-dnote" title="'+e(d.note)+'">'+e(d.note)+'</span>');
+  return '<div class="ts-dcell">'+L.join('')+'</div>';
 }
 function tsDocChip(b, date){
   var d=tsDocRef(b), e=ckEsc;
@@ -46709,7 +46761,7 @@ function renderTravelSum(){
                   : '<span class="ts-chip g">&#10003; เรียบร้อย</span>');
     body+='<tr>'
       +'<td><span class="ts-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'
-      +'<td>'+tsDocChip(b,date)+'</td>'
+      +'<td class="ts-dcol">'+tsDocCell(b,date)+'</td>'
       +'<td><span class="ts-ag" style="background:'+agColor+';color:'+agInk+'" title="'+e(agName)+'">'+e(agName)+'</span></td>'
       +'<td><div class="ts-lead">'+e(b.leadPax||'—')+'</div><div class="ts-tel">'+e(b.leadPhone||b.phone||'')+'</div></td>'
       +'<td class="c ts-mono" style="font-weight:800">'+r.travelled+' / '+r.booked+'</td>'
