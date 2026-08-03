@@ -46513,7 +46513,7 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-ao.ao-pier{background:var(--pu50);color:var(--pu700)}'
  +S+' .ts-aokey{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}'
  +S+' .ts-paycol{max-width:150px}'
- +S+' .ts-pay{display:flex;flex-direction:column;align-items:flex-start;gap:2px;line-height:1.25}'
+ +S+' .ts-payc{display:flex;flex-direction:column;align-items:flex-start;gap:2px;line-height:1.25}'
  +S+' .ts-pyd{font-size:10.5px;font-weight:800;color:var(--am900);background:var(--am50);'
    +'border:1px solid var(--am200);border-radius:6px;padding:0 6px;white-space:nowrap;font-variant-numeric:tabular-nums}'
  +S+' .ts-pyg{font-size:10px;font-weight:800;color:var(--em800);background:var(--em50);border-radius:6px;padding:0 6px;white-space:nowrap}'
@@ -46822,7 +46822,7 @@ function tsPayCell(r, date){
   if(r.cxlRow){
     var cc=b.cancellation||null;
     L.push('<span class="ts-pyd">'+((cc&&+cc.chargeAmount>0)?('ค่าปรับ '+m(cc.chargeAmount)):'ไม่มียอดเก็บ')+'</span>');
-    return '<div class="ts-pay">'+L.join('')+'</div>';
+    return '<div class="ts-payc">'+L.join('')+'</div>';
   }
   // ยอดที่ต้องเก็บวันนี้ · แยกให้เห็นว่ามาจากอะไร (COT / ค้าง / upgrade)
   if(M.due>0){
@@ -46846,7 +46846,7 @@ function tsPayCell(r, date){
   if(mm.length) L.push('<span class="ts-pym">'+e(mm.join(' · ')+(X.who?(' · '+X.who):''))+'</span>');
   if(M.noSlip>0) L.push('<span class="ts-pyw">&#9888; รอสลิป '+M.noSlip+'</span>');
   if(M.pierFee>0) L.push('<span class="ts-pyn">ค่าธรรมเนียม '+m(M.pierFee)+'</span>');
-  return '<div class="ts-pay">'+L.join('')+'</div>';
+  return '<div class="ts-payc">'+L.join('')+'</div>';
 }
 function tsMoneyOf(b, date){
   var M=(typeof pckMoney==='function')?pckMoney(b,date):{cot:0,balance:0,upDue:0,due:0,pierPaid:0};
