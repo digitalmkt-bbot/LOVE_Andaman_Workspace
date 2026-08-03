@@ -46512,6 +46512,14 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-ao.ao-up.due{background:var(--rs50);color:var(--rs900)}'
  +S+' .ts-ao.ao-pier{background:var(--pu50);color:var(--pu700)}'
  +S+' .ts-aokey{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}'
+ +S+' .ts-paycol{max-width:150px}'
+ +S+' .ts-pay{display:flex;flex-direction:column;align-items:flex-start;gap:2px;line-height:1.25}'
+ +S+' .ts-pyd{font-size:10.5px;font-weight:800;color:var(--am900);background:var(--am50);'
+   +'border:1px solid var(--am200);border-radius:6px;padding:0 6px;white-space:nowrap;font-variant-numeric:tabular-nums}'
+ +S+' .ts-pyg{font-size:10px;font-weight:800;color:var(--em800);background:var(--em50);border-radius:6px;padding:0 6px;white-space:nowrap}'
+ +S+' .ts-pyn{font-size:9px;color:var(--zn500);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+ +S+' .ts-pym{font-size:9px;font-weight:700;color:var(--em600);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+ +S+' .ts-pyw{font-size:9px;font-weight:800;color:var(--rs700)}'
  +S+' .ts-doc{cursor:pointer}'+S+' .ts-doc:hover{filter:brightness(.95)}'
  +'@media print{'
    +S+' .ts-noprint{display:none!important}'
@@ -46551,14 +46559,21 @@ function tsCSS(){ var S='#travelsum-host'; return ''
    +S+' .ts-man th:nth-child(10),'+S+' .ts-man td:nth-child(10){width:9.6%}'
    +S+' .ts-man th:nth-child(11),'+S+' .ts-man td:nth-child(11){width:7.6%}'
    +S+' .ts-man th:nth-child(12),'+S+' .ts-man td:nth-child(12){width:10.6%}'
-   +S+' .ts-man th:nth-child(13),'+S+' .ts-man td:nth-child(13){width:5.6%}'
-   +S+' .ts-man th:nth-child(14),'+S+' .ts-man td:nth-child(14),'
-     +S+' .ts-man th:nth-child(15),'+S+' .ts-man td:nth-child(15){width:3.4%}'
-   +S+' .ts-man th:nth-child(16),'+S+' .ts-man td:nth-child(16){width:4.6%}'
-   +S+' .ts-man th:nth-child(17),'+S+' .ts-man td:nth-child(17){width:7.2%}'
-   +S+' .ts-man th:nth-child(18),'+S+' .ts-man td:nth-child(18){width:5%}'
+   +S+' .ts-man th:nth-child(3),'+S+' .ts-man td:nth-child(3){width:9.8%}'
+   +S+' .ts-man th:nth-child(10),'+S+' .ts-man td:nth-child(10){width:8.6%}'
+   +S+' .ts-man th:nth-child(11),'+S+' .ts-man td:nth-child(11){width:6.6%}'
+   +S+' .ts-man th:nth-child(12),'+S+' .ts-man td:nth-child(12){width:9.4%}'
+   +S+' .ts-man th:nth-child(13),'+S+' .ts-man td:nth-child(13){width:5.8%}'
+   +S+' .ts-man th:nth-child(14),'+S+' .ts-man td:nth-child(14){width:5.4%}'
+   +S+' .ts-man th:nth-child(15),'+S+' .ts-man td:nth-child(15){width:8.4%}'
+   +S+' .ts-man th:nth-child(16),'+S+' .ts-man td:nth-child(16){width:7.4%}'
+   +S+' .ts-man th:nth-child(17),'+S+' .ts-man td:nth-child(17){width:5.2%}'
    // ป้ายในสองคอลัมน์ท้ายยาวกว่าช่อง · ให้ขึ้นบรรทัดใหม่แทนล้นออกไปนอกกระดาษ
-   +S+' .ts-man td:nth-child(17) .ts-chip,'+S+' .ts-man td:nth-child(18) .ts-chip{white-space:normal;line-height:1.2}'
+   +S+' .ts-man td:nth-child(16) .ts-chip,'+S+' .ts-man td:nth-child(17) .ts-chip{white-space:normal;line-height:1.2}'
+   +S+' .ts-pyd{font-size:7.2px;padding:0 3px}'
+   +S+' .ts-pyg,'+S+' .ts-pyn,'+S+' .ts-pym,'+S+' .ts-pyw{font-size:6.8px}'
+   // เบอร์โทรตัดบรรทัดทำให้ทุกแถวสูงขึ้นอีกบรรทัด · บีบให้อยู่บรรทัดเดียว
+   +S+' .ts-man td:nth-child(3) .ts-tel{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}'
    +S+' .ts-ao{font-size:6.8px;padding:0 3px;line-height:1.25}'
    +S+' .ts-aokey{margin-top:4px;gap:4px}'   // คำอธิบายสีต้องติดไปบนกระดาษด้วย ไม่งั้นอ่านสีไม่ออก
    +S+' .ts-man .ts-ag,'+S+' .ts-man .ts-lead,'+S+' .ts-man .ts-sbk{max-width:100%}'
@@ -46794,6 +46809,45 @@ function tsAddonCell(r, date){
     return '<span class="ts-ao '+sc[0]+(a.done===false?' due':'')+'" title="'+e(tip)+'">'+txt+'</span>';
   }).join('')+'</div>';
 }
+function tsPayCell(r, date){
+  var b=r.b, e=ckEsc, L=[];
+  var m=function(n){ return '฿'+Math.round(n||0).toLocaleString('en-US'); };
+  var X=tsMoneyOf(b, date), M=X.M;
+  // เงื่อนไขการชำระของใบนี้ · Invoice = เครดิต ไม่ต้องเก็บหน้างาน
+  var PT={ invoice:['Invoice','n'], credit:['Invoice','n'], proforma:['Proforma','e'], prepaid:['Proforma','e'],
+           cot:['COT','a'], bt:['โอนล่วงหน้า','e'] };
+  var pt=PT[M.payType||'']||null;
+  if(pt) L.push('<span class="ts-chip '+pt[1]+'" title="เงื่อนไขการชำระของ agent">'+pt[0]+'</span>');
+  else if(!b.agentId) L.push('<span class="ts-chip n">Walk-in</span>');
+  if(r.cxlRow){
+    var cc=b.cancellation||null;
+    L.push('<span class="ts-pyd">'+((cc&&+cc.chargeAmount>0)?('ค่าปรับ '+m(cc.chargeAmount)):'ไม่มียอดเก็บ')+'</span>');
+    return '<div class="ts-pay">'+L.join('')+'</div>';
+  }
+  // ยอดที่ต้องเก็บวันนี้ · แยกให้เห็นว่ามาจากอะไร (COT / ค้าง / upgrade)
+  if(M.due>0){
+    var parts=[];
+    if(M.cot>0)     parts.push('COT '+m(M.cot));
+    if(M.balance>0) parts.push('ค้าง '+m(M.balance));
+    if(M.upDue>0)   parts.push('upgrade '+m(M.upDue));
+    if(M.pierPaid>0)parts.push('เก็บแล้ว '+m(M.pierPaid));
+    L.push('<span class="ts-pyd" title="'+e(parts.join(' · '))+'">ต้องเก็บ '+m(M.due)+'</span>');
+    if(parts.length) L.push('<span class="ts-pyn">'+e(parts.join(' · '))+'</span>');
+  } else if(M.pierPaid>0){
+    L.push('<span class="ts-pyg">&#10003; เก็บครบ '+m(M.pierPaid)+'</span>');
+  } else if(M.payType==='cot'){
+    L.push('<span class="ts-pyn">COT · ยังไม่ระบุยอด</span>');
+  } else {
+    L.push('<span class="ts-pyn">ไม่มียอดเก็บหน้างาน</span>');
+  }
+  // เก็บด้วยวิธีไหน ใครเก็บ · อ่านจาก bk.pierPayments ชุดเดียวกับส่วนที่ 3
+  var ML={cash:'สด', transfer:'โอน', card:'บัตร'}, mm=[];
+  Object.keys(X.by||{}).forEach(function(k){ if(X.by[k]>0) mm.push((ML[k]||k)+' '+m(X.by[k])); });
+  if(mm.length) L.push('<span class="ts-pym">'+e(mm.join(' · ')+(X.who?(' · '+X.who):''))+'</span>');
+  if(M.noSlip>0) L.push('<span class="ts-pyw">&#9888; รอสลิป '+M.noSlip+'</span>');
+  if(M.pierFee>0) L.push('<span class="ts-pyn">ค่าธรรมเนียม '+m(M.pierFee)+'</span>');
+  return '<div class="ts-pay">'+L.join('')+'</div>';
+}
 function tsMoneyOf(b, date){
   var M=(typeof pckMoney==='function')?pckMoney(b,date):{cot:0,balance:0,upDue:0,due:0,pierPaid:0};
   var pays=(typeof pckPaysFor==='function')?pckPaysFor(b,date):[];
@@ -46974,7 +47028,7 @@ function renderTravelSum(){
       var grp=mrows.filter(function(x){ return x.routeId===r.routeId && !x.cxlRow; });
       var gX=mrows.filter(function(x){ return x.routeId===r.routeId && x.cxlRow; });
       var gB=grp.reduce(function(a,x){ return a+x.booked; },0), gT=grp.reduce(function(a,x){ return a+x.travelled; },0);
-      body+='<tr class="ts-grow"><td colspan="18" style="padding:7px 11px">'
+      body+='<tr class="ts-grow"><td colspan="17" style="padding:7px 11px">'
         +'<span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;color:'+(rt.color||'var(--zn700)')+'">'
         +'<i class="ts-dot" style="border-radius:50%;background:'+(rt.color||'#999')+'"></i>'+e(rt.name||r.routeId||'—')+'</span>'
         +'<span style="float:right" class="ts-tel">'+grp.length+' booking · จอง '+gB+' → เดินทางจริง '+gT+(gB-gT>0?(' · หาย '+(gB-gT)):'')
@@ -47019,9 +47073,8 @@ function renderTravelSum(){
       +'<td>'+(r.cxlRow?'<span style="color:var(--zn400)">—</span>'
         :((veh?('<span class="ts-chip n">&#128656; '+e(veh.name||r.van)+'</span>'):'<span class="ts-chip p">มาเอง</span>')
          +(boat?('<span class="ts-chip g">&#128676; '+e(boat.name||r.boat)+'</span>'):'<span class="ts-chip r">ยังไม่จัดเรือ</span>')))+'</td>'
-      +'<td class="c">'+((!r.cxlRow&&veh)?stg(r.vanDone, r.vanActual!=null?r.vanActual:r.booked, r.booked):'<span style="color:var(--zn400)">—</span>')+'</td>'
-      +'<td class="c">'+((!r.cxlRow&&boat)?stg(r.pierDone, r.pierActual!=null?r.pierActual:0, r.pierExp!=null?r.pierExp:r.booked):'<span style="color:var(--zn400)">—</span>')+'</td>'
       +'<td class="r ts-mono" style="font-weight:800">'+money(r.amount)+'</td>'
+      +'<td class="ts-paycol">'+tsPayCell(r, date)+'</td>'
       +'<td style="max-width:170px">'+tsCxlCell(r, date, DEC, money)+'</td>'
       +'<td class="c">'+stat+'</td>'
       +'</tr>';
@@ -47029,17 +47082,18 @@ function renderTravelSum(){
   var manifest='<div class="ts-sec"><div class="ts-sech"><div>'
     +'<div class="ts-sect"><i class="ts-dot" style="background:var(--lm600)"></i>ส่วนที่ 4 · Manifest ประจำวัน</div>'
     +'<div class="ts-secd">รายการทั้งหมดของวันเรียงตามเส้นทาง (Agency A-Z) — แยกจำนวนตามประเภทผู้โดยสาร · เวลารับและเวลาออกเรือ · จุดส่งกลับ · '
-      +'Add-on ทุกขั้นตอน · ค่าปรับกรณียกเลิก/ไม่มา · ตัวเลข <b>ไปจริง/จอง</b> หมายถึงมีคนไม่ได้เดินทาง</div>'
+      +'Add-on ทุกขั้นตอน · เงื่อนไขการชำระและยอดที่ต้องเก็บ · ค่าปรับกรณียกเลิก/ไม่มา · '
+      +'ตัวเลข <b>ไปจริง/จอง</b> หมายถึงมีคนไม่ได้เดินทาง</div>'
       +'<div class="ts-aokey"><span class="ts-ao ao-bk">จองมาแต่แรก</span><span class="ts-ao ao-ex">ขายเพิ่มหน้างาน</span>'
         +'<span class="ts-ao ao-up">อัปเกรด</span><span class="ts-ao ao-pier">สั่งหน้าท่า</span></div></div></div>'
     +'<div class="ts-card"><div class="ts-scroll"><table class="ts-tbl ts-man"><thead><tr>'
     +'<th>Voucher</th><th>Agency</th><th>ลูกค้า (lead)</th>'
     +'<th class="c ts-px">AD</th><th class="c ts-px">CHD</th><th class="c ts-px">INF</th><th class="c ts-px">FOC</th>'
     +'<th class="c">รวม<br>จริง/จอง</th><th>เวลารับ<br>&middot; ออก</th><th>จุดรับ &middot; ห้อง</th><th>ส่งกลับ</th>'
-    +'<th>Add-on &middot; ขายเพิ่ม</th><th>รถ · เรือ</th><th class="c">ขึ้นรถ</th><th class="c">ขึ้นเรือ</th><th class="r">ราคาเต็ม</th>'
+    +'<th>Add-on &middot; ขายเพิ่ม</th><th>รถ · เรือ</th><th class="r">ราคาเต็ม</th><th>Pay</th>'
     +'<th>ยกเลิก &middot; ชาร์จ</th><th class="c">สถานะ</th>'
     +'</tr></thead><tbody>'
-    +(body||'<tr><td colspan="18" class="ts-empty">'+(_tsOnlyIssue?'ไม่มีเคสที่ต้องตัดสินในวันนี้':'ไม่มี booking ในวันนี้')+'</td></tr>')
+    +(body||'<tr><td colspan="17" class="ts-empty">'+(_tsOnlyIssue?'ไม่มีเคสที่ต้องตัดสินในวันนี้':'ไม่มี booking ในวันนี้')+'</td></tr>')
     +'</tbody></table></div></div>'
     +'<div class="ts-sign">'
     +'<div class="ts-sg"><i></i><b>ผู้จัดทำ · Operations</b><span>เจ้าหน้าที่ปฏิบัติการ</span></div>'
