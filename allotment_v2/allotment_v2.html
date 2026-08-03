@@ -45444,6 +45444,11 @@ function pckGuideJobCss(){ return '<style>'
   +'.tm{font-family:"DM Mono",monospace;font-weight:700}'
   +'.tmc{white-space:nowrap}'
   +'.pl2{font-size:10.5px;color:#6b7280}'
+  // §jobDrop · จุดส่งต่างจากจุดรับ = ของที่พลาดไม่ได้ → ขึ้นบรรทัดใหม่ ตัวหนา มีกรอบซ้าย
+  +'.drp{display:block;font-size:10.5px;font-weight:700;color:#111827;border-left:2.5px solid #111827;'
+  +'padding-left:5px;margin-top:2px;line-height:1.25}'
+  +'.drp.self{font-weight:600;color:#4b5563;border-left-style:dashed}'
+  +'.sheet.d3 .drp{font-size:9.6px}.sheet.d4 .drp{font-size:9px}'
   +'.ao{display:inline-block;border:1.5px solid #111827;border-radius:3px;padding:1px 6px;font-size:10.5px;font-weight:700;margin:0 2px 2px 0;white-space:normal}'
   +'.sq{font-weight:600}.dash{color:#9ca3af}'
   // ── ระดับความหนาแน่น · เลือกตามจำนวนบรรทัดที่ต้องวาง ไม่ตัดข้อมูล แค่บีบระยะ ──
@@ -45539,6 +45544,7 @@ function pckGuideJobSheet(bid, date, rows, vd){
     var pickup=b.hotelName||b.pickup||'';
     var room=b.roomNo||b.room||b.roomNumber||'';
     var area=b.pickupArea||(b.pickupAreaId&&typeof bkV2GetArea==='function'?((bkV2GetArea(b.pickupAreaId)||{}).name||''):'')||'';
+    var dropOff=pckJobDrop(b, date);                                     // §jobDrop
     var ao=pckJobService(r, date);
     var nt=pckJobNote(b);
     return '<tr>'
@@ -45549,7 +45555,8 @@ function pckGuideJobSheet(bid, date, rows, vd){
       +'<td class="tmc"><span class="tm">'+e(pckJobTime(time, r.arr))+'</span></td>'
       +'<td class="pk">'+e(pickup||area||'ท่าเรือ (มาเอง)')
         +(room?('<span class="pl2"> ห้อง '+e(room)+'</span>'):'')
-        +((pickup&&area)?('<span class="pl2"> &middot; '+e(area)+'</span>'):'')+'</td>'
+        +((pickup&&area)?('<span class="pl2"> &middot; '+e(area)+'</span>'):'')
+        +(dropOff?('<span class="drp'+(dropOff.self?' self':'')+'">&#8627; ส่ง '+e(dropOff.t)+'</span>'):'')+'</td>'
       +(showSvc?('<td>'+(ao.length?ao.map(function(a){
           var _c=a.c||'', _i=(_c&&typeof bkV2ContrastInk==='function')?bkV2ContrastInk(_c):'#111827';
           return '<span class="svc"'+(_c?(' style="background:'+_c+';color:'+_i+'"'):'')+'>'+e(a.t)+'</span>';
@@ -45599,7 +45606,7 @@ function pckGuideJobSheet(bid, date, rows, vd){
     +'<th style="width:'+wName+'%">ลูกค้า &middot; ผู้โดยสารทั้งหมด</th>'
     +'<th class="num" style="width:2.8%">AD</th><th class="num" style="width:2.8%">CHD</th>'
     +'<th class="num" style="width:2.8%">INF</th><th class="num" style="width:2.8%">FOC</th>'
-    +'<th style="width:9%">เวลารับ</th><th style="width:'+wPick+'%">สถานที่รับ &middot; โซน</th>'
+    +'<th style="width:9%">เวลารับ</th><th style="width:'+wPick+'%">สถานที่รับ &middot; ส่ง &middot; โซน</th>'
     +(showSvc?'<th style="width:10%">Service</th>':'')
     +(showLang?'<th class="lgc" style="width:4%">ไกด์</th>':'')
     +'<th style="width:9%">Note</th></tr></thead>';
@@ -45607,6 +45614,8 @@ function pckGuideJobSheet(bid, date, rows, vd){
   // §sheetColor (2026-08-01) · หัวใบใช้สีประจำเรือชุดเดียวกับหน้าจอ
   //   วางใบงาน 5 ลำเรียงกันบนโต๊ะแล้วต้องหยิบถูกลำโดยไม่ต้องอ่านชื่อ — สีคือตัวช่วยนั้น
   //   ลงสีเฉพาะหัวใบกับกรอบสรุป ตารางยังขาวดำล้วน เพราะตัวหนังสือบนพื้นสีอ่านยากและเปลืองหมึก
+  // §jobDrop · นับใบที่จุดส่งไม่ตรงกับจุดรับ (รวม "กลับเอง")
+  var _nDrop=0; rows.forEach(function(r){ if(pckJobDrop(r.b, date)) _nDrop++; });
   var _col=(typeof pckBoatColor==='function')?(pckBoatColor(bid)||'#111827'):'#111827';
   var _ink=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(_col):'#fff';
   return '<div class="sheet d'+dens+'">'
@@ -45622,7 +45631,8 @@ function pckGuideJobSheet(bid, date, rows, vd){
       +(S.lost>0?('<span class="jwarn">จอง '+S.book+' &middot; หาย '+S.lost+'</span>'):'')
       +((vd&&vd.n)?('<span class="jwarn">ยกเลิกหน้างาน '+vd.n+' ใบ &middot; '+vd.pax+' คน</span>'):'')+'</div>'
     +'<div class="jsc"><span class="jslab">booking</span><span class="jsv">'+rows.length+'</span>'
-      +'<span class="jslab" style="margin-left:5px">รถ</span><span class="jsv">'+Object.keys(vans).length+' คัน</span></div>'
+      +'<span class="jslab" style="margin-left:5px">รถ</span><span class="jsv">'+Object.keys(vans).length+' คัน</span>'
+      +(_nDrop?('<span class="jwarn">&#8627; ส่งจุดอื่น '+_nDrop+' ใบ</span>'):'')+'</div>'
     +'<div class="jsc"><span class="jslab">ไกด์</span>'+(langs?('<span class="jsv">'+langs+'</span>'):'<span class="jsnone">—</span>')
       +(uniLang?'<span class="jwarn">ทุกใบ</span>':'')+'</div>'
     +'<div class="jsc"><span class="jslab">อาหาร</span>'
@@ -45635,6 +45645,17 @@ function pckGuideJobSheet(bid, date, rows, vd){
     +'</div>';
 }
 
+// §jobDrop (2026-08-02) · จุดส่งขากลับของบุ๊คกิ้งหนึ่งใบ
+//   ใบงานไกด์เดิมมีแต่ "สถานที่รับ" — ไกด์เป็นคนบอกคนขับรถกลับว่าใครลงตรงไหน
+//   พอกระดาษไม่มีจุดส่ง ไกด์ต้องโทรถามออฟฟิศกลางทะเล หรือส่งผิดที่
+//   อ่านจาก bkV2RetInfo ตัวเดียวกับใบงานรถ เพื่อไม่ให้สองใบบอกคนละอย่าง
+function pckJobDrop(b, date){
+  var ri = (typeof bkV2RetInfo === 'function') ? bkV2RetInfo(b, date) : null;
+  if(!ri) return null;
+  if(ri.selfRet) return { t:'กลับเอง', self:true };
+  if(ri.sep && ri.drop) return { t:ri.drop, self:false };
+  return null;
+}
 // ภาษาไกด์ของบุ๊คกิ้งหนึ่งใบ · ที่เดียวที่ตัดสินว่าใบนี้ต้องใช้ภาษาอะไร
 //   ทั้งป้ายในคอลัมน์ไกด์ · ชุดสีปากกา · ยอดรวมหัวใบ อ่านจากฟังก์ชันนี้ตัวเดียว
 function pckGuideLangs(b){
