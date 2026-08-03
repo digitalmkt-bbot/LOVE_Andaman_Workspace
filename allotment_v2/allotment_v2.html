@@ -45054,6 +45054,18 @@ function pckCardCSS(scope){ return ''
   +scope+' .pck-bchip .k{display:block;font-size:10px;opacity:.85;white-space:nowrap}'
   +scope+' .pck-bchip .v{font-family:\'DM Mono\',monospace;font-size:16px;font-weight:800;white-space:nowrap}'
   +scope+' .pck-bbody{padding:0 12px;display:flex;flex-direction:column;gap:12px}'
+  // §pierDrop · จุดส่งไม่ตรงจุดรับ = ของที่ต้องบอกคนขับรถกลับ
+  +scope+' .pck-drop{display:inline-block;margin-top:5px;background:#FFF6E5;border:1px solid #EAD9B0;color:#633806;'
+        +'border-radius:7px;padding:2px 8px;font-size:10.5px;font-weight:700;line-height:1.35;max-width:230px;overflow-wrap:break-word}'
+  +scope+' .pck-drop.self{background:#F5F4F0;border-color:#E0DDD4;color:#7a7972;font-weight:600}'
+  // §pierMeal · อาหารพิเศษ · ป้าย + ปุ่มแก้หน้างาน
+  +scope+' .pck-mcell{display:flex;flex-wrap:wrap;gap:4px;align-items:center}'
+  +scope+' .pck-mchip{display:inline-block;border:1px solid;border-radius:7px;padding:2px 7px;font-size:10px;font-weight:700;white-space:nowrap}'
+  +scope+' .pck-mchip.pier{background:#FFF6E5;border-color:#EAD9B0;color:#8a5a12}'
+  +scope+' .pck-mbtn{border:1px dashed #D8D4CA;background:#fff;color:#8a8a82;border-radius:7px;padding:2px 8px;'
+        +'font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}'
+  +scope+' .pck-mbtn:hover{border-color:#0F6E56;color:#0F6E56;background:#F2FAF7}'
+
   +scope+' .pck-rvoid{background:#FAF9F6}'
   +scope+' .pck-rvoid td{opacity:.66}'
   +scope+' .pck-void{display:flex;flex-direction:column;gap:2px;font-size:10.5px;color:#8a8a82;line-height:1.3}'
@@ -45173,6 +45185,110 @@ function pckNameCell(r){
 }
 // แถวลูกค้าของหน้าท่า · ต่างจาก ckRowHtml ตรงที่ยุบคอลัมน์ที่หัวการ์ดตอบไปแล้ว (เรือ / รถ / โซน)
 // แล้วเอาที่ว่างไปให้ชื่อผู้โดยสาร · add-on · เงิน · ปุ่มเช็คอิน
+// §pierDrop (2026-08-03) · จุดส่งของหน้าเช็คอิน · ใช้ pckJobDrop ตัวเดียวกับใบงานไกด์
+//   หน้าท่าเป็นจุดสุดท้ายที่แก้ทันก่อนเรือออก — ถ้าไม่เห็นตรงนี้ก็ไม่มีที่ไหนให้เห็นอีก
+function pckDropHtml(b, date){
+  var d = (typeof pckJobDrop === 'function') ? pckJobDrop(b, date) : null;
+  if(!d) return '';
+  return '<div class="pck-drop' + (d.self ? ' self' : '') + '" title="จุดส่งขากลับไม่ตรงกับจุดรับ">&#8627; ส่ง '
+       + ckEsc(d.t) + '</div>';
+}
+// §pierMeal (2026-08-03) · อาหารพิเศษที่ขอหน้างาน · แก้ได้ถึงนาทีสุดท้ายก่อนเรือออก
+var PCK_MEALS = [
+  { k:'veg',   l:'มังสวิรัติ', c:'#0F6E56', bg:'#E7F4EF', bd:'#BEE0D2' },
+  { k:'vegan', l:'วีแกน',     c:'#0F6E56', bg:'#E7F4EF', bd:'#BEE0D2' },
+  { k:'halal', l:'ฮาลาล',     c:'#185FA5', bg:'#E9F1FB', bd:'#C3D9F0' }
+];
+function pckMealChips(b){
+  var m = b.specialMeals || {}, out = [];
+  PCK_MEALS.forEach(function(x){ if(+m[x.k] > 0) out.push({ t:x.l + ' ' + (+m[x.k]), c:x.c, bg:x.bg, bd:x.bd }); });
+  var al = (typeof bkV2AllergyCount === 'function') ? bkV2AllergyCount(m) : ((String(m.allergies || '').trim()) ? 1 : 0);
+  if(al) out.push({ t:'⚠ แพ้อาหาร ' + al, c:'#A32D2D', bg:'#FCEBEB', bd:'#F0C9C9' });
+  return out;
+}
+function pckMealCell(b, date){
+  var chips = pckMealChips(b), m = b.specialMeals || {};
+  var html = chips.map(function(c){
+    return '<span class="pck-mchip" style="background:' + c.bg + ';color:' + c.c + ';border-color:' + c.bd + '">' + ckEsc(c.t) + '</span>';
+  }).join('');
+  if(m.pierAt) html += '<span class="pck-mchip pier" title="เพิ่ม/แก้ที่หน้าท่า ' + ckEsc(m.pierAt) + (m.pierBy ? (' · ' + ckEsc(m.pierBy)) : '') + '">หน้างาน</span>';
+  return '<div class="pck-mcell">' + (html || '<span class="ck-dim">—</span>')
+       + '<button class="pck-mbtn" onclick="event.stopPropagation();pckMealOpen(\'' + b.id + '\',\'' + date + '\')" title="เพิ่ม/แก้อาหารพิเศษหน้างาน">' + (chips.length ? '✎' : '+ อาหารพิเศษ') + '</button></div>';
+}
+// ── กล่องแก้อาหารพิเศษหน้างาน ──
+var _pckMeal = { bkId:null, date:'', veg:0, vegan:0, halal:0, allergies:'' };
+function pckMealOpen(bkId, date){
+  var b = (SB_BOOKINGS || []).find(function(x){ return x.id === bkId; }); if(!b) return;
+  var m = b.specialMeals || {};
+  _pckMeal = { bkId:bkId, date:date, veg:+m.veg || 0, vegan:+m.vegan || 0, halal:+m.halal || 0,
+               allergies:String(m.allergies || '') };
+  var host = document.getElementById('pck-meal-host');
+  if(!host){ host = document.createElement('div'); host.id = 'pck-meal-host'; document.body.appendChild(host); }
+  pckMealPaint();
+}
+function pckMealHead(){
+  var b = (SB_BOOKINGS || []).find(function(x){ return x.id === _pckMeal.bkId; }); if(!b) return 0;
+  var t = (typeof ckTripOn === 'function') ? (ckTripOn(b, _pckMeal.date) || {}) : {};
+  return (typeof ckBookedPax === 'function') ? ckBookedPax(t) : 0;
+}
+function pckMealStep(k, d){
+  var head = pckMealHead();
+  var others = ['veg', 'vegan', 'halal'].filter(function(x){ return x !== k; })
+                 .reduce(function(a, x){ return a + (+_pckMeal[x] || 0); }, 0);
+  var room = Math.max(0, head - others);                       // รวมทุกประเภทห้ามเกินจำนวนคนในบุ๊คกิ้ง
+  _pckMeal[k] = Math.max(0, Math.min(room, (+_pckMeal[k] || 0) + d));
+  pckMealPaint();
+}
+function pckMealPaint(){
+  var host = document.getElementById('pck-meal-host'); if(!host) return;
+  var b = (SB_BOOKINGS || []).find(function(x){ return x.id === _pckMeal.bkId; }); if(!b) return;
+  var head = pckMealHead();
+  var used = (+_pckMeal.veg || 0) + (+_pckMeal.vegan || 0) + (+_pckMeal.halal || 0);
+  var rows = PCK_MEALS.map(function(x){
+    var v = +_pckMeal[x.k] || 0;
+    var BT = 'border:none;background:#FAF9F6;color:#4a4a45;width:34px;height:32px;font-size:16px;cursor:pointer;font-family:inherit';
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #F3F1EA">'
+      + '<span style="font-size:13.5px;font-weight:700;color:' + x.c + '">' + x.l + '</span>'
+      + '<span style="display:inline-flex;align-items:center;border:1px solid #E4E1D9;border-radius:9px;overflow:hidden">'
+      + '<button style="' + BT + '" onclick="pckMealStep(\'' + x.k + '\',-1)">&minus;</button>'
+      + '<b style="min-width:40px;text-align:center;font-family:\'DM Mono\',monospace;font-size:15px">' + v + '</b>'
+      + '<button style="' + BT + '" onclick="pckMealStep(\'' + x.k + '\',1)">+</button></span></div>';
+  }).join('');
+  host.innerHTML = ''
+    + '<div id="pck-meal-ov" onclick="if(event.target===this)pckMealClose()" style="position:fixed;inset:0;background:rgba(20,24,22,.42);backdrop-filter:blur(2px);z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px">'
+    + '<div style="background:#fff;border-radius:16px;width:min(430px,96vw);max-height:90vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.28)">'
+    + '  <div style="padding:15px 20px;border-bottom:1px solid #EFECE4;display:flex;align-items:center;justify-content:space-between;gap:12px">'
+    + '    <div><div style="font-size:15px;font-weight:800;color:#15201a">อาหารพิเศษ · หน้างาน</div>'
+    + '    <div style="font-size:11.5px;color:#8a8a82;margin-top:2px;font-family:\'DM Mono\',monospace">'
+    +        ckEsc(b.voucherRef || b.code || b.id) + ' · ' + ckEsc(b.leadPax || '') + ' · ' + head + ' คน</div></div>'
+    + '    <button onclick="pckMealClose()" style="background:transparent;border:none;font-size:20px;color:#9a9a92;cursor:pointer;line-height:1">&times;</button>'
+    + '  </div>'
+    + '  <div style="padding:14px 20px">' + rows
+    + '    <div style="font-size:10.5px;color:' + (used > head ? '#A32D2D' : '#8a8a82') + ';margin:2px 0 12px">รวม ' + used + ' / ' + head + ' คนในบุ๊คกิ้งนี้</div>'
+    + '    <div style="font-size:10px;font-weight:700;color:#8a8a82;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">แพ้อาหาร</div>'
+    + '    <input id="pck-meal-al" type="text" value="' + ckEsc(_pckMeal.allergies) + '" placeholder="เช่น กุ้ง 2 คน · ถั่ว 1 คน" style="border:1px solid #E4E1D9;border-radius:9px;padding:9px 11px;font-size:13px;width:100%;box-sizing:border-box;font-family:inherit">'
+    + '    <div style="font-size:11px;color:#8a8a82;margin-top:11px;line-height:1.5">บันทึกแล้วจะขึ้นทั้งหน้าเช็คอินและ<b>ใบงานไกด์</b> พร้อมป้าย <b>หน้างาน</b> ให้ครัวรู้ว่าเป็นรายการที่เพิ่มทีหลัง</div>'
+    + '  </div>'
+    + '  <div style="padding:10px 20px 16px;display:flex;gap:9px;justify-content:flex-end">'
+    + '    <button onclick="pckMealClose()" style="border:1px solid #E4E1D9;background:#fff;color:#5F5E5A;border-radius:9px;padding:9px 16px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">ยกเลิก</button>'
+    + '    <button onclick="pckMealSave()" style="border:none;background:#0F6E56;color:#fff;border-radius:9px;padding:9px 20px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">บันทึก</button>'
+    + '  </div>'
+    + '</div></div>';
+}
+function pckMealClose(){ var h = document.getElementById('pck-meal-host'); if(h) h.innerHTML = ''; _pckMeal.bkId = null; }
+function pckMealSave(){
+  var st = _pckMeal; if(!st.bkId) return pckMealClose();
+  var b = (SB_BOOKINGS || []).find(function(x){ return x.id === st.bkId; }); if(!b) return pckMealClose();
+  var el = document.getElementById('pck-meal-al');
+  var sm = b.specialMeals || (b.specialMeals = { veg:0, vegan:0, halal:0, allergies:'' });
+  sm.veg = +st.veg || 0; sm.vegan = +st.vegan || 0; sm.halal = +st.halal || 0;
+  sm.allergies = el ? String(el.value || '') : st.allergies;
+  sm.pierAt = (typeof ckNowHM === 'function') ? ckNowHM() : '';
+  sm.pierBy = (typeof ckMe === 'function') ? ckMe() : '';
+  if(typeof acctPersistBookings === 'function') acctPersistBookings();
+  pckMealClose();
+  if(typeof renderPierCheckin === 'function') renderPierCheckin();
+}
 function pckRowHtml(r, date){
   var e=ckEsc, b=r.b, t=r.t;
   var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
@@ -45228,9 +45344,11 @@ function pckRowHtml(r, date){
         +(pArea?'<span class="ck-area">'+e(pArea)+'</span>':'')
         +(r.priv?' <span title="รถเหมา · ไม่แชร์" style="display:inline-block;background:#F4E8FB;color:#6B289A;font-weight:700;font-size:9px;padding:1px 6px;border-radius:6px;white-space:nowrap">เหมา'+(r.priv.qty>1?(' ×'+r.priv.qty):'')+'</span>':'')
       +'</div>':'')
+     +pckDropHtml(b, date)
    +'</td>'
    +'<td>'+pckAddonCell(r,date)+'</td>'
-   +'<td>'+(sreq?'<span class="ck-sreq" title="'+e(sreq)+'">'+e(sreq)+'</span>':'<span class="ck-dim">—</span>')+'</td>'
+   +'<td>'+(sreq?'<div style="margin-bottom:5px"><span class="ck-sreq" title="'+e(sreq)+'">'+e(sreq)+'</span></div>':'')
+     +pckMealCell(b, date)+'</td>'
    +'<td>'+pckStageCell(r,date)+'</td>'
    +'<td>'+pckMoneyCell(b,date)+'</td>'
    +'<td><div class="pck-acts">'
