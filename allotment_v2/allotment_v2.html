@@ -46520,7 +46520,9 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-pyn{font-size:9px;color:var(--zn500);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
  +S+' .ts-pym{font-size:9px;font-weight:700;color:var(--em600);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
  +S+' .ts-pyw{font-size:9px;font-weight:800;color:var(--rs700)}'
- +S+' .ts-chip.ts-nb{text-decoration:line-through;text-decoration-thickness:1.5px;opacity:.55;filter:grayscale(.5)}'
+ +S+' .ts-chip.ts-nb{position:relative;opacity:.5;filter:grayscale(.85);color:var(--zn500)!important}'
+ +S+' .ts-chip.ts-nb::after{content:"";position:absolute;left:3px;right:3px;top:50%;height:1.4px;'
+   +'background:var(--rs700);transform:translateY(-50%);border-radius:1px}'
  +S+' .ts-doc{cursor:pointer}'+S+' .ts-doc:hover{filter:brightness(.95)}'
  +'@media print{'
    +S+' .ts-noprint{display:none!important}'
@@ -47057,10 +47059,14 @@ function renderTravelSum(){
       return '<td class="c ts-px lost" title="จอง '+v.b+' → ไปจริง '+v.l+'">'+v.l+'<em>/'+v.b+'</em></td>';
     };
     var dep=tsDepTime(r.routeId), sb=tsSendBack(b, date);
-    // §tsNoBoard · ใบนี้ได้ขึ้นรถ/ขึ้นเรือจริงไหม · เช็คอินแล้วแต่ยอดจริง = 0 หรือทั้งใบไม่มีใครไป
+    // §tsNoBoard · ใบนี้ได้ขึ้นรถ/ขึ้นเรือจริงไหม
     //   เดิมป้ายรถ/เรือหน้าตาเหมือนกันหมดไม่ว่าคนจะขึ้นจริงหรือเปล่า คนอ่านใบปิดวันแยกไม่ออก
-    var noVan  = r.cxlRow || r.travelled<=0 || (r.vanDone  && (r.vanActual!=null)  && r.vanActual<=0);
-    var noBoat = r.cxlRow || r.travelled<=0 || (r.pierDone && (r.pierActual!=null) && r.pierActual<=0);
+    var _lost=(typeof ckLostByType==='function')?ckLostByType(b,date):null;
+    var _gone = r.cxlRow || r.travelled<=0 || (r.booked>0 && _lost && _lost.total>=r.booked);
+    var noVan  = _gone || (r.vanDone  && (r.vanActual!=null)  && r.vanActual<=0)
+                       || (!!r.vanCk  && (typeof ckEventTally==='function') && ckEventTally(r.vanCk).total>=r.booked && r.booked>0);
+    var noBoat = _gone || (r.pierDone && (r.pierActual!=null) && r.pierActual<=0)
+                       || (!!r.pierCk && (typeof ckEventTally==='function') && ckEventTally(r.pierCk).total>=r.booked && r.booked>0);
     var room=b.roomNo||b.room||b.roomNumber||'';
     body+='<tr'+(r.cxlRow?' class="ts-cxlrow"':'')+'>'
       +'<td><span class="ts-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'
