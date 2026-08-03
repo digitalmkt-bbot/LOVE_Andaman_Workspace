@@ -46596,11 +46596,22 @@ function tsPrintSheet(){
     ? _docPackPages(list, date, 'Reference · เอกสารประกอบ') : '';
   var w=window.open('','_blank');
   if(!w){ alert('เบราว์เซอร์บล็อกป๊อปอัป · อนุญาต pop-up แล้วลองใหม่'); return; }
+  // ฟอนต์ · ยกทุก <link rel=stylesheet> ที่ชี้ไปโรงฟอนต์จากหน้าหลักไปด้วย
+  //   (มี preconnect/preload ปนอยู่ด้วย เอามาทั้งชุดง่ายกว่าและไม่เสียหาย)
+  var fontLinks='';
+  try{
+    [].slice.call(document.querySelectorAll('link[rel="stylesheet"],link[rel="preconnect"]')).forEach(function(L){
+      var h=L.getAttribute('href')||'';
+      if(/fonts\.(googleapis|gstatic)\.com/.test(h)) fontLinks+=L.outerHTML;
+    });
+  }catch(_){}
   // สองขนาดกระดาษในไฟล์เดียว · ใบสรุปเป็น A4 นอน · ชุดเอกสารเป็น A4 ตั้ง
   //   @page ต้องอยู่ "ท้ายสุด" ของเอกสาร เพราะ CSS ของ Travel Summary มี @page ของตัวเอง
   //   ฝังมากับ host.innerHTML ถ้าประกาศไว้ก่อน อันหลังจะทับ ชุดเอกสารจะออกมาเป็นแนวนอนหมด
   var pageCSS='@page ts{size:A4 landscape;margin:9mm}@page doc{size:A4 portrait;margin:9mm}';
   var css='html,body{margin:0;padding:0;background:#fff}'
+    +'body{font-family:\'DM Sans\',sans-serif;font-size:13px;line-height:1.5;color:#1c1917}'
+    +'#travelsum-host{font-family:inherit}'
     +'#travelsum-host{page:ts;display:block}'
     +'.la-docpack{page:doc}'
     +'.la-docpack .pg{page:doc;break-before:page}'
@@ -46609,7 +46620,7 @@ function tsPrintSheet(){
     +'@media screen{body{background:#e9e7e1;padding:10px}}';
   var boot=(typeof _docPackBoot==='function')?_docPackBoot():'';
   w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Travel Summary '+ckEsc(date)+'</title>'
-    +'<style>'+css+'</style></head><body class="ts-printing">'
+    +fontLinks+'<style>'+css+'</style></head><body class="ts-printing">'
     +'<div id="travelsum-host">'+host.innerHTML+'</div>'
     +(pack?('<div class="la-docpack">'+pack+'</div>'):'')
     +'<style>'+pageCSS+'</style>'
@@ -64927,9 +64938,12 @@ function _docPackCSS(S){
 }
 // รอสแกนโหลดครบก่อนค่อยสั่งพิมพ์ · ไม่งั้นกระดาษออกมาเป็นกรอบเปล่า
 function _docPackBoot(){
-  return '<' + 'script>window.onload=function(){var im=[].slice.call(document.images);var n=im.filter(function(x){return !x.complete;}).length;'
-    + 'if(!n){setTimeout(function(){window.print();},350);return;}'
-    + 'im.forEach(function(x){ if(x.complete) return; x.onload=x.onerror=function(){ if(--n<=0) setTimeout(function(){window.print();},350); }; });};<' + '/script>';
+  return '<' + 'script>window.onload=function(){'
+    + 'var go=function(){ var f=(document.fonts&&document.fonts.ready)?document.fonts.ready:Promise.resolve();'
+      + 'f.then(function(){ setTimeout(function(){ window.print(); },250); },function(){ setTimeout(function(){ window.print(); },250); }); };'
+    + 'var im=[].slice.call(document.images);var n=im.filter(function(x){return !x.complete;}).length;'
+    + 'if(!n){ go(); return; }'
+    + 'im.forEach(function(x){ if(x.complete) return; x.onload=x.onerror=function(){ if(--n<=0) go(); }; });};<' + '/script>';
 }
 function docCheckPrintPack(opts){
   opts = opts || {};
@@ -64943,7 +64957,9 @@ function docCheckPrintPack(opts){
   const css='@page{size:A4;margin:9mm}'+_docPackCSS('');
   const w = window.open('','_blank');
   if(!w){ alert('เบราว์เซอร์บล็อกป๊อปอัป · อนุญาต pop-up แล้วลองใหม่'); return; }
-  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>ชุดเอกสาร '+_docPackEsc(date)+'</title><style>'+css+'</style></head><body>'+html+_docPackBoot()+'</body></html>');
+  let fl=''; try{ [].slice.call(document.querySelectorAll('link[rel="stylesheet"],link[rel="preconnect"]')).forEach(function(L){
+    var h=L.getAttribute('href')||''; if(/fonts\.(googleapis|gstatic)\.com/.test(h)) fl+=L.outerHTML; }); }catch(_){}
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>ชุดเอกสาร '+_docPackEsc(date)+'</title>'+fl+'<style>'+css+'</style></head><body>'+html+_docPackBoot()+'</body></html>');
   w.document.close();
 }
 
