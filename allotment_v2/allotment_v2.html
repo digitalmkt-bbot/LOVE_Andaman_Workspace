@@ -45458,26 +45458,36 @@ function pckBoatMeta(rows, date){
 function pckTripStats(rows, date){
   var real={ad:0,chd:0,inf:0,foc:0}, book=0, lost=0;
   var lang={}, meal={veg:0,vegan:0,halal:0,allergy:0}, ltJoin=0, ltChtr=0;
+  // §cxlAddon (2026-08-03) · No-show / CXL หน้างานต้องหักของแถมตามไปด้วย
+  //   เดิมทุกยอดข้างล่างคิดจาก "จองมา" (tot) ทั้งที่ยอดคนคิดจาก "เดินทางจริง" (real)
+  //   ผลคือยกเลิก 2 คนแล้วเลขคนลดลง แต่ Longtail จอย / ภาษาไกด์ ยังเท่าเดิม
+  //   → ของแถมรายหัวใช้ realTot · ของแถมรายลำหักเมื่อยกเลิกทั้งใบเท่านั้น (ลำยังต้องออก ถ้ายังมีคนไป)
   (rows||[]).forEach(function(r){
-    var b=r.b, t=r.t, pb=ckPaxBreak(t.pax), tot=0;
+    var b=r.b, t=r.t, pb=ckPaxBreak(t.pax), tot=0, realTot=0;
     ['ad','chd','inf','foc'].forEach(function(k){
       var bk=pb[k]||0; book+=bk; tot+=bk;
       var left=(typeof ckPaxLeft==='function')?ckPaxLeft(b,date,k,bk):bk;
-      real[k]+=left; lost+=Math.max(0,bk-left);
+      real[k]+=left; realTot+=left; lost+=Math.max(0,bk-left);
     });
+    var gone=(tot>0 && realTot<=0);                      // ยกเลิกยกใบ · ไม่เหลือใครเดินทาง
     var gd=b.guides||{};
-    var addL=function(c,n){ if(!c) return; lang[c]=(lang[c]||0)+n; };
-    if(gd.english) addL('EN',tot);
-    if(gd.russian) addL('RU',tot);
-    if(gd.chinese) addL('CN',tot);
-    var ol=String(gd.otherLang||'').trim(); if(ol) addL(ol,tot);
-    var mm=b.specialMeals||{};
+    var addL=function(c,n){ if(!c||!n) return; lang[c]=(lang[c]||0)+n; };
+    if(gd.english) addL('EN',realTot);
+    if(gd.russian) addL('RU',realTot);
+    if(gd.chinese) addL('CN',realTot);
+    var ol=String(gd.otherLang||'').trim(); if(ol) addL(ol,realTot);
+    // อาหาร · ยกเลิกบางส่วนยังทำเผื่อไว้ (ไม่รู้ว่าคนที่ไม่มาคือคนที่สั่งอะไร ทำขาดเสียหายกว่าทำเกิน)
+    //   ยกเลิกทั้งใบเท่านั้นที่ตัดออก
+    var mm=gone?{}:(b.specialMeals||{});
     meal.veg+=+mm.veg||0; meal.vegan+=+mm.vegan||0; meal.halal+=+mm.halal||0;
     meal.allergy+=(typeof bkV2AllergyCount==='function')?bkV2AllergyCount(mm):(String(mm.allergies||'').trim()?1:0);
     var af=(typeof bkV2AddOnFlags==='function')?bkV2AddOnFlags(b,t.routeId):{};
-    if(af.charter) ltChtr+=(af.charterQty||1); else if(af.join) ltJoin+=tot;
-    if(typeof bkV2LongtailExtraPax==='function') ltJoin+=(bkV2LongtailExtraPax(b.id,date)||0);
-    if(typeof bkV2LongtailCharterExtraBoats==='function') ltChtr+=(bkV2LongtailCharterExtraBoats(b.id,date)||0);
+    if(af.charter){ if(!gone) ltChtr+=(af.charterQty||1); }   // เหมาลำ · ยังต้องออกถ้ายังมีคนไป
+    else if(af.join) ltJoin+=realTot;                          // จอย · คิดรายหัวตามคนที่ไปจริง
+    if(!gone){
+      if(typeof bkV2LongtailExtraPax==='function') ltJoin+=(bkV2LongtailExtraPax(b.id,date)||0);
+      if(typeof bkV2LongtailCharterExtraBoats==='function') ltChtr+=(bkV2LongtailCharterExtraBoats(b.id,date)||0);
+    }
   });
   real.all=real.ad+real.chd+real.inf+real.foc;
   return { real:real, book:book, lost:lost, lang:lang, meal:meal, ltJoin:ltJoin, ltChtr:ltChtr };
