@@ -46534,12 +46534,45 @@ function tsCSS(){ var S='#travelsum-host'; return ''
    +'@page{size:A4 landscape;margin:9mm}'
    +'body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
 }
+// §tsRefPack · รายการที่จะพิมพ์เป็นชุดเอกสารต่อท้าย
+//   ใช้ลำดับเดียวกับ manifest (เส้นทาง → Agency A-Z → Voucher) และตามเส้นทางที่เลือกอยู่
+//   เอาเฉพาะใบที่มีเอกสารต้องตรวจ · ใบ walk-in ที่ไม่มีไฟล์ไม่ต้องเปลืองกระดาษ
+function tsRefPackList(date){
+  var rows=tsRows(date);
+  if(_tsRoute) rows=rows.filter(function(r){ return (r.routeId||'')===_tsRoute; });
+  return rows.filter(function(r){
+    var b=r.b;
+    if(((b.attachments||[]).length)>0) return true;
+    return (typeof _docIsB2B==='function') ? _docIsB2B(b) : !!b.agentId;
+  }).map(function(r){ return { bk:r.b, trip:r.t }; });
+}
 function tsPrintSheet(){
-  document.body.classList.add('ts-printing');
-  var back=function(){ document.body.classList.remove('ts-printing'); };
-  try{ window.addEventListener('afterprint', back, { once:true }); }catch(_){}
-  try{ window.print(); }catch(_){}
-  setTimeout(back, 1500);   // กันเบราว์เซอร์ที่ไม่ยิง afterprint
+  var host=document.getElementById('travelsum-host'); if(!host) return;
+  var date=_tsDate;
+  var list=(typeof tsRefPackList==='function')?tsRefPackList(date):[];
+  var pack=(list.length && typeof _docPackPages==='function')
+    ? _docPackPages(list, date, 'Reference · เอกสารประกอบ') : '';
+  var w=window.open('','_blank');
+  if(!w){ alert('เบราว์เซอร์บล็อกป๊อปอัป · อนุญาต pop-up แล้วลองใหม่'); return; }
+  // สองขนาดกระดาษในไฟล์เดียว · ใบสรุปเป็น A4 นอน · ชุดเอกสารเป็น A4 ตั้ง
+  //   @page ต้องอยู่ "ท้ายสุด" ของเอกสาร เพราะ CSS ของ Travel Summary มี @page ของตัวเอง
+  //   ฝังมากับ host.innerHTML ถ้าประกาศไว้ก่อน อันหลังจะทับ ชุดเอกสารจะออกมาเป็นแนวนอนหมด
+  var pageCSS='@page ts{size:A4 landscape;margin:9mm}@page doc{size:A4 portrait;margin:9mm}';
+  var css='html,body{margin:0;padding:0;background:#fff}'
+    +'#travelsum-host{page:ts;display:block}'
+    +'.la-docpack{page:doc}'
+    +'.la-docpack .pg{page:doc;break-before:page}'
+    +'.la-docpack{font-family:"DM Sans",-apple-system,system-ui,sans-serif}'
+    +(typeof _docPackCSS==='function'?_docPackCSS('.la-docpack'):'')
+    +'@media screen{body{background:#e9e7e1;padding:10px}}';
+  var boot=(typeof _docPackBoot==='function')?_docPackBoot():'';
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Travel Summary '+ckEsc(date)+'</title>'
+    +'<style>'+css+'</style></head><body class="ts-printing">'
+    +'<div id="travelsum-host">'+host.innerHTML+'</div>'
+    +(pack?('<div class="la-docpack">'+pack+'</div>'):'')
+    +'<style>'+pageCSS+'</style>'
+    +boot+'</body></html>');
+  w.document.close();
 }
 // §tsRoute · แยกดูรายเส้นทาง · '' = ทุกเส้นทาง
 var _tsRoute='';
@@ -46567,22 +46600,6 @@ function tsDocRef(b){
   return { st:st, n:n, label:m[0], cls:m[1], by:dc.by||'', at:dc.at||'', when:when, note:dc.note||'',
            done:done, tot:K.length, missing:missing, docRef:docRef, fname:fname,
            files:att.map(function(a){ return a.name||'ไฟล์แนบ'; }) };
-}
-// เซลล์ Reference เต็มใบสำหรับ manifest · ป้ายสถานะ + ของจริงที่ดึงมาจากหน้าตรวจเอกสาร
-function tsDocCell(b, date){
-  var d=tsDocRef(b), e=ckEsc, L=[];
-  // บรรทัดเดียวกัน · ป้ายสถานะ + เช็คลิสต์ (แถวในตารางจะได้ไม่สูงเกินจำเป็นตอนพิมพ์)
-  L.push('<span class="ts-drow">'+tsDocChip(b, date)
-    +(d.tot?('<span class="ts-dchk'+((d.done>=d.tot)?' ok':'')+'" title="'
-      +(d.missing.length?('ยังไม่ได้ตรวจ: '+e(d.missing.join(' · '))):'ตรวจครบทุกช่อง')
-      +'">&#10003; '+d.done+'/'+d.tot+'</span>'):'')+'</span>');
-  if(d.docRef) L.push('<span class="ts-dref" title="เลขอ้างอิงที่อ่านได้จากตัวเอกสาร (Pre-Check)">Ref '+e(d.docRef)+'</span>');
-  var who=e([d.by,d.when].filter(Boolean).join(' · '));
-  if(d.n) L.push('<span class="ts-dfile" title="'+e(d.files.join(' · '))+'">&#128206; '+e(d.fname)
-      +(d.n>1?('<em> +'+(d.n-1)+'</em>'):'')+(who?('<em class="w"> &middot; '+who+'</em>'):'')+'</span>');
-  else if(who) L.push('<span class="ts-dby">'+who+'</span>');
-  if(d.note) L.push('<span class="ts-dnote" title="'+e(d.note)+'">'+e(d.note)+'</span>');
-  return '<div class="ts-dcell">'+L.join('')+'</div>';
 }
 function tsDocChip(b, date){
   var d=tsDocRef(b), e=ckEsc;
@@ -46805,58 +46822,6 @@ function renderTravelSum(){
     +'<th>รถ · เรือ</th><th class="c">ขึ้นรถ</th><th class="c">ขึ้นเรือ</th><th class="r">ราคาเต็ม</th><th class="c">สถานะ</th>'
     +'</tr></thead><tbody>'
     +(body||'<tr><td colspan="11" class="ts-empty">'+(_tsOnlyIssue?'ไม่มีเคสที่ต้องตัดสินในวันนี้':'ไม่มี booking ในวันนี้')+'</td></tr>')
-    +'</tbody></table></div></div></div>';
-
-  // ══ ส่วน 5 · Reference · เอกสารประกอบ ══
-  // §tsRefList · ลิสต์ต่อจาก manifest · ลำดับเดียวกันเป๊ะ (เส้นทาง → Agency A-Z → Voucher)
-  //   คนตรวจจะได้ไล่คู่กันทีละบรรทัดโดยไม่ต้องค้นหา
-  var rbody='', prevR2=null, rn=0;
-  rows.forEach(function(r){
-    var b=r.b, d=tsDocRef(b);
-    if(r.routeId!==prevR2){
-      prevR2=r.routeId;
-      var rt2=(typeof getRoute==='function'?getRoute(r.routeId):null)||{};
-      var g2=rows.filter(function(x){ return x.routeId===r.routeId; });
-      var nF=0, nOk=0;
-      g2.forEach(function(x){ var dd=tsDocRef(x.b); nF+=dd.n; if(dd.st==='verified') nOk++; });
-      rbody+='<tr class="ts-grow"><td colspan="8" style="padding:7px 11px">'
-        +'<span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;color:'+(rt2.color||'var(--zn700)')+'">'
-        +'<i class="ts-dot" style="border-radius:50%;background:'+(rt2.color||'#999')+'"></i>'+e(rt2.name||r.routeId||'—')+'</span>'
-        +'<span style="float:right" class="ts-tel">'+g2.length+' booking · ตรวจแล้ว '+nOk+'/'+g2.length+' · ไฟล์แนบ '+nF+'</span>'
-        +'</td></tr>';
-    }
-    rn++;
-    rbody+='<tr>'
-      +'<td class="c ts-mono ts-tel">'+rn+'</td>'
-      +'<td><span class="ts-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'
-      +'<td class="ts-tel">'+e(tsAgName(b))+'</td>'
-      +'<td><div class="ts-lead">'+e(b.leadPax||'—')+'</div></td>'
-      +'<td>'+tsDocChip(b,date)
-        +(d.tot?('<span class="ts-dchk'+((d.done>=d.tot)?' ok':'')+'" style="margin-left:6px" title="'
-          +(d.missing.length?('ยังไม่ได้ตรวจ: '+e(d.missing.join(' · '))):'ตรวจครบทุกช่อง')
-          +'">&#10003; '+d.done+'/'+d.tot+'</span>'):'')
-        +(d.missing.length&&d.n?('<div class="ts-dnote" style="color:var(--am700)">ยังไม่ตรวจ: '+e(d.missing.join(' · '))+'</div>'):'')+'</td>'
-      +'<td>'+(d.docRef?('<span class="ts-dref">'+e(d.docRef)+'</span>'):'<span class="ts-tel">—</span>')+'</td>'
-      +'<td>'+(d.n?('<div class="ts-dfiles">'+d.files.map(function(f){
-          return '<span class="ts-dfile">&#128206; '+e(f)+'</span>'; }).join('')+'</div>')
-        :'<span class="ts-tel">— ยังไม่แนบ</span>')+'</td>'
-      +'<td class="ts-tel">'+e([d.by,d.when].filter(Boolean).join(' · ')||'—')
-        +(d.note?('<div class="ts-dnote">'+e(d.note)+'</div>'):'')+'</td>'
-      +'</tr>';
-  });
-  var nFiles=0, nOkAll=0;
-  rows.forEach(function(r){ var dd=tsDocRef(r.b); nFiles+=dd.n; if(dd.st==='verified') nOkAll++; });
-  var refSec='<div class="ts-sec"><div class="ts-sech"><div>'
-    +'<div class="ts-sect"><i class="ts-dot" style="background:var(--bl700)"></i>ส่วนที่ 5 · Reference · เอกสารประกอบ</div>'
-    +'<div class="ts-secd">เอกสารที่ agent ส่งมาของทุกใบใน manifest ข้างบน — เรียงลำดับเดียวกันบรรทัดต่อบรรทัด '
-      +'ดึงจากหน้าตรวจเอกสารโดยตรง (สถานะ · เช็คลิสต์ 6 ช่อง · เลขอ้างอิงในเอกสาร · ไฟล์แนบ · ผู้ตรวจ)</div></div>'
-    +'<span class="ts-chip '+((nOkAll>=rows.length&&rows.length)?'g':'a')+'" style="font-size:11px;padding:5px 12px">'
-      +'ตรวจแล้ว '+nOkAll+'/'+rows.length+' ใบ · ไฟล์แนบ '+nFiles+'</span></div>'
-    +'<div class="ts-card"><div class="ts-scroll"><table class="ts-tbl"><thead><tr>'
-    +'<th class="c" style="width:30px">#</th><th>Voucher</th><th>Agency</th><th>ลูกค้า (lead)</th>'
-    +'<th>สถานะเอกสาร · เช็คลิสต์</th><th>เลขอ้างอิงในเอกสาร</th><th>ไฟล์แนบ</th><th>ผู้ตรวจ · วันที่ · หมายเหตุ</th>'
-    +'</tr></thead><tbody>'
-    +(rbody||'<tr><td colspan="8" class="ts-empty">ไม่มีรายการ</td></tr>')
     +'</tbody></table></div></div>'
     +'<div class="ts-sign">'
     +'<div class="ts-sg"><i></i><b>ผู้จัดทำ · Operations</b><span>เจ้าหน้าที่ปฏิบัติการ</span></div>'
@@ -46917,7 +46882,7 @@ function renderTravelSum(){
       +'<div class="ts-secd">ยอดรวมทุกเส้นทางของวันนี้ · ตัวเลขทั้งหมดคิดจากผู้โดยสารที่เดินทางจริงหลังหักคนที่ไม่มา</div></div>'
       +'<span class="ts-chip n" style="font-size:11px;padding:5px 12px">เก็บค่าปรับได้ '+money(charge)+(nPostpone?(' · เลื่อนวัน '+nPostpone+' เคส'):'')+'</span></div>'
       +kpis+'</div>'
-    +audit+cash+manifest+refSec+'</div>';
+    +audit+cash+manifest+'</div>';
 }
 
 function bkV2VanJobOrder(date, vanId, routeId, leg){
@@ -64735,6 +64700,90 @@ function docCheckNav(dir){ const ids=_docCheckOrdered(_docCheck.date).map(r=>r.b
 // stays on that same page (layout adapts to the file count). Missing docs still
 // get a page so nothing silently falls off the checklist.
 // ══════════════════════════════════════════════════════════════════════════════
+// §docPack (2026-08-03) · แยกตัวสร้างหน้ากระดาษ "ชุดเอกสารตรวจ" ออกมา
+//   เดิมฝังอยู่ใน docCheckPrintPack ที่เดียว · Travel Summary เลยเอาไปต่อท้ายไม่ได้
+//   ตอนนี้ทั้งสองหน้าเรียกตัวเดียวกัน หน้ากระดาษจึงหน้าตาเหมือนกันเป๊ะเสมอ
+function _docPackEsc(x){ return String(x==null?'':x).replace(/[&<>"]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
+var _DOCPACK_PIER = {tublamu:'Tub Lamu Pier', panwa:'Visit Panwa'};
+// หนึ่ง voucher = หนึ่งหน้า · สแกนทุกใบของ voucher นั้นอยู่หน้าเดียวกัน
+function _docPackPage(r, i, total, seq, date, kicker){
+  var e=_docPackEsc, b=r.bk, t=r.trip;
+  var R=((typeof getRoute==='function'?getRoute(t.routeId):null)||{});
+  var ag=((typeof sbGetAgent==='function'?sbGetAgent(b.agentId):null)||{});
+  var pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
+  var files=(b.attachments||[]), n=files.length;
+  var pick=String(b.hotelName||b.pickup||'').trim();
+  var pickHtml=pick?e(pick):'<span class="warn">&#9888; ยังไม่มีที่รับ</span>';
+  var grid=(n<=1)?'one':(n===2)?'two':(n<=4)?'four':'many';
+  var body;
+  if(!n){
+    body='<div class="miss"><div class="mi">&#9888;</div><b>ยังไม่ได้แนบเอกสาร</b><span>'+pax+' pax &middot; ต้องการ '+pax+' ไฟล์</span></div>';
+  } else {
+    body='<div class="grid '+grid+'">'+files.map(function(f,k){
+      var url='/api/attach/'+encodeURIComponent(f.id);
+      var isImg=/^image\//.test(f.mime||'');
+      var box=isImg?('<img src="'+url+'" alt="">')
+                   :('<div class="nf"><div class="mi">&#128196;</div><span>'+e(f.name||'file')+'</span></div>');
+      return '<figure><div class="sc">'+box+'</div><figcaption>'+(k+1)+'/'+n+' &middot; '+e(f.name||'')+'</figcaption></figure>';
+    }).join('')+'</div>';
+    if(n<pax) body+='<div class="short">&#9888; '+pax+' pax แต่แนบมา '+n+' ไฟล์ — ขาดเอกสาร '+(pax-n)+' คน</div>';
+  }
+  return '<section class="pg">'
+    + '<header><span>LOVE Andaman &middot; '+e(kicker||'ชุดเอกสารตรวจ')+' &middot; '+e(date)+'</span><span>หน้า '+(i+1)+' / '+total+'</span></header>'
+    + '<div class="trip">ทริป &middot; '+e(R.name||t.routeId)+(R.pier?(' &middot; '+e(_DOCPACK_PIER[R.pier]||R.pier)):'')+'</div>'
+    + '<div class="bk"><div class="r1"><b>#'+seq+' &middot; '+e(b.leadPax||'—')+'</b><span>'+pax+' pax</span></div>'
+    +   '<div class="r2">'+e(ag.name||b.agentId||'')+(b.voucherRef?(' &middot; '+e(b.voucherRef)):'')+' &middot; รับที่ '+pickHtml+'</div></div>'
+    + '<div class="body">'+body+'</div>'
+    + '<footer><span>&#9744; ตรวจแล้ว &nbsp;&nbsp; &#9744; เอกสารครบ</span><span>ผู้ตรวจ ________________</span></footer>'
+    + '</section>';
+}
+function _docPackPages(list, date, kicker){
+  var html='', lastRoute=null, seq=0, total=list.length;
+  list.forEach(function(r,i){
+    var R=((typeof getRoute==='function'?getRoute(r.trip.routeId):null)||{});
+    if(R.id!==lastRoute){ lastRoute=R.id; seq=0; }
+    seq++;
+    html+=_docPackPage(r, i, total, seq, date, kicker);
+  });
+  return html;
+}
+// S = ตัวนำหน้า selector · ''  = เอกสารเดี่ยว (หน้าตรวจเอกสาร)
+//                          '.la-docpack' = เอาไปแปะต่อท้ายเอกสารอื่น (Travel Summary)
+function _docPackCSS(S){
+  var p=S?(S+' '):'';
+  return (S?'':'*{box-sizing:border-box}')
+   + (S?(S+'{box-sizing:border-box}'+S+' *{box-sizing:border-box}')
+       :'body{margin:0;font-family:"DM Sans",-apple-system,system-ui,sans-serif;color:#1f2a24;-webkit-print-color-adjust:exact;print-color-adjust:exact}')
+   + (S?(S+'{font-family:"DM Sans",-apple-system,system-ui,sans-serif;color:#1f2a24}'):'')
+   + p+'.pg{width:192mm;height:279mm;display:flex;flex-direction:column;page-break-after:always}'
+   + p+'.pg:last-child{page-break-after:auto}'
+   + p+'.pg > header{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #1f2a24;padding-bottom:3mm;font-size:8pt;color:#6b736e}'
+   + p+'.trip{background:#eef2f0;border-left:3px solid #0F6E56;padding:2mm 3mm;margin-top:3mm;font-size:9pt;font-weight:600}'
+   + p+'.bk{margin-top:2.5mm;font-size:9pt}'+p+'.bk .r1{display:flex;justify-content:space-between;font-size:11pt}'+p+'.bk .r2{color:#6b736e;margin-top:1mm}'
+   + p+'.warn{color:#A32D2D;font-weight:600}'
+   + p+'.body{flex:1;margin-top:3mm;min-height:0;display:flex;flex-direction:column}'
+   + p+'.grid{flex:1;display:grid;gap:3mm;min-height:0}'
+   + p+'.grid.one{grid-template-columns:1fr}'
+   + p+'.grid.two{grid-template-columns:1fr;grid-template-rows:1fr 1fr}'
+   + p+'.grid.four{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}'
+   + p+'.grid.many{grid-template-columns:1fr 1fr 1fr;grid-auto-rows:1fr}'
+   + p+'figure{margin:0;display:flex;flex-direction:column;min-height:0}'
+   + p+'.sc{flex:1;border:1px solid #cfd6d2;border-radius:1mm;background:#f4f2ec;display:flex;align-items:center;justify-content:center;overflow:hidden;min-height:0}'
+   + p+'.sc img{max-width:100%;max-height:100%;object-fit:contain}'
+   + p+'.nf{display:flex;flex-direction:column;align-items:center;gap:2mm;color:#8a938d;font-size:8pt;padding:3mm;text-align:center}'
+   + p+'.mi{font-size:20pt}'
+   + p+'figcaption{font-size:7.5pt;color:#6b736e;text-align:center;padding-top:1mm}'
+   + p+'.miss{flex:1;border:1px dashed #d99;border-radius:1mm;background:#fdf3f2;color:#A32D2D;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2mm;font-size:10pt}'
+   + p+'.short{color:#A32D2D;font-size:8pt;text-align:center;padding-top:2mm}'
+   + p+'.pg > footer{border-top:1px solid #d9d5cc;padding-top:2.5mm;margin-top:3mm;display:flex;justify-content:space-between;font-size:8pt;color:#6b736e}'
+   + (S?(''):'@media screen{body{background:#e9e7e1;padding:8mm}.pg{background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.15);margin:0 auto 6mm;padding:9mm}}');
+}
+// รอสแกนโหลดครบก่อนค่อยสั่งพิมพ์ · ไม่งั้นกระดาษออกมาเป็นกรอบเปล่า
+function _docPackBoot(){
+  return '<' + 'script>window.onload=function(){var im=[].slice.call(document.images);var n=im.filter(function(x){return !x.complete;}).length;'
+    + 'if(!n){setTimeout(function(){window.print();},350);return;}'
+    + 'im.forEach(function(x){ if(x.complete) return; x.onload=x.onerror=function(){ if(--n<=0) setTimeout(function(){window.print();},350); }; });};<' + '/script>';
+}
 function docCheckPrintPack(opts){
   opts = opts || {};
   const date = _docCheck.date;
@@ -64743,84 +64792,11 @@ function docCheckPrintPack(opts){
     list = list.filter(r => (r.bk.attachments||[]).length < bkV2PaxAllTot(r.trip.pax||{}));
   }
   if(!list.length){ alert('ไม่มีรายการตามเงื่อนไขที่เลือก'); return; }
-
-  const e = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  const rt = id => ((typeof getRoute==='function' ? getRoute(id) : null) || {});
-  const PIER = {tublamu:'Tub Lamu Pier', panwa:'Visit Panwa'};
-  const total = list.length;
-
-  let html = '', lastRoute = null, seq = 0;
-  list.forEach((r, i) => {
-    const b = r.bk, t = r.trip, R = rt(t.routeId);
-    const ag = ((typeof sbGetAgent==='function' ? sbGetAgent(b.agentId) : null) || {});
-    const pax = bkV2PaxAllTot(t.pax||{});
-    const files = (b.attachments||[]);
-    const n = files.length;
-    if(R.id !== lastRoute){ lastRoute = R.id; seq = 0; }
-    seq++;
-
-    const pick = String(b.hotelName||b.pickup||'').trim();
-    const pickHtml = pick ? e(pick) : '<span class="warn">⚠ ยังไม่มีที่รับ</span>';
-    const grid = n<=1 ? 'one' : n===2 ? 'two' : n<=4 ? 'four' : 'many';
-
-    let body;
-    if(!n){
-      body = '<div class="miss"><div class="mi">⚠</div><b>ยังไม่ได้แนบเอกสาร</b><span>'+pax+' pax · ต้องการ '+pax+' ไฟล์</span></div>';
-    } else {
-      body = '<div class="grid '+grid+'">' + files.map((f,k) => {
-        const url = '/api/attach/' + encodeURIComponent(f.id);
-        const isImg = /^image\//.test(f.mime||'');
-        const box = isImg ? '<img src="'+url+'" alt="">'
-                          : '<div class="nf"><div class="mi">📄</div><span>'+e(f.name||'file')+'</span></div>';
-        return '<figure><div class="sc">'+box+'</div><figcaption>'+(k+1)+'/'+n+' · '+e(f.name||'')+'</figcaption></figure>';
-      }).join('') + '</div>';
-      if(n < pax) body += '<div class="short">⚠ '+pax+' pax แต่แนบมา '+n+' ไฟล์ — ขาดเอกสาร '+(pax-n)+' คน</div>';
-    }
-
-    html += '<section class="pg">'
-      + '<header><span>LOVE Andaman · ชุดเอกสารตรวจ · '+e(date)+'</span><span>หน้า '+(i+1)+' / '+total+'</span></header>'
-      + '<div class="trip">ทริป · '+e(R.name||t.routeId)+(R.pier?(' · '+e(PIER[R.pier]||R.pier)):'')+'</div>'
-      + '<div class="bk"><div class="r1"><b>#'+seq+' · '+e(b.leadPax||'—')+'</b><span>'+pax+' pax</span></div>'
-      +   '<div class="r2">'+e(ag.name||b.agentId||'')+(b.voucherRef?(' · '+e(b.voucherRef)):'')+' · รับที่ '+pickHtml+'</div></div>'
-      + '<div class="body">'+body+'</div>'
-      + '<footer><span>☐ ตรวจแล้ว &nbsp;&nbsp; ☐ เอกสารครบ</span><span>ผู้ตรวจ ________________</span></footer>'
-      + '</section>';
-  });
-
-  const css = '@page{size:A4;margin:9mm}'
-   + '*{box-sizing:border-box}'
-   + 'body{margin:0;font-family:"DM Sans",-apple-system,system-ui,sans-serif;color:#1f2a24;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
-   + '.pg{width:192mm;height:279mm;display:flex;flex-direction:column;page-break-after:always}'
-   + '.pg:last-child{page-break-after:auto}'
-   + 'header{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid #1f2a24;padding-bottom:3mm;font-size:8pt;color:#6b736e}'
-   + '.trip{background:#eef2f0;border-left:3px solid #0F6E56;padding:2mm 3mm;margin-top:3mm;font-size:9pt;font-weight:600}'
-   + '.bk{margin-top:2.5mm;font-size:9pt}.bk .r1{display:flex;justify-content:space-between;font-size:11pt}.bk .r2{color:#6b736e;margin-top:1mm}'
-   + '.warn{color:#A32D2D;font-weight:600}'
-   + '.body{flex:1;margin-top:3mm;min-height:0;display:flex;flex-direction:column}'
-   + '.grid{flex:1;display:grid;gap:3mm;min-height:0}'
-   + '.grid.one{grid-template-columns:1fr}'
-   + '.grid.two{grid-template-columns:1fr;grid-template-rows:1fr 1fr}'
-   + '.grid.four{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}'
-   + '.grid.many{grid-template-columns:1fr 1fr 1fr;grid-auto-rows:1fr}'
-   + 'figure{margin:0;display:flex;flex-direction:column;min-height:0}'
-   + '.sc{flex:1;border:1px solid #cfd6d2;border-radius:1mm;background:#f4f2ec;display:flex;align-items:center;justify-content:center;overflow:hidden;min-height:0}'
-   + '.sc img{max-width:100%;max-height:100%;object-fit:contain}'
-   + '.nf{display:flex;flex-direction:column;align-items:center;gap:2mm;color:#8a938d;font-size:8pt;padding:3mm;text-align:center}'
-   + '.mi{font-size:20pt}'
-   + 'figcaption{font-size:7.5pt;color:#6b736e;text-align:center;padding-top:1mm}'
-   + '.miss{flex:1;border:1px dashed #d99;border-radius:1mm;background:#fdf3f2;color:#A32D2D;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2mm;font-size:10pt}'
-   + '.short{color:#A32D2D;font-size:8pt;text-align:center;padding-top:2mm}'
-   + 'footer{border-top:1px solid #d9d5cc;padding-top:2.5mm;margin-top:3mm;display:flex;justify-content:space-between;font-size:8pt;color:#6b736e}'
-   + '@media screen{body{background:#e9e7e1;padding:8mm}.pg{background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.15);margin:0 auto 6mm;padding:9mm}}';
-
-  // wait for every scan to load before firing print (otherwise pages print blank)
-  const boot = '<' + 'script>window.onload=function(){var im=[].slice.call(document.images);var n=im.filter(function(x){return !x.complete;}).length;'
-    + 'if(!n){setTimeout(function(){window.print();},350);return;}'
-    + 'im.forEach(function(x){ if(x.complete) return; x.onload=x.onerror=function(){ if(--n<=0) setTimeout(function(){window.print();},350); }; });};<' + '/script>';
-
+  const html=_docPackPages(list, date, 'ชุดเอกสารตรวจ');
+  const css='@page{size:A4;margin:9mm}'+_docPackCSS('');
   const w = window.open('','_blank');
   if(!w){ alert('เบราว์เซอร์บล็อกป๊อปอัป · อนุญาต pop-up แล้วลองใหม่'); return; }
-  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>ชุดเอกสาร '+e(date)+'</title><style>'+css+'</style></head><body>'+html+boot+'</body></html>');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>ชุดเอกสาร '+_docPackEsc(date)+'</title><style>'+css+'</style></head><body>'+html+_docPackBoot()+'</body></html>');
   w.document.close();
 }
 
