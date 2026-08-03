@@ -46520,6 +46520,7 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-pyn{font-size:9px;color:var(--zn500);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
  +S+' .ts-pym{font-size:9px;font-weight:700;color:var(--em600);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
  +S+' .ts-pyw{font-size:9px;font-weight:800;color:var(--rs700)}'
+ +S+' .ts-chip.ts-nb{text-decoration:line-through;text-decoration-thickness:1.5px;opacity:.55;filter:grayscale(.5)}'
  +S+' .ts-doc{cursor:pointer}'+S+' .ts-doc:hover{filter:brightness(.95)}'
  +'@media print{'
    +S+' .ts-noprint{display:none!important}'
@@ -46554,18 +46555,18 @@ function tsCSS(){ var S='#travelsum-host'; return ''
      +S+' .ts-man th:nth-child(5),'+S+' .ts-man td:nth-child(5),'
      +S+' .ts-man th:nth-child(6),'+S+' .ts-man td:nth-child(6),'
      +S+' .ts-man th:nth-child(7),'+S+' .ts-man td:nth-child(7){width:2.7%}'
-   +S+' .ts-man th:nth-child(8),'+S+' .ts-man td:nth-child(8){width:5.2%}'
+   +S+' .ts-man th:nth-child(8),'+S+' .ts-man td:nth-child(8){width:5.8%}'
    +S+' .ts-man th:nth-child(9),'+S+' .ts-man td:nth-child(9){width:5.6%}'
    +S+' .ts-man th:nth-child(10),'+S+' .ts-man td:nth-child(10){width:9.6%}'
    +S+' .ts-man th:nth-child(11),'+S+' .ts-man td:nth-child(11){width:7.6%}'
    +S+' .ts-man th:nth-child(12),'+S+' .ts-man td:nth-child(12){width:10.6%}'
    +S+' .ts-man th:nth-child(3),'+S+' .ts-man td:nth-child(3){width:9.8%}'
-   +S+' .ts-man th:nth-child(10),'+S+' .ts-man td:nth-child(10){width:8.6%}'
+   +S+' .ts-man th:nth-child(10),'+S+' .ts-man td:nth-child(10){width:8%}'
    +S+' .ts-man th:nth-child(11),'+S+' .ts-man td:nth-child(11){width:6.6%}'
    +S+' .ts-man th:nth-child(12),'+S+' .ts-man td:nth-child(12){width:9.4%}'
    +S+' .ts-man th:nth-child(13),'+S+' .ts-man td:nth-child(13){width:5.8%}'
-   +S+' .ts-man th:nth-child(14),'+S+' .ts-man td:nth-child(14){width:5.4%}'
-   +S+' .ts-man th:nth-child(15),'+S+' .ts-man td:nth-child(15){width:8.4%}'
+   +S+' .ts-man th:nth-child(14),'+S+' .ts-man td:nth-child(14){width:8.4%}'
+   +S+' .ts-man th:nth-child(15),'+S+' .ts-man td:nth-child(15){width:5.4%}'
    +S+' .ts-man th:nth-child(16),'+S+' .ts-man td:nth-child(16){width:7.4%}'
    +S+' .ts-man th:nth-child(17),'+S+' .ts-man td:nth-child(17){width:5.2%}'
    // ป้ายในสองคอลัมน์ท้ายยาวกว่าช่อง · ให้ขึ้นบรรทัดใหม่แทนล้นออกไปนอกกระดาษ
@@ -47056,6 +47057,10 @@ function renderTravelSum(){
       return '<td class="c ts-px lost" title="จอง '+v.b+' → ไปจริง '+v.l+'">'+v.l+'<em>/'+v.b+'</em></td>';
     };
     var dep=tsDepTime(r.routeId), sb=tsSendBack(b, date);
+    // §tsNoBoard · ใบนี้ได้ขึ้นรถ/ขึ้นเรือจริงไหม · เช็คอินแล้วแต่ยอดจริง = 0 หรือทั้งใบไม่มีใครไป
+    //   เดิมป้ายรถ/เรือหน้าตาเหมือนกันหมดไม่ว่าคนจะขึ้นจริงหรือเปล่า คนอ่านใบปิดวันแยกไม่ออก
+    var noVan  = r.cxlRow || r.travelled<=0 || (r.vanDone  && (r.vanActual!=null)  && r.vanActual<=0);
+    var noBoat = r.cxlRow || r.travelled<=0 || (r.pierDone && (r.pierActual!=null) && r.pierActual<=0);
     var room=b.roomNo||b.room||b.roomNumber||'';
     body+='<tr'+(r.cxlRow?' class="ts-cxlrow"':'')+'>'
       +'<td><span class="ts-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'
@@ -47070,11 +47075,14 @@ function renderTravelSum(){
       +'<td style="max-width:150px">'+(sb?('<div class="ts-sbk">'+e(sb.t)+'</div><span class="ts-chip '+sb.cls+'">'+e(sb.tag)+'</span>')
         :'<span style="color:var(--zn400)">จุดเดิม</span>')+'</td>'
       +'<td class="ts-aocol">'+tsAddonCell(r, date)+'</td>'
-      +'<td>'+(r.cxlRow?'<span style="color:var(--zn400)">—</span>'
-        :((veh?('<span class="ts-chip n">&#128656; '+e(veh.name||r.van)+'</span>'):'<span class="ts-chip p">มาเอง</span>')
-         +(boat?('<span class="ts-chip g">&#128676; '+e(boat.name||r.boat)+'</span>'):'<span class="ts-chip r">ยังไม่จัดเรือ</span>')))+'</td>'
-      +'<td class="r ts-mono" style="font-weight:800">'+money(r.amount)+'</td>'
+      +'<td>'+((veh?('<span class="ts-chip n'+(noVan?' ts-nb':'')+'"'+(noVan?' title="ไม่ได้ขึ้นรถ"':'')
+              +'>&#128656; '+e(veh.name||r.van)+'</span>'):(r.cxlRow?'':'<span class="ts-chip p">มาเอง</span>'))
+         +(boat?('<span class="ts-chip g'+(noBoat?' ts-nb':'')+'"'+(noBoat?' title="ไม่ได้ขึ้นเรือ"':'')
+              +'>&#128676; '+e(boat.name||r.boat)+'</span>')
+              :(r.cxlRow?'':'<span class="ts-chip r">ยังไม่จัดเรือ</span>'))
+         +((r.cxlRow&&!veh&&!boat)?'<span style="color:var(--zn400)">—</span>':''))+'</td>'
       +'<td class="ts-paycol">'+tsPayCell(r, date)+'</td>'
+      +'<td class="r ts-mono" style="font-weight:800">'+money(r.amount)+'</td>'
       +'<td style="max-width:170px">'+tsCxlCell(r, date, DEC, money)+'</td>'
       +'<td class="c">'+stat+'</td>'
       +'</tr>';
@@ -47087,11 +47095,11 @@ function renderTravelSum(){
       +'<div class="ts-aokey"><span class="ts-ao ao-bk">จองมาแต่แรก</span><span class="ts-ao ao-ex">ขายเพิ่มหน้างาน</span>'
         +'<span class="ts-ao ao-up">อัปเกรด</span><span class="ts-ao ao-pier">สั่งหน้าท่า</span></div></div></div>'
     +'<div class="ts-card"><div class="ts-scroll"><table class="ts-tbl ts-man"><thead><tr>'
-    +'<th>Voucher</th><th>Agency</th><th>ลูกค้า (lead)</th>'
+    +'<th>Voucher</th><th>Agency</th><th>Customer (lead)</th>'
     +'<th class="c ts-px">AD</th><th class="c ts-px">CHD</th><th class="c ts-px">INF</th><th class="c ts-px">FOC</th>'
-    +'<th class="c">รวม<br>จริง/จอง</th><th>เวลารับ<br>&middot; ออก</th><th>จุดรับ &middot; ห้อง</th><th>ส่งกลับ</th>'
-    +'<th>Add-on &middot; ขายเพิ่ม</th><th>รถ · เรือ</th><th class="r">ราคาเต็ม</th><th>Pay</th>'
-    +'<th>ยกเลิก &middot; ชาร์จ</th><th class="c">สถานะ</th>'
+    +'<th class="c">Actual<br>/ Booked</th><th>Pickup<br>&middot; Depart</th><th>Pickup point &middot; Room</th><th>Drop-off</th>'
+    +'<th>Add-on &middot; Upsell</th><th>Van &middot; Boat</th><th>Pay</th><th class="r">Total</th>'
+    +'<th>Cancel &middot; Charge</th><th class="c">Status</th>'
     +'</tr></thead><tbody>'
     +(body||'<tr><td colspan="17" class="ts-empty">'+(_tsOnlyIssue?'ไม่มีเคสที่ต้องตัดสินในวันนี้':'ไม่มี booking ในวันนี้')+'</td></tr>')
     +'</tbody></table></div></div>'
