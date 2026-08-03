@@ -46872,6 +46872,8 @@ function tsMoneyOf(b, date){
 // ══════════════════════════════════════════════════════════════════════════
 var _drDate = (typeof TODAY_STR !== 'undefined') ? TODAY_STR : new Date().toISOString().slice(0,10);
 var _drTab  = 'ov';
+var _drTrendMode = 'travel';   // 'travel' = ตามวันเดินทาง · 'booked' = ตามวันที่ลงบุคกิ้ง
+function drTrendMode(m){ _drTrendMode=m; drAfter(); }
 var DR_TABS = [['ov','ภาพรวม'],['px','ผู้โดยสาร'],['bt','เรือ'],['vn','รถรับส่ง'],['fi','การเงิน']];
 // ค่าที่ระบบไม่มีให้ · ทีมตั้งเองได้ในหน้านี้ · เก็บแบบเดียวกับสูตรต้นทุน (blob → app_meta)
 function drCfg(){
@@ -47083,6 +47085,39 @@ function drTrend(date, nDays, back){
   }
   return { pts:out, keys:keep, mkt:mkt };
 }
+// นับตาม "วันที่ลงบุคกิ้ง" · ย้อนหลัง nDays วันจบที่วันที่เลือก
+//   pax นับทุกทริปในใบนั้น เพราะใบเดียวอาจขายหลายวัน · ใบที่ยกเลิกไม่นับ (ตรงกับที่อื่น)
+function drTrendBooked(date, nDays){
+  nDays=nDays||14;
+  var end=new Date(date+'T12:00:00'), map={}, days=[], i;
+  var TH=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  for(i=nDays-1;i>=0;i--){
+    var d=new Date(end.getTime()); d.setDate(d.getDate()-i);
+    var ds=d.toISOString().slice(0,10);
+    days.push(ds);
+    map[ds]={ date:ds, by:{}, tot:0, today:(ds===date),
+              lb:(d.getDate()+((i===nDays-1||d.getDate()===1)?(' '+TH[d.getMonth()]):'')) };
+  }
+  var mkt={}, order=[];
+  (SB_BOOKINGS||[]).forEach(function(b){
+    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    var cd=String(b.bookingDate||b.createdAt||'').slice(0,10);
+    var p=map[cd]; if(!p) return;
+    var px=0; (b.trips||[]).forEach(function(t){ px+=drPaxOf(t).tot; });
+    if(!px) return;
+    var m=drMarket(b);
+    if(!mkt[m.id]){ mkt[m.id]={id:m.id,name:m.name,color:m.color,tot:0}; order.push(m.id); }
+    mkt[m.id].tot+=px; p.by[m.id]=(p.by[m.id]||0)+px; p.tot+=px;
+  });
+  order.sort(function(a,b){ return mkt[b].tot-mkt[a].tot; });
+  drPaint(order, mkt);
+  var keep=order.slice(0,5), rest=order.slice(5), pts=days.map(function(ds){ return map[ds]; });
+  if(rest.length){
+    pts.forEach(function(p){ var o=0; rest.forEach(function(id){ o+=(p.by[id]||0); delete p.by[id]; }); if(o) p.by._etc=o; });
+    mkt._etc={id:'_etc',name:'อื่น ๆ',color:'#94a3b8'}; keep.push('_etc'); drPaint(keep, mkt);
+  }
+  return { pts:pts, keys:keep, mkt:mkt };
+}
 function drSmooth(pts){
   if(!pts.length) return '';
   var d='M'+pts[0][0].toFixed(1)+','+pts[0][1].toFixed(1), t=0.28;
@@ -47288,6 +47323,11 @@ function drCSS(){ var S='#dailyreport-host'; return ''
  +S+' .dr-legrow i{width:9px;height:9px;border-radius:3px;font-style:normal}'
  +S+' .dr-legrow b{color:var(--di)}'
  +S+' .dr-empty{padding:40px;text-align:center;color:var(--df);font-size:13px}'
+ +S+' .dr-seg{display:inline-flex;gap:3px;background:#f3f4f6;padding:3px;border-radius:13px}'
+ +S+' .dr-seg button{border:none;background:none;font:inherit;font-size:11.5px;font-weight:700;color:var(--dm);'
+   +'padding:6px 12px;border-radius:10px;cursor:pointer;white-space:nowrap}'
+ +S+' .dr-seg button:hover{color:var(--di)}'
+ +S+' .dr-seg button.on{background:#fff;color:var(--di);box-shadow:0 1px 2px rgba(0,0,0,.08)}'
  +'#dr-mail-host .dr-mask{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:900}'
  +'#dr-mail-host .dr-modal{position:fixed;inset:24px;z-index:901;background:#fff;border-radius:22px;'
    +'box-shadow:0 30px 70px -20px rgba(0,0,0,.35);display:flex;flex-direction:column;overflow:hidden;'
@@ -47379,7 +47419,8 @@ function drSq(color, nm){
 
 // ══ แท็บ 1 · ภาพรวม ══════════════════════════════════════════════════════
 function drPaneOv(D){
-  var e=ckEsc, T=drTrend(D.date, 14, 2);
+  var e=ckEsc, bkMode=(_drTrendMode==='booked');
+  var T=bkMode ? drTrendBooked(D.date, 14) : drTrend(D.date, 14, 2);
   var kp=''
    + drK('blue','&#128101;','ผู้โดยสารทั้งวัน', D.pax.tot, 'คน','g',
        'ผู้ใหญ่ '+D.pax.ad+' · เด็ก '+D.pax.chd+' · ทารก '+D.pax.inf+' · FOC '+D.pax.foc,'',
@@ -47451,13 +47492,25 @@ function drPaneOv(D){
 
   return '<div class="dr-kpis">'+kp+'</div>'
    +'<div class="dr-main"><div class="dr-col">'
-     +'<div class="eg p6"><div class="dr-hd"><div><h2>ยอด booking ที่เข้ามาต่อวัน · 14 วัน</h2>'
-       +'<p>ผู้โดยสารที่จองแล้วของแต่ละวันเดินทาง แยกชั้นสีตาม Market — ตัวเลขบนยอดคือรวมทั้งวัน · ชี้เมาส์ดูแยกทีละตลาด</p></div>'
-       +'<span class="dr-chip i">วันนี้ '+D.pax.tot+' คน</span></div>'
+     +'<div class="eg p6"><div class="dr-hd"><div>'
+       +'<h2>'+(bkMode?'ยอดที่รับเข้ามา · ตามวันที่ลงบุคกิ้ง · 14 วันย้อนหลัง'
+                      :'ผู้โดยสาร · ตามวันเดินทาง · 14 วัน')+'</h2>'
+       +'<p>'+(bkMode
+           ? 'นับจากวันที่ลงบุคกิ้งในระบบ (bookingDate) — ใช้ดูจังหวะการขายว่าแต่ละวันรับงานเข้ามาเท่าไหร่ · หนึ่งใบนับ pax ของทุกทริปในใบนั้น'
+           : 'นับจากวันเดินทางของแต่ละใบ — ใช้วางแผนเรือ/รถล่วงหน้า · <b>ไม่ใช่</b>วันที่ลงบุคกิ้ง')
+         +' · แยกชั้นสีตาม Market · ตัวเลขบนยอดคือรวมทั้งวัน · ชี้เมาส์ดูแยกทีละตลาด</p></div>'
+       +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+         +'<div class="dr-seg dr-noprint">'
+           +'<button class="'+(bkMode?'':'on')+'" onclick="drTrendMode(\'travel\')">วันเดินทาง</button>'
+           +'<button class="'+(bkMode?'on':'')+'" onclick="drTrendMode(\'booked\')">วันที่ลงบุคกิ้ง</button>'
+         +'</div>'
+         +'<span class="dr-chip i">'+(bkMode?('รับเข้ามาวันนี้ '+((T.pts[T.pts.length-1]||{}).tot||0)+' คน')
+                                            :('เดินทางวันนี้ '+D.pax.tot+' คน'))+'</span></div></div>'
        +'<div style="height:300px;padding:0 2px">'+drChart(T)+'</div>'
        +'<div class="dr-legrow">'+T.keys.map(function(k){ var m=T.mkt[k]||{};
            return '<span><i style="background:'+(m.color||'#94a3b8')+'"></i>'+e(m.name||k)+'</span>'; }).join('')
-         +'<span style="margin-left:auto">รวม 14 วัน <b>'+T.pts.reduce(function(a,p){return a+p.tot;},0)+' คน</b></span></div></div>'
+         +'<span style="margin-left:auto">'+(bkMode?'รับเข้ามารวม 14 วัน':'เดินทางรวม 14 วัน')+' <b>'
+           +T.pts.reduce(function(a,p){return a+p.tot;},0)+' คน</b></span></div></div>'
      +'<div class="eg p6"><div class="dr-hd"><div><h2>แยกตามเส้นทาง</h2>'
        +'<p>คน · booking · รายได้ · ที่นั่งเรือของแต่ละโปรแกรม</p></div>'
        +'<span class="dr-chip n">'+D.rOrder.length+' เส้นทาง · '+D.rows.length+' booking</span></div>'
