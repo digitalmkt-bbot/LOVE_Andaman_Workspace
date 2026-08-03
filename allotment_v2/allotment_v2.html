@@ -1139,6 +1139,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--sand);color:var(--ink);fo
 /* ── MAIN ── */
 .main{margin-left:var(--sidebar);flex:1;padding:22px;min-width:0}
 .view{display:none}.view.active{display:block}
+/* §laBadgeGap (2026-08-03) · #la-userbadge / #la-viewonly / #la-refresh เป็น position:fixed
+   ที่ก้นจอ · พอเลื่อนลงสุดหน้ามันทับบรรทัดล่างสุดของตารางพอดี (เห็นชัดที่ Travel Summary
+   ที่แถวสุดท้ายโดนป้าย "Admin · แก้ล่าสุด" บัง) → เว้นที่ให้ทุกหน้า และซ่อนตอนพิมพ์ */
+.view{padding-bottom:64px}
+body.ts-printing .view{padding-bottom:0}
+body.ts-printing #la-userbadge,body.ts-printing #la-viewonly,body.ts-printing #la-refresh{display:none!important}
+@media print{#la-userbadge,#la-viewonly,#la-refresh{display:none!important}}
 .page-hd{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;gap:12px}
 .page-hd h1{font-size:20px;font-weight:600;color:var(--ink)}
 .page-hd p{font-size:12px;color:var(--ink-soft);margin-top:2px}
@@ -46294,6 +46301,12 @@ function tsPolicyText(b){
   return p?String(p):'';
 }
 // ── ทุก booking ของวันนั้น พร้อมข้อมูลครบสาย: จอง → รถ → เช็คอินรถ → เรือ → เช็คอินหน้าท่า → เดินทางจริง ──
+// §tsAgName · ชื่อ agency ของใบหนึ่ง · ที่เดียวที่ตัดสินว่าใบนี้อยู่ใต้ชื่อไหน
+//   ถ้าไม่มี agent ให้ใช้ช่องทางขาย (direct / walk-in) แทน จะได้เรียงร่วมกันได้
+function tsAgName(b){
+  var ag=(typeof sbGetAgent==='function')?sbGetAgent(b&&b.agentId):null;
+  return ag?(ag.name||ag.code||'—'):String((b&&b.channel)||'walk-in');
+}
 function tsRows(date){
   const out=[];
   (SB_BOOKINGS||[]).forEach(function(b){
@@ -46316,12 +46329,16 @@ function tsRows(date){
       issue:(noShow>0||events.length>0), amount:tsTripAmount(b,t), policy:tsPolicyText(b), dec:tsGet(b.id,date)
     });
   });
+  // §tsSortAZ (2026-08-03) · เรียง A-Z ตาม Agency ในแต่ละเส้นทาง
+  //   เดิมเรียงตามเวลารับ — ใบของ agent เดียวกันกระจายทั่วหน้า ตามเช็คทีละเจ้าไม่ได้
+  //   ตอนนี้ เส้นทาง → Agency (A-Z) → Voucher (A-Z) · ลิสต์ Reference ใช้ลำดับเดียวกันเป๊ะ
+  var _az=function(a,b){ return String(a||'').localeCompare(String(b||''), 'en', { numeric:true, sensitivity:'base' }); };
   return out.sort(function(x,y){
     const rx=((typeof getRoute==='function'?getRoute(x.routeId):null)||{}).name||x.routeId;
     const ry=((typeof getRoute==='function'?getRoute(y.routeId):null)||{}).name||y.routeId;
-    return String(rx).localeCompare(String(ry))
-      || String((x.O&&x.O.pickupTimeFinal)||x.t.pickupTime||'').localeCompare(String((y.O&&y.O.pickupTimeFinal)||y.t.pickupTime||''))
-      || String(x.b.voucherRef||'').localeCompare(String(y.b.voucherRef||''));
+    return _az(rx,ry)
+      || _az(tsAgName(x.b), tsAgName(y.b))
+      || _az(x.b.voucherRef||x.b.code||'', y.b.voucherRef||y.b.code||'');
   });
 }
 var _tsOnlyIssue=false;
@@ -46470,6 +46487,8 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-dby{font-size:8.5px;color:var(--zn400)}'
  +S+' .ts-dnote{font-size:9px;color:var(--rs700);font-weight:600;max-width:100%;overflow:hidden;'
    +'text-overflow:ellipsis;white-space:nowrap}'
+ +S+' .ts-dfiles{display:flex;flex-direction:column;gap:1px}'
+ +S+' .ts-dfiles .ts-dfile{max-width:250px}'
  +S+' .ts-doc{cursor:pointer}'+S+' .ts-doc:hover{filter:brightness(.95)}'
  +'@media print{'
    +S+' .ts-noprint{display:none!important}'
@@ -46494,7 +46513,11 @@ function tsCSS(){ var S='#travelsum-host'; return ''
    +S+' .ts-lead{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
    +S+' .ts-dcol{max-width:150px}'
    +S+' .ts-scroll{overflow:visible}'
-   +S+' .ts-sign{margin-top:14px;padding-top:12px}'
+   +S+' .ts-sign{margin-top:8px;padding-top:8px;gap:8px}'
+   +S+' .ts-sg{padding:6px 9px;border-radius:9px}'
+   +S+' .ts-sg i{height:18px;margin-bottom:4px}'
+   +S+' .ts-sg b{font-size:10px}'+S+' .ts-sg span{font-size:8.5px}'
+   +S+' .ts-sec:last-child{padding-bottom:2px}'
    +S+' .ts-rt{display:none}'
    // §tsPrint · ตอนสั่งพิมพ์ · ซ่อนเมนู + view อื่น แล้วปล่อยใบงานกินกระดาษเต็มใบ
    +S+' .ts-kpis{grid-template-columns:repeat(6,1fr)}'      // A4 นอน · 6 การ์ดพอดีแถวเดียว
@@ -46741,7 +46764,7 @@ function renderTravelSum(){
       var rt=(typeof getRoute==='function'?getRoute(r.routeId):null)||{};
       var grp=rows.filter(function(x){ return x.routeId===r.routeId; });
       var gB=grp.reduce(function(a,x){ return a+x.booked; },0), gT=grp.reduce(function(a,x){ return a+x.travelled; },0);
-      body+='<tr class="ts-grow"><td colspan="12" style="padding:7px 11px">'
+      body+='<tr class="ts-grow"><td colspan="11" style="padding:7px 11px">'
         +'<span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;color:'+(rt.color||'var(--zn700)')+'">'
         +'<i class="ts-dot" style="border-radius:50%;background:'+(rt.color||'#999')+'"></i>'+e(rt.name||r.routeId||'—')+'</span>'
         +'<span style="float:right" class="ts-tel">'+grp.length+' booking · จอง '+gB+' → เดินทางจริง '+gT+(gB-gT>0?(' · หาย '+(gB-gT)):'')+'</span>'
@@ -46761,7 +46784,6 @@ function renderTravelSum(){
                   : '<span class="ts-chip g">&#10003; เรียบร้อย</span>');
     body+='<tr>'
       +'<td><span class="ts-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'
-      +'<td class="ts-dcol">'+tsDocCell(b,date)+'</td>'
       +'<td><span class="ts-ag" style="background:'+agColor+';color:'+agInk+'" title="'+e(agName)+'">'+e(agName)+'</span></td>'
       +'<td><div class="ts-lead">'+e(b.leadPax||'—')+'</div><div class="ts-tel">'+e(b.leadPhone||b.phone||'')+'</div></td>'
       +'<td class="c ts-mono" style="font-weight:800">'+r.travelled+' / '+r.booked+'</td>'
@@ -46779,10 +46801,62 @@ function renderTravelSum(){
     +'<div class="ts-sect"><i class="ts-dot" style="background:var(--lm600)"></i>ส่วนที่ 4 · Manifest ประจำวัน</div>'
     +'<div class="ts-secd">รายการทั้งหมดของวันเรียงตามเส้นทาง — จอง → รถ → เช็คอินรถ → เรือ → เช็คอินหน้าท่า → เดินทางจริง → สถานะปิดงาน</div></div></div>'
     +'<div class="ts-card"><div class="ts-scroll"><table class="ts-tbl"><thead><tr>'
-    +'<th>Voucher</th><th>Reference · เอกสาร</th><th>Agency</th><th>ลูกค้า (lead)</th><th class="c">จริง/จอง</th><th>เวลารับ</th><th>จุดรับ</th>'
+    +'<th>Voucher</th><th>Agency</th><th>ลูกค้า (lead)</th><th class="c">จริง/จอง</th><th>เวลารับ</th><th>จุดรับ</th>'
     +'<th>รถ · เรือ</th><th class="c">ขึ้นรถ</th><th class="c">ขึ้นเรือ</th><th class="r">ราคาเต็ม</th><th class="c">สถานะ</th>'
     +'</tr></thead><tbody>'
-    +(body||'<tr><td colspan="12" class="ts-empty">'+(_tsOnlyIssue?'ไม่มีเคสที่ต้องตัดสินในวันนี้':'ไม่มี booking ในวันนี้')+'</td></tr>')
+    +(body||'<tr><td colspan="11" class="ts-empty">'+(_tsOnlyIssue?'ไม่มีเคสที่ต้องตัดสินในวันนี้':'ไม่มี booking ในวันนี้')+'</td></tr>')
+    +'</tbody></table></div></div></div>';
+
+  // ══ ส่วน 5 · Reference · เอกสารประกอบ ══
+  // §tsRefList · ลิสต์ต่อจาก manifest · ลำดับเดียวกันเป๊ะ (เส้นทาง → Agency A-Z → Voucher)
+  //   คนตรวจจะได้ไล่คู่กันทีละบรรทัดโดยไม่ต้องค้นหา
+  var rbody='', prevR2=null, rn=0;
+  rows.forEach(function(r){
+    var b=r.b, d=tsDocRef(b);
+    if(r.routeId!==prevR2){
+      prevR2=r.routeId;
+      var rt2=(typeof getRoute==='function'?getRoute(r.routeId):null)||{};
+      var g2=rows.filter(function(x){ return x.routeId===r.routeId; });
+      var nF=0, nOk=0;
+      g2.forEach(function(x){ var dd=tsDocRef(x.b); nF+=dd.n; if(dd.st==='verified') nOk++; });
+      rbody+='<tr class="ts-grow"><td colspan="8" style="padding:7px 11px">'
+        +'<span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;color:'+(rt2.color||'var(--zn700)')+'">'
+        +'<i class="ts-dot" style="border-radius:50%;background:'+(rt2.color||'#999')+'"></i>'+e(rt2.name||r.routeId||'—')+'</span>'
+        +'<span style="float:right" class="ts-tel">'+g2.length+' booking · ตรวจแล้ว '+nOk+'/'+g2.length+' · ไฟล์แนบ '+nF+'</span>'
+        +'</td></tr>';
+    }
+    rn++;
+    rbody+='<tr>'
+      +'<td class="c ts-mono ts-tel">'+rn+'</td>'
+      +'<td><span class="ts-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'
+      +'<td class="ts-tel">'+e(tsAgName(b))+'</td>'
+      +'<td><div class="ts-lead">'+e(b.leadPax||'—')+'</div></td>'
+      +'<td>'+tsDocChip(b,date)
+        +(d.tot?('<span class="ts-dchk'+((d.done>=d.tot)?' ok':'')+'" style="margin-left:6px" title="'
+          +(d.missing.length?('ยังไม่ได้ตรวจ: '+e(d.missing.join(' · '))):'ตรวจครบทุกช่อง')
+          +'">&#10003; '+d.done+'/'+d.tot+'</span>'):'')
+        +(d.missing.length&&d.n?('<div class="ts-dnote" style="color:var(--am700)">ยังไม่ตรวจ: '+e(d.missing.join(' · '))+'</div>'):'')+'</td>'
+      +'<td>'+(d.docRef?('<span class="ts-dref">'+e(d.docRef)+'</span>'):'<span class="ts-tel">—</span>')+'</td>'
+      +'<td>'+(d.n?('<div class="ts-dfiles">'+d.files.map(function(f){
+          return '<span class="ts-dfile">&#128206; '+e(f)+'</span>'; }).join('')+'</div>')
+        :'<span class="ts-tel">— ยังไม่แนบ</span>')+'</td>'
+      +'<td class="ts-tel">'+e([d.by,d.when].filter(Boolean).join(' · ')||'—')
+        +(d.note?('<div class="ts-dnote">'+e(d.note)+'</div>'):'')+'</td>'
+      +'</tr>';
+  });
+  var nFiles=0, nOkAll=0;
+  rows.forEach(function(r){ var dd=tsDocRef(r.b); nFiles+=dd.n; if(dd.st==='verified') nOkAll++; });
+  var refSec='<div class="ts-sec"><div class="ts-sech"><div>'
+    +'<div class="ts-sect"><i class="ts-dot" style="background:var(--bl700)"></i>ส่วนที่ 5 · Reference · เอกสารประกอบ</div>'
+    +'<div class="ts-secd">เอกสารที่ agent ส่งมาของทุกใบใน manifest ข้างบน — เรียงลำดับเดียวกันบรรทัดต่อบรรทัด '
+      +'ดึงจากหน้าตรวจเอกสารโดยตรง (สถานะ · เช็คลิสต์ 6 ช่อง · เลขอ้างอิงในเอกสาร · ไฟล์แนบ · ผู้ตรวจ)</div></div>'
+    +'<span class="ts-chip '+((nOkAll>=rows.length&&rows.length)?'g':'a')+'" style="font-size:11px;padding:5px 12px">'
+      +'ตรวจแล้ว '+nOkAll+'/'+rows.length+' ใบ · ไฟล์แนบ '+nFiles+'</span></div>'
+    +'<div class="ts-card"><div class="ts-scroll"><table class="ts-tbl"><thead><tr>'
+    +'<th class="c" style="width:30px">#</th><th>Voucher</th><th>Agency</th><th>ลูกค้า (lead)</th>'
+    +'<th>สถานะเอกสาร · เช็คลิสต์</th><th>เลขอ้างอิงในเอกสาร</th><th>ไฟล์แนบ</th><th>ผู้ตรวจ · วันที่ · หมายเหตุ</th>'
+    +'</tr></thead><tbody>'
+    +(rbody||'<tr><td colspan="8" class="ts-empty">ไม่มีรายการ</td></tr>')
     +'</tbody></table></div></div>'
     +'<div class="ts-sign">'
     +'<div class="ts-sg"><i></i><b>ผู้จัดทำ · Operations</b><span>เจ้าหน้าที่ปฏิบัติการ</span></div>'
@@ -46843,7 +46917,7 @@ function renderTravelSum(){
       +'<div class="ts-secd">ยอดรวมทุกเส้นทางของวันนี้ · ตัวเลขทั้งหมดคิดจากผู้โดยสารที่เดินทางจริงหลังหักคนที่ไม่มา</div></div>'
       +'<span class="ts-chip n" style="font-size:11px;padding:5px 12px">เก็บค่าปรับได้ '+money(charge)+(nPostpone?(' · เลื่อนวัน '+nPostpone+' เคส'):'')+'</span></div>'
       +kpis+'</div>'
-    +audit+cash+manifest+'</div>';
+    +audit+cash+manifest+refSec+'</div>';
 }
 
 function bkV2VanJobOrder(date, vanId, routeId, leg){
