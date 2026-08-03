@@ -46501,6 +46501,17 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-cxr{font-size:9px;color:var(--zn500);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
  +S+' .ts-cxlrow > td{background:var(--rs50);opacity:.78}'
  +S+' .ts-cxlrow .ts-vch,'+S+' .ts-cxlrow .ts-lead{text-decoration:line-through}'
+ +S+' .ts-aocol{max-width:210px}'
+ +S+' .ts-aos{display:flex;flex-direction:column;align-items:flex-start;gap:2px}'
+ +S+' .ts-ao{display:inline-block;max-width:100%;font-size:9.5px;font-weight:600;line-height:1.3;'
+   +'padding:1px 6px;border-radius:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+ +S+' .ts-ao b{font-weight:800}'
+ +S+' .ts-ao.ao-bk{background:var(--bl50);color:var(--bl700)}'
+ +S+' .ts-ao.ao-ex{background:var(--em50);color:var(--em800)}'
+ +S+' .ts-ao.ao-up{background:var(--am50);color:var(--am900)}'
+ +S+' .ts-ao.ao-up.due{background:var(--rs50);color:var(--rs900)}'
+ +S+' .ts-ao.ao-pier{background:var(--pu50);color:var(--pu700)}'
+ +S+' .ts-aokey{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}'
  +S+' .ts-doc{cursor:pointer}'+S+' .ts-doc:hover{filter:brightness(.95)}'
  +'@media print{'
    +S+' .ts-noprint{display:none!important}'
@@ -46527,26 +46538,29 @@ function tsCSS(){ var S='#travelsum-host'; return ''
    // ล็อกความกว้างต่อคอลัมน์ · รวม 99.5% · ที่เหลือเป็นระยะหายใจของขอบตาราง
    +S+' .ts-man{table-layout:fixed;width:100%}'
    +S+' .ts-man td{overflow:hidden}'
-   +S+' .ts-man th{white-space:normal;line-height:1.12;vertical-align:bottom}'
-   +S+' .ts-man th:nth-child(1),'+S+' .ts-man td:nth-child(1){width:6%}'
-   +S+' .ts-man th:nth-child(2),'+S+' .ts-man td:nth-child(2){width:6.5%}'
-   +S+' .ts-man th:nth-child(3),'+S+' .ts-man td:nth-child(3){width:10.5%}'
+   +S+' .ts-man th{white-space:normal;line-height:1.12;vertical-align:bottom;overflow:hidden}'
+   +S+' .ts-man th:nth-child(1),'+S+' .ts-man td:nth-child(1){width:5.6%}'
+   +S+' .ts-man th:nth-child(2),'+S+' .ts-man td:nth-child(2){width:5.8%}'
+   +S+' .ts-man th:nth-child(3),'+S+' .ts-man td:nth-child(3){width:9.4%}'
    +S+' .ts-man th:nth-child(4),'+S+' .ts-man td:nth-child(4),'
      +S+' .ts-man th:nth-child(5),'+S+' .ts-man td:nth-child(5),'
      +S+' .ts-man th:nth-child(6),'+S+' .ts-man td:nth-child(6),'
-     +S+' .ts-man th:nth-child(7),'+S+' .ts-man td:nth-child(7){width:2.8%}'
-   +S+' .ts-man th:nth-child(8),'+S+' .ts-man td:nth-child(8){width:4.6%}'
-   +S+' .ts-man th:nth-child(9),'+S+' .ts-man td:nth-child(9){width:6%}'
-   +S+' .ts-man th:nth-child(10),'+S+' .ts-man td:nth-child(10){width:11%}'
-   +S+' .ts-man th:nth-child(11),'+S+' .ts-man td:nth-child(11){width:8.6%}'
-   +S+' .ts-man th:nth-child(12),'+S+' .ts-man td:nth-child(12){width:6%}'
-   +S+' .ts-man th:nth-child(13),'+S+' .ts-man td:nth-child(13),'
-     +S+' .ts-man th:nth-child(14),'+S+' .ts-man td:nth-child(14){width:3.6%}'
-   +S+' .ts-man th:nth-child(15),'+S+' .ts-man td:nth-child(15){width:5%}'
-   +S+' .ts-man th:nth-child(16),'+S+' .ts-man td:nth-child(16){width:10.1%}'
-   +S+' .ts-man th:nth-child(17),'+S+' .ts-man td:nth-child(17){width:6%}'
+     +S+' .ts-man th:nth-child(7),'+S+' .ts-man td:nth-child(7){width:2.7%}'
+   +S+' .ts-man th:nth-child(8),'+S+' .ts-man td:nth-child(8){width:5.2%}'
+   +S+' .ts-man th:nth-child(9),'+S+' .ts-man td:nth-child(9){width:5.6%}'
+   +S+' .ts-man th:nth-child(10),'+S+' .ts-man td:nth-child(10){width:9.6%}'
+   +S+' .ts-man th:nth-child(11),'+S+' .ts-man td:nth-child(11){width:7.6%}'
+   +S+' .ts-man th:nth-child(12),'+S+' .ts-man td:nth-child(12){width:10.6%}'
+   +S+' .ts-man th:nth-child(13),'+S+' .ts-man td:nth-child(13){width:5.6%}'
+   +S+' .ts-man th:nth-child(14),'+S+' .ts-man td:nth-child(14),'
+     +S+' .ts-man th:nth-child(15),'+S+' .ts-man td:nth-child(15){width:3.4%}'
+   +S+' .ts-man th:nth-child(16),'+S+' .ts-man td:nth-child(16){width:4.6%}'
+   +S+' .ts-man th:nth-child(17),'+S+' .ts-man td:nth-child(17){width:7.2%}'
+   +S+' .ts-man th:nth-child(18),'+S+' .ts-man td:nth-child(18){width:5%}'
    // ป้ายในสองคอลัมน์ท้ายยาวกว่าช่อง · ให้ขึ้นบรรทัดใหม่แทนล้นออกไปนอกกระดาษ
-   +S+' .ts-man td:nth-child(16) .ts-chip,'+S+' .ts-man td:nth-child(17) .ts-chip{white-space:normal;line-height:1.2}'
+   +S+' .ts-man td:nth-child(17) .ts-chip,'+S+' .ts-man td:nth-child(18) .ts-chip{white-space:normal;line-height:1.2}'
+   +S+' .ts-ao{font-size:6.8px;padding:0 3px;line-height:1.25}'
+   +S+' .ts-aokey{margin-top:4px;gap:4px}'   // คำอธิบายสีต้องติดไปบนกระดาษด้วย ไม่งั้นอ่านสีไม่ออก
    +S+' .ts-man .ts-ag,'+S+' .ts-man .ts-lead,'+S+' .ts-man .ts-sbk{max-width:100%}'
    +S+' .ts-chip{padding:0 4px;font-size:7.4px}'
    +S+' .ts-ag{max-width:74px}'+S+' .ts-lead{max-width:112px}'
@@ -46737,6 +46751,49 @@ function tsCxlRows(date){
   });
   return out;
 }
+function tsAddonList(r, date){
+  var b=r.b, rid=(r.t&&r.t.routeId)||'', out=[];
+  // 1) จองมาแต่แรก · รวม bundle ที่มาจาก Rate Type ด้วย (ckAddonList จัดการให้แล้ว)
+  try{ (ckAddonList(b, rid)||[]).forEach(function(a){
+    out.push({ src:'bk', kind:a.kind, t:a.label, note:a.note||'' });
+  }); }catch(_){}
+  // 2) ขายเพิ่มหน้างาน · SB_EXTRAS · จำกัดเฉพาะรายการของทริปวันนี้ถ้ามีการระบุวัน
+  try{ ((typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(b.id):[]).forEach(function(x){
+    if(date && x.tripDate && x.tripDate!==date) return;
+    var PM={cash:'เงินสด', transfer:'โอนเงิน', card:'บัตรเครดิต'};
+    out.push({ src:'ex', t:String(x.service||'ขายเพิ่ม'), qty:(+x.qty||1), amt:(+x.total||0),
+      note:(PM[x.method||'cash']||'เงินสด')+(x.seller?(' · '+x.seller):'')
+           +((x.method&&x.method!=='cash'&&!((x.slips||[]).length))?' · ยังไม่มีสลิป':'') });
+  }); }catch(_){}
+  // 3) อัปเกรดหน้างาน
+  try{ (Array.isArray(b.upgrades)?b.upgrades:[]).forEach(function(u){
+    out.push({ src:'up', t:String(u.label||'upgrade'), amt:(+u.sellPrice||0),
+      done:!!u.collected, note:(u.collected?'เก็บเงินแล้ว':'ยังไม่เก็บ') });
+  }); }catch(_){}
+  // 4) อาหารพิเศษ · ถ้ามี pierAt แปลว่าสั่งเพิ่มหน้าท่า ไม่ได้มากับใบจอง
+  try{
+    var mm=b.specialMeals||{}, ml=[];
+    if(+mm.veg)   ml.push('มังสวิรัติ '+(+mm.veg));
+    if(+mm.vegan) ml.push('วีแกน '+(+mm.vegan));
+    if(+mm.halal) ml.push('ฮาลาล '+(+mm.halal));
+    var al=String(mm.allergies||'').trim(); if(al) ml.push('แพ้: '+al);
+    if(ml.length) out.push({ src:(mm.pierAt?'pier':'bk'), meal:true, t:ml.join(' · '),
+      note:(mm.pierAt?('สั่งหน้าท่า'+(mm.pierBy?(' · '+mm.pierBy):'')):'มากับใบจอง') });
+  }catch(_){}
+  return out;
+}
+function tsAddonCell(r, date){
+  var L=tsAddonList(r, date), e=ckEsc;
+  if(!L.length) return '<span style="color:var(--zn400)">—</span>';
+  var m=function(n){ return '฿'+Math.round(n||0).toLocaleString('en-US'); };
+  var SRC={ bk:['ao-bk','จองมาแต่แรก'], ex:['ao-ex','ขายเพิ่มหน้างาน'], up:['ao-up','อัปเกรดหน้างาน'], pier:['ao-pier','สั่งหน้าท่า'] };
+  return '<div class="ts-aos">'+L.map(function(a){
+    var sc=SRC[a.src]||SRC.bk;
+    var txt=e(a.t)+((a.qty&&a.qty>1)?(' ×'+a.qty):'')+((a.amt)?(' <b>+'+m(a.amt)+'</b>'):'');
+    var tip=sc[1]+(a.note?(' · '+a.note):'');
+    return '<span class="ts-ao '+sc[0]+(a.done===false?' due':'')+'" title="'+e(tip)+'">'+txt+'</span>';
+  }).join('')+'</div>';
+}
 function tsMoneyOf(b, date){
   var M=(typeof pckMoney==='function')?pckMoney(b,date):{cot:0,balance:0,upDue:0,due:0,pierPaid:0};
   var pays=(typeof pckPaysFor==='function')?pckPaysFor(b,date):[];
@@ -46917,7 +46974,7 @@ function renderTravelSum(){
       var grp=mrows.filter(function(x){ return x.routeId===r.routeId && !x.cxlRow; });
       var gX=mrows.filter(function(x){ return x.routeId===r.routeId && x.cxlRow; });
       var gB=grp.reduce(function(a,x){ return a+x.booked; },0), gT=grp.reduce(function(a,x){ return a+x.travelled; },0);
-      body+='<tr class="ts-grow"><td colspan="17" style="padding:7px 11px">'
+      body+='<tr class="ts-grow"><td colspan="18" style="padding:7px 11px">'
         +'<span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;color:'+(rt.color||'var(--zn700)')+'">'
         +'<i class="ts-dot" style="border-radius:50%;background:'+(rt.color||'#999')+'"></i>'+e(rt.name||r.routeId||'—')+'</span>'
         +'<span style="float:right" class="ts-tel">'+grp.length+' booking · จอง '+gB+' → เดินทางจริง '+gT+(gB-gT>0?(' · หาย '+(gB-gT)):'')
@@ -46958,6 +47015,7 @@ function renderTravelSum(){
         +(room?('<span class="ts-room">ห้อง '+e(room)+'</span>'):'')+'</td>'
       +'<td style="max-width:150px">'+(sb?('<div class="ts-sbk">'+e(sb.t)+'</div><span class="ts-chip '+sb.cls+'">'+e(sb.tag)+'</span>')
         :'<span style="color:var(--zn400)">จุดเดิม</span>')+'</td>'
+      +'<td class="ts-aocol">'+tsAddonCell(r, date)+'</td>'
       +'<td>'+(r.cxlRow?'<span style="color:var(--zn400)">—</span>'
         :((veh?('<span class="ts-chip n">&#128656; '+e(veh.name||r.van)+'</span>'):'<span class="ts-chip p">มาเอง</span>')
          +(boat?('<span class="ts-chip g">&#128676; '+e(boat.name||r.boat)+'</span>'):'<span class="ts-chip r">ยังไม่จัดเรือ</span>')))+'</td>'
@@ -46971,15 +47029,17 @@ function renderTravelSum(){
   var manifest='<div class="ts-sec"><div class="ts-sech"><div>'
     +'<div class="ts-sect"><i class="ts-dot" style="background:var(--lm600)"></i>ส่วนที่ 4 · Manifest ประจำวัน</div>'
     +'<div class="ts-secd">รายการทั้งหมดของวันเรียงตามเส้นทาง (Agency A-Z) — แยกจำนวนตามประเภทผู้โดยสาร · เวลารับและเวลาออกเรือ · จุดส่งกลับ · '
-      +'ค่าปรับกรณียกเลิก/ไม่มา · ตัวเลข <b>ไปจริง/จอง</b> หมายถึงมีคนไม่ได้เดินทาง</div></div></div>'
+      +'Add-on ทุกขั้นตอน · ค่าปรับกรณียกเลิก/ไม่มา · ตัวเลข <b>ไปจริง/จอง</b> หมายถึงมีคนไม่ได้เดินทาง</div>'
+      +'<div class="ts-aokey"><span class="ts-ao ao-bk">จองมาแต่แรก</span><span class="ts-ao ao-ex">ขายเพิ่มหน้างาน</span>'
+        +'<span class="ts-ao ao-up">อัปเกรด</span><span class="ts-ao ao-pier">สั่งหน้าท่า</span></div></div></div>'
     +'<div class="ts-card"><div class="ts-scroll"><table class="ts-tbl ts-man"><thead><tr>'
     +'<th>Voucher</th><th>Agency</th><th>ลูกค้า (lead)</th>'
     +'<th class="c ts-px">AD</th><th class="c ts-px">CHD</th><th class="c ts-px">INF</th><th class="c ts-px">FOC</th>'
-    +'<th class="c">รวม จริง/จอง</th><th>เวลารับ &middot; ออก</th><th>จุดรับ &middot; ห้อง</th><th>ส่งกลับ</th>'
-    +'<th>รถ · เรือ</th><th class="c">ขึ้นรถ</th><th class="c">ขึ้นเรือ</th><th class="r">ราคาเต็ม</th>'
+    +'<th class="c">รวม<br>จริง/จอง</th><th>เวลารับ<br>&middot; ออก</th><th>จุดรับ &middot; ห้อง</th><th>ส่งกลับ</th>'
+    +'<th>Add-on &middot; ขายเพิ่ม</th><th>รถ · เรือ</th><th class="c">ขึ้นรถ</th><th class="c">ขึ้นเรือ</th><th class="r">ราคาเต็ม</th>'
     +'<th>ยกเลิก &middot; ชาร์จ</th><th class="c">สถานะ</th>'
     +'</tr></thead><tbody>'
-    +(body||'<tr><td colspan="17" class="ts-empty">'+(_tsOnlyIssue?'ไม่มีเคสที่ต้องตัดสินในวันนี้':'ไม่มี booking ในวันนี้')+'</td></tr>')
+    +(body||'<tr><td colspan="18" class="ts-empty">'+(_tsOnlyIssue?'ไม่มีเคสที่ต้องตัดสินในวันนี้':'ไม่มี booking ในวันนี้')+'</td></tr>')
     +'</tbody></table></div></div>'
     +'<div class="ts-sign">'
     +'<div class="ts-sg"><i></i><b>ผู้จัดทำ · Operations</b><span>เจ้าหน้าที่ปฏิบัติการ</span></div>'
