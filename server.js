@@ -1753,6 +1753,40 @@ const server = http.createServer((req, res) => {
     pool.query('DELETE FROM attachments WHERE id=$1',[id]).then(()=>J(res,200,{ok:true})).catch(e=>J(res,500,{error:e.message})); return;
   }
 
+  // ───── MAIL IMAGES (Daily Report charts · public read so the recipient's mail client can load them) ─────
+  //   เก็บในตาราง attachments เดิม ใช้ booking_id = '__mailimg__' เป็นตัวคั่น ไม่ต้อง migrate
+  //   อ่านได้โดยไม่ต้อง login เพราะโปรแกรมเมลของผู้รับไม่มี session — id เป็น token สุ่ม 10 ไบต์ เดาไม่ได้
+  //   และเสิร์ฟเฉพาะแถวที่ booking_id ตรงกับตัวคั่นนี้เท่านั้น เอกสารของ booking จริงจึงรั่วทางนี้ไม่ได้
+  if(u === '/api/mailimg' && req.method === 'POST'){
+    const s=session(req); if(!s) return J(res,401,{error:'login required'});
+    if(!pool) return J(res,503,{error:'no database'});
+    readBody(req, body=>{
+      let b={}; try{ b=JSON.parse(body); }catch(e){ return J(res,400,{error:'invalid JSON'}); }
+      let buf=null; try{ buf=Buffer.from(String(b.dataB64||''),'base64'); }catch(e){ buf=null; }
+      if(!buf || !buf.length) return J(res,400,{error:'no image data'});
+      if(buf.length > 3*1024*1024) return J(res,413,{error:'รูปใหญ่เกิน 3MB'});
+      const id = 'mi_'+Date.now().toString(36)+'_'+crypto.randomBytes(10).toString('hex');
+      const fn = String(b.filename||'chart.png').slice(0,120);
+      pool.query("INSERT INTO attachments(id,booking_id,filename,mime,size,data,uploaded_by) VALUES($1,'__mailimg__',$2,'image/png',$3,$4,$5)",[id,fn,buf.length,buf,s.username])
+        .then(()=>{
+          // เก็บย้อนหลัง 120 วันพอ · จดหมายเก่ากว่านั้นไม่มีใครเปิดแล้ว
+          pool.query("DELETE FROM attachments WHERE booking_id='__mailimg__' AND created_at < now() - interval '120 days'").catch(()=>{});
+          J(res,200,{id:id, url:'/m/'+id+'.png'});
+        }).catch(e=>J(res,500,{error:e.message}));
+    }); return;
+  }
+  if(u.startsWith('/m/') && req.method === 'GET'){
+    const id=decodeURIComponent(u.slice(3)).replace(/\.png$/i,'');
+    if(!/^mi_[a-z0-9_]+$/i.test(id)){ res.writeHead(404); return res.end('not found'); }
+    if(!pool){ res.writeHead(503); return res.end('no db'); }
+    pool.query("SELECT data FROM attachments WHERE id=$1 AND booking_id='__mailimg__'",[id]).then(r=>{
+      const row=r.rows[0]; if(!row){ res.writeHead(404); return res.end('not found'); }
+      const buf = Buffer.isBuffer(row.data)?row.data:Buffer.from(row.data||'');
+      res.writeHead(200,{'Content-Type':'image/png','Content-Length':buf.length,'Cache-Control':'public, max-age=31536000, immutable'});
+      res.end(buf);
+    }).catch(e=>{ res.writeHead(500); res.end(e.message); }); return;
+  }
+
   // ───── ADMIN: user management (admin only) ─────
   if(u === '/api/users'){
     const s=session(req); if(!s) return J(res,401,{error:'login required'}); if(s.role!=='admin') return J(res,403,{error:'admin only'});

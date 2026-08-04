@@ -48487,6 +48487,126 @@ function drmTrend(T, e){
     +'<div style="border-top:1px solid '+DRM.line+';margin-top:12px;padding-top:10px">'+lg
     +'<span style="float:right;font-size:10.5px;color:'+DRM.mut+'">เดินทางรวม 14 วัน <b style="color:'+DRM.ink+'">'+tot+' คน</b></span></div>');
 }
+// ── วาดกราฟลง canvas · ใช้เลขชุดเดียวกับ drChart/drDonut บนหน้าจอ ──────
+var _drImg = { key:'', trend:'', donut:'', state:'' };   // state: '' | 'run' | 'ok' | 'err'
+function drImgKey(D){ return D.date+'|'+_drTrendMode+'|'+D.pax.tot+'|'+D.rev; }
+function _dcSmooth(ctx, pts){
+  if(!pts.length) return;
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  var t=0.28;
+  for(var i=0;i<pts.length-1;i++){
+    var p0=pts[i-1]||pts[i], p1=pts[i], p2=pts[i+1], p3=pts[i+2]||pts[i+1];
+    ctx.bezierCurveTo(p1[0]+(p2[0]-p0[0])*t, p1[1]+(p2[1]-p0[1])*t,
+                      p2[0]-(p3[0]-p1[0])*t, p2[1]-(p3[1]-p1[1])*t, p2[0], p2[1]);
+  }
+}
+function drmPngTrend(T){
+  var W=1040, H=340, L=44, R=18, TP=40, BT=44, n=T.pts.length, S=2;
+  if(!n) return '';
+  var cv=document.createElement('canvas'); cv.width=W*S; cv.height=H*S;
+  var c=cv.getContext('2d'); c.setTransform(S,0,0,S,0,0);
+  c.fillStyle='#ffffff'; c.fillRect(0,0,W,H);
+  var FT="'DM Sans','Noto Sans Thai',-apple-system,Segoe UI,Helvetica,Arial,sans-serif";
+  var mx=1; T.pts.forEach(function(p){ if(p.tot>mx) mx=p.tot; });
+  mx=Math.ceil(mx/8)*8 || 8;
+  var step=(n>1)?((W-L-R)/(n-1)):0, xs=[], i;
+  for(i=0;i<n;i++) xs.push(L+step*i);
+  var yb=H-BT, yt=TP, Y=function(v){ return yb-(v/mx)*(yb-yt); };
+  // เส้นกริด + ป้ายแกน
+  c.strokeStyle='#eef0f3'; c.lineWidth=1; c.setLineDash([4,4]);
+  for(i=0;i<5;i++){ var gy=Math.round(yt+(yb-yt)*i/4)+.5;
+    c.beginPath(); c.moveTo(L-14,gy); c.lineTo(W-R+6,gy); c.stroke(); }
+  c.setLineDash([]);
+  c.fillStyle='#9ca3af'; c.font='10px '+FT; c.textAlign='right'; c.textBaseline='middle';
+  for(i=0;i<5;i++){ c.fillText(String(Math.round(mx*(4-i)/4)), L-18, yt+(yb-yt)*i/4); }
+  // พื้นที่ซ้อนสี · ไล่สีบนเข้มล่างอ่อนเหมือนบนหน้าจอ
+  var cum=[]; for(i=0;i<n;i++) cum.push(0);
+  T.keys.forEach(function(k){
+    var col=(T.mkt[k]||{}).color||'#94a3b8';
+    var lo=cum.slice(), hi=[], top=[], bot=[];
+    for(i=0;i<n;i++){ cum[i]+=(T.pts[i].by[k]||0); hi.push(cum[i]); }
+    for(i=0;i<n;i++){ top.push([xs[i],Y(hi[i])]); bot.push([xs[i],Y(lo[i])]); }
+    var g=c.createLinearGradient(0,yt,0,yb);
+    g.addColorStop(0,col+'F2'); g.addColorStop(1,col+'B3');
+    c.beginPath(); _dcSmooth(c,top);
+    var rv=bot.slice().reverse();
+    c.lineTo(rv[0][0],rv[0][1]); _dcSmooth(c,rv);
+    c.closePath(); c.fillStyle=g; c.fill();
+  });
+  // เส้นยอดรวมจาง ๆ
+  var tot=[]; for(i=0;i<n;i++) tot.push([xs[i],Y(T.pts[i].tot)]);
+  c.beginPath(); _dcSmooth(c,tot); c.strokeStyle='rgba(31,41,55,.18)'; c.lineWidth=1.6; c.stroke();
+  // เส้นวันนี้ + ป้าย
+  var ti=-1; for(i=0;i<n;i++) if(T.pts[i].today) ti=i;
+  if(ti>=0){
+    c.save(); c.globalAlpha=.5; c.setLineDash([5,4]); c.strokeStyle='#111827'; c.lineWidth=1.4;
+    c.beginPath(); c.moveTo(xs[ti],yt-16); c.lineTo(xs[ti],yb); c.stroke(); c.restore();
+    c.fillStyle='#111827';
+    var bx=xs[ti]-25, by=yt-32, bw=50, bh=19, br=9.5;
+    c.beginPath(); c.moveTo(bx+br,by); c.arcTo(bx+bw,by,bx+bw,by+bh,br); c.arcTo(bx+bw,by+bh,bx,by+bh,br);
+    c.arcTo(bx,by+bh,bx,by,br); c.arcTo(bx,by,bx+bw,by,br); c.closePath(); c.fill();
+    c.fillStyle='#fff'; c.font='700 10px '+FT; c.textAlign='center'; c.textBaseline='middle';
+    c.fillText('วันนี้', xs[ti], by+bh/2+.5);
+  }
+  // ตัวเลขบนยอด + ป้ายวัน
+  c.textAlign='center'; c.textBaseline='alphabetic';
+  for(i=0;i<n;i++){ var big=(i===ti);
+    c.font=(big?'800 12.5px ':'800 11px ')+FT; c.fillStyle=big?'#111827':'#4b5563';
+    c.fillText(String(T.pts[i].tot), xs[i], Y(T.pts[i].tot)-9); }
+  for(i=0;i<n;i++){ c.font=((i===ti)?'700 10px ':'400 10px ')+FT;
+    c.fillStyle=(i===ti)?'#111827':'#9ca3af'; c.fillText(String(T.pts[i].lb), xs[i], yb+18); }
+  return cv.toDataURL('image/png');
+}
+function drmPngDonut(D){
+  var SZ=260, S=2, cv=document.createElement('canvas'); cv.width=SZ*S; cv.height=SZ*S;
+  var c=cv.getContext('2d'); c.setTransform(S,0,0,S,0,0);
+  c.fillStyle='#ffffff'; c.fillRect(0,0,SZ,SZ);
+  var FT="'DM Sans','Noto Sans Thai',-apple-system,Segoe UI,Helvetica,Arial,sans-serif";
+  var cx=SZ/2, cy=SZ/2, r=88, w=33, tot=D.pax.tot||0;
+  c.lineWidth=w; c.strokeStyle='#f3f4f6';
+  c.beginPath(); c.arc(cx,cy,r,0,Math.PI*2); c.stroke();
+  var a0=-Math.PI/2;
+  D.mOrder.slice(0,7).forEach(function(id){ var m=D.mkt[id];
+    var frac=tot>0?(m.pax/tot):0; if(frac<=0) return;
+    var a1=a0+frac*Math.PI*2;
+    c.beginPath(); c.strokeStyle=m.color; c.arc(cx,cy,r,a0,a1); c.stroke();
+    a0=a1;
+  });
+  c.textAlign='center';
+  c.fillStyle='#111827'; c.font='800 38px '+FT; c.textBaseline='alphabetic';
+  c.fillText(String(tot), cx, cy+6);
+  c.fillStyle='#9ca3af'; c.font='700 10px '+FT;
+  c.fillText('TOTAL PAX', cx, cy+24);
+  return cv.toDataURL('image/png');
+}
+function drmUpload(dataUrl, name){
+  var b64=String(dataUrl||'').split(',')[1]||'';
+  if(!b64) return Promise.reject(new Error('no image'));
+  return fetch('/api/mailimg',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({filename:name,dataB64:b64})})
+    .then(function(r){ return r.json(); })
+    .then(function(j){ if(!j||!j.url) throw new Error((j&&j.error)||'upload failed');
+      return location.origin+j.url; });
+}
+// เตรียมรูปกราฟไว้ก่อนเขียนจดหมาย · ทำครั้งเดียวต่อวัน/โหมด แล้วจำไว้
+function drmEnsureImgs(D, done){
+  var key=drImgKey(D);
+  if(_drImg.key===key && (_drImg.state==='ok'||_drImg.state==='run')){ if(done&&_drImg.state==='ok') done(); return; }
+  _drImg={ key:key, trend:'', donut:'', state:'run' };
+  if(done) drMailPaint();
+  var T=(_drTrendMode==='booked')?drTrendBooked(D.date,14):drTrend(D.date,14,2);
+  var jobs=[];
+  try{ jobs.push(drmUpload(drmPngTrend(T),'trend-'+D.date+'.png').then(function(u){ _drImg.trend=u; })); }catch(_){}
+  try{ if(D.mOrder.length) jobs.push(drmUpload(drmPngDonut(D),'donut-'+D.date+'.png').then(function(u){ _drImg.donut=u; })); }catch(_){}
+  Promise.all(jobs).then(function(){
+    if(_drImg.key!==key) return;
+    _drImg.state='ok'; if(done) done(); drMailPaint();
+  }).catch(function(err){
+    if(_drImg.key!==key) return;
+    _drImg.state='err'; console.warn('[dailyreport] chart upload failed', err);
+    if(done) done(); drMailPaint();
+  });
+}
 function drMailHTML(D){
   var e=ckEsc, C=drMailCfg(), I=C.inc, o='';
   var dNice=D.date; try{ dNice=new Date(D.date+'T12:00:00').toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }catch(_){}
@@ -48530,28 +48650,51 @@ function drMailHTML(D){
       '&#128656;', '#fff7ed', '#c2410c');
     o+=drmQuad([k1,k2,k3,k4]);
 
-    // กราฟ 14 วัน
+    // ── กราฟ 14 วัน (ซ้าย) + สัดส่วนลูกค้า (ขวา) · วาง 2 คอลัมน์เหมือนหน้าจอ ──
     var T=(_drTrendMode==='booked')?drTrendBooked(D.date,14):drTrend(D.date,14,2);
-    o+=drmSec('ผู้โดยสาร · ตามวันเดินทาง · 14 วัน','เดินทางวันนี้ '+D.pax.tot+' คน');
-    o+='<tr><td>'+drmTrend(T,e)+'</td></tr>';
-
-    // สัดส่วนลูกค้า · แถบซ้อน + ลิสต์แบบเดียวกับข้างโดนัท
-    var MO=D.mOrder.slice(0,7);
+    var useImg=(_drImg.key===drImgKey(D) && _drImg.state==='ok');
+    var chartBody;
+    if(useImg && _drImg.trend){
+      chartBody='<div style="font-size:11px;color:'+DRM.fain+';line-height:1.55;padding-bottom:10px">'
+        +'นับจากวันเดินทางของแต่ละใบ — ใช้วางแผนเรือ/รถล่วงหน้า <b>ไม่ใช่</b>วันที่ลงบุคกิ้ง · แยกชั้นสีตาม Market</div>'
+        +'<img src="'+_drImg.trend+'" width="100%" alt="ผู้โดยสาร 14 วัน" '
+        +'style="display:block;width:100%;max-width:100%;height:auto;border:0;outline:none;text-decoration:none">'
+        +'<div style="border-top:1px solid '+DRM.line+';margin-top:10px;padding-top:10px">'
+        + T.keys.map(function(k){ var m=T.mkt[k]||{};
+            return '<span style="display:inline-block;margin:0 12px 4px 0;font-size:10.5px;color:'+DRM.mut+'">'
+              +drmDot(m.color||'#94a3b8')+e(m.name||k)+'</span>'; }).join('')
+        +'<span style="float:right;font-size:10.5px;color:'+DRM.mut+'">เดินทางรวม 14 วัน <b style="color:'+DRM.ink+'">'
+        + T.pts.reduce(function(a,p){return a+p.tot;},0)+' คน</b></span></div>';
+      chartBody=drmCard(chartBody);
+    } else {
+      chartBody=drmTrend(T,e);
+    }
+    var MO=D.mOrder.slice(0,7), mktBody='';
     if(MO.length){
       var stack='', lst='';
       MO.forEach(function(id){ var m=D.mkt[id];
         stack+='<td width="'+(D.pax.tot?(m.pax/D.pax.tot*100).toFixed(1):0)+'%" style="background:'+m.color
           +';height:14px;font-size:0;line-height:0">&nbsp;</td>'; });
       MO.forEach(function(id,i){ var m=D.mkt[id], last=(i===MO.length-1), bd=last?'none':'1px solid #f4f5f7';
-        lst+='<tr><td style="padding:8px 2px;border-bottom:'+bd+';font-size:12.5px;color:#374151">'
+        lst+='<tr><td style="padding:8px 2px;border-bottom:'+bd+';font-size:12px;color:#374151">'
           +drmDot(m.color)+'<b style="color:'+DRM.ink+'">'+e(m.name)+'</b></td>'
-          +'<td align="right" style="padding:8px 2px;border-bottom:'+bd+';font-size:12.5px;color:'+DRM.mut+';white-space:nowrap">'
+          +'<td align="right" style="padding:8px 2px;border-bottom:'+bd+';font-size:12px;color:'+DRM.mut+';white-space:nowrap">'
           +'<b style="color:'+DRM.ink+'">'+m.pax+'</b> คน <span style="color:'+DRM.fain+'">('+drPct(m.pax,D.pax.tot)+'%)</span></td></tr>'; });
-      o+=drmSec('สัดส่วนลูกค้า','แบ่งตาม Market · '+D.pax.tot+' pax');
-      o+='<tr><td>'+drmCard('<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        +'style="border-radius:8px;overflow:hidden"><tr>'+stack+'</tr></table>'
-        +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px">'+lst+'</table>')+'</td></tr>';
+      mktBody=drmCard(
+        (useImg && _drImg.donut
+          ? ('<div style="text-align:center;padding-bottom:6px"><img src="'+_drImg.donut+'" width="200" alt="สัดส่วนลูกค้า" '
+             +'style="display:inline-block;width:200px;max-width:100%;height:auto;border:0"></div>')
+          : ('<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-radius:8px;overflow:hidden">'
+             +'<tr>'+stack+'</tr></table>'))
+        +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px">'+lst+'</table>');
     }
+    o+=drmSec('ผู้โดยสาร · ตามวันเดินทาง · 14 วัน','เดินทางวันนี้ '+D.pax.tot+' คน');
+    o+='<tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+      +'<td width="65%" valign="top" style="padding-right:6px">'+chartBody+'</td>'
+      +'<td width="35%" valign="top" style="padding-left:6px">'
+        +'<div style="font-size:12.5px;font-weight:800;color:'+DRM.ink+';padding:0 0 8px 2px">สัดส่วนลูกค้า'
+        +'<span style="float:right;font-size:10.5px;font-weight:600;color:'+DRM.fain+';padding-top:3px">แบ่งตาม Market</span></div>'
+        +(mktBody||'')+'</td></tr></table></td></tr>';
 
     // ข้อสังเกตของวัน · ข้อความชุดเดียวกับบนหน้าจอ
     var top=D.bOrder.length?D.boats[D.bOrder[0]]:null, m1=D.mOrder.length?D.mkt[D.mOrder[0]]:null;
@@ -48848,7 +48991,8 @@ function drMailText(D){
   return L.join('\n');
 }
 var _drMailOpen=false;
-function drMailShow(){ _drMailOpen=true; drMailPaint(); }
+function drMailShow(){ _drMailOpen=true; drMailPaint();
+  try{ drmEnsureImgs(drData(_drDate)); }catch(_){} }
 function drMailClose(){ _drMailOpen=false; var h=document.getElementById('dr-mail-host'); if(h) h.innerHTML=''; }
 function drMailToast(t){
   var h=document.getElementById('dr-mail-toast'); if(!h) return;
@@ -48924,6 +49068,12 @@ function drMailPaint(){
   var host=document.getElementById('dr-mail-host'); if(!host) return;
   if(!_drMailOpen){ host.innerHTML=''; return; }
   var e=ckEsc, D=drData(_drDate), C=drMailCfg();
+  var _imgSt=(_drImg.key===drImgKey(D))?_drImg.state:'';
+  var IMGLINE = _imgSt==='ok'
+      ? '<span style="color:#047857">&#10003; กราฟพร้อมแล้ว · ส่งไปจะเห็นเป็นรูปเหมือนหน้าจอ</span>'
+      : _imgSt==='run' ? '<span style="color:#b45309">กำลังเตรียมรูปกราฟ…</span>'
+      : _imgSt==='err' ? '<span style="color:#be123c">เตรียมรูปกราฟไม่สำเร็จ · จดหมายจะใช้กราฟแท่งแทน</span>'
+      : '';
   var SEC=[['ov','ภาพรวม + Market'],['rt','แยกตามเส้นทาง'],['bt','เรือ'],['vn','รถรับส่ง'],
            ['px','ผู้โดยสาร · เอกสาร · ขากลับ'],['fi','การเงิน'],['todo','ต้องเคลียร์ก่อนปิดวัน'],['list','ยอดตาม Agent · เส้นทาง']];
   host.innerHTML='<div class="dr-mask" onclick="drMailClose()"></div><div class="dr-modal">'
@@ -48941,6 +49091,7 @@ function drMailPaint(){
         + SEC.map(function(x){ return '<label class="ck"><input type="checkbox" '+(C.inc[x[0]]?'checked':'')
             +' onchange="drMailToggle(\''+x[0]+'\',this.checked)">'+e(x[1])+'</label>'; }).join('')
         +'</div>'
+        +(IMGLINE?('<div style="font-size:11px;font-weight:600;padding:2px 0 6px">'+IMGLINE+'</div>'):'')
         +'<div class="dr-mact">'
           +'<button class="dr-btn pri" onclick="drMailCopy()">&#128203; คัดลอกไปวางในอีเมล</button>'
           +'<button class="dr-btn" onclick="drMailEml()">&#11015; ดาวน์โหลดฉบับร่าง .eml</button>'
