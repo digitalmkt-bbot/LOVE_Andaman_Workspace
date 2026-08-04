@@ -46816,7 +46816,7 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-mono{font-family:\'DM Mono\',monospace;font-variant-numeric:tabular-nums}'
  +S+' .ts-vch{font-family:\'DM Mono\',monospace;font-weight:800;color:var(--zn900)}'
  +S+' .ts-ag{display:block;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:700;line-height:1.22;'
-   +'max-width:100%;white-space:normal;word-break:normal;overflow-wrap:break-word;box-shadow:0 1px 2px rgba(0,0,0,.10)}'
+   +'max-width:190px;white-space:normal;word-break:normal;overflow-wrap:break-word;box-shadow:0 1px 2px rgba(0,0,0,.10)}'
  +S+' .ts-man td:nth-child(2){min-width:118px}'
  +S+' .ts-thsub{display:block;font-size:8px;font-weight:600;color:var(--zn400);letter-spacing:0;text-transform:none}'
  +S+' .ts-totb{display:block;font-size:9px;font-weight:600;color:var(--zn400);white-space:nowrap;margin-top:1px}'
@@ -46883,6 +46883,8 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-cxlrow .ts-vch,'+S+' .ts-cxlrow .ts-lead{text-decoration:line-through}'
  +S+' .ts-aocol{max-width:210px}'
  +S+' .ts-aos{display:flex;flex-direction:column;align-items:flex-start;gap:2px}'
+ +S+' .ts-sls{display:flex;flex-direction:column;align-items:flex-start;gap:2px;max-width:230px}'
+ +S+' .ts-sls .ts-ao{white-space:normal;overflow:visible;text-overflow:clip}'
  +S+' .ts-ao{display:inline-block;max-width:100%;font-size:9.5px;font-weight:600;line-height:1.3;'
    +'padding:1px 6px;border-radius:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
  +S+' .ts-ao b{font-weight:800}'
@@ -47244,6 +47246,42 @@ function tsTotalOf(r, date){
   if(ex>0) parts.push(['ขายเพิ่มหน้าท่า', ex]);
   if(up>0) parts.push(['อัปเกรด', up]);
   return { base:base, site:ex+up, all:base+ex+up, parts:parts };
+}
+// ของที่ขายเพิ่มหน้างานของใบนี้ · extras (SB_EXTRAS) + upgrade
+//   คืนทั้งรายการและยอดแยกตามวิธีรับเงิน เพื่อเอาไปรวมกับการ์ดด้านบน
+function tsSaleList(b, date){
+  var out=[], by={cash:0,transfer:0,card:0}, fee=0, got=0, due=0, noSlip=0;
+  try{ ((typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(b.id):[]).forEach(function(x){
+    if(date && x.tripDate && x.tripDate!==date) return;
+    var amt=+x.total||0; if(!amt) return;
+    var mth=x.method||'cash'; if(by[mth]==null) by[mth]=0;
+    by[mth]+=amt; got+=amt; fee+=(+x.fee||0);
+    var slipMissing=(mth!=='cash' && !((x.slips||[]).length));
+    if(slipMissing) noSlip++;
+    out.push({ kind:'ex', t:String(x.service||'ขายเพิ่ม'), qty:(+x.qty||1), amt:amt,
+               method:mth, who:x.seller||'', done:true, noSlip:slipMissing });
+  }); }catch(_){}
+  try{ (Array.isArray(b.upgrades)?b.upgrades:[]).forEach(function(u){
+    var amt=+u.sellPrice||0; if(!amt) return;
+    if(u.collected){ var m2=u.method||'cash'; if(by[m2]==null) by[m2]=0; by[m2]+=amt; got+=amt; }
+    else due+=amt;
+    out.push({ kind:'up', t:String(u.label||'upgrade'), qty:1, amt:amt,
+               method:u.method||'cash', who:u.by||'', done:!!u.collected, noSlip:false });
+  }); }catch(_){}
+  return { list:out, by:by, fee:fee, got:got, due:due, noSlip:noSlip, tot:got+due, n:out.length };
+}
+// ป้ายรายการขายเพิ่มสำหรับตารางส่วนที่ 3
+function tsSaleCell(S, money, e){
+  if(!S.n) return '<span style="color:var(--zn400)">—</span>';
+  var PM={cash:'สด', transfer:'โอน', card:'บัตร'};
+  return '<div class="ts-sls">'+S.list.map(function(x){
+    var cls=x.kind==='up' ? 'ao-up' : 'ao-ex';
+    var tip=(x.qty>1?('จำนวน '+x.qty+' · '):'')+(PM[x.method]||x.method)
+      +(x.who?(' · '+x.who):'')+(x.done?'':' · ยังไม่เก็บ')+(x.noSlip?' · ยังไม่มีสลิป':'');
+    return '<span class="ts-ao '+cls+'" title="'+e(tip)+'">'+e(x.t)+(x.qty>1?(' ×'+x.qty):'')
+      +' <b>'+money(x.amt)+'</b>'+(x.done?'':' <i style="font-style:normal;opacity:.75">รอเก็บ</i>')
+      +(x.noSlip?' <i style="font-style:normal;color:#A32D2D">⚠</i>':'')+'</span>';
+  }).join('')+'</div>';
 }
 function tsMoneyOf(b, date){
   var M=(typeof pckMoney==='function')?pckMoney(b,date):{cot:0,balance:0,upDue:0,due:0,pierPaid:0};
@@ -48785,11 +48823,17 @@ function renderTravelSum(){
   var nPending=issues.length-nDecided;
 
   // ── เงินหน้างาน ──
-  var mAll=all.map(function(r){ var m=tsMoneyOf(r.b,date); m.r=r; return m; });
-  var mRows=mAll.filter(function(m){ return m.target>0 || m.paid>0; });
-  var sumCash=0,sumTf=0,sumCard=0,sumDue=0,sumTarget=0,sumFee=0;
-  mRows.forEach(function(m){ sumCash+=m.by.cash||0; sumTf+=m.by.transfer||0; sumCard+=m.by.card||0;
-    sumDue+=m.due; sumTarget+=m.target; sumFee+=(+m.M.pierFee||0); });
+  var mAll=all.map(function(r){ var m=tsMoneyOf(r.b,date); m.r=r; m.S=tsSaleList(r.b,date); return m; });
+  // §tsSaleCol · ใบที่ขายแต่ของเพิ่มอย่างเดียว (ไม่มี COT/ยอดค้าง) ต้องขึ้นด้วย
+  var mRows=mAll.filter(function(m){ return m.target>0 || m.paid>0 || m.S.tot>0; });
+  var sumCash=0,sumTf=0,sumCard=0,sumDue=0,sumTarget=0,sumFee=0,sumSale=0,nSale=0,sumSaleDue=0;
+  mRows.forEach(function(m){
+    sumCash+=(m.by.cash||0)+(m.S.by.cash||0);
+    sumTf  +=(m.by.transfer||0)+(m.S.by.transfer||0);
+    sumCard+=(m.by.card||0)+(m.S.by.card||0);
+    sumDue+=m.due; sumTarget+=m.target;
+    sumFee+=(+m.M.pierFee||0)+(+m.S.fee||0);
+    sumSale+=m.S.tot; nSale+=m.S.n; sumSaleDue+=m.S.due; });
 
   var K=function(cls,lb,val,unit,note,noteCls){
     return '<div class="ts-k '+cls+'"><div class="kk">'+lb+'</div><div class="kv">'+val+(unit?('<em>'+unit+'</em>'):'')+'</div>'
@@ -48881,12 +48925,17 @@ function renderTravelSum(){
       +'<td><div class="ts-lead">'+e(b.leadPax||'—')+'</div><div class="ts-tel">'+e(b.leadPhone||b.phone||'')+'</div></td>'
       +'<td><div style="font-size:11px">'+e(b.hotelName||b.pickup||'—')+'</div>'
         +'<div class="ts-tel">'+(veh?e(veh.name||r.van):'มาเอง')+(boat?(' · '+e(boat.name||r.boat)):'')+'</div></td>'
-      +'<td class="ts-mono" style="font-size:10.5px">'+(e(m.who)||'<span style="color:var(--zn400)">—</span>')+'</td>'
+      +'<td class="ts-aocol">'+tsSaleCell(m.S, money, e)+'</td>'
+      +'<td class="ts-mono" style="font-size:10.5px">'+(e([m.who].concat(m.S.list.map(function(x){return x.who;}))
+          .filter(function(v,i,a){ return v && a.indexOf(v)===i; }).join(' · '))||'<span style="color:var(--zn400)">—</span>')+'</td>'
       +'<td>'+mchips+slipWarn+'</td>'
       +'<td class="r ts-mono" style="font-weight:800">'+money(m.target)+'<div class="ts-tel">'+e(parts.join(' · '))+'</div></td>'
       +'<td class="c">'+(m.due>0
         ? ('<span class="ts-chip a">รอเก็บ '+money(m.due)+'</span>')
-        : ('<span class="ts-chip g">เก็บครบ '+money(m.paid)+'</span>'))+'</td>'
+        : (m.target<=0 && m.paid<=0 && m.S.got>0
+            ? ('<span class="ts-chip g">ขายเพิ่ม '+money(m.S.got)+'</span>')
+            : ('<span class="ts-chip g">เก็บครบ '+money(m.paid)+'</span>')))
+        + (m.S.due>0?('<div style="margin-top:3px"><span class="ts-chip a">upgrade รอเก็บ '+money(m.S.due)+'</span></div>'):'')+'</td>'
       +'</tr>';
   });
   var PC=function(cls,ic,lb,tag,val,note){
@@ -48895,18 +48944,24 @@ function renderTravelSum(){
   };
   var cash='<div class="ts-sec"><div class="ts-sech"><div>'
     +'<div class="ts-sect"><i class="ts-dot" style="background:var(--em600)"></i>ส่วนที่ 3 · เงินที่เก็บหน้างาน · แยกตามวิธีรับเงิน</div>'
-    +'<div class="ts-secd">รวมทุกยอดที่ต้องเก็บวันนี้ — Cash on Tour · ยอดค้าง · upgrade — และเก็บไปแล้วด้วยวิธีไหน อ่านจากรายการรับเงินหน้าท่าโดยตรง</div></div>'
-    +'<span class="ts-chip e" style="font-size:11px;padding:5px 12px">ต้องเก็บวันนี้ '+money(sumTarget)+'</span></div>'
+    +'<div class="ts-secd">รวมทุกยอดที่ต้องเก็บวันนี้ — Cash on Tour · ยอดค้าง · upgrade — และของที่ขายเพิ่มหน้างาน '
+      +'(Longtail · อาหาร · อัปเกรด) พร้อมวิธีรับเงินของแต่ละก้อน อ่านจากรายการรับเงินหน้าท่าโดยตรง</div></div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'
+      +'<span class="ts-chip e" style="font-size:11px;padding:5px 12px">ต้องเก็บวันนี้ '+money(sumTarget)+'</span>'
+      +(nSale?('<span class="ts-chip b" style="font-size:11px;padding:5px 12px">ขายเพิ่ม '+money(sumSale)+' · '+nSale+' รายการ</span>'):'')
+    +'</div></div>'
     +'<div class="ts-pay">'
-    + PC('cash','&#128181;','1 · เงินสด','นับลิ้นชักได้',money(sumCash),'เงินสดที่คนขับ / เคาน์เตอร์ท่าเก็บ')
-    + PC('tf','&#128241;','2 · โอนเงิน','ต้องมีสลิป',money(sumTf),'QR / พร้อมเพย์ / โอนผ่านแอป')
+    + PC('cash','&#128181;','1 · เงินสด','นับลิ้นชักได้',money(sumCash),'เงินสดที่คนขับ / เคาน์เตอร์ท่าเก็บ · รวมของขายเพิ่ม')
+    + PC('tf','&#128241;','2 · โอนเงิน','ต้องมีสลิป',money(sumTf),'QR / พร้อมเพย์ / โอนผ่านแอป · รวมของขายเพิ่ม')
     + PC('cc','&#128179;','3 · บัตรเครดิต','รูดเครื่อง EDC',money(sumCard),'ค่าธรรมเนียมบัตรวันนี้ '+money(sumFee))
-    + PC('pend','&#9203;','4 · ยังไม่ได้เก็บ','ค้างอยู่',money(sumDue),'ต้องเคลียร์ให้จบก่อนปิดวัน')
+    + PC('pend','&#9203;','4 · ยังไม่ได้เก็บ','ค้างอยู่',money(sumDue),'ต้องเคลียร์ให้จบก่อนปิดวัน'
+        +(sumSaleDue>0?(' · upgrade รอเก็บอีก '+money(sumSaleDue)):''))
     +'</div>'
     +'<div class="ts-card"><div class="ts-scroll"><table class="ts-tbl"><thead><tr>'
-    +'<th>Voucher</th><th>Agency</th><th>ลูกค้า (lead)</th><th>จุดรับ · รถ/เรือ</th><th>คนเก็บ</th>'
+    +'<th>Voucher</th><th>Agency</th><th>ลูกค้า (lead)</th><th>จุดรับ · รถ/เรือ</th>'
+    +'<th>ขายเพิ่มหน้างาน</th><th>คนเก็บ</th>'
     +'<th>วิธีรับเงิน</th><th class="r">ต้องเก็บ</th><th class="c">สถานะ</th></tr></thead><tbody>'
-    +(mbody||'<tr><td colspan="8" class="ts-empty">วันนี้ไม่มียอดที่ต้องเก็บหน้างาน</td></tr>')
+    +(mbody||'<tr><td colspan="9" class="ts-empty">วันนี้ไม่มียอดที่ต้องเก็บหน้างานและไม่มีของขายเพิ่ม</td></tr>')
     +'</tbody></table></div></div></div>';
 
   // ══ ส่วน 4 · manifest เต็ม ══
