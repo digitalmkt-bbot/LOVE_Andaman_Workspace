@@ -48409,143 +48409,285 @@ function drmBar(pct, color){
 }
 
 // ── ตัวจดหมาย ───────────────────────────────────────────────────────────
+function drmCard(inner, pad, bg, bd, radius){
+  return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:'+(bg||'#ffffff')
+    +';border:1px solid '+(bd||DRM.line)+';border-radius:'+(radius||'16px')+'"><tr><td style="padding:'+(pad||'16px 18px')
+    +'">'+inner+'</td></tr></table>';
+}
+// การ์ด KPI แบบเดียวกับหน้าจอ · ไอคอนวงกลม + แถวย่อยคั่นเส้น
+function drmKpi(label, value, unit, sub, foot, icon, iconbg, vcolor){
+  var f='';
+  if(foot && foot.length){
+    var tds='', w=Math.floor(100/foot.length);
+    foot.forEach(function(x,i){ tds+='<td width="'+w+'%" style="'+(i?('border-left:1px solid '+DRM.line+';'):'')
+      +'padding:0 8px;font-size:10.5px;color:'+DRM.mut+';text-align:center">'+x+'</td>'; });
+    f='<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:11px;border-top:1px solid '
+      +DRM.line+'"><tr><td style="padding-top:9px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">'
+      +'<tr>'+tds+'</tr></table></td></tr></table>';
+  }
+  return drmCard('<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+    +'<td valign="top"><div style="font-size:11.5px;color:'+DRM.mut+';font-weight:600">'+label+'</div>'
+    +'<div style="font-size:26px;font-weight:800;color:'+(vcolor||DRM.ink)+';letter-spacing:-.03em;padding-top:3px;line-height:1.1">'+value
+    +(unit?('<span style="font-size:12px;font-weight:600;color:'+DRM.fain+';padding-left:5px">'+unit+'</span>'):'')+'</div>'
+    +(sub?('<div style="font-size:10.5px;color:'+DRM.fain+';padding-top:5px;line-height:1.5">'+sub+'</div>'):'')+'</td>'
+    +'<td width="40" valign="top" align="right"><table role="presentation" cellpadding="0" cellspacing="0"><tr>'
+    +'<td width="36" height="36" align="center" valign="middle" style="background:'+iconbg
+    +';border-radius:12px;font-size:17px;line-height:36px">'+icon+'</td></tr></table></td></tr></table>'+f,
+    '14px 15px 13px');
+}
+function drmPair(a,b){
+  return '<tr><td style="padding:10px 0 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+    +'<td width="50%" valign="top" style="padding-right:5px">'+a+'</td>'
+    +'<td width="50%" valign="top" style="padding-left:5px">'+(b||'')+'</td></tr></table></td></tr>';
+}
+// กราฟ 14 วัน · แท่งซ้อนสีด้วย div ล้วน · ไม่มี SVG/รูป เพราะเมลบล็อก
+function drmTrend(T, e){
+  var MAXH=132, mx=1;
+  T.pts.forEach(function(p){ if(p.tot>mx) mx=p.tot; });
+  var cols='';
+  T.pts.forEach(function(p){
+    var h=Math.round(p.tot/mx*MAXH), segs='', used=0, ks=T.keys.slice();
+    ks.forEach(function(k,i){
+      var v=p.by[k]||0; if(!v && i<ks.length-1) return;
+      var sh=(i===ks.length-1)? Math.max(0,h-used) : Math.round(h*(v/(p.tot||1)));
+      used+=sh;
+      if(sh>0) segs+='<div style="height:'+sh+'px;background:'+((T.mkt[k]||{}).color||'#94a3b8')
+        +';font-size:0;line-height:0">&nbsp;</div>';
+    });
+    cols+='<td valign="bottom" align="center" style="padding:0 2px">'
+      +'<div style="font-size:'+(p.today?11:10)+'px;font-weight:'+(p.today?800:600)+';color:'+(p.today?DRM.ink:DRM.fain)+';padding-bottom:4px">'+p.tot+'</div>'
+      +'<div style="width:100%;border-radius:4px;overflow:hidden">'+segs+'</div>'
+      +'<div style="font-size:9.5px;color:'+(p.today?DRM.ink:DRM.fain)+';padding-top:5px;font-weight:'+(p.today?800:500)+'">'+e(p.lb)+'</div></td>';
+  });
+  var lg=T.keys.map(function(k){ var m=T.mkt[k]||{};
+    return '<span style="display:inline-block;margin:0 12px 4px 0;font-size:10.5px;color:'+DRM.mut+'">'
+      +drmDot(m.color||'#94a3b8')+e(m.name||k)+'</span>'; }).join('');
+  var tot=T.pts.reduce(function(a,p){ return a+p.tot; },0);
+  return drmCard('<div style="font-size:11px;color:'+DRM.fain+';line-height:1.55;padding-bottom:12px">'
+    +'นับจากวันเดินทางของแต่ละใบ — ใช้วางแผนเรือ/รถล่วงหน้า <b>ไม่ใช่</b>วันที่ลงบุคกิ้ง · แยกชั้นสีตาม Market</div>'
+    +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'+cols+'</tr></table>'
+    +'<div style="border-top:1px solid '+DRM.line+';margin-top:12px;padding-top:10px">'+lg
+    +'<span style="float:right;font-size:10.5px;color:'+DRM.mut+'">เดินทางรวม 14 วัน <b style="color:'+DRM.ink+'">'+tot+' คน</b></span></div>');
+}
 function drMailHTML(D){
   var e=ckEsc, C=drMailCfg(), I=C.inc, o='';
   var dNice=D.date; try{ dNice=new Date(D.date+'T12:00:00').toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }catch(_){}
   var cost=D.vanCost+D.ltCost;
+  var GRN='#047857', AMB='#b45309', RED='#b91c1c';
 
-  o+='<tr><td style="padding:0 0 2px">'
+  // ── หัวจดหมาย ──
+  o+='<tr><td style="padding:0 0 4px">'
     +'<div style="font-size:10px;font-weight:800;letter-spacing:.1em;color:#65a30d;text-transform:uppercase">LOVE ANDAMAN &middot; OPERATIONS</div>'
-    +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:4px"><tr>'
-    +'<td style="font-size:21px;font-weight:800;color:#111827;letter-spacing:-.02em">Daily Report</td>'
-    +'<td align="right" style="font-size:12px;color:#6b7280">'+e(dNice)+'</td></tr></table></td></tr>';
-  if(String(C.note||'').trim())
-    o+='<tr><td style="padding:12px 0 2px;font-size:13px;color:#374151;line-height:1.7;white-space:pre-wrap">'+e(C.note)+'</td></tr>';
+    +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:5px"><tr>'
+    +'<td style="font-size:23px;font-weight:800;color:#111827;letter-spacing:-.03em">Daily Report</td>'
+    +'<td align="right" style="font-size:12px;color:#6b7280">สรุปก่อนวันเดินทาง<br><b style="color:#111827">'+e(dNice)+'</b></td>'
+    +'</tr></table></td></tr>';
+  if((C.note||'').trim())
+    o+='<tr><td style="padding:14px 0 4px;font-size:12.5px;color:#374151;line-height:1.7">'
+      +e(C.note).replace(/\n/g,'<br>')+'</td></tr>';
 
-  // ── แถบเตือน · ขึ้นก่อนทุกอย่าง เพราะเป็นสิ่งที่ต้องลงมือ ──
+  // ── KPI 4 ใบ ──
+  if(I.ov){
+    var bF=D.bOrder.length
+      ? ('เต็มสุด <b style="color:'+GRN+'">'+e(D.boats[D.bOrder[0]].name)+' '+drPct(D.boats[D.bOrder[0]].pax,D.boats[D.bOrder[0]].cap)+'%</b>')
+      : 'ยังไม่จัดเรือ';
+    var bF2=(D.bOrder.length>1)
+      ? ('ว่างสุด <b style="color:#4338ca">'+e(D.boats[D.bOrder[D.bOrder.length-1]].name)+' '
+         +drPct(D.boats[D.bOrder[D.bOrder.length-1]].pax,D.boats[D.bOrder[D.bOrder.length-1]].cap)+'%</b>') : '';
+    var k1=drmKpi('ผู้โดยสารทั้งวัน', D.pax.tot, 'คน',
+      'ผู้ใหญ่ '+D.pax.ad+' · เด็ก '+D.pax.chd+' · ทารก '+D.pax.inf+' · FOC '+D.pax.foc,
+      ['ไทย <b style="color:#111827">'+D.pax.th+'</b>','ต่างชาติ <b style="color:#111827">'+D.pax.fr+'</b>',
+       '<b style="color:#111827">'+D.rOrder.length+'</b> เส้นทาง'], '&#128101;', '#eef2ff');
+    var k2=drmKpi('รายได้ทั้งวัน', drB(D.rev), '',
+      'เฉลี่ย <b style="color:'+GRN+'">'+drB(D.pax.tot?D.rev/D.pax.tot:0)+'</b> / คน',
+      ['Invoice <b style="color:#111827">'+drK2(D.pay.invoice)+'</b>','PFM <b style="color:#111827">'+drK2(D.pay.proforma)+'</b>',
+       'COT <b style="color:#111827">'+drK2(D.pay.cot)+'</b>'], '&#128176;', '#ecfdf5', GRN);
+    var k3=drmKpi('ที่นั่งเรือที่ใช้', drPct(D.seatTot,D.capTot)+'%', 'เฉลี่ย',
+      D.seatTot+' ที่นั่ง จากความจุ '+D.capTot+' · '+D.bOrder.length+' ลำ',
+      bF2?[bF,bF2]:[bF], '&#128676;', '#f5f3ff', '#4338ca');
+    var k4=drmKpi('ต้นทุนรถรับส่ง', drB(D.perPax), '/ คน',
+      D.vanIn+' คันในโควตา'+(D.vanOut?(' · นอกโควตา '+D.vanOut):'')+' · รับส่ง '+D.vanPax+' คน',
+      ['ค่ารถรวม <b style="color:#111827">'+drB(D.vanCost)+'</b>',
+       D.vanOut?('<b style="color:'+RED+'">เกินโควตา</b>'):('<b style="color:'+GRN+'">อยู่ในโควตา</b>')],
+      '&#128656;', '#fff7ed', '#c2410c');
+    o+=drmPair(k1,k2)+drmPair(k3,k4);
+
+    // กราฟ 14 วัน
+    var T=(_drTrendMode==='booked')?drTrendBooked(D.date,14):drTrend(D.date,14,2);
+    o+=drmSec('ผู้โดยสาร · ตามวันเดินทาง · 14 วัน','เดินทางวันนี้ '+D.pax.tot+' คน');
+    o+='<tr><td>'+drmTrend(T,e)+'</td></tr>';
+
+    // สัดส่วนลูกค้า · แถบซ้อน + ลิสต์แบบเดียวกับข้างโดนัท
+    var MO=D.mOrder.slice(0,7);
+    if(MO.length){
+      var stack='', lst='';
+      MO.forEach(function(id){ var m=D.mkt[id];
+        stack+='<td width="'+(D.pax.tot?(m.pax/D.pax.tot*100).toFixed(1):0)+'%" style="background:'+m.color
+          +';height:14px;font-size:0;line-height:0">&nbsp;</td>'; });
+      MO.forEach(function(id,i){ var m=D.mkt[id], last=(i===MO.length-1), bd=last?'none':'1px solid #f4f5f7';
+        lst+='<tr><td style="padding:8px 2px;border-bottom:'+bd+';font-size:12.5px;color:#374151">'
+          +drmDot(m.color)+'<b style="color:'+DRM.ink+'">'+e(m.name)+'</b></td>'
+          +'<td align="right" style="padding:8px 2px;border-bottom:'+bd+';font-size:12.5px;color:'+DRM.mut+';white-space:nowrap">'
+          +'<b style="color:'+DRM.ink+'">'+m.pax+'</b> คน <span style="color:'+DRM.fain+'">('+drPct(m.pax,D.pax.tot)+'%)</span></td></tr>'; });
+      o+=drmSec('สัดส่วนลูกค้า','แบ่งตาม Market · '+D.pax.tot+' pax');
+      o+='<tr><td>'+drmCard('<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        +'style="border-radius:8px;overflow:hidden"><tr>'+stack+'</tr></table>'
+        +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px">'+lst+'</table>')+'</td></tr>';
+    }
+
+    // ข้อสังเกตของวัน · ข้อความชุดเดียวกับบนหน้าจอ
+    var top=D.bOrder.length?D.boats[D.bOrder[0]]:null, m1=D.mOrder.length?D.mkt[D.mOrder[0]]:null;
+    var insH=top?(e(top.name)+' ขายไปแล้ว '+drPct(top.pax,top.cap)+'%'
+        +(top.cap>top.pax?(' · เหลืออีก '+(top.cap-top.pax)+' ที่นั่ง'):' · เต็มลำแล้ว')):'ยังไม่จัดเรือของวันนี้';
+    var insP=(m1?('กลุ่ม <b>'+e(m1.name)+'</b> ครองสัดส่วนสูงสุด '+drPct(m1.pax,D.pax.tot)+'% ของทั้งวัน '):'')
+      +'รายได้รวม <b>'+drB(D.rev)+'</b>'
+      +((D.warn.noVan||D.warn.noBoat)?(' ยังมี <b>'+(D.warn.noVan?(D.warn.noVan+' ใบที่ยังไม่จัดรถ'):'')
+        +((D.warn.noVan&&D.warn.noBoat)?' และ ':'')+(D.warn.noBoat?(D.warn.noBoat+' ใบยังไม่จัดเรือ'):'')+'</b> ต้องเคลียร์ก่อนปิดวัน'):' ทุกอย่างจัดครบแล้ว');
+    o+='<tr><td style="padding:12px 0 0">'+drmCard(
+      '<div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:#ffffff;text-transform:uppercase;padding-bottom:6px">&#128161; ข้อสังเกตของวัน</div>'
+      +'<div style="font-size:16px;font-weight:800;color:#ffffff;line-height:1.35">'+insH+'</div>'
+      +'<div style="font-size:12px;color:#ffffff;padding-top:6px;line-height:1.6">'+insP+'</div>',
+      '15px 17px','#f97316','#f97316')+'</td></tr>';
+  }
+
+  // ── แยกตามเส้นทาง · การ์ดเรียงข้างกัน ──
+  if(I.rt && D.rOrder.length){
+    o+=drmSec('แยกตามเส้นทาง', D.rOrder.length+' เส้นทาง · '+D.rows.length+' booking');
+    var mk=function(k,v){ return '<tr><td style="padding:3px 0;font-size:11.5px;color:'+DRM.mut+'">'+k+'</td>'
+      +'<td align="right" style="padding:3px 0;font-size:12px;font-weight:700;color:'+DRM.ink+'">'+v+'</td></tr>'; };
+    var cards=D.rOrder.map(function(id){ var r=D.routes[id], pc=drPct(r.seats,r.cap);
+      return drmCard('<div style="font-size:12.5px;font-weight:800;color:'+DRM.ink+';padding-bottom:8px;line-height:1.3">'
+        +drmDot(r.color)+e(r.name)+'</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0">'
+        +mk('ผู้โดยสาร',r.pax+' คน')+mk('booking',r.n+' ใบ')+mk('รายได้',drB(r.rev))
+        +mk('ที่นั่ง',r.seats+' / '+(r.cap||'—')+(r.cap?(' · '+pc+'%'):''))
+        +'</table>'+drmBar(pc,r.color),'13px 14px',DRM.soft,'#eef0f3'); });
+    for(var ci=0; ci<cards.length; ci+=3){
+      var g=cards.slice(ci,ci+3), tds='';
+      for(var gj=0; gj<3; gj++) tds+='<td width="33%" valign="top" style="padding:0 '+(gj<2?'5px':'0')+' 0 '+(gj?'5px':'0')+'">'+(g[gj]||'')+'</td>';
+      o+='<tr><td style="padding:0 0 8px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'+tds+'</tr></table></td></tr>';
+    }
+  }
+
+  // ── ต้องเคลียร์ก่อนปิดวัน ──
   if(I.todo){
     var W=[];
-    if(D.warn.noVan) W.push(['ยังไม่จัดรถ', D.warn.noVan+' ใบ · '+D.noVan.pax+' คน']);
-    if(D.warn.noBoat) W.push(['ยังไม่จัดเรือ', D.warn.noBoat+' ใบ · '+D.noBoat.pax+' คน']);
-    if(D.warn.over) W.push(['เรือเกินความจุ', D.warn.over+' ลำ']);
-    if(D.ret.todo) W.push(['ยังไม่จัดรถกลับ', D.ret.todo+' ใบ']);
-    if(D.warn.doc) W.push(['เอกสารไม่ครบ', D.warn.doc+' ใบ']);
-    if(D.due>0) W.push(['ต้องเก็บหน้างาน', drB(D.due)]);
-    if(D.noSlip) W.push(['รอสลิป', D.noSlip+' รายการ']);
-    o+='<tr><td style="padding:14px 0 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-      +'style="background:'+(W.length?'#fff5f5':'#f0fdf4')+';border:1px solid '+(W.length?'#ffdfe2':'#d6f5df')+';border-radius:14px">'
-      +'<tr><td style="padding:11px 14px;font-size:12px;color:'+(W.length?'#9f1239':'#166534')+';line-height:1.9">'
-      +'<b style="font-size:12.5px">'+(W.length?('&#9888; ต้องเคลียร์ก่อนปิดวัน · '+W.length+' เรื่อง'):'&#10003; ไม่มีรายการค้าง · พร้อมเดินทาง')+'</b>'
-      +(W.length?('<br>'+W.map(function(w){ return drmChip(w[0]+' <b>'+w[1]+'</b>','#be123c','#ffe4e6'); }).join('&nbsp;')):'')
-      +'</td></tr></table></td></tr>';
+    if(D.warn.noVan)  W.push([RED,'#fee2e2','ยังไม่จัดรถ '+D.warn.noVan+' ใบ ('+D.noVan.pax+' คน)']);
+    if(D.warn.noBoat) W.push([RED,'#fee2e2','ยังไม่จัดเรือ '+D.warn.noBoat+' ใบ ('+D.noBoat.pax+' คน)']);
+    if(D.warn.over)   W.push([RED,'#fee2e2','เรือเกินความจุ '+D.warn.over+' ลำ']);
+    if(D.ret.todo)    W.push([AMB,'#fef3c7','ยังไม่จัดรถกลับ '+D.ret.todo+' ใบ ('+D.ret.todoPax+' คน)']);
+    if(D.warn.doc)    W.push([AMB,'#fef3c7','เอกสารไม่ครบ '+D.warn.doc+' ใบ']);
+    if(D.due>0)       W.push([AMB,'#fef3c7','ต้องเก็บหน้างาน '+drB(D.due)]);
+    if(D.noSlip)      W.push([AMB,'#fef3c7','ยังไม่มีสลิป '+D.noSlip+' รายการ']);
+    o+=drmSec('สิ่งที่ต้องเคลียร์ก่อนปิดวัน', W.length?(W.length+' เรื่อง'):'เรียบร้อย');
+    o+='<tr><td>'+drmCard(W.length
+      ? (W.map(function(w){ return drmChip(w[2],w[0],w[1]); }).join('')
+         +'<div style="font-size:11px;color:'+DRM.fain+';padding-top:6px">เคลียร์ให้จบก่อนปิดวัน</div>')
+      : '<div style="font-size:12.5px;color:'+GRN+';font-weight:700">&#10003; ไม่มีรายการค้าง · ทุกอย่างพร้อมเดินทาง</div>',
+      '13px 15px', W.length?'#fffbf2':'#f2faf7', W.length?'#f6e6c9':'#cfe9de')+'</td></tr>';
   }
 
-  // ── KPI 4 ช่อง ──
-  if(I.ov){
-    o+=drmKpis([
-      ['ผู้โดยสารทั้งวัน', D.pax.tot, 'ผู้ใหญ่ '+D.pax.ad+' · เด็ก '+D.pax.chd+' · ทารก '+D.pax.inf+' · FOC '+D.pax.foc
-        +'<br>ไทย '+D.pax.th+' · ต่างชาติ '+D.pax.fr, '#111827', 'คน'],
-      ['รายได้ทั้งวัน', drB(D.rev), 'เฉลี่ย '+drB(D.pax.tot?D.rev/D.pax.tot:0)+' / คน<br>'
-        +D.rows.length+' booking · '+D.rOrder.length+' เส้นทาง', '#047857'],
-      ['ที่นั่งเรือที่ใช้', drPct(D.seatTot,D.capTot)+'%', D.seatTot+' / '+D.capTot+' ที่นั่ง · '+D.bOrder.length+' ลำ'
-        +'<br>เหลือ '+Math.max(0,D.capTot-D.seatTot)+' ที่นั่ง', '#4f46e5'],
-      ['ต้นทุนรถรับส่ง', drB(D.perPax), D.nVan+' คัน · รับส่ง '+D.vanPax+' คน<br>ค่ารถรวม '+drB(D.vanCost), '#b45309', '/ คน']
-    ]);
-  }
-
-  // ── Market ──
-  if(I.ov){
-    o+=drmSec('สัดส่วนลูกค้าตาม Market', D.mOrder.length+' กลุ่ม');
-    o+=drmT(['Market','ใบ','คน','สัดส่วน','รายได้'],
-      D.mOrder.map(function(id){ var m=D.mkt[id], pc=drPct(m.pax,D.pax.tot);
-        return drmR([drmDot(m.color)+'<b style="color:#111827">'+e(m.name)+'</b>', m.n, '<b>'+m.pax+'</b>',
-          '<b style="color:'+m.color+'">'+pc+'%</b>'+drmBar(pc,m.color), drB(m.rev)],
-          ['left','center','center','left','right']); }).join(''),
-      ['left','center','center','left','right'], ['','8%','9%','22%','16%']);
-  }
-
-  // ── เส้นทาง ──
-  if(I.rt){
-    o+=drmSec('แยกตามเส้นทาง', D.rows.length+' booking');
-    o+=drmT(['เส้นทาง','ใบ','คน','ที่นั่ง','Load','รายได้'],
-      D.rOrder.map(function(id){ var r=D.routes[id], pc=drPct(r.seats,r.cap);
-        return drmR([drmDot(r.color)+'<b style="color:#111827">'+e(r.name)+'</b>', r.n, '<b>'+r.pax+'</b>',
-          r.seats+' / '+(r.cap||'—'),
-          (r.cap?('<b style="color:'+r.color+'">'+pc+'%</b>'+drmBar(pc,r.color)):'—'), drB(r.rev)],
-          ['left','center','center','center','left','right']); }).join(''),
-      ['left','center','center','center','left','right'], ['','7%','8%','11%','17%','15%']);
-  }
-
-  // ── เรือ + รถ ──
-  if(I.bt){
-    var PIER={tublamu:'Tub Lamu',panwa:'Visit Panwa'};
-    o+=drmSec('เรือ', D.bOrder.length+' ลำ · '+D.capTot+' ที่นั่ง');
-    o+=drmT(['เรือ','ท่า · ออก','ความจุ','ขาย','เหลือ','Load'],
-      D.bOrder.map(function(id){ var b=D.boats[id], pc=drPct(b.pax,b.cap), over=(b.cap>0&&b.pax>b.cap);
-        var c=over?'#e11d48':(pc>=80?'#10b981':'#4f46e5');
-        return drmR(['<b style="color:#111827">'+e(b.name)+'</b>',
-          e((PIER[b.pier]||b.pier||'—')+(b.dep?(' · '+b.dep):'')), (b.cap||'—'),
-          '<b'+(over?' style="color:#be123c"':'')+'>'+b.pax+'</b>', (b.cap?(b.cap-b.pax):'—'),
-          (b.cap?('<b style="color:'+c+'">'+pc+'%</b>'+drmBar(Math.min(100,pc),c)):'—')],
-          ['left','left','center','center','center','left']); }).join('')
-      +(D.noBoat.n?drmR(['<b style="color:#be123c">&#9888; ยังไม่จัดเรือ</b>','—','—',
-          '<b style="color:#be123c">'+D.noBoat.pax+'</b>','—','—'],['left','left','center','center','center','left']):''),
-      ['left','left','center','center','center','left'], ['','','10%','9%','9%','18%']);
-  }
-  if(I.vn){
-    o+=drmSec('รถรับส่ง', D.nVan+' คัน · '+drB(D.vanCost));
-    o+=drmT(['โซน','คัน','คน','รับแรก'],
-      D.zOrder.map(function(z0){ var z=D.zones[z0];
-        return drmR(['<b style="color:#111827">'+e(z.name)+'</b>', Object.keys(z.vans).length,
-          '<b>'+z.pax+'</b>', e(z.first||'—')], ['left','center','center','center']); }).join('')
-      +(D.selfArr.n?drmR(['<span style="color:#9ca3af">มาเองที่ท่าเรือ</span>','—','<b>'+D.selfArr.pax+'</b>','—'],
-          ['left','center','center','center']):'')
-      +(D.noVan.n?drmR(['<b style="color:#be123c">&#9888; ยังไม่จัดรถ</b>','—',
-          '<b style="color:#be123c">'+D.noVan.pax+'</b>','—'],['left','center','center','center']):''),
-      ['left','center','center','center'], ['','12%','12%','16%']);
-    o+='<tr><td style="padding:8px 8px 0;font-size:11.5px;color:#6b7280;line-height:1.8">'
-      +'ในโควตา <b style="color:#111827">'+D.vanIn+'</b> คัน &middot; นอกโควตา <b style="color:'+(D.vanOut?'#be123c':'#111827')+'">'+D.vanOut+'</b> คัน'
-      +' &middot; เฉลี่ย <b style="color:#111827">'+drB(D.perPax)+'</b>/คน'
-      +' &middot; ส่งคนละที่ยังไม่จัดรถกลับ <b style="color:'+(D.ret.todo?'#be123c':'#047857')+'">'+D.ret.todo+'</b> ใบ</td></tr>';
-  }
-
-  // ── ผู้โดยสารดูแลพิเศษ ──
+  // ── ผู้โดยสาร ──
   if(I.px){
-    var lk=Object.keys(D.langs).sort(function(a,b){ return D.langs[b]-D.langs[a]; });
-    var mt=D.meals.veg+D.meals.vegan+D.meals.halal;
-    o+=drmSec('ต้องเตรียมล่วงหน้า', (mt+D.meals.allergy)+' รายการ');
-    o+='<tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-      +'style="background:#f7f8fa;border:1px solid #eef0f3;border-radius:12px"><tr><td style="padding:11px 14px;font-size:12px;color:#374151;line-height:2">'
-      +drmChip('มังสวิรัติ/วีแกน <b>'+(D.meals.veg+D.meals.vegan)+'</b>','#047857','#d9f7e6')+'&nbsp;'
-      +drmChip('ฮาลาล <b>'+D.meals.halal+'</b>','#047857','#d9f7e6')+'&nbsp;'
-      +drmChip('แพ้อาหาร <b>'+D.meals.allergy+'</b>', D.meals.allergy?'#be123c':'#6b7280', D.meals.allergy?'#ffe4e6':'#eceef1')
-      +(lk.length?('<br><span style="color:#9ca3af;font-size:11px">ภาษาไกด์</span>&nbsp;'
-        +lk.map(function(k){ return drmChip(e(k)+' <b>'+D.langs[k]+'</b>','#7c3aed','#f3ecff'); }).join('&nbsp;')):'')
-      +'</td></tr></table></td></tr>';
+    o+=drmSec('ผู้โดยสาร', D.pax.tot+' คน');
+    var pr='';
+    [['ผู้ใหญ่ (AD)',D.pax.ad],['เด็ก (CHD)',D.pax.chd],['ทารก (INF)',D.pax.inf],['FOC / ไม่คิดเงิน',D.pax.foc]]
+      .forEach(function(x){ if(x[1]) pr+=drmR([x[0],'<b>'+x[1]+'</b>',drPct(x[1],D.pax.tot)+'%'],['left','center','right']); });
+    o+=drmT(['ประเภท','คน','สัดส่วน'],pr,['left','center','right'],['','14%','14%']);
+    var ml=[]; if(D.meals.veg)ml.push('มังสวิรัติ '+D.meals.veg); if(D.meals.vegan)ml.push('วีแกน '+D.meals.vegan);
+    if(D.meals.halal)ml.push('ฮาลาล '+D.meals.halal); if(D.meals.allergy)ml.push('แพ้อาหาร '+D.meals.allergy);
+    var lgs=Object.keys(D.langs||{}).map(function(k){ return e(k)+' '+D.langs[k]+' คน'; }).join(' · ');
+    o+='<tr><td style="padding:8px 0 0">'+drmCard(
+      '<b style="color:'+DRM.ink+'">สัญชาติ</b> &nbsp; ไทย <b>'+D.pax.th+'</b> · ต่างชาติ <b>'+D.pax.fr+'</b>'
+      +(D.pax.un?(' · ยังไม่ระบุ <b>'+D.pax.un+'</b>'):'')+'<br>'
+      +'<b style="color:'+DRM.ink+'">อาหารพิเศษ</b> &nbsp; '+(ml.join(' · ')||'ไม่มี')+'<br>'
+      +'<b style="color:'+DRM.ink+'">ภาษาไกด์</b> &nbsp; '+(lgs||'—'),
+      '11px 14px',DRM.soft,'#eef0f3')+'</td></tr>';
+    var dr='';
+    [['ตรวจแล้ว',D.docs.verified,GRN,'#dcfce7'],['มีปัญหา',D.docs.issue,RED,'#fee2e2'],
+     ['รอตรวจ',D.docs.pending,AMB,'#fef3c7'],['ยังไม่แนบไฟล์',D.docs.nofiles,DRM.mut,'#f1f2f4']]
+      .forEach(function(x){ if(x[1]) dr+=drmR([drmChip(x[0],x[2],x[3]),'<b>'+x[1]+'</b>'],['left','right']); });
+    if(dr){ o+=drmSec('เอกสาร'); o+=drmT(['สถานะ','ใบ'],dr,['left','right'],['','14%']); }
+    o+='<tr><td style="padding:8px 0 0">'+drmCard(
+      '<b style="color:'+DRM.ink+'">รถกลับ</b> &nbsp; ส่งจุดเดิม <b>'+D.ret.same+'</b> ใบ ('+D.ret.samePax+' คน) · '
+      +'จัดรถแล้ว <b>'+D.ret.arr+'</b> ใบ · <span style="color:'+(D.ret.todo?RED:DRM.mut)+';font-weight:700">'
+      +'ยังไม่จัด '+D.ret.todo+' ใบ ('+D.ret.todoPax+' คน)</span> · ลูกค้ากลับเอง <b>'+D.ret.self+'</b> ใบ',
+      '11px 14px',DRM.soft,'#eef0f3')+'</td></tr>';
+  }
+
+  // ── เรือ ──
+  if(I.bt){
+    o+=drmSec('เรือ', D.bOrder.length+' ลำ · '+D.capTot+' ที่นั่ง');
+    var br='';
+    D.bOrder.forEach(function(id){ var b=D.boats[id], pc=drPct(b.pax,b.cap), over=b.pax>b.cap;
+      var col=over?RED:(pc>=85?AMB:GRN);
+      var rl=Object.keys(b.routes).sort(function(x,y){ return b.routes[y]-b.routes[x]; })
+        .map(function(k){ var r=D.routes[k]; return (r?r.name:k)+' '+b.routes[k]; }).join(' · ');
+      br+=drmR(['<b>'+e(b.name)+'</b><div style="font-size:10px;color:'+DRM.fain+';padding-top:2px">'
+          +e((b.type||'เรือ')+(b.pier?(' · ท่า '+b.pier):'')+(b.dep?(' · ออก '+b.dep):''))+'</div>',
+        b.n, '<b>'+b.pax+'</b> / '+(b.cap||'—'),
+        '<span style="font-size:11px;font-weight:700;color:'+col+'">'+pc+'%'+(over?' &#9888;':'')+'</span>'+drmBar(Math.min(pc,100),col),
+        '<span style="font-size:10.5px;color:'+DRM.mut+'">'+e(rl)+'</span>'],['left','center','center','left','left']); });
+    if(D.noBoat.n) br+=drmR(['<span style="color:'+RED+'">ยังไม่จัดเรือ</span>',D.noBoat.n,'<b>'+D.noBoat.pax+'</b>','',''],
+      ['left','center','center','left','left']);
+    o+=drmT(['เรือ','ใบ','คน / ที่นั่ง','Load','เส้นทางที่รับ'],br,['left','center','center','left','left'],['26%','6%','13%','18%','']);
+  }
+
+  // ── รถรับส่ง ──
+  if(I.vn){
+    o+=drmSec('รถรับส่ง', D.vOrder.length+' คัน · รับส่ง '+D.vanPax+' คน');
+    var vr='';
+    D.vOrder.forEach(function(id){ var v=D.vans[id], pc=drPct(v.pax,v.cap), col=(v.pax>v.cap)?RED:(pc>=85?AMB:GRN);
+      var bl=Object.keys(v.boats).map(function(k){ return (D.boats[k]?D.boats[k].name:k); }).join(' · ');
+      vr+=drmR(['<b>'+e(v.name)+'</b><div style="font-size:10px;color:'+DRM.fain+';padding-top:2px">'
+          +e((v.plate||'—')+' · '+(v.type||'van')+' · '+(v.own==='own'?'รถบริษัท':'รถพาร์ทเนอร์'))+'</div>',
+        e(v.first||'—'), v.n, '<b>'+v.pax+'</b> / '+(v.cap||'—'),
+        '<span style="font-size:11px;font-weight:700;color:'+col+'">'+pc+'%</span>'+drmBar(Math.min(pc,100),col),
+        '<span style="font-size:10.5px;color:'+DRM.mut+'">'+e(bl)+'</span>'],['left','center','center','center','left','left']); });
+    if(D.noVan.n) vr+=drmR(['<span style="color:'+RED+'">ยังไม่จัดรถ</span>','',D.noVan.n,'<b>'+D.noVan.pax+'</b>','',''],
+      ['left','center','center','center','left','left']);
+    if(D.selfArr.n) vr+=drmR(['<span style="color:'+DRM.mut+'">ลูกค้ามาเอง</span>','',D.selfArr.n,'<b>'+D.selfArr.pax+'</b>','',''],
+      ['left','center','center','center','left','left']);
+    o+=drmT(['รถ','รับแรก','ใบ','คน / ที่นั่ง','Load','ส่งขึ้นเรือ'],vr,
+      ['left','center','center','center','left','left'],['24%','9%','6%','13%','16%','']);
+    if(D.zOrder.length){
+      var zr='';
+      D.zOrder.forEach(function(k){ var z=D.zones[k];
+        zr+=drmR(['<b>'+e(z.name)+'</b>',z.n,'<b>'+z.pax+'</b>',Object.keys(z.vans).length,
+          '<span style="font-size:11px;color:'+DRM.mut+'">'+e((z.first||'—')+' – '+(z.last||'—'))+'</span>'],
+          ['left','center','center','center','right']); });
+      o+=drmSec('โซนรับ', D.zOrder.length+' โซน');
+      o+=drmT(['โซน','ใบ','คน','รถ','ช่วงเวลารับ'],zr,['left','center','center','center','right'],['','9%','9%','9%','22%']);
+    }
+    o+='<tr><td style="padding:8px 0 0">'+drmCard(
+      '<b style="color:'+DRM.ink+'">ต้นทุนรับส่ง</b> &nbsp; ในโควตา <b>'+D.vanIn+'</b> คัน'
+      +(D.vanOut?(' · <span style="color:'+RED+';font-weight:700">นอกโควตา '+D.vanOut+' คัน</span>'):'')
+      +' · ค่ารถรวม <b style="color:#c2410c">'+drB(D.vanCost)+'</b>'
+      +(D.ltCost?(' · หางยาว <b>'+drB(D.ltCost)+'</b>'):'')
+      +' &nbsp;·&nbsp; เฉลี่ย <b>'+drB(D.perPax)+'</b> / คน (เป้า '+drB((drCfg()||{}).targetPerPax||0)+')',
+      '11px 14px',DRM.soft,'#eef0f3')+'</td></tr>';
   }
 
   // ── การเงิน ──
   if(I.fi){
-    var CH=[['invoice','Invoice','#2563eb'],['proforma','Proforma','#8b5cf6'],['cot','COT','#f59e0b'],
-            ['transfer','โอนล่วงหน้า','#14b8a6'],['other','อื่น ๆ','#64748b']];
-    o+=drmSec('การเงิน', 'รายได้ '+drB(D.rev));
-    o+=drmT(['ช่องทางชำระ','ยอดเงิน','สัดส่วน'],
-      CH.filter(function(c){ return D.pay[c[0]]>0; }).map(function(c){ var pc=drPct(D.pay[c[0]],D.rev);
-        return drmR([drmDot(c[2])+'<b style="color:#111827">'+e(c[1])+'</b>', drB(D.pay[c[0]]),
-          '<b style="color:'+c[2]+'">'+pc+'%</b>'+drmBar(pc,c[2])], ['left','right','left']); }).join(''),
-      ['left','right','left'], ['','20%','26%']);
-    o+='<tr><td style="padding:10px 8px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-      +'style="background:#f7f8fa;border:1px solid #eef0f3;border-radius:12px"><tr><td style="padding:11px 14px;font-size:12px;color:#374151;line-height:1.95">'
-      +'ขายเพิ่มหน้างาน <b style="color:#111827">'+drB(D.extras)+'</b>'
-      +' &middot; ต้องเก็บหน้างาน <b style="color:'+(D.due>0?'#b45309':'#047857')+'">'+drB(D.due)+'</b>'
-      +' (เก็บแล้ว '+drB(D.got)+')<br>'
-      +'ค่ารถ <b style="color:#be123c">-'+drB(D.vanCost)+'</b>'
-      +(D.ltCost?(' &middot; หางยาว <b style="color:#be123c">-'+drB(D.ltCost)+'</b>'):'')
-      +' &middot; คงเหลือก่อนต้นทุนเรือ/ครัว <b style="color:#111827">'+drB(D.rev+D.extras-cost)+'</b>'
-      +'</td></tr></table></td></tr>';
+    o+=drmSec('การเงิน', drB(D.rev));
+    var PAY=[['Invoice / เครดิต',D.pay.invoice,'#1d4ed8'],['Pro forma / จ่ายล่วงหน้า',D.pay.proforma,'#0891b2'],
+             ['Cash on Tour',D.pay.cot,'#b45309'],['โอนล่วงหน้า',D.pay.transfer,'#7c3aed'],
+             ['บัตรเครดิต',D.pay.card,'#db2777'],['อื่น ๆ / ยังไม่ระบุ',D.pay.other,'#6b7280']];
+    var fr='';
+    PAY.forEach(function(p){ if(!p[1]) return; var pc=drPct(p[1],D.rev);
+      fr+=drmR([drmDot(p[2])+p[0],
+        '<span style="font-size:11px;font-weight:700;color:'+p[2]+'">'+pc+'%</span>'+drmBar(pc,p[2]),
+        drB(p[1])],['left','left','right']); });
+    o+=drmT(['ช่องทางชำระ','สัดส่วน','ยอดเงิน'],fr,['left','left','right'],['','34%','18%']);
+    o+='<tr><td style="padding:8px 0 0">'+drmCard(
+      '<b style="color:'+DRM.ink+'">เงินหน้างาน</b> &nbsp; ขายเพิ่ม <b>'+drB(D.extras)+'</b> · อัปเกรดเก็บแล้ว <b>'+drB(D.upGot)+'</b>'
+      +(D.upDue?(' · <span style="color:'+AMB+';font-weight:700">อัปเกรดรอเก็บ '+drB(D.upDue)+'</span>'):'')+'<br>'
+      +'<b style="color:'+DRM.ink+'">ต้องเก็บวันนี้</b> &nbsp; <span style="color:'+(D.due?AMB:GRN)+';font-weight:800">'+drB(D.due)+'</span>'
+      +' · เก็บไปแล้ว <b>'+drB(D.got)+'</b>'
+      +(D.noSlip?(' · <span style="color:'+RED+';font-weight:700">ขาดสลิป '+D.noSlip+'</span>'):'')+'<br>'
+      +'<b style="color:'+DRM.ink+'">Longtail</b> &nbsp; Join <b>'+D.ltJoin+'</b> คน · เหมาลำ <b>'+D.ltChtr+'</b> ลำ',
+      '11px 14px',DRM.soft,'#eef0f3')+'</td></tr>';
   }
-
-  // ── รายการ booking ──
   if(I.list){
     // ใบที่ไม่มี agent · ตั้งชื่อกลุ่มให้อ่านออก แทนที่จะโชว์รหัสช่องทางดิบ ๆ
     var _CHN={ direct:'Walk-in / Direct', walkin:'Walk-in / Direct', 'walk-in':'Walk-in / Direct',
@@ -48569,8 +48711,12 @@ function drMailHTML(D){
       var x=a.rt[rid]; x.n++; x.pax+=p.tot; x.rev+=amt;
     });
     AO.sort(function(x,y){ return (AG[y].rev-AG[x].rev) || (AG[y].pax-AG[x].pax); });
+    // Gmail ตัดจดหมายที่เกิน ~102KB · วันที่ agent เยอะ ๆ ให้โชว์ 12 เจ้าแรกแล้วยุบที่เหลือ
+    var AOTOP=AO.slice(0,12), AOREST=AO.slice(12);
+    var restN=0, restPax=0, restRev=0;
+    AOREST.forEach(function(k){ restN+=AG[k].n; restPax+=AG[k].pax; restRev+=AG[k].rev; });
     var rowsHtml='';
-    AO.forEach(function(k){
+    AOTOP.forEach(function(k){
       var a=AG[k];
       a.ro.sort(function(x,y){ return (a.rt[y].rev-a.rt[x].rev) || (a.rt[y].pax-a.rt[x].pax); });
       // หัวกลุ่ม · ชื่อ agent + Market + ยอดรวมของเจ้านั้น
@@ -48590,6 +48736,8 @@ function drMailHTML(D){
           ['left','left','center','center','right']);
       });
     });
+    if(AOREST.length) rowsHtml+=drmR(['','<span style="color:'+DRM.fain+'">…และอีก '+AOREST.length+' agent</span>',
+      restN,'<b>'+restPax+'</b>',drB(restRev)],['left','left','center','center','right']);
     o+=drmSec('ยอดตาม Agent · เส้นทาง', AO.length+' agent · '+D.rows.length+' booking');
     o+=drmT(['','Agent · เส้นทาง','ใบ','คน','ยอดเงิน'], rowsHtml,
       ['left','left','center','center','right'], ['14','','8%','9%','16%']);
@@ -48601,14 +48749,24 @@ function drMailHTML(D){
         +'<b style="font-size:14px;color:#047857">'+drB(D.rev)+'</b></td></tr></table></td></tr>';
   }
 
+
+  // ── สรุปทั้งวัน ──
+  o+='<tr><td style="padding:12px 0 0">'+drmCard(
+    '<div style="font-size:13px;font-weight:800;color:'+DRM.ink+';padding-bottom:5px">สรุปทั้งวัน</div>'
+    +'รายได้ <b style="color:'+GRN+'">'+drB(D.rev)+'</b> · ต้นทุนรับส่ง <b style="color:#c2410c">-'+drB(cost)+'</b>'
+    +(D.extras?(' · ขายเพิ่มหน้างาน <b style="color:'+GRN+'">+'+drB(D.extras)+'</b>'):'')
+    +' &nbsp;&rarr;&nbsp; คงเหลือก่อนต้นทุนเรือ/ครัว <b style="font-size:16px;color:'+GRN+'">'
+    +drB(D.rev-cost+D.extras)+'</b>','13px 16px','#f2faf7','#cfe9de')+'</td></tr>';
+
   o+='<tr><td style="padding:20px 0 0;border-top:1px solid #e9ebef;font-size:10.5px;color:#9ca3af;line-height:1.7">'
-    +'สร้างจากระบบ LOVE Andaman Operations &middot; ตัวเลขอ่านจากฐานข้อมูลเดียวกับหน้า Travel Summary และใบงานหน้าท่า</td></tr>';
+    +'สร้างจากระบบ LOVE Andaman Operations &middot; ตัวเลขอ่านจากฐานข้อมูลเดียวกับหน้า Daily Report และ Travel Summary '
+    +'&middot; หัวข้อที่ไม่ต้องการส่ง ปิดได้ในกล่องเขียนอีเมล</td></tr>';
 
   return '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>'
     +'<body style="margin:0;padding:0;background:#f3f4f6">'
-    +'<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f3f4f6;padding:20px 0">'
-    +'<tr><td align="center"><table role="presentation" cellpadding="0" cellspacing="0" width="800" '
-    +'style="width:800px;max-width:100%;background:#ffffff;border-radius:16px;padding:22px 26px;'
+    +'<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f3f4f6;padding:22px 0">'
+    +'<tr><td align="center"><table role="presentation" cellpadding="0" cellspacing="0" width="820" '
+    +'style="width:820px;max-width:100%;background:#ffffff;border-radius:18px;padding:24px 26px;'
     +'font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1f2937">'
     + o +'</table></td></tr></table></body></html>';
 }
@@ -48741,7 +48899,7 @@ function drMailPaint(){
   if(!_drMailOpen){ host.innerHTML=''; return; }
   var e=ckEsc, D=drData(_drDate), C=drMailCfg();
   var SEC=[['ov','ภาพรวม + Market'],['rt','แยกตามเส้นทาง'],['bt','เรือ'],['vn','รถรับส่ง'],
-           ['px','ผู้โดยสารดูแลพิเศษ'],['fi','การเงิน'],['todo','ต้องเคลียร์ก่อนปิดวัน'],['list','ยอดตาม Agent · เส้นทาง']];
+           ['px','ผู้โดยสาร · เอกสาร · ขากลับ'],['fi','การเงิน'],['todo','ต้องเคลียร์ก่อนปิดวัน'],['list','ยอดตาม Agent · เส้นทาง']];
   host.innerHTML='<div class="dr-mask" onclick="drMailClose()"></div><div class="dr-modal">'
     +'<div class="dr-mh"><div><b>ส่งรายงานทางอีเมล</b>'
       +'<span>ประกอบจดหมายให้ครบแล้วคัดลอกไปวาง หรือดาวน์โหลดเป็นฉบับร่าง (.eml)</span></div>'
