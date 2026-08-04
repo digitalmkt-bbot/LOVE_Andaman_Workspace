@@ -46446,7 +46446,12 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-tbl .r{text-align:right} '+S+' .ts-tbl .c{text-align:center}'
  +S+' .ts-mono{font-family:\'DM Mono\',monospace;font-variant-numeric:tabular-nums}'
  +S+' .ts-vch{font-family:\'DM Mono\',monospace;font-weight:800;color:var(--zn900)}'
- +S+' .ts-ag{display:inline-block;border-radius:999px;padding:2px 9px;font-size:9.5px;font-weight:700;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}'
+ +S+' .ts-ag{display:block;border-radius:8px;padding:8px 10px;font-size:12px;font-weight:700;line-height:1.22;'
+   +'max-width:100%;white-space:normal;word-break:normal;overflow-wrap:break-word;box-shadow:0 1px 2px rgba(0,0,0,.10)}'
+ +S+' .ts-man td:nth-child(2){min-width:118px}'
+ +S+' .ts-thsub{display:block;font-size:8px;font-weight:600;color:var(--zn400);letter-spacing:0;text-transform:none}'
+ +S+' .ts-totb{display:block;font-size:9px;font-weight:600;color:var(--zn400);white-space:nowrap;margin-top:1px}'
+ +S+' .ts-totb em{font-style:normal;color:var(--lm700);font-weight:700;margin-left:3px}'
  +S+' .ts-lead{font-weight:700;color:var(--zn900)} '+S+' .ts-tel{font-size:9.5px;color:var(--zn500);font-family:\'DM Mono\',monospace}'
  +S+' .ts-chip{display:inline-block;border-radius:999px;padding:2px 9px;font-size:9.5px;font-weight:800;white-space:nowrap;border:1px solid;margin:1px 3px 1px 0}'
  +S+' .ts-chip.g{background:var(--lm100);color:var(--lm950);border-color:var(--lm200)}'
@@ -46549,15 +46554,17 @@ function tsCSS(){ var S='#travelsum-host'; return ''
    // ตัวเลขฝั่งขวาชนกัน · บังคับไม่ให้ตัดบรรทัดและเว้นช่องให้พอ
    +S+' .ts-tbl td.c,'+S+' .ts-tbl td.r,'+S+' .ts-tbl th.c,'+S+' .ts-tbl th.r{white-space:nowrap;padding-left:7px;padding-right:7px}'
    +S+' .ts-chip{white-space:nowrap}'
-   +S+' .ts-ag{max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle}'
+   +S+' .ts-ag{display:block;max-width:100%;white-space:normal;word-break:normal;overflow-wrap:break-word;'
+     +'border-radius:5px;padding:4px 5px;font-size:8.6px;font-weight:700;line-height:1.18;box-shadow:none}'
    +S+' .ts-lead{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
    +S+' .ts-tbl{font-size:7.6px}'+S+' .ts-tbl td{padding:2.5px 3.5px}'+S+' .ts-tbl th{padding:4px 3.5px}'
    // ล็อกความกว้างต่อคอลัมน์ · รวม 99.5% · ที่เหลือเป็นระยะหายใจของขอบตาราง
    +S+' .ts-man{table-layout:fixed;width:100%}'
    +S+' .ts-man td{overflow:hidden}'
+   +S+' .ts-man td:nth-child(2){padding-left:2px;padding-right:2px;vertical-align:middle}'
    +S+' .ts-man th{white-space:normal;line-height:1.12;vertical-align:bottom;overflow:hidden}'
    +S+' .ts-man th:nth-child(1),'+S+' .ts-man td:nth-child(1){width:5.6%}'
-   +S+' .ts-man th:nth-child(2),'+S+' .ts-man td:nth-child(2){width:5.8%}'
+   +S+' .ts-man th:nth-child(2),'+S+' .ts-man td:nth-child(2){width:7.4%}'
    +S+' .ts-man th:nth-child(3),'+S+' .ts-man td:nth-child(3){width:9.4%}'
    +S+' .ts-man th:nth-child(4),'+S+' .ts-man td:nth-child(4),'
      +S+' .ts-man th:nth-child(5),'+S+' .ts-man td:nth-child(5),'
@@ -46569,12 +46576,12 @@ function tsCSS(){ var S='#travelsum-host'; return ''
    +S+' .ts-man th:nth-child(11),'+S+' .ts-man td:nth-child(11){width:7.6%}'
    +S+' .ts-man th:nth-child(12),'+S+' .ts-man td:nth-child(12){width:10.6%}'
    +S+' .ts-man th:nth-child(3),'+S+' .ts-man td:nth-child(3){width:9.8%}'
-   +S+' .ts-man th:nth-child(10),'+S+' .ts-man td:nth-child(10){width:8%}'
+   +S+' .ts-man th:nth-child(10),'+S+' .ts-man td:nth-child(10){width:7.4%}'
    +S+' .ts-man th:nth-child(11),'+S+' .ts-man td:nth-child(11){width:6.6%}'
-   +S+' .ts-man th:nth-child(12),'+S+' .ts-man td:nth-child(12){width:9.4%}'
+   +S+' .ts-man th:nth-child(12),'+S+' .ts-man td:nth-child(12){width:7.6%}'
    +S+' .ts-man th:nth-child(13),'+S+' .ts-man td:nth-child(13){width:5.8%}'
    +S+' .ts-man th:nth-child(14),'+S+' .ts-man td:nth-child(14){width:8.4%}'
-   +S+' .ts-man th:nth-child(15),'+S+' .ts-man td:nth-child(15){width:5.4%}'
+   +S+' .ts-man th:nth-child(15),'+S+' .ts-man td:nth-child(15){width:6.2%}'
    +S+' .ts-man th:nth-child(16),'+S+' .ts-man td:nth-child(16){width:7.4%}'
    +S+' .ts-man th:nth-child(17),'+S+' .ts-man td:nth-child(17){width:5.2%}'
    // ป้ายในสองคอลัมน์ท้ายยาวกว่าช่อง · ให้ขึ้นบรรทัดใหม่แทนล้นออกไปนอกกระดาษ
@@ -46583,11 +46590,13 @@ function tsCSS(){ var S='#travelsum-host'; return ''
    +S+' .ts-pyg,'+S+' .ts-pyn,'+S+' .ts-pym,'+S+' .ts-pyw{font-size:6.8px}'
    // เบอร์โทรตัดบรรทัดทำให้ทุกแถวสูงขึ้นอีกบรรทัด · บีบให้อยู่บรรทัดเดียว
    +S+' .ts-man td:nth-child(3) .ts-tel{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}'
-   +S+' .ts-ao{font-size:6.8px;padding:0 3px;line-height:1.25}'
+   +S+' .ts-ao{font-size:6.8px;padding:0 3px;line-height:1.25;white-space:normal;overflow:visible;text-overflow:clip}'
+   +S+' .ts-totb{font-size:6.2px;margin-top:0}'+S+' .ts-totb em{margin-left:2px}'
+   +S+' .ts-thsub{font-size:6.2px}'
    +S+' .ts-aokey{margin-top:4px;gap:4px}'   // คำอธิบายสีต้องติดไปบนกระดาษด้วย ไม่งั้นอ่านสีไม่ออก
    +S+' .ts-man .ts-ag,'+S+' .ts-man .ts-lead,'+S+' .ts-man .ts-sbk{max-width:100%}'
    +S+' .ts-chip{padding:0 4px;font-size:7.4px}'
-   +S+' .ts-ag{max-width:74px}'+S+' .ts-lead{max-width:112px}'
+   +S+' .ts-ag{font-size:8px;padding:3px 4px}'+S+' .ts-lead{max-width:112px}'
    +S+' .ts-px{width:22px;padding-left:2px;padding-right:2px}'
    +S+' .ts-vch{font-size:7.4px}'
    +S+' .ts-sbk{font-size:7.6px;max-width:104px}'
@@ -46856,6 +46865,16 @@ function tsPayCell(r, date){
   if(M.noSlip>0) L.push('<span class="ts-pyw">&#9888; รอสลิป '+M.noSlip+'</span>');
   if(M.pierFee>0) L.push('<span class="ts-pyn">ค่าธรรมเนียม '+m(M.pierFee)+'</span>');
   return '<div class="ts-payc">'+L.join('')+'</div>';
+}
+// แยกยอดของใบหนึ่งออกเป็น "ตาม booking" กับ "ขายเพิ่มหน้างาน"
+function tsTotalOf(r, date){
+  var base=+r.amount||0;
+  var M=(typeof pckMoney==='function')?pckMoney(r.b,date):null;
+  var ex=M?(+M.extrasTot||0):0, up=M?((+M.upDue||0)+(+M.upGot||0)):0;
+  var parts=[];
+  if(ex>0) parts.push(['ขายเพิ่มหน้าท่า', ex]);
+  if(up>0) parts.push(['อัปเกรด', up]);
+  return { base:base, site:ex+up, all:base+ex+up, parts:parts };
 }
 function tsMoneyOf(b, date){
   var M=(typeof pckMoney==='function')?pckMoney(b,date):{cot:0,balance:0,upDue:0,due:0,pierPaid:0};
@@ -48605,7 +48624,13 @@ function renderTravelSum(){
               :(r.cxlRow?'':'<span class="ts-chip r">ยังไม่จัดเรือ</span>'))
          +((r.cxlRow&&!veh&&!boat)?'<span style="color:var(--zn400)">—</span>':''))+'</td>'
       +'<td class="ts-paycol">'+tsPayCell(r, date)+'</td>'
-      +'<td class="r ts-mono" style="font-weight:800">'+money(r.amount)+'</td>'
+      +(function(){
+          var T=tsTotalOf(r, date);
+          if(!T.site) return '<td class="r ts-mono" style="font-weight:800">'+money(T.all)+'</td>';
+          var tip='booking '+money(T.base)+' · '+T.parts.map(function(p){ return p[0]+' '+money(p[1]); }).join(' · ');
+          return '<td class="r ts-mono ts-totc" style="font-weight:800" title="'+e(tip)+'">'+money(T.all)
+            +'<span class="ts-totb">'+money(T.base)+'<em>+'+money(T.site)+'</em></span></td>';
+        })()
       +'<td style="max-width:170px">'+tsCxlCell(r, date, DEC, money)+'</td>'
       +'<td class="c">'+stat+'</td>'
       +'</tr>';
@@ -48614,6 +48639,7 @@ function renderTravelSum(){
     +'<div class="ts-sect"><i class="ts-dot" style="background:var(--lm600)"></i>ส่วนที่ 4 · Manifest ประจำวัน</div>'
     +'<div class="ts-secd">รายการทั้งหมดของวันเรียงตามเส้นทาง (Agency A-Z) — แยกจำนวนตามประเภทผู้โดยสาร · เวลารับและเวลาออกเรือ · จุดส่งกลับ · '
       +'Add-on ทุกขั้นตอน · เงื่อนไขการชำระและยอดที่ต้องเก็บ · ค่าปรับกรณียกเลิก/ไม่มา · '
+      +'ช่อง <b>Total</b> คือยอด booking บวกของที่ขายเพิ่มหน้างานแล้ว · '
       +'ตัวเลข <b>ไปจริง/จอง</b> หมายถึงมีคนไม่ได้เดินทาง</div>'
       +'<div class="ts-aokey"><span class="ts-ao ao-bk">จองมาแต่แรก</span><span class="ts-ao ao-ex">ขายเพิ่มหน้างาน</span>'
         +'<span class="ts-ao ao-up">อัปเกรด</span><span class="ts-ao ao-pier">สั่งหน้าท่า</span></div></div></div>'
@@ -48621,7 +48647,7 @@ function renderTravelSum(){
     +'<th>Voucher</th><th>Agency</th><th>Customer (lead)</th>'
     +'<th class="c ts-px">AD</th><th class="c ts-px">CHD</th><th class="c ts-px">INF</th><th class="c ts-px">FOC</th>'
     +'<th class="c">Actual<br>/ Booked</th><th>Pickup<br>&middot; Depart</th><th>Pickup point &middot; Room</th><th>Drop-off</th>'
-    +'<th>Add-on &middot; Upsell</th><th>Van &middot; Boat</th><th>Pay</th><th class="r">Total</th>'
+    +'<th>Add-on &middot; Upsell</th><th>Van &middot; Boat</th><th>Pay</th><th class="r">Total<br><span class="ts-thsub">รวมหน้างาน</span></th>'
     +'<th>Cancel &middot; Charge</th><th class="c">Status</th>'
     +'</tr></thead><tbody>'
     +(body||'<tr><td colspan="17" class="ts-empty">'+(_tsOnlyIssue?'ไม่มีเคสที่ต้องตัดสินในวันนี้':'ไม่มี booking ในวันนี้')+'</td></tr>')
