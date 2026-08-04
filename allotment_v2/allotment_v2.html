@@ -23325,6 +23325,86 @@ function memoParseImport(){
   memoRenderItems();
   if(added) alert(`เพิ่ม ${added} รายการแล้ว`);
 }
+let _moCopyId=null, _moCopyFmt='tsv', _moCopyHead=false;
+// ชื่อรายการแบบที่ฟอร์มบัญชีใช้ · "<partNo> <ชื่อ>" ต่อกันเหมือนที่ทีมพิมพ์เอง
+function moCopyName(it){
+  const pn=String(it.partNo||'').trim(), nm=String(it.name||'').trim();
+  return pn ? (pn+' '+nm).trim() : nm;
+}
+function moCopyText(mo, fmt, withHead){
+  const items=(mo.items||[]);
+  const n2=v=>{ const x=+v||0; return (Math.round(x*100)/100).toString(); };
+  if(fmt==='name') return items.map(moCopyName).join('\n');
+  if(fmt==='txt'){
+    const L=[(mo.no||'MO')+' · '+(mo.title||''), ''];
+    items.forEach((it,i)=>{ L.push((i+1)+'. '+moCopyName(it)+'  ×'+(+it.qty||1)+' '+(it.unit||'ชิ้น')
+      +'  @ '+n2(it.price)+'  = '+n2((+it.qty||1)*(+it.price||0))); });
+    L.push('', 'รวม '+items.length+' รายการ · ฿'+(mo.amount||0).toLocaleString());
+    return L.join('\n');
+  }
+  // ตาราง · คอลัมน์ตามฟอร์มบัญชี · ช่อง "รายละเอียด" เว้นว่างไว้ให้เติมเอง
+  const rows=items.map(it=>[moCopyName(it), '', (+it.qty||1), (it.unit||'ชิ้น'), n2(it.price)].join('\t'));
+  if(withHead) rows.unshift(['รายการ','รายละเอียด','จำนวน','หน่วย','ราคา/หน่วย'].join('\t'));
+  return rows.join('\n');
+}
+function flCopyMemoItems(moId){
+  const mo=(typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).find(x=>x.id===moId); if(!mo) return;
+  if(!(mo.items||[]).length){ flShowToast('MO นี้ยังไม่มีรายการ','error'); return; }
+  _moCopyId=moId; _moCopyFmt='tsv'; _moCopyHead=false;
+  let h=document.getElementById('mo-copy-host');
+  if(!h){ h=document.createElement('div'); h.id='mo-copy-host'; document.body.appendChild(h); }
+  moCopyPaint();
+}
+function moCopyClose(){ const h=document.getElementById('mo-copy-host'); if(h) h.innerHTML=''; _moCopyId=null; }
+function moCopySetFmt(f){ _moCopyFmt=f; moCopyPaint(); }
+function moCopyToggleHead(){ _moCopyHead=!_moCopyHead; moCopyPaint(); }
+function moCopyPaint(){
+  const h=document.getElementById('mo-copy-host'); if(!h) return;
+  const mo=(typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).find(x=>x.id===_moCopyId); if(!mo){ h.innerHTML=''; return; }
+  const esc=v=>String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const txt=moCopyText(mo,_moCopyFmt,_moCopyHead);
+  const FMT=[['tsv','ตาราง','วางลงตารางได้ทั้งชุด (Excel / ฟอร์มที่รับตาราง)'],
+             ['name','ทีละช่อง','ชื่อรายการล้วน บรรทัดละชิ้น สำหรับฟอร์มที่ต้องวางทีละช่อง'],
+             ['txt','ข้อความ','อ่านออก ส่งในแชท/อีเมลได้เลย']];
+  const tab=(k,l)=>`<button onclick="moCopySetFmt('${k}')" style="border:none;background:${_moCopyFmt===k?'#fff':'transparent'};`
+    +`box-shadow:${_moCopyFmt===k?'0 1px 2px rgba(0,0,0,.10)':'none'};color:${_moCopyFmt===k?'#1A1A1A':'#6B6A64'};`
+    +`font-weight:${_moCopyFmt===k?700:500};font-size:12px;padding:6px 14px;border-radius:8px;cursor:pointer;font-family:inherit">${l}</button>`;
+  const hint=(FMT.find(f=>f[0]===_moCopyFmt)||[])[2]||'';
+  h.innerHTML=`<div onclick="if(event.target===this)moCopyClose()" style="position:fixed;inset:0;background:rgba(20,20,18,.34);z-index:12000;display:flex;align-items:center;justify-content:center;padding:24px">
+    <div style="background:#fff;border-radius:16px;width:660px;max-width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(0,0,0,.22);font-family:inherit">
+      <div style="padding:16px 20px 12px;border-bottom:0.5px solid #ECEAE2">
+        <div style="display:flex;align-items:baseline;gap:8px">
+          <span style="font-size:15px;font-weight:700;flex:1">คัดลอกรายการ · ${esc(mo.no||'MO')}</span>
+          <span style="font-size:11px;color:#A0A099;font-family:'DM Mono',monospace">${(mo.items||[]).length} รายการ</span>
+          <button onclick="moCopyClose()" style="border:none;background:#F1EFEA;width:24px;height:24px;border-radius:8px;cursor:pointer;color:#5F5E5A;font-size:14px;line-height:1;font-family:inherit">✕</button>
+        </div>
+        <div style="font-size:11.5px;color:#8A8880;margin-top:3px">${esc(mo.title||'')}</div>
+      </div>
+      <div style="padding:12px 20px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span style="display:inline-flex;background:#F1EFEA;border-radius:10px;padding:3px">${FMT.map(f=>tab(f[0],f[1])).join('')}</span>
+        ${_moCopyFmt==='tsv'?`<label style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:#5F5E5A;cursor:pointer">
+          <input type="checkbox" ${_moCopyHead?'checked':''} onchange="moCopyToggleHead()" style="margin:0">ใส่หัวตาราง</label>`:''}
+      </div>
+      <div style="padding:6px 20px 0;font-size:11px;color:#A0A099;line-height:1.5">${esc(hint)}</div>
+      <div style="padding:10px 20px 0;flex:1;min-height:0">
+        <textarea id="mo-copy-ta" readonly onclick="this.select()" style="width:100%;height:300px;resize:vertical;border:0.5px solid #DDD9D0;border-radius:10px;padding:11px 13px;font-family:'DM Mono',ui-monospace,monospace;font-size:11.5px;line-height:1.65;color:#27343B;background:#FBFAF7;white-space:pre;overflow:auto">${esc(txt)}</textarea>
+      </div>
+      <div style="padding:12px 20px 16px;display:flex;align-items:center;gap:9px">
+        <span style="flex:1;font-size:11px;color:#A0A099">กดคัดลอกแล้วไปวางในระบบบัญชีได้เลย · ถ้าคัดลอกไม่ได้ให้คลิกในกล่องแล้ว Ctrl/Cmd + C</span>
+        <button onclick="moCopyClose()" style="border:0.5px solid #DDD9D0;background:#fff;color:#5F5E5A;font-size:12.5px;font-weight:500;padding:8px 16px;border-radius:9px;cursor:pointer;font-family:inherit">ปิด</button>
+        <button onclick="moCopyDo()" style="border:none;background:#0F6E56;color:#fff;font-size:12.5px;font-weight:700;padding:8px 20px;border-radius:9px;cursor:pointer;font-family:inherit">คัดลอก</button>
+      </div>
+    </div></div>`;
+  setTimeout(function(){ const ta=document.getElementById('mo-copy-ta'); if(ta){ try{ ta.focus(); ta.select(); }catch(_){} } },30);
+}
+function moCopyDo(){
+  const ta=document.getElementById('mo-copy-ta'); if(!ta) return;
+  const done=()=>flShowToast('คัดลอกแล้ว · ไปวางในระบบบัญชีได้เลย');
+  const fallback=()=>{ try{ ta.focus(); ta.select(); document.execCommand('copy'); done(); }
+    catch(_){ flShowToast('คัดลอกอัตโนมัติไม่ได้ · ลากคลุมในกล่องแล้วกด Ctrl/Cmd + C','error'); } };
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(ta.value).then(done, fallback); }
+  else fallback();
+}
 function flPrintMemo(moId){
   const mo=FL_MEMOS.find(x=>x.id===moId);if(!mo)return;
   const b=getBoat(mo.boatId);
@@ -23639,6 +23719,7 @@ function flViewMemo(moId){
   const foot=`
     ${canMod?`<button class="btn btn-ghost" onclick="flEditMemo('${mo.id}')" style="border-color:#1683C7;color:#1683C7">✏️ แก้ไข</button>`:''}
     ${canMod?`<button class="btn btn-ghost" onclick="flCancelMemo('${mo.id}')" style="border-color:#E4A0A0;color:#A32D2D">🚫 ยกเลิก</button>`:''}
+    <button class="btn btn-ghost" onclick="flCopyMemoItems('${mo.id}')" style="border-color:#0F6E56;color:#0F6E56">📋 คัดลอกรายการ</button>
     <button class="btn btn-ghost" onclick="flPrintMemo('${mo.id}')">🖨 Print</button>
     <button class="btn btn-primary" onclick="closeModal('fl-modal-memoview')">ปิด</button>`;
   const bodyEl=document.getElementById('memoview-body'), footEl=document.getElementById('memoview-foot');
@@ -32135,7 +32216,7 @@ function flRenderInventory(){
       const stepperRow=compact?'':'<div style="padding:9px 14px;border-top:1px solid rgba(0,0,0,.04);background:#FBFAF7;display:flex;align-items:center;gap:10px"><span style="font-size:10px;color:'+dim.ink2+';white-space:nowrap;font-weight:500">ขั้น '+(currentIdx+1)+'/'+_totalSteps+' · '+_curStepLabel+'</span><span style="flex:1;height:4px;background:#E5E1DA;border-radius:3px;overflow:hidden"><span style="display:block;width:'+_pctDone+'%;height:100%;background:'+_barColor+'"></span></span>'+actionBtn+'</div>';
 
       return _divider+'<div data-memo-card style="background:white;border-radius:14px;border:1px solid '+dim.line+';overflow:hidden">'+
-        '<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;transition:background .15s" onmouseover="this.style.background=\'#FBFAF7\'" onmouseout="this.style.background=\'white\'" onclick="var card=this.closest(\'[data-memo-card]\');var d=card.querySelector(\'[data-memo-items]\');if(!d)return;var open=d.style.display!==\'none\';d.style.display=open?\'none\':\'block\';var chev=this.querySelector(\'[data-chev]\');if(chev)chev.style.transform=open?\'rotate(0deg)\':\'rotate(180deg)\';"><div style="width:3px;background:'+ss.stripe+';border-radius:2px;align-self:stretch;flex-shrink:0"></div><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:11px;font-family:\'DM Mono\',monospace;color:'+dim.ink3+';font-weight:600">'+(m.no||'\u2014')+'</span>'+typeBadge+'<span style="font-size:12px;font-weight:600">'+(m.title||'\u2014')+'</span></div><div style="font-size:10px;color:'+dim.ink3+';margin-top:2px">'+((m.scope==="general")?'🏢 '+(m.generalCategory||"General")+' \u00b7 ':(b?'🚤 '+b.name+' \u00b7 ':''))+(m.proposer?'By '+m.proposer+' \u00b7 ':'')+fmtD(m.createdDate)+(mj?' \u00b7 \u2192 '+mj.no:'')+'</div>'+(items.length?'<div style="font-size:10px;color:'+dim.ink2+';margin-top:4px;display:flex;align-items:center;gap:6px"><span style="background:'+dim.bg+';color:'+dim.ink2+';padding:1px 7px;border-radius:8px;font-size:9px;font-weight:600;font-family:\'DM Mono\',monospace">'+items.length+' รายการ</span><span style="color:'+dim.ink3+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px">'+items.slice(0,3).map(x=>x.name).join(' · ')+(items.length>3?' +'+(items.length-3)+' more':'')+'</span></div>':'')+'</div><span style="font-size:14px;font-weight:700;font-family:\'DM Mono\',monospace;color:'+SVG_PINK.text+';flex-shrink:0">\u0e3f'+(m.amount||0).toLocaleString()+'</span><span style="background:'+ss.bg+';color:'+ss.color+';padding:2px 9px;border-radius:11px;font-size:10px;font-weight:600;flex-shrink:0">'+ss.label+'</span>'+(compact?actionBtn:'')+'<button onclick="event.stopPropagation();flPrintMemo(\''+m.id+'\')" style="background:'+dim.bg+';border:none;border-radius:10px;padding:5px 12px;font-size:10px;color:'+dim.ink2+';cursor:pointer;flex-shrink:0;font-weight:500">Print</button>'+(items.length?'<div data-chev style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:'+dim.bg+';color:'+dim.ink2+';flex-shrink:0;transition:transform .2s ease"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>':'')+'</div>'+
+        '<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;transition:background .15s" onmouseover="this.style.background=\'#FBFAF7\'" onmouseout="this.style.background=\'white\'" onclick="var card=this.closest(\'[data-memo-card]\');var d=card.querySelector(\'[data-memo-items]\');if(!d)return;var open=d.style.display!==\'none\';d.style.display=open?\'none\':\'block\';var chev=this.querySelector(\'[data-chev]\');if(chev)chev.style.transform=open?\'rotate(0deg)\':\'rotate(180deg)\';"><div style="width:3px;background:'+ss.stripe+';border-radius:2px;align-self:stretch;flex-shrink:0"></div><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:11px;font-family:\'DM Mono\',monospace;color:'+dim.ink3+';font-weight:600">'+(m.no||'\u2014')+'</span>'+typeBadge+'<span style="font-size:12px;font-weight:600">'+(m.title||'\u2014')+'</span></div><div style="font-size:10px;color:'+dim.ink3+';margin-top:2px">'+((m.scope==="general")?'🏢 '+(m.generalCategory||"General")+' \u00b7 ':(b?'🚤 '+b.name+' \u00b7 ':''))+(m.proposer?'By '+m.proposer+' \u00b7 ':'')+fmtD(m.createdDate)+(mj?' \u00b7 \u2192 '+mj.no:'')+'</div>'+(items.length?'<div style="font-size:10px;color:'+dim.ink2+';margin-top:4px;display:flex;align-items:center;gap:6px"><span style="background:'+dim.bg+';color:'+dim.ink2+';padding:1px 7px;border-radius:8px;font-size:9px;font-weight:600;font-family:\'DM Mono\',monospace">'+items.length+' รายการ</span><span style="color:'+dim.ink3+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px">'+items.slice(0,3).map(x=>x.name).join(' · ')+(items.length>3?' +'+(items.length-3)+' more':'')+'</span></div>':'')+'</div><span style="font-size:14px;font-weight:700;font-family:\'DM Mono\',monospace;color:'+SVG_PINK.text+';flex-shrink:0">\u0e3f'+(m.amount||0).toLocaleString()+'</span><span style="background:'+ss.bg+';color:'+ss.color+';padding:2px 9px;border-radius:11px;font-size:10px;font-weight:600;flex-shrink:0">'+ss.label+'</span>'+(compact?actionBtn:'')+'<button onclick="event.stopPropagation();flCopyMemoItems(\''+m.id+'\')" title="คัดลอกรายการไปวางในระบบบัญชี" style="background:'+dim.bg+';border:none;border-radius:10px;padding:5px 10px;font-size:10px;color:'+dim.ink2+';cursor:pointer;flex-shrink:0;font-weight:500">คัดลอก</button>'+'<button onclick="event.stopPropagation();flPrintMemo(\''+m.id+'\')" style="background:'+dim.bg+';border:none;border-radius:10px;padding:5px 12px;font-size:10px;color:'+dim.ink2+';cursor:pointer;flex-shrink:0;font-weight:500">Print</button>'+(items.length?'<div data-chev style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:'+dim.bg+';color:'+dim.ink2+';flex-shrink:0;transition:transform .2s ease"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>':'')+'</div>'+
         stepperRow+
         approvalInfo+
         itemsTable+
