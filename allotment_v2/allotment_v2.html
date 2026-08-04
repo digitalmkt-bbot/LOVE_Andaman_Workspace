@@ -48419,10 +48419,17 @@ function drmBar(pct, color){
 }
 
 // ── ตัวจดหมาย ───────────────────────────────────────────────────────────
-function drmCard(inner, pad, bg, bd, radius){
-  return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:'+(bg||'#ffffff')
-    +';border:1px solid '+(bd||DRM.line)+';border-radius:'+(radius||'16px')+'"><tr><td style="padding:'+(pad||'16px 18px')
-    +'">'+inner+'</td></tr></table>';
+function drmCard(inner, pad, bg, bd, radius, full){
+  return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"'+(full?' height="100%"':'')
+    +' style="background:'+(bg||'#ffffff')+';border:1px solid '+(bd||DRM.line)+';border-radius:'+(radius||'16px')
+    +(full?';height:100%':'')+'"><tr><td valign="top" style="padding:'+(pad||'16px 18px')+'">'+inner+'</td></tr></table>';
+}
+// หัวข้อเล็กในการ์ด · ซ้ายชื่อ ขวาคำกำกับ · ใช้ให้การ์ดสองใบเริ่มบรรทัดแรกตรงกัน
+function drmCardHd(title, right){
+  return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px"><tr>'
+    +'<td style="font-size:12.5px;font-weight:800;color:'+DRM.ink+'">'+title+'</td>'
+    +(right?('<td align="right" style="font-size:10.5px;font-weight:600;color:'+DRM.fain+'">'+right+'</td>'):'')
+    +'</tr></table>';
 }
 // การ์ด KPI แบบเดียวกับหน้าจอ · ไอคอนวงกลม + แถวย่อยคั่นเส้น
 function drmKpi(label, value, unit, sub, foot, icon, iconbg, vcolor){
@@ -48459,7 +48466,7 @@ function drmQuad(arr){
     +'<tr>'+tds+'</tr></table></td></tr>';
 }
 // กราฟ 14 วัน · แท่งซ้อนสีด้วย div ล้วน · ไม่มี SVG/รูป เพราะเมลบล็อก
-function drmTrend(T, e){
+function drmTrend(T, e, full){
   var MAXH=168, mx=1;
   T.pts.forEach(function(p){ if(p.tot>mx) mx=p.tot; });
   var cols='';
@@ -48481,11 +48488,13 @@ function drmTrend(T, e){
     return '<span style="display:inline-block;margin:0 12px 4px 0;font-size:10.5px;color:'+DRM.mut+'">'
       +drmDot(m.color||'#94a3b8')+e(m.name||k)+'</span>'; }).join('');
   var tot=T.pts.reduce(function(a,p){ return a+p.tot; },0);
-  return drmCard('<div style="font-size:11px;color:'+DRM.fain+';line-height:1.55;padding-bottom:12px">'
+  return drmCard(drmCardHd('ผู้โดยสาร 14 วัน','นับตามวันเดินทาง')
+    +'<div style="font-size:11px;color:'+DRM.fain+';line-height:1.55;padding-bottom:12px">'
     +'นับจากวันเดินทางของแต่ละใบ — ใช้วางแผนเรือ/รถล่วงหน้า <b>ไม่ใช่</b>วันที่ลงบุคกิ้ง · แยกชั้นสีตาม Market</div>'
     +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'+cols+'</tr></table>'
     +'<div style="border-top:1px solid '+DRM.line+';margin-top:12px;padding-top:10px">'+lg
-    +'<span style="float:right;font-size:10.5px;color:'+DRM.mut+'">เดินทางรวม 14 วัน <b style="color:'+DRM.ink+'">'+tot+' คน</b></span></div>');
+    +'<span style="float:right;font-size:10.5px;color:'+DRM.mut+'">เดินทางรวม 14 วัน <b style="color:'+DRM.ink+'">'+tot+' คน</b></span></div>',
+    null,null,null,null,full);
 }
 // ── วาดกราฟลง canvas · ใช้เลขชุดเดียวกับ drChart/drDonut บนหน้าจอ ──────
 var _drImg = { key:'', trend:'', donut:'', state:'' };   // state: '' | 'run' | 'ok' | 'err'
@@ -48655,7 +48664,8 @@ function drMailHTML(D){
     var useImg=(_drImg.key===drImgKey(D) && _drImg.state==='ok');
     var chartBody;
     if(useImg && _drImg.trend){
-      chartBody='<div style="font-size:11px;color:'+DRM.fain+';line-height:1.55;padding-bottom:10px">'
+      chartBody=drmCardHd('ผู้โดยสาร 14 วัน','นับตามวันเดินทาง')
+        +'<div style="font-size:11px;color:'+DRM.fain+';line-height:1.55;padding-bottom:10px">'
         +'นับจากวันเดินทางของแต่ละใบ — ใช้วางแผนเรือ/รถล่วงหน้า <b>ไม่ใช่</b>วันที่ลงบุคกิ้ง · แยกชั้นสีตาม Market</div>'
         +'<img src="'+_drImg.trend+'" width="100%" alt="ผู้โดยสาร 14 วัน" '
         +'style="display:block;width:100%;max-width:100%;height:auto;border:0;outline:none;text-decoration:none">'
@@ -48665,9 +48675,9 @@ function drMailHTML(D){
               +drmDot(m.color||'#94a3b8')+e(m.name||k)+'</span>'; }).join('')
         +'<span style="float:right;font-size:10.5px;color:'+DRM.mut+'">เดินทางรวม 14 วัน <b style="color:'+DRM.ink+'">'
         + T.pts.reduce(function(a,p){return a+p.tot;},0)+' คน</b></span></div>';
-      chartBody=drmCard(chartBody);
+      chartBody=drmCard(chartBody,null,null,null,null,true);
     } else {
-      chartBody=drmTrend(T,e);
+      chartBody=drmTrend(T,e,true);
     }
     var MO=D.mOrder.slice(0,7), mktBody='';
     if(MO.length){
@@ -48681,34 +48691,20 @@ function drMailHTML(D){
           +'<td align="right" style="padding:6px 2px;border-bottom:'+bd+';font-size:12px;color:'+DRM.mut+';white-space:nowrap">'
           +'<b style="color:'+DRM.ink+'">'+m.pax+'</b> คน <span style="color:'+DRM.fain+'">('+drPct(m.pax,D.pax.tot)+'%)</span></td></tr>'; });
       mktBody=drmCard(
+        drmCardHd('สัดส่วนลูกค้า','แบ่งตาม Market · '+D.pax.tot+' pax')+
         (useImg && _drImg.donut
           ? ('<div style="text-align:center;padding-bottom:2px"><img src="'+_drImg.donut+'" width="176" alt="สัดส่วนลูกค้า" '
              +'style="display:inline-block;width:176px;max-width:100%;height:auto;border:0"></div>')
           : ('<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-radius:8px;overflow:hidden">'
              +'<tr>'+stack+'</tr></table>'))
-        +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px">'+lst+'</table>');
+        +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px">'+lst+'</table>',
+        null,null,null,null,true);
     }
     o+=drmSec('ผู้โดยสาร · ตามวันเดินทาง · 14 วัน','เดินทางวันนี้ '+D.pax.tot+' คน');
     o+='<tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
       +'<td width="65%" valign="top" style="padding-right:6px">'+chartBody+'</td>'
-      +'<td width="35%" valign="top" style="padding-left:6px">'
-        +'<div style="font-size:12.5px;font-weight:800;color:'+DRM.ink+';padding:0 0 8px 2px">สัดส่วนลูกค้า'
-        +'<span style="float:right;font-size:10.5px;font-weight:600;color:'+DRM.fain+';padding-top:3px">แบ่งตาม Market</span></div>'
-        +(mktBody||'')+'</td></tr></table></td></tr>';
+      +'<td width="35%" valign="top" style="padding-left:6px">'+(mktBody||'')+'</td></tr></table></td></tr>';
 
-    // ข้อสังเกตของวัน · ข้อความชุดเดียวกับบนหน้าจอ
-    var top=D.bOrder.length?D.boats[D.bOrder[0]]:null, m1=D.mOrder.length?D.mkt[D.mOrder[0]]:null;
-    var insH=top?(e(top.name)+' ขายไปแล้ว '+drPct(top.pax,top.cap)+'%'
-        +(top.cap>top.pax?(' · เหลืออีก '+(top.cap-top.pax)+' ที่นั่ง'):' · เต็มลำแล้ว')):'ยังไม่จัดเรือของวันนี้';
-    var insP=(m1?('กลุ่ม <b>'+e(m1.name)+'</b> ครองสัดส่วนสูงสุด '+drPct(m1.pax,D.pax.tot)+'% ของทั้งวัน '):'')
-      +'รายได้รวม <b>'+drB(D.rev)+'</b>'
-      +((D.warn.noVan||D.warn.noBoat)?(' ยังมี <b>'+(D.warn.noVan?(D.warn.noVan+' ใบที่ยังไม่จัดรถ'):'')
-        +((D.warn.noVan&&D.warn.noBoat)?' และ ':'')+(D.warn.noBoat?(D.warn.noBoat+' ใบยังไม่จัดเรือ'):'')+'</b> ต้องเคลียร์ก่อนปิดวัน'):' ทุกอย่างจัดครบแล้ว');
-    o+='<tr><td style="padding:12px 0 0">'+drmCard(
-      '<div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:#ffffff;text-transform:uppercase;padding-bottom:6px">&#128161; ข้อสังเกตของวัน</div>'
-      +'<div style="font-size:16px;font-weight:800;color:#ffffff;line-height:1.35">'+insH+'</div>'
-      +'<div style="font-size:12px;color:#ffffff;padding-top:6px;line-height:1.6">'+insP+'</div>',
-      '15px 17px','#f97316','#f97316')+'</td></tr>';
   }
 
   // ── แยกตามเส้นทาง · การ์ดเรียงข้างกัน ──
