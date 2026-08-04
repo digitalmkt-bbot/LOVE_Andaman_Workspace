@@ -23663,6 +23663,97 @@ function _memoStatusMeta(s){
   };
   return M[s]||{label:s||'—',bg:'#EEEEEE',color:'#555555'};
 }
+let _moLiveId=null, _moLiveItems=[];
+function moLiveStart(moId){
+  const mo=(typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).find(x=>x.id===moId); if(!mo) return;
+  if(mo.status==='paid'||mo.status==='cancelled'){ flShowToast('MO สถานะนี้แก้ไม่ได้','error'); return; }
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('fleet')){ flShowToast('สิทธิ์ดูอย่างเดียว','error'); return; }
+  _moLiveId=moId;
+  _moLiveItems=(mo.items||[]).map(it=>Object.assign({},it));
+  flViewMemo(moId);
+}
+function moLiveCancel(){ const id=_moLiveId; _moLiveId=null; _moLiveItems=[]; if(id) flViewMemo(id); }
+function moLiveSet(i,k,v){
+  const it=_moLiveItems[i]; if(!it) return;
+  if(k==='qty'||k==='price'||k==='discountPct') it[k]=Math.max(0,+v||0); else it[k]=v;
+  moLivePaintTotal();
+}
+function moLiveDel(i){ _moLiveItems.splice(i,1); if(_moLiveId) flViewMemo(_moLiveId); }
+function moLiveAdd(){
+  const nm=(document.getElementById('molive-new-name')||{}).value;
+  const qty=+((document.getElementById('molive-new-qty')||{}).value)||1;
+  const price=+((document.getElementById('molive-new-price')||{}).value)||0;
+  if(!String(nm||'').trim()){ flShowToast('ใส่ชื่อรายการก่อน','error'); return; }
+  const name=String(nm).trim();
+  // ผูกกับสต๊อกถ้าชื่อตรงเป๊ะ · ตรรกะเดียวกับ memoAddItem ในฟอร์มใหญ่
+  const ex=(typeof FL_INVENTORY!=='undefined'?FL_INVENTORY:[]).find(x=>x.name===name);
+  _moLiveItems.push(ex
+    ? { name, qty, price, invId:ex.id, fromInventory:true, autoRegister:false,
+        partNo:ex.partNo||'', unit:ex.unit||'ชิ้น', category:'parts' }
+    : { name, qty, price, invId:null, fromInventory:false, autoRegister:false,
+        partNo:'', unit:'ชิ้น', category:'parts' });
+  if(_moLiveId) flViewMemo(_moLiveId);
+}
+// MO เก่าบางใบเก็บแค่ยอดส่วนลด (discount) โดยไม่มี discountPct/discountAmt ให้คิดย้อน
+//   ถ้าคิดใหม่ตรง ๆ ส่วนลดก้อนนั้นจะหายไปเงียบ ๆ → ดึงออกมาเป็นยอดคงที่แล้วคงไว้
+function moLiveLegacyDisc(mo){
+  if((+mo.discountPct||0)>0 || (+mo.discountAmt||0)>0) return 0;
+  let ld=0; (mo.items||[]).forEach(it=>{ ld+=(+it.qty||0)*(+it.price||0)*((+it.discountPct||0)/100); });
+  return Math.max(0, Math.round(((+mo.discount||0)-ld)*100)/100);
+}
+// คิดยอดด้วยสูตรเดียวกับ memoCalcTotal แต่อ่านส่วนลด/VAT จากตัว memo เอง
+function moLiveTotals(mo, items){
+  let sub=0, lineDisc=0;
+  (items||[]).forEach(it=>{ const g=(+it.qty||0)*(+it.price||0);
+    sub+=g; lineDisc+=g*((+it.discountPct||0)/100); });
+  const afterLine=sub-lineDisc;
+  const legacy=moLiveLegacyDisc(mo);
+  const memoDisc=Math.round(afterLine*((+mo.discountPct||0)/100))+(+mo.discountAmt||0)+legacy;
+  const discTotal=lineDisc+memoDisc;
+  const afterDisc=Math.max(0,sub-discTotal);
+  const vatEnabled=mo.vatEnabled!==false;
+  const vatRate=vatEnabled?(mo.vatRate!=null?mo.vatRate:7):0;
+  const vat=Math.round(afterDisc*vatRate/100*100)/100;
+  return { sub, discTotal, afterDisc, vat, vatRate, vatEnabled, legacy, total:afterDisc+vat };
+}
+function moLiveSubLine(T){
+  return (T.discTotal>0?('ส่วนลด ฿'+T.discTotal.toLocaleString(undefined,{maximumFractionDigits:2})+' · '):'')
+    +'ก่อนภาษี ฿'+T.afterDisc.toLocaleString(undefined,{maximumFractionDigits:2})
+    +(T.vatEnabled?(' · VAT '+T.vatRate+'%'):' · ไม่คิด VAT');
+}
+function moLivePaintTotal(){
+  const mo=(typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).find(x=>x.id===_moLiveId); if(!mo) return;
+  const T=moLiveTotals(mo,_moLiveItems);
+  const el=document.getElementById('molive-total');
+  if(el) el.innerHTML='รวมทั้งสิ้น ฿'+T.total.toLocaleString(undefined,{maximumFractionDigits:2})
+    +'<span style="font-size:10px;font-weight:500;color:#999;margin-left:8px">'+moLiveSubLine(T)+'</span>';
+  (_moLiveItems||[]).forEach((it,i)=>{ const c=document.getElementById('molive-line-'+i);
+    if(c) c.textContent=((+it.qty||0)*(+it.price||0)).toLocaleString(undefined,{maximumFractionDigits:2}); });
+}
+function moLiveSave(){
+  const mo=(typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).find(x=>x.id===_moLiveId); if(!mo) return;
+  if(mo.status==='paid'||mo.status==='cancelled'){ flShowToast('MO สถานะนี้แก้ไม่ได้','error'); _moLiveId=null; return; }
+  const clean=_moLiveItems.filter(it=>String(it.name||'').trim());
+  if(!clean.length){ flShowToast('ต้องมีอย่างน้อย 1 รายการ','error'); return; }
+  const beforeN=(mo.items||[]).length, beforeAmt=+mo.amount||0;
+  const T=moLiveTotals(mo,clean);
+  mo.items=clean;
+  mo.subtotal=T.sub; mo.discount=T.discTotal; mo.afterDiscount=T.afterDisc;
+  mo.vat=T.vat; mo.amount=T.total;
+  const ch=[];
+  if(beforeN!==clean.length) ch.push('รายการ '+beforeN+'→'+clean.length);
+  if(Math.abs(beforeAmt-T.total)>0.005) ch.push('ยอด ฿'+beforeAmt.toLocaleString()+'→฿'+T.total.toLocaleString());
+  if(!mo.history) mo.history=[];
+  mo.history.push({ type:'edit', by:(typeof laBy==='function'?laBy():''), date:new Date().toISOString(),
+                    note:'แก้รายการจากหน้ารายละเอียด'+(ch.length?': '+ch.join(', '):'') });
+  if(mo.maintId && typeof flPushLog==='function') flPushLog(mo.maintId,'✏️ แก้รายการ Memo '+mo.no+' · ฿'+T.total.toLocaleString());
+  if(typeof flSave==='function') flSave();
+  const id=mo.id; _moLiveId=null; _moLiveItems=[];
+  flShowToast('บันทึกรายการแล้ว');
+  try{ if(mo.maintId && typeof flRenderMaintDetail==='function') flRenderMaintDetail(mo.maintId); }catch(_){}
+  try{ if(typeof flRenderMemos==='function') flRenderMemos(); }catch(_){}
+  flViewMemo(id);
+}
 function flViewMemo(moId){
   const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const mo=(typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).find(x=>x.id===moId); if(!mo) return;
@@ -23671,13 +23762,40 @@ function flViewMemo(moId){
   const st=_memoStatusMeta(mo.status);
   const canMod = mo.status!=='paid' && mo.status!=='cancelled';   // edit/cancel allowed except paid & already-cancelled
   const fmt=s=>{ if(!s) return '—'; const d=new Date(s); return isNaN(d.getTime())?String(s):(d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear()); };
-  const itemRows = items.length? items.map((it,i)=>`<tr>
+  const live = (_moLiveId===mo.id);
+  const rowItems = live ? _moLiveItems : items;
+  const inp='font-size:11px;border:0.5px solid #E0DDD5;border-radius:6px;padding:3px 6px;background:#fff;font-family:inherit;color:#27343B';
+  const itemRows = live
+   ? (rowItems.map((it,i)=>{
+      const locked=!!it.invId;
+      return `<tr>
+      <td style="padding:4px 4px;color:#999;font-size:10px">${String(i+1).padStart(2,'0')}</td>
+      <td style="padding:4px 4px">
+        <input type="text" value="${esc(it.name)}" oninput="moLiveSet(${i},'name',this.value)" style="${inp};width:100%">
+        ${it.partNo?`<div style="font-size:9px;color:#A0A099;font-family:'DM Mono',monospace;margin-top:2px">${esc(it.partNo)}${it.unit?(' · '+esc(it.unit)):''}</div>`:''}
+      </td>
+      <td style="padding:4px 4px;width:56px"><input type="number" min="0" value="${+it.qty||0}" oninput="moLiveSet(${i},'qty',this.value)" style="${inp};width:100%;text-align:center;font-family:'DM Mono',monospace"></td>
+      <td style="padding:4px 4px;width:88px">${locked
+        ? `<div title="ราคา lock ตาม cost ใน Inventory · ปลดที่หน้า Inventory" style="font-size:11px;text-align:right;font-family:'DM Mono',monospace;color:#8A8880;padding:3px 2px">${(+it.price||0).toLocaleString()} 🔒</div>`
+        : `<input type="number" min="0" value="${+it.price||0}" oninput="moLiveSet(${i},'price',this.value)" style="${inp};width:100%;text-align:right;font-family:'DM Mono',monospace">`}</td>
+      <td id="molive-line-${i}" style="padding:4px 4px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600;width:82px">${((+it.qty||0)*(+it.price||0)).toLocaleString(undefined,{maximumFractionDigits:2})}</td>
+      <td style="padding:4px 2px;width:22px;text-align:center"><button title="ลบรายการ" onclick="moLiveDel(${i})" style="border:none;background:none;color:#C0392B;cursor:pointer;font-size:12px;line-height:1;padding:0">✕</button></td>
+    </tr>`; }).join('')
+    + `<tr style="background:#FBFAF7">
+      <td style="padding:5px 4px;color:#bbb;font-size:11px">＋</td>
+      <td style="padding:5px 4px"><input id="molive-new-name" type="text" placeholder="ชื่อรายการใหม่ · ชื่อตรงกับสต๊อกจะผูกให้อัตโนมัติ" onkeydown="if(event.key==='Enter'){event.preventDefault();moLiveAdd();}" style="${inp};width:100%"></td>
+      <td style="padding:5px 4px"><input id="molive-new-qty" type="number" min="0" value="1" onkeydown="if(event.key==='Enter'){event.preventDefault();moLiveAdd();}" style="${inp};width:100%;text-align:center;font-family:'DM Mono',monospace"></td>
+      <td style="padding:5px 4px"><input id="molive-new-price" type="number" min="0" value="0" onkeydown="if(event.key==='Enter'){event.preventDefault();moLiveAdd();}" style="${inp};width:100%;text-align:right;font-family:'DM Mono',monospace"></td>
+      <td colspan="2" style="padding:5px 4px;text-align:right"><button onclick="moLiveAdd()" style="border:none;background:#E1F5EE;color:#0F6E56;font-size:11px;font-weight:700;padding:4px 12px;border-radius:7px;cursor:pointer;font-family:inherit">เพิ่ม</button></td>
+    </tr>`)
+   : (items.length? items.map((it,i)=>`<tr>
       <td style="padding:5px 6px;color:#999;font-size:10px">${String(i+1).padStart(2,'0')}</td>
-      <td style="padding:5px 6px">${esc(it.name)}</td>
+      <td style="padding:5px 6px">${esc(it.name)}${it.partNo?`<span style="font-size:9px;color:#A0A099;font-family:'DM Mono',monospace;margin-left:6px">${esc(it.partNo)}</span>`:''}</td>
       <td style="padding:5px 6px;text-align:right;font-variant-numeric:tabular-nums">${(it.qty||1)}</td>
       <td style="padding:5px 6px;text-align:right;font-variant-numeric:tabular-nums">${(it.price||0).toLocaleString()}</td>
       <td style="padding:5px 6px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600">${((it.qty||1)*(it.price||0)).toLocaleString()}</td>
-    </tr>`).join('') : `<tr><td colspan="5" style="padding:10px;text-align:center;color:#aaa">ไม่มีรายการ</td></tr>`;
+    </tr>`).join('') : `<tr><td colspan="5" style="padding:10px;text-align:center;color:#aaa">ไม่มีรายการ</td></tr>`);
+  const liveT = live ? moLiveTotals(mo,_moLiveItems) : null;
   const hist=(mo.history||[]);
   const histRows = hist.length? hist.slice().reverse().map(h=>{
       const ic = h.type==='create'?'🆕':h.type==='edit'?'✏️':h.type==='cancel'?'🚫':'•';
@@ -23706,17 +23824,26 @@ function flViewMemo(moId){
       <div><span style="color:#999">Supplier</span> · ${esc(mo.supplier||'—')}</div>
     </div>
     ${mo.status==='cancelled'&&mo.cancelReason?`<div style="background:#FCEBEB;border:1px solid #F3C9C9;border-radius:8px;padding:8px 10px;margin-bottom:12px;font-size:11px;color:#A32D2D"><b>เหตุผลยกเลิก:</b> ${esc(mo.cancelReason)} <span style="color:#B57">· ${esc(mo.cancelledBy||'')} · ${fmt(mo.cancelledDate)}</span></div>`:''}
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+      <span style="font-size:11px;font-weight:600;flex:1">รายการ <span style="color:#A0A099;font-weight:500">${rowItems.length}</span></span>
+      ${live
+        ? `<span style="font-size:10px;color:#0F6E56;background:#E1F5EE;padding:2px 9px;border-radius:9px;font-weight:700">กำลังแก้รายการ</span>`
+        : (canMod?`<button onclick="moLiveStart('${mo.id}')" style="border:0.5px solid #C9E3D8;background:#F2FAF7;color:#0F6E56;font-size:10.5px;font-weight:700;padding:4px 11px;border-radius:8px;cursor:pointer;font-family:inherit">✏️ แก้รายการ</button>`:'')}
+    </div>
     <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:6px">
       <thead><tr style="border-bottom:1px solid rgba(0,0,0,.1);color:#999;font-size:9px;text-transform:uppercase">
         <th style="padding:4px 6px;text-align:left"></th><th style="padding:4px 6px;text-align:left">รายการ</th>
-        <th style="padding:4px 6px;text-align:right">Qty</th><th style="padding:4px 6px;text-align:right">หน่วยละ</th><th style="padding:4px 6px;text-align:right">รวม</th></tr></thead>
+        <th style="padding:4px 6px;text-align:right">Qty</th><th style="padding:4px 6px;text-align:right">หน่วยละ</th><th style="padding:4px 6px;text-align:right">รวม</th>${live?'<th></th>':''}</tr></thead>
       <tbody>${itemRows}</tbody>
     </table>
-    <div style="text-align:right;font-size:13px;font-weight:700;margin-bottom:14px">รวมทั้งสิ้น ฿${(mo.amount||0).toLocaleString()}</div>
+    <div id="molive-total" style="text-align:right;font-size:13px;font-weight:700;margin-bottom:14px">รวมทั้งสิ้น ฿${((live?liveT.total:mo.amount)||0).toLocaleString(undefined,{maximumFractionDigits:2})}${live?`<span style="font-size:10px;font-weight:500;color:#999;margin-left:8px">${moLiveSubLine(liveT)}</span>`:''}</div>
     ${(mo.note||'').trim()?`<div style="background:#fafaf8;border:0.5px solid rgba(0,0,0,.12);border-left:2px solid #333;border-radius:6px;padding:8px 10px;margin-bottom:14px;font-size:11px;white-space:pre-wrap">${esc(mo.note)}</div>`:''}
     <div style="font-size:11px;font-weight:600;margin-bottom:4px">ประวัติ (History)</div>
     <div style="background:#FBFAF7;border-radius:8px;padding:4px 10px">${histRows}</div>`;
-  const foot=`
+  const foot= live ? `
+    <span style="flex:1;font-size:10.5px;color:#8A8880">แก้เฉพาะรายการ · หัวเอกสาร ส่วนลด และ VAT ไม่ถูกแตะ</span>
+    <button class="btn btn-ghost" onclick="moLiveCancel()">ยกเลิก</button>
+    <button class="btn btn-primary" onclick="moLiveSave()">บันทึกรายการ</button>` : `
     ${canMod?`<button class="btn btn-ghost" onclick="flEditMemo('${mo.id}')" style="border-color:#1683C7;color:#1683C7">✏️ แก้ไข</button>`:''}
     ${canMod?`<button class="btn btn-ghost" onclick="flCancelMemo('${mo.id}')" style="border-color:#E4A0A0;color:#A32D2D">🚫 ยกเลิก</button>`:''}
     <button class="btn btn-ghost" onclick="flCopyMemoItems('${mo.id}')" style="border-color:#0F6E56;color:#0F6E56">📋 คัดลอกรายการ</button>
@@ -23734,6 +23861,7 @@ function flCloseMemoModal(){
   closeModal('fl-modal-memo');
 }
 function flEditMemo(moId){
+  _moLiveId=null; _moLiveItems=[];
   const mo=(typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).find(x=>x.id===moId); if(!mo) return;
   if(mo.status==='paid'){ flShowToast('Memo จ่ายแล้ว แก้ไขไม่ได้','error'); return; }
   closeModal('fl-modal-memoview');
