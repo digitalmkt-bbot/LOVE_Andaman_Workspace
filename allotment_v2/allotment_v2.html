@@ -40541,6 +40541,103 @@ function pmapDraw(){ const map=_PM.map,cv=_PM.canvas; if(!map||!cv)return; const
     ctx.globalAlpha=1; ctx.textAlign='center'; const up=PM_LBLUP[a.key]; const ny=up?(pt.y-rPx-15):(pt.y+rPx+12), cy=up?(pt.y-rPx-4):(pt.y+rPx+23); ctx.lineWidth=3; ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.font='600 11px sans-serif'; ctx.strokeText(a.key,pt.x,ny); ctx.fillStyle='#27343B'; ctx.fillText(a.key,pt.x,ny); const _ln=pmShowNum(pmVal(a)); ctx.font='11px ui-monospace,monospace'; ctx.strokeText(_ln,pt.x,cy); ctx.fillStyle='#566'; ctx.fillText(_ln,pt.x,cy); }); }
 function pmapHits(){ const map=_PM.map; if(!map)return; if(_PM.hits)_PM.hits.clearLayers(); else _PM.hits=L.layerGroup().addTo(map);
   _PM.areas.forEach(a=>{ if(!a.shown)return; const cm=L.circleMarker(PHUKET_LL[a.key],{radius:Math.max(9,a.r),weight:0,opacity:0,fillOpacity:0.001,interactive:true}); cm.on('click',()=>pmapSelect(a.key)); cm.bindTooltip(a.key+' · '+pmShowNum(pmVal(a))+(_pmapMetric==='pax'?' pax':''),{direction:'top'}); cm.addTo(_PM.hits); }); }
+// โซน = region ของจุดรับ · ไม่ได้ตั้งกลุ่มใหม่ ใช้ที่ระบบแบ่งไว้อยู่แล้ว
+const PM_ZONE={
+  'phuket-west'   :['ฝั่งตะวันตก','#E2725B'], 'phuket-w-n'  :['ตะวันตกเฉียงเหนือ','#E0A93B'],
+  'phuket-north'  :['ภาคเหนือ','#4A9BB8'],    'phuket-central':['เมืองภูเก็ต','#8C6FD1'],
+  'phuket-south'  :['ภาคใต้','#55A868'],      'phuket-east' :['ฝั่งตะวันออก','#C46FA8'],
+  'pier'          :['ท่าเรือ · มาเอง','#4B5563'],
+  'phang-nga'     :['พังงาใต้','#8FA33E'],     'khao-lak'    :['เขาหลัก','#6BA292'],
+  ''              :['ไม่ระบุโซน','#B6B4AB'] };
+function pmZone(r){ return PM_ZONE[r||''] || PM_ZONE['']; }
+// ใบที่ไม่มี agent · ตั้งชื่อกลุ่มให้อ่านออกแทนรหัสช่องทางดิบ ๆ
+function pmChannelName(c){
+  c=String(c||'').trim(); if(!c) return 'Walk-in / Direct';
+  return ({ direct:'Walk-in / Direct', walkin:'Walk-in / Direct', 'walk-in':'Walk-in / Direct',
+            web:'เว็บไซต์ (B2C)', b2c:'เว็บไซต์ (B2C)', online:'เว็บไซต์ (B2C)',
+            phone:'โทรจอง', line:'LINE', facebook:'Facebook', staff:'Staff / Internal'
+          })[c.toLowerCase()] || (c.charAt(0).toUpperCase()+c.slice(1));
+}
+// รวมยอดเป็น agent × โซน · ใช้ช่วงเวลา หน่วยวัด และตัวกรองตลาดชุดเดียวกับแผนที่
+function pmapAgentZone(){
+  const BK=(typeof SB_BOOKINGS!=='undefined')?SB_BOOKINGS:[]; const per=pmapPeriod();
+  const AG={}, AO=[], ZT={}, ZO=[]; let tot=0;
+  BK.forEach(b=>{
+    if(['cancelled','rejected','cancelled_weather'].includes(b.status))return;
+    if(_pmapMkFilter && pmMarket(b)!==_pmapMkFilter)return;
+    let cp=0; (b.trips||[]).forEach(t=>{ if(per.test(t.date||'')) cp+=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; });
+    if(cp<=0)return;
+    const val=(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0);
+    const w=_pmapMetric==='value'?val:cp; if(w<=0)return;
+    const ar=(b.pickupAreaId&&typeof bkV2GetArea==='function')?bkV2GetArea(b.pickupAreaId):null;
+    const zk=(ar&&ar.region)||'';
+    const ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
+    const key=b.agentId||((b.b2cChannel||b.channelType==='b2c')?'_b2c':('_'+(b.channel||'walkin')));
+    const nm=ag?(ag.name||ag.code||key):((b.b2cChannel||b.channelType==='b2c')?'เว็บไซต์ (B2C)':pmChannelName(b.channel));
+    if(!AG[key]){ AG[key]={key,name:nm,mk:pmMarket(b),w:0,n:0,pax:0,z:{},zo:[]}; AO.push(key); }
+    const a=AG[key]; a.w+=w; a.n++; a.pax+=cp;
+    if(a.z[zk]==null){ a.z[zk]=0; a.zo.push(zk); }
+    a.z[zk]+=w;
+    if(ZT[zk]==null){ ZT[zk]=0; ZO.push(zk); }
+    ZT[zk]+=w; tot+=w;
+  });
+  AO.sort((x,y)=>AG[y].w-AG[x].w);
+  ZO.sort((x,y)=>ZT[y]-ZT[x]);
+  return {AG,AO,ZT,ZO,tot};
+}
+// ย่อ/กางการ์ด · ค่าเริ่มต้นคือกาง
+let _pmapAgOpen=null;
+function pmapAgOpen(){ if(_pmapAgOpen==null){ let v=null; try{ v=(typeof ctRead==='function')?ctRead('pmap_agpanel'):null; }catch(_){}
+    _pmapAgOpen=(v===0||v===false)?false:true; } return _pmapAgOpen; }
+function pmapAgToggle(){ _pmapAgOpen=!pmapAgOpen();
+  try{ if(typeof ctWrite==='function') ctWrite('pmap_agpanel', _pmapAgOpen?1:0); }catch(_){}
+  const h=document.getElementById('pmap-zpanel'); if(h) h.innerHTML=pmapZonePanel(); }
+function pmapZonePanel(){
+  const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const D=pmapAgentZone();
+  if(!pmapAgOpen())
+    return `<button onclick="pmapAgToggle()" title="กางการ์ดสรุป Agent × โซน" style="display:inline-flex;align-items:center;gap:7px;`
+      +`background:rgba(255,255,255,.97);border:0.5px solid #ddd;border-radius:99px;padding:7px 13px 7px 11px;`
+      +`box-shadow:0 3px 14px rgba(0,0,0,.1);cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;color:#3A3A36">`
+      +`<span style="width:9px;height:9px;border-radius:50%;background:#0F6E56"></span>Agent &times; โซน `
+      +`<b style="font-family:'DM Mono',monospace;font-weight:500;color:#8A8880">${D.AO.length}</b> &raquo;</button>`;
+  if(!D.AO.length)
+    return `<div style="background:rgba(255,255,255,.97);border-radius:12px;border:0.5px solid #ddd;padding:13px 15px;`
+      +`box-shadow:0 3px 14px rgba(0,0,0,.1);font-size:12px;color:#8A8880">ไม่มีข้อมูลในช่วงนี้`
+      +`<span onclick="pmapAgToggle()" style="cursor:pointer;color:#185FA5;margin-left:8px">&laquo;</span></div>`;
+  const TOPN=8, top=D.AO.slice(0,TOPN), restN=D.AO.length-top.length;
+  let restW=0; D.AO.slice(TOPN).forEach(k=>{ restW+=D.AG[k].w; });
+  const rows=top.map(k=>{
+    const a=D.AG[k]; const zo=a.zo.slice().sort((x,y)=>a.z[y]-a.z[x]);
+    const bar=zo.map(z=>`<i style="display:block;height:100%;width:${(a.z[z]/a.w*100).toFixed(1)}%;background:${pmZone(z)[1]}" title="${esc(pmZone(z)[0])} ${pmShowNum(a.z[z])}"></i>`).join('');
+    const cap=zo.slice(0,2).map(z=>`<span style="white-space:nowrap"><i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${pmZone(z)[1]};margin-right:4px"></i>${esc(pmZone(z)[0])} ${pmShowNum(a.z[z])}</span>`).join(' &middot; ')
+      + (zo.length>2?` &middot; <span style="color:#B4B2AA">+${zo.length-2} โซน</span>`:'');
+    return `<div style="padding:8px 0 9px;border-bottom:0.5px solid #F0EEE7">`
+      +`<div style="display:flex;align-items:baseline;gap:7px">`
+        +`<span style="width:9px;height:9px;border-radius:50%;background:${pmMktColor(a.mk)};flex:none;align-self:center" title="${esc(pmMktName(a.mk))}"></span>`
+        +`<span style="flex:1;font-size:12.5px;font-weight:700;color:#27343B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.name)}</span>`
+        +`<span style="font-family:'DM Mono',monospace;font-size:13.5px">${pmShowNum(a.w)}</span>`
+        +`<span style="font-size:10px;color:#A0A099;width:30px;text-align:right">${D.tot?Math.round(a.w/D.tot*100):0}%</span></div>`
+      +`<div style="display:flex;height:7px;border-radius:5px;overflow:hidden;margin:6px 0 5px;background:#F0EEE7">${bar}</div>`
+      +`<div style="font-size:10.5px;color:#8A8880;line-height:1.45">${cap}</div></div>`;
+  }).join('');
+  const legend=D.ZO.slice(0,8).map(z=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#8A8880;white-space:nowrap">`
+      +`<i style="width:8px;height:8px;border-radius:2px;background:${pmZone(z)[1]}"></i>${esc(pmZone(z)[0])} ${pmShowNum(D.ZT[z])}</span>`).join('');
+  return `<div style="max-height:calc(100vh - 236px);overflow:auto;background:rgba(255,255,255,.97);border-radius:12px;`
+    +`border:0.5px solid #ddd;padding:12px 14px 11px;box-shadow:0 3px 14px rgba(0,0,0,.1)">`
+    +`<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">`
+      +`<span style="flex:1;font-size:13px;font-weight:700">Agent &times; โซน</span>`
+      +`<span style="font-size:11px;color:#A0A099;font-family:'DM Mono',monospace">${D.AO.length} ราย</span>`
+      +`<button onclick="pmapAgToggle()" title="ย่อการ์ด" style="border:none;background:#F1EFEA;width:22px;height:22px;`
+        +`border-radius:7px;cursor:pointer;color:#5F5E5A;font-size:13px;line-height:1;flex:none;font-family:inherit">&laquo;</button></div>`
+    +`<div style="font-size:10.5px;color:#A0A099;margin:0 0 6px;line-height:1.5">`
+      +`เจ้าที่มีลูกค้ามากสุด · แถบสีคือโซนที่รับ ${_pmapMkFilter?('· กรอง '+esc(pmMktName(_pmapMkFilter))):''}</div>`
+    + rows
+    + (restN>0?`<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#8A8880;padding:8px 0 0">`
+        +`<span style="flex:1">อีก ${restN} ราย</span><b style="font-family:'DM Mono',monospace;color:#3A3A36">${pmShowNum(restW)}</b></div>`:'')
+    +`<div style="display:flex;flex-wrap:wrap;gap:5px 10px;margin-top:10px;padding-top:9px;border-top:0.5px solid #ECEAE2">${legend}</div>`
+    +`</div>`;
+}
 function pmapPanel(){ const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'); const unit=_pmapMetric==='pax'?'pax':'';
   const mom=(v)=>{ if(v==null)return ''; const up=v>=0; return `<span style="font-size:11px;font-weight:700;color:${up?'#2E7D43':'#C0392B'};margin-left:6px">${up?'▲':'▼'} ${Math.abs(v)}%</span>`; };
   if(_pmapSel){ const e=_PM.areas.find(x=>x.key===_pmapSel); if(e){ const tv=pmVal(e); const segs=Object.keys(e.mk).sort((a,b)=>pmVal(e.mk[b])-pmVal(e.mk[a])); const det=pmapAreaDetail(e.key);
@@ -40568,7 +40665,8 @@ function pmapToolbar(){ const per=pmapPeriod(); const mb=(m,l)=>`<button onclick
     <span style="flex:1;min-width:10px"></span>
     <span style="font-size:11px;color:#999">กรองตลาด:</span>${chips}${_pmapMkFilter?`<span onclick="pmapSetMk('${_pmapMkFilter}')" style="cursor:pointer;font-size:11px;color:#185FA5">ล้าง</span>`:''}
   </div>`; }
-function pmapRefresh(){ pmapAgg(); pmapBuildDots(); const bar=document.getElementById('pmap-bar'); if(bar)bar.innerHTML=pmapToolbar(); const pn=document.getElementById('pmap-panel'); if(pn)pn.innerHTML=pmapPanel(); if(_PM.map){ try{_PM.map.invalidateSize();}catch(e){} pmapHits(); pmapDraw(); } }
+function pmapRefresh(){ pmapAgg(); pmapBuildDots(); const bar=document.getElementById('pmap-bar'); if(bar)bar.innerHTML=pmapToolbar(); const pn=document.getElementById('pmap-panel'); if(pn)pn.innerHTML=pmapPanel();
+  const zp=document.getElementById('pmap-zpanel'); if(zp)zp.innerHTML=pmapZonePanel(); if(_PM.map){ try{_PM.map.invalidateSize();}catch(e){} pmapHits(); pmapDraw(); } }
 function pmapEnsureLeaflet(cb){ if(window.L){cb();return;} if(!document.getElementById('pm-leaflet-css')){ const l=document.createElement('link'); l.id='pm-leaflet-css'; l.rel='stylesheet'; l.href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css'; document.head.appendChild(l); } window._pmCbs=window._pmCbs||[]; window._pmCbs.push(cb); if(window._pmLoading)return; window._pmLoading=true; const s=document.createElement('script'); s.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'; s.onload=function(){ (window._pmCbs||[]).forEach(f=>f()); window._pmCbs=[]; }; s.onerror=function(){ const w=document.getElementById('pickupmap-wrap'); if(w)w.innerHTML='<div style="padding:40px;text-align:center;color:#a33;font-size:13px">โหลดแผนที่ไม่สำเร็จ · ต้องต่ออินเทอร์เน็ต (Leaflet/แผนที่)</div>'; window._pmLoading=false; }; document.body.appendChild(s); }
 /* ═══ System Log · admin-only dev/to-do checklist (§102) ═══
    Notes of what to do / fix in the system. Stored as a JSON STRING top-level key
@@ -40926,7 +41024,7 @@ function renderPickupMap(){ const wrap=document.getElementById('pickupmap-wrap')
   if(!_pmapAnchor){ _pmapAnchor=_pmYmd(new Date()); }   // default = today (current month) — was max trip date, which jumped to whatever far-future booking existed
   pmapEnsureLeaflet(function(){
     if(!document.getElementById('pmap-map')){
-      wrap.innerHTML='<div id="pmap-bar"></div><div style="position:relative"><div id="pmap-map" style="width:100%;height:calc(100vh - 188px);min-height:480px;border-radius:12px;overflow:hidden;border:0.5px solid #d8d5cd;background:#E4F0F6"></div><div id="pmap-panel" style="position:absolute;top:12px;right:12px;width:252px;max-height:calc(100vh - 212px);overflow:auto;background:rgba(255,255,255,.97);border-radius:12px;border:0.5px solid #ddd;padding:13px 15px;z-index:600;box-shadow:0 3px 14px rgba(0,0,0,.1)"></div></div>';
+      wrap.innerHTML='<div id="pmap-bar"></div><div style="position:relative"><div id="pmap-map" style="width:100%;height:calc(100vh - 188px);min-height:480px;border-radius:12px;overflow:hidden;border:0.5px solid #d8d5cd;background:#E4F0F6"></div><div id="pmap-zpanel" style="position:absolute;top:12px;left:12px;width:272px;z-index:600"></div><div id="pmap-panel" style="position:absolute;top:12px;right:12px;width:252px;max-height:calc(100vh - 212px);overflow:auto;background:rgba(255,255,255,.97);border-radius:12px;border:0.5px solid #ddd;padding:13px 15px;z-index:600;box-shadow:0 3px 14px rgba(0,0,0,.1)"></div></div>';
       const map=L.map('pmap-map',{attributionControl:false,zoomSnap:.5}).setView([7.95,98.34],11);
       L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:18,subdomains:'abcd'}).addTo(map);
       const cv=document.createElement('canvas'); cv.style.cssText='position:absolute;left:0;top:0;pointer-events:none;z-index:450'; document.getElementById('pmap-map').appendChild(cv);
