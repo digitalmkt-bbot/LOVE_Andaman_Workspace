@@ -48121,22 +48121,58 @@ function drMailHTML(D){
 
   // ── รายการ booking ──
   if(I.list){
-    // Gmail ตัดจดหมายที่เกิน ~102KB ทิ้งท้าย ("Message clipped") · จำกัดรายการไว้
-    var LIST_MAX=35, lst=D.rows.slice(0,LIST_MAX), more=D.rows.length-lst.length;
-    o+=drmSec('รายการ booking', D.rows.length+' ใบ'+(more?(' · แสดง '+lst.length+' ใบแรก'):''));
-    o+=drmT(['Voucher','Agency · Market','ลูกค้า','คน','เส้นทาง','รับ','ยอดเงิน'],
-      lst.map(function(r){ var b=r.b, p=drPaxOf(r.t), m=drMarket(b);
-        var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
-        var R=(typeof getRoute==='function'?getRoute(r.routeId):null)||{};
-        return drmR(['<b style="color:#111827">'+e(b.voucherRef||b.code||'—')+'</b>',
-          e(ag?(ag.name||ag.code):(b.channel||'walk-in'))
-            +'<div style="font-size:10px;color:#9ca3af;padding-top:1px">'+drmDot(m.color)+e(m.name)+'</div>',
-          e(b.leadPax||'—'), '<b>'+p.tot+'</b>', e(R.name||r.routeId||'—'),
-          e((r.O&&r.O.pickupTimeFinal)||r.t.pickupTime||'—'), drB(r.amount)],
-          ['left','left','left','center','left','center','right']); }).join('')
-      +(more?drmR(['<span style="color:#9ca3af">และอีก <b>'+more+'</b> ใบ · ดูทั้งหมดในระบบ</span>','','','','','',''],
-          ['left','left','left','center','left','center','right']):''),
-      ['left','left','left','center','left','center','right'], ['','','','6%','','8%','12%']);
+    // ใบที่ไม่มี agent · ตั้งชื่อกลุ่มให้อ่านออก แทนที่จะโชว์รหัสช่องทางดิบ ๆ
+    var _CHN={ direct:'Walk-in / Direct', walkin:'Walk-in / Direct', 'walk-in':'Walk-in / Direct',
+               web:'เว็บไซต์ (B2C)', b2c:'เว็บไซต์ (B2C)', online:'เว็บไซต์ (B2C)',
+               phone:'โทรจอง', line:'LINE', facebook:'Facebook', staff:'Staff / Internal' };
+    function drChannelName(c){
+      c=String(c||'').trim(); if(!c) return 'Walk-in / Direct';
+      return _CHN[c.toLowerCase()] || (c.charAt(0).toUpperCase()+c.slice(1));
+    }
+    // จัดกลุ่ม agent → เส้นทาง · ใบที่ agent เดียวกันขายเส้นทางเดียวกันยุบเป็นบรรทัดเดียว
+    var AG={}, AO=[];
+    D.rows.forEach(function(r){
+      var b=r.b, p=drPaxOf(r.t), amt=(+r.amount||0), m=drMarket(b);
+      var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
+      var key=b.agentId||('_'+(b.channel||'walk-in'));
+      var nm=ag?(ag.name||ag.code||key):drChannelName(b.channel);
+      if(!AG[key]){ AG[key]={ k:key, name:nm, mkt:m, n:0, pax:0, rev:0, rt:{}, ro:[] }; AO.push(key); }
+      var a=AG[key]; a.n++; a.pax+=p.tot; a.rev+=amt;
+      var rid=r.routeId||'', R=(typeof getRoute==='function'?getRoute(rid):null)||{};
+      if(!a.rt[rid]){ a.rt[rid]={ id:rid, name:R.name||rid||'—', color:R.color||'#94a3b8', n:0, pax:0, rev:0 }; a.ro.push(rid); }
+      var x=a.rt[rid]; x.n++; x.pax+=p.tot; x.rev+=amt;
+    });
+    AO.sort(function(x,y){ return (AG[y].rev-AG[x].rev) || (AG[y].pax-AG[x].pax); });
+    var rowsHtml='';
+    AO.forEach(function(k){
+      var a=AG[k];
+      a.ro.sort(function(x,y){ return (a.rt[y].rev-a.rt[x].rev) || (a.rt[y].pax-a.rt[x].pax); });
+      // หัวกลุ่ม · ชื่อ agent + Market + ยอดรวมของเจ้านั้น
+      rowsHtml+='<tr><td colspan="2" style="padding:9px 8px 7px;border-bottom:1px solid #eef0f3;background:#f7f8fa">'
+        +'<b style="font-size:12.5px;color:#111827">'+ckEsc(a.name)+'</b>'
+        +(a.mkt.name===a.name ? ''
+          : '<span style="font-size:10.5px;color:#9ca3af;padding-left:8px">'+drmDot(a.mkt.color)+ckEsc(a.mkt.name)+'</span>')+'</td>'
+        +'<td style="padding:9px 8px 7px;border-bottom:1px solid #eef0f3;background:#f7f8fa;text-align:center;'
+          +'font-size:12px;font-weight:700;color:#374151">'+a.n+'</td>'
+        +'<td style="padding:9px 8px 7px;border-bottom:1px solid #eef0f3;background:#f7f8fa;text-align:center;'
+          +'font-size:12px;font-weight:800;color:#111827">'+a.pax+'</td>'
+        +'<td style="padding:9px 8px 7px;border-bottom:1px solid #eef0f3;background:#f7f8fa;text-align:right;'
+          +'font-size:12px;font-weight:800;color:#047857">'+drB(a.rev)+'</td></tr>';
+      // บรรทัดเส้นทางของ agent นั้น
+      a.ro.forEach(function(rid){ var x=a.rt[rid];
+        rowsHtml+=drmR(['', drmDot(x.color)+ckEsc(x.name), x.n, '<b>'+x.pax+'</b>', drB(x.rev)],
+          ['left','left','center','center','right']);
+      });
+    });
+    o+=drmSec('ยอดตาม Agent · เส้นทาง', AO.length+' agent · '+D.rows.length+' booking');
+    o+=drmT(['','Agent · เส้นทาง','ใบ','คน','ยอดเงิน'], rowsHtml,
+      ['left','left','center','center','right'], ['14','','8%','9%','16%']);
+    o+='<tr><td style="padding:9px 8px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+      +'style="background:#f7f8fa;border:1px solid #eef0f3;border-radius:12px"><tr>'
+      +'<td style="padding:10px 14px;font-size:12px;color:#374151">รวมทั้งวัน</td>'
+      +'<td align="right" style="padding:10px 14px;font-size:12px;color:#374151">'
+        +'<b style="color:#111827">'+D.rows.length+'</b> ใบ &middot; <b style="color:#111827">'+D.pax.tot+'</b> คน &middot; '
+        +'<b style="font-size:14px;color:#047857">'+drB(D.rev)+'</b></td></tr></table></td></tr>';
   }
 
   o+='<tr><td style="padding:20px 0 0;border-top:1px solid #e9ebef;font-size:10.5px;color:#9ca3af;line-height:1.7">'
@@ -48178,6 +48214,26 @@ function drMailText(D){
   if(D.warn.doc){ any=true; L.push('  ! เอกสารยังไม่ครบ '+D.warn.doc+' ใบ'); }
   if(D.due>0){ any=true; L.push('  ! ต้องเก็บหน้างาน '+drB(D.due)); }
   if(!any) L.push('  ไม่มีรายการค้าง');
+  L.push('', '— ยอดตาม Agent · เส้นทาง —');
+  var AG2={}, AO2=[];
+  D.rows.forEach(function(r){
+    var b=r.b, p=drPaxOf(r.t), amt=(+r.amount||0);
+    var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
+    var key=b.agentId||('_'+(b.channel||'walk-in'));
+    var nm=ag?(ag.name||ag.code||key):(({direct:'Walk-in / Direct','walk-in':'Walk-in / Direct',walkin:'Walk-in / Direct',web:'เว็บไซต์ (B2C)',b2c:'เว็บไซต์ (B2C)'})[String(b.channel||'').toLowerCase()]||b.channel||'Walk-in / Direct');
+    if(!AG2[key]){ AG2[key]={name:nm,n:0,pax:0,rev:0,rt:{},ro:[]}; AO2.push(key); }
+    var a=AG2[key]; a.n++; a.pax+=p.tot; a.rev+=amt;
+    var rid=r.routeId||'', R=(typeof getRoute==='function'?getRoute(rid):null)||{};
+    if(!a.rt[rid]){ a.rt[rid]={name:R.name||rid||'-',n:0,pax:0,rev:0}; a.ro.push(rid); }
+    var x=a.rt[rid]; x.n++; x.pax+=p.tot; x.rev+=amt;
+  });
+  AO2.sort(function(x,y){ return AG2[y].rev-AG2[x].rev; });
+  AO2.forEach(function(k){ var a=AG2[k];
+    L.push('  '+a.name+' — '+a.n+' ใบ · '+a.pax+' คน · '+drB(a.rev));
+    a.ro.forEach(function(rid){ var x=a.rt[rid];
+      L.push('     · '+x.name+' — '+x.n+' ใบ · '+x.pax+' คน · '+drB(x.rev)); });
+  });
+  L.push('  รวม '+D.rows.length+' ใบ · '+D.pax.tot+' คน · '+drB(D.rev));
   L.push('', 'สร้างจากระบบ LOVE Andaman Operations');
   return L.join('\n');
 }
@@ -48259,7 +48315,7 @@ function drMailPaint(){
   if(!_drMailOpen){ host.innerHTML=''; return; }
   var e=ckEsc, D=drData(_drDate), C=drMailCfg();
   var SEC=[['ov','ภาพรวม + Market'],['rt','แยกตามเส้นทาง'],['bt','เรือ'],['vn','รถรับส่ง'],
-           ['px','ผู้โดยสารดูแลพิเศษ'],['fi','การเงิน'],['todo','ต้องเคลียร์ก่อนปิดวัน'],['list','รายการ booking ทั้งหมด']];
+           ['px','ผู้โดยสารดูแลพิเศษ'],['fi','การเงิน'],['todo','ต้องเคลียร์ก่อนปิดวัน'],['list','ยอดตาม Agent · เส้นทาง']];
   host.innerHTML='<div class="dr-mask" onclick="drMailClose()"></div><div class="dr-modal">'
     +'<div class="dr-mh"><div><b>ส่งรายงานทางอีเมล</b>'
       +'<span>ประกอบจดหมายให้ครบแล้วคัดลอกไปวาง หรือดาวน์โหลดเป็นฉบับร่าง (.eml)</span></div>'
