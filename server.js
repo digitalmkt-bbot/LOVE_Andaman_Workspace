@@ -1292,11 +1292,19 @@ const PERM_KEYS=new Set(['overview','operations','sales','accounting','fleet','c
   // §2026-07-25: same trap again — 'vancheckin' (added 07-21), 'piercheckin' (added today) and
   // 'b2b-dash' (added 07-20) existed in the client's LA_NAV but not here, so cleanPerms() silently
   // dropped those ticks on save and the boxes came back empty. Keep this Set in step with LA_NAV.
-  'dashboard','calendar','daily','booking','reconfirm','bookingflow','doccheck','operation','insurance','vehicles','vanjobs','vancheckin','piercheckin','travelsum','pickup-setup',
+  // §2026-08-04: ครั้งที่สาม — 'dailyreport' (เพิ่ม 08-02) อยู่ใน LA_NAV แต่ไม่อยู่ใน Set นี้
+  // admin ติ๊ก "Daily Report" แล้วกดบันทึก cleanPerms() กรองทิ้งเงียบ ๆ ติ๊กเลยหลุดทุกครั้ง
+  'dashboard','calendar','daily','booking','reconfirm','bookingflow','doccheck','operation','insurance','vehicles','vanjobs','vancheckin','piercheckin','travelsum','dailyreport','pickup-setup',
   'agents','sales-board','b2b-dash','rate-types','contract-tmpl','b2c','staff','marketdata','focdetail','pickupmap','dailypfm',
   'fl-dashboard','fl-boatstatus','fl-dailyreport','fl-incident','fl-projects','fl-maintenance','fl-inventory','fl-consumables','fl-cost','fl-insights','fl-fuel','fl-asset',
   'settings','teammkt','addonsvc']);   // 'accounting' already present as a group key
-function cleanPerms(a){ return Array.isArray(a)?a.filter(x=>PERM_KEYS.has(x)):null; }
+function cleanPerms(a){
+  if(!Array.isArray(a)) return null;
+  // ดักกับดักเดิม · คีย์ที่ถูกกรองทิ้งให้ log ไว้ ครั้งหน้าจะได้เห็นทันทีว่าลืมเพิ่มใน PERM_KEYS
+  const dropped=a.filter(x=>!PERM_KEYS.has(x));
+  if(dropped.length) console.warn('[perms] dropped unknown keys (add them to PERM_KEYS):', dropped.join(','));
+  return a.filter(x=>PERM_KEYS.has(x));
+}
 const AREA_KEYS=new Set(['overview','operations','sales','accounting','fleet','config']);
 function cleanAreas(a){ return Array.isArray(a)?a.filter(x=>AREA_KEYS.has(x)):null; }
 // A user's editable-areas + "can edit anything" flag · editAreas null → falls back to legacy can_edit
