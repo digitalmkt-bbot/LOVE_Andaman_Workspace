@@ -64105,7 +64105,7 @@ function bkV2RenderTab2(){
       const ids=(typeof bkBoatIdsOn==='function')?bkBoatIdsOn(r.bk,date):[];
       (ids.length?ids:[r.charterBoatId]).forEach(id=>{ if(id) _chtrBoatSet.add(id); });
     });
-    const _seatCap=_openBoats.filter(x=>!_chtrBoatSet.has(x.boatId)).reduce((s,x)=>s+((x.boat&&(x.boat.cap||x.boat.licensePax))||0),0);
+    const _seatCap=_openBoats.filter(x=>!_chtrBoatSet.has(x.boatId)).reduce((s,x)=>s+((typeof boatCapFor==='function')?boatCapFor(x.boatId,date):((x.boat&&(x.boat.cap||x.boat.licensePax))||0)),0);   // §cap override รายวัน
     const _lockedSeats=(_al&&_al.lockedSeats)||0;
     const _seatLeft=_openBoats.length?Math.max(0, _seatCap - _seatPax - _lockedSeats):null;
     const _bdStr=(a,c,i,f)=>`(${a}+${c}+${i}+${f}FOC)`;
@@ -64595,7 +64595,7 @@ function bkV2RenderTab2(){
         const kpis=(o)=>`<div style="display:flex;border-top:1px solid #f0eee7;padding-top:4px">${kc(o.ad,'AD').replace('border-left:1px solid #efeee8','border-left:none')}${kc(o.chd,'CHD')}${kc(o.inf,'INF')}${kc(o.foc,'FOC',true)}</div>`;
         // Option B card · compact · fixed equal width · 2 rows (header + KPI row)
         const CARD='background:#fff;border:1px solid #e6e4dd;border-radius:9px;padding:7px 9px;display:flex;flex-direction:column;gap:5px;width:200px;box-sizing:border-box';
-        const chips=baBoats.map((x,ix)=>{ const g=agg[x.boatId]; const cap=x.boat.cap||0; const rem=cap-g.tot; const over=rem<0; const col=boatColor[x.boatId]||['#E6F1FB','#185FA5'];
+        const chips=baBoats.map((x,ix)=>{ const g=agg[x.boatId]; const cap=(typeof boatCapFor==='function')?boatCapFor(x.boatId,date):(x.boat.cap||0); const rem=cap-g.tot; const over=rem<0; const col=boatColor[x.boatId]||['#E6F1FB','#185FA5'];   // §cap override รายวัน
           return `<div style="${CARD}${over?';border-color:#E6C9C3':''}">
             <div style="display:flex;align-items:center;gap:8px">
               <div style="width:26px;height:26px;border-radius:50%;background:${col[0]};color:${col[1]};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;flex:none;font-family:'DM Mono',monospace">${initials(x.boat.name||x.boatId)}</div>
@@ -64623,8 +64623,9 @@ function bkV2RenderTab2(){
         //   expand  = grid of per-boat guide + special-meal chips  ·  footer = trip-level prep summary
         const _stack = baBoats.slice(0,3).map((x,ix)=>{ const col=boatColor[x.boatId]||['#E6F1FB','#185FA5']; return `<span class="t2-bstk" style="background:${col[1]};${ix?'margin-left:-7px':''}">${initials(x.boat.name||x.boatId)}</span>`; }).join('');
         if(baBoats.length) headBoats = `<span class="t2-boatcount"><span style="display:inline-flex">${_stack}</span>${baBoats.length} เรือ</span>`;
-        const _miniChips = baBoats.map(x=>{ const g=agg[x.boatId]; const cap=x.boat.cap||0; const over=(cap-g.tot)<0; const col=boatColor[x.boatId]||['#E6F1FB','#185FA5'];
-          return `<span class="t2-mchip${over?' t2-mchip-over':''}"><span class="t2-mav" style="background:${over?'#C0392B':col[1]}">${initials(x.boat.name||x.boatId)}</span>${esc(x.boat.name||x.boatId)} <b${over?' style="color:#A32D2D"':''}>${g.tot}/${cap}</b></span>`; }).join('');
+        const _miniChips = baBoats.map(x=>{ const g=agg[x.boatId]; const cap=(typeof boatCapFor==='function')?boatCapFor(x.boatId,date):(x.boat.cap||0); const over=(cap-g.tot)<0; const col=boatColor[x.boatId]||['#E6F1FB','#185FA5'];   // §cap override รายวัน · ต้องตรงกับ _gridCells ที่กางอยู่ข้างล่าง
+          const _mcapB=(typeof boatCapBadge==='function')?boatCapBadge(x.boatId,date,'sm'):'';
+          return `<span class="t2-mchip${over?' t2-mchip-over':''}"><span class="t2-mav" style="background:${over?'#C0392B':col[1]}">${initials(x.boat.name||x.boatId)}</span>${esc(x.boat.name||x.boatId)} <b${over?' style="color:#A32D2D"':''}>${g.tot}/${cap}</b>${_mcapB}</span>`; }).join('');
         const _miniUn = uTot>0 ? `<span class="t2-mchip t2-mchip-un"><span class="t2-mav" style="background:#9A5B00">&#9888;</span>ยังไม่ assign <b>${uTot}</b></span>` : '';
         const _langOf=(o)=>Object.keys(o.lang||{}).map(code=>{ const lc=bkV2LangColors(code); return `<span class="t2-dchip" style="background:${lc[0]};color:${lc[1]}">${esc(code)} ${o.lang[code]}</span>`; });
         const _foodOf=(o)=>{ const out=[]; if(o.veg||o.vegan) out.push(`<span class="t2-dchip" style="background:#EAF3DE;color:#3B6D11">${(o.veg||0)+(o.vegan||0)} veg</span>`); if(o.halal) out.push(`<span class="t2-dchip" style="background:#E1F5EE;color:#0F6E56">${o.halal} halal</span>`); if(o.allerg) out.push(`<span class="t2-dchip" style="background:#FCEBEB;color:#A32D2D">&#9888; ${o.allerg}</span>`); return out; };

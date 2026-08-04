@@ -1834,6 +1834,25 @@ const server = http.createServer((req, res) => {
   // GET /api/b2c/availability?route=r6&dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD[&rateTypeId=xxx]
   // Returns booked+locked seat counts + pricing for the requested route/date range.
   // Secured via X-Api-Key header matched against B2C_API_KEY env var.
+  //
+  // ── SELLABILITY CONTRACT (read this before computing anything caller-side) ──────────────────────
+  // `seatsAvailable` IS the answer. It is the number of seats a caller with no locks and no approval
+  // rights — i.e. the webshop — may sell right now. Do NOT re-derive it from capacity/booked: it
+  // already accounts for all of the following, and each one is a rule that has drifted before when
+  // re-implemented elsewhere.
+  //   · per-day cap overrides set by ops, clamped to the boat's registered seats (§capOverride below)
+  //   · chartered boats — removed whole from the pool, they carry no sellable seat
+  //   · seat locks held by agents — subtracted; the webshop may never eat a locked seat
+  //   · pending_approval bookings — counted as consuming (only cancelled/rejected are excluded)
+  //   · closed days (season + override calendar) — forced to 0 regardless of deployed boats
+  // `status` says WHY it is 0, so a caller never has to guess: 'open' · 'sold_out' (boats out, full)
+  // · 'not_deployed' (ops has not assigned a boat yet) · 'closed' (route does not run).
+  // Sell when `status === 'open' && seatsAvailable >= paxNeeded`. Nothing else needs computing.
+  //
+  // What this endpoint deliberately does NOT expose: the two higher tiers the in-app booking engine
+  // can reach — drawing an agent's locked seats, and over-cap-but-within-license sales that a manager
+  // approves (bkV2CommitBooking · allotment_v2.html). Those are staff actions with a human in the
+  // loop; a webshop must not reach them, which is why seatsAvailable stops at the sellable tier.
   if (u === '/api/b2c/availability' && req.method === 'GET') {
     const B2C_API_KEY = process.env.B2C_API_KEY || '';
     if (!B2C_API_KEY || (req.headers['x-api-key'] || '') !== B2C_API_KEY)
@@ -1894,7 +1913,8 @@ const server = http.createServer((req, res) => {
       ),
       // deployed seat capacity per date: boats.cap × which boats run this route in trips (charter excluded).
       // Mirrors the client getAllotment: a charter deployment (bN_type='charter') does NOT add seat capacity.
-      pool.query(`SELECT id, cap FROM ${fqt('boats')}`),
+      // licensepax rides along for the cap-override clamp below.
+      pool.query(`SELECT id, cap, licensepax FROM ${fqt('boats')}`),
       pool.query(`SELECT * FROM ${fqt('trips')} WHERE ${qic('key')} >= $1 AND ${qic('key')} <= $2`, [dateFrom, dateTo]),
       // §closedDay (2026-07-29) · the open/closed calendar. Until now this endpoint answered with capacity
       // ONLY, and capacity is 0 on almost every future date (boats get deployed a few days ahead), so a
@@ -1904,12 +1924,34 @@ const server = http.createServer((req, res) => {
                   FROM ${fqt('routes__seasons')} WHERE routes_id = $1`, [routeId]),
       pool.query(`SELECT ${qic('key')} AS k, ${qic('value')} AS v
                   FROM ${fqt('routes__overrides')} WHERE routes_id = $1`, [routeId]),
-    ]).then(([bkRes, lockRes, rtRes, boatRes, tripRes, seasonRes, ovrRes]) => {
+      // §capOverride (2026-08-04) · ops' per-day seat override · BOAT_CAP_OVR['YYYY-MM-DD::boatId'].
+      // Without this the endpoint answers from boats.cap alone, so a boat ops opened up for one day still
+      // reports "fully booked" (Aluminous2, 4 Aug 2026: cap 44 raised to 46, B2C refused at 44/44).
+      // left(key,10): the key is '<date>::<boatId>', so a plain key<=dateTo drops same-day ranges
+      // ('2026-08-04::b10' > '2026-08-04').
+      pool.query(`SELECT ${qic('key')} AS k, cap FROM ${fqt('boat_capovr')}
+                  WHERE left(${qic('key')},10) >= $1 AND left(${qic('key')},10) <= $2`, [dateFrom, dateTo]),
+    ]).then(([bkRes, lockRes, rtRes, boatRes, tripRes, seasonRes, ovrRes, capOvrRes]) => {
       const bookedMap = {}, lockedMap = {};
       for (const r of bkRes.rows)   bookedMap[r.date]  = r.booked;
       for (const r of lockRes.rows) lockedMap[r.date]  = r.locked;
-      const boatCap = {}, boatIds = [];
-      for (const b of boatRes.rows) { boatCap[b.id] = Number(b.cap) || 0; boatIds.push(b.id); }
+      const boatCap = {}, boatLic = {}, boatIds = [];
+      for (const b of boatRes.rows) { boatCap[b.id] = Number(b.cap) || 0; boatLic[b.id] = Number(b.licensepax) || 0; boatIds.push(b.id); }
+      const capOvr = {};
+      for (const r of capOvrRes.rows) { if (r.cap != null && !isNaN(Number(r.cap))) capOvr[r.k] = Number(r.cap); }
+      // Mirrors the client boatCapInfo() (allotment_v2.html · §Boat capacity override) 1:1, INCLUDING the
+      // clamp to registered seats (licensePax, falling back to cap when unset). Without the clamp this API
+      // could advertise a seat bkV2CommitBooking then hard-blocks — a sale the customer completes on the
+      // webshop and ops cannot honour.
+      const capFor = (bid, dk) => {
+        const base = boatCap[bid] || 0;
+        const o = capOvr[dk + '::' + bid];
+        if (o == null) return base;
+        let c = Math.max(0, Math.round(o));
+        const lic = boatLic[bid] || base;
+        if (lic > 0) c = Math.min(c, lic);
+        return c;
+      };
       const tripsByDate = {};
       for (const r of tripRes.rows) tripsByDate[r.key] = r;
       // Mirrors the client getDayStatus() (allotment_v2.html · §getDayStatus) 1:1, including the
@@ -1931,17 +1973,27 @@ const server = http.createServer((req, res) => {
         const dk = d.toISOString().slice(0, 10);
         const booked = bookedMap[dk] || 0, locked = lockedMap[dk] || 0;
         const trow = tripsByDate[dk] || {};
-        let capacity = 0;
+        let capacity = 0, deployed = 0, capOverridden = false;
         for (const bid of boatIds) {
-          if (trow[bid + '_route'] === routeId && trow[bid + '_type'] !== 'charter') capacity += boatCap[bid] || 0;
+          if (trow[bid + '_route'] === routeId && trow[bid + '_type'] !== 'charter') {
+            const c = capFor(bid, dk);
+            if (c !== (boatCap[bid] || 0)) capOverridden = true;
+            capacity += c; deployed++;
+          }
         }
         const st = dayStatus(dk);
         const closed = !!(st && st.type !== 'open');
         // A closed day has no sellable seat by definition — report 0 even if boats happen to be deployed,
         // so a caller that only reads seatsAvailable is still protected.
         const seatsAvailable = closed ? 0 : Math.max(0, capacity - booked - locked);
+        // §sellability (2026-08-04) · why seatsAvailable is 0. A caller cannot tell "sold out" from "route
+        // does not run" from "ops hasn't deployed a boat yet" out of a bare 0, and those need three
+        // different messages to the customer. Derived here so no caller re-implements the rule.
+        const status = closed ? 'closed' : (!deployed ? 'not_deployed' : (seatsAvailable > 0 ? 'open' : 'sold_out'));
         dates.push({ date: dk, capacity, bookedSeats: booked, lockedSeats: locked, totalConsumed: booked + locked, seatsAvailable,
-                     closed, closedReason: closed ? st.source : null });
+                     closed, closedReason: closed ? st.source : null,
+                     // additive · sellability contract · see the endpoint header comment
+                     status, boatsDeployed: deployed, capacityOverridden: capOverridden });
       }
       // shape pricing by rate type
       const pricing = rtRes.rows.map(r => ({
