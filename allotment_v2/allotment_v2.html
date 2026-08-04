@@ -48387,6 +48387,16 @@ function drmKpis(items){
     +'</tr></table></td></tr>';
 }
 // ตารางกระชับ · หัวเล็ก แถวบรรทัดเดียว
+// เนื้อตารางล้วน ๆ · เอาไปวางในคอลัมน์ได้
+function drmTbl(head, rows, align, widths){
+  if(!rows) return '<div style="padding:10px 2px;font-size:12px;color:#9ca3af">ไม่มีข้อมูล</div>';
+  return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">'
+    +'<tr>'+head.map(function(h,i){
+      return '<th'+(widths&&widths[i]?(' width="'+widths[i]+'"'):'')+' style="padding:6px 8px;border-bottom:1px solid #e9ebef;'
+        +'font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;'
+        +'text-align:'+((align&&align[i])||'left')+'">'+h+'</th>'; }).join('')+'</tr>'
+    + rows +'</table>';
+}
 function drmT(head, rows, align, widths){
   if(!rows) return '<tr><td style="padding:10px 2px;font-size:12px;color:#9ca3af">ไม่มีข้อมูล</td></tr>';
   return '<tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">'
@@ -48420,29 +48430,37 @@ function drmKpi(label, value, unit, sub, foot, icon, iconbg, vcolor){
   if(foot && foot.length){
     var tds='', w=Math.floor(100/foot.length);
     foot.forEach(function(x,i){ tds+='<td width="'+w+'%" style="'+(i?('border-left:1px solid '+DRM.line+';'):'')
-      +'padding:0 8px;font-size:10.5px;color:'+DRM.mut+';text-align:center">'+x+'</td>'; });
+      +'padding:0 5px;font-size:10px;color:'+DRM.mut+';text-align:center;line-height:1.4">'+x+'</td>'; });
     f='<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:11px;border-top:1px solid '
       +DRM.line+'"><tr><td style="padding-top:9px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">'
       +'<tr>'+tds+'</tr></table></td></tr></table>';
   }
   return drmCard('<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
     +'<td valign="top"><div style="font-size:11.5px;color:'+DRM.mut+';font-weight:600">'+label+'</div>'
-    +'<div style="font-size:26px;font-weight:800;color:'+(vcolor||DRM.ink)+';letter-spacing:-.03em;padding-top:3px;line-height:1.1">'+value
+    +'<div style="font-size:23px;font-weight:800;color:'+(vcolor||DRM.ink)+';letter-spacing:-.03em;padding-top:3px;line-height:1.15">'+value
     +(unit?('<span style="font-size:12px;font-weight:600;color:'+DRM.fain+';padding-left:5px">'+unit+'</span>'):'')+'</div>'
     +(sub?('<div style="font-size:10.5px;color:'+DRM.fain+';padding-top:5px;line-height:1.5">'+sub+'</div>'):'')+'</td>'
-    +'<td width="40" valign="top" align="right"><table role="presentation" cellpadding="0" cellspacing="0"><tr>'
-    +'<td width="36" height="36" align="center" valign="middle" style="background:'+iconbg
-    +';border-radius:12px;font-size:17px;line-height:36px">'+icon+'</td></tr></table></td></tr></table>'+f,
-    '14px 15px 13px');
+    +'<td width="34" valign="top" align="right"><table role="presentation" cellpadding="0" cellspacing="0"><tr>'
+    +'<td width="30" height="30" align="center" valign="middle" style="background:'+iconbg
+    +';border-radius:10px;font-size:15px;line-height:30px">'+icon+'</td></tr></table></td></tr></table>'+f,
+    '13px 13px 12px');
 }
 function drmPair(a,b){
   return '<tr><td style="padding:10px 0 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
     +'<td width="50%" valign="top" style="padding-right:5px">'+a+'</td>'
     +'<td width="50%" valign="top" style="padding-left:5px">'+(b||'')+'</td></tr></table></td></tr>';
 }
+// การ์ด KPI เรียงแถวเดียว 4 ใบ · ตรงกับหน้าจอ และใช้ความกว้างที่มีให้คุ้ม
+function drmQuad(arr){
+  var tds='';
+  arr.forEach(function(c,i){ tds+='<td width="25%" valign="top" style="padding:0 '
+    +(i<arr.length-1?'5px':'0')+' 0 '+(i?'5px':'0')+'">'+c+'</td>'; });
+  return '<tr><td style="padding:10px 0 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">'
+    +'<tr>'+tds+'</tr></table></td></tr>';
+}
 // กราฟ 14 วัน · แท่งซ้อนสีด้วย div ล้วน · ไม่มี SVG/รูป เพราะเมลบล็อก
 function drmTrend(T, e){
-  var MAXH=132, mx=1;
+  var MAXH=168, mx=1;
   T.pts.forEach(function(p){ if(p.tot>mx) mx=p.tot; });
   var cols='';
   T.pts.forEach(function(p){
@@ -48510,7 +48528,7 @@ function drMailHTML(D){
       ['ค่ารถรวม <b style="color:#111827">'+drB(D.vanCost)+'</b>',
        D.vanOut?('<b style="color:'+RED+'">เกินโควตา</b>'):('<b style="color:'+GRN+'">อยู่ในโควตา</b>')],
       '&#128656;', '#fff7ed', '#c2410c');
-    o+=drmPair(k1,k2)+drmPair(k3,k4);
+    o+=drmQuad([k1,k2,k3,k4]);
 
     // กราฟ 14 วัน
     var T=(_drTrendMode==='booked')?drTrendBooked(D.date,14):drTrend(D.date,14,2);
@@ -48561,9 +48579,11 @@ function drMailHTML(D){
         +mk('ผู้โดยสาร',r.pax+' คน')+mk('booking',r.n+' ใบ')+mk('รายได้',drB(r.rev))
         +mk('ที่นั่ง',r.seats+' / '+(r.cap||'—')+(r.cap?(' · '+pc+'%'):''))
         +'</table>'+drmBar(pc,r.color),'13px 14px',DRM.soft,'#eef0f3'); });
-    for(var ci=0; ci<cards.length; ci+=3){
-      var g=cards.slice(ci,ci+3), tds='';
-      for(var gj=0; gj<3; gj++) tds+='<td width="33%" valign="top" style="padding:0 '+(gj<2?'5px':'0')+' 0 '+(gj?'5px':'0')+'">'+(g[gj]||'')+'</td>';
+    var PERROW=4;
+    for(var ci=0; ci<cards.length; ci+=PERROW){
+      var g=cards.slice(ci,ci+PERROW), tds='';
+      for(var gj=0; gj<PERROW; gj++) tds+='<td width="'+Math.floor(100/PERROW)+'%" valign="top" style="padding:0 '
+        +(gj<PERROW-1?'5px':'0')+' 0 '+(gj?'5px':'0')+'">'+(g[gj]||'')+'</td>';
       o+='<tr><td style="padding:0 0 8px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'+tds+'</tr></table></td></tr>';
     }
   }
@@ -48592,7 +48612,18 @@ function drMailHTML(D){
     var pr='';
     [['ผู้ใหญ่ (AD)',D.pax.ad],['เด็ก (CHD)',D.pax.chd],['ทารก (INF)',D.pax.inf],['FOC / ไม่คิดเงิน',D.pax.foc]]
       .forEach(function(x){ if(x[1]) pr+=drmR([x[0],'<b>'+x[1]+'</b>',drPct(x[1],D.pax.tot)+'%'],['left','center','right']); });
-    o+=drmT(['ประเภท','คน','สัดส่วน'],pr,['left','center','right'],['','14%','14%']);
+    var dr0='';
+    [['ตรวจแล้ว',D.docs.verified,GRN,'#dcfce7'],['มีปัญหา',D.docs.issue,RED,'#fee2e2'],
+     ['รอตรวจ',D.docs.pending,AMB,'#fef3c7'],['ยังไม่แนบไฟล์',D.docs.nofiles,DRM.mut,'#f1f2f4']]
+      .forEach(function(x){ if(x[1]) dr0+=drmR([drmChip(x[0],x[2],x[3]),'<b>'+x[1]+'</b>'],['left','right']); });
+    // ตารางแคบสองอัน วางคู่กัน · จอกว้างจะได้ไม่มีช่องว่างกลางบรรทัด
+    o+='<tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'
+      +'<td width="50%" valign="top" style="padding-right:9px">'
+        +drmTbl(['ประเภทผู้โดยสาร','คน','สัดส่วน'],pr,['left','center','right'],['','18%','18%'])+'</td>'
+      +'<td width="50%" valign="top" style="padding-left:9px">'
+        +(dr0?drmTbl(['สถานะเอกสาร','ใบ'],dr0,['left','right'],['','18%'])
+             :'<div style="padding:10px 2px;font-size:12px;color:'+DRM.fain+'">ไม่มีข้อมูลเอกสาร</div>')+'</td>'
+      +'</tr></table></td></tr>';
     var ml=[]; if(D.meals.veg)ml.push('มังสวิรัติ '+D.meals.veg); if(D.meals.vegan)ml.push('วีแกน '+D.meals.vegan);
     if(D.meals.halal)ml.push('ฮาลาล '+D.meals.halal); if(D.meals.allergy)ml.push('แพ้อาหาร '+D.meals.allergy);
     var lgs=Object.keys(D.langs||{}).map(function(k){ return e(k)+' '+D.langs[k]+' คน'; }).join(' · ');
@@ -48602,11 +48633,6 @@ function drMailHTML(D){
       +'<b style="color:'+DRM.ink+'">อาหารพิเศษ</b> &nbsp; '+(ml.join(' · ')||'ไม่มี')+'<br>'
       +'<b style="color:'+DRM.ink+'">ภาษาไกด์</b> &nbsp; '+(lgs||'—'),
       '11px 14px',DRM.soft,'#eef0f3')+'</td></tr>';
-    var dr='';
-    [['ตรวจแล้ว',D.docs.verified,GRN,'#dcfce7'],['มีปัญหา',D.docs.issue,RED,'#fee2e2'],
-     ['รอตรวจ',D.docs.pending,AMB,'#fef3c7'],['ยังไม่แนบไฟล์',D.docs.nofiles,DRM.mut,'#f1f2f4']]
-      .forEach(function(x){ if(x[1]) dr+=drmR([drmChip(x[0],x[2],x[3]),'<b>'+x[1]+'</b>'],['left','right']); });
-    if(dr){ o+=drmSec('เอกสาร'); o+=drmT(['สถานะ','ใบ'],dr,['left','right'],['','14%']); }
     o+='<tr><td style="padding:8px 0 0">'+drmCard(
       '<b style="color:'+DRM.ink+'">รถกลับ</b> &nbsp; ส่งจุดเดิม <b>'+D.ret.same+'</b> ใบ ('+D.ret.samePax+' คน) · '
       +'จัดรถแล้ว <b>'+D.ret.arr+'</b> ใบ · <span style="color:'+(D.ret.todo?RED:DRM.mut)+';font-weight:700">'
@@ -48656,7 +48682,7 @@ function drMailHTML(D){
           '<span style="font-size:11px;color:'+DRM.mut+'">'+e((z.first||'—')+' – '+(z.last||'—'))+'</span>'],
           ['left','center','center','center','right']); });
       o+=drmSec('โซนรับ', D.zOrder.length+' โซน');
-      o+=drmT(['โซน','ใบ','คน','รถ','ช่วงเวลารับ'],zr,['left','center','center','center','right'],['','9%','9%','9%','22%']);
+      o+=drmT(['โซน','ใบ','คน','รถ','ช่วงเวลารับ'],zr,['left','center','center','center','right'],['','7%','7%','7%','16%']);
     }
     o+='<tr><td style="padding:8px 0 0">'+drmCard(
       '<b style="color:'+DRM.ink+'">ต้นทุนรับส่ง</b> &nbsp; ในโควตา <b>'+D.vanIn+'</b> คัน'
@@ -48764,9 +48790,9 @@ function drMailHTML(D){
 
   return '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>'
     +'<body style="margin:0;padding:0;background:#f3f4f6">'
-    +'<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f3f4f6;padding:22px 0">'
-    +'<tr><td align="center"><table role="presentation" cellpadding="0" cellspacing="0" width="820" '
-    +'style="width:820px;max-width:100%;background:#ffffff;border-radius:18px;padding:24px 26px;'
+    +'<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#f3f4f6;padding:18px 12px">'
+    +'<tr><td align="center"><table role="presentation" cellpadding="0" cellspacing="0" width="100%" '
+    +'style="width:100%;max-width:1240px;background:#ffffff;border-radius:18px;padding:24px 28px;'
     +'font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1f2937">'
     + o +'</table></td></tr></table></body></html>';
 }
