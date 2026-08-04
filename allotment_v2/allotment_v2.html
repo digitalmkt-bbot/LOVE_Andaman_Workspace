@@ -40534,7 +40534,68 @@ function pmapBuildDots(){ const D2R=Math.PI/180; _PM.areas.forEach(a=>{ const us
   // organic scatter WITHIN the area (uniform-density disc · random) · clipped to LAND for masked areas; capes the coarse outline misses (e.g. Panwa) → free · contained (no straying)
   const masked=pmInLand(cLng,cLat); const cosL=Math.cos(cLat*D2R);
   a.dots=arr.map(mk=>{ let la=cLat,lo=cLng; const tries=masked?22:1; for(let k=0;k<tries;k++){ const rr=geoR*Math.sqrt(rnd()), ang=rnd()*6.2832; const cla=cLat+rr*Math.cos(ang), clo=cLng+rr*Math.sin(ang)/cosL; if(!masked||pmInLand(clo,cla)){ la=cla; lo=clo; break; } if(k===tries-1){ la=cla; lo=clo; } } return {lat:la,lng:lo,c:pmVivid(pmMktColor(mk))}; }); }); }
+// จุดรับ (ชื่อที่ normalize แล้ว) → โซน · สร้างครั้งเดียวจาก SB_PICKUP_AREAS
+function pmZoneOfArea(key){
+  if(!_PM.zoa){ const m={};
+    (typeof SB_PICKUP_AREAS!=='undefined'?SB_PICKUP_AREAS:[]).forEach(a=>{ const k=pmNormArea(a.name); if(k&&m[k]==null) m[k]=a.region||''; });
+    // ชื่อบนแผนที่บางอันไม่ตรงกับในตารางจุดรับเป๊ะ ๆ
+    if(m['Nai Harn']==null) m['Nai Harn']=m['Naiharn']||'phuket-south';
+    if(m['Naiharn']==null)  m['Naiharn']='phuket-south';
+    if(m['Panwa Pier']==null) m['Panwa Pier']='pier';
+    if(m['Kathu']==null) m['Kathu']='phuket-central';
+    _PM.zoa=m; }
+  return _PM.zoa[key]||'';
+}
+let _pmapZoneBg=null;
+function pmapZoneBgOn(){ if(_pmapZoneBg==null){ let v=null; try{ v=(typeof ctRead==='function')?ctRead('pmap_zonebg'):null; }catch(_){}
+    _pmapZoneBg=(v===0||v===false)?false:true; } return _pmapZoneBg; }
+function pmapZoneBgToggle(){ _pmapZoneBg=!pmapZoneBgOn();
+  try{ if(typeof ctWrite==='function') ctWrite('pmap_zonebg', _pmapZoneBg?1:0); }catch(_){}
+  pmapRefresh(); }
+// พื้นสีโซน · วงไล่สีที่จุดรับแต่ละจุด ซ้อนกันเป็นแถบของฝั่งนั้น + ป้ายชื่อโซนนอกชายฝั่ง
+function pmapDrawZones(ctx, map){
+  const grp={};
+  _PM.areas.forEach(a=>{ if(!a.shown||!PHUKET_LL[a.key])return; const z=pmZoneOfArea(a.key); (grp[z]=grp[z]||[]).push(a); });
+  const keys=Object.keys(grp); if(!keys.length)return;
+  ctx.save(); ctx.globalCompositeOperation='multiply';
+  keys.forEach(z=>{
+    const col=pmZone(z)[1];
+    grp[z].forEach(a=>{
+      const ll=PHUKET_LL[a.key], pt=map.latLngToContainerPoint(ll);
+      const pe=map.latLngToContainerPoint([ll[0]+0.032, ll[1]]);
+      const R=Math.max(34, Math.abs(pe.y-pt.y));
+      const g=ctx.createRadialGradient(pt.x,pt.y,0,pt.x,pt.y,R);
+      g.addColorStop(0,col+'40'); g.addColorStop(.5,col+'22'); g.addColorStop(1,col+'00');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(pt.x,pt.y,R,0,6.2832); ctx.fill();
+    });
+  });
+  ctx.restore();
+  // ป้ายชื่อโซน · ดันออกนอกเกาะจากจุดกึ่งกลางของโซน จะได้ไม่ทับกลุ่มจุด
+  //   ถ้าป้ายสองอันชนกัน (โซนเล็ก ๆ ที่อยู่ติดกัน) ดันอันหลังออกไปอีกทีละขั้น
+  ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='800 12.5px sans-serif';
+  const placed=[];
+  keys.slice().sort((x,y)=>grp[y].length-grp[x].length).forEach(z=>{
+    const ps=grp[z]; let la=0,lo=0; ps.forEach(a=>{ la+=PHUKET_LL[a.key][0]; lo+=PHUKET_LL[a.key][1]; });
+    la/=ps.length; lo/=ps.length;
+    const dla=la-_PMCEN[1], dlo=lo-_PMCEN[0], dl=Math.hypot(dla,dlo)||1;
+    const nm=pmZone(z)[0].replace(' · มาเอง','');
+    const half=ctx.measureText(nm).width/2+6;
+    let pt=null;
+    for(let k=0;k<7;k++){
+      const push=0.050+(ps.length>2?0.012:0)+k*0.020;
+      const p=map.latLngToContainerPoint([la+dla/dl*push, lo+dlo/dl*push]);
+      const clash=placed.some(q=>Math.abs(q.x-p.x)<(q.half+half) && Math.abs(q.y-p.y)<22);
+      pt=p; if(!clash) break;
+    }
+    placed.push({x:pt.x,y:pt.y,half:half});
+    ctx.lineJoin='round'; ctx.miterLimit=2;
+    ctx.lineWidth=3.5; ctx.strokeStyle='rgba(255,255,255,.95)'; ctx.strokeText(nm,pt.x,pt.y);
+    ctx.fillStyle=pmZone(z)[1]; ctx.fillText(nm,pt.x,pt.y);
+  });
+  ctx.restore();
+}
 function pmapDraw(){ const map=_PM.map,cv=_PM.canvas; if(!map||!cv)return; const sz=map.getSize(); const dpr=window.devicePixelRatio||1; if(cv.width!==Math.round(sz.x*dpr)||cv.height!==Math.round(sz.y*dpr)){ cv.width=Math.round(sz.x*dpr); cv.height=Math.round(sz.y*dpr); cv.style.width=sz.x+'px'; cv.style.height=sz.y+'px'; } const ctx=cv.getContext('2d'); ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,sz.x,sz.y);
+  if(pmapZoneBgOn()) pmapDrawZones(ctx, map);
   _PM.areas.forEach(a=>{ if(!a.shown)return; const pt=map.latLngToContainerPoint(PHUKET_LL[a.key]); ctx.globalAlpha=.95; a.dots.forEach(dd=>{ const p=map.latLngToContainerPoint([dd.lat,dd.lng]); ctx.beginPath(); ctx.arc(p.x,p.y,2.0,0,6.2832); ctx.fillStyle=dd.c; ctx.fill(); });
     const pe=map.latLngToContainerPoint([PHUKET_LL[a.key][0]+a.geoR,PHUKET_LL[a.key][1]]); const rPx=Math.max(8,Math.abs(pe.y-pt.y));
     if(_pmapSel===a.key){ ctx.globalAlpha=1; ctx.beginPath(); ctx.arc(pt.x,pt.y,rPx+5,0,6.2832); ctx.setLineDash([3,2]); ctx.strokeStyle='#111'; ctx.lineWidth=1.4; ctx.stroke(); ctx.setLineDash([]); }
@@ -40661,6 +40722,7 @@ function pmapToolbar(){ const per=pmapPeriod(); const mb=(m,l)=>`<button onclick
     <span style="display:inline-flex;background:#F1EFEA;border-radius:9px;padding:2px">${mb('week','สัปดาห์')}${mb('month','เดือน')}${mb('year','ปี')}</span>
     <span style="display:inline-flex;align-items:center;gap:2px;background:#fff;border:0.5px solid #e0ddd5;border-radius:99px;padding:3px 5px"><button onclick="pmapShift(-1)" style="background:none;border:none;width:24px;height:24px;cursor:pointer;font-size:14px;color:#888">‹</button><b style="font-size:12.5px;font-weight:600;padding:0 8px;min-width:130px;text-align:center">${per.label}</b><button onclick="pmapShift(1)" style="background:none;border:none;width:24px;height:24px;cursor:pointer;font-size:14px;color:#888">›</button></span>
     <span style="display:inline-flex;background:#EAF3EF;border-radius:9px;padding:2px">${met('pax','คน')}${met('value','฿ มูลค่า')}</span>
+    <button onclick="pmapZoneBgToggle()" title="พื้นสีอ่อนบอกโซนบนแผนที่ · สีเดียวกับการ์ดซ้าย" style="display:inline-flex;align-items:center;gap:6px;border:1px solid ${pmapZoneBgOn()?'#B9D8CB':'#e0ddd5'};background:${pmapZoneBgOn()?'#EAF3EF':'#fff'};color:#5F5E5A;font-size:11.5px;font-weight:${pmapZoneBgOn()?700:500};padding:5px 11px;border-radius:99px;cursor:pointer;font-family:inherit"><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:${pmapZoneBgOn()?'linear-gradient(135deg,#E2725B,#4A9BB8)':'#DAD7CF'}"></span>พื้นสีโซน</button>
     <span style="font-size:12.5px;color:#5F5E5A">รวม <b style="font-family:'DM Mono',monospace;color:#1A1A1A">${pmShowNum(pmVal(_PM.tot))}</b> ${_pmapMetric==='pax'?'pax':''}${cap!=null?` · <span title="ส่วนแบ่งทั้งเกาะ = pax เรา ÷ ผู้โดยสารขาเข้าทั้งเกาะ (จาก Demand) · ระดับเกาะ ไม่ใช่รายย่าน">ส่วนแบ่งเกาะ <b style="color:#0F6E56">${cap}%</b> <span style="color:#bbb">(${_PM.tot.pax}/${_PM.arr})</span></span>`:''}</span>
     <span style="flex:1;min-width:10px"></span>
     <span style="font-size:11px;color:#999">กรองตลาด:</span>${chips}${_pmapMkFilter?`<span onclick="pmapSetMk('${_pmapMkFilter}')" style="cursor:pointer;font-size:11px;color:#185FA5">ล้าง</span>`:''}
