@@ -48490,9 +48490,10 @@ function drmTrend(T, e){
 // ── วาดกราฟลง canvas · ใช้เลขชุดเดียวกับ drChart/drDonut บนหน้าจอ ──────
 var _drImg = { key:'', trend:'', donut:'', state:'' };   // state: '' | 'run' | 'ok' | 'err'
 function drImgKey(D){ return D.date+'|'+_drTrendMode+'|'+D.pax.tot+'|'+D.rev; }
-function _dcSmooth(ctx, pts){
+function _dcSmooth(ctx, pts, cont){
   if(!pts.length) return;
-  ctx.moveTo(pts[0][0], pts[0][1]);
+  // cont = ต่อจากเส้นที่วาดค้างไว้ · ห้าม moveTo ไม่งั้น path ขาดเป็นคนละชิ้น
+  if(cont) ctx.lineTo(pts[0][0], pts[0][1]); else ctx.moveTo(pts[0][0], pts[0][1]);
   var t=0.28;
   for(var i=0;i<pts.length-1;i++){
     var p0=pts[i-1]||pts[i], p1=pts[i], p2=pts[i+1], p3=pts[i+2]||pts[i+1];
@@ -48501,7 +48502,7 @@ function _dcSmooth(ctx, pts){
   }
 }
 function drmPngTrend(T){
-  var W=1040, H=340, L=44, R=18, TP=40, BT=44, n=T.pts.length, S=2;
+  var W=1040, H=420, L=46, R=18, TP=42, BT=46, n=T.pts.length, S=2;
   if(!n) return '';
   var cv=document.createElement('canvas'); cv.width=W*S; cv.height=H*S;
   var c=cv.getContext('2d'); c.setTransform(S,0,0,S,0,0);
@@ -48529,8 +48530,7 @@ function drmPngTrend(T){
     var g=c.createLinearGradient(0,yt,0,yb);
     g.addColorStop(0,col+'F2'); g.addColorStop(1,col+'B3');
     c.beginPath(); _dcSmooth(c,top);
-    var rv=bot.slice().reverse();
-    c.lineTo(rv[0][0],rv[0][1]); _dcSmooth(c,rv);
+    _dcSmooth(c, bot.slice().reverse(), true);
     c.closePath(); c.fillStyle=g; c.fill();
   });
   // เส้นยอดรวมจาง ๆ
@@ -48558,11 +48558,11 @@ function drmPngTrend(T){
   return cv.toDataURL('image/png');
 }
 function drmPngDonut(D){
-  var SZ=260, S=2, cv=document.createElement('canvas'); cv.width=SZ*S; cv.height=SZ*S;
+  var SZ=230, S=2, cv=document.createElement('canvas'); cv.width=SZ*S; cv.height=SZ*S;
   var c=cv.getContext('2d'); c.setTransform(S,0,0,S,0,0);
   c.fillStyle='#ffffff'; c.fillRect(0,0,SZ,SZ);
   var FT="'DM Sans','Noto Sans Thai',-apple-system,Segoe UI,Helvetica,Arial,sans-serif";
-  var cx=SZ/2, cy=SZ/2, r=88, w=33, tot=D.pax.tot||0;
+  var cx=SZ/2, cy=SZ/2, r=78, w=30, tot=D.pax.tot||0;
   c.lineWidth=w; c.strokeStyle='#f3f4f6';
   c.beginPath(); c.arc(cx,cy,r,0,Math.PI*2); c.stroke();
   var a0=-Math.PI/2;
@@ -48573,10 +48573,10 @@ function drmPngDonut(D){
     a0=a1;
   });
   c.textAlign='center';
-  c.fillStyle='#111827'; c.font='800 38px '+FT; c.textBaseline='alphabetic';
-  c.fillText(String(tot), cx, cy+6);
-  c.fillStyle='#9ca3af'; c.font='700 10px '+FT;
-  c.fillText('TOTAL PAX', cx, cy+24);
+  c.fillStyle='#111827'; c.font='800 34px '+FT; c.textBaseline='alphabetic';
+  c.fillText(String(tot), cx, cy+5);
+  c.fillStyle='#9ca3af'; c.font='700 9.5px '+FT;
+  c.fillText('TOTAL PAX', cx, cy+21);
   return cv.toDataURL('image/png');
 }
 function drmUpload(dataUrl, name){
@@ -48676,14 +48676,14 @@ function drMailHTML(D){
         stack+='<td width="'+(D.pax.tot?(m.pax/D.pax.tot*100).toFixed(1):0)+'%" style="background:'+m.color
           +';height:14px;font-size:0;line-height:0">&nbsp;</td>'; });
       MO.forEach(function(id,i){ var m=D.mkt[id], last=(i===MO.length-1), bd=last?'none':'1px solid #f4f5f7';
-        lst+='<tr><td style="padding:8px 2px;border-bottom:'+bd+';font-size:12px;color:#374151">'
+        lst+='<tr><td style="padding:6px 2px;border-bottom:'+bd+';font-size:12px;color:#374151">'
           +drmDot(m.color)+'<b style="color:'+DRM.ink+'">'+e(m.name)+'</b></td>'
-          +'<td align="right" style="padding:8px 2px;border-bottom:'+bd+';font-size:12px;color:'+DRM.mut+';white-space:nowrap">'
+          +'<td align="right" style="padding:6px 2px;border-bottom:'+bd+';font-size:12px;color:'+DRM.mut+';white-space:nowrap">'
           +'<b style="color:'+DRM.ink+'">'+m.pax+'</b> คน <span style="color:'+DRM.fain+'">('+drPct(m.pax,D.pax.tot)+'%)</span></td></tr>'; });
       mktBody=drmCard(
         (useImg && _drImg.donut
-          ? ('<div style="text-align:center;padding-bottom:6px"><img src="'+_drImg.donut+'" width="200" alt="สัดส่วนลูกค้า" '
-             +'style="display:inline-block;width:200px;max-width:100%;height:auto;border:0"></div>')
+          ? ('<div style="text-align:center;padding-bottom:2px"><img src="'+_drImg.donut+'" width="176" alt="สัดส่วนลูกค้า" '
+             +'style="display:inline-block;width:176px;max-width:100%;height:auto;border:0"></div>')
           : ('<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-radius:8px;overflow:hidden">'
              +'<tr>'+stack+'</tr></table>'))
         +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px">'+lst+'</table>');
