@@ -45522,7 +45522,7 @@ function pckCardCSS(scope){ return ''
   // §guideOrder · ใบสั่งงานมัคคุเทศก์ · เขียว แยกจากใบงานไกด์ไม่ให้กดผิดใบ
   +scope+' .pck-joball.go{margin-left:7px;background:#0F6E56;border-color:#0F6E56}'
   +scope+' .pck-joball.go2{margin-left:5px;background:#fff;border-color:#E7E4DC;color:#5F5E5A;font-size:13px}'
-  +scope+' .pck-jobbtn.go{margin-left:6px}'
+  +scope+' .pck-jobbtn + .pck-jobbtn{margin-left:6px}'
   +scope+' .pck-jobbtn.go b{font-size:9px;vertical-align:2px}'
   +scope+' .pck-joball:hover{background:#15201a;border-color:#15201a}'
   // แถบสรุปเที่ยวนี้ · พื้นขาวชุดเดียวกับการ์ดโซนข้างล่าง เว้นขอบเท่ากัน สีเรือจึงยังครอบเป็นกรอบ
@@ -47038,9 +47038,9 @@ function renderPierCheckin(){
       +'<div class="pck-bstat">'+bchip('ถึงท่า',a.arr+'/'+a.n)+bchip('เคลียร์',a.clr)+bchip('ขึ้นเรือ',a.on)
         +(a.due>0?bchip('ค้างเก็บ','&#3647;'+Math.round(a.due).toLocaleString()):'')
         +'<div class="pck-bchip" style="background:#fff;border:1px solid #fff;color:'+pckInkOnWhite(col)+'"><span class="k" style="opacity:.8">ที่นั่ง</span><span class="v">'+a.pax+(cap?('/'+cap):'')+'</span></div>'
-        +'<button class="pck-jobbtn" onclick="event.stopPropagation();pckGuideJobOrder(\''+bid+'\')" title="พิมพ์ใบงานไกด์ของลำนี้ · A4 แนวนอน">&#128196; ใบงานไกด์</button>'
         +'<button class="pck-jobbtn go" onclick="event.stopPropagation();goSetupOpen(\''+bid+'\')" title="ใบสั่งงานมัคคุเทศก์ของลำนี้ · จ่ายไกด์แล้วพิมพ์">&#128220; ใบสั่งงาน'
           +((goAsn(_pckDate,bid).g.length)?'':' <b style="color:#B4560A">&#9679;</b>')+'</button>'
+        +'<button class="pck-jobbtn" onclick="event.stopPropagation();pckGuideJobOrder(\''+bid+'\')" title="พิมพ์ใบงานไกด์ของลำนี้ · A4 แนวนอน">&#128196; ใบงานไกด์</button>'
       +'</div></div>'+pckBoatMeta(B.rows, date)+'<div class="pck-bbody">';
     B.torder.forEach(function(rk){
       var T=B.trips[rk];
