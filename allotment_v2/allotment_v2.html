@@ -47439,23 +47439,34 @@ function tsPayCell(r, date){
   var pt=PT[M.payType||'']||null;
   if(pt) L.push('<span class="ts-chip '+pt[1]+'" title="เงื่อนไขการชำระของ agent">'+pt[0]+'</span>');
   else if(!b.agentId) L.push('<span class="ts-chip n">Walk-in</span>');
+  // §tsInvPaid · เงินที่รับผ่านใบแจ้งหนี้ (หน้า By-trip-date / หน้าบัญชี) · คนละก้อนกับเงินหน้าท่า
+  var IV=X.inv||{};
+  if(IV.inv){
+    if(IV.settled)
+      L.push('<span class="ts-chip g" title="'+e('รับเงินครบแล้วตามใบแจ้งหนี้ '+IV.no+' '+m(IV.paid)
+        +(IV.nBk>1?(' · ใบนี้คุม '+IV.nBk+' booking'):''))+'">&#10003; จ่ายผ่านบิลแล้ว</span>');
+    else if(IV.paid>0)
+      L.push('<span class="ts-chip b" title="'+e('ใบแจ้งหนี้ '+IV.no+' รับแล้ว '+m(IV.paid)+' · ค้าง '+m(IV.bal)
+        +(IV.nBk>1?(' · ใบนี้คุม '+IV.nBk+' booking ปันส่วนรายใบไม่ได้'):''))+'">บิลชำระบางส่วน</span>');
+  }
   if(r.cxlRow){
     var cc=b.cancellation||null;
     L.push('<span class="ts-pyd">'+((cc&&+cc.chargeAmount>0)?('ค่าปรับ '+m(cc.chargeAmount)):'ไม่มียอดเก็บ')+'</span>');
     return '<div class="ts-payc">'+L.join('')+'</div>';
   }
   // ยอดที่ต้องเก็บวันนี้ · แยกให้เห็นว่ามาจากอะไร (COT / ค้าง / upgrade)
-  if(M.due>0){
+  if(X.due>0){
     var parts=[];
     if(M.cot>0)     parts.push('COT '+m(M.cot));
     if(M.balance>0) parts.push('ค้าง '+m(M.balance));
     if(M.upDue>0)   parts.push('upgrade '+m(M.upDue));
+    if(X.billed>0)  parts.push('จ่ายผ่านบิล '+m(X.billed));
     if(M.pierPaid>0)parts.push('เก็บแล้ว '+m(M.pierPaid));
-    L.push('<span class="ts-pyd" title="'+e(parts.join(' · '))+'">ต้องเก็บ '+m(M.due)+'</span>');
+    L.push('<span class="ts-pyd" title="'+e(parts.join(' · '))+'">ต้องเก็บ '+m(X.due)+'</span>');
     if(parts.length) L.push('<span class="ts-pyn">'+e(parts.join(' · '))+'</span>');
   } else if(M.pierPaid>0){
     L.push('<span class="ts-pyg">&#10003; เก็บครบ '+m(M.pierPaid)+'</span>');
-  } else if(M.payType==='cot'){
+  } else if(M.payType==='cot' && !(X.inv&&X.inv.settled)){
     L.push('<span class="ts-pyn">COT · ยังไม่ระบุยอด</span>');
   }
   // เก็บด้วยวิธีไหน ใครเก็บ · อ่านจาก bk.pierPayments ชุดเดียวกับส่วนที่ 3
@@ -47512,14 +47523,33 @@ function tsSaleCell(S, money, e){
       +(x.noSlip?' <i style="font-style:normal;color:#A32D2D">⚠</i>':'')+'</span>';
   }).join('')+'</div>';
 }
+// สถานะใบแจ้งหนี้ของ booking นี้ · ใช้ตัวเดียวกับหน้าบัญชี ไม่ได้คิดเลขเอง
+function tsInvSettle(b){
+  var out={ inv:null, no:'', state:'', paid:0, bal:0, nBk:0, settled:false };
+  try{
+    if(!b || !b.id || typeof acctBookingInvoice!=='function') return out;
+    var iv=acctBookingInvoice(b.id); if(!iv) return out;
+    out.inv=iv; out.no=iv.number||iv.id||'';
+    out.state=(typeof acctInvoiceState==='function')   ? acctInvoiceState(iv)   : '';
+    out.paid =(typeof acctInvoicePaid==='function')    ? acctInvoicePaid(iv)    : 0;
+    out.bal  =(typeof acctInvoiceBalance==='function') ? acctInvoiceBalance(iv) : 0;
+    out.nBk  =((iv.bookingIds||[]).length)||0;
+    out.settled=(out.state==='paid');
+  }catch(_){}
+  return out;
+}
 function tsMoneyOf(b, date){
   var M=(typeof pckMoney==='function')?pckMoney(b,date):{cot:0,balance:0,upDue:0,due:0,pierPaid:0};
   var pays=(typeof pckPaysFor==='function')?pckPaysFor(b,date):[];
   var by={cash:0,transfer:0,card:0}, who=[];
   pays.forEach(function(p){ var m=p.method||'cash'; if(by[m]==null) by[m]=0; by[m]+=(+p.amount||0);
     if(p.by && who.indexOf(p.by)<0) who.push(p.by); });
-  return { M:M, pays:pays, by:by, who:who.join(' · '),
-           target:(+M.cot||0)+(+M.balance||0)+(+M.upDue||0), paid:+M.pierPaid||0, due:+M.due||0 };
+  // §tsInvPaid · บิลจ่ายครบแล้ว = ส่วน COT/ยอดค้างถูกเคลียร์ทางบัญชีไปแล้ว ไม่ต้องตามเก็บที่ท่า
+  var IV=tsInvSettle(b);
+  var billed = IV.settled ? ((+M.cot||0)+(+M.balance||0)) : 0;
+  var target = Math.max(0, (+M.cot||0)+(+M.balance||0)+(+M.upDue||0) - billed);
+  return { M:M, pays:pays, by:by, who:who.join(' · '), inv:IV, billed:billed,
+           target:target, paid:+M.pierPaid||0, due:Math.max(0, target-(+M.pierPaid||0)) };
 }
 // ══════════════════════════════════════════════════════════════════════════
 // §dailyReport · รายงานประจำวัน
@@ -49498,7 +49528,10 @@ function renderTravelSum(){
     Object.keys(_sby).forEach(function(k){ var x=PM[k]||['อื่นๆ','n'];
       mchips+='<span class="ts-chip '+x[1]+'" title="เงินจากของที่ขายเพิ่มหน้างาน">'
         + x[0]+' '+money(_sby[k])+' <i style="font-style:normal;opacity:.7">ขายเพิ่ม</i></span>'; });
-    if(!mchips) mchips='<span class="ts-chip n">ยังไม่เก็บ</span>';
+    // §tsInvPaid · ใบที่จ่ายผ่านบิลมาแล้ว อย่าขึ้น "ยังไม่เก็บ" ให้คนหน้าท่าไปตามซ้ำ
+    if(!mchips) mchips=(m.inv&&m.inv.settled)
+      ? ('<span class="ts-chip g" title="'+e('รับเงินครบตามใบแจ้งหนี้ '+m.inv.no)+'">&#10003; จ่ายผ่านบิล</span>')
+      : '<span class="ts-chip n">ยังไม่เก็บ</span>';
     var _noSlip=(+m.M.noSlip||0)+(+m.S.noSlip||0);
     var slipWarn=(_noSlip>0)?('<span class="ts-chip a" title="โอน/บัตรที่ยังไม่แนบสลิป · รวมของที่ขายเพิ่ม">ขาดสลิป '+_noSlip+'</span>'):'';
     var parts=[]; if(m.M.cot>0) parts.push('COT '+money(m.M.cot));
