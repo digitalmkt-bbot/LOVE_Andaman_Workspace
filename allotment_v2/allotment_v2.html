@@ -46971,11 +46971,99 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-chip.ts-nb{position:relative;opacity:.5;filter:grayscale(.85);color:var(--zn500)!important}'
  +S+' .ts-chip.ts-nb::after{content:"";position:absolute;left:3px;right:3px;top:50%;height:1.4px;'
    +'background:var(--rs700);transform:translateY(-50%);border-radius:1px}'
+ // ══════ §tsFactSheet · ชั้นทับหน้าตาให้เป็นเอกสาร ══════
+ +S+' .ts-wrap{border-radius:4px;border-color:var(--zn300);box-shadow:none}'
+ +S+' .ts-hd{padding:20px 26px 0;background:#fff}'
+ +S+' .ts-hd::before{height:3px}'
+ +S+' .ts-kick b{font-size:9.5px;letter-spacing:.16em}'
+ +S+' .ts-mark{width:22px;height:22px;border-radius:3px;font-size:11px}'
+ +S+' .ts-h1{font-size:25px;font-weight:700;letter-spacing:-.025em}'
+ +S+' .ts-sub{font-size:10px;max-width:660px}'
+ // เลขที่เอกสารมุมขวา · แทนการ์ด meta เดิม
+ +S+' .ts-docid{text-align:right;flex:none}'
+ +S+' .ts-docid .l{font-size:8.5px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--zn400)}'
+ +S+' .ts-docid .v{font-family:\'DM Mono\',monospace;font-size:15px;font-weight:500;margin-top:1px}'
+ +S+' .ts-docid .s{font-size:9.5px;color:var(--zn500);margin-top:4px}'
+ // แถบ meta เต็มความกว้าง · เห็นครบตั้งแต่บรรทัดแรกโดยไม่ต้องเลื่อน
+ +S+' .ts-mbar{display:grid;grid-template-columns:repeat(7,1fr);margin:14px -26px 0;'
+   +'border-top:2px solid var(--zn900);border-bottom:1px solid var(--zn200)}'
+ +S+' .ts-mbar .c{padding:9px 14px;border-right:1px solid var(--zn200);min-width:0}'
+ +S+' .ts-mbar .c:last-child{border-right:none}'
+ +S+' .ts-mbar .k{font-size:8.5px;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--zn400)}'
+ +S+' .ts-mbar .v{font-size:13px;font-weight:600;margin-top:2px;line-height:1.3;font-variant-numeric:tabular-nums}'
+ +S+' .ts-mbar .v small{font-size:10px;font-weight:500;color:var(--zn500)}'
+ // แถบเครื่องมือกับแถวชิป · กินเต็มความกว้างเหมือนแถบเอกสาร
+ +S+' .ts-tools{margin:0 -26px;padding:11px 26px;border-top:none;border-bottom:1px solid var(--zn200);background:var(--zn50)}'
+ +S+' .ts-rt{margin:0 -26px;padding:9px 26px;border-top:none;border-bottom:1px solid var(--zn200)}'
+ +S+' .ts-rtl{font-size:8.5px;letter-spacing:.13em;width:52px;flex:none}'
+ +S+' .ts-btn{border-radius:3px;padding:5px 11px;font-size:11px;font-weight:600;border-color:var(--zn300)}'
+ +S+' .ts-btn.pri{background:var(--zn900);border-color:var(--zn900);color:#fff;box-shadow:none}'
+ +S+' .ts-rb{border-radius:3px;padding:4px 10px;font-size:11px;font-weight:600;border-color:var(--zn300)}'
+ +S+' .ts-rb i.ts-dot{width:7px;height:7px}'
+ // หัวข้อมีเลขกำกับ
+ +S+' .ts-sect{font-size:13.5px;font-weight:700;letter-spacing:-.01em;text-transform:none;gap:10px;align-items:baseline}'
+ +S+' .ts-sn{font-family:\'DM Mono\',monospace;font-size:11px;font-weight:500;color:#fff;background:var(--zn900);'
+   +'padding:2px 6px;border-radius:2px;flex:none}'
+ +S+' .ts-secd{font-size:10px}'
+ // กลุ่มตัวเลข · เส้นคั่นแทนการ์ดสี
+ +S+' .ts-kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:0;'
+   +'border-top:1px solid var(--zn900);border-bottom:1px solid var(--zn200)}'
+ +S+' .ts-k{border:none;border-right:1px solid var(--zn200);border-radius:0;background:#fff !important;padding:11px 14px 12px}'
+ +S+' .ts-k:last-child{border-right:none}'
+ +S+' .ts-k .kk{font-size:8.5px;letter-spacing:.1em;color:var(--zn400) !important}'
+ +S+' .ts-k .kv{font-family:\'DM Mono\',monospace;font-size:28px;font-weight:400;letter-spacing:-.03em;color:var(--zn900)}'
+ +S+' .ts-k .kv em{font-family:inherit;font-size:11px}'
+ +S+' .ts-k .kn{background:transparent !important;padding:0;margin-top:3px;font-size:9.5px;font-weight:500;color:var(--zn500) !important;border-radius:0}'
+ +S+' .ts-k.lime .kv{color:var(--lm600)}'
+ +S+' .ts-k.rose .kv{color:var(--rs700)}'
+ +S+' .ts-k.amber .kv,'+S+' .ts-k.act .kv{color:var(--am700)}'
+ +S+' .ts-read{margin-top:11px;padding:9px 12px;border-left:2px solid var(--lm600);background:var(--lm50);font-size:11.5px;line-height:1.7}'
+ +S+' .ts-read b{font-family:\'DM Mono\',monospace;font-weight:500}'
+ // การ์ดเงิน · พื้นขาว เหลือแถบสีบาง ๆ ด้านบนเป็นตัวแยก
+ +S+' .ts-pay{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-bottom:13px;'
+   +'border-top:1px solid var(--zn900);border-bottom:1px solid var(--zn200)}'
+ +S+' .ts-p{border:none;border-right:1px solid var(--zn200);border-radius:0;background:#fff !important;padding:11px 14px 12px;position:relative}'
+ +S+' .ts-p:last-child{border-right:none}'
+ +S+' .ts-p::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--zn300)}'
+ +S+' .ts-p.cash::before{background:var(--em600)} '+S+' .ts-p.tf::before{background:var(--bl700)}'
+ +S+' .ts-p.cc::before{background:var(--pu700)}   '+S+' .ts-p.pend::before{background:var(--am700)}'
+ +S+' .ts-p .pl{font-size:9px;letter-spacing:.08em}'
+ +S+' .ts-p .pt{border-radius:2px;font-size:8.5px;font-weight:700;background:#fff !important;border:1px solid var(--zn200) !important;color:var(--zn500) !important}'
+ +S+' .ts-p .pv{font-family:\'DM Mono\',monospace;font-size:24px;font-weight:400;letter-spacing:-.03em}'
+ +S+' .ts-p .pn{font-size:9.5px}'
+ // ตาราง · เส้นตารางจาง ๆ ทุกคอลัมน์ ไล่สายตาง่ายตอนพิมพ์
+ +S+' .ts-card{border-radius:3px;border-color:var(--zn300)}'
+ +S+' .ts-tbl th{font-size:8.5px;letter-spacing:.09em;padding:7px 9px;border-bottom:1px solid var(--zn900);'
+   +'border-right:1px solid var(--zn200);vertical-align:bottom}'
+ +S+' .ts-tbl th:last-child{border-right:none}'
+ +S+' .ts-tbl td{padding:7px 9px;border-right:1px solid #f4f3f1}'
+ +S+' .ts-tbl td:last-child{border-right:none}'
+ +S+' .ts-thsub{font-size:8px}'
+ +S+' .ts-mono,'+S+' .ts-vch{font-family:\'DM Mono\',monospace}'
+ +S+' .ts-chip{border-radius:2px;font-size:9px;padding:1px 6px}'
+ +S+' .ts-ag{border-radius:3px;box-shadow:none;padding:6px 9px;font-size:11.5px}'
+ +S+' .ts-grow td{background:var(--zn50);border-top:1.5px solid var(--zn900);border-bottom:1px solid var(--zn300)}'
+ +S+' .ts-grow .ts-dot{width:3px !important;height:14px !important;border-radius:1px !important}'
+ // ท้ายเอกสาร
+ +S+' .ts-sign{grid-template-columns:repeat(3,1fr);gap:34px;padding-top:0;border-top:none;margin-top:26px}'
+ +S+' .ts-sg{border:none;border-top:1px solid var(--zn400);border-radius:0;background:transparent;padding:7px 0 0;text-align:left}'
+ +S+' .ts-sg i{display:none}'
+ +S+' .ts-sg b{font-size:10.5px} '+S+' .ts-sg span{font-size:9px}'
+ +S+' .ts-foot{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:16px;padding-top:12px;'
+   +'border-top:1px solid var(--zn200);font-family:\'DM Mono\',monospace;font-size:9px;color:var(--zn400)}'
  +S+' .ts-doc{cursor:pointer}'+S+' .ts-doc:hover{filter:brightness(.95)}'
  +'@media print{'
    +S+' .ts-noprint{display:none!important}'
    +S+' .ts-wrap{border:none;box-shadow:none;border-radius:0}'
    +S+' .ts-hd{padding:0 0 10px}'+S+' .ts-hd::before{height:3px}'
+   // §tsFactSheet · แถบ meta / หัวข้อมีเลข / ท้ายเอกสาร ตอนพิมพ์
+   +S+' .ts-mbar{margin:10px 0 0;grid-template-columns:repeat(7,1fr)}'
+   +S+' .ts-mbar .c{padding:5px 7px}'+S+' .ts-mbar .v{font-size:10px}'+S+' .ts-mbar .k{font-size:7px}'
+   +S+' .ts-docid .v{font-size:12px}'
+   +S+' .ts-sect{font-size:12px}'+S+' .ts-sn{font-size:9px;padding:1px 4px}'
+   +S+' .ts-k{padding:6px 8px}'+S+' .ts-read{font-size:9px;padding:6px 8px;margin-top:7px}'
+   +S+' .ts-p{padding:6px 8px}'
+   +S+' .ts-foot{font-size:7.5px;margin-top:10px;padding-top:7px}'
    +S+' .ts-sec{padding:12px 0;break-inside:auto}'
    +S+' .ts-sech{margin-bottom:8px}'
    +S+' .ts-h1{font-size:19px}'+S+' .ts-sub{font-size:9.5px}'
@@ -47000,29 +47088,25 @@ function tsCSS(){ var S='#travelsum-host'; return ''
    +S+' .ts-man td{overflow:hidden}'
    +S+' .ts-man td:nth-child(2){padding-left:2px;padding-right:2px;vertical-align:middle}'
    +S+' .ts-man th{white-space:normal;line-height:1.12;vertical-align:bottom;overflow:hidden}'
-   +S+' .ts-man th:nth-child(1),'+S+' .ts-man td:nth-child(1){width:5.6%}'
-   +S+' .ts-man th:nth-child(2),'+S+' .ts-man td:nth-child(2){width:7.4%}'
-   +S+' .ts-man th:nth-child(3),'+S+' .ts-man td:nth-child(3){width:9.4%}'
+   // §tsManNoPickup · 16 คอลัมน์ · รวม 99.8% เผื่อเส้นตารางอีกเล็กน้อย
+   +S+' .ts-man th:nth-child(1),'+S+' .ts-man td:nth-child(1){width:5.6%}'     // Voucher
+   +S+' .ts-man th:nth-child(2),'+S+' .ts-man td:nth-child(2){width:7.4%}'     // Agency
+   +S+' .ts-man th:nth-child(3),'+S+' .ts-man td:nth-child(3){width:9.8%}'     // Customer
    +S+' .ts-man th:nth-child(4),'+S+' .ts-man td:nth-child(4),'
      +S+' .ts-man th:nth-child(5),'+S+' .ts-man td:nth-child(5),'
      +S+' .ts-man th:nth-child(6),'+S+' .ts-man td:nth-child(6),'
-     +S+' .ts-man th:nth-child(7),'+S+' .ts-man td:nth-child(7){width:2.7%}'
-   +S+' .ts-man th:nth-child(8),'+S+' .ts-man td:nth-child(8){width:5.8%}'
-   +S+' .ts-man th:nth-child(9),'+S+' .ts-man td:nth-child(9){width:5.6%}'
-   +S+' .ts-man th:nth-child(10),'+S+' .ts-man td:nth-child(10){width:9.6%}'
-   +S+' .ts-man th:nth-child(11),'+S+' .ts-man td:nth-child(11){width:7.6%}'
-   +S+' .ts-man th:nth-child(12),'+S+' .ts-man td:nth-child(12){width:10.6%}'
-   +S+' .ts-man th:nth-child(3),'+S+' .ts-man td:nth-child(3){width:9.8%}'
-   +S+' .ts-man th:nth-child(10),'+S+' .ts-man td:nth-child(10){width:7.4%}'
-   +S+' .ts-man th:nth-child(11),'+S+' .ts-man td:nth-child(11){width:6.6%}'
-   +S+' .ts-man th:nth-child(12),'+S+' .ts-man td:nth-child(12){width:7.6%}'
-   +S+' .ts-man th:nth-child(13),'+S+' .ts-man td:nth-child(13){width:5.8%}'
-   +S+' .ts-man th:nth-child(14),'+S+' .ts-man td:nth-child(14){width:8.4%}'
-   +S+' .ts-man th:nth-child(15),'+S+' .ts-man td:nth-child(15){width:6.2%}'
-   +S+' .ts-man th:nth-child(16),'+S+' .ts-man td:nth-child(16){width:7.4%}'
-   +S+' .ts-man th:nth-child(17),'+S+' .ts-man td:nth-child(17){width:5.2%}'
+     +S+' .ts-man th:nth-child(7),'+S+' .ts-man td:nth-child(7){width:2.7%}'   // AD/CHD/INF/FOC
+   +S+' .ts-man th:nth-child(8),'+S+' .ts-man td:nth-child(8){width:5.8%}'     // Actual/Booked
+   +S+' .ts-man th:nth-child(9),'+S+' .ts-man td:nth-child(9){width:9.8%}'     // Pickup point
+   +S+' .ts-man th:nth-child(10),'+S+' .ts-man td:nth-child(10){width:7.2%}'   // Drop-off
+   +S+' .ts-man th:nth-child(11),'+S+' .ts-man td:nth-child(11){width:8.8%}'   // Add-on
+   +S+' .ts-man th:nth-child(12),'+S+' .ts-man td:nth-child(12){width:6.2%}'   // Van · Boat
+   +S+' .ts-man th:nth-child(13),'+S+' .ts-man td:nth-child(13){width:8.8%}'   // Pay
+   +S+' .ts-man th:nth-child(14),'+S+' .ts-man td:nth-child(14){width:6.6%}'   // Total
+   +S+' .ts-man th:nth-child(15),'+S+' .ts-man td:nth-child(15){width:7.6%}'   // Cancel · Charge
+   +S+' .ts-man th:nth-child(16),'+S+' .ts-man td:nth-child(16){width:5.4%}'   // Status
    // ป้ายในสองคอลัมน์ท้ายยาวกว่าช่อง · ให้ขึ้นบรรทัดใหม่แทนล้นออกไปนอกกระดาษ
-   +S+' .ts-man td:nth-child(16) .ts-chip,'+S+' .ts-man td:nth-child(17) .ts-chip{white-space:normal;line-height:1.2}'
+   +S+' .ts-man td:nth-child(15) .ts-chip,'+S+' .ts-man td:nth-child(16) .ts-chip{white-space:normal;line-height:1.2}'
    +S+' .ts-pyd{font-size:7.2px;padding:0 3px}'
    +S+' .ts-pyg,'+S+' .ts-pyn,'+S+' .ts-pym,'+S+' .ts-pyw{font-size:6.8px}'
    // เบอร์โทรตัดบรรทัดทำให้ทุกแถวสูงขึ้นอีกบรรทัด · บีบให้อยู่บรรทัดเดียว
@@ -47135,6 +47219,10 @@ function tsVatGap(rows){
 }
 var _tsVatF='';   // '' = ทั้งหมด · 'vat' = เฉพาะมี VAT · 'novat' = เฉพาะไม่มี VAT
 function tsPickVat(v){ _tsVatF=(v===_tsVatF)?'':(v||''); tsAfter(); }
+// §tsFactSheet · ชื่อวันสั้น ๆ กับเวลาที่ออกเอกสาร
+function _tsDow(d){ try{ return new Date(d+'T12:00:00').toLocaleDateString('th-TH',{weekday:'short'}); }catch(_){ return ''; } }
+function _tsStamp(){ try{ var n=new Date();
+  return n.toLocaleDateString('en-GB')+' '+n.toTimeString().slice(0,5); }catch(_){ return ''; } }
 function tsRouteColor(id){ var r=(typeof getRoute==='function'?getRoute(id):null)||{}; return r.color||'#8b909c'; }
 // §tsDocRef · อ้างอิงเอกสารจากหน้าตรวจเอกสาร · ป้ายเดียวกับที่หน้า By-trip ใช้
 //   ไม่คิดสถานะเอง — เรียก docCheckStatus ตัวเดียวกับหน้าตรวจเอกสาร เลขสองที่จะได้ตรงกันเสมอ
@@ -49229,6 +49317,8 @@ function renderTravelSum(){
   everything.forEach(function(r){ var k=r.routeId||''; if(!rMap[k]){ rMap[k]={n:0,pax:0}; rOrder.push(k); }
     rMap[k].n++; rMap[k].pax+=r.travelled; });
   if(_tsRoute && !rMap[_tsRoute]) _tsRoute='';
+  var docNo='TS-'+String(date).replace(/-/g,'')+(_tsRoute?('-'+String(_tsRoute).toUpperCase()):'-ALL')
+    +(_tsVatF?(_tsVatF==='vat'?'-VAT':'-NOVAT'):'');
   var allDay=_tsRoute?everything.filter(function(r){ return (r.routeId||'')===_tsRoute; }):everything;
   // §tsVatFilter · นับไว้ก่อนกรอง เพื่อให้ตัวเลขบนชิปไม่หายตอนกดเลือก
   var nVat=0, nNoVat=0;
@@ -49268,7 +49358,16 @@ function renderTravelSum(){
     + K('amber','4 · ยกเลิกหน้างาน', tCxl, 'คน', 'CXL · แจ้งหน้างาน')
     + K(nPending?'act':'lime','5 · รอตัดสิน', nPending, 'เคส', (nPending?'ต้องตัดสินก่อนปิดวัน':'ตัดสินครบแล้ว'))
     + K('plain','6 · เงินหน้างาน', money(sumTarget), '', mRows.length+' ใบที่ต้องเก็บ')
-    + '</div>';
+    + '</div>'
+    // §tsFactSheet · สรุปเป็นประโยคเดียว · คนที่ไม่อยากไล่ตารางอ่านบรรทัดนี้จบ
+    + '<div class="ts-read">จอง <b>'+tBooked+'</b> &rarr; เดินทางจริง <b>'+tTrav+'</b>'
+      + (tBooked>0?(' (<b>'+(Math.round(tTrav/tBooked*1000)/10)+'%</b>)'):'')
+      + ' &middot; เก็บค่าปรับได้ <b>'+money(charge)+'</b>'
+      + ' &middot; เงินที่ต้องเก็บหน้าท่า <b>'+money(sumTarget)+'</b> จาก <b>'+mRows.length+'</b> ใบ'
+      + (sumDue>0?(' &middot; ยังค้างอีก <b>'+money(sumDue)+'</b>'):' &middot; เก็บครบแล้ว')
+      + (sumSale>0?(' &middot; ขายเพิ่มหน้างาน <b>'+money(sumSale)+'</b> จาก <b>'+nSale+'</b> รายการ'):'')
+      + (nPending?(' &middot; ยังมี <b>'+nPending+'</b> เคสรอตัดสิน'):'')
+      + '</div>';
 
   // ══ ส่วน 2 · ตัดสินค่าปรับ ══
   var DEC={ full:['เก็บเต็ม','g'], partial:['เก็บบางส่วน','a'], none:['ไม่ชาร์จ','n'], postpone:['เลื่อนวัน','p'] };
@@ -49312,7 +49411,7 @@ function renderTravelSum(){
       +'</tr>';
   });
   var audit='<div class="ts-sec"><div class="ts-sech"><div>'
-    +'<div class="ts-sect"><i class="ts-dot" style="background:var(--rs700)"></i>ส่วนที่ 2 · ตัดสินค่าปรับ ยกเลิก / เลื่อนวัน</div>'
+    +'<div class="ts-sect"><span class="ts-sn">02</span>ตัดสินค่าปรับ &middot; ยกเลิก / เลื่อนวัน</div>'
     +'<div class="ts-secd">เคสที่คนไม่ครบต้องตัดสินก่อนปิดวัน — เก็บเต็ม · เก็บบางส่วน · ไม่ชาร์จ · เลื่อนวัน · ผลจะถูกบันทึกพร้อมชื่อคนตัดสินและเวลา</div></div>'
     +'<div class="ts-noprint"><button class="ts-btn'+(_tsOnlyIssue?' on':'')+'" onclick="tsToggleFilter()">'
       +(_tsOnlyIssue?'กำลังดูเฉพาะเคสมีปัญหา':'ดูเฉพาะเคสมีปัญหา')+'</button></div></div>'
@@ -49374,7 +49473,7 @@ function renderTravelSum(){
       +'<div class="pv">'+val+'</div><div class="pn">'+note+'</div></div>';
   };
   var cash='<div class="ts-sec"><div class="ts-sech"><div>'
-    +'<div class="ts-sect"><i class="ts-dot" style="background:var(--em600)"></i>ส่วนที่ 3 · เงินที่เก็บหน้างาน · แยกตามวิธีรับเงิน</div>'
+    +'<div class="ts-sect"><span class="ts-sn">03</span>เงินที่เก็บหน้างาน &middot; แยกตามวิธีรับเงิน</div>'
     +'<div class="ts-secd">รวมทุกยอดที่ต้องเก็บวันนี้ — Cash on Tour · ยอดค้าง · upgrade — และของที่ขายเพิ่มหน้างาน '
       +'(Longtail · อาหาร · อัปเกรด) พร้อมวิธีรับเงินของแต่ละก้อน อ่านจากรายการรับเงินหน้าท่าโดยตรง</div></div>'
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'
@@ -49423,7 +49522,7 @@ function renderTravelSum(){
       var grp=mrows.filter(function(x){ return x.routeId===r.routeId && !x.cxlRow; });
       var gX=mrows.filter(function(x){ return x.routeId===r.routeId && x.cxlRow; });
       var gB=grp.reduce(function(a,x){ return a+x.booked; },0), gT=grp.reduce(function(a,x){ return a+x.travelled; },0);
-      body+='<tr class="ts-grow"><td colspan="17" style="padding:7px 11px">'
+      body+='<tr class="ts-grow"><td colspan="16" style="padding:7px 11px">'
         +'<span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;color:'+(rt.color||'var(--zn700)')+'">'
         +'<i class="ts-dot" style="border-radius:50%;background:'+(rt.color||'#999')+'"></i>'+e(rt.name||r.routeId||'—')+'</span>'
         +'<span style="float:right" class="ts-tel">'+grp.length+' booking · จอง '+gB+' → เดินทางจริง '+gT+(gB-gT>0?(' · หาย '+(gB-gT)):'')
@@ -49466,8 +49565,6 @@ function renderTravelSum(){
       +'<td><div class="ts-lead">'+e(b.leadPax||'—')+'</div><div class="ts-tel">'+e(b.leadPhone||b.phone||'')+'</div></td>'
       + pxCell('ad') + pxCell('chd') + pxCell('inf') + pxCell('foc')
       +'<td class="c ts-mono" style="font-weight:800">'+(r.cxlRow?('<span style="color:var(--rs700)">0</span> / '+r.booked):(r.travelled+' / '+r.booked))+'</td>'
-      +'<td class="ts-mono ts-tm"><b>'+(e(r.O.pickupTimeFinal||r.t.pickupTime||'')||'—')+'</b>'
-        +(dep?('<span class="ts-dep" title="เวลาออกเรือของเส้นทางนี้">&#8599; ออก '+e(dep)+'</span>'):'')+'</td>'
       +'<td style="max-width:168px">'+e(b.hotelName||b.pickup||'—')
         +(room?('<span class="ts-room">ห้อง '+e(room)+'</span>'):'')+'</td>'
       +'<td style="max-width:150px">'+(sb?('<div class="ts-sbk">'+e(sb.t)+'</div><span class="ts-chip '+sb.cls+'">'+e(sb.tag)+'</span>')
@@ -49492,8 +49589,8 @@ function renderTravelSum(){
       +'</tr>';
   });
   var manifest='<div class="ts-sec"><div class="ts-sech"><div>'
-    +'<div class="ts-sect"><i class="ts-dot" style="background:var(--lm600)"></i>ส่วนที่ 4 · Manifest ประจำวัน</div>'
-    +'<div class="ts-secd">รายการทั้งหมดของวันเรียงตามเส้นทาง (Agency A-Z) — แยกจำนวนตามประเภทผู้โดยสาร · เวลารับและเวลาออกเรือ · จุดส่งกลับ · '
+    +'<div class="ts-sect"><span class="ts-sn">04</span>Manifest ประจำวัน</div>'
+    +'<div class="ts-secd">รายการทั้งหมดของวันเรียงตามเส้นทาง (Agency A-Z) — แยกจำนวนตามประเภทผู้โดยสาร · จุดรับและจุดส่งกลับ · '
       +'Add-on ทุกขั้นตอน · เงื่อนไขการชำระและยอดที่ต้องเก็บ · ค่าปรับกรณียกเลิก/ไม่มา · '
       +'ช่อง <b>Total</b> คือยอด booking บวกของที่ขายเพิ่มหน้างานแล้ว · '
       +'ตัวเลข <b>ไปจริง/จอง</b> หมายถึงมีคนไม่ได้เดินทาง</div>'
@@ -49502,22 +49599,25 @@ function renderTravelSum(){
     +'<div class="ts-card"><div class="ts-scroll"><table class="ts-tbl ts-man"><thead><tr>'
     +'<th>Voucher</th><th>Agency</th><th>Customer (lead)</th>'
     +'<th class="c ts-px">AD</th><th class="c ts-px">CHD</th><th class="c ts-px">INF</th><th class="c ts-px">FOC</th>'
-    +'<th class="c">Actual<br>/ Booked</th><th>Pickup<br>&middot; Depart</th><th>Pickup point &middot; Room</th><th>Drop-off</th>'
+    +'<th class="c">Actual<br>/ Booked</th><th>Pickup point &middot; Room</th><th>Drop-off</th>'
     +'<th>Add-on &middot; Upsell</th><th>Van &middot; Boat</th><th>Pay</th><th class="r">Total<br><span class="ts-thsub">รวมหน้างาน</span></th>'
     +'<th>Cancel &middot; Charge</th><th class="c">Status</th>'
     +'</tr></thead><tbody>'
-    +(body||'<tr><td colspan="17" class="ts-empty">'+(_tsOnlyIssue?'ไม่มีเคสที่ต้องตัดสินในวันนี้':'ไม่มี booking ในวันนี้')+'</td></tr>')
+    +(body||'<tr><td colspan="16" class="ts-empty">'+(_tsOnlyIssue?'ไม่มีเคสที่ต้องตัดสินในวันนี้':'ไม่มี booking ในวันนี้')+'</td></tr>')
     +'</tbody></table></div></div>'
     +'<div class="ts-sign">'
     +'<div class="ts-sg"><i></i><b>ผู้จัดทำ · Operations</b><span>เจ้าหน้าที่ปฏิบัติการ</span></div>'
     +'<div class="ts-sg"><i></i><b>ผู้ตรวจสอบ · Finance</b><span>เจ้าหน้าที่การเงิน / แคชเชียร์</span></div>'
     +'<div class="ts-sg"><i></i><b>ผู้อนุมัติ · Management</b><span>ผู้จัดการฝ่ายปฏิบัติการ</span></div>'
-    +'</div></div>';
+    +'</div>'
+    +'<div class="ts-foot"><span>'+e(docNo)+'</span>'
+      +'<span>LOVE ANDAMAN &middot; OPERATIONS</span>'
+      +'<span>'+e(date)+'</span></div>'
+  +'</div>';
 
   // ══ หัวเอกสาร ══
   var dNice=date; try{ dNice=new Date(date+'T12:00:00').toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }catch(_){}
-  var docNo='TS-'+String(date).replace(/-/g,'')+(_tsRoute?('-'+String(_tsRoute).toUpperCase()):'-ALL')
-    +(_tsVatF?(_tsVatF==='vat'?'-VAT':'-NOVAT'):'');
+
   // §tsRoute · ปุ่มเลือกเส้นทาง
   var rPills='<div class="ts-rt"><span class="ts-rtl">เส้นทาง</span>'
     +'<button class="ts-rb'+(_tsRoute?'':' on')+'" onclick="tsPickRoute(\'\')">ทุกเส้นทาง'
@@ -49555,22 +49655,28 @@ function renderTravelSum(){
       +'<span class="ts-chip g">DAILY MANIFEST</span></div>'
     +'<h1 class="ts-h1">สรุปการเดินทางประจำวัน <em>MANIFEST</em></h1>'
     +'<div class="ts-sub">เอกสารปิดวัน — ยอดผู้โดยสารจริง · ตัดสินค่าปรับเคสยกเลิก/เลื่อนวัน · เงินที่เก็บหน้างานแยกตามวิธีรับเงิน · และ manifest เต็มของทุกเส้นทาง</div></div>'
-    +'<div class="ts-meta">'
-      +'<div class="ts-mrow"><span>เลขที่เอกสาร</span><b>'+e(docNo)+'</b></div>'
-      +'<div class="ts-mrow"><span>วันปฏิบัติการ</span><b>'+e(date)+'</b></div>'
-      +'<div class="ts-mrow"><span>เส้นทาง</span><b>'+e(_tsRoute?tsRouteName(_tsRoute):('ทุกเส้นทาง · '+rOrder.length))+'</b></div>'
-      +'<div class="ts-mrow"><span>ภาษี</span><b>'
+    +'<div class="ts-docid"><div class="l">Document No.</div><div class="v">'+e(docNo)+'</div>'
+      +'<div class="s">ออกเมื่อ '+e(_tsStamp())+(laBy?(' · โดย '+e(laBy())):'')+'</div></div>'
+    +'</div>'
+    // §tsFactSheet · แถบ meta เต็มความกว้าง · อ่านซ้ายไปขวาได้จบในบรรทัดเดียว
+    +'<div class="ts-mbar">'
+      +'<div class="c"><div class="k">วันปฏิบัติการ</div><div class="v">'+e(date)+' <small>'+e(_tsDow(date))+'</small></div></div>'
+      +'<div class="c"><div class="k">เส้นทาง</div><div class="v" style="font-size:11.5px">'
+        +e(_tsRoute?tsRouteName(_tsRoute):'ทุกเส้นทาง')+' <small>· '+rOrder.length+'</small></div></div>'
+      +'<div class="c"><div class="k">ภาษี</div><div class="v">'
         +(_tsVatF==='vat'?'<span class="ts-chip e">เฉพาะมี VAT</span>'
-          :(_tsVatF==='novat'?'<span class="ts-chip n">เฉพาะไม่มี VAT</span>':'ทั้งหมด'))+'</b></div>'
-      +'<div class="ts-mrow"><span>เอกสาร</span><b>'
+          :(_tsVatF==='novat'?'<span class="ts-chip n">เฉพาะไม่มี VAT</span>':'ทั้งหมด'))+'</div></div>'
+      +'<div class="c"><div class="k">Booking</div><div class="v">'+all.length+'</div></div>'
+      +'<div class="c"><div class="k">ผู้โดยสาร</div><div class="v">'+tTrav+' <small>/ '+tBooked+'</small></div></div>'
+      +'<div class="c"><div class="k">เอกสารแนบ</div><div class="v">'
         +(dcAgg.verified?('<span class="ts-chip g">ตรวจแล้ว '+dcAgg.verified+'</span>'):'')
         +(dcAgg.issue?('<span class="ts-chip r">มีปัญหา '+dcAgg.issue+'</span>'):'')
         +(dcAgg.pending?('<span class="ts-chip a">รอตรวจ '+dcAgg.pending+'</span>'):'')
         +(dcAgg.nofiles?('<span class="ts-chip n">ยังไม่แนบ '+dcAgg.nofiles+'</span>'):'')
-        +'</b></div>'
-      +'<div class="ts-mrow"><span>สถานะเอกสาร</span>'
-        +(nPending?('<span class="ts-chip a">รอตัดสิน '+nPending+' เคส</span>'):'<span class="ts-ok">ตรวจครบแล้ว</span>')+'</div>'
-    +'</div></div>'
+        +'</div></div>'
+      +'<div class="c"><div class="k">สถานะเอกสาร</div><div class="v">'
+        +(nPending?('<span class="ts-chip a">รอตัดสิน '+nPending+' เคส</span>'):'<span class="ts-ok">ตรวจครบแล้ว</span>')+'</div></div>'
+    +'</div>'
     +'<div class="ts-tools ts-noprint">'
       +'<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">'
         +'<button class="ts-btn" onclick="tsDateShift(-1)">&#8249; วันก่อน</button>'
@@ -49585,7 +49691,7 @@ function renderTravelSum(){
   host.innerHTML='<style id="ts-style">'+tsCSS()+'</style>'
     +'<div class="ts-wrap">'+head
     +'<div class="ts-sec"><div class="ts-sech"><div>'
-      +'<div class="ts-sect"><i class="ts-dot" style="background:var(--lm400)"></i>ส่วนที่ 1 · ภาพรวมของวัน</div>'
+      +'<div class="ts-sect"><span class="ts-sn">01</span>ภาพรวมของวัน</div>'
       +'<div class="ts-secd">ยอดรวมทุกเส้นทางของวันนี้ · ตัวเลขทั้งหมดคิดจากผู้โดยสารที่เดินทางจริงหลังหักคนที่ไม่มา</div></div>'
       +'<span class="ts-chip n" style="font-size:11px;padding:5px 12px">เก็บค่าปรับได้ '+money(charge)+(nPostpone?(' · เลื่อนวัน '+nPostpone+' เคส'):'')+'</span></div>'
       +kpis+'</div>'
