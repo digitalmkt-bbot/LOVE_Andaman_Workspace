@@ -46837,21 +46837,6 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-btn.on{background:var(--lm400);border-color:var(--lm400);color:var(--lm950);font-weight:800}'
  +S+' .ts-btn.pri{background:var(--lm400);border-color:var(--lm400);color:var(--lm950);font-weight:800;box-shadow:0 4px 14px rgba(163,230,53,.35)}'
  +S+' .ts-sec{padding:20px 26px;border-bottom:1px solid var(--zn200)}'
- // §tsVatSplit · หัวคั่นชุดเอกสาร · ต้องหนากว่าหัวข้อส่วนย่อยชัด ๆ ไม่งั้นสายตากลืนเป็นส่วนที่ 5
- +S+' .ts-setb{border-top:4px solid var(--sc)}'
- +S+' .ts-setb:first-of-type{border-top:none}'
- +S+' .ts-seth{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;'
-   +'padding:15px 26px;background:var(--sbg);border-bottom:1px solid var(--zn200)}'
- +S+' .ts-seth .sn{display:flex;align-items:center;gap:11px}'
- +S+' .ts-seth .sq{width:34px;height:34px;border-radius:11px;background:var(--sc);color:#fff;display:grid;place-items:center;'
-   +'font-size:15px;font-weight:800;flex:none}'
- +S+' .ts-seth .st{font-size:16px;font-weight:800;letter-spacing:-.01em;color:var(--sink);line-height:1.25}'
- +S+' .ts-seth .sd{font-size:10.5px;color:var(--zn500);margin-top:2px;line-height:1.5}'
- +S+' .ts-seth .sm{display:flex;gap:16px;flex-wrap:wrap;text-align:right}'
- +S+' .ts-seth .sm div{line-height:1.2}'
- +S+' .ts-seth .sm .k{font-size:9px;font-weight:800;color:var(--zn500);letter-spacing:.07em;text-transform:uppercase}'
- +S+' .ts-seth .sm .v{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--sink)}'
- +S+' .ts-setempty{padding:22px 26px;color:var(--zn400);font-size:12px;border-bottom:1px solid var(--zn200)}'
  +S+' .ts-sec:last-child{border-bottom:none}'
  +S+' .ts-sech{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:13px}'
  +S+' .ts-sect{font-size:11.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;display:flex;align-items:center;gap:7px;margin:0}'
@@ -46990,11 +46975,6 @@ function tsCSS(){ var S='#travelsum-host'; return ''
    +S+' .ts-wrap{border:none;box-shadow:none;border-radius:0}'
    +S+' .ts-hd{padding:0 0 10px}'+S+' .ts-hd::before{height:3px}'
    +S+' .ts-sec{padding:12px 0;break-inside:auto}'
-   +S+' .ts-setb{break-before:page;border-top:none}'      // แต่ละชุดขึ้นหน้าใหม่ · ฉีกส่งบัญชีแยกใบได้
-   +S+' .ts-setb:first-of-type{break-before:auto}'
-   +S+' .ts-seth{padding:8px 0;background:transparent;border-bottom:1.5px solid var(--sc)}'
-   +S+' .ts-seth .sq{width:24px;height:24px;border-radius:7px;font-size:11px}'
-   +S+' .ts-seth .st{font-size:13px}' +S+' .ts-seth .sm .v{font-size:13px}'
    +S+' .ts-sech{margin-bottom:8px}'
    +S+' .ts-h1{font-size:19px}'+S+' .ts-sub{font-size:9.5px}'
    +S+' .ts-k .kv{font-size:18px}'+S+' .ts-p .pv{font-size:17px}'
@@ -47141,7 +47121,7 @@ function tsVatMode(b){
   return (m==='include' || m==='exclude') ? m : 'none';
 }
 function tsHasVat(b){ return tsVatMode(b)!=='none'; }
-// agent ที่ยังไม่ได้ตั้งโหมด VAT · ตกไปอยู่ชุด "ไม่มี VAT" โดยปริยาย ต้องเตือนไม่งั้นเอกสารเพี้ยนเงียบ ๆ
+// agent ที่ยังไม่ได้ตั้งโหมด VAT · ตกไปกอง "ไม่มี VAT" โดยปริยาย ต้องเตือนไม่งั้นยอดเพี้ยนเงียบ ๆ
 function tsVatGap(rows){
   var g={};
   (rows||[]).forEach(function(r){
@@ -47151,6 +47131,8 @@ function tsVatGap(rows){
   });
   return Object.keys(g).map(function(k){ return g[k]; });
 }
+var _tsVatF='';   // '' = ทั้งหมด · 'vat' = เฉพาะมี VAT · 'novat' = เฉพาะไม่มี VAT
+function tsPickVat(v){ _tsVatF=(v===_tsVatF)?'':(v||''); tsAfter(); }
 function tsRouteColor(id){ var r=(typeof getRoute==='function'?getRoute(id):null)||{}; return r.color||'#8b909c'; }
 // §tsDocRef · อ้างอิงเอกสารจากหน้าตรวจเอกสาร · ป้ายเดียวกับที่หน้า By-trip ใช้
 //   ไม่คิดสถานะเอง — เรียก docCheckStatus ตัวเดียวกับหน้าตรวจเอกสาร เลขสองที่จะได้ตรงกันเสมอ
@@ -49246,27 +49228,17 @@ function renderTravelSum(){
     rMap[k].n++; rMap[k].pax+=r.travelled; });
   if(_tsRoute && !rMap[_tsRoute]) _tsRoute='';
   var allDay=_tsRoute?everything.filter(function(r){ return (r.routeId||'')===_tsRoute; }):everything;
-  // §tsCxlRows · ใบที่ยกเลิกทั้งใบ · คัดเข้าชุดเดียวกับใบปกติของ agent เจ้านั้น
-  var cxlDay=(typeof tsCxlRows==='function')?tsCxlRows(date):[];
-  if(_tsRoute) cxlDay=cxlDay.filter(function(x){ return (x.routeId||'')===_tsRoute; });
-  var _vy=function(r){ return tsHasVat(r.b); }, _vn=function(r){ return !tsHasVat(r.b); };
-  var TS_SETS=[
-    { k:'vat', no:'A', ttl:'ชุด A · มี VAT', col:'var(--em600)', bg:'var(--em50)', ink:'var(--em800)',
-      sd:'Agent ที่คิด VAT (รวม VAT แล้ว / บวก VAT ตอนวางบิล) — ยอดชุดนี้ต้องออกใบกำกับภาษี',
-      rows:allDay.filter(_vy), cxl:cxlDay.filter(_vy) },
-    { k:'novat', no:'B', ttl:'ชุด B · ไม่มี VAT', col:'var(--zn500)', bg:'var(--zn50)', ink:'var(--zn900)',
-      sd:'Agent ที่ไม่คิด VAT และลูกค้า Walk-in — ยอดชุดนี้ไม่ต้องออกใบกำกับภาษี',
-      rows:allDay.filter(_vn), cxl:cxlDay.filter(_vn) }
-  ];
-  // ── เดินโครงเดิมหนึ่งรอบต่อหนึ่งชุด ──────────────────────────────────
-  function tsBuildSet(all, cxlAll, SET){
+  // §tsVatFilter · นับไว้ก่อนกรอง เพื่อให้ตัวเลขบนชิปไม่หายตอนกดเลือก
+  var nVat=0, nNoVat=0;
+  allDay.forEach(function(r){ if(tsHasVat(r.b)) nVat++; else nNoVat++; });
+  var _vatKeep=function(r){ return _tsVatF==='vat' ? tsHasVat(r.b) : !tsHasVat(r.b); };
+  var all=_tsVatF?allDay.filter(_vatKeep):allDay;
   var issues=all.filter(function(r){ return r.issue; });
   var rows=_tsOnlyIssue?issues:all;
 
   // ── ยอดรวม ──
-  var tBooked=0,tTrav=0,tNs=0,tCxl=0,nDecided=0,charge=0,nPostpone=0,sumRev=0;
+  var tBooked=0,tTrav=0,tNs=0,tCxl=0,nDecided=0,charge=0,nPostpone=0;
   all.forEach(function(r){ tBooked+=r.booked; tTrav+=r.travelled; tNs+=r.ns; tCxl+=r.cxl;
-    sumRev+=((typeof tsTotalOf==='function')?(tsTotalOf(r,date).all||0):(+r.amount||0));
     if(r.issue&&r.dec){ nDecided++; if(r.dec.decision==='postpone') nPostpone++; else charge+=(+r.dec.amount||0); } });
   var nPending=issues.length-nDecided;
 
@@ -49295,11 +49267,6 @@ function renderTravelSum(){
     + K(nPending?'act':'lime','5 · รอตัดสิน', nPending, 'เคส', (nPending?'ต้องตัดสินก่อนปิดวัน':'ตัดสินครบแล้ว'))
     + K('plain','6 · เงินหน้างาน', money(sumTarget), '', mRows.length+' ใบที่ต้องเก็บ')
     + '</div>';
-  var over='<div class="ts-sec"><div class="ts-sech"><div>'
-    +'<div class="ts-sect"><i class="ts-dot" style="background:var(--lm400)"></i>ส่วนที่ 1 · ภาพรวมของ'+SET.ttl+'</div>'
-    +'<div class="ts-secd">ยอดของชุดนี้เท่านั้น · ตัวเลขทั้งหมดคิดจากผู้โดยสารที่เดินทางจริงหลังหักคนที่ไม่มา</div></div>'
-    +'<span class="ts-chip n" style="font-size:11px;padding:5px 12px">เก็บค่าปรับได้ '+money(charge)
-      +(nPostpone?(' · เลื่อนวัน '+nPostpone+' เคส'):'')+'</span></div>'+kpis+'</div>';
 
   // ══ ส่วน 2 · ตัดสินค่าปรับ ══
   var DEC={ full:['เก็บเต็ม','g'], partial:['เก็บบางส่วน','a'], none:['ไม่ชาร์จ','n'], postpone:['เลื่อนวัน','p'] };
@@ -49428,6 +49395,9 @@ function renderTravelSum(){
 
   // ══ ส่วน 4 · manifest เต็ม ══
   // §tsCxlRows · ใบที่ยกเลิกต่อท้ายกลุ่มเส้นทางเดียวกัน · เรียงหลังใบที่ยังเดินทาง
+  var cxlAll=(typeof tsCxlRows==='function')?tsCxlRows(date):[];
+  if(_tsRoute) cxlAll=cxlAll.filter(function(x){ return (x.routeId||'')===_tsRoute; });
+  if(_tsVatF)  cxlAll=cxlAll.filter(_vatKeep);   // §tsVatFilter · ใบที่ยกเลิกทั้งใบก็ต้องอยู่ชุดเดียวกับ agent เจ้านั้น
   var _azM=function(a,b){ return String(a||'').localeCompare(String(b||''),'en',{numeric:true,sensitivity:'base'}); };
   var mrows=rows.concat(cxlAll).sort(function(x,y){
     var rx=((typeof getRoute==='function'?getRoute(x.routeId):null)||{}).name||x.routeId;
@@ -49534,32 +49504,18 @@ function renderTravelSum(){
     +'<th>Add-on &middot; Upsell</th><th>Van &middot; Boat</th><th>Pay</th><th class="r">Total<br><span class="ts-thsub">รวมหน้างาน</span></th>'
     +'<th>Cancel &middot; Charge</th><th class="c">Status</th>'
     +'</tr></thead><tbody>'
-    +(body||'<tr><td colspan="17" class="ts-empty">'+(_tsOnlyIssue?'ไม่มีเคสที่ต้องตัดสินในชุดนี้':'ไม่มี booking ในชุดนี้')+'</td></tr>')
-    +'</tbody></table></div></div></div>';
-
-  // ── หัวคั่นชุด · สรุปสั้น ๆ ให้เห็นน้ำหนักของชุดนี้ก่อนลงรายละเอียด ──
-  var gap=tsVatGap(all);
-  var setHd='<div class="ts-seth">'
-    +'<div class="sn"><span class="sq">'+SET.no+'</span><div>'
-      +'<div class="st">'+SET.ttl+'</div><div class="sd">'+SET.sd+'</div></div></div>'
-    +'<div class="sm">'
-      +'<div><div class="k">Booking</div><div class="v">'+all.length+'</div></div>'
-      +'<div><div class="k">เดินทางจริง</div><div class="v">'+tTrav+'</div></div>'
-      +'<div><div class="k">ยอดรวม</div><div class="v">'+money(sumRev)+'</div></div>'
-      +(gap.length?('<div><div class="k">ยังไม่ตั้งโหมด</div><div class="v" style="color:var(--am700)" title="'
-         +e(gap.join(' · '))+'">'+gap.length+'</div></div>'):'')
+    +(body||'<tr><td colspan="17" class="ts-empty">'+(_tsOnlyIssue?'ไม่มีเคสที่ต้องตัดสินในวันนี้':'ไม่มี booking ในวันนี้')+'</td></tr>')
+    +'</tbody></table></div></div>'
+    +'<div class="ts-sign">'
+    +'<div class="ts-sg"><i></i><b>ผู้จัดทำ · Operations</b><span>เจ้าหน้าที่ปฏิบัติการ</span></div>'
+    +'<div class="ts-sg"><i></i><b>ผู้ตรวจสอบ · Finance</b><span>เจ้าหน้าที่การเงิน / แคชเชียร์</span></div>'
+    +'<div class="ts-sg"><i></i><b>ผู้อนุมัติ · Management</b><span>ผู้จัดการฝ่ายปฏิบัติการ</span></div>'
     +'</div></div>';
-  var setBody = all.length
-    ? (over+audit+cash+manifest)
-    : '<div class="ts-setempty">ไม่มีรายการในชุดนี้สำหรับวันที่เลือก</div>';
-  return { html:'<div class="ts-setb" style="--sc:'+SET.col+';--sbg:'+SET.bg+';--sink:'+SET.ink+'">'
-                 + setHd + setBody + '</div>',
-           n:all.length, pax:tTrav, charge:charge, nPending:nPending, rev:sumRev, gap:gap };
-  }
 
   // ══ หัวเอกสาร ══
   var dNice=date; try{ dNice=new Date(date+'T12:00:00').toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }catch(_){}
-  var docNo='TS-'+String(date).replace(/-/g,'')+(_tsRoute?('-'+String(_tsRoute).toUpperCase()):'-ALL');
+  var docNo='TS-'+String(date).replace(/-/g,'')+(_tsRoute?('-'+String(_tsRoute).toUpperCase()):'-ALL')
+    +(_tsVatF?(_tsVatF==='vat'?'-VAT':'-NOVAT'):'');
   // §tsRoute · ปุ่มเลือกเส้นทาง
   var rPills='<div class="ts-rt"><span class="ts-rtl">เส้นทาง</span>'
     +'<button class="ts-rb'+(_tsRoute?'':' on')+'" onclick="tsPickRoute(\'\')">ทุกเส้นทาง'
@@ -49573,21 +49529,37 @@ function renderTravelSum(){
           + '<i class="ts-dot" style="border-radius:50%;background:'+c+';margin-right:6px"></i>'
           + ckEsc(tsRouteName(k))+'<i>'+rMap[k].n+' ใบ · '+rMap[k].pax+' คน</i></button>';
       }).join('')+'</div>';
+  // §tsVatFilter · ชิปกรองภาษี · ใช้แทนการแบ่งเอกสารเป็นสองก้อน
+  var _vgap=tsVatGap(allDay);
+  var vPills='<div class="ts-rt"><span class="ts-rtl">ภาษี</span>'
+    +'<button class="ts-rb'+(_tsVatF?'':' on')+'" onclick="tsPickVat(\'\')">ทั้งหมด<i>'+allDay.length+' ใบ</i></button>'
+    +'<button class="ts-rb'+(_tsVatF==='vat'?' on':'')+'" onclick="tsPickVat(\'vat\')"'
+      +' style="border-color:'+(_tsVatF==='vat'?'var(--em600)':'var(--em200)')+';background:'+(_tsVatF==='vat'?'var(--em50)':'#fff')+'"'
+      +' title="Agent ที่คิด VAT (รวม VAT แล้ว / บวก VAT ตอนวางบิล) · ยอดกลุ่มนี้ต้องออกใบกำกับภาษี">'
+      +'<i class="ts-dot" style="border-radius:50%;background:var(--em600);margin-right:6px"></i>มี VAT<i>'+nVat+' ใบ</i></button>'
+    +'<button class="ts-rb'+(_tsVatF==='novat'?' on':'')+'" onclick="tsPickVat(\'novat\')"'
+      +' style="border-color:'+(_tsVatF==='novat'?'var(--zn500)':'var(--zn200)')+';background:'+(_tsVatF==='novat'?'var(--zn100)':'#fff')+'"'
+      +' title="Agent ที่ไม่คิด VAT และลูกค้า Walk-in · ยอดกลุ่มนี้ไม่ต้องออกใบกำกับภาษี">'
+      +'<i class="ts-dot" style="border-radius:50%;background:var(--zn400);margin-right:6px"></i>ไม่มี VAT<i>'+nNoVat+' ใบ</i></button>'
+    +(_vgap.length?('<span class="ts-chip a" title="'+e(_vgap.join(' · '))
+        +' — ยังไม่ได้ตั้งโหมด VAT ในหน้า Agents จึงถูกนับเป็นไม่มี VAT ไปก่อน">&#9888; '
+        +_vgap.length+' agent ยังไม่ได้ตั้งโหมด</span>'):'')
+    +'</div>';
   // สรุปสถานะเอกสารของวัน (ทั้งวัน · ไม่ขึ้นกับเส้นทางที่เลือก)
   var dcAgg={verified:0,issue:0,pending:0,nofiles:0};
-  allDay.forEach(function(r){ var d=tsDocRef(r.b); dcAgg[d.st]=(dcAgg[d.st]||0)+1; });
-  var OUT=TS_SETS.map(function(SET){ return tsBuildSet(SET.rows, SET.cxl, SET); });
-  var nPending=OUT.reduce(function(a,x){ return a+x.nPending; },0);
+  all.forEach(function(r){ var d=tsDocRef(r.b); dcAgg[d.st]=(dcAgg[d.st]||0)+1; });
   var head='<div class="ts-hd"><div class="ts-hdrow"><div>'
     +'<div class="ts-kick"><span class="ts-mark">&#9875;</span><b>LOVE ANDAMAN · OPERATIONS</b>'
       +'<span class="ts-chip g">DAILY MANIFEST</span></div>'
     +'<h1 class="ts-h1">สรุปการเดินทางประจำวัน <em>MANIFEST</em></h1>'
-    +'<div class="ts-sub">เอกสารปิดวัน แยกเป็น <b>2 ชุด</b> ตามภาษี — <b>ชุด A มี VAT</b> (ต้องออกใบกำกับภาษี) และ <b>ชุด B ไม่มี VAT</b> · '
-      +'แต่ละชุดมีภาพรวม · การตัดสินค่าปรับ · เงินที่เก็บหน้างาน · และ manifest เต็มของตัวเอง สั่งพิมพ์ทีเดียวได้เอกสารคนละใบ</div></div>'
+    +'<div class="ts-sub">เอกสารปิดวัน — ยอดผู้โดยสารจริง · ตัดสินค่าปรับเคสยกเลิก/เลื่อนวัน · เงินที่เก็บหน้างานแยกตามวิธีรับเงิน · และ manifest เต็มของทุกเส้นทาง</div></div>'
     +'<div class="ts-meta">'
       +'<div class="ts-mrow"><span>เลขที่เอกสาร</span><b>'+e(docNo)+'</b></div>'
       +'<div class="ts-mrow"><span>วันปฏิบัติการ</span><b>'+e(date)+'</b></div>'
       +'<div class="ts-mrow"><span>เส้นทาง</span><b>'+e(_tsRoute?tsRouteName(_tsRoute):('ทุกเส้นทาง · '+rOrder.length))+'</b></div>'
+      +'<div class="ts-mrow"><span>ภาษี</span><b>'
+        +(_tsVatF==='vat'?'<span class="ts-chip e">เฉพาะมี VAT</span>'
+          :(_tsVatF==='novat'?'<span class="ts-chip n">เฉพาะไม่มี VAT</span>':'ทั้งหมด'))+'</b></div>'
       +'<div class="ts-mrow"><span>เอกสาร</span><b>'
         +(dcAgg.verified?('<span class="ts-chip g">ตรวจแล้ว '+dcAgg.verified+'</span>'):'')
         +(dcAgg.issue?('<span class="ts-chip r">มีปัญหา '+dcAgg.issue+'</span>'):'')
@@ -49606,17 +49578,16 @@ function renderTravelSum(){
         +'<span style="font-size:11.5px;color:var(--zn500);margin-left:4px">'+e(dNice)+'</span>'
       +'</div>'
       +'<button class="ts-btn pri" onclick="tsPrintSheet()">&#128424; พิมพ์ / บันทึก PDF</button>'
-    +'</div>'+rPills+'</div>';
+    +'</div>'+rPills+vPills+'</div>';
 
   host.innerHTML='<style id="ts-style">'+tsCSS()+'</style>'
     +'<div class="ts-wrap">'+head
-    + OUT.map(function(x){ return x.html; }).join('')
-    +'<div class="ts-sec"><div class="ts-sign" style="margin-top:0;padding-top:0;border-top:none">'
-      +'<div class="ts-sg"><i></i><b>ผู้จัดทำ · Operations</b><span>เจ้าหน้าที่ปฏิบัติการ</span></div>'
-      +'<div class="ts-sg"><i></i><b>ผู้ตรวจสอบ · Finance</b><span>เจ้าหน้าที่การเงิน / แคชเชียร์</span></div>'
-      +'<div class="ts-sg"><i></i><b>ผู้อนุมัติ · Management</b><span>ผู้จัดการฝ่ายปฏิบัติการ</span></div>'
-    +'</div></div>'
-  +'</div>';
+    +'<div class="ts-sec"><div class="ts-sech"><div>'
+      +'<div class="ts-sect"><i class="ts-dot" style="background:var(--lm400)"></i>ส่วนที่ 1 · ภาพรวมของวัน</div>'
+      +'<div class="ts-secd">ยอดรวมทุกเส้นทางของวันนี้ · ตัวเลขทั้งหมดคิดจากผู้โดยสารที่เดินทางจริงหลังหักคนที่ไม่มา</div></div>'
+      +'<span class="ts-chip n" style="font-size:11px;padding:5px 12px">เก็บค่าปรับได้ '+money(charge)+(nPostpone?(' · เลื่อนวัน '+nPostpone+' เคส'):'')+'</span></div>'
+      +kpis+'</div>'
+    +audit+cash+manifest+'</div>';
 }
 
 function bkV2VanJobOrder(date, vanId, routeId, leg){
