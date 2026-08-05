@@ -45491,6 +45491,10 @@ function pckCardCSS(scope){ return ''
   +scope+' .pck-drop.self{background:#F5F4F0;border-color:#E0DDD4;color:#7a7972;font-weight:600}'
   // §pierMeal · อาหารพิเศษ · ป้าย + ปุ่มแก้หน้างาน
   +scope+' .pck-mcell{display:flex;flex-wrap:wrap;gap:4px;align-items:center}'
+  // §pierNote · โน้ตหน้างาน · กินเต็มบรรทัดใต้ป้าย จะได้อ่านออกโดยไม่ต้องชี้เมาส์
+  +scope+' .pck-note{flex:1 0 100%;background:#FFF8E6;border:1px solid #EEDFAE;border-radius:7px;padding:3px 8px;'
+    +'font-size:10.5px;font-weight:600;color:#7A4A00;line-height:1.45;margin-top:2px}'
+  +scope+' .pck-mbtn.note.on{border-style:solid;border-color:#EEDFAE;background:#FFF8E6;color:#7A4A00}'
   +scope+' .pck-mchip{display:inline-block;border:1px solid;border-radius:7px;padding:2px 7px;font-size:10px;font-weight:700;white-space:nowrap}'
   +scope+' .pck-mchip.pier{background:#FFF6E5;border-color:#EAD9B0;color:#8a5a12}'
   +scope+' .pck-mbtn{border:1px dashed #D8D4CA;background:#fff;color:#8a8a82;border-radius:7px;padding:2px 8px;'
@@ -45651,9 +45655,89 @@ function pckMealCell(b, date){
     return '<span class="pck-mchip" style="background:' + c.bg + ';color:' + c.c + ';border-color:' + c.bd + '">' + ckEsc(c.t) + '</span>';
   }).join('');
   if(m.pierAt) html += '<span class="pck-mchip pier" title="เพิ่ม/แก้ที่หน้าท่า ' + ckEsc(m.pierAt) + (m.pierBy ? (' · ' + ckEsc(m.pierBy)) : '') + '">หน้างาน</span>';
-  return '<div class="pck-mcell">' + (html || '<span class="ck-dim">—</span>')
-       + '<button class="pck-mbtn" onclick="event.stopPropagation();pckMealOpen(\'' + b.id + '\',\'' + date + '\')" title="เพิ่ม/แก้อาหารพิเศษหน้างาน">' + (chips.length ? '✎' : '+ อาหารพิเศษ') + '</button></div>';
+  // §pierNote · เรื่องที่ลูกค้าแจ้งที่ท่า · ข้อความอิสระ แยกจากอาหารพิเศษที่เป็นตัวเลข
+  var nt=(typeof pckNoteGet==='function')?pckNoteGet(b,date):'';
+  var ntHtml = nt ? ('<div class="pck-note" title="'+ckEsc(nt)+'">&#9998; '+ckEsc(nt)+'</div>') : '';
+  return '<div class="pck-mcell">' + (html || (nt?'':'<span class="ck-dim">—</span>'))
+       + '<button class="pck-mbtn" onclick="event.stopPropagation();pckMealOpen(\'' + b.id + '\',\'' + date + '\')" title="เพิ่ม/แก้อาหารพิเศษหน้างาน">' + (chips.length ? '✎' : '+ อาหารพิเศษ') + '</button>'
+       + '<button class="pck-mbtn note' + (nt?' on':'') + '" onclick="event.stopPropagation();pckNoteOpen(\'' + b.id + '\',\'' + date + '\')" title="โน้ตหน้างาน · เรื่องที่ลูกค้าแจ้งที่ท่า">' + (nt ? '✎ โน้ต' : '+ โน้ต') + '</button>'
+       + ntHtml + '</div>';
 }
+// §pierNote · โน้ตหน้างานของวันนั้น · เก็บที่ ops ของวัน ไม่ใช่ที่ booking
+function pckNoteGet(b, date){
+  var o=(typeof bkOpsRead==='function')?bkOpsRead(b,date):((b&&b.ops)||{});
+  return String((o&&o.pierNote)||'').trim();
+}
+function pckNoteSet(b, date, txt){
+  var o=(typeof bkOpsFor==='function')?bkOpsFor(b,(typeof bkOpsDate==='function'?bkOpsDate(b,date):date)):(b.ops=b.ops||{});
+  txt=String(txt||'').trim();
+  if(txt){ o.pierNote=txt; o.pierNoteAt=new Date().toISOString(); o.pierNoteBy=(typeof ckMe==='function'?ckMe():''); }
+  else { delete o.pierNote; delete o.pierNoteAt; delete o.pierNoteBy; }
+  try{ acctPersistBookings(); }catch(_){}
+  if(typeof bkV2AddHistory==='function')
+    bkV2AddHistory(b,'note',(txt?('โน้ตหน้างาน: '+txt):'ลบโน้ตหน้างาน'),'Pier');
+}
+// ── กล่องเขียนโน้ตหน้างาน ──
+var _pckNote={ bkId:null, date:'' };
+function pckNoteOpen(bkId, date){
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
+  _pckNote={ bkId:bkId, date:date };
+  var e=ckEsc, cur=pckNoteGet(b,date);
+  var o=(typeof bkOpsRead==='function')?bkOpsRead(b,date):{};
+  var who=(o&&o.pierNoteBy)?(' · '+o.pierNoteBy):'';
+  var at=(o&&o.pierNoteAt&&typeof pckHHMM==='function')?(' '+pckHHMM(o.pierNoteAt)):'';
+  var QUICK=['ขอนั่งหัวเรือ','ขอนั่งท้ายเรือ','เมาเรือ · ขอยา','ตั้งครรภ์','ว่ายน้ำไม่เป็น','ผู้สูงอายุ · ต้องช่วยขึ้นเรือ','เด็กเล็ก · ขอเสื้อชูชีพเด็ก','ขอกลับก่อน'];
+  acctModal(pckNoteCss()
+    +'<div class="pn-hd"><div><div class="pn-t">โน้ตหน้างาน</div>'
+      +'<div class="pn-s">'+e((b.voucherRef||b.code||'')+' · '+(b.leadPax||'')+' · '+date)
+        +(cur?e(' · แก้ล่าสุด'+at+who):'')+'</div></div>'
+      +'<button class="pn-x" onclick="acctModalClose()">&#10005;</button></div>'
+    +'<div class="pn-bd">'
+      +'<div class="pn-lab">เรื่องที่ลูกค้าแจ้งที่ท่า <span>ขึ้นในใบงานไกด์ช่อง Note ด้วย</span></div>'
+      +'<textarea id="pck-note-tx" rows="4" placeholder="เช่น ขอนั่งหัวเรือ · แพ้แดดจัด · ขอเสื้อชูชีพเด็ก 2 ตัว">'+e(cur)+'</textarea>'
+      +'<div class="pn-q">'+QUICK.map(function(q){
+          return '<button onclick="pckNoteQuick(\''+e(q).replace(/'/g,"")+'\')">'+e(q)+'</button>'; }).join('')+'</div>'
+      +'<div class="pn-act">'
+        +(cur?'<button class="pn-del" onclick="pckNoteSave(1)">ลบโน้ต</button>':'')
+        +'<button class="pn-b2" onclick="acctModalClose()">ยกเลิก</button>'
+        +'<button class="pn-b1" onclick="pckNoteSave(0)">บันทึก</button>'
+      +'</div>'
+    +'</div>');
+  setTimeout(function(){ var t=document.getElementById('pck-note-tx'); if(t){ t.focus(); t.setSelectionRange(t.value.length,t.value.length); } },60);
+}
+function pckNoteQuick(q){
+  var t=document.getElementById('pck-note-tx'); if(!t) return;
+  var v=String(t.value||'').trim();
+  t.value = v ? (v+' · '+q) : q;
+  t.focus();
+}
+function pckNoteSave(clear){
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===_pckNote.bkId; }); if(!b) return;
+  var t=document.getElementById('pck-note-tx');
+  pckNoteSet(b, _pckNote.date, clear?'':((t&&t.value)||''));
+  acctModalClose();
+  if(typeof renderPierCheckin==='function') renderPierCheckin();
+}
+function pckNoteCss(){ return '<style>'
+  +'#acct-modal .pn-hd{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid #E7E4DC}'
+  +'#acct-modal .pn-t{font-size:15px;font-weight:800;color:#2c2c2a}'
+  +'#acct-modal .pn-s{font-size:11px;color:#8a8a82;margin-top:2px;line-height:1.5}'
+  +'#acct-modal .pn-x{background:transparent;border:none;font-size:18px;color:#8a8a82;cursor:pointer;line-height:1}'
+  +'#acct-modal .pn-bd{padding:16px 20px 20px}'
+  +'#acct-modal .pn-lab{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8a8a82;margin-bottom:7px}'
+  +'#acct-modal .pn-lab span{font-weight:600;letter-spacing:0;text-transform:none;color:#a8a49b;margin-left:6px}'
+  +'#acct-modal .pn-bd textarea{width:100%;font-family:inherit;font-size:13px;line-height:1.6;border:1px solid #E7E4DC;'
+    +'border-radius:9px;padding:9px 11px;resize:vertical;box-sizing:border-box}'
+  +'#acct-modal .pn-bd textarea:focus{outline:none;border-color:#0F6E56}'
+  +'#acct-modal .pn-q{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}'
+  +'#acct-modal .pn-q button{border:1px dashed #D8D4CA;background:#fff;color:#5F5E5A;border-radius:999px;padding:3px 11px;'
+    +'font-family:inherit;font-size:11px;font-weight:600;cursor:pointer}'
+  +'#acct-modal .pn-q button:hover{border-style:solid;border-color:#0F6E56;color:#0F6E56}'
+  +'#acct-modal .pn-act{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}'
+  +'#acct-modal .pn-act button{font-family:inherit;font-size:12px;font-weight:700;padding:9px 16px;border-radius:9px;cursor:pointer;border:1px solid #E7E4DC;background:#fff;color:#2c2c2a}'
+  +'#acct-modal .pn-b1{background:#0F6E56 !important;border-color:#0F6E56 !important;color:#fff !important}'
+  +'#acct-modal .pn-del{margin-right:auto;border-color:#F0C9C9 !important;color:#A32D2D !important}'
+  +'</style>'; }
 // ── กล่องแก้อาหารพิเศษหน้างาน ──
 var _pckMeal = { bkId:null, date:'', veg:0, vegan:0, halal:0, allergies:'' };
 function pckMealOpen(bkId, date){
@@ -46119,7 +46203,7 @@ function pckGuideJobSheet(bid, date, rows, vd){
     var area=b.pickupArea||(b.pickupAreaId&&typeof bkV2GetArea==='function'?((bkV2GetArea(b.pickupAreaId)||{}).name||''):'')||'';
     var dropOff=pckJobDrop(b, date);                                     // §jobDrop
     var ao=pckJobService(r, date);
-    var nt=pckJobNote(b);
+    var nt=pckJobNote(b, date);
     return '<tr>'
       +'<td><span class="ck"></span></td>'
       +'<td><span class="vc">'+e(b.voucherRef||b.code||'—')+'</span></td>'
@@ -46405,7 +46489,7 @@ function pckJobService(r, date){
 }
 // ช่อง Note · เรื่องที่ไกด์ต้องรู้ก่อนถึงเรือ — อาหารพิเศษมาก่อน แล้วค่อยข้อความอิสระ
 //   อาหารเคยอยู่แต่ยอดรวมหัวใบ ซึ่งบอกว่า "มี 2 คน" แต่ไม่บอกว่าคนไหน
-function pckJobNote(b){
+function pckJobNote(b, date){
   var mm=b.specialMeals||{}, out=[];
   var veg=(+mm.veg||0)+(+mm.vegan||0);
   if(veg) out.push({w:1, t:'มังสวิรัติ '+veg});
@@ -46414,6 +46498,9 @@ function pckJobNote(b){
   if(al) out.push({w:1, t:'แพ้อาหาร: '+al});
   var sq=(typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim());
   if(sq) out.push({w:0, t:sq});
+  // §pierNote · เรื่องที่แจ้งที่ท่า · ตัวหนา (w:1) เพราะเป็นของที่เพิ่งเกิด ไกด์ยังไม่รู้
+  var pn=(typeof pckNoteGet==='function')?pckNoteGet(b,date):'';
+  if(pn) out.push({w:1, t:pn});
   return out;
 }
 // ══ §guideOrder · ใบสั่งงานมัคคุเทศก์ ═══════════════════════════════════
