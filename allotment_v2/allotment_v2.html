@@ -47230,7 +47230,9 @@ function _tsDow(d){ try{ return new Date(d+'T12:00:00').toLocaleDateString('th-T
 function _tsStamp(){ try{ var n=new Date();
   return n.toLocaleDateString('en-GB')+' '+n.toTimeString().slice(0,5); }catch(_){ return ''; } }
 // ยอด Net ของ trip หนึ่ง · อ่าน seatRates / charterRates ของ Rate Type ที่ผูกกับ agent
+//   คืน {tot, txt} · txt คือที่มาของตัวเลขในรูป "จำนวน × เรตต่อคน" ต่อกันด้วย +
 //   คืน null เมื่อหาเรตไม่เจอ (walk-in ตั้งราคาเอง ฯลฯ) → หน้าจอจะขึ้นขีดแทนตัวเลขมั่ว
+function _tsNum(v){ return Math.round(+v||0).toLocaleString('en-US'); }
 function tsNetOf(r){
   if(!r || !r.b || !r.t) return null;
   var b=r.b, t=r.t;
@@ -47248,7 +47250,9 @@ function tsNetOf(r){
     var cr=rt.charterRates && rt.charterRates[t.routeId] && rt.charterRates[t.routeId][ty];
     if(!cr) return null;
     var all=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(p):0;
-    return Math.round((+cr.starterPrice||0) + Math.max(0, all-(+cr.starterIncludes||0))*(+cr.extraPerPax||0));
+    var ex=Math.max(0, all-(+cr.starterIncludes||0));
+    var ct=Math.round((+cr.starterPrice||0) + ex*(+cr.extraPerPax||0));
+    return { tot:ct, txt:'เหมาลำ '+_tsNum(cr.starterPrice)+(ex?(' + '+ex+'\u00d7'+_tsNum(cr.extraPerPax)):'') };
   }
   var RR=rt.seatRates && rt.seatRates[t.routeId];
   if(!RR) return null;
@@ -47264,9 +47268,17 @@ function tsNetOf(r){
   var sr=zone?RR[zone]:null;
   if(!sr) return null;
   var legAd=+p.ad||0, legChd=+p.chd||0;
-  var n=(+sr['adult-fr']||0)*(+p.ad_fr||legAd) + (+sr['child-fr']||0)*(+p.chd_fr||legChd)
-       +(+sr['adult-thai']||0)*(+p.ad_th||0)   + (+sr['child-thai']||0)*(+p.chd_th||0);
-  return Math.round(n);
+  // §tsNetRate · เก็บทีละก้อน (จำนวน × เรตต่อคน) เพื่อโชว์ที่มาของตัวเลข ไม่ใช่ยอดลอย ๆ
+  var LN=[['adult-fr',(+p.ad_fr||legAd)],['adult-thai',(+p.ad_th||0)],
+          ['child-fr',(+p.chd_fr||legChd)],['child-thai',(+p.chd_th||0)]];
+  var n=0, parts=[];
+  LN.forEach(function(x){
+    var q=+x[1]||0, rate=+sr[x[0]]||0;
+    if(q<=0 || rate<=0) return;
+    n += q*rate; parts.push(q+'\u00d7'+_tsNum(rate));
+  });
+  if(!parts.length) return null;
+  return { tot:Math.round(n), txt:parts.join(' + ') };
 }
 function tsRouteColor(id){ var r=(typeof getRoute==='function'?getRoute(id):null)||{}; return r.color||'#8b909c'; }
 // §tsDocRef · อ้างอิงเอกสารจากหน้าตรวจเอกสาร · ป้ายเดียวกับที่หน้า By-trip ใช้
@@ -49624,13 +49636,12 @@ function renderTravelSum(){
       +'<td class="ts-paycol">'+tsPayCell(r, date)+'</td>'
       +(function(){
           var T=tsTotalOf(r, date), N=tsNetOf(r);
-          var _n=function(v){ return Math.round(+v||0).toLocaleString('en-US'); };
-          // §tsNetRate · (ยอดขาย / ยอด Net) · Net หาไม่เจอใส่ขีด ไม่เดา
-          var nr='<span class="ts-net" title="ยอดขายทั้งใบ / ยอด Net ตาม Rate Type">('
-                 +_n(T.all)+'/'+(N==null?'&mdash;':_n(N))+')</span>';
+          // §tsNetRate · ที่มาของยอด Net ในรูป "จำนวน × เรตต่อคน" · หาเรตไม่เจอใส่ขีด ไม่เดา
+          var nr='<span class="ts-net" title="'+(N?('ยอด Net '+money(N.tot)+' ตาม Rate Type'):'ไม่มีเรตใน Rate Type')+'">('
+                 +(N?e(N.txt):'&mdash;')+')</span>';
           var tip='booking '+money(T.base)
             +(T.site?(' · '+T.parts.map(function(p){ return p[0]+' '+money(p[1]); }).join(' · ')):'')
-            +(N==null?' · ไม่มีเรตใน Rate Type':(' · Net '+money(N)));
+            +(N?(' · Net '+money(N.tot)+' = '+N.txt):' · ไม่มีเรตใน Rate Type');
           return '<td class="r ts-mono ts-totc" style="font-weight:800" title="'+e(tip)+'">'+money(T.all)
             +(T.site?('<span class="ts-totb">'+money(T.base)+'<em>+'+money(T.site)+'</em></span>'):'')
             +nr+'</td>';
@@ -49651,7 +49662,7 @@ function renderTravelSum(){
     +'<th>Voucher</th><th>Agency</th><th>Customer (lead)</th>'
     +'<th class="c ts-px">AD</th><th class="c ts-px">CHD</th><th class="c ts-px">INF</th><th class="c ts-px">FOC</th>'
     +'<th class="c">Actual<br>/ Booked</th><th>Pickup point &middot; Room</th><th>Drop-off</th>'
-    +'<th>Add-on &middot; Upsell</th><th>Van &middot; Boat</th><th>Pay</th><th class="r">Total<br><span class="ts-thsub">ขาย / Net</span></th>'
+    +'<th>Add-on &middot; Upsell</th><th>Van &middot; Boat</th><th>Pay</th><th class="r">Total<br><span class="ts-thsub">จำนวน &times; Net</span></th>'
     +'<th>Cancel &middot; Charge</th><th class="c">Status</th>'
     +'</tr></thead><tbody>'
     +(body||'<tr><td colspan="16" class="ts-empty">'+(_tsOnlyIssue?'ไม่มีเคสที่ต้องตัดสินในวันนี้':'ไม่มี booking ในวันนี้')+'</td></tr>')
