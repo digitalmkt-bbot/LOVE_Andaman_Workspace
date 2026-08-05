@@ -43667,6 +43667,24 @@ var PCK_STAGES=[
   {k:'clr', lbl:'เคลียร์', short:'เคลียร์', col:'#7A4A00', bg:'#FBF0DD', bd:'#EAD9B0'},
   {k:'on',  lbl:'ขึ้นเรือ', short:'ขึ้นเรือ', col:'#0F6E56', bg:'#DCF4E8', bd:'#BFE3CC'}
 ];
+// สีสำหรับเขียนบนพื้นขาว · หรี่ความสว่างลงจนคอนทราสต์พอ (WCAG ~4.5:1)
+//   คืนสีเดิมถ้ามันเข้มพออยู่แล้ว · สีจืดมาก ๆ (เทา) ตกไปที่หมึกดำของระบบ
+function pckInkOnWhite(hex){
+  var m=String(hex||'').replace('#','');
+  if(m.length===3) m=m[0]+m[0]+m[1]+m[1]+m[2]+m[2];
+  if(m.length<6) return '#2f2f2b';
+  var r=parseInt(m.slice(0,2),16)/255, g=parseInt(m.slice(2,4),16)/255, b=parseInt(m.slice(4,6),16)/255;
+  var lin=function(v){ return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055,2.4); };
+  var L=function(rr,gg,bb){ return 0.2126*lin(rr)+0.7152*lin(gg)+0.0722*lin(bb); };
+  var k=1;
+  for(var i=0;i<24;i++){
+    if((1.05)/(L(r*k,g*k,b*k)+0.05) >= 4.5) break;   // เทียบกับพื้นขาว
+    k-=0.04;
+  }
+  if(k<=0.2) return '#2f2f2b';
+  var hx=function(v){ return ('0'+Math.round(Math.max(0,Math.min(1,v))*255).toString(16)).slice(-2); };
+  return '#'+hx(r*k)+hx(g*k)+hx(b*k);
+}
 function pckStage(ck){ if(!ck) return 'wait'; if(ck.at) return 'on'; if(ck.clearedAt) return 'clr'; if(ck.arrivedAt) return 'arr'; return 'wait'; }
 function pckStageRank(k){ return {wait:0, arr:1, clr:2, on:3}[k]||0; }
 // §vanBoatSplit (2026-08-01) · รถคันเดียวรับมาแล้วแยกลงคนละลำได้
@@ -43686,8 +43704,14 @@ function pckVanBoatSplit(vanId, date){
     } else if(O.vanId===vanId){ mine=true; pax=ckBookedPax(t); }
     if(!mine) return;
     var bid=O.boatId||t.charterBoatId||'', k=bid||'__none';
-    if(!idx[k]){ idx[k]={bid:bid, pax:0, n:0}; out.push(idx[k]); }
+    if(!idx[k]){ idx[k]={bid:bid, pax:0, n:0, t0:'', t1:''}; out.push(idx[k]); }
     idx[k].pax+=pax; idx[k].n++;
+    // เก็บช่วงเวลารับของกลุ่มนี้ไว้ตัดสินว่า "จอยรอบเดียวกัน" หรือ "คนละรอบ"
+    var tm=String(O.pickupTimeFinal||t.pickupTime||b.pickupTime||'').trim();
+    if(/^\d{1,2}:\d{2}/.test(tm)){
+      if(!idx[k].t0 || tm<idx[k].t0) idx[k].t0=tm;
+      if(!idx[k].t1 || tm>idx[k].t1) idx[k].t1=tm;
+    }
   });
   out.sort(function(a,b){ return b.pax-a.pax; });
   return out;
@@ -43695,17 +43719,36 @@ function pckVanBoatSplit(vanId, date){
 // §vanJoin · การ์ด/ใบงานหนึ่งอันเป็นของเรือลำเดียว · ลำอื่นที่รถคันเดียวกันต้องไปส่งคือสิ่งที่มองไม่เห็น
 //   บอกแค่ "จอยรถกับลำไหน" พอ · จำนวนคนอยู่ใน title ไว้ให้จิ้มดูตอนอยากรู้ ไม่เอามารกบนป้าย
 //   ใช้สีประจำเรือของ "ลำที่ไปจอย" ไม่ใช่ลำที่กำลังเปิดอยู่ — สายตาจะได้โยงไปถูกการ์ด
+function _pckMin(hhmm){ var m=String(hhmm||'').match(/^(\d{1,2}):(\d{2})/); return m?(+m[1]*60 + +m[2]):null; }
+// สองกลุ่มนี้อยู่รอบเดียวกันไหม · ช่วงเวลารับเหลื่อมกัน หรือห่างกันไม่เกิน 45 นาที = รอบเดียว
+function _pckSameRun(a, b){
+  var a0=_pckMin(a&&a.t0), a1=_pckMin(a&&a.t1), b0=_pckMin(b&&b.t0), b1=_pckMin(b&&b.t1);
+  if(a0==null || b0==null) return true;   // ไม่รู้เวลา → อย่าเดา ใช้คำกลาง ๆ ว่าจอย
+  if(a1==null) a1=a0; if(b1==null) b1=b0;
+  if(a0<=b1 && b0<=a1) return true;                       // ช่วงเวลาเหลื่อมกัน
+  return Math.min(Math.abs(b0-a1), Math.abs(a0-b1)) <= 20;
+}
 function pckVanJoinHtml(vanId, date, curBid, cls){
   if(!vanId || typeof pckVanBoatSplit!=='function') return '';
   var e=ckEsc;
-  var o=pckVanBoatSplit(vanId,date).filter(function(x){ return x.bid && x.bid!==curBid; });
+  var all=pckVanBoatSplit(vanId,date);
+  var cur=null; all.forEach(function(x){ if(x.bid===curBid) cur=x; });
+  var o=all.filter(function(x){ return x.bid && x.bid!==curBid; });
   if(!o.length) return '';
   return o.map(function(x){
     var c=(typeof pckBoatColor==='function')?(pckBoatColor(x.bid)||'#185FA5'):'#185FA5';
     var ink=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(c):'#fff';
     var nm=(typeof pckBoatName==='function')?pckBoatName(x.bid):x.bid;
-    return '<span class="'+cls+'" style="background:'+c+';color:'+ink+';border-color:'+c+'"'
-      +' title="รถคันนี้ต้องไปส่งขึ้นเรือ '+e(nm)+' อีก '+x.pax+' คน ('+x.n+' booking)">จอยรถกับ '+e(nm)+'</span>';
+    var same=_pckSameRun(cur,x);
+    var win=(x.t0?(x.t0+(x.t1&&x.t1!==x.t0?('–'+x.t1):'')):'');
+    var lbl = same ? ('จอยรถกับ '+e(nm))
+                   : ('อีกรอบ · '+e(nm)+(win?(' '+e(win)):''));
+    var tip = same
+      ? ('รอบเดียวกัน · รถคันนี้รับคนของ '+e(nm)+' ไปด้วยอีก '+x.pax+' คน ('+x.n+' booking)')
+      : ('คนละรอบ · รถคันนี้มีอีกงานส่งขึ้น '+e(nm)+' '+x.pax+' คน ('+x.n+' booking)'
+         +(win?(' · รับ '+e(win)):''));
+    return '<span class="'+cls+(same?'':' alt')+'" style="background:'+(same?c:'transparent')+';color:'+(same?ink:c)
+      +';border-color:'+c+'" title="'+tip+'">'+lbl+'</span>';
   }).join('');
 }
 // §onsiteVoid (2026-08-01) · ยกเลิกหน้างานจนไม่เหลือคน = ปิดรายการ ไม่ใช่ "รอเช็คอิน"
@@ -45932,14 +45975,18 @@ function pckGuideJobCss(){ return '<style>'
   +'.jwarn{border:1.5px solid #111827;border-radius:999px;padding:0 8px;font-size:10.5px;font-weight:700}'
   // ── ตาราง · 1 บุ๊คกิ้ง = 1 แถว ──
   +'.tw{flex:1;min-height:0;margin-top:6px;overflow:hidden}'
-  +'table{width:100%;border-collapse:collapse}'
-  +'th{font-size:9px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:4px 6px;border-bottom:1.5px solid #111827}'
-  +'td{padding:4px 6px;border-bottom:1px solid #e5e7eb;vertical-align:middle;font-size:11.8px;line-height:1.35}'
-  +'tr.grp td{background:#f3f4f6;border-top:1.5px solid #111827;border-bottom:1px solid #d1d5db;padding:3px 8px}'
+  // §guideGrid · กระดาษที่กรอกด้วยมือหน้าท่า ต้องมีเส้นให้สายตาไล่ · เส้นเดิมจางเกินไป
+  +'table{width:100%;border-collapse:collapse;border:1.4px solid #111827}'
+  +'th{font-size:9px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:4px 6px;'
+    +'border-bottom:1.4px solid #111827;border-right:1px solid #6b7280;background:#f3f4f6}'
+  +'td{padding:4px 6px;border-bottom:1px solid #9aa1ac;border-right:1px solid #c3c8d0;vertical-align:middle;font-size:11.8px;line-height:1.35}'
+  +'th:last-child,td:last-child{border-right:none}'
+  +'tr.grp td{background:#e8eaee;border-top:1.4px solid #111827;border-bottom:1.4px solid #111827;border-right:none;padding:4px 8px}'
   +'.gvan{font-weight:700;font-size:13px}'
   +'.gmeta{font-size:11.5px;color:#374151}.gmeta b{font-family:"DM Mono",monospace}'
   +'.gtot{float:right;font-size:12px;font-weight:700}'
   +'.gjoin{display:inline-block;border:1.5px solid;border-radius:4px;padding:0 8px;font-size:10.5px;font-weight:700;margin-left:7px;white-space:nowrap}'
+  +'.gjoin.alt{border-style:dashed}'
   +'.ck{width:14px;height:14px;border:1.5px solid #111827;border-radius:2px;display:block;margin:1px auto 0}'
   +'.vc{font-family:"DM Mono",monospace;font-weight:700;font-size:11.5px;word-break:break-all;line-height:1.15;display:inline-block}'
   +'.nmc{line-height:1.35}.nmc b{font-weight:700;font-size:12.2px}'
@@ -46107,8 +46154,7 @@ function pckGuideJobSheet(bid, date, rows, vd){
         head='<span class="gvan">'+(zk==='NOVAN'?'ยังไม่จัดรถ':'มาเอง / เอเย่นต์ส่งเอง')+'</span>'
           +' <span class="gmeta">ไม่มีรถของเรา — เช็คว่ามาถึงท่าหรือยัง</span>';
       }
-      body+='<tr class="grp"><td colspan="'+(10+(showSvc?1:0)+(showLang?1:0))+'">'+head
-        +'<span class="gtot">'+e(pckZoneLabel(zk))+' &middot; '+vg.rows.length+' booking &middot; '+st.real.all+' pax</span></td></tr>';
+      body+='<tr class="grp"><td colspan="'+(10+(showSvc?1:0)+(showLang?1:0))+'">'+head+'</td></tr>';
       vg.rows.forEach(function(r){ body+=rowHtml(r); });
     });
   });
@@ -46541,7 +46587,7 @@ function renderPierCheckin(){
       +'</div></div>'
       +'<div class="pck-bstat">'+bchip('ถึงท่า',a.arr+'/'+a.n)+bchip('เคลียร์',a.clr)+bchip('ขึ้นเรือ',a.on)
         +(a.due>0?bchip('ค้างเก็บ','&#3647;'+Math.round(a.due).toLocaleString()):'')
-        +'<div class="pck-bchip" style="background:#fff;border:1px solid #fff;color:'+col+'"><span class="k" style="opacity:.75">ที่นั่ง</span><span class="v">'+a.pax+(cap?('/'+cap):'')+'</span></div>'
+        +'<div class="pck-bchip" style="background:#fff;border:1px solid #fff;color:'+pckInkOnWhite(col)+'"><span class="k" style="opacity:.8">ที่นั่ง</span><span class="v">'+a.pax+(cap?('/'+cap):'')+'</span></div>'
         +'<button class="pck-jobbtn" onclick="event.stopPropagation();pckGuideJobOrder(\''+bid+'\')" title="พิมพ์ใบงานไกด์ของลำนี้ · A4 แนวนอน">&#128196; ใบงานไกด์</button>'
       +'</div></div>'+pckBoatMeta(B.rows, date)+'<div class="pck-bbody">';
     B.torder.forEach(function(rk){
