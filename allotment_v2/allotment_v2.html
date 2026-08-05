@@ -46060,7 +46060,9 @@ function pckGuideJobSheet(bid, date, rows, vd){
     var sv={}, lg={}, ks, kl;
     rows.forEach(function(r){ sv[_sigOf(pckJobService(r,date))]=1; lg[pckGuideLangs(r.b).join('/')]=1; });
     ks=Object.keys(sv); kl=Object.keys(lg);
-    if(ks.length===1 && ks[0]) uniSvc=ks[0];
+    // §guideSvcFull · ไม่ยุบช่อง Service อีกแล้ว · ของอย่างฉลามวาฬที่ทุกใบมีเหมือนกัน
+    //   ไกด์ต้องเห็นรายแถวเพื่อเช็คตัวคน ไม่ใช่เห็นแค่ยอดรวมบนหัวใบ
+    if(ks.length===1 && ks[0]) uniSvc='';
     if(kl.length===1 && kl[0]) uniLang=kl[0];
   })();
   var showSvc=!uniSvc, showLang=!uniLang;
@@ -46195,8 +46197,10 @@ function pckGuideJobSheet(bid, date, rows, vd){
     +'<div class="jsc"><span class="jslab">อาหาร</span>'
       +(ml.length?('<span class="jsv">'+ml.join(J)+'</span>'):(M.allergy?'':'<span class="jsnone">ไม่มี</span>'))
       +(M.allergy?('<span class="jwarn">&#9888; แพ้อาหาร '+M.allergy+'</span>'):'')+'</div>'
+    +'<div class="jsc"><span class="jslab">Service</span>'
+      +'<span class="jsv" style="font-weight:500;color:#4b5563">+ ขายหน้าท่า &middot; &#11014; อัปเกรด &middot; * ยังไม่เก็บเงิน</span></div>'
     +'<div class="jsc"><span class="jslab">Longtail</span>'+(lt.length?('<span class="jsv">'+lt.join(J)+'</span>'):'<span class="jsnone">ไม่มี</span>')
-      +(uniSvc?('<span class="jwarn">'+e(uniSvc)+' &middot; ทุกใบ</span>'):'')+'</div>'
+      +'</div>'
     +'</div>'
     +'<div class="tw"><table>'+THEAD+'<tbody>'+body+'</tbody></table></div>'
     +'</div>';
@@ -46370,6 +46374,19 @@ function pckJobService(r, date){
     if(a.kind==='longtail') return;
     var _lb=a.label+(a.note?(' ('+a.note+')'):'');
     out.push({c:pckSvcRuleColor(a.label), t:_lb});
+  }); }catch(_){}
+  // §guideSvcFull · ของที่ขายเพิ่มหน้าท่า (SB_EXTRAS) · หางยาวข้ามไป นับอยู่ในป้าย Longtail ข้างบนแล้ว
+  //   นำหน้าด้วย + ให้ไกด์แยกออกว่าไม่ได้มากับใบจอง — กระดาษขาวดำ ใช้สัญลักษณ์แทนสี
+  try{ ((typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(b.id):[]).forEach(function(x){
+    if(date && x.tripDate && x.tripDate!==date) return;
+    var nm=String(x.service||'');
+    if(/longtail|หางยาว/i.test(nm)) return;
+    out.push({c:pckSvcRuleColor(nm), t:'+ '+nm+((+x.qty||1)>1?(' \u00d7'+x.qty):'')});
+  }); }catch(_){}
+  // อัปเกรดหน้างาน · ยังไม่เก็บเงินใส่ดอกจันไว้ ไกด์จะได้ทวงถูกใบ
+  try{ (Array.isArray(b.upgrades)?b.upgrades:[]).forEach(function(u){
+    var lb=String(u.label||'upgrade');
+    out.push({c:pckSvcRuleColor(lb), t:'\u2b06 '+lb+(u.collected?'':' *')});
   }); }catch(_){}
   return out;
 }
