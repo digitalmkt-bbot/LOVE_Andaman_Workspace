@@ -36975,13 +36975,15 @@ function agLog(agentId, kind, text){
   }
   // House agent for B2C online bookings (auto-synced from the B2C site; sync sets agentId='a_b2c')
   if(!SB_AGENTS.some(x=>x.id==='a_b2c'||x.code==='B2C')){
-    SB_AGENTS.push({id:'a_b2c',code:'B2C',name:'Love Andaman',market:'b2c',sub:'Online',sales:'',payType:'cot',creditDays:0,creditLimit:0,contact:'',email:'-',phone:'-',note:'House account · B2C online bookings (auto-synced)',programs:['r5','r6','r10','r12'],rateTypeId:'rt003'});
+    SB_AGENTS.push({id:'a_b2c',code:'B2C',name:'Love Andaman',market:'b2c',sub:'Online',sales:'',payType:'cot',creditDays:0,creditLimit:0,contact:'',email:'-',phone:'-',note:'House account · B2C online bookings (auto-synced)',programs:['r5','r6','r10','r12'],rateTypeId:'rt003',vatMode:'include'});
     if(typeof sbAgentsPersist==='function') sbAgentsPersist();
     console.log('[seed] added B2C house agent (a_b2c)');
   } else {
     // back-fill: existing installs seeded this agent as 'B2C' — rename to 'Love Andaman'
     const _b2c = SB_AGENTS.find(x=>x.id==='a_b2c'||x.code==='B2C');
     if(_b2c && _b2c.name==='B2C'){ _b2c.name='Love Andaman'; if(typeof sbAgentsPersist==='function') sbAgentsPersist(); console.log('[migrate] a_b2c name -> Love Andaman'); }
+    // §b2cVat · ราคาบนเว็บรวม VAT แล้ว · ไม่ตั้งไว้ = ตกไปกอง "ไม่มี VAT" ใน Travel Summary
+    if(_b2c && !_b2c.vatMode){ _b2c.vatMode='include'; if(typeof sbAgentsPersist==='function') sbAgentsPersist(); console.log('[migrate] a_b2c vatMode -> include'); }
   }
 }catch(e){ console.warn('walkin/staff agent seed failed',e); } })();
 
