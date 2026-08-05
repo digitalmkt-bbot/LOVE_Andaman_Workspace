@@ -1201,6 +1201,12 @@ async function initDb(){
       for(const _tb of ['sb_bookings','sb_bookings__trips']){
         await sq(`${_tb}.ops_boatsplits col`, `ALTER TABLE ${OS_SCHEMA}."${_tb}" ADD COLUMN IF NOT EXISTS "ops_boatsplits" text`);
       }
+      // §pierNote (2026-08-05): ops.pierNote = {t,at,by} — เรื่องที่ลูกค้าแจ้งที่ท่า (ขอนั่งหัวเรือ · เมาเรือ ฯลฯ)
+      // อาการเดิมซ้ำรอบที่สาม: บันทึกแล้ว refresh หาย เพราะไม่มีคอลัมน์ → decompose ทิ้ง
+      // เก็บเป็นก้อนเดียว json_text จะได้เพิ่มฟิลด์ในโน้ตทีหลังโดยไม่ต้องแตะ backend อีก
+      for(const _tb of ['sb_bookings','sb_bookings__trips']){
+        await sq(`${_tb}.ops_piernote col`, `ALTER TABLE ${OS_SCHEMA}."${_tb}" ADD COLUMN IF NOT EXISTS "ops_piernote" text`);
+      }
       // §Boat capacity override รายวัน (2026-07-25): BOAT_CAP_OVR['YYYY-MM-DD::boatId'] = {cap,reason,by,at}
       // keyed map เหมือน vanjob_driver → 1 ตาราง รองรับทุกลำทุกวัน ไม่ต้องเพิ่มคอลัมน์ตอนมีเรือลำใหม่
       await sq('boat_capovr table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."boat_capovr" (id text PRIMARY KEY, key text, cap bigint, reason text, "by" text, at text)`);

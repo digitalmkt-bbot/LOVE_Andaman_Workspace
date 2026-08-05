@@ -45664,15 +45664,22 @@ function pckMealCell(b, date){
        + ntHtml + '</div>';
 }
 // §pierNote · โน้ตหน้างานของวันนั้น · เก็บที่ ops ของวัน ไม่ใช่ที่ booking
-function pckNoteGet(b, date){
+// ops.pierNote = {t:ข้อความ, at:เวลา, by:คนเขียน} · ก้อนเดียว = คอลัมน์เดียวใน operation_schemas
+//   รับของเก่าที่เคยเก็บเป็น string ล้วนด้วย (ที่พิมพ์ไปก่อนแก้บั๊กนี้)
+function pckNoteObj(b, date){
   var o=(typeof bkOpsRead==='function')?bkOpsRead(b,date):((b&&b.ops)||{});
-  return String((o&&o.pierNote)||'').trim();
+  var v=o&&o.pierNote;
+  if(!v) return null;
+  if(typeof v==='string') return { t:v.trim(), at:(o.pierNoteAt||''), by:(o.pierNoteBy||'') };
+  return { t:String(v.t||'').trim(), at:String(v.at||''), by:String(v.by||'') };
 }
+function pckNoteGet(b, date){ var n=pckNoteObj(b,date); return n?n.t:''; }
 function pckNoteSet(b, date, txt){
   var o=(typeof bkOpsFor==='function')?bkOpsFor(b,(typeof bkOpsDate==='function'?bkOpsDate(b,date):date)):(b.ops=b.ops||{});
   txt=String(txt||'').trim();
-  if(txt){ o.pierNote=txt; o.pierNoteAt=new Date().toISOString(); o.pierNoteBy=(typeof ckMe==='function'?ckMe():''); }
-  else { delete o.pierNote; delete o.pierNoteAt; delete o.pierNoteBy; }
+  if(txt) o.pierNote={ t:txt, at:new Date().toISOString(), by:(typeof ckMe==='function'?ckMe():'') };
+  else o.pierNote=null;                       // null ไม่ใช่ delete · ต้องส่งค่าว่างขึ้นไปล้างคอลัมน์ด้วย
+  delete o.pierNoteAt; delete o.pierNoteBy;   // ของเวอร์ชันแรก · ไม่มีคอลัมน์รองรับอยู่แล้ว
   try{ acctPersistBookings(); }catch(_){}
   if(typeof bkV2AddHistory==='function')
     bkV2AddHistory(b,'note',(txt?('โน้ตหน้างาน: '+txt):'ลบโน้ตหน้างาน'),'Pier');
@@ -45682,10 +45689,9 @@ var _pckNote={ bkId:null, date:'' };
 function pckNoteOpen(bkId, date){
   var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
   _pckNote={ bkId:bkId, date:date };
-  var e=ckEsc, cur=pckNoteGet(b,date);
-  var o=(typeof bkOpsRead==='function')?bkOpsRead(b,date):{};
-  var who=(o&&o.pierNoteBy)?(' · '+o.pierNoteBy):'';
-  var at=(o&&o.pierNoteAt&&typeof pckHHMM==='function')?(' '+pckHHMM(o.pierNoteAt)):'';
+  var e=ckEsc, N=pckNoteObj(b,date), cur=N?N.t:'';
+  var who=(N&&N.by)?(' · '+N.by):'';
+  var at=(N&&N.at&&typeof pckHHMM==='function')?(' '+pckHHMM(N.at)):'';
   var QUICK=['ขอนั่งหัวเรือ','ขอนั่งท้ายเรือ','เมาเรือ · ขอยา','ตั้งครรภ์','ว่ายน้ำไม่เป็น','ผู้สูงอายุ · ต้องช่วยขึ้นเรือ','เด็กเล็ก · ขอเสื้อชูชีพเด็ก','ขอกลับก่อน'];
   acctModal(pckNoteCss()
     +'<div class="pn-hd"><div><div class="pn-t">โน้ตหน้างาน</div>'

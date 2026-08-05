@@ -4916,6 +4916,11 @@
       "kind": "json_text",
       "db_type": "text"
     },
+    "ops_piernote": {
+      "source": "ops.pierNote",
+      "kind": "json_text",
+      "db_type": "text"
+    },
     "pierpayments": {
       "source": "pierPayments",
       "kind": "json_text",
@@ -5182,6 +5187,11 @@
     },
     "ops_piercheckin": {
       "source": "trips[].ops.pierCheckin",
+      "kind": "json_text",
+      "db_type": "text"
+    },
+    "ops_piernote": {
+      "source": "trips[].ops.pierNote",
       "kind": "json_text",
       "db_type": "text"
     }

@@ -4473,6 +4473,10 @@
         "type": "text"
       },
       {
+        "name": "ops_piernote",
+        "type": "text"
+      },
+      {
         "name": "pierpayments",
         "type": "text"
       }
@@ -4701,6 +4705,10 @@
       },
       {
         "name": "ops_piercheckin",
+        "type": "text"
+      },
+      {
+        "name": "ops_piernote",
         "type": "text"
       }
     ],
