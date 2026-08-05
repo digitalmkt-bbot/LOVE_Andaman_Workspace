@@ -45511,10 +45511,13 @@ function pckCardCSS(scope){ return ''
   +scope+' .pck-svcprev{display:inline-block;border:1.5px solid #111827;border-radius:3px;padding:1px 8px;font-size:10.5px;font-weight:700;white-space:nowrap}'
   +' .lg{display:inline-block;border:1.5px solid #111827;border-radius:3px;padding:0 6px;font-family:\'DM Mono\',monospace;font-size:11px;font-weight:700;white-space:nowrap;line-height:1.6}'
   +' .lg.alt{background:#111827;color:#fff}'
-  +scope+' .pck-joball{margin-left:auto;background:#2f2f2b;border:1.5px solid #2f2f2b;color:#fff;border-radius:999px;padding:6px 14px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}'
-  // §guideOrder · ปุ่มใบสั่งงานมัคคุเทศก์ · แยกสีจากใบงานไกด์ไม่ให้กดผิดใบ
-  +scope+' .pck-joball.go{margin-left:8px;background:#0F6E56;border-color:#0F6E56}'
-  +scope+' .pck-joball.go2{margin-left:6px;background:#fff;border-color:#E7E4DC;color:#5F5E5A}'
+  // §pckJobIcon · เหลือแค่ไอคอน · ชื่อเต็มอยู่ tooltip · แยกด้วยสี
+  +scope+' .pck-joball{margin-left:auto;width:32px;height:32px;padding:0;flex:none;display:inline-flex;align-items:center;justify-content:center;'
+    +'background:#2f2f2b;border:1.5px solid #2f2f2b;color:#fff;border-radius:50%;font-size:14px;line-height:1;cursor:pointer;font-family:inherit}'
+  +scope+' .pck-joball:hover{filter:brightness(1.15)}'
+  // §guideOrder · ใบสั่งงานมัคคุเทศก์ · เขียว แยกจากใบงานไกด์ไม่ให้กดผิดใบ
+  +scope+' .pck-joball.go{margin-left:7px;background:#0F6E56;border-color:#0F6E56}'
+  +scope+' .pck-joball.go2{margin-left:5px;background:#fff;border-color:#E7E4DC;color:#5F5E5A;font-size:13px}'
   +scope+' .pck-jobbtn.go{margin-left:6px}'
   +scope+' .pck-jobbtn.go b{font-size:9px;vertical-align:2px}'
   +scope+' .pck-joball:hover{background:#15201a;border-color:#15201a}'
@@ -46836,9 +46839,9 @@ function pckBoatTabs(all){
       +'<span class="rt"'+(on?' style="color:'+ink+'"':'')+'><i style="background:'+(rt.color||'#999')+'"></i>'+e(rt.name||'—')+(dep?(' · '+e(dep)):'')+'</span>'
       +'<span class="c"'+(on?' style="color:'+ink+'"':'')+'>'+a.on+'/'+a.n+'</span></button>';
   });
-  return h+'<button class="pck-joball" onclick="pckGuideJobOrder(\'all\')" title="พิมพ์ใบงานไกด์ทุกลำของวันนี้ · 1 ลำ = 1 ใบ">&#128196; ใบงานไกด์ทุกลำ</button>'
-    +'<button class="pck-joball go" onclick="goPrint(\'all\')" title="พิมพ์ใบสั่งงานมัคคุเทศก์ทุกลำ · A4 แนวตั้ง · 1 ลำ = 1 ใบ">&#128220; ใบสั่งงานมัคคุเทศก์ทุกลำ</button>'
-    +'<button class="pck-joball go2" onclick="goRegOpen(\'\')" title="ทะเบียนไกด์ · เลขที่ใบ · ผู้มีอำนาจลงนาม">&#9881; ทะเบียนไกด์</button></div>';
+  return h+'<button class="pck-joball" onclick="pckGuideJobOrder(\'all\')" title="ใบงานไกด์ทุกลำของวันนี้ · A4 แนวนอน · 1 ลำ = 1 ใบ">&#128196;</button>'
+    +'<button class="pck-joball go" onclick="goPrint(\'all\')" title="ใบสั่งงานมัคคุเทศก์ทุกลำ · A4 แนวตั้ง · 1 ลำ = 1 ใบ">&#128220;</button>'
+    +'<button class="pck-joball go2" onclick="goRegOpen(\'\')" title="ทะเบียนไกด์ · เลขที่ใบ · ผู้มีอำนาจลงนาม">&#9881;</button></div>';
 }
 function renderPierCheckin(){
   var host=document.getElementById('piercheckin-host'); if(!host) return;
