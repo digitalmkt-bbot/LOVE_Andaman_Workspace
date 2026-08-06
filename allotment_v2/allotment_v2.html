@@ -38747,6 +38747,7 @@ window._laReloadData=function(){
     if(typeof VANJOB_DRIVER!=='undefined' && d.vanjob_driver) VANJOB_DRIVER=d.vanjob_driver;
     if(typeof BOAT_CAP_OVR!=='undefined' && d.boat_capovr) BOAT_CAP_OVR=d.boat_capovr;   // §cap override รายวัน
     if(typeof TRAVEL_SUM!=='undefined' && d.travel_sum) TRAVEL_SUM=d.travel_sum;   // §Travel Summary
+    if(typeof TS_COT!=='undefined' && d.ts_cot) TS_COT=d.ts_cot;                   // §tsCotSettle
     return true;
   }catch(e){ console.warn('_laReloadData', e); return false; }
 };
@@ -47221,6 +47222,28 @@ function tsRows(date){
       || _az(x.b.voucherRef||x.b.code||'', y.b.voucherRef||y.b.code||'');
   });
 }
+// §tsCotSettle · สถานะการเคลียร์ส่วนต่าง COT · โครงเดียวกับ TRAVEL_SUM
+let TS_COT={};
+(function(){ try{ const lsKey=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2');
+  const d=JSON.parse(localStorage.getItem(lsKey)||'{}');
+  if(d && d.ts_cot && typeof d.ts_cot==='object') TS_COT=d.ts_cot; }catch(_){} })();
+function tsCotPersist(){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;
+  try{ const lsKey=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2');
+    const d=JSON.parse(localStorage.getItem(lsKey)||'{}');
+    d.ts_cot=TS_COT; localStorage.setItem(lsKey, JSON.stringify(d)); }catch(_){}
+}
+function tsCotGet(bkId,date){ return TS_COT[_tsKey(bkId,date)]||null; }
+function tsCotNoteOf(bkId,date){ var el=document.getElementById('ts-cotn-'+bkId); if(el) return el.value; var c=tsCotGet(bkId,date); return c?(c.note||''):''; }
+function tsCotDone(bkId,date){
+  TS_COT[_tsKey(bkId,date)]={ done:true, note:String(tsCotNoteOf(bkId,date)||''), by:ckMe(), at:new Date().toISOString() };
+  tsCotPersist(); tsAfter();
+}
+function tsCotUndo(bkId,date){ delete TS_COT[_tsKey(bkId,date)]; tsCotPersist(); tsAfter(); }
+function tsCotSaveNote(bkId,date){
+  var c=tsCotGet(bkId,date); if(!c) return;                 // ยังไม่เคลียร์ ค่อยเก็บตอนกดปุ่ม
+  c.note=String(tsCotNoteOf(bkId,date)||''); tsCotPersist();
+}
 var _tsOnlyIssue=false;
 function tsToggleFilter(){ _tsOnlyIssue=!_tsOnlyIssue; tsAfter(); }
 function tsPick(bkId,date,kind,amt){
@@ -47327,6 +47350,10 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-totb{display:block;font-size:9px;font-weight:600;color:var(--zn400);white-space:nowrap;margin-top:1px}'
  +S+' .ts-totb em{font-style:normal;color:var(--lm700);font-weight:700;margin-left:3px}'
  +S+' .ts-net{display:block;font-size:9.5px;font-weight:600;color:var(--zn500);white-space:nowrap;margin-top:1px}'
+ // §tsCotSettle
+ +S+' .ts-cotn{white-space:pre-wrap;line-height:1.45;color:var(--zn700);max-width:340px}'
+ +S+' .ts-cotn.empty{color:var(--zn400);font-style:italic}'
+ +S+' .ts-cotgap{font-family:\'DM Mono\',monospace;font-weight:700}'
  +S+' .ts-lead{font-weight:700;color:var(--zn900)} '+S+' .ts-tel{font-size:9.5px;color:var(--zn500);font-family:\'DM Mono\',monospace}'
  +S+' .ts-chip{display:inline-block;border-radius:999px;padding:2px 9px;font-size:9.5px;font-weight:800;white-space:nowrap;border:1px solid;margin:1px 3px 1px 0}'
  +S+' .ts-chip.g{background:var(--lm100);color:var(--lm950);border-color:var(--lm200)}'
@@ -50227,7 +50254,7 @@ function renderTravelSum(){
       +'</tr>';
   });
   var manifest='<div class="ts-sec"><div class="ts-sech"><div>'
-    +'<div class="ts-sect"><span class="ts-sn">04</span>Manifest ประจำวัน</div>'
+    +'<div class="ts-sect"><span class="ts-sn">05</span>Manifest ประจำวัน</div>'
     +'<div class="ts-secd">รายการทั้งหมดของวันเรียงตามเส้นทาง (Agency A-Z) — แยกจำนวนตามประเภทผู้โดยสาร · จุดรับและจุดส่งกลับ · '
       +'Add-on ทุกขั้นตอน · เงื่อนไขการชำระและยอดที่ต้องเก็บ · ค่าปรับกรณียกเลิก/ไม่มา · '
       +'ช่อง <b>Total</b> คือยอด booking บวกของที่ขายเพิ่มหน้างานแล้ว · '
@@ -50323,6 +50350,72 @@ function renderTravelSum(){
       +'<button class="ts-btn pri" onclick="tsPrintSheet()">&#128424; พิมพ์ / บันทึก PDF</button>'
     +'</div>'+rPills+vPills+'</div>';
 
+  // ══ ส่วนที่ 4 · เคลียร์ส่วนต่าง COT ══
+  var cotRows=all.map(function(r){
+    var M=(typeof pckMoney==='function')?pckMoney(r.b,date):null;
+    if(!M || !(M.cot>0)) return null;
+    var T=tsTotalOf(r,date);
+    return { r:r, b:r.b, M:M, tot:T.all, gap:Math.max(0, (T.all||0)-(+M.cot||0)),
+             st:tsCotGet(r.b.id,date) };
+  }).filter(Boolean);
+  var cotSecHtml='';
+  if(cotRows.length){
+    var cSumCot=0, cSumGap=0, cLeft=0;
+    cotRows.forEach(function(x){ cSumCot+=(+x.M.cot||0); cSumGap+=x.gap; if(!x.st) cLeft++; });
+    var cbody=cotRows.map(function(x){
+      var b=x.b, id=b.id, ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
+      var agName=ag?(ag.name||ag.code||'—'):(b.channel||'walk-in');
+      var agColor=(b.agentId&&typeof bkV2AgentColor==='function')?bkV2AgentColor(b.agentId):'#64748B';
+      var agInk=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(agColor):'#fff';
+      var sep=(x.M.handling==='separate');
+      var note=String(x.M.note||'').trim();
+      return '<tr'+(x.st?'':' class="need"')+'>'
+        +'<td><span class="ts-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'
+        +'<td><span class="ts-ag" style="background:'+agColor+';color:'+agInk+'">'+e(agName)+'</span></td>'
+        +'<td class="r ts-mono" style="font-weight:800">'+money(x.tot)+'</td>'
+        +'<td class="r"><span class="ts-chip '+(sep?'a':'b')+'">'+money(x.M.cot)+' &middot; '+(sep?'แยกจากบิล':'หักจากบิล')+'</span>'
+          +(x.M.pierPaid>0?('<div class="ts-totb">เก็บที่ท่าแล้ว '+money(x.M.pierPaid)+'</div>')
+                          :('<div class="ts-totb" style="color:var(--rs700)">ยังไม่ได้เก็บที่ท่า</div>'))+'</td>'
+        +'<td class="r ts-cotgap">'+money(x.gap)+'</td>'
+        +'<td><div class="ts-cotn'+(note?'':' empty')+'">'+(note?e(note):'ไม่มีรายละเอียดในโน้ต COT')+'</div></td>'
+        +'<td style="min-width:230px">'
+          +'<input id="ts-cotn-'+id+'" class="ts-note" type="text" value="'+e(x.st?(x.st.note||''):'')+'"'
+            +' placeholder="เลขอ้างอิงการโอน / หมายเหตุ" onchange="tsCotSaveNote(\''+id+'\',\''+date+'\')">'
+          +'<div style="margin-top:4px">'
+          +(x.st
+              ? ('<button class="ts-db del" onclick="tsCotUndo(\''+id+'\',\''+date+'\')">ยกเลิกการเคลียร์</button>')
+              : ('<button class="ts-db on" onclick="tsCotDone(\''+id+'\',\''+date+'\')">&#10003; เคลียร์แล้ว</button>'))
+          +'</div></td>'
+        +'<td class="c">'+(x.st
+            ? ('<span class="ts-chip g">&#10003; เคลียร์แล้ว</span><div class="ts-totb">'+e(x.st.by||'')
+               +(x.st.at?(' &middot; '+e(String(x.st.at).slice(0,10))):'')+'</div>')
+            : '<span class="ts-chip a">รอจัดการ</span>')+'</td>'
+        +'</tr>';
+    }).join('');
+    cotSecHtml='<div class="ts-sec"><div class="ts-sech"><div>'
+      +'<div class="ts-sect"><span class="ts-sn">04</span>Cash on Tour &middot; เคลียร์ส่วนต่าง</div></div>'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
+        +'<span class="ts-chip n" style="font-size:11px;padding:5px 12px">COT รวม '+money(cSumCot)+'</span>'
+        +'<span class="ts-chip b" style="font-size:11px;padding:5px 12px">ส่วนต่างรวม '+money(cSumGap)+'</span>'
+        +(cLeft?('<span class="ts-chip a" style="font-size:11px;padding:5px 12px">รอจัดการ '+cLeft+' ใบ</span>')
+               :('<span class="ts-chip g" style="font-size:11px;padding:5px 12px">เคลียร์ครบแล้ว</span>'))
+      +'</div></div>'
+      +'<div class="ts-card ts-scroll"><table class="ts-tbl"><thead><tr>'
+        +'<th style="width:9%">Voucher</th><th style="width:12%">Agency</th>'
+        +'<th class="r" style="width:9%">ยอดรวมใบ</th>'
+        +'<th class="r" style="width:16%">Cash on Tour</th>'
+        +'<th class="r" style="width:9%">ส่วนต่าง</th>'
+        +'<th style="width:23%">รายละเอียดจากโน้ต COT</th>'
+        +'<th style="width:14%">การจัดการ</th>'
+        +'<th class="c" style="width:8%">สถานะ</th>'
+      +'</tr></thead><tbody>'+cbody+'</tbody></table></div>'
+      +'<div class="ts-secd" style="display:block;margin-top:8px;font-size:10.5px;color:var(--zn500)">'
+        +'ส่วนต่าง = ยอดรวมใบ &minus; Cash on Tour &middot; '
+        +'“หักจากบิล” หมายถึงเงิน COT ก้อนนี้ไปลดยอดในใบแจ้งหนี้ของ agent &middot; '
+        +'“แยกจากบิล” หมายถึงบิลเต็มยังต้องเก็บตามเดิม</div>'
+    +'</div>';
+  }
+
   host.innerHTML='<style id="ts-style">'+tsCSS()+'</style>'
     +'<div class="ts-wrap">'+head
     +'<div class="ts-sec"><div class="ts-sech"><div>'
@@ -50330,7 +50423,7 @@ function renderTravelSum(){
       +'<div class="ts-secd">ยอดรวมทุกเส้นทางของวันนี้ · ตัวเลขทั้งหมดคิดจากผู้โดยสารที่เดินทางจริงหลังหักคนที่ไม่มา</div></div>'
       +'<span class="ts-chip n" style="font-size:11px;padding:5px 12px">เก็บค่าปรับได้ '+money(charge)+(nPostpone?(' · เลื่อนวัน '+nPostpone+' เคส'):'')+'</span></div>'
       +kpis+'</div>'
-    +audit+cash+manifest+'</div>';
+    +audit+cash+cotSecHtml+manifest+'</div>';
 }
 
 function bkV2VanJobOrder(date, vanId, routeId, leg){
