@@ -37806,9 +37806,11 @@ function psuRenderShell(){
       <button class="psu-tab ${_psuTab==='profiles'?'on':''}" onclick="psuSetTab('profiles')">📅 Schedule Profiles</button>
       <button class="psu-tab ${_psuTab==='areas'?'on':''}" onclick="psuSetTab('areas')">📍 Pickup Areas</button>
       <button class="psu-tab ${_psuTab==='matrix'?'on':''}" onclick="psuSetTab('matrix')">⏱ Time Matrix</button>
+      <button class="psu-tab ${_psuTab==='hotels'?'on':''}" onclick="psuSetTab('hotels')">🏨 ชื่อโรงแรมซ้ำ</button>
     </div>
 
-    ${_psuTab === 'profiles' ? psuRenderProfilesTab() : _psuTab === 'areas' ? psuRenderAreasTab() : psuRenderMatrixTab()}
+    ${_psuTab === 'profiles' ? psuRenderProfilesTab() : _psuTab === 'areas' ? psuRenderAreasTab()
+      : _psuTab === 'hotels' ? psuRenderHotelsTab() : psuRenderMatrixTab()}
 
     ${_psuAreaDraft ? psuRenderAreaModal() : ''}
     ${_psuProfileDraft ? psuRenderProfileModal() : ''}
@@ -37817,6 +37819,108 @@ function psuRenderShell(){
 }
 
 function psuSetTab(tab){ _psuTab = tab; renderPickupSetup(); }
+
+// ═══ §hotelMerge · รวมชื่อโรงแรมที่เขียนต่างกันแต่เป็นที่เดียวกัน ═══
+//   จัดกลุ่มด้วย bkV2HotelKey (คีย์เดียวกับที่ New Booking ใช้เทียบ)
+//   แล้วเชื่อมกลุ่มที่คะแนนความเหมือน >= เกณฑ์เข้าด้วยกันแบบ union-find
+var _psuHotelMin=0.82, _psuHotelPick={};
+function psuSetHotelMin(v){ _psuHotelMin=Math.max(0.5,Math.min(1,parseFloat(v)||0.82)); _psuHotelPick={}; renderPickupSetup(); }
+function psuHotelGroups(){
+  var BK=(typeof SB_BOOKINGS!=='undefined')?SB_BOOKINGS:[];
+  var byName={}, order=[];
+  BK.forEach(function(b){
+    if(!b) return;
+    ['hotelName','pickup'].forEach(function(f){
+      var s=String(b[f]||'').replace(/\s+/g,' ').trim(); if(!s) return;
+      if(!byName[s]){ byName[s]={name:s, n:0, last:''}; order.push(s); }
+      byName[s].n++;
+      var d=((b.trips&&b.trips[0])?b.trips[0].date:'')||'';
+      if(d>byName[s].last) byName[s].last=d;
+    });
+  });
+  // union-find บนชื่อทั้งหมด
+  var idx={}, par=[];
+  order.forEach(function(nm,i){ idx[nm]=i; par[i]=i; });
+  var find=function(i){ while(par[i]!==i){ par[i]=par[par[i]]; i=par[i]; } return i; };
+  var uni=function(a,b){ a=find(a); b=find(b); if(a!==b) par[b]=a; };
+  for(var i=0;i<order.length;i++){
+    for(var j=i+1;j<order.length;j++){
+      if(bkV2HotelSim(order[i],order[j])>=_psuHotelMin) uni(i,j);
+    }
+  }
+  var g={};
+  order.forEach(function(nm){ var r=find(idx[nm]); (g[r]=g[r]||[]).push(byName[nm]); });
+  var out=Object.keys(g).map(function(k){
+    var arr=g[k].sort(function(x,y){ return y.n-x.n || x.name.localeCompare(y.name); });
+    // ชื่อที่ควรเก็บโดยปริยาย · ใช้บ่อยสุดก่อน · เสมอกันเอาที่พิมพ์เป็นชื่อเฉพาะ (มีตัวใหญ่) และยาวกว่า
+    var keep=arr.slice().sort(function(x,y){
+      if(y.n!==x.n) return y.n-x.n;
+      var ux=/[A-Z\u0E00-\u0E7F]/.test(x.name)?1:0, uy=/[A-Z\u0E00-\u0E7F]/.test(y.name)?1:0;
+      if(ux!==uy) return uy-ux;
+      return y.name.length-x.name.length;
+    })[0].name;
+    return { id:'g'+k, items:arr, keep:keep, tot:arr.reduce(function(a,x){return a+x.n;},0) };
+  }).filter(function(x){ return x.items.length>1; });
+  out.sort(function(a,b){ return b.items.length-a.items.length || b.tot-a.tot; });
+  return out;
+}
+function psuHotelPick(gid, name){ _psuHotelPick[gid]=name; renderPickupSetup(); }
+function psuHotelMerge(gid){
+  if(typeof window.laGuardEdit==='function' && !window.laGuardEdit('operations')) return;
+  var G=psuHotelGroups().filter(function(x){ return x.id===gid; })[0]; if(!G) return;
+  var keep=_psuHotelPick[gid]||G.keep;
+  var drop=G.items.map(function(x){return x.name;}).filter(function(x){ return x!==keep; });
+  if(!drop.length){ alert('กลุ่มนี้เหลือชื่อเดียวแล้ว'); return; }
+  if(!confirm('รวม '+drop.length+' ชื่อเข้าเป็น "'+keep+'"\n\n'
+    +drop.map(function(x){return '  · '+x;}).join('\n')
+    +'\n\nจะเขียนทับชื่อโรงแรมใน booking ที่เกี่ยวข้องทั้งหมด · ย้อนกลับไม่ได้')) return;
+  var set={}; drop.forEach(function(x){ set[x]=1; });
+  var n=0;
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+    if(!b) return; var hit=false;
+    if(b.hotelName && set[String(b.hotelName).replace(/\s+/g,' ').trim()]){ b.hotelName=keep; hit=true; }
+    if(b.pickup && set[String(b.pickup).replace(/\s+/g,' ').trim()]){ b.pickup=keep; hit=true; }
+    if(hit){ n++; if(typeof bkV2AddHistory==='function') bkV2AddHistory(b,'edit','รวมชื่อโรงแรมเป็น "'+keep+'"','Hotel merge'); }
+  });
+  try{ if(typeof acctPersistBookings==='function') acctPersistBookings(); }catch(_){}
+  delete _psuHotelPick[gid];
+  alert('รวมเรียบร้อย · แก้ไป '+n+' booking');
+  renderPickupSetup();
+}
+function psuRenderHotelsTab(){
+  var esc=function(s){ return String(s||'').replace(/[&<>"']/g,function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); };
+  var G=psuHotelGroups();
+  var nNames=0; G.forEach(function(g){ nNames+=g.items.length; });
+  var head='<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">'
+    +'<div style="font-size:13px;color:#5a5a52">พบ <b style="color:#1B2A55">'+G.length+'</b> กลุ่มที่น่าจะเป็นโรงแรมเดียวกัน '
+      +'(รวม <b>'+nNames+'</b> ชื่อ) · เลือกชื่อที่จะเก็บไว้แล้วกดรวม</div>'
+    +'<label style="margin-left:auto;font-size:12px;color:#8a8a82;display:inline-flex;align-items:center;gap:7px">ความเข้มการจับคู่'
+      +'<select onchange="psuSetHotelMin(this.value)" style="font-family:inherit;font-size:12px;border:1px solid #e0ddd5;border-radius:6px;padding:5px 8px;background:#fff">'
+      +[['0.92','เข้มมาก · เฉพาะที่เกือบเหมือน'],['0.82','ปกติ'],['0.7','หลวม · จับได้เยอะแต่ต้องตรวจ']]
+        .map(function(o){ return '<option value="'+o[0]+'"'+(String(_psuHotelMin)===o[0]?' selected':'')+'>'+o[1]+'</option>'; }).join('')
+      +'</select></label></div>';
+  if(!G.length) return head+'<div style="padding:26px;text-align:center;color:#8a8a82;font-size:13px;background:#fff;border:1px solid #eceae2;border-radius:10px">ไม่พบชื่อที่ซ้ำกันในระดับนี้ &#127881;</div>';
+  var body=G.map(function(g){
+    var keep=_psuHotelPick[g.id]||g.keep;
+    var rows=g.items.map(function(it){
+      var on=(it.name===keep);
+      return '<label style="display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:7px;cursor:pointer;'
+        +'background:'+(on?'#EAF4F0':'transparent')+'">'
+        +'<input type="radio" name="hg-'+g.id+'"'+(on?' checked':'')+' onchange="psuHotelPick(\''+g.id+'\',this.dataset.n)" data-n="'+esc(it.name)+'" style="accent-color:#0F6E56">'
+        +'<span style="flex:1;font-size:13px;color:#1a1a1a;'+(on?'font-weight:700':'')+'">'+esc(it.name)+'</span>'
+        +'<span style="font-size:11px;color:#8a8a82;font-family:\'DM Mono\',monospace">'+it.n+' booking</span>'
+        +(it.last?'<span style="font-size:10.5px;color:#b4b2aa;width:82px;text-align:right">ล่าสุด '+esc(it.last)+'</span>':'')
+        +'</label>';
+    }).join('');
+    return '<div style="background:#fff;border:1px solid #eceae2;border-radius:10px;padding:11px 13px;margin-bottom:9px">'
+      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:5px">'
+        +'<span style="font-size:11px;font-weight:700;color:#8a8a82;letter-spacing:.05em;text-transform:uppercase">'+g.items.length+' ชื่อ · '+g.tot+' booking</span>'
+        +'<button onclick="psuHotelMerge(\''+g.id+'\')" style="margin-left:auto;background:#0F6E56;color:#fff;border:none;'
+          +'border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">รวมเป็นชื่อนี้</button></div>'
+      +rows+'</div>';
+  }).join('');
+  return head+body;
+}
 
 // ─── Schedule Profiles Tab ───
 function psuRenderProfilesTab(){
@@ -68997,6 +69101,49 @@ function bkV2HotelNameList(zoneFilter, areaFilter){
   list.sort(function(a,b){return a.localeCompare(b);});
   return list;
 }
+// §hotelDedupe · คีย์เทียบชื่อโรงแรม · แรงกว่าเดิมมาก
+//   ตัดเครื่องหมายวรรคตอนทิ้ง · ตัดคำที่ไม่ช่วยแยกโรงแรม (hotel/resort/phuket/the/…)
+//   เรียงคำใหม่ตามตัวอักษร → สลับลำดับคำก็ยังเป็นคีย์เดียวกัน
+var _HOTEL_STOP={hotel:1,resort:1,resorts:1,spa:1,the:1,by:1,and:1,at:1,of:1,a:1,an:1,
+  phuket:1,thailand:1,beach:1,'&':1,'-':1,co:1,ltd:1,'จ':1,'จังหวัด':1,'ภูเก็ต':1,'โรงแรม':1,'รีสอร์ท':1,'รีสอร์ต':1};
+function bkV2HotelKey(s){
+  var x=String(s||'').toLowerCase()
+    .replace(/[()\[\]{}]/g,' ')
+    .replace(/[-_/\\,.'"`|+*:;!?#@~^]/g,' ')
+    .replace(/&/g,' ')
+    .replace(/\s+/g,' ').trim();
+  var t=x.split(' ').filter(function(w){ return w && !_HOTEL_STOP[w]; });
+  if(!t.length) t=x.split(' ').filter(Boolean);
+  return t.sort().join(' ');
+}
+// คะแนนความเหมือน · ชุดคำเหมือนกันแค่ไหน (Dice) ผสมกับตัวอักษรที่ตรงกันจากหัว
+function bkV2HotelSim(a,b){
+  var ka=bkV2HotelKey(a), kb=bkV2HotelKey(b);
+  if(!ka || !kb) return 0;
+  if(ka===kb) return 1;
+  var ta=ka.split(' '), tb=kb.split(' ');
+  var m={}; ta.forEach(function(w){ m[w]=(m[w]||0)+1; });
+  var hit=0; tb.forEach(function(w){ if(m[w]>0){ m[w]--; hit++; } });
+  var dice=(2*hit)/(ta.length+tb.length);
+  // คำที่ไม่ตรงเป๊ะแต่ขึ้นต้นเหมือนกัน (พิมพ์ตกท้าย) ให้คะแนนบางส่วน
+  var pre=0, sa=ka.replace(/ /g,''), sb=kb.replace(/ /g,'');
+  var n=Math.min(sa.length,sb.length); for(var i=0;i<n;i++){ if(sa[i]!==sb[i]) break; pre++; }
+  var prefix=pre/Math.max(sa.length,sb.length);
+  return Math.max(dice, dice*0.75+prefix*0.25);
+}
+// ชื่อเดิมที่ใกล้ที่สุด · คืน null ถ้าไม่มีอะไรใกล้พอ
+function bkV2HotelNear(name, minScore){
+  var s=String(name||'').trim(); if(!s) return null;
+  var lim=(minScore==null)?0.82:minScore;
+  var list=bkV2HotelNameList(), best=null, bs=0;
+  for(var i=0;i<list.length;i++){
+    var sc=bkV2HotelSim(s, list[i]);
+    if(sc>bs){ bs=sc; best=list[i]; }
+  }
+  if(!best || bs<lim) return null;
+  if(bkV2HotelKey(best)===bkV2HotelKey(s) && best===s) return null;   // เหมือนเดิมเป๊ะ ไม่ต้องถาม
+  return {name:best, score:bs};
+}
 // Snap a typed hotel name to an EXISTING canonical spelling (match ignoring case/parens/spaces).
 // Prevents new duplicate variants on save · returns a whitespace-tidied version if genuinely new.
 function bkV2CanonicalHotel(name){
@@ -69020,17 +69167,38 @@ function bkV2HotelDDRender(val){
   var areaList=areaId?bkV2HotelNameList(null,areaId):[];
   var zoneList=(zone&&zone!=='NoTransfer'&&zone!=='NT')?bkV2HotelNameList(zone):[];
   var all=bkV2HotelNameList();
-  var match=function(s){return !q||s.toLowerCase().indexOf(q)!==-1;};
+  var _qk=(typeof bkV2HotelKey==='function')?bkV2HotelKey(q):'';
+  var _qt=_qk?_qk.split(' ').filter(Boolean):[];
+  var match=function(s){
+    if(!q) return true;
+    if(s.toLowerCase().indexOf(q)!==-1) return true;
+    if(!_qt.length || typeof bkV2HotelKey!=='function') return false;
+    var st=bkV2HotelKey(s).split(' ');
+    return _qt.every(function(w){ return st.some(function(x){ return x.indexOf(w)===0; }); });
+  };
   var esc=function(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
   var seen={};
   var take=function(list,tier){ var out=[]; list.forEach(function(s){ var k=s.toLowerCase(); if(seen[k]||!match(s))return; seen[k]=1; out.push({s:s,tier:tier}); }); return out; };
   var combined=take(areaList,'area').concat(take(zoneList,'zone')).concat(take(all,'other'));
-  // hide if the only match is exactly what's typed (nothing useful to suggest)
-  if(combined.length===0 || (combined.length===1 && combined[0].s.toLowerCase()===q)){ dd.classList.remove('open'); dd.innerHTML=''; return; }
+  // §hotelDedupe · ชื่อที่พิมพ์ยังไม่มีในระบบ → เสนอแถว "เพิ่มโรงแรมใหม่" ให้กดยืนยัน
+  //   ไม่บล็อกการพิมพ์ แต่บังคับให้เห็นชื่อเดิมก่อนเสมอ · คนจะเลือกของเดิมมากกว่าสร้างใหม่
+  var typed=String(val||'').replace(/\s+/g,' ').trim();
+  var exact=typed && all.some(function(x){ return x.toLowerCase()===typed.toLowerCase(); });
+  var addRow='';
+  if(typed.length>=3 && !exact){
+    var near=(typeof bkV2HotelNear==='function')?bkV2HotelNear(typed):null;
+    addRow='<div class="bkv2-nb-dd-item" data-label="'+esc(typed)+'"'
+      +' onmousedown="event.preventDefault();bkV2HotelDDPick(this.dataset.label,1)">'
+      +'<span class="bkv2-nb-dd-mkt" style="background:#E1F5EE;color:#0F6E56">ใหม่</span>'
+      +'<span class="bkv2-nb-dd-name">&#65291; เพิ่มโรงแรมใหม่: <b>'+esc(typed)+'</b>'
+      +(near?('<span style="color:#A05A1A;font-weight:600"> &middot; คล้ายกับ '+esc(near.name)+'</span>'):'')
+      +'</span></div>';
+  }
+  if(combined.length===0 && !addRow){ dd.classList.remove('open'); dd.innerHTML=''; return; }
   combined=combined.slice(0,50);
   if(_bkV2HotelDDActive>combined.length-1) _bkV2HotelDDActive=combined.length-1;
   var zlbl=zone==='PK'?'PK':zone==='KL'?'KL':zone;
-  dd.innerHTML=combined.map(function(o,i){
+  dd.innerHTML=addRow+combined.map(function(o,i){
     var badge = o.tier==='area' ? ('<span class="bkv2-nb-dd-mkt" style="background:#E1F0FA;color:#1683C7" title="เคยใช้ในพื้นที่ '+esc(areaName)+'">'+esc(areaName||'AREA')+'</span>')
       : o.tier==='zone' ? ('<span class="bkv2-nb-dd-mkt" style="background:#EAF1FA;color:#5685B5">'+esc(zlbl)+'</span>')
       : '<span class="bkv2-nb-dd-mkt" style="background:#EEEDEA;color:#9a988f">HOTEL</span>';
@@ -69059,6 +69227,7 @@ function bkV2HotelDDOutside(e){
 function bkV2HotelDDFilter(val){
   _bkV2HotelDDActive=-1; _bkV2HotelDDOn=true;
   bkV2SetBookingField('hotelName', val);
+  try{ if(_bkV2&&_bkV2.newBooking && _bkV2.newBooking.hotelConfirmedNew!==val) _bkV2.newBooking.hotelConfirmedNew=''; }catch(_){}
   bkV2HotelDDRender(val);
 }
 function bkV2HotelDDKey(e){
@@ -69068,10 +69237,12 @@ function bkV2HotelDDKey(e){
   else if(e.key==='Enter'){ var it=dd.querySelectorAll('.bkv2-nb-dd-item'); var t=it[_bkV2HotelDDActive]; if(t){ e.preventDefault(); bkV2HotelDDPick(t.dataset.label); } }
   else if(e.key==='Escape'){ bkV2HotelDDHide(); }
 }
-function bkV2HotelDDPick(label){
+function bkV2HotelDDPick(label, isNew){
   var inp=document.getElementById('bkv2-hotel-input');
   if(inp) inp.value=label;
   bkV2SetBookingField('hotelName', label);
+  // §hotelDedupe · กด "เพิ่มโรงแรมใหม่" = ยืนยันแล้วว่าตั้งใจ · ตอนบันทึกจะไม่ถามซ้ำ
+  try{ if(_bkV2&&_bkV2.newBooking) _bkV2.newBooking.hotelConfirmedNew = isNew?String(label||''):''; }catch(_){}
   bkV2HotelDDHide();
 }
 
@@ -69252,6 +69423,21 @@ function bkV2CommitBooking(status){
   if(typeof bkV2CanonicalHotel==='function'){
     if(d.hotelName) d.hotelName = bkV2CanonicalHotel(d.hotelName);
     if(d.dropoffHotelName) d.dropoffHotelName = bkV2CanonicalHotel(d.dropoffHotelName);
+  }
+  // §hotelDedupe · ชื่อใหม่ที่ใกล้กับของเดิมมาก · ถามก่อนหนึ่งครั้ง ไม่ตัดสินใจแทน
+  if(typeof bkV2HotelNear==='function' && d.hotelName && d.hotelConfirmedNew!==d.hotelName){
+    var _near=bkV2HotelNear(d.hotelName);
+    if(_near){
+      var _pc=Math.round(_near.score*100);
+      if(confirm('ชื่อโรงแรมที่พิมพ์คล้ายกับที่มีอยู่แล้ว ('+_pc+'%)\n\n'
+        +'พิมพ์: '+d.hotelName+'\n'
+        +'มีอยู่: '+_near.name+'\n\n'
+        +'กด OK = ใช้ชื่อเดิม "'+_near.name+'"\n'
+        +'กด Cancel = เก็บชื่อที่พิมพ์ไว้เป็นโรงแรมใหม่')){
+        d.hotelName=_near.name;
+      }
+      d.hotelConfirmedNew=d.hotelName;   // ถามครั้งเดียวพอ
+    }
   }
   // (Lead-count guard removed 2026-06-10 — Lead now occupies a real seat of its own type
   //  via bkV2SyncPassengers (AD if any adult, else FOC/CHD/INF), so an all-FOC group of N
