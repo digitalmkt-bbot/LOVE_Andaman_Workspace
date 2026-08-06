@@ -47669,6 +47669,10 @@ function tsCSS(){ var S='#travelsum-host'; return ''
 function tsRefPackList(date){
   var rows=tsRows(date);
   if(_tsRoute) rows=rows.filter(function(r){ return (r.routeId||'')===_tsRoute; });
+  // §tsRefVat · ต้องเดินตามชิปกรองภาษีเหมือนเนื้อใบสรุป · ไม่งั้นเอกสารของอีกชุดติดมาด้วย
+  if(_tsVatF) rows=rows.filter(function(r){
+    return _tsVatF==='vat' ? tsHasVat(r.b) : !tsHasVat(r.b);
+  });
   return rows.filter(function(r){
     var b=r.b;
     if(((b.attachments||[]).length)>0) return true;
@@ -47680,7 +47684,9 @@ function tsPrintSheet(){
   var date=_tsDate;
   var list=(typeof tsRefPackList==='function')?tsRefPackList(date):[];
   var pack=(list.length && typeof _docPackPages==='function')
-    ? _docPackPages(list, date, 'Reference · เอกสารประกอบ') : '';
+    ? _docPackPages(list, date, 'Reference · เอกสารประกอบ'
+        + (_tsVatF ? (_tsVatF==='vat' ? ' · เฉพาะมี VAT' : ' · เฉพาะไม่มี VAT') : '')
+        + (_tsRoute ? (' · '+tsRouteName(_tsRoute)) : '')) : '';
   var w=window.open('','_blank');
   if(!w){ alert('เบราว์เซอร์บล็อกป๊อปอัป · อนุญาต pop-up แล้วลองใหม่'); return; }
   // ฟอนต์ · ยกทุก <link rel=stylesheet> ที่ชี้ไปโรงฟอนต์จากหน้าหลักไปด้วย
