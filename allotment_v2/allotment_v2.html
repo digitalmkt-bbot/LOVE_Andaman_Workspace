@@ -48076,8 +48076,24 @@ function tsPayCell(r, date){
   }
   // §tsPayDetail · COT ตกลงกันไว้ยังไง · ก้อนนี้หักจากบิล agent หรือเก็บแยก
   if(M.cot>0){
-    L.push('<span class="ts-chip '+(M.handling==='separate'?'a':'b')+'" title="ข้อตกลง Cash on Tour ตอนเปิด booking">'
-      +'COT '+m(M.cot)+' &middot; '+(M.handling==='separate'?'แยกจากบิล':'หักจากบิล')+'</span>');
+    // §tsCotOnManifest · ถ้าตัดสินไว้แล้วในส่วนที่ 3 ให้เขียนผลที่ตัดสิน ไม่ใช่ค่าที่ตั้งไว้ตอนเปิด booking
+    var _cd=(typeof tsCotGet==='function')?tsCotGet(b.id,date):null;
+    var _lb, _cls, _tip;
+    if(_cd){
+      var _dd=+_cd.deduct||0, _pp=+_cd.payout||0, _kk=(+M.cot||0)-_dd-_pp, _PP=[];
+      if(_dd>0) _PP.push('หักบิล '+m(_dd));
+      if(_pp>0) _PP.push('โอนออก '+m(_pp));
+      if(_kk>0) _PP.push('บริษัทรับไว้ '+m(_kk));
+      _lb=_PP.join(' &middot; ')||'ไม่หักบิล';
+      _cls=(_pp>0)?'p':(_dd>0?'b':'e');
+      _tip='ตัดสินไว้ในส่วนเงินหน้างาน'+(_cd.by?(' โดย '+_cd.by):'')+(_cd.ref?(' · '+_cd.ref):'');
+    } else {
+      _lb='ตั้งไว้ '+(M.handling==='separate'?'แยกจากบิล':'หักจากบิล');
+      _cls=(M.handling==='separate')?'a':'n';
+      _tip='ค่าที่ตั้งไว้ตอนเปิด booking · ยังไม่ได้ตัดสินว่าจะหักบิลจริงเท่าไหร่';
+    }
+    L.push('<span class="ts-chip '+_cls+'" title="'+e(_tip)+'">COT '+m(M.cot)+' &middot; '+_lb+'</span>');
+    if(!_cd) L.push('<span class="ts-pyw">&#9888; ยังไม่ตัดสินการหักบิล</span>');
     if(M.note) L.push('<span class="ts-pyn2" title="'+e(M.note)+'">&#128221; '+e(M.note)+'</span>');
   }
   // §tsPayDetail · เก็บด้วยวิธีไหน · รวมเงินหน้าท่า (pierPayments) กับเงินของที่ขายเพิ่มหน้างาน
