@@ -4766,7 +4766,10 @@ body.sb-collapsed .sidebar.sb-collapsed ~ #la-userbadge, body.sb-collapsed .la-u
     <div class="modal-body">
 
       <div class="section-form-lbl">ข้อมูลพื้นฐาน</div>
-      <div class="form-row"><label class="form-label">ชื่อเรือ <span style="color:var(--red)">*</span></label><input type="text" id="fm-boat-name" placeholder="เช่น Aluminous1"></div>
+      <div class="form-2">
+        <div class="form-row"><label class="form-label">ชื่อเรือ <span style="color:var(--red)">*</span></label><input type="text" id="fm-boat-name" placeholder="เช่น Aluminous1"></div>
+        <div class="form-row"><label class="form-label">ชื่อไทย <span style="font-size:9px;color:var(--ink-soft);font-weight:400">(ใช้ในใบสั่งงานมัคคุเทศก์)</span></label><input type="text" id="fm-boat-nameth" placeholder="เช่น เฮอร์มีทิส"></div>
+      </div>
       <div class="form-2">
         <div class="form-row"><label class="form-label">ยี่ห้อ</label><input type="text" id="fm-boat-brand" placeholder="เช่น Princess"></div>
         <div class="form-row"><label class="form-label">รุ่น</label><input type="text" id="fm-boat-model" placeholder="เช่น Catamaran 64"></div>
@@ -8609,7 +8612,7 @@ function saveBoat(){
   const g=id=>document.getElementById(id)?.value.trim()||'';
   const n=id=>{const v=parseFloat(document.getElementById(id)?.value);return isNaN(v)?null:v;};
   const fields={
-    name, type:document.getElementById('fm-boat-type').value,
+    name, nameTh:g('fm-boat-nameth'), type:document.getElementById('fm-boat-type').value,
     engineCount:parseInt(document.getElementById('fm-boat-engcount').value)||4,
     use:document.getElementById('fm-boat-use').value,
     pier:pier,
@@ -33667,7 +33670,7 @@ function flOpenEditBoatModal(bid){
   fmBoatSt=0;
   fmBoatDocs=[...(b.docs||[])];
   const setVal=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v!=null?v:'';};
-  setVal('fm-boat-name',b.name);setVal('fm-boat-brand',b.brand);setVal('fm-boat-model',b.model);
+  setVal('fm-boat-name',b.name);setVal('fm-boat-nameth',b.nameTh);setVal('fm-boat-brand',b.brand);setVal('fm-boat-model',b.model);
   setVal('fm-boat-reg',b.reg);setVal('fm-boat-callsign',b.callsign);setVal('fm-boat-imo',b.imo);
   setVal('fm-boat-year',b.year);setVal('fm-boat-port',b.homeportCity);
   setVal('fm-boat-cap',b.cap||40);setVal('fm-boat-licensepax',b.licensePax);setVal('fm-boat-crew',b.crew);
@@ -44369,13 +44372,16 @@ function ckRoutePills(date, famSel, routeSel, famFn, routeFn, kind){
       // §perProgramme · แต่ละโปรแกรมออกคนละเวลา ตัวเลข ถึงท่า/เคลียร์/ขึ้นเรือ จึงต้องเป็นของโปรแกรมนั้น
       // ไม่ใช่ยอดรวมทั้งวัน (รวมทั้งวันบอกไม่ได้ว่าลำที่กำลังจะออกอีก 10 นาทีพร้อมหรือยัง)
       if(kind==='pier' && f){
+        // §pckCountPax · นับเป็นคน (pax = ยอดที่เดินทางจริงหลังหักคนที่ไม่มาแล้ว)
+        //   ใบที่ยกเลิกหน้างานจนไม่เหลือคน pax=0 → หลุดจากตัวหารเอง ป้าย "ออกได้" จึงขึ้นได้จริง
         var A=fam[f.id];
-        A.rows=(A.rows||0)+1;
+        A.rows=(A.rows||0)+1;                     // จำนวนใบ · เก็บไว้ให้ tooltip
+        A.rowsP=(A.rowsP||0)+pax;
         var _stg=(typeof pckStage==='function')?pckStage(O.pierCheckin):'wait';
         var _rk=(typeof pckStageRank==='function')?pckStageRank(_stg):0;
-        if(_rk>=1) A.arr=(A.arr||0)+1;
-        if(_rk>=2) A.clr=(A.clr||0)+1;
-        if(_rk>=3) A.on=(A.on||0)+1;
+        if(_rk>=1){ A.arr=(A.arr||0)+1; A.arrP=(A.arrP||0)+pax; }
+        if(_rk>=2){ A.clr=(A.clr||0)+1; A.clrP=(A.clrP||0)+pax; }
+        if(_rk>=3){ A.on=(A.on||0)+1;  A.onP=(A.onP||0)+pax; }
         else { var _M=(typeof pckMoney==='function')?pckMoney(b,date):null; if(_M&&_M.due>0) A.due=(A.due||0)+_M.due; }
       }
       var ck=(kind==='pier')?O.pierCheckin:O.vanCheckin;
@@ -44439,26 +44445,26 @@ function ckRoutePills(date, famSel, routeSel, famFn, routeFn, kind){
       var _isToday=(date===((typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10)));
       var _left=null;
       if(_isToday && _dep){ var _mm=_dep.match(/(\d{1,2})[:.](\d{2})/); if(_mm){ var _n=new Date(); _left=((+_mm[1])*60+(+_mm[2]))-(_n.getHours()*60+_n.getMinutes()); } }
-      var _miss=Math.max(0,(a.rows||0)-(a.on||0)), _allOn=(_miss===0);
+      var _miss=Math.max(0,(a.rowsP||0)-(a.onP||0)), _allOn=(_miss===0);
       var C, TXT;
       if(_allOn){ C=['#0F6E56','#DCF4E8']; TXT='ออกได้'; }
-      else if(_left===null){ C=['#5F5E5A','#F1EFE8']; TXT='ขาด '+_miss+' ราย'; }
-      else if(_left<0){ C=['#A32D2D','#FCEBEB']; TXT='เลยเวลาออก · ขาด '+_miss; }
-      else if(_left<=30){ C=['#A32D2D','#FCEBEB']; TXT='ขาด '+_miss+' ราย'; }
-      else if(_left<=60){ C=['#7A4A00','#FBF0DD']; TXT='ขาด '+_miss+' ราย'; }
+      else if(_left===null){ C=['#5F5E5A','#F1EFE8']; TXT='ขาด '+_miss+' คน'; }
+      else if(_left<0){ C=['#A32D2D','#FCEBEB']; TXT='เลยเวลาออก · ขาด '+_miss+' คน'; }
+      else if(_left<=30){ C=['#A32D2D','#FCEBEB']; TXT='ขาด '+_miss+' คน'; }
+      else if(_left<=60){ C=['#7A4A00','#FBF0DD']; TXT='ขาด '+_miss+' คน'; }
       else { C=['#5F5E5A','#F1EFE8']; TXT='ยังมีเวลา'; }
       var _clock;
       if(_allOn || _left===null) _clock='&mdash;';
       else { var _ab=Math.abs(_left), _h=Math.floor(_ab/60), _m2=_ab%60;
              _clock=(_left<0?'เลย ':'')+(_h?(_h+' ชม. '):'')+_m2+(_left<0?' น.':' นาที'); }
-      var st=function(lbl,n,c){ return '<span style="display:inline-flex;align-items:baseline;gap:5px;background:#fff;color:'+c+';border-radius:7px;padding:3px 9px;font-size:10.5px;font-weight:700;white-space:nowrap">'+lbl+' <b style="font-family:\'DM Mono\',monospace;font-size:13px">'+n+'</b></span>'; };
+      var st=function(lbl,n,c,tip){ return '<span'+(tip?(' title="'+e(tip)+'"'):'')+' style="display:inline-flex;align-items:baseline;gap:5px;background:#fff;color:'+c+';border-radius:7px;padding:3px 9px;font-size:10.5px;font-weight:700;white-space:nowrap">'+lbl+' <b style="font-family:\'DM Mono\',monospace;font-size:13px">'+n+'</b></span>'; };
       foot='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 12px;border-top:1px solid '+col+'2E;background:'+C[1]+'">'
         +'<div style="line-height:1.15"><div style="font-family:\'DM Mono\',monospace;font-size:16px;font-weight:700;color:'+C[0]+';white-space:nowrap">'+_clock+'</div>'
           +'<div style="font-size:9.5px;font-weight:700;color:'+C[0]+';opacity:.8;white-space:nowrap">ออก '+e(_tm.join(' / ')||'—')+'</div></div>'
         +'<span style="background:'+C[0]+';color:#fff;border-radius:8px;padding:4px 11px;font-size:11px;font-weight:800;white-space:nowrap">'+TXT+'</span>'
-        +st('ถึงท่า',(a.arr||0)+'/'+(a.rows||0),'#0C447C')
-        +st('เคลียร์',(a.clr||0),'#7A4A00')
-        +st('ขึ้นเรือ',(a.on||0),'#0F6E56')
+        +st('ถึงท่า',(a.arrP||0)+'/'+(a.rowsP||0),'#0C447C','นับเป็นคน · '+(a.arr||0)+'/'+(a.rows||0)+' booking')
+        +st('เคลียร์',(a.clrP||0),'#7A4A00','นับเป็นคน · '+(a.clr||0)+' booking')
+        +st('ขึ้นเรือ',(a.onP||0),'#0F6E56','นับเป็นคน · '+(a.on||0)+' booking')
         +((a.due||0)>0?st('ค้างเก็บ','&#3647;'+Math.round(a.due).toLocaleString(),'#7A4A00'):'')
       +'</div>';
     }
@@ -45445,12 +45451,15 @@ function pckExpandBoatSplits(row, b, date, out){
   return out;
 }
 function pckAgg(rows){
-  var a={n:0, pax:0, arr:0, clr:0, on:0, due:0, ns:0, vd:0};
+  // §pckCountPax · arrP/clrP/onP = รายคน · arr/clr/on = รายใบ (เก็บไว้ให้ tooltip)
+  var a={n:0, pax:0, arr:0, clr:0, on:0, arrP:0, clrP:0, onP:0, due:0, ns:0, vd:0};
   rows.forEach(function(r){
     if(r._vd){ if(r.money && r.money.due>0) a.due+=r.money.due; a.vd++; return; }   // §onsiteVoid · ปิดรายการแล้ว ไม่นับใน ถึงท่า/เคลียร์/ขึ้นเรือ/ที่นั่ง · เงินค้างยังนับ
     a.n++;
-    a.pax+=(r.expect!=null?r.expect:r.booked);
+    var _px=(r.expect!=null?r.expect:r.booked);
+    a.pax+=_px;
     var s=pckStage(r.ck), k=pckStageRank(s);
+    if(k>=1) a.arrP+=_px; if(k>=2) a.clrP+=_px; if(k>=3) a.onP+=_px;
     if(k>=1) a.arr++; if(k>=2) a.clr++; if(k>=3) a.on++;
     if(r.money && r.money.due>0 && s!=='on') a.due+=r.money.due;
     if(r.ck && r.ck.at) a.ns+=(r.ck.noShow||0);
@@ -45488,6 +45497,10 @@ function pckCardCSS(scope){ return ''
   +scope+' .pck-drop.self{background:#F5F4F0;border-color:#E0DDD4;color:#7a7972;font-weight:600}'
   // §pierMeal · อาหารพิเศษ · ป้าย + ปุ่มแก้หน้างาน
   +scope+' .pck-mcell{display:flex;flex-wrap:wrap;gap:4px;align-items:center}'
+  // §pierNote · โน้ตหน้างาน · กินเต็มบรรทัดใต้ป้าย จะได้อ่านออกโดยไม่ต้องชี้เมาส์
+  +scope+' .pck-note{flex:1 0 100%;background:#FFF8E6;border:1px solid #EEDFAE;border-radius:7px;padding:3px 8px;'
+    +'font-size:10.5px;font-weight:600;color:#7A4A00;line-height:1.45;margin-top:2px}'
+  +scope+' .pck-mbtn.note.on{border-style:solid;border-color:#EEDFAE;background:#FFF8E6;color:#7A4A00}'
   +scope+' .pck-mchip{display:inline-block;border:1px solid;border-radius:7px;padding:2px 7px;font-size:10px;font-weight:700;white-space:nowrap}'
   +scope+' .pck-mchip.pier{background:#FFF6E5;border-color:#EAD9B0;color:#8a5a12}'
   +scope+' .pck-mbtn{border:1px dashed #D8D4CA;background:#fff;color:#8a8a82;border-radius:7px;padding:2px 8px;'
@@ -45508,7 +45521,15 @@ function pckCardCSS(scope){ return ''
   +scope+' .pck-svcprev{display:inline-block;border:1.5px solid #111827;border-radius:3px;padding:1px 8px;font-size:10.5px;font-weight:700;white-space:nowrap}'
   +' .lg{display:inline-block;border:1.5px solid #111827;border-radius:3px;padding:0 6px;font-family:\'DM Mono\',monospace;font-size:11px;font-weight:700;white-space:nowrap;line-height:1.6}'
   +' .lg.alt{background:#111827;color:#fff}'
-  +scope+' .pck-joball{margin-left:auto;background:#2f2f2b;border:1.5px solid #2f2f2b;color:#fff;border-radius:999px;padding:6px 14px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}'
+  // §pckJobIcon · เหลือแค่ไอคอน · ชื่อเต็มอยู่ tooltip · แยกด้วยสี
+  +scope+' .pck-joball{margin-left:auto;width:32px;height:32px;padding:0;flex:none;display:inline-flex;align-items:center;justify-content:center;'
+    +'background:#2f2f2b;border:1.5px solid #2f2f2b;color:#fff;border-radius:50%;font-size:14px;line-height:1;cursor:pointer;font-family:inherit}'
+  +scope+' .pck-joball:hover{filter:brightness(1.15)}'
+  // §guideOrder · ใบสั่งงานมัคคุเทศก์ · เขียว แยกจากใบงานไกด์ไม่ให้กดผิดใบ
+  +scope+' .pck-joball.go{margin-left:7px;background:#0F6E56;border-color:#0F6E56}'
+  +scope+' .pck-joball.go2{margin-left:5px;background:#fff;border-color:#E7E4DC;color:#5F5E5A;font-size:13px}'
+  +scope+' .pck-jobbtn + .pck-jobbtn{margin-left:6px}'
+  +scope+' .pck-jobbtn.go b{font-size:9px;vertical-align:2px}'
   +scope+' .pck-joball:hover{background:#15201a;border-color:#15201a}'
   // แถบสรุปเที่ยวนี้ · พื้นขาวชุดเดียวกับการ์ดโซนข้างล่าง เว้นขอบเท่ากัน สีเรือจึงยังครอบเป็นกรอบ
   +scope+' .pck-bmeta{background:#fff;border-radius:15px;margin:0 12px 12px;padding:11px 15px;display:flex;flex-wrap:wrap;align-items:center;row-gap:9px}'
@@ -45640,9 +45661,95 @@ function pckMealCell(b, date){
     return '<span class="pck-mchip" style="background:' + c.bg + ';color:' + c.c + ';border-color:' + c.bd + '">' + ckEsc(c.t) + '</span>';
   }).join('');
   if(m.pierAt) html += '<span class="pck-mchip pier" title="เพิ่ม/แก้ที่หน้าท่า ' + ckEsc(m.pierAt) + (m.pierBy ? (' · ' + ckEsc(m.pierBy)) : '') + '">หน้างาน</span>';
-  return '<div class="pck-mcell">' + (html || '<span class="ck-dim">—</span>')
-       + '<button class="pck-mbtn" onclick="event.stopPropagation();pckMealOpen(\'' + b.id + '\',\'' + date + '\')" title="เพิ่ม/แก้อาหารพิเศษหน้างาน">' + (chips.length ? '✎' : '+ อาหารพิเศษ') + '</button></div>';
+  // §pierNote · เรื่องที่ลูกค้าแจ้งที่ท่า · ข้อความอิสระ แยกจากอาหารพิเศษที่เป็นตัวเลข
+  var nt=(typeof pckNoteGet==='function')?pckNoteGet(b,date):'';
+  var ntHtml = nt ? ('<div class="pck-note" title="'+ckEsc(nt)+'">&#9998; '+ckEsc(nt)+'</div>') : '';
+  return '<div class="pck-mcell">' + (html || (nt?'':'<span class="ck-dim">—</span>'))
+       + '<button class="pck-mbtn" onclick="event.stopPropagation();pckMealOpen(\'' + b.id + '\',\'' + date + '\')" title="เพิ่ม/แก้อาหารพิเศษหน้างาน">' + (chips.length ? '✎' : '+ อาหารพิเศษ') + '</button>'
+       + '<button class="pck-mbtn note' + (nt?' on':'') + '" onclick="event.stopPropagation();pckNoteOpen(\'' + b.id + '\',\'' + date + '\')" title="โน้ตหน้างาน · เรื่องที่ลูกค้าแจ้งที่ท่า">' + (nt ? '✎ โน้ต' : '+ โน้ต') + '</button>'
+       + ntHtml + '</div>';
 }
+// §pierNote · โน้ตหน้างานของวันนั้น · เก็บที่ ops ของวัน ไม่ใช่ที่ booking
+// ops.pierNote = {t:ข้อความ, at:เวลา, by:คนเขียน} · ก้อนเดียว = คอลัมน์เดียวใน operation_schemas
+//   รับของเก่าที่เคยเก็บเป็น string ล้วนด้วย (ที่พิมพ์ไปก่อนแก้บั๊กนี้)
+function pckNoteObj(b, date){
+  var o=(typeof bkOpsRead==='function')?bkOpsRead(b,date):((b&&b.ops)||{});
+  var v=o&&o.pierNote;
+  if(!v) return null;
+  if(typeof v==='string') return { t:v.trim(), at:(o.pierNoteAt||''), by:(o.pierNoteBy||'') };
+  return { t:String(v.t||'').trim(), at:String(v.at||''), by:String(v.by||'') };
+}
+function pckNoteGet(b, date){ var n=pckNoteObj(b,date); return n?n.t:''; }
+function pckNoteSet(b, date, txt){
+  var o=(typeof bkOpsFor==='function')?bkOpsFor(b,(typeof bkOpsDate==='function'?bkOpsDate(b,date):date)):(b.ops=b.ops||{});
+  txt=String(txt||'').trim();
+  if(txt) o.pierNote={ t:txt, at:new Date().toISOString(), by:(typeof ckMe==='function'?ckMe():'') };
+  else o.pierNote=null;                       // null ไม่ใช่ delete · ต้องส่งค่าว่างขึ้นไปล้างคอลัมน์ด้วย
+  delete o.pierNoteAt; delete o.pierNoteBy;   // ของเวอร์ชันแรก · ไม่มีคอลัมน์รองรับอยู่แล้ว
+  try{ acctPersistBookings(); }catch(_){}
+  if(typeof bkV2AddHistory==='function')
+    bkV2AddHistory(b,'note',(txt?('โน้ตหน้างาน: '+txt):'ลบโน้ตหน้างาน'),'Pier');
+}
+// ── กล่องเขียนโน้ตหน้างาน ──
+var _pckNote={ bkId:null, date:'' };
+function pckNoteOpen(bkId, date){
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
+  _pckNote={ bkId:bkId, date:date };
+  var e=ckEsc, N=pckNoteObj(b,date), cur=N?N.t:'';
+  var who=(N&&N.by)?(' · '+N.by):'';
+  var at=(N&&N.at&&typeof pckHHMM==='function')?(' '+pckHHMM(N.at)):'';
+  var QUICK=['ขอนั่งหัวเรือ','ขอนั่งท้ายเรือ','เมาเรือ · ขอยา','ตั้งครรภ์','ว่ายน้ำไม่เป็น','ผู้สูงอายุ · ต้องช่วยขึ้นเรือ','เด็กเล็ก · ขอเสื้อชูชีพเด็ก','ขอกลับก่อน'];
+  acctModal(pckNoteCss()
+    +'<div class="pn-hd"><div><div class="pn-t">โน้ตหน้างาน</div>'
+      +'<div class="pn-s">'+e((b.voucherRef||b.code||'')+' · '+(b.leadPax||'')+' · '+date)
+        +(cur?e(' · แก้ล่าสุด'+at+who):'')+'</div></div>'
+      +'<button class="pn-x" onclick="acctModalClose()">&#10005;</button></div>'
+    +'<div class="pn-bd">'
+      +'<div class="pn-lab">เรื่องที่ลูกค้าแจ้งที่ท่า <span>ขึ้นในใบงานไกด์ช่อง Note ด้วย</span></div>'
+      +'<textarea id="pck-note-tx" rows="4" placeholder="เช่น ขอนั่งหัวเรือ · แพ้แดดจัด · ขอเสื้อชูชีพเด็ก 2 ตัว">'+e(cur)+'</textarea>'
+      +'<div class="pn-q">'+QUICK.map(function(q){
+          return '<button onclick="pckNoteQuick(\''+e(q).replace(/'/g,"")+'\')">'+e(q)+'</button>'; }).join('')+'</div>'
+      +'<div class="pn-act">'
+        +(cur?'<button class="pn-del" onclick="pckNoteSave(1)">ลบโน้ต</button>':'')
+        +'<button class="pn-b2" onclick="acctModalClose()">ยกเลิก</button>'
+        +'<button class="pn-b1" onclick="pckNoteSave(0)">บันทึก</button>'
+      +'</div>'
+    +'</div>');
+  setTimeout(function(){ var t=document.getElementById('pck-note-tx'); if(t){ t.focus(); t.setSelectionRange(t.value.length,t.value.length); } },60);
+}
+function pckNoteQuick(q){
+  var t=document.getElementById('pck-note-tx'); if(!t) return;
+  var v=String(t.value||'').trim();
+  t.value = v ? (v+' · '+q) : q;
+  t.focus();
+}
+function pckNoteSave(clear){
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===_pckNote.bkId; }); if(!b) return;
+  var t=document.getElementById('pck-note-tx');
+  pckNoteSet(b, _pckNote.date, clear?'':((t&&t.value)||''));
+  acctModalClose();
+  if(typeof renderPierCheckin==='function') renderPierCheckin();
+}
+function pckNoteCss(){ return '<style>'
+  +'#acct-modal .pn-hd{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid #E7E4DC}'
+  +'#acct-modal .pn-t{font-size:15px;font-weight:800;color:#2c2c2a}'
+  +'#acct-modal .pn-s{font-size:11px;color:#8a8a82;margin-top:2px;line-height:1.5}'
+  +'#acct-modal .pn-x{background:transparent;border:none;font-size:18px;color:#8a8a82;cursor:pointer;line-height:1}'
+  +'#acct-modal .pn-bd{padding:16px 20px 20px}'
+  +'#acct-modal .pn-lab{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8a8a82;margin-bottom:7px}'
+  +'#acct-modal .pn-lab span{font-weight:600;letter-spacing:0;text-transform:none;color:#a8a49b;margin-left:6px}'
+  +'#acct-modal .pn-bd textarea{width:100%;font-family:inherit;font-size:13px;line-height:1.6;border:1px solid #E7E4DC;'
+    +'border-radius:9px;padding:9px 11px;resize:vertical;box-sizing:border-box}'
+  +'#acct-modal .pn-bd textarea:focus{outline:none;border-color:#0F6E56}'
+  +'#acct-modal .pn-q{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}'
+  +'#acct-modal .pn-q button{border:1px dashed #D8D4CA;background:#fff;color:#5F5E5A;border-radius:999px;padding:3px 11px;'
+    +'font-family:inherit;font-size:11px;font-weight:600;cursor:pointer}'
+  +'#acct-modal .pn-q button:hover{border-style:solid;border-color:#0F6E56;color:#0F6E56}'
+  +'#acct-modal .pn-act{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}'
+  +'#acct-modal .pn-act button{font-family:inherit;font-size:12px;font-weight:700;padding:9px 16px;border-radius:9px;cursor:pointer;border:1px solid #E7E4DC;background:#fff;color:#2c2c2a}'
+  +'#acct-modal .pn-b1{background:#0F6E56 !important;border-color:#0F6E56 !important;color:#fff !important}'
+  +'#acct-modal .pn-del{margin-right:auto;border-color:#F0C9C9 !important;color:#A32D2D !important}'
+  +'</style>'; }
 // ── กล่องแก้อาหารพิเศษหน้างาน ──
 var _pckMeal = { bkId:null, date:'', veg:0, vegan:0, halal:0, allergies:'' };
 function pckMealOpen(bkId, date){
@@ -46108,7 +46215,7 @@ function pckGuideJobSheet(bid, date, rows, vd){
     var area=b.pickupArea||(b.pickupAreaId&&typeof bkV2GetArea==='function'?((bkV2GetArea(b.pickupAreaId)||{}).name||''):'')||'';
     var dropOff=pckJobDrop(b, date);                                     // §jobDrop
     var ao=pckJobService(r, date);
-    var nt=pckJobNote(b);
+    var nt=pckJobNote(b, date);
     return '<tr>'
       +'<td><span class="ck"></span></td>'
       +'<td><span class="vc">'+e(b.voucherRef||b.code||'—')+'</span></td>'
@@ -46394,7 +46501,7 @@ function pckJobService(r, date){
 }
 // ช่อง Note · เรื่องที่ไกด์ต้องรู้ก่อนถึงเรือ — อาหารพิเศษมาก่อน แล้วค่อยข้อความอิสระ
 //   อาหารเคยอยู่แต่ยอดรวมหัวใบ ซึ่งบอกว่า "มี 2 คน" แต่ไม่บอกว่าคนไหน
-function pckJobNote(b){
+function pckJobNote(b, date){
   var mm=b.specialMeals||{}, out=[];
   var veg=(+mm.veg||0)+(+mm.vegan||0);
   if(veg) out.push({w:1, t:'มังสวิรัติ '+veg});
@@ -46403,8 +46510,336 @@ function pckJobNote(b){
   if(al) out.push({w:1, t:'แพ้อาหาร: '+al});
   var sq=(typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim());
   if(sq) out.push({w:0, t:sq});
+  // §pierNote · เรื่องที่แจ้งที่ท่า · ตัวหนา (w:1) เพราะเป็นของที่เพิ่งเกิด ไกด์ยังไม่รู้
+  var pn=(typeof pckNoteGet==='function')?pckNoteGet(b,date):'';
+  if(pn) out.push({w:1, t:pn});
   return out;
 }
+// ══ §guideOrder · ใบสั่งงานมัคคุเทศก์ ═══════════════════════════════════
+var GO_HEAD_DEF = {
+  en:'LOVE ISLAND CO.,LTD.',
+  lic:'ใบอนุญาตประกอบธุรกิจนำเที่ยว  เลขที่ 31/00986',
+  th:'บริษัท เลิฟ ไอแลนด์ จำกัด ( LOVE ISLAND CO.,LTD. )',
+  addr:'9/239-240 ถนน ศักดิเดช ตำบล ตลาดเหนือ อำเภอเมือง จังหวัดภูเก็ต 83000',
+  reg:'กรมพัฒนาธุรกิจการค้า แบบ พค. 0401  ทะเบียนเลขที่ 0825554000447  ออกให้ ณ วันที่  9 สิงหาคม พ.ศ. 2554'
+};
+function goGuides(){ var g=(typeof ctRead==='function')?ctRead('guides'):null; return Array.isArray(g)?g:[]; }
+function goGuidesSet(a){ if(typeof ctWrite==='function') ctWrite('guides', a||[]); }
+function goGuide(id){ var a=goGuides(); for(var i=0;i<a.length;i++) if(a[i].id===id) return a[i]; return null; }
+function goCfg(){
+  var c=(typeof ctRead==='function')?ctRead('go_cfg'):null; c=c||{};
+  return { next:(+c.next>0?+c.next:1),
+           signers:Array.isArray(c.signers)&&c.signers.length?c.signers:[{name:'นฤมล ชัวแซ่ง', title:'Phuket Pier Manager'}],
+           head:Object.assign({}, GO_HEAD_DEF, c.head||{}) };
+}
+function goCfgSet(c){ if(typeof ctWrite==='function') ctWrite('go_cfg', c); }
+function _goKey(date,bid){ return String(date||'')+'|'+String(bid||''); }
+function goAsn(date,bid){
+  var m=(typeof ctRead==='function')?ctRead('go_asn'):null; m=m||{};
+  var o=m[_goKey(date,bid)]||{};
+  return { g:Array.isArray(o.g)?o.g:[], other:(+o.other||0), sign:(+o.sign||0) };
+}
+function goAsnSet(date,bid,o){
+  var m=(typeof ctRead==='function')?ctRead('go_asn'):null; m=m||{};
+  m[_goKey(date,bid)]=o; if(typeof ctWrite==='function') ctWrite('go_asn', m);
+}
+// เลขที่ใบ · ออกครั้งเดียวต่อ (วัน,ลำ) · พิมพ์ซ้ำได้เลขเดิม ไม่กินเลขใหม่
+function goNoFor(date,bid,issue){
+  var m=(typeof ctRead==='function')?ctRead('go_no'):null; m=m||{};
+  var k=_goKey(date,bid);
+  if(m[k]) return m[k];
+  if(!issue) return null;
+  var c=goCfg(), n=c.next;
+  m[k]=n; if(typeof ctWrite==='function') ctWrite('go_no', m);
+  c.next=n+1; goCfgSet(c);
+  return n;
+}
+function goBoatTh(bid){
+  var b=(typeof getBoat==='function')?getBoat(bid):null; if(!b) return String(bid||'');
+  return b.nameTh ? (b.nameTh+' ('+(b.name||bid)+')') : (b.name||bid);
+}
+var GO_TH_MON=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+var GO_TH_DOW=['วันอาทิตย์','วันจันทร์','วันอังคาร','วันพุธ','วันพฤหัสบดี','วันศุกร์','วันเสาร์'];
+function goThDate(d){
+  try{ var x=new Date(d+'T12:00:00');
+    return GO_TH_DOW[x.getDay()]+'  '+x.getDate()+'  '+GO_TH_MON[x.getMonth()]+'  '+x.getFullYear();
+  }catch(_){ return String(d||''); }
+}
+// แถวของลำนั้นในวันนั้น · กติกาเดียวกับใบงานไกด์ (ใบที่ยังไม่จัดเรือ / ยกเลิก ไม่นับ)
+function goRows(date,bid){
+  var out=[];
+  (SB_BOOKINGS||[]).forEach(function(b){
+    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    var t=ckTripOn(b,date); if(!t) return;
+    if(typeof bkIsOvnReturn==='function' && bkIsOvnReturn(t)) return;
+    var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
+    var row={b:b,t:t,O:O,booked:ckBookedPax(t),expect:ckBookedPax(t),ck:O.pierCheckin||null,vanId:O.vanId||''};
+    row.bid=O.boatId||t.charterBoatId||'';
+    if(!row.bid) return;
+    if(typeof pckVoidInfo==='function' && pckVoidInfo(b,date,t)) return;
+    (typeof pckExpandBoatSplits==='function' ? pckExpandBoatSplits(row,b,date,[]) : [row]).forEach(function(r2){
+      if(r2.bid===bid) out.push(r2);
+    });
+  });
+  return out;
+}
+// จำนวนคนตามประเภท · นับ "คนที่เดินทางจริง" หลังหักคนที่ไม่มา · FOC นับรวมเป็นผู้ใหญ่
+function goCounts(date,bid){
+  var c={ad:0,chd:0,inf:0};
+  goRows(date,bid).forEach(function(r){
+    var pb=(typeof ckPaxBreak==='function')?ckPaxBreak(r.t.pax):{ad:0,chd:0,inf:0,foc:0};
+    var L=function(k,v){ return (typeof ckPaxLeft==='function')?ckPaxLeft(r.b,date,k,v):v; };
+    c.ad += L('ad',pb.ad||0) + L('foc',pb.foc||0);
+    c.chd+= L('chd',pb.chd||0);
+    c.inf+= L('inf',pb.inf||0);
+  });
+  return c;
+}
+function goRouteOf(date,bid){
+  var rows=goRows(date,bid), rid=rows.length?(rows[0].t.routeId||''):'';
+  return (typeof getRoute==='function'?getRoute(rid):null)||{};
+}
+// ── ใบเดียว ────────────────────────────────────────────────────────────
+function goSheet(date,bid,issue){
+  var e=ckEsc, C=goCfg(), H=C.head, A=goAsn(date,bid);
+  var boat=(typeof getBoat==='function')?getBoat(bid):null;
+  var rt=goRouteOf(date,bid), cnt=goCounts(date,bid);
+  var gs=A.g.map(goGuide).filter(Boolean);
+  var lead=gs[0]||null;
+  var crew=(boat&&+boat.crew>0)?+boat.crew:0;
+  var esc=(boat&&+boat.licensePax>0)?+boat.licensePax:((boat&&+boat.cap)||0);
+  var no=goNoFor(date,bid,issue);
+  var dep=(typeof pckDepOf==='function')?pckDepOf(rt.id||''):'';
+  var tot=cnt.ad+cnt.chd+cnt.inf+gs.length+crew+(+A.other||0);
+  var sg=C.signers[A.sign]||C.signers[0]||{name:'',title:''};
+  var dt=goThDate(date);
+  var row=function(lb,n){ return '<tr><td class="lb">'+lb+'</td><td class="n">'+n+'</td><td class="u">คน</td><td class="rm"></td></tr>'; };
+  return '<div class="gopg">'
+    +'<h1>ใบสั่งงานมัคคุเทศก์</h1>'
+    +'<div class="co"><div class="nm">'+e(H.en)+'</div><div class="sp"></div>'
+      +'<div class="li">'+e(H.lic)+'</div><div class="li">'+e(H.th)+'</div><div class="ad">'+e(H.addr)+'</div></div>'
+    +'<div class="reg">'+e(H.reg)+'</div><div class="dbd"></div>'
+    +'<div class="sp"></div>'
+    +'<div class="frow"><span class="flab">ใบสั่งงานประจำ</span><span class="fval">'+e(dt)+'</span>'
+      +'<span class="fno">( ใบสั่งงานเลขที่ <b>'+(no?e(String(no)):'&nbsp;')+'</b> )</span></div>'
+    +'<div class="frow"><span class="flab">มัคคุเทศก์</span>'
+      +'<span class="fval l">'+e(lead?(lead.name+(lead.nick?(' ('+lead.nick+')'):'')):'')+'</span>'
+      +'<span class="flab wr">ใบอนุญาตเลขที่</span><span class="fval">'+e(lead?(lead.license||''):'')+'</span></div>'
+    +'<div class="frow"><span class="flab">ขออนุญาตนำเที่ยว</span><span class="fval">'+e(rt.islands||rt.name||'')+'</span></div>'
+    +'<div class="box"><table>'
+      +'<tr><td class="k">วันที่เดินทาง</td><td class="v">'+e(dt)+'</td><td class="k2">ถึง</td><td class="v">'+e(dt)+'</td></tr>'
+      +'<tr><td class="k">รวมวันเดินทาง</td><td class="v">1</td><td class="k2">วัน</td>'
+        +'<td class="pd"><table><tr><td class="k kk">เวลา</td><td class="v">'+e(dep?String(dep).replace(':','.')+' น.':'')+'</td></tr></table></td></tr>'
+      +'<tr><td class="k">ชื่อเรือ</td><td class="v">'+e(goBoatTh(bid))+'</td>'
+        +'<td colspan="2" class="pd"><table><tr><td class="k kp">ผู้โดยสาร</td><td class="v">'+(esc?e(esc+' ที่นั่ง'):'')+'</td></tr></table></td></tr>'
+    +'</table></div>'
+    +'<table class="pt">'
+      +'<tr><th>ประเภทนักท่องเที่ยวและผู้ติดตามในเรือ</th><th colspan="2">จำนวน</th><th>หมายเหตุ</th></tr>'
+      +row('ผู้ใหญ่', cnt.ad)
+      +row('เด็กโต&nbsp; ( อายุ 4 - 12 ปี )', cnt.chd)
+      +row('เด็กเล็ก (อายุไม่เกิน 3 ขวบ )', cnt.inf)
+      +row('มัคคุเทศก์&nbsp; (ผู้ติดตาม)', gs.length)
+      +row('กัปตันและนายท้ายเรือ', crew)
+      +row('อื่นๆ .......นักศึกษาฝึกงาน./ สต๊าฟ........', (+A.other||0))
+      +'<tr class="sum"><td class="lb">รวมจำนวนผู้โดยสารบนเรือทั้งหมด</td><td class="n">'+tot+'</td><td class="u">คน</td><td class="blank"></td></tr>'
+    +'</table>'
+    +(gs.length>1?('<div class="gonote">มัคคุเทศก์ผู้ติดตาม: '+e(gs.slice(1).map(function(x){ return x.name+(x.license?(' ('+x.license+')'):''); }).join(' · '))+'</div>'):'')
+    +'<div class="sig"><span class="k">มัคคุเทศก์ลงนาม</span><span class="ln"></span></div>'
+    +'<div class="sig2"><div><span class="k">ผู้มีอำนาจลงนาม</span><span class="who">'+e(sg.name||'')+'</span></div>'
+      +'<div class="cap">( '+e(sg.title||'')+' )</div></div>'
+  +'</div>';
+}
+function goCss(){ return '<style>'
+  +'@page{size:A4 portrait;margin:10mm 12mm}'
+  +'*{box-sizing:border-box}'
+  +'body{margin:0;padding:20px 12px 50px;background:#e9eae5;font-family:\'Sarabun\',system-ui,sans-serif;color:#000;font-size:13px}'
+  +'.gotool{max-width:820px;margin:0 auto 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#fff;'
+    +'border:1px solid #ddd;border-radius:8px;padding:10px 14px}'
+  +'.gotool b{font-size:14px}.gotool .h{font-size:11.5px;color:#777;flex:1}'
+  +'.gotool button{font-family:inherit;font-size:12px;font-weight:600;padding:7px 14px;border-radius:6px;border:none;background:#2f2f2b;color:#fff;cursor:pointer}'
+  // §goPlain · พื้นหลังขาวล้วน ไม่มีเส้นตารางพื้นหลัง · เหลือเฉพาะกรอบที่ต้องมีจริง
+  +'.gopg{background:#fff;max-width:820px;margin:0 auto 22px;padding:26px 30px 34px;box-shadow:0 8px 26px -14px rgba(0,0,0,.3)}'
+  +'.gopg h1{margin:0 0 20px;font-size:19px;font-weight:700;text-align:center;line-height:21px}'
+  +'.co{text-align:center;line-height:21px}'
+  +'.co .nm{font-size:15px;font-weight:700}.co .li{font-size:12.5px;font-weight:700}.co .ad{font-size:12.5px;font-weight:700}'
+  +'.sp{height:21px}'
+  +'.reg{text-align:right;font-size:11.5px;font-weight:600;line-height:21px;padding-right:2px}'
+  +'.dbd{border-bottom:2px solid #000;margin-top:6px}'
+  +'.frow{display:flex;align-items:flex-end;gap:8px;line-height:21px}'
+  +'.flab{flex:none;font-size:13px}.flab.wr{width:150px;text-align:right}'
+  +'.fval{flex:1;border-bottom:1px dotted #444;text-align:center;font-weight:700;font-size:13.5px;padding-bottom:1px;min-height:20px}'
+  +'.fval.l{text-align:left;padding-left:10px}'
+  +'.fno{flex:none;width:250px;font-size:13px}'
+  +'.fno b{display:inline-block;min-width:120px;border-bottom:1px dotted #444;text-align:center;font-weight:700}'
+  +'.box{border:1px solid #000;margin-top:16px}'
+  +'.box table{width:100%;border-collapse:collapse}'
+  +'.box td{padding:5px 10px;font-size:13px;line-height:21px;vertical-align:bottom}'
+  +'.box td.k{width:110px}.box td.kk{width:66px}.box td.kp{width:96px;padding-left:14px}'
+  +'.box td.v{border-bottom:1px dotted #444;text-align:center;font-weight:700}'
+  +'.box td.k2{width:64px;text-align:center}.box td.pd{padding:0}'
+  +'.pt{border:1px solid #000;border-collapse:collapse;width:100%;margin-top:20px}'
+  +'.pt th,.pt td{border:1px solid #000;padding:5px 9px;font-size:13px;line-height:20px}'
+  +'.pt th{font-weight:600;text-align:center}'
+  +'.pt td.lb{text-align:left}.pt td.n{text-align:right;width:110px;font-weight:600}'
+  +'.pt td.u{text-align:left;width:74px}.pt td.rm{width:250px}'
+  +'.pt tr.sum td.lb{text-align:center;font-weight:600;border-right:none}'
+  +'.pt tr.sum td.n{text-align:center;font-weight:700}.pt tr.sum td.blank{border:none}'
+  +'.gonote{margin-top:10px;font-size:12px}'
+  +'.sig{margin-top:64px;display:flex;align-items:flex-end;gap:8px;line-height:21px}'
+  +'.sig .k{flex:none;font-size:13px}.sig .ln{flex:1;max-width:330px;border-bottom:1px dotted #444}'
+  +'.sig2{margin-top:64px}'
+  +'.sig2 .k{display:inline-block;width:110px}'
+  +'.sig2 .who{margin-left:8px;font-style:italic;font-size:14px}'
+  +'.sig2 .cap{margin-left:118px;font-size:13px}'
+  +'@media print{body{background:#fff;padding:0}.gotool{display:none}'
+    +'.gopg{box-shadow:none;margin:0;padding:0;max-width:none}'
+    +'.gopg + .gopg{break-before:page}}'
+  +'</style>'; }
+// bid = รหัสเรือ หรือ 'all'
+function goPrint(bid){
+  var date=_pckDate, e=ckEsc;
+  var ids=[];
+  if(bid && bid!=='all') ids=[bid];
+  else {
+    var seen={};
+    (SB_BOOKINGS||[]).forEach(function(b){
+      if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+      var t=ckTripOn(b,date); if(!t) return;
+      var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
+      var k=O.boatId||t.charterBoatId||''; if(k && !seen[k]){ seen[k]=1; ids.push(k); }
+    });
+  }
+  if(!ids.length){ alert('ยังไม่มีเรือที่จัดไว้ในวันนี้ — จัดเรือก่อนถึงพิมพ์ใบสั่งงานได้'); return; }
+  var miss=ids.filter(function(k){ return !goAsn(date,k).g.length; });
+  if(miss.length && !confirm('ยังไม่ได้จ่ายไกด์ให้ '+miss.length+' ลำ ('+miss.map(goBoatTh).join(', ')+')\nช่องมัคคุเทศก์จะว่างไว้ให้เขียนมือ · พิมพ์ต่อเลยไหม')) return;
+  var sheets=ids.map(function(k){ return goSheet(date,k,true); }).join('');
+  var title='ใบสั่งงานมัคคุเทศก์ · '+(bid==='all'?('ทุกลำ '+ids.length+' ใบ'):goBoatTh(bid))+' · '+date;
+  var html='<!doctype html><html lang="th"><head><meta charset="utf-8"><title>'+e(title)+'</title>'
+    +'<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">'
+    +goCss()+'</head><body>'
+    +'<div class="gotool"><b>ใบสั่งงานมัคคุเทศก์</b><span class="h">'+e(title)+' · A4 แนวตั้ง · 1 ลำ = 1 ใบ</span>'
+    +'<button onclick="window.print()">พิมพ์ / บันทึก PDF</button></div>'+sheets+'</body></html>';
+  var w=window.open('','_blank'); if(!w){ alert('เปิดหน้าต่างไม่ได้ · อนุญาต pop-up ก่อน'); return; }
+  w.document.write(html); w.document.close(); w.focus();
+}
+// ── หน้าต่างจ่ายไกด์ / ทะเบียน · acctModal อยู่ระดับ body สไตล์เลยต้องพกไปเอง ──
+function goModalCss(){ return '<style>'
+  +'#acct-modal .go-hd{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid #E7E4DC}'
+  +'#acct-modal .go-t{font-size:15px;font-weight:800;color:#2c2c2a}'
+  +'#acct-modal .go-s{font-size:11px;color:#8a8a82;margin-top:2px;line-height:1.5}'
+  +'#acct-modal .go-x{background:transparent;border:none;font-size:18px;color:#8a8a82;cursor:pointer;line-height:1}'
+  +'#acct-modal .go-bd{padding:16px 20px 20px;font-family:inherit}'
+  +'#acct-modal .go-lab{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8a8a82;margin-bottom:7px}'
+  +'#acct-modal .go-lab span{font-weight:600;letter-spacing:0;text-transform:none;color:#a8a49b;margin-left:6px}'
+  +'#acct-modal .go-gs{display:grid;grid-template-columns:1fr 1fr;gap:7px;max-height:230px;overflow:auto}'
+  +'#acct-modal .go-gl{display:flex;align-items:center;gap:8px;border:1.5px solid #E7E4DC;border-radius:9px;padding:7px 10px;cursor:pointer;font-size:12px}'
+  +'#acct-modal .go-gl.on{border-color:#0F6E56;background:#F1FAF6}'
+  +'#acct-modal .go-gl b{font-weight:700;color:#2c2c2a}'
+  +'#acct-modal .go-gl i{font-style:normal;font-size:10px;color:#8a8a82;margin-left:auto;font-family:ui-monospace,Menlo,monospace}'
+  +'#acct-modal .go-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}'
+  +'#acct-modal .go-bd input[type=number],#acct-modal .go-bd select{width:100%;height:34px;font-family:inherit;font-size:12.5px;'
+    +'border:1px solid #E7E4DC;border-radius:8px;padding:2px 9px;background:#fff}'
+  +'#acct-modal .go-act{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}'
+  +'#acct-modal .go-act button{font-family:inherit;font-size:12px;font-weight:700;padding:9px 16px;border-radius:9px;cursor:pointer;border:1px solid #E7E4DC;background:#fff;color:#2c2c2a}'
+  +'#acct-modal .go-b1{background:#0F6E56 !important;border-color:#0F6E56 !important;color:#fff !important}'
+  +'#acct-modal .go-b2{margin-right:auto}'
+  +'#acct-modal .go-tb{width:100%;border-collapse:collapse}'
+  +'#acct-modal .go-tb th{font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#8a8a82;text-align:left;padding:0 4px 5px}'
+  +'#acct-modal .go-tb td{padding:3px 4px;vertical-align:middle}'
+  +'#acct-modal .go-tb td.c{text-align:center}'
+  +'#acct-modal .go-tb input[type=text],#acct-modal .go-tb input:not([type]){width:100%;height:30px;font-family:inherit;font-size:12px;'
+    +'border:1px solid #E7E4DC;border-radius:7px;padding:2px 8px;background:#fff}'
+  +'#acct-modal .go-tb tr.off input{opacity:.5}'
+  +'#acct-modal .go-del{background:transparent;border:none;color:#A32D2D;font-family:inherit;font-size:11px;font-weight:700;cursor:pointer}'
+  +'#acct-modal .go-empty{padding:14px;text-align:center;color:#a8a49b;font-size:12px}'
+  +'#acct-modal .go-hint{font-size:10.5px;color:#8a8a82;line-height:1.6}'
+  +'</style>'; }
+// ── จ่ายไกด์เข้าลำ + พิมพ์ ──────────────────────────────────────────────
+function goSetupOpen(bid){
+  var date=_pckDate, e=ckEsc, A=goAsn(date,bid), C=goCfg(), G=goGuides().filter(function(x){ return x.active!==false; });
+  var cnt=goCounts(date,bid), boat=(typeof getBoat==='function')?getBoat(bid):null;
+  var no=goNoFor(date,bid,false);
+  var opts=G.map(function(g){
+    var on=A.g.indexOf(g.id)>=0;
+    return '<label class="go-gl'+(on?' on':'')+'"><input type="checkbox" '+(on?'checked':'')+' value="'+e(g.id)+'" onchange="goSetupTick(this)">'
+      +'<b>'+e(g.name)+(g.nick?(' ('+e(g.nick)+')'):'')+'</b><i>'+e(g.license||'ไม่มีเลขใบอนุญาต')+'</i></label>';
+  }).join('') || '<div class="go-empty">ยังไม่มีไกด์ในทะเบียน — กด “ทะเบียนไกด์” เพื่อเพิ่ม</div>';
+  var sgn=C.signers.map(function(x,i){ return '<option value="'+i+'"'+(i===A.sign?' selected':'')+'>'+e(x.name+' ('+x.title+')')+'</option>'; }).join('');
+  acctModal(goModalCss()+'<div class="go-hd"><div><div class="go-t">ใบสั่งงานมัคคุเทศก์ · '+e(goBoatTh(bid))+'</div>'
+    +'<div class="go-s">'+e(date)+' · ผู้ใหญ่ '+cnt.ad+' · เด็กโต '+cnt.chd+' · เด็กเล็ก '+cnt.inf
+      +' · กัปตัน/นายท้าย '+((boat&&boat.crew)||0)+(no?(' · เลขที่ '+no):' · ยังไม่ออกเลขที่')+'</div></div>'
+    +'<button class="go-x" onclick="acctModalClose()">&#10005;</button></div>'
+    +'<div class="go-bd">'
+      +'<div class="go-lab">มัคคุเทศก์ที่ขึ้นลำนี้ <span>คนแรกคือผู้รับผิดชอบใบ · ที่เหลือนับเป็นผู้ติดตาม</span></div>'
+      +'<div class="go-gs" id="go-gs">'+opts+'</div>'
+      +'<div class="go-2">'
+        +'<div><div class="go-lab">อื่นๆ · นักศึกษาฝึกงาน / สตาฟ</div>'
+          +'<input type="number" min="0" id="go-other" value="'+(+A.other||0)+'"></div>'
+        +'<div><div class="go-lab">ผู้มีอำนาจลงนาม</div><select id="go-sign">'+sgn+'</select></div>'
+      +'</div>'
+      +'<div class="go-act">'
+        +'<button class="go-b2" onclick="goRegOpen(\''+e(bid)+'\')">ทะเบียนไกด์ / ตั้งค่า</button>'
+        +'<button class="go-b1" onclick="goSetupSave(\''+e(bid)+'\',1)">บันทึก + พิมพ์</button>'
+        +'<button class="go-b3" onclick="goSetupSave(\''+e(bid)+'\',0)">บันทึกเฉยๆ</button>'
+      +'</div>'
+    +'</div>');
+}
+function goSetupTick(el){ var l=el.closest('label'); if(l) l.classList.toggle('on', el.checked); }
+function goSetupSave(bid, doPrint){
+  var date=_pckDate, host=document.getElementById('go-gs');
+  var g=[]; if(host) Array.prototype.forEach.call(host.querySelectorAll('input:checked'), function(x){ g.push(x.value); });
+  var other=Math.max(0, parseInt((document.getElementById('go-other')||{}).value,10)||0);
+  var sign=Math.max(0, parseInt((document.getElementById('go-sign')||{}).value,10)||0);
+  goAsnSet(date,bid,{g:g, other:other, sign:sign});
+  acctModalClose();
+  if(typeof renderPierCheckin==='function') renderPierCheckin();
+  if(doPrint) goPrint(bid);
+}
+// ── ทะเบียนไกด์ + ตั้งค่าเลขที่/ผู้ลงนาม ────────────────────────────────
+function goRegOpen(back){
+  var e=ckEsc, G=goGuides(), C=goCfg();
+  var rows=G.map(function(g,i){
+    return '<tr'+(g.active===false?' class="off"':'')+'>'
+      +'<td><input value="'+e(g.name||'')+'" oninput="goRegSet('+i+',\'name\',this.value)" placeholder="ชื่อ-นามสกุล (ไทย)"></td>'
+      +'<td><input value="'+e(g.nick||'')+'" oninput="goRegSet('+i+',\'nick\',this.value)" placeholder="ชื่อเล่น"></td>'
+      +'<td><input value="'+e(g.license||'')+'" oninput="goRegSet('+i+',\'license\',this.value)" placeholder="1-000000"></td>'
+      +'<td class="c"><input type="checkbox" '+(g.active===false?'':'checked')+' onchange="goRegSet('+i+',\'active\',this.checked)"></td>'
+      +'<td class="c"><button class="go-del" onclick="goRegDel('+i+')">ลบ</button></td></tr>';
+  }).join('') || '<tr><td colspan="5" class="go-empty">ยังไม่มีไกด์ · กด “+ เพิ่มไกด์”</td></tr>';
+  var sg=C.signers.map(function(x,i){
+    return '<tr><td><input value="'+e(x.name||'')+'" oninput="goSgSet('+i+',\'name\',this.value)" placeholder="ชื่อผู้ลงนาม"></td>'
+      +'<td><input value="'+e(x.title||'')+'" oninput="goSgSet('+i+',\'title\',this.value)" placeholder="ตำแหน่ง"></td>'
+      +'<td class="c"><button class="go-del" onclick="goSgDel('+i+')">ลบ</button></td></tr>';
+  }).join('');
+  acctModal(goModalCss()+'<div class="go-hd"><div><div class="go-t">ทะเบียนมัคคุเทศก์ / ตั้งค่าใบสั่งงาน</div>'
+    +'<div class="go-s">พิมพ์แล้วบันทึกทันที · ใช้ร่วมกันทุกเครื่อง</div></div>'
+    +'<button class="go-x" onclick="acctModalClose()">&#10005;</button></div>'
+    +'<div class="go-bd">'
+      +'<div class="go-lab">ทะเบียนไกด์</div>'
+      +'<table class="go-tb"><thead><tr><th>ชื่อ-นามสกุล</th><th style="width:110px">ชื่อเล่น</th>'
+        +'<th style="width:130px">เลขใบอนุญาต</th><th style="width:60px">ใช้งาน</th><th style="width:56px"></th></tr></thead>'
+        +'<tbody>'+rows+'</tbody></table>'
+      +'<button class="go-b2" onclick="goRegAdd()" style="margin-top:8px">+ เพิ่มไกด์</button>'
+      +'<div class="go-lab" style="margin-top:18px">ผู้มีอำนาจลงนาม</div>'
+      +'<table class="go-tb"><tbody>'+sg+'</tbody></table>'
+      +'<button class="go-b2" onclick="goSgAdd()" style="margin-top:8px">+ เพิ่มผู้ลงนาม</button>'
+      +'<div class="go-2" style="margin-top:18px">'
+        +'<div><div class="go-lab">เลขที่ใบถัดไป</div>'
+          +'<input type="number" min="1" value="'+C.next+'" onchange="goCfgNext(this.value)"></div>'
+        +'<div><div class="go-lab">&nbsp;</div>'
+          +'<div class="go-hint">เลขที่ออกไปแล้วจะถูกจำไว้ต่อลำต่อวัน · พิมพ์ซ้ำได้เลขเดิม ไม่กินเลขใหม่</div></div>'
+      +'</div>'
+      +'<div class="go-act"><button class="go-b1" onclick="'+(back?('goSetupOpen(\''+e(back)+'\')'):'acctModalClose()')+'">'+(back?'กลับไปหน้าจ่ายไกด์':'ปิด')+'</button></div>'
+    +'</div>');
+}
+function goRegAdd(){ var G=goGuides(); G.push({id:'g_'+Date.now().toString(36), name:'', nick:'', license:'', active:true}); goGuidesSet(G); goRegOpen(); }
+function goRegDel(i){ var G=goGuides(); if(!G[i]) return; if(!confirm('ลบ "'+(G[i].name||'ไกด์')+'" ออกจากทะเบียน?')) return; G.splice(i,1); goGuidesSet(G); goRegOpen(); }
+function goRegSet(i,k,v){ var G=goGuides(); if(!G[i]) return; G[i][k]=v; goGuidesSet(G); }
+function goSgAdd(){ var C=goCfg(); C.signers.push({name:'',title:''}); goCfgSet(C); goRegOpen(); }
+function goSgDel(i){ var C=goCfg(); if(C.signers.length<=1) return alert('ต้องเหลือผู้ลงนามอย่างน้อย 1 คน'); C.signers.splice(i,1); goCfgSet(C); goRegOpen(); }
+function goSgSet(i,k,v){ var C=goCfg(); if(!C.signers[i]) return; C.signers[i][k]=v; goCfgSet(C); }
+function goCfgNext(v){ var C=goCfg(); C.next=Math.max(1, parseInt(v,10)||1); goCfgSet(C); }
+
 // bid = รหัสเรือ หรือ 'all' (ทุกลำของวันนั้น · 1 ลำ = 1 หน้า)
 function pckGuideJobOrder(bid){
   var date=_pckDate, e=ckEsc;
@@ -46501,9 +46936,11 @@ function pckBoatTabs(all){
       +'<span style="width:10px;height:10px;border-radius:50%;flex:none;background:'+(on?ink:col)+'"></span>'
       +'<span>'+e(pckBoatName(k))+'</span>'
       +'<span class="rt"'+(on?' style="color:'+ink+'"':'')+'><i style="background:'+(rt.color||'#999')+'"></i>'+e(rt.name||'—')+(dep?(' · '+e(dep)):'')+'</span>'
-      +'<span class="c"'+(on?' style="color:'+ink+'"':'')+'>'+a.on+'/'+a.n+'</span></button>';
+      +'<span class="c"'+(on?' style="color:'+ink+'"':'')+' title="ขึ้นเรือแล้ว '+a.onP+' จาก '+a.pax+' คน · '+a.on+'/'+a.n+' booking">'+a.onP+'/'+a.pax+'</span></button>';
   });
-  return h+'<button class="pck-joball" onclick="pckGuideJobOrder(\'all\')" title="พิมพ์ใบงานไกด์ทุกลำของวันนี้ · 1 ลำ = 1 ใบ">&#128196; ใบงานไกด์ทุกลำ</button></div>';
+  return h+'<button class="pck-joball" onclick="pckGuideJobOrder(\'all\')" title="ใบงานไกด์ทุกลำของวันนี้ · A4 แนวนอน · 1 ลำ = 1 ใบ">&#128196;</button>'
+    +'<button class="pck-joball go" onclick="goPrint(\'all\')" title="ใบสั่งงานมัคคุเทศก์ทุกลำ · A4 แนวตั้ง · 1 ลำ = 1 ใบ">&#128220;</button>'
+    +'<button class="pck-joball go2" onclick="goRegOpen(\'\')" title="ทะเบียนไกด์ · เลขที่ใบ · ผู้มีอำนาจลงนาม">&#9881;</button></div>';
 }
 function renderPierCheckin(){
   var host=document.getElementById('piercheckin-host'); if(!host) return;
@@ -46604,9 +47041,11 @@ function renderPierCheckin(){
         : '<span class="pck-rchip" style="color:'+(rt0.color||'#2f2f2b')+'" title="'+e(rt0.name||'')+'"><i style="background:'+(rt0.color||'#999')+'"></i>'+e(rt0.name||B.torder[0]||'—')+'</span>'
           +(dep0?'<span class="pck-rdep" style="background:'+(rt0.color||'#5F5E5A')+'">ออก '+e(dep0)+'</span>':''))
       +'</div></div>'
-      +'<div class="pck-bstat">'+bchip('ถึงท่า',a.arr+'/'+a.n)+bchip('เคลียร์',a.clr)+bchip('ขึ้นเรือ',a.on)
+      +'<div class="pck-bstat">'+bchip('ถึงท่า',a.arrP+'/'+a.pax)+bchip('เคลียร์',a.clrP)+bchip('ขึ้นเรือ',a.onP)
         +(a.due>0?bchip('ค้างเก็บ','&#3647;'+Math.round(a.due).toLocaleString()):'')
         +'<div class="pck-bchip" style="background:#fff;border:1px solid #fff;color:'+pckInkOnWhite(col)+'"><span class="k" style="opacity:.8">ที่นั่ง</span><span class="v">'+a.pax+(cap?('/'+cap):'')+'</span></div>'
+        +'<button class="pck-jobbtn go" onclick="event.stopPropagation();goSetupOpen(\''+bid+'\')" title="ใบสั่งงานมัคคุเทศก์ของลำนี้ · จ่ายไกด์แล้วพิมพ์">&#128220; ใบสั่งงาน'
+          +((goAsn(_pckDate,bid).g.length)?'':' <b style="color:#B4560A">&#9679;</b>')+'</button>'
         +'<button class="pck-jobbtn" onclick="event.stopPropagation();pckGuideJobOrder(\''+bid+'\')" title="พิมพ์ใบงานไกด์ของลำนี้ · A4 แนวนอน">&#128196; ใบงานไกด์</button>'
       +'</div></div>'+pckBoatMeta(B.rows, date)+'<div class="pck-bbody">';
     B.torder.forEach(function(rk){
@@ -46620,9 +47059,9 @@ function renderPierCheckin(){
           +'<div class="pck-tsub">'+at.n+' booking · '+at.pax+' pax</div></div>'
           +(dep?'<span class="pck-tdep" style="background:'+(rt.color||'#5F5E5A')+'">ออก '+e(dep)+'</span>':'')
           +'<span class="pck-tstat">'
-            +'<span class="pck-tchip">ถึงท่า <b>'+at.arr+'/'+at.n+'</b></span>'
-            +'<span class="pck-tchip">เคลียร์ <b>'+at.clr+'</b></span>'
-            +'<span class="pck-tchip">ขึ้นเรือ <b>'+at.on+'</b></span>'
+            +'<span class="pck-tchip" title="นับเป็นคน · '+at.arr+'/'+at.n+' booking">ถึงท่า <b>'+at.arrP+'/'+at.pax+'</b></span>'
+            +'<span class="pck-tchip" title="นับเป็นคน · '+at.clr+' booking">เคลียร์ <b>'+at.clrP+'</b></span>'
+            +'<span class="pck-tchip" title="นับเป็นคน · '+at.on+' booking">ขึ้นเรือ <b>'+at.onP+'</b></span>'
             +(at.due>0?'<span class="pck-tchip money">ค้างเก็บ <b>&#3647;'+Math.round(at.due).toLocaleString()+'</b></span>':'')
           +'</span></div>';
       }
@@ -47513,23 +47952,34 @@ function tsPayCell(r, date){
   var pt=PT[M.payType||'']||null;
   if(pt) L.push('<span class="ts-chip '+pt[1]+'" title="เงื่อนไขการชำระของ agent">'+pt[0]+'</span>');
   else if(!b.agentId) L.push('<span class="ts-chip n">Walk-in</span>');
+  // §tsInvPaid · เงินที่รับผ่านใบแจ้งหนี้ (หน้า By-trip-date / หน้าบัญชี) · คนละก้อนกับเงินหน้าท่า
+  var IV=X.inv||{};
+  if(IV.inv){
+    if(IV.settled)
+      L.push('<span class="ts-chip g" title="'+e('รับเงินครบแล้วตามใบแจ้งหนี้ '+IV.no+' '+m(IV.paid)
+        +(IV.nBk>1?(' · ใบนี้คุม '+IV.nBk+' booking'):''))+'">&#10003; จ่ายผ่านบิลแล้ว</span>');
+    else if(IV.paid>0)
+      L.push('<span class="ts-chip b" title="'+e('ใบแจ้งหนี้ '+IV.no+' รับแล้ว '+m(IV.paid)+' · ค้าง '+m(IV.bal)
+        +(IV.nBk>1?(' · ใบนี้คุม '+IV.nBk+' booking ปันส่วนรายใบไม่ได้'):''))+'">บิลชำระบางส่วน</span>');
+  }
   if(r.cxlRow){
     var cc=b.cancellation||null;
     L.push('<span class="ts-pyd">'+((cc&&+cc.chargeAmount>0)?('ค่าปรับ '+m(cc.chargeAmount)):'ไม่มียอดเก็บ')+'</span>');
     return '<div class="ts-payc">'+L.join('')+'</div>';
   }
   // ยอดที่ต้องเก็บวันนี้ · แยกให้เห็นว่ามาจากอะไร (COT / ค้าง / upgrade)
-  if(M.due>0){
+  if(X.due>0){
     var parts=[];
     if(M.cot>0)     parts.push('COT '+m(M.cot));
     if(M.balance>0) parts.push('ค้าง '+m(M.balance));
     if(M.upDue>0)   parts.push('upgrade '+m(M.upDue));
+    if(X.billed>0)  parts.push('จ่ายผ่านบิล '+m(X.billed));
     if(M.pierPaid>0)parts.push('เก็บแล้ว '+m(M.pierPaid));
-    L.push('<span class="ts-pyd" title="'+e(parts.join(' · '))+'">ต้องเก็บ '+m(M.due)+'</span>');
+    L.push('<span class="ts-pyd" title="'+e(parts.join(' · '))+'">ต้องเก็บ '+m(X.due)+'</span>');
     if(parts.length) L.push('<span class="ts-pyn">'+e(parts.join(' · '))+'</span>');
   } else if(M.pierPaid>0){
     L.push('<span class="ts-pyg">&#10003; เก็บครบ '+m(M.pierPaid)+'</span>');
-  } else if(M.payType==='cot'){
+  } else if(M.payType==='cot' && !(X.inv&&X.inv.settled)){
     L.push('<span class="ts-pyn">COT · ยังไม่ระบุยอด</span>');
   }
   // §tsPayDetail · COT ตกลงกันไว้ยังไง · ก้อนนี้หักจากบิล agent หรือเก็บแยก
@@ -47607,14 +48057,33 @@ function tsSaleCell(S, money, e){
       +(x.noSlip?' <i style="font-style:normal;color:#A32D2D">⚠</i>':'')+'</span>';
   }).join('')+'</div>';
 }
+// สถานะใบแจ้งหนี้ของ booking นี้ · ใช้ตัวเดียวกับหน้าบัญชี ไม่ได้คิดเลขเอง
+function tsInvSettle(b){
+  var out={ inv:null, no:'', state:'', paid:0, bal:0, nBk:0, settled:false };
+  try{
+    if(!b || !b.id || typeof acctBookingInvoice!=='function') return out;
+    var iv=acctBookingInvoice(b.id); if(!iv) return out;
+    out.inv=iv; out.no=iv.number||iv.id||'';
+    out.state=(typeof acctInvoiceState==='function')   ? acctInvoiceState(iv)   : '';
+    out.paid =(typeof acctInvoicePaid==='function')    ? acctInvoicePaid(iv)    : 0;
+    out.bal  =(typeof acctInvoiceBalance==='function') ? acctInvoiceBalance(iv) : 0;
+    out.nBk  =((iv.bookingIds||[]).length)||0;
+    out.settled=(out.state==='paid');
+  }catch(_){}
+  return out;
+}
 function tsMoneyOf(b, date){
   var M=(typeof pckMoney==='function')?pckMoney(b,date):{cot:0,balance:0,upDue:0,due:0,pierPaid:0};
   var pays=(typeof pckPaysFor==='function')?pckPaysFor(b,date):[];
   var by={cash:0,transfer:0,card:0}, who=[];
   pays.forEach(function(p){ var m=p.method||'cash'; if(by[m]==null) by[m]=0; by[m]+=(+p.amount||0);
     if(p.by && who.indexOf(p.by)<0) who.push(p.by); });
-  return { M:M, pays:pays, by:by, who:who.join(' · '),
-           target:(+M.cot||0)+(+M.balance||0)+(+M.upDue||0), paid:+M.pierPaid||0, due:+M.due||0 };
+  // §tsInvPaid · บิลจ่ายครบแล้ว = ส่วน COT/ยอดค้างถูกเคลียร์ทางบัญชีไปแล้ว ไม่ต้องตามเก็บที่ท่า
+  var IV=tsInvSettle(b);
+  var billed = IV.settled ? ((+M.cot||0)+(+M.balance||0)) : 0;
+  var target = Math.max(0, (+M.cot||0)+(+M.balance||0)+(+M.upDue||0) - billed);
+  return { M:M, pays:pays, by:by, who:who.join(' · '), inv:IV, billed:billed,
+           target:target, paid:+M.pierPaid||0, due:Math.max(0, target-(+M.pierPaid||0)) };
 }
 // ══════════════════════════════════════════════════════════════════════════
 // §dailyReport · รายงานประจำวัน
@@ -49596,7 +50065,10 @@ function renderTravelSum(){
     Object.keys(_sby).forEach(function(k){ var x=PM[k]||['อื่นๆ','n'];
       mchips+='<span class="ts-chip '+x[1]+'" title="เงินจากของที่ขายเพิ่มหน้างาน">'
         + x[0]+' '+money(_sby[k])+' <i style="font-style:normal;opacity:.7">ขายเพิ่ม</i></span>'; });
-    if(!mchips) mchips='<span class="ts-chip n">ยังไม่เก็บ</span>';
+    // §tsInvPaid · ใบที่จ่ายผ่านบิลมาแล้ว อย่าขึ้น "ยังไม่เก็บ" ให้คนหน้าท่าไปตามซ้ำ
+    if(!mchips) mchips=(m.inv&&m.inv.settled)
+      ? ('<span class="ts-chip g" title="'+e('รับเงินครบตามใบแจ้งหนี้ '+m.inv.no)+'">&#10003; จ่ายผ่านบิล</span>')
+      : '<span class="ts-chip n">ยังไม่เก็บ</span>';
     var _noSlip=(+m.M.noSlip||0)+(+m.S.noSlip||0);
     var slipWarn=(_noSlip>0)?('<span class="ts-chip a" title="โอน/บัตรที่ยังไม่แนบสลิป · รวมของที่ขายเพิ่ม">ขาดสลิป '+_noSlip+'</span>'):'';
     var parts=[]; if(m.M.cot>0) parts.push('COT '+money(m.M.cot));
