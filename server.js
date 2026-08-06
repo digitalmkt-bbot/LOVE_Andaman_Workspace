@@ -183,7 +183,13 @@ const B2C_OWN_BK = new Set([
 // v13: if B2C did not fan out bookings.items into booking_items, synthesize item rows directly from
 //      bookings.items[] so discount/map bookings still import.
 // v14: normalize B2C paymentMethod/paymentType labels (PM-BANK, Bank transfer) to app pay code 'bt'.
-const B2C_MAP_VER = 14;
+// v15: imports details.addonsSelected into addOns[] and prices it as subtotal − seat, instead of
+//      hardcoding addOns: [] / priceBreakdown.addOn: 0. Also puts the add-on into lineTotal, which
+//      it was always missing from — an add-on line imported short of what the guest paid and read
+//      as overpaid. The re-upsert this bump forces backfills the 16 existing orders whose add-ons
+//      were discarded; both pricebreakdown_addon and the sb_bookings__addons child rows are
+//      refreshed by the normal sync path, so no separate migration is needed.
+const B2C_MAP_VER = 15;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -257,17 +263,65 @@ function b2cPayCode(h) {
   return '';
 }
 
-// Line-item seat price = Σ(pax_<cat> × details.unitPrices.<cat>) over adult/child/infant/foc.
-// details is jsonb (parsed by pg); falls back to the stored subtotal column if rates are missing.
-function b2cLineSeat(item) {
+// Line-item money, split into seat + add-on.
+//   seat   = Σ(pax_<cat> × details.unitPrices.<cat>) over adult/child/infant/foc — unitPrices is
+//            SEAT ONLY, verified on prod (LOV-4190737: 2 × 3500 = the 7,000 seat total).
+//   addOn  = subtotal − seat. B2C folds the add-on into the line subtotal and prices it nowhere
+//            else: addonsSelected carries no unitPrice/amount on ANY entry in the B2C database
+//            (census 2026-08-06, 0 of 25). Verified on all 16 add-on-carrying lines — 15 positive,
+//            1 zero, 0 negative — and it matches the paid-vs-total gap on every order checked.
+// We must NOT re-price from our own rate card: B2C charged 500/rider on LOV-4190737 where rt003
+// says 400 adult / 300 child. Whatever B2C charged is what ops and accounting show.
+// When unitPrices is missing there is nothing to subtract from — subtotal is all we have and it
+// cannot be split, so it stays wholly seat. That keeps the line TOTAL right (it always was) and
+// merely leaves the add-on unattributed, which is what the old subtotal fallback did anyway.
+function b2cLineMoney(item) {
   let det = item.details;
   if (typeof det === 'string') { try { det = JSON.parse(det); } catch (_) { det = null; } }
   const up = (det && det.unitPrices) || {};
-  const seat = (Number(item.pax_adult)  || 0) * (Number(up.adult)  || 0)
-             + (Number(item.pax_child)  || 0) * (Number(up.child)  || 0)
-             + (Number(item.pax_infant) || 0) * (Number(up.infant) || 0)
-             + (Number(item.pax_foc)    || 0) * (Number(up.foc)    || 0);
-  return Math.round(seat || Number(item.subtotal) || 0);
+  const sub = Math.round(Number(item.subtotal) || 0);
+  const rated = (Number(item.pax_adult)  || 0) * (Number(up.adult)  || 0)
+              + (Number(item.pax_child)  || 0) * (Number(up.child)  || 0)
+              + (Number(item.pax_infant) || 0) * (Number(up.infant) || 0)
+              + (Number(item.pax_foc)    || 0) * (Number(up.foc)    || 0);
+  if (!(rated > 0)) return { seat: sub, addOn: 0 };
+  const seat = Math.round(rated);
+  return { seat, addOn: Math.max(0, sub - seat) };
+}
+// Seat alone — same value the old b2cLineSeat returned, kept for any caller that wants just the seat.
+function b2cLineSeat(item) { return b2cLineMoney(item).seat; }
+
+// details.addonsSelected → ops addOns[{type,label,amount,qty,note}].
+// Ops identifies an add-on by the literal `type` string — bkV2AddOnFlags matches 'longtail-join',
+// 'longtail-charter' and a 'transfer-' prefix, and there is no id registry to look anything up in
+// (sb_addon_types is empty). B2C's `code` uses the same slugs, so it maps 1:1 with no table.
+// B2C started sending code/qtyAdult/qtyChild on 2026-08-06; older entries carry only {qty, addonId}.
+// An entry with no `code` gets a namespaced type ('b2c-ad-001') that deliberately matches none of
+// the patterns above: importing it as a generic line is honest, whereas guessing "longtail" from an
+// unknown code would put phantom boats on the pier. Fill in the real slugs once B2C confirms what
+// AD-001 / AD-002 are (docs/B2C_LONGTAIL_ADDON.md §4 Q1).
+const B2C_ADDON_LABEL = { 'longtail-join': 'Longtail Join', 'longtail-charter': 'Longtail Charter' };
+function b2cMapAddOns(det, addOnTotal) {
+  const arr = (det && Array.isArray(det.addonsSelected)) ? det.addonsSelected : [];
+  if (!arr.length) return [];
+  const rows = arr.map(a => {
+    const code = String((a && a.code) || '').trim().toLowerCase();
+    const id   = String((a && a.addonId) || '').trim();
+    const type = code || (id ? 'b2c-' + id.toLowerCase() : 'b2c-addon');
+    const qty  = Math.round(Number(a && a.qty) || 0) || 1;
+    const ad = Number(a && a.qtyAdult), ch = Number(a && a.qtyChild);
+    const base = B2C_ADDON_LABEL[type] || (code || ('B2C add-on ' + (id || '?')));
+    // Mirror the B2B label shape ("Longtail Join (2A + 0C)") when B2C sent the adult/child split.
+    const label = (Number.isFinite(ad) && Number.isFinite(ch)) ? `${base} (${ad}A + ${ch}C)`
+                                                               : `${base} × ${qty}`;
+    return { type, label, amount: 0, qty, note: '' };
+  });
+  // subtotal − seat gives the COMBINED add-on money for the line. With one entry that is its exact
+  // amount; with several (AD-001 + AD-002 together, 6 orders) it cannot be split without per-entry
+  // prices, so each stays 0 and priceBreakdown.addOn carries the money. Splitting it by qty would
+  // be a guess and would show made-up figures against a named product.
+  if (rows.length === 1) rows[0].amount = Math.max(0, Math.round(addOnTotal) || 0);
+  return rows;
 }
 
 // One allotment booking PER B2C booking_item — items sit at booking level, not nested as trips.
@@ -291,7 +345,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows) {
   // Item-level travel_date first; order-level (bookings.travel_date) as fallback — the B2C
   // checkout sometimes stores the trip date only on the order header.
   const date = td(h.travel_date) || td(h.bk_travel_date) || null;
-  const seat = b2cLineSeat(h);
+  const { seat, addOn } = b2cLineMoney(h);
   // pax_adult = total adults; pax_thai/pax_foreign = nationality split (may be 0/0 when unknown).
   // Never use pax_foreign||pax_adult — a Thai-only booking (fr=0, th=5, ad=5) double-counts to 10.
   // Pay type: bookings.paymentType/paymentMethod can be either app ids (bt/cot) or B2C labels
@@ -313,7 +367,10 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows) {
   // over-reported the sale, while paidStatus (which compares bk_total) still said fully paid.
   const discAmt  = isFirstLine ? Math.max(0, Math.round(Number(h.bk_discount)  || 0)) : 0;
   const extraAmt = isFirstLine ? Math.max(0, Math.round(Number(h.bk_surcharge) || 0)) : 0;
-  const lineTotal = Math.max(0, seat - discAmt + extraAmt);   // Σ lines = the order total
+  // Σ lines = the order total. The add-on has to be in here: it is inside bi.subtotal and inside
+  // bookings.total, so leaving it out made an add-on line import 1,000 short of what the guest paid
+  // (LOV-4190737: total 7,000 against paid 8,000) and read as overpaid in accounting.
+  const lineTotal = Math.max(0, seat + addOn - discAmt + extraAmt);
   const adTh = Number(h.pax_thai) || 0;
   const adFrRaw = Number(h.pax_foreign) || 0;
   const adFr = adFrRaw > 0 ? adFrRaw : Math.max(0, (Number(h.pax_adult) || 0) - adTh);
@@ -437,7 +494,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows) {
              ? `Pickup: ${pickupArea || pickupLoc}${pickupZone ? ' (' + pickupZone + ')' : ''} — area unassigned` : null].filter(Boolean).join(' · '),
     trips: [trip],
     passengers: isFirstLine ? b2cPassengerList(paxRows) : [],
-    addOns: [],
+    addOns: b2cMapAddOns(det, addOn),
     // Display rows for the Total panel. bkV2 stores adjustments as positive values with a kind, and
     // acctBookingTotal never re-applies them (the total already accounts for them) — so these are
     // presentational only and cannot double-count.
@@ -448,7 +505,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows) {
     total: lineTotal,
     priceBreakdown: {
       seat: seat,
-      addOn: 0,
+      addOn: addOn,
       focDiscount: 0,
       discount: -discAmt,      // negative, matching bkV2CommitBooking's own priceBreakdown
       extra: extraAmt,
