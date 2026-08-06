@@ -40699,6 +40699,19 @@ function mdTabAgents(days){
 // clustered per pickup area (real lat/long) · market filter + week/month/year period. (§62)
 // ══════════════════════════════════════
 let _pmapMode='month', _pmapAnchor=null, _pmapMkFilter=null, _pmapSel=null, _pmapMetric='pax';
+// §pmapAgFilter · กรองเฉพาะ agent เจ้าเดียว · null = ทุกเจ้า
+let _pmapAgFilter=null;
+// คีย์ agent ของ booking · ต้องคิดแบบเดียวกับในการ์ด Agent × โซน ไม่งั้นกรองแล้วไม่ตรง
+function pmAgKeyOf(b){ return (b&&b.agentId) || ((b&&(b.b2cChannel||b.channelType==='b2c'))?'_b2c':('_'+((b&&b.channel)||'walkin'))); }
+function pmAgSkip(b){ return !!(_pmapAgFilter && pmAgKeyOf(b)!==_pmapAgFilter); }
+function pmapSetAg(k){ _pmapAgFilter=(_pmapAgFilter===k)?null:(k||null); _pmapSel=null; pmapRefresh(); }
+function pmapAgName(){
+  if(!_pmapAgFilter) return '';
+  const ag=(typeof sbGetAgent==='function')?sbGetAgent(_pmapAgFilter):null;
+  if(ag) return ag.name||ag.code||_pmapAgFilter;
+  if(_pmapAgFilter==='_b2c') return 'เว็บไซต์ (B2C)';
+  return (typeof pmChannelName==='function')?pmChannelName(String(_pmapAgFilter).replace(/^_/,'')):String(_pmapAgFilter);
+}
 const PHUKET_LL={'Panwa Pier':[7.8295,98.4045],'Patong':[7.896,98.296],'Karon':[7.846,98.294],'Kata':[7.820,98.298],'Kalim':[7.910,98.298],'Kamala':[7.955,98.281],'Panwa':[7.818,98.402],'Tritrang':[7.879,98.2845],'Phuket Town':[7.884,98.388],'Naithon':[8.085,98.293],'Bangtao':[8.000,98.296],'Laguna':[8.012,98.302],'Rawai':[7.778,98.325],'Maikhao':[8.150,98.300],'Kathu':[7.907,98.337],'Chalong':[7.846,98.337],'Cherngtalay':[7.990,98.305],'Nai Harn':[7.775,98.305],'Aopor':[7.990,98.390],'Aoyon':[7.830,98.420],'Surin':[7.975,98.279],'Layan':[8.040,98.298],'Naiyang':[8.105,98.300],'Ko Kaeo':[7.922,98.392],'Siray':[7.884,98.416],'Naiharn':[7.775,98.305]};
 const _PMTH=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 const _PM={map:null,canvas:null,hits:null,areas:[],mkTot:{},total:0,other:0,otherAreas:{}};
@@ -40716,7 +40729,7 @@ function pmapSetMetric(m){ if(_pmapMetric===m)return; _pmapMetric=m; pmapRefresh
 function pmapArrivals(per){ let a=0,has=false; Object.values(SB_MARKET_STATS||{}).forEach(d=>{ if(per.test(d.date||'')){ const t=(typeof mdDirTot==='function')?mdDirTot(d,'in'):0; if(t){a+=t;has=true;} } }); return has?a:null; }
 function pmapMoM(key){ const c=_PM.areas.find(x=>x.key===key); if(!c)return null; const cv=pmVal(c); const p=_PM.prev[key]; if(!p)return null; const pv=_pmapMetric==='value'?p.val:p.pax; if(!pv)return null; return Math.round((cv/pv-1)*100); }
 function pmapAreaDetail(key){ const BK=(typeof SB_BOOKINGS!=='undefined')?SB_BOOKINGS:[]; const per=pmapPeriod(); const H={},A={}; let bk=0;
-  BK.forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; const ar=b.pickupAreaId&&typeof bkV2GetArea==='function'?bkV2GetArea(b.pickupAreaId):null; const rk=ar?pmNormArea(ar.name):''; if(rk!==key)return; if(_pmapMkFilter&&pmMarket(b)!==_pmapMkFilter)return; let cp=0;(b.trips||[]).forEach(t=>{if(per.test(t.date||''))cp+=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;}); if(cp<=0)return; bk++; const val=(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0); const w=_pmapMetric==='value'?val:cp; const hn=(b.hotelName||b.pickup||'—'); H[hn]=(H[hn]||0)+w; const ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null; const an=ag?ag.name:((b.b2cChannel||b.channelType==='b2c')?'B2C':'—'); A[an]=(A[an]||0)+w; });
+  BK.forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(pmAgSkip(b))return; const ar=b.pickupAreaId&&typeof bkV2GetArea==='function'?bkV2GetArea(b.pickupAreaId):null; const rk=ar?pmNormArea(ar.name):''; if(rk!==key)return; if(_pmapMkFilter&&pmMarket(b)!==_pmapMkFilter)return; let cp=0;(b.trips||[]).forEach(t=>{if(per.test(t.date||''))cp+=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;}); if(cp<=0)return; bk++; const val=(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0); const w=_pmapMetric==='value'?val:cp; const hn=(b.hotelName||b.pickup||'—'); H[hn]=(H[hn]||0)+w; const ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null; const an=ag?ag.name:((b.b2cChannel||b.channelType==='b2c')?'B2C':'—'); A[an]=(A[an]||0)+w; });
   const srt=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]).slice(0,5); return {hotels:srt(H),agents:srt(A),bk}; }
 function pmapPeriod(anchor){ const a=anchor||_pmapAnchor, d=new Date(a+'T00:00');
   if(_pmapMode==='year'){ const y=a.slice(0,4); return {test:s=>s.slice(0,4)===y, label:'ปี '+(+y+543)}; }
@@ -40734,7 +40747,7 @@ function pmNormArea(nm){ return String(nm||'').replace(/\(self-?arrive\)/i,'').r
 function pmapAgg(){ const BK=(typeof SB_BOOKINGS!=='undefined')?SB_BOOKINGS:[]; const per=pmapPeriod(), prevPer=pmapPeriod(_pmPrevAnchor());
   const agg={},mkTot={}; const tot={pax:0,val:0}, other={pax:0,val:0}; const otherAreas={}; const prev={};
   const bump=(o,mk,pax,val)=>{ o.pax+=pax;o.val+=val; const m=o.mk[mk]=o.mk[mk]||{pax:0,val:0}; m.pax+=pax;m.val+=val; };
-  BK.forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; const mk=pmMarket(b); const ar=b.pickupAreaId&&typeof bkV2GetArea==='function'?bkV2GetArea(b.pickupAreaId):null; const nm=ar?ar.name:''; const rk=nm?pmNormArea(nm):''; const key=(rk&&PHUKET_LL[rk])?rk:''; const val=(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0);
+  BK.forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(pmAgSkip(b))return; const mk=pmMarket(b); const ar=b.pickupAreaId&&typeof bkV2GetArea==='function'?bkV2GetArea(b.pickupAreaId):null; const nm=ar?ar.name:''; const rk=nm?pmNormArea(nm):''; const key=(rk&&PHUKET_LL[rk])?rk:''; const val=(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0);
     let cp=0,pp=0; (b.trips||[]).forEach(t=>{ const px=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; if(per.test(t.date||''))cp+=px; if(prevPer.test(t.date||''))pp+=px; });
     if(cp>0){ mkTot[mk]=mkTot[mk]||{pax:0,val:0}; mkTot[mk].pax+=cp; mkTot[mk].val+=val; tot.pax+=cp; tot.val+=val;
       if(key){ const e=agg[key]=agg[key]||{key,pax:0,val:0,mk:{}}; bump(e,mk,cp,val); } else { other.pax+=cp; other.val+=val; otherAreas[nm||'ไม่ระบุ']=(otherAreas[nm||'ไม่ระบุ']||0)+cp; } }
@@ -40836,12 +40849,44 @@ function pmChannelName(c){
           })[c.toLowerCase()] || (c.charAt(0).toUpperCase()+c.slice(1));
 }
 // รวมยอดเป็น agent × โซน · ใช้ช่วงเวลา หน่วยวัด และตัวกรองตลาดชุดเดียวกับแผนที่
+// โรงแรมทั้งหมดของ agent ที่กำลังเจาะดู · เรียงจากมากไปน้อย
+function pmapAgHotels(){
+  if(!_pmapAgFilter) return [];
+  const BK=(typeof SB_BOOKINGS!=='undefined')?SB_BOOKINGS:[]; const per=pmapPeriod();
+  const H={}, HO=[];
+  BK.forEach(b=>{
+    if(['cancelled','rejected','cancelled_weather'].includes(b.status))return;
+    if(pmAgKeyOf(b)!==_pmapAgFilter)return;
+    if(_pmapMkFilter && pmMarket(b)!==_pmapMkFilter)return;
+    let cp=0; (b.trips||[]).forEach(t=>{ if(per.test(t.date||'')) cp+=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; });
+    if(cp<=0)return;
+    const val=(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0);
+    const w=_pmapMetric==='value'?val:cp; if(w<=0)return;
+    const ar=(b.pickupAreaId&&typeof bkV2GetArea==='function')?bkV2GetArea(b.pickupAreaId):null;
+    const zk=(ar&&ar.region)||'', area=ar?pmNormArea(ar.name):'';
+    const nm=String(b.hotelName||b.pickup||'').trim()||'ไม่ระบุโรงแรม';
+    // รวมตามชื่อโรงแรมอย่างเดียว · โรงแรมเดียวอาจถูกผูกกับจุดรับต่างกันในแต่ละใบ
+    //   ไม่งั้นชื่อเดียวกันจะแตกเป็นหลายแถวจนอ่านไม่รู้เรื่อง · จุดรับเอาอันที่คนเยอะสุด
+    if(!H[nm]){ H[nm]={name:nm, zone:zk, area:area, w:0, n:0, _a:{}, _z:{}}; HO.push(nm); }
+    const e=H[nm]; e.w+=w; e.n++;
+    if(area){ e._a[area]=(e._a[area]||0)+w; }
+    if(zk){   e._z[zk]  =(e._z[zk]  ||0)+w; }
+  });
+  HO.forEach(k=>{ const e=H[k];
+    const ta=Object.keys(e._a).sort((x,y)=>e._a[y]-e._a[x]);
+    const tz=Object.keys(e._z).sort((x,y)=>e._z[y]-e._z[x]);
+    e.area=ta[0]||''; e.zone=tz[0]||''; e.nArea=ta.length;
+  });
+  HO.sort((x,y)=>H[y].w-H[x].w);
+  return HO.map(k=>H[k]);
+}
 function pmapAgentZone(){
   const BK=(typeof SB_BOOKINGS!=='undefined')?SB_BOOKINGS:[]; const per=pmapPeriod();
   const AG={}, AO=[], ZT={}, ZO=[]; let tot=0;
   BK.forEach(b=>{
     if(['cancelled','rejected','cancelled_weather'].includes(b.status))return;
     if(_pmapMkFilter && pmMarket(b)!==_pmapMkFilter)return;
+    if(pmAgSkip(b))return;   // §pmapAgFilter
     let cp=0; (b.trips||[]).forEach(t=>{ if(per.test(t.date||'')) cp+=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; });
     if(cp<=0)return;
     const val=(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0);
@@ -40882,14 +40927,20 @@ function pmapZonePanel(){
     return `<div style="background:rgba(255,255,255,.97);border-radius:12px;border:0.5px solid #ddd;padding:13px 15px;`
       +`box-shadow:0 3px 14px rgba(0,0,0,.1);font-size:12px;color:#8A8880">ไม่มีข้อมูลในช่วงนี้`
       +`<span onclick="pmapAgToggle()" style="cursor:pointer;color:#185FA5;margin-left:8px">&laquo;</span></div>`;
-  const TOPN=8, top=D.AO.slice(0,TOPN), restN=D.AO.length-top.length;
+  const TOPN=_pmapAgFilter?D.AO.length:8, top=D.AO.slice(0,TOPN), restN=D.AO.length-top.length;
   let restW=0; D.AO.slice(TOPN).forEach(k=>{ restW+=D.AG[k].w; });
   const rows=top.map(k=>{
     const a=D.AG[k]; const zo=a.zo.slice().sort((x,y)=>a.z[y]-a.z[x]);
     const bar=zo.map(z=>`<i style="display:block;height:100%;width:${(a.z[z]/a.w*100).toFixed(1)}%;background:${pmZone(z)[1]}" title="${esc(pmZone(z)[0])} ${pmShowNum(a.z[z])}"></i>`).join('');
-    const cap=zo.slice(0,2).map(z=>`<span style="white-space:nowrap"><i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${pmZone(z)[1]};margin-right:4px"></i>${esc(pmZone(z)[0])} ${pmShowNum(a.z[z])}</span>`).join(' &middot; ')
-      + (zo.length>2?` &middot; <span style="color:#B4B2AA">+${zo.length-2} โซน</span>`:'');
-    return `<div style="padding:8px 0 9px;border-bottom:0.5px solid #F0EEE7">`
+    // §pmapAgFilter · ตอนเจาะดูเจ้าเดียว โชว์โซนให้ครบ ไม่ต้องย่อเหลือสองอันแรก
+    const capN=_pmapAgFilter?zo.length:2;
+    const cap=zo.slice(0,capN).map(z=>`<span style="white-space:nowrap"><i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${pmZone(z)[1]};margin-right:4px"></i>${esc(pmZone(z)[0])} ${pmShowNum(a.z[z])}</span>`).join(' &middot; ')
+      + (zo.length>capN?` &middot; <span style="color:#B4B2AA">+${zo.length-capN} โซน</span>`:'');
+    const _on=(_pmapAgFilter===k);
+    return `<div onclick="pmapSetAg('${esc(k).replace(/'/g,'')}')" title="${_on?'กดอีกครั้งเพื่อดูทุกเจ้า':'กดเพื่อดูเฉพาะเจ้านี้บนแผนที่'}"`
+      +` style="padding:8px 7px 9px;margin:0 -7px;border-bottom:0.5px solid #F0EEE7;cursor:pointer;border-radius:8px;`
+      +`background:${_on?'#EAF4F0':'transparent'}"`
+      +` onmouseover="this.style.background='${_on?'#EAF4F0':'#F7F6F2'}'" onmouseout="this.style.background='${_on?'#EAF4F0':'transparent'}'">`
       +`<div style="display:flex;align-items:baseline;gap:7px">`
         +`<span style="width:9px;height:9px;border-radius:50%;background:${pmMktColor(a.mk)};flex:none;align-self:center" title="${esc(pmMktName(a.mk))}"></span>`
         +`<span style="flex:1;font-size:12.5px;font-weight:700;color:#27343B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.name)}</span>`
@@ -40907,9 +40958,32 @@ function pmapZonePanel(){
       +`<span style="font-size:11px;color:#A0A099;font-family:'DM Mono',monospace">${D.AO.length} ราย</span>`
       +`<button onclick="pmapAgToggle()" title="ย่อการ์ด" style="border:none;background:#F1EFEA;width:22px;height:22px;`
         +`border-radius:7px;cursor:pointer;color:#5F5E5A;font-size:13px;line-height:1;flex:none;font-family:inherit">&laquo;</button></div>`
-    +`<div style="font-size:10.5px;color:#A0A099;margin:0 0 6px;line-height:1.5">`
-      +`เจ้าที่มีลูกค้ามากสุด · แถบสีคือโซนที่รับ ${_pmapMkFilter?('· กรอง '+esc(pmMktName(_pmapMkFilter))):''}</div>`
+    +(_pmapAgFilter
+        ? `<div onclick="pmapSetAg(null)" style="cursor:pointer;font-size:11.5px;color:#185FA5;margin:2px 0 7px">&larr; ดูทุกเจ้า</div>`
+        : `<div style="font-size:10.5px;color:#A0A099;margin:0 0 6px;line-height:1.5">`
+          +`กดชื่อเจ้าเพื่อดูเฉพาะของเจ้านั้นบนแผนที่ · แถบสีคือโซนที่รับ ${_pmapMkFilter?('· กรอง '+esc(pmMktName(_pmapMkFilter))):''}</div>`)
     + rows
+    + (function(){   // §pmapAgHotels · ลิสต์โรงแรมของเจ้าที่เจาะดูอยู่
+        if(!_pmapAgFilter) return '';
+        const HL=pmapAgHotels();
+        if(!HL.length) return `<div style="font-size:11.5px;color:#A0A099;padding:10px 0 2px">ไม่มีรายชื่อโรงแรมในช่วงนี้</div>`;
+        const tot=HL.reduce((a,h)=>a+h.w,0);
+        const items=HL.map(h=>{
+          const z=pmZone(h.zone);
+          const jump=h.area?` onclick="event.stopPropagation();pmapSelect('${esc(h.area).replace(/'/g,'')}')" style="cursor:pointer;`:` style="`;
+          return `<div${jump}display:flex;align-items:center;gap:7px;font-size:12px;padding:5px 0;border-bottom:0.5px solid #F4F2EC"`
+            +` title="${esc(h.area||'ไม่ระบุจุดรับ')}${h.nArea>1?(' และอีก '+(h.nArea-1)+' จุดรับ'):''} &middot; ${h.n} booking${h.area?' · กดเพื่อดูจุดรับนี้':''}">`
+            +`<i style="width:8px;height:8px;border-radius:50%;background:${z[1]};flex:none"></i>`
+            +`<span style="flex:1;color:#3A3A36;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(h.name)}</span>`
+            +`<span style="font-size:10px;color:#B4B2AA;max-width:76px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(h.area||'')}</span>`
+            +`<b style="font-family:'DM Mono',monospace;font-size:12.5px">${pmShowNum(h.w)}</b></div>`;
+        }).join('');
+        return `<div style="margin-top:9px;padding-top:9px;border-top:0.5px solid #ECEAE2">`
+          +`<div style="display:flex;align-items:baseline;gap:7px;margin-bottom:3px">`
+            +`<span style="flex:1;font-size:11.5px;font-weight:700;color:#5F5E5A">โรงแรม / จุดรับ</span>`
+            +`<span style="font-size:10.5px;color:#A0A099;font-family:'DM Mono',monospace">${HL.length} แห่ง &middot; ${pmShowNum(tot)}</span></div>`
+          +`<div style="max-height:44vh;overflow:auto">${items}</div></div>`;
+      })()
     + (restN>0?`<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#8A8880;padding:8px 0 0">`
         +`<span style="flex:1">อีก ${restN} ราย</span><b style="font-family:'DM Mono',monospace;color:#3A3A36">${pmShowNum(restW)}</b></div>`:'')
     +`<div style="display:flex;flex-wrap:wrap;gap:5px 10px;margin-top:10px;padding-top:9px;border-top:0.5px solid #ECEAE2">${legend}</div>`
@@ -40941,6 +41015,7 @@ function pmapToolbar(){ const per=pmapPeriod(); const mb=(m,l)=>`<button onclick
     <button onclick="pmapZoneBgToggle()" title="พื้นสีอ่อนบอกโซนบนแผนที่ · สีเดียวกับการ์ดซ้าย" style="display:inline-flex;align-items:center;gap:6px;border:1px solid ${pmapZoneBgOn()?'#B9D8CB':'#e0ddd5'};background:${pmapZoneBgOn()?'#EAF3EF':'#fff'};color:#5F5E5A;font-size:11.5px;font-weight:${pmapZoneBgOn()?700:500};padding:5px 11px;border-radius:99px;cursor:pointer;font-family:inherit"><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:${pmapZoneBgOn()?'linear-gradient(135deg,#E2725B,#4A9BB8)':'#DAD7CF'}"></span>พื้นสีโซน</button>
     <span style="font-size:12.5px;color:#5F5E5A">รวม <b style="font-family:'DM Mono',monospace;color:#1A1A1A">${pmShowNum(pmVal(_PM.tot))}</b> ${_pmapMetric==='pax'?'pax':''}${cap!=null?` · <span title="ส่วนแบ่งทั้งเกาะ = pax เรา ÷ ผู้โดยสารขาเข้าทั้งเกาะ (จาก Demand) · ระดับเกาะ ไม่ใช่รายย่าน">ส่วนแบ่งเกาะ <b style="color:#0F6E56">${cap}%</b> <span style="color:#bbb">(${_PM.tot.pax}/${_PM.arr})</span></span>`:''}</span>
     <span style="flex:1;min-width:10px"></span>
+    ${_pmapAgFilter?`<span onclick="pmapSetAg(null)" title="กดเพื่อกลับไปดูทุกเจ้า" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:99px;border:1px solid #0F6E56;background:#EAF4F0;font-size:11.5px;font-weight:700;color:#0F6E56">เฉพาะ ${((s)=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'))(pmapAgName())} <b style="font-weight:800">&times;</b></span>`:''}
     <span style="font-size:11px;color:#999">กรองตลาด:</span>${chips}${_pmapMkFilter?`<span onclick="pmapSetMk('${_pmapMkFilter}')" style="cursor:pointer;font-size:11px;color:#185FA5">ล้าง</span>`:''}
   </div>`; }
 function pmapRefresh(){ pmapAgg(); pmapBuildDots(); const bar=document.getElementById('pmap-bar'); if(bar)bar.innerHTML=pmapToolbar(); const pn=document.getElementById('pmap-panel'); if(pn)pn.innerHTML=pmapPanel();
