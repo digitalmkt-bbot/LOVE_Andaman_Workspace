@@ -49403,10 +49403,13 @@ function renderTravelSum(){
   var host=document.getElementById('travelsum-host'); if(!host) return;
   var e=ckEsc, date=_tsDate, money=function(n){ return '฿'+Number(n||0).toLocaleString('en-US'); };
   var everything=tsRows(date);
-  // §tsRoute · แถบเลือกเส้นทาง คิดจากทั้งวันเสมอ (ไม่งั้นเลือกแล้วปุ่มอื่นหาย)
+  // §tsRoute · รายชื่อเส้นทางคิดจากทั้งวันเสมอ (ไม่งั้นเลือกแล้วปุ่มอื่นหาย)
+  // §tsRefFollowVat · แต่ "จำนวน" บนปุ่มนับจากชุดที่กรองภาษีแล้ว ให้ตรงกับเนื้อเอกสาร
   var rMap={}, rOrder=[];
   everything.forEach(function(r){ var k=r.routeId||''; if(!rMap[k]){ rMap[k]={n:0,pax:0}; rOrder.push(k); }
+    if(_tsVatF && (_tsVatF==='vat' ? !tsHasVat(r.b) : tsHasVat(r.b))) return;
     rMap[k].n++; rMap[k].pax+=r.travelled; });
+  var rTotN=rOrder.reduce(function(a,k){ return a+rMap[k].n; },0);
   if(_tsRoute && !rMap[_tsRoute]) _tsRoute='';
   var docNo='TS-'+String(date).replace(/-/g,'')+(_tsRoute?('-'+String(_tsRoute).toUpperCase()):'-ALL')
     +(_tsVatF?(_tsVatF==='vat'?'-VAT':'-NOVAT'):'');
@@ -49718,12 +49721,14 @@ function renderTravelSum(){
   // §tsRoute · ปุ่มเลือกเส้นทาง
   var rPills='<div class="ts-rt"><span class="ts-rtl">เส้นทาง</span>'
     +'<button class="ts-rb'+(_tsRoute?'':' on')+'" onclick="tsPickRoute(\'\')">ทุกเส้นทาง'
-      +'<i>'+everything.length+' ใบ</i></button>'
+      +'<i>'+rTotN+' ใบ</i></button>'
     + rOrder.map(function(k){
-        var on=(k===_tsRoute), c=tsRouteColor(k);
+        var on=(k===_tsRoute), c=tsRouteColor(k), empty=(rMap[k].n===0);
         // §tsRouteChip · สีประจำเส้นทางติดอยู่กับชิปตลอด · ตอนเลือกแค่เข้มขึ้นและมีเส้นขอบหนา
+        // §tsRefFollowVat · เส้นทางที่ไม่มีใบในชุดภาษีที่เลือก หรี่ลงให้เห็นว่าว่าง
         return '<button class="ts-rb'+(on?' on':'')+'" onclick="tsPickRoute(\''+String(k).replace(/'/g,"")+'\')"'
           + ' style="border-color:'+c+(on?'':'59')+';background:'+c+(on?'26':'0f')+';'
+          + (empty?'opacity:.42;':'')
           + (on?('box-shadow:inset 0 0 0 1px '+c+';'):'')+'">'
           + '<i class="ts-dot" style="border-radius:50%;background:'+c+';margin-right:6px"></i>'
           + ckEsc(tsRouteName(k))+'<i>'+rMap[k].n+' ใบ · '+rMap[k].pax+' คน</i></button>';
