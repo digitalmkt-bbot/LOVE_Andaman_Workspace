@@ -47222,7 +47222,8 @@ function tsRows(date){
       || _az(x.b.voucherRef||x.b.code||'', y.b.voucherRef||y.b.code||'');
   });
 }
-// §tsCotSettle · สถานะการเคลียร์ส่วนต่าง COT · โครงเดียวกับ TRAVEL_SUM
+// §tsCotSettle · คำตัดสินการจัดการ Cash on Tour · โครงเดียวกับ TRAVEL_SUM
+//   { mode:'full'|'part'|'none'|'payout', deduct, payout, ref, by, at }
 let TS_COT={};
 (function(){ try{ const lsKey=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2');
   const d=JSON.parse(localStorage.getItem(lsKey)||'{}');
@@ -47234,15 +47235,41 @@ function tsCotPersist(){
     d.ts_cot=TS_COT; localStorage.setItem(lsKey, JSON.stringify(d)); }catch(_){}
 }
 function tsCotGet(bkId,date){ return TS_COT[_tsKey(bkId,date)]||null; }
-function tsCotNoteOf(bkId,date){ var el=document.getElementById('ts-cotn-'+bkId); if(el) return el.value; var c=tsCotGet(bkId,date); return c?(c.note||''):''; }
-function tsCotDone(bkId,date){
-  TS_COT[_tsKey(bkId,date)]={ done:true, note:String(tsCotNoteOf(bkId,date)||''), by:ckMe(), at:new Date().toISOString() };
+// ค่าที่ตั้งไว้ตอนเปิด booking · ใช้เป็นปุ่มแนะนำ ไม่ได้ตัดสินแทน
+function tsCotSugMode(M){ return (M && M.handling==='separate') ? 'none' : 'full'; }
+function _tsCotNum(v){ return Math.max(0, Math.round(parseFloat(String(v==null?'':v).replace(/[^0-9.]/g,''))||0)); }
+function _tsCotInp(id,w){ var el=document.getElementById('ts-cot'+w+'-'+id); return el?_tsCotNum(el.value):0; }
+function _tsCotRefVal(id){ var el=document.getElementById('ts-cotr-'+id); return el?String(el.value||''):''; }
+function tsCotPick(bkId,date,mode,cot){
+  var k=_tsKey(bkId,date), cur=TS_COT[k]||{}, d=0, p=0;
+  cot=+cot||0;
+  if(mode==='full'){ d=cot; }
+  else if(mode==='payout'){ p=cot; }
+  else if(mode==='part'){ d=(cur.mode==='part')?_tsCotInp(bkId,'d'):cot; p=(cur.mode==='part')?_tsCotInp(bkId,'p'):0; }
+  TS_COT[k]={ mode:mode, deduct:d, payout:p, ref:(_tsCotRefVal(bkId)||cur.ref||''), by:ckMe(), at:new Date().toISOString() };
   tsCotPersist(); tsAfter();
 }
-function tsCotUndo(bkId,date){ delete TS_COT[_tsKey(bkId,date)]; tsCotPersist(); tsAfter(); }
-function tsCotSaveNote(bkId,date){
-  var c=tsCotGet(bkId,date); if(!c) return;                 // ยังไม่เคลียร์ ค่อยเก็บตอนกดปุ่ม
-  c.note=String(tsCotNoteOf(bkId,date)||''); tsCotPersist();
+function tsCotAmt(bkId,date){
+  var c=TS_COT[_tsKey(bkId,date)]; if(!c) return;
+  c.deduct=_tsCotInp(bkId,'d'); c.payout=_tsCotInp(bkId,'p');
+  c.by=ckMe(); c.at=new Date().toISOString();
+  tsCotPersist(); tsAfter();
+}
+function tsCotRefSave(bkId,date){ var c=TS_COT[_tsKey(bkId,date)]; if(!c) return; c.ref=_tsCotRefVal(bkId); tsCotPersist(); }
+function tsCotClear(bkId,date){ delete TS_COT[_tsKey(bkId,date)]; tsCotPersist(); tsAfter(); }
+// ทำทีเดียวทั้งหน้า · เดินตามตัวกรองเส้นทาง/ภาษีที่เลือกอยู่ ไม่ใช่ทั้งวันเสมอ
+function tsCotBulk(date, what){
+  ((typeof tsRows==='function')?tsRows(date):[]).forEach(function(r){
+    if(_tsRoute && (r.routeId||'')!==_tsRoute) return;
+    if(_tsVatF && (_tsVatF==='vat' ? !tsHasVat(r.b) : tsHasVat(r.b))) return;
+    var M=(typeof pckMoney==='function')?pckMoney(r.b,date):null; if(!M || !(M.cot>0)) return;
+    var k=_tsKey(r.b.id,date);
+    if(what==='clear'){ delete TS_COT[k]; return; }
+    var mode=(what==='sug')?tsCotSugMode(M):'full';
+    TS_COT[k]={ mode:mode, deduct:(mode==='full')?(+M.cot||0):0, payout:0,
+                ref:(TS_COT[k]&&TS_COT[k].ref)||'', by:ckMe(), at:new Date().toISOString() };
+  });
+  tsCotPersist(); tsAfter();
 }
 var _tsOnlyIssue=false;
 function tsToggleFilter(){ _tsOnlyIssue=!_tsOnlyIssue; tsAfter(); }
@@ -47351,9 +47378,20 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-totb em{font-style:normal;color:var(--lm700);font-weight:700;margin-left:3px}'
  +S+' .ts-net{display:block;font-size:9.5px;font-weight:600;color:var(--zn500);white-space:nowrap;margin-top:1px}'
  // §tsCotSettle
- +S+' .ts-cotn{white-space:pre-wrap;line-height:1.45;color:var(--zn700);max-width:340px}'
+ +S+' .ts-cotn{white-space:pre-wrap;line-height:1.45;color:var(--zn700);max-width:330px}'
  +S+' .ts-cotn.empty{color:var(--zn400);font-style:italic}'
- +S+' .ts-cotgap{font-family:\'DM Mono\',monospace;font-weight:700}'
+ +S+' .ts-db.sug{border-color:var(--lm600);color:var(--lm800);background:var(--lm50)}'
+ +S+' .ts-db.pick{background:var(--zn900);border-color:var(--zn900);color:#fff;font-weight:800}'
+ +S+' .ts-cotamt{width:88px;text-align:right;font-family:\'DM Mono\',monospace;border:1px solid var(--zn300);'
+   +'border-radius:3px;padding:3px 7px;font-size:11.5px}'
+ +S+' .ts-cotres{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-top:1px solid var(--zn300);margin-top:5px;padding-top:5px}'
+ +S+' .ts-cotres .k{font-size:8.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--zn400)}'
+ +S+' .ts-cotres .v{font-family:\'DM Mono\',monospace;font-size:13px;font-weight:700;margin-top:1px}'
+ +S+' .ts-cotres .v.z{color:var(--zn400);font-weight:400}'
+ +S+' .ts-cotres .v.ded{color:var(--bl700)} '+S+' .ts-cotres .v.pay{color:var(--pu700)} '+S+' .ts-cotres .v.ar{color:var(--am700)}'
+ +S+' .ts-cotbar{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:11px;padding:9px 12px;'
+   +'background:var(--zn50);border:1px solid var(--zn200);border-radius:3px}'
+ +S+' .ts-cotbar .lb{font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--zn500)}'
  +S+' .ts-lead{font-weight:700;color:var(--zn900)} '+S+' .ts-tel{font-size:9.5px;color:var(--zn500);font-family:\'DM Mono\',monospace}'
  +S+' .ts-chip{display:inline-block;border-radius:999px;padding:2px 9px;font-size:9.5px;font-weight:800;white-space:nowrap;border:1px solid;margin:1px 3px 1px 0}'
  +S+' .ts-chip.g{background:var(--lm100);color:var(--lm950);border-color:var(--lm200)}'
@@ -50350,69 +50388,101 @@ function renderTravelSum(){
       +'<button class="ts-btn pri" onclick="tsPrintSheet()">&#128424; พิมพ์ / บันทึก PDF</button>'
     +'</div>'+rPills+vPills+'</div>';
 
-  // ══ ส่วนที่ 4 · เคลียร์ส่วนต่าง COT ══
+  // ══ ส่วนที่ 4 · Cash on Tour · ตัดสินการหักบิล ══
   var cotRows=all.map(function(r){
     var M=(typeof pckMoney==='function')?pckMoney(r.b,date):null;
-    if(!M || !(M.cot>0)) return null;
-    var T=tsTotalOf(r,date);
-    return { r:r, b:r.b, M:M, tot:T.all, gap:Math.max(0, (T.all||0)-(+M.cot||0)),
-             st:tsCotGet(r.b.id,date) };
+    if(!M || !(+M.cot>0)) return null;
+    var T=tsTotalOf(r,date), c=tsCotGet(r.b.id,date);
+    var cot=+M.cot||0, ded=c?(+c.deduct||0):0, pay=c?(+c.payout||0):0;
+    return { r:r, b:r.b, M:M, cot:cot, tot:T.all, c:c, ded:ded, pay:pay,
+             keep:cot-ded-pay, ar:(T.all||0)-ded, over:(ded+pay)>cot };
   }).filter(Boolean);
   var cotSecHtml='';
   if(cotRows.length){
-    var cSumCot=0, cSumGap=0, cLeft=0;
-    cotRows.forEach(function(x){ cSumCot+=(+x.M.cot||0); cSumGap+=x.gap; if(!x.st) cLeft++; });
+    var cCot=0, cDed=0, cPay=0, cKeep=0, cLeft=0;
+    cotRows.forEach(function(x){ cCot+=x.cot; cDed+=x.ded; cPay+=x.pay;
+      if(x.c) cKeep+=Math.max(0,x.keep); if(!x.c || x.over) cLeft++; });
+    var MODES=[['full','หักทั้งก้อน'],['part','หักบางส่วน'],['none','ไม่หัก'],['payout','โอนออก']];
     var cbody=cotRows.map(function(x){
       var b=x.b, id=b.id, ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
       var agName=ag?(ag.name||ag.code||'—'):(b.channel||'walk-in');
       var agColor=(b.agentId&&typeof bkV2AgentColor==='function')?bkV2AgentColor(b.agentId):'#64748B';
       var agInk=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(agColor):'#fff';
-      var sep=(x.M.handling==='separate');
+      var sug=tsCotSugMode(x.M), mode=x.c?x.c.mode:'';
       var note=String(x.M.note||'').trim();
-      return '<tr'+(x.st?'':' class="need"')+'>'
+      var btns=MODES.map(function(mm){
+        var on=(mode===mm[0]), isSug=(!mode && mm[0]===sug);
+        var lbl=mm[1]+((mm[0]==='full'&&!mode)?(' '+money(x.cot)):'');
+        return '<button class="ts-db'+(on?' pick':'')+(isSug?' sug':'')+'"'
+          +' onclick="tsCotPick(\''+id+'\',\''+date+'\',\''+mm[0]+'\','+x.cot+')">'+lbl+'</button>';
+      }).join('');
+      var partBox = (mode==='part')
+        ? ('<div style="margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
+           +'<span style="font-size:10.5px;color:var(--zn500)">หัก</span>'
+           +'<input id="ts-cotd-'+id+'" class="ts-cotamt" value="'+x.ded+'" onchange="tsCotAmt(\''+id+'\',\''+date+'\')">'
+           +'<span style="font-size:10.5px;color:var(--zn500)">&middot; โอนออก</span>'
+           +'<input id="ts-cotp-'+id+'" class="ts-cotamt" value="'+x.pay+'" onchange="tsCotAmt(\''+id+'\',\''+date+'\')">'
+           +'</div>') : '';
+      var refBox = mode
+        ? ('<input id="ts-cotr-'+id+'" class="ts-note" type="text" value="'+e(x.c?(x.c.ref||''):'')+'"'
+           +' placeholder="เลขอ้างอิงการโอน / หมายเหตุ" onchange="tsCotRefSave(\''+id+'\',\''+date+'\')">'
+           +'<div style="margin-top:4px"><button class="ts-db del" onclick="tsCotClear(\''+id+'\',\''+date+'\')">ล้างคำตัดสิน</button></div>')
+        : '<div class="ts-totb" style="margin-top:4px">ปุ่มกรอบเขียวคือค่าที่ตั้งไว้ตอนเปิด booking &middot; กดยืนยันได้เลย</div>';
+      var _v=function(n,cls){ return n>0 ? ('<div class="v '+cls+'">'+_tsNum(n)+'</div>') : '<div class="v z">&mdash;</div>'; };
+      return '<tr'+((!x.c||x.over)?' class="need"':'')+'>'
         +'<td><span class="ts-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'
         +'<td><span class="ts-ag" style="background:'+agColor+';color:'+agInk+'">'+e(agName)+'</span></td>'
         +'<td class="r ts-mono" style="font-weight:800">'+money(x.tot)+'</td>'
-        +'<td class="r"><span class="ts-chip '+(sep?'a':'b')+'">'+money(x.M.cot)+' &middot; '+(sep?'แยกจากบิล':'หักจากบิล')+'</span>'
-          +(x.M.pierPaid>0?('<div class="ts-totb">เก็บที่ท่าแล้ว '+money(x.M.pierPaid)+'</div>')
-                          :('<div class="ts-totb" style="color:var(--rs700)">ยังไม่ได้เก็บที่ท่า</div>'))+'</td>'
-        +'<td class="r ts-cotgap">'+money(x.gap)+'</td>'
+        +'<td class="r"><span class="ts-chip b">'+money(x.cot)+'</span>'
+          +'<div class="ts-totb">'+(x.M.pierPaid>0?('เก็บที่ท่าแล้ว '+money(x.M.pierPaid))
+             :'<span style="color:var(--rs700)">ยังไม่ได้เก็บที่ท่า</span>')
+          +'<br>ตั้งไว้: '+(sug==='none'?'แยกจากบิล':'หักจากบิล')+'</div></td>'
         +'<td><div class="ts-cotn'+(note?'':' empty')+'">'+(note?e(note):'ไม่มีรายละเอียดในโน้ต COT')+'</div></td>'
-        +'<td style="min-width:230px">'
-          +'<input id="ts-cotn-'+id+'" class="ts-note" type="text" value="'+e(x.st?(x.st.note||''):'')+'"'
-            +' placeholder="เลขอ้างอิงการโอน / หมายเหตุ" onchange="tsCotSaveNote(\''+id+'\',\''+date+'\')">'
-          +'<div style="margin-top:4px">'
-          +(x.st
-              ? ('<button class="ts-db del" onclick="tsCotUndo(\''+id+'\',\''+date+'\')">ยกเลิกการเคลียร์</button>')
-              : ('<button class="ts-db on" onclick="tsCotDone(\''+id+'\',\''+date+'\')">&#10003; เคลียร์แล้ว</button>'))
-          +'</div></td>'
-        +'<td class="c">'+(x.st
-            ? ('<span class="ts-chip g">&#10003; เคลียร์แล้ว</span><div class="ts-totb">'+e(x.st.by||'')
-               +(x.st.at?(' &middot; '+e(String(x.st.at).slice(0,10))):'')+'</div>')
-            : '<span class="ts-chip a">รอจัดการ</span>')+'</td>'
+        +'<td style="min-width:250px">'+btns+partBox+refBox+'</td>'
+        +'<td style="min-width:180px">'
+          +'<div class="ts-cotres">'
+            +'<div><div class="k">หักบิล</div>'+_v(x.ded,'ded')+'</div>'
+            +'<div><div class="k">โอนออก</div>'+_v(x.pay,'pay')+'</div>'
+            +'<div><div class="k">คงเป็นลูกหนี้</div>'+_v(x.c?x.ar:0,'ar')+'</div>'
+          +'</div>'
+          +(x.over ? '<div style="margin-top:5px;font-size:10.5px;color:var(--rs700);font-weight:700">&#9888; หัก+โอนออก เกินยอด COT</div>'
+            : (x.c
+               ? ('<div class="ts-totb" style="margin-top:5px"><span class="ts-chip g">&#10003; ตัดสินแล้ว</span> '
+                  +e(x.c.by||'')+(x.c.at?(' &middot; '+e(String(x.c.at).slice(5,10))):'')
+                  +(x.keep>0?('<br>บริษัทรับไว้ '+money(x.keep)):'')+'</div>')
+               : '<div style="margin-top:5px;font-size:10.5px;color:var(--am700);font-weight:700">&#9888; ยังไม่ตัดสิน</div>'))
+        +'</td>'
         +'</tr>';
     }).join('');
     cotSecHtml='<div class="ts-sec"><div class="ts-sech"><div>'
-      +'<div class="ts-sect"><span class="ts-sn">04</span>Cash on Tour &middot; เคลียร์ส่วนต่าง</div></div>'
+      +'<div class="ts-sect"><span class="ts-sn">04</span>Cash on Tour &middot; ตัดสินการหักบิล</div></div>'
       +'<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
-        +'<span class="ts-chip n" style="font-size:11px;padding:5px 12px">COT รวม '+money(cSumCot)+'</span>'
-        +'<span class="ts-chip b" style="font-size:11px;padding:5px 12px">ส่วนต่างรวม '+money(cSumGap)+'</span>'
-        +(cLeft?('<span class="ts-chip a" style="font-size:11px;padding:5px 12px">รอจัดการ '+cLeft+' ใบ</span>')
-               :('<span class="ts-chip g" style="font-size:11px;padding:5px 12px">เคลียร์ครบแล้ว</span>'))
+        +'<span class="ts-chip n" style="font-size:11px;padding:5px 12px">COT รวม '+money(cCot)+'</span>'
+        +'<span class="ts-chip b" style="font-size:11px;padding:5px 12px">หักจากบิล '+money(cDed)+'</span>'
+        +'<span class="ts-chip p" style="font-size:11px;padding:5px 12px">โอนออก '+money(cPay)+'</span>'
+        +(cKeep>0?('<span class="ts-chip e" style="font-size:11px;padding:5px 12px">บริษัทรับไว้ '+money(cKeep)+'</span>'):'')
+        +(cLeft?('<span class="ts-chip a" style="font-size:11px;padding:5px 12px">ยังไม่ตัดสิน '+cLeft+' ใบ</span>')
+               :('<span class="ts-chip g" style="font-size:11px;padding:5px 12px">ตัดสินครบแล้ว</span>'))
       +'</div></div>'
+      +'<div class="ts-cotbar ts-noprint"><span class="lb">ทำทั้งหน้า</span>'
+        +'<button class="ts-db" onclick="tsCotBulk(\''+date+'\',\'full\')">หักทั้งก้อนทุกใบ</button>'
+        +'<button class="ts-db" onclick="tsCotBulk(\''+date+'\',\'sug\')">ใช้ค่าที่ตั้งไว้ตอนเปิด booking</button>'
+        +'<button class="ts-db del" onclick="tsCotBulk(\''+date+'\',\'clear\')">ล้างคำตัดสินทั้งหมด</button>'
+        +'<span style="margin-left:auto;font-size:11px;color:var(--zn500)">ทำเฉพาะใบที่เห็นอยู่ตามตัวกรองเส้นทาง/ภาษี</span></div>'
       +'<div class="ts-card ts-scroll"><table class="ts-tbl"><thead><tr>'
-        +'<th style="width:9%">Voucher</th><th style="width:12%">Agency</th>'
-        +'<th class="r" style="width:9%">ยอดรวมใบ</th>'
-        +'<th class="r" style="width:16%">Cash on Tour</th>'
-        +'<th class="r" style="width:9%">ส่วนต่าง</th>'
-        +'<th style="width:23%">รายละเอียดจากโน้ต COT</th>'
-        +'<th style="width:14%">การจัดการ</th>'
-        +'<th class="c" style="width:8%">สถานะ</th>'
+        +'<th style="width:8%">Voucher</th><th style="width:11%">Agency</th>'
+        +'<th class="r" style="width:8%">ยอดรวมใบ</th>'
+        +'<th class="r" style="width:11%">Cash on Tour</th>'
+        +'<th style="width:19%">รายละเอียดจากโน้ต COT</th>'
+        +'<th style="width:26%">ตัดสิน</th>'
+        +'<th style="width:17%">ผลลัพธ์</th>'
       +'</tr></thead><tbody>'+cbody+'</tbody></table></div>'
-      +'<div class="ts-secd" style="display:block;margin-top:8px;font-size:10.5px;color:var(--zn500)">'
-        +'ส่วนต่าง = ยอดรวมใบ &minus; Cash on Tour &middot; '
-        +'“หักจากบิล” หมายถึงเงิน COT ก้อนนี้ไปลดยอดในใบแจ้งหนี้ของ agent &middot; '
-        +'“แยกจากบิล” หมายถึงบิลเต็มยังต้องเก็บตามเดิม</div>'
+      +'<div class="ts-secd" style="display:block;margin-top:9px;font-size:10.5px;color:var(--zn500);line-height:1.7">'
+        +'<b>กติกา</b> &middot; หักบิล + โอนออก + ที่บริษัทรับไว้ = Cash on Tour เสมอ &middot; เกินยอดระบบเตือนและถือว่ายังไม่ตัดสิน<br>'
+        +'<b>หักบิล</b> คือส่วนที่จะไปลดยอดในใบแจ้งหนี้ของ agent &middot; '
+        +'<b>โอนออก</b> คือเงินที่ต้องโอนต่อตามรายละเอียดในโน้ต &middot; '
+        +'<b>คงเป็นลูกหนี้</b> = ยอดรวมใบ &minus; หักบิล<br>'
+        +'<b>หมายเหตุ</b> รอบนี้บันทึกไว้ใน Travel Summary เท่านั้น &middot; ยังไม่ได้ไปหักในใบแจ้งหนี้จริง ฝั่งบัญชีต้องทำต่อเอง</div>'
     +'</div>';
   }
 
