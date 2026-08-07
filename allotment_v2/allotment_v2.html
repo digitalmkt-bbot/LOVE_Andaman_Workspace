@@ -6532,8 +6532,23 @@ function _calTripsFor(ds, pier){
     if(isCharter){ booked = (_chtrBoat[_ck]!==undefined) ? _chtrBoat[_ck] : (op.booked||0); free = 0; }   // whole boat chartered → 0 sellable seats
     else { const take=Math.min(cap, Math.max(0, remain[x.r.id]||0)); remain[x.r.id]=(remain[x.r.id]||0)-take; booked=take; free=Math.max(0, cap-booked); }
     const weatherClosed=(typeof bkV2IsWeatherClosed==='function' && bkV2IsWeatherClosed(x.r.id, ds));
-    out.push({r:x.r,b:x.b,op,free,cap,booked,isCharter,routeClosed:false,weatherClosed});
+    out.push({r:x.r,b:x.b,op,free,cap,booked,locked:0,isCharter,routeClosed:false,weatherClosed});
   });
+  // §lkAvail · ที่นั่งที่ล็อกไว้ยังขายไม่ได้ · หักออกจากที่ว่าง
+  //   หักเฉพาะส่วนที่ยังกันอยู่ · ส่วนที่ถูกดึงไปขายแล้วอยู่ใน seatsConsumed แล้ว
+  //   เกลี่ยลงเรือของเส้นทางนั้นทีละลำ (เรือเหมาลำไม่มีที่ขายอยู่แล้ว ข้ามไป)
+  try{
+    if(typeof bkV2LockedTotal==='function'){
+      const _lkNeed={};
+      out.forEach(o=>{ if(!o.isCharter && _lkNeed[o.r.id]===undefined) _lkNeed[o.r.id]=bkV2LockedTotal(o.r.id, ds); });
+      out.forEach(o=>{
+        if(o.isCharter) return;
+        const need=_lkNeed[o.r.id]||0; if(need<=0) return;
+        const take=Math.min(o.free, need);
+        o.free-=take; o.locked=take; _lkNeed[o.r.id]=need-take;
+      });
+    }
+  }catch(e){ console.warn('[cal] lock deduction failed', e); }
   return out;
 }
 // Weather-resolution pax tally for a route+date (cancelled / rescheduled / pending) · used by Calendar
@@ -7537,7 +7552,12 @@ function buildDAGroups(ds){
     // §route ไม่ออกวันนั้น (ไม่อยู่ในโปรแกรม / ปิด override / weather) → เอาออกจากลิสต์ที่นั่งว่าง
     // แม้จะมีเรือค้างจัดไว้ใน TRIPS ก็ตาม (ให้ตรงกับเที่ยวอื่นที่ไม่ออก = ไม่โชว์)
     if(typeof bkV2IsRouteOpenOn==='function' && !bkV2IsRouteOpenOn(g.r.id, ds)){ delete groups[pier][key]; return; }
-    if(typeof getAllotment==='function' && g.r){ const al=getAllotment(g.r.id, ds); if(al){ g.booked = al.seatsConsumed||0; if((al.availableCapacity||0)>0) g.allot = al.availableCapacity; } }
+    if(typeof getAllotment==='function' && g.r){ const al=getAllotment(g.r.id, ds); if(al){
+      // §lkAvail · ที่นั่งที่ล็อกไว้ให้เอเจ้นยังขายไม่ได้ · นับรวมกับที่ขายไปแล้ว
+      //   ไม่งั้นข้อความที่ส่งเอเจ้นเจ้าอื่นจะบอกว่าว่าง ทั้งที่กันไว้ให้อีกเจ้าแล้ว
+      g.locked = al.lockedSeats||0;
+      g.booked = (al.seatsConsumed||0) + g.locked;
+      if((al.availableCapacity||0)>0) g.allot = al.availableCapacity; } }
   }); });
   return groups;
 }
@@ -7568,7 +7588,7 @@ function renderDA(){
     const rows=_daSortRows(Object.values(groups[pier]||{}));
     if(!rows.length) return;
     html+=`<div class="da-pier-lbl"><div style="width:6px;height:6px;border-radius:50%;background:${pm.dot}"></div>${pm.label}</div>`;
-    rows.forEach(({r,type,allot,booked})=>{
+    rows.forEach(({r,type,allot,booked,locked})=>{
       const free=Math.max(0,allot-booked);
       const pct=allot>0?Math.round(booked/allot*100):0;
       // §daFullSame · เกณฑ์เดียวกับข้อความที่ส่งเอเจ้น · เต็ม = ไม่เหลือที่จริง ๆ
@@ -7582,9 +7602,12 @@ function renderDA(){
       const numBadge = full
         ? `<span style="background:${_bg};color:${_fg};border-radius:9px;padding:4px 12px;font-size:12.5px;font-weight:700;flex-shrink:0">✕ เต็ม</span>`
         : `<span style="display:inline-flex;align-items:baseline;gap:4px;background:${_bg};border-radius:9px;padding:3px 11px;flex-shrink:0"><span style="font-size:18px;font-weight:800;color:${_fg};font-variant-numeric:tabular-nums;line-height:1">${free}</span><span style="font-size:10px;font-weight:600;color:${_fg};opacity:.65">/${allot}</span></span>`;
+      // §lkAvail · บอกด้วยว่ามีที่นั่งกันไว้ให้เอเจ้นอยู่กี่ที่ · ที่หายไปจะได้ไม่งง
+      const lockChip = (locked>0) ? `<span title="กันไว้ให้เอเจ้น ${locked} ที่ · ดูใน Seat Locks" style="font-size:10px;font-weight:700;color:#C0392B;background:#FBEAE6;border-radius:7px;padding:2px 7px;flex-shrink:0">&#128274; ${locked}</span>` : '';
       html+=`<div class="da-route-row">
         <div class="da-rr-dot" style="background:${r.color}"></div>
         <span class="da-rr-name" onclick="daEditRouteName('${r.id}')" title="คลิกเพื่อตั้งชื่อย่อในข้อความ · ชื่อเต็ม: ${r.name}" style="cursor:pointer">${_daRouteName(r)} <span style="opacity:.32;font-size:10px">&#9998;</span></span>
+        ${lockChip}
         ${typeChip}
         ${numBadge}
       </div>`;
@@ -39972,7 +39995,6 @@ function bkV2RenderLocks(){
     ${todayBox}
     ${bar}
     ${table}
-    ${bkV2LockAddModal()}
   </div>`;
 }
 // §lkOverview · สีประจำผู้ถือล็อก · เอเจ้นใช้สีเดียวกับหน้าอื่นทั้งระบบ
@@ -40114,15 +40136,18 @@ function bkV2LockOverlays(){
   let manageModal = '';
   if(mL){
     const kids = bkV2LockChildren(mL.id);
+    // §lkAddAnywhere · ล็อกแบบช่วงคิดเป็นรายรอบ · ยอด "Held" คือที่นั่งต่อรอบ
+    const _mBulk = (typeof bkV2LockSpansDays==='function') && bkV2LockSpansDays(mL);
     const held = bkV2LockHeldRemaining(mL), usedTot = bkV2LockUsedTotal(mL), unalloc = bkV2LockUnalloc(mL), alloc = bkV2LockAllocated(mL);
     const cut = bkV2LockCutoffLabel(mL);
     const rN = rid => (typeof ROUTES!=='undefined' ? (ROUTES.find(r=>r.id===rid)?.name||rid) : rid);
-    const whenTxt = mL.scope==='month' ? ((mL.monthFrom||mL.month)+(mL.monthTo&&mL.monthTo!==mL.monthFrom?(' → '+mL.monthTo):'')) : (mL.date||'');
+    const _mRg = (typeof bkV2LockRange==='function') ? bkV2LockRange(mL) : {from:'',to:''};
+    const whenTxt = _mBulk ? (_mRg.from + (_mRg.to && _mRg.to!==_mRg.from ? (' → '+_mRg.to) : '')) : (mL.date||'');
     const kidRows = kids.length ? kids.map(c=>`
         <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--border-2)">
           <div style="flex:1"><div style="font-size:12.5px;font-weight:600;color:var(--ink)">↳ ${esc(c.subName||'ย่อย')}</div><div style="font-size:10px;color:var(--ink-soft)">${esc(c.reason||'')}${c.expiry?` · หมดอายุ ${esc(c.expiry)}`:''}</div></div>
           <div style="font-family:Manrope,sans-serif;font-size:12px;font-variant-numeric:tabular-nums;color:var(--ink)"><b>${c.used}</b>/${c.qty} · <b style="color:#C0392B">${bkV2LockRemaining(c)}</b> เหลือ</div>
-          ${c.status==='active'?`<button onclick="bkV2LockReleaseConfirm('${c.id}')" style="font-size:11px;font-weight:700;color:#A32D2D;background:#FDECEA;border:1px solid #F5C9C4;border-radius:6px;padding:5px 10px;cursor:pointer;font-family:inherit">ปล่อย</button>`:`<span style="font-size:10px;color:var(--ink-soft)">${esc(c.status)}</span>`}
+          ${c.status==='active'?`<button onclick="bkV2LockManageClose();bkV2LockAddOpen('${c.id}')" style="font-size:11px;font-weight:700;color:#0F6E56;background:#E1F5EE;border:1px solid #B7E2D2;border-radius:6px;padding:5px 10px;cursor:pointer;font-family:inherit">+ ที่นั่ง</button><button onclick="bkV2LockReleaseConfirm('${c.id}')" style="font-size:11px;font-weight:700;color:#A32D2D;background:#FDECEA;border:1px solid #F5C9C4;border-radius:6px;padding:5px 10px;cursor:pointer;font-family:inherit">ปล่อย</button>`:`<span style="font-size:10px;color:var(--ink-soft)">${esc(c.status)}</span>`}
         </div>`).join('') : `<div style="font-size:11.5px;color:var(--ink-soft);padding:8px 0;border-top:1px solid var(--border-2)">ยังไม่มีกรุ๊ปย่อย</div>`;
     manageModal = `
     <div onclick="bkV2LockManageClose()" style="position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px">
@@ -40131,23 +40156,24 @@ function bkV2LockOverlays(){
           <div style="flex:1">
             <div style="font-size:9px;font-weight:700;letter-spacing:.06em;color:#C0392B;text-transform:uppercase">Seat lock</div>
             <div style="font-size:16px;font-weight:700;color:var(--ink);margin-top:2px">${esc(bkV2LockHolderName(mL))}</div>
-            <div style="font-size:11px;color:var(--ink-soft);margin-top:2px">${esc(rN(mL.routeId))} · ${esc(whenTxt)}${mL.scope==='month'?' · เดือน':''}</div>
+            <div style="font-size:11px;color:var(--ink-soft);margin-top:2px">${esc(rN(mL.routeId))} · ${esc(whenTxt)}${_mBulk?' · Bulk':''}</div>
             ${cut?`<div style="font-size:11px;color:#0F6E56;margin-top:3px">🕒 ${esc(cut)}</div>`:''}
           </div>
           <button onclick="bkV2LockManageClose()" style="border:none;background:transparent;font-size:20px;color:var(--ink-soft);cursor:pointer;line-height:1">&times;</button>
         </div>
         <div style="padding:14px 18px">
           <div style="display:flex;gap:14px;font-family:Manrope,sans-serif;font-variant-numeric:tabular-nums">
-            <div><div style="font-size:9px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em">Held</div><div style="font-size:20px;font-weight:700;color:#C0392B">${held}</div></div>
-            <div><div style="font-size:9px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em">Used</div><div style="font-size:20px;font-weight:700;color:var(--ink)">${usedTot}</div></div>
-            <div><div style="font-size:9px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em">Total</div><div style="font-size:20px;font-weight:700;color:var(--ink)">${mL.qty}</div></div>
+            <div><div style="font-size:9px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em">${_mBulk?'กันไว้/รอบ':'Held'}</div><div style="font-size:20px;font-weight:700;color:#C0392B">${held}</div></div>
+            <div><div style="font-size:9px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em">${_mBulk?'ดึงไปสะสม':'Used'}</div><div style="font-size:20px;font-weight:700;color:var(--ink)">${usedTot}</div></div>
+            <div><div style="font-size:9px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em">Total</div><div style="font-size:20px;font-weight:700;color:var(--ink)">${mL.qty}${_mBulk?'<span style="font-size:10px;color:var(--ink-soft);font-weight:600">/รอบ</span>':''}</div></div>
             <div style="margin-left:auto;text-align:right"><div style="font-size:9px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em">แบ่งย่อย / ยังไม่จัด</div><div style="font-size:14px;font-weight:700;color:var(--ink);margin-top:4px">${alloc} / <span style="color:${unalloc>0?'#A05A1A':'var(--ink-soft)'}">${unalloc}</span></div></div>
           </div>
           <div style="margin-top:12px;font-size:10px;font-weight:700;color:#534AB7;text-transform:uppercase;letter-spacing:.05em">กรุ๊ปย่อย (${kids.length})</div>
           ${kidRows}
         </div>
         <div style="display:flex;gap:8px;padding:12px 18px;background:#fafafa;border-top:1px solid var(--border);flex-wrap:wrap">
-          ${(mL.status==='active'&&unalloc>0)?`<button onclick="bkV2SubOpen('${mL.id}')" style="font-size:12px;font-weight:700;color:#fff;background:#534AB7;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-family:inherit">+ เพิ่มกรุ๊ปย่อย</button>`:''}
+          ${(mL.status==='active')?`<button onclick="bkV2LockManageClose();bkV2LockAddOpen('${mL.id}')" style="font-size:12px;font-weight:700;color:#fff;background:#0F6E56;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-family:inherit">+ เพิ่มที่นั่ง</button>`:''}
+          ${(mL.status==='active'&&unalloc>0)?`<button onclick="bkV2SubOpen('${mL.id}')" style="font-size:12px;font-weight:700;color:#fff;background:#534AB7;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-family:inherit">+ กรุ๊ปย่อย</button>`:''}
           ${(mL.status==='active')?`<button onclick="bkV2LockReleaseConfirm('${mL.id}')" style="font-size:12px;font-weight:700;color:#A32D2D;background:#FDECEA;border:1px solid #F5C9C4;border-radius:8px;padding:8px 14px;cursor:pointer;font-family:inherit">ปล่อย${kids.length?' (ยังไม่จัด)':''}</button>`:''}
           <button onclick="bkV2LockManageClose();bkV2SwitchTab('locks')" style="font-size:12px;font-weight:600;color:var(--ink-soft);background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 14px;cursor:pointer;font-family:inherit">ดูทั้งหมด →</button>
           <button onclick="bkV2LockManageClose()" style="margin-left:auto;font-size:12px;font-weight:600;color:var(--ink-soft);background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 14px;cursor:pointer;font-family:inherit">ปิด</button>
@@ -40155,7 +40181,7 @@ function bkV2LockOverlays(){
       </div>
     </div>`;
   }
-  return releaseModal + subModal + manageModal;
+  return releaseModal + subModal + manageModal + ((typeof bkV2LockAddModal==='function')?bkV2LockAddModal():'');
 }
 
 // ── Helpers ──
