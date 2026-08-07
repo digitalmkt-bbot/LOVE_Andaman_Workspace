@@ -39956,8 +39956,10 @@ function bkV2RenderLocks(){
   const showHolder = U.grp!=='holder';
   const nCol = showHolder ? 9 : 8;
   let body='';
+  // §lkStickyFix · แต่ละกลุ่มอยู่ใน tbody ของตัวเอง · หัวกลุ่มจะได้ดันกันออกแทนที่จะทับกัน
   groups.forEach(k=>{
     const list = rows.filter(l=>keyOf(l)===k);
+    body += '<tbody>';
     if(U.grp!=='none'){
       // §lkOverview · หัวกลุ่มเอเจ้นใช้สีประจำเอเจ้น · กวาดตาหาเจ้าที่ต้องการได้เร็ว
       // §lkTomorrow · ลงสีทั้งแถบ ไม่ใช่แค่ขีดซ้าย · แถบสีบาง ๆ ยังหาไม่เจออยู่ดี
@@ -39970,7 +39972,7 @@ function bkV2RenderLocks(){
         : `${list.length} ล็อก · ${new Set(list.map(bkV2LockHolderName)).size} ผู้ถือ`;
       const dSeats = list.filter(l=>!bkV2LockSpansDays(l)).reduce((a,l)=>a+bkV2LockHeldRemaining(l),0);
       const bSeats = list.filter(l=>bkV2LockSpansDays(l)).reduce((a,l)=>a+(l.qty||0),0);
-      body += `<tr><td colspan="${nCol}" style="background:${hBg};border-top:1px solid ${hBd};border-bottom:1px solid ${hBd};padding:6px 10px;position:sticky;top:29px;z-index:2">
+      body += `<tr><td colspan="${nCol}" style="background:${hBg};border-top:1px solid ${hBd};border-bottom:1px solid ${hBd};padding:7px 10px">
         <div style="display:flex;align-items:center;gap:9px">
           <span style="width:4px;height:16px;border-radius:2px;background:${col}"></span>
           <span style="font-size:12.5px;font-weight:700;color:${hFg}">${esc(k)}</span>
@@ -39979,10 +39981,12 @@ function bkV2RenderLocks(){
         </div></td></tr>`;
     }
     list.forEach(l=>{ body += lockRow(l, showHolder); });
+    body += '</tbody>';
   });
-  if(!body) body = `<tr><td colspan="${nCol}" style="padding:34px;text-align:center;color:var(--ink-faint)">ไม่มีล็อกที่ตรงกับตัวกรอง</td></tr>`;
+  if(!body) body = `<tbody><tr><td colspan="${nCol}" style="padding:34px;text-align:center;color:var(--ink-faint)">ไม่มีล็อกที่ตรงกับตัวกรอง</td></tr></tbody>`;
 
-  const th='position:sticky;top:0;z-index:3;background:#FAF9F5;border-bottom:1px solid var(--border);font-size:9.5px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.06em;text-align:left;padding:8px 10px;white-space:nowrap';
+  // §lkStickyFix · ความสูงหัวตารางคงที่ 31px · หัวกลุ่มยึดที่ 31px พอดี ไม่เหลื่อม
+  const th='position:sticky;top:0;z-index:4;background:#FAF9F5;border-bottom:1px solid var(--border);font-size:9.5px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.06em;text-align:left;padding:0 10px;height:31px;line-height:31px;white-space:nowrap';
   const table = `<div style="margin:0 12px 40px;background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden">
       <div style="max-height:calc(100vh - 300px);overflow:auto">
         <table style="width:100%;border-collapse:separate;border-spacing:0">
@@ -39995,7 +39999,7 @@ function bkV2RenderLocks(){
             <th style="${th};text-align:center">คงเหลือ</th>
             <th style="${th}">ปล่อยคืน</th><th style="${th};width:212px"></th>
           </tr></thead>
-          <tbody>${body}</tbody>
+          ${body}
         </table>
       </div>
     </div>`;
