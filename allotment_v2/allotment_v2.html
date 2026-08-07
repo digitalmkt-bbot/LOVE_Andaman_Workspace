@@ -49185,9 +49185,13 @@ function drData(date){
     // เรือ
     if(r.boat){
       var B=(typeof getBoat==='function'?getBoat(r.boat):null)||{};
-      if(!D.boats[r.boat]){ D.boats[r.boat]={id:r.boat,name:B.name||r.boat,type:B.type||'',pier:B.pier||'',
+      if(!D.boats[r.boat]){ D.boats[r.boat]={id:r.boat,name:B.name||r.boat,type:B.type||'',
+        homePier:B.pier||'', pier:'', piers:{},
         cap:(+B.cap||+B.capacity||0),pax:0,n:0,routes:{},dep:''}; D.bOrder.push(r.boat); }
       var bo=D.boats[r.boat]; bo.pax+=px.tot; bo.n++; bo.routes[rid]=(bo.routes[rid]||0)+px.tot;
+      // §drBoatPier · ท่าที่ต้องไปขึ้นเรือ = ท่าของเส้นทางที่เรือลำนี้รับวันนั้น
+      //   ไม่ใช่ท่าประจำของเรือ · เรือย้ายท่าไปวิ่งโปรแกรมอีกฝั่งได้
+      if(R && R.pier) bo.piers[R.pier]=(bo.piers[R.pier]||0)+px.tot;
       if(!bo.dep && Array.isArray(R.times) && R.times.length) bo.dep=R.times[0];
     } else { D.noBoat.n++; D.noBoat.pax+=px.tot; D.warn.noBoat++; }
 
@@ -49263,6 +49267,14 @@ function drData(date){
       D.routes[rid].cap+=Math.round(bo.cap*share);
     });
     if(bo.cap>0 && bo.pax>bo.cap) D.warn.over++;
+  });
+  // §drBoatPier · ท่าหลักของเรือแต่ละลำ = ท่าที่รับผู้โดยสารมากสุด · ไม่มีข้อมูลค่อยใช้ท่าประจำ
+  D.bOrder.forEach(function(id){ var b=D.boats[id];
+    var ks=Object.keys(b.piers||{});
+    ks.sort(function(x,y){ return b.piers[y]-b.piers[x]; });
+    b.pier = ks[0] || b.homePier || '';
+    b.pierAll = ks;                                        // เรือลำเดียวรับหลายท่าในวันเดียว
+    b.moved = !!(b.pier && b.homePier && b.pier!==b.homePier);   // ต้องย้ายเรือไปอีกท่า
   });
   D.capTot=D.bOrder.reduce(function(a,id){ return a+D.boats[id].cap; },0);
   D.seatTot=D.bOrder.reduce(function(a,id){ return a+D.boats[id].pax; },0);
@@ -49859,11 +49871,23 @@ function drPanePx(D){
      +'<div class="r"><span>รวมผู้โดยสารทั้งวัน</span><b style="color:#111827">'+P.tot+' คน</b></div></div></div>';
 }
 
+// §drBoatPier · ข้อความท่าเรือของวันนั้น · หลายท่าโชว์ครบ · ย้ายท่าบอกท่าเดิมด้วย
+var DR_PIER_NM={tublamu:'Tub Lamu', panwa:'Visit Panwa', ranong:'Ranong'};
+function drPierNm(p){ return DR_PIER_NM[p] || p || ''; }
+function drPierTxt(b){
+  if(!b) return '';
+  var ks=(b.pierAll && b.pierAll.length) ? b.pierAll : (b.pier?[b.pier]:[]);
+  if(!ks.length) return '';
+  var txt=ks.map(drPierNm).join(' + ');
+  if(b.moved && b.homePier) txt += ' (ย้ายจาก '+drPierNm(b.homePier)+')';
+  return txt;
+}
+
 // ══ แท็บ 3 · เรือ ════════════════════════════════════════════════════════
 function drPaneBt(D){
   var e=ckEsc;
   var piers={}; D.bOrder.forEach(function(id){ var b=D.boats[id]; var p=b.pier||'—'; piers[p]=1; });
-  var PIER={tublamu:'Tub Lamu Pier', panwa:'Visit Panwa'};
+  var PIER={tublamu:'Tub Lamu Pier', panwa:'Visit Panwa', ranong:'Ranong Pier'};
   var kp=''
    + drK('pu','&#128676;','เรือที่ออกวันนี้', D.bOrder.length, 'ลำ','g',
        Object.keys(piers).length+' ท่า · '+D.bOrder.map(function(id){ return e(D.boats[id].name); }).slice(0,3).join(' · '),'',
@@ -49886,7 +49910,7 @@ function drPaneBt(D){
     return drBar(e(b.name)+(b.type?(' · '+e(b.type)):''), col,
       b.pax+' / '+(b.cap||'—')+' <span>('+pc+'%)</span>',
       [{w:Math.min(100,pc),c:col}],
-      e(rn)+(b.pier?(' · '+e(PIER[b.pier]||b.pier)):'')+(b.dep?(' · ออก '+e(b.dep)):''),
+      e(rn)+(b.pier?(' · '+e(drPierTxt(b))):'')+(b.dep?(' · ออก '+e(b.dep)):''),
       over?('<b style="color:#be123c">&#9888; เกิน '+(b.pax-b.cap)+' ที่นั่ง</b>')
           :(b.cap>b.pax?('เหลือ '+(b.cap-b.pax)+' ที่นั่ง'):'เต็มลำ'));
   }).join('');
@@ -49894,7 +49918,7 @@ function drPaneBt(D){
   var deps=D.bOrder.slice().sort(function(a,b){ return String(D.boats[a].dep||'99').localeCompare(String(D.boats[b].dep||'99')); })
     .map(function(id){ var b=D.boats[id], over=(b.cap>0&&b.pax>b.cap);
       var rn=Object.keys(b.routes).map(function(rid){ return ((typeof getRoute==='function'?getRoute(rid):null)||{}).name||rid; }).join(' · ');
-      return drTile(over?'warn':'', e(PIER[b.pier]||b.pier||'—')+' · '+e(b.dep||'—'),
+      return drTile(over?'warn':'', e(drPierTxt(b)||'—')+' · '+e(b.dep||'—'),
         e(b.name)+' · '+e(rn),
         '<div class="rr"><p class="t">'+(over?'เกินความจุ':'ผู้โดยสาร')+'</p><p class="b"'+(over?' style="color:#be123c"':'')+'>'
         +b.pax+(over?(' / '+b.cap):' คน')+'</p></div>'); }).join('');
@@ -49903,7 +49927,7 @@ function drPaneBt(D){
     var col=over?'#e11d48':(pc>=80?'#047857':'#4f46e5');
     var rn=Object.keys(b.routes).map(function(rid){ return ((typeof getRoute==='function'?getRoute(rid):null)||{}).name||rid; }).join(' · ');
     return '<tr><td>'+drSq(col,b.name)+'<span><b>'+e(b.name)+'</b><span>'+e(b.type||'')+'</span></span></span></td>'
-      +'<td>'+e(b.type||'—')+'</td><td>'+e(PIER[b.pier]||b.pier||'—')+'</td>'
+      +'<td>'+e(b.type||'—')+'</td><td>'+e(drPierTxt(b)||'—')+'</td>'
       +'<td class="c dr-mono">'+e(b.dep||'—')+'</td><td>'+e(rn)+'</td><td class="c">'+b.n+'</td>'
       +'<td class="c dr-mono">'+(b.cap||'—')+'</td>'
       +'<td class="c dr-mono" style="font-weight:700'+(over?';color:#be123c':'')+'">'+b.pax+'</td>'
@@ -50590,7 +50614,7 @@ function drMailHTML(D){
       var rl=Object.keys(b.routes).sort(function(x,y){ return b.routes[y]-b.routes[x]; })
         .map(function(k){ var r=D.routes[k]; return (r?r.name:k)+' '+b.routes[k]; }).join(' · ');
       br+=drmR(['<b>'+e(b.name)+'</b><div style="font-size:10px;color:'+DRM.fain+';padding-top:2px">'
-          +e((b.type||'เรือ')+(b.pier?(' · ท่า '+b.pier):'')+(b.dep?(' · ออก '+b.dep):''))+'</div>',
+          +e((b.type||'เรือ')+(b.pier?(' · ท่า '+drPierTxt(b)):'')+(b.dep?(' · ออก '+b.dep):''))+'</div>',
         b.n, '<b>'+b.pax+'</b> / '+(b.cap||'—'),
         '<span style="font-size:11px;font-weight:700;color:'+col+'">'+pc+'%'+(over?' &#9888;':'')+'</span>'+drmBar(Math.min(pc,100),col),
         '<span style="font-size:10.5px;color:'+DRM.mut+'">'+e(rl)+'</span>'],['left','center','center','left','left']); });
