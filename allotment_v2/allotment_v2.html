@@ -7315,8 +7315,10 @@ function renderDA(){
       const free=Math.max(0,allot-booked);
       const pct=allot>0?Math.round(booked/allot*100):0;
       // §daLineFmt · ชื่อเส้นทางบรรทัดหนึ่ง · ที่นั่งอีกบรรทัดย่อหน้าเข้าไป
-      //   เครื่องหมายบอกระดับ: ✅ ว่าง · ⚠️ เหลือน้อย (>=80%) · ❌ เต็ม
-      const mark=pct>=100?'❌':pct>=80?'⚠️':'✅';
+      //   §daMarkTwo · เครื่องหมายมีสองแบบพอ: ✅ ยังจองได้ · ❌ เต็ม
+      //   ไม่ใช้ขั้นกลาง ⚠️ แล้ว — ฝั่งเอเจ้นอ่านแล้วเข้าใจผิดว่าจองไม่ได้
+      //   ทั้งที่ยังมีที่ว่าง · ตัวเลขที่นั่งบรรทัดเดียวกันบอกอยู่แล้วว่าเหลือเท่าไหร่
+      const mark=pct>=100?'❌':'✅';
       availLines.push(`- ${tname}`);
       availLines.push(pct>=100 ? `   ${mark} FULL` : `   ${mark} ${free} Seats`);
       availLines.push('');
