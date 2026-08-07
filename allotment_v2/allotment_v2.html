@@ -3421,8 +3421,11 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
 #view-booking .bkv2-cal-cell{ border-radius:12px !important; box-shadow:inset 0 1px 0 rgba(255,255,255,.55) !important; }
 /* §bkCalPast · วันที่ผ่านมาแล้ว · ยังกดดูได้ แค่ไม่ดึงสายตา
    ยกเว้นวันนี้กับวันที่เลือกอยู่ — สองอันนั้นต้องเด่นตามเดิม */
-#view-booking .bkv2-cal-cell.past:not(.sel):not(.today){ background:#FAF9F6 !important; border-color:#E9E6DF !important; }
-#view-booking .bkv2-cal-cell.weekend.past:not(.sel):not(.today){ background:#F6F4F0 !important; }
+#view-booking .bkv2-cal-cell.past:not(.sel):not(.today){ background:#F4F2ED !important; border-color:#E5E2DA !important; }
+/* §bkCalWeekend · เสาร์-อาทิตย์ที่ยังไม่ผ่าน = พื้นขาวเหมือนวันธรรมดา
+   ไม่งั้นพื้นเบจของวันหยุดไปชนกับพื้นเทาของวันที่ผ่านมาแล้ว แยกไม่ออก
+   ความเป็นวันหยุดยังดูได้จากหัวคอลัมน์ SUN/SAT ที่จางกว่า */
+#view-booking .bkv2-cal-cell.weekend:not(.past){ background:var(--white) !important; }
 #view-booking .bkv2-cal-cell.past:not(.sel) .bkv2-cal-daynum{ color:#a8a59d; }
 #view-booking .bkv2-cal-cell.past:not(.sel) .bkv2-cal-chip{ opacity:.5; filter:saturate(.6); transition:opacity .15s, filter .15s; }
 #view-booking .bkv2-cal-cell.past:not(.sel):hover .bkv2-cal-chip{ opacity:.92; filter:none; }
