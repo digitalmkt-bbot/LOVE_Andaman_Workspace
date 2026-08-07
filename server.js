@@ -189,7 +189,9 @@ const B2C_OWN_BK = new Set([
 //      as overpaid. The re-upsert this bump forces backfills the 16 existing orders whose add-ons
 //      were discarded; both pricebreakdown_addon and the sb_bookings__addons child rows are
 //      refreshed by the normal sync path, so no separate migration is needed.
-const B2C_MAP_VER = 15;
+// v16: prefers the catalog-resolved name carried on each addonsSelected entry, with a stable B2C
+//      add-on id fallback. The bump refreshes previously imported generic labels.
+const B2C_MAP_VER = 16;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -300,7 +302,6 @@ function b2cLineSeat(item) { return b2cLineMoney(item).seat; }
 // the patterns above: importing it as a generic line is honest, whereas guessing "longtail" from an
 // unknown code would put phantom boats on the pier. Fill in the real slugs once B2C confirms what
 // AD-001 / AD-002 are (docs/B2C_LONGTAIL_ADDON.md §4 Q1).
-const B2C_ADDON_LABEL = { 'longtail-join': 'Longtail Join', 'longtail-charter': 'Longtail Charter' };
 function b2cMapAddOns(det, addOnTotal) {
   const arr = (det && Array.isArray(det.addonsSelected)) ? det.addonsSelected : [];
   if (!arr.length) return [];
@@ -310,10 +311,10 @@ function b2cMapAddOns(det, addOnTotal) {
     const type = code || (id ? 'b2c-' + id.toLowerCase() : 'b2c-addon');
     const qty  = Math.round(Number(a && a.qty) || 0) || 1;
     const ad = Number(a && a.qtyAdult), ch = Number(a && a.qtyChild);
-    const base = B2C_ADDON_LABEL[type] || (code || ('B2C add-on ' + (id || '?')));
+    const name = String((a && a.name) || '').trim() || `B2C add-on ${id || '?'}`;
     // Mirror the B2B label shape ("Longtail Join (2A + 0C)") when B2C sent the adult/child split.
-    const label = (Number.isFinite(ad) && Number.isFinite(ch)) ? `${base} (${ad}A + ${ch}C)`
-                                                               : `${base} × ${qty}`;
+    const label = (Number.isFinite(ad) && Number.isFinite(ch)) ? `${name} (${ad}A + ${ch}C)`
+                                                               : `${name} × ${qty}`;
     return { type, label, amount: 0, qty, note: '' };
   });
   // subtotal − seat gives the COMBINED add-on money for the line. With one entry that is its exact
