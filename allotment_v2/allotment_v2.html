@@ -6414,6 +6414,24 @@ function calToggleHidePanel(){
   renderCal();
 }
 
+// §cal2b · ชื่อโปรแกรมที่จะโชว์ในปฏิทิน · ตั้งเองได้ต่อเส้นทาง
+//   เก็บเป็น JSON string ใน blob (cal_route_names · sync app_meta)
+//   แยกชุดจาก da_route_names เพราะช่องปฏิทินแคบกว่าข้อความ LINE คนละเงื่อนไข
+let CAL_ROUTE_NAMES={};
+(function(){ try{ const d=JSON.parse(localStorage.getItem('loveandaman_v2')||'{}'); const v=d.cal_route_names;
+  if(typeof v==='string'){ CAL_ROUTE_NAMES=JSON.parse(v)||{}; } else if(v && typeof v==='object'){ CAL_ROUTE_NAMES=v; } }catch(e){} })();
+// ชื่อที่ตั้งเอง → รายการย่อเดิม → ชื่อเต็ม
+function _calName(r){ return (r && ((CAL_ROUTE_NAMES[r.id]||'').trim())) || _calShortName((r&&r.name)||''); }
+function calEditRouteName(rid){
+  const r=(typeof getRoute==='function')?getRoute(rid):null; if(!r) return;
+  const v=prompt('ชื่อที่จะโชว์ในปฏิทิน\nเส้นทาง: '+r.name+'\n(เว้นว่าง = ใช้ชื่อย่อเดิม)', CAL_ROUTE_NAMES[rid]||'');
+  if(v===null) return;
+  const nv=v.trim();
+  if(nv) CAL_ROUTE_NAMES[rid]=nv; else delete CAL_ROUTE_NAMES[rid];
+  try{ const d=JSON.parse(localStorage.getItem('loveandaman_v2')||'{}'); d.cal_route_names=JSON.stringify(CAL_ROUTE_NAMES); localStorage.setItem('loveandaman_v2', JSON.stringify(d)); }catch(e){}
+  if(typeof renderCal==='function') renderCal();
+}
+
 // Helpers shared by renderCal
 function _calShortName(name){
   return name
@@ -6577,9 +6595,23 @@ function renderCal(){
   const CAL2CSS=`<style>
   .cal2-page{display:flex;flex-direction:column;gap:9px;height:calc(100vh - 168px);min-height:540px}
   .cal2-box{flex:1;min-height:0;background:#fff;border:1px solid ${ink.line2};border-radius:14px;padding:9px;display:flex;flex-direction:column;gap:6px}
+  /* §cal2b · การ์ดเดือน · ยาวคร่อมหัวตารางทั้งแถว */
+  .cal2-mb{flex:none;display:flex;align-items:center;gap:16px;background:${LIME};color:${FOREST};border:1px solid #B2E45E;border-radius:11px;padding:11px 16px;flex-wrap:wrap}
+  .cal2-mb .mo{font-size:21px;font-weight:700;letter-spacing:.02em;line-height:1}
+  .cal2-mb .yr{font-size:15px;font-weight:600;color:${LIME_DARK};font-family:'DM Mono',monospace;line-height:1}
+  .cal2-mb .sub{border-left:1px solid rgba(31,77,44,.22);padding-left:16px;flex:1;min-width:120px}
+  .cal2-mb .sub b{display:block;font-size:11.5px;font-weight:600;line-height:1.3}
+  .cal2-mb .sub span{display:block;font-size:10.5px;color:#4A7A25;line-height:1.3;font-family:'DM Mono',monospace}
+  .cal2-mb .k{display:flex;align-items:baseline;gap:5px}
+  .cal2-mb .k b{font-size:18px;font-weight:700;letter-spacing:-.02em;font-family:'DM Mono',monospace;line-height:1}
+  .cal2-mb .k span{font-size:10px;color:#4A7A25}
+  .cal2-mb .dv{width:1px;height:19px;background:rgba(31,77,44,.22);margin:0 13px}
   .cal2-wd{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;flex:none}
   .cal2-wd div{text-align:center;font-size:10px;font-weight:700;letter-spacing:.09em;color:#9F1B4F;background:#FCE5EC;border-radius:7px;padding:5px 0}
-  .cal2-grid{flex:1;min-height:0;display:grid;grid-template-columns:repeat(7,1fr);grid-auto-rows:1fr;gap:6px}
+  /* §cal2b · แต่ละสัปดาห์สูงพอดีกับวันที่มีเที่ยวมากที่สุดของสัปดาห์นั้น (min-content)
+     แล้วเอาพื้นที่ที่เหลือมาหารเท่า ๆ กัน (1fr) · สัปดาห์ที่โล่งจึงไม่ถูกดันให้สูงตาม
+     เดือนที่แน่นจนเกินจอ ตารางเลื่อนได้ ดีกว่าตัดเที่ยวทิ้งแบบเดิม */
+  .cal2-grid{flex:1;min-height:0;overflow:auto;display:grid;grid-template-columns:repeat(7,1fr);grid-auto-rows:minmax(min-content,1fr);gap:6px;padding-right:2px}
   .cal2-cell{border:1px solid #EAE7DF;border-radius:10px;padding:6px 6px 5px;display:flex;flex-direction:column;gap:3px;cursor:pointer;min-height:0;overflow:hidden;background:#fff;transition:border-color .12s}
   .cal2-cell:hover{border-color:rgba(0,0,0,.18)}
   .cal2-cell.pad{background:#FAFAF8;border-style:dashed;border-color:#EFEDE6;cursor:default}
@@ -6593,7 +6625,7 @@ function renderCal(){
   .cal2-dn{font-size:14px;font-weight:700;letter-spacing:-.02em;font-family:'DM Mono',monospace}
   .cal2-cell.today .cal2-dn,.cal2-cell.sel .cal2-dn{color:#C75A33}
   .cal2-tb{font-size:8px;font-weight:700;letter-spacing:.05em;color:#C75A33;background:#FFE6D9;border-radius:4px;padding:1px 5px}
-  .cal2-rows{display:flex;flex-direction:column;gap:3px;min-height:0;overflow:hidden}
+  .cal2-rows{display:flex;flex-direction:column;gap:3px}
   .cal2-rw{position:relative;display:flex;align-items:center;gap:5px;border-radius:6px;padding:3px 6px 3px 4px;flex:none;overflow:hidden}
   .cal2-fill{position:absolute;left:0;top:0;bottom:0;border-radius:6px 0 0 6px}
   .cal2-rw>*:not(.cal2-fill){position:relative;z-index:1}
@@ -6719,13 +6751,6 @@ function renderCal(){
     <input type="date" value="${_dv(_rng.t)}" min="${_mn}" max="${_mx}" onchange="calSetRange('t',this.value)" style="font-family:'DM Mono',monospace;font-size:11px;border:1px solid ${ink.line2};border-radius:9px;padding:3px 6px;color:${ink[1]};background:#FBFAF7">
     ${_pbtn(7,'7 วัน')}${_pbtn(14,'14 วัน')}${_pbtn(0,'ทั้งเดือน')}
   </div>`;
-  // ยอดรวมเดือน · ยุบการ์ด KPI สี่ใบเหลือชิปเดียว
-  const totChip=`<div style="display:flex;align-items:center;background:${FOREST};color:white;border-radius:12px;padding:5px 4px 5px 14px">
-    <div><span style="font-size:19px;font-weight:700;line-height:1;letter-spacing:-.02em;font-family:'DM Mono',monospace">${monthTrips}</span><span style="font-size:10.5px;color:#9BB89B;margin-left:4px">trips</span></div>
-    <div style="width:1px;height:20px;background:#3B6B48;margin:0 13px"></div>
-    <div><span style="font-size:19px;font-weight:700;line-height:1;letter-spacing:-.02em;font-family:'DM Mono',monospace">${monthFree.toLocaleString()}</span><span style="font-size:10.5px;color:#9BB89B;margin-left:4px">seats free</span></div>
-    <span style="background:${LIME};color:${FOREST};border-radius:9px;padding:3px 10px;font-size:11px;font-weight:700;margin-left:11px">avg ${weeklyAvg} /week</span>
-  </div>`;
   const filterPills=[['all','All'],['tublamu','Tub Lamu'],['panwa','Visit Panwa'],['ranong','Ranong']].map(([v,l])=>{
     const on=calPier===v;
     return `<button onclick="setCalPier('${v}')" style="background:${on?FOREST:'transparent'};color:${on?LIME:ink[2]};border:none;border-radius:14px;padding:4px 12px;font-size:11px;font-weight:${on?600:500};cursor:pointer">${l}</button>`;
@@ -6749,7 +6774,6 @@ function renderCal(){
       ${viewMode==='month'?rangeCtl:''}
     </div>
     <div style="display:flex;align-items:center;gap:6px">
-      ${viewMode==='month'?totChip:''}
       <div style="display:flex;align-items:center;gap:6px;background:white;border:1px solid ${ink.line};border-radius:20px;padding:3px 12px 3px 3px"><div style="width:24px;height:24px;border-radius:50%;background:${PIER_COL.tublamu};color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">TL</div><span style="font-size:11px;font-weight:500">${tlBoats}</span></div>
       <div style="display:flex;align-items:center;gap:6px;background:white;border:1px solid ${ink.line};border-radius:20px;padding:3px 12px 3px 3px"><div style="width:24px;height:24px;border-radius:50%;background:${PIER_COL.panwa};color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">VP</div><span style="font-size:11px;font-weight:500">${vpBoats}</span></div>
       ${rnTotal>0?`<div style="display:flex;align-items:center;gap:6px;background:white;border:1px solid ${ink.line};border-radius:20px;padding:3px 12px 3px 3px"><div style="width:24px;height:24px;border-radius:50%;background:${PIER_COL.ranong};color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">RN</div><span style="font-size:11px;font-weight:500">${rnBoats}</span></div>`:''}
@@ -6886,7 +6910,8 @@ function renderCal(){
       onclick="${_hidRt.has(rt.id)?`calUnhideRoute('${rt.id}')`:`calHideRoute('${rt.id}')`}"
       style="${dead?'':`background:${_calRgba(rt.color,.07)};border-color:${_calRgba(rt.color,.30)}`}">
       <i style="background:${rt.color};${dead?'opacity:.4':''}"></i>
-      <div><div style="font-size:11.5px;font-weight:${dead?500:600};color:${dead?ink[3]:ink[1]};line-height:1.25">${_calShortName(rt.name)}</div>
+      <div><div style="font-size:11.5px;font-weight:${dead?500:600};color:${dead?ink[3]:ink[1]};line-height:1.25">${_calName(rt)}
+        <span onclick="event.stopPropagation();calEditRouteName('${rt.id}')" title="ตั้งชื่อที่จะโชว์ในปฏิทิน" style="opacity:.34;font-size:10px;cursor:pointer;padding:0 2px">&#9998;</span></div>
         <div style="font-size:9.5px;color:${ink[3]};line-height:1.25">${PIER_LBL[rt.pier]||'?'} · ${dead?'ไม่มีเที่ยวออก':dd+' วันออก'+(dep?' · '+dep:'')}</div></div>
       <div style="margin-left:6px;text-align:right"><div style="font-size:15px;font-weight:700;line-height:1;color:${col};font-family:'DM Mono',monospace">${dead?'—':per}</div>
         <div style="font-size:9px;color:${ink[3]};margin-top:2px">${dead?'':'ว่าง/วัน'}</div></div>
@@ -6937,7 +6962,7 @@ function renderCal(){
         return `<div class="cal2-rw" style="background:${_calRgba(g.r.color,.11)};color:${_calDk(g.r.color,.45)}">
           <div class="cal2-fill" style="width:${pct}%;background:${_calRgba(g.r.color,.24)}"></div>
           <span class="cal2-b" style="background:${g.r.color}"></span>
-          <span class="cal2-n">${_calShortName(g.r.name)}</span>
+          <span class="cal2-n">${_calName(g.r)}</span>
           ${g.nb>1?`<span class="cal2-t">${g.nb} ลำ</span>`:''}
           <span class="${vCls}">${vTxt}${vCap}</span>
         </div>`;
@@ -6951,7 +6976,22 @@ function renderCal(){
       <div class="cal2-rows">${rowsHtml}</div>
     </div>`;
   }
+  const _rngLbl=(_rng.f===1 && _rng.t===daysInMonth)
+    ? `ทั้งเดือน · ${daysInMonth} วัน`
+    : `${_rng.f} – ${_rng.t} ${MONTHS_TH_SHORT[calMonth]} · ${_rng.t-_rng.f+1} วัน`;
+  const monthBar=`<div class="cal2-mb">
+    <div style="display:flex;align-items:baseline;gap:8px;flex:none">
+      <span class="mo">${(MONTHS_EN[calMonth]||'').toUpperCase()}</span><span class="yr">${calYear}</span>
+    </div>
+    <div class="sub"><b>ที่นั่งคงเหลือรายวัน</b><span>${_rngLbl}</span></div>
+    <div style="display:flex;align-items:center;flex:none">
+      <div class="k"><b>${monthTrips}</b><span>trips</span></div><div class="dv"></div>
+      <div class="k"><b>${monthFree.toLocaleString()}</b><span>seats free</span></div><div class="dv"></div>
+      <div class="k"><b>${weeklyAvg}</b><span>avg /week</span></div>
+    </div>
+  </div>`;
   const calGrid2=`<div class="cal2-box">
+    ${monthBar}
     <div class="cal2-wd">${WDS.map(w=>`<div>${w}</div>`).join('')}</div>
     <div class="cal2-grid">${cells2}</div>
   </div>`;
@@ -6964,7 +7004,7 @@ function renderCal(){
       <span style="background:#DFF3E9;color:#0B6B4F;border-radius:7px;padding:1px 7px;font-weight:700;font-size:10.5px;font-family:'DM Mono',monospace">13</span>
       · เต็ม <span style="background:#FBE0DE;color:#A32D2D;border-radius:7px;padding:1px 7px;font-weight:700;font-size:10px">Full</span></span>
     <span>เรียงตามเวลาเรือออก</span>
-    <span style="margin-left:auto;background:${LIME_SOFT};color:${FOREST};padding:3px 10px;border-radius:12px;font-weight:700">${weeklyAvg} free/week</span>
+    <span style="margin-left:auto;color:#a5a29a">กดดินสอบนชิปเส้นทาง เพื่อตั้งชื่อที่จะโชว์ในปฏิทิน</span>
   </div>`;
 
   // ── CALENDAR GRID (โหมด Matrix ยังใช้ของเดิม) ──
@@ -39132,6 +39172,9 @@ window._laReloadData=function(){
     if(typeof BOAT_CAP_OVR!=='undefined' && d.boat_capovr) BOAT_CAP_OVR=d.boat_capovr;   // §cap override รายวัน
     if(typeof TRAVEL_SUM!=='undefined' && d.travel_sum) TRAVEL_SUM=d.travel_sum;   // §Travel Summary
     if(typeof TS_COT!=='undefined' && d.ts_cot) TS_COT=d.ts_cot;                   // §tsCotSettle
+    if(typeof CAL_ROUTE_NAMES!=='undefined' && d.cal_route_names){                  // §cal2b · ชื่อโปรแกรมในปฏิทิน
+      try{ CAL_ROUTE_NAMES=(typeof d.cal_route_names==='string')?(JSON.parse(d.cal_route_names)||{}):d.cal_route_names; }catch(_){}
+    }
     return true;
   }catch(e){ console.warn('_laReloadData', e); return false; }
 };
