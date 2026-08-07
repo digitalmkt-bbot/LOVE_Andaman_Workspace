@@ -7225,7 +7225,9 @@ function daEditRouteName(rid){
   try{ const d=JSON.parse(localStorage.getItem('loveandaman_v2')||'{}'); d.da_route_names=JSON.stringify(DA_ROUTE_NAMES); localStorage.setItem('loveandaman_v2', JSON.stringify(d)); }catch(e){}
   if(typeof renderDA==='function') renderDA();
 }
-// §เน้นตัวเลขในข้อความ LINE · แปลงเลข 0-9 → Mathematical Bold (𝟎-𝟗) · โผล่หนากว่า text ธรรมดา (LINE ไม่รองรับ bold จริง)
+// §daPlainNum (2026-08-07) · เลิกใช้กับข้อความที่นั่งแล้ว — Mathematical Bold ไม่ใช่ฟอนต์เดียวกับ
+//   ข้อความรอบข้างบน LINE บางเครื่องขึ้นเป็นกล่องว่าง / เส้นฐานเพี้ยน · คงฟังก์ชันไว้เผื่อที่อื่นเรียก
+// §เน้นตัวเลขในข้อความ LINE · แปลงเลข 0-9 → Mathematical Bold (𝟎-𝟗)
 function _daBold(v){ return String(v).replace(/[0-9]/g, d=>String.fromCodePoint(0x1D7CE + (+d))); }
 function buildDAGroups(ds){
   const dayOps=TRIPS[ds]||{};
@@ -7303,7 +7305,7 @@ function renderDA(){
       //   เครื่องหมายบอกระดับ: ✅ ว่าง · ⚠️ เหลือน้อย (>=80%) · ❌ เต็ม
       const mark=pct>=100?'❌':pct>=80?'⚠️':'✅';
       availLines.push(`- ${tname}`);
-      availLines.push(pct>=100 ? `   ${mark} FULL` : `   ${mark} ${_daBold(free)} Seats`);
+      availLines.push(pct>=100 ? `   ${mark} FULL` : `   ${mark} ${free} Seats`);
       availLines.push('');
     });
   });
