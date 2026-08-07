@@ -6617,6 +6617,11 @@ function renderCal(){
   .cal2-cell.pad:hover{border-color:#EFEDE6}
   .cal2-cell.out{background:#FAFAF8;border-color:#EFEDE6;cursor:default}
   .cal2-cell.out:hover{border-color:#EFEDE6}
+  /* §cal2e · วันที่ผ่านมาแล้ว · ยังกดดูได้ แค่ไม่ดึงสายตา */
+  .cal2-cell.past{background:#FAF9F6;border-color:#EFEDE6}
+  .cal2-cell.past .cal2-dn{background:#EDEBE4;color:#a5a29a;font-weight:600}
+  .cal2-cell.past .cal2-rows{opacity:.5;filter:saturate(.6)}
+  .cal2-cell.past:hover .cal2-rows{opacity:.85;filter:none}
   .cal2-cell.today{border:1.5px solid #E8B59B;background:#FFFCFA}
   .cal2-cell.sel{border:1.5px solid #C75A33;background:#FFF8F4;box-shadow:0 0 0 3px rgba(199,90,51,.10)}
   .cal2-ch{display:flex;align-items:center;gap:5px;flex:none}
@@ -6971,7 +6976,9 @@ function renderCal(){
       // ท่าที่ปิดเฉพาะวันนี้ (ไม่ได้ปิดทั้งเดือน) ยังต้องบอก
       +shutToday.map(p=>`<div class="cal2-rw cal2-shut"><span class="cal2-b"></span><span class="cal2-n">${PIER_NAME[p]} &middot; closed</span></div>`).join('');
     }
-    const cls='cal2-cell'+(!on?' out':(isSel?' sel':(isToday?' today':'')));
+    // §cal2e · อดีต = ก่อนวันนี้ · วันนี้ยังขายได้ ไม่นับ
+    const isPast=(ds<TODAY_STR);
+    const cls='cal2-cell'+(!on?' out':(isSel?' sel':(isToday?' today':(isPast?' past':''))));
     cells2+=`<div class="${cls}" ${on?`onclick="calOpenDay('${ds}')"`:''}>
       <div class="cal2-ch"><span class="cal2-dn">${d}</span>${(on&&isToday)?'<span class="cal2-tb">TODAY</span>':''}</div>
       <div class="cal2-rows">${rowsHtml}</div>
@@ -6999,6 +7006,8 @@ function renderCal(){
       <span style="background:#DFF3E9;color:#0B6B4F;border-radius:7px;padding:1px 7px;font-weight:700;font-size:10.5px;font-family:'DM Mono',monospace">13</span>
       &middot; sold out <span style="background:#FBE0DE;color:#A32D2D;border-radius:7px;padding:1px 7px;font-weight:700;font-size:10px">Full</span></span>
     <span>Sorted by departure time</span>
+    <span style="display:inline-flex;align-items:center;gap:6px">Past days dimmed
+      <span style="display:inline-block;width:22px;height:11px;border-radius:3px;background:#EDEBE4"></span></span>
     <span style="margin-left:auto;color:#a5a29a">Pencil on a route chip renames it here</span>
   </div>`;
 
