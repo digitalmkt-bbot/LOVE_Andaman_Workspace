@@ -5262,7 +5262,12 @@ seed();
 // HELPERS
 // ══════════════════════════════════════
 function getCurStatus(boat,ds){
-  const sorted=[...boat.log].sort((a,b)=>b.from.localeCompare(a.from));
+  // §flBoatPersist · วันที่มีผลเท่ากัน ให้ entry ที่บันทึกทีหลังชนะ (ถือเป็นการแก้ไขล่าสุด)
+  //   เดิมเรียงด้วย from อย่างเดียว · เสมอกันแล้ว sort คงลำดับเดิม → ของเก่าชนะ
+  //   เคสจริง: เริ่มซ่อมวันนี้ แล้วเปลี่ยนเป็น Available วันเดียวกัน จะยังขึ้น Fixing
+  const sorted=(boat.log||[]).map((e,i)=>({e,i}))
+    .sort((a,b)=> b.e.from.localeCompare(a.e.from) || (b.i-a.i))
+    .map(x=>x.e);
   return sorted.find(e=>e.from<=ds&&(!e.to||e.to>=ds))||{s:'available',loc:'-'};
 }
 function getBoat(id){return BOATS.find(b=>b.id===id);}
@@ -17896,6 +17901,9 @@ function flSave(){
   d.fleet_daily=FL_DAILY;d.fleet_fuelprice=FL_FUEL_PRICE;d.fleet_drlock=FL_DR_LOCK;d.fleet_maintenance=FL_MAINT;d.fleet_incidents=FL_INCIDENTS;
   d.fleet_inventory=FL_INVENTORY;d.fleet_memos=FL_MEMOS;d.fleet_safety=FL_SAFETY;d.fleet_projects=FL_PROJECTS;d.fleet_version=FLEET_VERSION;
   d.fleet_consumable_logs=FL_CONSUMABLE_LOGS;
+  // §flBoatPersist · ฝั่ง Fleet แก้ b.log (สถานะเรือ) อยู่ตลอด แต่ BOATS ไม่เคยถูกเขียนลง
+  //   localStorage เพราะ save() เป็นคนเขียน ซึ่งฝั่งนี้ไม่ได้เรียก → แก้แล้วหายทุกครั้งที่ refresh
+  d.boats=BOATS;
   localStorage.setItem(LS_KEY,JSON.stringify(d));
 }
 
