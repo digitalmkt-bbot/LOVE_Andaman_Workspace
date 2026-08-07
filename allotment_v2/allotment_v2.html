@@ -7299,10 +7299,13 @@ function renderDA(){
       const tname=_daRouteName(r)+(type==='early'?' · Early':'');
       const free=Math.max(0,allot-booked);
       const pct=allot>0?Math.round(booked/allot*100):0;
-      const dot=pct>=100?'🔴':pct>=80?'🟡':'🟢';
-      availLines.push(pct>=100 ? `${dot} ${tname} — FULL` : `${dot} ${tname} — ${_daBold(free)} seats`);
+      // §daLineFmt · ชื่อเส้นทางบรรทัดหนึ่ง · ที่นั่งอีกบรรทัดย่อหน้าเข้าไป
+      //   เครื่องหมายบอกระดับ: ✅ ว่าง · ⚠️ เหลือน้อย (>=80%) · ❌ เต็ม
+      const mark=pct>=100?'❌':pct>=80?'⚠️':'✅';
+      availLines.push(`- ${tname}`);
+      availLines.push(pct>=100 ? `   ${mark} FULL` : `   ${mark} ${_daBold(free)} Seats`);
+      availLines.push('');
     });
-    availLines.push('');
   });
   const availBlock=availLines.join('\n').replace(/\n+$/,'');   // ตัดบรรทัดว่างท้าย
   const dateStr=daDate.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
