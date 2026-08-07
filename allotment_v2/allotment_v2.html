@@ -39516,7 +39516,8 @@ try { bkV2LockExpireSweep(); } catch(e){}
 // ── Seat Locks · management tab (Step 3b) ──
 let _bkV2LockForm = { scope:'day', routeId:'', date:'', dateFrom:'', dateTo:'', dow:[], monthFrom:'', monthTo:'', holderType:'agent', holderId:'', holderName:'', qty:'', reason:'', expiry:'', releaseDaysBefore:'1', releaseTime:'18:00' };
 // §lkBulkUI · สถานะของหน้ารายการ · ค้นหา / กรอง / จัดกลุ่ม
-let _bkV2LockUI = { q:'', route:'', holder:'', scope:'', st:'active', grp:'holder', open:{}, dayOff:0 };
+// §lkTomorrow · dayOff เริ่มที่ 1 = พรุ่งนี้ · ของวันนี้ถูกจัดการไปหมดแล้ว
+let _bkV2LockUI = { q:'', route:'', holder:'', scope:'', st:'active', grp:'holder', open:{}, dayOff:1 };
 let _bkV2AddModal = null;   // { lockId, add, note }
 let _bkV2ReleaseModal = null;   // { lockId, max, value }
 let _bkV2LockModalOpen = false; // inline create-lock modal (from Calendar)
@@ -39748,8 +39749,11 @@ function bkV2RenderLocks(){
     _spark.push(held);
   }
   const _sparkMax=Math.max(1,..._spark);
-  const todLocks=bkV2LocksOnDate(_today);
-  const todHeld=todLocks.reduce((a,l)=>a + (bkV2LockReleasedForDate(l,_today)?0:bkV2LockPoolHold(l,_today)), 0);
+  // §lkTomorrow · การ์ดนี้ดูของพรุ่งนี้ · ของวันนี้ถูกจัดการไปหมดแล้วตั้งแต่เมื่อวาน
+  const _tmr=(function(){ const d=new Date(_today+'T00:00:00'); d.setDate(d.getDate()+1);
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); })();
+  const todLocks=bkV2LocksOnDate(_tmr);
+  const todHeld=todLocks.reduce((a,l)=>a + (bkV2LockReleasedForDate(l,_tmr)?0:bkV2LockPoolHold(l,_tmr)), 0);
   const todRoutes=new Set(todLocks.map(l=>l.routeId)).size;
   const card=(cls,lab,val,unit,foot)=>`<div style="background:${cls.bg};border:1px solid ${cls.bd};border-radius:12px;padding:11px 14px;overflow:hidden">
       <div style="font-size:10px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.06em">${lab}</div>
@@ -39759,7 +39763,7 @@ function bkV2RenderLocks(){
   const pill=(t,bg,fg)=>`<span style="background:${bg||'#F3F1EC'};color:${fg||'#5c5c55'};border-radius:7px;padding:1px 8px;font-weight:600;font-size:10.5px">${t}</span>`;
   const cards = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:0 12px 10px">
       ${card({bg:'linear-gradient(180deg,#FCF3F1,#fff)',bd:'var(--border)',fg:'#C0392B'},'ล็อกที่ใช้งานอยู่',act.length,'รายการ', pill('รายวัน '+nDay)+pill('Bulk '+nBulk))}
-      ${card({bg:'#fff',bd:'var(--border)',fg:'var(--ink)'},'ที่นั่งกันไว้วันนี้',todHeld,'ที่',
+      ${card({bg:'#fff',bd:'var(--border)',fg:'var(--ink)'},'ที่นั่งกันไว้พรุ่งนี้',todHeld,'ที่',
         `<span>${todLocks.length} ล็อก · ${todRoutes} เส้นทาง</span>
          <div style="display:flex;gap:2px;align-items:flex-end;height:20px;width:100%;margin-top:4px">${_spark.map(v=>`<i style="flex:1;min-height:2px;height:${Math.round(v/_sparkMax*100)}%;background:${v?'#E2B7B0':'#EFEDE6'};border-radius:2px 2px 0 0"></i>`).join('')}</div>`)}
       ${card({bg:'#fff',bd:'var(--border)',fg:'#0F6E56'},'ดึงไปขายแล้ว',usedQty,'ที่', `<span>อัตราการใช้ <b style="color:#0F6E56">${conv}%</b> ของที่เสนอไปแล้ว</span>`)}
@@ -39768,7 +39772,8 @@ function bkV2RenderLocks(){
 
   // ── §lkOverview · ตารางล็อกของวันนี้ ──
   const _dObj=new Date(_dayStr+'T00:00:00');
-  const _dLbl=_dObj.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'})+(_dayStr===_today?' · วันนี้':'');
+  const _dLbl=_dObj.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+  const _dTag=(_dayStr===_today)?'วันนี้':((_bkV2LockUI.dayOff===1)?'พรุ่งนี้':'');
   const dayLocks=bkV2LocksOnDate(_dayStr).sort((a,b)=>
     bkV2LockHolderName(a).localeCompare(bkV2LockHolderName(b)) || routeName(a.routeId).localeCompare(routeName(b.routeId)));
   const dQty=dayLocks.reduce((a,l)=>a+(l.qty||0),0);
@@ -39802,13 +39807,19 @@ function bkV2RenderLocks(){
     </tr>`;
   }).join('') : `<tr><td colspan="8" style="padding:22px;text-align:center;color:var(--ink-faint)">วันนี้ไม่มีล็อก</td></tr>`;
   const todayBox = `<div style="background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;margin:0 12px 10px">
-      <div style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid var(--border-2);background:#FAF9F5;flex-wrap:wrap">
-        <span style="font-size:12.5px;font-weight:700">ล็อกของวันนี้</span>
-        <span style="font-size:11.5px;color:var(--ink-soft);font-family:'DM Mono',monospace">${esc(_dLbl)}</span>
-        <button onclick="bkV2LockDayShift(-1)" style="${navBtn}">&lsaquo;</button>
-        <button onclick="bkV2LockDayShift(1)" style="${navBtn}">&rsaquo;</button>
-        <button onclick="bkV2LockDayShift(0)" style="border:1px solid var(--border);background:#fff;border-radius:7px;padding:3px 10px;font-family:inherit;font-size:11px;font-weight:600;color:var(--ink-soft);cursor:pointer">วันนี้</button>
-        <span style="margin-left:auto;font-size:11.5px;color:var(--ink-soft)">${dayLocks.length?`${dayLocks.length} ล็อก · กันไว้ ${dQty} ที่ · ใช้ไป ${dUsed} · เหลือ ${dHeld}`:''}</span>
+      <div style="display:flex;align-items:center;gap:11px;padding:11px 14px;border-bottom:1px solid var(--border-2);background:#FAF9F5;flex-wrap:wrap">
+        <div style="min-width:0">
+          <div style="font-size:10px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.06em">ล็อกของวัน</div>
+          <div style="display:flex;align-items:baseline;gap:8px;margin-top:2px">
+            <span style="font-size:19px;font-weight:700;letter-spacing:-.01em;color:var(--ink);font-family:'DM Mono',monospace">${esc(_dLbl)}</span>
+            ${_dTag?`<span style="font-size:11px;font-weight:700;color:#C0392B;background:#FBEAE6;border-radius:8px;padding:2px 9px">${_dTag}</span>`:''}
+          </div>
+        </div>
+        <button onclick="bkV2LockDayShift(-1)" style="${navBtn}" title="วันก่อนหน้า">&lsaquo;</button>
+        <button onclick="bkV2LockDayShift(1)" style="${navBtn}" title="วันถัดไป">&rsaquo;</button>
+        <button onclick="bkV2LockDaySet(0)" style="border:1px solid var(--border);background:${_bkV2LockUI.dayOff===0?'#F1EFE8':'#fff'};border-radius:7px;padding:4px 11px;font-family:inherit;font-size:11.5px;font-weight:600;color:var(--ink-soft);cursor:pointer">วันนี้</button>
+        <button onclick="bkV2LockDaySet(1)" style="border:1px solid var(--border);background:${_bkV2LockUI.dayOff===1?'#F1EFE8':'#fff'};border-radius:7px;padding:4px 11px;font-family:inherit;font-size:11.5px;font-weight:600;color:var(--ink-soft);cursor:pointer">พรุ่งนี้</button>
+        <span style="margin-left:auto;font-size:12px;color:var(--ink-soft)">${dayLocks.length?`${dayLocks.length} ล็อก · กันไว้ ${dQty} ที่ · ใช้ไป ${dUsed} · เหลือ <b style="color:var(--ink)">${dHeld}</b>`:''}</span>
       </div>
       <div style="max-height:212px;overflow:auto">
         <table style="width:100%;border-collapse:separate;border-spacing:0">
@@ -39949,18 +39960,22 @@ function bkV2RenderLocks(){
     const list = rows.filter(l=>keyOf(l)===k);
     if(U.grp!=='none'){
       // §lkOverview · หัวกลุ่มเอเจ้นใช้สีประจำเอเจ้น · กวาดตาหาเจ้าที่ต้องการได้เร็ว
+      // §lkTomorrow · ลงสีทั้งแถบ ไม่ใช่แค่ขีดซ้าย · แถบสีบาง ๆ ยังหาไม่เจออยู่ดี
       const col = U.grp==='route' ? routeColor(list[0].routeId) : bkV2LockHolderColor(list[0]);
+      const _rgba=(typeof _calRgba==='function')?_calRgba:function(c,a){return c;};
+      const _dk=(typeof _calDk==='function')?_calDk:function(c,k){return c;};
+      const hBg=_rgba(col,.15), hFg=_dk(col,.45), hBd=_rgba(col,.32);
       const meta = U.grp==='holder'
         ? `${list.length} ล็อก · ${new Set(list.map(l=>l.routeId)).size} เส้นทาง`
         : `${list.length} ล็อก · ${new Set(list.map(bkV2LockHolderName)).size} ผู้ถือ`;
       const dSeats = list.filter(l=>!bkV2LockSpansDays(l)).reduce((a,l)=>a+bkV2LockHeldRemaining(l),0);
       const bSeats = list.filter(l=>bkV2LockSpansDays(l)).reduce((a,l)=>a+(l.qty||0),0);
-      body += `<tr><td colspan="${nCol}" style="background:#F4F2ED;border-bottom:1px solid var(--border);padding:5px 10px;position:sticky;top:29px;z-index:2">
+      body += `<tr><td colspan="${nCol}" style="background:${hBg};border-top:1px solid ${hBd};border-bottom:1px solid ${hBd};padding:6px 10px;position:sticky;top:29px;z-index:2">
         <div style="display:flex;align-items:center;gap:9px">
-          <span style="width:3px;height:14px;border-radius:2px;background:${col}"></span>
-          <span style="font-size:12px;font-weight:700">${esc(k)}</span>
-          <span style="font-size:10.5px;color:var(--ink-soft)">${meta}</span>
-          <span style="margin-left:auto;font-size:10.5px;color:var(--ink-soft)">รายวันกันอยู่ ${dSeats} ที่ · Bulk ${bSeats} ที่/รอบ</span>
+          <span style="width:4px;height:16px;border-radius:2px;background:${col}"></span>
+          <span style="font-size:12.5px;font-weight:700;color:${hFg}">${esc(k)}</span>
+          <span style="font-size:10.5px;color:${hFg};opacity:.72">${meta}</span>
+          <span style="margin-left:auto;font-size:10.5px;color:${hFg};opacity:.72">รายวันกันอยู่ ${dSeats} ที่ · Bulk ${bSeats} ที่/รอบ</span>
         </div></td></tr>`;
     }
     list.forEach(l=>{ body += lockRow(l, showHolder); });
@@ -40013,7 +40028,9 @@ function bkV2LockDayStr(){
   const d=new Date(base+'T00:00:00'); d.setDate(d.getDate()+off);
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
-function bkV2LockDayShift(n){ _bkV2LockUI.dayOff = n===0 ? 0 : (_bkV2LockUI.dayOff||0)+n; bkV2Render(); }
+// n=null → เด้งกลับไปพรุ่งนี้ · ใส่ตัวเลขคือเลื่อนทีละวัน
+function bkV2LockDayShift(n){ _bkV2LockUI.dayOff = (n==null) ? 1 : (_bkV2LockUI.dayOff||0)+n; bkV2Render(); }
+function bkV2LockDaySet(off){ _bkV2LockUI.dayOff = off; bkV2Render(); }
 // ล็อกทุกเส้นทางที่มีผลกับวันนั้น (ไม่กรองด้วยเวลาปล่อยคืน · จะได้เห็นว่าอันไหนปล่อยไปแล้ว)
 function bkV2LocksOnDate(ds){
   return SB_SEAT_LOCKS.filter(l=>{
