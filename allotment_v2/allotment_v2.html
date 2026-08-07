@@ -7284,7 +7284,9 @@ function renderDA(){
     rows.forEach(({r,type,allot,booked})=>{
       const free=Math.max(0,allot-booked);
       const pct=allot>0?Math.round(booked/allot*100):0;
-      const full=pct>=95;
+      // §daFullSame · เกณฑ์เดียวกับข้อความที่ส่งเอเจ้น · เต็ม = ไม่เหลือที่จริง ๆ
+      //   เดิมใช้ 95% การ์ดเลยขึ้นเต็มทั้งที่ยังเหลือที่ขายได้ · ขัดกับข้อความ
+      const full=(free<=0)||pct>=100;
       const typeChip=`<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:${type==='early'?'#fff7d6':'var(--ocean-50)'};color:${type==='early'?'#7a5500':'var(--ocean)'};font-weight:500;flex-shrink:0">${typeLabel[type]}</span>`;
       // §ไฮไลต์ตัวเลขในการ์ด · badge พื้นสีตามระดับ (เขียว=ว่างเยอะ · เหลือง=เหลือน้อย · แดง=เต็ม)
       const _tier = full ? 'full' : freeClass(pct);
