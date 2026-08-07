@@ -7255,6 +7255,19 @@ function buildDAGroups(ds){
   return groups;
 }
 
+// §daSortTime · เวลาออกของเส้นทาง (นาทีจากเที่ยงคืน) · ไม่มีเวลาให้ไปอยู่ท้ายสุด
+function _daDepMin(g){
+  const t=String(((g&&g.r&&g.r.times)||[])[0]||'').trim();
+  const m=t.match(/^(\d{1,2}):(\d{2})/);
+  return m ? (+m[1]*60 + +m[2]) : 9999;
+}
+function _daSortRows(rows){
+  return (rows||[]).slice().sort((a,b)=>{
+    const d=_daDepMin(a)-_daDepMin(b); if(d) return d;
+    if(a.type!==b.type) return a.type==='early' ? -1 : 1;   // เวลาเท่ากัน · Early ขึ้นก่อน
+    return String(_daRouteName(a.r)||'').localeCompare(String(_daRouteName(b.r)||''));
+  });
+}
 function renderDA(){
   const ds=fmt(daDate);
   const groups=buildDAGroups(ds);
@@ -7265,7 +7278,7 @@ function renderDA(){
   let html='';
   ['tublamu','panwa'].forEach(pier=>{
     const pm={tublamu:{label:'Tub Lamu Pier',dot:'var(--ocean-mid)'},panwa:{label:'Visit Panwa',dot:'var(--green)'}}[pier];
-    const rows=Object.values(groups[pier]||{});
+    const rows=_daSortRows(Object.values(groups[pier]||{}));
     if(!rows.length) return;
     html+=`<div class="da-pier-lbl"><div style="width:6px;height:6px;border-radius:50%;background:${pm.dot}"></div>${pm.label}</div>`;
     rows.forEach(({r,type,allot,booked})=>{
@@ -7294,7 +7307,7 @@ function renderDA(){
   const availLines=[];
   ['tublamu','panwa'].forEach(pier=>{
     const pm={tublamu:'Tub Lamu Pier',panwa:'Visit Panwa Pier'}[pier];
-    const rows=Object.values(groups[pier]||{});
+    const rows=_daSortRows(Object.values(groups[pier]||{}));
     if(!rows.length) return;
     availLines.push('📍 '+pm);
     rows.forEach(({r,type,allot,booked})=>{
