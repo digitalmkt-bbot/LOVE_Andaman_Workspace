@@ -39493,7 +39493,7 @@ try { bkV2LockExpireSweep(); } catch(e){}
 // ── Seat Locks · management tab (Step 3b) ──
 let _bkV2LockForm = { scope:'day', routeId:'', date:'', dateFrom:'', dateTo:'', dow:[], monthFrom:'', monthTo:'', holderType:'agent', holderId:'', holderName:'', qty:'', reason:'', expiry:'', releaseDaysBefore:'1', releaseTime:'18:00' };
 // §lkBulkUI · สถานะของหน้ารายการ · ค้นหา / กรอง / จัดกลุ่ม
-let _bkV2LockUI = { q:'', route:'', holder:'', scope:'', st:'active', grp:'holder', open:{} };
+let _bkV2LockUI = { q:'', route:'', holder:'', scope:'', st:'active', grp:'holder', open:{}, dayOff:0 };
 let _bkV2AddModal = null;   // { lockId, add, note }
 let _bkV2ReleaseModal = null;   // { lockId, max, value }
 let _bkV2LockModalOpen = false; // inline create-lock modal (from Calendar)
@@ -39705,11 +39705,96 @@ function bkV2RenderLocks(){
     return s + (l.qty||0) * (bkV2LockRounds(l).past||0);
   },0);
   const conv = capOffered ? Math.round(usedQty/capOffered*100) : 0;
-  const kpi = `<div style="display:flex;align-items:center;background:#fff;border:1px solid var(--border);border-radius:12px;padding:6px 4px 6px 14px;margin-left:auto">
-      ${[[act.length,'ล็อกที่ใช้งานอยู่','#C0392B'],[nDay+' / '+nBulk,'รายวัน / Bulk',''],[usedQty,'ที่นั่งดึงไปขายแล้ว',''],[conv+'%','อัตราการใช้','']]
-        .map(([v,l,c],i)=>`<div style="display:flex;align-items:baseline;gap:5px;padding:0 13px;${i?'border-left:1px solid var(--border-2)':''}">
-          <b style="font-size:17px;font-weight:700;letter-spacing:-.02em;font-family:'DM Mono',monospace;line-height:1;${c?'color:'+c:''}">${v}</b>
-          <span style="font-size:10.5px;color:var(--ink-soft)">${l}</span></div>`).join('')}
+  // ── §lkOverview · การ์ดสรุป ──
+  const _today=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10);
+  const _now=Date.now();
+  const _dayStr=bkV2LockDayStr();
+  // 14 วันข้างหน้า · ที่นั่งที่กันอยู่ + รอบที่ใกล้ปล่อยคืนใน 48 ชม.
+  const _spark=[]; let soonRounds=0, soonSeats=0;
+  for(let i=0;i<14;i++){
+    const d=new Date(_today+'T00:00:00'); d.setDate(d.getDate()+i);
+    const ds=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    let held=0;
+    bkV2LocksOnDate(ds).forEach(l=>{
+      const cut=bkV2LockReleaseCutoff(l, ds);
+      const released = cut ? (_now >= cut.getTime()) : false;
+      const h = bkV2LockPoolHold(l, ds);
+      if(!released) held += h;
+      if(cut && !released && (cut.getTime()-_now) <= 48*3600e3){ soonRounds++; soonSeats += h; }
+    });
+    _spark.push(held);
+  }
+  const _sparkMax=Math.max(1,..._spark);
+  const todLocks=bkV2LocksOnDate(_today);
+  const todHeld=todLocks.reduce((a,l)=>a + (bkV2LockReleasedForDate(l,_today)?0:bkV2LockPoolHold(l,_today)), 0);
+  const todRoutes=new Set(todLocks.map(l=>l.routeId)).size;
+  const card=(cls,lab,val,unit,foot)=>`<div style="background:${cls.bg};border:1px solid ${cls.bd};border-radius:12px;padding:11px 14px;overflow:hidden">
+      <div style="font-size:10px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.06em">${lab}</div>
+      <div style="display:flex;align-items:baseline;gap:6px;margin-top:5px"><b style="font-size:26px;font-weight:700;letter-spacing:-.03em;line-height:1;font-family:'DM Mono',monospace;color:${cls.fg}">${val}</b><span style="font-size:11.5px;color:var(--ink-soft)">${unit}</span></div>
+      <div style="font-size:10.5px;color:var(--ink-soft);margin-top:7px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${foot}</div>
+    </div>`;
+  const pill=(t,bg,fg)=>`<span style="background:${bg||'#F3F1EC'};color:${fg||'#5c5c55'};border-radius:7px;padding:1px 8px;font-weight:600;font-size:10.5px">${t}</span>`;
+  const cards = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:0 12px 10px">
+      ${card({bg:'linear-gradient(180deg,#FCF3F1,#fff)',bd:'var(--border)',fg:'#C0392B'},'ล็อกที่ใช้งานอยู่',act.length,'รายการ', pill('รายวัน '+nDay)+pill('Bulk '+nBulk))}
+      ${card({bg:'#fff',bd:'var(--border)',fg:'var(--ink)'},'ที่นั่งกันไว้วันนี้',todHeld,'ที่',
+        `<span>${todLocks.length} ล็อก · ${todRoutes} เส้นทาง</span>
+         <div style="display:flex;gap:2px;align-items:flex-end;height:20px;width:100%;margin-top:4px">${_spark.map(v=>`<i style="flex:1;min-height:2px;height:${Math.round(v/_sparkMax*100)}%;background:${v?'#E2B7B0':'#EFEDE6'};border-radius:2px 2px 0 0"></i>`).join('')}</div>`)}
+      ${card({bg:'#fff',bd:'var(--border)',fg:'#0F6E56'},'ดึงไปขายแล้ว',usedQty,'ที่', `<span>อัตราการใช้ <b style="color:#0F6E56">${conv}%</b> ของที่เสนอไปแล้ว</span>`)}
+      ${card({bg:'linear-gradient(180deg,#FDF4E7,#fff)',bd:'#F0DDBE',fg:'#A05A1A'},'ใกล้ปล่อยคืน · 48 ชม.',soonRounds,'รอบ', pill(soonSeats+' ที่จะกลับเข้า pool','#FBEFD9','#A05A1A'))}
+    </div>`;
+
+  // ── §lkOverview · ตารางล็อกของวันนี้ ──
+  const _dObj=new Date(_dayStr+'T00:00:00');
+  const _dLbl=_dObj.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'})+(_dayStr===_today?' · วันนี้':'');
+  const dayLocks=bkV2LocksOnDate(_dayStr).sort((a,b)=>
+    bkV2LockHolderName(a).localeCompare(bkV2LockHolderName(b)) || routeName(a.routeId).localeCompare(routeName(b.routeId)));
+  const dQty=dayLocks.reduce((a,l)=>a+(l.qty||0),0);
+  const dUsed=dayLocks.reduce((a,l)=>a+bkV2LockUsedTotal(l,_dayStr),0);
+  const dHeld=dayLocks.reduce((a,l)=>a+(bkV2LockReleasedForDate(l,_dayStr)?0:bkV2LockPoolHold(l,_dayStr)),0);
+  const navBtn='width:22px;height:22px;border-radius:6px;border:1px solid var(--border);background:#fff;cursor:pointer;color:var(--ink-soft);font-size:12px;line-height:1;font-family:inherit';
+  const th2='position:sticky;top:0;background:#fff;border-bottom:1px solid var(--border-2);font-size:9.5px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.06em;text-align:left;padding:6px 12px;white-space:nowrap;z-index:2';
+  const td2='border-bottom:1px solid var(--border-2);padding:6px 12px;font-size:12px;vertical-align:middle';
+  const dayRows = dayLocks.length ? dayLocks.map(l=>{
+    const u=bkV2LockUsedTotal(l,_dayStr), rm=bkV2LockPoolHold(l,_dayStr);
+    const cut=bkV2LockReleaseCutoff(l,_dayStr);
+    let relHtml;
+    if(cut){
+      const diff=cut.getTime()-_now;
+      if(diff<=0) relHtml=`<span style="font-size:10.5px;font-weight:700;color:#64748B;background:#F1F5F9;border-radius:6px;padding:2px 8px">ปล่อยแล้ว</span>`;
+      else if(diff<=48*3600e3) relHtml=`<span style="font-size:10.5px;font-weight:700;color:#A05A1A;background:#FBEFD9;border-radius:6px;padding:2px 8px">อีก ${Math.max(1,Math.round(diff/3600e3))} ชม.</span>`;
+      else relHtml=`<span style="font-size:10.5px;color:var(--ink-soft)">${cut.toLocaleDateString('en-GB',{day:'2-digit',month:'short'})} ${String(cut.getHours()).padStart(2,'0')}:${String(cut.getMinutes()).padStart(2,'0')}</span>`;
+    } else relHtml=`<span style="font-size:10.5px;color:var(--ink-soft)">${l.expiry?('หมดอายุ '+esc(l.expiry)):'—'}</span>`;
+    const released = cut ? (_now>=cut.getTime()) : false;
+    return `<tr>
+      <td style="${td2};font-weight:700"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${bkV2LockHolderColor(l)};margin-right:7px;vertical-align:0"></span>${esc(bkV2LockHolderName(l))}</td>
+      <td style="${td2}"><span style="display:inline-block;width:3px;height:14px;border-radius:2px;background:${routeColor(l.routeId)};vertical-align:-2px;margin-right:7px"></span>${esc(routeName(l.routeId))}</td>
+      <td style="${td2}">${bkV2LockSpansDays(l)
+        ?'<span style="font-size:9px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#5B3FA5;background:#F3EEFB;padding:2px 7px;border-radius:5px">Bulk</span>'
+        :'<span style="font-size:9px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:#2A5EA8;background:#EAF1FB;padding:2px 7px;border-radius:5px">รายวัน</span>'}</td>
+      <td style="${td2};text-align:center;font-family:'DM Mono',monospace;font-weight:700;color:#C0392B">${l.qty||0}</td>
+      <td style="${td2};text-align:center;font-family:'DM Mono',monospace;font-weight:700">${u}</td>
+      <td style="${td2};text-align:center;font-family:'DM Mono',monospace;font-weight:700;color:${released?'var(--ink-faint)':(rm?'#0F6E56':'var(--ink-faint)')}">${released?'—':rm}</td>
+      <td style="${td2}">${relHtml}</td>
+      <td style="${td2};text-align:right;padding-right:14px"><button onclick="bkV2LockAddOpen('${l.id}')" style="font-family:inherit;font-size:11px;font-weight:600;color:#0F6E56;background:#E1F5EE;border:1px solid #B7E2D2;border-radius:7px;padding:4px 9px;cursor:pointer">+ ที่นั่ง</button></td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="8" style="padding:22px;text-align:center;color:var(--ink-faint)">วันนี้ไม่มีล็อก</td></tr>`;
+  const todayBox = `<div style="background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;margin:0 12px 10px">
+      <div style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid var(--border-2);background:#FAF9F5;flex-wrap:wrap">
+        <span style="font-size:12.5px;font-weight:700">ล็อกของวันนี้</span>
+        <span style="font-size:11.5px;color:var(--ink-soft);font-family:'DM Mono',monospace">${esc(_dLbl)}</span>
+        <button onclick="bkV2LockDayShift(-1)" style="${navBtn}">&lsaquo;</button>
+        <button onclick="bkV2LockDayShift(1)" style="${navBtn}">&rsaquo;</button>
+        <button onclick="bkV2LockDayShift(0)" style="border:1px solid var(--border);background:#fff;border-radius:7px;padding:3px 10px;font-family:inherit;font-size:11px;font-weight:600;color:var(--ink-soft);cursor:pointer">วันนี้</button>
+        <span style="margin-left:auto;font-size:11.5px;color:var(--ink-soft)">${dayLocks.length?`${dayLocks.length} ล็อก · กันไว้ ${dQty} ที่ · ใช้ไป ${dUsed} · เหลือ ${dHeld}`:''}</span>
+      </div>
+      <div style="max-height:212px;overflow:auto">
+        <table style="width:100%;border-collapse:separate;border-spacing:0">
+          <thead><tr>
+            <th style="${th2}">เอเจ้น / ผู้ถือ</th><th style="${th2}">เส้นทาง</th><th style="${th2}">แบบ</th>
+            <th style="${th2};text-align:center">กันไว้</th><th style="${th2};text-align:center">ใช้วันนี้</th>
+            <th style="${th2};text-align:center">เหลือ</th><th style="${th2}">ปล่อยคืน</th><th style="${th2}"></th>
+          </tr></thead><tbody>${dayRows}</tbody></table>
+      </div>
     </div>`;
 
   // ── แถบกรอง ──
@@ -39799,7 +39884,7 @@ function bkV2RenderLocks(){
     const td = 'border-bottom:1px solid var(--border-2);padding:8px 10px;vertical-align:middle';
     let h = `<tr>
       <td style="${td};width:26px">${hasKids?`<button onclick="bkV2LockUIToggle('${l.id}')" style="border:none;background:transparent;cursor:pointer;color:var(--ink-faint);font-size:11px;width:18px">${open?'&#9662;':'&#9656;'}</button>`:''}</td>
-      ${showHolder?`<td style="${td}"><div style="font-size:12.5px;font-weight:700;color:var(--ink)">${esc(bkV2LockHolderName(l))}</div><div style="font-size:10px;margin-top:2px">${stChip(l.status)} ${subChip}</div></td>`:''}
+      ${showHolder?`<td style="${td}"><div style="font-size:12.5px;font-weight:700;color:var(--ink)"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${bkV2LockHolderColor(l)};margin-right:7px;vertical-align:0"></span>${esc(bkV2LockHolderName(l))}</div><div style="font-size:10px;margin-top:2px">${stChip(l.status)} ${subChip}</div></td>`:''}
       <td style="${td}"><div style="display:flex;align-items:center;gap:8px;min-width:0">
         <span style="width:3px;height:26px;border-radius:2px;flex:none;background:${routeColor(l.routeId)}"></span>
         <div style="min-width:0"><div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(routeName(l.routeId))}</div>
@@ -39840,7 +39925,8 @@ function bkV2RenderLocks(){
   groups.forEach(k=>{
     const list = rows.filter(l=>keyOf(l)===k);
     if(U.grp!=='none'){
-      const col = U.grp==='route' ? routeColor(list[0].routeId) : '#7d7d75';
+      // §lkOverview · หัวกลุ่มเอเจ้นใช้สีประจำเอเจ้น · กวาดตาหาเจ้าที่ต้องการได้เร็ว
+      const col = U.grp==='route' ? routeColor(list[0].routeId) : bkV2LockHolderColor(list[0]);
       const meta = U.grp==='holder'
         ? `${list.length} ล็อก · ${new Set(list.map(l=>l.routeId)).size} เส้นทาง`
         : `${list.length} ล็อก · ${new Set(list.map(bkV2LockHolderName)).size} ผู้ถือ`;
@@ -39880,14 +39966,44 @@ function bkV2RenderLocks(){
     <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 12px 10px">
       <div><div style="font-size:16px;font-weight:700;letter-spacing:-.01em">Seat Locks</div>
         <div style="font-size:11.5px;color:var(--ink-soft)">ที่นั่งที่กันไว้ก่อนขายเข้า pool รวม</div></div>
-      ${kpi}
-      <button class="bkv2-newbtn2" onclick="bkV2OpenLockModal()" style="font-size:12.5px">+ ล็อกที่นั่ง</button>
+      <button class="bkv2-newbtn2" onclick="bkV2OpenLockModal()" style="font-size:12.5px;margin-left:auto">+ ล็อกที่นั่ง</button>
     </div>
+    ${cards}
+    ${todayBox}
     ${bar}
     ${table}
     ${bkV2LockAddModal()}
   </div>`;
 }
+// §lkOverview · สีประจำผู้ถือล็อก · เอเจ้นใช้สีเดียวกับหน้าอื่นทั้งระบบ
+function bkV2LockHolderColor(l){
+  if(!l) return '#9C9C95';
+  if(l.holderType==='agent' && l.holderId && typeof bkV2AgentColor==='function') return bkV2AgentColor(l.holderId);
+  if(l.holderType==='office') return '#64748B';
+  if(l.holderType==='global') return '#8A6A0B';
+  return '#9C9C95';
+}
+// วันที่ที่กำลังดูในตาราง "ล็อกของวันนี้" · offset จากวันนี้
+function bkV2LockDayStr(){
+  const base=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10);
+  const off=_bkV2LockUI.dayOff||0;
+  if(!off) return base;
+  const d=new Date(base+'T00:00:00'); d.setDate(d.getDate()+off);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function bkV2LockDayShift(n){ _bkV2LockUI.dayOff = n===0 ? 0 : (_bkV2LockUI.dayOff||0)+n; bkV2Render(); }
+// ล็อกทุกเส้นทางที่มีผลกับวันนั้น (ไม่กรองด้วยเวลาปล่อยคืน · จะได้เห็นว่าอันไหนปล่อยไปแล้ว)
+function bkV2LocksOnDate(ds){
+  return SB_SEAT_LOCKS.filter(l=>{
+    if(l.parentId || l.status!=='active') return false;
+    if(bkV2LockSpansDays(l)){
+      const rg=bkV2LockRange(l);
+      return !!(rg.from && ds>=rg.from && ds<=rg.to && bkV2LockDowOk(l,ds));
+    }
+    return l.date===ds;
+  });
+}
+
 // §lkBulkUI · ตัวช่วยของหน้ารายการ
 function bkV2LockUISet(field, val){ _bkV2LockUI[field] = val; bkV2Render(); }
 function bkV2LockUIToggle(id){ _bkV2LockUI.open[id] = !_bkV2LockUI.open[id]; bkV2Render(); }
