@@ -5305,7 +5305,23 @@ const BOAT_COLORS = {
   b16: {bg:'#F5EBD9', text:'#7B5C1E', soft:'#FAF3E5'},  // (b16)        — gold
 };
 function _hexToRgb(h){ if(!h) return null; h=String(h).trim().replace('#',''); if(h.length===3) h=h.split('').map(x=>x+x).join(''); if(h.length!==6) return null; const n=parseInt(h,16); if(isNaN(n)) return null; return {r:(n>>16)&255,g:(n>>8)&255,b:n&255}; }
-function _boatColorFromHex(hex){ const c=_hexToRgb(hex); if(!c) return {bg:'#F4F2EE',text:'#666',soft:'#F8F6F2'}; const mix=a=>`rgb(${Math.round(c.r*a+255*(1-a))},${Math.round(c.g*a+255*(1-a))},${Math.round(c.b*a+255*(1-a))})`; return {bg:mix(0.15), text:hex, soft:mix(0.06)}; }
+// §boatInk · ความสว่างสัมพัทธ์ + อัตราส่วนความต่าง (สูตรมาตรฐาน WCAG)
+function _relLum(c){ const f=v=>{ v/=255; return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055, 2.4); }; return 0.2126*f(c.r)+0.7152*f(c.g)+0.0722*f(c.b); }
+function _cRatio(a,b){ const la=_relLum(a), lb=_relLum(b); return (Math.max(la,lb)+0.05)/(Math.min(la,lb)+0.05); }
+function _boatColorFromHex(hex){
+  const c=_hexToRgb(hex);
+  if(!c) return {bg:'#F4F2EE', text:'#666', soft:'#F8F6F2', raw:'#666'};
+  const mixO=a=>({ r:Math.round(c.r*a+255*(1-a)), g:Math.round(c.g*a+255*(1-a)), b:Math.round(c.b*a+255*(1-a)) });
+  const css=o=>`rgb(${o.r},${o.g},${o.b})`;
+  const bgO=mixO(0.15), softO=mixO(0.06);
+  /* §boatInk · ไล่เข้มลงจนอ่านออกบนพื้นของตัวเอง · สีเข้มอยู่แล้วจะไม่เข้าลูปเลย
+     ต้องอ่านออกทั้งบนพื้นอ่อน (ป้ายปกติ) และเป็นพื้นตัวเองคู่กับตัวหนังสือขาว (ตอนถูกเลือก) */
+  let ink={r:c.r, g:c.g, b:c.b}, n=0;
+  while(n<40 && (_cRatio(ink,bgO)<4.5 || _cRatio(ink,{r:255,g:255,b:255})<4.5)){
+    ink={ r:Math.round(ink.r*0.92), g:Math.round(ink.g*0.92), b:Math.round(ink.b*0.92) }; n++;
+  }
+  return {bg:css(bgO), text:css(ink), soft:css(softO), raw:hex};
+}
 // §per-boat identity colour · editable override (b.color hex) → falls back to the baked BOAT_COLORS, then generic grey · single source used by Boat Asset, Boat Status, By-trip, n8n canvas, job rows
 function getBoatColor(boatId){
   const b=(typeof BOATS!=='undefined'&&Array.isArray(BOATS))?BOATS.find(x=>x&&x.id===boatId):null;
@@ -32803,7 +32819,10 @@ function flOpenReceiveOne(id){
   const _locE = document.getElementById('receive-location');
   if(_locE) _locE.value = item.location || 'คลัง Tub Lamu';
   const _warnE = document.getElementById('receive-location-warn');
-  if(_warnE){ _warnE.style.display = 'none'; _warnE.textContent = ''; }
+  /* §memoRecvWh · โมดัลตัวเดียวกันถูกใช้สองโหมด · โหมด memo เปลี่ยนสีกล่องนี้เป็นโทนคำอธิบายไว้
+     ถ้าไม่คืนค่า คำเตือนจริงของโหมดรับรายตัวจะออกมาเป็นสีเทากลืนไปเลย */
+  if(_warnE){ _warnE.style.display='none'; _warnE.textContent='';
+    _warnE.style.color='#854F0B'; _warnE.style.background='#FFF8E1'; _warnE.style.borderColor='#F0D58C'; }
   // Warn when user changes location
   _locE.onchange = function(){
     if(item.location && item.location !== this.value){
@@ -33583,9 +33602,33 @@ function flSaveApprove(){
   flShowToast(`Memo ${m.no} อนุมัติแล้ว โดย ${by}`);
 }
 
+// §memoRecvWh · เดาคลังปลายทางจากท่าประจำของเรือในใบ memo
+function flMemoWarehouse(mo){
+  const MAP={ tublamu:'คลัง Tub Lamu', panwa:'คลัง Visit Panwa', ranong:'คลัง Ranong' };
+  try{
+    const b=(mo&&mo.boatId&&typeof BOATS!=='undefined')?(BOATS||[]).find(x=>x.id===mo.boatId):null;
+    const p=b?((typeof getBoatCurrentPier==='function'?getBoatCurrentPier(b):b.pier)||b.pier||b.homePier||''):'';
+    if(MAP[p]) return { wh:MAP[p], why:'ท่าประจำของ '+(b.name||'เรือลำนี้') };
+  }catch(_){}
+  return { wh:'คลัง Tub Lamu', why:(mo&&mo.boatId)?'ใบนี้ไม่ได้ระบุท่าของเรือ':'ใบนี้ไม่ได้ผูกกับเรือ' };
+}
 function flOpenReceiveMemo(moId){
   const mo=FL_MEMOS.find(x=>x.id===moId);if(!mo)return;
   _receiveMemoId=moId;
+  /* §memoRecvWh · ช่องคลังค้างค่าจากครั้งก่อนได้ · ต้องตั้งใหม่ทุกครั้งที่เปิด */
+  const _wh=flMemoWarehouse(mo);
+  const _locE=document.getElementById('receive-location');
+  if(_locE){
+    _locE.onchange=null;                     // ล้าง handler ที่ flOpenReceiveOne ผูกทิ้งไว้
+    if([..._locE.options].some(o=>o.value===_wh.wh)) _locE.value=_wh.wh;
+    else _locE.selectedIndex=0;
+  }
+  const _warnE=document.getElementById('receive-location-warn');
+  if(_warnE){
+    _warnE.style.display='block';
+    _warnE.style.color='#5F5E5A'; _warnE.style.background='#FBFAF7'; _warnE.style.borderColor='#E9E7E0';
+    _warnE.textContent='ตั้งให้จาก '+_wh.why+' · ของทั้งใบจะเข้าคลังเดียวกันหมด — ถ้าไม่ใช่ เปลี่ยนที่ช่องด้านบนก่อนกดบันทึก';
+  }
   // Only parts items can be received into stock (labor items are not received)
   const allItems=(mo.items||[]).filter(it=>(it.category||'parts')==='parts');
   if(allItems.length===0){
