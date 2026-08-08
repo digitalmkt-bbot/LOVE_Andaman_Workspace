@@ -32635,6 +32635,21 @@ function flRenderInventory(){
     const MEMO_TYPE_STYLE={parts:{bg:'#E6F1FB',color:'#185FA5',label:'Parts',dot:'#185FA5'},labor:{bg:'#FAEEDA',color:'#854F0B',label:'Labor',dot:'#BA7517'},mixed:{bg:'#EEEDF8',color:'#534AB7',label:'Mixed',dot:'#7F77DD'}};
     const _monthAgg={};
     memoList.forEach(function(mm){var _k=_memoLastDate(mm).slice(0,7);if(!_monthAgg[_k])_monthAgg[_k]={c:0,t:0};_monthAgg[_k].c++;_monthAgg[_k].t+=(mm.amount||0);});
+    // §memoTable · โครงคอลัมน์ · โหมดกระชับตัด "ผู้ขอ" ออก (ที่เหลือตัดในระดับเซลล์)
+    const _MCOL=compact
+      ? [['',3],['MO',78],['เรื่อง',0],['เรือ · งานซ่อม',140],['วันที่',76],['รายการ',46,'c'],['ยอด',108,'r'],['สถานะ',104],['ถัดไป',150],['',102,'r']]
+      : [['',3],['MO',78],['เรื่อง',0],['เรือ · งานซ่อม',150],['ผู้ขอ',74],['วันที่',76],['รายการ',52,'c'],['ยอด',108,'r'],['สถานะ',132],['ถัดไป',150],['',102,'r']];
+    const _NCOL=_MCOL.length;
+    /* §memoTable · เงินบาทไม่มีหลักที่สาม · toLocaleString() ดิบพ่นเศษจาก qty×ราคาออกมาหมด
+       ตรึง 2 ตำแหน่งให้จุดทศนิยมตรงกันทุกแถวด้วย · ตัวเลขที่เก็บจริงไม่ถูกแตะ */
+    const _mAmt=function(n){ return '฿'+(+n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+    const _mTd='padding:9px 10px;border-bottom:0.5px solid rgba(0,0,0,.055);vertical-align:middle';
+    const _mIco=function(on,title,svg,bg,fg){ return '<span onclick="event.stopPropagation();'+on+'" title="'+title+'" style="width:26px;height:26px;border-radius:8px;border:1px solid #EAE7E0;background:'+(bg||'#fff')+';color:'+(fg||'#8a857e')+';cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex:none">'+svg+'</span>'; };
+    const _MICO={
+      eye:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+      copy:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+      print:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>'
+    };
     let _curMonth=null;
     const memoCards=memoList.length?memoList.map(function(m){
       let _divider='';
@@ -32643,7 +32658,8 @@ function flRenderInventory(){
         _curMonth=_mk;
         const _agg=_monthAgg[_mk]||{c:0,t:0};
         const _ml=_mk?(MONTHS_EN[parseInt(_mk.slice(5,7),10)-1]+' '+_mk.slice(0,4)):'ไม่ระบุวันที่';
-        _divider='<div style="display:flex;align-items:baseline;gap:10px;padding:7px 12px;background:'+dim.bg+';border-radius:8px"><span style="font-size:12px;font-weight:600">'+_ml+'</span><span style="font-size:10px;color:'+dim.ink3+'">'+_agg.c+' ใบ</span><span style="flex:1"></span><span style="font-size:11px;font-weight:600;font-family:\'DM Mono\',monospace;color:'+dim.ink2+'">฿'+_agg.t.toLocaleString()+'</span></div>';
+        // §memoTable · หัวเดือนกลายเป็นแถวคั่นในตาราง · ยอดรวมชิดขวาให้ตรงคอลัมน์ยอด
+        _divider='<tr><td colspan="'+_NCOL+'" style="background:'+dim.bg+';padding:7px 12px;border-bottom:1px solid #E5E1DA"><span style="font-size:11.5px;font-weight:700">'+_ml+'</span><span style="font-size:10px;color:'+dim.ink3+';margin-left:8px">'+_agg.c+' ใบ</span><span style="float:right;font-size:11px;font-weight:700;font-family:\'DM Mono\',monospace;color:'+dim.ink2+'">'+_mAmt(_agg.t)+'</span></td></tr>';
       }
       const ss=ST_STYLE[m.status]||ST_STYLE.created;
       const b=getBoat(m.boatId);
@@ -32659,7 +32675,7 @@ function flRenderInventory(){
         const catBadge=' <span style="background:'+lblBg+';color:'+lblColor+';padding:1px 6px;border-radius:5px;font-size:8px;font-weight:600;margin-left:4px;display:inline-flex;align-items:center;gap:3px"><span style="width:5px;height:5px;border-radius:50%;background:'+dotColor+'"></span>'+(cat==='labor'?'Labor':'Parts')+'</span>';
         return '<tr style="border-top:0.5px solid rgba(0,0,0,.04)"><td style="padding:7px 14px">'+(it.name||'')+catBadge+(it.fromInventory?' <span style="background:#E1F5EE;color:#0F6E56;padding:1px 5px;border-radius:5px;font-size:8px;font-weight:600;margin-left:4px">INV</span>':'')+'</td><td style="padding:7px 12px;text-align:center;font-family:\'DM Mono\',monospace">'+(it.qty||0)+(it.unit?' '+it.unit:'')+'</td><td style="padding:7px 12px;text-align:right;font-family:\'DM Mono\',monospace">\u0e3f'+(it.price||0).toLocaleString()+'</td><td style="padding:7px 14px;text-align:right;font-family:\'DM Mono\',monospace;font-weight:600">\u0e3f'+((it.qty||0)*(it.price||0)).toLocaleString()+'</td></tr>';
       };
-      const itemsTable=items.length?'<div data-memo-items style="display:none;border-top:1px solid rgba(0,0,0,.06);background:#FBFAF7"><table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr style="background:rgba(0,0,0,.02)"><th style="padding:6px 14px;text-align:left;font-weight:600;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:9px">Item</th><th style="padding:6px 12px;text-align:center;font-weight:600;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:9px;width:50px">Qty</th><th style="padding:6px 12px;text-align:right;font-weight:600;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:9px;width:90px">Price</th><th style="padding:6px 14px;text-align:right;font-weight:600;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:9px;width:90px">Total</th></tr></thead><tbody>'+items.map(buildItemRow).join('')+'<tr style="border-top:1px solid rgba(0,0,0,.08)"><td colspan="3" style="padding:8px 14px;text-align:right;font-weight:600;font-size:11px">\u0e23\u0e27\u0e21\u0e17\u0e31\u0e49\u0e07\u0e2a\u0e34\u0e49\u0e19</td><td style="padding:8px 14px;text-align:right;font-weight:700;font-family:\'DM Mono\',monospace;color:'+SVG_PINK.text+';font-size:12px">\u0e3f'+(m.amount||0).toLocaleString()+'</td></tr></tbody></table></div>':'';
+      const itemsTable=items.length?'<div style="border-top:1px solid rgba(0,0,0,.06);background:#FBFAF7"><table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr style="background:rgba(0,0,0,.02)"><th style="padding:6px 14px;text-align:left;font-weight:600;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:9px">Item</th><th style="padding:6px 12px;text-align:center;font-weight:600;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:9px;width:50px">Qty</th><th style="padding:6px 12px;text-align:right;font-weight:600;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:9px;width:90px">Price</th><th style="padding:6px 14px;text-align:right;font-weight:600;color:'+dim.ink3+';text-transform:uppercase;letter-spacing:.05em;font-size:9px;width:90px">Total</th></tr></thead><tbody>'+items.map(buildItemRow).join('')+'<tr style="border-top:1px solid rgba(0,0,0,.08)"><td colspan="3" style="padding:8px 14px;text-align:right;font-weight:600;font-size:11px">\u0e23\u0e27\u0e21\u0e17\u0e31\u0e49\u0e07\u0e2a\u0e34\u0e49\u0e19</td><td style="padding:8px 14px;text-align:right;font-weight:700;font-family:\'DM Mono\',monospace;color:'+SVG_PINK.text+';font-size:12px">\u0e3f'+(m.amount||0).toLocaleString()+'</td></tr></tbody></table></div>':'';
 
       // ─── Approval workflow stepper ───
       const isLaborOnly=m.memoType==='labor'||(m.memoType==='mixed'&&!(m.items||[]).some(it=>(it.category||'parts')==='parts'));
@@ -32726,13 +32742,51 @@ function flRenderInventory(){
       const _barColor=isPaid?'#1D9E75':SVG_PINK.accent;
       const stepperRow=compact?'':'<div style="padding:9px 14px;border-top:1px solid rgba(0,0,0,.04);background:#FBFAF7;display:flex;align-items:center;gap:10px"><span style="font-size:10px;color:'+dim.ink2+';white-space:nowrap;font-weight:500">ขั้น '+(currentIdx+1)+'/'+_totalSteps+' · '+_curStepLabel+'</span><span style="flex:1;height:4px;background:#E5E1DA;border-radius:3px;overflow:hidden"><span style="display:block;width:'+_pctDone+'%;height:100%;background:'+_barColor+'"></span></span>'+actionBtn+'</div>';
 
-      return _divider+'<div data-memo-card style="background:white;border-radius:14px;border:1px solid '+dim.line+';overflow:hidden">'+
-        '<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;transition:background .15s" onmouseover="this.style.background=\'#FBFAF7\'" onmouseout="this.style.background=\'white\'" onclick="var card=this.closest(\'[data-memo-card]\');var d=card.querySelector(\'[data-memo-items]\');if(!d)return;var open=d.style.display!==\'none\';d.style.display=open?\'none\':\'block\';var chev=this.querySelector(\'[data-chev]\');if(chev)chev.style.transform=open?\'rotate(0deg)\':\'rotate(180deg)\';"><div style="width:3px;background:'+ss.stripe+';border-radius:2px;align-self:stretch;flex-shrink:0"></div><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:11px;font-family:\'DM Mono\',monospace;color:'+dim.ink3+';font-weight:600">'+(m.no||'\u2014')+'</span>'+typeBadge+'<span style="font-size:12px;font-weight:600">'+(m.title||'\u2014')+'</span></div><div style="font-size:10px;color:'+dim.ink3+';margin-top:2px">'+((m.scope==="general")?'🏢 '+(m.generalCategory||"General")+' \u00b7 ':(b?'🚤 '+b.name+' \u00b7 ':''))+(m.proposer?'By '+m.proposer+' \u00b7 ':'')+fmtD(m.createdDate)+(mj?' \u00b7 \u2192 '+mj.no:'')+'</div>'+(items.length?'<div style="font-size:10px;color:'+dim.ink2+';margin-top:4px;display:flex;align-items:center;gap:6px"><span style="background:'+dim.bg+';color:'+dim.ink2+';padding:1px 7px;border-radius:8px;font-size:9px;font-weight:600;font-family:\'DM Mono\',monospace">'+items.length+' รายการ</span><span style="color:'+dim.ink3+';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px">'+items.slice(0,3).map(x=>x.name).join(' · ')+(items.length>3?' +'+(items.length-3)+' more':'')+'</span></div>':'')+'</div><span style="font-size:14px;font-weight:700;font-family:\'DM Mono\',monospace;color:'+SVG_PINK.text+';flex-shrink:0">\u0e3f'+(m.amount||0).toLocaleString()+'</span><span style="background:'+ss.bg+';color:'+ss.color+';padding:2px 9px;border-radius:11px;font-size:10px;font-weight:600;flex-shrink:0">'+ss.label+'</span>'+(compact?actionBtn:'')+'<button onclick="event.stopPropagation();flViewMemo(\''+m.id+'\')" title="เปิดรายละเอียด · แก้รายการ / ยกเลิก" style="background:#E1F5EE;border:none;border-radius:10px;padding:5px 12px;font-size:10px;color:#0F6E56;cursor:pointer;flex-shrink:0;font-weight:700">รายละเอียด</button>'+'<button onclick="event.stopPropagation();flCopyMemoItems(\''+m.id+'\')" title="คัดลอกรายการไปวางในระบบบัญชี" style="background:'+dim.bg+';border:none;border-radius:10px;padding:5px 10px;font-size:10px;color:'+dim.ink2+';cursor:pointer;flex-shrink:0;font-weight:500">คัดลอก</button>'+'<button onclick="event.stopPropagation();flPrintMemo(\''+m.id+'\')" style="background:'+dim.bg+';border:none;border-radius:10px;padding:5px 12px;font-size:10px;color:'+dim.ink2+';cursor:pointer;flex-shrink:0;font-weight:500">Print</button>'+(items.length?'<div data-chev style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:'+dim.bg+';color:'+dim.ink2+';flex-shrink:0;transition:transform .2s ease"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>':'')+'</div>'+
-        stepperRow+
-        approvalInfo+
-        itemsTable+
-      '</div>';
-    }).join(''):'<div style="background:white;border-radius:14px;border:1px solid '+dim.line+';padding:30px;text-align:center;color:'+dim.ink3+';font-size:12px">No memos match filter</div>';
+      // §memoTable · หนึ่งใบ = หนึ่งแถว · รายการอะไหล่ซ่อนเป็น <tr> ใต้แถวนั้น
+      const _bcol=(m.boatId && typeof getBoatColor==='function')?getBoatColor(m.boatId):null;
+      let _whoCell;
+      if(m.scope==='general'){
+        _whoCell='<span style="display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;padding:1px 8px;border-radius:9px;background:'+dim.bg+';color:'+dim.ink2+';white-space:nowrap">&#127970; '+(m.generalCategory||'General')+'</span>';
+      } else if(b){
+        _whoCell='<span style="display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;padding:1px 8px;border-radius:9px;background:'+(_bcol?_bcol.bg:dim.bg)+';color:'+(_bcol?_bcol.text:dim.ink2)+';white-space:nowrap">'+b.name+'</span>';
+      } else {
+        _whoCell='<span style="color:#c9c5bd;font-size:10.5px">&mdash;</span>';
+      }
+      if(mj) _whoCell+='<span style="font-size:9.5px;color:'+dim.ink3+';font-family:\'DM Mono\',monospace;margin-left:5px">&rarr;'+mj.no+'</span>';
+
+      // สถานะ + ใครอนุมัติ + ความคืบหน้า อยู่ในเซลล์เดียว · เดิมกินไปคนละแถว
+      let _stCell='<span style="background:'+ss.bg+';color:'+ss.color+';padding:2px 9px;border-radius:10px;font-size:9.5px;font-weight:700;letter-spacing:.04em;white-space:nowrap;display:inline-flex">'+ss.label+'</span>';
+      if(m.approvedBy) _stCell+='<div title="'+String(m.approveNote||m.approvedNote||'').replace(/"/g,'&quot;')+'" style="font-size:9px;color:#0F6E56;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">&#10003; '+m.approvedBy+(m.approvedDate?(' · '+String(m.approvedDate).slice(5)):'')+'</div>';
+      else if(currentIdx>=2) _stCell+='<div style="font-size:9px;color:#c9c5bd;margin-top:3px;white-space:nowrap">&mdash; ไม่มีชื่อผู้อนุมัติ</div>';
+      if(!compact) _stCell+='<div style="display:flex;align-items:center;gap:5px;margin-top:4px"><span style="width:52px;height:3px;background:#E9E5DE;border-radius:2px;overflow:hidden;display:inline-block"><span style="display:block;height:100%;width:'+_pctDone+'%;background:'+_barColor+'"></span></span><i style="font-style:normal;font-size:8.5px;color:'+dim.ink3+';font-family:\'DM Mono\',monospace">'+(currentIdx+1)+'/'+_totalSteps+'</i></div>';
+
+      const _tools='<div style="display:flex;gap:4px;justify-content:flex-end">'
+        + _mIco("flViewMemo('"+m.id+"')",'รายละเอียด · แก้รายการ / ยกเลิก',_MICO.eye,'#E1F5EE','#0F6E56')
+        + _mIco("flCopyMemoItems('"+m.id+"')",'คัดลอกรายการไปวางในระบบบัญชี',_MICO.copy)
+        + _mIco("flPrintMemo('"+m.id+"')",'Print',_MICO.print)
+        + (items.length?'<span data-chev style="width:26px;height:26px;border-radius:8px;background:'+dim.bg+';color:'+dim.ink2+';display:inline-flex;align-items:center;justify-content:center;flex:none;transition:transform .2s ease"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>':'<span style="width:26px;display:inline-block"></span>')
+        + '</div>';
+
+      const _openJs="var r=this.nextElementSibling;if(!r||!r.hasAttribute('data-memo-items'))return;var o=r.style.display!=='none';r.style.display=o?'none':'table-row';var c=this.querySelector('[data-chev]');if(c)c.style.transform=o?'rotate(0deg)':'rotate(180deg)';";
+
+      let _row='<tr onclick="'+_openJs+'" onmouseover="this.style.background=\'#FCFBF8\'" onmouseout="this.style.background=\'\'" style="cursor:'+(items.length?'pointer':'default')+'">'
+        +'<td style="width:3px;padding:0;background:'+ss.stripe+';border-bottom:0.5px solid rgba(0,0,0,.055)"></td>'
+        +'<td style="'+_mTd+'"><span style="font-size:11px;font-family:\'DM Mono\',monospace;color:'+dim.ink3+';font-weight:700">'+(m.no||'\u2014')+'</span></td>'
+        +'<td style="'+_mTd+'"><div style="font-size:12px;font-weight:600;line-height:1.35">'+(m.title||'\u2014')+' '+typeBadge+'</div>'
+          +((!compact && items.length)?('<div style="font-size:9.5px;color:'+dim.ink3+';margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:330px">'+items.slice(0,3).map(x=>x.name).join(' · ')+(items.length>3?(' +'+(items.length-3)+' more'):'')+'</div>'):'')
+          +'</td>'
+        +'<td style="'+_mTd+'">'+_whoCell+'</td>'
+        +(compact?'':'<td style="'+_mTd+';font-size:11px">'+(m.proposer||'<span style="color:#c9c5bd">\u2014</span>')+'</td>')
+        +'<td style="'+_mTd+';font-size:10.5px;color:'+dim.ink3+';font-family:\'DM Mono\',monospace;white-space:nowrap">'+fmtD(m.createdDate)+'</td>'
+        +'<td style="'+_mTd+';text-align:center;font-size:11px;color:'+dim.ink3+';font-family:\'DM Mono\',monospace">'+(items.length||'\u2014')+'</td>'
+        +'<td style="'+_mTd+';text-align:right;white-space:nowrap"><span style="font-size:13px;font-weight:700;font-family:\'DM Mono\',monospace;font-variant-numeric:tabular-nums;color:'+SVG_PINK.text+'">'+_mAmt(m.amount)+'</span></td>'
+        +'<td style="'+_mTd+'">'+_stCell+'</td>'
+        +'<td style="'+_mTd+'">'+actionBtn+'</td>'
+        +'<td style="'+_mTd+';text-align:right">'+_tools+'</td>'
+        +'</tr>';
+      if(itemsTable) _row+='<tr data-memo-items style="display:none"><td colspan="'+_NCOL+'" style="padding:0;background:#FBFAF7;border-bottom:1px solid rgba(0,0,0,.06)">'+itemsTable+'</td></tr>';
+      return _divider+_row;
+    }).join(''):'<tr><td colspan="11" style="padding:30px;text-align:center;color:'+dim.ink3+';font-size:12px">No memos match filter</td></tr>';
 
     var useBoard=(_memoView==='board' && _memoArchiveTab==='active');
     if(useBoard){
@@ -32762,7 +32816,14 @@ function flRenderInventory(){
       }).join('')+'</div>';
       return tabBar+searchRow+boardHtml;
     }
-    return tabBar+searchRow+filterBar+'<div style="display:flex;flex-direction:column;gap:8px">'+memoCards+'</div>';
+    // §memoTable · หัวตารางค้างไว้ · เลื่อนยาวแค่ไหนก็ยังรู้ว่าคอลัมน์ไหนคืออะไร
+    const _mHead='<thead><tr>'+_MCOL.map(function(c){
+      var al=(c[2]==='r')?'right':(c[2]==='c')?'center':'left';
+      return '<th style="'+(c[1]?('width:'+c[1]+'px;'):'')+'position:sticky;top:0;z-index:2;background:#FBFAF7;padding:'+(c[1]===3?'0':'9px 10px')+';text-align:'+al+';font-size:9px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:'+dim.ink3+';white-space:nowrap;border-bottom:1px solid #E5E1DA">'+(c[0]||'')+'</th>';
+    }).join('')+'</tr></thead>';
+    const _mTable='<div style="background:white;border:1px solid '+dim.line+';border-radius:14px;overflow:hidden">'
+      +'<table style="width:100%;border-collapse:collapse">'+_mHead+'<tbody>'+memoCards+'</tbody></table></div>';
+    return tabBar+searchRow+filterBar+_mTable;
   }
 }
 
