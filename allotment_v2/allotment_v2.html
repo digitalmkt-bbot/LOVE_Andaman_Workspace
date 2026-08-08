@@ -44302,7 +44302,11 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
       let _ckTag='';
       if(isRet){
         try{
-          const _sp=(typeof pckSelfPierNote==='function')?pckSelfPierNote(b,t.date||date):null;
+          const _dte=t.date||date;
+          const _sp=(typeof pckSelfPierNote==='function')?pckSelfPierNote(b,_dte):null;
+          // §vjRetNS2 · อีกทางหนึ่ง · หน้าท่ากดยืนยันเองว่ามาแล้ว (เหตุผลตอนกด No-show เป็นแบบปกติ)
+          const _re=(typeof ckReinstateOf==='function')?ckReinstateOf(b,_dte):null;
+          const _vn=(typeof ckVanNsPax==='function')?ckVanNsPax(b,_dte):0;
           const _bd0=(typeof ckPaxBreak==='function')?ckPaxBreak(t.pax):null;
           let _left=null;
           if(_bd0 && typeof ckPaxLeft==='function'){
@@ -44310,8 +44314,9 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
           }
           if(_left===0){
             _ckTag='<div style="margin-top:3px"><span style="display:inline-block;background:#FBE3E1;color:#B5271F;font-weight:700;font-size:11px;border-radius:7px;padding:2px 8px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#10007; ไม่ได้เดินทาง · ไม่ต้องรอ</span></div>';
-          } else if(_sp){
-            _ckTag='<div style="margin-top:3px"><span style="display:inline-block;background:#F1E7FB;color:#5B289A;font-weight:700;font-size:11px;border-radius:7px;padding:2px 8px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#128694; เช้าไม่ได้ขึ้นรถ ('+e(_sp.label)+') · ขากลับส่งตามปกติ</span></div>';
+          } else if(_sp || (_re && _vn>0)){
+            const _why=_sp ? ('('+e(_sp.label)+')') : '(หน้าท่ายืนยันว่ามาแล้ว)';
+            _ckTag='<div style="margin-top:3px"><span style="display:inline-block;background:#F1E7FB;color:#5B289A;font-weight:700;font-size:11px;border-radius:7px;padding:2px 8px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#128694; เช้าไม่ได้ขึ้นรถ '+_why+' · ขากลับส่งตามปกติ</span></div>';
           }
         }catch(_e){}
       }
