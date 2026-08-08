@@ -48186,6 +48186,9 @@ function tsRows(date){
     const evV=ckEventTally(v), evP=ckEventTally(pcv);
     const events=[].concat((v&&v.events)||[], (pcv&&pcv.events)||[]);
     const booked=s.booked, noShow=s.noShow||0;
+    // §tsIssueReal · คนที่ไม่ได้เดินทางจริง (หักเคสมาเองที่ท่า / หน้าท่ายืนยันแล้วออกให้)
+    const _lostTot=(typeof ckLostByType==='function')?(((ckLostByType(b,date)||{}).total)||0):0;
+    const _decNow=tsGet(b.id,date);
     out.push({
       b:b, t:t, O:O, routeId:t.routeId||'',
       booked:booked, travelled:Math.max(0,booked-noShow), noShow:noShow,
@@ -48193,7 +48196,10 @@ function tsRows(date){
       van:O.vanId||'', vanCk:v, vanDone:!!(v&&v.at), vanActual:(v&&v.actualPax!=null)?v.actualPax:null,
       boat:O.boatId||t.charterBoatId||'', pierCk:pcv, pierDone:!!(pcv&&pcv.at),
       pierActual:(pcv&&pcv.actualPax!=null)?pcv.actualPax:null, pierExp:(pcv&&pcv.expected!=null)?pcv.expected:null,
-      issue:(noShow>0||events.length>0), amount:tsTripAmount(b,t), policy:tsPolicyText(b), dec:tsGet(b.id,date)
+      // §tsIssueReal · เข้าหัวข้อ "ตัดสินค่าปรับ" เฉพาะตอนมีคนไม่ได้เดินทางจริง
+      //   เดิมใช้ events.length>0 ด้วย · กดอะไรหน้างานสักอย่างก็ติดค้างรอตัดสิน
+      //   ทั้งที่ผลสุดท้ายที่ท่าเรืออาจเป็น "มาครบ" (มาเองที่ท่า / หน้าท่ายืนยันว่ามาแล้ว)
+      issue:(noShow>0 || _lostTot>0 || !!_decNow), amount:tsTripAmount(b,t), policy:tsPolicyText(b), dec:_decNow
     });
   });
   // §tsSortAZ (2026-08-03) · เรียง A-Z ตาม Agency ในแต่ละเส้นทาง
