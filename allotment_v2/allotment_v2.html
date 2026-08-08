@@ -61086,6 +61086,9 @@ const CT_DOC_I18N = {
     /* §ราคา 3 ชั้น + TOUR INCLUDED + General Provisions (2026-07-14) */
     tierNet: 'Net rate — payable to the Operator',
     tierSellMin: 'Recommended selling / minimum selling rate',
+    tierRowLbl: 'Sell / Min',
+    tierSell: 'Recommended selling rate',
+    tierMin: 'Minimum selling rate — must not be sold below this',
     tourIncluded: 'Tour included',
     seasonOnly: 'Season',
     includedList: 'Speedboat transfer|National park fee|Lunch + light breakfast|English-speaking guide|Snorkelling equipment|Travel accident insurance|Hotel van transfer (Phuket)',
@@ -61205,6 +61208,9 @@ const CT_DOC_I18N = {
     charterRates: 'ราคาเช่าเหมา · เริ่มต้น + ส่วนเพิ่ม · บาท',
     tierNet: 'ราคาสุทธิ — ที่ตัวแทนชำระให้ผู้ประกอบการ',
     tierSellMin: 'ราคาแนะนำขาย / ราคาขายต่ำสุด',
+    tierRowLbl: 'ขาย / ต่ำสุด',
+    tierSell: 'ราคาแนะนำขาย',
+    tierMin: 'ราคาขายต่ำสุด — ห้ามขายต่ำกว่านี้',
     tourIncluded: 'ราคานี้รวม',
     seasonOnly: 'ฤดูกาล',
     includedList: 'เรือสปีดโบ๊ท|ค่าธรรมเนียมอุทยาน|อาหารกลางวัน + อาหารว่าง|ไกด์ภาษาอังกฤษ|อุปกรณ์ดำน้ำตื้น|ประกันอุบัติเหตุการเดินทาง|รถรับส่งโรงแรม (ภูเก็ต)',
@@ -62361,24 +62367,36 @@ function ctDocRenderPricing(a, rt, lang, fmt){
     // the route-name column aligned even when KL (or PK) is "Not Offered".
     const presentZones = ZONES.filter(z => rr[z]);
     if(!presentZones.length) return;
-    presentZones.forEach((z, idx) => {
+    /* §ctTierRow · ตารางนี้มี ไทย×ต่างชาติ×ผู้ใหญ่/เด็ก = 4 ช่องอยู่แล้ว · ถ้าแตกเป็นคอลัมน์ Net/Sell/Min
+       จะกลายเป็น 12 ช่อง = ล้น A4 → แตกเป็น "บรรทัดที่สองของแถว" แทน ตัวเลขยังอยู่คอลัมน์เดิม
+       ต้องรู้ก่อนว่าโซนไหนมีชั้นสัญญาบ้าง ถึงจะตั้ง rowspan ของชื่อเส้นทางได้ถูก */
+    const zInfo = presentZones.map(z => {
+      const tiers = PAX.map(p => (rt.priceTiers && rt.priceTiers[rId] && rt.priceTiers[rId][z] && rt.priceTiers[rId][z][p]) || {});
+      const has = tiers.some(t => (t.sell===0||t.sell) || (t.minSell===0||t.minSell));
+      return { z, tiers, has };
+    });
+    const totalRows = zInfo.reduce((n,x) => n + (x.has?2:1), 0);
+    zInfo.forEach(({z, tiers, has}, idx) => {
       const isFirst = idx===0;
       const cell = rr[z];
       const rowTop = isFirst ? 'border-top:1px solid #E0DED8' : 'border-top:1px solid #F2F0EA';
       seatRows += `<tr style="${rowTop}">
-        ${isFirst ? `<td rowspan="${presentZones.length}" style="padding:8px 12px 8px 0;vertical-align:top;font-size:11px;font-weight:600;color:#0F1419;line-height:1.3">${rName(rId)}</td>` : ''}
-        <td style="padding:5px 10px;font-size:9.5px;color:#5F5E5A;text-transform:uppercase;letter-spacing:.05em;font-weight:600">${z==='NoTransfer'?'No tr.':z}</td>
-        ${PAX.map((p,pi) => {
-          /* §ราคา 3 ชั้น · ตารางนี้มี ไทย×ต่างชาติ×ผู้ใหญ่/เด็ก = 4 ช่องอยู่แล้ว · คูณ 3 ชั้น = 12 ช่อง = ล้น A4
-             → ซ้อนในเซลล์เดิมแทน: Net ตัวใหญ่ (ราคาที่เอเยนต์จ่ายเรา · ตัวที่ระบบคิดเงิน)
-               แล้ว Selling / Min sell ตัวเล็กใต้ลงมา · rate type ที่ไม่มี priceTiers = ไม่มีบรรทัดล่าง เหมือนเดิมเป๊ะ */
-          const _t = (rt.priceTiers && rt.priceTiers[rId] && rt.priceTiers[rId][z] && rt.priceTiers[rId][z][p]) || {};
-          const _s = (_t.sell===0||_t.sell) ? fmtN(_t.sell) : '';
-          const _m = (_t.minSell===0||_t.minSell) ? fmtN(_t.minSell) : '';
-          const _sub = (_s||_m) ? `<div style="font-size:8px;color:#9b9590;font-variant-numeric:tabular-nums;margin-top:1px;white-space:nowrap">${_s||'—'} <span style="color:#c9c5bd">/</span> ${_m||'—'}</div>` : '';
-          return `<td style="padding:5px 10px;text-align:right;font-size:10.5px;font-variant-numeric:tabular-nums;color:#0F1419;${pi===1?'padding-right:18px;':''}"><div style="font-weight:600">${fmtN(cell[p])}</div>${_sub}</td>`;
-        }).join('')}
+        ${isFirst ? `<td rowspan="${totalRows}" style="padding:8px 12px 8px 0;vertical-align:top;font-size:11px;font-weight:600;color:#0F1419;line-height:1.3">${rName(rId)}</td>` : ''}
+        <td style="padding:5px 10px ${has?'0':'5px'};font-size:9.5px;color:#5F5E5A;text-transform:uppercase;letter-spacing:.05em;font-weight:600">${z==='NoTransfer'?'No tr.':z}</td>
+        ${PAX.map((p,pi) => `<td style="padding:5px 10px ${has?'0':'5px'};text-align:right;font-size:10.5px;font-variant-numeric:tabular-nums;color:#0F1419;${pi===1?'padding-right:18px;':''}"><div style="font-weight:600">${fmtN(cell[p])}</div></td>`).join('')}
       </tr>`;
+      /* บรรทัดชั้นสัญญา · ป้ายอยู่ในคอลัมน์ Zone ครั้งเดียวต่อแถว ไม่ต้องซ้ำทุกเซลล์ */
+      if(has){
+        seatRows += `<tr>
+          <td style="padding:1px 10px 6px;font-size:7.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#B9B4AC;white-space:nowrap">${T('tierRowLbl')}</td>
+          ${PAX.map((p,pi) => {
+            const _t = tiers[pi] || {};
+            const _s = (_t.sell===0||_t.sell) ? fmtN(_t.sell) : '—';
+            const _m = (_t.minSell===0||_t.minSell) ? fmtN(_t.minSell) : '—';
+            return `<td style="padding:1px 10px 6px;text-align:right;font-size:8.5px;color:#9b9590;font-variant-numeric:tabular-nums;white-space:nowrap;${pi===1?'padding-right:18px;':''}">${_s} <span style="color:#c9c5bd">/</span> ${_m}</td>`;
+          }).join('')}
+        </tr>`;
+      }
     });
   });
   /* คำอธิบายใต้ตาราง — ขึ้นเฉพาะเมื่อ rate type นี้กรอกชั้นสัญญาไว้จริง */
@@ -62386,9 +62404,9 @@ function ctDocRenderPricing(a, rt, lang, fmt){
     Object.keys(rt.priceTiers[rid]||{}).some(z => Object.keys(rt.priceTiers[rid][z]||{}).some(p => {
       const c = rt.priceTiers[rid][z][p] || {}; return (c.sell===0||c.sell)||(c.minSell===0||c.minSell); }))));
   const tierLegend = _hasTiers ? `
-    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:7px;padding:7px 11px;background:#FAFAF6;border:1px solid #E9E7E0;border-radius:4px">
+    <div style="display:flex;gap:6px 20px;flex-wrap:wrap;margin-top:7px;padding:7px 11px;background:#FAFAF6;border:1px solid #E9E7E0;border-radius:4px">
       <span style="font-size:9px;color:#5F5E5A;line-height:1.5"><b style="color:#0F1419;font-size:10px">1,800</b> &nbsp;${T('tierNet')}</span>
-      <span style="font-size:9px;color:#5F5E5A;line-height:1.5"><b style="color:#9b9590">3,500 / 2,500</b> &nbsp;${T('tierSellMin')}</span>
+      <span style="font-size:9px;color:#5F5E5A;line-height:1.5"><b style="color:#B9B4AC;font-size:7.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase">${T('tierRowLbl')}</b> &nbsp;<b style="color:#9b9590">3,500</b> ${T('tierSell')} &nbsp;<span style="color:#c9c5bd">/</span>&nbsp; <b style="color:#9b9590">2,500</b> ${T('tierMin')}</span>
     </div>` : '';
   const seatTable = seatRows ? `
     <table style="width:100%;border-collapse:collapse">
