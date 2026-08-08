@@ -9204,6 +9204,7 @@ function bop2OpenCellPopover(routeId, dateStr, anchorEl){
   // Off-season / closed program → no boat can be assigned on this date.
   const _dayStat = (typeof getDayStatus === 'function' && route) ? getDayStatus(route, dateStr) : null;
   const routeClosed = !!(_dayStat && _dayStat.type === 'closed');
+  const _bopPast = bop2IsPast(dateStr);   // §bopPastLock · วันเก่า = เปิดดูได้ แต่แก้ไม่ได้
   const dt = new Date(dateStr);
   const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -9226,8 +9227,10 @@ function bop2OpenCellPopover(routeId, dateStr, anchorEl){
       const _capD = (typeof boatCapFor==='function') ? boatCapFor(x.boat.id, dateStr) : x.boat.cap;
       const _capB = (typeof boatCapBadge==='function') ? boatCapBadge(x.boat.id, dateStr, 'sm') : '';
       const seats = (x.isCharter ? 'charter · ' + _capD : _boatLoad + '/' + _capD) + _capB
-        + '<button onclick="event.stopPropagation();boatCapModalOpen(\''+x.boat.id+'\',\''+dateStr+'\',function(){ if(typeof renderOp===\'function\') renderOp(); });bop2CloseCellPopover();" title="ปรับที่นั่งของลำนี้ เฉพาะวันนี้" style="margin-left:5px;border:1px solid #cfd8e3;background:#fff;color:#185FA5;border-radius:5px;padding:0 5px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">cap</button>';
-      const removeBtn = x.isCharter
+        + (_bopPast ? '' : '<button onclick="event.stopPropagation();boatCapModalOpen(\''+x.boat.id+'\',\''+dateStr+'\',function(){ if(typeof renderOp===\'function\') renderOp(); });bop2CloseCellPopover();" title="ปรับที่นั่งของลำนี้ เฉพาะวันนี้" style="margin-left:5px;border:1px solid #cfd8e3;background:#fff;color:#185FA5;border-radius:5px;padding:0 5px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">cap</button>');
+      const removeBtn = _bopPast
+        ? '<span style="font-size:10px;color:var(--ink-soft)">&#128274;</span>'
+        : x.isCharter
         ? '<span style="font-size:10px;color:var(--ink-soft);font-style:italic">locked</span>'
         : '<button onclick="if(confirm(\'Unassign '+esc(x.boat.name)+'?\')){bop2UnassignBoat(\''+dateStr+'\',\''+x.boat.id+'\');bop2CloseCellPopover();}" title="Unassign" style="font-size:13px;color:#a32d2d;background:none;border:none;cursor:pointer;padding:0 4px;line-height:1">×</button>';
       return '<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:#f5f3ef;border-radius:4px;font-size:11px;margin-bottom:3px">'
@@ -9238,7 +9241,12 @@ function bop2OpenCellPopover(routeId, dateStr, anchorEl){
   }
 
   let availHTML = '';
-  if(routeClosed){
+  if(_bopPast){
+    // §bopPastLock · ไม่โชว์รายการเรือว่างของวันเก่า · กดไปก็โดนบล็อกอยู่ดี
+    availHTML = '<div style="display:flex;align-items:flex-start;gap:7px;padding:8px 10px;background:#F4F2ED;border:1px solid #E0DCD2;border-radius:8px;font-size:11px;color:#6B6862;line-height:1.55">'
+      + '<span>&#128274;</span><span><b style="color:#3A3833">วันที่ผ่านมาแล้ว</b> — แก้เรือที่ deploy ไม่ได้<br>'
+      + '<span style="font-size:10px">วันนี้ถูกใช้ปิดวันและออกรายงานไปแล้ว · เปิดดูได้อย่างเดียว</span></span></div>';
+  } else if(routeClosed){
     availHTML = '<div style="font-size:11px;color:#A32D2D;font-style:italic;padding:2px 0">โปรแกรมปิด/ยังไม่เปิดวันนี้ · assign เรือไม่ได้</div>';
   } else if(availList.length === 0){
     availHTML = '<div style="font-size:11px;color:var(--ink-soft);font-style:italic;padding:2px 0">No boats available on this date</div>';
@@ -9285,11 +9293,11 @@ function bop2OpenCellPopover(routeId, dateStr, anchorEl){
     +   availHTML
     + '</div>'
     + unavailHTML
-    + '<div style="padding:9px 12px;border-top:1px solid var(--border)">'
+    + (_bopPast ? '' : '<div style="padding:9px 12px;border-top:1px solid var(--border)">'   /* §bopPastLock */
     + ((typeof bkV2IsWeatherClosed==='function' && bkV2IsWeatherClosed(routeId,dateStr))
         ? '<button onclick="bop2CloseCellPopover();bkV2WeatherMark(\'' + routeId + '\',\'' + dateStr + '\')" style="width:100%;background:#FBF0DD;color:#7A4A00;border:1px solid #EAD9B0;border-radius:6px;font-family:inherit;font-size:11.5px;font-weight:600;padding:8px;cursor:pointer">&#9928; ยกเลิกแล้ว · แก้หมายเหตุ</button>'
         : '<button onclick="bop2CloseCellPopover();bkV2WeatherMark(\'' + routeId + '\',\'' + dateStr + '\')" style="width:100%;background:#FCEBEB;color:#A32D2D;border:1px solid #F2C0C0;border-radius:6px;font-family:inherit;font-size:11.5px;font-weight:600;padding:8px;cursor:pointer">&#9928; Cancel trip (weather)</button>')
-    + '</div>';
+    + '</div>');
 
   // Compute position
   const popW = 290;
@@ -9327,7 +9335,15 @@ function bop2CloseCellPopover(){
   document.removeEventListener('mousedown', bop2PopoverOutsideClick);
   document.removeEventListener('keydown', bop2PopoverKey);
 }
+// §bopPastLock · วันก่อนวันนี้ = ปิดวันไปแล้ว · ห้ามแก้เรือ
+function bop2IsPast(ds){ return !!ds && String(ds) < ((typeof TODAY_STR!=='undefined') ? TODAY_STR : ''); }
+function bop2GuardPast(ds, silent){
+  if(!bop2IsPast(ds)) return false;
+  if(!silent) alert('วันที่ '+ds+' ผ่านมาแล้ว · แก้เรือที่ deploy ไม่ได้\n\nวันเก่าถูกใช้ปิดวันและออกรายงานไปแล้ว (Daily Report · Travel Summary · ต้นทุนต่อเที่ยว)\nถ้าต้องแก้จริง ๆ แจ้งแอดมินให้แก้ที่ต้นทางแทน');
+  return true;
+}
 function bop2AssignBoat(routeId, date, boatId){
+  if(bop2GuardPast(date)) return;
   if(!TRIPS[date]) TRIPS[date] = {};
   if(TRIPS[date][boatId]){
     if(TRIPS[date][boatId].charterBookingId){ alert('Boat is chartered · cannot reassign'); return; }
@@ -9348,6 +9364,7 @@ function bop2AssignBoat(routeId, date, boatId){
   renderOp();
 }
 function bop2UnassignBoat(date, boatId){
+  if(bop2GuardPast(date)) return;
   if(!TRIPS[date] || !TRIPS[date][boatId]) return;
   if(TRIPS[date][boatId].charterBookingId){
     alert('Cannot unassign · charter is active. Cancel the charter booking first.');
@@ -9467,6 +9484,7 @@ function bop2CopyWeekToNext(){
   dates.forEach(d => {
     if(!TRIPS[d]) return;
     const tgt = fmt(addDays(new Date(d), offset));
+    if(bop2GuardPast(tgt, true)) return;   // §bopPastLock · ปลายทางเป็นวันเก่า (ย้อนสัปดาห์อยู่) ข้ามไป
     if(!TRIPS[tgt]) TRIPS[tgt] = {};
     Object.entries(TRIPS[d]).forEach(([bid, op]) => {
       if(op.charterBookingId) { skipped++; return; }
@@ -9487,6 +9505,7 @@ function bop2CopyDayToWeek(){
   if(!confirm('Copy ' + src + ' assignments to ' + dates.length + ' other day(s) in view? Existing target assignments are kept.')) return;
   let copied = 0, skipped = 0;
   dates.forEach(d => {
+    if(bop2GuardPast(d, true)) { skipped++; return; }   // §bopPastLock
     if(!TRIPS[d]) TRIPS[d] = {};
     Object.entries(TRIPS[src]).forEach(([bid, op]) => {
       if(op.charterBookingId) { skipped++; return; }
@@ -9599,10 +9618,11 @@ function bop2ApplyAssignRange(){
   if(from > to){ alert('From date must be on or before To date'); return; }
   const boat = BOATS.find(b => b.id === bid);
   if(!boat){ alert('Boat not found'); return; }
-  let applied = 0, skipped = 0, chartered = 0, statusBlocked = 0;
+  let applied = 0, skipped = 0, chartered = 0, statusBlocked = 0, pastSkip = 0;
   const start = new Date(from), end = new Date(to);
   for(let d = new Date(start); d <= end; d.setDate(d.getDate()+1)){
     const ds = fmt(d);
+    if(bop2GuardPast(ds, true)){ pastSkip++; continue; }   // §bopPastLock
     // Skip if boat is fixing / unavailable on this date
     const st = (typeof getCurStatus === 'function') ? getCurStatus(boat, ds).s : 'available';
     if(st !== 'available'){ statusBlocked++; continue; }
@@ -9618,6 +9638,7 @@ function bop2ApplyAssignRange(){
   if(skipped > 0) parts.push(skipped + ' kept existing');
   if(chartered > 0) parts.push(chartered + ' chartered (preserved)');
   if(statusBlocked > 0) parts.push(statusBlocked + ' skipped (boat not ready)');
+  if(pastSkip > 0) parts.push(pastSkip + ' ข้าม (วันผ่านมาแล้ว)');   // §bopPastLock
   alert(parts.join(' · '));
   renderOp();
 }
@@ -9742,10 +9763,11 @@ function bop2ApplyTemplate(){
   const tpl = bop2LoadTemplates().find(t => t.id === tid);
   if(!tpl){ alert('Template not found'); return; }
   if(!from || !to || from > to){ alert('Invalid date range'); return; }
-  let applied = 0, skipped = 0, chartered = 0;
+  let applied = 0, skipped = 0, chartered = 0, pastSkip = 0;
   const start = new Date(from), end = new Date(to);
   for(let d = new Date(start); d <= end; d.setDate(d.getDate()+1)){
     const ds = fmt(d);
+    if(bop2GuardPast(ds, true)){ pastSkip++; continue; }   // §bopPastLock
     const dow = d.getDay();
     const slots = tpl.pattern[dow] || {};
     Object.entries(slots).forEach(([bid, op]) => {
@@ -9758,7 +9780,8 @@ function bop2ApplyTemplate(){
   }
   save('operations');
   bop2CloseModal();
-  alert('Applied ' + applied + ' slots from "' + tpl.name + '". Skipped ' + skipped + '. Chartered ' + chartered + '.');
+  alert('Applied ' + applied + ' slots from "' + tpl.name + '". Skipped ' + skipped + '. Chartered ' + chartered + '.'
+    + (pastSkip>0 ? (' ข้าม ' + pastSkip + ' วัน (ผ่านมาแล้ว).') : ''));   // §bopPastLock
   renderOp();
 }
 function bop2DeleteTemplate(){
@@ -9812,6 +9835,7 @@ function bop2ApplySwap(){
   const a = document.getElementById('bop2sw-a').value;
   const b = document.getElementById('bop2sw-b').value;
   if(a === b){ alert('Select two different boats'); return; }
+  if(bop2GuardPast(date)) return;   // §bopPastLock
   if(!TRIPS[date] || !TRIPS[date][a] || !TRIPS[date][b]){ alert('One or both boats are no longer assigned on this day'); return; }
   if(TRIPS[date][a].charterBookingId || TRIPS[date][b].charterBookingId){ alert('Cannot swap a charter slot'); return; }
   const tmpR = TRIPS[date][a].route, tmpT = TRIPS[date][a].type;
@@ -9890,12 +9914,13 @@ function bop2ApplyWeekdayPattern(){
   if(!bid || !rid || !from || !to || from > to){ alert('Fill all fields with a valid range'); return; }
   const boat = BOATS.find(b => b.id === bid);
   if(!boat){ alert('Boat not found'); return; }
-  let applied = 0, skipped = 0, chartered = 0, totalDays = 0, statusBlocked = 0;
+  let applied = 0, skipped = 0, chartered = 0, totalDays = 0, statusBlocked = 0, pastSkip = 0;
   const start = new Date(from), end = new Date(to);
   for(let d = new Date(start); d <= end; d.setDate(d.getDate()+1)){
     if(!dows.includes(d.getDay())) continue;
     totalDays++;
     const ds = fmt(d);
+    if(bop2GuardPast(ds, true)){ pastSkip++; continue; }   // §bopPastLock
     const st = (typeof getCurStatus === 'function') ? getCurStatus(boat, ds).s : 'available';
     if(st !== 'available'){ statusBlocked++; continue; }
     if(!TRIPS[ds]) TRIPS[ds] = {};
@@ -9910,6 +9935,7 @@ function bop2ApplyWeekdayPattern(){
   if(skipped > 0) parts.push(skipped + ' kept existing');
   if(chartered > 0) parts.push(chartered + ' chartered');
   if(statusBlocked > 0) parts.push(statusBlocked + ' skipped (boat not ready)');
+  if(pastSkip > 0) parts.push(pastSkip + ' ข้าม (วันผ่านมาแล้ว)');   // §bopPastLock
   alert(parts.join(' · '));
   renderOp();
 }
