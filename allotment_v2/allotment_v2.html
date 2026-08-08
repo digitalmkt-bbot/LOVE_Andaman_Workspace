@@ -48371,6 +48371,15 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-p.tf{border-color:var(--bl200);background:var(--bl50)} '+S+' .ts-p.tf .pl{color:var(--bl700)} '+S+' .ts-p.tf .pt{background:#fff;color:var(--bl700);border:1px solid var(--bl200)}'
  +S+' .ts-p.cc{border-color:var(--pu200);background:var(--pu50)} '+S+' .ts-p.cc .pl{color:var(--pu700)} '+S+' .ts-p.cc .pt{background:#fff;color:var(--pu700);border:1px solid var(--pu200)}'
  +S+' .ts-p.pend{border-color:var(--am200);background:var(--am50)} '+S+' .ts-p.pend .pl{color:var(--am900)} '+S+' .ts-p.pend .pv{color:var(--am700)} '+S+' .ts-p.pend .pt{background:var(--am200);color:var(--am900)}'
+ // §tsCashNet · การ์ดเงินที่ต้องจ่ายออก · โทนแดงเพราะเป็นตัวลบ ไม่ใช่รายรับ
+ +S+' .ts-p.out{border-color:var(--rs200);background:var(--rs50)} '+S+' .ts-p.out .pl{color:var(--rs900)} '+S+' .ts-p.out .pv{color:var(--rs700)} '+S+' .ts-p.out .pt{background:var(--rs200);color:var(--rs900)}'
+ // §tsSlipAdd · ปุ่มแนบสลิปในตารางเงินหน้างาน
+ +S+' .ts-slips{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}'
+ +S+' .ts-slipb{display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-size:10px;font-weight:700;'
+   +'border:1px dashed var(--am700);color:var(--am700);background:var(--am50);border-radius:999px;padding:2px 9px;white-space:nowrap}'
+ +S+' .ts-slipb:hover{background:var(--am200)}'
+ +S+' .ts-slipok{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;'
+   +'border:1px solid var(--em200);color:var(--em800);background:var(--em50);border-radius:999px;padding:2px 9px;white-space:nowrap}'
  +S+' .ts-card{border:1px solid var(--zn200);border-radius:16px;overflow:hidden;background:#fff}'
  +S+' .ts-scroll{overflow-x:auto}'
  +S+' .ts-tbl{width:100%;border-collapse:collapse;font-size:11.5px}'
@@ -48550,6 +48559,8 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-p::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--zn300)}'
  +S+' .ts-p.cash::before{background:var(--em600)} '+S+' .ts-p.tf::before{background:var(--bl700)}'
  +S+' .ts-p.cc::before{background:var(--pu700)}   '+S+' .ts-p.pend::before{background:var(--am700)}'
+ +S+' .ts-p.out::before{background:var(--rs700)}'
+ +S+' .ts-pay5{grid-template-columns:repeat(5,1fr)}'
  +S+' .ts-p .pl{font-size:9px;letter-spacing:.08em}'
  +S+' .ts-p .pt{border-radius:2px;font-size:8.5px;font-weight:700;background:#fff !important;border:1px solid var(--zn200) !important;color:var(--zn500) !important}'
  +S+' .ts-p .pv{font-family:\'DM Mono\',monospace;font-size:24px;font-weight:400;letter-spacing:-.03em}'
@@ -49132,14 +49143,17 @@ function tsSaleList(b, date){
     by[mth]+=amt; got+=amt; fee+=(+x.fee||0);
     var slipMissing=(mth!=='cash' && !((x.slips||[]).length));
     if(slipMissing) noSlip++;
-    out.push({ kind:'ex', t:String(x.service||'ขายเพิ่ม'), qty:(+x.qty||1), amt:amt,
+    out.push({ kind:'ex', id:x.id||'', t:String(x.service||'ขายเพิ่ม'), qty:(+x.qty||1), amt:amt,
+               // §tsSaleFee · fee ของรายการนี้ · รูดจริง = amt + fee (ตัวที่ตรงกับ statement)
+               fee:(+x.fee||0), nSlip:((x.slips||[]).length),
                method:mth, who:x.seller||'', done:true, noSlip:slipMissing });
   }); }catch(_){}
   try{ (Array.isArray(b.upgrades)?b.upgrades:[]).forEach(function(u){
     var amt=+u.sellPrice||0; if(!amt) return;
     if(u.collected){ var m2=u.method||'cash'; if(by[m2]==null) by[m2]=0; by[m2]+=amt; got+=amt; }
     else due+=amt;
-    out.push({ kind:'up', t:String(u.label||'upgrade'), qty:1, amt:amt,
+    out.push({ kind:'up', id:u.id||'', t:String(u.label||'upgrade'), qty:1, amt:amt,
+               fee:(+u.fee||0), nSlip:0,
                method:u.method||'cash', who:u.by||'', done:!!u.collected, noSlip:false });
   }); }catch(_){}
   return { list:out, by:by, fee:fee, got:got, due:due, noSlip:noSlip, tot:got+due, n:out.length };
@@ -49150,12 +49164,36 @@ function tsSaleCell(S, money, e){
   var PM={cash:'สด', transfer:'โอน', card:'บัตร'};
   return '<div class="ts-sls">'+S.list.map(function(x){
     var cls=x.kind==='up' ? 'ao-up' : 'ao-ex';
+    // §tsSaleFee · บัตรมีค่าธรรมเนียมแยกจากยอดขายเสมอ · ต้องเห็นทั้งสองตัวถึงจะกระทบยอดได้
+    var _fee=+x.fee||0;
     var tip=(x.qty>1?('จำนวน '+x.qty+' · '):'')+(PM[x.method]||x.method)
+      +(_fee>0?(' · ค่าธรรมเนียมบัตร '+money(_fee)+' · รูดจริง '+money((+x.amt||0)+_fee)):'')
       +(x.who?(' · '+x.who):'')+(x.done?'':' · ยังไม่เก็บ')+(x.noSlip?' · ยังไม่มีสลิป':'');
     return '<span class="ts-ao '+cls+'" title="'+e(tip)+'">'+e(x.t)+(x.qty>1?(' ×'+x.qty):'')
-      +' <b>'+money(x.amt)+'</b>'+(x.done?'':' <i style="font-style:normal;opacity:.75">รอเก็บ</i>')
+      +' <b>'+money(x.amt)+'</b>'
+      +(_fee>0?(' <i style="font-style:normal;opacity:.72">+fee '+money(_fee)+'</i>'):'')
+      +(x.done?'':' <i style="font-style:normal;opacity:.75">รอเก็บ</i>')
       +(x.noSlip?' <i style="font-style:normal;color:#A32D2D">⚠</i>':'')+'</span>';
   }).join('')+'</div>';
+}
+// §tsSlipAdd · แนบสลิปจากหน้าปิดวันโดยตรง · kind 'p' = เงินที่รับหน้าท่า · 'x' = ของที่ขายเพิ่ม
+function tsSlipPick(kind, bkId, itemId, inp){
+  var f=(inp&&inp.files&&inp.files[0])||null; if(inp) inp.value='';
+  if(!f) return;
+  if(typeof pckSlipUpload!=='function'){ alert('แนบสลิปไม่ได้ในหน้านี้'); return; }
+  pckSlipUpload(f, bkId, function(meta){
+    if(kind==='p'){
+      var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; });
+      var p=b&&(Array.isArray(b.pierPayments)?b.pierPayments:[]).find(function(x){ return x.id===itemId; });
+      if(p){ p.slips=Array.isArray(p.slips)?p.slips:[]; p.slips.push(meta); }
+      try{ acctPersistBookings(); }catch(_){}
+    } else {
+      var x=(typeof SB_EXTRAS!=='undefined'&&Array.isArray(SB_EXTRAS)?SB_EXTRAS:[]).find(function(y){ return y.id===itemId; });
+      if(x){ x.slips=Array.isArray(x.slips)?x.slips:[]; x.slips.push(meta); }
+      try{ sbExtrasPersist(); }catch(_){}
+    }
+    if(typeof tsAfter==='function') tsAfter();
+  });
 }
 // สถานะใบแจ้งหนี้ของ booking นี้ · ใช้ตัวเดียวกับหน้าบัญชี ไม่ได้คิดเลขเอง
 function tsInvSettle(b){
@@ -51084,14 +51122,28 @@ function renderTravelSum(){
   var mAll=all.map(function(r){ var m=tsMoneyOf(r.b,date); m.r=r; m.S=tsSaleList(r.b,date); return m; });
   // §tsSaleCol · ใบที่ขายแต่ของเพิ่มอย่างเดียว (ไม่มี COT/ยอดค้าง) ต้องขึ้นด้วย
   var mRows=mAll.filter(function(m){ return m.target>0 || m.paid>0 || m.S.tot>0; });
-  var sumCash=0,sumTf=0,sumCard=0,sumDue=0,sumTarget=0,sumFee=0,sumSale=0,nSale=0,sumSaleDue=0;
+  var sumCash=0,sumTf=0,sumCard=0,sumDue=0,sumTarget=0,sumFee=0,sumSale=0,nSale=0,sumSaleDue=0,sumFeeSale=0;
   mRows.forEach(function(m){
     sumCash+=(m.by.cash||0)+(m.S.by.cash||0);
     sumTf  +=(m.by.transfer||0)+(m.S.by.transfer||0);
     sumCard+=(m.by.card||0)+(m.S.by.card||0);
     sumDue+=m.due; sumTarget+=m.target;
-    sumFee+=(+m.M.pierFee||0)+(+m.S.fee||0);
+    sumFee+=(+m.M.pierFee||0)+(+m.S.fee||0); sumFeeSale+=(+m.S.fee||0);
     sumSale+=m.S.tot; nSale+=m.S.n; sumSaleDue+=m.S.due; });
+
+  // §tsCashNet · แยกเงินที่ต้องจ่ายออกตามคำตัดสิน COT ออกจากยอดที่รับเข้า
+  var sumPayout=0, sumDeduct=0, sumCotAll=0, nCotLeft=0;
+  mRows.forEach(function(m){
+    var v=+((m.M&&m.M.cot)||0); if(!(v>0)) return;
+    sumCotAll+=v;
+    var c=(typeof tsCotGet==='function')?tsCotGet(m.r.b.id,date):null;
+    if(!c){ nCotLeft++; return; }
+    var d=+c.deduct||0, p=+c.payout||0;
+    if(d+p>v){ nCotLeft++; return; }     // หัก+โอนออก เกินยอด · ยังถือว่าตัวเลขไม่นิ่ง
+    sumDeduct+=d; sumPayout+=p;
+  });
+  var sumIn=sumCash+sumTf+sumCard;
+  var sumNet=Math.max(0, sumIn-sumPayout);
 
   var K=function(cls,lb,val,unit,note,noteCls){
     return '<div class="ts-k '+cls+'"><div class="kk">'+lb+'</div><div class="kv">'+val+(unit?('<em>'+unit+'</em>'):'')+'</div>'
@@ -51195,6 +51247,28 @@ function renderTravelSum(){
       : '<span class="ts-chip n">ยังไม่เก็บ</span>';
     var _noSlip=(+m.M.noSlip||0)+(+m.S.noSlip||0);
     var slipWarn=(_noSlip>0)?('<span class="ts-chip a" title="โอน/บัตรที่ยังไม่แนบสลิป · รวมของที่ขายเพิ่ม">ขาดสลิป '+_noSlip+'</span>'):'';
+    // §tsSlipAdd · แถวปุ่มแนบสลิปของแต่ละก้อนเงินที่ไม่ใช่เงินสด · แนบได้จากหน้านี้เลย
+    var _slipBits=[];
+    m.pays.forEach(function(p){
+      if((p.method||'cash')==='cash') return;
+      var n=((p.slips||[]).length), lb=(PM[p.method||'cash']||['อื่นๆ'])[0]+' '+money(p.amount);
+      _slipBits.push(n
+        ? ('<span class="ts-slipok" title="'+e(lb+' · มีสลิปแล้ว '+n+' ไฟล์')+'">&#128206; '+e(lb)+'</span>')
+        : ('<label class="ts-slipb" title="'+e('แนบสลิป · '+lb)+'">&#128206; แนบสลิป '+e(lb)
+           +'<input type="file" accept="image/*,application/pdf" style="display:none"'
+           +' onchange="tsSlipPick(\'p\',\''+b.id+'\',\''+(p.id||'')+'\',this)"></label>'));
+    });
+    m.S.list.forEach(function(x){
+      if(x.kind!=='ex' || !x.id) return;
+      if((x.method||'cash')==='cash') return;
+      var lb=String(x.t||'ขายเพิ่ม')+' '+money(x.amt);
+      _slipBits.push((+x.nSlip>0)
+        ? ('<span class="ts-slipok" title="'+e(lb+' · มีสลิปแล้ว')+'">&#128206; '+e(lb)+'</span>')
+        : ('<label class="ts-slipb" title="'+e('แนบสลิป · '+lb)+'">&#128206; แนบสลิป '+e(lb)
+           +'<input type="file" accept="image/*,application/pdf" style="display:none"'
+           +' onchange="tsSlipPick(\'x\',\''+b.id+'\',\''+x.id+'\',this)"></label>'));
+    });
+    var slipRow=_slipBits.length?('<div class="ts-slips">'+_slipBits.join('')+'</div>'):'';
     var parts=[]; if(m.M.cot>0) parts.push('COT '+money(m.M.cot));
     if(m.M.balance>0) parts.push('ค้าง '+money(m.M.balance));
     if(m.M.upDue>0) parts.push('upgrade '+money(m.M.upDue));
@@ -51207,7 +51281,7 @@ function renderTravelSum(){
       +'<td class="ts-aocol">'+tsSaleCell(m.S, money, e)+'</td>'
       +'<td class="ts-mono" style="font-size:10.5px">'+(e([m.who].concat(m.S.list.map(function(x){return x.who;}))
           .filter(function(v,i,a){ return v && a.indexOf(v)===i; }).join(' · '))||'<span style="color:var(--zn400)">—</span>')+'</td>'
-      +'<td>'+mchips+slipWarn+'</td>'
+      +'<td>'+mchips+slipWarn+slipRow+'</td>'
       +'<td class="r ts-mono" style="font-weight:800">'+money(m.target)+'<div class="ts-tel">'+e(parts.join(' · '))+'</div></td>'
       // §tsCotSettle · โน้ต COT + ช่องตัดสินการจัดการเงินก้อนนี้
       +'<td>'+((m.M.cot>0)
@@ -51235,31 +51309,37 @@ function renderTravelSum(){
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'
       +'<span class="ts-chip e" style="font-size:11px;padding:5px 12px">ต้องเก็บวันนี้ '+money(sumTarget)+'</span>'
       +(nSale?('<span class="ts-chip b" style="font-size:11px;padding:5px 12px">ขายเพิ่ม '+money(sumSale)+' · '+nSale+' รายการ</span>'):'')
-      +(function(){   // §tsCotSettle · สรุปการจัดการ COT ของวัน
-          var cot=0, ded=0, pay=0, left=0;
-          mRows.forEach(function(m){
-            var v=+((m.M&&m.M.cot)||0); if(!(v>0)) return;
-            cot+=v; var c=tsCotGet(m.r.b.id,date);
-            if(!c){ left++; return; }
-            var d=+c.deduct||0, p=+c.payout||0;
-            if(d+p>v){ left++; return; }
-            ded+=d; pay+=p;
-          });
-          if(!(cot>0)) return '';
-          return '<span class="ts-chip n" style="font-size:11px;padding:5px 12px">COT '+money(cot)+'</span>'
-            +(ded>0?('<span class="ts-chip b" style="font-size:11px;padding:5px 12px">หักบิล '+money(ded)+'</span>'):'')
-            +(pay>0?('<span class="ts-chip p" style="font-size:11px;padding:5px 12px">โอนออก '+money(pay)+'</span>'):'')
-            +(left?('<span class="ts-chip a" style="font-size:11px;padding:5px 12px">COT ยังไม่ตัดสิน '+left+' ใบ</span>')
+      +(function(){   // §tsCotSettle · สรุปการจัดการ COT ของวัน · ตัวเลขคำนวณไว้ข้างบนแล้ว (§tsCashNet)
+          if(!(sumCotAll>0)) return '';
+          return '<span class="ts-chip n" style="font-size:11px;padding:5px 12px">COT '+money(sumCotAll)+'</span>'
+            +(sumDeduct>0?('<span class="ts-chip b" style="font-size:11px;padding:5px 12px">หักบิล '+money(sumDeduct)+'</span>'):'')
+            +(sumPayout>0?('<span class="ts-chip p" style="font-size:11px;padding:5px 12px">โอนออก '+money(sumPayout)+'</span>'):'')
+            +(nCotLeft?('<span class="ts-chip a" style="font-size:11px;padding:5px 12px">COT ยังไม่ตัดสิน '+nCotLeft+' ใบ</span>')
                   :('<span class="ts-chip g" style="font-size:11px;padding:5px 12px">COT ตัดสินครบ</span>'));
         })()
     +'</div></div>'
-    +'<div class="ts-pay">'
-    + PC('cash','&#128181;','1 · เงินสด','นับลิ้นชักได้',money(sumCash),'เงินสดที่คนขับ / เคาน์เตอร์ท่าเก็บ · รวมของขายเพิ่ม')
+    +'<div class="ts-pay ts-pay5">'
+    + PC('cash','&#128181;','1 · เงินสด','นับลิ้นชักได้',money(sumCash),'เงินสดที่คนขับ / เคาน์เตอร์ท่าเก็บ · รวมของขายเพิ่ม'
+        +(sumPayout>0?('<br><b style="color:var(--rs700)">ในก้อนนี้มีเงินที่ต้องจ่ายออกอีก '+money(sumPayout)+'</b>'):''))
     + PC('tf','&#128241;','2 · โอนเงิน','ต้องมีสลิป',money(sumTf),'QR / พร้อมเพย์ / โอนผ่านแอป · รวมของขายเพิ่ม')
-    + PC('cc','&#128179;','3 · บัตรเครดิต','รูดเครื่อง EDC',money(sumCard),'ค่าธรรมเนียมบัตรวันนี้ '+money(sumFee))
-    + PC('pend','&#9203;','4 · ยังไม่ได้เก็บ','ค้างอยู่',money(sumDue),'ต้องเคลียร์ให้จบก่อนปิดวัน'
+    + PC('cc','&#128179;','3 · บัตรเครดิต','รูดเครื่อง EDC',money(sumCard),'ค่าธรรมเนียมบัตรวันนี้ '+money(sumFee)
+        +(sumFeeSale>0?(' · ของขายเพิ่ม '+money(sumFeeSale)):''))
+    // §tsCashNet · เงินที่ถือไว้แล้วต้องโอนคืนเอเจนต์ · แยกออกมาให้เห็นชัด ไม่ปนกับรายรับ
+    + PC('out','&#128228;','4 · จ่ายออก','ไม่ใช่รายรับ',money(sumPayout),
+        (sumPayout>0 ? 'โอนคืนเอเจนต์ตามคำตัดสิน COT · ต้องหักออกจากเงินที่รับมา'
+                     : 'วันนี้ไม่มีรายการที่ต้องจ่ายออก'))
+    + PC('pend','&#9203;','5 · ยังไม่ได้เก็บ','ค้างอยู่',money(sumDue),'ต้องเคลียร์ให้จบก่อนปิดวัน'
         +(sumSaleDue>0?(' · upgrade รอเก็บอีก '+money(sumSaleDue)):''))
     +'</div>'
+    // §tsCashNet · บรรทัดกระทบยอด · ตัวเลขที่เอาเข้าบัญชีจริงคือ "เหลือเข้าบริษัท"
+    +'<div class="ts-read" style="margin-top:0;margin-bottom:13px">รับเข้าวันนี้ <b>'+money(sumIn)+'</b>'
+      +' (สด '+money(sumCash)+' &middot; โอน '+money(sumTf)+' &middot; บัตร '+money(sumCard)+')'
+      +(sumPayout>0?(' &minus; จ่ายออกตาม COT <b style="color:var(--rs700)">'+money(sumPayout)+'</b>'):'')
+      +' = เหลือเข้าบริษัท <b>'+money(sumNet)+'</b>'
+      +(sumDeduct>0?(' &middot; อีก <b>'+money(sumDeduct)+'</b> หักจากบิลเอเจนต์ (ไม่ผ่านมือหน้าท่า)'):'')
+      +(sumFee>0?(' &middot; ค่าธรรมเนียมบัตร <b>'+money(sumFee)+'</b> ธนาคารหัก ไม่ใช่รายได้'):'')
+      +(nCotLeft?(' &middot; <b style="color:var(--am700)">ยังมี '+nCotLeft+' ใบที่ยังไม่ตัดสิน COT</b>'):'')
+      +'</div>'
     +'<div class="ts-card"><div class="ts-scroll"><table class="ts-tbl"><thead><tr>'
     +'<th>Voucher</th><th>Agency</th><th>ลูกค้า (lead)</th><th>จุดรับ · รถ/เรือ</th>'
     +'<th>ขายเพิ่มหน้างาน</th><th>คนเก็บ</th>'
