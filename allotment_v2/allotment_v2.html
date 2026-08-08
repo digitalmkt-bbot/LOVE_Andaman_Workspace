@@ -3779,6 +3779,53 @@ body.la-nav-open .la-burger{background:#1683C7;color:#fff;box-shadow:inset 2px 2
   .bk-form-grid{grid-template-columns:minmax(0,1fr) !important}
   /* ช่องนับ pax 4 ช่อง · เหลือ 2 แถวยังกรอกง่ายกว่ายืดเป็นแถวเดียว */
   #view-booking .bkv2-nb-pax-row,.bk-pax-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important}
+
+  /* §mobile2 · ตารางกว้างเลื่อนในกล่องของตัวเอง ไม่ดันหน้าหลัก
+     ทำที่ "กล่องที่ห่อตาราง" ไม่ใช่ตัวตาราง — ตารางหลายตัวตั้ง min-width ไว้เป็นพัน px
+     (ck-tbl 1420px) ซึ่ง min-width ชนะ max-width เสมอ ตัวตารางเลยกว้างเท่าเดิมอยู่ดี
+     :has(> table) ให้กล่องแม่เป็นตัวเลื่อนแทน · ตารางข้างในคงความกว้างไว้ครบ */
+  /* !important จำเป็น · การ์ดพวกนี้ถูกตั้ง overflow ไว้ด้วย selector ที่มี id
+     (#vancheckin-host .ck-card) ซึ่งชนะ selector ที่มีแต่ class เสมอ */
+  .main .view *:has(> table){max-width:100% !important;overflow-x:auto !important;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+  /* เบราว์เซอร์เก่าที่ยังไม่รองรับ :has() · อย่างน้อยอย่าให้ตารางที่ไม่ได้ตั้ง min-width ดันจอ */
+  .main .view table:not([style*="min-width"]){max-width:100%}
+  /* การ์ดที่ห่อปฏิทิน/heatmap/ตาราง · ให้เลื่อนในการ์ด ไม่ลากทั้งหน้า */
+  .main .bo-card,.main .cal2-card,.main .ts-card,.main .ck-card,
+  .main .fl-card,.main .bkv2-card,.main .card{overflow-x:auto !important;-webkit-overflow-scrolling:touch;max-width:100% !important}
+  /* ปฏิทิน 7 ช่องบนจอแคบ · 600px คือเส้นต่ำสุดที่ยังอ่านชื่อเรือออก */
+  .main .fc-grid,.main .cal2-grid,.main .bkv2-cal-grid{min-width:600px}
+
+  /* §mobile2 · กริดที่เขียน grid-template-columns ไว้ใน style ตรง ๆ ยุบเหลือคอลัมน์เดียวทั้งหมด
+     รอบก่อนไล่ทีละแพตเทิร์นแล้วหลุด (เช่น "1fr 1.7fr 1fr" ของ Dashboard)
+     ยกเว้นปฏิทิน/heatmap ที่ต้องคงจำนวนช่องไว้แล้วเลื่อนแนวนอนแทน */
+  .main .view [style*="grid-template-columns"]:not([style*="repeat(7"]):not(.bop2-grid):not(.fc-grid):not(.cal2-grid):not(.bkv2-cal-grid){grid-template-columns:minmax(0,1fr) !important}
+  /* ลูกของ grid/flex มี min-width:auto ตามค่าเริ่มต้น · ของยาวข้างในเลยดันกล่องแม่จนล้น */
+  .main .view [style*="display:grid"] > *,.main .view [style*="display:flex"] > *,
+  .main .view [class*="grid"] > *{min-width:0}
+  /* ของที่ตั้งความกว้างตายตัวไว้ในสไตล์ · อย่าให้เกินจอ */
+  .main .view [style*="width:"]:not([style*="min-width"]):not(table):not(svg){max-width:100%}
+  .main .view [style*="flex-shrink:0"]{flex-shrink:1}
+  /* กล่อง host ของหน้าที่ render ด้วย JS ตั้ง margin ติดลบ 22px ไว้เพื่อกินขอบให้เต็มความกว้าง
+     (ล้อกับ padding 22px ของ .main บนเดสก์ท็อป) · บนมือถือ padding เหลือ 8–10px
+     margin ติดลบเลยเกินไปข้างละ ~12px แล้วดันทั้งหน้า → คืนเป็น 0 บนจอเล็ก */
+  .main .view > [id$="-host"]{margin-left:0 !important;margin-right:0 !important;max-width:100%}
+
+  /* §mobile3 · กริดหลายคอลัมน์ที่ประกาศเป็น class (รวมที่ JS ฉีดเข้ามาตอน render) */
+  #acct-modal .go-2,#acct-modal .go-gs,#acct-modal .pckp-g2,#dr-mail-host .dr-mb,#view-addonsvc .aos-fld-row,
+  #view-addonsvc .aos-variant-row,#view-agents .ag-fld-row,#view-agents .ag-fld-row-3,
+  #view-agents .ag-pp-dates,#view-agents .ag-pp-period-inputs,#view-agents .agi-grid-3,
+  #view-agents .agi-grid-4,#view-agents .agi-prog-header,#view-agents .agi-prog-row,
+  #view-agents .agp-addon-variant,#view-agents .agp-var-row,#view-agents .ct-arch-addon-row,
+  #view-agents .ct-arch-prog-row,#view-agents .ct-period-row,#view-agents .ct-versions,
+  #view-agents .sb-kpi-row,#view-agents .sb-meta-grid,#view-agents .sb-wrap,#view-booking .bkv2-detail-row,
+  #view-booking .bkv2-kpis,#view-booking .bkv2-nb-pax-row,#view-booking .bkv2-nb-row,
+  #view-booking .bkv2-routes-grid,#view-booking .bkv2-split,#view-booking .bkv2-stats,#view-costing .ct-duo,
+  #view-costing .ct-grid8,#view-costing .ct-kpis,#view-costing .ct-pair,#view-costing .ct-trio,
+  #view-pickup-setup .psu-kpi,#view-rate-types .rt-agg-grid,#view-rate-types .sb-wrap,
+  #view-rate-types .sb-wrap.three-col,.bk-form-grid,.bk-pax-grid,.boats-layout,.cal-detail-body,.cards,
+  .da-layout,.dr-duo,.dr-kpis,.dr-main,.dr-rts,.fl-bc-body,.fl-split,.form-2,.form-3,.g2,.g3,.g4,.grid.four,
+  .grid.many,.head-fields,.header,.loc-grid,.sb-kpi-row,.sb-meta-grid,.sb-wrap,.sc,.settings-layout,.sgrid,
+  .sig-grid,.st-picker,.t2-bgrid,.t2-famvgrid,.ts-kpis,.ts-mbar,.ts-pay,.ts-pay5,.ts-sign{grid-template-columns:minmax(0,1fr) !important}
 }
 
 /* iOS · 100vh นับรวมแถบ URL ทำให้ท้ายจอโดนบัง · ใช้ dvh ถ้ารองรับ */
