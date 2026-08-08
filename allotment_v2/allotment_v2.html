@@ -29242,6 +29242,19 @@ function _flMaintTimelineInner(m){
   }).join(''):`<div style="font-size:11px;color:${dim.ink3};text-align:center;padding:14px">No progress logged</div>`;
 }
 // Parts-withdrawn list + subtotal inner HTML (shared by full render + surgical refresh)
+// §mjLateParts · job ที่เปิดโหมดแก้อะไหล่ย้อนหลังอยู่ (ทีละงาน · ปิดเองเมื่อสลับงาน)
+var _flMaintLateEdit='';
+function flMaintCanEditParts(m){ return !!m && (m.status!=='done' || _flMaintLateEdit===m.id); }
+function flMaintLateEditOn(jobId){
+  const m=(typeof FL_MAINT!=='undefined'?FL_MAINT:[]).find(x=>x.id===jobId); if(!m) return;
+  if(!confirm('งาน '+(m.no||'')+' ปิดไปแล้ว\n\nการเบิก/คืนอะไหล่ตอนนี้จะไปเปลี่ยนต้นทุนของงานที่ปิดแล้ว และหักสต็อกคลังจริง\nทุกรายการจะถูกบันทึกว่าเป็นการแก้ย้อนหลัง\n\nเปิดโหมดแก้ไขย้อนหลัง?')) return;
+  _flMaintLateEdit=jobId;
+  if(typeof flRenderMaintDetailPink==='function') flRenderMaintDetailPink();
+}
+function flMaintLateEditOff(){
+  _flMaintLateEdit='';
+  if(typeof flRenderMaintDetailPink==='function') flRenderMaintDetailPink();
+}
 function _flMaintPartsInner(m){
   const dim={ink2:'#666',ink3:'#999'};
   const SVG_PINK={text:'#9F1B4F'};
@@ -29266,7 +29279,8 @@ function _flMaintPartsInner(m){
         <div style="font-size:9px;color:${dim.ink3};font-family:'DM Mono',monospace">${p.qty} ${p.unit||''} × ฿${(p.cost||0).toLocaleString()}${p.location?' · '+p.location:''}</div>
       </div>
       <span style="font-size:11px;font-weight:700;font-family:'DM Mono',monospace;color:${SVG_PINK.text}">฿${((p.qty||0)*(p.cost||0)).toLocaleString()}</span>
-      ${m.status!=='done'?`<button onclick="flMaintRemovePart('${m.id}',${i})" style="background:transparent;border:1px solid rgba(0,0,0,.08);border-radius:8px;padding:3px 8px;font-size:9px;color:#A32D2D;cursor:pointer;flex-shrink:0">×</button>`:''}
+      ${p.late?`<span title="เพิ่มหลังปิดงาน${p.lateBy?(' · โดย '+p.lateBy):''}" style="background:#FBF6EE;color:#8A5B00;border:0.5px solid #EBDCC2;border-radius:7px;padding:1px 6px;font-size:8.5px;font-weight:700;flex-shrink:0;white-space:nowrap">ย้อนหลัง</span>`:''}
+      ${flMaintCanEditParts(m)?`<button onclick="flMaintRemovePart('${m.id}',${i})" style="background:transparent;border:1px solid rgba(0,0,0,.08);border-radius:8px;padding:3px 8px;font-size:9px;color:#A32D2D;cursor:pointer;flex-shrink:0">×</button>`:''}
     </div>`;
   }).join(''):`<div style="font-size:11px;color:${dim.ink3};text-align:center;padding:14px">No parts withdrawn</div>`;
   return `<div style="background:#FBFAF7;border-radius:10px;overflow:hidden">${partsHtml}</div>`
@@ -29521,7 +29535,7 @@ function flRenderMaintDetailPink(){
     _wdSeen[label]=true; window._maintInvLabelMap[label]=x.id;
     return `<option value="${label.replace(/"/g,'&quot;')}"></option>`;
   }).join('');
-  const withdrawForm=m.status!=='done'?`<div style="display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap">
+  const withdrawForm=flMaintCanEditParts(m)?`<div style="display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap">
       <input list="maint-inv-list-${m.id}" id="maint-inv-sel-${m.id}" onchange="flMaintFillLoc('${m.id}')" autocomplete="off" placeholder="พิมพ์ชื่ออะไหล่ / Part No..." style="flex:1 1 160px;background:#FBFAF7;border:1px solid rgba(0,0,0,.06);border-radius:10px;padding:8px 10px;font-size:11px;outline:none;font-family:inherit;min-width:0"/>
       <datalist id="maint-inv-list-${m.id}">${invOpts}</datalist>
       <select id="maint-inv-loc-${m.id}" style="flex:1 1 130px;background:#FBFAF7;border:1px solid rgba(0,0,0,.06);border-radius:10px;padding:8px 10px;font-size:11px;outline:none;font-family:inherit;min-width:0">
@@ -29535,7 +29549,15 @@ function flRenderMaintDetailPink(){
       <span style="font-size:13px;font-weight:600">Parts withdrawn <span id="maint-parts-count-${m.id}" style="color:${dim.ink3};font-weight:400">${parts.length}</span></span>
     </div>
     <div id="maint-parts-list-${m.id}">${_flMaintPartsInner(m)}</div>
+    ${/* §mjLateParts · งานปิดแล้วยังลงอะไหล่ที่ลืมได้ · แต่ต้องกดเปิดโหมดก่อน */''}
+    ${(m.status==='done' && _flMaintLateEdit===m.id)?`<div style="display:flex;align-items:flex-start;gap:7px;padding:8px 11px;margin-top:8px;background:#FBF6EE;border:0.5px solid #EBDCC2;border-radius:8px">
+      <span style="font-size:10.5px;line-height:1.55;color:#8A5B00;flex:1">⚠ <b>งานนี้ปิดไปแล้ว</b> — การเบิก/คืนตอนนี้จะหักสต็อกจริงและเปลี่ยนต้นทุนของงานที่ปิดแล้ว · ทุกรายการจะติดป้าย “ย้อนหลัง” และบันทึกลง log</span>
+      <button onclick="flMaintLateEditOff()" style="background:#fff;border:1px solid #EBDCC2;color:#8A5B00;border-radius:8px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;flex-shrink:0;font-family:inherit">เสร็จแล้ว</button>
+    </div>`:''}
     ${withdrawForm}
+    ${(m.status==='done' && _flMaintLateEdit!==m.id)?`<div style="display:flex;justify-content:flex-end;margin-top:8px">
+      <button onclick="flMaintLateEditOn('${m.id}')" title="ปิดงานไปแล้วแต่ลืมลงอะไหล่ที่เบิกไปใช้จริง" style="background:transparent;border:1px solid rgba(0,0,0,.12);color:#666;border-radius:14px;padding:5px 12px;font-size:10px;font-weight:600;cursor:pointer;font-family:inherit">&#9998; แก้ไขอะไหล่ย้อนหลัง</button>
+    </div>`:''}
   </div>`;
 
   const memos=FL_MEMOS.filter(mo=>mo.maintId===m.id);
@@ -30627,15 +30649,19 @@ function flMaintAddPart(jobId){
   if(!invRemoveAt(inv,location,qty)){alert('หักสต็อกไม่สำเร็จ');return;}
   // log to inventory history
   if(!inv.history) inv.history=[];
-  inv.history.push({date:TODAY_STR,type:'withdraw',qty,location,note:`เบิกใช้งาน ${m.no||''} · ${m.title||''} · @ ${location}`,by:'ระบบ',jobId:m.id});
+  inv.history.push({date:TODAY_STR,type:'withdraw',qty,location,note:`เบิกใช้งาน ${m.no||''} · ${m.title||''} · @ ${location}`+(m.status==='done'?' · ลงย้อนหลัง (งานปิดแล้ว)':''),by:'ระบบ',jobId:m.id});
   // add to job parts (merge by part + location)
   if(!m.parts) m.parts=[];
-  const existing=m.parts.find(p=>p.invId===invId && p.location===location && p.date===TODAY_STR);
+  // §mjLateParts · งานปิดแล้ว = ลงย้อนหลัง · ติดธงไว้ให้แยกออกจากของที่เบิกตอนทำงานจริง
+  const _late=(m.status==='done');
+  const _lateBy=_late?((typeof laBy==='function'?laBy():'')||(typeof ckMe==='function'?ckMe():'')||''):'';
+  const _lateTag=_late?' · ลงย้อนหลังหลังปิดงาน':'';
+  const existing=m.parts.find(p=>p.invId===invId && p.location===location && p.date===TODAY_STR && !p.late===!_late);
   if(existing){existing.qty+=qty;}
-  else{m.parts.push({invId,name:inv.name,qty,unit:inv.unit,cost:inv.cost,location,date:TODAY_STR});}
-  flPushLog(jobId,`📦 เบิก ${inv.name} ${qty} ${inv.unit} · ${location} (฿${(qty*inv.cost).toLocaleString()})`);
+  else{m.parts.push(Object.assign({invId,name:inv.name,qty,unit:inv.unit,cost:inv.cost,location,date:TODAY_STR}, _late?{late:true,lateBy:_lateBy}:{}));}
+  flPushLog(jobId,`📦 เบิก ${inv.name} ${qty} ${inv.unit} · ${location} (฿${(qty*inv.cost).toLocaleString()})${_lateTag}`);
   if(!m.progressLog) m.progressLog=[];
-  m.progressLog.push({date:TODAY_STR,text:`📦 เบิก ${inv.name} ${qty} ${inv.unit} · ${location} (฿${(qty*inv.cost).toLocaleString()})`,by:'ระบบ'});
+  m.progressLog.push({date:TODAY_STR,text:`📦 เบิก ${inv.name} ${qty} ${inv.unit} · ${location} (฿${(qty*inv.cost).toLocaleString()})${_lateTag}`,by:_lateBy||'ระบบ'});
   flMaintCalcCost(jobId); // sync m.cost
   flSave();
   flMaintRefreshParts(jobId); // surgical update · keeps +Withdraw button alive → no scroll jump
@@ -30653,9 +30679,11 @@ function flMaintRemovePart(jobId,idx){
     if(!inv.history) inv.history=[];
     inv.history.push({date:TODAY_STR,type:'receive',qty:p.qty,location:retLoc,note:`คืนสต็อก (ยกเลิกเบิก ${m.no||''}) · @ ${retLoc}`,by:'ระบบ',jobId:m.id});
   }
-  flPushLog(jobId,`↩ คืนอะไหล่ ${p.name} ${p.qty} ${p.unit} กลับสต็อก`);
+  // §mjLateParts · คืนตอนงานปิดแล้ว = การแก้ย้อนหลังเหมือนกัน · ต้องเห็นใน log
+  const _lateR=(m.status==='done')?' · แก้ย้อนหลังหลังปิดงาน':'';
+  flPushLog(jobId,`↩ คืนอะไหล่ ${p.name} ${p.qty} ${p.unit} กลับสต็อก${_lateR}`);
   if(!m.progressLog) m.progressLog=[];
-  m.progressLog.push({date:TODAY_STR,text:`↩ ยกเลิกเบิก ${p.name} ${p.qty} ${p.unit||''} (คืนสต็อก)`,by:'ระบบ'});
+  m.progressLog.push({date:TODAY_STR,text:`↩ ยกเลิกเบิก ${p.name} ${p.qty} ${p.unit||''} (คืนสต็อก)${_lateR}`,by:'ระบบ'});
   m.parts.splice(idx,1);
   flMaintCalcCost(jobId); // sync m.cost
   flSave();
@@ -55036,7 +55064,9 @@ function agRenderTable(){
         +((typeof window.laIsAdmin==='function' && window.laIsAdmin()) ? '<button onclick="agTblDeleteSelected()" title="ลบโปรไฟล์ Agent ที่ติ๊กไว้ (เฉพาะ admin)" style="border:1px solid #E4A0A0;background:#FCEBEB;color:#A32D2D;border-radius:7px;padding:5px 10px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit">🗑 ลบที่เลือก</button>' : '')
         +'</div></div>'
     +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">'
-      + sel('agb-rate','ตั้ง Rate Type',(SB_RATE_TYPES||[]).map(r=>({v:r.id,t:r.name})))
+      /* §rtLoginScope · กรองตามสิทธิ์ + ตัดตัวที่ Deactivate ทิ้ง · ฝั่งการ์ดกันไม่ให้เลือกอยู่แล้ว
+         ถ้าตรงนี้ยังเลือกได้ จะตั้งเรทที่ปิดใช้งานทับ agent ทีละหลายสิบใบโดยไม่มีอะไรเตือน */
+      + sel('agb-rate','ตั้ง Rate Type',((typeof rtScopeList==='function')?rtScopeList((SB_RATE_TYPES||[]).filter(r=>r.active!==false)):(SB_RATE_TYPES||[]).filter(r=>r.active!==false)).map(r=>({v:r.id,t:r.name})))
       + '<div><label style="font-size:11px;color:#8b9a94;display:block;margin-bottom:3px">ตั้ง Programs</label>'
         +'<button onclick="agBulkProgramsPick()" style="width:100%;height:31px;border:1px solid '+(nPg?'#0F6E56':'#d7d3ca')+';background:'+(nPg?'#E1F5EE':'#fff')+';color:'+(nPg?'#0F6E56':'#8b9a94')+';border-radius:7px;font-size:12px;cursor:pointer;font-family:inherit">'+(nPg? nPg+' โปรแกรม' : '— ไม่เปลี่ยน —')+'</button></div>'
       + sel('agb-sales','ตั้ง เซลล์',(SB_SALES||[]).map(s=>({v:s.id,t:s.name})))
@@ -55332,8 +55362,16 @@ function _rtOwnerId(rt){ return (rt && rt.owner) ? rt.owner : ''; }
 //   กติกา: เรทของเซลล์เจ้าของ agent + เรทส่วนกลาง (ไม่มี owner) เท่านั้น
 //   ข้อยกเว้นสำคัญ — ถ้า agent ผูกเรทของเซลล์อื่นไว้อยู่แล้ว ต้องยังเห็น ไม่งั้นค่าเดิมจะหายเงียบตอนแก้
 //   agent ที่ยังไม่ระบุเซลล์ = กรองไม่ได้ ให้เห็นทั้งหมดไปก่อน
+// §rtLoginScope · เซลล์ที่ถูก scope เห็นเฉพาะเรทของตัวเอง + ส่วนกลาง · admin เห็นหมด
+//   keepId = เรทที่ agent ผูกอยู่ตอนนี้ · ต้องรอดเสมอ ไม่งั้นค่าเดิมหายไปจากช่องเลือก
+function rtScopeList(list, keepId){
+  if(typeof laSalesScoped!=='function' || !laSalesScoped()) return list||[];
+  var my=(typeof laMySalesId==='function')?(laMySalesId()||''):'';
+  return (list||[]).filter(function(r){ var o=_rtOwnerId(r); return !o || o===my || (keepId && r.id===keepId); });
+}
 function rtForSales(salesId, keepId){
   var act=(SB_RATE_TYPES||[]).filter(function(r){ return r.active!==false || r.id===keepId; });
+  act=rtScopeList(act, keepId);   // §rtLoginScope · กรองตามคนที่ login ก่อน แล้วค่อยแบ่งกลุ่มตามเซลล์เจ้าของ agent
   act.sort(function(a,b){ return String(a.name||'').localeCompare(String(b.name||'')); });
   if(!salesId) return {own:[], shared:[], other:[], all:act, noSales:true};
   var own=[], shared=[], other=[];
@@ -57974,9 +58012,11 @@ function agEditBuildRateTypePicker(){
   // §rtBySales · เห็นเฉพาะเรทของเซลล์เจ้าของ + ส่วนกลาง · เรทของเซลล์อื่นซ่อนไว้ กดดูได้
   const _G = rtForSales(d.sales||'', currentId);
   const _salesNm = (d.sales && typeof sbGetSales==='function') ? ((sbGetSales(d.sales)||{}).name||'') : '';
-  const _hidden = _G.noSales ? 0 : (SB_RATE_TYPES||[]).filter(r=>r.active!==false && _rtOwnerId(r) && _rtOwnerId(r)!==d.sales && r.id!==currentId).length;
+  // §rtLoginScope · ทั้งปุ่ม "แสดงเรทของเซลล์อื่น" และกรณี agent ยังไม่ได้ตั้งเซลล์ ต้องอยู่ในสิทธิ์ของคน login
+  const _rtPool = (typeof rtScopeList==='function') ? rtScopeList((SB_RATE_TYPES||[]).slice(), currentId) : (SB_RATE_TYPES||[]).slice();
+  const _hidden = _G.noSales ? 0 : _rtPool.filter(r=>r.active!==false && _rtOwnerId(r) && _rtOwnerId(r)!==d.sales && r.id!==currentId).length;
   const items = (_G.noSales || _agEditRTAll)
-    ? (SB_RATE_TYPES||[]).slice().sort((a,b) => {
+    ? _rtPool.slice().sort((a,b) => {
         if((a.active!==false) !== (b.active!==false)) return (a.active!==false) ? -1 : 1;
         return (a.code||'').localeCompare(b.code||'');
       })
@@ -60191,7 +60231,8 @@ function agNewRender(){
   const _rtSalesNm = (_rtSel && typeof sbGetSales==='function') ? ((sbGetSales(_rtSel)||{}).name||'') : '';
   const _rtO = r => (typeof _rtOwnerId==='function') ? _rtOwnerId(r) : (r.owner||'');
   const _rtOpt = (r,shared) => `<option value="${r.id}" ${d.rateTypeId===r.id?'selected':''}>${esc(r.name)}${r.code?(' · '+esc(r.code)):''}${shared?' · กลาง':''}</option>`;
-  const _rtActive = (SB_RATE_TYPES||[]).filter(r=>r.active!==false).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+  // §rtLoginScope · เลือกเซลล์คนอื่นในหน้านี้ได้ แต่เรทของคนอื่นต้องไม่โผล่ให้เซลล์ที่ถูก scope เห็น
+  const _rtActive = ((typeof rtScopeList==='function')?rtScopeList((SB_RATE_TYPES||[]).filter(r=>r.active!==false)):(SB_RATE_TYPES||[]).filter(r=>r.active!==false)).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
   const _rtOwnList = _rtSel ? _rtActive.filter(r=>_rtO(r)===_rtSel) : [];
   const _rtSharedList = _rtActive.filter(r=>!_rtO(r));
   const _rtOptions = `<option value="">${d.sales?'— เลือกเรท —':'— เลือก Sales ก่อน —'}</option>`
