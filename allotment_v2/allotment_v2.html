@@ -60345,8 +60345,8 @@ const CT_DOC_SECTIONS = [
   {id:'parties',    name:'Parties',                       required:true,  defaultOn:true,  num:'02'},
   {id:'programs',   name:'Programs in Contract',          required:false, defaultOn:true,  num:'03'},
   {id:'pricing',    name:'Pricing · Seat + Charter',      required:false, defaultOn:true,  num:'04'},
-  {id:'eligibility',name:'Guest Eligibility · Important', required:true,  defaultOn:true,  num:'05'},
-  {id:'addons',     name:'Add-on Services',               required:false, defaultOn:true,  num:'06'},
+  {id:'addons',     name:'Add-on Services',               required:false, defaultOn:true,  num:'05'},
+  {id:'eligibility',name:'Guest Eligibility · Important', required:true,  defaultOn:true,  num:'06'},
   {id:'payment',    name:'Payment Terms',                 required:false, defaultOn:true,  num:'07'},
   {id:'booking',    name:'Booking Channel',               required:false, defaultOn:true,  num:'08'},
   {id:'cancel',     name:'Cancellation Policy',           required:false, defaultOn:false, num:'09'},
@@ -60799,8 +60799,8 @@ function _ctDocRenderPages(hostId){
   const PAGE_GROUPS = [
     { id:'p1', sections:['cover'] },
     { id:'p2', sections:['parties','programs'] },
-    { id:'p3', sections:['pricing','eligibility'] },   // Eligibility goes right under pricing table
-    { id:'p4', sections:['addons','payment'] },
+    { id:'p3', sections:['pricing','addons'] },        // §ctSwap56 · ตารางราคาแล้วต่อด้วยของขายเพิ่ม · เรื่องเงินอยู่ด้วยกัน
+    { id:'p4', sections:['eligibility','payment'] },
     { id:'p5', sections:['booking','cancel','general','custom'] },
     { id:'p6', sections:['signature'] }
   ];
