@@ -44526,6 +44526,7 @@ var CK_NOSHOW_REASONS = [
 function ckLostByType(b, date){
   var out={ad:0,chd:0,inf:0,foc:0,total:0,unalloc:0,ns:0,cxl:0,selfPier:0};
   var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):((b&&b.ops)||{});
+  var _reins=!!(O.pierCheckin && O.pierCheckin.reinstate);   // §ckPierFix
   [[ 'van', O.vanCheckin ], [ 'pier', O.pierCheckin ]].forEach(function(pair){
     var kind=pair[0], ck=pair[1];
     var ev=(ck&&Array.isArray(ck.events))?ck.events:[];
@@ -44533,7 +44534,9 @@ function ckLostByType(b, date){
       var n=Math.max(0,+x.pax||0); if(!n) return;
       // §ckSelfPier · ไม่ได้ขึ้นรถ แต่แจ้งว่าไปเองที่ท่า/ไปรถคันอื่น → ยังถือว่าเดินทาง
       //   ให้หน้าท่าเป็นคนตัดสิน ถ้าไม่มาจริงค่อยกด No-show ที่ท่า อันนั้นถึงนับว่าหาย
-      if(kind==='van' && x.type!=='cxl' && ckExpectAtPier(x.reasonCode)){ out.selfPier+=n; return; }
+      // §ckPierFix · หรือหน้าท่ากดยืนยันเองว่ามาจริง → No-show ฝั่งรถไม่นับเป็นคนหาย
+      //   บันทึกฝั่งรถยังอยู่ครบ แค่ไม่เอามาตัดสินว่าเดินทางหรือไม่
+      if(kind==='van' && x.type!=='cxl' && (_reins || ckExpectAtPier(x.reasonCode))){ out.selfPier+=n; return; }
       out.total+=n; if(x.type==='cxl') out.cxl+=n; else out.ns+=n;
       var pb=x.paxBreak;
       if(pb && (pb.ad||pb.chd||pb.inf||pb.foc)){ out.ad+=(+pb.ad||0); out.chd+=(+pb.chd||0); out.inf+=(+pb.inf||0); out.foc+=(+pb.foc||0); }
@@ -44559,6 +44562,32 @@ function ckEventTally(ck){
 function ckReasonDef(code){ return CK_NOSHOW_REASONS.find(function(r){ return r.code===code; }) || null; }
 function ckReasonLabel(code){ var d=ckReasonDef(code); return d?d.label:(code||''); }
 function ckExpectAtPier(code){ var d=ckReasonDef(code); return !!(d && d.expectAtPier); }
+// §ckPierFix · หน้าท่ายืนยันเองว่ามาจริง แม้เช็คอินรถบันทึกว่าไม่ได้ขึ้นรถ
+function ckReinstateOf(b, date){ var p=ckRead(b,date,'pier'); return (p && p.reinstate) ? p.reinstate : null; }
+// มี No-show ฝั่งรถอยู่ไหม (ไว้ตัดสินว่าจะโชว์ปุ่ม "มาแล้ว" หรือปุ่ม "ถอน")
+function ckVanNsPax(b, date){
+  var v=ckRead(b,date,'van'); if(!v || !Array.isArray(v.events)) return 0;
+  return v.events.reduce(function(s,x){ return s + ((x.type!=='cxl') ? Math.max(0,+x.pax||0) : 0); }, 0);
+}
+function ckPierReinstate(bkId, date, on){
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
+  var cur=ckRead(b,date,'pier')||{};
+  if(on){
+    if(!confirm('ยืนยันว่าลูกค้ามาถึงท่าจริง?\n\nบันทึกของเช็คอินรถจะไม่ถูกแก้ (ยังเห็นว่าเช้าไม่ได้ขึ้นรถ)\nแถวนี้จะกลับมาเช็คอินได้ตามปกติ')) return;
+  } else {
+    if(!confirm('ยกเลิกการยืนยัน?\n\nแถวจะกลับไปเป็น "ไม่มาทั้งใบ" ตามที่เช็คอินรถบันทึกไว้')) return;
+  }
+  var val={}; Object.keys(cur).forEach(function(k){ val[k]=cur[k]; });
+  if(on){
+    val.reinstate={ at:ckNowHM(), by:ckMe(), ts:new Date().toISOString() };
+    // §ckPierFix2 · ตั้งช่องนับคนเป็นยอดจอง · มาไม่ครบค่อยกด − ลดเอา
+    var _t=ckTripOn(b,date)||{}, _bk=ckBookedPax(_t);
+    val.actualPax=_bk; val.noShow=0; val.expected=_bk;
+  } else {
+    delete val.reinstate;
+  }
+  ckWrite(b, date, 'pier', val); ckPersist(); ckAfter('pier');
+}
 function ckNowHM(){ var d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
 function ckMe(){ return (typeof ME!=='undefined' && ME && (ME.name||ME.username)) || '—'; }
 function ckEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -44582,7 +44611,7 @@ function ckTripOn(b, date){ return ((b&&b.trips)||[]).find(function(x){ return (
 function ckRead(b, date, kind){ var o=(typeof bkOpsRead==='function')?bkOpsRead(b,date):((b&&b.ops)||{}); return (kind==='pier'?o.pierCheckin:o.vanCheckin)||null; }
 // §pierStage · ckStep / ckToggle / ckEvSave ต่างสร้าง object ใหม่ทั้งก้อน ถ้าไม่พกขั้น "ถึงท่า / เคลียร์"
 // มาด้วย จะหายทุกครั้งที่กด +/- (บั๊กแบบเดียวกับที่เคยทำ events หาย) — merge จากของเดิมที่จุดเดียวตรงนี้
-var CK_STAGE_KEYS=['arrivedAt','arrivedBy','clearedAt','clearedBy'];
+var CK_STAGE_KEYS=['arrivedAt','arrivedBy','clearedAt','clearedBy','reinstate'];   // §ckPierFix · reinstate ต้องไม่หายตอนกด +/- หรือเช็คอิน
 function ckWrite(b, date, kind, val){
   var o=(typeof bkOpsFor==='function')?bkOpsFor(b, (typeof bkOpsDate==='function'?bkOpsDate(b,date):date)):(b.ops=b.ops||{});
   var prev=(kind==='pier'?o.pierCheckin:o.vanCheckin)||null;
@@ -46120,6 +46149,12 @@ function pckStageCell(r, date){
   var e=ckEsc, ck=r.ck||{}, st=pckStage(ck);
   // §ckSelfPier · ไม่ได้ขึ้นรถ แต่แจ้งว่ามาเองที่ท่า · ยังเช็คอินได้ตามปกติ
   var _sp=pckSelfPierNote(r.b, date);
+  // §ckPierFix · หน้าท่ายืนยันเองว่ามาจริง · โชว์ให้เห็นว่าใครกด เวลาไหน · กดยกเลิกได้
+  var _re=(typeof ckReinstateOf==='function')?ckReinstateOf(r.b,date):null;
+  var _reTag=_re ? ('<div style="font-size:10px;font-weight:700;color:#0F6E56;background:#E1F5EE;border:1px solid #B7E2D2;border-radius:7px;padding:2px 8px;margin-bottom:4px;display:inline-block;cursor:pointer" '
+      +'onclick="event.stopPropagation();ckPierReinstate(\''+r.b.id+'\',\''+date+'\',false)" '
+      +'title="หน้าท่ายืนยันว่ามาจริง แม้เช็คอินรถบันทึกว่าไม่ได้ขึ้นรถ · คลิกเพื่อยกเลิกการยืนยัน">&#8617; หน้าท่ายืนยันว่ามาแล้ว'
+      +(_re.at?(' · '+e(_re.at)):'')+(_re.by?(' · '+e(_re.by)):'')+'</div>') : '';
   var _spTag=_sp ? ('<div style="font-size:10px;font-weight:700;color:#6B289A;background:#F4E8FB;border:1px solid #E2CDF2;border-radius:7px;padding:2px 8px;margin-bottom:4px;display:inline-block" '
       +'title="เช็คอินรถบันทึกว่าไม่ได้ขึ้นรถ แต่ให้เหตุผลว่าจะมาเองที่ท่า · ยังนับว่ารอรับอยู่ เช็คอินได้ตามปกติ">&#128694; ไม่ได้ขึ้นรถ · '
       +e(_sp.label)+' '+_sp.pax+' คน'+(_sp.at?(' · '+e(_sp.at)):'')+'</div>') : '';
@@ -46136,7 +46171,7 @@ function pckStageCell(r, date){
     return '<button onclick="pckStageSet(\''+r.b.id+'\',\''+date+'\',\''+S.k+'\')" title="'+e(S.lbl+(done?(' · '+((S.k==='arr'?ck.arrivedBy:ck.clearedBy)||'')+(when?(' '+when):'')):' · กดเพื่อบันทึก'))+'" style="border:1.5px solid '+(done?S.bd:'#E7E4DC')+';background:'+(done?S.bg:'#fff')+';color:'+(done?S.col:'#a5a49d')+';border-radius:7px;padding:3px 9px;font-size:10.5px;font-weight:'+(done?'800':'600')+';cursor:pointer;font-family:inherit;white-space:nowrap;margin:0 3px 3px 0">'
       +(done?'&#10003; ':'')+e(S.short)+(done&&when?('<span style="font-family:\'DM Mono\',monospace;font-weight:600;margin-left:5px;opacity:.75">'+when+'</span>'):'')+'</button>';
   };
-  var html=_spTag+btn(PCK_STAGES[0])+btn(PCK_STAGES[1]);
+  var html=_reTag+_spTag+btn(PCK_STAGES[0])+btn(PCK_STAGES[1]);
   if(st==='on') html+='<div style="font-size:10px;font-weight:800;color:#0F6E56">&#10003; ขึ้นเรือแล้ว</div>';
   else if(st==='clr' && due>0) html+='<div style="font-size:9.5px;color:#7A4A00">เคลียร์แล้ว · รอขึ้นเรือ</div>';
   else if(st==='arr' && due>0) html+='<div style="font-size:9.5px;color:#A32D2D;font-weight:700">&#9888; ยังไม่เก็บเงิน</div>';
@@ -46831,7 +46866,11 @@ function pckRowHtml(r, date){
    +'<td>'+pckMoneyCell(b,date)+'</td>'
    +'<td><div class="pck-acts">'
      +(_vd?('<span class="pck-vdchip" title="'+e(pckVoidLabel(_vd)+' · '+_vd.pax+' คน'+(_vd.reason?(' · '+_vd.reason):''))+'">&#10007; '+e(pckVoidLabel(_vd))+' · ไม่ต้องเช็คอิน</span>'
-       +'<button class="pck-undo" onclick="event.stopPropagation();ckEventUndo(\''+b.id+'\',\''+date+'\',\'pier\')" title="กดผิด? ถอนรายการล่าสุดคืน">&#8630; ถอน</button>'):(
+       // §ckPierFix · ปิดมาจากฝั่งรถ → ปุ่ม "ถอน" ของหน้าท่าใช้ไม่ได้ (ไม่มีรายการฝั่งนี้)
+       //   ให้ปุ่มยืนยันว่ามาจริงแทน · บันทึกฝั่งรถไม่ถูกแตะ
+       +((ckVanNsPax(b,date)>0 && !(ck.events&&ck.events.length))
+         ? '<button onclick="event.stopPropagation();ckPierReinstate(\''+b.id+'\',\''+date+'\',true)" title="ลูกค้าตามมาเองที่ท่า · กดเพื่อเปิดแถวนี้ให้เช็คอินได้ (บันทึกของเช็คอินรถยังอยู่)" style="border:1px solid #B7E2D2;background:#E1F5EE;color:#0F6E56;border-radius:999px;padding:5px 11px;font-size:10.5px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap">&#8617; มาแล้ว · เปิดเช็คอิน</button>'
+         : '<button class="pck-undo" onclick="event.stopPropagation();ckEventUndo(\''+b.id+'\',\''+date+'\',\'pier\')" title="กดผิด? ถอนรายการล่าสุดคืน">&#8630; ถอน</button>')):(
       '<span class="ck-stp" title="จำนวนคนที่ขึ้นเรือจริง"><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\'pier\',-1)">&minus;</button><span class="ck-n">'+actual+'</span><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\'pier\',1)">+</button></span>'
      +'<span style="display:inline-flex;gap:4px"><button class="ck-ev ck-ev-ns" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'no_show\')" title="ลูกค้าไม่มา · ไม่แจ้งล่วงหน้า">No-show</button>'
      +'<button class="ck-ev ck-ev-cx" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'cxl\')" title="ลูกค้าแจ้งยกเลิกหน้างาน">CXL</button></span>'
