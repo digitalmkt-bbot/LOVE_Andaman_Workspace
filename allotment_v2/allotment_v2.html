@@ -18279,9 +18279,12 @@ function flLoad(){
     
     // §dupNo · เดิมใช้ FL_MEMOS.length + 1 · พอลิสต์มีรู เลขใหม่จะไปชนใบที่มีอยู่แล้ว
     //   (จุดอื่นในระบบใช้เลขสูงสุด + 1 อยู่แล้ว · เหลือจุดนี้จุดเดียวที่หลุด)
-    const _moMax = FL_MEMOS.reduce(function(mx,x){
+    let _moMax = FL_MEMOS.reduce(function(mx,x){
       var v = parseInt(String(x.no||'').replace(/\D/g,''),10); return (v>mx)?v:mx; }, 0);
-    const no = 'MO-' + String(_moMax + 1).padStart(3, '0');
+    // §noFree · ยืนยันว่าเลขที่จะออกยังว่างจริง ไม่ใช่แค่มากกว่าเลขสูงสุด
+    let no;
+    do { _moMax++; no = 'MO-' + String(_moMax).padStart(3,'0'); }
+    while(FL_MEMOS.some(function(x){ return x.no===no; }));
     const memo = {
       id: LA_UID('m') + '_' + jobNo,
       no,
@@ -18790,7 +18793,7 @@ var LA_DUP_NUMS = [
     head:['id','วันที่','สถานะ','เรื่อง · ยอด'],
     get:function(){ return typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]; },
     no:function(x){ return x.no||''; },
-    cols:function(x){ return [x.id, x.createdDate||'', x.status||'',
+    cols:function(x){ return [x.id+(x.prevNo?' (เดิม '+x.prevNo+')':''), x.createdDate||'', x.status||'',
       (x.title||'')+' · \u0e3f'+Math.round(+x.amount||0).toLocaleString()]; } },
   { k:'noMaint', label:'เลขที่ใบงานซ่อมซ้ำ (คนละใบ)', money:true,
     head:['id','วันที่','สถานะ','เรื่อง'],
@@ -18805,6 +18808,78 @@ var LA_DUP_NUMS = [
     cols:function(x){ return [x.id, x.date||x.startDate||'', x.status||'',
       ((getBoat(x.boatId)||{}).name||'')+' · '+(x.title||'')]; } }
 ];
+// §renumber · ออกเลขใหม่ให้เอกสารที่เลขชนกัน · ไม่ลบอะไรทั้งสิ้น
+//   คืนค่า {n, changed:[{id,from,to,title}]} เพื่อเอาไปแสดงว่าทำอะไรไปบ้าง
+function laRenumberSet(k){
+  var U=LA_DUP_NUMS.filter(function(x){return x.k===k;})[0];
+  if(!U) return {n:0,changed:[]};
+  var arr=U.get()||[];
+  var pad=function(n){ return String(n).padStart(3,'0'); };
+  var pre=(k==='noMemo')?'MO-':(k==='noMaint')?'MJ-':'INC-';
+  var maxN=arr.reduce(function(mx,x){
+    var v=parseInt(String(x.no||'').replace(/\D/g,''),10); return (v>mx)?v:mx; },0);
+  var groups={};
+  arr.forEach(function(x){ var n=U.no(x); if(!n) return; (groups[n]=groups[n]||[]).push(x); });
+  var changed=[];
+  Object.keys(groups).forEach(function(n){
+    var g=groups[n]; if(g.length<2) return;
+    // §keep · ใบที่สร้างก่อนได้ครองเลขเดิม
+    var dOf=function(x){ return x.createdDate||x.startDate||x.date||''; };
+    g=g.slice().sort(function(a,b){ return String(dOf(a)).localeCompare(String(dOf(b)))
+      || String(a.id).localeCompare(String(b.id)); });
+    g.slice(1).forEach(function(m){
+      // §noFree · เลื่อนจนกว่าจะได้เลขที่ยังไม่มีใครใช้จริง ๆ
+      //   เลขสูงสุด+1 อย่างเดียวไม่พอ ถ้ารูปแบบการเขียนเลขในระบบไม่เหมือนกัน
+      var newNo;
+      do { maxN++; newNo=pre+pad(maxN); }
+      while(arr.some(function(x){ return x!==m && x.no===newNo; }));
+      var oldNo=m.no;
+      m.prevNo = m.prevNo || oldNo;      // §trace
+      m.no = newNo;
+      if(k==='noMemo'){
+        // §refs · ประวัติคลังที่ผูกกับ memo ใบนี้ด้วย memoId → แก้ข้อความให้ตรง
+        (typeof FL_INVENTORY!=='undefined'?FL_INVENTORY:[]).forEach(function(it){
+          (it.history||[]).forEach(function(h){
+            if(h && h.memoId===m.id && h.note) h.note=String(h.note).split(oldNo).join(newNo);
+          });
+        });
+        // progressLog ของใบงานที่ memo ใบนี้ผูกอยู่ · แก้ได้เฉพาะตอนที่ไม่กำกวม
+        //   ถ้าอีกใบที่เลขชนกันผูกใบงานเดียวกัน จะแยกไม่ออกว่าบรรทัดไหนของใคร → ไม่แตะ
+        var ambiguous = m.maintId && g.some(function(x){ return x!==m && x.maintId===m.maintId; });
+        if(m.maintId && !ambiguous){
+          var mj=(typeof FL_MAINT!=='undefined'?FL_MAINT:[]).find(function(x){ return x.id===m.maintId; });
+          if(mj) (mj.progressLog||[]).forEach(function(l){
+            if(l && l.text) l.text=String(l.text).split(oldNo).join(newNo); });
+        }
+      }
+      changed.push({ id:m.id, from:oldNo, to:newNo, title:m.title||'' });
+    });
+  });
+  if(changed.length){
+    if(typeof flSave==='function') flSave();
+    if(typeof save==='function'){ try{ save('config'); }catch(e){} }
+  }
+  return { n:changed.length, changed:changed };
+}
+function costDupRenumber(k){
+  var U=LA_DUP_NUMS.filter(function(x){return x.k===k;})[0]; if(!U) return;
+  var arr=U.get()||[], groups={};
+  arr.forEach(function(x){ var n=U.no(x); if(!n) return; (groups[n]=groups[n]||[]).push(x); });
+  var cols=Object.keys(groups).filter(function(n){ return groups[n].length>1; });
+  if(!cols.length){ alert('ไม่พบเลขที่ชนกัน'); return; }
+  var msg='ออกเลขใหม่ให้เอกสารที่เลขชนกัน · '+cols.length+' เลข\n\n'
+    +cols.slice(0,10).join(', ')+(cols.length>10?' …':'')+'\n\n'
+    +'ใบที่สร้างก่อนจะได้ครองเลขเดิม · ใบที่มาทีหลังได้เลขใหม่\n'
+    +'เลขเดิมถูกเก็บไว้ที่ prevNo · ค้นด้วยเลขเก่ายังเจอ\n'
+    +'ไม่มีการลบเอกสารใด ๆ';
+  if(!confirm(msg)) return;
+  var r=laRenumberSet(k);
+  alert(r.n>0 ? ('ออกเลขใหม่แล้ว '+r.n+' ใบ\n\n'
+      +r.changed.slice(0,12).map(function(c){ return c.from+' → '+c.to+' · '+String(c.title).slice(0,40); }).join('\n')
+      +(r.changed.length>12?'\n…':''))
+    : 'ไม่มีอะไรต้องแก้');
+  if(typeof flRenderCostAnalytics==='function') flRenderCostAnalytics();
+}
 // ให้คะแนน "ความมีเนื้อหา" · ในกลุ่มที่ซ้ำ เก็บใบที่คะแนนสูงสุด ที่เหลือคือเงา
 function laDupScore(x){
   var n=0;
@@ -29049,11 +29124,12 @@ function flRenderCostAnalytics(){
   try{
     const DS=(typeof laDupScan==='function')?laDupScan():null;
     if(DS && (DS.nDup>0 || DS.nNo>0)){
-      const mkLine=(x)=>`<div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-top:1px solid rgba(160,90,26,.14)">
+      const mkLine=(x,isNo)=>`<div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-top:1px solid rgba(160,90,26,.14)">
           <span style="flex:1;font-size:11.5px;font-weight:600">${x.label}${x.money?' <span style="font-size:9px;background:#FCE5EC;color:#9F1B4F;border-radius:5px;padding:1px 6px;font-weight:700">\u0e01\u0e23\u0e30\u0e17\u0e1a\u0e22\u0e2d\u0e14\u0e40\u0e07\u0e34\u0e19</span>':''}</span>
           <span style="font-size:11.5px;font-family:'DM Mono',monospace;font-weight:700">${x.extra} \u0e0b\u0e49\u0e33</span>
           <button onclick="costDupInspect('${x.k}')" style="border:1px solid #E0B24B;background:#fff;color:#7A4A00;border-radius:9px;padding:4px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">\u0e14\u0e39\u0e2b\u0e25\u0e31\u0e01\u0e10\u0e32\u0e19</button>
           ${x.clean?`<button onclick="costDupClean('${x.k}')" style="border:none;background:#A05A1A;color:#fff;border-radius:9px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">\u0e25\u0e49\u0e32\u0e07</button>`:''}
+          ${isNo?`<button onclick="costDupRenumber('${x.k}')" style="border:none;background:#5B289A;color:#fff;border-radius:9px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">\u0e2d\u0e2d\u0e01\u0e40\u0e25\u0e02\u0e43\u0e2b\u0e21\u0e48</button>`:''}
         </div>`;
       const all=DS.sets.concat(DS.nested).filter(x=>x.extra>0);
       const numsL=(DS.nums||[]).filter(x=>x.extra>0);
@@ -29061,7 +29137,7 @@ function flRenderCostAnalytics(){
       const lines=(sureL.length?`<div style="margin-top:9px;font-size:10px;font-weight:800;letter-spacing:.06em;color:#7A4A00;opacity:.75">\u0e0b\u0e49\u0e33\u0e41\u0e19\u0e48\u0e19\u0e2d\u0e19 \u00b7 \u0e17\u0e38\u0e01\u0e0a\u0e48\u0e2d\u0e07\u0e15\u0e23\u0e07\u0e01\u0e31\u0e19\u0e2b\u0e21\u0e14</div>`+sureL.map(mkLine).join(''):'')
         +(maybeL.length?`<div style="margin-top:11px;font-size:10px;font-weight:800;letter-spacing:.06em;color:#7A4A00;opacity:.75">\u0e19\u0e48\u0e32\u0e2a\u0e07\u0e2a\u0e31\u0e22 \u00b7 \u0e23\u0e30\u0e1a\u0e1a\u0e15\u0e31\u0e14\u0e2a\u0e34\u0e19\u0e41\u0e17\u0e19\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49 \u0e40\u0e1b\u0e34\u0e14\u0e14\u0e39\u0e40\u0e2d\u0e07</div>`+maybeL.map(mkLine).join(''):'')
         +`<div style="margin-top:10px;padding-top:9px;border-top:1px solid rgba(160,90,26,.14);font-size:10.5px;line-height:1.6;opacity:.85">\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23\u0e22\u0e48\u0e2d\u0e22 (\u0e1b\u0e23\u0e30\u0e27\u0e31\u0e15\u0e34\u0e40\u0e1a\u0e34\u0e01\u0e02\u0e2d\u0e07 \u00b7 \u0e2d\u0e30\u0e44\u0e2b\u0e25\u0e48\u0e43\u0e19\u0e43\u0e1a\u0e07\u0e32\u0e19 \u00b7 \u0e23\u0e32\u0e22\u0e01\u0e32\u0e23\u0e43\u0e19 memo \u00b7 \u0e01\u0e32\u0e23\u0e23\u0e31\u0e1a\u0e40\u0e07\u0e34\u0e19) \u0e15\u0e23\u0e27\u0e08\u0e08\u0e32\u0e01 id \u0e1b\u0e23\u0e30\u0e08\u0e33\u0e1a\u0e23\u0e23\u0e17\u0e31\u0e14\u0e40\u0e17\u0e48\u0e32\u0e19\u0e31\u0e49\u0e19 \u00b7 \u0e02\u0e2d\u0e07\u0e17\u0e35\u0e48\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e01\u0e48\u0e2d\u0e19\u0e2d\u0e31\u0e1b\u0e40\u0e14\u0e15\u0e19\u0e35\u0e49\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35 id \u0e08\u0e36\u0e07\u0e15\u0e23\u0e27\u0e08\u0e43\u0e2b\u0e49\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49 \u2014 \u0e40\u0e1e\u0e23\u0e32\u0e30 \u0e40\u0e1a\u0e34\u0e01 \u2192 \u0e22\u0e01\u0e40\u0e25\u0e34\u0e01 \u2192 \u0e40\u0e1a\u0e34\u0e01\u0e43\u0e2b\u0e21\u0e48\u0e43\u0e19\u0e27\u0e31\u0e19\u0e40\u0e14\u0e35\u0e22\u0e27\u0e01\u0e31\u0e19 \u0e44\u0e14\u0e49\u0e1a\u0e23\u0e23\u0e17\u0e31\u0e14\u0e17\u0e35\u0e48\u0e40\u0e2b\u0e21\u0e37\u0e2d\u0e19\u0e01\u0e31\u0e19\u0e17\u0e38\u0e01\u0e0a\u0e48\u0e2d\u0e07\u0e42\u0e14\u0e22\u0e18\u0e23\u0e23\u0e21\u0e0a\u0e32\u0e15\u0e34</div>`
-        +(numsL.length?`<div style="margin-top:11px;font-size:10px;font-weight:800;letter-spacing:.06em;color:#7A4A00;opacity:.75">\u0e40\u0e25\u0e02\u0e17\u0e35\u0e48\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23\u0e0a\u0e19\u0e01\u0e31\u0e19 \u00b7 \u0e40\u0e1b\u0e47\u0e19\u0e04\u0e19\u0e25\u0e30\u0e43\u0e1a \u0e2b\u0e49\u0e32\u0e21\u0e25\u0e1a \u0e15\u0e49\u0e2d\u0e07\u0e2d\u0e2d\u0e01\u0e40\u0e25\u0e02\u0e43\u0e2b\u0e21\u0e48</div>`+numsL.map(mkLine).join(''):'');
+        +(numsL.length?`<div style="margin-top:11px;font-size:10px;font-weight:800;letter-spacing:.06em;color:#7A4A00;opacity:.75">\u0e40\u0e25\u0e02\u0e17\u0e35\u0e48\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23\u0e0a\u0e19\u0e01\u0e31\u0e19 \u00b7 \u0e40\u0e1b\u0e47\u0e19\u0e04\u0e19\u0e25\u0e30\u0e43\u0e1a \u0e2b\u0e49\u0e32\u0e21\u0e25\u0e1a \u0e15\u0e49\u0e2d\u0e07\u0e2d\u0e2d\u0e01\u0e40\u0e25\u0e02\u0e43\u0e2b\u0e21\u0e48</div>`+numsL.map(x=>mkLine(x,true)).join(''):'');
       dupBar=`<div style="background:#FFF6E5;border:1px solid #EAD9B0;border-radius:14px;padding:14px 17px;margin-bottom:12px;color:#7A4A00">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
           <b style="font-size:13px">&#9888; \u0e1e\u0e1a\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25\u0e0b\u0e49\u0e33 ${DS.nDup} \u0e23\u0e32\u0e22\u0e01\u0e32\u0e23</b>
