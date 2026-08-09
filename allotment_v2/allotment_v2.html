@@ -11310,6 +11310,15 @@ function fmtNum(n){ return Math.round(n||0).toLocaleString(); }
 
 // Sum seat-mode pax for a route on a date (across all bookings)
 // Excludes: cancelled bookings, charter-mode trips
+// §pendSeat · booking ที่รออนุมัติ · กันที่นั่งไว้หรือเปล่า ขึ้นกับว่าพักไว้เพราะอะไร
+//   เกิน capacity = ที่นั่งไม่มีอยู่จริง → ไม่กัน (ไม่งั้นคงเหลือติดลบและบังที่ขายได้จริง)
+//   เหตุผลอื่น (ส่วนลดรอยืนยัน · B2C sync · ขายวันที่ปิด) = ที่นั่งมีจริง → กันไว้
+function bkPendHoldsSeat(bk){
+  if(!bk || bk.status!=='pending_approval') return true;
+  var ap=bk.approval||{};
+  var overCap = (Array.isArray(ap.over) && ap.over.length>0) || (+ap.totOver>0);
+  return !overCap;
+}
 function getSeatsConsumed(routeId, dateStr, excludeBkId){
   if(!routeId || !dateStr) return 0;
   if(typeof SB_BOOKINGS === 'undefined' || !Array.isArray(SB_BOOKINGS)) return 0;
@@ -11317,6 +11326,7 @@ function getSeatsConsumed(routeId, dateStr, excludeBkId){
   SB_BOOKINGS.forEach(bk => {
     if(excludeBkId && bk.id === excludeBkId) return;   // exclude the booking being edited (don't count its own seats against itself)
     if(bk.status === 'cancelled' || bk.status === 'rejected' || bk.status === 'cancelled_weather') return;
+    if(!bkPendHoldsSeat(bk)) return;   // §pendSeat · รออนุมัติเพราะเกิน cap = ที่นั่งยังไม่มีอยู่จริง
     // v2 bookings with trips[]
     if(bk.schemaVer === 2 && Array.isArray(bk.trips)){
       bk.trips.forEach(t => {
@@ -66666,8 +66676,14 @@ function bkV2RenderTab2(){
   const zoneTh = `<th onclick="bkV2Tab2SetSort('zone')" style="cursor:pointer;user-select:none" title="Sort by pickup area">Zone${_sortArrow('zone')}</th>`;
 
   // Group by route
-  const groups = {};
-  rowsF.forEach(r=>{ (groups[r.routeId] = groups[r.routeId] || []).push(r); });
+  // §pendSeat · แถว "รออนุมัติ" ถูกแยกออกตั้งแต่ตรงนี้ ไม่ใส่ลง groups
+  //   โค้ดที่นับ pax / จัดรถ / จัดเรือ / prep ทุกจุดอ่านจาก groups → จึงมองไม่เห็นมันเลย
+  //   ปลอดภัยกว่าไล่เติมเงื่อนไขทีละจุด (มีหลายสิบจุด พลาดจุดเดียวตัวเลขก็เพี้ยน)
+  const groups = {}, pendGroups = {};
+  rowsF.forEach(r=>{
+    if(r.bk && r.bk.status==='pending_approval'){ (pendGroups[r.routeId] = pendGroups[r.routeId] || []).push(r); return; }
+    (groups[r.routeId] = groups[r.routeId] || []).push(r);
+  });
   // Also surface routes that have a seat-lock on this date even with 0 bookings (respect pier + route filter)
   const lockRouteIds = (typeof bkV2LocksFor==='function')
     ? [...new Set((typeof ROUTES!=='undefined'?ROUTES:[]).map(r=>r.id).filter(rid => bkV2LocksFor(rid, date).length>0))]
@@ -66691,7 +66707,7 @@ function bkV2RenderTab2(){
   // Group by program family (main trip), order families by earliest departure · variants kept adjacent
   const _famOf = rid => (bkV2RouteFamily(rid)?.id) || 'zzz';
   const _timeOf = rid => ROUTES.find(x=>x.id===rid)?.times?.[0] || '99:99';
-  const _allRids = [...new Set([...Object.keys(groups), ...lockRouteIds, ...reschedFromRouteIds])];
+  const _allRids = [...new Set([...Object.keys(groups), ...Object.keys(pendGroups), ...lockRouteIds, ...reschedFromRouteIds])];
   const _famMinTime = {};
   _allRids.forEach(rid => { const fid=_famOf(rid), t=_timeOf(rid); if(!(fid in _famMinTime) || t < _famMinTime[fid]) _famMinTime[fid]=t; });
   const routeIds = _allRids.sort((a,b)=>{
@@ -67461,6 +67477,36 @@ function bkV2RenderTab2(){
       </div>` : '';
 
     // ── Cancelled bookings · kept as a record in their own block · not counted in totals ──
+    // §pendSeat · กลุ่มรออนุมัติของทริปนี้ · แสดงเหนือ manifest ไม่ปนกับคนที่จะเดินทางจริง
+    const _pendRows = pendGroups[rid] || [];
+    const _pendPax = _pendRows.reduce((s,r)=> s + P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'), 0);
+    const pendBlock = _pendRows.length ? `
+      <div class="t2-pend-sec">
+        <div class="t2-pend-hd">&#9203; รออนุมัติ &middot; ${_pendRows.length} booking &middot; ${_pendPax} pax
+          <span style="font-weight:500;text-transform:none;color:#9a7a3a">(ยังไม่นับในยอดของทริป &middot; ยังไม่เข้าใบงานรถ/เรือ)</span></div>
+        ${_pendRows.map(r=>{
+          const bk=r.bk, norm=bkV2Norm(bk), ap=bk.approval||{};
+          const lead=bk.leadPax||bk.customerName||'—';
+          const ppax=P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc');
+          const overCap=(Array.isArray(ap.over)&&ap.over.length>0)||(+ap.totOver>0);
+          const why = overCap ? ('เกิน cap +'+(ap.totOver||0)+' ที่')
+                    : (+ap.discount>0) ? ('ส่วนลด &#3647;'+(+ap.discount).toLocaleString()+' · รอเซลล์ยืนยัน')
+                    : ((typeof bkV2PendLabel==='function' && (ap.reason||(typeof bkV2PendReason==='function'?bkV2PendReason(bk):'')))
+                        ? bkV2PendLabel(ap.reason||bkV2PendReason(bk)) : 'รอผู้จัดการอนุมัติ');
+          const held = (typeof bkPendHoldsSeat==='function') ? bkPendHoldsSeat(bk) : true;
+          return `<div class="t2-pend-row">
+            <span class="t2-cxl-vc">${bk.voucherRef?esc(bk.voucherRef):esc(bk.code||bk.id)}</span>
+            <span class="t2-cxl-ag">${esc(norm.agentName)}</span>
+            <span class="t2-cxl-cu">${esc(lead)}</span>
+            <span class="t2-cxl-px">${ppax} pax</span>
+            <span class="t2-pend-why">${why}</span>
+            <span class="t2-pend-hold" title="${held?'ที่นั่งถูกกันไว้ระหว่างรออนุมัติ':'ที่นั่งเกิน cap อยู่แล้ว จึงไม่ถูกกันไว้'}">${held?'&#128274; กันที่นั่งไว้':'ไม่กันที่นั่ง'}</span>
+            <button class="t2-ghost-go" onclick="event.stopPropagation();bkV2OpenDetail('${esc(bk.id)}')" title="ดูรายละเอียด">View</button>
+            <button class="t2-ghost-go" style="color:#0F6E56;border-color:#9FE1CB" onclick="event.stopPropagation();bkV2ApproveBooking('${esc(bk.id)}')" title="อนุมัติ · แถวจะย้ายลงไปอยู่ใน manifest">&#10003; อนุมัติ</button>
+          </div>`;
+        }).join('')}
+      </div>` : '';
+
     const _cxlRows = grp.filter(r=>r.cxl);
     const cxlBlock = _cxlRows.length ? `
       <div class="t2-cxl-sec">
@@ -67665,7 +67711,8 @@ function bkV2RenderTab2(){
         ${vanStrip}
         ${rcStrip}
         ${lockBar}
-        ${grp.length===0 ? '<div class="t2-nobk">No bookings yet · seats held by lock above</div>' : zoneBlocks}
+        ${pendBlock}
+        ${(grp.length===0 && !_pendRows.length) ? '<div class="t2-nobk">No bookings yet · seats held by lock above</div>' : zoneBlocks}
         ${ghostBlock}
         ${cxlBlock}
         </div>
@@ -67889,6 +67936,18 @@ function bkV2RenderTab2(){
     .t2-row.t2-cklost:hover>td{background:#F2C2BD !important}
     .t2-nsbadge{display:inline-block;background:#FBE3D0;color:#9A4A12;border:1px solid #EFC6A3;font-size:9px;font-weight:800;letter-spacing:.03em;padding:1px 6px;border-radius:5px;margin-left:6px;white-space:nowrap}
     .t2-redbadge{display:inline-block;background:#FCEBEB;color:#A32D2D;border:1px solid #E6C9C3;font-size:9px;font-weight:700;padding:1px 6px;border-radius:5px;margin-left:6px;white-space:nowrap}
+    /* §pendSeat · กลุ่มรออนุมัติ · โทนอำพัน แยกจากกลุ่มยกเลิก (แดง) ให้ชัด */
+    .t2-pend-sec{margin-bottom:10px;border:1px solid #EAD9B0;border-radius:9px;background:#FDF8EE;padding:9px 13px}
+    .t2-pend-hd{font-size:10px;font-weight:700;color:#8A5B00;text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
+    .t2-pend-row{display:flex;align-items:center;gap:13px;padding:6px 0;border-top:0.5px solid #EFE0C2;font-size:11.5px;color:#7a6338}
+    .t2-pend-why{flex:1;min-width:0;font-weight:700;color:#8A5B00;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .t2-pend-hold{font-size:10px;font-weight:700;color:#5F6B7A;background:#EEF1F5;border-radius:6px;padding:1px 7px;white-space:nowrap}
+    /* ใช้คลาสช่องเดียวกับกลุ่มยกเลิกเพื่อให้คอลัมน์ตรงกัน · แต่ต้องล้างเส้นขีดฆ่าออก
+       รออนุมัติยังไม่ถูกยกเลิก · ขีดฆ่าจะอ่านเป็น "ใบนี้ตายแล้ว" ซึ่งผิด */
+    .t2-pend-row .t2-cxl-vc,.t2-pend-row .t2-cxl-cu{text-decoration:none;opacity:1}
+    .t2-pend-row .t2-cxl-vc{color:#7a6338}
+    .t2-pend-row .t2-cxl-cu{font-weight:600;color:#5a4a2a}
+    .t2-pend-row .t2-cxl-ag{color:#8a7350}
     .t2-cxl-sec{margin-top:10px;border:1px solid #E6C9C3;border-radius:9px;background:#FCF6F5;padding:9px 13px}
     .t2-cxl-hd{font-size:10px;font-weight:700;color:#A32D2D;text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
     .t2-cxl-row{display:flex;align-items:center;gap:13px;padding:6px 0;border-top:0.5px solid #F0DBD6;font-size:11.5px;color:#8d726d}
