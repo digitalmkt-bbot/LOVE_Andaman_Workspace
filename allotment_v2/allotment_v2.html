@@ -10133,17 +10133,26 @@ function bop2CloseModal(){
 }
 
 // ─── #1 ASSIGN BOAT TO RANGE ────────────────────────────────────
+// §bopBulkDate · ป้ายท่าแบบย่อ · เดิมเขียน TL/VP อย่างเดียว ระนองเลยขึ้น VP ผิด
+function bop2PierAbbr(p){ return p==='tublamu'?'TL':p==='panwa'?'VP':p==='ranong'?'RN':p==='shop'?'อู่':(p||'?'); }
+function bop2PierName(p){ return p==='tublamu'?'ท่าทับละมุ':p==='panwa'?'ท่าวิสิษฐ์พันวา':p==='ranong'?'ท่าระนอง':(p||'—'); }
 // Build boat options filtered by pier · with status indicator
-function bop2AssignBoatOptsFor(pier){
-  const today = TODAY_STR;
-  const boats = BOATS.filter(b => !b.retired && getBoatCurrentPier(b) === pier);
-  if(boats.length === 0) return '<option value="" disabled>— no boats at this pier —</option>';
+// §bopBulkDate · ทั้ง "ท่า" และ "สถานะ" ต้องอ่าน ณ วันที่ที่จะ assign ไม่ใช่วันนี้
+//   ไม่ส่ง ds มา = ใช้วันที่ที่เลือกบนปฏิทิน แล้วค่อยตกไปที่วันนี้
+//   เดิมอ่าน TODAY เสมอ · เรือที่ยังอยู่อู่วันนี้แต่กลับมาใช้เดือนหน้าจึงถูกกรองทิ้ง
+//   ทั้งท่าเลยว่าง แล้วขึ้น "no boats at this pier" ทั้งที่แผงขวาบอกว่ามีเรือพร้อม
+function bop2AssignBoatOptsFor(pier, ds){
+  ds = ds || (typeof _bop2 !== 'undefined' && _bop2.selDate) || TODAY_STR;
+  const boats = BOATS.filter(b => !b.retired && getBoatCurrentPier(b, ds) === pier);
+  if(boats.length === 0){
+    return '<option value="" disabled>— ไม่มีเรือที่' + bop2PierName(pier) + ' ในวันที่ ' + ds + ' —</option>';
+  }
   return boats.map(b => {
-    const st = getCurStatus(b, today).s;
+    const st = getCurStatus(b, ds).s;
     let suffix = '';
     if(st === 'fixing') suffix = ' · 🔧 fixing';
     else if(st === 'unavailable') suffix = ' · N/A';
-    return '<option value="'+b.id+'"'+(st !== 'available' ? ' style="color:#aaa"' : '')+'>'+b.name+' · '+b.cap+' pax · '+(pier==='tublamu'?'TL':pier==='panwa'?'VP':pier==='ranong'?'RN':(pier||'?'))+suffix+'</option>';
+    return '<option value="'+b.id+'"'+(st !== 'available' ? ' style="color:#aaa"' : '')+'>'+b.name+' · '+b.cap+' pax · '+bop2PierAbbr(pier)+suffix+'</option>';
   }).join('');
 }
 function bop2UpdateAssignBoatOpts(){
@@ -10153,15 +10162,20 @@ function bop2UpdateAssignBoatOpts(){
   const opt = routeSel.options[routeSel.selectedIndex];
   const pier = opt?.dataset.pier;
   if(!pier) return;
-  boatSel.innerHTML = bop2AssignBoatOptsFor(pier);
+  // §bopBulkDate · โหลดรายชื่อเรือตามวันเริ่มของช่วงที่กรอกไว้
+  const fromEl = document.getElementById('bop2ar-from');
+  boatSel.innerHTML = bop2AssignBoatOptsFor(pier, (fromEl && fromEl.value) || undefined);
 }
 function bop2AssignRangeForm(){
-  const today = TODAY_STR;
+  // §bopBulkDate · ตั้งต้นที่วันที่ซึ่งผู้ใช้เลือกไว้บนปฏิทิน ไม่ใช่วันนี้
+  //   เปิดหน้าอยู่เดือน ต.ค. แต่กล่องเด้งมาเป็นวันนี้ ต้องแก้มือทุกครั้ง
+  //   และรายชื่อเรือด้านล่างก็จะโหลดผิดวันตามไปด้วย
+  const today = (typeof _bop2 !== 'undefined' && _bop2.selDate) || TODAY_STR;
   const activeRoutes = ROUTES.filter(r => r.active !== false);
   const initialRoute = activeRoutes[0];
   const initialPier = initialRoute?.pier || 'tublamu';
-  const routeOpts = activeRoutes.map(r => '<option value="'+r.id+'" data-pier="'+r.pier+'">'+r.name+' · '+(r.pier==='tublamu'?'TL':'VP')+'</option>').join('');
-  const boatOpts = bop2AssignBoatOptsFor(initialPier);
+  const routeOpts = activeRoutes.map(r => '<option value="'+r.id+'" data-pier="'+r.pier+'">'+r.name+' · '+bop2PierAbbr(r.pier)+'</option>').join('');   // §bopBulkDate
+  const boatOpts = bop2AssignBoatOptsFor(initialPier, today);
   return `
     <div style="padding:18px 20px;border-bottom:1px solid #eee">
       <div style="font-size:18px;font-weight:700;color:#0F6E56">🎯 Assign boat to date range</div>
@@ -10176,7 +10190,7 @@ function bop2AssignRangeForm(){
       </label>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <label style="font-size:11px;font-weight:700;color:var(--ink-soft);letter-spacing:.06em">FROM
-          <input type="date" id="bop2ar-from" value="${today}" style="display:block;width:100%;padding:8px;font-size:13px;border:1px solid var(--border);border-radius:4px;margin-top:4px;font-family:inherit">
+          <input type="date" id="bop2ar-from" value="${today}" onchange="bop2UpdateAssignBoatOpts()" style="display:block;width:100%;padding:8px;font-size:13px;border:1px solid var(--border);border-radius:4px;margin-top:4px;font-family:inherit">
         </label>
         <label style="font-size:11px;font-weight:700;color:var(--ink-soft);letter-spacing:.06em">TO
           <input type="date" id="bop2ar-to" value="${today}" style="display:block;width:100%;padding:8px;font-size:13px;border:1px solid var(--border);border-radius:4px;margin-top:4px;font-family:inherit">
@@ -10438,15 +10452,16 @@ function bop2UpdateWeekdayBoatOpts(){
   const opt = routeSel.options[routeSel.selectedIndex];
   const pier = opt?.dataset.pier;
   if(!pier) return;
-  boatSel.innerHTML = bop2AssignBoatOptsFor(pier);
+  const fromEl = document.getElementById('bop2wp-from');   // §bopBulkDate
+  boatSel.innerHTML = bop2AssignBoatOptsFor(pier, (fromEl && fromEl.value) || undefined);
 }
 function bop2WeekdayPatternForm(){
-  const today = TODAY_STR;
+  const today = (typeof _bop2 !== 'undefined' && _bop2.selDate) || TODAY_STR;   // §bopBulkDate
   const next = fmt(addDays(new Date(today), 30));
   const activeRoutes = ROUTES.filter(r => r.active !== false);
   const initialPier = activeRoutes[0]?.pier || 'tublamu';
-  const boatOpts = bop2AssignBoatOptsFor(initialPier);
-  const routeOpts = activeRoutes.map(r => '<option value="'+r.id+'" data-pier="'+r.pier+'">'+r.name+' · '+(r.pier==='tublamu'?'TL':'VP')+'</option>').join('');
+  const boatOpts = bop2AssignBoatOptsFor(initialPier, today);
+  const routeOpts = activeRoutes.map(r => '<option value="'+r.id+'" data-pier="'+r.pier+'">'+r.name+' · '+bop2PierAbbr(r.pier)+'</option>').join('');   // §bopBulkDate
   return `
     <div style="padding:18px 20px;border-bottom:1px solid #eee">
       <div style="font-size:18px;font-weight:700;color:#0F6E56">📅 Apply pattern by weekday</div>
@@ -10471,7 +10486,7 @@ function bop2WeekdayPatternForm(){
       </label>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <label style="font-size:11px;font-weight:700;color:var(--ink-soft);letter-spacing:.06em">FROM
-          <input type="date" id="bop2wp-from" value="${today}" style="display:block;width:100%;padding:8px;font-size:13px;border:1px solid var(--border);border-radius:4px;margin-top:4px;font-family:inherit">
+          <input type="date" id="bop2wp-from" value="${today}" onchange="bop2UpdateWeekdayBoatOpts()" style="display:block;width:100%;padding:8px;font-size:13px;border:1px solid var(--border);border-radius:4px;margin-top:4px;font-family:inherit">
         </label>
         <label style="font-size:11px;font-weight:700;color:var(--ink-soft);letter-spacing:.06em">TO
           <input type="date" id="bop2wp-to" value="${next}" style="display:block;width:100%;padding:8px;font-size:13px;border:1px solid var(--border);border-radius:4px;margin-top:4px;font-family:inherit">
