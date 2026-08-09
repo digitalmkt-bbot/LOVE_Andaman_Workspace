@@ -18755,27 +18755,31 @@ var LA_DUP_SETS = [
 // รายการย่อยข้างในแต่ละใบ · คีย์ต้องครบทุกฟิลด์ที่มีความหมาย
 // ไม่งั้นของคนละครั้ง (คนละวัน คนละคลัง) จะถูกมองว่าเป็นรายการเดียวกัน
 var LA_DUP_NESTED = [
-  { k:'invHist', label:'ประวัติเบิก/รับอะไหล่ในคลัง', money:false, clean:true, sure:true,
+  { k:'invHist', label:'ประวัติเบิก/รับอะไหล่ในคลัง', money:false, clean:true, sure:true, needId:true,
     head:['วันที่','ประเภท','จำนวน','คลัง · หมายเหตุ'],
     each:function(cb){ (typeof FL_INVENTORY!=='undefined'?FL_INVENTORY:[]).forEach(function(it){ cb(it, it.history, it.name, it.id); }); },
-    // entry ไม่มี id ประจำตัว · จึงต้องเทียบทุกฟิลด์ที่มี ไม่งั้นแจ้งผิด
-    key:function(h){ return [h.date||'',h.type||'',h.qty,h.location||'',h.jobId||'',h.memoId||'',(h.note||'').trim(),h.by||''].join('\u241F'); },
+    // §dupNoId · เบิก → ยกเลิก → เบิกใหม่ ในวันเดียวกัน ได้บรรทัดที่เหมือนกันทุกฟิลด์
+    //   โดยธรรมชาติ · เป็นคนละเหตุการณ์จริง ไม่ใช่การเขียนซ้ำ · เทียบด้วยเนื้อหาไม่ได้
+    //   จึงเทียบด้วย id เท่านั้น · บรรทัดเก่าที่ยังไม่มี id = ข้าม ไม่ตัดสินแทนผู้ใช้
+    key:function(h){ return h && h.id ? ('id\u241F'+h.id) : null; },
     cols:function(h){ return [h.date||'', h.type||'', String(h.qty||''), (h.location||'')+' · '+(h.note||'').slice(0,44)]; } },
-  { k:'mjParts', label:'อะไหล่ในใบงานซ่อม', money:true, clean:true, sure:true,
+  { k:'mjParts', label:'อะไหล่ในใบงานซ่อม', money:true, clean:true, sure:true, needId:true,
     head:['วันที่เบิก','จำนวน','มูลค่า','คลัง · ชื่ออะไหล่'],
     each:function(cb){ (typeof FL_MAINT!=='undefined'?FL_MAINT:[]).forEach(function(m){ cb(m, m.parts, (m.no||'')+' · '+(m.title||'').slice(0,34), m.id); }); },
-    // โค้ดเบิกของรวมบรรทัดเมื่อ invId+location+date+late ตรงกัน · เบิกคนละวันจึงเป็นคนละบรรทัดโดยตั้งใจ
-    key:function(p){ return [p.invId||'',(p.name||'').trim(),p.qty,p.cost,p.location||'',p.date||'',!!p.late].join('\u241F'); },
+    // §dupNoId · เทียบด้วย id ของบรรทัดเท่านั้น · บรรทัดเก่าที่ไม่มี id = ข้าม
+    key:function(p){ return p && p.id ? ('id\u241F'+p.id) : null; },
     cols:function(p){ return [p.date||'', String(p.qty||''), '฿'+Math.round((p.qty||0)*(p.cost||0)).toLocaleString(), (p.location||'')+' · '+(p.name||'').slice(0,36)]; } },
-  { k:'moItems', label:'รายการใน memo', money:true, clean:true, sure:true,
+  { k:'moItems', label:'รายการใน memo', money:true, clean:true, sure:true, needId:true,
     head:['','จำนวน','ราคา/หน่วย','ชื่อรายการ'],
     each:function(cb){ (typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).forEach(function(mo){ cb(mo, mo.items, (mo.no||'')+' · '+(mo.title||'').slice(0,34), mo.id); }); },
-    key:function(i){ return [i.invId||'',(i.name||i.desc||i.title||'').trim(),i.qty,(i.price!=null?i.price:i.cost),i.unit||'',i.partNo||'',(i.note||'').trim()].join('\u241F'); },
+    // §dupNoId · รายการใน memo ไม่มี id · สั่งของชิ้นเดียวกัน 2 บรรทัดเป็นเรื่องปกติ
+    key:function(i){ return i && i.id ? ('id\u241F'+i.id) : null; },
     cols:function(i){ return ['', String(i.qty||''), '฿'+Math.round(+((i.price!=null?i.price:i.cost))||0).toLocaleString(), (i.name||i.desc||i.title||'').slice(0,44)]; } },
-  { k:'pierPay', label:'การรับเงินหน้าท่า', money:true, clean:true, sure:true,
+  { k:'pierPay', label:'การรับเงินหน้าท่า', money:true, clean:true, sure:true, needId:true,
     head:['เวลา','วิธีรับ','ยอด','ผู้รับเงิน'],
     each:function(cb){ (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){ cb(b, b.pierPayments, b.voucherRef||b.id, b.id); }); },
-    key:function(p){ return [p.method||'',Math.round(+p.amount||0),p.at||'',p.by||'',(p.note||'').trim()].join('\u241F'); },
+    // §dupNoId · การรับเงินไม่มี id · รับเงินสดยอดเท่ากันสองรอบเกิดขึ้นได้จริง
+    key:function(p){ return p && p.id ? ('id\u241F'+p.id) : null; },
     cols:function(p){ return [(p.at||'').slice(0,16), p.method||'', '฿'+Math.round(+p.amount||0).toLocaleString(), p.by||'']; } }
 ];
 // §dupNo · เลขที่เอกสารซ้ำ แต่เนื้อหาคนละใบ
@@ -18854,7 +18858,7 @@ function laDupScan(){
     var hits=[], extra=0;
     N.each(function(owner, list, label){
       if(!Array.isArray(list) || list.length<2) return;
-      var m={}; list.forEach(function(x){ var k=N.key(x); (m[k]=m[k]||[]).push(x); });
+      var m={}; list.forEach(function(x){ var k=N.key(x); if(k==null) return; (m[k]=m[k]||[]).push(x); });   // §dupNoId · ไม่มี id = ไม่ตัดสิน
       var e=Object.keys(m).reduce(function(s,k){ return s+(m[k].length-1); },0);
       if(e>0){ extra+=e; hits.push({ label:String(label||''), extra:e }); }
     });
@@ -18897,7 +18901,8 @@ function laDupClean(key){
     N.each(function(owner, list){
       if(!Array.isArray(list) || list.length<2) return;
       var seen={}, keep=[];
-      list.forEach(function(x){ var k=N.key(x); if(seen[k]){ removed++; return; } seen[k]=1; keep.push(x); });
+      list.forEach(function(x){ var k=N.key(x); if(k==null){ keep.push(x); return; }   // §dupNoId · ไม่มี id = ไม่แตะ
+        if(seen[k]){ removed++; return; } seen[k]=1; keep.push(x); });
       if(keep.length!==list.length){ list.length=0; keep.forEach(function(x){ list.push(x); }); }
     });
   }
@@ -18930,7 +18935,7 @@ function costDupInspect(key){
     // §owner · เลขที่ใบไม่ใช่ตัวระบุที่เชื่อถือได้ (มีเคสเลขชนกัน) จึงต้องบอก id กำกับ
     N.each(function(owner, list, label, ownerId){
       if(!Array.isArray(list)||list.length<2) return;
-      var m={}; list.forEach(function(x){ var k=N.key(x); (m[k]=m[k]||[]).push(x); });
+      var m={}; list.forEach(function(x){ var k=N.key(x); if(k==null) return; (m[k]=m[k]||[]).push(x); });
       Object.keys(m).forEach(function(k){
         var g=m[k]; if(g.length<2) return; nGrp++; nRec+=g.length;
         g.forEach(function(x,ix){ rows.push({ grp:(ix===0?String(label||''):''),
@@ -29055,6 +29060,7 @@ function flRenderCostAnalytics(){
       const sureL=all.filter(x=>x.sure), maybeL=all.filter(x=>!x.sure);
       const lines=(sureL.length?`<div style="margin-top:9px;font-size:10px;font-weight:800;letter-spacing:.06em;color:#7A4A00;opacity:.75">\u0e0b\u0e49\u0e33\u0e41\u0e19\u0e48\u0e19\u0e2d\u0e19 \u00b7 \u0e17\u0e38\u0e01\u0e0a\u0e48\u0e2d\u0e07\u0e15\u0e23\u0e07\u0e01\u0e31\u0e19\u0e2b\u0e21\u0e14</div>`+sureL.map(mkLine).join(''):'')
         +(maybeL.length?`<div style="margin-top:11px;font-size:10px;font-weight:800;letter-spacing:.06em;color:#7A4A00;opacity:.75">\u0e19\u0e48\u0e32\u0e2a\u0e07\u0e2a\u0e31\u0e22 \u00b7 \u0e23\u0e30\u0e1a\u0e1a\u0e15\u0e31\u0e14\u0e2a\u0e34\u0e19\u0e41\u0e17\u0e19\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49 \u0e40\u0e1b\u0e34\u0e14\u0e14\u0e39\u0e40\u0e2d\u0e07</div>`+maybeL.map(mkLine).join(''):'')
+        +`<div style="margin-top:10px;padding-top:9px;border-top:1px solid rgba(160,90,26,.14);font-size:10.5px;line-height:1.6;opacity:.85">\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23\u0e22\u0e48\u0e2d\u0e22 (\u0e1b\u0e23\u0e30\u0e27\u0e31\u0e15\u0e34\u0e40\u0e1a\u0e34\u0e01\u0e02\u0e2d\u0e07 \u00b7 \u0e2d\u0e30\u0e44\u0e2b\u0e25\u0e48\u0e43\u0e19\u0e43\u0e1a\u0e07\u0e32\u0e19 \u00b7 \u0e23\u0e32\u0e22\u0e01\u0e32\u0e23\u0e43\u0e19 memo \u00b7 \u0e01\u0e32\u0e23\u0e23\u0e31\u0e1a\u0e40\u0e07\u0e34\u0e19) \u0e15\u0e23\u0e27\u0e08\u0e08\u0e32\u0e01 id \u0e1b\u0e23\u0e30\u0e08\u0e33\u0e1a\u0e23\u0e23\u0e17\u0e31\u0e14\u0e40\u0e17\u0e48\u0e32\u0e19\u0e31\u0e49\u0e19 \u00b7 \u0e02\u0e2d\u0e07\u0e17\u0e35\u0e48\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e01\u0e48\u0e2d\u0e19\u0e2d\u0e31\u0e1b\u0e40\u0e14\u0e15\u0e19\u0e35\u0e49\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35 id \u0e08\u0e36\u0e07\u0e15\u0e23\u0e27\u0e08\u0e43\u0e2b\u0e49\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49 \u2014 \u0e40\u0e1e\u0e23\u0e32\u0e30 \u0e40\u0e1a\u0e34\u0e01 \u2192 \u0e22\u0e01\u0e40\u0e25\u0e34\u0e01 \u2192 \u0e40\u0e1a\u0e34\u0e01\u0e43\u0e2b\u0e21\u0e48\u0e43\u0e19\u0e27\u0e31\u0e19\u0e40\u0e14\u0e35\u0e22\u0e27\u0e01\u0e31\u0e19 \u0e44\u0e14\u0e49\u0e1a\u0e23\u0e23\u0e17\u0e31\u0e14\u0e17\u0e35\u0e48\u0e40\u0e2b\u0e21\u0e37\u0e2d\u0e19\u0e01\u0e31\u0e19\u0e17\u0e38\u0e01\u0e0a\u0e48\u0e2d\u0e07\u0e42\u0e14\u0e22\u0e18\u0e23\u0e23\u0e21\u0e0a\u0e32\u0e15\u0e34</div>`
         +(numsL.length?`<div style="margin-top:11px;font-size:10px;font-weight:800;letter-spacing:.06em;color:#7A4A00;opacity:.75">\u0e40\u0e25\u0e02\u0e17\u0e35\u0e48\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23\u0e0a\u0e19\u0e01\u0e31\u0e19 \u00b7 \u0e40\u0e1b\u0e47\u0e19\u0e04\u0e19\u0e25\u0e30\u0e43\u0e1a \u0e2b\u0e49\u0e32\u0e21\u0e25\u0e1a \u0e15\u0e49\u0e2d\u0e07\u0e2d\u0e2d\u0e01\u0e40\u0e25\u0e02\u0e43\u0e2b\u0e21\u0e48</div>`+numsL.map(mkLine).join(''):'');
       dupBar=`<div style="background:#FFF6E5;border:1px solid #EAD9B0;border-radius:14px;padding:14px 17px;margin-bottom:12px;color:#7A4A00">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
@@ -32010,7 +32016,7 @@ function flMaintAddPart(jobId){
   if(!invRemoveAt(inv,location,qty)){alert('หักสต็อกไม่สำเร็จ');return;}
   // log to inventory history
   if(!inv.history) inv.history=[];
-  inv.history.push({date:TODAY_STR,type:'withdraw',qty,location,note:`เบิกใช้งาน ${m.no||''} · ${m.title||''} · @ ${location}`+(m.status==='done'?' · ลงย้อนหลัง (งานปิดแล้ว)':''),by:'ระบบ',jobId:m.id});
+  inv.history.push({id:(typeof LA_UID==='function'?LA_UID('h'):'h'+Math.random().toString(36).slice(2)),date:TODAY_STR,type:'withdraw',qty,location,note:`เบิกใช้งาน ${m.no||''} · ${m.title||''} · @ ${location}`+(m.status==='done'?' · ลงย้อนหลัง (งานปิดแล้ว)':''),by:'ระบบ',jobId:m.id});   // §dupNoId
   // add to job parts (merge by part + location)
   if(!m.parts) m.parts=[];
   // §mjLateParts · งานปิดแล้ว = ลงย้อนหลัง · ติดธงไว้ให้แยกออกจากของที่เบิกตอนทำงานจริง
@@ -32019,7 +32025,7 @@ function flMaintAddPart(jobId){
   const _lateTag=_late?' · ลงย้อนหลังหลังปิดงาน':'';
   const existing=m.parts.find(p=>p.invId===invId && p.location===location && p.date===TODAY_STR && !p.late===!_late);
   if(existing){existing.qty+=qty;}
-  else{m.parts.push(Object.assign({invId,name:inv.name,qty,unit:inv.unit,cost:inv.cost,location,date:TODAY_STR}, _late?{late:true,lateBy:_lateBy}:{}));}
+  else{m.parts.push(Object.assign({id:(typeof LA_UID==='function'?LA_UID('p'):'p'+Math.random().toString(36).slice(2)),invId,name:inv.name,qty,unit:inv.unit,cost:inv.cost,location,date:TODAY_STR}, _late?{late:true,lateBy:_lateBy}:{}));}   // §dupNoId
   flPushLog(jobId,`📦 เบิก ${inv.name} ${qty} ${inv.unit} · ${location} (฿${(qty*inv.cost).toLocaleString()})${_lateTag}`);
   if(!m.progressLog) m.progressLog=[];
   m.progressLog.push({date:TODAY_STR,text:`📦 เบิก ${inv.name} ${qty} ${inv.unit} · ${location} (฿${(qty*inv.cost).toLocaleString()})${_lateTag}`,by:_lateBy||'ระบบ'});
@@ -32038,7 +32044,7 @@ function flMaintRemovePart(jobId,idx){
     const retLoc=p.location||inv.primaryLocation||inv.location||'คลัง Tub Lamu';
     invAddAt(inv,retLoc,p.qty);
     if(!inv.history) inv.history=[];
-    inv.history.push({date:TODAY_STR,type:'receive',qty:p.qty,location:retLoc,note:`คืนสต็อก (ยกเลิกเบิก ${m.no||''}) · @ ${retLoc}`,by:'ระบบ',jobId:m.id});
+    inv.history.push({id:(typeof LA_UID==='function'?LA_UID('h'):'h'+Math.random().toString(36).slice(2)),date:TODAY_STR,type:'receive',qty:p.qty,location:retLoc,note:`คืนสต็อก (ยกเลิกเบิก ${m.no||''}) · @ ${retLoc}`,by:'ระบบ',jobId:m.id});   // §dupNoId
   }
   // §mjLateParts · คืนตอนงานปิดแล้ว = การแก้ย้อนหลังเหมือนกัน · ต้องเห็นใน log
   const _lateR=(m.status==='done')?' · แก้ย้อนหลังหลังปิดงาน':'';
@@ -34378,7 +34384,7 @@ function flSaveReceive(){
           invSyncLegacy(inv);
           invAddAt(inv, memoLocation, qty);
           if(!inv.history)inv.history=[];
-          inv.history.push({date,type:'receive',qty,location:memoLocation,note:`จาก ${mo.no} · ${note} · @ ${memoLocation}`,by:''});
+          inv.history.push({id:(typeof LA_UID==='function'?LA_UID('h'):'h'+Math.random().toString(36).slice(2)),date,type:'receive',qty,location:memoLocation,note:`จาก ${mo.no} · ${note} · @ ${memoLocation}`,by:'',memoId:mo.id});   // §dupNoId
           updatedCount++;
         } else {
           // Auto-create new inventory item from memo line — with multi-warehouse stocks
