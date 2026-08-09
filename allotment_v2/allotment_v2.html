@@ -18792,20 +18792,21 @@ var LA_DUP_NUMS = [
   { k:'noMemo',  label:'เลขที่ memo ซ้ำ (คนละใบ)', money:true,
     head:['id','วันที่','สถานะ','เรื่อง · ยอด'],
     get:function(){ return typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]; },
-    no:function(x){ return x.no||''; },
+    // §noOne · ใบที่ยกเลิกแล้วไม่ได้แย่งเลขกับใคร · ตัดออกจากการนับเลขชน
+    no:function(x){ return (x.status==='cancelled'||x.status==='rejected')?null:(x.no||''); },
     cols:function(x){ return [x.id+(x.prevNo?' (เดิม '+x.prevNo+')':''), x.createdDate||'', x.status||'',
       (x.title||'')+' · \u0e3f'+Math.round(+x.amount||0).toLocaleString()]; } },
   { k:'noMaint', label:'เลขที่ใบงานซ่อมซ้ำ (คนละใบ)', money:true,
     head:['id','วันที่','สถานะ','เรื่อง'],
     get:function(){ return typeof FL_MAINT!=='undefined'?FL_MAINT:[]; },
-    no:function(x){ return x.no||''; },
-    cols:function(x){ return [x.id, x.startDate||'', x.status||'',
+    no:function(x){ return (x.status==='cancelled')?null:(x.no||''); },
+    cols:function(x){ return [x.id+(x.prevNo?' (เดิม '+x.prevNo+')':''), x.startDate||'', x.status||'',
       ((getBoat(x.boatId)||{}).name||'')+' · '+(x.title||'')]; } },
   { k:'noInc',   label:'เลขที่ Incident ซ้ำ (คนละใบ)', money:false,
     head:['id','วันที่','สถานะ','เรื่อง'],
     get:function(){ return typeof FL_INCIDENTS!=='undefined'?FL_INCIDENTS:[]; },
-    no:function(x){ return x.no||''; },
-    cols:function(x){ return [x.id, x.date||x.startDate||'', x.status||'',
+    no:function(x){ return (x.status==='cancelled')?null:(x.no||''); },
+    cols:function(x){ return [x.id+(x.prevNo?' (เดิม '+x.prevNo+')':''), x.date||x.startDate||'', x.status||'',
       ((getBoat(x.boatId)||{}).name||'')+' · '+(x.title||'')]; } }
 ];
 // §renumber · ออกเลขใหม่ให้เอกสารที่เลขชนกัน · ไม่ลบอะไรทั้งสิ้น
@@ -18860,6 +18861,60 @@ function laRenumberSet(k){
     if(typeof save==='function'){ try{ save('config'); }catch(e){} }
   }
   return { n:changed.length, changed:changed };
+}
+// §noOne · ออกเลขใหม่ให้ "ใบเดียว" ที่เลือก · ใบอื่นในกลุ่มไม่ถูกแตะ
+function laRenumberOne(k, id){
+  var U=LA_DUP_NUMS.filter(function(x){return x.k===k;})[0]; if(!U) return null;
+  var arr=U.get()||[];
+  var m=arr.filter(function(x){ return x.id===id; })[0]; if(!m) return null;
+  var pad=function(n){ return String(n).padStart(3,'0'); };
+  var pre=(k==='noMemo')?'MO-':(k==='noMaint')?'MJ-':'INC-';
+  var maxN=arr.reduce(function(mx,x){
+    var v=parseInt(String(x.no||'').replace(/\D/g,''),10); return (v>mx)?v:mx; },0);
+  var newNo;
+  do { maxN++; newNo=pre+pad(maxN); }            // §noFree · ต้องว่างจริง
+  while(arr.some(function(x){ return x!==m && x.no===newNo; }));
+  var oldNo=m.no;
+  m.prevNo = m.prevNo || oldNo;
+  m.no = newNo;
+  if(k==='noMemo'){
+    (typeof FL_INVENTORY!=='undefined'?FL_INVENTORY:[]).forEach(function(it){
+      (it.history||[]).forEach(function(h){
+        if(h && h.memoId===m.id && h.note) h.note=String(h.note).split(oldNo).join(newNo); });
+    });
+    // แก้ข้อความใน log ของใบงานได้เฉพาะตอนไม่กำกวม (ไม่มีใบอื่นเลขเดียวกันผูกใบงานเดียวกัน)
+    var ambiguous = m.maintId && arr.some(function(x){
+      return x!==m && x.no===oldNo && x.maintId===m.maintId; });
+    if(m.maintId && !ambiguous){
+      var mj=(typeof FL_MAINT!=='undefined'?FL_MAINT:[]).find(function(x){ return x.id===m.maintId; });
+      if(mj) (mj.progressLog||[]).forEach(function(l){
+        if(l && l.text) l.text=String(l.text).split(oldNo).join(newNo); });
+    }
+  }
+  if(typeof flSave==='function') flSave();
+  if(typeof save==='function'){ try{ save('config'); }catch(e){} }
+  return { from:oldNo, to:newNo };
+}
+function costNoRenumberOne(k, id){
+  var U=LA_DUP_NUMS.filter(function(x){return x.k===k;})[0]; if(!U) return;
+  var m=(U.get()||[]).filter(function(x){ return x.id===id; })[0]; if(!m) return;
+  if(!confirm('ออกเลขใหม่ให้ใบนี้?\n\n'+(m.no||'')+' · '+(m.title||'')
+    +'\n\nใบอื่นที่เลขเดียวกันจะไม่ถูกแตะ · เลขเดิมเก็บไว้ที่ prevNo · ไม่มีการลบ')) return;
+  var r=laRenumberOne(k, id);
+  if(r) alert('ออกเลขใหม่แล้ว\n\n'+r.from+' → '+r.to);
+  costDupInspect(k);
+  if(typeof flRenderCostAnalytics==='function') flRenderCostAnalytics();
+}
+// §cancel · ยกเลิกใบนั้นไปเลย · ใช้ตัวยกเลิกเดิมของระบบ (บังคับระบุเหตุผล · ใบที่จ่ายแล้วยกเลิกไม่ได้)
+function costNoCancelOne(k, id){
+  if(k!=='noMemo'){ alert('ยกเลิกจากหน้านี้ได้เฉพาะ memo'); return; }
+  if(typeof flCancelMemo!=='function'){ alert('ยกเลิกไม่ได้จากหน้านี้'); return; }
+  flCancelMemo(id);
+  var mo=(typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).find(function(x){ return x.id===id; });
+  if(mo && mo.status==='cancelled'){
+    costDupInspect(k);
+    if(typeof flRenderCostAnalytics==='function') flRenderCostAnalytics();
+  }
 }
 function costDupRenumber(k){
   var U=LA_DUP_NUMS.filter(function(x){return x.k===k;})[0]; if(!U) return;
@@ -19022,7 +19077,17 @@ function costDupInspect(key){
     arr.forEach(function(x){ var n=U.no(x); if(!n) return; (m[n]=m[n]||[]).push(x); });
     Object.keys(m).forEach(function(n){
       var g=m[n]; if(g.length<2) return; nGrp++; nRec+=g.length;
-      g.forEach(function(x,ix){ rows.push({ grp:(ix===0?n:''), first:ix===0, c:U.cols(x) }); });
+      // §noOne · ทุกแถวเลือกได้เอง ว่าจะออกเลขใหม่ หรือยกเลิกใบนี้ทิ้ง
+      g.forEach(function(x,ix){
+        var canCancel = (key==='noMemo') && x.status!=='paid' && x.status!=='cancelled';
+        var act='<button onclick="costNoRenumberOne(\''+key+'\',\''+String(x.id).replace(/\'/g,'')+'\')" '
+          +'style="border:none;background:#5B289A;color:#fff;border-radius:8px;padding:4px 10px;'
+          +'font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">ออกเลขใหม่</button>'
+          +(canCancel?' <button onclick="costNoCancelOne(\''+key+'\',\''+String(x.id).replace(/\'/g,'')+'\')" '
+            +'style="border:1px solid #E0A0A0;background:#fff;color:#A32D2D;border-radius:8px;padding:4px 10px;'
+            +'font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;margin-left:5px">ยกเลิกใบนี้</button>':'');
+        rows.push({ grp:(ix===0?n:''), first:ix===0, c:U.cols(x), act:act });
+      });
     });
   } else return;
   var meta=S||N||U;
@@ -19034,8 +19099,9 @@ function costDupInspect(key){
   var t=document.getElementById('cost-dw-tbl'); if(!t) return;
   var tabs=document.querySelector('#cost-dw .cdt'); if(tabs) tabs.style.display='none';
   var HD=meta.head||['id','วันที่','สถานะ','รายละเอียด'];
-  t.innerHTML='<thead><tr><th style="width:230px">กลุ่ม</th><th style="width:150px">'+esc(HD[0])+'</th>'
-   +'<th style="width:112px">'+esc(HD[1])+'</th><th style="width:112px">'+esc(HD[2])+'</th><th>'+esc(HD[3])+'</th></tr></thead><tbody>'
+  t.innerHTML='<thead><tr><th style="width:190px">กลุ่ม</th><th style="width:150px">'+esc(HD[0])+'</th>'
+   +'<th style="width:104px">'+esc(HD[1])+'</th><th style="width:100px">'+esc(HD[2])+'</th><th>'+esc(HD[3])+'</th>'
+   +(U?'<th style="width:186px">จัดการ</th>':'')+'</tr></thead><tbody>'
    +rows.map(function(r){
       return '<tr style="cursor:default'+(r.first?';border-top:2px solid #E0B24B':'')+'">'
        +'<td style="font-weight:700;color:#1A1A1A">'+esc(r.grp)
@@ -19044,7 +19110,8 @@ function costDupInspect(key){
        +'<td style="font-family:\'DM Mono\',monospace;font-size:10.5px;color:#666">'+esc(r.c[0])+'</td>'
        +'<td style="font-family:\'DM Mono\',monospace;color:#666">'+esc(r.c[1])+'</td>'
        +'<td style="color:#666">'+esc(r.c[2])+'</td>'
-       +'<td style="color:#666">'+esc(r.c[3])+'</td></tr>';
+       +'<td style="color:#666">'+esc(r.c[3])+'</td>'
+       +(U?('<td>'+(r.act||'')+'</td>'):'')+'</tr>';
      }).join('')
    +'</tbody></table>';
 }
@@ -29129,7 +29196,7 @@ function flRenderCostAnalytics(){
           <span style="font-size:11.5px;font-family:'DM Mono',monospace;font-weight:700">${x.extra} \u0e0b\u0e49\u0e33</span>
           <button onclick="costDupInspect('${x.k}')" style="border:1px solid #E0B24B;background:#fff;color:#7A4A00;border-radius:9px;padding:4px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">\u0e14\u0e39\u0e2b\u0e25\u0e31\u0e01\u0e10\u0e32\u0e19</button>
           ${x.clean?`<button onclick="costDupClean('${x.k}')" style="border:none;background:#A05A1A;color:#fff;border-radius:9px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">\u0e25\u0e49\u0e32\u0e07</button>`:''}
-          ${isNo?`<button onclick="costDupRenumber('${x.k}')" style="border:none;background:#5B289A;color:#fff;border-radius:9px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">\u0e2d\u0e2d\u0e01\u0e40\u0e25\u0e02\u0e43\u0e2b\u0e21\u0e48</button>`:''}
+          ${isNo?`<span style="font-size:10px;color:#5B289A;opacity:.9">\u0e15\u0e31\u0e14\u0e2a\u0e34\u0e19\u0e17\u0e35\u0e25\u0e30\u0e43\u0e1a\u0e02\u0e49\u0e32\u0e07\u0e43\u0e19</span>`:''}
         </div>`;
       const all=DS.sets.concat(DS.nested).filter(x=>x.extra>0);
       const numsL=(DS.nums||[]).filter(x=>x.extra>0);
