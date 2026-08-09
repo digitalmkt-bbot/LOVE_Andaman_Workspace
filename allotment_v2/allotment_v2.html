@@ -28419,10 +28419,25 @@ var COST_CATS = [
   {k:'engine',    t:'เครื่องยนต์', c:'#E03B7E'},
   {k:'gearbox',   t:'เกียร์',      c:'#BA7517'},
   {k:'propeller', t:'ใบจักร',      c:'#1D9E75'},
-  {k:'other',     t:'อื่น ๆ',      c:'#9AA0A6'}
+  {k:'other',     t:'อื่น ๆ',      c:'#9AA0A6'},
+  // §memoToBoat · เงินของเรือที่ไม่ได้ผ่านใบงานซ่อม (memo ระบุเรือไว้ตรง ๆ)
+  {k:'memo',      t:'memo ตรง',   c:'#8B5CF6'}
 ];
 function costCat(k){ return COST_CATS.find(function(x){return x.k===k;}) || COST_CATS[4]; }
 
+// §memoToBoat · ส่วนของ memo ที่ "ไม่ได้เข้าสต็อก" จึงคิดเป็นค่าใช้จ่ายของเรือได้เลย
+//   item ที่มี invId = ของเข้าคลัง · จะถูกคิดอีกครั้งตอนเบิกเข้าใบงาน ต้องกันไว้
+//   ไม่มีรายการเลย (เช่น memo ค่าแรงล้วน) = คิดได้เต็มใบ
+function laMemoDirectShare(mo){
+  var items=(mo&&mo.items)||[];
+  if(!items.length) return 1;
+  var line=function(i){ var q=(i.qty==null?1:+i.qty)||0, p=+((i.price!=null)?i.price:i.cost)||0;
+                        return (i.amount!=null? (+i.amount||0) : q*p); };
+  var sub=0, direct=0;
+  items.forEach(function(i){ var v=line(i); sub+=v; if(!i.invId) direct+=v; });
+  if(sub<=0) return items.every(function(i){ return !i.invId; }) ? 1 : 0;
+  return Math.max(0, Math.min(1, direct/sub));
+}
 // §costV2 · รวมตัวเลขทั้งหน้าไว้ที่เดียว · ทุกแผงอ่านจากก้อนนี้ก้อนเดียว
 //   จะได้ไม่มีทางที่การ์ดบนกับตารางล่างคิดคนละวิธีแล้วตัวเลขไม่ตรงกัน
 function costAggregate(){
@@ -28485,6 +28500,35 @@ function costAggregate(){
   };
   scoped.forEach(function(m){ build(m,true); });
 
+  // §memoToBoat · memo ที่ระบุเรือแต่ไม่ผูกใบงาน · ลงเป็นค่าใช้จ่ายของเรือลำนั้น
+  //   เอาเฉพาะส่วนที่ไม่ได้เข้าสต็อก จะได้ไม่ไปซ้ำกับตอนเบิกอะไหล่เข้าใบงาน
+  var _cenLeft=[];
+  ((typeof FL_MEMOS!=='undefined'?FL_MEMOS:[])||[]).forEach(function(mo){
+    if(mo.maintId) return;
+    if(CNT.indexOf(mo.status)<0) return;
+    var amtAll=+mo.amount||0;
+    var dt=mo.createdDate||mo.approvedDate||'';
+    var inScope=true;
+    if(_costTimeFilter==='ytd')        inScope = dt>=ytdStr;
+    else if(_costTimeFilter==='month') inScope = dt.indexOf(thisMonth)===0;
+    else if(_costTimeFilter==='last30')inScope = dt>=l30Str;
+    var share = mo.boatId ? laMemoDirectShare(mo) : 0;
+    var amt   = Math.round(amtAll*share);
+    var rest  = amtAll-amt;
+    if(rest>0.5 || !mo.boatId) _cenLeft.push({ mo:mo, amt: mo.boatId?rest:amtAll });
+    if(!mo.boatId || amt<=0 || !inScope) return;
+    var isPaid = (mo.status==='paid');
+    var row={ id:mo.id, no:mo.no||mo.id, boatId:mo.boatId, title:mo.title||'',
+              type:(mo.memoType||'memo'), st:(isPaid?'done':'inprogress'), date:dt,
+              cost:amt, cats:['memo'], done:isPaid, parts:0, memo:amt, kind:'memo' };
+    A.rows.push(row); A.all.push(row);
+    if(isPaid){ A.done+=amt; A.nDone++; } else { A.proc+=amt; A.nProc++; }
+    A.byCat.memo[isPaid?'done':'proc']+=amt; A.byCat.memo.n++;
+    var b=A.boats[mo.boatId]=A.boats[mo.boatId]||{id:mo.boatId,name:(getBoat(mo.boatId)||{}).name||mo.boatId,done:0,proc:0,n:0,cats:{}};
+    b.cats.memo=(b.cats.memo||0)+amt;
+    b[isPaid?'done':'proc']+=amt; b.n++;
+  });
+
   A.total=A.done+A.proc;
   A.boatList=Object.keys(A.boats).map(function(k){ var b=A.boats[k]; b.tot=b.done+b.proc; return b; })
     .sort(function(a,z){ return z.tot-a.tot; });
@@ -28492,10 +28536,12 @@ function costAggregate(){
     .sort(function(a,z){ return z.cost-a.cost; }).slice(0,10);
   A.boatsServiced=A.boatList.length;
   A.nJobs=A.nDone+A.nProc;
-  // §cen · memo ที่อนุมัติ/จ่ายแล้วแต่ไม่ผูกใบงาน · ไม่บวกเข้ายอดรวม
-  var orph=((typeof FL_MEMOS!=='undefined'?FL_MEMOS:[])||[]).filter(function(mo){
-    return !mo.maintId && CNT.indexOf(mo.status)>=0; });
-  A.central={ n:orph.length, amt:orph.reduce(function(x,mo){ return x+(mo.amount||0); },0), list:orph };
+  // §cen · เหลือเฉพาะที่ยังลงเรือลำไหนไม่ได้ · ไม่ระบุเรือ หรือเป็นของที่เข้าสต็อก
+  //   (ส่วนที่ลงเรือได้ ถูกย้ายไปอยู่ในยอดของเรือแล้วด้านบน)
+  A.central={ n:_cenLeft.length,
+              amt:_cenLeft.reduce(function(x,e){ return x+e.amt; },0),
+              list:_cenLeft.map(function(e){ return e.mo; }),
+              amtOf:_cenLeft.reduce(function(m,e){ m[e.mo.id]=e.amt; return m; },{}) };
   return A;
 }
 // ชื่ออุปกรณ์ · เอาจาก label ของใบงานก่อน ถ้าไม่มีค่อยไปหาใน registry
@@ -28551,7 +28597,7 @@ function costDwPaint(){
       sp =rs.reduce(function(x,r){return x+r.parts;},0),
       sm =rs.reduce(function(x,r){return x+r.memo;},0);
   t.innerHTML=''
-   +'<thead><tr><th style="width:80px">\u0e43\u0e1a\u0e07\u0e32\u0e19</th><th style="width:96px">\u0e27\u0e31\u0e19\u0e17\u0e35\u0e48</th><th>\u0e40\u0e23\u0e37\u0e48\u0e2d\u0e07</th>'
+   +'<thead><tr><th style="width:86px">\u0e43\u0e1a\u0e07\u0e32\u0e19 / memo</th><th style="width:96px">\u0e27\u0e31\u0e19\u0e17\u0e35\u0e48</th><th>\u0e40\u0e23\u0e37\u0e48\u0e2d\u0e07</th>'
    +'<th style="width:104px">\u0e2b\u0e21\u0e27\u0e14</th><th style="width:86px">\u0e2a\u0e16\u0e32\u0e19\u0e30</th>'
    +'<th class="n" style="width:88px">\u0e2d\u0e30\u0e44\u0e2b\u0e25\u0e48</th><th class="n" style="width:88px">memo</th>'
    +'<th class="n" style="width:98px">\u0e23\u0e27\u0e21</th></tr></thead><tbody>'
@@ -28559,7 +28605,9 @@ function costDwPaint(){
       var bn=(getBoat(r.boatId)||{}).name||'\u2014';
       var cats=r.cats.map(function(k){ var c=costCat(k);
         return '<span class="cpill" style="background:'+c.c+'22;color:'+c.c+'">'+c.t+'</span>'; }).join(' ');
-      return '<tr onclick="costDwGoJob(\''+r.id+'\')">'
+      return '<tr onclick="'+(r.kind==='memo'
+        ? ('costDwGoMemo(\''+String(r.no).replace(/\'/g,'')+'\')')
+        : ('costDwGoJob(\''+r.id+'\')'))+'">'
        +'<td style="font-family:\'DM Mono\',monospace;font-weight:600">'+esc(r.no)+'</td>'
        +'<td style="font-family:\'DM Mono\',monospace;color:#666">'+esc(r.date||'\u2014')+'</td>'
        +'<td><div style="font-weight:600;color:#1A1A1A">'+esc(r.title)+'</div>'
@@ -28575,6 +28623,15 @@ function costDwPaint(){
    +'</tbody><tfoot><tr><td colspan="5">\u0e23\u0e27\u0e21 '+rs.length+' \u0e43\u0e1a\u0e07\u0e32\u0e19</td>'
    +'<td class="n">'+f(sp)+'</td><td class="n">'+f(sm)+'</td>'
    +'<td class="n" style="color:#9F1B4F">'+f(sum)+'</td></tr></tfoot>';
+}
+// §memoToBoat · แถวที่มาจาก memo ไม่มีใบงานให้เปิด · พาไปหน้า memo แล้วค้นด้วยเลขที่ใบ
+function costDwGoMemo(no){
+  costDwClose();
+  if(typeof _memoSearch!=='undefined') _memoSearch=no||'';
+  var el=document.querySelector('[data-view="fl-inventory"]');
+  if(el && typeof nav==='function') nav(el);
+  if(typeof invSwitchTab==='function') invSwitchTab('memo');
+  if(typeof flRenderInventory==='function') flRenderInventory();
 }
 function costDwGoJob(id){
   costDwClose();
@@ -28630,14 +28687,18 @@ function costOpenCentral(){
    +'<th style="width:96px">\u0e1b\u0e23\u0e30\u0e40\u0e20\u0e17</th><th style="width:86px">\u0e2a\u0e16\u0e32\u0e19\u0e30</th><th class="n" style="width:104px">\u0e22\u0e2d\u0e14</th></tr></thead><tbody>'
    +A.central.list.slice().sort(function(a,z){return (z.amount||0)-(a.amount||0);}).map(function(mo){
       var bn=mo.boatId?((getBoat(mo.boatId)||{}).name||mo.boatId):'\u2014';
-      return '<tr onclick="costDwClose();if(typeof flGoToMemo===\'function\')flGoToMemo(\''+mo.id+'\')">'
+      var shown=(A.central.amtOf&&A.central.amtOf[mo.id]!=null)?A.central.amtOf[mo.id]:(mo.amount||0);
+      return '<tr onclick="costDwGoMemo(\''+String(mo.no||'').replace(/\'/g,'')+'\')">'
        +'<td style="font-family:\'DM Mono\',monospace;font-weight:600">'+esc(mo.no||'')+'</td>'
        +'<td style="font-family:\'DM Mono\',monospace;color:#666">'+esc(mo.createdDate||'\u2014')+'</td>'
        +'<td><div style="font-weight:600;color:#1A1A1A">'+esc(mo.title||'')+'</div>'
        +   '<div style="font-size:10px;color:#999">'+esc(bn)+'</div></td>'
        +'<td style="color:#666">'+esc(mo.memoType||'')+'</td>'
        +'<td style="color:#666">'+esc(mo.status||'')+'</td>'
-       +'<td class="n" style="font-weight:700;color:#9F1B4F">'+f(mo.amount)+'</td></tr>';
+       +'<td class="n" style="font-weight:700;color:#9F1B4F">'+f(shown)
+       + ((Math.round(shown)!==Math.round(mo.amount||0))
+           ? '<div style="font-size:9.5px;color:#999;font-weight:400">\u0e40\u0e15\u0e47\u0e21\u0e43\u0e1a '+f(mo.amount)+'</div>' : '')
+       +'</td></tr>';
      }).join('')
    +'</tbody><tfoot><tr><td colspan="5">\u0e23\u0e27\u0e21 '+A.central.n+' memo</td>'
    +'<td class="n" style="color:#9F1B4F">'+f(A.central.amt)+'</td></tr></tfoot>';
@@ -28708,10 +28769,11 @@ function flRenderCostAnalytics(){
       <span style="font-size:10px;color:${dim.ink3}">\u0e44\u0e21\u0e48\u0e23\u0e27\u0e21\u0e43\u0e19\u0e22\u0e2d\u0e14\u0e0b\u0e49\u0e32\u0e22 \u00b7 \u0e01\u0e14\u0e14\u0e39 \u203a</span>
     </div>
     <div style="font-size:25px;font-weight:700;font-family:'DM Mono',monospace;letter-spacing:-.7px">${f(A.central.amt)}</div>
-    <div style="font-size:11px;color:${dim.ink3};margin-top:3px">${A.central.n} memo \u00b7 \u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34/\u0e08\u0e48\u0e32\u0e22\u0e41\u0e25\u0e49\u0e27 \u00b7 \u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e1c\u0e39\u0e01\u0e43\u0e1a\u0e07\u0e32\u0e19</div>
+    <div style="font-size:11px;color:${dim.ink3};margin-top:3px">${A.central.n} memo \u00b7 \u0e44\u0e21\u0e48\u0e23\u0e30\u0e1a\u0e38\u0e40\u0e23\u0e37\u0e2d \u0e2b\u0e23\u0e37\u0e2d\u0e40\u0e1b\u0e47\u0e19\u0e02\u0e2d\u0e07\u0e17\u0e35\u0e48\u0e40\u0e02\u0e49\u0e32\u0e2a\u0e15\u0e47\u0e2d\u0e01</div>
     <div style="background:#FFF6E5;border-radius:10px;padding:9px 11px;font-size:10.5px;color:#A05A1A;line-height:1.55;margin-top:10px">
-      memo \u0e01\u0e25\u0e38\u0e48\u0e21\u0e19\u0e35\u0e49\u0e2a\u0e48\u0e27\u0e19\u0e43\u0e2b\u0e0d\u0e48\u0e40\u0e1b\u0e47\u0e19\u0e01\u0e32\u0e23\u0e2a\u0e31\u0e48\u0e07\u0e2d\u0e30\u0e44\u0e2b\u0e25\u0e48\u0e40\u0e02\u0e49\u0e32\u0e2a\u0e15\u0e47\u0e2d\u0e01\u0e41\u0e25\u0e30\u0e07\u0e32\u0e19\u0e17\u0e48\u0e32\u0e40\u0e23\u0e37\u0e2d
-      \u0e16\u0e49\u0e32\u0e1a\u0e27\u0e01\u0e40\u0e02\u0e49\u0e32\u0e22\u0e2d\u0e14\u0e02\u0e2d\u0e07\u0e40\u0e23\u0e37\u0e2d\u0e08\u0e30<b>\u0e19\u0e31\u0e1a\u0e0b\u0e49\u0e33</b> \u0e40\u0e1e\u0e23\u0e32\u0e30\u0e2d\u0e30\u0e44\u0e2b\u0e25\u0e48\u0e08\u0e30\u0e16\u0e39\u0e01\u0e04\u0e34\u0e14\u0e2d\u0e35\u0e01\u0e23\u0e2d\u0e1a\u0e15\u0e2d\u0e19\u0e40\u0e1a\u0e34\u0e01\u0e2d\u0e2d\u0e01\u0e21\u0e32\u0e43\u0e0a\u0e49\u0e43\u0e19\u0e43\u0e1a\u0e07\u0e32\u0e19
+      memo \u0e17\u0e35\u0e48<b>\u0e23\u0e30\u0e1a\u0e38\u0e40\u0e23\u0e37\u0e2d</b>\u0e44\u0e27\u0e49 \u0e16\u0e39\u0e01\u0e22\u0e49\u0e32\u0e22\u0e44\u0e1b\u0e23\u0e27\u0e21\u0e43\u0e19\u0e22\u0e2d\u0e14\u0e02\u0e2d\u0e07\u0e40\u0e23\u0e37\u0e2d\u0e25\u0e33\u0e19\u0e31\u0e49\u0e19\u0e41\u0e25\u0e49\u0e27 \u00b7 \u0e2b\u0e21\u0e27\u0e14 <b>memo \u0e15\u0e23\u0e07</b>
+      \u0e17\u0e35\u0e48\u0e40\u0e2b\u0e25\u0e37\u0e2d\u0e15\u0e23\u0e07\u0e19\u0e35\u0e49\u0e04\u0e37\u0e2d\u0e43\u0e1a\u0e17\u0e35\u0e48\u0e44\u0e21\u0e48\u0e23\u0e30\u0e1a\u0e38\u0e40\u0e23\u0e37\u0e2d \u0e01\u0e31\u0e1a\u0e2d\u0e30\u0e44\u0e2b\u0e25\u0e48\u0e17\u0e35\u0e48<b>\u0e23\u0e31\u0e1a\u0e40\u0e02\u0e49\u0e32\u0e2a\u0e15\u0e47\u0e2d\u0e01</b>
+      \u0e0b\u0e36\u0e48\u0e07\u0e08\u0e30\u0e16\u0e39\u0e01\u0e04\u0e34\u0e14\u0e40\u0e1b\u0e47\u0e19\u0e02\u0e2d\u0e07\u0e40\u0e23\u0e37\u0e2d\u0e2d\u0e22\u0e39\u0e48\u0e41\u0e25\u0e49\u0e27\u0e15\u0e2d\u0e19\u0e40\u0e1a\u0e34\u0e01\u0e2d\u0e2d\u0e01\u0e21\u0e32\u0e43\u0e0a\u0e49 \u0e08\u0e36\u0e07\u0e44\u0e21\u0e48\u0e1a\u0e27\u0e01\u0e0b\u0e49\u0e33\u0e15\u0e23\u0e07\u0e19\u0e35\u0e49
     </div>
   </div>`;
 
@@ -28884,7 +28946,7 @@ function flRenderCostAnalytics(){
 
   wrap.innerHTML=headerBar+dupBar
     +`<div style="display:grid;grid-template-columns:1.55fr 1fr;gap:12px;margin-bottom:12px" class="cost-top">${totalCard}${centralCard}</div>`
-    +`<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:12px" class="cost-cats">${catCards}</div>`
+    +`<div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-bottom:12px" class="cost-cats">${catCards}</div>`
     +chartSection
     +`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px" class="cost-duo">${boatPanel}${unitPanel}</div>`
     +`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px" class="cost-duo">${typePanel}${outcomePanel}</div>`;
