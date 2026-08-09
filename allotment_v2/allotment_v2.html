@@ -3644,6 +3644,49 @@ body.sb-collapsed .sidebar.sb-collapsed ~ #la-userbadge, body.sb-collapsed .la-u
 #view-booking .bkv2-cal-cell.today .bkv2-cal-daytot,#view-booking .bkv2-cal-cell.sel .bkv2-cal-daytot{background:rgba(58,111,247,.2)}
 #view-booking .bkv2-cal-foc + .bkv2-cal-daytot{margin-left:6px}
 </style>
+<style id="cost-v2-skin">
+/* §costV2 · ลิ้นชักรายละเอียดค่าใช้จ่าย · เปิดจากหน้า Cost Analytics */
+#cost-dw-ov{position:fixed;inset:0;background:rgba(20,18,16,.4);opacity:0;pointer-events:none;
+  transition:opacity .2s;z-index:9040}
+#cost-dw-ov.on{opacity:1;pointer-events:auto}
+#cost-dw{position:fixed;top:0;right:0;bottom:0;width:min(880px,96vw);background:#fff;z-index:9050;
+  transform:translateX(102%);transition:transform .24s cubic-bezier(.4,0,.2,1);
+  display:flex;flex-direction:column;box-shadow:-16px 0 44px rgba(0,0,0,.16);
+  font-family:'Plus Jakarta Sans',system-ui,sans-serif}
+#cost-dw.on{transform:none}
+#cost-dw .cdh{padding:18px 22px;border-bottom:1px solid rgba(0,0,0,.06)}
+#cost-dw .cdh .x{float:right;border:none;background:#f3f3f1;width:30px;height:30px;border-radius:10px;
+  cursor:pointer;font-size:16px;color:#666;font-family:inherit}
+#cost-dw .cdh h2{margin:0;font-size:19px;font-weight:700;letter-spacing:-.02em;color:#1A1A1A}
+#cost-dw .cdh .s{font-size:12px;color:#666;margin-top:4px}
+#cost-dw .cdk{display:flex;gap:9px;margin-top:13px;flex-wrap:wrap}
+#cost-dw .cdk > div{border:1px solid rgba(0,0,0,.06);border-radius:11px;padding:8px 12px;min-width:116px}
+#cost-dw .cdk .k{font-size:10px;color:#999;font-weight:600}
+#cost-dw .cdk .v{font-size:16px;font-weight:700;font-family:'DM Mono',monospace;margin-top:2px}
+#cost-dw .cdt{display:flex;gap:5px;padding:12px 22px 0;flex-wrap:wrap}
+#cost-dw .cdt button{border:1px solid rgba(0,0,0,.06);background:#fff;border-radius:11px;padding:6px 13px;
+  font:inherit;font-size:11.5px;font-weight:600;color:#666;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+#cost-dw .cdt button.on{background:#1A1A1A;color:#fff;border-color:#1A1A1A}
+#cost-dw .cdt button i{width:8px;height:8px;border-radius:3px;display:inline-block}
+#cost-dw .cdb{flex:1;overflow:auto;padding:14px 22px 26px}
+#cost-dw table{width:100%;border-collapse:collapse;font-size:12px}
+#cost-dw th{text-align:left;padding:0 8px 8px;font-size:9.5px;font-weight:700;color:#999;letter-spacing:.06em;
+  text-transform:uppercase;border-bottom:1px solid rgba(0,0,0,.06);position:sticky;top:0;background:#fff}
+#cost-dw td{padding:9px 8px;border-bottom:.5px solid rgba(0,0,0,.05)}
+#cost-dw tbody tr{cursor:pointer}
+#cost-dw tbody tr:hover{background:#FCE5EC}
+#cost-dw td.n,#cost-dw th.n{text-align:right;font-family:'DM Mono',monospace}
+#cost-dw tfoot td{padding:11px 8px;border-top:2px solid #1A1A1A;font-weight:700;font-family:'DM Mono',monospace;border-bottom:none}
+#cost-dw .cpill{font-size:9px;font-weight:700;padding:1px 6px;border-radius:5px;display:inline-block}
+/* บนมือถือ ตารางแปดคอลัมน์ยัดลงจอ 390px ไม่ได้ · ให้เลื่อนแนวนอนในกล่องตัวเอง
+   (#cost-dw อยู่นอก .main กฎเลื่อนตารางของ la-mobile จึงไม่ครอบมาถึง) */
+@media (max-width:820px){
+  #cost-dw{width:100vw}
+  #cost-dw .cdb{padding:12px 12px 20px;overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+  #cost-dw table{min-width:660px}
+  #cost-dw .cdk > div{flex:1 1 calc(50% - 5px);min-width:0}
+}
+</style>
 <style id="bkv2-vc-skin">
 /* ═══ §vcSkin · Booking Detail (VC) · ดีไซน์ชุดเดียวกับ Daily Report ═══
    โครงเดิมทั้งหมด · เปลี่ยนเฉพาะการมองเห็น · scope ที่ .bkv2-vc เท่านั้น
@@ -4979,7 +5022,7 @@ window.addEventListener('resize',function(){ if(window.innerWidth>820) laNavClos
     </div>
 
     <div id="view-fl-cost" class="view">
-      <div class="page-hd"><div><h1>Cost Analytics</h1><p>Maintenance spending · By boat · By type · By engine</p></div></div>
+      <div class="page-hd"><div><h1>Cost Analytics</h1><p>ค่าใช้จ่ายซ่อมบำรุง · แยกตามเรือ · หมวดอุปกรณ์ · สถานะงาน</p></div></div>
       <div id="fl-cost-wrap" style="background:#F4F2EE;margin:14px -16px -16px;padding:18px 20px 22px"></div>
     </div>
 
@@ -28125,248 +28168,450 @@ function maintResetFilters(){
 let _costTimeFilter='all'; // 'all' | 'ytd' | 'month' | 'last30'
 function costSetFilter(v){_costTimeFilter=v;flRenderCostAnalytics();}
 
+// §costV2 · หมวดของค่าใช้จ่าย · อิงจากอุปกรณ์ที่ใบงานไปแตะ (assets[].type)
+var COST_CATS = [
+  {k:'hull',      t:'เรือ',        c:'#5B7CB3'},
+  {k:'engine',    t:'เครื่องยนต์', c:'#E03B7E'},
+  {k:'gearbox',   t:'เกียร์',      c:'#BA7517'},
+  {k:'propeller', t:'ใบจักร',      c:'#1D9E75'},
+  {k:'other',     t:'อื่น ๆ',      c:'#9AA0A6'}
+];
+function costCat(k){ return COST_CATS.find(function(x){return x.k===k;}) || COST_CATS[4]; }
+
+// §costV2 · รวมตัวเลขทั้งหน้าไว้ที่เดียว · ทุกแผงอ่านจากก้อนนี้ก้อนเดียว
+//   จะได้ไม่มีทางที่การ์ดบนกับตารางล่างคิดคนละวิธีแล้วตัวเลขไม่ตรงกัน
+function costAggregate(){
+  var CNT=['paid','received','approved'];
+  var calc=function(m){ return typeof flMaintCalcCost==='function'?flMaintCalcCost(m.id):(m.cost||0); };
+  var todayD=new Date(TODAY_STR), yr=todayD.getFullYear();
+  var ytdStr=yr+'-01-01', thisMonth=TODAY_STR.slice(0,7);
+  var l30=new Date(todayD); l30.setDate(l30.getDate()-30);
+  var l30Str=l30.toISOString().slice(0,10);
+  // §total · นับงานที่ปิดแล้ว "และ" งานที่ยังทำอยู่ · งานที่ยกเลิกไม่นับ
+  var pool=(typeof FL_MAINT!=='undefined'?FL_MAINT:[]).filter(function(m){
+    return m.status==='done'||m.status==='inprogress'||m.status==='on_hold'; });
+  var dOf=function(m){ return m.endDate||m.startDate||''; };
+  var scoped=pool;
+  if(_costTimeFilter==='ytd')        scoped=pool.filter(function(m){return dOf(m)>=ytdStr;});
+  else if(_costTimeFilter==='month') scoped=pool.filter(function(m){return dOf(m).indexOf(thisMonth)===0;});
+  else if(_costTimeFilter==='last30')scoped=pool.filter(function(m){return dOf(m)>=l30Str;});
+
+  var A={done:0,proc:0,nDone:0,nProc:0,byCat:{},byType:{},boats:{},units:{},rows:[],all:[]};
+  COST_CATS.forEach(function(c){ A.byCat[c.k]={done:0,proc:0,n:0}; });
+  ['corrective','preventive','scheduled'].forEach(function(t){ A.byType[t]={done:0,proc:0,n:0}; });
+
+  var build=function(m, intoRows){
+    var c=calc(m), isDone=(m.status==='done');
+    var as=(m.assets||[]);
+    var keys = as.length ? as.map(function(a){ return costCat(a.type).k; }) : ['other'];
+    var share = c/keys.length;
+    var row={ id:m.id, no:m.no||m.id, boatId:m.boatId||'', title:m.title||'',
+              type:m.type||'corrective', st:m.status, date:dOf(m), cost:c,
+              cats:keys, done:isDone };
+    // แยกให้เห็นว่าเงินมาจากอะไหล่ที่เบิก หรือจาก memo ที่อนุมัติ
+    var covered=(typeof flMaintPartsCoveredByMemo==='function')?flMaintPartsCoveredByMemo(m):0;
+    row.parts=(m.parts||[]).reduce(function(x,p){ return x+((p.qty||0)*(p.cost||0)); },0)-covered;
+    row.memo=((typeof FL_MEMOS!=='undefined'?FL_MEMOS:[])||[]).filter(function(mo){
+      return mo.maintId===m.id && CNT.indexOf(mo.status)>=0; }).reduce(function(x,mo){ return x+(mo.amount||0); },0);
+    if(intoRows) A.rows.push(row);
+    A.all.push(row);
+    if(!intoRows) return;
+
+    if(isDone){ A.done+=c; A.nDone++; } else { A.proc+=c; A.nProc++; }
+    if(A.byType[row.type]){ A.byType[row.type][isDone?'done':'proc']+=c; A.byType[row.type].n++; }
+    keys.forEach(function(k,ix){
+      A.byCat[k][isDone?'done':'proc']+=share; A.byCat[k].n++;
+      if(m.boatId){
+        var b=A.boats[m.boatId]=A.boats[m.boatId]||{id:m.boatId,name:(getBoat(m.boatId)||{}).name||m.boatId,done:0,proc:0,n:0,cats:{}};
+        b.cats[k]=(b.cats[k]||0)+share;
+      }
+      var a=as[ix]; if(!a) return;
+      var uid=a.engId||a.gbId||a.propId; if(!uid) return;
+      var u=A.units[uid]=A.units[uid]||{id:uid,cat:k,boatId:m.boatId||'',
+        boat:(getBoat(m.boatId)||{}).name||'', label:'', cost:0, n:0};
+      if(!u.label) u.label=costUnitLabel(uid,k,a);
+      u.cost+=share; u.n++;
+    });
+    if(m.boatId && A.boats[m.boatId]){ A.boats[m.boatId][isDone?'done':'proc']+=c; A.boats[m.boatId].n++; }
+  };
+  scoped.forEach(function(m){ build(m,true); });
+
+  A.total=A.done+A.proc;
+  A.boatList=Object.keys(A.boats).map(function(k){ var b=A.boats[k]; b.tot=b.done+b.proc; return b; })
+    .sort(function(a,z){ return z.tot-a.tot; });
+  A.unitList=Object.keys(A.units).map(function(k){ return A.units[k]; })
+    .sort(function(a,z){ return z.cost-a.cost; }).slice(0,10);
+  A.boatsServiced=A.boatList.length;
+  A.nJobs=A.nDone+A.nProc;
+  // §cen · memo ที่อนุมัติ/จ่ายแล้วแต่ไม่ผูกใบงาน · ไม่บวกเข้ายอดรวม
+  var orph=((typeof FL_MEMOS!=='undefined'?FL_MEMOS:[])||[]).filter(function(mo){
+    return !mo.maintId && CNT.indexOf(mo.status)>=0; });
+  A.central={ n:orph.length, amt:orph.reduce(function(x,mo){ return x+(mo.amount||0); },0), list:orph };
+  return A;
+}
+// ชื่ออุปกรณ์ · เอาจาก label ของใบงานก่อน ถ้าไม่มีค่อยไปหาใน registry
+function costUnitLabel(uid, catKey, asset){
+  if(asset && asset.label) return asset.label;
+  var pick=function(arr){ var x=(arr||[]).find(function(o){return o.id===uid;});
+    return x?((x.serial||'')+(x.pos?' \u00b7 '+x.pos:'')):''; };
+  var lb='';
+  if(catKey==='engine')         lb=pick(typeof FL_ENGINES!=='undefined'?FL_ENGINES:[]);
+  else if(catKey==='gearbox')   lb=pick(typeof FL_GEARBOXES!=='undefined'?FL_GEARBOXES:[]);
+  else if(catKey==='propeller') lb=pick(typeof FL_PROPELLERS!=='undefined'?FL_PROPELLERS:[]);
+  return lb||uid;
+}
+
+// ══ §dw · ลิ้นชักรายละเอียด ══════════════════════════════════════════════
+var _costDw={rows:[],cat:'all',title:'',sub:'',kpis:[]};
+function costDwOpen(title, sub, kpis, rows){
+  _costDw={rows:rows||[], cat:'all', title:title, sub:sub, kpis:kpis||[]};
+  var ov=document.getElementById('cost-dw-ov'), dw=document.getElementById('cost-dw');
+  if(!ov){ ov=document.createElement('div'); ov.id='cost-dw-ov'; ov.onclick=costDwClose; document.body.appendChild(ov); }
+  if(!dw){ dw=document.createElement('div'); dw.id='cost-dw'; document.body.appendChild(dw); }
+  var esc=(typeof escapeHTML==='function')?escapeHTML:function(x){return String(x||'');};
+  var present=COST_CATS.filter(function(c){ return (rows||[]).some(function(r){ return r.cats.indexOf(c.k)>=0; }); });
+  dw.innerHTML=''
+   +'<div class="cdh"><button class="x" onclick="costDwClose()">&times;</button>'
+   +  '<h2>'+esc(title)+'</h2><div class="s">'+esc(sub)+'</div>'
+   +  '<div class="cdk">'+(kpis||[]).map(function(k){
+        return '<div><div class="k">'+esc(k[0])+'</div><div class="v"'+(k[2]?' style="color:'+k[2]+'"':'')+'>'+k[1]+'</div></div>'; }).join('')+'</div>'
+   +'</div>'
+   +'<div class="cdt"><button class="on" onclick="costDwTab(\'all\',this)">\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14</button>'
+   +  present.map(function(c){ return '<button onclick="costDwTab(\''+c.k+'\',this)"><i style="background:'+c.c+'"></i>'+c.t+'</button>'; }).join('')
+   +'</div><div class="cdb"><table id="cost-dw-tbl"></table></div>';
+  costDwPaint();
+  ov.classList.add('on'); dw.classList.add('on');
+}
+function costDwTab(k, el){
+  _costDw.cat=k;
+  if(el&&el.parentNode) Array.prototype.forEach.call(el.parentNode.children,function(b){ b.classList.remove('on'); });
+  if(el) el.classList.add('on');
+  costDwPaint();
+}
+function costDwClose(){
+  var ov=document.getElementById('cost-dw-ov'), dw=document.getElementById('cost-dw');
+  if(ov) ov.classList.remove('on'); if(dw) dw.classList.remove('on');
+}
+function costDwPaint(){
+  var t=document.getElementById('cost-dw-tbl'); if(!t) return;
+  var esc=(typeof escapeHTML==='function')?escapeHTML:function(x){return String(x||'');};
+  var f=function(n){ return '\u0e3f'+Math.round(n||0).toLocaleString(); };
+  var rs=_costDw.rows.filter(function(r){ return _costDw.cat==='all'||r.cats.indexOf(_costDw.cat)>=0; });
+  rs=rs.slice().sort(function(a,z){ return z.cost-a.cost || String(z.date).localeCompare(String(a.date)); });
+  var sum=rs.reduce(function(x,r){return x+r.cost;},0),
+      sp =rs.reduce(function(x,r){return x+r.parts;},0),
+      sm =rs.reduce(function(x,r){return x+r.memo;},0);
+  t.innerHTML=''
+   +'<thead><tr><th style="width:80px">\u0e43\u0e1a\u0e07\u0e32\u0e19</th><th style="width:96px">\u0e27\u0e31\u0e19\u0e17\u0e35\u0e48</th><th>\u0e40\u0e23\u0e37\u0e48\u0e2d\u0e07</th>'
+   +'<th style="width:104px">\u0e2b\u0e21\u0e27\u0e14</th><th style="width:86px">\u0e2a\u0e16\u0e32\u0e19\u0e30</th>'
+   +'<th class="n" style="width:88px">\u0e2d\u0e30\u0e44\u0e2b\u0e25\u0e48</th><th class="n" style="width:88px">memo</th>'
+   +'<th class="n" style="width:98px">\u0e23\u0e27\u0e21</th></tr></thead><tbody>'
+   +(rs.length?rs.map(function(r){
+      var bn=(getBoat(r.boatId)||{}).name||'\u2014';
+      var cats=r.cats.map(function(k){ var c=costCat(k);
+        return '<span class="cpill" style="background:'+c.c+'22;color:'+c.c+'">'+c.t+'</span>'; }).join(' ');
+      return '<tr onclick="costDwGoJob(\''+r.id+'\')">'
+       +'<td style="font-family:\'DM Mono\',monospace;font-weight:600">'+esc(r.no)+'</td>'
+       +'<td style="font-family:\'DM Mono\',monospace;color:#666">'+esc(r.date||'\u2014')+'</td>'
+       +'<td><div style="font-weight:600;color:#1A1A1A">'+esc(r.title)+'</div>'
+       +   '<div style="font-size:10px;color:#999">'+esc(bn)+' \u00b7 '+esc(r.type)+'</div></td>'
+       +'<td>'+cats+'</td>'
+       +'<td>'+(r.done?'<span class="cpill" style="background:#E7F3EE;color:#1D6E56">\u0e1b\u0e34\u0e14\u0e41\u0e25\u0e49\u0e27</span>'
+                     :'<span class="cpill" style="background:#FFF1DC;color:#A05A1A">\u0e01\u0e33\u0e25\u0e31\u0e07\u0e17\u0e33</span>')+'</td>'
+       +'<td class="n" style="color:#666">'+(r.parts?f(r.parts):'\u2014')+'</td>'
+       +'<td class="n" style="color:#666">'+(r.memo?f(r.memo):'\u2014')+'</td>'
+       +'<td class="n" style="font-weight:700;color:#9F1B4F">'+f(r.cost)+'</td></tr>';
+     }).join('')
+    :'<tr><td colspan="8" style="text-align:center;padding:34px;color:#999">\u0e44\u0e21\u0e48\u0e21\u0e35\u0e43\u0e1a\u0e07\u0e32\u0e19\u0e43\u0e19\u0e2b\u0e21\u0e27\u0e14\u0e19\u0e35\u0e49</td></tr>')
+   +'</tbody><tfoot><tr><td colspan="5">\u0e23\u0e27\u0e21 '+rs.length+' \u0e43\u0e1a\u0e07\u0e32\u0e19</td>'
+   +'<td class="n">'+f(sp)+'</td><td class="n">'+f(sm)+'</td>'
+   +'<td class="n" style="color:#9F1B4F">'+f(sum)+'</td></tr></tfoot>';
+}
+function costDwGoJob(id){
+  costDwClose();
+  if(typeof _selMaintId!=='undefined') _selMaintId=id;
+  var el=document.querySelector('[data-view="fl-maintenance"]');
+  if(el && typeof nav==='function') nav(el);
+}
+function costOpenStatus(k){
+  var A=costAggregate();
+  var rs=A.rows.filter(function(r){ return k==='done'?r.done:!r.done; });
+  var f=function(n){ return '\u0e3f'+Math.round(n||0).toLocaleString(); };
+  costDwOpen(k==='done'?'\u0e07\u0e32\u0e19\u0e17\u0e35\u0e48\u0e1b\u0e34\u0e14\u0e41\u0e25\u0e49\u0e27':'\u0e07\u0e32\u0e19\u0e17\u0e35\u0e48\u0e01\u0e33\u0e25\u0e31\u0e07\u0e14\u0e33\u0e40\u0e19\u0e34\u0e19\u0e01\u0e32\u0e23',
+    (k==='done'?'\u0e08\u0e48\u0e32\u0e22\u0e08\u0e23\u0e34\u0e07\u0e41\u0e25\u0e30\u0e1b\u0e34\u0e14\u0e07\u0e32\u0e19\u0e41\u0e25\u0e49\u0e27':'\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e1b\u0e34\u0e14\u0e07\u0e32\u0e19 \u00b7 \u0e22\u0e2d\u0e14\u0e2d\u0e32\u0e08\u0e40\u0e1e\u0e34\u0e48\u0e21\u0e44\u0e14\u0e49\u0e2d\u0e35\u0e01')+' \u00b7 '+rs.length+' \u0e43\u0e1a\u0e07\u0e32\u0e19',
+    [['\u0e23\u0e27\u0e21',f(k==='done'?A.done:A.proc)],['\u0e08\u0e33\u0e19\u0e27\u0e19\u0e43\u0e1a\u0e07\u0e32\u0e19',(k==='done'?A.nDone:A.nProc)]], rs);
+}
+function costOpenCat(k){
+  var A=costAggregate(), c=costCat(k), v=A.byCat[k]||{done:0,proc:0};
+  var rs=A.rows.filter(function(r){ return r.cats.indexOf(k)>=0; });
+  var f=function(n){ return '\u0e3f'+Math.round(n||0).toLocaleString(); };
+  costDwOpen('\u0e2b\u0e21\u0e27\u0e14 \u00b7 '+c.t, '\u0e17\u0e38\u0e01\u0e25\u0e33 \u00b7 '+rs.length+' \u0e43\u0e1a\u0e07\u0e32\u0e19',
+    [['\u0e23\u0e27\u0e21\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14',f(v.done+v.proc)],
+     ['\u0e1b\u0e34\u0e14\u0e07\u0e32\u0e19\u0e41\u0e25\u0e49\u0e27',f(v.done)],
+     ['\u0e01\u0e33\u0e25\u0e31\u0e07\u0e14\u0e33\u0e40\u0e19\u0e34\u0e19\u0e01\u0e32\u0e23',f(v.proc),'#A05A1A']], rs);
+}
+function costOpenBoat(id){
+  var A=costAggregate(), b=A.boats[id]; if(!b) return;
+  var rs=A.rows.filter(function(r){ return r.boatId===id; });
+  var f=function(n){ return '\u0e3f'+Math.round(n||0).toLocaleString(); };
+  costDwOpen(b.name, '\u0e04\u0e48\u0e32\u0e43\u0e0a\u0e49\u0e08\u0e48\u0e32\u0e22\u0e0b\u0e48\u0e2d\u0e21\u0e1a\u0e33\u0e23\u0e38\u0e07\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14 \u00b7 '+b.n+' \u0e43\u0e1a\u0e07\u0e32\u0e19',
+    [['\u0e23\u0e27\u0e21\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14',f(b.tot)],
+     ['\u0e1b\u0e34\u0e14\u0e07\u0e32\u0e19\u0e41\u0e25\u0e49\u0e27',f(b.done)],
+     ['\u0e01\u0e33\u0e25\u0e31\u0e07\u0e14\u0e33\u0e40\u0e19\u0e34\u0e19\u0e01\u0e32\u0e23',f(b.proc),'#A05A1A'],
+     ['% \u0e02\u0e2d\u0e07\u0e01\u0e2d\u0e07\u0e40\u0e23\u0e37\u0e2d',(A.total?Math.round(b.tot/A.total*100):0)+'%']], rs);
+}
+function costOpenUnit(id){
+  var A=costAggregate(), u=A.units[id]; if(!u) return;
+  var rs=A.rows.filter(function(r){ return r.boatId===u.boatId && r.cats.indexOf(u.cat)>=0; });
+  var f=function(n){ return '\u0e3f'+Math.round(n||0).toLocaleString(); };
+  costDwOpen(u.label, costCat(u.cat).t+(u.boat?' \u00b7 '+u.boat:'')+' \u00b7 '+u.n+' \u0e43\u0e1a\u0e07\u0e32\u0e19',
+    [['\u0e23\u0e27\u0e21\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14',f(u.cost)],['\u0e08\u0e33\u0e19\u0e27\u0e19\u0e07\u0e32\u0e19',u.n]], rs);
+}
+function costOpenCentral(){
+  var A=costAggregate();
+  var esc=(typeof escapeHTML==='function')?escapeHTML:function(x){return String(x||'');};
+  var f=function(n){ return '\u0e3f'+Math.round(n||0).toLocaleString(); };
+  // memo กลุ่มนี้ไม่มีใบงาน จึงใช้ตารางของตัวเองแทนตารางใบงาน
+  costDwOpen('\u0e04\u0e48\u0e32\u0e43\u0e0a\u0e49\u0e08\u0e48\u0e32\u0e22\u0e01\u0e25\u0e32\u0e07 / \u0e0b\u0e37\u0e49\u0e2d\u0e40\u0e02\u0e49\u0e32\u0e04\u0e25\u0e31\u0e07',
+    'memo \u0e17\u0e35\u0e48\u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34/\u0e08\u0e48\u0e32\u0e22\u0e41\u0e25\u0e49\u0e27\u0e41\u0e15\u0e48\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e1c\u0e39\u0e01\u0e43\u0e1a\u0e07\u0e32\u0e19\u0e0b\u0e48\u0e2d\u0e21 \u00b7 '+A.central.n+' \u0e43\u0e1a',
+    [['\u0e23\u0e27\u0e21',f(A.central.amt)],['\u0e08\u0e33\u0e19\u0e27\u0e19 memo',A.central.n]], []);
+  var t=document.getElementById('cost-dw-tbl'); if(!t) return;
+  var tabs=document.querySelector('#cost-dw .cdt'); if(tabs) tabs.style.display='none';
+  t.innerHTML='<thead><tr><th style="width:82px">memo</th><th style="width:96px">\u0e27\u0e31\u0e19\u0e17\u0e35\u0e48</th><th>\u0e40\u0e23\u0e37\u0e48\u0e2d\u0e07</th>'
+   +'<th style="width:96px">\u0e1b\u0e23\u0e30\u0e40\u0e20\u0e17</th><th style="width:86px">\u0e2a\u0e16\u0e32\u0e19\u0e30</th><th class="n" style="width:104px">\u0e22\u0e2d\u0e14</th></tr></thead><tbody>'
+   +A.central.list.slice().sort(function(a,z){return (z.amount||0)-(a.amount||0);}).map(function(mo){
+      var bn=mo.boatId?((getBoat(mo.boatId)||{}).name||mo.boatId):'\u2014';
+      return '<tr onclick="costDwClose();if(typeof flGoToMemo===\'function\')flGoToMemo(\''+mo.id+'\')">'
+       +'<td style="font-family:\'DM Mono\',monospace;font-weight:600">'+esc(mo.no||'')+'</td>'
+       +'<td style="font-family:\'DM Mono\',monospace;color:#666">'+esc(mo.createdDate||'\u2014')+'</td>'
+       +'<td><div style="font-weight:600;color:#1A1A1A">'+esc(mo.title||'')+'</div>'
+       +   '<div style="font-size:10px;color:#999">'+esc(bn)+'</div></td>'
+       +'<td style="color:#666">'+esc(mo.memoType||'')+'</td>'
+       +'<td style="color:#666">'+esc(mo.status||'')+'</td>'
+       +'<td class="n" style="font-weight:700;color:#9F1B4F">'+f(mo.amount)+'</td></tr>';
+     }).join('')
+   +'</tbody><tfoot><tr><td colspan="5">\u0e23\u0e27\u0e21 '+A.central.n+' memo</td>'
+   +'<td class="n" style="color:#9F1B4F">'+f(A.central.amt)+'</td></tr></tfoot>';
+}
+document.addEventListener('keydown',function(e){ if(e.key==='Escape') costDwClose(); });
+
 function flRenderCostAnalytics(){
   const wrap=document.getElementById('fl-cost-wrap');
   if(!wrap)return;
-  const dim={bg:'#F4F2EE',ink:'#1A1A1A',ink2:'#666',ink3:'#999',ink4:'#bbb',ink5:'#ccc',line:'rgba(0,0,0,.04)'};
-  const SVG_PINK={accent:'#E03B7E',soft:'#FCE5EC',text:'#9F1B4F'};
-  const calcCost=(m)=>typeof flMaintCalcCost==='function'?flMaintCalcCost(m.id):(m.cost||0);
-  const fmt=(n)=>'฿'+(Math.round(n||0)).toLocaleString();
-  const fmtShort=(n)=>{if(!n)return'฿0';if(n>=1000000)return'฿'+(n/1000000).toFixed(1)+'M';if(n>=1000)return'฿'+Math.round(n/1000)+'k';return'฿'+n;};
-
-  const todayD=new Date(TODAY_STR);
-  const yr=todayD.getFullYear();
-  const ytdStr=yr+'-01-01';
+  const dim={bg:'#F4F2EE',ink:'#1A1A1A',ink2:'#666',ink3:'#999',ink4:'#bbb',line:'rgba(0,0,0,.06)'};
+  const PK={accent:'#E03B7E',soft:'#FCE5EC',text:'#9F1B4F'};
+  const PROC='#E0B24B';   // สีของ "ยังไม่ปิดงาน" · ใช้ชุดเดียวกันทั้งหน้า
+  const esc=(typeof escapeHTML==='function')?escapeHTML:(x=>String(x||''));
+  const f=(n)=>'\u0e3f'+(Math.round(n||0)).toLocaleString();
+  const fs=(n)=>{ n=Math.round(n||0); if(!n)return'\u0e3f0';
+    if(n>=1000000)return'\u0e3f'+(n/1000000).toFixed(1)+'M';
+    if(n>=1000)return'\u0e3f'+Math.round(n/1000)+'k'; return'\u0e3f'+n; };
+  const yr=new Date(TODAY_STR).getFullYear();
   const thisMonth=TODAY_STR.slice(0,7);
-  const last30=new Date(todayD);last30.setDate(last30.getDate()-30);
-  const last30Str=last30.toISOString().slice(0,10);
+  const A=costAggregate();
+  const TOT=A.total||0;
+  const pctOf=(v)=>TOT?Math.round(v/TOT*100):0;
 
-  const allDone=FL_MAINT.filter(m=>m.status==='done');
-  let scoped=allDone;
-  if(_costTimeFilter==='ytd')scoped=allDone.filter(m=>(m.endDate||m.startDate||'')>=ytdStr);
-  else if(_costTimeFilter==='month')scoped=allDone.filter(m=>(m.endDate||m.startDate||'').startsWith(thisMonth));
-  else if(_costTimeFilter==='last30')scoped=allDone.filter(m=>(m.endDate||m.startDate||'')>=last30Str);
-
-  const totalAll=allDone.reduce((s,m)=>s+calcCost(m),0);
-  const totalScoped=scoped.reduce((s,m)=>s+calcCost(m),0);
-  const cntScoped=scoped.length;
-  const avgScoped=cntScoped?totalScoped/cntScoped:0;
-  const boatsScoped=new Set(scoped.map(m=>m.boatId).filter(Boolean)).size;
-
-  // By boat
-  const byBoat={};
-  scoped.forEach(m=>{
-    if(!m.boatId)return;
-    if(!byBoat[m.boatId])byBoat[m.boatId]={count:0,cost:0};
-    byBoat[m.boatId].count++;
-    byBoat[m.boatId].cost+=calcCost(m);
-  });
-  const boatRanking=Object.entries(byBoat).map(([bid,v])=>{
-    const b=getBoat(bid);
-    return{id:bid,name:b?b.name:'?',count:v.count,cost:v.cost};
-  }).sort((a,z)=>z.cost-a.cost);
-
-  // By type
-  const byType={corrective:0,preventive:0,scheduled:0};
-  const byTypeCnt={corrective:0,preventive:0,scheduled:0};
-  scoped.forEach(m=>{
-    const t=m.type||'corrective';
-    if(byType[t]!=null){byType[t]+=calcCost(m);byTypeCnt[t]++;}
-  });
-
-  // By month (last 12 months for full view)
-  const monthsArr=[];
-  for(let i=11;i>=0;i--){
-    const d=new Date(TODAY_STR);d.setMonth(d.getMonth()-i);
-    const k=d.toISOString().slice(0,7);
-    monthsArr.push({key:k,label:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()],year:d.getFullYear(),cost:0,count:0});
-  }
-  allDone.forEach(m=>{
-    const k=(m.endDate||m.startDate||'').slice(0,7);
-    const ent=monthsArr.find(x=>x.key===k);
-    if(ent){ent.cost+=calcCost(m);ent.count++;}
-  });
-  const maxMonth=Math.max(1,...monthsArr.map(m=>m.cost));
-
-  // By outcome
-  const byOutcome={success:0,limited:0,rework:0,decommission:0,cancelled:0};
-  const byOutcomeCnt={success:0,limited:0,rework:0,decommission:0,cancelled:0};
-  scoped.forEach(m=>{
-    const o=m.outcome||'success';
-    if(byOutcome[o]!=null){byOutcome[o]+=calcCost(m);byOutcomeCnt[o]++;}
-  });
-  const hasNonSuccess=Object.entries(byOutcome).filter(([k,v])=>k!=='success'&&v>0).length>0;
-
-  // Top engines
-  const engCost={};const engCnt={};
-  scoped.forEach(m=>{
-    (m.assets||[]).forEach(a=>{
-      if(a.type==='engine'&&a.engId){
-        const jc=calcCost(m);
-        const ac=(m.assets||[]).length||1;
-        engCost[a.engId]=(engCost[a.engId]||0)+jc/ac;
-        engCnt[a.engId]=(engCnt[a.engId]||0)+1;
-      }
-    });
-  });
-  const topEngines=Object.entries(engCost).map(([eid,cost])=>{
-    const e=(typeof FL_ENGINES!=='undefined'?FL_ENGINES:[]).find(x=>x.id===eid);
-    const b=e?getBoat(e.boatId):null;
-    return{id:eid,label:e?e.serial:'?',pos:e?e.pos:'',brand:e?e.brand:'',boat:b?b.name:'',cost,cnt:engCnt[eid]||0};
-  }).sort((a,z)=>z.cost-a.cost).slice(0,10);
-
-  // ─── HEADER + KPI ───
-  const headerBar=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
-    <div style="display:flex;align-items:center;gap:6px">
+  // ── หัวหน้า + ตัวกรองเวลา ──
+  const headerBar=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:12px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:9px">
       <div style="width:32px;height:32px;border-radius:50%;background:${dim.ink};color:white;display:flex;align-items:center;justify-content:center">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
       </div>
     </div>
-    <div style="background:white;border:1px solid ${dim.line};border-radius:24px;padding:2px;display:flex">
+    <div style="background:white;border:1px solid ${dim.line};border-radius:24px;padding:2px;display:flex;flex-wrap:wrap">
       ${[['all','All time'],['ytd','YTD '+yr],['last30','Last 30 days'],['month','This month']].map(([k,lbl])=>{
         const on=_costTimeFilter===k;
-        return `<button onclick="costSetFilter('${k}')" style="background:${on?dim.ink:'transparent'};color:${on?'white':dim.ink2};border:none;border-radius:14px;padding:5px 14px;font-size:11px;font-weight:${on?600:500};cursor:pointer">${lbl}</button>`;
+        return `<button onclick="costSetFilter('${k}')" style="background:${on?dim.ink:'transparent'};color:${on?'white':dim.ink2};border:none;border-radius:14px;padding:5px 14px;font-size:11px;font-weight:${on?600:500};cursor:pointer;font-family:inherit">${lbl}</button>`;
       }).join('')}
     </div>
   </div>`;
 
-  // KPI strip
-  const kpiStrip=`<div style="display:grid;grid-template-columns:1.6fr 0.85fr 0.85fr 0.85fr 1fr;gap:8px;margin-bottom:14px;align-items:stretch">
-    <div style="grid-column:1;align-self:end;padding-bottom:6px">
-      <div style="font-size:13px;font-weight:500;color:${dim.ink4};margin-bottom:2px">Total Maintenance Spend</div>
-      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap">
-        <span style="font-size:42px;font-weight:700;letter-spacing:-1.5px;line-height:1">${fmtShort(totalScoped)}</span>
-        <span style="font-size:18px;color:${dim.ink3};font-weight:500">spent</span>
-        <span style="display:inline-flex;align-items:center;background:${SVG_PINK.accent};color:white;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">▴ ${cntScoped} jobs</span>
-      </div>
-      <div style="font-size:11px;color:${dim.ink3}">${boatsScoped} boats serviced · avg ${fmt(avgScoped)}/job · all-time ${fmt(totalAll)}</div>
-    </div>
+  // ── §total · ยอดรวม แล้วแยกปิดแล้ว / กำลังทำ ──
+  const legBox=(color,t1,val,t2,onclick)=>`<div onclick="${onclick}" style="flex:1;min-width:180px;border:1px solid ${dim.line};border-radius:12px;padding:10px 12px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:.15s" onmouseover="this.style.background='${PK.soft}';this.style.borderColor='#f3c6d8'" onmouseout="this.style.background='transparent';this.style.borderColor='${dim.line}'">
+      <span style="width:11px;height:11px;border-radius:4px;background:${color};flex:none"></span>
+      <div style="min-width:0"><div style="font-size:11px;color:${dim.ink2};font-weight:600">${t1}</div>
+        <div style="font-size:17px;font-weight:700;font-family:'DM Mono',monospace;line-height:1.15">${val}</div>
+        <div style="font-size:10.5px;color:${dim.ink3}">${t2}</div></div>
+      <span style="margin-left:auto;font-size:10px;color:${dim.ink3}">\u0e14\u0e39 \u203a</span></div>`;
 
-    <div style="grid-column:2;background:white;border-radius:14px;padding:11px 13px;border:1px solid ${dim.line}">
-      <div style="font-size:10px;color:${dim.ink3}">Corrective</div>
-      <div style="font-size:14px;font-weight:700;line-height:1.2;font-family:'DM Mono',monospace;color:#A32D2D;margin-top:3px">${fmtShort(byType.corrective)}</div>
-      <div style="font-size:11px;color:${dim.ink3};margin-top:6px">${byTypeCnt.corrective} jobs</div>
+  const totalCard=`<div style="background:white;border:1px solid ${dim.line};border-radius:14px;padding:15px 17px">
+    <div style="font-size:13px;font-weight:500;color:${dim.ink4}">\u0e04\u0e48\u0e32\u0e43\u0e0a\u0e49\u0e08\u0e48\u0e32\u0e22\u0e0b\u0e48\u0e2d\u0e21\u0e1a\u0e33\u0e23\u0e38\u0e07\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14</div>
+    <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin:2px 0 3px">
+      <b style="font-size:42px;font-weight:700;letter-spacing:-1.5px;line-height:1;font-family:'DM Mono',monospace">${fs(TOT)}</b>
+      <span style="font-size:16px;color:${dim.ink3};font-weight:500">\u0e43\u0e19\u0e0a\u0e48\u0e27\u0e07\u0e17\u0e35\u0e48\u0e40\u0e25\u0e37\u0e2d\u0e01</span>
     </div>
-
-    <div style="grid-column:3;background:white;border-radius:14px;padding:11px 13px;border:1px solid ${dim.line}">
-      <div style="font-size:10px;color:${dim.ink3}">Preventive</div>
-      <div style="font-size:14px;font-weight:700;line-height:1.2;font-family:'DM Mono',monospace;color:#BA7517;margin-top:3px">${fmtShort(byType.preventive)}</div>
-      <div style="font-size:11px;color:${dim.ink3};margin-top:6px">${byTypeCnt.preventive} jobs</div>
+    <div style="font-size:11.5px;color:${dim.ink3}">${A.boatsServiced} \u0e25\u0e33 \u00b7 ${A.nJobs} \u0e43\u0e1a\u0e07\u0e32\u0e19 \u00b7 \u0e40\u0e09\u0e25\u0e35\u0e48\u0e22 ${f(A.nJobs?TOT/A.nJobs:0)}/\u0e43\u0e1a</div>
+    <div style="display:flex;height:13px;border-radius:7px;overflow:hidden;margin:14px 0 11px;background:#eee">
+      <i style="display:block;height:100%;background:${dim.ink};width:${TOT?A.done/TOT*100:0}%"></i>
+      <i style="display:block;height:100%;background:${PROC};width:${TOT?A.proc/TOT*100:0}%"></i>
     </div>
-
-    <div style="grid-column:4;background:white;border-radius:14px;padding:11px 13px;border:1px solid ${dim.line}">
-      <div style="font-size:10px;color:${dim.ink3}">Scheduled</div>
-      <div style="font-size:14px;font-weight:700;line-height:1.2;font-family:'DM Mono',monospace;color:#185FA5;margin-top:3px">${fmtShort(byType.scheduled)}</div>
-      <div style="font-size:11px;color:${dim.ink3};margin-top:6px">${byTypeCnt.scheduled} jobs</div>
-    </div>
-
-    <div style="grid-column:5;background:${dim.ink};color:white;border-radius:14px;padding:11px 13px">
-      <div style="font-size:10px;color:#aaa">By outcome</div>
-      <div style="display:flex;flex-direction:column;gap:2px;margin-top:4px">
-        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Success</span><span style="font-size:11px;font-weight:600;color:white;font-family:'DM Mono',monospace">${fmtShort(byOutcome.success)}</span></div>
-        ${byOutcome.limited?`<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Limited</span><span style="font-size:11px;font-weight:600;color:#FFAA66;font-family:'DM Mono',monospace">${fmtShort(byOutcome.limited)}</span></div>`:''}
-        ${byOutcome.rework?`<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Rework</span><span style="font-size:11px;font-weight:600;color:#FF8FA8;font-family:'DM Mono',monospace">${fmtShort(byOutcome.rework)}</span></div>`:''}
-        ${byOutcome.decommission?`<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Decom</span><span style="font-size:11px;font-weight:600;color:white;font-family:'DM Mono',monospace">${fmtShort(byOutcome.decommission)}</span></div>`:''}
-      </div>
+    <div style="display:flex;gap:9px;flex-wrap:wrap">
+      ${legBox(dim.ink,'\u0e1b\u0e34\u0e14\u0e07\u0e32\u0e19\u0e41\u0e25\u0e49\u0e27 \u00b7 \u0e08\u0e48\u0e32\u0e22\u0e08\u0e23\u0e34\u0e07',f(A.done),A.nDone+' \u0e43\u0e1a\u0e07\u0e32\u0e19 \u00b7 '+pctOf(A.done)+'% \u0e02\u0e2d\u0e07\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14',"costOpenStatus('done')")}
+      ${legBox(PROC,'\u0e01\u0e33\u0e25\u0e31\u0e07\u0e14\u0e33\u0e40\u0e19\u0e34\u0e19\u0e01\u0e32\u0e23 \u00b7 \u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e1b\u0e34\u0e14',f(A.proc),A.nProc+' \u0e43\u0e1a\u0e07\u0e32\u0e19 \u00b7 '+pctOf(A.proc)+'% \u0e02\u0e2d\u0e07\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14',"costOpenStatus('proc')")}
     </div>
   </div>`;
 
-  // ─── Monthly chart (full width) ───
-  const chartH=120;
-  const monthBars=monthsArr.map(mo=>{
-    const h=mo.cost>0?Math.max(4,(mo.cost/maxMonth)*chartH):2;
-    const isCur=mo.key===thisMonth;
-    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0">
-      <div style="font-size:9px;font-family:'DM Mono',monospace;color:${dim.ink3};white-space:nowrap;min-height:12px">${mo.cost>0?fmtShort(mo.cost):''}</div>
-      <div style="width:75%;height:${h}px;background:${isCur?SVG_PINK.accent:'#cdc8c1'};border-radius:4px 4px 0 0;transition:all .15s" title="${mo.cost?fmt(mo.cost)+' · '+mo.count+' jobs':'no jobs'}"></div>
-      <div style="font-size:9px;color:${isCur?SVG_PINK.text:dim.ink3};font-weight:${isCur?600:400};font-family:'DM Mono',monospace;text-align:center">${mo.label}<br><span style="opacity:.7;font-size:8px">'${String(mo.year).slice(-2)}</span></div>
+  // ── §cen · ค่าใช้จ่ายกลาง · แยกไว้ ไม่บวกเข้ายอดรวม ──
+  const centralCard=`<div onclick="costOpenCentral()" style="background:white;border:1px solid ${dim.line};border-radius:14px;padding:15px 17px;cursor:pointer">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;gap:8px">
+      <b style="font-size:13px;font-weight:600">\u0e04\u0e48\u0e32\u0e43\u0e0a\u0e49\u0e08\u0e48\u0e32\u0e22\u0e01\u0e25\u0e32\u0e07 / \u0e0b\u0e37\u0e49\u0e2d\u0e40\u0e02\u0e49\u0e32\u0e04\u0e25\u0e31\u0e07</b>
+      <span style="font-size:10px;color:${dim.ink3}">\u0e44\u0e21\u0e48\u0e23\u0e27\u0e21\u0e43\u0e19\u0e22\u0e2d\u0e14\u0e0b\u0e49\u0e32\u0e22 \u00b7 \u0e01\u0e14\u0e14\u0e39 \u203a</span>
+    </div>
+    <div style="font-size:25px;font-weight:700;font-family:'DM Mono',monospace;letter-spacing:-.7px">${f(A.central.amt)}</div>
+    <div style="font-size:11px;color:${dim.ink3};margin-top:3px">${A.central.n} memo \u00b7 \u0e2d\u0e19\u0e38\u0e21\u0e31\u0e15\u0e34/\u0e08\u0e48\u0e32\u0e22\u0e41\u0e25\u0e49\u0e27 \u00b7 \u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e1c\u0e39\u0e01\u0e43\u0e1a\u0e07\u0e32\u0e19</div>
+    <div style="background:#FFF6E5;border-radius:10px;padding:9px 11px;font-size:10.5px;color:#A05A1A;line-height:1.55;margin-top:10px">
+      memo \u0e01\u0e25\u0e38\u0e48\u0e21\u0e19\u0e35\u0e49\u0e2a\u0e48\u0e27\u0e19\u0e43\u0e2b\u0e0d\u0e48\u0e40\u0e1b\u0e47\u0e19\u0e01\u0e32\u0e23\u0e2a\u0e31\u0e48\u0e07\u0e2d\u0e30\u0e44\u0e2b\u0e25\u0e48\u0e40\u0e02\u0e49\u0e32\u0e2a\u0e15\u0e47\u0e2d\u0e01\u0e41\u0e25\u0e30\u0e07\u0e32\u0e19\u0e17\u0e48\u0e32\u0e40\u0e23\u0e37\u0e2d
+      \u0e16\u0e49\u0e32\u0e1a\u0e27\u0e01\u0e40\u0e02\u0e49\u0e32\u0e22\u0e2d\u0e14\u0e02\u0e2d\u0e07\u0e40\u0e23\u0e37\u0e2d\u0e08\u0e30<b>\u0e19\u0e31\u0e1a\u0e0b\u0e49\u0e33</b> \u0e40\u0e1e\u0e23\u0e32\u0e30\u0e2d\u0e30\u0e44\u0e2b\u0e25\u0e48\u0e08\u0e30\u0e16\u0e39\u0e01\u0e04\u0e34\u0e14\u0e2d\u0e35\u0e01\u0e23\u0e2d\u0e1a\u0e15\u0e2d\u0e19\u0e40\u0e1a\u0e34\u0e01\u0e2d\u0e2d\u0e01\u0e21\u0e32\u0e43\u0e0a\u0e49\u0e43\u0e19\u0e43\u0e1a\u0e07\u0e32\u0e19
+    </div>
+  </div>`;
+
+  // ── §cat · การ์ดหมวด ──
+  const catCards=COST_CATS.map(c=>{
+    const v=A.byCat[c.k]||{done:0,proc:0,n:0}, t=v.done+v.proc;
+    return `<div onclick="costOpenCat('${c.k}')" style="background:white;border:1px solid ${dim.line};border-radius:14px;padding:12px 13px;cursor:pointer;transition:.15s" onmouseover="this.style.boxShadow='0 4px 14px rgba(0,0,0,.05)'" onmouseout="this.style.boxShadow='none'">
+      <div style="display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700"><i style="width:9px;height:9px;border-radius:3px;background:${c.c};flex:none"></i>${c.t}</div>
+      <div style="font-size:20px;font-weight:700;font-family:'DM Mono',monospace;margin:7px 0 2px;letter-spacing:-.5px">${fs(t)}</div>
+      <div style="font-size:10.5px;color:${dim.ink3}">${v.n} \u0e43\u0e1a\u0e07\u0e32\u0e19 \u00b7 ${pctOf(t)}% \u0e02\u0e2d\u0e07\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14</div>
+      <div style="display:flex;height:5px;border-radius:3px;overflow:hidden;background:#eee;margin-top:9px">
+        <i style="display:block;height:100%;background:${c.c};width:${t?v.done/t*100:0}%"></i>
+        <i style="display:block;height:100%;background:${c.c}55;width:${t?v.proc/t*100:0}%"></i></div>
+      <div style="font-size:10.5px;color:${dim.ink3};margin-top:5px">\u0e1b\u0e34\u0e14\u0e41\u0e25\u0e49\u0e27 ${fs(v.done)} \u00b7 \u0e04\u0e49\u0e32\u0e07 ${fs(v.proc)}</div>
     </div>`;
   }).join('');
-  const chartSection=`<div style="background:white;border-radius:14px;border:1px solid ${dim.line};padding:14px 16px;margin-bottom:12px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <span style="font-size:13px;font-weight:600">Monthly spend trend</span>
-      <span style="font-size:10px;color:${dim.ink3}">Last 12 months · all jobs</span>
+
+  // ── กราฟรายเดือน · ซ้อนปิดแล้ว/กำลังทำ ──
+  const MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const months={}; const order=[];
+  for(let i=11;i>=0;i--){ const d=new Date(TODAY_STR); d.setDate(1); d.setMonth(d.getMonth()-i);
+    const k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    months[k]={k,l:MN[d.getMonth()],y:d.getFullYear(),done:0,proc:0}; order.push(k); }
+  A.all.forEach(r=>{ const k=(r.date||'').slice(0,7); if(months[k]) months[k][r.done?'done':'proc']+=r.cost; });
+  const mxM=Math.max(1,...order.map(k=>months[k].done+months[k].proc));
+  const H=120;
+  const chartSection=`<div style="background:white;border:1px solid ${dim.line};border-radius:14px;padding:14px 16px;margin-bottom:12px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px;flex-wrap:wrap">
+      <span style="font-size:13px;font-weight:600">\u0e41\u0e19\u0e27\u0e42\u0e19\u0e49\u0e21\u0e23\u0e32\u0e22\u0e40\u0e14\u0e37\u0e2d\u0e19</span>
+      <span style="font-size:10px;color:${dim.ink3}">12 \u0e40\u0e14\u0e37\u0e2d\u0e19\u0e25\u0e48\u0e32\u0e2a\u0e38\u0e14 \u00b7 \u0e17\u0e38\u0e01\u0e43\u0e1a\u0e07\u0e32\u0e19 \u00b7 \u0e40\u0e02\u0e49\u0e21 = \u0e1b\u0e34\u0e14\u0e41\u0e25\u0e49\u0e27 \u00b7 \u0e40\u0e2b\u0e25\u0e37\u0e2d\u0e07 = \u0e01\u0e33\u0e25\u0e31\u0e07\u0e14\u0e33\u0e40\u0e19\u0e34\u0e19\u0e01\u0e32\u0e23</span>
     </div>
-    <div style="display:flex;align-items:flex-end;gap:6px;height:${chartH+40}px;padding:0 4px">${monthBars}</div>
+    <div style="display:flex;align-items:flex-end;gap:6px;height:${H+52}px;padding:0 4px">
+      ${order.map(k=>{ const m=months[k], t=m.done+m.proc, h=t?Math.max(4,t/mxM*H):2;
+        const isCur=(k===thisMonth);
+        return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0">
+          <div style="font-size:9px;font-family:'DM Mono',monospace;color:${dim.ink3};min-height:12px;white-space:nowrap">${t?fs(t):''}</div>
+          <div title="${t?f(t)+' \u00b7 \u0e1b\u0e34\u0e14\u0e41\u0e25\u0e49\u0e27 '+f(m.done)+' \u00b7 \u0e04\u0e49\u0e32\u0e07 '+f(m.proc):'\u0e44\u0e21\u0e48\u0e21\u0e35\u0e07\u0e32\u0e19'}" style="width:74%;height:${h}px;display:flex;flex-direction:column;justify-content:flex-end;border-radius:4px 4px 0 0;overflow:hidden">
+            <i style="display:block;width:100%;background:${PROC};height:${t?m.proc/t*100:0}%"></i>
+            <i style="display:block;width:100%;background:${t?dim.ink:'#cdc8c1'};height:${t?m.done/t*100:100}%"></i>
+          </div>
+          <div style="font-size:9px;color:${isCur?PK.text:dim.ink3};font-weight:${isCur?600:400};font-family:'DM Mono',monospace;text-align:center;line-height:1.3">${m.l}<br><span style="opacity:.65;font-size:8px">'${String(m.y).slice(-2)}</span></div>
+        </div>`; }).join('')}
+    </div>
   </div>`;
 
-  // ─── By Boat ranking + By Type bars + By Engine top ───
-  const boatRows=boatRanking.slice(0,10).map((b,i)=>{
-    const pct=totalScoped?Math.round(b.cost/totalScoped*100):0;
-    const barPct=totalScoped?(b.cost/totalScoped*100):0;
-    return `<div onclick="if(typeof flGoToAsset==='function')flGoToAsset('boats','${b.id}')" style="cursor:pointer;padding:8px 0;${i<Math.min(boatRanking.length,10)-1?'border-bottom:0.5px solid rgba(0,0,0,.04)':''}" onmouseover="this.style.background='${SVG_PINK.soft}'" onmouseout="this.style.background='transparent'">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-        <span style="font-size:11px;font-family:'DM Mono',monospace;color:${dim.ink3};width:20px;font-weight:600">#${i+1}</span>
-        <span style="font-size:12px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b.name}</span>
-        <span style="font-size:10px;color:${dim.ink3};font-family:'DM Mono',monospace">${b.count} jobs</span>
-        <span style="font-size:12px;font-weight:700;font-family:'DM Mono',monospace;color:${SVG_PINK.text};min-width:75px;text-align:right">${fmt(b.cost)}</span>
-        <span style="font-size:10px;color:${dim.ink3};font-family:'DM Mono',monospace;width:30px;text-align:right">${pct}%</span>
+  // ── §boat · เรือ · แท่งแบ่งตามหมวด ──
+  const boatRows=A.boatList.slice(0,12).map((b,i)=>{
+    const t=b.tot||0;
+    const segs=COST_CATS.filter(c=>(b.cats[c.k]||0)>0)
+      .map(c=>`<i style="display:block;height:100%;background:${c.c};width:${t?b.cats[c.k]/t*100:0}%"></i>`).join('');
+    const brk=COST_CATS.filter(c=>(b.cats[c.k]||0)>0)
+      .map(c=>`<span style="display:inline-flex;align-items:center;gap:4px"><i style="width:7px;height:7px;border-radius:2px;background:${c.c};display:inline-block"></i>${c.t} ${fs(b.cats[c.k])}</span>`).join('');
+    return `<div onclick="costOpenBoat('${b.id}')" style="padding:9px 0;border-bottom:.5px solid rgba(0,0,0,.05);cursor:pointer;border-radius:6px;transition:.12s" onmouseover="this.style.background='${PK.soft}'" onmouseout="this.style.background='transparent'">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:11px;font-family:'DM Mono',monospace;color:${dim.ink3};width:22px;font-weight:600">#${i+1}</span>
+        <span style="font-size:12.5px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(b.name)}</span>
+        ${b.proc>0?`<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:5px;background:#FFF1DC;color:#A05A1A;white-space:nowrap">\u0e04\u0e49\u0e32\u0e07 ${fs(b.proc)}</span>`:''}
+        <span style="font-size:10px;color:${dim.ink3};font-family:'DM Mono',monospace">${b.n} \u0e07\u0e32\u0e19</span>
+        <span style="font-size:12.5px;font-weight:700;font-family:'DM Mono',monospace;color:${PK.text};min-width:82px;text-align:right">${f(t)}</span>
+        <span style="font-size:10px;color:${dim.ink3};font-family:'DM Mono',monospace;width:32px;text-align:right">${pctOf(t)}%</span>
       </div>
-      <div style="background:rgba(0,0,0,.04);border-radius:3px;height:4px;overflow:hidden;margin-left:28px">
-        <div style="background:${SVG_PINK.accent};height:100%;width:${barPct.toFixed(1)}%;border-radius:3px"></div>
-      </div>
+      <div style="display:flex;height:6px;border-radius:3px;overflow:hidden;background:rgba(0,0,0,.05);margin:6px 0 0 30px">${segs}</div>
+      <div style="margin:5px 0 0 30px;font-size:10px;color:${dim.ink3};display:flex;gap:11px;flex-wrap:wrap">${brk}</div>
     </div>`;
-  }).join('')||`<div style="font-size:11px;color:${dim.ink3};text-align:center;padding:30px">No maintenance data in this period</div>`;
+  }).join('')||`<div style="font-size:11px;color:${dim.ink3};text-align:center;padding:30px">\u0e44\u0e21\u0e48\u0e21\u0e35\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25\u0e43\u0e19\u0e0a\u0e48\u0e27\u0e07\u0e19\u0e35\u0e49</div>`;
 
-  const boatPanel=`<div style="background:white;border-radius:14px;border:1px solid ${dim.line};padding:14px 16px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <span style="font-size:13px;font-weight:600">Top boats by spend</span>
-      <span style="font-size:10px;color:${dim.ink3}">Click for detail</span>
+  const boatPanel=`<div style="background:white;border:1px solid ${dim.line};border-radius:14px;padding:14px 16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px">
+      <span style="font-size:13px;font-weight:600">\u0e40\u0e23\u0e37\u0e2d\u0e17\u0e35\u0e48\u0e43\u0e0a\u0e49\u0e40\u0e07\u0e34\u0e19\u0e21\u0e32\u0e01\u0e17\u0e35\u0e48\u0e2a\u0e38\u0e14</span>
+      <span style="font-size:10px;color:${dim.ink3}">\u0e23\u0e27\u0e21\u0e17\u0e38\u0e01\u0e04\u0e48\u0e32\u0e43\u0e0a\u0e49\u0e08\u0e48\u0e32\u0e22 \u00b7 \u0e01\u0e14\u0e40\u0e1e\u0e37\u0e48\u0e2d\u0e14\u0e39\u0e23\u0e32\u0e22\u0e25\u0e30\u0e40\u0e2d\u0e35\u0e22\u0e14</span>
     </div>
     <div>${boatRows}</div>
   </div>`;
 
-  // Engine top
-  const engRows=topEngines.map((e,i)=>{
-    return `<div onclick="if(typeof flGoToAsset==='function')flGoToAsset('engines','${e.id}')" style="cursor:pointer;padding:8px 0;${i<topEngines.length-1?'border-bottom:0.5px solid rgba(0,0,0,.04)':''};display:flex;align-items:center;gap:8px" onmouseover="this.style.background='${SVG_PINK.soft}'" onmouseout="this.style.background='transparent'">
-      <span style="font-size:11px;font-family:'DM Mono',monospace;color:${dim.ink3};width:20px;font-weight:600">#${i+1}</span>
+  // ── §unit · อุปกรณ์ ──
+  const unitRows=A.unitList.map((u,i)=>{
+    const c=costCat(u.cat);
+    return `<div onclick="costOpenUnit('${u.id}')" style="padding:9px 0;border-bottom:.5px solid rgba(0,0,0,.05);cursor:pointer;display:flex;align-items:center;gap:8px;border-radius:6px;transition:.12s" onmouseover="this.style.background='${PK.soft}'" onmouseout="this.style.background='transparent'">
+      <span style="font-size:11px;font-family:'DM Mono',monospace;color:${dim.ink3};width:22px;font-weight:600">#${i+1}</span>
       <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:6px">
-          <span style="font-size:11px;font-family:'DM Mono',monospace;font-weight:600">${e.label}</span>
-          ${e.pos?`<span style="font-size:8px;background:#E6F1FB;color:#185FA5;padding:1px 5px;border-radius:4px;font-weight:600">${e.pos}</span>`:''}
-        </div>
-        <div style="font-size:9px;color:${dim.ink3}">${e.brand||''}${e.boat?' · '+e.boat:''}</div>
+        <div style="font-size:11.5px;font-family:'DM Mono',monospace;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(u.label)}</div>
+        <div style="font-size:9.5px;color:${dim.ink3};display:flex;align-items:center;gap:5px;margin-top:2px">
+          <i style="width:7px;height:7px;border-radius:2px;background:${c.c};display:inline-block"></i>${c.t}${u.boat?' \u00b7 '+esc(u.boat):''}</div>
       </div>
-      <span style="font-size:9px;color:${dim.ink3};font-family:'DM Mono',monospace">${e.cnt} job${e.cnt>1?'s':''}</span>
-      <span style="font-size:12px;font-weight:700;font-family:'DM Mono',monospace;color:${SVG_PINK.text};min-width:75px;text-align:right">${fmt(Math.round(e.cost))}</span>
+      <span style="font-size:9.5px;color:${dim.ink3};font-family:'DM Mono',monospace">${u.n} \u0e07\u0e32\u0e19</span>
+      <span style="font-size:12.5px;font-weight:700;font-family:'DM Mono',monospace;color:${PK.text};min-width:82px;text-align:right">${f(u.cost)}</span>
     </div>`;
-  }).join('')||`<div style="font-size:11px;color:${dim.ink3};text-align:center;padding:30px">No engine data tracked yet</div>`;
+  }).join('')||`<div style="font-size:11px;color:${dim.ink3};text-align:center;padding:30px">\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e07\u0e32\u0e19\u0e17\u0e35\u0e48\u0e23\u0e30\u0e1a\u0e38\u0e2d\u0e38\u0e1b\u0e01\u0e23\u0e13\u0e4c</div>`;
 
-  const enginePanel=`<div style="background:white;border-radius:14px;border:1px solid ${dim.line};padding:14px 16px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <span style="font-size:13px;font-weight:600">Top engines by repair cost</span>
-      <span style="font-size:10px;color:${dim.ink3}">Click for detail</span>
+  const unitPanel=`<div style="background:white;border:1px solid ${dim.line};border-radius:14px;padding:14px 16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px">
+      <span style="font-size:13px;font-weight:600">\u0e2d\u0e38\u0e1b\u0e01\u0e23\u0e13\u0e4c\u0e17\u0e35\u0e48\u0e43\u0e0a\u0e49\u0e40\u0e07\u0e34\u0e19\u0e21\u0e32\u0e01\u0e17\u0e35\u0e48\u0e2a\u0e38\u0e14</span>
+      <span style="font-size:10px;color:${dim.ink3}">\u0e40\u0e04\u0e23\u0e37\u0e48\u0e2d\u0e07\u0e22\u0e19\u0e15\u0e4c \u00b7 \u0e40\u0e01\u0e35\u0e22\u0e23\u0e4c \u00b7 \u0e43\u0e1a\u0e08\u0e31\u0e01\u0e23</span>
     </div>
-    <div>${engRows}</div>
+    <div>${unitRows}</div>
   </div>`;
 
-  // By outcome detailed (if hasNonSuccess) + Type bars
-  const OUT_STYLE={success:{color:'#1D9E75',label:'Success'},limited:{color:'#BA7517',label:'Limited use'},rework:{color:'#E03B7E',label:'Rework needed'},decommission:{color:'#1A1A1A',label:'Decommissioned'},cancelled:{color:'#A32D2D',label:'Cancelled'}};
-  const outDetailRows=['success','limited','rework','decommission','cancelled'].filter(o=>byOutcome[o]>0||byOutcomeCnt[o]>0).map(o=>{
-    const os=OUT_STYLE[o];
-    const cnt=byOutcomeCnt[o];
-    const cost=byOutcome[o];
-    const avg=cnt?cost/cnt:0;
-    const pct=totalScoped?(cost/totalScoped*100):0;
-    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid rgba(0,0,0,.04)">
-      <span style="width:10px;height:10px;border-radius:50%;background:${os.color};flex-shrink:0"></span>
-      <div style="flex:1">
-        <div style="font-size:11px;font-weight:600">${os.label}</div>
-        <div style="font-size:9px;color:${dim.ink3};margin-top:1px">avg ${fmt(avg)}/job · ${pct.toFixed(0)}% of total</div>
-      </div>
-      <span style="font-size:10px;color:${dim.ink3};font-family:'DM Mono',monospace">${cnt}</span>
-      <span style="font-size:12px;font-weight:700;font-family:'DM Mono',monospace;color:${dim.ink};min-width:75px;text-align:right">${fmt(cost)}</span>
-    </div>`;
-  }).join('');
-  const outcomePanel=hasNonSuccess||byOutcomeCnt.success?`<div style="background:white;border-radius:14px;border:1px solid ${dim.line};padding:14px 16px">
+  // ── แยกตามประเภทงาน (ยังต้องการอยู่ · ย้ายลงมาไว้ล่าง) ──
+  const TYPE_META={corrective:{t:'Corrective \u00b7 \u0e0b\u0e48\u0e2d\u0e21\u0e40\u0e21\u0e37\u0e48\u0e2d\u0e40\u0e2a\u0e35\u0e22',c:'#A32D2D'},
+                   preventive:{t:'Preventive \u00b7 \u0e1b\u0e49\u0e2d\u0e07\u0e01\u0e31\u0e19',c:'#BA7517'},
+                   scheduled:{t:'Scheduled \u00b7 \u0e15\u0e32\u0e21\u0e41\u0e1c\u0e19',c:'#185FA5'}};
+  const typePanel=`<div style="background:white;border:1px solid ${dim.line};border-radius:14px;padding:14px 16px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <span style="font-size:13px;font-weight:600">By outcome</span>
-      <span style="font-size:10px;color:${dim.ink3}">Quality breakdown</span>
+      <span style="font-size:13px;font-weight:600">\u0e41\u0e22\u0e01\u0e15\u0e32\u0e21\u0e1b\u0e23\u0e30\u0e40\u0e20\u0e17\u0e07\u0e32\u0e19</span>
+      <span style="font-size:10px;color:${dim.ink3}">\u0e23\u0e27\u0e21\u0e07\u0e32\u0e19\u0e17\u0e35\u0e48\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e1b\u0e34\u0e14</span>
     </div>
-    <div>${outDetailRows}</div>
-  </div>`:'';
+    ${['corrective','preventive','scheduled'].map(k=>{
+      const v=A.byType[k], t=v.done+v.proc, m=TYPE_META[k];
+      return `<div style="padding:8px 0;border-bottom:.5px solid rgba(0,0,0,.05)">
+        <div style="display:flex;align-items:center;gap:9px">
+          <span style="width:10px;height:10px;border-radius:3px;background:${m.c};flex:none"></span>
+          <span style="flex:1;font-size:11.5px;font-weight:600">${m.t}</span>
+          <span style="font-size:10px;color:${dim.ink3};font-family:'DM Mono',monospace">${v.n} \u0e07\u0e32\u0e19</span>
+          <span style="font-size:12.5px;font-weight:700;font-family:'DM Mono',monospace;min-width:82px;text-align:right">${f(t)}</span>
+        </div>
+        <div style="display:flex;height:5px;border-radius:3px;overflow:hidden;background:#eee;margin:6px 0 0 19px">
+          <i style="display:block;height:100%;background:${m.c};width:${t?v.done/t*100:0}%"></i>
+          <i style="display:block;height:100%;background:${m.c}55;width:${t?v.proc/t*100:0}%"></i></div>
+      </div>`; }).join('')}
+  </div>`;
 
-  wrap.innerHTML=`${headerBar}${kpiStrip}${chartSection}<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">${boatPanel}${enginePanel}</div>${outcomePanel}`;
+  // ── By outcome · เฉพาะงานที่ปิดแล้ว (งานที่ยังทำอยู่ยังไม่มีผลลัพธ์) ──
+  const OUT_STYLE={success:{color:'#1D9E75',label:'Success'},limited:{color:'#BA7517',label:'Limited use'},
+                   rework:{color:'#E03B7E',label:'Rework needed'},decommission:{color:'#1A1A1A',label:'Decommissioned'},
+                   cancelled:{color:'#A32D2D',label:'Cancelled'}};
+  const byOut={},byOutN={};
+  A.rows.filter(r=>r.done).forEach(r=>{ const m=FL_MAINT.find(x=>x.id===r.id)||{};
+    const o=m.outcome||'success'; byOut[o]=(byOut[o]||0)+r.cost; byOutN[o]=(byOutN[o]||0)+1; });
+  const outRows=Object.keys(OUT_STYLE).filter(o=>byOutN[o]).map(o=>{
+    const os=OUT_STYLE[o], cnt=byOutN[o], cost=byOut[o]||0;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:.5px solid rgba(0,0,0,.05)">
+      <span style="width:10px;height:10px;border-radius:50%;background:${os.color};flex:none"></span>
+      <div style="flex:1"><div style="font-size:11.5px;font-weight:600">${os.label}</div>
+        <div style="font-size:9.5px;color:${dim.ink3};margin-top:1px">\u0e40\u0e09\u0e25\u0e35\u0e48\u0e22 ${f(cnt?cost/cnt:0)}/\u0e07\u0e32\u0e19</div></div>
+      <span style="font-size:10px;color:${dim.ink3};font-family:'DM Mono',monospace">${cnt}</span>
+      <span style="font-size:12.5px;font-weight:700;font-family:'DM Mono',monospace;min-width:82px;text-align:right">${f(cost)}</span>
+    </div>`; }).join('');
+  const outcomePanel=outRows?`<div style="background:white;border:1px solid ${dim.line};border-radius:14px;padding:14px 16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <span style="font-size:13px;font-weight:600">\u0e1c\u0e25\u0e25\u0e31\u0e1e\u0e18\u0e4c\u0e07\u0e32\u0e19\u0e0b\u0e48\u0e2d\u0e21</span>
+      <span style="font-size:10px;color:${dim.ink3}">\u0e40\u0e09\u0e1e\u0e32\u0e30\u0e07\u0e32\u0e19\u0e17\u0e35\u0e48\u0e1b\u0e34\u0e14\u0e41\u0e25\u0e49\u0e27</span>
+    </div>${outRows}</div>`:'';
+
+  wrap.innerHTML=headerBar
+    +`<div style="display:grid;grid-template-columns:1.55fr 1fr;gap:12px;margin-bottom:12px" class="cost-top">${totalCard}${centralCard}</div>`
+    +`<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:12px" class="cost-cats">${catCards}</div>`
+    +chartSection
+    +`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px" class="cost-duo">${boatPanel}${unitPanel}</div>`
+    +`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px" class="cost-duo">${typePanel}${outcomePanel}</div>`;
 }
 
 // ══════ FLEET INSIGHTS ══════
