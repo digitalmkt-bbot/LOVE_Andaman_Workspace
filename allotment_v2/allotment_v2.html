@@ -18684,67 +18684,95 @@ function flLoad(){
 //   คีย์ที่ใช้ตัดสินว่า "เป็นรายการเดียวกัน" ตั้งเข้มไว้ทุกก้อน
 //   ต้องเหมือนกันครบทุกช่องที่ระบุ ถึงจะถือว่าซ้ำ · ยอมพลาดดีกว่าลบของจริง
 var LA_DUP_SETS = [
-  { k:'maint',  label:'ใบงานซ่อม',            money:true,  clean:true,
+  // ชั้น "ซ้ำแน่นอน" · เลขที่เอกสารต้องไม่ซ้ำอยู่แล้ว ถ้าซ้ำคือมีปัญหาแน่
+  { k:'maint',  label:'ใบงานซ่อม', money:true, clean:true, sure:true,
     get:function(){ return typeof FL_MAINT!=='undefined'?FL_MAINT:[]; },
-    key:function(x){ return !x.no?null:[x.no,x.boatId||'',(x.title||'').trim(),x.type||'',x.startDate||''].join('\u241F'); },
-    name:function(x){ return (x.no||'')+' · '+(x.title||''); } },
-  { k:'memo',   label:'memo',                  money:true,  clean:true,
+    key:function(x){ return !x.no?null:[x.no,x.boatId||'',(x.title||'').trim(),x.type||'',x.startDate||'',x.endDate||''].join('\u241F'); },
+    name:function(x){ return (x.no||'')+' · '+(x.title||''); },
+    cols:function(x){ return [x.id, x.startDate||'', x.status||'', ((x.parts||[]).length)+' อะไหล่ / '+((x.progressLog||[]).length)+' log']; } },
+  { k:'memo',   label:'memo', money:true, clean:true, sure:true,
     get:function(){ return typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]; },
     key:function(x){ return !x.no?null:[x.no,x.maintId||'',x.boatId||'',(x.title||'').trim(),Math.round(+x.amount||0),x.createdDate||''].join('\u241F'); },
-    name:function(x){ return (x.no||'')+' · '+(x.title||''); } },
-  { k:'incident', label:'เหตุการณ์ / Incident', money:false, clean:true,
+    name:function(x){ return (x.no||'')+' · '+(x.title||''); },
+    cols:function(x){ return [x.id, x.createdDate||'', x.status||'', '฿'+Math.round(+x.amount||0).toLocaleString()+' · '+((x.items||[]).length)+' รายการ']; } },
+  { k:'incident', label:'เหตุการณ์ / Incident', money:false, clean:true, sure:true,
     get:function(){ return typeof FL_INCIDENTS!=='undefined'?FL_INCIDENTS:[]; },
     key:function(x){ return !x.no?null:[x.no,x.boatId||'',(x.title||'').trim(),x.date||x.startDate||''].join('\u241F'); },
-    name:function(x){ return (x.no||'')+' · '+(x.title||''); } },
-  { k:'consum', label:'บันทึกเบิกของใช้/น้ำมัน', money:true, clean:true,
+    name:function(x){ return (x.no||'')+' · '+(x.title||''); },
+    cols:function(x){ return [x.id, x.date||x.startDate||'', x.status||'', (x.detail||'').slice(0,40)]; } },
+
+  // ชั้น "น่าสงสัย" · ไม่มีเลขที่เอกสารประจำตัว หรือของจริงซ้ำกันได้ตามปกติ
+  //   ไม่มีปุ่มล้าง · เปิดดูหลักฐานแล้วตัดสินเอง
+  { k:'consum', label:'บันทึกเบิกของใช้/น้ำมัน', money:true, clean:false, sure:false,
     get:function(){ return typeof FL_CONSUMABLE_LOGS!=='undefined'?FL_CONSUMABLE_LOGS:[]; },
-    key:function(x){ return [x.date||'',x.boatId||'',x.itemId||x.invId||'',x.qty,Math.round(+x.amount||0)].join('\u241F'); },
-    name:function(x){ return (x.date||'')+' · '+(x.boatId||''); } },
-  // ทะเบียน · รายงานอย่างเดียว ไม่ลบให้ (ถูกอ้าง id กระจายทั้งระบบ)
-  { k:'inv',    label:'อะไหล่ในคลัง',          money:false, clean:false,
+    key:function(x){ return [x.date||'',x.boatId||'',x.itemId||x.invId||'',x.qty,Math.round(+x.amount||0),(x.note||'').trim(),x.by||''].join('\u241F'); },
+    name:function(x){ return (x.date||'')+' · '+((getBoat(x.boatId)||{}).name||x.boatId||''); },
+    cols:function(x){ return [x.id||'—', x.date||'', String(x.qty||''), (x.note||'').slice(0,40)]; } },
+  { k:'inv',    label:'อะไหล่ในคลัง', money:false, clean:false, sure:false,
     get:function(){ return typeof FL_INVENTORY!=='undefined'?FL_INVENTORY:[]; },
-    key:function(x){ return [(x.name||'').trim(),x.partNo||''].join('\u241F'); },
-    name:function(x){ return (x.name||'')+(x.partNo?' · '+x.partNo:''); } },
-  { k:'engine', label:'เครื่องยนต์',           money:false, clean:false,
+    // ของชิ้นเดียวกันคนละคลัง = คนละ record โดยตั้งใจ · ต้องเอาคลังเข้าคีย์ด้วย
+    key:function(x){ var loc=x.location||''; var st=(x.stocks||[]).map(function(s){return s.location;}).sort().join('+');
+      return [(x.name||'').trim(),x.partNo||'',loc,st].join('\u241F'); },
+    name:function(x){ return (x.name||'')+(x.partNo?' · '+x.partNo:''); },
+    cols:function(x){ return [x.id, x.location||'', String(x.totalQty!=null?x.totalQty:x.qty||0), x.supplier||'']; } },
+  { k:'engine', label:'เครื่องยนต์', money:false, clean:false, sure:true,
     get:function(){ return typeof FL_ENGINES!=='undefined'?FL_ENGINES:[]; },
     key:function(x){ return !x.serial?null:[x.serial,x.boatId||'',x.pos||''].join('\u241F'); },
-    name:function(x){ return x.serial||x.id; } },
-  { k:'gearbox',label:'เกียร์',                money:false, clean:false,
+    name:function(x){ return x.serial||x.id; },
+    cols:function(x){ return [x.id, x.pos||'', x.status||'', (getBoat(x.boatId)||{}).name||'']; } },
+  { k:'gearbox',label:'เกียร์', money:false, clean:false, sure:true,
     get:function(){ return typeof FL_GEARBOXES!=='undefined'?FL_GEARBOXES:[]; },
     key:function(x){ return !x.serial?null:[x.serial,x.boatId||''].join('\u241F'); },
-    name:function(x){ return x.serial||x.id; } },
-  { k:'prop',   label:'ใบจักร',                money:false, clean:false,
+    name:function(x){ return x.serial||x.id; },
+    cols:function(x){ return [x.id, x.model||'', x.status||'', (getBoat(x.boatId)||{}).name||'']; } },
+  { k:'prop',   label:'ใบจักร', money:false, clean:false, sure:true,
     get:function(){ return typeof FL_PROPELLERS!=='undefined'?FL_PROPELLERS:[]; },
     key:function(x){ return !x.serial?null:[x.serial,x.boatId||''].join('\u241F'); },
-    name:function(x){ return x.serial||x.id; } },
-  { k:'boat',   label:'เรือ',                  money:false, clean:false,
+    name:function(x){ return x.serial||x.id; },
+    cols:function(x){ return [x.id, x.size||'', x.status||'', (getBoat(x.boatId)||{}).name||'']; } },
+  { k:'boat',   label:'เรือ', money:false, clean:false, sure:true,
     get:function(){ return typeof BOATS!=='undefined'?BOATS:[]; },
     key:function(x){ return [(x.name||'').trim(),x.reg||''].join('\u241F'); },
-    name:function(x){ return x.name||x.id; } },
-  { k:'agent',  label:'เอเจนต์',               money:false, clean:false,
+    name:function(x){ return x.name||x.id; },
+    cols:function(x){ return [x.id, x.reg||'', x.pier||'', String(x.cap||'')]; } },
+  { k:'agent',  label:'เอเจนต์', money:false, clean:false, sure:false,
     get:function(){ return typeof SB_AGENTS!=='undefined'?SB_AGENTS:[]; },
     key:function(x){ return [(x.name||'').trim(),x.code||''].join('\u241F'); },
-    name:function(x){ return x.name||x.id; } },
-  { k:'booking',label:'บุคกิ้ง',               money:true,  clean:false,
+    name:function(x){ return x.name||x.id; },
+    cols:function(x){ return [x.id, x.code||'', x.market||'', x.active===false?'ปิด':'ใช้งาน']; } },
+  { k:'booking',label:'บุคกิ้ง', money:true, clean:false, sure:false,
     get:function(){ return typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]; },
-    key:function(x){ return !x.voucherRef?null:[x.voucherRef,x.agentId||'',(x.leadPax||'').trim(),
-      (x.trips||[]).map(function(t){return (t.routeId||'')+'@'+(t.date||'');}).join(',')].join('\u241F'); },
-    name:function(x){ return (x.voucherRef||x.id)+' · '+(x.leadPax||''); } }
+    // voucher ใบเดียวมีหลายบุคกิ้งได้โดยออกแบบไว้แบบนั้น (b2c_<order>_<line>)
+    // จึงเทียบด้วย id เท่านั้น · ซ้ำที่ระดับ id ถึงจะเป็นปัญหาจริง
+    key:function(x){ return x.id||null; },
+    name:function(x){ return (x.voucherRef||x.id)+' · '+(x.leadPax||''); },
+    cols:function(x){ return [x.id, ((x.trips||[])[0]||{}).date||'', x.status||'', x.voucherRef||'']; } }
 ];
-// รายการย่อยข้างในแต่ละใบ · พวกนี้ซ้ำแล้วยอดเงินบวมทันที
+// รายการย่อยข้างในแต่ละใบ · คีย์ต้องครบทุกฟิลด์ที่มีความหมาย
+// ไม่งั้นของคนละครั้ง (คนละวัน คนละคลัง) จะถูกมองว่าเป็นรายการเดียวกัน
 var LA_DUP_NESTED = [
-  { k:'invHist', label:'ประวัติเบิกอะไหล่ในคลัง', money:false, clean:true,
+  { k:'invHist', label:'ประวัติเบิก/รับอะไหล่ในคลัง', money:false, clean:true, sure:true,
+    head:['วันที่','ประเภท','จำนวน','คลัง · หมายเหตุ'],
     each:function(cb){ (typeof FL_INVENTORY!=='undefined'?FL_INVENTORY:[]).forEach(function(it){ cb(it, it.history, it.name); }); },
-    key:function(h){ return [h.date||'',h.jobId||'',h.type||'',h.qty,(h.desc||'').slice(0,60)].join('\u241F'); } },
-  { k:'mjParts', label:'อะไหล่ในใบงานซ่อม', money:true, clean:true,
+    // entry ไม่มี id ประจำตัว · จึงต้องเทียบทุกฟิลด์ที่มี ไม่งั้นแจ้งผิด
+    key:function(h){ return [h.date||'',h.type||'',h.qty,h.location||'',h.jobId||'',h.memoId||'',(h.note||'').trim(),h.by||''].join('\u241F'); },
+    cols:function(h){ return [h.date||'', h.type||'', String(h.qty||''), (h.location||'')+' · '+(h.note||'').slice(0,44)]; } },
+  { k:'mjParts', label:'อะไหล่ในใบงานซ่อม', money:true, clean:true, sure:true,
+    head:['วันที่เบิก','จำนวน','มูลค่า','คลัง · ชื่ออะไหล่'],
     each:function(cb){ (typeof FL_MAINT!=='undefined'?FL_MAINT:[]).forEach(function(m){ cb(m, m.parts, m.no); }); },
-    key:function(p){ return [(p.name||'').trim(),p.qty,p.cost,!!p.late].join('\u241F'); } },
-  { k:'moItems', label:'รายการใน memo', money:true, clean:true,
+    // โค้ดเบิกของรวมบรรทัดเมื่อ invId+location+date+late ตรงกัน · เบิกคนละวันจึงเป็นคนละบรรทัดโดยตั้งใจ
+    key:function(p){ return [p.invId||'',(p.name||'').trim(),p.qty,p.cost,p.location||'',p.date||'',!!p.late].join('\u241F'); },
+    cols:function(p){ return [p.date||'', String(p.qty||''), '฿'+Math.round((p.qty||0)*(p.cost||0)).toLocaleString(), (p.location||'')+' · '+(p.name||'').slice(0,36)]; } },
+  { k:'moItems', label:'รายการใน memo', money:true, clean:true, sure:true,
+    head:['','จำนวน','ราคา/หน่วย','ชื่อรายการ'],
     each:function(cb){ (typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).forEach(function(mo){ cb(mo, mo.items, mo.no); }); },
-    key:function(i){ return [(i.name||i.desc||i.title||'').trim(),i.qty,(i.price!=null?i.price:i.cost)].join('\u241F'); } },
-  { k:'pierPay', label:'การรับเงินหน้าท่า', money:true, clean:true,
+    key:function(i){ return [i.invId||'',(i.name||i.desc||i.title||'').trim(),i.qty,(i.price!=null?i.price:i.cost),i.unit||'',i.partNo||'',(i.note||'').trim()].join('\u241F'); },
+    cols:function(i){ return ['', String(i.qty||''), '฿'+Math.round(+((i.price!=null?i.price:i.cost))||0).toLocaleString(), (i.name||i.desc||i.title||'').slice(0,44)]; } },
+  { k:'pierPay', label:'การรับเงินหน้าท่า', money:true, clean:true, sure:true,
+    head:['เวลา','วิธีรับ','ยอด','ผู้รับเงิน'],
     each:function(cb){ (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){ cb(b, b.pierPayments, b.voucherRef||b.id); }); },
-    key:function(p){ return [p.method||'',Math.round(+p.amount||0),p.at||'',p.by||''].join('\u241F'); } }
+    key:function(p){ return [p.method||'',Math.round(+p.amount||0),p.at||'',p.by||'',(p.note||'').trim()].join('\u241F'); },
+    cols:function(p){ return [(p.at||'').slice(0,16), p.method||'', '฿'+Math.round(+p.amount||0).toLocaleString(), p.by||'']; } }
 ];
 // ให้คะแนน "ความมีเนื้อหา" · ในกลุ่มที่ซ้ำ เก็บใบที่คะแนนสูงสุด ที่เหลือคือเงา
 function laDupScore(x){
@@ -18781,7 +18809,7 @@ function laDupScan(){
     });
     var extra=groups.reduce(function(s,g){ return s+g.drop; },0);
     if(extra>0){ out.nDup+=extra; if(S.money) out.nMoney+=extra; }
-    out.sets.push({ k:S.k, label:S.label, money:!!S.money, clean:!!S.clean,
+    out.sets.push({ k:S.k, label:S.label, money:!!S.money, clean:!!S.clean, sure:!!S.sure,
                     total:arr.length, extra:extra, groups:groups.slice(0,40) });
   });
   LA_DUP_NESTED.forEach(function(N){
@@ -18793,7 +18821,7 @@ function laDupScan(){
       if(e>0){ extra+=e; hits.push({ label:String(label||''), extra:e }); }
     });
     if(extra>0){ out.nDup+=extra; if(N.money) out.nMoney+=extra; }
-    out.nested.push({ k:N.k, label:N.label, money:!!N.money, clean:!!N.clean,
+    out.nested.push({ k:N.k, label:N.label, money:!!N.money, clean:!!N.clean, sure:!!N.sure,
                       extra:extra, hits:hits.slice(0,40) });
   });
   return out;
@@ -18845,6 +18873,48 @@ function laDupCleanAll(){
   var n=0;
   LA_DUP_SETS.concat(LA_DUP_NESTED).forEach(function(S){ if(S.clean) n+=laDupClean(S.k); });
   return n;
+}
+// §see · เปิดดูว่ากลุ่มนี้จับคู่อะไรไว้บ้าง · ตัดสินเองได้ก่อนกดล้าง
+function costDupInspect(key){
+  var S=LA_DUP_SETS.filter(function(x){return x.k===key;})[0];
+  var N=LA_DUP_NESTED.filter(function(x){return x.k===key;})[0];
+  var esc=(typeof escapeHTML==='function')?escapeHTML:function(x){return String(x||'');};
+  var rows=[], nGrp=0, nRec=0;
+  if(S){
+    var arr=S.get()||[], m={};
+    arr.forEach(function(x){ var k=S.key(x); if(k==null) return; (m[k]=m[k]||[]).push(x); });
+    Object.keys(m).forEach(function(k){
+      var g=m[k]; if(g.length<2) return; nGrp++; nRec+=g.length;
+      g.forEach(function(x,ix){ rows.push({ grp:(ix===0?S.name(x):''), first:ix===0, c:S.cols(x) }); });
+    });
+  } else if(N){
+    N.each(function(owner, list, label){
+      if(!Array.isArray(list)||list.length<2) return;
+      var m={}; list.forEach(function(x){ var k=N.key(x); (m[k]=m[k]||[]).push(x); });
+      Object.keys(m).forEach(function(k){
+        var g=m[k]; if(g.length<2) return; nGrp++; nRec+=g.length;
+        g.forEach(function(x,ix){ rows.push({ grp:(ix===0?String(label||''):''), first:ix===0, c:N.cols(x) }); });
+      });
+    });
+  } else return;
+  var meta=S||N;
+  costDwOpen((meta.sure?'ซ้ำแน่นอน · ':'น่าสงสัย · ')+meta.label,
+    nGrp+' กลุ่ม · '+nRec+' รายการ · แถวที่อยู่กลุ่มเดียวกันคือของที่ระบบมองว่าเหมือนกันทุกฟิลด์',
+    [['กลุ่มที่ซ้ำ',nGrp],['รายการทั้งหมด',nRec],['ส่วนเกิน',nRec-nGrp]], []);
+  var t=document.getElementById('cost-dw-tbl'); if(!t) return;
+  var tabs=document.querySelector('#cost-dw .cdt'); if(tabs) tabs.style.display='none';
+  var HD=meta.head||['id','วันที่','สถานะ','รายละเอียด'];
+  t.innerHTML='<thead><tr><th style="width:230px">กลุ่ม</th><th style="width:150px">'+esc(HD[0])+'</th>'
+   +'<th style="width:112px">'+esc(HD[1])+'</th><th style="width:112px">'+esc(HD[2])+'</th><th>'+esc(HD[3])+'</th></tr></thead><tbody>'
+   +rows.map(function(r){
+      return '<tr style="cursor:default'+(r.first?';border-top:2px solid #E0B24B':'')+'">'
+       +'<td style="font-weight:700;color:#1A1A1A">'+esc(r.grp)+'</td>'
+       +'<td style="font-family:\'DM Mono\',monospace;font-size:10.5px;color:#666">'+esc(r.c[0])+'</td>'
+       +'<td style="font-family:\'DM Mono\',monospace;color:#666">'+esc(r.c[1])+'</td>'
+       +'<td style="color:#666">'+esc(r.c[2])+'</td>'
+       +'<td style="color:#666">'+esc(r.c[3])+'</td></tr>';
+     }).join('')
+   +'</tbody></table>';
 }
 function costDupClean(key){
   var lbl=(LA_DUP_SETS.concat(LA_DUP_NESTED).filter(function(x){return x.k===key;})[0]||{}).label||key;
@@ -28922,20 +28992,23 @@ function flRenderCostAnalytics(){
   try{
     const DS=(typeof laDupScan==='function')?laDupScan():null;
     if(DS && DS.nDup>0){
-      const lines=DS.sets.concat(DS.nested).filter(x=>x.extra>0).map(x=>
-        `<div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-top:1px solid rgba(160,90,26,.14)">
+      const mkLine=(x)=>`<div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-top:1px solid rgba(160,90,26,.14)">
           <span style="flex:1;font-size:11.5px;font-weight:600">${x.label}${x.money?' <span style="font-size:9px;background:#FCE5EC;color:#9F1B4F;border-radius:5px;padding:1px 6px;font-weight:700">\u0e01\u0e23\u0e30\u0e17\u0e1a\u0e22\u0e2d\u0e14\u0e40\u0e07\u0e34\u0e19</span>':''}</span>
           <span style="font-size:11.5px;font-family:'DM Mono',monospace;font-weight:700">${x.extra} \u0e0b\u0e49\u0e33</span>
-          ${x.clean?`<button onclick="costDupClean('${x.k}')" style="border:1px solid #E0B24B;background:#fff;color:#A05A1A;border-radius:9px;padding:4px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">\u0e25\u0e49\u0e32\u0e07</button>`
-            :`<span style="font-size:10px;color:#A05A1A;opacity:.8">\u0e15\u0e49\u0e2d\u0e07\u0e14\u0e39\u0e40\u0e2d\u0e07</span>`}
-        </div>`).join('');
+          <button onclick="costDupInspect('${x.k}')" style="border:1px solid #E0B24B;background:#fff;color:#7A4A00;border-radius:9px;padding:4px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">\u0e14\u0e39\u0e2b\u0e25\u0e31\u0e01\u0e10\u0e32\u0e19</button>
+          ${x.clean?`<button onclick="costDupClean('${x.k}')" style="border:none;background:#A05A1A;color:#fff;border-radius:9px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">\u0e25\u0e49\u0e32\u0e07</button>`:''}
+        </div>`;
+      const all=DS.sets.concat(DS.nested).filter(x=>x.extra>0);
+      const sureL=all.filter(x=>x.sure), maybeL=all.filter(x=>!x.sure);
+      const lines=(sureL.length?`<div style="margin-top:9px;font-size:10px;font-weight:800;letter-spacing:.06em;color:#7A4A00;opacity:.75">\u0e0b\u0e49\u0e33\u0e41\u0e19\u0e48\u0e19\u0e2d\u0e19 \u00b7 \u0e17\u0e38\u0e01\u0e0a\u0e48\u0e2d\u0e07\u0e15\u0e23\u0e07\u0e01\u0e31\u0e19\u0e2b\u0e21\u0e14</div>`+sureL.map(mkLine).join(''):'')
+        +(maybeL.length?`<div style="margin-top:11px;font-size:10px;font-weight:800;letter-spacing:.06em;color:#7A4A00;opacity:.75">\u0e19\u0e48\u0e32\u0e2a\u0e07\u0e2a\u0e31\u0e22 \u00b7 \u0e23\u0e30\u0e1a\u0e1a\u0e15\u0e31\u0e14\u0e2a\u0e34\u0e19\u0e41\u0e17\u0e19\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49 \u0e40\u0e1b\u0e34\u0e14\u0e14\u0e39\u0e40\u0e2d\u0e07</div>`+maybeL.map(mkLine).join(''):'');
       dupBar=`<div style="background:#FFF6E5;border:1px solid #EAD9B0;border-radius:14px;padding:14px 17px;margin-bottom:12px;color:#7A4A00">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
           <b style="font-size:13px">&#9888; \u0e1e\u0e1a\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25\u0e0b\u0e49\u0e33 ${DS.nDup} \u0e23\u0e32\u0e22\u0e01\u0e32\u0e23</b>
           ${DS.nMoney>0?`<span style="font-size:11px;background:#FCE5EC;color:#9F1B4F;border-radius:8px;padding:2px 9px;font-weight:700">\u0e01\u0e23\u0e30\u0e17\u0e1a\u0e22\u0e2d\u0e14\u0e40\u0e07\u0e34\u0e19 ${DS.nMoney} \u0e23\u0e32\u0e22\u0e01\u0e32\u0e23</span>`:''}
           <button onclick="costDupCleanAll()" style="margin-left:auto;border:none;background:#A05A1A;color:#fff;border-radius:10px;padding:6px 14px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit">\u0e25\u0e49\u0e32\u0e07\u0e17\u0e35\u0e48\u0e25\u0e49\u0e32\u0e07\u0e44\u0e14\u0e49\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14</button>
         </div>
-        <div style="font-size:11px;line-height:1.6;opacity:.9">\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25\u0e17\u0e35\u0e48\u0e0b\u0e49\u0e33\u0e08\u0e30\u0e16\u0e39\u0e01\u0e19\u0e31\u0e1a\u0e0b\u0e49\u0e33\u0e17\u0e38\u0e01\u0e2b\u0e19\u0e49\u0e32\u0e17\u0e35\u0e48\u0e04\u0e34\u0e14\u0e40\u0e07\u0e34\u0e19 \u00b7 \u0e01\u0e32\u0e23\u0e25\u0e49\u0e32\u0e07\u0e08\u0e30\u0e40\u0e01\u0e47\u0e1a\u0e43\u0e1a\u0e17\u0e35\u0e48\u0e21\u0e35\u0e40\u0e19\u0e37\u0e49\u0e2d\u0e2b\u0e32\u0e21\u0e32\u0e01\u0e17\u0e35\u0e48\u0e2a\u0e38\u0e14\u0e44\u0e27\u0e49 \u0e41\u0e25\u0e30\u0e22\u0e49\u0e32\u0e22 memo / \u0e1b\u0e23\u0e30\u0e27\u0e31\u0e15\u0e34\u0e40\u0e1a\u0e34\u0e01\u0e2d\u0e30\u0e44\u0e2b\u0e25\u0e48 \u0e21\u0e32\u0e0a\u0e35\u0e49\u0e43\u0e1a\u0e17\u0e35\u0e48\u0e40\u0e01\u0e47\u0e1a\u0e44\u0e27\u0e49 \u0e40\u0e07\u0e34\u0e19\u0e08\u0e36\u0e07\u0e44\u0e21\u0e48\u0e2b\u0e32\u0e22</div>
+        <div style="font-size:11px;line-height:1.6;opacity:.9">\u0e01\u0e14 <b>\u0e14\u0e39\u0e2b\u0e25\u0e31\u0e01\u0e10\u0e32\u0e19</b> \u0e01\u0e48\u0e2d\u0e19\u0e40\u0e2a\u0e21\u0e2d \u0e08\u0e30\u0e40\u0e2b\u0e47\u0e19\u0e27\u0e48\u0e32\u0e23\u0e30\u0e1a\u0e1a\u0e08\u0e31\u0e1a\u0e04\u0e39\u0e48\u0e2d\u0e30\u0e44\u0e23\u0e44\u0e27\u0e49\u0e01\u0e31\u0e1a\u0e2d\u0e30\u0e44\u0e23 \u00b7 \u0e01\u0e32\u0e23\u0e25\u0e49\u0e32\u0e07\u0e08\u0e30\u0e40\u0e01\u0e47\u0e1a\u0e43\u0e1a\u0e17\u0e35\u0e48\u0e21\u0e35\u0e40\u0e19\u0e37\u0e49\u0e2d\u0e2b\u0e32\u0e21\u0e32\u0e01\u0e17\u0e35\u0e48\u0e2a\u0e38\u0e14\u0e44\u0e27\u0e49 \u0e41\u0e25\u0e30\u0e22\u0e49\u0e32\u0e22 memo / \u0e1b\u0e23\u0e30\u0e27\u0e31\u0e15\u0e34\u0e40\u0e1a\u0e34\u0e01\u0e2d\u0e30\u0e44\u0e2b\u0e25\u0e48 \u0e21\u0e32\u0e0a\u0e35\u0e49\u0e43\u0e1a\u0e17\u0e35\u0e48\u0e40\u0e01\u0e47\u0e1a\u0e44\u0e27\u0e49 \u0e40\u0e07\u0e34\u0e19\u0e08\u0e36\u0e07\u0e44\u0e21\u0e48\u0e2b\u0e32\u0e22</div>
         ${lines}
       </div>`;
     } else if(DS){
