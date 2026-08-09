@@ -17976,7 +17976,8 @@ function flLoad(){
   
   FL_ENGINES=d.fleet_engines||[];FL_GEARBOXES=d.fleet_gearboxes||[];
   FL_PROPELLERS=d.fleet_propellers||[];FL_DAILY=d.fleet_daily||{};FL_FUEL_PRICE=d.fleet_fuelprice||{};FL_DR_LOCK=d.fleet_drlock||{};
-  FL_MAINT=d.fleet_maintenance||[];FL_INCIDENTS=d.fleet_incidents||[];
+  FL_MAINT=(typeof flDedupeMaint==='function')?flDedupeMaint(d.fleet_maintenance||[]):(d.fleet_maintenance||[]);   // §mjDedupe
+  FL_INCIDENTS=d.fleet_incidents||[];
   FL_INVENTORY=d.fleet_inventory||[];FL_MEMOS=d.fleet_memos||[];
   FL_CONSUMABLE_LOGS=Array.isArray(d.fleet_consumable_logs)?d.fleet_consumable_logs:[];
   // Back-fill NEW seed inventory items missing from already-seeded storage.
@@ -18630,6 +18631,69 @@ function flLoad(){
       localStorage.setItem(LS_KEY, JSON.stringify(d));
     }
   }
+
+  // ── §mjDedupe · ล้างใบงานซ่อมที่ซ้ำ (ครั้งเดียว) ───────────────────────
+  //   hook รุ่นเก่าตั้ง id ด้วย Date.now() ทุกครั้งที่ seed ใหม่ จึงเกิด record
+  //   ที่ id ไม่ซ้ำ แต่เนื้อหาเหมือนกันทุกช่อง · โผล่ซ้ำในทุกหน้าที่นับเงิน
+  //   ตอนนี้ id เป็นค่าคงที่แล้ว แต่ของที่ซ้ำไปแล้วยังค้างอยู่ ต้องมาล้างตรงนี้
+  if(d._app_hooks && !d._app_hooks.mj_dedupe_v1 && Array.isArray(d.fleet_maintenance)){
+    var _memos = Array.isArray(d.fleet_memos) ? d.fleet_memos : [];
+    var _memoCnt = {};
+    _memos.forEach(function(mo){ if(mo.maintId) _memoCnt[mo.maintId]=(_memoCnt[mo.maintId]||0)+1; });
+    // เข้มไว้ก่อน · ต้องเหมือนกันครบทุกช่องถึงจะถือว่าเป็นใบเดียวกัน
+    var _key = function(m){
+      return [m.no||'', m.boatId||'', (m.title||'').trim(), m.type||'', m.startDate||''].join('\u241F');
+    };
+    // ใบไหน "มีเนื้อหา" มากกว่า เก็บใบนั้นไว้ · ใบที่เหลือคือเงาที่ seed ทิ้งไว้
+    var _score = function(m){
+      return ((m.parts||[]).length*10) + ((m.progressLog||[]).length*5)
+           + ((_memoCnt[m.id]||0)*20) + (m.endDate?3:0)
+           + (m.status && m.status!=='pending' ? 2 : 0) + (m.closeNote?1:0);
+    };
+    var groups = {};
+    d.fleet_maintenance.forEach(function(m){ (groups[_key(m)]=groups[_key(m)]||[]).push(m); });
+    var dropIds = {}, report = [];
+    Object.keys(groups).forEach(function(k){
+      var g = groups[k];
+      if(g.length < 2) return;
+      var keep = g.slice().sort(function(a,b){ return _score(b)-_score(a); })[0];
+      g.forEach(function(m){ if(m.id!==keep.id) dropIds[m.id]=keep.id; });
+      report.push({ no: keep.no, title: keep.title, boatId: keep.boatId,
+                    kept: keep.id, removed: g.length-1 });
+    });
+    var nDrop = Object.keys(dropIds).length;
+    if(nDrop > 0){
+      // memo ที่เคยชี้ใบที่จะถูกลบ ให้ย้ายมาชี้ใบที่เก็บไว้ · เงินต้องไม่หายไปกับใบที่ลบ
+      _memos.forEach(function(mo){ if(mo.maintId && dropIds[mo.maintId]) mo.maintId = dropIds[mo.maintId]; });
+      // ประวัติการเบิกอะไหล่ก็อ้าง jobId อยู่เหมือนกัน · ย้ายตามให้ครบ
+      (d.fleet_inventory||[]).forEach(function(it){
+        (it.history||[]).forEach(function(h){ if(h && h.jobId && dropIds[h.jobId]) h.jobId = dropIds[h.jobId]; });
+      });
+      (d.fleet_incidents||[]).forEach(function(ic){
+        if(ic && ic.maintId && dropIds[ic.maintId]) ic.maintId = dropIds[ic.maintId];
+      });
+      d.fleet_maintenance = d.fleet_maintenance.filter(function(m){ return !dropIds[m.id]; });
+      console.warn('[mjDedupe] \u0e25\u0e1a\u0e43\u0e1a\u0e07\u0e32\u0e19\u0e0b\u0e48\u0e2d\u0e21\u0e17\u0e35\u0e48\u0e0b\u0e49\u0e33 '+nDrop+' \u0e43\u0e1a', report);
+    }
+    d._app_hooks.mj_dedupe_v1 = true;
+    d._app_hooks.mj_dedupe_v1_report = report;
+    localStorage.setItem(LS_KEY, JSON.stringify(d));
+  }
+}
+// §mjDedupe · \u0e01\u0e31\u0e19\u0e0b\u0e49\u0e33\u0e15\u0e2d\u0e19\u0e42\u0e2b\u0e25\u0e14 · เผื่อ hook รุ่นเก่าหรือการ import
+//   ยัดใบงานที่เนื้อหาเหมือนกันเข้ามาอีก · เอาไว้เรียกจากจุดที่ set FL_MAINT
+function flDedupeMaint(list){
+  if(!Array.isArray(list)) return list;
+  var seen={}, out=[];
+  list.forEach(function(m){
+    if(!m) return;
+    var k=[m.no||'', m.boatId||'', (m.title||'').trim(), m.type||'', m.startDate||''].join('\u241F');
+    // ใบที่ไม่มีเลขที่ (ยังไม่ออกเลข) ปล่อยผ่าน · ไม่ควรเอามาจับคู่กัน
+    if(!m.no){ out.push(m); return; }
+    if(seen[k]) return;
+    seen[k]=1; out.push(m);
+  });
+  return out;
 }
 function flSave(){
   if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('fleet')) return;   // fleet view-only → no save
@@ -28219,8 +28283,12 @@ function costAggregate(){
 
     if(isDone){ A.done+=c; A.nDone++; } else { A.proc+=c; A.nProc++; }
     if(A.byType[row.type]){ A.byType[row.type][isDone?'done':'proc']+=c; A.byType[row.type].n++; }
+    // §count · ใบงานที่แตะอุปกรณ์หลายชิ้นในหมวดเดียวกัน ต้องนับเป็น 1 ใบ ไม่ใช่ N ใบ
+    //   (เงินยังหารเฉลี่ยตามชิ้นเหมือนเดิม ยอดรวมจึงไม่เปลี่ยน)
+    var seenCat={};
     keys.forEach(function(k,ix){
-      A.byCat[k][isDone?'done':'proc']+=share; A.byCat[k].n++;
+      A.byCat[k][isDone?'done':'proc']+=share;
+      if(!seenCat[k]){ seenCat[k]=1; A.byCat[k].n++; }
       if(m.boatId){
         var b=A.boats[m.boatId]=A.boats[m.boatId]||{id:m.boatId,name:(getBoat(m.boatId)||{}).name||m.boatId,done:0,proc:0,n:0,cats:{}};
         b.cats[k]=(b.cats[k]||0)+share;
@@ -40209,7 +40277,7 @@ window._laReloadData=function(){
     if(Array.isArray(d.fleet_gearboxes)) FL_GEARBOXES=d.fleet_gearboxes;
     if(Array.isArray(d.fleet_propellers)) FL_PROPELLERS=d.fleet_propellers;
     if(Array.isArray(d.fleet_incidents)) FL_INCIDENTS=d.fleet_incidents;
-    if(Array.isArray(d.fleet_maintenance)) FL_MAINT=d.fleet_maintenance;
+    if(Array.isArray(d.fleet_maintenance)) FL_MAINT=(typeof flDedupeMaint==='function')?flDedupeMaint(d.fleet_maintenance):d.fleet_maintenance;   // §mjDedupe
     if(Array.isArray(d.fleet_inventory)) FL_INVENTORY=d.fleet_inventory;
     if(Array.isArray(d.fleet_memos)) FL_MEMOS=d.fleet_memos;
     if(Array.isArray(d.fleet_projects)) FL_PROJECTS=d.fleet_projects;
