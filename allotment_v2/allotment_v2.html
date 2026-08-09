@@ -18680,6 +18680,187 @@ function flLoad(){
     localStorage.setItem(LS_KEY, JSON.stringify(d));
   }
 }
+// ══ §dupAudit · ตรวจข้อมูลซ้ำทั้งระบบ ═══════════════════════════════════
+//   คีย์ที่ใช้ตัดสินว่า "เป็นรายการเดียวกัน" ตั้งเข้มไว้ทุกก้อน
+//   ต้องเหมือนกันครบทุกช่องที่ระบุ ถึงจะถือว่าซ้ำ · ยอมพลาดดีกว่าลบของจริง
+var LA_DUP_SETS = [
+  { k:'maint',  label:'ใบงานซ่อม',            money:true,  clean:true,
+    get:function(){ return typeof FL_MAINT!=='undefined'?FL_MAINT:[]; },
+    key:function(x){ return !x.no?null:[x.no,x.boatId||'',(x.title||'').trim(),x.type||'',x.startDate||''].join('\u241F'); },
+    name:function(x){ return (x.no||'')+' · '+(x.title||''); } },
+  { k:'memo',   label:'memo',                  money:true,  clean:true,
+    get:function(){ return typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]; },
+    key:function(x){ return !x.no?null:[x.no,x.maintId||'',x.boatId||'',(x.title||'').trim(),Math.round(+x.amount||0),x.createdDate||''].join('\u241F'); },
+    name:function(x){ return (x.no||'')+' · '+(x.title||''); } },
+  { k:'incident', label:'เหตุการณ์ / Incident', money:false, clean:true,
+    get:function(){ return typeof FL_INCIDENTS!=='undefined'?FL_INCIDENTS:[]; },
+    key:function(x){ return !x.no?null:[x.no,x.boatId||'',(x.title||'').trim(),x.date||x.startDate||''].join('\u241F'); },
+    name:function(x){ return (x.no||'')+' · '+(x.title||''); } },
+  { k:'consum', label:'บันทึกเบิกของใช้/น้ำมัน', money:true, clean:true,
+    get:function(){ return typeof FL_CONSUMABLE_LOGS!=='undefined'?FL_CONSUMABLE_LOGS:[]; },
+    key:function(x){ return [x.date||'',x.boatId||'',x.itemId||x.invId||'',x.qty,Math.round(+x.amount||0)].join('\u241F'); },
+    name:function(x){ return (x.date||'')+' · '+(x.boatId||''); } },
+  // ทะเบียน · รายงานอย่างเดียว ไม่ลบให้ (ถูกอ้าง id กระจายทั้งระบบ)
+  { k:'inv',    label:'อะไหล่ในคลัง',          money:false, clean:false,
+    get:function(){ return typeof FL_INVENTORY!=='undefined'?FL_INVENTORY:[]; },
+    key:function(x){ return [(x.name||'').trim(),x.partNo||''].join('\u241F'); },
+    name:function(x){ return (x.name||'')+(x.partNo?' · '+x.partNo:''); } },
+  { k:'engine', label:'เครื่องยนต์',           money:false, clean:false,
+    get:function(){ return typeof FL_ENGINES!=='undefined'?FL_ENGINES:[]; },
+    key:function(x){ return !x.serial?null:[x.serial,x.boatId||'',x.pos||''].join('\u241F'); },
+    name:function(x){ return x.serial||x.id; } },
+  { k:'gearbox',label:'เกียร์',                money:false, clean:false,
+    get:function(){ return typeof FL_GEARBOXES!=='undefined'?FL_GEARBOXES:[]; },
+    key:function(x){ return !x.serial?null:[x.serial,x.boatId||''].join('\u241F'); },
+    name:function(x){ return x.serial||x.id; } },
+  { k:'prop',   label:'ใบจักร',                money:false, clean:false,
+    get:function(){ return typeof FL_PROPELLERS!=='undefined'?FL_PROPELLERS:[]; },
+    key:function(x){ return !x.serial?null:[x.serial,x.boatId||''].join('\u241F'); },
+    name:function(x){ return x.serial||x.id; } },
+  { k:'boat',   label:'เรือ',                  money:false, clean:false,
+    get:function(){ return typeof BOATS!=='undefined'?BOATS:[]; },
+    key:function(x){ return [(x.name||'').trim(),x.reg||''].join('\u241F'); },
+    name:function(x){ return x.name||x.id; } },
+  { k:'agent',  label:'เอเจนต์',               money:false, clean:false,
+    get:function(){ return typeof SB_AGENTS!=='undefined'?SB_AGENTS:[]; },
+    key:function(x){ return [(x.name||'').trim(),x.code||''].join('\u241F'); },
+    name:function(x){ return x.name||x.id; } },
+  { k:'booking',label:'บุคกิ้ง',               money:true,  clean:false,
+    get:function(){ return typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]; },
+    key:function(x){ return !x.voucherRef?null:[x.voucherRef,x.agentId||'',(x.leadPax||'').trim(),
+      (x.trips||[]).map(function(t){return (t.routeId||'')+'@'+(t.date||'');}).join(',')].join('\u241F'); },
+    name:function(x){ return (x.voucherRef||x.id)+' · '+(x.leadPax||''); } }
+];
+// รายการย่อยข้างในแต่ละใบ · พวกนี้ซ้ำแล้วยอดเงินบวมทันที
+var LA_DUP_NESTED = [
+  { k:'invHist', label:'ประวัติเบิกอะไหล่ในคลัง', money:false, clean:true,
+    each:function(cb){ (typeof FL_INVENTORY!=='undefined'?FL_INVENTORY:[]).forEach(function(it){ cb(it, it.history, it.name); }); },
+    key:function(h){ return [h.date||'',h.jobId||'',h.type||'',h.qty,(h.desc||'').slice(0,60)].join('\u241F'); } },
+  { k:'mjParts', label:'อะไหล่ในใบงานซ่อม', money:true, clean:true,
+    each:function(cb){ (typeof FL_MAINT!=='undefined'?FL_MAINT:[]).forEach(function(m){ cb(m, m.parts, m.no); }); },
+    key:function(p){ return [(p.name||'').trim(),p.qty,p.cost,!!p.late].join('\u241F'); } },
+  { k:'moItems', label:'รายการใน memo', money:true, clean:true,
+    each:function(cb){ (typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).forEach(function(mo){ cb(mo, mo.items, mo.no); }); },
+    key:function(i){ return [(i.name||i.desc||i.title||'').trim(),i.qty,(i.price!=null?i.price:i.cost)].join('\u241F'); } },
+  { k:'pierPay', label:'การรับเงินหน้าท่า', money:true, clean:true,
+    each:function(cb){ (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){ cb(b, b.pierPayments, b.voucherRef||b.id); }); },
+    key:function(p){ return [p.method||'',Math.round(+p.amount||0),p.at||'',p.by||''].join('\u241F'); } }
+];
+// ให้คะแนน "ความมีเนื้อหา" · ในกลุ่มที่ซ้ำ เก็บใบที่คะแนนสูงสุด ที่เหลือคือเงา
+function laDupScore(x){
+  var n=0;
+  if(Array.isArray(x.parts))       n+=x.parts.length*10;
+  if(Array.isArray(x.items))       n+=x.items.length*10;
+  if(Array.isArray(x.progressLog)) n+=x.progressLog.length*5;
+  if(Array.isArray(x.history))     n+=x.history.length*5;
+  if(Array.isArray(x.assets))      n+=x.assets.length*2;
+  if(Array.isArray(x.attachments)) n+=x.attachments.length*3;
+  if(x.endDate) n+=3;
+  if(x.approvedBy||x.confirmedBy||x.closeNote) n+=2;
+  if(x.status && x.status!=='pending' && x.status!=='draft') n+=2;
+  // ถูกอ้างจากที่อื่นกี่ครั้ง · ใบที่มีคนชี้อยู่ ห้ามลบทิ้งก่อนใบที่ไม่มีใครชี้
+  var refs=0, id=x.id;
+  if(id){
+    (typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).forEach(function(mo){ if(mo.maintId===id) refs++; });
+    (typeof FL_MAINT!=='undefined'?FL_MAINT:[]).forEach(function(m){ if(m.incidentId===id) refs++; });
+    (typeof FL_INVENTORY!=='undefined'?FL_INVENTORY:[]).forEach(function(it){
+      (it.history||[]).forEach(function(h){ if(h && (h.jobId===id||h.memoId===id)) refs++; }); });
+  }
+  return n + refs*20;
+}
+// ── §scan · ไล่ดูทุกก้อน · ไม่แก้อะไรทั้งสิ้น ──
+function laDupScan(){
+  var out={ sets:[], nested:[], nDup:0, nMoney:0 };
+  LA_DUP_SETS.forEach(function(S){
+    var arr=S.get()||[], m={};
+    arr.forEach(function(x){ var k=S.key(x); if(k==null) return; (m[k]=m[k]||[]).push(x); });
+    var groups=Object.keys(m).filter(function(k){ return m[k].length>1; }).map(function(k){
+      var g=m[k].slice().sort(function(a,b){ return laDupScore(b)-laDupScore(a); });
+      return { name:S.name(g[0]), keepId:g[0].id, drop:g.length-1,
+               ids:g.slice(1).map(function(x){ return x.id; }) };
+    });
+    var extra=groups.reduce(function(s,g){ return s+g.drop; },0);
+    if(extra>0){ out.nDup+=extra; if(S.money) out.nMoney+=extra; }
+    out.sets.push({ k:S.k, label:S.label, money:!!S.money, clean:!!S.clean,
+                    total:arr.length, extra:extra, groups:groups.slice(0,40) });
+  });
+  LA_DUP_NESTED.forEach(function(N){
+    var hits=[], extra=0;
+    N.each(function(owner, list, label){
+      if(!Array.isArray(list) || list.length<2) return;
+      var m={}; list.forEach(function(x){ var k=N.key(x); (m[k]=m[k]||[]).push(x); });
+      var e=Object.keys(m).reduce(function(s,k){ return s+(m[k].length-1); },0);
+      if(e>0){ extra+=e; hits.push({ label:String(label||''), extra:e }); }
+    });
+    if(extra>0){ out.nDup+=extra; if(N.money) out.nMoney+=extra; }
+    out.nested.push({ k:N.k, label:N.label, money:!!N.money, clean:!!N.clean,
+                      extra:extra, hits:hits.slice(0,40) });
+  });
+  return out;
+}
+// ── §clean · ล้างก้อนเดียว · ย้าย reference ตามให้ครบก่อนลบเสมอ ──
+function laDupClean(key){
+  var S=LA_DUP_SETS.filter(function(x){ return x.k===key; })[0];
+  var N=LA_DUP_NESTED.filter(function(x){ return x.k===key; })[0];
+  var removed=0;
+  if(S){
+    if(!S.clean) return 0;
+    var arr=S.get()||[], m={};
+    arr.forEach(function(x){ var k=S.key(x); if(k==null) return; (m[k]=m[k]||[]).push(x); });
+    var map={};
+    Object.keys(m).forEach(function(k){
+      var g=m[k]; if(g.length<2) return;
+      var keep=g.slice().sort(function(a,b){ return laDupScore(b)-laDupScore(a); })[0];
+      g.forEach(function(x){ if(x.id!==keep.id) map[x.id]=keep.id; });
+    });
+    var ids=Object.keys(map); if(!ids.length) return 0;
+    // ย้าย reference ทุกเส้นก่อน · เงินและประวัติจะได้ไม่ขาดตอน
+    (typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).forEach(function(mo){
+      if(mo.maintId && map[mo.maintId]) mo.maintId=map[mo.maintId]; });
+    (typeof FL_MAINT!=='undefined'?FL_MAINT:[]).forEach(function(mj){
+      if(mj.incidentId && map[mj.incidentId]) mj.incidentId=map[mj.incidentId]; });
+    (typeof FL_INVENTORY!=='undefined'?FL_INVENTORY:[]).forEach(function(it){
+      (it.history||[]).forEach(function(h){ if(!h) return;
+        if(h.jobId && map[h.jobId]) h.jobId=map[h.jobId];
+        if(h.memoId && map[h.memoId]) h.memoId=map[h.memoId]; }); });
+    var keepArr=arr.filter(function(x){ return !map[x.id]; });
+    removed=arr.length-keepArr.length;
+    arr.length=0; keepArr.forEach(function(x){ arr.push(x); });
+  } else if(N){
+    if(!N.clean) return 0;
+    N.each(function(owner, list){
+      if(!Array.isArray(list) || list.length<2) return;
+      var seen={}, keep=[];
+      list.forEach(function(x){ var k=N.key(x); if(seen[k]){ removed++; return; } seen[k]=1; keep.push(x); });
+      if(keep.length!==list.length){ list.length=0; keep.forEach(function(x){ list.push(x); }); }
+    });
+  }
+  if(removed>0){
+    if(typeof flSave==='function') flSave();
+    if(typeof save==='function'){ try{ save('bookings'); }catch(e){} }
+  }
+  return removed;
+}
+function laDupCleanAll(){
+  var n=0;
+  LA_DUP_SETS.concat(LA_DUP_NESTED).forEach(function(S){ if(S.clean) n+=laDupClean(S.k); });
+  return n;
+}
+function costDupClean(key){
+  var lbl=(LA_DUP_SETS.concat(LA_DUP_NESTED).filter(function(x){return x.k===key;})[0]||{}).label||key;
+  if(!confirm('ล้างรายการซ้ำในกลุ่ม "'+lbl+'" ?\n\nระบบจะเก็บใบที่มีเนื้อหามากที่สุดไว้ '
+    +'แล้วย้าย memo / ประวัติเบิกอะไหล่ ที่ชี้ใบที่ถูกลบ ให้มาชี้ใบที่เก็บไว้')) return;
+  var n=laDupClean(key);
+  alert(n>0?('ล้างไปแล้ว '+n+' รายการ'):'ไม่พบรายการซ้ำที่ล้างได้');
+  if(typeof flRenderCostAnalytics==='function') flRenderCostAnalytics();
+}
+function costDupCleanAll(){
+  if(!confirm('ล้างรายการซ้ำทุกกลุ่มที่ล้างได้ ?\n\nทะเบียนเรือ / เครื่องยนต์ / เกียร์ / ใบจักร / เอเจนต์ / บุคกิ้ง จะไม่ถูกแตะ\nเพราะถูกอ้าง id กระจายทั้งระบบ ต้องดูทีละรายการเอง')) return;
+  var n=laDupCleanAll();
+  alert(n>0?('ล้างไปแล้ว '+n+' รายการ'):'ไม่พบรายการซ้ำที่ล้างได้');
+  if(typeof flRenderCostAnalytics==='function') flRenderCostAnalytics();
+}
+
 // §mjDedupe · \u0e01\u0e31\u0e19\u0e0b\u0e49\u0e33\u0e15\u0e2d\u0e19\u0e42\u0e2b\u0e25\u0e14 · เผื่อ hook รุ่นเก่าหรือการ import
 //   ยัดใบงานที่เนื้อหาเหมือนกันเข้ามาอีก · เอาไว้เรียกจากจุดที่ set FL_MAINT
 function flDedupeMaint(list){
@@ -28674,7 +28855,34 @@ function flRenderCostAnalytics(){
       <span style="font-size:10px;color:${dim.ink3}">\u0e40\u0e09\u0e1e\u0e32\u0e30\u0e07\u0e32\u0e19\u0e17\u0e35\u0e48\u0e1b\u0e34\u0e14\u0e41\u0e25\u0e49\u0e27</span>
     </div>${outRows}</div>`:'';
 
-  wrap.innerHTML=headerBar
+  // ── §dupAudit · แถบตรวจข้อมูลซ้ำ · ข้อมูลซ้ำทำให้ทุกยอดในหน้านี้บวมโดยไม่มีสัญญาณอะไรเลย ──
+  let dupBar='';
+  try{
+    const DS=(typeof laDupScan==='function')?laDupScan():null;
+    if(DS && DS.nDup>0){
+      const lines=DS.sets.concat(DS.nested).filter(x=>x.extra>0).map(x=>
+        `<div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-top:1px solid rgba(160,90,26,.14)">
+          <span style="flex:1;font-size:11.5px;font-weight:600">${x.label}${x.money?' <span style="font-size:9px;background:#FCE5EC;color:#9F1B4F;border-radius:5px;padding:1px 6px;font-weight:700">\u0e01\u0e23\u0e30\u0e17\u0e1a\u0e22\u0e2d\u0e14\u0e40\u0e07\u0e34\u0e19</span>':''}</span>
+          <span style="font-size:11.5px;font-family:'DM Mono',monospace;font-weight:700">${x.extra} \u0e0b\u0e49\u0e33</span>
+          ${x.clean?`<button onclick="costDupClean('${x.k}')" style="border:1px solid #E0B24B;background:#fff;color:#A05A1A;border-radius:9px;padding:4px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">\u0e25\u0e49\u0e32\u0e07</button>`
+            :`<span style="font-size:10px;color:#A05A1A;opacity:.8">\u0e15\u0e49\u0e2d\u0e07\u0e14\u0e39\u0e40\u0e2d\u0e07</span>`}
+        </div>`).join('');
+      dupBar=`<div style="background:#FFF6E5;border:1px solid #EAD9B0;border-radius:14px;padding:14px 17px;margin-bottom:12px;color:#7A4A00">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+          <b style="font-size:13px">&#9888; \u0e1e\u0e1a\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25\u0e0b\u0e49\u0e33 ${DS.nDup} \u0e23\u0e32\u0e22\u0e01\u0e32\u0e23</b>
+          ${DS.nMoney>0?`<span style="font-size:11px;background:#FCE5EC;color:#9F1B4F;border-radius:8px;padding:2px 9px;font-weight:700">\u0e01\u0e23\u0e30\u0e17\u0e1a\u0e22\u0e2d\u0e14\u0e40\u0e07\u0e34\u0e19 ${DS.nMoney} \u0e23\u0e32\u0e22\u0e01\u0e32\u0e23</span>`:''}
+          <button onclick="costDupCleanAll()" style="margin-left:auto;border:none;background:#A05A1A;color:#fff;border-radius:10px;padding:6px 14px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit">\u0e25\u0e49\u0e32\u0e07\u0e17\u0e35\u0e48\u0e25\u0e49\u0e32\u0e07\u0e44\u0e14\u0e49\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14</button>
+        </div>
+        <div style="font-size:11px;line-height:1.6;opacity:.9">\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25\u0e17\u0e35\u0e48\u0e0b\u0e49\u0e33\u0e08\u0e30\u0e16\u0e39\u0e01\u0e19\u0e31\u0e1a\u0e0b\u0e49\u0e33\u0e17\u0e38\u0e01\u0e2b\u0e19\u0e49\u0e32\u0e17\u0e35\u0e48\u0e04\u0e34\u0e14\u0e40\u0e07\u0e34\u0e19 \u00b7 \u0e01\u0e32\u0e23\u0e25\u0e49\u0e32\u0e07\u0e08\u0e30\u0e40\u0e01\u0e47\u0e1a\u0e43\u0e1a\u0e17\u0e35\u0e48\u0e21\u0e35\u0e40\u0e19\u0e37\u0e49\u0e2d\u0e2b\u0e32\u0e21\u0e32\u0e01\u0e17\u0e35\u0e48\u0e2a\u0e38\u0e14\u0e44\u0e27\u0e49 \u0e41\u0e25\u0e30\u0e22\u0e49\u0e32\u0e22 memo / \u0e1b\u0e23\u0e30\u0e27\u0e31\u0e15\u0e34\u0e40\u0e1a\u0e34\u0e01\u0e2d\u0e30\u0e44\u0e2b\u0e25\u0e48 \u0e21\u0e32\u0e0a\u0e35\u0e49\u0e43\u0e1a\u0e17\u0e35\u0e48\u0e40\u0e01\u0e47\u0e1a\u0e44\u0e27\u0e49 \u0e40\u0e07\u0e34\u0e19\u0e08\u0e36\u0e07\u0e44\u0e21\u0e48\u0e2b\u0e32\u0e22</div>
+        ${lines}
+      </div>`;
+    } else if(DS){
+      dupBar=`<div style="display:flex;align-items:center;gap:8px;font-size:11.5px;color:#1D6E56;background:#F0F9F4;border:1px solid #CDE9DC;border-radius:12px;padding:8px 13px;margin-bottom:12px">
+        &#10003; <span>\u0e15\u0e23\u0e27\u0e08\u0e02\u0e49\u0e2d\u0e21\u0e39\u0e25\u0e0b\u0e49\u0e33\u0e41\u0e25\u0e49\u0e27 \u00b7 \u0e44\u0e21\u0e48\u0e1e\u0e1a\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23\u0e0b\u0e49\u0e33 \u00b7 \u0e22\u0e2d\u0e14\u0e43\u0e19\u0e2b\u0e19\u0e49\u0e32\u0e19\u0e35\u0e49\u0e40\u0e0a\u0e37\u0e48\u0e2d\u0e16\u0e37\u0e2d\u0e44\u0e14\u0e49</span></div>`;
+    }
+  }catch(e){ dupBar=''; }
+
+  wrap.innerHTML=headerBar+dupBar
     +`<div style="display:grid;grid-template-columns:1.55fr 1fr;gap:12px;margin-bottom:12px" class="cost-top">${totalCard}${centralCard}</div>`
     +`<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:12px" class="cost-cats">${catCards}</div>`
     +chartSection
