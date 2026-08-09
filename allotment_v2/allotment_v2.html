@@ -9334,11 +9334,20 @@ function getCellType(op, route){
 }
 
 // map current loc → pier key
-function getBoatCurrentPier(b){
+// §boatPierDate · ท่าของเรือขึ้นกับ "วันที่ถาม" ไม่ใช่วันนี้เสมอไป
+//   ds ว่าง = ถามถึงวันนี้ (ผู้เรียกเดิมทุกจุดจึงได้ผลเท่าเดิม)
+//   เคสที่เคยพัง: เรือเข้าอู่อยู่ตอนนี้ แต่ตั้งไว้ว่ากลับมาพร้อมใช้ 1 ต.ค.
+//   เปิดปฏิทิน 15 ต.ค. → สถานะอ่านจากวันนั้นได้ available แต่ท่ายังอ่านจากวันนี้ได้ 'shop'
+//   เรือเลยถูกกรองทิ้งทั้งจากรายการว่างและรายการไม่ว่าง = หายไปเฉย ๆ
+function getBoatCurrentPier(b, ds){
+  ds = ds || TODAY_STR;
+  const _stD = getCurStatus(b, ds);
   // 1. ★ Active MJ at shop (boat physically away · not available) → 'shop'
   //    Conditions: status=inprogress · has location · boat is actually unavailable
   //    Exclude cases like engine-swap where boat stays running (setFixing:false / boatStatus:'available')
-  if(typeof FL_MAINT !== 'undefined' && Array.isArray(FL_MAINT)){
+  //    §boatPierDate · เช็คข้อนี้เฉพาะตอนที่ "วันนั้น" เรือยังไม่พร้อมใช้
+  //    ถ้าวันนั้นสถานะเป็น available แปลว่าออกจากอู่แล้ว ไม่ต้องนับเป็น shop อีก
+  if(_stD.s !== 'available' && typeof FL_MAINT !== 'undefined' && Array.isArray(FL_MAINT)){
     const activeMj = FL_MAINT.find(m => {
       if(m.boatId !== b.id) return false;
       if(m.status !== 'inprogress') return false;
@@ -9350,15 +9359,15 @@ function getBoatCurrentPier(b){
     if(activeMj) return 'shop';
   }
   // 2. Check active pier assignments (only if not at shop)
+  //    §boatPierDate · ใบย้ายท่าที่ครอบคลุม "วันที่ถาม" ไม่ใช่วันนี้
   if(b.assignments && Array.isArray(b.assignments)){
-    const today = TODAY_STR;
     const active = b.assignments.find(a =>
-      a.status !== 'cancelled' && a.startDate <= today && a.endDate >= today
+      a.status !== 'cancelled' && a.startDate <= ds && a.endDate >= ds
     );
     if(active) return active.toPier;
   }
   // 3. Fall back to status location keyword
-  const st=getCurStatus(b,TODAY_STR);
+  const st=_stD;
   const loc=(st.loc||'').toLowerCase();
   if(loc.includes('panwa')) return 'panwa';
   if(loc.includes('ranong')||loc.includes('grand andaman')||loc.includes('se la va')) return 'ranong';   // §Ranong pier locations (Grand Andaman Pier) → group under Ranong, not the tublamu fallback
@@ -9506,8 +9515,34 @@ function bop2OpenCellPopover(routeId, dateStr, anchorEl){
   // Boats can only operate a route from the SAME pier (a Visit Panwa boat can't run a Ranong trip).
   // fleet.available is filtered by the top pier filter (may be 'all'); additionally scope to the route's pier.
   const routePier = route && route.pier;
-  const availList = routePier ? fleet.available.filter(a => getBoatCurrentPier(a.boat) === routePier) : fleet.available;
-  const unavailList = routePier ? fleet.unavailable.filter(a => getBoatCurrentPier(a.boat) === routePier) : fleet.unavailable;
+  // §boatPierDate · ท่าต้องอ่าน ณ วันที่ของช่องนี้ ไม่ใช่ของวันนี้
+  const _pierOn = bt => getBoatCurrentPier(bt, dateStr);
+  const _pierName = p => p === 'tublamu' ? 'ท่าทับละมุ'
+                       : p === 'panwa'   ? 'ท่าวิสิษฐ์พันวา'
+                       : p === 'ranong'  ? 'ท่าระนอง'
+                       : p === 'shop'    ? 'อยู่ที่อู่'
+                       : (p || '—');
+  let availList = fleet.available, unavailList = fleet.unavailable;
+  if(routePier){
+    // เรือที่พร้อมใช้วันนั้น แต่ไม่ได้อยู่ท่าเดียวกับเส้นทาง · เดิมถูกตัดทิ้งเงียบ ๆ
+    // ทั้งจาก availList และ unavailList จึงหายไปจากหน้าจอโดยไม่มีเหตุผลบอก
+    // ย้ายมาโชว์ในกลุ่ม UNAVAILABLE พร้อมบอกว่าอยู่ท่าไหน จะได้รู้ว่าต้องย้ายท่าก่อน
+    const _offPier = [];
+    availList = fleet.available.filter(a => {
+      const p = _pierOn(a.boat);
+      if(p === routePier) return true;
+      const shopAt = (p === 'shop' && typeof getBoatShopLocation === 'function') ? getBoatShopLocation(a.boat) : '';
+      _offPier.push({ boat: a.boat, reason: _pierName(p) + (shopAt ? ' · ' + shopAt : '') });
+      return false;
+    });
+    // เรือที่เสีย/เข้าอู่ ยังนับเป็นเรือของท่านี้อยู่ (บ้านมันคือท่านี้ แค่ไปนอนอู่)
+    // ถ้ากรองด้วยท่าปัจจุบันอย่างเดียว 'shop' จะไม่ตรงกับท่าไหนเลย แล้วหายไปทั้งลำ
+    // ผู้ใช้จะงงว่าเรือหายไปไหน · ให้ขึ้นในกลุ่ม UNAVAILABLE พร้อมเลขใบซ่อม
+    unavailList = fleet.unavailable.filter(a => {
+      const p = _pierOn(a.boat);
+      return p === routePier || (p === 'shop' && (a.boat.pier || 'tublamu') === routePier);
+    }).concat(_offPier);
+  }
   // Off-season / closed program → no boat can be assigned on this date.
   const _dayStat = (typeof getDayStatus === 'function' && route) ? getDayStatus(route, dateStr) : null;
   const routeClosed = !!(_dayStat && _dayStat.type === 'closed');
@@ -9560,7 +9595,8 @@ function bop2OpenCellPopover(routeId, dateStr, anchorEl){
   } else {
     availHTML = availList.map(a => {
       const c = bop2BoatColor(a.boat.id);
-      const pierLbl = getBoatCurrentPier(a.boat) === 'tublamu' ? 'TL' : (getBoatCurrentPier(a.boat) === 'panwa' ? 'VP' : (getBoatCurrentPier(a.boat) === 'ranong' ? 'RN' : ''));
+      const _bp = _pierOn(a.boat);   // §boatPierDate
+      const pierLbl = _bp === 'tublamu' ? 'TL' : (_bp === 'panwa' ? 'VP' : (_bp === 'ranong' ? 'RN' : ''));
       return '<button onclick="bop2AssignBoat(\''+routeId+'\',\''+dateStr+'\',\''+a.boat.id+'\');bop2CloseCellPopover();" '
         + 'style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:#fff;border:1px solid #eee;border-radius:4px;font-size:11px;cursor:pointer;text-align:left;font-family:inherit;width:100%;margin-bottom:3px;color:var(--ink)" '
         + 'onmouseover="this.style.background=\'#E1F5EE\';this.style.borderColor=\'#9FE1CB\'" '
@@ -9720,15 +9756,17 @@ function fcOpenDay(ds){
   var el=document.querySelector('[data-view="operation"]');
   if(el && typeof nav==='function') nav(el);
 }
-/* ท่าปัจจุบันของลำนี้ · ลำที่เข้าอู่ (pier='shop') นับเป็นไม่พร้อม ไม่ผูกกับท่าไหน */
-function fcPierOf(b){ return (typeof getBoatCurrentPier==='function') ? getBoatCurrentPier(b) : (b.pier||''); }
+/* ท่าของลำนี้ ณ วันที่ ds · ลำที่เข้าอู่ (pier='shop') นับเป็นไม่พร้อม ไม่ผูกกับท่าไหน
+   §boatPierDate · ต้องส่ง ds เข้าไป ไม่งั้นเรือที่กลับมาพร้อมใช้เดือนหน้าจะตกลงถัง 'shop'
+   ซึ่ง FC_PIER ไม่มีช่องให้แสดง → นับใน nReady แต่ไม่โผล่ใต้ท่าไหนเลย */
+function fcPierOf(b, ds){ return (typeof getBoatCurrentPier==='function') ? getBoatCurrentPier(b, ds) : (b.pier||''); }
 var FC_PIER=[['tublamu','TL','Tub Lamu'],['panwa','VP','Visit Panwa'],['ranong','RN','Ranong']];
 /* รวมทุกอย่างของหนึ่งวัน · ไม่คิดเลขซ้ำกับที่อื่น อ่านจาก TRIPS ตัวเดียวกับ Boat Operation */
 function fcDay(ds){
   var out={ routes:[], charters:[], ready:{}, fixing:[], nReady:0, nOut:0, wx:[] };
   FC_PIER.forEach(function(p){ out.ready[p[0]]=[]; });
   var boats=(typeof BOATS!=='undefined'?BOATS:[]).filter(function(b){ return b && !b.retired; });
-  if(_fc.pier!=='all') boats=boats.filter(function(b){ return fcPierOf(b)===_fc.pier; });
+  if(_fc.pier!=='all') boats=boats.filter(function(b){ return fcPierOf(b, ds)===_fc.pier; });
   var byRoute={};
   boats.forEach(function(b){
     var st=(typeof getCurStatus==='function') ? getCurStatus(b, ds).s : 'available';
@@ -9740,7 +9778,7 @@ function fcDay(ds){
       (byRoute[op.route]=byRoute[op.route]||[]).push(b);
       return;
     }
-    var pk=fcPierOf(b);
+    var pk=fcPierOf(b, ds);
     if(!out.ready[pk]) out.ready[pk]=[];
     out.ready[pk].push(b); out.nReady++;
   });
@@ -9938,7 +9976,7 @@ function bop2FleetStatus(dateStr){
   if(typeof BOATS === 'undefined') return out;
   BOATS.forEach(b => {
     if(b.retired) return;
-    if(_bop2.pier !== 'all' && getBoatCurrentPier(b) !== _bop2.pier) return;
+    if(_bop2.pier !== 'all' && getBoatCurrentPier(b, dateStr) !== _bop2.pier) return;   // §boatPierDate
     const st = getCurStatus(b, dateStr).s;
     if(st !== 'available'){
       // Enrich reason with active project info if any
@@ -11162,7 +11200,7 @@ function openPortal(anchorEl,key,mode){
   const op=getOp(ds,bid);
   let html='';
   if(mode==='route'){
-    const pierRoutes=ROUTES.filter(rt=>rt.pier===getBoatCurrentPier(b)).filter(rt=>{var _s=getDayStatus(rt,ds);return !_s||_s.type==='open';});
+    const pierRoutes=ROUTES.filter(rt=>rt.pier===getBoatCurrentPier(b, ds)).filter(rt=>{var _s=getDayStatus(rt,ds);return !_s||_s.type==='open';});   // §boatPierDate
     html=pierRoutes.map(rt=>`
       <div class="dd-item${op.route===rt.id?' on':''}" data-action="route" data-key="${key}" data-rid="${rt.id}">
         <div class="dd-dot" style="background:${rt.color}"></div>${rt.name}
