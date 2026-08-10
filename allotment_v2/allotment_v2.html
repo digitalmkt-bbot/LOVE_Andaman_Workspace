@@ -3742,6 +3742,10 @@ body.sb-collapsed .sidebar.sb-collapsed ~ #la-userbadge, body.sb-collapsed .la-u
   box-shadow:0 0 0 3px rgba(79,70,229,.15)}
 
 /* ป้ายช่อง + ค่า · ตัวป้ายเล็กลงและจางลง ให้ค่าที่อ่านจริงเด่นขึ้น */
+/* §vcDoc · หัวเอกสาร · กระดาษขาวเต็มความกว้าง อ่านเหมือนใบ voucher จริง */
+#view-booking .bkv2-vcdoc{background:#fff;border:1px solid rgba(20,25,45,.10);border-radius:14px;
+  padding:26px 30px 30px;margin-bottom:14px;box-shadow:0 2px 10px rgba(20,25,45,.06)}
+#view-booking .bkv2-vcdoc table{margin:0 0 22px}
 #view-booking .bkv2-vc .bkv2-dt-lab{font-size:9.5px;font-weight:700;color:var(--df);
   letter-spacing:.07em;margin-bottom:5px}
 #view-booking .bkv2-vc .bkv2-dt-val{font-size:13.5px;font-weight:700;color:var(--di);line-height:1.4}
@@ -73773,89 +73777,158 @@ function _bkV2FamIcon(famId, color, size){
 // Boarding-pass / ticket header for the Voucher detail · left route panel + trip/date/VC hero
 function bkV2VoucherTicket(bk, esc){
   esc = esc || (s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]));
-  const trips=bk.trips||[]; const t0=trips[0]||{};
-  const route=(typeof ROUTES!=='undefined')?ROUTES.find(r=>r.id===t0.routeId):null;
-  const fam=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(t0.routeId):null;
-  const col=(fam&&fam.color)||(route&&route.color)||'#1F2A44';
-  const tint=(typeof _bkV2Soft==='function')?_bkV2Soft(col,0.86):'#eef';
-  const tint2=(typeof _bkV2Soft==='function')?_bkV2Soft(col,0.78):'#eef';
-  const tripName=esc(route?(route.name):(t0.routeId||'—'));
-  const dateTxt=t0.date?((typeof bkV2FmtFullDate==='function')?bkV2FmtFullDate(t0.date):t0.date):'—';
-  const ptime=(bk.ops&&bk.ops.pickupTimeFinal)||t0.pickupTime||bk.pickupTime||'';
-  const isCharter=(bk.trips||[]).some(t=>t.bookingMode==='charter');
-  const chtrBoatId=(t0.charterBoatId)||(bk.ops&&bk.ops.boatId)||'';
-  const chtrBoatNm=chtrBoatId?(((typeof BOATS!=='undefined'?BOATS.find(b=>b.id===chtrBoatId):null)||{}).name||chtrBoatId):'';
-  const lead=esc(bk.leadPax||bk.customerName||'—');
-  const pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t0.pax||{}):0;
-  const _pt=(k)=>(typeof bkV2PaxTot==='function')?bkV2PaxTot(t0.pax||{},k):0;
-  const _ad=_pt('ad'),_chd=_pt('chd'),_inf=_pt('inf'),_foc=_pt('foc');
-  const paxParts=[]; if(_ad)paxParts.push(_ad+'A'); if(_chd)paxParts.push(_chd+'C'); if(_inf)paxParts.push(_inf+'I'); if(_foc)paxParts.push(_foc+'FOC');
-  const paxStr=pax+' pax'+(paxParts.length?(' · '+paxParts.join(' · ')):'');
-  const hotel=esc(bk.hotelName||bk.pickup||'—');
-  const room=esc(bk.roomNumber||'');
+  const NAVY='#16265C', CYAN='#29B6E8', ROW='#F1F1F1', MUT='#7C8091', RED='#E0232A';
+  const trips=(bk.trips||[]);
+  const t0=trips[0]||{};
+  const dsFirst=t0.date||'';
+  const PIER={tublamu:'Tub Lamu',panwa:'Visit Panwa',ranong:'Ranong'};
+  const money=n=>'\u0e3f'+Math.round(+n||0).toLocaleString('en-US');
+  const zap='<span style="color:#B9BCC6">\u2014</span>';   // §gap · ขีดจาง = ไม่มี · ไม่ใช่ลืมกรอก
+
+  // ── สถานะ · สีเดินตามสถานะจริง ──
+  const st=String(bk.status||'');
+  const stLbl=(typeof bkV2StatusLabel==='function')?bkV2StatusLabel(st):st;
+  const stCol=/cancel|reject/.test(st)?'#C6403F':(/pending/.test(st)?'#DBA02A':CYAN);
+
+  // ── เอเยนต์ ──
+  const ag=(bk.agentId&&typeof sbGetAgent==='function')?sbGetAgent(bk.agentId):null;
+  const agTxt=ag?((ag.name||ag.code||'')+(ag.code&&ag.name?(' \u00b7 '+ag.code):'')):(bk.channelType==='b2c'?'B2C \u00b7 Direct':'Walk-in / Direct');
+
+  // ── ตารางทริป ── §same · ตัวเลข pax ใช้ตัวนับตัวเดียวกับที่เหลือทั้งระบบ
+  const PT=(px,k)=>(typeof bkV2PaxTot==='function')?bkV2PaxTot(px||{},k):0;
+  const rows=trips.map(t=>{
+    const r=(typeof ROUTES!=='undefined')?ROUTES.find(x=>x.id===t.routeId):null;
+    const dep=(r&&(r.times||[])[0])||'';
+    const sub=[(r&&r.name)||t.routeId||'', dep, PIER[(r&&r.pier)||'']||''].filter(Boolean).join(' \u00b7 ');
+    const cell=n=>n>0?('<b>'+n+'</b>'):zap;
+    let dTxt=t.date||'';
+    try{ if(t.date){ const d=new Date(t.date+'T12:00:00'); dTxt=d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear(); } }catch(_){}
+    return '<tr>'
+      +'<td style="text-align:left;padding-left:22px;font-weight:700">'+esc((r&&r.name)||t.routeId||'\u2014')
+        +(t.bookingMode==='charter'?' <span style="font-size:10.5px;font-weight:700;color:#6B289A">CHARTER</span>':'')
+        +'<div style="font-size:11px;color:'+MUT+';font-weight:500;margin-top:2px">'+esc(sub)+'</div></td>'
+      +'<td style="font-family:\'DM Mono\',monospace">'+esc(dTxt)+'</td>'
+      +'<td>'+cell(PT(t.pax,'ad'))+'</td><td>'+cell(PT(t.pax,'chd'))+'</td>'
+      +'<td>'+cell(PT(t.pax,'inf'))+'</td><td>'+cell(PT(t.pax,'foc'))+'</td></tr>';
+  }).join('')||('<tr><td colspan="6" style="text-align:center;color:'+MUT+'">\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e17\u0e23\u0e34\u0e1b</td></tr>');
+
+  // ── จุดรับ-ส่ง ──
+  const room=(bk.roomNumber||'').trim();
+  const zone=[bk.pickupArea||'', bk.pickupZone||''].filter(Boolean).join(' \u00b7 ');
   const dropDiff=(bk.dropoffSame===false);
-  const dropTxt=dropDiff?esc(bk.dropoffHotelName||bk.dropoffArea||'—'):'';
-  const vno=esc(bk.voucherRef||bk.id||'');
-  const moreTrips=trips.length>1?` <span style="font-size:11px;font-weight:500;color:var(--ink-soft)">+${trips.length-1} more trip${trips.length-1>1?'s':''}</span>`:'';
-  const calSvg='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="'+col+'" stroke-width="2.2" stroke-linecap="round" style="vertical-align:-3px"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>';
-  // Dietary & special requests
-  const sm=bk.specialMeals||{}; const gd=bk.guides||{};
-  const reqChips=[];
-  if(sm.veg)   reqChips.push('<span style="background:#EAF3DE;color:#3B6D11;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:6px">'+sm.veg+' veg</span>');
-  if(sm.vegan) reqChips.push('<span style="background:#EAF3DE;color:#3B6D11;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:6px">'+sm.vegan+' vegan</span>');
-  if(sm.halal) reqChips.push('<span style="background:#E1F5EE;color:#0F6E56;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:6px">'+sm.halal+' halal</span>');
-  const _langs=[]; if(gd.english)_langs.push('EN'); if(gd.russian)_langs.push('RU'); if(gd.chinese)_langs.push('CN'); if((gd.otherLang||'').trim())_langs.push(esc(gd.otherLang));
-  _langs.forEach(l=>reqChips.push('<span style="background:#E6F1FB;color:#185FA5;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:6px">'+l+'</span>'));
-  const allerg=(typeof bkV2AllergyText==='function')?bkV2AllergyText(sm):(sm.allergies||'').trim();
-  if(allerg) reqChips.push('<span style="background:#FCEBEB;color:#A32D2D;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:6px">&#9888; '+esc(allerg)+'</span>');
-  const notes=(bk.notes||'').trim();
-  const reqHtml=(reqChips.length||notes)?`<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">${reqChips.join('')}${notes?`<span style="font-size:11px;color:#1F2A44">${esc(notes)}</span>`:''}</div>`:'<span style="font-size:12px;color:var(--ink-soft)">—</span>';
-  const logoPlain=(typeof LOVE_LOGO_B64!=='undefined')?`<img src="${LOVE_LOGO_B64}" alt="LOVE andaman" style="height:20px;width:auto;display:block">`:`<span style="font-family:Georgia,serif;font-style:italic;font-size:13px;color:#1F2A44">LOVE Andaman</span>`;
-  // Voucher-specific photo (assets/voucher/<id>.jpg) layered ON TOP of the shared hero image
-  // (assets/hero/<id>.jpg) — so the Voucher can use its own photo WITHOUT changing the
-  // marketing card / other features that use the hero image. If the voucher photo is missing
-  // (404) the hero image shows through underneath; if both missing, the route color shows.
-  const heroV='assets/voucher/'+(t0.routeId||'')+'.jpg';
-  const heroH=(route&&route.heroImage)||('assets/hero/'+(t0.routeId||'')+'.jpg');
-  return `
-  <div style="display:flex;background:#fff;border:1px solid rgba(26,35,50,.12);border-radius:14px;overflow:hidden;margin-bottom:14px">
-    <div style="width:200px;flex:none;position:relative;overflow:hidden;background:${col};display:flex;flex-direction:column;justify-content:space-between;padding:14px;min-height:190px">
-      <div style="position:absolute;inset:0;background-image:url('${heroV}'),url('${heroH}');background-size:cover,auto 172%;background-position:center top,center center;background-repeat:no-repeat,no-repeat;filter:brightness(1.16) saturate(1.06);pointer-events:none"></div>
-      <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.04) 0%,rgba(0,0,0,0) 42%,rgba(0,0,0,.24) 68%,rgba(0,0,0,.76) 100%);pointer-events:none"></div>
-      <div style="position:relative;background:#fff;border-radius:7px;padding:5px 9px;align-self:flex-start;line-height:1;box-shadow:0 1px 4px rgba(0,0,0,.18)">${logoPlain}</div>
-      <div style="position:relative">
-        <div style="font-size:9px;letter-spacing:.07em;color:rgba(255,255,255,.88);text-transform:uppercase;font-weight:600;text-shadow:0 1px 3px rgba(0,0,0,.5)">Route</div>
-        <div style="font-size:15px;font-weight:700;color:#fff;line-height:1.2;text-shadow:0 1px 5px rgba(0,0,0,.65)">${esc((fam&&fam.name)||tripName)}</div>
-      </div>
-    </div>
-    <div style="flex:1;min-width:0;border-left:2px dashed rgba(26,35,50,.18);padding:15px 18px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px">
-        <div style="min-width:0">
-          <div style="font-size:9px;letter-spacing:.08em;color:var(--ink-soft);text-transform:uppercase;font-weight:600">You're going on</div>
-          <div style="font-size:22px;font-weight:800;color:#1F2A44;line-height:1.15;margin-top:3px">${tripName}${moreTrips}</div>
-          ${isCharter?`<div style="display:inline-flex;align-items:center;gap:6px;margin-top:7px;background:#EEEAFB;color:#5B289A;border:1px solid #D5C9F0;padding:3px 11px;border-radius:7px;font-size:11.5px;font-weight:800;letter-spacing:.02em">&#128676; CHARTER · เหมาลำ${chtrBoatNm?(' · '+esc(chtrBoatNm)):' · ยังไม่ระบุเรือ'}</div>`:''}
-        </div>
-        <div style="text-align:right;flex-shrink:0">
-          <div style="font-size:9px;letter-spacing:.06em;color:var(--ink-soft);text-transform:uppercase;font-weight:600">Voucher · VC</div>
-          <div style="font-size:18px;font-weight:800;font-family:'DM Mono',monospace;color:${col};line-height:1.1">${vno}</div>
-        </div>
-      </div>
-      <div style="display:inline-flex;align-items:center;gap:8px;margin-top:10px;background:${tint2};color:${col};padding:6px 13px;border-radius:8px;font-size:14px;font-weight:700">${calSvg}${esc(dateTxt)}${ptime?(' · Pickup Time '+esc(ptime)):''}</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px 18px;margin-top:14px">
-        <div><div style="font-size:9px;color:var(--ink-soft);letter-spacing:.04em;text-transform:uppercase;font-weight:600">Customer</div><div style="font-size:13.5px;font-weight:700;color:#1F2A44">${lead}</div></div>
-        <div><div style="font-size:9px;color:var(--ink-soft);letter-spacing:.04em;text-transform:uppercase;font-weight:600">Pax</div><div style="font-size:13.5px;font-weight:700;color:#1F2A44;font-family:'DM Mono',monospace">${paxStr}</div></div>
-        <div><div style="font-size:9px;color:var(--ink-soft);letter-spacing:.04em;text-transform:uppercase;font-weight:600">Pick-up${room?(' · Room '+room):''}</div><div style="font-size:12.5px;color:#1F2A44">${hotel}</div></div>
-        <div><div style="font-size:9px;color:var(--ink-soft);letter-spacing:.04em;text-transform:uppercase;font-weight:600">Drop-off</div><div style="font-size:12.5px;color:${dropDiff?'#1F2A44':'var(--ink-soft)'}">${dropDiff?dropTxt:'same as pick-up'}</div></div>
-        ${(Array.isArray(bk.altPickups)&&bk.altPickups.length)?`<div style="grid-column:1/-1"><div style="font-size:9px;color:#5B289A;letter-spacing:.04em;text-transform:uppercase;font-weight:700;margin-bottom:3px">&#128652; รับหลายจุด · ${bk.altPickups.length} จุด</div><div style="display:flex;flex-direction:column;gap:3px">${bk.altPickups.map(a=>{ const _ar=a.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.areaId):null; const _loc=(a.place||'').trim()||(_ar?_ar.name:'')||'—'; const _q=Math.max(1,parseInt(a.qty)||1); return `<div style="font-size:12px;color:#1F2A44"><b style="color:#5B289A">${_q} คน</b> ${esc((a.who||'').trim())} &rarr; ${esc(_loc)}</div>`; }).join('')}</div></div>`:''}
-        <div style="grid-column:1/-1"><div style="font-size:9px;color:var(--ink-soft);letter-spacing:.04em;text-transform:uppercase;font-weight:600;margin-bottom:4px">Dietary &amp; Special Requests</div>${reqHtml}</div>
-      </div>
-    </div>
-  </div>`;
+  const dropTxt=dropDiff?(bk.dropoffHotelName||bk.dropoffArea||''):'';
+  let retTxt='';
+  try{ if(dsFirst && typeof ckRetVan==='function'){ const rv=ckRetVan(bk,dsFirst);
+        if(rv && typeof ckRetVanTxt==='function') retTxt=ckRetVanTxt(rv); } }catch(_){}
+  const ptime=((bk.ops&&bk.ops.pickupTimeFinal)||t0.pickupTime||bk.pickupTime||'').trim();
+
+  // ── คำขอพิเศษ / บริการ ──
+  const chip=(txt,bg,fg,bd)=>'<span style="display:inline-block;background:'+bg+';color:'+fg+';border:1px solid '+bd
+    +';border-radius:5px;padding:2px 9px;font-size:11.5px;font-weight:700;margin:0 5px 5px 0">'+txt+'</span>';
+  const sm=bk.specialMeals||{}, gd=bk.guides||{};
+  const reqBits=[];
+  const allerg=(typeof bkV2AllergyText==='function')?bkV2AllergyText(sm):((sm.allergies||'').trim());
+  if(allerg) reqBits.push(chip('\u26a0 '+esc(allerg),'#FDECEC','#A32D2D','#F3C9C9'));
+  if(sm.veg)   reqBits.push(chip('\u0e21\u0e31\u0e07\u0e2a\u0e27\u0e34\u0e23\u0e31\u0e15\u0e34 '+sm.veg,'#E7F5EE','#0F6E56','#BFE4D5'));
+  if(sm.vegan) reqBits.push(chip('vegan '+sm.vegan,'#E7F5EE','#0F6E56','#BFE4D5'));
+  if(sm.halal) reqBits.push(chip('\u0e2e\u0e32\u0e25\u0e32\u0e25 '+sm.halal,'#E7F5EE','#0F6E56','#BFE4D5'));
+  if((bk.notes||'').trim()) reqBits.push('<div style="font-size:13px;line-height:1.55;margin-top:2px">'+esc(bk.notes.trim())+'</div>');
+  const svcBits=[];
+  (bk.addOns||[]).forEach(a=>{ svcBits.push(chip(esc(a.label||a.type||'')+(+a.amount>0?(' '+money(a.amount)):''),'#E4F5FC','#0E5E80','#BEE5F5')); });
+  const langs=[]; if(gd.english)langs.push('EN'); if(gd.russian)langs.push('RU'); if(gd.chinese)langs.push('CN');
+  if((gd.otherLang||'').trim()) langs.push(esc(gd.otherLang.trim()));
+
+  // ── เงิน ── §same · ยอดทั้งใบกับเงินที่ต้องเก็บหน้างาน คนละก้อน ต้องเห็นแยกกัน
+  const tot=(bk.total!=null?bk.total:((bk.priceBreakdown||{}).total||0));
+  const cot=(bk.cashOnTour&&+bk.cashOnTour.amount>0)?+bk.cashOnTour.amount:0;
+
+  // ── เหตุการณ์ยกเลิก/ไม่มา หน้างาน ──
+  let lostHtml='';
+  try{
+    if(dsFirst && typeof ckLostByType==='function'){
+      const L=ckLostByType(bk,dsFirst);
+      if(L && L.total>0){
+        const who=(typeof tsPaxWho==='function')?tsPaxWho(L):'';
+        const kind=(L.cxl>0)?'\u0e22\u0e01\u0e40\u0e25\u0e34\u0e01\u0e2b\u0e19\u0e49\u0e32\u0e07\u0e32\u0e19':'\u0e44\u0e21\u0e48\u0e21\u0e32';
+        lostHtml='<div style="background:#A32D2D;color:#fff;font-size:11.5px;font-weight:700;letter-spacing:.06em;padding:8px 22px">'+kind+'</div>'
+          +'<div style="background:#FDECEC;padding:13px 22px;margin-bottom:20px;font-size:13px">'
+          +esc(kind)+' '+L.total+' \u0e04\u0e19'+(who?(' \u00b7 '+esc(who)):'')
+          +(L.unalloc>0?(' \u00b7 \u0e44\u0e21\u0e48\u0e23\u0e30\u0e1a\u0e38\u0e1b\u0e23\u0e30\u0e40\u0e20\u0e17 '+L.unalloc):'')
+          +'<div style="font-size:11.5px;color:#8a3a30;margin-top:3px">\u0e04\u0e48\u0e32\u0e1b\u0e23\u0e31\u0e1a\u0e15\u0e31\u0e14\u0e2a\u0e34\u0e19\u0e17\u0e35\u0e48 Travel Summary \u00b7 \u0e2a\u0e48\u0e27\u0e19 02</div></div>';
+      }
+    }
+  }catch(_){}
+
+  const SECD='<span style="width:13px;height:13px;border-radius:50%;border:2.5px solid '+NAVY+';display:inline-block;flex:none;position:relative">'
+    +'<span style="position:absolute;inset:2px;border-radius:50%;background:'+NAVY+';display:block"></span></span>';
+  const SEC=(t)=>'<div style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:800;letter-spacing:.02em;margin:0 0 10px">'+SECD+t+'</div>';
+  const BAND=(t,bg)=>'<div style="background:'+(bg||NAVY)+';color:#fff;font-size:11.5px;font-weight:700;letter-spacing:.06em;padding:8px 22px">'+t+'</div>';
+  const FK=(t)=>'<div style="font-size:11.5px;font-weight:700;color:#3A3F52;letter-spacing:.02em">'+t+'</div>';
+
+  return '<div class="bkv2-vcdoc">'
+  + '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:18px">'
+    + '<div style="display:flex;align-items:center;gap:9px">'
+      + '<svg width="52" height="42" viewBox="0 0 52 42"><path d="M4 6 L26 6 L15 22 Z" fill="#2FA9E0"/><path d="M26 6 L48 6 L37 22 Z" fill="#1B4E9B"/><path d="M15 22 L37 22 L26 40 Z" fill="#155BA8"/></svg>'
+      + '<div style="line-height:1"><div style="font-size:23px;font-weight:800;color:#0F2E6B">LOVE</div>'
+        + '<div style="font-size:13px;letter-spacing:.34em;color:#3B7FC4;margin-top:1px">andaman</div></div></div>'
+    + '<div style="text-align:right;line-height:1.5">'
+      + '<div style="font-size:15px;font-weight:800;color:'+NAVY+'">LOVE ISLAND CO.,LTD.</div>'
+      + '<div style="font-size:10.5px;color:'+MUT+'">T.TALAD NUEA , A.MUENG , PHUKET 83000</div>'
+      + '<div style="font-size:10.5px;color:'+MUT+'">MOBILE: + 66 (0)887654678</div></div></div>'
+
+  + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">'
+    + '<div style="display:flex;min-height:38px;border-radius:3px;overflow:hidden">'
+      + '<span style="background:'+NAVY+';color:#fff;font-size:12.5px;font-weight:800;letter-spacing:.04em;padding:10px 15px;display:flex;align-items:center;white-space:nowrap">VOUCHER NO.</span>'
+      + '<span style="background:'+CYAN+';color:#fff;font-size:15px;font-weight:700;padding:9px 18px;display:flex;align-items:center;flex:1;font-family:\'DM Mono\',monospace">'
+        + esc(bk.voucherRef || ((typeof bkV2DisplayCode==='function')?bkV2DisplayCode(bk):bk.id) || '\u2014') + '</span></div>'
+    + '<div style="display:flex;min-height:38px;border-radius:3px;overflow:hidden">'
+      + '<span style="background:'+NAVY+';color:#fff;font-size:12.5px;font-weight:800;letter-spacing:.04em;padding:10px 15px;display:flex;align-items:center;white-space:nowrap">BOOKING STATUS</span>'
+      + '<span style="background:'+stCol+';color:#fff;font-size:15px;font-weight:700;padding:9px 18px;display:flex;align-items:center;flex:1">'+esc(stLbl)+'</span></div></div>'
+
+  + '<div style="font-size:16px;font-weight:700;margin:0 0 4px 4px">'+esc(bk.leadPax||'\u2014')
+    + (bk.leadPhone?(' <span style="font-weight:500;color:#4A4F60">'+esc(bk.leadPhone)+'</span>'):'')+'</div>'
+  + '<div style="font-size:12px;color:'+MUT+';margin:0 0 20px 4px">Agent \u00b7 '+esc(agTxt)+'</div>'
+
+  + SEC('PACKAGE :')
+  + '<div style="margin:0 0 20px 22px;font-size:14px">'+esc(bk.packageName||'One Day Tour')+'</div>'
+
+  + '<table style="width:100%;border-collapse:collapse;margin-bottom:22px">'
+    + '<thead><tr>'
+      + ['TRIP','DATE','AD','CHD','INF','FOC'].map((h,i)=>'<th style="background:'+NAVY+';color:#fff;font-size:11.5px;font-weight:700;letter-spacing:.06em;padding:9px 14px;text-align:'
+        + (i===0?'left;padding-left:22px':'center')+'">'+h+'</th>').join('')
+    + '</tr></thead><tbody style="background:'+ROW+'">'+rows+'</tbody></table>'
+    + '<style>.bkv2-vcdoc tbody td{background:'+ROW+';padding:11px 14px;text-align:center;font-size:14px;border-bottom:1px solid #E1E1E1}'
+    + '.bkv2-vcdoc tbody tr:last-child td{border-bottom:2.5px solid '+NAVY+'}</style>'
+
+  + BAND('LOCATION')
+  + '<div style="background:'+ROW+';padding:13px 22px;margin-bottom:20px;display:grid;grid-template-columns:1fr 1fr;gap:18px">'
+    + '<div>'+FK('PICK UP :')
+      + '<div style="font-size:13.5px;margin-top:2px">'+(esc(bk.hotelName||bk.pickup||'')||zap)
+        + (room?(' '+chip('\u0e2b\u0e49\u0e2d\u0e07 '+esc(room),'#E4F5FC','#0E5E80','#BEE5F5')):'')+'</div>'
+      + (zone?('<div style="font-size:13.5px;color:'+MUT+'">'+esc(zone)+'</div>'):'')+'</div>'
+    + '<div>'+FK('DROP OFF :')
+      + '<div style="font-size:13.5px;margin-top:2px">'+(dropDiff?esc(dropTxt||''):'<span style="color:#B9BCC6">\u0e08\u0e38\u0e14\u0e40\u0e14\u0e34\u0e21</span>')+'</div>'
+      + (retTxt?('<div style="font-size:13.5px;color:'+MUT+'">\u0e23\u0e16\u0e02\u0e32\u0e01\u0e25\u0e31\u0e1a \u00b7 '+esc(retTxt)+'</div>'):'')+'</div></div>'
+  + (ptime?('<div style="color:'+RED+';font-weight:700;font-size:14px;margin:6px 0 0 22px">Pick up time '+esc(ptime)+'</div><div style="height:18px"></div>'):'')
+
+  + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-bottom:18px">'
+    + '<div>'+SEC('SPECIAL REQUEST')+'<div style="margin-left:22px">'+(reqBits.join('')||zap)+'</div></div>'
+    + '<div>'+SEC('SERVICES')+'<div style="margin-left:22px">'+(svcBits.join('')||zap)+'</div>'
+      + '<div style="margin-left:22px;font-size:13px;margin-top:4px">\u0e20\u0e32\u0e29\u0e32\u0e44\u0e01\u0e14\u0e4c '
+        + (langs.length?langs.map(l=>chip(l,'#E4F5FC','#0E5E80','#BEE5F5')).join(''):zap)+'</div></div></div>'
+
+  + lostHtml
+
+  + BAND('PAYMENT')
+  + '<div style="background:'+ROW+';padding:13px 22px;display:grid;grid-template-columns:1fr 1fr;gap:18px">'
+    + '<div>'+FK('\u0e22\u0e2d\u0e14\u0e17\u0e31\u0e49\u0e07\u0e43\u0e1a')
+      + '<div style="font-family:\'DM Mono\',monospace;font-size:17px;font-weight:800;margin-top:2px">'+money(tot)+'</div></div>'
+    + '<div>'+FK('\u0e40\u0e01\u0e47\u0e1a\u0e2b\u0e19\u0e49\u0e32\u0e07\u0e32\u0e19 (COT)')
+      + '<div style="font-family:\'DM Mono\',monospace;font-size:17px;font-weight:800;margin-top:2px;color:'+(cot>0?'#A05A1A':'#0F6E56')+'">'
+        + (cot>0?money(cot):'\u0e44\u0e21\u0e48\u0e21\u0e35')+'</div>'
+      + (bk.cashOnTour&&(bk.cashOnTour.note||'').trim()?('<div style="font-size:12px;color:'+MUT+'">'+esc(bk.cashOnTour.note.trim())+'</div>'):'')+'</div></div>'
+  + '</div>';
 }
-// Friendly booking code for display. B2C ids are internal (b2c_<orderId>_<lineNo>); show the
-// B2C order code (voucherRef = the B2C booking id verbatim). A per-line ordinal (-1/-2, sorted
-// by line_no among siblings of the same order) is appended ONLY when the order has 2+ synced
-// lines, so single-line orders show the exact B2C id. Non-B2C bookings show their id unchanged.
 function bkV2DisplayCode(bk){
   if(!bk||!bk.id) return '';
   if(bk.id.indexOf('b2c_')!==0) return bk.id;
