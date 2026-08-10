@@ -49994,6 +49994,13 @@ function tsToday(){ _tsDate=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new 
 function tsPickDay(ds){ if(ds){ _tsDate=ds; renderTravelSum(); } }
 function tsAfter(){ const sy=window.scrollY||0; renderTravelSum(); try{ window.scrollTo(0,sy); }catch(_){} }
 // ราคาของ trip วันนั้น (บุ๊กหลายวันใช้ subtotal ของ trip · วันเดียวใช้ยอดรวมของ booking)
+// §tsWho · {ad,chd,inf,foc} → "2 AD · 1 CHD" · ข้ามหมวดที่เป็น 0
+function tsPaxWho(pb){
+  if(!pb) return '';
+  return [['ad','AD'],['chd','CHD'],['inf','INF'],['foc','FOC']]
+    .filter(function(k){ return (+pb[k[0]]||0)>0; })
+    .map(function(k){ return (+pb[k[0]])+' '+k[1]; }).join(' \u00b7 ');
+}
 function tsTripAmount(b, t){
   const multi=((b.trips||[]).length>1);
   if(multi && t && typeof t.subtotal==='number' && t.subtotal>0) return t.subtotal;
@@ -53042,8 +53049,10 @@ function renderTravelSum(){
     var agInk=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(agColor):'#fff';
     var ev=r.events.map(function(x){
       var T=(CK_EVENT_TYPES[x.type]||CK_EVENT_TYPES.no_show);
+      // §tsWho · ประเภทผู้โดยสารบันทึกไว้ตอนกดปุ่มหน้างานแล้ว (paxBreak) · ของเก่าไม่มีก็ไม่เดาให้
+      var _w=(typeof tsPaxWho==='function')?tsPaxWho(x.paxBreak):'';
       return '<span class="ts-chip '+(x.type==='cxl'?'a':'r')+'" title="'+e((x.at?x.at+' · ':'')+ckReasonLabel(x.reasonCode)+(x.note?(' · '+x.note):''))+'">'
-        + T.label+' '+x.pax+'</span>';
+        + T.label+' '+x.pax+(_w?(' \u00b7 '+e(_w)):'')+'</span>';
     }).join('') || '<span class="ts-chip r">หาย '+r.noShow+' · ไม่ระบุเหตุ</span>';
     var why=r.events.map(function(x){ return ckReasonLabel(x.reasonCode)+(x.note?(' · '+x.note):''); }).filter(Boolean).join(' · ');
     var btn=function(k,lbl,amt,fn,cls){ var on=dec&&dec.decision===k;
@@ -53055,7 +53064,28 @@ function renderTravelSum(){
       +'<td><div class="ts-lead">'+e(b.leadPax||'—')+'</div><div class="ts-tel">'+e(b.leadPhone||b.phone||'')+'</div></td>'
       +'<td>'+ev+'</td>'
       +'<td style="max-width:210px;color:var(--zn700)">'+(e(why)||'<span style="color:var(--zn400)">—</span>')+'</td>'
-      +'<td class="r ts-mono" style="font-weight:800">'+money(r.amount)+'</td>'
+      +'<td class="r ts-mono" style="font-weight:800">'+money(r.amount)
+        +(function(){
+            var bits=[];
+            // §mix · จองมากี่คน แต่ละประเภท · เทียบกับที่ยกเลิกจริงแล้วรู้ทันทีว่าทั้งใบหรือบางส่วน
+            var _bk=(typeof ckPaxBreak==='function')?ckPaxBreak((r.t||{}).pax):null;
+            var _bw=tsPaxWho(_bk); if(_bw) bits.push('จอง '+_bw);
+            var L=(typeof ckLostByType==='function')?ckLostByType(b,date):null;
+            var _lw=L?tsPaxWho(L):'';
+            if(_lw||((L&&L.unalloc)>0)) bits.push('ไม่ได้ไป '+(_lw||'')
+              +((L.unalloc>0)?((_lw?' \u00b7 ':'')+'ไม่ระบุประเภท '+L.unalloc):''));
+            // §comp · ราคาไม่ได้มาจากที่นั่งอย่างเดียวเมื่อไร ต้องเห็นว่ามีอะไรปนอยู่
+            var Pb=b.priceBreakdown||{}, comp=[];
+            if(+Pb.seat>0)  comp.push('ที่นั่ง '+money(Pb.seat));
+            if(+Pb.addOn>0) comp.push('ของเพิ่ม '+money(Pb.addOn));
+            if(+Pb.extra>0) comp.push('อื่นๆ '+money(Pb.extra));
+            if(+Pb.discount) comp.push('ส่วนลด '+money(Math.abs(+Pb.discount)));
+            if(comp.length>1) bits.push(comp.join(' + '));
+            return bits.length
+              ? ('<div class="ts-tel" style="font-weight:400;margin-top:3px">'+bits.map(e).join('<br>')+'</div>')
+              : '';
+          })()
+      +'</td>'
       +'<td class="ts-noprint"><div style="display:flex;flex-wrap:wrap;max-width:310px">'
         +btn('full','เก็บเต็ม '+money(r.amount),r.amount)
         +btn('partial','50%',half,null,'warn')
