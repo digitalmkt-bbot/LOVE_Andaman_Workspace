@@ -71387,15 +71387,31 @@ function _docPreCheckMatch(b, ocrText){
     else out.lead={s:'none'};
   })();
 
-  // pax count (parse adults/children/infants or total)
+  // §ocr · pax · เทียบรายประเภท ไม่ใช่แค่ยอดรวม
+  //   เอกสาร "3 Adults & 1 child" กับ ระบบ "4 AD" รวมได้ 4 เท่ากันทั้งคู่
+  //   ของเดิมจะขึ้น "✓ ตรง" แล้วคนตรวจติ๊กผ่าน ทั้งที่ราคาสองแบบนี้ไม่เท่ากัน
   (function(){ var num=function(re){ var m=ocrN.match(re); return m?parseInt(m[1],10):null; };
+    var sysB=(typeof ckPaxBreak==='function')?ckPaxBreak(chkT.pax||{}):{ad:paxSys,chd:0,inf:0,foc:0};
+    var who=function(o){ return [['ad','AD'],['chd','CHD'],['inf','INF'],['foc','FOC']]
+        .filter(function(k){ return (+o[k[0]]||0)>0; })
+        .map(function(k){ return (+o[k[0]])+' '+k[1]; }).join(' · ') || '0'; };
+    var sysTxt='ระบบ '+who(sysB)+' = '+paxSys+' pax';
     var ad=num(/(\d+)\s*adult/), ch=num(/(\d+)\s*child/)||num(/(\d+)\s*children/), inf=num(/(\d+)\s*infant/);
-    var docTot=null, evTxt='';
-    if(ad!=null){ docTot=ad+(ch||0)+(inf||0); evTxt=ad+' adult'+(ch?' '+ch+' child':'')+(inf?' '+inf+' infant':''); }
+    var docTot=null, docB=null, evTxt='';
+    if(ad!=null){ docB={ad:ad,chd:ch||0,inf:inf||0,foc:0}; docTot=ad+(ch||0)+(inf||0); evTxt=who(docB)+' = '+docTot+' pax'; }
     else { var px=num(/(\d+)\s*(?:pax|persons?|people|pers\b|ท่าน|คน)/); if(px!=null){ docTot=px; evTxt=px+' pax'; } }
-    if(docTot==null){ out.pax={s:'none', detail:'ระบบ '+paxSys+' pax'}; return; }
-    if(docTot===paxSys) out.pax={s:'match', ev:evTxt};
-    else out.pax={s:'mismatch', detail:'เอกสาร '+docTot+' · ระบบ '+paxSys+' pax'};
+    if(docTot==null){ out.pax={s:'none', detail:sysTxt}; return; }
+    if(docTot!==paxSys){ out.pax={s:'mismatch', detail:'เอกสาร '+evTxt+' · '+sysTxt}; return; }
+    // ยอดรวมตรงแล้ว · เทียบรายประเภทต่อ เฉพาะตอนที่เอกสารแยกประเภทมาให้
+    // FOC รวมเข้าฝั่งผู้ใหญ่ เพราะเอกสารเอเยนต์ไม่เคยแยก FOC ออกมา
+    if(docB){
+      var sysAd=(+sysB.ad||0)+(+sysB.foc||0);
+      if(docB.ad!==sysAd || docB.chd!==(+sysB.chd||0) || docB.inf!==(+sysB.inf||0)){
+        out.pax={s:'mismatch', detail:'ยอดรวมตรง แต่ประเภทไม่ตรง · เอกสาร '+evTxt+' · '+sysTxt};
+        return;
+      }
+    }
+    out.pax={s:'match', ev:evTxt};
   })();
 
   // route / program (keyword score)
@@ -72003,7 +72019,18 @@ function _docCheckDrawer(bkId, e, rName){
   const _sbDiff = b.dropoffSame===false && (b.dropoffHotelName||b.dropoffArea); const sbTxt = _sbDiff?e(b.dropoffHotelName||b.dropoffArea||'-'):'';
   const fld=(lbl,val)=>`<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid #f0f2ee"><span style="flex:0 0 84px;font-size:10px;color:#8a8a82;text-transform:uppercase;letter-spacing:.03em;font-weight:600">${e(lbl)}</span><span style="flex:1;font-size:13px;color:#1B2A55;font-weight:600">${val}</span></div>`;
   const subrow=(l,v)=>`<div style="display:flex;gap:10px;margin-bottom:3px"><span style="flex:0 0 84px;font-size:10px;color:#8a8a82;text-transform:uppercase;letter-spacing:.03em;font-weight:600">${l}</span><span style="flex:1;font-size:13px;color:#1B2A55;font-weight:600">${v}</span></div>`;
-  const tripsBlock=(b.trips||[]).map((t,i)=>{ const rn=rName(t.routeId); const p=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; return (i>0?'<div style="border-top:1px dashed #e8eae6;margin:7px 0"></div>':'')+subrow('Date',e(t.date||'-'))+subrow('Trip',e(rn))+subrow('Pax',p+' pax'); }).join('')||'-';
+  // §panel · ชิปรายประเภท · 0 ก็ยังโชว์ (จาง) เพราะ "ไม่มีเด็ก" ต้องเทียบกับเอกสารด้วย
+  const _dcPX={ad:['#5BB4E5','#062A3E'],chd:['#4FC08D','#04301F'],inf:['#F0B429','#3B2A00'],foc:['#B79BFB','#241059']};
+  const _dcPaxChips=(px)=>{
+    const B=(typeof ckPaxBreak==='function')?ckPaxBreak(px||{}):{ad:0,chd:0,inf:0,foc:0};
+    const tot=(+B.ad||0)+(+B.chd||0)+(+B.inf||0)+(+B.foc||0);
+    const one=(k,l)=>{ const n=+B[k]||0;
+      return n>0
+        ? `<span style="background:${_dcPX[k][0]};color:${_dcPX[k][1]};border-radius:999px;padding:1px 7px;font-size:10.5px;font-weight:800;white-space:nowrap">${l} ${n}</span>`
+        : `<span style="background:#F1F2EF;color:#b9bec4;border-radius:999px;padding:1px 7px;font-size:10.5px;font-weight:700;white-space:nowrap">${l} 0</span>`; };
+    return `<span style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">${one('ad','AD')}${one('chd','CHD')}${one('inf','INF')}${one('foc','FOC')}<span style="font-size:10px;color:#8a8a82;font-weight:700;white-space:nowrap">= ${tot} pax</span></span>`;
+  };
+  const tripsBlock=(b.trips||[]).map((t,i)=>{ const rn=rName(t.routeId); return (i>0?'<div style="border-top:1px dashed #e8eae6;margin:7px 0"></div>':'')+subrow('Date',e(t.date||'-'))+subrow('Trip',e(rn))+subrow('Pax',_dcPaxChips(t.pax)); }).join('')||'-';
   const fileHtml = files.length ? files.map(a=>{ const url='/api/attach/'+encodeURIComponent(a.id); const isImg=/^image\//.test(a.mime||''); const isPdf=/pdf/i.test(a.mime||'');
     return `<div style="margin-bottom:14px;border:1px solid #e3e6e1;border-radius:10px;overflow:hidden;background:#fff">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 11px;background:#F7F8F6;border-bottom:1px solid #eef0ec"><span style="font-size:12px;color:#3F4654;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.kind==='capture'?'🖥':a.kind==='paste'?'📋':'📎'} ${e(a.name||'file')}</span><a href="${url}" target="_blank" rel="noopener" style="font-size:11.5px;color:#185FA5;text-decoration:none;flex:none;margin-left:8px">เปิดเต็ม ↗</a></div>
