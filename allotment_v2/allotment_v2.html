@@ -66745,12 +66745,44 @@ function bkV2EnsureApproval(b){
   }
   return b.approval;
 }
+// §apprCap · ผลต่อที่นั่งถ้าอนุมัติใบนี้ · หักที่นั่งของใบเองออกก่อน จะได้เป็น "หลังอนุมัติ" ไม่ใช่ "ตอนนี้"
+function bkV2ApprovalImpact(b){
+  var out=[];
+  if(!b || typeof getAllotment!=='function' || typeof bkV2PaxAllTot!=='function') return out;
+  (b.trips||[]).forEach(function(t){
+    if(!t || t.bookingMode==='charter' || !t.routeId || !t.date) return;
+    var al=getAllotment(t.routeId, t.date, b.id);   // ไม่นับที่นั่งของใบนี้
+    if(!al || !al.hasAllotment) return;
+    var pax=bkV2PaxAllTot(t.pax);
+    var need=pax - Math.min(Number(t.lockUse)||0, pax);
+    var physFree=(al.seatsAvailable||0) + (al.lockedSeats||0);          // เพดานบริษัท ไม่สนล็อก
+    var licFree=(al.licenseAvailable!=null)?al.licenseAvailable:physFree; // ที่นั่งจริงตามทะเบียนเรือ
+    var r=(typeof ROUTES!=='undefined')?ROUTES.find(function(x){return x.id===t.routeId;}):null;
+    out.push({ name:(r&&r.name)||t.routeId, date:t.date, need:need,
+      sellable:(al.seatsAvailable||0), overCap:Math.max(0, need-physFree), overLic:Math.max(0, need-licFree) });
+  });
+  return out;
+}
+function bkV2ApprovalImpactText(imp){
+  if(!imp.length) return '';
+  return '\n\nที่นั่งหลังอนุมัติ:\n' + imp.map(function(o){
+    return o.overLic>0 ? ('  \u26a0 '+o.name+' '+o.date+' \u00b7 '+o.need+' ที่ \u2014 เกินทะเบียนเรือ '+o.overLic+' ที่ (ไม่มีที่นั่งจริง)')
+         : o.overCap>0 ? ('  \u26a0 '+o.name+' '+o.date+' \u00b7 '+o.need+' ที่ \u2014 เกินโควต้าบริษัท '+o.overCap+' ที่ (ยังอยู่ในทะเบียนเรือ)')
+         : ('  \u2713 '+o.name+' '+o.date+' \u00b7 '+o.need+' ที่ \u2014 ที่นั่งพอ (เหลือ '+(o.sellable-o.need)+')');
+  }).join('\n');
+}
 function bkV2ApproveBooking(id){
   const b=(SB_BOOKINGS||[]).find(x=>x.id===id); if(!b) return;
   bkV2EnsureApproval(b);
   const _r=b.approval.reason||''; const _isDisc=/discount/.test(_r);
   const _lbl=_isDisc?(/over_cap/.test(_r)?'เกิน cap + ส่วนลด':'ส่วนลด'):bkV2PendLabel(_r);
-  const by=prompt('อนุมัติบุคกิ้ง '+id+' ('+_lbl+')\nชื่อผู้อนุมัติ ('+(_isDisc?'เซลล์ที่ดูแล':'ผจก.')+'):',''); if(by===null) return;
+  // §apprCap · เกินทะเบียนเรือ = ไม่มีที่นั่งจริง · ถามซ้ำก่อน ไม่ให้กดผ่านโดยไม่ตั้งใจ
+  const _imp=bkV2ApprovalImpact(b), _impTxt=bkV2ApprovalImpactText(_imp);
+  const _noSeat=_imp.filter(function(o){ return o.overLic>0; });
+  if(_noSeat.length && !confirm('\u26a0 ใบนี้ไม่มีที่นั่งจริงรองรับ\n'
+      + _noSeat.map(function(o){ return o.name+' '+o.date+': เกินทะเบียนเรือ '+o.overLic+' ที่'; }).join('\n')
+      + '\n\nอนุมัติได้ แต่ต้องเพิ่มเรือใน Boat Operation ก่อนวันเดินทาง\nยืนยันอนุมัติ?')) return;
+  const by=prompt('อนุมัติบุคกิ้ง '+id+' ('+_lbl+')'+_impTxt+'\n\nชื่อผู้อนุมัติ ('+(_isDisc?'เซลล์ที่ดูแล':'ผจก.')+'):',''); if(by===null) return;
   if(!by.trim()){ alert('กรุณาใส่ชื่อผู้อนุมัติ'); return; }
   b.approval.status='approved'; b.approval.approvedBy=by.trim(); b.approval.approvedAt=new Date().toISOString();
   b.status = b.approval.targetStatus || 'confirmed';

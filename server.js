@@ -882,8 +882,14 @@ async function relSyncB2C(singleExtId = null) {
     const bkPh      = BK_COLS.map((_, i) => '$' + (i + 1)).join(', ');
     // Sticky cancel: an ops-side cancellation must survive B2C re-sync. B2C can still MOVE a booking INTO
     // a cancelled state (existing not-cancelled → takes EXCLUDED), but can never resurrect one ops cancelled.
+    // §opsApproved · เพิ่มชั้นที่สาม: ใบที่ ops กด "อนุมัติ" ไปแล้วต้องเหนียวเท่ากับใบที่ ops ยกเลิก
+    //   ลำดับสำคัญ — ยกเลิกฝั่งเรา > ยกเลิกฝั่ง B2C (ลูกค้ายกเลิกจริง ต้องทะลุเข้ามาได้) > อนุมัติแล้ว > ค่าจากต้นทาง
     const bkSet     = BK_UPDATE.map(c => c === 'status'
-      ? `${qic(c)} = CASE WHEN ${qic('sb_bookings')}.${qic(c)} IN ('cancelled','cancelled_weather','rejected') THEN ${qic('sb_bookings')}.${qic(c)} ELSE EXCLUDED.${qic(c)} END`
+      ? `${qic(c)} = CASE`
+        + ` WHEN ${qic('sb_bookings')}.${qic(c)} IN ('cancelled','cancelled_weather','rejected') THEN ${qic('sb_bookings')}.${qic(c)}`
+        + ` WHEN EXCLUDED.${qic(c)} IN ('cancelled','cancelled_weather','rejected') THEN EXCLUDED.${qic(c)}`
+        + ` WHEN ${qic('sb_bookings')}.${qic('approval_status')} = 'approved' THEN ${qic('sb_bookings')}.${qic(c)}`
+        + ` ELSE EXCLUDED.${qic(c)} END`
       : `${qic(c)} = EXCLUDED.${qic(c)}`).join(', ');
     const tripColSql = TRIP_COLS.map(qic).join(', ');
     const tripPh    = TRIP_COLS.map((_, i) => '$' + (i + 1)).join(', ');
@@ -1005,7 +1011,7 @@ async function relSyncB2C(singleExtId = null) {
         for (const r of (await client.query(
           // Same COALESCE requirement as the availability query — without it a B2C row's pax came back
           // NULL, `cum + null > fillLine` was never true, and the oversell net silently never fired.
-          `SELECT t.routeid, t.date, b.id, b.status,
+          `SELECT t.routeid, t.date, b.id, b.status, b.approval_status,
                   (COALESCE(t.pax_ad_fr,0)+COALESCE(t.pax_chd_fr,0)+COALESCE(t.pax_inf_fr,0)+COALESCE(t.pax_foc_fr,0)
                     +COALESCE(t.pax_ad_th,0)+COALESCE(t.pax_chd_th,0)+COALESCE(t.pax_inf_th,0)+COALESCE(t.pax_foc_th,0)
                     +COALESCE(t.pax_ad,0)+COALESCE(t.pax_foc,0))::int AS pax
@@ -1026,13 +1032,17 @@ async function relSyncB2C(singleExtId = null) {
           const fillLine = capacity - (lockByKey[pair] || 0);   // seats sellable to bookings after locks
           let cum = 0;
           for (const r of (bkByKey[pair] || [])) {
-            if (cum + r.pax > fillLine && /^b2c_/.test(r.id) && r.status === 'confirmed') toFlag.push(r.id);
+            // §opsApproved · ใบที่ ผจก. อนุมัติแล้วไม่ตีกลับ · แต่ที่นั่งยังนับว่าถูกใช้ไปแล้ว
+            //   ใบที่ B2C ขายเกินเข้ามาทีหลังจึงยังโดนตีตราตามปกติ
+            if (cum + r.pax > fillLine && /^b2c_/.test(r.id) && r.status === 'confirmed'
+                && r.approval_status !== 'approved') toFlag.push(r.id);
             cum += r.pax;
           }
         }
         if (toFlag.length) {
           const fr = await client.query(
-            `UPDATE ${fqt('sb_bookings')} SET status='pending_approval' WHERE id = ANY($1) AND status='confirmed'`, [toFlag]);
+            `UPDATE ${fqt('sb_bookings')} SET status='pending_approval'
+             WHERE id = ANY($1) AND status='confirmed' AND approval_status IS DISTINCT FROM 'approved'`, [toFlag]);
           console.log(`[b2c-sync] oversell — flagged ${fr.rowCount} B2C booking(s) pending_approval across ${affPairs.length} route/date(s)`);
         }
         // 5b. §closedDay safety net (2026-07-29). The "route does not run that day" guard lives ONLY in the
@@ -1073,6 +1083,7 @@ async function relSyncB2C(singleExtId = null) {
           if (!st || st.type === 'open') continue;
           for (const r of (bkByKey[pair] || [])) {
             if (!/^b2c_/.test(r.id) || r.status !== 'confirmed') continue;
+            if (r.approval_status === 'approved') continue;   // §opsApproved · ops ตัดสินใจแล้วว่าวันนั้นเรือออก
             // A season closure is published months ahead, so a sale inside one is wrong no matter when we
             // notice it → flag every sync (idempotent). A per-day override normally appears AFTER the
             // bookings do (weather call on the morning), so only a sale created in THIS run is flagged.
@@ -1083,7 +1094,8 @@ async function relSyncB2C(singleExtId = null) {
         }
         if (closedFlag.length) {
           const cf = await client.query(
-            `UPDATE ${fqt('sb_bookings')} SET status='pending_approval' WHERE id = ANY($1) AND status='confirmed'`, [closedFlag]);
+            `UPDATE ${fqt('sb_bookings')} SET status='pending_approval'
+             WHERE id = ANY($1) AND status='confirmed' AND approval_status IS DISTINCT FROM 'approved'`, [closedFlag]);
           console.log(`[b2c-sync] closed-day — flagged ${cf.rowCount} B2C booking(s) pending_approval: ${closedWhy.join(', ')}`);
         }
       }
