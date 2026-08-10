@@ -5350,6 +5350,31 @@
       "source": "upgrades[].at",
       "kind": "scalar",
       "db_type": "text"
+    },
+    "method": {
+      "source": "upgrades[].method",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "feepct": {
+      "source": "upgrades[].feePct",
+      "kind": "scalar",
+      "db_type": "double precision"
+    },
+    "fee": {
+      "source": "upgrades[].fee",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "customerpaid": {
+      "source": "upgrades[].customerPaid",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "slips": {
+      "source": "upgrades[].slips",
+      "kind": "json_text",
+      "db_type": "text"
     }
   },
   "sb_bookings__feeitems": {

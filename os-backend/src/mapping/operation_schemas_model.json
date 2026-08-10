@@ -4866,6 +4866,26 @@
       {
         "name": "at",
         "type": "text"
+      },
+      {
+        "name": "method",
+        "type": "text"
+      },
+      {
+        "name": "feepct",
+        "type": "double precision"
+      },
+      {
+        "name": "fee",
+        "type": "bigint"
+      },
+      {
+        "name": "customerpaid",
+        "type": "bigint"
+      },
+      {
+        "name": "slips",
+        "type": "text"
       }
     ],
     "primary_key": "row_pk",

@@ -1349,6 +1349,12 @@ async function initDb(){
               WHERE "value" IS NULL`);
         }
       }
+      // §upgPay · วิธีรับเงินของ upgrade · ชุดเดียวกับที่ sb_extras ใช้อยู่
+      for(const [c,t] of [['method','text'],['feepct','double precision'],['fee','bigint'],
+                          ['customerpaid','bigint'],['slips','text']]){
+        await sq(`sb_bookings__upgrades.${c} col`,
+          `ALTER TABLE ${OS_SCHEMA}."sb_bookings__upgrades" ADD COLUMN IF NOT EXISTS "${c}" ${t}`);
+      }
       // §openMap · ฟิลด์รายลำของ fleet_daily (fuel · paxActual · ที่จะเพิ่มมาทีหลัง) · 1 แถวต่อ (วัน, เรือ)
       await sq('fleet_daily__boat table',
         `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."fleet_daily__boat" (row_pk text PRIMARY KEY, fleet_daily_id text, ${qic('key')} text, value text)`);

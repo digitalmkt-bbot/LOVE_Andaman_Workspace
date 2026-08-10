@@ -51017,11 +51017,15 @@ function tsSaleList(b, date){
   }); }catch(_){}
   try{ (Array.isArray(b.upgrades)?b.upgrades:[]).forEach(function(u){
     var amt=+u.sellPrice||0; if(!amt) return;
-    if(u.collected){ var m2=u.method||'cash'; if(by[m2]==null) by[m2]=0; by[m2]+=amt; got+=amt; }
+    var m2=u.method||'cash';
+    if(u.collected){ if(by[m2]==null) by[m2]=0; by[m2]+=amt; got+=amt; fee+=(+u.fee||0); }
     else due+=amt;
+    // §upgPay · รูดบัตร/โอนแล้วยังไม่มีสลิป ต้องขึ้นเตือนเหมือน Extra
+    var _uNo=(!!u.collected && m2!=='cash' && !((u.slips||[]).length));
+    if(_uNo) noSlip++;
     out.push({ kind:'up', id:u.id||'', t:String(u.label||'upgrade'), qty:1, amt:amt,
-               fee:(+u.fee||0), nSlip:0,
-               method:u.method||'cash', who:u.by||'', done:!!u.collected, noSlip:false });
+               fee:(+u.fee||0), nSlip:((u.slips||[]).length),
+               method:m2, who:u.seller||'', done:!!u.collected, noSlip:_uNo });
   }); }catch(_){}
   return { list:out, by:by, fee:fee, got:got, due:due, noSlip:noSlip, tot:got+due, n:out.length };
 }
@@ -55777,7 +55781,26 @@ let _bkExtraEditId=null;   // id of the extra currently being edited (null = add
 //   และห้ามเรียก bkV2ExtraRender() ตอนสลับวิธี ไม่งั้นชื่อรายการ/ราคาที่พิมพ์ค้างไว้จะถูกล้าง
 var BKX_PAY_WAYS=[['cash','เงินสด','ไม่ต้องแนบสลิป'],['transfer','โอนเงิน','ต้องแนบสลิป'],['card','บัตรเครดิต','ต้องแนบสลิป']];
 var _bkExtraPay={m:'cash', feePct:3, slips:[]};
-function _bkxPayReset(e){
+// §upgPay · บล็อกรับเงินใช้ร่วมกันสองหน้า (Extra วันเดินทาง · อัพเกรดหน้างาน)
+//   host = id ของกล่องที่จะวาดลงไป · base = ตัวอ่าน "ยอดขาย" ของหน้านั้น
+var _bkxPayHost='bkx-pay';
+var _bkxPayBkId=null;
+var _bkxPayBase=function(){
+  var qty=Math.max(1,+(document.getElementById('bkx-qty')||{}).value||1);
+  var price=Math.max(0,+(document.getElementById('bkx-price')||{}).value||0);
+  return qty*price;
+};
+function _bkxPayReset(e, opt){
+  opt=opt||{};
+  _bkxPayHost = opt.host || 'bkx-pay';
+  _bkxPayBkId = (opt.bkId!=null) ? opt.bkId : _bkExtraBk;
+  if(typeof opt.base==='function') _bkxPayBase=opt.base;
+  else if(!opt.host || opt.host==='bkx-pay'){
+    _bkxPayBase=function(){
+      var qty=Math.max(1,+(document.getElementById('bkx-qty')||{}).value||1);
+      var price=Math.max(0,+(document.getElementById('bkx-price')||{}).value||0);
+      return qty*price; };
+  }
   _bkExtraPay = e
     ? {m:e.method||'cash', feePct:(e.feePct!=null?+e.feePct:3), slips:Array.isArray(e.slips)?e.slips.slice():[]}
     : {m:'cash', feePct:3, slips:[]};
@@ -55785,9 +55808,7 @@ function _bkxPayReset(e){
 // ค่าธรรมเนียมบัตรคิดบนยอดขาย · ลูกค้าจ่ายจริง = ยอดขาย + ค่าธรรมเนียม (กติกาเดียวกับหน้าเก็บเงิน)
 function bkV2ExtraFee(){
   if(_bkExtraPay.m!=='card') return 0;
-  var qty=Math.max(1,+(document.getElementById('bkx-qty')||{}).value||1);
-  var price=Math.max(0,+(document.getElementById('bkx-price')||{}).value||0);
-  return Math.round(qty*price*(+_bkExtraPay.feePct||0)/100);
+  return Math.round(_bkxPayBase()*(+_bkExtraPay.feePct||0)/100);
 }
 function bkV2ExtraSetM(m){ _bkExtraPay.m=m; if(m!=='card') _bkExtraPay.feePct=_bkExtraPay.feePct; bkV2ExtraPayRender(); }
 function bkV2ExtraSetPct(v){ _bkExtraPay.feePct=Math.max(0,Math.min(5,+v||0)); bkV2ExtraPayRender(); }
@@ -55795,12 +55816,12 @@ function bkV2ExtraPickSlip(inp){
   var f=(inp&&inp.files&&inp.files[0])||null; if(inp) inp.value='';
   if(!f) return;
   if(typeof pckSlipUpload!=='function'){ alert('อัปโหลดสลิปไม่ได้ในหน้านี้'); return; }
-  pckSlipUpload(f, _bkExtraBk, function(meta){ _bkExtraPay.slips.push(meta); bkV2ExtraPayRender(); });
+  pckSlipUpload(f, (_bkxPayBkId||_bkExtraBk), function(meta){ _bkExtraPay.slips.push(meta); bkV2ExtraPayRender(); });
 }
 function bkV2ExtraRmSlip(i){ _bkExtraPay.slips.splice(i,1); bkV2ExtraPayRender(); }
 // วาดเฉพาะบล็อกการรับเงิน · ไม่แตะช่องอื่นในฟอร์ม
 function bkV2ExtraPayRender(){
-  var host=document.getElementById('bkx-pay'); if(!host) return;
+  var host=document.getElementById(_bkxPayHost||'bkx-pay'); if(!host) return;
   var esc=function(x){ return String(x||'').replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
   var P=_bkExtraPay, h='';
   h+='<label style="font-size:10px;color:var(--fd-ink-soft)">วิธีรับเงิน</label>';
@@ -55813,9 +55834,7 @@ function bkV2ExtraPayRender(){
   });
   h+='</div>';
   if(P.m==='card'){
-    var qty=Math.max(1,+(document.getElementById('bkx-qty')||{}).value||1);
-    var price=Math.max(0,+(document.getElementById('bkx-price')||{}).value||0);
-    var base=qty*price, fee=bkV2ExtraFee();
+    var base=_bkxPayBase(), fee=bkV2ExtraFee();
     h+='<div style="display:grid;grid-template-columns:1fr 1.6fr;gap:8px;margin-bottom:10px">'
       +'<div><label style="font-size:10px;color:var(--fd-ink-soft)">ค่าธรรมเนียมบัตร %</label>'
       +'<input type="number" min="0" max="5" step="0.5" value="'+(+P.feePct||0)+'" oninput="bkV2ExtraSetPct(this.value)" style="width:100%;height:32px;font-size:12px;text-align:right;border:1px solid var(--fd-line);border-radius:7px;padding:2px 8px"></div>'
@@ -55929,11 +55948,18 @@ function bkV2UpgradesFor(bkId){ const bk=(SB_BOOKINGS||[]).find(x=>x.id===bkId);
 function bkV2UpgradePaidTotal(bkId){ return bkV2UpgradesFor(bkId).reduce((s,u)=>s+(+u.sellPrice||0),0); }
 function bkV2UpgradeCommTotal(bkId){ return bkV2UpgradesFor(bkId).reduce((s,u)=>s+(+u.commission||0),0); }
 let _bkUpgBk=null, _bkUpgEditId=null;
-function bkV2UpgradeOpen(bkId){ _bkUpgBk=bkId; _bkUpgEditId=null; bkV2UpgradeRender(); }
-function bkV2UpgradeEditLoad(id,bkId){ _bkUpgEditId=id; _bkUpgBk=bkId; bkV2UpgradeRender(); }
-function bkV2UpgradeEditCancel(){ _bkUpgEditId=null; bkV2UpgradeRender(); }
+// §upgPay · ยอดฐานของหน้าอัพเกรดคือ "ราคาขาย" ช่องเดียว
+function _bkUpgPayInit(u){
+  _bkxPayReset(u||null, { host:'bku-pay', bkId:_bkUpgBk,
+    base:function(){ return Math.max(0,+(document.getElementById('bku-sell')||{}).value||0); } });
+}
+function bkV2UpgradeOpen(bkId){ _bkUpgBk=bkId; _bkUpgEditId=null; _bkUpgPayInit(null); bkV2UpgradeRender(); }
+function bkV2UpgradeEditLoad(id,bkId){ _bkUpgEditId=id; _bkUpgBk=bkId;
+  _bkUpgPayInit(bkV2UpgradesFor(bkId).find(function(x){ return x.id===id; })); bkV2UpgradeRender(); }
+function bkV2UpgradeEditCancel(){ _bkUpgEditId=null; _bkUpgPayInit(null); bkV2UpgradeRender(); }
 function bkV2UpgradePreset(){ const i=+(document.getElementById('bku-preset')||{}).value||0; const L=document.getElementById('bku-label'); if(L)L.value=BKV2_UPGRADE_PRESETS[i]||''; }
-function bkV2UpgradeRecalc(){ const sell=+(document.getElementById('bku-sell')||{}).value||0; const comp=+(document.getElementById('bku-company')||{}).value||0; const comm=Math.max(0,sell-comp); const el=document.getElementById('bku-comm'); if(el) el.textContent='฿'+Math.round(comm).toLocaleString(); }
+function bkV2UpgradeRecalc(){ const sell=+(document.getElementById('bku-sell')||{}).value||0; const comp=+(document.getElementById('bku-company')||{}).value||0; const comm=Math.max(0,sell-comp); const el=document.getElementById('bku-comm'); if(el) el.textContent='฿'+Math.round(comm).toLocaleString();
+  if(_bkExtraPay.m==='card') bkV2ExtraPayRender();   /* §upgPay · ราคาขายขยับ ค่าธรรมเนียมบัตรต้องขยับตาม */ }
 function bkV2UpgradeRender(){
   const esc = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
   const bkId=_bkUpgBk; const bk=(SB_BOOKINGS||[]).find(x=>x.id===bkId); if(!bk) return;
@@ -55941,7 +55967,7 @@ function bkV2UpgradeRender(){
   const list=bk.upgrades; const fmt=n=>'฿'+Math.round(n||0).toLocaleString();
   const editing=_bkUpgEditId?list.find(u=>u.id===_bkUpgEditId):null;
   const rows=list.map(u=>{ const on=(u.id===_bkUpgEditId); return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:0.5px solid var(--fd-line-soft);${on?'background:#F0F7FF;border-radius:7px;padding:8px':''}">
-      <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600">${esc(u.label)} ${u.collected?'<span style="color:#0F6E56;font-size:10px">&#10003; เก็บแล้ว</span>':'<span style="color:#9A5B00;font-size:10px">รอเก็บ</span>'}</div><div style="font-size:10px;color:var(--fd-ink-soft)">ขาย ${fmt(u.sellPrice)} · บริษัท ${fmt(u.toCompany)} · คอม ${fmt(u.commission)}${u.seller?' · <b style="color:#854F0B">'+esc(u.seller)+'</b>':''}</div></div>
+      <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600">${esc(u.label)} ${u.collected?'<span style="color:#0F6E56;font-size:10px">&#10003; เก็บแล้ว</span>':'<span style="color:#9A5B00;font-size:10px">รอเก็บ</span>'}</div><div style="font-size:10px;color:var(--fd-ink-soft)">ขาย ${fmt(u.sellPrice)} · บริษัท ${fmt(u.toCompany)} · คอม ${fmt(u.commission)}${u.seller?' · <b style="color:#854F0B">'+esc(u.seller)+'</b>':''}${(u.method&&u.method!=='cash')?` · <b style="color:#0C447C">${u.method==='card'?'บัตร':'โอน'}</b>${(+u.fee||0)?` (ค่าธรรมเนียม ฿${Math.round(u.fee).toLocaleString()})`:''}${(!(u.slips||[]).length)?' <span style="color:#A32D2D">⚠ ยังไม่มีสลิป</span>':''}`:''}</div></div>
       <button onclick="bkV2UpgradeEditLoad('${u.id}','${bkId}')" title="แก้ไข" style="background:transparent;border:none;color:#185FA5;cursor:pointer;font-size:13px">&#9998;</button>
       <button onclick="bkV2UpgradeDelete('${u.id}','${bkId}')" title="ลบ" style="background:transparent;border:none;color:#A32D2D;cursor:pointer;font-size:13px">✕</button>
     </div>`; }).join('') || '<div style="font-size:11.5px;color:var(--fd-ink-soft);font-style:italic;padding:6px 0">ยังไม่มีรายการอัพเกรด</div>';
@@ -55972,9 +55998,11 @@ function bkV2UpgradeRender(){
         <div><label style="font-size:10px;color:#854F0B">คนขาย (คอมมิชชั่นของใคร)</label><input id="bku-seller" list="bkv2-sellers" type="text" value="${esc(fSeller)}" placeholder="เลือก/พิมพ์ชื่อคนขาย" style="width:100%;height:32px;font-size:12px;border:1px solid var(--fd-line);border-radius:7px;padding:2px 8px"></div>
         <div><label style="font-size:10px;color:var(--fd-ink-soft)">โน้ต</label><input id="bku-note" type="text" value="${esc(fNote)}" placeholder="โน้ต (ถ้ามี)" style="width:100%;height:32px;font-size:12px;border:1px solid var(--fd-line);border-radius:7px;padding:2px 8px"></div>
       </div>
-      <div style="margin-bottom:12px"><label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer"><input id="bku-coll" type="checkbox" ${fColl?'checked':''} style="width:16px;height:16px">เก็บเงินแล้ว</label></div>
+      <div style="margin-bottom:10px"><label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer"><input id="bku-coll" type="checkbox" ${fColl?'checked':''} style="width:16px;height:16px">เก็บเงินแล้ว</label></div>
+      <div id="bku-pay" style="margin-bottom:12px"></div>
       <div style="display:flex;justify-content:flex-end;gap:8px">${editing?`<button onclick="bkV2UpgradeEditCancel()" style="background:#fff;border:1px solid var(--fd-line);color:var(--fd-ink);font-family:inherit;font-size:12px;padding:9px 15px;border-radius:9px;cursor:pointer">ยกเลิกแก้ไข</button>`:''}<button onclick="bkV2UpgradeSave('${bkId}')" style="background:${editing?'#185FA5':'#0F7A5A'};color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:600;padding:9px 18px;border-radius:9px;cursor:pointer">${editing?'บันทึกการแก้ไข':'+ เพิ่มอัพเกรด'}</button></div>
     </div>`);
+  if(typeof bkV2ExtraPayRender==='function') bkV2ExtraPayRender();   // §upgPay · วาดบล็อกรับเงินหลัง modal ขึ้นจอแล้ว
 }
 function bkV2UpgradeSave(bkId){
   const bk=(SB_BOOKINGS||[]).find(x=>x.id===bkId); if(!bk) return;
@@ -55987,16 +56015,23 @@ function bkV2UpgradeSave(bkId){
   const note=((document.getElementById('bku-note')||{}).value||'').trim();
   const seller=((document.getElementById('bku-seller')||{}).value||'').trim();
   if(sellPrice<=0){ alert('ใส่ราคาขาย'); return; }
+  // §upgPay · ชุดเดียวกับที่ Extra บันทึก · ลูกค้าจ่ายจริง = ราคาขาย + ค่าธรรมเนียมบัตร
+  const _upm=_bkExtraPay.m||'cash';
+  const _ufee=(typeof bkV2ExtraFee==='function')?bkV2ExtraFee():0;
+  const _uslips=(_bkExtraPay.slips||[]).slice();
+  const _upay={ method:_upm, feePct:(_upm==='card'?(+_bkExtraPay.feePct||0):0),
+                fee:_ufee, customerPaid:sellPrice+_ufee, slips:_uslips };
   if(_bkUpgEditId){
     const u=bk.upgrades.find(x=>x.id===_bkUpgEditId);
-    if(u){ Object.assign(u,{label,sellPrice,toCompany,commission,collected,note,seller}); }
+    if(u){ Object.assign(u,{label,sellPrice,toCompany,commission,collected,note,seller}, _upay); }
     if(typeof bkV2AddHistory==='function') bkV2AddHistory(bk,'extra','Edited upgrade · '+label+' · ขาย ฿'+Math.round(sellPrice).toLocaleString()+' · คอม ฿'+Math.round(commission).toLocaleString()+(seller?' · '+seller:''),'Extra');
     _bkUpgEditId=null;
   } else {
-    bk.upgrades.push({id:'up_'+Date.now(), label, sellPrice, toCompany, commission, collected, note, seller, settle:'pending', at:new Date().toISOString()});
+    bk.upgrades.push(Object.assign({id:'up_'+Date.now(), label, sellPrice, toCompany, commission, collected, note, seller, settle:'pending', at:new Date().toISOString()}, _upay));
     if(typeof bkV2AddHistory==='function') bkV2AddHistory(bk,'extra','Upgrade · '+label+' · ขาย ฿'+Math.round(sellPrice).toLocaleString()+' · บริษัท ฿'+Math.round(toCompany).toLocaleString()+' · คอม ฿'+Math.round(commission).toLocaleString()+(seller?' · '+seller:''),'Extra');
   }
   if(typeof acctPersistBookings==='function') acctPersistBookings();
+  if(typeof _bkUpgPayInit==='function') _bkUpgPayInit(null);   // §upgPay · ล้างบล็อกรับเงินกลับเป็นค่าตั้งต้น
   bkV2Render(); bkV2UpgradeRender();
 }
 function bkV2UpgradeDelete(id,bkId){ const bk=(SB_BOOKINGS||[]).find(x=>x.id===bkId); if(!bk||!Array.isArray(bk.upgrades)) return; bk.upgrades=bk.upgrades.filter(u=>u.id!==id); if(typeof acctPersistBookings==='function') acctPersistBookings(); bkV2Render(); bkV2UpgradeRender(); }
