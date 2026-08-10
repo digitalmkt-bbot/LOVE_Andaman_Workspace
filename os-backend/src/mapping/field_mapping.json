@@ -6688,5 +6688,47 @@
       "kind": "scalar",
       "db_type": "text"
     }
+  },
+  "ts_cot": {
+    "id": {
+      "source": "ts_cot map key (generated id)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "key": {
+      "source": "ts_cot map key (original)",
+      "kind": "map_key",
+      "db_type": "text"
+    },
+    "mode": {
+      "source": "ts_cot[key].mode",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "deduct": {
+      "source": "ts_cot[key].deduct",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "payout": {
+      "source": "ts_cot[key].payout",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "ref": {
+      "source": "ts_cot[key].ref",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "by": {
+      "source": "ts_cot[key].by",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "at": {
+      "source": "ts_cot[key].at",
+      "kind": "scalar",
+      "db_type": "text"
+    }
   }
 }

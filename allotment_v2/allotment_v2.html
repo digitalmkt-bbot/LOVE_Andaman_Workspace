@@ -49824,11 +49824,13 @@ let TRAVEL_SUM={};
 (function(){ try{ const lsKey=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2'); const d=JSON.parse(localStorage.getItem(lsKey)||'{}'); if(d&&d.travel_sum&&typeof d.travel_sum==='object') TRAVEL_SUM=d.travel_sum; }catch(_){} })();
 function tsPersist(){
   if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;
-  try{ const lsKey=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2'); const d=JSON.parse(localStorage.getItem(lsKey)||'{}'); d.travel_sum=TRAVEL_SUM; localStorage.setItem(lsKey,JSON.stringify(d)); }catch(_){}
+  // §tsCotSave · ผ่านแคชกลางเหมือนของอื่นทุกตัว · อ่าน-เขียน localStorage ดิบจะข้าม _laBlob แล้วทับกันเอง
+  try{ laBlob().travel_sum=TRAVEL_SUM; laBlobSave(); }catch(_){}
 }
 function _tsKey(bkId,date){ return String(date||'')+'::'+String(bkId||''); }
 function tsGet(bkId,date){ return TRAVEL_SUM[_tsKey(bkId,date)]||null; }
 function tsSet(bkId,date,decision,amount,note){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('operations')) return;   // §tsCotSave · บอกให้รู้ว่าดูอย่างเดียว · และอย่าเพิ่งแก้ค่า
   const k=_tsKey(bkId,date);
   if(!decision){ delete TRAVEL_SUM[k]; }
   else TRAVEL_SUM[k]={decision:decision, amount:Math.max(0,Math.round(+amount||0)), note:String(note||''), by:ckMe(), at:new Date().toISOString()};
@@ -49906,9 +49908,8 @@ let TS_COT={};
   if(d && d.ts_cot && typeof d.ts_cot==='object') TS_COT=d.ts_cot; }catch(_){} })();
 function tsCotPersist(){
   if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;
-  try{ const lsKey=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2');
-    const d=JSON.parse(localStorage.getItem(lsKey)||'{}');
-    d.ts_cot=TS_COT; localStorage.setItem(lsKey, JSON.stringify(d)); }catch(_){}
+  // §tsCotSave · ผ่านแคชกลาง · ตัว ts_cot เพิ่งมีตารางในแมป (os-backend §tsCot) จึงจะขึ้นเซิร์ฟเวอร์จริงตั้งแต่รอบนี้
+  try{ laBlob().ts_cot=TS_COT; laBlobSave(); }catch(_){}
 }
 function tsCotGet(bkId,date){ return TS_COT[_tsKey(bkId,date)]||null; }
 // ค่าที่ตั้งไว้ตอนเปิด booking · ใช้เป็นปุ่มแนะนำ ไม่ได้ตัดสินแทน
@@ -49917,6 +49918,7 @@ function _tsCotNum(v){ return Math.max(0, Math.round(parseFloat(String(v==null?'
 function _tsCotInp(id,w){ var el=document.getElementById('ts-cot'+w+'-'+id); return el?_tsCotNum(el.value):0; }
 function _tsCotRefVal(id){ var el=document.getElementById('ts-cotr-'+id); return el?String(el.value||''):''; }
 function tsCotPick(bkId,date,mode,cot){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('operations')) return;   // §tsCotSave
   var k=_tsKey(bkId,date), cur=TS_COT[k]||{}, d=0, p=0;
   cot=+cot||0;
   if(mode==='full'){ d=cot; }
@@ -49926,13 +49928,16 @@ function tsCotPick(bkId,date,mode,cot){
   tsCotPersist(); tsAfter();
 }
 function tsCotAmt(bkId,date){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('operations')) return;   // §tsCotSave
   var c=TS_COT[_tsKey(bkId,date)]; if(!c) return;
   c.deduct=_tsCotInp(bkId,'d'); c.payout=_tsCotInp(bkId,'p');
   c.by=ckMe(); c.at=new Date().toISOString();
   tsCotPersist(); tsAfter();
 }
-function tsCotRefSave(bkId,date){ var c=TS_COT[_tsKey(bkId,date)]; if(!c) return; c.ref=_tsCotRefVal(bkId); tsCotPersist(); }
-function tsCotClear(bkId,date){ delete TS_COT[_tsKey(bkId,date)]; tsCotPersist(); tsAfter(); }
+function tsCotRefSave(bkId,date){ if(typeof laGuardEdit==='function' && !laGuardEdit('operations')) return;   /* §tsCotSave */
+  var c=TS_COT[_tsKey(bkId,date)]; if(!c) return; c.ref=_tsCotRefVal(bkId); tsCotPersist(); }
+function tsCotClear(bkId,date){ if(typeof laGuardEdit==='function' && !laGuardEdit('operations')) return;   /* §tsCotSave */
+  delete TS_COT[_tsKey(bkId,date)]; tsCotPersist(); tsAfter(); }
 // ช่อง "จัดการ" ของหนึ่งใบ · ใช้ในตารางเงินหน้างาน (ส่วนที่ 3)
 function tsCotCell(b, M, date, money, e){
   var cot=+((M&&M.cot)||0);

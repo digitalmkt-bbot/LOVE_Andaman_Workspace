@@ -1294,6 +1294,8 @@ async function initDb(){
       await sq('boat_capovr table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."boat_capovr" (id text PRIMARY KEY, key text, cap bigint, reason text, "by" text, at text)`);
       // §Travel Summary (2026-07-26): TRAVEL_SUM['YYYY-MM-DD::bookingId'] = {decision,amount,note,by,at}
       await sq('travel_sum table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."travel_sum" (id text PRIMARY KEY, key text, decision text, amount bigint, note text, "by" text, at text)`);
+      // §tsCot · คำตัดสินเงิน COT · เดิมไม่มีตาราง → decompose ทิ้งทุกครั้ง คนอื่นจึงไม่เคยเห็นว่ามีการตัดสินแล้ว
+      await sq('ts_cot table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."ts_cot" (id text PRIMARY KEY, key text, mode text, deduct bigint, payout bigint, ref text, "by" text, at text)`);
       // §trips: ตารางนี้ map แบบระบุชื่อเรือตายตัว (b1_route, b2_route, …) และตกหล่น b8/b14/b15 ไปตั้งแต่ต้น
       // → ถ้าจัด Tadeo / Juliet / Rolanda ลงเส้นทาง การจัดนั้นจะหายตอน sync. เติมคอลัมน์ให้ครบ.
       // ⚠ โครงนี้ยังเปราะ — เรือลำใหม่หลังจากนี้ก็ต้องมาเติมมืออีก (ดู BACKLOG)

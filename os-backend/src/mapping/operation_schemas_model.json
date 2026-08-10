@@ -6209,5 +6209,44 @@
         "type": "text"
       }
     ]
+  },
+  "ts_cot": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "text"
+      },
+      {
+        "name": "key",
+        "type": "text"
+      },
+      {
+        "name": "mode",
+        "type": "text"
+      },
+      {
+        "name": "deduct",
+        "type": "bigint"
+      },
+      {
+        "name": "payout",
+        "type": "bigint"
+      },
+      {
+        "name": "ref",
+        "type": "text"
+      },
+      {
+        "name": "by",
+        "type": "text"
+      },
+      {
+        "name": "at",
+        "type": "text"
+      }
+    ],
+    "primary_key": "id",
+    "foreign_keys": [],
+    "rows": 0
   }
 }
