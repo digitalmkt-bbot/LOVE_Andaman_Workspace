@@ -1333,6 +1333,27 @@ async function initDb(){
       await sq('sb_vehicles.color col', `ALTER TABLE ${OS_SCHEMA}."sb_vehicles" ADD COLUMN IF NOT EXISTS "color" text`);
       // §b2cOwn · รายชื่อคอลัมน์ที่ ops ประกาศเป็นเจ้าของบน booking ของ B2C · sync จะข้ามคอลัมน์เหล่านั้น
       await sq('sb_bookings.b2coverride col', `ALTER TABLE ${OS_SCHEMA}."sb_bookings" ADD COLUMN IF NOT EXISTS "b2coverride" text`);
+
+      // §openMap · แผนที่ที่คีย์ชั้นในเปิดกว้าง · ย้ายจากคอลัมน์ตายตัวมาเป็นค่า JSON ทั้งก้อน
+      //   คอลัมน์เดิมไม่ถูกลบ · เก็บไว้เป็นต้นทางของการย้าย และเป็นตาข่ายถ้าต้องย้อนกลับ
+      for(const t of ['fleet_fuelprice','fleet_drlock']){
+        await sq(`${t}.value col`, `ALTER TABLE ${OS_SCHEMA}."${t}" ADD COLUMN IF NOT EXISTS "value" text`);
+        // §fill · ประกอบ JSON จากคอลัมน์เดิมเท่าที่มีอยู่จริงในฐาน · รันซ้ำได้ (WHERE value IS NULL)
+        const { rows: oc } = await pool.query(
+          `SELECT column_name FROM information_schema.columns
+            WHERE table_schema=$1 AND table_name=$2 AND column_name NOT IN ('id','key','value')`, [OS_SCHEMA, t]);
+        if(oc.length){
+          const pairs = oc.map(r => `'${r.column_name}', ${qic(r.column_name)}`).join(', ');
+          await sq(`${t} backfill value`,
+            `UPDATE ${OS_SCHEMA}."${t}" SET "value" = json_strip_nulls(json_build_object(${pairs}))::text
+              WHERE "value" IS NULL`);
+        }
+      }
+      // §openMap · ฟิลด์รายลำของ fleet_daily (fuel · paxActual · ที่จะเพิ่มมาทีหลัง) · 1 แถวต่อ (วัน, เรือ)
+      await sq('fleet_daily__boat table',
+        `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."fleet_daily__boat" (row_pk text PRIMARY KEY, fleet_daily_id text, ${qic('key')} text, value text)`);
+      await sq('fleet_daily__boat index',
+        `CREATE INDEX IF NOT EXISTS idx_fleetdaily_boat ON ${OS_SCHEMA}."fleet_daily__boat"(fleet_daily_id)`);
       await sq('boats.color col', `ALTER TABLE ${OS_SCHEMA}."boats" ADD COLUMN IF NOT EXISTS "color" text`);
       // §B2C paid state (2026-07-30, from lk-inbox): B2C's payment_type is a BILLING TERM
       // (proforma/invoice/bt/cot) and says nothing about whether money arrived — paid state must be

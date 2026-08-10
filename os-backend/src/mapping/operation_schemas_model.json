@@ -5693,29 +5693,13 @@
         "type": "text"
       },
       {
-        "name": "panwa",
-        "type": "double precision"
-      },
-      {
-        "name": "b10",
-        "type": "double precision"
-      },
-      {
-        "name": "b2",
-        "type": "double precision"
-      },
-      {
-        "name": "b13",
-        "type": "double precision"
-      },
-      {
-        "name": "b6",
-        "type": "double precision"
+        "name": "value",
+        "type": "text"
       }
     ],
     "primary_key": "id",
     "foreign_keys": [],
-    "rows": 24
+    "rows": 0
   },
   "fleet_drlock": {
     "columns": [
@@ -5728,13 +5712,13 @@
         "type": "text"
       },
       {
-        "name": "panwa",
-        "type": "boolean"
+        "name": "value",
+        "type": "text"
       }
     ],
     "primary_key": "id",
     "foreign_keys": [],
-    "rows": 24
+    "rows": 0
   },
   "vanjob_pickup_th": {
     "columns": [
@@ -6247,6 +6231,34 @@
     ],
     "primary_key": "id",
     "foreign_keys": [],
+    "rows": 0
+  },
+  "fleet_daily__boat": {
+    "columns": [
+      {
+        "name": "fleet_daily_id",
+        "type": "text"
+      },
+      {
+        "name": "key",
+        "type": "text"
+      },
+      {
+        "name": "row_pk",
+        "type": "text"
+      },
+      {
+        "name": "value",
+        "type": "text"
+      }
+    ],
+    "primary_key": "row_pk",
+    "foreign_keys": [
+      {
+        "column": "fleet_daily_id",
+        "references": "fleet_daily.id"
+      }
+    ],
     "rows": 0
   }
 }

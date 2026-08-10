@@ -116,10 +116,24 @@ const { plan: PLAN, childrenOf: CHILDREN } = buildPlan();
 // for any boat/engine/field, past or future. (Replaces the old fixed engines_e* column scheme, which
 // silently dropped trips for engines that weren't in the generated column list.)
 const FD_TRIPS = 'fleet_daily__trips';
+// ---------- fleet_daily__boat special-case (2026-08) ----------
+// Same trap as the old engines_e* scheme, one level up: the generated mapping gave fleet_daily one
+// column per (boat, field) that happened to exist in the snapshot — b2_fuel, b10_fuel, b6_fuel,
+// b13_fuel, b12_fuel, b10_paxactual, b2_paxactual. Any boat outside that list lost its litres on
+// every save (its engine hours survived, because trips already had this fix), and b12 lost paxActual.
+// One row per (day, boat) with every non-trips field as JSON: lossless for any boat, past or future.
+// The old columns are LEFT IN PLACE and still written — they now merely duplicate what this table
+// carries, so nothing depends on a migration having run before the first save.
+const FD_BOAT = 'fleet_daily__boat';
 function fleetDailyAssembleFix(blob, tablesData) {
   const fd = blob.fleet_daily; if (!fd || typeof fd !== 'object') return;
   const idToDay = {}; for (const r of (tablesData.fleet_daily || [])) idToDay[r.id] = r.key;
-  for (const day of Object.values(fd)) { if (day && typeof day === 'object') delete day.trips; }   // drop the bogus merged day-level trips (generic artifact)
+  for (const day of Object.values(fd)) { if (day && typeof day === 'object') { delete day.trips; delete day.boats; } }   // drop the bogus merged day-level keys (generic artifact)
+  for (const row of (tablesData[FD_BOAT] || [])) {                     // per-boat scalars · merged, never replacing
+    const day = idToDay[row.fleet_daily_id]; if (day == null || row.key == null) continue;
+    const v = safeParse(row.value); if (!v || typeof v !== 'object') continue;
+    Object.assign(((fd[day] ||= {})[row.key] ||= {}), v);
+  }
   for (const row of (tablesData[FD_TRIPS] || [])) {
     const day = idToDay[row.fleet_daily_id]; if (day == null || !row.boat) continue;
     const b = ((fd[day] ||= {})[row.boat] ||= {});
@@ -127,12 +141,17 @@ function fleetDailyAssembleFix(blob, tablesData) {
   }
 }
 function fleetDailyDecompose(blob, out) {
-  out[FD_TRIPS] = [];
+  out[FD_TRIPS] = []; out[FD_BOAT] = [];
   const fd = blob.fleet_daily; if (!fd || typeof fd !== 'object') return;
   for (const [day, dayObj] of Object.entries(fd)) {
     if (!dayObj || typeof dayObj !== 'object') continue;
     for (const [boatId, bObj] of Object.entries(dayObj)) {
-      if (!bObj || typeof bObj !== 'object' || !bObj.trips) continue;
+      if (!bObj || typeof bObj !== 'object') continue;
+      const scal = {}; let hasScal = false;                            // ทุกฟิลด์ของเรือลำนั้น ยกเว้น trips ที่มีตารางของตัวเองอยู่แล้ว
+      for (const [k, v] of Object.entries(bObj)) { if (k === 'trips' || v === undefined) continue; scal[k] = v; hasScal = true; }
+      if (hasScal) out[FD_BOAT].push({ fleet_daily_id: day, key: boatId,
+                                       value: JSON.stringify(scal), row_pk: rowPk(FD_BOAT) });
+      if (!bObj.trips) continue;
       for (const [tripKey, trip] of Object.entries(bObj.trips)) {
         out[FD_TRIPS].push({ fleet_daily_id: day, boat: boatId, key: tripKey,
                              value: JSON.stringify(trip), row_pk: rowPk(FD_TRIPS) });

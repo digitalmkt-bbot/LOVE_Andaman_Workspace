@@ -6178,30 +6178,10 @@
       "kind": "map_key",
       "db_type": "text"
     },
-    "panwa": {
-      "source": "fleet_fuelprice[key].panwa",
-      "kind": "scalar",
-      "db_type": "double precision"
-    },
-    "b10": {
-      "source": "fleet_fuelprice[key].b10",
-      "kind": "scalar",
-      "db_type": "double precision"
-    },
-    "b2": {
-      "source": "fleet_fuelprice[key].b2",
-      "kind": "scalar",
-      "db_type": "double precision"
-    },
-    "b13": {
-      "source": "fleet_fuelprice[key].b13",
-      "kind": "scalar",
-      "db_type": "double precision"
-    },
-    "b6": {
-      "source": "fleet_fuelprice[key].b6",
-      "kind": "scalar",
-      "db_type": "double precision"
+    "value": {
+      "source": "fleet_fuelprice[key] value",
+      "kind": "map_value_json",
+      "db_type": "text"
     }
   },
   "fleet_drlock": {
@@ -6215,10 +6195,10 @@
       "kind": "map_key",
       "db_type": "text"
     },
-    "panwa": {
-      "source": "fleet_drlock[key].panwa",
-      "kind": "scalar",
-      "db_type": "boolean"
+    "value": {
+      "source": "fleet_drlock[key] value",
+      "kind": "map_value_json",
+      "db_type": "text"
     }
   },
   "vanjob_pickup_th": {
@@ -6728,6 +6708,28 @@
     "at": {
       "source": "ts_cot[key].at",
       "kind": "scalar",
+      "db_type": "text"
+    }
+  },
+  "fleet_daily__boat": {
+    "fleet_daily_id": {
+      "source": "(link) fleet_daily.id",
+      "kind": "fk",
+      "db_type": "text"
+    },
+    "key": {
+      "source": "(map key of fleet_daily[key].boats)",
+      "kind": "map_key",
+      "db_type": "text"
+    },
+    "row_pk": {
+      "source": "(generated child key)",
+      "kind": "synthetic-pk",
+      "db_type": "text"
+    },
+    "value": {
+      "source": "fleet_daily[key][boat] scalars",
+      "kind": "map_value_json",
       "db_type": "text"
     }
   }
