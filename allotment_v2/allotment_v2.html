@@ -48801,7 +48801,7 @@ function pckGuideJobSheet(bid, date, rows, vd){
     if(kl.length===1 && kl[0]) uniLang=kl[0];
   })();
   var showSvc=!uniSvc, showLang=!uniLang;
-  var wName=31, wPick=18;
+  var wName=31+5, wPick=18+4;   // §guideBig · รับที่ว่างจากคอลัมน์เวลารับที่ตัดออก
   if(!showSvc){ wName+=6; wPick+=4; }
   if(!showLang){ wName+=2; wPick+=2; }
 
@@ -48847,7 +48847,7 @@ function pckGuideJobSheet(bid, date, rows, vd){
       +'<td><span class="vc">'+e(b.voucherRef||b.code||'—')+'</span></td>'
       +'<td class="nmc">'+names+'</td>'
       +num('ad')+num('chd')+num('inf')+num('foc')
-      +'<td class="tmc"><span class="tm">'+e(pckJobTime(time, r.arr))+'</span></td>'
+      /* §guideBig · ตัดคอลัมน์เวลารับออก · เป็นข้อมูลของคนขับรถ ใบงานรถมีอยู่แล้ว */
       +'<td class="pk">'+e(pickup||area||'ท่าเรือ (มาเอง)')
         +(room?('<span class="pl2"> ห้อง '+e(room)+'</span>'):'')
         +((pickup&&area)?('<span class="pl2"> &middot; '+e(area)+'</span>'):'')
@@ -48903,7 +48903,7 @@ function pckGuideJobSheet(bid, date, rows, vd){
     +'<th style="width:'+wName+'%">ลูกค้า &middot; ผู้โดยสารทั้งหมด</th>'
     +'<th class="num" style="width:2.8%">AD</th><th class="num" style="width:2.8%">CHD</th>'
     +'<th class="num" style="width:2.8%">INF</th><th class="num" style="width:2.8%">FOC</th>'
-    +'<th style="width:9%">เวลารับ</th><th style="width:'+wPick+'%">สถานที่รับ &middot; ส่ง &middot; โซน</th>'
+    +'<th style="width:'+wPick+'%">สถานที่รับ &middot; ส่ง &middot; โซน</th>'
     +(showSvc?'<th style="width:10%">Service</th>':'')
     +(showLang?'<th class="lgc" style="width:4%">ไกด์</th>':'')
     +'<th style="width:9%">Note</th></tr></thead>';
@@ -49540,7 +49540,7 @@ function pckGuideJobOrder(bid){
     // §autoFit · หาระดับที่ "ใหญ่ที่สุดที่ยังพอดีหน้า" ด้วยการวัดจริง ไม่ใช่การเดา
     // ไล่ d1 → d4 หยุดทันทีที่ตารางไม่ล้นกรอบ · ถ้า d4 ยังล้นค่อยย่อตารางเป็นทางสุดท้าย
     // (ห้ามย่อทั้งใบ เพราะจะย่อกรอบลงไปด้วย สัดส่วนเท่าเดิม แก้อะไรไม่ได้)
-    +'<script>(function(){var T=["d1","d2","d3","d4"];function fit(){'
+    +'<script>(function(){var T=["d1","d2"];function fit(){'   /* §guideBig · ไม่ย่อต่ำกว่า d2 · ล้นก็ให้ไปหน้า 2 */
     +'Array.prototype.forEach.call(document.querySelectorAll(".sheet"),function(el){'
     +'var tw=el.querySelector(".tw"), tb=tw&&tw.querySelector("table"); if(!tb) return;'
     +'tb.style.zoom=1; var i, ok=false;'
@@ -49548,7 +49548,7 @@ function pckGuideJobOrder(bid){
     +'Array.prototype.forEach.call(TD,function(c){ c.style.paddingTop=""; c.style.paddingBottom=""; });'
     +'for(i=0;i<T.length;i++){ T.forEach(function(c){ el.classList.remove(c); }); el.classList.add(T[i]);'
     +'if(tb.scrollHeight<=tw.clientHeight){ ok=true; break; } }'
-    +'if(!ok){ tb.style.zoom=Math.max(.45,(tw.clientHeight-2)/tb.scrollHeight); return; }'
+    +'if(!ok){ tb.style.zoom=Math.max(.92,(tw.clientHeight-2)/tb.scrollHeight); return; }'   /* §guideBig · ไม่ย่อจนอ่านไม่ออกอีก */
     // §fillPage · เลือกระดับที่ "พอดี" แล้วยังเหลือที่ว่างท้ายใบ · เกลี่ยลงทุกแถวเท่าๆ กัน
     //   ใบที่คนน้อยเคยจบครึ่งหน้าแล้วเว้นขาวยาว ดูเหมือนพิมพ์ไม่ครบ · เกลี่ยแล้วเต็มหน้าเหมือนกันทุกใบ
     //   เพิ่มเฉพาะระยะห่าง ไม่แตะขนาดตัวหนังสือ · เพดาน 7px กันแถวอ้วนจนดูโหว่
