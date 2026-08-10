@@ -48688,7 +48688,7 @@ function pckGuideJobCss(){ return '<style>'
   +'.tools b{font-size:13px}.tools .h{font-size:11px;color:#6b7280}'
   +'.tools button{margin-left:auto;background:#111827;color:#fff;border:none;border-radius:9px;padding:9px 18px;font:700 12px inherit;cursor:pointer}'
   +'.sheet{width:297mm;min-height:210mm;height:auto;overflow:visible;margin:14px auto;background:#fff;padding:7mm 8mm;'   /* §guidePreview · บนจอต้องเห็นเท่ากับที่พิมพ์ */
-    +'box-shadow:0 4px 18px rgba(0,0,0,.12);position:relative;display:flex;flex-direction:column}'
+    +'box-shadow:0 4px 18px rgba(0,0,0,.12);position:relative;display:block}'   /* §guideHead2 · เลิก flex · กล่องธรรมดาแบ่งหน้าตอนพิมพ์ได้นิ่งกว่า */
   // ── หัวใบ · ยุบเหลือแถวเดียว ──
   +'.jh{display:flex;align-items:center;gap:12px;padding:7px 12px;border-radius:11px;flex:none}'
   +'.jlogo{width:38px;height:38px;border:2px solid currentColor;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none}'
@@ -48709,8 +48709,14 @@ function pckGuideJobCss(){ return '<style>'
   +'.jsnone{font-size:11px;color:#9ca3af}'
   +'.jwarn{border:1.5px solid #111827;border-radius:999px;padding:0 8px;font-size:10.5px;font-weight:700}'
   // ── ตาราง · 1 บุ๊คกิ้ง = 1 แถว ──
-  +'.tw{flex:1;min-height:0;margin-top:6px;overflow:visible}'   /* §guidePage2 · ล้นแล้วต้องไหลไปหน้า 2 ไม่ใช่ถูกตัดทิ้ง */
+  +'.tw{margin-top:6px;overflow:visible}'   /* §guidePage2 + §guideHead2 · ไหลตามเนื้อหา ไม่ต้องยืดเต็มกล่องแล้ว */
   +'thead{display:table-header-group}'          /* §guidePage2 · หัวตารางซ้ำทุกหน้า */
+  /* §guideHead2 · ตารางชั้นนอกที่ทำหน้าที่พา "หัวใบ" ไปซ้ำทุกหน้า
+     ต้องโปร่งใสทุกอย่าง ไม่มีเส้น ไม่มีพื้น ไม่งั้นจะเห็นกรอบซ้อนกับตารางข้อมูล
+     (เลือกใช้ตัวเลือกที่เจาะจงกว่า table/td ทั่วไป จะได้ชนะโดยไม่ต้องพึ่งลำดับ) */
+  +'table.pgt{width:100%;border:none;border-collapse:collapse;table-layout:auto}'
+  +'table.pgt > thead > tr > td,table.pgt > tbody > tr > td{border:none;padding:0;vertical-align:top;background:transparent}'
+  +'table.pgt > tbody > tr,table.pgt > tbody > tr > td{break-inside:auto;page-break-inside:auto}'   /* แถวเดียวที่ยาวทั้งใบ ต้องแบ่งหน้าได้ */
   +'tr{break-inside:avoid;page-break-inside:avoid}'   /* §guidePage2 · ห้ามตัดกลางแถว */
   // §guideGrid · กระดาษที่กรอกด้วยมือหน้าท่า ต้องมีเส้นให้สายตาไล่ · เส้นเดิมจางเกินไป
   +'table{width:100%;border-collapse:collapse;border:1.4px solid #111827}'
@@ -48918,6 +48924,7 @@ function pckGuideJobSheet(bid, date, rows, vd){
   var _col=(typeof pckBoatColor==='function')?(pckBoatColor(bid)||'#111827'):'#111827';
   var _ink=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(_col):'#fff';
   return '<div class="sheet d'+dens+'">'
+    +'<table class="pgt"><thead><tr><td>'   /* §guideHead2 · ทุกอย่างใน thead นี้จะซ้ำทุกหน้า */
     +'<div class="jh" style="background:'+_col+';color:'+_ink+'"><div class="jlogo">LA</div>'
     +'<div><div class="jt1">ใบงานไกด์</div><div class="jt2">Guide Job Order</div></div>'
     +'<div style="margin-left:22px"><div class="jbname">'+e(boat.name||bid)+'</div>'
@@ -48942,7 +48949,9 @@ function pckGuideJobSheet(bid, date, rows, vd){
     +'<div class="jsc"><span class="jslab">Longtail</span>'+(lt.length?('<span class="jsv">'+lt.join(J)+'</span>'):'<span class="jsnone">ไม่มี</span>')
       +'</div>'
     +'</div>'
+    +'</td></tr></thead><tbody><tr><td>'   /* §guideHead2 · เนื้อหาไหลต่อไปหน้า 2 ได้ */
     +'<div class="tw"><table>'+THEAD+'<tbody>'+body+'</tbody></table></div>'
+    +'</td></tr></tbody></table>'
     +'</div>';
 }
 
@@ -49545,16 +49554,24 @@ function pckGuideJobOrder(bid){
     +'<script>(function(){var T=["d1","d2"];function fit(){'   /* §guideBig · ไม่ย่อต่ำกว่า d2 · ล้นก็ให้ไปหน้า 2 */
     +'Array.prototype.forEach.call(document.querySelectorAll(".sheet"),function(el){'
     +'var tw=el.querySelector(".tw"), tb=tw&&tw.querySelector("table"); if(!tb) return;'
+    // §meas · แท่งวัด 210mm · ให้เบราว์เซอร์บอกเองว่า 1 หน้าเท่ากับกี่ px
+    +'var _pr=document.createElement("div");'
+    +'_pr.style.cssText="position:absolute;left:0;top:0;width:0;height:210mm;visibility:hidden;pointer-events:none";'
+    +'el.appendChild(_pr); var PH=_pr.offsetHeight||794; _pr.parentNode.removeChild(_pr);'
+    +'var _cs=getComputedStyle(el), _hd=el.querySelector(".pgt > thead");'
+    +'var AV=PH-(parseFloat(_cs.paddingTop)||0)-(parseFloat(_cs.paddingBottom)||0)'
+      +'-(_hd?_hd.getBoundingClientRect().height:0)-6;'   /* 6 = margin-top ของ .tw */
+    +'if(AV<80) return;'
     +'tb.style.zoom=1; var i, ok=false;'
     +'var TD=tb.querySelectorAll("td");'
     +'Array.prototype.forEach.call(TD,function(c){ c.style.paddingTop=""; c.style.paddingBottom=""; });'
     +'for(i=0;i<T.length;i++){ T.forEach(function(c){ el.classList.remove(c); }); el.classList.add(T[i]);'
-    +'if(tb.scrollHeight<=tw.clientHeight){ ok=true; break; } }'
+    +'if(tb.scrollHeight<=AV){ ok=true; break; } }'   /* §meas · เทียบกับที่ว่างจริงบนกระดาษ */
     +'if(!ok){ return; }'   /* §guidePage2 · ล้นก็ปล่อยขึ้นหน้า 2 · ไม่ย่ออีกแล้ว */
     // §fillPage · เลือกระดับที่ "พอดี" แล้วยังเหลือที่ว่างท้ายใบ · เกลี่ยลงทุกแถวเท่าๆ กัน
     //   ใบที่คนน้อยเคยจบครึ่งหน้าแล้วเว้นขาวยาว ดูเหมือนพิมพ์ไม่ครบ · เกลี่ยแล้วเต็มหน้าเหมือนกันทุกใบ
     //   เพิ่มเฉพาะระยะห่าง ไม่แตะขนาดตัวหนังสือ · เพดาน 7px กันแถวอ้วนจนดูโหว่
-    +'var sl=tw.clientHeight-tb.scrollHeight; if(sl<=0) return;'   /* §guidePage2 · ล้นอยู่ ไม่ต้องเกลี่ยเพิ่ม */
+    +'var sl=AV-tb.scrollHeight; if(sl<=0) return;'   /* §guidePage2 · ล้นอยู่ ไม่ต้องเกลี่ยเพิ่ม */
     +'var rn=tb.querySelectorAll("tbody tr").length||1;'
     +'var ex=Math.floor(sl/rn/2); if(ex>7) ex=7;'
     +'if(ex>0){ Array.prototype.forEach.call(TD,function(c){ c.style.paddingTop=ex+"px"; c.style.paddingBottom=ex+"px"; }); }'
