@@ -47019,18 +47019,21 @@ function ckRoutePills(date, famSel, routeSel, famFn, routeFn, kind){
     var col=a.fam.color||'#8b909c';
     var rids=Object.keys(a.rids).sort();
     var famOn=(famSel===a.fam.id)||(routeSel&&a.rids[routeSel]);
+    // §chipSel · กรองอยู่แต่ไม่ใช่ใบนี้ → ถอดสีเป็นเทา จะได้เห็นชัดว่ากำลังดูอันไหน
+    var _mute=!!(famSel||routeSel) && !famOn;
+    var _cc=_mute?'#B9B6AE':col;
     var subLbl=function(rid){ var rn=((typeof getRoute==='function'&&getRoute(rid))||{}).name||rid; var s=String(rn).replace(a.fam.name,'').replace(/^[\s·\-]*by[\s·\-]*/i,'').replace(/^[\s·\-]+/,'').trim(); return s||((typeof bkV2RouteShort==='function'&&bkV2RouteShort(rid))||''); };
     var subs=rids.map(function(rid){
       var open=(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(rid,date);
       var lblFull=subLbl(rid), lbl=e(abbr(lblFull)||lblFull||'trip');
-      if(!open) return '<span title="'+e(lblFull)+' · ไม่ออกวันนี้" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;border-left:1px solid '+col+'33;background:#FCEBEB;color:#A32D2D;padding:8px 12px;white-space:nowrap">'+lbl+' <span style="font-size:10px;font-weight:600;opacity:.85">ไม่ออก</span></span>';
+      if(!open) return '<span title="'+e(lblFull)+' · ไม่ออกวันนี้" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;border-left:1px solid '+_cc+'33;background:#FCEBEB;color:#A32D2D;padding:8px 12px;white-space:nowrap">'+lbl+' <span style="font-size:10px;font-weight:600;opacity:.85">ไม่ออก</span></span>';
       var R=rst[rid]||{PK:{tot:0,done:0},KL:{tot:0,done:0},OWN:{tot:0,done:0}};
       var tot=R.PK.tot+R.KL.tot+R.OWN.tot, done=R.PK.done+R.KL.done;
       var totBk=(R.PK.bk||0)+(R.KL.bk||0)+(R.OWN.bk||0);
       var blocks=zoneBlock('PK',R.PK)+zoneBlock('KL',R.KL)+zoneBlock('มาเอง',R.OWN,true);
       if(!blocks) blocks='<span style="font-size:11px;color:#b0aea6">ไม่มี booking</span>';
       var ron=(routeSel===rid);
-      return '<button onclick="'+routeFn+'(\''+rid+'\')" title="'+e(lblFull)+' · '+(kind==='pier'?'ขึ้นเรือ':'ขึ้นรถ')+'แล้ว '+done+' จาก '+(R.PK.tot+R.KL.tot)+' pax ที่มีรถรับ'+(R.OWN.tot?(' · มาเอง '+R.OWN.tot+' pax'):'')+' · คลิกกรองเฉพาะทริปนี้" style="display:inline-flex;align-items:center;gap:8px;border:none;border-left:1px solid '+col+'33;background:'+(ron?'#EFEAFB':'#fff')+';white-space:nowrap;padding:8px 12px;cursor:pointer;font-family:inherit"><span style="font-size:12.5px;font-weight:700;color:'+(ron?'#4A2E86':'#5A5A52')+'">'+lbl+'</span><span style="font-family:\'DM Mono\',monospace;font-size:12px;color:#a09a90">'+tot+' pax'+(totBk>tot?('<s style="opacity:.65;margin-left:3px">'+totBk+'</s>'):'')+'</span>'+blocks+'</button>';
+      return '<button onclick="'+routeFn+'(\''+rid+'\')" title="'+e(lblFull)+' · '+(kind==='pier'?'ขึ้นเรือ':'ขึ้นรถ')+'แล้ว '+done+' จาก '+(R.PK.tot+R.KL.tot)+' pax ที่มีรถรับ'+(R.OWN.tot?(' · มาเอง '+R.OWN.tot+' pax'):'')+' · คลิกกรองเฉพาะทริปนี้" style="display:inline-flex;align-items:center;gap:8px;border:none;border-left:1px solid '+_cc+'33;background:'+(ron?'#EFEAFB':'#fff')+';white-space:nowrap;padding:8px 12px;cursor:pointer;font-family:inherit"><span style="font-size:12.5px;font-weight:700;color:'+(ron?'#4A2E86':((routeSel||_mute)?'#9C9990':'#5A5A52'))+'">'+lbl+'</span><span style="font-family:\'DM Mono\',monospace;font-size:12px;color:#a09a90">'+tot+' pax'+(totBk>tot?('<s style="opacity:.65;margin-left:3px">'+totBk+'</s>'):'')+'</span>'+blocks+'</button>';
     }).join('');
     // แถบสถานะหน้าท่าใต้การ์ด · เน้น "เหลือเวลาเท่าไรก่อนออก" เพราะแต่ละโปรแกรมออกไม่พร้อมกัน
     // สีเปลี่ยนตามความเร่งด่วน: ครบแล้ว = เขียว · เหลือ ≤30 นาที หรือเลยเวลาแล้ว = แดง · ≤60 นาที = เหลือง
@@ -47056,7 +47059,7 @@ function ckRoutePills(date, famSel, routeSel, famFn, routeFn, kind){
       else { var _ab=Math.abs(_left), _h=Math.floor(_ab/60), _m2=_ab%60;
              _clock=(_left<0?'เลย ':'')+(_h?(_h+' ชม. '):'')+_m2+(_left<0?' น.':' นาที'); }
       var st=function(lbl,n,c,tip){ return '<span'+(tip?(' title="'+e(tip)+'"'):'')+' style="display:inline-flex;align-items:baseline;gap:5px;background:#fff;color:'+c+';border-radius:7px;padding:3px 9px;font-size:10.5px;font-weight:700;white-space:nowrap">'+lbl+' <b style="font-family:\'DM Mono\',monospace;font-size:13px">'+n+'</b></span>'; };
-      foot='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 12px;border-top:1px solid '+col+'2E;background:'+C[1]+'">'
+      foot='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 12px;border-top:1px solid '+_cc+'2E;background:'+C[1]+'">'
         +'<div style="line-height:1.15"><div style="font-family:\'DM Mono\',monospace;font-size:16px;font-weight:700;color:'+C[0]+';white-space:nowrap">'+_clock+'</div>'
           +'<div style="font-size:9.5px;font-weight:700;color:'+C[0]+';opacity:.8;white-space:nowrap">ออก '+e(_tm.join(' / ')||'—')+'</div></div>'
         +'<span style="background:'+C[0]+';color:#fff;border-radius:8px;padding:4px 11px;font-size:11px;font-weight:800;white-space:nowrap">'+TXT+'</span>'
@@ -47066,7 +47069,7 @@ function ckRoutePills(date, famSel, routeSel, famFn, routeFn, kind){
         +((a.due||0)>0?st('ค้างเก็บ','&#3647;'+Math.round(a.due).toLocaleString(),'#7A4A00'):'')
       +'</div>';
     }
-    return '<div style="display:inline-flex;flex-direction:column;border:1.5px solid '+(famOn?col:col+'aa')+';background:#fff;border-radius:14px;overflow:hidden;'+(famOn?'box-shadow:0 0 0 2px '+col+'33;':'')+'"><div style="display:flex;align-items:stretch;flex-wrap:wrap"><button onclick="'+famFn+'(\''+a.fam.id+'\')" title="กรองเฉพาะ '+e(a.fam.name)+'" style="display:inline-flex;align-items:center;gap:7px;border:none;background:'+col+'14;font-size:14px;font-weight:700;color:'+col+';white-space:nowrap;padding:9px 13px;cursor:pointer;font-family:inherit"><span style="width:9px;height:9px;border-radius:50%;background:'+col+';flex:none"></span>'+e(a.fam.name)+' <span style="font-family:\'DM Mono\',monospace;font-weight:600;opacity:.85;font-size:13px">'+a.pax+((a.booked||0)>a.pax?('<s style="opacity:.6;font-size:11px;margin-left:3px">'+a.booked+'</s>'):'')+'</span>'+(a.locked>0?' <span style="font-size:10px;color:#C0392B">&#128274;'+a.locked+'</span>':'')+'</button>'+subs+'</div>'+foot+'</div>';
+    return '<div style="display:inline-flex;flex-direction:column;border:1.5px solid '+(famOn?col:(_mute?'#E2DED6':col+'aa'))+';background:#fff;border-radius:14px;overflow:hidden;'+(famOn?'box-shadow:0 0 0 2px '+col+'33;':'')+(_mute?'opacity:.72;':'')+'"><div style="display:flex;align-items:stretch;flex-wrap:wrap"><button onclick="'+famFn+'(\''+a.fam.id+'\')" title="กรองเฉพาะ '+e(a.fam.name)+'" style="display:inline-flex;align-items:center;gap:7px;border:none;background:'+_cc+(_mute?'10':'14')+';font-size:14px;font-weight:700;color:'+_cc+';white-space:nowrap;padding:9px 13px;cursor:pointer;font-family:inherit"><span style="width:9px;height:9px;border-radius:50%;background:'+_cc+';flex:none"></span>'+e(a.fam.name)+' <span style="font-family:\'DM Mono\',monospace;font-weight:600;opacity:.85;font-size:13px">'+a.pax+((a.booked||0)>a.pax?('<s style="opacity:.6;font-size:11px;margin-left:3px">'+a.booked+'</s>'):'')+'</span>'+(a.locked>0?' <span style="font-size:10px;color:#C0392B">&#128274;'+a.locked+'</span>':'')+'</button>'+subs+'</div>'+foot+'</div>';
   }).join('');
   return {html:html, dA:dA, dC:dC, dI:dI, dF:dF, total:Math.max(0,(dA+dC+dI+dF)-_lostAll), booked:dA+dC+dI+dF, lost:_lostAll};
 }
