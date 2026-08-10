@@ -50230,6 +50230,9 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-tbl tbody tr:last-child td{border-bottom:none}'
  +S+' .ts-tbl tbody tr:hover td{background:var(--lm50)}'
  +S+' .ts-tbl tr.need td{background:var(--am50)}'
+ /* §tsCxlNoCount · ใบที่เก็บไม่ได้แล้ว · เห็นได้แต่ไม่ดึงสายตาไปจากใบที่ยังต้องตามเก็บจริง */
+ +S+' .ts-tbl tr.ts-cxl td{background:#FAF9F6;color:var(--zn500)}'
+ +S+' .ts-tbl tr.ts-cxl .ts-lead,.ts-tbl tr.ts-cxl .ts-vch{opacity:.62}'
  +S+' .ts-tbl tr.need:hover td{background:#fef6e0}'
  +S+' .ts-tbl .r{text-align:right} '+S+' .ts-tbl .c{text-align:center}'
  +S+' .ts-mono{font-family:\'DM Mono\',monospace;font-variant-numeric:tabular-nums}'
@@ -50878,6 +50881,13 @@ function tsAddonCell(r, date){
     return '<span class="ts-ao '+sc[0]+(a.done===false?' due':'')+'" title="'+e(tip)+'">'+txt+'</span>';
   }).join('')+'</div>';
 }
+// §tsCxlNoCount · กติกาเดียว ใช้ทั้งส่วนเงินหน้างานและ manifest · จะได้ไม่มีวันบอกคนละอย่าง
+//   ไม่มีใครได้เดินทางเลย + ยังไม่ได้รับเงินสักบาท = เก็บไม่ได้แล้ว
+function tsNoCollect(r, paid){
+  if(!r) return false;
+  if(+paid>0) return false;                          // §paid · เก็บไปแล้วค่อยยกเลิก = เรื่องคืนเงิน ไม่ใช่ไม่นับ
+  return (r.travelled<=0) && ((+r.cxl>0)||(+r.ns>0)||(+r.noShow>0));
+}
 function tsPayCell(r, date){
   var b=r.b, e=ckEsc, L=[];
   var m=function(n){ return '฿'+Math.round(n||0).toLocaleString('en-US'); };
@@ -50901,6 +50911,12 @@ function tsPayCell(r, date){
   if(r.cxlRow){
     var cc=b.cancellation||null;
     L.push('<span class="ts-pyd">'+((cc&&+cc.chargeAmount>0)?('ค่าปรับ '+m(cc.chargeAmount)):'ไม่มียอดเก็บ')+'</span>');
+    return '<div class="ts-payc">'+L.join('')+'</div>';
+  }
+  // §tsCxlNoCount · เก็บไม่ได้แล้ว · manifest ต้องไม่บอกว่ายังต้องเก็บ และไม่ต้องเตือนเรื่องหักบิล
+  if(tsNoCollect(r, X.paid)){
+    if(X.due>0) L.push('<span class="ts-pyd" style="opacity:.55;text-decoration:line-through">ต้องเก็บ '+m(X.due)+'</span>');
+    L.push('<span class="ts-pyn">'+((+r.cxl>0)?'ยกเลิกหน้างาน':'ไม่มา')+' &middot; ไม่นับเข้ายอดวันนี้</span>');
     return '<div class="ts-payc">'+L.join('')+'</div>';
   }
   // ยอดที่ต้องเก็บวันนี้ · แยกให้เห็นว่ามาจากอะไร (COT / ค้าง / upgrade)
@@ -52963,18 +52979,25 @@ function renderTravelSum(){
   var mAll=all.map(function(r){ var m=tsMoneyOf(r.b,date); m.r=r; m.S=tsSaleList(r.b,date); return m; });
   // §tsSaleCol · ใบที่ขายแต่ของเพิ่มอย่างเดียว (ไม่มี COT/ยอดค้าง) ต้องขึ้นด้วย
   var mRows=mAll.filter(function(m){ return m.target>0 || m.paid>0 || m.S.tot>0; });
+  // §tsCxlNoCount · ใบที่เก็บเงินไม่ได้แล้ว · ยังโชว์ แต่ห้ามนับ
+  mAll.forEach(function(m){
+    m.cxl = tsNoCollect(m.r, m.paid);
+    m.cxlKind = (m.r.cxl>0) ? 'ยกเลิกหน้างาน' : 'ไม่มา';
+  });
+  var nCollect=mRows.filter(function(m){ return !m.cxl; }).length;
   var sumCash=0,sumTf=0,sumCard=0,sumDue=0,sumTarget=0,sumFee=0,sumSale=0,nSale=0,sumSaleDue=0,sumFeeSale=0;
   mRows.forEach(function(m){
     sumCash+=(m.by.cash||0)+(m.S.by.cash||0);
     sumTf  +=(m.by.transfer||0)+(m.S.by.transfer||0);
     sumCard+=(m.by.card||0)+(m.S.by.card||0);
-    sumDue+=m.due; sumTarget+=m.target;
+    if(!m.cxl){ sumDue+=m.due; sumTarget+=m.target; }   // §tsCxlNoCount · เงินที่เก็บไม่ได้ ไม่เข้ายอดต้องเก็บ
     sumFee+=(+m.M.pierFee||0)+(+m.S.fee||0); sumFeeSale+=(+m.S.fee||0);
     sumSale+=m.S.tot; nSale+=m.S.n; sumSaleDue+=m.S.due; });
 
   // §tsCashNet · แยกเงินที่ต้องจ่ายออกตามคำตัดสิน COT ออกจากยอดที่รับเข้า
   var sumPayout=0, sumDeduct=0, sumCotAll=0, nCotLeft=0;
   mRows.forEach(function(m){
+    if(m.cxl) return;                                  // §cot · ไม่เคยได้เงินมา ไม่มีอะไรให้ตัดสิน
     var v=+((m.M&&m.M.cot)||0); if(!(v>0)) return;
     sumCotAll+=v;
     var c=(typeof tsCotGet==='function')?tsCotGet(m.r.b.id,date):null;
@@ -52996,13 +53019,13 @@ function renderTravelSum(){
     + K('rose','3 · No-show', tNs, 'คน', 'ไม่มาโดยไม่แจ้ง')
     + K('amber','4 · ยกเลิกหน้างาน', tCxl, 'คน', 'CXL · แจ้งหน้างาน')
     + K(nPending?'act':'lime','5 · รอตัดสิน', nPending, 'เคส', (nPending?'ต้องตัดสินก่อนปิดวัน':'ตัดสินครบแล้ว'))
-    + K('plain','6 · เงินหน้างาน', money(sumTarget), '', mRows.length+' ใบที่ต้องเก็บ')
+    + K('plain','6 · เงินหน้างาน', money(sumTarget), '', nCollect+' ใบที่ต้องเก็บ')
     + '</div>'
     // §tsFactSheet · สรุปเป็นประโยคเดียว · คนที่ไม่อยากไล่ตารางอ่านบรรทัดนี้จบ
     + '<div class="ts-read">จอง <b>'+tBooked+'</b> &rarr; เดินทางจริง <b>'+tTrav+'</b>'
       + (tBooked>0?(' (<b>'+(Math.round(tTrav/tBooked*1000)/10)+'%</b>)'):'')
       + ' &middot; เก็บค่าปรับได้ <b>'+money(charge)+'</b>'
-      + ' &middot; เงินที่ต้องเก็บหน้าท่า <b>'+money(sumTarget)+'</b> จาก <b>'+mRows.length+'</b> ใบ'
+      + ' &middot; เงินที่ต้องเก็บหน้าท่า <b>'+money(sumTarget)+'</b> จาก <b>'+nCollect+'</b> ใบ'
       + (sumDue>0?(' &middot; ยังค้างอีก <b>'+money(sumDue)+'</b>'):' &middot; เก็บครบแล้ว')
       + (sumSale>0?(' &middot; ขายเพิ่มหน้างาน <b>'+money(sumSale)+'</b> จาก <b>'+nSale+'</b> รายการ'):'')
       + (nPending?(' &middot; ยังมี <b>'+nPending+'</b> เคสรอตัดสิน'):'')
@@ -53113,7 +53136,7 @@ function renderTravelSum(){
     var parts=[]; if(m.M.cot>0) parts.push('COT '+money(m.M.cot));
     if(m.M.balance>0) parts.push('ค้าง '+money(m.M.balance));
     if(m.M.upDue>0) parts.push('upgrade '+money(m.M.upDue));
-    mbody+='<tr class="'+(m.due>0?'need':'')+'">'
+    mbody+='<tr class="'+(m.cxl?'ts-cxl':(m.due>0?'need':''))+'">'
       +'<td><span class="ts-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'
       +'<td><span class="ts-ag" style="background:'+agColor+';color:'+agInk+'" title="'+e(agName)+'">'+e(agName)+'</span></td>'
       +'<td><div class="ts-lead">'+e(b.leadPax||'—')+'</div><div class="ts-tel">'+e(b.leadPhone||b.phone||'')+'</div></td>'
@@ -53123,15 +53146,21 @@ function renderTravelSum(){
       +'<td class="ts-mono" style="font-size:10.5px">'+(e([m.who].concat(m.S.list.map(function(x){return x.who;}))
           .filter(function(v,i,a){ return v && a.indexOf(v)===i; }).join(' · '))||'<span style="color:var(--zn400)">—</span>')+'</td>'
       +'<td>'+mchips+slipWarn+slipRow+'</td>'
-      +'<td class="r ts-mono" style="font-weight:800">'+money(m.target)+'<div class="ts-tel">'+e(parts.join(' · '))+'</div></td>'
+      +'<td class="r ts-mono" style="font-weight:800">'
+        +(m.cxl?('<span style="text-decoration:line-through;opacity:.45">'+money(m.target)+'</span>'):money(m.target))
+        +'<div class="ts-tel">'+(m.cxl?'ไม่นับ · เก็บไม่ได้':e(parts.join(' · ')))+'</div></td>'
       // §tsCotSettle · โน้ต COT + ช่องตัดสินการจัดการเงินก้อนนี้
       +'<td>'+((m.M.cot>0)
           ? ((String(m.M.note||'').trim())
               ? ('<div class="ts-cotn">'+e(String(m.M.note).trim())+'</div>')
               : '<div class="ts-cotn empty">ไม่มีโน้ต</div>')
           : '<span style="color:var(--zn400)">—</span>')+'</td>'
-      +'<td class="ts-cotcol">'+tsCotCell(b, m.M, date, money, e)+'</td>'
-      +'<td class="c">'+(m.due>0
+      +'<td class="ts-cotcol">'+(m.cxl
+          ? '<span style="color:var(--zn400);font-size:10.5px">ไม่ต้องตัดสิน &middot; เงินไม่ได้เข้ามา</span>'
+          : tsCotCell(b, m.M, date, money, e))+'</td>'
+      +'<td class="c">'+(m.cxl
+        ? ('<span class="ts-chip r">'+m.cxlKind+'</span><div class="ts-tel" style="margin-top:3px">ไม่นับเข้ายอดวันนี้</div>')
+        : m.due>0
         ? ('<span class="ts-chip a">รอเก็บ '+money(m.due)+'</span>')
         : (m.target<=0 && m.paid<=0 && m.S.got>0
             ? ('<span class="ts-chip g">ขายเพิ่ม '+money(m.S.got)+'</span>')
