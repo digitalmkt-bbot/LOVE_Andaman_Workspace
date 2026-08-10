@@ -73918,7 +73918,26 @@ function bkV2VoucherTicket(bk, esc){
   if(sm.vegan) reqBits.push(chip('Vegan '+sm.vegan,'#E7F5EE','#0F6E56','#BFE4D5'));
   if(sm.halal) reqBits.push(chip('Halal '+sm.halal,'#E7F5EE','#0F6E56','#BFE4D5'));
   if((bk.notes||'').trim()) reqBits.push('<div style="font-size:12px;line-height:1.45;margin-top:2px">'+esc(bk.notes.trim())+'</div>');
-  const svcBits=(bk.addOns||[]).map(a=>chip(esc(a.label||a.type||'')+(+a.amount>0?(' '+money(a.amount)):''),'#E9F5FC','#0E5E80','#C9E6F5'));
+  // §vcSvc · แหล่งเดียวกับใบงานเรือ · bundle ของทริปและ Rate Type ก็นับ ไม่ใช่แค่ addOns
+  const svcBits=[];
+  (function(){
+    let _join=false, _chtr=0, _ptr=false;
+    (bk.trips||[]).forEach(t=>{ if(typeof bkV2AddOnFlags!=='function') return;
+      const f=bkV2AddOnFlags(bk, t.routeId);
+      if(f.join) _join=true;
+      if(f.charter) _chtr += (+f.charterQty||1);
+      if(f.transfer) _ptr=true; });
+    if(_join) svcBits.push(chip('Longtail Join','#E9F5FC','#0E5E80','#C9E6F5'));
+    if(_chtr) svcBits.push(chip('Longtail Charter'+(_chtr>1?(' \u00d7'+_chtr):''),'#E9F5FC','#0E5E80','#C9E6F5'));
+    if(_ptr)  svcBits.push(chip('Private Transfer','#E9F5FC','#0E5E80','#C9E6F5'));
+    // add-on ชื่ออื่น ๆ · ข้ามหางยาวกับรถส่วนตัวเพราะนับไปแล้วข้างบน
+    (bk.addOns||[]).forEach(a=>{
+      const ty=String(a.type||'');
+      if(/longtail|transfer/i.test(ty)) return;
+      const lbl=String(a.label||ty).trim(); if(!lbl) return;
+      svcBits.push(chip(esc(lbl)+((+a.qty>1)?(' \u00d7'+(+a.qty)):'')+(+a.amount>0?(' '+money(a.amount)):''),'#E9F5FC','#0E5E80','#C9E6F5'));
+    });
+  })();
   const langs=[]; if(gd.english)langs.push('EN'); if(gd.russian)langs.push('RU'); if(gd.chinese)langs.push('CN');
   if((gd.otherLang||'').trim()) langs.push(esc(gd.otherLang.trim()));
 
