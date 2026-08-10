@@ -7335,10 +7335,8 @@ function renderCal(){
   // ── §cal2 · ท่าที่ปิดทั้งเดือน · บอกครั้งเดียว ไม่ต้องซ้ำในทุกช่องวัน ──
   const _shutAll=piers.filter(p=>closedDaysPier[p]>=daysInMonth);
   const _openP=piers.filter(p=>closedDaysPier[p]<daysInMonth);
-  // §calHead/§bar · ข้อความเดิมของแถบนี้ย้ายไปอยู่ในหัวเดือน (บริบทของเดือน) กับแถวคำอธิบายล่าง (วิธีใช้)
-  const _shutTxt=_shutAll.map(p=>`${PIER_NAME[p]} closed`).join(' &middot; ')
-    +((_shutAll.length&&_openP.length)?' &middot; ':'')
-    +(_openP.length&&_shutAll.length?`from ${_openP.map(p=>PIER_NAME[p]).join(' · ')} only`:'');
+  // §calHead/§bar · แถบนี้ถูกยุบไปแล้ว · "คลิกวันไหนก็ได้" ย้ายไปอยู่แถวคำอธิบายล่าง
+  //   ส่วนท่าที่ไม่มีเที่ยว อ่านได้จากชิปเส้นทางเหนือปฏิทิน ซึ่งบอกละเอียดกว่า
   const shutBar='';
 
   // ── §cal2 · ปฏิทินเต็มหน้า ────────────────────────────────────────
@@ -7410,7 +7408,7 @@ function renderCal(){
       </div>`; })()
     : `<div class="cal2-mb">
         <div class="r1"><span class="mo">${(MONTHS_EN[calMonth]||'').toUpperCase()} <span class="yr">${calYear}</span></span></div>
-        <span class="sub">SEATS AVAILABLE PER DAY &middot; ${_rngLbl}${_visRt.length?(' &middot; '+_visRt.length+' เส้นทาง'):''}${_shutTxt?`<span style="opacity:.66"> &middot; ${_shutTxt}</span>`:''}</span>
+        <span class="sub">SEATS AVAILABLE PER DAY &middot; ${_rngLbl}</span>
       </div>`;
   const calGrid2=`<div class="cal2-box">
     ${monthBar}
