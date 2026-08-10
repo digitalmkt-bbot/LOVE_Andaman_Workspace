@@ -884,13 +884,25 @@ async function relSyncB2C(singleExtId = null) {
     // a cancelled state (existing not-cancelled → takes EXCLUDED), but can never resurrect one ops cancelled.
     // §opsApproved · เพิ่มชั้นที่สาม: ใบที่ ops กด "อนุมัติ" ไปแล้วต้องเหนียวเท่ากับใบที่ ops ยกเลิก
     //   ลำดับสำคัญ — ยกเลิกฝั่งเรา > ยกเลิกฝั่ง B2C (ลูกค้ายกเลิกจริง ต้องทะลุเข้ามาได้) > อนุมัติแล้ว > ค่าจากต้นทาง
+    // §b2cOwn · คอลัมน์ที่ ops ประกาศเป็นเจ้าของ (อยู่ใน b2coverride) ให้คงค่าของเราไว้
+    //   §keep · เงินห้าม override เด็ดขาด · ต้องตรงกับที่ลูกค้าจ่ายที่ B2C เสมอ
+    const B2C_NO_OVERRIDE = new Set(['status','total','pricebreakdown_seat','pricebreakdown_addon',
+      'pricebreakdown_focdiscount','pricebreakdown_discount','pricebreakdown_extra','pricebreakdown_total',
+      'paymentsnapshot_method','paymentsnapshot_netdays','paymentsnapshot_source',
+      'paymentsnapshot_contractversion','paymentsnapshot_paid','paymentsnapshot_paidstatus']);
+    //   เก็บเป็น json_text ของอาร์เรย์ชื่อคอลัมน์ → หาแบบ substring กับรูปแบบที่ใส่เครื่องหมายคำพูดครบ
+    //   ('"note"' จึงไม่ไปแมตช์ '"noteX"') · ไม่ต้องมีตารางเพิ่ม ไม่ต้อง join
+    const ovrKeep = c => `position('"${c}"' in coalesce(${qic('sb_bookings')}.${qic('b2coverride')}, '')) > 0`;
     const bkSet     = BK_UPDATE.map(c => c === 'status'
       ? `${qic(c)} = CASE`
         + ` WHEN ${qic('sb_bookings')}.${qic(c)} IN ('cancelled','cancelled_weather','rejected') THEN ${qic('sb_bookings')}.${qic(c)}`
         + ` WHEN EXCLUDED.${qic(c)} IN ('cancelled','cancelled_weather','rejected') THEN EXCLUDED.${qic(c)}`
         + ` WHEN ${qic('sb_bookings')}.${qic('approval_status')} = 'approved' THEN ${qic('sb_bookings')}.${qic(c)}`
         + ` ELSE EXCLUDED.${qic(c)} END`
-      : `${qic(c)} = EXCLUDED.${qic(c)}`).join(', ');
+      : B2C_NO_OVERRIDE.has(c)
+      ? `${qic(c)} = EXCLUDED.${qic(c)}`
+      : `${qic(c)} = CASE WHEN ${ovrKeep(c)} THEN ${qic('sb_bookings')}.${qic(c)} ELSE EXCLUDED.${qic(c)} END`
+      ).join(', ');
     const tripColSql = TRIP_COLS.map(qic).join(', ');
     const tripPh    = TRIP_COLS.map((_, i) => '$' + (i + 1)).join(', ');
     const paxColSql = PAX_COLS.map(qic).join(', ');
@@ -1317,6 +1329,8 @@ async function initDb(){
         await sq(`fleet_memos__items.${col} -> double`, `ALTER TABLE ${OS_SCHEMA}."fleet_memos__items" ALTER COLUMN "${col}" TYPE double precision USING "${col}"::double precision`);
       }
       await sq('sb_vehicles.color col', `ALTER TABLE ${OS_SCHEMA}."sb_vehicles" ADD COLUMN IF NOT EXISTS "color" text`);
+      // §b2cOwn · รายชื่อคอลัมน์ที่ ops ประกาศเป็นเจ้าของบน booking ของ B2C · sync จะข้ามคอลัมน์เหล่านั้น
+      await sq('sb_bookings.b2coverride col', `ALTER TABLE ${OS_SCHEMA}."sb_bookings" ADD COLUMN IF NOT EXISTS "b2coverride" text`);
       await sq('boats.color col', `ALTER TABLE ${OS_SCHEMA}."boats" ADD COLUMN IF NOT EXISTS "color" text`);
       // §B2C paid state (2026-07-30, from lk-inbox): B2C's payment_type is a BILLING TERM
       // (proforma/invoice/bt/cot) and says nothing about whether money arrived — paid state must be

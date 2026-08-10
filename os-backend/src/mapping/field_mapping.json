@@ -4925,6 +4925,11 @@
       "source": "pierPayments",
       "kind": "json_text",
       "db_type": "text"
+    },
+    "b2coverride": {
+      "source": "b2cOverride",
+      "kind": "json_text",
+      "db_type": "text"
     }
   },
   "sb_bookings__passengers": {

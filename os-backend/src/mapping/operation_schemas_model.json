@@ -4479,6 +4479,10 @@
       {
         "name": "pierpayments",
         "type": "text"
+      },
+      {
+        "name": "b2coverride",
+        "type": "text"
       }
     ],
     "primary_key": "id",

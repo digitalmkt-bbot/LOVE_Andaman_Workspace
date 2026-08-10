@@ -65186,6 +65186,10 @@ function bkV2RenderNewBooking(){
         <div class="meta">${routesCnt} route${routesCnt===1?'':'s'} covered &middot; valid ${validFrom} &rarr; ${validTo}</div>
       </div>
     `;
+  } else if(typeof bkV2IsB2CBk==='function' && bkV2IsB2CBk(d)){
+    // §b2cEdit · ใบ B2C ไม่ต้องมี Rate Type · ราคามาจากต้นทางโดยตรง · การไปผูกเรทให้เอเจนต์ B2C
+    //   จะทำให้ระบบคิดราคาใหม่ทับยอดที่ลูกค้าจ่ายจริง ซึ่งผิดกว่าเดิม
+    rtPreview = `<div class="bkv2-nb-rt-preview" style="background:#EEF5FF;border-color:#C3D8F2;color:#185FA5"><strong>ราคามาจาก B2C โดยตรง</strong><div class="meta">&#3647;${Number(d.manualTotal||0).toLocaleString()} &middot; ไม่ต้องผูก Rate Type &middot; ยอดเงิน ทริป และจำนวนคน แก้ที่ B2C เท่านั้น &middot; ที่แก้ได้ในหน้านี้คือจุดรับ-ส่ง ผู้ติดต่อ และข้อมูลปฏิบัติการ</div></div>`;
   } else if(d.agentId){
     rtPreview = `<div class="bkv2-nb-rt-preview" style="background:#FFF6E5;border-color:#EAD9B0;color:#633806"><strong>&#9888; No Rate Type bound</strong><div class="meta">This agent has no Rate Type assigned · go to Agent List to bind one before proceeding</div></div>`;
   }
@@ -65194,7 +65198,9 @@ function bkV2RenderNewBooking(){
   const createdAt = new Date(d.createdAt);
   const createdStr = createdAt.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
 
-  const canContinue = d.agentId && d.leadPax && (d.rateTypeRef || (d.priceMode==='manual' && Number(d.manualTotal)>0));
+  // §b2cEdit · ใบ B2C ผ่านได้โดยไม่ต้องมีเรทและไม่ต้องมียอด (ใบ ฿0 ก็ยังต้องแก้จุดรับได้)
+  const canContinue = d.agentId && d.leadPax && (d.rateTypeRef || (d.priceMode==='manual' && Number(d.manualTotal)>0)
+    || (typeof bkV2IsB2CBk==='function' && bkV2IsB2CBk(d)));
 
   return `
     <div class="bkv2-nb">
@@ -65596,6 +65602,8 @@ function bkV2RenderTripsSection(){
   const escapeHTML = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 
   if(!rt){
+    // §b2cEdit · ใบ B2C ไม่มี Rate Type และไม่ควรมี · แสดงทริปจริงแบบอ่านอย่างเดียว
+    if(typeof bkV2IsB2CBk==='function' && bkV2IsB2CBk(d)) return bkV2RenderB2CTripsRO(d);
     return `<div style="font-size:12px;color:var(--ink-soft);font-style:italic;padding:12px 0">Pick an agent first to enable trip selection.</div>`;
   }
 
@@ -65919,7 +65927,21 @@ function bkV2RenderAddOnsSection(){
   const d = _bkV2.newBooking;
   if(!Array.isArray(d.addOns)) d.addOns = [];   // ponytail: legacy bookings have no addOns array → edit crashed on .find/.some
   const rt = bkV2GetRT();
-  if(!rt) return `<div style="font-size:12px;color:var(--ink-soft);font-style:italic;padding:12px 0">Pick an agent first to see available add-ons.</div>`;
+  if(!rt){
+    // §b2cEdit · add-on ของใบ B2C ถูกลบแล้วใส่ใหม่ทุกรอบ sync · โชว์ของที่มีจริงแบบอ่านอย่างเดียว
+    if(typeof bkV2IsB2CBk==='function' && bkV2IsB2CBk(d)){
+      var _e=function(x){ return String(x||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); };
+      var _li=(d.addOns||[]).map(function(a){
+        return '<div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;font-size:11.5px">'
+          +'<span>'+_e(a.label||a.type)+(a.qty>1?(' &times; '+a.qty):'')+'</span>'
+          +'<span style="font-family:\'DM Mono\',monospace">&#3647;'+(Number(a.amount)||0).toLocaleString()+'</span></div>';
+      }).join('');
+      return '<div style="font-size:11.5px;color:var(--ink-soft);padding:4px 0">'
+        +(_li||'<span style="font-style:italic">ไม่มี add-on</span>')
+        +'<div style="font-size:10.5px;color:#8a7a58;margin-top:6px">มาจาก B2C &middot; แก้ที่ B2C เท่านั้น</div></div>';
+    }
+    return `<div style="font-size:12px;color:var(--ink-soft);font-style:italic;padding:12px 0">Pick an agent first to see available add-ons.</div>`;
+  }
 
   const escapeHTML = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
   const checked = type => d.addOns.some(a => a.type === type);
@@ -66149,7 +66171,11 @@ function bkV2RenderReviewPanel(){
       <div style="padding:6px 0;border-bottom:1px solid #f5f3ef;font-size:11px;line-height:1.4">
         <div style="display:flex;align-items:baseline;justify-content:space-between;gap:6px">
           <div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--ink)" title="${escapeHTML(route?.name||t.routeId)}">${i+1}. ${escapeHTML(route?.name||t.routeId)}</div>
-          <div ${d.priceMode==='manual'?'style="text-decoration:line-through;opacity:.5" title="Rate-type reference — Manual total used"':''}>${fmtMoney(sub.total)}</div>
+          ${(function(){ /* §b2cEdit · ใบ B2C ยอดรายทริปเป็นของจริง ไม่ต้องขีดฆ่า */
+            var _b2c=(typeof bkV2IsB2CBk==='function')&&bkV2IsB2CBk(d);
+            if(_b2c) return `<div>${fmtMoney(Number(t.subtotal)||0)}</div>`;
+            return `<div ${d.priceMode==='manual'?'style="text-decoration:line-through;opacity:.5" title="Rate-type reference — Manual total used"':''}>${fmtMoney(sub.total)}</div>`;
+          })()}
         </div>
         <div style="font-family:Manrope,sans-serif;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:3px">
           <span style="font-size:11.5px;font-weight:700;color:var(--ink)">${t.date ? escapeHTML(t.date) : '<span style="color:#a32d2d">no date</span>'}</span>
@@ -72199,7 +72225,9 @@ function bkV2CommitBooking(status){
     if(!validTrips.length)                   missHard.push('Trip (route + date)');
     if(totalPax <= 0)                        missHard.push('Pax (at least 1)');
     if(!(d.leadPax||'').trim())              missHard.push('Lead passenger name');
-    if(!d.rateTypeRef)                       missHard.push('Rate Type');
+    // §b2cSave · ราคาไม่ได้มาจากเรท (B2C ส่งยอดมาเอง / walk-in ตั้งราคาเอง) ก็ไม่ต้องมีเรท
+    const _extPrice = (typeof bkV2IsB2CBk==='function') && bkV2IsB2CBk(d);
+    if(!d.rateTypeRef && d.priceMode!=='manual') missHard.push('Rate Type');
     // Nationality required (needed for market/demand analytics) · auto-guess from lead name when blank
     if(!d.leadNationality && typeof bkV2GuessNationality==='function'){ const _gn=bkV2GuessNationality(d.leadPax||''); if(_gn) d.leadNationality=_gn; }
     if(!d.leadNationality)                   missHard.push('Lead nationality (cannot auto-detect — please pick)');
@@ -72215,7 +72243,9 @@ function bkV2CommitBooking(status){
     }
     if(_paxNoNat.length) missHard.push('Passenger nationality — '+_paxNoNat.join(', ')+' (cannot auto-detect · please pick)');
     const _g = d.guides||{};
-    if(!(_g.english||_g.russian||_g.chinese||(_g.otherLang||'').trim())) missHard.push('Guide language');
+    // §b2cSave · ใบ B2C ไม่ได้ถามภาษาไกด์มา · บังคับตรงนี้จะได้ข้อมูลที่ ops เดาเอา
+    const _noLang = !(_g.english||_g.russian||_g.chinese||(_g.otherLang||'').trim());
+    if(_noLang && !_extPrice) missHard.push('Guide language');
     // If a pickup area/zone is chosen, the specific Hotel / pickup location is required — EXCEPT No Transfer (self-arrival · field becomes an optional note)
     const _pa = (typeof bkV2GetArea==='function') ? bkV2GetArea(d.pickupAreaId) : null;
     const _zoneNT = (_pa && (_pa.zone==='NoTransfer'||_pa.zone==='NT')) || d.pickupZoneFilter==='NoTransfer' || (d.trips||[]).some(t=>t.zone==='NoTransfer'||t.zone==='NT');
@@ -72230,7 +72260,9 @@ function bkV2CommitBooking(status){
     // §non-operating guard (hard block · a trip cannot be booked on a day its route does not run · closed/off-season/weather)
     if(typeof bkV2IsRouteOpenOn==='function'){
       const _closedTrips = validTrips.filter(t=>!bkV2IsRouteOpenOn(t.routeId, t.date)).map(t=>{ const _rn=(typeof ROUTES!=='undefined' && (ROUTES.find(r=>r.id===t.routeId)||{}).name)||t.routeId; return _rn+' · '+t.date+' (ทริปไม่ออกวันนี้)'; });
-      if(_closedTrips.length) missHard.push('ทริปไม่ออกวันที่เลือก · route not running that day:\n    - '+_closedTrips.join('\n    - '));
+      // §b2cSave · ใบ B2C ทริป/วันที่เป็นของต้นทางและแก้ที่นี่ไม่ได้ · บล็อกไว้ = ใบนั้นแก้อะไรไม่ได้เลย
+      if(_closedTrips.length && !_extPrice) missHard.push('ทริปไม่ออกวันที่เลือก · route not running that day:\n    - '+_closedTrips.join('\n    - '));
+      else if(_closedTrips.length) _bkV2._b2cClosedWarn = _closedTrips;
     }
     if(missHard.length){
       alert('Cannot save — please complete:\n\n· ' + missHard.join('\n· '));
@@ -72272,6 +72304,10 @@ function bkV2CommitBooking(status){
     // Soft: pickup (hotel / area) — OTA bookings may not have it yet → warn + flag, don't block
     const _missSoft = [];
     if(!d.pickupAreaId && !(d.hotelName||'').trim()) _missSoft.push('pickup');
+    // §b2cSave · สิ่งที่ยกเว้นให้ใบ B2C ต้องไม่หายไปเฉย ๆ · ติดธงไว้บนใบให้ตามเก็บ
+    if(_extPrice && _noLang) _missSoft.push('guide-lang');
+    if(_extPrice && Array.isArray(_bkV2._b2cClosedWarn) && _bkV2._b2cClosedWarn.length) _missSoft.push('route-closed');
+    _bkV2._b2cClosedWarn = null;
     if(_missSoft.length){
       if(!confirm('ยังไม่ได้ระบุจุดรับ (pickup)\nบันทึกต่อโดยติดธง ⚠ ให้ตามเก็บภายหลังไหม?')) return;
     }
@@ -72443,6 +72479,7 @@ function bkV2CommitBooking(status){
         return { locked: lu, general: Math.max(0, paxT - lu) };
       })(),
       lockDrawSel: (t.bookingMode==='charter') ? {} : { ...(t.lockDrawSel||{}) },   // staff-picked draw sources {lockId:qty} (Option A sub-groups)
+      ops: t.ops || undefined,   // §b2cEdit/§ops · การจัดเรือ-รถ + ผลเช็คอินของ "วันนั้น" · เดิมสร้างทริปใหม่โดยไม่คัดมา = แก้ booking ทีเดียวหายทุกวัน
       lockDraws: [],   // filled after save · [{lockId, qty}]
       subtotal: bkV2TripSubtotal(t).total
     })),
@@ -72523,6 +72560,22 @@ function bkV2CommitBooking(status){
     // ⚠ Preserve operational assignments across edits — boat assign (ops.boatId), van group/van/return,
     //   reconfirm, final pickup time, upgrade, etc. were being WIPED on every edit (data-loss bug 2026-06-14).
     if(editing.ops) newBk.ops = editing.ops;
+    // §b2cEdit · เงิน · ทริป · ผู้โดยสาร · add-on เป็นของ B2C ทั้งชุด · คัดของเดิมกลับ
+    //   ไม่ให้เครื่องคิดเรทของเราเขียนทับ (ใบที่ไม่มีเรทจะถูกคิดใหม่เป็น ฿0)
+    //   แล้วจดว่า ops แตะช่องไหนบ้าง เพื่อให้ sync ข้ามเฉพาะช่องนั้น (server.js §b2cOwn)
+    if(bkV2IsB2CBk(editing)){
+      newBk.total = editing.total;
+      newBk.priceBreakdown = JSON.parse(JSON.stringify(editing.priceBreakdown || {}));
+      newBk.priceMode = editing.priceMode || 'rate';
+      newBk.manualTotal = (editing.manualTotal != null) ? editing.manualTotal : null;
+      newBk.trips = JSON.parse(JSON.stringify(editing.trips || []));
+      newBk.passengers = JSON.parse(JSON.stringify(editing.passengers || []));
+      newBk.addOns = JSON.parse(JSON.stringify(editing.addOns || []));
+      var _prevOv = Array.isArray(editing.b2cOverride) ? editing.b2cOverride : [];
+      var _newOv  = bkV2B2CDiff(d._b2cSnap, newBk);
+      newBk.b2cOverride = _prevOv.concat(_newOv).filter(function(v,i,a){ return v && a.indexOf(v)===i; });
+      if(_newOv.length) bkV2AddHistory(newBk,'edit','แก้ช่องของ B2C: '+_newOv.join(', ')+' · จากนี้ sync จะไม่ทับช่องเหล่านี้','Edited');
+    } else if(Array.isArray(editing.b2cOverride)){ newBk.b2cOverride = editing.b2cOverride; }
     // …but a NEW travel day means the old day's boat and van no longer apply. Preserving them blindly is how
     // a booking moved from the 12th to the 15th kept the 12th's boat and van (and its pickup time).
     // Charter keeps its boat — the charter lock travels with the trip.
@@ -72866,7 +72919,11 @@ function bkV2CalcQuote(){
   if(d.priceMode === 'manual'){
     const mt = Math.max(0, Number(d.manualTotal)||0);
     let foc=0; (d.trips||[]).forEach(t=> foc += bkV2PaxTot(t.pax,'foc'));
-    return { totalSeat:mt, totalAddOn:0, focDiscount:0, totalFoc:foc, totalDiscount:0, totalExtra:0, base:mt, grandTotal:mt, perTrip:[], manual:true };
+    // §b2cEdit · ใบ B2C · ยอดรายทริปกับ add-on อ่านจากที่ต้นทางส่งมา ไม่ใช่ 0 (ยอดรวมยังเท่าเดิม)
+    const _b2c = (typeof bkV2IsB2CBk==='function') && bkV2IsB2CBk(d);
+    const _pt  = _b2c ? (d.trips||[]).map(t=>({ total:Number(t.subtotal)||0 })) : [];
+    const _ao  = _b2c ? (d.addOns||[]).reduce((s,a)=>s+(Number(a.amount)||0),0) : 0;
+    return { totalSeat:Math.max(0,mt-_ao), totalAddOn:_ao, focDiscount:0, totalFoc:foc, totalDiscount:0, totalExtra:0, base:mt, grandTotal:mt, perTrip:_pt, manual:true, b2c:_b2c };
   }
   let totalSeat = 0, totalFoc = 0, focDiscount = 0;
   const perTrip = d.trips.map(t => {
@@ -73410,6 +73467,49 @@ function bkV2EditLockActive(bk){   // → {by,mins} if someone ELSE holds a fres
 }
 function bkV2SetEditLock(bkId){ const bk=SB_BOOKINGS.find(b=>b.id===bkId); if(!bk) return; bk.editLock={uid:_bkV2MeUid(), by:_bkV2MeName(), at:Date.now()}; try{acctPersistBookings();}catch(e){} }
 function bkV2ClearEditLock(bkId){ const bk=SB_BOOKINGS.find(b=>b.id===bkId); if(bk && bk.editLock){ delete bk.editLock; try{acctPersistBookings();}catch(e){} } }
+// §b2cEdit · booking ที่มาจาก B2C · id ขึ้นต้นด้วย b2c_ เสมอ (relSyncB2C เป็นคนตั้ง)
+function bkV2IsB2CBk(bk){ return /^b2c_/.test(String((bk&&bk.id)||'')); }
+// ช่องที่ B2C เป็นเจ้าของและ sync เขียนทับทุกรอบ · key = ชื่อในแอป · value = ชื่อคอลัมน์ใน DB
+//   ops แก้ช่องไหน ชื่อคอลัมน์นั้นจะถูกจดลง bk.b2cOverride แล้ว sync จะข้ามเฉพาะช่องนั้น
+//   (ราคาไม่อยู่ในนี้โดยตั้งใจ · ยอดเงินล็อกตาม B2C เสมอ)
+var BKV2_B2C_OWN = { leadPax:'leadpax', leadNationality:'leadnationality', leadPhone:'leadphone',
+  leadEmail:'leademail', hotelName:'hotelname', pickupArea:'pickuparea', pickupZone:'pickupzone',
+  pickupSelf:'pickupself', dropoffHotelName:'dropoffhotelname', note:'note',
+  bookingDate:'bookingdate', voucherRef:'voucherref' };
+function bkV2B2CSnap(bk){
+  var o={}; Object.keys(BKV2_B2C_OWN).forEach(function(k){ o[k]=(bk?bk[k]:undefined); }); return o;
+}
+function bkV2B2CDiff(snap, now){
+  var out=[]; if(!snap) return out;
+  Object.keys(BKV2_B2C_OWN).forEach(function(k){
+    var a=snap[k], b=now?now[k]:undefined;
+    if(String(a==null?'':a) !== String(b==null?'':b)) out.push(BKV2_B2C_OWN[k]);
+  });
+  return out;
+}
+// ทริป + add-on ของใบ B2C · อ่านอย่างเดียว · sync ลบแล้วใส่ใหม่ทุกรอบ แก้ที่นี่ไม่มีทางอยู่
+function bkV2RenderB2CTripsRO(d){
+  var e=function(x){ return String(x||'').replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); };
+  var rows=(d.trips||[]).map(function(t,i){
+    var r=(typeof ROUTES!=='undefined')?ROUTES.find(function(x){return x.id===t.routeId;}):null;
+    var pt=function(k){ return (typeof bkV2PaxTot==='function')?bkV2PaxTot(t.pax||{},k):0; };
+    var parts=[]; if(pt('ad'))parts.push(pt('ad')+' AD'); if(pt('chd'))parts.push(pt('chd')+' CHD');
+    if(pt('inf'))parts.push(pt('inf')+' INF'); if(pt('foc'))parts.push(pt('foc')+' FOC');
+    return '<div style="display:flex;align-items:baseline;gap:10px;padding:8px 0;border-bottom:1px solid #f0eee9">'
+      +'<span style="font-family:\'DM Mono\',monospace;font-size:11px;color:#9b9590">'+(i+1)+'</span>'
+      +'<div style="flex:1;min-width:0"><div style="font-weight:700;font-size:12.5px">'+e((r&&r.name)||t.routeId)+'</div>'
+      +'<div style="font-size:11px;color:var(--ink-soft);margin-top:2px">'+e(t.date||'—')
+        +' &middot; '+e(t.zone||'—')+' &middot; '+e(parts.join(' · ')||'0 pax')+'</div></div>'
+      +'<div style="font-family:\'DM Mono\',monospace;font-size:12px">&#3647;'+(Number(t.subtotal)||0).toLocaleString()+'</div>'
+    +'</div>';
+  }).join('');
+  return '<div style="border:1px solid #EAD9B0;background:#FFFBF2;border-radius:10px;padding:10px 13px">'
+    +'<div style="font-size:11px;font-weight:700;color:#633806;letter-spacing:.03em">ทริป &middot; pax &middot; ราคา มาจาก B2C</div>'
+    +'<div style="font-size:10.5px;color:#8a7a58;margin-top:2px;line-height:1.45">ชุดนี้ถูกดึงใหม่จาก B2C ทุกครั้งที่ sync '
+      +'&middot; แก้ตรงนี้จะถูกทับกลับ ถ้าต้องเปลี่ยนทริป/จำนวนคน/ราคา ให้แก้ที่ B2C</div>'
+    +'<div style="margin-top:8px">'+(rows||'<div style="font-size:11.5px;color:#9b9590;padding:8px 0">ไม่มีทริป</div>')+'</div>'
+  +'</div>';
+}
 function bkV2EditBooking(bookingId){
   const bk = SB_BOOKINGS.find(b => b.id === bookingId);
   if(!bk){ alert('Booking not found'); return; }
@@ -73425,6 +73525,14 @@ function bkV2EditBooking(bookingId){
   // Normalize arrays the relational backend drops when empty ([] → 0 child rows → key missing on
   // reload). Form renderers/calc read these without guards → "reading 'forEach'" crash on edit.
   ['addOns','passengers','adjustments','feeItems','altPickups'].forEach(k => { if(!Array.isArray(clone[k])) clone[k] = []; });
+  // §b2cEdit · ใบจาก B2C ไม่มีและไม่ควรมี Rate Type · ยอดเงินคือของจริงจากต้นทาง
+  //   ใส่เป็นราคาตายตัวเท่ากับยอดของ B2C เพื่อไม่ให้เครื่องคิดเรทคิดใหม่เป็น ฿0
+  //   แล้วจำค่าตั้งต้นของช่องที่ B2C เป็นเจ้าของไว้ เทียบตอนบันทึกว่า ops แตะช่องไหนบ้าง
+  if(bkV2IsB2CBk(clone)){
+    clone.priceMode = 'manual';
+    clone.manualTotal = Number(clone.total || (clone.priceBreakdown && clone.priceBreakdown.total) || 0);
+    clone._b2cSnap = bkV2B2CSnap(clone);
+  }
   _bkV2.newBooking = clone;
   _bkV2.editingId = bk.id;
   _bkV2.detailId = null;
