@@ -29300,6 +29300,44 @@ function _fuelAgg(month){
   (SB_BOOKINGS||[]).forEach(bk=>{ if(['cancelled','rejected','cancelled_weather'].includes(bk.status))return; const trs=(bk.trips||[]).filter(t=>(t.date||'').slice(0,7)===month); if(!trs.length)return; const tot=(typeof acctBookingTotal==='function')?acctBookingTotal(bk):(bk.total||0); trs.forEach(t=>{ const fam=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(t.routeId):null; const fid=(fam&&fam.id)||t.routeId; const fnm=(fam&&fam.name)||((getRoute(t.routeId)||{}).name)||t.routeId; const ff=out.byFam[fid]=out.byFam[fid]||{name:fnm,fuel:0,cost:0,pax:0,rev:0}; ff.rev+=(t.subtotal>0?t.subtotal:(tot/trs.length)); }); });
   return out;
 }
+// §fuelWk · ยอดรายลำ แยกรายสัปดาห์ · ตรรกะต่อวันเหมือน _fuelAgg เป๊ะ (ราคา · ชั่วโมงเครื่อง · เงื่อนไข "ออกจริง")
+//   ตั้งใจไม่เรียก _fuelAgg ซ้ำ เพราะตัวนั้นวน SB_BOOKINGS ทั้งก้อนเพื่อคิดรายได้ ซึ่งไม่ได้ใช้ตรงนี้
+//   และตารางรายเดือนต้องเรียกย้อนหลัง 6 เดือน
+var _fuelWkMetric=0;   // 0=L/hr · 1=L/วัน · 2=L/pax · 3=฿
+function fuelWkMetric(i){ _fuelWkMetric=+i||0; const sy=window.scrollY; renderFuelIntel(); window.scrollTo(0,sy); }
+function _fuelWkAgg(month){
+  const out={};
+  Object.keys(FL_DAILY||{}).filter(ds=>ds.slice(0,7)===month).sort().forEach(ds=>{
+    const day=FL_DAILY[ds]||{};
+    Object.keys(day).forEach(bid=>{
+      const b=getBoat(bid); if(!b||b.ownership==='charter'||b.retired) return;
+      const bd=day[bid]||{}; const fuel=+bd.fuel||0;
+      const info=(typeof flBoatBookingsFor==='function')?flBoatBookingsFor(bid,ds):{pax:0,routes:{}};
+      const ran=(info.pax>0)||Object.keys(info.routes||{}).length>0||fuel>0; if(!ran) return;   // §nil · ไม่ออก = ไม่นับ ไม่ใช่ 0
+      const pier=(typeof getBoatCurrentPier==='function')?getBoatCurrentPier(b):b.pier;
+      const price=(typeof flFuelPriceForBoat==='function')?flFuelPriceForBoat(ds,b):((typeof flFuelPrice==='function')?flFuelPrice(ds,pier):null);
+      const cost=(fuel&&price!=null)?fuel*price:0;
+      let runH=0; (FL_ENGINES||[]).forEach(e=>{ if(e.boatId!==bid) return;
+        const v=bd.trips&&bd.trips.normal&&bd.trips.normal.engines?bd.trips.normal.engines[e.id]:null;
+        const prev=(typeof flPrevMeter==='function')?flPrevMeter(e.id,ds):null;
+        if(v!=null&&prev!=null){ const dlt=v-prev; if(dlt>runH) runH=dlt; } });
+      const rec=out[bid]||(out[bid]={id:bid,name:b.name,w:[null,null,null,null,null],tot:{fuel:0,cost:0,pax:0,days:0,runH:0}});
+      const wi=Math.min(4,Math.max(0,Math.ceil((+ds.slice(8,10))/7)-1));   // W1..W5 · ตัดสัปดาห์แบบเดียวกับแท่งเดิม
+      const w=rec.w[wi]||(rec.w[wi]={fuel:0,cost:0,pax:0,days:0,runH:0});
+      w.fuel+=fuel; w.cost+=cost; w.pax+=info.pax; w.days++; w.runH+=runH;
+      const t=rec.tot; t.fuel+=fuel; t.cost+=cost; t.pax+=info.pax; t.days++; t.runH+=runH;
+    });
+  });
+  return out;
+}
+// ค่าของหนึ่งช่อง · null = คิดไม่ได้ (ไม่มีชั่วโมงเครื่อง / ไม่มี pax) ซึ่งต่างจาก 0
+function _fuelWkVal(x,i){
+  if(!x||!x.days) return null;
+  if(i===0) return x.runH>0 ? x.fuel/x.runH : null;
+  if(i===1) return x.fuel/x.days;
+  if(i===2) return x.pax>0 ? x.fuel/x.pax : null;
+  return x.cost;
+}
 function renderFuelIntel(){
   const wrap=document.getElementById('fl-fuel-wrap'); if(!wrap) return;
   const PK={accent:'#E03B7E',soft:'#FCE5EC',text:'#9F1B4F'}, ink3='#999', line='rgba(0,0,0,.07)';
@@ -29373,6 +29411,91 @@ function renderFuelIntel(){
   const anoms=a.anomalies.slice(0,3);
   const anomHtml=anoms.length?anoms.map((x,i)=>`${i?'<span style="width:1px;height:14px;background:#444"></span>':''}<span style="font-size:12.5px"><b>${x.name} · ${(+x.ds.slice(8,10))} ${THM}</b> <span style="color:#888">${fL(x.fuel)} L (เฉลี่ย ${fL(x.avg)}) +${x.pct}%</span></span>`).join(''):'<span style="font-size:12.5px;color:#9BCBA6">ไม่มีวันที่น้ำมันผิดปกติ</span>';
   const missList=a.missing.slice(0,6).map(m=>`<div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;background:#FCEBEB;border-radius:8px;padding:7px 10px"><span><span style="font-weight:600;color:#A32D2D">${m.name}</span>${m.route?` <span style="color:#999">· ${m.route}</span>`:''}</span><span style="font-family:'DM Mono',monospace;color:#A32D2D">${(+m.ds.slice(8,10))} ${THM}</span></div>`).join('')||`<div style="font-size:12px;color:#3B6D11;padding:6px 2px">กรอกน้ำมันครบทุกวันแล้ว ✓</div>`;
+  // ══ §fuelWk · รายสัปดาห์ + รายเดือน แยกรายลำ ══════════════════════════
+  const MI=_fuelWkMetric;
+  const MU=['L/hr','L/วัน','L/pax','฿'][MI];
+  const MLAB=['L/ชม.เครื่อง','L/วัน','L/PAX','฿ รวม'];
+  const wkA=_fuelWkAgg(_fuelMonth), wkP=_fuelWkAgg(pmS);
+  const fmtM=(v)=>v==null?'—':(MI===3?Math.round(v).toLocaleString():(MI===1?Math.round(v).toLocaleString():v.toFixed(1)));
+  // §self · เขียว = ดีกว่าฐานของลำตัวเอง · แดง = แย่กว่า ≥15% · ฿ ไม่ลงสี (§baht)
+  const toneM=(cur,base)=>{ if(MI===3||!base||cur==null) return ['transparent','#1A1A1A'];
+    const r=cur/base; return r<=0.95?['#E7F5EE','#0F6E56']:(r<1.15?['#FBF3E2','#8A5B00']:['#FCE9E9','#A32D2D']); };
+  const wkRange=(i)=>{ const a1=i*7+1, b1=Math.min(dim,(i+1)*7); return a1+'–'+b1; };
+  const wkBoats=Object.values(wkA).sort((x,y)=>y.tot.fuel-x.tot.fuel);
+  // สัปดาห์ที่ยังมาไม่ถึงในเดือนปัจจุบัน · แสดงจาง ๆ ไม่ใช่ "ไม่ออก"
+  const wkFuture=(i)=>isCur && (i*7+1)>elapsed;
+  const wkRows=wkBoats.map(b=>{
+    const base=_fuelWkVal((wkP[b.id]||{}).tot,MI);
+    const cells=b.w.map((w,i)=>{
+      if(!w) return `<td style="text-align:center"><span style="font-size:11px;color:${wkFuture(i)?'#DCD8D0':'#C7C3BB'}">${wkFuture(i)?'—':'ไม่ออก'}</span></td>`;
+      const v=_fuelWkVal(w,MI), tc=toneM(v,base);
+      return `<td style="text-align:center"><span style="display:inline-block;min-width:60px;border-radius:8px;padding:4px 8px;line-height:1.2;background:${tc[0]};color:${tc[1]}">`
+        +`<span style="font-family:'DM Mono',monospace;font-size:12.5px">${fmtM(v)}</span>`
+        +`<div style="font-size:9.5px;opacity:.72;margin-top:1px">${w.days} วัน${w.days===1?' <span style="background:rgba(0,0,0,.07);padding:0 3px;border-radius:3px;font-weight:700">n=1</span>':''}</div></span></td>`;
+    }).join('');
+    const cur=_fuelWkVal(b.tot,MI);
+    const dl=(cur!=null&&base&&MI!==3)?((cur/base-1)*100):null;
+    return `<tr><td style="text-align:left"><span style="display:flex;align-items:center;gap:9px">`
+      +`<span style="width:26px;height:26px;border-radius:50%;background:${avc(b.id)};color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">${av(b.name)}</span>`
+      +`<span style="font-weight:600;font-size:12.5px">${b.name}</span></span></td>`
+      +`<td style="text-align:center;font-family:'DM Mono',monospace;color:#5a5a52">${MI===3?'—':fmtM(base)}</td>`
+      +cells
+      +`<td style="text-align:right">${dl==null?`<span style="color:${ink3}">—</span>`
+        :(_dr=>`<span style="font-family:'DM Mono',monospace;font-weight:700;color:${dl<=-5?'#0F6E56':(dl<15?'#8A5B00':'#A32D2D')}">${_dr>0?'+':''}${_dr}%</span>`)(Math.round(dl)||0)}</td></tr>`;
+  }).join('');
+  const segBtn=(i)=>`<button onclick="fuelWkMetric(${i})" style="border:none;border-radius:7px;padding:5px 12px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;${MI===i?'background:#1A1A1A;color:#fff':'background:transparent;color:#7a756e'}">${MLAB[i]}</button>`;
+  // ทำไมยอดรวมทั้งกองเทียบกันไม่ได้ · บอกด้วยตัวเลขของเดือนที่กำลังดูอยู่จริง
+  const wkMix=[0,1,2,3,4].map(i=>{ const n=wkBoats.filter(b=>b.w[i]).length, d=wkBoats.reduce((s,b)=>s+((b.w[i]||{}).days||0),0);
+    return n?`W${i+1} ${n} ลำ/${d} วัน`:null; }).filter(Boolean).join(' &middot; ');
+  const wkCard=`
+    <div class="fi-card" style="padding:16px 18px;margin-bottom:12px">
+      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:6px;flex-wrap:wrap">
+        <div><div class="fi-sec"><span class="fi-tick"></span>รายสัปดาห์ &middot; แยกรายลำ</div>
+          <div class="fi-mut" style="margin-left:12px;margin-top:3px">แต่ละลำเทียบกับฐานของตัวเอง (เฉลี่ย ${THM_prev(pmS)}) &middot; เขียว = ดีกว่าฐาน &middot; แดง = แย่กว่า &ge;15%</div></div>
+        <div style="margin-left:auto;display:inline-flex;gap:3px;background:#F0EEE8;border-radius:9px;padding:3px">${[0,1,2,3].map(segBtn).join('')}</div>
+      </div>
+      <div style="font-size:11px;color:${ink3};background:#FAFAF7;border-radius:9px;padding:8px 11px;margin:8px 0 12px;line-height:1.5">
+        เรือออกไม่เท่ากันในแต่ละสัปดาห์ (${wkMix||'—'}) &middot; ยอดรวมทั้งกองจึงเทียบกันตรง ๆ ไม่ได้ ตารางนี้เทียบรายลำและบอกจำนวนวันที่ค่านั้นคิดมาจากเสมอ
+      </div>
+      <table class="fi-tbl" style="font-size:12.5px"><thead><tr style="color:${ink3};font-size:10.5px">
+        <th style="text-align:left">เรือ</th><th style="text-align:center">ฐาน ${THM_prev(pmS)}</th>
+        ${[0,1,2,3,4].map(i=>`<th style="text-align:center">W${i+1}<div style="font-weight:400;color:#bbb">${wkRange(i)}</div></th>`).join('')}
+        <th style="text-align:right">เดือนนี้ vs ฐาน</th></tr></thead>
+        <tbody>${wkRows||`<tr><td colspan="8" style="text-align:center;color:${ink3};padding:18px">ยังไม่มีข้อมูล</td></tr>`}</tbody></table>
+      <div style="font-size:11px;color:${ink3};margin-top:12px;padding-top:11px;border-top:1px solid #F5F3EF;line-height:1.55">
+        <b>n=1</b> คือค่านั้นคิดจากวันเดียว &mdash; ขึ้นลงแรงเป็นเรื่องปกติ ต้องมีอย่างน้อย 3 วันจึงอ่านเป็นแนวโน้มได้<br>
+        <b>ไม่ออก</b> ไม่ใช่ 0 &mdash; ลำที่ไม่ได้ออกไม่ถูกนับเข้าค่าเฉลี่ยใด ๆ${MI===3?'<br><b>฿ รวม</b> ไม่ลงสี &mdash; ยอดเงินขึ้นกับจำนวนวันที่ออก ไม่ใช่ประสิทธิภาพ':''}
+      </div>
+    </div>`;
+  // ── รายเดือน · 6 เดือนล่าสุด · หน่วยเดียวกับที่เลือกอยู่ ──
+  const moKeys=[]; for(let k=5;k>=0;k--){ const d0=new Date(yy,mm-1-k,1); moKeys.push(d0.getFullYear()+'-'+String(d0.getMonth()+1).padStart(2,'0')); }
+  const moAgg=moKeys.map(k=>k===_fuelMonth?wkA:(k===pmS?wkP:_fuelWkAgg(k)));
+  const moIds=[]; moAgg.forEach(g=>Object.keys(g).forEach(id=>{ if(moIds.indexOf(id)<0) moIds.push(id); }));
+  moIds.sort((x,y)=>((wkA[y]||{tot:{fuel:0}}).tot.fuel)-((wkA[x]||{tot:{fuel:0}}).tot.fuel));
+  const moRows=moIds.map(id=>{
+    const vals=moAgg.map(g=>_fuelWkVal((g[id]||{}).tot,MI));
+    const nm=(moAgg.find(g=>g[id])||{})[id].name;
+    const mx=Math.max(1,...vals.filter(v=>v!=null));
+    const base=vals[4];
+    const tds=vals.map((v,i)=>{ const tc=(i===5)?toneM(v,base):['transparent','#1A1A1A'];
+      return `<td style="text-align:center"><span style="display:inline-block;min-width:56px;border-radius:8px;padding:4px 7px;background:${tc[0]};color:${tc[1]};font-family:'DM Mono',monospace;font-size:12.5px">${fmtM(v)}</span></td>`; }).join('');
+    const spark=vals.map((v,i)=>`<i style="display:block;width:6px;border-radius:1.5px;height:${v==null?3:Math.max(3,Math.round(v/mx*22))}px;background:${i===5?PK.accent:'#D9D5CC'}"></i>`).join('');
+    return `<tr><td style="text-align:left"><span style="display:flex;align-items:center;gap:9px">`
+      +`<span style="width:26px;height:26px;border-radius:50%;background:${avc(id)};color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none">${av(nm)}</span>`
+      +`<span style="font-weight:600;font-size:12.5px">${nm}</span></span></td>${tds}`
+      +`<td style="text-align:right"><span style="display:inline-flex;align-items:flex-end;gap:2px;height:22px">${spark}</span></td></tr>`;
+  }).join('');
+  const moCard=`
+    <div class="fi-card" style="padding:16px 18px;margin-bottom:12px">
+      <div class="fi-sec" style="margin-bottom:4px"><span class="fi-tick"></span>รายเดือน &middot; แยกรายลำ <span class="fi-mut" style="font-weight:400">&middot; ${MLAB[MI]} &middot; หน่วยเดียวกับตารางบน</span></div>
+      <div class="fi-mut" style="margin-left:12px;margin-bottom:12px">อ่านเป็นแถว (ลำนั้นเปลี่ยนไปยังไง) ไม่ใช่เป็นคอลัมน์ &mdash; เดือนที่ทั้งกองสูงขึ้นพร้อมกันมักแปลว่าออกทริปเยอะขึ้น</div>
+      <table class="fi-tbl" style="font-size:12.5px"><thead><tr style="color:${ink3};font-size:10.5px">
+        <th style="text-align:left">เรือ</th>
+        ${moKeys.map(k=>{ const cu=k===_fuelMonth; return `<th style="text-align:center;${cu?'color:'+PK.text:''}">${THM_prev(k)}${cu&&isCur?`<div style="font-weight:400;color:#bbb">ถึง ${elapsed}</div>`:''}</th>`; }).join('')}
+        <th style="text-align:right">แนวโน้ม</th></tr></thead>
+        <tbody>${moRows||`<tr><td colspan="8" style="text-align:center;color:${ink3};padding:18px">ยังไม่มีข้อมูล</td></tr>`}</tbody></table>
+    </div>`;
+
   wrap.innerHTML=`<style>
     #fl-fuel-wrap .fi-card{background:#fff;border-radius:16px;border:0.5px solid rgba(0,0,0,.06);box-shadow:0 1px 3px rgba(20,20,20,.045)}
     #fl-fuel-wrap .fi-kpi{border-radius:16px;box-shadow:0 1px 4px rgba(20,20,20,.07)}
@@ -29441,6 +29564,9 @@ function renderFuelIntel(){
         <div style="display:flex;gap:12px;margin-top:8px">${wkLabels}</div>
       </div>
     </div>
+
+    ${wkCard}
+    ${moCard}
 
     <div class="fi-kpi" style="background:#1A1A1A;border-radius:16px;padding:13px 18px;color:#fff;display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px">
       <span style="font-size:12px;font-weight:600;color:#F09595">◆ ต้องตรวจสอบ</span>${anomHtml}<span style="margin-left:auto;font-size:11px;color:#9BCBA6">รั่ว / หาย / กรอกผิด ?</span>
