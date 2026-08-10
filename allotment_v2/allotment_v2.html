@@ -48709,7 +48709,9 @@ function pckGuideJobCss(){ return '<style>'
   +'.jsnone{font-size:11px;color:#9ca3af}'
   +'.jwarn{border:1.5px solid #111827;border-radius:999px;padding:0 8px;font-size:10.5px;font-weight:700}'
   // ── ตาราง · 1 บุ๊คกิ้ง = 1 แถว ──
-  +'.tw{flex:1;min-height:0;margin-top:6px;overflow:hidden}'
+  +'.tw{flex:1;min-height:0;margin-top:6px;overflow:visible}'   /* §guidePage2 · ล้นแล้วต้องไหลไปหน้า 2 ไม่ใช่ถูกตัดทิ้ง */
+  +'thead{display:table-header-group}'          /* §guidePage2 · หัวตารางซ้ำทุกหน้า */
+  +'tr{break-inside:avoid;page-break-inside:avoid}'   /* §guidePage2 · ห้ามตัดกลางแถว */
   // §guideGrid · กระดาษที่กรอกด้วยมือหน้าท่า ต้องมีเส้นให้สายตาไล่ · เส้นเดิมจางเกินไป
   +'table{width:100%;border-collapse:collapse;border:1.4px solid #111827}'
   +'th{font-size:9px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:4px 6px;'
@@ -48758,7 +48760,7 @@ function pckGuideJobCss(){ return '<style>'
   +'.svc{display:inline-block;border:1.5px solid #111827;border-radius:3px;padding:1px 6px;font-size:10.5px;font-weight:700;margin:0 2px 2px 0;white-space:nowrap}'
   +'.nt{line-height:1.3}.nt b{font-weight:700}.nt .n2{color:#374151;font-size:10.5px}'
   +'@media print{body{background:#fff}.tools{display:none}'
-    +'.sheet{width:100%;height:210mm;margin:0;box-shadow:none;page-break-after:always}'
+    +'.sheet{width:100%;height:auto;min-height:210mm;margin:0;box-shadow:none;page-break-after:always}'   /* §guidePage2 */
     +'.sheet:last-child{page-break-after:auto}}'
   +'</style>';
 }
@@ -49548,11 +49550,12 @@ function pckGuideJobOrder(bid){
     +'Array.prototype.forEach.call(TD,function(c){ c.style.paddingTop=""; c.style.paddingBottom=""; });'
     +'for(i=0;i<T.length;i++){ T.forEach(function(c){ el.classList.remove(c); }); el.classList.add(T[i]);'
     +'if(tb.scrollHeight<=tw.clientHeight){ ok=true; break; } }'
-    +'if(!ok){ tb.style.zoom=Math.max(.92,(tw.clientHeight-2)/tb.scrollHeight); return; }'   /* §guideBig · ไม่ย่อจนอ่านไม่ออกอีก */
+    +'if(!ok){ return; }'   /* §guidePage2 · ล้นก็ปล่อยขึ้นหน้า 2 · ไม่ย่ออีกแล้ว */
     // §fillPage · เลือกระดับที่ "พอดี" แล้วยังเหลือที่ว่างท้ายใบ · เกลี่ยลงทุกแถวเท่าๆ กัน
     //   ใบที่คนน้อยเคยจบครึ่งหน้าแล้วเว้นขาวยาว ดูเหมือนพิมพ์ไม่ครบ · เกลี่ยแล้วเต็มหน้าเหมือนกันทุกใบ
     //   เพิ่มเฉพาะระยะห่าง ไม่แตะขนาดตัวหนังสือ · เพดาน 7px กันแถวอ้วนจนดูโหว่
-    +'var sl=tw.clientHeight-tb.scrollHeight, rn=tb.querySelectorAll("tbody tr").length||1;'
+    +'var sl=tw.clientHeight-tb.scrollHeight; if(sl<=0) return;'   /* §guidePage2 · ล้นอยู่ ไม่ต้องเกลี่ยเพิ่ม */
+    +'var rn=tb.querySelectorAll("tbody tr").length||1;'
     +'var ex=Math.floor(sl/rn/2); if(ex>7) ex=7;'
     +'if(ex>0){ Array.prototype.forEach.call(TD,function(c){ c.style.paddingTop=ex+"px"; c.style.paddingBottom=ex+"px"; }); }'
     +'});}'
