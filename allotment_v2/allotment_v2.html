@@ -389,7 +389,7 @@
     b.innerHTML='<span>👤 <b>'+esc(ME.name||ME.username)+'</b>'+(ME.role==='admin'?' · admin':(laCanEdit()?'':' · <span style="color:#FFD08A">👁 ดูอย่างเดียว</span>'))+(LASTBY?(' <span style="opacity:.7">· แก้ล่าสุด '+esc(LASTBY)+'</span>'):'')+'</span>'+(ME.role==='admin'?'<button class="la-ub-btn" onclick="__laUsers()">ผู้ใช้</button>':'')+'<button class="la-ub-btn" onclick="__laLogout()">ออก</button>';
     document.body.appendChild(b);
     if(!laCanEdit()){ var vb=document.createElement('div'); vb.id='la-viewonly'; vb.style.cssText='position:fixed;bottom:12px;right:12px;z-index:99998;background:#7A4A00;color:#fff;border-radius:20px;padding:6px 14px;font:12px/1.25 "DM Sans",sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.22)'; vb.innerHTML='👁 โหมดดูอย่างเดียว · การแก้ไขจะไม่ถูกบันทึก'; document.body.appendChild(vb); }
-    laWrapNav(); laApplyPerms(); setTimeout(laApplyPerms,600); setTimeout(_laRestoreView,850);
+    laWrapNav(); laApplyPerms(); laApplyAdminOnly(); setTimeout(laApplyPerms,600); setTimeout(laApplyAdminOnly,600); setTimeout(_laRestoreView,850);
   });
   // ── Per-user area access (role-based nav gating) ──
   var LA_AREAS=[{k:'overview',t:'ภาพรวม · Dashboard/Calendar'},{k:'operations',t:'ปฏิบัติการ · Booking/Boat Op/รถ'},{k:'sales',t:'ขาย · Agents/Rate/Demand'},{k:'accounting',t:'บัญชี · Accounting/PFM'},{k:'fleet',t:'เรือ/ช่าง · Fleet/Maintenance'},{k:'config',t:'ตั้งค่า · Programs/Team'}];
@@ -415,6 +415,13 @@
     if(!set['dailyreport'] && set['travelsum']) set['dailyreport']=1;   // §dailyreport เพิ่มใหม่ 2026-08-02 · back-fill ให้คนที่ถือ Travel Summary (เอกสารปิดวันชุดเดียวกัน)   // §b2b-dash เพิ่มใหม่ 2026-07-20 · back-fill ให้คนที่ถือ sales-board/marketdata (perms แบบ view-list เก่าไม่มี key นี้)
     return set; }
   function laPermViewList(perms){ var set=laExpandPerms(perms); if(!set) return LA_NAV.map(function(n){return n.v;}); return LA_NAV.filter(function(n){return set[n.v];}).map(function(n){return n.v;}); }
+  // §adminTools · ป้าย data-adminonly = admin เท่านั้น · ไม่เกี่ยวกับสิทธิ์เมนู
+  //   laApplyPerms() ซ่อนให้เฉพาะคนที่ถูกจำกัดเมนู · ตัวนี้ยึด role อย่างเดียว
+  //   ME ว่าง (เปิดไฟล์ export ตรง ๆ ไม่มีระบบ login) → ไม่ซ่อน เหมือนพฤติกรรมเดิม
+  function laApplyAdminOnly(){ try{ if(!ME || ME.role==='admin') return;
+    document.querySelectorAll('[data-adminonly]').forEach(function(el){ el.style.display='none'; });
+  }catch(_){} }
+  window.laApplyAdminOnly=laApplyAdminOnly;
   function laCanEdit(){ return !ME || ME.role==='admin' || ME.canEdit!==false; }   // can edit ANYTHING (global save-gate)
   function laCanEditArea(area){ if(!ME || ME.role==='admin') return true; if(Array.isArray(ME.editAreas)) return ME.editAreas.indexOf(area)>=0; return ME.canEdit!==false; }   // per-section edit
   function _laToast(msg){ try{ var t=document.getElementById('la-toast'); if(!t){ t=document.createElement('div'); t.id='la-toast'; t.style.cssText='position:fixed;bottom:56px;right:12px;z-index:100000;background:#7A4A00;color:#fff;border-radius:10px;padding:9px 14px;font:12px/1.35 "DM Sans",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:290px;opacity:0;transition:opacity .18s'; document.body.appendChild(t); } t.textContent=msg; t.style.opacity='1'; clearTimeout(t._h); t._h=setTimeout(function(){ t.style.opacity='0'; },2600); }catch(e){} }
@@ -3994,11 +4001,11 @@ body.la-nav-open .la-burger{background:#1683C7;color:#fff;box-shadow:inset 2px 2
   <div class="topbar-sep"></div>
   <div class="topbar-right">
     <span class="topbar-date" id="topbar-date"></span>
-    <button class="topbar-btn" onclick="refreshData()">↻ Refresh</button>
-    <button class="topbar-btn" onclick="exportHTML()" style="border-color:rgba(100,220,180,.4);color:rgba(150,255,220,.9)">⬇ Export HTML</button>
+    <button class="topbar-btn" data-adminonly="1" onclick="refreshData()">↻ Refresh</button>
+    <button class="topbar-btn" data-adminonly="1" onclick="exportHTML()" style="border-color:rgba(100,220,180,.4);color:rgba(150,255,220,.9)">⬇ Export HTML</button>
     <button class="topbar-btn" onclick="flBackupData()" style="border-color:rgba(120,170,255,.45);color:rgba(175,205,255,.95)">💾 Backup</button>
-    <button class="topbar-btn" onclick="flImportData()" style="border-color:rgba(120,200,150,.45);color:rgba(180,235,200,.95)">📥 Import</button>
-    <button class="topbar-btn" onclick="resetAllData()" style="border-color:rgba(255,100,80,.4);color:rgba(255,180,170,.9)">↺ Reset</button>
+    <button class="topbar-btn" data-adminonly="1" onclick="flImportData()" style="border-color:rgba(120,200,150,.45);color:rgba(180,235,200,.95)">📥 Import</button>
+    <button class="topbar-btn" data-adminonly="1" onclick="resetAllData()" style="border-color:rgba(255,100,80,.4);color:rgba(255,180,170,.9)">↺ Reset</button>
   </div>
   <button class="la-burger" onclick="laNavToggle()" aria-label="เมนู" title="เมนู">
     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
@@ -12758,6 +12765,7 @@ function exportHTML(){
 }
 
 function resetAllData(){
+  if(typeof laIsAdmin==='function' && !laIsAdmin()){ alert('ล้างข้อมูลได้เฉพาะ admin'); return; }   // §guard
   if(!confirm('ล้างข้อมูลทั้งหมดและกลับเป็น demo data ใช่ไหม?')) return;
   localStorage.removeItem(LS_KEY);
   location.reload();
@@ -12785,6 +12793,7 @@ function flBackupData(){
 // Import a backup JSON (from flBackupData) → overwrites this browser's localStorage[LS_KEY] → reload.
 // Lets you move data between origins/devices (e.g. localhost → the Railway URL). One-way snapshot.
 function flImportData(){
+  if(typeof laIsAdmin==='function' && !laIsAdmin()){ alert('นำเข้าข้อมูลได้เฉพาะ admin'); return; }   // §guard
   const inp=document.createElement('input');
   inp.type='file'; inp.accept='.json,application/json';
   inp.onchange=()=>{
