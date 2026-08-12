@@ -72923,6 +72923,16 @@ function bkV2CommitBooking(status){
       newBk.trips = JSON.parse(JSON.stringify(editing.trips || []));
       newBk.passengers = JSON.parse(JSON.stringify(editing.passengers || []));
       newBk.addOns = JSON.parse(JSON.stringify(editing.addOns || []));
+      // §b2cPay (2026-08-12) · การชำระเงินก็เป็นของ B2C เหมือนเงินก้อนอื่นในบล็อกนี้
+      //   newBk.paymentSnapshot ปั้นใหม่จาก "สัญญาของ agent" (payType!=='invoice' → 'prepaid') — ถูกกับ B2B
+      //   แต่ใบ B2C ห้อยกับ house agent a_b2c (payType 'cot') ค่าจริงมาราย booking จาก B2C:
+      //   method 'bt'/'cot'/… + paid/paidStatus ที่ derive ฝั่ง server (Σpayments + Σcredits vs total)
+      //   ⇒ แก้ช่องอะไรก็ได้แล้ว save = ทับเป็น {method:'prepaid', source:'contract'} และ paid/paidStatus หาย
+      //   'prepaid' ใช้ถังเดียวกับ proforma (bkV2PayLabel → 'PFM' · สีเหลือง :53171 · Daily Report :48544
+      //   พิมพ์ 'Proforma') ⇒ ใบที่จ่ายครบอ่านเป็น proforma ค้างจ่าย · ป้าย "Paid" เขียวหายไปด้วย
+      //   ของจริง: LOV-6682744 · B2C ส่ง 'Bank transfer' จ่าย 9,496/9,496 · แก้ hotelName แล้วขึ้น Proforma
+      //   ไม่จดลง b2cOverride โดยตั้งใจ — B2C ยังเป็นเจ้าของช่องนี้ ให้ sync รอบหน้าทับได้ตามเดิม
+      if(editing.paymentSnapshot) newBk.paymentSnapshot = JSON.parse(JSON.stringify(editing.paymentSnapshot));
       var _prevOv = Array.isArray(editing.b2cOverride) ? editing.b2cOverride : [];
       var _newOv  = bkV2B2CDiff(d._b2cSnap, newBk);
       newBk.b2cOverride = _prevOv.concat(_newOv).filter(function(v,i,a){ return v && a.indexOf(v)===i; });

@@ -191,7 +191,16 @@ const B2C_OWN_BK = new Set([
 //      refreshed by the normal sync path, so no separate migration is needed.
 // v16: prefers the catalog-resolved name carried on each addonsSelected entry, with a stable B2C
 //      add-on id fallback. The bump refreshes previously imported generic labels.
-const B2C_MAP_VER = 16;
+// v17: no mapper change — a forced corrective re-upsert. The ops client used to rebuild
+//      paymentSnapshot from the agent contract on every booking edit, so editing any field on a
+//      B2C booking overwrote the imported {method,paid,paidStatus} with {method:'prepaid',
+//      source:'contract'} — the Pay column then read "PFM"/"Proforma" and the "Paid" chip vanished
+//      on fully-settled orders (LOV-6682744, 9,496 of 9,496 received). The client no longer does
+//      this, but the damaged rows can't heal on their own: the change detector hashes the B2C
+//      source rows, which never moved. Bumping the version changes the hash and forces exactly one
+//      re-upsert, restoring paymentsnapshot_method/_paid/_paidstatus from B2C for every synced
+//      booking in the window (13 rows were on 'prepaid' at the time of this bump).
+const B2C_MAP_VER = 17;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
