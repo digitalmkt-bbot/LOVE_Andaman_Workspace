@@ -47287,7 +47287,10 @@ function ckRowHtml(r, date, kind, extraHtml){
   // บล็อกสี agency แบบเดียวกับ By-trip (เต็มช่อง ไม่ใช่ชิปเล็ก) · ใช้สีเดียวกันด้วย
   var agColor=(b.agentId&&typeof bkV2AgentColor==='function')?bkV2AgentColor(b.agentId):((ag&&ag.color)||'#64748B');
   var agInk=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(agColor):'#fff';
-  var agCell=b.agentId
+  var agLogo=(typeof laAgencyMark==='function')?laAgencyMark(b,20):'';   // §van
+  var agCell=agLogo
+    ? '<td style="padding:0">'+agLogo+'</td>'
+    : b.agentId
     ? '<td style="padding:0"><div class="ck-agblk" title="'+e(agName)+'" style="background:'+agColor+';color:'+agInk+';margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;box-shadow:0 1px 2px rgba(0,0,0,.10)">'+e(agName)+'</div></td>'
     : '<td><span style="color:#8a8a82;font-weight:600">'+e(agName)+'</span></td>';
   var pb=ckPaxBreak(t.pax);
@@ -47452,7 +47455,7 @@ function renderVanCheckin(){
       var agName=ag?(ag.name||ag.code||'—'):(b.channel||'walk-in'), pb=ckPaxBreak(t.pax);
       var agColor=(b.agentId&&typeof bkV2AgentColor==='function')?bkV2AgentColor(b.agentId):((ag&&ag.color)||'#64748B');
       var pa=b.pickupArea||(b.pickupAreaId&&typeof bkV2GetArea==='function'?((bkV2GetArea(b.pickupAreaId)||{}).name||''):'')||'';
-      warnHtml+='<tr class="ck-unassigned" style="opacity:.75"><td><span class="ck-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'+(b.agentId?('<td style="padding:0"><div style="background:'+agColor+';color:'+((typeof bkV2ContrastInk==='function')?bkV2ContrastInk(agColor):'#fff')+';margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">'+e(agName)+'</div></td>'):('<td><span style="color:#8a8a82;font-weight:600">'+e(agName)+'</span></td>'))+'<td>'+(b.createdBy?('<span class="ck-by">'+e(b.createdBy)+'</span>'):'<span class="ck-dim">—</span>')+'</td><td><span class="ck-lead" style="background:#F6E27A">'+e(b.leadPax||'—')+'</span>'+((b.leadPhone||b.phone||'')?('<div><a class="ck-tel" href="tel:'+e(String(b.leadPhone||b.phone).split(/[,;\/]/)[0].replace(/[^0-9+]/g,''))+'">&#128222; '+e(b.leadPhone||b.phone)+'</a></div>'):'')+'</td><td class="ck-c">'+(pb.ad||0)+'</td><td class="ck-c">'+(pb.chd||0)+'</td><td class="ck-c">'+(pb.inf||0)+'</td><td class="ck-c">'+(pb.foc||0)+'</td><td class="ck-mono">'+e(r.O.pickupTimeFinal||t.pickupTime||'—')+'</td><td><span class="ck-pick">'+e(b.hotelName||b.pickup||'—')+'</span></td><td class="ck-c ck-mono">'+e(b.roomNo||b.roomNumber||'—')+'</td><td>'+(pa?'<span class="ck-area">'+e(pa)+'</span>':'<span class="ck-dim">—</span>')+'</td><td>'+(((typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim()))?('<span class="ck-sreq">'+e((typeof vanJobsSreqFinal==='function')?vanJobsSreqFinal(b):(b.notes||''))+'</span>'):'<span class="ck-dim">—</span>')+'</td><td class="ck-c ck-in" style="border-left:2px solid #EBD9BE;color:#b0aea6">—</td><td class="ck-in"></td><td class="ck-c ck-in" style="color:#b0aea6">—</td><td class="ck-in"></td></tr>';
+      warnHtml+='<tr class="ck-unassigned" style="opacity:.75"><td><span class="ck-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'+((typeof laAgencyMark==='function'&&laAgencyMark(b,20))?('<td style="padding:0">'+laAgencyMark(b,20)+'</td>'):b.agentId?('<td style="padding:0"><div style="background:'+agColor+';color:'+((typeof bkV2ContrastInk==='function')?bkV2ContrastInk(agColor):'#fff')+';margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">'+e(agName)+'</div></td>'):('<td><span style="color:#8a8a82;font-weight:600">'+e(agName)+'</span></td>'))+'<td>'+(b.createdBy?('<span class="ck-by">'+e(b.createdBy)+'</span>'):'<span class="ck-dim">—</span>')+'</td><td><span class="ck-lead" style="background:#F6E27A">'+e(b.leadPax||'—')+'</span>'+((b.leadPhone||b.phone||'')?('<div><a class="ck-tel" href="tel:'+e(String(b.leadPhone||b.phone).split(/[,;\/]/)[0].replace(/[^0-9+]/g,''))+'">&#128222; '+e(b.leadPhone||b.phone)+'</a></div>'):'')+'</td><td class="ck-c">'+(pb.ad||0)+'</td><td class="ck-c">'+(pb.chd||0)+'</td><td class="ck-c">'+(pb.inf||0)+'</td><td class="ck-c">'+(pb.foc||0)+'</td><td class="ck-mono">'+e(r.O.pickupTimeFinal||t.pickupTime||'—')+'</td><td><span class="ck-pick">'+e(b.hotelName||b.pickup||'—')+'</span></td><td class="ck-c ck-mono">'+e(b.roomNo||b.roomNumber||'—')+'</td><td>'+(pa?'<span class="ck-area">'+e(pa)+'</span>':'<span class="ck-dim">—</span>')+'</td><td>'+(((typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim()))?('<span class="ck-sreq">'+e((typeof vanJobsSreqFinal==='function')?vanJobsSreqFinal(b):(b.notes||''))+'</span>'):'<span class="ck-dim">—</span>')+'</td><td class="ck-c ck-in" style="border-left:2px solid #EBD9BE;color:#b0aea6">—</td><td class="ck-in"></td><td class="ck-c ck-in" style="color:#b0aea6">—</td><td class="ck-in"></td></tr>';
     });
   }
   bodyHtml = warnHtml + bodyHtml;
@@ -48653,7 +48656,7 @@ function pckRowHtml(r, date){
   };
   return '<tr class="'+cls+'">'
    +'<td><span class="ck-vch" title="'+e(b.voucherRef||b.code||'')+'">'+e(b.voucherRef||b.code||'—')+'</span>'
-     +'<div style="margin-top:5px"><span class="ck-agblk" title="'+e(agName)+'" style="display:inline-block;background:'+agColor+';color:'+agInk+';padding:3px 10px;border-radius:999px;font-size:10.5px;font-weight:700;max-width:175px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle">'+e(agName)+'</span></div>'
+     +'<div style="margin-top:5px">'+(((typeof laAgencyMark==='function')&&laAgencyMark(b,14,{pad:'3px 8px',radius:'999px',margin:false}))||('<span class="ck-agblk" title="'+e(agName)+'" style="display:inline-block;background:'+agColor+';color:'+agInk+';padding:3px 10px;border-radius:999px;font-size:10.5px;font-weight:700;max-width:175px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle">'+e(agName)+'</span>'))+'</div>'
      +((_pckShowBy&&by)?'<div style="margin-top:3px;font-size:10px;color:#a5a49d">โดย <b style="color:#5F5E5A;font-weight:700">'+e(by)+'</b></div>':'')
    +'</td>'
    +'<td>'+pckNameCell(r)+'</td>'
@@ -50672,6 +50675,7 @@ function tsPrintSheet(){
     +'<style>'+pageCSS+'</style>'
     +boot+'</body></html>');
   w.document.close();
+  if(typeof _docPackDrive==='function') _docPackDrive(w);   // §drive
 }
 // §tsRoute · แยกดูรายเส้นทาง · '' = ทุกเส้นทาง
 var _tsRoute='';
@@ -53077,7 +53081,7 @@ function renderTravelSum(){
     abody+='<tr class="'+(dec?'':'need')+'">'
       +'<td><span class="ts-vch">'+e(b.voucherRef||b.code||'—')+'</span>'
         +'<div style="margin-top:3px">'+tsDocChip(b,date)+'</div></td>'
-      +'<td><span class="ts-ag" style="background:'+agColor+';color:'+agInk+'" title="'+e(agName)+'">'+e(agName)+'</span></td>'
+      +'<td>'+(((typeof laAgencyMark==='function')&&laAgencyMark(b,16,{pad:'5px 7px',margin:false}))||('<span class="ts-ag" style="background:'+agColor+';color:'+agInk+'" title="'+e(agName)+'">'+e(agName)+'</span>'))+'</td>'
       +'<td><div class="ts-lead">'+e(b.leadPax||'—')+'</div><div class="ts-tel">'+e(b.leadPhone||b.phone||'')+'</div></td>'
       +'<td>'+ev+'</td>'
       +'<td style="max-width:210px;color:var(--zn700)">'+(e(why)||'<span style="color:var(--zn400)">—</span>')+'</td>'
@@ -53185,7 +53189,7 @@ function renderTravelSum(){
     if(m.M.upDue>0) parts.push('upgrade '+money(m.M.upDue));
     mbody+='<tr class="'+(m.cxl?'ts-cxl':(m.due>0?'need':''))+'">'
       +'<td><span class="ts-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'
-      +'<td><span class="ts-ag" style="background:'+agColor+';color:'+agInk+'" title="'+e(agName)+'">'+e(agName)+'</span></td>'
+      +'<td>'+(((typeof laAgencyMark==='function')&&laAgencyMark(b,16,{pad:'5px 7px',margin:false}))||('<span class="ts-ag" style="background:'+agColor+';color:'+agInk+'" title="'+e(agName)+'">'+e(agName)+'</span>'))+'</td>'
       +'<td><div class="ts-lead">'+e(b.leadPax||'—')+'</div><div class="ts-tel">'+e(b.leadPhone||b.phone||'')+'</div></td>'
       +'<td><div style="font-size:11px">'+e(b.hotelName||b.pickup||'—')+'</div>'
         +'<div class="ts-tel">'+(veh?e(veh.name||r.van):'มาเอง')+(boat?(' · '+e(boat.name||r.boat)):'')+'</div></td>'
@@ -53333,7 +53337,7 @@ function renderTravelSum(){
     var room=b.roomNo||b.room||b.roomNumber||'';
     body+='<tr'+(r.cxlRow?' class="ts-cxlrow"':'')+'>'
       +'<td><span class="ts-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'
-      +'<td><span class="ts-ag" style="background:'+agColor+';color:'+agInk+'" title="'+e(agName)+'">'+e(agName)+'</span></td>'
+      +'<td>'+(((typeof laAgencyMark==='function')&&laAgencyMark(b,16,{pad:'5px 7px',margin:false}))||('<span class="ts-ag" style="background:'+agColor+';color:'+agInk+'" title="'+e(agName)+'">'+e(agName)+'</span>'))+'</td>'
       +'<td><div class="ts-lead">'+e(b.leadPax||'—')+'</div><div class="ts-tel">'+e(b.leadPhone||b.phone||'')+'</div></td>'
       + pxCell('ad') + pxCell('chd') + pxCell('inf') + pxCell('foc')
       +'<td class="c ts-mono" style="font-weight:800">'+(r.cxlRow?('<span style="color:var(--rs700)">0</span> / '+r.booked):(r.travelled+' / '+r.booked))+'</td>'
@@ -67954,6 +67958,18 @@ function bkV2B2CMark(h){
   return '<img src="'+LA_LOGO_MARK+'" alt="" style="height:'+(h||11)+'px;width:auto;display:inline-block;'
        + 'vertical-align:-2px;margin-right:4px">';
 }
+// §fn · ป้ายเอเยนต์ของใบที่ขายเอง · คืน HTML ของกล่องโลโก้ · ไม่ใช่ใบ B2C คืน ''
+//   หน้าไหนอยากให้ขึ้นโลโก้ เรียกตัวนี้จุดเดียว · เปลี่ยนดีไซน์ทีหลังแก้ที่นี่ที่เดียว
+//   พื้นขาวเสมอ เพราะคำว่า LOVE ในโลโก้เป็นตัวดำ วางบนชิปสีจะอ่านไม่ออก
+function laAgencyMark(bk, h, opt){
+  if(!bk || !/^b2c_/.test(String(bk.id||''))) return '';
+  opt = opt || {};
+  var pad = opt.pad || '8px 10px', rad = opt.radius || '8px';
+  return '<div title="Love Andaman \u00b7 \u0e02\u0e32\u0e22\u0e40\u0e2d\u0e07 (B2C)" style="background:#fff;border:1px solid #E3E6EC;'
+    + (opt.margin===false?'':'margin:2px 3px;') + 'padding:'+pad+';border-radius:'+rad+';'
+    + 'box-shadow:0 1px 2px rgba(0,0,0,.08);max-width:180px;display:flex;align-items:center;justify-content:center">'
+    + bkV2B2CLogo(h||20) + '</div>';
+}
 // ชุดเต็ม · ใช้ตรงที่มีที่พอให้อ่านคำว่า LOVE andaman ออก
 function bkV2B2CLogo(h){
   return '<img src="'+LA_LOGO_FULL+'" alt="LOVE andaman" style="height:'+(h||22)+'px;width:auto;display:block">';
@@ -71527,7 +71543,11 @@ function _docPackPage(r, i, total, seq, date, kicker){
     body='<div class="grid '+grid+'">'+files.map(function(f,k){
       var url='/api/attach/'+encodeURIComponent(f.id);
       var isImg=/^image\//.test(f.mime||'');
+      var isPdf=/pdf/i.test(f.mime||'') || /\.pdf$/i.test(f.name||'');
+      // §mark · PDF วาดเป็นภาพจริงตอนเปิดหน้าต่างพิมพ์ (ดู _docPackBoot)
       var box=isImg?('<img src="'+url+'" alt="">')
+             :isPdf?('<canvas class="pdfc" data-pdf="'+url+'"></canvas>'
+                    +'<div class="pdfw">&#128196; '+e(f.name||'file')+' &middot; กำลังเปิดไฟล์ PDF…</div>')
                    :('<div class="nf"><div class="mi">&#128196;</div><span>'+e(f.name||'file')+'</span></div>');
       return '<figure><div class="sc">'+box+'</div><figcaption>'+(k+1)+'/'+n+' &middot; '+e(f.name||'')+'</figcaption></figure>';
     }).join('')+'</div>';
@@ -71575,6 +71595,11 @@ function _docPackCSS(S){
    + p+'figure{margin:0;display:flex;flex-direction:column;min-height:0}'
    + p+'.sc{flex:1;border:1px solid #cfd6d2;border-radius:1mm;background:#f4f2ec;display:flex;align-items:center;justify-content:center;overflow:hidden;min-height:0}'
    + p+'.sc img{max-width:100%;max-height:100%;object-fit:contain}'
+   + p+'.sc canvas.pdfc{max-width:100%;max-height:100%;object-fit:contain;display:none}'
+   + p+'.sc canvas.pdfc.on{display:block}'
+   + p+'.pdfw{position:absolute;font-size:8pt;color:#8a938d;text-align:center;padding:3mm}'
+   + p+'.pdfw.err{color:#A32D2D;font-weight:600}'
+   + p+'.sc{position:relative}'
    + p+'.nf{display:flex;flex-direction:column;align-items:center;gap:2mm;color:#8a938d;font-size:8pt;padding:3mm;text-align:center}'
    + p+'.mi{font-size:20pt}'
    + p+'figcaption{font-size:7.5pt;color:#6b736e;text-align:center;padding-top:1mm}'
@@ -71584,13 +71609,78 @@ function _docPackCSS(S){
    + (S?(''):'@media screen{body{background:#e9e7e1;padding:8mm}.pg{background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.15);margin:0 auto 6mm;padding:9mm}}');
 }
 // รอสแกนโหลดครบก่อนค่อยสั่งพิมพ์ · ไม่งั้นกระดาษออกมาเป็นกรอบเปล่า
-function _docPackBoot(){
-  return '<' + 'script>window.onload=function(){'
-    + 'var go=function(){ var f=(document.fonts&&document.fonts.ready)?document.fonts.ready:Promise.resolve();'
-      + 'f.then(function(){ setTimeout(function(){ window.print(); },250); },function(){ setTimeout(function(){ window.print(); },250); }); };'
-    + 'var im=[].slice.call(document.images);var n=im.filter(function(x){return !x.complete;}).length;'
-    + 'if(!n){ go(); return; }'
-    + 'im.forEach(function(x){ if(x.complete) return; x.onload=x.onerror=function(){ if(--n<=0) go(); }; });};<' + '/script>';
+function _docPackBoot(){ return ''; }   // §drive · ไม่ใช้แล้ว · ดู _docPackDrive
+// โหลด pdf.js ครั้งเดียวที่หน้าหลัก · worker ต้องแปลงเป็น blob ก่อน
+//   เพราะ new Worker() ข้ามโดเมนไม่ได้ · ถ้าดึงไม่ได้ก็ปล่อยให้ pdf.js ถอยเอง
+var _docPdfP=null;
+function _docPdfLib(){
+  if(_docPdfP) return _docPdfP;
+  _docPdfP = new Promise(function(res, rej){
+    if(window.pdfjsLib) return res(window.pdfjsLib);
+    var sc=document.createElement('script');
+    sc.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    sc.onerror=function(){ _docPdfP=null; rej(new Error('load')); };
+    sc.onload=function(){ res(window.pdfjsLib); };
+    document.head.appendChild(sc);
+  }).then(function(lib){
+    var wsrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    return fetch(wsrc).then(function(r){ return r.text(); }).then(function(t){
+      lib.GlobalWorkerOptions.workerSrc=URL.createObjectURL(new Blob([t],{type:'application/javascript'}));
+      return lib;
+    }).catch(function(){ try{ lib.GlobalWorkerOptions.workerSrc=wsrc; }catch(_){} return lib; });
+  });
+  return _docPdfP;
+}
+// วาด PDF ลงหน้าต่างพิมพ์ → รอรูป → รอฟอนต์ → สั่งพิมพ์
+function _docPackDrive(w){
+  var doc;
+  try{ doc = w.document; }catch(_){ return; }
+  var printed=false;
+  var finish=function(){
+    if(printed) return; printed=true;
+    var go=function(){
+      var f=(doc.fonts&&doc.fonts.ready)?doc.fonts.ready:Promise.resolve();
+      var p=function(){ setTimeout(function(){ try{ w.focus(); }catch(_){} try{ w.print(); }catch(_){} },250); };
+      f.then(p, p);
+    };
+    var im=[].slice.call(doc.images), n=im.filter(function(x){ return !x.complete; }).length;
+    if(!n) return go();
+    im.forEach(function(x){ if(x.complete) return; x.onload=x.onerror=function(){ if(--n<=0) go(); }; });
+  };
+  var cvs=[].slice.call(doc.querySelectorAll('canvas.pdfc'));
+  if(!cvs.length) return finish();
+  var warn=function(c,msg){ var el=c.parentNode.querySelector('.pdfw');
+    if(el){ el.className='pdfw err'; el.innerHTML='⚠ '+msg; } };
+  // นาฬิกากันค้าง · ไม่ว่าอะไรจะเกิดขึ้น ภายใน 15 วิต้องเข้าหน้าพิมพ์
+  var tmr=setTimeout(function(){
+    cvs.forEach(function(c){ if(String(c.className).indexOf('on')<0) warn(c,'เปิดไฟล์ PDF ไม่ทัน · ต้องเปิดดูจากในระบบ'); });
+    finish();
+  }, 15000);
+  _docPdfLib().then(function(lib){
+    var left=cvs.length, done=function(){ if(--left<=0){ clearTimeout(tmr); finish(); } };
+    cvs.forEach(function(c){
+      var el=c.parentNode.querySelector('.pdfw');
+      lib.getDocument(c.getAttribute('data-pdf')).promise.then(function(pdf){
+        return pdf.getPage(1).then(function(pg){
+          var vp=pg.getViewport({scale:2.2});   // 2.2x ให้ตัวหนังสือในเอกสารยังคมตอนพิมพ์
+          c.width=vp.width; c.height=vp.height;
+          return pg.render({canvasContext:c.getContext('2d'), viewport:vp}).promise.then(function(){
+            c.className='pdfc on';
+            if(el){
+              if(pdf.numPages>1){ el.className='pdfw'; el.style.position='static'; el.style.paddingTop='1mm';
+                el.innerHTML='หน้า 1 จาก '+pdf.numPages+' · หน้าอื่นเปิดดูจากในระบบ'; }
+              else { el.parentNode.removeChild(el); }
+            }
+          });
+        });
+      }).catch(function(){ warn(c,'ไฟล์ PDF นี้เปิดไม่ได้ · ต้องเปิดดูจากในระบบ'); })
+        .then(done, done);
+    });
+  }).catch(function(){
+    clearTimeout(tmr);
+    cvs.forEach(function(c){ warn(c,'เปิดตัวอ่าน PDF ไม่ได้ (ไม่มีเน็ต?) · ต้องเปิดดูจากในระบบ'); });
+    finish();
+  });
 }
 function docCheckPrintPack(opts){
   opts = opts || {};
@@ -71606,8 +71696,9 @@ function docCheckPrintPack(opts){
   if(!w){ alert('เบราว์เซอร์บล็อกป๊อปอัป · อนุญาต pop-up แล้วลองใหม่'); return; }
   let fl=''; try{ [].slice.call(document.querySelectorAll('link[rel="stylesheet"],link[rel="preconnect"]')).forEach(function(L){
     var h=L.getAttribute('href')||''; if(/fonts\.(googleapis|gstatic)\.com/.test(h)) fl+=L.outerHTML; }); }catch(_){}
-  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>ชุดเอกสาร '+_docPackEsc(date)+'</title>'+fl+'<style>'+css+'</style></head><body>'+html+_docPackBoot()+'</body></html>');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>ชุดเอกสาร '+_docPackEsc(date)+'</title>'+fl+'<style>'+css+'</style></head><body>'+html+'</body></html>');
   w.document.close();
+  if(typeof _docPackDrive==='function') _docPackDrive(w);   // §drive
 }
 
 /* ══ Daily PFM · จัดการสลิปการชำระของบุ๊กกิ้ง — ดู · แนบเพิ่ม · ลบ ═══════════════
@@ -74012,7 +74103,7 @@ function bkV2VoucherTicket(bk, esc){
 
   return '<div class="bkv2-vcdoc">'
   + '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:12px">'
-    + '<img src="'+LA_LOGO_FULL+'" alt="LOVE andaman" style="height:36px;width:auto;display:block">'
+    + '<img src="'+LA_LOGO_FULL+'" alt="LOVE andaman" style="height:24px;width:auto;display:block">'
     + '<div style="text-align:right;line-height:1.45">'
       + '<div style="font-size:11.5px;font-weight:800;color:'+NAVY+'">LOVE ISLAND CO.,LTD.</div>'
       + '<div style="font-size:8.8px;color:'+MUT+'">T.TALAD NUEA , A.MUENG , PHUKET 83000</div>'
