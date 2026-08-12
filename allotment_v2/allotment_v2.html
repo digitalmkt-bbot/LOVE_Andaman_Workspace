@@ -47994,6 +47994,7 @@ function pckStageCell(r, date){
 function ckAddonList(bk, routeId){
   var out=[], ltLabel='', ltNote='';
   (bk.addOns||[]).forEach(function(a){
+    if(typeof bkV2IsB2CFeeAddOn==='function' && bkV2IsB2CFeeAddOn(a)) return;   // §b2cFee
     var ty=String(a.type||''), lbl=String(a.label||a.type||'');
     if(/longtail|หางยาว/i.test(ty) || /longtail|หางยาว/i.test(lbl)){
       ltLabel=(lbl||'Longtail').replace(/\s*\(per boat[^)]*\)/i,'');
@@ -67977,6 +67978,11 @@ function laAgencyMark(bk, h, opt){
 function bkV2B2CLogo(h){
   return '<img src="'+LA_LOGO_FULL+'" alt="LOVE andaman" style="height:'+(h||22)+'px;width:auto;display:block">';
 }
+// §b2cFee · จริงไหมว่ารายการนี้เป็นค่าธรรมเนียมจาก B2C (ไม่ใช่ของที่ต้องเตรียม)
+//   ใช้ที่เดียวทุกหน้า · ถ้าวันหนึ่ง B2C เปลี่ยนรหัส แก้ตรงนี้จุดเดียว
+function bkV2IsB2CFeeAddOn(a){
+  return !!(a && /^b2c-ad-/i.test(String(a.type||'')));
+}
 function bkV2AddOnFlags(bk, routeId){
   let join=false, charter=false, transfer=false, charterQty=0;
   (bk.addOns||[]).forEach(a=>{ const ty=String(a.type||''); const lbl=String(a.label||'');
@@ -68648,6 +68654,7 @@ function bkV2RenderTab2(){
         const _trip=(bk.trips||[]).find(t=>t.routeId===r.routeId)||{};
         let _ltLabel='', _ltNote='';
         (bk.addOns||[]).forEach(a=>{
+          if(typeof bkV2IsB2CFeeAddOn==='function' && bkV2IsB2CFeeAddOn(a)) return;   // §b2cFee
           const ty=String(a.type||''); const lbl=String(a.label||a.type||'');
           if(/longtail|หางยาว/i.test(ty) || /longtail|หางยาว/i.test(lbl)){ _ltLabel = (lbl||'Longtail').replace(/\s*\(per boat[^)]*\)/i,''); if((a.note||'').trim()) _ltNote=(a.note||'').trim(); }
           else if(lbl) addonBadges.push(`<span class="t2-rb" style="background:#EDE7FB;color:#5B289A">${esc(lbl)}</span>`);
@@ -72136,7 +72143,8 @@ function _docCheckDrawer(bkId, e, rName){
   if(_ltJoin)_adSet.push('Longtail Join');
   if(_ltChtr)_adSet.push('Longtail Charter'+(_ltChtr>1?(' ×'+_ltChtr):''));
   if(_ptr)_adSet.push('Private Transfer');
-  (b.addOns||[]).forEach(a=>{ const ty=String(a.type||''); if(/longtail|transfer/i.test(ty))return; const lbl=(a.label||ty).trim(); if(lbl && _adSet.indexOf(lbl)<0)_adSet.push(lbl+((a.qty&&a.qty>1)?(' ×'+a.qty):'')); });
+  (b.addOns||[]).forEach(a=>{ if(typeof bkV2IsB2CFeeAddOn==='function' && bkV2IsB2CFeeAddOn(a)) return;   /* §b2cFee */
+    const ty=String(a.type||''); if(/longtail|transfer/i.test(ty))return; const lbl=(a.label||ty).trim(); if(lbl && _adSet.indexOf(lbl)<0)_adSet.push(lbl+((a.qty&&a.qty>1)?(' ×'+a.qty):'')); });
   const addonStr=_adSet.length?e(_adSet.join(' · ')):'-';
   const _sbDiff = b.dropoffSame===false && (b.dropoffHotelName||b.dropoffArea); const sbTxt = _sbDiff?e(b.dropoffHotelName||b.dropoffArea||'-'):'';
   const fld=(lbl,val)=>`<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid #f0f2ee"><span style="flex:0 0 84px;font-size:10px;color:#8a8a82;text-transform:uppercase;letter-spacing:.03em;font-weight:600">${e(lbl)}</span><span style="flex:1;font-size:13px;color:#1B2A55;font-weight:600">${val}</span></div>`;
@@ -74074,6 +74082,7 @@ function bkV2VoucherTicket(bk, esc){
     if(_ptr)  svcBits.push(chip('Private Transfer','#E9F5FC','#0E5E80','#C9E6F5'));
     // add-on ชื่ออื่น ๆ · ข้ามหางยาวกับรถส่วนตัวเพราะนับไปแล้วข้างบน
     (bk.addOns||[]).forEach(a=>{
+      if(typeof bkV2IsB2CFeeAddOn==='function' && bkV2IsB2CFeeAddOn(a)) return;   // §b2cFee
       const ty=String(a.type||'');
       if(/longtail|transfer/i.test(ty)) return;
       const lbl=String(a.label||ty).trim(); if(!lbl) return;
