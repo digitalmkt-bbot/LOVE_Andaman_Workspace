@@ -1644,6 +1644,95 @@ CREATE TABLE operation_schemas."vanjob_th_flag" (
   PRIMARY KEY ("id")
 );
 
+CREATE TABLE operation_schemas."pier_items" (
+    "id" text,
+    "pier" text,
+    "kind" text,
+    "label" text,
+    "total" bigint,
+    "active" boolean,
+    "note" text
+);
+
+CREATE TABLE operation_schemas."pier_moves" (
+    "id" text,
+    "date" text,
+    "pier" text,
+    "itemid" text,
+    "boatid" text,
+    "type" text,
+    "qty" bigint,
+    "frombucket" text,
+    "fine" double precision,
+    "finepaid" boolean,
+    "note" text,
+    "by" text,
+    "at" text
+);
+
+CREATE TABLE operation_schemas."pier_staff" (
+    "id" text,
+    "pier" text,
+    "nick" text,
+    "name" text,
+    "role" text,
+    "phone" text,
+    "active" boolean
+);
+
+CREATE TABLE operation_schemas."pier_duty" (
+    "id" text,
+    "key" text,
+    "value" text
+);
+
+CREATE TABLE operation_schemas."pier_team" (
+    "id" text,
+    "key" text,
+    "value" text
+);
+
+CREATE TABLE operation_schemas."pier_job" (
+    "id" text,
+    "key" text,
+    "value" text
+);
+
+CREATE TABLE operation_schemas."pier_cfg" (
+    "id" text,
+    "key" text,
+    "value" text
+);
+
+CREATE TABLE operation_schemas."pier_lic_types" (
+    "id" text,
+    "side" text,
+    "short" text,
+    "formal" text,
+    "perboat" bigint,
+    "active" boolean
+);
+
+CREATE TABLE operation_schemas."pier_lic_classes" (
+    "id" text,
+    "typeid" text,
+    "name" text,
+    "maxgt" double precision,
+    "maxbhp" double precision,
+    "ord" bigint
+);
+
+CREATE TABLE operation_schemas."pier_licenses" (
+    "id" text,
+    "staffid" text,
+    "classid" text,
+    "no" text,
+    "exp" text,
+    "issuedat" text,
+    "issuer" text,
+    "note" text
+);
+
 ALTER TABLE operation_schemas."boats__assignments" ADD CONSTRAINT "fk_boats_assignments" FOREIGN KEY ("boats_id") REFERENCES operation_schemas."boats" ("id");
 ALTER TABLE operation_schemas."boats__docs" ADD CONSTRAINT "fk_boats_docs" FOREIGN KEY ("boats_id") REFERENCES operation_schemas."boats" ("id");
 ALTER TABLE operation_schemas."boats__log" ADD CONSTRAINT "fk_boats_log" FOREIGN KEY ("boats_id") REFERENCES operation_schemas."boats" ("id");

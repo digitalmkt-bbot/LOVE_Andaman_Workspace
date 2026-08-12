@@ -1,10 +1,10 @@
-// generated from operation_schemas_structure.sql (live dump 2026-07-09)
-// 107 tables · 52 refs
+// generated from operation_schemas_structure.sql
+// 118 tables · 52 refs
 // Separated by real database schema (see dbml_groups.js for the layout)
 
 // ████████████████████████████████████████████████████████████
 // ██  DATABASE SCHEMA: operation_schemas
-// ██  app data · 107 tables · accessed as role allotment_app
+// ██  app data · 118 tables · accessed as role allotment_app
 // ████████████████████████████████████████████████████████████
 
 // ──────── app / meta ────────
@@ -980,6 +980,8 @@ Table sb_bookings {
   paymentsnapshot_netdays bigint
   paymentsnapshot_source text
   paymentsnapshot_contractversion text
+  paymentsnapshot_paid bigint
+  paymentsnapshot_paidstatus text
   pricebreakdown_seat bigint
   pricebreakdown_addon bigint
   pricebreakdown_focdiscount bigint
@@ -1546,10 +1548,105 @@ Table agent_artifacts {
   value text
 }
 
+Table contract_templates {
+  id text [pk]
+  key text
+  value text
+}
+
 Table insurance_overrides {
   id text [pk]
   key text
   value text
+}
+
+Table pier_items {
+  id text
+  pier text
+  kind text
+  label text
+  total bigint
+  active boolean
+  note text
+}
+
+Table pier_moves {
+  id text
+  date text
+  pier text
+  itemid text
+  boatid text
+  type text
+  qty bigint
+  frombucket text
+  fine double
+  finepaid boolean
+  note text
+  by text
+  at text
+}
+
+Table pier_staff {
+  id text
+  pier text
+  nick text
+  name text
+  role text
+  phone text
+  active boolean
+}
+
+Table pier_duty {
+  id text
+  key text
+  value text
+}
+
+Table pier_team {
+  id text
+  key text
+  value text
+}
+
+Table pier_job {
+  id text
+  key text
+  value text
+}
+
+Table pier_cfg {
+  id text
+  key text
+  value text
+}
+
+Table pier_lic_types {
+  id text
+  side text
+  short text
+  formal text
+  perboat bigint
+  active boolean
+}
+
+Table pier_lic_classes {
+  id text
+  typeid text
+  name text
+  maxgt double
+  maxbhp double
+  ord bigint
+}
+
+Table pier_licenses {
+  id text
+  staffid text
+  classid text
+  no text
+  exp text
+  issuedat text
+  issuer text
+  note text
 }
 
 // ████████████████████████████████████████████████████████████
@@ -1722,7 +1819,18 @@ TableGroup market_intel {
 
 TableGroup other {
   agent_artifacts
+  contract_templates
   insurance_overrides
+  pier_items
+  pier_moves
+  pier_staff
+  pier_duty
+  pier_team
+  pier_job
+  pier_cfg
+  pier_lic_types
+  pier_lic_classes
+  pier_licenses
 }
 
 TableGroup allotment_schema {

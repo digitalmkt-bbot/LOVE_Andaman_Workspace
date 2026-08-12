@@ -6757,5 +6757,321 @@
       "kind": "map_value_json",
       "db_type": "text"
     }
+  },
+  "pier_items": {
+    "id": {
+      "source": "pier_items[].id (record id; generated if absent)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "pier": {
+      "source": "pier",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "kind": {
+      "source": "kind",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "label": {
+      "source": "label",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "total": {
+      "source": "total",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "active": {
+      "source": "active",
+      "kind": "scalar",
+      "db_type": "boolean"
+    },
+    "note": {
+      "source": "note",
+      "kind": "scalar",
+      "db_type": "text"
+    }
+  },
+  "pier_moves": {
+    "id": {
+      "source": "pier_moves[].id (record id; generated if absent)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "date": {
+      "source": "date",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "pier": {
+      "source": "pier",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "itemid": {
+      "source": "itemId",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "boatid": {
+      "source": "boatId",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "type": {
+      "source": "type",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "qty": {
+      "source": "qty",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "frombucket": {
+      "source": "from",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "fine": {
+      "source": "fine",
+      "kind": "scalar",
+      "db_type": "double precision"
+    },
+    "finepaid": {
+      "source": "finePaid",
+      "kind": "scalar",
+      "db_type": "boolean"
+    },
+    "note": {
+      "source": "note",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "by": {
+      "source": "by",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "at": {
+      "source": "at",
+      "kind": "scalar",
+      "db_type": "text"
+    }
+  },
+  "pier_staff": {
+    "id": {
+      "source": "pier_staff[].id (record id; generated if absent)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "pier": {
+      "source": "pier",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "nick": {
+      "source": "nick",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "name": {
+      "source": "name",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "role": {
+      "source": "role",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "phone": {
+      "source": "phone",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "active": {
+      "source": "active",
+      "kind": "scalar",
+      "db_type": "boolean"
+    }
+  },
+  "pier_duty": {
+    "id": {
+      "source": "pier_duty map key (generated id)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "key": {
+      "source": "pier_duty map key (original)",
+      "kind": "map_key",
+      "db_type": "text"
+    },
+    "value": {
+      "source": "pier_duty[key] value",
+      "kind": "map_value_json",
+      "db_type": "text",
+      "note": "ค่าเป็น array ของ staffId — เก็บทั้งก้อนเป็น JSON text เหมือน vanjob_sent · เพิ่มคนหรือเปลี่ยนรูปแบบไม่ต้องแตะ DB"
+    }
+  },
+  "pier_team": {
+    "id": {
+      "source": "pier_team map key (generated id)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "key": {
+      "source": "pier_team map key (original)",
+      "kind": "map_key",
+      "db_type": "text"
+    },
+    "value": {
+      "source": "pier_team[key] value",
+      "kind": "map_value_json",
+      "db_type": "text"
+    }
+  },
+  "pier_job": {
+    "id": {
+      "source": "pier_job map key (generated id)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "key": {
+      "source": "pier_job map key (original)",
+      "kind": "map_key",
+      "db_type": "text"
+    },
+    "value": {
+      "source": "pier_job[key] value",
+      "kind": "map_value_json",
+      "db_type": "text"
+    }
+  },
+  "pier_cfg": {
+    "id": {
+      "source": "pier_cfg map key (generated id)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "key": {
+      "source": "pier_cfg map key (original)",
+      "kind": "map_key",
+      "db_type": "text"
+    },
+    "value": {
+      "source": "pier_cfg[key] value",
+      "kind": "map_value_json",
+      "db_type": "text"
+    }
+  },
+  "pier_lic_types": {
+    "id": {
+      "source": "pier_lic_types[].id (record id; generated if absent)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "side": {
+      "source": "side",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "short": {
+      "source": "short",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "formal": {
+      "source": "formal",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "perboat": {
+      "source": "perBoat",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "active": {
+      "source": "active",
+      "kind": "scalar",
+      "db_type": "boolean"
+    }
+  },
+  "pier_lic_classes": {
+    "id": {
+      "source": "pier_lic_classes[].id (record id; generated if absent)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "typeid": {
+      "source": "typeId",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "name": {
+      "source": "name",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "maxgt": {
+      "source": "maxGt",
+      "kind": "scalar",
+      "db_type": "double precision"
+    },
+    "maxbhp": {
+      "source": "maxBhp",
+      "kind": "scalar",
+      "db_type": "double precision"
+    },
+    "ord": {
+      "source": "ord",
+      "kind": "scalar",
+      "db_type": "bigint"
+    }
+  },
+  "pier_licenses": {
+    "id": {
+      "source": "pier_licenses[].id (record id; generated if absent)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "staffid": {
+      "source": "staffId",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "classid": {
+      "source": "classId",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "no": {
+      "source": "no",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "exp": {
+      "source": "exp",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "issuedat": {
+      "source": "issuedAt",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "issuer": {
+      "source": "issuer",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "note": {
+      "source": "note",
+      "kind": "scalar",
+      "db_type": "text"
+    }
   }
 }
