@@ -46118,7 +46118,7 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
         <td style="font-size:15.5px;font-weight:700;color:#1B2A55">${e(b.leadPax||'-')}${_ckTag}${(_ovnRet||_ovnOut)?`<div style="margin-top:2px"><span style="display:inline-block;background:${_ovnOut?'#EDE7FB':'#FBE4C9'};color:${_ovnOut?'#4A2E86':'#8a5500'};font-weight:700;font-size:10px;border-radius:7px;padding:1px 7px;white-space:nowrap">${_ovnOut?'&#127765; OVN':'&#8617; OVN'}</span></div>`:''}${(function(){ const _lead=String(b.leadPax||'').trim(); const _ex=(b.passengers||[]).map(p=>String((p&&p.name)||'').trim()).filter(n=>n&&n!==_lead); if(_ex.length){ let h=_ex.slice(0,2).map(n=>`<div class="ag" style="font-weight:600;color:#3F4654">${e(n)}</div>`).join(''); if(_ex.length>2) h+=`<div class="ag">+${_ex.length-2} more</div>`; return h; } return (b.passengers&&b.passengers.length)?`<div class="ag">+${b.passengers.length} more</div>`:''; })()}${x.splitPax!=null?`<div class="ag" style="color:#5B289A">${x.sMain?('&#128652; จุดหลัก'):('&#128652; แยกรับ'+(x.sWho?(' · '+e(x.sWho)):''))} · เดียวกัน ${e(b.voucherRef||b.code||b.id)}</div>`:''}</td>
         ${paxCells}
         <td style="text-align:center;font-variant-numeric:tabular-nums;font-weight:800;font-size:17px;color:#C0271C;white-space:nowrap">${isRet?'<span style="color:#aaa;font-weight:400;font-size:14px">—</span>':(e(_ptime(b,t))||'-')}</td>
-        <td style="font-size:14.5px;font-weight:600;color:#1B2A55">${e(pickup)||'<span style="color:#b00">— no pickup —</span>'}${_pkTh?`<div class="ag" style="color:#185FA5;font-size:12px">${e(_pkTh)}</div>`:''}${(!isRet&&Array.isArray(b.altPickups)&&b.altPickups.some(a=>(a.who||'').trim()||(a.place||'').trim()))?b.altPickups.filter(a=>(a.who||'').trim()||(a.place||'').trim()||a.area||a.areaId).map(a=>`<div style="color:#5B289A;font-size:11.5px;margin-top:2px">&#128652; <b>${Math.max(1,parseInt(a.qty)||1)} คน</b>${(a.who||'').trim()?(' · '+e((a.who||'').trim())):''}${a.zone?(' ['+e(a.zone)+']'):''} @ ${e((a.place||'').trim()||a.area||'?')}</div>`).join(''):''}</td>
+        <td style="font-size:14.5px;font-weight:600;color:#1B2A55">${e(pickup)||'<span style="color:#b00">— no pickup —</span>'}${_pkTh?`<div class="ag" style="color:#185FA5;font-size:18px;font-weight:600;line-height:1.3;margin-top:1px">${e(_pkTh)}</div>`:''}${(!isRet&&Array.isArray(b.altPickups)&&b.altPickups.some(a=>(a.who||'').trim()||(a.place||'').trim()))?b.altPickups.filter(a=>(a.who||'').trim()||(a.place||'').trim()||a.area||a.areaId).map(a=>`<div style="color:#5B289A;font-size:11.5px;margin-top:2px">&#128652; <b>${Math.max(1,parseInt(a.qty)||1)} คน</b>${(a.who||'').trim()?(' · '+e((a.who||'').trim())):''}${a.zone?(' ['+e(a.zone)+']'):''} @ ${e((a.place||'').trim()||a.area||'?')}</div>`).join(''):''}</td>
         <td style="text-align:center">${e(b.roomNumber||'')||'-'}</td>
         <td>${zoneCell}</td>
         <td>${dropCell}${retDiff?`<div style="margin-top:4px"><span style="display:inline-block;background:#FBE4C9;color:#8a5500;font-weight:700;font-size:12px;border-radius:7px;padding:3px 10px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#8617; ขากลับ โดย ${e(retName)}</span></div>`:''}</td>
@@ -68643,16 +68643,14 @@ function bkV2RenderTab2(){
         const rowId = `t2pax-${esc(bk.id)}-${esc(r.routeId)}`;
         const sm=bk.specialMeals||{}; const g=bk.guides||{};
         const reqBadges=[];
-        // Add-on column · เฉพาะ "หางยาว" (join + เหมาลำ) เท่านั้น — booking add-ons + trip bundle/manual longtail
-        //   §addonChip (2026-08-12) · แถวนี้คือลิสต์ทำงานหน้าท่า ต้องอ่านจบในตาเดียว · หางยาวขึ้นเพราะ
-        //   "ต้องจัดเรือเพิ่ม" · add-on อื่น (Join Transfer, International Park Fee, ...) ไม่เปลี่ยนงานหน้าท่า
-        //   แต่กินที่จนป้ายหางยาวจม — ย้ายไปดูที่ voucher / booking detail / job sheet ซึ่งยังโชว์ครบเหมือนเดิม
+        // Add-on column (longtail / transfer / others) — booking add-ons + trip bundle/manual longtail
         const addonBadges=[];
         const _trip=(bk.trips||[]).find(t=>t.routeId===r.routeId)||{};
         let _ltLabel='', _ltNote='';
         (bk.addOns||[]).forEach(a=>{
           const ty=String(a.type||''); const lbl=String(a.label||a.type||'');
           if(/longtail|หางยาว/i.test(ty) || /longtail|หางยาว/i.test(lbl)){ _ltLabel = (lbl||'Longtail').replace(/\s*\(per boat[^)]*\)/i,''); if((a.note||'').trim()) _ltNote=(a.note||'').trim(); }
+          else if(lbl) addonBadges.push(`<span class="t2-rb" style="background:#EDE7FB;color:#5B289A">${esc(lbl)}</span>`);
         });
         if(!_ltLabel && _trip.bundle && _trip.bundle.type==='longtail') _ltLabel = 'Longtail'+(_trip.bundle.mode==='free'?' (incl.)':'');
         if(!_ltLabel && _trip.longtailManual) _ltLabel = 'Longtail';
