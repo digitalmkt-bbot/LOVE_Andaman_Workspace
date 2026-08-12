@@ -1340,6 +1340,119 @@ function startB2CListener() {
   }
   connect();
 }
+// ── db/migrations autorun (2026-08-12) ──────────────────────────────────────────────────────────
+// Until now nothing ran db/migrations: Railway starts `node server.js` and that was it, so a .sql
+// file was only ever applied when someone remembered to run tools/apply-migration.js by hand. That
+// is how prod ended up serving code whose mapping listed 10 pier_* tables the database did not
+// have — and because relLoad() SELECTs every mapped table in one Promise.all, one missing table
+// took /api/load down completely (500, app boots with no data at all). The code shipped the moment
+// it was pushed; the schema did not.
+//
+// Two things here are not optional, and both exist because of what this repo actually contains:
+//
+//  1. BASELINE. Re-running the existing migrations is NOT harmless. 003 recreates
+//     v_seat_availability from the repo file, and the repo file has drifted from the definition
+//     prod really runs — auto-running it would quietly replace a live view with a stale one. So on
+//     a database that already has a schema, every migration written so far is recorded as applied
+//     WITHOUT being executed, and only files added after today actually run. A genuinely empty
+//     database has nothing to protect, so there the whole set runs in order.
+//
+//  2. ROLLBACK FILES ARE SKIPPED. 004 ships as a pair — the migration and its undo script sit
+//     side by side, and filename order puts the undo FIRST (004_rollback_… < 004_v_…). Running
+//     the folder blindly would apply an undo and then the thing it undoes. Anything matching
+//     /rollback/ stays a manual tool.
+//
+// Each file runs inside its own transaction, so a failure leaves that file's changes fully rolled
+// back rather than half-applied, and the run stops there (order matters — a later migration may
+// depend on the one that failed). A failure NEVER blocks boot: the app has to keep serving, and
+// the outage this replaces was caused by silence, so the state is logged loudly and published on
+// /api/version where it can be read without shell access.
+const MIG_DIR = path.join(__dirname, 'db', 'migrations');
+const MIG_LOCK_KEY = 4820261;   // arbitrary but fixed · two instances booting must not both migrate
+let MIG_STATE = { ran: false, applied: [], failed: [], baselined: 0, pending: 0, skipped: [], at: null };
+
+const migSha = f => crypto.createHash('sha1').update(fs.readFileSync(path.join(MIG_DIR, f))).digest('hex');
+
+async function runMigrations(){
+  MIG_STATE = { ran: true, applied: [], failed: [], baselined: 0, pending: 0, skipped: [], at: new Date().toISOString() };
+  let all;
+  try { all = fs.readdirSync(MIG_DIR).filter(f => /\.sql$/i.test(f)).sort(); }
+  catch(_) { return MIG_STATE; }                       // no folder in this deploy → nothing to do
+  MIG_STATE.skipped = all.filter(f => /rollback/i.test(f));
+  const files = all.filter(f => !/rollback/i.test(f));
+  if (MIG_STATE.skipped.length) console.log(`[mig] manual-only, not auto-run: ${MIG_STATE.skipped.join(', ')}`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS schema_migrations (
+    name text PRIMARY KEY, sha1 text, applied_at timestamptz DEFAULT now(),
+    baseline boolean DEFAULT false, ms integer, err text)`);
+
+  // One instance at a time. try_ (not the blocking form) so a second boot moves on instead of
+  // hanging on the pool; whoever holds the lock is already doing the work.
+  const lockCli = await pool.connect();
+  let held = false;
+  try {
+    held = (await lockCli.query('SELECT pg_try_advisory_lock($1) AS ok', [MIG_LOCK_KEY])).rows[0].ok;
+    if (!held) { console.log('[mig] another instance is migrating — skipping this run'); return MIG_STATE; }
+
+    const done = new Map((await pool.query('SELECT name, sha1 FROM schema_migrations')).rows.map(r => [r.name, r.sha1]));
+
+    if (!done.size) {
+      const n = (await pool.query(
+        'SELECT count(*)::int n FROM information_schema.tables WHERE table_schema = $1', [OS_SCHEMA])).rows[0].n;
+      if (n > 0) {
+        for (const f of files) {
+          await pool.query('INSERT INTO schema_migrations(name, sha1, baseline) VALUES($1,$2,true) ON CONFLICT (name) DO NOTHING',
+                           [f, migSha(f)]);
+          done.set(f, migSha(f));
+        }
+        MIG_STATE.baselined = files.length;
+        console.log(`[mig] baseline · ${files.length} existing migration(s) recorded as applied without running (schema "${OS_SCHEMA}" already has ${n} tables)`);
+      }
+    }
+
+    for (const f of files) {
+      const sha = migSha(f);
+      if (done.has(f)) {
+        if (done.get(f) && done.get(f) !== sha)
+          console.warn(`[mig] ${f} has changed since it was applied — NOT re-run. Add a new migration rather than editing an applied one.`);
+        continue;
+      }
+      const cli = await pool.connect();
+      const t0 = Date.now();
+      try {
+        await cli.query('BEGIN');
+        await cli.query(fs.readFileSync(path.join(MIG_DIR, f), 'utf8'));
+        await cli.query(`INSERT INTO schema_migrations(name, sha1, ms) VALUES($1,$2,$3)
+                         ON CONFLICT (name) DO UPDATE SET sha1=EXCLUDED.sha1, applied_at=now(), ms=EXCLUDED.ms, err=NULL`,
+                        [f, sha, Date.now() - t0]);
+        await cli.query('COMMIT');
+        MIG_STATE.applied.push(f);
+        console.log(`[mig] applied ${f} (${Date.now() - t0}ms)`);
+      } catch (e) {
+        try { await cli.query('ROLLBACK'); } catch(_) {}
+        try { await pool.query(`INSERT INTO schema_migrations(name, sha1, err) VALUES($1,$2,$3)
+                                ON CONFLICT (name) DO UPDATE SET err=EXCLUDED.err`, [f, sha, e.message]); } catch(_) {}
+        MIG_STATE.failed.push({ file: f, error: e.message });
+        console.error(`[mig] FAILED ${f}: ${e.message}`);
+        console.error('[mig] this file was rolled back and later migrations were not attempted');
+        break;
+      } finally { cli.release(); }
+    }
+    MIG_STATE.pending = files.filter(f => !done.has(f) && !MIG_STATE.applied.includes(f)).length;
+    const s = MIG_STATE;
+    console.log(`[mig] done · applied ${s.applied.length} · baselined ${s.baselined} · failed ${s.failed.length} · pending ${s.pending}`);
+  } finally {
+    if (held) { try { await lockCli.query('SELECT pg_advisory_unlock($1)', [MIG_LOCK_KEY]); } catch(_) {} }
+    lockCli.release();
+  }
+  return MIG_STATE;
+}
+function migSummary(){
+  return { ran: MIG_STATE.ran, applied: MIG_STATE.applied.length, baselined: MIG_STATE.baselined,
+           failed: MIG_STATE.failed.length, pending: MIG_STATE.pending,
+           lastError: MIG_STATE.failed.length ? MIG_STATE.failed[0].error : '', at: MIG_STATE.at };
+}
+
 async function initDb(){
   let _step = 'start';
   const sq = async (label, q, ...args) => { _step = label; await pool.query(q, ...args); };
@@ -1501,6 +1614,12 @@ async function initDb(){
       await pool.query(`INSERT INTO ${USERS_T}(username,pass_hash,name,role) VALUES($1,$2,$3,$4)`, [ADMIN_USER, hashPw(ADMIN_PASS), 'Admin', 'admin']);
       console.log('[db] seeded admin user:', ADMIN_USER);
     }
+    // After the hand-written ensure block above, so a migration can rely on those tables existing.
+    // Wrapped: a broken migration must not stop the app from serving — that is the failure this
+    // whole mechanism exists to prevent, and it would be perverse to reintroduce it here.
+    _step = 'migrations';
+    try { await runMigrations(); }
+    catch(e){ console.error('[mig] runner error (boot continues):', e.message); }
     dbReady = true; console.log('[db] ready');
     startB2CListener();
   }catch(e){ console.error(`[db] init failed at step "${_step}": ${e.message}`); }
@@ -1892,7 +2011,11 @@ const server = http.createServer((req, res) => {
     pool.query('SELECT version,updated_by,updated_at FROM app_state WHERE id=$1',[STATE_KEY])
       .then(r=>J(res,200, Object.assign(
         r.rows[0]?{version:r.rows[0].version,updated_by:r.rows[0].updated_by,updated_at:r.rows[0].updated_at}:{version:0},
-        { b2c: b2cHealthReport() })))
+        // mig rides along for the same reason b2c does: a migration that did not run is silent by
+        // nature — it bumps no version and throws nothing — and that silence is exactly what took
+        // /api/load down on 12 Aug. `pending` or `failed` above zero means the database is behind
+        // the code that is already serving.
+        { b2c: b2cHealthReport(), mig: migSummary() })))
       .catch(e=>J(res,500,{error:e.message}));
     return;
   }
