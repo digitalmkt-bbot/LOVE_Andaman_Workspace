@@ -68640,14 +68640,16 @@ function bkV2RenderTab2(){
         const rowId = `t2pax-${esc(bk.id)}-${esc(r.routeId)}`;
         const sm=bk.specialMeals||{}; const g=bk.guides||{};
         const reqBadges=[];
-        // Add-on column (longtail / transfer / others) — booking add-ons + trip bundle/manual longtail
+        // Add-on column · เฉพาะ "หางยาว" (join + เหมาลำ) เท่านั้น — booking add-ons + trip bundle/manual longtail
+        //   §addonChip (2026-08-12) · แถวนี้คือลิสต์ทำงานหน้าท่า ต้องอ่านจบในตาเดียว · หางยาวขึ้นเพราะ
+        //   "ต้องจัดเรือเพิ่ม" · add-on อื่น (Join Transfer, International Park Fee, ...) ไม่เปลี่ยนงานหน้าท่า
+        //   แต่กินที่จนป้ายหางยาวจม — ย้ายไปดูที่ voucher / booking detail / job sheet ซึ่งยังโชว์ครบเหมือนเดิม
         const addonBadges=[];
         const _trip=(bk.trips||[]).find(t=>t.routeId===r.routeId)||{};
         let _ltLabel='', _ltNote='';
         (bk.addOns||[]).forEach(a=>{
           const ty=String(a.type||''); const lbl=String(a.label||a.type||'');
           if(/longtail|หางยาว/i.test(ty) || /longtail|หางยาว/i.test(lbl)){ _ltLabel = (lbl||'Longtail').replace(/\s*\(per boat[^)]*\)/i,''); if((a.note||'').trim()) _ltNote=(a.note||'').trim(); }
-          else if(lbl) addonBadges.push(`<span class="t2-rb" style="background:#EDE7FB;color:#5B289A">${esc(lbl)}</span>`);
         });
         if(!_ltLabel && _trip.bundle && _trip.bundle.type==='longtail') _ltLabel = 'Longtail'+(_trip.bundle.mode==='free'?' (incl.)':'');
         if(!_ltLabel && _trip.longtailManual) _ltLabel = 'Longtail';
