@@ -392,29 +392,40 @@
     laWrapNav(); laApplyPerms(); laApplyAdminOnly(); setTimeout(laApplyPerms,600); setTimeout(laApplyAdminOnly,600); setTimeout(_laRestoreView,850);
   });
   // ── Per-user area access (role-based nav gating) ──
-  var LA_AREAS=[{k:'overview',t:'ภาพรวม · Dashboard/Calendar'},{k:'operations',t:'ปฏิบัติการ · Booking/Boat Op/รถ'},{k:'sales',t:'ขาย · Agents/Rate/Demand'},{k:'accounting',t:'บัญชี · Accounting/PFM'},{k:'fleet',t:'เรือ/ช่าง · Fleet/Maintenance'},{k:'config',t:'ตั้งค่า · Programs/Team'}];
-  var LA_PRESETS={Sales:['overview','sales'],Operations:['overview','operations'],Fleet:['fleet'],Accounting:['overview','accounting']};
-  var LA_VIEW_AREA={'sales-board':'sales','b2b-dash':'sales','contract-tmpl':'sales',dashboard:'overview',calendar:'overview',daily:'overview',booking:'operations',operation:'operations',vehicles:'operations',vanjobs:'operations',vancheckin:'operations',piercheckin:'operations',pieroffice:'operations',travelsum:'operations',dailyreport:'operations','pickup-setup':'operations',boatassign:'operations',agents:'sales','rate-types':'sales',b2c:'sales',staff:'sales',marketdata:'sales',pickupmap:'sales',accounting:'accounting',dailypfm:'accounting','fl-dashboard':'fleet','fl-boatstatus':'fleet','fl-dailyreport':'fleet','fl-incident':'fleet','fl-projects':'fleet','fl-maintenance':'fleet','fl-inventory':'fleet','fl-consumables':'fleet','fl-cost':'fleet','fl-insights':'fleet','fl-fuel':'fleet','fl-asset':'fleet',settings:'config',teammkt:'config',addonsvc:'config'};
+  var LA_AREAS=[{k:'overview',t:'ภาพรวม · Dashboard/Calendar'},{k:'operations',t:'ปฏิบัติการ · Booking/Boat Op/รถ'},{k:'sales',t:'ขาย · Agents/Rate/Demand'},{k:'accounting',t:'บัญชี · Accounting/PFM'},{k:'fleet',t:'เรือ/ช่าง · Fleet/Maintenance'},{k:'pier',t:'ท่าเรือ · Office ท่าเรือ'},{k:'config',t:'ตั้งค่า · Programs/Team'}];
+  var LA_PRESETS={Sales:['overview','sales'],Operations:['overview','operations'],Fleet:['fleet'],Accounting:['overview','accounting'],Pier:['pier']};
+  var LA_VIEW_AREA={'sales-board':'sales','b2b-dash':'sales','contract-tmpl':'sales',dashboard:'overview',calendar:'overview',daily:'overview',booking:'operations',operation:'operations',vehicles:'operations',vanjobs:'operations',vancheckin:'operations',piercheckin:'operations',travelsum:'operations',dailyreport:'operations','pickup-setup':'operations',boatassign:'operations',agents:'sales','rate-types':'sales',b2c:'sales',staff:'sales',marketdata:'sales',pickupmap:'sales',accounting:'accounting',dailypfm:'accounting','fl-dashboard':'fleet','fl-boatstatus':'fleet','fl-dailyreport':'fleet','fl-incident':'fleet','fl-projects':'fleet','fl-maintenance':'fleet','fl-inventory':'fleet','fl-consumables':'fleet','fl-cost':'fleet','fl-insights':'fleet','fl-fuel':'fleet','fl-asset':'fleet','po-panwa':'pier','po-tublamu':'pier','po-ranong':'pier',settings:'config',teammkt:'config',addonsvc:'config'};
   // Per-MENU registry (finer than the 6 groups) · {v:view, t:label, a:area}
   var LA_NAV=[
     {v:'dashboard',t:'Dashboard',a:'overview'},{v:'calendar',t:'Calendar',a:'overview'},{v:'daily',t:'Daily Availability',a:'overview'},
     /* §สิทธิ์ · reconfirm กับ bookingflow ไม่เคยอยู่ใน LA_NAV เลย และ laAllowed() ปล่อยผ่านเมนูที่ไม่รู้จัก
        (return managed?false:true) → 2 หน้านี้เปิดให้ "ทุกคน" มาตลอด แม้ผู้ใช้จะไม่ได้ติ๊กพื้นที่ปฏิบัติการไว้
        ใส่เข้ากลุ่ม operations · เรียงตามลำดับในเมนูจริง (Booking → Re-confirm → Booking Flow → ตรวจเอกสาร) */
-    {v:'booking',t:'Booking',a:'operations'},{v:'reconfirm',t:'Re-confirm',a:'operations'},{v:'bookingflow',t:'Booking Flow',a:'operations'},{v:'doccheck',t:'ตรวจเอกสาร',a:'operations'},{v:'operation',t:'Boat Operation',a:'operations'},{v:'fleetcal',t:'Fleet Calendar',a:'operations'},{v:'insurance',t:'Insurance',a:'operations'},{v:'vehicles',t:'Transfer Fleet',a:'operations'},{v:'vanjobs',t:'ใบงานรถ',a:'operations'},{v:'vancheckin',t:'เช็คอินรถ',a:'operations'},{v:'piercheckin',t:'เช็คอินหน้าท่า',a:'operations'},{v:'pieroffice',t:'Office ท่าเรือ',a:'operations'},{v:'travelsum',t:'Travel Summary',a:'operations'},{v:'dailyreport',t:'Daily Report',a:'operations'},{v:'pickup-setup',t:'Pickup time setup',a:'operations'},
+    {v:'booking',t:'Booking',a:'operations'},{v:'reconfirm',t:'Re-confirm',a:'operations'},{v:'bookingflow',t:'Booking Flow',a:'operations'},{v:'doccheck',t:'ตรวจเอกสาร',a:'operations'},{v:'operation',t:'Boat Operation',a:'operations'},{v:'fleetcal',t:'Fleet Calendar',a:'operations'},{v:'insurance',t:'Insurance',a:'operations'},{v:'vehicles',t:'Transfer Fleet',a:'operations'},{v:'vanjobs',t:'ใบงานรถ',a:'operations'},{v:'vancheckin',t:'เช็คอินรถ',a:'operations'},{v:'piercheckin',t:'เช็คอินหน้าท่า',a:'operations'},{v:'travelsum',t:'Travel Summary',a:'operations'},{v:'dailyreport',t:'Daily Report',a:'operations'},{v:'pickup-setup',t:'Pickup time setup',a:'operations'},
     {v:'sales-board',t:'Sales Board',a:'sales'},{v:'b2b-dash',t:'B2B Dashboard',a:'sales'},{v:'agents',t:'Agent List',a:'sales'},{v:'rate-types',t:'Rate Types',a:'sales'},{v:'contract-tmpl',t:'Contract Templates',a:'sales'},{v:'b2c',t:'B2C Channels',a:'sales'},{v:'staff',t:'Staff & Welfare',a:'sales'},{v:'marketdata',t:'Demand',a:'sales'},{v:'focdetail',t:'FOC Detail',a:'sales'},{v:'pickupmap',t:'แผนที่จุดรับ',a:'sales'},
     {v:'accounting',t:'Accounting',a:'accounting'},{v:'costing',t:'ต้นทุน & จุดคุ้มทุน',a:'accounting'},{v:'dailypfm',t:'Daily PFM',a:'accounting'},
     {v:'fl-dashboard',t:'Fleet Dashboard',a:'fleet'},{v:'fl-boatstatus',t:'Boat Status',a:'fleet'},{v:'fl-dailyreport',t:'Daily Fleet Log',a:'fleet'},{v:'fl-incident',t:'Incident / Job',a:'fleet'},{v:'fl-projects',t:'Projects',a:'fleet'},{v:'fl-maintenance',t:'Maintenance',a:'fleet'},{v:'fl-inventory',t:'Inventory / Memo',a:'fleet'},{v:'fl-consumables',t:'เบิกของใช้/น้ำมัน',a:'fleet'},{v:'fl-cost',t:'Cost Analytics',a:'fleet'},{v:'fl-insights',t:'Fleet Insights',a:'fleet'},{v:'fl-fuel',t:'Fuel',a:'fleet'},{v:'fl-asset',t:'Company Asset',a:'fleet'},
+    {v:'po-panwa',t:'Office ท่าเรือ · Phuket',a:'pier'},{v:'po-tublamu',t:'Office ท่าเรือ · Tub Lamu',a:'pier'},{v:'po-ranong',t:'Office ท่าเรือ · Ranong',a:'pier'},
     {v:'settings',t:'Programs',a:'config'},{v:'teammkt',t:'Team & Markets',a:'config'},{v:'addonsvc',t:'Add-on Services',a:'config'}
   ];
   // Expand a stored perms array → Set of allowed view keys. Group keys (the 6 areas) expand to every menu in that group (back-compat with old data). View keys pass through.
   function laExpandPerms(perms){ if(!Array.isArray(perms)) return null; var set={}, areaKeys=LA_AREAS.map(function(a){return a.k;});
     perms.forEach(function(p){ if(areaKeys.indexOf(p)>=0){ LA_NAV.forEach(function(n){ if(n.a===p) set[n.v]=1; }); } else set[p]=1; });
+    laBackfillPier(set);
     if(!set['contract-tmpl'] && (set['rate-types']||set['agents'])) set['contract-tmpl']=1;   // §contract-tmpl เพิ่มใหม่ 2026-07-14 · back-fill สิทธิ์ให้คนที่ถือ rate-types/agents อยู่แล้ว (perms แบบ view-list เก่าไม่มี key นี้ → เข้าหน้าไม่ได้)
     if(!set['b2b-dash'] && (set['sales-board']||set['marketdata'])) set['b2b-dash']=1;   // §b2b-dash
     if(!set['costing'] && set['accounting']) set['costing']=1;   // §fill · costing ลงทะเบียน 2026-08-11 · คนที่ถือหน้า Accounting อยู่แล้วยกให้ต่อ (perms แบบ view-list เก่าไม่มี key นี้)
     if(!set['dailyreport'] && set['travelsum']) set['dailyreport']=1;   // §dailyreport เพิ่มใหม่ 2026-08-02 · back-fill ให้คนที่ถือ Travel Summary (เอกสารปิดวันชุดเดียวกัน)   // §b2b-dash เพิ่มใหม่ 2026-07-20 · back-fill ให้คนที่ถือ sales-board/marketdata (perms แบบ view-list เก่าไม่มี key นี้)
     return set; }
+  /* §pierSplit · Office ท่าเรือ เคยอยู่ในกลุ่ม operations · ย้ายออกมาเป็นกลุ่มของตัวเอง
+     ใครที่ติ๊ก operations ไว้แต่เดิมยังต้องเห็นเหมือนเดิม จนกว่า admin จะเข้าไปปรับ */
+  function laBackfillPier(set){
+    if(!set) return set;
+    if(set['operations'] || set['piercheckin']){
+      if(!set['po-panwa'] && !set['po-tublamu'] && !set['po-ranong']){ set['po-panwa']=1; set['po-tublamu']=1; set['po-ranong']=1; }
+    }
+    return set;
+  }
   function laPermViewList(perms){ var set=laExpandPerms(perms); if(!set) return LA_NAV.map(function(n){return n.v;}); return LA_NAV.filter(function(n){return set[n.v];}).map(function(n){return n.v;}); }
   // §adminTools · ป้าย data-adminonly = admin เท่านั้น · ไม่เกี่ยวกับสิทธิ์เมนู
   //   laApplyPerms() ซ่อนให้เฉพาะคนที่ถูกจำกัดเมนู · ตัวนี้ยึด role อย่างเดียว
@@ -4086,10 +4097,6 @@ window.addEventListener('resize',function(){ if(window.innerWidth>820) laNavClos
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18h18"/><path d="M5 18l2-7h10l2 7"/><path d="M12 11V4"/><path d="M9 6h6"/></svg>
       เช็คอินหน้าท่า
     </div>
-    <div class="nav-item" data-view="pieroffice" onclick="nav(this)" style="border-left:2px solid rgba(130,210,170,.25);padding-left:9px">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><path d="M9 21v-5h6v5"/><path d="M9 11h2M13 11h2"/></svg>
-      Office ท่าเรือ
-    </div>
     <div class="nav-item" data-view="travelsum" onclick="nav(this)" style="border-left:2px solid rgba(130,210,170,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M8 9h8"/><path d="M8 13h5"/><path d="M8 17h3"/></svg>
       Travel Summary
@@ -4101,6 +4108,20 @@ window.addEventListener('resize',function(){ if(window.innerWidth>820) laNavClos
     <div class="nav-item" data-view="pickup-setup" onclick="nav(this)" style="border-left:2px solid rgba(130,210,170,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-7 8-13a8 8 0 10-16 0c0 6 8 13 8 13z"/><circle cx="12" cy="9" r="3"/></svg>
       Pickup time setup
+    </div>
+    <div style="height:1px;background:rgba(255,255,255,.07);margin:8px 6px 2px"></div>
+    <div class="nav-section" style="color:rgba(150,205,235,.5)">Pier Office</div>
+    <div class="nav-item" data-view="po-panwa" onclick="nav(this)" style="border-left:2px solid rgba(150,205,235,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><path d="M9 21v-5h6v5"/><path d="M9 11h2M13 11h2"/></svg>
+      Phuket
+    </div>
+    <div class="nav-item" data-view="po-tublamu" onclick="nav(this)" style="border-left:2px solid rgba(150,205,235,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><path d="M9 21v-5h6v5"/><path d="M9 11h2M13 11h2"/></svg>
+      Tub Lamu
+    </div>
+    <div class="nav-item" data-view="po-ranong" onclick="nav(this)" style="border-left:2px solid rgba(150,205,235,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><path d="M9 21v-5h6v5"/><path d="M9 11h2M13 11h2"/></svg>
+      Ranong
     </div>
     <div style="height:1px;background:rgba(255,255,255,.07);margin:8px 6px 2px"></div>
     <div class="nav-section" style="color:rgba(255,170,200,.5)">Sales</div>
@@ -4850,7 +4871,9 @@ window.addEventListener('resize',function(){ if(window.innerWidth>820) laNavClos
     <div id="view-vanjobs" class="view"><div id="vanjobs-host"></div></div>
     <div id="view-vancheckin" class="view"><div id="vancheckin-host"></div></div>
     <div id="view-piercheckin" class="view"><div id="piercheckin-host"></div></div>
-    <div id="view-pieroffice" class="view"><div id="pieroffice-host"></div></div>
+    <div id="view-po-panwa" class="view"><div id="po-host-panwa" class="po-host"></div></div>
+    <div id="view-po-tublamu" class="view"><div id="po-host-tublamu" class="po-host"></div></div>
+    <div id="view-po-ranong" class="view"><div id="po-host-ranong" class="po-host"></div></div>
     <div id="view-travelsum" class="view"><div id="travelsum-host"></div></div>
     <div id="view-dailyreport" class="view"><div id="dailyreport-host"></div></div>
     <div id="view-doccheck" class="view"><style>@keyframes docspin{to{transform:rotate(360deg)}}</style><div id="doccheck-host"></div></div>
@@ -5807,7 +5830,7 @@ function nav(el){
     else if(view==='vanjobs') renderVanJobs();
     else if(view==='vancheckin') renderVanCheckin();
     else if(view==='piercheckin') renderPierCheckin();
-    else if(view==='pieroffice') renderPierOffice();
+    else if(view.indexOf('po-')===0) renderPierOffice(view.slice(3));
     else if(view==='travelsum') renderTravelSum();
     else if(view==='dailyreport') renderDailyReport();
     else if(view==='boatassign') renderBoatAssign();
@@ -75698,7 +75721,9 @@ function b2dMarketDetail(L,w,agAll,mktCode){
 /* ══════════════════════════════════════════════════════════════════════════
    §pierOffice · Office ท่าเรือ · สต็อกหมุนเวียน + ใบเซ็นรับ-คืน
    ══════════════════════════════════════════════════════════════════════════ */
-var PO_PIERS=[{k:'panwa',t:'Visit Panwa',s:'VP',c:'#0F6E56'},{k:'tublamu',t:'ทับละมุ',s:'TL',c:'#185FA5'},{k:'ranong',t:'ระนอง',s:'RN',c:'#BA7517'}];
+var PO_PIERS=[{k:'panwa',n:'Phuket',t:'Visit Panwa · ภูเก็ต',s:'VP',c:'#0F6E56'},
+               {k:'tublamu',n:'Tub Lamu',t:'ทับละมุ · พังงา',s:'TL',c:'#185FA5'},
+               {k:'ranong',n:'Ranong',t:'ระนอง',s:'RN',c:'#BA7517'}];
 var PO_KIND={fin:{t:'ตีนกบ',u:'คู่',c:'#0F6E56'},mask:{t:'หน้ากาก',u:'ชิ้น',c:'#185FA5'},towel:{t:'ผ้าเช็ดตัว',u:'ผืน',c:'#BA7517'}};
 var PO_KORDER=['fin','mask','towel'];
 /* ถัง · เรียงตามลำดับที่โชว์บนแถบสัดส่วน */
@@ -75885,15 +75910,11 @@ function poLaundryOpen(pier){
 }
 
 function poCSS(){
-  var H='#pieroffice-host';
+  var H='.po-host';
   return H+'{font-family:"DM Sans","Noto Sans Thai",sans-serif;color:#2f2f2b}'
   +H+' .po-h{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:14px}'
   +H+' .po-h h1{font-size:23px;font-weight:800;letter-spacing:-.02em;margin:0}'
   +H+' .po-h p{font-size:12.5px;color:#7C8091;margin:3px 0 0}'
-  +H+' .po-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}'
-  +H+' .po-tab{border:1px solid #E3E3DF;background:#fff;border-radius:999px;padding:7px 16px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;color:#5F5E5A;display:flex;align-items:center;gap:7px}'
-  +H+' .po-tab i{width:9px;height:9px;border-radius:50%;display:inline-block}'
-  +H+' .po-tab.on{color:#fff;border-color:transparent}'
   +H+' .po-bar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;background:#fff;border:1px solid #E3E3DF;border-radius:12px;padding:9px 12px;margin-bottom:14px}'
   +H+' .po-bar input[type=date]{border:1px solid #D8D4CA;border-radius:8px;padding:6px 9px;font:600 13px inherit;color:#2f2f2b}'
   +H+' .po-bar button{border:1px solid #D8D4CA;background:#fff;border-radius:8px;padding:6px 12px;font:700 12px inherit;color:#5F5E5A;cursor:pointer}'
@@ -75933,9 +75954,10 @@ function poCSS(){
   +H+' .po-empty{padding:26px 14px;text-align:center;color:#9A9A93;font-size:12.5px}';
 }
 
-function renderPierOffice(){
-  var host=document.getElementById('pieroffice-host'); if(!host) return;
+function renderPierOffice(pier){
+  if(pier) _poPier=pier;
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
+  var host=document.getElementById('po-host-'+P.k); if(!host) return;
   var boats=poBoats(_poDate,_poPier), items=poItems(_poPier), una=poUnassigned(_poDate,_poPier);
   var ro=!poCanEdit();
 
@@ -75945,11 +75967,6 @@ function renderPierOffice(){
     PO_KORDER.forEach(function(k){ kIss+=K[k].iss; kBack+=K[k].back; kMiss+=K[k].miss; }); });
   items.forEach(function(it){ var b=poBal(it.id); kReady+=b.ready; kLaundry+=b.laundry; kRepair+=b.repair; });
   var openN=boats.filter(function(b){ return poBoatStage(_poDate,b.bid,_poPier).k==='open'; }).length;
-
-  var tabs=PO_PIERS.map(function(p){
-    return '<div class="po-tab'+(p.k===_poPier?' on':'')+'"'+(p.k===_poPier?' style="background:'+p.c+'"':'')
-      +' onclick="poSetPier(\''+p.k+'\')"><i style="background:'+(p.k===_poPier?'rgba(255,255,255,.85)':p.c)+'"></i>'+poE(p.t)+'</div>';
-  }).join('');
 
   var kpi=function(k,v,s,c){ return '<div class="po-kpi"><div class="k">'+k+'</div><div class="v"'+(c?' style="color:'+c+'"':'')+'>'+v+'</div>'+(s?'<div class="s">'+s+'</div>':'')+'</div>'; };
   var kpis='<div class="po-kpis">'
@@ -75961,9 +75978,9 @@ function renderPierOffice(){
     +'</div>';
 
   host.innerHTML='<style id="po-style">'+poCSS()+'</style>'
-    +'<div class="po-h"><div><h1>Office ท่าเรือ · '+poE(P.t)+'</h1>'
-      +'<p>สต็อกหมุนเวียน ตีนกบ · หน้ากาก · ผ้าเช็ดตัว — เบิกเช้า คืนเย็น และใบเซ็นรับ-คืนของลูกค้า</p></div></div>'
-    +'<div class="po-tabs">'+tabs+'</div>'
+    +'<div class="po-h"><div><h1>Office ท่าเรือ · '+poE(P.n||P.t)+'</h1>'
+      +'<p><span style="font-weight:700;color:'+P.c+'">'+poE(P.t)+'</span> · สต็อกหมุนเวียน ตีนกบ · หน้ากาก · ผ้าเช็ดตัว — เบิกเช้า คืนเย็น และใบเซ็นรับ-คืนของลูกค้า<br>'
+      +'<span style="color:#9A9A93">ของ พนักงาน และทุกยอดในหน้านี้เป็นของท่านี้เท่านั้น ไม่ปนกับท่าอื่น</span></p></div></div>'
     +'<div class="po-bar">'
       +'<button onclick="poShift(-1)">&#8249;</button>'
       +'<input type="date" value="'+_poDate+'" onchange="poSetDate(this.value)">'
@@ -75981,7 +75998,7 @@ function renderPierOffice(){
     +'<div class="po-sec"><span class="n">3</span> วงจรผ้าเช็ดตัว</div>'
     +poLaundryBlock(ro);
 }
-function poSetPier(k){ _poPier=k; renderPierOffice(); }
+function poPierName(){ var p=PO_PIERS.filter(function(x){return x.k===_poPier;})[0]; return p?(p.n+' · '+p.t):_poPier; }
 function poSetDate(v){ if(v) _poDate=v; renderPierOffice(); }
 function poShift(n){ var d=new Date(_poDate+'T12:00:00'); d.setDate(d.getDate()+n); _poDate=poYMD(d); renderPierOffice(); }
 function poToday(){ _poDate=poYMD(new Date()); renderPierOffice(); }
@@ -76249,7 +76266,7 @@ function poDutySave(bid){
 
 function poStaffOpen(){
   var st=(PIER_STAFF||[]).filter(function(s){ return s.pier===_poPier; });
-  var body='<div style="font-size:12px;color:#7C8091;margin-bottom:10px">พนักงานประจำท่า '+poE((PO_PIERS.filter(function(p){return p.k===_poPier;})[0]||{}).t||'')+' · ใช้จัดคนลงเรือในตารางเบิก-คืน</div>';
+  var body='<div style="font-size:12px;color:#7C8091;margin-bottom:10px">พนักงานประจำท่า '+poE(poPierName())+' · ใช้จัดคนลงเรือในตารางเบิก-คืน</div>';
   body+=st.map(function(s){
     return '<div style="'+poRowCss()+'">'
       +'<div style="flex:1"><div style="font-weight:700;font-size:12.5px">'+poE(s.nick||s.name)+(s.active===false?' <span style="color:#9A9A93;font-weight:600">(ปิดใช้)</span>':'')+'</div>'
@@ -76295,7 +76312,7 @@ function poItemsOpen(){
     +PO_KORDER.map(function(k){ return '<option value="'+k+'">'+PO_KIND[k].t+' ('+PO_KIND[k].u+')</option>'; }).join('')+'</select>'
     +poIn('poni_label','','ชื่อ/แบบ เช่น ตีนกบ · L (42-44)',230)+poIn('poni_total','','จำนวน',80)
     +poBtn('เพิ่ม','poItemAdd()',1)+'</div></div>';
-  poModal('ทะเบียนของ · '+poE((PO_PIERS.filter(function(p){return p.k===_poPier;})[0]||{}).t||''), body,
+  poModal('ทะเบียนของ · '+poE(poPierName()), body,
     poBtn('ปิด','poModalClose()')+poBtn('บันทึกชื่อ/จำนวน','poItemsSave()',1), 700);
 }
 function poItemsSave(){
@@ -76401,8 +76418,8 @@ function poLedgerOpen(){
   var fines=(PIER_MOVES||[]).filter(function(m){ return m.pier===_poPier && m.type==='lost' && m.fine>0; });
   var fsum=0; fines.forEach(function(m){ fsum+=poNum(m.fine); });
   var head=fines.length?('<div class="po-warn" style="margin:0 0 12px">ค่าปรับของหาย/ลูกค้าไม่คืนสะสม <b>'+poBaht(fsum)+'</b> จาก '+fines.length+' รายการ · เก็บแยกจากยอด Booking</div>'):'';
-  poModal('ประวัติการเคลื่อนไหว · '+poE((PO_PIERS.filter(function(p){return p.k===_poPier;})[0]||{}).t||''),
-    '<style>'+poCSS().replace(/#pieroffice-host/g,'#po-modal')+'</style>'+head+body, poBtn('ปิด','poModalClose()'), 860);
+  poModal('ประวัติการเคลื่อนไหว · '+poE(poPierName()),
+    '<style>'+poCSS().replace(/\.po-host/g,'#po-modal')+'</style>'+head+body, poBtn('ปิด','poModalClose()'), 860);
 }
 
 function poSignSheet(bid){
@@ -76471,7 +76488,7 @@ function poSignSheet(bid){
     +'<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800&family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet">'
     +'<style>'+css+'</style></head><body>'
     +'<div class="hd"><div><div class="t1">ใบรับ-คืนอุปกรณ์ · Equipment Receipt &amp; Return</div>'
-      +'<div class="t2">'+e(P.t)+' · '+e((B.route&&B.route.name)||'')+'</div></div>'
+      +'<div class="t2">'+e(P.n+' · '+P.t)+' · '+e((B.route&&B.route.name)||'')+'</div></div>'
       +((typeof bkV2B2CLogo==='function')?('<div style="background:#fff;padding:2px">'+bkV2B2CLogo(26)+'</div>'):'')
     +'</div>'
     +'<div class="meta">'
