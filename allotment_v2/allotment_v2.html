@@ -66872,7 +66872,11 @@ function bkV2RenderSubmitButton(){
   // Block save if any trip has no rate for its route×zone combo
   const noRateTrips = bkV2NoRateTrips();
   const ratesOk = noRateTrips.length === 0;
-  const ready = d.agentId && d.leadPax && d.rateTypeRef && hasTrips && focOk && ratesOk;
+  // §rate · ใบที่ราคามาจากต้นทาง (B2C) หรือตั้งราคาเอง ไม่มีและไม่ต้องมี Rate Type
+  //   ของเดิมบังคับ rateTypeRef ทุกใบ → ปุ่มนี้ปิดตายกับใบ B2C ทั้งหมด
+  //   เหลือทางเดียวคือ Save Draft ที่เขียนสถานะเป็น quote (ดู §down)
+  const _mnPrice = (d.priceMode==='manual') || ((typeof bkV2IsB2CBk==='function') && bkV2IsB2CBk(d));
+  const ready = d.agentId && d.leadPax && (d.rateTypeRef || _mnPrice) && hasTrips && focOk && ratesOk;
   if(!ratesOk){
     return `<button class="bkv2-nb-btn" disabled title="Some trips have no rate · fix Rate Type or change route/zone" style="cursor:not-allowed;color:#A32D2D;border-color:#F5B5B5;background:#FDECEA">⚠ No rate · ${noRateTrips.length} trip${noRateTrips.length===1?'':'s'} · cannot save</button>`;
   }
@@ -72327,6 +72331,18 @@ function bkV2SaveDraft(){
   if(!_bkV2.newBooking) return;
   const d = _bkV2.newBooking;
   if(!d.agentId){ alert('Please pick an agent first'); return; }
+  // §down · แก้ใบที่ยืนยันแล้วแล้วกด Save Draft = ลดสถานะกลับเป็นใบเสนอราคา
+  //   ใบจะหลุดจากใบงานรถ ใบงานเรือ และยอดของทริปทันทีโดยไม่มีอะไรเตือน
+  //   เคยเกิดกับใบ B2C เพราะปุ่ม Update ถูกปิดอยู่ (ดู §rate) เหลือปุ่มนี้ปุ่มเดียว
+  if(_bkV2.editingId){
+    const _cur = (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).find(function(b){ return b.id===_bkV2.editingId; });
+    const _st = _cur && _cur.status;
+    if(_st && _st!=='quote' && _st!=='draft'){
+      if(!confirm('booking นี้สถานะ "'+_st+'" อยู่\n\nกด Save Draft จะเปลี่ยนกลับเป็นใบเสนอราคา (quote)\n'
+        +'ใบจะหลุดจากใบงานรถ ใบงานเรือ และยอดของทริป\n\n'
+        +'ถ้าแค่ต้องการบันทึกการแก้ไข ให้กด Cancel แล้วใช้ปุ่มบันทึกด้านบนแทน\n\nยืนยันลดสถานะเป็น quote?')) return;
+    }
+  }
   bkV2CommitBooking('quote');
 }
 function bkV2SubmitBooking(){
@@ -72598,9 +72614,16 @@ function bkV2CommitBooking(status){
     // §b2cSave · สิ่งที่ยกเว้นให้ใบ B2C ต้องไม่หายไปเฉย ๆ · ติดธงไว้บนใบให้ตามเก็บ
     if(_extPrice && _noLang) _missSoft.push('guide-lang');
     if(_extPrice && Array.isArray(_bkV2._b2cClosedWarn) && _bkV2._b2cClosedWarn.length) _missSoft.push('route-closed');
-    _bkV2._b2cClosedWarn = null;
+    // §eat · ห้ามล้าง _b2cClosedWarn ตรงนี้ · ถ้าล้างก่อนถาม พอกด Cancel แล้วกดใหม่
+    //        คำเตือนจะหายไปและบันทึกเงียบ ๆ · ล้างหลังบันทึกสำเร็จเท่านั้น
     if(_missSoft.length){
-      if(!confirm('ยังไม่ได้ระบุจุดรับ (pickup)\nบันทึกต่อโดยติดธง ⚠ ให้ตามเก็บภายหลังไหม?')) return;
+      // §msg · บอกให้ตรงกับธงที่เกิดขึ้นจริง · ของเดิมเขียนตายตัวว่าไม่มีจุดรับ
+      const _softLbl = { 'pickup':'ยังไม่ได้ระบุจุดรับ (pickup)',
+                         'guide-lang':'ยังไม่ได้ระบุภาษาไกด์',
+                         'route-closed':'เส้นทางปิดในวันที่เลือก' };
+      const _lines = _missSoft.map(function(k){ return '\u00b7 '+(_softLbl[k]||k); }).join('\n');
+      if(!confirm(_missSoft.length>1?('ยังขาดข้อมูลนี้:\n'+_lines+'\n\nบันทึกต่อโดยติดธง \u26a0 ให้ตามเก็บภายหลังไหม?')
+                                    :((_softLbl[_missSoft[0]]||_missSoft[0])+'\nบันทึกต่อโดยติดธง \u26a0 ให้ตามเก็บภายหลังไหม?'))) return;
     }
     _bkV2._missSoft = _missSoft;   // consumed below when building newBk
   }
@@ -72816,6 +72839,7 @@ function bkV2CommitBooking(status){
   };
 
   newBk.incomplete = _bkV2._missSoft || [];   // soft-missing fields (e.g. pickup) · ⚠ in manifest
+  _bkV2._b2cClosedWarn = null;   // §eat · ผู้ใช้ตัดสินใจแล้วและกำลังบันทึกจริง · ล้างได้ตรงนี้
   // ── Over-capacity → Pending manager approval (saved + holds seats, but NOT confirmed until a manager approves) ──
   if(_approvalReq){
     newBk.status = 'pending_approval';
