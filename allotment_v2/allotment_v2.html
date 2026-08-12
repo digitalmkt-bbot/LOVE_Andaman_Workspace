@@ -72042,7 +72042,9 @@ function _docCheckDrawer(bkId, e, rName){
   if(_ltJoin)_adSet.push('Longtail Join');
   if(_ltChtr)_adSet.push('Longtail Charter'+(_ltChtr>1?(' ×'+_ltChtr):''));
   if(_ptr)_adSet.push('Private Transfer');
-  (b.addOns||[]).forEach(a=>{ const ty=String(a.type||''); if(/longtail|transfer/i.test(ty))return; const lbl=(a.label||ty).trim(); if(lbl && _adSet.indexOf(lbl)<0)_adSet.push(lbl+((a.qty&&a.qty>1)?(' ×'+a.qty):'')); });
+  // ข้ามเฉพาะตัวที่ flag ข้างบนนับไปแล้ว · 'transfer' ห้ามจับแบบ substring — B2C มี add-on ชื่อ
+  // 'join-transfer-phuket' (รถ join ไปท่า) ซึ่งไม่ใช่ Private Transfer และเคยหายไปทั้งอัน
+  (b.addOns||[]).forEach(a=>{ const ty=String(a.type||''); if(/longtail/i.test(ty)||/^transfer-/i.test(ty))return; const lbl=(a.label||ty).trim(); if(lbl && _adSet.indexOf(lbl)<0)_adSet.push(lbl+((a.qty&&a.qty>1)?(' ×'+a.qty):'')); });
   const addonStr=_adSet.length?e(_adSet.join(' · ')):'-';
   const _sbDiff = b.dropoffSame===false && (b.dropoffHotelName||b.dropoffArea); const sbTxt = _sbDiff?e(b.dropoffHotelName||b.dropoffArea||'-'):'';
   const fld=(lbl,val)=>`<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid #f0f2ee"><span style="flex:0 0 84px;font-size:10px;color:#8a8a82;text-transform:uppercase;letter-spacing:.03em;font-weight:600">${e(lbl)}</span><span style="flex:1;font-size:13px;color:#1B2A55;font-weight:600">${val}</span></div>`;
@@ -73978,10 +73980,12 @@ function bkV2VoucherTicket(bk, esc){
     if(_join) svcBits.push(chip('Longtail Join','#E9F5FC','#0E5E80','#C9E6F5'));
     if(_chtr) svcBits.push(chip('Longtail Charter'+(_chtr>1?(' \u00d7'+_chtr):''),'#E9F5FC','#0E5E80','#C9E6F5'));
     if(_ptr)  svcBits.push(chip('Private Transfer','#E9F5FC','#0E5E80','#C9E6F5'));
-    // add-on ชื่ออื่น ๆ · ข้ามหางยาวกับรถส่วนตัวเพราะนับไปแล้วข้างบน
+    // add-on ชื่ออื่น ๆ · ข้ามเฉพาะตัวที่ flag ข้างบนนับไปแล้ว (หางยาว + รถส่วนตัว)
+    //   'transfer' ห้ามจับแบบ substring — slug จาก B2C 'join-transfer-phuket' คือรถ join ไปท่า
+    //   ไม่ใช่ Private Transfer (bkV2AddOnFlags ดูเฉพาะ prefix 'transfer-') จึงไม่มีใครนับ แล้วหายทั้งอัน
     (bk.addOns||[]).forEach(a=>{
       const ty=String(a.type||'');
-      if(/longtail|transfer/i.test(ty)) return;
+      if(/longtail/i.test(ty) || /^transfer-/i.test(ty)) return;
       const lbl=String(a.label||ty).trim(); if(!lbl) return;
       svcBits.push(chip(esc(lbl)+((+a.qty>1)?(' \u00d7'+(+a.qty)):'')+(+a.amount>0?(' '+money(a.amount)):''),'#E9F5FC','#0E5E80','#C9E6F5'));
     });
@@ -74315,7 +74319,7 @@ function bkV2RenderBookingDetail(){
               <tbody>
                 ${(bk.addOns||[]).map(a => `
                   <tr style="border-bottom:1px solid rgba(26,35,50,0.05)">
-                    <td style="padding:8px 0">${escapeHTML(a.label || a.type || '—')}</td>
+                    <td style="padding:8px 0">${escapeHTML(a.label || a.type || '—')}${(+a.qty>1)?` <span style="color:var(--ink-soft);font-family:'DM Mono',monospace">&times;${(+a.qty)}</span>`:''}</td>
                     <td style="padding:8px 0;text-align:right;font-family:'DM Mono',monospace;font-weight:700">฿${bkV2FmtTHB(a.amount||0)}</td>
                   </tr>
                 `).join('')}

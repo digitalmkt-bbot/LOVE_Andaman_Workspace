@@ -200,7 +200,11 @@ const B2C_OWN_BK = new Set([
 //      source rows, which never moved. Bumping the version changes the hash and forces exactly one
 //      re-upsert, restoring paymentsnapshot_method/_paid/_paidstatus from B2C for every synced
 //      booking in the window (13 rows were on 'prepaid' at the time of this bump).
-const B2C_MAP_VER = 17;
+// v18: resolves add-on names (and the ops slug) from program_own_addons on the (program, addon_id)
+//      pair, so rows that carry only {qty, addonId} stop importing as "B2C add-on AD-001" and read
+//      as "Join Transfer ( Phuket )" / "International Park Fee". Also drops the "× qty" that was
+//      baked into the label — every renderer appends the quantity itself, so it printed twice.
+const B2C_MAP_VER = 18;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -304,26 +308,32 @@ function b2cLineSeat(item) { return b2cLineMoney(item).seat; }
 
 // details.addonsSelected → ops addOns[{type,label,amount,qty,note}].
 // Ops identifies an add-on by the literal `type` string — bkV2AddOnFlags matches 'longtail-join',
-// 'longtail-charter' and a 'transfer-' prefix, and there is no id registry to look anything up in
-// (sb_addon_types is empty). B2C's `code` uses the same slugs, so it maps 1:1 with no table.
+// 'longtail-charter' and a 'transfer-' prefix, and ops has no id registry of its own to look
+// anything up in (sb_addon_types is empty). B2C's `code` uses the same slugs, so it maps 1:1.
+// NB 'join-transfer-phuket' is the shared van to the pier, NOT a private transfer — it does not
+// carry the 'transfer-' prefix on purpose, or ops would advertise a private car nobody bought.
 // B2C started sending code/qtyAdult/qtyChild on 2026-08-06; older entries carry only {qty, addonId}.
-// An entry with no `code` gets a namespaced type ('b2c-ad-001') that deliberately matches none of
-// the patterns above: importing it as a generic line is honest, whereas guessing "longtail" from an
-// unknown code would put phantom boats on the pier. Fill in the real slugs once B2C confirms what
-// AD-001 / AD-002 are (docs/B2C_LONGTAIL_ADDON.md §4 Q1).
-function b2cMapAddOns(det, addOnTotal) {
+// For those the name and the slug are recovered from the program's add-on catalog, keyed on the
+// (program, addon_id) PAIR — see b2cAddonCatalog for why the id alone is not an identity. An entry
+// the catalog cannot answer for still gets a namespaced type ('b2c-ad-001') that deliberately
+// matches none of the ops patterns above: importing it as a generic line is honest, whereas
+// guessing "longtail" from an unknown code would put phantom boats on the pier.
+//
+// The label is the NAME ONLY. Every renderer that shows an add-on appends the quantity itself, so
+// baking "× 4" into the label printed it twice ("Join Transfer ( Phuket ) × 4 ×4").
+function b2cMapAddOns(det, addOnTotal, programId, addonCat) {
   const arr = (det && Array.isArray(det.addonsSelected)) ? det.addonsSelected : [];
   if (!arr.length) return [];
   const rows = arr.map(a => {
-    const code = String((a && a.code) || '').trim().toLowerCase();
     const id   = String((a && a.addonId) || '').trim();
+    const cat  = (addonCat && id) ? addonCat.get(b2cAddonKey(programId, id)) : null;
+    const code = String((a && a.code) || (cat && cat.code) || '').trim().toLowerCase();
     const type = code || (id ? 'b2c-' + id.toLowerCase() : 'b2c-addon');
     const qty  = Math.round(Number(a && a.qty) || 0) || 1;
     const ad = Number(a && a.qtyAdult), ch = Number(a && a.qtyChild);
-    const name = String((a && a.name) || '').trim() || `B2C add-on ${id || '?'}`;
+    const name = String((a && a.name) || (cat && cat.name) || '').trim() || `B2C add-on ${id || '?'}`;
     // Mirror the B2B label shape ("Longtail Join (2A + 0C)") when B2C sent the adult/child split.
-    const label = (Number.isFinite(ad) && Number.isFinite(ch)) ? `${name} (${ad}A + ${ch}C)`
-                                                               : `${name} × ${qty}`;
+    const label = (Number.isFinite(ad) && Number.isFinite(ch)) ? `${name} (${ad}A + ${ch}C)` : name;
     return { type, label, amount: 0, qty, note: '' };
   });
   // subtotal − seat gives the COMBINED add-on money for the line. With one entry that is its exact
@@ -339,7 +349,7 @@ function b2cMapAddOns(det, addOnTotal) {
 // new B2C ids already carry their own LOV- prefix); each carries a single trip.
 // isFirstLine: order-level payment (deposit/balance) attaches only to the first line of the order,
 // so a multi-item order's payment isn't multiplied across its item-bookings.
-function mapB2CItemBooking(item, isFirstLine, findArea, paxRows) {
+function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat) {
   const h = item;
   // pg returns date columns as JS Date objects — String(d).slice(0,10) gives "Sat Jul 18",
   // not YYYY-MM-DD, which the frontend cannot parse. Format in local time explicitly.
@@ -504,7 +514,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows) {
              ? `Pickup: ${pickupArea || pickupLoc}${pickupZone ? ' (' + pickupZone + ')' : ''} — area unassigned` : null].filter(Boolean).join(' · '),
     trips: [trip],
     passengers: isFirstLine ? b2cPassengerList(paxRows) : [],
-    addOns: b2cMapAddOns(det, addOn),
+    addOns: b2cMapAddOns(det, addOn, routeLookupId, addonCat),
     // Display rows for the Total panel. bkV2 stores adjustments as positive values with a kind, and
     // acctBookingTotal never re-applies them (the total already accounts for them) — so these are
     // presentational only and cannot double-count.
@@ -731,6 +741,52 @@ async function b2cPassengerRows(ids) {
   return map;
 }
 
+// B2C add-on catalog · "<PROGRAM>::<ADDON>" → {name, code}.
+//
+// details.addonsSelected only ever carries {qty, addonId} on older rows, and addon_id is unique
+// ONLY WITHIN A PROGRAM — program_own_addons says so in its own DDL: AD-002 is 'Join Transfer
+// ( Khaolak )' on POW-001 but 'International Park Fee' on POW-003. So the key MUST be the pair;
+// keying off addon_id alone would print the wrong product name on half the orders.
+//
+// This is what lets ops show "Join Transfer ( Phuket )" instead of "B2C add-on AD-001". The `code`
+// column rides along because it is the stable cross-program slug ops matches on ('longtail-join'),
+// which addon_id can never be.
+//
+// The whole table is a few dozen rows, so it loads once per sync rather than joining per item —
+// and a failed read degrades to the old id-based labels instead of killing the sync, same contract
+// as the traveller view.
+const B2C_ADDON_TABLE = 'program_own_addons';
+let _b2cAddonTblMissingAt = 0;
+const B2C_ADDON_TBL_RETRY_MS = 10 * 60 * 1000;   // re-probe, so adding the table needs no restart
+
+const b2cAddonKey = (programId, addonId) =>
+  String(programId || '').trim().toUpperCase() + '::' + String(addonId || '').trim().toUpperCase();
+
+async function b2cAddonCatalog() {
+  const map = new Map();
+  if (!b2cPool) return map;
+  if (_b2cAddonTblMissingAt && Date.now() - _b2cAddonTblMissingAt < B2C_ADDON_TBL_RETRY_MS) return map;
+  try {
+    const { rows } = await b2cPool.query(
+      `SELECT program_id, addon_id, code, name FROM ${b2cT(B2C_ADDON_TABLE)}`);
+    _b2cAddonTblMissingAt = 0;
+    for (const r of rows) {
+      const nm = String(r.name || '').trim();
+      if (!nm) continue;
+      map.set(b2cAddonKey(r.program_id, r.addon_id),
+              { name: nm, code: String(r.code || '').trim().toLowerCase() });
+    }
+  } catch (e) {
+    if (e && e.code === '42P01') {                // undefined_table
+      _b2cAddonTblMissingAt = Date.now();
+      console.warn(`[b2c-sync] ${B2C_SCHEMA}.${B2C_ADDON_TABLE} not found — add-ons import with their B2C id as the label`);
+    } else {
+      console.warn('[b2c-sync] add-on catalog read failed — id labels this run:', e.message);
+    }
+  }
+  return map;
+}
+
 // Fallback for bookings the view did not supply — because it does not exist yet, or because the
 // read failed. bookings.passengers is already selected by the JOIN as bk_passengers, so the same
 // travellers can be had without any DDL; this mirrors the view's own normalisation (btrim, blanks
@@ -837,10 +893,17 @@ async function relSyncB2C(singleExtId = null) {
       if (filled) console.log(`[b2c-sync] traveller list read off bookings.passengers for ${filled} booking(s) the view did not cover`);
     }
 
+    // Add-on names live in the catalog, not on the order — so a renamed add-on changes what ops
+    // should show while every source row stays byte-identical. It therefore has to feed the change
+    // hash too, exactly like the traveller list: otherwise the rename would sit unsynced until an
+    // unrelated edit moved a booking.
+    const addonCat = await b2cAddonCatalog();
+
     let srcHash = null;
     if (!singleExtId) {
       srcHash = crypto.createHash('sha1')
-        .update('v' + B2C_MAP_VER + '|' + JSON.stringify(itemRows) + '|' + JSON.stringify([...paxByBooking]))
+        .update('v' + B2C_MAP_VER + '|' + JSON.stringify(itemRows) + '|' + JSON.stringify([...paxByBooking])
+                + '|' + JSON.stringify([...addonCat]))
         .digest('hex');
       try {
         const hr = await pool.query('SELECT data FROM app_state WHERE id=$1', ['b2c_sync_hash']);
@@ -873,7 +936,7 @@ async function relSyncB2C(singleExtId = null) {
     const b2cBks = [];
     for (const items of Object.values(byId)) {
       items.sort((a, b) => Number(a.line_no) - Number(b.line_no));
-      items.forEach((it, i) => b2cBks.push(mapB2CItemBooking(it, i === 0, findArea, paxByBooking.get(String(it.booking_id)))));
+      items.forEach((it, i) => b2cBks.push(mapB2CItemBooking(it, i === 0, findArea, paxByBooking.get(String(it.booking_id)), addonCat)));
     }
     const tables  = osRepo.decomposeBlob({ sb_bookings: b2cBks });
     const b2cIds  = b2cBks.map(b => b.id);
