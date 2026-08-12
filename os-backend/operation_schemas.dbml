@@ -1,10 +1,10 @@
 // generated from operation_schemas_structure.sql
-// 118 tables · 52 refs
+// 120 tables · 52 refs
 // Separated by real database schema (see dbml_groups.js for the layout)
 
 // ████████████████████████████████████████████████████████████
 // ██  DATABASE SCHEMA: operation_schemas
-// ██  app data · 118 tables · accessed as role allotment_app
+// ██  app data · 120 tables · accessed as role allotment_app
 // ████████████████████████████████████████████████████████████
 
 // ──────── app / meta ────────
@@ -1649,6 +1649,23 @@ Table pier_licenses {
   note text
 }
 
+Table pier_codes {
+  id text
+  code text
+  label text
+  color text
+  bg text
+  kind text
+  ord bigint
+  active boolean
+}
+
+Table pier_shift {
+  id text
+  key text
+  value text
+}
+
 // ████████████████████████████████████████████████████████████
 // ██  DATABASE SCHEMA: allotment
 // ██  auth / session / file store · created by server.js boot
@@ -1831,6 +1848,8 @@ TableGroup other {
   pier_lic_types
   pier_lic_classes
   pier_licenses
+  pier_codes
+  pier_shift
 }
 
 TableGroup allotment_schema {

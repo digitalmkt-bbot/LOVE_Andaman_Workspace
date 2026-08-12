@@ -7073,5 +7073,64 @@
       "kind": "scalar",
       "db_type": "text"
     }
+  },
+  "pier_codes": {
+    "id": {
+      "source": "pier_codes[].id (record id; generated if absent)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "code": {
+      "source": "code",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "label": {
+      "source": "label",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "color": {
+      "source": "color",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "bg": {
+      "source": "bg",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "kind": {
+      "source": "kind",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "ord": {
+      "source": "ord",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "active": {
+      "source": "active",
+      "kind": "scalar",
+      "db_type": "boolean"
+    }
+  },
+  "pier_shift": {
+    "id": {
+      "source": "pier_shift map key (generated id)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "key": {
+      "source": "pier_shift map key (original)",
+      "kind": "map_key",
+      "db_type": "text"
+    },
+    "value": {
+      "source": "pier_shift[key] value",
+      "kind": "map_value_json",
+      "db_type": "text"
+    }
   }
 }

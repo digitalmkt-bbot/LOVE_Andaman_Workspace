@@ -1733,6 +1733,23 @@ CREATE TABLE operation_schemas."pier_licenses" (
     "note" text
 );
 
+CREATE TABLE operation_schemas."pier_codes" (
+    "id" text,
+    "code" text,
+    "label" text,
+    "color" text,
+    "bg" text,
+    "kind" text,
+    "ord" bigint,
+    "active" boolean
+);
+
+CREATE TABLE operation_schemas."pier_shift" (
+    "id" text,
+    "key" text,
+    "value" text
+);
+
 ALTER TABLE operation_schemas."boats__assignments" ADD CONSTRAINT "fk_boats_assignments" FOREIGN KEY ("boats_id") REFERENCES operation_schemas."boats" ("id");
 ALTER TABLE operation_schemas."boats__docs" ADD CONSTRAINT "fk_boats_docs" FOREIGN KEY ("boats_id") REFERENCES operation_schemas."boats" ("id");
 ALTER TABLE operation_schemas."boats__log" ADD CONSTRAINT "fk_boats_log" FOREIGN KEY ("boats_id") REFERENCES operation_schemas."boats" ("id");
