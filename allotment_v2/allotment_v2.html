@@ -394,7 +394,7 @@
   // ── Per-user area access (role-based nav gating) ──
   var LA_AREAS=[{k:'overview',t:'ภาพรวม · Dashboard/Calendar'},{k:'operations',t:'ปฏิบัติการ · Booking/Boat Op/รถ'},{k:'sales',t:'ขาย · Agents/Rate/Demand'},{k:'accounting',t:'บัญชี · Accounting/PFM'},{k:'fleet',t:'เรือ/ช่าง · Fleet/Maintenance'},{k:'pier',t:'ท่าเรือ · Office ท่าเรือ'},{k:'config',t:'ตั้งค่า · Programs/Team'}];
   var LA_PRESETS={Sales:['overview','sales'],Operations:['overview','operations'],Fleet:['fleet'],Accounting:['overview','accounting'],Pier:['pier']};
-  var LA_VIEW_AREA={'sales-board':'sales','b2b-dash':'sales','contract-tmpl':'sales',dashboard:'overview',calendar:'overview',daily:'overview',booking:'operations',operation:'operations',vehicles:'operations',vanjobs:'operations',vancheckin:'operations',piercheckin:'operations',travelsum:'operations',dailyreport:'operations','pickup-setup':'operations',boatassign:'operations',agents:'sales','rate-types':'sales',b2c:'sales',staff:'sales',marketdata:'sales',pickupmap:'sales',accounting:'accounting',dailypfm:'accounting','fl-dashboard':'fleet','fl-boatstatus':'fleet','fl-dailyreport':'fleet','fl-incident':'fleet','fl-projects':'fleet','fl-maintenance':'fleet','fl-inventory':'fleet','fl-consumables':'fleet','fl-cost':'fleet','fl-insights':'fleet','fl-fuel':'fleet','fl-asset':'fleet','po-panwa':'pier','po-tublamu':'pier','po-ranong':'pier',settings:'config',teammkt:'config',addonsvc:'config'};
+  var LA_VIEW_AREA={'sales-board':'sales','b2b-dash':'sales','contract-tmpl':'sales',dashboard:'overview',calendar:'overview',daily:'overview',booking:'operations',operation:'operations',vehicles:'operations',vanjobs:'operations',vancheckin:'operations',piercheckin:'operations',travelsum:'operations',dailyreport:'operations','pickup-setup':'operations',boatassign:'operations',agents:'sales','rate-types':'sales',b2c:'sales',staff:'sales',marketdata:'sales',pickupmap:'sales',accounting:'accounting',dailypfm:'accounting','fl-dashboard':'fleet','fl-boatstatus':'fleet','fl-dailyreport':'fleet','fl-incident':'fleet','fl-projects':'fleet','fl-maintenance':'fleet','fl-inventory':'fleet','fl-consumables':'fleet','fl-cost':'fleet','fl-insights':'fleet','fl-fuel':'fleet','fl-asset':'fleet','po-panwa':'pier','po-tublamu':'pier','po-ranong':'pier','poj-panwa':'pier','poj-tublamu':'pier','poj-ranong':'pier',settings:'config',teammkt:'config',addonsvc:'config'};
   // Per-MENU registry (finer than the 6 groups) · {v:view, t:label, a:area}
   var LA_NAV=[
     {v:'dashboard',t:'Dashboard',a:'overview'},{v:'calendar',t:'Calendar',a:'overview'},{v:'daily',t:'Daily Availability',a:'overview'},
@@ -405,7 +405,9 @@
     {v:'sales-board',t:'Sales Board',a:'sales'},{v:'b2b-dash',t:'B2B Dashboard',a:'sales'},{v:'agents',t:'Agent List',a:'sales'},{v:'rate-types',t:'Rate Types',a:'sales'},{v:'contract-tmpl',t:'Contract Templates',a:'sales'},{v:'b2c',t:'B2C Channels',a:'sales'},{v:'staff',t:'Staff & Welfare',a:'sales'},{v:'marketdata',t:'Demand',a:'sales'},{v:'focdetail',t:'FOC Detail',a:'sales'},{v:'pickupmap',t:'แผนที่จุดรับ',a:'sales'},
     {v:'accounting',t:'Accounting',a:'accounting'},{v:'costing',t:'ต้นทุน & จุดคุ้มทุน',a:'accounting'},{v:'dailypfm',t:'Daily PFM',a:'accounting'},
     {v:'fl-dashboard',t:'Fleet Dashboard',a:'fleet'},{v:'fl-boatstatus',t:'Boat Status',a:'fleet'},{v:'fl-dailyreport',t:'Daily Fleet Log',a:'fleet'},{v:'fl-incident',t:'Incident / Job',a:'fleet'},{v:'fl-projects',t:'Projects',a:'fleet'},{v:'fl-maintenance',t:'Maintenance',a:'fleet'},{v:'fl-inventory',t:'Inventory / Memo',a:'fleet'},{v:'fl-consumables',t:'เบิกของใช้/น้ำมัน',a:'fleet'},{v:'fl-cost',t:'Cost Analytics',a:'fleet'},{v:'fl-insights',t:'Fleet Insights',a:'fleet'},{v:'fl-fuel',t:'Fuel',a:'fleet'},{v:'fl-asset',t:'Company Asset',a:'fleet'},
-    {v:'po-panwa',t:'Phuket · เบิก-คืนอุปกรณ์',a:'pier'},{v:'po-tublamu',t:'Tub Lamu · เบิก-คืนอุปกรณ์',a:'pier'},{v:'po-ranong',t:'Ranong · เบิก-คืนอุปกรณ์',a:'pier'},
+    {v:'poj-panwa',t:'Phuket · ใบงานเรือ',a:'pier'},{v:'po-panwa',t:'Phuket · เบิก-คืนอุปกรณ์',a:'pier'},
+    {v:'poj-tublamu',t:'Tub Lamu · ใบงานเรือ',a:'pier'},{v:'po-tublamu',t:'Tub Lamu · เบิก-คืนอุปกรณ์',a:'pier'},
+    {v:'poj-ranong',t:'Ranong · ใบงานเรือ',a:'pier'},{v:'po-ranong',t:'Ranong · เบิก-คืนอุปกรณ์',a:'pier'},
     {v:'settings',t:'Programs',a:'config'},{v:'teammkt',t:'Team & Markets',a:'config'},{v:'addonsvc',t:'Add-on Services',a:'config'}
   ];
   // Expand a stored perms array → Set of allowed view keys. Group keys (the 6 areas) expand to every menu in that group (back-compat with old data). View keys pass through.
@@ -423,6 +425,7 @@
     if(!set) return set;
     if(set['operations'] || set['piercheckin']){
       if(!set['po-panwa'] && !set['po-tublamu'] && !set['po-ranong']){ set['po-panwa']=1; set['po-tublamu']=1; set['po-ranong']=1; }
+      if(!set['poj-panwa'] && !set['poj-tublamu'] && !set['poj-ranong']){ set['poj-panwa']=1; set['poj-tublamu']=1; set['poj-ranong']=1; }
     }
     return set;
   }
@@ -4131,6 +4134,10 @@ window.addEventListener('resize',function(){ if(window.innerWidth>820) laNavClos
       Phuket
       <span class="po-gch">&#8964;</span>
     </div>
+    <div class="nav-item po-sub" data-pogrp="panwa" data-view="poj-panwa" onclick="nav(this)">
+      <span class="po-dot"></span>
+      ใบงานเรือ
+    </div>
     <div class="nav-item po-sub" data-pogrp="panwa" data-view="po-panwa" onclick="nav(this)">
       <span class="po-dot"></span>
       เบิก-คืนอุปกรณ์
@@ -4140,6 +4147,10 @@ window.addEventListener('resize',function(){ if(window.innerWidth>820) laNavClos
       Tub Lamu
       <span class="po-gch">&#8964;</span>
     </div>
+    <div class="nav-item po-sub" data-pogrp="tublamu" data-view="poj-tublamu" onclick="nav(this)">
+      <span class="po-dot"></span>
+      ใบงานเรือ
+    </div>
     <div class="nav-item po-sub" data-pogrp="tublamu" data-view="po-tublamu" onclick="nav(this)">
       <span class="po-dot"></span>
       เบิก-คืนอุปกรณ์
@@ -4148,6 +4159,10 @@ window.addEventListener('resize',function(){ if(window.innerWidth>820) laNavClos
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><path d="M9 21v-5h6v5"/><path d="M9 11h2M13 11h2"/></svg>
       Ranong
       <span class="po-gch">&#8964;</span>
+    </div>
+    <div class="nav-item po-sub" data-pogrp="ranong" data-view="poj-ranong" onclick="nav(this)">
+      <span class="po-dot"></span>
+      ใบงานเรือ
     </div>
     <div class="nav-item po-sub" data-pogrp="ranong" data-view="po-ranong" onclick="nav(this)">
       <span class="po-dot"></span>
@@ -4901,6 +4916,9 @@ window.addEventListener('resize',function(){ if(window.innerWidth>820) laNavClos
     <div id="view-vanjobs" class="view"><div id="vanjobs-host"></div></div>
     <div id="view-vancheckin" class="view"><div id="vancheckin-host"></div></div>
     <div id="view-piercheckin" class="view"><div id="piercheckin-host"></div></div>
+    <div id="view-poj-panwa" class="view"><div id="pj-host-panwa" class="pj-host"></div></div>
+    <div id="view-poj-tublamu" class="view"><div id="pj-host-tublamu" class="pj-host"></div></div>
+    <div id="view-poj-ranong" class="view"><div id="pj-host-ranong" class="pj-host"></div></div>
     <div id="view-po-panwa" class="view"><div id="po-host-panwa" class="po-host"></div></div>
     <div id="view-po-tublamu" class="view"><div id="po-host-tublamu" class="po-host"></div></div>
     <div id="view-po-ranong" class="view"><div id="po-host-ranong" class="po-host"></div></div>
@@ -5890,6 +5908,7 @@ function nav(el){
     else if(view==='vanjobs') renderVanJobs();
     else if(view==='vancheckin') renderVanCheckin();
     else if(view==='piercheckin') renderPierCheckin();
+    else if(view.indexOf('poj-')===0){ try{ if(el.dataset.pogrp) poNavGroupOpen(el.dataset.pogrp); }catch(_){} renderPierJob(view.slice(4)); }
     else if(view.indexOf('po-')===0){ try{ if(el.dataset.pogrp) poNavGroupOpen(el.dataset.pogrp); }catch(_){} renderPierOffice(view.slice(3)); }
     else if(view==='travelsum') renderTravelSum();
     else if(view==='dailyreport') renderDailyReport();
@@ -41096,6 +41115,8 @@ window._laReloadData=function(){
     if(typeof PIER_MOVES!=='undefined' && Array.isArray(d.pier_moves)) PIER_MOVES=d.pier_moves;
     if(typeof PIER_STAFF!=='undefined' && Array.isArray(d.pier_staff)) PIER_STAFF=d.pier_staff;
     if(typeof PIER_DUTY!=='undefined' && d.pier_duty) PIER_DUTY=d.pier_duty;
+    if(typeof PIER_TEAM!=='undefined' && d.pier_team) PIER_TEAM=d.pier_team;   // §pierJob
+    if(typeof PIER_JOB!=='undefined' && d.pier_job) PIER_JOB=d.pier_job;
     if(typeof TRAVEL_SUM!=='undefined' && d.travel_sum) TRAVEL_SUM=d.travel_sum;   // §Travel Summary
     if(typeof TS_COT!=='undefined' && d.ts_cot) TS_COT=d.ts_cot;                   // §tsCotSettle
     if(typeof CAL_ROUTE_NAMES!=='undefined' && d.cal_route_names){                  // §cal2b · ชื่อโปรแกรมในปฏิทิน
@@ -49639,7 +49660,7 @@ function goPrint(bid){
   var sheets=ids.map(function(k){ return goSheet(date,k,true); }).join('');
   var title='ใบสั่งงานมัคคุเทศก์ · '+(bid==='all'?('ทุกลำ '+ids.length+' ใบ'):goBoatTh(bid))+' · '+date;
   var html='<!doctype html><html lang="th"><head><meta charset="utf-8"><title>'+e(title)+'</title>'
-    +'<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">'
+    +'<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">'
     +goCss()+'</head><body>'
     +'<div class="gotool"><b>ใบสั่งงานมัคคุเทศก์</b><span class="h">'+e(title)+' · A4 แนวตั้ง · 1 ลำ = 1 ใบ</span>'
     +'<button onclick="window.print()">พิมพ์ / บันทึก PDF</button></div>'+sheets+'</body></html>';
@@ -75805,6 +75826,8 @@ var PIER_ITEMS=PIER_ITEMS_SEED.map(function(x){return Object.assign({},x);});
 var PIER_MOVES=[];
 var PIER_STAFF=[];
 var PIER_DUTY={};
+var PIER_TEAM={};   // §pierJob · boatId -> {cap, asst, crew:[]}  ทีมประจำเรือ
+var PIER_JOB={};    // §pierJob · 'YYYY-MM-DD::boatId' -> {cap, asst, crew:[], island:[], note, wb, wbc}
 (function(){ try{
   var K=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2');
   var d=JSON.parse(localStorage.getItem(K)||'{}');
@@ -75812,12 +75835,15 @@ var PIER_DUTY={};
   if(Array.isArray(d.pier_moves)) PIER_MOVES=d.pier_moves;
   if(Array.isArray(d.pier_staff)) PIER_STAFF=d.pier_staff;
   if(d.pier_duty && typeof d.pier_duty==='object') PIER_DUTY=d.pier_duty;
+  if(d.pier_team && typeof d.pier_team==='object') PIER_TEAM=d.pier_team;
+  if(d.pier_job && typeof d.pier_job==='object') PIER_JOB=d.pier_job;
 }catch(_){} })();
 function poPersist(){
   if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;   /* §edit-guard */
   try{ var K=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2');
     var d=JSON.parse(localStorage.getItem(K)||'{}');
     d.pier_items=PIER_ITEMS; d.pier_moves=PIER_MOVES; d.pier_staff=PIER_STAFF; d.pier_duty=PIER_DUTY;
+    d.pier_team=PIER_TEAM; d.pier_job=PIER_JOB;
     localStorage.setItem(K,JSON.stringify(d));
   }catch(e){ console.warn('pier office persist failed', e); }
 }
@@ -75971,7 +75997,7 @@ function poLaundryOpen(pier){
 
 function poCSS(){
   var H='.po-host';
-  return H+'{font-family:"DM Sans","Noto Sans Thai",sans-serif;color:#2f2f2b}'
+  return H+'{font-family:"Sarabun","DM Sans",sans-serif;color:#2f2f2b}'
   +H+' .po-h{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:14px}'
   +H+' .po-h h1{font-size:23px;font-weight:800;letter-spacing:-.02em;margin:0}'
   +H+' .po-h p{font-size:12.5px;color:#7C8091;margin:3px 0 0}'
@@ -76482,6 +76508,404 @@ function poLedgerOpen(){
   var head=fines.length?('<div class="po-warn" style="margin:0 0 12px">ค่าปรับของหาย/ลูกค้าไม่คืนสะสม <b>'+poBaht(fsum)+'</b> จาก '+fines.length+' รายการ · เก็บแยกจากยอด Booking</div>'):'';
   poModal('ประวัติการเคลื่อนไหว · '+poE(poPierName()),
     '<style>'+poCSS().replace(/\.po-host/g,'#po-modal')+'</style>'+head+body, poBtn('ปิด','poModalClose()'), 860);
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   §pierJob · ใบงานเรือประจำวัน · การ์ดรายลำ
+   ══════════════════════════════════════════════════════════════════════════ */
+function pjKey(d,b){ return String(d||'')+'::'+String(b||''); }
+function pjRaw(d,b){ var o=PIER_JOB[pjKey(d,b)]; return (o&&typeof o==='object')?o:null; }
+function pjTeam(b){ var t=PIER_TEAM[b]; return (t&&typeof t==='object')?t:{cap:'',asst:'',crew:[]}; }
+/* ใบของวันนั้น · ถ้ายังไม่เคยแตะ ให้ยืมทีมประจำเรือมาแสดง (ยังไม่เขียนลง store) */
+function pjOf(d,b){
+  var o=pjRaw(d,b), T=pjTeam(b);
+  if(!o) return {cap:T.cap||'', asst:T.asst||'', crew:(T.crew||[]).slice(), island:[], note:'', wb:'', wbc:'', _std:true};
+  return {cap:o.cap||'', asst:o.asst||'', crew:Array.isArray(o.crew)?o.crew.slice():[],
+          island:Array.isArray(o.island)?o.island.slice():[], note:o.note||'', wb:o.wb||'', wbc:o.wbc||'', _std:false};
+}
+function pjSet(d,b,patch){
+  if(!poCanEdit()) return;
+  var k=pjKey(d,b), cur=PIER_JOB[k]||pjOf(d,b);
+  delete cur._std;
+  Object.keys(patch).forEach(function(x){ cur[x]=patch[x]; });
+  PIER_JOB[k]=cur; poPersist();
+}
+/* ต่างจากทีมประจำกี่คน · ใช้ติดป้าย SUB */
+function pjSubList(d,b){
+  var J=pjOf(d,b), T=pjTeam(b), out={};
+  if(J.cap && T.cap && J.cap!==T.cap) out.cap=T.cap;
+  if(J.asst && T.asst && J.asst!==T.asst) out.asst=T.asst;
+  (J.crew||[]).forEach(function(id,i){ var t=(T.crew||[])[i]; if(id && t && id!==t) out['crew'+i]=t; });
+  return out;
+}
+function pjSubN(d,b){ return Object.keys(pjSubList(d,b)).length; }
+function pjStaffName(id){ if(!id) return ''; var s=(PIER_STAFF||[]).filter(function(x){ return x.id===id; })[0];
+  return s ? ((s.name||s.nick||id)+(s.nick&&s.name?(' ('+s.nick+')'):'')) : id; }
+
+/* ── ยอด ลค ของลำหนึ่ง · แยก AD/CHD/INF/FOC + ภาษาไกด์ ── */
+function pjPax(date, boatId, pier){
+  var out={ad:0,chd:0,inf:0,foc:0,n:0,langs:{}};
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    var t=(typeof ckTripOn==='function')?ckTripOn(b,date):null; if(!t) return;
+    var rt=(typeof getRoute==='function')?getRoute(t.routeId):null; if(!rt||(rt.pier||'')!==pier) return;
+    var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
+    if((O.boatId||t.charterBoatId||'')!==boatId) return;
+    var p=(typeof ckPaxBreak==='function')?ckPaxBreak(t.pax):{ad:0,chd:0,inf:0,foc:0};
+    out.ad+=p.ad; out.chd+=p.chd; out.inf+=p.inf; out.foc+=p.foc; out.n++;
+    if(typeof pckGuideLangs==='function') pckGuideLangs(b).forEach(function(L){ out.langs[L]=1; });
+  });
+  return out;
+}
+/* ไกด์ของลำนั้น · อ่านจากใบสั่งงานมัคคุเทศก์ที่มีอยู่แล้ว ไม่จัดซ้ำ */
+function pjGuides(date, boatId){
+  try{
+    var A=goAsn(date,boatId), G=goGuides();
+    return (A.g||[]).map(function(id){ var g=G.filter(function(x){ return x.id===id; })[0];
+      return g?((g.name||'')+(g.nick?(' ('+g.nick+')'):'')):id; });
+  }catch(_){ return []; }
+}
+/* สายรัดข้อมือ · ชุดสีมาตรฐาน */
+var PJ_WB=[{t:'ดำ',c:'#1A1A1A'},{t:'ม่วง',c:'#8E2FD6'},{t:'ฟ้า TQ',c:'#2BC8DE'},{t:'แดง',c:'#C0271C'},
+           {t:'เขียว',c:'#1C9B62'},{t:'ส้ม',c:'#F08A24'},{t:'ชมพู',c:'#E75480'},{t:'เหลือง',c:'#F5C518'},
+           {t:'น้ำเงิน',c:'#185FA5'},{t:'ขาว',c:'#FFFFFF'}];
+var PJ_PAL=['#B8860B','#D9A441','#B4560A','#C0271C','#A82063','#7B3FA0',
+            '#4A3FB0','#185FA5','#1668A8','#0E7D74','#0F6E56','#4E6B2F'];
+/* สีประจำหมวดในการ์ด */
+var PJ_SEC={crew:{bg:'#EAF0F9',fg:'#1B4A87',bd:'#D3E0F2'},
+            guide:{bg:'#F2EBFA',fg:'#5B3B96',bd:'#E2D6F3'},
+            cust:{bg:'#EAF4EE',fg:'#14603E',bd:'#D2E7DA'},
+            note:{bg:'#FDF3E2',fg:'#8A5A00',bd:'#F2E1C0'}};
+
+function pjCSS(){
+  var H='.pj-host';
+  return H+'{font-family:"Sarabun","DM Sans",sans-serif;color:#242730}'
+  +H+' .pj-h{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:14px}'
+  +H+' .pj-h h1{font-size:23px;font-weight:800;letter-spacing:-.01em;margin:0}'
+  +H+' .pj-h .lab{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9BA3B0;margin-bottom:2px}'
+  +H+' .pj-h p{font-size:12.5px;color:#6E7684;margin:3px 0 0;line-height:1.6}'
+  +H+' .pj-bar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;background:#fff;border:1px solid #E1E4EA;border-radius:12px;padding:9px 12px;margin-bottom:14px}'
+  +H+' .pj-bar input[type=date]{border:1px solid #D9DDE4;border-radius:8px;padding:6px 9px;font:600 13px inherit;color:#242730}'
+  +H+' .pj-bar button{border:1px solid #D9DDE4;background:#fff;border-radius:8px;padding:6px 12px;font:700 12px inherit;color:#5A6270;cursor:pointer}'
+  +H+' .pj-bar button:hover{border-color:#16265C;color:#16265C}'
+  +H+' .pj-bar button.pri{background:#16265C;border-color:#16265C;color:#fff}'
+  +H+' .pj-bar button.gh{background:#F0F6F3;border-color:#BFE0CD;color:#0F6E56}'
+  +H+' .pj-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(376px,1fr));gap:15px;align-items:start}'
+  +H+' .bc{border:1px solid #E1E4EA;border-radius:13px;background:#fff;position:relative;overflow:hidden;box-shadow:0 1px 2px rgba(20,30,50,.04)}'
+  +H+' .bc .top{padding:11px 15px 10px;color:#fff;display:flex;align-items:flex-start;gap:12px}'
+  +H+' .bc .top .l{flex:1;min-width:0}'
+  +H+' .bc .top .bn{font-size:16px;font-weight:800;letter-spacing:.02em;line-height:1.2}'
+  +H+' .bc .top .be{font-size:9.5px;font-weight:600;opacity:.82;margin-top:1px;letter-spacing:.06em}'
+  +H+' .bc .top .tm{font-size:23px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1;text-align:right}'
+  +H+' .bc .top .tmL{font-size:8.5px;font-weight:700;opacity:.82;letter-spacing:.1em;text-align:right;margin-top:2px}'
+  +H+' .bc .pg{padding:11px 15px 10px;color:#fff;position:relative}'
+  +H+' .bc .pg .pn{font-size:17px;font-weight:800;line-height:1.25;padding-right:34px}'
+  +H+' .bc .pg .pr{font-size:11.5px;font-weight:500;opacity:.93;margin-top:3px}'
+  +H+' .pj-pen{position:absolute;top:9px;right:11px;width:26px;height:26px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.16);color:#fff;font-size:12px;cursor:pointer}'
+  +H+' .pj-pen:hover{background:rgba(255,255,255,.3)}'
+  +H+' .pj-pop{position:absolute;top:42px;right:10px;z-index:30;background:#fff;border:1px solid #E1E4EA;border-radius:12px;box-shadow:0 14px 34px rgba(20,30,50,.18);padding:12px;width:236px;display:none}'
+  +H+' .pj-pop.on{display:block}'
+  +H+' .pj-pop .ph{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8B93A1;margin-bottom:8px}'
+  +H+' .pj-sws{display:grid;grid-template-columns:repeat(6,1fr);gap:7px}'
+  +H+' .pj-sw{width:28px;height:28px;border-radius:9px;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #E1E4EA}'
+  +H+' .pj-sw.on{box-shadow:0 0 0 2px #16265C}'
+  +H+' .pj-pop .pf{font-size:10.5px;color:#6E7684;line-height:1.6;margin-top:9px;border-top:1px solid #F0F2F6;padding-top:8px}'
+  +H+' .bc .stbar{padding:7px 15px;background:#FAFBFC;border-bottom:1px solid #EFF1F5;display:flex;align-items:center;gap:8px;flex-wrap:wrap}'
+  +H+' .pj-sub{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:2px 8px;background:#FFF0D8;color:#B4560A}'
+  +H+' .pj-std{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:2px 8px;background:#EDF3EF;color:#5E8B72}'
+  +H+' .pj-gh{display:flex;align-items:center;gap:8px;padding:0 15px;height:28px;font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);background:var(--bg);color:var(--fg);box-shadow:inset 4px 0 0 var(--fg)}'
+  +H+' .pj-rw{display:flex;align-items:center;gap:8px;padding:0 15px;height:32px;border-bottom:1px solid #F4F5F8}'
+  +H+' .pj-rw .k{font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#9BA3B0;width:100px;flex:none}'
+  +H+' .pj-rw .v{font-size:12px;font-weight:600;color:#242730;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  +H+' .pj-rw .v.e{color:#CFD4DC;font-weight:400}'
+  +H+' .pj-rw.sw2{background:#FFFCF3}'
+  +H+' .pj-rw select{flex:1;min-width:0;border:1px solid transparent;background:transparent;border-radius:7px;padding:3px 6px;font:600 12px inherit;color:#242730;cursor:pointer}'
+  +H+' .pj-rw select:hover{border-color:#D9DDE4;background:#fff}'
+  +H+' .pj-rw select:focus{border-color:#16265C;background:#fff;outline:none}'
+  +H+' .pj-tag{font-size:9px;font-weight:800;border-radius:4px;padding:1px 6px;background:#FFF0D8;color:#B4560A;flex:none}'
+  +H+' .pj-was{font-size:10px;color:#B4560A;font-weight:600;flex:none;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+  +H+' .pj-wbrow{display:flex;align-items:center;gap:9px;padding:0 15px;height:36px;border-bottom:1px solid #F4F5F8}'
+  +H+' .pj-wbrow .k{font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#9BA3B0}'
+  +H+' .pj-wb{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;color:#4A5464;border:1px solid #E7EAEF;border-radius:8px;padding:3px 9px;background:#fff;cursor:pointer}'
+  +H+' .pj-wb i{width:14px;height:14px;border-radius:5px;border:1px solid rgba(0,0,0,.16);display:inline-block}'
+  +H+' .pj-lang{display:inline-block;font-size:10px;font-weight:700;border-radius:5px;padding:2px 7px;margin-left:3px;background:#EEF2F8;color:#3C4E6B}'
+  +H+' .pj-pax{display:flex;background:#FAFBFC;border-bottom:1px solid #E7EAEF}'
+  +H+' .pj-pax .c{flex:1;padding:9px 6px;text-align:center;border-right:1px solid #EFF1F5}'
+  +H+' .pj-pax .c:last-child{border-right:none}'
+  +H+' .pj-pax .k{font-size:9px;font-weight:800;color:#9BA3B0;letter-spacing:.06em}'
+  +H+' .pj-pax .v{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:1px}'
+  +H+' .pj-pax .c.t{background:#F1F8F4}'
+  +H+' .pj-pax .c.t .v{color:#0F6E56;font-size:19px}'
+  +H+' .pj-note{min-height:36px;margin:10px 15px 12px;border:1px dashed #E5D3A8;border-radius:9px;background:#fff;padding:8px 11px;font-size:12px;font-weight:600;color:#7A4A00;line-height:1.55;outline:none}'
+  +H+' .pj-note:focus{border-style:solid;border-color:#D9A441;box-shadow:0 0 0 3px rgba(217,164,65,.15)}'
+  +H+' .pj-note:empty:before{content:attr(data-ph);color:#C9CFD8;font-weight:400}'
+  +H+' .bc .foot{display:flex;align-items:center;gap:8px;padding:9px 15px;border-top:1px solid #EFF1F5;flex-wrap:wrap}'
+  +H+' .bc .foot button{border:1px solid #D9DDE4;background:#fff;border-radius:7px;padding:4px 10px;font:700 11px inherit;color:#5A6270;cursor:pointer}'
+  +H+' .bc .foot button:hover{border-color:#16265C;color:#16265C}'
+  +H+' .bc .foot button.gh{background:#F0F6F3;border-color:#BFE0CD;color:#0F6E56}'
+  +H+' .pj-idle{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px;background:#fff;border:1px solid #E1E4EA;border-radius:12px;padding:13px 15px}'
+  +H+' .pj-ib{border:1px solid #E7EAEF;background:#FAFBFC;border-radius:9px;padding:6px 12px}'
+  +H+' .pj-ib .n{font-size:11.5px;font-weight:800;color:#5A6270}'
+  +H+' .pj-ib .s{font-size:10px;font-weight:700;margin-top:1px;color:#8B93A1}'
+  +H+' .pj-empty{background:#fff;border:1px solid #E1E4EA;border-radius:12px;padding:28px 14px;text-align:center;color:#9BA3B0;font-size:12.5px}';
+}
+
+function pjSecHd(t,k){ var S=PJ_SEC[k]; return '<div class="pj-gh" style="--bg:'+S.bg+';--fg:'+S.fg+';--bd:'+S.bd+'">'+t+'</div>'; }
+function pjOpts(pier, sel, roles){
+  var list=(PIER_STAFF||[]).filter(function(s){ return s.pier===pier && s.active!==false; });
+  if(roles && roles.length){
+    var pri=list.filter(function(s){ return roles.indexOf(String(s.role||'').toLowerCase())>=0; });
+    var rest=list.filter(function(s){ return roles.indexOf(String(s.role||'').toLowerCase())<0; });
+    list=pri.concat(rest);
+  }
+  var out='<option value="">— ว่าง —</option>';
+  list.forEach(function(s){
+    out+='<option value="'+poE(s.id)+'"'+(s.id===sel?' selected':'')+'>'
+      +poE((s.name||s.nick||s.id)+(s.nick&&s.name?(' ('+s.nick+')'):''))+(s.role?(' · '+poE(s.role)):'')+'</option>';
+  });
+  if(sel && !list.some(function(s){ return s.id===sel; }))
+    out+='<option value="'+poE(sel)+'" selected>'+poE(pjStaffName(sel))+' (ไม่อยู่ในทะเบียนแล้ว)</option>';
+  return out;
+}
+function pjRow(label, html, subOld){
+  return '<div class="pj-rw'+(subOld?' sw2':'')+'"><div class="k">'+label+'</div>'+html
+    +(subOld?('<span class="pj-tag">SUB</span><span class="pj-was" title="ปกติคือ '+poE(pjStaffName(subOld))+'">ปกติ '+poE(pjStaffName(subOld))+'</span>'):'')+'</div>';
+}
+function pjSelRow(pier,bid,label,slot,val,subOld,roles,ro){
+  var sel='<select onchange="pjPick(\''+bid+'\',\''+slot+'\',this.value)"'+(ro?' disabled':'')+'>'+pjOpts(pier,val,roles)+'</select>';
+  return pjRow(label, sel, subOld);
+}
+function pjTxtRow(label,txt){
+  return pjRow(label, txt?('<div class="v">'+poE(txt)+'</div>'):'<div class="v e">—</div>', null);
+}
+function pjPick(bid, slot, val){
+  var J=pjOf(_poDate,bid);
+  if(slot==='cap') J.cap=val;
+  else if(slot==='asst') J.asst=val;
+  else if(slot.indexOf('crew')===0){ var i=+slot.slice(4); var a=J.crew.slice(); while(a.length<=i) a.push(''); a[i]=val; J.crew=a; }
+  else if(slot.indexOf('island')===0){ var j=+slot.slice(6); var b=J.island.slice(); while(b.length<=j) b.push(''); b[j]=val; J.island=b; }
+  pjSet(_poDate,bid,{cap:J.cap,asst:J.asst,crew:J.crew,island:J.island});
+  renderPierJob();
+}
+function pjNote(bid,txt){ pjSet(_poDate,bid,{note:String(txt||'').slice(0,400)}); }
+function pjWbSet(bid,t,c){ pjSet(_poDate,bid,{wb:t,wbc:c}); renderPierJob(); }
+function pjPopToggle(id){
+  var el=document.getElementById(id), was=el&&el.classList.contains('on');
+  document.querySelectorAll('.pj-pop').forEach(function(p){ p.classList.remove('on'); });
+  if(el && !was) el.classList.add('on');
+  if(window.event) window.event.stopPropagation();
+}
+/* แต้มสีโปรแกรม · เขียนลง ROUTES เลย จึงเปลี่ยนพร้อมกันทุกหน้าที่โชว์เส้นทางนี้ */
+function pjProgColor(rid,hex){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('config')) return;
+  for(var i=0;i<ROUTES.length;i++){ if(ROUTES[i].id===rid){ ROUTES[i].color=hex; break; } }
+  try{ save('config'); }catch(_){}
+  renderPierJob();
+  if(window.event) window.event.stopPropagation();
+}
+/* ทีมประจำเรือ */
+function pjTeamPull(bid){
+  var T=pjTeam(bid);
+  if(!T.cap && !T.asst && !(T.crew||[]).length){ alert('ลำนี้ยังไม่ได้ตั้งทีมประจำ · จัดคนวันนี้ให้เรียบร้อยแล้วกด "ตั้งเป็นทีมประจำ"'); return; }
+  pjSet(_poDate,bid,{cap:T.cap||'',asst:T.asst||'',crew:(T.crew||[]).slice()});
+  renderPierJob();
+}
+function pjTeamSave(bid){
+  if(!poCanEdit()) return;
+  var J=pjOf(_poDate,bid);
+  if(!confirm('ตั้งคนของวันนี้เป็นทีมประจำของลำนี้?\n\nใบงานวันถัดไปจะเติมชุดนี้ให้อัตโนมัติ')) return;
+  PIER_TEAM[bid]={cap:J.cap,asst:J.asst,crew:(J.crew||[]).filter(Boolean)};
+  poPersist(); renderPierJob();
+}
+/* คัดลอกทั้งวัน */
+function pjCopyYday(pier){
+  if(!poCanEdit()) return;
+  var d=new Date(_poDate+'T12:00:00'); d.setDate(d.getDate()-1);
+  var prev=poYMD(d), boats=poBoats(_poDate,pier), n=0;
+  boats.forEach(function(B){
+    var o=pjRaw(prev,B.bid); if(!o) return;
+    pjSet(_poDate,B.bid,{cap:o.cap||'',asst:o.asst||'',crew:(o.crew||[]).slice(),
+                         island:(o.island||[]).slice(), wb:o.wb||'', wbc:o.wbc||''});
+    n++;
+  });
+  if(!n) alert('เมื่อวาน ('+prev+') ยังไม่มีใบงานที่บันทึกไว้');
+  renderPierJob();
+}
+/* จัดไกด์ · ใช้หน้าเดิม แล้วรีเฟรชกลับมาที่ใบงาน */
+function pjGuideOpen(bid){ try{ _pckDate=_poDate; goSetupOpen(bid); }catch(_){} }
+(function(){ try{
+  if(typeof goSetupSave==='function' && !window.__pjWrapGo){
+    var _o=window.goSetupSave;
+    window.goSetupSave=function(){ var r=_o.apply(this,arguments);
+      try{ if(document.querySelector('.view.active') && /^view-poj-/.test(document.querySelector('.view.active').id)) renderPierJob(); }catch(_){}
+      return r; };
+    window.__pjWrapGo=1;
+  }
+}catch(_){} })();
+
+function pjCard(B, pier, ro){
+  var bid=B.bid, rt=B.route||{}, J=pjOf(_poDate,bid), SUB=pjSubList(_poDate,bid), n=Object.keys(SUB).length;
+  var col=(typeof pckBoatColor==='function')?pckBoatColor(bid):'#185FA5';
+  var pcol=rt.color||'#5A6270';
+  var pax=pjPax(_poDate,bid,pier), G=pjGuides(_poDate,bid);
+  var langs=Object.keys(pax.langs);
+  var wbc=J.wbc||'', wbt=J.wb||'';
+  var pid='pjpop-'+bid.replace(/[^A-Za-z0-9_-]/g,'_');
+  var wid='pjwb-'+bid.replace(/[^A-Za-z0-9_-]/g,'_');
+  var h='<div class="bc">'
+   +'<div class="top" style="background:'+col+'"><div class="l"><div class="bn">'+poE(B.boat.name||bid)+'</div>'
+     +'<div class="be">'+poE(B.boat.type||'')+'</div></div>'
+     +'<div><div class="tm">'+poE(B.dep||'--:--')+'</div><div class="tmL">DEPARTURE</div></div></div>'
+   +'<div class="pg" style="background:'+pcol+'"><div class="pn">'+poE(rt.name||B.rid||'—')+'</div>'
+     +'<div class="pr">'+poE(rt.islands||'')+'</div>'
+     +(ro?'':'<button class="pj-pen" onclick="pjPopToggle(\''+pid+'\')" title="แต้มสีโปรแกรมนี้">&#9998;</button>')
+     +'<div class="pj-pop" id="'+pid+'"><div class="ph">สีของโปรแกรม '+poE(rt.name||'')+'</div><div class="pj-sws">'
+       +PJ_PAL.map(function(c){ return '<div class="pj-sw'+(c===pcol?' on':'')+'" style="background:'+c+'" onclick="pjProgColor(\''+poE(B.rid)+'\',\''+c+'\')"></div>'; }).join('')
+       +'</div><div class="pf">เปลี่ยนแล้วมีผลกับโปรแกรมนี้ <b>ทุกลำทุกวัน</b> และทุกหน้าที่โชว์เส้นทางนี้</div></div></div>'
+   +'<div class="stbar">'+(n?('<span class="pj-sub">'+n+' SUBSTITUTION'+(n>1?'S':'')+' TODAY</span>')
+                            :(J._std?'<span class="pj-std">&#10003; ทีมประจำเรือ</span>':'<span class="pj-std">&#10003; STANDARD CREW</span>'))
+     +(pax.n?('<span style="font-size:10.5px;color:#8B93A1;font-weight:600">'+pax.n+' booking</span>'):'')+'</div>'
+   + pjSecHd('Captain &amp; Crew','crew')
+   + pjSelRow(pier,bid,'Captain','cap',J.cap,SUB.cap,['กัปตัน','captain'],ro)
+   + pjSelRow(pier,bid,'Asst. Captain','asst',J.asst,SUB.asst,['กัปตัน','captain'],ro)
+   + [0,1,2].map(function(i){ return pjSelRow(pier,bid,'Crew '+(i+1),'crew'+i,(J.crew||[])[i]||'',SUB['crew'+i],['เด็กเรือ','crew','ลูกเรือ'],ro); }).join('')
+   + [0,1].map(function(i){ return pjSelRow(pier,bid,'Island Staff '+(i+1),'island'+i,(J.island||[])[i]||'',null,['อุปกรณ์','equipment'],ro); }).join('')
+   + pjSecHd('Guides &amp; Trainee','guide')
+   + pjTxtRow('Guide 1', G[0]||'')
+   + pjTxtRow('Guide 2', G[1]||'')
+   + pjTxtRow('Guide 3', G[2]||'')
+   + pjSecHd('Customer','cust')
+   +'<div class="pj-wbrow"><span class="k">Wristband</span>'
+     +'<span class="pj-wb" onclick="'+(ro?'':'pjPopToggle(\''+wid+'\')')+'" style="position:relative">'
+       +'<i style="background:'+(wbc||'#F0F0EC')+'"></i>'+(wbt?poE(wbt):'<span style="color:#C9CFD8;font-weight:500">ยังไม่ระบุ</span>')
+       +'<div class="pj-pop" id="'+wid+'" style="top:30px;left:0;right:auto;width:210px"><div class="ph">สีสายรัดข้อมือวันนี้</div>'
+       +'<div class="pj-sws" style="grid-template-columns:repeat(5,1fr)">'
+       +PJ_WB.map(function(w){ return '<div class="pj-sw'+(w.c===wbc?' on':'')+'" title="'+w.t+'" style="background:'+w.c+'" onclick="pjWbSet(\''+bid+'\',\''+w.t+'\',\''+w.c+'\')"></div>'; }).join('')
+       +'</div><div class="pf">เก็บแยกรายวันรายลำ</div></div></span>'
+     +'<span style="flex:1"></span><span class="k">Group</span>'
+     +(langs.length?langs.map(function(L){ return '<span class="pj-lang">'+poE(L)+'</span>'; }).join(''):'<span style="font-size:11px;color:#C9CFD8">—</span>')
+   +'</div>'
+   +'<div class="pj-pax">'
+     +[['AD',pax.ad],['CHD',pax.chd],['INF',pax.inf],['FOC',pax.foc]].map(function(x){
+        return '<div class="c"><div class="k">'+x[0]+'</div><div class="v"'+(x[1]?'':' style="color:#CFD4DC"')+'>'+x[1]+'</div></div>'; }).join('')
+     +'<div class="c t"><div class="k">TOTAL</div><div class="v">'+(pax.ad+pax.chd+pax.inf+pax.foc)+'</div></div></div>'
+   + pjSecHd('Note','note')
+   +'<div class="pj-note"'+(ro?'':' contenteditable="true"')+' data-ph="พิมพ์หมายเหตุของลำนี้วันนี้…" '
+     +'onblur="pjNote(\''+bid+'\',this.innerText)">'+poE(J.note||'')+'</div>'
+   +'<div class="foot">'
+     +'<button class="gh" onclick="pjTeamPull(\''+bid+'\')"'+(ro?' disabled':'')+'>&#8634; ดึงทีมประจำ</button>'
+     +'<button onclick="pjTeamSave(\''+bid+'\')"'+(ro?' disabled':'')+'>ตั้งเป็นทีมประจำ</button>'
+     +'<span style="flex:1"></span>'
+     +'<button onclick="pjGuideOpen(\''+bid+'\')">จัดไกด์</button>'
+   +'</div></div>';
+  return h;
+}
+
+function renderPierJob(pier){
+  if(pier) _poPier=pier;
+  var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
+  var host=document.getElementById('pj-host-'+P.k); if(!host) return;
+  var boats=poBoats(_poDate,_poPier), ro=!poCanEdit();
+  var tot=0, subN=0, noCap=0;
+  boats.forEach(function(B){ var p=pjPax(_poDate,B.bid,_poPier); tot+=p.ad+p.chd+p.inf+p.foc;
+    subN+=pjSubN(_poDate,B.bid); if(!pjOf(_poDate,B.bid).cap) noCap++; });
+  var idle=[];
+  (typeof BOATS!=='undefined'?BOATS:[]).forEach(function(b){
+    if((b.pier||'')!==_poPier) return;
+    if(boats.some(function(x){ return x.bid===b.id; })) return;
+    idle.push(b);
+  });
+  host.innerHTML='<style id="pj-style">'+pjCSS()+'</style>'
+    +'<div class="pj-h"><div><div class="lab">Pier Office</div>'
+      +'<h1>'+poE(P.n||P.t)+' · ใบงานเรือ</h1>'
+      +'<p>'+poE(P.t)+' · จ่ายคนลงเรือของวันนี้ · ตัวเลข ลค · โปรแกรม · เวลาออก · ไกด์ ดึงจากระบบทั้งหมด</p></div></div>'
+    +'<div class="pj-bar">'
+      +'<button onclick="pjShift(-1)">&#8249;</button>'
+      +'<input type="date" value="'+_poDate+'" onchange="pjDate(this.value)">'
+      +'<button onclick="pjToday()">วันนี้</button>'
+      +'<span style="font-size:12px;color:#6E7684;margin-left:6px">เรือออก <b style="color:#16265C">'+boats.length+'</b> ลำ · '
+        +'<b style="color:#0F6E56">'+tot+'</b> pax'
+        +(subN?(' · <b style="color:#B4560A">เปลี่ยนตัว '+subN+' คน</b>'):'')
+        +(noCap?(' · <b style="color:#C0271C">ยังไม่มีกัปตัน '+noCap+' ลำ</b>'):'')+'</span>'
+      +'<span style="flex:1"></span>'
+      +'<button class="gh" onclick="pjCopyYday(\''+P.k+'\')"'+(ro?' disabled':'')+'>&#8634; คัดลอกจากเมื่อวาน</button>'
+      +'<button onclick="poStaffOpen()">ทะเบียนพนักงาน</button>'
+      +'<button class="pri" onclick="pjPrint()">พิมพ์ใบงาน</button>'
+    +'</div>'
+    +(boats.length
+      ? ('<div class="pj-grid">'+boats.map(function(B){ return pjCard(B,_poPier,ro); }).join('')+'</div>')
+      : '<div class="pj-empty">ไม่มีเรือออกจากท่านี้ในวันที่เลือก<br><span style="font-size:11.5px">ผูกเรือกับเส้นทางได้ที่หน้า Boat Operation</span></div>')
+    +(idle.length?('<div class="pj-idle"><div style="width:100%;font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#8B93A1;margin-bottom:2px">ไม่ได้ออกทริปวันนี้ · '+idle.length+' ลำ</div>'
+       +idle.map(function(b){ return '<div class="pj-ib"><div class="n">'+poE(b.name||b.id)+'</div><div class="s">'+poE(b.status||b.type||'')+'</div></div>'; }).join('')+'</div>'):'');
+  if(!host.__pjClose){ host.__pjClose=1;
+    document.addEventListener('click', function(){ try{ host.querySelectorAll('.pj-pop').forEach(function(p){ p.classList.remove('on'); }); }catch(_){} });
+  }
+}
+function pjDate(v){ if(v) _poDate=v; renderPierJob(); }
+function pjShift(n){ var d=new Date(_poDate+'T12:00:00'); d.setDate(d.getDate()+n); _poDate=poYMD(d); renderPierJob(); }
+function pjToday(){ _poDate=poYMD(new Date()); renderPierJob(); }
+
+/* ── พิมพ์ใบงาน · A4 แนวนอน 2 ลำต่อแถว ── */
+function pjPrint(){
+  var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
+  var boats=poBoats(_poDate,_poPier), e=poE;
+  if(!boats.length){ alert('วันนี้ไม่มีเรือออกจากท่านี้'); return; }
+  var css='@page{size:A4 landscape;margin:9mm}'
+   +'*{box-sizing:border-box}body{margin:0;font-family:"Sarabun","DM Sans",sans-serif;color:#242730;font-size:11px}'
+   +'.hd{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #16265C;padding-bottom:7px;margin-bottom:10px}'
+   +'.t1{font-size:16px;font-weight:800;color:#16265C}.t2{font-size:11px;color:#5A6270;margin-top:2px}'
+   +'.g{display:grid;grid-template-columns:1fr 1fr;gap:9px}'
+   +'.c{border:1px solid #B9BFC9;border-radius:8px;overflow:hidden;break-inside:avoid}'
+   +'.ch{padding:6px 10px;color:#fff;display:flex;justify-content:space-between;align-items:center}'
+   +'.ch b{font-size:13px;font-weight:800}.ch span{font-size:15px;font-weight:800}'
+   +'.cp{padding:5px 10px;color:#fff;font-size:12px;font-weight:800}'
+   +'table{border-collapse:collapse;width:100%}'
+   +'td{border-bottom:1px solid #E7EAEF;padding:3px 10px;font-size:10.5px}'
+   +'td.k{width:96px;color:#8B93A1;font-weight:700;font-size:8.5px;text-transform:uppercase;letter-spacing:.04em}'
+   +'.sec{background:#F2F5F9;font-size:8px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#5A6B85;padding:3px 10px}'
+   +'.px{display:flex;border-top:1px solid #B9BFC9}'
+   +'.px div{flex:1;text-align:center;padding:4px 2px;border-right:1px solid #E7EAEF}'
+   +'.px div:last-child{border-right:none;background:#F1F8F4}'
+   +'.px b{display:block;font-size:8px;color:#8B93A1;letter-spacing:.05em}'
+   +'.px i{font-style:normal;font-size:13px;font-weight:800}'
+   +'.nt{padding:5px 10px;font-size:10.5px;min-height:26px;border-top:1px solid #E7EAEF;color:#7A4A00}'
+   +'.sg{display:flex;gap:14px;margin-top:12px}'
+   +'.sg div{flex:1;border-top:1px solid #9BA3B0;padding-top:4px;text-align:center;font-size:10px;color:#5A6270}';
+  var cards=boats.map(function(B){
+    var rt=B.route||{}, J=pjOf(_poDate,B.bid), pax=pjPax(_poDate,B.bid,_poPier), G=pjGuides(_poDate,B.bid);
+    var col=(typeof pckBoatColor==='function')?pckBoatColor(B.bid):'#185FA5';
+    var row=function(k,v){ return '<tr><td class="k">'+k+'</td><td>'+(v?e(v):'<span style="color:#C9CFD8">—</span>')+'</td></tr>'; };
+    return '<div class="c">'
+     +'<div class="ch" style="background:'+col+'"><b>'+e(B.boat.name||B.bid)+'</b><span>'+e(B.dep||'--:--')+'</span></div>'
+     +'<div class="cp" style="background:'+(rt.color||'#5A6270')+'">'+e(rt.name||'')+'</div>'
+     +'<div class="sec">Captain &amp; Crew</div><table>'
+       +row('Captain',pjStaffName(J.cap))+row('Asst. Captain',pjStaffName(J.asst))
+       +[0,1,2].map(function(i){ return row('Crew '+(i+1),pjStaffName((J.crew||[])[i])); }).join('')
+       +[0,1].map(function(i){ return row('Island '+(i+1),pjStaffName((J.island||[])[i])); }).join('')
+     +'</table><div class="sec">Guides</div><table>'
+       +[0,1,2].map(function(i){ return row('Guide '+(i+1),G[i]||''); }).join('')
+     +'</table><div class="sec">Customer</div><table>'
+       +row('Wristband',J.wb||'')+row('Group',Object.keys(pax.langs).join(' · '))
+     +'</table>'
+     +'<div class="px"><div><b>AD</b><i>'+pax.ad+'</i></div><div><b>CHD</b><i>'+pax.chd+'</i></div>'
+       +'<div><b>INF</b><i>'+pax.inf+'</i></div><div><b>FOC</b><i>'+pax.foc+'</i></div>'
+       +'<div><b>TOTAL</b><i style="color:#0F6E56">'+(pax.ad+pax.chd+pax.inf+pax.foc)+'</i></div></div>'
+     +'<div class="nt"><b style="font-size:8px;color:#B4560A;letter-spacing:.1em">NOTE</b> '+e(J.note||'')+'</div>'
+     +'</div>';
+  }).join('');
+  var html='<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ใบงานเรือ · '+e(P.n)+' · '+e(_poDate)+'</title>'
+   +'<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">'
+   +'<style>'+css+'</style></head><body>'
+   +'<div class="hd"><div><div class="t1">ใบงานเรือ · '+e(P.n)+'</div><div class="t2">'+e(P.t)+' · '+e(_poDate)+' · เรือออก '+boats.length+' ลำ</div></div>'
+   +'<div style="text-align:right;font-size:10px;color:#5A6270">พิมพ์เมื่อ '+e(new Date().toLocaleString('th-TH'))+'</div></div>'
+   +'<div class="g">'+cards+'</div>'
+   +'<div class="sg"><div>เจ้าหน้าที่จ่ายงาน</div><div>หัวหน้าท่าเรือ</div></div>'
+   +'</body></html>';
+  var w=window.open('','_blank','width=1100,height=800');
+  if(!w){ alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ · อนุญาต pop-up ของหน้านี้ก่อน'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+  setTimeout(function(){ try{ w.focus(); w.print(); }catch(_){} }, 600);
 }
 
 function poSignSheet(bid){
