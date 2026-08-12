@@ -204,7 +204,10 @@ const B2C_OWN_BK = new Set([
 //      pair, so rows that carry only {qty, addonId} stop importing as "B2C add-on AD-001" and read
 //      as "Join Transfer ( Phuket )" / "International Park Fee". Also drops the "× qty" that was
 //      baked into the label — every renderer appends the quantity itself, so it printed twice.
-const B2C_MAP_VER = 18;
+// v19: nationality no longer needs a hand-written alias for every demonym — 'Slovak' and 'Qatari'
+//      were importing blank (LOV-9260122) while ICU knew 'Slovakia' and 'Qatar'. Also stops ICU's
+//      withdrawn codes from winning a name collision, which had 'Serbia' resolving to YU.
+const B2C_MAP_VER = 19;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -687,6 +690,16 @@ const B2C_NAT_ALIAS = {
   brazilian:'BR', brazil:'BR', mexican:'MX', mexico:'MX', 'south african':'ZA', 'south africa':'ZA',
   lao:'LA', laos:'LA', cambodian:'KH', cambodia:'KH',
 };
+// ICU answers for withdrawn ISO-3166-3 codes too, and 15 country names therefore resolve to TWO
+// codes. Whichever the scan hit last used to win, which is how 'Serbia' became YU (Yugoslavia),
+// 'Russia' SU (Soviet Union), 'France' FX and 'Timor-Leste' TP. Skipping the withdrawn codes leaves
+// exactly one live code per name — verified against the full A–Z sweep, all 15 collisions resolved.
+// The tail is ICU's non-country aggregates: ZZ in particular is 'Unknown Region', so a guest whose
+// nationality reads "Unknown" was about to be stamped with a country code.
+const B2C_NAT_SKIP = new Set([
+  'AN','BU','CS','DD','DY','FX','HV','NH','RH','SU','TP','UK','VD','YD','YU','ZR',   // withdrawn
+  'EU','EZ','QO','UN','XA','XB','ZZ',                                                // not countries
+]);
 let _b2cNatByName = null;
 function b2cNatCode(txt) {
   const s = String(txt || '').trim();
@@ -702,12 +715,36 @@ function b2cNatCode(txt) {
       const dn = new Intl.DisplayNames(['en'], { type: 'region' });
       for (let a = 65; a <= 90; a++) for (let b = 65; b <= 90; b++) {
         const cc = String.fromCharCode(a, b);
+        if (B2C_NAT_SKIP.has(cc)) continue;
         let nm = ''; try { nm = dn.of(cc) || ''; } catch (_) {}
         if (nm && nm !== cc) _b2cNatByName[nm.toLowerCase()] = cc;
       }
     } catch (_) {}
   }
-  return _b2cNatByName[k] || '';
+  if (_b2cNatByName[k]) return _b2cNatByName[k];
+  return b2cNatFromDemonym(k);
+}
+
+// Last resort for a demonym the alias table happens not to carry. The table is hand-maintained, so
+// every market nobody thought of lands in ops with a BLANK nationality and no warning — 'Slovak'
+// (LOV-9260122) and 'Qatari' were both sitting like that, while ICU knows 'Slovakia' and 'Qatar'
+// perfectly well. This bridges the two.
+//
+// It only ever answers when a transform lands on a REAL ICU country name, and the prefix rule only
+// when exactly ONE country matches — so 'Congo' (two) and 'Ind' (India + Indonesia) are refused
+// rather than guessed. Anything it cannot place returns '' exactly as before, which the client
+// already handles by guessing from the name.
+//   'Qatari' → Qatar · 'Indian' → India · 'Egyptian' → Egypt · 'Romanian' → Romania
+//   'Slovak' → Slovakia (prefix)
+function b2cNatFromDemonym(k) {
+  if (!_b2cNatByName || k.length < 4) return '';
+  for (const c of [k.replace(/i$/, ''), k.replace(/n$/, ''), k.replace(/ian$/, ''),
+                   k.replace(/ese$/, ''), k.replace(/ish$/, '')]) {
+    if (c.length >= 4 && c !== k && _b2cNatByName[c]) return _b2cNatByName[c];
+  }
+  const hits = [...new Set(Object.keys(_b2cNatByName)
+    .filter(n => n.startsWith(k)).map(n => _b2cNatByName[n]))];
+  return hits.length === 1 ? hits[0] : '';
 }
 
 // booking_id → [{paxNo, name, nationality}] for a batch of B2C orders. A missing view or a failed
