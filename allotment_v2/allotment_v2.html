@@ -405,7 +405,7 @@
     {v:'sales-board',t:'Sales Board',a:'sales'},{v:'b2b-dash',t:'B2B Dashboard',a:'sales'},{v:'agents',t:'Agent List',a:'sales'},{v:'rate-types',t:'Rate Types',a:'sales'},{v:'contract-tmpl',t:'Contract Templates',a:'sales'},{v:'b2c',t:'B2C Channels',a:'sales'},{v:'staff',t:'Staff & Welfare',a:'sales'},{v:'marketdata',t:'Demand',a:'sales'},{v:'focdetail',t:'FOC Detail',a:'sales'},{v:'pickupmap',t:'แผนที่จุดรับ',a:'sales'},
     {v:'accounting',t:'Accounting',a:'accounting'},{v:'costing',t:'ต้นทุน & จุดคุ้มทุน',a:'accounting'},{v:'dailypfm',t:'Daily PFM',a:'accounting'},
     {v:'fl-dashboard',t:'Fleet Dashboard',a:'fleet'},{v:'fl-boatstatus',t:'Boat Status',a:'fleet'},{v:'fl-dailyreport',t:'Daily Fleet Log',a:'fleet'},{v:'fl-incident',t:'Incident / Job',a:'fleet'},{v:'fl-projects',t:'Projects',a:'fleet'},{v:'fl-maintenance',t:'Maintenance',a:'fleet'},{v:'fl-inventory',t:'Inventory / Memo',a:'fleet'},{v:'fl-consumables',t:'เบิกของใช้/น้ำมัน',a:'fleet'},{v:'fl-cost',t:'Cost Analytics',a:'fleet'},{v:'fl-insights',t:'Fleet Insights',a:'fleet'},{v:'fl-fuel',t:'Fuel',a:'fleet'},{v:'fl-asset',t:'Company Asset',a:'fleet'},
-    {v:'po-panwa',t:'Office ท่าเรือ · Phuket',a:'pier'},{v:'po-tublamu',t:'Office ท่าเรือ · Tub Lamu',a:'pier'},{v:'po-ranong',t:'Office ท่าเรือ · Ranong',a:'pier'},
+    {v:'po-panwa',t:'Phuket · เบิก-คืนอุปกรณ์',a:'pier'},{v:'po-tublamu',t:'Tub Lamu · เบิก-คืนอุปกรณ์',a:'pier'},{v:'po-ranong',t:'Ranong · เบิก-คืนอุปกรณ์',a:'pier'},
     {v:'settings',t:'Programs',a:'config'},{v:'teammkt',t:'Team & Markets',a:'config'},{v:'addonsvc',t:'Add-on Services',a:'config'}
   ];
   // Expand a stored perms array → Set of allowed view keys. Group keys (the 6 areas) expand to every menu in that group (back-compat with old data). View keys pass through.
@@ -446,6 +446,11 @@
     var items=document.querySelectorAll('.nav-item[data-view]');
     items.forEach(function(it){ it.style.display = laAllowed(it.dataset.view) ? '' : 'none'; });
     document.querySelectorAll('[data-adminonly]').forEach(function(it){ it.style.display='none'; }); // admin-only nodes hidden for everyone else (laApplyPerms only runs for non-admins)
+    /* §pierSub · หัวกลุ่มท่าไม่มี data-view จึงไม่โดนรอบบน · ซ่อนเองถ้าลูกไม่เหลือสักอัน */
+    document.querySelectorAll('.nav-item.po-grp[data-pogrp]').forEach(function(g){
+      var kids=[].slice.call(document.querySelectorAll('.nav-item.po-sub[data-pogrp="'+g.dataset.pogrp+'"]'));
+      g.style.display = kids.some(function(k){ return k.style.display!=='none'; }) ? '' : 'none';
+    });
     var nodes=[].slice.call(document.querySelectorAll('.sidebar .nav-section, .sidebar .nav-item[data-view]'));
     if(!nodes.length) nodes=[].slice.call(document.querySelectorAll('.nav-section, .nav-item[data-view]'));
     nodes.forEach(function(node,i){ if(node.classList.contains('nav-section')){ var vis=false; for(var j=i+1;j<nodes.length;j++){ if(nodes[j].classList.contains('nav-section')) break; if(nodes[j].style.display!=='none'){vis=true;break;} } node.style.display=vis?'':'none'; } });
@@ -1154,6 +1159,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--sand);color:var(--ink);fo
 .nav-item.active{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.1);color:#fff;font-weight:500}
 .nav-item svg{width:14px;height:14px;flex-shrink:0;opacity:.6}
 .nav-item.active svg{opacity:1}
+/* §pierSub · กลุ่มท่าเรือพับได้ + เมนูย่อยใต้กลุ่ม */
+.nav-item.po-grp{font-weight:600}
+.nav-item.po-grp .po-gch{margin-left:auto;font-size:11px;opacity:.55;transition:transform .2s}
+.nav-item.po-grp.po-collapsed .po-gch{transform:rotate(-90deg)}
+.nav-item.po-sub{padding-left:32px;font-size:11.5px;margin-bottom:0}
+.nav-item.po-sub .po-dot{width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.5;flex:none;display:inline-block}
+.nav-item.po-sub.po-hide{display:none !important}
 .sidebar-footer{margin-top:auto;padding:10px 10px;font-size:10px;color:rgba(255,255,255,.2);border-top:1px solid rgba(255,255,255,.06)}
 
 /* ── MAIN ── */
@@ -3602,6 +3614,9 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
 .sidebar .nav-item.active{ background:#1683C7 !important; color:#fff !important; font-weight:500 !important; border:none !important; box-shadow:0 8px 18px -4px rgba(22,131,199,.5) !important; }
 .sidebar .nav-item.active svg{ color:#fff !important; opacity:1 !important; }
 .sidebar .ct-nav-badge{ background:#E24B4A !important; color:#fff !important; border:none !important; }
+.sidebar .nav-item.po-sub{ padding-left:34px !important; font-size:11.5px !important; margin-bottom:1px !important; }
+.sidebar .nav-item.po-grp{ font-weight:600 !important; }
+.sidebar.sb-collapsed .nav-item.po-sub{ display:none !important; }
 .sidebar-footer{ color:#9aa3af !important; border-top:1px solid rgba(0,0,0,.06) !important; }
 /* profile header (injected) */
 .sb-profile{ display:flex; align-items:center; gap:10px; padding:4px 6px 0; }
@@ -4111,17 +4126,32 @@ window.addEventListener('resize',function(){ if(window.innerWidth>820) laNavClos
     </div>
     <div style="height:1px;background:rgba(255,255,255,.07);margin:8px 6px 2px"></div>
     <div class="nav-section" style="color:rgba(150,205,235,.5)">Pier Office</div>
-    <div class="nav-item" data-view="po-panwa" onclick="nav(this)" style="border-left:2px solid rgba(150,205,235,.25);padding-left:9px">
+    <div class="nav-item po-grp" data-pogrp="panwa" onclick="poNavGroup(this)" style="border-left:2px solid rgba(150,205,235,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><path d="M9 21v-5h6v5"/><path d="M9 11h2M13 11h2"/></svg>
       Phuket
+      <span class="po-gch">&#8964;</span>
     </div>
-    <div class="nav-item" data-view="po-tublamu" onclick="nav(this)" style="border-left:2px solid rgba(150,205,235,.25);padding-left:9px">
+    <div class="nav-item po-sub" data-pogrp="panwa" data-view="po-panwa" onclick="nav(this)">
+      <span class="po-dot"></span>
+      เบิก-คืนอุปกรณ์
+    </div>
+    <div class="nav-item po-grp" data-pogrp="tublamu" onclick="poNavGroup(this)" style="border-left:2px solid rgba(150,205,235,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><path d="M9 21v-5h6v5"/><path d="M9 11h2M13 11h2"/></svg>
       Tub Lamu
+      <span class="po-gch">&#8964;</span>
     </div>
-    <div class="nav-item" data-view="po-ranong" onclick="nav(this)" style="border-left:2px solid rgba(150,205,235,.25);padding-left:9px">
+    <div class="nav-item po-sub" data-pogrp="tublamu" data-view="po-tublamu" onclick="nav(this)">
+      <span class="po-dot"></span>
+      เบิก-คืนอุปกรณ์
+    </div>
+    <div class="nav-item po-grp" data-pogrp="ranong" onclick="poNavGroup(this)" style="border-left:2px solid rgba(150,205,235,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><path d="M9 21v-5h6v5"/><path d="M9 11h2M13 11h2"/></svg>
       Ranong
+      <span class="po-gch">&#8964;</span>
+    </div>
+    <div class="nav-item po-sub" data-pogrp="ranong" data-view="po-ranong" onclick="nav(this)">
+      <span class="po-dot"></span>
+      เบิก-คืนอุปกรณ์
     </div>
     <div style="height:1px;background:rgba(255,255,255,.07);margin:8px 6px 2px"></div>
     <div class="nav-section" style="color:rgba(255,170,200,.5)">Sales</div>
@@ -5768,6 +5798,35 @@ function laSbInitAccordion(){
     if(col.indexOf(sec.dataset.acclbl)>=0){ laSbSecItems(sec).forEach(it=>it.classList.add('acc-hidden')); sec.classList.add('acc-collapsed'); }
   });
 }
+/* §pierSub · พับ/กางกลุ่มท่าเรือ · จำสถานะไว้ต่อเครื่อง
+   ถ้าเมนูซ้ายย่ออยู่ (รางไอคอน) เมนูย่อยไม่โชว์ กดหัวกลุ่ม = เข้างานแรกของท่านั้นเลย */
+function poNavGroupKids(g){ return [].slice.call(document.querySelectorAll('.nav-item.po-sub[data-pogrp="'+g+'"]')); }
+function poNavGroup(el){
+  var g=el.dataset.pogrp; if(!g) return;
+  var sb=document.querySelector('.sidebar');
+  var kids=poNavGroupKids(g).filter(function(k){ return k.style.display!=='none'; });
+  if(sb && sb.classList.contains('sb-collapsed')){ if(kids[0]) kids[0].click(); return; }
+  var col=el.classList.toggle('po-collapsed');
+  kids.forEach(function(k){ if(col) k.classList.add('po-hide'); else k.classList.remove('po-hide'); });
+  try{ var st=JSON.parse(localStorage.getItem('la_pogrp')||'{}'); st[g]=col?1:0; localStorage.setItem('la_pogrp',JSON.stringify(st)); }catch(_){}
+}
+function poNavGroupOpen(g){
+  var el=document.querySelector('.nav-item.po-grp[data-pogrp="'+g+'"]'); if(!el) return;
+  el.classList.remove('po-collapsed');
+  poNavGroupKids(g).forEach(function(k){ k.classList.remove('po-hide'); });
+  try{ var st=JSON.parse(localStorage.getItem('la_pogrp')||'{}'); st[g]=0; localStorage.setItem('la_pogrp',JSON.stringify(st)); }catch(_){}
+}
+function poNavGroupInit(){
+  var st={}; try{ st=JSON.parse(localStorage.getItem('la_pogrp')||'{}'); }catch(_){}
+  document.querySelectorAll('.nav-item.po-grp[data-pogrp]').forEach(function(el){
+    var g=el.dataset.pogrp;
+    var kids=poNavGroupKids(g);
+    if(kids.some(function(k){ return k.classList.contains('active'); })) return;   /* กลุ่มที่กำลังเปิดอยู่ ห้ามพับ */
+    if(!st[g]) return;
+    el.classList.add('po-collapsed');
+    kids.forEach(function(k){ k.classList.add('po-hide'); });
+  });
+}
 function laSbInit(){
   if(!document.getElementById('la-sb-base')){ const s=document.createElement('style'); s.id='la-sb-base';
     s.textContent='.sidebar .nav-item.acc-hidden{display:none !important}.sidebar .nav-section{display:flex;align-items:center}.sidebar .nav-section.acc-collapsed .acc-ch{transform:rotate(-90deg)}';
@@ -5775,6 +5834,7 @@ function laSbInit(){
   const foot=document.querySelector('.sidebar .sidebar-footer');
   if(foot && !document.getElementById('la-sbcolor-sw')){ const w=document.createElement('div'); w.innerHTML=laSbColorPickerHTML(); if(w.firstElementChild) foot.parentNode.insertBefore(w.firstElementChild, foot); }
   try{ laSbInitAccordion(); }catch(e){}
+  try{ poNavGroupInit(); }catch(e){}
   try{ laApplySidebarColor(); }catch(e){}
 }
 // ══════════════════════════════════════
@@ -5830,7 +5890,7 @@ function nav(el){
     else if(view==='vanjobs') renderVanJobs();
     else if(view==='vancheckin') renderVanCheckin();
     else if(view==='piercheckin') renderPierCheckin();
-    else if(view.indexOf('po-')===0) renderPierOffice(view.slice(3));
+    else if(view.indexOf('po-')===0){ try{ if(el.dataset.pogrp) poNavGroupOpen(el.dataset.pogrp); }catch(_){} renderPierOffice(view.slice(3)); }
     else if(view==='travelsum') renderTravelSum();
     else if(view==='dailyreport') renderDailyReport();
     else if(view==='boatassign') renderBoatAssign();
@@ -75978,7 +76038,9 @@ function renderPierOffice(pier){
     +'</div>';
 
   host.innerHTML='<style id="po-style">'+poCSS()+'</style>'
-    +'<div class="po-h"><div><h1>Office ท่าเรือ · '+poE(P.n||P.t)+'</h1>'
+    +'<div class="po-h"><div>'
+      +'<div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9A9A93;margin-bottom:2px">Pier Office</div>'
+      +'<h1>'+poE(P.n||P.t)+' · เบิก-คืนอุปกรณ์</h1>'
       +'<p><span style="font-weight:700;color:'+P.c+'">'+poE(P.t)+'</span> · สต็อกหมุนเวียน ตีนกบ · หน้ากาก · ผ้าเช็ดตัว — เบิกเช้า คืนเย็น และใบเซ็นรับ-คืนของลูกค้า<br>'
       +'<span style="color:#9A9A93">ของ พนักงาน และทุกยอดในหน้านี้เป็นของท่านี้เท่านั้น ไม่ปนกับท่าอื่น</span></p></div></div>'
     +'<div class="po-bar">'
