@@ -48656,7 +48656,7 @@ function pckRowHtml(r, date){
   };
   return '<tr class="'+cls+'">'
    +'<td><span class="ck-vch" title="'+e(b.voucherRef||b.code||'')+'">'+e(b.voucherRef||b.code||'—')+'</span>'
-     +'<div style="margin-top:5px">'+(((typeof laAgencyMark==='function')&&laAgencyMark(b,14,{pad:'3px 8px',radius:'999px',margin:false}))||('<span class="ck-agblk" title="'+e(agName)+'" style="display:inline-block;background:'+agColor+';color:'+agInk+';padding:3px 10px;border-radius:999px;font-size:10.5px;font-weight:700;max-width:175px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle">'+e(agName)+'</span>'))+'</div>'
+     +'<div style="margin-top:5px">'+(((typeof laAgencyMark==='function')&&laAgencyMark(b,12,{pad:'3px 9px',radius:'999px',margin:false,inline:true}))||('<span class="ck-agblk" title="'+e(agName)+'" style="display:inline-block;background:'+agColor+';color:'+agInk+';padding:3px 10px;border-radius:999px;font-size:10.5px;font-weight:700;max-width:175px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle">'+e(agName)+'</span>'))+'</div>'
      +((_pckShowBy&&by)?'<div style="margin-top:3px;font-size:10px;color:#a5a49d">โดย <b style="color:#5F5E5A;font-weight:700">'+e(by)+'</b></div>':'')
    +'</td>'
    +'<td>'+pckNameCell(r)+'</td>'
@@ -67965,9 +67965,12 @@ function laAgencyMark(bk, h, opt){
   if(!bk || !/^b2c_/.test(String(bk.id||''))) return '';
   opt = opt || {};
   var pad = opt.pad || '8px 10px', rad = opt.radius || '8px';
+  // §markFit · inline = หดตามโลโก้ (ใช้ตอนอยู่ปนกับป้ายเล็ก ๆ) · ไม่ใส่ = ยืดเต็มช่องตาราง
   return '<div title="Love Andaman \u00b7 \u0e02\u0e32\u0e22\u0e40\u0e2d\u0e07 (B2C)" style="background:#fff;border:1px solid #E3E6EC;'
     + (opt.margin===false?'':'margin:2px 3px;') + 'padding:'+pad+';border-radius:'+rad+';'
-    + 'box-shadow:0 1px 2px rgba(0,0,0,.08);max-width:180px;display:flex;align-items:center;justify-content:center">'
+    + 'box-shadow:0 1px 2px rgba(0,0,0,.08);'
+    + (opt.inline ? 'display:inline-flex;vertical-align:middle;' : 'max-width:180px;display:flex;')
+    + 'align-items:center;justify-content:center">'
     + bkV2B2CLogo(h||20) + '</div>';
 }
 // ชุดเต็ม · ใช้ตรงที่มีที่พอให้อ่านคำว่า LOVE andaman ออก
@@ -72133,9 +72136,7 @@ function _docCheckDrawer(bkId, e, rName){
   if(_ltJoin)_adSet.push('Longtail Join');
   if(_ltChtr)_adSet.push('Longtail Charter'+(_ltChtr>1?(' ×'+_ltChtr):''));
   if(_ptr)_adSet.push('Private Transfer');
-  // ข้ามเฉพาะตัวที่ flag ข้างบนนับไปแล้ว · 'transfer' ห้ามจับแบบ substring — B2C มี add-on ชื่อ
-  // 'join-transfer-phuket' (รถ join ไปท่า) ซึ่งไม่ใช่ Private Transfer และเคยหายไปทั้งอัน
-  (b.addOns||[]).forEach(a=>{ const ty=String(a.type||''); if(/longtail/i.test(ty)||/^transfer-/i.test(ty))return; const lbl=(a.label||ty).trim(); if(lbl && _adSet.indexOf(lbl)<0)_adSet.push(lbl+((a.qty&&a.qty>1)?(' ×'+a.qty):'')); });
+  (b.addOns||[]).forEach(a=>{ const ty=String(a.type||''); if(/longtail|transfer/i.test(ty))return; const lbl=(a.label||ty).trim(); if(lbl && _adSet.indexOf(lbl)<0)_adSet.push(lbl+((a.qty&&a.qty>1)?(' ×'+a.qty):'')); });
   const addonStr=_adSet.length?e(_adSet.join(' · ')):'-';
   const _sbDiff = b.dropoffSame===false && (b.dropoffHotelName||b.dropoffArea); const sbTxt = _sbDiff?e(b.dropoffHotelName||b.dropoffArea||'-'):'';
   const fld=(lbl,val)=>`<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid #f0f2ee"><span style="flex:0 0 84px;font-size:10px;color:#8a8a82;text-transform:uppercase;letter-spacing:.03em;font-weight:600">${e(lbl)}</span><span style="flex:1;font-size:13px;color:#1B2A55;font-weight:600">${val}</span></div>`;
@@ -74071,12 +74072,10 @@ function bkV2VoucherTicket(bk, esc){
     if(_join) svcBits.push(chip('Longtail Join','#E9F5FC','#0E5E80','#C9E6F5'));
     if(_chtr) svcBits.push(chip('Longtail Charter'+(_chtr>1?(' \u00d7'+_chtr):''),'#E9F5FC','#0E5E80','#C9E6F5'));
     if(_ptr)  svcBits.push(chip('Private Transfer','#E9F5FC','#0E5E80','#C9E6F5'));
-    // add-on ชื่ออื่น ๆ · ข้ามเฉพาะตัวที่ flag ข้างบนนับไปแล้ว (หางยาว + รถส่วนตัว)
-    //   'transfer' ห้ามจับแบบ substring — slug จาก B2C 'join-transfer-phuket' คือรถ join ไปท่า
-    //   ไม่ใช่ Private Transfer (bkV2AddOnFlags ดูเฉพาะ prefix 'transfer-') จึงไม่มีใครนับ แล้วหายทั้งอัน
+    // add-on ชื่ออื่น ๆ · ข้ามหางยาวกับรถส่วนตัวเพราะนับไปแล้วข้างบน
     (bk.addOns||[]).forEach(a=>{
       const ty=String(a.type||'');
-      if(/longtail/i.test(ty) || /^transfer-/i.test(ty)) return;
+      if(/longtail|transfer/i.test(ty)) return;
       const lbl=String(a.label||ty).trim(); if(!lbl) return;
       svcBits.push(chip(esc(lbl)+((+a.qty>1)?(' \u00d7'+(+a.qty)):'')+(+a.amount>0?(' '+money(a.amount)):''),'#E9F5FC','#0E5E80','#C9E6F5'));
     });
@@ -74410,7 +74409,7 @@ function bkV2RenderBookingDetail(){
               <tbody>
                 ${(bk.addOns||[]).map(a => `
                   <tr style="border-bottom:1px solid rgba(26,35,50,0.05)">
-                    <td style="padding:8px 0">${escapeHTML(a.label || a.type || '—')}${(+a.qty>1)?` <span style="color:var(--ink-soft);font-family:'DM Mono',monospace">&times;${(+a.qty)}</span>`:''}</td>
+                    <td style="padding:8px 0">${escapeHTML(a.label || a.type || '—')}</td>
                     <td style="padding:8px 0;text-align:right;font-family:'DM Mono',monospace;font-weight:700">฿${bkV2FmtTHB(a.amount||0)}</td>
                   </tr>
                 `).join('')}
