@@ -2124,13 +2124,29 @@ const server = http.createServer((req, res) => {
          GROUP BY t.date`,
         [routeId, dateFrom, dateTo, CANCELLED]
       ),
-      // locked seats per date (active locks, respecting qty-used)
+      // locked seats per date (active locks, respecting qty-used).
+      // §parentLock · sb_seat_locks is a TREE: a parent block is carved into named sub-holds via
+      // parentid, and the children's seats live INSIDE the parent's qty — creating a child does not
+      // touch the parent's qty or used. Summing every active row flat therefore charged a parent and
+      // its children twice, and a drawn-down child a third time through `booked`; r10/2026-08-13 read
+      // 34 locked against 15 real and the seat gate refused live bookings. Only parents and
+      // standalone blocks contribute; a child contributes 0. Mirrors bkV2LockPoolHold /
+      // bkV2LockHeldRemaining (allotment_v2.html:41177-41185) and operation_schemas.v_seat_availability
+      // (db/migrations/004). Children's USED is subtracted, not their qty: an unused seat on a
+      // released sub-hold has not left the parent's block and must stay held.
+      // `used` is COALESCE'd for the same reason every pax term above is — one NULL makes the row's
+      // arithmetic NULL and SUM() skips it, silently under-reporting the hold.
       pool.query(
-        `SELECT date,
-                COALESCE(SUM(GREATEST(qty - used, 0)), 0)::int AS locked
-         FROM ${fqt('sb_seat_locks')}
-         WHERE routeid=$1 AND date>=$2 AND date<=$3 AND status='active'
-         GROUP BY date`,
+        `SELECT sl.date,
+                COALESCE(SUM(GREATEST(sl.qty - COALESCE(sl.used,0) - COALESCE(ch.child_used,0), 0)), 0)::int AS locked
+         FROM ${fqt('sb_seat_locks')} sl
+         LEFT JOIN LATERAL (
+           SELECT COALESCE(SUM(COALESCE(c.used,0)),0) AS child_used
+           FROM ${fqt('sb_seat_locks')} c WHERE c.parentid = sl.id
+         ) ch ON true
+         WHERE sl.routeid=$1 AND sl.date>=$2 AND sl.date<=$3 AND sl.status='active'
+           AND (sl.parentid IS NULL OR sl.parentid='')
+         GROUP BY sl.date`,
         [routeId, dateFrom, dateTo]
       ),
       // pricing — seat rates for this route from active rate type(s)
