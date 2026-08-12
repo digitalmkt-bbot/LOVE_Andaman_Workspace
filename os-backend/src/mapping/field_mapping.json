@@ -252,6 +252,16 @@
       "source": "color",
       "kind": "scalar",
       "db_type": "text"
+    },
+    "ownership": {
+      "source": "ownership",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "retired": {
+      "source": "retired",
+      "kind": "scalar",
+      "db_type": "boolean"
     }
   },
   "boats__docs": {
@@ -717,6 +727,66 @@
     },
     "b6_charterbookingid": {
       "source": "trips[key].b6.charterBookingId",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "b8_route": {
+      "source": "trips[key].b8.route",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "b8_type": {
+      "source": "trips[key].b8.type",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "b8_booked": {
+      "source": "trips[key].b8.booked",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "b8_charterbookingid": {
+      "source": "trips[key].b8.charterBookingId",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "b14_route": {
+      "source": "trips[key].b14.route",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "b14_type": {
+      "source": "trips[key].b14.type",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "b14_booked": {
+      "source": "trips[key].b14.booked",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "b14_charterbookingid": {
+      "source": "trips[key].b14.charterBookingId",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "b15_route": {
+      "source": "trips[key].b15.route",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "b15_type": {
+      "source": "trips[key].b15.type",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "b15_booked": {
+      "source": "trips[key].b15.booked",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "b15_charterbookingid": {
+      "source": "trips[key].b15.charterBookingId",
       "kind": "scalar",
       "db_type": "text"
     }
@@ -2167,7 +2237,7 @@
     "qty": {
       "source": "items[].qty",
       "kind": "scalar",
-      "db_type": "bigint"
+      "db_type": "double precision"
     },
     "price": {
       "source": "items[].price",
@@ -2202,7 +2272,7 @@
     "discountpct": {
       "source": "items[].discountPct",
       "kind": "scalar",
-      "db_type": "bigint"
+      "db_type": "double precision"
     },
     "autoregister": {
       "source": "items[].autoRegister",
@@ -2222,7 +2292,7 @@
     "inventorysnapshot_qtyatselection": {
       "source": "items[].inventorySnapshot.qtyAtSelection",
       "kind": "scalar",
-      "db_type": "bigint"
+      "db_type": "double precision"
     }
   },
   "app_hooks": {
@@ -2298,6 +2368,12 @@
       "source": "nationalityScope",
       "kind": "scalar",
       "db_type": "text"
+    },
+    "owner": {
+      "source": "owner",
+      "kind": "scalar",
+      "db_type": "text",
+      "note": "rate-type owner = sales id · '' = Shared/central (visible to all)"
     }
   },
   "sb_rate_types__routes": {
@@ -4335,6 +4411,16 @@
       "kind": "scalar",
       "db_type": "text"
     },
+    "paymentsnapshot_paid": {
+      "source": "paymentSnapshot.paid",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "paymentsnapshot_paidstatus": {
+      "source": "paymentSnapshot.paidStatus",
+      "kind": "scalar",
+      "db_type": "text"
+    },
     "pricebreakdown_seat": {
       "source": "priceBreakdown.seat",
       "kind": "scalar",
@@ -4814,6 +4900,36 @@
       "source": "ops.vanSplits",
       "kind": "json_text",
       "db_type": "text"
+    },
+    "ops_boatsplits": {
+      "source": "ops.boatSplits",
+      "kind": "json_text",
+      "db_type": "text"
+    },
+    "ops_vancheckin": {
+      "source": "ops.vanCheckin",
+      "kind": "json_text",
+      "db_type": "text"
+    },
+    "ops_piercheckin": {
+      "source": "ops.pierCheckin",
+      "kind": "json_text",
+      "db_type": "text"
+    },
+    "ops_piernote": {
+      "source": "ops.pierNote",
+      "kind": "json_text",
+      "db_type": "text"
+    },
+    "pierpayments": {
+      "source": "pierPayments",
+      "kind": "json_text",
+      "db_type": "text"
+    },
+    "b2coverride": {
+      "source": "b2cOverride",
+      "kind": "json_text",
+      "db_type": "text"
     }
   },
   "sb_bookings__passengers": {
@@ -5059,8 +5175,28 @@
       "kind": "json_text",
       "db_type": "text"
     },
+    "ops_boatsplits": {
+      "source": "trips[].ops.boatSplits",
+      "kind": "json_text",
+      "db_type": "text"
+    },
     "ops_reconfirm": {
       "source": "trips[].ops.reconfirm",
+      "kind": "json_text",
+      "db_type": "text"
+    },
+    "ops_vancheckin": {
+      "source": "trips[].ops.vanCheckin",
+      "kind": "json_text",
+      "db_type": "text"
+    },
+    "ops_piercheckin": {
+      "source": "trips[].ops.pierCheckin",
+      "kind": "json_text",
+      "db_type": "text"
+    },
+    "ops_piernote": {
+      "source": "trips[].ops.pierNote",
       "kind": "json_text",
       "db_type": "text"
     }
@@ -5213,6 +5349,31 @@
     "at": {
       "source": "upgrades[].at",
       "kind": "scalar",
+      "db_type": "text"
+    },
+    "method": {
+      "source": "upgrades[].method",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "feepct": {
+      "source": "upgrades[].feePct",
+      "kind": "scalar",
+      "db_type": "double precision"
+    },
+    "fee": {
+      "source": "upgrades[].fee",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "customerpaid": {
+      "source": "upgrades[].customerPaid",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "slips": {
+      "source": "upgrades[].slips",
+      "kind": "json_text",
       "db_type": "text"
     }
   },
@@ -6009,6 +6170,26 @@
       "source": "date",
       "kind": "scalar",
       "db_type": "text"
+    },
+    "feepct": {
+      "source": "feePct",
+      "kind": "scalar",
+      "db_type": "double precision"
+    },
+    "fee": {
+      "source": "fee",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "customerpaid": {
+      "source": "customerPaid",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "slips": {
+      "source": "slips",
+      "kind": "json_text",
+      "db_type": "text"
     }
   },
   "fleet_fuelprice": {
@@ -6022,30 +6203,10 @@
       "kind": "map_key",
       "db_type": "text"
     },
-    "panwa": {
-      "source": "fleet_fuelprice[key].panwa",
-      "kind": "scalar",
-      "db_type": "double precision"
-    },
-    "b10": {
-      "source": "fleet_fuelprice[key].b10",
-      "kind": "scalar",
-      "db_type": "double precision"
-    },
-    "b2": {
-      "source": "fleet_fuelprice[key].b2",
-      "kind": "scalar",
-      "db_type": "double precision"
-    },
-    "b13": {
-      "source": "fleet_fuelprice[key].b13",
-      "kind": "scalar",
-      "db_type": "double precision"
-    },
-    "b6": {
-      "source": "fleet_fuelprice[key].b6",
-      "kind": "scalar",
-      "db_type": "double precision"
+    "value": {
+      "source": "fleet_fuelprice[key] value",
+      "kind": "map_value_json",
+      "db_type": "text"
     }
   },
   "fleet_drlock": {
@@ -6059,10 +6220,10 @@
       "kind": "map_key",
       "db_type": "text"
     },
-    "panwa": {
-      "source": "fleet_drlock[key].panwa",
-      "kind": "scalar",
-      "db_type": "boolean"
+    "value": {
+      "source": "fleet_drlock[key] value",
+      "kind": "map_value_json",
+      "db_type": "text"
     }
   },
   "vanjob_pickup_th": {
@@ -6348,6 +6509,253 @@
       "kind": "map_value_json",
       "db_type": "text",
       "note": "whole template object as JSON: {id,code,name,active,isDefault,sections{},text{en{},th{}}} — new template fields need no DB change"
+    }
+  },
+  "sb_contracts": {
+    "id": {
+      "source": "sb_contracts[].id (record id; generated if absent)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "agentid": {
+      "source": "agentId",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "kind": {
+      "source": "kind",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "ratetypeid": {
+      "source": "rateTypeId",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "activefrom": {
+      "source": "activeFrom",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "activeto": {
+      "source": "activeTo",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "priority": {
+      "source": "priority",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "version": {
+      "source": "version",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "status": {
+      "source": "status",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "createddate": {
+      "source": "createdDate",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "createdby": {
+      "source": "createdBy",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "note": {
+      "source": "note",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "docid": {
+      "source": "docId",
+      "kind": "scalar",
+      "db_type": "text"
+    }
+  },
+  "sb_contracts__programperiods": {
+    "sb_contracts_id": {
+      "source": "(link) sb_contracts.id",
+      "kind": "fk",
+      "db_type": "text"
+    },
+    "idx": {
+      "source": "(order) position in programPeriods[]",
+      "kind": "synthetic",
+      "db_type": "bigint"
+    },
+    "row_pk": {
+      "source": "(generated child key)",
+      "kind": "synthetic-pk",
+      "db_type": "text"
+    },
+    "routeid": {
+      "source": "programPeriods[].routeId",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "bookfrom": {
+      "source": "programPeriods[].bookFrom",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "bookto": {
+      "source": "programPeriods[].bookTo",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "travelfrom": {
+      "source": "programPeriods[].travelFrom",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "travelto": {
+      "source": "programPeriods[].travelTo",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "note": {
+      "source": "programPeriods[].note",
+      "kind": "scalar",
+      "db_type": "text"
+    }
+  },
+  "boat_capovr": {
+    "id": {
+      "source": "boat_capovr map key (generated id)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "key": {
+      "source": "boat_capovr map key (original)",
+      "kind": "map_key",
+      "db_type": "text"
+    },
+    "cap": {
+      "source": "boat_capovr[key].cap",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "reason": {
+      "source": "boat_capovr[key].reason",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "by": {
+      "source": "boat_capovr[key].by",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "at": {
+      "source": "boat_capovr[key].at",
+      "kind": "scalar",
+      "db_type": "text"
+    }
+  },
+  "travel_sum": {
+    "id": {
+      "source": "travel_sum map key (generated id)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "key": {
+      "source": "travel_sum map key (original)",
+      "kind": "map_key",
+      "db_type": "text"
+    },
+    "decision": {
+      "source": "travel_sum[key].decision",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "amount": {
+      "source": "travel_sum[key].amount",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "note": {
+      "source": "travel_sum[key].note",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "by": {
+      "source": "travel_sum[key].by",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "at": {
+      "source": "travel_sum[key].at",
+      "kind": "scalar",
+      "db_type": "text"
+    }
+  },
+  "ts_cot": {
+    "id": {
+      "source": "ts_cot map key (generated id)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "key": {
+      "source": "ts_cot map key (original)",
+      "kind": "map_key",
+      "db_type": "text"
+    },
+    "mode": {
+      "source": "ts_cot[key].mode",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "deduct": {
+      "source": "ts_cot[key].deduct",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "payout": {
+      "source": "ts_cot[key].payout",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "ref": {
+      "source": "ts_cot[key].ref",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "by": {
+      "source": "ts_cot[key].by",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "at": {
+      "source": "ts_cot[key].at",
+      "kind": "scalar",
+      "db_type": "text"
+    }
+  },
+  "fleet_daily__boat": {
+    "fleet_daily_id": {
+      "source": "(link) fleet_daily.id",
+      "kind": "fk",
+      "db_type": "text"
+    },
+    "key": {
+      "source": "(map key of fleet_daily[key].boats)",
+      "kind": "map_key",
+      "db_type": "text"
+    },
+    "row_pk": {
+      "source": "(generated child key)",
+      "kind": "synthetic-pk",
+      "db_type": "text"
+    },
+    "value": {
+      "source": "fleet_daily[key][boat] scalars",
+      "kind": "map_value_json",
+      "db_type": "text"
     }
   }
 }

@@ -1,7 +1,42 @@
 # LOVE Andaman — Feature Backlog
 
 > Pending features parked for later · scope is documented here so context isn't lost
-> Last updated: 2026-06-12
+> Last updated: 2026-07-25
+
+---
+
+## ⏸ `trips` mapping — ยังผูกกับชื่อเรือตายตัว (พบ 2026-07-25)
+
+ตาราง `trips` (เก็บว่า "วันไหน เรือลำไหน วิ่งเส้นทางอะไร" = หน้า Boat Operation) map ไว้แบบ
+**ระบุชื่อเรือทีละลำ**: `b1_route`, `b1_type`, `b1_booked`, `b2_route`, … ไม่ใช่ keyed map
+→ เรือที่ไม่มีคอลัมน์ของตัวเอง **จะถูกทิ้งเงียบๆ ตอน sync** (การจัดเรือหายตอนรีเฟรช เครื่องอื่นไม่เห็น)
+
+- **2026-07-25 อุดชั่วคราวแล้ว:** เติม `b8` (Tadeo), `b14` (Juliet), `b15` (Rolanda) ครบทั้ง 4 field
+  + `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` ตอน boot · ตอนพบ 3 ลำนี้อยู่นอกสถานะ "พร้อมใช้" เลยยังไม่เคยเจออาการ
+- **ยังเปราะ:** เรือลำใหม่หลังจากนี้ต้องมาเติมคอลัมน์ด้วยมือทุกครั้ง ไม่งั้นเงียบหายเหมือนเดิม
+- **ทางแก้ที่ควรทำ:** เปลี่ยน `trips` เป็น child table แบบ keyed (1 แถว = 1 วัน × 1 เรือ) หรือใช้
+  `map_value_json` เก็บทั้งวันเป็น JSON ก้อนเดียว — ทั้งสองแบบรองรับเรือทุกลำอัตโนมัติ
+  ต้องมี migration ย้ายข้อมูลเดิมจากคอลัมน์ `b*_` เข้าโครงใหม่ · ทำตอนมีหน้าต่างว่าง ไม่ใช่กลางไฮซีซั่น
+
+**แพทเทิร์นที่ถูกต้องอยู่แล้ว (ใช้อ้างอิงได้):** `vanjob_driver` และ `boat_capovr` (2026-07-25)
+เก็บเป็น keyed map `date::id` → ตารางเดียว รองรับทุก id ทุกวัน ไม่ต้องแตะ schema เมื่อมีของใหม่
+
+---
+
+## ⏸ Rate/Contract model — remaining OPTIONAL work (2026-07-23 · Phases 1–4 DONE & deployed)
+
+**Built & shipped (Phases 1–4, all committed on `lk-inbox`):**
+- **Phase 1** — `SB_CONTRACTS` store + Postgres tables `sb_contracts` (+ child `sb_contracts__programperiods`) + idempotent migration (each agent → one `main` contract; `contractHistory[]` → `expired`; `agent.rateTypeId` kept as pointer). Commit `a4fcb35`.
+- **Phase 2** — per-trip rate resolver `bkV2ResolveRateType(agentId, routeId, travelDate)` + `bkV2GetRTForTrip` wired into `bkV2TripSubtotal` + FOC calc. Promo overlays Main by **travel date**, **per route**, `priority` desc; falls back to Main when no promo (verified: no behavior change until a promo exists). Commit `c905ecb`.
+- **Phase 3** — Contracts panel + "＋ เพิ่ม Promotion" modal (rate pick or clone-from-main, active window, per-route travel windows, priority) → creates `kind:'promo'` contract; void reverts to Main. Commit `b2eb178`. (Panel later moved into the "Generated Contracts" tab so it doesn't linger under every agent tab.)
+- **Phase 4** — per-contract document: `ctDocOpen(agentId, opts)` + `_ctDocAgentRT()` let each contract issue its own PDF using its rate + program periods + window/version (defaults to agent when no override). "ออกสัญญา" per contract; artifact tagged `contractId`, `contract.docId` stamped.
+
+**NOT built yet (optional — user parked 2026-07-23):**
+1. **Renew-ahead for Main** — create a *future* `main` contract while the current one is still active (overlapping transition), mirroring the Add-Promotion flow but `kind:'main'`. Today only promos are created via UI; main contracts come from migration only. Resolver already handles overlaps by `priority`/dates, so this is mostly a creation-UI addition (a "＋ ต่อ/สร้าง Main" button + set status `scheduled`→`active` by date).
+2. **Timeline view** — visualize an agent's Main + Promo contracts on a date axis (overlaps, gaps, which rate is effective when). The Contracts panel currently lists them as rows; a horizontal timeline would make overlaps/fallback obvious.
+
+**Pending end-to-end verification (not yet run against prod):**
+Create a real promo → make a booking on a promo route with a travel date inside the promo window → confirm the seat price uses the promo rate (and a date outside the window uses Main) → issue the promo contract PDF. Prereq: the promo's rate type must have seat rates for the promo routes (else resolver keeps Main — a defensive guard, not a bug).
 
 ---
 
@@ -401,6 +436,41 @@ SB_ROUTE_COSTS = {
 **ของที่มีอยู่แล้วใช้ต่อได้:** ราคาขาย/pax/FOC ต่อเอเจ้น (mdTabSales `A`/`focAg`), discount/extra (`priceBreakdown`), CXL (`cancelCategory`/`partialCancels` + cancel report), invoices/payments (accounting). **ที่ยังขาด = ต้นทุนต่อหัว** (ต้องมี input section นี้).
 
 **Workaround จนกว่าจะสร้าง:** ทำใน Excel นอกระบบ — export ยอดขาย/pax/FOC ต่อเอเจ้นจาก Sales tab แล้วเทียบ cost/head จาก P&L มือ.
+
+---
+
+## 🚐 Standalone Transfer Booking — จองรถรับส่ง (นอกทัวร์) · scoped 2026-07-21 · NOT built
+
+**Status:** Parked · scope confirmed with RM, ready to build when timing with the B2C Dev is clear.
+
+**Motivation:** ปัจจุบันรถรับส่งเป็นแค่ *ส่วนเสริมของ booking ทัวร์* (รับไปลงเรือ) — ยังจองรถเป็น **สินค้าเดี่ยว** ไม่ได้ เช่น **รับส่งสนามบิน**. ต้องมีระบบจอง + รายการทริป/ใบงานของตัวเอง.
+
+**Scope ที่เคาะแล้ว:**
+- **ประเภท:** รับ/ส่งสนามบิน · โรงแรม–โรงแรม / จุดต่อจุด · โรงแรม–ท่าเรือ (นอกทัวร์) · เหมาคัน/รายวัน
+- **ราคา:** ใส่มือต่องาน (ไม่มีตารางเรทตายตัว — กรอกราคาเอง)
+- **ผู้จอง:** Agent + หน้าเคาน์เตอร์/walk-in
+
+**Data model — store ใหม่ `SB_TRANSFERS` (LS `sb_transfers` · `sbTransfersPersist` · read-modify-write):**
+```js
+{ id, no:'TR-xxx', type:'airport_in'|'airport_out'|'hotel_hotel'|'point'|'hotel_pier'|'charter',
+  date, time, from, to, pax, luggage, flightNo,
+  customerName, phone, agentId?,           // agent หรือ walk-in
+  vehicleType, vanId, driver,              // reuse SB_VEHICLES + VANJOB_DRIVER
+  price, payType, status, note, history[] }
+```
+
+**แผน 4 เฟส:**
+1. โครง + store + **backend** (ตาราง `sb_transfers` ใน field_mapping + operation_schemas_model + server.js — ไม่งั้นหายตอน sync) + nav (กลุ่ม OPERATIONS)
+2. ฟอร์มจอง (ประเภท · วัน-เวลา · จุดรับ→ส่ง · pax · เที่ยวบิน · ลูกค้า/agent · รถ · ราคาใส่มือ · payType)
+3. หน้ารายการทริปรถ (ลิสต์ตามวัน · จัดรถ+คนขับ · สถานะ · ค้นหา)
+4. พิมพ์ใบงานรถ (ต่อยอด `bkV2VanJobOrder` เดิม 2 ภาษา) + โผล่ใน Transfer Fleet "Daily"
+
+**บริบทสำคัญ — 3 แหล่งจอง:** ทัวร์ (`sb_bookings`) · รถรับส่ง (`sb_transfers` · อันนี้) · **อื่นๆ ดึงจาก B2C (`SB_B2C` · หน้า `renderB2C` · `/api/b2c/*`) — คนละระบบ · Dev กำลังเทสต์**.
+- ⚠ Transfer ต้อง**แยกอิสระ · ห้ามแตะ `SB_B2C`/`/api/b2c`** (พื้นที่ Dev).
+- อนาคตออกแบบ **unified trip/booking overview** รวม 3 แหล่งได้ (ยังไม่ทำ).
+- ⚠ **Coordination:** Dev แก้ `allotment_v2.html` (ไฟล์เดียวกัน) อยู่ → สร้างโมดูลใหญ่พร้อมกันเสี่ยง merge conflict บนไฟล์ 4.5MB → **sync timing กับ Dev ก่อนเริ่ม**.
+
+**Workaround จนกว่าจะสร้าง:** จองรถรับส่งนอกทัวร์ทำนอกระบบ (จด/Excel) แล้วใช้หน้า Van Job Order เดิมเฉพาะที่ผูกกับทัวร์.
 
 ---
 

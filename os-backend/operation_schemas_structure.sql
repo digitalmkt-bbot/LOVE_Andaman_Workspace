@@ -820,6 +820,8 @@ CREATE TABLE operation_schemas."sb_bookings" (
   "paymentsnapshot_netdays" bigint,
   "paymentsnapshot_source" text,
   "paymentsnapshot_contractversion" text,
+  "paymentsnapshot_paid" bigint,
+  "paymentsnapshot_paidstatus" text,
   "pricebreakdown_seat" bigint,
   "pricebreakdown_addon" bigint,
   "pricebreakdown_focdiscount" bigint,
