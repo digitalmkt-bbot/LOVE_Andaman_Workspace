@@ -77731,8 +77731,12 @@ function pjGuides(date, boatId){
 var PJ_WB=[{t:'ดำ',c:'#1A1A1A'},{t:'ม่วง',c:'#8E2FD6'},{t:'ฟ้า TQ',c:'#2BC8DE'},{t:'แดง',c:'#C0271C'},
            {t:'เขียว',c:'#1C9B62'},{t:'ส้ม',c:'#F08A24'},{t:'ชมพู',c:'#E75480'},{t:'เหลือง',c:'#F5C518'},
            {t:'น้ำเงิน',c:'#185FA5'},{t:'ขาว',c:'#FFFFFF'}];
-var PJ_PAL=['#B8860B','#D9A441','#B4560A','#C0271C','#A82063','#7B3FA0',
-            '#4A3FB0','#185FA5','#1668A8','#0E7D74','#0F6E56','#4E6B2F'];
+/* §pjPal · 24 สี เรียงตามวงล้อสี แดง → ส้ม → เหลือง → เขียว → ฟ้า → คราม → ม่วง → กลาง
+   ทุกสีเข้มพอให้ตัวหนังสือขาวอ่านออก · ไม่ใส่สีอ่อนเพราะแถบนี้พิมพ์ชื่อสีขาวทับ */
+var PJ_PAL=['#7A1F1A','#C0271C','#B4560A','#D9761F','#B8860B','#A8791F',
+            '#8A7B1F','#4E6B2F','#2F7D3A','#0F6E56','#0E7D74','#14808F',
+            '#1668A8','#185FA5','#2F4B8A','#4A3FB0','#6A3FA8','#7B3FA0',
+            '#A82063','#C43E6E','#6E4B34','#5A6270','#3D4A5C','#2A2F3A'];
 /* §pjDocAlways · ผสมสีเข้าหาเทา · ใช้กับหัวการ์ดของลำที่ไม่ได้ออก
    ทำที่ตอนสร้าง HTML ไม่ใช่ CSS filter · ลูกในการ์ดจะได้ไม่โดนลดสีตามไปด้วย */
 function pjMute(hex, amt){
@@ -78008,8 +78012,10 @@ function pjCSS(){
   +H+' .pj-pop{position:absolute;top:42px;right:10px;z-index:30;background:#fff;border:1px solid #E1E4EA;border-radius:12px;box-shadow:0 14px 34px rgba(20,30,50,.18);padding:12px;width:236px;display:none}'
   +H+' .pj-pop.on{display:block}'
   +H+' .pj-pop .ph{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8B93A1;margin-bottom:8px}'
-  +H+' .pj-sws{display:grid;grid-template-columns:repeat(6,1fr);gap:7px}'
-  +H+' .pj-sw{width:28px;height:28px;border-radius:9px;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #E1E4EA}'
+  +H+' .pj-sws{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}'
+  +H+' .pj-sw{width:100%;aspect-ratio:1/1;border-radius:8px;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #E1E4EA}'
+  +H+' .pj-cus{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px;padding:6px 8px;font-size:10.5px;font-weight:700;color:#4A5D7A;background:#F7F9FB;border:1px solid #E9ECF1;border-radius:8px;cursor:pointer}'
+  +H+' .pj-cus input{width:44px;height:24px;padding:0;border:1px solid #E1E4EA;border-radius:6px;background:none;cursor:pointer}'
   +H+' .pj-sw.on{box-shadow:0 0 0 2px #16265C}'
   +H+' .pj-pop .pf{font-size:10.5px;color:#6E7684;line-height:1.6;margin-top:9px;border-top:1px solid #F0F2F6;padding-top:8px}'
   +H+' .pj-rst{display:block;width:100%;margin-top:8px;padding:5px 0;font-size:10.5px;font-weight:700;color:#4A5D7A;background:#F4F6F9;border:1px solid #E1E4EA;border-radius:7px;cursor:pointer}'
@@ -78215,11 +78221,15 @@ function pjCard(B, pier, ro){
      /* §pjStColor · ลำที่ไม่มีโปรแกรม แถบนี้แทนสถานะ · จานสีจึงต้องแก้สีของสถานะ ไม่ใช่ของโปรแกรม */
      +(rt.id
         ? ('<div class="pj-pop" id="'+pid+'"><div class="ph">สีของโปรแกรม '+poE(rt.name||'')+'</div><div class="pj-sws">'
-            +PJ_PAL.map(function(c){ return '<div class="pj-sw'+(c===pcol?' on':'')+'" style="background:'+c+'" onclick="pjProgColor(\''+poE(B.rid)+'\',\''+c+'\')"></div>'; }).join('')
-            +'</div><div class="pf">เปลี่ยนแล้วมีผลกับโปรแกรมนี้ <b>ทุกลำทุกวัน</b> และทุกหน้าที่โชว์เส้นทางนี้</div></div>')
+            +PJ_PAL.map(function(c){ return '<div class="pj-sw'+(c.toLowerCase()===String(pcol).toLowerCase()?' on':'')+'" style="background:'+c+'" onclick="pjProgColor(\''+poE(B.rid)+'\',\''+c+'\')"></div>'; }).join('')
+            +'</div>'
+            +'<label class="pj-cus">เลือกสีเอง<input type="color" value="'+poE(pcol)+'" onchange="pjProgColor(\''+poE(B.rid)+'\',this.value)" onclick="event.stopPropagation()"></label>'
+            +'<div class="pf">เปลี่ยนแล้วมีผลกับโปรแกรมนี้ <b>ทุกลำทุกวัน</b> และทุกหน้าที่โชว์เส้นทางนี้</div></div>')
         : ('<div class="pj-pop" id="'+pid+'"><div class="ph">สีของสถานะ '+poE(SM.t)+'</div><div class="pj-sws">'
-            +PJ_PAL.map(function(c){ return '<div class="pj-sw'+(c===pjBand(ST.k)?' on':'')+'" style="background:'+c+'" onclick="pjStColor(\''+ST.k+'\',\''+c+'\')"></div>'; }).join('')
-            +'</div><div class="pf">เปลี่ยนแล้วมีผลกับ<b>ทุกลำที่อยู่สถานะนี้</b> · ลำที่ออกทริปยังใช้สีของโปรแกรมเหมือนเดิม'
+            +PJ_PAL.map(function(c){ return '<div class="pj-sw'+(c.toLowerCase()===String(pjBand(ST.k)).toLowerCase()?' on':'')+'" style="background:'+c+'" onclick="pjStColor(\''+ST.k+'\',\''+c+'\')"></div>'; }).join('')
+            +'</div>'
+            +'<label class="pj-cus">เลือกสีเอง<input type="color" value="'+poE(pjBand(ST.k))+'" onchange="pjStColor(\''+ST.k+'\',this.value)" onclick="event.stopPropagation()"></label>'
+            +'<div class="pf">เปลี่ยนแล้วมีผลกับ<b>ทุกลำที่อยู่สถานะนี้</b> · ลำที่ออกทริปยังใช้สีของโปรแกรมเหมือนเดิม'
             +(pjStIsCustom(ST.k)?('<button class="pj-rst" onclick="pjStColorReset(\''+ST.k+'\')">คืนค่าสีเดิมของสถานะนี้</button>'):'')
             +'</div></div>'))
      +'</div>'
