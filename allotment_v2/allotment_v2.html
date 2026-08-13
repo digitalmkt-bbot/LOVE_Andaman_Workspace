@@ -76225,14 +76225,23 @@ var PIER_JOB={};    // §pierJob · 'YYYY-MM-DD::boatId' -> {cap, asst, crew:[],
 }catch(_){} })();
 function poPersist(){
   if(!poCanEdit()) return;   /* §pierEdit · ถามหมวดของ Pier Office เอง ไม่ใช่ operations */
-  try{ var K=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2');
-    var d=JSON.parse(localStorage.getItem(K)||'{}');
+  // §pierBlob · ต้องผ่านแคชกลางเหมือนโมดูลอื่นทุกตัว
+  //   อ่าน-เขียน localStorage ดิบ = อ่าน snapshot เก่าแล้วทับงานที่คนอื่นเพิ่งเขียน
+  //   และโมดูลอื่นที่เขียนจากแคชก็จะลบของเราทิ้งเพราะแคชไม่มีข้อมูลนี้
+  //   อาการที่เห็นหน้างานคือ "กรอกแล้วรีเฟรชเด้งกลับ"
+  try{
+    var d=(typeof laBlob==='function')?laBlob():null;
+    if(!d){   // ยังไม่มีแคชกลาง (โหลดไม่ครบ) · ถอยไปทางเดิม ดีกว่าไม่บันทึกเลย
+      var K=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2');
+      d=JSON.parse(localStorage.getItem(K)||'{}');
+    }
     d.pier_items=PIER_ITEMS; d.pier_moves=PIER_MOVES; d.pier_staff=PIER_STAFF; d.pier_duty=PIER_DUTY;
     d.pier_team=PIER_TEAM; d.pier_job=PIER_JOB;
     d.pier_lic_types=PIER_LIC_TYPES; d.pier_lic_classes=PIER_LIC_CLASSES;
     d.pier_licenses=PIER_LICENSES; d.pier_cfg=PIER_CFG;
     d.pier_codes=PIER_CODES; d.pier_shift=PIER_SHIFT;
-    localStorage.setItem(K,JSON.stringify(d));
+    if(typeof laBlobSave==='function') laBlobSave();
+    else localStorage.setItem((typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2'), JSON.stringify(d));
   }catch(e){ console.warn('pier office persist failed', e); }
 }
 function poCanEdit(){
@@ -78027,29 +78036,39 @@ function pjCSS(){
 
 function pjSecHd(t,k){ var S=PJ_SEC[k]; return '<div class="pj-gh" style="--bg:'+S.bg+';--fg:'+S.fg+';--bd:'+S.bd+'">'+t+'</div>'; }
 /* §pierRotate · เลือกคนได้จากทั้ง 3 ท่า · ท่านี้ขึ้นก่อน ท่าอื่นอยู่กลุ่ม "มาช่วย" */
+/* §pierBlob · ตำแหน่งของคนนี้เข้าข่ายที่ช่องนี้ต้องการไหม
+   เทียบแบบ "มีคำนี้อยู่ในตำแหน่ง" ไม่ใช่ตรงเป๊ะ · ช่างกล ช่างยนต์ ช่างไฟฟ้า เข้ากลุ่ม "ช่าง" ทั้งหมด
+   ไม่ระบุตำแหน่งที่ต้องการ = ทุกคนเข้าข่าย (ช่องช่วยงาน ใครก็ช่วยได้) */
+function pjRoleHit(role, roles){
+  if(!roles || !roles.length) return true;
+  var r=String(role||'').toLowerCase(); if(!r) return false;
+  for(var i=0;i<roles.length;i++){ var k=String(roles[i]||'').trim().toLowerCase(); if(k && r.indexOf(k)>=0) return true; }
+  return false;
+}
 function pjOpts(pier, sel, roles){
   var all=(PIER_STAFF||[]).filter(function(s){ return s.active!==false; });
-  var sortRole=function(list){
-    if(!roles || !roles.length) return list;
-    var pri=list.filter(function(s){ return roles.indexOf(String(s.role||'').toLowerCase())>=0; });
-    var rest=list.filter(function(s){ return roles.indexOf(String(s.role||'').toLowerCase())<0; });
-    return pri.concat(rest);
-  };
-  var mine=sortRole(all.filter(function(s){ return s.pier===pier; }));
-  var other=sortRole(all.filter(function(s){ return s.pier!==pier; }));
+  var want=(roles&&roles.length)?String(roles[0]):'';
   var opt=function(s, tag){
     return '<option value="'+poE(s.id)+'"'+(s.id===sel?' selected':'')+'>'
       +poE((s.name||s.nick||s.id)+(s.nick&&s.name?(' ('+s.nick+')'):''))
       +(s.role?(' · '+poE(s.role)):'')+(tag?(' · '+poE(tag)):'')+'</option>';
   };
+  var grp=function(list, label, tagFn){
+    if(!list.length) return '';
+    return '<optgroup label="'+poE(label)+'">'
+      + list.map(function(s){ return opt(s, tagFn?tagFn(s):''); }).join('') + '</optgroup>';
+  };
+  var pierTag=function(s){ var p=PO_PIERS.filter(function(x){ return x.k===s.pier; })[0]; return p?(p.n||p.t):s.pier; };
+  var mine=all.filter(function(s){ return s.pier===pier; });
+  var other=all.filter(function(s){ return s.pier!==pier; });
+  var hit=function(s){ return pjRoleHit(s.role, roles); };
+  // §pierBlob · แยกกลุ่มตามหน้าที่ · คนตรงตำแหน่งอยู่กลุ่มแรก
+  //   ไม่ตัดคนนอกตำแหน่งทิ้ง เพราะบางวันต้องหยิบคนอื่นมาลงจริง · แค่ย้ายไปกลุ่มล่าง
   var out='<option value="">— ว่าง —</option>';
-  if(mine.length){ out+='<optgroup label="ท่านี้">'+mine.map(function(s){ return opt(s,''); }).join('')+'</optgroup>'; }
-  if(other.length){
-    out+='<optgroup label="ท่าอื่น · มาช่วย">'
-      + other.map(function(s){ var p=PO_PIERS.filter(function(x){ return x.k===s.pier; })[0];
-          return opt(s, p?(p.n||p.t):s.pier); }).join('')
-      + '</optgroup>';
-  }
+  out+= grp(mine.filter(hit),  want?('ท่านี้ · '+want):'ท่านี้', null);
+  if(want) out+= grp(mine.filter(function(s){ return !hit(s); }), 'ท่านี้ · ตำแหน่งอื่น', null);
+  out+= grp(other.filter(hit), want?('ท่าอื่น · '+want+' · มาช่วย'):'ท่าอื่น · มาช่วย', pierTag);
+  if(want) out+= grp(other.filter(function(s){ return !hit(s); }), 'ท่าอื่น · ตำแหน่งอื่น', pierTag);
   if(sel && !all.some(function(s){ return s.id===sel; }))
     out+='<option value="'+poE(sel)+'" selected>'+poE(pjStaffName(sel))+' (ไม่อยู่ในทะเบียนแล้ว)</option>';
   return out;
@@ -78096,7 +78115,10 @@ function pjProgColor(rid,hex){
   var okCfg=(typeof laCanEditArea==='function') ? laCanEditArea('config') : true;
   if(!okCfg && !poCanEdit()){ if(typeof laGuardEdit==='function') laGuardEdit('pier'); return; }
   for(var i=0;i<ROUTES.length;i++){ if(ROUTES[i].id===rid){ ROUTES[i].color=hex; break; } }
-  try{ save('config'); }catch(_){}
+  // §pierBlob · ห้ามใช้ save('config') · มันมีด่านสิทธิ์ของตัวเองแล้ว return เงียบ
+  //   คนหน้าท่าไม่มีสิทธิ์ config · สีจะเปลี่ยนบนจอแต่ไม่ถูกบันทึก แล้วเด้งกลับตอนรีเฟรช
+  //   เขียนเฉพาะ routes ผ่านแคชกลาง · ตรงกับที่ตัดสินไว้ว่าแก้ท่าเรือได้ก็แต้มสีได้
+  try{ if(typeof laBlob==='function'){ laBlob().routes=ROUTES; laBlobSave(); } else save('config'); }catch(_){}
   renderPierJob();
   if(window.event) window.event.stopPropagation();
 }
@@ -78190,8 +78212,8 @@ function pjCard(B, pier, ro){
          ? ['Captain','Asst. Captain','Crew 1','Crew 2','Crew 3','Island Staff 1','Island Staff 2']
          : ['หัวหน้าช่าง','ช่าง 1','ช่าง 2','ช่วยงาน 1','ช่วยงาน 2','ช่วยงาน 3','ช่วยงาน 4'];
        var RL = going
-         ? [['กัปตัน','captain'],['กัปตัน','captain'],['เด็กเรือ','crew','ลูกเรือ'],['เด็กเรือ','crew','ลูกเรือ'],['เด็กเรือ','crew','ลูกเรือ'],['อุปกรณ์','equipment'],['อุปกรณ์','equipment']]
-         : [['ช่าง','engineer','ช่างยนต์','ช่างไฟฟ้า'],['ช่าง','engineer','ช่างยนต์','ช่างไฟฟ้า'],['ช่าง','engineer','ช่างยนต์','ช่างไฟฟ้า'],[],[],[],[]];
+         ? [['กัปตัน','captain'],['กัปตัน','captain'],['เด็กเรือ','crew','ลูกเรือ'],['เด็กเรือ','crew','ลูกเรือ'],['เด็กเรือ','crew','ลูกเรือ'],['อุปกรณ์','equipment','ไกด์เกาะ'],['อุปกรณ์','equipment','ไกด์เกาะ']]
+         : [['ช่าง','engineer','mechanic'],['ช่าง','engineer','mechanic'],['ช่าง','engineer','mechanic'],[],[],[],[]];
        return pjSelRow(pier,bid,LB[0],'cap',J.cap,SUB.cap,RL[0],ro,B.boat)
          + pjSelRow(pier,bid,LB[1],'asst',J.asst,SUB.asst,RL[1],ro,B.boat)
          + [0,1,2].map(function(i){ return pjSelRow(pier,bid,LB[2+i],'crew'+i,(J.crew||[])[i]||'',SUB['crew'+i],RL[2+i],ro,B.boat); }).join('')
