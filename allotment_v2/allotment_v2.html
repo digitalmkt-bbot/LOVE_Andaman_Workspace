@@ -48984,12 +48984,9 @@ function pckTripStats(rows, date){
       real[k]+=left; realTot+=left; lost+=Math.max(0,bk-left);
     });
     var gone=(tot>0 && realTot<=0);                      // ยกเลิกยกใบ · ไม่เหลือใครเดินทาง
-    var gd=b.guides||{};
+    // §langNorm · อ่านจาก pckGuideLangs ตัวเดียวกับป้ายในแถว · เลขหัวใบกับป้ายจะได้ตรงกันเสมอ
     var addL=function(c,n){ if(!c||!n) return; lang[c]=(lang[c]||0)+n; };
-    if(gd.english) addL('EN',realTot);
-    if(gd.russian) addL('RU',realTot);
-    if(gd.chinese) addL('CN',realTot);
-    var ol=String(gd.otherLang||'').trim(); if(ol) addL(ol,realTot);
+    ((typeof pckGuideLangs==='function')?pckGuideLangs(b):[]).forEach(function(c){ addL(c,realTot); });
     // อาหาร · ยกเลิกบางส่วนยังทำเผื่อไว้ (ไม่รู้ว่าคนที่ไม่มาคือคนที่สั่งอะไร ทำขาดเสียหายกว่าทำเกิน)
     //   ยกเลิกทั้งใบเท่านั้นที่ตัดออก
     var mm=gone?{}:(b.specialMeals||{});
@@ -49147,6 +49144,21 @@ function pckGuideJobSheet(bid, date, rows, vd){
   if(S.ltJoin) lt.push('Join '+S.ltJoin+' คน');
   if(S.ltChtr) lt.push('Charter '+S.ltChtr+' ลำ');
   var vans={}; rows.forEach(function(r){ if(r.vanId) vans[r.vanId]=1; });
+  // §svcLegend · คำอธิบายสัญลักษณ์ต้องมาจากใบนี้ ไม่ใช่พิมพ์ตายตัว
+  //   ใบที่มีแต่ Longtail ไม่ได้ใช้ + / ⬆ / * เลย · อธิบายไปก็ทำให้คนไล่หาของที่ไม่มี
+  var _svcN=0, _svcP=0, _svcU=0, _svcS=0;
+  rows.forEach(function(r){
+    try{ (pckJobService(r,date)||[]).forEach(function(a){
+      var t=String(a.t||''); _svcN++;
+      if(t.charAt(0)==='+') _svcP++;
+      if(t.charAt(0)==='\u2b06') _svcU++;
+      if(/\*\s*$/.test(t)) _svcS++;
+    }); }catch(_){}
+  });
+  var _svcLg=[];
+  if(_svcP) _svcLg.push('+ ขายหน้าท่า');
+  if(_svcU) _svcLg.push('&#11014; อัปเกรด');
+  if(_svcS) _svcLg.push('* ยังไม่เก็บเงิน');
 
   // §uniform (2026-08-01) · ค่าที่เหมือนกันทุกแถว ไม่ใช่ข้อมูล มันคือพื้นหลัง
   //   เทียบใบ Artemis (31 ก.ค.) กับ Hermetis วันเดียวกัน — Artemis มี Longtail Join 20/27 แถว
@@ -49343,8 +49355,9 @@ function pckGuideJobSheet(bid, date, rows, vd){
     +'<div class="jsc"><span class="jslab">อาหาร</span>'
       +(ml.length?('<span class="jsv">'+ml.join(J)+'</span>'):(M.allergy?'':'<span class="jsnone">ไม่มี</span>'))
       +(M.allergy?('<span class="jwarn">&#9888; แพ้อาหาร '+M.allergy+'</span>'):'')+'</div>'
-    +'<div class="jsc"><span class="jslab">Service</span>'
-      +'<span class="jsv" style="font-weight:500;color:#4b5563">+ ขายหน้าท่า &middot; &#11014; อัปเกรด &middot; * ยังไม่เก็บเงิน</span></div>'
+    +(_svcN?('<div class="jsc"><span class="jslab">Service</span><span class="jsv">'+_svcN+' รายการ</span>'
+      +(_svcLg.length?('<span class="jsv" style="font-weight:500;color:#4b5563">'+_svcLg.join(J)+'</span>'):'')
+      +'</div>'):'')
     +'<div class="jsc"><span class="jslab">Longtail</span>'+(lt.length?('<span class="jsv">'+lt.join(J)+'</span>'):'<span class="jsnone">ไม่มี</span>')
       +'</div>'
     +'</div>'
@@ -49389,12 +49402,43 @@ function ckRetVanTxt(v){
 }
 // ภาษาไกด์ของบุ๊คกิ้งหนึ่งใบ · ที่เดียวที่ตัดสินว่าใบนี้ต้องใช้ภาษาอะไร
 //   ทั้งป้ายในคอลัมน์ไกด์ · ชุดสีปากกา · ยอดรวมหัวใบ อ่านจากฟังก์ชันนี้ตัวเดียว
+// §langNorm · ช่อง "ภาษาอื่น" เป็นช่องพิมพ์อิสระ · ต้องรวบให้เป็นรหัสเดียวก่อนนับ
+//   ไม่งั้น Spanish Guide / Spain / spanish  กลายเป็นสามภาษาบนใบเดียวกัน
+var PCK_LANG_MAP=[
+  {re:/spanish|spain|espan|españ|สเปน/i,            c:'ES'},
+  {re:/russian|russia|\u0440\u0443\u0441|รัสเซีย/i, c:'RU'},
+  {re:/chinese|china|mandarin|จีน/i,                c:'CN'},
+  {re:/german|deutsch|เยอรมัน/i,                     c:'DE'},
+  {re:/french|france|francais|français|ฝรั่งเศส/i,   c:'FR'},
+  {re:/italian|italy|italiano|อิตาลี/i,              c:'IT'},
+  {re:/korean|korea|เกาหลี/i,                        c:'KO'},
+  {re:/japanese|japan|nihongo|ญี่ปุ่น/i,             c:'JA'},
+  {re:/arabic|arab|อาหรับ/i,                         c:'AR'},
+  {re:/hebrew|israel|ฮีบรู/i,                        c:'HE'},
+  {re:/portug|brazil|โปรตุเกส/i,                     c:'PT'},
+  {re:/english|อังกฤษ/i,                             c:'EN'},
+  {re:/thai|ไทย/i,                                   c:'TH'}
+];
+function pckLangNorm(v){
+  var t=String(v==null?'':v).replace(/[\s\u00a0]+/g,' ').trim();
+  if(!t) return '';
+  // "Spanish Guide" กับ "Spanish" คือภาษาเดียวกัน · คำว่า guide ไม่ใช่ชื่อภาษา
+  var core=t.replace(/\b(guide|guides|speaking|speaker)\b/ig,'').replace(/ไกด์|พูด|ภาษา/g,'')
+            .replace(/[\s\u00a0]+/g,' ').trim();
+  var probe=core||t;
+  for(var i=0;i<PCK_LANG_MAP.length;i++) if(PCK_LANG_MAP[i].re.test(probe)) return PCK_LANG_MAP[i].c;
+  if(/^[A-Za-z]{2,3}$/.test(probe)) return probe.toUpperCase();   // พิมพ์รหัสมาเองอยู่แล้ว
+  return probe;                                                    // ภาษาที่ไม่รู้จัก · เก็บข้อความไว้ ไม่ทำข้อมูลหาย
+}
 function pckGuideLangs(b){
-  var gd=(b&&b.guides)||{}, out=[];
-  if(gd.english) out.push('EN');
-  if(gd.russian) out.push('RU');
-  if(gd.chinese) out.push('CN');
-  var ol=String(gd.otherLang||'').trim(); if(ol) out.push(ol);
+  var gd=(b&&b.guides)||{}, raw=[];
+  if(gd.english) raw.push('EN');
+  if(gd.russian) raw.push('RU');
+  if(gd.chinese) raw.push('CN');
+  if(String(gd.otherLang||'').trim()) raw.push(gd.otherLang);
+  var out=[], seen={};
+  raw.forEach(function(x){ var c=pckLangNorm(x); if(!c) return;
+    var k=c.toLowerCase(); if(seen[k]) return; seen[k]=1; out.push(c); });
   return out;
 }
 // §svcColor (2026-08-01) · สีของ Service ผู้ใช้ตั้งเองได้ · เก็บใน blob เหมือน rc_status_colors
@@ -51608,9 +51652,9 @@ function drData(date){
     var mm=b.specialMeals||{};
     D.meals.veg+=+mm.veg||0; D.meals.vegan+=+mm.vegan||0; D.meals.halal+=+mm.halal||0;
     D.meals.allergy+=(typeof bkV2AllergyCount==='function')?bkV2AllergyCount(mm):(String(mm.allergies||'').trim()?1:0);
-    var gd=b.guides||{}, addL=function(c,n){ if(!c||!n) return; D.langs[c]=(D.langs[c]||0)+n; };
-    if(gd.english) addL('EN',px.tot); if(gd.russian) addL('RU',px.tot); if(gd.chinese) addL('CN',px.tot);
-    var ol=String(gd.otherLang||'').trim(); if(ol) addL(ol,px.tot);
+    // §langNorm · กติกาเดียวกับใบงานไกด์ · ไม่งั้น Daily Report นับ Spanish แยกเป็นหลายภาษา
+    var addL=function(c,n){ if(!c||!n) return; D.langs[c]=(D.langs[c]||0)+n; };
+    ((typeof pckGuideLangs==='function')?pckGuideLangs(b):[]).forEach(function(c){ addL(c,px.tot); });
 
     // เอกสาร
     var st=(typeof docCheckStatus==='function')?docCheckStatus(b):'nofiles';
