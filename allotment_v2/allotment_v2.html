@@ -47674,13 +47674,22 @@ var PCK_ARR_LBL={PK:'PK · ภูเก็ต', KL:'KL · เขาหลัก'
 //   §extraPay · ค่าธรรมเนียมบัตรของ extra ไม่ถูกนับเป็นรายได้ (เก็บไว้ที่ x.fee เฉยๆ) กติกาเดียวกับ pierFee
 // ยังเป็นแค่การ "แสดงผล" · ยังไม่เขียนลงบัญชี — รอตัดสินใจว่าจะลง SB_PAYMENTS ด้วยไหม
 function pckMoney(b, date){
-  var cot=(b.cashOnTour && +b.cashOnTour.amount>0) ? +b.cashOnTour.amount : 0;
-  var ex=(typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(b.id):[];
+  // §ovnSettled · ขากลับค้างคืน · เงินระดับบุ๊กกิ้งจบไปตั้งแต่วันขาไป
+  //   COT / ยอดค้าง / อัปเกรด เป็นก้อนเดียวของทั้งใบ ไม่ใช่ของรายวัน
+  //   ปล่อยไว้ = ยอดเดิมโผล่ซ้ำในวันรับกลับ แล้วหน้าท่าไล่เก็บซ้ำจากคนที่จ่ายไปแล้ว
+  var _t=(typeof ckTripOn==='function')?ckTripOn(b,date):null;
+  var _ovnBack=!!(_t && typeof bkIsOvnReturn==='function' && bkIsOvnReturn(_t));
+  var cot=(!_ovnBack && b.cashOnTour && +b.cashOnTour.amount>0) ? +b.cashOnTour.amount : 0;
+  // §extraDay · ของที่ขายวันอื่นไม่ใช่ของวันนี้ · กติกาเดียวกับ tsSaleList / tsAddonList
+  //   (ไม่มี tripDate = ข้อมูลเก่า ให้ขึ้นเหมือนเดิม)
+  var ex=((typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(b.id):[]).filter(function(x){
+    return !(date && x.tripDate && x.tripDate!==date);
+  });
   var exTot=ex.reduce(function(s,x){ return s+(+x.total||0); },0);
-  var ups=Array.isArray(b.upgrades)?b.upgrades:[];
+  var ups=(!_ovnBack && Array.isArray(b.upgrades))?b.upgrades:[];
   var upDue=0, upGot=0;
   ups.forEach(function(u){ var v=+u.sellPrice||0; if(u.collected) upGot+=v; else upDue+=v; });
-  var bal=(b.paymentSnapshot && +b.paymentSnapshot.balance>0) ? +b.paymentSnapshot.balance : 0;
+  var bal=(!_ovnBack && b.paymentSnapshot && +b.paymentSnapshot.balance>0) ? +b.paymentSnapshot.balance : 0;
   var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
   // §pierPay · เงินที่เก็บหน้าท่าไปแล้ว (bk.pierPayments) หักออกจากยอดค้างทันที
   // fee ไม่เข้า got เพราะไม่ใช่รายได้เรา — เป็นเงินที่ส่งต่อธนาคาร (ดูคอมเมนต์ §pierPay)
@@ -47689,7 +47698,7 @@ function pckMoney(b, date){
   var gross=cot+upDue+bal;
   return { cot:cot, cur:(b.cashOnTour&&b.cashOnTour.currency)||'THB', handling:(b.cashOnTour&&b.cashOnTour.handling)||'',
            note:(b.cashOnTour&&b.cashOnTour.note)||'', extras:ex, extrasTot:exTot, upgrades:ups, upDue:upDue, upGot:upGot,
-           balance:bal, gross:gross, pierPaid:pierPaid, pierFee:pierFee,
+           balance:bal, gross:gross, pierPaid:pierPaid, pierFee:pierFee, ovnSettled:_ovnBack,
            noSlip:(typeof pckNoSlip==='function')?pckNoSlip(b,date):0,
            due:Math.max(0, gross-pierPaid), got:exTot+upGot+pierPaid, payType:(ag&&ag.payType)||'' };
 }
@@ -47703,7 +47712,7 @@ function pckMoneyCell(b, date){
   try{
     var _chips='';
     if(typeof bkV2PayChip==='function') _chips+=bkV2PayChip(b);
-    if(typeof bkV2CotChip==='function'){ var _c=bkV2CotChip(b,''); if(_c&&_c.chip) _chips+=_c.chip; }
+    if(!M.ovnSettled && typeof bkV2CotChip==='function'){ var _c=bkV2CotChip(b,''); if(_c&&_c.chip) _chips+=_c.chip; }
     if(_chips) out+='<div class="pck-paychips">'+_chips+'</div>';
   }catch(_){}
   if(M.due>0){
@@ -47718,6 +47727,11 @@ function pckMoneyCell(b, date){
     out+='<span style="font-size:10px;font-weight:800;color:#0F6E56;background:#DCF4E8;border-radius:6px;padding:2px 8px;white-space:nowrap">&#10003; เก็บครบ '+m(M.pierPaid)+'</span>';
   } else if(M.payType==='cot'){
     out+='<span style="font-size:10px;color:#a5a49d">COT · ยังไม่ระบุยอด</span>';
+  } else if(M.ovnSettled){
+    // §ovnSettled · ช่องว่างเปล่าอ่านได้สองแบบ "ไม่มีอะไรต้องเก็บ" กับ "ลืมใส่" · บอกไปเลยว่าอันไหน
+    var _od=(typeof _ovnOutDate==='function')?_ovnOutDate(b,date):'';
+    out+='<span style="font-size:10px;color:#a5a49d" title="เงินของใบนี้จบไปแล้วในวันขาไป · ขากลับไม่มีอะไรต้องเก็บ">'
+      +'&#10003; ชำระแล้ววันขาไป'+(_od?(' &middot; '+e((typeof ovnDayTh==='function')?ovnDayTh(_od):_od)):'')+'</span>';
   }
   // §payChips · เดิมปิดท้ายด้วยป้าย "เครดิต ไม่เก็บ" · ตัดออกแล้ว เพราะป้ายเงื่อนไขด้านบน
   //   (Invoice / Pro Forma / Paid / FOC) บอกละเอียดกว่าและตรงกับหน้า By-trip ป้ายเดิมเหมารวมทุกกรณีเป็นก้อนเดียว
@@ -48178,19 +48192,25 @@ function ckAddonList(bk, routeId){
 function pckAddonCell(r, date){
   var e=ckEsc, b=r.b;
   var m=function(n){ return '&#3647;'+Math.round(n||0).toLocaleString(); };
-  var pre=ckAddonList(b, r.t.routeId).map(function(a){
+  // §ovnSettled · ขากลับค้างคืน · ของที่จองมากับใบและอัปเกรด ถูกใช้/เก็บเงินไปแล้ววันขาไป
+  //   โชว์ซ้ำพร้อมราคา = อ่านเหมือนมีเงินต้องเก็บอีกรอบ
+  var _ovn=!!r._ovnBack;
+  var pre=(_ovn?[]:ckAddonList(b, r.t.routeId)).map(function(a){
     var bg=(a.kind==='longtail')?'#E6F1FB':'#EDE7FB', fg=(a.kind==='longtail')?'#1683C7':'#5B289A';
     return '<span class="ck-ao" style="background:'+bg+';color:'+fg+'" title="'+e(a.note?('หมายเหตุ: '+a.note):'จองมาล่วงหน้า')+'">'+e(a.label)+(a.note?' &#128221;':'')+'</span>';
   }).join('');
-  var ex=((typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(b.id):[]).map(function(x){
+  // §extraDay · ของขายหน้างานเป็นของ "วันที่ขาย" ไม่ใช่ของทั้งใบ · กติกาเดียวกับ pckMoney
+  var ex=((typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(b.id):[]).filter(function(x){
+    return !(date && x.tripDate && x.tripDate!==date);
+  }).map(function(x){
     return '<span class="ck-ao" style="background:#E1F5EE;color:#0F6E56" title="'+e(x.service+(x.qty>1?(' ×'+x.qty):'')+' · ขายหน้างาน '+({cash:'เงินสด',transfer:'โอนเงิน',card:'บัตรเครดิต'}[x.method||'cash']||'เงินสด')+((+x.fee||0)?(' · ค่าธรรมเนียม '+Math.round(x.fee).toLocaleString()):'')+((x.method&&x.method!=='cash'&&!((x.slips||[]).length))?' · ยังไม่มีสลิป':'')+(x.seller?(' · '+x.seller):''))+'">'+e(x.service)+(x.qty>1?(' ×'+x.qty):'')+' +'+m(x.total)+'</span>';
   }).join('');
-  var up=(Array.isArray(b.upgrades)?b.upgrades:[]).map(function(u){
+  var up=((!_ovn && Array.isArray(b.upgrades))?b.upgrades:[]).map(function(u){
     var got=!!u.collected;
     return '<span class="ck-ao" style="background:'+(got?'#DCF4E8':'#FBF0DD')+';color:'+(got?'#0F6E56':'#7A4A00')+'" title="'+e(u.label+' · '+(got?'เก็บเงินแล้ว':'ยังไม่เก็บ'))+'">&#11014; '+e(u.label)+' '+m(u.sellPrice)+'</span>';
   }).join('');
   var body=pre+ex+up;
-  return (body||'<span class="ck-dim">—</span>')
+  return (body||(_ovn?'<span class="ck-dim" title="ของที่จองมากับใบถูกใช้ไปแล้ววันขาไป">— ของวันขาไป</span>':'<span class="ck-dim">—</span>'))
     +'<div class="ck-aoact"><button onclick="event.stopPropagation();bkV2ExtraAdd(\''+b.id+'\')" title="ขายเพิ่มหน้างาน (เงินสด)">+ ขายเพิ่ม</button>'
     +'<button onclick="event.stopPropagation();bkV2UpgradeOpen(\''+b.id+'\')" title="อัปเกรดหน้างาน">&#11014;</button></div>';
 }
@@ -56264,13 +56284,26 @@ function bkV2ExtraSave(bkId){
     if(bk && typeof bkV2AddHistory==='function'){ bkV2AddHistory(bk,'extra','Edited extra · '+name+(qty>1?' ×'+qty:'')+' · ฿'+Math.round(total).toLocaleString()+(commission?' · คอม ฿'+Math.round(commission).toLocaleString():''),'Extra'); if(typeof acctPersistBookings==='function') acctPersistBookings(); }
     _bkExtraEditId=null;
   } else {
-    SB_EXTRAS.push({id:LA_UID('ex_'), bookingId:bkId, tripDate:(bk&&bk.trips&&bk.trips[0]&&bk.trips[0].date)||'', service:name, qty, unitPrice:price, total, toCompany, commission, seller,
+    SB_EXTRAS.push({id:LA_UID('ex_'), bookingId:bkId, tripDate:(typeof bkV2ExtraDayOf==='function'?bkV2ExtraDayOf(bk):((bk&&bk.trips&&bk.trips[0]&&bk.trips[0].date)||'')), service:name, qty, unitPrice:price, total, toCompany, commission, seller,
       method:_pm, feePct:(_pm==='card'?(+_bkExtraPay.feePct||0):0), fee:_fee, customerPaid:total+_fee, slips:_slips,
       settle:'pending', date:new Date().toISOString()});
     if(bk && typeof bkV2AddHistory==='function'){ bkV2AddHistory(bk,'extra','Day-of extra · '+name+(qty>1?' ×'+qty:'')+' · ฿'+Math.round(total).toLocaleString()+(commission?' · คอม ฿'+Math.round(commission).toLocaleString():'')+' ('+_pm+(_fee?(' · fee ฿'+Math.round(_fee).toLocaleString()):'')+')','Extra'); if(typeof acctPersistBookings==='function') acctPersistBookings(); }
   }
   _bkxPayReset(null);
   sbExtrasPersist(); bkV2Render(); bkV2ExtraRender();
+}
+// §extraDay · วันที่ของรายการขายเพิ่ม
+//   เดิมยัด trips[0].date เสมอ · บุ๊กกิ้งหลายวัน (โดยเฉพาะค้างคืน) ขายวันไหนก็ไปเกาะวันแรกหมด
+//   เลือกวันจากหน้าที่กำลังเปิดอยู่ ถ้าวันนั้นเป็นวันเดินทางของใบนี้จริง · ไม่ตรงค่อยถอยไปวันแรก
+function bkV2ExtraDayOf(bk){
+  var days=(((bk&&bk.trips)||[]).map(function(t){ return (t&&t.date)||''; })).filter(Boolean);
+  if(!days.length) return '';
+  var cand=[];
+  try{ if(typeof _pckDate!=='undefined' && _pckDate) cand.push(_pckDate); }catch(_){}
+  try{ if(typeof _vanCkDate!=='undefined' && _vanCkDate) cand.push(_vanCkDate); }catch(_){}
+  try{ if(typeof bkV2Tab2ActiveDate==='function'){ var d=bkV2Tab2ActiveDate(); if(d) cand.push(d); } }catch(_){}
+  for(var i=0;i<cand.length;i++){ if(days.indexOf(cand[i])>=0) return cand[i]; }
+  return days[0];
 }
 function bkV2ExtraDelete(id,bkId){ SB_EXTRAS=SB_EXTRAS.filter(e=>e.id!==id); sbExtrasPersist(); bkV2Render(); bkV2ExtraRender(); }
 
