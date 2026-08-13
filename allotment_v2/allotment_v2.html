@@ -76203,7 +76203,8 @@ var PIER_JOB={};    // §pierJob · 'YYYY-MM-DD::boatId' -> {cap, asst, crew:[],
     {id:'c_sc',  code:'SC',   label:'',                     color:'#1668A8', bg:'#E4F1FB', kind:'work',  ord:7, active:true},
     {id:'c_sr',  code:'SR',   label:'',                     color:'#0E7D74', bg:'#E2F7F5', kind:'work',  ord:8, active:true},
     {id:'c_5',   code:'5',    label:'',                     color:'#8A6D1F', bg:'#FFF7CC', kind:'work',  ord:9, active:true},
-    {id:'c_abs', code:'ABS',  label:'ขาดงาน',               color:'#A3251A', bg:'#FDECEA', kind:'none',  ord:10, active:true}
+    {id:'c_abs', code:'ABS',  label:'ขาดงาน',               color:'#A3251A', bg:'#FDECEA', kind:'none',  ord:10, active:true},
+    {id:'c_mt',  code:'MT',   label:'งานซ่อม / ขึ้นคาน',      color:'#5B3B96', bg:'#F2EBFA', kind:'work',  ord:11, active:true}
   ];
 }catch(_){} })();
 /* ค่าเริ่มต้นของทะเบียนประเภทใบ · ชื่อและเพดานเป็นค่าตั้งต้น แก้ได้ในหน้าใบอนุญาต */
@@ -76933,6 +76934,22 @@ function paCode(code){ return (PIER_CODES||[]).filter(function(c){ return c.code
 function paKindOf(code){ var c=paCode(code); return c?(c.kind||'none'):'none'; }
 function paCycleStart(){ var n=parseInt(PIER_CFG.cycleStart,10); return (n>=1&&n<=28)?n:26; }
 function paOnBoatCode(){ return PIER_CFG.onBoatCode || 'PP'; }
+/* §pjWork · รหัสของวันที่ลงงานซ่อม · ตั้งเองได้ในทะเบียนรหัส
+   ขึ้นคานไม่ตั้ง = ใช้รหัสเดียวกับงานซ่อม (ตั้งแยกเมื่อค่าแรง/เบี้ยเลี้ยงต่างกัน) */
+function paMtCode(){ return PIER_CFG.mtCode || 'MT'; }
+function paDdCode(){ return PIER_CFG.ddCode || paMtCode(); }
+/* วันนั้นเรือลำนั้นเป็นงานแบบไหน · 'boat' | 'mt' | 'dd' */
+function paJobKind(date, bid){
+  try{
+    var b=(typeof getBoat==='function')?getBoat(bid):null; if(!b) return 'boat';
+    var hasTrip=!!((typeof TRIPS!=='undefined' && TRIPS[date]) ? TRIPS[date][bid] : null);
+    if(typeof pjBoatSt!=='function') return 'boat';
+    var k=pjBoatSt(date,b,hasTrip).k;
+    if(k==='dd') return 'dd';
+    if(k==='broke'||k==='maint') return 'mt';
+    return 'boat';
+  }catch(_){ return 'boat'; }
+}
 function paDefFallback(){ return PIER_CFG.defCode || 'SE'; }
 
 /* รอบเดือนที่ครอบวันที่ที่กำลังดู · 26 → 25 ตามของเดิม */
@@ -76964,8 +76981,9 @@ function paDayIdx(date){
     var b=(typeof getBoat==='function')?getBoat(bid):null;
     var pk=(b&&b.pier)||'';
     if(pk) E.piers[pk]=1;
+    var kind=(typeof paJobKind==='function')?paJobKind(date,bid):'boat';
     [o.cap,o.asst].concat(o.crew||[], o.island||[]).forEach(function(sid){
-      if(sid && !E.byStaff[sid]) E.byStaff[sid]={boat:(b&&b.name)||bid, pier:pk};
+      if(sid && !E.byStaff[sid]) E.byStaff[sid]={boat:(b&&b.name)||bid, pier:pk, kind:kind};
     });
   });
   return E;
@@ -76980,7 +76998,9 @@ function paCell(date, pier, st, E){
   var on=E.byStaff[st.id]||null;
   var man=paManual(date,st.id);
   if(man) return {c:man, src:'manual', boat:on?on.boat:'', atPier:on?on.pier:''};
-  if(on) return {c:paOnBoatCode(), src:'boat', boat:on.boat, atPier:on.pier};
+  // §pjWork · ลงเรือ / ลงงานซ่อม / ลงคาน ใช้รหัสคนละตัว · ทั้งหมดตั้งเองได้
+  if(on) return {c:(on.kind==='dd'?paDdCode():(on.kind==='mt'?paMtCode():paOnBoatCode())),
+                 src:(on.kind==='boat'?'boat':on.kind), boat:on.boat, atPier:on.pier};
   if(E.piers[pier]) return {c:(st.defCode||paDefFallback()), src:'default', boat:'', atPier:''};
   return {c:'', src:'none', boat:'', atPier:''};
 }
@@ -77052,7 +77072,23 @@ function paCellHtml(date, pier, st, day, hasJob, today, E){
     +(v.src==='manual'?'<span class="pa-dot"></span>':'')+'</td>';
 }
 
+/* §pjWork · ทะเบียนที่ตั้งไว้ก่อนมีงานซ่อม จะยังไม่มีรหัส MT · เติมให้ครั้งเดียว
+   เติมแล้วแก้ชื่อ เปลี่ยนสี หรือลบทิ้งได้เหมือนรหัสอื่นทุกประการ
+   ตรวจก่อนเติมทุกครั้ง จึงไม่เขียนซ้ำและไม่ทับของที่ผู้ใช้แก้ไว้ */
+function paEnsureMtCode(){
+  try{
+    if(!Array.isArray(PIER_CODES) || !PIER_CODES.length) return;
+    var want=String(paMtCode()||'MT').trim(); if(!want) return;
+    var has=PIER_CODES.some(function(c){ return String(c.code||'').trim().toUpperCase()===want.toUpperCase(); });
+    if(has) return;
+    var mx=PIER_CODES.reduce(function(a,c){ return Math.max(a,+c.ord||0); },0);
+    PIER_CODES.push({id:'c_mt_'+Date.now().toString(36), code:want, label:'งานซ่อม / ขึ้นคาน',
+                     color:'#5B3B96', bg:'#F2EBFA', kind:'work', ord:mx+1, active:true});
+    if(typeof poCanEdit==='function' && poCanEdit()) poPersist();
+  }catch(_){}
+}
 function renderPierAtt(pier){
+  paEnsureMtCode();
   if(pier) _poPier=pier;
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
   var host=document.getElementById('pa-host-'+P.k); if(!host) return;
@@ -77154,6 +77190,7 @@ function paSet(date,sid,code){
 
 /* ── ทะเบียนรหัส ── */
 function paCodesOpen(){
+  paEnsureMtCode();
   var ro=!poCanEdit();
   var KIND=[['work','วันทำงาน'],['off','วันหยุด'],['leave','วันลา'],['none','ไม่นับ']];
   var body='<div style="font-size:12px;color:#6E7684;margin-bottom:12px;line-height:1.7">'
@@ -77175,16 +77212,27 @@ function paCodesOpen(){
   });
   body+='</tbody></table>'
     +(ro?'':'<button class="po-btn" style="margin-top:10px" onclick="paCodeAdd()">+ เพิ่มรหัส</button>')
-    +'<div style="margin-top:14px;border-top:1px dashed #D9DDE4;padding-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:11px">'
-    +'<div><div style="font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8B93A1;margin-bottom:5px">รหัสเมื่ออยู่บนเรือ</div>'
+    +'<div style="margin-top:14px;border-top:1px dashed #D9DDE4;padding-top:12px">'
+    +'<div style="font-size:11.5px;color:#6E7684;line-height:1.7;margin-bottom:9px">'
+      +'รหัสข้างล่างคือตัวที่ระบบเติมให้เองในตารางการทำงาน ตามว่าคนนั้นวันนั้นไปทำอะไร<br>'
+      +'พิมพ์รหัสไหนก็ได้ที่มีอยู่ในตารางข้างบน · <b>ขึ้นคาน</b> เว้นว่างไว้ = ใช้รหัสเดียวกับงานซ่อม '
+      +'(แยกเมื่อค่าแรงหรือเบี้ยเลี้ยงต่างกัน)</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:11px">'
+    +'<div><div style="font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8B93A1;margin-bottom:5px">ลงเรือ</div>'
       +'<input id="pa_onboat" value="'+poE(paOnBoatCode())+'" style="width:100%;border:1px solid #D9DDE4;border-radius:8px;padding:7px 10px;font:700 12.5px inherit;font-family:inherit"'+(ro?' disabled':'')+'></div>'
+    +'<div><div style="font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8B93A1;margin-bottom:5px">งานซ่อม</div>'
+      +'<input id="pa_mt" value="'+poE(PIER_CFG.mtCode||'')+'" placeholder="'+poE(paMtCode())+'" style="width:100%;border:1px solid #D9DDE4;border-radius:8px;padding:7px 10px;font:700 12.5px inherit;font-family:inherit"'+(ro?' disabled':'')+'></div>'
+    +'<div><div style="font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8B93A1;margin-bottom:5px">ขึ้นคาน</div>'
+      +'<input id="pa_dd" value="'+poE(PIER_CFG.ddCode||'')+'" placeholder="ใช้รหัสงานซ่อม" style="width:100%;border:1px solid #D9DDE4;border-radius:8px;padding:7px 10px;font:700 12.5px inherit;font-family:inherit"'+(ro?' disabled':'')+'></div>'
     +'<div><div style="font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8B93A1;margin-bottom:5px">วันเริ่มรอบเดือน</div>'
       +'<input id="pa_cyc" type="number" min="1" max="28" value="'+paCycleStart()+'" style="width:100%;border:1px solid #D9DDE4;border-radius:8px;padding:7px 10px;font:700 12.5px inherit;font-family:inherit"'+(ro?' disabled':'')+'></div>'
-    +'</div>';
+    +'</div></div>';
   poModal('ทะเบียนรหัสตารางการทำงาน', body, poBtn('ปิด','paCodesClose()',1), 780);
 }
 function paCodesClose(){
   try{ var o=poV('pa_onboat').trim(); if(o) PIER_CFG.onBoatCode=o;
+       PIER_CFG.mtCode=poV('pa_mt').trim();
+       PIER_CFG.ddCode=poV('pa_dd').trim();
        var c=parseInt(poV('pa_cyc'),10); if(c>=1&&c<=28) PIER_CFG.cycleStart=c; }catch(_){}
   poPersist(); poModalClose(); renderPierAtt();
 }
@@ -77682,25 +77730,47 @@ function pjOpenJobs(bid){
   catch(_){ return []; }
 }
 /* op = TRIPS[date][bid] หรือ null */
+/* work:true = วันนั้นมีคนต้องทำงานกับเรือลำนี้จริง · การ์ดจะเป็นใบงานซ่อม */
 var PJ_ST={
-  clash:{t:'ขัดกัน · ช่างแจ้งไม่พร้อม', bg:'#FCEFEE', fg:'#A0342A', bd:'#F0CFCB', ord:0},
+  clash:{t:'ขัดกัน · ช่างแจ้งไม่พร้อม', bg:'#FCEFEE', fg:'#A0342A', bd:'#F0CFCB', ord:0, band:'#A0342A'},
   run  :{t:'ออกทริปวันนี้',            bg:'#E1F5EE', fg:'#0F6E56', bd:'#B7E2D2', ord:1},
-  away :{t:'ไปวิ่งท่าอื่นวันนี้',        bg:'#EAF0F9', fg:'#1B4A87', bd:'#CFDCEF', ord:2},
-  idle :{t:'ว่าง · ไม่มีงานวันนี้',     bg:'#EEF2F7', fg:'#4A5D7A', bd:'#D6DFEA', ord:3},
-  fix  :{t:'ซ่อมอยู่',                 bg:'#FBF0DD', fg:'#8A5A00', bd:'#EFDCB4', ord:4},
-  off  :{t:'ไม่พร้อมใช้งาน',            bg:'#EEEFF1', fg:'#5A6270', bd:'#DDE0E5', ord:5}
+  broke:{t:'เสีย · ซ่อมแก้ไข',          bg:'#FCEFEE', fg:'#A0342A', bd:'#F0CFCB', ord:2, work:1, band:'#A0342A'},
+  maint:{t:'ซ่อมบำรุงตามแผน',           bg:'#FBF0DD', fg:'#8A5A00', bd:'#EFDCB4', ord:3, work:1, band:'#8A5A00'},
+  dd   :{t:'ขึ้นคาน',                  bg:'#F2EBFA', fg:'#5B3B96', bd:'#E2D6F3', ord:4, work:1, band:'#5B3B96'},
+  away :{t:'ไปวิ่งท่าอื่นวันนี้',        bg:'#EAF0F9', fg:'#1B4A87', bd:'#CFDCEF', ord:5, band:'#4A6E9E'},
+  idle :{t:'ว่าง · เรือพร้อม',          bg:'#EEF2F7', fg:'#4A5D7A', bd:'#D6DFEA', ord:6},
+  donor:{t:'จอด · ให้เครื่องลำอื่น',     bg:'#EEEFF1', fg:'#5A6270', bd:'#DDE0E5', ord:7},
+  off  :{t:'ไม่พร้อมใช้งาน',            bg:'#EEEFF1', fg:'#5A6270', bd:'#DDE0E5', ord:8}
 };
+/* §pjWork · ประเภทของงานซ่อมที่เปิดอยู่ · corrective = เสีย · scheduled/preventive = ตามแผน */
+function pjMjPlanned(m){ return /^(scheduled|preventive|planned)$/i.test(String((m&&m.type)||'')); }
 function pjBoatSt(date, boat, op){
   var st=pjLogAt(boat,date), s=st?String(st.s||''):'';
   var mj=pjOpenJobs(boat&&boat.id);
+  var rsn=String((st&&st.reason)||'').toLowerCase();
+  // เหตุผลอาจอยู่ที่ log หรือที่ MJ ที่สั่งให้เรือหยุด · ดูทั้งสองที่
+  if(!rsn) mj.forEach(function(m){ if(!rsn && m.boatStatusReason) rsn=String(m.boatStatusReason).toLowerCase(); });
   var k;
   if(op && s && s!=='available') k='clash';
-  else if(s==='unavailable') k='off';
-  else if(s==='fixing') k='fix';
+  else if(/dry.?dock|คาน/.test(rsn)) k='dd';
+  else if(/donor/.test(rsn)) k='donor';
+  else if(s==='fixing' || s==='unavailable'){
+    // มีงานเปิดอยู่ → แยกว่าเสียหรือตามแผน · ไม่มีงานเลย → บอกได้แค่ว่าไม่พร้อม
+    if(mj.length) k = mj.every(pjMjPlanned) ? 'maint' : 'broke';
+    else k = (s==='fixing') ? 'broke' : 'off';
+  }
   else if(op) k='run';
   else k='idle';
-  return {k:k, log:st, s:s, mj:mj, loc:(st&&st.loc)||'', note:(st&&(st.note||st.reason))||''};
+  return {k:k, log:st, s:s, mj:mj, reason:rsn,
+          loc:(st&&st.loc)||'', note:(st&&(st.note||st.reason))||''};
 }
+/* MJ ที่เลือกไว้ว่าวันนี้ทำใบไหน · ไม่ได้เลือก = ใบแรกที่เปิดอยู่ */
+function pjMjOf(date, bid, mjList){
+  var o=pjRaw(date,bid), pick=o&&o.mj;
+  var hit=(mjList||[]).filter(function(m){ return m.id===pick; })[0];
+  return hit || (mjList||[])[0] || null;
+}
+function pjMjPick(bid, mjId){ pjSet(_poDate,bid,{mj:mjId||''}); renderPierJob(); }
 /* โปรแกรมของลำนี้วันนั้น · ไม่สนว่าเป็นท่าไหน · ใช้จับเคส "ย้ายไปวิ่งท่าอื่น" */
 function pjDayOp(date, bid){
   var day=(typeof TRIPS!=='undefined' && TRIPS[date])?TRIPS[date]:{};
@@ -78067,10 +78137,10 @@ function pjCard(B, pier, ro){
      /* §pjDocs · ใบอนุญาตใช้เรือ + ใบเข้าเกาะของโปรแกรมวันนี้ */
      + pjDocsHtml(B.boat, rt, _poDate)
    +'</div>'
-   +'<div class="pg" style="background:'+(rt.id?pcol:'#8B93A1')+'">'
+   +'<div class="pg" style="background:'+(rt.id?pcol:(SM.band||'#8B93A1'))+'">'
      +'<div class="pn">'+(rt.id?poE(rt.name||B.rid)
         :(B._away?('วันนี้ไปวิ่งที่ '+poE(((PO_PIERS.filter(function(x){ return x.k===(B._away.route.pier||''); })[0])||{}).n||B._away.route.pier||'ท่าอื่น'))
-                 :'ไม่ได้ออกทริปวันนี้'))+'</div>'
+                 :poE(SM.t)))+'</div>'
      +'<div class="pr">'+(rt.id?poE(rt.islands||'')
         :(B._away?poE(B._away.route.name||'')
                  :poE([ST.loc||'', ST.note||''].filter(Boolean).join(' \u00b7 ')||(SM.t))))+'</div>'
@@ -78088,11 +78158,21 @@ function pjCard(B, pier, ro){
      +((!going&&ST.mj.length)?('<span class="pj-stmeta" title="'+poE(ST.mj.map(function(m){ return (m.no||'')+' '+(m.title||m.type||''); }).join(' \u00b7 '))+'">งานซ่อม '+ST.mj.length+' ใบ'
         +(ST.mj[0]&&ST.mj[0].no?(' \u00b7 '+poE(ST.mj[0].no)):'')+'</span>'):'')
    +'</div>'
-   + pjSecHd('Captain &amp; Crew','crew')
-   + pjSelRow(pier,bid,'Captain','cap',J.cap,SUB.cap,['กัปตัน','captain'],ro,B.boat)
-   + pjSelRow(pier,bid,'Asst. Captain','asst',J.asst,SUB.asst,['กัปตัน','captain'],ro,B.boat)
-   + [0,1,2].map(function(i){ return pjSelRow(pier,bid,'Crew '+(i+1),'crew'+i,(J.crew||[])[i]||'',SUB['crew'+i],['เด็กเรือ','crew','ลูกเรือ'],ro,B.boat); }).join('')
-   + [0,1].map(function(i){ return pjSelRow(pier,bid,'Island Staff '+(i+1),'island'+i,(J.island||[])[i]||'',null,['อุปกรณ์','equipment'],ro,B.boat); }).join('')
+   /* §pjWork · ชื่อตำแหน่งเปลี่ยนตามงาน · ชื่อคนยังมาจากทะเบียนพนักงานท่าเรือชุดเดิม
+      ช่องที่เก็บยังเป็น cap/asst/crew/island ชุดเดิม จึงไหลเข้าตารางการทำงานเองอยู่แล้ว */
+   + pjSecHd(going?'Captain &amp; Crew':(SM.work?'ทีมงานวันนี้':'ทีมงาน (ไม่บังคับ)'),'crew')
+   + (function(){
+       var LB = going
+         ? ['Captain','Asst. Captain','Crew 1','Crew 2','Crew 3','Island Staff 1','Island Staff 2']
+         : ['หัวหน้าช่าง','ช่าง 1','ช่าง 2','ช่วยงาน 1','ช่วยงาน 2','ช่วยงาน 3','ช่วยงาน 4'];
+       var RL = going
+         ? [['กัปตัน','captain'],['กัปตัน','captain'],['เด็กเรือ','crew','ลูกเรือ'],['เด็กเรือ','crew','ลูกเรือ'],['เด็กเรือ','crew','ลูกเรือ'],['อุปกรณ์','equipment'],['อุปกรณ์','equipment']]
+         : [['ช่าง','engineer','ช่างยนต์','ช่างไฟฟ้า'],['ช่าง','engineer','ช่างยนต์','ช่างไฟฟ้า'],['ช่าง','engineer','ช่างยนต์','ช่างไฟฟ้า'],[],[],[],[]];
+       return pjSelRow(pier,bid,LB[0],'cap',J.cap,SUB.cap,RL[0],ro,B.boat)
+         + pjSelRow(pier,bid,LB[1],'asst',J.asst,SUB.asst,RL[1],ro,B.boat)
+         + [0,1,2].map(function(i){ return pjSelRow(pier,bid,LB[2+i],'crew'+i,(J.crew||[])[i]||'',SUB['crew'+i],RL[2+i],ro,B.boat); }).join('')
+         + [0,1].map(function(i){ return pjSelRow(pier,bid,LB[5+i],'island'+i,(J.island||[])[i]||'',null,RL[5+i],ro,B.boat); }).join('');
+     })()
    + '<div class="pj-licbox">'+(function(){ try{
        // §pjAll · ลำที่ไม่ได้ออก ไม่ต้องเตือนใบอนุญาต · ไม่มีใครต้องคุมเรือ
        if(!going) return '<div class="pj-licnone">ไม่ต้องตรวจใบอนุญาต — ไม่ได้ออกเรือวันนี้</div>';
@@ -78104,11 +78184,34 @@ function pjCard(B, pier, ro){
            +(r.lv==='ok'?'&#10003;':(r.lv==='warn'?'&#9888;':'&#9940;'))+'</b> '+poE(r.t)+'</div>';
        }).join('');
      }catch(_){ return ''; } })()+'</div>'
-   + pjSecHd('Guides &amp; Trainee','guide')
-   + pjTxtRow('Guide 1', G[0]||'')
-   + pjTxtRow('Guide 2', G[1]||'')
-   + pjTxtRow('Guide 3', G[2]||'')
-   + pjSecHd('Customer','cust')
+   + (going
+      ? ( pjSecHd('Guides &amp; Trainee','guide')
+        + pjTxtRow('Guide 1', G[0]||'')
+        + pjTxtRow('Guide 2', G[1]||'')
+        + pjTxtRow('Guide 3', G[2]||'') )
+      /* §pjWork · ลำที่ไม่ได้ออก · ช่องนี้เปลี่ยนเป็น "งานที่ทำวันนี้" */
+      : ( pjSecHd(SM.work?'งานที่ทำวันนี้':'สถานะเรือ','guide')
+        + (function(){
+            var M=pjMjOf(_poDate,bid,ST.mj);
+            if(!ST.mj.length){
+              return pjTxtRow('สถานะ', SM.t)
+                + pjTxtRow('ที่อยู่', ST.loc||'—')
+                + pjTxtRow('ตั้งแต่', (ST.log&&ST.log.from)?pjDocDate(ST.log.from):'—');
+            }
+            var sel='<select onchange="pjMjPick(\''+bid+'\',this.value)"'+(ro?' disabled':'')+'>'
+              + ST.mj.map(function(m){ return '<option value="'+poE(m.id)+'"'+((M&&M.id===m.id)?' selected':'')+'>'
+                  +poE((m.no?(m.no+' · '):'')+(m.title||m.type||'งานซ่อม'))+'</option>'; }).join('')
+              +'</select>';
+            var last='';
+            try{ var L=(M&&M.progressLog)||[]; var e=L[L.length-1];
+                 if(e) last=(e.date?(pjDocDate(e.date)+' · '):'')+String(e.text||e.note||e.detail||''); }catch(_){}
+            return pjRow('งาน ('+ST.mj.length+')', sel, null)
+              + pjTxtRow('ประเภท', M?((pjMjPlanned(M)?'ตามแผน':'ซ่อมแก้ไข')
+                  +(M.startDate?(' · เริ่ม '+pjDocDate(M.startDate)):'')
+                  +(M.location?(' · '+M.location):'')):'—')
+              + pjTxtRow('คืบหน้า', last||'—');
+          })() ))
+   + (going ? ( pjSecHd('Customer','cust')
    +'<div class="pj-wbrow"><span class="k">Wristband</span>'
      +'<span class="pj-wb" onclick="'+(ro?'':'pjPopToggle(\''+wid+'\')')+'" style="position:relative">'
        +'<i style="background:'+(wbc||'#F0F0EC')+'"></i>'+(wbt?poE(wbt):'<span style="color:#C9CFD8;font-weight:500">ยังไม่ระบุ</span>')
@@ -78122,7 +78225,22 @@ function pjCard(B, pier, ro){
    +'<div class="pj-pax">'
      +[['AD',pax.ad],['CHD',pax.chd],['INF',pax.inf],['FOC',pax.foc]].map(function(x){
         return '<div class="c"><div class="k">'+x[0]+'</div><div class="v"'+(x[1]?'':' style="color:#CFD4DC"')+'>'+x[1]+'</div></div>'; }).join('')
-     +'<div class="c t"><div class="k">TOTAL</div><div class="v">'+(pax.ad+pax.chd+pax.inf+pax.foc)+'</div></div></div>'
+     +'<div class="c t"><div class="k">TOTAL</div><div class="v">'+(pax.ad+pax.chd+pax.inf+pax.foc)+'</div></div></div>' )
+   /* §pjWork · ลำที่ไม่ได้ออกไม่มี ลค · ช่องนี้บอกช่วงเวลาของงานแทน */
+   : ( pjSecHd(SM.work?'ช่วงงาน':'ข้อมูลเรือ','cust')
+   +'<div class="pj-wbrow"><span class="k">ที่อยู่</span>'
+     +'<span style="font-size:12px;font-weight:700">'+poE(ST.loc||'—')+'</span>'
+     +'<span style="flex:1"></span>'
+     +(ST.mj.length?('<span class="pj-lang">งานเปิด '+ST.mj.length+' ใบ</span>'):'')+'</div>'
+   +(function(){
+      var F=(ST.log&&ST.log.from)||'', T=(ST.log&&ST.log.to)||'';
+      var d=0; try{ if(F) d=Math.max(0,Math.round((new Date(_poDate+'T12:00:00')-new Date(F+'T12:00:00'))/86400000))+1; }catch(_){}
+      return '<div class="pj-pax">'
+        +'<div class="c" style="flex:1.4"><div class="k">เริ่ม</div><div class="v" style="font-size:12px">'+(F?poE(pjDocDate(F)):'<span style="color:#CFD4DC">—</span>')+'</div></div>'
+        +'<div class="c t" style="flex:1"><div class="k">วันที่</div><div class="v">'+(d||'<span style="color:#CFD4DC">—</span>')+'</div></div>'
+        +'<div class="c" style="flex:1.4"><div class="k">กลับใช้งาน</div><div class="v" style="font-size:12px">'+(T?poE(pjDocDate(T)):'<span style="color:#CFD4DC">ยังไม่ระบุ</span>')+'</div></div>'
+      +'</div>';
+    })() ) )
    + pjSecHd('Note','note')
    +'<div class="pj-note"'+(ro?'':' contenteditable="true"')+' data-ph="พิมพ์หมายเหตุของลำนี้วันนี้…" '
      +'onblur="pjNote(\''+bid+'\',this.innerText)">'+poE(J.note||'')+'</div>'
