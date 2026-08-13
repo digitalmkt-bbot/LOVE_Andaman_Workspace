@@ -78162,10 +78162,20 @@ function renderPierJob(pier){
       +'</div>'
       +(cnt.clash?('<span style="font-size:11.5px;font-weight:800;color:#A0342A;background:#FCEFEE;border:1px solid #F0CFCB;border-radius:9px;padding:5px 11px">'
         +'&#9888; ขัดกัน '+cnt.clash+' ลำ · ช่างแจ้งว่าไม่พร้อม แต่มีโปรแกรมวางไว้</span>'):'')
+      /* §pjAllDefault · เรือที่ยังไม่ได้ตั้งท่าประจำ จะไม่ขึ้นในหน้าท่าไหนเลย · ต้องบอก ไม่ใช่หายเงียบ */
+      +(function(){ var np=(typeof BOATS!=='undefined'?BOATS:[]).filter(function(b){ return !(b.pier||''); });
+        if(!np.length) return '';
+        return '<span title="'+poE(np.map(function(b){ return b.name||b.id; }).join(' \u00b7 '))+'" '
+          +'style="font-size:11.5px;font-weight:700;color:#8A5A00;background:#FBF0DD;border:1px solid #EFDCB4;border-radius:9px;padding:5px 11px">'
+          +'&#9888; ยังไม่ได้ตั้งท่าประจำ '+np.length+' ลำ · ไม่ขึ้นในหน้าท่าไหนเลย — ตั้งได้ที่ Boat Operation</span>'; })()
     +'</div>'
     +(boats.length
       ? ('<div class="pj-strip w'+_pjW+'">'+boats.map(function(B){ return pjCard(B,_poPier,ro); }).join('')+'</div>')
-      : '<div class="pj-empty">ไม่มีเรือที่ตรงตัวกรองนี้<br><span style="font-size:11.5px">กด "ทั้งหมด" เพื่อดูทุกลำของท่านี้</span></div>');
+      : ('<div class="pj-empty">'
+          +(all.length
+            ? ('ไม่มีเรือที่ตรงตัวกรองนี้<br><span style="font-size:11.5px">ท่านี้มีเรือ '+all.length+' ลำ — กด <b>ทั้งหมด</b> เพื่อดูทุกลำ</span>')
+            : ('ยังไม่มีเรือผูกกับท่านี้<br><span style="font-size:11.5px">ตั้งท่าประจำของเรือได้ที่หน้า Boat Operation</span>'))
+        +'</div>'));
   if(!host.__pjClose){ host.__pjClose=1;
     document.addEventListener('click', function(){ try{ host.querySelectorAll('.pj-pop').forEach(function(p){ p.classList.remove('on'); }); }catch(_){} });
   }
@@ -78174,7 +78184,7 @@ function renderPierJob(pier){
 var _pjW=(function(){ try{ var v=+localStorage.getItem('la_pjw'); return (v===3||v===4||v===5)?v:4; }catch(_){ return 4; } })();
 function pjWide(n){ _pjW=n; try{ localStorage.setItem('la_pjw',String(n)); }catch(_){} renderPierJob(); }
 /* §pjAll · ตัวกรองสถานะ · จำไว้ให้ ไม่ต้องกดใหม่ทุกวัน */
-var _pjF=(function(){ try{ var v=localStorage.getItem('la_pjf'); return ['all','go','idle','down'].indexOf(v)>=0?v:'go'; }catch(_){ return 'go'; } })();
+var _pjF=(function(){ try{ var v=localStorage.getItem('la_pjf'); return ['all','go','idle','down'].indexOf(v)>=0?v:'all'; }catch(_){ return 'all'; } })();
 function pjFilter(k){ _pjF=k; try{ localStorage.setItem('la_pjf',k); }catch(_){} renderPierJob(); }
 function pjDate(v){ if(v) _poDate=v; renderPierJob(); }
 function pjShift(n){ var d=new Date(_poDate+'T12:00:00'); d.setDate(d.getDate()+n); _poDate=poYMD(d); renderPierJob(); }
