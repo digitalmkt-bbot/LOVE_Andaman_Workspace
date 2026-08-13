@@ -77657,6 +77657,69 @@ var PJ_WB=[{t:'ดำ',c:'#1A1A1A'},{t:'ม่วง',c:'#8E2FD6'},{t:'ฟ้า
            {t:'น้ำเงิน',c:'#185FA5'},{t:'ขาว',c:'#FFFFFF'}];
 var PJ_PAL=['#B8860B','#D9A441','#B4560A','#C0271C','#A82063','#7B3FA0',
             '#4A3FB0','#185FA5','#1668A8','#0E7D74','#0F6E56','#4E6B2F'];
+/* §pjAll · สถานะของเรือ ณ วันหนึ่ง · อ่านจากของที่มีอยู่แล้วทั้งหมด */
+function pjLogAt(boat, date){
+  var L=((boat&&boat.log)||[]).filter(function(e){ return e && e.from<=date && (!e.to || e.to>=date); });
+  L.sort(function(a,b){ return String(b.from||'').localeCompare(String(a.from||'')); });
+  return L[0]||null;
+}
+function pjOpenJobs(bid){
+  try{ return (typeof FL_MAINT!=='undefined'?FL_MAINT:[]).filter(function(m){
+    return m && m.boatId===bid && ['open','inprogress','pending'].indexOf(String(m.status||''))>=0; }); }
+  catch(_){ return []; }
+}
+/* op = TRIPS[date][bid] หรือ null */
+var PJ_ST={
+  clash:{t:'ขัดกัน · ช่างแจ้งไม่พร้อม', bg:'#FCEFEE', fg:'#A0342A', bd:'#F0CFCB', ord:0},
+  run  :{t:'ออกทริปวันนี้',            bg:'#E1F5EE', fg:'#0F6E56', bd:'#B7E2D2', ord:1},
+  away :{t:'ไปวิ่งท่าอื่นวันนี้',        bg:'#EAF0F9', fg:'#1B4A87', bd:'#CFDCEF', ord:2},
+  idle :{t:'ว่าง · ไม่มีงานวันนี้',     bg:'#EEF2F7', fg:'#4A5D7A', bd:'#D6DFEA', ord:3},
+  fix  :{t:'ซ่อมอยู่',                 bg:'#FBF0DD', fg:'#8A5A00', bd:'#EFDCB4', ord:4},
+  off  :{t:'ไม่พร้อมใช้งาน',            bg:'#EEEFF1', fg:'#5A6270', bd:'#DDE0E5', ord:5}
+};
+function pjBoatSt(date, boat, op){
+  var st=pjLogAt(boat,date), s=st?String(st.s||''):'';
+  var mj=pjOpenJobs(boat&&boat.id);
+  var k;
+  if(op && s && s!=='available') k='clash';
+  else if(s==='unavailable') k='off';
+  else if(s==='fixing') k='fix';
+  else if(op) k='run';
+  else k='idle';
+  return {k:k, log:st, s:s, mj:mj, loc:(st&&st.loc)||'', note:(st&&(st.note||st.reason))||''};
+}
+/* โปรแกรมของลำนี้วันนั้น · ไม่สนว่าเป็นท่าไหน · ใช้จับเคส "ย้ายไปวิ่งท่าอื่น" */
+function pjDayOp(date, bid){
+  var day=(typeof TRIPS!=='undefined' && TRIPS[date])?TRIPS[date]:{};
+  var op=day[bid]; if(!op || !op.route) return null;
+  var rt=(typeof getRoute==='function')?getRoute(op.route):null;
+  return rt?{op:op, rid:op.route, route:rt}:null;
+}
+/* ทุกลำของท่านี้ · ลำที่มีโปรแกรมมาก่อน แล้วเรียงตามสถานะ */
+function pjAllBoats(date, pier){
+  var run=(typeof poBoats==='function')?poBoats(date,pier):[], out=[], seen={};
+  run.forEach(function(B){ seen[B.bid]=1;
+    B._st=pjBoatSt(date,B.boat,true); out.push(B); });
+  (typeof BOATS!=='undefined'?BOATS:[]).forEach(function(b){
+    if((b.pier||'')!==pier || seen[b.id]) return;
+    var D=pjDayOp(date,b.id);
+    var away=(D && (D.route.pier||'')!==pier) ? D : null;   // ย้ายไปวิ่งท่าอื่นวันนี้
+    var st=pjBoatSt(date,b,false);
+    // ไปวิ่งท่าอื่น ≠ ว่าง · ท่านี้ไม่มีงานให้ แต่เรือไม่ได้จอดเฉยๆ ต้องบอกให้ตรง
+    if(away && st.k==='idle') st.k='away';
+    out.push({bid:b.id, boat:b, rid:'', route:{}, dep:'', pax:0, bks:[],
+              _st:st, _away:away});
+  });
+  out.sort(function(a,b){
+    // ord ของ clash เป็น 0 · ใช้ ||9 ไม่ได้ เพราะ 0 เป็นค่าเท็จ แล้วจะเด้งไปท้ายสุด
+    var _o=function(x){ var m=PJ_ST[x]; return (m&&m.ord!=null)?m.ord:9; };
+    var oa=_o(a._st.k), ob=_o(b._st.k);
+    if(oa!==ob) return oa-ob;
+    return String(a.dep||'99').localeCompare(String(b.dep||'99'))
+        || String(a.boat.name||a.bid).localeCompare(String(b.boat.name||b.bid));
+  });
+  return out;
+}
 /* §pjDocs · โปรแกรมไหนต้องใช้ใบอุทยานใบไหน
    จับจากชื่อเส้นทาง + ชื่อเกาะ · ครอบคลุมทั้ง 12 เส้นทางที่มีอยู่
    (Similan / Surin / Phi Phi + Whale Shark Maiton / Krabi + Phang Nga) */
@@ -77708,8 +77771,11 @@ function pjDocsHtml(boat, rt, date){
   // บรรทัด 1 · ใบอนุญาตใช้เรือ
   out+=line(pjDocLv(pjDocFind(boat,/ใบอนุญาตใช้เรือ/), date), 'ใบอนุญาตใช้เรือ', '');
   // บรรทัด 2 · ใบเข้าเกาะของโปรแกรมวันนี้
-  var need=pjParkNeed(rt);
-  if(!need.length){
+  var need=(rt&&rt.id)?pjParkNeed(rt):[];
+  if(!rt || !rt.id){
+    out+='<div class="pj-dl none"><span class="nm">ใบเข้าเกาะ</span>'
+       +'<span class="vl">ไม่ได้ออกทริปวันนี้</span></div>';
+  } else if(!need.length){
     out+='<div class="pj-dl none"><span class="nm">ใบเข้าเกาะ</span>'
        +'<span class="vl">โปรแกรมนี้ไม่ต้องใช้ใบอุทยาน</span></div>';
   } else {
@@ -77752,6 +77818,17 @@ function pjCSS(){
   +H+' .pj-wsw{display:flex;gap:4px;background:#fff;border:1px solid #E1E4EA;border-radius:9px;padding:3px}'
   +H+' .pj-wsw button{border:none;background:transparent;border-radius:6px;padding:4px 10px;font:700 11.5px inherit;color:#6E7684;cursor:pointer}'
   +H+' .pj-wsw button.on{background:#EAF0F9;color:#1B4A87}'
+  /* §pjAll · ลำที่ไม่ได้ออก · ลดความจัดของสีหัวการ์ด สายตาจะได้ไปที่ลำที่ทำงานก่อน */
+  +H+' .bc.dim .top,'+H+' .bc.dim .pg{filter:saturate(.24) brightness(.99)}'
+  +H+' .bc.dim{opacity:.94}'
+  +H+' .bc.clash{border-color:#E8B4AE;box-shadow:0 0 0 2px rgba(192,39,28,.10)}'
+  +H+' .pj-stq{font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap}'
+  +H+' .pj-stmeta{font-size:10px;color:#8B93A1;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  +H+' .pj-chips{display:flex;gap:5px;background:#fff;border:1px solid #E1E4EA;border-radius:10px;padding:4px;flex-wrap:wrap}'
+  +H+' .pj-chips button{border:none;background:transparent;border-radius:7px;padding:5px 11px;font:700 11.5px inherit;color:#6E7684;cursor:pointer;display:flex;align-items:center;gap:6px}'
+  +H+' .pj-chips button.on{background:#16265C;color:#fff}'
+  +H+' .pj-chips button i{width:7px;height:7px;border-radius:50%;display:inline-block;font-style:normal;flex:none}'
+  +H+' .pj-chips button .n{font-variant-numeric:tabular-nums;font-size:11px;opacity:.72}'
   +H+' .bc{display:flex;flex-direction:column;border:1px solid #E1E4EA;border-radius:13px;background:#fff;position:relative;overflow:hidden;box-shadow:0 1px 2px rgba(20,30,50,.04)}'
   +H+' .bc .top{padding:11px 15px 10px;color:#fff;display:block}'
   +H+' .bc .trow{display:flex;align-items:flex-start;gap:12px}'
@@ -77945,6 +78022,8 @@ function pjGuideOpen(bid){ try{ _pckDate=_poDate; goSetupOpen(bid); }catch(_){} 
 
 function pjCard(B, pier, ro){
   var bid=B.bid, rt=B.route||{}, J=pjOf(_poDate,bid), SUB=pjSubList(_poDate,bid), n=Object.keys(SUB).length;
+  var ST=B._st||pjBoatSt(_poDate,B.boat,!!rt.id), SM=PJ_ST[ST.k]||PJ_ST.idle;
+  var going=(ST.k==='run'||ST.k==='clash');
   var col=(typeof pckBoatColor==='function')?pckBoatColor(bid):'#185FA5';
   var pcol=rt.color||'#5A6270';
   var pax=pjPax(_poDate,bid,pier), G=pjGuides(_poDate,bid);
@@ -77952,7 +78031,7 @@ function pjCard(B, pier, ro){
   var wbc=J.wbc||'', wbt=J.wb||'';
   var pid='pjpop-'+bid.replace(/[^A-Za-z0-9_-]/g,'_');
   var wid='pjwb-'+bid.replace(/[^A-Za-z0-9_-]/g,'_');
-  var h='<div class="bc">'
+  var h='<div class="bc'+(going?'':' dim')+(ST.k==='clash'?' clash':'')+'" data-st="'+ST.k+'">'
    +'<div class="top" style="background:'+col+'">'
      +'<div class="trow"><div class="l"><div class="bn">'+poE(B.boat.name||bid)+'</div>'
        +'<div class="be">'+poE(B.boat.type||'')+(B.boat.engineCount?(' &middot; '+B.boat.engineCount+' Eng'):'')
@@ -77961,21 +78040,35 @@ function pjCard(B, pier, ro){
      /* §pjDocs · ใบอนุญาตใช้เรือ + ใบเข้าเกาะของโปรแกรมวันนี้ */
      + pjDocsHtml(B.boat, rt, _poDate)
    +'</div>'
-   +'<div class="pg" style="background:'+pcol+'"><div class="pn">'+poE(rt.name||B.rid||'—')+'</div>'
-     +'<div class="pr">'+poE(rt.islands||'')+'</div>'
+   +'<div class="pg" style="background:'+(rt.id?pcol:'#8B93A1')+'">'
+     +'<div class="pn">'+(rt.id?poE(rt.name||B.rid)
+        :(B._away?('วันนี้ไปวิ่งที่ '+poE(((PO_PIERS.filter(function(x){ return x.k===(B._away.route.pier||''); })[0])||{}).n||B._away.route.pier||'ท่าอื่น'))
+                 :'ไม่ได้ออกทริปวันนี้'))+'</div>'
+     +'<div class="pr">'+(rt.id?poE(rt.islands||'')
+        :(B._away?poE(B._away.route.name||'')
+                 :poE([ST.loc||'', ST.note||''].filter(Boolean).join(' \u00b7 ')||(SM.t))))+'</div>'
      +(ro?'':'<button class="pj-pen" onclick="pjPopToggle(\''+pid+'\')" title="แต้มสีโปรแกรมนี้">&#9998;</button>')
      +'<div class="pj-pop" id="'+pid+'"><div class="ph">สีของโปรแกรม '+poE(rt.name||'')+'</div><div class="pj-sws">'
        +PJ_PAL.map(function(c){ return '<div class="pj-sw'+(c===pcol?' on':'')+'" style="background:'+c+'" onclick="pjProgColor(\''+poE(B.rid)+'\',\''+c+'\')"></div>'; }).join('')
        +'</div><div class="pf">เปลี่ยนแล้วมีผลกับโปรแกรมนี้ <b>ทุกลำทุกวัน</b> และทุกหน้าที่โชว์เส้นทางนี้</div></div></div>'
-   +'<div class="stbar">'+(n?('<span class="pj-sub">'+n+' SUBSTITUTION'+(n>1?'S':'')+' TODAY</span>')
-                            :(J._std?'<span class="pj-std">&#10003; ทีมประจำเรือ</span>':'<span class="pj-std">&#10003; STANDARD CREW</span>'))
-     +(pax.n?('<span style="font-size:10.5px;color:#8B93A1;font-weight:600">'+pax.n+' booking</span>'):'')+'</div>'
+   +'<div class="stbar">'
+     +'<span class="pj-stq" style="background:'+SM.bg+';color:'+SM.fg+';border:1px solid '+SM.bd+'">'+poE(SM.t)+'</span>'
+     +(going
+        ? (n?('<span class="pj-sub">'+n+' SUB'+(n>1?'S':'')+'</span>')
+             :(J._std?'<span class="pj-std">&#10003; ทีมประจำ</span>':'<span class="pj-std">&#10003; STANDARD</span>'))
+        : '')
+     +(going&&pax.n?('<span class="pj-stmeta">'+pax.n+' booking</span>'):'')
+     +((!going&&ST.mj.length)?('<span class="pj-stmeta" title="'+poE(ST.mj.map(function(m){ return (m.no||'')+' '+(m.title||m.type||''); }).join(' \u00b7 '))+'">งานซ่อม '+ST.mj.length+' ใบ'
+        +(ST.mj[0]&&ST.mj[0].no?(' \u00b7 '+poE(ST.mj[0].no)):'')+'</span>'):'')
+   +'</div>'
    + pjSecHd('Captain &amp; Crew','crew')
    + pjSelRow(pier,bid,'Captain','cap',J.cap,SUB.cap,['กัปตัน','captain'],ro,B.boat)
    + pjSelRow(pier,bid,'Asst. Captain','asst',J.asst,SUB.asst,['กัปตัน','captain'],ro,B.boat)
    + [0,1,2].map(function(i){ return pjSelRow(pier,bid,'Crew '+(i+1),'crew'+i,(J.crew||[])[i]||'',SUB['crew'+i],['เด็กเรือ','crew','ลูกเรือ'],ro,B.boat); }).join('')
    + [0,1].map(function(i){ return pjSelRow(pier,bid,'Island Staff '+(i+1),'island'+i,(J.island||[])[i]||'',null,['อุปกรณ์','equipment'],ro,B.boat); }).join('')
    + '<div class="pj-licbox">'+(function(){ try{
+       // §pjAll · ลำที่ไม่ได้ออก ไม่ต้องเตือนใบอนุญาต · ไม่มีใครต้องคุมเรือ
+       if(!going) return '<div class="pj-licnone">ไม่ต้องตรวจใบอนุญาต — ไม่ได้ออกเรือวันนี้</div>';
        var ids=[J.cap,J.asst].concat(J.crew||[]);
        var R=plCheckBoat(bid,ids);
        if(!R || !R.length) return '<div class="pj-licnone">ยังไม่ได้ตั้งทะเบียนประเภทใบอนุญาต</div>';
@@ -78019,19 +78112,26 @@ function renderPierJob(pier){
   if(pier) _poPier=pier;
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
   var host=document.getElementById('pj-host-'+P.k); if(!host) return;
-  var boats=poBoats(_poDate,_poPier), ro=!poCanEdit();
+  var all=pjAllBoats(_poDate,_poPier), ro=!poCanEdit();
+  var cnt={all:all.length, run:0, idle:0, fix:0, off:0, clash:0};
   var tot=0, subN=0, noCap=0, licBad=0;
-  boats.forEach(function(B){ var p=pjPax(_poDate,B.bid,_poPier); tot+=p.ad+p.chd+p.inf+p.foc;
+  all.forEach(function(B){
+    cnt[B._st.k]=(cnt[B._st.k]||0)+1;
+    if(B._st.k!=='run' && B._st.k!=='clash') return;      // ตัวเลขงานวันนี้ นับเฉพาะลำที่ออก
+    var p=pjPax(_poDate,B.bid,_poPier); tot+=p.ad+p.chd+p.inf+p.foc;
     var J=pjOf(_poDate,B.bid);
     subN+=pjSubN(_poDate,B.bid); if(!J.cap) noCap++;
     try{ licBad+=plBoatBad(B.bid,[J.cap,J.asst].concat(J.crew||[]))?1:0; }catch(_){}
   });
-  var idle=[];
-  (typeof BOATS!=='undefined'?BOATS:[]).forEach(function(b){
-    if((b.pier||'')!==_poPier) return;
-    if(boats.some(function(x){ return x.bid===b.id; })) return;
-    idle.push(b);
+  var boats=(_pjF==='all')?all:all.filter(function(B){
+    return _pjF==='go' ? (B._st.k==='run'||B._st.k==='clash')
+         : _pjF==='idle' ? (B._st.k==='idle'||B._st.k==='away')
+         : (B._st.k==='fix'||B._st.k==='off'||B._st.k==='clash');
   });
+  var chip=function(k,lb,n,dot){
+    return '<button class="'+(_pjF===k?'on':'')+'" onclick="pjFilter(\''+k+'\')">'
+      +(dot?('<i style="background:'+dot+'"></i>'):'')+lb+'<span class="n">'+n+'</span></button>';
+  };
   host.innerHTML='<style id="pj-style">'+pjCSS()+(typeof plCSS==='function'?plCSS():'')+'</style>'
     +'<div class="pj-h"><div><div class="lab">Pier Office</div>'
       +'<h1>'+poE(P.n||P.t)+' · ใบงานเรือ</h1>'
@@ -78040,7 +78140,7 @@ function renderPierJob(pier){
       +'<button onclick="pjShift(-1)">&#8249;</button>'
       +'<input type="date" value="'+_poDate+'" onchange="pjDate(this.value)">'
       +'<button onclick="pjToday()">วันนี้</button>'
-      +'<span style="font-size:12px;color:#6E7684;margin-left:6px">เรือออก <b style="color:#16265C">'+boats.length+'</b> ลำ · '
+      +'<span style="font-size:12px;color:#6E7684;margin-left:6px">เรือออก <b style="color:#16265C">'+(cnt.run+cnt.clash)+'</b> / '+all.length+' ลำ · '
         +'<b style="color:#0F6E56">'+tot+'</b> pax'
         +(subN?(' · <b style="color:#B4560A">เปลี่ยนตัว '+subN+' คน</b>'):'')
         +(noCap?(' · <b style="color:#C0271C">ยังไม่มีกัปตัน '+noCap+' ลำ</b>'):'')
@@ -78053,11 +78153,19 @@ function renderPierJob(pier){
       +'</div>'
       +'<button class="pri" onclick="pjPrint()">พิมพ์ใบงาน</button>'
     +'</div>'
+    +'<div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:13px">'
+      +'<div class="pj-chips">'
+        + chip('all','ทั้งหมด',all.length,'')
+        + chip('go','ออกทริปวันนี้',cnt.run+cnt.clash,'#0F6E56')
+        + chip('idle','ว่าง / ไปท่าอื่น',cnt.idle+(cnt.away||0),'#4A5D7A')
+        + chip('down','ซ่อม / ไม่พร้อม',cnt.fix+cnt.off+cnt.clash,'#8A5A00')
+      +'</div>'
+      +(cnt.clash?('<span style="font-size:11.5px;font-weight:800;color:#A0342A;background:#FCEFEE;border:1px solid #F0CFCB;border-radius:9px;padding:5px 11px">'
+        +'&#9888; ขัดกัน '+cnt.clash+' ลำ · ช่างแจ้งว่าไม่พร้อม แต่มีโปรแกรมวางไว้</span>'):'')
+    +'</div>'
     +(boats.length
       ? ('<div class="pj-strip w'+_pjW+'">'+boats.map(function(B){ return pjCard(B,_poPier,ro); }).join('')+'</div>')
-      : '<div class="pj-empty">ไม่มีเรือออกจากท่านี้ในวันที่เลือก<br><span style="font-size:11.5px">ผูกเรือกับเส้นทางได้ที่หน้า Boat Operation</span></div>')
-    +(idle.length?('<div class="pj-idle"><div style="width:100%;font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#8B93A1;margin-bottom:2px">ไม่ได้ออกทริปวันนี้ · '+idle.length+' ลำ</div>'
-       +idle.map(function(b){ return '<div class="pj-ib"><div class="n">'+poE(b.name||b.id)+'</div><div class="s">'+poE(b.status||b.type||'')+'</div></div>'; }).join('')+'</div>'):'');
+      : '<div class="pj-empty">ไม่มีเรือที่ตรงตัวกรองนี้<br><span style="font-size:11.5px">กด "ทั้งหมด" เพื่อดูทุกลำของท่านี้</span></div>');
   if(!host.__pjClose){ host.__pjClose=1;
     document.addEventListener('click', function(){ try{ host.querySelectorAll('.pj-pop').forEach(function(p){ p.classList.remove('on'); }); }catch(_){} });
   }
@@ -78065,6 +78173,9 @@ function renderPierJob(pier){
 /* §pjDocs · จำนวนลำต่อจอ · จอเล็กเลือก 3 อ่านสบาย จอใหญ่เลือก 5 เห็นเยอะ */
 var _pjW=(function(){ try{ var v=+localStorage.getItem('la_pjw'); return (v===3||v===4||v===5)?v:4; }catch(_){ return 4; } })();
 function pjWide(n){ _pjW=n; try{ localStorage.setItem('la_pjw',String(n)); }catch(_){} renderPierJob(); }
+/* §pjAll · ตัวกรองสถานะ · จำไว้ให้ ไม่ต้องกดใหม่ทุกวัน */
+var _pjF=(function(){ try{ var v=localStorage.getItem('la_pjf'); return ['all','go','idle','down'].indexOf(v)>=0?v:'go'; }catch(_){ return 'go'; } })();
+function pjFilter(k){ _pjF=k; try{ localStorage.setItem('la_pjf',k); }catch(_){} renderPierJob(); }
 function pjDate(v){ if(v) _poDate=v; renderPierJob(); }
 function pjShift(n){ var d=new Date(_poDate+'T12:00:00'); d.setDate(d.getDate()+n); _poDate=poYMD(d); renderPierJob(); }
 function pjToday(){ _poDate=poYMD(new Date()); renderPierJob(); }
