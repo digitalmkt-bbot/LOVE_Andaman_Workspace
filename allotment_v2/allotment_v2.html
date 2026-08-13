@@ -77657,6 +77657,19 @@ var PJ_WB=[{t:'ดำ',c:'#1A1A1A'},{t:'ม่วง',c:'#8E2FD6'},{t:'ฟ้า
            {t:'น้ำเงิน',c:'#185FA5'},{t:'ขาว',c:'#FFFFFF'}];
 var PJ_PAL=['#B8860B','#D9A441','#B4560A','#C0271C','#A82063','#7B3FA0',
             '#4A3FB0','#185FA5','#1668A8','#0E7D74','#0F6E56','#4E6B2F'];
+/* §pjDocAlways · ผสมสีเข้าหาเทา · ใช้กับหัวการ์ดของลำที่ไม่ได้ออก
+   ทำที่ตอนสร้าง HTML ไม่ใช่ CSS filter · ลูกในการ์ดจะได้ไม่โดนลดสีตามไปด้วย */
+function pjMute(hex, amt){
+  var h=String(hex||'').replace('#',''); if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  if(!/^[0-9a-f]{6}$/i.test(h)) return '#8B93A1';
+  var t=[0x8B,0x93,0xA1], k=(amt==null?0.62:amt), o='#';
+  for(var i=0;i<3;i++){
+    var v=parseInt(h.substr(i*2,2),16);
+    var m=Math.round(v+(t[i]-v)*k);
+    o+=('0'+Math.max(0,Math.min(255,m)).toString(16)).slice(-2);
+  }
+  return o;
+}
 /* §pjAll · สถานะของเรือ ณ วันหนึ่ง · อ่านจากของที่มีอยู่แล้วทั้งหมด */
 function pjLogAt(boat, date){
   var L=((boat&&boat.log)||[]).filter(function(e){ return e && e.from<=date && (!e.to || e.to>=date); });
@@ -77773,8 +77786,20 @@ function pjDocsHtml(boat, rt, date){
   // บรรทัด 2 · ใบเข้าเกาะของโปรแกรมวันนี้
   var need=(rt&&rt.id)?pjParkNeed(rt):[];
   if(!rt || !rt.id){
-    out+='<div class="pj-dl none"><span class="nm">ใบเข้าเกาะ</span>'
-       +'<span class="vl">ไม่ได้ออกทริปวันนี้</span></div>';
+    // §pjDocAlways · ไม่ได้ออกทริป ก็ยังต้องเตือนใบเข้าเกาะ
+    //   ไม่มีโปรแกรมให้ยึด จึงโชว์ใบที่ "แย่ที่สุดที่เรือลำนี้ถืออยู่"
+    //   ลำที่จอดคือลำที่มีเวลาไปต่อใบ ยิ่งต้องเห็นก่อนถึงคิววิ่ง
+    var RANK0={x:0,none:1,d1:2,renew:3,d2:4,d3:5,d4:6};
+    var held=PJ_PARK.map(function(p){ var d=pjDocFind(boat,p.doc); if(!d) return null;
+        var lv=pjDocLv(d,date); lv._t=p.t; return lv; }).filter(Boolean);
+    if(!held.length){
+      out+='<div class="pj-dl none"><span class="nm">ใบเข้าเกาะ</span>'
+         +'<span class="vl">ไม่มีใบในระบบ</span></div>';
+    } else {
+      held.sort(function(a,b){ return (RANK0[a.k]||9)-(RANK0[b.k]||9); });
+      var w0=held[0];
+      out+=line(w0, 'ใบอนุญาต '+w0._t, (held.length>1?('<span class="pj-dmore">+'+(held.length-1)+'</span>'):''));
+    }
   } else if(!need.length){
     out+='<div class="pj-dl none"><span class="nm">ใบเข้าเกาะ</span>'
        +'<span class="vl">โปรแกรมนี้ไม่ต้องใช้ใบอุทยาน</span></div>';
@@ -77818,9 +77843,10 @@ function pjCSS(){
   +H+' .pj-wsw{display:flex;gap:4px;background:#fff;border:1px solid #E1E4EA;border-radius:9px;padding:3px}'
   +H+' .pj-wsw button{border:none;background:transparent;border-radius:6px;padding:4px 10px;font:700 11.5px inherit;color:#6E7684;cursor:pointer}'
   +H+' .pj-wsw button.on{background:#EAF0F9;color:#1B4A87}'
-  /* §pjAll · ลำที่ไม่ได้ออก · ลดความจัดของสีหัวการ์ด สายตาจะได้ไปที่ลำที่ทำงานก่อน */
-  +H+' .bc.dim .top,'+H+' .bc.dim .pg{filter:saturate(.24) brightness(.99)}'
-  +H+' .bc.dim{opacity:.94}'
+  /* §pjDocAlways · ลำที่ไม่ได้ออกใช้สีหัวการ์ดที่ผสมให้จางแล้วตั้งแต่ตอนสร้าง HTML
+     ห้ามใช้ CSS filter · filter กินลูกทุกตัว บรรทัดใบอนุญาตจะโดนลดสีไปด้วย
+     ใบหมดอายุต้องแดงเสมอ ไม่ว่าวันนั้นเรือจะออกหรือไม่ */
+  +H+' .bc.dim .bn{opacity:.92}'
   +H+' .bc.clash{border-color:#E8B4AE;box-shadow:0 0 0 2px rgba(192,39,28,.10)}'
   +H+' .pj-stq{font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap}'
   +H+' .pj-stmeta{font-size:10px;color:#8B93A1;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
@@ -78024,7 +78050,8 @@ function pjCard(B, pier, ro){
   var bid=B.bid, rt=B.route||{}, J=pjOf(_poDate,bid), SUB=pjSubList(_poDate,bid), n=Object.keys(SUB).length;
   var ST=B._st||pjBoatSt(_poDate,B.boat,!!rt.id), SM=PJ_ST[ST.k]||PJ_ST.idle;
   var going=(ST.k==='run'||ST.k==='clash');
-  var col=(typeof pckBoatColor==='function')?pckBoatColor(bid):'#185FA5';
+  var colRaw=(typeof pckBoatColor==='function')?pckBoatColor(bid):'#185FA5';
+  var col=going?colRaw:pjMute(colRaw);
   var pcol=rt.color||'#5A6270';
   var pax=pjPax(_poDate,bid,pier), G=pjGuides(_poDate,bid);
   var langs=Object.keys(pax.langs);
