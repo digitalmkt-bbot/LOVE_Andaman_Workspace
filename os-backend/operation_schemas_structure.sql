@@ -1677,7 +1677,8 @@ CREATE TABLE operation_schemas."pier_staff" (
     "name" text,
     "role" text,
     "phone" text,
-    "active" boolean
+    "active" boolean,
+    "defcode" text
 );
 
 CREATE TABLE operation_schemas."pier_duty" (

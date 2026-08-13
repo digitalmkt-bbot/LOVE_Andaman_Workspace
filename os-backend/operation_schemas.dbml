@@ -1594,6 +1594,7 @@ Table pier_staff {
   role text
   phone text
   active boolean
+  defcode text
 }
 
 Table pier_duty {

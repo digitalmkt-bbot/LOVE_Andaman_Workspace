@@ -6897,6 +6897,12 @@
       "source": "active",
       "kind": "scalar",
       "db_type": "boolean"
+    },
+    "defcode": {
+      "source": "defCode",
+      "kind": "scalar",
+      "db_type": "text",
+      "note": "รหัสตั้งต้นในตารางการทำงาน เมื่อวันนั้นมีใบงานแล้วแต่คนนี้ไม่ได้ลงเรือ"
     }
   },
   "pier_duty": {
