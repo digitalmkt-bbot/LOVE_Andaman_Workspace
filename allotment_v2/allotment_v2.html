@@ -48822,8 +48822,12 @@ function pckRowHtml(r, date){
    +'</td>'
    +'<td>'+pckNameCell(r)+'</td>'
    +px('ad')+px('chd')+px('inf')+px('foc')
-   +'<td>'+ckTimeChip(tst, time, 'pier')
-     +(pickup?'<div style="margin-top:5px"><span class="ck-pick">'+e(pickup)+'</span></div>':'')
+   +'<td>'+(r._ovnBack
+       /* §ovnCard · ขากลับไม่มีเวลารับ · ชิปเวลาจะกลายเป็น "สาย" ทั้งที่ไม่เคยมีนัดรับ */
+       ? '<span class="ck-pick" style="background:#EDE7FB;color:#5B289A;font-weight:800" title="ขากลับค้างคืน · ขึ้นเรือที่ท่าเกาะ ไม่มีรถไปรับ">&#8617; ไม่มีขารับ &middot; มาจากเกาะ</span>'
+         +(r._ovnOut?('<div style="margin-top:4px;font-size:10.5px;color:#a5a49d">ไปเมื่อ <b style="color:#5B289A">'+e((typeof ovnDayTh==='function')?ovnDayTh(r._ovnOut):r._ovnOut)+'</b></div>'):'')
+       : ckTimeChip(tst, time, 'pier'))
+     +(pickup?'<div style="margin-top:5px"><span class="ck-pick"'+(r._ovnBack?' title="จุดส่ง · ขากลับส่งเข้าโรงแรม"':'')+'>'+(r._ovnBack?'&#8627; ส่ง ':'')+e(pickup)+'</span></div>':'')
      +((room||pArea||r.priv)?'<div style="margin-top:4px;font-size:10.5px;color:#a5a49d">'
         +(room?'Room <b style="color:#5F5E5A;font-family:\'DM Mono\',monospace">'+e(room)+'</b>':'')
         +((room&&pArea)?' · ':'')
@@ -49250,7 +49254,35 @@ function pckGuideJobSheet(bid, date, rows, vd){
     body+='<tr class="grp"><td colspan="'+(10+(showSvc?1:0)+(showLang?1:0))+'" style="background:#F4EFFC">'
       +'<span class="gvan" style="color:#5B289A">&#8617; รับกลับจากเกาะ (OVN) &middot; '+_ovnG.length+' ใบ &middot; '+_ovPax+' คน</span>'
       +' <span class="gmeta">ค้างคืนบนเกาะ &middot; ขึ้นเรือที่ท่าเกาะ ไม่มีรถไปรับ — เช็คชื่อให้ครบก่อนออกจากเกาะ</span></td></tr>';
-    _ovnG.forEach(function(r){ body+=rowHtml(r); });
+    // §ovnCard · แยกตามรถที่พากลับ · ไกด์ต้องบอกได้ว่าใครขึ้นคันไหนตอนถึงท่า
+    //   ขากลับใช้ vanReturnId ถ้าไม่ได้ตั้งไว้ถือว่ากลับคันเดิม (vanId)
+    var _og={}, _oo=[];
+    _ovnG.forEach(function(r){
+      var rv=(r.O&&(r.O.vanReturnId||r.O.vanId))||'';
+      var k=rv||'__none';
+      if(!_og[k]){ _og[k]={vid:rv, rows:[]}; _oo.push(k); }
+      _og[k].rows.push(r);
+    });
+    _oo.sort(function(x,y){
+      if(x==='__none') return -1; if(y==='__none') return 1;
+      return String(pckVanName(_og[x].vid)).localeCompare(String(pckVanName(_og[y].vid)));
+    });
+    _oo.forEach(function(k){
+      var g=_og[k], hd;
+      if(g.vid){
+        var veh=(typeof vehGet==='function'?vehGet(g.vid):null)||{};
+        var rd=(typeof vanJobsDriverInfo==='function')?vanJobsDriverInfo(g.vid,date)
+              :{driver:veh.driver||'', phone:veh.driverPhone||'', plate:veh.plate||''};
+        hd='<span class="gvan">&#8617; รถกลับ &middot; '+e(veh.name||g.vid)+'</span> <span class="gmeta">'
+          +(rd.plate?('ทะเบียน <b>'+e(rd.plate)+'</b>'):'')
+          +(rd.driver?(' &middot; '+e(rd.driver)):'')+(rd.phone?(' &middot; <b>'+e(rd.phone)+'</b>'):'')+'</span>';
+      } else {
+        hd='<span class="gvan" style="color:#A32D2D">&#9888; ยังไม่จัดรถกลับ</span>'
+          +' <span class="gmeta">เรือรับกลับถึงท่าแล้วต้องมีรถส่งเข้าโรงแรม — แจ้งออฟฟิศก่อนออกจากเกาะ</span>';
+      }
+      body+='<tr class="grp"><td colspan="'+(10+(showSvc?1:0)+(showLang?1:0))+'" style="background:#FAF7FE;padding-left:26px">'+hd+'</td></tr>';
+      g.rows.forEach(function(r){ body+=rowHtml(r); });
+    });
   }
 
   var THEAD='<thead><tr><th style="width:18px">&#10003;</th><th style="width:7%">Voucher</th>'
@@ -49968,76 +50000,32 @@ function pckBoatTabs(all){
     +'<button class="pck-joball go" onclick="goPrint(\'all\')" title="ใบสั่งงานมัคคุเทศก์ทุกลำ · A4 แนวตั้ง · 1 ลำ = 1 ใบ">&#128220;</button>'
     +'<button class="pck-joball go2" onclick="goRegOpen(\'\')" title="ทะเบียนไกด์ · เลขที่ใบ · ผู้มีอำนาจลงนาม">&#9881;</button></div>';
 }
-// §ovnBack (2026-08-13) · แถบ "รับกลับจากเกาะ" ของหน้าเช็คอินหน้าท่า
-//   คนกลุ่มนี้ค้างคืนบนเกาะ วันนี้เรือต้องไปรับกลับ · ไม่มีขั้นเช็คอิน ไม่มีเงินให้เก็บ
-//   จึงเป็นแถบอ่านอย่างเดียว ไม่มีปุ่ม และไม่ถูกนับในตัวเลขสถานะใดๆ ของหน้า
-//   วางบนสุดก่อนการ์ดเรือ เพราะเป็นงานที่ "ลืมแล้วแก้ไม่ได้" — เรือออกไปแล้วไม่วนกลับ
-function pckOvnBackBand(list, date){
-  if(!list || !list.length) return '';
-  var e=ckEsc;
-  var byBoat={}, ord=[];
-  list.forEach(function(r){
-    var k=r.bid||'__none';
-    if(!byBoat[k]){ byBoat[k]={bid:r.bid||'', rows:[], pax:0}; ord.push(k); }
-    byBoat[k].rows.push(r); byBoat[k].pax+=(+r.pax||0);
-  });
-  ord.sort(function(x,y){
-    if(x==='__none') return 1; if(y==='__none') return -1;
-    return String(pckBoatName(byBoat[x].bid)).localeCompare(String(pckBoatName(byBoat[y].bid)));
-  });
-  var totPax=list.reduce(function(a,r){ return a+(+r.pax||0); },0);
-  var body='';
-  ord.forEach(function(k){
-    var G=byBoat[k];
-    var col=G.bid?((typeof pckBoatColor==='function'?pckBoatColor(G.bid):'')||'#5B289A'):'#8a8a82';
-    G.rows.forEach(function(r){
-      var b=r.b, t=r.t;
-      var pb=(typeof ckPaxBreak==='function')?ckPaxBreak(t.pax):{ad:0,chd:0,inf:0,foc:0};
-      var who=(typeof tsPaxWho==='function')?tsPaxWho(pb):'';
-      var rt=(typeof getRoute==='function'?getRoute(t.routeId):null)||{};
-      var z=(typeof bkV2EffZone==='function')?bkV2EffZone(b,t):((t&&t.zone)||b.pickupZone||'');
-      var zl=(z&&typeof bkV2ZoneLabel==='function')?bkV2ZoneLabel(z):(z||'');
-      var drop=b.hotelName||b.pickup||'';
-      var nights='';
-      if(r.out){ try{ nights=String(Math.max(1, Math.round((new Date(date+'T12:00:00')-new Date(r.out+'T12:00:00'))/86400000))); }catch(_){ nights=''; } }
-      body+='<div class="pck-ovrow">'
-        +'<div class="pck-ovbt"><i style="background:'+col+'"></i>'+e(G.bid?pckBoatName(G.bid):'ยังไม่จัดเรือ')+'</div>'
-        +'<div><div class="pck-ovnm">'+e(b.voucherRef||b.code||'—')+' &middot; '+e(b.leadPax||'—')+'</div>'
-          +'<div class="pck-ovsub">'+e(rt.name||t.routeId||'')+(b.leadPhone||b.phone?(' &middot; '+e(b.leadPhone||b.phone)):'')+'</div></div>'
-        +'<div class="pck-ovpx">'+(+r.pax||0)+(who?('<span>'+e(who)+'</span>'):'')+'</div>'
-        +'<div class="pck-ovgo">'+(r.out?('ไปเมื่อ <b>'+e(ovnDayTh(r.out))+'</b>'+(nights?(' &middot; ค้าง '+nights+' คืน'):'')):'<span style="color:#b0aea6">ไม่พบทริปขาไป</span>')
-          +'<span class="pck-ovnp">&#8617; ไม่มีขารับ &middot; มาจากเกาะ</span></div>'
-        +'<div class="pck-ovzn">'+(drop?e(drop):(zl?e(zl):'<span style="color:#b0aea6">—</span>'))
-          +(drop&&zl?('<span>'+e(zl)+'</span>'):(drop?'':''))+'</div>'
-        +'</div>';
-    });
-  });
-  return '<style>'
-    +'#piercheckin-host .pck-ovband{background:linear-gradient(180deg,#F7F3FE,#EFE8FC);border:1.5px solid #DDCFF7;border-radius:14px;padding:12px 14px;margin-bottom:12px}'
-    +'#piercheckin-host .pck-ovhd{display:flex;align-items:center;gap:10px;margin-bottom:9px}'
-    +'#piercheckin-host .pck-ovhd .t{font-size:13.5px;font-weight:800;color:#4A2E86}'
-    +'#piercheckin-host .pck-ovhd .s{font-size:11px;color:#7c6ba8}'
-    +'#piercheckin-host .pck-ovhd .c{margin-left:auto;background:#5B289A;color:#fff;border-radius:9px;padding:4px 12px;font-size:11.5px;font-weight:800;white-space:nowrap}'
-    +'#piercheckin-host .pck-ovrow{display:grid;grid-template-columns:132px minmax(0,1fr) 84px 190px minmax(0,150px);gap:10px;align-items:center;'
-      +'background:#fff;border:1px solid #E7DEF8;border-radius:10px;padding:8px 11px;margin-top:6px}'
-    +'#piercheckin-host .pck-ovbt{font-weight:800;font-size:12px;display:flex;align-items:center;gap:6px;min-width:0}'
-    +'#piercheckin-host .pck-ovbt i{width:9px;height:9px;border-radius:50%;flex:none}'
-    +'#piercheckin-host .pck-ovnm{font-weight:700;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
-    +'#piercheckin-host .pck-ovsub{font-size:10.5px;color:#8b8579;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
-    +'#piercheckin-host .pck-ovpx{text-align:center;font-weight:800;font-size:16px;color:#5B289A;line-height:1.15}'
-    +'#piercheckin-host .pck-ovpx span{display:block;font-size:9.5px;font-weight:600;color:#9b93ab}'
-    +'#piercheckin-host .pck-ovgo{font-size:11px;color:#6b675e;line-height:1.45}'
-    +'#piercheckin-host .pck-ovgo b{color:#4A2E86}'
-    +'#piercheckin-host .pck-ovnp{display:block;color:#8a5500;font-weight:600}'
-    +'#piercheckin-host .pck-ovzn{font-size:11px;color:#185FA5;font-weight:600;line-height:1.35;overflow:hidden}'
-    +'#piercheckin-host .pck-ovzn span{display:block;font-size:10px;font-weight:500;color:#8b8579}'
-    +'@media print{#piercheckin-host .pck-ovband{break-inside:avoid}}'
-    +'</style>'
-    +'<div class="pck-ovband"><div class="pck-ovhd">'
-    +'<div><div class="t">&#8617; รับกลับจากเกาะ (OVN)</div>'
-    +'<div class="s">ค้างคืนบนเกาะ &middot; วันนี้เรือไปรับกลับ &middot; ไม่ต้องเช็คอินที่ท่า และไม่มีเงินต้องเก็บ</div></div>'
-    +'<div class="c">'+list.length+' booking &middot; '+totPax+' คน</div></div>'
-    +body+'</div>';
+// §ovnCard · หัวกลุ่ม "รถที่พากลับ" ของบล็อกรับกลับ
+//   ขากลับไม่มีการเช็คอินรถ ตัวเลข "เช็คอินรถแล้ว x/y" ของหัวปกติจึงไม่มีความหมาย
+//   สิ่งที่หน้าท่าต้องรู้คือ รถคันไหน ทะเบียนอะไร คนขับใคร เบอร์อะไร
+//   และถ้ายังไม่จัด ต้องเตือนแรง — เรือถึงท่าแล้วค่อยรู้ว่าไม่มีรถส่ง คือแก้ไม่ทัน
+function pckOvnVanHead(vg, date){
+  var e=ckEsc, vid=vg.vid, a=pckAgg(vg.rows);
+  var h='<div class="pck-vhd">';
+  if(vg.self){
+    h+='<span class="pck-vpill" style="background:#8a8a82">กลับเอง</span>'
+      +'<span class="pck-vmeta" style="white-space:normal">ลูกค้าเดินทางกลับเอง — เรือส่งถึงท่าแล้วจบงาน</span>';
+  } else if(!vid){
+    h+='<span class="pck-vpill" style="background:#A32D2D">&#9888; ยังไม่จัดรถกลับ</span>'
+      +'<span class="pck-vmeta" style="white-space:normal;color:#A32D2D">เรือรับกลับถึงท่าแล้วต้องมีรถส่งเข้าโรงแรม — จัดรถกลับก่อนเรือถึง</span>';
+  } else {
+    var veh=(typeof vehGet==='function')?(vehGet(vid)||{}):{};
+    var c=(typeof vehChipPair==='function')?vehChipPair(vid):['#F4E8FB','#6B289A'];
+    var col=c[1]||'#6B289A';
+    var rd=(typeof vanJobsDriverInfo==='function')?vanJobsDriverInfo(vid,date)
+          :{driver:veh.driver||'', phone:veh.driverPhone||'', plate:veh.plate||''};
+    h+='<span class="pck-vpill" style="background:'+col+'">&#8617; รถกลับ &middot; '+e(veh.name||vid)+'</span>'
+      +(rd.plate?'<span class="pck-vplate" style="color:'+col+';border-color:'+col+'66">'+e(rd.plate)+'</span>':'')
+      +(rd.driver?'<span class="pck-vmeta">คนขับ <b>'+e(rd.driver)+'</b></span>':'<span class="pck-vmeta" style="color:#a5751f">ยังไม่ระบุคนขับ</span>')
+      +(rd.phone?'<a class="pck-vtel" style="color:'+col+';border-color:'+col+'66" href="tel:'+e(String(rd.phone).replace(/[^0-9+]/g,''))+'" onclick="event.stopPropagation()">'+e(rd.phone)+'</a>':'');
+  }
+  h+='<span class="pck-vstat">รับกลับ '+a.pax+' pax</span></div>';
+  return h;
 }
 function renderPierCheckin(){
   var host=document.getElementById('piercheckin-host'); if(!host) return;
@@ -50052,16 +50040,6 @@ function renderPierCheckin(){
     var _ovnBack=(typeof bkIsOvnReturn==='function') && bkIsOvnReturn(t);
     if(_pckRoute){ if(t.routeId!==_pckRoute) return; }
     else if(_pckFam){ var f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(t.routeId):null; if(!f||f.id!==_pckFam) return; }
-    // §ovnBack · ขากลับค้างคืน · ไม่มีการเช็คอินที่ท่า (ขึ้นเรือที่ท่าเกาะ) และไม่มีเงินให้เก็บ
-    //   จึงห้ามเข้า all — ไม่งั้น ถึงท่า/เคลียร์/ขึ้นเรือ จะค้างเป็น "ยังไม่มา" ทั้งวัน
-    //   แต่หน้าท่าต้องรู้ว่าเรือลำไหนต้องแวะรับใครกลับ → เก็บอีกกอง โชว์เป็นแถบอ่านอย่างเดียว
-    if(_ovnBack){
-      var _oO=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
-      ovnAll.push({ b:b, t:t, O:_oO, bid:_oO.boatId||t.charterBoatId||'',
-                    pax:ckBookedPax(t),
-                    out:(typeof _ovnOutDate==='function')?_ovnOutDate(b,t):'' });
-      return;
-    }
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
     var booked=ckBookedPax(t);
     var row={b:b, t:t, O:O, booked:booked, expect:pckExpected(b,date,booked), ck:O.pierCheckin||null,
@@ -50070,7 +50048,16 @@ function renderPierCheckin(){
     row.arr=pckArrivalOf(row);
     row.money=pckMoney(b,date);
     row._vd=pckVoidInfo(b,date,t);
-    pckExpandBoatSplits(row, b, date, all);   // §boatSplit · แยกลำ → 1 แถวต่อลำ
+    // §ovnCard · ขากลับค้างคืน · แถวสร้างเหมือนกันทุกอย่าง ต่างแค่ปลายทางที่เก็บ
+    //   ห้ามเข้า all — ไม่งั้น ถึงท่า/เคลียร์/ขึ้นเรือ จะค้างเป็น "ยังไม่มา" ทั้งวัน และเงินจะถูกนับซ้ำ
+    row._ovnBack=_ovnBack;
+    if(_ovnBack){
+      row._ovnOut=(typeof _ovnOutDate==='function')?_ovnOutDate(b,t):'';
+      // รถที่พากลับ · ตั้งไว้เองก็ใช้อันนั้น ไม่ได้ตั้ง = กลับคันเดิมกับที่จัดไว้ในวันนั้น
+      row._retVan=O.vanReturnId||O.vanId||'';
+      row._retSelf=!!((typeof bkV2RetInfo==='function') && bkV2RetInfo(b,date).selfRet);
+    }
+    pckExpandBoatSplits(row, b, date, _ovnBack?ovnAll:all);   // §boatSplit · แยกลำ → 1 แถวต่อลำ
   });
   var cnt={boat:{},van:{},arr:{},stat:{wait:0,arr:0,clr:0,on:0,due:0,ns:0,vd:0}};
   var tExpect=0, tNoShow=0, tDue=0, tSlip=0, tFee=0, tGot=0;
@@ -50115,12 +50102,22 @@ function renderPierCheckin(){
   all.forEach(function(r){
     if(!keep(r)){ nHidden++; return; }
     if(!r.bid){ noBoat.push(r); return; }
-    if(!boats[r.bid]){ boats[r.bid]={bid:r.bid, rows:[], trips:{}, torder:[]}; border.push(r.bid); }
+    if(!boats[r.bid]){ boats[r.bid]={bid:r.bid, rows:[], trips:{}, torder:[], ovn:[]}; border.push(r.bid); }
     var B=boats[r.bid]; B.rows.push(r);
     var rk=(r.t&&r.t.routeId)||'';
     if(!B.trips[rk]){ B.trips[rk]={rid:rk, rows:[]}; B.torder.push(rk); }
     B.trips[rk].rows.push(r);
   });
+  // §ovnCard · แถวรับกลับเข้าการ์ดของเรือที่เราจัดให้ไปรับ · เรือที่มีแต่งานรับกลับก็ต้องมีการ์ด
+  var nOvnHidden=0;
+  ovnAll.forEach(function(r){
+    if(!keep(r)){ nOvnHidden++; return; }
+    if(!r.bid){ noBoat.push(r); return; }
+    if(!boats[r.bid]){ boats[r.bid]={bid:r.bid, rows:[], trips:{}, torder:[], ovn:[]}; border.push(r.bid); }
+    var B=boats[r.bid]; (B.ovn=B.ovn||[]).push(r);
+  });
+  nHidden+=nOvnHidden;
+
   border.sort(function(a,b){
     return String(pckDepOf(boats[a].torder[0])||'99').localeCompare(String(pckDepOf(boats[b].torder[0])||'99'))
         || String(pckBoatName(a)).localeCompare(String(pckBoatName(b)));
@@ -50129,7 +50126,8 @@ function renderPierCheckin(){
   // §ovnBack · ยอดคนรับกลับต่อลำ · ใช้ทั้งบนชิปการ์ดเรือและแถบด้านบน
   var ovnByBoat={};
   ovnAll.forEach(function(r){ if(!r.bid) return;
-    var o=ovnByBoat[r.bid]=(ovnByBoat[r.bid]||{n:0,pax:0}); o.n++; o.pax+=r.pax; });
+    var o=ovnByBoat[r.bid]=(ovnByBoat[r.bid]||{n:0,pax:0});
+    o.n++; o.pax+=(r.expect!=null?r.expect:r.booked); });
 
   var cardsHtml='';
   border.forEach(function(bid){
@@ -50150,8 +50148,11 @@ function renderPierCheckin(){
       +'<div><div class="pck-bname">'+e(boat.name||bid)+'</div><div class="pck-brt">'
       +(multi
         ? '<span class="pck-rchip" style="color:#2f2f2b">'+B.torder.length+' ทริปในวันนี้ · ดูชื่อทริปด้านล่าง</span>'
-        : '<span class="pck-rchip" style="color:'+(rt0.color||'#2f2f2b')+'" title="'+e(rt0.name||'')+'"><i style="background:'+(rt0.color||'#999')+'"></i>'+e(rt0.name||B.torder[0]||'—')+'</span>'
-          +(dep0?'<span class="pck-rdep" style="background:'+(rt0.color||'#5F5E5A')+'">ออก '+e(dep0)+'</span>':''))
+        : (B.torder.length
+            ? '<span class="pck-rchip" style="color:'+(rt0.color||'#2f2f2b')+'" title="'+e(rt0.name||'')+'"><i style="background:'+(rt0.color||'#999')+'"></i>'+e(rt0.name||B.torder[0]||'—')+'</span>'
+              +(dep0?'<span class="pck-rdep" style="background:'+(rt0.color||'#5F5E5A')+'">ออก '+e(dep0)+'</span>':'')
+            /* §ovnCard · ลำนี้ไม่มีโปรแกรมของตัวเองวันนี้ · ออกไปรับคนกลับจากเกาะอย่างเดียว */
+            : '<span class="pck-rchip" style="color:#5B289A"><i style="background:#5B289A"></i>&#8617; วันนี้ออกไปรับกลับจากเกาะ</span>'))
       +'</div></div>'
       +'<div class="pck-bstat">'+bchip('ถึงท่า',a.arrP+'/'+a.pax)+bchip('เคลียร์',a.clrP)+bchip('ขึ้นเรือ',a.onP)
         +(ovnByBoat[bid]?('<div class="pck-bchip" style="background:#EDE7FB;border:1px solid #fff;color:#5B289A;font-weight:800" title="ค้างคืนบนเกาะ · วันนี้เรือลำนี้ต้องไปรับกลับ · ไม่ต้องเช็คอินที่ท่า"><span class="k" style="opacity:.85">&#8617; รับกลับ</span><span class="v">'+ovnByBoat[bid].pax+'</span></div>'):'')
@@ -50160,7 +50161,7 @@ function renderPierCheckin(){
         +'<button class="pck-jobbtn go" onclick="event.stopPropagation();goSetupOpen(\''+bid+'\')" title="ใบสั่งงานมัคคุเทศก์ของลำนี้ · จ่ายไกด์แล้วพิมพ์">&#128220; ใบสั่งงาน'
           +((goAsn(_pckDate,bid).g.length)?'':' <b style="color:#B4560A">&#9679;</b>')+'</button>'
         +'<button class="pck-jobbtn" onclick="event.stopPropagation();pckGuideJobOrder(\''+bid+'\')" title="พิมพ์ใบงานไกด์ของลำนี้ · A4 แนวนอน">&#128196; ใบงานไกด์</button>'
-      +'</div></div>'+pckBoatMeta(B.rows, date)+'<div class="pck-bbody">';
+      +'</div></div>'+pckBoatMeta(B.rows.concat(B.ovn||[]), date)+'<div class="pck-bbody">';
     B.torder.forEach(function(rk){
       var T=B.trips[rk];
       var rt=(typeof getRoute==='function'?getRoute(rk):null)||{}, dep=pckDepOf(rk), at=pckAgg(T.rows);
@@ -50221,6 +50222,46 @@ function renderPierCheckin(){
       });
       cardsHtml+='</div></div>';
     });
+    // §ovnCard · บล็อกรับกลับของลำนี้ · ท้ายการ์ดเพราะงานเรียงตามเวลาจริง (ส่งออก → ไปรับกลับ)
+    if((B.ovn||[]).length){
+      var oa=pckAgg(B.ovn);
+      var oRtOrd=[], oSeen={};
+      B.ovn.forEach(function(r){ var k=(r.t&&r.t.routeId)||''; if(!oSeen[k]){ oSeen[k]=1; oRtOrd.push(k); } });
+      var oDates=[], oDs={};
+      B.ovn.forEach(function(r){ if(r._ovnOut && !oDs[r._ovnOut]){ oDs[r._ovnOut]=1; oDates.push(r._ovnOut); } });
+      oDates.sort();
+      var ovg={}, ovord=[];
+      B.ovn.forEach(function(r){
+        var vk=r._retSelf?'__self':(r._retVan||'__none');
+        if(!ovg[vk]){ ovg[vk]={vid:(r._retSelf?'':(r._retVan||'')), rows:[], self:!!r._retSelf, none:(!r._retSelf && !r._retVan)}; ovord.push(vk); }
+        ovg[vk].rows.push(r);
+      });
+      ovord.sort(function(x,y){
+        if(x==='__none') return -1; if(y==='__none') return 1;      // ยังไม่จัดรถ = ต้องแก้ก่อน อยู่บนสุด
+        if(x==='__self') return 1;  if(y==='__self') return -1;
+        return String(pckVanName(ovg[x].vid)).localeCompare(String(pckVanName(ovg[y].vid)));
+      });
+      var nNoRet=(ovg['__none']||{rows:[]}).rows.length;
+      cardsHtml+='<div class="pck-trip multi"><div class="pck-thead" style="border-left-color:#5B289A;background:#F7F3FE">'
+        +'<span class="pck-zdot" style="background:#5B289A"></span>'
+        +'<div><div class="pck-tname" style="color:#5B289A">&#8617; รับกลับจากเกาะ (OVN)</div>'
+        +'<div class="pck-tsub">'+oRtOrd.map(function(k){ var R=(typeof getRoute==='function'?getRoute(k):null)||{}; return e(R.name||k||'—'); }).join(' &middot; ')
+          +' &middot; '+oa.n+' booking &middot; '+oa.pax+' pax'
+          +(oDates.length?(' &middot; ไปเมื่อ '+oDates.map(function(d){ return e(ovnDayTh(d)); }).join(' / ')):'')+'</div></div>'
+        +'<span class="pck-tstat">'
+          +'<span class="pck-tchip" title="ค้างคืนบนเกาะ · ขึ้นเรือที่ท่าเกาะ · ไม่มีขั้นเช็คอินที่ท่า และไม่มีเงินต้องเก็บ">ไม่ต้องเช็คอินที่ท่า</span>'
+          +(nNoRet?('<span class="pck-tchip money">&#9888; ยังไม่จัดรถกลับ <b>'+nNoRet+'</b> ใบ</span>'):'')
+        +'</span></div><div class="pck-tbody">';
+      ovord.forEach(function(vk){
+        var vg=ovg[vk];
+        var bc=vg.none?'#A32D2D':(vg.self?'#8a8a82':'#5B289A');
+        cardsHtml+='<div class="pck-van" style="border-color:'+bc+'55">'+pckOvnVanHead(vg,date)
+          +'<div class="pck-tw"><table class="ck-tbl pck-tbl">'+PCK_THEAD+'<tbody>'
+          +vg.rows.map(function(r){ return pckRowHtml(r,date); }).join('')
+          +'</tbody></table></div></div>';
+      });
+      cardsHtml+='</div></div>';
+    }
     cardsHtml+='</div></div>';
   });
 
@@ -50243,7 +50284,7 @@ function renderPierCheckin(){
   // §perProgramme · ถึงท่า / เคลียร์ / ขึ้นเรือ อยู่ใต้การ์ดของแต่ละโปรแกรมและแต่ละลำแล้ว
   // (แต่ละโปรแกรมออกคนละเวลา ยอดรวมทั้งวันตอบไม่ได้ว่าลำที่กำลังจะออกพร้อมหรือยัง)
   var kpi='<span style="background:#F1EFE8;color:#5F5E5A">ทั้งท่า '+all.length+' booking · รอรับ '+tExpect+' pax</span>'
-        +(ovnAll.length?('<span style="background:#EDE7FB;color:#5B289A" title="ค้างคืนบนเกาะ · วันนี้เรือไปรับกลับ · ไม่ต้องเช็คอินที่ท่า">&#8617; รับกลับจากเกาะ '+ovnAll.reduce(function(a,r){ return a+(+r.pax||0); },0)+' pax</span>'):'')
+        +(ovnAll.length?('<span style="background:#EDE7FB;color:#5B289A" title="ค้างคืนบนเกาะ · วันนี้เรือไปรับกลับ · ไม่ต้องเช็คอินที่ท่า และไม่มีเงินต้องเก็บ">&#8617; รับกลับจากเกาะ '+pckAgg(ovnAll).pax+' pax</span>'):'')
         +(tDue>0?'<span style="background:#FBF0DD;color:#7A4A00">ค้างเก็บทั้งวัน &#3647;'+Math.round(tDue).toLocaleString()+'</span>':'')
         +(tGot>0?'<span style="background:#DCF4E8;color:#0F6E56">เก็บแล้ว &#3647;'+Math.round(tGot).toLocaleString()+'</span>':'')
         +(tFee>0?'<span style="background:#F6F2FD;color:#5B289A" title="ค่าธรรมเนียมบัตรที่ลูกค้าจ่ายเพิ่ม · ไม่ใช่รายได้ · ยอดที่ต้องตรงกับ statement คือยอดตัดหนี้ + ค่าธรรมเนียม">ค่าธรรมเนียมบัตร &#3647;'+Math.round(tFee).toLocaleString()+'</span>':'')
@@ -50257,7 +50298,6 @@ function renderPierCheckin(){
                   totalBreak:(pills.lost>0?('เดินทางจริง · จอง '+pills.booked+' หาย '+pills.lost):(pills.dA+'A·'+pills.dC+'C·'+pills.dI+'I·'+pills.dF+'F'))})
     +pckBoatTabs(all)
     +pckFilterBar(all, cnt, nHidden)
-    +pckOvnBackBand(ovnAll, date)
     +warnHtml+cardsHtml;
   ckSyncSticky(host); ckStartTick('piercheckin', renderPierCheckin);
 }
