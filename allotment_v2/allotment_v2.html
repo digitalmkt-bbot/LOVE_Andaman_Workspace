@@ -49421,6 +49421,8 @@ var PCK_LANG_MAP=[
 ];
 function pckLangNorm(v){
   var t=String(v==null?'':v).replace(/[\s\u00a0]+/g,' ').trim();
+  // §langPurge · อัญประกาศค้างจากการนำเข้าข้อมูล · ไม่ใช่ส่วนหนึ่งของชื่อภาษา
+  t=t.replace(/^["'\u201c\u201d\u2018\u2019]+/,'').replace(/["'\u201c\u201d\u2018\u2019]+$/,'').trim();
   if(!t) return '';
   // "Spanish Guide" กับ "Spanish" คือภาษาเดียวกัน · คำว่า guide ไม่ใช่ชื่อภาษา
   var core=t.replace(/\b(guide|guides|speaking|speaker)\b/ig,'').replace(/ไกด์|พูด|ภาษา/g,'')
@@ -49428,6 +49430,8 @@ function pckLangNorm(v){
   var probe=core||t;
   for(var i=0;i<PCK_LANG_MAP.length;i++) if(PCK_LANG_MAP[i].re.test(probe)) return PCK_LANG_MAP[i].c;
   if(/^[A-Za-z]{2,3}$/.test(probe)) return probe.toUpperCase();   // พิมพ์รหัสมาเองอยู่แล้ว
+  // §langPurge · ตัวเดียวไม่ใช่ชื่อภาษา · เป็นเศษที่พิมพ์ค้างไว้ · ทิ้ง
+  if(probe.length<2) return '';
   return probe;                                                    // ภาษาที่ไม่รู้จัก · เก็บข้อความไว้ ไม่ทำข้อมูลหาย
 }
 function pckGuideLangs(b){
@@ -49467,14 +49471,44 @@ function pckSvcRuleDel(id){ _pckSvcWrite('pck_svc_rules', pckSvcRules().filter(f
 //   กติกา add-on จับ "ชื่อ add-on" ส่วนภาษาไกด์มาจาก bk.guides คนละที่กัน
 //   ตั้งค่า "RU" ในกติกา add-on จึงไม่มีทางไปโดนป้ายไกด์ (เจอจริง 1 ส.ค.)
 function pckGuideLangList(){
+  // §langPurge · ทำรายการจากรหัสที่รวบแล้ว · ไม่ใช่ข้อความดิบที่คนพิมพ์
   var out=['EN','RU','CN'], seen={EN:1,RU:1,CN:1};
-  try{ (SB_BOOKINGS||[]).forEach(function(b){
-    var ol=String(((b&&b.guides)||{}).otherLang||'').trim();
-    if(ol && !seen[ol]){ seen[ol]=1; out.push(ol); }
-  }); }catch(_){}
+  var add=function(v){ var c=pckLangNorm(v); if(!c || seen[c]) return; seen[c]=1; out.push(c); };
+  try{ (SB_BOOKINGS||[]).forEach(function(b){ add(((b&&b.guides)||{}).otherLang); }); }catch(_){}
+  // ภาษาที่ตั้งสีไว้แต่วันนี้ไม่มีใบจอง ต้องยังเห็น ไม่งั้นแก้สีคืนไม่ได้
+  try{ Object.keys(pckGuideColors()).forEach(add); }catch(_){}
   return out;
 }
-function pckGuideColors(){ var u=_pckSvcRead('pck_guide_colors'); return (u&&typeof u==='object')?u:{}; }
+var _pckGdHealed=false;
+function pckGuideColors(){
+  var u=_pckSvcRead('pck_guide_colors'); if(!u || typeof u!=='object') return {};
+  if(_pckGdHealed) return u;
+  // §langPurge · คีย์เก่าเป็นข้อความดิบที่คนพิมพ์เอง · รวบเป็นรหัสเดียวแล้วเขียนกลับครั้งเดียว
+  //   สีไม่หาย · ที่เคยตั้งไว้กับ "Spanish Guide" กลายเป็นสีของ ES
+  //   คีย์ที่กลายเป็นค่าว่าง (เศษตัวอักษรเดียว) ถูกทิ้ง
+  var out={}, dirty=false;
+  Object.keys(u).forEach(function(k){
+    var c=pckLangNorm(k);
+    if(!c || !u[k]){ dirty=true; return; }
+    if(c!==k) dirty=true;
+    if(!out[c]) out[c]=u[k];            // คีย์แรกที่มีสีชนะ
+  });
+  _pckGdHealed=true;                     // ลองครั้งเดียวต่อการเปิดหน้า · ผู้ใช้สิทธิ์ดูอย่างเดียวจะได้ไม่วนเขียน
+  if(dirty){ try{ _pckSvcWrite('pck_guide_colors', out); }catch(_){} return out; }
+  return u;
+}
+// §langPurge · ล้างสีของภาษาที่ไม่มีในใบจองแล้ว
+function pckGuideColorPurge(){
+  var G=pckGuideColors(), used={EN:1,RU:1,CN:1};
+  try{ (SB_BOOKINGS||[]).forEach(function(b){
+    var c=pckLangNorm(((b&&b.guides)||{}).otherLang); if(c) used[c]=1; }); }catch(_){}
+  var gone=Object.keys(G).filter(function(k){ return !used[k]; });
+  if(!gone.length){ alert('ไม่มีรายการค้าง\n\nทุกภาษาที่ตั้งสีไว้ยังมีใช้อยู่ในใบจอง'); return; }
+  if(!confirm('ลบสีของภาษาที่ไม่มีในใบจองแล้ว '+gone.length+' รายการ?\n\n'+gone.join(' \u00b7 ')
+    +'\n\nป้ายกลับไปเป็นขาวดำ · ตั้งใหม่ได้ทุกเมื่อ')) return;
+  var out={}; Object.keys(G).forEach(function(k){ if(used[k]) out[k]=G[k]; });
+  _pckSvcWrite('pck_guide_colors',out); pckSvcSetRender();
+}
 function pckGuideColorSave(c,hex){
   var u=pckGuideColors(); if(hex) u[c]=hex; else delete u[c];
   _pckSvcWrite('pck_guide_colors',u); pckSvcSetRender();
@@ -49560,7 +49594,9 @@ function pckSvcSetRender(){
    +'<div style="padding:16px 20px">'
    +'<div style="'+lbl+';margin-bottom:9px">บริการหลัก</div>'+built
    +'<div style="'+lbl+';margin:18px 0 4px">ป้ายภาษาไกด์</div>'
-   +'<div style="font-size:11.5px;color:#8a8a82;margin-bottom:9px;line-height:1.5">ไม่ตั้งสี = ป้ายขาวดำตามเดิม (ทึบ = ไม่ใช่อังกฤษ) · ตั้งสีแล้วสีชนะ</div>'+gds
+   +'<div style="font-size:11.5px;color:#8a8a82;margin-bottom:9px;line-height:1.5">ไม่ตั้งสี = ป้ายขาวดำตามเดิม (ทึบ = ไม่ใช่อังกฤษ) · ตั้งสีแล้วสีชนะ<br>'
+     +'ชื่อภาษาถูกรวบให้เป็นรหัสเดียวแล้ว — Spanish Guide · Spain · สเปน นับเป็น ES อันเดียวกัน</div>'+gds
+   +'<button onclick="pckGuideColorPurge()" title="ลบสีของภาษาที่ไม่มีในใบจองแล้ว · ป้ายกลับไปเป็นขาวดำ" style="border:1px solid #E4E1D9;background:#fff;color:#8a8a82;border-radius:8px;padding:6px 12px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:2px">&#128465; ล้างภาษาที่ไม่มีในใบจองแล้ว</button>'
    +'<div style="'+lbl+';margin:18px 0 4px">บริการอื่นที่อยากให้มีสี</div>'
    +'<div style="font-size:11.5px;color:#8a8a82;margin-bottom:9px;line-height:1.5">พิมพ์คำที่อยู่ในชื่อ add-on แล้วเลือกสี · ใบไหนมี add-on ที่ชื่อมีคำนั้น จะได้สีนี้ในช่อง Service<br>ไม่ต้องพิมพ์ให้ตรงเป๊ะ และไม่สนตัวพิมพ์เล็กใหญ่</div>'
    +(rules||'<div style="font-size:11.5px;color:#c2c0b7;margin-bottom:9px">ยังไม่มีกติกา</div>')
