@@ -77732,16 +77732,18 @@ function pjOpenJobs(bid){
 /* op = TRIPS[date][bid] หรือ null */
 /* work:true = วันนั้นมีคนต้องทำงานกับเรือลำนี้จริง · การ์ดจะเป็นใบงานซ่อม */
 var PJ_ST={
-  clash:{t:'ขัดกัน · ช่างแจ้งไม่พร้อม', bg:'#FCEFEE', fg:'#A0342A', bd:'#F0CFCB', ord:0, band:'#A0342A'},
-  run  :{t:'ออกทริปวันนี้',            bg:'#E1F5EE', fg:'#0F6E56', bd:'#B7E2D2', ord:1},
-  broke:{t:'เสีย · ซ่อมแก้ไข',          bg:'#FCEFEE', fg:'#A0342A', bd:'#F0CFCB', ord:2, work:1, band:'#A0342A'},
-  maint:{t:'ซ่อมบำรุงตามแผน',           bg:'#FBF0DD', fg:'#8A5A00', bd:'#EFDCB4', ord:3, work:1, band:'#8A5A00'},
-  dd   :{t:'ขึ้นคาน',                  bg:'#F2EBFA', fg:'#5B3B96', bd:'#E2D6F3', ord:4, work:1, band:'#5B3B96'},
-  away :{t:'ไปวิ่งท่าอื่นวันนี้',        bg:'#EAF0F9', fg:'#1B4A87', bd:'#CFDCEF', ord:5, band:'#4A6E9E'},
-  idle :{t:'ว่าง · เรือพร้อม',          bg:'#EEF2F7', fg:'#4A5D7A', bd:'#D6DFEA', ord:6},
-  donor:{t:'จอด · ให้เครื่องลำอื่น',     bg:'#EEEFF1', fg:'#5A6270', bd:'#DDE0E5', ord:7},
-  off  :{t:'ไม่พร้อมใช้งาน',            bg:'#EEEFF1', fg:'#5A6270', bd:'#DDE0E5', ord:8}
+  /* grp = กลุ่มที่ใช้ทั้งเรียงลำดับและกรอง · go=วิ่ง ready=พร้อม work=ซ่อมบำรุง down=ไม่พร้อม */
+  clash:{t:'ขัดกัน · ช่างแจ้งไม่พร้อม', bg:'#FCEFEE', fg:'#A0342A', bd:'#F0CFCB', ord:0, grp:'go',    band:'#A0342A'},
+  run  :{t:'ออกทริปวันนี้',            bg:'#E1F5EE', fg:'#0F6E56', bd:'#B7E2D2', ord:1, grp:'go'},
+  away :{t:'ไปวิ่งท่าอื่นวันนี้',        bg:'#EAF0F9', fg:'#1B4A87', bd:'#CFDCEF', ord:2, grp:'go',    band:'#4A6E9E'},
+  idle :{t:'ว่าง · เรือพร้อม',          bg:'#EEF2F7', fg:'#4A5D7A', bd:'#D6DFEA', ord:3, grp:'ready'},
+  broke:{t:'เสีย · ซ่อมแก้ไข',          bg:'#FCEFEE', fg:'#A0342A', bd:'#F0CFCB', ord:4, grp:'work',  work:1, band:'#A0342A'},
+  maint:{t:'ซ่อมบำรุงตามแผน',           bg:'#FBF0DD', fg:'#8A5A00', bd:'#EFDCB4', ord:5, grp:'work',  work:1, band:'#8A5A00'},
+  dd   :{t:'ขึ้นคาน',                  bg:'#F2EBFA', fg:'#5B3B96', bd:'#E2D6F3', ord:6, grp:'work',  work:1, band:'#5B3B96'},
+  donor:{t:'จอด · ให้เครื่องลำอื่น',     bg:'#EEEFF1', fg:'#5A6270', bd:'#DDE0E5', ord:7, grp:'down'},
+  off  :{t:'ไม่พร้อมใช้งาน',            bg:'#EEEFF1', fg:'#5A6270', bd:'#DDE0E5', ord:8, grp:'down'}
 };
+function pjGrp(k){ var m=PJ_ST[k]; return (m&&m.grp)||'down'; }
 /* §pjWork · ประเภทของงานซ่อมที่เปิดอยู่ · corrective = เสีย · scheduled/preventive = ตามแผน */
 function pjMjPlanned(m){ return /^(scheduled|preventive|planned)$/i.test(String((m&&m.type)||'')); }
 function pjBoatSt(date, boat, op){
@@ -78258,21 +78260,18 @@ function renderPierJob(pier){
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
   var host=document.getElementById('pj-host-'+P.k); if(!host) return;
   var all=pjAllBoats(_poDate,_poPier), ro=!poCanEdit();
-  var cnt={all:all.length, run:0, idle:0, fix:0, off:0, clash:0};
+  var cnt={all:all.length, go:0, ready:0, work:0, down:0, clash:0};
   var tot=0, subN=0, noCap=0, licBad=0;
   all.forEach(function(B){
-    cnt[B._st.k]=(cnt[B._st.k]||0)+1;
-    if(B._st.k!=='run' && B._st.k!=='clash') return;      // ตัวเลขงานวันนี้ นับเฉพาะลำที่ออก
+    cnt[pjGrp(B._st.k)]=(cnt[pjGrp(B._st.k)]||0)+1;
+    if(B._st.k==='clash') cnt.clash++;
+    if(B._st.k!=='run' && B._st.k!=='clash') return;      // ตัวเลขงานวันนี้ นับเฉพาะลำที่ออกจากท่านี้
     var p=pjPax(_poDate,B.bid,_poPier); tot+=p.ad+p.chd+p.inf+p.foc;
     var J=pjOf(_poDate,B.bid);
     subN+=pjSubN(_poDate,B.bid); if(!J.cap) noCap++;
     try{ licBad+=plBoatBad(B.bid,[J.cap,J.asst].concat(J.crew||[]))?1:0; }catch(_){}
   });
-  var boats=(_pjF==='all')?all:all.filter(function(B){
-    return _pjF==='go' ? (B._st.k==='run'||B._st.k==='clash')
-         : _pjF==='idle' ? (B._st.k==='idle'||B._st.k==='away')
-         : (B._st.k==='fix'||B._st.k==='off'||B._st.k==='clash');
-  });
+  var boats=(_pjF==='all')?all:all.filter(function(B){ return pjGrp(B._st.k)===_pjF; });
   var chip=function(k,lb,n,dot){
     return '<button class="'+(_pjF===k?'on':'')+'" onclick="pjFilter(\''+k+'\')">'
       +(dot?('<i style="background:'+dot+'"></i>'):'')+lb+'<span class="n">'+n+'</span></button>';
@@ -78285,7 +78284,7 @@ function renderPierJob(pier){
       +'<button onclick="pjShift(-1)">&#8249;</button>'
       +'<input type="date" value="'+_poDate+'" onchange="pjDate(this.value)">'
       +'<button onclick="pjToday()">วันนี้</button>'
-      +'<span style="font-size:12px;color:#6E7684;margin-left:6px">เรือออก <b style="color:#16265C">'+(cnt.run+cnt.clash)+'</b> / '+all.length+' ลำ · '
+      +'<span style="font-size:12px;color:#6E7684;margin-left:6px">เรือออก <b style="color:#16265C">'+cnt.go+'</b> / '+all.length+' ลำ · '
         +'<b style="color:#0F6E56">'+tot+'</b> pax'
         +(subN?(' · <b style="color:#B4560A">เปลี่ยนตัว '+subN+' คน</b>'):'')
         +(noCap?(' · <b style="color:#C0271C">ยังไม่มีกัปตัน '+noCap+' ลำ</b>'):'')
@@ -78301,9 +78300,10 @@ function renderPierJob(pier){
     +'<div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:13px">'
       +'<div class="pj-chips">'
         + chip('all','ทั้งหมด',all.length,'')
-        + chip('go','ออกทริปวันนี้',cnt.run+cnt.clash,'#0F6E56')
-        + chip('idle','ว่าง / ไปท่าอื่น',cnt.idle+(cnt.away||0),'#4A5D7A')
-        + chip('down','ซ่อม / ไม่พร้อม',cnt.fix+cnt.off+cnt.clash,'#8A5A00')
+        + chip('go','เรือที่วิ่ง',cnt.go,'#0F6E56')
+        + chip('ready','เรือที่พร้อม',cnt.ready,'#4A5D7A')
+        + chip('work','ซ่อมบำรุง · ใช้คน',cnt.work,'#8A5A00')
+        + chip('down','ไม่พร้อม',cnt.down,'#8B93A1')
       +'</div>'
       +(cnt.clash?('<span style="font-size:11.5px;font-weight:800;color:#A0342A;background:#FCEFEE;border:1px solid #F0CFCB;border-radius:9px;padding:5px 11px">'
         +'&#9888; ขัดกัน '+cnt.clash+' ลำ · ช่างแจ้งว่าไม่พร้อม แต่มีโปรแกรมวางไว้</span>'):'')
@@ -78329,7 +78329,7 @@ function renderPierJob(pier){
 var _pjW=(function(){ try{ var v=+localStorage.getItem('la_pjw'); return (v===3||v===4||v===5)?v:4; }catch(_){ return 4; } })();
 function pjWide(n){ _pjW=n; try{ localStorage.setItem('la_pjw',String(n)); }catch(_){} renderPierJob(); }
 /* §pjAll · ตัวกรองสถานะ · จำไว้ให้ ไม่ต้องกดใหม่ทุกวัน */
-var _pjF=(function(){ try{ var v=localStorage.getItem('la_pjf'); return ['all','go','idle','down'].indexOf(v)>=0?v:'all'; }catch(_){ return 'all'; } })();
+var _pjF=(function(){ try{ var v=localStorage.getItem('la_pjf'); return ['all','go','ready','work','down'].indexOf(v)>=0?v:'all'; }catch(_){ return 'all'; } })();
 function pjFilter(k){ _pjF=k; try{ localStorage.setItem('la_pjf',k); }catch(_){} renderPierJob(); }
 function pjDate(v){ if(v) _poDate=v; renderPierJob(); }
 function pjShift(n){ var d=new Date(_poDate+'T12:00:00'); d.setDate(d.getDate()+n); _poDate=poYMD(d); renderPierJob(); }
