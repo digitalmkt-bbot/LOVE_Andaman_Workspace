@@ -443,6 +443,8 @@
   function laCanEditArea(area){ if(!ME || ME.role==='admin') return true; if(Array.isArray(ME.editAreas)) return ME.editAreas.indexOf(area)>=0; return ME.canEdit!==false; }   // per-section edit
   function _laToast(msg){ try{ var t=document.getElementById('la-toast'); if(!t){ t=document.createElement('div'); t.id='la-toast'; t.style.cssText='position:fixed;bottom:56px;right:12px;z-index:100000;background:#7A4A00;color:#fff;border-radius:10px;padding:9px 14px;font:12px/1.35 "DM Sans",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:290px;opacity:0;transition:opacity .18s'; document.body.appendChild(t); } t.textContent=msg; t.style.opacity='1'; clearTimeout(t._h); t._h=setTimeout(function(){ t.style.opacity='0'; },2600); }catch(e){} }
   window.laCanEdit=laCanEdit; window.laCanEditArea=laCanEditArea;
+  // §pierEdit · ต้องรู้ว่า "ตั้งไว้เป็นรายการ" หรือ "ไม่เคยตั้ง" เพื่อรองรับหมวดที่เพิ่งแยกออกมา
+  window.laEditAreas=function(){ return (ME && Array.isArray(ME.editAreas)) ? ME.editAreas.slice() : null; };
   window.laIsAdmin=function(){ return !!(ME && ME.role==='admin'); };   // admin-only actions (e.g. delete agent profile)
   window.laGuardEdit=function(area){ if(laCanEditArea(area)) return true; _laToast('👁 ส่วนนี้คุณมีสิทธิ์ดูอย่างเดียว · แก้ไขไม่ได้ (ติดต่อ admin)'); return false; };
   function laFullAccess(){ return !ME || ME.role==='admin' || !Array.isArray(ME.perms); }
@@ -76222,7 +76224,7 @@ var PIER_JOB={};    // §pierJob · 'YYYY-MM-DD::boatId' -> {cap, asst, crew:[],
   ];
 }catch(_){} })();
 function poPersist(){
-  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;   /* §edit-guard */
+  if(!poCanEdit()) return;   /* §pierEdit · ถามหมวดของ Pier Office เอง ไม่ใช่ operations */
   try{ var K=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2');
     var d=JSON.parse(localStorage.getItem(K)||'{}');
     d.pier_items=PIER_ITEMS; d.pier_moves=PIER_MOVES; d.pier_staff=PIER_STAFF; d.pier_duty=PIER_DUTY;
@@ -76233,7 +76235,24 @@ function poPersist(){
     localStorage.setItem(K,JSON.stringify(d));
   }catch(e){ console.warn('pier office persist failed', e); }
 }
-function poCanEdit(){ return !(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')); }
+function poCanEdit(){
+  try{
+    if(typeof window.laCanEditArea!=='function') return true;
+    if(window.laCanEditArea('pier')) return true;
+    // §pierEdit · บัญชีที่ตั้งสิทธิ์ไว้ก่อนแยกหมวด "ท่าเรือ" จะไม่มีคำว่า pier ในรายการ
+    //   ถ้ายังแก้ "ปฏิบัติการ" ได้ ให้ถือว่าได้สิทธิ์เดิมต่อ ไม่ตัดสิทธิ์เพราะเราไปแยกหมวดทีหลัง
+    var ea=(typeof window.laEditAreas==='function')?window.laEditAreas():null;
+    if(Array.isArray(ea) && ea.indexOf('pier')<0) return !!window.laCanEditArea('operations');
+    return false;
+  }catch(_){ return true; }
+}
+/* §pierEdit · กดแล้วเงียบคือสิ่งที่แยกไม่ออกจากระบบพัง · บอกเหตุผลทุกครั้ง */
+function poGuard(){
+  if(poCanEdit()) return true;
+  try{ if(typeof window.laGuardEdit==='function') return window.laGuardEdit('pier'); }catch(_){}
+  try{ alert('ส่วนนี้คุณมีสิทธิ์ดูอย่างเดียว · แก้ไขไม่ได้ (ติดต่อ admin)'); }catch(_){}
+  return false;
+}
 function poE(x){ return (typeof ckEsc==='function')?ckEsc(x):String(x==null?'':x); }
 function poUid(p){ return p+Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-4); }
 function poWho(){ try{ return (ME&&(ME.name||ME.username))||''; }catch(_){ return ''; } }
@@ -77658,7 +77677,7 @@ function pjOf(d,b){
           island:Array.isArray(o.island)?o.island.slice():[], note:o.note||'', wb:o.wb||'', wbc:o.wbc||'', _std:false};
 }
 function pjSet(d,b,patch){
-  if(!poCanEdit()) return;
+  if(!poGuard()) return;
   var k=pjKey(d,b), cur=PIER_JOB[k]||pjOf(d,b);
   delete cur._std;
   Object.keys(patch).forEach(function(x){ cur[x]=patch[x]; });
@@ -78063,7 +78082,7 @@ function pjPick(bid, slot, val){
   renderPierJob();
 }
 function pjNote(bid,txt){ pjSet(_poDate,bid,{note:String(txt||'').slice(0,400)}); }
-function pjWbSet(bid,t,c){ pjSet(_poDate,bid,{wb:t,wbc:c}); renderPierJob(); }
+function pjWbSet(bid,t,c){ if(!poGuard()) return; pjSet(_poDate,bid,{wb:t,wbc:c}); renderPierJob(); }
 function pjPopToggle(id){
   var el=document.getElementById(id), was=el&&el.classList.contains('on');
   document.querySelectorAll('.pj-pop').forEach(function(p){ p.classList.remove('on'); });
@@ -78072,7 +78091,10 @@ function pjPopToggle(id){
 }
 /* แต้มสีโปรแกรม · เขียนลง ROUTES เลย จึงเปลี่ยนพร้อมกันทุกหน้าที่โชว์เส้นทางนี้ */
 function pjProgColor(rid,hex){
-  if(typeof laGuardEdit==='function' && !laGuardEdit('config')) return;
+  // §pierEdit · ฟีเจอร์นี้ทำมาให้คนหน้าท่าใช้ · เขาไม่มีวันได้สิทธิ์ "ตั้งค่า"
+  //   ค่าที่เปลี่ยนคือสีป้ายของโปรแกรม ไม่ใช่ราคาหรือโควตา · แก้ท่าเรือได้ก็พอ
+  var okCfg=(typeof laCanEditArea==='function') ? laCanEditArea('config') : true;
+  if(!okCfg && !poCanEdit()){ if(typeof laGuardEdit==='function') laGuardEdit('pier'); return; }
   for(var i=0;i<ROUTES.length;i++){ if(ROUTES[i].id===rid){ ROUTES[i].color=hex; break; } }
   try{ save('config'); }catch(_){}
   renderPierJob();
