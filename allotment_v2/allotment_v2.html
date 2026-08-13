@@ -36005,6 +36005,26 @@ function flGuessDocType(docName){
   return null;
 }
 
+/* §pjDocSrc · ใบไหนคือใบปัจจุบัน · กติกานี้ต้องมีที่เดียวในทั้งไฟล์
+   ต่ออายุแล้วระบบเก็บใบเก่าไว้เป็นประวัติ · ใครหยิบผิดใบก็รายงานผิดทันที */
+function flDocBetter(existing, doc){
+  if(!existing) return true;
+  if(doc.renewStatus==='processing') return true;                      // ที่กำลังยื่นอยู่ สำคัญกว่าเสมอ
+  if(existing.renewStatus==='done' && doc.renewStatus!=='done') return true;
+  if(!existing.exp && doc.exp) return true;                            // มีวันที่ ดีกว่าไม่มี
+  if(doc.exp && existing.exp && doc.exp>existing.exp) return true;     // ใบที่หมดทีหลัง คือใบใหม่กว่า
+  return false;
+}
+/* ใบปัจจุบันของเรือลำนี้ ประเภทนี้ · typeId ตาม FL_DOC_TYPES */
+function flDocCurrent(boat, typeId){
+  var best=null;
+  ((boat&&boat.docs)||[]).forEach(function(doc){
+    var id=flGuessDocType(String(doc.name||''))||('other_'+doc.name);
+    if(id!==typeId) return;
+    if(flDocBetter(best,doc)) best=doc;
+  });
+  return best;
+}
 function flDocStatus(doc){
   const expStr=typeof doc==='string'?doc:doc?.exp;
   const renewStatus=typeof doc==='object'?doc?.renewStatus:null;
@@ -37419,13 +37439,8 @@ function flRenderDocsList(){
     (b.docs||[]).forEach(doc=>{
       const typeId=flGuessDocType(doc.name)||'other_'+doc.name;
       const existing=boatDocMap[b.id][typeId];
-      const newSt=flDocStatus(doc);
-      if(!existing
-        || doc.renewStatus==='processing'
-        || (existing.renewStatus==='done'&&doc.renewStatus!=='done')
-        || (!existing.exp&&doc.exp)
-        || (doc.exp&&existing.exp&&doc.exp>existing.exp)){
-        boatDocMap[b.id][typeId]={exp:doc.exp,renewStatus:doc.renewStatus,status:newSt,name:doc.name};
+      if(flDocBetter(existing,doc)){   // §pjDocSrc · กติกาเดียวกับใบงานเรือ
+        boatDocMap[b.id][typeId]={exp:doc.exp,renewStatus:doc.renewStatus,status:flDocStatus(doc),name:doc.name};
       }
     });
   });
@@ -77859,11 +77874,14 @@ function pjAllBoats(date, pier){
 /* §pjDocs · โปรแกรมไหนต้องใช้ใบอุทยานใบไหน
    จับจากชื่อเส้นทาง + ชื่อเกาะ · ครอบคลุมทั้ง 12 เส้นทางที่มีอยู่
    (Similan / Surin / Phi Phi + Whale Shark Maiton / Krabi + Phang Nga) */
+/* hit = จับจากชื่อโปรแกรม/เกาะ ว่าวันนั้นต้องใช้ใบไหน (หน้า Document ไม่รู้เรื่องเส้นทาง)
+   doc = รหัสประเภทใบของหน้า Document · ชื่อใบเปลี่ยนที่นั่นที่เดียว ที่นี่ไม่ต้องตามแก้ */
 var PJ_PARK=[
-  {k:'similan',  hit:/similan|สิมิลัน/i,           doc:/สิมิลัน/,  t:'สิมิลัน'},
-  {k:'surin',    hit:/surin|สุรินทร/i,             doc:/สุรินทร/,  t:'สุรินทร์'},
-  {k:'phiphi',   hit:/phi[\s._-]*phi|พีพี/i,       doc:/พีพี/,     t:'พีพี'},
-  {k:'phangnga', hit:/phang[\s._-]*nga|พังงา/i,    doc:/พังงา/,    t:'อ่าวพังงา'}
+  {k:'similan',  hit:/similan|สิมิลัน/i,           doc:'similan',  t:'สิมิลัน'},
+  {k:'surin',    hit:/surin|สุรินทร/i,             doc:'surin',    t:'สุรินทร์'},
+  {k:'phiphi',   hit:/phi[\s._-]*phi|พีพี|ปอดะ|ทะเลแหวก/i, doc:'pp', t:'พีพี'},
+  {k:'phangnga', hit:/phang[\s._-]*nga|พังงา/i,    doc:'phangnga', t:'อ่าวพังงา'},
+  {k:'tarn',     hit:/ธาร[\s]*โบก|โบกขรณี|tarn[\s._-]*bok/i, doc:'tarn', t:'ธารโบกขรณี'}
 ];
 function pjDocDays(from,to){
   if(!to) return null;
@@ -77888,9 +77906,11 @@ function pjDocLv(doc, date){
   if(left<=90)return {k:'d3', txt:pjDocDate(doc.exp)+' · เหลือ '+left+' วัน'};
   return {k:'d4', txt:pjDocDate(doc.exp)+' · เหลือ '+left+' วัน'};
 }
-function pjDocFind(boat, re){
-  return ((boat&&boat.docs)||[]).filter(function(d){ return re.test(String(d.name||'')); })
-    .sort(function(a,b){ return String(a.exp||'').localeCompare(String(b.exp||'')); })[0]||null;
+/* §pjDocSrc · อ่านใบจากทะเบียนเดียวกับหน้า Company Asset › Documents
+   ของเดิมเรียงตามวันหมดอายุแล้วหยิบใบแรก = ใบเก่าสุด · ลำที่ต่อใบแล้วจึงยังขึ้นแดง */
+function pjDocFind(boat, typeId){
+  if(typeof flDocCurrent==='function') return flDocCurrent(boat, typeId);
+  return null;
 }
 /* ใบอุทยานที่โปรแกรมนี้ต้องใช้ · คืนได้หลายใบ (เส้นทางที่แวะหลายอุทยาน) */
 function pjParkNeed(rt){
@@ -77905,7 +77925,7 @@ function pjDocsHtml(boat, rt, date){
   };
   var out='';
   // บรรทัด 1 · ใบอนุญาตใช้เรือ
-  out+=line(pjDocLv(pjDocFind(boat,/ใบอนุญาตใช้เรือ/), date), 'ใบอนุญาตใช้เรือ', '');
+  out+=line(pjDocLv(pjDocFind(boat,'lic'), date), 'ใบอนุญาตใช้เรือ', '');
   // บรรทัด 2 · ใบเข้าเกาะของโปรแกรมวันนี้
   var need=(rt&&rt.id)?pjParkNeed(rt):[];
   if(!rt || !rt.id){
