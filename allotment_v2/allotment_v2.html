@@ -77577,6 +77577,71 @@ var PJ_WB=[{t:'ดำ',c:'#1A1A1A'},{t:'ม่วง',c:'#8E2FD6'},{t:'ฟ้า
            {t:'น้ำเงิน',c:'#185FA5'},{t:'ขาว',c:'#FFFFFF'}];
 var PJ_PAL=['#B8860B','#D9A441','#B4560A','#C0271C','#A82063','#7B3FA0',
             '#4A3FB0','#185FA5','#1668A8','#0E7D74','#0F6E56','#4E6B2F'];
+/* §pjDocs · โปรแกรมไหนต้องใช้ใบอุทยานใบไหน
+   จับจากชื่อเส้นทาง + ชื่อเกาะ · ครอบคลุมทั้ง 12 เส้นทางที่มีอยู่
+   (Similan / Surin / Phi Phi + Whale Shark Maiton / Krabi + Phang Nga) */
+var PJ_PARK=[
+  {k:'similan',  hit:/similan|สิมิลัน/i,           doc:/สิมิลัน/,  t:'สิมิลัน'},
+  {k:'surin',    hit:/surin|สุรินทร/i,             doc:/สุรินทร/,  t:'สุรินทร์'},
+  {k:'phiphi',   hit:/phi[\s._-]*phi|พีพี/i,       doc:/พีพี/,     t:'พีพี'},
+  {k:'phangnga', hit:/phang[\s._-]*nga|พังงา/i,    doc:/พังงา/,    t:'อ่าวพังงา'}
+];
+function pjDocDays(from,to){
+  if(!to) return null;
+  try{ return Math.round((new Date(String(to)+'T12:00:00')-new Date(String(from)+'T12:00:00'))/86400000); }
+  catch(_){ return null; }
+}
+function pjDocDate(d){
+  if(!d) return '';
+  try{ return new Date(String(d)+'T12:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}); }
+  catch(_){ return String(d); }
+}
+/* ระดับของใบหนึ่งใบ · คืน {k, txt} · k ใช้เป็นชื่อคลาสสี */
+function pjDocLv(doc, date){
+  if(!doc) return {k:'none', txt:'ไม่มีใบในระบบ'};
+  var left=pjDocDays(date, doc.exp);
+  var renew=/process|renew|ยื่น|ต่ออายุ/i.test(String(doc.renewStatus||''));
+  if(left==null) return {k:'none', txt:'ไม่ระบุวันหมดอายุ'};
+  if(renew) return {k:'renew', txt:(left<0?('หมด '+pjDocDate(doc.exp)):(pjDocDate(doc.exp)))+' · กำลังต่ออายุ'};
+  if(left<0)  return {k:'x',  txt:'หมด '+pjDocDate(doc.exp)+' · เกิน '+(-left)+' วัน'};
+  if(left<=7) return {k:'d1', txt:pjDocDate(doc.exp)+' · เหลือ '+left+' วัน'};
+  if(left<=30)return {k:'d2', txt:pjDocDate(doc.exp)+' · เหลือ '+left+' วัน'};
+  if(left<=90)return {k:'d3', txt:pjDocDate(doc.exp)+' · เหลือ '+left+' วัน'};
+  return {k:'d4', txt:pjDocDate(doc.exp)+' · เหลือ '+left+' วัน'};
+}
+function pjDocFind(boat, re){
+  return ((boat&&boat.docs)||[]).filter(function(d){ return re.test(String(d.name||'')); })
+    .sort(function(a,b){ return String(a.exp||'').localeCompare(String(b.exp||'')); })[0]||null;
+}
+/* ใบอุทยานที่โปรแกรมนี้ต้องใช้ · คืนได้หลายใบ (เส้นทางที่แวะหลายอุทยาน) */
+function pjParkNeed(rt){
+  var blob=String((rt&&rt.name)||'')+' '+String((rt&&rt.islands)||'');
+  return PJ_PARK.filter(function(p){ return p.hit.test(blob); });
+}
+/* สองบรรทัดใต้ชื่อเรือ */
+function pjDocsHtml(boat, rt, date){
+  var line=function(lv, name, extra){
+    return '<div class="pj-dl '+lv.k+'"><span class="nm">'+poE(name)+(extra||'')+'</span>'
+      +'<span class="vl">'+poE(lv.txt)+'</span></div>';
+  };
+  var out='';
+  // บรรทัด 1 · ใบอนุญาตใช้เรือ
+  out+=line(pjDocLv(pjDocFind(boat,/ใบอนุญาตใช้เรือ/), date), 'ใบอนุญาตใช้เรือ', '');
+  // บรรทัด 2 · ใบเข้าเกาะของโปรแกรมวันนี้
+  var need=pjParkNeed(rt);
+  if(!need.length){
+    out+='<div class="pj-dl none"><span class="nm">ใบเข้าเกาะ</span>'
+       +'<span class="vl">โปรแกรมนี้ไม่ต้องใช้ใบอุทยาน</span></div>';
+  } else {
+    // หลายใบ → เอาใบที่แย่ที่สุดขึ้นบรรทัด แล้วบอกจำนวนที่เหลือ
+    var RANK={x:0,none:1,d1:2,renew:3,d2:4,d3:5,d4:6};
+    var all=need.map(function(p){ var lv=pjDocLv(pjDocFind(boat,p.doc), date); lv._t=p.t; return lv; });
+    all.sort(function(a,b){ return (RANK[a.k]||9)-(RANK[b.k]||9); });
+    var w=all[0];
+    out+=line(w, 'ใบอนุญาต '+w._t, (all.length>1?('<span class="pj-dmore">+'+(all.length-1)+'</span>'):''));
+  }
+  return '<div class="pj-docs">'+out+'</div>';
+}
 /* สีประจำหมวดในการ์ด */
 var PJ_SEC={crew:{bg:'#EAF0F9',fg:'#1B4A87',bd:'#D3E0F2'},
             guide:{bg:'#F2EBFA',fg:'#5B3B96',bd:'#E2D6F3'},
@@ -77596,16 +77661,45 @@ function pjCSS(){
   +H+' .pj-bar button:hover{border-color:#16265C;color:#16265C}'
   +H+' .pj-bar button.pri{background:#16265C;border-color:#16265C;color:#fff}'
   +H+' .pj-bar button.gh{background:#F0F6F3;border-color:#BFE0CD;color:#0F6E56}'
-  +H+' .pj-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(376px,1fr));gap:15px;align-items:start}'
-  +H+' .bc{border:1px solid #E1E4EA;border-radius:13px;background:#fff;position:relative;overflow:hidden;box-shadow:0 1px 2px rgba(20,30,50,.04)}'
-  +H+' .bc .top{padding:11px 15px 10px;color:#fff;display:flex;align-items:flex-start;gap:12px}'
+  /* §pjDocs · แถวเดียว เลื่อนแนวนอน · ทุกใบสูงเท่ากันและบรรทัดตรงกัน */
+  +H+' .pj-strip{display:flex;gap:15px;align-items:stretch;overflow-x:auto;padding:2px 2px 14px}'
+  +H+' .pj-strip::-webkit-scrollbar{height:9px}'
+  +H+' .pj-strip::-webkit-scrollbar-track{background:#E4E3DE;border-radius:6px}'
+  +H+' .pj-strip::-webkit-scrollbar-thumb{background:#B9BDC5;border-radius:6px}'
+  +H+' .pj-strip.w3 .bc{flex:0 0 clamp(310px,31.4%,470px)}'
+  +H+' .pj-strip.w4 .bc{flex:0 0 clamp(292px,23.5%,400px)}'
+  +H+' .pj-strip.w5 .bc{flex:0 0 clamp(276px,18.6%,344px)}'
+  +H+' .pj-wsw{display:flex;gap:4px;background:#fff;border:1px solid #E1E4EA;border-radius:9px;padding:3px}'
+  +H+' .pj-wsw button{border:none;background:transparent;border-radius:6px;padding:4px 10px;font:700 11.5px inherit;color:#6E7684;cursor:pointer}'
+  +H+' .pj-wsw button.on{background:#EAF0F9;color:#1B4A87}'
+  +H+' .bc{display:flex;flex-direction:column;border:1px solid #E1E4EA;border-radius:13px;background:#fff;position:relative;overflow:hidden;box-shadow:0 1px 2px rgba(20,30,50,.04)}'
+  +H+' .bc .top{padding:11px 15px 10px;color:#fff;display:block}'
+  +H+' .bc .trow{display:flex;align-items:flex-start;gap:12px}'
   +H+' .bc .top .l{flex:1;min-width:0}'
+  /* §pjDocs · สองบรรทัดใบอนุญาต ใต้ชื่อเรือ */
+  +H+' .pj-docs{margin-top:9px;display:flex;flex-direction:column;gap:4px}'
+  +H+' .pj-dl{border-radius:7px;padding:4px 9px;display:flex;align-items:center;gap:8px;font-size:10.5px;line-height:1.25;min-height:26px}'
+  +H+' .pj-dl .nm{font-weight:800;white-space:nowrap;flex:none}'
+  +H+' .pj-dl .vl{margin-left:auto;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right}'
+  +H+' .pj-dmore{font-weight:800;opacity:.7;margin-left:4px}'
+  +H+' .pj-dl.x{background:#8E1E14;color:#fff}'
+  +H+' .pj-dl.d1{background:#FCE4E1;color:#9B2B20;border:1px solid #F0BCB5}'
+  +H+' .pj-dl.d2{background:#FBE9D4;color:#8A5000;border:1px solid #F0D4AC}'
+  +H+' .pj-dl.d3{background:#FAF3DA;color:#7A6205;border:1px solid #EDE0AE}'
+  +H+' .pj-dl.d4{background:#E9F4EE;color:#1D6A4C;border:1px solid #CDE6DA}'
+  +H+' .pj-dl.renew{background:#E4EEF9;color:#17538F;border:1px solid #C3DBF2}'
+  +H+' .pj-dl.none{background:rgba(255,255,255,.16);color:rgba(255,255,255,.86);border:1px dashed rgba(255,255,255,.42)}'
+  /* กล่องผลตรวจใบอนุญาตคนขับ · สูงคงที่ ไม่งั้นใบที่มีปัญหาจะดันบรรทัดล่างเหลื่อม */
+  +H+' .pj-licbox{height:58px;overflow:auto;border-bottom:1px solid #F4F5F8}'
+  +H+' .pj-licbox .pl-res{border-bottom:none;padding:6px 15px;font-size:11px}'
+  +H+' .pj-licbox .pj-licnone{padding:6px 15px;font-size:11px;color:#9BA3B0}'
   +H+' .bc .top .bn{font-size:16px;font-weight:800;letter-spacing:.02em;line-height:1.2}'
   +H+' .bc .top .be{font-size:9.5px;font-weight:600;opacity:.82;margin-top:1px;letter-spacing:.06em}'
   +H+' .bc .top .tm{font-size:23px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1;text-align:right}'
   +H+' .bc .top .tmL{font-size:8.5px;font-weight:700;opacity:.82;letter-spacing:.1em;text-align:right;margin-top:2px}'
   +H+' .bc .pg{padding:11px 15px 10px;color:#fff;position:relative}'
-  +H+' .bc .pg .pn{font-size:17px;font-weight:800;line-height:1.25;padding-right:34px}'
+  +H+' .bc .pg{height:58px;display:flex;flex-direction:column;justify-content:center}'
+  +H+' .bc .pg .pn{font-size:15px;font-weight:800;line-height:1.2;padding-right:34px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
   +H+' .bc .pg .pr{font-size:11.5px;font-weight:500;opacity:.93;margin-top:3px}'
   +H+' .pj-pen{position:absolute;top:9px;right:11px;width:26px;height:26px;border-radius:8px;border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.16);color:#fff;font-size:12px;cursor:pointer}'
   +H+' .pj-pen:hover{background:rgba(255,255,255,.3)}'
@@ -77616,7 +77710,7 @@ function pjCSS(){
   +H+' .pj-sw{width:28px;height:28px;border-radius:9px;cursor:pointer;border:2px solid #fff;box-shadow:0 0 0 1px #E1E4EA}'
   +H+' .pj-sw.on{box-shadow:0 0 0 2px #16265C}'
   +H+' .pj-pop .pf{font-size:10.5px;color:#6E7684;line-height:1.6;margin-top:9px;border-top:1px solid #F0F2F6;padding-top:8px}'
-  +H+' .bc .stbar{padding:7px 15px;background:#FAFBFC;border-bottom:1px solid #EFF1F5;display:flex;align-items:center;gap:8px;flex-wrap:wrap}'
+  +H+' .bc .stbar{height:32px;padding:0 15px;background:#FAFBFC;border-bottom:1px solid #EFF1F5;display:flex;align-items:center;gap:8px;overflow:hidden}'
   +H+' .pj-sub{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:2px 8px;background:#FFF0D8;color:#B4560A}'
   +H+' .pj-std{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:2px 8px;background:#EDF3EF;color:#5E8B72}'
   +H+' .pj-gh{display:flex;align-items:center;gap:8px;padding:0 15px;height:28px;font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);background:var(--bg);color:var(--fg);box-shadow:inset 4px 0 0 var(--fg)}'
@@ -77643,10 +77737,10 @@ function pjCSS(){
   +H+' .pj-pax .v{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:1px}'
   +H+' .pj-pax .c.t{background:#F1F8F4}'
   +H+' .pj-pax .c.t .v{color:#0F6E56;font-size:19px}'
-  +H+' .pj-note{min-height:36px;margin:10px 15px 12px;border:1px dashed #E5D3A8;border-radius:9px;background:#fff;padding:8px 11px;font-size:12px;font-weight:600;color:#7A4A00;line-height:1.55;outline:none}'
+  +H+' .pj-note{height:56px;overflow:auto;margin:10px 15px 12px;border:1px dashed #E5D3A8;border-radius:9px;background:#fff;padding:8px 11px;font-size:12px;font-weight:600;color:#7A4A00;line-height:1.55;outline:none}'
   +H+' .pj-note:focus{border-style:solid;border-color:#D9A441;box-shadow:0 0 0 3px rgba(217,164,65,.15)}'
   +H+' .pj-note:empty:before{content:attr(data-ph);color:#C9CFD8;font-weight:400}'
-  +H+' .bc .foot{display:flex;align-items:center;gap:8px;padding:9px 15px;border-top:1px solid #EFF1F5;flex-wrap:wrap}'
+  +H+' .bc .foot{margin-top:auto;height:46px;display:flex;align-items:center;gap:8px;padding:0 15px;border-top:1px solid #EFF1F5;overflow:hidden}'
   +H+' .bc .foot button{border:1px solid #D9DDE4;background:#fff;border-radius:7px;padding:4px 10px;font:700 11px inherit;color:#5A6270;cursor:pointer}'
   +H+' .bc .foot button:hover{border-color:#16265C;color:#16265C}'
   +H+' .bc .foot button.gh{background:#F0F6F3;border-color:#BFE0CD;color:#0F6E56}'
@@ -77779,9 +77873,14 @@ function pjCard(B, pier, ro){
   var pid='pjpop-'+bid.replace(/[^A-Za-z0-9_-]/g,'_');
   var wid='pjwb-'+bid.replace(/[^A-Za-z0-9_-]/g,'_');
   var h='<div class="bc">'
-   +'<div class="top" style="background:'+col+'"><div class="l"><div class="bn">'+poE(B.boat.name||bid)+'</div>'
-     +'<div class="be">'+poE(B.boat.type||'')+'</div></div>'
+   +'<div class="top" style="background:'+col+'">'
+     +'<div class="trow"><div class="l"><div class="bn">'+poE(B.boat.name||bid)+'</div>'
+       +'<div class="be">'+poE(B.boat.type||'')+(B.boat.engineCount?(' &middot; '+B.boat.engineCount+' Eng'):'')
+       +(B.boat.licensePax?(' &middot; '+B.boat.licensePax+' ที่นั่ง'):'')+'</div></div>'
      +'<div><div class="tm">'+poE(B.dep||'--:--')+'</div><div class="tmL">DEPARTURE</div></div></div>'
+     /* §pjDocs · ใบอนุญาตใช้เรือ + ใบเข้าเกาะของโปรแกรมวันนี้ */
+     + pjDocsHtml(B.boat, rt, _poDate)
+   +'</div>'
    +'<div class="pg" style="background:'+pcol+'"><div class="pn">'+poE(rt.name||B.rid||'—')+'</div>'
      +'<div class="pr">'+poE(rt.islands||'')+'</div>'
      +(ro?'':'<button class="pj-pen" onclick="pjPopToggle(\''+pid+'\')" title="แต้มสีโปรแกรมนี้">&#9998;</button>')
@@ -77796,13 +77895,15 @@ function pjCard(B, pier, ro){
    + pjSelRow(pier,bid,'Asst. Captain','asst',J.asst,SUB.asst,['กัปตัน','captain'],ro,B.boat)
    + [0,1,2].map(function(i){ return pjSelRow(pier,bid,'Crew '+(i+1),'crew'+i,(J.crew||[])[i]||'',SUB['crew'+i],['เด็กเรือ','crew','ลูกเรือ'],ro,B.boat); }).join('')
    + [0,1].map(function(i){ return pjSelRow(pier,bid,'Island Staff '+(i+1),'island'+i,(J.island||[])[i]||'',null,['อุปกรณ์','equipment'],ro,B.boat); }).join('')
-   + (function(){ try{
+   + '<div class="pj-licbox">'+(function(){ try{
        var ids=[J.cap,J.asst].concat(J.crew||[]);
-       return plCheckBoat(bid,ids).map(function(r){
+       var R=plCheckBoat(bid,ids);
+       if(!R || !R.length) return '<div class="pj-licnone">ยังไม่ได้ตั้งทะเบียนประเภทใบอนุญาต</div>';
+       return R.map(function(r){
          return '<div class="pl-res '+(r.lv==='ok'?'ok':(r.lv==='warn'?'warn':'bad'))+'"><b>'
            +(r.lv==='ok'?'&#10003;':(r.lv==='warn'?'&#9888;':'&#9940;'))+'</b> '+poE(r.t)+'</div>';
        }).join('');
-     }catch(_){ return ''; } })()
+     }catch(_){ return ''; } })()+'</div>'
    + pjSecHd('Guides &amp; Trainee','guide')
    + pjTxtRow('Guide 1', G[0]||'')
    + pjTxtRow('Guide 2', G[1]||'')
@@ -77867,10 +77968,13 @@ function renderPierJob(pier){
       +'<span style="flex:1"></span>'
       +'<button class="gh" onclick="pjCopyYday(\''+P.k+'\')"'+(ro?' disabled':'')+'>&#8634; คัดลอกจากเมื่อวาน</button>'
       +'<button onclick="poStaffOpen()">ทะเบียนพนักงาน</button>'
+      +'<div class="pj-wsw" title="จำนวนลำที่เห็นพร้อมกันต่อหนึ่งหน้าจอ">'
+        +[3,4,5].map(function(n){ return '<button class="'+(_pjW===n?'on':'')+'" onclick="pjWide('+n+')">'+n+' ลำ</button>'; }).join('')
+      +'</div>'
       +'<button class="pri" onclick="pjPrint()">พิมพ์ใบงาน</button>'
     +'</div>'
     +(boats.length
-      ? ('<div class="pj-grid">'+boats.map(function(B){ return pjCard(B,_poPier,ro); }).join('')+'</div>')
+      ? ('<div class="pj-strip w'+_pjW+'">'+boats.map(function(B){ return pjCard(B,_poPier,ro); }).join('')+'</div>')
       : '<div class="pj-empty">ไม่มีเรือออกจากท่านี้ในวันที่เลือก<br><span style="font-size:11.5px">ผูกเรือกับเส้นทางได้ที่หน้า Boat Operation</span></div>')
     +(idle.length?('<div class="pj-idle"><div style="width:100%;font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#8B93A1;margin-bottom:2px">ไม่ได้ออกทริปวันนี้ · '+idle.length+' ลำ</div>'
        +idle.map(function(b){ return '<div class="pj-ib"><div class="n">'+poE(b.name||b.id)+'</div><div class="s">'+poE(b.status||b.type||'')+'</div></div>'; }).join('')+'</div>'):'');
@@ -77878,6 +77982,9 @@ function renderPierJob(pier){
     document.addEventListener('click', function(){ try{ host.querySelectorAll('.pj-pop').forEach(function(p){ p.classList.remove('on'); }); }catch(_){} });
   }
 }
+/* §pjDocs · จำนวนลำต่อจอ · จอเล็กเลือก 3 อ่านสบาย จอใหญ่เลือก 5 เห็นเยอะ */
+var _pjW=(function(){ try{ var v=+localStorage.getItem('la_pjw'); return (v===3||v===4||v===5)?v:4; }catch(_){ return 4; } })();
+function pjWide(n){ _pjW=n; try{ localStorage.setItem('la_pjw',String(n)); }catch(_){} renderPierJob(); }
 function pjDate(v){ if(v) _poDate=v; renderPierJob(); }
 function pjShift(n){ var d=new Date(_poDate+'T12:00:00'); d.setDate(d.getDate()+n); _poDate=poYMD(d); renderPierJob(); }
 function pjToday(){ _poDate=poYMD(new Date()); renderPierJob(); }
