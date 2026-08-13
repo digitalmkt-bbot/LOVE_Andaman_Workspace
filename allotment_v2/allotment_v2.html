@@ -50382,6 +50382,7 @@ function tsRows(date){
     // §ovnBack · ขากลับค้างคืนเป็นคนที่เดินทางจริงในวันนั้น จึงต้องอยู่ในใบสรุปและชุดเอกสาร
     //   ยอดเงินไม่ซ้ำเพราะ tsTripAmount() คืน 0 ให้ ovnLeg (และ tsNetOf คืน null อยู่แล้ว)
     const O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
+    const _ovnB=(typeof bkIsOvnReturn==='function') && bkIsOvnReturn(t);
     const s=ckSummary(b,date)||{booked:ckBookedPax(t),noShow:0};
     const v=O.vanCheckin||null, pcv=O.pierCheckin||null;
     const evV=ckEventTally(v), evP=ckEventTally(pcv);
@@ -50394,15 +50395,16 @@ function tsRows(date){
       b:b, t:t, O:O, routeId:t.routeId||'',
       booked:booked, travelled:Math.max(0,booked-noShow), noShow:noShow,
       ns:evV.no_show+evP.no_show, cxl:evV.cxl+evP.cxl, events:events,
-      van:O.vanId||'', vanCk:v, vanDone:!!(v&&v.at), vanActual:(v&&v.actualPax!=null)?v.actualPax:null,
+      /* §ovnDaily · ขากลับไม่มีรถไปรับ มีแต่รถพากลับ · vanReturnId ว่าง = กลับคันเดิม */
+      van:(_ovnB?(O.vanReturnId||O.vanId||''):(O.vanId||'')), vanCk:v, vanDone:!!(v&&v.at), vanActual:(v&&v.actualPax!=null)?v.actualPax:null,
       boat:O.boatId||t.charterBoatId||'', pierCk:pcv, pierDone:!!(pcv&&pcv.at),
       pierActual:(pcv&&pcv.actualPax!=null)?pcv.actualPax:null, pierExp:(pcv&&pcv.expected!=null)?pcv.expected:null,
       // §tsIssueReal · เข้าหัวข้อ "ตัดสินค่าปรับ" เฉพาะตอนมีคนไม่ได้เดินทางจริง
       //   เดิมใช้ events.length>0 ด้วย · กดอะไรหน้างานสักอย่างก็ติดค้างรอตัดสิน
       //   ทั้งที่ผลสุดท้ายที่ท่าเรืออาจเป็น "มาครบ" (มาเองที่ท่า / หน้าท่ายืนยันว่ามาแล้ว)
       issue:(noShow>0 || _lostTot>0 || !!_decNow), amount:tsTripAmount(b,t), policy:tsPolicyText(b), dec:_decNow,
-      ovnBack:(typeof bkIsOvnReturn==='function') && bkIsOvnReturn(t),
-      ovnOut:((typeof bkIsOvnReturn==='function' && bkIsOvnReturn(t) && typeof _ovnOutDate==='function')?_ovnOutDate(b,t):'')
+      ovnBack:_ovnB,
+      ovnOut:((_ovnB && typeof _ovnOutDate==='function')?_ovnOutDate(b,t):'')
     });
   });
   // §tsSortAZ (2026-08-03) · เรียง A-Z ตาม Agency ในแต่ละเส้นทาง
@@ -51523,10 +51525,15 @@ function drData(date){
             meals:{veg:0,vegan:0,halal:0,allergy:0}, langs:{}, docs:{verified:0,issue:0,pending:0,nofiles:0},
             extras:0, upDue:0, upGot:0, ltJoin:0, ltChtr:0,
             ret:{same:0,samePax:0,arr:0,arrPax:0,todo:0,todoPax:0,self:0,selfPax:0},
+            ovn:{n:0, pax:0, days:{}},
             warn:{noVan:0,noBoat:0,doc:0,over:0,dueAmt:0} };
 
   rows.forEach(function(r){
     var b=r.b, t=r.t, px=drPaxOf(t);
+    // §ovnDaily · คนรับกลับอยู่บนเรือจริง จึงนับใน "ผู้โดยสารทั้งวัน" และในที่นั่งของเรือ
+    //   แต่รายได้ของเขาถูกลงไปแล้ววันขาไป และวันนี้ไม่มีงานขารับ
+    var _ovn=!!r.ovnBack;
+    if(_ovn){ D.ovn.n++; D.ovn.pax+=px.tot; if(r.ovnOut) D.ovn.days[r.ovnOut]=(D.ovn.days[r.ovnOut]||0)+px.tot; }
     ['ad','chd','inf','foc','th','fr','un','tot'].forEach(function(k){ D.pax[k]+=px[k]; });
     var amt=(+r.amount||0); D.rev+=amt;
 
@@ -51564,11 +51571,13 @@ function drData(date){
       var tm=String((r.O&&r.O.pickupTimeFinal)||t.pickupTime||'');
       if(tm && (!vn.first || tm<vn.first)) vn.first=tm;
       if(r.boat) vn.boats[r.boat]=1;
-    } else if(selfArr){ D.selfArr.n++; D.selfArr.pax+=px.tot; }   // ไม่มีรถและเป็นโซนมาเอง
+    } else if(_ovn){ /* §ovnDaily · ไม่มีรถกลับ = เรื่องของขากลับ ไม่ใช่ "มาเอง" · เตือนที่ warn.noVan พอ */ D.warn.noVan++; }
+    else if(selfArr){ D.selfArr.n++; D.selfArr.pax+=px.tot; }   // ไม่มีรถและเป็นโซนมาเอง
     else { D.noVan.n++; D.noVan.pax+=px.tot; D.warn.noVan++; }
 
-    // โซนรับ
-    if(!selfArr || r.van){
+    // โซนรับ · §ovnDaily · ขากลับไม่มีการไปรับ · โซนที่ติดมาคือโซนส่ง ไม่ใช่โซนรับ
+    if(_ovn){ /* ข้าม */ }
+    else if(!selfArr || r.van){
       var zl=(r.van&&(zRaw==='NoTransfer'||zRaw==='NT')) ? 'ยังไม่ระบุโซน'
              : ((typeof bkV2ZoneLabel==='function')?bkV2ZoneLabel(zRaw):zRaw);
       if(!D.zones[zl]){ D.zones[zl]={name:zl,pax:0,n:0,vans:{},first:'',last:''}; D.zOrder.push(zl); }
@@ -51608,8 +51617,8 @@ function drData(date){
     if(D.docs[st]==null) D.docs[st]=0; D.docs[st]++;
     if(b.agentId && st!=='verified') D.warn.doc++;
 
-    // หางยาว
-    var af=(typeof bkV2AddOnFlags==='function')?bkV2AddOnFlags(b,rid):{};
+    // หางยาว · §ovnDaily · ของที่จองมากับใบถูกใช้และจ่ายไปแล้ววันขาไป · นับซ้ำ = ค่าใช้จ่ายเกินจริง
+    var af=(!_ovn && typeof bkV2AddOnFlags==='function')?bkV2AddOnFlags(b,rid):{};
     if(af.charter) D.ltChtr+=(af.charterQty||1); else if(af.join) D.ltJoin+=px.tot;
     if(typeof bkV2LongtailExtraPax==='function') D.ltJoin+=(bkV2LongtailExtraPax(b.id,date)||0);
     if(typeof bkV2LongtailCharterExtraBoats==='function') D.ltChtr+=(bkV2LongtailCharterExtraBoats(b.id,date)||0);
@@ -51634,6 +51643,8 @@ function drData(date){
     b.pierAll = ks;                                        // เรือลำเดียวรับหลายท่าในวันเดียว
     b.moved = !!(b.pier && b.homePier && b.pier!==b.homePier);   // ต้องย้ายเรือไปอีกท่า
   });
+  // §ovnDaily · ตัวหารของค่าเฉลี่ยรายได้ = คนที่มีรายได้ของวันนี้ · ไม่รวมคนรับกลับ (ลงเงินไปแล้ววันขาไป)
+  D.paxPay=Math.max(0, D.pax.tot - D.ovn.pax);
   D.capTot=D.bOrder.reduce(function(a,id){ return a+D.boats[id].cap; },0);
   D.seatTot=D.bOrder.reduce(function(a,id){ return a+D.boats[id].pax; },0);
 
@@ -52023,9 +52034,11 @@ function drPaneOv(D){
    + drK('blue','&#128101;','ผู้โดยสารทั้งวัน', D.pax.tot, 'คน','g',
        'ผู้ใหญ่ '+D.pax.ad+' · เด็ก '+D.pax.chd+' · ทารก '+D.pax.inf+' · FOC '+D.pax.foc,'',
        '<span>ไทย <b>'+D.pax.th+'</b></span><span class="sep">|</span><span>ต่างชาติ <b>'+D.pax.fr+'</b></span>'
-       +'<span class="sep">|</span><span>'+D.rOrder.length+' เส้นทาง</span>')
+       +'<span class="sep">|</span><span>'+D.rOrder.length+' เส้นทาง</span>'
+       /* §ovnDaily · ในยอดรวมมีคนที่กลับจากเกาะปนอยู่ · บอกไว้ ไม่งั้นเทียบกับยอดขายแล้วงง */
+       +(D.ovn.pax?('<span class="sep">|</span><span title="ค้างคืนบนเกาะ · วันนี้เรือไปรับกลับ · รายได้ลงไปแล้ววันขาไป">&#8617; รับกลับ <b>'+D.ovn.pax+'</b></span>'):''))
    + drK('em','&#128176;','รายได้ทั้งวัน', drB(D.rev),'','',
-       'เฉลี่ย '+drB(D.pax.tot?D.rev/D.pax.tot:0)+' / คน','ok',
+       'เฉลี่ย '+drB(D.paxPay?D.rev/D.paxPay:0)+' / คน'+(D.ovn.pax?(' (จาก '+D.paxPay+' คน · ไม่รวมรับกลับ)'):''),'ok',
        '<span>Invoice <b>'+drK2(D.pay.invoice)+'</b></span><span class="sep">|</span>'
        +'<span>PFM <b>'+drK2(D.pay.proforma)+'</b></span><span class="sep">|</span>'
        +'<span>COT <b>'+drK2(D.pay.cot)+'</b></span>')
@@ -52418,7 +52431,7 @@ function drPaneFi(D){
   var cost=D.vanCost+D.ltCost;
   var kp=''
    + drK('em','&#128176;','รายได้ทั้งวัน', drB(D.rev),'','',
-       'เฉลี่ย '+drB(D.pax.tot?D.rev/D.pax.tot:0)+' / คน','ok',
+       'เฉลี่ย '+drB(D.paxPay?D.rev/D.paxPay:0)+' / คน','ok',
        '<span>'+D.rows.length+' booking</span><span class="sep">|</span><span>'+D.pax.tot+' คน</span>')
    + drK('or','&#128179;','ต้องเก็บหน้างาน', drB(D.due), D.due>0?'ค้าง':'','r',
        D.due>0?('เก็บไปแล้ว '+drB(D.got)):'เก็บครบแล้ว', D.due>0?'bad':'ok',
@@ -52830,7 +52843,7 @@ function drMailHTML(D){
       ['ไทย <b style="color:#111827">'+D.pax.th+'</b>','ต่างชาติ <b style="color:#111827">'+D.pax.fr+'</b>',
        '<b style="color:#111827">'+D.rOrder.length+'</b> เส้นทาง'], '&#128101;', '#eef2ff');
     var k2=drmKpi('รายได้ทั้งวัน', drB(D.rev), '',
-      'เฉลี่ย <b style="color:'+GRN+'">'+drB(D.pax.tot?D.rev/D.pax.tot:0)+'</b> / คน',
+      'เฉลี่ย <b style="color:'+GRN+'">'+drB(D.paxPay?D.rev/D.paxPay:0)+'</b> / คน',
       ['Invoice <b style="color:#111827">'+drK2(D.pay.invoice)+'</b>','PFM <b style="color:#111827">'+drK2(D.pay.proforma)+'</b>',
        'COT <b style="color:#111827">'+drK2(D.pay.cot)+'</b>'], '&#128176;', '#ecfdf5', GRN);
     var k3=drmKpi('ที่นั่งเรือที่ใช้', drPct(D.seatTot,D.capTot)+'%', 'เฉลี่ย',
@@ -53130,7 +53143,7 @@ function drMailText(D){
   L.push('', '— ภาพรวม —',
     'ผู้โดยสาร '+D.pax.tot+' คน (ผู้ใหญ่ '+D.pax.ad+' · เด็ก '+D.pax.chd+' · ทารก '+D.pax.inf+' · FOC '+D.pax.foc+')',
     'booking '+D.rows.length+' ใบ · '+D.rOrder.length+' เส้นทาง',
-    'รายได้ '+drB(D.rev)+' · เฉลี่ย '+drB(D.pax.tot?D.rev/D.pax.tot:0)+'/คน',
+    'รายได้ '+drB(D.rev)+' · เฉลี่ย '+drB(D.paxPay?D.rev/D.paxPay:0)+'/คน',
     'ที่นั่งเรือ '+D.seatTot+'/'+D.capTot+' ('+drPct(D.seatTot,D.capTot)+'%)',
     'ค่ารถ '+drB(D.vanCost)+' · '+drB(D.perPax)+'/คน');
   L.push('', '— Market —');
