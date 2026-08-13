@@ -1644,6 +1644,12 @@ const PERM_KEYS=new Set(['overview','operations','sales','accounting','fleet','c
   'dashboard','calendar','daily','booking','reconfirm','bookingflow','doccheck','operation','insurance','vehicles','vanjobs','vancheckin','piercheckin','travelsum','dailyreport','pickup-setup',
   'agents','sales-board','b2b-dash','rate-types','contract-tmpl','b2c','staff','marketdata','focdetail','pickupmap','dailypfm',
   'fl-dashboard','fl-boatstatus','fl-dailyreport','fl-incident','fl-projects','fl-maintenance','fl-inventory','fl-consumables','fl-cost','fl-insights','fl-fuel','fl-asset',
+  // §2026-08-13: ครั้งที่สี่ — 12 หน้าของ Pier Office (po-/poj-/pol-/poa- x 3 ท่า) อยู่ใน LA_NAV
+  // แต่ไม่อยู่ใน Set นี้ · ติ๊กสิทธิ์ท่าเรือให้ผู้ใช้ใหม่แล้วบันทึก คีย์ถูกกรองทิ้งเงียบ ๆ ทุกครั้ง
+  // ครั้งนี้เลิกพึ่งความจำ · laSyncPermKeys() ด้านล่างอ่าน LA_NAV/LA_AREAS จากไฟล์หน้าเว็บตอนบูต
+  // แล้วเติมคีย์ที่ขาดให้เอง รายการนี้จึงเป็นแค่ค่าเริ่มต้น ไม่ใช่ความจริงชุดเดียว
+  'po-panwa','po-tublamu','po-ranong','poj-panwa','poj-tublamu','poj-ranong',
+  'pol-panwa','pol-tublamu','pol-ranong','poa-panwa','poa-tublamu','poa-ranong',
   'settings','teammkt','addonsvc']);   // 'accounting' already present as a group key
 function cleanPerms(a){
   if(!Array.isArray(a)) return null;
@@ -1652,8 +1658,39 @@ function cleanPerms(a){
   if(dropped.length) console.warn('[perms] dropped unknown keys (add them to PERM_KEYS):', dropped.join(','));
   return a.filter(x=>PERM_KEYS.has(x));
 }
-const AREA_KEYS=new Set(['overview','operations','sales','accounting','fleet','config']);
-function cleanAreas(a){ return Array.isArray(a)?a.filter(x=>AREA_KEYS.has(x)):null; }
+const AREA_KEYS=new Set(['overview','operations','sales','accounting','fleet','pier','config']);
+function cleanAreas(a){
+  const dropped=Array.isArray(a)?a.filter(x=>!AREA_KEYS.has(x)):[];
+  if(dropped.length) console.warn('[perms] dropped unknown edit areas (add them to AREA_KEYS):', dropped.join(','));
+  return Array.isArray(a)?a.filter(x=>AREA_KEYS.has(x)):null;
+}
+
+// ── §permSync (2026-08-13) · เลิกจดรายชื่อหน้าไว้สองที่ ──────────────────
+//   กับดักเดิมเป็นรอบที่สี่แล้ว · หน้าใหม่เพิ่มใน LA_NAV ฝั่ง client แต่ลืมเพิ่มที่นี่
+//   ผลคือ admin ติ๊กสิทธิ์ให้ผู้ใช้ กด "บันทึก" ขึ้นว่าสำเร็จ แต่ติ๊กหายทุกครั้ง
+//   เพราะ cleanPerms() กรองคีย์ที่ไม่รู้จักทิ้งเงียบ ๆ — อาการเหมือนบันทึกไม่ติด หาสาเหตุยาก
+//
+//   ตอนบูต อ่านไฟล์หน้าเว็บที่เซิร์ฟเวอร์นี้เสิร์ฟอยู่แล้ว ดึงคีย์จาก LA_NAV / LA_AREAS
+//   มาเติมให้ครบเอง · รายการที่เขียนไว้ข้างบนยังอยู่ในฐานะค่าเริ่มต้นเผื่ออ่านไฟล์ไม่ได้
+//   อ่านครั้งเดียวตอนเริ่ม ไม่แตะ request path จึงไม่มีผลกับความเร็ว
+function laSyncPermKeys(){
+  try{
+    const fp = path.join(ROOT, 'allotment_v2', 'allotment_v2.html');
+    const head = fs.readFileSync(fp, 'utf8').slice(0, 400000);   // LA_NAV/LA_AREAS อยู่ต้นไฟล์
+    // เอาเฉพาะรูปทรงของ LA_NAV เท่านั้น · {v:'view',t:'...',a:'area'}
+    //   ชื่อ area เอาจากช่อง a: ของ LA_NAV ไม่ใช่จาก LA_AREAS เพราะรูปทรง {k:'..',t:'..'}
+    //   ไปตรงกับ literal อื่นในไฟล์อีกหลายที่ · ดึงมาแล้วจะได้ area ปลอมติดมาด้วย
+    const navs = [...head.matchAll(/\{\s*v\s*:\s*'([a-z0-9_-]+)'\s*,\s*t\s*:[^}]*?a\s*:\s*'([a-z0-9_-]+)'\s*\}/gi)];
+    const addP=[], addA=[];
+    navs.forEach(m=>{ if(!PERM_KEYS.has(m[1])){ PERM_KEYS.add(m[1]); addP.push(m[1]); }
+                      if(!AREA_KEYS.has(m[2])){ AREA_KEYS.add(m[2]); addA.push(m[2]); } });
+    if(!navs.length) console.warn('[perms] LA_NAV not found in allotment_v2.html — using the built-in key list only');
+    else console.log('[perms] synced from LA_NAV: '+navs.length+' views, '+AREA_KEYS.size+' areas'
+      +(addP.length?(' · added views: '+addP.join(',')):'')
+      +(addA.length?(' · added areas: '+[...new Set(addA)].join(',')):''));
+  }catch(e){ console.warn('[perms] could not read LA_NAV from allotment_v2.html: '+e.message+' — using the built-in key list only'); }
+}
+laSyncPermKeys();
 // A user's editable-areas + "can edit anything" flag · editAreas null → falls back to legacy can_edit
 function editInfo(usr){ const ea=parsePerms(usr.edit_areas); const arr=Array.isArray(ea)?ea.filter(x=>AREA_KEYS.has(x)):null; const any = arr ? arr.length>0 : (usr.can_edit!==false); return {editAreas:arr, canEditAny:any}; }
 
