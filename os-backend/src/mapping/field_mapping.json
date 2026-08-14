@@ -41,6 +41,12 @@
       "source": "sort",
       "kind": "scalar",
       "db_type": "bigint"
+    },
+    "code": {
+      "source": "code",
+      "kind": "scalar",
+      "db_type": "text",
+      "note": "รหัสสั้นที่ผู้ใช้ตั้งเอง · ใช้แสดงในช่องวันของตารางการทำงาน · ไม่ตั้งก็เดาจากชื่อเส้นทาง"
     }
   },
   "routes__times": {
@@ -6903,6 +6909,43 @@
       "kind": "scalar",
       "db_type": "text",
       "note": "รหัสตั้งต้นในตารางการทำงาน เมื่อวันนั้นมีใบงานแล้วแต่คนนี้ไม่ได้ลงเรือ"
+    },
+    "sect": {
+      "source": "sect",
+      "kind": "scalar",
+      "db_type": "text",
+      "note": "กลุ่ม (pier_sect.id) ที่คนนี้อยู่ในตารางการทำงาน · ว่าง = ยังไม่จัดกลุ่ม"
+    },
+    "note": {
+      "source": "note",
+      "kind": "scalar",
+      "db_type": "text",
+      "note": "ช่อง REMARKS ในตารางการทำงาน · เช่น ลาออก · กลับมาช่วงไฮซีซัน"
+    }
+  },
+  "pier_sect": {
+    "id": {
+      "source": "pier_sect[].id (record id; generated if absent)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "pier": {
+      "source": "pier",
+      "kind": "scalar",
+      "db_type": "text",
+      "note": "ท่าเรือที่กลุ่มนี้เป็นของ"
+    },
+    "name": {
+      "source": "name",
+      "kind": "scalar",
+      "db_type": "text",
+      "note": "ชื่อกลุ่มที่แสดงเป็นแถบคั่นในตาราง เช่น OFFICE · BOAT CREW"
+    },
+    "ord": {
+      "source": "ord",
+      "kind": "scalar",
+      "db_type": "bigint",
+      "note": "ลำดับของแถบคั่นในตาราง"
     }
   },
   "pier_duty": {

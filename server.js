@@ -41,6 +41,39 @@ for (const t of OS_TABLES) OS_COLS[t] = osModel[t].columns.map(c => c.name);
 // (2026-07-15: a bulk agent import shipped creditDays:"" → "invalid input syntax for type bigint").
 const OS_COLTYPE = {};
 for (const t of OS_TABLES){ OS_COLTYPE[t] = {}; for (const c of osModel[t].columns) OS_COLTYPE[t][c.name] = c.type || ''; }
+// §mapDrift (2026-08-14) · ตารางอยู่ใน model แต่ field_mapping ไม่รู้จัก = ข้อมูลหายเงียบสนิท
+//   ไฟล์นี้สร้าง/ลบ/เขียนตารางจาก operation_schemas_model.json
+//   แต่ตัวแปลง blob <-> rows (os_repo) เดินจาก field_mapping.json ล้วน ๆ
+//   ตารางที่มีแค่ในไฟล์แรก จึงโดน DELETE ทุกครั้งที่เซฟ แล้วไม่มีแถวไหนถูก INSERT กลับ
+//   ตอนโหลด assembleBlob ก็ไม่คายคีย์นั้นออกมา · คอลัมน์ที่ขาดก็เช่นกัน
+//   สิ่งที่ผู้ใช้เห็นคือ กรอกได้ ไม่มี error ไม่มีเตือน แล้วรีเฟรชทีข้อมูลหายทุกครั้ง
+//   (เจอจริง 14 ส.ค. 2026 · pier_sect + pier_staff.sect/note + routes.code เข้า model แต่ไม่เข้า field_mapping)
+//   เช็คตอนบูตครั้งเดียว · warn ที่ log และรายงานที่ /api/version ให้เห็นโดยไม่ต้องเดา
+const MAP_DRIFT = (() => {
+  const plan = osRepo._plan || {};
+  const tables = [], columns = [];
+  for (const t of OS_TABLES){
+    if (t === 'app_meta') continue;                       // scalars table · ไม่มี appKey ของตัวเอง
+    const p = plan[t];
+    if (!p){ tables.push(t); continue; }
+    const known = new Set();
+    for (const k of ['pkCol','fkCol','idxCol','rowPkCol','keyCol','valueCol']) if (p[k]) known.add(p[k]);
+    for (const dc of (p.dataCols || [])) known.add(dc.col);
+    for (const c of OS_COLS[t]) if (!known.has(c)) columns.push(t + '.' + c);
+  }
+  if (tables.length || columns.length)
+    console.warn('[map] operation_schemas_model.json has table(s)/column(s) that field_mapping.json does not map. '
+      + 'They are DELETEd on every save, never written back, and never returned on load — the data looks saved '
+      + 'and disappears on refresh, with no error. tables: ' + (tables.join(', ') || '-')
+      + ' | columns: ' + (columns.join(', ') || '-')
+      + ' — add them to os-backend/src/mapping/field_mapping.json');
+  else console.log('[map] field_mapping.json covers every table and column in operation_schemas_model.json');
+  return { tables, columns };
+})();
+function mapDriftSummary(){
+  return { tables: MAP_DRIFT.tables.length, columns: MAP_DRIFT.columns.length,
+           detail: MAP_DRIFT.tables.concat(MAP_DRIFT.columns).slice(0, 20).join(', ') };
+}
 function _bindVal(t, c, row){
   let v = row[c] === undefined ? null : row[c];
   const ty = (OS_COLTYPE[t] && OS_COLTYPE[t][c]) || '';
@@ -2125,7 +2158,9 @@ const server = http.createServer((req, res) => {
         // nature — it bumps no version and throws nothing — and that silence is exactly what took
         // /api/load down on 12 Aug. `pending` or `failed` above zero means the database is behind
         // the code that is already serving.
-        { b2c: b2cHealthReport(), mig: migSummary() })))
+        // §mapDrift · อยู่ตรงนี้ด้วยเหตุผลเดียวกับ mig · mapping ที่ขาดไม่ขึ้น error และไม่ขยับ version
+        //   ความเงียบนั้นคืออาการ · ต้องมีที่ให้มองแล้วรู้ทันที ไม่ใช่ไล่หาทีละไฟล์
+        { b2c: b2cHealthReport(), mig: migSummary(), map: mapDriftSummary() })))
       .catch(e=>J(res,500,{error:e.message}));
     return;
   }
