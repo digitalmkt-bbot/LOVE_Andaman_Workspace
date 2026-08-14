@@ -470,6 +470,7 @@
   function laWrapNav(){ if(window.__laNavWrapped||typeof window.nav!=='function') return; var orig=window.nav; window.nav=function(el){ try{ var v=el&&el.dataset&&el.dataset.view; if(v&&!laAllowed(v)){ alert('คุณไม่มีสิทธิ์เข้าถึงเมนูนี้ · ติดต่อ admin'); return; } }catch(e){} return orig.apply(this,arguments); }; window.__laNavWrapped=true; }
   function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function badgeTick(){ var b=document.getElementById('la-userbadge'); if(b){ b.style.borderColor='rgba(120,240,170,.7)'; setTimeout(function(){ b.style.borderColor='rgba(255,255,255,.15)'; },600);} }
+<<<<<<< HEAD
   // §mobUser · ของเดิมใช้ XHR แบบ synchronous ซึ่งเบราว์เซอร์รุ่นใหม่เลิกอุ้ม
   //   พังแล้วกลืน error · reload เฉย ๆ · จอกระพริบแล้วยังเป็นคนเดิม ไม่มีอะไรบอกว่าทำไม
   //   ตอนนี้ยิงแล้วตรวจว่าออกจริงไหมก่อน · ออกไม่ได้ต้องบอก
@@ -485,6 +486,29 @@
         .catch(function(){ fail(); });
     }catch(e){ fail(); }
   };
+=======
+  /* §logout · iPhone/iPad Safari ออกจากระบบไม่ได้ (2026-08-14)
+     เดิมยิง sync XHR ดิบ ๆ แล้วกลืน error ด้วย catch(e){} จากนั้น location.reload() ทุกกรณี
+     WebKit ล้มเหลวกับ sync XHR ที่ Chrome ไม่ล้ม (เหตุผลเดียวกับที่ sxr() ถูกเขียนขึ้น · ดูบรรทัด ~22)
+     → บน iPhone Safari คุกกี้ไม่เคยถูกล้าง กดปุ่มแล้วหน้าโหลดใหม่ แต่ยัง login อยู่เหมือนเดิม
+     ปุ่ม "ออก" คือทางออกจากระบบทางเดียวของทั้งแอป พังเงียบ ๆ แบบนี้ = ออกไม่ได้เลย
+     fetch() เชื่อถือได้บน WebKit · เก็บ sxr() (retry + cache-buster + เช็ค status) ไว้เป็นทางสำรอง
+     ล้มเหลวจริงต้องบอกผู้ใช้ ไม่ reload หลอกให้เข้าใจผิดว่าออกสำเร็จ */
+  window.__laLogout=function(){ if(!confirm('ออกจากระบบ?')) return;
+    var fail=function(why){ alert('Sign out failed ('+why+').\nPlease close all Safari tabs for this site, or clear website data, then try again.'); };
+    /* Never reload until the server agrees we are out. The old code reloaded whenever the REQUEST
+       succeeded, which is not the same thing: on iPhone Safari the 200 came back, the cookie stayed,
+       the page reloaded still logged in — a button that looks alive and does nothing.
+       /api/me through sxr() is cache-busted, so a 401 here means the session is genuinely gone. */
+    var confirmOut=function(){ var r=sxr('/api/me');
+      if(r.status===401){ location.reload(); return; }
+      fail(r.status===200 ? 'browser kept the session cookie' : 'status '+r.status); };
+    var viaSync=function(){ var r=sxr('/api/logout'); if(r.status===200) confirmOut(); else fail('status '+r.status); };
+    if(window.fetch){ fetch('/api/logout',{credentials:'same-origin',cache:'no-store'})
+        .then(function(r){ if(r.ok) confirmOut(); else fail('HTTP '+r.status); })
+        .catch(function(){ try{ viaSync(); }catch(e){ fail('network'); } }); }
+    else { try{ viaSync(); }catch(e){ fail('network'); } } };
+>>>>>>> 2c9a8e1c852649d7bb58ae3a90607c96c4245946
 
   // ── Login screen ──
   function showLogin(){
