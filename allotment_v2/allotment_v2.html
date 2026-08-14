@@ -77453,7 +77453,7 @@ function paCSS(){
      +'text-align:left;font-size:12px;font-weight:700;color:#242730;white-space:nowrap}'
   +H+' .pa-nk{position:sticky;left:234px;z-index:3;background:#fff;width:74px;min-width:74px;padding:5px 9px !important;'
      +'text-align:left;font-size:11.5px;color:#5A6270;white-space:nowrap}'
-  +H+' .pa-rl{position:sticky;left:308px;z-index:3;background:#fff;width:184px;min-width:184px;padding:5px 10px !important;'
+  +H+' .pa-rl{position:sticky;left:308px;z-index:3;background:#fff;width:206px;min-width:206px;padding:5px 10px !important;'
      +'text-align:left;font-size:11.5px;color:#5A6270;white-space:nowrap;border-right:2px solid #97A0AE !important}'
   +H+" .pa-rl i{font-style:normal;font-size:9.5px;font-weight:700;color:#8B93A1;background:#F2F4F7;border-radius:4px;padding:1px 6px;margin-left:6px}"
   +H+' .pa-away{font-size:9.5px;font-weight:800;color:#20477E;background:#E9EFF7;border-radius:4px;padding:1px 6px;margin-left:5px}'
@@ -77472,6 +77472,19 @@ function paCSS(){
   +H+" .pa-nti{width:100%;border:1px solid transparent;background:transparent;border-radius:6px;padding:4px 7px;font:600 11px inherit;color:#8A5A00}"
   +H+' .pa-nti:hover{border-color:#E1E4EA;background:#fff}'
   +H+' .pa-nti:focus{border-color:#16265C;background:#fff;outline:none}'
+  /* §paEdit · ช่องพิมพ์ทับสี่ช่องแรก · กลืนกับตารางจนกว่าจะชี้ จะได้ไม่รกกว่าเดิม */
+  +H+' .pa-ei{width:100%;border:1px solid transparent;background:transparent;border-radius:6px;'
+     +'padding:3px 6px;font:inherit;color:inherit;min-height:0}'
+  +H+' .pa-ei::placeholder{color:#C6CCD5;font-weight:400}'
+  +H+' .pa-ei:hover{border-color:#E1E4EA;background:#fff}'
+  +H+' .pa-ei:focus{border-color:#16265C;background:#fff;outline:none}'
+  +H+' .pa-nm2 .pa-away{display:inline-block;margin:3px 0 0 2px}'
+  +H+' .pa-rlw{display:flex;align-items:center;gap:5px;min-width:0}'
+  +H+' .pa-rlw .pa-ei{flex:1 1 auto;min-width:0}'
+  +H+" .pa-dc{flex:0 0 auto;border:1px solid transparent;background:#F2F4F7;border-radius:4px;"
+     +"font:700 9.5px 'DM Sans','Noto Sans Thai',sans-serif;color:#8B93A1;padding:2px 3px;cursor:pointer}"
+  +H+' .pa-dc:hover{border-color:#C6CCD5;color:#20477E;background:#fff}'
+  +H+' .pa-dc:focus{border-color:#16265C;color:#16265C;background:#fff;outline:none}'
   +H+' tr.pa-band .pa-no,tr.pa-band .pa-nm2{background:#EAEEF4}'
   +H+' tr.pa-band td{background:#EAEEF4;font-size:9.5px;font-weight:800;letter-spacing:.1em;color:#1F3C88}'
   /* เสาร์-อาทิตย์ · เข้มขึ้นทับสีของรหัส ไม่ใช่แทนที่ */
@@ -77618,12 +77631,15 @@ function renderPierAtt(pier){
         return '<td class="pa-sc'+(v?'':' z')+'">'+(v||'·')+'</td>'; }).join('')
         + '<td class="pa-sc tot">'+w+'</td>';
       _n++;
+      // §paEdit · สี่ช่องแรกพิมพ์ทับได้ตรงนี้ · ออกจากช่องแล้วบันทึกเลย
+      var _aw=(aw?('<b class="pa-away" title="ไปลงเรือที่ท่าอื่น '+aw+' วัน · ยังนับเป็นวันทำงานของท่าประจำ">ช่วยท่าอื่น '+aw+'</b>'):'');
       body+='<tr><td class="pa-no">'+_n+'</td>'
-        +'<td class="pa-nm2">'+poE(st.name||st.nick||st.id)
-          +(aw?(' <b class="pa-away" title="ไปลงเรือที่ท่าอื่น '+aw+' วัน · ยังนับเป็นวันทำงานของท่าประจำ">ช่วยท่าอื่น '+aw+'</b>'):'')+'</td>'
-        +'<td class="pa-nk">'+poE(st.nick||'')+'</td>'
-        +'<td class="pa-rl">'+poE(st.role||'')
-          +'<i title="รหัสที่ใช้เมื่อวันนั้นไม่ได้ลงเรือ">'+poE(st.defCode||paDefFallback())+'</i></td>'
+        +'<td class="pa-nm2">'+(ro?(poE(st.name||st.nick||st.id)+(_aw?' '+_aw:''))
+            :(paEi(st.id,'name',st.name,'ชื่อ–นามสกุล')+_aw))+'</td>'
+        +'<td class="pa-nk">'+(ro?poE(st.nick||''):paEi(st.id,'nick',st.nick,'ชื่อเล่น'))+'</td>'
+        +'<td class="pa-rl">'+(ro?(poE(st.role||'')
+              +'<i title="รหัสที่ใช้เมื่อวันนั้นไม่ได้ลงเรือ">'+poE(st.defCode||paDefFallback())+'</i>')
+            :('<div class="pa-rlw">'+paEi(st.id,'role',st.role,'ตำแหน่ง')+paDefSel(st)+'</div>'))+'</td>'
         +tds+sums
         +'<td class="pa-nt">'+(ro?poE(st.note||'')
             :('<input class="pa-nti" value="'+poE(st.note||'')+'" placeholder="—" '
@@ -77717,6 +77733,51 @@ function paPick(ev, date, sid){
   setTimeout(function(){ document.addEventListener('click', paPopClose, {once:true}); },0);
 }
 function paPopClose(){ var d=document.getElementById('pa-pop'); if(d) d.remove(); }
+/* §paEdit · ช่องพิมพ์ทับในตาราง · หน้าตาเหมือนข้อความจนกว่าจะชี้ */
+function paEi(sid, key, val, ph){
+  return '<input class="pa-ei" value="'+poE(val||'')+'" placeholder="'+poE(ph||'')+'" '
+    + 'title="แก้ได้ตรงนี้ · ออกจากช่องแล้วบันทึกเอง" '
+    + 'onchange="paStaffFld(\''+poE(sid)+'\',\''+key+'\',this.value)">';
+}
+/* รหัสตั้งต้น · เลือกจากทะเบียนรหัสเท่านั้น · พิมพ์เองแล้วสรุปจะนับไม่ถูก */
+function paDefSel(st){
+  var cur=String(st.defCode||''), fb=paDefFallback();
+  var cs=(PIER_CODES||[]).filter(function(c){ return c && c.active!==false; })
+    .sort(function(a,b){ return (+a.ord||0)-(+b.ord||0); });
+  var seen={}; cs.forEach(function(c){ seen[c.code]=1; });
+  if(cur && !seen[cur]) cs.push({code:cur, label:'(ไม่มีในทะเบียน)'});   // ของเก่าที่ตั้งไว้ก่อน ต้องไม่หายไปเงียบ ๆ
+  return '<select class="pa-dc" title="รหัสที่ใช้เมื่อวันนั้นไม่ได้ลงเรือ" '
+    + 'onchange="paStaffFld(\''+poE(st.id)+'\',\'defCode\',this.value)">'
+    // ตัวย่ออย่างเดียวในช่อง · ความหมายเต็มอยู่ในแถบรหัสท้ายหน้าอยู่แล้ว ใส่ซ้ำจะดันคอลัมน์จนล้น
+    + '<option value=""'+(cur?'':' selected')+' title="ใช้ค่ากลางของท่า">&mdash; '+poE(fb)+'</option>'
+    + cs.map(function(c){ return '<option value="'+poE(c.code)+'"'+(c.code===cur?' selected':'')
+        +' title="'+poE(c.label||c.code)+'">'+poE(c.code)+'</option>'; }).join('')
+    + '</select>';
+}
+/* วาดตารางใหม่โดยไม่ทิ้งตำแหน่งที่เลื่อนค้างไว้ · รอบหนึ่ง 31 คอลัมน์ เลื่อนกลับเองไม่ไหว */
+function paKeep(fn){
+  var w=document.querySelector('#pa-host-'+_poPier+' .pa-wrap');
+  var x=w?w.scrollLeft:0, y=w?w.scrollTop:0;
+  fn();
+  try{ var w2=document.querySelector('#pa-host-'+_poPier+' .pa-wrap');
+    if(w2){ w2.scrollLeft=x; w2.scrollTop=y; } }catch(_){}
+}
+function paStaffFld(sid, key, txt){
+  if(!poGuard()) return;
+  var st=(PIER_STAFF||[]).filter(function(x){ return x.id===sid; })[0]; if(!st) return;
+  var v=String(txt==null?'':txt).trim().slice(0,80);
+  // ชื่อกับชื่อเล่นห้ามว่างพร้อมกัน · ทั้งตารางเรียกคนจากสองช่องนี้ ว่างทั้งคู่แล้วเหลือแต่ id
+  if((key==='name' && !v && !String(st.nick||'').trim()) ||
+     (key==='nick' && !v && !String(st.name||'').trim())){
+    alert('ต้องเหลือชื่อหรือชื่อเล่นไว้อย่างน้อยหนึ่งช่อง');
+    paKeep(function(){ renderPierAtt(); }); return;
+  }
+  if(String(st[key]||'')===v) return;
+  st[key]=v; poPersist();
+  // รหัสตั้งต้นมีผลกับช่องวันทั้งแถวและยอดสรุป · อีกสามช่องเป็นตัวหนังสือในช่องเดิม ไม่ต้องวาดใหม่
+  if(key==='defCode') paKeep(function(){ renderPierAtt(); });
+  try{ if(typeof renderPierJob==='function' && key!=='defCode') renderPierJob(); }catch(_){}
+}
 /* §paCols · หมายเหตุรายคน · เก็บที่ทะเบียนพนักงาน ไม่ใช่รายวัน (ลาออก · กลับมาไฮซีซั่น) */
 function paNote(sid, txt){
   if(!poGuard()) return;
