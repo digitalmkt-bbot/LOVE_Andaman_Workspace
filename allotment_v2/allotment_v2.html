@@ -470,7 +470,21 @@
   function laWrapNav(){ if(window.__laNavWrapped||typeof window.nav!=='function') return; var orig=window.nav; window.nav=function(el){ try{ var v=el&&el.dataset&&el.dataset.view; if(v&&!laAllowed(v)){ alert('คุณไม่มีสิทธิ์เข้าถึงเมนูนี้ · ติดต่อ admin'); return; } }catch(e){} return orig.apply(this,arguments); }; window.__laNavWrapped=true; }
   function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function badgeTick(){ var b=document.getElementById('la-userbadge'); if(b){ b.style.borderColor='rgba(120,240,170,.7)'; setTimeout(function(){ b.style.borderColor='rgba(255,255,255,.15)'; },600);} }
-  window.__laLogout=function(){ if(!confirm('ออกจากระบบ?')) return; try{ var x=new XMLHttpRequest(); x.open('GET','/api/logout',false); x.send(); }catch(e){} location.reload(); };
+  // §mobUser · ของเดิมใช้ XHR แบบ synchronous ซึ่งเบราว์เซอร์รุ่นใหม่เลิกอุ้ม
+  //   พังแล้วกลืน error · reload เฉย ๆ · จอกระพริบแล้วยังเป็นคนเดิม ไม่มีอะไรบอกว่าทำไม
+  //   ตอนนี้ยิงแล้วตรวจว่าออกจริงไหมก่อน · ออกไม่ได้ต้องบอก
+  window.__laLogout=function(){
+    if(!confirm('ออกจากระบบ?')) return;
+    var done=function(){ try{ location.replace(location.pathname+'?t='+Date.now()); }catch(_){ location.reload(); } };
+    var fail=function(){ alert('ออกจากระบบไม่สำเร็จ · เน็ตอาจหลุด\n\nลองใหม่อีกครั้ง ถ้ายังไม่ได้ให้ปิดแท็บแล้วเปิดใหม่'); };
+    try{
+      fetch('/api/logout',{credentials:'same-origin',cache:'no-store'})
+        .then(function(){ return fetch('/api/me',{credentials:'same-origin',cache:'no-store'}); })
+        .then(function(r){ return r.ok?r.json():null; })
+        .then(function(j){ if(j && (j.username||j.name)) fail(); else done(); })
+        .catch(function(){ fail(); });
+    }catch(e){ fail(); }
+  };
 
   // ── Login screen ──
   function showLogin(){
@@ -3914,7 +3928,28 @@ body.la-nav-open .la-burger{background:#1683C7;color:#fff;box-shadow:inset 2px 2
   .modal-body,.tm-modal-body,.aos-modal-body{-webkit-overflow-scrolling:touch}
 
   /* ป้ายมุมจอ · ยกให้พ้น home indicator */
-  #la-userbadge,#la-viewonly,#la-refresh{bottom:calc(8px + env(safe-area-inset-bottom)) !important;font-size:10px !important}
+  #la-viewonly,#la-refresh{bottom:calc(8px + env(safe-area-inset-bottom)) !important;font-size:10px !important}
+  /* §mobUser · ป้ายผู้ใช้ย้ายเข้าไปอยู่ท้ายลิ้นชักแล้ว · เลิกลอย เลิกทับเนื้อหา
+     และพ้นแถบเครื่องมือของเบราว์เซอร์ที่คาอยู่ก้นจอ ซึ่งเป็นเหตุที่กดปุ่มออกไม่โดน */
+  #la-userbadge.la-ub-inside{
+    position:static !important; left:auto !important; right:auto !important; bottom:auto !important;
+    width:auto !important; max-width:none !important; margin:14px 2px calc(6px + env(safe-area-inset-bottom)) !important;
+    border-radius:14px !important; font-size:12px !important; padding:11px 12px !important; gap:9px !important;
+    box-shadow:none !important; border:1px solid rgba(26,35,50,.09) !important; background:rgba(255,255,255,.82) !important;
+  }
+  #la-userbadge.la-ub-inside > span{ flex:1 1 100% !important; line-height:1.5 }
+  /* ที่ว่างก้นลิ้นชัก 66px เดิมเผื่อไว้ให้กล่องลอยมาทับ · ตอนนี้ป้ายอยู่ในนี้แล้ว ไม่ต้องเผื่อ */
+  .sidebar{ padding-bottom:10px !important }
+  /* นิ้วกดได้จริง · ของเดิมสูง 26px */
+  #la-userbadge.la-ub-inside .la-ub-btn{ flex:1 1 0; min-height:42px !important; font-size:12.5px !important;
+    border-radius:11px !important; font-weight:600 }
+  /* ปฏิทินเดือน · เลื่อนในการ์ดของตัวเอง ไม่ดันทั้งหน้าไปทางขวา
+     หัววันต้องกว้างเท่าตัวตาราง ไม่งั้นเลื่อนแล้วหัวไม่ตรงช่อง */
+  .main .cal2-box{ overflow-x:auto !important; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; max-width:100% !important }
+  .main .cal2-box .cal2-wd,.main .cal2-box .cal2-grid,.main .cal2-box .cal2-mb{ min-width:600px }
+  .main .cal2-box .cal2-grid{ overflow:visible !important }
+  /* แถบปุ่มสลับแท็บที่ยาวกว่าจอ · เลื่อนในแถบตัวเอง */
+  .main .dr-pills,.main .bkv2-utabs,.main .fl-tabs{ overflow-x:auto; -webkit-overflow-scrolling:touch; max-width:100% }
 
   /* การ์ดที่ถูกวางไว้คอลัมน์ที่ 5 ของกริด · พอกริดเหลือ 1–2 คอลัมน์ มันจะยื่นออกนอกจอ */
   .main [style*="grid-column:"]{grid-column:auto !important}
@@ -4053,6 +4088,26 @@ body.la-nav-open .la-burger{background:#1683C7;color:#fff;box-shadow:inset 2px 2
 function laNavOpen(){ document.body.classList.add('la-nav-open'); }
 function laNavClose(){ document.body.classList.remove('la-nav-open'); }
 function laNavToggle(){ document.body.classList.toggle('la-nav-open'); }
+/* §mobUser · จอเล็ก · ป้ายผู้ใช้ + ปุ่มออก ต้องอยู่ในลิ้นชัก ไม่ใช่ลอยทับเนื้อหา
+   กล่องลอยที่มุมซ้ายล่างบนมือถือมีสองปัญหาพร้อมกัน
+     · ทับเนื้อหาของทุกหน้า เพราะ sidebar ที่มันเคยเกาะอยู่เลื่อนออกไปนอกจอแล้ว
+     · ปุ่มไปอยู่ใต้แถบเครื่องมือของ Safari · กดไม่โดน = ออกจากระบบไม่ได้ */
+function laUbPlace(){
+  try{
+    var b=document.getElementById('la-userbadge'); if(!b) return;
+    var sb=document.querySelector('.sidebar'); if(!sb) return;
+    var small=(window.innerWidth<=820);
+    if(small){
+      if(b.parentNode!==sb){ sb.appendChild(b); b.classList.add('la-ub-inside'); }
+    }else if(b.parentNode!==document.body){
+      document.body.appendChild(b); b.classList.remove('la-ub-inside');
+    }
+  }catch(_){}
+}
+(function(){ var n=0;
+  (function go(){ laUbPlace(); if(!document.getElementById('la-userbadge') && n++<40) setTimeout(go,180); })();
+  window.addEventListener('resize', laUbPlace);
+})();
 document.addEventListener('keydown',function(e){ if(e.key==='Escape') laNavClose(); });
 window.addEventListener('resize',function(){ if(window.innerWidth>820) laNavClose(); });</script>
 

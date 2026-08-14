@@ -1945,7 +1945,13 @@ const server = http.createServer((req, res) => {
         }).catch(e=>J(res,500,{error:e.message}));
     }); return;
   }
-  if(u === '/api/logout'){ J(res,200,{ok:true},{'Set-Cookie':'sess=; HttpOnly; Path=/; Max-Age=0'}); return; }
+  // §mobUser · คุกกี้ที่ลบต้องมีคุณสมบัติตรงกับตอนตั้ง (Secure + SameSite)
+  //   ไม่งั้น Safari บน iOS ไม่ถือว่าเป็นคุกกี้ใบเดียวกัน แล้วไม่ยอมลบให้ · ผู้ใช้ค้างอยู่ในระบบ
+  //   ส่ง Max-Age=0 คู่กับ Expires ในอดีต เพราะเบราว์เซอร์เก่าอ่านเฉพาะ Expires
+  if(u === '/api/logout'){
+    J(res,200,{ok:true},{'Set-Cookie':'sess=; HttpOnly; Path=/; SameSite=Lax; Secure; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT'});
+    return;
+  }
   if(u === '/api/me'){ const s=session(req); return s ? J(res,200,{username:s.username,name:s.name,role:s.role,perms:(s.perms!==undefined?s.perms:null),canEdit:(s.edit!==false),editAreas:(s.editAreas!==undefined?s.editAreas:null),salesId:(s.salesId!==undefined?s.salesId:null)}) : J(res,401,{error:'not logged in'}); }
 
   // ───── DATA (require login) ─────
