@@ -723,7 +723,7 @@
 <link rel="icon" type="image/png" sizes="16x16" href="/allotment_v2/assets/favicon-16.png">
 <link rel="icon" href="/allotment_v2/assets/favicon.ico">
 <link rel="apple-touch-icon" sizes="180x180" href="/allotment_v2/assets/favicon-180.png">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=Noto+Sans+Thai:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 /* §ctSkin · ดีไซน์ ต้นทุน & จุดคุ้มทุน · scoped ใต้ #view-costing เท่านั้น ไม่กระทบหน้าจออื่น */
 #view-costing{
@@ -77255,7 +77255,13 @@ function paGroups(pier){
 
 function paCSS(){
   var H='.pj-host';
-  return H+' .pa-wrap{overflow:auto;max-height:calc(100vh - 250px)}'
+  /* §paFontTh · body ตั้ง font stack ไว้แค่ 'DM Sans' ซึ่งไม่มีอักษรไทย
+     ไทยเลยหล่นไปใช้ฟอนต์ระบบ · คนละน้ำหนักคนละความสูงกับอังกฤษที่อยู่บรรทัดเดียวกัน
+     ในไฟล์มีที่เขียน 'Noto Sans Thai' ไว้แล้วหลายจุด (poModal · ใบพิมพ์) แต่ตัวฟอนต์ไม่เคยถูกโหลด
+     จึงเติมเข้า <link> ตัวหลัก แล้วใช้ชุดเดียวกันทั้งหน้าท่าเรือ · จะได้ไม่มีสองฟอนต์ไทยในจอเดียว */
+  return H+"{font-family:'DM Sans','Noto Sans Thai',sans-serif}"
+  +H+" table.pa,"+H+" .pa-lg,"+H+" .pa-pop{font-family:'DM Sans','Noto Sans Thai',sans-serif}"
+  +H+' .pa-wrap{overflow:auto;max-height:calc(100vh - 250px)}'
   +H+' table.pa{border-collapse:separate;border-spacing:0;min-width:1400px;background:#fff}'
   /* §paSheet · เส้นครบทุกด้านเหมือนสเปรดชีต · ของเดิมมีแต่เส้นล่าง อ่านเป็นคอลัมน์ไม่ได้ */
   +H+' table.pa th,table.pa td{padding:0;border:1px solid #D9DEE6}'
@@ -77612,16 +77618,33 @@ function paSectOpen(){
       + S.map(function(x){ var c=staff.filter(function(s){ return s.sect===x.id; }).length;
           return '<th title="'+poE(x.name||'')+'">'+poE(x.name||'(ไม่มีชื่อ)')+'<span>'+c+'</span></th>'; }).join('')
       +'<th class="un">ยังไม่จัด<span>'+nUn+'</span></th></tr></thead><tbody>'
-      + staff.map(function(s){
-          var cur=known[s.sect]?s.sect:'';
-          return '<tr'+(cur?'':' class="nos"')+'><td class="who"><b>'+poE(s.name||s.nick||s.id)+'</b>'
-            +(s.nick?('<em>'+poE(s.nick)+'</em>'):'')+'<i>'+poE(s.role||'')+'</i></td>'
-            + S.map(function(x){
-                return '<td class="tk'+(cur===x.id?' on':'')+'"'+(ro?'':' onclick="paStaffSect(\''+poE(s.id)+'\',\''+poE(x.id)+'\')"')+'>'
-                  +'<span>'+(cur===x.id?'&#10003;':'')+'</span></td>'; }).join('')
-            + '<td class="tk un'+(cur?'':' on')+'"'+(ro?'':' onclick="paStaffSect(\''+poE(s.id)+'\',\'\')"')+'>'
-              +'<span>'+(cur?'':'&#10003;')+'</span></td></tr>';
-        }).join('')
+      + (function(){
+          // §paSectFlow · ยังไม่จัดอยู่บนสุดเสมอ · ติ๊กแล้วแถวเด้งลงไปอยู่กลุ่มของตัวเอง
+          var row=function(s){
+            var cur=known[s.sect]?s.sect:'';
+            return '<tr'+(cur?'':' class="nos"')+'><td class="who"><b>'+poE(s.name||s.nick||s.id)+'</b>'
+              +(s.nick?('<em>'+poE(s.nick)+'</em>'):'')+'<i>'+poE(s.role||'')+'</i></td>'
+              + S.map(function(x){
+                  return '<td class="tk'+(cur===x.id?' on':'')+'"'+(ro?'':' onclick="paStaffSect(\''+poE(s.id)+'\',\''+poE(x.id)+'\')"')+'>'
+                    +'<span>'+(cur===x.id?'&#10003;':'')+'</span></td>'; }).join('')
+              + '<td class="tk un'+(cur?'':' on')+'"'+(ro?'':' onclick="paStaffSect(\''+poE(s.id)+'\',\'\')"')+'>'
+                +'<span>'+(cur?'':'&#10003;')+'</span></td></tr>';
+          };
+          var band=function(t,n,cls){
+            return '<tr class="bnd'+(cls?(' '+cls):'')+'"><td colspan="'+(S.length+2)+'">'+poE(t)
+              +'<span>'+n+' คน</span></td></tr>';
+          };
+          var un=staff.filter(function(s){ return !known[s.sect]; });
+          var out='';
+          if(un.length) out+=band('ยังไม่จัด · ติ๊กเลือกกลุ่มให้คนเหล่านี้',un.length,'todo')+un.map(row).join('');
+          else out+='<tr class="bnd done"><td colspan="'+(S.length+2)+'">จัดครบทุกคนแล้ว</td></tr>';
+          S.forEach(function(x){
+            var rows=staff.filter(function(s){ return s.sect===x.id; });
+            if(!rows.length) return;
+            out+=band(x.name||'(ไม่มีชื่อ)',rows.length)+rows.map(row).join('');
+          });
+          return out;
+        })()
       +'</tbody></table></div>';
   }
   poModal('กลุ่มในตารางการทำงาน · '+poE(poPierName()),
@@ -77664,7 +77687,14 @@ function paSectCSS(){
    +'#po-modal .pa-tick td.tk.on span{background:#16265C;border-color:#16265C;color:#fff;font-weight:800}'
    +'#po-modal .pa-tick td.tk.un.on span{background:#8B93A1;border-color:#8B93A1}'
    +'#po-modal .pa-tick tr.nos td.who{background:#FFFDF7}'
-   +'#po-modal .pa-tick tr:hover td{background:#FAFBFD}';
+   +'#po-modal .pa-tick tr:hover td{background:#FAFBFD}'
+   +'#po-modal .pa-tick tr.bnd td{background:#EEF2F7;padding:6px 11px;font-size:9.5px;font-weight:800;'
+     +'letter-spacing:.07em;text-transform:uppercase;color:#20477E;position:sticky;left:0;border-bottom:1px solid #DCE3EC}'
+   +"#po-modal .pa-tick tr.bnd td span{float:right;font:500 10px 'DM Mono',monospace;color:#8B93A1;letter-spacing:0;text-transform:none}"
+   +'#po-modal .pa-tick tr.bnd.todo td{background:#FDF3E3;color:#8A5A00;border-bottom-color:#EFDCB4}'
+   +'#po-modal .pa-tick tr.bnd.done td{background:#E9F4EE;color:#0F6E56;text-align:center;letter-spacing:.05em}'
+   +'#po-modal .pa-tick tr.bnd:hover td{background:#EEF2F7}'
+   +'#po-modal .pa-tick tr.bnd.todo:hover td{background:#FDF3E3}';
 }
 function paCodesOpen(){
   paEnsureMtCode();
