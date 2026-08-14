@@ -77286,12 +77286,15 @@ function paCycle(anchor){
   return {from:poYMD(from), to:poYMD(to), days:out};
 }
 function paShiftKey(date,sid){ return String(date||'')+'::'+String(sid||''); }
-function paManual(date,sid){ var o=PIER_SHIFT[paShiftKey(date,sid)]; return (o&&o.c)?o.c:''; }
-function paSetManual(date,sid,code){
+function paManualRec(date,sid){ var o=PIER_SHIFT[paShiftKey(date,sid)]; return (o&&o.c)?o:null; }
+function paManual(date,sid){ var o=paManualRec(date,sid); return o?o.c:''; }
+/* §paLayers · plan=true คือชั้นโครงงาน (ใบงานทับได้) · ไม่ใส่คือแก้ทับรายช่อง (ชนะใบงาน)
+   ของเก่าที่บันทึกไว้ก่อนหน้านี้ไม่มีคีย์นี้ จึงถูกอ่านเป็น "แก้ทับ" เหมือนเดิมทุกช่อง */
+function paSetManual(date,sid,code,plan){
   if(!poCanEdit()) return;
   var k=paShiftKey(date,sid);
   if(!code) delete PIER_SHIFT[k];
-  else PIER_SHIFT[k]={c:code, by:poWho(), at:new Date().toISOString()};
+  else { var o={c:code, by:poWho(), at:new Date().toISOString()}; if(plan) o.plan=1; PIER_SHIFT[k]=o; }
 }
 /* §pierRotate · ดัชนีของหนึ่งวัน · อ่านตรงจาก PIER_JOB ไม่ต้องวน poBoats() ต่อช่อง
    {byStaff:{sid:{boat,pier}}, piers:{pier:1}}  ครอบทั้ง 3 ท่าในรอบเดียว */
@@ -77324,14 +77327,19 @@ function paHasJob(date, pier, E){ E=E||paDayIdx(date); return !!E.piers[pier]; }
 function paCell(date, pier, st, E){
   E=E||paDayIdx(date);
   var on=E.byStaff[st.id]||null;
-  var man=paManual(date,st.id);
-  if(man) return {c:man, src:'manual', boat:on?on.boat:'', atPier:on?on.pier:''};
+  var m=paManualRec(date,st.id);
+  // §paLayers ชั้น ๑ · แก้ทับรายช่อง · ตั้งใจให้ชนะใบงาน (ใบงานลง PP แต่คนนั้นลา ต้องเป็น LWOP)
+  if(m && !m.plan) return {c:m.c, src:'manual', boat:on?on.boat:'', atPier:on?on.pier:''};
+  // §paLayers ชั้น ๒ · ใบงานเรือ · ทับโครงที่วางไว้
   // §pjWork · ลงเรือ / ลงงานซ่อม / ลงคาน ใช้รหัสคนละตัว · ทั้งหมดตั้งเองได้
   // §rtCode · ลงเรือ = ใช้รหัสของเส้นทางที่วิ่งวันนั้น · ไม่รู้เส้นทางค่อยถอยไปใช้รหัสรวม
   if(on) return {c:(on.kind==='dd'?paDdCode():(on.kind==='mt'?paMtCode():(paRouteCode(on.rid)||paOnBoatCode()))),
                  src:(on.kind==='boat'?'boat':on.kind), boat:on.boat, atPier:on.pier, rid:on.rid||''};
-  if(E.piers[pier]) return {c:(st.defCode||paDefFallback()), src:'default', boat:'', atPier:''};
-  return {c:'', src:'none', boat:'', atPier:''};
+  // §paLayers ชั้น ๓ · โครงงานที่วางไว้ล่วงหน้า · เป็นฐาน ไม่ใช่คำสั่งสุดท้าย
+  if(m && m.plan) return {c:m.c, src:'plan', boat:'', atPier:''};
+  // ยังไม่ได้วางและไม่ได้ถูกเลือกลงใบงาน · เดิมเติม SE ให้เอง ซึ่งไม่ใช่ข้อเท็จจริง
+  //   ท่ามีใบงานวันนั้น = ช่องนี้คือ "ช่องที่ยังต้องวาง" · ไม่มีใบงานเลย = ยังไม่ถึงคิววาง
+  return {c:'', src:(E.piers[pier]?'todo':'none'), boat:'', atPier:''};
 }
 // §paOrder · ord = ลำดับที่ผู้ใช้จัดเอง · ยังไม่เคยจัด (Infinity) = ยึดลำดับทะเบียนเหมือนเดิม
 function paOrd(s){ var v=(s&&s.ord); return (v==null||v==='')?Infinity:((+v)||0); }
@@ -77515,6 +77523,8 @@ function paCSS(){
   +H+' .pa-pop .s{font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9AA3B0;padding:7px 8px 3px}'
   +H+' .pa-lg .i .rtag{font-size:9px;font-weight:700;color:#20477E;background:#EEF2F7;border-radius:4px;padding:1px 6px;margin-left:5px}'
   +H+' .pa-lg .i.off{opacity:.55}'
+  /* §paLayers · ช่องที่ยังไม่ได้วางงาน · วันนั้นท่ามีใบงานอยู่ แปลว่าเป็นช่องที่ค้างอยู่จริง */
+  +H+' .pa-c.todo{background:#FFFCF3}'
   +H+' tr.pa-tot .pa-nm{background:#F2F5F9;font-size:11px;font-weight:800;color:#20477E}'
   +H+' tr.pa-tot td.pa-sc{background:#EDEFF3;color:#16233a;font-weight:700}'
   +H+' .pa-nm .a{font-size:12px;font-weight:700;color:#242730;line-height:1.3}'
@@ -77533,10 +77543,7 @@ function paCSS(){
   +H+' td.pa-c:hover .cd{outline:2px solid #16265C;outline-offset:-2px}'
   /* §paSheet · ระบายเต็มช่องแบบ conditional formatting · ไม่ใช่ป้ายมนลอยกลางช่อง */
   +H+' .pa-cd{display:block;width:100%;border-radius:0;font-size:9px;font-weight:800;line-height:23px;height:23px;letter-spacing:-.01em}'
-  /* §paMarkFold · มุมพับ · รูปเดียวกับที่อยู่ในแถบคำอธิบายท้ายหน้าเป๊ะ ๆ */
-  +H+' .pa-dot{position:absolute;top:0;right:0;width:0;height:0;border-top:8px solid #B4560A;border-left:8px solid transparent}'
-  +H+' .pa-lg .i b.mk{position:relative;overflow:visible;background:#E9EFF7;color:#20477E}'
-  +H+' .pa-lg .i b.mk i{position:absolute;top:0;right:0;width:0;height:0;border-top:8px solid #B4560A;border-left:8px solid transparent}'
+  /* §paNoMark · ไม่มีเครื่องหมายในช่องแล้ว · ดูได้จากคำโปรยตอนชี้ค้าง */
   +H+' .pa-away{position:absolute;left:2px;bottom:1px;font-size:7.5px;font-weight:800;letter-spacing:.02em;color:#20477E;background:#E9EFF7;border-radius:3px;padding:0 3px;line-height:11px}'
   +H+' .pa-sum{position:sticky;right:0;background:#FAFBFC;border-left:1px solid #E7EAEF;padding:5px 11px !important;white-space:nowrap;text-align:right;z-index:3}'
   +H+' .pa-sum b{font-size:12.5px;font-weight:800;color:#0F6E56;font-variant-numeric:tabular-nums}'
@@ -77549,6 +77556,13 @@ function paCSS(){
   +H+' .pa-lg .i em{font-style:normal;color:#C0271C;font-weight:700}'
   +H+' .pa-pop{position:fixed;z-index:99996;background:#fff;border:1px solid #E1E4EA;border-radius:12px;box-shadow:0 14px 34px rgba(20,30,50,.2);padding:10px;width:210px}'
   +H+' .pa-pop .h{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8B93A1;margin-bottom:7px}'
+  /* §paLayers · สลับว่ากำลังวางโครงหรือแก้ทับ · ต้องเลือกก่อนกดรหัส ไม่ใช่รู้ทีหลัง */
+  +H+' .pa-lay{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px}'
+  +H+' .pa-lay button{display:block;width:100%;text-align:center;border:1px solid #DCE0E6;background:#fff;'
+     +'border-radius:8px;padding:5px 4px;font:700 10.5px inherit;color:#6E7684;cursor:pointer;line-height:1.35}'
+  +H+' .pa-lay button span{display:block;font-weight:500;font-size:8.5px;color:#A9B0BB}'
+  +H+' .pa-lay button.on{background:#16265C;border-color:#16265C;color:#fff}'
+  +H+' .pa-lay button.on span{color:#B9C6E4}'
   +H+' .pa-pop button{display:flex;align-items:center;gap:8px;width:100%;border:1px solid #E7EAEF;background:#fff;border-radius:8px;padding:5px 8px;margin-bottom:4px;font:600 11.5px inherit;color:#242730;cursor:pointer;text-align:left}'
   +H+' .pa-pop button:hover{border-color:#16265C}'
   +H+' .pa-pop button i{font-style:normal;min-width:36px;text-align:center;border-radius:5px;font-size:9.5px;font-weight:800;line-height:18px}';
@@ -77556,17 +77570,19 @@ function paCSS(){
 
 function paCellHtml(date, pier, st, day, hasJob, today, E){
   var v=paCell(date,pier,st,E), C=paCodeMeta(v.c);
-  var bg=C?C.bg:'#FBFCFD', fg=C?C.color:'#D5D9E0';
+  var bg=C?C.bg:'transparent', fg=C?C.color:'#D5D9E0';
   var we=(day.w===0||day.w===6);
   var away=(v.atPier && v.atPier!==pier) ? v.atPier : '';
   var tip=(v.c||'ยังไม่มีใบงาน')+((C&&C.route&&C.label)?(' · '+C.label):'')+(v.boat?(' · '+v.boat):'')
     +(away?(' · ไปช่วยท่า '+((PO_PIERS.filter(function(x){return x.k===away;})[0]||{}).t||away)):'')
-    +(v.src==='manual'?' · แก้มือ':(v.src==='boat'?' · จากใบงานเรือ':(v.src==='default'?' · ค่าเริ่มต้น':'')));
-  return '<td class="pa-c'+(!hasJob?' nf':(we?' we':''))+'" title="'+poE(tip)+'"'
+    +(v.src==='manual'?' · แก้ทับรายช่อง (ใบงานทับไม่ได้)'
+     :(v.src==='plan'?' · โครงงานที่วางไว้ (ใบงานทับได้)'
+     :(v.src==='boat'?' · จากใบงานเรือ'
+     :(v.src==='todo'?' · ยังไม่ได้วางงานให้คนนี้':''))));
+  return '<td class="pa-c'+(!hasJob?' nf':(we?' we':''))+(v.src==='todo'?' todo':'')+'" title="'+poE(tip)+'"'
     +' onclick="paPick(event,\''+date+'\',\''+st.id+'\')">'
     +'<span class="pa-cd" style="background:'+bg+';color:'+fg+'">'+poE(v.c||'·')+'</span>'
-    +(away?'<span class="pa-away">'+poE(pjPierShort(away))+'</span>':'')
-    +(v.src==='manual'?'<span class="pa-dot"></span>':'')+'</td>';
+    +(away?'<span class="pa-away">'+poE(pjPierShort(away))+'</span>':'')+'</td>';
 }
 
 /* §paSkinC · ชุดสีมาตรฐาน · [สีตัวอักษร, สีพื้น]
@@ -77666,7 +77682,7 @@ function renderPierAtt(pier){
         return '<th class="pa-sh'+(m.route?' rt':'')+'" title="'+poE(m.label||c)+'">'+poE(c)+'</th>'; }).join('')
     + '<th class="pa-sh tot">TOTAL</th><th class="pa-nt">Notes</th></tr>';
 
-  var body='', totW=0, totO=0, totL=0, totAway=0, gTot={}, _n=0;
+  var body='', totW=0, totO=0, totL=0, totAway=0, totTodo=0, gTot={}, _n=0;
   groups.forEach(function(G){
     body+='<tr class="pa-band"><td class="pa-no"></td><td class="pa-nm2" colspan="3">'+poE(G.t)+'</td>'
       +'<td colspan="'+(CY.days.length+SUMC.length+2)+'"></td></tr>';
@@ -77676,6 +77692,7 @@ function renderPierAtt(pier){
         var E=IDX[d.s], v=paCell(d.s,P.k,st,E), k=paKindOf(v.c);
         if(v.c){ cnt[v.c]=(cnt[v.c]||0)+1; gTot[v.c]=(gTot[v.c]||0)+1;
                  if(k==='work') w++; else if(k==='off') o++; else if(k==='leave') l++; }
+        else if(v.src==='todo') totTodo++;   // §paLayers · ช่องค้าง · ต้องมีตัวเลขให้เห็น ไม่งั้นช่องว่างอ่านเป็น "ไม่มีอะไรต้องทำ"
         if(v.atPier && v.atPier!==P.k) aw++;
         return paCellHtml(d.s,P.k,st,d,hasJob[d.s],today,E);
       }).join('');
@@ -77693,7 +77710,7 @@ function renderPierAtt(pier){
         +'<td class="pa-rl">'+(ed
             ?('<div class="pa-rlw">'+paEi(st.id,'role',st.role,'ตำแหน่ง')+paDefSel(st)+'</div>')
             :(poE(st.role||'')
-              +'<i title="รหัสที่ใช้เมื่อวันนั้นไม่ได้ลงเรือ">'+poE(st.defCode||paDefFallback())+'</i>'))+'</td>'
+              +'<i title="รหัสตั้งต้นของคนนี้ · ใช้เป็นค่าเริ่มต้นตอนวางโครงงาน">'+poE(st.defCode||paDefFallback())+'</i>'))+'</td>'
         +tds+sums
         +'<td class="pa-nt">'+(ed
             ?('<input class="pa-nti" value="'+poE(st.note||'')+'" placeholder="—" '
@@ -77717,8 +77734,8 @@ function renderPierAtt(pier){
     + paCodes().filter(function(c){ return !_lgSeen[c.code]; }).map(function(c){
     return '<div class="i off"><b style="background:'+c.bg+';color:'+c.color+'">'+poE(c.code)+'</b>'
       +(c.label?poE(c.label):'<em>ยังไม่ได้ใส่ความหมาย</em>')+'</div>'; }).join('')
-    +'<div class="i"><b style="background:#FBFCFD;color:#B8BEC8">·</b>ยังไม่มีใบงานของวันนั้น</div>'
-    +'<div class="i"><b class="mk">SE<i></i></b>มุมพับ = ช่องนี้แก้ด้วยมือ · ระบบไม่เขียนทับ</div>'
+    +'<div class="i"><b style="background:#FFFCF3;color:#B8BEC8">·</b>ยังไม่ได้วางงานให้คนนี้ · วันนั้นท่ามีใบงานอยู่</div>'
+    +'<div class="i"><b style="background:transparent;color:#B8BEC8">·</b>ยังไม่มีใบงานของวันนั้นทั้งท่า</div>'
     +'<div class="i"><b style="background:#E9EFF7;color:#20477E">TL</b>ไปช่วยท่าอื่นวันนั้น · ยังนับวันทำงานที่ท่าประจำ</div>';
 
   host.innerHTML='<style id="pa-style">'+pjCSS()+plCSS()+paCSS()+poCSS()+'</style>'
@@ -77733,7 +77750,8 @@ function renderPierAtt(pier){
       +'<button onclick="paShift(1)">รอบถัดไป &#8250;</button>'
       +'<button onclick="paThis()">รอบปัจจุบัน</button>'
       +'<span style="font-size:12px;color:#6E7684;margin-left:6px">รวม ทำงาน <b style="color:#0F6E56">'+totW+'</b> · หยุด <b>'+totO+'</b> · ลา <b style="color:#B4560A">'+totL+'</b> วัน-คน'
-        +(totAway?(' · <b style="color:#20477E">ไปช่วยท่าอื่น '+totAway+'</b>'):'')+'</span>'
+        +(totAway?(' · <b style="color:#20477E">ไปช่วยท่าอื่น '+totAway+'</b>'):'')
+        +(totTodo?(' · <b style="color:#8A5A00">ยังไม่ได้วาง '+totTodo+' ช่อง</b>'):'')+'</span>'
       +'<span style="flex:1"></span>'
       +(ro?'':'<button class="pa-edb'+(ed?' on':'')+'" onclick="paEditToggle()" '
           +'title="เปิดให้พิมพ์แก้ ชื่อ · ชื่อเล่น · ตำแหน่ง · รหัสตั้งต้น · หมายเหตุ">'
@@ -77761,7 +77779,7 @@ function paPick(ev, date, sid){
   ev.stopPropagation();
   var old=document.getElementById('pa-pop'); if(old) old.remove();
   var st=(PIER_STAFF||[]).filter(function(x){ return x.id===sid; })[0]; if(!st) return;
-  var cur=paCell(date,_poPier,st);
+  var cur=paCell(date,_poPier,st), m=paManualRec(date,sid);
   var d=document.createElement('div'); d.className='pa-pop'; d.id='pa-pop';
   // §paPickRt · รหัสเส้นทางของท่านี้ต้องเลือกได้ · ไม่งั้นแก้ทับเป็น "วันนี้ไปลง Krabi" ไม่ได้
   var _rtSeen={}, _rtOpts=[];
@@ -77772,18 +77790,27 @@ function paPick(ev, date, sid){
       _rtSeen[code]=1; _rtOpts.push(paCodeMeta(code));
     });
   }catch(_){}
+  // §paLayers · เลือกก่อนว่ากำลังทำอะไร · วางโครง (ใบงานทับได้) หรือแก้ทับ (ใบงานทับไม่ได้)
+  //   ค่าตั้งต้นคือแก้ทับ · คนที่มาคลิกทีละช่องมักกำลังแก้ให้ถูก ไม่ใช่วางแผน
+  var _pl=(m&&m.plan)?1:0;
+  var mk=function(code){ return 'paSet(\''+date+'\',\''+sid+'\',\''+code+'\',_paPlan)'; };
   d.innerHTML='<div class="h">'+poE(st.nick||st.name)+' · '+poE(date)+'</div>'
+    + '<div class="pa-lay">'
+      + '<button class="'+(_pl?'':'on')+'" onclick="paPlanMode(0,this)">แก้ทับ<span>ใบงานทับไม่ได้</span></button>'
+      + '<button class="'+(_pl?'on':'')+'" onclick="paPlanMode(1,this)">วางโครง<span>ใบงานทับได้</span></button>'
+    + '</div>'
     + (_rtOpts.length?('<div class="s">เส้นทางของท่านี้</div>'):'')
     + _rtOpts.map(function(c){
-        return '<button onclick="paSet(\''+date+'\',\''+sid+'\',\''+poE(c.code)+'\')">'
+        return '<button onclick="'+mk(poE(c.code))+'">'
           +'<i style="background:'+c.bg+';color:'+c.color+'">'+poE(c.code)+'</i>'+poE(c.label||'')+'</button>'; }).join('')
     + (_rtOpts.length?('<div class="s">อื่น ๆ</div>'):'')
     + paCodes().filter(function(c){ return !_rtSeen[c.code]; }).map(function(c){
-        return '<button onclick="paSet(\''+date+'\',\''+sid+'\',\''+poE(c.code)+'\')">'
+        return '<button onclick="'+mk(poE(c.code))+'">'
           +'<i style="background:'+c.bg+';color:'+c.color+'">'+poE(c.code)+'</i>'
           +(c.label?poE(c.label):'<span style="color:#C0271C">ยังไม่ใส่ความหมาย</span>')+'</button>'; }).join('')
     + '<button onclick="paSet(\''+date+'\',\''+sid+'\',\'\')" style="border-style:dashed;color:#8B93A1">'
-      +'<i style="background:#F4F6FA;color:#8B93A1">auto</i>กลับไปใช้ค่าจากใบงาน</button>';
+      +'<i style="background:#F4F6FA;color:#8B93A1">auto</i>ล้างช่องนี้ · กลับไปใช้ใบงาน</button>';
+  _paPlan=_pl;
   document.body.appendChild(d);
   var r=ev.currentTarget.getBoundingClientRect();
   var top=Math.min(r.bottom+4, window.innerHeight-d.offsetHeight-10);
@@ -77812,7 +77839,7 @@ function paDefSel(st){
     .sort(function(a,b){ return (+a.ord||0)-(+b.ord||0); });
   var seen={}; cs.forEach(function(c){ seen[c.code]=1; });
   if(cur && !seen[cur]) cs.push({code:cur, label:'(ไม่มีในทะเบียน)'});   // ของเก่าที่ตั้งไว้ก่อน ต้องไม่หายไปเงียบ ๆ
-  return '<select class="pa-dc" title="รหัสที่ใช้เมื่อวันนั้นไม่ได้ลงเรือ" '
+  return '<select class="pa-dc" title="รหัสตั้งต้นของคนนี้ · ใช้เป็นค่าเริ่มต้นตอนวางโครงงาน" '
     + 'onchange="paStaffFld(\''+poE(st.id)+'\',\'defCode\',this.value)">'
     // ตัวย่ออย่างเดียวในช่อง · ความหมายเต็มอยู่ในแถบรหัสท้ายหน้าอยู่แล้ว ใส่ซ้ำจะดันคอลัมน์จนล้น
     + '<option value=""'+(cur?'':' selected')+' title="ใช้ค่ากลางของท่า">&mdash; '+poE(fb)+'</option>'
@@ -77851,8 +77878,16 @@ function paNote(sid, txt){
   st.note=String(txt||'').slice(0,120);
   poPersist();
 }
-function paSet(date,sid,code){
-  paSetManual(date,sid,code); poPersist(); paPopClose(); renderPierAtt();
+/* §paLayers · ปุ่มสองอันบนหัวหน้าต่างเลือกรหัส · จำไว้ระหว่างที่หน้าต่างเปิดอยู่ */
+var _paPlan=0;
+function paPlanMode(v, el){
+  _paPlan=v?1:0;
+  try{ var w=el.parentNode.querySelectorAll('button');
+    for(var i=0;i<w.length;i++) w[i].className=(i===(v?1:0))?'on':''; }catch(_){}
+}
+function paSet(date,sid,code,plan){
+  paSetManual(date,sid,code,plan);
+  poPersist(); paPopClose(); paKeep(function(){ renderPierAtt(); });
 }
 
 /* ── ทะเบียนรหัส ── */
@@ -78161,9 +78196,15 @@ function paRangeOpen(){
         +'<option value="2">อังคาร</option><option value="3">พุธ</option><option value="4">พฤหัส</option>'
         +'<option value="5">ศุกร์</option><option value="6">เสาร์</option></select></div>'
     +'</div>'
-    +'<div><div style="font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8B93A1;margin-bottom:5px">ช่องที่แก้มือไว้แล้ว</div>'
-      +'<select id="pa_ovr" style="width:100%;border:1px solid #D9DDE4;border-radius:8px;padding:7px 10px;font:600 12.5px inherit;font-family:inherit">'
-      +'<option value="0">ไม่แตะ (ปลอดภัย)</option><option value="1">เขียนทับด้วย</option></select></div>';
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">'
+      +'<div><div style="font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8B93A1;margin-bottom:5px">ลงเป็นชั้นไหน</div>'
+        +'<select id="pa_lay" style="width:100%;border:1px solid #D9DDE4;border-radius:8px;padding:7px 10px;font:600 12.5px inherit;font-family:inherit">'
+        +'<option value="1">โครงงาน · ใบงานเรือทับได้</option>'
+        +'<option value="0">แก้ทับ · ใบงานเรือทับไม่ได้</option></select></div>'
+      +'<div><div style="font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8B93A1;margin-bottom:5px">ช่องที่ลงไว้แล้ว</div>'
+        +'<select id="pa_ovr" style="width:100%;border:1px solid #D9DDE4;border-radius:8px;padding:7px 10px;font:600 12.5px inherit;font-family:inherit">'
+        +'<option value="0">ไม่แตะ (ปลอดภัย)</option><option value="1">เขียนทับด้วย</option></select></div>'
+    +'</div>';
   poModal('วางงานเป็นช่วง', body,
     '<div id="pa_msg" style="flex:1;font-size:11.5px;color:#6E7684"></div>'
     +poBtn('ยกเลิก','poModalClose()')+poBtn('ลงตารางเลย','paRangeApply()',1), 620);
@@ -78173,6 +78214,7 @@ function paRangeApply(){
   var ids=[]; document.querySelectorAll('.pa-rs:checked').forEach(function(x){ ids.push(x.value); });
   if(!ids.length){ var m=document.getElementById('pa_msg'); if(m) m.innerHTML='<b style="color:#C0271C">เลือกพนักงานอย่างน้อย 1 คน</b>'; return; }
   var d1=poV('pa_d1'), d2=poV('pa_d2'), code=poV('pa_code'), dow=poV('pa_dow'), ovr=poV('pa_ovr')==='1';
+  var plan=poV('pa_lay')!=='0';   // §paLayers · ลงเป็นช่วง = วางโครงงาน โดยปริยาย
   if(!d1||!d2||d2<d1){ alert('ช่วงวันที่ไม่ถูกต้อง'); return; }
   var n=0, skip=0, cur=new Date(d1+'T12:00:00'), end=new Date(d2+'T12:00:00');
   while(cur<=end){
@@ -78180,13 +78222,15 @@ function paRangeApply(){
     if(dow==='' || String(cur.getDay())===dow){
       ids.forEach(function(sid){
         if(!ovr && paManual(ds,sid)){ skip++; return; }
-        paSetManual(ds,sid,code); n++;
+        paSetManual(ds,sid,code,plan); n++;
       });
     }
     cur.setDate(cur.getDate()+1);
   }
   poPersist(); poModalClose(); renderPierAtt();
-  alert('ลงตารางแล้ว '+n+' ช่อง'+(skip?(' · ข้าม '+skip+' ช่องที่แก้มือไว้แล้ว'):''));
+  alert('ลง'+(plan?'โครงงาน':'แก้ทับ')+'แล้ว '+n+' ช่อง'
+    +(skip?(' · ข้าม '+skip+' ช่องที่ลงไว้แล้ว'):'')
+    +(plan?'\n\nช่องเหล่านี้เป็นฐาน · จัดคนลงใบงานเรือวันไหน วันนั้นจะขึ้นรหัสเส้นทางทับให้เอง':''));
 }
 
 /* ── Export CSV ── */
