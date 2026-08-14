@@ -74997,12 +74997,21 @@ function bkV2RenderBookingDetail(){
             <div class="bkv2-nb-sec-hd"><span class="bkv2-nb-sec-dot"></span><span class="bkv2-nb-sec-ttl">Add-on Services</span></div>
             <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:6px">
               <tbody>
-                ${(bk.addOns||[]).map(a => `
+                ${(bk.addOns||[]).map(a => {
+                  /* §addonUnit · show the working, not just the total: "4 × ฿200" under the name.
+                     Derived from qty + amount rather than stored, so it cannot drift from the money.
+                     Shown only when it divides exactly — a rounded unit price that does not multiply
+                     back to the total is worse than no unit price at all. qty is units for a charter
+                     (ลำ) and pax for a per-person add-on, so the row stays deliberately unlabelled. */
+                  const _q = Math.max(1, Math.round(Number(a.qty) || 1));
+                  const _amt = Math.round(Number(a.amount) || 0);
+                  const _unit = (_q > 1 && _amt > 0 && _amt % _q === 0) ? (_amt / _q) : null;
+                  return `
                   <tr style="border-bottom:1px solid rgba(26,35,50,0.05)">
-                    <td style="padding:8px 0">${escapeHTML(a.label || a.type || '—')}</td>
-                    <td style="padding:8px 0;text-align:right;font-family:'DM Mono',monospace;font-weight:700">฿${bkV2FmtTHB(a.amount||0)}</td>
+                    <td style="padding:8px 0">${escapeHTML(a.label || a.type || '—')}${_unit !== null ? `<div style="font-size:11px;color:var(--ink-soft);font-family:'DM Mono',monospace;margin-top:2px">${_q} × ฿${bkV2FmtTHB(_unit)}</div>` : ''}</td>
+                    <td style="padding:8px 0;text-align:right;font-family:'DM Mono',monospace;font-weight:700;vertical-align:top">฿${bkV2FmtTHB(_amt)}</td>
                   </tr>
-                `).join('')}
+                `;}).join('')}
               </tbody>
             </table>
           </div>`:''}
