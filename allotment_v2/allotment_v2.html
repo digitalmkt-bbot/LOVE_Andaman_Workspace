@@ -473,17 +473,46 @@
   // §mobUser · ของเดิมใช้ XHR แบบ synchronous ซึ่งเบราว์เซอร์รุ่นใหม่เลิกอุ้ม
   //   พังแล้วกลืน error · reload เฉย ๆ · จอกระพริบแล้วยังเป็นคนเดิม ไม่มีอะไรบอกว่าทำไม
   //   ตอนนี้ยิงแล้วตรวจว่าออกจริงไหมก่อน · ออกไม่ได้ต้องบอก
+  // §outSheet · confirm() เชื่อไม่ได้บนมือถือ · Safari ปิดกล่องเด้งได้เองหลังเจอซ้ำ ๆ
+  //   แล้วคืน false ทันทีโดยไม่ขึ้นกล่อง = โค้ดเข้าใจว่าผู้ใช้กดยกเลิก = กดปุ่มแล้วเงียบสนิท
+  //   ใช้แผ่นยืนยันของแอปเอง จะได้ไม่มีทางเงียบอีก ทุกทางต้องเห็นอะไรสักอย่าง
+  window.__laLogoutSheet=null;
   window.__laLogout=function(){
-    if(!confirm('ออกจากระบบ?')) return;
-    var done=function(){ try{ location.replace(location.pathname+'?t='+Date.now()); }catch(_){ location.reload(); } };
-    var fail=function(){ alert('ออกจากระบบไม่สำเร็จ · เน็ตอาจหลุด\n\nลองใหม่อีกครั้ง ถ้ายังไม่ได้ให้ปิดแท็บแล้วเปิดใหม่'); };
-    try{
-      fetch('/api/logout',{credentials:'same-origin',cache:'no-store'})
-        .then(function(){ return fetch('/api/me',{credentials:'same-origin',cache:'no-store'}); })
-        .then(function(r){ return r.ok?r.json():null; })
-        .then(function(j){ if(j && (j.username||j.name)) fail(); else done(); })
-        .catch(function(){ fail(); });
-    }catch(e){ fail(); }
+    if(document.getElementById('la-out')) return;
+    var ov=document.createElement('div'); ov.className='la-modal'; ov.id='la-out';
+    ov.innerHTML='<div class="la-card" style="width:340px;max-width:92vw;padding:22px 22px 18px;text-align:center">'
+      +'<div style="font-size:15px;font-weight:800;color:#15396B">ออกจากระบบ?</div>'
+      +'<div id="la-out-msg" style="font-size:12.5px;color:#7C8091;margin:7px 0 16px;line-height:1.6">'
+        +'คุณจะต้องล็อกอินใหม่เพื่อกลับเข้าใช้งาน</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">'
+        +'<button id="la-out-no" style="padding:12px 0;border:1px solid #DCDFE5;border-radius:11px;background:#fff;'
+          +'color:#3a4453;font:700 13px inherit;cursor:pointer;min-height:46px">ยกเลิก</button>'
+        +'<button id="la-out-yes" style="padding:12px 0;border:none;border-radius:11px;background:#A32D2D;'
+          +'color:#fff;font:700 13px inherit;cursor:pointer;min-height:46px">ออกจากระบบ</button>'
+      +'</div></div>';
+    document.body.appendChild(ov);
+    var msg=document.getElementById('la-out-msg'), yes=document.getElementById('la-out-yes'), no=document.getElementById('la-out-no');
+    var close=function(){ try{ ov.remove(); }catch(_){} };
+    no.onclick=close;
+    ov.onclick=function(e){ if(e.target===ov) close(); };
+    yes.onclick=function(){
+      yes.disabled=true; no.disabled=true;
+      yes.textContent='กำลังออก…'; yes.style.background='#8C9099';
+      msg.textContent='กำลังแจ้งเซิร์ฟเวอร์…'; msg.style.color='#7C8091';
+      var done=function(){ try{ location.replace(location.pathname+'?t='+Date.now()); }catch(_){ location.reload(); } };
+      var fail=function(why){
+        msg.innerHTML='<b style="color:#A32D2D">ออกจากระบบไม่สำเร็จ</b><br>'+(why||'เน็ตอาจหลุด')
+          +'<br>ลองใหม่อีกครั้ง ถ้ายังไม่ได้ให้ปิดแท็บแล้วเปิดใหม่';
+        yes.disabled=false; no.disabled=false; yes.textContent='ลองใหม่'; yes.style.background='#A32D2D';
+      };
+      try{
+        fetch('/api/logout',{credentials:'same-origin',cache:'no-store'})
+          .then(function(){ return fetch('/api/me',{credentials:'same-origin',cache:'no-store'}); })
+          .then(function(r){ return r.ok?r.json():null; })
+          .then(function(j){ if(j && (j.username||j.name)) fail('เซิร์ฟเวอร์ยังจำ session นี้อยู่'); else done(); })
+          .catch(function(e){ fail(String((e&&e.message)||e)); });
+      }catch(e){ fail(String((e&&e.message)||e)); }
+    };
   };
 
   // ── Login screen ──
