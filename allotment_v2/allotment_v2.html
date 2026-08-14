@@ -77943,20 +77943,42 @@ function pjDayOp(date, bid){
   var rt=(typeof getRoute==='function')?getRoute(op.route):null;
   return rt?{op:op, rid:op.route, route:rt}:null;
 }
+/* §pjPierNow · ใบย้ายท่าที่ครอบคลุมวันนั้น · ไม่ใช่ "ที่ active วันนี้" */
+function pjAsnAt(boat, date){
+  var a=(boat && boat.assignments)||[];
+  for(var i=0;i<a.length;i++){
+    var x=a[i];
+    if(x && x.status!=='cancelled' && x.startDate && x.endDate && x.startDate<=date && x.endDate>=date) return x;
+  }
+  return null;
+}
+/* ท่าที่รับผิดชอบเรือลำนี้ในวันนั้น
+   ใช้ตัวตัดสินตัวเดียวกับหน้า Boat Status · 'shop' ไม่ใช่ท่า จึงถอยไปหาคนรับผิดชอบ */
+function pjPierOf(boat, date){
+  var cur='';
+  try{ if(typeof getBoatCurrentPier==='function') cur=getBoatCurrentPier(boat, date)||''; }catch(_){}
+  if(cur && cur!=='shop') return cur;
+  var a=pjAsnAt(boat, date);
+  return (a && a.toPier) || (boat && boat.pier) || '';
+}
 /* ทุกลำของท่านี้ · ลำที่มีโปรแกรมมาก่อน แล้วเรียงตามสถานะ */
 function pjAllBoats(date, pier){
   var run=(typeof poBoats==='function')?poBoats(date,pier):[], out=[], seen={};
   run.forEach(function(B){ seen[B.bid]=1;
     B._st=pjBoatSt(date,B.boat,true); out.push(B); });
   (typeof BOATS!=='undefined'?BOATS:[]).forEach(function(b){
-    if((b.pier||'')!==pier || seen[b.id]) return;
+    // §pjPierNow · ถามตัวตัดสินเดียวกับ Boat Status · ไม่ใช่ b.pier ที่เป็นค่าคงที่
+    if(pjPierOf(b,date)!==pier || seen[b.id]) return;
     var D=pjDayOp(date,b.id);
     var away=(D && (D.route.pier||'')!==pier) ? D : null;   // ย้ายไปวิ่งท่าอื่นวันนี้
     var st=pjBoatSt(date,b,false);
     // ไปวิ่งท่าอื่น ≠ ว่าง · ท่านี้ไม่มีงานให้ แต่เรือไม่ได้จอดเฉยๆ ต้องบอกให้ตรง
     if(away && st.k==='idle') st.k='away';
+    var asn=pjAsnAt(b,date);
+    var shop=''; try{ if(typeof getBoatCurrentPier==='function' && getBoatCurrentPier(b,date)==='shop'
+                        && typeof getBoatShopLocation==='function') shop=getBoatShopLocation(b)||'อู่'; }catch(_){}
     out.push({bid:b.id, boat:b, rid:'', route:{}, dep:'', pax:0, bks:[],
-              _st:st, _away:away});
+              _st:st, _away:away, _asn:asn, _shop:shop});
   });
   out.sort(function(a,b){
     // ord ของ clash เป็น 0 · ใช้ ||9 ไม่ได้ เพราะ 0 เป็นค่าเท็จ แล้วจะเด้งไปท้ายสุด
@@ -78139,6 +78161,8 @@ function pjCSS(){
   +H+' .pj-rst:hover{background:#E9EDF3}'
   +H+' .bc .stbar{height:32px;padding:0 15px;background:#FAFBFC;border-bottom:1px solid #EFF1F5;display:flex;align-items:center;gap:8px;overflow:hidden}'
   +H+' .pj-sub{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:2px 8px;background:#FFF0D8;color:#B4560A}'
+  +H+' .pj-move{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:2px 8px;background:#E9EFF7;color:#20477E;white-space:nowrap}'
+  +H+' .pj-shop{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:2px 8px;background:#F2EBFA;color:#5B3B96;white-space:nowrap}'
   +H+' .pj-std{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:2px 8px;background:#EDF3EF;color:#5E8B72}'
   +H+' .pj-gh{display:flex;align-items:center;gap:8px;padding:0 15px;height:28px;font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);background:var(--bg);color:var(--fg);box-shadow:inset 4px 0 0 var(--fg)}'
   +H+' .pj-rw{display:flex;align-items:center;gap:8px;padding:0 15px;height:32px;border-bottom:1px solid #F4F5F8}'
@@ -78357,6 +78381,14 @@ function pjCard(B, pier, ro){
              :(J._std?'<span class="pj-std">&#10003; ทีมประจำ</span>':'<span class="pj-std">&#10003; STANDARD</span>'))
         : '')
      +(going&&pax.n?('<span class="pj-stmeta">'+pax.n+' booking</span>'):'')
+     /* §pjPierNow · ลำนี้ไม่ใช่ของประจำท่า หรือไม่ได้อยู่ที่ท่า · ต้องบอกให้เห็นตั้งแต่แถบสถานะ */
+     +((B._asn && B._asn.toPier===pier && B._asn.fromPier && B._asn.fromPier!==pier)
+        ? ('<span class="pj-move" title="ใบย้ายท่า '+poE(B._asn.startDate||'')+' – '+poE(B._asn.endDate||'')
+            +(B._asn.reason?(' \u00b7 '+poE(B._asn.reason)):'')+'">ย้ายมาจาก '
+            +poE((typeof PIER_LABELS!=='undefined'&&PIER_LABELS[B._asn.fromPier])||B._asn.fromPier)
+            +(B._asn.type==='permanent'?' \u00b7 ถาวร':(B._asn.endDate?(' \u00b7 ถึง '+poE(pjDocDate(B._asn.endDate))):''))+'</span>')
+        : '')
+     +(B._shop?('<span class="pj-shop" title="เรือไม่ได้อยู่ที่ท่า · ท่านี้เป็นผู้รับผิดชอบ">อยู่อู่ '+poE(B._shop)+'</span>'):'')
      +((!going&&ST.mj.length)?('<span class="pj-stmeta" title="'+poE(ST.mj.map(function(m){ return (m.no||'')+' '+(m.title||m.type||''); }).join(' \u00b7 '))+'">งานซ่อม '+ST.mj.length+' ใบ'
         +(ST.mj[0]&&ST.mj[0].no?(' \u00b7 '+poE(ST.mj[0].no)):'')+'</span>'):'')
    +'</div>'
