@@ -337,13 +337,31 @@ function b2cMapAddOns(det, addOnTotal, programId, addonCat) {
     const name = String((a && a.name) || (cat && cat.name) || '').trim() || `B2C add-on ${id || '?'}`;
     // Mirror the B2B label shape ("Longtail Join (2A + 0C)") when B2C sent the adult/child split.
     const label = (Number.isFinite(ad) && Number.isFinite(ch)) ? `${name} (${ad}A + ${ch}C)` : name;
-    return { type, label, amount: 0, qty, note: '' };
+    // Per-entry money, best source first. The order is correctness, not preference:
+    //   1. a.amount / a.unitPrice — what B2C actually charged, promos and overrides already applied.
+    //      Authoritative. B2C started sending these on 2026-08-06.
+    //   2. cat.price — the catalog LIST price, and only a fallback for the older entries that carry
+    //      nothing but {qty, addonId}. It is today's price, not the price this booking paid: AD-002
+    //      is 500 in the catalog and was charged at 400 on the 2026-07 orders. So it is verified
+    //      against the real total below and dropped when it disagrees.
+    // Before 2026-08-14 every entry was hardcoded to 0 and all of this was discarded.
+    const fromB2C = Math.round(Number(a && a.amount) || 0)
+                 || Math.round((Number(a && a.unitPrice) || 0) * qty);
+    const fromCat = Math.round((cat && Number(cat.price) || 0) * qty);
+    return { type, label, amount: Math.max(0, fromB2C || fromCat), qty, note: '', _listPriced: !fromB2C && fromCat > 0 };
   });
-  // subtotal − seat gives the COMBINED add-on money for the line. With one entry that is its exact
-  // amount; with several (AD-001 + AD-002 together, 6 orders) it cannot be split without per-entry
-  // prices, so each stays 0 and priceBreakdown.addOn carries the money. Splitting it by qty would
-  // be a guess and would show made-up figures against a named product.
-  if (rows.length === 1) rows[0].amount = Math.max(0, Math.round(addOnTotal) || 0);
+  const total = Math.max(0, Math.round(addOnTotal) || 0);
+  // subtotal − seat is what the customer was charged, so it is the arbiter. If the lines do not add
+  // up to it, a list price we guessed with is wrong for this booking — drop those back to 0 rather
+  // than print a confident figure against a named product. Lines B2C priced itself are kept either
+  // way: they are the charge, and any residual difference belongs to the seat/add-on split, not here.
+  if (rows.some(r => r._listPriced) && rows.reduce((n, r) => n + r.amount, 0) !== total) {
+    for (const r of rows) if (r._listPriced) r.amount = 0;
+  }
+  // With a single entry the combined figure IS that entry's amount — arithmetic, not a guess. With
+  // several it cannot be split, so they stay 0 and priceBreakdown.addOn carries the money.
+  if (rows.length === 1 && !rows[0].amount) rows[0].amount = total;
+  for (const r of rows) delete r._listPriced;
   return rows;
 }
 
@@ -804,14 +822,16 @@ async function b2cAddonCatalog() {
   if (!b2cPool) return map;
   if (_b2cAddonTblMissingAt && Date.now() - _b2cAddonTblMissingAt < B2C_ADDON_TBL_RETRY_MS) return map;
   try {
+    // price is the LIST price, used only to fill a line B2C priced at 0 — see b2cMapAddOns for why
+    // it must never outrank what B2C actually charged.
     const { rows } = await b2cPool.query(
-      `SELECT program_id, addon_id, code, name FROM ${b2cT(B2C_ADDON_TABLE)}`);
+      `SELECT program_id, addon_id, code, name, price FROM ${b2cT(B2C_ADDON_TABLE)}`);
     _b2cAddonTblMissingAt = 0;
     for (const r of rows) {
       const nm = String(r.name || '').trim();
       if (!nm) continue;
       map.set(b2cAddonKey(r.program_id, r.addon_id),
-              { name: nm, code: String(r.code || '').trim().toLowerCase() });
+              { name: nm, code: String(r.code || '').trim().toLowerCase(), price: Number(r.price) || 0 });
     }
   } catch (e) {
     if (e && e.code === '42P01') {                // undefined_table
