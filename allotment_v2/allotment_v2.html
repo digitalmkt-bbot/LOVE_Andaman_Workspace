@@ -41271,6 +41271,7 @@ window._laReloadData=function(){
     if(typeof PIER_CFG!=='undefined' && d.pier_cfg) PIER_CFG=d.pier_cfg;
     if(typeof PIER_CODES!=='undefined' && Array.isArray(d.pier_codes) && d.pier_codes.length) PIER_CODES=d.pier_codes;   // §pierAtt
     if(typeof PIER_SHIFT!=='undefined' && d.pier_shift) PIER_SHIFT=d.pier_shift;
+    if(typeof PIER_SECT!=='undefined' && Array.isArray(d.pier_sect)) PIER_SECT=d.pier_sect;   // §paSect
     if(typeof TRAVEL_SUM!=='undefined' && d.travel_sum) TRAVEL_SUM=d.travel_sum;   // §Travel Summary
     if(typeof TS_COT!=='undefined' && d.ts_cot) TS_COT=d.ts_cot;                   // §tsCotSettle
     if(typeof CAL_ROUTE_NAMES!=='undefined' && d.cal_route_names){                  // §cal2b · ชื่อโปรแกรมในปฏิทิน
@@ -76286,6 +76287,7 @@ var PIER_LICENSES=[];     // §pierLic · [{id, staffId, classId, no, exp, issue
 var PIER_CFG={};          // §pierLic · ตั้งค่ารวมของ Pier Office เช่น licWarnDays / cycleStart / onBoatCode
 var PIER_CODES=[];        // §pierAtt · [{id, code, label, color, bg, kind, ord, active}]
 var PIER_SHIFT={};        // §pierAtt · 'YYYY-MM-DD::staffId' -> {c, by, at}  เฉพาะช่องที่แก้มือ
+var PIER_SECT=[];         // §paSect · [{id, pier, name, ord}] · หัวข้อกลุ่มในตารางการทำงาน · ผู้ใช้ตั้งเอง
 var PIER_TEAM={};   // §pierJob · boatId -> {cap, asst, crew:[]}  ทีมประจำเรือ
 var PIER_JOB={};    // §pierJob · 'YYYY-MM-DD::boatId' -> {cap, asst, crew:[], island:[], note, wb, wbc}
 (function(){ try{
@@ -76303,6 +76305,7 @@ var PIER_JOB={};    // §pierJob · 'YYYY-MM-DD::boatId' -> {cap, asst, crew:[],
   if(d.pier_cfg && typeof d.pier_cfg==='object') PIER_CFG=d.pier_cfg;
   if(Array.isArray(d.pier_codes)) PIER_CODES=d.pier_codes;
   if(d.pier_shift && typeof d.pier_shift==='object') PIER_SHIFT=d.pier_shift;
+  if(Array.isArray(d.pier_sect)) PIER_SECT=d.pier_sect;   // §paSect
 }catch(_){} })();
 /* รหัสตั้งต้น · ตัวที่ยังไม่รู้ความหมายเว้น label ไว้ให้ไปกรอกเอง */
 (function(){ try{
@@ -76351,7 +76354,7 @@ function poPersist(){
     d.pier_team=PIER_TEAM; d.pier_job=PIER_JOB;
     d.pier_lic_types=PIER_LIC_TYPES; d.pier_lic_classes=PIER_LIC_CLASSES;
     d.pier_licenses=PIER_LICENSES; d.pier_cfg=PIER_CFG;
-    d.pier_codes=PIER_CODES; d.pier_shift=PIER_SHIFT;
+    d.pier_codes=PIER_CODES; d.pier_shift=PIER_SHIFT; d.pier_sect=PIER_SECT;
     if(typeof laBlobSave==='function') laBlobSave();
     else localStorage.setItem((typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2'), JSON.stringify(d));
   }catch(e){ console.warn('pier office persist failed', e); }
@@ -77210,22 +77213,41 @@ function paCell(date, pier, st, E){
 function paStaff(pier){
   return (PIER_STAFF||[]).filter(function(s){ return s.pier===pier && s.active!==false; });
 }
-/* จัดกลุ่มตามตำแหน่ง · เรียงตามลำดับที่เจอครั้งแรก เหมือนไฟล์เดิมที่แบ่งเป็นแผนก */
+/* §paSect · กลุ่มของท่านี้ · เรียงตาม ord */
+function paSects(pier){
+  return (PIER_SECT||[]).filter(function(x){ return x && x.pier===pier; })
+    .sort(function(a,b){ return (+a.ord||0)-(+b.ord||0); });
+}
+/* §paSect · หัวข้อกลุ่มในตาราง
+   ตั้งกลุ่มเองไว้ = ใช้ของที่ตั้ง · ยังไม่เคยตั้ง = ถอยไปจัดตามตำแหน่งแบบเดิม
+   คนที่ไม่ได้อยู่กลุ่มไหน ต้องไม่หายจากตาราง · ไปรวมกันที่ UNASSIGNED ท้ายสุด */
 function paGroups(pier){
-  var out=[], idx={};
-  paStaff(pier).forEach(function(s){
-    var k=String(s.role||'ไม่ระบุตำแหน่ง').trim()||'ไม่ระบุตำแหน่ง';
-    if(idx[k]==null){ idx[k]=out.length; out.push({t:k, rows:[]}); }
-    out[idx[k]].rows.push(s);
-  });
-  return out;
+  var staff=paStaff(pier), S=paSects(pier);
+  if(!S.length){
+    var out=[], idx={};
+    staff.forEach(function(s){
+      var k=String(s.role||'ไม่ระบุตำแหน่ง').trim()||'ไม่ระบุตำแหน่ง';
+      if(idx[k]==null){ idx[k]=out.length; out.push({t:k, rows:[]}); }
+      out[idx[k]].rows.push(s);
+    });
+    return out;
+  }
+  var byId={}, res=[];
+  S.forEach(function(sec){ byId[sec.id]={t:sec.name||'(ไม่มีชื่อ)', id:sec.id, rows:[]}; res.push(byId[sec.id]); });
+  var rest=[];
+  staff.forEach(function(s){ var g=byId[s.sect]; if(g) g.rows.push(s); else rest.push(s); });
+  res=res.filter(function(g){ return g.rows.length; });
+  if(rest.length) res.push({t:'UNASSIGNED', id:'', rows:rest});
+  return res;
 }
 
 function paCSS(){
   var H='.pj-host';
   return H+' .pa-wrap{overflow:auto;max-height:calc(100vh - 250px)}'
   +H+' table.pa{border-collapse:separate;border-spacing:0;min-width:1400px;background:#fff}'
-  +H+' table.pa th,table.pa td{padding:0;border-bottom:1px solid #F0F2F6}'
+  /* §paSheet · เส้นครบทุกด้านเหมือนสเปรดชีต · ของเดิมมีแต่เส้นล่าง อ่านเป็นคอลัมน์ไม่ได้ */
+  +H+' table.pa th,table.pa td{padding:0;border:1px solid #D9DEE6}'
+  +H+' table.pa{border-collapse:collapse !important}'
   +H+' .pa-nm{position:sticky;left:0;z-index:3;background:#fff;width:236px;min-width:236px;padding:6px 12px !important;border-right:1px solid #E7EAEF;text-align:left}'
   /* §paCols · แยกเป็นคอลัมน์จริง · ตรึงสี่คอลัมน์แรกไว้ตอนเลื่อนดูปลายรอบ */
   +H+' .pa-no{position:sticky;left:0;z-index:3;background:#fff;width:38px;min-width:38px;text-align:center;'
@@ -77235,17 +77257,17 @@ function paCSS(){
   +H+' .pa-nk{position:sticky;left:234px;z-index:3;background:#fff;width:74px;min-width:74px;padding:5px 9px !important;'
      +'text-align:left;font-size:11.5px;color:#5A6270;white-space:nowrap}'
   +H+' .pa-rl{position:sticky;left:308px;z-index:3;background:#fff;width:184px;min-width:184px;padding:5px 10px !important;'
-     +'text-align:left;font-size:11.5px;color:#5A6270;white-space:nowrap;border-right:1px solid #E7EAEF;box-shadow:1px 0 0 #EFF1F5}'
+     +'text-align:left;font-size:11.5px;color:#5A6270;white-space:nowrap;border-right:2px solid #97A0AE !important}'
   +H+" .pa-rl i{font-style:normal;font-size:9.5px;font-weight:700;color:#8B93A1;background:#F2F4F7;border-radius:4px;padding:1px 6px;margin-left:6px}"
   +H+' .pa-away{font-size:9.5px;font-weight:800;color:#20477E;background:#E9EFF7;border-radius:4px;padding:1px 6px;margin-left:5px}'
-  +H+' th.pa-h0{position:sticky;top:0;z-index:6;background:#fff;text-align:left;padding:8px 11px !important;'
-     +'font-size:12px;font-weight:700;color:#16233a;border-bottom:1px solid #E1E4EA;white-space:nowrap}'
-  +H+' th.pa-h0.nt{text-align:center;font-size:10px;color:#8B93A1;font-weight:800;letter-spacing:.06em;text-transform:uppercase}'
-  +H+' th.pa-mo{position:sticky;top:0;z-index:5;background:linear-gradient(180deg,#FDF6E9,#FBF0DD);color:#7A4A00;'
-     +'font-size:11px;font-weight:700;letter-spacing:.03em;border-bottom:1px solid #EFDCB4;padding:6px 0 !important}'
-  +H+' th.pa-mo.sum{background:linear-gradient(180deg,#F7F9FC,#EEF2F7);color:#20477E;border-bottom-color:#DCE3EC}'
-  +H+' th.pa-no,th.pa-nm2,th.pa-nk,th.pa-rl{position:sticky;top:27px;z-index:4;background:#F7F8FA;'
-     +'font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#8B93A1;padding:5px 10px !important;text-align:left}'
+  +H+' th.pa-h0{position:sticky;top:0;z-index:6;background:#1F3C88;color:#fff;text-align:left;padding:7px 11px !important;'
+     +'font-size:11.5px;font-weight:700;letter-spacing:.05em;white-space:nowrap}'
+  +H+' th.pa-h0.nt{text-align:center;font-size:10px;letter-spacing:.08em}'
+  +H+' th.pa-mo{position:sticky;top:0;z-index:5;background:#DFE5EE;color:#1F3C88;'
+     +'font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;padding:6px 0 !important}'
+  +H+' th.pa-mo.sum{background:#E8E2D3;color:#6B4B12}'
+  +H+' th.pa-no,th.pa-nm2,th.pa-nk,th.pa-rl{position:sticky;top:27px;z-index:4;background:#F2F4F7;'
+     +'font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#5A6472;padding:5px 9px !important;text-align:left}'
   +H+' th.pa-no{text-align:center}'
   +H+' th.pa-d,th.pa-sh{top:27px}'
   +H+' .pa-nt{width:158px;min-width:158px;padding:3px 8px !important;text-align:left}'
@@ -77253,13 +77275,16 @@ function paCSS(){
   +H+" .pa-nti{width:100%;border:1px solid transparent;background:transparent;border-radius:6px;padding:4px 7px;font:600 11px inherit;color:#8A5A00}"
   +H+' .pa-nti:hover{border-color:#E1E4EA;background:#fff}'
   +H+' .pa-nti:focus{border-color:#16265C;background:#fff;outline:none}'
-  +H+' tr.pa-band .pa-no,tr.pa-band .pa-nm2{background:#EEF2F7}'
+  +H+' tr.pa-band .pa-no,tr.pa-band .pa-nm2{background:#EAEEF4}'
+  +H+' tr.pa-band td{background:#EAEEF4;font-size:9.5px;font-weight:800;letter-spacing:.1em;color:#1F3C88}'
+  /* เสาร์-อาทิตย์ · เข้มขึ้นทับสีของรหัส ไม่ใช่แทนที่ */
+  +H+' td.pa-c.we::before{content:"";position:absolute;inset:0;background:rgba(20,30,50,.05);pointer-events:none}'
   +H+' tr.pa-tot .pa-no,tr.pa-tot .pa-nm2{background:#F2F5F9;font-size:11px;font-weight:800;color:#20477E}'
   /* §paSum · คอลัมน์สรุปท้ายรอบ · พื้นครีมแยกออกจากช่องวันให้ชัด */
-  +H+' th.pa-sh{width:36px;min-width:36px;text-align:center;padding:5px 0 !important;background:#FBF7F0;position:sticky;top:0;z-index:4;'
-     +'font-size:9.5px;font-weight:800;color:#7A4A00;border-bottom:1px solid #EFDCB4;border-right:1px solid #F2E7D4}'
-  +H+' th.pa-sh.rt{color:#16265C;background:#F4F7FB;border-bottom-color:#D8E2EE;border-right-color:#E7EDF4}'
-  +H+' th.pa-sh.tot{width:46px;min-width:46px;background:#F3E9D8;color:#5A3A00}'
+  +H+' th.pa-sh{width:34px;min-width:34px;text-align:center;padding:5px 0 !important;background:#F4F1E8;position:sticky;top:27px;z-index:4;'
+     +'font-size:9px;font-weight:700;color:#6B4B12}'
+  +H+' th.pa-sh.rt{color:#1F3C88;background:#EDF1F7}'
+  +H+' th.pa-sh.tot{width:46px;min-width:46px;background:#E8E2D3;color:#5A3A00}'
   +H+' td.pa-sc{width:36px;min-width:36px;text-align:center;background:#FDFBF7;border-right:1px solid #F4EEE3;'
      +"font:500 11px 'DM Mono',monospace;color:#7A4A00}"
   +H+' td.pa-sc.z{color:#DCD5C8}'
@@ -77280,11 +77305,12 @@ function paCSS(){
   +H+' th.pa-d.nf{background:#F7F8FA}'
   +H+' th.pa-d.nf .dd{color:#B8BEC8}'
   +H+' th.pa-d.tdy{box-shadow:inset 0 -3px 0 #16265C}'
-  +H+' td.pa-c{text-align:center;padding:3px 2px !important;position:relative;cursor:pointer}'
+  +H+' td.pa-c{text-align:center;padding:0 !important;cursor:pointer;position:relative}'
   +H+' td.pa-c.we{background:#FFFBF8}'
   +H+' td.pa-c.nf{background:#FAFBFC}'
   +H+' td.pa-c:hover .cd{outline:2px solid #16265C;outline-offset:-2px}'
-  +H+' .pa-cd{display:block;border-radius:6px;font-size:9.5px;font-weight:800;line-height:22px;height:22px}'
+  /* §paSheet · ระบายเต็มช่องแบบ conditional formatting · ไม่ใช่ป้ายมนลอยกลางช่อง */
+  +H+' .pa-cd{display:block;width:100%;border-radius:0;font-size:9px;font-weight:800;line-height:23px;height:23px;letter-spacing:-.01em}'
   +H+' .pa-dot{position:absolute;top:2px;right:3px;width:5px;height:5px;border-radius:50%;background:#B4560A}'
   +H+' .pa-away{position:absolute;left:2px;bottom:1px;font-size:7.5px;font-weight:800;letter-spacing:.02em;color:#20477E;background:#E9EFF7;border-radius:3px;padding:0 3px;line-height:11px}'
   +H+' .pa-sum{position:sticky;right:0;background:#FAFBFC;border-left:1px solid #E7EAEF;padding:5px 11px !important;white-space:nowrap;text-align:right;z-index:3}'
@@ -77339,7 +77365,7 @@ function renderPierAtt(pier){
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
   var host=document.getElementById('pa-host-'+P.k); if(!host) return;
   var ro=!poCanEdit(), CY=paCycle(_paDate), groups=paGroups(P.k), today=poYMD(new Date());
-  var WD=['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'];
+  var WD=['SUN','MON','TUE','WED','THU','FRI','SAT'];   // §paSheet · หัวข้อเป็นอังกฤษตามที่ตกลง
   var IDX=paIndex(CY.days);
   var hasJob={}, nJob=0;
   CY.days.forEach(function(d){ hasJob[d.s]=paHasJob(d.s,P.k,IDX[d.s]); if(hasJob[d.s]) nJob++; });
@@ -77357,25 +77383,25 @@ function renderPierAtt(pier){
   });
 
   /* §paCols · รอบ 26–25 คร่อมสองเดือนเสมอ · ต้องบอกให้ชัดว่าเลข 1 กับ 26 คนละเดือน */
-  var MTH=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  var MTH=['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
   var spans=[]; CY.days.forEach(function(d){
     var key=String(d.s).slice(0,7);
     if(spans.length && spans[spans.length-1].k===key) spans[spans.length-1].n++;
     else spans.push({k:key, n:1, m:d.m, y:+String(d.s).slice(0,4)});
   });
   var head='<tr>'
-    + '<th class="pa-h0" colspan="4">ตารางการทำงาน · '+poE(CY.from)+' – '+poE(CY.to)+'</th>'
-    + spans.map(function(sp){ return '<th class="pa-mo" colspan="'+sp.n+'">'+MTH[sp.m]+' '+(sp.y+543)+'</th>'; }).join('')
-    + '<th class="pa-mo sum" colspan="'+(SUMC.length+1)+'">สรุปท้ายรอบ (วัน)</th>'
-    + '<th class="pa-h0 nt">หมายเหตุ</th></tr>'
-    + '<tr><th class="pa-no">ลำดับ</th><th class="pa-nm2">ชื่อ สกุล</th><th class="pa-nk">ชื่อเล่น</th><th class="pa-rl">ตำแหน่ง</th>'
+    + '<th class="pa-h0" colspan="4">CREW DUTY ROSTER &nbsp;&middot;&nbsp; '+poE(CY.from)+' – '+poE(CY.to)+' &nbsp;&middot;&nbsp; '+poE(String(P.n||P.t).toUpperCase())+'</th>'
+    + spans.map(function(sp){ return '<th class="pa-mo" colspan="'+sp.n+'">'+MTH[sp.m]+' '+sp.y+'</th>'; }).join('')
+    + '<th class="pa-mo sum" colspan="'+(SUMC.length+1)+'">MONTHLY SUMMARY (DAYS)</th>'
+    + '<th class="pa-h0 nt">REMARKS</th></tr>'
+    + '<tr><th class="pa-no">No.</th><th class="pa-nm2">Full name</th><th class="pa-nk">Nickname</th><th class="pa-rl">Position</th>'
     + CY.days.map(function(d){
         var we=(d.w===0||d.w===6);
         return '<th class="pa-d'+(!hasJob[d.s]?' nf':(we?' we':''))+(d.s===today?' tdy':'')+'">'
           +'<div class="dd">'+d.n+'</div><div class="dw">'+WD[d.w]+'</div></th>'; }).join('')
     + SUMC.map(function(c){ var m=paCodeMeta(c)||{};
         return '<th class="pa-sh'+(m.route?' rt':'')+'" title="'+poE(m.label||c)+'">'+poE(c)+'</th>'; }).join('')
-    + '<th class="pa-sh tot">รวม</th><th class="pa-nt"></th></tr>';
+    + '<th class="pa-sh tot">TOTAL</th><th class="pa-nt">Notes</th></tr>';
 
   var body='', totW=0, totO=0, totL=0, totAway=0, gTot={}, _n=0;
   groups.forEach(function(G){
@@ -77408,7 +77434,7 @@ function renderPierAtt(pier){
     });
   });
   /* แถวรวมท้ายตาราง · ทั้งท่าใช้คนไปกี่วัน-คน กับแต่ละรหัสไปเท่าไหร่ */
-  body+='<tr class="pa-tot"><td class="pa-no"></td><td class="pa-nm2" colspan="3">รวมทั้งท่า</td>'
+  body+='<tr class="pa-tot"><td class="pa-no"></td><td class="pa-nm2" colspan="3">TOTAL &middot; ALL STAFF</td>'
     + CY.days.map(function(){ return '<td></td>'; }).join('')
     + SUMC.map(function(c){ return '<td class="pa-sc">'+(gTot[c]||0)+'</td>'; }).join('')
     + '<td class="pa-sc tot">'+totW+'</td><td class="pa-nt"></td></tr>';
@@ -77441,6 +77467,7 @@ function renderPierAtt(pier){
         +(totAway?(' · <b style="color:#20477E">ไปช่วยท่าอื่น '+totAway+'</b>'):'')+'</span>'
       +'<span style="flex:1"></span>'
       +'<button class="gh" onclick="paRangeOpen()"'+(ro?' disabled':'')+'>วางงานเป็นช่วง</button>'
+      +'<button onclick="paSectOpen()">จัดกลุ่ม</button>'
       +'<button onclick="paCodesOpen()">ทะเบียนรหัส</button>'
       +'<button onclick="paExport()">Export CSV</button>'
       +'<button class="pri" onclick="paPrint()">พิมพ์</button>'
@@ -77505,6 +77532,99 @@ function paSet(date,sid,code){
 }
 
 /* ── ทะเบียนรหัส ── */
+/* §paSect · หน้าจัดกลุ่ม · สร้าง เปลี่ยนชื่อ เรียง ลบ ย้ายคน */
+function paSectId(){ return 'sc_'+Math.random().toString(36).slice(2,8); }
+function paSectAdd(){
+  if(!poGuard()) return;
+  var S=paSects(_poPier);
+  PIER_SECT.push({id:paSectId(), pier:_poPier, name:'', ord:(S.length?((+S[S.length-1].ord||0)+1):1)});
+  poPersist(); paSectOpen();
+}
+function paSectSet(id, key, val){
+  if(!poGuard()) return;
+  var x=(PIER_SECT||[]).filter(function(v){ return v.id===id; })[0]; if(!x) return;
+  x[key]=val; poPersist();
+  if(key!=='name') paSectOpen();
+  try{ renderPierAtt(); }catch(_){}
+}
+function paSectMove(id, dir){
+  if(!poGuard()) return;
+  var S=paSects(_poPier), i=-1;
+  S.forEach(function(x,n){ if(x.id===id) i=n; });
+  var j=i+dir; if(i<0 || j<0 || j>=S.length) return;
+  var a=S[i].ord, b=S[j].ord;
+  if(a===b || a==null || b==null){ S.forEach(function(x,n){ x.ord=n+1; }); a=S[i].ord; b=S[j].ord; }
+  S[i].ord=b; S[j].ord=a;
+  poPersist(); paSectOpen(); try{ renderPierAtt(); }catch(_){}
+}
+function paSectDel(id){
+  if(!poGuard()) return;
+  var n=(PIER_STAFF||[]).filter(function(s){ return s.sect===id; }).length;
+  if(n && !confirm('ลบกลุ่มนี้?\n\nคน '+n+' คนในกลุ่มจะไม่หายไปไหน · ย้ายไปอยู่ UNASSIGNED ท้ายตาราง')) return;
+  PIER_SECT=(PIER_SECT||[]).filter(function(x){ return x.id!==id; });
+  (PIER_STAFF||[]).forEach(function(s){ if(s.sect===id) s.sect=''; });
+  poPersist(); paSectOpen(); try{ renderPierAtt(); }catch(_){}
+}
+function paStaffSect(sid, secId){
+  if(!poGuard()) return;
+  var s=(PIER_STAFF||[]).filter(function(x){ return x.id===sid; })[0]; if(!s) return;
+  s.sect=secId||''; poPersist(); paSectOpen(); try{ renderPierAtt(); }catch(_){}
+}
+function paSectOpen(){
+  var ro=!poCanEdit(), S=paSects(_poPier), G=paGroups(_poPier);
+  var opts=function(cur){
+    return '<option value="">— UNASSIGNED —</option>'
+      + S.map(function(x){ return '<option value="'+poE(x.id)+'"'+(x.id===cur?' selected':'')+'>'+poE(x.name||'(ไม่มีชื่อ)')+'</option>'; }).join('');
+  };
+  var body='<div style="font-size:12px;color:#6E7684;margin-bottom:12px;line-height:1.7">'
+    +'หัวข้อที่คั่นในตารางการทำงาน · ตั้งเอง เรียงเอง ย้ายคนเองได้<br>'
+    +'ลบกลุ่มแล้ว<b style="color:#16265C">คนไม่หาย</b> · ตกไปอยู่ UNASSIGNED ท้ายตาราง<br>'
+    +'ยังไม่ได้ตั้งกลุ่มเลย ตารางจะจัดกลุ่มตามตำแหน่งให้เหมือนเดิม</div>';
+  if(!S.length) body+='<div class="po-warn" style="margin:0 0 12px">ท่านี้ยังไม่มีกลุ่ม · กด "เพิ่มกลุ่ม" เพื่อเริ่ม</div>';
+  S.forEach(function(sec,i){
+    var rows=(PIER_STAFF||[]).filter(function(s){ return s.pier===_poPier && s.active!==false && s.sect===sec.id; });
+    body+='<div class="pa-sec">'
+      +'<div class="hd">'
+        +'<input class="pl-f nm" value="'+poE(sec.name||'')+'" placeholder="ชื่อกลุ่ม เช่น OFFICE DEPARTMENT" '
+          +'oninput="paSectSet(\''+sec.id+'\',\'name\',this.value)"'+(ro?' disabled':'')+'>'
+        +'<span class="n">'+rows.length+' คน</span>'
+        +(ro?'':'<button class="mv" onclick="paSectMove(\''+sec.id+'\',-1)"'+(i===0?' disabled':'')+' title="ขึ้น">&#9650;</button>'
+             +'<button class="mv" onclick="paSectMove(\''+sec.id+'\',1)"'+(i===S.length-1?' disabled':'')+' title="ลง">&#9660;</button>'
+             +'<button class="x" onclick="paSectDel(\''+sec.id+'\')" title="ลบกลุ่ม">&times;</button>')
+      +'</div>'
+      +'<div class="pp">'+(rows.length?rows.map(function(s){
+          return '<span class="chip"><b>'+poE(s.name||s.nick||s.id)+'</b><i>'+poE(s.role||'')+'</i>'
+            +'<select onchange="paStaffSect(\''+poE(s.id)+'\',this.value)"'+(ro?' disabled':'')+'>'+opts(s.sect||'')+'</select></span>';
+        }).join(''):'<span class="none">ยังไม่มีใครในกลุ่มนี้</span>')+'</div></div>';
+  });
+  var un=(PIER_STAFF||[]).filter(function(s){ return s.pier===_poPier && s.active!==false && !paSects(_poPier).some(function(x){ return x.id===s.sect; }); });
+  if(un.length) body+='<div class="pa-sec un"><div class="hd"><span class="nm2">UNASSIGNED</span><span class="n">'+un.length+' คน</span></div>'
+    +'<div class="pp">'+un.map(function(s){
+        return '<span class="chip"><b>'+poE(s.name||s.nick||s.id)+'</b><i>'+poE(s.role||'')+'</i>'
+          +'<select onchange="paStaffSect(\''+poE(s.id)+'\',this.value)"'+(ro?' disabled':'')+'>'+opts(s.sect||'')+'</select></span>';
+      }).join('')+'</div></div>';
+  poModal('กลุ่มในตารางการทำงาน · '+poE(poPierName()),
+    '<style>'+poCSS().replace(/\.po-host/g,'#po-modal')+paSectCSS()+'</style>'+body,
+    (ro?'':poBtn('+ เพิ่มกลุ่ม','paSectAdd()','pri'))+poBtn('ปิด','poModalClose()'), 760);
+}
+function paSectCSS(){
+  return '#po-modal .pa-sec{border:1px solid #E1E4EA;border-radius:11px;margin-bottom:10px;overflow:hidden}'
+   +'#po-modal .pa-sec .hd{display:flex;align-items:center;gap:8px;padding:8px 11px;background:#F2F5F9}'
+   +"#po-modal .pa-sec .hd .nm{flex:1;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#20477E;font-size:11.5px}"
+   +'#po-modal .pa-sec .hd .nm2{flex:1;font-weight:800;letter-spacing:.06em;color:#8B93A1;font-size:11.5px}'
+   +"#po-modal .pa-sec .hd .n{font-size:10.5px;color:#8B93A1;font-family:'DM Mono',monospace}"
+   +'#po-modal .pa-sec .hd .mv,#po-modal .pa-sec .hd .x{border:1px solid #DCE0E6;background:#fff;border-radius:6px;'
+     +'width:24px;height:24px;cursor:pointer;color:#5A6472;font-size:10px;line-height:1}'
+   +'#po-modal .pa-sec .hd .mv:disabled{opacity:.35;cursor:default}'
+   +'#po-modal .pa-sec .hd .x{color:#C0271C;font-size:15px}'
+   +'#po-modal .pa-sec.un .hd{background:#FAFBFC}'
+   +'#po-modal .pa-sec .pp{display:flex;flex-wrap:wrap;gap:6px;padding:10px 11px}'
+   +'#po-modal .pa-sec .chip{display:inline-flex;align-items:center;gap:7px;border:1px solid #E1E4EA;border-radius:9px;padding:4px 5px 4px 10px;background:#fff}'
+   +'#po-modal .pa-sec .chip b{font-size:11.5px;font-weight:600}'
+   +'#po-modal .pa-sec .chip i{font-style:normal;font-size:10.5px;color:#8B93A1}'
+   +'#po-modal .pa-sec .chip select{border:1px solid #E7EAEF;border-radius:6px;padding:3px 5px;font:600 10.5px inherit;color:#5A6472;background:#F7F8FA}'
+   +'#po-modal .pa-sec .none{font-size:11.5px;color:#9AA3B0}';
+}
 function paCodesOpen(){
   paEnsureMtCode();
   var ro=!poCanEdit();
