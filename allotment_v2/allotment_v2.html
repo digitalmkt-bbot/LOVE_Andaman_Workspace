@@ -3979,6 +3979,19 @@ body.la-nav-open .la-burger{background:#1683C7;color:#fff;box-shadow:inset 2px 2
   .main .cal2-box .cal2-grid{ overflow:visible !important }
   /* แถบปุ่มสลับแท็บที่ยาวกว่าจอ · เลื่อนในแถบตัวเอง */
   .main .dr-pills,.main .bkv2-utabs,.main .fl-tabs{ overflow-x:auto; -webkit-overflow-scrolling:touch; max-width:100% }
+  /* §tapSize · พื้นขั้นต่ำของทุกอย่างที่กดได้ · 40px คือขนาดที่กดโดนโดยไม่ต้องเล็ง
+     ตั้งรวมทีเดียวแทนการไล่ทีละคลาส · ปุ่มที่เพิ่มมาทีหลังจะได้ตามไปเอง */
+  .main .view button,
+  .main .view .btn,
+  .main .view select,
+  .main .view input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]){
+    min-height:40px }
+  /* ปุ่มดินสอบนแถบโปรแกรม · วางแบบ absolute จึงต้องกำหนดทั้งกว้างและสูง */
+  .main .pj-pen{ width:36px !important; height:36px !important }
+  /* ปฏิทินใน Booking · 7 ช่องกว้าง 600px ในกล่อง 372px ที่ overflow:hidden
+     สามวันขวาสุดถูกตัดหายไปเลย · ให้กล่องเลื่อนได้เหมือนปฏิทินหน้าอื่น */
+  .main .bkv2-cal{ overflow-x:auto !important; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; max-width:100% }
+  .main .bkv2-bodycard{ overflow-x:visible !important }
 
   /* การ์ดที่ถูกวางไว้คอลัมน์ที่ 5 ของกริด · พอกริดเหลือ 1–2 คอลัมน์ มันจะยื่นออกนอกจอ */
   .main [style*="grid-column:"]{grid-column:auto !important}
