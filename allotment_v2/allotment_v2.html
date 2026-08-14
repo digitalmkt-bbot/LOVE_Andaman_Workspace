@@ -76432,15 +76432,15 @@ var PIER_JOB={};    // §pierJob · 'YYYY-MM-DD::boatId' -> {cap, asst, crew:[],
 (function(){ try{
   if(PIER_CODES.length) return;
   PIER_CODES=[
-    {id:'c_pp',  code:'PP',   label:'ทำงาน (ลงเรือ)',      color:'#A82063', bg:'#FCE7F0', kind:'work',  ord:1, active:true},
+    {id:'c_pp',  code:'PP',   label:'ทำงาน (ลงเรือ)',      color:'#20477E', bg:'#E9EFF7', kind:'work',  ord:1, active:true},
     {id:'c_se',  code:'SE',   label:'เข้าเวร',              color:'#20477E', bg:'#E9EFF7', kind:'work',  ord:2, active:true},
-    {id:'c_off', code:'OFF',  label:'หยุดประจำสัปดาห์',     color:'#8B93A1', bg:'#F3F4F6', kind:'off',   ord:3, active:true},
-    {id:'c_ph',  code:'PH',   label:'วันหยุดนักขัตฤกษ์',     color:'#6C3FB0', bg:'#EFE7FB', kind:'off',   ord:4, active:true},
-    {id:'c_lwop',code:'LWOP', label:'ลาไม่รับค่าจ้าง',       color:'#B32B1E', bg:'#FDECEA', kind:'leave', ord:5, active:true},
-    {id:'c_lwp', code:'LWP',  label:'',                     color:'#8A5A00', bg:'#FFF3E0', kind:'leave', ord:6, active:true},
-    {id:'c_sc',  code:'SC',   label:'',                     color:'#1668A8', bg:'#E4F1FB', kind:'work',  ord:7, active:true},
-    {id:'c_sr',  code:'SR',   label:'',                     color:'#0E7D74', bg:'#E2F7F5', kind:'work',  ord:8, active:true},
-    {id:'c_5',   code:'5',    label:'',                     color:'#8A6D1F', bg:'#FFF7CC', kind:'work',  ord:9, active:true},
+    {id:'c_off', code:'OFF',  label:'หยุดประจำสัปดาห์',     color:'#B8BFC9', bg:'#FCFCFD', kind:'off',   ord:3, active:true},
+    {id:'c_ph',  code:'PH',   label:'วันหยุดนักขัตฤกษ์',     color:'#9AA3B0', bg:'#FBFBFD', kind:'off',   ord:4, active:true},
+    {id:'c_lwop',code:'LWOP', label:'ลาไม่รับค่าจ้าง',       color:'#A3251A', bg:'#FDECEA', kind:'leave', ord:5, active:true},
+    {id:'c_lwp', code:'LWP',  label:'',                     color:'#8A5100', bg:'#FDF0DC', kind:'leave', ord:6, active:true},
+    {id:'c_sc',  code:'SC',   label:'',                     color:'#0B6552', bg:'#E2F5EF', kind:'work',  ord:7, active:true},
+    {id:'c_sr',  code:'SR',   label:'',                     color:'#0E6E86', bg:'#E3F2F7', kind:'work',  ord:8, active:true},
+    {id:'c_5',   code:'5',    label:'',                     color:'#6B5B14', bg:'#F7F4DA', kind:'work',  ord:9, active:true},
     {id:'c_abs', code:'ABS',  label:'ขาดงาน',               color:'#A3251A', bg:'#FDECEA', kind:'none',  ord:10, active:true},
     {id:'c_mt',  code:'MT',   label:'งานซ่อม / ขึ้นคาน',      color:'#5B3B96', bg:'#F2EBFA', kind:'work',  ord:11, active:true}
   ];
@@ -77246,13 +77246,15 @@ function paCodeMeta(code){
        + (rs.length>2 ? (' +' + (rs.length-2) + ' โปรแกรม') : ''));
   return {id:'rt_'+rt.id, code:code, label:label, color:col, bg:paTint(col), kind:'work', route:1, nRoutes:rs.length};
 }
-/* สีพื้นอ่อนของสีเข้ม · ผสมกับขาว 88% */
+/* สีพื้นอ่อนของสีเข้ม · ผสมกับขาว
+   §paSkinC · เดิม 88% · ขยับเป็น 90% ให้เส้นทางอยู่ชั้นเดียวกับรหัสอื่นในทะเบียน
+   สีของเส้นทางเลือกมาให้ต่างกันชัดอยู่แล้ว ไม่ต้องพึ่งความเข้มของพื้นอีกชั้น */
 function paTint(hex){
   var h=String(hex||'').replace('#',''); if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
   if(!/^[0-9a-f]{6}$/i.test(h)) return '#EEF2F7';
   var o='#';
   for(var i=0;i<3;i++){ var v=parseInt(h.substr(i*2,2),16);
-    o+=('0'+Math.round(v+(255-v)*0.88).toString(16)).slice(-2); }
+    o+=('0'+Math.round(v+(255-v)*0.90).toString(16)).slice(-2); }
   return o;
 }
 /* §pjWork · รหัสของวันที่ลงงานซ่อม · ตั้งเองได้ในทะเบียนรหัส
@@ -77531,7 +77533,10 @@ function paCSS(){
   +H+' td.pa-c:hover .cd{outline:2px solid #16265C;outline-offset:-2px}'
   /* §paSheet · ระบายเต็มช่องแบบ conditional formatting · ไม่ใช่ป้ายมนลอยกลางช่อง */
   +H+' .pa-cd{display:block;width:100%;border-radius:0;font-size:9px;font-weight:800;line-height:23px;height:23px;letter-spacing:-.01em}'
-  +H+' .pa-dot{position:absolute;top:2px;right:3px;width:5px;height:5px;border-radius:50%;background:#B4560A}'
+  /* §paMarkFold · มุมพับ · รูปเดียวกับที่อยู่ในแถบคำอธิบายท้ายหน้าเป๊ะ ๆ */
+  +H+' .pa-dot{position:absolute;top:0;right:0;width:0;height:0;border-top:8px solid #B4560A;border-left:8px solid transparent}'
+  +H+' .pa-lg .i b.mk{position:relative;overflow:visible;background:#E9EFF7;color:#20477E}'
+  +H+' .pa-lg .i b.mk i{position:absolute;top:0;right:0;width:0;height:0;border-top:8px solid #B4560A;border-left:8px solid transparent}'
   +H+' .pa-away{position:absolute;left:2px;bottom:1px;font-size:7.5px;font-weight:800;letter-spacing:.02em;color:#20477E;background:#E9EFF7;border-radius:3px;padding:0 3px;line-height:11px}'
   +H+' .pa-sum{position:sticky;right:0;background:#FAFBFC;border-left:1px solid #E7EAEF;padding:5px 11px !important;white-space:nowrap;text-align:right;z-index:3}'
   +H+' .pa-sum b{font-size:12.5px;font-weight:800;color:#0F6E56;font-variant-numeric:tabular-nums}'
@@ -77564,6 +77569,43 @@ function paCellHtml(date, pier, st, day, hasJob, today, E){
     +(v.src==='manual'?'<span class="pa-dot"></span>':'')+'</td>';
 }
 
+/* §paSkinC · ชุดสีมาตรฐาน · [สีตัวอักษร, สีพื้น]
+   วันหยุดพื้นเกือบขาว ไม่ใช่ไม่มีพื้น · เก็บเป็นสีจริงไว้ ช่องเลือกสีในทะเบียนรหัสจะได้ไม่เพี้ยน */
+var PA_SKIN_C={
+  PP:  ['#20477E','#E9EFF7'],   SE:  ['#20477E','#E9EFF7'],
+  OFF: ['#B8BFC9','#FCFCFD'],   PH:  ['#9AA3B0','#FBFBFD'],
+  LWOP:['#A3251A','#FDECEA'],   ABS: ['#A3251A','#FDECEA'],
+  LWP: ['#8A5100','#FDF0DC'],
+  SC:  ['#0B6552','#E2F5EF'],   SR:  ['#0E6E86','#E3F2F7'],
+  '5': ['#6B5B14','#F7F4DA'],   MT:  ['#5B3B96','#F2EBFA']
+};
+/* ค่าตั้งต้น "ชุดเดิม" · ใช้ดูว่ารหัสนี้ยังไม่เคยถูกแก้สี ถึงจะเขียนทับได้ */
+var PA_SKIN_OLD={
+  PP:  ['#A82063','#FCE7F0'],   SE:  ['#20477E','#E9EFF7'],
+  OFF: ['#8B93A1','#F3F4F6'],   PH:  ['#6C3FB0','#EFE7FB'],
+  LWOP:['#B32B1E','#FDECEA'],   ABS: ['#A3251A','#FDECEA'],
+  LWP: ['#8A5A00','#FFF3E0'],
+  SC:  ['#1668A8','#E4F1FB'],   SR:  ['#0E7D74','#E2F7F5'],
+  '5': ['#8A6D1F','#FFF7CC'],   MT:  ['#5B3B96','#F2EBFA']
+};
+/* §paSkinC · ทำครั้งเดียวต่อฐานข้อมูล · ไม่แตะสีที่ผู้ใช้เลือกเอง */
+function paSkinApply(){
+  try{
+    if(!Array.isArray(PIER_CODES) || !PIER_CODES.length) return;
+    if(PIER_CFG && PIER_CFG.skin==='c1') return;
+    var hit=0;
+    PIER_CODES.forEach(function(c){
+      var k=String(c.code||'').trim(), want=PA_SKIN_C[k], was=PA_SKIN_OLD[k];
+      if(!want || !was) return;
+      // ตรงกับค่าตั้งต้นเดิมทั้งคู่ = ยังไม่เคยมีใครเลือกสีนี้เอง
+      if(String(c.color||'').toUpperCase()!==was[0] || String(c.bg||'').toUpperCase()!==was[1]) return;
+      c.color=want[0]; c.bg=want[1]; hit++;
+    });
+    if(!PIER_CFG || typeof PIER_CFG!=='object') return;
+    PIER_CFG.skin='c1';
+    if(typeof poCanEdit==='function' && poCanEdit()) poPersist();
+  }catch(_){}
+}
 /* §pjWork · ทะเบียนที่ตั้งไว้ก่อนมีงานซ่อม จะยังไม่มีรหัส MT · เติมให้ครั้งเดียว
    เติมแล้วแก้ชื่อ เปลี่ยนสี หรือลบทิ้งได้เหมือนรหัสอื่นทุกประการ
    ตรวจก่อนเติมทุกครั้ง จึงไม่เขียนซ้ำและไม่ทับของที่ผู้ใช้แก้ไว้ */
@@ -77580,7 +77622,7 @@ function paEnsureMtCode(){
   }catch(_){}
 }
 function renderPierAtt(pier){
-  paEnsureMtCode();
+  paEnsureMtCode(); paSkinApply();
   if(pier) _poPier=pier;
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
   var host=document.getElementById('pa-host-'+P.k); if(!host) return;
@@ -77676,7 +77718,7 @@ function renderPierAtt(pier){
     return '<div class="i off"><b style="background:'+c.bg+';color:'+c.color+'">'+poE(c.code)+'</b>'
       +(c.label?poE(c.label):'<em>ยังไม่ได้ใส่ความหมาย</em>')+'</div>'; }).join('')
     +'<div class="i"><b style="background:#FBFCFD;color:#B8BEC8">·</b>ยังไม่มีใบงานของวันนั้น</div>'
-    +'<div class="i"><b style="background:#fff;color:#B4560A;box-shadow:inset 0 0 0 2px #B4560A">◻</b>แก้ทับด้วยมือ · ระบบไม่เขียนทับ</div>'
+    +'<div class="i"><b class="mk">SE<i></i></b>มุมพับ = ช่องนี้แก้ด้วยมือ · ระบบไม่เขียนทับ</div>'
     +'<div class="i"><b style="background:#E9EFF7;color:#20477E">TL</b>ไปช่วยท่าอื่นวันนั้น · ยังนับวันทำงานที่ท่าประจำ</div>';
 
   host.innerHTML='<style id="pa-style">'+pjCSS()+plCSS()+paCSS()+poCSS()+'</style>'
