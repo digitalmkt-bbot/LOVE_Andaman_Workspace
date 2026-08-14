@@ -47864,8 +47864,14 @@ function pckMoneyCell(b, date){
   //   (Invoice / Pro Forma / Paid / FOC) บอกละเอียดกว่าและตรงกับหน้า By-trip ป้ายเดิมเหมารวมทุกกรณีเป็นก้อนเดียว
   out+=pckFeeLine(b,date);
   if(M.pierPaid>0){
-    var ms=[]; pckPaysFor(b,date).forEach(function(p){ ms.push(pckMLabel(p.method)+' '+pckHHMMloc(p.at)); });
-    out+='<div style="font-size:9px;color:#a5a49d;margin-top:2px;white-space:nowrap">'+e(ms.join(' · '))+'</div>';
+    // §paySplitCell · รวมตามวิธี ไม่ใช่ไล่ทีละรายการ · แบ่งจ่ายทีเดียวเวลาซ้ำกันทุกบรรทัด
+    var _by={}, _ord=[];
+    pckPaysFor(b,date).forEach(function(p){ var k=p.method||'cash';
+      if(_by[k]==null){ _by[k]=0; _ord.push(k); } _by[k]+=(+p.amount||0); });
+    var ms=_ord.map(function(k){ return pckMLabel(k)+' '+m(_by[k]); });
+    out+='<div style="font-size:9px;color:#a5a49d;margin-top:2px;white-space:nowrap">'
+      +(_ord.length>1?'<b style="color:#5B289A">แบ่งจ่าย '+_ord.length+' วิธี</b> &middot; ':'')
+      +e(ms.join(' · '))+'</div>';
   }
   if(M.noSlip>0) out+='<div style="margin-top:4px"><span class="pckp-wait">&#9888; รอสลิป '+M.noSlip+'</span></div>';
   if(M.got>0 && M.pierPaid<M.got) out+='<div style="font-size:9.5px;color:#0F6E56;font-weight:700;margin-top:3px;white-space:nowrap">&#10003; เก็บหน้างาน '+m(M.got-M.pierPaid)+'</div>';
@@ -47977,27 +47983,57 @@ var _pckPay=null;
 // §autoCheckIn (2026-08-02) · เปิดกล่องนี้จากการกดเช็คอิน = ตั้งใจจะขึ้นเรืออยู่แล้ว
 //   เดิมพอเก็บเงินครบ กล่องปิดแล้วต้องกลับไปกดเช็คอินอีกรอบ ทั้งที่ไม่มีทางเลือกอื่นให้กด
 //   thenCk จำไว้ว่ามาจากทางไหน · เก็บครบเมื่อไรก็เช็คอินต่อให้เลย · เปิดจากปุ่ม "เก็บเงิน" ในคอลัมน์เงินไม่เช็คอินให้
+// §paySplit · หนึ่งบรรทัด = หนึ่งวิธีรับเงิน · บันทึกแล้วกลายเป็น pierPayments หนึ่งรายการ
+function pckLineNew(amt){
+  return { k:'l'+Math.random().toString(36).slice(2,8), m:'cash', amt:Math.max(0,Math.round(+amt||0)),
+           feeMode:'pct', feePct:3, fee:0, note:'', slips:[] };
+}
 function pckPayOpen(bkId, thenCk){
   var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
   var M=pckMoney(b,_pckDate);
-  _pckPay={ bkId:bkId, date:_pckDate, m:'cash', amt:Math.round(M.due||0), feeMode:'pct', feePct:3, fee:0, note:'', slips:[], thenCk:!!thenCk };
+  _pckPay={ bkId:bkId, date:_pckDate, lines:[pckLineNew(M.due||0)], thenCk:!!thenCk };
   pckPayRender();
 }
-function pckPaySet(k,v){ if(!_pckPay) return; _pckPay[k]=v; pckPayRender(); }
-function pckPaySetM(m){ if(!_pckPay) return; _pckPay.m=m; if(m!=='card'){ _pckPay.fee=0; } pckPayRender(); }
-// ค่าธรรมเนียมบัตร · กรอกเป็นบาทตรงๆ หรือกรอกเป็น % แล้วให้ระบบคูณให้ (ปัดเป็นบาทเต็ม)
-function pckPayFee(){
-  if(!_pckPay || _pckPay.m!=='card') return 0;
-  return _pckPay.feeMode==='pct'
-    ? Math.round((+_pckPay.amt||0)*(+_pckPay.feePct||0)/100)
-    : Math.round(+_pckPay.fee||0);
+function pckPayDue(){                      // ยอดค้างของใบนี้ (ยังไม่หักบรรทัดที่กำลังกรอก)
+  if(!_pckPay) return 0;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===_pckPay.bkId; }); if(!b) return 0;
+  return Math.round(pckMoney(b,_pckPay.date).due||0);
 }
-function pckPayPickSlip(inp){
+function pckPayTotal(){ return (_pckPay?_pckPay.lines:[]).reduce(function(s,L){ return s+Math.round(+L.amt||0); },0); }
+function pckPayLeft(){ return pckPayDue()-pckPayTotal(); }
+function pckLineAt(i){ return (_pckPay && _pckPay.lines[i])||null; }
+function pckLineAdd(){
+  if(!_pckPay) return;
+  _pckPay.lines.push(pckLineNew(Math.max(0, pckPayLeft())));   // เริ่มที่ยอดที่ยังเหลือ ไม่ต้องคิดเลขเอง
+  pckPayRender();
+}
+function pckLineDel(i){
+  if(!_pckPay || _pckPay.lines.length<=1) return;
+  _pckPay.lines.splice(i,1); pckPayRender();
+}
+function pckLineSet(i,k,v){ var L=pckLineAt(i); if(!L) return; L[k]=v; pckPayRender(); }
+function pckLineSetM(i,m){ var L=pckLineAt(i); if(!L) return; L.m=m; if(m!=='card') L.fee=0; pckPayRender(); }
+// เติมยอดให้บรรทัดนี้ · 'rest' = ที่เหลือทั้งหมด · 'half' = ครึ่งหนึ่งของยอดค้าง (ปัดขึ้นเป็นบาทเต็ม)
+function pckLineFill(i, how){
+  var L=pckLineAt(i); if(!L) return;
+  var other=pckPayTotal()-Math.round(+L.amt||0), due=pckPayDue();
+  L.amt = (how==='half') ? Math.max(0, Math.round(due/2)) : Math.max(0, due-other);
+  pckPayRender();
+}
+// ค่าธรรมเนียมบัตร · คิดต่อบรรทัด · กรอกเป็นบาทตรง ๆ หรือกรอก % แล้วให้ระบบคูณให้ (ปัดเป็นบาทเต็ม)
+function pckLineFee(L){
+  if(!L || L.m!=='card') return 0;
+  return L.feeMode==='pct' ? Math.round((+L.amt||0)*(+L.feePct||0)/100) : Math.round(+L.fee||0);
+}
+function pckPayFeeTotal(){ return (_pckPay?_pckPay.lines:[]).reduce(function(s,L){ return s+pckLineFee(L); },0); }
+function pckPayPickSlip(i, inp){
   var f=(inp&&inp.files&&inp.files[0])||null; if(inp) inp.value='';
   if(!f||!_pckPay) return;
-  pckSlipUpload(f, _pckPay.bkId, function(meta){ if(_pckPay){ _pckPay.slips.push(meta); } try{ acctPersistBookings(); }catch(_){} pckPayRender(); });
+  pckSlipUpload(f, _pckPay.bkId, function(meta){
+    var L=pckLineAt(i); if(L) L.slips.push(meta);
+    try{ acctPersistBookings(); }catch(_){} pckPayRender(); });
 }
-function pckPayRmSlip(i){ if(!_pckPay) return; _pckPay.slips.splice(i,1); pckPayRender(); }
+function pckPayRmSlip(i,j){ var L=pckLineAt(i); if(!L) return; L.slips.splice(j,1); pckPayRender(); }
 // แนบสลิปย้อนหลังให้รายการที่บันทึกไปแล้ว (หน้าท่าเร่ง ถ่ายไม่ทันก็บันทึกก่อนได้)
 function pckPayAddSlip(payId, inp){
   var f=(inp&&inp.files&&inp.files[0])||null; if(inp) inp.value='';
@@ -48013,24 +48049,37 @@ function pckPayAddSlip(payId, inp){
 function pckPaySave(){
   if(!_pckPay) return;
   var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===_pckPay.bkId; }); if(!b) return;
-  var amt=Math.round(+_pckPay.amt||0); if(amt<=0){ alert('ใส่จำนวนเงินก่อน'); return; }
-  var fee=pckPayFee();
+  // §paySplit · บรรทัดยอด 0 ทิ้งไปเงียบ ๆ · กด "เพิ่มวิธีจ่าย" แล้วไม่ได้ใช้ ไม่ควรกลายเป็นรายการ ฿0 ในประวัติ
+  var use=_pckPay.lines.filter(function(L){ return Math.round(+L.amt||0)>0; });
+  if(!use.length){ alert('ใส่จำนวนเงินก่อน'); return; }
+  var total=use.reduce(function(s,L){ return s+Math.round(+L.amt||0); },0);
+  var due=pckPayDue();
+  if(total>due && !confirm('ยอดที่รับ '+ (' ฿'+total.toLocaleString()) +' มากกว่ายอดค้าง'+(' ฿'+due.toLocaleString())
+      +'\n\nบันทึกต่อไหม?')) return;
   b.pierPayments=Array.isArray(b.pierPayments)?b.pierPayments:[];
-  b.pierPayments.push({
-    id:(typeof LA_UID==='function'?LA_UID('pp_'):('pp_'+Date.now()+'_'+Math.random().toString(36).slice(2,6))),
-    date:_pckPay.date, amount:amt, method:_pckPay.m, fee:fee,
-    feePct:(_pckPay.m==='card' && _pckPay.feeMode==='pct') ? (+_pckPay.feePct||0) : null,
-    note:String(_pckPay.note||''), slips:_pckPay.slips.slice(),
-    by:(typeof ckMe==='function'?ckMe():''), at:new Date().toISOString()
+  var stamp=new Date().toISOString(), who=(typeof ckMe==='function'?ckMe():''), parts=[], feeAll=0;
+  use.forEach(function(L){
+    var amt=Math.round(+L.amt||0), fee=pckLineFee(L); feeAll+=fee;
+    b.pierPayments.push({
+      id:(typeof LA_UID==='function'?LA_UID('pp_'):('pp_'+Date.now()+'_'+Math.random().toString(36).slice(2,6))),
+      date:_pckPay.date, amount:amt, method:L.m, fee:fee,
+      feePct:(L.m==='card' && L.feeMode==='pct') ? (+L.feePct||0) : null,
+      note:String(L.note||''), slips:L.slips.slice(),
+      by:who, at:stamp
+    });
+    parts.push(pckMLabel(L.m)+' ฿'+amt.toLocaleString()+(fee>0?(' +ธรรมเนียม ฿'+fee.toLocaleString()):''));
   });
   try{ acctPersistBookings(); }catch(_){}
   if(typeof bkV2AddHistory==='function')
-    bkV2AddHistory(b,'payment','เก็บเงินหน้าท่า '+pckB(amt).replace('&#3647;','฿')+' ('+pckMLabel(_pckPay.m)+')'
-      +(fee>0?(' + ค่าธรรมเนียม ฿'+fee):''),'Pier');
-  _pckPay.m='cash'; _pckPay.amt=0; _pckPay.fee=0; _pckPay.note=''; _pckPay.slips=[];
+    bkV2AddHistory(b,'payment','เก็บเงินหน้าท่า ฿'+total.toLocaleString()
+      +(use.length>1?(' · แบ่งจ่าย '+use.length+' วิธี ('+parts.join(' · ')+')')
+                    :(' ('+pckMLabel(use[0].m)+')'+(feeAll>0?(' + ค่าธรรมเนียม ฿'+feeAll.toLocaleString()):''))),'Pier');
+  _pckPay.lines=[pckLineNew(0)];
   var _thenCk=!!_pckPay.thenCk, _bkId=_pckPay.bkId, _dt=_pckPay.date;
   var M=pckMoney(b,_dt);
-  if(M.due>0){ pckPayRender(); if(typeof renderPierCheckin==='function') renderPierCheckin(); return; }
+  // §paySplit · ยังค้างอยู่ = ตั้งยอดคงเหลือให้เลย · เดิมรีเซ็ตเป็น 0 แล้วต้องพิมพ์เองใหม่ทุกครั้ง
+  if(M.due>0){ _pckPay.lines=[pckLineNew(M.due)]; pckPayRender();
+    if(typeof renderPierCheckin==='function') renderPierCheckin(); return; }
   acctModalClose();
   // §autoCheckIn · เก็บครบแล้วและมาจากปุ่มเช็คอิน → เช็คอินต่อให้เลย ไม่ต้องกลับไปกดซ้ำ
   //   ตั้ง skip ก่อนเรียก เพราะ guard อ่านยอดใหม่อยู่แล้วก็จริง แต่กันไว้ให้แน่ว่าไม่เด้งกล่องซ้ำ
@@ -48054,7 +48103,7 @@ function pckPayRender(){
   if(!_pckPay) return;
   var e=ckEsc, b=(SB_BOOKINGS||[]).find(function(x){ return x.id===_pckPay.bkId; }); if(!b) return;
   var date=_pckPay.date, M=pckMoney(b,date);
-  var due=M.due, fee=pckPayFee(), needSlip=(_pckPay.m!=='cash');
+  var due=M.due;
   var rows=[];
   if(M.cot>0)     rows.push(['Cash on Tour (ระบุตอนจอง)', M.cot]);
   if(M.balance>0) rows.push(['ยอดค้างจาก B2C', M.balance]);
@@ -48070,67 +48119,91 @@ function pckPayRender(){
   if(due<=0){
     form='<div class="pckp-done">&#10003; เก็บเงินครบแล้ว ไม่มียอดค้าง</div>';
   } else {
-    form+='<label class="pckp-lbl">วิธีรับเงิน</label><div class="pckp-seg">';
-    [['cash','เงินสด','ไม่ต้องแนบสลิป'],['transfer','โอนเงิน','ต้องแนบสลิป'],['card','บัตรเครดิต','ต้องแนบสลิป']].forEach(function(x){
-      form+='<button class="'+(_pckPay.m===x[0]?'on':'')+'" onclick="pckPaySetM(\''+x[0]+'\')">'
-        +'<span class="n">'+x[1]+'</span><span class="d">'+x[2]+'</span></button>';
-    });
-    form+='</div>';
+    // §paySplit · หนึ่งบรรทัด = หนึ่งวิธีรับเงิน · ครึ่งเงินสดครึ่งบัตรก็กรอกทีเดียวจบ
+    var many=_pckPay.lines.length>1;
+    _pckPay.lines.forEach(function(L,i){
+      var fee=pckLineFee(L), needSlip=(L.m!=='cash');
+      form+='<div class="pckp-line">';
+      form+='<div class="pckp-lnhd"><span class="no">วิธีที่ '+(i+1)+'</span>'
+        +'<span class="amt">'+pckB(L.amt)+(fee>0?('<i> +ธรรมเนียม '+pckB(fee)+'</i>'):'')+'</span>'
+        +(many?('<button class="rm" onclick="pckLineDel('+i+')" title="เอาวิธีนี้ออก">&#10005;</button>'):'')+'</div>';
 
-    form+='<div class="'+(_pckPay.m==='card'?'pckp-g2':'')+'">';
-    form+='<div class="pckp-fld"><label class="pckp-lbl">จำนวนเงินที่รับ &#3647;</label>'
-      +'<input class="pckp-amt" type="number" min="0" value="'+(_pckPay.amt||0)+'" oninput="_pckPay.amt=this.value;pckPayRender()">'
-      +'<div class="pckp-hint">ใส่น้อยกว่ายอดค้างได้ ส่วนที่เหลือจะคงเป็นยอดค้างต่อ</div></div>';
-    if(_pckPay.m==='card'){
-      form+='<div class="pckp-fld"><label class="pckp-lbl">ค่าธรรมเนียมบัตร'
-        +'<span class="pckp-unit">'
-        +'<button class="'+(_pckPay.feeMode==='pct'?'on':'')+'" onclick="pckPaySet(\'feeMode\',\'pct\')">%</button>'
-        +'<button class="'+(_pckPay.feeMode==='baht'?'on':'')+'" onclick="pckPaySet(\'feeMode\',\'baht\')">&#3647;</button>'
-        +'</span></label>';
-      if(_pckPay.feeMode==='pct'){
-        form+='<input class="pckp-amt" type="number" step="0.1" min="0" value="'+(_pckPay.feePct||0)+'" oninput="_pckPay.feePct=this.value;pckPayRender()">'
-          +'<div class="pckp-pct">'
-          + [1.5,2,2.5,3,3.5,4,4.5,5].map(function(x){ return '<button class="'+((+_pckPay.feePct===x)?'on':'')+'" onclick="pckPaySet(\'feePct\','+x+')">'+x+'%</button>'; }).join('')
-          + '<button class="'+((+_pckPay.feePct===0)?'on':'')+'" onclick="pckPaySet(\'feePct\',0)">ไม่ชาร์จ</button></div>'
-          +'<div class="pckp-hint">คิดจาก '+pckB(_pckPay.amt)+' &times; '+(+_pckPay.feePct||0)+'% = <b style="color:#5B289A;font-family:\'DM Mono\',monospace">'+pckB(fee)+'</b> (ปัดเป็นบาทเต็ม)</div>'
-          +((+_pckPay.feePct||0)>5?'<div class="pckp-hint" style="color:#A32D2D;font-weight:700">&#9888; เกิน 5% แล้ว — เช็คอีกทีว่ากรอกถูกไหม (บันทึกได้ ไม่บล็อก)</div>':'');
-      } else {
-        form+='<input class="pckp-amt" type="number" min="0" value="'+(_pckPay.fee||0)+'" oninput="_pckPay.fee=this.value;pckPayRender()">'
-          +'<div class="pckp-hint">กรอกยอดบาทตามที่เครื่องคิดจริง'
-          +(((+_pckPay.amt>0)&&fee>0)?(' · เท่ากับ <b style="color:#5B289A">'+(Math.round(fee/(+_pckPay.amt)*1000)/10)+'%</b> ของยอดที่รับ'):'')+'</div>'
-          +(((+_pckPay.amt>0)&&(fee/(+_pckPay.amt)*100>5))?'<div class="pckp-hint" style="color:#A32D2D;font-weight:700">&#9888; เกิน 5% แล้ว — เช็คอีกทีว่ากรอกถูกไหม (บันทึกได้ ไม่บล็อก)</div>':'');
+      form+='<div class="pckp-seg">';
+      [['cash','เงินสด','ไม่ต้องแนบสลิป'],['transfer','โอนเงิน','ต้องแนบสลิป'],['card','บัตรเครดิต','ต้องแนบสลิป']].forEach(function(x){
+        form+='<button class="'+(L.m===x[0]?'on':'')+'" onclick="pckLineSetM('+i+',\''+x[0]+'\')">'
+          +'<span class="n">'+x[1]+'</span><span class="d">'+x[2]+'</span></button>';
+      });
+      form+='</div>';
+
+      form+='<div class="'+(L.m==='card'?'pckp-g2':'')+'">';
+      form+='<div class="pckp-fld"><label class="pckp-lbl">จำนวนเงินที่รับ &#3647;</label>'
+        +'<input class="pckp-amt" type="number" min="0" value="'+(L.amt||0)+'" oninput="pckLineAt('+i+').amt=this.value;pckPayRender()">'
+        +'<div class="pckp-quick">'
+          +'<button onclick="pckLineFill('+i+',\'rest\')">ที่เหลือทั้งหมด</button>'
+          +'<button onclick="pckLineFill('+i+',\'half\')">ครึ่งหนึ่ง</button>'
+        +'</div>'
+        +'<div class="pckp-hint">ใส่น้อยกว่ายอดค้างได้ · ส่วนที่เหลือกด <b>เพิ่มวิธีจ่าย</b> ด้านล่างเพื่อรับด้วยวิธีอื่น</div></div>';
+      if(L.m==='card'){
+        form+='<div class="pckp-fld"><label class="pckp-lbl">ค่าธรรมเนียมบัตร'
+          +'<span class="pckp-unit">'
+          +'<button class="'+(L.feeMode==='pct'?'on':'')+'" onclick="pckLineSet('+i+',\'feeMode\',\'pct\')">%</button>'
+          +'<button class="'+(L.feeMode==='baht'?'on':'')+'" onclick="pckLineSet('+i+',\'feeMode\',\'baht\')">&#3647;</button>'
+          +'</span></label>';
+        if(L.feeMode==='pct'){
+          form+='<input class="pckp-amt" type="number" step="0.1" min="0" value="'+(L.feePct||0)+'" oninput="pckLineAt('+i+').feePct=this.value;pckPayRender()">'
+            +'<div class="pckp-pct">'
+            + [1.5,2,2.5,3,3.5,4,4.5,5].map(function(x){ return '<button class="'+((+L.feePct===x)?'on':'')+'" onclick="pckLineSet('+i+',\'feePct\','+x+')">'+x+'%</button>'; }).join('')
+            + '<button class="'+((+L.feePct===0)?'on':'')+'" onclick="pckLineSet('+i+',\'feePct\',0)">ไม่ชาร์จ</button></div>'
+            +'<div class="pckp-hint">คิดจาก '+pckB(L.amt)+' &times; '+(+L.feePct||0)+'% = <b style="color:#5B289A;font-family:\'DM Mono\',monospace">'+pckB(fee)+'</b> (ปัดเป็นบาทเต็ม)</div>'
+            +((+L.feePct||0)>5?'<div class="pckp-hint" style="color:#A32D2D;font-weight:700">&#9888; เกิน 5% แล้ว — เช็คอีกทีว่ากรอกถูกไหม (บันทึกได้ ไม่บล็อก)</div>':'');
+        } else {
+          form+='<input class="pckp-amt" type="number" min="0" value="'+(L.fee||0)+'" oninput="pckLineAt('+i+').fee=this.value;pckPayRender()">'
+            +'<div class="pckp-hint">กรอกยอดบาทตามที่เครื่องคิดจริง'
+            +(((+L.amt>0)&&fee>0)?(' · เท่ากับ <b style="color:#5B289A">'+(Math.round(fee/(+L.amt)*1000)/10)+'%</b> ของยอดที่รับ'):'')+'</div>'
+            +(((+L.amt>0)&&(fee/(+L.amt)*100>5))?'<div class="pckp-hint" style="color:#A32D2D;font-weight:700">&#9888; เกิน 5% แล้ว — เช็คอีกทีว่ากรอกถูกไหม (บันทึกได้ ไม่บล็อก)</div>':'');
+        }
+        form+='</div>';
       }
       form+='</div>';
-    }
-    form+='</div>';
 
-    if(_pckPay.m==='card' && fee>0)
-      form+='<div class="pckp-sum"><span>ลูกค้ารูดจริงทั้งหมด <span style="color:#a5a49d">('+pckB(_pckPay.amt)+' + ค่าธรรมเนียม '+pckB(fee)
-        +(_pckPay.feeMode==='pct'?(' · '+(+_pckPay.feePct||0)+'%'):'')+')</span></span>'
-        +'<b style="color:#5B289A">'+pckB((+_pckPay.amt||0)+fee)+'</b></div>';
+      if(L.m==='card' && fee>0)
+        form+='<div class="pckp-sum"><span>ลูกค้ารูดจริงบรรทัดนี้ <span style="color:#a5a49d">('+pckB(L.amt)+' + ค่าธรรมเนียม '+pckB(fee)
+          +(L.feeMode==='pct'?(' · '+(+L.feePct||0)+'%'):'')+')</span></span>'
+          +'<b style="color:#5B289A">'+pckB((+L.amt||0)+fee)+'</b></div>';
 
-    var nHint=_pckPay.m==='transfer'?' — โอนเข้าบัญชีไหน / เลขอ้างอิง':_pckPay.m==='card'?' — เครื่องไหน / เลข approve':'';
-    var nPh  =_pckPay.m==='transfer'?'เช่น กสิกร xxx-x-x1234 (บ.เลิฟอันดามัน) · ref 2607291042'
-             :_pckPay.m==='card'    ?'เช่น เครื่อง KBank EDC เครื่อง 2 · approve 004512'
-             :                       'เช่น รับเงินที่ท่าเรือ · ทอน 300';
-    form+='<div class="pckp-fld"><label class="pckp-lbl">หมายเหตุ'
-      +(nHint?('<span class="pckp-soft">'+e(nHint)+'</span>'):'')+'</label>'
-      +'<textarea rows="2" class="pckp-ta" oninput="_pckPay.note=this.value" placeholder="'+e(nPh)+'">'+e(_pckPay.note||'')+'</textarea></div>';
+      var nHint=L.m==='transfer'?' — โอนเข้าบัญชีไหน / เลขอ้างอิง':L.m==='card'?' — เครื่องไหน / เลข approve':'';
+      var nPh  =L.m==='transfer'?'เช่น กสิกร xxx-x-x1234 (บ.เลิฟอันดามัน) · ref 2607291042'
+               :L.m==='card'    ?'เช่น เครื่อง KBank EDC เครื่อง 2 · approve 004512'
+               :                 'เช่น รับเงินที่ท่าเรือ · ทอน 300';
+      form+='<div class="pckp-fld"><label class="pckp-lbl">หมายเหตุ'
+        +(nHint?('<span class="pckp-soft">'+e(nHint)+'</span>'):'')+'</label>'
+        +'<textarea rows="2" class="pckp-ta" oninput="pckLineAt('+i+').note=this.value" placeholder="'+e(nPh)+'">'+e(L.note||'')+'</textarea></div>';
 
-    form+='<div class="pckp-fld"><label class="pckp-lbl">สลิป '
-      +(needSlip?'<span style="color:#A32D2D;font-weight:800">*ต้องมี</span><span class="pckp-soft"> — แนบทีหลังได้</span>'
-                :'<span class="pckp-soft">— ไม่ต้องแนบสำหรับเงินสด</span>')+'</label>';
-    form+=_pckPay.slips.map(function(s,i){
-      return '<div class="pckp-slip"><span>&#128206;</span><span class="nm">'+e(s.name||'slip')+'</span>'
-        +'<button class="rm" onclick="pckPayRmSlip('+i+')">&#10005;</button></div>';
-    }).join('');
-    form+='<label class="pckp-drop'+((needSlip&&!_pckPay.slips.length)?' need':'')+'">'
-      +'<input type="file" accept="image/*,application/pdf" style="display:none" onchange="pckPayPickSlip(this)">'
-      +'<div class="t">&#128247; ถ่ายรูป / เลือกไฟล์สลิป</div>'
-      +'<div class="s">'+(_pckPay.m==='transfer'?'สลิปโอนจากแอปธนาคาร':_pckPay.m==='card'?'สลิปจากเครื่องรูดบัตร':'เช่น รูปใบเสร็จที่ออกให้ลูกค้า')+' · jpg / png / pdf</div></label>';
-    if(needSlip && !_pckPay.slips.length)
-      form+='<div class="pckp-hint">หน้าท่าเร่ง ถ่ายไม่ทันก็บันทึกไปก่อนได้ — ระบบจะติดธง <b style="color:#7A4A00">รอสลิป</b> ไว้ให้ตามแนบทีหลัง</div>';
-    form+='</div>';
+      form+='<div class="pckp-fld"><label class="pckp-lbl">สลิป '
+        +(needSlip?'<span style="color:#A32D2D;font-weight:800">*ต้องมี</span><span class="pckp-soft"> — แนบทีหลังได้</span>'
+                  :'<span class="pckp-soft">— ไม่ต้องแนบสำหรับเงินสด</span>')+'</label>';
+      form+=L.slips.map(function(sl,j){
+        return '<div class="pckp-slip"><span>&#128206;</span><span class="nm">'+e(sl.name||'slip')+'</span>'
+          +'<button class="rm" onclick="pckPayRmSlip('+i+','+j+')">&#10005;</button></div>';
+      }).join('');
+      form+='<label class="pckp-drop'+((needSlip&&!L.slips.length)?' need':'')+'">'
+        +'<input type="file" accept="image/*,application/pdf" style="display:none" onchange="pckPayPickSlip('+i+',this)">'
+        +'<div class="t">&#128247; ถ่ายรูป / เลือกไฟล์สลิป</div>'
+        +'<div class="s">'+(L.m==='transfer'?'สลิปโอนจากแอปธนาคาร':L.m==='card'?'สลิปจากเครื่องรูดบัตร':'เช่น รูปใบเสร็จที่ออกให้ลูกค้า')+' · jpg / png / pdf</div></label>';
+      if(needSlip && !L.slips.length)
+        form+='<div class="pckp-hint">หน้าท่าเร่ง ถ่ายไม่ทันก็บันทึกไปก่อนได้ — ระบบจะติดธง <b style="color:#7A4A00">รอสลิป</b> ไว้ให้ตามแนบทีหลัง</div>';
+      form+='</div></div>';
+    });
+
+    form+='<button class="pckp-add" onclick="pckLineAdd()">+ เพิ่มวิธีจ่าย <span>เช่น ครึ่งเงินสด ครึ่งบัตร</span></button>';
+
+    // สรุปเทียบยอด · ตัวเลขที่คนหน้าท่าต้องเห็นก่อนกดบันทึก
+    var tot=pckPayTotal(), left=due-tot, feeAll=pckPayFeeTotal();
+    form+='<div class="pckp-tot'+(left<0?' over':(left>0?' short':' ok'))+'">'
+      +'<div class="r"><span>รวมที่รับครั้งนี้</span><b>'+pckB(tot)+'</b></div>'
+      +(feeAll>0?('<div class="r f"><span>ค่าธรรมเนียมบัตรรวม (ไม่ตัดยอดค้าง)</span><b>'+pckB(feeAll)+'</b></div>'):'')
+      +'<div class="r m"><span>'+(left>0?'จะยังค้างอยู่':(left<0?'เกินยอดค้าง':'ตรงพอดี · ไม่มียอดค้างเหลือ'))+'</span>'
+        +'<b>'+(left===0?'&#10003;':pckB(Math.abs(left)))+'</b></div></div>';
   }
 
   var paid=pckPaysFor(b,date), hist='';
@@ -48158,11 +48231,38 @@ function pckPayRender(){
     +'<button class="pckp-x" onclick="acctModalClose()">&#10005;</button></div>'
     +'<div class="pckp-bd">'+brk+form+hist+'</div>'
     +'<div class="pckp-ft"><button class="pckp-btn" onclick="acctModalClose()">ปิด</button>'
-    +(due>0?'<button class="pckp-btn pri" onclick="pckPaySave()">บันทึกการรับเงิน</button>':'')
+    +(due>0?('<button class="pckp-btn pri" onclick="pckPaySave()">บันทึกการรับเงิน'
+        +(_pckPay.lines.filter(function(L){ return Math.round(+L.amt||0)>0; }).length>1
+          ?(' · '+_pckPay.lines.filter(function(L){ return Math.round(+L.amt||0)>0; }).length+' วิธี'):'')+'</button>'):'')
     +'</div>');
 }
 
 function pckPayCSS(){ return ''
+  /* §paySplit · กล่องต่อวิธีจ่าย · ปุ่มเติมยอด · แถบสรุปเทียบยอดค้าง */
+  +'#acct-modal .pckp-line{border:1px solid #E7E4DC;border-radius:12px;padding:12px 13px;margin-bottom:10px;background:#fff}'
+  +'#acct-modal .pckp-lnhd{display:flex;align-items:center;gap:9px;margin-bottom:9px}'
+  +'#acct-modal .pckp-lnhd .no{font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8a8a82}'
+  +"#acct-modal .pckp-lnhd .amt{flex:1;text-align:right;font-family:'DM Mono',monospace;font-weight:800;font-size:12.5px;color:#2f2f2b}"
+  +'#acct-modal .pckp-lnhd .amt i{font-style:normal;font-weight:500;font-size:10px;color:#5B289A;margin-left:5px}'
+  +'#acct-modal .pckp-lnhd .rm{border:1px solid #E7E4DC;background:#fff;color:#a5a49d;border-radius:7px;width:24px;height:24px;'
+    +'font-size:11px;cursor:pointer;font-family:inherit;line-height:1;padding:0}'
+  +'#acct-modal .pckp-lnhd .rm:hover{border-color:#A32D2D;color:#A32D2D}'
+  +'#acct-modal .pckp-quick{display:flex;gap:6px;margin-top:6px}'
+  +'#acct-modal .pckp-quick button{border:1px solid #D8D4CA;background:#fff;color:#4a4a45;border-radius:999px;'
+    +'padding:4px 11px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit}'
+  +'#acct-modal .pckp-quick button:hover{border-color:#0F6E56;color:#0F6E56;background:#F3FAF7}'
+  +'#acct-modal .pckp-add{width:100%;border:1.5px dashed #D8D4CA;background:#FAF9F6;color:#4a4a45;border-radius:11px;'
+    +'padding:10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:12px}'
+  +'#acct-modal .pckp-add:hover{border-color:#0F6E56;color:#0F6E56;background:#F3FAF7}'
+  +'#acct-modal .pckp-add span{font-weight:500;color:#a5a49d;font-size:10.5px;margin-left:5px}'
+  +'#acct-modal .pckp-tot{border:1px solid #E7E4DC;border-radius:11px;padding:10px 13px;background:#FAF9F6;margin-bottom:4px}'
+  +'#acct-modal .pckp-tot .r{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:11.5px;color:#6b6b64;padding:2px 0}'
+  +"#acct-modal .pckp-tot .r b{font-family:'DM Mono',monospace;font-weight:800;font-size:13px;color:#2f2f2b}"
+  +'#acct-modal .pckp-tot .r.f b{font-size:11.5px;color:#5B289A}'
+  +'#acct-modal .pckp-tot .r.m{border-top:1px solid #E7E4DC;margin-top:6px;padding-top:7px;font-weight:700}'
+  +'#acct-modal .pckp-tot.ok .r.m,#acct-modal .pckp-tot.ok .r.m b{color:#0F6E56}'
+  +'#acct-modal .pckp-tot.short .r.m,#acct-modal .pckp-tot.short .r.m b{color:#7A4A00}'
+  +'#acct-modal .pckp-tot.over .r.m,#acct-modal .pckp-tot.over .r.m b{color:#A32D2D}'
   +'.pckp-feeline{font-size:10px;color:#5B289A;background:#F6F2FD;border:1px solid #E2D8F5;border-radius:7px;padding:3px 8px;margin-top:4px;display:inline-block;line-height:1.5}'
   +'.pckp-feeline b{font-family:\'DM Mono\',monospace;font-weight:800}'
   +'.pckp-feeswipe{font-size:9.5px;color:#7d6aa8;font-family:\'DM Mono\',monospace}'
