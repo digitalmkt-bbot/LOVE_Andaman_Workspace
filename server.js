@@ -1948,7 +1948,11 @@ const server = http.createServer((req, res) => {
   // §logout · attributes MUST match the login cookie above (SameSite=Lax; Secure). Safari is strict about
   // this: a clearing cookie whose attributes differ can fail to overwrite the original, so the session
   // survived "sign out" on iPhone. Path/name alone is not enough.
-  if(u === '/api/logout'){ J(res,200,{ok:true},{'Set-Cookie':'sess=; HttpOnly; Path=/; SameSite=Lax; Secure; Max-Age=0'}); return; }
+  // Expires is NOT redundant with Max-Age. iOS Safari has long-standing trouble honouring Max-Age on
+  // its own; Expires in the past is the form it reliably acts on. Sending both is the only deletion
+  // that works everywhere, and deletion is the ONLY way a session ends here — verify() is stateless
+  // (HMAC + exp, see ~1703), so a cookie Safari refuses to drop stays valid for the full SESS_DAYS.
+  if(u === '/api/logout'){ J(res,200,{ok:true},{'Set-Cookie':'sess=; HttpOnly; Path=/; SameSite=Lax; Secure; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0'}); return; }
   if(u === '/api/me'){ const s=session(req); return s ? J(res,200,{username:s.username,name:s.name,role:s.role,perms:(s.perms!==undefined?s.perms:null),canEdit:(s.edit!==false),editAreas:(s.editAreas!==undefined?s.editAreas:null),salesId:(s.salesId!==undefined?s.salesId:null)}) : J(res,401,{error:'not logged in'}); }
 
   // ───── DATA (require login) ─────

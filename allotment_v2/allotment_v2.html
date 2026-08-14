@@ -478,13 +478,19 @@
      fetch() เชื่อถือได้บน WebKit · เก็บ sxr() (retry + cache-buster + เช็ค status) ไว้เป็นทางสำรอง
      ล้มเหลวจริงต้องบอกผู้ใช้ ไม่ reload หลอกให้เข้าใจผิดว่าออกสำเร็จ */
   window.__laLogout=function(){ if(!confirm('ออกจากระบบ?')) return;
-    var done=function(){ location.reload(); };
-    var fail=function(){ alert('Sign out failed. Please check your connection and try again.'); };
-    var viaSync=function(){ var r=sxr('/api/logout'); if(r.status===200) done(); else fail(); };
+    var fail=function(why){ alert('Sign out failed ('+why+').\nPlease close all Safari tabs for this site, or clear website data, then try again.'); };
+    /* Never reload until the server agrees we are out. The old code reloaded whenever the REQUEST
+       succeeded, which is not the same thing: on iPhone Safari the 200 came back, the cookie stayed,
+       the page reloaded still logged in — a button that looks alive and does nothing.
+       /api/me through sxr() is cache-busted, so a 401 here means the session is genuinely gone. */
+    var confirmOut=function(){ var r=sxr('/api/me');
+      if(r.status===401){ location.reload(); return; }
+      fail(r.status===200 ? 'browser kept the session cookie' : 'status '+r.status); };
+    var viaSync=function(){ var r=sxr('/api/logout'); if(r.status===200) confirmOut(); else fail('status '+r.status); };
     if(window.fetch){ fetch('/api/logout',{credentials:'same-origin',cache:'no-store'})
-        .then(function(r){ if(r.ok) done(); else fail(); })
-        .catch(function(){ try{ viaSync(); }catch(e){ fail(); } }); }
-    else { try{ viaSync(); }catch(e){ fail(); } } };
+        .then(function(r){ if(r.ok) confirmOut(); else fail('HTTP '+r.status); })
+        .catch(function(){ try{ viaSync(); }catch(e){ fail('network'); } }); }
+    else { try{ viaSync(); }catch(e){ fail('network'); } } };
 
   // ── Login screen ──
   function showLogin(){
