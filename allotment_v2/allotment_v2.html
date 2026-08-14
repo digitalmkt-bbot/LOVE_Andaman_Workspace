@@ -77625,6 +77625,23 @@ var PA_SKIN_OLD={
   SC:  ['#1668A8','#E4F1FB'],   SR:  ['#0E7D74','#E2F7F5'],
   '5': ['#8A6D1F','#FFF7CC'],   MT:  ['#5B3B96','#F2EBFA']
 };
+/* §paSkinReset · กดเอง · คืนทั้งชุดรวมถึงรหัสที่เคยเลือกสีไว้เอง
+   ต่างจาก paSkinApply ตรงที่อันนั้นทำเงียบ ๆ ตอนบูตและเลี่ยงของที่ผู้ใช้เลือก */
+function paSkinReset(){
+  if(!poGuard()) return;
+  var n=0; (PIER_CODES||[]).forEach(function(c){ if(PA_SKIN_C[String(c.code||'').trim()]) n++; });
+  if(!confirm('คืนสีของรหัสมาตรฐาน '+n+' ตัวให้เป็นชุดที่ออกแบบไว้\n\n'
+    +'สีที่เคยเลือกเองของรหัสเหล่านี้จะถูกทับ · รหัสที่ตั้งเองใหม่ไม่ถูกแตะ\n'
+    +'รหัสของเส้นทาง (PP · SL · WS …) ใช้ชุดสีของตารางอยู่แล้ว')) return;
+  (PIER_CODES||[]).forEach(function(c){
+    var w=PA_SKIN_C[String(c.code||'').trim()]; if(!w) return;
+    c.color=w[0]; c.bg=w[1]; delete c.userColor;
+  });
+  if(PIER_CFG && typeof PIER_CFG==='object') PIER_CFG.skin='c1';
+  poPersist(); paCodesOpen();
+  try{ renderPierAtt(); }catch(_){}
+  try{ if(typeof renderPierJob==='function') renderPierJob(); }catch(_){}
+}
 /* §paSkinC · ทำครั้งเดียวต่อฐานข้อมูล · ไม่แตะสีที่ผู้ใช้เลือกเอง */
 function paSkinApply(){
   try{
@@ -78136,7 +78153,11 @@ function paCodesOpen(){
       +'<td style="text-align:right">'+(ro?'':'<button class="po-btn" onclick="paCodeDel(\''+c.id+'\')">ลบ</button>')+'</td></tr>';
   });
   body+='</tbody></table>'
-    +(ro?'':'<button class="po-btn" style="margin-top:10px" onclick="paCodeAdd()">+ เพิ่มรหัส</button>')
+    +(ro?'':'<div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">'
+        +'<button class="po-btn" onclick="paCodeAdd()">+ เพิ่มรหัส</button>'
+        +'<button class="po-btn" onclick="paSkinReset()">ใช้ชุดสีมาตรฐาน</button>'
+        +'<span style="font-size:11px;color:#8B93A1">คืนสีของรหัสมาตรฐานให้เป็นชุดที่ออกแบบไว้ · '
+          +'เลือกมาให้กลุ่มลา กลุ่มหยุด และเส้นทาง ไม่ชนกัน</span></div>')
     +'<div style="margin-top:14px;border-top:1px dashed #D9DDE4;padding-top:12px">'
     +'<div style="font-size:11.5px;color:#6E7684;line-height:1.7;margin-bottom:9px">'
       +'รหัสข้างล่างคือตัวที่ระบบเติมให้เองในตารางการทำงาน ตามว่าคนนั้นวันนั้นไปทำอะไร<br>'
@@ -78165,8 +78186,9 @@ function paCodeSet(i,f,v){ if(!poCanEdit()) return; var c=PIER_CODES[i]; if(c) c
 function paCodeColor(i,hex){
   if(!poCanEdit()) return; var c=PIER_CODES[i]; if(!c) return;
   c.color=hex; c.userColor=1;   // §paRtSkin · เลือกเองแล้ว · ชุดสีมาตรฐานและชุดเส้นทางจะไม่ทับอีก
-  try{ var r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
-       c.bg='rgba('+r+','+g+','+b+',.13)'; }catch(_){}
+  // §paSkinReset · พื้นเป็นสีทึบผสมขาว ไม่ใช่ rgba โปร่ง · โปร่งจะทับกับสีพื้นของแถวเสาร์อาทิตย์
+  //   และของช่องที่ยังไม่ได้วาง ทำให้รหัสเดียวกันดูคนละสีในคนละคอลัมน์
+  try{ c.bg=paTint(hex); }catch(_){ c.bg='#F1F2F5'; }
   poPersist(); paCodesOpen();
 }
 function paCodeAdd(){
