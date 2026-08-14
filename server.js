@@ -1620,6 +1620,11 @@ async function initDb(){
     _step = 'migrations';
     try { await runMigrations(); }
     catch(e){ console.error('[mig] runner error (boot continues):', e.message); }
+    // After migrations: 009 adds the column this reads. Re-read on a timer so a second replica picks up
+    // a sign-out that happened on the other one within a minute.
+    _step = 'logout epochs';
+    await loadLogoutEpochs();
+    setInterval(loadLogoutEpochs, 60000).unref();
     dbReady = true; console.log('[db] ready');
     startB2CListener();
   }catch(e){ console.error(`[db] init failed at step "${_step}": ${e.message}`); }
@@ -1700,7 +1705,36 @@ function verifyPw(pw, stored){ try{ const [salt,h] = String(stored).split(':'); 
 
 // ── signed session cookie ──
 function sign(payloadObj){ const p = Buffer.from(JSON.stringify(payloadObj)).toString('base64url'); const sig = crypto.createHmac('sha256', SECRET).update(p).digest('base64url'); return p+'.'+sig; }
-function verify(token){ try{ const [p,sig] = String(token).split('.'); const exp = crypto.createHmac('sha256', SECRET).update(p).digest('base64url'); if(!crypto.timingSafeEqual(Buffer.from(sig),Buffer.from(exp))) return null; const o = JSON.parse(Buffer.from(p,'base64url').toString()); if(o.exp && Date.now() > o.exp) return null; return o; }catch(e){ return null; } }
+function verify(token){ try{ const [p,sig] = String(token).split('.'); const exp = crypto.createHmac('sha256', SECRET).update(p).digest('base64url'); if(!crypto.timingSafeEqual(Buffer.from(sig),Buffer.from(exp))) return null; const o = JSON.parse(Buffer.from(p,'base64url').toString()); if(o.exp && Date.now() > o.exp) return null; if(revoked(o)) return null; return o; }catch(e){ return null; } }
+// ── session revocation (2026-08-14 · migration 009) ──
+// Until now a session ended only when the browser dropped the cookie. iPhone Safari does not reliably
+// drop it, so staff on iPhones could not sign out: 200 back from /api/logout, cookie still there, reload
+// straight back into the app. Set-Cookie tuning cannot fix a browser that ignores Set-Cookie, so the
+// server now keeps its own cutoff and rejects tokens issued before the user's last sign-out.
+// In memory because verify() must stay synchronous (18 call sites); persisted so a restart cannot
+// resurrect a signed-out session; re-read periodically so a second Railway replica converges.
+const LOGOUT_AFTER = new Map();   // lowercased username → ms timestamp of that user's last sign-out
+function revoked(o){
+  if(!o || !o.username) return false;
+  const cut = LOGOUT_AFTER.get(String(o.username).toLowerCase());
+  if(!cut) return false;
+  return !(o.iat && o.iat > cut);   // pre-009 tokens have no iat → treated as older → dead on first logout
+}
+function revokeSessions(username){
+  if(!username) return;
+  const ts = Date.now();
+  LOGOUT_AFTER.set(String(username).toLowerCase(), ts);
+  if(pool) pool.query(`UPDATE ${USERS_T} SET logout_after=$2 WHERE lower(username)=lower($1)`, [username, ts])
+    .catch(e => console.error('[auth] logout_after persist failed:', e.message));
+}
+async function loadLogoutEpochs(){
+  if(!pool) return;
+  try{
+    const r = await pool.query(`SELECT username, logout_after FROM ${USERS_T} WHERE logout_after IS NOT NULL`);
+    LOGOUT_AFTER.clear();
+    for(const row of r.rows) LOGOUT_AFTER.set(String(row.username).toLowerCase(), Number(row.logout_after)||0);
+  }catch(e){ console.error('[auth] logout_after load failed:', e.message); }   // column missing = migration not applied yet; fall back to old behaviour rather than locking everyone out
+}
 function cookies(req){ const h = req.headers.cookie||''; const o={}; h.split(';').forEach(s=>{ const i=s.indexOf('='); if(i>0) o[s.slice(0,i).trim()] = decodeURIComponent(s.slice(i+1).trim()); }); return o; }
 function session(req){ return verify(cookies(req).sess||''); }
 // Daily session reset (2026-07-08): sessions expire at the next 03:00 ICT so every user re-logs in each morning → fresh data on login.
@@ -1940,7 +1974,8 @@ const server = http.createServer((req, res) => {
           if(!usr || !verifyPw(b.password||'', usr.pass_hash)) return J(res,401,{error:'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'});
           const perms = parsePerms(usr.perms); const ei = editInfo(usr);
           const EXP = Date.now() + SESS_DAYS*864e5;   // §102 REVERTED 2026-07-10: back to 30-day session. The daily 03:00 re-login forced every client to reload each morning, which is what fired the latent loadData version-mismatch reseed. nextDailyExpiry() kept for reference (unused).
-          const tok = sign({uid:usr.id, username:usr.username, name:usr.name, role:usr.role, perms:perms, edit:ei.canEditAny, editAreas:ei.editAreas, salesId:usr.sales_id||null, exp:EXP});
+          // iat lets revoked() tell a token minted after the last sign-out from one minted before it.
+          const tok = sign({uid:usr.id, username:usr.username, name:usr.name, role:usr.role, perms:perms, edit:ei.canEditAny, editAreas:ei.editAreas, salesId:usr.sales_id||null, iat:Date.now(), exp:EXP});
           J(res,200,{username:usr.username,name:usr.name,role:usr.role,perms:perms,canEdit:ei.canEditAny,editAreas:ei.editAreas,salesId:usr.sales_id||null}, {'Set-Cookie':`sess=${tok}; HttpOnly; Path=/; SameSite=Lax; Secure; Max-Age=${Math.max(60,Math.floor((EXP-Date.now())/1000))}`});
         }).catch(e=>J(res,500,{error:e.message}));
     }); return;
@@ -1952,7 +1987,12 @@ const server = http.createServer((req, res) => {
   // its own; Expires in the past is the form it reliably acts on. Sending both is the only deletion
   // that works everywhere, and deletion is the ONLY way a session ends here — verify() is stateless
   // (HMAC + exp, see ~1703), so a cookie Safari refuses to drop stays valid for the full SESS_DAYS.
-  if(u === '/api/logout'){ J(res,200,{ok:true},{'Set-Cookie':'sess=; HttpOnly; Path=/; SameSite=Lax; Secure; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0'}); return; }
+  if(u === '/api/logout'){
+    // Revoke server-side FIRST. The cookie clear below is best-effort — it is exactly the part iPhone
+    // Safari was ignoring — so the session must already be dead by the time we answer, not conditional
+    // on the browser cooperating.
+    const s = session(req); if(s && s.username) revokeSessions(s.username);
+    J(res,200,{ok:true},{'Set-Cookie':'sess=; HttpOnly; Path=/; SameSite=Lax; Secure; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0'}); return; }
   if(u === '/api/me'){ const s=session(req); return s ? J(res,200,{username:s.username,name:s.name,role:s.role,perms:(s.perms!==undefined?s.perms:null),canEdit:(s.edit!==false),editAreas:(s.editAreas!==undefined?s.editAreas:null),salesId:(s.salesId!==undefined?s.salesId:null)}) : J(res,401,{error:'not logged in'}); }
 
   // ───── DATA (require login) ─────
