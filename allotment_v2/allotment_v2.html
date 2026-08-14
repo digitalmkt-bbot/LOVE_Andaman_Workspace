@@ -77561,6 +77561,70 @@ function paSet(date,sid,code){
 /* ── ทะเบียนรหัส ── */
 /* §paSect · หน้าจัดกลุ่ม · สร้าง เปลี่ยนชื่อ เรียง ลบ ย้ายคน */
 function paSectId(){ return 'sc_'+Math.random().toString(36).slice(2,8); }
+function paSectStaff(){ return (PIER_STAFF||[]).filter(function(s){ return s.pier===_poPier && s.active!==false; }); }
+// §paTickLive · ตัวสร้างตารางติ๊ก · ใช้ทั้งตอนเปิดกล่องและตอนอัปเดตสดหลังติ๊ก
+function paTickTable(S, staff, ro){
+  var known={}; S.forEach(function(x){ known[x.id]=1; });
+  var nUn=staff.filter(function(s){ return !known[s.sect]; }).length;
+  var row=function(s){
+    var cur=known[s.sect]?s.sect:'';
+    return '<tr data-sid="'+poE(s.id)+'"'+(cur?'':' class="nos"')+'><td class="who"><b>'+poE(s.name||s.nick||s.id)+'</b>'
+      +(s.nick?('<em>'+poE(s.nick)+'</em>'):'')+'<i>'+poE(s.role||'')+'</i></td>'
+      + S.map(function(x){
+          return '<td class="tk'+(cur===x.id?' on':'')+'"'+(ro?'':' onclick="paStaffSect(\''+poE(s.id)+'\',\''+poE(x.id)+'\')"')+'>'
+            +'<span>'+(cur===x.id?'&#10003;':'')+'</span></td>'; }).join('')
+      + '<td class="tk un'+(cur?'':' on')+'"'+(ro?'':' onclick="paStaffSect(\''+poE(s.id)+'\',\'\')"')+'>'
+        +'<span>'+(cur?'':'&#10003;')+'</span></td></tr>';
+  };
+  var band=function(t,n,cls){
+    return '<tr class="bnd'+(cls?(' '+cls):'')+'"><td colspan="'+(S.length+2)+'">'+poE(t)
+      +(n==null?'':'<span>'+n+' คน</span>')+'</td></tr>';
+  };
+  // §paSectFlow · ยังไม่จัดอยู่บนสุดเสมอ · ติ๊กแล้วแถวลงไปอยู่กลุ่มของตัวเอง
+  var un=staff.filter(function(s){ return !known[s.sect]; });
+  var out='';
+  if(un.length) out+=band('ยังไม่จัด · ติ๊กเลือกกลุ่มให้คนเหล่านี้',un.length,'todo')+un.map(row).join('');
+  else out+=band('จัดครบทุกคนแล้ว',null,'done');
+  S.forEach(function(x){
+    var rows=staff.filter(function(s){ return s.sect===x.id; });
+    if(!rows.length) return;
+    out+=band(x.name||'(ไม่มีชื่อ)',rows.length)+rows.map(row).join('');
+  });
+  return '<table><thead><tr>'
+    +'<th class="who">ใคร<span>'+staff.length+' คน</span></th>'
+    + S.map(function(x){ var c=staff.filter(function(s){ return s.sect===x.id; }).length;
+        return '<th title="'+poE(x.name||'')+'">'+poE(x.name||'(ไม่มีชื่อ)')+'<span>'+c+'</span></th>'; }).join('')
+    +'<th class="un">ยังไม่จัด<span>'+nUn+'</span></th></tr></thead><tbody>'+out+'</tbody></table>';
+}
+function _paRowBy(w, sid){
+  var rs=w.getElementsByTagName('tr');
+  for(var i=0;i<rs.length;i++) if(rs[i].getAttribute('data-sid')===sid) return rs[i];
+  return null;
+}
+// §paTickLive · วาดเฉพาะตารางติ๊กใหม่ ไม่สร้างกล่องใหม่ · คืนตำแหน่งที่สายตาจับอยู่
+//   หมุดต้องเป็น "แถว" ไม่ใช่ค่า scrollTop ดิบ · แถวที่ย้ายออกจากบล็อกบนทำให้ของข้างล่างเลื่อนขึ้นมาหนึ่งแถว
+//   คืนแค่ตัวเลขเดิมจะเหลื่อมไปหนึ่งแถวทุกครั้งที่ติ๊ก
+function paTickRefresh(movedSid){
+  var w=document.getElementById('pa-tick'); if(!w) return false;
+  var ro=!poCanEdit(), S=paSects(_poPier), staff=paSectStaff();
+  if(!S.length || !staff.length) return false;
+  var top=w.scrollTop, anchor=null, rs=w.getElementsByTagName('tr');
+  for(var i=0;i<rs.length;i++){
+    var sid=rs[i].getAttribute('data-sid');
+    if(!sid || sid===movedSid) continue;              // แถวที่เพิ่งย้ายใช้เป็นหมุดไม่ได้ · มันไปอยู่ที่ใหม่แล้ว
+    if(rs[i].offsetTop+rs[i].offsetHeight > top+1){ anchor={sid:sid, off:rs[i].offsetTop-top}; break; }
+  }
+  w.innerHTML=paTickTable(S, staff, ro);
+  var a=anchor?_paRowBy(w, anchor.sid):null;
+  w.scrollTop = a ? Math.max(0, a.offsetTop-anchor.off) : top;
+  // ป้ายจำนวนคนบนหัวกล่องแต่ละกลุ่มอยู่นอกตาราง · อัปเดตแยก ไม่งั้นเลขค้างจนกว่าจะปิดเปิดใหม่
+  try{ var hd=document.querySelectorAll('#po-modal .pa-sec .hd .n');
+    S.forEach(function(sec,i){ if(hd[i]) hd[i].textContent=staff.filter(function(s){ return s.sect===sec.id; }).length+' คน'; });
+  }catch(_){}
+  var m=movedSid?_paRowBy(w, movedSid):null;          // กะพริบสั้น ๆ ตรงที่มันไปโผล่ · ไม่ต้องเลื่อนจอตาม
+  if(m){ m.className=(m.className+' mv').trim(); setTimeout(function(){ try{ m.className=m.className.replace(/\s*\bmv\b/,''); }catch(_){} }, 1000); }
+  return true;
+}
 function paSectAdd(){
   if(!poGuard()) return;
   var S=paSects(_poPier);
@@ -77595,7 +77659,11 @@ function paSectDel(id){
 function paStaffSect(sid, secId){
   if(!poGuard()) return;
   var s=(PIER_STAFF||[]).filter(function(x){ return x.id===sid; })[0]; if(!s) return;
-  s.sect=secId||''; poPersist(); paSectOpen(); try{ renderPierAtt(); }catch(_){}
+  if(String(s.sect||'')===String(secId||'')) return;   // ติ๊กซ้ำที่เดิม · ไม่มีอะไรเปลี่ยน ไม่ต้องขยับจอ
+  s.sect=secId||''; poPersist();
+  // §paTickLive · เดิมเรียก paSectOpen() ซึ่งสร้างกล่องใหม่ทั้งใบทุกครั้ง · จอกระพริบ scroll กลับไปบนสุด
+  if(!paTickRefresh(sid)) paSectOpen();
+  try{ renderPierAtt(); }catch(_){}
 }
 function paSectOpen(){
   var ro=!poCanEdit(), S=paSects(_poPier), G=paGroups(_poPier);
@@ -77618,44 +77686,8 @@ function paSectOpen(){
       +'</div>';
   });
   // §paSectTick · ตารางติ๊ก · แถวละคน คอลัมน์ละกลุ่ม · เห็นทั้งกระดานในหน้าจอเดียว
-  var staff=(PIER_STAFF||[]).filter(function(s){ return s.pier===_poPier && s.active!==false; });
-  if(S.length && staff.length){
-    var known={}; S.forEach(function(x){ known[x.id]=1; });
-    var nUn=staff.filter(function(s){ return !known[s.sect]; }).length;
-    body+='<div class="pa-tick"><table><thead><tr>'
-      +'<th class="who">ใคร<span>'+staff.length+' คน</span></th>'
-      + S.map(function(x){ var c=staff.filter(function(s){ return s.sect===x.id; }).length;
-          return '<th title="'+poE(x.name||'')+'">'+poE(x.name||'(ไม่มีชื่อ)')+'<span>'+c+'</span></th>'; }).join('')
-      +'<th class="un">ยังไม่จัด<span>'+nUn+'</span></th></tr></thead><tbody>'
-      + (function(){
-          // §paSectFlow · ยังไม่จัดอยู่บนสุดเสมอ · ติ๊กแล้วแถวเด้งลงไปอยู่กลุ่มของตัวเอง
-          var row=function(s){
-            var cur=known[s.sect]?s.sect:'';
-            return '<tr'+(cur?'':' class="nos"')+'><td class="who"><b>'+poE(s.name||s.nick||s.id)+'</b>'
-              +(s.nick?('<em>'+poE(s.nick)+'</em>'):'')+'<i>'+poE(s.role||'')+'</i></td>'
-              + S.map(function(x){
-                  return '<td class="tk'+(cur===x.id?' on':'')+'"'+(ro?'':' onclick="paStaffSect(\''+poE(s.id)+'\',\''+poE(x.id)+'\')"')+'>'
-                    +'<span>'+(cur===x.id?'&#10003;':'')+'</span></td>'; }).join('')
-              + '<td class="tk un'+(cur?'':' on')+'"'+(ro?'':' onclick="paStaffSect(\''+poE(s.id)+'\',\'\')"')+'>'
-                +'<span>'+(cur?'':'&#10003;')+'</span></td></tr>';
-          };
-          var band=function(t,n,cls){
-            return '<tr class="bnd'+(cls?(' '+cls):'')+'"><td colspan="'+(S.length+2)+'">'+poE(t)
-              +'<span>'+n+' คน</span></td></tr>';
-          };
-          var un=staff.filter(function(s){ return !known[s.sect]; });
-          var out='';
-          if(un.length) out+=band('ยังไม่จัด · ติ๊กเลือกกลุ่มให้คนเหล่านี้',un.length,'todo')+un.map(row).join('');
-          else out+='<tr class="bnd done"><td colspan="'+(S.length+2)+'">จัดครบทุกคนแล้ว</td></tr>';
-          S.forEach(function(x){
-            var rows=staff.filter(function(s){ return s.sect===x.id; });
-            if(!rows.length) return;
-            out+=band(x.name||'(ไม่มีชื่อ)',rows.length)+rows.map(row).join('');
-          });
-          return out;
-        })()
-      +'</tbody></table></div>';
-  }
+  var staff=paSectStaff();
+  if(S.length && staff.length) body+='<div class="pa-tick" id="pa-tick">'+paTickTable(S, staff, ro)+'</div>';
   poModal('กลุ่มในตารางการทำงาน · '+poE(poPierName()),
     '<style>'+poCSS().replace(/\.po-host/g,'#po-modal')+paSectCSS()+'</style>'+body,
     (ro?'':poBtn('+ เพิ่มกลุ่ม','paSectAdd()','pri'))+poBtn('ปิด','poModalClose()'), 760);
@@ -77703,7 +77735,9 @@ function paSectCSS(){
    +'#po-modal .pa-tick tr.bnd.todo td{background:#FDF3E3;color:#8A5A00;border-bottom-color:#EFDCB4}'
    +'#po-modal .pa-tick tr.bnd.done td{background:#E9F4EE;color:#0F6E56;text-align:center;letter-spacing:.05em}'
    +'#po-modal .pa-tick tr.bnd:hover td{background:#EEF2F7}'
-   +'#po-modal .pa-tick tr.bnd.todo:hover td{background:#FDF3E3}';
+   +'#po-modal .pa-tick tr.bnd.todo:hover td{background:#FDF3E3}'
+   +'@keyframes paMv{0%{background:#FFEFC2}55%{background:#FFF8E4}100%{background:transparent}}'
+   +'#po-modal .pa-tick tr.mv td,#po-modal .pa-tick tr.mv td.who{animation:paMv 1s ease-out}';
 }
 function paCodesOpen(){
   paEnsureMtCode();
