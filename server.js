@@ -1945,7 +1945,10 @@ const server = http.createServer((req, res) => {
         }).catch(e=>J(res,500,{error:e.message}));
     }); return;
   }
-  if(u === '/api/logout'){ J(res,200,{ok:true},{'Set-Cookie':'sess=; HttpOnly; Path=/; Max-Age=0'}); return; }
+  // §logout · attributes MUST match the login cookie above (SameSite=Lax; Secure). Safari is strict about
+  // this: a clearing cookie whose attributes differ can fail to overwrite the original, so the session
+  // survived "sign out" on iPhone. Path/name alone is not enough.
+  if(u === '/api/logout'){ J(res,200,{ok:true},{'Set-Cookie':'sess=; HttpOnly; Path=/; SameSite=Lax; Secure; Max-Age=0'}); return; }
   if(u === '/api/me'){ const s=session(req); return s ? J(res,200,{username:s.username,name:s.name,role:s.role,perms:(s.perms!==undefined?s.perms:null),canEdit:(s.edit!==false),editAreas:(s.editAreas!==undefined?s.editAreas:null),salesId:(s.salesId!==undefined?s.salesId:null)}) : J(res,401,{error:'not logged in'}); }
 
   // ───── DATA (require login) ─────
