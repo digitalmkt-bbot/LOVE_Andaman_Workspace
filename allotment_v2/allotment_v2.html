@@ -77176,7 +77176,10 @@ function paDayIdx(date){
     var o=PIER_JOB[k]; if(!o || typeof o!=='object') return;
     var bid=k.slice(pre.length);
     var b=(typeof getBoat==='function')?getBoat(bid):null;
-    var pk=(b&&b.pier)||'';
+    // §paPierNow · ท่าของวันนั้น ไม่ใช่ท่าประจำในทะเบียน · เรือย้ายท่าชั่วคราวได้
+    var pk='';
+    try{ pk=(typeof pjPierOf==='function')?pjPierOf(b,date):''; }catch(_){}
+    if(!pk) pk=(b&&b.pier)||'';
     if(pk) E.piers[pk]=1;
     var kind=(typeof paJobKind==='function')?paJobKind(date,bid):'boat';
     // §rtCode · เก็บเส้นทางของวันนั้นไว้ด้วย · ช่องในตารางจะได้บอกว่าลงสายไหน
@@ -77224,6 +77227,34 @@ function paCSS(){
   +H+' table.pa{border-collapse:separate;border-spacing:0;min-width:1400px;background:#fff}'
   +H+' table.pa th,table.pa td{padding:0;border-bottom:1px solid #F0F2F6}'
   +H+' .pa-nm{position:sticky;left:0;z-index:3;background:#fff;width:236px;min-width:236px;padding:6px 12px !important;border-right:1px solid #E7EAEF;text-align:left}'
+  /* §paCols · แยกเป็นคอลัมน์จริง · ตรึงสี่คอลัมน์แรกไว้ตอนเลื่อนดูปลายรอบ */
+  +H+' .pa-no{position:sticky;left:0;z-index:3;background:#fff;width:38px;min-width:38px;text-align:center;'
+     +"font:500 10.5px 'DM Mono',monospace;color:#A9B0BB;padding:5px 0 !important}"
+  +H+' .pa-nm2{position:sticky;left:38px;z-index:3;background:#fff;width:196px;min-width:196px;padding:5px 10px !important;'
+     +'text-align:left;font-size:12px;font-weight:700;color:#242730;white-space:nowrap}'
+  +H+' .pa-nk{position:sticky;left:234px;z-index:3;background:#fff;width:74px;min-width:74px;padding:5px 9px !important;'
+     +'text-align:left;font-size:11.5px;color:#5A6270;white-space:nowrap}'
+  +H+' .pa-rl{position:sticky;left:308px;z-index:3;background:#fff;width:184px;min-width:184px;padding:5px 10px !important;'
+     +'text-align:left;font-size:11.5px;color:#5A6270;white-space:nowrap;border-right:1px solid #E7EAEF;box-shadow:1px 0 0 #EFF1F5}'
+  +H+" .pa-rl i{font-style:normal;font-size:9.5px;font-weight:700;color:#8B93A1;background:#F2F4F7;border-radius:4px;padding:1px 6px;margin-left:6px}"
+  +H+' .pa-away{font-size:9.5px;font-weight:800;color:#20477E;background:#E9EFF7;border-radius:4px;padding:1px 6px;margin-left:5px}'
+  +H+' th.pa-h0{position:sticky;top:0;z-index:6;background:#fff;text-align:left;padding:8px 11px !important;'
+     +'font-size:12px;font-weight:700;color:#16233a;border-bottom:1px solid #E1E4EA;white-space:nowrap}'
+  +H+' th.pa-h0.nt{text-align:center;font-size:10px;color:#8B93A1;font-weight:800;letter-spacing:.06em;text-transform:uppercase}'
+  +H+' th.pa-mo{position:sticky;top:0;z-index:5;background:linear-gradient(180deg,#FDF6E9,#FBF0DD);color:#7A4A00;'
+     +'font-size:11px;font-weight:700;letter-spacing:.03em;border-bottom:1px solid #EFDCB4;padding:6px 0 !important}'
+  +H+' th.pa-mo.sum{background:linear-gradient(180deg,#F7F9FC,#EEF2F7);color:#20477E;border-bottom-color:#DCE3EC}'
+  +H+' th.pa-no,th.pa-nm2,th.pa-nk,th.pa-rl{position:sticky;top:27px;z-index:4;background:#F7F8FA;'
+     +'font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#8B93A1;padding:5px 10px !important;text-align:left}'
+  +H+' th.pa-no{text-align:center}'
+  +H+' th.pa-d,th.pa-sh{top:27px}'
+  +H+' .pa-nt{width:158px;min-width:158px;padding:3px 8px !important;text-align:left}'
+  +H+' th.pa-nt{position:sticky;top:27px;z-index:4;background:#F7F8FA}'
+  +H+" .pa-nti{width:100%;border:1px solid transparent;background:transparent;border-radius:6px;padding:4px 7px;font:600 11px inherit;color:#8A5A00}"
+  +H+' .pa-nti:hover{border-color:#E1E4EA;background:#fff}'
+  +H+' .pa-nti:focus{border-color:#16265C;background:#fff;outline:none}'
+  +H+' tr.pa-band .pa-no,tr.pa-band .pa-nm2{background:#EEF2F7}'
+  +H+' tr.pa-tot .pa-no,tr.pa-tot .pa-nm2{background:#F2F5F9;font-size:11px;font-weight:800;color:#20477E}'
   /* §paSum · คอลัมน์สรุปท้ายรอบ · พื้นครีมแยกออกจากช่องวันให้ชัด */
   +H+' th.pa-sh{width:36px;min-width:36px;text-align:center;padding:5px 0 !important;background:#FBF7F0;position:sticky;top:0;z-index:4;'
      +'font-size:9.5px;font-weight:800;color:#7A4A00;border-bottom:1px solid #EFDCB4;border-right:1px solid #F2E7D4}'
@@ -77234,6 +77265,7 @@ function paCSS(){
   +H+' td.pa-sc.z{color:#DCD5C8}'
   +H+' td.pa-sc.tot{width:46px;min-width:46px;background:#F3E9D8;font-weight:700;color:#16233a}'
   +H+' tr.pa-tot td{background:#F2F5F9;border-top:2px solid #DCE3EC}'
+  +H+' .pa-pop .s{font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9AA3B0;padding:7px 8px 3px}'
   +H+' .pa-lg .i .rtag{font-size:9px;font-weight:700;color:#20477E;background:#EEF2F7;border-radius:4px;padding:1px 6px;margin-left:5px}'
   +H+' .pa-lg .i.off{opacity:.55}'
   +H+' tr.pa-tot .pa-nm{background:#F2F5F9;font-size:11px;font-weight:800;color:#20477E}'
@@ -77324,18 +77356,31 @@ function renderPierAtt(pier){
     return ((ma.ord!=null?ma.ord:99)-(mb.ord!=null?mb.ord:99)) || String(a).localeCompare(String(b));
   });
 
-  var head='<tr><th class="pa-nm" style="background:#F2F5F9;position:sticky;top:0;z-index:5"></th>'
+  /* §paCols · รอบ 26–25 คร่อมสองเดือนเสมอ · ต้องบอกให้ชัดว่าเลข 1 กับ 26 คนละเดือน */
+  var MTH=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  var spans=[]; CY.days.forEach(function(d){
+    var key=String(d.s).slice(0,7);
+    if(spans.length && spans[spans.length-1].k===key) spans[spans.length-1].n++;
+    else spans.push({k:key, n:1, m:d.m, y:+String(d.s).slice(0,4)});
+  });
+  var head='<tr>'
+    + '<th class="pa-h0" colspan="4">ตารางการทำงาน · '+poE(CY.from)+' – '+poE(CY.to)+'</th>'
+    + spans.map(function(sp){ return '<th class="pa-mo" colspan="'+sp.n+'">'+MTH[sp.m]+' '+(sp.y+543)+'</th>'; }).join('')
+    + '<th class="pa-mo sum" colspan="'+(SUMC.length+1)+'">สรุปท้ายรอบ (วัน)</th>'
+    + '<th class="pa-h0 nt">หมายเหตุ</th></tr>'
+    + '<tr><th class="pa-no">ลำดับ</th><th class="pa-nm2">ชื่อ สกุล</th><th class="pa-nk">ชื่อเล่น</th><th class="pa-rl">ตำแหน่ง</th>'
     + CY.days.map(function(d){
         var we=(d.w===0||d.w===6);
         return '<th class="pa-d'+(!hasJob[d.s]?' nf':(we?' we':''))+(d.s===today?' tdy':'')+'">'
           +'<div class="dd">'+d.n+'</div><div class="dw">'+WD[d.w]+'</div></th>'; }).join('')
     + SUMC.map(function(c){ var m=paCodeMeta(c)||{};
         return '<th class="pa-sh'+(m.route?' rt':'')+'" title="'+poE(m.label||c)+'">'+poE(c)+'</th>'; }).join('')
-    + '<th class="pa-sh tot">รวม</th></tr>';
+    + '<th class="pa-sh tot">รวม</th><th class="pa-nt"></th></tr>';
 
-  var body='', totW=0, totO=0, totL=0, totAway=0, gTot={};
+  var body='', totW=0, totO=0, totL=0, totAway=0, gTot={}, _n=0;
   groups.forEach(function(G){
-    body+='<tr class="pa-band"><td class="pa-nm">'+poE(G.t)+'</td><td colspan="'+(CY.days.length+SUMC.length+1)+'"></td></tr>';
+    body+='<tr class="pa-band"><td class="pa-no"></td><td class="pa-nm2" colspan="3">'+poE(G.t)+'</td>'
+      +'<td colspan="'+(CY.days.length+SUMC.length+2)+'"></td></tr>';
     G.rows.forEach(function(st){
       var w=0,o=0,l=0,aw=0,cnt={};
       var tds=CY.days.map(function(d){
@@ -77349,18 +77394,24 @@ function renderPierAtt(pier){
       var sums=SUMC.map(function(c){ var v=cnt[c]||0;
         return '<td class="pa-sc'+(v?'':' z')+'">'+(v||'·')+'</td>'; }).join('')
         + '<td class="pa-sc tot">'+w+'</td>';
-      body+='<tr><td class="pa-nm"><div class="a">'+poE(st.name||st.nick||st.id)
-        +' <span style="color:#8B93A1;font-weight:500">('+poE(st.nick||'')+')</span></div>'
-        +'<div class="b">'+poE(st.role||'')+' · ค่าเริ่มต้น '+poE(st.defCode||paDefFallback())
-        +(aw?(' · <b style="color:#20477E">ไปช่วยท่าอื่น '+aw+' วัน</b>'):'')+'</div></td>'
-        +tds+sums+'</tr>';
+      _n++;
+      body+='<tr><td class="pa-no">'+_n+'</td>'
+        +'<td class="pa-nm2">'+poE(st.name||st.nick||st.id)
+          +(aw?(' <b class="pa-away" title="ไปลงเรือที่ท่าอื่น '+aw+' วัน · ยังนับเป็นวันทำงานของท่าประจำ">ช่วยท่าอื่น '+aw+'</b>'):'')+'</td>'
+        +'<td class="pa-nk">'+poE(st.nick||'')+'</td>'
+        +'<td class="pa-rl">'+poE(st.role||'')
+          +'<i title="รหัสที่ใช้เมื่อวันนั้นไม่ได้ลงเรือ">'+poE(st.defCode||paDefFallback())+'</i></td>'
+        +tds+sums
+        +'<td class="pa-nt">'+(ro?poE(st.note||'')
+            :('<input class="pa-nti" value="'+poE(st.note||'')+'" placeholder="—" '
+              +'onchange="paNote(\''+poE(st.id)+'\',this.value)">'))+'</td></tr>';
     });
   });
   /* แถวรวมท้ายตาราง · ทั้งท่าใช้คนไปกี่วัน-คน กับแต่ละรหัสไปเท่าไหร่ */
-  body+='<tr class="pa-tot"><td class="pa-nm">รวมทั้งท่า</td>'
+  body+='<tr class="pa-tot"><td class="pa-no"></td><td class="pa-nm2" colspan="3">รวมทั้งท่า</td>'
     + CY.days.map(function(){ return '<td></td>'; }).join('')
     + SUMC.map(function(c){ return '<td class="pa-sc">'+(gTot[c]||0)+'</td>'; }).join('')
-    + '<td class="pa-sc tot">'+totW+'</td></tr>';
+    + '<td class="pa-sc tot">'+totW+'</td><td class="pa-nt"></td></tr>';
 
   // §rtLegend · รหัสที่โผล่จริงในรอบนี้มาก่อน (รวมรหัสเส้นทาง) แล้วค่อยรหัสอื่นในทะเบียน
   var _lgSeen={};
@@ -77413,8 +77464,22 @@ function paPick(ev, date, sid){
   var st=(PIER_STAFF||[]).filter(function(x){ return x.id===sid; })[0]; if(!st) return;
   var cur=paCell(date,_poPier,st);
   var d=document.createElement('div'); d.className='pa-pop'; d.id='pa-pop';
+  // §paPickRt · รหัสเส้นทางของท่านี้ต้องเลือกได้ · ไม่งั้นแก้ทับเป็น "วันนี้ไปลง Krabi" ไม่ได้
+  var _rtSeen={}, _rtOpts=[];
+  try{
+    (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(function(r){
+      if((r.pier||'')!==_poPier) return;
+      var code=paRouteCode(r.id); if(!code || _rtSeen[code]) return;
+      _rtSeen[code]=1; _rtOpts.push(paCodeMeta(code));
+    });
+  }catch(_){}
   d.innerHTML='<div class="h">'+poE(st.nick||st.name)+' · '+poE(date)+'</div>'
-    + paCodes().map(function(c){
+    + (_rtOpts.length?('<div class="s">เส้นทางของท่านี้</div>'):'')
+    + _rtOpts.map(function(c){
+        return '<button onclick="paSet(\''+date+'\',\''+sid+'\',\''+poE(c.code)+'\')">'
+          +'<i style="background:'+c.bg+';color:'+c.color+'">'+poE(c.code)+'</i>'+poE(c.label||'')+'</button>'; }).join('')
+    + (_rtOpts.length?('<div class="s">อื่น ๆ</div>'):'')
+    + paCodes().filter(function(c){ return !_rtSeen[c.code]; }).map(function(c){
         return '<button onclick="paSet(\''+date+'\',\''+sid+'\',\''+poE(c.code)+'\')">'
           +'<i style="background:'+c.bg+';color:'+c.color+'">'+poE(c.code)+'</i>'
           +(c.label?poE(c.label):'<span style="color:#C0271C">ยังไม่ใส่ความหมาย</span>')+'</button>'; }).join('')
@@ -77428,6 +77493,13 @@ function paPick(ev, date, sid){
   setTimeout(function(){ document.addEventListener('click', paPopClose, {once:true}); },0);
 }
 function paPopClose(){ var d=document.getElementById('pa-pop'); if(d) d.remove(); }
+/* §paCols · หมายเหตุรายคน · เก็บที่ทะเบียนพนักงาน ไม่ใช่รายวัน (ลาออก · กลับมาไฮซีซั่น) */
+function paNote(sid, txt){
+  if(!poGuard()) return;
+  var st=(PIER_STAFF||[]).filter(function(x){ return x.id===sid; })[0]; if(!st) return;
+  st.note=String(txt||'').slice(0,120);
+  poPersist();
+}
 function paSet(date,sid,code){
   paSetManual(date,sid,code); poPersist(); paPopClose(); renderPierAtt();
 }
