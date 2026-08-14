@@ -77231,8 +77231,78 @@ function paCell(date, pier, st, E){
   if(E.piers[pier]) return {c:(st.defCode||paDefFallback()), src:'default', boat:'', atPier:''};
   return {c:'', src:'none', boat:'', atPier:''};
 }
+// §paOrder · ord = ลำดับที่ผู้ใช้จัดเอง · ยังไม่เคยจัด (Infinity) = ยึดลำดับทะเบียนเหมือนเดิม
+function paOrd(s){ var v=(s&&s.ord); return (v==null||v==='')?Infinity:((+v)||0); }
 function paStaff(pier){
-  return (PIER_STAFF||[]).filter(function(s){ return s.pier===pier && s.active!==false; });
+  var out=[];
+  (PIER_STAFF||[]).forEach(function(s,i){ if(s.pier===pier && s.active!==false) out.push({s:s,i:i}); });
+  out.sort(function(a,b){ var x=paOrd(a.s), y=paOrd(b.s); return x===y ? a.i-b.i : x-y; });
+  return out.map(function(x){ return x.s; });
+}
+function paStaffById(id){ return (PIER_STAFF||[]).filter(function(x){ return x.id===id; })[0]||null; }
+function paSectKey(s){
+  var known={}; paSects(_poPier).forEach(function(x){ known[x.id]=1; });
+  return (s && known[s.sect]) ? s.sect : '';
+}
+function paGrpList(sid){                       // คนในกลุ่มเดียวกับ sid ตามลำดับที่แสดงจริง
+  var s=paStaffById(sid); if(!s) return [];
+  var k=paSectKey(s);
+  return paStaff(_poPier).filter(function(x){ return paSectKey(x)===k; });
+}
+// เขียนเลขลำดับใหม่ทั้งท่าตามที่เห็นบนจอ · กันเลขชนกันและกันช่องว่างสะสม
+function paOrderNorm(pier){
+  var n=0;
+  paGroups(pier).forEach(function(g){ g.rows.forEach(function(x){ x.ord=++n; }); });
+}
+function paStaffOrder(sid, toSid, before){
+  if(!poGuard()) return;
+  var s=paStaffById(sid); if(!s) return;
+  var list=paGrpList(sid), i=-1, j=-1;
+  list.forEach(function(x,n){ if(x.id===sid) i=n; if(x.id===toSid) j=n; });
+  if(i<0) return;
+  list.splice(i,1);
+  if(j<0) list.push(s);
+  else { var t=paStaffById(toSid), at=list.indexOf(t); list.splice(before?at:at+1, 0, s); }
+  list.forEach(function(x,n){ x.ord=n+1; });   // ชั่วคราว · ให้ paGroups เห็นลำดับใหม่ก่อน
+  paOrderNorm(_poPier); poPersist();
+  if(!paTickRefresh(sid)) paSectOpen();
+  try{ renderPierAtt(); }catch(_){}
+}
+function paStaffBump(sid, dir){
+  var list=paGrpList(sid), i=-1;
+  list.forEach(function(x,n){ if(x.id===sid) i=n; });
+  var j=i+dir; if(i<0 || j<0 || j>=list.length) return;
+  paStaffOrder(sid, list[j].id, dir<0);
+}
+// ── ลาก · เฉพาะในกลุ่มตัวเอง · ข้ามกลุ่มใช้ติ๊ก จะได้ไม่มีสองวิธีทำเรื่องเดียวกัน ──
+var _paDrag='';
+function _paDzClear(){
+  try{ var w=document.getElementById('pa-tick'); if(!w) return;
+    var rs=w.getElementsByTagName('tr');
+    for(var i=0;i<rs.length;i++) rs[i].className=rs[i].className.replace(/\s*\bdz\b/,'');
+  }catch(_){}
+}
+function paDragStart(e, sid){ _paDrag=sid;
+  try{ e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', sid); }catch(_){} }
+function paDragEnd(){ _paDrag=''; _paDzClear(); }
+function _paSameGrp(a, b){
+  var x=paStaffById(a), y=paStaffById(b);
+  return !!(x && y && paSectKey(x)===paSectKey(y));
+}
+function paDragOver(e, sid){
+  if(!_paDrag || _paDrag===sid || !_paSameGrp(_paDrag, sid)) return;
+  e.preventDefault(); try{ e.dataTransfer.dropEffect='move'; }catch(_){}
+  var tr=e.currentTarget; if(!/\bdz\b/.test(tr.className)) tr.className=(tr.className+' dz').trim();
+}
+function paDragLeave(e){ try{ var tr=e.currentTarget; tr.className=tr.className.replace(/\s*\bdz\b/,''); }catch(_){} }
+function paDrop(e, sid){
+  try{ e.preventDefault(); }catch(_){}
+  var from=_paDrag; paDragEnd();
+  if(!from || from===sid || !_paSameGrp(from, sid)) return;
+  var list=paGrpList(from), a=-1, b=-1;
+  list.forEach(function(x,n){ if(x.id===from) a=n; if(x.id===sid) b=n; });
+  if(a<0 || b<0) return;
+  paStaffOrder(from, sid, a>b);                // ลากขึ้น = วางไว้ก่อนแถวเป้าหมาย · ลากลง = วางไว้หลัง
 }
 /* §paSect · กลุ่มของท่านี้ · เรียงตาม ord */
 function paSects(pier){
@@ -77568,7 +77638,14 @@ function paTickTable(S, staff, ro){
   var nUn=staff.filter(function(s){ return !known[s.sect]; }).length;
   var row=function(s){
     var cur=known[s.sect]?s.sect:'';
-    return '<tr data-sid="'+poE(s.id)+'"'+(cur?'':' class="nos"')+'><td class="who"><b>'+poE(s.name||s.nick||s.id)+'</b>'
+    var D=ro?'':(' ondragover="paDragOver(event,\''+poE(s.id)+'\')" ondragleave="paDragLeave(event)"'
+              +' ondrop="paDrop(event,\''+poE(s.id)+'\')"');
+    return '<tr data-sid="'+poE(s.id)+'"'+(cur?'':' class="nos"')+D+'>'
+      +'<td class="who"'+(ro?'':' draggable="true" ondragstart="paDragStart(event,\''+poE(s.id)+'\')" ondragend="paDragEnd()"')+'>'
+      +(ro?'':'<span class="gr" title="ลากเพื่อสลับลำดับในกลุ่ม">&#8942;&#8942;</span>')
+      +(ro?'':'<span class="ord"><button onclick="event.stopPropagation();paStaffBump(\''+poE(s.id)+'\',-1)" title="ขึ้น">&#9650;</button>'
+             +'<button onclick="event.stopPropagation();paStaffBump(\''+poE(s.id)+'\',1)" title="ลง">&#9660;</button></span>')
+      +'<b>'+poE(s.name||s.nick||s.id)+'</b>'
       +(s.nick?('<em>'+poE(s.nick)+'</em>'):'')+'<i>'+poE(s.role||'')+'</i></td>'
       + S.map(function(x){
           return '<td class="tk'+(cur===x.id?' on':'')+'"'+(ro?'':' onclick="paStaffSect(\''+poE(s.id)+'\',\''+poE(x.id)+'\')"')+'>'
@@ -77660,7 +77737,9 @@ function paStaffSect(sid, secId){
   if(!poGuard()) return;
   var s=(PIER_STAFF||[]).filter(function(x){ return x.id===sid; })[0]; if(!s) return;
   if(String(s.sect||'')===String(secId||'')) return;   // ติ๊กซ้ำที่เดิม · ไม่มีอะไรเปลี่ยน ไม่ต้องขยับจอ
-  s.sect=secId||''; poPersist();
+  s.sect=secId||'';
+  s.ord=1e9; paOrderNorm(_poPier);   // §paOrder · เข้ากลุ่มใหม่ = ไปต่อท้ายกลุ่มนั้น ไม่ใช่แทรกกลางตามเลขเก่า
+  poPersist();
   // §paTickLive · เดิมเรียก paSectOpen() ซึ่งสร้างกล่องใหม่ทั้งใบทุกครั้ง · จอกระพริบ scroll กลับไปบนสุด
   if(!paTickRefresh(sid)) paSectOpen();
   try{ renderPierAtt(); }catch(_){}
@@ -77670,6 +77749,7 @@ function paSectOpen(){
   var body='<div style="font-size:12px;color:#6E7684;margin-bottom:12px;line-height:1.7">'
     +'ตั้งชื่อกลุ่มด้านบน แล้ว<b style="color:#16265C">ติ๊กในตารางข้างล่าง</b>ว่าใครอยู่กลุ่มไหน<br>'
     +'คนหนึ่งอยู่ได้กลุ่มเดียว · ติ๊กที่ใหม่แล้วที่เก่าหลุดเอง<br>'
+    +'อยากสลับลำดับคนในกลุ่ม · <b style="color:#16265C">ลากชื่อขึ้นลง</b> หรือกดปุ่ม &#9650;&#9660; ท้ายชื่อ<br>'
     +'ลบกลุ่มแล้ว<b style="color:#16265C">คนไม่หาย</b> · ตกไปอยู่ UNASSIGNED ท้ายตาราง</div>';
   if(!S.length) body+='<div class="po-warn" style="margin:0 0 12px">ท่านี้ยังไม่มีกลุ่ม · กด "เพิ่มกลุ่ม" เพื่อเริ่ม</div>';
   S.forEach(function(sec,i){
@@ -77737,7 +77817,19 @@ function paSectCSS(){
    +'#po-modal .pa-tick tr.bnd:hover td{background:#EEF2F7}'
    +'#po-modal .pa-tick tr.bnd.todo:hover td{background:#FDF3E3}'
    +'@keyframes paMv{0%{background:#FFEFC2}55%{background:#FFF8E4}100%{background:transparent}}'
-   +'#po-modal .pa-tick tr.mv td,#po-modal .pa-tick tr.mv td.who{animation:paMv 1s ease-out}';
+   +'#po-modal .pa-tick tr.mv td,#po-modal .pa-tick tr.mv td.who{animation:paMv 1s ease-out}'
+   /* §paOrder · ที่จับลาก · ปุ่มขึ้นลง · เส้นบอกว่าจะไปวางตรงไหน */
+   +'#po-modal .pa-tick td.who{cursor:grab}'
+   +'#po-modal .pa-tick td.who:active{cursor:grabbing}'
+   +'#po-modal .pa-tick td.who .gr{float:left;color:#C9CFD8;font-size:13px;line-height:1;letter-spacing:-3px;'
+     +'margin:2px 8px 0 -3px;user-select:none}'
+   +'#po-modal .pa-tick tr:hover td.who .gr{color:#8B93A1}'
+   +'#po-modal .pa-tick td.who .ord{float:right;display:inline-flex;gap:3px;margin-left:8px;opacity:.3;transition:.12s}'
+   +'#po-modal .pa-tick tr:hover td.who .ord{opacity:1}'
+   +'#po-modal .pa-tick td.who .ord button{width:21px;height:21px;padding:0;line-height:1;cursor:pointer;'
+     +'border:1px solid #DCE0E6;background:#fff;border-radius:5px;font-size:7px;color:#6E7684}'
+   +'#po-modal .pa-tick td.who .ord button:hover{border-color:#20477E;color:#16265C;background:#F2F5F9}'
+   +'#po-modal .pa-tick tr.dz td{box-shadow:inset 0 2px 0 #20477E}';
 }
 function paCodesOpen(){
   paEnsureMtCode();

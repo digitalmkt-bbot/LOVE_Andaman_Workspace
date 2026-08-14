@@ -6420,6 +6420,10 @@
       {
         "name": "note",
         "type": "text"
+      },
+      {
+        "name": "ord",
+        "type": "bigint"
       }
     ],
     "primary_key": "id",
