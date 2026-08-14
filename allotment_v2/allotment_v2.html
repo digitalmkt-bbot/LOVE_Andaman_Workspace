@@ -21,7 +21,18 @@
 
   // sync GET with quick retry — WebKit (Safari iPad/macOS) fails sync XHR where Chrome doesn't;
   // a transient 0/5xx must NOT silently disable cloud sync (that rendered an empty app with no hint)
-  function sxr(url){ var r=sx('GET',url); for(var i=0;i<2 && (r.status===0||r.status>=500);i++){ r=sx('GET',url); } return r; }
+  // §bootRetry · หน่วงแบบบล็อก · ตรงนี้เป็นด่านบูตที่ยังไงก็ซิงโครนัสอยู่แล้ว
+  function _laHold(ms){ var t=Date.now()+ms; while(Date.now()<t){} }
+  //   404 = ช่วง deploy ที่ตัวเก่าถูกถอดแล้วตัวใหม่ยังไม่ขึ้น · ต้องลองใหม่ ไม่ใช่ยอมแพ้
+  function _laBootRetryable(st){ return st===0 || st===404 || st>=500; }
+  function sxr(url){
+    var r=sx('GET',url);
+    for(var i=0;i<3 && _laBootRetryable(r.status); i++){
+      _laHold(i===0?600:1400);   // ตัวใหม่ตั้งตัวเป็นวินาที · ยิงรัวติดกันไม่ช่วยอะไร
+      r=sx('GET',url);
+    }
+    return r;
+  }
   function _laLocalHost(){ return /^(localhost|127\.|192\.168\.|10\.|\[::1\])/.test(location.hostname); }
   // full-screen blocking error — replaces the old silent bail so a Safari boot failure is visible + reportable
   function bootFail(stage, status){ onReady(function(){
@@ -36,8 +47,9 @@
   if(me.status===401){ onReady(showLogin); return; }            // not logged in → login screen, do not load/sync
   if(me.status!==200){                                           // backend unreachable
     if(_laLocalHost()) return;                                   // local dev without backend → plain localStorage (intentional)
-    try{ console.error('[boot] /api/me failed · status '+me.status); }catch(e){}
-    bootFail('auth /api/me', me.status); return; }
+    try{ console.error('[boot] /api/me failed · status '+me.status+' (retried)'); }catch(e){}
+    // §bootRetry · 404 ที่ยังไม่หายหลังลองครบ = ไม่ใช่ช่วง deploy แล้ว · บอกให้ตรงว่าน่าจะเป็นอะไร
+    bootFail(me.status===404?'auth /api/me · เซิร์ฟเวอร์อาจกำลังอัปเดต':'auth /api/me', me.status); return; }
   ME=me.json||{}; window.LA_ME=ME;                               // expose current user (edit-lock / audit)
   // §per-user sidebar (accent colour + collapsible groups) · retry until the footer is mounted
   //  (laSbInit ran once but the sidebar footer wasn't stable yet → picker dropped)
@@ -473,17 +485,46 @@
   // §mobUser · ของเดิมใช้ XHR แบบ synchronous ซึ่งเบราว์เซอร์รุ่นใหม่เลิกอุ้ม
   //   พังแล้วกลืน error · reload เฉย ๆ · จอกระพริบแล้วยังเป็นคนเดิม ไม่มีอะไรบอกว่าทำไม
   //   ตอนนี้ยิงแล้วตรวจว่าออกจริงไหมก่อน · ออกไม่ได้ต้องบอก
+  // §outSheet · confirm() เชื่อไม่ได้บนมือถือ · Safari ปิดกล่องเด้งได้เองหลังเจอซ้ำ ๆ
+  //   แล้วคืน false ทันทีโดยไม่ขึ้นกล่อง = โค้ดเข้าใจว่าผู้ใช้กดยกเลิก = กดปุ่มแล้วเงียบสนิท
+  //   ใช้แผ่นยืนยันของแอปเอง จะได้ไม่มีทางเงียบอีก ทุกทางต้องเห็นอะไรสักอย่าง
+  window.__laLogoutSheet=null;
   window.__laLogout=function(){
-    if(!confirm('ออกจากระบบ?')) return;
-    var done=function(){ try{ location.replace(location.pathname+'?t='+Date.now()); }catch(_){ location.reload(); } };
-    var fail=function(){ alert('ออกจากระบบไม่สำเร็จ · เน็ตอาจหลุด\n\nลองใหม่อีกครั้ง ถ้ายังไม่ได้ให้ปิดแท็บแล้วเปิดใหม่'); };
-    try{
-      fetch('/api/logout',{credentials:'same-origin',cache:'no-store'})
-        .then(function(){ return fetch('/api/me',{credentials:'same-origin',cache:'no-store'}); })
-        .then(function(r){ return r.ok?r.json():null; })
-        .then(function(j){ if(j && (j.username||j.name)) fail(); else done(); })
-        .catch(function(){ fail(); });
-    }catch(e){ fail(); }
+    if(document.getElementById('la-out')) return;
+    var ov=document.createElement('div'); ov.className='la-modal'; ov.id='la-out';
+    ov.innerHTML='<div class="la-card" style="width:340px;max-width:92vw;padding:22px 22px 18px;text-align:center">'
+      +'<div style="font-size:15px;font-weight:800;color:#15396B">ออกจากระบบ?</div>'
+      +'<div id="la-out-msg" style="font-size:12.5px;color:#7C8091;margin:7px 0 16px;line-height:1.6">'
+        +'คุณจะต้องล็อกอินใหม่เพื่อกลับเข้าใช้งาน</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">'
+        +'<button id="la-out-no" style="padding:12px 0;border:1px solid #DCDFE5;border-radius:11px;background:#fff;'
+          +'color:#3a4453;font:700 13px inherit;cursor:pointer;min-height:46px">ยกเลิก</button>'
+        +'<button id="la-out-yes" style="padding:12px 0;border:none;border-radius:11px;background:#A32D2D;'
+          +'color:#fff;font:700 13px inherit;cursor:pointer;min-height:46px">ออกจากระบบ</button>'
+      +'</div></div>';
+    document.body.appendChild(ov);
+    var msg=document.getElementById('la-out-msg'), yes=document.getElementById('la-out-yes'), no=document.getElementById('la-out-no');
+    var close=function(){ try{ ov.remove(); }catch(_){} };
+    no.onclick=close;
+    ov.onclick=function(e){ if(e.target===ov) close(); };
+    yes.onclick=function(){
+      yes.disabled=true; no.disabled=true;
+      yes.textContent='กำลังออก…'; yes.style.background='#8C9099';
+      msg.textContent='กำลังแจ้งเซิร์ฟเวอร์…'; msg.style.color='#7C8091';
+      var done=function(){ try{ location.replace(location.pathname+'?t='+Date.now()); }catch(_){ location.reload(); } };
+      var fail=function(why){
+        msg.innerHTML='<b style="color:#A32D2D">ออกจากระบบไม่สำเร็จ</b><br>'+(why||'เน็ตอาจหลุด')
+          +'<br>ลองใหม่อีกครั้ง ถ้ายังไม่ได้ให้ปิดแท็บแล้วเปิดใหม่';
+        yes.disabled=false; no.disabled=false; yes.textContent='ลองใหม่'; yes.style.background='#A32D2D';
+      };
+      try{
+        fetch('/api/logout',{credentials:'same-origin',cache:'no-store'})
+          .then(function(){ return fetch('/api/me',{credentials:'same-origin',cache:'no-store'}); })
+          .then(function(r){ return r.ok?r.json():null; })
+          .then(function(j){ if(j && (j.username||j.name)) fail('เซิร์ฟเวอร์ยังจำ session นี้อยู่'); else done(); })
+          .catch(function(e){ fail(String((e&&e.message)||e)); });
+      }catch(e){ fail(String((e&&e.message)||e)); }
+    };
   };
 
   // ── Login screen ──
@@ -3950,6 +3991,19 @@ body.la-nav-open .la-burger{background:#1683C7;color:#fff;box-shadow:inset 2px 2
   .main .cal2-box .cal2-grid{ overflow:visible !important }
   /* แถบปุ่มสลับแท็บที่ยาวกว่าจอ · เลื่อนในแถบตัวเอง */
   .main .dr-pills,.main .bkv2-utabs,.main .fl-tabs{ overflow-x:auto; -webkit-overflow-scrolling:touch; max-width:100% }
+  /* §tapSize · พื้นขั้นต่ำของทุกอย่างที่กดได้ · 40px คือขนาดที่กดโดนโดยไม่ต้องเล็ง
+     ตั้งรวมทีเดียวแทนการไล่ทีละคลาส · ปุ่มที่เพิ่มมาทีหลังจะได้ตามไปเอง */
+  .main .view button,
+  .main .view .btn,
+  .main .view select,
+  .main .view input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]){
+    min-height:40px }
+  /* ปุ่มดินสอบนแถบโปรแกรม · วางแบบ absolute จึงต้องกำหนดทั้งกว้างและสูง */
+  .main .pj-pen{ width:36px !important; height:36px !important }
+  /* ปฏิทินใน Booking · 7 ช่องกว้าง 600px ในกล่อง 372px ที่ overflow:hidden
+     สามวันขวาสุดถูกตัดหายไปเลย · ให้กล่องเลื่อนได้เหมือนปฏิทินหน้าอื่น */
+  .main .bkv2-cal{ overflow-x:auto !important; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; max-width:100% }
+  .main .bkv2-bodycard{ overflow-x:visible !important }
 
   /* การ์ดที่ถูกวางไว้คอลัมน์ที่ 5 ของกริด · พอกริดเหลือ 1–2 คอลัมน์ มันจะยื่นออกนอกจอ */
   .main [style*="grid-column:"]{grid-column:auto !important}
@@ -41229,6 +41283,7 @@ window._laReloadData=function(){
     if(typeof PIER_CFG!=='undefined' && d.pier_cfg) PIER_CFG=d.pier_cfg;
     if(typeof PIER_CODES!=='undefined' && Array.isArray(d.pier_codes) && d.pier_codes.length) PIER_CODES=d.pier_codes;   // §pierAtt
     if(typeof PIER_SHIFT!=='undefined' && d.pier_shift) PIER_SHIFT=d.pier_shift;
+    if(typeof PIER_SECT!=='undefined' && Array.isArray(d.pier_sect)) PIER_SECT=d.pier_sect;   // §paSect
     if(typeof TRAVEL_SUM!=='undefined' && d.travel_sum) TRAVEL_SUM=d.travel_sum;   // §Travel Summary
     if(typeof TS_COT!=='undefined' && d.ts_cot) TS_COT=d.ts_cot;                   // §tsCotSettle
     if(typeof CAL_ROUTE_NAMES!=='undefined' && d.cal_route_names){                  // §cal2b · ชื่อโปรแกรมในปฏิทิน
@@ -76244,6 +76299,7 @@ var PIER_LICENSES=[];     // §pierLic · [{id, staffId, classId, no, exp, issue
 var PIER_CFG={};          // §pierLic · ตั้งค่ารวมของ Pier Office เช่น licWarnDays / cycleStart / onBoatCode
 var PIER_CODES=[];        // §pierAtt · [{id, code, label, color, bg, kind, ord, active}]
 var PIER_SHIFT={};        // §pierAtt · 'YYYY-MM-DD::staffId' -> {c, by, at}  เฉพาะช่องที่แก้มือ
+var PIER_SECT=[];         // §paSect · [{id, pier, name, ord}] · หัวข้อกลุ่มในตารางการทำงาน · ผู้ใช้ตั้งเอง
 var PIER_TEAM={};   // §pierJob · boatId -> {cap, asst, crew:[]}  ทีมประจำเรือ
 var PIER_JOB={};    // §pierJob · 'YYYY-MM-DD::boatId' -> {cap, asst, crew:[], island:[], note, wb, wbc}
 (function(){ try{
@@ -76261,6 +76317,7 @@ var PIER_JOB={};    // §pierJob · 'YYYY-MM-DD::boatId' -> {cap, asst, crew:[],
   if(d.pier_cfg && typeof d.pier_cfg==='object') PIER_CFG=d.pier_cfg;
   if(Array.isArray(d.pier_codes)) PIER_CODES=d.pier_codes;
   if(d.pier_shift && typeof d.pier_shift==='object') PIER_SHIFT=d.pier_shift;
+  if(Array.isArray(d.pier_sect)) PIER_SECT=d.pier_sect;   // §paSect
 }catch(_){} })();
 /* รหัสตั้งต้น · ตัวที่ยังไม่รู้ความหมายเว้น label ไว้ให้ไปกรอกเอง */
 (function(){ try{
@@ -76309,7 +76366,7 @@ function poPersist(){
     d.pier_team=PIER_TEAM; d.pier_job=PIER_JOB;
     d.pier_lic_types=PIER_LIC_TYPES; d.pier_lic_classes=PIER_LIC_CLASSES;
     d.pier_licenses=PIER_LICENSES; d.pier_cfg=PIER_CFG;
-    d.pier_codes=PIER_CODES; d.pier_shift=PIER_SHIFT;
+    d.pier_codes=PIER_CODES; d.pier_shift=PIER_SHIFT; d.pier_sect=PIER_SECT;
     if(typeof laBlobSave==='function') laBlobSave();
     else localStorage.setItem((typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2'), JSON.stringify(d));
   }catch(e){ console.warn('pier office persist failed', e); }
@@ -77029,9 +77086,66 @@ var _paDate = poYMD(new Date());   /* วันไหนก็ได้ในร
 function paCodes(){ return (PIER_CODES||[]).filter(function(c){ return c.active!==false; })
   .sort(function(a,b){ return (+a.ord||0)-(+b.ord||0); }); }
 function paCode(code){ return (PIER_CODES||[]).filter(function(c){ return c.code===code; })[0]||null; }
-function paKindOf(code){ var c=paCode(code); return c?(c.kind||'none'):'none'; }
+function paKindOf(code){ var c=(typeof paCodeMeta==='function')?paCodeMeta(code):paCode(code); return c?(c.kind||'none'):'none'; }
 function paCycleStart(){ var n=parseInt(PIER_CFG.cycleStart,10); return (n>=1&&n<=28)?n:26; }
 function paOnBoatCode(){ return PIER_CFG.onBoatCode || 'PP'; }
+/* §rtCode · รหัสย่อของเส้นทาง · ตั้งเองได้ที่ ROUTES[].code · ไม่ตั้งก็เดาจากชื่อ
+   ชุดเดาอิงตัวย่อเดิมที่ฝั่งรถใช้อยู่ (VEH_FAM_ABBR) เพื่อไม่ให้มีสองภาษาในระบบเดียว
+   เรียงจากเจาะจงที่สุดไปกว้างที่สุด · ชื่อเส้นทางหลายอันมีคำซ้อนกัน
+   เช่น "Whale Shark Phi Phi Maiton" มีทั้ง whale และ phi phi · ถ้าเช็ค phi phi ก่อนจะได้รหัสผิด
+   และดูจาก "ชื่อเส้นทาง" อย่างเดียว ไม่เอาชื่อเกาะมาปน (ชื่อเกาะใช้ตอนตรวจใบอุทยาน คนละเรื่องกัน) */
+var RT_CODE_GUESS=[
+  [/whale|maiton|ไมตอน|ฉลามวาฬ/i,'WS'],
+  [/krabi|กระบี่|phang[\s._-]*nga|พังงา/i,'KB'],
+  [/surin|สุรินทร/i,'SR'],
+  [/similan|สิมิลัน/i,'SL'],
+  [/phi[\s._-]*phi|พีพี/i,'PP'],
+  [/raya|ราชา/i,'RY'], [/coral|เฮ/i,'CR'], [/james[\s._-]*bond/i,'JB']
+];
+function paRouteCodeGuess(rt){
+  var blob=String((rt&&rt.name)||'');
+  for(var i=0;i<RT_CODE_GUESS.length;i++) if(RT_CODE_GUESS[i][0].test(blob)) return RT_CODE_GUESS[i][1];
+  // ไม่เข้าชุดไหนเลย · เอาอักษรแรกของสองคำแรกที่เป็นตัวอักษร
+  var w=String((rt&&rt.name)||'').replace(/[^A-Za-z\u0E00-\u0E7F ]/g,' ').trim().split(/\s+/).filter(Boolean);
+  var c=((w[0]||'?')[0]||'?')+((w[1]||'')[0]||'');
+  return c.toUpperCase().slice(0,3);
+}
+function paRouteCode(rid){
+  if(!rid) return '';
+  var rt=(typeof getRoute==='function')?getRoute(rid):null; if(!rt) return '';
+  var c=String(rt.code||'').trim();
+  return c || paRouteCodeGuess(rt);
+}
+/* เส้นทางทั้งหมดที่ถือรหัสนี้ · หลายเส้นทางใช้รหัสเดียวกันได้ (Phi Phi มี 4 โปรแกรม) */
+function paRoutesByCode(code){
+  if(!code) return [];
+  var all=(typeof ROUTES!=='undefined'&&Array.isArray(ROUTES))?ROUTES:[];
+  return all.filter(function(r){ return paRouteCode(r.id)===code; });
+}
+function paRouteByCode(code){ return paRoutesByCode(code)[0]||null; }
+/* ข้อมูลของรหัสหนึ่งตัว · ทะเบียนรหัสมาก่อน แล้วค่อยถามเส้นทาง
+   คืนรูปเดียวกับสมาชิกของ PIER_CODES เพื่อให้ที่เรียกใช้ไม่ต้องแยกสองทาง */
+function paCodeMeta(code){
+  // เส้นทางมาก่อน · PP ในทะเบียนเดิมแปลว่า "ลงเรือ" ซึ่งเป็นความหมายที่เรากำลังเลิกใช้
+  // ถ้ามีเส้นทางถือรหัสนี้อยู่ ให้ความหมายของเส้นทางชนะเสมอ
+  var rs=paRoutesByCode(code);
+  if(!rs.length){ return (typeof paCode==='function')?paCode(code):null; }
+  var rt=rs[0], col=String(rt.color||'#20477E');
+  // หลายโปรแกรมใช้รหัสเดียวกัน · บอกให้ครบว่ารหัสนี้ครอบอะไรบ้าง ไม่ใช่หยิบมาอันเดียว
+  var label=(rs.length===1) ? (rt.name||'')
+    : (rs.slice(0,2).map(function(r){ return r.name||''; }).join(' · ')
+       + (rs.length>2 ? (' +' + (rs.length-2) + ' โปรแกรม') : ''));
+  return {id:'rt_'+rt.id, code:code, label:label, color:col, bg:paTint(col), kind:'work', route:1, nRoutes:rs.length};
+}
+/* สีพื้นอ่อนของสีเข้ม · ผสมกับขาว 88% */
+function paTint(hex){
+  var h=String(hex||'').replace('#',''); if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  if(!/^[0-9a-f]{6}$/i.test(h)) return '#EEF2F7';
+  var o='#';
+  for(var i=0;i<3;i++){ var v=parseInt(h.substr(i*2,2),16);
+    o+=('0'+Math.round(v+(255-v)*0.88).toString(16)).slice(-2); }
+  return o;
+}
 /* §pjWork · รหัสของวันที่ลงงานซ่อม · ตั้งเองได้ในทะเบียนรหัส
    ขึ้นคานไม่ตั้ง = ใช้รหัสเดียวกับงานซ่อม (ตั้งแยกเมื่อค่าแรง/เบี้ยเลี้ยงต่างกัน) */
 function paMtCode(){ return PIER_CFG.mtCode || 'MT'; }
@@ -77077,11 +77191,16 @@ function paDayIdx(date){
     var o=PIER_JOB[k]; if(!o || typeof o!=='object') return;
     var bid=k.slice(pre.length);
     var b=(typeof getBoat==='function')?getBoat(bid):null;
-    var pk=(b&&b.pier)||'';
+    // §paPierNow · ท่าของวันนั้น ไม่ใช่ท่าประจำในทะเบียน · เรือย้ายท่าชั่วคราวได้
+    var pk='';
+    try{ pk=(typeof pjPierOf==='function')?pjPierOf(b,date):''; }catch(_){}
+    if(!pk) pk=(b&&b.pier)||'';
     if(pk) E.piers[pk]=1;
     var kind=(typeof paJobKind==='function')?paJobKind(date,bid):'boat';
+    // §rtCode · เก็บเส้นทางของวันนั้นไว้ด้วย · ช่องในตารางจะได้บอกว่าลงสายไหน
+    var rid=''; try{ var tp=(typeof TRIPS!=='undefined'&&TRIPS[date])?TRIPS[date][bid]:null; rid=(tp&&tp.route)||''; }catch(_){}
     [o.cap,o.asst].concat(o.crew||[], o.island||[]).forEach(function(sid){
-      if(sid && !E.byStaff[sid]) E.byStaff[sid]={boat:(b&&b.name)||bid, pier:pk, kind:kind};
+      if(sid && !E.byStaff[sid]) E.byStaff[sid]={boat:(b&&b.name)||bid, pier:pk, kind:kind, rid:rid};
     });
   });
   return E;
@@ -77097,31 +77216,97 @@ function paCell(date, pier, st, E){
   var man=paManual(date,st.id);
   if(man) return {c:man, src:'manual', boat:on?on.boat:'', atPier:on?on.pier:''};
   // §pjWork · ลงเรือ / ลงงานซ่อม / ลงคาน ใช้รหัสคนละตัว · ทั้งหมดตั้งเองได้
-  if(on) return {c:(on.kind==='dd'?paDdCode():(on.kind==='mt'?paMtCode():paOnBoatCode())),
-                 src:(on.kind==='boat'?'boat':on.kind), boat:on.boat, atPier:on.pier};
+  // §rtCode · ลงเรือ = ใช้รหัสของเส้นทางที่วิ่งวันนั้น · ไม่รู้เส้นทางค่อยถอยไปใช้รหัสรวม
+  if(on) return {c:(on.kind==='dd'?paDdCode():(on.kind==='mt'?paMtCode():(paRouteCode(on.rid)||paOnBoatCode()))),
+                 src:(on.kind==='boat'?'boat':on.kind), boat:on.boat, atPier:on.pier, rid:on.rid||''};
   if(E.piers[pier]) return {c:(st.defCode||paDefFallback()), src:'default', boat:'', atPier:''};
   return {c:'', src:'none', boat:'', atPier:''};
 }
 function paStaff(pier){
   return (PIER_STAFF||[]).filter(function(s){ return s.pier===pier && s.active!==false; });
 }
-/* จัดกลุ่มตามตำแหน่ง · เรียงตามลำดับที่เจอครั้งแรก เหมือนไฟล์เดิมที่แบ่งเป็นแผนก */
+/* §paSect · กลุ่มของท่านี้ · เรียงตาม ord */
+function paSects(pier){
+  return (PIER_SECT||[]).filter(function(x){ return x && x.pier===pier; })
+    .sort(function(a,b){ return (+a.ord||0)-(+b.ord||0); });
+}
+/* §paSect · หัวข้อกลุ่มในตาราง
+   ตั้งกลุ่มเองไว้ = ใช้ของที่ตั้ง · ยังไม่เคยตั้ง = ถอยไปจัดตามตำแหน่งแบบเดิม
+   คนที่ไม่ได้อยู่กลุ่มไหน ต้องไม่หายจากตาราง · ไปรวมกันที่ UNASSIGNED ท้ายสุด */
 function paGroups(pier){
-  var out=[], idx={};
-  paStaff(pier).forEach(function(s){
-    var k=String(s.role||'ไม่ระบุตำแหน่ง').trim()||'ไม่ระบุตำแหน่ง';
-    if(idx[k]==null){ idx[k]=out.length; out.push({t:k, rows:[]}); }
-    out[idx[k]].rows.push(s);
-  });
-  return out;
+  var staff=paStaff(pier), S=paSects(pier);
+  if(!S.length){
+    var out=[], idx={};
+    staff.forEach(function(s){
+      var k=String(s.role||'ไม่ระบุตำแหน่ง').trim()||'ไม่ระบุตำแหน่ง';
+      if(idx[k]==null){ idx[k]=out.length; out.push({t:k, rows:[]}); }
+      out[idx[k]].rows.push(s);
+    });
+    return out;
+  }
+  var byId={}, res=[];
+  S.forEach(function(sec){ byId[sec.id]={t:sec.name||'(ไม่มีชื่อ)', id:sec.id, rows:[]}; res.push(byId[sec.id]); });
+  var rest=[];
+  staff.forEach(function(s){ var g=byId[s.sect]; if(g) g.rows.push(s); else rest.push(s); });
+  res=res.filter(function(g){ return g.rows.length; });
+  if(rest.length) res.push({t:'UNASSIGNED', id:'', rows:rest});
+  return res;
 }
 
 function paCSS(){
   var H='.pj-host';
   return H+' .pa-wrap{overflow:auto;max-height:calc(100vh - 250px)}'
   +H+' table.pa{border-collapse:separate;border-spacing:0;min-width:1400px;background:#fff}'
-  +H+' table.pa th,table.pa td{padding:0;border-bottom:1px solid #F0F2F6}'
+  /* §paSheet · เส้นครบทุกด้านเหมือนสเปรดชีต · ของเดิมมีแต่เส้นล่าง อ่านเป็นคอลัมน์ไม่ได้ */
+  +H+' table.pa th,table.pa td{padding:0;border:1px solid #D9DEE6}'
+  +H+' table.pa{border-collapse:collapse !important}'
   +H+' .pa-nm{position:sticky;left:0;z-index:3;background:#fff;width:236px;min-width:236px;padding:6px 12px !important;border-right:1px solid #E7EAEF;text-align:left}'
+  /* §paCols · แยกเป็นคอลัมน์จริง · ตรึงสี่คอลัมน์แรกไว้ตอนเลื่อนดูปลายรอบ */
+  +H+' .pa-no{position:sticky;left:0;z-index:3;background:#fff;width:38px;min-width:38px;text-align:center;'
+     +"font:500 10.5px 'DM Mono',monospace;color:#A9B0BB;padding:5px 0 !important}"
+  +H+' .pa-nm2{position:sticky;left:38px;z-index:3;background:#fff;width:196px;min-width:196px;padding:5px 10px !important;'
+     +'text-align:left;font-size:12px;font-weight:700;color:#242730;white-space:nowrap}'
+  +H+' .pa-nk{position:sticky;left:234px;z-index:3;background:#fff;width:74px;min-width:74px;padding:5px 9px !important;'
+     +'text-align:left;font-size:11.5px;color:#5A6270;white-space:nowrap}'
+  +H+' .pa-rl{position:sticky;left:308px;z-index:3;background:#fff;width:184px;min-width:184px;padding:5px 10px !important;'
+     +'text-align:left;font-size:11.5px;color:#5A6270;white-space:nowrap;border-right:2px solid #97A0AE !important}'
+  +H+" .pa-rl i{font-style:normal;font-size:9.5px;font-weight:700;color:#8B93A1;background:#F2F4F7;border-radius:4px;padding:1px 6px;margin-left:6px}"
+  +H+' .pa-away{font-size:9.5px;font-weight:800;color:#20477E;background:#E9EFF7;border-radius:4px;padding:1px 6px;margin-left:5px}'
+  +H+' th.pa-h0{position:sticky;top:0;z-index:6;background:#1F3C88;color:#fff;text-align:left;padding:7px 11px !important;'
+     +'font-size:11.5px;font-weight:700;letter-spacing:.05em;white-space:nowrap}'
+  +H+' th.pa-h0.nt{text-align:center;font-size:10px;letter-spacing:.08em}'
+  +H+' th.pa-mo{position:sticky;top:0;z-index:5;background:#DFE5EE;color:#1F3C88;'
+     +'font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;padding:6px 0 !important}'
+  +H+' th.pa-mo.sum{background:#E8E2D3;color:#6B4B12}'
+  +H+' th.pa-no,th.pa-nm2,th.pa-nk,th.pa-rl{position:sticky;top:27px;z-index:4;background:#F2F4F7;'
+     +'font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#5A6472;padding:5px 9px !important;text-align:left}'
+  +H+' th.pa-no{text-align:center}'
+  +H+' th.pa-d,th.pa-sh{top:27px}'
+  +H+' .pa-nt{width:158px;min-width:158px;padding:3px 8px !important;text-align:left}'
+  +H+' th.pa-nt{position:sticky;top:27px;z-index:4;background:#F7F8FA}'
+  +H+" .pa-nti{width:100%;border:1px solid transparent;background:transparent;border-radius:6px;padding:4px 7px;font:600 11px inherit;color:#8A5A00}"
+  +H+' .pa-nti:hover{border-color:#E1E4EA;background:#fff}'
+  +H+' .pa-nti:focus{border-color:#16265C;background:#fff;outline:none}'
+  +H+' tr.pa-band .pa-no,tr.pa-band .pa-nm2{background:#EAEEF4}'
+  +H+' tr.pa-band td{background:#EAEEF4;font-size:9.5px;font-weight:800;letter-spacing:.1em;color:#1F3C88}'
+  /* เสาร์-อาทิตย์ · เข้มขึ้นทับสีของรหัส ไม่ใช่แทนที่ */
+  +H+' td.pa-c.we::before{content:"";position:absolute;inset:0;background:rgba(20,30,50,.05);pointer-events:none}'
+  +H+' tr.pa-tot .pa-no,tr.pa-tot .pa-nm2{background:#F2F5F9;font-size:11px;font-weight:800;color:#20477E}'
+  /* §paSum · คอลัมน์สรุปท้ายรอบ · พื้นครีมแยกออกจากช่องวันให้ชัด */
+  +H+' th.pa-sh{width:34px;min-width:34px;text-align:center;padding:5px 0 !important;background:#F4F1E8;position:sticky;top:27px;z-index:4;'
+     +'font-size:9px;font-weight:700;color:#6B4B12}'
+  +H+' th.pa-sh.rt{color:#1F3C88;background:#EDF1F7}'
+  +H+' th.pa-sh.tot{width:46px;min-width:46px;background:#E8E2D3;color:#5A3A00}'
+  +H+' td.pa-sc{width:36px;min-width:36px;text-align:center;background:#FDFBF7;border-right:1px solid #F4EEE3;'
+     +"font:500 11px 'DM Mono',monospace;color:#7A4A00}"
+  +H+' td.pa-sc.z{color:#DCD5C8}'
+  +H+' td.pa-sc.tot{width:46px;min-width:46px;background:#F3E9D8;font-weight:700;color:#16233a}'
+  +H+' tr.pa-tot td{background:#F2F5F9;border-top:2px solid #DCE3EC}'
+  +H+' .pa-pop .s{font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9AA3B0;padding:7px 8px 3px}'
+  +H+' .pa-lg .i .rtag{font-size:9px;font-weight:700;color:#20477E;background:#EEF2F7;border-radius:4px;padding:1px 6px;margin-left:5px}'
+  +H+' .pa-lg .i.off{opacity:.55}'
+  +H+' tr.pa-tot .pa-nm{background:#F2F5F9;font-size:11px;font-weight:800;color:#20477E}'
+  +H+' tr.pa-tot td.pa-sc{background:#EDEFF3;color:#16233a;font-weight:700}'
   +H+' .pa-nm .a{font-size:12px;font-weight:700;color:#242730;line-height:1.3}'
   +H+' .pa-nm .b{font-size:10.5px;color:#8B93A1;margin-top:1px}'
   +H+' th.pa-d{width:34px;min-width:34px;text-align:center;padding:4px 0 !important;background:#fff;position:sticky;top:0;z-index:4;border-bottom:1px solid #E1E4EA}'
@@ -77132,11 +77317,12 @@ function paCSS(){
   +H+' th.pa-d.nf{background:#F7F8FA}'
   +H+' th.pa-d.nf .dd{color:#B8BEC8}'
   +H+' th.pa-d.tdy{box-shadow:inset 0 -3px 0 #16265C}'
-  +H+' td.pa-c{text-align:center;padding:3px 2px !important;position:relative;cursor:pointer}'
+  +H+' td.pa-c{text-align:center;padding:0 !important;cursor:pointer;position:relative}'
   +H+' td.pa-c.we{background:#FFFBF8}'
   +H+' td.pa-c.nf{background:#FAFBFC}'
   +H+' td.pa-c:hover .cd{outline:2px solid #16265C;outline-offset:-2px}'
-  +H+' .pa-cd{display:block;border-radius:6px;font-size:9.5px;font-weight:800;line-height:22px;height:22px}'
+  /* §paSheet · ระบายเต็มช่องแบบ conditional formatting · ไม่ใช่ป้ายมนลอยกลางช่อง */
+  +H+' .pa-cd{display:block;width:100%;border-radius:0;font-size:9px;font-weight:800;line-height:23px;height:23px;letter-spacing:-.01em}'
   +H+' .pa-dot{position:absolute;top:2px;right:3px;width:5px;height:5px;border-radius:50%;background:#B4560A}'
   +H+' .pa-away{position:absolute;left:2px;bottom:1px;font-size:7.5px;font-weight:800;letter-spacing:.02em;color:#20477E;background:#E9EFF7;border-radius:3px;padding:0 3px;line-height:11px}'
   +H+' .pa-sum{position:sticky;right:0;background:#FAFBFC;border-left:1px solid #E7EAEF;padding:5px 11px !important;white-space:nowrap;text-align:right;z-index:3}'
@@ -77156,11 +77342,11 @@ function paCSS(){
 }
 
 function paCellHtml(date, pier, st, day, hasJob, today, E){
-  var v=paCell(date,pier,st,E), C=paCode(v.c);
+  var v=paCell(date,pier,st,E), C=paCodeMeta(v.c);
   var bg=C?C.bg:'#FBFCFD', fg=C?C.color:'#D5D9E0';
   var we=(day.w===0||day.w===6);
   var away=(v.atPier && v.atPier!==pier) ? v.atPier : '';
-  var tip=(v.c||'ยังไม่มีใบงาน')+(v.boat?(' · '+v.boat):'')
+  var tip=(v.c||'ยังไม่มีใบงาน')+((C&&C.route&&C.label)?(' · '+C.label):'')+(v.boat?(' · '+v.boat):'')
     +(away?(' · ไปช่วยท่า '+((PO_PIERS.filter(function(x){return x.k===away;})[0]||{}).t||away)):'')
     +(v.src==='manual'?' · แก้มือ':(v.src==='boat'?' · จากใบงานเรือ':(v.src==='default'?' · ค่าเริ่มต้น':'')));
   return '<td class="pa-c'+(!hasJob?' nf':(we?' we':''))+'" title="'+poE(tip)+'"'
@@ -77191,40 +77377,89 @@ function renderPierAtt(pier){
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
   var host=document.getElementById('pa-host-'+P.k); if(!host) return;
   var ro=!poCanEdit(), CY=paCycle(_paDate), groups=paGroups(P.k), today=poYMD(new Date());
-  var WD=['อา.','จ.','อ.','พ.','พฤ.','ศ.','ส.'];
+  var WD=['SUN','MON','TUE','WED','THU','FRI','SAT'];   // §paSheet · หัวข้อเป็นอังกฤษตามที่ตกลง
   var IDX=paIndex(CY.days);
   var hasJob={}, nJob=0;
   CY.days.forEach(function(d){ hasJob[d.s]=paHasJob(d.s,P.k,IDX[d.s]); if(hasJob[d.s]) nJob++; });
 
-  var head='<tr><th class="pa-nm" style="background:#F2F5F9;position:sticky;top:0;z-index:5"></th>'
+  /* §paSum · รหัสที่ใช้จริงในรอบนี้ · เรียงเส้นทางก่อน แล้วค่อยรหัสของทะเบียน */
+  var used={};
+  groups.forEach(function(G){ G.rows.forEach(function(st){
+    CY.days.forEach(function(d){ var v=paCell(d.s,P.k,st,IDX[d.s]); if(v.c) used[v.c]=1; }); }); });
+  var SUMC=Object.keys(used).sort(function(a,b){
+    var ma=paCodeMeta(a)||{}, mb=paCodeMeta(b)||{};
+    var ra=ma.route?0:1, rb=mb.route?0:1;
+    if(ra!==rb) return ra-rb;
+    if(ra===0) return String(a).localeCompare(String(b));
+    return ((ma.ord!=null?ma.ord:99)-(mb.ord!=null?mb.ord:99)) || String(a).localeCompare(String(b));
+  });
+
+  /* §paCols · รอบ 26–25 คร่อมสองเดือนเสมอ · ต้องบอกให้ชัดว่าเลข 1 กับ 26 คนละเดือน */
+  var MTH=['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
+  var spans=[]; CY.days.forEach(function(d){
+    var key=String(d.s).slice(0,7);
+    if(spans.length && spans[spans.length-1].k===key) spans[spans.length-1].n++;
+    else spans.push({k:key, n:1, m:d.m, y:+String(d.s).slice(0,4)});
+  });
+  var head='<tr>'
+    + '<th class="pa-h0" colspan="4">CREW DUTY ROSTER &nbsp;&middot;&nbsp; '+poE(CY.from)+' – '+poE(CY.to)+' &nbsp;&middot;&nbsp; '+poE(String(P.n||P.t).toUpperCase())+'</th>'
+    + spans.map(function(sp){ return '<th class="pa-mo" colspan="'+sp.n+'">'+MTH[sp.m]+' '+sp.y+'</th>'; }).join('')
+    + '<th class="pa-mo sum" colspan="'+(SUMC.length+1)+'">MONTHLY SUMMARY (DAYS)</th>'
+    + '<th class="pa-h0 nt">REMARKS</th></tr>'
+    + '<tr><th class="pa-no">No.</th><th class="pa-nm2">Full name</th><th class="pa-nk">Nickname</th><th class="pa-rl">Position</th>'
     + CY.days.map(function(d){
         var we=(d.w===0||d.w===6);
         return '<th class="pa-d'+(!hasJob[d.s]?' nf':(we?' we':''))+(d.s===today?' tdy':'')+'">'
           +'<div class="dd">'+d.n+'</div><div class="dw">'+WD[d.w]+'</div></th>'; }).join('')
-    + '<th class="pa-sum" style="font-size:9px;color:#8B93A1;font-weight:800;position:sticky;top:0;z-index:5">สรุปรอบ</th></tr>';
+    + SUMC.map(function(c){ var m=paCodeMeta(c)||{};
+        return '<th class="pa-sh'+(m.route?' rt':'')+'" title="'+poE(m.label||c)+'">'+poE(c)+'</th>'; }).join('')
+    + '<th class="pa-sh tot">TOTAL</th><th class="pa-nt">Notes</th></tr>';
 
-  var body='', totW=0, totO=0, totL=0, totAway=0;
+  var body='', totW=0, totO=0, totL=0, totAway=0, gTot={}, _n=0;
   groups.forEach(function(G){
-    body+='<tr class="pa-band"><td class="pa-nm">'+poE(G.t)+'</td><td colspan="'+(CY.days.length+1)+'"></td></tr>';
+    body+='<tr class="pa-band"><td class="pa-no"></td><td class="pa-nm2" colspan="3">'+poE(G.t)+'</td>'
+      +'<td colspan="'+(CY.days.length+SUMC.length+2)+'"></td></tr>';
     G.rows.forEach(function(st){
-      var w=0,o=0,l=0,aw=0;
+      var w=0,o=0,l=0,aw=0,cnt={};
       var tds=CY.days.map(function(d){
         var E=IDX[d.s], v=paCell(d.s,P.k,st,E), k=paKindOf(v.c);
-        if(v.c){ if(k==='work') w++; else if(k==='off') o++; else if(k==='leave') l++; }
+        if(v.c){ cnt[v.c]=(cnt[v.c]||0)+1; gTot[v.c]=(gTot[v.c]||0)+1;
+                 if(k==='work') w++; else if(k==='off') o++; else if(k==='leave') l++; }
         if(v.atPier && v.atPier!==P.k) aw++;
         return paCellHtml(d.s,P.k,st,d,hasJob[d.s],today,E);
       }).join('');
       totW+=w; totO+=o; totL+=l; totAway+=aw;
-      body+='<tr><td class="pa-nm"><div class="a">'+poE(st.name||st.nick||st.id)
-        +' <span style="color:#8B93A1;font-weight:500">('+poE(st.nick||'')+')</span></div>'
-        +'<div class="b">'+poE(st.role||'')+' · ค่าเริ่มต้น '+poE(st.defCode||paDefFallback())
-        +(aw?(' · <b style="color:#20477E">ไปช่วยท่าอื่น '+aw+' วัน</b>'):'')+'</div></td>'
-        +tds+'<td class="pa-sum"><b>'+w+'</b><span>หยุด '+o+'</span><span>ลา '+l+'</span></td></tr>';
+      var sums=SUMC.map(function(c){ var v=cnt[c]||0;
+        return '<td class="pa-sc'+(v?'':' z')+'">'+(v||'·')+'</td>'; }).join('')
+        + '<td class="pa-sc tot">'+w+'</td>';
+      _n++;
+      body+='<tr><td class="pa-no">'+_n+'</td>'
+        +'<td class="pa-nm2">'+poE(st.name||st.nick||st.id)
+          +(aw?(' <b class="pa-away" title="ไปลงเรือที่ท่าอื่น '+aw+' วัน · ยังนับเป็นวันทำงานของท่าประจำ">ช่วยท่าอื่น '+aw+'</b>'):'')+'</td>'
+        +'<td class="pa-nk">'+poE(st.nick||'')+'</td>'
+        +'<td class="pa-rl">'+poE(st.role||'')
+          +'<i title="รหัสที่ใช้เมื่อวันนั้นไม่ได้ลงเรือ">'+poE(st.defCode||paDefFallback())+'</i></td>'
+        +tds+sums
+        +'<td class="pa-nt">'+(ro?poE(st.note||'')
+            :('<input class="pa-nti" value="'+poE(st.note||'')+'" placeholder="—" '
+              +'onchange="paNote(\''+poE(st.id)+'\',this.value)">'))+'</td></tr>';
     });
   });
+  /* แถวรวมท้ายตาราง · ทั้งท่าใช้คนไปกี่วัน-คน กับแต่ละรหัสไปเท่าไหร่ */
+  body+='<tr class="pa-tot"><td class="pa-no"></td><td class="pa-nm2" colspan="3">TOTAL &middot; ALL STAFF</td>'
+    + CY.days.map(function(){ return '<td></td>'; }).join('')
+    + SUMC.map(function(c){ return '<td class="pa-sc">'+(gTot[c]||0)+'</td>'; }).join('')
+    + '<td class="pa-sc tot">'+totW+'</td><td class="pa-nt"></td></tr>';
 
-  var lg=paCodes().map(function(c){
-    return '<div class="i"><b style="background:'+c.bg+';color:'+c.color+'">'+poE(c.code)+'</b>'
+  // §rtLegend · รหัสที่โผล่จริงในรอบนี้มาก่อน (รวมรหัสเส้นทาง) แล้วค่อยรหัสอื่นในทะเบียน
+  var _lgSeen={};
+  var lg=SUMC.map(function(code){
+    var c=paCodeMeta(code); if(!c) return ''; _lgSeen[code]=1;
+    return '<div class="i'+(c.route?' rt':'')+'"><b style="background:'+c.bg+';color:'+c.color+'">'+poE(c.code)+'</b>'
+      +(c.label?poE(c.label):'<em>ยังไม่ได้ใส่ความหมาย</em>')
+      +(c.route?'<span class="rtag">เส้นทาง</span>':'')+'</div>'; }).join('')
+    + paCodes().filter(function(c){ return !_lgSeen[c.code]; }).map(function(c){
+    return '<div class="i off"><b style="background:'+c.bg+';color:'+c.color+'">'+poE(c.code)+'</b>'
       +(c.label?poE(c.label):'<em>ยังไม่ได้ใส่ความหมาย</em>')+'</div>'; }).join('')
     +'<div class="i"><b style="background:#FBFCFD;color:#B8BEC8">·</b>ยังไม่มีใบงานของวันนั้น</div>'
     +'<div class="i"><b style="background:#fff;color:#B4560A;box-shadow:inset 0 0 0 2px #B4560A">◻</b>แก้ทับด้วยมือ · ระบบไม่เขียนทับ</div>'
@@ -77244,6 +77479,7 @@ function renderPierAtt(pier){
         +(totAway?(' · <b style="color:#20477E">ไปช่วยท่าอื่น '+totAway+'</b>'):'')+'</span>'
       +'<span style="flex:1"></span>'
       +'<button class="gh" onclick="paRangeOpen()"'+(ro?' disabled':'')+'>วางงานเป็นช่วง</button>'
+      +'<button onclick="paSectOpen()">จัดกลุ่ม</button>'
       +'<button onclick="paCodesOpen()">ทะเบียนรหัส</button>'
       +'<button onclick="paExport()">Export CSV</button>'
       +'<button class="pri" onclick="paPrint()">พิมพ์</button>'
@@ -77267,8 +77503,22 @@ function paPick(ev, date, sid){
   var st=(PIER_STAFF||[]).filter(function(x){ return x.id===sid; })[0]; if(!st) return;
   var cur=paCell(date,_poPier,st);
   var d=document.createElement('div'); d.className='pa-pop'; d.id='pa-pop';
+  // §paPickRt · รหัสเส้นทางของท่านี้ต้องเลือกได้ · ไม่งั้นแก้ทับเป็น "วันนี้ไปลง Krabi" ไม่ได้
+  var _rtSeen={}, _rtOpts=[];
+  try{
+    (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(function(r){
+      if((r.pier||'')!==_poPier) return;
+      var code=paRouteCode(r.id); if(!code || _rtSeen[code]) return;
+      _rtSeen[code]=1; _rtOpts.push(paCodeMeta(code));
+    });
+  }catch(_){}
   d.innerHTML='<div class="h">'+poE(st.nick||st.name)+' · '+poE(date)+'</div>'
-    + paCodes().map(function(c){
+    + (_rtOpts.length?('<div class="s">เส้นทางของท่านี้</div>'):'')
+    + _rtOpts.map(function(c){
+        return '<button onclick="paSet(\''+date+'\',\''+sid+'\',\''+poE(c.code)+'\')">'
+          +'<i style="background:'+c.bg+';color:'+c.color+'">'+poE(c.code)+'</i>'+poE(c.label||'')+'</button>'; }).join('')
+    + (_rtOpts.length?('<div class="s">อื่น ๆ</div>'):'')
+    + paCodes().filter(function(c){ return !_rtSeen[c.code]; }).map(function(c){
         return '<button onclick="paSet(\''+date+'\',\''+sid+'\',\''+poE(c.code)+'\')">'
           +'<i style="background:'+c.bg+';color:'+c.color+'">'+poE(c.code)+'</i>'
           +(c.label?poE(c.label):'<span style="color:#C0271C">ยังไม่ใส่ความหมาย</span>')+'</button>'; }).join('')
@@ -77282,11 +77532,140 @@ function paPick(ev, date, sid){
   setTimeout(function(){ document.addEventListener('click', paPopClose, {once:true}); },0);
 }
 function paPopClose(){ var d=document.getElementById('pa-pop'); if(d) d.remove(); }
+/* §paCols · หมายเหตุรายคน · เก็บที่ทะเบียนพนักงาน ไม่ใช่รายวัน (ลาออก · กลับมาไฮซีซั่น) */
+function paNote(sid, txt){
+  if(!poGuard()) return;
+  var st=(PIER_STAFF||[]).filter(function(x){ return x.id===sid; })[0]; if(!st) return;
+  st.note=String(txt||'').slice(0,120);
+  poPersist();
+}
 function paSet(date,sid,code){
   paSetManual(date,sid,code); poPersist(); paPopClose(); renderPierAtt();
 }
 
 /* ── ทะเบียนรหัส ── */
+/* §paSect · หน้าจัดกลุ่ม · สร้าง เปลี่ยนชื่อ เรียง ลบ ย้ายคน */
+function paSectId(){ return 'sc_'+Math.random().toString(36).slice(2,8); }
+function paSectAdd(){
+  if(!poGuard()) return;
+  var S=paSects(_poPier);
+  PIER_SECT.push({id:paSectId(), pier:_poPier, name:'', ord:(S.length?((+S[S.length-1].ord||0)+1):1)});
+  poPersist(); paSectOpen();
+}
+function paSectSet(id, key, val){
+  if(!poGuard()) return;
+  var x=(PIER_SECT||[]).filter(function(v){ return v.id===id; })[0]; if(!x) return;
+  x[key]=val; poPersist();
+  if(key!=='name') paSectOpen();
+  try{ renderPierAtt(); }catch(_){}
+}
+function paSectMove(id, dir){
+  if(!poGuard()) return;
+  var S=paSects(_poPier), i=-1;
+  S.forEach(function(x,n){ if(x.id===id) i=n; });
+  var j=i+dir; if(i<0 || j<0 || j>=S.length) return;
+  var a=S[i].ord, b=S[j].ord;
+  if(a===b || a==null || b==null){ S.forEach(function(x,n){ x.ord=n+1; }); a=S[i].ord; b=S[j].ord; }
+  S[i].ord=b; S[j].ord=a;
+  poPersist(); paSectOpen(); try{ renderPierAtt(); }catch(_){}
+}
+function paSectDel(id){
+  if(!poGuard()) return;
+  var n=(PIER_STAFF||[]).filter(function(s){ return s.sect===id; }).length;
+  if(n && !confirm('ลบกลุ่มนี้?\n\nคน '+n+' คนในกลุ่มจะไม่หายไปไหน · ย้ายไปอยู่ UNASSIGNED ท้ายตาราง')) return;
+  PIER_SECT=(PIER_SECT||[]).filter(function(x){ return x.id!==id; });
+  (PIER_STAFF||[]).forEach(function(s){ if(s.sect===id) s.sect=''; });
+  poPersist(); paSectOpen(); try{ renderPierAtt(); }catch(_){}
+}
+function paStaffSect(sid, secId){
+  if(!poGuard()) return;
+  var s=(PIER_STAFF||[]).filter(function(x){ return x.id===sid; })[0]; if(!s) return;
+  s.sect=secId||''; poPersist(); paSectOpen(); try{ renderPierAtt(); }catch(_){}
+}
+function paSectOpen(){
+  var ro=!poCanEdit(), S=paSects(_poPier), G=paGroups(_poPier);
+  var body='<div style="font-size:12px;color:#6E7684;margin-bottom:12px;line-height:1.7">'
+    +'ตั้งชื่อกลุ่มด้านบน แล้ว<b style="color:#16265C">ติ๊กในตารางข้างล่าง</b>ว่าใครอยู่กลุ่มไหน<br>'
+    +'คนหนึ่งอยู่ได้กลุ่มเดียว · ติ๊กที่ใหม่แล้วที่เก่าหลุดเอง<br>'
+    +'ลบกลุ่มแล้ว<b style="color:#16265C">คนไม่หาย</b> · ตกไปอยู่ UNASSIGNED ท้ายตาราง</div>';
+  if(!S.length) body+='<div class="po-warn" style="margin:0 0 12px">ท่านี้ยังไม่มีกลุ่ม · กด "เพิ่มกลุ่ม" เพื่อเริ่ม</div>';
+  S.forEach(function(sec,i){
+    var rows=(PIER_STAFF||[]).filter(function(s){ return s.pier===_poPier && s.active!==false && s.sect===sec.id; });
+    body+='<div class="pa-sec">'
+      +'<div class="hd">'
+        +'<input class="pl-f nm" value="'+poE(sec.name||'')+'" placeholder="ชื่อกลุ่ม เช่น OFFICE DEPARTMENT" '
+          +'oninput="paSectSet(\''+sec.id+'\',\'name\',this.value)"'+(ro?' disabled':'')+'>'
+        +'<span class="n">'+rows.length+' คน</span>'
+        +(ro?'':'<button class="mv" onclick="paSectMove(\''+sec.id+'\',-1)"'+(i===0?' disabled':'')+' title="ขึ้น">&#9650;</button>'
+             +'<button class="mv" onclick="paSectMove(\''+sec.id+'\',1)"'+(i===S.length-1?' disabled':'')+' title="ลง">&#9660;</button>'
+             +'<button class="x" onclick="paSectDel(\''+sec.id+'\')" title="ลบกลุ่ม">&times;</button>')
+      +'</div>'
+      +'</div>';
+  });
+  // §paSectTick · ตารางติ๊ก · แถวละคน คอลัมน์ละกลุ่ม · เห็นทั้งกระดานในหน้าจอเดียว
+  var staff=(PIER_STAFF||[]).filter(function(s){ return s.pier===_poPier && s.active!==false; });
+  if(S.length && staff.length){
+    var known={}; S.forEach(function(x){ known[x.id]=1; });
+    var nUn=staff.filter(function(s){ return !known[s.sect]; }).length;
+    body+='<div class="pa-tick"><table><thead><tr>'
+      +'<th class="who">ใคร<span>'+staff.length+' คน</span></th>'
+      + S.map(function(x){ var c=staff.filter(function(s){ return s.sect===x.id; }).length;
+          return '<th title="'+poE(x.name||'')+'">'+poE(x.name||'(ไม่มีชื่อ)')+'<span>'+c+'</span></th>'; }).join('')
+      +'<th class="un">ยังไม่จัด<span>'+nUn+'</span></th></tr></thead><tbody>'
+      + staff.map(function(s){
+          var cur=known[s.sect]?s.sect:'';
+          return '<tr'+(cur?'':' class="nos"')+'><td class="who"><b>'+poE(s.name||s.nick||s.id)+'</b>'
+            +(s.nick?('<em>'+poE(s.nick)+'</em>'):'')+'<i>'+poE(s.role||'')+'</i></td>'
+            + S.map(function(x){
+                return '<td class="tk'+(cur===x.id?' on':'')+'"'+(ro?'':' onclick="paStaffSect(\''+poE(s.id)+'\',\''+poE(x.id)+'\')"')+'>'
+                  +'<span>'+(cur===x.id?'&#10003;':'')+'</span></td>'; }).join('')
+            + '<td class="tk un'+(cur?'':' on')+'"'+(ro?'':' onclick="paStaffSect(\''+poE(s.id)+'\',\'\')"')+'>'
+              +'<span>'+(cur?'':'&#10003;')+'</span></td></tr>';
+        }).join('')
+      +'</tbody></table></div>';
+  }
+  poModal('กลุ่มในตารางการทำงาน · '+poE(poPierName()),
+    '<style>'+poCSS().replace(/\.po-host/g,'#po-modal')+paSectCSS()+'</style>'+body,
+    (ro?'':poBtn('+ เพิ่มกลุ่ม','paSectAdd()','pri'))+poBtn('ปิด','poModalClose()'), 760);
+}
+function paSectCSS(){
+  return '#po-modal .pa-sec{border:1px solid #E1E4EA;border-radius:11px;margin-bottom:10px;overflow:hidden}'
+   +'#po-modal .pa-sec .hd{display:flex;align-items:center;gap:8px;padding:8px 11px;background:#F2F5F9}'
+   +"#po-modal .pa-sec .hd .nm{flex:1;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#20477E;font-size:11.5px}"
+   +'#po-modal .pa-sec .hd .nm2{flex:1;font-weight:800;letter-spacing:.06em;color:#8B93A1;font-size:11.5px}'
+   +"#po-modal .pa-sec .hd .n{font-size:10.5px;color:#8B93A1;font-family:'DM Mono',monospace}"
+   +'#po-modal .pa-sec .hd .mv,#po-modal .pa-sec .hd .x{border:1px solid #DCE0E6;background:#fff;border-radius:6px;'
+     +'width:24px;height:24px;cursor:pointer;color:#5A6472;font-size:10px;line-height:1}'
+   +'#po-modal .pa-sec .hd .mv:disabled{opacity:.35;cursor:default}'
+   +'#po-modal .pa-sec .hd .x{color:#C0271C;font-size:15px}'
+   +'#po-modal .pa-sec.un .hd{background:#FAFBFC}'
+   +'#po-modal .pa-sec .pp{display:flex;flex-wrap:wrap;gap:6px;padding:10px 11px}'
+   +'#po-modal .pa-sec .chip{display:inline-flex;align-items:center;gap:7px;border:1px solid #E1E4EA;border-radius:9px;padding:4px 5px 4px 10px;background:#fff}'
+   +'#po-modal .pa-sec .chip b{font-size:11.5px;font-weight:600}'
+   +'#po-modal .pa-sec .chip i{font-style:normal;font-size:10.5px;color:#8B93A1}'
+   +'#po-modal .pa-sec .chip select{border:1px solid #E7EAEF;border-radius:6px;padding:3px 5px;font:600 10.5px inherit;color:#5A6472;background:#F7F8FA}'
+   +'#po-modal .pa-sec .none{font-size:11.5px;color:#9AA3B0}'
+   +'#po-modal .pa-tick{border:1px solid #E1E4EA;border-radius:11px;overflow:auto;max-height:44vh;margin-top:14px}'
+   +'#po-modal .pa-tick table{border-collapse:separate;border-spacing:0;width:100%}'
+   +'#po-modal .pa-tick th{position:sticky;top:0;z-index:2;background:#F2F5F9;border-bottom:1px solid #DCE3EC;'
+     +'padding:7px 6px;font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#20477E;text-align:center;white-space:nowrap}'
+   +"#po-modal .pa-tick th span{display:block;font:500 10px 'DM Mono',monospace;color:#8B93A1;letter-spacing:0;margin-top:2px}"
+   +'#po-modal .pa-tick th.who{text-align:left;padding-left:11px;position:sticky;left:0;z-index:3}'
+   +'#po-modal .pa-tick th.un{color:#8B93A1;background:#FAFBFC}'
+   +'#po-modal .pa-tick td{border-bottom:1px solid #F2F4F7;padding:0}'
+   +'#po-modal .pa-tick td.who{position:sticky;left:0;z-index:1;background:#fff;padding:6px 11px;min-width:210px;text-align:left;border-right:1px solid #EFF1F5}'
+   +'#po-modal .pa-tick td.who b{font-size:11.5px;font-weight:600}'
+   +'#po-modal .pa-tick td.who em{font-style:normal;font-size:10.5px;color:#8B93A1;margin-left:5px}'
+   +'#po-modal .pa-tick td.who i{display:block;font-style:normal;font-size:10px;color:#A9B0BB;margin-top:1px}'
+   +'#po-modal .pa-tick td.tk{width:82px;text-align:center;cursor:pointer}'
+   +'#po-modal .pa-tick td.tk span{display:inline-flex;align-items:center;justify-content:center;width:21px;height:21px;'
+     +'border:1.5px solid #D5DAE2;border-radius:6px;font-size:12px;color:transparent;background:#fff;transition:.12s}'
+   +'#po-modal .pa-tick td.tk:hover span{border-color:#20477E;background:#F2F5F9}'
+   +'#po-modal .pa-tick td.tk.on span{background:#16265C;border-color:#16265C;color:#fff;font-weight:800}'
+   +'#po-modal .pa-tick td.tk.un.on span{background:#8B93A1;border-color:#8B93A1}'
+   +'#po-modal .pa-tick tr.nos td.who{background:#FFFDF7}'
+   +'#po-modal .pa-tick tr:hover td{background:#FAFBFD}';
+}
 function paCodesOpen(){
   paEnsureMtCode();
   var ro=!poCanEdit();
@@ -77901,20 +78280,42 @@ function pjDayOp(date, bid){
   var rt=(typeof getRoute==='function')?getRoute(op.route):null;
   return rt?{op:op, rid:op.route, route:rt}:null;
 }
+/* §pjPierNow · ใบย้ายท่าที่ครอบคลุมวันนั้น · ไม่ใช่ "ที่ active วันนี้" */
+function pjAsnAt(boat, date){
+  var a=(boat && boat.assignments)||[];
+  for(var i=0;i<a.length;i++){
+    var x=a[i];
+    if(x && x.status!=='cancelled' && x.startDate && x.endDate && x.startDate<=date && x.endDate>=date) return x;
+  }
+  return null;
+}
+/* ท่าที่รับผิดชอบเรือลำนี้ในวันนั้น
+   ใช้ตัวตัดสินตัวเดียวกับหน้า Boat Status · 'shop' ไม่ใช่ท่า จึงถอยไปหาคนรับผิดชอบ */
+function pjPierOf(boat, date){
+  var cur='';
+  try{ if(typeof getBoatCurrentPier==='function') cur=getBoatCurrentPier(boat, date)||''; }catch(_){}
+  if(cur && cur!=='shop') return cur;
+  var a=pjAsnAt(boat, date);
+  return (a && a.toPier) || (boat && boat.pier) || '';
+}
 /* ทุกลำของท่านี้ · ลำที่มีโปรแกรมมาก่อน แล้วเรียงตามสถานะ */
 function pjAllBoats(date, pier){
   var run=(typeof poBoats==='function')?poBoats(date,pier):[], out=[], seen={};
   run.forEach(function(B){ seen[B.bid]=1;
     B._st=pjBoatSt(date,B.boat,true); out.push(B); });
   (typeof BOATS!=='undefined'?BOATS:[]).forEach(function(b){
-    if((b.pier||'')!==pier || seen[b.id]) return;
+    // §pjPierNow · ถามตัวตัดสินเดียวกับ Boat Status · ไม่ใช่ b.pier ที่เป็นค่าคงที่
+    if(pjPierOf(b,date)!==pier || seen[b.id]) return;
     var D=pjDayOp(date,b.id);
     var away=(D && (D.route.pier||'')!==pier) ? D : null;   // ย้ายไปวิ่งท่าอื่นวันนี้
     var st=pjBoatSt(date,b,false);
     // ไปวิ่งท่าอื่น ≠ ว่าง · ท่านี้ไม่มีงานให้ แต่เรือไม่ได้จอดเฉยๆ ต้องบอกให้ตรง
     if(away && st.k==='idle') st.k='away';
+    var asn=pjAsnAt(b,date);
+    var shop=''; try{ if(typeof getBoatCurrentPier==='function' && getBoatCurrentPier(b,date)==='shop'
+                        && typeof getBoatShopLocation==='function') shop=getBoatShopLocation(b)||'อู่'; }catch(_){}
     out.push({bid:b.id, boat:b, rid:'', route:{}, dep:'', pax:0, bks:[],
-              _st:st, _away:away});
+              _st:st, _away:away, _asn:asn, _shop:shop});
   });
   out.sort(function(a,b){
     // ord ของ clash เป็น 0 · ใช้ ||9 ไม่ได้ เพราะ 0 เป็นค่าเท็จ แล้วจะเด้งไปท้ายสุด
@@ -78097,6 +78498,8 @@ function pjCSS(){
   +H+' .pj-rst:hover{background:#E9EDF3}'
   +H+' .bc .stbar{height:32px;padding:0 15px;background:#FAFBFC;border-bottom:1px solid #EFF1F5;display:flex;align-items:center;gap:8px;overflow:hidden}'
   +H+' .pj-sub{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:2px 8px;background:#FFF0D8;color:#B4560A}'
+  +H+' .pj-move{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:2px 8px;background:#E9EFF7;color:#20477E;white-space:nowrap}'
+  +H+' .pj-shop{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:2px 8px;background:#F2EBFA;color:#5B3B96;white-space:nowrap}'
   +H+' .pj-std{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:2px 8px;background:#EDF3EF;color:#5E8B72}'
   +H+' .pj-gh{display:flex;align-items:center;gap:8px;padding:0 15px;height:28px;font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);background:var(--bg);color:var(--fg);box-shadow:inset 4px 0 0 var(--fg)}'
   +H+' .pj-rw{display:flex;align-items:center;gap:8px;padding:0 15px;height:32px;border-bottom:1px solid #F4F5F8}'
@@ -78315,6 +78718,14 @@ function pjCard(B, pier, ro){
              :(J._std?'<span class="pj-std">&#10003; ทีมประจำ</span>':'<span class="pj-std">&#10003; STANDARD</span>'))
         : '')
      +(going&&pax.n?('<span class="pj-stmeta">'+pax.n+' booking</span>'):'')
+     /* §pjPierNow · ลำนี้ไม่ใช่ของประจำท่า หรือไม่ได้อยู่ที่ท่า · ต้องบอกให้เห็นตั้งแต่แถบสถานะ */
+     +((B._asn && B._asn.toPier===pier && B._asn.fromPier && B._asn.fromPier!==pier)
+        ? ('<span class="pj-move" title="ใบย้ายท่า '+poE(B._asn.startDate||'')+' – '+poE(B._asn.endDate||'')
+            +(B._asn.reason?(' \u00b7 '+poE(B._asn.reason)):'')+'">ย้ายมาจาก '
+            +poE((typeof PIER_LABELS!=='undefined'&&PIER_LABELS[B._asn.fromPier])||B._asn.fromPier)
+            +(B._asn.type==='permanent'?' \u00b7 ถาวร':(B._asn.endDate?(' \u00b7 ถึง '+poE(pjDocDate(B._asn.endDate))):''))+'</span>')
+        : '')
+     +(B._shop?('<span class="pj-shop" title="เรือไม่ได้อยู่ที่ท่า · ท่านี้เป็นผู้รับผิดชอบ">อยู่อู่ '+poE(B._shop)+'</span>'):'')
      +((!going&&ST.mj.length)?('<span class="pj-stmeta" title="'+poE(ST.mj.map(function(m){ return (m.no||'')+' '+(m.title||m.type||''); }).join(' \u00b7 '))+'">งานซ่อม '+ST.mj.length+' ใบ'
         +(ST.mj[0]&&ST.mj[0].no?(' \u00b7 '+poE(ST.mj[0].no)):'')+'</span>'):'')
    +'</div>'
