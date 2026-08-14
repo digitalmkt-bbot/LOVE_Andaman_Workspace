@@ -21,7 +21,18 @@
 
   // sync GET with quick retry — WebKit (Safari iPad/macOS) fails sync XHR where Chrome doesn't;
   // a transient 0/5xx must NOT silently disable cloud sync (that rendered an empty app with no hint)
-  function sxr(url){ var r=sx('GET',url); for(var i=0;i<2 && (r.status===0||r.status>=500);i++){ r=sx('GET',url); } return r; }
+  // §bootRetry · หน่วงแบบบล็อก · ตรงนี้เป็นด่านบูตที่ยังไงก็ซิงโครนัสอยู่แล้ว
+  function _laHold(ms){ var t=Date.now()+ms; while(Date.now()<t){} }
+  //   404 = ช่วง deploy ที่ตัวเก่าถูกถอดแล้วตัวใหม่ยังไม่ขึ้น · ต้องลองใหม่ ไม่ใช่ยอมแพ้
+  function _laBootRetryable(st){ return st===0 || st===404 || st>=500; }
+  function sxr(url){
+    var r=sx('GET',url);
+    for(var i=0;i<3 && _laBootRetryable(r.status); i++){
+      _laHold(i===0?600:1400);   // ตัวใหม่ตั้งตัวเป็นวินาที · ยิงรัวติดกันไม่ช่วยอะไร
+      r=sx('GET',url);
+    }
+    return r;
+  }
   function _laLocalHost(){ return /^(localhost|127\.|192\.168\.|10\.|\[::1\])/.test(location.hostname); }
   // full-screen blocking error — replaces the old silent bail so a Safari boot failure is visible + reportable
   function bootFail(stage, status){ onReady(function(){
@@ -36,8 +47,9 @@
   if(me.status===401){ onReady(showLogin); return; }            // not logged in → login screen, do not load/sync
   if(me.status!==200){                                           // backend unreachable
     if(_laLocalHost()) return;                                   // local dev without backend → plain localStorage (intentional)
-    try{ console.error('[boot] /api/me failed · status '+me.status); }catch(e){}
-    bootFail('auth /api/me', me.status); return; }
+    try{ console.error('[boot] /api/me failed · status '+me.status+' (retried)'); }catch(e){}
+    // §bootRetry · 404 ที่ยังไม่หายหลังลองครบ = ไม่ใช่ช่วง deploy แล้ว · บอกให้ตรงว่าน่าจะเป็นอะไร
+    bootFail(me.status===404?'auth /api/me · เซิร์ฟเวอร์อาจกำลังอัปเดต':'auth /api/me', me.status); return; }
   ME=me.json||{}; window.LA_ME=ME;                               // expose current user (edit-lock / audit)
   // §per-user sidebar (accent colour + collapsible groups) · retry until the footer is mounted
   //  (laSbInit ran once but the sidebar footer wasn't stable yet → picker dropped)
@@ -77572,14 +77584,10 @@ function paStaffSect(sid, secId){
 }
 function paSectOpen(){
   var ro=!poCanEdit(), S=paSects(_poPier), G=paGroups(_poPier);
-  var opts=function(cur){
-    return '<option value="">— UNASSIGNED —</option>'
-      + S.map(function(x){ return '<option value="'+poE(x.id)+'"'+(x.id===cur?' selected':'')+'>'+poE(x.name||'(ไม่มีชื่อ)')+'</option>'; }).join('');
-  };
   var body='<div style="font-size:12px;color:#6E7684;margin-bottom:12px;line-height:1.7">'
-    +'หัวข้อที่คั่นในตารางการทำงาน · ตั้งเอง เรียงเอง ย้ายคนเองได้<br>'
-    +'ลบกลุ่มแล้ว<b style="color:#16265C">คนไม่หาย</b> · ตกไปอยู่ UNASSIGNED ท้ายตาราง<br>'
-    +'ยังไม่ได้ตั้งกลุ่มเลย ตารางจะจัดกลุ่มตามตำแหน่งให้เหมือนเดิม</div>';
+    +'ตั้งชื่อกลุ่มด้านบน แล้ว<b style="color:#16265C">ติ๊กในตารางข้างล่าง</b>ว่าใครอยู่กลุ่มไหน<br>'
+    +'คนหนึ่งอยู่ได้กลุ่มเดียว · ติ๊กที่ใหม่แล้วที่เก่าหลุดเอง<br>'
+    +'ลบกลุ่มแล้ว<b style="color:#16265C">คนไม่หาย</b> · ตกไปอยู่ UNASSIGNED ท้ายตาราง</div>';
   if(!S.length) body+='<div class="po-warn" style="margin:0 0 12px">ท่านี้ยังไม่มีกลุ่ม · กด "เพิ่มกลุ่ม" เพื่อเริ่ม</div>';
   S.forEach(function(sec,i){
     var rows=(PIER_STAFF||[]).filter(function(s){ return s.pier===_poPier && s.active!==false && s.sect===sec.id; });
@@ -77592,17 +77600,30 @@ function paSectOpen(){
              +'<button class="mv" onclick="paSectMove(\''+sec.id+'\',1)"'+(i===S.length-1?' disabled':'')+' title="ลง">&#9660;</button>'
              +'<button class="x" onclick="paSectDel(\''+sec.id+'\')" title="ลบกลุ่ม">&times;</button>')
       +'</div>'
-      +'<div class="pp">'+(rows.length?rows.map(function(s){
-          return '<span class="chip"><b>'+poE(s.name||s.nick||s.id)+'</b><i>'+poE(s.role||'')+'</i>'
-            +'<select onchange="paStaffSect(\''+poE(s.id)+'\',this.value)"'+(ro?' disabled':'')+'>'+opts(s.sect||'')+'</select></span>';
-        }).join(''):'<span class="none">ยังไม่มีใครในกลุ่มนี้</span>')+'</div></div>';
+      +'</div>';
   });
-  var un=(PIER_STAFF||[]).filter(function(s){ return s.pier===_poPier && s.active!==false && !paSects(_poPier).some(function(x){ return x.id===s.sect; }); });
-  if(un.length) body+='<div class="pa-sec un"><div class="hd"><span class="nm2">UNASSIGNED</span><span class="n">'+un.length+' คน</span></div>'
-    +'<div class="pp">'+un.map(function(s){
-        return '<span class="chip"><b>'+poE(s.name||s.nick||s.id)+'</b><i>'+poE(s.role||'')+'</i>'
-          +'<select onchange="paStaffSect(\''+poE(s.id)+'\',this.value)"'+(ro?' disabled':'')+'>'+opts(s.sect||'')+'</select></span>';
-      }).join('')+'</div></div>';
+  // §paSectTick · ตารางติ๊ก · แถวละคน คอลัมน์ละกลุ่ม · เห็นทั้งกระดานในหน้าจอเดียว
+  var staff=(PIER_STAFF||[]).filter(function(s){ return s.pier===_poPier && s.active!==false; });
+  if(S.length && staff.length){
+    var known={}; S.forEach(function(x){ known[x.id]=1; });
+    var nUn=staff.filter(function(s){ return !known[s.sect]; }).length;
+    body+='<div class="pa-tick"><table><thead><tr>'
+      +'<th class="who">ใคร<span>'+staff.length+' คน</span></th>'
+      + S.map(function(x){ var c=staff.filter(function(s){ return s.sect===x.id; }).length;
+          return '<th title="'+poE(x.name||'')+'">'+poE(x.name||'(ไม่มีชื่อ)')+'<span>'+c+'</span></th>'; }).join('')
+      +'<th class="un">ยังไม่จัด<span>'+nUn+'</span></th></tr></thead><tbody>'
+      + staff.map(function(s){
+          var cur=known[s.sect]?s.sect:'';
+          return '<tr'+(cur?'':' class="nos"')+'><td class="who"><b>'+poE(s.name||s.nick||s.id)+'</b>'
+            +(s.nick?('<em>'+poE(s.nick)+'</em>'):'')+'<i>'+poE(s.role||'')+'</i></td>'
+            + S.map(function(x){
+                return '<td class="tk'+(cur===x.id?' on':'')+'"'+(ro?'':' onclick="paStaffSect(\''+poE(s.id)+'\',\''+poE(x.id)+'\')"')+'>'
+                  +'<span>'+(cur===x.id?'&#10003;':'')+'</span></td>'; }).join('')
+            + '<td class="tk un'+(cur?'':' on')+'"'+(ro?'':' onclick="paStaffSect(\''+poE(s.id)+'\',\'\')"')+'>'
+              +'<span>'+(cur?'':'&#10003;')+'</span></td></tr>';
+        }).join('')
+      +'</tbody></table></div>';
+  }
   poModal('กลุ่มในตารางการทำงาน · '+poE(poPierName()),
     '<style>'+poCSS().replace(/\.po-host/g,'#po-modal')+paSectCSS()+'</style>'+body,
     (ro?'':poBtn('+ เพิ่มกลุ่ม','paSectAdd()','pri'))+poBtn('ปิด','poModalClose()'), 760);
@@ -77623,7 +77644,27 @@ function paSectCSS(){
    +'#po-modal .pa-sec .chip b{font-size:11.5px;font-weight:600}'
    +'#po-modal .pa-sec .chip i{font-style:normal;font-size:10.5px;color:#8B93A1}'
    +'#po-modal .pa-sec .chip select{border:1px solid #E7EAEF;border-radius:6px;padding:3px 5px;font:600 10.5px inherit;color:#5A6472;background:#F7F8FA}'
-   +'#po-modal .pa-sec .none{font-size:11.5px;color:#9AA3B0}';
+   +'#po-modal .pa-sec .none{font-size:11.5px;color:#9AA3B0}'
+   +'#po-modal .pa-tick{border:1px solid #E1E4EA;border-radius:11px;overflow:auto;max-height:44vh;margin-top:14px}'
+   +'#po-modal .pa-tick table{border-collapse:separate;border-spacing:0;width:100%}'
+   +'#po-modal .pa-tick th{position:sticky;top:0;z-index:2;background:#F2F5F9;border-bottom:1px solid #DCE3EC;'
+     +'padding:7px 6px;font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#20477E;text-align:center;white-space:nowrap}'
+   +"#po-modal .pa-tick th span{display:block;font:500 10px 'DM Mono',monospace;color:#8B93A1;letter-spacing:0;margin-top:2px}"
+   +'#po-modal .pa-tick th.who{text-align:left;padding-left:11px;position:sticky;left:0;z-index:3}'
+   +'#po-modal .pa-tick th.un{color:#8B93A1;background:#FAFBFC}'
+   +'#po-modal .pa-tick td{border-bottom:1px solid #F2F4F7;padding:0}'
+   +'#po-modal .pa-tick td.who{position:sticky;left:0;z-index:1;background:#fff;padding:6px 11px;min-width:210px;text-align:left;border-right:1px solid #EFF1F5}'
+   +'#po-modal .pa-tick td.who b{font-size:11.5px;font-weight:600}'
+   +'#po-modal .pa-tick td.who em{font-style:normal;font-size:10.5px;color:#8B93A1;margin-left:5px}'
+   +'#po-modal .pa-tick td.who i{display:block;font-style:normal;font-size:10px;color:#A9B0BB;margin-top:1px}'
+   +'#po-modal .pa-tick td.tk{width:82px;text-align:center;cursor:pointer}'
+   +'#po-modal .pa-tick td.tk span{display:inline-flex;align-items:center;justify-content:center;width:21px;height:21px;'
+     +'border:1.5px solid #D5DAE2;border-radius:6px;font-size:12px;color:transparent;background:#fff;transition:.12s}'
+   +'#po-modal .pa-tick td.tk:hover span{border-color:#20477E;background:#F2F5F9}'
+   +'#po-modal .pa-tick td.tk.on span{background:#16265C;border-color:#16265C;color:#fff;font-weight:800}'
+   +'#po-modal .pa-tick td.tk.un.on span{background:#8B93A1;border-color:#8B93A1}'
+   +'#po-modal .pa-tick tr.nos td.who{background:#FFFDF7}'
+   +'#po-modal .pa-tick tr:hover td{background:#FAFBFD}';
 }
 function paCodesOpen(){
   paEnsureMtCode();
