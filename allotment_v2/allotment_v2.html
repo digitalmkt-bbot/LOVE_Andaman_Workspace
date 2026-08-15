@@ -78883,9 +78883,12 @@ function pjTeam(b){ var t=PIER_TEAM[b]; return (t&&typeof t==='object')?t:{cap:'
 /* ใบของวันนั้น · ถ้ายังไม่เคยแตะ ให้ยืมทีมประจำเรือมาแสดง (ยังไม่เขียนลง store) */
 function pjOf(d,b){
   var o=pjRaw(d,b), T=pjTeam(b);
-  if(!o) return {cap:T.cap||'', asst:T.asst||'', crew:(T.crew||[]).slice(), island:[], note:'', wb:'', wbc:'', _std:true};
+  /* §pjLock · lock ต้องอยู่ในรายการนี้ด้วย · ฟังก์ชันนี้คัดเฉพาะช่องที่รู้จัก
+     ตกหล่นเมื่อไหร่ ล็อกจะหลุดทุกครั้งที่มีการบันทึกช่องอื่น */
+  if(!o) return {cap:T.cap||'', asst:T.asst||'', crew:(T.crew||[]).slice(), island:[], note:'', wb:'', wbc:'', lock:0, _std:true};
   return {cap:o.cap||'', asst:o.asst||'', crew:Array.isArray(o.crew)?o.crew.slice():[],
-          island:Array.isArray(o.island)?o.island.slice():[], note:o.note||'', wb:o.wb||'', wbc:o.wbc||'', _std:false};
+          island:Array.isArray(o.island)?o.island.slice():[], note:o.note||'', wb:o.wb||'', wbc:o.wbc||'',
+          lock:(o.lock?1:0), _std:false};
 }
 function pjSet(d,b,patch){
   if(!poGuard()) return;
@@ -79199,6 +79202,17 @@ function pjCSS(){
      ห้ามใช้ CSS filter · filter กินลูกทุกตัว บรรทัดใบอนุญาตจะโดนลดสีไปด้วย
      ใบหมดอายุต้องแดงเสมอ ไม่ว่าวันนั้นเรือจะออกหรือไม่ */
   +H+' .bc.dim .bn{opacity:.92}'
+  /* §pjLock · ใบที่ยืนยันแล้ว · ขอบเขียวบาง ๆ พอให้กวาดตาเห็นว่าใบไหนปิดแล้ว */
+  +H+' .bc.lk{border-color:#BFE0CD;box-shadow:0 0 0 2px rgba(15,110,86,.09)}'
+  +H+' .pj-lock{display:inline-flex;align-items:center;gap:5px;font-size:9.5px;font-weight:800;border-radius:5px;'
+     +'padding:2px 8px;background:#E1F5EE;color:#0F6E56;white-space:nowrap}'
+  /* ช่องที่ล็อกแล้วต้องอ่านเหมือนใบงานที่พิมพ์ไว้ · ไม่ใช่ช่องเลือกที่สีจาง */
+  +H+' .pj-rw select:disabled{-webkit-appearance:none;appearance:none;padding-right:7px;'
+     +'color:#242730;opacity:1;-webkit-text-fill-color:#242730;cursor:default}'
+  +H+' .bc .foot button.done{background:#0F6E56;border-color:#0F6E56;color:#fff}'
+  +H+' .bc .foot button.done:hover{background:#0B5744;border-color:#0B5744;color:#fff}'
+  +H+' .bc .foot button.edit{background:#FFF6E5;border-color:#EFD9AE;color:#8A5A00}'
+  +H+' .bc .foot button.edit:hover{background:#FBEDD3;border-color:#E3C88F;color:#7A4E00}'
   +H+' .bc.clash{border-color:#E8B4AE;box-shadow:0 0 0 2px rgba(192,39,28,.10)}'
   +H+' .pj-stq{font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap}'
   +H+' .pj-stmeta{font-size:10px;color:#8B93A1;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
@@ -79283,7 +79297,9 @@ function pjCSS(){
   +H+' .pj-note{height:56px;overflow:auto;margin:10px 15px 12px;border:1px dashed #E5D3A8;border-radius:9px;background:#fff;padding:8px 11px;font-size:12px;font-weight:600;color:#7A4A00;line-height:1.55;outline:none}'
   +H+' .pj-note:focus{border-style:solid;border-color:#D9A441;box-shadow:0 0 0 3px rgba(217,164,65,.15)}'
   +H+' .pj-note:empty:before{content:attr(data-ph);color:#C9CFD8;font-weight:400}'
-  +H+' .bc .foot{margin-top:auto;height:46px;display:flex;align-items:center;gap:8px;padding:0 15px;border-top:1px solid #EFF1F5;overflow:hidden}'
+  +H+' .bc .foot{margin-top:auto;min-height:46px;display:flex;align-items:center;gap:7px;flex-wrap:wrap;'
+     +'padding:8px 15px;border-top:1px solid #EFF1F5}'
+  +H+' .bc .foot button{flex:0 0 auto;white-space:nowrap}'
   +H+' .bc .foot button{border:1px solid #D9DDE4;background:#fff;border-radius:7px;padding:4px 10px;font:700 11px inherit;color:#5A6270;cursor:pointer}'
   +H+' .bc .foot button:hover{border-color:#16265C;color:#16265C}'
   +H+' .bc .foot button.gh{background:#F0F6F3;border-color:#BFE0CD;color:#0F6E56}'
@@ -79447,6 +79463,21 @@ function pjPick(bid, slot, val){
   renderPierJob();
 }
 function pjNote(bid,txt){ pjSet(_poDate,bid,{note:String(txt||'').slice(0,400)}); }
+/* §pjLock · แถบการ์ดเลื่อนแนวนอน · วาดใหม่แล้วเด้งกลับซ้ายสุด จะกดล็อกลำที่ห้าไม่ได้เลย
+   จำตำแหน่งไว้ก่อน แล้วคืนให้หลังวาดเสร็จ */
+function pjKeep(fn){
+  var w=document.querySelector('.pj-host.sk .pj-strip');
+  var x=w?w.scrollLeft:0, y=window.scrollY;
+  fn();
+  var w2=document.querySelector('.pj-host.sk .pj-strip');
+  if(w2) w2.scrollLeft=x;
+  try{ window.scrollTo(0,y); }catch(_){}
+}
+function pjLockSet(bid,v){
+  if(!poCanEdit()) return;
+  pjSet(_poDate,bid,{lock:v?1:0});
+  pjKeep(function(){ renderPierJob(); });
+}
 function pjWbSet(bid,t,c){ if(!poGuard()) return; pjSet(_poDate,bid,{wb:t,wbc:c}); renderPierJob(); }
 function pjPopToggle(id){
   var el=document.getElementById(id), was=el&&el.classList.contains('on');
@@ -79486,15 +79517,19 @@ function pjTeamSave(bid){
 function pjCopyYday(pier){
   if(!poCanEdit()) return;
   var d=new Date(_poDate+'T12:00:00'); d.setDate(d.getDate()-1);
-  var prev=poYMD(d), boats=poBoats(_poDate,pier), n=0;
+  var prev=poYMD(d), boats=poBoats(_poDate,pier), n=0, skip=0;
   boats.forEach(function(B){
+    /* §pjLock · ใบที่ยืนยันแล้วห้ามโดนทับ · ไม่งั้นปุ่มเดียวลบงานที่จัดเสร็จทิ้งทั้งท่า */
+    if(pjOf(_poDate,B.bid).lock){ skip++; return; }
     var o=pjRaw(prev,B.bid); if(!o) return;
     pjSet(_poDate,B.bid,{cap:o.cap||'',asst:o.asst||'',crew:(o.crew||[]).slice(),
                          island:(o.island||[]).slice(), wb:o.wb||'', wbc:o.wbc||''});
     n++;
   });
-  if(!n) alert('เมื่อวาน ('+prev+') ยังไม่มีใบงานที่บันทึกไว้');
-  renderPierJob();
+  if(!n && !skip) alert('เมื่อวาน ('+prev+') ยังไม่มีใบงานที่บันทึกไว้');
+  else if(skip) alert('คัดลอกมา '+n+' ลำ · ข้าม '+skip+' ลำที่กดจัดเสร็จแล้วไว้'
+    +'\n\nถ้าต้องการทับลำที่ข้ามไป ให้กดแก้ไขที่ท้ายการ์ดของลำนั้นก่อน');
+  pjKeep(function(){ renderPierJob(); });
 }
 /* จัดไกด์ · ใช้หน้าเดิม แล้วรีเฟรชกลับมาที่ใบงาน */
 function pjGuideOpen(bid){ try{ _pckDate=_poDate; goSetupOpen(bid); }catch(_){} }
@@ -79512,6 +79547,10 @@ function pjCard(B, pier, ro){
   var bid=B.bid, rt=B.route||{}, J=pjOf(_poDate,bid), SUB=pjSubList(_poDate,bid), n=Object.keys(SUB).length;
   var ST=B._st||pjBoatSt(_poDate,B.boat,!!rt.id), SM=PJ_ST[ST.k]||PJ_ST.idle;
   var going=(ST.k==='run'||ST.k==='clash');
+  /* §pjLock · ro = ไม่มีสิทธิ์แก้เลย · lk = มีสิทธิ์ แต่ใบนี้ปิดไปแล้ว
+     ทุกช่องที่เขียนค่าลงใบงานใช้ lro · ส่วนจานสีของโปรแกรม/สถานะยังใช้ ro
+     เพราะนั่นเป็นค่าของเส้นทาง ไม่ใช่ของใบงานลำนี้วันนี้ */
+  var lk=!!J.lock, lro=(ro||lk);
   var colRaw=(typeof pckBoatColor==='function')?pckBoatColor(bid):'#185FA5';
   var col=going?colRaw:pjMute(colRaw);
   var pcol=rt.color||'#5A6270';
@@ -79520,7 +79559,7 @@ function pjCard(B, pier, ro){
   var wbc=J.wbc||'', wbt=J.wb||'';
   var pid='pjpop-'+bid.replace(/[^A-Za-z0-9_-]/g,'_');
   var wid='pjwb-'+bid.replace(/[^A-Za-z0-9_-]/g,'_');
-  var h='<div class="bc'+(going?'':' dim')+(ST.k==='clash'?' clash':'')+'" data-st="'+ST.k+'">'
+  var h='<div class="bc'+(going?'':' dim')+(ST.k==='clash'?' clash':'')+(lk?' lk':'')+'" data-st="'+ST.k+'">'
    +'<div class="top" style="background:'+col+'">'
      +'<div class="trow"><div class="l"><div class="bn">'+poE(B.boat.name||bid)+'</div>'
        +'<div class="be">'+poE(B.boat.type||'')+(B.boat.engineCount?(' &middot; '+B.boat.engineCount+' Eng'):'')
@@ -79558,6 +79597,7 @@ function pjCard(B, pier, ro){
         ? (n?('<span class="pj-sub">'+n+' SUB'+(n>1?'S':'')+'</span>')
              :(J._std?'<span class="pj-std">&#10003; ทีมประจำ</span>':'<span class="pj-std">&#10003; STANDARD</span>'))
         : '')
+     +(lk?('<span class="pj-lock" title="ใบนี้ยืนยันแล้ว · กดแก้ไขที่ท้ายการ์ดก่อนถึงจะเปลี่ยนคนได้">&#128274; จัดเสร็จแล้ว</span>'):'')
      +(going&&pax.n?('<span class="pj-stmeta">'+pax.n+' booking</span>'):'')
      /* §pjPierNow · ลำนี้ไม่ใช่ของประจำท่า หรือไม่ได้อยู่ที่ท่า · ต้องบอกให้เห็นตั้งแต่แถบสถานะ */
      +((B._asn && B._asn.toPier===pier && B._asn.fromPier && B._asn.fromPier!==pier)
@@ -79580,10 +79620,10 @@ function pjCard(B, pier, ro){
        var RL = going
          ? [['กัปตัน','captain'],['กัปตัน','captain'],['เด็กเรือ','crew','ลูกเรือ'],['เด็กเรือ','crew','ลูกเรือ'],['เด็กเรือ','crew','ลูกเรือ'],['อุปกรณ์','equipment','ไกด์เกาะ'],['อุปกรณ์','equipment','ไกด์เกาะ']]
          : [['ช่าง','engineer','mechanic'],['ช่าง','engineer','mechanic'],['ช่าง','engineer','mechanic'],[],[],[],[]];
-       return pjSelRow(pier,bid,LB[0],'cap',J.cap,SUB.cap,RL[0],ro,B.boat)
-         + pjSelRow(pier,bid,LB[1],'asst',J.asst,SUB.asst,RL[1],ro,B.boat)
-         + [0,1,2].map(function(i){ return pjSelRow(pier,bid,LB[2+i],'crew'+i,(J.crew||[])[i]||'',SUB['crew'+i],RL[2+i],ro,B.boat); }).join('')
-         + [0,1].map(function(i){ return pjSelRow(pier,bid,LB[5+i],'island'+i,(J.island||[])[i]||'',null,RL[5+i],ro,B.boat); }).join('');
+       return pjSelRow(pier,bid,LB[0],'cap',J.cap,SUB.cap,RL[0],lro,B.boat)
+         + pjSelRow(pier,bid,LB[1],'asst',J.asst,SUB.asst,RL[1],lro,B.boat)
+         + [0,1,2].map(function(i){ return pjSelRow(pier,bid,LB[2+i],'crew'+i,(J.crew||[])[i]||'',SUB['crew'+i],RL[2+i],lro,B.boat); }).join('')
+         + [0,1].map(function(i){ return pjSelRow(pier,bid,LB[5+i],'island'+i,(J.island||[])[i]||'',null,RL[5+i],lro,B.boat); }).join('');
      })()
    + '<div class="pj-licbox">'+(function(){ try{
        // §pjAll · ลำที่ไม่ได้ออก ไม่ต้องเตือนใบอนุญาต · ไม่มีใครต้องคุมเรือ
@@ -79610,7 +79650,7 @@ function pjCard(B, pier, ro){
                 + pjTxtRow('ที่อยู่', ST.loc||'—')
                 + pjTxtRow('ตั้งแต่', (ST.log&&ST.log.from)?pjDocDate(ST.log.from):'—');
             }
-            var sel='<select onchange="pjMjPick(\''+bid+'\',this.value)"'+(ro?' disabled':'')+'>'
+            var sel='<select onchange="pjMjPick(\''+bid+'\',this.value)"'+(lro?' disabled':'')+'>'
               + ST.mj.map(function(m){ return '<option value="'+poE(m.id)+'"'+((M&&M.id===m.id)?' selected':'')+'>'
                   +poE((m.no?(m.no+' · '):'')+(m.title||m.type||'งานซ่อม'))+'</option>'; }).join('')
               +'</select>';
@@ -79625,7 +79665,7 @@ function pjCard(B, pier, ro){
           })() ))
    + (going ? ( pjSecHd('Customer','cust')
    +'<div class="pj-wbrow"><span class="k">Wristband</span>'
-     +'<span class="pj-wb" onclick="'+(ro?'':'pjPopToggle(\''+wid+'\')')+'" style="position:relative">'
+     +'<span class="pj-wb" onclick="'+(lro?'':'pjPopToggle(\''+wid+'\')')+'" style="position:relative">'
        +'<i style="background:'+(wbc||'#F0F0EC')+'"></i>'+(wbt?poE(wbt):'<span style="color:#C9CFD8;font-weight:500">ยังไม่ระบุ</span>')
        +'<div class="pj-pop" id="'+wid+'" style="top:30px;left:0;right:auto;width:210px"><div class="ph">สีสายรัดข้อมือวันนี้</div>'
        +'<div class="pj-sws" style="grid-template-columns:repeat(5,1fr)">'
@@ -79654,13 +79694,18 @@ function pjCard(B, pier, ro){
       +'</div>';
     })() ) )
    + pjSecHd('Note','note')
-   +'<div class="pj-note"'+(ro?'':' contenteditable="true"')+' data-ph="พิมพ์หมายเหตุของลำนี้วันนี้…" '
+   +'<div class="pj-note"'+(lro?'':' contenteditable="true"')+' data-ph="พิมพ์หมายเหตุของลำนี้วันนี้…" '
      +'onblur="pjNote(\''+bid+'\',this.innerText)">'+poE(J.note||'')+'</div>'
    +'<div class="foot">'
-     +'<button class="gh" onclick="pjTeamPull(\''+bid+'\')"'+(ro?' disabled':'')+'>&#8634; ดึงทีมประจำ</button>'
-     +'<button onclick="pjTeamSave(\''+bid+'\')"'+(ro?' disabled':'')+'>ตั้งเป็นทีมประจำ</button>'
+     +'<button class="gh" onclick="pjTeamPull(\''+bid+'\')"'+(lro?' disabled':'')+'>&#8634; ดึงทีมประจำ</button>'
+     +'<button onclick="pjTeamSave(\''+bid+'\')"'+(lro?' disabled':'')+'>ตั้งเป็นทีมประจำ</button>'
      +'<span style="flex:1"></span>'
      +'<button onclick="pjGuideOpen(\''+bid+'\')">จัดไกด์</button>'
+     /* §pjLock · ปุ่มปิด/เปิดใบ · คนที่ไม่มีสิทธิ์แก้ก็ไม่ควรเห็นปุ่มนี้เลย */
+     +(ro?''
+        :(lk
+          ? ('<button class="edit" onclick="pjLockSet(\''+bid+'\',0)" title="เปิดใบนี้ให้แก้ไขอีกครั้ง">&#9998; แก้ไข</button>')
+          : ('<button class="done" onclick="pjLockSet(\''+bid+'\',1)" title="ปิดใบนี้ · ต้องกดแก้ไขก่อนถึงจะเปลี่ยนคนได้">&#10003; จัดเสร็จแล้ว</button>')))
    +'</div></div>';
   return h;
 }
