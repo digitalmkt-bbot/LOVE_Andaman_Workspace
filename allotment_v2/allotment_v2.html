@@ -76681,7 +76681,10 @@ var PO_ICON={
   check:'<circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/>',
   box:'<path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5z"/><path d="M4 8.5 12 13l8-4.5M12 13v7"/>',
   wash:'<path d="M7 4h7l1 3H8z"/><path d="M6 7h11v11a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z"/><path d="M9 12h5"/>',
-  anchor:'<circle cx="12" cy="5" r="2"/><path d="M12 7v13"/><path d="M6 13H4a8 8 0 0 0 16 0h-2"/>'
+  anchor:'<circle cx="12" cy="5" r="2"/><path d="M12 7v13"/><path d="M6 13H4a8 8 0 0 0 16 0h-2"/>',
+  users:'<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 6a3 3 0 0 1 0 6"/><path d="M18 20a6 6 0 0 0-3-5"/>',
+  swap:'<path d="M4 8h13l-3-3"/><path d="M20 16H7l3 3"/>',
+  warn:'<path d="M12 4 2.5 20h19z"/><path d="M12 10v4"/><path d="M12 17h.01"/>'
 };
 function poIco(n, sz){
   return '<svg viewBox="0 0 24 24" width="'+(sz||20)+'" height="'+(sz||20)+'" fill="none" stroke="currentColor" '
@@ -79286,7 +79289,74 @@ function pjCSS(){
   +H+' .pj-ib{border:1px solid #E7EAEF;background:#FAFBFC;border-radius:9px;padding:6px 12px}'
   +H+' .pj-ib .n{font-size:11.5px;font-weight:800;color:#5A6270}'
   +H+' .pj-ib .s{font-size:10px;font-weight:700;margin-top:1px;color:#8B93A1}'
-  +H+' .pj-empty{background:#fff;border:1px solid #E1E4EA;border-radius:12px;padding:28px 14px;text-align:center;color:#9BA3B0;font-size:12.5px}';
+  +H+' .pj-empty{background:#fff;border:1px solid #E1E4EA;border-radius:12px;padding:28px 14px;text-align:center;color:#9BA3B0;font-size:12.5px}'
+  /* §pjSkin · ทั้งก้อนนี้ผูกกับ .sk เท่านั้น · อีกสองหน้าที่ใช้ pjCSS() ร่วมกันจึงไม่ขยับ */
+  +H+'.sk{background:#F0F2F5;margin:-22px;padding:22px;min-height:calc(100vh - 44px)}'
+  +'@media(max-width:820px){'+H+'.sk{margin:-12px -10px;padding:12px 10px;min-height:calc(100vh - 24px)}}'
+  +H+'.sk .pj-nh{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:22px}'
+  +H+'.sk .pj-hl{display:flex;align-items:center;gap:12px}'
+  +H+'.sk .pj-badge{width:40px;height:40px;border-radius:14px;background:#0F172A;color:#fff;display:flex;align-items:center;'
+     +'justify-content:center;font-weight:800;font-size:15px;letter-spacing:.02em;flex:0 0 auto;box-shadow:0 4px 12px rgba(15,23,42,.18)}'
+  +H+'.sk .pj-nh h1{font-size:22px;font-weight:800;letter-spacing:-.02em;margin:0;color:#0F172A}'
+  +H+'.sk .pj-nh p{font-size:11.5px;color:#64748B;margin:2px 0 0;line-height:1.6}'
+  +H+'.sk .pj-nbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;background:rgba(255,255,255,.85);'
+     +'border:1px solid rgba(226,232,240,.7);border-radius:18px;padding:6px;box-shadow:0 1px 2px rgba(15,23,42,.04)}'
+  +H+'.sk .pj-nbar button{border:none;background:none;border-radius:12px;padding:9px 15px;font:600 12.5px inherit;'
+     +'color:#475569;cursor:pointer;white-space:nowrap;transition:.14s}'
+  +H+'.sk .pj-nbar button:hover{background:#F1F5F9;color:#0F172A}'
+  +H+'.sk .pj-nbar button.pri{background:#0F172A;color:#fff;font-weight:700;box-shadow:0 1px 2px rgba(15,23,42,.14)}'
+  +H+'.sk .pj-nbar button.pri:hover{background:#1E293B;color:#fff}'
+  +H+'.sk .pj-nbar button.now{background:#EEF2FF;color:#4F46E5;font-weight:700;padding:7px 12px;font-size:11.5px}'
+  +H+'.sk .pj-nbar button.now:hover{background:#E0E7FF;color:#4338CA}'
+  +H+'.sk .pj-nbar button.nav{padding:7px 11px;color:#64748B}'
+  +H+'.sk .pj-nbar input[type=date]{border:none;background:#F1F5F9;border-radius:12px;padding:7px 11px;'
+     +'font:600 11.5px inherit;color:#1E293B;cursor:pointer;outline:none}'
+  +H+'.sk .pj-nbar .sep{width:1px;height:22px;background:#E2E8F0;margin:0 3px}'
+  +H+'.sk .pj-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin:0 0 18px}'
+  +H+'.sk .pj-kpi{background:#fff;border:1px solid #F1F5F9;border-radius:22px;padding:17px 18px;display:flex;'
+     +'align-items:center;justify-content:space-between;gap:12px;box-shadow:0 10px 30px -5px rgba(0,0,0,.04),0 4px 12px -2px rgba(0,0,0,.02)}'
+  +H+'.sk .pj-kpi .k{font-size:11px;font-weight:500;color:#94A3B8;display:block;margin-bottom:3px}'
+  +H+".sk .pj-kpi .v{font:800 26px 'DM Mono',monospace;line-height:1.1;color:#0F172A;letter-spacing:-.02em}"
+  +H+'.sk .pj-kpi .v em{font-style:normal;font-size:11px;font-weight:500;color:#64748B;margin-left:5px;font-family:inherit}'
+  +H+'.sk .pj-kpi .s{font-size:10.5px;color:#94A3B8;margin-top:3px}'
+  +H+'.sk .pj-kpi .ic{width:46px;height:46px;border-radius:16px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}'
+  /* แถวตัวกรอง · แคปซูลซ้าย ปุ่มลงมือขวา */
+  +H+'.sk .pj-frow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}'
+  +H+'.sk .pj-chips{background:#fff;border:1px solid #F1F5F9;padding:5px;border-radius:16px;gap:3px;'
+     +'box-shadow:0 1px 2px rgba(15,23,42,.04)}'
+  +H+'.sk .pj-chips button{border-radius:11px;padding:7px 14px;font:600 12px inherit;color:#64748B;gap:7px}'
+  +H+'.sk .pj-chips button:hover{color:#0F172A;background:#F8FAFC}'
+  +H+'.sk .pj-chips button.on{background:#0F172A;color:#fff;font-weight:700}'
+  +H+'.sk .pj-chips button.on:hover{background:#1E293B;color:#fff}'
+  +H+".sk .pj-chips button .n{font:700 11px 'DM Mono',monospace;opacity:.65}"
+  +H+'.sk .pj-warnc{font-size:11.5px;font-weight:700;color:#92400E;background:#FFFBEB;border:1px solid #FDE68A;'
+     +'border-radius:12px;padding:7px 13px}'
+  +H+'.sk .pj-warnc.red{color:#9F1239;background:#FFF1F2;border-color:#FECDD3}'
+  +H+'.sk .pj-acts{display:flex;gap:6px;align-items:center;flex-wrap:wrap;background:rgba(255,255,255,.85);'
+     +'border:1px solid rgba(226,232,240,.7);border-radius:16px;padding:5px;box-shadow:0 1px 2px rgba(15,23,42,.04)}'
+  +H+'.sk .pj-acts button{border:none;background:none;border-radius:11px;padding:7px 13px;font:600 12px inherit;'
+     +'color:#475569;cursor:pointer;white-space:nowrap}'
+  +H+'.sk .pj-acts button:hover{background:#F1F5F9;color:#0F172A}'
+  +H+'.sk .pj-acts button.pri{background:#0F172A;color:#fff;font-weight:700}'
+  +H+'.sk .pj-acts button.pri:hover{background:#1E293B;color:#fff}'
+  +H+'.sk .pj-acts button.gh{background:#ECFDF5;color:#047857;font-weight:700}'
+  +H+'.sk .pj-acts button.gh:hover{background:#D1FAE5;color:#065F46}'
+  +H+'.sk .pj-acts button[disabled]{opacity:.42;cursor:not-allowed}'
+  +H+'.sk .pj-wsw{background:#F1F5F9;border:none;border-radius:12px;padding:3px}'
+  +H+'.sk .pj-wsw button{border-radius:9px;padding:5px 11px;font:600 11.5px inherit;color:#64748B}'
+  +H+'.sk .pj-wsw button.on{background:#fff;color:#0F172A;font-weight:700;box-shadow:0 1px 2px rgba(15,23,42,.07)}'
+  +H+'.sk .pj-strip::-webkit-scrollbar-track{background:#E2E5EA}'
+  +H+'.sk .pj-idle,'+H+'.sk .pj-empty{border-radius:20px;border-color:#F1F5F9;box-shadow:0 10px 30px -5px rgba(0,0,0,.04)}';
+}
+
+/* §pjSkin · ปุ่มในแถบเมนูพาไปหน้าอื่นของท่าเดียวกัน
+   เรียกผ่านปุ่มในเมนูซ้ายจริง ๆ เพื่อให้แถบเมนูไฮไลต์ตามไปด้วย ไม่ใช่แค่วาดหน้าใหม่ทับ */
+function pjGo(pfx){
+  var v=pfx+'-'+_poPier;
+  try{ var el=document.querySelector('.nav-item[data-view="'+v+'"]'); if(el){ nav(el); return; } }catch(_){}
+  if(pfx==='poa' && typeof renderPierAtt==='function') renderPierAtt(_poPier);
+  else if(pfx==='pol' && typeof renderPierLic==='function') renderPierLic(_poPier);
+  else if(pfx==='po' && typeof renderPierOffice==='function') renderPierOffice(_poPier);
 }
 
 function pjSecHd(t,k){ var S=PJ_SEC[k]; return '<div class="pj-gh" style="--bg:'+S.bg+';--fg:'+S.fg+';--bd:'+S.bd+'">'+t+'</div>'; }
@@ -79595,28 +79665,42 @@ function renderPierJob(pier){
     return '<button class="'+(_pjF===k?'on':'')+'" onclick="pjFilter(\''+k+'\')">'
       +(dot?('<i style="background:'+dot+'"></i>'):'')+lb+'<span class="n">'+n+'</span></button>';
   };
+  /* §pjSkin · ธงบอกว่า host ตัวนี้ใช้สกินใหม่ · อีกสองหน้าที่ใช้ pjCSS() ร่วมกันไม่ได้ธงนี้ */
+  try{ host.classList.add('sk'); }catch(_){}
+  var kpi=function(k,v,unit,sub,ic,fg,bg,vc){
+    return '<div class="pj-kpi"><div><span class="k">'+k+'</span>'
+      +'<div class="v"'+(vc?' style="color:'+vc+'"':'')+'>'+v+(unit?('<em>'+unit+'</em>'):'')+'</div>'
+      +(sub?'<div class="s">'+sub+'</div>':'')+'</div>'
+      +'<div class="ic" style="background:'+bg+';color:'+fg+'">'+(typeof poIco==='function'?poIco(ic):'')+'</div></div>';
+  };
+  var kpis='<div class="pj-kpis">'
+    +kpi('เรือออกวันนี้',cnt.go,'/ '+all.length+' ลำ','จากเรือทั้งหมดของท่านี้','ship','#2563EB','#EFF6FF')
+    +kpi('ผู้โดยสารวันนี้',tot,'pax','รวมทุกลำที่ออกจากท่านี้','users','#059669','#ECFDF5','#059669')
+    +kpi('เปลี่ยนตัวคน',subN,'คน',subN?'สลับจากที่วางไว้ในตารางงาน':'ไม่มีการสลับจากที่วางไว้','swap',
+         subN?'#D97706':'#64748B', subN?'#FFFBEB':'#F1F5F9', subN?'#D97706':null)
+    +kpi('ยังไม่มีกัปตัน',noCap,'ลำ',licBad?('ใบอนุญาตไม่ครบอีก '+licBad+' ลำ'):'ใบอนุญาตครบทุกลำ','warn',
+         (noCap||licBad)?'#DC2626':'#64748B',(noCap||licBad)?'#FEF2F2':'#F1F5F9', noCap?'#DC2626':null)
+    +'</div>';
   host.innerHTML='<style id="pj-style">'+pjCSS()+(typeof plCSS==='function'?plCSS():'')+'</style>'
-    +'<div class="pj-h"><div><div class="lab">Pier Office</div>'
-      +'<h1>'+poE(P.n||P.t)+' · ใบงานเรือ</h1>'
-      +'<p>'+poE(P.t)+' · จ่ายคนลงเรือของวันนี้ · ตัวเลข ลค · โปรแกรม · เวลาออก · ไกด์ ดึงจากระบบทั้งหมด</p></div></div>'
-    +'<div class="pj-bar">'
-      +'<button onclick="pjShift(-1)">&#8249;</button>'
-      +'<input type="date" value="'+_poDate+'" onchange="pjDate(this.value)">'
-      +'<button onclick="pjToday()">วันนี้</button>'
-      +'<span style="font-size:12px;color:#6E7684;margin-left:6px">เรือออก <b style="color:#16265C">'+cnt.go+'</b> / '+all.length+' ลำ · '
-        +'<b style="color:#0F6E56">'+tot+'</b> pax'
-        +(subN?(' · <b style="color:#B4560A">เปลี่ยนตัว '+subN+' คน</b>'):'')
-        +(noCap?(' · <b style="color:#C0271C">ยังไม่มีกัปตัน '+noCap+' ลำ</b>'):'')
-        +(licBad?(' · <b style="color:#C0271C">ใบอนุญาตไม่ครบ '+licBad+' ลำ</b>'):'')+'</span>'
-      +'<span style="flex:1"></span>'
-      +'<button class="gh" onclick="pjCopyYday(\''+P.k+'\')"'+(ro?' disabled':'')+'>&#8634; คัดลอกจากเมื่อวาน</button>'
-      +'<button onclick="poStaffOpen()">ทะเบียนพนักงาน</button>'
-      +'<div class="pj-wsw" title="จำนวนลำที่เห็นพร้อมกันต่อหนึ่งหน้าจอ">'
-        +[3,4,5].map(function(n){ return '<button class="'+(_pjW===n?'on':'')+'" onclick="pjWide('+n+')">'+n+' ลำ</button>'; }).join('')
+    +'<div class="pj-nh">'
+      +'<div class="pj-hl"><div class="pj-badge">'+poE(P.s||String(P.n||'').slice(0,2).toUpperCase())+'</div><div>'
+        +'<h1>'+poE(P.n||P.t)+' · ใบงานเรือ</h1>'
+        +'<p>'+poE(P.t)+' — จ่ายคนลงเรือของวันนี้<br>'
+        +'ตัวเลข ลค · โปรแกรม · เวลาออก · ไกด์ ดึงจากระบบทั้งหมด</p></div></div>'
+      +'<div class="pj-nbar">'
+        +'<button class="pri">ใบงานเรือ</button>'
+        +'<button onclick="pjGo(\'poa\')">ตารางการทำงาน</button>'
+        +'<button onclick="pjGo(\'pol\')">ใบอนุญาต</button>'
+        +'<button onclick="pjGo(\'po\')">เบิก-คืนอุปกรณ์</button>'
+        +'<span class="sep"></span>'
+        +'<button class="nav" onclick="pjShift(-1)" title="วันก่อนหน้า">&#8249;</button>'
+        +'<input type="date" value="'+_poDate+'" onchange="pjDate(this.value)">'
+        +'<button class="nav" onclick="pjShift(1)" title="วันถัดไป">&#8250;</button>'
+        +'<button class="now" onclick="pjToday()">วันนี้</button>'
       +'</div>'
-      +'<button class="pri" onclick="pjPrint()">พิมพ์ใบงาน</button>'
     +'</div>'
-    +'<div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:13px">'
+    +kpis
+    +'<div class="pj-frow">'
       +'<div class="pj-chips">'
         + chip('all','ทั้งหมด',all.length,'')
         + chip('go','เรือที่วิ่ง',cnt.go,'#0F6E56')
@@ -79624,14 +79708,22 @@ function renderPierJob(pier){
         + chip('work','ซ่อมบำรุง · ใช้คน',cnt.work,'#8A5A00')
         + chip('down','ไม่พร้อม',cnt.down,'#8B93A1')
       +'</div>'
-      +(cnt.clash?('<span style="font-size:11.5px;font-weight:800;color:#A0342A;background:#FCEFEE;border:1px solid #F0CFCB;border-radius:9px;padding:5px 11px">'
+      +(cnt.clash?('<span class="pj-warnc red">'
         +'&#9888; ขัดกัน '+cnt.clash+' ลำ · ช่างแจ้งว่าไม่พร้อม แต่มีโปรแกรมวางไว้</span>'):'')
       /* §pjAllDefault · เรือที่ยังไม่ได้ตั้งท่าประจำ จะไม่ขึ้นในหน้าท่าไหนเลย · ต้องบอก ไม่ใช่หายเงียบ */
       +(function(){ var np=(typeof BOATS!=='undefined'?BOATS:[]).filter(function(b){ return !(b.pier||''); });
         if(!np.length) return '';
-        return '<span title="'+poE(np.map(function(b){ return b.name||b.id; }).join(' \u00b7 '))+'" '
-          +'style="font-size:11.5px;font-weight:700;color:#8A5A00;background:#FBF0DD;border:1px solid #EFDCB4;border-radius:9px;padding:5px 11px">'
+        return '<span class="pj-warnc" title="'+poE(np.map(function(b){ return b.name||b.id; }).join(' \u00b7 '))+'">'
           +'&#9888; ยังไม่ได้ตั้งท่าประจำ '+np.length+' ลำ · ไม่ขึ้นในหน้าท่าไหนเลย — ตั้งได้ที่ Boat Operation</span>'; })()
+      +'<span style="flex:1"></span>'
+      +'<div class="pj-acts">'
+        +'<button class="gh" onclick="pjCopyYday(\''+P.k+'\')"'+(ro?' disabled':'')+'>&#8634; คัดลอกจากเมื่อวาน</button>'
+        +'<button onclick="poStaffOpen()">ทะเบียนพนักงาน</button>'
+        +'<div class="pj-wsw" title="จำนวนลำที่เห็นพร้อมกันต่อหนึ่งหน้าจอ">'
+          +[3,4,5].map(function(n){ return '<button class="'+(_pjW===n?'on':'')+'" onclick="pjWide('+n+')">'+n+' ลำ</button>'; }).join('')
+        +'</div>'
+        +'<button class="pri" onclick="pjPrint()">&#128424; พิมพ์ใบงาน</button>'
+      +'</div>'
     +'</div>'
     +(boats.length
       ? ('<div class="pj-strip w'+_pjW+'">'+boats.map(function(B){ return pjCard(B,_poPier,ro); }).join('')+'</div>')
@@ -79666,61 +79758,187 @@ function pjPrint(){
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
   var boats=poBoats(_poDate,_poPier), e=poE;
   if(!boats.length){ alert('วันนี้ไม่มีเรือออกจากท่านี้'); return; }
-  var css='@page{size:A4 landscape;margin:9mm}'
-   +'*{box-sizing:border-box}body{margin:0;font-family:"Sarabun","DM Sans",sans-serif;color:#242730;font-size:11px}'
-   +'.hd{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #16265C;padding-bottom:7px;margin-bottom:10px}'
-   +'.t1{font-size:16px;font-weight:800;color:#16265C}.t2{font-size:11px;color:#5A6270;margin-top:2px}'
-   +'.g{display:grid;grid-template-columns:1fr 1fr;gap:9px}'
-   +'.c{border:1px solid #B9BFC9;border-radius:8px;overflow:hidden;break-inside:avoid}'
-   +'.ch{padding:6px 10px;color:#fff;display:flex;justify-content:space-between;align-items:center}'
-   +'.ch b{font-size:13px;font-weight:800}.ch span{font-size:15px;font-weight:800}'
-   +'.cp{padding:5px 10px;color:#fff;font-size:12px;font-weight:800}'
-   +'table{border-collapse:collapse;width:100%}'
-   +'td{border-bottom:1px solid #E7EAEF;padding:3px 10px;font-size:10.5px}'
-   +'td.k{width:96px;color:#8B93A1;font-weight:700;font-size:8.5px;text-transform:uppercase;letter-spacing:.04em}'
-   +'.sec{background:#F2F5F9;font-size:8px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#5A6B85;padding:3px 10px}'
-   +'.px{display:flex;border-top:1px solid #B9BFC9}'
-   +'.px div{flex:1;text-align:center;padding:4px 2px;border-right:1px solid #E7EAEF}'
-   +'.px div:last-child{border-right:none;background:#F1F8F4}'
-   +'.px b{display:block;font-size:8px;color:#8B93A1;letter-spacing:.05em}'
-   +'.px i{font-style:normal;font-size:13px;font-weight:800}'
-   +'.nt{padding:5px 10px;font-size:10.5px;min-height:26px;border-top:1px solid #E7EAEF;color:#7A4A00}'
-   +'.sg{display:flex;gap:14px;margin-top:12px}'
-   +'.sg div{flex:1;border-top:1px solid #9BA3B0;padding-top:4px;text-align:center;font-size:10px;color:#5A6270}';
-  var cards=boats.map(function(B){
-    var rt=B.route||{}, J=pjOf(_poDate,B.bid), pax=pjPax(_poDate,B.bid,_poPier), G=pjGuides(_poDate,B.bid);
-    var col=(typeof pckBoatColor==='function')?pckBoatColor(B.bid):'#185FA5';
-    var row=function(k,v){ return '<tr><td class="k">'+k+'</td><td>'+(v?e(v):'<span style="color:#C9CFD8">—</span>')+'</td></tr>'; };
-    return '<div class="c">'
-     +'<div class="ch" style="background:'+col+'"><b>'+e(B.boat.name||B.bid)+'</b><span>'+e(B.dep||'--:--')+'</span></div>'
-     +'<div class="cp" style="background:'+(rt.color||'#5A6270')+'">'+e(rt.name||'')+'</div>'
-     +'<div class="sec">Captain &amp; Crew</div><table>'
-       +row('Captain',pjStaffName(J.cap)+plPrintLic(J.cap))+row('Asst. Captain',pjStaffName(J.asst)+plPrintLic(J.asst))
-       +[0,1,2].map(function(i){ return row('Crew '+(i+1),pjStaffName((J.crew||[])[i])+plPrintLic((J.crew||[])[i])); }).join('')
-       +[0,1].map(function(i){ return row('Island '+(i+1),pjStaffName((J.island||[])[i])); }).join('')
-     +'</table><div class="sec">Guides</div><table>'
-       +[0,1,2].map(function(i){ return row('Guide '+(i+1),G[i]||''); }).join('')
-     +'</table><div class="sec">Customer</div><table>'
-       +row('Wristband',J.wb||'')+row('Group',Object.keys(pax.langs).join(' · '))
-     +'</table>'
-     +'<div class="px"><div><b>AD</b><i>'+pax.ad+'</i></div><div><b>CHD</b><i>'+pax.chd+'</i></div>'
-       +'<div><b>INF</b><i>'+pax.inf+'</i></div><div><b>FOC</b><i>'+pax.foc+'</i></div>'
-       +'<div><b>TOTAL</b><i style="color:#0F6E56">'+(pax.ad+pax.chd+pax.inf+pax.foc)+'</i></div></div>'
-     +'<div class="nt"><b style="font-size:8px;color:#B4560A;letter-spacing:.1em">NOTE</b> '+e(J.note||'')+'</div>'
-     +'</div>';
-  }).join('');
-  var html='<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ใบงานเรือ · '+e(P.n)+' · '+e(_poDate)+'</title>'
-   +'<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">'
-   +'<style>'+css+'</style></head><body>'
-   +'<div class="hd"><div><div class="t1">ใบงานเรือ · '+e(P.n)+'</div><div class="t2">'+e(P.t)+' · '+e(_poDate)+' · เรือออก '+boats.length+' ลำ</div></div>'
-   +'<div style="text-align:right;font-size:10px;color:#5A6270">พิมพ์เมื่อ '+e(new Date().toLocaleString('th-TH'))+'</div></div>'
-   +'<div class="g">'+cards+'</div>'
-   +'<div class="sg"><div>เจ้าหน้าที่จ่ายงาน</div><div>หัวหน้าท่าเรือ</div></div>'
-   +'</body></html>';
-  var w=window.open('','_blank','width=1100,height=800');
+  var n=boats.length;
+  /* §pjSheet · ทุกลำต้องอยู่แผ่นเดียว · เรือยิ่งเยอะ ตัวยิ่งเล็กลงตามขั้น */
+  var fs = n<=6?10 : (n<=8?9.2 : (n<=10?8.4 : 7.6));
+  var kw = n<=6?96 : (n<=8?86 : (n<=10?76 : 68));
+  var hs = n<=6?11.5 : (n<=8?10.6 : (n<=10?9.8 : 9));
+  /* แถวเด็กเรือ/ประจำเกาะ/ไกด์ · เอาเท่าที่มีคนจริง จะได้ไม่เหลือแถวว่างเปล่าทั้งแผ่น */
+  var J=boats.map(function(B){ return pjOf(_poDate,B.bid); });
+  var Gs=boats.map(function(B){ return pjGuides(_poDate,B.bid)||[]; });
+  var mx=function(a){ var m=0; a.forEach(function(v){ if(v>m) m=v; }); return m; };
+  var nCrew=Math.max(2, Math.min(4, mx(J.map(function(j){ return (j.crew||[]).filter(Boolean).length; }))));
+  var nIsl =Math.min(2, mx(J.map(function(j){ return (j.island||[]).filter(Boolean).length; })));
+  var nGd  =Math.max(1, Math.min(3, mx(Gs.map(function(g){ return g.filter(Boolean).length; }))));
+
+  var css='@page{size:A4 landscape;margin:8mm}'
+   +'*{box-sizing:border-box}'
+   +'body{margin:0;background:#E9EBEF;font-family:"Noto Sans Thai","DM Sans",sans-serif;color:#1E293B}'
+   +'.tb{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:1120px;margin:0 auto 14px}'
+   +'.tb button{border:1px solid #E2E8F0;background:#fff;border-radius:11px;padding:8px 15px;'
+     +'font:700 12.5px inherit;color:#475569;cursor:pointer}'
+   +'.tb button:hover{background:#F8FAFC;color:#0F172A}'
+   +'.tb button.pri{background:#0F172A;border-color:#0F172A;color:#fff}'
+   +'.tb button.img{background:#4F46E5;border-color:#4F46E5;color:#fff}'
+   +'.tb button[disabled]{opacity:.55;cursor:progress}'
+   +'.tb .hint{font-size:11px;color:#94A3B8}'
+   +'.sheet{background:#fff;margin:0 auto;padding:12px 14px;border:1px solid #CBD5E1;border-radius:6px;'
+     +'max-width:1120px;box-shadow:0 2px 12px rgba(15,23,42,.07)}'
+   +'@media screen{body{padding:18px 16px 60px}}'
+   +'@media print{body{background:#fff;padding:0}.tb{display:none}'
+     +'.sheet{max-width:none;border:0;border-radius:0;box-shadow:none;padding:0;margin:0}}'
+   +'.shead{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #0F172A;'
+     +'padding-bottom:7px;margin-bottom:9px}'
+   +'.t1{font-size:15px;font-weight:800;color:#0F172A}'
+   +'.t2{font-size:10.5px;color:#64748B;margin-top:2px}'
+   +'.meta{text-align:right;font-size:9.5px;color:#94A3B8;line-height:1.6}'
+   +'table{border-collapse:collapse;width:100%;table-layout:fixed}'
+   +'th,td{border:1px solid #CBD5E1;padding:3px 6px;vertical-align:middle;word-break:break-word}'
+   +'th.k{background:#F8FAFC;text-align:left;width:'+kw+'px;font-size:8px;font-weight:800;letter-spacing:.05em;'
+     +'text-transform:uppercase;color:#64748B}'
+   +'thead th{color:#fff;padding:5px 7px;text-align:left}'
+   +'thead .bn{font-size:'+hs+'px;font-weight:800;display:block;line-height:1.25}'
+   +'thead .bt{font-size:'+(fs-1.4)+'px;font-weight:600;opacity:.85}'
+   +'tr.rt td{font-size:'+(fs-0.4)+'px;font-weight:700;color:#fff;padding:3px 7px}'
+   +'td{font-size:'+fs+'px}'
+   +'td.mut{color:#CBD5E1;text-align:center}'
+   +'tr.sec th,tr.sec td{background:#EEF2F7;font-size:7.5px;font-weight:800;letter-spacing:.11em;'
+     +'text-transform:uppercase;color:#475569;padding:2px 7px}'
+   +"tr.pax td{font:800 "+(fs+1.6)+"px 'DM Mono',monospace;text-align:center}"
+   +'tr.pax th{font-size:8px}'
+   +'.tot{color:#0F6E56}'
+   +'.lic{color:#94A3B8;font-size:'+(fs-1.6)+'px}'
+   +"td.tm{font:800 "+(fs+1.6)+"px 'DM Mono',monospace}"
+   +'td.nt{color:#92400E;font-size:'+(fs-0.6)+'px;height:24px}'
+   +'.sg{display:flex;gap:16px;margin-top:12px}'
+   +'.sg div{flex:1;border-top:1px solid #94A3B8;padding-top:4px;text-align:center;font-size:9.5px;color:#64748B}';
+
+  var mut=function(v){ return v?v:'<td class="mut">—</td>'; };
+  var cell=function(v){ return v?('<td>'+v+'</td>'):'<td class="mut">—</td>'; };
+  var lic=function(sid){ var t=''; try{ t=plPrintLic(sid).replace(/^\s*\(|\)\s*$/g,''); }catch(_){}
+    return t?(' <span class="lic">('+e(t)+')</span>'):''; };
+  var who=function(sid,withLic){ if(!sid) return ''; var nm=pjStaffName(sid); if(!nm) return '';
+    return e(nm)+(withLic?lic(sid):''); };
+  var row=function(k,fn,cls){
+    return '<tr'+(cls?' class="'+cls+'"':'')+'><th class="k">'+k+'</th>'
+      + boats.map(function(B,i){ return cell(fn(B,i)); }).join('') + '</tr>'; };
+  var sec=function(t){
+    return '<tr class="sec"><th>'+t+'</th>'+boats.map(function(){ return '<td></td>'; }).join('')+'</tr>'; };
+
+  var totPax=0;
+  var PX=boats.map(function(B){ var p=pjPax(_poDate,B.bid,_poPier);
+    p.all=p.ad+p.chd+p.inf+p.foc; totPax+=p.all; return p; });
+
+  var head='<thead><tr><th class="k" style="background:#0F172A;color:#fff">เรือ</th>'
+    + boats.map(function(B){
+        var col=(typeof pckBoatColor==='function')?pckBoatColor(B.bid):'#185FA5';
+        var ty=(B.boat.type||'')+(B.boat.engineCount?(' · '+B.boat.engineCount+' เครื่อง'):'');
+        return '<th style="background:'+col+'"><span class="bn">'+e(B.boat.name||B.bid)+'</span>'
+          +'<span class="bt">'+e(ty)+'</span></th>'; }).join('')
+    +'</tr></thead>';
+
+  var body='<tbody>'
+    +'<tr class="rt"><th class="k">โปรแกรม</th>'
+      + boats.map(function(B){ var rt=B.route||{};
+          return '<td style="background:'+(rt.color||'#64748B')+'">'+e(rt.name||'—')+'</td>'; }).join('')
+    +'</tr>'
+    +'<tr><th class="k">เวลาออก</th>'
+      + boats.map(function(B){ return '<td class="tm">'+e(B.dep||'--:--')+'</td>'; }).join('')
+    +'</tr>'
+    + sec('Captain &amp; Crew')
+    + row('กัปตัน',function(B,i){ return who(J[i].cap,1); })
+    + row('ผู้ช่วยกัปตัน',function(B,i){ return who(J[i].asst,1); })
+    + (function(){ var o=''; for(var c=0;c<nCrew;c++){ (function(c){
+        o+=row('เด็กเรือ '+(c+1),function(B,i){ return who((J[i].crew||[])[c],0); }); })(c); } return o; })()
+    + (function(){ var o=''; for(var c=0;c<nIsl;c++){ (function(c){
+        o+=row('ประจำเกาะ'+(nIsl>1?(' '+(c+1)):''),function(B,i){ return who((J[i].island||[])[c],0); }); })(c); } return o; })()
+    + sec('Guides')
+    + (function(){ var o=''; for(var c=0;c<nGd;c++){ (function(c){
+        o+=row('ไกด์ '+(c+1),function(B,i){ return e(Gs[i][c]||''); }); })(c); } return o; })()
+    + sec('Customer')
+    + row('สายรัดข้อมือ',function(B,i){ return e(J[i].wb||''); })
+    + row('กลุ่มภาษา',function(B,i){ return e(Object.keys(PX[i].langs||{}).join(' · ')); })
+    +'<tr class="pax"><th class="k">AD / CHD / INF / FOC</th>'
+      + PX.map(function(p){ return '<td>'+p.ad+' / '+p.chd+' / '+p.inf+' / '+p.foc+'</td>'; }).join('')
+    +'</tr>'
+    +'<tr class="pax"><th class="k">รวม</th>'
+      + PX.map(function(p){ return '<td class="tot">'+p.all+'</td>'; }).join('')
+    +'</tr>'
+    + sec('Note')
+    +'<tr><th class="k">หมายเหตุ</th>'
+      + boats.map(function(B,i){ return '<td class="nt">'+e(J[i].note||'')+'</td>'; }).join('')
+    +'</tr></tbody>';
+
+  var sheet='<div class="sheet" id="sheet">'
+    +'<div class="shead"><div><div class="t1">ใบงานเรือ · '+e(P.n||P.t)+'</div>'
+      +'<div class="t2">'+e(P.t)+' · '+e(_poDate)+' · เรือออก '+n+' ลำ · '+totPax+' pax</div></div>'
+      +'<div class="meta">พิมพ์เมื่อ '+e(new Date().toLocaleString('th-TH'))+'<br>'
+      +'ผู้จ่ายงาน · '+e((typeof poWho==='function'?poWho():'')||'—')+'</div></div>'
+    +'<table>'+head+body+'</table>'
+    +'<div class="sg"><div>เจ้าหน้าที่จ่ายงาน</div><div>หัวหน้าท่าเรือ</div><div>ผู้รับใบงาน</div></div>'
+    +'</div>';
+
+  /* §pjShot · โค้ดฝั่งหน้าต่างที่เด้งขึ้นมา · ไม่แตะแอปหลัก */
+  /* ชื่อไฟล์เป็นอังกฤษล้วน · ชื่อไทยบางเบราว์เซอร์ทิ้งทั้งชื่อแล้วตั้งเป็น download เฉย ๆ
+     และไฟล์นี้ต้องส่งต่อข้ามเครื่องข้ามแอป ชื่ออังกฤษปลอดภัยกว่า */
+  var fn=('boatjob_'+(P.k||_poPier||'pier')+'_'+_poDate).replace(/[^A-Za-z0-9_.-]+/g,'_');
+  var scr=""
+   +"var FN="+JSON.stringify(fn)+";"
+   +"function bz(t,d){var b=document.getElementById('bimg');b.textContent=t;b.disabled=!!d;}"
+   /* ชื่อไฟล์ต้องติดไปกับไฟล์จริง · data: URL ยาว ๆ เบราว์เซอร์จะทิ้งชื่อแล้วตั้งเป็น download เฉย ๆ
+      blob จึงเป็นทางหลัก · เผื่อ toBlob ไม่มีค่อยตกไปใช้ data: URL */
+   +"function save(c){var fin=function(u,rv){var a=document.createElement('a');a.href=u;a.download=FN+'.png';"
+     +"document.body.appendChild(a);a.click();a.remove();"
+     +"if(rv)setTimeout(function(){try{URL.revokeObjectURL(u);}catch(_){}},5000);"
+     +"bz('\u{1F4F7} \u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e40\u0e1b\u0e47\u0e19\u0e23\u0e39\u0e1b PNG',0);};"
+     +"try{if(c.toBlob){c.toBlob(function(b){b?fin(URL.createObjectURL(b),1):fin(c.toDataURL('image/png'),0);},'image/png');return;}}catch(_){}"
+     +"fin(c.toDataURL('image/png'),0);}"
+   +"function svgShot(ok,bad){try{"
+     +"var el=document.getElementById('sheet'),w=el.offsetWidth,h=el.offsetHeight,sc=2;"
+     /* ข้างใน foreignObject ต้องเป็น XML จริง ๆ · outerHTML ปล่อย <br> ลอยไว้ได้ แต่ XML ไม่ยอม
+        แล้วรูปจะโหลดไม่ขึ้นแบบเงียบ ๆ · XMLSerializer ปิดแท็กให้ครบเอง */
+     +"var wr=document.createElement('div');"
+     +"wr.setAttribute('xmlns','http://www.w3.org/1999/xhtml');"
+     +"wr.setAttribute('style','width:'+w+'px;background:#fff');"
+     +"var sy=document.createElement('style');sy.textContent=document.getElementById('sty').textContent;"
+     +"wr.appendChild(sy);wr.appendChild(el.cloneNode(true));"
+     +"var inner=new XMLSerializer().serializeToString(wr);"
+     +"var svg='<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"'+w+'\" height=\"'+h+'\">'"
+       +"+'<foreignObject width=\"100%\" height=\"100%\">'+inner+'</foreignObject></svg>';"
+     +"var im=new Image();"
+     +"im.onload=function(){var c=document.createElement('canvas');c.width=w*sc;c.height=h*sc;"
+       +"var x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.scale(sc,sc);"
+       +"x.drawImage(im,0,0);try{ok(c);}catch(_){bad();}};"
+     +"im.onerror=function(){bad();};"
+     +"im.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);"
+   +"}catch(_){bad();}}"
+   +"function shot(){bz('\u0e01\u0e33\u0e25\u0e31\u0e07\u0e2a\u0e23\u0e49\u0e32\u0e07\u0e23\u0e39\u0e1b...',1);"
+     +"var el=document.getElementById('sheet');"
+     +"var bad=function(){svgShot(save,function(){bz('\u{1F4F7} \u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e40\u0e1b\u0e47\u0e19\u0e23\u0e39\u0e1b PNG',0);"
+       +"alert('\u0e2a\u0e23\u0e49\u0e32\u0e07\u0e23\u0e39\u0e1b\u0e44\u0e21\u0e48\u0e2a\u0e33\u0e40\u0e23\u0e47\u0e08 \u00b7 \u0e43\u0e0a\u0e49\u0e1b\u0e38\u0e48\u0e21 \u0e1e\u0e34\u0e21\u0e1e\u0e4c \u0e41\u0e25\u0e49\u0e27\u0e40\u0e25\u0e37\u0e2d\u0e01 Save as PDF \u0e41\u0e17\u0e19\u0e44\u0e14\u0e49');});};"
+     +"var run=function(){try{html2canvas(el,{scale:2,backgroundColor:'#ffffff',logging:false})"
+       +".then(function(c){save(c);}).catch(bad);}catch(_){bad();}};"
+     +"if(window.html2canvas) return run();"
+     +"var s=document.createElement('script');"
+     +"s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';"
+     +"s.onload=run;s.onerror=bad;document.head.appendChild(s);}";
+
+  var html='<!doctype html><html lang="th"><head><meta charset="utf-8">'
+   +'<title>ใบงานเรือ · '+e(P.n||P.t)+' · '+e(_poDate)+'</title>'
+   +'<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@500;700&family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet">'
+   +'<style id="sty">'+css+'</style></head><body>'
+   +'<div class="tb">'
+     +'<button class="pri" onclick="window.print()">&#128424; พิมพ์</button>'
+     +'<button class="img" id="bimg" onclick="shot()">&#128247; บันทึกเป็นรูป PNG</button>'
+     +'<span class="hint">ปุ่มสองปุ่มนี้อยู่บนหน้าจอเท่านั้น · ไม่ติดไปกับกระดาษและไม่ติดในรูป</span>'
+   +'</div>'
+   + sheet
+   +'<script>'+scr+'<\/script></body></html>';
+
+  var w=window.open('','_blank','width=1180,height=860');
   if(!w){ alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ · อนุญาต pop-up ของหน้านี้ก่อน'); return; }
   w.document.open(); w.document.write(html); w.document.close();
-  setTimeout(function(){ try{ w.focus(); w.print(); }catch(_){} }, 600);
+  setTimeout(function(){ try{ w.focus(); }catch(_){} }, 300);
 }
 
 function poSignSheet(bid){
