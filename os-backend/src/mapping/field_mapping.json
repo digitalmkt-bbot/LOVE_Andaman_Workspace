@@ -6801,6 +6801,42 @@
       "db_type": "text"
     }
   },
+  "pier_kinds": {
+    "id": {
+      "source": "pier_kinds[].id (record id; generated if absent)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "name": {
+      "source": "name",
+      "kind": "scalar",
+      "db_type": "text",
+      "note": "ชื่อประเภท เช่น ตีนกบ · หน้ากาก · เสื้อชูชีพ"
+    },
+    "unit": {
+      "source": "unit",
+      "kind": "scalar",
+      "db_type": "text",
+      "note": "หน่วยนับของประเภทนี้ เช่น คู่ · ชิ้น · ตัว"
+    },
+    "color": {
+      "source": "color",
+      "kind": "scalar",
+      "db_type": "text",
+      "note": "สีป้ายของประเภทนี้"
+    },
+    "ord": {
+      "source": "ord",
+      "kind": "scalar",
+      "db_type": "bigint",
+      "note": "ลำดับที่แสดงในตารางและบนใบเบิก"
+    },
+    "active": {
+      "source": "active",
+      "kind": "scalar",
+      "db_type": "boolean"
+    }
+  },
   "pier_moves": {
     "id": {
       "source": "pier_moves[].id (record id; generated if absent)",

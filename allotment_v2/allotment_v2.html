@@ -41271,6 +41271,7 @@ window._laReloadData=function(){
     if(typeof VANJOB_SENT!=='undefined' && d.vanjob_sent) VANJOB_SENT=d.vanjob_sent;
     if(typeof VANJOB_DRIVER!=='undefined' && d.vanjob_driver) VANJOB_DRIVER=d.vanjob_driver;
     if(typeof BOAT_CAP_OVR!=='undefined' && d.boat_capovr) BOAT_CAP_OVR=d.boat_capovr;   // §cap override รายวัน
+    if(typeof PIER_KINDS!=='undefined' && Array.isArray(d.pier_kinds)) PIER_KINDS=d.pier_kinds;     // §poKinds
     if(typeof PIER_ITEMS!=='undefined' && Array.isArray(d.pier_items)) PIER_ITEMS=d.pier_items;   // §pierOffice
     if(typeof PIER_MOVES!=='undefined' && Array.isArray(d.pier_moves)) PIER_MOVES=d.pier_moves;
     if(typeof PIER_STAFF!=='undefined' && Array.isArray(d.pier_staff)) PIER_STAFF=d.pier_staff;
@@ -76381,8 +76382,33 @@ function b2dMarketDetail(L,w,agAll,mktCode){
 var PO_PIERS=[{k:'panwa',n:'Phuket',t:'Visit Panwa · ภูเก็ต',s:'VP',c:'#0F6E56'},
                {k:'tublamu',n:'Tub Lamu',t:'ทับละมุ · พังงา',s:'TL',c:'#185FA5'},
                {k:'ranong',n:'Ranong',t:'ระนอง',s:'RN',c:'#BA7517'}];
-var PO_KIND={fin:{t:'ตีนกบ',u:'คู่',c:'#0F6E56'},mask:{t:'หน้ากาก',u:'ชิ้น',c:'#185FA5'},towel:{t:'ผ้าเช็ดตัว',u:'ผืน',c:'#BA7517'}};
-var PO_KORDER=['fin','mask','towel'];
+/* §poKinds · ประเภทของในทะเบียน · ผู้ใช้ตั้งเอง · [{id, name, unit, color, ord, active}]
+   id ของสามตัวแรกคงเป็น fin/mask/towel เหมือนเดิม ของเก่าที่อ้างอยู่จึงไม่หลุด */
+var PIER_KINDS=[];
+var PO_KIND_SEED=[{id:'fin',name:'ตีนกบ',unit:'คู่',color:'#0F6E56',ord:1,active:true},
+                  {id:'mask',name:'หน้ากาก',unit:'ชิ้น',color:'#185FA5',ord:2,active:true},
+                  {id:'towel',name:'ผ้าเช็ดตัว',unit:'ผืน',color:'#BA7517',ord:3,active:true}];
+var PO_KIND={}, PO_KORDER=[];
+function poKinds(){
+  return (PIER_KINDS||[]).filter(function(k){ return k && k.active!==false; })
+    .sort(function(a,b){ return (+a.ord||0)-(+b.ord||0); });
+}
+/* ประกอบ PO_KIND / PO_KORDER ใหม่จากข้อมูล · เรียกทุกครั้งที่ประเภทเปลี่ยน
+   จุดเรียกใช้เดิมทั้งหมดอ่านสองตัวนี้ จึงไม่ต้องแก้ที่ไหนอีก */
+function poKindSync(){
+  if(!Array.isArray(PIER_KINDS) || !PIER_KINDS.length)
+    PIER_KINDS=PO_KIND_SEED.map(function(x){ return Object.assign({},x); });
+  PO_KIND={}; PO_KORDER=[];
+  poKinds().forEach(function(k){
+    PO_KIND[k.id]={t:k.name||k.id, u:k.unit||'ชิ้น', c:k.color||'#5F6C7B'};
+    PO_KORDER.push(k.id);
+  });
+  // ของที่อ้างประเภทซึ่งไม่มีอยู่แล้ว · เติมที่ว่างไว้ ดีกว่าปล่อยให้อ่านค่าจาก undefined แล้วหน้าขาว
+  try{ (PIER_ITEMS||[]).forEach(function(it){
+    var k=it&&it.kind; if(!k || PO_KIND[k]) return;
+    PO_KIND[k]={t:String(k)+' (ประเภทถูกลบ)', u:'ชิ้น', c:'#9A9A93'}; PO_KORDER.push(k);
+  }); }catch(_){}
+}
 /* ถัง · เรียงตามลำดับที่โชว์บนแถบสัดส่วน */
 var PO_BUCKET=[{k:'ready',t:'พร้อมใช้',c:'#1C7A4E'},{k:'onboat',t:'อยู่กับเรือ',c:'#185FA5'},
                {k:'dirty',t:'รอส่งซัก',c:'#B4560A'},{k:'laundry',t:'อยู่ร้านซัก',c:'#8A6D1F'},
@@ -76399,6 +76425,7 @@ var PIER_ITEMS_SEED=(function(){
   return out;
 })();
 var PIER_ITEMS=PIER_ITEMS_SEED.map(function(x){return Object.assign({},x);});
+try{ poKindSync(); }catch(_){}   // §poKinds · หน้าอื่นอ่าน PO_KIND ได้ตั้งแต่ก่อนเปิดทะเบียนของ
 var PIER_MOVES=[];
 var PIER_STAFF=[];
 var PIER_DUTY={};
@@ -76414,6 +76441,7 @@ var PIER_JOB={};    // §pierJob · 'YYYY-MM-DD::boatId' -> {cap, asst, crew:[],
 (function(){ try{
   var K=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2');
   var d=JSON.parse(localStorage.getItem(K)||'{}');
+  if(Array.isArray(d.pier_kinds) && d.pier_kinds.length) PIER_KINDS=d.pier_kinds;   // §poKinds
   if(Array.isArray(d.pier_items) && d.pier_items.length) PIER_ITEMS=d.pier_items;
   if(Array.isArray(d.pier_moves)) PIER_MOVES=d.pier_moves;
   if(Array.isArray(d.pier_staff)) PIER_STAFF=d.pier_staff;
@@ -76471,6 +76499,7 @@ function poPersist(){
       var K=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2');
       d=JSON.parse(localStorage.getItem(K)||'{}');
     }
+    d.pier_kinds=PIER_KINDS;   // §poKinds
     d.pier_items=PIER_ITEMS; d.pier_moves=PIER_MOVES; d.pier_staff=PIER_STAFF; d.pier_duty=PIER_DUTY;
     d.pier_team=PIER_TEAM; d.pier_job=PIER_JOB;
     d.pier_lic_types=PIER_LIC_TYPES; d.pier_lic_classes=PIER_LIC_CLASSES;
@@ -77049,28 +77078,99 @@ function poStaffToggle(id){
   poPersist(); poStaffOpen();
 }
 
+/* §poKinds · ตั้งประเภทเอง · ใช้ร่วมกันทุกท่า เพราะของชนิดเดียวกันควรนับหน่วยเดียวกัน */
+function poKindId(){ return 'pk_'+Math.random().toString(36).slice(2,7); }
+function poKindAdd(){
+  if(!poGuard()) return;
+  var L=poKinds();
+  PIER_KINDS.push({id:poKindId(), name:'', unit:'ชิ้น', color:'#5F6C7B',
+                   ord:(L.length?((+L[L.length-1].ord||0)+1):1), active:true});
+  poKindSync(); poPersist(); poItemsOpen();
+}
+function poKindSet(id, f, v){
+  if(!poGuard()) return;
+  var k=(PIER_KINDS||[]).filter(function(x){ return x.id===id; })[0]; if(!k) return;
+  k[f]=String(v==null?'':v).slice(0,40);
+  poKindSync(); poPersist();
+  if(f!=='name' && f!=='unit') poItemsOpen();   // พิมพ์ชื่อ/หน่วยอยู่ ไม่ต้องวาดใหม่ให้หลุดโฟกัส
+}
+function poKindMove(id, dir){
+  if(!poGuard()) return;
+  var L=poKinds(), i=-1; L.forEach(function(x,n){ if(x.id===id) i=n; });
+  var j=i+dir; if(i<0 || j<0 || j>=L.length) return;
+  var a=L[i].ord, b=L[j].ord;
+  if(a===b || a==null || b==null){ L.forEach(function(x,n){ x.ord=n+1; }); a=L[i].ord; b=L[j].ord; }
+  L[i].ord=b; L[j].ord=a;
+  poKindSync(); poPersist(); poItemsOpen();
+}
+function poKindDel(id){
+  if(!poGuard()) return;
+  var n=(PIER_ITEMS||[]).filter(function(i){ return i.kind===id; }).length;
+  if(n){ alert('ลบไม่ได้ · ยังมีของ '+n+' รายการอยู่ในประเภทนี้\n\nย้ายของไปประเภทอื่นหรือปิดของเหล่านั้นก่อน'); return; }
+  if(!confirm('ลบประเภทนี้?')) return;
+  PIER_KINDS=(PIER_KINDS||[]).filter(function(x){ return x.id!==id; });
+  poKindSync(); poPersist(); poItemsOpen();
+}
 function poItemsOpen(){
+  poKindSync();
   var its=(PIER_ITEMS||[]).filter(function(i){ return i.pier===_poPier; });
   var body='<div style="font-size:12px;color:#7C8091;margin-bottom:10px">"ทะเบียน" คือจำนวนที่ซื้อเข้ามาทั้งหมด · ยอดคงเหลือคำนวณจากรายการเคลื่อนไหว ไม่ต้องมาแก้มือ</div>';
   body+=its.map(function(it){
     var b=poBal(it.id), u=PO_KIND[it.kind]?PO_KIND[it.kind].u:'ชิ้น';
+    var KM=PO_KIND[it.kind]||{t:it.kind,u:'ชิ้น',c:'#9A9A93'};
     return '<div style="'+poRowCss()+'">'
-      +'<span class="po-pill" style="background:'+PO_KIND[it.kind].c+'1f;color:'+PO_KIND[it.kind].c+'">'+PO_KIND[it.kind].t+'</span>'
+      // §poKinds · ย้ายของข้ามประเภทได้ · ไม่งั้นเพิ่มประเภทใหม่แล้วของเก่าย้ายมาไม่ได้เลย
+      +'<select onchange="poItemKind(\''+it.id+'\',this.value)" class="po-kpick" '
+        +'style="border:1px solid '+KM.c+'55;background:'+KM.c+'14;color:'+KM.c+'">'
+        + poKinds().map(function(k){ return '<option value="'+poE(k.id)+'"'+(k.id===it.kind?' selected':'')+'>'
+            +poE(k.name||k.id)+'</option>'; }).join('')
+        + (PO_KIND[it.kind]&&poKinds().some(function(k){ return k.id===it.kind; })?''
+            :('<option value="'+poE(it.kind)+'" selected>'+poE(KM.t)+'</option>'))
+      +'</select>'
       +'<div style="flex:1"><input id="poit_'+it.id+'" value="'+poE(it.label)+'" style="border:1px solid #D8D4CA;border-radius:8px;padding:5px 9px;font:600 12.5px inherit;width:100%;font-family:inherit"></div>'
       +poIn('poitt_'+it.id, poNum(it.total), '', 66)
       +'<span style="font-size:11px;color:#7C8091;width:56px">'+u+' · เหลือ '+b.inhand+'</span>'
       +'<button class="po-btn" onclick="poItemOff(\''+it.id+'\')">'+(it.active===false?'เปิดใช้':'ปิด')+'</button></div>';
   }).join('');
+  // §poKinds · จัดประเภทเอง · อยู่เหนือช่องเพิ่มรายการ เพราะต้องมีประเภทก่อนถึงจะเพิ่มของได้
+  body+='<div style="margin-top:14px;border-top:1px dashed #D8D4CA;padding-top:12px">'
+    +'<div style="font-size:11.5px;font-weight:800;color:#16265C;margin-bottom:3px">ประเภทของ</div>'
+    +'<div style="font-size:11px;color:#8a8a82;margin-bottom:8px">ตั้งเองได้ · ชื่อ หน่วยนับ สี และลำดับที่โชว์ · '
+      +'ใช้ร่วมกันทุกท่า เพราะของชนิดเดียวกันควรนับหน่วยเดียวกัน</div>'
+    + poKinds().map(function(k,i,arr){
+        return '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">'
+          +'<input type="color" value="'+poE(k.color||'#5F6C7B')+'" onchange="poKindSet(\''+poE(k.id)+'\',\'color\',this.value)" '
+            +'style="width:28px;height:28px;border:none;background:none;cursor:pointer;padding:0">'
+          +'<input value="'+poE(k.name||'')+'" placeholder="ชื่อประเภท เช่น เสื้อชูชีพ" '
+            +'oninput="poKindSet(\''+poE(k.id)+'\',\'name\',this.value)" '
+            +'style="flex:1;border:1px solid #D8D4CA;border-radius:8px;padding:5px 9px;font:600 12.5px inherit;font-family:inherit">'
+          +'<input value="'+poE(k.unit||'')+'" placeholder="หน่วย" title="หน่วยนับ เช่น คู่ · ตัว · ชิ้น" '
+            +'oninput="poKindSet(\''+poE(k.id)+'\',\'unit\',this.value)" '
+            +'style="width:74px;border:1px solid #D8D4CA;border-radius:8px;padding:5px 9px;font:600 12.5px inherit;font-family:inherit">'
+          +'<button class="po-btn" onclick="poKindMove(\''+poE(k.id)+'\',-1)"'+(i===0?' disabled':'')+' title="ขึ้น">&#9650;</button>'
+          +'<button class="po-btn" onclick="poKindMove(\''+poE(k.id)+'\',1)"'+(i===arr.length-1?' disabled':'')+' title="ลง">&#9660;</button>'
+          +'<button class="po-btn" onclick="poKindDel(\''+poE(k.id)+'\')" title="ลบประเภท">&times;</button>'
+        +'</div>'; }).join('')
+    + poBtn('+ เพิ่มประเภท','poKindAdd()')
+    +'</div>';
   body+='<div style="margin-top:14px;border-top:1px dashed #D8D4CA;padding-top:12px">'
     +'<div style="font-size:11.5px;font-weight:800;color:#16265C;margin-bottom:7px">เพิ่มรายการ</div>'
     +'<div style="display:flex;gap:7px;flex-wrap:wrap;align-items:center">'
     +'<select id="poni_kind" style="border:1px solid #D8D4CA;border-radius:8px;padding:6px 9px;font:600 12.5px inherit;font-family:inherit">'
-    +PO_KORDER.map(function(k){ return '<option value="'+k+'">'+PO_KIND[k].t+' ('+PO_KIND[k].u+')</option>'; }).join('')+'</select>'
+    +poKinds().map(function(k){ return '<option value="'+poE(k.id)+'">'+poE(k.name||k.id)+' ('+poE(k.unit||'ชิ้น')+')</option>'; }).join('')+'</select>'
     +poIn('poni_label','','ชื่อ/แบบ เช่น ตีนกบ · L (42-44)',230)+poIn('poni_total','','จำนวน',80)
     +poBtn('เพิ่ม','poItemAdd()',1)+'</div></div>';
   poModal('ทะเบียนของ · '+poE(poPierName()), body,
     poBtn('ปิด','poModalClose()')+poBtn('บันทึกชื่อ/จำนวน','poItemsSave()',1), 700);
 }
+/* §poKinds · ดรอปดาวน์ประเภทในแถวของ · หน้าตาเหมือนป้ายเดิม แต่กดเปลี่ยนได้ */
+(function(){ try{
+  if(document.getElementById('po-kpick-css')) return;
+  var st=document.createElement('style'); st.id='po-kpick-css';
+  st.textContent='#po-modal .po-kpick{border-radius:999px;padding:3px 8px;'
+    +"font:800 10.5px 'DM Sans','Noto Sans Thai',sans-serif;cursor:pointer;max-width:118px}";
+  document.head.appendChild(st);
+}catch(_){} })();
 function poItemsSave(){
   (PIER_ITEMS||[]).forEach(function(it){
     if(it.pier!==_poPier) return;
@@ -77082,7 +77182,16 @@ function poItemsSave(){
 }
 function poItemAdd(){
   var lb=poV('poni_label').trim(); if(!lb){ alert('ใส่ชื่อรายการ'); return; }
-  PIER_ITEMS.push({id:poUid('pi_'), pier:_poPier, kind:poV('poni_kind')||'fin', label:lb, total:poNum(poV('poni_total')), active:true, note:''});
+  var L=poKinds();
+  if(!L.length){ alert('ยังไม่มีประเภทของ · กด "+ เพิ่มประเภท" ก่อน'); return; }
+  PIER_ITEMS.push({id:poUid('pi_'), pier:_poPier, kind:poV('poni_kind')||L[0].id,
+                   label:lb, total:poNum(poV('poni_total')), active:true, note:''});
+  poPersist(); poItemsOpen();
+}
+/* §poKinds · ย้ายของไปประเภทอื่น · หน่วยนับกับสีจะเปลี่ยนตามทันที */
+function poItemKind(id, kind){
+  if(!poGuard()) return;
+  (PIER_ITEMS||[]).forEach(function(i){ if(i.id===id) i.kind=kind; });
   poPersist(); poItemsOpen();
 }
 function poItemOff(id){

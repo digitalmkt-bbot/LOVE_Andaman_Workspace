@@ -6320,6 +6320,37 @@
     "foreign_keys": [],
     "rows": 0
   },
+  "pier_kinds": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "text"
+      },
+      {
+        "name": "name",
+        "type": "text"
+      },
+      {
+        "name": "unit",
+        "type": "text"
+      },
+      {
+        "name": "color",
+        "type": "text"
+      },
+      {
+        "name": "ord",
+        "type": "bigint"
+      },
+      {
+        "name": "active",
+        "type": "boolean"
+      }
+    ],
+    "primary_key": "id",
+    "foreign_keys": [],
+    "rows": 0
+  },
   "pier_moves": {
     "columns": [
       {
