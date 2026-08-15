@@ -79263,7 +79263,14 @@ function pjCSS(){
   +H+' .pj-pop .pf{font-size:10.5px;color:#6E7684;line-height:1.6;margin-top:9px;border-top:1px solid #F0F2F6;padding-top:8px}'
   +H+' .pj-rst{display:block;width:100%;margin-top:8px;padding:5px 0;font-size:10.5px;font-weight:700;color:#4A5D7A;background:#F4F6F9;border:1px solid #E1E4EA;border-radius:7px;cursor:pointer}'
   +H+' .pj-rst:hover{background:#E9EDF3}'
-  +H+' .bc .stbar{height:32px;padding:0 15px;background:#FAFBFC;border-bottom:1px solid #EFF1F5;display:flex;align-items:center;gap:8px;overflow:hidden}'
+  +H+' .bc .stbar{height:32px;padding:0 11px 0 15px;background:#FAFBFC;border-bottom:1px solid #EFF1F5;display:flex;align-items:center;gap:8px;overflow:hidden}'
+  /* §pjLock2 · ป้ายอยู่ในกล่องที่ยอมโดนตัด · ปุ่มอยู่นอกกล่องและไม่ยอมย่อ */
+  +H+' .bc .stbar .stw{flex:1 1 auto;min-width:0;overflow:hidden;display:flex;align-items:center;gap:8px}'
+  +H+' .pj-lb{flex:0 0 auto;border:1px solid #0F6E56;background:#0F6E56;color:#fff;border-radius:7px;'
+     +'padding:3px 10px;font:800 10.5px inherit;cursor:pointer;white-space:nowrap;line-height:1.55}'
+  +H+' .pj-lb:hover{background:#0B5744;border-color:#0B5744}'
+  +H+' .pj-lb.ed{background:#FFF6E5;border-color:#EFD9AE;color:#8A5A00}'
+  +H+' .pj-lb.ed:hover{background:#FBEDD3;border-color:#E3C88F;color:#7A4E00}'
   +H+' .pj-sub{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:2px 8px;background:#FFF0D8;color:#B4560A}'
   +H+' .pj-move{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:2px 8px;background:#E9EFF7;color:#20477E;white-space:nowrap}'
   +H+' .pj-shop{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:2px 8px;background:#F2EBFA;color:#5B3B96;white-space:nowrap}'
@@ -79297,9 +79304,7 @@ function pjCSS(){
   +H+' .pj-note{height:56px;overflow:auto;margin:10px 15px 12px;border:1px dashed #E5D3A8;border-radius:9px;background:#fff;padding:8px 11px;font-size:12px;font-weight:600;color:#7A4A00;line-height:1.55;outline:none}'
   +H+' .pj-note:focus{border-style:solid;border-color:#D9A441;box-shadow:0 0 0 3px rgba(217,164,65,.15)}'
   +H+' .pj-note:empty:before{content:attr(data-ph);color:#C9CFD8;font-weight:400}'
-  +H+' .bc .foot{margin-top:auto;min-height:46px;display:flex;align-items:center;gap:7px;flex-wrap:wrap;'
-     +'padding:8px 15px;border-top:1px solid #EFF1F5}'
-  +H+' .bc .foot button{flex:0 0 auto;white-space:nowrap}'
+  +H+' .bc .foot{margin-top:auto;height:46px;display:flex;align-items:center;gap:8px;padding:0 15px;border-top:1px solid #EFF1F5;overflow:hidden}'
   +H+' .bc .foot button{border:1px solid #D9DDE4;background:#fff;border-radius:7px;padding:4px 10px;font:700 11px inherit;color:#5A6270;cursor:pointer}'
   +H+' .bc .foot button:hover{border-color:#16265C;color:#16265C}'
   +H+' .bc .foot button.gh{background:#F0F6F3;border-color:#BFE0CD;color:#0F6E56}'
@@ -79591,13 +79596,14 @@ function pjCard(B, pier, ro){
             +(pjStIsCustom(ST.k)?('<button class="pj-rst" onclick="pjStColorReset(\''+ST.k+'\')">คืนค่าสีเดิมของสถานะนี้</button>'):'')
             +'</div></div>'))
      +'</div>'
-   +'<div class="stbar">'
+   +'<div class="stbar"><span class="stw">'
      +'<span class="pj-stq" style="background:'+SM.bg+';color:'+SM.fg+';border:1px solid '+SM.bd+'">'+poE(SM.t)+'</span>'
      +(going
         ? (n?('<span class="pj-sub">'+n+' SUB'+(n>1?'S':'')+'</span>')
              :(J._std?'<span class="pj-std">&#10003; ทีมประจำ</span>':'<span class="pj-std">&#10003; STANDARD</span>'))
         : '')
-     +(lk?('<span class="pj-lock" title="ใบนี้ยืนยันแล้ว · กดแก้ไขที่ท้ายการ์ดก่อนถึงจะเปลี่ยนคนได้">&#128274; จัดเสร็จแล้ว</span>'):'')
+     /* §pjLock2 · คนที่มีสิทธิ์แก้อ่านสถานะจากตัวปุ่มมุมขวาได้อยู่แล้ว · ป้ายนี้ไว้ให้คนที่ไม่มีปุ่ม */
+     +((lk&&ro)?('<span class="pj-lock" title="ใบนี้ยืนยันแล้ว">&#128274; จัดเสร็จแล้ว</span>'):'')
      +(going&&pax.n?('<span class="pj-stmeta">'+pax.n+' booking</span>'):'')
      /* §pjPierNow · ลำนี้ไม่ใช่ของประจำท่า หรือไม่ได้อยู่ที่ท่า · ต้องบอกให้เห็นตั้งแต่แถบสถานะ */
      +((B._asn && B._asn.toPier===pier && B._asn.fromPier && B._asn.fromPier!==pier)
@@ -79609,6 +79615,12 @@ function pjCard(B, pier, ro){
      +(B._shop?('<span class="pj-shop" title="เรือไม่ได้อยู่ที่ท่า · ท่านี้เป็นผู้รับผิดชอบ">อยู่อู่ '+poE(B._shop)+'</span>'):'')
      +((!going&&ST.mj.length)?('<span class="pj-stmeta" title="'+poE(ST.mj.map(function(m){ return (m.no||'')+' '+(m.title||m.type||''); }).join(' \u00b7 '))+'">งานซ่อม '+ST.mj.length+' ใบ'
         +(ST.mj[0]&&ST.mj[0].no?(' \u00b7 '+poE(ST.mj[0].no)):'')+'</span>'):'')
+     +'</span>'
+     /* §pjLock2 · ปุ่มปิด/เปิดใบ · มุมขวาของแถบสถานะ · คนที่แก้ไม่ได้ไม่ต้องเห็น */
+     +(ro?''
+        :(lk
+          ? ('<button class="pj-lb ed" onclick="pjLockSet(\''+bid+'\',0)" title="เปิดใบนี้ให้แก้ไขอีกครั้ง">&#9998; แก้ไข</button>')
+          : ('<button class="pj-lb" onclick="pjLockSet(\''+bid+'\',1)" title="ปิดใบนี้ · ต้องกดแก้ไขก่อนถึงจะเปลี่ยนคนได้">&#10003; จัดเสร็จแล้ว</button>')))
    +'</div>'
    /* §pjWork · ชื่อตำแหน่งเปลี่ยนตามงาน · ชื่อคนยังมาจากทะเบียนพนักงานท่าเรือชุดเดิม
       ช่องที่เก็บยังเป็น cap/asst/crew/island ชุดเดิม จึงไหลเข้าตารางการทำงานเองอยู่แล้ว */
@@ -79701,11 +79713,6 @@ function pjCard(B, pier, ro){
      +'<button onclick="pjTeamSave(\''+bid+'\')"'+(lro?' disabled':'')+'>ตั้งเป็นทีมประจำ</button>'
      +'<span style="flex:1"></span>'
      +'<button onclick="pjGuideOpen(\''+bid+'\')">จัดไกด์</button>'
-     /* §pjLock · ปุ่มปิด/เปิดใบ · คนที่ไม่มีสิทธิ์แก้ก็ไม่ควรเห็นปุ่มนี้เลย */
-     +(ro?''
-        :(lk
-          ? ('<button class="edit" onclick="pjLockSet(\''+bid+'\',0)" title="เปิดใบนี้ให้แก้ไขอีกครั้ง">&#9998; แก้ไข</button>')
-          : ('<button class="done" onclick="pjLockSet(\''+bid+'\',1)" title="ปิดใบนี้ · ต้องกดแก้ไขก่อนถึงจะเปลี่ยนคนได้">&#10003; จัดเสร็จแล้ว</button>')))
    +'</div></div>';
   return h;
 }
