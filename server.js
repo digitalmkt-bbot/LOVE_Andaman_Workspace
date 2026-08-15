@@ -184,7 +184,7 @@ const B2C_OWN_BK = new Set([
   'pickupself','pickuparea','pickupzone','hotelname','dropoffhotelname',
   'paymentsnapshot_method','paymentsnapshot_netdays','paymentsnapshot_source',
   'paymentsnapshot_contractversion','paymentsnapshot_paid','paymentsnapshot_paidstatus',
-  'paymentsnapshot_deposit','paymentsnapshot_balance',   // §deposit · mapper has always produced these; columns added by migration 010
+  'paymentsnapshot_deposit','paymentsnapshot_balance',   // §deposit · mapper has always produced these; columns added by migration 013
   'pricebreakdown_seat','pricebreakdown_addon','pricebreakdown_focdiscount',
   'pricebreakdown_discount','pricebreakdown_extra','pricebreakdown_total',
 ]);
@@ -241,7 +241,7 @@ const B2C_OWN_BK = new Set([
 // v19: nationality no longer needs a hand-written alias for every demonym — 'Slovak' and 'Qatari'
 //      were importing blank (LOV-9260122) while ICU knew 'Slovakia' and 'Qatar'. Also stops ICU's
 //      withdrawn codes from winning a name collision, which had 'Serbia' resolving to YU.
-// v20: paymentSnapshot.deposit / .balance finally have somewhere to land (migration 010) and are on
+// v20: paymentSnapshot.deposit / .balance finally have somewhere to land (migration 013) and are on
 //      the B2C_OWN_BK whitelist. The mapper has produced both all along and decomposeBlob dropped
 //      them for want of a column, so no source row changed and the hash would never re-fire — this
 //      bump is what back-fills the 92 orders carrying a deposit and the 9 with a balance owed.

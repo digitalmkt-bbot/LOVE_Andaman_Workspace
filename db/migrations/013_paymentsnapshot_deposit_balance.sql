@@ -1,4 +1,11 @@
--- 010_paymentsnapshot_deposit_balance.sql  (2026-08-14)
+-- 013_paymentsnapshot_deposit_balance.sql  (2026-08-14, renumbered 2026-08-15)
+--
+-- Renumbered from 010: another branch landed 010_pier_sections.sql the same day and applied first,
+-- so two different files claimed 010. Nothing broke — the runner keys on filename, not number, and
+-- both applied cleanly — but two people picking "the next number" independently will keep colliding
+-- (007 is already doubled the same way). Renaming is safe here only because this file is idempotent
+-- and not baselined; renaming a BASELINED migration would make it execute for real on the next boot,
+-- which is exactly what the baseline mechanism exists to prevent. Do not renumber those.
 --
 -- Why this exists
 -- ---------------
