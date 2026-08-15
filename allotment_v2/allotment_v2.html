@@ -79844,10 +79844,14 @@ function pjPrint(){
            + 1 /*หัวไกด์*/ + nGd + 1 /*หัวลูกค้า*/ + 2 + 1 /*ลค*/ + 1 /*หัวหมายเหตุ*/ + 1;
 
   /* §pjSheet2 · ลำที่ออกจริงได้คอลัมน์กว้างเป็นสองเท่า · ลำที่จอดไม่มีอะไรให้อ่าน */
-  var LW=7.6, WT=boats.map(function(B){ return isGo(B)?2:1; });
+  /* §pjSheet3 · GAP เป็นพิกเซลจริง · ต้องหักออกจากเปอร์เซ็นต์ ไม่งั้นตารางล้นหน้ากระดาษ
+     SHEETW = ความกว้างเนื้อหาของ A4 แนวนอนขอบ 8 มม. โดยประมาณ · ตีต่ำไว้ปลอดภัยกว่าตีสูง */
+  var GAP=5, SHEETW=1040;
+  var gapPct=(boats.length+2)*GAP/SHEETW*100, avail=100-gapPct;
+  var LW=7.6*avail/100, WT=boats.map(function(B){ return isGo(B)?2:1; });
   var SUM=0; WT.forEach(function(w){ SUM+=w; });
   var cols='<colgroup><col style="width:'+LW+'%">'
-    + WT.map(function(w){ return '<col style="width:'+((100-LW)*w/SUM).toFixed(3)+'%">'; }).join('')
+    + WT.map(function(w){ return '<col style="width:'+((avail-LW)*w/SUM).toFixed(3)+'%">'; }).join('')
     + '</colgroup>';
   /* ยิ่งคอลัมน์เยอะ ตัวยิ่งเล็กลงตามขั้น · ทุกลำต้องอยู่แผ่นเดียว */
   var fs = SUM<=12?9.6 : (SUM<=18?8.9 : (SUM<=26?8.2 : 7.5));
@@ -79868,36 +79872,47 @@ function pjPrint(){
    +'@media screen{body{padding:18px 16px 60px}}'
    +'@media print{body{background:#fff;padding:0}.tb{display:none}'
      +'.sheet{max-width:none;border:0;border-radius:0;box-shadow:none;padding:0;margin:0}}'
-   +'.shead{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #0F172A;'
-     +'padding-bottom:7px;margin-bottom:9px}'
-   +'.t1{font-size:15px;font-weight:800;color:#0F172A}'
-   +'.t2{font-size:10.5px;color:#64748B;margin-top:2px}'
-   +'.meta{text-align:right;font-size:9.5px;color:#94A3B8;line-height:1.6}'
+   +'.shead{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;'
+     +'border-bottom:2px solid #0F172A;padding-bottom:9px;margin-bottom:11px}'
+   +'.eyebrow{font-size:9.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#94A3B8}'
+   +'.dt{font-size:22px;font-weight:800;color:#0F172A;letter-spacing:-.01em;line-height:1.2;margin-top:3px}'
+   +'.en{font-size:11px;font-weight:600;color:#64748B;margin-top:2px}'
+   +'.rt{text-align:right;flex:0 0 auto}'
+   +'.pills{display:flex;gap:6px;justify-content:flex-end;margin-bottom:5px;flex-wrap:wrap}'
+   +'.pill{border:1px solid #E2E8F0;background:#F8FAFC;border-radius:999px;padding:3px 11px;'
+     +'font-size:10px;font-weight:600;color:#475569;white-space:nowrap}'
+   +".pill b{font-family:'DM Mono',monospace;font-weight:700;color:#0F172A;margin-left:3px}"
+   +'.pill.go{background:#ECFDF5;border-color:#BFE0CD;color:#047857}.pill.go b{color:#047857}'
+   +'.pill.px{background:#EFF6FF;border-color:#C7DBF5;color:#1D4ED8}.pill.px b{color:#1D4ED8}'
+   +'.stamp{font-size:9px;color:#94A3B8;line-height:1.6}'
    /* §pjSheet2 · ดีไซน์ยกจากการ์ดบนหน้าจอ */
-   +'table{border-collapse:separate;border-spacing:0;width:100%;table-layout:fixed}'
-   +'th,td{border-right:1px solid #CBD5E1;border-bottom:1px solid #E2E8F0;padding:2px 5px;'
-     +'vertical-align:middle;overflow:hidden;word-break:break-word}'
-   +'tr th:first-child,tr td:first-child{border-left:1px solid #CBD5E1}'
-   +'thead th{border-bottom:0;padding:0;vertical-align:top}'
-   +'.bh{padding:6px 7px;color:#fff}'
+   +'table{border-collapse:separate;border-spacing:'+GAP+'px 0;width:100%;table-layout:fixed}'
+   +'th,td{padding:2px 6px;vertical-align:middle;overflow:hidden;word-break:break-word}'
+   /* §pjSheet3 · ขอบซ้ายขวาต่อกันลงมาเป็นตัวการ์ด · แถวสุดท้ายปิดท้ายด้วยมุมมน */
+   +'tbody td,tbody th{border-left:1px solid #E4E8EE;border-right:1px solid #E4E8EE;border-bottom:1px solid #EFF2F6}'
+   +'tbody tr:last-child td,tbody tr:last-child th{border-bottom:1px solid #E4E8EE;border-radius:0 0 11px 11px}'
+   +'td.off{border-radius:0 0 11px 11px;border-bottom:1px solid #E4E8EE}'
+   +'thead th{padding:0;border:0;vertical-align:top}'
+   +'.bh{padding:7px 8px;color:#fff;text-align:center;border-radius:11px 11px 0 0}'
    +'.bh .bn{font-size:'+(fs+1.6)+'px;font-weight:800;line-height:1.2;display:block}'
    +'.bh .be{font-size:'+(fs-1.4)+'px;font-weight:600;opacity:.85;display:block;margin-top:1px;line-height:1.25}'
    +".bh .tm{font:800 "+(fs+5)+"px 'DM Mono',monospace;line-height:1;display:block;margin-top:4px}"
    +'.bh .tm.no{font-size:'+(fs+1.5)+'px;opacity:.7}'
-   +'tr.rt td{color:#fff;font-size:'+(fs-0.4)+'px;font-weight:800;padding:5px 6px;line-height:1.3;'
-     +'border-bottom-color:rgba(0,0,0,.14);vertical-align:top}'
+   +'tr.rt td{color:#fff;font-size:'+(fs-0.4)+'px;font-weight:800;padding:6px 7px;line-height:1.3;'
+     +'border-color:transparent;vertical-align:top}'
    +'tr.rt td .sub{font-weight:500;opacity:.9;font-size:'+(fs-1.4)+'px;display:block;margin-top:1px}'
    +'th.k{background:#F8FAFC;text-align:left;font-size:7.5px;font-weight:800;letter-spacing:.05em;'
-     +'text-transform:uppercase;color:#64748B}'
+     +'text-transform:uppercase;color:#64748B;padding:3px 7px}'
+   +'thead th.k{background:#0F172A;color:#fff;vertical-align:bottom;padding:9px 8px;border-radius:11px 11px 0 0}'
    +'tr.gh th,tr.gh td{font-size:7px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;padding:2px 6px}'
-   +'tr.gh.crew th,tr.gh.crew td{background:#EAF0F9;color:#1B4A87;border-bottom-color:#D3E0F2}'
-   +'tr.gh.crew th{box-shadow:inset 3px 0 0 #1B4A87}'
-   +'tr.gh.guide th,tr.gh.guide td{background:#F2EBFA;color:#5B3B96;border-bottom-color:#E2D6F3}'
-   +'tr.gh.guide th{box-shadow:inset 3px 0 0 #5B3B96}'
-   +'tr.gh.cust th,tr.gh.cust td{background:#EAF4EE;color:#14603E;border-bottom-color:#D2E7DA}'
-   +'tr.gh.cust th{box-shadow:inset 3px 0 0 #14603E}'
-   +'tr.gh.note th,tr.gh.note td{background:#FDF3E2;color:#8A5A00;border-bottom-color:#F2E1C0}'
-   +'tr.gh.note th{box-shadow:inset 3px 0 0 #8A5A00}'
+   +'tr.gh.crew th{background:#EAF0F9;color:#1B4A87;box-shadow:inset 3px 0 0 #1B4A87}'
+   +'tr.gh.crew td{background:#F4F7FC}'
+   +'tr.gh.guide th{background:#F2EBFA;color:#5B3B96;box-shadow:inset 3px 0 0 #5B3B96}'
+   +'tr.gh.guide td{background:#F9F6FD}'
+   +'tr.gh.cust th{background:#EAF4EE;color:#14603E;box-shadow:inset 3px 0 0 #14603E}'
+   +'tr.gh.cust td{background:#F4FAF6}'
+   +'tr.gh.note th{background:#FDF3E2;color:#8A5A00;box-shadow:inset 3px 0 0 #8A5A00}'
+   +'tr.gh.note td{background:#FEFAF2}'
    +'td.v{font-size:'+fs+'px;font-weight:600;color:#242730;line-height:1.35}'
    +'td.v .rl{color:#94A3B8;font-size:'+(fs-1.5)+'px;font-weight:600}'
    +'td.mut{color:#CBD5E1;text-align:center;font-size:'+(fs+0.5)+'px}'
@@ -79985,11 +80000,17 @@ function pjPrint(){
 
   var DW=pjDateWords(_poDate);
   var sheet='<div class="sheet" id="sheet">'
-    +'<div class="shead"><div><div class="t1">ใบงานเรือ · '+e(P.n||P.t)+'</div>'
-      +'<div class="t2">'+e(P.t)+' · '+e(DW.big)+' · '+e(FLT[_pjF]||'')+' '+n+' ลำ'
-        +' · ออกจริง '+nGo+' ลำ · '+totPax+' pax</div></div>'
-      +'<div class="meta">พิมพ์เมื่อ '+e(new Date().toLocaleString('th-TH'))+'<br>'
-      +'ผู้จ่ายงาน · '+e((typeof poWho==='function'?poWho():'')||'—')+'</div></div>'
+    +'<div class="shead">'
+      +'<div><div class="eyebrow">ใบงานเรือ · '+e(P.t||P.n)+'</div>'
+        +'<div class="dt">'+e(DW.big)+'</div>'
+        +'<div class="en">'+e(DW.sm)+' · '+e(FLT[_pjF]||'')+'</div></div>'
+      +'<div class="rt"><div class="pills">'
+        +'<span class="pill">เรือในใบนี้<b>'+n+'</b></span>'
+        +'<span class="pill go">ออกจริง<b>'+nGo+'</b></span>'
+        +'<span class="pill px">ผู้โดยสาร<b>'+totPax+'</b></span>'
+      +'</div><div class="stamp">พิมพ์เมื่อ '+e(new Date().toLocaleString('th-TH'))
+      +' &nbsp;·&nbsp; ผู้จ่ายงาน '+e((typeof poWho==='function'?poWho():'')||'—')+'</div></div>'
+    +'</div>'
     +'<table>'+cols+head+body+'</table>'
     +'<div class="sg"><div>เจ้าหน้าที่จ่ายงาน</div><div>หัวหน้าท่าเรือ</div><div>ผู้รับใบงาน</div></div>'
     +'</div>';
