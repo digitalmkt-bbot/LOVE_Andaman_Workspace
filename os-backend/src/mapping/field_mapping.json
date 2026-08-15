@@ -4427,6 +4427,16 @@
       "kind": "scalar",
       "db_type": "text"
     },
+    "paymentsnapshot_deposit": {
+      "source": "paymentSnapshot.deposit",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "paymentsnapshot_balance": {
+      "source": "paymentSnapshot.balance",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
     "pricebreakdown_seat": {
       "source": "priceBreakdown.seat",
       "kind": "scalar",
