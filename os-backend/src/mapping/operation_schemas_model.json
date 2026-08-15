@@ -29,6 +29,10 @@
         "type": "text"
       },
       {
+        "name": "mealvenueid",
+        "type": "text"
+      },
+      {
         "name": "color",
         "type": "text"
       },
@@ -5531,6 +5535,10 @@
         "type": "text"
       },
       {
+        "name": "costperday",
+        "type": "numeric"
+      },
+      {
         "name": "partnername",
         "type": "text"
       },
@@ -6357,6 +6365,45 @@
       {
         "name": "ord",
         "type": "bigint"
+      },
+      {
+        "name": "active",
+        "type": "boolean"
+      }
+    ],
+    "primary_key": "id",
+    "foreign_keys": [],
+    "rows": 0
+  },
+  "meal_venues": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "text"
+      },
+      {
+        "name": "name",
+        "type": "text"
+      },
+      {
+        "name": "place",
+        "type": "text"
+      },
+      {
+        "name": "price_ad",
+        "type": "numeric"
+      },
+      {
+        "name": "price_ch",
+        "type": "numeric"
+      },
+      {
+        "name": "phone",
+        "type": "text"
+      },
+      {
+        "name": "note",
+        "type": "text"
       },
       {
         "name": "active",

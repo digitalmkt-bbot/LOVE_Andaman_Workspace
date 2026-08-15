@@ -5087,6 +5087,7 @@ window.addEventListener('resize',function(){ if(window.innerWidth>820) laNavClos
         <nav id="ct-tabs">
           <button class="ct-tab on" data-t="plan" onclick="ctSetTab('plan')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><rect x="4" y="3" width="16" height="18" rx="2.5"/><path d="M8 7h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h4"/></svg>แผนคำนวณ</button>
           <button class="ct-tab" data-t="tpl" onclick="ctSetTab('tpl')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M18 18h2"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="16" cy="18" r="2"/></svg>สูตรกลาง</button>
+          <button class="ct-tab" data-t="real" onclick="ctSetTab('real')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>ราคาจริง</button>
           <button class="ct-tab" data-t="ovr" onclick="ctSetTab('ovr')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M9 6h11M9 12h11M9 18h11M4 6l1.5 1.5L8 5M4 12l1.5 1.5L8 11M4 18l1.5 1.5L8 17"/></svg>ปรับ / ปิด รายแผน</button>
         </nav>
       </div>
@@ -41490,6 +41491,7 @@ window._laReloadData=function(){
     if(typeof VANJOB_SENT!=='undefined' && d.vanjob_sent) VANJOB_SENT=d.vanjob_sent;
     if(typeof VANJOB_DRIVER!=='undefined' && d.vanjob_driver) VANJOB_DRIVER=d.vanjob_driver;
     if(typeof BOAT_CAP_OVR!=='undefined' && d.boat_capovr) BOAT_CAP_OVR=d.boat_capovr;   // §cap override รายวัน
+    if(typeof MEAL_VENUES!=='undefined' && Array.isArray(d.meal_venues)) MEAL_VENUES=d.meal_venues;   // §plCost
     if(typeof PIER_KINDS!=='undefined' && Array.isArray(d.pier_kinds)) PIER_KINDS=d.pier_kinds;     // §poKinds
     if(typeof PIER_ITEMS!=='undefined' && Array.isArray(d.pier_items)) PIER_ITEMS=d.pier_items;   // §pierOffice
     if(typeof PIER_MOVES!=='undefined' && Array.isArray(d.pier_moves)) PIER_MOVES=d.pier_moves;
@@ -55216,12 +55218,35 @@ var CT_DEFAULT = { vatRate: 7, lines: [
   { id:'con',   g:'ค่าใช้จ่ายดำเนินงานอื่น',       l:'วัสดุสิ้นเปลือง',         vat:true,  parts:[{k:'var', u:15}] },
   { id:'ins',   g:'ค่าใช้จ่ายดำเนินงานอื่น',       l:'ประกันอุบัติเหตุลูกค้า',  vat:false, parts:[{k:'var', u:15}] },
   { id:'gear',  g:'ค่าใช้จ่ายดำเนินงานอื่น',       l:'มาส์ก + ตีนกบ',           vat:true,  parts:[{k:'var', u:10}] },
-  { id:'med',   g:'ค่าใช้จ่ายดำเนินงานอื่น',       l:'ยาเมาเรือ + เสื้อกันฝน',  vat:true,  parts:[{k:'var', u:15}] }
+  { id:'med',   g:'ค่าใช้จ่ายดำเนินงานอื่น',       l:'ยาเมาเรือ + เสื้อกันฝน',  vat:true,  parts:[{k:'var', u:15}] },
+  /* §plCost · สามบรรทัดนี้เป็นเงินที่จ่ายจริงทุกวันแต่ไม่เคยอยู่ในสูตร
+     ค่ารถประมาณเป็นต่อหัว เพราะสูตรไม่รู้ว่าวันนั้นใช้รถกี่คัน · ตอนคิดจริงจะทับด้วยรถที่ผูกไว้จริง
+     หางยาวตั้งต้นเป็น 0 ทั้งคู่ · เส้นทางไหนใช้ค่อยไปตั้งในแท็บ ปรับ/ปิด รายแผน
+     ตั้งเป็น 0 ดีกว่าเดา เพราะเส้นทางส่วนใหญ่ไม่ใช้หางยาวเลย */
+  { id:'van',   g:'ค่ารถรับส่ง',          l:'รถรับส่งโรงแรม',          vat:false, parts:[{k:'var', u:130}] },
+  { id:'ltj',   g:'ค่าเรือหางยาว',        l:'หางยาว · จอย (ต่อหัว)',   vat:false, parts:[{k:'var', u:0}] },
+  { id:'ltc',   g:'ค่าเรือหางยาว',        l:'หางยาว · เหมา (ต่อลำ)',   vat:false, parts:[{k:'fix', q:0, u:600}] }
 ]};
 function ctTpl(){
   var t = ctRead('cost_template');
-  if(t && Array.isArray(t.lines) && t.lines.length) return t;
+  if(t && Array.isArray(t.lines) && t.lines.length) return ctTplFill(t);
   return JSON.parse(JSON.stringify(CT_DEFAULT));
+}
+/* §plCost · เครื่องที่เคยแก้สูตรไว้จะมีสูตรของตัวเองเก็บอยู่ · บรรทัดที่เพิ่มในโค้ดทีหลังจะไม่มีวันโผล่
+   เติมเฉพาะ id ที่ยังไม่มีในสูตรของเขา · บรรทัดที่เขาแก้ไว้แล้วไม่แตะสักช่อง
+   ลบทิ้งเองได้ตามปกติ — ถ้าลบแล้วมันโผล่กลับมาทุกครั้งจะน่ารำคาญกว่าไม่มีให้เลย
+   จึงจำ id ที่ถูกลบไว้ใน t.dropped */
+function ctTplFill(t){
+  var have = {}, dropped = {};
+  (t.lines || []).forEach(function(l){ have[l.id] = 1; });
+  (t.dropped || []).forEach(function(id){ dropped[id] = 1; });
+  var added = 0;
+  CT_DEFAULT.lines.forEach(function(d){
+    if(have[d.id] || dropped[d.id]) return;
+    t.lines.push(JSON.parse(JSON.stringify(d))); added++;
+  });
+  if(added) ctTplSave(t);
+  return t;
 }
 function ctTplSave(t){ ctWrite('cost_template', t); }
 function ctVatR(t){ var r = +((t || ctTpl()).vatRate); if(!(r > 0)) r = 0; return r / (100 + r); }
@@ -55371,6 +55396,50 @@ function ctBreakEven(pl, cap, tpl){
 //   พอร์ตเป็น CSS scoped ใต้ #view-costing แทนการดึง Tailwind CDN — preflight ของ Tailwind
 //   จะ reset CSS ทั้งหน้าและทำให้ทุกหน้าจอเดิมของแอปพัง · ไอคอนใช้ inline SVG ไม่พึ่ง Font Awesome
 //   ตรรกะคำนวณยังเป็นตัวเดิมทั้งหมด (ขั้นบันได · ราคาไทย/ต่างชาติ · 4EN · %หมวด · VAT รายบรรทัด)
+/* §plCost · ทะเบียนร้านอาหาร · [{id, name, place, priceAd, priceCh, phone, note, active}]
+   ราคาเก็บไว้ที่ร้าน ไม่ใช่ที่ทริป · ขึ้นราคาเมื่อไหร่แก้ที่เดียว
+   ทริปที่ปิดยอดไปแล้วจะไม่ขยับตาม เพราะตอนปิดยอดจะบันทึกจำนวนเงินไว้ ไม่ได้บันทึกแค่ชื่อร้าน */
+var MEAL_VENUES = [];
+(function(){ try{
+  var K = (typeof LS_KEY !== 'undefined' ? LS_KEY : 'loveandaman_v2');
+  var d = JSON.parse(localStorage.getItem(K) || '{}');
+  if(Array.isArray(d.meal_venues)) MEAL_VENUES = d.meal_venues;
+}catch(_){} })();
+function mvPersist(){
+  try{
+    /* ต้องผ่านแคชกลางเหมือนโมดูลอื่น · อ่าน-เขียน localStorage ดิบจะทับงานที่โมดูลอื่นเพิ่งเขียน */
+    var d = (typeof laBlob === 'function') ? laBlob() : null;
+    if(!d){
+      var K = (typeof LS_KEY !== 'undefined' ? LS_KEY : 'loveandaman_v2');
+      d = JSON.parse(localStorage.getItem(K) || '{}');
+    }
+    d.meal_venues = MEAL_VENUES;
+    if(typeof laBlobSave === 'function') laBlobSave();
+    else localStorage.setItem((typeof LS_KEY !== 'undefined' ? LS_KEY : 'loveandaman_v2'), JSON.stringify(d));
+  }catch(e){ console.warn('[meal] persist failed', e); }
+}
+function mvList(){ return (MEAL_VENUES || []).filter(function(v){ return v && v.active !== false; }); }
+function mvGet(id){ return (MEAL_VENUES || []).filter(function(v){ return v.id === id; })[0] || null; }
+function mvName(id){ var v = mvGet(id); return v ? (v.name || v.id) : ''; }
+/* ร้านของทริปหนึ่ง · ค่าเริ่มต้นมาจากเส้นทาง · ตอนนี้ยังไม่มีตัวแก้รายลำ (ก้อนถัดไป) */
+function mvForRoute(routeId){
+  var r = (typeof getRoute === 'function') ? getRoute(routeId) : null;
+  return (r && r.mealVenueId) ? mvGet(r.mealVenueId) : null;
+}
+/* ค่าอาหารของหัวชุดหนึ่ง · เด็กคิดราคาเด็ก · ไม่มีร้าน = ไม่มีค่าอาหาร ไม่ใช่ราคา 0 บาทแบบเงียบ ๆ */
+function mvCost(venue, nAd, nCh){
+  if(!venue) return null;
+  return (+venue.priceAd || 0) * (+nAd || 0) + (+venue.priceCh || 0) * (+nCh || 0);
+}
+
+/* §plCost · ราคาต่อวันของรถ · รถบริษัทคิดน้ำมัน+คนขับ · รถเช่าคิดค่าเช่า คนละเรื่องกัน */
+var MV_VAN_DEF = { own:900, partner:1800 };
+function vanDayCost(v){
+  if(!v) return 0;
+  if(v.costPerDay != null && v.costPerDay !== '') return +v.costPerDay || 0;
+  return (v.ownership === 'own') ? MV_VAN_DEF.own : MV_VAN_DEF.partner;
+}
+
 var _ct = { tab:'plan', pid:'' };   // สถานะหน้าจอ · แท็บที่เปิด + แผนที่เลือก
 function ctE(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function ctB(n){ return '฿' + Math.round(n || 0).toLocaleString(); }
@@ -55447,7 +55516,10 @@ function ctRender(){
   var a = document.activeElement, fk = (a && a.getAttribute) ? a.getAttribute('data-fk') : null;
   var ss = (a && a.selectionStart != null) ? a.selectionStart : null;
   ctPaintTabs();
-  host.innerHTML = (_ct.tab === 'tpl') ? ctTplHtml() : (_ct.tab === 'ovr') ? ctOvrHtml() : ctPlanHtml();
+  host.innerHTML = (_ct.tab === 'tpl') ? ctTplHtml()
+                 : (_ct.tab === 'ovr') ? ctOvrHtml()
+                 : (_ct.tab === 'real') ? ctRealHtml()      /* §plCost */
+                 : ctPlanHtml();
   if(fk){ var el = host.querySelector('[data-fk="' + fk + '"]'); if(el){ el.focus(); try{ el.setSelectionRange(ss, ss); }catch(_){ } } }
 }
 function ctNum(v, fk, oninput, w){
@@ -55676,6 +55748,112 @@ function ctPlanHtml(){
     + '<div class="ct-trio">' + itin + chart + pnl + '</div>'
     + '<div class="ct-duo">' + tier + tbl + '</div></div></div>';
 }
+/* ═══ §plCost · แท็บ "ราคาจริง" ═══════════════════════════════════════════════
+   สูตรกลางตอบว่า "ทริปแบบนี้ควรต้นทุนเท่าไหร่" · แท็บนี้เก็บ "จริง ๆ จ่ายเท่าไหร่"
+   สองอันนี้ต้องอยู่คนละที่ ไม่งั้นพอแก้ราคาจริงวันนี้ ตัวเลขประมาณของเมื่อวานจะขยับตามไปด้วย
+   ═══════════════════════════════════════════════════════════════════════════ */
+function ctRealHtml(){
+  var e = ctE, B = ctB;
+
+  /* ── ร้านอาหาร ── */
+  var vRows = (MEAL_VENUES || []).map(function(v){
+    var used = (typeof ROUTES !== 'undefined' ? ROUTES : []).filter(function(r){ return r.mealVenueId === v.id; }).length;
+    return '<tr' + (v.active === false ? ' style="opacity:.5"' : '') + '>'
+      + '<td><input class="ct-in" data-fk="mvn' + v.id + '" value="' + e(v.name || '') + '" placeholder="ชื่อร้าน" '
+        + 'oninput="mvSet(\'' + v.id + '\',\'name\',this.value)" style="width:100%;text-align:left"></td>'
+      + '<td><input class="ct-in" data-fk="mvp' + v.id + '" value="' + e(v.place || '') + '" placeholder="เกาะ / จุดจอด" '
+        + 'oninput="mvSet(\'' + v.id + '\',\'place\',this.value)" style="width:100%;text-align:left"></td>'
+      + '<td>' + ctNum(v.priceAd, 'mva' + v.id, 'mvSet(\'' + v.id + '\',\'priceAd\',this.value)', 66) + '</td>'
+      + '<td>' + ctNum(v.priceCh, 'mvc' + v.id, 'mvSet(\'' + v.id + '\',\'priceCh\',this.value)', 66) + '</td>'
+      + '<td><input class="ct-in" data-fk="mvt' + v.id + '" value="' + e(v.phone || '') + '" placeholder="เบอร์" '
+        + 'oninput="mvSet(\'' + v.id + '\',\'phone\',this.value)" style="width:100%;text-align:left"></td>'
+      + '<td class="ct-u">' + (used ? (used + ' เส้นทาง') : '<span style="opacity:.5">ยังไม่ได้ใช้</span>') + '</td>'
+      + '<td class="ct-del"><button class="ct-mini" onclick="mvToggle(\'' + v.id + '\')">'
+        + (v.active === false ? 'เปิดใช้' : 'ปิด') + '</button></td></tr>';
+  }).join('');
+  if(!vRows) vRows = '<tr><td colspan="7" class="ct-u" style="padding:14px 4px">ยังไม่มีร้านในทะเบียน · '
+    + 'กดปุ่มขวาบนเพื่อเพิ่มร้านแรก</td></tr>';
+
+  var venueSel = function(rid, cur){
+    return '<select class="ct-sel" style="width:100%" onchange="mvRouteSet(\'' + rid + '\',this.value)">'
+      + '<option value="">— ไม่มีอาหารกลางวัน —</option>'
+      + mvList().map(function(v){
+          return '<option value="' + e(v.id) + '"' + (cur === v.id ? ' selected' : '') + '>'
+            + e(v.name || v.id) + ' · ฿' + (+v.priceAd || 0) + '/' + (+v.priceCh || 0) + '</option>'; }).join('')
+      + '</select>';
+  };
+  var rRows = (typeof ROUTES !== 'undefined' ? ROUTES : []).map(function(r){
+    return '<tr><td class="ct-nm"><span class="ct-dot" style="background:' + e(r.color || '#64748B') + '"></span>'
+      + '<b>' + e(r.name || r.id) + '</b><div class="ct-nmsub">' + e(r.islands || '') + '</div></td>'
+      + '<td>' + venueSel(r.id, r.mealVenueId || '') + '</td></tr>';
+  }).join('');
+
+  /* ── รถ ── */
+  var vans = (typeof SB_VEHICLES !== 'undefined' ? SB_VEHICLES : []).filter(function(v){ return v && v.active !== false; });
+  var vanRows = vans.map(function(v){
+    var own = (v.ownership === 'own');
+    return '<tr><td class="ct-nm"><b>' + e(v.name || v.id) + '</b>'
+      + '<div class="ct-nmsub">' + e(v.plate || '') + (v.capacity ? (' · ' + v.capacity + ' ที่นั่ง') : '') + '</div></td>'
+      + '<td><span class="ct-tag ' + (own ? 'fix' : 'step') + '">' + (own ? 'ของบริษัท' : 'เช่า / พาร์ทเนอร์') + '</span>'
+        + (v.partnerName ? ('<span class="ct-u"> ' + e(v.partnerName) + '</span>') : '') + '</td>'
+      + '<td>' + ctNum(v.costPerDay, 'vc' + v.id, 'vanCostSet(\'' + v.id + '\',this.value)', 76)
+        + '<span class="ct-u" style="margin:0 4px">฿/วัน</span>'
+        + ((v.costPerDay == null || v.costPerDay === '')
+            ? ('<span class="ct-u" style="opacity:.65;margin-left:8px">ยังไม่ตั้ง · ใช้ ฿' + vanDayCost(v) + '</span>') : '')
+      + '</td></tr>';
+  }).join('');
+  if(!vanRows) vanRows = '<tr><td colspan="3" class="ct-u" style="padding:14px 4px">ยังไม่มีรถในระบบ</td></tr>';
+
+  return '<div class="ct-card ct-bar2"><div><b>ราคาจริง</b>'
+      + '<span class="ct-sub">สูตรกลางตอบว่า<em class="fix">ควรจะ</em>ต้นทุนเท่าไหร่ · หน้านี้เก็บว่า<em class="var">จริง ๆ</em>จ่ายเท่าไหร่ '
+      + 'ตอนคิด P&amp;L รายทริป ตัวเลขในหน้านี้จะไปทับตัวประมาณเป็นรายบรรทัด</span></div>'
+      + '<div class="ct-bar2r"><button class="ct-btn" onclick="mvAdd()">' + ctIcon('plus', 13) + ' เพิ่มร้านอาหาร</button></div></div>'
+
+    + '<div class="ct-card ct-catcard"><div class="ct-cath"><span>' + ctIcon('folder', 15) + '<b>ทะเบียนร้านอาหาร</b></span>'
+      + '<span class="ct-cnt">' + (MEAL_VENUES || []).length + ' ร้าน</span></div>'
+      + '<div class="ct-scroll"><table class="ct-mtbl">'
+      + '<colgroup><col style="width:24%"><col style="width:22%"><col style="width:96px"><col style="width:96px"><col style="width:16%"><col style="width:110px"><col style="width:62px"></colgroup>'
+      + '<thead><tr><th>ร้าน</th><th>จุดจอด</th><th>ผู้ใหญ่</th><th>เด็ก</th><th>ติดต่อ</th><th>ใช้กับ</th><th></th></tr></thead>'
+      + '<tbody>' + vRows + '</tbody></table></div>'
+      + '<div class="ct-hint">ปิดร้านแทนการลบ · ทริปเก่าที่ปิดยอดไปแล้วยังอ่านราคาที่ใช้จริงตอนนั้นได้</div></div>'
+
+    + '<div class="ct-card ct-catcard"><div class="ct-cath"><span>' + ctIcon('folder', 15) + '<b>ร้านประจำเส้นทาง</b></span>'
+      + '<span class="ct-cnt">' + (typeof ROUTES !== 'undefined' ? ROUTES.length : 0) + ' เส้นทาง</span></div>'
+      + '<div class="ct-scroll"><table class="ct-mtbl"><colgroup><col><col style="width:300px"></colgroup>'
+      + '<tbody>' + rRows + '</tbody></table></div>'
+      + '<div class="ct-hint">นี่คือค่าเริ่มต้น · วันไหนร้านเต็มหรือเรือไปไม่ทัน จะเปลี่ยนเฉพาะลำนั้นวันนั้นได้ที่ใบงานเรือ (ก้อนถัดไป)</div></div>'
+
+    + '<div class="ct-card ct-catcard"><div class="ct-cath"><span>' + ctIcon('folder', 15) + '<b>ค่ารถต่อวัน</b></span>'
+      + '<span class="ct-cnt">' + vans.length + ' คัน</span></div>'
+      + '<div class="ct-scroll"><table class="ct-mtbl"><colgroup><col><col style="width:30%"><col style="width:280px"></colgroup>'
+      + '<tbody>' + vanRows + '</tbody></table></div>'
+      + '<div class="ct-hint">รถของบริษัทคิดน้ำมัน + คนขับ · รถเช่าคิดค่าเช่า — เดิมระบบคิดทุกคันเท่ากันที่ ฿1,200 '
+      + 'ไม่ได้ตั้งค่าไว้จะใช้ ฿' + MV_VAN_DEF.own + ' (ของบริษัท) / ฿' + MV_VAN_DEF.partner + ' (เช่า)</div></div>';
+}
+function mvAdd(){
+  MEAL_VENUES.push({ id:'mv' + Math.random().toString(36).slice(2, 8), name:'', place:'',
+                     priceAd:280, priceCh:180, phone:'', note:'', active:true });
+  mvPersist(); ctRender();
+}
+function mvSet(id, f, v){
+  var x = mvGet(id); if(!x) return;
+  x[f] = (f === 'priceAd' || f === 'priceCh') ? (+v || 0) : String(v == null ? '' : v).slice(0, 80);
+  mvPersist();
+  if(f !== 'name' && f !== 'place' && f !== 'phone') ctRender();   /* พิมพ์อยู่ ไม่วาดใหม่ให้หลุดโฟกัส */
+}
+function mvToggle(id){ var x = mvGet(id); if(!x) return; x.active = (x.active === false); mvPersist(); ctRender(); }
+function mvRouteSet(rid, vid){
+  var r = (typeof getRoute === 'function') ? getRoute(rid) : null; if(!r) return;
+  r.mealVenueId = vid || '';
+  if(typeof save === 'function') save();
+  ctRender();
+}
+function vanCostSet(vid, v){
+  var x = (typeof vehGet === 'function') ? vehGet(vid) : null; if(!x) return;
+  x.costPerDay = (String(v).trim() === '') ? null : (+v || 0);
+  if(typeof sbVehiclesPersist === 'function') sbVehiclesPersist();
+}
+
 function ctPickPlan(id){ _ct.pid = id; ctRender(); }
 // §ctTier · Tier ราคา 5 ระดับต่อแผน · ไม่เคยตั้ง = กระจายจากราคาปัจจุบันให้ก่อน
 var CT_TIER_NAMES = ['B2C · หน้าร้าน', 'Agent Tier 1', 'Agent Tier 2', 'OTA / Wholesale', 'Charter / Group'];
@@ -56001,6 +56179,11 @@ function ctAddLine(){ var T = ctTpl(); T.lines.push({ id:'x' + Math.random().toS
 function ctDelLine(li){
   var T = ctTpl(); var ln = T.lines[li]; if(!ln) return;
   if(!confirm('ลบ "' + ln.l + '" ออกจากสูตรกลาง? · ค่าที่ตั้งไว้รายแผนของรายการนี้จะถูกลบด้วย')) return;
+  /* §plCost · จำไว้ว่าลบบรรทัดมาตรฐานไหนไป · ctTplFill จะได้ไม่เติมกลับมาให้ทุกครั้งที่เปิดหน้า */
+  if(CT_DEFAULT.lines.some(function(d){ return d.id === ln.id; })){
+    T.dropped = T.dropped || [];
+    if(T.dropped.indexOf(ln.id) < 0) T.dropped.push(ln.id);
+  }
   T.lines.splice(li, 1); ctTplSave(T);
   var P = ctPlans(); P.forEach(function(p){ if(p.ovr) delete p.ovr[ln.id]; }); ctPlansSave(P);
   ctRender();

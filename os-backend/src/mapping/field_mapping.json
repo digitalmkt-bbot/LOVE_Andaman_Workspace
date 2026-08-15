@@ -27,6 +27,12 @@
       "kind": "scalar",
       "db_type": "text"
     },
+    "mealvenueid": {
+      "source": "mealVenueId",
+      "kind": "scalar",
+      "db_type": "text",
+      "note": "ร้านอาหารกลางวันประจำเส้นทางนี้ · อ้าง meal_venues.id · ว่าง = เส้นทางนี้ไม่มีอาหารกลางวัน"
+    },
     "color": {
       "source": "color",
       "kind": "scalar",
@@ -6016,6 +6022,12 @@
       "kind": "scalar",
       "db_type": "text"
     },
+    "costperday": {
+      "source": "costPerDay",
+      "kind": "scalar",
+      "db_type": "numeric",
+      "note": "ค่ารถต่อวันของคันนี้ · รถบริษัทคิดน้ำมัน+คนขับ รถเช่าคิดค่าเช่า · ว่าง = ใช้ค่าตั้งต้นตามประเภท"
+    },
     "partnername": {
       "source": "partnerName",
       "kind": "scalar",
@@ -6856,6 +6868,54 @@
       "source": "active",
       "kind": "scalar",
       "db_type": "boolean"
+    }
+  },
+  "meal_venues": {
+    "id": {
+      "source": "ทะเบียนร้านอาหาร · meal_venues[].id (record id; generated if absent)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "name": {
+      "source": "name",
+      "kind": "scalar",
+      "db_type": "text",
+      "note": "ชื่อร้าน"
+    },
+    "place": {
+      "source": "place",
+      "kind": "scalar",
+      "db_type": "text",
+      "note": "เกาะ / จุดจอดที่ขึ้นกินข้าว"
+    },
+    "price_ad": {
+      "source": "priceAd",
+      "kind": "scalar",
+      "db_type": "numeric",
+      "note": "ราคาต่อหัว ผู้ใหญ่"
+    },
+    "price_ch": {
+      "source": "priceCh",
+      "kind": "scalar",
+      "db_type": "numeric",
+      "note": "ราคาต่อหัว เด็ก"
+    },
+    "phone": {
+      "source": "phone",
+      "kind": "scalar",
+      "db_type": "text",
+      "note": "เบอร์ติดต่อร้าน"
+    },
+    "note": {
+      "source": "note",
+      "kind": "scalar",
+      "db_type": "text"
+    },
+    "active": {
+      "source": "active",
+      "kind": "scalar",
+      "db_type": "boolean",
+      "note": "ปิดร้านแทนการลบ · ทริปเก่ายังอ่านราคาที่ใช้จริงตอนนั้นได้"
     }
   },
   "pier_moves": {
