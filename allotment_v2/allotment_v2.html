@@ -80236,7 +80236,30 @@ function pjPrint(){
 
   /* §pjShot · โค้ดฝั่งหน้าต่างที่เด้งขึ้นมา · ไม่แตะแอปหลัก */
   var fn=('boatjob_'+(P.k||_poPier||'pier')+'_'+_poDate).replace(/[^A-Za-z0-9_.-]+/g,'_');
-  var scr=""
+  var scr=pjShotScript(fn);
+
+  var html='<!doctype html><html lang="th"><head><meta charset="utf-8">'
+   +'<title>ใบงานเรือ · '+e(P.n||P.t)+' · '+e(_poDate)+'</title>'
+   +'<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@500;700&family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet">'
+   +'<style id="sty">'+css+'</style></head><body>'
+   +'<div class="tb">'
+     +'<button class="pri" onclick="window.print()">&#128424; พิมพ์</button>'
+     +'<button class="img" id="bimg" onclick="shot()">&#128247; บันทึกเป็นรูป PNG</button>'
+     +'<span class="hint">ปุ่มสองปุ่มนี้อยู่บนหน้าจอเท่านั้น · ไม่ติดไปกับกระดาษและไม่ติดในรูป</span>'
+   +'</div>'
+   + sheet
+   +'<script>'+scr+'<\/script></body></html>';
+
+  var w=window.open('','_blank','width=1220,height=880');
+  if(!w){ alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ · อนุญาต pop-up ของหน้านี้ก่อน'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+  setTimeout(function(){ try{ w.focus(); }catch(_){} }, 300);
+}
+
+/* §poSign · โค้ดฝั่งหน้าต่างที่เด้งขึ้นมา · ปุ่มพิมพ์ + บันทึก PNG
+   ยกออกมาจากใบงานเรือทั้งดุ้น · ใบเซ็นใช้ตัวเดียวกัน จะได้ไม่ต้องแก้สองที่เวลาปุ่มพัง */
+function pjShotScript(fn){
+  return ""
    +"var FN="+JSON.stringify(fn)+";"
    +"function bz(t,d){var b=document.getElementById('bimg');b.textContent=t;b.disabled=!!d;}"
    +"function save(c){var fin=function(u,rv){var a=document.createElement('a');a.href=u;a.download=FN+'.png';"
@@ -80272,10 +80295,214 @@ function pjPrint(){
      +"var s=document.createElement('script');"
      +"s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';"
      +"s.onload=run;s.onerror=bad;document.head.appendChild(s);}";
+}
+
+/* §poSign · ประเภทของที่จะขึ้นเป็นคอลัมน์ในใบเซ็น · จำที่ติ๊กไว้ล่าสุด */
+var PO_SIGN_KEY='la.po.signkinds';
+function poSignKindsGet(){
+  try{ var v=JSON.parse(localStorage.getItem(PO_SIGN_KEY)||'null');
+       if(Array.isArray(v)) return v.filter(function(k){ return PO_KIND[k]; }); }catch(_){}
+  return null;
+}
+function poSignKindsSave(list){ try{ localStorage.setItem(PO_SIGN_KEY, JSON.stringify(list||[])); }catch(_){} }
+
+/* ── หน้าถามก่อนพิมพ์ · เลือกว่าจะเอาของประเภทไหนขึ้นใบ ── */
+function poSignSheet(bid){
+  var B=poBoats(_poDate,_poPier).filter(function(x){return x.bid===bid;})[0];
+  if(!B){ alert('ไม่พบเรือลำนี้ในวันที่เลือก'); return; }
+  poKindSync();
+  var items=poItems(_poPier), S=poBoatSum(_poDate,bid,_poPier);
+  /* ประเภทที่ "เบิกจริงวันนี้" · ใช้เป็นค่าตั้งต้นครั้งแรก เพราะเป็นของที่อยู่บนเรือแน่ ๆ */
+  var issued=PO_KORDER.filter(function(k){
+    return items.some(function(it){ return it.kind===k && S[it.id] && S[it.id].iss>0; }); });
+  var pick=poSignKindsGet();
+  if(!pick) pick=(issued.length?issued:PO_KORDER.slice(0,2));
+  var e=poE;
+  var body='<div style="font-size:12px;color:#7C8091;line-height:1.6;margin-bottom:11px">'
+    +'ประเภทของมาจาก<b>ทะเบียนของ</b> · เพิ่มประเภทใหม่แล้วจะมาโผล่ที่นี่เอง<br>'
+    +'ติ๊กเฉพาะที่จะใช้จริงวันนี้ · ยิ่งติ๊กเยอะคอลัมน์ยิ่งแคบ กระดาษมีอยู่เท่าเดิม · '
+    +'<b>ที่ติ๊กไว้จะจำไว้ให้</b> ครั้งหน้าเปิดมาเป็นชุดเดิม</div>';
+  body+=PO_KORDER.map(function(k){
+    var KM=PO_KIND[k]||{t:k,u:'ชิ้น',c:'#9A9A93'}, on=pick.indexOf(k)>=0, iss=issued.indexOf(k)>=0;
+    return '<label style="display:flex;align-items:center;gap:9px;padding:8px 11px;margin-bottom:6px;'
+      +'border:1px solid '+(on?'#16265C33':'#E3E3DF')+';border-radius:10px;cursor:pointer;'
+      +'background:'+(on?'#F5F7FB':'#fff')+'">'
+      +'<input type="checkbox" class="po-sgk" value="'+e(k)+'"'+(on?' checked':'')
+        +' onchange="this.parentNode.style.background=this.checked?\'#F5F7FB\':\'#fff\'" style="cursor:pointer">'
+      +'<span style="width:11px;height:11px;border-radius:3px;background:'+e(KM.c)+';flex:0 0 auto"></span>'
+      +'<span style="font-weight:700;font-size:12.5px;color:#16265C">'+e(KM.t)+'</span>'
+      +'<span style="font-size:11px;color:#8a8a82">'+e(KM.u)+'</span>'
+      +(iss?'<span style="margin-left:auto;font-size:10.5px;font-weight:700;color:#047857;'
+        +'background:#ECFDF5;border-radius:999px;padding:2px 9px">เบิกวันนี้</span>':'')
+      +'</label>'; }).join('');
+  if(!PO_KORDER.length) body+='<div style="font-size:12px;color:#B4560A">ยังไม่ได้ตั้งประเภทของ · '
+    +'ใบเซ็นจะออกมาโดยไม่มีคอลัมน์ของ</div>';
+  poModal('ใบเซ็น · '+e(B.boat.name||bid)+' · '+e((B.route&&B.route.name)||''), body,
+    poBtn('ปิด','poModalClose()')+poBtn('เปิดใบเซ็น','poSignGo(\''+bid+'\')',1), 520);
+}
+function poSignGo(bid){
+  var ks=[];
+  try{ [].slice.call(document.querySelectorAll('#po-modal .po-sgk')).forEach(function(x){
+         if(x.checked) ks.push(x.value); }); }catch(_){}
+  poSignKindsSave(ks); poModalClose(); poSignPrint(bid, ks);
+}
+
+function poSignPrint(bid, kinds){
+  var B=poBoats(_poDate,_poPier).filter(function(x){return x.bid===bid;})[0];
+  if(!B){ alert('ไม่พบเรือลำนี้ในวันที่เลือก'); return; }
+  var e=poE, P=PO_PIERS.filter(function(p){return p.k===_poPier;})[0]||PO_PIERS[0];
+  var KS=(kinds||[]).filter(function(k){ return PO_KIND[k]; });
+
+  /* ── หนึ่งแถวต่อหนึ่งใบจอง · ชื่อทุกคนซ้อนกันในช่องเดียว เหมือนไฟล์ที่ใช้อยู่ ── */
+  var rows=B.bks.map(function(x){
+    var b=x.b, t=x.t;
+    var O=(typeof bkOpsRead==='function')?bkOpsRead(b,_poDate):(b.ops||{});
+    var van=(O&&O.vanId&&typeof vehGet==='function')?vehGet(O.vanId):null;
+    var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
+    var names=[];
+    (b.passengers||[]).forEach(function(p){ if(p&&p.name) names.push(String(p.name)); });
+    if(!names.length && b.leadPax) names.push(String(b.leadPax));
+    var tel=String(b.leadPhone||b.phone||'').trim();
+    if(tel) names.splice(1,0,tel);   /* เบอร์อยู่ใต้ชื่อคนแรก เหมือนที่เขาเขียนกันในไฟล์ */
+    var px=(t&&t.pax)||{}, PT=(typeof bkV2PaxTot==='function')?bkV2PaxTot:function(){return 0;};
+    return {
+      vch: b.voucherRef||b.code||((typeof bkV2DisplayCode==='function')?bkV2DisplayCode(b):'')||b.id||'',
+      agN: ag?(ag.name||''):((b.b2cChannel||b.channelType==='b2c')?'B2C · Website':''),
+      agC: (b.agentId&&typeof bkV2AgentColor==='function')?bkV2AgentColor(b.agentId):'',
+      names: names.length?names:[''],
+      ad:PT(px,'ad'), chd:PT(px,'chd'), inf:PT(px,'inf'), foc:PT(px,'foc'),
+      pkg: b.packageName||'One Day Tour',
+      car: van?(van.name||van.id||''):'',
+      pu:  b.hotelName||b.pickup||'',
+      rm:  b.roomNo||b.room||b.roomNumber||'' };
+  });
+  /* เรียงตามรถ · คนหน้าท่าเดินไล่ทีละคัน ไม่ได้ไล่ทีละ voucher */
+  rows.sort(function(a,b){ return String(a.car||'zzz').localeCompare(String(b.car||'zzz'))
+    || String(a.vch).localeCompare(String(b.vch)); });
+
+  /* ── ความกว้างคอลัมน์ · คิดเป็นน้ำหนักแล้วหารเป็น % ทีเดียว
+        จะได้ไม่ล้นกระดาษไม่ว่าติ๊กของมากี่ประเภท ── */
+  /* 12 คอลัมน์ซ้าย · กว้างพอให้หัวคอลัมน์อยู่บรรทัดเดียว ไม่ตัดคำเป็น "Roo m" */
+  var WL=[5.4,6.4,11.6,2.4,3.0,2.8,3.2,5.0,3.2,3.4,10.0,3.8];
+  var wArr=WL.slice(), n=KS.length;
+  for(var g=0; g<2; g++){
+    for(var q=0;q<n;q++) wArr.push(3.2);   /* ของแต่ละประเภท · ชื่อไทยยาวกว่า FINS/TOWEL */
+    wArr.push(4.2); wArr.push(5.4); wArr.push(3.8);   /* DEPOSIT/RETURN · Signature · Remark */
+  }
+  wArr.push(2.6); wArr.push(3.0); wArr.push(4.8);     /* Money Change · Give / Return / Signature */
+  var wSum=0; wArr.forEach(function(w){ wSum+=w; });
+  var pc=function(w){ return (w/wSum*100).toFixed(3)+'%'; };
+  var cols='<colgroup>'+wArr.map(function(w){ return '<col style="width:'+pc(w)+'">'; }).join('')+'</colgroup>';
+  /* คอลัมน์ยิ่งเยอะตัวยิ่งเล็ก · ทุกอย่างต้องอยู่แผ่นเดียว */
+  var fs = wArr.length<=25 ? 8.6 : (wArr.length<=29 ? 8.0 : 7.4);
+
+  var css='@page{size:A4 landscape;margin:7mm}'
+   +'*{box-sizing:border-box}'
+   +'body{margin:0;background:#E9EBEF;font-family:"Noto Sans Thai","DM Sans",sans-serif;color:#111}'
+   +'.tb{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:1160px;margin:0 auto 14px}'
+   +'.tb button{border:1px solid #E2E8F0;background:#fff;border-radius:11px;padding:8px 15px;'
+     +'font:700 12.5px inherit;color:#475569;cursor:pointer}'
+   +'.tb button.pri{background:#0F172A;border-color:#0F172A;color:#fff}'
+   +'.tb button.img{background:#4F46E5;border-color:#4F46E5;color:#fff}'
+   +'.tb button[disabled]{opacity:.55;cursor:progress}'
+   +'.tb .hint{font-size:11px;color:#94A3B8}'
+   +'.sheet{background:#fff;margin:0 auto;padding:10px 12px 14px;border:1px solid #CBD5E1;border-radius:6px;'
+     +'max-width:1160px;box-shadow:0 2px 12px rgba(15,23,42,.07)}'
+   +'@media screen{body{padding:18px 16px 60px}}'
+   +'@media print{body{background:#fff;padding:0}.tb{display:none}'
+     +'.sheet{max-width:none;border:0;border-radius:0;box-shadow:none;padding:0;margin:0}}'
+   /* หัวกระดาษ · โลโก้กลางแผ่น แล้วขีดน้ำเงินคาด เหมือนไฟล์เดิมเป๊ะ */
+   +'.lg{display:flex;justify-content:center;padding:2px 0 6px}'
+   +'.lg img{height:30px;width:auto;display:block}'
+   +'.hrow{display:flex;align-items:center;gap:12px;border-top:2px solid #1E5FA8;padding:6px 2px 8px}'
+   +'.hrow .rn{font-size:14px;font-weight:800;color:#C00000;line-height:1.2}'
+   +'.hrow .bt{font-size:11px;font-weight:700;color:#475569}'
+   +'.hrow .dt{flex:1;text-align:center;font-size:14px;font-weight:800;color:#111}'
+   +'.hrow .dn{background:#00B050;color:#fff;font-weight:800;font-size:15px;border-radius:3px;'
+     +'padding:3px 16px;min-width:64px;text-align:center;line-height:1.3}'
+   +'table{border-collapse:collapse;width:100%;table-layout:fixed;font-size:'+fs+'px}'
+   +'th,td{border:1px solid #9AA3AE;padding:2px 3px;word-break:break-word;overflow:hidden}'
+   /* หัวตารางชั้นล่างตัวเล็กลงหน่อย · ชื่อประเภทของเป็นภาษาไทยยาวกว่า FINS/TOWEL ในไฟล์เดิม */
+   +'thead th{background:#fff;font-weight:700;text-align:center;line-height:1.2;font-size:'+(fs-0.8)+'px;padding:3px 1px}'
+   +'thead tr.g th{font-size:'+(fs+2)+'px;padding:4px 2px}'
+   +'th.boat{background:#D0021B;color:#fff;font-size:'+(fs-0.4)+'px;padding:4px 1px}'
+   /* สามช่วงสีตามไฟล์ · ชมพูขารับ เหลืองขาคืน ขาวเงินทอน */
+   +'th.gp{background:#E7A9A9}td.pk{background:#F6DDDD}'
+   +'th.gr{background:#FFD98A}td.rt{background:#FDF0D2}'
+   +'th.gm{background:#fff}td.mn{background:#fff}'
+   +'td{height:'+(fs*3.1).toFixed(0)+'px;vertical-align:middle}'
+   +'td.c{text-align:center}'
+   +'td.vch{text-align:center;font-size:'+(fs-0.3)+'px}'
+   +'td.nm{padding:2px 4px;line-height:1.3}'
+   +'td.nm span{display:block}'
+   /* ช่อง Agent ทาสีเต็มช่อง · สีมาจากที่ผู้ใช้ตั้งไว้ให้ Agent นั้นในหน้าจอง */
+   +'td.ag{padding:0}'
+   +'td.ag .chip{display:flex;align-items:center;justify-content:center;height:100%;min-height:'+(fs*3.1).toFixed(0)+'px;'
+     +'font-weight:800;font-size:'+(fs-0.3)+'px;line-height:1.2;text-align:center;padding:2px 3px}'
+   +'.sg{display:flex;gap:16px;margin-top:10px}'
+   +'.sg div{flex:1;border-top:1px solid #94A3B8;padding-top:4px;text-align:center;font-size:9px;color:#64748B}';
+
+  var th=function(t,cls,span,rs){ return '<th'+(cls?' class="'+cls+'"':'')
+    +(span?' colspan="'+span+'"':'')+(rs?' rowspan="'+rs+'"':'')+'>'+t+'</th>'; };
+  var L12=['Voucher','Agent','Customer&#39;s Name','AD','CHD','INF','FOC','Package','Boat','Car','Pickup','Room'];
+  var head='<thead><tr class="g">'
+    + L12.map(function(t,i){ return th(t, i===8?'boat':'', 0, 2); }).join('')
+    + th('Pick-up','gp',KS.length+3) + th('Return','gr',KS.length+3) + th('Money Change','gm',3)
+    +'</tr><tr>'
+    + KS.map(function(k){ return th(e(PO_KIND[k].t),'gp'); }).join('')
+    + th('DEPOSIT','gp')+th('Signature','gp')+th('Remark','gp')
+    + KS.map(function(k){ return th(e(PO_KIND[k].t),'gr'); }).join('')
+    + th('RETURN','gr')+th('Signature','gr')+th('Remark','gr')
+    + th('Give','gm')+th('Return','gm')+th('Signature','gm')
+    +'</tr></thead>';
+
+  var blanks=function(){
+    return KS.map(function(){ return '<td class="pk"></td>'; }).join('')+'<td class="pk"></td><td class="pk"></td><td class="pk"></td>'
+         + KS.map(function(){ return '<td class="rt"></td>'; }).join('')+'<td class="rt"></td><td class="rt"></td><td class="rt"></td>'
+         + '<td class="mn"></td><td class="mn"></td><td class="mn"></td>'; };
+  var EMPTY=blanks();
+  var bn=e(B.boat.name||bid);
+  var body=rows.map(function(r){
+    var ink=(r.agC&&typeof bkV2ContrastInk==='function')?bkV2ContrastInk(r.agC):'#2c2c2a';
+    return '<tr><td class="vch">'+e(r.vch)+'</td>'
+      +'<td class="ag">'+(r.agN
+          ? '<span class="chip" style="background:'+e(r.agC||'#EEF2F7')+';color:'+(r.agC?ink:'#334155')+'">'+e(r.agN)+'</span>'
+          : '')+'</td>'
+      +'<td class="nm">'+r.names.map(function(x){ return '<span>'+e(x)+'</span>'; }).join('')+'</td>'
+      +'<td class="c">'+(r.ad||'')+'</td><td class="c">'+(r.chd||'')+'</td>'
+      +'<td class="c">'+(r.inf||'')+'</td><td class="c">'+(r.foc||'')+'</td>'
+      +'<td class="c">'+e(r.pkg)+'</td>'
+      +'<td class="c"></td>'   /* Boat · เว้นไว้เขียนมือ ชื่อลำอยู่บนหัวกระดาษแล้ว */
+      +'<td class="c">'+e(r.car)+'</td>'
+      +'<td class="c">'+e(r.pu)+'</td>'
+      +'<td class="c">'+e(r.rm)+'</td>'
+      + EMPTY +'</tr>'; }).join('')
+   /* แถวว่างท้ายใบ · ที่หน้าท่ามีลูกค้าโผล่มาเพิ่มเสมอ เขียนมือลงไปได้เลย */
+   + Array.apply(null,{length:6}).map(function(){
+       return '<tr><td></td><td class="ag"></td><td></td><td></td><td></td><td></td><td></td>'
+         +'<td></td><td></td><td></td><td></td><td></td>'+EMPTY+'</tr>'; }).join('');
+
+  var tot=0; rows.forEach(function(r){ tot+=(r.ad||0)+(r.chd||0)+(r.inf||0)+(r.foc||0); });
+  var DW=(typeof pjDateWords==='function')?pjDateWords(_poDate):{big:_poDate};
+  var sheet='<div class="sheet" id="sheet">'
+    +'<div class="lg"><img src="'+LA_LOGO_FULL+'" alt="LOVE andaman"></div>'
+    +'<div class="hrow">'
+      +'<span class="rn">'+e((B.route&&B.route.name)||'')+'</span>'
+      +'<span class="bt">'+bn+(B.dep?(' · '+e(B.dep)):'')+'</span>'
+      +'<span class="dt">'+e(DW.big||_poDate)+'</span>'
+      +'<span class="dn">'+tot+'</span>'
+    +'</div>'
+    +'<table>'+cols+head+'<tbody>'+body+'</tbody></table>'
+    +'<div class="sg"><div>พนักงานจ่ายของ (เช้า)</div><div>พนักงานรับคืน (เย็น)</div><div>หัวหน้าท่าเรือ</div></div>'
+    +'</div>';
+
+  var fn=('signsheet_'+(P.k||_poPier||'pier')+'_'+(B.boat.name||bid)+'_'+_poDate)
+    .replace(/[^A-Za-z0-9_.-]+/g,'_');
+  var scr=pjShotScript(fn);
 
   var html='<!doctype html><html lang="th"><head><meta charset="utf-8">'
-   +'<title>ใบงานเรือ · '+e(P.n||P.t)+' · '+e(_poDate)+'</title>'
-   +'<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@500;700&family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet">'
+   +'<title>ใบเซ็น · '+e(B.boat.name||bid)+' · '+e(_poDate)+'</title>'
+   +'<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800&family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet">'
    +'<style id="sty">'+css+'</style></head><body>'
    +'<div class="tb">'
      +'<button class="pri" onclick="window.print()">&#128424; พิมพ์</button>'
@@ -80288,101 +80515,8 @@ function pjPrint(){
   var w=window.open('','_blank','width=1220,height=880');
   if(!w){ alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ · อนุญาต pop-up ของหน้านี้ก่อน'); return; }
   w.document.open(); w.document.write(html); w.document.close();
+  /* ไม่สั่งพิมพ์เอง · ให้ดูก่อนแล้วเลือกเองว่าจะพิมพ์หรือเก็บเป็นรูป เหมือนใบงานเรือ */
   setTimeout(function(){ try{ w.focus(); }catch(_){} }, 300);
-}
-
-function poSignSheet(bid){
-  var B=poBoats(_poDate,_poPier).filter(function(x){return x.bid===bid;})[0];
-  if(!B){ alert('ไม่พบเรือลำนี้ในวันที่เลือก'); return; }
-  var P=PO_PIERS.filter(function(p){return p.k===_poPier;})[0]||PO_PIERS[0];
-  var items=poItems(_poPier), S=poBoatSum(_poDate,bid,_poPier);
-  var issued=items.filter(function(it){ return S[it.id] && S[it.id].iss>0; });
-  var duty=poDuty(_poDate,bid).map(function(id){ return poStaffName(id); }).join(', ');
-  var e=poE;
-  /* แถวลูกค้า · ดึงจาก booking ที่ผูกลำนี้ไว้ เหมือนใบ manifest */
-  var rows=[];
-  B.bks.forEach(function(x){
-    var names=[];
-    (x.b.passengers||[]).forEach(function(p){ if(p&&p.name) names.push(p.name); });
-    if(!names.length) names.push(x.b.leadPax||x.b.voucherRef||x.b.id);
-    names.forEach(function(nm,i){
-      rows.push({name:nm, ref:(i===0?(x.b.voucherRef||x.b.code||x.b.id):''), first:i===0, n:names.length});
-    });
-    /* pax มากกว่าชื่อที่กรอกไว้ → เติมบรรทัดว่างให้เซ็น */
-    for(var k=names.length;k<x.pax;k++) rows.push({name:'', ref:'', first:false, n:0});
-  });
-  while(rows.length<Math.max(B.pax,12)) rows.push({name:'',ref:'',first:false,n:0});
-
-  var kindCols=PO_KORDER.filter(function(k){ return issued.some(function(it){ return it.kind===k; }); });
-  if(!kindCols.length) kindCols=PO_KORDER.slice();
-  var colW=Math.floor(30/kindCols.length);
-
-  var css='@page{size:A4 portrait;margin:11mm 10mm}'
-    +'*{box-sizing:border-box}body{margin:0;font-family:"Noto Sans Thai","DM Sans",sans-serif;color:#1A1A1A;font-size:11px}'
-    +'.hd{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;border-bottom:2px solid '+P.c+';padding-bottom:8px;margin-bottom:9px}'
-    +'.t1{font-size:17px;font-weight:800;color:'+P.c+';line-height:1.2}'
-    +'.t2{font-size:11px;color:#5F5E5A;margin-top:2px}'
-    +'.meta{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px}'
-    +'.mb{border:1px solid #D8D4CA;border-radius:7px;padding:5px 10px;font-size:10.5px}'
-    +'.mb b{display:block;font-size:9px;color:#7C8091;font-weight:700;text-transform:uppercase;letter-spacing:.05em}'
-    +'.mb span{font-size:12px;font-weight:700}'
-    +'table{border-collapse:collapse;width:100%}'
-    +'th{border:1px solid #B9B9B2;background:#F0F0EC;font-size:9.5px;font-weight:700;padding:4px 5px;text-align:center;line-height:1.25}'
-    +'td{border:1px solid #D2D2CA;padding:0 5px;height:26px;font-size:10.5px}'
-    +'td.nm{font-weight:600}'
-    +'td.sg{background:#FCFCFA}'
-    +'.ft{display:flex;gap:16px;margin-top:12px;font-size:10.5px}'
-    +'.ft div{flex:1;border-top:1px solid #9A9A93;padding-top:5px;text-align:center;color:#5F5E5A}'
-    +'.note{font-size:9.5px;color:#7C8091;margin-top:8px;line-height:1.55}'
-    +'.sum{margin-top:9px;border:1px solid #D8D4CA;border-radius:7px;padding:7px 10px;font-size:10.5px}'
-    +'.sum b{color:#16265C}';
-
-  var thKind=kindCols.map(function(k){
-    return '<th colspan="2" style="width:'+colW+'%">'+e(PO_KIND[k].t)+' ('+e(PO_KIND[k].u)+')</th>'; }).join('');
-  var th2=kindCols.map(function(){ return '<th style="font-weight:600">รับ</th><th style="font-weight:600">คืน</th>'; }).join('');
-  var tds=kindCols.map(function(){ return '<td class="sg"></td><td class="sg"></td>'; }).join('');
-
-  var body=rows.map(function(r,i){
-    return '<tr><td style="text-align:center;width:24px">'+(i+1)+'</td>'
-      +'<td class="nm">'+e(r.name)+'</td>'
-      +'<td style="width:88px;font-size:9.5px;color:#5F5E5A">'+e(r.ref)+'</td>'
-      +tds
-      +'<td class="sg" style="width:110px"></td><td class="sg" style="width:110px"></td></tr>';
-  }).join('');
-
-  var issTxt=issued.length?issued.map(function(it){ return e(it.label)+' '+S[it.id].iss+' '+PO_KIND[it.kind].u; }).join(' · ')
-    :'<span style="color:#B4560A">ยังไม่ได้บันทึกการเบิกในระบบ</span>';
-
-  var html='<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ใบรับ-คืนอุปกรณ์ · '+e(B.boat.name||bid)+' · '+e(_poDate)+'</title>'
-    +'<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800&family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet">'
-    +'<style>'+css+'</style></head><body>'
-    +'<div class="hd"><div><div class="t1">ใบรับ-คืนอุปกรณ์ · Equipment Receipt &amp; Return</div>'
-      +'<div class="t2">'+e(P.n+' · '+P.t)+' · '+e((B.route&&B.route.name)||'')+'</div></div>'
-      +((typeof bkV2B2CLogo==='function')?('<div style="background:#fff;padding:2px">'+bkV2B2CLogo(26)+'</div>'):'')
-    +'</div>'
-    +'<div class="meta">'
-      +'<div class="mb"><b>วันที่</b><span>'+e(_poDate)+'</span></div>'
-      +'<div class="mb"><b>เรือ</b><span>'+e(B.boat.name||bid)+'</span></div>'
-      +'<div class="mb"><b>ออกเรือ</b><span>'+e(B.dep||'-')+'</span></div>'
-      +'<div class="mb"><b>ลูกค้า</b><span>'+B.pax+' ท่าน</span></div>'
-      +'<div class="mb"><b>พนักงานอุปกรณ์</b><span>'+e(duty||'-')+'</span></div>'
-    +'</div>'
-    +'<table><thead><tr><th rowspan="2" style="width:24px">#</th><th rowspan="2">ชื่อลูกค้า / Name</th>'
-      +'<th rowspan="2" style="width:88px">Voucher</th>'+thKind
-      +'<th rowspan="2" style="width:110px">ลายเซ็นรับ<br>Signature (out)</th>'
-      +'<th rowspan="2" style="width:110px">ลายเซ็นคืน<br>Signature (in)</th></tr>'
-      +'<tr>'+th2+'</tr></thead><tbody>'+body+'</tbody></table>'
-    +'<div class="sum"><b>เบิกจากคลังวันนี้:</b> '+issTxt+'</div>'
-    +'<div class="ft"><div>พนักงานจ่ายของ (เช้า)</div><div>พนักงานรับคืน (เย็น)</div><div>หัวหน้าท่าเรือ</div></div>'
-    +'<div class="note">อุปกรณ์ที่รับไปเป็นทรัพย์สินของบริษัท · กรุณาคืนครบตามจำนวนก่อนขึ้นจากเรือ '
-      +'กรณีชำรุดเสียหายหรือสูญหาย บริษัทขอสงวนสิทธิ์เรียกเก็บค่าเสียหายตามจริง<br>'
-      +'Equipment issued remains company property. Please return all items before disembarking. '
-      +'Damage or loss may be charged at cost.</div>'
-    +'</body></html>';
-  var w=window.open('','_blank','width=900,height=1100');
-  if(!w){ alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ · อนุญาต pop-up ของหน้านี้ก่อน'); return; }
-  w.document.open(); w.document.write(html); w.document.close();
-  setTimeout(function(){ try{ w.focus(); w.print(); }catch(_){} }, 500);
 }
 
 </script>
