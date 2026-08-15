@@ -4081,6 +4081,14 @@
         "type": "text"
       },
       {
+        "name": "paymentsnapshot_deposit",
+        "type": "bigint"
+      },
+      {
+        "name": "paymentsnapshot_balance",
+        "type": "bigint"
+      },
+      {
         "name": "pricebreakdown_seat",
         "type": "bigint"
       },
