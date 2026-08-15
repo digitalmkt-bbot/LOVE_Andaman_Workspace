@@ -80387,7 +80387,9 @@ function pjPrint(){
   var fs = SUM<=12?9.6 : (SUM<=18?8.9 : (SUM<=26?8.2 : 7.5));
 
   var css='@page{size:A4 landscape;margin:8mm}'
-   +'*{box-sizing:border-box}'
+   /* §poSign3 · สีในใบนี้เป็นข้อมูล ไม่ใช่ของประดับ · แถบสีคือโปรแกรมของแต่ละลำ
+      เบราว์เซอร์ตัดสีพื้นหลังทิ้งตอนพิมพ์เป็นค่าเริ่มต้น ต้องบังคับให้พิมพ์สีเสมอ */
+   +'*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}'
    +'body{margin:0;background:#E9EBEF;font-family:"Noto Sans Thai","DM Sans",sans-serif;color:#1E293B}'
    +'.tb{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:1160px;margin:0 auto 14px}'
    +'.tb button{border:1px solid #E2E8F0;background:#fff;border-radius:11px;padding:8px 15px;'
@@ -80734,8 +80736,7 @@ function poSignPrint(bid, kinds){
       names: names.length?names:[''],
       ad:PT(px,'ad'), chd:PT(px,'chd'), inf:PT(px,'inf'), foc:PT(px,'foc'),
       car: van?(van.name||van.id||''):'',
-      pu:  b.hotelName||b.pickup||'',
-      rm:  b.roomNo||b.room||b.roomNumber||'' };
+      pu:  b.hotelName||b.pickup||'' };
   });
   /* เรียงตามรถ · คนหน้าท่าเดินไล่ทีละคัน ไม่ได้ไล่ทีละ voucher */
   rows.sort(function(a,b){ return String(a.car||'zzz').localeCompare(String(b.car||'zzz'))
@@ -80743,15 +80744,15 @@ function poSignPrint(bid, kinds){
 
   /* ── ความกว้างคอลัมน์ · คิดเป็นน้ำหนักแล้วหารเป็น % ทีเดียว
         จะได้ไม่ล้นกระดาษไม่ว่าติ๊กของมากี่ประเภท ── */
-  /* §poSign2 · 10 คอลัมน์ซ้าย · ที่ว่างจาก Boat กับ Package ยกให้ชื่อลูกค้ากับจุดรับ
-     กว้างพอให้หัวคอลัมน์อยู่บรรทัดเดียว ไม่ตัดคำเป็น "Roo m" */
-  var WL=[5.6,7.0,14.0,2.4,3.0,2.8,3.2,3.8,12.6,3.8];
+  /* §poSign3 · 9 คอลัมน์ซ้าย · Room ออกไปแล้ว ที่ว่างยกให้ช่องที่ต้องเขียนมือ
+     ช่องเซ็นแคบเป็นปัญหาที่เห็นทันทีบนกระดาษ แต่มองไม่ออกเลยตอนดูบนจอ */
+  var WL=[5.6,7.0,14.0,2.4,3.0,2.8,3.2,3.8,12.6];
   var wArr=WL.slice(), n=KS.length;
   for(var g=0; g<2; g++){
-    for(var q=0;q<n;q++) wArr.push(3.2);   /* ของแต่ละประเภท · ชื่อไทยยาวกว่า FINS/TOWEL */
-    wArr.push(4.2); wArr.push(5.4); wArr.push(3.8);   /* DEPOSIT/RETURN · Signature · Remark */
+    for(var q=0;q<n;q++) wArr.push(3.0);   /* ของแต่ละประเภท · แค่ติ๊กจำนวน ไม่ต้องกว้าง */
+    wArr.push(4.0); wArr.push(8.6); wArr.push(6.0);   /* DEPOSIT/RETURN · Signature · Remark */
   }
-  wArr.push(2.6); wArr.push(3.0); wArr.push(4.8);     /* Money Change · Give / Return / Signature */
+  wArr.push(2.6); wArr.push(3.0); wArr.push(6.6);     /* Money Change · Give / Return / Signature */
   var wSum=0; wArr.forEach(function(w){ wSum+=w; });
   var pc=function(w){ return (w/wSum*100).toFixed(3)+'%'; };
   var cols='<colgroup>'+wArr.map(function(w){ return '<col style="width:'+pc(w)+'">'; }).join('')+'</colgroup>';
@@ -80759,7 +80760,10 @@ function poSignPrint(bid, kinds){
   var fs = wArr.length<=25 ? 8.6 : (wArr.length<=29 ? 8.0 : 7.4);
 
   var css='@page{size:A4 landscape;margin:7mm}'
-   +'*{box-sizing:border-box}'
+   /* §poSign3 · เบราว์เซอร์ตัดสีพื้นหลังทิ้งตอนพิมพ์เป็นค่าเริ่มต้น เพื่อประหยัดหมึก
+      แต่ใบนี้ใช้สีเป็นข้อมูล · ชมพู=ขารับ เหลือง=ขาคืน สี Agent=ตัวแยกกองตอนแจกของ
+      ตัดสีทิ้งแล้วใบเสียความหมายไปครึ่งใบ · จึงบังคับให้พิมพ์สีเสมอ */
+   +'*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}'
    +'body{margin:0;background:#E9EBEF;font-family:"Noto Sans Thai","DM Sans",sans-serif;color:#111}'
    +'.tb{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:1160px;margin:0 auto 14px}'
    +'.tb button{border:1px solid #E2E8F0;background:#fff;border-radius:11px;padding:8px 15px;'
@@ -80806,9 +80810,9 @@ function poSignPrint(bid, kinds){
 
   var th=function(t,cls,span,rs){ return '<th'+(cls?' class="'+cls+'"':'')
     +(span?' colspan="'+span+'"':'')+(rs?' rowspan="'+rs+'"':'')+'>'+t+'</th>'; };
-  var L10=['Voucher','Agent','Customer&#39;s Name','AD','CHD','INF','FOC','Car','Pickup','Room'];
+  var L9=['Voucher','Agent','Customer&#39;s Name','AD','CHD','INF','FOC','Car','Pickup'];
   var head='<thead><tr class="g">'
-    + L10.map(function(t){ return th(t, '', 0, 2); }).join('')
+    + L9.map(function(t){ return th(t, '', 0, 2); }).join('')
     + th('Pick-up','gp',KS.length+3) + th('Return','gr',KS.length+3) + th('Money Change','gm',3)
     +'</tr><tr>'
     /* §poKindEn · ใบนี้เป็นภาษาอังกฤษทั้งใบ · ยังไม่ได้ตั้งชื่ออังกฤษก็ใช้ชื่อไทยไปก่อน */
@@ -80836,12 +80840,11 @@ function poSignPrint(bid, kinds){
       +'<td class="c">'+(r.inf||'')+'</td><td class="c">'+(r.foc||'')+'</td>'
       +'<td class="c">'+e(r.car)+'</td>'
       +'<td class="c">'+e(r.pu)+'</td>'
-      +'<td class="c">'+e(r.rm)+'</td>'
       + EMPTY +'</tr>'; }).join('')
    /* แถวว่างท้ายใบ · ที่หน้าท่ามีลูกค้าโผล่มาเพิ่มเสมอ เขียนมือลงไปได้เลย */
    + Array.apply(null,{length:6}).map(function(){
        return '<tr><td></td><td class="ag"></td><td></td><td></td><td></td><td></td><td></td>'
-         +'<td></td><td></td><td></td>'+EMPTY+'</tr>'; }).join('');
+         +'<td></td><td></td>'+EMPTY+'</tr>'; }).join('');
 
   var tot=0; rows.forEach(function(r){ tot+=(r.ad||0)+(r.chd||0)+(r.inf||0)+(r.foc||0); });
   var DW=(typeof pjDateWords==='function')?pjDateWords(_poDate):{big:_poDate};
