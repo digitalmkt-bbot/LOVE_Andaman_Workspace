@@ -7123,6 +7123,25 @@
       "db_type": "text"
     }
   },
+  "trip_actuals": {
+    "id": {
+      "source": "trip_actuals map key (generated id)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "key": {
+      "source": "trip_actuals map key (original)",
+      "kind": "map_key",
+      "db_type": "text",
+      "note": "'YYYY-MM-DD::boatId' · คีย์เดียวกับ trips / fleet_daily / pier_job"
+    },
+    "value": {
+      "source": "trip_actuals[key] value",
+      "kind": "map_value_json",
+      "db_type": "text",
+      "note": "ของจริงรายทริป · ตอนนี้มี meal (ต้นทุนอาหารที่ส่งร้านจริง) · หน้า P&L ใช้ทับค่าประมาณจากสูตร"
+    }
+  },
   "pier_cfg": {
     "id": {
       "source": "pier_cfg map key (generated id)",
