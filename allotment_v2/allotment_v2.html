@@ -7216,13 +7216,15 @@ function _calDk(c,k){ const [r,g,b]=_calHx(c); k=(k==null)?0.45:k;
   return 'rgb('+Math.round(r*(1-k))+','+Math.round(g*(1-k))+','+Math.round(b*(1-k))+')'; }
 /* §calChip · ดันความอิ่มสีขึ้นก่อนเอาไปทาชิป · แปลงเป็น HSL ดัน S แล้วบีบ L เข้าช่วงที่อ่านออก
    ไม่ได้แก้ค่าสีที่เก็บไว้ของเส้นทาง · หน้าอื่นที่ใช้สีเดียวกันจึงไม่ขยับ */
-function _calVivid(c, boost){
+function _calVivid(c, amt){
   let [r,g,b]=_calHx(c).map(x=>x/255);
   const mx=Math.max(r,g,b), mn=Math.min(r,g,b); let h=0, sa=0, l=(mx+mn)/2;
   if(mx!==mn){ const d=mx-mn; sa = l>0.5 ? d/(2-mx-mn) : d/(mx+mn);
     h = mx===r ? ((g-b)/d+(g<b?6:0)) : mx===g ? ((b-r)/d+2) : ((r-g)/d+4); h/=6; }
-  sa=Math.min(1, sa*(boost||1.35));
-  l=Math.min(0.60, Math.max(0.40, l));
+  /* §calVivid2 · ดันเข้าหาเต็มทีละส่วน ไม่ใช่คูณ · สีที่อิ่มอยู่แล้วจึงแทบไม่ขยับ */
+  const k=(amt==null)?0.30:amt;
+  sa = sa + (1-sa)*k;
+  l = Math.min(0.62, Math.max(0.36, l));
   const q = l<0.5 ? l*(1+sa) : l+sa-l*sa, p = 2*l-q;
   const f=(t)=>{ t=(t+1)%1; if(t<1/6) return p+(q-p)*6*t; if(t<0.5) return q;
                  if(t<2/3) return p+(q-p)*(2/3-t)*6; return p; };
