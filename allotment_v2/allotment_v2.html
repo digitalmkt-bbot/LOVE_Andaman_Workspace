@@ -50745,14 +50745,7 @@ function mvOrderSlip(date, bid, V, C, al, amt, rid){
    +".alg .it .n{font:800 17px 'DM Mono',monospace;color:#B91C1C;min-width:30px}"
    +'.alg .it .t{font-size:15px;font-weight:700;color:#7F1D1D}'
    +'.alg .note{font-size:11.5px;color:#B91C1C;margin-top:7px;font-weight:600}'
-   +'.sl-money{margin:15px 22px 0;display:flex;align-items:center;gap:12px;background:#FAFBFC;'
-     +'border:1px solid #E7EBF0;border-radius:14px;padding:12px 15px}'
-   +'.sl-money .cal{font-size:12.5px;color:#64748B;line-height:1.7}'
-   +".sl-money .cal b{color:#0F172A;font-family:'DM Mono',monospace}"
-   +'.sl-money .amt{margin-left:auto;text-align:right}'
-   +'.sl-money .amt .k{font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#94A3B8}'
-   +".sl-money .amt .v{font:800 29px 'DM Mono',monospace;color:#5B289A;line-height:1.1}"
-   +'.sl-foot{padding:12px 22px 16px;margin-top:13px;border-top:1px solid #F1F5F9;display:flex;gap:12px;'
+   +'.sl-foot{padding:12px 22px 16px;margin-top:15px;border-top:1px solid #F1F5F9;display:flex;gap:12px;'
      +'align-items:center;flex-wrap:wrap;font-size:12px;color:#64748B}'
    +".sl-foot b{color:#0F172A;font-family:'DM Mono',monospace}";
 
@@ -50781,10 +50774,9 @@ function mvOrderSlip(date, bid, V, C, al, amt, rid){
    +(al.length?('<div class="alg"><div class="h">&#9888; แพ้อาหาร — ต้องแยกจานให้ชัดเจน</div>'
       + al.map(function(x){ return '<div class="it"><span class="n">&times;'+x.qty+'</span><span class="t">'+e(x.name)+'</span></div>'; }).join('')
       +'<div class="note">กรุณาโทรกลับยืนยันว่าแยกจานได้ ก่อนเรือถึง</div></div>'):'')
-   +'<div class="sl-money"><div class="cal">'
-     +'ผู้ใหญ่ <b>'+C.ad+' &times; '+(+V.priceAd||0)+'</b> = <b>'+(C.ad*(+V.priceAd||0)).toLocaleString()+'</b>'
-     +(C.chd?('<br>เด็ก <b>'+C.chd+' &times; '+(+V.priceCh||0)+'</b> = <b>'+(C.chd*(+V.priceCh||0)).toLocaleString()+'</b>'):'')
-     +'</div><div class="amt"><div class="k">รวมเป็นเงิน</div><div class="v">&#3647;'+Math.round(amt).toLocaleString()+'</div></div></div>'
+   /* §mealSlip2 · ไม่มียอดเงินบนใบ · ใบนี้อยู่ในมือแม่ครัวกับเด็กเรือ
+      เขาต้องทำอาหารให้ถูกจำนวนถูกชนิด · ราคาเป็นเรื่องระหว่างออฟฟิศกับเจ้าของร้าน
+      ต้นทุนยังถูกบันทึกครบเหมือนเดิม แค่ไม่พิมพ์ลงบนกระดาษที่ออกไปข้างนอก */
    +'<div class="sl-foot"><span>ส่งโดย <b>'+e((typeof ckMe==="function")?ckMe():"")+'</b> · '
      +e(new Date().toLocaleString('th-TH'))+'</span>'
      +'<span style="margin-left:auto">ติดต่อกลับ <b>088-765-4678</b></span></div>'
