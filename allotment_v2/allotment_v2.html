@@ -1088,6 +1088,10 @@
 #view-costing .ct-lname:hover{background:var(--sd50)}
 #view-costing .ct-lname:focus{background:#fff;border-color:var(--b500);outline:none}
 #view-costing .ct-nmsub{display:flex;align-items:center;gap:9px;margin:5px 0 0 7px;flex-wrap:wrap}
+#view-costing .ct-pierh td{background:#F6F1E7;font-size:9.5px;font-weight:800;letter-spacing:.09em;
+  text-transform:uppercase;color:#8A6A3A;padding:6px 12px}
+#view-costing .ct-vgh td{background:#FBF8F2}
+#view-costing .ct-vgb > td{padding:0 0 10px 0;background:#FDFCF9}
 #view-costing .ct-catsel{font-size:10px;color:rgba(74,62,54,.7);border:1px solid var(--sd200);border-radius:999px;
   padding:2px 7px;background:var(--sd50);max-width:120px}
 #view-costing .ct-vat{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--sd400);font-weight:500;cursor:pointer;white-space:nowrap}
@@ -55434,10 +55438,73 @@ function mvCost(venue, nAd, nCh){
 
 /* §plCost · ราคาต่อวันของรถ · รถบริษัทคิดน้ำมัน+คนขับ · รถเช่าคิดค่าเช่า คนละเรื่องกัน */
 var MV_VAN_DEF = { own:900, partner:1800 };
-function vanDayCost(v){
+
+/* §plCost2 · รถวิ่งเป็นกลุ่ม ไม่ได้วิ่งเป็นคัน · รถของเจ้าเดียวกันราคาเดียวกัน
+   กลุ่มของรถบริษัทคือ 'own' · ของรถร่วมคือชื่อเจ้าของ */
+function vanGroupKey(v){
+  if(!v) return 'own';
+  if(v.ownership === 'own') return 'own';
+  var p = String(v.partnerName || '').trim();
+  return 'p:' + (p || '—');
+}
+function vanGroupName(k){
+  if(k === 'own') return 'รถของบริษัท';
+  var p = String(k).slice(2);
+  return (p === '—') ? 'รถร่วม (ยังไม่ระบุเจ้าของ)' : p;
+}
+/* กลุ่มทั้งหมดที่มีรถอยู่จริง · เรียงรถบริษัทขึ้นก่อน แล้วตามด้วยรถร่วมตามตัวอักษร */
+function vanGroups(){
+  var by = {}, order = [];
+  (typeof SB_VEHICLES !== 'undefined' ? SB_VEHICLES : []).forEach(function(v){
+    if(!v || v.active === false) return;
+    var k = vanGroupKey(v);
+    if(!by[k]){ by[k] = { key:k, name:vanGroupName(k), own:(k === 'own'), vans:[] }; order.push(k); }
+    by[k].vans.push(v);
+  });
+  order.sort(function(a, b){
+    if((a === 'own') !== (b === 'own')) return (a === 'own') ? -1 : 1;
+    return vanGroupName(a).localeCompare(vanGroupName(b), 'th');
+  });
+  return order.map(function(k){ return by[k]; });
+}
+
+/* ตารางราคา · { <กลุ่ม>: { base, rt:{ <เส้นทาง>: {base, PK, KL} } } }
+   สามชั้นที่ถอยหากันได้ · เว้นว่าง = ใช้ชั้นบน · จะได้กรอกเท่าที่ต่างจริง */
+function vanRates(){ var r = ctRead('van_rates'); return (r && typeof r === 'object') ? r : {}; }
+function vanRatesSave(r){ ctWrite('van_rates', r); }
+function vanRateSet(gk, routeId, field, val){
+  var R = vanRates();
+  var G = R[gk] = R[gk] || {};
+  var v = (String(val).trim() === '') ? null : (+val || 0);
+  if(!routeId){ if(v == null) delete G.base; else G.base = v; }
+  else {
+    G.rt = G.rt || {};
+    var T = G.rt[routeId] = G.rt[routeId] || {};
+    if(v == null) delete T[field]; else T[field] = v;
+    if(!Object.keys(T).length) delete G.rt[routeId];
+  }
+  vanRatesSave(R);
+}
+function vanRateRaw(gk, routeId, field){
+  var G = vanRates()[gk] || {};
+  if(!routeId) return (G.base == null) ? '' : G.base;
+  var T = (G.rt || {})[routeId] || {};
+  return (T[field] == null) ? '' : T[field];
+}
+/* ราคาที่ใช้จริง · ไล่จากละเอียดสุดขึ้นไปหาหยาบสุด */
+function vanRate(gk, routeId, zone){
+  var G = vanRates()[gk] || {}, T = (G.rt || {})[routeId] || {};
+  var z = (zone === 'KL') ? 'KL' : 'PK';
+  if(T[z] != null) return +T[z] || 0;
+  if(T.base != null) return +T.base || 0;
+  if(G.base != null) return +G.base || 0;
+  return (gk === 'own') ? MV_VAN_DEF.own : MV_VAN_DEF.partner;
+}
+/* ค่ารถของคันหนึ่งในทริปหนึ่ง · ราคาเฉพาะคันมาก่อนเสมอ ถ้าตกลงกันไว้พิเศษจริง ๆ */
+function vanDayCost(v, routeId, zone){
   if(!v) return 0;
   if(v.costPerDay != null && v.costPerDay !== '') return +v.costPerDay || 0;
-  return (v.ownership === 'own') ? MV_VAN_DEF.own : MV_VAN_DEF.partner;
+  return vanRate(vanGroupKey(v), routeId, zone);
 }
 
 var _ct = { tab:'plan', pid:'' };   // สถานะหน้าจอ · แท็บที่เปิด + แผนที่เลือก
@@ -55752,6 +55819,20 @@ function ctPlanHtml(){
    สูตรกลางตอบว่า "ทริปแบบนี้ควรต้นทุนเท่าไหร่" · แท็บนี้เก็บ "จริง ๆ จ่ายเท่าไหร่"
    สองอันนี้ต้องอยู่คนละที่ ไม่งั้นพอแก้ราคาจริงวันนี้ ตัวเลขประมาณของเมื่อวานจะขยับตามไปด้วย
    ═══════════════════════════════════════════════════════════════════════════ */
+/* §plCost2 · เส้นทางแยกตามท่า · 14 เส้นทางเรียงรวดเดียวหาไม่เจอว่าอันไหนของท่าไหน */
+function ctRoutesByPier(){
+  var out = [], seen = {};
+  var ord = (typeof PO_PIERS !== 'undefined') ? PO_PIERS.map(function(p){ return p.k; }) : ['panwa','tublamu','ranong'];
+  var RS = (typeof ROUTES !== 'undefined') ? ROUTES : [];
+  ord.forEach(function(pk){
+    var rs = RS.filter(function(r){ return (r.pier || '') === pk; });
+    if(rs.length){ seen[pk] = 1; out.push({ pier:pk, name:(typeof PIER_LABELS !== 'undefined' ? PIER_LABELS[pk] : '') || pk, routes:rs }); }
+  });
+  var rest = RS.filter(function(r){ return !seen[r.pier || '']; });
+  if(rest.length) out.push({ pier:'', name:'ยังไม่ระบุท่า', routes:rest });
+  return out;
+}
+
 function ctRealHtml(){
   var e = ctE, B = ctB;
 
@@ -55782,25 +55863,54 @@ function ctRealHtml(){
             + e(v.name || v.id) + ' · ฿' + (+v.priceAd || 0) + '/' + (+v.priceCh || 0) + '</option>'; }).join('')
       + '</select>';
   };
-  var rRows = (typeof ROUTES !== 'undefined' ? ROUTES : []).map(function(r){
-    return '<tr><td class="ct-nm"><span class="ct-dot" style="background:' + e(r.color || '#64748B') + '"></span>'
-      + '<b>' + e(r.name || r.id) + '</b><div class="ct-nmsub">' + e(r.islands || '') + '</div></td>'
-      + '<td>' + venueSel(r.id, r.mealVenueId || '') + '</td></tr>';
+  var rRows = ctRoutesByPier().map(function(g){
+    return '<tr class="ct-pierh"><td colspan="2">' + e(g.name) + ' · ' + g.routes.length + ' เส้นทาง</td></tr>'
+      + g.routes.map(function(r){
+          return '<tr><td class="ct-nm"><span class="ct-dot" style="background:' + e(r.color || '#64748B') + '"></span>'
+            + '<b>' + e(r.name || r.id) + '</b><div class="ct-nmsub">' + e(r.islands || '') + '</div></td>'
+            + '<td>' + venueSel(r.id, r.mealVenueId || '') + '</td></tr>'; }).join('');
   }).join('');
 
-  /* ── รถ ── */
-  var vans = (typeof SB_VEHICLES !== 'undefined' ? SB_VEHICLES : []).filter(function(v){ return v && v.active !== false; });
-  var vanRows = vans.map(function(v){
-    var own = (v.ownership === 'own');
-    return '<tr><td class="ct-nm"><b>' + e(v.name || v.id) + '</b>'
-      + '<div class="ct-nmsub">' + e(v.plate || '') + (v.capacity ? (' · ' + v.capacity + ' ที่นั่ง') : '') + '</div></td>'
-      + '<td><span class="ct-tag ' + (own ? 'fix' : 'step') + '">' + (own ? 'ของบริษัท' : 'เช่า / พาร์ทเนอร์') + '</span>'
-        + (v.partnerName ? ('<span class="ct-u"> ' + e(v.partnerName) + '</span>') : '') + '</td>'
-      + '<td>' + ctNum(v.costPerDay, 'vc' + v.id, 'vanCostSet(\'' + v.id + '\',this.value)', 76)
-        + '<span class="ct-u" style="margin:0 4px">฿/วัน</span>'
-        + ((v.costPerDay == null || v.costPerDay === '')
-            ? ('<span class="ct-u" style="opacity:.65;margin-left:8px">ยังไม่ตั้ง · ใช้ ฿' + vanDayCost(v) + '</span>') : '')
+  /* ── รถ · คิดตามกลุ่ม ไม่ใช่ตามคัน ── */
+  var GS = vanGroups(), PR = ctRoutesByPier();
+  _ct.vg = _ct.vg || {};
+  var vanRows = GS.map(function(g){
+    var opened = !!_ct.vg[g.key];
+    var nOvr = 0;
+    (Object.keys(((vanRates()[g.key] || {}).rt) || {})).forEach(function(){ nOvr++; });
+    var head = '<tr class="ct-vgh"><td class="ct-nm">'
+      + '<button class="ct-mini" onclick="ctVanOpen(\'' + e(g.key) + '\')" style="margin-right:8px">'
+        + (opened ? '&#9660;' : '&#9654;') + '</button>'
+      + '<b>' + e(g.name) + '</b>'
+      + '<div class="ct-nmsub">' + g.vans.length + ' คัน · '
+        + e(g.vans.slice(0, 5).map(function(v){ return v.name || v.id; }).join(' · '))
+        + (g.vans.length > 5 ? (' +' + (g.vans.length - 5)) : '') + '</div></td>'
+      + '<td><span class="ct-tag ' + (g.own ? 'fix' : 'step') + '">' + (g.own ? 'ของบริษัท' : 'รถร่วม') + '</span>'
+        + (nOvr ? ('<span class="ct-u" style="margin-left:8px">ตั้งแยก ' + nOvr + ' เส้นทาง</span>') : '') + '</td>'
+      + '<td>' + ctNum(vanRateRaw(g.key, '', ''), 'vb' + g.key, 'vanRateSet(\'' + e(g.key) + '\',\'\',\'\',this.value)', 76)
+        + '<span class="ct-u" style="margin:0 4px">฿/วัน · ราคาฐาน</span>'
+        + ((vanRateRaw(g.key, '', '') === '')
+            ? ('<span class="ct-u" style="opacity:.65">ยังไม่ตั้ง · ใช้ ฿' + (g.own ? MV_VAN_DEF.own : MV_VAN_DEF.partner) + '</span>') : '')
       + '</td></tr>';
+    if(!opened) return head;
+    /* ตารางเส้นทาง × โซนรับ · เว้นว่างได้ทุกช่อง จะถอยไปใช้ราคาฐาน */
+    var body = PR.map(function(pg){
+      return '<tr class="ct-pierh"><td colspan="3">' + e(pg.name) + '</td></tr>'
+        + pg.routes.map(function(r){
+            var F = function(fld, w){ return ctNum(vanRateRaw(g.key, r.id, fld), 'v' + g.key + r.id + fld,
+              'vanRateSet(\'' + e(g.key) + '\',\'' + e(r.id) + '\',\'' + fld + '\',this.value)', w || 68); };
+            return '<tr><td class="ct-nm" style="padding-left:26px">'
+              + '<span class="ct-dot" style="background:' + e(r.color || '#64748B') + '"></span>'
+              + e(r.name || r.id) + '</td>'
+              + '<td>' + F('base') + '<span class="ct-u" style="margin-left:5px">ทั้งเส้นทาง</span></td>'
+              + '<td><span class="ct-u">PK</span> ' + F('PK')
+                + '<span class="ct-u" style="margin-left:10px">KL</span> ' + F('KL') + '</td></tr>'; }).join('');
+    }).join('');
+    return head + '<tr class="ct-vgb"><td colspan="3"><table class="ct-mtbl">'
+      + '<colgroup><col><col style="width:210px"><col style="width:300px"></colgroup><tbody>' + body + '</tbody></table>'
+      + '<div class="ct-hint" style="padding:8px 4px 2px">เว้นว่าง = ใช้ราคาฐานของกลุ่ม · '
+      + 'ใส่ช่อง <b>ทั้งเส้นทาง</b> ถ้าเส้นทางนี้ราคาเดียวไม่แยกโซน · '
+      + 'ใส่ <b>PK / KL</b> เมื่อรับที่ภูเก็ตกับเขาหลักคิดไม่เท่ากัน</div></td></tr>';
   }).join('');
   if(!vanRows) vanRows = '<tr><td colspan="3" class="ct-u" style="padding:14px 4px">ยังไม่มีรถในระบบ</td></tr>';
 
@@ -55823,12 +55933,14 @@ function ctRealHtml(){
       + '<tbody>' + rRows + '</tbody></table></div>'
       + '<div class="ct-hint">นี่คือค่าเริ่มต้น · วันไหนร้านเต็มหรือเรือไปไม่ทัน จะเปลี่ยนเฉพาะลำนั้นวันนั้นได้ที่ใบงานเรือ (ก้อนถัดไป)</div></div>'
 
-    + '<div class="ct-card ct-catcard"><div class="ct-cath"><span>' + ctIcon('folder', 15) + '<b>ค่ารถต่อวัน</b></span>'
-      + '<span class="ct-cnt">' + vans.length + ' คัน</span></div>'
-      + '<div class="ct-scroll"><table class="ct-mtbl"><colgroup><col><col style="width:30%"><col style="width:280px"></colgroup>'
+    + '<div class="ct-card ct-catcard"><div class="ct-cath"><span>' + ctIcon('folder', 15) + '<b>ค่ารถ · คิดตามกลุ่ม</b></span>'
+      + '<span class="ct-cnt">' + GS.length + ' กลุ่ม · ' + GS.reduce(function(a, g){ return a + g.vans.length; }, 0) + ' คัน</span></div>'
+      + '<div class="ct-scroll"><table class="ct-mtbl"><colgroup><col><col style="width:26%"><col style="width:330px"></colgroup>'
       + '<tbody>' + vanRows + '</tbody></table></div>'
-      + '<div class="ct-hint">รถของบริษัทคิดน้ำมัน + คนขับ · รถเช่าคิดค่าเช่า — เดิมระบบคิดทุกคันเท่ากันที่ ฿1,200 '
-      + 'ไม่ได้ตั้งค่าไว้จะใช้ ฿' + MV_VAN_DEF.own + ' (ของบริษัท) / ฿' + MV_VAN_DEF.partner + ' (เช่า)</div></div>';
+      + '<div class="ct-hint">รถของเจ้าเดียวกันราคาเดียวกัน จึงตั้งเป็นกลุ่ม ไม่ต้องกรอกทีละคัน · '
+      + 'ที่ต่างกันจริงคือ<b>ไปท่าไหน</b>และ<b>ไปรับโซนไหน</b> — กดสามเหลี่ยมหน้ากลุ่มเพื่อตั้งแยกรายเส้นทาง<br>'
+      + 'เดิมระบบคิดทุกคันเท่ากันที่ ฿1,200 · ไม่ได้ตั้งอะไรเลยจะใช้ ฿' + MV_VAN_DEF.own + ' (ของบริษัท) / ฿'
+      + MV_VAN_DEF.partner + ' (รถร่วม)</div></div>';
 }
 function mvAdd(){
   MEAL_VENUES.push({ id:'mv' + Math.random().toString(36).slice(2, 8), name:'', place:'',
@@ -55848,6 +55960,7 @@ function mvRouteSet(rid, vid){
   if(typeof save === 'function') save();
   ctRender();
 }
+function ctVanOpen(k){ _ct.vg = _ct.vg || {}; if(_ct.vg[k]) delete _ct.vg[k]; else _ct.vg[k] = 1; ctRender(); }
 function vanCostSet(vid, v){
   var x = (typeof vehGet === 'function') ? vehGet(vid) : null; if(!x) return;
   x.costPerDay = (String(v).trim() === '') ? null : (+v || 0);
