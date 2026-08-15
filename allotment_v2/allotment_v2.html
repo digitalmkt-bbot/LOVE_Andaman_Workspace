@@ -7838,15 +7838,23 @@ function renderCal(){
         const full=(g.free<=0 && g.cap>0);
         const dep=((g.r.times||[])[0]||'').trim();
         const pct=g.cap>0?Math.round((g.cap-g.free)/g.cap*100):0;
+        /* §calChip2 · ใช้ความสดชุดเดียวกับชิปในช่องวัน · เลือก Solid แล้วต้องสดทั้งสองฝั่ง */
+        const v=_calVivid(g.r.color), solid=(_chip.st==='D');
+        const cBg = solid ? v : _calRgba(v,.16);
+        const cBd = solid ? v : _calRgba(v,.42);
+        const cTm = solid ? 'rgba(255,255,255,.22)' : _calRgba(v,.24);
+        const cFg = solid ? '#fff' : _calDk(v,.34);
+        const cNm = solid ? '#fff' : _calDk(v,.36);
+        const cSv = full ? (solid?'#fff':'#B91C1C') : (solid?'#fff':_calDk(v,.28));
         return `<div class="calx-tc" onclick="calOpenDay('${_sel}')"
             title="${g.r.name} · ${g.free} of ${g.cap} seats free · ${pct}% sold"
-            style="background:${_calRgba(g.r.color,.10)};border-color:${_calRgba(g.r.color,.28)}">
+            style="background:${cBg};border-color:${cBd}">
           <div class="r1">
-            <span class="tm" style="background:${_calRgba(g.r.color,.16)};color:${_calDk(g.r.color,.34)}">${dep||'--:--'}</span>
-            <span class="pr" style="color:${_calDk(g.r.color,.34)};opacity:.75">${PIER_NAME[g.r.pier]||g.r.pier||''}${g.nb>1?(' · '+g.nb+' boats'):''}</span>
+            <span class="tm" style="background:${cTm};color:${cFg}">${dep||'--:--'}</span>
+            <span class="pr" style="color:${cFg};opacity:.8">${PIER_NAME[g.r.pier]||g.r.pier||''}${g.nb>1?(' · '+g.nb+' boats'):''}</span>
           </div>
-          <div class="r2"><span class="rn" style="color:${_calDk(g.r.color,.36)}">${_calName(g.r)}</span>
-            <span class="sv${full?' f':''}"${full?'':` style="color:${_calDk(g.r.color,.30)}"`}>${full?'FULL':g.free}</span></div>
+          <div class="r2"><span class="rn" style="color:${cNm}">${_calName(g.r)}</span>
+            <span class="sv${full?' f':''}" style="color:${cSv}">${full?'FULL':g.free}</span></div>
         </div>`; }).join('')
     : `<div class="calx-empty">No trips scheduled on this day</div>`;
   const _sideShut=_selGroups.shut.length
