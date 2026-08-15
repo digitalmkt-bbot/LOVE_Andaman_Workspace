@@ -4045,6 +4045,10 @@
         "type": "text"
       },
       {
+        "name": "specialmeals_allergylist",
+        "type": "text"
+      },
+      {
         "name": "largeluggage",
         "type": "bigint"
       },

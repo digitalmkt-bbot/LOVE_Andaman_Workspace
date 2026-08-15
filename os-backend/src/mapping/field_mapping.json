@@ -4946,6 +4946,11 @@
       "source": "b2cOverride",
       "kind": "json_text",
       "db_type": "text"
+    },
+    "specialmeals_allergylist": {
+      "source": "specialMeals.allergyList",
+      "kind": "json_text",
+      "db_type": "text"
     }
   },
   "sb_bookings__passengers": {

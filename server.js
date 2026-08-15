@@ -74,6 +74,43 @@ function mapDriftSummary(){
   return { tables: MAP_DRIFT.tables.length, columns: MAP_DRIFT.columns.length,
            detail: MAP_DRIFT.tables.concat(MAP_DRIFT.columns).slice(0, 20).join(', ') };
 }
+// §dbDrift · model บอกว่ามีคอลัมน์นี้ แต่ตารางจริงไม่มี
+//   _restInsertRows ยิงคอลัมน์ตามที่ model บอกล้วน ๆ ไม่ได้เช็คว่ามีจริง
+//   ขาดคอลัมน์เดียว INSERT พังทั้งชุด · transaction rollback · เซฟไม่ติดเลยสักฟิลด์
+//   ผู้ใช้เห็นเป็น "เซฟแล้วรีเฟรชหาย" เหมือนกับตอน mapping ขาดทุกประการ แต่คนละสาเหตุ
+//   เช็คหลังรัน migration เสร็จ · ตอนนั้นตารางอยู่ในสภาพสุดท้ายแล้ว
+const DB_DRIFT = { checked:false, missing:[], extra:0, at:'' };
+async function dbDriftCheck(){
+  if (DATA_BACKEND !== 'relational' || !pool) return DB_DRIFT;
+  try{
+    const r = await pool.query(
+      'SELECT table_name, column_name FROM information_schema.columns WHERE table_schema=$1', [OS_SCHEMA]);
+    const real = {};
+    for (const row of r.rows) (real[row.table_name] ||= new Set()).add(row.column_name);
+    const missing = [];
+    let extra = 0;
+    for (const t of OS_TABLES){
+      const have = real[t];
+      if (!have){ missing.push(t + ' (ทั้งตาราง)'); continue; }
+      for (const c of OS_COLS[t]) if (!have.has(c)) missing.push(t + '.' + c);
+      for (const c of have) if (OS_COLS[t].indexOf(c) < 0) extra++;
+    }
+    DB_DRIFT.checked = true; DB_DRIFT.missing = missing; DB_DRIFT.extra = extra;
+    DB_DRIFT.at = new Date().toISOString();
+    if (missing.length)
+      console.error('[db] operation_schemas is MISSING column(s) the code writes on every save. '
+        + 'One missing column aborts the whole INSERT, the transaction rolls back, and NOTHING is saved — '
+        + 'the user sees their edit vanish on refresh with no error. missing: ' + missing.slice(0,40).join(', ')
+        + (missing.length>40?(' … +'+(missing.length-40)+' more'):'')
+        + ' — add a migration under db/migrations/ with ADD COLUMN IF NOT EXISTS');
+    else console.log('[db] every column in operation_schemas_model.json exists in the database');
+  }catch(e){ console.error('[db] drift check failed (boot continues):', e.message); }
+  return DB_DRIFT;
+}
+function dbDriftSummary(){
+  return { checked: DB_DRIFT.checked, missing: DB_DRIFT.missing.length, extraInDb: DB_DRIFT.extra,
+           detail: DB_DRIFT.missing.slice(0, 20).join(', '), at: DB_DRIFT.at };
+}
 function _bindVal(t, c, row){
   let v = row[c] === undefined ? null : row[c];
   const ty = (OS_COLTYPE[t] && OS_COLTYPE[t][c]) || '';
@@ -1682,6 +1719,10 @@ async function initDb(){
     _step = 'migrations';
     try { await runMigrations(); }
     catch(e){ console.error('[mig] runner error (boot continues):', e.message); }
+    // §dbDrift · หลัง migration · ตารางอยู่ในสภาพสุดท้ายแล้วค่อยเทียบกับ model
+    _step = 'db drift check';
+    try { await dbDriftCheck(); }
+    catch(e){ console.error('[db] drift check error (boot continues):', e.message); }
     // After migrations: 009 adds the column this reads. Re-read on a timer so a second replica picks up
     // a sign-out that happened on the other one within a minute.
     _step = 'logout epochs';
@@ -2169,7 +2210,9 @@ const server = http.createServer((req, res) => {
         // the code that is already serving.
         // §mapDrift · อยู่ตรงนี้ด้วยเหตุผลเดียวกับ mig · mapping ที่ขาดไม่ขึ้น error และไม่ขยับ version
         //   ความเงียบนั้นคืออาการ · ต้องมีที่ให้มองแล้วรู้ทันที ไม่ใช่ไล่หาทีละไฟล์
-        { b2c: b2cHealthReport(), mig: migSummary(), map: mapDriftSummary() })))
+        //   §dbDrift · อีกทางที่ข้อมูลหายเงียบ · model มีคอลัมน์ แต่ตารางจริงไม่มี
+        //   INSERT พังทั้งชุด transaction rollback เซฟไม่ติดสักฟิลด์ · เห็นเป็นอาการเดียวกันเป๊ะ
+        { b2c: b2cHealthReport(), mig: migSummary(), map: mapDriftSummary(), db: dbDriftSummary() })))
       .catch(e=>J(res,500,{error:e.message}));
     return;
   }
