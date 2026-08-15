@@ -591,8 +591,12 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat) {
       total: lineTotal,
     },
     paymentSnapshot: {
-      deposit: isFirstLine ? (Number(h.bk_deposit) || 0) : 0,
-      balance: isFirstLine ? (Number(h.bk_balance) || 0) : 0,
+      // Math.round for the same reason paidAmt has it (~441): these columns are bigint, and B2C
+      // stores money as numeric WITH satang — a deposit of 5831.78 went in raw and Postgres rejected
+      // the whole statement, which failed the entire sync rather than just this field. Every other
+      // money column here is already whole baht, so rounding keeps them consistent.
+      deposit: isFirstLine ? Math.round(Number(h.bk_deposit) || 0) : 0,
+      balance: isFirstLine ? Math.round(Number(h.bk_balance) || 0) : 0,
       method: payType,
       paid: isFirstLine ? paidAmt : 0,
       paidStatus: paidStatus,
