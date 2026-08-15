@@ -79260,7 +79260,9 @@ function pjCSS(){
   +H+' .pj-rw .v{font-size:12px;font-weight:600;color:#242730;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
   +H+' .pj-rw .v.e{color:#CFD4DC;font-weight:400}'
   +H+' .pj-rw.sw2{background:#FFFCF3}'
-  +H+' .pj-rw select{flex:1;min-width:0;border:1px solid transparent;background:transparent;border-radius:7px;padding:3px 6px;font:600 12px inherit;color:#242730;cursor:pointer}'
+  /* §pjRowFit · เว้นขวาให้ลูกศรของ select · ไม่งั้นชื่อยาววิ่งไปทับ */
+  +H+' .pj-rw select{flex:1;min-width:0;border:1px solid transparent;background:transparent;border-radius:7px;'
+     +'padding:3px 22px 3px 7px;font:600 12px inherit;color:#242730;cursor:pointer;text-overflow:ellipsis}'
   +H+' .pj-rw select:hover{border-color:#D9DDE4;background:#fff}'
   +H+' .pj-rw select:focus{border-color:#16265C;background:#fff;outline:none}'
   +H+' .pj-tag{font-size:9px;font-weight:800;border-radius:4px;padding:1px 6px;background:#FFF0D8;color:#B4560A;flex:none}'
@@ -79316,15 +79318,12 @@ function pjCSS(){
   +H+'.sk .pj-dcard{background:#fff;border:1px solid #F1F5F9;border-radius:20px;padding:14px 20px;margin:0 0 16px;'
      +'display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;'
      +'box-shadow:0 10px 30px -5px rgba(0,0,0,.04),0 4px 12px -2px rgba(0,0,0,.02)}'
-  +H+'.sk .pj-dcard .dnum{width:62px;height:62px;border-radius:20px;background:#0F172A;color:#fff;flex:0 0 auto;'
-     +'display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}'
-  +H+".sk .pj-dcard .dnum b{font:800 25px 'DM Mono',monospace;letter-spacing:-.02em}"
-  +H+'.sk .pj-dcard .dnum span{font-size:9.5px;font-weight:700;opacity:.75;margin-top:3px;letter-spacing:.06em}'
   +H+'.sk .pj-dcard .tx{text-align:center}'
-  +H+'.sk .pj-dcard .big{font-size:21px;font-weight:800;color:#0F172A;letter-spacing:-.01em;line-height:1.25}'
-  +H+'.sk .pj-dcard .sm{font-size:11.5px;color:#64748B;margin-top:3px}'
+  +H+'.sk .pj-dcard .big{font-size:21px;font-weight:800;color:#0F172A;letter-spacing:-.01em;line-height:1.3}'
+  /* §pjDateCard2 · บรรทัดสากลใหญ่เท่าบรรทัดไทย · ต่างกันที่น้ำหนักกับสีเท่านั้น */
+  +H+'.sk .pj-dcard .sm{font-size:21px;font-weight:600;color:#64748B;line-height:1.3;margin-top:1px}'
   +H+'.sk .pj-dcard .sm b{color:#0F172A;font-weight:700}'
-  +'@media(max-width:600px){'+H+'.sk .pj-dcard .big{font-size:17px}}'
+  +'@media(max-width:600px){'+H+'.sk .pj-dcard .big,'+H+'.sk .pj-dcard .sm{font-size:16px}}'
   /* แถวตัวกรอง · แคปซูลซ้าย ปุ่มลงมือขวา */
   +H+'.sk .pj-frow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}'
   +H+'.sk .pj-chips{background:#fff;border:1px solid #F1F5F9;padding:5px;border-radius:16px;gap:3px;'
@@ -79427,7 +79426,8 @@ function pjRow(label, html, subOld){
     +(subOld?('<span class="pj-tag">SUB</span><span class="pj-was" title="ปกติคือ '+poE(pjStaffName(subOld))+'">ปกติ '+poE(pjStaffName(subOld))+'</span>'):'')+'</div>';
 }
 function pjSelRow(pier,bid,label,slot,val,subOld,roles,ro,boat){
-  var badge=(val&&typeof plChips==='function')?plChips(val,boat):'';
+  /* §pjRowFit · ชิปใบอนุญาตรายคน (ก / ช) ออก · บรรทัดสรุปใต้การ์ดบอกเรื่องเดียวกันอยู่แล้ว */
+  var badge='';
   var hp=val?pjHomePier(val):'';
   if(hp && hp!==pier) badge+='<span class="pj-away" title="มาช่วยจาก '+poE((PO_PIERS.filter(function(x){return x.k===hp;})[0]||{}).t||hp)+'">'+poE(pjPierShort(hp))+'</span>';
   var sel=(badge?('<span style="display:inline-flex;flex:none">'+badge+'</span>'):'')
@@ -79691,7 +79691,6 @@ function renderPierJob(pier){
   /* §pjDateCard · การ์ด KPI สี่ใบถูกตัดออก · ตัวเลขรอบวันอ่านได้จากชิปตัวกรองด้านล่างอยู่แล้ว */
   var DW=pjDateWords(_poDate);
   var dcard='<div class="pj-dcard">'
-    +'<div class="dnum"><b>'+DW.d+'</b><span>'+poE(DW.ms)+'</span></div>'
     +'<div class="tx"><div class="big">'+poE(DW.big)+'</div>'
       +'<div class="sm">'+poE(DW.sm)+' · <b>'+poE(P.n||P.t)+'</b></div></div>'
     +'</div>';
