@@ -76604,9 +76604,10 @@ var PO_PIERS=[{k:'panwa',n:'Phuket',t:'Visit Panwa · ภูเก็ต',s:'VP'
 /* §poKinds · ประเภทของในทะเบียน · ผู้ใช้ตั้งเอง · [{id, name, unit, color, ord, active}]
    id ของสามตัวแรกคงเป็น fin/mask/towel เหมือนเดิม ของเก่าที่อ้างอยู่จึงไม่หลุด */
 var PIER_KINDS=[];
-var PO_KIND_SEED=[{id:'fin',name:'ตีนกบ',unit:'คู่',color:'#0F6E56',ord:1,active:true},
-                  {id:'mask',name:'หน้ากาก',unit:'ชิ้น',color:'#185FA5',ord:2,active:true},
-                  {id:'towel',name:'ผ้าเช็ดตัว',unit:'ผืน',color:'#BA7517',ord:3,active:true}];
+/* §poKindEn · name_en · ชื่อที่ใช้พิมพ์บนใบอังกฤษ · หน้าจอยังใช้ชื่อไทยเหมือนเดิมทุกที่ */
+var PO_KIND_SEED=[{id:'fin',name:'ตีนกบ',name_en:'FINS',unit:'คู่',color:'#0F6E56',ord:1,active:true},
+                  {id:'mask',name:'หน้ากาก',name_en:'MASK',unit:'ชิ้น',color:'#185FA5',ord:2,active:true},
+                  {id:'towel',name:'ผ้าเช็ดตัว',name_en:'TOWEL',unit:'ผืน',color:'#BA7517',ord:3,active:true}];
 var PO_KIND={}, PO_KORDER=[];
 function poKinds(){
   return (PIER_KINDS||[]).filter(function(k){ return k && k.active!==false; })
@@ -76618,8 +76619,14 @@ function poKindSync(){
   if(!Array.isArray(PIER_KINDS) || !PIER_KINDS.length)
     PIER_KINDS=PO_KIND_SEED.map(function(x){ return Object.assign({},x); });
   PO_KIND={}; PO_KORDER=[];
+  /* §poKindEn · ของที่ติดตั้งไปก่อนหน้านี้ไม่มี name_en · เติมให้สามตัวตั้งต้นจาก id
+     เทียบด้วย id ไม่ใช่ชื่อ เพราะชื่อไทยผู้ใช้เปลี่ยนได้ตลอด แต่ id ไม่เคยเปลี่ยน */
+  var EN={}; PO_KIND_SEED.forEach(function(x){ EN[x.id]=x.name_en; });
   poKinds().forEach(function(k){
-    PO_KIND[k.id]={t:k.name||k.id, u:k.unit||'ชิ้น', c:k.color||'#5F6C7B'};
+    /* เขียนกลับลงตัวข้อมูลด้วย · ไม่งั้นช่อง EN ในทะเบียนของจะว่างทั้งที่ใบพิมพ์ออกมาเป็น FINS
+       ดูแล้วสับสนว่าค่าอยู่ตรงไหน · เขียนไว้เฉย ๆ ไม่ได้สั่งเซฟ ติดไปเองตอนบันทึกครั้งถัดไป */
+    if(!k.name_en && EN[k.id]) k.name_en=EN[k.id];
+    PO_KIND[k.id]={t:k.name||k.id, e:(k.name_en||''), u:k.unit||'ชิ้น', c:k.color||'#5F6C7B'};
     PO_KORDER.push(k.id);
   });
   // ของที่อ้างประเภทซึ่งไม่มีอยู่แล้ว · เติมที่ว่างไว้ ดีกว่าปล่อยให้อ่านค่าจาก undefined แล้วหน้าขาว
@@ -77473,7 +77480,7 @@ function poKindSet(id, f, v){
   var k=(PIER_KINDS||[]).filter(function(x){ return x.id===id; })[0]; if(!k) return;
   k[f]=String(v==null?'':v).slice(0,40);
   poKindSync(); poPersist();
-  if(f!=='name' && f!=='unit') poItemsOpen();   // พิมพ์ชื่อ/หน่วยอยู่ ไม่ต้องวาดใหม่ให้หลุดโฟกัส
+  if(f!=='name' && f!=='name_en' && f!=='unit') poItemsOpen();   // พิมพ์ชื่อ/หน่วยอยู่ ไม่ต้องวาดใหม่ให้หลุดโฟกัส
 }
 function poKindMove(id, dir){
   if(!poGuard()) return;
@@ -77517,7 +77524,9 @@ function poItemsOpen(){
   body+='<div style="margin-top:14px;border-top:1px dashed #D8D4CA;padding-top:12px">'
     +'<div style="font-size:11.5px;font-weight:800;color:#16265C;margin-bottom:3px">ประเภทของ</div>'
     +'<div style="font-size:11px;color:#8a8a82;margin-bottom:8px">ตั้งเองได้ · ชื่อ หน่วยนับ สี และลำดับที่โชว์ · '
-      +'ใช้ร่วมกันทุกท่า เพราะของชนิดเดียวกันควรนับหน่วยเดียวกัน</div>'
+      +'ใช้ร่วมกันทุกท่า เพราะของชนิดเดียวกันควรนับหน่วยเดียวกัน<br>'
+      +'ช่อง <b>EN</b> คือชื่อที่จะไปขึ้นบน<b>ใบเซ็น</b> ซึ่งเป็นภาษาอังกฤษทั้งใบเพราะลูกค้าต่างชาติเป็นคนเซ็น · '
+      +'เว้นว่างได้ จะใช้ชื่อไทยแทน</div>'
     + poKinds().map(function(k,i,arr){
         return '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">'
           +'<input type="color" value="'+poE(k.color||'#5F6C7B')+'" onchange="poKindSet(\''+poE(k.id)+'\',\'color\',this.value)" '
@@ -77525,6 +77534,12 @@ function poItemsOpen(){
           +'<input value="'+poE(k.name||'')+'" placeholder="ชื่อประเภท เช่น เสื้อชูชีพ" '
             +'oninput="poKindSet(\''+poE(k.id)+'\',\'name\',this.value)" '
             +'style="flex:1;border:1px solid #D8D4CA;border-radius:8px;padding:5px 9px;font:600 12.5px inherit;font-family:inherit">'
+          /* §poKindEn · ชื่ออังกฤษ · ใช้เฉพาะตอนพิมพ์ใบเซ็น หน้าจอยังเป็นไทยหมด */
+          +'<input value="'+poE(k.name_en||'')+'" placeholder="EN เช่น LIFE JACKET" '
+            +'title="ชื่อภาษาอังกฤษ · ใช้เป็นหัวคอลัมน์ในใบเซ็นซึ่งเป็นภาษาอังกฤษทั้งใบ · เว้นว่างได้ จะใช้ชื่อไทยแทน" '
+            +'oninput="poKindSet(\''+poE(k.id)+'\',\'name_en\',this.value)" '
+            +'style="width:132px;border:1px solid #D8D4CA;border-radius:8px;padding:5px 9px;'
+            +'font:600 12.5px inherit;font-family:inherit;letter-spacing:.02em">'
           +'<input value="'+poE(k.unit||'')+'" placeholder="หน่วย" title="หน่วยนับ เช่น คู่ · ตัว · ชิ้น" '
             +'oninput="poKindSet(\''+poE(k.id)+'\',\'unit\',this.value)" '
             +'style="width:74px;border:1px solid #D8D4CA;border-radius:8px;padding:5px 9px;font:600 12.5px inherit;font-family:inherit">'
@@ -80347,6 +80362,10 @@ function poSignSheet(bid){
         +' onchange="this.parentNode.style.background=this.checked?\'#F5F7FB\':\'#fff\'" style="cursor:pointer">'
       +'<span style="width:11px;height:11px;border-radius:3px;background:'+e(KM.c)+';flex:0 0 auto"></span>'
       +'<span style="font-weight:700;font-size:12.5px;color:#16265C">'+e(KM.t)+'</span>'
+      /* §poKindEn · ชื่อที่จะไปขึ้นบนกระดาษจริง · ยังไม่ตั้งก็เตือนตรงนี้เลย จะได้ไม่ไปเจอตอนพิมพ์แล้ว */
+      +(KM.e ? '<span style="font-size:11px;font-weight:700;color:#185FA5;letter-spacing:.02em">'+e(KM.e)+'</span>'
+             : '<span style="font-size:10.5px;color:#B4560A" title="หัวคอลัมน์ในใบเซ็นจะเป็นภาษาไทย · '
+               +'ตั้งชื่ออังกฤษได้ที่ ทะเบียนของ → ประเภทของ">ยังไม่มีชื่ออังกฤษ</span>')
       +'<span style="font-size:11px;color:#8a8a82">'+e(KM.u)+'</span>'
       +(iss?'<span style="margin-left:auto;font-size:10.5px;font-weight:700;color:#047857;'
         +'background:#ECFDF5;border-radius:999px;padding:2px 9px">เบิกวันนี้</span>':'')
@@ -80496,9 +80515,10 @@ function poSignPrint(bid, kinds){
     + L10.map(function(t){ return th(t, '', 0, 2); }).join('')
     + th('Pick-up','gp',KS.length+3) + th('Return','gr',KS.length+3) + th('Money Change','gm',3)
     +'</tr><tr>'
-    + KS.map(function(k){ return th(e(PO_KIND[k].t),'gp'); }).join('')
+    /* §poKindEn · ใบนี้เป็นภาษาอังกฤษทั้งใบ · ยังไม่ได้ตั้งชื่ออังกฤษก็ใช้ชื่อไทยไปก่อน */
+    + KS.map(function(k){ return th(e(PO_KIND[k].e||PO_KIND[k].t),'gp'); }).join('')
     + th('DEPOSIT','gp')+th('Signature','gp')+th('Remark','gp')
-    + KS.map(function(k){ return th(e(PO_KIND[k].t),'gr'); }).join('')
+    + KS.map(function(k){ return th(e(PO_KIND[k].e||PO_KIND[k].t),'gr'); }).join('')
     + th('RETURN','gr')+th('Signature','gr')+th('Remark','gr')
     + th('Give','gm')+th('Return','gm')+th('Signature','gm')
     +'</tr></thead>';

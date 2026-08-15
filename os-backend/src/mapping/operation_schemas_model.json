@@ -6343,6 +6343,10 @@
         "type": "text"
       },
       {
+        "name": "name_en",
+        "type": "text"
+      },
+      {
         "name": "unit",
         "type": "text"
       },
