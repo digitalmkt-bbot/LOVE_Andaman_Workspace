@@ -76674,25 +76674,77 @@ function poLaundryOpen(pier){
   return out;
 }
 
+/* §poSkin · ไอคอนฝังในไฟล์ · ไม่พึ่ง CDN ใด ๆ */
+var PO_ICON={
+  ship:'<path d="M3 17s1.5-1 3-1 3 1 4.5 1 3-1 4.5-1 3 1 3 1"/><path d="M5 14l1.5-5h11L19 14"/><path d="M12 4v5"/>',
+  out:'<path d="M12 15V4"/><path d="m8 8 4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>',
+  check:'<circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/>',
+  box:'<path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5z"/><path d="M4 8.5 12 13l8-4.5M12 13v7"/>',
+  wash:'<path d="M7 4h7l1 3H8z"/><path d="M6 7h11v11a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z"/><path d="M9 12h5"/>',
+  anchor:'<circle cx="12" cy="5" r="2"/><path d="M12 7v13"/><path d="M6 13H4a8 8 0 0 0 16 0h-2"/>'
+};
+function poIco(n, sz){
+  return '<svg viewBox="0 0 24 24" width="'+(sz||20)+'" height="'+(sz||20)+'" fill="none" stroke="currentColor" '
+    +'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(PO_ICON[n]||'')+'</svg>';
+}
 function poCSS(){
   var H='.po-host';
-  return H+'{font-family:"Sarabun","DM Sans",sans-serif;color:#2f2f2b}'
-  +H+' .po-h{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:14px}'
-  +H+' .po-h h1{font-size:23px;font-weight:800;letter-spacing:-.02em;margin:0}'
-  +H+' .po-h p{font-size:12.5px;color:#7C8091;margin:3px 0 0}'
-  +H+' .po-bar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;background:#fff;border:1px solid #E3E3DF;border-radius:12px;padding:9px 12px;margin-bottom:14px}'
-  +H+' .po-bar input[type=date]{border:1px solid #D8D4CA;border-radius:8px;padding:6px 9px;font:600 13px inherit;color:#2f2f2b}'
-  +H+' .po-bar button{border:1px solid #D8D4CA;background:#fff;border-radius:8px;padding:6px 12px;font:700 12px inherit;color:#5F5E5A;cursor:pointer}'
-  +H+' .po-bar button:hover{border-color:#1C4A30;color:#1C4A30}'
-  +H+' .po-bar button.pri{background:#16265C;border-color:#16265C;color:#fff}'
-  +H+' .po-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}'
-  +H+' .po-kpi{background:#fff;border:1px solid #E3E3DF;border-radius:12px;padding:11px 13px}'
-  +H+' .po-kpi .k{font-size:10px;font-weight:700;color:#9A9A93;text-transform:uppercase;letter-spacing:.05em}'
-  +H+' .po-kpi .v{font-size:22px;font-weight:800;margin-top:3px;line-height:1.1}'
-  +H+' .po-kpi .s{font-size:11px;color:#7C8091;margin-top:2px}'
-  +H+' .po-sec{font-size:13px;font-weight:800;color:#16265C;margin:22px 0 9px;display:flex;align-items:center;gap:9px}'
-  +H+' .po-sec span.n{background:#16265C;color:#fff;border-radius:6px;width:19px;height:19px;display:inline-flex;align-items:center;justify-content:center;font-size:11px}'
-  +H+' .po-card{background:#fff;border:1px solid #E3E3DF;border-radius:12px;overflow:hidden}'
+  /* §poSkin · โทน slate · การ์ดมุมมนใหญ่ · เงานุ่ม — ตามไฟล์ที่ตกลงกัน */
+  return H+'{color:#1E293B}'
+  +H+' .po-h{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:22px}'
+  +H+' .po-hl{display:flex;align-items:center;gap:12px}'
+  +H+' .po-badge{width:40px;height:40px;border-radius:14px;background:#0F172A;color:#fff;display:flex;align-items:center;'
+     +'justify-content:center;font-weight:800;font-size:15px;letter-spacing:.02em;flex:0 0 auto;box-shadow:0 4px 12px rgba(15,23,42,.18)}'
+  +H+' .po-h h1{font-size:22px;font-weight:800;letter-spacing:-.02em;margin:0;color:#0F172A}'
+  +H+' .po-h p{font-size:11.5px;color:#64748B;margin:2px 0 0;line-height:1.6}'
+  /* แถบเมนูแบบ pill · เมนูซ้าย เส้นคั่น แล้ววันที่ */
+  +H+' .po-bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;background:rgba(255,255,255,.85);'
+     +'border:1px solid rgba(226,232,240,.7);border-radius:18px;padding:6px;box-shadow:0 1px 2px rgba(15,23,42,.04)}'
+  +H+' .po-bar button{border:none;background:none;border-radius:12px;padding:9px 15px;font:600 12.5px inherit;'
+     +'color:#475569;cursor:pointer;white-space:nowrap;transition:.14s}'
+  +H+' .po-bar button:hover{background:#F1F5F9;color:#0F172A}'
+  +H+' .po-bar button.pri{background:#0F172A;color:#fff;font-weight:700;box-shadow:0 1px 2px rgba(15,23,42,.14)}'
+  +H+' .po-bar button.pri:hover{background:#1E293B;color:#fff}'
+  +H+' .po-bar button.now{background:#EEF2FF;color:#4F46E5;font-weight:700;padding:7px 12px;font-size:11.5px}'
+  +H+' .po-bar button.now:hover{background:#E0E7FF;color:#4338CA}'
+  +H+' .po-bar button.nav{padding:7px 11px;color:#64748B}'
+  +H+' .po-bar input[type=date]{border:none;background:#F1F5F9;border-radius:12px;padding:7px 11px;'
+     +'font:600 11.5px inherit;color:#1E293B;cursor:pointer;outline:none}'
+  +H+' .po-bar .sep{width:1px;height:22px;background:#E2E8F0;margin:0 3px}'
+  /* KPI · ป้ายไอคอนสีอยู่ขวา */
+  +H+' .po-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(196px,1fr));gap:14px;margin:22px 0}'
+  +H+' .po-kpi{background:#fff;border:1px solid #F1F5F9;border-radius:22px;padding:17px 18px;display:flex;'
+     +'align-items:center;justify-content:space-between;gap:12px;box-shadow:0 10px 30px -5px rgba(0,0,0,.04),0 4px 12px -2px rgba(0,0,0,.02)}'
+  +H+' .po-kpi .k{font-size:11px;font-weight:500;color:#94A3B8;display:block;margin-bottom:3px}'
+  +H+" .po-kpi .v{font:800 26px 'DM Mono',monospace;line-height:1.1;color:#0F172A;letter-spacing:-.02em}"
+  +H+' .po-kpi .v em{font-style:normal;font-size:11px;font-weight:500;color:#64748B;margin-left:5px;font-family:inherit}'
+  +H+' .po-kpi .s{font-size:10.5px;color:#94A3B8;margin-top:3px}'
+  +H+' .po-kpi .ic{width:46px;height:46px;border-radius:16px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}'
+  /* หัวข้อส่วน · เลขวงกลมดำ */
+  +H+' .po-sec{font-size:16px;font-weight:800;color:#0F172A;margin:26px 0 12px;display:flex;align-items:center;gap:11px}'
+  +H+' .po-sec span.n{background:#0F172A;color:#fff;border-radius:999px;width:26px;height:26px;display:inline-flex;'
+     +'align-items:center;justify-content:center;font-size:11.5px;font-weight:800;flex:0 0 auto}'
+  +H+' .po-sec .chip{background:#F1F5F9;color:#475569;font-size:11px;font-weight:600;border-radius:999px;padding:3px 10px}'
+  +H+' .po-card{background:#fff;border:1px solid #F1F5F9;border-radius:22px;overflow:hidden;'
+     +'box-shadow:0 10px 30px -5px rgba(0,0,0,.04),0 4px 12px -2px rgba(0,0,0,.02)}'
+  /* แถบกรองประเภท + คำอธิบายย่อ ในหัวการ์ดสต็อก */
+  +H+' .po-tools{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;'
+     +'padding:13px 16px 12px;border-bottom:1px solid #F1F5F9}'
+  +H+' .po-cf{display:inline-flex;background:#F1F5F9;padding:4px;border-radius:13px;gap:3px;flex-wrap:wrap}'
+  +H+' .po-cf button{border:none;background:none;border-radius:9px;padding:5px 12px;font:600 11.5px inherit;'
+     +'color:#64748B;cursor:pointer;white-space:nowrap;transition:.12s}'
+  +H+' .po-cf button:hover{color:#0F172A}'
+  +H+' .po-cf button.on{background:#fff;color:#0F172A;font-weight:700;box-shadow:0 1px 2px rgba(15,23,42,.07)}'
+  +H+' .po-mini{display:flex;align-items:center;gap:11px;font-size:10.5px;color:#94A3B8;font-weight:500;flex-wrap:wrap}'
+  +H+' .po-mini span{display:inline-flex;align-items:center;gap:5px}'
+  +H+' .po-mini i{width:8px;height:8px;border-radius:999px;display:inline-block}'
+  /* empty state แบบเส้นประ */
+  +H+' .po-blank{background:rgba(248,250,252,.6);border:1px dashed #E2E8F0;border-radius:18px;padding:38px 16px;'
+     +'text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;margin:16px}'
+  +H+' .po-blank .ic{width:60px;height:60px;border-radius:999px;background:#fff;color:#CBD5E1;display:flex;'
+     +'align-items:center;justify-content:center;margin-bottom:12px;box-shadow:0 1px 3px rgba(15,23,42,.06)}'
+  +H+' .po-blank h4{margin:0 0 5px;font-size:13px;font-weight:700;color:#334155}'
+  +H+' .po-blank p{margin:0;font-size:11.5px;color:#94A3B8;max-width:420px;line-height:1.7}'
   +H+' table.po-t{border-collapse:collapse;width:100%}'
   +H+' table.po-t th{background:#F7F7F4;border-bottom:1px solid #E3E3DF;font-size:10px;font-weight:700;color:#7C8091;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:8px 10px;white-space:nowrap}'
   +H+' table.po-t td{border-bottom:1px solid #F0F0EC;padding:9px 10px;font-size:12.5px;vertical-align:middle}'
@@ -76702,54 +76754,64 @@ function poCSS(){
   +H+' .po-pill{display:inline-block;font-size:10.5px;font-weight:700;border-radius:999px;padding:2px 9px;white-space:nowrap}'
   +H+' .po-q{font-variant-numeric:tabular-nums;font-weight:700}'
   +H+' .po-q .b{color:#9A9A93;font-weight:600}'
-  +H+' .po-btn{border:1px solid #D8D4CA;background:#fff;border-radius:7px;padding:4px 10px;font:700 11px inherit;color:#5F5E5A;cursor:pointer;white-space:nowrap;margin:1px}'
-  +H+' .po-btn:hover{border-color:#16265C;color:#16265C}'
-  +H+' .po-btn.pri{background:#16265C;border-color:#16265C;color:#fff}'
-  +H+' .po-btn.warn{background:#B4560A;border-color:#B4560A;color:#fff}'
+  +H+' .po-btn{border:1px solid #E2E8F0;background:#fff;border-radius:10px;padding:5px 12px;font:600 11px inherit;'
+     +'color:#475569;cursor:pointer;white-space:nowrap;margin:1px;transition:.12s}'
+  +H+' .po-btn:hover{border-color:#0F172A;background:#0F172A;color:#fff}'
+  +H+' .po-btn.pri{background:#0F172A;border-color:#0F172A;color:#fff;font-weight:700}'
+  +H+' .po-btn.pri:hover{background:#1E293B;border-color:#1E293B}'
+  +H+' .po-btn.warn{background:#F59E0B;border-color:#F59E0B;color:#fff;font-weight:700}'
+  +H+' .po-btn.warn:hover{background:#D97706;border-color:#D97706}'
   +H+' .po-bar2{height:11px;border-radius:6px;overflow:hidden;display:flex;background:#F0F0EC;margin-top:4px}'
   +H+' .po-bar2 i{display:block;height:100%}'
   +H+' .po-lg{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:#5F5E5A;margin-top:9px;padding:0 12px 11px}'
   +H+' .po-lg span{display:flex;align-items:center;gap:5px}'
   +H+' .po-lg i{width:9px;height:9px;border-radius:2px;display:inline-block}'
   /* §poFlowStrip · แถบเดียว สี่ขั้นต่อกันด้วยลูกศร */
-  +H+' .po-flow{display:flex;align-items:stretch;background:#fff;border:1px solid #E3E3DF;border-radius:12px;overflow:hidden}'
-  +H+' .po-fl{flex:1;min-width:0;padding:10px 14px}'
-  +H+' .po-fl+.po-fl{border-left:1px solid #EFEFEA}'
-  +H+' .po-fl .t{font-size:11px;font-weight:700;color:#7C8091;display:flex;align-items:center;gap:6px;white-space:nowrap}'
-  +H+" .po-fl .t b{width:15px;height:15px;border-radius:5px;background:#F0F0EC;color:#7C8091;"
-     +"font:800 9px 'DM Mono',monospace;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}"
-  +H+" .po-fl .v{font:800 25px 'DM Mono',monospace;margin-top:2px;line-height:1.15}"
-  +H+' .po-fl .v em{font-style:normal;font-size:11px;font-weight:500;color:#A5A49D;margin-left:4px}'
-  +H+' .po-fl .a{margin-top:6px}'
-  +H+' .po-fl.zero .t{color:#B8B6AE}'
-  +H+' .po-arw{align-self:center;color:#D5D2C8;font-size:15px;line-height:1;margin:0 -9px;padding:0 2px;'
+  +H+' .po-flow{display:flex;align-items:stretch;background:#fff;border:1px solid #F1F5F9;border-radius:22px;overflow:hidden;'
+     +'box-shadow:0 10px 30px -5px rgba(0,0,0,.04),0 4px 12px -2px rgba(0,0,0,.02)}'
+  +H+' .po-fl{flex:1;min-width:0;padding:14px 16px 14px 18px;position:relative}'
+  +H+' .po-fl:before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--sc,#CBD5E1)}'
+  +H+' .po-fl+.po-fl{border-left:1px solid #F1F5F9}'
+  +H+' .po-fl .t{font-size:11px;font-weight:700;display:flex;align-items:center;gap:7px;white-space:nowrap;color:var(--st,#475569)}'
+  +H+" .po-fl .t b{width:19px;height:19px;border-radius:999px;background:var(--sb,#F1F5F9);color:var(--st,#64748B);"
+     +"font:800 9.5px 'DM Mono',monospace;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}"
+  +H+" .po-fl .v{font:800 28px 'DM Mono',monospace;margin-top:5px;line-height:1.1;color:#0F172A;letter-spacing:-.02em}"
+  +H+' .po-fl .v em{font-style:normal;font-size:11px;font-weight:500;color:#94A3B8;margin-left:5px;font-family:inherit}'
+  +H+' .po-fl .a{margin-top:8px}'
+  +H+' .po-fl.zero{background:#FCFDFE}'
+  +H+' .po-fl.zero .v{color:#CBD5E1}'
+  +H+' .po-arw{align-self:center;color:#E2E8F0;font-size:15px;line-height:1;margin:0 -9px;padding:0 3px;'
      +'background:#fff;border-radius:999px;position:relative;z-index:1}'
   /* §poStockCards · การ์ดต่อประเภท */
-  +H+' .po-kg{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:11px;align-items:start;padding:0 12px 12px}'
-  +H+' .po-kc{border:1px solid #E3E3DF;border-radius:12px;overflow:hidden;background:#fff}'
-  +H+' .po-kh{display:flex;align-items:center;gap:8px;padding:6px 12px;background:#FAFAF7;border-bottom:1px solid #EFEFEA}'
-  +H+' .po-kh b{font-size:11.5px;font-weight:800;color:#16265C}'
+  +H+' .po-kg{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:13px;align-items:start;padding:16px}'
+  +H+' .po-kc{border:1px solid #F1F5F9;border-radius:18px;overflow:hidden;background:#fff}'
+  +H+' .po-kh{display:flex;align-items:center;gap:8px;padding:8px 14px;background:#F8FAFC;border-bottom:1px solid #F1F5F9}'
+  +H+' .po-kh b{font-size:11.5px;font-weight:800;color:#0F172A}'
   +H+' .po-kh .dot{width:9px;height:9px;border-radius:3px;flex:0 0 auto}'
-  +H+" .po-kh .sum{margin-left:auto;font:600 11px 'DM Mono',monospace;color:#7C8091;white-space:nowrap}"
-  +H+' .po-kh .sum em{font-style:normal;color:#1C7A4E;font-weight:700}'
-  +H+' .po-ir{display:flex;align-items:center;gap:9px;padding:4px 12px;border-bottom:1px solid #F6F5F0;line-height:1.3}'
+  +H+" .po-kh .sum{margin-left:auto;font:600 11px 'DM Mono',monospace;color:#94A3B8;white-space:nowrap}"
+  +H+' .po-kh .sum em{font-style:normal;color:#10B981;font-weight:700}'
+  +H+' .po-ir{display:flex;align-items:center;gap:9px;padding:5px 14px;border-bottom:1px solid #F8FAFC;line-height:1.3}'
   +H+' .po-ir:last-child{border-bottom:0}'
-  +H+' .po-ir:hover{background:#FCFCF9}'
-  +H+' .po-ir .l{flex:1 1 auto;min-width:78px;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  +H+' .po-ir:hover{background:#F8FAFC}'
+  +H+' .po-ir .l{flex:1 1 auto;min-width:78px;font-size:12px;font-weight:700;color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
   +H+' .po-ir .po-chs{max-width:190px;overflow:hidden}'
-  +H+" .po-ir .v{font:700 14px 'DM Mono',monospace;color:#1C7A4E;min-width:32px;text-align:right;flex:0 0 auto}"
-  +H+" .po-ir .u{font:500 10px 'DM Mono',monospace;color:#A5A49D;width:52px;flex:0 0 auto;white-space:nowrap}"
+  +H+" .po-ir .v{font:800 14px 'DM Mono',monospace;color:#10B981;min-width:32px;text-align:right;flex:0 0 auto}"
+  +H+" .po-ir .u{font:500 10px 'DM Mono',monospace;color:#94A3B8;width:52px;flex:0 0 auto;white-space:nowrap}"
   +H+' .po-ir .ac{display:flex;gap:3px;flex:0 0 auto;width:112px;justify-content:flex-end}'
-  +H+' .po-mb{width:80px;height:7px;border-radius:999px;overflow:hidden;display:flex;background:#F0F0EC;flex:0 0 auto}'
+  +H+' .po-mb{width:80px;height:6px;border-radius:999px;overflow:hidden;display:flex;background:#F1F5F9;flex:0 0 auto}'
   +H+' .po-mb i{display:block;height:100%}'
   +H+' .po-chs{display:flex;gap:4px;flex:0 0 auto}'
   +H+" .po-ch{font:700 9.5px 'DM Mono',monospace;border-radius:5px;padding:1px 5px;white-space:nowrap}"
-  +H+' .po-go{border:1px solid transparent;background:none;color:#B8B6AE;border-radius:7px;padding:1px 8px;'
-     +'font:700 10.5px inherit;font-family:inherit;cursor:pointer;white-space:nowrap}'
-  +H+' .po-ir:hover .po-go{border-color:#D8D4CA;color:#4a4a45;background:#fff}'
+  +H+' .po-go{border:none;background:none;color:#CBD5E1;border-radius:9px;padding:3px 9px;'
+     +'font:600 10.5px inherit;font-family:inherit;cursor:pointer;white-space:nowrap;transition:.12s}'
+  +H+' .po-ir:hover .po-go{color:#475569;background:#F1F5F9}'
+  +H+' .po-ir .po-go:hover{background:#0F172A;color:#fff}'
   +H+' .po-go:disabled{opacity:.4;cursor:default}'
-  +H+' .po-warn{background:#FFF6E8;border:1px solid #F0D8A8;color:#7A4A00;border-radius:10px;padding:9px 13px;font-size:12px;margin-top:10px}'
-  +H+' .po-empty{padding:26px 14px;text-align:center;color:#9A9A93;font-size:12.5px}';
+  +H+' .po-warn{background:#FFFBEB;border:1px solid #FDE68A;color:#92400E;border-radius:14px;padding:11px 15px;font-size:12px;margin-top:12px}'
+  +H+' .po-empty{padding:26px 14px;text-align:center;color:#94A3B8;font-size:12.5px}'
+  +H+' table.po-t th{background:#F8FAFC;border-bottom:1px solid #F1F5F9;color:#94A3B8}'
+  +H+' table.po-t td{border-bottom:1px solid #F8FAFC}'
+  +H+' .po-lg{color:#64748B}';
 }
 
 function renderPierOffice(pier){
@@ -76766,32 +76828,45 @@ function renderPierOffice(pier){
   items.forEach(function(it){ var b=poBal(it.id); kReady+=b.ready; kLaundry+=b.laundry; kRepair+=b.repair; });
   var openN=boats.filter(function(b){ return poBoatStage(_poDate,b.bid,_poPier).k==='open'; }).length;
 
-  var kpi=function(k,v,s,c){ return '<div class="po-kpi"><div class="k">'+k+'</div><div class="v"'+(c?' style="color:'+c+'"':'')+'>'+v+'</div>'+(s?'<div class="s">'+s+'</div>':'')+'</div>'; };
+  // §poSkin · KPI · ป้ายไอคอนสีอยู่ขวาตามไฟล์ที่ตกลง
+  var kpi=function(k,v,unit,sub,ico,fg,bg,vc){
+    return '<div class="po-kpi"><div><span class="k">'+k+'</span>'
+      +'<div class="v"'+(vc?' style="color:'+vc+'"':'')+'>'+v+(unit?('<em>'+unit+'</em>'):'')+'</div>'
+      +(sub?'<div class="s">'+sub+'</div>':'')+'</div>'
+      +'<div class="ic" style="background:'+bg+';color:'+fg+'">'+poIco(ico)+'</div></div>';
+  };
   var kpis='<div class="po-kpis">'
-    +kpi('เรือออกวันนี้',boats.length,kPax+' pax'+(una>0?(' · ยังไม่ระบุเรือ '+una):''),'#16265C')
-    +kpi('เบิกออกไป',kIss,'คืนแล้ว '+kBack+(kMiss?(' · ขาด '+kMiss):''),'#185FA5')
-    +kpi('ยังไม่ปิดยอด',openN,openN?'ต้องเคลียร์ก่อนเลิกงาน':'ครบทุกลำ',openN?'#B4560A':'#1C7A4E')
-    +kpi('พร้อมใช้ในคลัง',kReady,'รวมทุกชนิด','#1C7A4E')
-    +kpi('อยู่ร้านซัก',kLaundry,'รอซ่อม '+kRepair,'#8A6D1F')
+    +kpi('เรือออกวันนี้',boats.length,'ลำ',kPax+' pax'+(una>0?(' · ยังไม่ระบุเรือ '+una):''),'ship','#2563EB','#EFF6FF')
+    +kpi('เบิกออกไป',kIss,'รายการ','คืนแล้ว '+kBack+(kMiss?(' · ขาด '+kMiss):''),'out','#D97706','#FFFBEB')
+    +kpi('สถานะปิดยอด',openN,'',openN?'ต้องเคลียร์ก่อนเลิกงาน':'ครบทุกลำ · ไม่มีเรือค้าง','check',
+        openN?'#D97706':'#059669', openN?'#FFFBEB':'#ECFDF5', openN?'#D97706':null)
+    +kpi('พร้อมใช้ในคลัง',kReady,'ชิ้น','รวมอุปกรณ์ทุกชนิด','box','#4F46E5','#EEF2FF','#059669')
+    +kpi('อยู่ร้านซัก / รอซ่อม',kLaundry,'รายการ','รอซ่อม '+kRepair+' ชิ้น','wash','#E11D48','#FFF1F2')
     +'</div>';
 
+  // §poSkin · ชื่อชนิดของในคำโปรยหัวหน้า · ต้องตามประเภทที่ผู้ใช้ตั้งจริง ไม่ใช่สามชื่อที่ฝังไว้
+  var kNames=poKinds().slice(0,4).map(function(k){ return k.name||k.id; }).join(' · ') || 'อุปกรณ์';
   host.innerHTML='<style id="po-style">'+poCSS()+'</style>'
-    +'<div class="po-h"><div>'
-      +'<div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#9A9A93;margin-bottom:2px">Pier Office</div>'
-      +'<h1>'+poE(P.n||P.t)+' · เบิก-คืนอุปกรณ์</h1>'
-      +'<p><span style="font-weight:700;color:'+P.c+'">'+poE(P.t)+'</span> · สต็อกหมุนเวียน ตีนกบ · หน้ากาก · ผ้าเช็ดตัว — เบิกเช้า คืนเย็น และใบเซ็นรับ-คืนของลูกค้า<br>'
-      +'<span style="color:#9A9A93">ของ พนักงาน และทุกยอดในหน้านี้เป็นของท่านี้เท่านั้น ไม่ปนกับท่าอื่น</span></p></div></div>'
-    +'<div class="po-bar">'
-      +'<button onclick="poShift(-1)">&#8249;</button>'
-      +'<input type="date" value="'+_poDate+'" onchange="poSetDate(this.value)">'
-      +'<button onclick="poToday()">วันนี้</button>'
-      +'<span style="flex:1"></span>'
-      +'<button onclick="poItemsOpen()">ทะเบียนของ</button>'
-      +'<button onclick="poStaffOpen()">พนักงานท่าเรือ</button>'
-      +'<button class="pri" onclick="poLedgerOpen()">ประวัติการเคลื่อนไหว</button>'
+    +'<div class="po-h">'
+      +'<div class="po-hl"><div class="po-badge">'+poE(P.s||String(P.n||'').slice(0,2).toUpperCase())+'</div><div>'
+        +'<h1>'+poE(P.n||P.t)+' · เบิก-คืนอุปกรณ์</h1>'
+        +'<p>'+poE(P.t)+' — สต็อกหมุนเวียน '+poE(kNames)+' · เบิกเช้า คืนเย็น และใบเซ็นรับ-คืนของลูกค้า<br>'
+        +'ของ พนักงาน และทุกยอดในหน้านี้เป็นของท่านี้เท่านั้น ไม่ปนกับท่าอื่น</p></div></div>'
+      +'<div class="po-bar">'
+        +'<button class="pri">หน้าหลักเบิก-คืน</button>'
+        +'<button onclick="poItemsOpen()">ทะเบียนของ</button>'
+        +'<button onclick="poStaffOpen()">พนักงานท่าเรือ</button>'
+        +'<button onclick="poLedgerOpen()">ประวัติการเคลื่อนไหว</button>'
+        +'<span class="sep"></span>'
+        +'<button class="nav" onclick="poShift(-1)" title="วันก่อนหน้า">&#8249;</button>'
+        +'<input type="date" value="'+_poDate+'" onchange="poSetDate(this.value)">'
+        +'<button class="nav" onclick="poShift(1)" title="วันถัดไป">&#8250;</button>'
+        +'<button class="now" onclick="poToday()">วันนี้</button>'
+      +'</div>'
     +'</div>'
     +kpis
-    +'<div class="po-sec"><span class="n">1</span> เบิก – คืน รายลำ</div>'
+    +'<div class="po-sec"><span class="n">1</span> เบิก – คืน รายลำ'
+      +'<span class="chip">'+(boats.length?(boats.length+' ลำ'):'รอบวันนี้')+'</span></div>'
     +'<div class="po-card">'+poBoatTable(boats,items,ro)+'</div>'
     +'<div class="po-sec"><span class="n">2</span> สต็อกคงเหลือ · แยกตามถัง</div>'
     +'<div class="po-card">'+poStockTable(items,ro)+'</div>'
@@ -76804,7 +76879,10 @@ function poShift(n){ var d=new Date(_poDate+'T12:00:00'); d.setDate(d.getDate()+
 function poToday(){ _poDate=poYMD(new Date()); renderPierOffice(); }
 
 function poBoatTable(boats, items, ro){
-  if(!boats.length) return '<div class="po-empty">ไม่มีเรือออกจากท่านี้ในวันที่เลือก<br><span style="font-size:11.5px">ผูกเรือกับเส้นทางได้ที่หน้า Boat Operation</span></div>';
+  // §poSkin · ที่ว่างแบบเส้นประ · บอกด้วยว่าไปทำต่อที่ไหน ไม่ใช่แค่บอกว่าไม่มี
+  if(!boats.length) return '<div class="po-blank"><div class="ic">'+poIco('anchor',26)+'</div>'
+    +'<h4>ไม่มีเรือออกจากท่านี้ในวันที่เลือก</h4>'
+    +'<p>ผูกเรือกับเส้นทางได้ที่หน้า Boat Operation เพื่อเปิดรายการเบิกอุปกรณ์สำหรับเที่ยวเรือ</p></div>';
   var hd='<tr><th style="width:170px">เรือ</th><th>เส้นทาง</th><th style="width:60px;text-align:center">ลค</th>'
     +'<th style="width:150px">พนักงานลงเรือ</th>'
     +PO_KORDER.map(function(k){ return '<th style="width:96px;text-align:center">'+PO_KIND[k].t+'<br><span style="font-weight:400;text-transform:none">เบิก / คืน</span></th>'; }).join('')
@@ -76853,8 +76931,26 @@ function poStockChips(b){
     return '<span class="po-ch" style="background:'+k.c+'18;color:'+k.c+'" title="'+poE(k.t)+'">'
       +poE(k.t.split(' ')[0])+' '+v+'</span>'; }).join('');
 }
+/* §poCatFilter · กรองตามประเภท · ไม่เก็บลงข้อมูล เป็นมุมมองชั่วคราวของคนที่กำลังดู */
+var _poCat='all';
+function poCatSet(k){ _poCat=k||'all'; renderPierOffice(); }
 function poStockTable(items, ro){
   if(!items.length) return '<div class="po-empty">ยังไม่มีของในทะเบียนของท่านี้ · กด "ทะเบียนของ" เพื่อเพิ่ม</div>';
+  // แถบกรอง · นับจากของทั้งหมดเสมอ ไม่ใช่จากที่กรองแล้ว ตัวเลขในปุ่มจะได้ไม่เปลี่ยนตามตัวเอง
+  var cnt={}; items.forEach(function(it){ cnt[it.kind]=(cnt[it.kind]||0)+1; });
+  var tools='<div class="po-tools"><div class="po-cf">'
+    +'<button class="'+(_poCat==='all'?'on':'')+'" onclick="poCatSet(\'all\')">ทั้งหมด ('+items.length+')</button>'
+    + poKinds().filter(function(k){ return cnt[k.id]; }).map(function(k){
+        return '<button class="'+(_poCat===k.id?'on':'')+'" onclick="poCatSet(\''+poE(k.id)+'\')">'
+          +poE(k.name||k.id)+' ('+cnt[k.id]+')</button>'; }).join('')
+    +'</div><div class="po-mini">'
+    + PO_BUCKET.filter(function(b){ return b.k!=='gone'; }).map(function(b){
+        return '<span><i style="background:'+b.c+'"></i>'+poE(b.t)+'</span>'; }).join('')
+    +'</div></div>';
+  if(_poCat!=='all'){
+    var f=items.filter(function(it){ return it.kind===_poCat; });
+    if(f.length) items=f; else _poCat='all';   // ประเภทที่กรองอยู่ถูกลบไปแล้ว · ถอยกลับไปทั้งหมด
+  }
   var by={}, order=[];
   items.forEach(function(it){ if(!by[it.kind]){ by[it.kind]=[]; order.push(it.kind); } by[it.kind].push(it); });
   // เรียงตามลำดับประเภทที่ผู้ใช้ตั้งไว้ · ประเภทที่ถูกลบไปแล้วไปต่อท้าย
@@ -76880,8 +76976,7 @@ function poStockTable(items, ro){
             +'</span></div>'; }).join('')
       +'</div>';
   }).join('');
-  var lg='<div class="po-lg">'+PO_BUCKET.map(function(k){ return '<span><i style="background:'+k.c+'"></i>'+k.t+'</span>'; }).join('')+'</div>';
-  return '<div class="po-kg">'+cards+'</div>'+lg;
+  return tools+'<div class="po-kg">'+cards+'</div>';
 }
 
 function poLaundryBlock(ro){
@@ -76889,15 +76984,19 @@ function poLaundryBlock(ro){
   if(!tw.length) return '<div class="po-card"><div class="po-empty">ท่านี้ยังไม่มีผ้าเช็ดตัวในทะเบียน</div></div>';
   var t={ready:0,onboat:0,dirty:0,laundry:0};
   tw.forEach(function(it){ var b=poBal(it.id); t.ready+=b.ready; t.onboat+=b.onboat; t.dirty+=b.dirty; t.laundry+=b.laundry; });
-  var st=[['พร้อมใช้ในคลัง',t.ready,'#1C7A4E','เบิกเช้า'],['อยู่กับเรือ',t.onboat,'#185FA5','คืนเย็น'],
-          ['คืนแล้ว รอส่งซัก',t.dirty,'#B4560A','ส่งซัก'],['อยู่ร้านซัก',t.laundry,'#8A6D1F','รับเข้า']];
+  // §poSkin · แต่ละขั้นมีสีของตัวเอง · แถบซ้าย ตัวเลข และป้ายเลขขั้น ใช้สีเดียวกัน
+  var st=[['พร้อมใช้ในคลัง',t.ready,'#059669','#ECFDF5','ผ้าสะอาดพร้อมแจกจ่าย'],
+          ['อยู่กับเรือ',t.onboat,'#2563EB','#EFF6FF','ออกเที่ยวทะเลวันนี้'],
+          ['คืนแล้ว รอส่งซัก',t.dirty,'#D97706','#FFFBEB','รับกลับมาจากเรือแล้ว'],
+          ['อยู่ร้านซัก',t.laundry,'#7C3AED','#F5F3FF','ซักและอบแห้งนอกสถานที่']];
   // §poFlowStrip · ลูกศรบอกว่าสี่ขั้นนี้ต่อกัน · ขั้นที่ยังไม่มีของจางลง จะได้เห็นว่าคิวอยู่ตรงไหน
   var flow=st.map(function(x,i){
     var act='';
     if(i===2 && x[1]>0) act='<div class="a"><button class="po-btn pri" onclick="poLaundryOutOpen()"'+(ro?' disabled':'')+'>ส่งซัก '+x[1]+' ผืน</button></div>';
     if(i===3 && x[1]>0) act='<div class="a"><button class="po-btn pri" onclick="poLaundryInOpen()"'+(ro?' disabled':'')+'>รับเข้า</button></div>';
-    return '<div class="po-fl'+(x[1]?'':' zero')+'"><div class="t"><b>'+(i+1)+'</b>'+x[0]+'</div>'
-      +'<div class="v" style="color:'+(x[1]?x[2]:'#C9C9C2')+'">'+x[1]+'<em>ผืน</em></div>'+act+'</div>';
+    return '<div class="po-fl'+(x[1]?'':' zero')+'" style="--sc:'+x[2]+';--st:'+x[2]+';--sb:'+x[3]+'">'
+      +'<div class="t"><b>'+(i+1)+'</b>'+x[0]+'</div>'
+      +'<div class="v"'+(x[1]?(' style="color:'+x[2]+'"'):'')+'>'+x[1]+'<em>ผืน</em></div>'+act+'</div>';
   }).join('<div class="po-arw">&#10230;</div>');
   var op=poLaundryOpen(_poPier).filter(function(o){ return o.days>PO_LAUNDRY_DUE; });
   var warn=op.length?('<div class="po-warn"><b>ผ้าค้างที่ร้านซักนานผิดปกติ</b> — '
