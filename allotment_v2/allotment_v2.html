@@ -80297,6 +80297,22 @@ function pjShotScript(fn){
      +"s.onload=run;s.onerror=bad;document.head.appendChild(s);}";
 }
 
+/* §poSign2 · สี Agent ของใบเซ็นโดยเฉพาะ · คนละชุดกับสีในหน้าจอง
+   หน้าจองใช้สีไว้กวาดตาหาใบ · ใบเซ็นใช้สีไว้แยกกองตอนแจกของหน้าท่า
+   คนละคนดู คนละงาน · มัดให้ใช้สีเดียวกันแล้วจะมีฝ่ายหนึ่งเสียเสมอ
+   เก็บใน PIER_CFG ซึ่ง poPersist ส่งขึ้นฐานข้อมูลอยู่แล้ว · ตั้งที่เครื่องไหนก็เห็นทุกเครื่อง */
+function poSignColors(){
+  if(!PIER_CFG.signAgentColors || typeof PIER_CFG.signAgentColors!=='object') PIER_CFG.signAgentColors={};
+  return PIER_CFG.signAgentColors;
+}
+function poSignColor(agId){ return (agId && poSignColors()[agId]) || ''; }
+function poSignColorSet(agId, hex){
+  var M=poSignColors();
+  if(hex) M[agId]=hex; else delete M[agId];
+  try{ poPersist(); }catch(_){}
+}
+function poSignColorClear(bid, agId){ poSignColorSet(agId,''); poSignSheet(bid); }
+
 /* §poSign · ประเภทของที่จะขึ้นเป็นคอลัมน์ในใบเซ็น · จำที่ติ๊กไว้ล่าสุด */
 var PO_SIGN_KEY='la.po.signkinds';
 function poSignKindsGet(){
@@ -80337,6 +80353,34 @@ function poSignSheet(bid){
       +'</label>'; }).join('');
   if(!PO_KORDER.length) body+='<div style="font-size:12px;color:#B4560A">ยังไม่ได้ตั้งประเภทของ · '
     +'ใบเซ็นจะออกมาโดยไม่มีคอลัมน์ของ</div>';
+
+  /* §poSign2 · ตั้งสี Agent ของใบนี้ · เฉพาะเอเจนต์ที่มีคนอยู่บนลำนี้วันนี้จริง ๆ
+     ไม่ยกทั้งทะเบียนมากอง เพราะที่ต้องแยกกองคือของที่อยู่ตรงหน้า ไม่ใช่ทั้งบริษัท */
+  var AG={}, agOrd=[];
+  B.bks.forEach(function(x){
+    var id=x.b.agentId; if(!id || AG[id]) return;
+    var a=(typeof sbGetAgent==='function')?sbGetAgent(id):null;
+    AG[id]=(a&&a.name)||id; agOrd.push(id);
+  });
+  body+='<div style="margin-top:16px;border-top:1px dashed #D8D4CA;padding-top:13px">'
+    +'<div style="font-size:11.5px;font-weight:800;color:#16265C;margin-bottom:3px">สี Agent ในใบเซ็น</div>'
+    +'<div style="font-size:11px;color:#8a8a82;line-height:1.6;margin-bottom:9px">'
+      +'สีชุดนี้<b>ใช้เฉพาะใบเซ็น</b> · ไม่เกี่ยวกับสีเอเจนต์ในหน้าจอง แก้ที่นี่ไม่กระทบที่นั่น<br>'
+      +'ตั้งครั้งเดียวจำไว้ให้ · ขึ้นทุกใบทุกวันจนกว่าจะเปลี่ยนเอง · ไม่ตั้งก็ปล่อยเป็นช่องขาว</div>';
+  body+=agOrd.length ? agOrd.map(function(id){
+      var c=poSignColor(id);
+      return '<div style="display:flex;gap:9px;align-items:center;margin-bottom:6px">'
+        +'<input type="color" value="'+(c||'#ffffff')+'" title="เลือกสีของ '+e(AG[id])+'" '
+          +'onchange="poSignColorSet(\''+e(id)+'\',this.value)" '
+          +'style="width:30px;height:28px;border:1px solid #D8D4CA;border-radius:7px;background:none;cursor:pointer;padding:1px">'
+        +'<span style="flex:1;font-weight:700;font-size:12.5px;color:#16265C">'+e(AG[id])+'</span>'
+        + (c?('<button class="po-btn" onclick="poSignColorClear(\''+bid+'\',\''+e(id)+'\')">ล้างสี</button>')
+            :'<span style="font-size:11px;color:#b8b6ad">ยังไม่ตั้ง</span>')
+        +'</div>'; }).join('')
+    : '<div style="font-size:11.5px;color:#b8b6ad">ลำนี้ยังไม่มีใบจองของเอเจนต์ · '
+      +'งานที่มาจาก Love Andaman เองจะขึ้นเป็นโลโก้ ไม่ใช้สี</div>';
+  body+='</div>';
+
   poModal('ใบเซ็น · '+e(B.boat.name||bid)+' · '+e((B.route&&B.route.name)||''), body,
     poBtn('ปิด','poModalClose()')+poBtn('เปิดใบเซ็น','poSignGo(\''+bid+'\')',1), 520);
 }
@@ -80367,11 +80411,13 @@ function poSignPrint(bid, kinds){
     var px=(t&&t.pax)||{}, PT=(typeof bkV2PaxTot==='function')?bkV2PaxTot:function(){return 0;};
     return {
       vch: b.voucherRef||b.code||((typeof bkV2DisplayCode==='function')?bkV2DisplayCode(b):'')||b.id||'',
-      agN: ag?(ag.name||''):((b.b2cChannel||b.channelType==='b2c')?'B2C · Website':''),
-      agC: (b.agentId&&typeof bkV2AgentColor==='function')?bkV2AgentColor(b.agentId):'',
+      agN: ag?(ag.name||''):'',
+      /* §poSign2 · สีของใบเซ็นเอง · ไม่ตั้งก็ปล่อยขาว ไม่ไปหยิบสีของหน้าจองมาใส่แทน */
+      agC: poSignColor(b.agentId),
+      /* งานของ Love Andaman เอง · ขึ้นโลโก้ชุดเดียวกับหน้าอื่นทั้งระบบ */
+      agLa: (typeof laAgencyMark==='function')?laAgencyMark(b,14,{inline:true,margin:false,pad:'2px 7px',radius:'6px'}):'',
       names: names.length?names:[''],
       ad:PT(px,'ad'), chd:PT(px,'chd'), inf:PT(px,'inf'), foc:PT(px,'foc'),
-      pkg: b.packageName||'One Day Tour',
       car: van?(van.name||van.id||''):'',
       pu:  b.hotelName||b.pickup||'',
       rm:  b.roomNo||b.room||b.roomNumber||'' };
@@ -80382,8 +80428,9 @@ function poSignPrint(bid, kinds){
 
   /* ── ความกว้างคอลัมน์ · คิดเป็นน้ำหนักแล้วหารเป็น % ทีเดียว
         จะได้ไม่ล้นกระดาษไม่ว่าติ๊กของมากี่ประเภท ── */
-  /* 12 คอลัมน์ซ้าย · กว้างพอให้หัวคอลัมน์อยู่บรรทัดเดียว ไม่ตัดคำเป็น "Roo m" */
-  var WL=[5.4,6.4,11.6,2.4,3.0,2.8,3.2,5.0,3.2,3.4,10.0,3.8];
+  /* §poSign2 · 10 คอลัมน์ซ้าย · ที่ว่างจาก Boat กับ Package ยกให้ชื่อลูกค้ากับจุดรับ
+     กว้างพอให้หัวคอลัมน์อยู่บรรทัดเดียว ไม่ตัดคำเป็น "Roo m" */
+  var WL=[5.6,7.0,14.0,2.4,3.0,2.8,3.2,3.8,12.6,3.8];
   var wArr=WL.slice(), n=KS.length;
   for(var g=0; g<2; g++){
     for(var q=0;q<n;q++) wArr.push(3.2);   /* ของแต่ละประเภท · ชื่อไทยยาวกว่า FINS/TOWEL */
@@ -80425,7 +80472,6 @@ function poSignPrint(bid, kinds){
    /* หัวตารางชั้นล่างตัวเล็กลงหน่อย · ชื่อประเภทของเป็นภาษาไทยยาวกว่า FINS/TOWEL ในไฟล์เดิม */
    +'thead th{background:#fff;font-weight:700;text-align:center;line-height:1.2;font-size:'+(fs-0.8)+'px;padding:3px 1px}'
    +'thead tr.g th{font-size:'+(fs+2)+'px;padding:4px 2px}'
-   +'th.boat{background:#D0021B;color:#fff;font-size:'+(fs-0.4)+'px;padding:4px 1px}'
    /* สามช่วงสีตามไฟล์ · ชมพูขารับ เหลืองขาคืน ขาวเงินทอน */
    +'th.gp{background:#E7A9A9}td.pk{background:#F6DDDD}'
    +'th.gr{background:#FFD98A}td.rt{background:#FDF0D2}'
@@ -80439,14 +80485,15 @@ function poSignPrint(bid, kinds){
    +'td.ag{padding:0}'
    +'td.ag .chip{display:flex;align-items:center;justify-content:center;height:100%;min-height:'+(fs*3.1).toFixed(0)+'px;'
      +'font-weight:800;font-size:'+(fs-0.3)+'px;line-height:1.2;text-align:center;padding:2px 3px}'
+   +'td.ag .la{display:flex;align-items:center;justify-content:center;padding:2px}'
    +'.sg{display:flex;gap:16px;margin-top:10px}'
    +'.sg div{flex:1;border-top:1px solid #94A3B8;padding-top:4px;text-align:center;font-size:9px;color:#64748B}';
 
   var th=function(t,cls,span,rs){ return '<th'+(cls?' class="'+cls+'"':'')
     +(span?' colspan="'+span+'"':'')+(rs?' rowspan="'+rs+'"':'')+'>'+t+'</th>'; };
-  var L12=['Voucher','Agent','Customer&#39;s Name','AD','CHD','INF','FOC','Package','Boat','Car','Pickup','Room'];
+  var L10=['Voucher','Agent','Customer&#39;s Name','AD','CHD','INF','FOC','Car','Pickup','Room'];
   var head='<thead><tr class="g">'
-    + L12.map(function(t,i){ return th(t, i===8?'boat':'', 0, 2); }).join('')
+    + L10.map(function(t){ return th(t, '', 0, 2); }).join('')
     + th('Pick-up','gp',KS.length+3) + th('Return','gr',KS.length+3) + th('Money Change','gm',3)
     +'</tr><tr>'
     + KS.map(function(k){ return th(e(PO_KIND[k].t),'gp'); }).join('')
@@ -80465,14 +80512,12 @@ function poSignPrint(bid, kinds){
   var body=rows.map(function(r){
     var ink=(r.agC&&typeof bkV2ContrastInk==='function')?bkV2ContrastInk(r.agC):'#2c2c2a';
     return '<tr><td class="vch">'+e(r.vch)+'</td>'
-      +'<td class="ag">'+(r.agN
-          ? '<span class="chip" style="background:'+e(r.agC||'#EEF2F7')+';color:'+(r.agC?ink:'#334155')+'">'+e(r.agN)+'</span>'
+      +'<td class="ag">'+(r.agLa ? '<span class="la">'+r.agLa+'</span>'
+          : r.agN ? '<span class="chip" style="background:'+e(r.agC||'#fff')+';color:'+(r.agC?ink:'#2c2c2a')+'">'+e(r.agN)+'</span>'
           : '')+'</td>'
       +'<td class="nm">'+r.names.map(function(x){ return '<span>'+e(x)+'</span>'; }).join('')+'</td>'
       +'<td class="c">'+(r.ad||'')+'</td><td class="c">'+(r.chd||'')+'</td>'
       +'<td class="c">'+(r.inf||'')+'</td><td class="c">'+(r.foc||'')+'</td>'
-      +'<td class="c">'+e(r.pkg)+'</td>'
-      +'<td class="c"></td>'   /* Boat · เว้นไว้เขียนมือ ชื่อลำอยู่บนหัวกระดาษแล้ว */
       +'<td class="c">'+e(r.car)+'</td>'
       +'<td class="c">'+e(r.pu)+'</td>'
       +'<td class="c">'+e(r.rm)+'</td>'
@@ -80480,7 +80525,7 @@ function poSignPrint(bid, kinds){
    /* แถวว่างท้ายใบ · ที่หน้าท่ามีลูกค้าโผล่มาเพิ่มเสมอ เขียนมือลงไปได้เลย */
    + Array.apply(null,{length:6}).map(function(){
        return '<tr><td></td><td class="ag"></td><td></td><td></td><td></td><td></td><td></td>'
-         +'<td></td><td></td><td></td><td></td><td></td>'+EMPTY+'</tr>'; }).join('');
+         +'<td></td><td></td><td></td>'+EMPTY+'</tr>'; }).join('');
 
   var tot=0; rows.forEach(function(r){ tot+=(r.ad||0)+(r.chd||0)+(r.inf||0)+(r.foc||0); });
   var DW=(typeof pjDateWords==='function')?pjDateWords(_poDate):{big:_poDate};
@@ -80489,11 +80534,11 @@ function poSignPrint(bid, kinds){
     +'<div class="hrow">'
       +'<span class="rn">'+e((B.route&&B.route.name)||'')+'</span>'
       +'<span class="bt">'+bn+(B.dep?(' · '+e(B.dep)):'')+'</span>'
-      +'<span class="dt">'+e(DW.big||_poDate)+'</span>'
+      +'<span class="dt">'+e(DW.sm||_poDate)+'</span>'
       +'<span class="dn">'+tot+'</span>'
     +'</div>'
     +'<table>'+cols+head+'<tbody>'+body+'</tbody></table>'
-    +'<div class="sg"><div>พนักงานจ่ายของ (เช้า)</div><div>พนักงานรับคืน (เย็น)</div><div>หัวหน้าท่าเรือ</div></div>'
+    +'<div class="sg"><div>Issued by (AM)</div><div>Received by (PM)</div><div>Pier Supervisor</div></div>'
     +'</div>';
 
   var fn=('signsheet_'+(P.k||_poPier||'pier')+'_'+(B.boat.name||bid)+'_'+_poDate)
