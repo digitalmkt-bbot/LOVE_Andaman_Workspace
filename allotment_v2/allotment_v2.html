@@ -7214,6 +7214,54 @@ function _calFitPage(){
 if(!window.__calFitBound){ window.__calFitBound=1; window.addEventListener('resize', function(){ _calFitPage(); }); }
 function _calDk(c,k){ const [r,g,b]=_calHx(c); k=(k==null)?0.45:k;
   return 'rgb('+Math.round(r*(1-k))+','+Math.round(g*(1-k))+','+Math.round(b*(1-k))+')'; }
+/* §calChip · ดันความอิ่มสีขึ้นก่อนเอาไปทาชิป · แปลงเป็น HSL ดัน S แล้วบีบ L เข้าช่วงที่อ่านออก
+   ไม่ได้แก้ค่าสีที่เก็บไว้ของเส้นทาง · หน้าอื่นที่ใช้สีเดียวกันจึงไม่ขยับ */
+function _calVivid(c, boost){
+  let [r,g,b]=_calHx(c).map(x=>x/255);
+  const mx=Math.max(r,g,b), mn=Math.min(r,g,b); let h=0, sa=0, l=(mx+mn)/2;
+  if(mx!==mn){ const d=mx-mn; sa = l>0.5 ? d/(2-mx-mn) : d/(mx+mn);
+    h = mx===r ? ((g-b)/d+(g<b?6:0)) : mx===g ? ((b-r)/d+2) : ((r-g)/d+4); h/=6; }
+  sa=Math.min(1, sa*(boost||1.35));
+  l=Math.min(0.60, Math.max(0.40, l));
+  const q = l<0.5 ? l*(1+sa) : l+sa-l*sa, p = 2*l-q;
+  const f=(t)=>{ t=(t+1)%1; if(t<1/6) return p+(q-p)*6*t; if(t<0.5) return q;
+                 if(t<2/3) return p+(q-p)*(2/3-t)*6; return p; };
+  const to=(x)=>Math.round(x*255).toString(16).padStart(2,'0');
+  return '#'+to(f(h+1/3))+to(f(h))+to(f(h-1/3));
+}
+/* §calChip · ความชอบของคนดู · เก็บในเครื่อง ไม่ใช่ข้อมูลที่ต้องแชร์ */
+var CAL_CHIP_SZ={M:{h:20,f:10.5,p:6},L:{h:23,f:12,p:7},XL:{h:26,f:13.5,p:8},XXL:{h:29,f:15,p:9}};
+var CAL_CHIP_INK={
+  white:{t:'White', bg:'#22C55E', fg:'#FFFFFF', bgf:'#EF4444', fgf:'#FFFFFF'},
+  deep :{t:'Deep green', bg:'#4ADE80', fg:'#064E32', bgf:'#FCA5A5', fgf:'#7F1D1D'},
+  ink  :{t:'Ink', bg:'#4ADE80', fg:'#0F172A', bgf:'#FCA5A5', fgf:'#0F172A'},
+  soft :{t:'Soft', bg:'#DCFCE7', fg:'#15803D', bgf:'#FEE2E2', fgf:'#B91C1C'}};
+function calChipCfg(){
+  let st='C', sz='L', ik='white';
+  try{ st=localStorage.getItem('la_cal_chip')||st;
+       sz=localStorage.getItem('la_cal_chipsz')||sz;
+       ik=localStorage.getItem('la_cal_chipink')||ik; }catch(_){}
+  if(['C','D'].indexOf(st)<0) st='C';
+  if(!CAL_CHIP_SZ[sz]) sz='L';
+  if(!CAL_CHIP_INK[ik]) ik='white';
+  return {st:st, sz:sz, ik:ik};
+}
+function calChipSet(k,v){ try{ localStorage.setItem(k,v); }catch(_){} window._calChipOpen=true; renderCal(); }
+function calChipPop(e){
+  window._calChipOpen=!window._calChipOpen;
+  const p=document.getElementById('cal-chippop');
+  if(p) p.classList.toggle('on', !!window._calChipOpen);
+  if(e && e.stopPropagation) e.stopPropagation();
+}
+if(!window.__calChipBound){ window.__calChipBound=1;
+  document.addEventListener('click', function(ev){
+    try{ if(!window._calChipOpen) return;
+      if(ev.target.closest && ev.target.closest('.calx-cfgw')) return;
+      window._calChipOpen=false;
+      const p=document.getElementById('cal-chippop'); if(p) p.classList.remove('on');
+    }catch(_){}
+  });
+}
 // เวลาออกของเส้นทาง เป็นนาทีจากเที่ยงคืน · ไม่ได้ตั้งเวลาไว้ให้ไปอยู่ท้ายสุด
 function _calDepMin(r){
   const t=String(((r&&r.times)||[])[0]||'').trim();
@@ -7319,6 +7367,23 @@ function renderCal(){
   .cal2-mb .st span b{font-family:'DM Mono',monospace;font-weight:700;color:#0F172A;margin-left:4px}
   .cal2-mb .st span.g{background:#ECFDF5;border-color:#BFE0CD;color:#047857}
   .cal2-mb .st span.g b{color:#047857}
+  /* §calChip · ปุ่มตั้งความสดของชิป · อยู่มุมขวาของหัวปฏิทิน เปิดเป็นแผงเล็ก */
+  .calx-cfgw{position:relative;display:inline-block}
+  .calx-cfg{border:1px solid #E2E8F0;background:#fff;border-radius:999px;padding:4px 12px;font:700 10.5px inherit;
+            color:#475569;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  .calx-cfg:hover{background:#F8FAFC;color:#0F172A}
+  .calx-cfg i{width:11px;height:11px;border-radius:999px;display:inline-block;
+              background:linear-gradient(135deg,#F4543C 50%,#2C7BE5 50%)}
+  .calx-pop{position:absolute;top:30px;right:0;z-index:40;background:#fff;border:1px solid #E2E8F0;border-radius:16px;
+            box-shadow:0 16px 40px rgba(15,23,42,.16);padding:13px 14px;width:298px;display:none;text-align:left}
+  .calx-pop.on{display:block}
+  .calx-pop .ph{font-size:9.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#94A3B8;margin:0 0 6px}
+  .calx-pop .ph:not(:first-child){margin-top:12px}
+  .calx-pop .sg{display:flex;background:#F1F5F9;padding:3px;border-radius:11px;gap:3px;flex-wrap:wrap}
+  .calx-pop .sg button{flex:1 1 auto;border:none;background:none;border-radius:8px;padding:5px 8px;
+                       font:600 11px inherit;color:#64748B;cursor:pointer;white-space:nowrap}
+  .calx-pop .sg button.on{background:#fff;color:#0F172A;font-weight:700;box-shadow:0 1px 2px rgba(15,23,42,.08)}
+  .calx-pop .pf{font-size:10.5px;color:#94A3B8;line-height:1.6;margin-top:11px;border-top:1px solid #F1F5F9;padding-top:9px}
   .cal2-wd{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;flex:none}
   .cal2-wd div{text-align:center;font-size:10.5px;font-weight:800;letter-spacing:.13em;color:#94A3B8;padding:4px 0;background:none}
   /* §cal2b · แต่ละสัปดาห์สูงพอดีกับวันที่มีเที่ยวมากที่สุดของสัปดาห์นั้น (min-content)
@@ -7649,6 +7714,14 @@ function renderCal(){
   const shutBar='';
 
   // ── §cal2 · ปฏิทินเต็มหน้า ────────────────────────────────────────
+  /* §calChip · ความสด/ขนาด/สีตัวเลข ที่ผู้ใช้ตั้งไว้ · ใช้ทั้งชิปในช่องวันและคำอธิบายล่าง */
+  const _chip=calChipCfg();
+  const _chSz=CAL_CHIP_SZ[_chip.sz], _chIk=CAL_CHIP_INK[_chip.ik];
+  const _chVst=(full)=>`min-width:${_chSz.h}px;height:${_chSz.h}px;padding:0 ${_chSz.p}px;font-size:${_chSz.f}px;`
+    +`background:${full?_chIk.bgf:_chIk.bg};color:${full?_chIk.fgf:_chIk.fg}`;
+  const _chSkin=(col)=>{ const v=_calVivid(col);
+    return (_chip.st==='D') ? {bg:v, bd:v, c:'#fff'}
+                            : {bg:_calRgba(v,.30), bd:_calRgba(v,.65), c:_calDk(v,.34)}; };
   let cells2='';
   for(let i=0;i<firstDay;i++) cells2+='<div class="cal2-cell pad"></div>';
   for(let d=1;d<=daysInMonth;d++){
@@ -7685,11 +7758,11 @@ function renderCal(){
         else if(full){ vCls='cal2-v full'; }
         const tip=`${g.r.name} · ${g.free} of ${g.cap} seats free · ${pct}% sold`
           +(g.nb>1?` · ${g.nb} boats`:'')+(g.wx?' · weather cancelled':'')+(g.ch?' · charter':'');
-        return `<div class="cal2-rw" title="${tip}" style="background:${_calRgba(g.r.color,.13)};
-            border-color:${_calRgba(g.r.color,.38)};color:${_calDk(g.r.color,.28)}">
+        const sk=_chSkin(g.r.color);
+        return `<div class="cal2-rw" title="${tip}" style="background:${sk.bg};border-color:${sk.bd};color:${sk.c}">
           <span class="cal2-n">${_calName(g.r)}</span>
           ${g.nb>1?`<span class="cal2-t">${g.nb}b</span>`:''}
-          <span class="${vCls}">${vTxt}</span>
+          <span class="${vCls}" style="${_chVst(full)}">${vTxt}</span>
         </div>`;
       }).join('')
       // ท่าที่ปิดเฉพาะวันนี้ (ไม่ได้ปิดทั้งเดือน) ยังต้องบอก
@@ -7711,11 +7784,28 @@ function renderCal(){
   const _visRt=_rtSorted.filter(rt=>{ const st=routeStat[rt.id]; return st && st.days.size && !_hidRt.has(rt.id); });
   const _mbOne=(_visRt.length===1)?_visRt[0]:null;
   /* §calSkin · หัวปฏิทิน · ชื่อเดือนซ้าย ป้ายสรุปขวา */
+  /* §calChip · แผงตั้งค่าเล็ก ๆ · เปิดค้างไว้ได้ระหว่างลองกดหลายอัน */
+  const _sgBtn=(key,cur,arr)=>`<div class="sg">`+arr.map(o=>
+      `<button class="${o[0]===cur?'on':''}" onclick="calChipSet('${key}','${o[0]}')">${o[1]}</button>`).join('')+`</div>`;
+  const _chipPop=`<div class="calx-cfgw">
+      <button class="calx-cfg" onclick="calChipPop(event)" title="How route chips are coloured"><i></i>Chip style</button>
+      <div class="calx-pop${window._calChipOpen?' on':''}" id="cal-chippop" onclick="event.stopPropagation()">
+        <div class="ph">Chip style</div>
+        ${_sgBtn('la_cal_chip',_chip.st,[['C','Tinted'],['D','Solid']])}
+        <div class="ph">Seats number</div>
+        ${_sgBtn('la_cal_chipsz',_chip.sz,[['M','M'],['L','L'],['XL','XL'],['XXL','XXL']])}
+        <div class="ph">Number colour</div>
+        ${_sgBtn('la_cal_chipink',_chip.ik,[['white','White'],['deep','Deep'],['ink','Ink'],['soft','Soft']])}
+        <div class="pf">Route colours themselves are not changed here &mdash; only how strongly they are painted.
+          Saved on this device.</div>
+      </div>
+    </div>`;
   const _stats=`<div class="st">`
     +`<span>Trips this month<b>${monthTrips}</b></span>`
     +`<span class="g">Seats free<b>${monthFree.toLocaleString()}</b></span>`
     +`<span>Avg / week<b>${weeklyAvg}</b></span>`
     +`<span>${_rngLbl}</span>`
+    +_chipPop
    +`</div>`;
   const monthBar = _mbOne
     ? `<div class="cal2-mb"><div class="mo"><span class="bar" style="background:${_mbOne.color}"></span>${_calName(_mbOne)} &middot; ${MONTHS_EN[calMonth]} ${calYear}</div>${_stats}</div>`
@@ -7779,9 +7869,11 @@ function renderCal(){
   const calLegend=`<div class="cal2-lg">
     <span>Chip colour = route</span>
     <span style="display:inline-flex;align-items:center;gap:6px">Seats free
-      <span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:#22C55E;color:#fff;font:800 10.5px 'DM Mono',monospace">13</span></span>
+      <span style="display:inline-flex;align-items:center;justify-content:center;border-radius:999px;
+        font-family:'DM Mono',monospace;font-weight:800;${_chVst(false)}">13</span></span>
     <span style="display:inline-flex;align-items:center;gap:6px">Sold out
-      <span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:#EF4444;color:#fff;font:800 10.5px 'DM Mono',monospace">0</span></span>
+      <span style="display:inline-flex;align-items:center;justify-content:center;border-radius:999px;
+        font-family:'DM Mono',monospace;font-weight:800;${_chVst(true)}">0</span></span>
     <span>Sorted by departure time</span>
     <span style="margin-left:auto;color:#a5a29a">Click a day to select it &middot; the pencil on a route chip renames it here</span>
   </div>`;
