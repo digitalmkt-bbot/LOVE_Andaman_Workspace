@@ -76711,10 +76711,43 @@ function poCSS(){
   +H+' .po-lg{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:#5F5E5A;margin-top:9px;padding:0 12px 11px}'
   +H+' .po-lg span{display:flex;align-items:center;gap:5px}'
   +H+' .po-lg i{width:9px;height:9px;border-radius:2px;display:inline-block}'
-  +H+' .po-flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}'
-  +H+' .po-fl{background:#fff;border:1px solid #E3E3DF;border-radius:12px;padding:11px 13px}'
-  +H+' .po-fl .t{font-size:11px;font-weight:700;color:#7C8091}'
-  +H+' .po-fl .v{font-size:24px;font-weight:800;margin-top:2px}'
+  /* §poFlowStrip · แถบเดียว สี่ขั้นต่อกันด้วยลูกศร */
+  +H+' .po-flow{display:flex;align-items:stretch;background:#fff;border:1px solid #E3E3DF;border-radius:12px;overflow:hidden}'
+  +H+' .po-fl{flex:1;min-width:0;padding:10px 14px}'
+  +H+' .po-fl+.po-fl{border-left:1px solid #EFEFEA}'
+  +H+' .po-fl .t{font-size:11px;font-weight:700;color:#7C8091;display:flex;align-items:center;gap:6px;white-space:nowrap}'
+  +H+" .po-fl .t b{width:15px;height:15px;border-radius:5px;background:#F0F0EC;color:#7C8091;"
+     +"font:800 9px 'DM Mono',monospace;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}"
+  +H+" .po-fl .v{font:800 25px 'DM Mono',monospace;margin-top:2px;line-height:1.15}"
+  +H+' .po-fl .v em{font-style:normal;font-size:11px;font-weight:500;color:#A5A49D;margin-left:4px}'
+  +H+' .po-fl .a{margin-top:6px}'
+  +H+' .po-fl.zero .t{color:#B8B6AE}'
+  +H+' .po-arw{align-self:center;color:#D5D2C8;font-size:15px;line-height:1;margin:0 -9px;padding:0 2px;'
+     +'background:#fff;border-radius:999px;position:relative;z-index:1}'
+  /* §poStockCards · การ์ดต่อประเภท */
+  +H+' .po-kg{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:11px;align-items:start;padding:0 12px 12px}'
+  +H+' .po-kc{border:1px solid #E3E3DF;border-radius:12px;overflow:hidden;background:#fff}'
+  +H+' .po-kh{display:flex;align-items:center;gap:8px;padding:6px 12px;background:#FAFAF7;border-bottom:1px solid #EFEFEA}'
+  +H+' .po-kh b{font-size:11.5px;font-weight:800;color:#16265C}'
+  +H+' .po-kh .dot{width:9px;height:9px;border-radius:3px;flex:0 0 auto}'
+  +H+" .po-kh .sum{margin-left:auto;font:600 11px 'DM Mono',monospace;color:#7C8091;white-space:nowrap}"
+  +H+' .po-kh .sum em{font-style:normal;color:#1C7A4E;font-weight:700}'
+  +H+' .po-ir{display:flex;align-items:center;gap:9px;padding:4px 12px;border-bottom:1px solid #F6F5F0;line-height:1.3}'
+  +H+' .po-ir:last-child{border-bottom:0}'
+  +H+' .po-ir:hover{background:#FCFCF9}'
+  +H+' .po-ir .l{flex:1 1 auto;min-width:78px;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  +H+' .po-ir .po-chs{max-width:190px;overflow:hidden}'
+  +H+" .po-ir .v{font:700 14px 'DM Mono',monospace;color:#1C7A4E;min-width:32px;text-align:right;flex:0 0 auto}"
+  +H+" .po-ir .u{font:500 10px 'DM Mono',monospace;color:#A5A49D;width:52px;flex:0 0 auto;white-space:nowrap}"
+  +H+' .po-ir .ac{display:flex;gap:3px;flex:0 0 auto;width:112px;justify-content:flex-end}'
+  +H+' .po-mb{width:80px;height:7px;border-radius:999px;overflow:hidden;display:flex;background:#F0F0EC;flex:0 0 auto}'
+  +H+' .po-mb i{display:block;height:100%}'
+  +H+' .po-chs{display:flex;gap:4px;flex:0 0 auto}'
+  +H+" .po-ch{font:700 9.5px 'DM Mono',monospace;border-radius:5px;padding:1px 5px;white-space:nowrap}"
+  +H+' .po-go{border:1px solid transparent;background:none;color:#B8B6AE;border-radius:7px;padding:1px 8px;'
+     +'font:700 10.5px inherit;font-family:inherit;cursor:pointer;white-space:nowrap}'
+  +H+' .po-ir:hover .po-go{border-color:#D8D4CA;color:#4a4a45;background:#fff}'
+  +H+' .po-go:disabled{opacity:.4;cursor:default}'
   +H+' .po-warn{background:#FFF6E8;border:1px solid #F0D8A8;color:#7A4A00;border-radius:10px;padding:9px 13px;font-size:12px;margin-top:10px}'
   +H+' .po-empty{padding:26px 14px;text-align:center;color:#9A9A93;font-size:12.5px}';
 }
@@ -76806,32 +76839,49 @@ function poBoatTable(boats, items, ro){
   return '<table class="po-t"><thead>'+hd+'</thead><tbody>'+body+'</tbody></table>';
 }
 
+/* §poStockCards · แถบสัดส่วนย่อของหนึ่งรายการ */
+function poStockBar(b, cls){
+  var live=b.ready+b.onboat+b.dirty+b.laundry+b.repair, denom=live||1;
+  return '<div class="'+(cls||'po-bar2')+'">'+PO_BUCKET.filter(function(k){ return k.k!=='gone'; })
+    .map(function(k){ var v=Math.max(0,b[k.k]); if(!v) return '';
+      return '<i style="width:'+(v/denom*100).toFixed(2)+'%;background:'+k.c+'" title="'+poE(k.t)+' '+v+'"></i>'; }).join('')+'</div>';
+}
+/* ถังที่ไม่ใช่ "พร้อมใช้" และไม่เป็นศูนย์ · คือตัวที่ยังต้องตามเก็บ จึงเป็นตัวเดียวที่ควรกินที่ */
+function poStockChips(b){
+  return PO_BUCKET.filter(function(k){ return k.k!=='ready'; }).map(function(k){
+    var v=b[k.k]; if(!v) return '';
+    return '<span class="po-ch" style="background:'+k.c+'18;color:'+k.c+'" title="'+poE(k.t)+'">'
+      +poE(k.t.split(' ')[0])+' '+v+'</span>'; }).join('');
+}
 function poStockTable(items, ro){
   if(!items.length) return '<div class="po-empty">ยังไม่มีของในทะเบียนของท่านี้ · กด "ทะเบียนของ" เพื่อเพิ่ม</div>';
-  var hd='<tr><th>รายการ</th><th style="width:64px;text-align:center">หน่วย</th>'
-    +PO_BUCKET.map(function(b){ return '<th style="width:74px;text-align:center">'+b.t.split(' ')[0]+'</th>'; }).join('')
-    +'<th style="width:200px">สัดส่วน</th><th style="width:130px"></th></tr>';
-  var body=items.map(function(it){
-    var b=poBal(it.id), u=PO_KIND[it.kind]?PO_KIND[it.kind].u:'ชิ้น';
-    var live=b.ready+b.onboat+b.dirty+b.laundry+b.repair, denom=live||1;
-    var bar=PO_BUCKET.filter(function(k){ return k.k!=='gone'; }).map(function(k){
-      var v=Math.max(0,b[k.k]); if(!v) return '';
-      return '<i style="width:'+(v/denom*100).toFixed(2)+'%;background:'+k.c+'" title="'+k.t+' '+v+'"></i>'; }).join('');
-    var cells=PO_BUCKET.map(function(k){
-      var v=b[k.k];
-      return '<td style="text-align:center" class="po-q"><span style="color:'+(v?k.c:'#C9C9C2')+'">'+v+'</span></td>'; }).join('');
-    return '<tr><td><div style="font-weight:700">'+poE(it.label)+'</div>'
-      +'<div class="po-rt">ทะเบียน '+poNum(it.total)+' '+u+(b.gone?(' · ตัดออกสะสม '+b.gone):'')+'</div></td>'
-      +'<td style="text-align:center;color:#7C8091;font-size:11.5px">'+u+'</td>'
-      +cells
-      +'<td><div class="po-bar2">'+bar+'</div></td>'
-      +'<td style="text-align:right">'
-        +(b.repair>0?'<button class="po-btn" onclick="poFixOpen(\''+it.id+'\')"'+(ro?' disabled':'')+'>ซ่อมเสร็จ</button>':'')
-        +'<button class="po-btn" onclick="poAdjOpen(\''+it.id+'\')"'+(ro?' disabled':'')+'>ปรับยอด</button>'
-      +'</td></tr>';
+  var by={}, order=[];
+  items.forEach(function(it){ if(!by[it.kind]){ by[it.kind]=[]; order.push(it.kind); } by[it.kind].push(it); });
+  // เรียงตามลำดับประเภทที่ผู้ใช้ตั้งไว้ · ประเภทที่ถูกลบไปแล้วไปต่อท้าย
+  order.sort(function(a,b){ var ia=PO_KORDER.indexOf(a), ib=PO_KORDER.indexOf(b);
+    return (ia<0?999:ia)-(ib<0?999:ib); });
+  var cards=order.map(function(k){
+    var K=PO_KIND[k]||{t:k,u:'ชิ้น',c:'#9A9A93'}, list=by[k];
+    var tot=0, rd=0;
+    list.forEach(function(it){ tot+=poNum(it.total); rd+=poBal(it.id).ready; });
+    return '<div class="po-kc"><div class="po-kh"><span class="dot" style="background:'+K.c+'"></span>'
+      +'<b>'+poE(K.t)+'</b><span class="sum">พร้อมใช้ <em>'+rd+'</em> / '+tot+' '+poE(K.u)+'</span></div>'
+      + list.map(function(it){
+          var b=poBal(it.id);
+          var tip=it.label+' · ทะเบียน '+poNum(it.total)+' '+K.u+(b.gone?(' · ตัดออกสะสม '+b.gone):'');
+          return '<div class="po-ir"><b class="l" title="'+poE(tip)+'">'+poE(it.label)+'</b>'
+            +'<span class="po-chs">'+poStockChips(b)+'</span>'
+            +poStockBar(b,'po-mb')
+            +'<span class="v">'+b.ready+'</span>'
+            +'<span class="u">/'+poNum(it.total)+' '+poE(K.u)+'</span>'
+            +'<span class="ac">'
+              +(b.repair>0?'<button class="po-go" onclick="poFixOpen(\''+it.id+'\')" title="ซ่อมเสร็จ"'+(ro?' disabled':'')+'>ซ่อม&#10003;</button>':'')
+              +'<button class="po-go" onclick="poAdjOpen(\''+it.id+'\')" title="ปรับยอด"'+(ro?' disabled':'')+'>ปรับยอด</button>'
+            +'</span></div>'; }).join('')
+      +'</div>';
   }).join('');
   var lg='<div class="po-lg">'+PO_BUCKET.map(function(k){ return '<span><i style="background:'+k.c+'"></i>'+k.t+'</span>'; }).join('')+'</div>';
-  return '<table class="po-t"><thead>'+hd+'</thead><tbody>'+body+'</tbody></table>'+lg;
+  return '<div class="po-kg">'+cards+'</div>'+lg;
 }
 
 function poLaundryBlock(ro){
@@ -76841,12 +76891,14 @@ function poLaundryBlock(ro){
   tw.forEach(function(it){ var b=poBal(it.id); t.ready+=b.ready; t.onboat+=b.onboat; t.dirty+=b.dirty; t.laundry+=b.laundry; });
   var st=[['พร้อมใช้ในคลัง',t.ready,'#1C7A4E','เบิกเช้า'],['อยู่กับเรือ',t.onboat,'#185FA5','คืนเย็น'],
           ['คืนแล้ว รอส่งซัก',t.dirty,'#B4560A','ส่งซัก'],['อยู่ร้านซัก',t.laundry,'#8A6D1F','รับเข้า']];
+  // §poFlowStrip · ลูกศรบอกว่าสี่ขั้นนี้ต่อกัน · ขั้นที่ยังไม่มีของจางลง จะได้เห็นว่าคิวอยู่ตรงไหน
   var flow=st.map(function(x,i){
     var act='';
-    if(i===2 && x[1]>0) act='<button class="po-btn pri" style="margin-top:7px" onclick="poLaundryOutOpen()"'+(ro?' disabled':'')+'>ส่งซัก '+x[1]+' ผืน</button>';
-    if(i===3 && x[1]>0) act='<button class="po-btn pri" style="margin-top:7px" onclick="poLaundryInOpen()"'+(ro?' disabled':'')+'>รับเข้า</button>';
-    return '<div class="po-fl"><div class="t">'+(i+1)+'. '+x[0]+'</div><div class="v" style="color:'+x[2]+'">'+x[1]+'</div>'+act+'</div>';
-  }).join('');
+    if(i===2 && x[1]>0) act='<div class="a"><button class="po-btn pri" onclick="poLaundryOutOpen()"'+(ro?' disabled':'')+'>ส่งซัก '+x[1]+' ผืน</button></div>';
+    if(i===3 && x[1]>0) act='<div class="a"><button class="po-btn pri" onclick="poLaundryInOpen()"'+(ro?' disabled':'')+'>รับเข้า</button></div>';
+    return '<div class="po-fl'+(x[1]?'':' zero')+'"><div class="t"><b>'+(i+1)+'</b>'+x[0]+'</div>'
+      +'<div class="v" style="color:'+(x[1]?x[2]:'#C9C9C2')+'">'+x[1]+'<em>ผืน</em></div>'+act+'</div>';
+  }).join('<div class="po-arw">&#10230;</div>');
   var op=poLaundryOpen(_poPier).filter(function(o){ return o.days>PO_LAUNDRY_DUE; });
   var warn=op.length?('<div class="po-warn"><b>ผ้าค้างที่ร้านซักนานผิดปกติ</b> — '
     +op.map(function(o){ return poE(o.it.label)+' '+o.qty+' ผืน · ส่งไปตั้งแต่ '+poE(o.since)+' ('+o.days+' วัน)'; }).join(' · ')+'</div>'):'';
