@@ -406,7 +406,7 @@
   // ── Per-user area access (role-based nav gating) ──
   var LA_AREAS=[{k:'overview',t:'ภาพรวม · Dashboard/Calendar'},{k:'operations',t:'ปฏิบัติการ · Booking/Boat Op/รถ'},{k:'sales',t:'ขาย · Agents/Rate/Demand'},{k:'accounting',t:'บัญชี · Accounting/PFM'},{k:'fleet',t:'เรือ/ช่าง · Fleet/Maintenance'},{k:'pier',t:'ท่าเรือ · Office ท่าเรือ'},{k:'config',t:'ตั้งค่า · Programs/Team'}];
   var LA_PRESETS={Sales:['overview','sales'],Operations:['overview','operations'],Fleet:['fleet'],Accounting:['overview','accounting'],Pier:['pier']};
-  var LA_VIEW_AREA={'sales-board':'sales','b2b-dash':'sales','contract-tmpl':'sales',dashboard:'overview',calendar:'overview',daily:'overview',booking:'operations',operation:'operations',vehicles:'operations',vanjobs:'operations',vancheckin:'operations',piercheckin:'operations',travelsum:'operations',dailyreport:'operations','pickup-setup':'operations',boatassign:'operations',agents:'sales','rate-types':'sales',b2c:'sales',staff:'sales',marketdata:'sales',pickupmap:'sales',accounting:'accounting',dailypfm:'accounting','fl-dashboard':'fleet','fl-boatstatus':'fleet','fl-dailyreport':'fleet','fl-incident':'fleet','fl-projects':'fleet','fl-maintenance':'fleet','fl-inventory':'fleet','fl-consumables':'fleet','fl-cost':'fleet','fl-insights':'fleet','fl-fuel':'fleet','fl-asset':'fleet','po-panwa':'pier','po-tublamu':'pier','po-ranong':'pier','poj-panwa':'pier','poj-tublamu':'pier','poj-ranong':'pier','pol-panwa':'pier','pol-tublamu':'pier','pol-ranong':'pier','poa-panwa':'pier','poa-tublamu':'pier','poa-ranong':'pier',settings:'config',teammkt:'config',addonsvc:'config'};
+  var LA_VIEW_AREA={'sales-board':'sales','b2b-dash':'sales','contract-tmpl':'sales',dashboard:'overview',calendar:'overview',daily:'overview',booking:'operations',operation:'operations',vehicles:'operations',vanjobs:'operations',vancheckin:'operations',piercheckin:'operations',travelsum:'operations',dailyreport:'operations','pickup-setup':'operations',boatassign:'operations',agents:'sales','rate-types':'sales',b2c:'sales',staff:'sales',marketdata:'sales',pickupmap:'sales',accounting:'accounting',costing:'accounting',trippl:'accounting',dailypfm:'accounting','fl-dashboard':'fleet','fl-boatstatus':'fleet','fl-dailyreport':'fleet','fl-incident':'fleet','fl-projects':'fleet','fl-maintenance':'fleet','fl-inventory':'fleet','fl-consumables':'fleet','fl-cost':'fleet','fl-insights':'fleet','fl-fuel':'fleet','fl-asset':'fleet','po-panwa':'pier','po-tublamu':'pier','po-ranong':'pier','poj-panwa':'pier','poj-tublamu':'pier','poj-ranong':'pier','pol-panwa':'pier','pol-tublamu':'pier','pol-ranong':'pier','poa-panwa':'pier','poa-tublamu':'pier','poa-ranong':'pier',settings:'config',teammkt:'config',addonsvc:'config'};
   // Per-MENU registry (finer than the 6 groups) · {v:view, t:label, a:area}
   var LA_NAV=[
     {v:'dashboard',t:'Dashboard',a:'overview'},{v:'calendar',t:'Calendar',a:'overview'},{v:'daily',t:'Daily Availability',a:'overview'},
@@ -415,7 +415,7 @@
        ใส่เข้ากลุ่ม operations · เรียงตามลำดับในเมนูจริง (Booking → Re-confirm → Booking Flow → ตรวจเอกสาร) */
     {v:'booking',t:'Booking',a:'operations'},{v:'reconfirm',t:'Re-confirm',a:'operations'},{v:'bookingflow',t:'Booking Flow',a:'operations'},{v:'doccheck',t:'ตรวจเอกสาร',a:'operations'},{v:'operation',t:'Boat Operation',a:'operations'},{v:'fleetcal',t:'Fleet Calendar',a:'operations'},{v:'insurance',t:'Insurance',a:'operations'},{v:'vehicles',t:'Transfer Fleet',a:'operations'},{v:'vanjobs',t:'ใบงานรถ',a:'operations'},{v:'vancheckin',t:'เช็คอินรถ',a:'operations'},{v:'piercheckin',t:'เช็คอินหน้าท่า',a:'operations'},{v:'travelsum',t:'Travel Summary',a:'operations'},{v:'dailyreport',t:'Daily Report',a:'operations'},{v:'pickup-setup',t:'Pickup time setup',a:'operations'},
     {v:'sales-board',t:'Sales Board',a:'sales'},{v:'b2b-dash',t:'B2B Dashboard',a:'sales'},{v:'agents',t:'Agent List',a:'sales'},{v:'rate-types',t:'Rate Types',a:'sales'},{v:'contract-tmpl',t:'Contract Templates',a:'sales'},{v:'b2c',t:'B2C Channels',a:'sales'},{v:'staff',t:'Staff & Welfare',a:'sales'},{v:'marketdata',t:'Demand',a:'sales'},{v:'focdetail',t:'FOC Detail',a:'sales'},{v:'pickupmap',t:'แผนที่จุดรับ',a:'sales'},
-    {v:'accounting',t:'Accounting',a:'accounting'},{v:'costing',t:'ต้นทุน & จุดคุ้มทุน',a:'accounting'},{v:'dailypfm',t:'Daily PFM',a:'accounting'},
+    {v:'accounting',t:'Accounting',a:'accounting'},{v:'costing',t:'ต้นทุน & จุดคุ้มทุน',a:'accounting'},{v:'trippl',t:'P&L รายทริป',a:'accounting'},{v:'dailypfm',t:'Daily PFM',a:'accounting'},
     {v:'fl-dashboard',t:'Fleet Dashboard',a:'fleet'},{v:'fl-boatstatus',t:'Boat Status',a:'fleet'},{v:'fl-dailyreport',t:'Daily Fleet Log',a:'fleet'},{v:'fl-incident',t:'Incident / Job',a:'fleet'},{v:'fl-projects',t:'Projects',a:'fleet'},{v:'fl-maintenance',t:'Maintenance',a:'fleet'},{v:'fl-inventory',t:'Inventory / Memo',a:'fleet'},{v:'fl-consumables',t:'เบิกของใช้/น้ำมัน',a:'fleet'},{v:'fl-cost',t:'Cost Analytics',a:'fleet'},{v:'fl-insights',t:'Fleet Insights',a:'fleet'},{v:'fl-fuel',t:'Fuel',a:'fleet'},{v:'fl-asset',t:'Company Asset',a:'fleet'},
     {v:'poj-panwa',t:'Phuket · ใบงานเรือ',a:'pier'},{v:'po-panwa',t:'Phuket · เบิก-คืนอุปกรณ์',a:'pier'},{v:'poa-panwa',t:'Phuket · ตารางการทำงาน',a:'pier'},{v:'pol-panwa',t:'Phuket · ใบอนุญาต',a:'pier'},
     {v:'poj-tublamu',t:'Tub Lamu · ใบงานเรือ',a:'pier'},{v:'po-tublamu',t:'Tub Lamu · เบิก-คืนอุปกรณ์',a:'pier'},{v:'poa-tublamu',t:'Tub Lamu · ตารางการทำงาน',a:'pier'},{v:'pol-tublamu',t:'Tub Lamu · ใบอนุญาต',a:'pier'},
@@ -4361,6 +4361,10 @@ window.addEventListener('resize',function(){ if(window.innerWidth>820) laNavClos
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/><circle cx="11" cy="10" r="1"/></svg>
       ต้นทุน &amp; จุดคุ้มทุน
     </div>
+    <div class="nav-item" data-view="trippl" onclick="nav(this)" style="border-left:2px solid rgba(120,200,230,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+      P&amp;L รายทริป
+    </div>
     <div class="nav-item" data-view="dailypfm" onclick="nav(this)" style="border-left:2px solid rgba(120,200,230,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
       Daily PFM
@@ -5079,6 +5083,7 @@ window.addEventListener('resize',function(){ if(window.innerWidth>820) laNavClos
       </div>
       <div id="acct-body"></div>
     </div>
+    <div id="view-trippl" class="view"><div id="trippl-host"></div></div>
     <div id="view-costing" class="view">
       <div class="ct-head">
         <div class="ct-brand">
@@ -6038,6 +6043,7 @@ function nav(el){
     else if(view==='operation') renderOp();
     else if(view==='fleetcal') renderFleetCal();   // §fleetCal
     else if(view==='costing') ctRender();   // §costing
+    else if(view==='trippl') renderTripPL();   // §tripPL
     else if(view==='settings') renderSettings();
     else if(view==='agents') renderAgents();
     else if(view==='rate-types') renderRateTypes();
@@ -55752,6 +55758,369 @@ function mvForTrip(date, bid, routeId){
 function mvCost(venue, nAd, nCh){
   if(!venue) return null;
   return (+venue.priceAd || 0) * (+nAd || 0) + (+venue.priceCh || 0) * (+nCh || 0);
+}
+
+/* ═══ §tripPL · P&L รายทริป ══════════════════════════════════════════════════
+   ไม่มีสูตรของตัวเอง · ป้อนของจริงเข้า ctCalc ของหน้าต้นทุน แล้วเอาผลมาแสดง
+   ═══════════════════════════════════════════════════════════════════════════ */
+var _px = { date:'', pier:'', open:{} };
+
+/* แผนต้นทุนของเส้นทางนี้ · ใช้แค่ ovr/grp (ที่ปรับ-ปิดรายเส้นทาง)
+   ไม่ใช้ pax/price/boats/fuel ของแผน เพราะนั่นเป็นค่าไว้ลองเล่นในหน้าต้นทุน
+   ถ้าเอามาใช้ วันหนึ่งมีคนเลื่อน pax เล่น กำไรของเมื่อวานจะขยับตาม */
+function pxPlanFor(routeId){
+  var fam=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(routeId):null;
+  var fid=(fam&&fam.id)||routeId;
+  var P=(typeof ctPlans==='function')?ctPlans():[];
+  var hit=P.filter(function(p){ return p.famId===fid; })[0]
+        || P.filter(function(p){ return p.famId===routeId; })[0];
+  return hit ? {id:hit.id, name:hit.name, ovr:hit.ovr||{}, grp:hit.grp||{}} : null;
+}
+/* หัวที่เดินทางจริงของลำหนึ่ง · แยกไทย/ต่างชาติเพื่อคิดค่าอุทยาน
+   คนที่ไม่ระบุสัญชาติ นับเป็นต่างชาติ · คิดสูงไว้ก่อนดีกว่าคิดต่ำแล้วขาดทุนแบบไม่รู้ตัว */
+function pxPax(date, bid){
+  var o={ad:0,chd:0,inf:0,foc:0,tot:0,th:0,fr:0,bk:0,rev:0};
+  var KIND=['ad','chd','inf','foc'];
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    var t=ckTripOn(b,date); if(!t) return;
+    var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
+    if((O.boatId||t.charterBoatId)!==bid) return;
+    if(typeof pckVoidInfo==='function' && pckVoidInfo(b,date,t)) return;
+    var booked=ckBookedPax(t);
+    var exp=(typeof pckExpected==='function')?pckExpected(b,date,booked):booked;
+    var ck=O.pierCheckin||null, ns=(ck&&ck.at)?(+ck.noShow||0):0;
+    var tot=Math.max(0,((exp!=null?exp:booked)||0)-ns);
+    if(!tot) return;
+    o.bk++;
+    var px=t.pax||{}, bookedTot=0, th=0;
+    KIND.forEach(function(k){ bookedTot+=(+px[k]||0)+(+px[k+'_fr']||0)+(+px[k+'_th']||0); th+=(+px[k+'_th']||0); });
+    /* คนหายไปกี่คน หักตามสัดส่วน · ไม่มีทางรู้ว่าคนที่ไม่มาเป็นสัญชาติไหน */
+    var ratio=bookedTot?(tot/bookedTot):0;
+    KIND.forEach(function(k){
+      var n=((+px[k]||0)+(+px[k+'_fr']||0)+(+px[k+'_th']||0))*ratio;
+      o[k]+=n;
+    });
+    o.th+=th*ratio; o.tot+=tot;
+    o.rev+=(typeof tsTripAmount==='function')?(+tsTripAmount(b,t)||0):0;
+  });
+  ['ad','chd','inf','foc'].forEach(function(k){ o[k]=Math.round(o[k]); });
+  o.th=Math.round(o.th); o.fr=Math.max(0,o.tot-o.th);
+  return o;
+}
+/* รถที่วิ่งให้ลำนี้จริง · นับเป็นคัน ไม่ใช่เป็นใบจอง
+   รถคันเดียวส่งขึ้นสองลำ → หารตามจำนวนหัวที่ส่งขึ้นแต่ละลำ ไม่ใช่หารครึ่ง */
+function pxVanCost(date, bid, routeId){
+  var mine={}, all={};
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    var t=ckTripOn(b,date); if(!t) return;
+    var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
+    var vid=O.vanId; if(!vid) return;
+    var tb=(O.boatId||t.charterBoatId)||'';
+    var pax=(typeof ckBookedPax==='function')?ckBookedPax(t):0;
+    all[vid]=(all[vid]||0)+pax;
+    if(tb===bid){
+      mine[vid]=(mine[vid]||0)+pax;
+      /* โซนที่ไปรับ · คันเดียวรับปนสองโซน ให้ยึดโซนที่แพงกว่า เพราะรถวิ่งไกลสุดจริง */
+      var a=(b.pickupAreaId && typeof bkV2GetArea==='function')?bkV2GetArea(b.pickupAreaId):null;
+      var z=(a&&a.zone)||'';
+      if(z==='KL') mine['_z'+vid]='KL'; else if(!mine['_z'+vid]) mine['_z'+vid]='PK';
+    }
+  });
+  var tot=0, list=[];
+  Object.keys(mine).forEach(function(vid){
+    if(vid.indexOf('_z')===0) return;
+    var v=(typeof vehGet==='function')?vehGet(vid):null; if(!v) return;
+    var day=vanDayCost(v, routeId, mine['_z'+vid]||'PK');
+    var share=(all[vid]>0)?(mine[vid]/all[vid]):1;
+    tot+=day*share;
+    list.push({name:v.name||vid, day:day, share:share, zone:mine['_z'+vid]||'PK'});
+  });
+  return {total:Math.round(tot), vans:list};
+}
+/* หนึ่งทริป · รายได้ ต้นทุน กำไร พร้อมที่มาของทุกบรรทัด */
+function pxTrip(date, bid){
+  var boat=(typeof getBoat==='function'?getBoat(bid):null)||{};
+  var op=(typeof TRIPS!=='undefined' && TRIPS[date])?TRIPS[date][bid]:null;
+  var rid=(op&&op.route)||'';
+  var rt=(typeof getRoute==='function'?getRoute(rid):null)||{};
+  var PX=pxPax(date,bid);
+  var A=(typeof taGet==='function')?(taGet(date,bid)||{}):{};
+  var T=(typeof ctTpl==='function')?ctTpl():null;
+  var R=(typeof ctVatR==='function')?ctVatR(T):0;
+  var fuelPr=(typeof flFuelPriceForBoat==='function')?(flFuelPriceForBoat(date,boat)||0):0;
+  var ctx={ eng:((+boat.engineCount||3)>=4?'4EN':'3EN'), boats:1, fuel:fuelPr,
+            pax:PX.tot, paxTH:PX.th, paxFR:PX.fr };
+  var plan=pxPlanFor(rid);
+  var C=(typeof ctCalc==='function')?ctCalc(plan||{}, ctx, T):{rows:[],net:0};
+
+  /* ของจริงทับค่าประมาณเป็นรายบรรทัด */
+  var act={};
+  try{
+    var FD=(typeof FL_DAILY!=='undefined' && FL_DAILY[date])?FL_DAILY[date][bid]:null;
+    if(FD && +FD.fuel>0 && fuelPr>0) act.fuel={amt:Math.round((+FD.fuel)*fuelPr), why:(+FD.fuel)+' ลิตร × ฿'+fuelPr};
+  }catch(_){}
+  if(A.meal && A.meal.amount!=null)
+    act.meal={amt:Math.round(+A.meal.amount||0),
+              why:(A.meal.name||'')+' · ผู้ใหญ่ '+(A.meal.ad||0)+'×'+(A.meal.priceAd||0)
+                  +(A.meal.chd?(' + เด็ก '+A.meal.chd+'×'+(A.meal.priceCh||0)):'')};
+  var VN=pxVanCost(date,bid,rid);
+  if(VN.vans.length)
+    act.van={amt:VN.total, why:VN.vans.map(function(v){
+      return v.name+' ฿'+Math.round(v.day)+(v.share<0.999?(' ×'+Math.round(v.share*100)+'%'):'')+' ('+v.zone+')'; }).join(' · ')};
+
+  var rows=(C.rows||[]).map(function(r){
+    var a=act[r.id];
+    var est=r.net;                                   /* สูตรคิดเป็นยอดหลังหัก VAT ซื้อแล้ว */
+    var real=a ? (a.amt - (r.vat ? a.amt*R : 0)) : null;
+    return { id:r.id, g:r.g, l:r.l, est:est, real:real, why:a?a.why:'', use:(real!=null?real:est) };
+  });
+  var cost=0; rows.forEach(function(r){ cost+=r.use; });
+  var revGross=PX.rev;
+  var revNet=revGross*(1-R);                          /* รายได้ไม่รวม VAT ขาย */
+  var nReal=rows.filter(function(r){ return r.real!=null; }).length;
+  var st = A.closed ? 'done' : (nReal ? 'part' : 'est');
+  var be=null;
+  try{ if(typeof ctBreakEven==='function'){
+    var cap=(typeof boatCapFor==='function')?boatCapFor(bid,date):(boat.cap||0);
+    be=ctBreakEven(Object.assign({}, plan||{}, {eng:ctx.eng, boats:1, fuel:fuelPr, paxTH:PX.th,
+        price:(PX.tot?revGross/PX.tot:0), comm:0}), Math.max(1,cap||60), T);
+  } }catch(_){}
+  return { bid:bid, boat:boat, name:boat.name||bid, rid:rid, route:rt, dep:(rt.times&&rt.times[0])||'',
+           px:PX, ctx:ctx, plan:plan, rows:rows, cost:Math.round(cost),
+           revGross:Math.round(revGross), rev:Math.round(revNet),
+           profit:Math.round(revNet-cost), st:st, nReal:nReal, closed:!!A.closed, be:be,
+           fuelPr:fuelPr };
+}
+function pxDay(date, pier){
+  var out=[];
+  var day=(typeof TRIPS!=='undefined' && TRIPS[date])?TRIPS[date]:{};
+  Object.keys(day).forEach(function(bid){
+    var op=day[bid]; if(!op||!op.route) return;
+    var rt=(typeof getRoute==='function')?getRoute(op.route):null; if(!rt) return;
+    if(pier && (rt.pier||'')!==pier) return;
+    out.push(pxTrip(date,bid));
+  });
+  out.sort(function(a,b){ return String(a.dep||'99').localeCompare(String(b.dep||'99')); });
+  return out;
+}
+/* ปิดยอด · แช่ตัวเลขไว้ ณ วินาทีที่กด · แก้สูตรทีหลังจะไม่ย้อนมาขยับ */
+function pxClose(bid){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('accounting')) return;
+  var date=_px.date, A=(taGet(date,bid)||{});
+  if(A.closed){ if(!confirm('เปิดยอดทริปนี้ใหม่? · ตัวเลขจะกลับไปคิดตามสูตรและราคาปัจจุบัน')) return;
+    taSet(date,bid,{closed:null}); renderTripPL(); return; }
+  var t=pxTrip(date,bid);
+  if(!confirm('ปิดยอดทริปนี้?\n\n'+t.name+' · '+(t.route.name||'')+'\n'
+    +'รายได้ '+t.rev.toLocaleString()+' − ต้นทุน '+t.cost.toLocaleString()
+    +' = '+(t.profit>=0?'กำไร ':'ขาดทุน ')+Math.abs(t.profit).toLocaleString()+'\n\n'
+    +'ตัวเลขจะถูกแช่ไว้ · แก้สูตรหรือขึ้นราคาทีหลังจะไม่ย้อนมาขยับทริปนี้')) return;
+  taSet(date,bid,{closed:{rev:t.rev, cost:t.cost, profit:t.profit,
+    rows:t.rows.map(function(r){ return {id:r.id,l:r.l,amt:Math.round(r.use),real:r.real!=null}; }),
+    pax:t.px.tot, at:new Date().toISOString(), by:(typeof ckMe==='function')?ckMe():''}});
+  renderTripPL();
+}
+function pxShift(n){ var d=new Date(_px.date+'T12:00:00'); d.setDate(d.getDate()+n);
+  _px.date=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(d):d.toISOString().slice(0,10); renderTripPL(); }
+function pxToday(){ _px.date=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10); renderTripPL(); }
+function pxPick(v){ if(v) _px.date=v; renderTripPL(); }
+function pxPier(v){ _px.pier=v||''; renderTripPL(); }
+function pxOpen(bid){ _px.open=_px.open||{}; if(_px.open[bid]) delete _px.open[bid]; else _px.open[bid]=1; renderTripPL(); }
+
+/* สีประจำหมวดต้นทุน · หมวดที่ไม่รู้จักได้สีเทา ไม่ต้องมาแก้โค้ดทุกครั้งที่เพิ่มหมวด */
+var PX_GC={ 'ค่าเชื้อเพลิง':'#0F6E56', 'ค่าธรรมเนียมอุทยานแห่งชาติ':'#185FA5',
+            'ค่าอาหารและเครื่องดื่ม':'#8E5BB5', 'ค่าตอบแทนลูกเรือและไกด์':'#B4560A',
+            'ค่ารถรับส่ง':'#0E7490', 'ค่าเรือหางยาว':'#BE185D',
+            'ค่าธรรมเนียมท่าเทียบเรือ':'#64748B', 'ค่าใช้จ่ายดำเนินงานอื่น':'#A8B2C0' };
+function pxGColor(g){ return PX_GC[g]||'#94A3B8'; }
+function pxB(n){ return '\u0e3f'+Math.round(n||0).toLocaleString(); }
+function pxCSS(){ return ''
+ +'#trippl-host{font-family:"DM Sans","Noto Sans Thai",sans-serif;color:#0F172A;padding:2px}'
+ +'#trippl-host .pl-tb{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:15px}'
+ +'#trippl-host .pl-btn{border:1px solid #E2E8F0;background:#fff;border-radius:11px;padding:7px 14px;'
+   +'font:600 12.5px inherit;color:#475569;cursor:pointer}'
+ +'#trippl-host .pl-btn:hover{background:#F8FAFC}'
+ +'#trippl-host .pl-dt{font-size:15px;font-weight:800;padding:0 6px}'
+ +'#trippl-host input[type=date],#trippl-host select{border:1px solid #CBD5E1;border-radius:10px;'
+   +'padding:6px 11px;font:600 12.5px inherit;background:#fff;color:#0F172A}'
+ +'#trippl-host .pl-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px}'
+ +'#trippl-host .pl-k{border:1px solid #E7EBF0;border-radius:15px;padding:12px 14px;background:#FBFCFD}'
+ +'#trippl-host .pl-k .k{font-size:9.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#94A3B8}'
+ +"#trippl-host .pl-k .v{font:800 21px 'DM Mono',monospace;margin-top:4px;letter-spacing:-.02em}"
+ +'#trippl-host .pl-k .s{font-size:10.5px;color:#94A3B8;margin-top:2px}'
+ +'#trippl-host .pl-k.rev .v{color:#1D4ED8}#trippl-host .pl-k.cost .v{color:#B4560A}'
+ +'#trippl-host .pl-k.pro .v{color:#047857}#trippl-host .pl-k.pro.neg .v{color:#B91C1C}'
+ +'#trippl-host .pl-k.bad{background:#FEF2F2;border-color:#F5CFCF}#trippl-host .pl-k.bad .v{color:#B91C1C}'
+ +'#trippl-host .tc{border:1px solid #E7EBF0;border-radius:17px;margin-bottom:11px;overflow:hidden;background:#fff}'
+ +'#trippl-host .tc.loss{border-color:#F0C9C9}'
+ +'#trippl-host .tcr{display:flex;align-items:stretch}'
+ +'#trippl-host .tcl{flex:0 0 258px;padding:14px 16px;border-right:1px solid #F1F5F9;cursor:pointer}'
+ +"#trippl-host .tcl .tm{font:800 17px 'DM Mono',monospace;line-height:1}"
+ +'#trippl-host .tcl .bn{font-size:14.5px;font-weight:800;margin-top:5px}'
+ +'#trippl-host .tcl .rt{display:inline-block;color:#fff;border-radius:999px;padding:2px 10px;font-size:10.5px;font-weight:700;margin-top:6px}'
+ +'#trippl-host .tcl .px{font-size:11px;color:#64748B;margin-top:6px;line-height:1.5}'
+ +'#trippl-host .tcm{flex:1;padding:14px 18px;min-width:0}'
+ +'#trippl-host .bar{height:15px;border-radius:8px;overflow:hidden;display:flex;background:#F1F5F9;margin-bottom:5px}'
+ +'#trippl-host .bar i{display:block;height:100%}'
+ +'#trippl-host .blab{display:flex;justify-content:space-between;font-size:11px;color:#64748B;margin-bottom:11px}'
+ +"#trippl-host .blab b{font-family:'DM Mono',monospace;color:#0F172A;font-size:12px}"
+ +'#trippl-host .segs{display:flex;gap:5px;flex-wrap:wrap}'
+ +'#trippl-host .cc{border:1px solid #E7EBF0;border-radius:9px;padding:4px 9px;font-size:10.5px;background:#FBFCFD;white-space:nowrap}'
+ +'#trippl-host .cc i{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:5px;vertical-align:middle}'
+ +"#trippl-host .cc b{font-family:'DM Mono',monospace;margin-left:5px;font-size:11px}"
+ +'#trippl-host .cc.est{opacity:.62}'
+ +'#trippl-host .tcx{flex:0 0 214px;padding:14px 16px;border-left:1px solid #F1F5F9;text-align:right}'
+ +"#trippl-host .tcx .pv{font:800 25px 'DM Mono',monospace;letter-spacing:-.02em;color:#047857;line-height:1.1}"
+ +'#trippl-host .tc.loss .tcx .pv{color:#B91C1C}'
+ +'#trippl-host .tcx .pv.dim{color:#94A3B8}'
+ +'#trippl-host .tcx .ph{font-size:11px;color:#64748B;margin-top:3px;line-height:1.5}'
+ +'#trippl-host .st{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 11px;'
+   +'font-size:10.5px;font-weight:700;margin-top:9px;border:1px solid;cursor:pointer}'
+ +'#trippl-host .st i{width:7px;height:7px;border-radius:999px;display:block}'
+ +'#trippl-host .st.est{background:#FEF6E7;color:#8A5A00;border-color:#EFD9AE}#trippl-host .st.est i{background:#E0A106}'
+ +'#trippl-host .st.part{background:#EFF6FF;color:#1D4ED8;border-color:#C7DBF5}#trippl-host .st.part i{background:#3B82F6}'
+ +'#trippl-host .st.done{background:#ECFDF5;color:#047857;border-color:#BFE0CD}#trippl-host .st.done i{background:#10B981}'
+ +'#trippl-host .bd{border-top:1px solid #F1F5F9;background:#FBFCFD;padding:12px 16px}'
+ +'#trippl-host table.bt{width:100%;border-collapse:collapse;font-size:12px}'
+ +'#trippl-host table.bt th{text-align:left;font-size:9.5px;font-weight:800;letter-spacing:.09em;'
+   +'text-transform:uppercase;color:#94A3B8;padding:0 8px 7px}'
+ +'#trippl-host table.bt td{padding:6px 8px;border-top:1px solid #EEF2F6}'
+ +"#trippl-host table.bt td.n{text-align:right;font-family:'DM Mono',monospace}"
+ +'#trippl-host .src{font-size:10px;font-weight:700;border-radius:999px;padding:1px 8px;white-space:nowrap}'
+ +'#trippl-host .src.real{background:#ECFDF5;color:#047857}'
+ +'#trippl-host .src.est{background:#FEF6E7;color:#8A5A00}'
+ +'#trippl-host .dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:7px;vertical-align:middle}'
+ +'#trippl-host .why{font-size:11px;color:#94A3B8}'
+ +'#trippl-host .empty{border:1px dashed #CBD5E1;border-radius:16px;padding:34px;text-align:center;color:#94A3B8;font-size:13px}'
+ +'#trippl-host .warn{background:#FEF6F6;border-top:1px solid #F1F5F9;padding:11px 16px;font-size:12px;'
+   +'color:#B91C1C;font-weight:600;line-height:1.7}'
+ +'#trippl-host .note{font-size:11.5px;color:#64748B;line-height:1.75;margin-top:14px;padding-top:12px;border-top:1px dashed #E2E8F0}';
+}
+
+function renderTripPL(){
+  var host=document.getElementById('trippl-host'); if(!host) return;
+  var e=(typeof ckEsc==='function')?ckEsc:function(x){return String(x==null?'':x);};
+  if(!_px.date) _px.date=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10);
+  var D=pxDay(_px.date,_px.pier);
+  var DW=(typeof pjDateWords==='function')?pjDateWords(_px.date):{big:_px.date};
+
+  var tR=0,tC=0,tP=0,tPax=0,nLoss=0,lossName='';
+  D.forEach(function(t){ tR+=t.rev; tC+=t.cost; tP+=t.profit; tPax+=t.px.tot;
+    if(t.profit<0){ nLoss++; if(!lossName) lossName=t.name; } });
+  var per=tPax?Math.round(tP/tPax):0;
+  var tgt=(typeof drCfg==='function')?((drCfg()||{}).targetPerPax||0):0;
+
+  var pierSel='<select onchange="pxPier(this.value)"><option value="">ทุกท่า</option>'
+    +((typeof PO_PIERS!=='undefined')?PO_PIERS:[]).map(function(p){
+        return '<option value="'+e(p.k)+'"'+(_px.pier===p.k?' selected':'')+'>'+e(p.t||p.n)+'</option>'; }).join('')
+    +'</select>';
+
+  var cards=D.map(function(t){
+    var loss=t.profit<0, open=!!(_px.open||{})[t.bid];
+    var mx=Math.max(t.rev,t.cost)||1;
+    /* แถบต้นทุนแบ่งตามหมวด · เรียงตามลำดับในสูตร ไม่เรียงตามขนาด จะได้เทียบข้ามทริปได้ */
+    var byG={}, gOrd=[];
+    /* เทียบกับ undefined ไม่ใช่ความจริง/เท็จ · หมวดที่รวมได้ 0 เป็นค่าเท็จ แล้วจะถูกดันเข้า gOrd ซ้ำ */
+    t.rows.forEach(function(r){ if(byG[r.g]===undefined){ byG[r.g]=0; gOrd.push(r.g); } byG[r.g]+=r.use; });
+    /* หมวดที่รวมแล้วเป็น 0 ไม่ต้องโชว์ · เส้นทางส่วนใหญ่ไม่ใช้หางยาว ชิป "เรือหางยาว 0" มีแต่รก */
+    gOrd=gOrd.filter(function(g){ return Math.round(byG[g])!==0; });
+    var segs=gOrd.map(function(g){
+      return '<i style="width:'+(byG[g]/mx*100).toFixed(2)+'%;background:'+pxGColor(g)+(t.st==='est'?';opacity:.55':'')+'"></i>'; }).join('');
+    var chips=gOrd.map(function(g){
+      var anyReal=t.rows.some(function(r){ return r.g===g && r.real!=null; });
+      return '<span class="cc'+(anyReal?'':' est')+'"><i style="background:'+pxGColor(g)+'"></i>'
+        +e(g.replace(/^ค่า/,''))+'<b>'+Math.round(byG[g]).toLocaleString()+'</b></span>'; }).join('');
+    var stTxt={est:'ยังเป็นตัวประมาณ',part:'ใส่ของจริงแล้ว '+t.nReal+' อย่าง',done:'ปิดยอดทริปแล้ว'}[t.st];
+
+    var bd='';
+    if(open){
+      bd='<div class="bd"><table class="bt">'
+        +'<tr><th style="width:30%">ก้อนต้นทุน</th><th>ที่มาของตัวเลข</th>'
+          +'<th style="width:12%;text-align:right">ประมาณ</th><th style="width:12%;text-align:right">จริง</th>'
+          +'<th style="width:10%;text-align:right">ต่าง</th></tr>'
+        + t.rows.filter(function(r){ return Math.round(r.est)!==0 || r.real!=null; }).map(function(r){
+            var df=(r.real!=null)?(r.real-r.est):null;
+            return '<tr><td><span class="dot" style="background:'+pxGColor(r.g)+'"></span>'+e(r.l)+'</td>'
+              +'<td>'+(r.real!=null?'<span class="src real">ของจริง</span>':'<span class="src est">ประมาณ</span>')
+                +(r.why?(' <span class="why">'+e(r.why)+'</span>'):'')+'</td>'
+              +'<td class="n">'+Math.round(r.est).toLocaleString()+'</td>'
+              +'<td class="n"'+(r.real==null?' style="color:#CBD5E1"':'')+'>'+(r.real!=null?Math.round(r.real).toLocaleString():'—')+'</td>'
+              +'<td class="n"'+(df?(' style="color:'+(df>0?'#B91C1C':'#047857')+'"'):'')+'>'
+                +(df?((df>0?'+':'−')+Math.abs(Math.round(df)).toLocaleString()):'—')+'</td></tr>'; }).join('')
+        +'</table>'
+        +'<div class="why" style="margin-top:9px">'
+          +'สูตรที่ใช้: '+(t.plan?('<b>'+e(t.plan.name)+'</b>'):'<b style="color:#B4560A">เส้นทางนี้ยังไม่ได้ผูกแผนต้นทุน — ใช้สูตรกลางเปล่า ๆ</b>')
+          +' · เครื่อง '+e(t.ctx.eng)+' · น้ำมัน '+(t.fuelPr?('฿'+t.fuelPr+'/ลิตร'):'<b style="color:#B4560A">ยังไม่ได้ลงราคาน้ำมันวันนี้</b>')
+          +' · หัวจริง '+t.px.tot+' (ไทย '+t.px.th+' · ต่างชาติ '+t.px.fr+')</div>'
+        +'</div>';
+    }
+    var warn='';
+    if(loss && t.be) warn='<div class="warn">ออกเรือด้วย '+t.px.tot+' หัว จากจุดคุ้มทุน '+t.be+' หัว · '
+      +'น้ำมัน ค่าเสื่อม ลูกเรือ เป็นต้นทุนคงที่ ไม่ลดตามจำนวนคน'
+      +'<span style="font-weight:400;opacity:.85"> — ทริปแบบนี้ควรเห็นตั้งแต่เมื่อวาน ไม่ใช่มาเห็นตอนปิดยอด</span></div>';
+
+    return '<div class="tc'+(loss?' loss':'')+'"><div class="tcr">'
+      +'<div class="tcl" onclick="pxOpen(\''+e(t.bid)+'\')">'
+        +'<div class="tm">'+e(t.dep||'--:--')+'</div>'
+        +'<div class="bn">'+e(t.name)+'</div>'
+        +'<div class="rt" style="background:'+e(t.route.color||'#64748B')+'">'+e(t.route.name||'—')+'</div>'
+        +'<div class="px">'+t.px.tot+' หัว · ไทย '+t.px.th+' · ต่างชาติ '+t.px.fr+' · '+t.px.bk+' ใบจอง<br>'
+          +'<span style="color:#94A3B8">'+(open?'&#9660; ปิดรายละเอียด':'&#9654; ดูแยกทีละก้อน')+'</span></div>'
+      +'</div>'
+      +'<div class="tcm">'
+        +'<div class="bar"><i style="width:'+(t.rev/mx*100).toFixed(2)+'%;background:'+(t.st==='est'?'#93C5FD':'#3B82F6')+'"></i></div>'
+        +'<div class="blab"><span>รายได้ (ไม่รวม VAT)</span><b>'+t.rev.toLocaleString()+'</b></div>'
+        +'<div class="bar">'+segs+'</div>'
+        +'<div class="blab"><span>ต้นทุน'+(t.st==='est'?' (ประมาณจากสูตร)':'')+'</span><b>'+t.cost.toLocaleString()+'</b></div>'
+        +'<div class="segs">'+chips+'</div>'
+      +'</div>'
+      +'<div class="tcx">'
+        +'<div class="pv'+(t.st==='est'?' dim':'')+'">'+(t.profit>=0?'+':'−')+Math.abs(t.profit).toLocaleString()+'</div>'
+        +'<div class="ph">'+(t.px.tot?((t.profit>=0?'+':'−')+Math.abs(Math.round(t.profit/t.px.tot)).toLocaleString()+' / หัว'):'ไม่มีคนเดินทาง')
+          +(t.rev?(' · '+Math.round(t.profit/t.rev*100)+'%'):'')
+          +(t.be?('<br>จุดคุ้มทุน '+t.be+' หัว'):'')+'</div>'
+        +'<div class="st '+t.st+'" onclick="pxClose(\''+e(t.bid)+'\')" title="'
+          +(t.closed?'กดเพื่อเปิดยอดใหม่':'กดเพื่อปิดยอดทริปนี้')+'"><i></i>'+stTxt+'</div>'
+      +'</div></div>'+warn+bd+'</div>';
+  }).join('');
+
+  host.innerHTML='<style id="pl-style">'+pxCSS()+'</style>'
+    +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">'
+      +'<h1 style="margin:0;font-size:19px;font-weight:700">P&amp;L รายทริป</h1>'
+      +'<span style="font-size:11px;color:#8a8a82">ต้นทุนคิดด้วยสูตรเดียวกับหน้า ต้นทุน &amp; จุดคุ้มทุน · '
+      +'ป้อนของจริงของทริปเข้าไป สองหน้านี้จึงตอบไม่ตรงกันไม่ได้</span></div>'
+    +'<div class="pl-tb">'
+      +'<button class="pl-btn" onclick="pxShift(-1)">&lsaquo;</button>'
+      +'<span class="pl-dt">'+e(DW.big||_px.date)+'</span>'
+      +'<button class="pl-btn" onclick="pxShift(1)">&rsaquo;</button>'
+      +'<button class="pl-btn" onclick="pxToday()">วันนี้</button>'
+      +'<input type="date" value="'+e(_px.date)+'" onchange="pxPick(this.value)">'
+      +'<span style="flex:1"></span>'+pierSel
+    +'</div>'
+    +'<div class="pl-strip">'
+      +'<div class="pl-k rev"><div class="k">Revenue</div><div class="v">'+tR.toLocaleString()+'</div>'
+        +'<div class="s">ไม่รวม VAT · '+tPax+' หัว</div></div>'
+      +'<div class="pl-k cost"><div class="k">Cost</div><div class="v">'+tC.toLocaleString()+'</div>'
+        +'<div class="s">'+D.filter(function(t){return t.nReal;}).length+' / '+D.length+' ทริปมีของจริงแล้ว</div></div>'
+      +'<div class="pl-k pro'+(tP<0?' neg':'')+'"><div class="k">Profit</div><div class="v">'
+        +(tP>=0?'+':'−')+Math.abs(tP).toLocaleString()+'</div>'
+        +'<div class="s">'+(tR?(Math.round(tP/tR*100)+'% ของรายได้'):'—')+'</div></div>'
+      +'<div class="pl-k'+(tgt&&per<tgt?' bad':'')+'"><div class="k">ต่อหัว</div><div class="v">'
+        +(per>=0?'+':'−')+Math.abs(per).toLocaleString()+'</div>'
+        +'<div class="s">'+(tgt?('เป้า '+tgt+' · '+(per>=tgt?'ผ่าน':'ไม่ถึงเป้า')):'ยังไม่ได้ตั้งเป้า')+'</div></div>'
+      +'<div class="pl-k'+(nLoss?' bad':'')+'"><div class="k">ทริปที่ขาดทุน</div><div class="v">'
+        +nLoss+' / '+D.length+'</div><div class="s">'+(nLoss?e(lossName):'ไม่มี')+'</div></div>'
+    +'</div>'
+    + (D.length ? cards : '<div class="empty">วันนี้ยังไม่มีเรือออก'
+        +(_px.pier?' ที่ท่านี้':'')+' · เลือกวันอื่นหรือเปลี่ยนท่าดู</div>')
+    + '<div class="note"><b>สถานะสามระดับ</b> — '
+      +'<span style="color:#8A5A00">&#9679; ประมาณจากสูตร</span> · '
+      +'<span style="color:#1D4ED8">&#9679; ใส่ของจริงบางส่วนแล้ว</span> · '
+      +'<span style="color:#047857">&#9679; ปิดยอดแล้ว</span> (ตัวเลขถูกแช่ไว้ · แก้สูตรหรือขึ้นราคาทีหลังจะไม่ย้อนมาขยับ)<br>'
+      +'กดที่ป้ายสถานะเพื่อปิดยอด · กดที่ชื่อเรือเพื่อกางดูต้นทุนทีละบรรทัด<br>'
+      +'ของจริงที่ทับสูตรได้ตอนนี้: <b>น้ำมัน</b> (จาก Daily Fleet Log) · <b>อาหาร</b> (จากที่ส่งร้านหน้าท่า) · '
+      +'<b>ค่ารถ</b> (จากรถที่ผูกกับใบจองจริง) — ที่เหลือยังเป็นตัวประมาณ</div>';
 }
 
 /* §mealTrip · ของจริงรายทริป · 'YYYY-MM-DD::boatId'
