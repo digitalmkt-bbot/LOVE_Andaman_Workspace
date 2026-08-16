@@ -56599,6 +56599,12 @@ function pxCSS(){ return ''
  /* §plV7 · ทั้งหน้าใช้ Sarabun · ตัวเลขใช้ tabular-nums แทน DM Mono จะได้ฟอนต์เดียวทั้งหน้า
     ทุก selector ขึ้นต้นด้วย #trippl-host เสมอ · ห้ามหลุดออกไปโดนหน้าอื่น
     §nameClash · ห้ามตั้งชื่อคลาสสั้น ๆ ที่ซ้ำกันเองในไฟล์นี้ (เคยเจอ .ic ชนกับปุ่มลูกศร) */
+ /* §plBg · พื้นหลังเทาเต็มพื้นที่ · การ์ดขาวจะได้ลอยขึ้นมา
+    .main มี padding 22px (และถูก !important ทับเป็นค่าอื่นในหลาย breakpoint)
+    ถ้าใช้ margin ติดลบมาหักจะพังทุกครั้งที่ padding เปลี่ยน → ใช้ :has() ระบายที่ .main เลย
+    เบราว์เซอร์ที่ไม่รู้จัก :has() จะได้เทาเฉพาะในกรอบ view ซึ่งยังดูได้ ไม่พัง */
+ +'.main:has(#view-trippl.active){background:#F3F4F8}'
+ +'#view-trippl{background:#F3F4F8;min-height:calc(100vh - 120px)}'
  +'#trippl-host{font-family:"Sarabun","Noto Sans Thai",sans-serif;color:#1E293B;padding:2px;'
    +'--pi:#0F172A;--pm:#64748B;--pf:#94A3B8;--pl:#F1F5F9;--pl2:#E2E8F0;'
    +'--pem:#059669;--pam:#D97706;--pro:#E11D48;--pblu:#2563EB;--pind:#4F46E5;'
@@ -57087,7 +57093,7 @@ function pxBar(e){
 /* ══ DAILY ══════════════════════════════════════════════════════════════════ */
 function pxDaily(e){
   var D=pxDay(_px.date,_px.pier);
-  var DW=(typeof pjDateWords==='function')?pjDateWords(_px.date):{big:_px.date};
+  var DW=(typeof pjDateWords==='function')?pjDateWords(_px.date):{sm:_px.date};
   var tR=0,tC=0,tP=0,tPax=0,tBk=0,tGross=0,nLoss=0,nReal=0,nProfit=0;
   D.forEach(function(t){ tR+=t.rev; tC+=t.cost; tP+=t.profit; tPax+=t.px.tot; tBk+=t.px.bk; tGross+=t.revGross;
     if(t.profit<0) nLoss++; else nProfit++; if(t.nReal) nReal++; });
@@ -57098,10 +57104,10 @@ function pxDaily(e){
   var nNoFuel=D.filter(function(t){ return !t.fuelPr; }).length;
   var nFuelBack=D.filter(function(t){ return t.fp && (t.fp.src==='back'||t.fp.src==='sib'||t.fp.src==='plan'); }).length;
 
-  if(!D.length) return '<div class="phero"><div><h1>Daily performance <span>('+e(DW.big||_px.date)+')</span></h1></div></div>'
+  if(!D.length) return '<div class="phero"><div><h1>Daily performance <span>('+e(DW.sm||_px.date)+')</span></h1></div></div>'
     +'<div class="empty">No boats scheduled on this date'+(_px.pier?' at this pier':'')+'</div>';
 
-  var hero='<div class="phero"><div><h1>Daily performance <span>('+e(DW.big||_px.date)+')</span></h1>'
+  var hero='<div class="phero"><div><h1>Daily performance <span>('+e(DW.sm||_px.date)+')</span></h1>'
     +'<p><span class="htag">'+D.length+' trip'+(D.length===1?'':'s')+' · '+tPax+' pax</span>'
     +(nNoPlan?('<span class="htag w">'+nNoPlan+' boat'+(nNoPlan===1?'':'s')+' not mapped to a cost plan</span>'):'')
     +(nNoFuel?('<span class="htag w">'+nNoFuel+' boat'+(nNoFuel===1?'':'s')+' with no fuel price</span>'):'')
