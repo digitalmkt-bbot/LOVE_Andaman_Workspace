@@ -52533,6 +52533,73 @@ function drCfgSet(k, v){
   if(typeof ctWrite === 'function') ctWrite('dr_cfg', c);
   drAfter();
 }
+/* ══ §drReal · ต้นทุนใน Daily Report ต้องมาจากที่เดียวกับ P&L ═══════════════════
+   เดิม DR มีเลขของตัวเอง · ค่ารถคันละ ฿1,200 เท่ากันหมด และหางยาวเหมาลำละ ฿600 ฝังในโค้ด
+   ของจริงคือรถบริษัท ฿900 รถร่วม ฿1,800 แยกตามเส้นทางและโซนรับ (หน้า ราคาจริง)
+   เทียบ 1–16 ส.ค. เลขเก่าต่ำกว่าจริง ฿32,700 · ผิด 15 จาก 16 วัน
+   ═══════════════════════════════════════════════════════════════════════════════ */
+function drVanReal(date){
+  var out = { byVan:{}, total:0, nDefault:0, def:{} };
+  if(typeof SB_BOOKINGS === 'undefined' || typeof vehGet !== 'function') return out;
+  var all = {}, cell = {}, order = [];
+  SB_BOOKINGS.forEach(function(b){
+    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status) >= 0) return;
+    var t = (typeof ckTripOn==='function') ? ckTripOn(b, date) : null; if(!t) return;
+    var O = (typeof bkOpsRead==='function') ? bkOpsRead(b, date) : (b.ops||{});
+    var vid = O.vanId; if(!vid) return;
+    var pax = (typeof ckBookedPax==='function') ? ckBookedPax(t) : 0;
+    all[vid] = (all[vid] || 0) + pax;
+    var bid = (O.boatId || t.charterBoatId) || '';
+    var k = vid + '|' + bid;
+    if(!cell[k]){ cell[k] = { vid:vid, bid:bid, pax:0, zone:'' }; order.push(k); }
+    cell[k].pax += pax;
+    /* คันเดียวรับปนสองโซน · ยึดโซนที่แพงกว่า เพราะรถวิ่งไกลสุดจริง */
+    var a = (b.pickupAreaId && typeof bkV2GetArea==='function') ? bkV2GetArea(b.pickupAreaId) : null;
+    var z = (a && a.zone) || '';
+    if(z === 'KL') cell[k].zone = 'KL'; else if(!cell[k].zone) cell[k].zone = 'PK';
+  });
+  order.forEach(function(k){
+    var c = cell[k], v = vehGet(c.vid); if(!v) return;
+    var rid = '';
+    try{ rid = (typeof TRIPS!=='undefined' && TRIPS[date] && TRIPS[date][c.bid] && TRIPS[date][c.bid].route) || ''; }catch(_){}
+    var day = (typeof vanDayCost==='function') ? vanDayCost(v, rid, c.zone || 'PK') : 0;
+    /* รถคันเดียวส่งขึ้นสองลำ → หารตามจำนวนหัวที่ส่งขึ้นแต่ละลำ · รวมกันแล้วเท่าค่าเช่าหนึ่งวันพอดี */
+    var share = (all[c.vid] > 0) ? (c.pax / all[c.vid]) : 1;
+    out.byVan[c.vid] = (out.byVan[c.vid] || 0) + day * share;
+    out.total += day * share;
+    /* ยังไม่ได้ตั้งเรตให้กลุ่มนี้เลย = กำลังใช้ค่าเริ่มต้น ไม่ใช่ราคาที่ตกลงกันจริง */
+    var gk = (typeof vanGroupKey==='function') ? vanGroupKey(v) : 'own';
+    var noRate = !(v.costPerDay != null && v.costPerDay !== '')
+              && (typeof vanRateRaw==='function')
+              && vanRateRaw(gk, rid, c.zone === 'KL' ? 'KL' : 'PK') === ''
+              && vanRateRaw(gk, rid, 'base') === ''
+              && vanRateRaw(gk, '', '') === '';
+    if(noRate && !out.def[c.vid]){ out.def[c.vid] = 1; out.nDefault++; }
+  });
+  out.total = Math.round(out.total);
+  Object.keys(out.byVan).forEach(function(k){ out.byVan[k] = Math.round(out.byVan[k]); });
+  return out;
+}
+/* ราคาเรือหางยาวของเส้นทางหนึ่ง · อ่านจากสูตร (บรรทัด ltc/ltj) ผ่านแผนของเส้นทางนั้น
+   เดิมฝังไว้ในโค้ดว่าเหมาลำละ 600 · ค่าเริ่มต้นของสูตรก็ 600 เท่ากัน วันแรกเลขจึงไม่ขยับ
+   ต่างกันตรงที่ตั้งแต่นี้ไปแก้ได้ที่หน้าต้นทุน และแยกรายเส้นทางได้ */
+function drLtRate(routeId){
+  var out = { chtr:600, join:0 };
+  try{
+    var T = ctTpl(), pl = (typeof pxPlanFor==='function') ? pxPlanFor(routeId) : null;
+    (T.lines || []).forEach(function(ln){
+      if(ln.id !== 'ltc' && ln.id !== 'ltj') return;
+      if(typeof ctGrpCfg==='function' && ctGrpCfg(pl || {}, ln.g || 'อื่นๆ').off){
+        if(ln.id === 'ltc') out.chtr = 0; else out.join = 0; return;
+      }
+      var L = (typeof ctEffLine==='function') ? ctEffLine(ln, pl || {}) : ln;
+      if(L.off){ if(ln.id === 'ltc') out.chtr = 0; else out.join = 0; return; }
+      var p = (L.parts || [])[0] || {};
+      if(ln.id === 'ltc') out.chtr = +p.u || 0; else out.join = +p.u || 0;
+    });
+  }catch(_){}
+  return out;
+}
 function drB(n){ return '฿' + Math.round(+n||0).toLocaleString('en-US'); }
 function drK(n){ n=+n||0; return n>=1000 ? ('฿'+(Math.round(n/100)/10)+'k') : drB(n); }
 function drPct(a,b){ return (b>0) ? (Math.round(a/b*1000)/10) : 0; }
@@ -52581,7 +52648,7 @@ function drData(date){
             vans:{}, vOrder:[], noVan:{n:0,pax:0}, selfArr:{n:0,pax:0}, zones:{}, zOrder:[],
             pay:{invoice:0,proforma:0,cot:0,card:0,transfer:0,other:0}, due:0, got:0, noSlip:0,
             meals:{veg:0,vegan:0,halal:0,allergy:0}, langs:{}, docs:{verified:0,issue:0,pending:0,nofiles:0},
-            extras:0, upDue:0, upGot:0, ltJoin:0, ltChtr:0,
+            extras:0, upDue:0, upGot:0, ltJoin:0, ltChtr:0, ltBy:{},
             ret:{same:0,samePax:0,arr:0,arrPax:0,todo:0,todoPax:0,self:0,selfPax:0},
             ovn:{n:0, pax:0, days:{}},
             warn:{noVan:0,noBoat:0,doc:0,over:0,dueAmt:0} };
@@ -52677,9 +52744,11 @@ function drData(date){
 
     // หางยาว · §ovnDaily · ของที่จองมากับใบถูกใช้และจ่ายไปแล้ววันขาไป · นับซ้ำ = ค่าใช้จ่ายเกินจริง
     var af=(!_ovn && typeof bkV2AddOnFlags==='function')?bkV2AddOnFlags(b,rid):{};
-    if(af.charter) D.ltChtr+=(af.charterQty||1); else if(af.join) D.ltJoin+=px.tot;
-    if(typeof bkV2LongtailExtraPax==='function') D.ltJoin+=(bkV2LongtailExtraPax(b.id,date)||0);
-    if(typeof bkV2LongtailCharterExtraBoats==='function') D.ltChtr+=(bkV2LongtailCharterExtraBoats(b.id,date)||0);
+    if(!D.ltBy[rid]) D.ltBy[rid]={chtr:0, join:0};
+    if(af.charter){ D.ltChtr+=(af.charterQty||1); D.ltBy[rid].chtr+=(af.charterQty||1); }
+    else if(af.join){ D.ltJoin+=px.tot; D.ltBy[rid].join+=px.tot; }
+    if(typeof bkV2LongtailExtraPax==='function'){ var _xj=(bkV2LongtailExtraPax(b.id,date)||0); D.ltJoin+=_xj; D.ltBy[rid].join+=_xj; }
+    if(typeof bkV2LongtailCharterExtraBoats==='function'){ var _xc=(bkV2LongtailCharterExtraBoats(b.id,date)||0); D.ltChtr+=_xc; D.ltBy[rid].chtr+=_xc; }
   });
 
   // ความจุเรือลงไปที่เส้นทาง · เรือลำเดียวอาจวิ่งหลายเส้นทางในวันเดียว จึงเฉลี่ยตามสัดส่วนคน
@@ -52710,10 +52779,21 @@ function drData(date){
   D.nVan=D.vOrder.length;
   D.vanIn=Math.min(D.nVan, C.vanQuota);
   D.vanOut=Math.max(0, D.nVan-C.vanQuota);
-  D.vanCost=D.nVan*C.vanCost;
+  /* §drReal · ค่ารถจากเรตจริงรายคัน ไม่ใช่เลขเฉลี่ยตัวเดียว
+     ช่อง "ค่ารถ/คัน" ในหน้านี้เหลือไว้เป็นตัวสำรองของคันที่ยังไม่ได้ตั้งเรต */
+  D.vanReal=drVanReal(date);
+  D.vanCost=D.vanReal.total || (D.nVan*C.vanCost);
+  D.vanEst=!D.vanReal.total;                       /* ไม่มีข้อมูลเลย → ถอยไปใช้เลขเฉลี่ยเหมือนเดิม */
+  D.vanNoRate=D.vanReal.nDefault;                  /* กี่คันที่ยังใช้ค่าเริ่มต้น ไม่ใช่ราคาที่ตกลงกันจริง */
   D.vanPax=D.vOrder.reduce(function(a,id){ return a+D.vans[id].pax; },0);
   D.perPax=(D.vanPax>0)?(D.vanCost/D.vanPax):0;
-  D.ltCost=D.ltChtr*600;   // ประมาณการ · ราคาเหมาต่อลำ
+  /* §drReal · หางยาวคิดจากสูตรของเส้นทางนั้น ๆ · จอยมีราคาต่อหัวได้ด้วย ไม่ใช่นับแต่เหมาลำ */
+  D.ltCost=0;
+  Object.keys(D.ltBy).forEach(function(rid){
+    var L=D.ltBy[rid], R=drLtRate(rid);
+    D.ltCost += (L.chtr||0)*R.chtr + (L.join||0)*R.join;
+  });
+  D.ltCost=Math.round(D.ltCost);
   D.warn.dueAmt=D.due;
   D.mOrder.sort(function(a,b){ return D.mkt[b].pax-D.mkt[a].pax; });
   drPaint(D.mOrder, D.mkt);
@@ -53414,8 +53494,13 @@ function drPaneVn(D){
    + drK('em','&#128176;','ต้นทุนต่อหัว', drB(D.perPax), '/ คน','g',
        (D.perPax<=C.targetPerPax?'&#10003; ต่ำกว่าเป้า ':'&#9888; สูงกว่าเป้า ')+drB(C.targetPerPax),
        (D.perPax<=C.targetPerPax?'ok':'bad'),
-       '<span class="dr-cfg dr-noprint">ค่ารถ/คัน <input value="'+C.vanCost+'" onchange="drCfgSet(\'vanCost\',this.value)"></span>'
-       +'<span class="dr-cfg dr-noprint">โควตา <input value="'+C.vanQuota+'" onchange="drCfgSet(\'vanQuota\',this.value)"></span>')
+       '<span class="dr-cfg dr-noprint" title="ใช้เฉพาะคันที่ยังไม่ได้ตั้งเรตในหน้า ต้นทุน › ราคาจริง">'
+         +(D.vanEst?'ค่ารถ/คัน ':'สำรอง ฿/คัน ')+'<input value="'+C.vanCost+'" onchange="drCfgSet(\'vanCost\',this.value)"></span>'
+       +'<span class="dr-cfg dr-noprint">โควตา <input value="'+C.vanQuota+'" onchange="drCfgSet(\'vanQuota\',this.value)"></span>'
+       +(D.vanEst
+          ? '<span class="dr-cfg dr-noprint" style="color:#b45309">ยังไม่มีเรตจริง · ใช้เลขเฉลี่ย</span>'
+          : ('<span class="dr-cfg dr-noprint" style="color:#047857">เรตจริงรายคัน · แหล่งเดียวกับ P&amp;L</span>'
+             +(D.vanNoRate?('<span class="dr-cfg dr-noprint" style="color:#b45309">'+D.vanNoRate+' คันยังไม่ตั้งเรต</span>'):''))))
    + drK('ro','&#9888;','ยังไม่จัดรถ', D.noVan.n, 'booking', D.noVan.n?'r':'g',
        D.noVan.n?('&#9888; '+D.noVan.pax+' คน · ต้องจัดก่อนปิดวัน'):'จัดครบทุกใบแล้ว', D.noVan.n?'bad':'ok',
        '<span>รถกลับยังไม่จัด <b style="color:'+(D.ret.todo?'#be123c':'#047857')+'">'+D.ret.todo+' ใบ</b></span>'
@@ -53440,7 +53525,10 @@ function drPaneVn(D){
       +'<td class="c dr-mono" style="font-weight:700">'+v.pax+'</td><td class="c dr-mono">'+(v.cap||'—')+'</td>'
       +'<td class="c" style="font-weight:700;color:'+col+'">'+(v.cap?(pc+'%'):'—')+'</td>'
       +'<td>'+(bts||'<span class="dr-z0">—</span>')+'</td>'
-      +'<td class="r dr-mono" style="font-weight:700">'+drB(C.vanCost)+'</td></tr>';
+      +'<td class="r dr-mono" style="font-weight:700">'
+        +drB((D.vanReal&&D.vanReal.byVan[id]!=null)?D.vanReal.byVan[id]:C.vanCost)
+        +((D.vanReal&&D.vanReal.def[id])?'<div style="font-size:9px;font-weight:600;color:#b45309">ยังไม่ตั้งเรต</div>':'')
+      +'</td></tr>';
   }).join('');
   if(D.noVan.n){
     body+='<tr style="opacity:.75"><td>'+drSq('#9ca3af','—')+'<span><b>ยังไม่จัดรถ</b><span>'+D.noVan.n+' booking</span></span></span></td>'
