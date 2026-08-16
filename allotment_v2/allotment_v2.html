@@ -47187,7 +47187,12 @@ function ckPierReinstate(bkId, date, on){
   ckWrite(b, date, 'pier', val); ckPersist(); ckAfter('pier');
 }
 function ckNowHM(){ var d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
-function ckMe(){ return (typeof ME!=='undefined' && ME && (ME.name||ME.username)) || '—'; }
+/* §ckWho · ใครเช็คอิน · ME เป็นตัวแปรใน IIFE ของบูต ไม่ใช่ global → บล็อกนี้เห็นเสมอ undefined
+   ทุกเช็คอิน/โน้ต/สรุปค่าเดินทาง จึงถูกสตัมป๊กว่า '—' มาตลอด · สอบย้อนไม่ได้ว่าใครทำ
+   ใช้ window.LA_ME (ตั้งตอนบูตจาก /api/me) เหมือน laBy() ที่หน้าอื่นใช้ */
+function ckMe(){ var m=window.LA_ME;
+  if(m && (m.username||m.name)) return m.username||m.name;
+  return (typeof ME!=='undefined' && ME && (ME.name||ME.username)) || '—'; }
 function ckEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 /* ══ §ckPerm · เช็คอินเงียบหาย ═══════════════════════════════════════════════
    ckPersist เดิมเรียก acctPersistBookings ซึ่งมีด่าน laCanEditArea('operations')
