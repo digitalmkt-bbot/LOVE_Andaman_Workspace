@@ -47167,6 +47167,7 @@ function ckVanNsPax(b, date){
   return v.events.reduce(function(s,x){ return s + ((x.type!=='cxl') ? Math.max(0,+x.pax||0) : 0); }, 0);
 }
 function ckPierReinstate(bkId, date, on){
+  if(!ckGuard()) return;                                   /* §ckPerm */
   var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
   var cur=ckRead(b,date,'pier')||{};
   if(on){
@@ -47188,7 +47189,28 @@ function ckPierReinstate(bkId, date, on){
 function ckNowHM(){ var d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
 function ckMe(){ return (typeof ME!=='undefined' && ME && (ME.name||ME.username)) || '—'; }
 function ckEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function ckPersist(){ if(typeof acctPersistBookings==='function') acctPersistBookings(); }
+/* ══ §ckPerm · เช็คอินเงียบหาย ═══════════════════════════════════════════════
+   ckPersist เดิมเรียก acctPersistBookings ซึ่งมีด่าน laCanEditArea('operations')
+   คนหน้าท่าที่ได้สิทธิ์แก้แค่ 'pier' จึงกดเช็คอินได้ หน้าจอขึ้นติ๊กถูกให้เรียบร้อย
+   แต่ไม่มีอะไรถูกบันทึกเลย · พอ refresh หรือ sync ทีเดียวหายทั้งวัน
+   ที่ร้ายกว่าคือมันเงียบสนิท ไม่มีข้อความบอกว่าไม่มีสิทธิ์ ทุกคนจึงเชื่อว่าเช็คอินแล้ว
+   ═══════════════════════════════════════════════════════════════════════════════ */
+function ckCanEdit(){
+  if(typeof window.laCanEditArea !== 'function') return true;
+  return window.laCanEditArea('operations') || window.laCanEditArea('pier');
+}
+/* กันไว้ตั้งแต่ก่อนกด · ถ้าไม่มีสิทธิ์จริง ต้องบอก ไม่ใช่ปล่อยให้กดแล้วเงียบ */
+function ckGuard(){
+  if(ckCanEdit()) return true;
+  if(typeof window.laGuardEdit === 'function') window.laGuardEdit('pier');
+  return false;
+}
+function ckPersist(){
+  if(!ckCanEdit()) return false;
+  try{ if(typeof baChMemoClear === 'function') baChMemoClear(); }catch(_){}
+  try{ laBlob().sb_bookings = SB_BOOKINGS; laBlobSave(); return true; }
+  catch(e){ console.warn('persist check-in failed', e); return false; }
+}
 function ckBookedPax(t){ return (typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot((t&&t.pax)||{}):0; }
 // §focSplit (2026-07-31) · FOC ที่แยก FR/TH ถูกลืมอีกแล้ว
 //   ad / chd / inf บวกครบทั้ง 3 ทรง (flat + _fr + _th) แต่ foc อ่านแค่ p.foc ตัวเดียว
@@ -47344,6 +47366,7 @@ function pckSelfPierNote(b, date){
 function pckVoidLabel(vd){ return (vd&&vd.kind==='ns')?'ไม่มาทั้งใบ':'ยกเลิกหน้างาน'; }
 // ทางกลับของ CXL / No-show ที่กดพลาด · ถอนเหตุการณ์ล่าสุดของด่านนั้นแล้วคืนจำนวนให้
 function ckEventUndo(bkId, date, kind){
+  if(!ckGuard()) return;                                   /* §ckPerm */
   var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
   var cur=ckRead(b,date,kind)||{};
   var ev=(Array.isArray(cur.events)?cur.events.slice():[]);
@@ -47362,6 +47385,7 @@ function ckEventUndo(bkId, date, kind){
 }
 // กดขั้นไหน = ไปถึงขั้นนั้น (ขั้นก่อนหน้าเติมให้อัตโนมัติ) · กดขั้นที่ทำแล้ว = ถอยกลับหนึ่งขั้น
 function pckStageSet(bkId, date, stage){
+  if(!ckGuard()) return;                                   /* §ckPerm */
   var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
   var cur=ckRead(b,date,'pier')||{};
   var now=new Date().toISOString(), me=ckMe();
@@ -47470,6 +47494,7 @@ function ckReasonPick(code){
 }
 function ckReasonClose(){ var h=document.getElementById('ck-reason-host'); if(h) h.innerHTML=''; }
 function ckReasonSave(){
+  if(!ckGuard()) return;                                   /* §ckPerm */
   var st=_ckReason; if(!st.bkId) return ckReasonClose();
   if(!st.code){ alert('Please pick a reason first.'); return; }
   var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===st.bkId; }); if(!b) return ckReasonClose();
@@ -47581,6 +47606,7 @@ function ckEvSave(){
   var cap=(typeof ckCap==='function')?ckCap(b,st.date,st.kind,booked):booked;
   var cur=ckRead(b,st.date,st.kind)||{};
   var actual=(cur.actualPax!=null?cur.actualPax:cap);
+  if(!ckGuard()) return;                                   /* §ckPerm */
   var _n0=_ckEvPax();
   if(_ckEvMixed && _n0<=0){ alert('ระบุจำนวนก่อนครับ — กด + ที่ประเภทที่ยกเลิก (AD / CHD / INF / FOC)'); return; }
   var n=Math.max(1,Math.min(actual,_n0));
@@ -47708,6 +47734,7 @@ function ckSyncSticky(host){
        host._ckWinRz=function(){ apply(); }; window.addEventListener('resize', host._ckWinRz); }catch(_){}
 }
 function ckStep(bkId, date, kind, delta){
+  if(!ckGuard()) return;                                   /* §ckPerm */
   var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
   var t=ckTripOn(b,date)||{}, booked=ckBookedPax(t), cap=ckCap(b,date,kind,booked);
   var cur=ckRead(b,date,kind)||{};
@@ -47721,6 +47748,7 @@ function ckStep(bkId, date, kind, delta){
   if(ns>0 && !(cur.reasonCode)) ckReasonOpen(bkId,date,kind);   // ลดคนแล้วยังไม่มีเหตุผล → ถามทันที
 }
 function ckToggle(bkId, date, kind){
+  if(!ckGuard()) return;                                   /* §ckPerm */
   var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
   var t=ckTripOn(b,date)||{}, booked=ckBookedPax(t), cap=ckCap(b,date,kind,booked);
   var cur=ckRead(b,date,kind)||{};
