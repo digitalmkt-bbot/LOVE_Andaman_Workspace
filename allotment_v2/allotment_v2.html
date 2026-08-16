@@ -42598,9 +42598,14 @@ function bkV2LockOverlays(){
     const rN = rid => (typeof ROUTES!=='undefined' ? (ROUTES.find(r=>r.id===rid)?.name||rid) : rid);
     const _mRg = (typeof bkV2LockRange==='function') ? bkV2LockRange(mL) : {from:'',to:''};
     const whenTxt = _mBulk ? (_mRg.from + (_mRg.to && _mRg.to!==_mRg.from ? (' → '+_mRg.to) : '')) : (mL.date||'');
-    // §lkVC · กรุ๊ปที่ปล่อยแล้วและไม่เหลืออะไรเลย ไม่ต้องกินพื้นที่ · ยุบเป็นบรรทัดเดียว
-    const kidsDead = kids.filter(c => c.status!=='active' && !(+c.qty) && !(+c.used));
-    const kidsShow = kids.filter(c => kidsDead.indexOf(c)<0);
+    /* §lkSort · แบ่งกรุ๊ปย่อยเป็นชั้น · ที่ยังใช้ได้อยู่บน ที่ใช้ไปแล้วอยู่ล่าง ที่ปล่อยแล้วยุบท้ายสุด
+       เดิมเรียงตามลำดับที่สร้าง · กรุ๊ปว่างกับกรุ๊ปหมดปนกัน หาที่ยังจองได้ต้องไล่อ่านทีละบรรทัด */
+    const _kUsed = c => Number(c.used)||0;
+    const _kBkt  = c => _kUsed(c) ? 'used' : (c.status==='active' ? 'free' : 'rel');
+    const kFree = kids.filter(c=>_kBkt(c)==='free').sort((a,b)=> bkV2LockRemaining(b)-bkV2LockRemaining(a));
+    const kUsed = kids.filter(c=>_kBkt(c)==='used').sort((a,b)=>
+      (bkV2LockRemaining(b)>0) - (bkV2LockRemaining(a)>0) || _kUsed(b)-_kUsed(a));
+    const kRel  = kids.filter(c=>_kBkt(c)==='rel');
     // §lkVC · ใครใช้ที่นั่งของกรุ๊ปนี้ไป · VC ของใบจองจริง ไม่ใช่แค่ตัวเลข
     const vcLine = c => {
       const A = bkV2LockAudit(c);
@@ -42614,13 +42619,28 @@ function bkV2LockOverlays(){
       if(!bits && !ghost) return '';
       return `<div style="margin-top:3px;line-height:1.7">${bits}${ghost}</div>`;
     };
-    const kidRows = (kidsShow.length ? kidsShow.map(c=>`
-        <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-top:1px solid var(--border-2)">
+    const kidRow = (c, tint) => `
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-top:1px solid var(--border-2);border-left:3px solid ${tint}">
           <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:600;color:var(--ink)">↳ ${esc(c.subName||'ย่อย')}</div><div style="font-size:10px;color:var(--ink-soft)">${esc(c.reason||'')}${c.expiry?` · หมดอายุ ${esc(c.expiry)}`:''}</div>${vcLine(c)}</div>
-          <div style="font-family:Manrope,sans-serif;font-size:12px;font-variant-numeric:tabular-nums;color:var(--ink);white-space:nowrap;padding-top:1px"><b>${c.used}</b>/${c.qty} · <b style="color:#C0392B">${bkV2LockRemaining(c)}</b> เหลือ</div>
+          <div style="font-family:Manrope,sans-serif;font-size:12px;font-variant-numeric:tabular-nums;color:var(--ink);white-space:nowrap;padding-top:1px"><b>${c.used}</b>/${c.qty} · <b style="color:${bkV2LockRemaining(c)>0?'#0F6E56':'#C0392B'}">${bkV2LockRemaining(c)}</b> เหลือ</div>
           <div style="display:flex;gap:6px;padding-top:1px">${c.status==='active'?`<button onclick="bkV2LockManageClose();bkV2LockAddOpen('${c.id}')" style="font-size:11px;font-weight:700;color:#0F6E56;background:#E1F5EE;border:1px solid #B7E2D2;border-radius:6px;padding:5px 10px;cursor:pointer;font-family:inherit">+ ที่นั่ง</button><button onclick="bkV2LockReleaseConfirm('${c.id}')" style="font-size:11px;font-weight:700;color:#A32D2D;background:#FDECEA;border:1px solid #F5C9C4;border-radius:6px;padding:5px 10px;cursor:pointer;font-family:inherit">ปล่อย</button>`:`<span style="font-size:10px;color:var(--ink-soft)">${esc(c.status)}</span>`}</div>
-        </div>`).join('') : (kids.length?'':`<div style="font-size:11.5px;color:var(--ink-soft);padding:8px 0;border-top:1px solid var(--border-2)">ยังไม่มีกรุ๊ปย่อย</div>`))
-      + (kidsDead.length?`<div style="font-size:10.5px;color:var(--ink-soft);padding:8px 0;border-top:1px solid var(--border-2)">ปล่อยไปแล้วและไม่เหลือที่นั่ง ${kidsDead.length} กรุ๊ป · ${esc(kidsDead.map(c=>c.subName||'ย่อย').join(' · '))}</div>`:'');
+        </div>`;
+    const kidHead = (label, sub, ink, bg, list, seats) => `
+        <div style="display:flex;align-items:baseline;gap:8px;margin:14px 0 0;padding:6px 10px;border-radius:8px;background:${bg};border-left:3px solid ${ink}">
+          <span style="font-size:10px;font-weight:800;color:${ink};text-transform:uppercase;letter-spacing:.05em">${label}</span>
+          <span style="font-size:10px;color:${ink};opacity:.8">${sub}</span>
+          <span style="margin-left:auto;font-family:Manrope,sans-serif;font-size:11px;font-weight:700;color:${ink}">${list.length} กรุ๊ป · ${seats} ที่</span>
+        </div>`;
+    const _sumRem = L => L.reduce((n,c)=>n+bkV2LockRemaining(c),0);
+    const _sumUse = L => L.reduce((n,c)=>n+_kUsed(c),0);
+    const kidRows = !kids.length
+      ? `<div style="font-size:11.5px;color:var(--ink-soft);padding:8px 0;border-top:1px solid var(--border-2)">ยังไม่มีกรุ๊ปย่อย</div>`
+      : ( (kFree.length ? kidHead('ยังไม่ถูกใช้', 'จองเข้าได้เลย', '#0F6E56', '#ECFDF5', kFree, _sumRem(kFree))
+             + kFree.map(c=>kidRow(c,'#8FD3BC')).join('') : '')
+        + (kUsed.length ? kidHead('ใช้ไปแล้ว', 'มีใบจองผูกอยู่', '#3730A3', '#EEF2FF', kUsed, _sumUse(kUsed))
+             + kUsed.map(c=>kidRow(c,'#A5B4FC')).join('') : '')
+        + (kRel.length ? kidHead('ปล่อยคืนแล้ว', 'ไม่กันที่แล้ว', '#64748B', '#F1F5F9', kRel, 0)
+             + `<div style="font-size:10.5px;color:var(--ink-soft);padding:8px 10px;border-top:1px solid var(--border-2);border-left:3px solid #CBD5E1;line-height:1.7">${esc(kRel.map(c=>c.subName||'ย่อย').join(' · '))}</div>` : '') );
     // §lkVC · ที่นั่งของล็อกแม่เองที่ยังไม่ได้แบ่ง ใครดึงไปบ้าง
     const ownVc = vcLine(mL);
     const _aud = bkV2LockAuditTree(mL);
@@ -42680,7 +42700,10 @@ function bkV2LockOverlays(){
           </div>`:`
           <div style="margin-top:12px;font-size:10.5px;color:#0F6E56">✓ ตัวเลขตรงกับใบจองที่อ้างถึงจริง ${_aud.live} ที่</div>`}
           ${_covHtml}
-          <div style="margin-top:12px;font-size:10px;font-weight:700;color:#534AB7;text-transform:uppercase;letter-spacing:.05em">กรุ๊ปย่อย (${kids.length})</div>
+          <div style="margin-top:14px;display:flex;align-items:baseline;gap:8px">
+            <span style="font-size:10px;font-weight:700;color:#534AB7;text-transform:uppercase;letter-spacing:.05em">กรุ๊ปย่อย (${kids.length})</span>
+            <span style="margin-left:auto;font-size:10.5px;color:var(--ink-soft)">${kFree.length?`<b style="color:#0F6E56">ว่าง ${kFree.length}</b>`:''}${kUsed.length?` · <b style="color:#3730A3">ใช้แล้ว ${kUsed.length}</b>`:''}${kRel.length?` · ปล่อยแล้ว ${kRel.length}`:''}</span>
+          </div>
           ${kidRows}
         </div>
         <div style="display:flex;gap:8px;padding:12px 18px;background:#fafafa;border-top:1px solid var(--border);flex-wrap:wrap">
