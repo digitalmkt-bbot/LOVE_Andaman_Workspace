@@ -55853,6 +55853,20 @@ function ctTpl(){
    เติมเฉพาะ id ที่ยังไม่มีในสูตรของเขา · บรรทัดที่เขาแก้ไว้แล้วไม่แตะสักช่อง
    ลบทิ้งเองได้ตามปกติ — ถ้าลบแล้วมันโผล่กลับมาทุกครั้งจะน่ารำคาญกว่าไม่มีให้เลย
    จึงจำ id ที่ถูกลบไว้ใน t.dropped */
+/* §ctOd · ครั้งเดียว · ทำเครื่องหมายบรรทัดที่เป็นของที่ลูกค้าสั่งเพิ่ม
+   รถรับส่งตั้งต้น 100% ของหัว = ได้เลขเท่าเดิมเป๊ะ · แผน No TF ตั้ง 0% แทนการปิดบรรทัด
+   หางยาวตั้งต้น 0 = ได้เลขเท่าเดิม (สูตรเดิม q=0 กับ u=0 ก็ให้ 0 อยู่แล้ว) */
+var CT_OD_SEED = { van:100, ltj:0, ltc:0 };
+function ctTplOdSeed(t){
+  var n = 0;
+  (t.lines || []).forEach(function(ln){
+    if(!(ln.id in CT_OD_SEED)) return;
+    if(ln.od) return;
+    ln.od = 1; if(ln.odQ == null) ln.odQ = CT_OD_SEED[ln.id];
+    n++;
+  });
+  return n;
+}
 function ctTplFill(t){
   var have = {}, dropped = {};
   (t.lines || []).forEach(function(l){ have[l.id] = 1; });
@@ -55862,6 +55876,7 @@ function ctTplFill(t){
     if(have[d.id] || dropped[d.id]) return;
     t.lines.push(JSON.parse(JSON.stringify(d))); added++;
   });
+  if(ctTplOdSeed(t)) added++;
   if(added) ctTplSave(t);
   return t;
 }
@@ -55979,6 +55994,50 @@ function ctPartAmt(p, ctx){
   }
   return 0;
 }
+/* ══ §ctOd · บรรทัดที่ลูกค้าสั่งเพิ่ม ═══════════════════════════════════════════
+   ค่าหางยาวกับค่ารถไม่ใช่ต้นทุนของทุกหัว · เป็นของที่ลูกค้าสั่งและจ่ายเงินแยก
+   เดิมสูตรคูณหัวทั้งลำ · 16 ส.ค. Oceanus 35 หัว ซื้อจอยจริง 2 คน สูตรคิดเกิน 17 เท่า
+   จนต้องปิดบรรทัดทิ้ง แล้ว P&L ก็เลยไม่คิดตามไปด้วย
+   ของใหม่ · จำนวนมาจากที่สั่งจริง และมีฝั่งรายได้คู่กับฝั่งต้นทุน จะได้ไม่เกิดขาดทุนผี
+   ═══════════════════════════════════════════════════════════════════════════════ */
+/* จำนวนนับเป็น % ของหัว เมื่อหน่วยเป็น "ต่อคน" · นับเป็นจำนวนเต็มเมื่อหน่วยเป็น "ต่อลำ" */
+function ctOdPct(ln){ var p = (ln && ln.parts || [])[0] || {}; return p.k === 'var'; }
+/* ตั้งรายเส้นทาง · แผนหนึ่งแผนคือหนึ่งเส้นทาง ค่าพวกนี้จึงแยกตามเส้นทางอยู่แล้ว
+   aQ/aR = ผ่านเอเจนต์ · uQ/uR = ขายเพิ่มหน้างาน · R คือเงินที่ "บริษัทได้" ไม่ใช่ยอดขาย
+   (ค่าคอมหักอยู่ในนั้นแล้ว จึงไม่ต้องมีบรรทัดต้นทุนค่าคอมแยก) */
+function ctOdCfg(pl, ln){
+  var C = ((pl && pl.od) || {})[ln.id] || {};
+  var dq = (ln.odQ != null) ? +ln.odQ : 0;
+  return { aQ:(C.aQ != null && C.aQ !== '') ? +C.aQ : dq, aR:+C.aR || 0,
+           uQ:(C.uQ != null && C.uQ !== '') ? +C.uQ : 0,  uR:+C.uR || 0 };
+}
+function ctOdSet(pid, lineId, k, v){
+  var P = ctPlans(), pl = P.filter(function(x){ return x.id === pid; })[0]; if(!pl) return;
+  pl.od = pl.od || {}; pl.od[lineId] = pl.od[lineId] || {};
+  if(String(v).trim() === '') delete pl.od[lineId][k]; else pl.od[lineId][k] = +v || 0;
+  ctPlansSave(P); ctRender();
+}
+/* จำนวนที่สั่ง · ของจริงมาก่อนเสมอ (P&L ส่งมาทาง ctx.odQty) ไม่มีค่อยใช้ตัวที่คาดไว้ */
+function ctOdQty(pl, ln, ctx){
+  if(ctx && ctx.odQty && ctx.odQty[ln.id] != null) return Math.max(0, +ctx.odQty[ln.id] || 0);
+  var C = ctOdCfg(pl, ln), q = (+C.aQ || 0) + (+C.uQ || 0);
+  return ctOdPct(ln) ? Math.round((+ctx.pax || 0) * q / 100) : q;
+}
+/* รายได้ของบรรทัดพวกนี้ · ใช้เฉพาะหน้าแผนคำนวณ
+   P&L ไม่เรียกตัวนี้ เพราะเงินฝั่งเอเจนต์อยู่ในยอดใบจองแล้ว และฝั่งขายเพิ่มอ่านจากของจริง */
+function ctOdRev(pl, tpl, ctx){
+  var T = tpl || ctTpl(), r = 0;
+  (T.lines || []).forEach(function(ln){
+    if(!ln.od) return;
+    if(ctGrpCfg(pl, ln.g || 'อื่นๆ').off) return;
+    var L = ctEffLine(ln, pl); if(L.off) return;
+    var C = ctOdCfg(pl, ln), pct = ctOdPct(ln), pax = +ctx.pax || 0;
+    var aq = pct ? Math.round(pax * (+C.aQ || 0) / 100) : (+C.aQ || 0);
+    var uq = pct ? Math.round(pax * (+C.uQ || 0) / 100) : (+C.uQ || 0);
+    r += aq * (+C.aR || 0) + uq * (+C.uR || 0);
+  });
+  return r;
+}
 function ctCalc(pl, ctx, tpl){
   var T = tpl || ctTpl(), R = ctVatR(T);
   var out = { gross:0, vin:0, net:0, fixNet:0, varNet:0, rows:[] };
@@ -55987,7 +56046,13 @@ function ctCalc(pl, ctx, tpl){
     if(ctGrpCfg(pl, g).off) return;                       // §category · ปิดทั้งหมวด
     var L = ctEffLine(ln, pl); if(L.off) return;
     var amt = 0, fx = 0, vr = 0;
-    L.parts.forEach(function(p){ var a = ctPartAmt(p, ctx); amt += a; if(p.k === 'var') vr += a; else fx += a; });
+    if(ln.od){
+      /* §ctOd · ราคาต่อหน่วย × จำนวนที่สั่ง · ไม่เกี่ยวกับจำนวนหัวบนเรือ */
+      var _q = ctOdQty(pl, ln, ctx);
+      L.parts.forEach(function(p){ var a = (+p.u || 0) * _q; amt += a; vr += a; });
+    } else {
+      L.parts.forEach(function(p){ var a = ctPartAmt(p, ctx); amt += a; if(p.k === 'var') vr += a; else fx += a; });
+    }
     var m = ctGrpMul(pl, g);                              // §category · ปรับ ±% ทั้งหมวด
     if(m !== 1){ amt *= m; fx *= m; vr *= m; }
     var v = L.vat ? amt * R : 0;
@@ -56020,7 +56085,9 @@ function ctProfitAt(pl, n, tpl){
   var pCh = (pl.priceCh != null && pl.priceCh !== '') ? (+pl.priceCh || 0) : pAd;
   var ch = ctx.paxCh, ad = Math.max(0, n - ch);
   var rev = (ad * pAd + ch * pCh) * (1 - R) * (1 - (+pl.comm || 0) / 100);
-  return { p:rev - c.net, rev:rev, c:c, ad:ad, ch:ch };
+  /* §ctOd · เงินที่บริษัทได้จากของที่ลูกค้าสั่งเพิ่ม · ไม่โดนคอมของทัวร์หลัก */
+  var odR = ctOdRev(pl, T, ctx) * (1 - R);
+  return { p:rev + odR - c.net, rev:rev + odR, revTour:rev, revOd:odR, c:c, ad:ad, ch:ch };
 }
 function ctStepCount(pl, n, tpl){
   var T = tpl || ctTpl(), t = 0;
@@ -56143,6 +56210,56 @@ function pxPax(date, bid){
   o.th=Math.round(o.th); o.fr=Math.max(0,o.tot-o.th);
   return o;
 }
+/* §pxOd · หางยาวที่ลูกค้าสั่งจริงของลำนั้น · เหมากี่ลำ จอยกี่คน
+   เดิม P&L เอาเรตต่อหัวไปคูณหัวทั้งลำ ทั้งที่คนซื้อจริงมีไม่กี่คน */
+function pxLongtail(date, bid){
+  var chtr = 0, join = 0;
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    var t=ckTripOn(b,date); if(!t) return;
+    var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
+    if((O.boatId||t.charterBoatId)!==bid) return;
+    if(typeof pckVoidInfo==='function' && pckVoidInfo(b,date,t)) return;
+    if(typeof bkV2AddOnFlags!=='function') return;
+    var f=bkV2AddOnFlags(b, t.routeId);
+    var pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
+    if(f.charter) chtr += (+f.charterQty||1); else if(f.join) join += pax;
+    try{ if(typeof bkV2LongtailExtraPax==='function') join += (bkV2LongtailExtraPax(b.id,date)||0); }catch(_){}
+    try{ if(typeof bkV2LongtailCharterExtraBoats==='function') chtr += (bkV2LongtailCharterExtraBoats(b.id,date)||0); }catch(_){}
+  });
+  return { chtr:chtr, join:join };
+}
+/* §pxOd · ของที่ขายเพิ่มหน้างาน · เก็บอยู่สองที่ (ขายเพิ่ม กับ อัพเกรด) โครงเดียวกัน
+   นับเฉพาะ "บริษัทได้" ไม่ใช่ยอดขาย · ค่าคอมหักอยู่ในนั้นแล้ว จึงไม่ต้องมีบรรทัดต้นทุนค่าคอม
+   ผูกเข้าลำตามใบจองที่ขายให้ · ทุกรายการในระบบมีเลขใบจองครบ */
+function pxUpsell(date, bid){
+  var rows=[], sell=0, comp=0, comm=0, mine={};
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    var t=ckTripOn(b,date); if(!t) return;
+    var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
+    if((O.boatId||t.charterBoatId)!==bid) return;
+    mine[b.id]=b; if(b.code) mine[b.code]=b;
+    /* อัพเกรดผูกกับใบจอง ไม่ได้ผูกกับวัน · ใบที่มีหลายทริปให้ลงวันแรกวันเดียว กันนับซ้ำ */
+    var first=((b.trips||[])[0]||{}).date||'';
+    if(first && first!==date) return;
+    (b.upgrades||[]).forEach(function(u){
+      var c=+u.toCompany||0, m=+u.commission||0, sp=+u.sellPrice||0;
+      rows.push({ vc:(b.voucherRef||b.code||b.id||''), label:u.label||'อัพเกรด', sell:sp, comp:c, comm:m,
+                  seller:u.seller||'', got:!!u.collected, kind:'upg' });
+      sell+=sp; comp+=c; comm+=m;
+    });
+  });
+  (typeof SB_EXTRAS!=='undefined'?SB_EXTRAS:[]).forEach(function(e){
+    if(String(e.tripDate||'')!==date) return;
+    var b=mine[e.bookingId]; if(!b) return;
+    var sp=+e.total||0, c=+e.toCompany||0, m=+e.commission||0;
+    rows.push({ vc:(b.voucherRef||b.code||b.id||''), label:e.service||'ขายเพิ่ม', sell:sp, comp:c, comm:m,
+                seller:e.seller||'', got:(e.settle==='done'), kind:'ex' });
+    sell+=sp; comp+=c; comm+=m;
+  });
+  return { rows:rows, sell:Math.round(sell), company:Math.round(comp), comm:Math.round(comm) };
+}
 /* §pxAgent · เงินของลำนี้มาจากเจ้าไหนบ้าง · เงื่อนไขคัดใบจองต้องตรงกับ pxPax เป๊ะ
    ไม่งั้นยอดรวมสองที่จะไม่ตรงกัน แล้วไม่มีใครรู้ว่าอันไหนถูก */
 function pxAgents(date, bid){
@@ -56212,7 +56329,10 @@ function pxTrip(date, bid){
   var T=(typeof ctTpl==='function')?ctTpl():null;
   var R=(typeof ctVatR==='function')?ctVatR(T):0;
   var fuelPr=(typeof flFuelPriceForBoat==='function')?(flFuelPriceForBoat(date,boat)||0):0;
+  /* §pxOd · จำนวนที่ลูกค้าสั่งจริงของลำนี้ · ป้อนเข้าสูตรแทนจำนวนที่คาดไว้ในแผน */
+  var LT=(typeof pxLongtail==='function')?pxLongtail(date,bid):{chtr:0,join:0};
   var ctx={ eng:((+boat.engineCount||3)>=4?'4EN':'3EN'), boats:1, fuel:fuelPr,
+            odQty:{ ltj:LT.join, ltc:LT.chtr },
             pax:PX.tot, paxTH:PX.th, paxFR:PX.fr,
             /* §ctChd · ทารกนับรวมกับเด็ก · ไม่มีทางที่ทารกจะกินเท่าผู้ใหญ่ */
             paxCh:Math.min(PX.tot, (PX.chd||0) + (PX.inf||0)) };
@@ -56268,13 +56388,19 @@ function pxTrip(date, bid){
     var real=a ? (a.amt - (r.vat ? a.amt*R : 0)) : null;
     var src = (real!=null) ? 'r' : (pxIsOvr(r.id, r.g) ? 'p' : 'f');
     var why = a ? a.why : '';
+    /* §pxOd · จำนวนมาจากใบจองจริง ไม่ใช่ตัวประมาณ · ป้ายจึงเป็น "ของจริง" */
+    if(r.id==='ltj' && real==null){ src='r'; why='จอยจริง '+LT.join+' คน (ไม่ใช่ '+PX.tot+' หัวทั้งลำ)'; }
+    if(r.id==='ltc' && real==null){ src='r'; why='เหมาจริง '+LT.chtr+' ลำ'; }
     if(r.id==='meal' && real==null && mealWait){ src='w'; why=mealWait.why; }
     return { id:r.id, g:r.g, l:r.l, vat:!!r.vat, est:est, real:real, why:why, src:src,
              gross:(a?a.amt:null), use:(real!=null?real:est) };
   });
   var cost=0; rows.forEach(function(r){ cost+=r.use; });
   var revGross=PX.rev;
-  var revNet=revGross*(1-R);                          /* รายได้ไม่รวม VAT ขาย */
+  /* §pxOd · เงินขายเพิ่มหน้างานไม่ได้อยู่ในยอดใบจอง · ต้องบวกเข้ามาเอง
+     บวกเฉพาะส่วนที่บริษัทได้ ค่าคอมจึงไม่ต้องตั้งเป็นต้นทุนอีกบรรทัด */
+  var UP=(typeof pxUpsell==='function')?pxUpsell(date,bid):{rows:[],sell:0,company:0,comm:0};
+  var revNet=(revGross+UP.company)*(1-R);             /* รายได้ไม่รวม VAT ขาย */
   /* §pxFreeze · ปิดยอดแล้ว = ตัวเลขเงินหยุดนิ่ง · แก้สูตรหรือขึ้นราคาทีหลังต้องไม่ย้อนมาขยับ
      หัวคนยังคิดสดอยู่ เพราะนั่นเป็นข้อเท็จจริงของวันนั้น ไม่ใช่ราคาที่เราตั้งเอง */
   var frozen=null;
@@ -56298,7 +56424,7 @@ function pxTrip(date, bid){
         price:(PX.tot?revGross/PX.tot:0), comm:0}), Math.max(1,cap||60), T);
   } }catch(_){}
   return { bid:bid, boat:boat, name:boat.name||bid, rid:rid, route:rt, dep:(rt.times&&rt.times[0])||'',
-           px:PX, ctx:ctx, plan:plan, rows:rows, cost:Math.round(cost),
+           px:PX, ctx:ctx, plan:plan, rows:rows, cost:Math.round(cost), up:UP, lt:LT,
            revGross:Math.round(revGross), rev:Math.round(revNet),
            profit:Math.round(revNet-cost), st:st, nReal:nReal, closed:!!A.closed, frozen:frozen, be:be,
            fuelPr:fuelPr };
@@ -57111,6 +57237,64 @@ function ctPlanHtml(){
           + '\u0e40\u0e14\u0e47\u0e01 0% = \u0e17\u0e38\u0e01\u0e2b\u0e31\u0e27\u0e08\u0e48\u0e32\u0e22\u0e23\u0e32\u0e04\u0e32\u0e40\u0e14\u0e35\u0e22\u0e27\u0e40\u0e2b\u0e21\u0e37\u0e2d\u0e19\u0e40\u0e14\u0e34\u0e21')
     + '</div></div>';
 
+  /* §ctOd · ของที่ลูกค้าสั่งเพิ่ม · แยกสองช่องทาง แยกรายเส้นทาง (แผน 1 แผน = 1 เส้นทาง)
+     ต้นทุนยังมาจากสูตรกลาง · ที่กรอกตรงนี้คือจำนวนที่คาดกับเงินที่บริษัทได้จริงต่อหน่วย */
+  var odLines = (T.lines || []).filter(function(ln){ return ln.od; });
+  var odHtml = '';
+  if(odLines.length){
+    var odN = function(v, fk, k, ln){
+      return '<input class="ct-in" data-fk="' + fk + '" value="' + (v === 0 ? '0' : (v || '')) + '" '
+        + 'oninput="ctOdSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',\'' + k + '\',this.value)" '
+        + 'style="width:62px;text-align:right">'; };
+    var odRows = odLines.map(function(ln){
+      var C = ctOdCfg(pl, ln), pct = ctOdPct(ln), L = ctEffLine(ln, pl);
+      var unit = +((L.parts || [])[0] || {}).u || 0;
+      var u1 = pct ? 'คน' : 'ลำ';
+      var aq = pct ? Math.round(pax * (+C.aQ || 0) / 100) : (+C.aQ || 0);
+      var uq = pct ? Math.round(pax * (+C.uQ || 0) / 100) : (+C.uQ || 0);
+      var mg = (+C.aR || 0) - unit, mg2 = (+C.uR || 0) - unit;
+      var off = L.off || ctGrpCfg(pl, ln.g || 'อื่นๆ').off;
+      var F = 'od' + pl.id + ln.id;
+      return '<tr' + (off ? ' style="opacity:.45"' : '') + '><td class="ct-nm"><b>' + ctE(ln.l) + '</b>'
+        + '<div class="ct-nmsub">ทุน ' + ctB(unit) + '/' + u1 + ' จากสูตร'
+          + (off ? ' · <b style="color:#A05A1A">ปิดอยู่</b>' : '') + '</div></td>'
+        + '<td style="text-align:right">' + odN(C.aQ, F + 'aQ', 'aQ', ln)
+          + '<span class="ct-u"> ' + (pct ? '%' : u1) + '</span></td>'
+        + '<td style="text-align:right">' + odN(C.aR, F + 'aR', 'aR', ln) + '</td>'
+        + '<td style="text-align:right">' + odN(C.uQ, F + 'uQ', 'uQ', ln)
+          + '<span class="ct-u"> ' + (pct ? '%' : u1) + '</span></td>'
+        + '<td style="text-align:right">' + odN(C.uR, F + 'uR', 'uR', ln) + '</td>'
+        + '<td style="text-align:right"><span class="ct-u">' + (aq + uq) + ' ' + u1 + '</span></td>'
+        + '<td style="text-align:right;font-weight:700;color:' + ((mg > 0 || mg2 > 0) ? '#0d7a5f' : 'var(--sd400)') + '">'
+          + ((C.aR || C.uR) ? ((mg >= 0 ? '+' : '−') + ctB(Math.abs(mg))) : '—') + '</td></tr>';
+    }).join('');
+    var odRev = ctOdRev(pl, T, { pax:pax });
+    var odCost = 0;
+    odLines.forEach(function(ln){
+      if(ctGrpCfg(pl, ln.g || 'อื่นๆ').off) return;
+      var L = ctEffLine(ln, pl); if(L.off) return;
+      odCost += (+((L.parts || [])[0] || {}).u || 0) * ctOdQty(pl, ln, { pax:pax });
+    });
+    odHtml = '<div class="ct-card ct-catcard"><div class="ct-cath"><span>' + ctIcon('folder', 15)
+      + '<b>ของที่ลูกค้าสั่งเพิ่ม</b></span>'
+      + '<span class="ct-cnt">ที่ ' + pax + ' คน · ทุน ' + ctB(odCost)
+        + ' · รายได้ ' + ctB(odRev) + ' · เหลือ <b style="color:'
+        + ((odRev - odCost) >= 0 ? '#0d7a5f' : '#A05A1A') + '">'
+        + ((odRev - odCost) >= 0 ? '+' : '−') + ctB(Math.abs(odRev - odCost)) + '</b></span></div>'
+      + '<div class="ct-scroll"><table class="ct-mtbl">'
+      + '<colgroup><col><col style="width:96px"><col style="width:104px"><col style="width:96px"><col style="width:104px"><col style="width:86px"><col style="width:96px"></colgroup>'
+      + '<thead><tr><th>รายการ</th>'
+      + '<th style="text-align:right">เอเจนต์<br>คาดว่าสั่ง</th><th style="text-align:right">บริษัทได้/หน่วย</th>'
+      + '<th style="text-align:right">ขายเพิ่ม<br>คาดว่าสั่ง</th><th style="text-align:right">บริษัทได้/หน่วย</th>'
+      + '<th style="text-align:right">รวมที่สั่ง</th><th style="text-align:right">กำไร/หน่วย</th></tr></thead>'
+      + '<tbody>' + odRows + '</tbody></table></div>'
+      + '<div class="ct-hint">ของพวกนี้ไม่ใช่ต้นทุนของทุกหัว · ลูกค้าสั่งเท่าไหร่คิดเท่านั้น '
+      + 'และมีรายได้ของมันเองด้วย จึงไม่ต้องปิดบรรทัดทิ้งอีกต่อไป<br>'
+      + '<b>บริษัทได้/หน่วย</b> คือเงินที่เหลือหลังหักค่าคอมแล้ว (ขาย ฿2,500 คอม ฿750 → ใส่ ฿1,750) '
+      + 'จึงไม่ต้องตั้งบรรทัดต้นทุนค่าคอมแยก<br>'
+      + '<b>P&amp;L รายทริป</b>ไม่ใช้ตัวเลขที่คาดในตารางนี้ · ใช้จำนวนที่สั่งจริงกับเงินที่เก็บได้จริงจากใบจอง</div></div>';
+  }
+
   // ── การ์ดตัวเลขสำคัญ ──
   var kpi = '<div class="ct-kpis">'
     + '<div class="ct-k mint"><div class="ct-k-top"><div><span class="ct-k-lb">จุดคุ้มทุน · BREAK-EVEN</span>'
@@ -57280,7 +57464,7 @@ function ctPlanHtml(){
     + '<div class="ct-ifoot"><span>รวมระยะทาง</span><b>' + (km == null ? '—' : km.toLocaleString()) + ' กม.</b></div>'
     + '</div></div>';
 
-  return '<div class="ct-wrap">' + side + '<div class="ct-main">' + head + params + kpi
+  return '<div class="ct-wrap">' + side + '<div class="ct-main">' + head + params + odHtml + kpi
     + '<div class="ct-trio">' + itin + chart + pnl + '</div>'
     + '<div class="ct-duo">' + tier + tbl + '</div></div></div>';
 }
