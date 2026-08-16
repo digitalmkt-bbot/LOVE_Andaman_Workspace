@@ -50665,8 +50665,9 @@ function pckKitchenHtml(border, boats, date){
         + (V?('<button onclick="pckMealSend(\''+bid+'\')" style="border:1px solid '
               +(sent?'#BFE0CD':'#0F172A')+';background:'+(sent?'#ECFDF5':'#0F172A')+';color:'+(sent?'#047857':'#fff')
               +';border-radius:10px;padding:6px 14px;font:700 11.5px inherit;cursor:pointer">'
-              +(sent?'&#10003; ส่งแล้ว &#3647;'+Math.round(sent.amount||0).toLocaleString()+' · เปิดใบอีกครั้ง'
-                    :'ส่งรายการให้ร้าน')+'</button>'):'')
+              +(sent?('&#10003; ส่งแล้ว &#3647;'+Math.round(sent.amount||0).toLocaleString()
+                      +(mvLunchOk(rid)?' · เปิดใบอีกครั้ง':''))
+                    :(mvLunchOk(rid)?'ส่งรายการให้ร้าน · เปิดใบ':'บันทึกยอดอาหาร'))+'</button>'):'')
       +'</div>'
       + (body?('<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+body+'</div>'):'')
       + (al.length?('<div style="background:#FEF2F2;border:1px solid #F5CFCF;color:#B91C1C;border-radius:10px;'
@@ -50687,112 +50688,155 @@ function pckKitchenHtml(border, boats, date){
 /* ═══ §mealSlip · ใบสั่งอาหาร ════════════════════════════════════════════════
    ภาษาไทยทั้งใบ · คนอ่านคือแม่ครัว ไม่ใช่ลูกค้า
    ═══════════════════════════════════════════════════════════════════════════ */
-function mvOrderSlip(date, bid, V, C, al, amt, rid){
+/* หนึ่งบรรทัดต่อหนึ่งใบจอง · ชื่อ Lead อย่างเดียว
+   จำนวนคนเป็นตัวเลขหลังหักคนไม่มาแล้ว ทั้งฝั่งรถและฝั่งท่า
+   Special Request รวมสามทาง — ช่องที่ติ๊ก · รายการแพ้อาหารที่มีชื่อ · ข้อความที่พิมพ์เอง
+   ของจริงคนกรอกเป็นข้อความล้วนเกือบทั้งหมด จึงเอาข้อความดิบขึ้นใบตรง ๆ ไม่แปลงเป็นตัวเลข */
+function mvLunchRows(date, bid){
+  var out=[], PT=(typeof bkV2PaxTot==='function')?bkV2PaxTot:function(){return 0;};
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    var t=ckTripOn(b,date); if(!t) return;
+    var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
+    if((O.boatId||t.charterBoatId)!==bid) return;
+    if(typeof pckVoidInfo==='function' && pckVoidInfo(b,date,t)) return;   /* ปิดรายการแล้ว ไม่ต้องทำอาหาร */
+    var booked=ckBookedPax(t), exp=(typeof pckExpected==='function')?pckExpected(b,date,booked):booked;
+    var ck=O.pierCheckin||null, ns=(ck&&ck.at)?(+ck.noShow||0):0;
+    var tot=Math.max(0,((exp!=null?exp:booked)||0)-ns);
+    var px=t.pax||{};
+    var chd=Math.min(PT(px,'chd'), tot);
+    var inf=Math.min(PT(px,'inf'), Math.max(0,tot-chd));
+    var foc=Math.min(PT(px,'foc'), Math.max(0,tot-chd-inf));
+    var ad =Math.max(0, tot-chd-inf-foc);
+    if(!(ad+chd+inf+foc)) return;
+    var sm=b.specialMeals||{}, sr=[];
+    if(sm.halal) sr.push('ฮาลาล '+sm.halal);
+    if(sm.veg)   sr.push('มังสวิรัติ '+sm.veg);
+    if(sm.vegan) sr.push('วีแกน '+sm.vegan);
+    (Array.isArray(sm.allergyList)?sm.allergyList:[]).forEach(function(a){
+      if(a&&a.name) sr.push('แพ้ '+a.name+' ×'+Math.max(1,+a.qty||1)); });
+    if(String(sm.allergies||'').trim()) sr.push(String(sm.allergies).trim());
+    out.push({lead:String(b.leadPax||'').trim()||'—', ad:ad, chd:chd, inf:inf, foc:foc, sr:sr.join('\n')});
+  });
+  out.sort(function(a,b){ return String(a.lead).localeCompare(String(b.lead),'th'); });
+  return out;
+}
+/* ท่าที่ใช้ใบแบบนี้ได้ · ทับละมุใช้ใบคนละแบบ ยังไม่ได้ทำ */
+function mvLunchPier(rid){
+  var rt=(typeof getRoute==='function')?getRoute(rid):null;
+  return (rt&&rt.pier)||'';
+}
+function mvLunchOk(rid){ return mvLunchPier(rid)==='panwa'; }
+
+/* ═══ §lunch · ใบสั่งอาหาร ═══════════════════════════════════════════════
+   ภาษาไทยทั้งใบ · คนอ่านคือแม่ครัว ไม่ใช่ลูกค้า
+   ═══════════════════════════════════════════════════════════════════════ */
+function mvOrderSlip(date, bid, V, rid){
   var e=ckEsc;
   var rt=(typeof getRoute==='function'?getRoute(rid):null)||{};
+  var boat=(typeof getBoat==='function'?getBoat(bid):null)||{};
+  var bcol=(typeof pckBoatColor==='function')?pckBoatColor(bid):(boat.color||'#1E5FA8');
+  var bink=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(bcol):'#fff';
   var DW=(typeof pjDateWords==='function')?pjDateWords(date):{big:date};
-  var dep=(typeof pckDepOf==='function')?pckDepOf(rid):'';
-  var css='@page{size:A5 portrait;margin:8mm}'
-   /* สีบนใบนี้เป็นข้อมูล · กล่องแดงคือแพ้อาหาร ตัดสีทิ้งแล้วมันกลายเป็นกล่องเปล่า */
+  var J=(typeof pjOf==='function')?pjOf(date,bid):{};
+  var guides=(typeof pjGuides==='function')?pjGuides(date,bid):[];
+  var island=(J.island||[]).filter(Boolean);
+  var stNames=island.map(function(id){ return (typeof pjStaffName==='function')?pjStaffName(id):id; }).filter(Boolean);
+  var nCrew=(J.cap?1:0)+(J.asst?1:0)+((J.crew||[]).filter(Boolean).length);
+  var rows=mvLunchRows(date,bid);
+  var T={ad:0,chd:0,inf:0,foc:0};
+  rows.forEach(function(r){ T.ad+=r.ad; T.chd+=r.chd; T.inf+=r.inf; T.foc+=r.foc; });
+
+  var css='@page{size:A4 portrait;margin:9mm}'
+   /* สีบนใบนี้เป็นข้อมูล · เขียวคือแถวที่ครัวต้องทำต่างจากคนอื่น ตัดสีทิ้งแล้วหาไม่เจอ */
    +'*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}'
    +'body{margin:0;background:#EEF1F5;font-family:"DM Sans","Noto Sans Thai",sans-serif;color:#0F172A}'
    +'@media screen{body{padding:18px 16px 60px}}'
-   +'.tb{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:620px;margin:0 auto 14px}'
+   +'.tb{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:800px;margin:0 auto 14px}'
    +'.tb button{border:1px solid #E2E8F0;background:#fff;border-radius:11px;padding:8px 15px;'
      +'font:700 12.5px inherit;color:#475569;cursor:pointer}'
    +'.tb button.pri{background:#0F172A;border-color:#0F172A;color:#fff}'
    +'.tb button.img{background:#06C755;border-color:#06C755;color:#fff}'
    +'.tb button[disabled]{opacity:.55;cursor:progress}'
    +'.tb .hint{font-size:11px;color:#94A3B8}'
-   +'.slip{width:620px;margin:0 auto;background:#fff;border-radius:20px;overflow:hidden;'
-     +'box-shadow:0 14px 40px -10px rgba(15,23,42,.16)}'
+   +'.sheet{width:800px;margin:0 auto;background:#fff;padding:14px 16px 18px;border:1px solid #CBD5E1;'
+     +'border-radius:8px;box-shadow:0 14px 40px -12px rgba(15,23,42,.16)}'
    +'@media print{body{background:#fff;padding:0}.tb{display:none}'
-     +'.slip{width:auto;border-radius:0;box-shadow:none}}'
-   +'.sl-top{padding:16px 22px 13px;border-bottom:3px solid #5B289A;display:flex;align-items:center;'
-     +'justify-content:space-between;gap:12px}'
-   +'.sl-top img{height:26px;width:auto;display:block}'
-   +'.sl-top .d1{font-size:15px;font-weight:800;color:#5B289A;text-align:right}'
-   +'.sl-top .d2{font-size:12px;color:#64748B;margin-top:2px;text-align:right}'
-   +'.sl-venue{background:#F7F3FF;padding:12px 22px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}'
-   +'.sl-venue .nm{font-size:19px;font-weight:800;color:#5B289A}'
-   +'.sl-venue .pl{font-size:12.5px;color:#7C5BA8}'
-   +".sl-venue .tel{margin-left:auto;font:700 13px 'DM Mono',monospace;color:#5B289A}"
-   +'.sl-trip{padding:12px 22px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-bottom:1px solid #F1F5F9}'
-   +'.sl-trip .bo{font-size:16px;font-weight:800}'
-   +'.sl-trip .rt{color:#fff;border-radius:999px;padding:3px 12px;font-size:12px;font-weight:700}'
-   +".sl-trip .tm{font:800 14px 'DM Mono',monospace;background:#F1F5F9;border-radius:8px;padding:3px 11px;color:#334155}"
-   +".sl-trip .eta{font:800 14px 'DM Mono',monospace;background:#ECFDF5;border:1px solid #BFE0CD;"
-     +'border-radius:8px;padding:2px 11px;color:#047857}'
-   +'.sl-head{display:grid;grid-template-columns:1fr 1fr 1.25fr;border-bottom:1px solid #F1F5F9}'
-   +'.sl-head>div{padding:15px 10px;text-align:center;border-right:1px solid #F1F5F9}'
-   +'.sl-head>div:last-child{border-right:0;background:#FAFBFC}'
-   +'.sl-head .k{font-size:11px;font-weight:800;letter-spacing:.06em;color:#94A3B8;text-transform:uppercase}'
-   +".sl-head .v{font:800 38px 'DM Mono',monospace;line-height:1.05;margin-top:3px;letter-spacing:-.02em}"
-   +'.sl-head .u{font-size:11px;color:#94A3B8;margin-top:1px}'
-   +'.sl-head .tot .v{color:#5B289A}'
-   +'.sl-sec{padding:13px 22px 2px}'
-   +'.sl-sec .h{font-size:11px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#94A3B8;margin-bottom:8px}'
-   +'.sp{display:flex;align-items:center;gap:10px;padding:8px 13px;border:1px solid #E7EBF0;border-radius:12px;margin-bottom:7px}'
-   +".sp .n{font:800 20px 'DM Mono',monospace;min-width:32px;text-align:center}"
-   +'.sp .t{font-size:14px;font-weight:700}'
-   +'.sp .s{font-size:11.5px;color:#94A3B8;margin-left:auto}'
-   +'.sp.veg{background:#F1FAF6;border-color:#BEE0D2}.sp.veg .n,.sp.veg .t{color:#0F6E56}'
-   +'.sp.hal{background:#F0F6FD;border-color:#C3D9F0}.sp.hal .n,.sp.hal .t{color:#185FA5}'
-   +'.alg{margin:6px 22px 0;background:#FEF2F2;border:2px solid #E9A8A8;border-radius:14px;padding:12px 15px}'
-   +'.alg .h{font-size:13.5px;font-weight:800;color:#B91C1C;margin-bottom:7px}'
-   +'.alg .it{display:flex;align-items:center;gap:9px;padding:6px 0;border-top:1px solid #F3D3D3}'
-   +'.alg .it:first-of-type{border-top:0}'
-   +".alg .it .n{font:800 17px 'DM Mono',monospace;color:#B91C1C;min-width:30px}"
-   +'.alg .it .t{font-size:15px;font-weight:700;color:#7F1D1D}'
-   +'.alg .note{font-size:11.5px;color:#B91C1C;margin-top:7px;font-weight:600}'
-   +'.sl-foot{padding:12px 22px 16px;margin-top:15px;border-top:1px solid #F1F5F9;display:flex;gap:12px;'
-     +'align-items:center;flex-wrap:wrap;font-size:12px;color:#64748B}'
-   +".sl-foot b{color:#0F172A;font-family:'DM Mono',monospace}";
+     +'.sheet{width:auto;border:0;border-radius:0;box-shadow:none;padding:0}}'
+   +'.ttl{text-align:center;font-size:26px;font-weight:800;letter-spacing:-.2px;line-height:1.15}'
+   +'.dat{text-align:center;font-size:17px;font-weight:700;margin-top:1px;margin-bottom:9px}'
+   +'table{border-collapse:collapse;width:100%}td,th{border:1px solid #9BA9BC}'
+   +'table.hd td{padding:5px 9px;font-size:13.5px}'
+   +'table.hd td.k{background:#C9D9F0;font-weight:800;width:132px}'
+   +'table.hd td.v{background:#DCE6F5;font-weight:600}'
+   +'table.hd td.b{background:#8DB4E2;font-weight:600}'
+   +'table.hd td.boat{font-size:20px;font-weight:800;text-align:center}'
+   +'table.hd td.rest{background:#FFF200;color:#C00000;font-weight:800;font-size:16px;text-align:center;padding:6px 10px}'
+   +'table.hd td.restsub{background:#FFF9B8;color:#8A5A00;font-weight:600;font-size:11.5px;text-align:center;padding:3px 10px}'
+   +'table.hd tr.crew td{background:#4F81BD;color:#fff;font-weight:800;font-size:14px;text-align:center;padding:6px 9px}'
+   +'table.hd tr.crew td.k{text-align:left;width:132px}'
+   +'table.hd td.blank{background:#DCE6F5}table.hd td.blank2{background:#8DB4E2}'
+   +'table.hd td.none{color:#6E8199;font-weight:500}'
+   +'table.gs th{background:#C9D9F0;font-size:12.5px;font-weight:800;padding:6px 8px}'
+   +'table.gs td{padding:6px 9px;font-size:13px;vertical-align:middle}'
+   +'table.gs td.nm{font-weight:600}'
+   +"table.gs td.n{text-align:center;font:700 14px 'DM Mono',monospace}"
+   +'table.gs td.sr{background:#00E64D;font-weight:700;font-size:12.5px;line-height:1.5;text-align:center;color:#0B3D1A}'
+   +'table.gs td.sr.l{text-align:left}'
+   +'table.gs tr.tot td{background:#C9D9F0;font-weight:800}'
+   +'table.gs tr.tot td.lb{text-align:right;font-size:17px}'
+   +'table.gs tr.tot td.n{font-size:17px}';
 
-  var sp='';
-  if(C.veg)   sp+='<div class="sp veg"><span class="n">'+C.veg+'</span><span class="t">มังสวิรัติ</span><span class="s">ไม่มีเนื้อสัตว์ทุกชนิด</span></div>';
-  if(C.vegan) sp+='<div class="sp veg"><span class="n">'+C.vegan+'</span><span class="t">วีแกน</span><span class="s">ไม่มีเนื้อสัตว์ ไข่ นม</span></div>';
-  if(C.halal) sp+='<div class="sp hal"><span class="n">'+C.halal+'</span><span class="t">ฮาลาล</span><span class="s">ไม่มีหมู · ไม่มีแอลกอฮอล์</span></div>';
+  var sub=[V.place||'', V.eta?('เรือถึง ~'+V.eta):'', V.phone||''].filter(Boolean).join(' · ');
+  /* บรรทัดรายละเอียดร้านขึ้นแถวเดียว ใต้ชื่อร้านพอดี · ซ้ำทุกแถวแล้วรก */
+  var subCell=function(first){ return (first&&sub) ? ('<td class="restsub">'+e(sub)+'</td>') : '<td class="blank"></td>'; };
+  var gList = guides.length ? guides : [null];
+  var gRows = gList.map(function(g,i){
+    return '<tr><td class="k">ไกด์</td>'
+      +'<td class="v'+(g?'':' none')+'" colspan="2">'+(g?e(g):'— ยังไม่ได้จัดไกด์ —')+'</td>'
+      +'<td class="blank"></td>'+subCell(i===0)+'</tr>'; }).join('');
 
-  var slip='<div class="slip" id="sheet">'
-   +'<div class="sl-top"><img src="'+LA_LOGO_FULL+'" alt="LOVE andaman">'
-     +'<div><div class="d1">ใบสั่งอาหารกลางวัน</div><div class="d2">'+e(DW.big||date)+'</div></div></div>'
-   +'<div class="sl-venue"><span class="nm">'+e(V.name||'')+'</span>'
-     +(V.place?('<span class="pl">· '+e(V.place)+'</span>'):'')
-     +(V.phone?('<span class="tel">'+e(V.phone)+'</span>'):'')+'</div>'
-   +'<div class="sl-trip"><span class="bo">เรือ '+e(pckBoatName(bid))+'</span>'
-     +(rt.name?('<span class="rt" style="background:'+e(rt.color||'#64748B')+'">'+e(rt.name)+'</span>'):'')
-     +(dep?('<span class="tm">ออก '+e(dep)+'</span>'):'')
-     +(V.eta?('<span class="eta">ถึงเกาะ ~'+e(V.eta)+'</span>'):'')+'</div>'
-   +'<div class="sl-head">'
-     +'<div><div class="k">ผู้ใหญ่</div><div class="v">'+C.ad+'</div><div class="u">ที่</div></div>'
-     +'<div><div class="k">เด็ก</div><div class="v">'+C.chd+'</div><div class="u">ที่</div></div>'
-     +'<div class="tot"><div class="k">รวมทั้งหมด</div><div class="v">'+(C.ad+C.chd)+'</div>'
-       +'<div class="u">ที่'+(C.inf?(' · ทารก '+C.inf+' ไม่นับ'):'')+'</div></div>'
-   +'</div>'
-   +(sp?('<div class="sl-sec"><div class="h">อาหารพิเศษ</div>'+sp+'</div>'):'')
-   +(al.length?('<div class="alg"><div class="h">&#9888; แพ้อาหาร — ต้องแยกจานให้ชัดเจน</div>'
-      + al.map(function(x){ return '<div class="it"><span class="n">&times;'+x.qty+'</span><span class="t">'+e(x.name)+'</span></div>'; }).join('')
-      +'<div class="note">กรุณาโทรกลับยืนยันว่าแยกจานได้ ก่อนเรือถึง</div></div>'):'')
-   /* §mealSlip2 · ไม่มียอดเงินบนใบ · ใบนี้อยู่ในมือแม่ครัวกับเด็กเรือ
-      เขาต้องทำอาหารให้ถูกจำนวนถูกชนิด · ราคาเป็นเรื่องระหว่างออฟฟิศกับเจ้าของร้าน
-      ต้นทุนยังถูกบันทึกครบเหมือนเดิม แค่ไม่พิมพ์ลงบนกระดาษที่ออกไปข้างนอก */
-   +'<div class="sl-foot"><span>ส่งโดย <b>'+e((typeof ckMe==="function")?ckMe():"")+'</b> · '
-     +e(new Date().toLocaleString('th-TH'))+'</span>'
-     +'<span style="margin-left:auto">ติดต่อกลับ <b>088-765-4678</b></span></div>'
+  var body=rows.map(function(r){
+    return '<tr><td class="nm">'+e(r.lead)+'</td>'
+      +'<td class="n">'+(r.ad||'')+'</td><td class="n">'+(r.chd||'')+'</td>'
+      +'<td class="n">'+(r.inf||'')+'</td><td class="n">'+(r.foc||'')+'</td>'
+      +(r.sr ? ('<td class="sr'+(r.sr.length>40?' l':'')+'">'+e(r.sr).replace(/\n/g,'<br>')+'</td>') : '<td></td>')
+      +'</tr>'; }).join('');
+
+  var sheet='<div class="sheet" id="sheet">'
+   +'<div class="ttl">Love Andaman - Lunch</div>'
+   +'<div class="dat">'+e(DW.big||date)+'</div>'
+   +'<table class="hd"><colgroup><col style="width:132px"><col><col style="width:70px"><col style="width:70px"><col style="width:250px"></colgroup>'
+     +'<tr><td class="k">เรือ</td>'
+       +'<td class="boat" colspan="2" style="background:'+e(bcol)+';color:'+bink+'">'+e(boat.name||bid)+'</td>'
+       +'<td class="blank"></td><td class="rest">'+e(V.name||'')+'</td></tr>'
+     + gRows
+     +'<tr><td class="k">Staff</td>'
+       +'<td class="b'+(stNames.length?'':' none')+'" colspan="2">'
+       +(stNames.length?e(stNames.join(' / ')):'— ไม่ได้จัด Island Staff ลำนี้ —')+'</td>'
+       +'<td class="blank2"></td><td class="blank"></td></tr>'
+     +'<tr class="crew"><td class="k">ทีมกัปตัน เด็กเรือ</td><td colspan="2">'+(nCrew||'—')+'</td>'
+       +'<td colspan="2">Staff '+(stNames.length||'—')+'</td></tr>'
+   +'</table>'
+   +'<table class="gs"><colgroup><col><col style="width:52px"><col style="width:52px"><col style="width:52px"><col style="width:52px"><col style="width:250px"></colgroup>'
+     +'<thead><tr><th style="text-align:left;padding-left:10px">Customer&#39;s Name</th>'
+       +'<th>AD</th><th>CHD</th><th>INF</th><th>FOC</th><th>Special Request</th></tr></thead>'
+     +'<tbody>'+body
+     +'<tr class="tot"><td class="lb">Total</td><td class="n">'+T.ad+'</td><td class="n">'+T.chd+'</td>'
+       +'<td class="n">'+T.inf+'</td><td class="n">'+T.foc+'</td><td></td></tr></tbody></table>'
    +'</div>';
 
-  var fn=('mealorder_'+bid+'_'+date).replace(/[^A-Za-z0-9_.-]+/g,'_');
+  var fn=('lunch_'+bid+'_'+date).replace(/[^A-Za-z0-9_.-]+/g,'_');
   var html='<!doctype html><html lang="th"><head><meta charset="utf-8">'
-   +'<title>ใบสั่งอาหาร · '+e(V.name||'')+' · '+e(date)+'</title>'
+   +'<title>Love Andaman - Lunch · '+e(boat.name||bid)+' · '+e(date)+'</title>'
    +'<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@500;700&family=DM+Sans:wght@400;600;700;800&family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet">'
    +'<style id="sty">'+css+'</style></head><body>'
    +'<div class="tb"><button class="pri" onclick="window.print()">&#128424; พิมพ์</button>'
      +'<button class="img" id="bimg" onclick="shot()">&#128247; บันทึกเป็นรูป · ส่ง LINE</button>'
      +'<span class="hint">ปุ่มสองปุ่มนี้อยู่บนหน้าจอเท่านั้น · ไม่ติดไปกับกระดาษและไม่ติดในรูป</span></div>'
-   + slip
+   + sheet
    +'<script>'+pjShotScript(fn)+'<\/script></body></html>';
-  var w=window.open('','_blank','width=700,height=940');
+  var w=window.open('','_blank','width=880,height=1000');
   if(!w){ alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ · อนุญาต pop-up ของหน้านี้ก่อน'); return; }
   w.document.open(); w.document.write(html); w.document.close();
   setTimeout(function(){ try{ w.focus(); }catch(_){} }, 300);
@@ -50828,7 +50872,14 @@ function pckMealSend(bid){
                             priceAd:(+V.priceAd||0), priceCh:(+V.priceCh||0),
                             amount:Math.round(amt), at:new Date().toISOString(),
                             by:(typeof ckMe==='function')?ckMe():'' } });
-  try{ mvOrderSlip(date, bid, V, C, pckAllergyList(rows), amt, rid); }catch(e){ console.warn('[meal] slip failed', e); }
+  /* §lunch · ใบแบบนี้ทำเฉพาะฝั่ง Visit Panwa · ทับละมุใช้ใบคนละแบบ ยังไม่ได้ทำ
+     ท่าอื่นยังบันทึกต้นทุนได้ตามปกติ แค่ไม่มีใบให้เปิด */
+  if(mvLunchOk(rid)){
+    try{ mvOrderSlip(date, bid, V, rid); }catch(e){ console.warn('[meal] slip failed', e); }
+  }else{
+    alert('บันทึกยอดอาหารของทริปนี้แล้ว\n\nใบสั่งอาหารตอนนี้ทำเฉพาะฝั่ง Visit Panwa · '
+      +'ท่านี้ใช้ใบคนละแบบ ยังไม่ได้ทำ');
+  }
   renderPierCheckin();
 }
 
