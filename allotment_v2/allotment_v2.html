@@ -1002,6 +1002,17 @@
 #view-costing .ct-tag.v{background:var(--b50);color:var(--b600);border:1px solid var(--b100)}
 #view-costing .ct-tag.m{background:var(--mt50);color:var(--mt700);border:1px solid var(--mt100)}
 #view-costing .ct-dm{color:var(--sd400)}
+/* §ctMatch · จับคู่กลุ่มเส้นทางกับแผนต้นทุน */
+#view-costing .ct-warn{display:flex;gap:13px;align-items:flex-start;background:#FFFBEB;border:1px solid #FDE68A;border-radius:12px;padding:13px 15px;margin-bottom:14px}
+#view-costing .ct-warn .wi{width:26px;height:26px;border-radius:9px;background:#FEF3C7;color:#B45309;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex:none}
+#view-costing .ct-warn b{color:#92400E;font-size:11.5px}
+#view-costing .ct-warn p{margin:4px 0 0;font-size:10.5px;color:#A16207;line-height:1.75}
+#view-costing .ct-mrow td{vertical-align:middle}
+#view-costing .ct-fam{display:flex;align-items:center;gap:8px}
+#view-costing .ct-fam b{font-size:11.5px}
+#view-costing .ct-sug{display:inline-flex;align-items:center;gap:5px;margin-top:5px;font-size:9.5px;color:var(--b600)}
+#view-costing .ct-ok{color:#047857;font-weight:700}
+#view-costing .ct-nolink{color:#B45309;font-weight:700}
 #view-costing .ct-tbl tfoot td{background:var(--b50);color:var(--es900);border-top:1.5px solid var(--b300);padding:10px 14px}
 #view-costing .ct-tbl tfoot td.w{color:var(--es900)}
 #view-costing .ct-tbl tfoot td.o{color:var(--b600)}
@@ -5097,6 +5108,7 @@ window.addEventListener('resize',function(){ if(window.innerWidth>820) laNavClos
           <button class="ct-tab on" data-t="plan" onclick="ctSetTab('plan')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><rect x="4" y="3" width="16" height="18" rx="2.5"/><path d="M8 7h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h4"/></svg>แผนคำนวณ</button>
           <button class="ct-tab" data-t="tpl" onclick="ctSetTab('tpl')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M18 18h2"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="16" cy="18" r="2"/></svg>สูตรกลาง</button>
           <button class="ct-tab" data-t="real" onclick="ctSetTab('real')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>ราคาจริง</button>
+          <button class="ct-tab" data-t="match" onclick="ctSetTab('match')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/></svg>จับคู่เส้นทาง</button>
           <button class="ct-tab" data-t="ovr" onclick="ctSetTab('ovr')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M9 6h11M9 12h11M9 18h11M4 6l1.5 1.5L8 5M4 12l1.5 1.5L8 11M4 18l1.5 1.5L8 17"/></svg>ปรับ / ปิด รายแผน</button>
         </nav>
       </div>
@@ -55808,6 +55820,33 @@ function pxPax(date, bid){
   o.th=Math.round(o.th); o.fr=Math.max(0,o.tot-o.th);
   return o;
 }
+/* §pxAgent · เงินของลำนี้มาจากเจ้าไหนบ้าง · เงื่อนไขคัดใบจองต้องตรงกับ pxPax เป๊ะ
+   ไม่งั้นยอดรวมสองที่จะไม่ตรงกัน แล้วไม่มีใครรู้ว่าอันไหนถูก */
+function pxAgents(date, bid){
+  var M={}, ord=[];
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    var t=ckTripOn(b,date); if(!t) return;
+    var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
+    if((O.boatId||t.charterBoatId)!==bid) return;
+    if(typeof pckVoidInfo==='function' && pckVoidInfo(b,date,t)) return;
+    var booked=ckBookedPax(t);
+    var exp=(typeof pckExpected==='function')?pckExpected(b,date,booked):booked;
+    var ck=O.pierCheckin||null, ns=(ck&&ck.at)?(+ck.noShow||0):0;
+    var tot=Math.max(0,((exp!=null?exp:booked)||0)-ns);
+    if(!tot) return;
+    var b2c=/^b2c_/.test(String(b.id||''));
+    var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
+    var nm=ag?(ag.name||ag.code||'—'):(b2c?'Love Andaman':String(b.channel||'walk-in'));
+    var key=(ag&&ag.id)||(b2c?'_b2c':('_'+nm));
+    if(!M[key]){ M[key]={ key:key, name:nm, b2c:b2c, n:0, head:0, ad:0, chd:0, amt:0 }; ord.push(key); }
+    var A=M[key], px=t.pax||{}, PT=(typeof bkV2PaxTot==='function')?bkV2PaxTot:function(){return 0;};
+    var chd=Math.min(PT(px,'chd'), tot);
+    A.n++; A.head+=tot; A.chd+=chd; A.ad+=Math.max(0,tot-chd);
+    A.amt+=(typeof tsTripAmount==='function')?(+tsTripAmount(b,t)||0):0;
+  });
+  return ord.map(function(k){ return M[k]; }).sort(function(a,b){ return b.amt-a.amt; });
+}
 /* รถที่วิ่งให้ลำนี้จริง · นับเป็นคัน ไม่ใช่เป็นใบจอง
    รถคันเดียวส่งขึ้นสองลำ → หารตามจำนวนหัวที่ส่งขึ้นแต่ละลำ ไม่ใช่หารครึ่ง */
 function pxVanCost(date, bid, routeId){
@@ -55870,15 +55909,61 @@ function pxTrip(date, bid){
     act.van={amt:VN.total, why:VN.vans.map(function(v){
       return v.name+' ฿'+Math.round(v.day)+(v.share<0.999?(' ×'+Math.round(v.share*100)+'%'):'')+' ('+v.zone+')'; }).join(' · ')};
 
+  /* §pxSrc · บรรทัดนี้ถูกปรับในแผนของเส้นทางนี้ไหม · ไม่ใช่แค่ว่ามี key แต่ต้องมีค่าจริง */
+  var ovrOf=(plan&&plan.ovr)||{}, grpOf=(plan&&plan.grp)||{};
+  function pxIsOvr(id, g){
+    var o=ovrOf[id];
+    if(o){
+      if(o.off) return true;
+      var ps=o.p||[];
+      for(var i=0;i<ps.length;i++){ var q=ps[i]||{};
+        for(var k in q){ if(q[k]!=='' && q[k]!=null) return true; } }
+    }
+    var G=grpOf[g]; if(G && (G.off || (+G.mul && +G.mul!==100 && +G.mul!==1))) return true;
+    return false;
+  }
+  /* ร้านอาหารที่ตั้งไว้แล้วแต่ยังไม่ได้กดส่งรายการ · ตัวเลขที่ใช้อยู่จึงยังเป็นสูตร ทั้งที่ของจริงรออยู่ */
+  var mealWait=null;
+  try{
+    if(!act.meal){
+      var V=(typeof mvForTrip==='function')?mvForTrip(date,bid,rid):null;
+      if(V){
+        var nCh=Math.min(PX.chd, PX.tot), nAd=Math.max(0, PX.tot-nCh-PX.inf);
+        var exp=(typeof mvCost==='function')?mvCost(V, nAd, nCh):null;
+        mealWait={ name:(V.name||''), exp:exp,
+                   why:'\u0e23\u0e49\u0e32\u0e19 '+(V.name||'')+' \u00b7 '+nAd+'\u00d7\u0e3f'+(+V.priceAd||0)
+                       +(nCh?(' + \u0e40\u0e14\u0e47\u0e01 '+nCh+'\u00d7\u0e3f'+(+V.priceCh||0)):'')
+                       +' = \u0e3f'+Math.round(exp||0).toLocaleString()+' \u00b7 \u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e2a\u0e48\u0e07\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23\u0e43\u0e2b\u0e49\u0e23\u0e49\u0e32\u0e19' };
+      }
+    }
+  }catch(_){}
   var rows=(C.rows||[]).map(function(r){
     var a=act[r.id];
     var est=r.net;                                   /* สูตรคิดเป็นยอดหลังหัก VAT ซื้อแล้ว */
     var real=a ? (a.amt - (r.vat ? a.amt*R : 0)) : null;
-    return { id:r.id, g:r.g, l:r.l, est:est, real:real, why:a?a.why:'', use:(real!=null?real:est) };
+    var src = (real!=null) ? 'r' : (pxIsOvr(r.id, r.g) ? 'p' : 'f');
+    var why = a ? a.why : '';
+    if(r.id==='meal' && real==null && mealWait){ src='w'; why=mealWait.why; }
+    return { id:r.id, g:r.g, l:r.l, vat:!!r.vat, est:est, real:real, why:why, src:src,
+             gross:(a?a.amt:null), use:(real!=null?real:est) };
   });
   var cost=0; rows.forEach(function(r){ cost+=r.use; });
   var revGross=PX.rev;
   var revNet=revGross*(1-R);                          /* รายได้ไม่รวม VAT ขาย */
+  /* §pxFreeze · ปิดยอดแล้ว = ตัวเลขเงินหยุดนิ่ง · แก้สูตรหรือขึ้นราคาทีหลังต้องไม่ย้อนมาขยับ
+     หัวคนยังคิดสดอยู่ เพราะนั่นเป็นข้อเท็จจริงของวันนั้น ไม่ใช่ราคาที่เราตั้งเอง */
+  var frozen=null;
+  if(A.closed){
+    var Z=A.closed, ZM={};
+    (Z.rows||[]).forEach(function(x){ ZM[x.id]=x; });
+    rows=rows.map(function(r){
+      var z=ZM[r.id]; if(!z) return r;
+      return { id:r.id, g:r.g, l:r.l, vat:r.vat, est:r.est, real:(z.real?z.amt:r.real),
+               why:r.why, src:r.src, gross:r.gross, use:z.amt };
+    });
+    cost=+Z.cost||0; revNet=+Z.rev||0;
+    frozen={ at:Z.at||'', by:Z.by||'', pax:Z.pax };
+  }
   var nReal=rows.filter(function(r){ return r.real!=null; }).length;
   var st = A.closed ? 'done' : (nReal ? 'part' : 'est');
   var be=null;
@@ -55890,7 +55975,7 @@ function pxTrip(date, bid){
   return { bid:bid, boat:boat, name:boat.name||bid, rid:rid, route:rt, dep:(rt.times&&rt.times[0])||'',
            px:PX, ctx:ctx, plan:plan, rows:rows, cost:Math.round(cost),
            revGross:Math.round(revGross), rev:Math.round(revNet),
-           profit:Math.round(revNet-cost), st:st, nReal:nReal, closed:!!A.closed, be:be,
+           profit:Math.round(revNet-cost), st:st, nReal:nReal, closed:!!A.closed, frozen:frozen, be:be,
            fuelPr:fuelPr };
 }
 function pxDay(date, pier){
@@ -55929,73 +56014,372 @@ function pxPier(v){ _px.pier=v||''; renderTripPL(); }
 function pxOpen(bid){ _px.open=_px.open||{}; if(_px.open[bid]) delete _px.open[bid]; else _px.open[bid]=1; renderTripPL(); }
 
 /* สีประจำหมวดต้นทุน · หมวดที่ไม่รู้จักได้สีเทา ไม่ต้องมาแก้โค้ดทุกครั้งที่เพิ่มหมวด */
-var PX_GC={ 'ค่าเชื้อเพลิง':'#0F6E56', 'ค่าธรรมเนียมอุทยานแห่งชาติ':'#185FA5',
-            'ค่าอาหารและเครื่องดื่ม':'#8E5BB5', 'ค่าตอบแทนลูกเรือและไกด์':'#B4560A',
-            'ค่ารถรับส่ง':'#0E7490', 'ค่าเรือหางยาว':'#BE185D',
-            'ค่าธรรมเนียมท่าเทียบเรือ':'#64748B', 'ค่าใช้จ่ายดำเนินงานอื่น':'#A8B2C0' };
+var PX_GC={ 'ค่าเชื้อเพลิง':'#DC2626', 'ค่าธรรมเนียมอุทยานแห่งชาติ':'#0D9488',
+            'ค่าอาหารและเครื่องดื่ม':'#D97706', 'ค่าตอบแทนลูกเรือและไกด์':'#4F46E5',
+            'ค่ารถรับส่ง':'#2563EB', 'ค่าเรือหางยาว':'#DB2777',
+            'ค่าธรรมเนียมท่าเทียบเรือ':'#0891B2', 'ค่าใช้จ่ายดำเนินงานอื่น':'#7C3AED' };
 function pxGColor(g){ return PX_GC[g]||'#94A3B8'; }
 function pxB(n){ return '\u0e3f'+Math.round(n||0).toLocaleString(); }
+function pxN(n){ return Math.round(n||0).toLocaleString(); }
+/* สีเอเจนต์ · ไม่ได้ตั้งไว้ที่ไหน จึงหยิบจากชื่อแบบคงที่ ชื่อเดิมได้สีเดิมทุกวัน */
+var PX_AGC=['#0EA5E9','#8B5CF6','#0891B2','#DB2777','#EA580C','#65A30D','#0D9488','#7C3AED','#B45309','#475569'];
+function pxAColor(a){
+  if(a.b2c) return '#4F46E5';
+  var h=0, k=String(a.name||'');
+  for(var i=0;i<k.length;i++) h=(h*31+k.charCodeAt(i))>>>0;
+  return PX_AGC[h%PX_AGC.length];
+}
+var PX_ICON={
+  rev:'<path d="M3 7h18v10H3z"/><circle cx="12" cy="12" r="2.5"/>',
+  cost:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/>',
+  pro:'<path d="M3 17l6-6 4 4 7-7"/><path d="M14 8h6v6"/>',
+  ok:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>'
+};
+function pxIco(k){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+  +'stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px">'+(PX_ICON[k]||'')+'</svg>'; }
+
 function pxCSS(){ return ''
- +'#trippl-host{font-family:"DM Sans","Noto Sans Thai",sans-serif;color:#0F172A;padding:2px}'
- +'#trippl-host .pl-tb{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:15px}'
- +'#trippl-host .pl-btn{border:1px solid #E2E8F0;background:#fff;border-radius:11px;padding:7px 14px;'
-   +'font:600 12.5px inherit;color:#475569;cursor:pointer}'
- +'#trippl-host .pl-btn:hover{background:#F8FAFC}'
- +'#trippl-host .pl-dt{font-size:15px;font-weight:800;padding:0 6px}'
- +'#trippl-host input[type=date],#trippl-host select{border:1px solid #CBD5E1;border-radius:10px;'
-   +'padding:6px 11px;font:600 12.5px inherit;background:#fff;color:#0F172A}'
- +'#trippl-host .pl-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px}'
- +'#trippl-host .pl-k{border:1px solid #E7EBF0;border-radius:15px;padding:12px 14px;background:#FBFCFD}'
- +'#trippl-host .pl-k .k{font-size:9.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#94A3B8}'
- +"#trippl-host .pl-k .v{font:800 21px 'DM Mono',monospace;margin-top:4px;letter-spacing:-.02em}"
- +'#trippl-host .pl-k .s{font-size:10.5px;color:#94A3B8;margin-top:2px}'
- +'#trippl-host .pl-k.rev .v{color:#1D4ED8}#trippl-host .pl-k.cost .v{color:#B4560A}'
- +'#trippl-host .pl-k.pro .v{color:#047857}#trippl-host .pl-k.pro.neg .v{color:#B91C1C}'
- +'#trippl-host .pl-k.bad{background:#FEF2F2;border-color:#F5CFCF}#trippl-host .pl-k.bad .v{color:#B91C1C}'
- +'#trippl-host .tc{border:1px solid #E7EBF0;border-radius:17px;margin-bottom:11px;overflow:hidden;background:#fff}'
- +'#trippl-host .tc.loss{border-color:#F0C9C9}'
- +'#trippl-host .tcr{display:flex;align-items:stretch}'
- +'#trippl-host .tcl{flex:0 0 258px;padding:14px 16px;border-right:1px solid #F1F5F9;cursor:pointer}'
- +"#trippl-host .tcl .tm{font:800 17px 'DM Mono',monospace;line-height:1}"
- +'#trippl-host .tcl .bn{font-size:14.5px;font-weight:800;margin-top:5px}'
- +'#trippl-host .tcl .rt{display:inline-block;color:#fff;border-radius:999px;padding:2px 10px;font-size:10.5px;font-weight:700;margin-top:6px}'
- +'#trippl-host .tcl .px{font-size:11px;color:#64748B;margin-top:6px;line-height:1.5}'
- +'#trippl-host .tcm{flex:1;padding:14px 18px;min-width:0}'
- +'#trippl-host .bar{height:15px;border-radius:8px;overflow:hidden;display:flex;background:#F1F5F9;margin-bottom:5px}'
- +'#trippl-host .bar i{display:block;height:100%}'
- +'#trippl-host .blab{display:flex;justify-content:space-between;font-size:11px;color:#64748B;margin-bottom:11px}'
- +"#trippl-host .blab b{font-family:'DM Mono',monospace;color:#0F172A;font-size:12px}"
- +'#trippl-host .segs{display:flex;gap:5px;flex-wrap:wrap}'
- +'#trippl-host .cc{border:1px solid #E7EBF0;border-radius:9px;padding:4px 9px;font-size:10.5px;background:#FBFCFD;white-space:nowrap}'
- +'#trippl-host .cc i{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:5px;vertical-align:middle}'
- +"#trippl-host .cc b{font-family:'DM Mono',monospace;margin-left:5px;font-size:11px}"
- +'#trippl-host .cc.est{opacity:.62}'
- +'#trippl-host .tcx{flex:0 0 214px;padding:14px 16px;border-left:1px solid #F1F5F9;text-align:right}'
- +"#trippl-host .tcx .pv{font:800 25px 'DM Mono',monospace;letter-spacing:-.02em;color:#047857;line-height:1.1}"
- +'#trippl-host .tc.loss .tcx .pv{color:#B91C1C}'
- +'#trippl-host .tcx .pv.dim{color:#94A3B8}'
- +'#trippl-host .tcx .ph{font-size:11px;color:#64748B;margin-top:3px;line-height:1.5}'
- +'#trippl-host .st{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 11px;'
-   +'font-size:10.5px;font-weight:700;margin-top:9px;border:1px solid;cursor:pointer}'
- +'#trippl-host .st i{width:7px;height:7px;border-radius:999px;display:block}'
- +'#trippl-host .st.est{background:#FEF6E7;color:#8A5A00;border-color:#EFD9AE}#trippl-host .st.est i{background:#E0A106}'
- +'#trippl-host .st.part{background:#EFF6FF;color:#1D4ED8;border-color:#C7DBF5}#trippl-host .st.part i{background:#3B82F6}'
- +'#trippl-host .st.done{background:#ECFDF5;color:#047857;border-color:#BFE0CD}#trippl-host .st.done i{background:#10B981}'
- +'#trippl-host .bd{border-top:1px solid #F1F5F9;background:#FBFCFD;padding:12px 16px}'
- +'#trippl-host table.bt{width:100%;border-collapse:collapse;font-size:12px}'
- +'#trippl-host table.bt th{text-align:left;font-size:9.5px;font-weight:800;letter-spacing:.09em;'
-   +'text-transform:uppercase;color:#94A3B8;padding:0 8px 7px}'
- +'#trippl-host table.bt td{padding:6px 8px;border-top:1px solid #EEF2F6}'
- +"#trippl-host table.bt td.n{text-align:right;font-family:'DM Mono',monospace}"
- +'#trippl-host .src{font-size:10px;font-weight:700;border-radius:999px;padding:1px 8px;white-space:nowrap}'
- +'#trippl-host .src.real{background:#ECFDF5;color:#047857}'
- +'#trippl-host .src.est{background:#FEF6E7;color:#8A5A00}'
- +'#trippl-host .dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:7px;vertical-align:middle}'
- +'#trippl-host .why{font-size:11px;color:#94A3B8}'
- +'#trippl-host .empty{border:1px dashed #CBD5E1;border-radius:16px;padding:34px;text-align:center;color:#94A3B8;font-size:13px}'
- +'#trippl-host .warn{background:#FEF6F6;border-top:1px solid #F1F5F9;padding:11px 16px;font-size:12px;'
-   +'color:#B91C1C;font-weight:600;line-height:1.7}'
- +'#trippl-host .note{font-size:11.5px;color:#64748B;line-height:1.75;margin-top:14px;padding-top:12px;border-top:1px dashed #E2E8F0}';
+ +'#trippl-host{font-family:"DM Sans","Noto Sans Thai",sans-serif;color:#1F2937;padding:2px;'
+   +'--pi:#111827;--pm:#6B7280;--pf:#9CA3AF;--pl:#F3F4F6;--pl2:#E5E7EB;--pem:#047857;--pam:#B45309;--pro:#BE123C;--pblu:#2563EB}'
+ +'#trippl-host .pbar{display:flex;align-items:center;justify-content:space-between;gap:14px;background:#fff;'
+   +'border-radius:22px;padding:11px 13px;box-shadow:0 1px 2px rgba(0,0,0,.05);flex-wrap:wrap;margin-bottom:18px}'
+ +'#trippl-host .pbrand{display:flex;align-items:center;gap:9px;padding-left:3px}'
+ +'#trippl-host .plogo{width:36px;height:36px;border-radius:13px;background:linear-gradient(45deg,#4F46E5,#8B5CF6);'
+   +'display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:15px}'
+ +'#trippl-host .pbrand b{font-size:16px;font-weight:800;letter-spacing:-.02em;color:var(--pi)}'
+ +'#trippl-host .pctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center}'
+ +'#trippl-host .pbtn{border:1px solid var(--pl);background:#fff;border-radius:14px;padding:8px 13px;'
+   +'font:700 12px inherit;color:#374151;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.04)}'
+ +'#trippl-host .pbtn:hover{background:#F9FAFB}'
+ +'#trippl-host .pbtn.on{background:var(--pi);color:#fff;border-color:var(--pi)}'
+ +'#trippl-host input[type=date],#trippl-host select{border:1px solid var(--pl2);border-radius:14px;'
+   +'padding:8px 12px;font:700 12px inherit;background:#fff;color:var(--pi)}'
+ +'#trippl-host .ptitle{margin-bottom:18px}'
+ +'#trippl-host .ptitle h1{margin:0;font-size:26px;font-weight:800;letter-spacing:-.025em;color:var(--pi)}'
+ +'#trippl-host .ptitle p{margin:5px 0 0;font-size:12.5px;color:var(--pm);display:flex;align-items:center;gap:8px;flex-wrap:wrap}'
+ +'#trippl-host .plive{width:8px;height:8px;border-radius:50%;background:#10B981;box-shadow:0 0 0 3px rgba(16,185,129,.2)}'
+ +'#trippl-host .pk4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}'
+ +'#trippl-host .eg{background:#fff;border-radius:22px;box-shadow:0 10px 25px -5px rgba(0,0,0,.04),0 8px 10px -6px rgba(0,0,0,.02);padding:19px}'
+ +'#trippl-host .k1{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}'
+ +'#trippl-host .k1 .lb{font-size:11.5px;font-weight:500;color:var(--pm);margin:0}'
+ +'#trippl-host .kbig{display:flex;align-items:baseline;gap:8px;margin-top:7px}'
+ +"#trippl-host .kbig b{font:800 27px 'DM Mono',monospace;color:var(--pi);letter-spacing:-.02em;line-height:1}"
+ +'#trippl-host .kbig em{font-style:normal;font-size:11.5px;font-weight:700;color:var(--pem)}'
+ +'#trippl-host .kbig em.r{color:var(--pro)}#trippl-host .kbig em.g{color:var(--pm);font-weight:500}'
+ +'#trippl-host .ksm{font-size:10.5px;color:var(--pf);margin:6px 0 0}'
+ +'#trippl-host .pico{width:38px;height:38px;border-radius:14px;display:flex;align-items:center;'
+   +'justify-content:center;flex:none;box-shadow:0 1px 2px rgba(0,0,0,.05)}'
+ +'#trippl-host .pico.blue{background:#EFF6FF;color:var(--pblu)}#trippl-host .pico.or{background:#FFF7ED;color:#F97316}'
+ +'#trippl-host .pico.em{background:#ECFDF5;color:var(--pem)}#trippl-host .pico.pu{background:#F5F3FF;color:#8B5CF6}'
+ +'#trippl-host .kft{margin-top:12px;padding-top:10px;border-top:1px solid var(--pl);display:flex;'
+   +'justify-content:space-between;gap:6px;font-size:10.5px;color:var(--pm)}'
+ +'#trippl-host .kft b{color:#1F2937;font-weight:700}'
+ +'#trippl-host .phd{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:16px}'
+ +'#trippl-host .phd h2{margin:0;font-size:15.5px;font-weight:800;color:var(--pi)}'
+ +'#trippl-host .phd p{margin:2px 0 0;font-size:11.5px;color:var(--pm)}'
+ +'#trippl-host .phd .rt{font-size:11.5px;font-weight:600;color:var(--pf)}'
+ /* ── ตารางสรุปรายลำ ── */
+ +'#trippl-host table.sum{width:100%;border-collapse:collapse}'
+ +'#trippl-host table.sum th{font-size:10px;font-weight:700;color:var(--pf);text-transform:uppercase;'
+   +'letter-spacing:.06em;text-align:right;padding:0 9px 10px;border-bottom:1px solid var(--pl2);white-space:nowrap}'
+ +'#trippl-host table.sum th.l{text-align:left}'
+ +'#trippl-host table.sum td{padding:12px 9px;border-bottom:1px solid var(--pl);font-size:12.5px;text-align:right}'
+ +'#trippl-host table.sum td.l{text-align:left}'
+ +'#trippl-host table.sum tr.br{cursor:pointer}#trippl-host table.sum tr.br:hover td{background:#FAFBFC}'
+ +'#trippl-host table.sum .bn{font-weight:800;font-size:13.5px;color:var(--pi);display:flex;align-items:center;gap:9px}'
+ +'#trippl-host table.sum .bn i{width:10px;height:10px;border-radius:50%;flex:none}'
+ +'#trippl-host table.sum .rn{font-size:11px;color:var(--pm);margin-top:3px;padding-left:19px}'
+ +"#trippl-host table.sum .tm{font-family:'DM Mono',monospace;font-size:11.5px;font-weight:700;color:#64748B;"
+   +'background:#F3F4F6;border-radius:8px;padding:3px 9px;display:inline-block}'
+ +"#trippl-host table.sum .num{font-family:'DM Mono',monospace;font-weight:700;font-size:13px;color:#1F2937}"
+ +'#trippl-host table.sum .num.mut{color:var(--pm);font-weight:500}'
+ +'#trippl-host table.sum .num.cost{color:var(--pam)}'
+ +"#trippl-host table.sum .net{font-family:'DM Mono',monospace;font-weight:800;font-size:16px;color:var(--pem);letter-spacing:-.02em}"
+ +'#trippl-host table.sum .net.neg{color:var(--pro)}'
+ +'#trippl-host table.sum .per{font-size:10.5px;color:var(--pf);margin-top:2px}'
+ +'#trippl-host table.sum tr.tot td{background:#F9FAFB;border-top:2px solid var(--pl2);border-bottom:0;padding:14px 9px}'
+ +'#trippl-host table.sum tr.tot td.l{font-weight:800;color:var(--pi);font-size:13.5px}'
+ +'#trippl-host table.sum tr.tot .num{font-size:15px}#trippl-host table.sum tr.tot .net{font-size:20px}'
+ +'#trippl-host table.sum tr.loss td{background:#FFF7F8}'
+ +'#trippl-host .bars{width:112px;height:8px;background:#F3F4F6;border-radius:999px;overflow:hidden;display:flex;margin-left:auto}'
+ +'#trippl-host .bars i{display:block;height:100%}'
+ +'#trippl-host .chip{padding:4px 11px;border-radius:999px;font-size:10.5px;font-weight:700;white-space:nowrap;display:inline-block}'
+ +'#trippl-host .chip.est{background:#FEF3C7;color:#B45309}#trippl-host .chip.part{background:#EFF6FF;color:var(--pblu)}'
+ +'#trippl-host .chip.done{background:#D1FAE5;color:#047857}#trippl-host .chip.nom{background:#FEF3C7;color:#B45309}'
+ /* ── การ์ดรายละเอียดรายลำ ── */
+ +'#trippl-host .dcard{margin-top:16px}'
+ +'#trippl-host .dth{display:flex;align-items:center;gap:13px;flex-wrap:wrap;padding-bottom:15px;border-bottom:1px solid var(--pl)}'
+ +'#trippl-host .dth .dot{width:13px;height:13px;border-radius:50%;flex:none;box-shadow:0 0 0 4px rgba(0,0,0,.04)}'
+ +'#trippl-host .dth h2{margin:0;font-size:18px;font-weight:800;color:var(--pi);letter-spacing:-.02em}'
+ +'#trippl-host .dth .rt{font-size:12px;color:var(--pm);margin-top:2px}'
+ +'#trippl-host .pxb{display:flex;gap:6px;flex-wrap:wrap}'
+ +'#trippl-host .pxb span{background:#F9FAFB;border:1px solid var(--pl2);border-radius:11px;padding:5px 10px;'
+   +'font-size:11px;color:var(--pm);font-weight:600}'
+ +'#trippl-host .pxb span b{color:var(--pi);font-weight:800;font-size:12px}'
+ +'#trippl-host .cols{display:grid;grid-template-columns:1fr 1.22fr;gap:24px;margin-top:18px}'
+ +'#trippl-host .cx h3{margin:0 0 3px;font-size:13.5px;font-weight:800;color:var(--pi);display:flex;align-items:center;gap:8px}'
+ +'#trippl-host .cx h3 .bd{width:4px;height:15px;border-radius:3px;flex:none}'
+ +'#trippl-host .cx .sub{margin:0 0 13px;font-size:11px;color:var(--pf);padding-left:12px;line-height:1.6}'
+ +'#trippl-host table.t{width:100%;border-collapse:collapse}'
+ +'#trippl-host table.t th{font-size:9.5px;font-weight:700;color:var(--pf);text-transform:uppercase;letter-spacing:.06em;'
+   +'text-align:right;padding:0 6px 9px;border-bottom:1px solid var(--pl2);white-space:nowrap}'
+ +'#trippl-host table.t th.l{text-align:left}'
+ +'#trippl-host table.t td{padding:8px 6px;border-bottom:1px solid #F7F8F9;font-size:12px;text-align:right;vertical-align:top}'
+ +'#trippl-host table.t td.l{text-align:left}'
+ +"#trippl-host .num{font-family:'DM Mono',monospace;font-weight:700;font-size:12px;color:#1F2937;white-space:nowrap}"
+ +'#trippl-host .num.mut{color:var(--pf);font-weight:500}#trippl-host .num.cost{color:var(--pam)}'
+ +'#trippl-host .who{font-weight:700;color:var(--pi)}'
+ +'#trippl-host .gh{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:10px;margin:12px 0 3px;text-align:left}'
+ +'#trippl-host .gh .gn{font-size:11.5px;font-weight:800;flex:1}'
+ +'#trippl-host .gh .gp{font-size:10px;font-weight:600;opacity:.78}'
+ +"#trippl-host .gh .gv{font-family:'DM Mono',monospace;font-size:12.5px;font-weight:800}"
+ +"#trippl-host .gh .dlt{font-family:'DM Mono',monospace;font-size:10px;font-weight:700;border-radius:7px;padding:3px 8px;white-space:nowrap}"
+ +'#trippl-host tr.g td{padding:0!important;border-bottom:0!important}'
+ +'#trippl-host table.t tr.tot td{border-top:2px solid var(--pl2);border-bottom:0;padding-top:12px;font-weight:800;color:var(--pi);font-size:12.5px}'
+ +'#trippl-host table.t tr.vat td{color:var(--pm);font-size:11px;border-bottom:0;padding:4px 6px}'
+ +'#trippl-host .src{display:inline-block;border-radius:7px;padding:2px 8px;font-size:9.5px;font-weight:800;white-space:nowrap}'
+ +'#trippl-host .src.f{background:#F3F4F6;color:#64748B}'
+ +'#trippl-host .src.p{background:#DBEAFE;color:#1D4ED8}'
+ +'#trippl-host .src.r{background:#D1FAE5;color:#047857}'
+ +'#trippl-host .src.w{background:#FEF3C7;color:#B45309}'
+ +'#trippl-host .src.b{background:#EEF2FF;color:#4338CA;font-size:9px;padding:1px 6px}'
+ +"#trippl-host .fml{font-size:10.5px;color:var(--pm);margin-top:3px;font-family:'DM Mono',monospace;line-height:1.55}"
+ +'#trippl-host .warnbox{margin-top:4px;font-size:10px;color:#B45309;background:#FFFBEB;border-radius:8px;padding:4px 8px;display:inline-block;line-height:1.6}'
+ +'#trippl-host .foot{margin-top:11px;font-size:10.5px;color:var(--pf);line-height:1.75}'
+ +'#trippl-host .foot b{color:var(--pm)}'
+ +'#trippl-host .abar{height:6px;background:#F1F2F4;border-radius:999px;overflow:hidden;margin-top:5px;max-width:180px}'
+ +'#trippl-host .abar i{display:block;height:100%;border-radius:999px;opacity:.7}'
+ /* ── แถบต่อหัว + แถบผลลัพธ์ ── */
+ +'#trippl-host .pph{margin-top:22px;background:#F9FAFB;border:1px solid var(--pl2);border-radius:17px;padding:16px 18px}'
+ +'#trippl-host .pph .h{font-size:12px;font-weight:800;color:var(--pi);margin-bottom:2px}'
+ +'#trippl-host .pph .s{font-size:10.5px;color:var(--pf);margin-bottom:14px}'
+ +'#trippl-host .pph .row{display:flex;align-items:center;gap:20px;flex-wrap:wrap}'
+ +'#trippl-host .pph .cell small{display:block;font-size:10px;color:var(--pm);margin-bottom:3px}'
+ +"#trippl-host .pph .cell b{font-family:'DM Mono',monospace;font-size:20px;font-weight:800;letter-spacing:-.02em}"
+ +'#trippl-host .pph .cell u{display:block;text-decoration:none;font-size:10px;color:var(--pf);margin-top:3px}'
+ +'#trippl-host .pph .op{font-size:18px;color:#D1D5DB;font-weight:300}'
+ +'#trippl-host .pph .stk{flex:1;min-width:300px}'
+ +'#trippl-host .pph .stk .rail{height:14px;border-radius:8px;overflow:hidden;display:flex;background:#ECEEF1}'
+ +'#trippl-host .pph .stk .rail i{display:block;height:100%}'
+ +'#trippl-host .pph .lgd{display:flex;flex-wrap:wrap;gap:9px 16px;margin-top:10px}'
+ +'#trippl-host .pph .lgd span{font-size:10px;color:var(--pm);display:flex;align-items:center;gap:6px}'
+ +'#trippl-host .pph .lgd span i{width:9px;height:9px;border-radius:3px;flex:none}'
+ +"#trippl-host .pph .lgd span b{color:var(--pi);font-family:'DM Mono',monospace;font-weight:700}"
+ +'#trippl-host .res{margin-top:18px;padding-top:16px;border-top:1px dashed var(--pl2);display:flex;align-items:center;gap:22px;flex-wrap:wrap}'
+ +'#trippl-host .res .box small{display:block;font-size:10.5px;color:var(--pm);margin-bottom:4px}'
+ +"#trippl-host .res .box b{font-family:'DM Mono',monospace;font-size:15px;font-weight:800}"
+ +"#trippl-host .res .big{font-family:'DM Mono',monospace;font-size:25px;font-weight:800;color:var(--pem);letter-spacing:-.02em}"
+ +'#trippl-host .res .big.neg{color:var(--pro)}'
+ +'#trippl-host .res .eqn{font-size:19px;color:#D1D5DB;font-weight:300}'
+ +'#trippl-host .bebar{width:180px}'
+ +'#trippl-host .bebar .t2{display:flex;justify-content:space-between;font-size:10px;color:var(--pm);margin-bottom:5px}'
+ +'#trippl-host .bebar .rail{height:9px;background:#F3F4F6;border-radius:999px;overflow:hidden;position:relative}'
+ +'#trippl-host .bebar .rail i{display:block;height:100%;background:#10B981;border-radius:999px}'
+ +'#trippl-host .bebar .rail i.neg{background:#E11D48}'
+ +'#trippl-host .bebar .rail u{position:absolute;top:-3px;width:2px;height:15px;background:var(--pi);text-decoration:none}'
+ +'#trippl-host .empty{border:1px dashed #CBD5E1;border-radius:20px;padding:34px;text-align:center;color:var(--pf);font-size:13px;background:#fff}'
+ +'#trippl-host .lossnote{margin-top:14px;background:#FFF7F8;border:1px solid #FBD5DB;border-radius:14px;'
+   +'padding:11px 14px;font-size:11.5px;color:#BE123C;font-weight:600;line-height:1.7}'
+ +'#trippl-host .note{font-size:11px;color:var(--pm);line-height:1.85;margin-top:16px;padding-top:14px;border-top:1px dashed var(--pl2)}'
+ +'#trippl-host .note b{color:var(--pi)}';
+}
+
+/* หมวดต้นทุนของทริปหนึ่ง · เรียงตามลำดับในสูตร ไม่เรียงตามขนาด จะได้เทียบข้ามทริปได้
+   เทียบกับ undefined ไม่ใช่ความจริง/เท็จ · หมวดที่รวมได้ 0 เป็นค่าเท็จ แล้วจะถูกดันเข้า ord ซ้ำ */
+function pxGroups(t){
+  var by={}, ord=[];
+  t.rows.forEach(function(r){ if(by[r.g]===undefined){ by[r.g]=0; ord.push(r.g); } by[r.g]+=r.use; });
+  return ord.filter(function(g){ return Math.round(by[g])!==0; })
+            .map(function(g){ return { g:g, v:by[g], c:pxGColor(g),
+              real:t.rows.some(function(r){ return r.g===g && r.src==='r'; }) }; });
+}
+function pxOpenAll(){
+  _px.open=_px.open||{};
+  var D=pxDay(_px.date,_px.pier), all=D.every(function(t){ return _px.open[t.bid]; });
+  _px.open={}; if(!all) D.forEach(function(t){ _px.open[t.bid]=1; });
+  renderTripPL();
+}
+
+/* ── การ์ดรายละเอียดหนึ่งลำ · ซ้ายเงินเข้า ขวาเงินออก ล่างค่าเฉลี่ยต่อหัว ── */
+function pxDetail(t, e){
+  var pax=Math.max(1, t.px.tot), R=(typeof ctVatR==='function')?ctVatR(ctTpl()):0;
+  var cph=t.cost/pax;
+
+  /* ฝั่งรายได้ · รายเอเจนต์ */
+  var AG=pxAgents(_px.date, t.bid);
+  var mxA=AG.reduce(function(m,a){ return Math.max(m,a.amt); },0)||1;
+  var agRows=AG.map(function(a){
+    var c=pxAColor(a), net=a.head?(a.amt*(1-R)/a.head):0, d=net-cph, ok=(d>=0);
+    return '<tr><td class="l"><div style="display:flex;align-items:center;gap:9px">'
+      +'<i style="width:9px;height:9px;border-radius:3px;flex:none;background:'+c+'"></i>'
+      +'<span class="who">'+e(a.name)+'</span>'
+      +(a.b2c?'<span class="src b">B2C</span>':'')+'</div>'
+      +'<div class="abar"><i style="width:'+(a.amt/mxA*100).toFixed(1)+'%;background:'+c+'"></i></div></td>'
+      +'<td class="num mut">'+a.n+'</td>'
+      +'<td class="num mut">'+a.ad+'</td>'
+      +'<td class="num mut">'+(a.chd||'\u2013')+'</td>'
+      +'<td class="num">'+pxN(a.amt)+'</td>'
+      +'<td class="num" style="color:'+(ok?'#047857':'#BE123C')+'">'+pxN(net)
+        +'<div class="fml" style="color:'+(ok?'#047857':'#BE123C')+'">'
+        +(ok?'+':'\u2212')+pxN(Math.abs(d))+'</div></td></tr>';
+  }).join('');
+  var gross=t.revGross, vatOut=gross-t.rev;
+
+  /* ฝั่งต้นทุน · รายหมวด */
+  var GS=pxGroups(t), tot=GS.reduce(function(a,x){ return a+x.v; },0)||1;
+  var SRCT={ f:'\u0e2a\u0e39\u0e15\u0e23\u0e01\u0e25\u0e32\u0e07', p:'\u0e41\u0e1c\u0e19\u0e40\u0e2a\u0e49\u0e19\u0e17\u0e32\u0e07',
+             r:'\u0e02\u0e2d\u0e07\u0e08\u0e23\u0e34\u0e07', w:'\u0e23\u0e2d\u0e02\u0e2d\u0e07\u0e08\u0e23\u0e34\u0e07' };
+  var costRows=GS.map(function(G){
+    var head='<tr class="g"><td colspan="4"><div class="gh" style="background:'+G.c+'14">'
+      +'<span class="gn" style="color:'+G.c+'">'+e(G.g)+'</span>'
+      +'<span class="gp" style="color:'+G.c+'">'+pxB(G.v/pax)+'/\u0e2b\u0e31\u0e27 \u00b7 '
+        +Math.round(G.v/tot*100)+'%</span>'
+      +'<span class="gv" style="color:'+G.c+'">'+pxN(G.v)+'</span></div></td></tr>';
+    var body=t.rows.filter(function(r){ return r.g===G.g && (Math.round(r.est)!==0 || r.real!=null); })
+      .map(function(r){
+        var use=r.use, diff='';
+        if(r.real!=null){
+          var d=r.real-r.est;
+          if(Math.round(d)!==0) diff='<div class="fml" style="color:'+(d>0?'#BE123C':'#047857')+'">'
+            +'\u0e15\u0e48\u0e32\u0e07 '+(d>0?'+':'\u2212')+pxN(Math.abs(d))+'</div>';
+        }
+        var why=r.why ? ((r.src==='r')
+          ? '<div class="fml" style="color:#047857">'+e(r.why)+'</div>'
+          : '<div class="warnbox">'+e(r.why)+'</div>') : '';
+        return '<tr><td class="l" style="width:46%;padding-left:12px">'
+          +'<div class="who">'+e(r.l)+'</div>'+why+'</td>'
+          +'<td class="l"><span class="src '+r.src+'">'+SRCT[r.src]+'</span></td>'
+          +'<td class="num mut">'+pxN(r.est)+'</td>'
+          +'<td class="num cost" style="font-weight:800">'+pxN(use)+diff+'</td></tr>';
+      }).join('');
+    return head+body;
+  }).join('');
+  var estTot=t.rows.reduce(function(a,r){ return a+r.est; },0);
+  var vatIn=t.rows.reduce(function(a,r){
+    if(!r.vat) return a;
+    var g=(r.gross!=null)?r.gross:(r.est/(1-R));
+    return a+g*R; },0);
+
+  /* แถบต่อหัว */
+  var stk=GS.map(function(G){ return '<i style="width:'+(G.v/tot*100).toFixed(2)+'%;background:'+G.c+'"></i>'; }).join('');
+  var lgd=GS.map(function(G){ return '<span><i style="background:'+G.c+'"></i>'+e(G.g)
+    +' <b>'+pxB(G.v/pax)+'</b></span>'; }).join('');
+
+  var loss=t.profit<0;
+  var nShown=t.rows.filter(function(r){ return Math.round(r.est)!==0 || r.real!=null; }).length;
+  var beW=t.be?Math.min(100, Math.round(t.px.tot/Math.max(1,t.be)*63)):0;
+  var stTxt={est:'\u0e22\u0e31\u0e07\u0e40\u0e1b\u0e47\u0e19\u0e15\u0e31\u0e27\u0e1b\u0e23\u0e30\u0e21\u0e32\u0e13',
+             part:'\u0e21\u0e35\u0e02\u0e2d\u0e07\u0e08\u0e23\u0e34\u0e07\u0e41\u0e25\u0e49\u0e27 '+t.nReal+' \u0e08\u0e32\u0e01 '+nShown+' \u0e01\u0e49\u0e2d\u0e19',
+             done:'\u0e1b\u0e34\u0e14\u0e22\u0e2d\u0e14\u0e41\u0e25\u0e49\u0e27'}[t.st];
+
+  return '<div class="eg dcard">'
+    +'<div class="dth"><span class="dot" style="background:'
+      +e((typeof pckBoatColor==='function'?pckBoatColor(t.bid):'')||t.route.color||'#64748B')+'"></span>'
+    +'<div><h2>'+e(t.name)+'</h2><div class="rt">'+e(t.route.name||'\u2014')+'</div></div>'
+    +'<span class="tm" style="font-family:\'DM Mono\',monospace;font-size:12px;font-weight:700;color:#64748B;'
+      +'background:#F3F4F6;border-radius:9px;padding:5px 11px">'+e(t.dep||'--:--')+'</span>'
+    +'<div class="pxb">'
+      +'<span>\u0e1c\u0e39\u0e49\u0e43\u0e2b\u0e0d\u0e48 <b>'+t.px.ad+'</b></span>'
+      +'<span>\u0e40\u0e14\u0e47\u0e01 <b>'+t.px.chd+'</b></span>'
+      +'<span>\u0e17\u0e32\u0e23\u0e01 <b>'+t.px.inf+'</b></span>'
+      +'<span>FOC <b>'+t.px.foc+'</b></span>'
+      +'<span>\u0e44\u0e17\u0e22 <b>'+t.px.th+'</b> \u00b7 \u0e15\u0e48\u0e32\u0e07\u0e0a\u0e32\u0e15\u0e34 <b>'+t.px.fr+'</b></span>'
+      +'<span>'+t.px.bk+' \u0e43\u0e1a\u0e08\u0e2d\u0e07 \u00b7 '+AG.length+' \u0e40\u0e2d\u0e40\u0e08\u0e19\u0e15\u0e4c</span></div>'
+    +'<span style="flex:1"></span>'
+    +'<span class="chip '+t.st+'" style="cursor:pointer" onclick="pxClose(\''+e(t.bid)+'\')" title="'
+      +(t.closed?'\u0e01\u0e14\u0e40\u0e1e\u0e37\u0e48\u0e2d\u0e40\u0e1b\u0e34\u0e14\u0e22\u0e2d\u0e14\u0e43\u0e2b\u0e21\u0e48':'\u0e01\u0e14\u0e40\u0e1e\u0e37\u0e48\u0e2d\u0e1b\u0e34\u0e14\u0e22\u0e2d\u0e14')+'">'+stTxt+'</span>'
+    +(t.plan?'':'<span class="chip nom">\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e08\u0e31\u0e1a\u0e04\u0e39\u0e48\u0e41\u0e1c\u0e19\u0e15\u0e49\u0e19\u0e17\u0e38\u0e19 \u00b7 \u0e43\u0e0a\u0e49\u0e2a\u0e39\u0e15\u0e23\u0e01\u0e25\u0e32\u0e07</span>')
+    +'</div>'
+
+    +'<div class="cols">'
+    +'<div class="cx"><h3><span class="bd" style="background:#10B981"></span>\u0e23\u0e32\u0e22\u0e44\u0e14\u0e49</h3>'
+    +'<p class="sub">\u0e23\u0e27\u0e21\u0e22\u0e2d\u0e14\u0e23\u0e32\u0e22\u0e40\u0e2d\u0e40\u0e08\u0e19\u0e15\u0e4c \u00b7 '
+      +'\u0e04\u0e2d\u0e25\u0e31\u0e21\u0e19\u0e4c\u0e02\u0e27\u0e32\u0e2a\u0e38\u0e14\u0e04\u0e37\u0e2d\u0e2a\u0e38\u0e17\u0e18\u0e34\u0e15\u0e48\u0e2d\u0e2b\u0e31\u0e27 \u0e40\u0e17\u0e35\u0e22\u0e1a\u0e01\u0e31\u0e1a\u0e15\u0e49\u0e19\u0e17\u0e38\u0e19\u0e08\u0e23\u0e34\u0e07 '+pxB(cph)+'/\u0e2b\u0e31\u0e27</p>'
+    +'<table class="t"><tr><th class="l">\u0e40\u0e2d\u0e40\u0e08\u0e19\u0e15\u0e4c</th><th>\u0e43\u0e1a</th>'
+      +'<th>\u0e1c\u0e39\u0e49\u0e43\u0e2b\u0e0d\u0e48</th><th>\u0e40\u0e14\u0e47\u0e01</th><th>\u0e22\u0e2d\u0e14</th>'
+      +'<th>\u0e2a\u0e38\u0e17\u0e18\u0e34/\u0e2b\u0e31\u0e27</th></tr>'
+    +(agRows||'<tr><td colspan="6" class="l" style="color:#9CA3AF;padding:14px 6px">\u0e44\u0e21\u0e48\u0e21\u0e35\u0e43\u0e1a\u0e08\u0e2d\u0e07\u0e17\u0e35\u0e48\u0e40\u0e14\u0e34\u0e19\u0e17\u0e32\u0e07\u0e08\u0e23\u0e34\u0e07</td></tr>')
+    +'<tr class="tot"><td class="l">\u0e22\u0e2d\u0e14\u0e02\u0e32\u0e22\u0e23\u0e27\u0e21</td>'
+      +'<td class="num">'+t.px.bk+'</td><td class="num">'+t.px.ad+'</td><td class="num">'+t.px.chd+'</td>'
+      +'<td class="num">'+pxN(gross)+'</td><td class="num mut">'+pxN(gross/pax)+'</td></tr>'
+    +'<tr class="vat"><td class="l" colspan="4">\u0e2b\u0e31\u0e01 VAT \u0e02\u0e32\u0e22 7% (\u0e43\u0e19 107)</td>'
+      +'<td class="num" style="color:#6B7280">\u2212'+pxN(vatOut)+'</td><td></td></tr>'
+    +'<tr class="tot" style="border-top:1px solid #E5E7EB"><td class="l" colspan="4">'
+      +'\u0e23\u0e32\u0e22\u0e44\u0e14\u0e49\u0e2a\u0e38\u0e17\u0e18\u0e34 (\u0e17\u0e35\u0e48\u0e40\u0e2d\u0e32\u0e44\u0e1b\u0e04\u0e34\u0e14\u0e01\u0e33\u0e44\u0e23)</td>'
+      +'<td class="num" style="color:#047857;font-size:14px">'+pxN(t.rev)+'</td>'
+      +'<td class="num" style="color:#047857">'+pxN(t.rev/pax)+'</td></tr></table>'
+    +(t.frozen?('<div class="foot" style="color:#047857">'
+      +'\u0e1b\u0e34\u0e14\u0e22\u0e2d\u0e14\u0e41\u0e25\u0e49\u0e27'
+      +(t.frozen.at?(' \u0e40\u0e21\u0e37\u0e48\u0e2d '+e(String(t.frozen.at).slice(0,10))):'')
+      +(t.frozen.by?(' \u0e42\u0e14\u0e22 '+e(t.frozen.by)):'')
+      +' \u00b7 \u0e15\u0e31\u0e27\u0e40\u0e25\u0e02\u0e40\u0e07\u0e34\u0e19\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e19\u0e49\u0e32\u0e19\u0e35\u0e49\u0e16\u0e39\u0e01\u0e41\u0e0a\u0e48\u0e44\u0e27\u0e49 '
+      +'\u0e44\u0e21\u0e48\u0e04\u0e34\u0e14\u0e43\u0e2b\u0e21\u0e48\u0e15\u0e32\u0e21\u0e2a\u0e39\u0e15\u0e23\u0e2d\u0e35\u0e01\u0e41\u0e25\u0e49\u0e27</div>'):'')
+    +'<div class="foot"><b>\u0e17\u0e35\u0e48\u0e21\u0e32:</b> \u0e22\u0e2d\u0e14\u0e43\u0e19\u0e43\u0e1a\u0e08\u0e2d\u0e07\u0e08\u0e23\u0e34\u0e07 (\u0e2b\u0e19\u0e49\u0e32 Booking) \u00b7 '
+      +'\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e04\u0e34\u0e14\u0e43\u0e2b\u0e21\u0e48\u0e08\u0e32\u0e01\u0e40\u0e23\u0e15\u0e23\u0e32\u0e04\u0e32 \u0e16\u0e49\u0e32\u0e21\u0e35\u0e2a\u0e48\u0e27\u0e19\u0e25\u0e14\u0e2b\u0e19\u0e49\u0e32\u0e07\u0e32\u0e19 \u0e15\u0e31\u0e27\u0e19\u0e35\u0e49\u0e04\u0e37\u0e2d\u0e15\u0e31\u0e27\u0e17\u0e35\u0e48\u0e25\u0e14\u0e41\u0e25\u0e49\u0e27<br>'
+      +'\u0e04\u0e19\u0e44\u0e21\u0e48\u0e21\u0e32 (No-show) \u0e15\u0e31\u0e14\u0e2d\u0e2d\u0e01\u0e08\u0e32\u0e01\u0e2b\u0e31\u0e27\u0e41\u0e25\u0e49\u0e27 \u0e41\u0e15\u0e48\u0e40\u0e07\u0e34\u0e19\u0e22\u0e31\u0e07\u0e2d\u0e22\u0e39\u0e48</div></div>'
+
+    +'<div class="cx"><h3><span class="bd" style="background:#F59E0B"></span>\u0e15\u0e49\u0e19\u0e17\u0e38\u0e19</h3>'
+    +'<p class="sub">\u0e04\u0e34\u0e14\u0e14\u0e49\u0e27\u0e22\u0e2a\u0e39\u0e15\u0e23\u0e40\u0e14\u0e35\u0e22\u0e27\u0e01\u0e31\u0e1a\u0e2b\u0e19\u0e49\u0e32 \u0e15\u0e49\u0e19\u0e17\u0e38\u0e19 &amp; \u0e08\u0e38\u0e14\u0e04\u0e38\u0e49\u0e21\u0e17\u0e38\u0e19 \u00b7 '
+      +'\u0e25\u0e33\u0e14\u0e31\u0e1a\u0e04\u0e27\u0e32\u0e21\u0e19\u0e48\u0e32\u0e40\u0e0a\u0e37\u0e48\u0e2d \u0e02\u0e2d\u0e07\u0e08\u0e23\u0e34\u0e07 \u203a \u0e41\u0e1c\u0e19\u0e40\u0e2a\u0e49\u0e19\u0e17\u0e32\u0e07 \u203a \u0e2a\u0e39\u0e15\u0e23\u0e01\u0e25\u0e32\u0e07</p>'
+    +'<table class="t"><tr><th class="l">\u0e23\u0e32\u0e22\u0e01\u0e32\u0e23</th><th class="l">\u0e17\u0e35\u0e48\u0e21\u0e32</th>'
+      +'<th>\u0e2a\u0e39\u0e15\u0e23\u0e27\u0e48\u0e32</th><th>\u0e43\u0e0a\u0e49\u0e08\u0e23\u0e34\u0e07</th></tr>'
+    +costRows
+    +'<tr class="tot"><td class="l" colspan="2">\u0e23\u0e27\u0e21\u0e15\u0e49\u0e19\u0e17\u0e38\u0e19</td>'
+      +'<td class="num mut">'+pxN(estTot)+'</td>'
+      +'<td class="num" style="color:#B45309;font-size:14px">'+pxN(t.cost)+'</td></tr>'
+    +'<tr class="vat"><td class="l" colspan="3">VAT \u0e0b\u0e37\u0e49\u0e2d\u0e17\u0e35\u0e48\u0e2b\u0e31\u0e01\u0e04\u0e37\u0e19\u0e44\u0e14\u0e49 '
+      +'(\u0e2b\u0e31\u0e01\u0e2d\u0e2d\u0e01\u0e08\u0e32\u0e01\u0e15\u0e31\u0e27\u0e40\u0e25\u0e02\u0e02\u0e49\u0e32\u0e07\u0e1a\u0e19\u0e41\u0e25\u0e49\u0e27)</td>'
+      +'<td class="num" style="color:#6B7280">'+pxB(vatIn)+'</td></tr></table>'
+    +'<div class="foot">'
+      +'<span class="src f">\u0e2a\u0e39\u0e15\u0e23\u0e01\u0e25\u0e32\u0e07</span> \u0e43\u0e0a\u0e49\u0e23\u0e48\u0e27\u0e21\u0e17\u0e38\u0e01\u0e40\u0e2a\u0e49\u0e19\u0e17\u0e32\u0e07&nbsp;&nbsp;'
+      +'<span class="src p">\u0e41\u0e1c\u0e19\u0e40\u0e2a\u0e49\u0e19\u0e17\u0e32\u0e07</span> \u0e40\u0e2a\u0e49\u0e19\u0e19\u0e35\u0e49\u0e1b\u0e23\u0e31\u0e1a\u0e44\u0e27\u0e49\u0e40\u0e2d\u0e07&nbsp;&nbsp;'
+      +'<span class="src r">\u0e02\u0e2d\u0e07\u0e08\u0e23\u0e34\u0e07</span> \u0e01\u0e23\u0e2d\u0e01\u0e08\u0e23\u0e34\u0e07\u0e41\u0e25\u0e49\u0e27&nbsp;&nbsp;'
+      +'<span class="src w">\u0e23\u0e2d\u0e02\u0e2d\u0e07\u0e08\u0e23\u0e34\u0e07</span> \u0e21\u0e35\u0e17\u0e35\u0e48\u0e21\u0e32\u0e08\u0e23\u0e34\u0e07\u0e41\u0e15\u0e48\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e01\u0e23\u0e2d\u0e01<br>'
+      +'\u0e2b\u0e21\u0e27\u0e14\u0e17\u0e35\u0e48\u0e23\u0e27\u0e21\u0e40\u0e1b\u0e47\u0e19 0 \u0e0b\u0e48\u0e2d\u0e19\u0e44\u0e27\u0e49 \u0e44\u0e21\u0e48\u0e40\u0e1b\u0e25\u0e37\u0e2d\u0e07\u0e15\u0e32</div></div>'
+    +'</div>'
+
+    +'<div class="pph"><div class="h">\u0e04\u0e48\u0e32\u0e40\u0e09\u0e25\u0e35\u0e48\u0e22\u0e15\u0e48\u0e2d\u0e2b\u0e31\u0e27 \u00b7 \u0e2b\u0e32\u0e23 '+t.px.tot+' \u0e04\u0e19\u0e17\u0e35\u0e48\u0e40\u0e14\u0e34\u0e19\u0e17\u0e32\u0e07\u0e08\u0e23\u0e34\u0e07</div>'
+    +'<div class="s">\u0e15\u0e31\u0e27\u0e40\u0e25\u0e02\u0e0a\u0e38\u0e14\u0e19\u0e35\u0e49\u0e40\u0e17\u0e35\u0e22\u0e1a\u0e02\u0e49\u0e32\u0e21\u0e25\u0e33 \u0e02\u0e49\u0e32\u0e21\u0e27\u0e31\u0e19 \u0e02\u0e49\u0e32\u0e21\u0e40\u0e2a\u0e49\u0e19\u0e17\u0e32\u0e07\u0e44\u0e14\u0e49 \u00b7 '
+      +'\u0e22\u0e2d\u0e14\u0e23\u0e27\u0e21\u0e40\u0e17\u0e35\u0e22\u0e1a\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e40\u0e1e\u0e23\u0e32\u0e30\u0e04\u0e19\u0e44\u0e21\u0e48\u0e40\u0e17\u0e48\u0e32\u0e01\u0e31\u0e19</div>'
+    +'<div class="row">'
+    +'<div class="cell"><small>\u0e23\u0e32\u0e22\u0e44\u0e14\u0e49 / \u0e2b\u0e31\u0e27</small>'
+      +'<b style="color:#047857">'+pxN(t.rev/pax)+'</b>'
+      +'<u>\u0e22\u0e2d\u0e14\u0e02\u0e32\u0e22 '+pxN(gross/pax)+' \u2212 VAT '+pxN(vatOut/pax)+'</u></div>'
+    +'<span class="op">\u2212</span>'
+    +'<div class="cell"><small>\u0e15\u0e49\u0e19\u0e17\u0e38\u0e19 / \u0e2b\u0e31\u0e27</small>'
+      +'<b style="color:#B45309">'+pxN(cph)+'</b>'
+      +'<u>'+(t.rev?(Math.round(t.cost/t.rev*100)+'% \u0e02\u0e2d\u0e07\u0e23\u0e32\u0e22\u0e44\u0e14\u0e49\u0e15\u0e48\u0e2d\u0e2b\u0e31\u0e27'):'\u2014')+'</u></div>'
+    +'<span class="op">=</span>'
+    +'<div class="cell"><small>\u0e40\u0e2b\u0e25\u0e37\u0e2d / \u0e2b\u0e31\u0e27</small>'
+      +'<b style="color:'+(loss?'#BE123C':'#047857')+'">'+(loss?'\u2212':'+')+pxN(Math.abs(t.profit/pax))+'</b>'
+      +'<u>\u0e17\u0e31\u0e49\u0e07\u0e25\u0e33 '+(loss?'\u2212':'+')+pxN(Math.abs(t.profit))+'</u></div>'
+    +'<div class="stk"><div class="rail">'+stk+'</div><div class="lgd">'+lgd+'</div></div>'
+    +'</div></div>'
+
+    +'<div class="res">'
+    +'<div class="box"><small>\u0e23\u0e32\u0e22\u0e44\u0e14\u0e49\u0e2a\u0e38\u0e17\u0e18\u0e34</small><b style="color:#047857">'+pxN(t.rev)+'</b></div>'
+    +'<span class="eqn">\u2212</span>'
+    +'<div class="box"><small>\u0e15\u0e49\u0e19\u0e17\u0e38\u0e19</small><b style="color:#B45309">'+pxN(t.cost)+'</b></div>'
+    +'<span class="eqn">=</span>'
+    +'<div class="box"><small>'+(loss?'\u0e02\u0e32\u0e14\u0e17\u0e38\u0e19':'\u0e01\u0e33\u0e44\u0e23')+'\u0e02\u0e2d\u0e07\u0e25\u0e33\u0e19\u0e35\u0e49</small>'
+      +'<span class="big'+(loss?' neg':'')+'">'+(loss?'\u2212':'+')+pxN(Math.abs(t.profit))+'</span></div>'
+    +'<span style="flex:1"></span>'
+    +(t.be?('<div class="bebar"><div class="t2">'
+      +'<span>\u0e08\u0e38\u0e14\u0e04\u0e38\u0e49\u0e21\u0e17\u0e38\u0e19 <b style="color:#111827">'+t.be+' \u0e2b\u0e31\u0e27</b></span>'
+      +'<span>\u0e2d\u0e2d\u0e01\u0e08\u0e23\u0e34\u0e07 <b style="color:#111827">'+t.px.tot+'</b></span></div>'
+      +'<div class="rail"><i class="'+(loss?'neg':'')+'" style="width:'+beW+'%"></i><u style="left:63%"></u></div>'
+      +'<div style="font-size:10px;color:#6B7280;margin-top:5px">'
+      +(t.px.tot>=t.be?('\u0e40\u0e01\u0e34\u0e19\u0e08\u0e38\u0e14\u0e04\u0e38\u0e49\u0e21\u0e17\u0e38\u0e19 '+(t.px.tot-t.be)+' \u0e2b\u0e31\u0e27')
+                       :('\u0e02\u0e32\u0e14\u0e2d\u0e35\u0e01 '+(t.be-t.px.tot)+' \u0e2b\u0e31\u0e27\u0e16\u0e36\u0e07\u0e08\u0e30\u0e40\u0e2a\u0e21\u0e2d\u0e15\u0e31\u0e27'))
+      +' \u00b7 \u0e02\u0e35\u0e14\u0e14\u0e33\u0e04\u0e37\u0e2d\u0e08\u0e38\u0e14\u0e04\u0e38\u0e49\u0e21\u0e17\u0e38\u0e19</div></div>'):'')
+    +'<button class="pbtn on" onclick="pxClose(\''+e(t.bid)+'\')">'
+      +(t.closed?'\u0e40\u0e1b\u0e34\u0e14\u0e22\u0e2d\u0e14\u0e43\u0e2b\u0e21\u0e48':'\u0e1b\u0e34\u0e14\u0e22\u0e2d\u0e14\u0e17\u0e23\u0e34\u0e1b\u0e19\u0e35\u0e49')+'</button></div>'
+
+    +(loss&&t.be?('<div class="lossnote">\u0e2d\u0e2d\u0e01\u0e40\u0e23\u0e37\u0e2d\u0e14\u0e49\u0e27\u0e22 '+t.px.tot
+      +' \u0e2b\u0e31\u0e27 \u0e08\u0e32\u0e01\u0e08\u0e38\u0e14\u0e04\u0e38\u0e49\u0e21\u0e17\u0e38\u0e19 '+t.be+' \u0e2b\u0e31\u0e27 \u00b7 '
+      +'\u0e19\u0e49\u0e33\u0e21\u0e31\u0e19 \u0e04\u0e48\u0e32\u0e40\u0e2a\u0e37\u0e48\u0e2d\u0e21 \u0e25\u0e39\u0e01\u0e40\u0e23\u0e37\u0e2d \u0e40\u0e1b\u0e47\u0e19\u0e15\u0e49\u0e19\u0e17\u0e38\u0e19\u0e04\u0e07\u0e17\u0e35\u0e48 \u0e44\u0e21\u0e48\u0e25\u0e14\u0e15\u0e32\u0e21\u0e08\u0e33\u0e19\u0e27\u0e19\u0e04\u0e19'
+      +'<span style="font-weight:400;opacity:.85"> \u2014 \u0e17\u0e23\u0e34\u0e1b\u0e41\u0e1a\u0e1a\u0e19\u0e35\u0e49\u0e04\u0e27\u0e23\u0e40\u0e2b\u0e47\u0e19\u0e15\u0e31\u0e49\u0e07\u0e41\u0e15\u0e48\u0e40\u0e21\u0e37\u0e48\u0e2d\u0e27\u0e32\u0e19 \u0e44\u0e21\u0e48\u0e43\u0e0a\u0e48\u0e21\u0e32\u0e40\u0e2b\u0e47\u0e19\u0e15\u0e2d\u0e19\u0e1b\u0e34\u0e14\u0e22\u0e2d\u0e14</span></div>'):'')
+    +'</div>';
 }
 
 function renderTripPL(){
@@ -56004,123 +56388,138 @@ function renderTripPL(){
   if(!_px.date) _px.date=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10);
   var D=pxDay(_px.date,_px.pier);
   var DW=(typeof pjDateWords==='function')?pjDateWords(_px.date):{big:_px.date};
+  var OP=_px.open||{};
 
-  var tR=0,tC=0,tP=0,tPax=0,nLoss=0,lossName='';
-  D.forEach(function(t){ tR+=t.rev; tC+=t.cost; tP+=t.profit; tPax+=t.px.tot;
-    if(t.profit<0){ nLoss++; if(!lossName) lossName=t.name; } });
+  var tR=0,tC=0,tP=0,tPax=0,tBk=0,tGross=0,nLoss=0,lossName='',nReal=0,nProfit=0;
+  D.forEach(function(t){ tR+=t.rev; tC+=t.cost; tP+=t.profit; tPax+=t.px.tot; tBk+=t.px.bk; tGross+=t.revGross;
+    if(t.profit<0){ nLoss++; if(!lossName) lossName=t.name; } else nProfit++;
+    if(t.nReal) nReal++; });
   var per=tPax?Math.round(tP/tPax):0;
   var tgt=(typeof drCfg==='function')?((drCfg()||{}).targetPerPax||0):0;
+  var pct=tR?Math.round(tC/tR*100):0;
+  var nNoPlan=D.filter(function(t){ return !t.plan; }).length;
+  var nNoFuel=D.filter(function(t){ return !t.fuelPr; }).length;
 
-  var pierSel='<select onchange="pxPier(this.value)"><option value="">ทุกท่า</option>'
+  var pierSel='<select onchange="pxPier(this.value)"><option value="">\u0e17\u0e38\u0e01\u0e17\u0e48\u0e32</option>'
     +((typeof PO_PIERS!=='undefined')?PO_PIERS:[]).map(function(p){
         return '<option value="'+e(p.k)+'"'+(_px.pier===p.k?' selected':'')+'>'+e(p.t||p.n)+'</option>'; }).join('')
     +'</select>';
 
-  var cards=D.map(function(t){
-    var loss=t.profit<0, open=!!(_px.open||{})[t.bid];
-    var mx=Math.max(t.rev,t.cost)||1;
-    /* แถบต้นทุนแบ่งตามหมวด · เรียงตามลำดับในสูตร ไม่เรียงตามขนาด จะได้เทียบข้ามทริปได้ */
-    var byG={}, gOrd=[];
-    /* เทียบกับ undefined ไม่ใช่ความจริง/เท็จ · หมวดที่รวมได้ 0 เป็นค่าเท็จ แล้วจะถูกดันเข้า gOrd ซ้ำ */
-    t.rows.forEach(function(r){ if(byG[r.g]===undefined){ byG[r.g]=0; gOrd.push(r.g); } byG[r.g]+=r.use; });
-    /* หมวดที่รวมแล้วเป็น 0 ไม่ต้องโชว์ · เส้นทางส่วนใหญ่ไม่ใช้หางยาว ชิป "เรือหางยาว 0" มีแต่รก */
-    gOrd=gOrd.filter(function(g){ return Math.round(byG[g])!==0; });
-    var segs=gOrd.map(function(g){
-      return '<i style="width:'+(byG[g]/mx*100).toFixed(2)+'%;background:'+pxGColor(g)+(t.st==='est'?';opacity:.55':'')+'"></i>'; }).join('');
-    var chips=gOrd.map(function(g){
-      var anyReal=t.rows.some(function(r){ return r.g===g && r.real!=null; });
-      return '<span class="cc'+(anyReal?'':' est')+'"><i style="background:'+pxGColor(g)+'"></i>'
-        +e(g.replace(/^ค่า/,''))+'<b>'+Math.round(byG[g]).toLocaleString()+'</b></span>'; }).join('');
-    var stTxt={est:'ยังเป็นตัวประมาณ',part:'ใส่ของจริงแล้ว '+t.nReal+' อย่าง',done:'ปิดยอดทริปแล้ว'}[t.st];
-
-    var bd='';
-    if(open){
-      bd='<div class="bd"><table class="bt">'
-        +'<tr><th style="width:30%">ก้อนต้นทุน</th><th>ที่มาของตัวเลข</th>'
-          +'<th style="width:12%;text-align:right">ประมาณ</th><th style="width:12%;text-align:right">จริง</th>'
-          +'<th style="width:10%;text-align:right">ต่าง</th></tr>'
-        + t.rows.filter(function(r){ return Math.round(r.est)!==0 || r.real!=null; }).map(function(r){
-            var df=(r.real!=null)?(r.real-r.est):null;
-            return '<tr><td><span class="dot" style="background:'+pxGColor(r.g)+'"></span>'+e(r.l)+'</td>'
-              +'<td>'+(r.real!=null?'<span class="src real">ของจริง</span>':'<span class="src est">ประมาณ</span>')
-                +(r.why?(' <span class="why">'+e(r.why)+'</span>'):'')+'</td>'
-              +'<td class="n">'+Math.round(r.est).toLocaleString()+'</td>'
-              +'<td class="n"'+(r.real==null?' style="color:#CBD5E1"':'')+'>'+(r.real!=null?Math.round(r.real).toLocaleString():'—')+'</td>'
-              +'<td class="n"'+(df?(' style="color:'+(df>0?'#B91C1C':'#047857')+'"'):'')+'>'
-                +(df?((df>0?'+':'−')+Math.abs(Math.round(df)).toLocaleString()):'—')+'</td></tr>'; }).join('')
-        +'</table>'
-        +'<div class="why" style="margin-top:9px">'
-          +'สูตรที่ใช้: '+(t.plan?('<b>'+e(t.plan.name)+'</b>'):'<b style="color:#B4560A">เส้นทางนี้ยังไม่ได้ผูกแผนต้นทุน — ใช้สูตรกลางเปล่า ๆ</b>')
-          +' · เครื่อง '+e(t.ctx.eng)+' · น้ำมัน '+(t.fuelPr?('฿'+t.fuelPr+'/ลิตร'):'<b style="color:#B4560A">ยังไม่ได้ลงราคาน้ำมันวันนี้</b>')
-          +' · หัวจริง '+t.px.tot+' (ไทย '+t.px.th+' · ต่างชาติ '+t.px.fr+')</div>'
-        +'</div>';
-    }
-    var warn='';
-    if(loss && t.be) warn='<div class="warn">ออกเรือด้วย '+t.px.tot+' หัว จากจุดคุ้มทุน '+t.be+' หัว · '
-      +'น้ำมัน ค่าเสื่อม ลูกเรือ เป็นต้นทุนคงที่ ไม่ลดตามจำนวนคน'
-      +'<span style="font-weight:400;opacity:.85"> — ทริปแบบนี้ควรเห็นตั้งแต่เมื่อวาน ไม่ใช่มาเห็นตอนปิดยอด</span></div>';
-
-    return '<div class="tc'+(loss?' loss':'')+'"><div class="tcr">'
-      +'<div class="tcl" onclick="pxOpen(\''+e(t.bid)+'\')">'
-        +'<div class="tm">'+e(t.dep||'--:--')+'</div>'
-        +'<div class="bn">'+e(t.name)+'</div>'
-        +'<div class="rt" style="background:'+e(t.route.color||'#64748B')+'">'+e(t.route.name||'—')+'</div>'
-        +'<div class="px">'+t.px.tot+' หัว · ไทย '+t.px.th+' · ต่างชาติ '+t.px.fr+' · '+t.px.bk+' ใบจอง<br>'
-          +'<span style="color:#94A3B8">'+(open?'&#9660; ปิดรายละเอียด':'&#9654; ดูแยกทีละก้อน')+'</span></div>'
-      +'</div>'
-      +'<div class="tcm">'
-        +'<div class="bar"><i style="width:'+(t.rev/mx*100).toFixed(2)+'%;background:'+(t.st==='est'?'#93C5FD':'#3B82F6')+'"></i></div>'
-        +'<div class="blab"><span>รายได้ (ไม่รวม VAT)</span><b>'+t.rev.toLocaleString()+'</b></div>'
-        +'<div class="bar">'+segs+'</div>'
-        +'<div class="blab"><span>ต้นทุน'+(t.st==='est'?' (ประมาณจากสูตร)':'')+'</span><b>'+t.cost.toLocaleString()+'</b></div>'
-        +'<div class="segs">'+chips+'</div>'
-      +'</div>'
-      +'<div class="tcx">'
-        +'<div class="pv'+(t.st==='est'?' dim':'')+'">'+(t.profit>=0?'+':'−')+Math.abs(t.profit).toLocaleString()+'</div>'
-        +'<div class="ph">'+(t.px.tot?((t.profit>=0?'+':'−')+Math.abs(Math.round(t.profit/t.px.tot)).toLocaleString()+' / หัว'):'ไม่มีคนเดินทาง')
-          +(t.rev?(' · '+Math.round(t.profit/t.rev*100)+'%'):'')
-          +(t.be?('<br>จุดคุ้มทุน '+t.be+' หัว'):'')+'</div>'
-        +'<div class="st '+t.st+'" onclick="pxClose(\''+e(t.bid)+'\')" title="'
-          +(t.closed?'กดเพื่อเปิดยอดใหม่':'กดเพื่อปิดยอดทริปนี้')+'"><i></i>'+stTxt+'</div>'
-      +'</div></div>'+warn+bd+'</div>';
+  /* ── ตารางสรุปรายลำ ── */
+  var sumRows=D.map(function(t){
+    var loss=t.profit<0, open=!!OP[t.bid];
+    var ratio=t.rev?Math.min(140, t.cost/t.rev*100):100;
+    var bc=(ratio>=100)?'#E11D48':(ratio>=70?'#F59E0B':'#10B981');
+    var col=(typeof pckBoatColor==='function'?pckBoatColor(t.bid):'')||t.route.color||'#64748B';
+    return '<tr class="br'+(loss?' loss':'')+'" onclick="pxOpen(\''+e(t.bid)+'\')">'
+      +'<td class="l"><div class="bn"><i style="background:'+e(col)+'"></i>'+e(t.name)
+        +'<span style="font-size:10px;color:#9CA3AF;font-weight:600">'+(open?'\u25be':'\u25b8')+'</span></div>'
+      +'<div class="rn">'+e(t.route.name||'\u2014')+'</div></td>'
+      +'<td><span class="tm">'+e(t.dep||'--:--')+'</span></td>'
+      +'<td><span class="num">'+t.px.tot+'</span><div class="per">\u0e44\u0e17\u0e22 '+t.px.th+' \u00b7 \u0e15\u0e1b\u0e01 '+t.px.fr+'</div></td>'
+      +'<td><span class="num">'+pxN(t.rev)+'</span><div class="per">'+pxN(t.rev/Math.max(1,t.px.tot))+' / \u0e2b\u0e31\u0e27</div></td>'
+      +'<td><span class="num cost">'+pxN(t.cost)+'</span><div class="per">'+pxN(t.cost/Math.max(1,t.px.tot))+' / \u0e2b\u0e31\u0e27</div></td>'
+      +'<td><span class="net'+(loss?' neg':'')+'">'+(loss?'\u2212':'+')+pxN(Math.abs(t.profit))+'</span>'
+        +'<div class="per">'+(loss?'\u2212':'+')+pxN(Math.abs(t.profit/Math.max(1,t.px.tot)))+' / \u0e2b\u0e31\u0e27'
+        +(t.rev?(' \u00b7 '+Math.round(t.profit/t.rev*100)+'%'):'')+'</div></td>'
+      +'<td><div class="bars"><i style="width:'+Math.min(100,ratio).toFixed(0)+'%;background:'+bc+'"></i></div>'
+        +'<div class="per" style="text-align:right">'+(t.be?('\u0e04\u0e38\u0e49\u0e21\u0e17\u0e38\u0e19 '+t.be+' \u0e2b\u0e31\u0e27'):'\u2014')+'</div></td></tr>';
   }).join('');
 
+  var totRow=D.length?('<tr class="tot"><td class="l">\u0e23\u0e27\u0e21\u0e17\u0e31\u0e49\u0e07\u0e27\u0e31\u0e19 \u00b7 '+D.length+' \u0e25\u0e33</td>'
+    +'<td class="num mut">\u2014</td>'
+    +'<td><span class="num">'+tPax+'</span><div class="per">'+tBk+' \u0e43\u0e1a\u0e08\u0e2d\u0e07</div></td>'
+    +'<td><span class="num">'+pxN(tR)+'</span><div class="per">'+pxN(tR/Math.max(1,tPax))+' / \u0e2b\u0e31\u0e27</div></td>'
+    +'<td><span class="num cost">'+pxN(tC)+'</span><div class="per">'+pxN(tC/Math.max(1,tPax))+' / \u0e2b\u0e31\u0e27</div></td>'
+    +'<td><span class="net'+(tP<0?' neg':'')+'">'+(tP>=0?'+':'\u2212')+pxN(Math.abs(tP))+'</span>'
+      +'<div class="per">'+(per>=0?'+':'\u2212')+pxN(Math.abs(per))+' / \u0e2b\u0e31\u0e27'+(tR?(' \u00b7 '+Math.round(tP/tR*100)+'%'):'')+'</div></td>'
+    +'<td><div class="bars"><i style="width:'+Math.min(100,pct)+'%;background:'
+      +((pct>=100)?'#E11D48':(pct>=70?'#F59E0B':'#10B981'))+'"></i></div>'
+      +'<div class="per" style="text-align:right">\u0e15\u0e49\u0e19\u0e17\u0e38\u0e19 '+pct+'% \u0e02\u0e2d\u0e07\u0e23\u0e32\u0e22\u0e44\u0e14\u0e49</div></td></tr>'):'';
+
+  var details=D.filter(function(t){ return OP[t.bid]; }).map(function(t){ return pxDetail(t, e); }).join('');
+
   host.innerHTML='<style id="pl-style">'+pxCSS()+'</style>'
-    +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">'
-      +'<h1 style="margin:0;font-size:19px;font-weight:700">P&amp;L รายทริป</h1>'
-      +'<span style="font-size:11px;color:#8a8a82">ต้นทุนคิดด้วยสูตรเดียวกับหน้า ต้นทุน &amp; จุดคุ้มทุน · '
-      +'ป้อนของจริงของทริปเข้าไป สองหน้านี้จึงตอบไม่ตรงกันไม่ได้</span></div>'
-    +'<div class="pl-tb">'
-      +'<button class="pl-btn" onclick="pxShift(-1)">&lsaquo;</button>'
-      +'<span class="pl-dt">'+e(DW.big||_px.date)+'</span>'
-      +'<button class="pl-btn" onclick="pxShift(1)">&rsaquo;</button>'
-      +'<button class="pl-btn" onclick="pxToday()">วันนี้</button>'
-      +'<input type="date" value="'+e(_px.date)+'" onchange="pxPick(this.value)">'
-      +'<span style="flex:1"></span>'+pierSel
+    +'<div class="pbar">'
+      +'<div class="pbrand"><div class="plogo">\u0e3f</div><b>P&amp;L \u0e23\u0e32\u0e22\u0e17\u0e23\u0e34\u0e1b</b></div>'
+      +'<div class="pctl">'
+        +'<button class="pbtn" onclick="pxShift(-1)">\u2039</button>'
+        +'<span class="pbtn" style="font-weight:800">'+e(DW.big||_px.date)+'</span>'
+        +'<button class="pbtn" onclick="pxShift(1)">\u203a</button>'
+        +'<button class="pbtn" onclick="pxToday()">\u0e27\u0e31\u0e19\u0e19\u0e35\u0e49</button>'
+        +'<input type="date" value="'+e(_px.date)+'" onchange="pxPick(this.value)">'
+        +pierSel
+        +(D.length?('<button class="pbtn" onclick="pxOpenAll()">'
+          +(D.every(function(t){ return OP[t.bid]; })?'\u0e1e\u0e31\u0e1a\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14':'\u0e01\u0e32\u0e07\u0e17\u0e38\u0e01\u0e25\u0e33')+'</button>'):'')
+      +'</div></div>'
+
+    +'<div class="ptitle"><h1>'+(D.length
+        ?((tP>=0?'\u0e01\u0e33\u0e44\u0e23\u0e27\u0e31\u0e19\u0e19\u0e35\u0e49 +':'\u0e02\u0e32\u0e14\u0e17\u0e38\u0e19\u0e27\u0e31\u0e19\u0e19\u0e35\u0e49 \u2212')+pxN(Math.abs(tP)))
+        :'\u0e27\u0e31\u0e19\u0e19\u0e35\u0e49\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e40\u0e23\u0e37\u0e2d\u0e2d\u0e2d\u0e01')+'</h1>'
+      +'<p><span class="plive"></span>'+D.length+' \u0e17\u0e23\u0e34\u0e1b \u00b7 '+tPax+' \u0e2b\u0e31\u0e27 \u00b7 '
+      +'\u0e15\u0e49\u0e19\u0e17\u0e38\u0e19\u0e04\u0e34\u0e14\u0e14\u0e49\u0e27\u0e22\u0e2a\u0e39\u0e15\u0e23\u0e40\u0e14\u0e35\u0e22\u0e27\u0e01\u0e31\u0e1a\u0e2b\u0e19\u0e49\u0e32 \u0e15\u0e49\u0e19\u0e17\u0e38\u0e19 &amp; \u0e08\u0e38\u0e14\u0e04\u0e38\u0e49\u0e21\u0e17\u0e38\u0e19'
+      +(nNoPlan?(' \u00b7 <b style="color:#B45309">'+nNoPlan+' \u0e25\u0e33\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e08\u0e31\u0e1a\u0e04\u0e39\u0e48\u0e41\u0e1c\u0e19</b>'):'')
+      +'</p></div>'
+
+    +'<div class="pk4">'
+      +'<div class="eg k"><div class="k1"><p class="lb">\u0e23\u0e32\u0e22\u0e44\u0e14\u0e49 (\u0e44\u0e21\u0e48\u0e23\u0e27\u0e21 VAT)</p>'
+        +'<span class="pico blue">'+pxIco('rev')+'</span></div>'
+        +'<div class="kbig"><b>'+pxN(tR)+'</b><em class="g">\u0e3f</em></div>'
+        +'<p class="ksm">'+pxN(tR/Math.max(1,tPax))+' \u0e15\u0e48\u0e2d\u0e2b\u0e31\u0e27 \u00b7 '+tBk+' \u0e43\u0e1a\u0e08\u0e2d\u0e07</p>'
+        +'<div class="kft"><span>\u0e22\u0e2d\u0e14\u0e02\u0e32\u0e22 <b>'+pxN(tGross)+'</b></span>'
+        +'<span>VAT \u0e02\u0e32\u0e22 <b>'+pxN(tGross-tR)+'</b></span></div></div>'
+
+      +'<div class="eg k"><div class="k1"><p class="lb">\u0e15\u0e49\u0e19\u0e17\u0e38\u0e19</p>'
+        +'<span class="pico or">'+pxIco('cost')+'</span></div>'
+        +'<div class="kbig"><b>'+pxN(tC)+'</b><em class="'+(pct>=100?'r':'g')+'">'+pct+'%</em></div>'
+        +'<p class="ksm">'+pxN(tC/Math.max(1,tPax))+' \u0e15\u0e48\u0e2d\u0e2b\u0e31\u0e27</p>'
+        +'<div class="kft"><span>\u0e21\u0e35\u0e02\u0e2d\u0e07\u0e08\u0e23\u0e34\u0e07 <b>'+nReal+'/'+D.length+' \u0e25\u0e33</b></span>'
+        +'<span>'+(nNoFuel?('<b style="color:#B45309">'+nNoFuel+' \u0e25\u0e33\u0e44\u0e21\u0e48\u0e21\u0e35\u0e23\u0e32\u0e04\u0e32\u0e19\u0e49\u0e33\u0e21\u0e31\u0e19</b>'):'\u0e19\u0e49\u0e33\u0e21\u0e31\u0e19 <b>\u0e04\u0e23\u0e1a</b>')+'</span></div></div>'
+
+      +'<div class="eg k"><div class="k1"><p class="lb">\u0e01\u0e33\u0e44\u0e23\u0e2a\u0e38\u0e17\u0e18\u0e34</p>'
+        +'<span class="pico em">'+pxIco('pro')+'</span></div>'
+        +'<div class="kbig"><b style="color:'+(tP<0?'#BE123C':'#047857')+'">'
+        +(tP>=0?'+':'\u2212')+pxN(Math.abs(tP))+'</b>'
+        +'<em class="'+(tP<0?'r':'')+'">'+(tR?(Math.round(tP/tR*100)+'%'):'\u2014')+'</em></div>'
+        +'<p class="ksm'+((tgt&&per<tgt)?'':'')+'">'+(per>=0?'+':'\u2212')+pxN(Math.abs(per))+' \u0e15\u0e48\u0e2d\u0e2b\u0e31\u0e27'
+        +(tgt?(' \u00b7 \u0e40\u0e1b\u0e49\u0e32 '+tgt+' '+(per>=tgt?'\u0e1c\u0e48\u0e32\u0e19':'\u0e44\u0e21\u0e48\u0e16\u0e36\u0e07')):'')+'</p>'
+        +'<div class="kft"><span>\u0e17\u0e23\u0e34\u0e1b\u0e01\u0e33\u0e44\u0e23 <b>'+nProfit+'</b></span>'
+        +'<span>\u0e17\u0e23\u0e34\u0e1b\u0e02\u0e32\u0e14\u0e17\u0e38\u0e19 <b'+(nLoss?' style="color:#BE123C"':'')+'>'+nLoss+'</b></span></div></div>'
+
+      +'<div class="eg k"><div class="k1"><p class="lb">\u0e04\u0e27\u0e32\u0e21\u0e08\u0e23\u0e34\u0e07\u0e02\u0e2d\u0e07\u0e15\u0e31\u0e27\u0e40\u0e25\u0e02</p>'
+        +'<span class="pico pu">'+pxIco('ok')+'</span></div>'
+        +'<div class="kbig"><b>'+nReal+' / '+D.length+'</b><em class="g">\u0e25\u0e33</em></div>'
+        +'<p class="ksm">\u0e21\u0e35\u0e02\u0e2d\u0e07\u0e08\u0e23\u0e34\u0e07\u0e17\u0e31\u0e1a\u0e2a\u0e39\u0e15\u0e23\u0e41\u0e25\u0e49\u0e27\u0e2d\u0e22\u0e48\u0e32\u0e07\u0e19\u0e49\u0e2d\u0e22 1 \u0e1a\u0e23\u0e23\u0e17\u0e31\u0e14</p>'
+        +'<div class="kft"><span>\u0e08\u0e31\u0e1a\u0e04\u0e39\u0e48\u0e41\u0e1c\u0e19 <b'+(nNoPlan?' style="color:#B45309"':'')+'>'
+        +(D.length-nNoPlan)+'/'+D.length+'</b></span>'
+        +'<span>\u0e1b\u0e34\u0e14\u0e22\u0e2d\u0e14 <b>'+D.filter(function(t){ return t.closed; }).length+'</b></span></div></div>'
     +'</div>'
-    +'<div class="pl-strip">'
-      +'<div class="pl-k rev"><div class="k">Revenue</div><div class="v">'+tR.toLocaleString()+'</div>'
-        +'<div class="s">ไม่รวม VAT · '+tPax+' หัว</div></div>'
-      +'<div class="pl-k cost"><div class="k">Cost</div><div class="v">'+tC.toLocaleString()+'</div>'
-        +'<div class="s">'+D.filter(function(t){return t.nReal;}).length+' / '+D.length+' ทริปมีของจริงแล้ว</div></div>'
-      +'<div class="pl-k pro'+(tP<0?' neg':'')+'"><div class="k">Profit</div><div class="v">'
-        +(tP>=0?'+':'−')+Math.abs(tP).toLocaleString()+'</div>'
-        +'<div class="s">'+(tR?(Math.round(tP/tR*100)+'% ของรายได้'):'—')+'</div></div>'
-      +'<div class="pl-k'+(tgt&&per<tgt?' bad':'')+'"><div class="k">ต่อหัว</div><div class="v">'
-        +(per>=0?'+':'−')+Math.abs(per).toLocaleString()+'</div>'
-        +'<div class="s">'+(tgt?('เป้า '+tgt+' · '+(per>=tgt?'ผ่าน':'ไม่ถึงเป้า')):'ยังไม่ได้ตั้งเป้า')+'</div></div>'
-      +'<div class="pl-k'+(nLoss?' bad':'')+'"><div class="k">ทริปที่ขาดทุน</div><div class="v">'
-        +nLoss+' / '+D.length+'</div><div class="s">'+(nLoss?e(lossName):'ไม่มี')+'</div></div>'
-    +'</div>'
-    + (D.length ? cards : '<div class="empty">วันนี้ยังไม่มีเรือออก'
-        +(_px.pier?' ที่ท่านี้':'')+' · เลือกวันอื่นหรือเปลี่ยนท่าดู</div>')
-    + '<div class="note"><b>สถานะสามระดับ</b> — '
-      +'<span style="color:#8A5A00">&#9679; ประมาณจากสูตร</span> · '
-      +'<span style="color:#1D4ED8">&#9679; ใส่ของจริงบางส่วนแล้ว</span> · '
-      +'<span style="color:#047857">&#9679; ปิดยอดแล้ว</span> (ตัวเลขถูกแช่ไว้ · แก้สูตรหรือขึ้นราคาทีหลังจะไม่ย้อนมาขยับ)<br>'
-      +'กดที่ป้ายสถานะเพื่อปิดยอด · กดที่ชื่อเรือเพื่อกางดูต้นทุนทีละบรรทัด<br>'
-      +'ของจริงที่ทับสูตรได้ตอนนี้: <b>น้ำมัน</b> (จาก Daily Fleet Log) · <b>อาหาร</b> (จากที่ส่งร้านหน้าท่า) · '
-      +'<b>ค่ารถ</b> (จากรถที่ผูกกับใบจองจริง) — ที่เหลือยังเป็นตัวประมาณ</div>';
+
+    +(D.length?('<div class="eg"><div class="phd"><div><h2>\u0e2a\u0e23\u0e38\u0e1b\u0e23\u0e32\u0e22\u0e25\u0e33</h2>'
+      +'<p>\u0e25\u0e33\u0e19\u0e35\u0e49\u0e44\u0e1b\u0e40\u0e2a\u0e49\u0e19\u0e17\u0e32\u0e07\u0e44\u0e2b\u0e19 \u0e23\u0e31\u0e1a\u0e01\u0e35\u0e48\u0e04\u0e19 \u0e44\u0e14\u0e49\u0e40\u0e17\u0e48\u0e32\u0e44\u0e2b\u0e23\u0e48 \u0e08\u0e48\u0e32\u0e22\u0e40\u0e17\u0e48\u0e32\u0e44\u0e2b\u0e23\u0e48 \u0e40\u0e2b\u0e25\u0e37\u0e2d\u0e40\u0e17\u0e48\u0e32\u0e44\u0e2b\u0e23\u0e48 \u00b7 '
+      +'\u0e01\u0e14\u0e17\u0e35\u0e48\u0e41\u0e16\u0e27\u0e40\u0e1e\u0e37\u0e48\u0e2d\u0e01\u0e32\u0e07\u0e14\u0e39\u0e17\u0e35\u0e25\u0e30\u0e1a\u0e23\u0e23\u0e17\u0e31\u0e14</p></div>'
+      +'<span class="rt">\u0e40\u0e23\u0e35\u0e22\u0e07\u0e15\u0e32\u0e21\u0e40\u0e27\u0e25\u0e32\u0e2d\u0e2d\u0e01\u0e40\u0e23\u0e37\u0e2d</span></div>'
+      +'<table class="sum"><tr><th class="l">\u0e40\u0e23\u0e37\u0e2d \u00b7 \u0e40\u0e2a\u0e49\u0e19\u0e17\u0e32\u0e07</th><th>\u0e2d\u0e2d\u0e01</th>'
+      +'<th>\u0e25\u0e39\u0e01\u0e04\u0e49\u0e32</th><th>\u0e23\u0e32\u0e22\u0e44\u0e14\u0e49</th><th>\u0e04\u0e48\u0e32\u0e43\u0e0a\u0e49\u0e08\u0e48\u0e32\u0e22</th>'
+      +'<th>\u0e04\u0e07\u0e40\u0e2b\u0e25\u0e37\u0e2d</th><th>\u0e2a\u0e31\u0e14\u0e2a\u0e48\u0e27\u0e19</th></tr>'
+      +sumRows+totRow+'</table>'
+      +'<div class="note" style="margin-top:14px;padding-top:12px">'
+      +'<b>\u0e41\u0e16\u0e1a\u0e02\u0e27\u0e32\u0e2a\u0e38\u0e14\u0e04\u0e37\u0e2d\u0e2a\u0e31\u0e14\u0e2a\u0e48\u0e27\u0e19\u0e15\u0e49\u0e19\u0e17\u0e38\u0e19\u0e15\u0e48\u0e2d\u0e23\u0e32\u0e22\u0e44\u0e14\u0e49</b> \u2014 '
+      +'\u0e22\u0e34\u0e48\u0e07\u0e22\u0e32\u0e27\u0e22\u0e34\u0e48\u0e07\u0e40\u0e09\u0e35\u0e22\u0e14\u0e02\u0e32\u0e14\u0e17\u0e38\u0e19 \u00b7 '
+      +'<span style="color:#047857">\u0e40\u0e02\u0e35\u0e22\u0e27 &lt;70%</span> \u00b7 '
+      +'<span style="color:#B45309">\u0e40\u0e2b\u0e25\u0e37\u0e2d\u0e07 70\u201395%</span> \u00b7 '
+      +'<span style="color:#BE123C">\u0e41\u0e14\u0e07\u0e04\u0e37\u0e2d\u0e40\u0e01\u0e34\u0e19 100%</span></div></div>'):'')
+
+    +(D.length?details:'<div class="empty">\u0e27\u0e31\u0e19\u0e19\u0e35\u0e49\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e40\u0e23\u0e37\u0e2d\u0e2d\u0e2d\u0e01'
+        +(_px.pier?' \u0e17\u0e35\u0e48\u0e17\u0e48\u0e32\u0e19\u0e35\u0e49':'')+' \u00b7 \u0e40\u0e25\u0e37\u0e2d\u0e01\u0e27\u0e31\u0e19\u0e2d\u0e37\u0e48\u0e19\u0e2b\u0e23\u0e37\u0e2d\u0e40\u0e1b\u0e25\u0e35\u0e48\u0e22\u0e19\u0e17\u0e48\u0e32\u0e14\u0e39</div>')
+
+    +'<div class="note"><b>\u0e2a\u0e2d\u0e07\u0e15\u0e32\u0e23\u0e32\u0e07\u0e19\u0e35\u0e49\u0e15\u0e2d\u0e1a\u0e04\u0e19\u0e25\u0e30\u0e04\u0e33\u0e16\u0e32\u0e21</b> \u2014 '
+      +'\u0e15\u0e32\u0e23\u0e32\u0e07\u0e2a\u0e23\u0e38\u0e1b\u0e15\u0e2d\u0e1a\u0e27\u0e48\u0e32 <b>\u0e25\u0e33\u0e44\u0e2b\u0e19\u0e44\u0e14\u0e49\u0e40\u0e17\u0e48\u0e32\u0e44\u0e2b\u0e23\u0e48</b> \u00b7 '
+      +'\u0e01\u0e32\u0e07\u0e41\u0e25\u0e49\u0e27\u0e15\u0e2d\u0e1a\u0e27\u0e48\u0e32 <b>\u0e17\u0e33\u0e44\u0e21\u0e16\u0e36\u0e07\u0e44\u0e14\u0e49\u0e40\u0e17\u0e48\u0e32\u0e19\u0e31\u0e49\u0e19</b><br>'
+      +'\u0e02\u0e2d\u0e07\u0e08\u0e23\u0e34\u0e07\u0e17\u0e35\u0e48\u0e17\u0e31\u0e1a\u0e2a\u0e39\u0e15\u0e23\u0e44\u0e14\u0e49\u0e15\u0e2d\u0e19\u0e19\u0e35\u0e49: <b>\u0e19\u0e49\u0e33\u0e21\u0e31\u0e19</b> (Daily Fleet Log) \u00b7 '
+      +'<b>\u0e2d\u0e32\u0e2b\u0e32\u0e23</b> (\u0e08\u0e32\u0e01\u0e17\u0e35\u0e48\u0e2a\u0e48\u0e07\u0e23\u0e49\u0e32\u0e19\u0e2b\u0e19\u0e49\u0e32\u0e17\u0e48\u0e32) \u00b7 '
+      +'<b>\u0e04\u0e48\u0e32\u0e23\u0e16</b> (\u0e08\u0e32\u0e01\u0e23\u0e16\u0e17\u0e35\u0e48\u0e1c\u0e39\u0e01\u0e01\u0e31\u0e1a\u0e43\u0e1a\u0e08\u0e2d\u0e07\u0e08\u0e23\u0e34\u0e07) \u2014 \u0e17\u0e35\u0e48\u0e40\u0e2b\u0e25\u0e37\u0e2d\u0e22\u0e31\u0e07\u0e40\u0e1b\u0e47\u0e19\u0e15\u0e31\u0e27\u0e1b\u0e23\u0e30\u0e21\u0e32\u0e13<br>'
+      +'\u0e1b\u0e34\u0e14\u0e22\u0e2d\u0e14\u0e41\u0e25\u0e49\u0e27\u0e15\u0e31\u0e27\u0e40\u0e25\u0e02\u0e08\u0e30\u0e16\u0e39\u0e01\u0e41\u0e0a\u0e48\u0e44\u0e27\u0e49 \u00b7 \u0e41\u0e01\u0e49\u0e2a\u0e39\u0e15\u0e23\u0e2b\u0e23\u0e37\u0e2d\u0e02\u0e36\u0e49\u0e19\u0e23\u0e32\u0e04\u0e32\u0e17\u0e35\u0e2b\u0e25\u0e31\u0e07\u0e08\u0e30\u0e44\u0e21\u0e48\u0e22\u0e49\u0e2d\u0e19\u0e21\u0e32\u0e02\u0e22\u0e31\u0e1a</div>';
 }
 
 /* §mealTrip · ของจริงรายทริป · 'YYYY-MM-DD::boatId'
@@ -56294,6 +56693,7 @@ function ctRender(){
   host.innerHTML = (_ct.tab === 'tpl') ? ctTplHtml()
                  : (_ct.tab === 'ovr') ? ctOvrHtml()
                  : (_ct.tab === 'real') ? ctRealHtml()      /* §plCost */
+                 : (_ct.tab === 'match') ? ctMatchHtml()    /* §ctMatch */
                  : ctPlanHtml();
   if(fk){ var el = host.querySelector('[data-fk="' + fk + '"]'); if(el){ el.focus(); try{ el.setSelectionRange(ss, ss); }catch(_){ } } }
 }
@@ -56679,6 +57079,210 @@ function vanCostSet(vid, v){
   var x = (typeof vehGet === 'function') ? vehGet(vid) : null; if(!x) return;
   x.costPerDay = (String(v).trim() === '') ? null : (+v || 0);
   if(typeof sbVehiclesPersist === 'function') sbVehiclesPersist();
+}
+
+/* ═══ §ctMatch · จับคู่กลุ่มเส้นทางกับแผนต้นทุน ══════════════════
+   ตัวเชื่อมที่หายไประหว่างหน้าต้นทุนกับหน้า P&L
+   ไม่จับคู่ = ทุกเส้นทางคิดต้นทุนด้วยสูตรกลางชุดเดียวกัน ซึ่งแปลว่า Similan กับ Phi Phi กินน้ำมันเท่ากัน
+   ══════════════════════════════════════════════════════════════════ */
+/* คำที่บอกว่าแผนชื่อนี้น่าจะเป็นกลุ่มไหน · Whale ต้องมาก่อน Phi Phi เสมอ เพราะชื่อเต็มมีคำว่า Phi Phi อยู่ด้วย */
+var CT_FAMKEY = [
+  ['whaleshark', ['whale','maiton','\u0e21าิตอน','ฉลามวาฬ']],
+  ['nyaung',     ['nyaung','oo phee','พยาม']],
+  ['selava',     ['se la va','selava','เซลาว้า']],
+  ['similan',    ['similan','สิมิลัน']],
+  ['surin',      ['surin','สุรินทร์']],
+  ['krabi',      ['krabi','phang nga','james bond','กระบี่','พังงา','เจมส์บอนด์']],
+  ['phiphi',     ['phi phi','phiphi','bamboo','พีพี','ไม้ไผ่']]
+];
+function ctFamGuess(name){
+  var n = String(name || '').toLowerCase();
+  for(var i = 0; i < CT_FAMKEY.length; i++){
+    var K = CT_FAMKEY[i][1];
+    for(var j = 0; j < K.length; j++) if(n.indexOf(K[j]) >= 0) return CT_FAMKEY[i][0];
+  }
+  return '';
+}
+/* กลุ่มเส้นทางทั้งหมด พร้อมเส้นทางย่อยที่อยู่ในกลุ่ม · เรียงตามท่า */
+function ctMatchFams(){
+  var M = {}, ord = [];
+  (typeof ROUTES !== 'undefined' ? ROUTES : []).forEach(function(r){
+    var f = (typeof bkV2RouteFamily === 'function') ? bkV2RouteFamily(r.id) : null;
+    var id = (f && f.id) || r.id;
+    if(!M[id]){ M[id] = { id:id, name:(f && f.name) || r.name || r.id,
+                          color:(f && f.color) || r.color || '#64748B',
+                          pier:r.pier || '', routes:[] }; ord.push(id); }
+    M[id].routes.push(r);
+  });
+  var rank = { panwa:0, tublamu:1, ranong:2 };
+  return ord.map(function(k){ return M[k]; }).sort(function(a, b){
+    var d = (rank[a.pier] == null ? 9 : rank[a.pier]) - (rank[b.pier] == null ? 9 : rank[b.pier]);
+    return d || b.routes.length - a.routes.length;
+  });
+}
+/* ออกจริงกี่ทริปใน 30 วันหลังสุด · ไว้ตัดสินว่าควรทำแผนไหนก่อน */
+function ctFamTrips(fam){
+  if(typeof TRIPS === 'undefined') return 0;
+  var rid = {}; fam.routes.forEach(function(r){ rid[r.id] = 1; });
+  var to = (typeof bkV2LocalYMD === 'function') ? bkV2LocalYMD(new Date()) : new Date().toISOString().slice(0, 10);
+  var d0 = new Date(to + 'T12:00:00'); d0.setDate(d0.getDate() - 30);
+  var from = (typeof bkV2LocalYMD === 'function') ? bkV2LocalYMD(d0) : d0.toISOString().slice(0, 10);
+  var n = 0;
+  Object.keys(TRIPS).forEach(function(d){
+    if(d < from || d > to) return;
+    var day = TRIPS[d] || {};
+    Object.keys(day).forEach(function(bid){ var op = day[bid]; if(op && op.route && rid[op.route]) n++; });
+  });
+  return n;
+}
+function ctPlanOfFam(fid){ return ctPlans().filter(function(p){ return p.famId === fid; })[0] || null; }
+/* ผูกแผนเข้ากลุ่ม · หนึ่งกลุ่มหนึ่งแผน · แผนเดิมที่จับคู่ไว้จะถูกปลดให้เอง ไม่ให้ชนกันเงียบ ๆ */
+function ctFamSetPlan(fid, pidRaw){
+  if(typeof laGuardEdit === 'function' && !laGuardEdit('accounting')) return;
+  var pid = String(pidRaw || ''), P = ctPlans();
+  P.forEach(function(p){
+    if(p.famId === fid) p.famId = '';
+    if(pid && p.id === pid) p.famId = fid;
+  });
+  ctPlansSave(P); ctRender();
+}
+/* สร้างแผนใหม่จากสูตรกลาง แล้วผูกให้เลย · เริ่มจากศูนย์ทุกครั้งคือสาเหตุที่ไม่มีใครทำสักที */
+function ctFamNewPlan(fid){
+  if(typeof laGuardEdit === 'function' && !laGuardEdit('accounting')) return;
+  var F = ctMatchFams().filter(function(f){ return f.id === fid; })[0];
+  var q = ctBlankPlan((F ? F.name : fid));
+  q.famId = fid;
+  var P = ctPlans(); P.push(q); ctPlansSave(P);
+  _ct.pid = q.id; _ct.tab = 'ovr'; ctRender();
+}
+/* ราคาน้ำมันล่าสุดที่เคยกรอก · ใช้เป็นฉากหลังตอนเทียบต้นทุน/หัว ไม่ใช่ตัวเลขที่เอาไปคิดเงินจริง */
+function ctRefFuel(){
+  try{
+    if(typeof FL_FUEL_PRICE === 'undefined') return 32;
+    var ks = Object.keys(FL_FUEL_PRICE).sort();
+    for(var i = ks.length - 1; i >= 0; i--){
+      var o = FL_FUEL_PRICE[ks[i]] || {};
+      var vs = Object.keys(o).map(function(k){ return +o[k] || 0; }).filter(function(x){ return x > 0; });
+      if(vs.length) return vs[0];
+    }
+  }catch(_){ }
+  return 32;
+}
+var CT_REF_PAX = 30;
+function ctCostPerHead(plan){
+  var T = ctTpl();
+  var ctx = { eng:'3EN', boats:1, fuel:ctRefFuel(), pax:CT_REF_PAX, paxTH:0, paxFR:CT_REF_PAX };
+  var C = ctCalc(plan || {}, ctx, T);
+  return C.net / CT_REF_PAX;
+}
+function ctMatchHtml(){
+  var e = ctE, B = ctB, P = ctPlans(), FAMS = ctMatchFams();
+  var base = ctCostPerHead(null), fuel = ctRefFuel();
+  var nLinked = FAMS.filter(function(f){ return !!ctPlanOfFam(f.id); }).length;
+  var PIERTH = { panwa:'วิสิษฐ์พันวา', tublamu:'ทับละมุ', ranong:'ระนอง' };
+
+  var rows = FAMS.map(function(f){
+    var pl = ctPlanOfFam(f.id), nT = ctFamTrips(f);
+    var sug = null;
+    if(!pl) sug = P.filter(function(p){ return !p.famId && ctFamGuess(p.name) === f.id; })[0] || null;
+    var sel = '<select class="ct-sel" style="width:100%" onchange="ctFamSetPlan(\'' + e(f.id) + '\',this.value)">'
+      + '<option value="">— ยังไม่จับคู่ · ใช้สูตรกลาง —</option>'
+      + P.map(function(p){
+          var taken = p.famId && p.famId !== f.id;
+          return '<option value="' + e(p.id) + '"' + ((pl && pl.id === p.id) ? ' selected' : '')
+            + (taken ? ' disabled' : '') + '>' + e(p.name || p.id)
+            + (taken ? (' · ใช้กับ ' + e(ctFamName(p.famId))) : '') + '</option>'; }).join('')
+      + '</select>';
+    var below = pl
+      ? ('<div class="ct-sug ct-ok">' + ctIcon('link', 11) + ' ผูกแล้ว · '
+         + '<button class="ct-mini" onclick="ctPickPlan(\'' + e(pl.id) + '\');ctSetTab(\'ovr\')" '
+         + 'style="margin-left:5px">แก้แผนนี้</button></div>')
+      : (sug
+          ? ('<div class="ct-sug">น่าจะใช่ <b>' + e(sug.name) + '</b> '
+             + '<button class="ct-mini" onclick="ctFamSetPlan(\'' + e(f.id) + '\',\'' + e(sug.id) + '\')" '
+             + 'style="margin-left:5px">ใช้แผนนี้</button></div>')
+          : ('<div class="ct-sug"><button class="ct-mini" onclick="ctFamNewPlan(\'' + e(f.id) + '\')">'
+             + '+ สร้างแผนจากสูตรกลาง</button></div>'));
+
+    var cph, nOvr = pl ? Object.keys(pl.ovr || {}).length : 0;
+    if(pl){
+      var v = ctCostPerHead(pl), d = v - base;
+      cph = '<b>' + B(Math.round(v)) + '</b><div class="ct-u">'
+          + (Math.abs(d) < 1 ? 'เท่าสูตรกลาง'
+             : ((d > 0 ? 'สูงกว่า' : 'ต่ำกว่า') + 'สูตรกลาง ' + B(Math.round(Math.abs(d)))))
+          + '</div>';
+    } else {
+      cph = '<span class="ct-nolink">' + B(Math.round(base)) + '</span>'
+          + '<div class="ct-u">สูตรกลาง</div>';
+    }
+
+    return '<tr class="ct-mrow"><td class="ct-nm">'
+      + '<div class="ct-fam"><span class="ct-dot" style="background:' + e(f.color) + '"></span>'
+      + '<b>' + e(f.name) + '</b><span class="ct-u">' + e(PIERTH[f.pier] || f.pier || '') + '</span></div>'
+      + '<div class="ct-nmsub">' + f.routes.length + ' เส้นทาง · '
+        + e(f.routes.map(function(r){ return r.name || r.id; }).join(' · ')) + '</div></td>'
+      + '<td style="text-align:right"><b>' + (nT || '–') + '</b><div class="ct-u">ทริป/30 วัน</div></td>'
+      + '<td>' + sel + below + '</td>'
+      + '<td style="text-align:right">' + cph + '</td>'
+      + '<td style="text-align:right">'
+      + (pl ? ('<span class="ct-tag m">จับคู่แล้ว</span>'
+               + '<div class="ct-u">ปรับไว้ ' + nOvr + ' บรรทัด</div>')
+            : '<span class="ct-tag f">ยังไม่จับคู่</span>')
+      + '</td></tr>';
+  }).join('');
+
+  /* แผนที่ยังลอยอยู่ · ไม่ผูกกับกลุ่มไหนเลย = P&L ไม่มีวันหยิบไปใช้ */
+  var loose = P.filter(function(p){ return !p.famId; });
+  var looseHtml = loose.length
+    ? ('<div class="ct-card ct-catcard"><div class="ct-cath"><span>' + ctIcon('folder', 15)
+       + '<b>แผนที่ยังลอยอยู่</b></span>'
+       + '<span class="ct-cnt">' + loose.length + ' แผน</span></div>'
+       + '<div class="ct-scroll"><table class="ct-mtbl"><colgroup><col><col style="width:150px"><col style="width:230px"></colgroup><tbody>'
+       + loose.map(function(p){
+           var g = ctFamGuess(p.name), F = FAMS.filter(function(x){ return x.id === g; })[0];
+           return '<tr><td class="ct-nm"><b>' + e(p.name || p.id) + '</b>'
+             + '<div class="ct-nmsub">ปรับจากสูตรกลาง ' + Object.keys(p.ovr || {}).length + ' บรรทัด'
+             + (Object.keys(p.grp || {}).length ? (' · ปรับทั้งหมวด ' + Object.keys(p.grp).length + ' หมวด') : '')
+             + '</div></td>'
+             + '<td style="text-align:right"><b>' + B(Math.round(ctCostPerHead(p))) + '</b><div class="ct-u">ต่อหัว ที่ ' + CT_REF_PAX + ' หัว</div></td>'
+             + '<td>' + (F
+                 ? ('<button class="ct-mini" onclick="ctFamSetPlan(\'' + e(F.id) + '\',\'' + e(p.id) + '\')">'
+                    + 'ผูกกับ ' + e(F.name) + '</button>')
+                 : '<span class="ct-u">ยังเดาไม่ออกว่าเป็นเส้นทางไหน · เลือกจากช่องด้านบน</span>')
+             + '</td></tr>'; }).join('')
+       + '</tbody></table></div>'
+       + '<div class="ct-hint">แผนที่ไม่ได้ผูกกับกลุ่มไหนเลย ใช้ได้แค่ในหน้านี้ · '
+       + 'P&amp;L จะไม่หยิบไปใช้เลย</div></div>')
+    : '';
+
+  return '<div class="ct-card ct-bar2"><div><b>จับคู่เส้นทาง</b>'
+      + '<span class="ct-sub">เส้นทางไหนใช้แผนไหน · ตัดสินที่นี่ที่เดียว '
+      + 'แล้ว <em class="var">P&amp;L รายทริป</em> จะหยิบแผนนั้นไปคิดให้เอง</span></div>'
+      + '<div class="ct-bar2r"><span class="ct-u">จับคู่แล้ว <b>' + nLinked + '</b> จาก ' + FAMS.length + ' กลุ่ม</span></div></div>'
+
+    + (nLinked < FAMS.length
+        ? ('<div class="ct-warn"><div class="wi">!</div><div>'
+           + '<b>ยังเหลืออีก ' + (FAMS.length - nLinked) + ' กลุ่มที่ยังไม่ได้จับคู่แผน</b>'
+           + '<p>กลุ่มที่ยังไม่จับคู่ ทุกทริปจะคิดต้นทุนด้วย<b>สูตรกลางชุดเดียวกันหมด</b> '
+           + '— เส้นที่วิ่งไกลกว่า กินข้าวแพงกว่า จอดคนละท่า ก็คิดเท่ากันหมด<br>'
+           + 'P&amp;L จะขึ้นป้ายเหลืองบนการ์ดของเรือทุกลำที่วิ่งเส้นเหล่านี้ ไม่แอบใช้เงียบ ๆ</p></div></div>')
+        : '')
+
+    + '<div class="ct-card ct-catcard"><div class="ct-cath"><span>' + ctIcon('folder', 15)
+      + '<b>กลุ่มเส้นทาง → แผนต้นทุน</b></span>'
+      + '<span class="ct-cnt">' + FAMS.length + ' กลุ่ม</span></div>'
+      + '<div class="ct-scroll"><table class="ct-mtbl">'
+      + '<colgroup><col><col style="width:88px"><col style="width:320px"><col style="width:120px"><col style="width:120px"></colgroup>'
+      + '<thead><tr><th>กลุ่มเส้นทาง</th><th style="text-align:right">ออกจริง</th>'
+      + '<th>แผนต้นทุนที่ใช้</th><th style="text-align:right">ต้นทุน/หัว</th>'
+      + '<th style="text-align:right">สถานะ</th></tr></thead>'
+      + '<tbody>' + rows + '</tbody></table></div>'
+      + '<div class="ct-hint">จับคู่ที่ระดับ<b>กลุ่ม</b> ไม่ใช่รายเส้นทาง · '
+      + 'Phi Phi Bamboo มีหลายเส้นย่อยแต่ใช้เรือชุดเดียว กินข้าวที่เดียว ต้นทุนก็ควรชุดเดียว<br>'
+      + '<b>ต้นทุน/หัว</b> คิดที่ ' + CT_REF_PAX + ' หัว น้ำมัน ฿' + fuel + ' เรือ 3 เครื่อง '
+      + '· เป็นตัวเทียบเฉย ๆ ไว้ดูความต่างระหว่างแผน ไม่ใช่ตัวเลขที่เอาไปคิดเงินจริง</div></div>'
+
+    + looseHtml;
 }
 
 function ctPickPlan(id){ _ct.pid = id; ctRender(); }
