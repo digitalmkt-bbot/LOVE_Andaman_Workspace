@@ -12394,6 +12394,15 @@ function laMakeSortable(container, itemSel, onReorder){
 function laBySort(a,b){ const x=(a&&a.sort), y=(b&&b.sort); if(x==null&&y==null) return 0; if(x==null) return 1; if(y==null) return -1; return x-y; }
 function laApplySort(arr){ if(Array.isArray(arr) && arr.some(r=>r&&r.sort!=null)) arr.sort(laBySort); return arr; }
 
+/* §laSortSync · ยืนยันลำดับก่อนวาดทุกครั้ง · ถ้ามีทางเข้าอื่นที่ยังไม่ได้เรียง จะได้ไม่หลุด
+   เรียงเฉพาะตอนที่ลำดับเพี้ยนจริง ๆ จะได้ไม่ไปรบกวน reference ของ array โดยไม่จำเป็น */
+function laEnsureSorted(arr){
+  if(!Array.isArray(arr) || !arr.some(function(r){ return r && r.sort != null; })) return false;
+  var ok = true;
+  for(var i=1; i<arr.length; i++){ if(laBySort(arr[i-1], arr[i]) > 0){ ok = false; break; } }
+  if(ok) return false;
+  arr.sort(laBySort); return true;
+}
 // Programs: reorder ROUTES *within one pier* — routes of other piers keep their exact slots
 function stApplyRouteOrder(ids, pier){
   if(!Array.isArray(ids) || !ids.length || !pier) return;
@@ -12431,6 +12440,7 @@ function renderSettings(){
     // legacy path — fallback to old render if wrap not found
     return renderSettingsLegacy();
   }
+  laEnsureSorted(ROUTES);   /* §laSortSync · ลำดับที่ลากไว้ต้องชนะลำดับแถวที่เซิร์ฟเวอร์ส่งมา */
   const dim={bg:'#F4F2EE',ink:'#1A1A1A',ink2:'#666',ink3:'#999',ink4:'#bbb',ink5:'#ccc',line:'rgba(0,0,0,.04)'};
   const SVG_PINK={accent:'#E03B7E',soft:'#FCE5EC',text:'#9F1B4F'};
   const fmtD=s=>s?new Date(s).toLocaleDateString('en-US',{day:'numeric',month:'short',year:'2-digit'}):'—';
@@ -12784,6 +12794,7 @@ function renderProgDetailPink(){
 
 // Legacy fallback (kept for backward compat)
 function renderSettingsLegacy(){
+  laEnsureSorted(ROUTES);   /* §laSortSync */
   ROUTES.forEach(r=>{ if(groups[r.pier]) groups[r.pier].push(r); });
   const pm={tublamu:{label:'Tub Lamu Pier',dot:'var(--ocean-mid)'},panwa:{label:'Visit Panwa',dot:'var(--green)'},ranong:{label:'Ranong Pier',dot:'var(--amber)'}};
   const fmtD=s=>s?new Date(s).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}):'—';
@@ -41480,7 +41491,11 @@ window._laReloadData=function(){
     if(Array.isArray(d.sb_rate_types)) SB_RATE_TYPES=d.sb_rate_types;
     if(Array.isArray(d.sb_contracts) && typeof SB_CONTRACTS!=='undefined') SB_CONTRACTS=d.sb_contracts;
     if(Array.isArray(d.sb_vehicles)) SB_VEHICLES=d.sb_vehicles;
-    if(Array.isArray(d.sb_markets)) SB_MARKETS=d.sb_markets;
+    /* §laSortSync · ตอนบูตจาก localStorage เรียงตาม sort ให้ (loadData) แต่ทางนี้ลืม
+       ผลคือทุกครั้งที่ดึงข้อมูลจากเซิร์ฟเวอร์ ลำดับที่ลากจัดไว้จะถูกทับด้วยลำดับแถวในตาราง
+       ซึ่ง Postgres ไม่รับประกันลำดับ และแถวที่เพิ่งแก้จะเด้งไปท้ายตาราง
+       → "วันนี้อยู่ตรงนี้ พรุ่งนี้ไปอยู่อีกที่" ทั้งที่จัดลำดับไว้แล้ว */
+    if(Array.isArray(d.sb_markets)) SB_MARKETS=laApplySort(d.sb_markets);
     if(Array.isArray(d.sb_sales)) SB_SALES=d.sb_sales;
     if(Array.isArray(d.sb_staff)) SB_STAFF=d.sb_staff;
     if(Array.isArray(d.sb_addon_types)) SB_ADDON_TYPES=d.sb_addon_types;
@@ -41497,7 +41512,7 @@ window._laReloadData=function(){
     if(d.sb_weather) SB_WEATHER_CLOSURES=d.sb_weather;
     if(d.trips) TRIPS=d.trips;
     if(Array.isArray(d.boats)) BOATS=d.boats;
-    if(Array.isArray(d.routes)) ROUTES=d.routes;
+    if(Array.isArray(d.routes)) ROUTES=laApplySort(d.routes);
     if(Array.isArray(d.fleet_engines)) FL_ENGINES=d.fleet_engines;
     if(Array.isArray(d.fleet_gearboxes)) FL_GEARBOXES=d.fleet_gearboxes;
     if(Array.isArray(d.fleet_propellers)) FL_PROPELLERS=d.fleet_propellers;
@@ -55861,9 +55876,10 @@ function ctTplOdSeed(t){
   var n = 0;
   (t.lines || []).forEach(function(ln){
     if(!(ln.id in CT_OD_SEED)) return;
-    if(ln.od) return;
-    ln.od = 1; if(ln.odQ == null) ln.odQ = CT_OD_SEED[ln.id];
-    n++;
+    var ch = false;
+    if(!ln.od){ ln.od = 1; ch = true; }
+    if(ln.odQ == null){ ln.odQ = CT_OD_SEED[ln.id]; ch = true; }
+    if(ch) n++;
   });
   return n;
 }
@@ -57242,8 +57258,13 @@ function ctPlanHtml(){
   var odLines = (T.lines || []).filter(function(ln){ return ln.od; });
   var odHtml = '';
   if(odLines.length){
-    var odN = function(v, fk, k, ln){
-      return '<input class="ct-in" data-fk="' + fk + '" value="' + (v === 0 ? '0' : (v || '')) + '" '
+    var odN = function(v, fk, k, ln, ph){
+      var raw = (((pl.od || {})[ln.id] || {})[k]);
+      var set = (raw != null && raw !== '');
+      return '<input class="ct-in" data-fk="' + fk + '" value="' + (set ? raw : '') + '" '
+        + 'placeholder="' + (ph == null ? 0 : ph) + '" '
+        + 'title="' + (set ? 'ตั้งไว้เอง · ล้างช่องเพื่อกลับไปใช้ค่าเริ่มต้น ' + (ph == null ? 0 : ph)
+                           : 'ยังไม่ได้ตั้ง · ใช้ค่าเริ่มต้น ' + (ph == null ? 0 : ph)) + '" '
         + 'oninput="ctOdSet(\'' + pl.id + '\',\'' + ctE(ln.id) + '\',\'' + k + '\',this.value)" '
         + 'style="width:62px;text-align:right">'; };
     var odRows = odLines.map(function(ln){
@@ -57258,12 +57279,12 @@ function ctPlanHtml(){
       return '<tr' + (off ? ' style="opacity:.45"' : '') + '><td class="ct-nm"><b>' + ctE(ln.l) + '</b>'
         + '<div class="ct-nmsub">ทุน ' + ctB(unit) + '/' + u1 + ' จากสูตร'
           + (off ? ' · <b style="color:#A05A1A">ปิดอยู่</b>' : '') + '</div></td>'
-        + '<td style="text-align:right">' + odN(C.aQ, F + 'aQ', 'aQ', ln)
+        + '<td style="text-align:right">' + odN(C.aQ, F + 'aQ', 'aQ', ln, (ln.odQ != null ? ln.odQ : 0))
           + '<span class="ct-u"> ' + (pct ? '%' : u1) + '</span></td>'
-        + '<td style="text-align:right">' + odN(C.aR, F + 'aR', 'aR', ln) + '</td>'
-        + '<td style="text-align:right">' + odN(C.uQ, F + 'uQ', 'uQ', ln)
+        + '<td style="text-align:right">' + odN(C.aR, F + 'aR', 'aR', ln, 0) + '</td>'
+        + '<td style="text-align:right">' + odN(C.uQ, F + 'uQ', 'uQ', ln, 0)
           + '<span class="ct-u"> ' + (pct ? '%' : u1) + '</span></td>'
-        + '<td style="text-align:right">' + odN(C.uR, F + 'uR', 'uR', ln) + '</td>'
+        + '<td style="text-align:right">' + odN(C.uR, F + 'uR', 'uR', ln, 0) + '</td>'
         + '<td style="text-align:right"><span class="ct-u">' + (aq + uq) + ' ' + u1 + '</span></td>'
         + '<td style="text-align:right;font-weight:700;color:' + ((mg > 0 || mg2 > 0) ? '#0d7a5f' : 'var(--sd400)') + '">'
           + ((C.aR || C.uR) ? ((mg >= 0 ? '+' : '−') + ctB(Math.abs(mg))) : '—') + '</td></tr>';
@@ -57275,24 +57296,31 @@ function ctPlanHtml(){
       var L = ctEffLine(ln, pl); if(L.off) return;
       odCost += (+((L.parts || [])[0] || {}).u || 0) * ctOdQty(pl, ln, { pax:pax });
     });
-    odHtml = '<div class="ct-card ct-catcard"><div class="ct-cath"><span>' + ctIcon('folder', 15)
-      + '<b>ของที่ลูกค้าสั่งเพิ่ม</b></span>'
+    /* §ctOdFold · แถบเดียวตอนปิด · เปิดค่อยกางตาราง
+       ตอนแรกวางเป็นการ์ดเต็มความกว้างคั่นระหว่างพารามิเตอร์กับการ์ด KPI แล้วเลย์เอาต์เสีย */
+    var odOpen = !!_ct.odOpen;
+    odHtml = '<div class="ct-card ct-catcard"><div class="ct-cath" style="cursor:pointer" onclick="ctOdFold()">'
+      + '<span><button class="ct-mini" style="margin-right:8px">' + (odOpen ? '&#9660;' : '&#9654;') + '</button>'
+      + '<b>ของที่ลูกค้าสั่งเพิ่ม</b>'
+      + '<span class="ct-u" style="margin-left:8px">' + odLines.length + ' รายการ · หางยาว · รถรับส่ง</span></span>'
       + '<span class="ct-cnt">ที่ ' + pax + ' คน · ทุน ' + ctB(odCost)
         + ' · รายได้ ' + ctB(odRev) + ' · เหลือ <b style="color:'
         + ((odRev - odCost) >= 0 ? '#0d7a5f' : '#A05A1A') + '">'
         + ((odRev - odCost) >= 0 ? '+' : '−') + ctB(Math.abs(odRev - odCost)) + '</b></span></div>'
-      + '<div class="ct-scroll"><table class="ct-mtbl">'
+      + (odOpen ? ('<div class="ct-scroll"><table class="ct-mtbl">'
       + '<colgroup><col><col style="width:96px"><col style="width:104px"><col style="width:96px"><col style="width:104px"><col style="width:86px"><col style="width:96px"></colgroup>'
       + '<thead><tr><th>รายการ</th>'
       + '<th style="text-align:right">เอเจนต์<br>คาดว่าสั่ง</th><th style="text-align:right">บริษัทได้/หน่วย</th>'
       + '<th style="text-align:right">ขายเพิ่ม<br>คาดว่าสั่ง</th><th style="text-align:right">บริษัทได้/หน่วย</th>'
       + '<th style="text-align:right">รวมที่สั่ง</th><th style="text-align:right">กำไร/หน่วย</th></tr></thead>'
       + '<tbody>' + odRows + '</tbody></table></div>'
-      + '<div class="ct-hint">ของพวกนี้ไม่ใช่ต้นทุนของทุกหัว · ลูกค้าสั่งเท่าไหร่คิดเท่านั้น '
+      + '<div class="ct-hint">ช่องที่ปล่อยว่าง = ใช้ค่าเริ่มต้นตามที่โชว์จาง ๆ ในช่อง<br>'
+      + 'ของพวกนี้ไม่ใช่ต้นทุนของทุกหัว · ลูกค้าสั่งเท่าไหร่คิดเท่านั้น '
       + 'และมีรายได้ของมันเองด้วย จึงไม่ต้องปิดบรรทัดทิ้งอีกต่อไป<br>'
       + '<b>บริษัทได้/หน่วย</b> คือเงินที่เหลือหลังหักค่าคอมแล้ว (ขาย ฿2,500 คอม ฿750 → ใส่ ฿1,750) '
       + 'จึงไม่ต้องตั้งบรรทัดต้นทุนค่าคอมแยก<br>'
-      + '<b>P&amp;L รายทริป</b>ไม่ใช้ตัวเลขที่คาดในตารางนี้ · ใช้จำนวนที่สั่งจริงกับเงินที่เก็บได้จริงจากใบจอง</div></div>';
+      + '<b>P&amp;L รายทริป</b>ไม่ใช้ตัวเลขที่คาดในตารางนี้ · ใช้จำนวนที่สั่งจริงกับเงินที่เก็บได้จริงจากใบจอง</div>') : '')
+      + '</div>';
   }
 
   // ── การ์ดตัวเลขสำคัญ ──
@@ -57464,8 +57492,9 @@ function ctPlanHtml(){
     + '<div class="ct-ifoot"><span>รวมระยะทาง</span><b>' + (km == null ? '—' : km.toLocaleString()) + ' กม.</b></div>'
     + '</div></div>';
 
-  return '<div class="ct-wrap">' + side + '<div class="ct-main">' + head + params + odHtml + kpi
+  return '<div class="ct-wrap">' + side + '<div class="ct-main">' + head + params + kpi
     + '<div class="ct-trio">' + itin + chart + pnl + '</div>'
+    + odHtml
     + '<div class="ct-duo">' + tier + tbl + '</div></div></div>';
 }
 /* ═══ §plCost · แท็บ "ราคาจริง" ═══════════════════════════════════════════════
@@ -57619,6 +57648,7 @@ function mvRouteSet(rid, vid){
   if(typeof save === 'function') save();
   ctRender();
 }
+function ctOdFold(){ _ct.odOpen = !_ct.odOpen; ctRender(); }
 function ctVanOpen(k){ _ct.vg = _ct.vg || {}; if(_ct.vg[k]) delete _ct.vg[k]; else _ct.vg[k] = 1; ctRender(); }
 function vanCostSet(vid, v){
   var x = (typeof vehGet === 'function') ? vehGet(vid) : null; if(!x) return;

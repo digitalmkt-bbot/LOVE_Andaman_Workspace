@@ -157,8 +157,25 @@ function shrinkGuard(curCount, incCount){                                       
 }
 function shrinkErr(bad){ const e = new Error('SHRINK_GUARD'); e.code = 'SHRINK_GUARD'; e.detail = bad; return e; }
 
+// §stableOrder · Postgres ไม่รับประกันลำดับแถวถ้าไม่สั่ง ORDER BY · แถวที่เพิ่ง UPDATE ย้ายไปท้าย heap
+// ผลคือลำดับที่ส่งกลับไปเปลี่ยนไปเรื่อย ๆ ทั้งที่ไม่มีใครแก้ลำดับ — โปรแกรมที่จัดเรียงไว้เลยสลับที่เอง
+// ตารางลูก: เรียงตาม (พ่อ, ตำแหน่งในอาเรย์) · ตารางหลัก: มีคอลัมน์ sort ใช้ sort ไม่มีก็ใช้ primary key
+const OS_ORDER = (() => {
+  const m = {};
+  for (const t of OS_TABLES) {
+    const md = osModel[t] || {}, cols = (md.columns || []).map(c => c.name), pk = md.primary_key;
+    const fk = ((md.foreign_keys || [])[0] || {}).column;
+    if (fk && cols.includes('idx') && cols.includes(fk)) m[t] = `ORDER BY ${qic(fk)}, ${qic('idx')}`;
+    else if (cols.includes('sort')) m[t] = `ORDER BY ${qic('sort')} NULLS LAST${pk && cols.includes(pk) ? `, ${qic(pk)}` : ''}`;
+    else if (pk && cols.includes(pk)) m[t] = `ORDER BY ${qic(pk)}`;
+    else m[t] = '';
+  }
+  return m;
+})();
+const ordSql = t => OS_ORDER[t] ? ` ${OS_ORDER[t]}` : '';
+
 async function relLoad() {                                           // operation_schemas -> blob (parallel)
-  const results = await Promise.all(OS_TABLES.map(t => pool.query(`SELECT * FROM ${fqt(t)}`)));
+  const results = await Promise.all(OS_TABLES.map(t => pool.query(`SELECT * FROM ${fqt(t)}${ordSql(t)}`)));
   const data = {};
   OS_TABLES.forEach((t, i) => { data[t] = results[i].rows; });
   return osRepo.assembleBlob(data);
@@ -1358,7 +1375,7 @@ async function relApplyAndSave(payload, username, base) {
     const curVer = vr.rows[0] ? vr.rows[0].version : 0;
     const behind = (base !== -1 && base < curVer);
     const data = {};
-    for (const t of OS_TABLES) { const r = await client.query(`SELECT * FROM ${fqt(t)}`); data[t] = r.rows; }
+    for (const t of OS_TABLES) { const r = await client.query(`SELECT * FROM ${fqt(t)}${ordSql(t)}`); data[t] = r.rows; }
     let blob = osRepo.assembleBlob(data);
     if (payload.full && typeof payload.full === 'string') blob = JSON.parse(payload.full);
     else applyDiff(blob, payload.diff || {});
