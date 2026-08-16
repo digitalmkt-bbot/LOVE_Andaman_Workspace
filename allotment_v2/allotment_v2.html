@@ -22264,6 +22264,59 @@ function flSaveFuel(ds,bid,val){
 function flFuelPrice(ds, pierKey){ return (FL_FUEL_PRICE[ds] && FL_FUEL_PRICE[ds][pierKey]!=null) ? FL_FUEL_PRICE[ds][pierKey] : null; }
 // Per-BOAT fuel price · per-boat override (FL_FUEL_PRICE[ds][boatId]) → else the pier default. Some boats fill at a different ฿/L.
 function flFuelPriceForBoat(ds, boat){ if(!boat) return null; const m=FL_FUEL_PRICE[ds]; if(!m) return null; if(m[boat.id]!=null) return m[boat.id]; if(m[boat.pier]!=null) return m[boat.pier]; return null; }
+/* ══ §fuelEff · ราคาน้ำมันที่เอาไปคิดเงินได้จริง ═══════════════════════════════
+   flFuelPriceForBoat ข้างบนเป็นตัวเข้มงวด · ไม่มีราคาของลำนั้นวันนั้นก็คืน null
+   ถูกแล้วสำหรับหน้ากรอกข้อมูล (ช่องว่างต้องว่างไว้ให้คนเห็นว่ายังไม่ได้ลง)
+   แต่ P&L เอาไปใช้ตรง ๆ ไม่ได้ · ไม่มีราคา = ค่าน้ำมันเป็นศูนย์ ซึ่งไม่เคยจริงสักครั้ง
+   ของจริง 175 ทริป มี 49 ทริป (28%) ที่ไม่มีราคา · น้ำมัน 6,803 ลิตรถูกคิดเป็น ฿0
+   ตัวนี้ไล่หาราคาที่ใกล้ความจริงที่สุดตามลำดับ แล้วบอกด้วยว่าเอามาจากไหน
+   ═══════════════════════════════════════════════════════════════════════════════ */
+function _flDayGap(a, b){
+  try{ return Math.round((new Date(b+'T00:00:00') - new Date(a+'T00:00:00')) / 86400000); }catch(_){ return 999; }
+}
+/* ลำอื่นที่ท่าเดียวกันวันเดียวกัน · น้ำมันท่าเดียวกันวันเดียวกันราคาเดียวกันเสมอ */
+function _flPierSibPrice(m, pier, skipId){
+  if(!m || !pier) return null;
+  var ks = Object.keys(m);
+  for(var i=0; i<ks.length; i++){
+    var k = ks[i]; if(k === skipId || m[k] == null) continue;
+    var b = (typeof getBoat === 'function') ? getBoat(k) : null;
+    if(b && ((b.pier || b.homePier || '') === pier)) return +m[k] || 0;
+  }
+  return null;
+}
+var FL_FUEL_BACK_DAYS = 30;   /* ย้อนหลังได้ไกลสุดกี่วัน · ไกลกว่านี้ราคาไม่น่าเชื่อแล้ว */
+function flFuelPriceEff(ds, boat){
+  var out = { price:0, src:'', from:'' };
+  if(!boat || typeof FL_FUEL_PRICE === 'undefined') return out;
+  var pier = boat.pier || boat.homePier || '';
+  var m = FL_FUEL_PRICE[ds];
+  if(m){
+    if(m[boat.id] != null) return { price:+m[boat.id] || 0, src:'boat', from:ds };
+    if(pier && m[pier] != null) return { price:+m[pier] || 0, src:'pier', from:ds };
+    var sib = _flPierSibPrice(m, pier, boat.id);
+    if(sib != null) return { price:sib, src:'sib', from:ds };
+  }
+  /* ยังไม่ได้ลงราคาวันนี้ · ใช้ราคาล่าสุดที่เคยลงไว้ ดีกว่าคิดเป็นศูนย์ */
+  var ks = Object.keys(FL_FUEL_PRICE).filter(function(k){ return k < ds; }).sort();
+  for(var i = ks.length - 1; i >= 0; i--){
+    var k = ks[i];
+    if(_flDayGap(k, ds) > FL_FUEL_BACK_DAYS) break;
+    var mm = FL_FUEL_PRICE[k] || {};
+    if(mm[boat.id] != null) return { price:+mm[boat.id] || 0, src:'back', from:k };
+    if(pier && mm[pier] != null) return { price:+mm[pier] || 0, src:'back', from:k };
+    var s2 = _flPierSibPrice(mm, pier, boat.id);
+    if(s2 != null) return { price:s2, src:'back', from:k };
+  }
+  return out;
+}
+function flFuelSrcTxt(FP){
+  if(!FP || !FP.price) return 'ยังไม่ได้ลงราคาน้ำมัน · ค่าน้ำมันคิดเป็น ฿0';
+  if(FP.src === 'boat') return 'ราคาของลำนี้วันนี้';
+  if(FP.src === 'pier') return 'ราคาของท่าวันนี้';
+  if(FP.src === 'sib')  return 'ราคาของลำอื่นที่ท่าเดียวกันวันนี้';
+  return 'ยังไม่ได้ลงราคาวันนี้ · ใช้ราคาล่าสุด ' + FP.from;
+}
 function flSaveFuelPrice(ds, pierKey, val){
   if(!FL_FUEL_PRICE[ds]) FL_FUEL_PRICE[ds]={};
   const v=parseFloat(val);
@@ -56344,7 +56397,9 @@ function pxTrip(date, bid){
   var A=(typeof taGet==='function')?(taGet(date,bid)||{}):{};
   var T=(typeof ctTpl==='function')?ctTpl():null;
   var R=(typeof ctVatR==='function')?ctVatR(T):0;
-  var fuelPr=(typeof flFuelPriceForBoat==='function')?(flFuelPriceForBoat(date,boat)||0):0;
+  /* §fuelEff · ไม่มีราคาของวันนั้นก็ไล่หาที่ใกล้เคียงที่สุด · ศูนย์บาทไม่ใช่คำตอบที่ถูก */
+  var FP=(typeof flFuelPriceEff==='function')?flFuelPriceEff(date,boat):{price:0,src:'',from:''};
+  var fuelPr=FP.price||0;
   /* §pxOd · จำนวนที่ลูกค้าสั่งจริงของลำนี้ · ป้อนเข้าสูตรแทนจำนวนที่คาดไว้ในแผน */
   var LT=(typeof pxLongtail==='function')?pxLongtail(date,bid):{chtr:0,join:0};
   var ctx={ eng:((+boat.engineCount||3)>=4?'4EN':'3EN'), boats:1, fuel:fuelPr,
@@ -56359,7 +56414,8 @@ function pxTrip(date, bid){
   var act={};
   try{
     var FD=(typeof FL_DAILY!=='undefined' && FL_DAILY[date])?FL_DAILY[date][bid]:null;
-    if(FD && +FD.fuel>0 && fuelPr>0) act.fuel={amt:Math.round((+FD.fuel)*fuelPr), why:(+FD.fuel)+' ลิตร × ฿'+fuelPr};
+    if(FD && +FD.fuel>0 && fuelPr>0) act.fuel={amt:Math.round((+FD.fuel)*fuelPr),
+      why:(+FD.fuel)+' ลิตร × ฿'+fuelPr+(FP.src==='boat'||FP.src==='pier'?'':(' · '+flFuelSrcTxt(FP)))};
   }catch(_){}
   if(A.meal && A.meal.amount!=null)
     act.meal={amt:Math.round(+A.meal.amount||0),
@@ -56405,6 +56461,10 @@ function pxTrip(date, bid){
     var src = (real!=null) ? 'r' : (pxIsOvr(r.id, r.g) ? 'p' : 'f');
     var why = a ? a.why : '';
     /* §pxOd · จำนวนมาจากใบจองจริง ไม่ใช่ตัวประมาณ · ป้ายจึงเป็น "ของจริง" */
+    if(r.id==='fuel' && real==null){
+      if(!fuelPr) why='ยังไม่ได้ลงราคาน้ำมัน · บรรทัดนี้จึงเป็น ฿0 ทั้งที่เรือวิ่งจริง';
+      else if(FP.src==='sib' || FP.src==='back') why=flFuelSrcTxt(FP)+' · ฿'+fuelPr+'/ลิตร';
+    }
     if(r.id==='ltj' && real==null){ src='r'; why='จอยจริง '+LT.join+' คน (ไม่ใช่ '+PX.tot+' หัวทั้งลำ)'; }
     if(r.id==='ltc' && real==null){ src='r'; why='เหมาจริง '+LT.chtr+' ลำ'; }
     if(r.id==='meal' && real==null && mealWait){ src='w'; why=mealWait.why; }
@@ -56440,7 +56500,7 @@ function pxTrip(date, bid){
         price:(PX.tot?revGross/PX.tot:0), comm:0}), Math.max(1,cap||60), T);
   } }catch(_){}
   return { bid:bid, boat:boat, name:boat.name||bid, rid:rid, route:rt, dep:(rt.times&&rt.times[0])||'',
-           px:PX, ctx:ctx, plan:plan, rows:rows, cost:Math.round(cost), up:UP, lt:LT,
+           px:PX, ctx:ctx, plan:plan, rows:rows, cost:Math.round(cost), up:UP, lt:LT, fp:FP,
            revGross:Math.round(revGross), rev:Math.round(revNet),
            profit:Math.round(revNet-cost), st:st, nReal:nReal, closed:!!A.closed, frozen:frozen, be:be,
            fuelPr:fuelPr };
@@ -56866,6 +56926,8 @@ function renderTripPL(){
   var pct=tR?Math.round(tC/tR*100):0;
   var nNoPlan=D.filter(function(t){ return !t.plan; }).length;
   var nNoFuel=D.filter(function(t){ return !t.fuelPr; }).length;
+  /* §fuelEff · ราคาที่ยืมมาจากวันอื่น ไม่ใช่ของวันนี้ · ต้องเห็นว่าเลขยังไม่แน่นอน */
+  var nFuelBack=D.filter(function(t){ return t.fp && (t.fp.src==='back' || t.fp.src==='sib'); }).length;
 
   var pierSel='<select onchange="pxPier(this.value)"><option value="">\u0e17\u0e38\u0e01\u0e17\u0e48\u0e32</option>'
     +((typeof PO_PIERS!=='undefined')?PO_PIERS:[]).map(function(p){
@@ -56941,7 +57003,9 @@ function renderTripPL(){
         +'<div class="kbig"><b>'+pxN(tC)+'</b><em class="'+(pct>=100?'r':'g')+'">'+pct+'%</em></div>'
         +'<p class="ksm">'+pxN(tC/Math.max(1,tPax))+' \u0e15\u0e48\u0e2d\u0e2b\u0e31\u0e27</p>'
         +'<div class="kft"><span>\u0e21\u0e35\u0e02\u0e2d\u0e07\u0e08\u0e23\u0e34\u0e07 <b>'+nReal+'/'+D.length+' \u0e25\u0e33</b></span>'
-        +'<span>'+(nNoFuel?('<b style="color:#B45309">'+nNoFuel+' \u0e25\u0e33\u0e44\u0e21\u0e48\u0e21\u0e35\u0e23\u0e32\u0e04\u0e32\u0e19\u0e49\u0e33\u0e21\u0e31\u0e19</b>'):'\u0e19\u0e49\u0e33\u0e21\u0e31\u0e19 <b>\u0e04\u0e23\u0e1a</b>')+'</span></div></div>'
+        +'<span>'+(nNoFuel?('<b style="color:#B45309">'+nNoFuel+' \u0e25\u0e33\u0e44\u0e21\u0e48\u0e21\u0e35\u0e23\u0e32\u0e04\u0e32\u0e19\u0e49\u0e33\u0e21\u0e31\u0e19</b>')
+          :(nFuelBack?('\u0e19\u0e49\u0e33\u0e21\u0e31\u0e19 <b style="color:#B45309">\u0e22\u0e37\u0e21\u0e23\u0e32\u0e04\u0e32 '+nFuelBack+' \u0e25\u0e33</b>')
+                     :'\u0e19\u0e49\u0e33\u0e21\u0e31\u0e19 <b>\u0e04\u0e23\u0e1a</b>'))+'</span></div></div>'
 
       +'<div class="eg k"><div class="k1"><p class="lb">\u0e01\u0e33\u0e44\u0e23\u0e2a\u0e38\u0e17\u0e18\u0e34</p>'
         +'<span class="pico em">'+pxIco('pro')+'</span></div>'
