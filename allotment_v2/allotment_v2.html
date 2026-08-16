@@ -22315,6 +22315,7 @@ function flFuelSrcTxt(FP){
   if(FP.src === 'boat') return 'ราคาของลำนี้วันนี้';
   if(FP.src === 'pier') return 'ราคาของท่าวันนี้';
   if(FP.src === 'sib')  return 'ราคาของลำอื่นที่ท่าเดียวกันวันนี้';
+  if(FP.src === 'plan') return 'ไม่มีราคาจริงเลย · ใช้ราคาที่ตั้งไว้ในแผนต้นทุนของเส้นทางนี้';
   return 'ยังไม่ได้ลงราคาวันนี้ · ใช้ราคาล่าสุด ' + FP.from;
 }
 function flSaveFuelPrice(ds, pierKey, val){
@@ -56245,7 +56246,10 @@ function pxPlanFor(routeId){
   /* §ctRoute · เส้นทางตรงมาก่อนเสมอ · แผนที่ผูกไว้ระดับกลุ่ม (ของเก่า) เป็นตัวสำรอง */
   var hit=P.filter(function(p){ return p.famId===routeId; })[0]
         || P.filter(function(p){ return p.famId===fid; })[0];
-  return hit ? {id:hit.id, name:hit.name, ovr:hit.ovr||{}, grp:hit.grp||{}} : null;
+  /* §fuelPlan · ส่ง fuel ออกมาด้วยแต่ตั้งชื่อแยกให้ชัด · ใช้เป็น "ตัวสำรองท้ายสุด" เท่านั้น
+     ไม่ได้ป้อนเข้า ctCalc · กติกาเดิมยังอยู่ ตัวเลขที่ไว้ลองเล่นในหน้าแผนต้องไม่ขยับกำไรของเมื่อวาน
+     แต่ถ้า "ไม่มีราคาจริงเลย" การใช้ราคาที่ตั้งไว้ ยังใกล้ความจริงกว่าการคิดเป็น ฿0 */
+  return hit ? {id:hit.id, name:hit.name, ovr:hit.ovr||{}, grp:hit.grp||{}, planFuel:+hit.fuel||0} : null;
 }
 /* หัวที่เดินทางจริงของลำหนึ่ง · แยกไทย/ต่างชาติเพื่อคิดค่าอุทยาน
    คนที่ไม่ระบุสัญชาติ นับเป็นต่างชาติ · คิดสูงไว้ก่อนดีกว่าคิดต่ำแล้วขาดทุนแบบไม่รู้ตัว */
@@ -56397,8 +56401,11 @@ function pxTrip(date, bid){
   var A=(typeof taGet==='function')?(taGet(date,bid)||{}):{};
   var T=(typeof ctTpl==='function')?ctTpl():null;
   var R=(typeof ctVatR==='function')?ctVatR(T):0;
-  /* §fuelEff · ไม่มีราคาของวันนั้นก็ไล่หาที่ใกล้เคียงที่สุด · ศูนย์บาทไม่ใช่คำตอบที่ถูก */
+  var plan=pxPlanFor(rid);
+  /* §fuelEff · ไม่มีราคาของวันนั้นก็ไล่หาที่ใกล้เคียงที่สุด · ศูนย์บาทไม่ใช่คำตอบที่ถูก
+     ชั้นสุดท้ายคือราคาที่ตั้งไว้ในแผนของเส้นทางนั้น (หน้าต้นทุน) ซึ่งเป็นตัวเลขที่ทีมตั้งเอง */
   var FP=(typeof flFuelPriceEff==='function')?flFuelPriceEff(date,boat):{price:0,src:'',from:''};
+  if(!FP.price && plan && plan.planFuel>0) FP={price:plan.planFuel, src:'plan', from:''};
   var fuelPr=FP.price||0;
   /* §pxOd · จำนวนที่ลูกค้าสั่งจริงของลำนี้ · ป้อนเข้าสูตรแทนจำนวนที่คาดไว้ในแผน */
   var LT=(typeof pxLongtail==='function')?pxLongtail(date,bid):{chtr:0,join:0};
@@ -56407,7 +56414,6 @@ function pxTrip(date, bid){
             pax:PX.tot, paxTH:PX.th, paxFR:PX.fr,
             /* §ctChd · ทารกนับรวมกับเด็ก · ไม่มีทางที่ทารกจะกินเท่าผู้ใหญ่ */
             paxCh:Math.min(PX.tot, (PX.chd||0) + (PX.inf||0)) };
-  var plan=pxPlanFor(rid);
   var C=(typeof ctCalc==='function')?ctCalc(plan||{}, ctx, T):{rows:[],net:0};
 
   /* ของจริงทับค่าประมาณเป็นรายบรรทัด */
@@ -56463,7 +56469,7 @@ function pxTrip(date, bid){
     /* §pxOd · จำนวนมาจากใบจองจริง ไม่ใช่ตัวประมาณ · ป้ายจึงเป็น "ของจริง" */
     if(r.id==='fuel' && real==null){
       if(!fuelPr) why='ยังไม่ได้ลงราคาน้ำมัน · บรรทัดนี้จึงเป็น ฿0 ทั้งที่เรือวิ่งจริง';
-      else if(FP.src==='sib' || FP.src==='back') why=flFuelSrcTxt(FP)+' · ฿'+fuelPr+'/ลิตร';
+      else if(FP.src==='sib' || FP.src==='back' || FP.src==='plan') why=flFuelSrcTxt(FP)+' · ฿'+fuelPr+'/ลิตร';
     }
     if(r.id==='ltj' && real==null){ src='r'; why='จอยจริง '+LT.join+' คน (ไม่ใช่ '+PX.tot+' หัวทั้งลำ)'; }
     if(r.id==='ltc' && real==null){ src='r'; why='เหมาจริง '+LT.chtr+' ลำ'; }
@@ -56927,7 +56933,7 @@ function renderTripPL(){
   var nNoPlan=D.filter(function(t){ return !t.plan; }).length;
   var nNoFuel=D.filter(function(t){ return !t.fuelPr; }).length;
   /* §fuelEff · ราคาที่ยืมมาจากวันอื่น ไม่ใช่ของวันนี้ · ต้องเห็นว่าเลขยังไม่แน่นอน */
-  var nFuelBack=D.filter(function(t){ return t.fp && (t.fp.src==='back' || t.fp.src==='sib'); }).length;
+  var nFuelBack=D.filter(function(t){ return t.fp && (t.fp.src==='back' || t.fp.src==='sib' || t.fp.src==='plan'); }).length;
 
   var pierSel='<select onchange="pxPier(this.value)"><option value="">\u0e17\u0e38\u0e01\u0e17\u0e48\u0e32</option>'
     +((typeof PO_PIERS!=='undefined')?PO_PIERS:[]).map(function(p){
@@ -57306,7 +57312,8 @@ function ctPlanHtml(){
     + fld('เด็กกี่ %', inp('chPct'))
     + fld('คอมมิชชั่น %', inp('comm')) + fld('ราคาน้ำมัน ฿/ลิตร', inp('fuel'))
     + '</div>'
-    + '<div class="ct-hint" style="padding:0 20px 4px">ราคาผู้ใหญ่ / ราคาเด็ก เป็นราคา<b>รวม VAT</b> เหมือนที่ขายจริง</div>'
+    + '<div class="ct-hint" style="padding:0 20px 4px">ราคาผู้ใหญ่ / ราคาเด็ก เป็นราคา<b>รวม VAT</b> เหมือนที่ขายจริง · '
+    + '<b>ราคาน้ำมัน</b> ในช่องนี้ P&amp;L จะหยิบไปใช้เมื่อวันนั้นไม่มีราคาจริงเลย (เป็นตัวสำรองชั้นสุดท้าย)</div>'
     + '<div class="ct-hint" style="padding:0 20px 14px">'
     + (+pl.chPct > 0
         ? ('\u0e08\u0e38\u0e14\u0e04\u0e38\u0e49\u0e21\u0e17\u0e38\u0e19\u0e04\u0e34\u0e14\u0e42\u0e14\u0e22\u0e41\u0e15\u0e01\u0e17\u0e38\u0e01\u0e23\u0e2d\u0e1a\u0e40\u0e1b\u0e47\u0e19\u0e1c\u0e39\u0e49\u0e43\u0e2b\u0e0d\u0e48/\u0e40\u0e14\u0e47\u0e01\u0e01\u0e48\u0e2d\u0e19 \u00b7 \u0e17\u0e35\u0e48 '
