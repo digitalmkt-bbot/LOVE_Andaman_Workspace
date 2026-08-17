@@ -56467,7 +56467,7 @@ function mvCost(venue, nAd, nCh){
 /* ═══ §tripPL · P&L รายทริป ══════════════════════════════════════════════════
    ไม่มีสูตรของตัวเอง · ป้อนของจริงเข้า ctCalc ของหน้าต้นทุน แล้วเอาผลมาแสดง
    ═══════════════════════════════════════════════════════════════════════════ */
-var _px = { date:'', pier:'', open:{}, tab:'d', mon:'', an:47, oc:{}, oa:{} };
+var _px = { date:'', pier:'', open:{}, tab:'d', mon:'', an:47, oc:{} };
 
 /* แผนต้นทุนของเส้นทางนี้ · ใช้แค่ ovr/grp (ที่ปรับ-ปิดรายเส้นทาง)
    ไม่ใช้ pax/price/boats/fuel ของแผน เพราะนั่นเป็นค่าไว้ลองเล่นในหน้าต้นทุน
@@ -57133,32 +57133,41 @@ function pxCSS(){ return ''
  +'#trippl-host .dqx .t{font-size:11px;font-weight:800;color:var(--pi)}'
  +'#trippl-host .dqx span.q{font-size:10.5px;color:var(--pm);display:flex;align-items:center;gap:6px}'
  +'#trippl-host .dqx span.q i{width:10px;height:10px;border-radius:3px;flex:none}'
- /* §agRoute · แถวเอเจนต์กดกางดูเส้นทางที่เขาส่งมา */
- +'#trippl-host tr.agc2{cursor:pointer}'
- +'#trippl-host tr.agc2 .cv2{width:10px;height:10px;flex:none;color:#CBD5E1;transition:transform .18s;'
-   +'margin-right:2px}'
- +'#trippl-host tr.agc2.opn .cv2{transform:rotate(90deg);color:#6366F1}'
- +'#trippl-host tr.agc2.opn > td{background:#FAFBFF}'
- +'#trippl-host tr.agd > td{padding:0;border-bottom:1px solid var(--pl2);background:#FAFBFF}'
- +'#trippl-host .agdw{padding:2px 14px 14px 40px}'
- +'#trippl-host .agdw table{width:100%;border-collapse:collapse;background:#fff;'
-   +'border:1px solid var(--pl2);border-radius:14px;overflow:hidden}'
- +'#trippl-host .agdw th{font-size:9.5px;font-weight:800;color:var(--pf);letter-spacing:.05em;'
-   +'text-transform:uppercase;text-align:right;padding:7px 10px;background:#F8FAFC;'
-   +'border-bottom:1px solid var(--pl)}'
- +'#trippl-host .agdw th.l{text-align:left}'
- +'#trippl-host .agdw th.c{text-align:center}'
- +'#trippl-host .agdw td{font-size:11.5px;padding:8px 10px;border-bottom:1px solid #F5F7FA;text-align:right}'
- +'#trippl-host .agdw td.l{text-align:left}'
- +'#trippl-host .agdw td.c{text-align:center}'
- +'#trippl-host .agdw tr:last-child td{border-bottom:0}'
- +'#trippl-host .agdw .rn{display:flex;align-items:center;gap:8px}'
- +'#trippl-host .agdw .rn i{width:9px;height:20px;border-radius:3px;flex:none}'
- +'#trippl-host .agdw .rn b{font-size:11.5px;font-weight:800;color:var(--pi)}'
- +'#trippl-host .agdw .rn small{display:block;font-size:10px;color:var(--pf);font-weight:400}'
- +'#trippl-host .agdw .shr{height:6px;border-radius:999px;background:#EEF1F6;overflow:hidden;min-width:70px}'
- +'#trippl-host .agdw .shr i{display:block;height:100%;border-radius:999px}'
- +'#trippl-host .agdw .shl{font-size:9.5px;color:var(--pf);margin-top:3px;text-align:center}'
+ /* §agMx · เมทริกซ์ เอเจนต์ × เส้นทาง · หนึ่งคอลัมน์คือหนึ่งเส้นทาง
+    สีพื้นเป็นสเกลสองขั้ว ไล่ขั้นละเท่ากันสองฝั่งจากศูนย์ · ตัวเลขในช่องคือตัวถือความหมายจริง
+    สีเป็นแค่ตัวช่วยกวาดตา ไม่ใช่ตัวเดียวที่บอกเรื่อง */
+ +'#trippl-host table.sum th.rth{min-width:116px;max-width:136px;white-space:normal;'
+   +'text-align:center;text-transform:none;font-size:10.5px;letter-spacing:0;line-height:1.35;'
+   +'vertical-align:bottom;padding:9px 8px 8px}'
+ +'#trippl-host table.sum th.rth i{display:block;width:26px;height:4px;border-radius:999px;margin:0 auto 6px}'
+ +'#trippl-host td.mx{padding:0;border-left:2px solid #fff;border-right:2px solid #fff}'
+ +'#trippl-host td.mx > div{padding:9px 8px;text-align:center;border-radius:8px;margin:2px 0}'
+ +'#trippl-host td.mx b{display:block;font-size:12.5px;font-weight:800;line-height:1.25}'
+ +'#trippl-host td.mx small{display:block;font-size:10px;color:var(--pm);margin-top:2px}'
+ +'#trippl-host td.mx .pos{color:#065F46}'
+ +'#trippl-host td.mx .neg{color:#9F1239}'
+ +'#trippl-host td.mx.e > div{background:#F8FAFC}'
+ +'#trippl-host td.mx.e span{color:#CBD5E1;font-size:12px}'
+ +'#trippl-host td.mx.d3n > div{background:#FDA4AF}'
+ +'#trippl-host td.mx.d2n > div{background:#FECDD3}'
+ +'#trippl-host td.mx.d1n > div{background:#FFE4E6}'
+ +'#trippl-host td.mx.d0  > div{background:#F1F5F9}'
+ +'#trippl-host td.mx.d1p > div{background:#ECFDF5}'
+ +'#trippl-host td.mx.d2p > div{background:#D1FAE5}'
+ +'#trippl-host td.mx.d3p > div{background:#A7F3D0}'
+ /* ชื่อเอเจนต์ตรึงซ้าย · ต้องทึบ ไม่งั้นคอลัมน์เส้นทางเลื่อนลอดใต้ตัวหนังสือ */
+ +'#trippl-host table.sum td.stk,#trippl-host table.sum th.stk{position:sticky;left:0;z-index:3;'
+   +'background:#fff;box-shadow:2px 0 0 0 #EEF1F6}'
+ +'#trippl-host table.sum tr.br:hover td.stk{background:#FAFBFF}'
+ +'#trippl-host table.sum tr.tot td.stk{background:#EEF2FF}'
+ +'#trippl-host .mxlg{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:14px;'
+   +'background:#F8FAFC;border:1px solid var(--pl2);border-radius:16px;padding:12px 16px}'
+ +'#trippl-host .mxlg .t{font-size:11px;font-weight:800;color:var(--pi)}'
+ +'#trippl-host .mxlg .ramp{display:flex;align-items:center;gap:2px}'
+ +'#trippl-host .mxlg .ramp i{width:32px;height:14px;border-radius:4px;display:block}'
+ +'#trippl-host .mxlg .ramp span{font-size:9.5px;color:var(--pf);margin:0 5px}'
+ +'#trippl-host .mxlg .q{font-size:10.5px;color:var(--pm);display:flex;align-items:center;gap:6px}'
+ +'#trippl-host .mxlg .q i{width:11px;height:11px;border-radius:3px;flex:none}'
  /* §wkTrend · แท่งรายสัปดาห์ · ความสูงทั้งแท่ง = รายได้ต่อหัว */
  +'#trippl-host .wkw{display:flex;align-items:flex-end;gap:9px;height:158px;padding:6px 2px 0}'
  +'#trippl-host .wkc{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;'
@@ -57206,12 +57215,6 @@ var PX_CHEV='<svg class="cv" viewBox="0 0 24 24" fill="none" stroke="currentColo
 /* ค่าที่จะไปอยู่ใน onclick="...('X')" · กันทั้งฝั่ง JS และฝั่ง HTML attribute */
 function pxQ(v){ return String(v==null?'':v).replace(/\\/g,'\\\\').replace(/'/g,"\\'")
   .replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
-function pxAgTog(k){
-  k=String(k==null?'':k);
-  if(!_px.oa) _px.oa={};
-  if(_px.oa[k]) delete _px.oa[k]; else _px.oa[k]=1;
-  renderTripPL();
-}
 function pxCostTog(g){
   g=String(g==null?'':g);
   if(!_px.oc) _px.oc={};
@@ -57809,6 +57812,7 @@ function pxAnalysis(e){
   if(!T.trips) return '<div class="empty">No trips in the last '+N+' days'+(_px.pier?' at this pier':'')+'</div>';
 
   var RL=Object.keys(RT).map(function(k){ var r=RT[k];
+    r.k=k;
     r.rph=r.rev/Math.max(1,r.pax); r.cph=r.cost/Math.max(1,r.pax); r.nph=r.profit/Math.max(1,r.pax);
     r.lf=r.cap?(r.pax/r.cap):0; r.beAvg=r.beN?Math.round(r.be/r.beN):0;
     r.avgPax=Math.round(r.pax/Math.max(1,r.n)); r.avgCap=Math.round(r.cap/Math.max(1,r.n));
@@ -57986,73 +57990,52 @@ function pxAnalysis(e){
   }).join('');
   var thin=bandN[0]+bandN[1];
 
-  if(!_px.oa) _px.oa={};
-  /* §agRoute · เส้นทางของเอเจนต์คนหนึ่ง · เรียงตามหัวคน */
-  function pxAgRoutes(g){
-    var src=g.routes||{};
-    return Object.keys(src).map(function(k){
-      var q=src[k], R0=RT[k]||{};
-      return { k:k, name:R0.name||k, color:R0.color||'#94A3B8',
-               n:q.n, pax:q.pax, rev:q.rev, cost:q.cost,
-               rph:q.rev/Math.max(1,q.pax), cph:q.cost/Math.max(1,q.pax),
-               nph:(q.rev-q.cost)/Math.max(1,q.pax), net:q.rev-q.cost,
-               shr:g.pax?(q.pax/g.pax):0 };
-    }).filter(function(x){ return x.pax>0 || Math.round(x.rev)!==0; })
-      .sort(function(a,b){ return b.pax-a.pax; });
+  /* §agMx · เอเจนต์ × เส้นทาง · เอเจนต์คนเดียวกันกำไรคนละเรื่องในแต่ละเส้นทาง
+     ตัวเลขรวมของเขาจึงกลบเส้นทางที่ขาดทุนไว้ · คอลัมน์เรียงตามหัวคน เส้นทางหลักอยู่ติดชื่อ */
+  var AGN_TOP=15;
+  var RCOL=RL.slice().sort(function(a,b){ return b.pax-a.pax; });
+  var mxStep=Math.max(1, +tgt||130);
+  function pxMxCls(v){
+    if(v>=3*mxStep) return 'd3p';
+    if(v>=mxStep)   return 'd2p';
+    if(v>0)         return 'd1p';
+    if(v===0)       return 'd0';
+    if(v>-mxStep)   return 'd1n';
+    if(v>-3*mxStep) return 'd2n';
+    return 'd3n';
   }
-  function pxAgPane(g){
-    var RS=pxAgRoutes(g);
-    if(!RS.length) return '<tr class="agd"><td colspan="8"><div class="agdw" '
-      +'style="font-size:11.5px;color:#94A3B8;padding:10px 14px 14px 40px">'
-      +'No route detail for this agent</div></td></tr>';
-    var rows=RS.map(function(r){
-      var loss=r.nph<0;
-      return '<tr><td class="l"><div class="rn"><i style="background:'+e(r.color)+'"></i>'
-        +'<div><b>'+e(r.name)+'</b><small>'+r.n+' booking'+(r.n===1?'':'s')+'</small></div></div></td>'
-        +'<td class="c"><span class="num n">'+r.pax+'</span></td>'
-        +'<td class="c"><div class="shr"><i style="width:'+Math.round(r.shr*100)+'%;background:'
-          +e(r.color)+'"></i></div><div class="shl">'+Math.round(r.shr*100)+'% of their pax</div></td>'
-        +'<td><span class="num n">'+pxN(r.rph)+'</span></td>'
-        +'<td><span class="num cost n">'+pxN(r.cph)+'</span></td>'
-        +'<td class="netc'+(loss?' neg':'')+'"><span class="net'+(loss?' neg':'')+' n">'
-          +(loss?'\u2212':'+')+pxN(Math.abs(r.nph))+'</span></td>'
-        +'<td class="netc'+(loss?' neg':'')+'"><span class="net'+(loss?' neg':'')+' n">'
-          +(loss?'\u2212':'+')+pxN(Math.abs(r.net))+'</span></td></tr>';
-    }).join('');
-    var bad=RS.filter(function(r){ return r.nph<0; });
-    return '<tr class="agd"><td colspan="8"><div class="agdw">'
-      +'<table><thead><tr><th class="l">Route</th><th class="c">Pax</th><th class="c">Share</th>'
-      +'<th>Rev / pax</th><th>Cost / pax</th><th>Net / pax</th><th>Total net</th></tr></thead>'
-      +'<tbody>'+rows+'</tbody></table>'
-      +(bad.length?('<div class="hint" style="margin-top:10px">'
-        +'<b>'+bad.length+' of '+RS.length+' route'+(RS.length===1?'':'s')+' loses money for this agent.</b> '
-        +e(bad.slice(0,3).map(function(r){ return r.name; }).join(', '))
-        +' \u2014 the headline number is being carried by the rest.</div>'):'')
-      +'</div></td></tr>';
+  function pxMxCell(q, label){
+    if(!q || (!q.pax && Math.round(q.rev||0)===0))
+      return '<td class="mx e"><div><span>\u2014</span></div></td>';
+    var px=Math.max(1,q.pax), nph=Math.round((q.rev-q.cost)/px), loss=nph<0;
+    return '<td class="mx '+pxMxCls(nph)+'" title="'+label+' \u00b7 '+q.pax+' pax \u00b7 '
+      +'rev '+pxN(q.rev/px)+'/pax \u00b7 cost '+pxN(q.cost/px)+'/pax \u00b7 net '
+      +pxN(q.rev-q.cost)+' \u0e3f">'
+      +'<div><b class="'+(loss?'neg':'pos')+' n">'+(loss?'\u2212':'+')+pxN(Math.abs(nph))+'</b>'
+      +'<small>'+q.pax+' pax</small></div></td>';
   }
-  var agRows=AL.slice(0,8).map(function(g){
-    var loss=g.nph<0, op=!!_px.oa[g.name], nr=Object.keys(g.routes||{}).length;
-    return '<tr class="br agc2'+(loss?' loss':'')+(op?' opn':'')+'" '
-      +'onclick="pxAgTog(\''+pxQ(g.name)+'\')" title="'
-      +(op?'Hide the route split':'Show which routes this agent sends')+'">'
-      +'<td class="l"><div class="bn">'
-        +'<svg class="cv2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" '
-        +'stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>'
-        +'<i style="background:'+pxAColor(g)+'"></i><div><b>'+e(g.name)+'</b>'
-        +'<small>'+(g.b2c?'Direct \u00b7 no commission':'Agent')
-        +(nr?(' \u00b7 '+nr+' route'+(nr===1?'':'s')):'')+'</small></div></div></td>'
-      +'<td class="c"><span class="num n">'+g.n+'</span></td>'
+  var agRows=AL.slice(0,AGN_TOP).map(function(g){
+    var loss=g.nph<0, RS=g.routes||{};
+    return '<tr class="br'+(loss?' loss':'')+'">'
+      +'<td class="l stk"><div class="bn"><i style="background:'+pxAColor(g)+'"></i><div>'
+      +'<b>'+e(g.name)+'</b><small>'+(g.b2c?'Direct \u00b7 no commission':'Agent')
+      +' \u00b7 '+g.n+' booking'+(g.n===1?'':'s')+'</small></div></div></td>'
       +'<td class="c"><span class="num n">'+g.pax+'</span></td>'
-      +'<td><span class="num n">'+pxN(g.rph)+'</span></td>'
-      +'<td><span class="num cost n">'+pxN(g.cph)+'</span></td>'
+      +RCOL.map(function(r){ return pxMxCell(RS[r.k], e(r.name)); }).join('')
       +'<td class="netc'+(loss?' neg':'')+'"><span class="net'+(loss?' neg':'')+' n">'
         +(loss?'\u2212':'+')+pxN(Math.abs(g.nph))+'</span></td>'
       +'<td class="netc'+(loss?' neg':'')+'"><span class="net'+(loss?' neg':'')+' n">'
         +(loss?'\u2212':'+')+pxN(Math.abs(g.net))+'</span></td>'
       +'<td class="c"><span class="pill '+(loss?'ro':(g.nph<(tgt||130)?'am':'em'))+'">'
-        +(loss?'Below cost':(g.nph<(tgt||130)?'Thin':'Strong'))+'</span></td></tr>'
-      +(op?pxAgPane(g):'');
+        +(loss?'Below cost':(g.nph<(tgt||130)?'Thin':'Strong'))+'</span></td></tr>';
   }).join('');
+  var mxHead=RCOL.map(function(r){
+    return '<th class="rth"><i style="background:'+e(r.color)+'"></i>'+e(r.name)+'</th>'; }).join('');
+  var mxFoot=RCOL.map(function(r){
+    return pxMxCell({pax:r.pax, rev:r.rev, cost:r.cost}, e(r.name)); }).join('');
+  var mxWide=430+118*RCOL.length;
+  /* เส้นทางที่ทั้งบริษัทขาดทุน · เอาไว้เขียนสรุปใต้ตาราง */
+  var mxBad=RCOL.filter(function(r){ return r.nph<0; });
 
   return hero+ins
     +'<div class="eg mb"><div class="phd"><div><h2>Route profitability</h2>'
@@ -58150,30 +58133,46 @@ function pxAnalysis(e){
       :'<div class="empty">Not enough days to draw a weekly trend</div>')
       +'</div></div>'
     +'<div class="eg"><div class="phd"><div><h2>Agent contribution</h2>'
-      +'<p>What each agent pays per head against what the trip costs · negative means we pay to carry them · click a row to split it by route</p></div></div>'
-      +'<div class="twrap"><div class="tscroll"><table class="sum" style="min-width:840px">'
-      +'<thead><tr><th class="l">Agent</th><th class="c">Bookings</th><th class="c">Pax</th>'
-      +'<th>Rev / pax</th><th>Cost / pax</th><th>Net / pax</th><th>Total net</th>'
-      +'<th class="c">Status</th></tr></thead><tbody>'+agRows
-      +(AL.length>8?('<tr><td class="l" colspan="8" style="text-align:center;font-size:11.5px;color:#94A3B8">… '
-        +(AL.length-8)+' more agents · '+below.length+' below cost in total</td></tr>'):'')
-      +'<tr class="tot"><td class="l">Σ '+AL.length+' agents</td>'
-      +'<td class="c"><span class="num n">'+T.bk+'</span></td><td class="c"><span class="num n">'+T.pax+'</span></td>'
-      +'<td><span class="num n">'+pxN(T.rev/Math.max(1,T.pax))+'</span></td>'
-      +'<td><span class="num cost n">'+pxN(T.cost/Math.max(1,T.pax))+'</span></td>'
+      +'<p>Net per pax, split by route \u00b7 the same agent earns a different margin on every route, '
+      +'so their headline number hides the ones that lose money</p></div>'
+      +'<div><span class="pill pu">top '+Math.min(AGN_TOP,AL.length)+' of '+AL.length+' agents</span></div></div>'
+      +'<div class="twrap"><div class="tscroll"><table class="sum" style="min-width:'+mxWide+'px">'
+      +'<thead><tr><th class="l stk" style="min-width:212px">Agent</th><th class="c">Pax</th>'
+      +mxHead
+      +'<th>Net / pax</th><th>Total net</th><th class="c">Status</th></tr></thead><tbody>'+agRows
+      +(AL.length>AGN_TOP?('<tr><td class="l stk" style="font-size:11.5px;color:#94A3B8">\u2026 '
+        +(AL.length-AGN_TOP)+' more</td><td colspan="'+(RCOL.length+4)+'" '
+        +'style="text-align:center;font-size:11.5px;color:#94A3B8">\u2026 '
+        +(AL.length-AGN_TOP)+' more agents \u00b7 '+below.length+' below cost in total</td></tr>'):'')
+      +'<tr class="tot"><td class="l stk">\u03a3 '+AL.length+' agents</td>'
+      +'<td class="c"><span class="num n">'+T.pax+'</span></td>'
+      +mxFoot
       +'<td class="netc"><span class="net n">'+pxN(T.profit/Math.max(1,T.pax))+'</span></td>'
-      +'<td class="netc"><span class="net n">'+(T.profit<0?'−':'+')+pxN(Math.abs(T.profit))+'</span></td>'
+      +'<td class="netc"><span class="net n">'+(T.profit<0?'\u2212':'+')+pxN(Math.abs(T.profit))+'</span></td>'
       +'<td class="c"><span class="pill pu">'+(T.rev?Math.round(T.profit/T.rev*100):0)+'%</span></td>'
       +'</tr></tbody></table></div></div>'
-      +(below.length?('<div class="hint"><b>'+below.length+' agent'+(below.length===1?' is':'s are')
-        +' priced below what it costs to carry them.</b> '
+      +'<div class="mxlg"><span class="t">Net per pax</span>'
+      +'<div class="ramp"><span>\u2212'+pxN(3*mxStep)+' or worse</span>'
+      +'<i style="background:#FDA4AF"></i><i style="background:#FECDD3"></i><i style="background:#FFE4E6"></i>'
+      +'<i style="background:#F1F5F9"></i>'
+      +'<i style="background:#ECFDF5"></i><i style="background:#D1FAE5"></i><i style="background:#A7F3D0"></i>'
+      +'<span>+'+pxN(3*mxStep)+' or better</span></div>'
+      +'<span class="q"><i style="background:#F8FAFC;border:1px solid #E2E8F0"></i>'
+      +'\u2014 = never sent on this route</span>'
+      +'<span class="q">top number = \u0e3f per head \u00b7 bottom = pax \u00b7 hover for the full split</span>'
+      +'</div>'
+      +(mxBad.length?('<div class="hint"><b>'+mxBad.length+' route'+(mxBad.length===1?' loses':'s lose')
+        +' money across the whole company.</b> '
+        +e(mxBad.map(function(r){ return r.name; }).slice(0,3).join(', '))
+        +' \u2014 every agent carrying them is being subsidised by the rest of the table. ')
+        :'<div class="hint"><b>No route is loss-making company-wide.</b> ')
+      +(below.length?(below.length+' agent'+(below.length===1?' is':'s are')
+        +' priced below what it costs to carry them, led by '
         +e(below.slice(0,3).map(function(g){ return g.name; }).join(', '))
-        +' carried '+below.slice(0,3).reduce(function(s,g){ return s+g.pax; },0)
-        +' pax for '+pxN(below.slice(0,3).reduce(function(s,g){ return s+g.net; },0))
-        +' ฿. Check their rate card against the current cost per head of '
-        +pxN(T.cost/Math.max(1,T.pax))+' ฿.</div>')
-        :'<div class="hint"><b>No agent is priced below cost.</b> The thinnest is '
-          +(AL.length?(e(AL[AL.length-1].name)+' at '+pxN(AL[AL.length-1].nph)+' ฿ per head.'):'—')+'</div>')
+        +' \u00b7 combined drag '+pxN(belowDrag)+' \u0e3f against a cost per head of '
+        +pxN(T.cost/Math.max(1,T.pax))+' \u0e3f.')
+        :'No agent is priced below cost overall.')
+      +'</div>'
       +'</div>';
 }
 function rkc(i){ return ['t1','t2','t3'][i]||''; }
