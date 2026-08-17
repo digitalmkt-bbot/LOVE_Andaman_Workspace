@@ -47235,23 +47235,25 @@ function ckTripOn(b, date){ return ((b&&b.trips)||[]).find(function(x){ return (
 /* §vckSplit · บุคกิ้งที่รับหลายจุดถูกแตกเป็น ops.vanSplits[] แล้วขึ้นรถคนละคัน
    การเช็คอินจึงต้องแยกรายคัน · kind = 'van#<i>' เก็บลง ops.vanCkS[i]
    เก็บเป็น object map ไม่ใช่ array เพราะ _deepDiff ไล่ merge ทีละคีย์ ไม่ทับกันข้ามเครื่อง */
-function _ckSlot(kind){ var m=/^van#(\d+)$/.exec(String(kind||'')); return m?+m[1]:-1; }
+function _ckSlot(kind){ var m=/^(van|pier)#(\d+)$/.exec(String(kind||'')); return m?{k:m[1], i:+m[2]}:null; }
+function _ckBag(o, sl){ return (sl.k==='pier')?o.pierCkS:o.vanCkS; }
 function ckRead(b, date, kind){
   var o=(typeof bkOpsRead==='function')?bkOpsRead(b,date):((b&&b.ops)||{});
-  var si=_ckSlot(kind);
-  if(si>=0) return (o.vanCkS&&o.vanCkS[si])||null;
+  var sl=_ckSlot(kind);
+  if(sl){ var bag=_ckBag(o,sl); return (bag&&bag[sl.i])||null; }
   return (kind==='pier'?o.pierCheckin:o.vanCheckin)||null; }
 // §pierStage · ckStep / ckToggle / ckEvSave ต่างสร้าง object ใหม่ทั้งก้อน ถ้าไม่พกขั้น "ถึงท่า / เคลียร์"
 // มาด้วย จะหายทุกครั้งที่กด +/- (บั๊กแบบเดียวกับที่เคยทำ events หาย) — merge จากของเดิมที่จุดเดียวตรงนี้
 var CK_STAGE_KEYS=['arrivedAt','arrivedBy','clearedAt','clearedBy','reinstate'];   // §ckPierFix · reinstate ต้องไม่หายตอนกด +/- หรือเช็คอิน
 function ckWrite(b, date, kind, val){
   var o=(typeof bkOpsFor==='function')?bkOpsFor(b, (typeof bkOpsDate==='function'?bkOpsDate(b,date):date)):(b.ops=b.ops||{});
-  var si=_ckSlot(kind);
-  var prev=(si>=0)?((o.vanCkS&&o.vanCkS[si])||null):((kind==='pier'?o.pierCheckin:o.vanCheckin)||null);
+  var sl=_ckSlot(kind);
+  var prev=sl?((_ckBag(o,sl)||{})[sl.i]||null):((kind==='pier'?o.pierCheckin:o.vanCheckin)||null);
   if(prev && val && typeof val==='object'){
     CK_STAGE_KEYS.forEach(function(k){ if(val[k]===undefined && prev[k]!==undefined) val[k]=prev[k]; });
   }
-  if(si>=0){ o.vanCkS=o.vanCkS||{}; o.vanCkS[si]=val; }
+  if(sl){ if(sl.k==='pier'){ o.pierCkS=o.pierCkS||{}; o.pierCkS[sl.i]=val; }
+          else { o.vanCkS=o.vanCkS||{}; o.vanCkS[sl.i]=val; } }
   else if(kind==='pier') o.pierCheckin=val; else o.vanCheckin=val;
   return val;
 }
@@ -47399,10 +47401,13 @@ function ckEventUndo(bkId, date, kind){
   ckPersist(); ckAfter(kind);
 }
 // กดขั้นไหน = ไปถึงขั้นนั้น (ขั้นก่อนหน้าเติมให้อัตโนมัติ) · กดขั้นที่ทำแล้ว = ถอยกลับหนึ่งขั้น
-function pckStageSet(bkId, date, stage){
+/* §pckSplit · kind = 'pier' หรือ 'pier#<i>' ของจุดรับย่อย · ต้องแยกสถานะรายจุด
+   ไม่งั้นกด "ถึงท่า" จุดเดียวจะเหมาว่าทั้งใบมาถึงแล้ว */
+function pckStageSet(bkId, date, stage, kind){
   if(!ckGuard()) return;                                   /* §ckPerm */
+  kind=kind||'pier';
   var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
-  var cur=ckRead(b,date,'pier')||{};
+  var cur=ckRead(b,date,kind)||{};
   var now=new Date().toISOString(), me=ckMe();
   var at=pckStageRank(pckStage(cur)), want=pckStageRank(stage);
   var to=(at===want)?want-1:want;                       // กดซ้ำ = ถอยกลับ
@@ -47412,11 +47417,11 @@ function pckStageSet(bkId, date, stage){
   v.arrivedBy = to>=1 ? (cur.arrivedBy||me)  : null;
   v.clearedAt = to>=2 ? (cur.clearedAt||now) : null;
   v.clearedBy = to>=2 ? (cur.clearedBy||me)  : null;
-  if(to>=3 && !cur.at){ ckToggle(bkId,date,'pier'); }   // ขึ้นเรือใช้ทางเดิม (มันนับ pax + ถามเหตุผลให้ด้วย)
-  else if(to<3 && cur.at){ ckToggle(bkId,date,'pier'); }
-  var now2=ckRead(b,date,'pier')||{};
+  if(to>=3 && !cur.at){ ckToggle(bkId,date,kind); }   // ขึ้นเรือใช้ทางเดิม (มันนับ pax + ถามเหตุผลให้ด้วย)
+  else if(to<3 && cur.at){ ckToggle(bkId,date,kind); }
+  var now2=ckRead(b,date,kind)||{};
   var t=ckTripOn(b,date)||{}, cap=ckCap(b,date,'pier',ckBookedPax(t));
-  ckWrite(b,date,'pier',{
+  ckWrite(b,date,kind,{
     actualPax:(now2.actualPax!=null?now2.actualPax:cap), noShow:(now2.noShow!=null?now2.noShow:0),
     expected:(now2.expected!=null?now2.expected:cap), at:now2.at||null, by:now2.by||null,
     events:(Array.isArray(now2.events)?now2.events:[]),
@@ -48979,7 +48984,7 @@ function pckStageCell(r, date){
   var btn=function(S){
     var done=pckStageRank(st)>=pckStageRank(S.k);
     var when=(S.k==='arr'?hhmm(ck.arrivedAt):hhmm(ck.clearedAt));
-    return '<button onclick="pckStageSet(\''+r.b.id+'\',\''+date+'\',\''+S.k+'\')" title="'+e(S.lbl+(done?(' · '+((S.k==='arr'?ck.arrivedBy:ck.clearedBy)||'')+(when?(' '+when):'')):' · กดเพื่อบันทึก'))+'" style="border:1.5px solid '+(done?S.bd:'#E7E4DC')+';background:'+(done?S.bg:'#fff')+';color:'+(done?S.col:'#a5a49d')+';border-radius:7px;padding:3px 9px;font-size:10.5px;font-weight:'+(done?'800':'600')+';cursor:pointer;font-family:inherit;white-space:nowrap;margin:0 3px 3px 0">'
+    return '<button onclick="pckStageSet(\''+r.b.id+'\',\''+date+'\',\''+S.k+'\',\''+(r._ckKind||'pier')+'\')" title="'+e(S.lbl+(done?(' · '+((S.k==='arr'?ck.arrivedBy:ck.clearedBy)||'')+(when?(' '+when):'')):' · กดเพื่อบันทึก'))+'" style="border:1.5px solid '+(done?S.bd:'#E7E4DC')+';background:'+(done?S.bg:'#fff')+';color:'+(done?S.col:'#a5a49d')+';border-radius:7px;padding:3px 9px;font-size:10.5px;font-weight:'+(done?'800':'600')+';cursor:pointer;font-family:inherit;white-space:nowrap;margin:0 3px 3px 0">'
       +(done?'&#10003; ':'')+e(S.short)+(done&&when?('<span style="font-family:\'DM Mono\',monospace;font-weight:600;margin-left:5px;opacity:.75">'+when+'</span>'):'')+'</button>';
   };
   var html=_reTag+_spTag+btn(PCK_STAGES[0])+btn(PCK_STAGES[1]);
@@ -49241,6 +49246,37 @@ function pckExpandBoatSplits(row, b, date, out){
     var take=Math.min(lostLeft, np); lostLeft-=take;
     r2.bid=x.boatId||''; r2.bsIdx=i; r2.bsN=sp.length; r2.bsPaxBd=pb;
     r2.booked=np; r2.expect=Math.max(0,np-take);
+    if(i>0 && r2.money) r2.money=Object.assign({}, r2.money, {due:0, got:0, noSlip:0, pierFee:0, pierPaid:0});
+    out.push(r2);
+  });
+  return out;
+}
+/* §pckSplit · รับหลายจุด = คนละรถ คนละที่ · หน้าท่าต้องเห็นทีละจุดว่าใครมาถึงแล้ว
+   เงินอยู่กับแถวแรกแถวเดียว (เหมือน pckExpandBoatSplits) ไม่งั้นยอดค้างถูกนับซ้ำ
+   สถานะ ถึงท่า/เคลียร์/ขึ้นเรือ อ่านจาก ops.pierCkS[i] ของจุดนั้น */
+function pckExpandVanSplits(row, b, date, out){
+  var O=row.O||{};
+  var sp=Array.isArray(O.vanSplits)?O.vanSplits.filter(Boolean):null;
+  if(!sp || sp.length<2){ out.push(row); return out; }
+  var lostLeft=Math.max(0, (row.booked||0)-(row.expect!=null?row.expect:row.booked));
+  sp.forEach(function(x,i){
+    var r2={}; Object.keys(row).forEach(function(k){ r2[k]=row[k]; });
+    var pb={ad:+x.ad||0, chd:+x.chd||0, inf:+x.inf||0, foc:+x.foc||0};
+    var np=(typeof bkPaxSum==='function')?bkPaxSum(pb):0;
+    if(!np) np=Math.max(0,+x.pax||0);
+    var take=Math.min(lostLeft, np); lostLeft-=take;
+    r2.vsIdx=i; r2.vsN=sp.length; r2.vsPaxBd=pb; r2.vsp=x;
+    r2.booked=np; r2.expect=Math.max(0,np-take);
+    r2.vanId=x.vanId||'';
+    r2.ck=(O.pierCkS&&O.pierCkS[i])||null;
+    r2._ckKind='pier#'+i;
+    if(!x.main){
+      var ar=(x.pickAreaId && typeof bkV2GetArea==='function')?(bkV2GetArea(x.pickAreaId)||{}):{};
+      r2._pickHotel=(x.pickHotel||'').trim()||ar.name||'';
+      r2._pickArea=ar.name||'';
+      r2._pickWho=(x.altWho||'').trim();
+    }
+    r2.arr=pckArrivalOf(r2);
     if(i>0 && r2.money) r2.money=Object.assign({}, r2.money, {due:0, got:0, noSlip:0, pierFee:0, pierPaid:0});
     out.push(r2);
   });
@@ -49632,6 +49668,8 @@ function pckRowHtml(r, date){
   var time=r.O.pickupTimeFinal||t.pickupTime||t.pickupFinal||'';
   var pickup=b.hotelName||b.pickup||'';
   var pArea=b.pickupArea||(b.pickupAreaId&&typeof bkV2GetArea==='function'?((bkV2GetArea(b.pickupAreaId)||{}).name||''):'')||'';
+  /* §pckSplit · แถวของจุดรับย่อย · โรงแรม/โซน เป็นของจุดนั้น ไม่ใช่ของ Lead */
+  if(r._pickHotel!=null){ pickup=r._pickHotel||pickup; pArea=r._pickArea||pArea; }
   var room=b.roomNo||b.room||b.roomNumber||'';
   var by=b.createdBy||'';
   var sreq=(typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim());
@@ -51343,7 +51381,12 @@ function renderPierCheckin(){
       row._retVan=O.vanReturnId||O.vanId||'';
       row._retSelf=!!((typeof bkV2RetInfo==='function') && bkV2RetInfo(b,date).selfRet);
     }
-    pckExpandBoatSplits(row, b, date, _ovnBack?ovnAll:all);   // §boatSplit · แยกลำ → 1 แถวต่อลำ
+    /* §boatSplit แยกลำ → 1 แถวต่อลำ · §pckSplit ถ้าไม่ได้แยกลำ ค่อยแยกตามจุดรับ
+       ไม่ซ้อนกันสองชั้น เพราะจะได้ N×M แถว อ่านไม่รู้เรื่อง */
+    var _tgt=_ovnBack?ovnAll:all, _tmp=[];
+    pckExpandBoatSplits(row, b, date, _tmp);
+    if(_tmp.length>1) _tmp.forEach(function(x){ _tgt.push(x); });
+    else pckExpandVanSplits(_tmp[0]||row, b, date, _tgt);
   });
   var cnt={boat:{},van:{},arr:{},stat:{wait:0,arr:0,clr:0,on:0,due:0,ns:0,vd:0}};
   var tExpect=0, tNoShow=0, tDue=0, tSlip=0, tFee=0, tGot=0;
