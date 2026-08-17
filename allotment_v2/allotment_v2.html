@@ -57168,6 +57168,15 @@ function pxCSS(){ return ''
  +'#trippl-host .mxlg .ramp span{font-size:9.5px;color:var(--pf);margin:0 5px}'
  +'#trippl-host .mxlg .q{font-size:10.5px;color:var(--pm);display:flex;align-items:center;gap:6px}'
  +'#trippl-host .mxlg .q i{width:11px;height:11px;border-radius:3px;flex:none}'
+ /* §mxWhy · เหตุผลสั้นๆ ในช่องที่ติดลบ · สีอย่างเดียวบอกได้แค่ "แย่" บอกไม่ได้ว่า "แย่เพราะอะไร" */
+ +'#trippl-host td.mx u{display:block;text-decoration:none;font-size:9px;font-weight:700;'
+   +'margin-top:3px;letter-spacing:.01em;color:#9F1239;opacity:.9}'
+ +'#trippl-host td.mx u.dq{color:#B45309}'
+ /* §revFlag · การ์ดรายได้ที่ต้องไปตรวจ */
+ +'#trippl-host .eg.warn{border-color:#FECDD3;box-shadow:0 10px 30px -5px rgba(225,29,72,.06),'
+   +'0 4px 12px -2px rgba(225,29,72,.04)}'
+ +'#trippl-host .tm.fit{color:#4338CA}'
+ +'#trippl-host .tm.plan{color:#94A3B8}'
  /* §wkTrend · แท่งรายสัปดาห์ · ความสูงทั้งแท่ง = รายได้ต่อหัว */
  +'#trippl-host .wkw{display:flex;align-items:flex-end;gap:9px;height:158px;padding:6px 2px 0}'
  +'#trippl-host .wkc{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;'
@@ -57281,7 +57290,7 @@ function pxAnRange(v){ _px.an=+v||47; renderTripPL(); }
 
 /* ── การ์ดรายละเอียดหนึ่งลำ · คืนเป็น "เซลล์ของกริด" 6 + n หมวด + 1 ใบ ──
    ห้ามห่อด้วย div ใบเดียว · กริดต้องเห็นทุกบล็อกเป็นลูกโดยตรงถึงจะจัดแถวให้ตรงกันได้ */
-function pxDetail(t, e, GORD){
+function pxDetail(t, e, GORD, DAVG){
   var pax=Math.max(1, t.px.tot), R=(typeof ctVatR==='function')?ctVatR(ctTpl()):0;
   var cph=t.cost/pax, loss=t.profit<0, L=loss?' ls':'';
   var col=(typeof pckBoatColor==='function'?pckBoatColor(t.bid):'')||t.route.color||'#64748B';
@@ -57289,12 +57298,22 @@ function pxDetail(t, e, GORD){
 
   /* 1 · หัวเรือ */
   var stTxt={est:'Estimated', part:'Actuals on '+t.nReal, done:'Locked'}[t.st]||'';
+  /* §revFlag · เตือนตรงหัวลำเลย · คนที่เปิดหน้านี้คือคนที่แก้ใบจองได้ */
+  var rphNow=t.rev/pax, revBad=(DAVG>0 && t.px.tot>0 && rphNow<DAVG*0.3);
+  var revPill=revBad
+    ? ('<span class="pill ro" title="'+e('This boat took '+pxN(rphNow)+' \u0e3f per head while the rest of '
+        +'the day averaged '+pxN(DAVG)+' \u0e3f. A gap this big is almost always a booking entered as a '
+        +'total instead of a per-head price \u2014 check the booking before reading the loss as real. '
+        +'Priced like the rest of the day this trip would have taken '+pxN(DAVG*t.px.tot)+' \u0e3f '
+        +'instead of '+pxN(t.rev)+' \u0e3f.')+'">\u26a0 check revenue</span>')
+    : '';
   O.push('<div class="r1'+L+'" id="px-col-'+e(t.bid)+'"><div class="dth">'
     +'<div class="bar" style="background:'+e(col)+'"></div>'
     +'<div style="min-width:0"><h2>'+e(t.name)
       +'<span class="pill '+(loss?'ro':'pu')+' n">'+e(t.dep||'--:--')+'</span>'
       +'<span class="pill g clk" onclick="pxClose(\''+e(t.bid)+'\')" title="'
-        +(t.closed?'Re-open this trip':'Lock the numbers for this trip')+'">'+stTxt+'</span></h2>'
+        +(t.closed?'Re-open this trip':'Lock the numbers for this trip')+'">'+stTxt+'</span>'
+      +revPill+'</h2>'
     +'<div class="rt">'+e(t.route.name||'—')
       +(t.plan?(' · plan "'+e(t.plan.name||'')+'"')
              :' · <b style="color:#B45309">no cost plan — using the default formula</b>')
@@ -57507,7 +57526,11 @@ function pxDaily(e){
       +'<div class="bmeta"><span class="a" style="color:#3730A3">Cost is '+pct+'% of revenue</span><span class="b"></span></div></td></tr>';
 
   var GORD=pxGOrd(D);
-  var cells=D.map(function(t){ return pxDetail(t, e, GORD); }).join('');
+  /* §revFlag · รายได้ต่อหัวของลำนี้ต่ำกว่าค่าเฉลี่ยของวันมากผิดปกติ = น่าจะกรอกใบจองผิด
+     ต้องมีอย่างน้อย 2 ลำถึงจะมีตัวเทียบ · ลำเดียวทั้งวันเทียบกับอะไรไม่ได้ */
+  var DAVG=0;
+  if(D.length>1 && tPax>=10) DAVG=tR/tPax;
+  var cells=D.map(function(t){ return pxDetail(t, e, GORD, DAVG); }).join('');
 
   return hero+kpi
     +'<div class="eg"><div class="phd"><div><h2>Boat summary '
@@ -57546,7 +57569,7 @@ function pxDayAgg(date, pier){
   var D=pxDay(date,pier);
   var a={ date:date, trips:D.length, rev:0, cost:0, profit:0, pax:0, bk:0, loss:0, cap:0,
           routes:{}, agents:{}, groups:{}, gdet:{}, bandN:[0,0,0,0], bandNet:[0,0,0,0], bandPax:[0,0,0,0],
-          best:null, boats:[] };
+          best:null, boats:[], tr:[] };
   D.forEach(function(t){
     a.rev+=t.rev; a.cost+=t.cost; a.profit+=t.profit; a.pax+=t.px.tot; a.bk+=t.px.bk;
     if(t.profit<0) a.loss++;
@@ -57560,6 +57583,10 @@ function pxDayAgg(date, pier){
       n:0, pax:0, rev:0, cost:0, profit:0, cap:0, be:0, beN:0, pier:(t.route.pier||'') });
     RR.n++; RR.pax+=t.px.tot; RR.rev+=t.rev; RR.cost+=t.cost; RR.profit+=t.profit; RR.cap+=cap;
     if(t.be){ RR.be+=t.be; RR.beN++; }
+    /* §trRaw · ทริปดิบรายใบ · หน้าวิเคราะห์ต้องใช้หา "ต้นทุนคงที่ต่อทริป" จากของจริง
+       ตัวรวมรายวันบอกไม่ได้ว่าต้นทุนก้อนไหนไม่ขยับตามจำนวนคน ต้องมีรายทริปถึงจะ fit ได้ */
+    a.tr.push({ rid:rk, bid:t.bid, name:t.name, date:date, pax:t.px.tot,
+                cost:t.cost, rev:t.rev, cap:cap, foc:t.px.foc||0, inf:t.px.inf||0 });
     /* §csDetail · แยกเก็บรายบรรทัด / ที่มาของตัวเลข / เส้นทางที่ดันหมวดนั้น */
     var _gs={};
     (t.rows||[]).forEach(function(r){
@@ -57828,6 +57855,43 @@ function pxAnalysis(e){
   var tgt=(typeof drCfg==='function')?((drCfg()||{}).targetPerPax||0):0;
   var lfAll=T.cap?Math.round(T.pax/T.cap*100):0;
 
+  /* §beFit · ต้นทุนจริงของทริปที่แล่นไปแล้ว · cost = คงที่ต่อทริป + ต่อหัว × จำนวนคน
+     สูตรในแผนบอกจุดคุ้มทุน "ตามที่ตั้งใจ" · อันนี้บอก "ตามที่เกิดขึ้นจริง"
+     น้ำมันกับค่าจ้างลูกเรือแทบไม่ขยับตามจำนวนคน ต้นทุนต่อหัวจึงพุ่งเมื่อเรือไม่เต็ม */
+  var TRR={}, ALLTR=[];
+  A.forEach(function(x){ (x.tr||[]).forEach(function(t){
+    ALLTR.push(t); (TRR[t.rid]||(TRR[t.rid]=[])).push(t); }); });
+  function pxFit(L){
+    if(!L || L.length<4) return null;
+    var n=L.length, sx=0, sy=0, sxx=0, sxy=0;
+    L.forEach(function(t){ sx+=t.pax; sy+=t.cost; sxx+=t.pax*t.pax; sxy+=t.pax*t.cost; });
+    var den=n*sxx-sx*sx; if(!den) return null;
+    var vpp=(n*sxy-sx*sy)/den, fix=(sy-vpp*sx)/n;
+    /* ต้นทุนคงที่ติดลบ หรือต่อหัวติดลบ = เส้นตรงมั่ว ข้อมูลน้อยเกินไป · อย่าเอาไปโชว์ */
+    if(!isFinite(fix) || !isFinite(vpp) || fix<=0 || vpp<0) return null;
+    return { fix:fix, vpp:vpp, n:n };
+  }
+  RL.forEach(function(r){
+    r.fit=pxFit(TRR[r.k]);
+    r.beFit=null;
+    if(r.fit){ var m=r.rph-r.fit.vpp; if(m>0) r.beFit=Math.ceil(r.fit.fix/m); }
+  });
+
+  /* §revFlag · รายได้ต่อหัวต่ำผิดวิสัย = เกือบทุกครั้งคือใบจองกรอกผิด ไม่ใช่ขาดทุนจากการเดินเรือ
+     เทียบกับค่าเฉลี่ยของเส้นทางเดียวกัน · เส้นทางที่มีคนน้อยเกินไปไม่มีค่าเฉลี่ยที่เชื่อได้ ข้ามไป */
+  var FLAG=[];
+  ALLTR.forEach(function(t){
+    if(!t.pax) return;
+    var R0=RT[t.rid]; if(!R0 || R0.pax<20) return;
+    var avg=R0.rev/Math.max(1,R0.pax), rph=t.rev/t.pax;
+    if(avg>0 && rph<avg*0.3)
+      FLAG.push({ date:t.date, name:t.name, route:R0.name||t.rid, pax:t.pax,
+                  rph:Math.round(rph), avg:Math.round(avg), gap:Math.round(t.rev-t.cost),
+                  miss:Math.round(avg*t.pax-t.rev) });
+  });
+  FLAG.sort(function(a,b){ return a.gap-b.gap; });
+  var flagMiss=FLAG.reduce(function(a,x){ return a+x.miss; },0);
+
   /* §csDetail · รวมรายละเอียดรายหมวดข้ามทุกวันในช่วง */
   var GDT={};
   A.forEach(function(x){ var gd=x.gdet||{};
@@ -57949,6 +58013,30 @@ function pxAnalysis(e){
       +'<p>'+(GL.length?(pxN(GL[0].v/Math.max(1,T.pax))+' ฿ per head, '
         +Math.round(GL[0].v/gTot*100)+'% of all cost.'):'')+'</p></div></div>';
 
+  /* §beFit · ช่องจุดคุ้มทุน · ตัวเลขจากของจริงมาก่อน ไม่มีค่อยถอยไปใช้สูตรในแผน
+     ต่างกันคนละเรื่อง จึงต้องเขียนกำกับว่าอันไหนเป็นอันไหน ไม่งั้นไม่มีใครรู้ว่าเชื่อได้แค่ไหน */
+  function pxBeCell(r){
+    if(r.fit){
+      var m=r.rph-r.fit.vpp;
+      if(m>0){
+        var be=Math.ceil(r.fit.fix/m), pc=r.avgCap?Math.round(be/r.avgCap*100):0;
+        return '<span class="tm fit n" title="'+e('Fitted from '+r.fit.n+' actual trips: cost = '
+          +pxN(r.fit.fix)+' \u0e3f fixed per trip + '+pxN(r.fit.vpp)+' \u0e3f per head. '
+          +'At the '+pxN(r.rph)+' \u0e3f average sold per head, every seat contributes '+pxN(m)
+          +' \u0e3f toward the fixed cost, so the trip clears it at '+be+' pax'
+          +(r.avgCap?(' \u2014 '+pc+'% of a '+r.avgCap+'-seat boat'):'')+'.')+'">'+be+'</span>'
+          +'<div class="per">'+(r.avgCap?(pc+'% full'):'actual')+'</div>';
+      }
+      return '<span class="tm n" style="color:#BE123C" title="'+e('At the current average of '
+        +pxN(r.rph)+' \u0e3f per head, each seat only covers '+pxN(r.rph)+' \u0e3f against a variable '
+        +'cost of '+pxN(r.fit.vpp)+' \u0e3f \u2014 the boat never clears its '+pxN(r.fit.fix)
+        +' \u0e3f fixed cost no matter how full it sails. This is a price problem, not a load problem.')
+        +'">never</span><div class="per negp">at this price</div>';
+    }
+    return '<span class="tm plan n" title="From the route\'s cost plan \u2014 not enough completed '
+      +'trips yet to fit the real fixed cost">'+(r.beAvg||'\u2014')+'</span>'
+      +(r.beAvg?'<div class="per">from plan</div>':'');
+  }
   var rtRows=RL.map(function(r,i){
     var loss=r.nph<0, lfp=Math.round(r.lf*100);
     var bc=(lfp>=75)?'#10B981':(lfp>=55?'#F59E0B':'#E11D48');
@@ -57963,7 +58051,7 @@ function pxAnalysis(e){
       +'<td class="netc'+(loss?' neg':'')+'"><span class="net'+(loss?' neg':'')+' n">'
         +(loss?'−':'+')+pxN(Math.abs(r.nph))+'</span>'
         +'<div class="per '+(loss?'negp':'pos')+'">'+(r.rev?Math.round(r.profit/r.rev*100):0)+'% margin</div></td>'
-      +'<td class="c"><span class="tm n">'+(r.beAvg||'—')+'</span></td>'
+      +'<td class="c">'+pxBeCell(r)+'</td>'
       +'<td><div class="bars"><i style="width:'+Math.min(100,lfp)+'%;background:'+bc+'"></i></div>'
         +'<div class="bmeta"><span class="a" style="color:'+bc+'">'+lfp+'%</span>'
         +'<span class="b">'+r.avgPax+' / '+r.avgCap+'</span></div></td></tr>';
@@ -58004,15 +58092,46 @@ function pxAnalysis(e){
     if(v>-3*mxStep) return 'd2n';
     return 'd3n';
   }
-  function pxMxCell(q, label){
+  /* §mxWhy · ทำไมช่องนี้ติดลบ · สี่สาเหตุคนละเรื่อง แก้คนละทาง
+     1 ไม่มีรายได้เลย = FOC / ทริปภายใน  2 รายได้ต่ำผิดวิสัย = ข้อมูลผิด
+     3 ต้นทุนต่อหัวสูงกว่าเส้นทาง = ไปนั่งเรือที่ไม่เต็ม  4 ราคาต่ำกว่าเส้นทาง = rate card */
+  function pxMxWhy(q, R0){
+    var px=Math.max(1,q.pax), rph=q.rev/px, cph=q.cost/px;
+    var rAvg=R0?(R0.rev/Math.max(1,R0.pax)):0, cAvg=R0?(R0.cost/Math.max(1,R0.pax)):0;
+    if(rph<=5) return { tag:'FOC', cls:'dq',
+      txt:'No revenue recorded against these heads \u2014 free-of-charge or an internal trip. '
+         +'The cost is real, the loss is a welfare cost, not a pricing problem.' };
+    if(rAvg>0 && rph<rAvg*0.3) return { tag:'check data', cls:'dq',
+      txt:'Takes only '+pxN(rph)+' \u0e3f per head against a route average of '+pxN(rAvg)
+         +' \u0e3f \u2014 that is almost always a booking typed as a total instead of a per-head price. '
+         +'Check it before treating this as a real loss.' };
+    if(cAvg>0 && cph>cAvg*1.15) return { tag:'empty boats', cls:'',
+      txt:'Cost per head is '+Math.round((cph/cAvg-1)*100)+'% above the route average ('+pxN(cph)
+         +' vs '+pxN(cAvg)+' \u0e3f) \u2014 these heads rode boats that sailed under-filled, so they '
+         +'carried a bigger share of the fuel and crew. Fill the boat, not the rate card.' };
+    if(rAvg>0 && rph<rAvg*0.85) return { tag:'price '+Math.round((rph/rAvg-1)*100)+'%', cls:'',
+      txt:'Pays '+pxN(rph)+' \u0e3f per head where the route averages '+pxN(rAvg)
+         +' \u0e3f, against a cost of '+pxN(cph)+' \u0e3f. The boats were normal \u2014 this is the rate '
+         +'card. Filling the boat will not fix it.' };
+    var lf=(R0&&R0.lf)?Math.round(R0.lf*100):0;
+    return { tag:'thin route', cls:'',
+      txt:'Priced in line with the route \u2014 the route itself is the problem. It sails '
+         +(lf?(lf+'% full on average, so its '):'at a load factor that leaves its ')
+         +'cost per head sits at '+pxN(cAvg)+' \u0e3f against '+pxN(rAvg)
+         +' \u0e3f sold. Filling these boats, or running fewer of them, is what moves this cell.' };
+  }
+  function pxMxCell(q, label, R0, noWhy){
     if(!q || (!q.pax && Math.round(q.rev||0)===0))
       return '<td class="mx e"><div><span>\u2014</span></div></td>';
     var px=Math.max(1,q.pax), nph=Math.round((q.rev-q.cost)/px), loss=nph<0;
-    return '<td class="mx '+pxMxCls(nph)+'" title="'+label+' \u00b7 '+q.pax+' pax \u00b7 '
-      +'rev '+pxN(q.rev/px)+'/pax \u00b7 cost '+pxN(q.cost/px)+'/pax \u00b7 net '
-      +pxN(q.rev-q.cost)+' \u0e3f">'
+    var W=(loss && !noWhy)?pxMxWhy(q,R0):null;
+    var ttl=label+' \u00b7 '+q.pax+' pax \u00b7 rev '+pxN(q.rev/px)+'/pax \u00b7 cost '
+      +pxN(q.cost/px)+'/pax \u00b7 net '+pxN(q.rev-q.cost)+' \u0e3f'
+      +(W?('\n\nWhy: '+W.txt):'');
+    return '<td class="mx '+pxMxCls(nph)+'" title="'+e(ttl)+'">'
       +'<div><b class="'+(loss?'neg':'pos')+' n">'+(loss?'\u2212':'+')+pxN(Math.abs(nph))+'</b>'
-      +'<small>'+q.pax+' pax</small></div></td>';
+      +'<small>'+q.pax+' pax</small>'
+      +(W?('<u class="'+W.cls+'">'+e(W.tag)+'</u>'):'')+'</div></td>';
   }
   var agRows=AL.slice(0,AGN_TOP).map(function(g){
     var loss=g.nph<0, RS=g.routes||{};
@@ -58021,7 +58140,7 @@ function pxAnalysis(e){
       +'<b>'+e(g.name)+'</b><small>'+(g.b2c?'Direct \u00b7 no commission':'Agent')
       +' \u00b7 '+g.n+' booking'+(g.n===1?'':'s')+'</small></div></div></td>'
       +'<td class="c"><span class="num n">'+g.pax+'</span></td>'
-      +RCOL.map(function(r){ return pxMxCell(RS[r.k], e(r.name)); }).join('')
+      +RCOL.map(function(r){ return pxMxCell(RS[r.k], r.name, r); }).join('')
       +'<td class="netc'+(loss?' neg':'')+'"><span class="net'+(loss?' neg':'')+' n">'
         +(loss?'\u2212':'+')+pxN(Math.abs(g.nph))+'</span></td>'
       +'<td class="netc'+(loss?' neg':'')+'"><span class="net'+(loss?' neg':'')+' n">'
@@ -58032,17 +58151,49 @@ function pxAnalysis(e){
   var mxHead=RCOL.map(function(r){
     return '<th class="rth"><i style="background:'+e(r.color)+'"></i>'+e(r.name)+'</th>'; }).join('');
   var mxFoot=RCOL.map(function(r){
-    return pxMxCell({pax:r.pax, rev:r.rev, cost:r.cost}, e(r.name)); }).join('');
+    return pxMxCell({pax:r.pax, rev:r.rev, cost:r.cost}, r.name, r, true); }).join('');
   var mxWide=430+118*RCOL.length;
   /* เส้นทางที่ทั้งบริษัทขาดทุน · เอาไว้เขียนสรุปใต้ตาราง */
   var mxBad=RCOL.filter(function(r){ return r.nph<0; });
 
-  return hero+ins
+  /* §revFlag · การ์ดนี้ต้องอยู่ก่อนทุกอย่าง · ถ้าตัวเลขต้นทางผิด ทุกตารางข้างล่างก็ผิดตาม */
+  var flagCard = FLAG.length ? ('<div class="eg warn mb"><div class="phd">'
+    +'<div><h2>Revenue to check <span class="pill ro">'+FLAG.length+' trip'
+      +(FLAG.length===1?'':'s')+'</span></h2>'
+    +'<p>These trips took less than 30% of what their own route averages per head \u00b7 '
+    +'almost always a booking entered as a total instead of a per-head price, not a real loss</p></div>'
+    +'<div><span class="pill ro">'+pxN(flagMiss)+' \u0e3f unaccounted</span></div></div>'
+    +'<div class="twrap"><div class="tscroll"><table class="sum" style="min-width:820px">'
+    +'<thead><tr><th class="l">Date</th><th class="l">Boat \u00b7 route</th><th class="c">Pax</th>'
+    +'<th>Taken / pax</th><th>Route avg / pax</th><th>Shows as</th>'
+    +'<th>Gap if priced normally</th></tr></thead><tbody>'
+    +FLAG.slice(0,8).map(function(x){
+      return '<tr class="br"><td class="l"><b>'+e(String(pxDW(x.date).txt))+'</b></td>'
+        +'<td class="l"><div class="bn"><i style="background:#E11D48"></i><div><b>'+e(x.name)+'</b>'
+        +'<small>'+e(x.route)+'</small></div></div></td>'
+        +'<td class="c"><span class="num n">'+x.pax+'</span></td>'
+        +'<td><span class="num n" style="color:#BE123C">'+pxN(x.rph)+'</span></td>'
+        +'<td><span class="num n">'+pxN(x.avg)+'</span></td>'
+        +'<td class="netc'+(x.gap<0?' neg':'')+'"><span class="net'+(x.gap<0?' neg':'')+' n">'
+        +(x.gap<0?'\u2212':'+')+pxN(Math.abs(x.gap))+'</span></td>'
+        +'<td><span class="num n">'+pxN(x.miss)+'</span></td></tr>';
+    }).join('')
+    +(FLAG.length>8?('<tr><td class="l" colspan="7" style="text-align:center;font-size:11.5px;'
+      +'color:#94A3B8">\u2026 '+(FLAG.length-8)+' more</td></tr>'):'')
+    +'</tbody></table></div></div>'
+    +'<div class="hint"><b>Why this matters more than it looks.</b> '
+    +'A trip like this drags the route average, the agent that booked it, and the load-factor bands '
+    +'all at once \u2014 '+pxN(Math.abs(FLAG[0].gap))+' \u0e3f of the '+e(FLAG[0].route)
+    +' loss sits in a single trip on '+e(String(pxDW(FLAG[0].date).txt))+'. '
+    +'Fix the booking and every number below moves with it.</div></div>') : '';
+
+  return hero+ins+flagCard
     +'<div class="eg mb"><div class="phd"><div><h2>Route profitability</h2>'
       +'<p>Ranked by net per pax · the break-even column is how many seats must sell before the trip stops losing money</p></div></div>'
       +'<div class="twrap"><div class="tscroll"><table class="sum" style="min-width:900px">'
       +'<thead><tr><th class="l">#</th><th class="l">Route</th><th class="c">Trips</th><th class="c">Avg pax</th>'
-      +'<th>Rev / pax</th><th>Cost / pax</th><th>Net / pax</th><th class="c">B/E pax</th>'
+      +'<th>Rev / pax</th><th>Cost / pax</th><th>Net / pax</th>'
+      +'<th class="c" title="Seats that must sell before the trip stops losing money">B/E pax</th>'
       +'<th class="c">Load factor</th></tr></thead><tbody>'+rtRows
       +'<tr class="tot"><td class="l">Σ</td><td class="l">'+RL.length+' routes · '+T.trips+' trips</td>'
       +'<td class="c"><span class="num n">'+T.trips+'</span></td>'
@@ -58056,8 +58207,20 @@ function pxAnalysis(e){
       +'<div class="bmeta"><span class="a" style="color:#3730A3">'+lfAll+'% avg</span>'
       +'<span class="b">'+Math.round(T.pax/Math.max(1,T.trips))+' / '+Math.round(T.cap/Math.max(1,T.trips))+'</span></div></td>'
       +'</tr></tbody></table></div></div>'
-      +'<div class="hint"><b>Load factor is the lever, not price.</b> Every empty seat still carries its share of '
-      +'fuel, crew and pier fees. '+(bot&&bot.beAvg?('Moving '+e(bot.name)+' from '+bot.avgPax+' to '
+      +'<div class="hint"><b>The break-even column is fitted from real trips, not from the plan.</b> '
+      +'Every completed trip gives one (pax, cost) pair; the line through them splits cost into what the '
+      +'boat spends before anyone boards and what each extra head adds. '
+      +(RL.filter(function(r){ return r.fit; }).length
+        ? ('Right now '+RL.filter(function(r){ return r.fit; }).length+' of '+RL.length
+           +' routes have enough trips to fit \u2014 hover any number to see the split. '
+           +(function(){ var f=RL.filter(function(r){ return r.fit; })
+                 .sort(function(a,b){ return b.fit.fix-a.fit.fix; })[0];
+              return f?('The heaviest is '+e(f.name)+' at '+pxN(f.fit.fix)
+                +' \u0e3f before a single passenger boards.'):''; })())
+        : 'None of the routes has enough completed trips to fit yet \u2014 the numbers shown come from the plan. ')
+      +'</div>'
+      +'<div class="hint" style="margin-top:10px"><b>Load factor is the lever, not price.</b> '
+      +'Every empty seat still carries its share of fuel, crew and pier fees. '+(bot&&bot.beAvg?('Moving '+e(bot.name)+' from '+bot.avgPax+' to '
       +Math.max(bot.beAvg+8, bot.avgPax+8)+' pax is worth roughly '
       +pxN(Math.abs(bot.cph*bot.avgPax/Math.max(1,bot.avgPax+8)-bot.cph))+' ฿ per head on the cost side alone.'):'')
       +'</div></div>'
