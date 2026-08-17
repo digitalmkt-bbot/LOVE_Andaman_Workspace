@@ -1775,6 +1775,12 @@ const PERM_KEYS=new Set(['overview','operations','sales','accounting','fleet','c
   // แล้วเติมคีย์ที่ขาดให้เอง รายการนี้จึงเป็นแค่ค่าเริ่มต้น ไม่ใช่ความจริงชุดเดียว
   'po-panwa','po-tublamu','po-ranong','poj-panwa','poj-tublamu','poj-ranong',
   'pol-panwa','pol-tublamu','pol-ranong','poa-panwa','poa-tublamu','poa-ranong',
+  // §2026-08-17: ครั้งที่ห้า — 'fleetcal' · 'costing' (11 ส.ค.) · 'trippl' (P&L รายทริป)
+  //   อยู่ใน LA_NAV แต่ไม่อยู่ในรายการนี้ · รอดมาได้เพราะ laSyncPermKeys() อ่านจากไฟล์ตอนบูตเท่านั้น
+  //   ถ้าเซิร์ฟเวอร์ที่รันอยู่บูตด้วยไฟล์รุ่นเก่ากว่า (ยังไม่ deploy) cleanPerms() จะกรองทิ้งเงียบ ๆ
+  //   admin ติ๊ก "P&L รายทริป" กดบันทึกขึ้นว่าสำเร็จ แต่ผู้ใช้ยังมองไม่เห็นเมนู — อาการเดิมทุกครั้ง
+  //   เขียนไว้ตรง ๆ ด้วย จะได้ไม่ต้องพึ่ง deploy ให้ตรงจังหวะ
+  'fleetcal','costing','trippl',
   'settings','teammkt','addonsvc']);   // 'accounting' already present as a group key
 function cleanPerms(a){
   if(!Array.isArray(a)) return null;
