@@ -50438,6 +50438,22 @@ var GO_HEAD_DEF = {
   addr:'9/239-240 ถนน ศักดิเดช ตำบล ตลาดเหนือ อำเภอเมือง จังหวัดภูเก็ต 83000',
   reg:'กรมพัฒนาธุรกิจการค้า แบบ พค. 0401  ทะเบียนเลขที่ 0825554000447  ออกให้ ณ วันที่  9 สิงหาคม พ.ศ. 2554'
 };
+/* §gdRole · ทะเบียนไกด์เดิมมีแค่ ชื่อ/ชื่อเล่น/ใบอนุญาต · แยก "ไกด์ RUS / ไกด์ CHN /
+   นักศึกษาฝึกงาน" ไม่ได้เลย ทั้งที่ฝั่งลูกค้าระบุภาษามาแล้วในใบจอง (pckGuideLangs)
+   เพิ่มสองช่อง: lang = ภาษาที่พูดได้ (หลายภาษา) · role = บทบาท
+   ของเดิมที่ไม่มีสองช่องนี้ ให้เป็นไกด์ที่ไม่ระบุภาษา ไม่ต้องไล่แก้ย้อนหลัง */
+var GO_ROLES=[{k:'guide',t:'ไกด์'},{k:'trainee',t:'ไกด์ฝึกหัด'},
+              {k:'intern',t:'นักศึกษาฝึกงาน'},{k:'staff',t:'สตาฟ'}];
+function goRoleT(k){ for(var i=0;i<GO_ROLES.length;i++) if(GO_ROLES[i].k===k) return GO_ROLES[i].t; return GO_ROLES[0].t; }
+function goRoleOf(g){ var r=String((g&&g.role)||'guide'); 
+  for(var i=0;i<GO_ROLES.length;i++) if(GO_ROLES[i].k===r) return r; return 'guide'; }
+function goIsGuide(g){ var r=goRoleOf(g); return r==='guide'||r==='trainee'; }
+function goLangsOf(g){ var L=(g&&g.lang); if(!Array.isArray(L)) L=String(L||'').split(/[,\s\/]+/);
+  var out=[],seen={};
+  L.forEach(function(x){ var c=(typeof pckLangNorm==='function')?pckLangNorm(x):String(x||'').toUpperCase();
+    if(!c||seen[c]) return; seen[c]=1; out.push(c); });
+  return out; }
+function goLangsParse(v){ return goLangsOf({lang:String(v||'')}); }
 function goGuides(){ var g=(typeof ctRead==='function')?ctRead('guides'):null; return Array.isArray(g)?g:[]; }
 function goGuidesSet(a){ if(typeof ctWrite==='function') ctWrite('guides', a||[]); }
 function goGuide(id){ var a=goGuides(); for(var i=0;i<a.length;i++) if(a[i].id===id) return a[i]; return null; }
@@ -50525,13 +50541,18 @@ function goSheet(date,bid,issue){
   var e=ckEsc, C=goCfg(), H=C.head, A=goAsn(date,bid);
   var boat=(typeof getBoat==='function')?getBoat(bid):null;
   var rt=goRouteOf(date,bid), cnt=goCounts(date,bid);
-  var gs=A.g.map(goGuide).filter(Boolean);
+  /* §gdRole · เฉพาะไกด์/ไกด์ฝึกหัดเท่านั้นที่นับเป็น "มัคคุเทศก์ (ผู้ติดตาม)"
+     นักศึกษาฝึกงานและสตาฟลงช่อง "อื่นๆ" ตามที่กรมการท่องเที่ยวให้กรอก */
+  var picked=A.g.map(goGuide).filter(Boolean);
+  var gs=picked.filter(goIsGuide);
+  var oth=picked.filter(function(g){ return !goIsGuide(g); });
+  var othN=(+A.other||0)+oth.length;
   var lead=gs[0]||null;
   var crew=(boat&&+boat.crew>0)?+boat.crew:0;
   var esc=(boat&&+boat.licensePax>0)?+boat.licensePax:((boat&&+boat.cap)||0);
   var no=goNoFor(date,bid,issue);
   var dep=(typeof pckDepOf==='function')?pckDepOf(rt.id||''):'';
-  var tot=cnt.ad+cnt.chd+cnt.inf+gs.length+crew+(+A.other||0);
+  var tot=cnt.ad+cnt.chd+cnt.inf+gs.length+crew+othN;
   var sg=C.signers[A.sign]||C.signers[0]||{name:'',title:''};
   var dt=goThDate(date);
   var row=function(lb,n){ return '<tr><td class="lb">'+lb+'</td><td class="n">'+n+'</td><td class="u">คน</td><td class="rm"></td></tr>'; };
@@ -50561,10 +50582,11 @@ function goSheet(date,bid,issue){
       +row('เด็กเล็ก (อายุไม่เกิน 3 ขวบ )', cnt.inf)
       +row('มัคคุเทศก์&nbsp; (ผู้ติดตาม)', gs.length)
       +row('กัปตันและนายท้ายเรือ', crew)
-      +row('อื่นๆ .......นักศึกษาฝึกงาน./ สต๊าฟ........', (+A.other||0))
+      +row('อื่นๆ .......นักศึกษาฝึกงาน./ สต๊าฟ........', othN)
       +'<tr class="sum"><td class="lb">รวมจำนวนผู้โดยสารบนเรือทั้งหมด</td><td class="n">'+tot+'</td><td class="u">คน</td><td class="blank"></td></tr>'
     +'</table>'
     +(gs.length>1?('<div class="gonote">มัคคุเทศก์ผู้ติดตาม: '+e(gs.slice(1).map(function(x){ return x.name+(x.license?(' ('+x.license+')'):''); }).join(' · '))+'</div>'):'')
+    +(oth.length?('<div class="gonote">'+e(oth.map(function(x){ return x.name+' ('+goRoleT(goRoleOf(x))+')'; }).join(' · '))+'</div>'):'')
     +'<div class="sig"><span class="k">มัคคุเทศก์ลงนาม</span><span class="ln"></span></div>'
     +'<div class="sig2"><div><span class="k">ผู้มีอำนาจลงนาม</span><span class="who">'+e(sg.name||'')+'</span></div>'
       +'<div class="cap">( '+e(sg.title||'')+' )</div></div>'
@@ -50652,7 +50674,14 @@ function goModalCss(){ return '<style>'
   +'#acct-modal .go-bd{padding:16px 20px 20px;font-family:inherit}'
   +'#acct-modal .go-lab{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8a8a82;margin-bottom:7px}'
   +'#acct-modal .go-lab span{font-weight:600;letter-spacing:0;text-transform:none;color:#a8a49b;margin-left:6px}'
-  +'#acct-modal .go-gs{display:grid;grid-template-columns:1fr 1fr;gap:7px;max-height:230px;overflow:auto}'
+  +'#acct-modal .go-gs{display:grid;grid-template-columns:1fr 1fr;gap:7px}'
+  +'#acct-modal #go-gs{max-height:300px;overflow:auto;padding-right:3px}'
+  +'#acct-modal .go-rh{display:flex;align-items:center;gap:7px;font-size:10.5px;font-weight:800;'
+    +'color:#8a8a82;letter-spacing:.05em;margin:12px 0 6px}'
+  +'#acct-modal .go-rh:first-child{margin-top:0}'
+  +'#acct-modal .go-rh span{background:#EFEDE7;color:#5F5E5A;border-radius:999px;padding:1px 8px;font-size:10px}'
+  +'#acct-modal .go-lg{display:inline-block;background:#E6F1FB;color:#185FA5;border-radius:5px;'
+    +'padding:1px 5px;font-size:9px;font-weight:800;margin-left:5px;vertical-align:middle}'
   +'#acct-modal .go-gl{display:flex;align-items:center;gap:8px;border:1.5px solid #E7E4DC;border-radius:9px;padding:7px 10px;cursor:pointer;font-size:12px}'
   +'#acct-modal .go-gl.on{border-color:#0F6E56;background:#F1FAF6}'
   +'#acct-modal .go-gl b{font-weight:700;color:#2c2c2a}'
@@ -50680,10 +50709,19 @@ function goSetupOpen(bid){
   var date=_pckDate, e=ckEsc, A=goAsn(date,bid), C=goCfg(), G=goGuides().filter(function(x){ return x.active!==false; });
   var cnt=goCounts(date,bid), boat=(typeof getBoat==='function')?getBoat(bid):null;
   var no=goNoFor(date,bid,false);
-  var opts=G.map(function(g){
-    var on=A.g.indexOf(g.id)>=0;
+  /* §gdRole · แยกกลุ่มตามบทบาท · หน้าท่าจะได้ไม่ติ๊กนักศึกษาฝึกงานเป็นมัคคุเทศก์ผู้รับผิดชอบใบ */
+  function goCard(g){
+    var on=A.g.indexOf(g.id)>=0, LG=goLangsOf(g);
+    var chips=LG.map(function(L){ return '<span class="go-lg">'+e(L)+'</span>'; }).join('');
     return '<label class="go-gl'+(on?' on':'')+'"><input type="checkbox" '+(on?'checked':'')+' value="'+e(g.id)+'" onchange="goSetupTick(this)">'
-      +'<b>'+e(g.name)+(g.nick?(' ('+e(g.nick)+')'):'')+'</b><i>'+e(g.license||'ไม่มีเลขใบอนุญาต')+'</i></label>';
+      +'<b>'+e(g.name)+(g.nick?(' ('+e(g.nick)+')'):'')+chips+'</b>'
+      +'<i>'+e(g.license||'ไม่มีเลขใบอนุญาต')+'</i></label>';
+  }
+  var opts=GO_ROLES.map(function(R){
+    var list=G.filter(function(g){ return goRoleOf(g)===R.k; });
+    if(!list.length) return '';
+    return '<div class="go-rh">'+e(R.t)+' <span>'+list.length+'</span></div>'
+      +'<div class="go-gs">'+list.map(goCard).join('')+'</div>';
   }).join('') || '<div class="go-empty">ยังไม่มีไกด์ในทะเบียน — กด “ทะเบียนไกด์” เพื่อเพิ่ม</div>';
   var sgn=C.signers.map(function(x,i){ return '<option value="'+i+'"'+(i===A.sign?' selected':'')+'>'+e(x.name+' ('+x.title+')')+'</option>'; }).join('');
   acctModal(goModalCss()+'<div class="go-hd"><div><div class="go-t">ใบสั่งงานมัคคุเทศก์ · '+e(goBoatTh(bid))+'</div>'
@@ -50692,9 +50730,9 @@ function goSetupOpen(bid){
     +'<button class="go-x" onclick="acctModalClose()">&#10005;</button></div>'
     +'<div class="go-bd">'
       +'<div class="go-lab">มัคคุเทศก์ที่ขึ้นลำนี้ <span>คนแรกคือผู้รับผิดชอบใบ · ที่เหลือนับเป็นผู้ติดตาม</span></div>'
-      +'<div class="go-gs" id="go-gs">'+opts+'</div>'
+      +'<div id="go-gs">'+opts+'</div>'
       +'<div class="go-2">'
-        +'<div><div class="go-lab">อื่นๆ · นักศึกษาฝึกงาน / สตาฟ</div>'
+        +'<div><div class="go-lab">อื่นๆ ที่ไม่อยู่ในทะเบียน</div>'
           +'<input type="number" min="0" id="go-other" value="'+(+A.other||0)+'"></div>'
         +'<div><div class="go-lab">ผู้มีอำนาจลงนาม</div><select id="go-sign">'+sgn+'</select></div>'
       +'</div>'
@@ -50724,9 +50762,13 @@ function goRegOpen(back){
       +'<td><input value="'+e(g.name||'')+'" oninput="goRegSet('+i+',\'name\',this.value)" placeholder="ชื่อ-นามสกุล (ไทย)"></td>'
       +'<td><input value="'+e(g.nick||'')+'" oninput="goRegSet('+i+',\'nick\',this.value)" placeholder="ชื่อเล่น"></td>'
       +'<td><input value="'+e(g.license||'')+'" oninput="goRegSet('+i+',\'license\',this.value)" placeholder="1-000000"></td>'
+      +'<td><input value="'+e(goLangsOf(g).join(', '))+'" onchange="goRegSet('+i+',\'lang\',goLangsParse(this.value))" placeholder="EN, RU"></td>'
+      +'<td><select onchange="goRegSet('+i+',\'role\',this.value)">'
+        + GO_ROLES.map(function(R){ return '<option value="'+R.k+'"'+(goRoleOf(g)===R.k?' selected':'')+'>'+e(R.t)+'</option>'; }).join('')
+        +'</select></td>'
       +'<td class="c"><input type="checkbox" '+(g.active===false?'':'checked')+' onchange="goRegSet('+i+',\'active\',this.checked)"></td>'
       +'<td class="c"><button class="go-del" onclick="goRegDel('+i+')">ลบ</button></td></tr>';
-  }).join('') || '<tr><td colspan="5" class="go-empty">ยังไม่มีไกด์ · กด “+ เพิ่มไกด์”</td></tr>';
+  }).join('') || '<tr><td colspan="7" class="go-empty">ยังไม่มีไกด์ · กด “+ เพิ่มไกด์”</td></tr>';
   var sg=C.signers.map(function(x,i){
     return '<tr><td><input value="'+e(x.name||'')+'" oninput="goSgSet('+i+',\'name\',this.value)" placeholder="ชื่อผู้ลงนาม"></td>'
       +'<td><input value="'+e(x.title||'')+'" oninput="goSgSet('+i+',\'title\',this.value)" placeholder="ตำแหน่ง"></td>'
@@ -50737,8 +50779,9 @@ function goRegOpen(back){
     +'<button class="go-x" onclick="acctModalClose()">&#10005;</button></div>'
     +'<div class="go-bd">'
       +'<div class="go-lab">ทะเบียนไกด์</div>'
-      +'<table class="go-tb"><thead><tr><th>ชื่อ-นามสกุล</th><th style="width:110px">ชื่อเล่น</th>'
-        +'<th style="width:130px">เลขใบอนุญาต</th><th style="width:60px">ใช้งาน</th><th style="width:56px"></th></tr></thead>'
+      +'<table class="go-tb"><thead><tr><th>ชื่อ-นามสกุล</th><th style="width:100px">ชื่อเล่น</th>'
+        +'<th style="width:118px">เลขใบอนุญาต</th><th style="width:110px">ภาษา</th>'
+        +'<th style="width:132px">บทบาท</th><th style="width:58px">ใช้งาน</th><th style="width:56px"></th></tr></thead>'
         +'<tbody>'+rows+'</tbody></table>'
       +'<button class="go-b2" onclick="goRegAdd()" style="margin-top:8px">+ เพิ่มไกด์</button>'
       +'<div class="go-lab" style="margin-top:18px">ผู้มีอำนาจลงนาม</div>'
@@ -50753,7 +50796,7 @@ function goRegOpen(back){
       +'<div class="go-act"><button class="go-b1" onclick="'+(back?('goSetupOpen(\''+e(back)+'\')'):'acctModalClose()')+'">'+(back?'กลับไปหน้าจ่ายไกด์':'ปิด')+'</button></div>'
     +'</div>');
 }
-function goRegAdd(){ var G=goGuides(); G.push({id:'g_'+Date.now().toString(36), name:'', nick:'', license:'', active:true}); goGuidesSet(G); goRegOpen(); }
+function goRegAdd(){ var G=goGuides(); G.push({id:'g_'+Date.now().toString(36), name:'', nick:'', license:'', lang:[], role:'guide', active:true}); goGuidesSet(G); goRegOpen(); }
 function goRegDel(i){ var G=goGuides(); if(!G[i]) return; if(!confirm('ลบ "'+(G[i].name||'ไกด์')+'" ออกจากทะเบียน?')) return; G.splice(i,1); goGuidesSet(G); goRegOpen(); }
 function goRegSet(i,k,v){ var G=goGuides(); if(!G[i]) return; G[i][k]=v; goGuidesSet(G); }
 function goSgAdd(){ var C=goCfg(); C.signers.push({name:'',title:''}); goCfgSet(C); goRegOpen(); }
@@ -82083,13 +82126,23 @@ function pjPax(date, boatId, pier){
   });
   return out;
 }
-/* ไกด์ของลำนั้น · อ่านจากใบสั่งงานมัคคุเทศก์ที่มีอยู่แล้ว ไม่จัดซ้ำ */
-function pjGuides(date, boatId){
+/* ไกด์ของลำนั้น · อ่านจากใบสั่งงานมัคคุเทศก์ที่มีอยู่แล้ว ไม่จัดซ้ำ
+   §gdRole · Full = ทุกคนพร้อมภาษา/บทบาท · ตัวเดิมคืนเป็นสตริง ยังมีใบครัวใช้อยู่ */
+function pjGuidesFull(date, boatId){
   try{
     var A=goAsn(date,boatId), G=goGuides();
-    return (A.g||[]).map(function(id){ var g=G.filter(function(x){ return x.id===id; })[0];
-      return g?((g.name||'')+(g.nick?(' ('+g.nick+')'):'')):id; });
-  }catch(_){ return []; }
+    var out=(A.g||[]).map(function(id){
+      var g=G.filter(function(x){ return x.id===id; })[0];
+      if(!g) return { id:id, name:id, langs:[], role:'guide', guide:true };
+      return { id:id, name:(g.name||'')+(g.nick?(' ('+g.nick+')'):''),
+               langs:goLangsOf(g), role:goRoleOf(g), guide:goIsGuide(g) };
+    });
+    out.other=(+A.other||0);
+    return out;
+  }catch(_){ var z=[]; z.other=0; return z; }
+}
+function pjGuides(date, boatId){
+  return pjGuidesFull(date, boatId).map(function(x){ return x.name; });
 }
 /* สายรัดข้อมือ · ชุดสีมาตรฐาน */
 var PJ_WB=[{t:'ดำ',c:'#1A1A1A'},{t:'ม่วง',c:'#8E2FD6'},{t:'ฟ้า TQ',c:'#2BC8DE'},{t:'แดง',c:'#C0271C'},
@@ -82446,6 +82499,9 @@ function pjCSS(){
   +H+' .pj-rw select:hover{border-color:#D9DDE4;background:#fff}'
   +H+' .pj-rw select:focus{border-color:#16265C;background:#fff;outline:none}'
   +H+' .pj-tag{font-size:9px;font-weight:800;border-radius:4px;padding:1px 6px;background:#FFF0D8;color:#B4560A;flex:none}'
+  +H+' .pj-lg{display:inline-block;font-size:9px;font-weight:800;border-radius:4px;padding:1px 5px;'
+    +'background:#E6F1FB;color:#185FA5;vertical-align:middle}'
+  +H+' .pj-lgs{display:flex;gap:3px;flex:none}'
   +H+' .pj-away{font-size:9px;font-weight:800;border-radius:5px;padding:1px 6px;background:#E9EFF7;color:#20477E;flex:none;margin-right:3px}'
   +H+' .pj-was{font-size:10px;color:#B4560A;font-weight:600;flex:none;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
   +H+' .pj-wbrow{display:flex;align-items:center;gap:9px;padding:0 15px;height:36px;border-bottom:1px solid #F4F5F8}'
@@ -82617,6 +82673,14 @@ function pjSelRow(pier,bid,label,slot,val,subOld,roles,ro,boat){
 function pjTxtRow(label,txt){
   return pjRow(label, txt?('<div class="v">'+poE(txt)+'</div>'):'<div class="v e">—</div>', null);
 }
+/* §gdRole · ชื่อไกด์ + ป้ายภาษาที่พูดได้ · ป้ายมาจากทะเบียน ไม่ใช่จากใบจอง */
+function pjGuideRow(label, name, langs){
+  if(!name) return pjRow(label, '<div class="v e">—</div>', null);
+  /* ป้ายภาษาอยู่นอก .v · ถ้าอยู่ข้างในจะโดน text-overflow:ellipsis กินไปพร้อมชื่อยาว */
+  var chips=(langs||[]).map(function(L){ return '<span class="pj-lg">'+poE(L)+'</span>'; }).join('');
+  return pjRow(label, '<div class="v">'+poE(name)+'</div>'
+    +(chips?('<span class="pj-lgs">'+chips+'</span>'):''), null);
+}
 function pjPick(bid, slot, val){
   var J=pjOf(_poDate,bid);
   if(slot==='cap') J.cap=val;
@@ -82720,7 +82784,7 @@ function pjCard(B, pier, ro){
   var colRaw=(typeof pckBoatColor==='function')?pckBoatColor(bid):'#185FA5';
   var col=going?colRaw:pjMute(colRaw);
   var pcol=rt.color||'#5A6270';
-  var pax=pjPax(_poDate,bid,pier), G=pjGuides(_poDate,bid);
+  var pax=pjPax(_poDate,bid,pier), GF=pjGuidesFull(_poDate,bid), G=GF.map(function(x){ return x.name; });
   var langs=Object.keys(pax.langs);
   var wbc=J.wbc||'', wbt=J.wb||'';
   var pid='pjpop-'+bid.replace(/[^A-Za-z0-9_-]/g,'_');
@@ -82811,9 +82875,29 @@ function pjCard(B, pier, ro){
      }catch(_){ return ''; } })()+'</div>'
    + (going
       ? ( pjSecHd('Guides &amp; Trainee','guide')
-        + pjTxtRow('Guide 1', G[0]||'')
-        + pjTxtRow('Guide 2', G[1]||'')
-        + pjTxtRow('Guide 3', G[2]||'')
+        /* §gdRole · เดิมมี 3 ช่องตายตัว · จ่ายไกด์ 5 คนแล้วคนที่ 4-5 หายเงียบ
+           ตอนนี้แสดงทุกคนที่จ่ายไว้จริง พร้อมป้ายภาษา แล้วแยกแถวฝึกงาน/สตาฟ */
+        + (function(){
+            var gd=GF.filter(function(x){ return x.guide; });
+            var tr=GF.filter(function(x){ return !x.guide; });
+            var need=Object.keys(pax.langs||{});
+            var out=gd.length
+              ? gd.map(function(x,i){ return pjGuideRow('Guide '+(i+1), x.name, x.langs); }).join('')
+              : pjGuideRow('Guide 1','',[]);
+            if(gd.length<3) for(var i=gd.length; i<3; i++) out+=pjGuideRow('Guide '+(i+1),'',[]);
+            var trTxt=tr.map(function(x){ return x.name; }).join(' · ');
+            var trN=tr.length+(+GF.other||0);
+            if(!trTxt && GF.other>0) trTxt=GF.other+' คน';
+            out+=pjRow('Trainee / Staff',
+              (trTxt?('<div class="v">'+poE(trTxt)+'</div>'):'<div class="v e">—</div>')
+              +(trN>1?('<span class="pj-lgs"><span class="pj-lg" style="background:#F1EFE8;color:#6B6B63">'
+                       +trN+' คน</span></span>'):''), null);
+            if(need.length) out+=pjRow('ภาษาที่ลูกค้าขอ',
+              '<span class="pj-lgs" style="flex-wrap:wrap">'
+              +need.map(function(L){ return '<span class="pj-lg">'+poE(L)+'</span>'; }).join('')
+              +'</span><span style="flex:1"></span>', null);
+            return out;
+          })()
         /* §mealTrip · ร้านอาหารของลำนี้วันนี้ · ค่าเริ่มต้นมาจากเส้นทาง กดเปลี่ยนเฉพาะวันนี้ได้ */
         + (function(){
             var raw=mvTripRaw(_poDate,bid), V=mvForTrip(_poDate,bid,B.rid);
@@ -83013,7 +83097,8 @@ function pjPrint(){
   var mx=function(a){ var m=0; a.forEach(function(v){ if(v>m) m=v; }); return m; };
   var nCrew=Math.max(2, Math.min(4, mx(J.map(function(j){ return (j.crew||[]).filter(Boolean).length; }))));
   var nIsl =Math.max(1, Math.min(2, mx(J.map(function(j){ return (j.island||[]).filter(Boolean).length; }))));
-  var nGd  =Math.max(1, Math.min(3, mx(Gs.map(function(g){ return g.filter(Boolean).length; }))));
+  /* §gdRole · เดิมล็อก 3 · ลำที่จ่ายไกด์ 5 คนจะหายไป 2 คนเงียบ ๆ · ปล่อยตามจริง กัน 8 ไว้กันตารางบาน */
+  var nGd  =Math.max(1, Math.min(8, mx(Gs.map(function(g){ return g.filter(Boolean).length; }))));
   /* จำนวนแถวในตัวตาราง · ช่องของลำที่ไม่ออกต้องคลุมให้ครบพอดี ไม่งั้นตารางเบี้ยว */
   var SPAN = 1 /*โปรแกรม*/ + 1 /*หัวกลุ่มคน*/ + 2 + nCrew + nIsl
            + 1 /*หัวไกด์*/ + nGd + 1 /*หัวลูกค้า*/ + 2 + 1 /*ลค*/ + 1 /*หัวหมายเหตุ*/ + 1;
