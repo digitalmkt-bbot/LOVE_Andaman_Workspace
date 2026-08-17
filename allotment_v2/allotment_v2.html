@@ -56451,7 +56451,7 @@ function mvCost(venue, nAd, nCh){
 /* ═══ §tripPL · P&L รายทริป ══════════════════════════════════════════════════
    ไม่มีสูตรของตัวเอง · ป้อนของจริงเข้า ctCalc ของหน้าต้นทุน แล้วเอาผลมาแสดง
    ═══════════════════════════════════════════════════════════════════════════ */
-var _px = { date:'', pier:'', open:{}, tab:'d', mon:'', an:47 };
+var _px = { date:'', pier:'', open:{}, tab:'d', mon:'', an:47, oc:{} };
 
 /* แผนต้นทุนของเส้นทางนี้ · ใช้แค่ ovr/grp (ที่ปรับ-ปิดรายเส้นทาง)
    ไม่ใช้ pax/price/boats/fuel ของแผน เพราะนั่นเป็นค่าไว้ลองเล่นในหน้าต้นทุน
@@ -57004,8 +57004,9 @@ function pxCSS(){ return ''
  /* §oneLine · ต้นทุน 1 หมวด = 1 บรรทัด · สูตรเต็มอยู่ใน title ตอน hover */
  +'#trippl-host .csw{padding-bottom:7px}'
  +'#trippl-host .csr{display:flex;align-items:center;gap:9px;background:#F8FAFC;border:1px solid var(--pl);'
-   +'border-radius:12px;padding:9px 11px;height:100%;min-height:38px}'
- +'#trippl-host .csr:hover{background:#F1F5F9}'
+   +'border-radius:12px;padding:9px 11px;height:100%;min-height:38px;cursor:pointer;'
+   +'transition:background .15s,border-color .15s}'
+ +'#trippl-host .csr:hover{background:#F1F5F9;border-color:#DDE3EC}'
  +'#trippl-host .csr > i{width:4px;height:17px;border-radius:999px;flex:none}'
  +'#trippl-host .csr .gn{font-size:12px;font-weight:800;flex:none;white-space:nowrap}'
  +'#trippl-host .csr .fml{font-size:10.5px;color:var(--pf);flex:1;min-width:0;white-space:nowrap;'
@@ -57015,6 +57016,40 @@ function pxCSS(){ return ''
  +'#trippl-host .csr.zero{background:transparent;border-style:dashed;border-color:#E8ECF1}'
  +'#trippl-host .csr.zero .gn,#trippl-host .csr.zero .gv{color:#CBD5E1}'
  +'#trippl-host .csr.zero > i{background:#E2E8F0}'
+ /* §csExp · กางรายละเอียดค่าใช้จ่ายของหมวดนั้น · หมวดเดียวกันกางพร้อมกันทุกลำ แถวกริดจึงยังตรง */
+ +'#trippl-host .csw.ope{display:flex;flex-direction:column}'
+ +'#trippl-host .csw.ope > .csr{height:auto;flex:none;border-bottom-left-radius:0;border-bottom-right-radius:0;'
+   +'background:#fff;border-color:#C7D2FE;box-shadow:0 2px 8px -2px rgba(79,70,229,.18)}'
+ +'#trippl-host .csw.ope > .csd{flex:1 1 auto}'
+ +'#trippl-host .csr .cv{width:11px;height:11px;flex:none;color:#CBD5E1;transition:transform .18s}'
+ +'#trippl-host .csw.ope > .csr .cv{transform:rotate(90deg);color:#6366F1}'
+ +'#trippl-host .csr.zero .cv{visibility:hidden}'
+ +'#trippl-host .csd{border:1px solid #C7D2FE;border-top:0;border-radius:0 0 12px 12px;background:#fff;'
+   +'box-shadow:0 6px 14px -6px rgba(79,70,229,.2);overflow:hidden}'
+ +'#trippl-host .csd table{width:100%;border-collapse:collapse}'
+ +'#trippl-host .csd th{font-size:9.5px;font-weight:800;color:var(--pf);letter-spacing:.05em;'
+   +'text-transform:uppercase;text-align:right;padding:7px 10px 5px;background:#FAFBFF;'
+   +'border-bottom:1px solid var(--pl)}'
+ +'#trippl-host .csd th.l{text-align:left}'
+ +'#trippl-host .csd td{font-size:11px;color:#334155;padding:7px 10px;border-bottom:1px solid #F5F7FA;'
+   +'text-align:right;vertical-align:top}'
+ +'#trippl-host .csd td.l{text-align:left}'
+ +'#trippl-host .csd tbody tr:last-child td{border-bottom:0}'
+ +'#trippl-host .csd .ln{font-weight:700;color:var(--pi);font-size:11.5px;display:block}'
+ +'#trippl-host .csd .amt{font-weight:800;font-size:12px;color:var(--pi);display:block}'
+ +'#trippl-host .csd .amt+.src{margin-top:3px}'
+ +'#trippl-host .csd .estv{color:var(--pm)}'
+ +'#trippl-host .csd .estv.old{color:#CBD5E1;text-decoration:line-through}'
+ +'#trippl-host .csd .dlt{display:block;font-size:10px;font-weight:700;margin-top:2px}'
+ +'#trippl-host .csd .dlt.up{color:#E11D48}'
+ +'#trippl-host .csd .dlt.dn{color:#059669}'
+ +'#trippl-host .csd .mut{color:#CBD5E1}'
+ +'#trippl-host .csd tfoot td{background:#F8FAFC;font-weight:800;font-size:11.5px;color:var(--pi);'
+   +'border-top:1px solid var(--pl2);border-bottom:0}'
+ +'#trippl-host .csd .why{background:#FFFBEB;border-top:1px solid #FDE68A;padding:8px 11px;'
+   +'font-size:10.5px;color:#92400E;line-height:1.65}'
+ +'#trippl-host .csd .why b{font-weight:800}'
+ +'#trippl-host .csd .why div+div{margin-top:4px}'
  +'#trippl-host .src{display:inline-block;border-radius:6px;padding:2px 6px;font-size:9px;font-weight:700;white-space:nowrap}'
  +'#trippl-host .src.f{background:#F1F5F9;color:#475569}'
  +'#trippl-host .src.p{background:#DBEAFE;color:#1D4ED8}'
@@ -57068,6 +57103,31 @@ function pxCSS(){ return ''
  +'#trippl-host .cslg span{font-size:11px;color:var(--pm);display:flex;align-items:center;gap:6px}'
  +'#trippl-host .cslg span i{width:10px;height:10px;border-radius:3px;flex:none}'
  +'#trippl-host .cslg span b{color:var(--pi);font-weight:700}'
+ /* §csTable · ตารางรายหมวดในการ์ด Cost structure */
+ +'#trippl-host .trd{font-size:11.5px;font-weight:800}'
+ +'#trippl-host .trd.up{color:#E11D48}'
+ +'#trippl-host .trd.dn{color:#059669}'
+ +'#trippl-host .trd.fl{color:#94A3B8}'
+ +'#trippl-host .qbar{display:flex;height:9px;border-radius:999px;overflow:hidden;background:#EEF1F6;'
+   +'min-width:84px}'
+ +'#trippl-host .qbar i{display:block;height:100%}'
+ +'#trippl-host .qmeta{font-size:9.5px;color:var(--pf);margin-top:4px;text-align:center}'
+ +'#trippl-host .dqx{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-top:14px;'
+   +'background:#F8FAFC;border:1px solid var(--pl2);border-radius:16px;padding:12px 16px}'
+ +'#trippl-host .dqx .t{font-size:11px;font-weight:800;color:var(--pi)}'
+ +'#trippl-host .dqx span.q{font-size:10.5px;color:var(--pm);display:flex;align-items:center;gap:6px}'
+ +'#trippl-host .dqx span.q i{width:10px;height:10px;border-radius:3px;flex:none}'
+ /* §wkTrend · แท่งรายสัปดาห์ · ความสูงทั้งแท่ง = รายได้ต่อหัว */
+ +'#trippl-host .wkw{display:flex;align-items:flex-end;gap:9px;height:158px;padding:6px 2px 0}'
+ +'#trippl-host .wkc{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;'
+   +'height:100%;justify-content:flex-end;min-width:0}'
+ +'#trippl-host .wkst{width:100%;max-width:46px;display:flex;flex-direction:column;'
+   +'justify-content:flex-end;height:100%}'
+ +'#trippl-host .wkst i{display:block}'
+ +'#trippl-host .wkst i:first-child{border-radius:5px 5px 0 0}'
+ +'#trippl-host .wklb{font-size:9.5px;color:var(--pf);white-space:nowrap}'
+ +'#trippl-host .wkv{font-size:10.5px;font-weight:800;color:var(--pi);white-space:nowrap}'
+ +'#trippl-host .wkv.neg{color:#E11D48}'
  +'#trippl-host .hint{margin-top:14px;background:#F8FAFC;border:1px solid var(--pl2);border-radius:16px;'
    +'padding:13px 15px;font-size:11.5px;color:var(--pm);line-height:1.75}'
  +'#trippl-host .hint b{color:var(--pi)}'
@@ -57099,6 +57159,45 @@ function pxGOrd(D){
   return out;
 }
 var PX_SRCT={ f:'Formula', p:'Plan', r:'Actual', w:'Pending' };
+var PX_CHEV='<svg class="cv" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" '
+  +'stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>';
+/* ค่าที่จะไปอยู่ใน onclick="...('X')" · กันทั้งฝั่ง JS และฝั่ง HTML attribute */
+function pxQ(v){ return String(v==null?'':v).replace(/\\/g,'\\\\').replace(/'/g,"\\'")
+  .replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function pxCostTog(g){
+  g=String(g==null?'':g);
+  if(!_px.oc) _px.oc={};
+  if(_px.oc[g]) delete _px.oc[g]; else _px.oc[g]=1;
+  renderTripPL();
+}
+/* แผงรายละเอียดหนึ่งหมวด · ของที่เคยซ่อนอยู่ใน title ตอน hover ย้ายมาอยู่ตรงนี้ทั้งหมด */
+function pxCostPane(t, g, lines, e){
+  var pax=Math.max(1, t.px.tot), tot=0, est=0, whys=[];
+  lines.forEach(function(r){ tot+=r.use; est+=(+r.est||0); });
+  var body=lines.map(function(r){
+    var d=(r.real!=null)?Math.round(r.real-r.est):0;
+    var ec=(r.real==null)
+      ? '<span class="mut">\u2014</span>'
+      : ('<span class="estv n'+(d?' old':'')+'">'+pxN(r.est)+'</span>'
+         +(d?('<span class="dlt '+(d>0?'up':'dn')+' n">'+(d>0?'+':'\u2212')+pxN(Math.abs(d))+'</span>'):''));
+    if(r.why) whys.push('<div><b>'+e(r.l)+'</b> \u00b7 '+e(r.why)+'</div>');
+    return '<tr><td class="l"><span class="ln">'+e(r.l)+'</span></td>'
+      +'<td>'+ec+'</td>'
+      +'<td><span class="amt n">'+pxN(r.use)+'</span> <span class="src '+e(r.src)+'">'
+        +(PX_SRCT[r.src]||'')+'</span></td>'
+      +'<td><span class="n">'+pxN(r.use/pax)+'</span></td></tr>';
+  }).join('');
+  var shr=t.cost?Math.round(tot/t.cost*100):0;
+  var anyReal=lines.some(function(r){ return r.real!=null; });
+  return '<div class="csd"><table><thead><tr><th class="l">Line item</th><th>Formula</th>'
+    +'<th>Used</th><th>\u0e3f / pax</th></tr></thead>'
+    +'<tbody>'+(body||'<tr><td class="l mut" colspan="4">No line items</td></tr>')+'</tbody>'
+    +'<tfoot><tr><td class="l">'+e(g)+' \u00b7 '+shr+'% of trip cost</td>'
+    +'<td>'+(anyReal?('<span class="n">'+pxN(est)+'</span>'):'<span class="mut">\u2014</span>')+'</td>'
+    +'<td><span class="n">'+pxN(tot)+'</span></td>'
+    +'<td><span class="n">'+pxN(tot/pax)+'</span></td></tr></tfoot></table>'
+    +(whys.length?('<div class="why">'+whys.join('')+'</div>'):'')+'</div>';
+}
 var PX_SRCO=['r','p','w','f'];
 function pxIcoSvg(d){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
   +'stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px">'+d+'</svg>'; }
@@ -57216,27 +57315,26 @@ function pxDetail(t, e, GORD){
 
   /* 7..n · หมวดต้นทุน · หมวดละ 1 แถว 1 บรรทัด · ลำดับเดียวกันทุกลำ */
   var byG={}; GS.forEach(function(G){ byG[G.g]=G; });
+  if(!_px.oc) _px.oc={};
   GORD.forEach(function(g){
-    var G=byG[g], c=pxGColor(g);
-    if(!G){ O.push('<div class="csw'+L+'"><div class="csr zero"><i></i>'
+    var G=byG[g], c=pxGColor(g), op=!!_px.oc[g], qg=pxQ(g);
+    if(!G){ O.push('<div class="csw'+L+'"><div class="csr zero"><i></i>'+PX_CHEV
         +'<span class="gn">'+e(g)+'</span><span class="fml"></span>'
-        +'<span class="gv n">—</span></div></div>'); return; }
+        +'<span class="gv n">\u2014</span></div></div>'); return; }
     var lines=t.rows.filter(function(r){ return r.g===g && (Math.round(r.est)!==0 || r.real!=null); });
     var fml=pxN(G.v/pax)+'/pax'
-      + (lines.length?(' · '+lines.map(function(r){ return r.l; }).join(' + ')):'');
+      + (lines.length?(' \u00b7 '+lines.map(function(r){ return r.l; }).join(' + ')):'');
     var chips={}; lines.forEach(function(r){ chips[r.src]=1; });
     var sx=PX_SRCO.filter(function(k){ return chips[k]; })
       .map(function(k){ return '<span class="src '+k+'">'+PX_SRCT[k]+'</span>'; }).join('');
-    var ttl=lines.map(function(r){
-      var s=r.l+': '+pxN(r.use)+' ('+PX_SRCT[r.src]+')';
-      if(r.real!=null && Math.round(r.real-r.est)!==0) s+=' · formula said '+pxN(r.est);
-      if(r.why) s+=' · '+r.why;
-      return s; }).join('\n');
-    O.push('<div class="csw'+L+'"><div class="csr" title="'+e(ttl)+'">'
-      +'<i style="background:'+c+'"></i>'
+    O.push('<div class="csw'+L+(op?' ope':'')+'">'
+      +'<div class="csr" onclick="pxCostTog(\''+qg+'\')" title="'
+        +(op?'Hide the expense detail':'Show the expense detail')+'">'
+      +'<i style="background:'+c+'"></i>'+PX_CHEV
       +'<span class="gn" style="color:'+c+'">'+e(g)+'</span>'
       +'<span class="fml">'+e(fml)+'</span><span class="sx">'+sx+'</span>'
-      +'<span class="gv n" style="color:'+c+'">'+pxN(G.v)+'</span></div></div>');
+      +'<span class="gv n" style="color:'+c+'">'+pxN(G.v)+'</span></div>'
+      +(op?pxCostPane(t, g, lines, e):'')+'</div>');
   });
 
   /* สุดท้าย · รวมต้นทุน */
@@ -57396,7 +57494,7 @@ function pxDayAgg(date, pier){
   var R=(typeof ctVatR==='function')?ctVatR(ctTpl()):0;
   var D=pxDay(date,pier);
   var a={ date:date, trips:D.length, rev:0, cost:0, profit:0, pax:0, bk:0, loss:0, cap:0,
-          routes:{}, agents:{}, groups:{}, bandN:[0,0,0,0], bandNet:[0,0,0,0], bandPax:[0,0,0,0],
+          routes:{}, agents:{}, groups:{}, gdet:{}, bandN:[0,0,0,0], bandNet:[0,0,0,0], bandPax:[0,0,0,0],
           best:null, boats:[] };
   D.forEach(function(t){
     a.rev+=t.rev; a.cost+=t.cost; a.profit+=t.profit; a.pax+=t.px.tot; a.bk+=t.px.bk;
@@ -57411,7 +57509,17 @@ function pxDayAgg(date, pier){
       n:0, pax:0, rev:0, cost:0, profit:0, cap:0, be:0, beN:0, pier:(t.route.pier||'') });
     RR.n++; RR.pax+=t.px.tot; RR.rev+=t.rev; RR.cost+=t.cost; RR.profit+=t.profit; RR.cap+=cap;
     if(t.be){ RR.be+=t.be; RR.beN++; }
-    (t.rows||[]).forEach(function(r){ a.groups[r.g]=(a.groups[r.g]||0)+r.use; });
+    /* §csDetail · แยกเก็บรายบรรทัด / ที่มาของตัวเลข / เส้นทางที่ดันหมวดนั้น */
+    var _gs={};
+    (t.rows||[]).forEach(function(r){
+      a.groups[r.g]=(a.groups[r.g]||0)+r.use;
+      var GD=a.gdet[r.g]||(a.gdet[r.g]={ v:0, est:0, trips:0, src:{}, lines:{}, routes:{} });
+      GD.v+=r.use; GD.est+=(+r.est||0);
+      GD.src[r.src]=(GD.src[r.src]||0)+r.use;
+      if(Math.round(r.use)!==0 || r.real!=null) GD.lines[r.l]=(GD.lines[r.l]||0)+r.use;
+      GD.routes[rk]=(GD.routes[rk]||0)+r.use;
+      if(!_gs[r.g]){ _gs[r.g]=1; GD.trips++; }
+    });
     var cph=t.cost/Math.max(1,t.px.tot);
     (pxAgents(date,t.bid)||[]).forEach(function(g){
       var AA=a.agents[g.name]||(a.agents[g.name]={ name:g.name, b2c:!!g.b2c, n:0, pax:0, rev:0, cost:0 });
@@ -57661,6 +57769,102 @@ function pxAnalysis(e){
   var tgt=(typeof drCfg==='function')?((drCfg()||{}).targetPerPax||0):0;
   var lfAll=T.cap?Math.round(T.pax/T.cap*100):0;
 
+  /* §csDetail · รวมรายละเอียดรายหมวดข้ามทุกวันในช่วง */
+  var GDT={};
+  A.forEach(function(x){ var gd=x.gdet||{};
+    Object.keys(gd).forEach(function(g){
+      var sc=gd[g], d=GDT[g]||(GDT[g]={ v:0, est:0, trips:0, src:{}, lines:{}, routes:{} });
+      d.v+=sc.v; d.est+=sc.est; d.trips+=sc.trips;
+      Object.keys(sc.src||{}).forEach(function(k){ d.src[k]=(d.src[k]||0)+sc.src[k]; });
+      Object.keys(sc.lines||{}).forEach(function(k){ d.lines[k]=(d.lines[k]||0)+sc.lines[k]; });
+      Object.keys(sc.routes||{}).forEach(function(k){ d.routes[k]=(d.routes[k]||0)+sc.routes[k]; });
+    });
+  });
+  /* ช่วงก่อนหน้าที่ยาวเท่ากัน · ไม่มีตัวเทียบก็ไม่ต้องเดา ปล่อยเป็นขีด */
+  var PT={rev:0,cost:0,pax:0,trips:0}, PG={}, pOK=false;
+  try{
+    var pEnd=pxBackDays(2, days[0])[0];
+    pxBackDays(N, pEnd).forEach(function(d){
+      var x=pxDayAgg(d,_px.pier);
+      PT.rev+=x.rev; PT.cost+=x.cost; PT.pax+=x.pax; PT.trips+=x.trips;
+      Object.keys(x.groups||{}).forEach(function(k){ PG[k]=(PG[k]||0)+x.groups[k]; });
+    });
+    pOK=PT.trips>0;
+  }catch(_){}
+  function pxTrd(cur, prev){
+    if(!pOK || !prev) return '<span class="trd fl">\u2014</span><div class="per">no history</div>';
+    var p=(cur-prev)/Math.abs(prev)*100, d=Math.round(cur-prev);
+    var k=(Math.abs(p)<1)?'fl':(p>0?'up':'dn');
+    return '<span class="trd '+k+'">'
+      +(k==='fl'?'\u2014 ':(p>0?'\u25b2 ':'\u25bc '))+Math.abs(p).toFixed(1)+'%</span>'
+      +'<div class="per'+(k==='fl'?'':(p>0?' negp':' pos'))+'">'
+      +(k==='fl'?'flat':((d>0?'+':'\u2212')+pxN(Math.abs(d))+' \u0e3f'))+'</div>';
+  }
+  var PXQC={ r:'#10B981', p:'#3B82F6', f:'#CBD5E1', w:'#F59E0B' };
+  var qAll=0, qReal=0;
+  var GLx=Object.keys(GDT).map(function(g){
+    var d=GDT[g], sc=d.src||{};
+    var rk=Object.keys(d.routes).sort(function(a,b){ return Math.abs(d.routes[b])-Math.abs(d.routes[a]); })[0];
+    var R0=rk?RT[rk]:null;
+    var tt=0; ['r','p','f','w'].forEach(function(k){ tt+=Math.abs(sc[k]||0); });
+    qAll+=tt; qReal+=Math.abs(sc.r||0);
+    return { g:g, v:d.v, c:pxGColor(g), trips:d.trips,
+             nline:Object.keys(d.lines||{}).length,
+             rn:R0?R0.name:'', rc:R0?R0.color:'#CBD5E1',
+             rsh:(rk&&d.v)?Math.round(Math.abs(d.routes[rk]/d.v)*100):0,
+             pv:(PG[g]||0),
+             q:{ r:tt?Math.abs(sc.r||0)/tt:0, p:tt?Math.abs(sc.p||0)/tt:0,
+                 f:tt?Math.abs(sc.f||0)/tt:0, w:tt?Math.abs(sc.w||0)/tt:0 } };
+  }).filter(function(x){ return Math.round(x.v)!==0; }).sort(function(a,b){ return b.v-a.v; });
+  var qPct=qAll?Math.round(qReal/qAll*100):0;
+  var movers=GLx.filter(function(x){ return pOK && x.pv>0 && (x.v-x.pv)/x.pv>0.05; })
+    .sort(function(a,b){ return (b.v-b.pv)-(a.v-a.pv); }).slice(0,2);
+
+  /* §wkTrend · ก้อนละ 7 วัน นับถอยจากวันสุดท้าย · สัปดาห์ที่ไม่มีทริปเลยไม่ต้องโชว์ */
+  var WK=[];
+  for(var wi=A.length; wi>0; wi-=7){
+    var seg=A.slice(Math.max(0,wi-7), wi);
+    var w={ rev:0, cost:0, pax:0, trips:0, d1:seg[seg.length-1].date, d0:seg[0].date };
+    seg.forEach(function(x){ w.rev+=x.rev; w.cost+=x.cost; w.pax+=x.pax; w.trips+=x.trips; });
+    if(w.trips) WK.unshift(w);
+  }
+  WK=WK.slice(-8);
+  var wMax=1, wWorst=null;
+  WK.forEach(function(w){
+    w.rph=w.rev/Math.max(1,w.pax); w.cph=w.cost/Math.max(1,w.pax); w.nph=w.rph-w.cph;
+    if(w.rph>wMax) wMax=w.rph; if(w.cph>wMax) wMax=w.cph;
+    if(!wWorst || w.nph<wWorst.nph) wWorst=w;
+  });
+  var wkHtml=WK.map(function(w){
+    var loss=w.nph<0;
+    var hC=Math.round(w.cph/wMax*100), hN=Math.round(Math.max(0,w.nph)/wMax*100);
+    return '<div class="wkc" title="'+e(w.d0)+' \u2192 '+e(w.d1)+' \u00b7 '+w.trips+' trips \u00b7 '
+      +w.pax+' pax \u00b7 rev '+pxN(w.rph)+'/pax \u00b7 cost '+pxN(w.cph)+'/pax">'
+      +'<span class="wkv'+(loss?' neg':'')+'">'+(loss?'\u2212':'+')+pxN(Math.abs(w.nph))+'</span>'
+      +'<div class="wkst">'+(hN>0?('<i style="height:'+hN+'%;background:#059669"></i>'):'')
+      +'<i style="height:'+hC+'%;background:'+(loss?'#E11D48':'#F59E0B')+'"></i></div>'
+      +'<span class="wklb">'+e(String(pxDW(w.d1).txt).replace(/^[A-Za-z]+ /,''))+'</span></div>';
+  }).join('');
+
+  var csRows=GLx.map(function(x){
+    return '<tr class="br"><td class="l"><div class="bn"><i style="background:'+e(x.c)+'"></i><div>'
+      +'<b>'+e(x.g)+'</b><small>'+x.nline+' item'+(x.nline===1?'':'s')+' \u00b7 '+x.trips+' trips</small>'
+      +'</div></div></td>'
+      +'<td><span class="num n">'+pxN(x.v)+'</span></td>'
+      +'<td class="c"><span class="num n">'+(gTot?(x.v/gTot*100).toFixed(1):'0.0')+'%</span></td>'
+      +'<td class="c"><span class="num n">'+(T.rev?(x.v/T.rev*100).toFixed(1):'0.0')+'%</span></td>'
+      +'<td><span class="num cost n">'+pxN(x.v/Math.max(1,T.pax))+'</span></td>'
+      +'<td class="c">'+pxTrd(x.v, x.pv)+'</td>'
+      +'<td class="l">'+(x.rn
+        ?('<div class="bn"><i style="background:'+e(x.rc)+';height:16px"></i><div>'
+          +'<b style="font-size:11.5px">'+e(x.rn)+'</b><small>'+x.rsh+'% of the line</small></div></div>')
+        :'<span class="mut">\u2014</span>')+'</td>'
+      +'<td class="c"><div class="qbar">'
+      +['r','p','f','w'].map(function(k){ var q=x.q[k]||0;
+          return q>0.001?('<i style="width:'+(q*100).toFixed(1)+'%;background:'+PXQC[k]+'"></i>'):''; }).join('')
+      +'</div><div class="qmeta">'+Math.round(x.q.r*100)+'% receipted</div></td></tr>';
+  }).join('');
+
   var hero='<div class="phero"><div><h1>Analysis <span>(last '+N+' days · to '+e(end)+')</span></h1>'
     +'<p><span class="htag">'+T.trips+' trips · '+T.pax+' pax</span>'
     +(below.length?('<span class="htag w">'+below.length+' agent'+(below.length===1?'':'s')+' priced below cost</span>'):'')
@@ -57768,14 +57972,49 @@ function pxAnalysis(e){
       +Math.max(bot.beAvg+8, bot.avgPax+8)+' pax is worth roughly '
       +pxN(Math.abs(bot.cph*bot.avgPax/Math.max(1,bot.avgPax+8)-bot.cph))+' ฿ per head on the cost side alone.'):'')
       +'</div></div>'
-    +'<div class="g2 mb"><div class="eg"><div class="phd"><div><h2>Cost structure</h2>'
-      +'<p>Share of total cost · and what each line costs per head</p></div></div>'
+    /* §csCard · การ์ดต้นทุน · เต็มความกว้าง · แถบสัดส่วน + ตารางรายหมวด + คุณภาพข้อมูล */
+    +'<div class="eg mb"><div class="phd"><div><h2>Cost structure</h2>'
+      +'<p>Last '+N+' days \u00b7 '+pxN(T.cost)+' \u0e3f spent against '+pxN(T.rev)+' \u0e3f of revenue'
+      +(pOK?(' \u00b7 compared with the '+N+' days before that'):'')+'</p></div>'
+      +'<div><span class="pill pu">'+(T.rev?Math.round(T.cost/T.rev*100):0)+'% of revenue</span></div></div>'
       +'<div class="stackbar">'+stack+'</div><div class="cslg">'+slg+'</div>'
-      +'<div class="hint"><b>Total cost is '+(T.rev?Math.round(T.cost/T.rev*100):0)+'% of revenue.</b> '
-      +(GL.length?('The top three lines — '+e(GL.slice(0,3).map(function(x){return x.g;}).join(', '))
-        +' — are '+Math.round(GL.slice(0,3).reduce(function(s,x){return s+x.v;},0)/gTot*100)
-        +'% of everything spent.'):'')+'</div></div>'
-    +'<div class="eg"><div class="phd"><div><h2>Load factor vs margin</h2>'
+      +'<div class="twrap" style="margin-top:16px"><div class="tscroll">'
+      +'<table class="sum" style="min-width:1000px"><thead><tr>'
+      +'<th class="l">Cost line</th><th>Total \u0e3f</th><th class="c">% of cost</th>'
+      +'<th class="c">% of revenue</th><th>\u0e3f / pax</th><th class="c">vs prev '+N+'d</th>'
+      +'<th class="l">Biggest driver</th><th class="c">Data quality</th></tr></thead><tbody>'
+      +csRows
+      +'<tr class="tot"><td class="l">\u03a3 '+GLx.length+' cost lines</td>'
+      +'<td><span class="num n">'+pxN(T.cost)+'</span></td>'
+      +'<td class="c"><span class="num n">100%</span></td>'
+      +'<td class="c"><span class="num n">'+(T.rev?(T.cost/T.rev*100).toFixed(1):'0.0')+'%</span></td>'
+      +'<td><span class="num cost n">'+pxN(T.cost/Math.max(1,T.pax))+'</span></td>'
+      +'<td class="c">'+pxTrd(T.cost, PT.cost)+'</td>'
+      +'<td class="l"><span class="mut">all routes</span></td>'
+      +'<td class="c"><span class="pill '+(qPct>=60?'em':(qPct>=35?'am':'ro'))+'">'
+      +qPct+'% receipted</span></td></tr></tbody></table></div></div>'
+      +'<div class="dqx"><span class="t">Where each number comes from</span>'
+      +'<span class="q"><i style="background:#10B981"></i>Actual \u2014 a receipt or logged expense</span>'
+      +'<span class="q"><i style="background:#3B82F6"></i>Plan \u2014 the route\'s cost plan</span>'
+      +'<span class="q"><i style="background:#CBD5E1"></i>Formula \u2014 system default, no plan linked</span>'
+      +'<span class="q"><i style="background:#F59E0B"></i>Pending \u2014 expected but nothing entered yet</span>'
+      +'</div>'
+      +'<div class="hint"><b>Total cost is '+(T.rev?Math.round(T.cost/T.rev*100):0)+'% of revenue'
+      +(pOK&&PT.rev?(', against '+Math.round(PT.cost/PT.rev*100)+'% in the previous '+N+' days'):'')+'.</b> '
+      +(GL.length?('The top three lines \u2014 '+e(GL.slice(0,3).map(function(x){return x.g;}).join(', '))
+        +' \u2014 are '+Math.round(GL.slice(0,3).reduce(function(s,x){return s+x.v;},0)/gTot*100)
+        +'% of everything spent. '):'')
+      +(movers.length?('Moving fastest: '+e(movers.map(function(x){ return x.g; }).join(' and '))
+        +' \u2014 together '+pxN(movers.reduce(function(a,x){ return a+(x.v-x.pv); },0))
+        +' \u0e3f more than the previous period. '):'')
+      +'Only '+qPct+'% of spend is backed by a real receipt'
+      +(GLx.length?(' \u00b7 the least trustworthy line is '
+        +e(GLx.slice().sort(function(a,b){ return a.q.r-b.q.r; })[0].g)+' at '
+        +Math.round(GLx.slice().sort(function(a,b){ return a.q.r-b.q.r; })[0].q.r*100)
+        +'% receipted'):'')+'.</div></div>'
+
+    /* §wkCard · จุดคุ้มทุนตามอัตราบรรทุก คู่กับแนวโน้มต่อหัวรายสัปดาห์ */
+    +'<div class="g2 mb"><div class="eg"><div class="phd"><div><h2>Load factor vs margin</h2>'
       +'<p>What each occupancy band actually earns per head</p></div></div>'
       +'<div class="twrap"><div class="tscroll"><table class="sum" style="min-width:360px">'
       +'<thead><tr><th class="l">Load factor</th><th class="c">Trips</th><th>Net / pax</th>'
@@ -57784,9 +58023,26 @@ function pxAnalysis(e){
       +'<td class="netc"><span class="net n">'+pxN(T.profit/Math.max(1,T.pax))+'</span></td>'
       +'<td class="c"><span class="pill pu">'+(T.rev?Math.round(T.profit/T.rev*100):0)+'%</span></td></tr>'
       +'</tbody></table></div></div>'
-      +'<div class="hint"><b>'+thin+' of '+T.trips+' trips ('
+      +'<div class="hint" style="margin-top:auto"><b>'+thin+' of '+T.trips+' trips ('
       +Math.round(thin/Math.max(1,T.trips)*100)+'%) sailed under 60% full.</b> '
-      +'Consolidating even half of them into fuller boats is the single biggest lever on this page.</div></div></div>'
+      +'Consolidating even half of them into fuller boats is the single biggest lever on this page.</div></div>'
+    +'<div class="eg"><div class="phd"><div><h2>Per-head trend</h2>'
+      +'<p>Revenue, cost and net per pax by week \u00b7 bar height is revenue per head, '
+      +'the amber part is what it cost</p></div>'
+      +'<div>'+(pOK?('<span class="pill '+((T.cost/Math.max(1,T.pax))>(PT.cost/Math.max(1,PT.pax))?'am':'em')
+      +'">cost/pax '+pxTrdTxt(T.cost/Math.max(1,T.pax), PT.cost/Math.max(1,PT.pax))+'</span>'):'')+'</div></div>'
+      +(WK.length?('<div class="wkw">'+wkHtml+'</div>'
+      +'<div class="cslg" style="margin-top:10px">'
+      +'<span><i style="background:#F59E0B"></i>Cost / pax</span>'
+      +'<span><i style="background:#059669"></i>Net / pax</span>'
+      +'<span style="color:#94A3B8">week ending \u00b7 hover for the detail</span></div>'
+      +'<div class="hint" style="margin-top:auto">'
+      +(wWorst?('<b>The weakest week ended '+e(String(pxDW(wWorst.d1).txt))+' \u2014 '
+        +(wWorst.nph<0?'\u2212':'+')+pxN(Math.abs(wWorst.nph))+' \u0e3f net per head.</b> '
+        +'It ran '+wWorst.trips+' trips at '+pxN(wWorst.cph)+' \u0e3f cost per head against '
+        +pxN(wWorst.rph)+' \u0e3f of revenue per head.'):'')+'</div>')
+      :'<div class="empty">Not enough days to draw a weekly trend</div>')
+      +'</div></div>'
     +'<div class="eg"><div class="phd"><div><h2>Agent contribution</h2>'
       +'<p>What each agent pays per head against what the trip costs · negative means we pay to carry them</p></div></div>'
       +'<div class="twrap"><div class="tscroll"><table class="sum" style="min-width:840px">'
@@ -57815,6 +58071,12 @@ function pxAnalysis(e){
       +'</div>';
 }
 function rkc(i){ return ['t1','t2','t3'][i]||''; }
+function pxTrdTxt(cur, prev){
+  if(!prev) return '\u2014';
+  var p=(cur-prev)/Math.abs(prev)*100;
+  if(Math.abs(p)<1) return 'flat';
+  return (p>0?'\u25b2 ':'\u25bc ')+Math.abs(p).toFixed(1)+'%';
+}
 
 function renderTripPL(){
   var host=document.getElementById('trippl-host'); if(!host) return;
