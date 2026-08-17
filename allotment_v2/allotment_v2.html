@@ -41874,14 +41874,31 @@ function bkV2ReturnBookingDraws(bk, why){
 }
 /* ใบจองที่ "ยังอ้างถึง" ล็อกนี้อยู่จริง ณ ตอนนี้ · แหล่งความจริงคือ trips[].lockDraws บนใบจอง
    ไม่ใช่ตัวนับ used ที่เชื่อไม่ได้ · ยกเลิกแล้วยังเก็บไว้แสดง แต่ไม่นับ */
+/* §lkStale · วันของล็อคนี้ · ล็อคลูกยืมวันของแม่ · ล็อคแบบช่วงไม่มีวันเดียว คืนค่าว่าง */
+function bkV2LockDateOf(l){
+  if(!l) return '';
+  if(typeof bkV2LockSpansDays==='function' && bkV2LockSpansDays(l)) return '';
+  if(l.date) return l.date;
+  if(l.parentId && typeof SB_SEAT_LOCKS!=='undefined'){
+    const p=SB_SEAT_LOCKS.find(y=>y.id===l.parentId);
+    if(p && !(typeof bkV2LockSpansDays==='function' && bkV2LockSpansDays(p))) return p.date||'';
+  }
+  return '';
+}
 function bkV2LockClaims(lockId){
   const out = [];
+  const _L=(typeof SB_SEAT_LOCKS!=='undefined')?SB_SEAT_LOCKS.find(y=>y.id===lockId):null;
+  const _ld=bkV2LockDateOf(_L);   /* ว่าง = ล็อคแบบช่วง ข้ามการเช็ควัน */
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b => {
-    const dead = ['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0;
+    const gone = ['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0;
     (b.trips||[]).forEach(t => { (t.lockDraws||[]).forEach(x => {
       if(x.lockId!==lockId) return;
+      /* §lkStale · ใบย้ายวันไปแล้ว แต่ที่นั่งยังชี้ล็อคของวันเดิม
+         ไม่ใช่ใบจองของวันนี้แล้ว จึงไม่ใช่ของจริงเท่ากับใบที่ยกเลิก */
+      const moved = !!(_ld && t.date && t.date!==_ld);
       out.push({ id:b.id, vc:(b.voucherRef||b.code||b.id||''), lead:String(b.leadPax||'').trim(),
-                 qty:Number(x.qty)||0, date:t.date||'', status:b.status||'', dead:dead });
+                 qty:Number(x.qty)||0, date:t.date||'', moved:moved,
+                 status:(moved&&!gone)?('ย้ายวันไป '+t.date):(b.status||''), dead:(gone||moved) });
     }); });
   });
   return out.sort((a,b)=> String(a.date).localeCompare(String(b.date)) || String(a.vc).localeCompare(String(b.vc)));
@@ -41927,9 +41944,11 @@ function bkV2LockCoverage(l, date){
 /* ตรวจทั้งล็อกแม่และกรุ๊ปย่อยทีเดียว · เลขที่หน้าจอโชว์เป็นยอดรวมของทั้งต้นไม้ */
 function bkV2LockAuditTree(parent){
   const ls = [parent].concat(bkV2LockChildren(parent.id));
-  let used=0, live=0, dead=0, bad=0;
-  ls.forEach(l => { const a=bkV2LockAudit(l); used+=a.used; live+=a.live; dead+=a.dead; if(a.diff!==0) bad++; });
-  return { used, live, dead, diff:used-live, bad, count:ls.length };
+  let used=0, live=0, dead=0, bad=0, moved=0;
+  ls.forEach(l => { const a=bkV2LockAudit(l); used+=a.used; live+=a.live; dead+=a.dead;
+    moved+=a.claims.filter(c=>c.moved).reduce((n,c)=>n+c.qty,0);
+    if(a.diff!==0) bad++; });
+  return { used, live, dead, moved, diff:used-live, bad, count:ls.length };
 }
 /* แก้ตัวนับให้ตรงกับใบจองที่ยังอ้างถึงจริง · ไม่แตะ qty ที่นั่งที่กันไว้ยังเท่าเดิม */
 function bkV2LockFixUsed(lockId, silent){
@@ -42174,8 +42193,15 @@ function bkV2CreateSubLock(parentId, subName, qty, opt){
   opt = opt||{};
   const p = SB_SEAT_LOCKS.find(x=>x.id===parentId); if(!p){ return null; }
   const q = Number(qty)||0; if(q<=0){ alert('Enter the number of seats for this sub-group'); return null; }
-  const room = bkV2LockUnalloc(p);
-  if(q > room){ alert('เกินจำนวนที่เหลือแบ่งได้ (เหลือ '+room+' ที่)'); return null; }
+  /* §lkOver · ต้องหักที่นั่งที่ล็อคแม่ขายไปเองแล้วออกก่อน
+     ไม่หัก = แบ่งที่นั่งที่ขายไปแล้วลงกรุ๊ปย่อยได้ ล็อคจ่ายที่นั่งเกินจำนวนที่มีจริง */
+  const room = (typeof bkV2LockUnallocDrawable==='function') ? bkV2LockUnallocDrawable(p) : bkV2LockUnalloc(p);
+  if(q > room){
+    const _raw=bkV2LockUnalloc(p), _pu=Number(p.used)||0;
+    alert('เกินจำนวนที่เหลือแบ่งได้ (เหลือ '+room+' ที่)'
+      +((_pu>0 && _raw>room)?('\n\nยังไม่ได้แบ่ง '+_raw+' ที่ แต่ล็อคแม่ขายไปเองแล้ว '+_pu+' ที่'):''));
+    return null;
+  }
   const today = (typeof bkV2LocalYMD==='function') ? bkV2LocalYMD(new Date()) : new Date().toISOString().slice(0,10);
   const nowTs = new Date().toISOString();
   const c = { id:LA_UID('lk'), parentId:parentId, subName:String(subName||'').trim()||'ย่อย',
@@ -42186,6 +42212,60 @@ function bkV2CreateSubLock(parentId, subName, qty, opt){
     reason:opt.reason||'', expiry:opt.expiry||p.expiry||'', status:'active', createdAt:nowTs, createdBy:laBy(),
     log:[{date:today, at:nowTs, type:'create', qty:q, by:laBy(), sub:true}] };
   SB_SEAT_LOCKS.push(c); sbSeatLocksPersist(); return c;
+}
+/* ══ §lkSweep · ไล่ทุกล็อคหาที่นั่งที่กันไว้แต่ไม่มีใบจองจริงรออยู่ ═══════════
+   3 อาการ · (1) ใบย้ายวันไปแล้วแต่ที่นั่งค้างอยู่กับล็อคของวันเดิม
+             (2) ใบถูกยกเลิกแต่ตัวนับยังไม่ลด
+             (3) ล็อคแม่แบ่งกรุ๊ปย่อยจนหมด แต่ตัวเองยังขายไปอีก = จ่ายเกินจำนวนที่มี
+   อาการ 1-2 แก้ได้ด้วยการตั้งตัวนับใหม่ให้ตรงใบจอง · อาการ 3 ต้องตัดสินใจเอง
+   ══════════════════════════════════════════════════════════════════════════ */
+function bkV2LockSweep(){
+  const L=(typeof SB_SEAT_LOCKS!=='undefined'?SB_SEAT_LOCKS:[]);
+  const rows=[], over=[];
+  let seatsMoved=0, seatsDead=0, seatsOver=0;
+  L.forEach(l=>{
+    const A=bkV2LockAudit(l);
+    if(A.diff>0){
+      const mv=A.claims.filter(c=>c.moved).reduce((n,c)=>n+c.qty,0);
+      const dd=A.claims.filter(c=>c.dead&&!c.moved).reduce((n,c)=>n+c.qty,0);
+      seatsMoved+=Math.min(A.diff,mv); seatsDead+=Math.max(0,A.diff-mv);
+      rows.push({ id:l.id, name:bkV2LockHolderName(l)+(l.parentId?(' · '+(l.subName||'ย่อย')):''),
+        date:bkV2LockDateOf(l)||(l.dateFrom||l.date||''), routeId:l.routeId||'',
+        qty:l.qty||0, used:A.used, live:A.live, diff:A.diff, moved:mv, dead:dd,
+        vcs:A.claims.filter(c=>c.dead).map(c=>c.vc+(c.qty>1?(' ×'+c.qty):'')+(c.moved?' (ย้ายวัน)':' (ยกเลิก)')) });
+    }
+    if(!l.parentId){
+      const kids=bkV2LockChildren(l.id);
+      if(kids.length){
+        const un=bkV2LockUnalloc(l), pu=Number(l.used)||0;
+        if(pu>un){ seatsOver+=(pu-un);
+          over.push({ id:l.id, name:bkV2LockHolderName(l), date:bkV2LockDateOf(l)||(l.dateFrom||l.date||''),
+            routeId:l.routeId||'', qty:l.qty||0, alloc:bkV2LockAllocated(l), unalloc:un, used:pu, over:pu-un }); }
+      }
+    }
+  });
+  rows.sort((a,b)=> b.diff-a.diff || String(a.date).localeCompare(String(b.date)));
+  over.sort((a,b)=> b.over-a.over || String(a.date).localeCompare(String(b.date)));
+  return { rows, over, locks:L.length, nBad:rows.length, nOver:over.length,
+           seats:rows.reduce((n,r)=>n+r.diff,0), seatsMoved, seatsDead, seatsOver };
+}
+let _bkV2SweepOpen=false;
+function bkV2LockSweepOpen(){ _bkV2SweepOpen=true; bkV2Render(); }
+function bkV2LockSweepClose(){ _bkV2SweepOpen=false; bkV2Render(); }
+function bkV2LockSweepFixAll(){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('operations')) return;
+  const S=bkV2LockSweep();
+  if(!S.nBad){ alert('ไม่มีล็อคไหนที่ตัวนับไม่ตรงกับใบจอง'); return; }
+  if(!confirm('คืนที่นั่งที่ไม่มีใบจองรออยู่ กลับเข้าล็อคทั้งหมด?\n\n'
+    +S.nBad+' ล็อค · '+S.seats+' ที่\n'
+    +'· ใบย้ายวันไปแล้ว '+S.seatsMoved+' ที่\n'
+    +'· ใบยกเลิกไปแล้ว '+S.seatsDead+' ที่\n\n'
+    +'จำนวนที่กันไว้ (qty) ไม่เปลี่ยน · แก้เฉพาะตัวนับที่ใช้ไป')) return;
+  let n=0, seats=0;
+  S.rows.forEach(r=>{ const d=bkV2LockFixUsed(r.id, true); if(d){ n++; seats+=d; } });
+  if(typeof sbSeatLocksPersist==='function') sbSeatLocksPersist();
+  alert('คืนแล้ว '+seats+' ที่ จาก '+n+' ล็อค');
+  bkV2Render();
 }
 // Sub-group create modal (inline · in the Seat Locks tab)
 let _bkV2SubModal = null;   // { parentId, name, qty, expiry, reason }
@@ -42510,12 +42590,82 @@ function bkV2RenderLocks(){
       </div>
     </div>`;
 
+  /* §lkSweep · ที่นั่งผีต้องเห็นตั้งแต่หน้าแรกของแท็บ ไม่ใช่ต้องเปิดล็อคทีละใบถึงจะรู้ */
+  const _sw=(typeof bkV2LockSweep==='function')?bkV2LockSweep():{nBad:0,nOver:0,seats:0,seatsOver:0,rows:[],over:[]};
+  const _swTot=_sw.seats+_sw.seatsOver;
+  const _swBar = (!_swTot) ? '' : `
+    <div style="margin:0 12px 10px;background:#FFF7ED;border:1px solid #FED7AA;border-radius:12px;padding:11px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="min-width:0;flex:1">
+        <div style="font-size:12.5px;font-weight:700;color:#9A3412">มีที่นั่งกันไว้เปล่า ${_swTot} ที่ · ขายไม่ได้</div>
+        <div style="font-size:10.5px;color:#B45309;line-height:1.65;margin-top:2px">
+          ${_sw.seats?`${_sw.seats} ที่ไม่มีใบจองรออยู่ใน ${_sw.nBad} ล็อค`:''}${(_sw.seats&&_sw.seatsOver)?' · ':''}${_sw.seatsOver?`${_sw.seatsOver} ที่มาจาก ${_sw.nOver} ล็อคที่แบ่งกรุ๊ปย่อยเกินจำนวนที่มี`:''}
+        </div>
+      </div>
+      <button onclick="bkV2LockSweepOpen()" style="font-family:inherit;font-size:12px;font-weight:700;color:#fff;background:#B45309;border:none;border-radius:8px;padding:8px 14px;cursor:pointer">ดูรายการ</button>
+    </div>`;
+  const _swModal = !_bkV2SweepOpen ? '' : (function(){
+    const S=_sw;
+    const th='position:sticky;top:0;background:#fff;border-bottom:1px solid var(--border-2);font-size:9.5px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.06em;text-align:left;padding:6px 10px;white-space:nowrap;z-index:2';
+    const td='border-bottom:1px solid var(--border-2);padding:7px 10px;font-size:11.5px;vertical-align:top';
+    const rws=S.rows.length?S.rows.map(r=>`<tr>
+        <td style="${td}"><b>${esc(r.name)}</b><div style="font-size:10px;color:var(--ink-soft)">${esc(r.date||'—')} · ${esc(routeName(r.routeId))}</div></td>
+        <td style="${td};text-align:center;font-family:'DM Mono',monospace">${r.used}</td>
+        <td style="${td};text-align:center;font-family:'DM Mono',monospace">${r.live}</td>
+        <td style="${td};text-align:center;font-family:'DM Mono',monospace;font-weight:700;color:#A32D2D">${r.diff}</td>
+        <td style="${td};font-size:10px;color:var(--ink-soft);line-height:1.6">${esc(r.vcs.slice(0,4).join(' · '))}${r.vcs.length>4?(' … +'+(r.vcs.length-4)):''}</td>
+      </tr>`).join(''):`<tr><td colspan="5" style="padding:16px;text-align:center;color:var(--ink-faint);font-size:11.5px">ไม่มี</td></tr>`;
+    const ovs=S.over.length?S.over.map(r=>`<tr>
+        <td style="${td}"><b>${esc(r.name)}</b><div style="font-size:10px;color:var(--ink-soft)">${esc(r.date||'—')} · ${esc(routeName(r.routeId))}</div></td>
+        <td style="${td};text-align:center;font-family:'DM Mono',monospace">${r.qty}</td>
+        <td style="${td};text-align:center;font-family:'DM Mono',monospace">${r.alloc}</td>
+        <td style="${td};text-align:center;font-family:'DM Mono',monospace">${r.used}</td>
+        <td style="${td};text-align:center;font-family:'DM Mono',monospace;font-weight:700;color:#A32D2D">${r.over}</td>
+      </tr>`).join(''):`<tr><td colspan="5" style="padding:16px;text-align:center;color:var(--ink-faint);font-size:11.5px">ไม่มี</td></tr>`;
+    return `<div onclick="bkV2LockSweepClose()" style="position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px">
+      <div onclick="event.stopPropagation()" style="background:#fff;border-radius:14px;width:760px;max-width:95vw;max-height:88vh;overflow:auto;box-shadow:0 16px 50px rgba(0,0,0,.3)">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:10px">
+          <div style="flex:1">
+            <div style="font-size:9px;font-weight:700;letter-spacing:.06em;color:#B45309;text-transform:uppercase">Seat lock sweep</div>
+            <div style="font-size:16px;font-weight:700;color:var(--ink);margin-top:2px">ที่นั่งที่กันไว้เปล่า</div>
+            <div style="font-size:11px;color:var(--ink-soft);margin-top:2px">ไล่ครบ ${S.locks} ล็อคทั้งระบบ</div>
+          </div>
+          <button onclick="bkV2LockSweepClose()" style="border:none;background:transparent;font-size:20px;color:var(--ink-soft);cursor:pointer;line-height:1">&times;</button>
+        </div>
+        <div style="padding:14px 18px">
+          <div style="font-size:11px;font-weight:700;color:#A32D2D;text-transform:uppercase;letter-spacing:.05em">1 · ตัวนับไม่ตรงกับใบจอง · ${S.nBad} ล็อค · ${S.seats} ที่</div>
+          <div style="font-size:10.5px;color:var(--ink-soft);line-height:1.7;margin:3px 0 8px">
+            ใบย้ายวันไปแล้ว <b>${S.seatsMoved}</b> ที่ · ใบยกเลิกไปแล้ว <b>${S.seatsDead}</b> ที่ ·
+            แก้ได้อัตโนมัติทั้งหมด (ตั้งตัวนับใหม่ให้ตรงใบจอง · จำนวนที่กันไว้ไม่เปลี่ยน)
+          </div>
+          <div style="border:1px solid var(--border-2);border-radius:10px;overflow:auto;max-height:34vh">
+            <table style="width:100%;border-collapse:collapse">
+              <thead><tr><th style="${th}">ล็อค</th><th style="${th};text-align:center">นับว่าใช้</th><th style="${th};text-align:center">ใบจองจริง</th><th style="${th};text-align:center">ส่วนต่าง</th><th style="${th}">ใบที่ไม่นับแล้ว</th></tr></thead>
+              <tbody>${rws}</tbody></table></div>
+          ${S.nBad?`<button onclick="bkV2LockSweepFixAll()" style="margin-top:10px;font-family:inherit;font-size:12px;font-weight:700;color:#fff;background:#B45309;border:none;border-radius:8px;padding:8px 14px;cursor:pointer">คืนที่นั่งทั้งหมด ${S.seats} ที่</button>`:''}
+
+          <div style="font-size:11px;font-weight:700;color:#A32D2D;text-transform:uppercase;letter-spacing:.05em;margin-top:18px">2 · แบ่งกรุ๊ปย่อยเกินจำนวนที่มี · ${S.nOver} ล็อค · ${S.seatsOver} ที่</div>
+          <div style="font-size:10.5px;color:var(--ink-soft);line-height:1.7;margin:3px 0 8px">
+            ล็อคแม่ขายที่นั่งไปเอง แล้วที่นั่งก้อนเดิมถูกแบ่งลงกรุ๊ปย่อยซ้ำอีก · ยอด Held จึงต่ำกว่าความจริง
+            <b>แก้อัตโนมัติไม่ได้</b> ต้องเลือกเองว่าจะย้ายใบจองไปผูกกรุ๊ปย่อย ลดจำนวนกรุ๊ปย่อยลง หรือเพิ่มที่นั่งให้ล็อค
+          </div>
+          <div style="border:1px solid var(--border-2);border-radius:10px;overflow:auto;max-height:28vh">
+            <table style="width:100%;border-collapse:collapse">
+              <thead><tr><th style="${th}">ล็อค</th><th style="${th};text-align:center">มีทั้งหมด</th><th style="${th};text-align:center">แบ่งย่อย</th><th style="${th};text-align:center">แม่ขายเอง</th><th style="${th};text-align:center">เกิน</th></tr></thead>
+              <tbody>${ovs}</tbody></table></div>
+        </div>
+        <div style="display:flex;gap:8px;padding:12px 18px;background:#fafafa;border-top:1px solid var(--border)">
+          <button onclick="bkV2LockSweepClose()" style="margin-left:auto;font-family:inherit;font-size:12px;font-weight:600;color:var(--ink-soft);background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 14px;cursor:pointer">ปิด</button>
+        </div>
+      </div>
+    </div>`;
+  })();
   return `<div class="bkv2-locks">
     <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 12px 10px">
       <div><div style="font-size:16px;font-weight:700;letter-spacing:-.01em">Seat Locks</div>
         <div style="font-size:11.5px;color:var(--ink-soft)">ที่นั่งที่กันไว้ก่อนขายเข้า pool รวม</div></div>
       <button class="bkv2-newbtn2" onclick="bkV2OpenLockModal()" style="font-size:12.5px;margin-left:auto">+ ล็อกที่นั่ง</button>
     </div>
+    ${_swBar}${_swModal}
     ${cards}
     ${todayBox}
     ${bar}
@@ -42666,6 +42816,9 @@ function bkV2LockOverlays(){
     // §lkAddAnywhere · ล็อกแบบช่วงคิดเป็นรายรอบ · ยอด "Held" คือที่นั่งต่อรอบ
     const _mBulk = (typeof bkV2LockSpansDays==='function') && bkV2LockSpansDays(mL);
     const held = bkV2LockHeldRemaining(mL), usedTot = bkV2LockUsedTotal(mL), unalloc = bkV2LockUnalloc(mL), alloc = bkV2LockAllocated(mL);
+    /* §lkOver · ที่นั่งที่ยังแบ่งลงกรุ๊ปย่อยได้จริง = ยังไม่ได้แบ่ง − ที่ล็อคแม่ขายไปเอง */
+    const _unallocDraw = (typeof bkV2LockUnallocDrawable==='function') ? bkV2LockUnallocDrawable(mL) : unalloc;
+    const _overSold = Math.max(0, (Number(mL.used)||0) - unalloc);
     const cut = bkV2LockCutoffLabel(mL);
     const rN = rid => (typeof ROUTES!=='undefined' ? (ROUTES.find(r=>r.id===rid)?.name||rid) : rid);
     const _mRg = (typeof bkV2LockRange==='function') ? bkV2LockRange(mL) : {from:'',to:''};
@@ -42761,11 +42914,20 @@ function bkV2LockOverlays(){
             <div style="margin-left:auto;text-align:right"><div style="font-size:9px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em">แบ่งย่อย / ยังไม่จัด</div><div style="font-size:14px;font-weight:700;color:var(--ink);margin-top:4px">${alloc} / <span style="color:${unalloc>0?'#A05A1A':'var(--ink-soft)'}">${unalloc}</span></div></div>
           </div>
           ${ownVc?`<div style="margin-top:10px"><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em">ดึงจากส่วนที่ยังไม่ได้แบ่ง</div>${ownVc}</div>`:''}
+          ${_overSold>0?`
+          <div style="margin-top:12px;background:#FDECEA;border:1px solid #F5C9C4;border-radius:10px;padding:10px 12px">
+            <div style="font-size:11.5px;font-weight:700;color:#A32D2D">จ่ายที่นั่งเกินไป ${_overSold} ที่</div>
+            <div style="font-size:10.5px;color:#B45309;line-height:1.7;margin-top:3px">
+              ล็อคนี้มี ${mL.qty} ที่ · แบ่งลงกรุ๊ปย่อยไปแล้ว ${alloc} ที่ (เหลือไม่ได้แบ่ง ${unalloc})
+              แต่ล็อคแม่เองขายไปแล้ว <b>${Number(mL.used)||0}</b> ที่<br>
+              รวมแล้วจ่ายออก ${alloc+(Number(mL.used)||0)} ที่จากที่มีจริง ${mL.qty} · ยอด Held จึงต่ำกว่าความจริง ${_overSold} ที่
+            </div>
+          </div>`:''}
           ${_aud.diff!==0?`
           <div style="margin-top:12px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:10px 12px">
             <div style="font-size:11.5px;font-weight:700;color:#92400E">ตัวเลขไม่ตรงกับใบจอง · ต่างกัน ${Math.abs(_aud.diff)} ที่</div>
             <div style="font-size:10.5px;color:#A16207;line-height:1.7;margin-top:3px">
-              ตัวนับบอกว่าใช้ไป <b>${_aud.used}</b> ที่ แต่ใบจองที่ยังอยู่จริงอ้างถึงแค่ <b>${_aud.live}</b> ที่${_aud.dead?` (อีก ${_aud.dead} ที่อยู่ในใบที่ยกเลิกไปแล้ว)`:''}<br>
+              ตัวนับบอกว่าใช้ไป <b>${_aud.used}</b> ที่ แต่ใบจองที่ยังอยู่จริงอ้างถึงแค่ <b>${_aud.live}</b> ที่${_aud.dead?` (อีก ${_aud.dead} ที่อยู่ในใบที่ยกเลิกหรือย้ายวันไปแล้ว)`:''}${_aud.moved?`<br>ในนั้นมี <b>${_aud.moved}</b> ที่ที่ใบจองย้ายวันไปแล้วแต่ที่นั่งยังค้างอยู่กับล็อคนี้`:''}<br>
               ที่นั่งส่วนต่างถูกกันไว้เฉย ๆ ขายไม่ได้ · กดปุ่มล่างเพื่อคืนกลับเข้าล็อก
             </div>
             <button onclick="bkV2LockFixTree('${mL.id}')" style="margin-top:8px;font-size:11.5px;font-weight:700;color:#fff;background:#B45309;border:none;border-radius:7px;padding:7px 13px;cursor:pointer;font-family:inherit">แก้ตัวเลขให้ตรงกับใบจอง</button>
@@ -42780,7 +42942,7 @@ function bkV2LockOverlays(){
         </div>
         <div style="display:flex;gap:8px;padding:12px 18px;background:#fafafa;border-top:1px solid var(--border);flex-wrap:wrap">
           ${(mL.status==='active')?`<button onclick="bkV2LockManageClose();bkV2LockAddOpen('${mL.id}')" style="font-size:12px;font-weight:700;color:#fff;background:#0F6E56;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-family:inherit">+ เพิ่มที่นั่ง</button>`:''}
-          ${(mL.status==='active'&&unalloc>0)?`<button onclick="bkV2SubOpen('${mL.id}')" style="font-size:12px;font-weight:700;color:#fff;background:#534AB7;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-family:inherit">+ กรุ๊ปย่อย</button>`:''}
+          ${(mL.status==='active'&&_unallocDraw>0)?`<button onclick="bkV2SubOpen('${mL.id}')" style="font-size:12px;font-weight:700;color:#fff;background:#534AB7;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-family:inherit">+ กรุ๊ปย่อย</button>`:''}
           ${(mL.status==='active')?`<button onclick="bkV2LockReleaseConfirm('${mL.id}')" style="font-size:12px;font-weight:700;color:#A32D2D;background:#FDECEA;border:1px solid #F5C9C4;border-radius:8px;padding:8px 14px;cursor:pointer;font-family:inherit">ปล่อย${kids.length?' (ยังไม่จัด)':''}</button>`:''}
           <button onclick="bkV2LockManageClose();bkV2SwitchTab('locks')" style="font-size:12px;font-weight:600;color:var(--ink-soft);background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 14px;cursor:pointer;font-family:inherit">ดูทั้งหมด →</button>
           <button onclick="bkV2LockManageClose()" style="margin-left:auto;font-size:12px;font-weight:600;color:var(--ink-soft);background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 14px;cursor:pointer;font-family:inherit">ปิด</button>
@@ -78259,9 +78421,32 @@ function bkV2RescheduleBooking(bookingId, opts){
   const _charge=_ctype==='full'?_total:(_ctype==='partial'?Math.max(0,Number(opts.chargeAmount)||0):0);
   const _collect=opts.collect||'invoice';
   // Move trips on `from` date → `to`; carry charter TRIPS locks with them
-  let moved=0, lockMoved=0;
+  let moved=0, lockMoved=0, lockFreed=0, lockFreedIds=[];
   (bk.trips||[]).forEach(t=>{
     if(t.date!==from) return;
+    /* §lkResched · ที่นั่งที่กันไว้ของวันเดิมต้องคืนก่อนย้าย
+       ไม่คืน = ล็อคของวันเดิมยังนับว่าใช้ไปแล้ว ที่นั่งกลายเป็นที่นั่งผี ขายไม่ได้อีกเลย
+       และตัวตรวจก็ไม่ร้อง เพราะใบจองยังไม่ถูกยกเลิก แค่ย้ายวัน */
+    if(Array.isArray(t.lockDraws) && t.lockDraws.length && typeof SB_SEAT_LOCKS!=='undefined'){
+      t.lockDraws.forEach(x=>{
+        const q=Number(x&&x.qty)||0; if(!q) return;
+        const L=SB_SEAT_LOCKS.find(y=>y.id===(x&&x.lockId)); if(!L) return;
+        if(typeof bkV2LockSpansDays==='function' && bkV2LockSpansDays(L)){
+          /* ล็อคแบบช่วง · ยอดเก็บเป็นรายวัน ต้องหักเฉพาะวันที่ย้ายออก */
+          const m=L.usedBy||(L.usedBy={});
+          m[from]=Math.max(0,(Number(m[from])||0)-q);
+          if(!m[from]) delete m[from];
+          L.used=Object.keys(m).reduce((a,k)=>a+(Number(m[k])||0),0);
+        } else {
+          L.used=Math.max(0,(Number(L.used)||0)-q);
+        }
+        if(L.status==='depleted' && typeof bkV2LockDrawable==='function' && bkV2LockDrawable(L)>0) L.status='active';
+        (L.log=L.log||[]).push({date:from, at:new Date().toISOString(), type:'resched-return',
+          qty:-q, note:'\u0e04\u0e37\u0e19\u0e08\u0e32\u0e01\u0e01\u0e32\u0e23\u0e40\u0e25\u0e37\u0e48\u0e2d\u0e19\u0e27\u0e31\u0e19 '+from+' \u2192 '+to, by:laBy()});
+        lockFreed+=q; if(lockFreedIds.indexOf(L.id)<0) lockFreedIds.push(L.id);
+      });
+      t.lockDraws=[];
+    }
     if(t.bookingMode==='charter' && t.charterBoatId && typeof TRIPS!=='undefined'){
       const op=(TRIPS[from]||{})[t.charterBoatId];
       if(op && op.charterBookingId===bookingId){
@@ -78291,6 +78476,7 @@ function bkV2RescheduleBooking(bookingId, opts){
       delete t.ops.vanCheckin; delete t.ops.pierCheckin;   // §เลื่อนวันแล้ว → ล้างผลเช็คอินของวันเดิม
     });
   }
+  if(lockFreed>0 && typeof sbSeatLocksPersist==='function') sbSeatLocksPersist();
   bk.reschedule={ fromDate:from, toDate:to, reason:_reason, chargeType:_ctype, chargeAmount:_charge, collect:(_charge>0?_collect:'none'), at:new Date().toISOString(), by:laBy() };
   bk.rebook={ from, to, reason:'manual', at:bk.reschedule.at };
   // Accounting: trip continues → its own price stands. The reschedule fee is attached to THIS booking's
@@ -78313,7 +78499,8 @@ function bkV2RescheduleBooking(bookingId, opts){
   }catch(e){ console.warn('[bkV2RescheduleBooking] accounting step failed:', e); }
   const _chargeLbl=_ctype==='full'?('Full charge ฿'+Math.round(_charge).toLocaleString()):_ctype==='partial'?('Charge ฿'+Math.round(_charge).toLocaleString()):'No charge';
   const _collLbl=_charge>0?(_collect==='invoice'?(billedTo?(' · on invoice '+billedTo):' · on booking invoice (pending)'):' · paid separately'):'';
-  if(typeof bkV2AddHistory==='function') bkV2AddHistory(bk,'reschedule','Rescheduled '+from+' → '+to+' · '+_chargeLbl+_collLbl+(_reason?' · '+_reason:''),'Reschedule');
+  if(typeof bkV2AddHistory==='function') bkV2AddHistory(bk,'reschedule','Rescheduled '+from+' → '+to+' · '+_chargeLbl+_collLbl
+    +(lockFreed?(' · คืนที่นั่งล็อค '+lockFreed+' ที่'):'')+(_reason?' · '+_reason:''),'Reschedule');
   // Persist (mirror cancel: manual write sb_bookings + trips when locks moved)
   try{
     const lsKey=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2');
@@ -78322,7 +78509,8 @@ function bkV2RescheduleBooking(bookingId, opts){
     if(lockMoved>0 && typeof TRIPS!=='undefined') obj.trips=TRIPS;
     localStorage.setItem(lsKey, JSON.stringify(obj));
   }catch(e){ console.warn('[bkV2RescheduleBooking] save failed:', e); }
-  console.log('[bkV2RescheduleBooking] '+bookingId+' '+from+' → '+to+' · '+moved+' trip(s), '+lockMoved+' charter lock(s) moved · fee '+_charge+' ('+_collect+')');
+  console.log('[bkV2RescheduleBooking] '+bookingId+' '+from+' → '+to+' · '+moved+' trip(s), '+lockMoved
+    +' charter lock(s) moved, '+lockFreed+' seat-lock seat(s) returned to '+lockFreedIds.length+' lock(s) · fee '+_charge+' ('+_collect+')');
   return true;
 }
 function bkV2DetailReschedule(bookingId){
