@@ -47232,17 +47232,27 @@ function ckPaxBreak(p){
 }
 function ckTripOn(b, date){ return ((b&&b.trips)||[]).find(function(x){ return (x.date||'')===date; }) || null; }
 // อ่านบล็อกเช็คอินของวันนั้น · kind = 'van' | 'pier'
-function ckRead(b, date, kind){ var o=(typeof bkOpsRead==='function')?bkOpsRead(b,date):((b&&b.ops)||{}); return (kind==='pier'?o.pierCheckin:o.vanCheckin)||null; }
+/* §vckSplit · บุคกิ้งที่รับหลายจุดถูกแตกเป็น ops.vanSplits[] แล้วขึ้นรถคนละคัน
+   การเช็คอินจึงต้องแยกรายคัน · kind = 'van#<i>' เก็บลง ops.vanCkS[i]
+   เก็บเป็น object map ไม่ใช่ array เพราะ _deepDiff ไล่ merge ทีละคีย์ ไม่ทับกันข้ามเครื่อง */
+function _ckSlot(kind){ var m=/^van#(\d+)$/.exec(String(kind||'')); return m?+m[1]:-1; }
+function ckRead(b, date, kind){
+  var o=(typeof bkOpsRead==='function')?bkOpsRead(b,date):((b&&b.ops)||{});
+  var si=_ckSlot(kind);
+  if(si>=0) return (o.vanCkS&&o.vanCkS[si])||null;
+  return (kind==='pier'?o.pierCheckin:o.vanCheckin)||null; }
 // §pierStage · ckStep / ckToggle / ckEvSave ต่างสร้าง object ใหม่ทั้งก้อน ถ้าไม่พกขั้น "ถึงท่า / เคลียร์"
 // มาด้วย จะหายทุกครั้งที่กด +/- (บั๊กแบบเดียวกับที่เคยทำ events หาย) — merge จากของเดิมที่จุดเดียวตรงนี้
 var CK_STAGE_KEYS=['arrivedAt','arrivedBy','clearedAt','clearedBy','reinstate'];   // §ckPierFix · reinstate ต้องไม่หายตอนกด +/- หรือเช็คอิน
 function ckWrite(b, date, kind, val){
   var o=(typeof bkOpsFor==='function')?bkOpsFor(b, (typeof bkOpsDate==='function'?bkOpsDate(b,date):date)):(b.ops=b.ops||{});
-  var prev=(kind==='pier'?o.pierCheckin:o.vanCheckin)||null;
+  var si=_ckSlot(kind);
+  var prev=(si>=0)?((o.vanCkS&&o.vanCkS[si])||null):((kind==='pier'?o.pierCheckin:o.vanCheckin)||null);
   if(prev && val && typeof val==='object'){
     CK_STAGE_KEYS.forEach(function(k){ if(val[k]===undefined && prev[k]!==undefined) val[k]=prev[k]; });
   }
-  if(kind==='pier') o.pierCheckin=val; else o.vanCheckin=val;
+  if(si>=0){ o.vanCkS=o.vanCkS||{}; o.vanCkS[si]=val; }
+  else if(kind==='pier') o.pierCheckin=val; else o.vanCheckin=val;
   return val;
 }
 // ขั้นของการเช็คอินหน้าท่า · wait → arr (ถึงท่า) → clr (ตรวจ+เก็บเงินแล้ว) → on (ขึ้นเรือ · นับเข้า manifest)
@@ -48116,6 +48126,8 @@ function ckUnitBar(groups, gkeys, kind, anchorPrefix){
 // แถวลูกค้า · ใช้ร่วม 2 หน้า (kind='van'|'pier') · extra = html คอลัมน์เพิ่ม (แทรกก่อนบล็อกเช็คอิน)
 function ckRowHtml(r, date, kind, extraHtml){
   var e=ckEsc, b=r.b, t=r.t;
+  /* §vckSplit · แถวของจุดรับย่อย · โรงแรม/โซน/จำนวนคน เป็นของจุดนั้น ไม่ใช่ของ Lead */
+  var _sp=r.sp||null;
   var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
   var agName=ag?(ag.name||ag.code||'—'):(b.channel||'walk-in');
   // บล็อกสี agency แบบเดียวกับ By-trip (เต็มช่อง ไม่ใช่ชิปเล็ก) · ใช้สีเดียวกันด้วย
@@ -48131,6 +48143,14 @@ function ckRowHtml(r, date, kind, extraHtml){
   var time=r.O.pickupTimeFinal||t.pickupTime||t.pickupFinal||'';
   var pickup=b.hotelName||b.pickup||'—';
   var pArea=b.pickupArea||(b.pickupAreaId&&typeof bkV2GetArea==='function'?((bkV2GetArea(b.pickupAreaId)||{}).name||''):'')||'';
+  if(_sp){
+    pb={ad:+_sp.ad||0, chd:+_sp.chd||0, inf:+_sp.inf||0, foc:+_sp.foc||0};
+    if(!_sp.main){
+      var _ar=(_sp.pickAreaId && typeof bkV2GetArea==='function')?(bkV2GetArea(_sp.pickAreaId)||{}):{};
+      pickup=(_sp.pickHotel||'').trim() || _ar.name || pickup;
+      pArea=_ar.name||pArea;
+    }
+  }
   var room=b.roomNo||b.room||b.roomNumber||'—';
   var phone=b.leadPhone||b.phone||b.customerPhone||'';
   var by=b.createdBy||'';
@@ -48206,6 +48226,9 @@ function renderVanCheckin(){
   var host=document.getElementById('vancheckin-host'); if(!host) return;
   var e=ckEsc, date=_vanCkDate;
   if(typeof bkV2VanGroupHeal==='function'){ try{ bkV2VanGroupHeal(date); }catch(_){} }
+  /* §vckSplit · หน้าใบงานรถ / Van Assign เรียกตัวนี้ทุกหน้า แต่หน้านี้ไม่เคยเรียก
+     บุคกิ้งที่เพิ่งเพิ่มจุดรับจึงยังไม่มี vanSplits แล้วตกไปอยู่ "ยังไม่จัดรถ" */
+  if(typeof bkV2HealAltSplits==='function'){ try{ bkV2HealAltSplits(date); }catch(_){} }
   if(typeof bkV2HealSelfArrivePickup==='function'){ try{ bkV2HealSelfArrivePickup(date); }catch(_){} }
   var zoneLbl=function(z){ return (typeof bkV2ZoneLabel==='function')?bkV2ZoneLabel(z):(z||'—'); };
   var groups={}, unassigned=[];
@@ -48217,10 +48240,29 @@ function renderVanCheckin(){
     else if(_vckFam){ var f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(t.routeId):null; if(!f||f.id!==_vckFam) return; }
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
     var z=(typeof bkV2EffZone==='function')?bkV2EffZone(b,t):(t.zone||b.pickupZone||'NoTransfer');
-    var row={b:b, t:t, O:O, z:z, priv:(typeof bkV2TripPrivateVan==='function')?bkV2TripPrivateVan(b,t):null, booked:ckBookedPax(t), ck:O.vanCheckin||null};
-    var vid=O.vanId;
-    if(vid){ var k=vid+'~'+(t.routeId||''); (groups[k]=groups[k]||{vid:vid, routeId:t.routeId||'', zone:z, rows:[]}); groups[k].rows.push(row); }
-    else if(z && z!=='NoTransfer' && z!=='NT' && !b.pickupSelf){ unassigned.push(row); }
+    var priv=(typeof bkV2TripPrivateVan==='function')?bkV2TripPrivateVan(b,t):null;
+    var need=function(zz){ return zz && zz!=='NoTransfer' && zz!=='NT' && !b.pickupSelf; };
+    var put=function(row, vid, zz){
+      if(vid){ var k=vid+'~'+(t.routeId||'');
+        (groups[k]=groups[k]||{vid:vid, routeId:t.routeId||'', zone:zz, rows:[]}); groups[k].rows.push(row); }
+      else if(need(zz)) unassigned.push(row);
+    };
+    /* §vckSplit · รับหลายจุด = ขึ้นรถคนละคัน · ต้องเป็นคนละแถว ติ๊กแยกกัน
+       ยอดคนของแต่ละแถวมาจาก split ไม่ใช่ยอดทั้งบุคกิ้ง ไม่งั้นนับซ้ำ */
+    var SP=Array.isArray(O.vanSplits)?O.vanSplits.filter(Boolean):null;
+    if(SP && SP.length>1){
+      SP.forEach(function(sp,i){
+        var zz=sp.pickZone||z;
+        var n=(typeof bkPaxSum==='function')
+          ? bkPaxSum({ad:+sp.ad||0, chd:+sp.chd||0, inf:+sp.inf||0, foc:+sp.foc||0}) : 0;
+        if(!n) n=Math.max(0,+sp.pax||0);
+        put({b:b, t:t, O:O, z:zz, priv:priv, booked:n, ck:(O.vanCkS&&O.vanCkS[i])||null,
+             si:i, sp:sp, nSplit:SP.length}, sp.vanId||'', zz);
+      });
+      return;
+    }
+    put({b:b, t:t, O:O, z:z, priv:priv, booked:ckBookedPax(t), ck:O.vanCheckin||null},
+        O.vanId || (SP&&SP[0]&&SP[0].vanId) || '', z);
   });
   var tBooked=0,tNoShow=0,tChecked=0,tRows=0;
   Object.keys(groups).forEach(function(k){ groups[k].rows.forEach(function(r){ tRows++; tBooked+=r.booked; if(r.ck&&r.ck.at){ tChecked++; tNoShow+=(r.ck.noShow||0); } }); });
@@ -48276,7 +48318,7 @@ function renderVanCheckin(){
         +(vLost>0?('<b style="color:#A32D2D;font-size:13px">'+vGo+'</b> pax <s style="color:#c2c0b7">'+vPax+'</s>'):(vPax+' pax'))
         +(vLost>0?' · <span style="color:#A32D2D;font-weight:700">หาย '+vLost+'</span>':'')+'</span>'
       +'</div></td></tr>';
-    g.rows.forEach(function(r){ bodyHtml+=ckRowHtml(r, date, 'van', ''); });
+    g.rows.forEach(function(r){ bodyHtml+=ckRowHtml(r, date, (r.si!=null?('van#'+r.si):'van'), ''); });
   });
   // §topWarn · booking ที่ยังไม่จัดรถคือของที่ต้องลงมือก่อนใคร เดิมต่อท้ายสุดของตาราง ต้องเลื่อนผ่าน
   // ทุกคันกว่าจะเจอ · ย้ายมาไว้บนสุดแทน (สร้างแยกไว้ใน warnHtml แล้วค่อยเอาไปต่อหน้า)
@@ -48333,12 +48375,23 @@ function pckClearFilters(){ _pckBoat=_pckVan=_pckArr=_pckStat=_pckQ=''; renderPi
 function pckSetQ(v){ _pckQ=String(v||''); renderPierCheckin();
   var el=document.getElementById('pck-q'); if(el){ el.focus(); try{ el.setSelectionRange(el.value.length, el.value.length); }catch(_){} } }
 
+/* §vckSplit · รถของบุคกิ้ง · พอแยกจุดรับ bkV2SyncAltPickupSplits จะย้ายรถไปไว้ใน
+   vanSplits[i].vanId แล้ว "ลบ ops.vanId ทิ้ง" (main now lives in split[0])
+   ใครยังอ่านแค่ ops.vanId จะเห็นเป็น "ยังไม่จัดรถ" ทั้งที่จัดครบแล้ว */
+function ckVanIds(O){
+  var out=[];
+  if(O && O.vanId) out.push(O.vanId);
+  if(O && Array.isArray(O.vanSplits)) O.vanSplits.forEach(function(sp){
+    if(sp && sp.vanId && out.indexOf(sp.vanId)<0) out.push(sp.vanId); });
+  return out;
+}
 // ลูกค้ามาถึงท่าได้ยังไง · PK/KL = รถเรารับ · OWN = มาเอง/รถเอเย่นต์ · NOVAN = อยู่ในโซนรับแต่ยังไม่จัดรถ
 function pckArrivalOf(r){
   var b=r.b, t=r.t;
   var z=(typeof bkV2EffZone==='function')?bkV2EffZone(b,t):((t&&t.zone)||b.pickupZone||'');
   if(b.pickupSelf || z==='NoTransfer' || z==='NT' || !z) return 'OWN';
-  return r.vanId ? (z==='KL'?'KL':'PK') : 'NOVAN';
+  var has=r.vanId || (r.vanIds&&r.vanIds.length) || ckVanIds(r.O).length;
+  return has ? (z==='KL'?'KL':'PK') : 'NOVAN';
 }
 var PCK_ARR_LBL={PK:'PK · ภูเก็ต', KL:'KL · เขาหลัก', OWN:'มาเอง / รถเอเย่นต์', NOVAN:'ยังไม่จัดรถ'};
 
@@ -51257,6 +51310,9 @@ function renderPierCheckin(){
   var host=document.getElementById('piercheckin-host'); if(!host) return;
   var e=ckEsc, date=_pckDate;
   if(typeof bkV2CharterBoatHeal==='function'){ try{ bkV2CharterBoatHeal(date); }catch(_){} }
+  /* §vckSplit · หน้านี้ก็ไม่เคยเรียก · บุคกิ้งรับหลายจุดที่ยังไม่มี vanSplits
+     จะขึ้นป้าย "ยังไม่จัดรถ" ทั้งที่จัดครบแล้ว */
+  if(typeof bkV2HealAltSplits==='function'){ try{ bkV2HealAltSplits(date); }catch(_){} }
   // §pierFilter · เก็บทุกแถวของวันก่อน (ผ่านตัวกรองเส้นทางแล้ว) → นับเลขบนชิป → ค่อยกรอง → ค่อยจัดชั้น
   // นับจาก all เสมอ ตัวเลขบนชิปจะได้ไม่กระโดดตามตัวกรองที่เพิ่งกดไป
   var all=[], ovnAll=[];
@@ -51270,6 +51326,10 @@ function renderPierCheckin(){
     var booked=ckBookedPax(t);
     var row={b:b, t:t, O:O, booked:booked, expect:pckExpected(b,date,booked), ck:O.pierCheckin||null,
              van:O.vanCheckin||null, vanId:O.vanId||'', priv:(typeof bkV2TripPrivateVan==='function')?bkV2TripPrivateVan(b,t):null};
+    /* §vckSplit · หน้าท่าทุกคนขึ้นเรือลำเดียวกัน จึงคงเป็นแถวเดียว
+       แต่ต้องรู้ว่ามีรถแล้ว และตัวกรองรถต้องจับได้ทุกคันที่บุคกิ้งนี้ใช้ */
+    row.vanIds=ckVanIds(O);
+    if(!row.vanId && row.vanIds.length) row.vanId=row.vanIds[0];
     row.bid=O.boatId||t.charterBoatId||'';
     row.arr=pckArrivalOf(row);
     row.money=pckMoney(b,date);
@@ -51303,7 +51363,7 @@ function renderPierCheckin(){
   var q=_pckQ.toLowerCase().trim();
   var keep=function(r){
     if(_pckBoat && r.bid!==_pckBoat) return false;
-    if(_pckVan && r.vanId!==_pckVan) return false;
+    if(_pckVan && r.vanId!==_pckVan && (r.vanIds||[]).indexOf(_pckVan)<0) return false;
     if(_pckArr && r.arr!==_pckArr) return false;
     if(_pckStat){
       var stg=r.stage||pckStage(r.ck);
