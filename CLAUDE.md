@@ -5,18 +5,24 @@
 
 ## 0. START HERE (new-chat orientation)
 
-**What this is:** one giant single-file web app `allotment_v2/allotment_v2.html` (~4MB / ~46k lines) for LOVE Andaman (Phuket marine tours). Runs on Railway. A logged-in prod Chrome tab already exists — use the Claude-in-Chrome tools to query live `SB_BOOKINGS` etc. to verify any data claim before asserting.
+**What this is:** one giant single-file web app `allotment_v2/allotment_v2.html` (~4MB / ~46k lines) for LOVE Andaman (Phuket marine tours). Runs on Railway, served to staff at `rsvn.loveandaman.com` (behind Cloudflare — **Rocket Loader must stay off**, it kills every inline `onclick` and looks exactly like a permissions bug). Verify any data claim against live data before asserting it: a logged-in prod Chrome tab is usually open (Claude-in-Chrome tools), but the extension is often not connected — when it isn't, query the prod Postgres directly (credentials under *Verifying what is actually live* below) instead of reasoning from the source alone.
 
 **Starting a new chat:**
 1. Do NOT dump the changelog back at the user or re-read the whole file.
 
 2. On a task: `grep` for the relevant function → read a small window → targeted `Edit` → verify.
 
-**Deploy workflow (CRITICAL — the sandbox CANNOT git-push):**
+**Deploy workflow (verified 2026-08-17):**
 - Edit → extract the main `<script>` and run `node --check` → back up to `BACKUP/`.
-- Commit + push ONLY through **GitHub Desktop via computer-use tools**: front GitHub Desktop → if on `main`, switch to branch **`backend-db-implementation`** (bring changes) → Summary → Commit → **Push origin** → switch to `main` → Branch ▸ **Merge into Current Branch** ▸ `backend-db-implementation` ▸ merge commit → **Push origin**.
-- Verify: `git ls-remote origin refs/heads/main` must equal `git rev-parse main`.
-- Prod auto-deploys from `main` (~1–2 min). `backend-db-implementation` = dev branch (relational-backend work; see `HANDOFF_2026-07-04.md`).
+- **`lk-inbox` IS production.** Railway auto-deploys it (~1–2 min), so **`git push origin lk-inbox` is a production release** — staff see the change minutes later, and its migrations run against the live database on the way. Treat every push as shipping, not as saving work. (This changed on 2026-08-12; older notes saying "pushing to lk-inbox doesn't touch prod" are obsolete.)
+- Plain git from the sandbox works — auth is configured. GitHub Desktop / computer-use is NOT needed.
+- Verify: `git ls-remote origin refs/heads/lk-inbox` must equal `git rev-parse lk-inbox`.
+- **Always `git fetch` + fast-forward before working.** Other sessions push to `lk-inbox` constantly, and a rejected push usually means someone already shipped the thing you were about to. Read their commit before re-doing the work — on 2026-08-17 an entire pier-check-in permission fix was written twice this way, and the upstream one was the better fix.
+- **Do NOT merge `lk-inbox` → `main`.** `main` is a stale snapshot (last merged 2026-08-12, ~100 commits behind) that nothing deploys from; merging would ship a hundred commits to prod in one shot. It carries one commit of its own (`7e7782e`, the 27 Jul B2C-availability COALESCE hotfix) whose fix already exists on `lk-inbox` — divergent history, not a missing fix.
+- `backend-db-implementation` is **dead** (last touched 2026-07-10, ~680 commits behind). Ignore it and `HANDOFF_2026-07-04.md`'s branch instructions.
+- **Migrations run automatically at deploy** (boot runner, since 2026-08-12) — `db/migrations/*.sql` applies on prod the moment the push lands. A `field_mapping.json` entry whose migration file is missing takes `/api/load` down entirely, so ship the mapping and the migration in the same push.
+
+**Verifying what is actually live:** don't guess from branch names — check the prod DB. Its `OPS_DATABASE_URL` is in the B2C repo's `.env` (`D:/projects/Loveandaman-Kingdom/.env`); the URL in `db/rt.cjs` is dead. App tables are in schema `operation_schemas`; **`schema_migrations` is in schema `allotment`** (the boot runner creates it unqualified, so it lands in the connection's default schema). `SELECT name, applied_at FROM allotment.schema_migrations ORDER BY applied_at` is the fastest honest answer to "what code is prod actually running" — each row is a deploy that happened. That query is how the `lk-inbox`-is-prod fact above was established on 2026-08-17 (005→018 applied 13–15 Aug, all from `lk-inbox`-only commits, while `main` had not moved since 12 Aug).
 
 **Pending (not done):** move the Booking top-tab bar onto the same row as the date stepper — user wants 3 mockups (A merge tabs+date · B tabs in day-header · C keep 2 rows, tighten). Awaiting their pick.
 
