@@ -50743,7 +50743,7 @@ function goSetupOpen(bid){
         +'<div><div class="go-lab">ผู้มีอำนาจลงนาม</div><select id="go-sign">'+sgn+'</select></div>'
       +'</div>'
       +'<div class="go-act">'
-        +'<button class="go-b2" onclick="goRegOpen(\''+e(bid)+'\')">ทะเบียนไกด์ / ตั้งค่า</button>'
+        +'<button class="go-b2" onclick="goRegOpen(\''+e(bid)+'\')" title="เพิ่ม/แก้ไกด์แล้วกลับมาที่หน้านี้">ทะเบียนไกด์</button>'
         +'<button class="go-b1" onclick="goSetupSave(\''+e(bid)+'\',1)">บันทึก + พิมพ์</button>'
         +'<button class="go-b3" onclick="goSetupSave(\''+e(bid)+'\',0)">บันทึกเฉยๆ</button>'
       +'</div>'
@@ -50922,7 +50922,7 @@ function pckBoatTabs(all){
   });
   return h+'<button class="pck-joball" onclick="pckGuideJobOrder(\'all\')" title="ใบงานไกด์ทุกลำของวันนี้ · A4 แนวนอน · 1 ลำ = 1 ใบ">&#128196;</button>'
     +'<button class="pck-joball go" onclick="goPrint(\'all\')" title="ใบสั่งงานมัคคุเทศก์ทุกลำ · A4 แนวตั้ง · 1 ลำ = 1 ใบ">&#128220;</button>'
-    +'<button class="pck-joball go2" onclick="goRegOpen(\'\')" title="ทะเบียนไกด์ · เลขที่ใบ · ผู้มีอำนาจลงนาม">&#9881;</button></div>';
+    +'</div>';
 }
 // §ovnCard · หัวกลุ่ม "รถที่พากลับ" ของบล็อกรับกลับ
 //   ขากลับไม่มีการเช็คอินรถ ตัวเลข "เช็คอินรถแล้ว x/y" ของหัวปกติจึงไม่มีความหมาย
@@ -80064,7 +80064,6 @@ function renderPierOffice(pier){
       +'<div class="po-bar">'
         +'<button class="pri">หน้าหลักเบิก-คืน</button>'
         +'<button onclick="poItemsOpen()">ทะเบียนของ</button>'
-        +'<button onclick="poStaffOpen()">พนักงานท่าเรือ</button>'
         +'<button onclick="poLedgerOpen()">ประวัติการเคลื่อนไหว</button>'
         +'<span class="sep"></span>'
         +'<button class="nav" onclick="poShift(-1)" title="วันก่อนหน้า">&#8249;</button>'
@@ -80383,7 +80382,7 @@ function poDutyOpen(bid){
       +'<div style="flex:1"><div style="font-weight:700;font-size:12.5px">'+poE(s.nick||s.name)+'</div>'
       +'<div style="font-size:11px;color:#7C8091">'+poE(s.name||'')+(s.role?(' · '+poE(s.role)):'')+(s.phone?(' · '+poE(s.phone)):'')+'</div></div></label>';
   }).join('')
-  :'<div style="color:#9A9A93;font-size:12.5px;padding:14px 0">ยังไม่มีพนักงานของท่านี้ในทะเบียน · กด "พนักงานท่าเรือ" ที่แถบด้านบนเพื่อเพิ่ม</div>';
+  :'<div style="color:#9A9A93;font-size:12.5px;padding:14px 0">ยังไม่มีพนักงานของท่านี้ในทะเบียน · เพิ่มได้ที่หน้า ตารางการทำงาน › ทะเบียนพนักงาน</div>';
   poModal('พนักงานลง '+poE(B.boat.name||bid)+' · '+poE(_poDate), body,
     poBtn('ยกเลิก','poModalClose()')+poBtn('บันทึก',"poDutySave('"+bid+"')",1), 480);
 }
@@ -81277,15 +81276,21 @@ function renderPierAtt(pier){
           +'title="เปิดให้พิมพ์แก้ ชื่อ · ชื่อเล่น · ตำแหน่ง · รหัสตั้งต้น · หมายเหตุ">'
           +(ed?'&#10003; แก้ไขอยู่ · กดเพื่อปิด':'&#9998; แก้ไข')+'</button>')
       +'<button class="gh" onclick="paRangeOpen()"'+(ro?' disabled':'')+'>วางงานเป็นช่วง</button>'
-      +'<button onclick="paSectOpen()">จัดกลุ่ม</button>'
-      +'<button onclick="paCodesOpen()">ทะเบียนรหัส</button>'
+      /* §regHub · ทะเบียนทั้งหมดของท่าอยู่ตรงนี้ที่เดียว · ชื่อขึ้นต้น "ทะเบียน" เหมือนกันหมด */
+      +'<span class="sep"></span>'
+      +'<button onclick="poStaffOpen()" title="ชื่อ · ตำแหน่ง · ท่าประจำ · รหัสตั้งต้น">ทะเบียนพนักงาน</button>'
+      +'<button onclick="goRegOpen(\'\')" title="ไกด์ · ภาษา · บทบาท · เลขที่ใบ · ผู้มีอำนาจลงนาม">ทะเบียนไกด์</button>'
+      +'<button onclick="paSectOpen()" title="หัวข้อกลุ่มในตารางนี้">ทะเบียนกลุ่ม</button>'
+      +'<button onclick="paCodesOpen()" title="รหัสงานที่ใช้ในตาราง">ทะเบียนรหัส</button>'
+      +'<button onclick="plTypesOpen()" title="ประเภทใบอนุญาตของพนักงาน">ทะเบียนประเภทใบ</button>'
+      +'<span class="sep"></span>'
       +'<button onclick="paExport()">Export CSV</button>'
       +'<button class="pri" onclick="paPrint()">พิมพ์</button>'
     +'</div>'
     +(groups.length
       ? ('<div class="pl-card" style="margin-bottom:0"><div class="pa-wrap"><table class="pa'+(ed?' ed':'')+'"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'
          +'<div class="pa-lg">'+lg+'</div></div>')
-      : '<div class="pj-empty">ยังไม่มีพนักงานของท่านี้ · เพิ่มได้ที่หน้าใบงานเรือ ปุ่ม "ทะเบียนพนักงาน"</div>');
+      : '<div class="pj-empty">ยังไม่มีพนักงานของท่านี้ · กดปุ่ม "ทะเบียนพนักงาน" ที่แถบด้านบนเพื่อเพิ่ม</div>');
 }
 function paShift(n){
   var CY=paCycle(_paDate), d=new Date(CY.from+'T12:00:00');
@@ -81981,10 +81986,9 @@ function renderPierLic(pier){
       +'<span style="font-size:11.5px;color:#6E7684">เตือนล่วงหน้า</span>'
       +'<input type="number" value="'+W+'" min="1" onchange="plSetWarn(this.value)" style="width:72px;border:1px solid #D9DDE4;border-radius:8px;padding:5px 8px;font:700 12px inherit;text-align:right"'+(ro?' disabled':'')+'>'
       +'<span style="font-size:11.5px;color:#6E7684">วัน</span>'
-      +'<button class="po-btn" onclick="poStaffOpen()">ทะเบียนพนักงาน</button>'
-      +'<button class="po-btn pri" onclick="plTypesOpen()" style="background:#16265C;border-color:#16265C;color:#fff">ทะเบียนประเภทใบ</button></div>'
+      +'</div>'
       +(staff.length?('<table class="pl-t"><thead><tr><th style="width:230px">พนักงาน</th><th style="width:120px">ตำแหน่ง</th><th>ใบที่ถือ</th><th style="width:110px"></th></tr></thead><tbody>'+rows+'</tbody></table>')
-        :'<div class="po-empty" style="padding:26px;text-align:center;color:#9BA3B0;font-size:12.5px">ยังไม่มีพนักงานของท่านี้ · กด "ทะเบียนพนักงาน" เพื่อเพิ่ม</div>')
+        :'<div class="po-empty" style="padding:26px;text-align:center;color:#9BA3B0;font-size:12.5px">ยังไม่มีพนักงานของท่านี้ · เพิ่มได้ที่หน้า ตารางการทำงาน › ทะเบียนพนักงาน</div>')
     +'</div>';
 }
 function plSetWarn(v){ var n=parseInt(v,10); if(!(n>0)) return; PIER_CFG.licWarnDays=n; poPersist(); renderPierLic(); }
@@ -83049,7 +83053,6 @@ function renderPierJob(pier){
       +'<span style="flex:1"></span>'
       +'<div class="pj-acts">'
         +'<button class="gh" onclick="pjCopyYday(\''+P.k+'\')"'+(ro?' disabled':'')+'>&#8634; คัดลอกจากเมื่อวาน</button>'
-        +'<button onclick="poStaffOpen()">ทะเบียนพนักงาน</button>'
         +'<div class="pj-wsw" title="จำนวนลำที่เห็นพร้อมกันต่อหนึ่งหน้าจอ">'
           +[3,4,5].map(function(n){ return '<button class="'+(_pjW===n?'on':'')+'" onclick="pjWide('+n+')">'+n+' ลำ</button>'; }).join('')
         +'</div>'
