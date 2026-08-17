@@ -47236,12 +47236,35 @@ function ckTripOn(b, date){ return ((b&&b.trips)||[]).find(function(x){ return (
    การเช็คอินจึงต้องแยกรายคัน · kind = 'van#<i>' เก็บลง ops.vanCkS[i]
    เก็บเป็น object map ไม่ใช่ array เพราะ _deepDiff ไล่ merge ทีละคีย์ ไม่ทับกันข้ามเครื่อง */
 function _ckSlot(kind){ var m=/^(van|pier)#(\d+)$/.exec(String(kind||'')); return m?{k:m[1], i:+m[2]}:null; }
+/* §pckSplit · 'pier#0' ต้องนับเป็นฝั่งท่า · ตัวเทียบทุกจุดต้องผ่านตัวนี้ ไม่งั้น
+   ckAfter() จะไปวาดหน้าเช็คอินรถแทน กดแล้วหน้าท่าไม่ขยับสักที (เหมือนกดไม่ติด) */
+function _ckBase(kind){ var t=String(kind||''), i=t.indexOf('#'); return i<0?t:t.slice(0,i); }
+/* จำนวนคนของจุดรับย่อยนั้น · ใช้เป็นเพดานแทนยอดทั้งใบ ไม่งั้นทุกแถวขึ้นยอดเต็มใบ */
+function _ckSplitPax(b, date, kind){
+  var sl=_ckSlot(kind); if(!sl) return null;
+  var o=(typeof bkOpsRead==='function')?bkOpsRead(b,date):((b&&b.ops)||{});
+  var sp=(Array.isArray(o.vanSplits)?o.vanSplits:[])[sl.i]; if(!sp) return null;
+  var n=(typeof bkPaxSum==='function')
+    ? bkPaxSum({ad:+sp.ad||0, chd:+sp.chd||0, inf:+sp.inf||0, foc:+sp.foc||0}) : 0;
+  return n || Math.max(0, +sp.pax||0);
+}
 function _ckBag(o, sl){ return (sl.k==='pier')?o.pierCkS:o.vanCkS; }
 function ckRead(b, date, kind){
   var o=(typeof bkOpsRead==='function')?bkOpsRead(b,date):((b&&b.ops)||{});
   var sl=_ckSlot(kind);
-  if(sl){ var bag=_ckBag(o,sl); return (bag&&bag[sl.i])||null; }
+  if(sl){ var bag=_ckBag(o,sl), v=(bag&&bag[sl.i])||null;
+    if(!v && sl.i===0) v=_ckLegacySeed(sl.k==='pier'?o.pierCheckin:o.vanCheckin);
+    return v; }
   return (kind==='pier'?o.pierCheckin:o.vanCheckin)||null; }
+/* §pckSplit · ของเดิมก่อนแยกจุดรับ · ยกเฉพาะ "เวลา/คนที่ทำ/ขั้นตอน" มาให้จุดหลัก
+   ไม่ยก actualPax/expected เพราะเพดานของจุดนั้นไม่เท่ากับยอดทั้งใบแล้ว */
+function _ckLegacySeed(L){
+  if(!L || !(L.at || L.arrivedAt || L.clearedAt)) return null;
+  return { at:L.at||null, by:L.by||null, events:(Array.isArray(L.events)?L.events:[]),
+           reasonCode:L.reasonCode||'', reasonNote:L.reasonNote||'', reasonAt:L.reasonAt||'',
+           arrivedAt:L.arrivedAt||null, arrivedBy:L.arrivedBy||null,
+           clearedAt:L.clearedAt||null, clearedBy:L.clearedBy||null };
+}
 // §pierStage · ckStep / ckToggle / ckEvSave ต่างสร้าง object ใหม่ทั้งก้อน ถ้าไม่พกขั้น "ถึงท่า / เคลียร์"
 // มาด้วย จะหายทุกครั้งที่กด +/- (บั๊กแบบเดียวกับที่เคยทำ events หาย) — merge จากของเดิมที่จุดเดียวตรงนี้
 var CK_STAGE_KEYS=['arrivedAt','arrivedBy','clearedAt','clearedBy','reinstate'];   // §ckPierFix · reinstate ต้องไม่หายตอนกด +/- หรือเช็คอิน
@@ -47482,7 +47505,7 @@ function ckReasonOpen(bkId, date, kind){
     +'<div id="ck-reason-ov" onclick="if(event.target===this)ckReasonClose()" style="position:fixed;inset:0;background:rgba(20,24,22,.42);backdrop-filter:blur(2px);z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px">'
     +'<div style="background:#fff;border-radius:16px;width:min(520px,96vw);max-height:90vh;overflow:auto;box-shadow:0 18px 50px rgba(0,0,0,.28)">'
     +'  <div style="padding:16px 20px;border-bottom:1px solid #EFECE4;display:flex;align-items:center;justify-content:space-between;gap:12px">'
-    +'    <div><div style="font-size:15px;font-weight:800;color:#15201a">เหตุผล No-show · '+(kind==='pier'?'ท่าเรือ':'รถรับ')+'</div>'
+    +'    <div><div style="font-size:15px;font-weight:800;color:#15201a">เหตุผล No-show · '+(_ckBase(kind)==='pier'?'ท่าเรือ':'รถรับ')+'</div>'
     +'    <div style="font-size:11.5px;color:#8a8a82;margin-top:2px;font-family:\'DM Mono\',monospace">'+ckEsc(vch)+' · '+ckEsc(b.leadPax||'')+' · จอง '+booked+' · ขึ้นจริง '+actual+' · <b style="color:#A32D2D">No-show '+ns+'</b></div></div>'
     +'    <button onclick="ckReasonClose()" style="background:transparent;border:none;font-size:20px;color:#9a9a92;cursor:pointer;line-height:1">&times;</button>'
     +'  </div>'
@@ -47530,7 +47553,7 @@ function ckReasonSave(){
     reasonCode:st.code, reasonNote:(noteEl?noteEl.value:st.note)||'', reasonAt:(atEl?atEl.value:st.at)||''
   });
   ckPersist(); ckReasonClose();
-  if(st.kind==='pier'){ if(typeof renderPierCheckin==='function') renderPierCheckin(); }
+  if(_ckBase(st.kind)==='pier'){ if(typeof renderPierCheckin==='function') renderPierCheckin(); }
   else { if(typeof renderVanCheckin==='function') renderVanCheckin(); }
 }
 
@@ -47648,12 +47671,14 @@ function ckEvSave(){
 
 // ── ปุ่มนับ / ปุ่ม ✓ (ใช้ร่วมกันทั้ง 2 หน้า) ───────────────────────────────
 // เพดานของแต่ละด่าน · รถรับ = ยอดจอง · ท่าเรือ = ยอดที่คาดว่าจะมาถึงท่า (หักคนที่ No-show ตอนรถรับแล้ว)
-function ckCap(b, date, kind, booked){ return (kind==='pier')?pckExpected(b,date,booked):booked; }
+function ckCap(b, date, kind, booked){
+  var sp=_ckSplitPax(b,date,kind); if(sp!=null) return sp;
+  return (_ckBase(kind)==='pier')?pckExpected(b,date,booked):booked; }
 // re-render โดยไม่เด้งกลับหัวหน้า · เก็บตำแหน่ง scroll ไว้แล้วคืนหลังวาดใหม่ (แพทเทิร์นเดียวกับ vanJobsToggleSent)
 function ckAfter(kind){
   var sy=(typeof window!=='undefined')?(window.scrollY||window.pageYOffset||0):0;
   try{ if(document.activeElement && document.activeElement.blur) document.activeElement.blur(); }catch(_){}
-  if(kind==='pier'){ if(typeof renderPierCheckin==='function') renderPierCheckin(); }
+  if(_ckBase(kind)==='pier'){ if(typeof renderPierCheckin==='function') renderPierCheckin(); }
   else { if(typeof renderVanCheckin==='function') renderVanCheckin(); }
   try{ window.scrollTo(0, sy); }catch(_){}
 }
@@ -47687,7 +47712,7 @@ function ckTimeState(timeStr, date, checked){
 function ckMinLbl(m){ m=Math.max(0,m|0); if(m<60) return m+' น.'; var h=Math.floor(m/60), r=m%60; return h+' ชม.'+(r?(' '+r+' น.'):''); }
 function ckTimeChip(st, timeStr, kind){
   var e=ckEsc, lbl=e(timeStr||'—');
-  var verb=(kind==='pier')?'ขึ้นเรือ':'ขึ้นรถ';
+  var verb=(_ckBase(kind)==='pier')?'ขึ้นเรือ':'ขึ้นรถ';
   if(st.k==='done') return '<span class="ck-tm ck-tm-done" title="'+verb+'แล้ว">'+lbl+'</span>';
   if(st.k==='miss') return '<span class="ck-tm ck-tm-miss" title="เลยเวลารับมา '+ckMinLbl(st.mins)+' · ยังไม่ได้เช็คอิน">'+lbl+'<b>ยังไม่เช็คอิน</b></span>';
   if(st.k==='late') return '<span class="ck-tm ck-tm-late" title="เลยเวลารับมา '+ckMinLbl(st.mins)+' · ยังไม่'+verb+'">'+lbl+'<b>เลย '+ckMinLbl(st.mins)+'</b></span>';
@@ -47773,7 +47798,7 @@ function ckToggle(bkId, date, kind){
   var t=ckTripOn(b,date)||{}, booked=ckBookedPax(t), cap=ckCap(b,date,kind,booked);
   var cur=ckRead(b,date,kind)||{};
   // §pierPay · จะติ๊กขึ้นเรือทั้งที่ยังค้างเงิน → เตือนก่อน · ไม่บล็อก (เรือรอไม่ได้) แต่ต้องเป็นการตัดสินใจข้าม ไม่ใช่ลืม
-  if(kind==='pier' && !cur.at && typeof pckPayGuard==='function' && pckPayGuard(bkId, date)) return;
+  if(_ckBase(kind)==='pier' && !cur.at && typeof pckPayGuard==='function' && pckPayGuard(bkId, date)) return;
   if(cur.at){   // กดซ้ำ = ยกเลิกการเช็คอิน (ค่าที่นับไว้ยังอยู่)
     ckWrite(b,date,kind,{actualPax:(cur.actualPax!=null?cur.actualPax:cap), noShow:(cur.noShow!=null?cur.noShow:0), expected:(cur.expected!=null?cur.expected:cap), at:null, by:null,
       events:(Array.isArray(cur.events)?cur.events:[]),
@@ -48261,7 +48286,8 @@ function renderVanCheckin(){
         var n=(typeof bkPaxSum==='function')
           ? bkPaxSum({ad:+sp.ad||0, chd:+sp.chd||0, inf:+sp.inf||0, foc:+sp.foc||0}) : 0;
         if(!n) n=Math.max(0,+sp.pax||0);
-        put({b:b, t:t, O:O, z:zz, priv:priv, booked:n, ck:(O.vanCkS&&O.vanCkS[i])||null,
+        put({b:b, t:t, O:O, z:zz, priv:priv, booked:n,
+             ck:(O.vanCkS&&O.vanCkS[i])||(i===0?_ckLegacySeed(O.vanCheckin):null),
              si:i, sp:sp, nSplit:SP.length}, sp.vanId||'', zz);
       });
       return;
@@ -49268,7 +49294,7 @@ function pckExpandVanSplits(row, b, date, out){
     r2.vsIdx=i; r2.vsN=sp.length; r2.vsPaxBd=pb; r2.vsp=x;
     r2.booked=np; r2.expect=Math.max(0,np-take);
     r2.vanId=x.vanId||'';
-    r2.ck=(O.pierCkS&&O.pierCkS[i])||null;
+    r2.ck=(O.pierCkS&&O.pierCkS[i])||(i===0?_ckLegacySeed(O.pierCheckin):null);
     r2._ckKind='pier#'+i;
     if(!x.main){
       var ar=(x.pickAreaId && typeof bkV2GetArea==='function')?(bkV2GetArea(x.pickAreaId)||{}):{};
@@ -49664,7 +49690,9 @@ function pckRowHtml(r, date){
   var agName=ag?(ag.name||ag.code||'—'):(b.channel||'walk-in');
   var agColor=(b.agentId&&typeof bkV2AgentColor==='function')?bkV2AgentColor(b.agentId):((ag&&ag.color)||'#64748B');
   var agInk=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(agColor):'#fff';
-  var pb=(r.bsN&&r.bsPaxBd)?r.bsPaxBd:ckPaxBreak(t.pax);   // §boatSplit · แถวของลำไหน นับของลำนั้น
+  /* §boatSplit แถวของลำไหน นับของลำนั้น · §pckSplit แถวของจุดรับไหน นับของจุดนั้น
+     เดิมตกกรณี vsPaxBd ทั้งสองแถวจึงโชว์ยอดเต็มใบเหมือนกัน */
+  var pb=(r.bsN&&r.bsPaxBd)?r.bsPaxBd:((r.vsN&&r.vsPaxBd)?r.vsPaxBd:ckPaxBreak(t.pax));   // §boatSplit · แถวของลำไหน นับของลำนั้น
   var time=r.O.pickupTimeFinal||t.pickupTime||t.pickupFinal||'';
   var pickup=b.hotelName||b.pickup||'';
   var pArea=b.pickupArea||(b.pickupAreaId&&typeof bkV2GetArea==='function'?((bkV2GetArea(b.pickupAreaId)||{}).name||''):'')||'';
@@ -49674,6 +49702,9 @@ function pckRowHtml(r, date){
   var by=b.createdBy||'';
   var sreq=(typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim());
   var ck=r.ck||{};
+  /* §pckSplit · แถวจุดรับย่อยมีสถานะของตัวเอง · ปุ่มทุกตัวต้องส่ง kind ของแถวไป
+     ไม่งั้นกดแล้วไปเขียนทับ ops.pierCheckin ของทั้งใบ แถวนี้จึงไม่ขึ้นสักที */
+  var _kd=r._ckKind||'pier';
   var booked=(r.expect!=null?r.expect:r.booked);
   var actual=(ck.actualPax!=null?ck.actualPax:booked), noShow=Math.max(0,booked-actual), on=!!ck.at;
   var tally=ckEventTally(ck);
@@ -49688,7 +49719,7 @@ function pckRowHtml(r, date){
   var rsn='';
   if(noShow>0){
     var lbl=ck.reasonCode?((ck.reasonAt?ck.reasonAt+' · ':'')+ckReasonLabel(ck.reasonCode)+(ck.reasonNote?(' · '+ck.reasonNote):'')):'⚠ ใส่เหตุผล';
-    rsn='<div style="text-align:right;margin-top:4px"><button class="ck-rsn'+(ck.reasonCode?'':' ck-rsn-need')+'" onclick="event.stopPropagation();ckReasonOpen(\''+b.id+'\',\''+date+'\',\'pier\')" title="'+e(lbl)+' · คลิกแก้ไข">'+e(lbl)+'</button></div>';
+    rsn='<div style="text-align:right;margin-top:4px"><button class="ck-rsn'+(ck.reasonCode?'':' ck-rsn-need')+'" onclick="event.stopPropagation();ckReasonOpen(\''+b.id+'\',\''+date+'\',\''+_kd+'\')" title="'+e(lbl)+' · คลิกแก้ไข">'+e(lbl)+'</button></div>';
   }
   var big=function(n){ return n>0?'<b style="font-family:\'DM Mono\',monospace;font-size:14px;font-weight:800">'+n+'</b>':'<span class="ck-dim" style="font-size:13px">0</span>'; };
   var px=function(k){
@@ -49733,10 +49764,10 @@ function pckRowHtml(r, date){
        +((ckVanNsPax(b,date)>0 && !(ck.events&&ck.events.length))
          ? '<button onclick="event.stopPropagation();ckPierReinstate(\''+b.id+'\',\''+date+'\',true)" title="ลูกค้าตามมาเองที่ท่า · กดเพื่อเปิดแถวนี้ให้เช็คอินได้ (บันทึกของเช็คอินรถยังอยู่)" style="border:1px solid #B7E2D2;background:#E1F5EE;color:#0F6E56;border-radius:999px;padding:5px 11px;font-size:10.5px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap">&#8617; มาแล้ว · เปิดเช็คอิน</button>'
          : '<button class="pck-undo" onclick="event.stopPropagation();ckEventUndo(\''+b.id+'\',\''+date+'\',\'pier\')" title="กดผิด? ถอนรายการล่าสุดคืน">&#8630; ถอน</button>')):(
-      '<span class="ck-stp" title="จำนวนคนที่ขึ้นเรือจริง"><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\'pier\',-1)">&minus;</button><span class="ck-n">'+actual+'</span><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\'pier\',1)">+</button></span>'
+      '<span class="ck-stp" title="จำนวนคนที่ขึ้นเรือจริง"><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\''+_kd+'\',-1)">&minus;</button><span class="ck-n">'+actual+'</span><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\'pier\',1)">+</button></span>'
      +'<span style="display:inline-flex;gap:4px"><button class="ck-ev ck-ev-ns" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'no_show\')" title="ลูกค้าไม่มา · ไม่แจ้งล่วงหน้า">No-show</button>'
      +'<button class="ck-ev ck-ev-cx" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'cxl\')" title="ลูกค้าแจ้งยกเลิกหน้างาน">CXL</button></span>'
-     +'<button class="pck-ok'+(on?'':' off')+'" onclick="event.stopPropagation();ckToggle(\''+b.id+'\',\''+date+'\',\'pier\')" title="'+e(on?('เช็คอินขึ้นเรือแล้ว · '+(ck.by||'')+' '+pckHHMM(ck.at)):'กดเพื่อเช็คอินขึ้นเรือ')+'">'
+     +'<button class="pck-ok'+(on?'':' off')+'" onclick="event.stopPropagation();ckToggle(\''+b.id+'\',\''+date+'\',\''+_kd+'\')" title="'+e(on?('เช็คอินขึ้นเรือแล้ว · '+(ck.by||'')+' '+pckHHMM(ck.at)):'กดเพื่อเช็คอินขึ้นเรือ')+'">'
        +'<span class="tk">&#10003;</span><span class="lb">'+(on?e(pckHHMM(ck.at)||'ขึ้นเรือ'):'เช็คอิน')+'</span></button>'
      ))
      +'<button onclick="event.stopPropagation();pckDetailOpen(\''+b.id+'\')" title="ดูรายละเอียดทั้งหมดของ booking นี้" style="border:1px solid #D8D4CA;background:#fff;color:#4a4a45;border-radius:999px;padding:5px 11px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">รายละเอียด</button>'
