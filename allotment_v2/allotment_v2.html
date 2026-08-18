@@ -49537,6 +49537,11 @@ function pckCardCSS(scope){ return ''
   +scope+' .pck-mbtn.note.on{border-style:solid;border-color:#EEDFAE;background:#FFF8E6;color:#7A4A00}'
   +scope+' .pck-mchip{display:inline-block;border:1px solid;border-radius:7px;padding:2px 7px;font-size:10px;font-weight:700;white-space:nowrap}'
   +scope+' .pck-mchip.pier{background:#FFF6E5;border-color:#EAD9B0;color:#8a5a12}'
+  // §pierGuide · ป้ายภาษาไกด์รายใบ · ไม่ตั้งสีก็เป็นม่วงกลาง ๆ ชุดเดียวกับป้ายไกด์ที่อื่นในระบบ
+  +scope+' .pck-gchip{display:inline-block;border:1px solid #D9CFF2;background:#F1ECFB;color:#4A2E86;'
+        +'border-radius:7px;padding:2px 7px;font-size:10px;font-weight:800;white-space:nowrap}'
+  // EN อย่างเดียวคือค่าปกติของเกือบทุกใบ · ทำให้จาง ตาจะได้ไปหยุดที่ใบที่ต้องจัดไกด์ภาษาอื่น
+  +scope+' .pck-gchip.en{background:#F6F5F1;border-color:#E4E1D9;color:#8f8e86;font-weight:700}'
   +scope+' .pck-mbtn{border:1px dashed #D8D4CA;background:#fff;color:#8a8a82;border-radius:7px;padding:2px 8px;'
         +'font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}'
   +scope+' .pck-mbtn:hover{border-color:#0F6E56;color:#0F6E56;background:#F2FAF7}'
@@ -49699,6 +49704,18 @@ function pckMealChips(b){
 }
 function pckMealCell(b, date){
   var chips = pckMealChips(b), m = b.specialMeals || {};
+  /* §pierGuide · ภาษาไกด์ของใบนี้ · อ่านจากที่เดียวกับใบงานไกด์ (pckGuideLangs)
+     ไม่ได้ตีความ notes เอง · ใบไหนติ๊กไว้ในใบจองเท่านั้นที่ขึ้น */
+  var gl=(typeof pckGuideLangs==='function')?pckGuideLangs(b):[];
+  var gHtml='';
+  if(gl.length){
+    var gc=(typeof pckGuideColorOf==='function')?pckGuideColorOf(gl):'';
+    var gInk=(gc && typeof bkV2ContrastInk==='function')?bkV2ContrastInk(gc):'';
+    var gEn=(gl.length===1 && gl[0]==='EN');   /* กติกาเดียวกับป้ายบนใบงานไกด์ */
+    gHtml='<span class="pck-gchip'+((gEn&&!gc)?' en':'')+'"'+(gc?(' style="background:'+gc+';border-color:'+gc+';color:'+gInk+'"'):'')
+      +' title="ใบนี้ขอไกด์พูด '+ckEsc(gl.join(' / '))+' &#10;สีตั้งได้ที่ปุ่ม สี Service ในแถบตัวกรอง">'
+      +'&#128483; ไกด์ '+gl.map(ckEsc).join('/')+'</span>';
+  }
   var html = chips.map(function(c){
     return '<span class="pck-mchip" style="background:' + c.bg + ';color:' + c.c + ';border-color:' + c.bd + '">' + ckEsc(c.t) + '</span>';
   }).join('');
@@ -49706,7 +49723,7 @@ function pckMealCell(b, date){
   // §pierNote · เรื่องที่ลูกค้าแจ้งที่ท่า · ข้อความอิสระ แยกจากอาหารพิเศษที่เป็นตัวเลข
   var nt=(typeof pckNoteGet==='function')?pckNoteGet(b,date):'';
   var ntHtml = nt ? ('<div class="pck-note" title="'+ckEsc(nt)+'">&#9998; '+ckEsc(nt)+'</div>') : '';
-  return '<div class="pck-mcell">' + (html || (nt?'':'<span class="ck-dim">—</span>'))
+  return '<div class="pck-mcell">' + gHtml + (html || ((nt||gHtml)?'':'<span class="ck-dim">—</span>'))
        + '<button class="pck-mbtn" onclick="event.stopPropagation();pckMealOpen(\'' + b.id + '\',\'' + date + '\')" title="เพิ่ม/แก้อาหารพิเศษหน้างาน">' + (chips.length ? '✎' : '+ อาหารพิเศษ') + '</button>'
        + '<button class="pck-mbtn note' + (nt?' on':'') + '" onclick="event.stopPropagation();pckNoteOpen(\'' + b.id + '\',\'' + date + '\')" title="โน้ตหน้างาน · เรื่องที่ลูกค้าแจ้งที่ท่า">' + (nt ? '✎ โน้ต' : '+ โน้ต') + '</button>'
        + ntHtml + '</div>';
