@@ -49562,6 +49562,12 @@ function pckCardCSS(scope){ return ''
   // §guideOrder · ใบสั่งงานมัคคุเทศก์ · เขียว แยกจากใบงานไกด์ไม่ให้กดผิดใบ
   +scope+' .pck-joball.go{margin-left:7px;background:#0F6E56;border-color:#0F6E56}'
   +scope+' .pck-joball.go2{margin-left:5px;background:#fff;border-color:#E7E4DC;color:#5F5E5A;font-size:13px}'
+  // §kitPop · ครัว · ม่วงชุดเดียวกับป้ายร้านอาหารและยอดเงินในการ์ด
+  +scope+' .pck-joball.kit{margin-left:7px;background:#5B289A;border-color:#5B289A;position:relative;overflow:visible}'
+  +scope+' .pck-joball.kit:hover{background:#4A1F80;border-color:#4A1F80}'
+  +scope+' .pck-joball .dot{position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;padding:0 3px;'
+    +'border-radius:999px;background:#B4560A;color:#fff;font:800 9.5px/16px inherit;text-align:center;'
+    +'border:2px solid #fff;box-sizing:content-box}'
   +scope+' .pck-jobbtn + .pck-jobbtn{margin-left:6px}'
   +scope+' .pck-jobbtn.go b{font-size:9px;vertical-align:2px}'
   +scope+' .pck-joball:hover{background:#15201a;border-color:#15201a}'
@@ -51218,8 +51224,19 @@ function pckBoatTabs(all){
       +'<span class="rt"'+(on?' style="color:'+ink+'"':'')+'><i style="background:'+(rt.color||'#999')+'"></i>'+e(rt.name||'—')+(dep?(' · '+e(dep)):'')+'</span>'
       +'<span class="c"'+(on?' style="color:'+ink+'"':'')+' title="ขึ้นเรือแล้ว '+a.onP+' จาก '+a.pax+' คน · '+a.on+'/'+a.n+' booking">'+a.onP+'/'+a.pax+'</span></button>';
   });
+  /* §kitPop · จำนวนลำที่มีร้านแล้วแต่ยังไม่ได้ส่งรายการ · ติดเป็นจุดส้มบนปุ่ม
+     ของเดิมแถบครัวกางอยู่ตลอด เห็นเองว่ายังไม่ส่ง · พอย้ายเข้า popup ต้องมีอะไรมาแทนการมองเห็นนั้น */
+  var kitDue=0;
+  ks.forEach(function(k){
+    try{
+      var V=(typeof mvForTrip==='function')?mvForTrip(_pckDate,k,m[k].rid):null;
+      if(V && !((taGet(_pckDate,k)||{}).meal)) kitDue++;
+    }catch(_){}
+  });
   return h+'<button class="pck-joball" onclick="pckGuideJobOrder(\'all\')" title="ใบงานไกด์ทุกลำของวันนี้ · A4 แนวนอน · 1 ลำ = 1 ใบ">&#128196;</button>'
     +'<button class="pck-joball go" onclick="goPrint(\'all\')" title="ใบสั่งงานมัคคุเทศก์ทุกลำ · A4 แนวตั้ง · 1 ลำ = 1 ใบ">&#128220;</button>'
+    +'<button class="pck-joball kit" onclick="pckKitchenOpen()" title="ครัว · อาหารกลางวันวันนี้ · จำนวนหัวนับจากคนที่ไปจริง">&#127869;'
+      +(kitDue?('<span class="dot" title="'+kitDue+' ลำยังไม่ได้ส่งรายการให้ร้าน">'+kitDue+'</span>'):'')+'</button>'
     +'</div>';
 }
 // §ovnCard · หัวกลุ่ม "รถที่พากลับ" ของบล็อกรับกลับ
@@ -51286,7 +51303,7 @@ function pckAllergyList(rows){
   });
   return Object.keys(by).map(function(k){ return {name:k, qty:by[k]}; });
 }
-function pckKitchenHtml(border, boats, date){
+function pckKitchenHtml(border, boats, date, bare){
   if(!border || !border.length) return '';
   var e=ckEsc, cards='';
   border.forEach(function(bid){
@@ -51349,9 +51366,61 @@ function pckKitchenHtml(border, boats, date){
       +'</div>';
   });
   if(!cards) return '';
+  if(bare) return cards;
   return '<div style="margin-bottom:16px">'
     +'<div style="font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#94A3B8;margin-bottom:8px">'
     +'ครัว · อาหารกลางวันวันนี้</div>'+cards+'</div>';
+}
+/* §kitPop · popup ครัว · เก็บโครงเรือของรอบวาดล่าสุดไว้ใช้ ไม่ต้องไล่ประกอบใหม่
+   ตัวเลขจึงเป็นชุดเดียวกับที่การ์ดเรือใช้เสมอ ไม่มีทางเพี้ยนคนละที่ */
+var _pckKit=null, _pckKitOpen=false;
+function pckKitchenOpen(){
+  var h=document.getElementById('pck-kit-host');
+  if(!h){ h=document.createElement('div'); h.id='pck-kit-host'; document.body.appendChild(h); }
+  _pckKitOpen=true; pckKitchenRender();
+}
+function pckKitchenClose(){
+  _pckKitOpen=false;
+  var h=document.getElementById('pck-kit-host'); if(h) h.innerHTML='';
+}
+function pckKitchenRender(){
+  var h=document.getElementById('pck-kit-host'); if(!h || !_pckKitOpen) return;
+  var e=ckEsc, K=_pckKit||{border:[],boats:{},date:_pckDate};
+  var cards=pckKitchenHtml(K.border, K.boats, K.date, true);
+  /* ยอดรวมทั้งวัน · หน้าท่าถามคำถามนี้ทุกวัน "วันนี้ค่าอาหารเท่าไหร่" */
+  var sum=0, nSent=0, nDue=0;
+  (K.border||[]).forEach(function(bid){
+    var B=K.boats[bid]; if(!B) return;
+    var rid=(B.torder||[])[0]||'';
+    var V=(typeof mvForTrip==='function')?mvForTrip(K.date,bid,rid):null; if(!V) return;
+    var C=pckMealCount(B.rows), amt=(typeof mvCost==='function')?mvCost(V,C.ad,C.chd):0;
+    sum+=(+amt||0);
+    if((taGet(K.date,bid)||{}).meal) nSent++; else nDue++;
+  });
+  h.innerHTML='<div onclick="if(event.target===this)pckKitchenClose()" style="position:fixed;inset:0;'
+   +'background:rgba(20,24,22,.42);backdrop-filter:blur(2px);z-index:9000;display:flex;align-items:center;'
+   +'justify-content:center;padding:20px;font-family:\'DM Sans\',\'Noto Sans Thai\',sans-serif">'
+   +'<div style="background:#F6F7F9;border-radius:16px;width:min(840px,96vw);max-height:90vh;display:flex;'
+     +'flex-direction:column;box-shadow:0 18px 50px rgba(0,0,0,.28)">'
+   +'<div style="padding:16px 20px;border-bottom:1px solid #E7EBF0;background:#fff;border-radius:16px 16px 0 0;'
+     +'display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">'
+     +'<div><div style="font-size:15px;font-weight:800;color:#0F172A">&#127869; ครัว · อาหารกลางวันวันนี้</div>'
+     +'<div style="font-size:11.5px;color:#94A3B8;margin-top:2px">'+e(K.date||'')
+       +' · จำนวนหัวนับจาก<b>คนที่ไปจริง</b> หลังหัก No-show แล้ว ไม่ใช่ยอดจอง</div></div>'
+     +'<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">'
+       +(nDue?('<span style="font-size:11px;font-weight:700;color:#B4560A;background:#FEF6E7;'
+              +'border:1px solid #EFD9AE;border-radius:999px;padding:3px 11px">ยังไม่ส่ง '+nDue+' ลำ</span>'):'')
+       +(nSent?('<span style="font-size:11px;font-weight:700;color:#047857;background:#ECFDF5;'
+              +'border:1px solid #BFE0CD;border-radius:999px;padding:3px 11px">ส่งแล้ว '+nSent+' ลำ</span>'):'')
+       +(sum?('<span style="font:800 17px \'DM Mono\',monospace;color:#5B289A">&#3647;'
+              +Math.round(sum).toLocaleString()+'</span>'):'')
+       +'<button onclick="pckKitchenClose()" style="background:transparent;border:none;font-size:20px;'
+         +'color:#9a9a92;cursor:pointer;line-height:1">&times;</button>'
+     +'</div></div>'
+   +'<div style="padding:16px 20px;overflow:auto;flex:1">'
+     +(cards||'<div style="font-size:12.5px;color:#94A3B8;text-align:center;padding:28px 0">'
+              +'วันนี้ยังไม่มีเรือที่ต้องสั่งอาหาร</div>')
+   +'</div></div></div>';
 }
 /* ═══ §mealSlip · ใบสั่งอาหาร ════════════════════════════════════════════════
    ภาษาไทยทั้งใบ · คนอ่านคือแม่ครัว ไม่ใช่ลูกค้า
@@ -51672,7 +51741,8 @@ function renderPierCheckin(){
 
   /* §mealTrip · แถบครัว · หัวจริงที่จะไป ไม่ใช่หัวที่จอง
      คนที่รู้ว่าใครมาไม่มาคือคนที่ยืนเช็คอินอยู่ตรงนี้ · ให้กรอกที่อื่นทีหลังจะได้ตัวเลขจอง */
-  var kitHtml=pckKitchenHtml(border, boats, date);
+  /* §kitPop · แถบครัวย้ายไปอยู่หลังปุ่มแถวใบงานไกด์แล้ว · เก็บโครงไว้ให้ popup อ่าน */
+  _pckKit={ border:border, boats:boats, date:date };
 
   var cardsHtml='';
   border.forEach(function(bid){
@@ -51843,8 +51913,9 @@ function renderPierCheckin(){
                   totalBreak:(pills.lost>0?('เดินทางจริง · จอง '+pills.booked+' หาย '+pills.lost):(pills.dA+'A·'+pills.dC+'C·'+pills.dI+'I·'+pills.dF+'F'))})
     +pckBoatTabs(all)
     +pckFilterBar(all, cnt, nHidden)
-    +kitHtml+warnHtml+cardsHtml;
+    +warnHtml+cardsHtml;
   ckSyncSticky(host); ckStartTick('piercheckin', renderPierCheckin);
+  if(_pckKitOpen) pckKitchenRender();   /* §kitPop · เปิดค้างอยู่ก็ให้ตัวเลขในหน้าต่างเดินตามหน้าจอ */
 }
 // ══ §Travel Summary (2026-07-26) · สรุปหน้างานรายวัน → ตัดสินว่าเก็บเท่าไร / เลื่อนวัน ══
 // อ่านผลจากเช็คอินรถ + เช็คอินหน้าท่า (events[] ของ ops.vanCheckin / ops.pierCheckin)
