@@ -51373,9 +51373,11 @@ function mvLunchRows(date, bid){
     var px=t.pax||{};
     var chd=Math.min(PT(px,'chd'), tot);
     var inf=Math.min(PT(px,'inf'), Math.max(0,tot-chd));
+    /* §mealFoc · FOC นับรวมกับ AD · เก็บ foc ไว้ต่างหากเพื่อบอกที่ท้ายใบว่ารวมไปกี่คน
+       ไม่ได้หายไปไหน แค่ไม่ต้องให้ครัวบวกเอง */
     var foc=Math.min(PT(px,'foc'), Math.max(0,tot-chd-inf));
-    var ad =Math.max(0, tot-chd-inf-foc);
-    if(!(ad+chd+inf+foc)) return;
+    var ad =Math.max(0, tot-chd-inf);
+    if(!(ad+chd+inf)) return;
     var sm=b.specialMeals||{}, sr=[];
     if(sm.halal) sr.push('ฮาลาล '+sm.halal);
     if(sm.veg)   sr.push('มังสวิรัติ '+sm.veg);
@@ -51466,7 +51468,7 @@ function mvOrderSlip(date, bid, V, rid){
   var body=rows.map(function(r){
     return '<tr><td class="nm">'+e(r.lead)+'</td>'
       +'<td class="n">'+(r.ad||'')+'</td><td class="n">'+(r.chd||'')+'</td>'
-      +'<td class="n">'+(r.inf||'')+'</td><td class="n">'+(r.foc||'')+'</td>'
+      +'<td class="n">'+(r.inf||'')+'</td>'
       +(r.sr ? ('<td class="sr'+(r.sr.length>40?' l':'')+'">'+e(r.sr).replace(/\n/g,'<br>')+'</td>') : '<td></td>')
       +'</tr>'; }).join('');
 
@@ -51485,12 +51487,15 @@ function mvOrderSlip(date, bid, V, rid){
      +'<tr class="crew"><td class="k">ทีมกัปตัน เด็กเรือ</td><td colspan="2">'+(nCrew||'—')+'</td>'
        +'<td colspan="2">Staff '+(stNames.length||'—')+'</td></tr>'
    +'</table>'
-   +'<table class="gs"><colgroup><col><col style="width:52px"><col style="width:52px"><col style="width:52px"><col style="width:52px"><col style="width:250px"></colgroup>'
+   +'<table class="gs"><colgroup><col><col style="width:56px"><col style="width:56px"><col style="width:56px"><col style="width:250px"></colgroup>'
      +'<thead><tr><th style="text-align:left;padding-left:10px">Customer&#39;s Name</th>'
-       +'<th>AD</th><th>CHD</th><th>INF</th><th>FOC</th><th>Special Request</th></tr></thead>'
+       +'<th>AD</th><th>CHD</th><th>INF</th><th>Special Request</th></tr></thead>'
      +'<tbody>'+body
      +'<tr class="tot"><td class="lb">Total</td><td class="n">'+T.ad+'</td><td class="n">'+T.chd+'</td>'
-       +'<td class="n">'+T.inf+'</td><td class="n">'+T.foc+'</td><td></td></tr></tbody></table>'
+       +'<td class="n">'+T.inf+'</td><td></td></tr></tbody></table>'
+   +(T.foc?('<div style="margin-top:6px;font-size:10.5px;color:#475569;font-weight:600">'
+       +'\u0e23\u0e27\u0e21 FOC '+T.foc+' \u0e04\u0e19\u0e2d\u0e22\u0e39\u0e48\u0e43\u0e19\u0e0a\u0e48\u0e2d\u0e07 AD '
+       +'\u0e41\u0e25\u0e49\u0e27 \u00b7 \u0e17\u0e33\u0e2d\u0e32\u0e2b\u0e32\u0e23\u0e40\u0e2b\u0e21\u0e37\u0e2d\u0e19\u0e1c\u0e39\u0e49\u0e43\u0e2b\u0e0d\u0e48</div>'):'')
    +'</div>';
 
   var fn=('lunch_'+bid+'_'+date).replace(/[^A-Za-z0-9_.-]+/g,'_');
