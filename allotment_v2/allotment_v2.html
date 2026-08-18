@@ -51276,9 +51276,12 @@ function pckTravelCrew(bid, date){
   for(var i=0;i<oth;i++) out.push({ name:'', pos:'ผช. ไกด์', grp:'staff' });
   return out;
 }
-/* ── ลูกค้า · หนึ่งแถวต่อหนึ่งใบจอง ชื่อซ้อนกันในช่องเดียว เหมือนใบเดิม ── */
+/* ── ลูกค้า · หนึ่งคน = หนึ่งบรรทัด ──────────────────────────────────────
+   คืน { people, pax, th, fr, over } · people เรียงตามใบจองเพื่อให้ครอบครัวอยู่ติดกัน
+   คนที่ใบจองไม่ได้พิมพ์ชื่อไว้ ยังได้บรรทัดของตัวเอง (ว่าง) ไว้ให้หน้าท่าเขียนมือ
+   ตัดบรรทัดทิ้งเลยจะทำให้จำนวนบรรทัดไม่ตรงกับยอดรวมท้ายใบ */
 function pckTravelRows(bid, date){
-  var out=[];
+  var people=[], pax=0, th=0, fr=0, over=0, list=[];
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=(typeof ckTripOn==='function')?ckTripOn(b,date):null; if(!t) return;
@@ -51291,29 +51294,41 @@ function pckTravelRows(bid, date){
     var ck=O.pierCheckin||null, ns=(ck&&ck.at)?(+ck.noShow||0):0;
     var tot=Math.max(0, ((exp!=null?exp:booked)||0)-ns);
     if(!tot) return;
-    var names=[], nats={}, natOrd=[];
-    (b.passengers||[]).forEach(function(p){
-      if(p&&p.name) names.push(String(p.name).trim());
-      var c=pckNat3(p&&p.nationality);
-      if(c && !nats[c]){ nats[c]=1; natOrd.push(c); }
-    });
-    if(!names.length && b.leadPax) names.push(String(b.leadPax).trim());
-    /* สัญชาติระดับใบจอง · ไม่มีรายคนก็ใช้ยอดไทย/ต่างชาติของใบมาบอกอย่างน้อยหนึ่งอย่าง */
+    list.push({b:b, t:t, tot:tot, vc:String(b.voucherRef||b.code||b.id||'').trim()});
+  });
+  list.sort(function(a,b){ return String(a.vc).localeCompare(String(b.vc)); });
+
+  list.forEach(function(x){
+    var b=x.b, t=x.t, tot=x.tot;
     var P=t.pax||{}, nTh=0, nFr=0;
     ['ad','chd','inf','foc'].forEach(function(k){ nTh+=(+P[k+'_th']||0); nFr+=(+P[k+'_fr']||0); });
-    if(!natOrd.length && nTh>0 && !nFr) natOrd.push('THA');
-    out.push({
-      vc: String(b.voucherRef||b.code||b.id||'').trim(),
-      names: names,
-      unnamed: Math.max(0, tot-names.length),
-      phone: String(b.leadPhone||b.phone||'').trim(),
-      nat: natOrd.join(' / '),
-      pax: tot, th:nTh, fr:nFr,
-      bid: b.id
+    /* สัดส่วนไทย/ต่างชาติมาจากใบจอง · จำนวนคนจริงมาจากการเช็คอิน
+       มีคนแจ้งไม่มา สองช่องนี้จะบวกกันเกินยอดจริง แล้วท้ายใบขัดกันเอง · เกลี่ยตามสัดส่วน */
+    var base=nTh+nFr;
+    if(base>tot){ nTh=Math.max(0, Math.min(tot, Math.round(tot*nTh/base))); nFr=tot-nTh; }
+    pax+=tot; th+=nTh; fr+=nFr;
+    /* สัญชาติสำรองระดับใบจอง · ใช้เมื่อรายคนไม่ได้กรอกไว้ */
+    var bkNat='', seen={};
+    (b.passengers||[]).forEach(function(p){ var c=pckNat3(p&&p.nationality);
+      if(c && !seen[c]){ seen[c]=1; if(!bkNat) bkNat=c; } });
+    if(!bkNat && nTh>0 && !nFr) bkNat='THA';
+
+    var nm=[];
+    (b.passengers||[]).forEach(function(p){
+      var n=String((p&&p.name)||'').trim(); if(!n) return;
+      nm.push({ name:n, nat:pckNat3(p&&p.nationality)||bkNat });
     });
+    if(!nm.length && b.leadPax) nm.push({ name:String(b.leadPax).trim(), nat:bkNat });
+    /* ชื่อมากกว่าจำนวนที่เดินทางจริง = มีคนแจ้งไม่มา · ใบต้องตรงกับคนที่อยู่บนเรือ */
+    if(nm.length>tot){ over+=(nm.length-tot); nm=nm.slice(0,tot); }
+    var phone=String(b.leadPhone||b.phone||'').trim();
+    nm.forEach(function(p,i){
+      people.push({ name:p.name, nat:p.nat||'', phone:(i===0?phone:'') });
+    });
+    /* ยังไม่ได้พิมพ์ชื่อ · เว้นบรรทัดไว้ ไม่เติมอะไรทั้งนั้น */
+    for(var k=nm.length;k<tot;k++) people.push({ name:'', nat:'', phone:'' });
   });
-  out.sort(function(a,b){ return String(a.vc).localeCompare(String(b.vc)); });
-  return out;
+  return { people:people, pax:pax, th:th, fr:fr, over:over };
 }
 function pckTravelCss(){
   return '<style id="sty">'
@@ -51346,10 +51361,7 @@ function pckTravelCss(){
   +'.gt th{background:#F3F4F6;font-weight:700;text-align:center;line-height:1.15;font-size:7.4px;padding:2px 1px}'
   +'.gt thead{display:table-header-group}'
   +'.gt tr{page-break-inside:avoid}'
-  /* เลข voucher ของบาง agent ยาว 16 หลัก · ปล่อยตัวเท่าเดิมแล้วตัดเป็นสามบรรทัด อ่านยากกว่าย่อ */
-  +'.gt td.vc{font-size:7.2px;line-height:1.2;font-family:"DM Mono",monospace;word-break:break-all}'
-  +'.gt td.vc b{font-weight:700}'
-  +'.gt td.vc i{display:block;font-style:normal;font-family:inherit;font-size:7px;color:#6B7280}'
+  +'.gt td.no{font-family:"DM Mono",monospace;font-size:8px}'
   +'.gt td{height:15px;text-align:center;vertical-align:middle;line-height:1.25}'
   +'.gt td.nm{text-align:left;padding-left:5px}'
   +'.gt td.nm span{display:block}'
@@ -51377,13 +51389,12 @@ function pckTravelSheet(bid, date){
   var rt=((typeof getRoute==='function')?getRoute(rid):null)||{};
   var dep=(typeof pckDepOf==='function')?(pckDepOf(rid)||''):'';
   var reg=String(boat.reg||'').replace(/[^0-9A-Za-z]/g,'');
-  var CR=pckTravelCrew(bid,date), RW=pckTravelRows(bid,date);
+  var CR=pckTravelCrew(bid,date), PP=pckTravelRows(bid,date);
 
   /* ── ยอดท้ายใบ ── */
   var cnt={cap:0,eng:0,crew:0,guide:0,staff:0};
   CR.forEach(function(c){ cnt[c.grp]=(cnt[c.grp]||0)+1; });
-  var nCrew=CR.length, pax=0, th=0, fr=0;
-  RW.forEach(function(r){ pax+=r.pax; th+=r.th; fr+=r.fr; });
+  var nCrew=CR.length, pax=PP.pax, th=PP.th, fr=PP.fr;
   var unspec=Math.max(0, pax-th-fr);
   /* ไม่ระบุสัญชาติ · ใบมีแค่สองช่อง จึงต้องเลือกข้าง · ลงต่างชาติแล้วบอกไว้ท้ายใบว่ากี่คน
      เงียบไว้แล้วยอดสองช่องไม่บวกกันเป็นยอดรวม คนตรวจจะสงสัยก่อน แล้วไม่รู้ว่าเพราะอะไร */
@@ -51400,7 +51411,7 @@ function pckTravelSheet(bid, date){
      +'<td class="k">จุดหมายปลายทาง</td><td colspan="4">'+e(rt.islands||rt.name||'—')+'</td></tr>'
    +'</table>';
 
-  var COL=[8.5,24,4,9.5,9,5.5,5,8,5,6.5,6,9];
+  var COL=[5.5,27,4,9.5,9,5.5,5,8,5,6.5,6,9];
   var cols='<colgroup>'+COL.map(function(w){ return '<col style="width:'+w+'%">'; }).join('')+'</colgroup>';
   var th2='<thead><tr>'
    +'<th>ลำดับที่</th><th>ชื่อ - สกุล</th><th>อายุ (ปี)</th>'
@@ -51413,22 +51424,23 @@ function pckTravelSheet(bid, date){
   var cb='';
   for(var i=0;i<Math.max(CREW_MIN,CR.length);i++){
     var c=CR[i];
-    cb+='<tr><td>'+(i+1)+'</td><td class="nm">'+(c?e(c.name):'')+'</td><td></td><td></td><td></td>'
+    /* §travelReg2 · ไม่มีชื่อ = ไม่มีข้อมูลอื่น · เหลือไว้แค่เลขลำดับกับเส้นบรรทัด */
+    cb+='<tr><td class="no">'+(i+1)+'</td><td class="nm">'+(c?e(c.name):'')+'</td><td></td><td></td><td></td>'
       +'<td>'+(c?'ไทย':'')+'</td><td></td><td>'+(c?'ภูเก็ต':'')+'</td><td>'+(c?'-':'')+'</td><td></td>'
-      +'<td>Negative</td><td>'+(c?e(c.pos):'')+'</td></tr>';
+      +'<td>'+(c?'Negative':'')+'</td><td>'+(c?e(c.pos):'')+'</td></tr>';
   }
   var pb='';
-  RW.forEach(function(r){
-    pb+='<tr><td class="vc"><b>'+e(r.vc)+'</b><i>'+r.pax+' ท่าน</i></td>'
-      +'<td class="nm">'+(r.names.map(function(x){ return '<span>'+e(x)+'</span>'; }).join('')
-         +(r.unnamed?('<em>+'+r.unnamed+' ไม่ระบุชื่อ</em>'):''))+'</td>'
+  PP.people.forEach(function(r,i){
+    var has=!!r.name;
+    pb+='<tr><td class="no">'+(i+1)+'</td><td class="nm">'+e(r.name)+'</td>'
       +'<td></td><td></td><td>'+e(r.phone)+'</td><td>'+e(r.nat)+'</td><td></td><td></td><td></td><td></td>'
-      +'<td>Negative</td><td>ลูกค้า ทั่วไป</td></tr>';
+      +'<td>'+(has?'Negative':'')+'</td><td>'+(has?'ลูกค้า ทั่วไป':'')+'</td></tr>';
   });
-  /* แถวว่างท้ายใบ · หน้าท่ามีคนเพิ่มหน้างานเสมอ เขียนมือลงไปได้เลย */
+  /* แถวว่างท้ายใบ · หน้าท่ามีคนเพิ่มหน้างานเสมอ เขียนมือลงไปได้เลย
+     ไม่ใส่เลขลำดับ ไม่ใส่อะไรทั้งนั้น · บรรทัดสุดท้ายที่มีเลขจะได้เท่ากับยอดผู้โดยสารพอดี */
   for(var q=0;q<6;q++)
     pb+='<tr><td></td><td class="nm"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>'
-      +'<td>Negative</td><td>ลูกค้า ทั่วไป</td></tr>';
+      +'<td></td><td></td></tr>';
 
   var L=function(t,n){ return '<tr><td>'+e(t)+'</td><td class="n">'+n+'</td><td>ท่าน</td></tr>'; };
   var rep=(function(){ try{ var c=goCfg(); return ((c.signers||[])[0]||{}).name||''; }catch(_){ return ''; } })();
@@ -51441,7 +51453,9 @@ function pckTravelSheet(bid, date){
     +'</table>'
     +'<div class="rep">ผู้รายงาน : '+e(rep||'&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;')+'</div></div>'
     +(unspec?('<div class="warn">ไม่ได้ระบุสัญชาติ '+unspec+' ท่าน &middot; นับรวมไว้ในช่อง'
-        +'<b>ชาวต่างชาติ</b> เพื่อให้ยอดรวมตรง &middot; แก้สัญชาติได้ที่ใบจอง</div>'):'');
+        +'<b>ชาวต่างชาติ</b> เพื่อให้ยอดรวมตรง &middot; แก้สัญชาติได้ที่ใบจอง</div>'):'')
+    +(PP.over?('<div class="warn">ใบจองมีชื่อมากกว่าจำนวนที่เดินทางจริง '+PP.over+' ท่าน &middot; '
+        +'เป็นคนที่แจ้งไม่มา &middot; ไม่ได้พิมพ์ลงใบ เพราะใบนี้ต้องตรงกับคนที่อยู่บนเรือ</div>'):'');
 
   return '<div class="sheet">'
     +'<div class="ttl">ทะเบียนรายชื่อผู้เดินทางเข้า-ออก จังหวัดภูเก็ตช่องทางน้ำ (ท่าเทียบเรือวิสิษฐ์พันวา)</div>'
