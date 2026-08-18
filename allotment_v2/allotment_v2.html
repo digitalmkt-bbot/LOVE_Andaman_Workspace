@@ -49568,6 +49568,9 @@ function pckCardCSS(scope){ return ''
   +scope+' .pck-joball.go{margin-left:7px;background:#0F6E56;border-color:#0F6E56}'
   +scope+' .pck-joball.go2{margin-left:5px;background:#fff;border-color:#E7E4DC;color:#5F5E5A;font-size:13px}'
   // §kitPop · ครัว · ม่วงชุดเดียวกับป้ายร้านอาหารและยอดเงินในการ์ด
+  // §travelReg · ใบยื่นเจ้าท่า · น้ำเงินราชการ แยกจากใบงานไกด์ดำและใบสั่งงานเขียว
+  +scope+' .pck-joball.reg{margin-left:7px;background:#1E5FA8;border-color:#1E5FA8}'
+  +scope+' .pck-joball.reg:hover{background:#174B85;border-color:#174B85}'
   +scope+' .pck-joball.kit{margin-left:7px;background:#5B289A;border-color:#5B289A;position:relative;overflow:visible}'
   +scope+' .pck-joball.kit:hover{background:#4A1F80;border-color:#4A1F80}'
   +scope+' .pck-joball .dot{position:absolute;top:-3px;right:-3px;min-width:16px;height:16px;padding:0 3px;'
@@ -51216,6 +51219,285 @@ function pckGuideJobOrder(bid){
   if(!w){ alert('เบราว์เซอร์บล็อกป๊อปอัป — อนุญาตป๊อปอัปของเว็บนี้ก่อน แล้วกดใหม่'); return; }
   w.document.open(); w.document.write(html); w.document.close(); w.focus();
 }
+/* ══════════════════════════════════════════════════════════════════════════
+   §travelReg · ทะเบียนรายชื่อผู้เดินทางเข้า-ออก จังหวัดภูเก็ตช่องทางน้ำ
+                (ท่าเทียบเรือวิสิษฐ์พันวา)
+   ใบที่ต้องยื่นเจ้าท่าทุกเที่ยว · เดิมพิมพ์จาก Excel แยกไฟล์ แล้วพิมพ์ชื่อเข้าไปเอง
+   ทั้งที่ชื่อลูกค้า ลูกเรือ ไกด์ อยู่ในระบบครบแล้วตั้งแต่ตอนจัดเรือ
+   ออกต่อจากใบสั่งงานไกด์ · ชุดคนบนใบเป็นชุดเดียวกับที่ไกด์ถือขึ้นเรือ
+   ────────────────────────────────────────────────────────────────────────
+   ช่องที่ระบบไม่มีข้อมูล (อายุ · เลขพาสปอร์ต · อุณหภูมิ · วัคซีน) เว้นว่างให้เขียนมือ
+   ดีกว่าเดาแล้วยื่นเลขที่ไม่จริงให้ราชการ
+   ══════════════════════════════════════════════════════════════════════════ */
+/* รหัสสัญชาติบนใบราชการเป็นสามตัวอักษร · ในระบบมีทั้งสองและสามตัวปนกัน */
+var PCK_NAT3={TH:'THA',CN:'CHN',RU:'RUS',US:'USA',GB:'GBR',AU:'AUS',IN:'IND',SA:'SAU',
+  KR:'KOR',TR:'TUR',KZ:'KAZ',IT:'ITA',EG:'EGY',IL:'ISR',DE:'DEU',MX:'MEX',BR:'BRA',
+  SD:'SDN',PK:'PAK',JP:'JPN',QA:'QAT',NL:'NLD',CA:'CAN',ES:'ESP',PH:'PHL',ZA:'ZAF',
+  FR:'FRA',JO:'JOR',KW:'KWT',PL:'POL',ID:'IDN',BH:'BHR',OM:'OMN',MM:'MMR',UA:'UKR',
+  LK:'LKA',BE:'BEL',SK:'SVK',NG:'NGA',MA:'MAR',NZ:'NZL',SG:'SGP',MY:'MYS',VN:'VNM',
+  HK:'HKG',TW:'TWN',AT:'AUT',CH:'CHE',SE:'SWE',NO:'NOR',DK:'DNK',FI:'FIN',IE:'IRL',
+  PT:'PRT',GR:'GRC',CZ:'CZE',HU:'HUN',RO:'ROU',AE:'UAE',IR:'IRN',IQ:'IRQ',LB:'LBN',
+  BD:'BGD',NP:'NPL',KH:'KHM',LA:'LAO',AR:'ARG',CL:'CHL',CO:'COL',PE:'PER',UZ:'UZB',
+  KG:'KGZ',TJ:'TJK',AZ:'AZE',AM:'ARM',GE:'GEO',BY:'BLR',EE:'EST',LV:'LVA',LT:'LTU',
+  BG:'BGR',HR:'HRV',RS:'SRB',SI:'SVN',SK2:'SVK',CY:'CYP',MT:'MLT',LU:'LUX',IS:'ISL'};
+function pckNat3(v){
+  var t=String(v==null?'':v).trim().toUpperCase();
+  if(!t) return '';
+  if(t.length===2) return PCK_NAT3[t]||t;
+  return t;
+}
+/* "วันพุธ 19 สิงหาคม 2026" · ปี ค.ศ. ตามที่ใบเดิมใช้ ไม่ใช่ พ.ศ. */
+function pckThaiDateCE(ymd){
+  var p=String(ymd||'').split('-'), y=+p[0], m=+p[1], d=+p[2];
+  if(!y||!m||!d) return String(ymd||'');
+  var w=-1; try{ var dt=new Date(String(ymd)+'T12:00:00'); if(!isNaN(dt)) w=dt.getDay(); }catch(_){}
+  var ML=(typeof MONTHS_TH!=='undefined')?MONTHS_TH:[];
+  var DW=(typeof PJ_DOW_TH!=='undefined')?PJ_DOW_TH:[];
+  return (w>=0?((DW[w]||'')+' '):'')+d+' '+(ML[m-1]||m)+' '+y;
+}
+/* ── ลูกเรือ + ไกด์ · อ่านจากใบงานเรือและใบสั่งงานมัคคุเทศก์ที่จัดไว้แล้ว ──
+   ตำแหน่งใช้คำเดียวกับใบเดิมที่เจ้าท่าคุ้นตา · ผู้ช่วยกัปตันในระบบคือคนถือใบช่างเครื่อง */
+function pckTravelCrew(bid, date){
+  var out=[];
+  var J=(typeof pjOf==='function')?pjOf(date,bid):null;
+  var nm=(typeof pjStaffName==='function')?pjStaffName:function(x){ return x||''; };
+  if(J){
+    if(J.cap)  out.push({ name:nm(J.cap),  pos:'กัปตัน',     grp:'cap' });
+    if(J.asst) out.push({ name:nm(J.asst), pos:'ช่างเครื่อง', grp:'eng' });
+    (J.crew||[]).forEach(function(id){ if(id) out.push({ name:nm(id), pos:'คนเรือ', grp:'crew' }); });
+    (J.island||[]).forEach(function(id){ if(id) out.push({ name:nm(id), pos:'ผช. ไกด์', grp:'staff' }); });
+  }
+  var GF=(typeof pjGuidesFull==='function')?pjGuidesFull(date,bid):[];
+  GF.forEach(function(g){
+    out.push({ name:g.name||'', pos:(g.guide?'ไกด์':'ผช. ไกด์'), grp:(g.guide?'guide':'staff') });
+  });
+  /* จำนวนคนอื่นที่ใบสั่งงานนับไว้แต่ไม่ได้ระบุชื่อ · ให้ที่ว่างไว้เขียนมือ ไม่ใช่ทำหาย */
+  var oth=(GF&&GF.other)?(+GF.other||0):0;
+  for(var i=0;i<oth;i++) out.push({ name:'', pos:'ผช. ไกด์', grp:'staff' });
+  return out;
+}
+/* ── ลูกค้า · หนึ่งแถวต่อหนึ่งใบจอง ชื่อซ้อนกันในช่องเดียว เหมือนใบเดิม ── */
+function pckTravelRows(bid, date){
+  var out=[];
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    var t=(typeof ckTripOn==='function')?ckTripOn(b,date):null; if(!t) return;
+    var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
+    if((O.boatId||t.charterBoatId||'')!==bid) return;
+    /* ปิดรายการหน้างานแล้ว = ไม่ได้ลงเรือ · ใบนี้คือรายชื่อคนที่อยู่บนเรือจริง */
+    if(typeof pckVoidInfo==='function' && pckVoidInfo(b,date,t)) return;
+    var booked=(typeof ckBookedPax==='function')?ckBookedPax(t):0;
+    var exp=(typeof pckExpected==='function')?pckExpected(b,date,booked):booked;
+    var ck=O.pierCheckin||null, ns=(ck&&ck.at)?(+ck.noShow||0):0;
+    var tot=Math.max(0, ((exp!=null?exp:booked)||0)-ns);
+    if(!tot) return;
+    var names=[], nats={}, natOrd=[];
+    (b.passengers||[]).forEach(function(p){
+      if(p&&p.name) names.push(String(p.name).trim());
+      var c=pckNat3(p&&p.nationality);
+      if(c && !nats[c]){ nats[c]=1; natOrd.push(c); }
+    });
+    if(!names.length && b.leadPax) names.push(String(b.leadPax).trim());
+    /* สัญชาติระดับใบจอง · ไม่มีรายคนก็ใช้ยอดไทย/ต่างชาติของใบมาบอกอย่างน้อยหนึ่งอย่าง */
+    var P=t.pax||{}, nTh=0, nFr=0;
+    ['ad','chd','inf','foc'].forEach(function(k){ nTh+=(+P[k+'_th']||0); nFr+=(+P[k+'_fr']||0); });
+    if(!natOrd.length && nTh>0 && !nFr) natOrd.push('THA');
+    out.push({
+      vc: String(b.voucherRef||b.code||b.id||'').trim(),
+      names: names,
+      unnamed: Math.max(0, tot-names.length),
+      phone: String(b.leadPhone||b.phone||'').trim(),
+      nat: natOrd.join(' / '),
+      pax: tot, th:nTh, fr:nFr,
+      bid: b.id
+    });
+  });
+  out.sort(function(a,b){ return String(a.vc).localeCompare(String(b.vc)); });
+  return out;
+}
+function pckTravelCss(){
+  return '<style id="sty">'
+  +'@page{size:A4 portrait;margin:7mm}'
+  +'*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}'
+  +'body{margin:0;background:#E9EBEF;font-family:"Noto Sans Thai","DM Sans",sans-serif;color:#111}'
+  +'@media screen{body{padding:18px 16px 60px}}'
+  +'.tb{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:820px;margin:0 auto 14px}'
+  +'.tb b{font-size:13px;color:#0F172A}'
+  +'.tb button{border:1px solid #E2E8F0;background:#fff;border-radius:11px;padding:8px 15px;'
+    +'font:700 12.5px inherit;color:#475569;cursor:pointer;font-family:inherit}'
+  +'.tb button.pri{background:#0F172A;border-color:#0F172A;color:#fff}'
+  +'.tb button.on{background:#0F6E56;border-color:#0F6E56;color:#fff}'
+  +'.tb .hint{font-size:11px;color:#94A3B8}'
+  +'.sheet{background:#fff;margin:0 auto 18px;padding:8px 10px 12px;border:1px solid #CBD5E1;border-radius:6px;'
+    +'max-width:820px;box-shadow:0 2px 12px rgba(15,23,42,.07)}'
+  +'@media print{body{background:#fff;padding:0}.tb{display:none}'
+    +'.sheet{max-width:none;border:0;border-radius:0;box-shadow:none;padding:0;margin:0}'
+    +'.sheet+.sheet{page-break-before:always}}'
+  +'.ttl{text-align:center;font-size:12px;font-weight:800;padding:3px 0 2px}'
+  +'.dt{text-align:center;font-size:10.5px;font-weight:700;padding-bottom:4px}'
+  +'table{border-collapse:collapse;width:100%;table-layout:fixed}'
+  +'.hd td{border:1px solid #6B7280;padding:2px 5px;font-size:9px;height:17px;vertical-align:middle}'
+  +'.hd .k{font-weight:700}'
+  +'.cb{display:inline-block;width:11px;height:11px;border:1px solid #374151;text-align:center;'
+    +'line-height:10px;font-size:9px;font-weight:800;vertical-align:-1px;margin-right:4px}'
+  +'.cb.on{background:#166534;border-color:#166534;color:#fff}'
+  +'.gt{margin-top:3px}'
+  +'.gt th,.gt td{border:1px solid #6B7280;padding:1px 3px;font-size:8px;word-break:break-word;overflow:hidden}'
+  +'.gt th{background:#F3F4F6;font-weight:700;text-align:center;line-height:1.15;font-size:7.4px;padding:2px 1px}'
+  +'.gt thead{display:table-header-group}'
+  +'.gt tr{page-break-inside:avoid}'
+  /* เลข voucher ของบาง agent ยาว 16 หลัก · ปล่อยตัวเท่าเดิมแล้วตัดเป็นสามบรรทัด อ่านยากกว่าย่อ */
+  +'.gt td.vc{font-size:7.2px;line-height:1.2;font-family:"DM Mono",monospace;word-break:break-all}'
+  +'.gt td.vc b{font-weight:700}'
+  +'.gt td.vc i{display:block;font-style:normal;font-family:inherit;font-size:7px;color:#6B7280}'
+  +'.gt td{height:15px;text-align:center;vertical-align:middle;line-height:1.25}'
+  +'.gt td.nm{text-align:left;padding-left:5px}'
+  +'.gt td.nm span{display:block}'
+  +'.gt td.nm em{font-style:normal;color:#6B7280}'
+  +'.gt tr.band td{background:#1F2937;height:11px;padding:0 6px;text-align:right;color:#fff;'
+    +'font-size:8px;font-weight:800;border-color:#1F2937}'
+  +'.sum{margin-top:6px;display:flex;gap:26px;align-items:flex-start;font-size:9px}'
+  +'.sum table{width:auto;table-layout:auto}'
+  +'.sum td{padding:1px 6px 1px 0;white-space:nowrap}'
+  +'.sum td.n{text-align:right;font-weight:700;font-family:"DM Mono",monospace;min-width:34px}'
+  +'.sum tr.tot td{font-weight:800}'
+  +'.sum tr.tot td.n{background:#FEF08A}'
+  +'.rep{margin-left:auto;font-size:9px;padding-top:2px}'
+  +'.warn{margin-top:5px;font-size:8px;color:#92400E;background:#FEF6E7;border:1px solid #EFD9AE;'
+    +'border-radius:4px;padding:3px 7px}'
+  +'</style>';
+}
+function pckTravelSheet(bid, date){
+  var e=ckEsc;
+  var boat=((typeof getBoat==='function')?getBoat(bid):null)||{};
+  var op=(typeof TRIPS!=='undefined' && TRIPS[date])?TRIPS[date][bid]:null;
+  var rid=(op&&op.route)||'';
+  if(!rid){ try{ (SB_BOOKINGS||[]).some(function(b){ var t=ckTripOn(b,date); if(!t) return false;
+      var O=bkOpsRead(b,date); if((O.boatId||t.charterBoatId)!==bid) return false; rid=t.routeId; return true; }); }catch(_){} }
+  var rt=((typeof getRoute==='function')?getRoute(rid):null)||{};
+  var dep=(typeof pckDepOf==='function')?(pckDepOf(rid)||''):'';
+  var reg=String(boat.reg||'').replace(/[^0-9A-Za-z]/g,'');
+  var CR=pckTravelCrew(bid,date), RW=pckTravelRows(bid,date);
+
+  /* ── ยอดท้ายใบ ── */
+  var cnt={cap:0,eng:0,crew:0,guide:0,staff:0};
+  CR.forEach(function(c){ cnt[c.grp]=(cnt[c.grp]||0)+1; });
+  var nCrew=CR.length, pax=0, th=0, fr=0;
+  RW.forEach(function(r){ pax+=r.pax; th+=r.th; fr+=r.fr; });
+  var unspec=Math.max(0, pax-th-fr);
+  /* ไม่ระบุสัญชาติ · ใบมีแค่สองช่อง จึงต้องเลือกข้าง · ลงต่างชาติแล้วบอกไว้ท้ายใบว่ากี่คน
+     เงียบไว้แล้วยอดสองช่องไม่บวกกันเป็นยอดรวม คนตรวจจะสงสัยก่อน แล้วไม่รู้ว่าเพราะอะไร */
+  var thai=th, forg=fr+unspec, all=nCrew+pax;
+
+  var CB=function(on){ return '<span class="cb'+(on?' on':'')+'">'+(on?'&#10003;':'&nbsp;')+'</span>'; };
+  var head='<table class="hd"><colgroup><col style="width:11%"><col style="width:27%"><col style="width:17%">'
+     +'<col style="width:13%"><col style="width:14%"><col style="width:9%"><col style="width:9%"></colgroup>'
+   +'<tr><td class="k">ชื่อเรือ</td><td>'+e(boat.name||bid)+'</td>'
+     +'<td class="k">หมายเลขทะเบียนเรือ</td><td>'+e(reg||'—')+'</td>'
+     +'<td class="k">ประเภทการเดินทาง</td>'
+     +'<td id="cOut">'+CB(1)+'ออกภูเก็ต</td><td id="cIn">'+CB(0)+'เข้าภูเก็ต</td></tr>'
+   +'<tr><td class="k">เวลาเดินเรือ</td><td>'+e(dep?(dep.replace(':','.')+' น.'):'—')+'</td>'
+     +'<td class="k">จุดหมายปลายทาง</td><td colspan="4">'+e(rt.islands||rt.name||'—')+'</td></tr>'
+   +'</table>';
+
+  var COL=[8.5,24,4,9.5,9,5.5,5,8,5,6.5,6,9];
+  var cols='<colgroup>'+COL.map(function(w){ return '<col style="width:'+w+'%">'; }).join('')+'</colgroup>';
+  var th2='<thead><tr>'
+   +'<th>ลำดับที่</th><th>ชื่อ - สกุล</th><th>อายุ (ปี)</th>'
+   +'<th>เลขบัตรประชาชน<br>Passport</th><th>เบอร์โทร</th><th>สัญชาติ</th><th>อุณหภูมิ</th>'
+   +'<th>14 วันก่อนเดินทาง<br>มาจากพื้นที่ใด</th><th>อาการ<br>เจ็บป่วย</th>'
+   +'<th>ชนิดวัคซีน<br>ยี่ห้อ / กี่โดส</th><th>ผลตรวจ<br>หาเชื้อ</th><th>ตำแหน่งในเรือ</th></tr></thead>';
+
+  var band=function(txt){ return '<tr class="band"><td colspan="12">'+e(txt||'')+'</td></tr>'; };
+  var CREW_MIN=10;
+  var cb='';
+  for(var i=0;i<Math.max(CREW_MIN,CR.length);i++){
+    var c=CR[i];
+    cb+='<tr><td>'+(i+1)+'</td><td class="nm">'+(c?e(c.name):'')+'</td><td></td><td></td><td></td>'
+      +'<td>'+(c?'ไทย':'')+'</td><td></td><td>'+(c?'ภูเก็ต':'')+'</td><td>'+(c?'-':'')+'</td><td></td>'
+      +'<td>Negative</td><td>'+(c?e(c.pos):'')+'</td></tr>';
+  }
+  var pb='';
+  RW.forEach(function(r){
+    pb+='<tr><td class="vc"><b>'+e(r.vc)+'</b><i>'+r.pax+' ท่าน</i></td>'
+      +'<td class="nm">'+(r.names.map(function(x){ return '<span>'+e(x)+'</span>'; }).join('')
+         +(r.unnamed?('<em>+'+r.unnamed+' ไม่ระบุชื่อ</em>'):''))+'</td>'
+      +'<td></td><td></td><td>'+e(r.phone)+'</td><td>'+e(r.nat)+'</td><td></td><td></td><td></td><td></td>'
+      +'<td>Negative</td><td>ลูกค้า ทั่วไป</td></tr>';
+  });
+  /* แถวว่างท้ายใบ · หน้าท่ามีคนเพิ่มหน้างานเสมอ เขียนมือลงไปได้เลย */
+  for(var q=0;q<6;q++)
+    pb+='<tr><td></td><td class="nm"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>'
+      +'<td>Negative</td><td>ลูกค้า ทั่วไป</td></tr>';
+
+  var L=function(t,n){ return '<tr><td>'+e(t)+'</td><td class="n">'+n+'</td><td>ท่าน</td></tr>'; };
+  var rep=(function(){ try{ var c=goCfg(); return ((c.signers||[])[0]||{}).name||''; }catch(_){ return ''; } })();
+  var sum='<div class="sum"><table>'
+    +L('กัปตัน',cnt.cap)+L('ช่างเครื่อง',cnt.eng)+L('คนเรือ',cnt.crew)+L('ไกด์',cnt.guide)+L('สต๊าฟ',cnt.staff)
+    +L('ชาวไทย',thai)+L('ชาวต่างชาติ',forg)
+    +'<tr class="tot"><td>จำนวนผู้เดินทางทั้งหมด</td><td class="n">'+all+'</td><td>ท่าน</td></tr>'
+    +'</table><table>'
+    +L('อาการปกติ',all)+L('กลุ่มเสี่ยงที่มีอาการป่วย',0)
+    +'</table>'
+    +'<div class="rep">ผู้รายงาน : '+e(rep||'&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;')+'</div></div>'
+    +(unspec?('<div class="warn">ไม่ได้ระบุสัญชาติ '+unspec+' ท่าน &middot; นับรวมไว้ในช่อง'
+        +'<b>ชาวต่างชาติ</b> เพื่อให้ยอดรวมตรง &middot; แก้สัญชาติได้ที่ใบจอง</div>'):'');
+
+  return '<div class="sheet">'
+    +'<div class="ttl">ทะเบียนรายชื่อผู้เดินทางเข้า-ออก จังหวัดภูเก็ตช่องทางน้ำ (ท่าเทียบเรือวิสิษฐ์พันวา)</div>'
+    +'<div class="dt">'+e(pckThaiDateCE(date))+'</div>'
+    +head
+    +'<table class="gt">'+cols+th2+'<tbody>'
+      +band('')+cb+band(boat.name||bid)+pb
+    +'</tbody></table>'+sum+'</div>';
+}
+function pckTravelReg(bid){
+  var date=_pckDate, e=ckEsc;
+  var ks=[];
+  if(bid==='all'){
+    var seen={};
+    (SB_BOOKINGS||[]).forEach(function(b){
+      if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+      var t=(typeof ckTripOn==='function')?ckTripOn(b,date):null; if(!t) return;
+      var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
+      var k=O.boatId||t.charterBoatId||''; if(!k||seen[k]) return; seen[k]=1; ks.push(k);
+    });
+    ks.sort(function(a,b){
+      var ta='',tb='';
+      try{ ta=pckDepOf(((TRIPS[date]||{})[a]||{}).route||'')||''; tb=pckDepOf(((TRIPS[date]||{})[b]||{}).route||'')||''; }catch(_){}
+      return String(ta||'99').localeCompare(String(tb||'99')) || String(pckBoatName(a)).localeCompare(String(pckBoatName(b)));
+    });
+  } else ks=[bid];
+  if(!ks.length){ alert('ยังไม่มี booking ที่จัดเรือแล้วในวันนี้ — จัดเรือก่อนถึงพิมพ์ใบทะเบียนได้'); return; }
+
+  var sheets=ks.map(function(k){ return pckTravelSheet(k,date); }).join('');
+  var ttl='ทะเบียนรายชื่อผู้เดินทาง · '+(bid==='all'?('ทุกลำ '+ks.length+' ใบ'):pckBoatName(bid))+' · '+date;
+  var html='<!doctype html><html lang="th"><head><meta charset="utf-8"><title>'+e(ttl)+'</title>'
+   +'<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600;700;800&family=DM+Mono:wght@400;700&family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet">'
+   + pckTravelCss()+'</head><body>'
+   +'<div class="tb"><b>ทะเบียนรายชื่อผู้เดินทาง</b>'
+     +'<button class="pri" onclick="window.print()">&#128424; พิมพ์ / บันทึก PDF</button>'
+     +'<button id="bOut" class="on" onclick="dir(1)">ออกภูเก็ต</button>'
+     +'<button id="bIn" onclick="dir(0)">เข้าภูเก็ต</button>'
+     +'<span class="hint">'+e(ttl)+' &middot; A4 แนวตั้ง &middot; 1 ลำ = 1 ใบ &middot; '
+       +'ช่องอายุ / พาสปอร์ต / อุณหภูมิ / วัคซีน ระบบไม่มีข้อมูล เว้นไว้เขียนมือ</span></div>'
+   + sheets
+   +'<script>function dir(o){'
+     +'document.getElementById("bOut").className=o?"on":"";'
+     +'document.getElementById("bIn").className=o?"":"on";'
+     +'Array.prototype.forEach.call(document.querySelectorAll("#cOut .cb,#cIn .cb"),function(x){});'
+     +'Array.prototype.forEach.call(document.querySelectorAll(".sheet"),function(s){'
+       +'var a=s.querySelector("#cOut .cb")||s.querySelectorAll(".cb")[0];'
+       +'var b=s.querySelectorAll(".cb")[1];'
+       +'if(a){a.className="cb"+(o?" on":"");a.innerHTML=o?"\u2713":"&nbsp;";}'
+       +'if(b){b.className="cb"+(o?"":" on");b.innerHTML=o?"&nbsp;":"\u2713";}});}<\/script>'
+   +'</body></html>';
+  var w=window.open('','_blank','width=1000,height=900');
+  if(!w){ alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ · อนุญาต pop-up ของหน้านี้ก่อน'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+  setTimeout(function(){ try{ w.focus(); }catch(_){} }, 300);
+}
+
 // แถบแท็บเรือ · ทำหน้าที่เป็นตัวกรองเรือไปในตัว (แทน select เดิมในแถบตัวกรอง)
 function pckBoatTabs(all){
   var e=ckEsc, m={}, ks=[];
@@ -51252,6 +51534,7 @@ function pckBoatTabs(all){
   });
   return h+'<button class="pck-joball" onclick="pckGuideJobOrder(\'all\')" title="ใบงานไกด์ทุกลำของวันนี้ · A4 แนวนอน · 1 ลำ = 1 ใบ">&#128196;</button>'
     +'<button class="pck-joball go" onclick="goPrint(\'all\')" title="ใบสั่งงานมัคคุเทศก์ทุกลำ · A4 แนวตั้ง · 1 ลำ = 1 ใบ">&#128220;</button>'
+    +'<button class="pck-joball reg" onclick="pckTravelReg(\'all\')" title="ทะเบียนรายชื่อผู้เดินทางเข้า-ออก จังหวัดภูเก็ตช่องทางน้ำ · ทุกลำ · A4 แนวตั้ง · 1 ลำ = 1 ใบ">&#128203;</button>'
     +'<button class="pck-joball kit" onclick="pckKitchenOpen()" title="ครัว · อาหารกลางวันวันนี้ · จำนวนหัวนับจากคนที่ไปจริง">&#127869;'
       +(kitDue?('<span class="dot" title="'+kitDue+' ลำยังไม่ได้ส่งรายการให้ร้าน">'+kitDue+'</span>'):'')+'</button>'
     +'</div>';
@@ -51793,6 +52076,8 @@ function renderPierCheckin(){
         +'<button class="pck-jobbtn go" onclick="event.stopPropagation();goSetupOpen(\''+bid+'\')" title="ใบสั่งงานมัคคุเทศก์ของลำนี้ · จ่ายไกด์แล้วพิมพ์">&#128220; ใบสั่งงาน'
           +((goAsn(_pckDate,bid).g.length)?'':' <b style="color:#B4560A">&#9679;</b>')+'</button>'
         +'<button class="pck-jobbtn" onclick="event.stopPropagation();pckGuideJobOrder(\''+bid+'\')" title="พิมพ์ใบงานไกด์ของลำนี้ · A4 แนวนอน">&#128196; ใบงานไกด์</button>'
+        /* §travelReg · ใบยื่นเจ้าท่า · ออกต่อจากใบงานไกด์ ชุดคนเดียวกัน */
+        +'<button class="pck-jobbtn" onclick="event.stopPropagation();pckTravelReg(\''+bid+'\')" title="ทะเบียนรายชื่อผู้เดินทางเข้า-ออก จังหวัดภูเก็ตช่องทางน้ำ (ท่าเทียบเรือวิสิษฐ์พันวา) · A4 แนวตั้ง">&#128203; ทะเบียนรายชื่อ</button>'
       +'</div></div>'+pckBoatMeta(B.rows.concat(B.ovn||[]), date)+'<div class="pck-bbody">';
     B.torder.forEach(function(rk){
       var T=B.trips[rk];
