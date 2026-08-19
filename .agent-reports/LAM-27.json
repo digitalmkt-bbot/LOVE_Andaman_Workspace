@@ -11,11 +11,11 @@
     "base": "refactor/booking-v2-migration",
     "branch": "agent/LAM-27-cancelled-status-constant",
     "worktree": "D:/projects/wt-sprint2b/LAM-27-cancelled-status-constant",
-    "commit": "e7d28f0487b2b51c621a89b21689bc649f7f980a",
+    "commit": "aaeaf6fbd8988b9ffcc6c6ed049fd2a3b5802fb3",
     "pr": {
-      "number": null,
-      "url": "",
-      "state": "none"
+      "number": 19,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/19",
+      "state": "open"
     }
   },
   "input": {

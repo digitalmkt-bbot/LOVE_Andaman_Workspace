@@ -111,5 +111,6 @@ None of the above were modified. If a future task wants these consolidated too, 
 - **Worktree:** `D:/projects/wt-sprint2b/LAM-27-cancelled-status-constant`
 - **HEAD at scaffold:** `e7d28f0487b2b51c621a89b21689bc649f7f980a`
 - **Merge base (recomputed against `origin/refactor/booking-v2-migration`):** `e7d28f0487b2b51c621a89b21689bc649f7f980a`
-- **PR:** see `.agent-reports/LAM-27.json` → `git.pr`
+- **Final commit:** `aaeaf6fbd8988b9ffcc6c6ed049fd2a3b5802fb3`
+- **PR:** [#19](https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/19) — `agent/LAM-27-cancelled-status-constant` → `refactor/booking-v2-migration`, state OPEN (verified via `gh pr view 19 --json number,url,title,state,baseRefName,headRefName`)
 - **Unrelated changes left untouched:** Everything outside the 4 owned files. In particular, the stale local branch ref `refactor/booking-v2-migration` (pointing at an unrelated older commit, shared across this multi-worktree repo) was left exactly as found — not force-updated, not checked out, not touched — this report simply computed its diffs against `origin/refactor/booking-v2-migration` instead.
