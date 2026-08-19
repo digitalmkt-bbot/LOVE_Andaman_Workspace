@@ -75,5 +75,5 @@ No files under `apps/web/**` were added, modified, or removed by this run — th
 - **Worktree:** `D:/projects/wt-sprint2/LAM-76-nextjs-shell`
 - **HEAD at scaffold:** `76479def2fcf182bc4d1f730fe3aff6013569f46` (after fast-forwarding to `origin/main`; started at `17a15c46429b126d6e2eda9f2ebcd6b26cb31351`)
 - **Merge base:** `76479def2fcf182bc4d1f730fe3aff6013569f46`
-- **PR:** None — will be filled in after publish.
+- **PR:** [#13](https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/13) — open; base `main`, head `agent/LAM-76-nextjs-shell`. (An older, separate LAM-76 PR, #3, is already merged into `main` from a prior run and was left untouched.)
 - **Unrelated changes left untouched:** `apps/web/**`, `docs/adr/001-nextjs-app-router.md`, `tests/legacy/**`, `SYSTEM_MAP.md`, and the `.agent-reports`/`docs/development/tasks` files for LAM-77 and LAM-79 — all already present on `main` from other merged tasks, not modified or re-staged by this run.
