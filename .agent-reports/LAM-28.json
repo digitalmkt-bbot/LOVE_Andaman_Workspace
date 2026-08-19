@@ -1,0 +1,221 @@
+{
+  "schemaVersion": 1,
+  "task": "LAM-28",
+  "title": "Make the four-registration trap loud",
+  "status": "completed",
+  "agent": {
+    "sessionId": "b62aa485-2f47-403c-a470-1fb23f7233f4",
+    "model": "claude-sonnet-5"
+  },
+  "git": {
+    "base": "refactor/booking-v2-migration",
+    "branch": "agent/LAM-28-mapping-drift-check",
+    "worktree": "D:/projects/wt-sprint2b/LAM-28-mapping-drift-check",
+    "commit": "95ebdebd005d47f360994fbedb4f703d21bd5e53",
+    "pr": {
+      "number": 16,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/16",
+      "state": "open"
+    }
+  },
+  "input": {
+    "requestedOutcome": "A new persisted field needs the persist helper, both client load paths, field_mapping.json and operation_schemas_model.json, plus a real column; miss any one and the data silently disappears. Build a drift check that fails CI when a model field has no mapping entry or a mapping entry has no column - restoring the capability of the deleted check_mapping_drift.js - plus an npm script scaffolding all registrations, and commit the ops.pierNote worked example into the repo. Source: allotment_v2/docs/workflows/07-data-persistence-api.md sections 4 and 10.5 (invariant 5).",
+    "acceptanceCriteria": [
+      "A CI-runnable drift check compares os-backend/src/mapping/field_mapping.json against os-backend/src/mapping/operation_schemas_model.json and fails when a model column has no mapping entry or a mapping entry has no matching column",
+      "The check restores the capability of the deleted os-backend/scripts/check_mapping_drift.js (removed at 094dde1) without requiring the live blob or os_repo.js the old script needed",
+      "An npm script scaffolds (prints) all four registrations for a given field so a developer has a checklist plus copy-paste snippets",
+      "The ops.pierNote worked example (already-live, two-table json_text field) is committed as documentation, not as a new persisted field",
+      "Both mapping JSON files are read-only inputs to the check; the check and this task's own edits must never modify them",
+      "A GitHub Actions workflow wires the check into PRs, alongside (not replacing or modifying) the existing ci-boot-smoke.yml (LAM-16)"
+    ],
+    "allowedScope": [
+      "tools/check-mapping-drift.mjs",
+      "tools/scaffold-registration.mjs",
+      "docs/development/four-registration-trap.md",
+      "package.json",
+      ".github/workflows/mapping-drift.yml",
+      "docs/development/tasks/LAM-28.md",
+      ".agent-reports/LAM-28.json"
+    ],
+    "constraints": [
+      "os-backend/src/mapping/field_mapping.json and operation_schemas_model.json are live persistence mappings - read and compare only, never modify",
+      "Do not edit allotment_v2/allotment_v2.html, server.js, or any SQL",
+      "Do not touch .github/workflows/ci-boot-smoke.yml (LAM-16, already on base) - add a sibling workflow file instead",
+      "Report the real drift count found against the current repo; do not tune the check to force a particular answer",
+      "Stage only the owned paths, explicitly, never git add -A / git add .",
+      "Exclusive owner of root package.json and .github/workflows/mapping-drift.yml this run"
+    ],
+    "assumptions": [
+      "docs/workflows/07 in the Jira text refers to allotment_v2/docs/workflows/07-data-persistence-api.md (verified: no docs/workflows/07* exists at repo root)",
+      "10.5 in the Jira text refers to item 5 in section 10's numbered invariant list (there is no literal heading numbered 10.5); that item is the exact four-registrations statement",
+      "The worktree was clean at start on agent/LAM-28-mapping-drift-check tracking origin/refactor/booking-v2-migration at HEAD e7d28f0"
+    ]
+  },
+  "output": {
+    "summary": "Added tools/check-mapping-drift.mjs, a static CLI that diffs os-backend/src/mapping/field_mapping.json against operation_schemas_model.json table-by-table and fails (exit 1) when a model column has no mapping entry or a mapping entry has no column, restoring the capability (not the implementation) of the deleted os-backend/scripts/check_mapping_drift.js. Wired it into a new npm script (check:mapping-drift) and a new sibling CI workflow (.github/workflows/mapping-drift.yml) that runs on PRs into refactor/booking-v2-migration and main. Added tools/scaffold-registration.mjs (npm run scaffold:registration), a print-only CLI that emits the full four-registration checklist with copy-paste field_mapping.json / operation_schemas_model.json / ALTER TABLE snippets for a given field and table set, making no file edits. Documented the trap, the check, and the scaffold tool in docs/development/four-registration-trap.md, including the already-live ops.pierNote worked example committed as documentation only. Ran the drift check against the real, current repo before writing anything else: it reports 0 drift (130 tables, all in lockstep), which is recorded honestly as the genuine finding rather than tuned toward any particular answer.",
+    "filesChanged": [
+      {
+        "path": "package.json",
+        "change": "modified",
+        "purpose": "Add check:mapping-drift and scaffold:registration npm scripts wrapping the two new tools"
+      },
+      {
+        "path": ".github/workflows/mapping-drift.yml",
+        "change": "added",
+        "purpose": "New CI workflow running npm run check:mapping-drift on PRs into refactor/booking-v2-migration and main, and on push to refactor/booking-v2-migration; sibling to, not a modification of, ci-boot-smoke.yml"
+      },
+      {
+        "path": "tools/check-mapping-drift.mjs",
+        "change": "added",
+        "purpose": "Static drift check between field_mapping.json and operation_schemas_model.json; restores the capability of the deleted check_mapping_drift.js"
+      },
+      {
+        "path": "tools/scaffold-registration.mjs",
+        "change": "added",
+        "purpose": "Print-only checklist/snippet generator for all four (plus DB column) registrations needed for a new persisted field; makes no file edits"
+      },
+      {
+        "path": "docs/development/four-registration-trap.md",
+        "change": "added",
+        "purpose": "Documents the trap, the checklist, the ops.pierNote worked example, the new CI check, and the scaffold tool"
+      },
+      {
+        "path": "docs/development/tasks/LAM-28.md",
+        "change": "modified",
+        "purpose": "Agent-change-pr I/O report for this task"
+      },
+      {
+        "path": ".agent-reports/LAM-28.json",
+        "change": "modified",
+        "purpose": "Agent-change-pr JSON manifest for this task"
+      }
+    ],
+    "behaviorChanges": [
+      {
+        "area": "Mapping-file drift detection",
+        "before": "Nothing catches a field_mapping.json / operation_schemas_model.json mismatch until a real save fails or a value silently vanishes; the deleted blob-round-trip checker that could have caught related drift was removed at 094dde1",
+        "after": "npm run check:mapping-drift (and the mapping-drift.yml CI job) statically diffs the two files on every PR and fails with a specific list of table.column drift points if they disagree"
+      },
+      {
+        "area": "Registering a new persisted field",
+        "before": "Developer re-derives the checklist (client field, persist, both loads, mapper, model, column) from the workflow doc by hand each time",
+        "after": "npm run scaffold:registration -- --client-path ... --column ... --tables ... prints the full checklist pre-filled with copy-paste JSON/DDL snippets for the given field"
+      },
+      {
+        "area": "Documentation of a correct four-registration field",
+        "before": "The ops.pierNote example lived only inside allotment_v2/docs/workflows/07-data-persistence-api.md section 4.1",
+        "after": "Same example is cross-referenced and elaborated in docs/development/four-registration-trap.md, with the scaffold-tool invocation that reproduces its checklist"
+      }
+    ],
+    "interfaces": {
+      "added": [
+        "CLI: node tools/check-mapping-drift.mjs [--mapping <path>] [--model <path>] (exit 0 = no drift, 1 = drift or read/parse failure)",
+        "CLI: node tools/scaffold-registration.mjs [--client-path ...] [--column ...] [--kind ...] [--db-type ...] [--tables a,b] [--persist-helper ...] [--load-fn ...] (print-only, exit 0 always)",
+        "npm script: check:mapping-drift",
+        "npm script: scaffold:registration"
+      ],
+      "changed": [],
+      "removed": []
+    },
+    "dataPersistence": {
+      "impact": "read-only",
+      "details": [
+        "check-mapping-drift.mjs reads os-backend/src/mapping/field_mapping.json and operation_schemas_model.json but never writes to them",
+        "scaffold-registration.mjs reads nothing and writes nothing on disk; it only prints",
+        "No SQL, server.js, or allotment_v2.html was touched; no schema or runtime persistence path changed"
+      ],
+      "migrationRequired": false
+    }
+  },
+  "verification": [
+    {
+      "command": "git status --short --branch (at task start)",
+      "status": "passed",
+      "evidence": "Clean tree on agent/LAM-28-mapping-drift-check...origin/refactor/booking-v2-migration, HEAD e7d28f0"
+    },
+    {
+      "command": "node --check tools/check-mapping-drift.mjs",
+      "status": "passed",
+      "evidence": "No syntax errors"
+    },
+    {
+      "command": "node --check tools/scaffold-registration.mjs",
+      "status": "passed",
+      "evidence": "No syntax errors"
+    },
+    {
+      "command": "node tools/check-mapping-drift.mjs",
+      "status": "passed",
+      "evidence": "Exit 0. Output: 'OK - no drift. 130 tables compared, every model column has a mapping entry and every mapping entry has a column.' Real drift count against the current repo is 0."
+    },
+    {
+      "command": "npm run check:mapping-drift",
+      "status": "passed",
+      "evidence": "Same result as the direct node invocation, run through the new npm script"
+    },
+    {
+      "command": "node tools/check-mapping-drift.mjs --mapping <scratch>/fm_drift.json --model <scratch>/om_drift.json (scratch copies with one injected bogus model column and one injected bogus mapping entry, built and deleted outside the repo)",
+      "status": "passed",
+      "evidence": "Exit 1. Correctly reported routes.zz_test_bogus_col (model field, no mapping entry) and routes.zz_test_bogus_field (mapping entry, no column); git status --short os-backend/ was empty before and after, confirming the real mapping files were never touched"
+    },
+    {
+      "command": "node tools/scaffold-registration.mjs --client-path \"ops.pierNote\" --column ops_piernote --kind json_text --db-type text --tables sb_bookings,sb_bookings__trips --persist-helper sbBookingsPersist --load-fn \"window._laReloadData\"",
+      "status": "passed",
+      "evidence": "Printed the full 8-step checklist with correct per-table field_mapping.json / operation_schemas_model.json / ALTER TABLE snippets matching the real, already-live ops_piernote entries"
+    },
+    {
+      "command": "node tools/scaffold-registration.mjs (no args, defaults)",
+      "status": "passed",
+      "evidence": "Printed a runnable template with no errors"
+    },
+    {
+      "command": "grep -na \"ops_piernote\" os-backend/src/mapping/field_mapping.json os-backend/src/mapping/operation_schemas_model.json server.js",
+      "status": "passed",
+      "evidence": "Confirmed ops_piernote (kind json_text, db_type text) exists on both sb_bookings and sb_bookings__trips in both mapping files, and server.js:1628 has the matching ALTER TABLE ... ADD COLUMN IF NOT EXISTS \"ops_piernote\" text"
+    },
+    {
+      "command": "node -e \"JSON.parse(require('fs').readFileSync('package.json','utf8'))\"",
+      "status": "passed",
+      "evidence": "package.json remains valid JSON after the edit"
+    },
+    {
+      "command": "YAML syntax check of .github/workflows/mapping-drift.yml",
+      "status": "blocked",
+      "evidence": "No yamllint/actionlint/Python+PyYAML available in this sandbox and no network to install one; verified manually instead - no tabs, consistent 2-space indentation, structure mirrors the known-good sibling .github/workflows/ci-boot-smoke.yml"
+    },
+    {
+      "command": "git status --short os-backend/ (checked after every step that touched mapping-file contents)",
+      "status": "passed",
+      "evidence": "Empty every time - the two live mapping JSON files were never modified"
+    },
+    {
+      "command": "git diff --stat origin/refactor/booking-v2-migration ; git status --short",
+      "status": "passed",
+      "evidence": "Changed/untracked set is exactly the seven owned paths: package.json (modified), .github/workflows/mapping-drift.yml, docs/development/four-registration-trap.md, docs/development/tasks/LAM-28.md, .agent-reports/LAM-28.json, tools/check-mapping-drift.mjs, tools/scaffold-registration.mjs (all added)"
+    },
+    {
+      "command": "GitHub Actions execution of .github/workflows/mapping-drift.yml against a real PR/runner",
+      "status": "not_run",
+      "evidence": "No network/CI runner available in this sandbox; the workflow's only step was verified locally via npm run check:mapping-drift instead"
+    }
+  ],
+  "decisions": [
+    "Compare field_mapping.json and operation_schemas_model.json directly against each other (table-by-table, field-name-by-column-name) rather than reimplementing the deleted script's live-blob decompose/assemble round-trip, which needs os_repo.js and a real sample blob; the two JSON files are self-contained, static, and are exactly the two of the four registrations that section 10 invariant 5 calls out as mechanically checkable",
+    "scaffold-registration.mjs never writes to field_mapping.json or operation_schemas_model.json - it only prints - because the task forbids editing those files and an auto-mutating script on a live persistence mapping is the class of over-eager automation CLAUDE.md section 4 warns against",
+    "Ran the drift check against the real, current repo before writing any other artifact, per the task's instruction not to tune the check until it reports zero; it reported 0 drift immediately, documented honestly as the genuine finding rather than adjusted or hidden",
+    "New CI workflow is a sibling file (mapping-drift.yml), not an edit to the existing ci-boot-smoke.yml, per the task's explicit instruction to leave that file alone"
+  ],
+  "risks": [
+    "The drift check cannot see the other three registrations (persist helper, both client load paths) - those are structural JavaScript inside allotment_v2.html, not tabular data; this is called out explicitly in the new doc so mapping-drift CI passing is not mistaken for all four registrations being correct",
+    "mapping-drift.yml's actual GitHub Actions execution was not verified end-to-end (no CI runner/network in this sandbox) - only its single npm run check:mapping-drift step was verified locally, and its YAML was checked by hand rather than with a linter"
+  ],
+  "blockers": [],
+  "dependencies": [
+    "Builds on (does not modify) .github/workflows/ci-boot-smoke.yml from LAM-16, already merged onto this base at e7d28f0"
+  ],
+  "followUps": [
+    "Consider whether branch protection on refactor/booking-v2-migration should mark the new mapping-drift check as required to merge - that is a repo-settings change outside this task's scope, same caveat as ci-boot-smoke.yml's own header comment",
+    "A future task could extend check-mapping-drift.mjs to also fail CI on db_type/column-type disagreement (currently 0 mismatches, verified, but nothing enforces that continuously since this task's scope was limited to entry-presence, not type-agreement)"
+  ],
+  "rollback": "Revert this task's commit on agent/LAM-28-mapping-drift-check, or drop the added files (tools/check-mapping-drift.mjs, tools/scaffold-registration.mjs, docs/development/four-registration-trap.md, .github/workflows/mapping-drift.yml) and the two new package.json script entries. No data, schema, or runtime app code is affected - rollback is purely removing tooling/docs/CI and is safe at any time."
+}
