@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "task": "LAM-77",
+  "title": "Characterize critical legacy booking workflows",
+  "status": "completed",
+  "agent": {
+    "sessionId": "01a0184f-9ec5-7cb8-86fe-ae4a1d8b24c2",
+    "model": "openai-codex/gpt-5.6-terra"
+  },
+  "git": {
+    "base": "origin/main",
+    "branch": "task/LAM-77",
+    "worktree": "C:/Users/ta-za/.pi/workflows/projects/wt-coordinator-6d3a93079ab9/sessions/01a01848-e03b-7eaf-b0b1-c703097d7229/runs/203096be-3173-4143-858b-c601e9ce8a3b/worktrees/f68526b059ab576c",
+    "commit": "pending initial task commit",
+    "pr": {
+      "number": null,
+      "url": "",
+      "state": "none"
+    }
+  },
+  "input": {
+    "requestedOutcome": "Add and publish repeatable characterization tests for LAM-77 without changing production behavior.",
+    "acceptanceCriteria": [
+      "Document booking persistence, edit-preserve fields, cancelled-status aggregates, seat locks, boat assignment, and rate-type pricing.",
+      "Document intentional exceptions before modular extraction.",
+      "Do not modify production behavior, persistence, schema, root configuration, ADRs, or SYSTEM_MAP.md."
+    ],
+    "allowedScope": [
+      "tests/legacy/**",
+      "docs/development/tasks/LAM-77.md",
+      ".agent-reports/LAM-77.json"
+    ],
+    "constraints": [
+      "Base the isolated task branch on origin/main.",
+      "Use only Node built-ins and test-owned globals; do not install dependencies or change shared configuration.",
+      "Create a PR but do not merge it or transition Jira."
+    ],
+    "assumptions": [
+      "The monolithic HTML is the behavior source under characterization.",
+      "The repository's Node 18+ engine supports node:test and vm."
+    ]
+  },
+  "output": {
+    "summary": "Added eight isolated Node characterization tests plus an intentional-exceptions fixture for critical legacy booking workflows.",
+    "filesChanged": [
+      {
+        "path": "tests/legacy/helpers/legacy-source.mjs",
+        "change": "added",
+        "purpose": "Extract selected production functions into a test-owned VM context."
+      },
+      {
+        "path": "tests/legacy/legacy-characterization.test.mjs",
+        "change": "added",
+        "purpose": "Exercise persistence, aggregate, lock, boat, rate, and edit-preserve behavior."
+      },
+      {
+        "path": "tests/legacy/fixtures/intentional-exceptions.json",
+        "change": "added",
+        "purpose": "Record intentional compatibility exceptions for future extraction."
+      },
+      {
+        "path": "docs/development/tasks/LAM-77.md",
+        "change": "added",
+        "purpose": "Record task inputs, observable output, verification, risks, and rollback."
+      },
+      {
+        "path": ".agent-reports/LAM-77.json",
+        "change": "added",
+        "purpose": "Provide the coordinator-readable handoff manifest."
+      }
+    ],
+    "behaviorChanges": [
+      {
+        "area": "Legacy characterization coverage",
+        "before": "Critical behavior was only represented by the monolithic implementation.",
+        "after": "Eight executable tests pin selected current behavior without changing the implementation."
+      },
+      {
+        "area": "Production behavior and persistence",
+        "before": "Existing behavior and data paths were unchanged.",
+        "after": "Existing behavior and data paths remain unchanged; tests use in-memory test doubles."
+      }
+    ],
+    "interfaces": {
+      "added": [
+        "node --test tests/legacy/legacy-characterization.test.mjs"
+      ],
+      "changed": [],
+      "removed": []
+    },
+    "dataPersistence": {
+      "impact": "read-only",
+      "details": [
+        "Tests read the legacy HTML source and use an in-memory localStorage double.",
+        "No production persistence, API, schema, or migration behavior changed."
+      ],
+      "migrationRequired": false
+    }
+  },
+  "verification": [
+    {
+      "command": "node --test tests/legacy/legacy-characterization.test.mjs",
+      "status": "passed",
+      "evidence": "8 tests passed, 0 failed."
+    },
+    {
+      "command": "git diff --check",
+      "status": "passed",
+      "evidence": "No whitespace errors reported."
+    }
+  ],
+  "decisions": [
+    "Extract individual named functions instead of executing the entire legacy application.",
+    "Select the second save declaration explicitly because the first is the cloud-sync helper and the second is the localStorage persistence implementation."
+  ],
+  "risks": [
+    "The extraction harness intentionally depends on named function declarations and selected source structure; a rename or conversion may require test-harness migration."
+  ],
+  "blockers": [],
+  "dependencies": [
+    "Node.js 18+.",
+    "allotment_v2/allotment_v2.html present in the checkout."
+  ],
+  "followUps": [
+    "Move the cases to module-level tests as corresponding legacy modules are extracted.",
+    "Retain fixture exceptions until a separately approved behavior change replaces them."
+  ],
+  "rollback": "Revert the LAM-77 commit; no production code or persisted data is affected."
+}

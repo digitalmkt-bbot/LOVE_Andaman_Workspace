@@ -1,0 +1,25 @@
+{
+  "source": "allotment_v2/allotment_v2.html at origin/main (17a15c46429b126d6e2eda9f2ebcd6b26cb31351)",
+  "exceptions": [
+    {
+      "area": "booking edit preservation",
+      "behavior": "When the travel-date set changes, existing operational boat and van assignments are deliberately cleared; a charter boat assignment is retained."
+    },
+    {
+      "area": "seat consumption",
+      "behavior": "Cancelled, rejected, cancelled_weather, and pending approvals caused by over-capacity do not consume seat inventory. Charter-mode trips do not consume the seat pool."
+    },
+    {
+      "area": "seat locks",
+      "behavior": "A child/sub-lock contributes zero directly to the sellable-pool hold because its parent already holds the allocation."
+    },
+    {
+      "area": "boat assignment",
+      "behavior": "A charter boat is excluded from the seat-boat picker whether it is marked in Boat Operation or is only discoverable from a non-cancelled charter booking."
+    },
+    {
+      "area": "rate-type longtail pricing",
+      "behavior": "Legacy flat longtail pricing is intentionally spread to every applicable route; a route-specific entry wins when present."
+    }
+  ]
+}
