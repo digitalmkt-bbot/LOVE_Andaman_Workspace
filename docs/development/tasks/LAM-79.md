@@ -72,5 +72,5 @@ A  .agent-reports/LAM-79.json
 - **Worktree:** `D:/projects/wt-sprint2/LAM-79-nextjs-architecture-adr`
 - **HEAD at scaffold:** `17a15c46429b126d6e2eda9f2ebcd6b26cb31351`
 - **Merge base:** `17a15c46429b126d6e2eda9f2ebcd6b26cb31351`
-- **PR:** recorded after publish — see manifest `git.pr`.
+- **PR:** [#12](https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/12) — base `main`, head `agent/LAM-79-nextjs-architecture-adr`, state `open`.
 - **Unrelated changes left untouched:** All other files in the worktree (`allotment_v2/**`, `server.js`, `package.json`, `railway.json`, `BACKLOG.md`, `README.md`, `CLAUDE.md`, `os-backend/**`, `db/**`, etc.) are untouched by this task. An older PR for this same Jira ticket exists on a different head branch from a previous run; it was not touched, closed, or updated.

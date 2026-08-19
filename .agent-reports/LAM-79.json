@@ -11,11 +11,11 @@
     "base": "main",
     "branch": "agent/LAM-79-nextjs-architecture-adr",
     "worktree": "D:/projects/wt-sprint2/LAM-79-nextjs-architecture-adr",
-    "commit": "17a15c46429b126d6e2eda9f2ebcd6b26cb31351",
+    "commit": "cdad037174c3f2b5064c883cd0663a25b1b8678b",
     "pr": {
-      "number": null,
-      "url": "",
-      "state": "none"
+      "number": 12,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/12",
+      "state": "open"
     }
   },
   "input": {
