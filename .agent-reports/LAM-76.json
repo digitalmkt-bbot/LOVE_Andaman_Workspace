@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "task": "LAM-76",
+  "title": "Create the Next.js and TypeScript application shell",
+  "status": "completed",
+  "agent": {
+    "sessionId": "01a0184f-9f37-711f-b688-36c09ae5ab0e",
+    "model": "openai-codex/gpt-5.6-terra"
+  },
+  "git": {
+    "base": "origin/main",
+    "branch": "lam-76-nextjs-shell",
+    "worktree": "C:/Users/ta-za/.pi/workflows/projects/wt-coordinator-6d3a93079ab9/sessions/01a01848-e03b-7eaf-b0b1-c703097d7229/runs/203096be-3173-4143-858b-c601e9ce8a3b/worktrees/6bdf1e7a29d9b824",
+    "commit": "234093cfb84b0adbad017c77361ad43ea3fabe66",
+    "pr": {
+      "number": 3,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/3",
+      "state": "open"
+    }
+  },
+  "input": {
+    "requestedOutcome": "Create and publish an isolated Next.js App Router shell for the modernization work.",
+    "acceptanceCriteria": [
+      "The shell runs locally and in CI.",
+      "The shell uses Next.js App Router and strict TypeScript.",
+      "The shell provides navigation, environment configuration, linting, unit-test setup, and a health page.",
+      "The shell does not replace production modules or change persistence behavior."
+    ],
+    "allowedScope": [
+      "apps/web/**",
+      "docs/development/tasks/LAM-76.md",
+      ".agent-reports/LAM-76.json"
+    ],
+    "constraints": [
+      "Do not modify the legacy production module, SQL, persistence mappings, existing API behavior, root/shared configuration, or SYSTEM_MAP.md.",
+      "Do not transition Jira or merge the PR.",
+      "Publish a pull request targeting main without force-pushing."
+    ],
+    "assumptions": [
+      "No apps/web shell existed on origin/main.",
+      "Existing root deployment remains the production application.",
+      "CI integration changes are outside this task's permitted scope."
+    ]
+  },
+  "output": {
+    "summary": "Added an isolated, audited Next.js 16 App Router shell with strict TypeScript, shared navigation, static health page, public environment defaults, ESLint, Vitest, and repeatable package scripts without touching legacy behavior.",
+    "filesChanged": [
+      { "path": "apps/web", "change": "added", "purpose": "Self-contained Next.js application shell, configuration, source, tests, documentation, and lockfile." },
+      { "path": "docs/development/tasks/LAM-76.md", "change": "added", "purpose": "Human-readable development record." },
+      { "path": ".agent-reports/LAM-76.json", "change": "added", "purpose": "Coordinator-readable implementation manifest." }
+    ],
+    "behaviorChanges": [
+      { "area": "Web shell", "before": "No isolated Next.js application existed.", "after": "A strict TypeScript Next.js App Router shell is available under apps/web." },
+      { "area": "Navigation and health", "before": "No shell routes existed.", "after": "The shell provides shared navigation plus static / and /health pages." },
+      { "area": "Legacy persistence", "before": "Legacy persistence behavior was active only in the existing application.", "after": "Unchanged; the shell has no legacy imports, API requests, database access, or write paths." }
+    ],
+    "interfaces": {
+      "added": [
+        "GET / in the isolated shell",
+        "GET /health in the isolated shell",
+        "NEXT_PUBLIC_APP_NAME and NEXT_PUBLIC_APP_ENV optional public display variables",
+        "apps/web package scripts: dev, build, start, typecheck, lint, test"
+      ],
+      "changed": [],
+      "removed": []
+    },
+    "dataPersistence": {
+      "impact": "none",
+      "details": [
+        "No database, schema, migration, mapper, API, localStorage, or legacy production module was changed.",
+        "The isolated shell has no persistence or write path."
+      ],
+      "migrationRequired": false
+    }
+  },
+  "verification": [
+    { "command": "cd apps/web && npm ci", "status": "passed", "evidence": "Installed the committed lockfile successfully." },
+    { "command": "cd apps/web && npm run typecheck", "status": "passed", "evidence": "tsc --noEmit completed successfully." },
+    { "command": "cd apps/web && npm run lint", "status": "passed", "evidence": "ESLint completed successfully with Next core-web-vitals rules." },
+    { "command": "cd apps/web && npm test", "status": "passed", "evidence": "Vitest 3.2.7 reported 1 passing test in 1 test file." },
+    { "command": "cd apps/web && npm run build", "status": "passed", "evidence": "Next.js 16.3.1 production build completed and generated static / and /health routes." },
+    { "command": "cd apps/web && npm audit --audit-level=high", "status": "passed", "evidence": "npm reported 0 vulnerabilities." },
+    { "command": "cd apps/web && ./node_modules/.bin/next start -p 3101; curl -fsS http://127.0.0.1:3101/health", "status": "passed", "evidence": "The health response contained <h1 id=\"health-title\">Healthy</h1>." }
+  ],
+  "decisions": [
+    "Kept all application code and configuration under apps/web to preserve the production application and root/shared configuration.",
+    "Used Next.js 16.3.1, strict TypeScript, App Router server components, and current audited dependency versions.",
+    "Used public environment variables only for labels with safe defaults; secrets are explicitly prohibited from NEXT_PUBLIC variables.",
+    "Used Next core-web-vitals lint rules and Vitest with jsdom for the initial unit-test setup."
+  ],
+  "risks": [
+    "The shell is deliberately not wired to legacy authentication, APIs, persistence, deployment, or CI orchestration; future migration slices need explicit integration ownership and contracts."
+  ],
+  "blockers": [],
+  "dependencies": [
+    "Node.js 20.9 or newer is required by Next.js 16.",
+    "A separately owned CI change must invoke the documented apps/web commands."
+  ],
+  "followUps": [
+    "Add a separately owned CI workflow invocation for apps/web.",
+    "Migrate legacy modules only through explicit adapters that preserve existing persistence behavior."
+  ],
+  "rollback": "Revert the LAM-76 commits or remove the unreferenced apps/web directory. No data, schema, API, mapper, localStorage, or production deployment rollback is required."
+}
