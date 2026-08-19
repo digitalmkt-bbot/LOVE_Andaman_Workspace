@@ -1,0 +1,162 @@
+{
+  "schemaVersion": 1,
+  "task": "LAM-30",
+  "title": "Spike: trips per-boat hardcoded columns — normalize vs generate-from-BOATS",
+  "status": "completed",
+  "agent": {
+    "sessionId": "",
+    "model": "claude-sonnet-5"
+  },
+  "git": {
+    "base": "refactor/booking-v2-migration",
+    "branch": "agent/LAM-30-trips-columns-spike",
+    "worktree": "D:/projects/wt-sprint2b/LAM-30-trips-columns-spike",
+    "commit": "ae23d75bd786fa11f8ffe6112720ce6d9aaed9c2",
+    "pr": {
+      "number": 18,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/18",
+      "state": "open"
+    }
+  },
+  "input": {
+    "requestedOutcome": "Deliver a spike document (no code/SQL/migration changes) comparing normalize-to-child-table vs generate-columns-from-BOATS for the trips table's per-boat bN_* columns, verify the real current bN_* column list against server.js:1637-1644 and os-backend/src/mapping/operation_schemas_model.json (confirm or correct the b8/b14/b15 claim), assess cost on the os_repo assembleBlob/decomposeBlob path for each option, recommend one with reasoning, and write a prose migration plan that preserves existing bN_* data and makes adding a boat require zero schema edits.",
+    "acceptanceCriteria": [
+      "docs/development/trips-per-boat-columns.md exists and covers: verified current bN_* column scheme (real list, not assumed), confirmation/correction of the b8/b14/b15 claim against server.js:1637-1644 and operation_schemas_model.json, an honest normalize-vs-generate-columns comparison including cost to assembleBlob/decomposeBlob, a recommendation with reasoning, and a prose migration plan preserving existing bN_* data with zero schema edits required to add a boat",
+      "Notes LAM-73 (still To Do) as a dependency governing the fate of db/migrations",
+      "Read-only on all code: no SQL, no server.js edit, no mapping-file edit, no migration file created",
+      "Only the three owned files are staged/committed"
+    ],
+    "allowedScope": [
+      "docs/development/trips-per-boat-columns.md",
+      "docs/development/tasks/LAM-30.md",
+      ".agent-reports/LAM-30.json"
+    ],
+    "constraints": [
+      "SPIKE ONLY: no SQL, no server.js edit, no mapping file edit, no migration file creation",
+      "Read-only on all code",
+      "Stage only the three owned files, never git add . / -A"
+    ],
+    "assumptions": []
+  },
+  "output": {
+    "summary": "Wrote docs/development/trips-per-boat-columns.md, a research-backed spike document. Verified the Jira claim is accurate but already partially patched (server.js:1637-1644 added route/type/booked/charterbookingid for b8/b14/b15 on 2026-07-25). Found the real current column list via os-backend/src/mapping/operation_schemas_model.json: all 15 boats (b1-b15) now have route/type/booked, but charterbookingid exists for only 5 of 15 boats (b6, b8, b13, b14, b15) - a second, still-live instance of the same silent-data-loss bug the ticket describes, not mentioned in the ticket. Traced the client-side shape (TRIPS[date][boatId] = {route,type,booked,charterBookingId}) via grep across allotment_v2.html and field_mapping.json sources, confirming it is structurally identical to fleet_daily[day][boatId], a table whose identical bug was already fixed in this codebase via a JSON child table (fleet_daily__boat, documented at os_repo.js:119-127). Found that boats added at runtime (saveCharterBoat's id:'b'+Date.now(), fmBoatSave's LA_UID('b')) get long non-sequential ids, which makes a generate-columns-from-BOATS approach materially harder than it looks (SQL identifier sanitization, plus field_mapping.json/operation_schemas_model.json must be regenerated and committed on every boat addition since buildPlan() only reads the static checked-in JSON). Recommended normalizing to a child table (Option A), following the fleet_daily__boat precedent, with reasoning on why generate-from-BOATS is not simpler once those costs are counted and does not close the charterBookingId-class gap at all. Wrote a 6-step prose migration plan (add table -> backfill idempotently -> switch read/write path -> keep old bN_* columns as inert fallback -> verify with zz_test_* scratch records -> defer column drop to a later cleanup task) with an explicit rollback procedure. Recorded LAM-73 (still To Do, decides the fate of db/migrations) as a hard dependency and wrote the plan to be migration-mechanism-agnostic so it can slot into whatever LAM-73 lands on. Also flagged that database_migration/operation_schemas_model.json (a second checked-in copy of the same schema snapshot) is stale relative to os-backend's copy - still missing b8/b14/b15 entirely - as a drift risk for whoever implements this.",
+    "filesChanged": [
+      {
+        "path": "docs/development/trips-per-boat-columns.md",
+        "change": "added",
+        "purpose": "The spike deliverable: verified current bN_* column scheme, normalize-vs-generate-columns comparison with cost to os_repo assembleBlob/decomposeBlob, recommendation with reasoning, prose migration plan, and LAM-73 dependency note"
+      },
+      {
+        "path": "docs/development/tasks/LAM-30.md",
+        "change": "added",
+        "purpose": "Agent change-report required by the agent-change-pr skill"
+      },
+      {
+        "path": ".agent-reports/LAM-30.json",
+        "change": "added",
+        "purpose": "Machine-readable manifest required by the agent-change-pr skill"
+      }
+    ],
+    "behaviorChanges": [
+      {
+        "area": "Application behavior",
+        "before": "No change — this is a documentation-only spike",
+        "after": "No change — this is a documentation-only spike"
+      }
+    ],
+    "interfaces": {
+      "added": [],
+      "changed": [],
+      "removed": []
+    },
+    "dataPersistence": {
+      "impact": "none",
+      "details": [
+        "No SQL, mapping file, or migration file was written or modified. The report documents a proposed future migration in prose only; nothing in this change touches the schema, server.js, or os-backend/src/mapping/*."
+      ],
+      "migrationRequired": false
+    }
+  },
+  "verification": [
+    {
+      "command": "git status --short --branch (at task start, in the assigned worktree)",
+      "status": "passed",
+      "evidence": "Clean worktree at start: '## agent/LAM-30-trips-columns-spike...origin/refactor/booking-v2-migration' with no other output — no pre-existing uncommitted changes."
+    },
+    {
+      "command": "grep -a context around server.js:1637-1644 (sed -n '1637,1644p' server.js)",
+      "status": "passed",
+      "evidence": "Confirmed the exact loop described in the ticket: for(const _b of ['b8','b14','b15']){ for(const [_c,_t] of [['route','text'],['type','text'],['booked','bigint'],['charterbookingid','text']]){ ALTER TABLE trips ADD COLUMN IF NOT EXISTS ... } } — matches the Jira claim exactly, dated 2026-07-25 per the adjacent comment and BACKLOG.md."
+    },
+    {
+      "command": "node -e \"const d=require('./os-backend/src/mapping/operation_schemas_model.json'); ...\" to enumerate trips.columns grouped by boat number",
+      "status": "passed",
+      "evidence": "All 15 boats (b1-b15) have route/type/booked columns (50 boat-scoped columns total, plus id/key). charterbookingid exists for only b6, b8, b13, b14, b15 (5 of 15) — the real current state, correcting the ticket's implicit assumption that b8/b14/b15 were the only gap."
+    },
+    {
+      "command": "grep -na 'charterbookingid' server.js",
+      "status": "passed",
+      "evidence": "Exactly one match, at line 1641 (the b8/b14/b15 loop) — confirms no other ALTER statement in current server.js ever added charterbookingid for b6/b13, i.e. those two columns came from an untracked one-off DDL run, not from the migration path visible in this repo."
+    },
+    {
+      "command": "diff of os-backend/src/mapping/operation_schemas_model.json's trips entry vs database_migration/operation_schemas_model.json's trips entry (node -e JSON.stringify comparison)",
+      "status": "passed",
+      "evidence": "DIFFERENT — database_migration/operation_schemas_model.json's trips.columns still lacks b8/b14/b15 entirely (only 13 boats), confirming it is a stale, pre-2026-07-25 snapshot never regenerated after the patch. Flagged in the report as a schema-drift risk."
+    },
+    {
+      "command": "grep for TRIPS[...][...].field access patterns and DEFAULT_BOATS id/name pairs across allotment_v2/allotment_v2.html",
+      "status": "passed",
+      "evidence": "Confirmed TRIPS[dateStr][boatId] = {route,type,booked,charterBookingId} is the only shape in use (all matches fit that pattern), and confirmed b8='Tadeo', b14='Juliet', b15='Rolanda' in DEFAULT_BOATS, matching both the Jira ticket and BACKLOG.md's naming."
+    },
+    {
+      "command": "grep for BOATS.push / saveCharterBoat / fmBoatSave / LA_UID definition in allotment_v2.html",
+      "status": "passed",
+      "evidence": "Found id:'b'+Date.now() (saveCharterBoat, line ~39156) and fields.id=LA_UID('b') (fmBoatSave add-mode, line ~9883), with LA_UID(p) = p+Date.now().toString(36)+Math.random().toString(36).slice(2,7) (line 16) — confirms runtime-added boats get long non-sequential ids, not small integers, which materially raises the cost of any generate-columns-from-BOATS approach (documented in report section 1.4/3-B)."
+    },
+    {
+      "command": "Read os-backend/src/mapping/os_repo.js in full (329 lines) to characterize assembleBlob/decomposeBlob and locate existing precedent",
+      "status": "passed",
+      "evidence": "Confirmed the generic engine's four shapes (scalars/array/map/map_value_json) do not cover a fixed-named-child-per-parent shape like trips[date].bN, and located the exact prior fix for the structurally identical fleet_daily[day][boatId] bug — fleetDailyAssembleFix/fleetDailyDecompose (os_repo.js:119-161) plus its own comment describing the old bN_fuel-style scheme's silent data loss — used as the basis for this report's recommendation and migration plan."
+    },
+    {
+      "command": "grep -n 'trips' BACKLOG.md and read the '⏸ trips mapping' section in full",
+      "status": "passed",
+      "evidence": "Confirmed BACKLOG.md (2026-07-25) already documents this exact problem, already proposes child-table-or-map_value_json as the fix, and already cites vanjob_driver/boat_capovr as the correct existing pattern — used as corroborating precedent in the report, alongside the closer-matching fleet_daily__boat table."
+    },
+    {
+      "command": "Read allotment_v2/docs/workflows/07-data-persistence-api.md section 10 (Invariants & gotchas, item 12) and section 0 (STOP - HEAD is broken)",
+      "status": "passed",
+      "evidence": "Section 10 item 12 independently documents the same b8/b14/b15 gap and calls the scheme fragile. Section 0 documents that os-backend was deleted at 094dde1 and restored at 1c10d84; confirmed via git merge-base --is-ancestor 1c10d84 HEAD that the restore is present in this worktree, so the module actually resolves (not exercised at runtime — see next entry)."
+    },
+    {
+      "command": "node -e \"require('./server.js')\" (attempted, to check module resolution / boot)",
+      "status": "blocked",
+      "evidence": "Command hung and was killed by the tool's own 2-minute timeout (exit 143) — server.js attempts to start listening / connect to Postgres at require time, and no Postgres/network is reachable from this sandbox per the task's stated constraints. Verified no orphaned node.exe process remained afterward. Did not retry; module-resolution correctness for os-backend was instead confirmed statically via git ancestry (previous entry) and by directly reading/requiring the individual mapping files (os_repo.js, operation_schemas_model.json, field_mapping.json), which all loaded successfully with node -e require() in isolation."
+    },
+    {
+      "command": "node /c/.../change-report.mjs --validate .agent-reports/LAM-30.json --report docs/development/tasks/LAM-30.md",
+      "status": "passed",
+      "evidence": "Output: valid: LAM-30. Run once before the implementation commit (ae23d75) and re-run after recording PR #18 metadata, per the skill publish-mode requirement."
+    }
+  ],
+  "decisions": [
+    "Recommended Option A (normalize to a child table, e.g. trips__byboat keyed by boatId with the per-boat object stored as one JSON value) over Option B (generate/automate bN_* columns from the BOATS registry), primarily because this exact tradeoff was already made and resolved this way for the structurally identical fleet_daily[day][boatId] table in this same codebase (os_repo.js:119-161), and because Option B does not close the charterBookingId-class gap (new field on an existing boat, not just a new boat) that this spike found still live today.",
+    "Treated the ticket's b8/b14/b15 claim as accurate-but-incomplete rather than simply confirming it: the historical 3-boat gap in route/type/booked/charterbookingid is fixed, but a live, still-open instance of the same bug exists today for charterbookingid on 11 of 15 boats — reported this as the more urgent finding since it is not covered by the ticket text and would otherwise be missed by a reader who only checks the literal b8/b14/b15 claim.",
+    "Did not attempt to run or boot server.js (beyond one blocked attempt, see verification) given the explicit no-Postgres/no-prod-network constraint and the SPIKE ONLY / read-only-on-all-code instruction — all findings were reached through static reading of server.js, the mapping JSON files, os_repo.js, allotment_v2.html, BACKLOG.md, and the existing architecture doc, cross-checked against each other.",
+    "Flagged database_migration/operation_schemas_model.json as a stale duplicate of os-backend/src/mapping/operation_schemas_model.json (missing b8/b14/b15 entirely) as an explicit risk for the follow-up implementation task, rather than silently picking one file as ground truth."
+  ],
+  "risks": [
+    "The exact production trips column list may have drifted further since this spike (the two checked-in schema snapshot files already disagree with each other, per this spike's own finding) — the report explicitly tells the follow-up implementer to re-verify against the live DB before writing any migration, not to trust either checked-in file.",
+    "This spike could not execute server.js or connect to Postgres (no network/DB reachable in this sandbox), so no claim in this report about mapper behavior was verified by actually running assembleBlob/decomposeBlob against real rows — all mapper-behavior claims are from static reading of os_repo.js and field_mapping.json, cross-checked against the already-shipped fleet_daily__boat precedent's own code and comments.",
+    "The recommended migration plan is prose-only by design (per task constraints) — no SQL or code was drafted, so effort/risk at implementation time could not be estimated more precisely than the qualitative comparison given."
+  ],
+  "dependencies": [
+    "LAM-73 (status: To Do) decides the fate of db/migrations/ and, by extension, the mechanism (SQL migration ladder, initDb inline ALTER blocks, or other) through which any future trips normalization migration would actually be applied. This report's migration plan (section 4) is written in mechanism-agnostic prose specifically so it can slot into whichever outcome LAM-73 lands on; it is not itself an implementation task and creates no code that depends on LAM-73 landing a particular way."
+  ],
+  "followUps": [
+    "Implement the Option A migration described in section 4 of docs/development/trips-per-boat-columns.md once LAM-73 has settled the migration mechanism: add a trips__byboat child table, backfill idempotently from the existing bN_* columns, switch assembleBlob/decomposeBlob to read/write the new table (leaving old columns in place, unused), verify with zz_test_* scratch records, and only later consider dropping the old bN_* columns as a separate cleanup task.",
+    "Separately and more urgently than the full normalization: consider a small interim ALTER (in the same spirit as the existing b8/b14/b15 boot-time patch) to add charterbookingid for the remaining 10 boats that currently lack it, since that is a live silent-data-loss bug today, independent of which long-term design (Option A or B) is eventually chosen. Not implemented here — this spike is read-only on all code per its constraints — but recorded so it isn't lost.",
+    "Regenerate database_migration/operation_schemas_model.json from the live database (or otherwise reconcile it with os-backend/src/mapping/operation_schemas_model.json) so the two checked-in schema snapshots stop disagreeing about which trips columns exist."
+  ],
+  "rollback": "This change is documentation-only (three new files, no code/SQL/schema touched). Rollback is `git revert` of the merge commit, or simply not merging the PR — there is no data, schema, or runtime behavior to roll back."
+}
