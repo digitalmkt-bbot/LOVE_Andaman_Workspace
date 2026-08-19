@@ -13,9 +13,9 @@
     "worktree": "D:/projects/wt-sprint1/LAM-16-ci-boot-smoke",
     "commit": "fa60a96e2d86c7776e04a0cf726f7ed8eb60a7c6",
     "pr": {
-      "number": null,
-      "url": "",
-      "state": "none"
+      "number": 10,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/10",
+      "state": "open"
     }
   },
   "input": {

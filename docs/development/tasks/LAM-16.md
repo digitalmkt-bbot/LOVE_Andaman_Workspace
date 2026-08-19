@@ -82,5 +82,5 @@ docs/development/tasks/LAM-16.md    — this report
 - **Worktree:** `D:/projects/wt-sprint1/LAM-16-ci-boot-smoke`
 - **HEAD at scaffold:** `fa60a96e2d86c7776e04a0cf726f7ed8eb60a7c6`
 - **Merge base:** `fa60a96e2d86c7776e04a0cf726f7ed8eb60a7c6`
-- **PR:** Not yet opened — will be filled in after push, per the skill's publish step
+- **PR:** [#10](https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/10) — `agent/LAM-16-ci-boot-smoke` → `refactor/booking-v2-migration` (open)
 - **Unrelated changes left untouched:** None encountered — worktree was clean at start.
