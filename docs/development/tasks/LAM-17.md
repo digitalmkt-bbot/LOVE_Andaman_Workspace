@@ -78,5 +78,5 @@ check-persist-gates: 3 finding(s):
 - **Worktree:** `D:/projects/wt-sprint1/LAM-17-acct-ops-permission-gate`
 - **HEAD at scaffold:** `fa60a96e2d86c7776e04a0cf726f7ed8eb60a7c6`
 - **Merge base:** `fa60a96e2d86c7776e04a0cf726f7ed8eb60a7c6`
-- **PR:** Pending — will be filled in immediately after `gh pr create` in this same task run
+- **PR:** [#8](https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/8) — open, base `refactor/booking-v2-migration` ← head `agent/LAM-17-acct-ops-permission-gate`
 - **Unrelated changes left untouched:** The 2 pre-existing disjoint-gate findings surfaced by the new tool (`agClearExecute`, `tmSaveModal`) — real but out of scope for this task.
