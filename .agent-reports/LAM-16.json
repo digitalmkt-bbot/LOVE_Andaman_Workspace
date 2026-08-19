@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "task": "LAM-16",
+  "title": "Add a CI boot smoke test for server.js",
+  "status": "partial",
+  "agent": {
+    "sessionId": "",
+    "model": "claude-sonnet-5"
+  },
+  "git": {
+    "base": "refactor/booking-v2-migration",
+    "branch": "agent/LAM-16-ci-boot-smoke",
+    "worktree": "D:/projects/wt-sprint1/LAM-16-ci-boot-smoke",
+    "commit": "fa60a96e2d86c7776e04a0cf726f7ed8eb60a7c6",
+    "pr": {
+      "number": null,
+      "url": "",
+      "state": "none"
+    }
+  },
+  "input": {
+    "requestedOutcome": "A CI job that would have caught S1-01: runs require('./server.js') for real (by spawning it) against a scratch Postgres, makes one authenticated /api/version request, and fails if map.*/db.* drift counters are non-zero or mig.failed/mig.pending is above zero.",
+    "acceptanceCriteria": [
+      "New GitHub Actions workflow defines a Postgres service and boots server.js against it",
+      "Job fails if map.tables or map.columns is non-zero",
+      "Job fails if db.missing or db.extraInDb is non-zero",
+      "Job fails if mig.failed is non-zero or mig.pending > 0",
+      "Behavior documented against allotment_v2/docs/workflows/07-data-persistence-api.md sections 0 and 10.18"
+    ],
+    "allowedScope": [
+      "root package.json",
+      ".github/workflows/ci-boot-smoke.yml",
+      "tools/ci-boot-smoke.mjs",
+      "docs/development/tasks/LAM-16.md",
+      ".agent-reports/LAM-16.json"
+    ],
+    "constraints": [
+      "Must not touch allotment_v2/allotment_v2.html",
+      "Must not touch test/** or .github/workflows/tests.yml (owned by parallel task LAM-22)",
+      "No persistence/schema/SQL/API behavior change",
+      "No scratch Postgres available in this sandbox: DB-backed checks must be built into the CI workflow and reported as not_run/blocked locally, never passed",
+      "Stage only explicitly owned paths, no git add -A / git add ."
+    ],
+    "assumptions": [
+      "os-backend/ (deleted at 094dde1, the S1-01 bug) was already restored by 1c10d84 on this branch, so require('./server.js') succeeds today; this task adds the regression guard, it does not itself fix S1-01",
+      "db/migrations/ is documented as still absent from the repo (07-data-persistence-api.md sec 0), a separate, larger gap out of this task's scope",
+      "GitHub Actions runner provides Docker for the postgres service container (standard on ubuntu-latest)"
+    ]
+  },
+  "output": {
+    "summary": "Added a GitHub Actions workflow (ci-boot-smoke.yml) with a scratch postgres:16 service that spawns server.js, logs in, and polls /api/version via a new tools/ci-boot-smoke.mjs script, failing the job if map.*/db.* drift counters are non-zero or mig.failed/mig.pending is above zero. Added a package.json convenience script. DB-backed verification could not be executed in this sandbox per task constraints (reported as not_run), so the job's real pass/fail behavior against Postgres, and its first execution on GitHub Actions, remain unverified locally; the job is also expected to fail red on this branch today because db/migrations/ is documented as absent (a separate, out-of-scope gap), which is flagged as a known risk and follow-up rather than worked around.",
+    "filesChanged": [
+      { "path": "tools/ci-boot-smoke.mjs", "change": "added", "purpose": "Spawns server.js against $DATABASE_URL, logs in as a throwaway admin, polls /api/version, and fails on map/db/mig drift" },
+      { "path": ".github/workflows/ci-boot-smoke.yml", "change": "added", "purpose": "GitHub Actions workflow: postgres:16 service container + npm ci + run the smoke script on PRs/pushes" },
+      { "path": "package.json", "change": "modified", "purpose": "Added scripts.ci:boot-smoke convenience alias for tools/ci-boot-smoke.mjs" },
+      { "path": "docs/development/tasks/LAM-16.md", "change": "modified", "purpose": "Filled-in development record for this task" },
+      { "path": ".agent-reports/LAM-16.json", "change": "modified", "purpose": "Filled-in machine-readable manifest for this task" }
+    ],
+    "behaviorChanges": [
+      {
+        "area": "CI on this repo",
+        "before": "No GitHub Actions workflows exist at all (.github/workflows/ was absent)",
+        "after": "ci-boot-smoke.yml runs on every PR into refactor/booking-v2-migration/main and on push to refactor/booking-v2-migration, spawning server.js against a real scratch Postgres"
+      },
+      {
+        "area": "Detecting a broken boot (S1-01 class)",
+        "before": "Silent; merges straight to prod and is discovered only by the app actually failing to start, as happened at 094dde1",
+        "after": "tools/ci-boot-smoke.mjs fails loudly if server.js exits before it starts listening, e.g. from a require() throw"
+      },
+      {
+        "area": "Detecting silent mapping/DB drift (map.*/db.*)",
+        "before": "Silent; only visible by manually hitting /api/version on a live deploy",
+        "after": "CI job fails the moment any drift counter goes non-zero"
+      },
+      {
+        "area": "Detecting a stuck/failed migration",
+        "before": "Silent; mig.failed/mig.pending only ever inspected manually",
+        "after": "CI job fails if mig.failed > 0 or mig.pending > 0"
+      }
+    ],
+    "interfaces": {
+      "added": ["tools/ci-boot-smoke.mjs script", "package.json script ci:boot-smoke", ".github/workflows/ci-boot-smoke.yml GitHub Actions check"],
+      "changed": [],
+      "removed": []
+    },
+    "dataPersistence": {
+      "impact": "none",
+      "details": [
+        "Workflow provisions its own throwaway postgres:16 service container per run; no real database is touched",
+        "Script only performs GET /api/version and POST /api/login; no writes"
+      ],
+      "migrationRequired": false
+    }
+  },
+  "verification": [
+    { "command": "node --check tools/ci-boot-smoke.mjs", "status": "passed", "evidence": "Exited 0, no syntax errors" },
+    { "command": "node -e \"JSON.parse(require('fs').readFileSync('package.json','utf8'))\"", "status": "passed", "evidence": "package.json still parses after adding the ci:boot-smoke script line" },
+    { "command": "npx --yes js-yaml .github/workflows/ci-boot-smoke.yml", "status": "passed", "evidence": "Workflow YAML parsed cleanly to an equivalent JSON structure, no errors" },
+    { "command": "npx --yes @action-validator/cli .github/workflows/ci-boot-smoke.yml", "status": "passed", "evidence": "No schema errors reported against the GitHub Actions workflow schema" },
+    { "command": "DATABASE_URL=postgres://ci_smoke:ci_smoke@127.0.0.1:59999/ci_smoke CI_SMOKE_BOOT_TIMEOUT_MS=8000 CI_SMOKE_LOGIN_TIMEOUT_MS=6000 CI_SMOKE_SETTLE_TIMEOUT_MS=2000 node tools/ci-boot-smoke.mjs", "status": "passed", "evidence": "Script self-test only (unreachable DB, no pg installed locally): confirmed require('./server.js') succeeds today, '[map] field_mapping.json covers every table and column in operation_schemas_model.json' printed (map drift currently 0/0 on this branch), server boots and listens, and the script's spawn/poll/login-retry/timeout/diagnostic-error path all behave correctly. Not a substitute for the real Postgres-backed check." },
+    { "command": "Full check against a real scratch Postgres (login as seeded admin, /api/version returns clean map/db/mig counters)", "status": "not_run", "evidence": "No scratch Postgres available in this sandbox per task constraints; this is the workflow's actual job on GitHub Actions and has not been executed here" },
+    { "command": "End-to-end CI run on GitHub Actions after push", "status": "not_run", "evidence": "Requires the push/PR to trigger Actions; not executed as part of this local session" }
+  ],
+  "decisions": [
+    "Used DATA_BACKEND=relational in the CI job (not the default blob) because db.*/mig.* drift checks only run meaningfully in that mode (server.js dbDriftCheck early-returns otherwise), matching how prod actually runs",
+    "Script performs a real login as a throwaway ADMIN_USER/ADMIN_PASS seeded by initDb() on first boot, since /api/version requires a session",
+    "Login is retried with a timeout rather than attempted once, because initDb() runs asynchronously after server.listen() fires and can race the first request",
+    "Readiness poll accepts any HTTP response as 'server is up' rather than grepping stdout for a specific log line, so the check does not rot if log wording changes"
+  ],
+  "risks": [
+    "This job is expected to fail red on this branch today, and that is the correct signal, not a bug in the check: db/migrations/ is documented as absent from the repo (07-data-persistence-api.md sec 0), which is out of this task's scope to restore. Without it, operation_schemas.* tables never get created in DATA_BACKEND=relational mode, so initDb()'s hand-written ALTER TABLE steps throw before the admin-seed step runs, meaning the smoke script's login will time out rather than reach a clean db.missing count",
+    "Branch protection to make this check required to merge is not configured by this diff; it is a GitHub repo setting with no file to edit for it",
+    "The workflow has not actually executed on GitHub Actions yet; the first real run may surface environment issues (image pull time, npm ci cache behavior) not visible locally"
+  ],
+  "blockers": [],
+  "dependencies": [],
+  "followUps": [
+    "Restore db/migrations/ (or otherwise provision operation_schemas.* tables) so this job's db.*/mig.* counters are exercised meaningfully instead of failing at the login step",
+    "Configure ci-boot-smoke as a required status check under GitHub branch protection for refactor/booking-v2-migration",
+    "After the first real Actions run, confirm timing (image pull + npm ci + boot) comfortably fits the timeout-minutes: 10 budget; tune if needed"
+  ],
+  "rollback": "Delete .github/workflows/ci-boot-smoke.yml and tools/ci-boot-smoke.mjs, and remove the ci:boot-smoke line from package.json scripts. No data or schema changes to undo."
+}
