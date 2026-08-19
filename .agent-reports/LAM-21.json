@@ -11,11 +11,11 @@
     "base": "refactor/booking-v2-migration",
     "branch": "agent/LAM-21-unpersisted-write-catalogue",
     "worktree": "D:/projects/wt-sprint1/LAM-21-unpersisted-write-catalogue",
-    "commit": "fa60a96e2d86c7776e04a0cf726f7ed8eb60a7c6",
+    "commit": "e8f0e86803ae02e59afaaa0f50e1b636546ad0ed",
     "pr": {
-      "number": null,
-      "url": "",
-      "state": "none"
+      "number": 7,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/7",
+      "state": "open"
     }
   },
   "input": {

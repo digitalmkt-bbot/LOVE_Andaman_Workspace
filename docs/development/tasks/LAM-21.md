@@ -122,6 +122,6 @@ docs/development/tasks/LAM-21.md         (added)
 - **Worktree:** `D:/projects/wt-sprint1/LAM-21-unpersisted-write-catalogue`
 - **HEAD at scaffold:** `fa60a96e2d86c7776e04a0cf726f7ed8eb60a7c6`
 - **Merge base:** `fa60a96e2d86c7776e04a0cf726f7ed8eb60a7c6`
-- **PR:** none yet — will be filled in immediately after `gh pr create` in this same task run
+- **PR:** [#7](https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/7) — `agent/LAM-21-unpersisted-write-catalogue` → `refactor/booking-v2-migration`, state OPEN
 - **Unrelated changes left untouched:** None observed in the worktree at any point during
   this task.
