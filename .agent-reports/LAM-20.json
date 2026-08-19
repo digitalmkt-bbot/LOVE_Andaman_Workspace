@@ -11,11 +11,11 @@
     "base": "refactor/booking-v2-migration",
     "branch": "agent/LAM-20-esc-rate-type-picker",
     "worktree": "D:/projects/wt-sprint1/LAM-20-esc-rate-type-picker",
-    "commit": "",
+    "commit": "ddf500a07944c1896e81984923f609fb87773866",
     "pr": {
-      "number": null,
-      "url": "",
-      "state": "none"
+      "number": 9,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/9",
+      "state": "open"
     }
   },
   "input": {

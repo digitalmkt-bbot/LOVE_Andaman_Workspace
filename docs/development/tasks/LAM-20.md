@@ -108,5 +108,5 @@ Per the task's ask to "grep every top-level render function for the same class o
 - **Worktree:** `D:/projects/wt-sprint1/LAM-20-esc-rate-type-picker`
 - **HEAD at scaffold:** `fa60a96e2d86c7776e04a0cf726f7ed8eb60a7c6`
 - **Merge base:** `fa60a96e2d86c7776e04a0cf726f7ed8eb60a7c6`
-- **PR:** None (not yet published — will be filled in after the publish step)
+- **PR:** [#9](https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/9) — open, base `refactor/booking-v2-migration` ← head `agent/LAM-20-esc-rate-type-picker`
 - **Unrelated changes left untouched:** None — worktree was clean at start; only the three owned paths were touched.
