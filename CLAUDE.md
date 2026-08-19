@@ -1,7 +1,7 @@
 # LOVE Andaman — allotment_v2
 
 > Cowork context file, loaded every session. Focus: the `allotment_v2` module.
-> Per-feature history lives in **CHANGELOG.md** (not auto-loaded) — grep it when a task needs the detail behind a specific change.
+> Per-domain history and design live in `allotment_v2/docs/workflows/` (not auto-loaded — see **ARCHITECTURE.md** for the map) — grep the relevant doc when a task needs the detail behind a specific change. There is no `CHANGELOG.md`; it is not tracked in git (`git log --all -- CHANGELOG.md` returns nothing).
 
 ## 0. START HERE (new-chat orientation)
 
@@ -20,7 +20,7 @@
 
 **Pending (not done):** move the Booking top-tab bar onto the same row as the date stepper — user wants 3 mockups (A merge tabs+date · B tabs in day-header · C keep 2 rows, tighten). Awaiting their pick.
 
-**Companion docs in the workspace:** `SYSTEM_MAP.md` (AI-readable architecture map — keep in sync when adding modules), `BACKLOG.md` (pending items), `OPERATIONS_PIPELINE_DESIGN.md` (van-assign/grouping spec), `CHANGELOG.md` (full §-history).
+**Companion docs in the workspace:** `ARCHITECTURE.md` (points at `allotment_v2/docs/workflows/`, the real per-domain design/behavior docs), `SYSTEM_MAP.md` (AI-readable architecture map — keep in sync when adding modules), `BACKLOG.md` (pending items), `OPERATIONS_PIPELINE_DESIGN.md` (van-assign/grouping spec).
 
 ---
 
@@ -32,10 +32,11 @@
 
 ```
 LOVE_Andaman_Workspace/
-├── CLAUDE.md · SYSTEM_MAP.md · BACKLOG.md · CHANGELOG.md
+├── CLAUDE.md · ARCHITECTURE.md · SYSTEM_MAP.md · BACKLOG.md
 └── allotment_v2/
     ├── allotment_v2.html      ← main file
-    ├── start_server.command   ← local server (§4)
+    ├── start_server.command   ← static local server, no /api (§4)
+    ├── docs/workflows/        ← per-domain workflow docs (see ARCHITECTURE.md)
     ├── BACKUP/                ← timestamped pre-edit copies
     └── data_exports/          ← localStorage JSON exports
 ```
@@ -86,7 +87,7 @@ Reusable price packages bound to agents via `agent.rateTypeId`. Shape: `{id, cod
 - **Persist** with `rtPersist()` (read-modify-write). Shared detail renderer `rtBuildDetailBody(rt)` feeds both the Rate Type page and the Agent Pricing Matrix tab.
 
 ### 3.3 Zone/region expansion
-Piers, rate-type zones, pickup zones, and pickup-setup areas are 4 overlapping "where" concepts stored separately; adding a real new zone touches ~5–6 places. Decision (2026-06-01, Option A): don't refactor to a central `SB_ZONES` until 2+ zones land at once or non-technical staff need UI zone CRUD. Until then follow the manual checklist — see CHANGELOG §12 / `SYSTEM_MAP.md`. (Pickup Setup UI adds **Areas** only, not zones; zones are hardcoded `['PK','KL','NoTransfer']`.)
+Piers, rate-type zones, pickup zones, and pickup-setup areas are 4 overlapping "where" concepts stored separately; adding a real new zone touches ~5–6 places. Decision (2026-06-01, Option A): don't refactor to a central `SB_ZONES` until 2+ zones land at once or non-technical staff need UI zone CRUD. Until then follow the manual checklist — see `allotment_v2/docs/workflows/04-transfer-vans-pickup.md` (the four "where" concepts) / `SYSTEM_MAP.md`. (Pickup Setup UI adds **Areas** only, not zones; zones are hardcoded `['PK','KL','NoTransfer']`.)
 
 ### 3.4 Booking (`SB_BOOKINGS`)
 Key fields: `id`, `schemaVer`, `agentId`, `channel`, `leadPax`, `leadNationality`, `leadPhone`, `leadEmail`, `hotelName`, `pickupAreaId`, `status` (`confirmed`/`pending_approval`/`cancelled`/`cancelled_weather`/`rejected`), `bookingDate`, `voucherRef`, `trips[]`, `passengers[]`, `addOns[]`, `adjustments[]`, `priceBreakdown{seat,addOn,focDiscount,discount,extra,total}`, `paymentSnapshot`, `marketSnapshot`, `history[]`, `ops{boatId,vanId,vanGroup,vanSeq,vanReturnId,vanSplits[],pfm{}}`.
@@ -107,7 +108,7 @@ Key fields: `id`, `name`, `code`, `companyInfo{legalName,taxId,address}`, `conta
 - **Verify enum values** before assigning unknown strings (see pier example above).
 - **Keep data fixes user-triggered.** Don't add new auto-mutations to `flLoad` that could wrongly rewrite legitimate data (an over-eager spare-detach / dedupe self-heal was removed for this reason). The existing self-heals (engine status, boat stuck-fixing, charter-boat mirror, van-group `vanId`) are deliberately idempotent and targeted — match that bar or don't add one.
 - **Preserve runtime safety systems:** `flLoad()` auto-snapshot + `flListSnapshots()`/`flRestoreSnapshot(N)`, defensive field-level merge, version whitelist.
-- **Browser must run via localhost, not `file://`.** Double-click `start_server.command` → open `http://localhost:8765/allotment_v2.html`, ONE tab only. `file://` breaks localStorage persistence and local `fetch()`. Never test in the Claude artifact preview (isolated storage).
+- **Browser must run via localhost, not `file://`.** Double-click `allotment_v2/start_server.command` → open `http://localhost:8765/allotment_v2.html`, ONE tab only. `file://` breaks localStorage persistence and local `fetch()`. This is a **static file server only** (no `/api`) — it can't log in or sync to Postgres; use it for pure front-end/UI edits and prefer `node server.js` (with a real `DATABASE_URL`) when you need the backend. Never test in the Claude artifact preview (isolated storage).
 
 ---
 
@@ -119,9 +120,9 @@ Key fields: `id`, `name`, `code`, `companyInfo{legalName,taxId,address}`, `conta
 
 ---
 
-## 6. Gotchas & recurring patterns (distilled from the §-history)
+## 6. Gotchas & recurring patterns
 
-These bite repeatedly. Read the relevant one before touching that area; full context is in CHANGELOG.md.
+These bite repeatedly. Read the relevant one before touching that area; full context is in `allotment_v2/docs/workflows/` (see **ARCHITECTURE.md** for which doc covers which domain).
 
 **JS / render**
 - **`esc` / `escapeHTML` is NOT global** — it's declared locally per function. Any new top-level render fn that builds HTML with `esc(...)` must declare its own `const esc=...` or it throws silently on click.
@@ -163,4 +164,4 @@ Fleet: Boat Operation (`renderOp`), Transfer Fleet (`renderVehicles`), Van Job O
 
 Sidebar groups: OPERATIONS (Booking · Boat Operation · Transfer Fleet · Van Jobs · Pickup time setup) · SALES (Agent List · Rate Types · B2C · Staff & Welfare · Demand · FOC Detail · Insurance · Booking Flow · Pickup Map) · ACCOUNTING & FINANCE (Accounting · Daily PFM) · Fleet Management · Overview · Config.
 
-*Full per-feature history (§13–§87) is in **CHANGELOG.md** — grep it for the reasoning behind any specific behavior.*
+*Full per-domain design and behavior detail is in `allotment_v2/docs/workflows/` — see **ARCHITECTURE.md** for the map, then grep the relevant doc for the reasoning behind any specific behavior.*
