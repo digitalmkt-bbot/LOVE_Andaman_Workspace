@@ -11,11 +11,11 @@
     "base": "refactor/booking-v2-migration",
     "branch": "agent/LAM-31-save-disambiguation",
     "worktree": "D:/projects/wt-sprint2b/LAM-31-save-disambiguation",
-    "commit": "TBD_AT_COMMIT",
+    "commit": "f006808c0c7b857b04889a297cde57113c32ba7d",
     "pr": {
-      "number": null,
-      "url": "",
-      "state": "none"
+      "number": 21,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/21",
+      "state": "open"
     }
   },
   "input": {

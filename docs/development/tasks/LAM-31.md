@@ -127,5 +127,5 @@ modified	allotment_v2/allotment_v2.html
 - **Worktree:** `D:/projects/wt-sprint2b/LAM-31-save-disambiguation`
 - **HEAD at scaffold:** `ca649aa45a0ce6fc670edfdb4391176f43c95047`
 - **Merge base:** `fa60a96e2d86c7776e04a0cf726f7ed8eb60a7c6`
-- **PR:** TODO_AFTER_PUBLISH
+- **PR:** [#21](https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/21) — `agent/LAM-31-save-disambiguation` → `refactor/booking-v2-migration`, state OPEN
 - **Unrelated changes left untouched:** Everything outside `allotment_v2/allotment_v2.html`, `docs/development/tasks/LAM-31.md`, and `.agent-reports/LAM-31.json` — including all files brought in by the required sibling merges (LAM-27, LAM-29) and prior base-branch history (LAM-16 through LAM-23), which were kept exactly as those branches produced them, staged nowhere by this task.
