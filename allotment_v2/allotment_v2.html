@@ -81559,7 +81559,13 @@ function poBoatTable(boats, items, ro){
       +'<td style="text-align:center;font-weight:800;font-size:15px">'+b.pax+'</td>'
       +'<td style="font-size:11.5px">'+dutyTxt+'</td>'
       +cells
-      +'<td><span class="po-pill" style="background:'+st.c+'1f;color:'+st.c+'">'+st.t+'</span></td>'
+      /* §poDraft · ใบที่กรอกแล้วแต่ยังไม่ยืนยัน · ถ้าไม่ติดป้ายไว้ จะดูเหมือนลำนี้ยังไม่มีใครแตะ */
+      +'<td><span class="po-pill" style="background:'+st.c+'1f;color:'+st.c+'">'+st.t+'</span>'
+        +(poSheetPending(_poDate,b.bid)
+          ? '<div style="margin-top:4px"><span class="po-pill" style="background:#FEF6E7;color:#8A5A00" '
+            +'title="กรอกใบเบิก–คืนไว้แล้ว แต่ยังไม่ได้กดยืนยัน · สต็อกยังไม่ถูกตัด">ร่าง · ยังไม่ตัดสต็อก</span></div>'
+          : '')
+      +'</td>'
       +'<td style="text-align:right">'
         +'<button class="po-btn" onclick="poDutyOpen(\''+b.bid+'\')"'+(ro?' disabled':'')+'>พนักงาน</button>'
         +'<button class="po-btn'+(st.k==='none'?' pri':'')+'" onclick="poIssueOpen(\''+b.bid+'\')"'+(ro?' disabled':'')+'>เบิก–คืน</button>'
@@ -81856,7 +81862,9 @@ function poIsBuild(bid){
   KS.forEach(function(k){
     size[k]={};
     var need=0; rows.forEach(function(r){ need+=(+r.iss[k]||0); });
-    if(issued){ byKind[k].forEach(function(it){ size[k][it.id]=S[it.id]?S[it.id].iss:0; }); }
+    var saved=(SV&&SV.size&&SV.size[k])?SV.size[k]:null;
+    if(saved){ byKind[k].forEach(function(it){ size[k][it.id]=+saved[it.id]||0; }); }
+    else if(issued){ byKind[k].forEach(function(it){ size[k][it.id]=S[it.id]?S[it.id].iss:0; }); }
     else size[k]=poIsDist(k, need);
   });
   return _poIs;
@@ -82139,22 +82147,63 @@ function poIssueOpen(bid){
   if(!poCanEdit()) return;
   if(!poIsBuild(bid)) return;
   var B=_poIs.B;
+  var PD=poSheetPending(_poDate,bid);
   var head='<div style="font-size:11.5px;color:#7C8091;margin:-4px 0 10px">'
     +poE((B.route&&B.route.name)||'')+(B.dep?(' · ออก '+poE(B.dep)):'')+' · '+poE(_poDate)
-    +' · <b style="color:#16265C">ลูกค้า '+B.pax+' ท่าน · '+B.bks.length+' ใบจอง</b></div>';
+    +' · <b style="color:#16265C">ลูกค้า '+B.pax+' ท่าน · '+B.bks.length+' ใบจอง</b>'
+    +(PD?('<span style="margin-left:9px;background:#FEF6E7;border:1px solid #EFD9AE;color:#8A5A00;'
+        +'border-radius:999px;padding:2px 10px;font-size:10.5px;font-weight:800">ร่าง · ยังไม่ตัดสต็อก</span>'):'')
+    +'</div>';
   poModal('เบิก–คืน · '+poE(B.boat.name||bid),
     poIsCss()+'<div class="poi">'+head+'<div id="poi-wrap"></div></div>',
-    poBtn('ยกเลิก','poModalClose()')
+    '<div style="flex:1;font-size:11px;color:#7C8091;line-height:1.5">'
+      +'<b style="color:#16265C">บันทึกร่าง</b> เก็บที่กรอกไว้เฉย ๆ สต็อกไม่ขยับ · '
+      +'<b style="color:#16265C">ยืนยัน</b> ถึงจะตัดสต็อกจริง</div>'
+    +poBtn('ยกเลิก','poModalClose()')
     +poBtn('พิมพ์ใบเซ็นจากตารางนี้',"poIsPrint('"+bid+"')")
-    +poBtn('บันทึก',"poIssueSave('"+bid+"')",1), 1240);
+    +poBtn('บันทึกร่าง',"poIssueDraft('"+bid+"')")
+    +poBtn('ยืนยัน · ตัดสต็อก',"poIssueSave('"+bid+"')",1), 1240);
   poIsRender();
 }
 
 /* ── บันทึก · ใบเบิกเก็บตามที่กรอก · สต็อกเขียนเป็นส่วนต่างจากที่เคยบันทึกไว้แล้ว ── */
-function poIsCommit(bid, quiet){
+/* ใบร่างที่ยังไม่ได้ตัดสต็อก · เทียบใบที่บันทึกไว้กับบัญชีจริง
+   คืน null เมื่อยอดในใบตรงกับบัญชีแล้ว (ยืนยันไปแล้ว หรือไม่มีอะไรค้าง) */
+function poSheetPending(date, bid){
+  var SH=PIER_SHEET[poIsKey(date,bid)]; if(!SH) return null;
+  var pier=SH.pier||_poPier, S=poBoatSum(date, bid, pier), n=0, dI=0, dR=0;
+  var byK={}; poItemsAll(pier).forEach(function(it){ (byK[it.kind]=byK[it.kind]||[]).push(it.id); });
+  var rI={}, rR={};
+  (SH.rows||[]).forEach(function(r){
+    Object.keys(r.iss||{}).forEach(function(k){ rI[k]=(rI[k]||0)+(+r.iss[k]||0); });
+    Object.keys(r.ret||{}).forEach(function(k){ rR[k]=(rR[k]||0)+(+r.ret[k]||0); }); });
+  Object.keys(rI).forEach(function(k){
+    var led=0; (byK[k]||[]).forEach(function(id){ led+=(S[id]?S[id].iss:0); });
+    var d=rI[k]-led; if(d){ n++; dI+=d; } });
+  var W=(SH.wrote&&SH.wrote.ret)||{};
+  Object.keys(rR).forEach(function(k){ var d=rR[k]-(+W[k]||0); if(d){ n++; dR+=d; } });
+  return n ? {n:n, iss:dI, ret:dR} : null;
+}
+/* mode · 'draft' = เก็บใบอย่างเดียว · อย่างอื่น = ตรวจครบแล้วเขียนลงบัญชี */
+function poIsCommit(bid, mode){
   if(!_poIs || _poIs.bid!==bid) return false;
   poIsRead();
   var KS=_poIs.KS, S=_poIs.base, over=[];
+  var DRAFT=(mode==='draft');
+
+  /* §poDraft · ร่างไม่ตรวจอะไรทั้งนั้น · กรอกค้างไว้ครึ่งใบก็ต้องเซฟได้
+     ของเดิมที่เคยเขียนลงบัญชีไว้แล้วไม่ถูกแตะ (wrote คงไว้ตามเดิม) */
+  if(DRAFT){
+    var OLD=poIsSaved(_poDate,bid);
+    PIER_SHEET[poIsKey(_poDate,bid)]={
+      pier:_poPier, boatId:bid, date:_poDate, at:new Date().toISOString(), by:poWho(),
+      size:JSON.parse(JSON.stringify(_poIs.size)),
+      wrote:(OLD&&OLD.wrote)?OLD.wrote:null,
+      rows:poIsRowsOut()
+    };
+    poPersist();
+    return true;
+  }
 
   /* 1 · ตรวจไซส์ให้ตรงกับตารางก่อน · ไม่ตรงแปลว่าสต็อกจะเพี้ยนทันที */
   var bad=[];
@@ -82252,7 +82301,6 @@ function poIsCommit(bid, quiet){
   }
 
   /* 4 · เขียน */
-  var note=quiet?'':'';
   plan.forEach(function(p){
     if(!p.qty) return;
     poAdd({date:_poDate, pier:_poPier, itemId:p.itemId, boatId:bid, type:p.type, qty:p.qty,
@@ -82265,23 +82313,32 @@ function poIsCommit(bid, quiet){
     size:JSON.parse(JSON.stringify(_poIs.size)),
     wrote:{ ret:(function(){ var o={};
       KS.forEach(function(k){ var t=0; _poIs.rows.forEach(function(r){ t+=(+r.ret[k]||0); }); o[k]=t; }); return o; })() },
-    rows:_poIs.rows.map(function(r){
-      return { id:r.id, bkId:r.bkId, extra:!!r.extra, agN:r.agN, label:r.extra?(r.names[0]||''):'',
-               ad:r.extra?(+r.ad||0):0,
-               iss:JSON.parse(JSON.stringify(r.iss)), ret:JSON.parse(JSON.stringify(r.ret)),
-               dep:+r.dep||0, back:+r.back||0, cut:+r.cut||0, note:r.note||'' };
-    })
+    rows:poIsRowsOut()
   };
   poPersist();
   return true;
 }
+function poIsRowsOut(){
+  return _poIs.rows.map(function(r){
+    return { id:r.id, bkId:r.bkId, extra:!!r.extra, agN:r.agN, label:r.extra?(r.names[0]||''):'',
+             ad:r.extra?(+r.ad||0):0,
+             iss:JSON.parse(JSON.stringify(r.iss)), ret:JSON.parse(JSON.stringify(r.ret)),
+             dep:+r.dep||0, back:+r.back||0, cut:+r.cut||0, note:r.note||'' };
+  });
+}
+/* §poDraft · เก็บใบไว้เฉย ๆ · สต็อกไม่ขยับ */
+function poIssueDraft(bid){
+  if(!poIsCommit(bid,'draft')) return;
+  poModalClose(); renderPierOffice();
+}
+/* §poDraft · ยืนยัน = ตรวจครบแล้วเขียนลงบัญชีสต็อก */
 function poIssueSave(bid){
   if(!poIsCommit(bid)) return;
   poModalClose(); renderPierOffice();
 }
-/* บันทึกก่อนแล้วค่อยไปเลือกประเภทของที่จะขึ้นใบ · ตัวเลขบนกระดาษจะได้เป็นชุดเดียวกับที่เพิ่งกรอก */
+/* พิมพ์ใบเซ็น · เก็บเป็นร่างพอ ไม่ต้องตัดสต็อกเพราะแค่จะเอากระดาษไปให้เซ็น */
 function poIsPrint(bid){
-  if(!poIsCommit(bid)) return;
+  if(!poIsCommit(bid,'draft')) return;
   renderPierOffice();
   poSignSheet(bid);
 }
