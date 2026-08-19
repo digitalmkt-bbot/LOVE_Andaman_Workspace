@@ -92,9 +92,9 @@
 
 - **Task:** LAM-19
 - **Branch:** `agent/LAM-19-partial-cancel-lock-draws`
-- **Commit:** TBD — recorded after commit, see manifest `.agent-reports/LAM-19.json`
+- **Commit:** `5ec70cfc8458ab1b011a92f8da82e68dc751db71`
 - **Worktree:** `D:/projects/wt-sprint1/LAM-19-partial-cancel-lock-draws`
 - **Jira:** LAM-19 (S1-05 Partial cancel must return seat-lock draws)
-- **PR:** None yet — created after commit/push in publish mode; see manifest for the recorded number/URL.
+- **PR:** [#5](https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/5) — base `refactor/booking-v2-migration`, head `agent/LAM-19-partial-cancel-lock-draws`, state OPEN
 - **Manifest:** `.agent-reports/LAM-19.json`
 - **Unrelated changes left untouched:** None — the working tree had no pre-existing modifications at task start (`git status --short --branch` was clean), and only `allotment_v2/allotment_v2.html` plus this task's own two report artifacts were changed.
