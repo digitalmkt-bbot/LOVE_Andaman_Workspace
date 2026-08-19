@@ -77753,6 +77753,44 @@ function bkV2PartialCancel(bookingId, tripIdx, opts){
   });
   const moneyLbl = `charge ${charged.count||0} (฿${Math.round(charged.amount||0).toLocaleString()}) · waive ${waived.count||0} (฿${Math.round(refund).toLocaleString()})`;
   if(typeof bkV2AddHistory==='function') bkV2AddHistory(bk,'cancel',`Partial cancel · −${opts.totalRem} pax · ${catLbl} · ${moneyLbl}${opts.note?' · '+opts.note:''}`,'Cancel');
+  /* §lkReturn(partial) · trips[].lockDraws is the source of truth for lock usage (not `used`) — a
+     partial cancel that only decrements pax leaves the removed seats permanently drawn against the
+     lock, so they never come back to getAllotment. Return up to totalRem seats from THIS trip's
+     lockDraws (capped at what was actually drawn); any remainder of totalRem was general pool and
+     is already freed because getSeatsConsumed reads the now-lower t.pax live. */
+  let _lkBack=0;
+  try{
+    const totalRem=Math.max(0,Number(opts.totalRem)||0);
+    if(totalRem>0 && Array.isArray(t.lockDraws) && t.lockDraws.length && typeof bkV2ReturnLock==='function'){
+      let need=totalRem; const kept=[];
+      t.lockDraws.forEach(d=>{
+        const qty=Number(d.qty)||0;
+        if(need<=0 || qty<=0){ if(qty>0) kept.push(d); return; }
+        const take=Math.min(need, qty);
+        const got=bkV2ReturnLock(d.lockId, take, bk.id, t.date, 'partial cancel');
+        _lkBack+=got; need-=got;
+        const remain=qty-got;
+        if(remain>0) kept.push({lockId:d.lockId, qty:remain});
+      });
+      t.lockDraws=kept;
+      if(t.seatSource) t.seatSource.locked=Math.max(0,(Number(t.seatSource.locked)||0)-_lkBack);
+    }
+  }catch(e){ console.warn('[bkV2PartialCancel] return lock draws failed:',e); }
+  if(_lkBack>0 && typeof bkV2AddHistory==='function')
+    bkV2AddHistory(bk,'cancel',`คืนที่นั่งเข้า seat lock ${_lkBack} ที่ (partial cancel)`,'Cancel');
+  /* Invoice was raised on the pre-reduction pax/total — flag it for manual review instead of
+     silently rewriting a number a human already sent to the agent. Money is NOT auto-adjusted. */
+  try{
+    const _iv=(typeof acctBookingInvoice==='function')?acctBookingInvoice(bookingId):null;
+    if(_iv){
+      _iv.needsAdjustment=true;
+      (_iv.adjustmentFlags=_iv.adjustmentFlags||[]).push({
+        reason:'partial_cancel', bookingId, tripIdx, removed:opts.removed||{}, count:opts.totalRem||0,
+        refund, at:new Date().toISOString(), by:laBy()
+      });
+      if(typeof sbInvoicesPersist==='function') sbInvoicesPersist();
+    }
+  }catch(e){ console.warn('[bkV2PartialCancel] flag invoice failed:',e); }
   // persist
   try{ const lsKey=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2'); const obj=JSON.parse(localStorage.getItem(lsKey)||'{}'); obj.sb_bookings=SB_BOOKINGS; localStorage.setItem(lsKey,JSON.stringify(obj)); }catch(e){ console.warn('[bkV2PartialCancel] save failed:',e); }
   return true;
