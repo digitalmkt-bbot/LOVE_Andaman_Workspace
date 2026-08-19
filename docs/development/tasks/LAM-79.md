@@ -51,6 +51,7 @@
 | `node -e "const fs=require('fs'); const map=fs.readFileSync('SYSTEM_MAP.md','utf8'); const href='docs/adr/001-nextjs-app-router.md'; if(!map.includes(href)) throw new Error('Missing SYSTEM_MAP link'); if(!fs.existsSync(href)) throw new Error('Broken ADR target'); console.log('SYSTEM_MAP ADR link: valid');"` | Passed — `SYSTEM_MAP ADR link: valid`. |
 | `git diff --check` | Passed — no whitespace errors. |
 | `node C:/Users/ta-za/.pi/agent/git/github.com/TheTaTha5/my-own-skills/skills/agent-change-pr/scripts/change-report.mjs --validate .agent-reports/LAM-79.json --report docs/development/tasks/LAM-79.md` | Passed — `valid: LAM-79`. |
+| `gh pr view 1 --json number,url,title,state,baseRefName,headRefName` | Passed — #1 is `OPEN`, base `main`, head `LAM-79-nextjs-app-router-adr`. |
 
 ## Decisions, risks, and rollback
 
@@ -66,8 +67,8 @@
 - **Task:** LAM-79
 - **Branch:** `LAM-79-nextjs-app-router-adr`
 - **Worktree:** `C:/Users/ta-za/.pi/workflows/projects/wt-coordinator-6d3a93079ab9/sessions/01a01848-e03b-7eaf-b0b1-c703097d7229/runs/203096be-3173-4143-858b-c601e9ce8a3b/worktrees/395ca071fce37b5c`
-- **Initial implementation commit:** Pending; recorded after the focused implementation commit in the publication metadata update.
+- **Initial implementation commit:** `cb27bac6608f5815883daea59b3dc74217f7d50b` (`LAM-79: document Next.js App Router decision`).
 - **Jira:** LAM-79 (no transition performed).
-- **PR:** Pending publication; the final number, URL, base, and head are recorded in the publication metadata update.
+- **PR:** [#1](https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/1), `OPEN`; verified base `main`, head `LAM-79-nextjs-app-router-adr`. This publication-metadata update is committed and pushed separately without rewriting the implementation commit.
 - **Manifest:** `.agent-reports/LAM-79.json`
 - **Unrelated changes left untouched:** None.

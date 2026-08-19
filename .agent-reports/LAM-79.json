@@ -11,11 +11,11 @@
     "base": "origin/main",
     "branch": "LAM-79-nextjs-app-router-adr",
     "worktree": "C:/Users/ta-za/.pi/workflows/projects/wt-coordinator-6d3a93079ab9/sessions/01a01848-e03b-7eaf-b0b1-c703097d7229/runs/203096be-3173-4143-858b-c601e9ce8a3b/worktrees/395ca071fce37b5c",
-    "commit": "Pending initial implementation commit; final SHA is recorded in the publication metadata update.",
+    "commit": "cb27bac6608f5815883daea59b3dc74217f7d50b",
     "pr": {
-      "number": null,
-      "url": "Not published yet",
-      "state": "none"
+      "number": 1,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/1",
+      "state": "open"
     }
   },
   "input": {
@@ -130,6 +130,11 @@
       "command": "node C:/Users/ta-za/.pi/agent/git/github.com/TheTaTha5/my-own-skills/skills/agent-change-pr/scripts/change-report.mjs --validate .agent-reports/LAM-79.json --report docs/development/tasks/LAM-79.md",
       "status": "passed",
       "evidence": "Output: valid: LAM-79."
+    },
+    {
+      "command": "gh pr view 1 --json number,url,title,state,baseRefName,headRefName",
+      "status": "passed",
+      "evidence": "PR #1 is OPEN at https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/1 with base main and head LAM-79-nextjs-app-router-adr."
     }
   ],
   "decisions": [
