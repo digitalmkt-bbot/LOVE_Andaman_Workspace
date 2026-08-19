@@ -119,5 +119,5 @@ Per-file purpose is in [`tests/legacy/README.md`](../../../tests/legacy/README.m
 - **Worktree:** `D:/projects/wt-sprint2/LAM-77-characterization-tests`
 - **HEAD at scaffold:** `17a15c46429b126d6e2eda9f2ebcd6b26cb31351`
 - **Merge base:** `17a15c46429b126d6e2eda9f2ebcd6b26cb31351`
-- **PR:** TODO — filled in after publish.
+- **PR:** [#14](https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/14) — `agent/LAM-77-characterization-tests` → `main`, state: open.
 - **Unrelated changes left untouched:** None — `allotment_v2/allotment_v2.html`, `server.js`, the root `package.json`, `.github/`, `apps/web/**`, `docs/adr/**`, and `SYSTEM_MAP.md` were all left exactly as found (the first four were read via grep/narrow windows only where relevant; the last three were not touched or read for this task).

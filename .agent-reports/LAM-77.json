@@ -11,11 +11,11 @@
     "base": "main",
     "branch": "agent/LAM-77-characterization-tests",
     "worktree": "D:/projects/wt-sprint2/LAM-77-characterization-tests",
-    "commit": "PENDING_COMMIT",
+    "commit": "bffa1d9c80d858499b9bad8c50873c28c1b2b4ba",
     "pr": {
-      "number": null,
-      "url": "",
-      "state": "none"
+      "number": 14,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/14",
+      "state": "open"
     }
   },
   "input": {
