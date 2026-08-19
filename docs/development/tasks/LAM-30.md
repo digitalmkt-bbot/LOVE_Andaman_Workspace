@@ -70,7 +70,7 @@ added	docs/development/trips-per-boat-columns.md
 | `grep -n 'trips' BACKLOG.md` + read `⏸ trips mapping` section | Passed — confirmed BACKLOG.md already proposes child-table/`map_value_json` and cites `vanjob_driver`/`boat_capovr` as the correct existing pattern |
 | Read `allotment_v2/docs/workflows/07-data-persistence-api.md` §0 and §10 item 12 | Passed — independently confirms the same gap and the `os-backend` deletion/restore history; `git merge-base --is-ancestor 1c10d84 HEAD` confirmed the restore is present in this worktree |
 | `node -e "require('./server.js')"` | Blocked — hung and was killed by the tool's 2-minute timeout (server.js attempts to connect to Postgres/listen at require time); no Postgres/prod network reachable in this sandbox per task constraints. No orphaned process remained afterward. Module resolution was instead confirmed statically (git ancestry + individually `require()`-ing each mapping file, which loaded fine standalone) |
-| `node .../change-report.mjs --validate .agent-reports/LAM-30.json --report docs/development/tasks/LAM-30.md` | Run after this report was filled in, before commit — see final status in agent notes |
+| `node .../change-report.mjs --validate .agent-reports/LAM-30.json --report docs/development/tasks/LAM-30.md` | Passed — `valid: LAM-30`, run once before the implementation commit and again after recording PR #18 metadata |
 
 ## Decisions, risks, and rollback
 
@@ -104,6 +104,6 @@ added	docs/development/trips-per-boat-columns.md
 - **Worktree:** `D:/projects/wt-sprint2b/LAM-30-trips-columns-spike`
 - **HEAD at scaffold:** `e7d28f0487b2b51c621a89b21689bc649f7f980a`
 - **Merge base:** `fa60a96e2d86c7776e04a0cf726f7ed8eb60a7c6`
-- **PR:** filled in after publish
+- **PR:** [#18](https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/18) — open, base `refactor/booking-v2-migration`, head `agent/LAM-30-trips-columns-spike`
 - **Unrelated changes left untouched:** all other files in the worktree — verified via `git status --short`
   and `git diff --name-status` showing only the three owned files

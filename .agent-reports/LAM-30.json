@@ -11,11 +11,11 @@
     "base": "refactor/booking-v2-migration",
     "branch": "agent/LAM-30-trips-columns-spike",
     "worktree": "D:/projects/wt-sprint2b/LAM-30-trips-columns-spike",
-    "commit": "PENDING",
+    "commit": "ae23d75bd786fa11f8ffe6112720ce6d9aaed9c2",
     "pr": {
-      "number": null,
-      "url": "",
-      "state": "none"
+      "number": 18,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/18",
+      "state": "open"
     }
   },
   "input": {
@@ -135,8 +135,8 @@
     },
     {
       "command": "node /c/.../change-report.mjs --validate .agent-reports/LAM-30.json --report docs/development/tasks/LAM-30.md",
-      "status": "not_run",
-      "evidence": "To be run after this manifest and the task report are both filled in, before staging/commit — recorded here as not_run at manifest-authoring time; see final validation step in the task workflow."
+      "status": "passed",
+      "evidence": "Output: valid: LAM-30. Run once before the implementation commit (ae23d75) and re-run after recording PR #18 metadata, per the skill publish-mode requirement."
     }
   ],
   "decisions": [
