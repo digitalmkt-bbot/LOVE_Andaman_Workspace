@@ -11,11 +11,11 @@
     "base": "refactor/booking-v2-migration",
     "branch": "agent/LAM-22-test-harness",
     "worktree": "D:/projects/wt-sprint1/LAM-22-test-harness",
-    "commit": "fa60a96e2d86c7776e04a0cf726f7ed8eb60a7c6",
+    "commit": "4b297376bc4df5e55c13078d3355c981af60f9fa",
     "pr": {
-      "number": null,
-      "url": "",
-      "state": "none"
+      "number": 11,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/11",
+      "state": "open"
     }
   },
   "input": {

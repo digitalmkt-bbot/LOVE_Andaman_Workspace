@@ -106,5 +106,6 @@ added	test/unit/booking-fixture.test.mjs
 - **Worktree:** `D:/projects/wt-sprint1/LAM-22-test-harness`
 - **HEAD at scaffold:** `fa60a96e2d86c7776e04a0cf726f7ed8eb60a7c6`
 - **Merge base:** `fa60a96e2d86c7776e04a0cf726f7ed8eb60a7c6`
-- **PR:** TBD — created after this report is committed and pushed (see Publish step of the agent-change-pr skill).
+- **Commit:** `4b297376bc4df5e55c13078d3355c981af60f9fa`
+- **PR:** [#11](https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/11) — open, base `refactor/booking-v2-migration`, head `agent/LAM-22-test-harness`
 - **Unrelated changes left untouched:** `package.json`/`package-lock.json` (LAM-16's exclusive scope this run), `db/migrations/` (not restored/invented — LAM-73's scope), `db/rt.cjs`/`db/test_seat_lock_race.mjs` internals (not owned by this task; issues found are reported under Dependencies/Follow-up work instead of fixed directly).
