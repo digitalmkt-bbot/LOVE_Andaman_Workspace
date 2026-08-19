@@ -87,5 +87,6 @@
 - **Worktree:** `D:/projects/wt-sprint1/LAM-18-weather-reschedule-clear-ops`
 - **HEAD at scaffold:** `fa60a96e2d86c7776e04a0cf726f7ed8eb60a7c6`
 - **Merge base:** `fa60a96e2d86c7776e04a0cf726f7ed8eb60a7c6`
-- **PR:** None yet — created during publish step.
+- **Commit:** `739affacfd88739d39d0c7060df7bbb0c68a196b`
+- **PR:** https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/4 (open, base `refactor/booking-v2-migration` ← head `agent/LAM-18-weather-reschedule-clear-ops`)
 - **Unrelated changes left untouched:** None — the only implementation edit is the 4-line insertion inside `bkV2WeatherResolveOne` described above.

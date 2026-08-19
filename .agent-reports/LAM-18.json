@@ -11,11 +11,11 @@
     "base": "refactor/booking-v2-migration",
     "branch": "agent/LAM-18-weather-reschedule-clear-ops",
     "worktree": "D:/projects/wt-sprint1/LAM-18-weather-reschedule-clear-ops",
-    "commit": "fa60a96e2d86c7776e04a0cf726f7ed8eb60a7c6",
+    "commit": "739affacfd88739d39d0c7060df7bbb0c68a196b",
     "pr": {
-      "number": null,
-      "url": "",
-      "state": "none"
+      "number": 4,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/4",
+      "state": "open"
     }
   },
   "input": {
