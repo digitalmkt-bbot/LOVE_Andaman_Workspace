@@ -42874,7 +42874,15 @@ function laBlobSave(){
   }catch(e){ console.warn('[perf] blob save failed', e && e.message); }
 }
 
-function acctPersistBookings(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;
+// §permGate (LAM-17) · sb_bookings is written from BOTH the operations area (van/boat ops, check-in)
+// AND the accounting area (invoice/payment writes stamp bk.invoiceId/paymentStatus/history on the
+// same SB_BOOKINGS rows — see acctCreateInvoice/acctRecordPayment/acctVoidInvoice just above/below).
+// Gating this on 'operations' alone let an accounting-only user's sbInvoicesPersist() (gated
+// 'accounting') succeed while this sibling call silently no-op'd — invoiceId/paymentStatus/history
+// stayed in RAM only and were lost on refresh. Mirror ckCanEdit's OR-of-areas pattern (operations||pier)
+// so either area that legitimately writes this table can persist it.
+function acctCanEditBookings(){ return (typeof window.laCanEditArea!=='function') || window.laCanEditArea('operations') || window.laCanEditArea('accounting'); }
+function acctPersistBookings(){ if(!acctCanEditBookings()) return;
   if(typeof baChMemoClear==='function') baChMemoClear();   // §boatSplit · ข้อมูลเปลี่ยนแล้ว แคชเรือเหมาต้องหมดอายุทันที
   try{ laBlob().sb_bookings=SB_BOOKINGS; laBlobSave(); }catch(e){ console.warn('persist sb_bookings failed',e);} }
 
