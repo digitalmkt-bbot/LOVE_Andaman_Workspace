@@ -232,7 +232,7 @@ added	test/regression/seat-locks/month-lock-rolling-release.test.mjs
 - **Worktree:** `D:/projects/wt-sprint2b/LAM-26-seat-lock-invariants`
 - **HEAD at scaffold:** `e7d28f0487b2b51c621a89b21689bc649f7f980a`
 - **Merge base:** `fa60a96e2d86c7776e04a0cf726f7ed8eb60a7c6`
-- **PR:** Pending — will be filled in after `gh pr create` in the publish step
+- **PR:** [#20](https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/20) — `agent/LAM-26-seat-lock-invariants` → `refactor/booking-v2-migration`, state OPEN (verified via `gh pr view 20 --json number,url,title,state,baseRefName,headRefName`)
 - **Unrelated changes left untouched:** None encountered — worktree was clean at start
   (`git status --short --branch` showed no pre-existing modifications); no other
   agent's files were touched.
