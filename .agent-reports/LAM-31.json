@@ -1,0 +1,343 @@
+{
+  "schemaVersion": 1,
+  "task": "LAM-31",
+  "title": "Disambiguate the two save() functions",
+  "status": "partial",
+  "agent": {
+    "sessionId": "",
+    "model": ""
+  },
+  "git": {
+    "base": "refactor/booking-v2-migration",
+    "branch": "agent/LAM-31-save-disambiguation",
+    "worktree": "D:/projects/wt-sprint2b/LAM-31-save-disambiguation",
+    "commit": "f006808c0c7b857b04889a297cde57113c32ba7d",
+    "pr": {
+      "number": 21,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/21",
+      "state": "open"
+    }
+  },
+  "input": {
+    "requestedOutcome": "Rename the two identically-named `save()` functions in allotment_v2.html to intent-revealing names, update every call site file-wide, document why flSave() also persists BOATS, and describe the reload-survival test for a fleet-side boat status change (test/** is out of scope for this task's owned paths).",
+    "acceptanceCriteria": [
+      "The closure-private cloud-sync save(v, forceLegacy) inside the boot IIFE (docs/workflows/07 §1.3) and the global persist helper save(area) that writes routes/boats/trips (docs/workflows/05 §10.1) are each renamed to an intent-revealing, non-colliding name.",
+      "Every call site of both renamed functions is updated file-wide; zero references to the bare old name `save(` remain outside the two known-unrelated locations (Canvas 2D `ctx.save()`/`c.save()` and the self-contained popup-window script string built by pjShotScript()).",
+      "Behavior is unchanged — this is a pure rename, not a refactor of what either function persists.",
+      "flSave()'s definition carries a comment explaining why it independently persists BOATS (fleet mutates b.log constantly and never calls the sales-side persist helper).",
+      "A test verifying a fleet-UI boat status change survives a reload is specified (test/** is not in this task's owned-files list, so the test itself could not be added in this run).",
+      "Verification includes node --check on the extracted <script> content and a grep proving zero old-name references remain."
+    ],
+    "allowedScope": [
+      "allotment_v2/allotment_v2.html",
+      "docs/development/tasks/LAM-31.md",
+      ".agent-reports/LAM-31.json"
+    ],
+    "constraints": [
+      "allotment_v2/allotment_v2.html is explicitly pre-approved for this task by the user; do not hard-stop on it.",
+      "File is ~4MB — never read whole; grep -n to locate, read a 30-50 line window, targeted edit, re-read only the changed region.",
+      "Every JS change must be verified with node --check on the extracted <script> content.",
+      "Must rebase on sibling branches agent/LAM-27-cancelled-status-constant and agent/LAM-29-revert-to-seed-stores before editing, keeping both siblings' work.",
+      "Do not touch test/** (not owned this run).",
+      "Do not force-push; never commit to main or refactor/booking-v2-migration.",
+      "Stage only the three owned paths, never git add -A / git add ."
+    ],
+    "assumptions": [
+      "\"the two save() functions\" in the Jira title refers to the pair documented in docs/workflows/07-data-persistence-api.md §1.3 (\"The two save() functions — a real trap\"): the closure-private cloud-sync save(v, forceLegacy) at allotment_v2.html:219 (pre-rename) inside the boot IIFE, and the global persist helper save(area) at allotment_v2.html:5813 (pre-rename) that writes routes/boats/trips.",
+      "flSave() (the fleet-side persist helper) keeps its existing, already intent-revealing name; the Jira text about flSave() and BOATS (sourced from docs/workflows/05-fleet-management.md §10.1 item 1) is background/rationale for a documentation requirement at its definition, not an instruction to rename it — its name was already unambiguous and it is not part of the 'two save() functions' pair the doc identifies.",
+      "The reload-survival test (fleet UI boat status change → flSave() → BOATS persisted → reload → status still present) is a real, valuable test but test/** is outside this task's owned-files list, so it is declared as a dependency/follow-up rather than added."
+    ]
+  },
+  "output": {
+    "summary": "Renamed the closure-private cloud-sync save(v, forceLegacy) (inside the boot IIFE, allotment_v2.html) to _laSyncSave(v, forceLegacy), matching the file's existing _la*-prefixed private-helper convention in that IIFE, and renamed the global persist helper save(area) (writes ROUTES/BOATS/TRIPS to localStorage) to saveData(area), pairing it with its existing counterpart loadData(). Updated every real call site (6 for _laSyncSave, 44 for saveData, including 6 `typeof save==='function'` guards that the initial sweep missed and a follow-up pass fixed) and every comment that named the old identifier. Left three things deliberately untouched because they are unrelated identifiers that merely contain the substring \"save(\": Canvas 2D context calls `ctx.save()`/`c.save()` (2D drawing API, not our function), the self-contained `save(c)` function defined inside the string literal built by pjShotScript() (injected into an unrelated popup window, its own closure), and the local boolean parameter named `save` in `agTblCommit(save)` (unrelated). Added a documentation comment directly above flSave()'s definition explaining why it independently persists BOATS (fleet mutates b.log constantly and only ever calls flSave(), never saveData()), in addition to the pre-existing Thai §flBoatPersist comment inside the function body (updated in place to reference the new saveData() name). No behavior was changed anywhere — every edit is a pure identifier rename or a comment-text update to match.",
+    "filesChanged": [
+      {
+        "path": ".agent-reports/LAM-16.json",
+        "change": "added",
+        "purpose": "Inherited from sibling task LAM-16 (agent/LAM-16-ci-boot-smoke), already merged into the base branch history this branch was created from — not authored by LAM-31."
+      },
+      {
+        "path": ".agent-reports/LAM-17.json",
+        "change": "added",
+        "purpose": "Inherited from base branch history (prior sprint task) — not authored by LAM-31."
+      },
+      {
+        "path": ".agent-reports/LAM-18.json",
+        "change": "added",
+        "purpose": "Inherited from base branch history (prior sprint task) — not authored by LAM-31."
+      },
+      {
+        "path": ".agent-reports/LAM-19.json",
+        "change": "added",
+        "purpose": "Inherited from base branch history (prior sprint task) — not authored by LAM-31."
+      },
+      {
+        "path": ".agent-reports/LAM-20.json",
+        "change": "added",
+        "purpose": "Inherited from base branch history (prior sprint task) — not authored by LAM-31."
+      },
+      {
+        "path": ".agent-reports/LAM-21.json",
+        "change": "added",
+        "purpose": "Inherited from base branch history (prior sprint task) — not authored by LAM-31."
+      },
+      {
+        "path": ".agent-reports/LAM-22.json",
+        "change": "added",
+        "purpose": "Inherited from base branch history (prior sprint task) — not authored by LAM-31."
+      },
+      {
+        "path": ".agent-reports/LAM-23.json",
+        "change": "added",
+        "purpose": "Inherited from base branch history (prior sprint task) — not authored by LAM-31."
+      },
+      {
+        "path": ".agent-reports/LAM-27.json",
+        "change": "added",
+        "purpose": "Brought in by required sibling-integration merge of origin/agent/LAM-27-cancelled-status-constant per task instructions — not authored by LAM-31."
+      },
+      {
+        "path": ".agent-reports/LAM-29.json",
+        "change": "added",
+        "purpose": "Brought in by required sibling-integration merge of origin/agent/LAM-29-revert-to-seed-stores per task instructions — not authored by LAM-31."
+      },
+      {
+        "path": ".github/workflows/ci-boot-smoke.yml",
+        "change": "added",
+        "purpose": "Inherited from base branch history (LAM-16) — not authored by LAM-31."
+      },
+      {
+        "path": ".github/workflows/tests.yml",
+        "change": "added",
+        "purpose": "Inherited from base branch history (prior sprint task) — not authored by LAM-31."
+      },
+      {
+        "path": "allotment_v2/allotment_v2.html",
+        "change": "modified",
+        "purpose": "LAM-31: renamed save(v, forceLegacy) -> _laSyncSave(v, forceLegacy) (cloud-sync, IIFE-private) and save(area) -> saveData(area) (global persist helper for ROUTES/BOATS/TRIPS) at every definition, call site, and comment mention; added an explanatory comment at flSave()'s definition documenting why it independently persists BOATS. Pure rename, no behavior change."
+      },
+      {
+        "path": "ARCHITECTURE.md",
+        "change": "added",
+        "purpose": "Inherited from base branch history (prior sprint task) — not authored by LAM-31."
+      },
+      {
+        "path": "CLAUDE.md",
+        "change": "modified",
+        "purpose": "Inherited from base branch history (prior sprint task) — not authored by LAM-31."
+      },
+      {
+        "path": "docs/development/tasks/LAM-16.md",
+        "change": "added",
+        "purpose": "Inherited from base branch history (prior sprint task) — not authored by LAM-31."
+      },
+      {
+        "path": "docs/development/tasks/LAM-17.md",
+        "change": "added",
+        "purpose": "Inherited from base branch history (prior sprint task) — not authored by LAM-31."
+      },
+      {
+        "path": "docs/development/tasks/LAM-18.md",
+        "change": "added",
+        "purpose": "Inherited from base branch history (prior sprint task) — not authored by LAM-31."
+      },
+      {
+        "path": "docs/development/tasks/LAM-19.md",
+        "change": "added",
+        "purpose": "Inherited from base branch history (prior sprint task) — not authored by LAM-31."
+      },
+      {
+        "path": "docs/development/tasks/LAM-20.md",
+        "change": "added",
+        "purpose": "Inherited from base branch history (prior sprint task) — not authored by LAM-31."
+      },
+      {
+        "path": "docs/development/tasks/LAM-21.md",
+        "change": "added",
+        "purpose": "Inherited from base branch history (prior sprint task) — not authored by LAM-31."
+      },
+      {
+        "path": "docs/development/tasks/LAM-22.md",
+        "change": "added",
+        "purpose": "Inherited from base branch history (prior sprint task) — not authored by LAM-31."
+      },
+      {
+        "path": "docs/development/tasks/LAM-23.md",
+        "change": "added",
+        "purpose": "Inherited from base branch history (prior sprint task) — not authored by LAM-31."
+      },
+      {
+        "path": "docs/development/tasks/LAM-27.md",
+        "change": "added",
+        "purpose": "Brought in by required sibling-integration merge of origin/agent/LAM-27-cancelled-status-constant per task instructions — not authored by LAM-31."
+      },
+      {
+        "path": "docs/development/tasks/LAM-29.md",
+        "change": "added",
+        "purpose": "Brought in by required sibling-integration merge of origin/agent/LAM-29-revert-to-seed-stores per task instructions — not authored by LAM-31."
+      },
+      {
+        "path": "docs/development/tasks/LAM-31.md",
+        "change": "added",
+        "purpose": "This task's own durable development record, scaffolded and completed per the agent-change-pr skill."
+      },
+      {
+        "path": "docs/development/unpersisted-writes.md",
+        "change": "added",
+        "purpose": "Inherited from base branch history (prior sprint task) — not authored by LAM-31."
+      },
+      {
+        "path": "package.json",
+        "change": "modified",
+        "purpose": "Inherited from base branch history (prior sprint task) — not authored by LAM-31."
+      },
+      {
+        "path": "README.md",
+        "change": "modified",
+        "purpose": "Inherited from base branch history (prior sprint task) — not authored by LAM-31."
+      },
+      {
+        "path": "test/e2e/booking-write-path.test.mjs",
+        "change": "added",
+        "purpose": "Inherited from base branch history (LAM-22 test harness) — not authored by LAM-31; test/** is not owned by this task."
+      },
+      {
+        "path": "test/fixtures/booking.mjs",
+        "change": "added",
+        "purpose": "Inherited from base branch history (LAM-22 test harness) — not authored by LAM-31; test/** is not owned by this task."
+      },
+      {
+        "path": "test/helpers/db.mjs",
+        "change": "added",
+        "purpose": "Inherited from base branch history (LAM-22 test harness) — not authored by LAM-31; test/** is not owned by this task."
+      },
+      {
+        "path": "test/helpers/server.mjs",
+        "change": "added",
+        "purpose": "Inherited from base branch history (LAM-22 test harness) — not authored by LAM-31; test/** is not owned by this task."
+      },
+      {
+        "path": "test/README.md",
+        "change": "added",
+        "purpose": "Inherited from base branch history (LAM-22 test harness) — not authored by LAM-31; test/** is not owned by this task."
+      },
+      {
+        "path": "test/unit/booking-fixture.test.mjs",
+        "change": "added",
+        "purpose": "Inherited from base branch history (LAM-22 test harness) — not authored by LAM-31; test/** is not owned by this task."
+      },
+      {
+        "path": "tools/check-excluded-states.mjs",
+        "change": "added",
+        "purpose": "Brought in by required sibling-integration merge of origin/agent/LAM-27-cancelled-status-constant per task instructions — not authored by LAM-31."
+      },
+      {
+        "path": "tools/check-persist-gates.mjs",
+        "change": "added",
+        "purpose": "Inherited from base branch history (prior sprint task) — not authored by LAM-31."
+      },
+      {
+        "path": "tools/ci-boot-smoke.mjs",
+        "change": "added",
+        "purpose": "Inherited from base branch history (LAM-16) — not authored by LAM-31."
+      }
+    ],
+    "behaviorChanges": [
+      {
+        "area": "allotment_v2.html — cloud-sync save function (boot IIFE)",
+        "before": "Declared as `function save(v, forceLegacy)`, called from the localStorage.setItem shim, its own retry paths, and the unsaved-work recovery path — same bare name `save` as the unrelated global persist helper 3700+ lines later, and shadowed by nothing since it's closure-private.",
+        "after": "Renamed to `_laSyncSave(v, forceLegacy)`, matching the file's existing `_la*`-prefixed private-helper convention (`_laSaveErr`, `_laBlobUsable`, `_laFlush`, `_laMark`, `_laShrinkBlocked`). All 5 call sites plus 1 comment mention updated. Identical logic — same XHR POST to /api/v1/_batch or /api/save, same retry/backoff behavior."
+      },
+      {
+        "area": "allotment_v2.html — global persist helper for ROUTES/BOATS/TRIPS",
+        "before": "Declared as `function save(area)`, writing d.routes/d.boats/d.trips into the LS_KEY blob, gated by laCanEditArea(area). Called ~44 times across Boat Status, Boat Operation, Route/Season admin, and project-close code, plus mixed in with an unrelated closure-private function of the same name.",
+        "after": "Renamed to `saveData(area)`, pairing it with its existing load-side counterpart `loadData()`. All ~44 call sites (including 6 `typeof save==='function'` guards found in a follow-up sweep) and 3 comment mentions updated. Identical logic — same laCanEditArea(area) gate, same read-modify-write of d.routes/d.boats/d.trips."
+      },
+      {
+        "area": "allotment_v2.html — flSave() BOATS-ownership documentation",
+        "before": "The rationale for flSave() also writing d.boats=BOATS lived only in a terse Thai comment (§flBoatPersist) inside the function body.",
+        "after": "Added a 9-line English comment directly above the function definition (tagged LAM-31) spelling out: BOATS is a sales/schedule global that saveData() also owns; fleet code mutates b.log through flSave() call sites exclusively and never calls saveData(); saveData() is gated to Booking/Boat-Operation screens by laCanEditArea; removing d.boats=BOATS from flSave() would silently lose every fleet-side boat status edit on reload. The original Thai comment was left in place (with its save() reference updated to saveData())."
+      }
+    ],
+    "interfaces": {
+      "added": [
+        "_laSyncSave(v, forceLegacy) — renamed from save(v, forceLegacy); closure-private inside the boot IIFE, not reachable from outside that scope.",
+        "saveData(area) — renamed from save(area); global function, same call signature and semantics as before."
+      ],
+      "changed": [],
+      "removed": [
+        "The bare global name save() no longer exists as either function; any external code or console snippet that referenced window.save (there were no such references in the file) would need updating to saveData()."
+      ]
+    },
+    "dataPersistence": {
+      "impact": "none",
+      "details": [
+        "Pure identifier rename. Neither function's write set changed: _laSyncSave still POSTs the same diff/ops payload to the same endpoints; saveData still writes d.routes/d.boats/d.trips (+ d.version) to the same LS_KEY blob under the same laCanEditArea(area) gate; flSave still writes the same fleet_* keys plus d.boats=BOATS.",
+        "No schema, migration, or API surface change."
+      ],
+      "migrationRequired": false
+    }
+  },
+  "verification": [
+    {
+      "command": "grep -c call-site inventory: `grep -noE \"\\\\bsave\\\\([^)]*\\\\)\" allotment_v2/allotment_v2.html` before renaming, cross-checked against IIFE line range [18,726] vs global scope",
+      "status": "passed",
+      "evidence": "59 total `save(` occurrences pre-rename: 7 inside the boot IIFE (1 definition + 5 real calls + 1 comment mention) and 52 outside it (1 definition + 43 real calls + 2 comment mentions [§edit-guard block] + 3 unrelated Canvas ctx.save()/c.save() + 2 unrelated pjShotScript string occurrences + a follow-up pass found 6 more real call sites hidden behind `typeof save==='function'` guards, which the initial `save(` pattern search could not catch since there's no immediately-following '(')."
+    },
+    {
+      "command": "node --check on each of the 8 non-src inline <script> blocks extracted from allotment_v2.html (the file has multiple top-level <script> tags sharing global scope; extracted via a small Node script that walks <script>...</script> pairs using indexOf, correctly skipping the escaped `<\\/script>` sequences used inside string-built HTML)",
+      "status": "passed",
+      "evidence": "All 8 blocks (lines 5-727, 3737-3755, 4166-4192, 5555-13347, 13770-36213, 36249-38114, 39142-39184, 39203-83696) passed `node --check` with no output (success)."
+    },
+    {
+      "command": "grep -noE \"[A-Za-z_$.]*save\\(\" allotment_v2/allotment_v2.html | awk -F: '$1>726' -- post-rename sweep for any remaining bare save( call outside the IIFE",
+      "status": "passed",
+      "evidence": "Only 5 matches remain: `ctx.save(` x2 (lines 44231, 44246), `c.save(` x1 (line 54072) — Canvas 2D context method calls, unrelated to our functions — and `save(` x2 at lines 83387/83406 inside the string literal built by pjShotScript(), which defines its own self-contained `function save(c)` for a popup print/screenshot window, unrelated to the outer scope's functions. Zero unaccounted-for matches."
+    },
+    {
+      "command": "grep -n \"typeof save\\\\b\" allotment_v2/allotment_v2.html (post-rename)",
+      "status": "passed",
+      "evidence": "No matches — all 6 `typeof save==='function'` guards were updated to `typeof saveData==='function'` in the follow-up pass."
+    },
+    {
+      "command": "grep -n \"^function save(\\|  function save(\" allotment_v2/allotment_v2.html (post-rename, proving no leftover top-level `function save(` definition outside the excluded pjShotScript string)",
+      "status": "passed",
+      "evidence": "No matches."
+    },
+    {
+      "command": "git diff --stat / git diff --name-status allotment_v2/allotment_v2.html — confirm the diff is scoped to the intended file with no unintended edits",
+      "status": "passed",
+      "evidence": "1 file changed, 63 insertions(+), 54 deletions(-); every hunk reviewed by hand is either an identifier rename (save->saveData or save->_laSyncSave) or a matching comment-text update, plus the added flSave() documentation comment. No logic changes."
+    },
+    {
+      "command": "Reload-survival test for a fleet-side boat status change (flSave() -> d.boats=BOATS -> localStorage -> reload -> status persists)",
+      "status": "blocked",
+      "evidence": "test/** is not in this task's owned-files list (allotment_v2/allotment_v2.html, docs/development/tasks/LAM-31.md, .agent-reports/LAM-31.json only), so no test file was added. Declared as a dependency/follow-up below with the exact scenario to implement."
+    },
+    {
+      "command": "npm test / any existing automated test suite",
+      "status": "not_run",
+      "evidence": "Not run — no test files were touched by this task and the task's owned-files list excludes test/**, so there was no in-scope reason to invoke the suite. package.json/test/** were not inspected for a runnable command in this session."
+    }
+  ],
+  "decisions": [
+    "Interpreted 'the two save() functions' (Jira title, matching docs/workflows/07-data-persistence-api.md §1.3's exact heading) as the closure-private cloud-sync save(v, forceLegacy) and the global persist helper save(area) — NOT flSave(). flSave() already had an intent-revealing, non-colliding name (fl-prefixed, fleet-scoped) and is a different function pair from the one the '07 §1.3' citation describes; the Jira text about flSave()/BOATS is sourced separately from docs/workflows/05-fleet-management.md §10.1 item 1 and reads as background/rationale for the documentation sub-requirement, not an instruction to rename flSave() itself.",
+    "Named the renamed cloud-sync function `_laSyncSave` to match the file's existing underscore+`la`-prefixed convention for closure-private helpers in that same boot IIFE (_laSaveErr, _laBlobUsable, _laFlush, _laMark, _laShrinkBlocked all already use this pattern).",
+    "Named the renamed global persist helper `saveData` to pair it with its existing load-side counterpart `loadData()` (declared immediately above it), which is the most direct, low-risk intent-revealing name available and requires no new abbreviation/prefix vocabulary.",
+    "Kept flSave()'s existing Thai §flBoatPersist in-body comment (only updating its save()->saveData() reference) and added a new, more complete English comment directly above the function definition — satisfying 'document, in a comment at flSave()'s new definition, why it owns BOATS' by treating 'new definition' as 'the definition site after this task's changes' rather than as evidence flSave() itself needed a new name.",
+    "Ran a first rename pass matching the literal `save(` call-syntax, then a mandatory follow-up pass after discovering it silently missed 6 `typeof save==='function'` type-checks (no parens immediately after the identifier) — both passes are reflected in the final diff and verification evidence above."
+  ],
+  "risks": [
+    "This is a large, file-wide mechanical rename (48 real call sites + 2 definitions + comments) across a ~4MB single-file app with no automated test suite reachable in this sandbox (no Postgres, no prod service). node --check on every extracted <script> block is strong evidence the JS still parses, but it cannot prove runtime behavior is unchanged the way a browser smoke test or the declared reload test would.",
+    "Because saveData() and flSave() both write d.boats=BOATS by design (documented, pre-existing, unchanged by this task), a future edit to either could silently reintroduce ambiguity about which one 'owns' BOATS if the new comment at flSave() is not kept in sync."
+  ],
+  "blockers": [],
+  "dependencies": [
+    "The reload-survival test could not be added because test/** is outside this task's owned-files list. Depends on a task/agent that owns test/** to add it."
+  ],
+  "followUps": [
+    "Add an automated test (e.g. under test/e2e/ or test/unit/, following the LAM-22 harness pattern already in the repo — test/helpers/server.mjs, test/fixtures/booking.mjs) that: (1) loads the app with a fresh/seeded LS_KEY blob, (2) drives a fleet-UI boat status change (e.g. call saveStatus()/flSaveEditBoatStatus() equivalent flow, or directly push a new entry onto BOATS[i].log and call flSave()), (3) asserts localStorage[LS_KEY].boats reflects the new status immediately after flSave() runs (not after saveData()), (4) simulates a reload by re-reading and re-hydrating from localStorage (loadData()) and asserts the boat's current status (getCurStatus / last log entry) still matches. This directly exercises the §flBoatPersist / LAM-31 comment's claim and would regress loudly if a future refactor ever removed d.boats=BOATS from flSave() without adding an equivalent saveData() call on every fleet mutation path.",
+      "Consider whether _laSyncSave should eventually be exposed with a name discoverable via grep from outside the IIFE (e.g. in a code comment index) since it is currently only reachable by reading the boot IIFE end-to-end — out of scope for this pure-rename task."
+  ],
+  "rollback": "Revert the single commit on this branch (or `git checkout <previous-commit> -- allotment_v2/allotment_v2.html`) to restore the original `save(v, forceLegacy)` / `save(area)` names. No data migration, schema, or persisted-blob shape changed, so rollback is a pure code revert with no cleanup required."
+}
