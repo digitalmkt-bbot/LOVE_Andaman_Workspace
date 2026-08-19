@@ -81101,6 +81101,13 @@ function poBal(itemId){
   b.inhand=b.ready+b.onboat+b.dirty+b.laundry+b.repair;
   return b;
 }
+/* §poCapReady · ยอดพร้อมใช้ที่เอาไปโชว์ · ไม่เกินทะเบียนของชิ้นนั้น
+   บัญชีเก็บค่าจริงไว้เหมือนเดิม ตัวเลขบนจอเกินทะเบียนไม่ได้ ของจริงในตู้ก็ไม่เคยเกิน
+   ส่วนที่เกินไม่ได้ถูกกลบ · ตัวเลขเปลี่ยนเป็นสีแดงและบอกไว้ใน title ว่าบัญชีขึ้นเท่าไหร่ */
+function poReadyShown(it, b){
+  var cap=poNum(it&&it.total); b=b||poBal(it&&it.id);
+  return Math.min(b.ready, cap);
+}
 
 /* ── เรือที่ออกวันนี้ที่ท่านี้ · ดึงจาก TRIPS + ROUTES.pier ของเดิม ── */
 function poBoats(date, pier){
@@ -81506,7 +81513,7 @@ function poStockTable(items, ro){
   var cards=order.map(function(k){
     var K=PO_KIND[k]||{t:k,u:'ชิ้น',c:'#9A9A93'}, list=by[k];
     var tot=0, rd=0;
-    list.forEach(function(it){ tot+=poNum(it.total); rd+=poBal(it.id).ready; });
+    list.forEach(function(it){ tot+=poNum(it.total); rd+=poReadyShown(it); });
     return '<div class="po-kc"><div class="po-kh"><span class="dot" style="background:'+K.c+'"></span>'
       +'<b>'+poE(K.t)+'</b><span class="sum">พร้อมใช้ <em>'+rd+'</em> / '+tot+' '+poE(K.u)+'</span></div>'
       + list.map(function(it){
@@ -81514,13 +81521,14 @@ function poStockTable(items, ro){
           var tip=it.label+' · ทะเบียน '+poNum(it.total)+' '+K.u+(b.gone?(' · ตัดออกสะสม '+b.gone):'');
           /* §poNoNeg · พร้อมใช้เกินทะเบียนแปลว่ามีของคืนกลับมามากกว่าที่เบิกออกไป · ไม่ใช่ของที่มีจริง */
           var vOver=(b.ready>poNum(it.total));
-          if(vOver) tip+=' · พร้อมใช้เกินทะเบียน '+(b.ready-poNum(it.total))+' — ยอดคืนมากกว่ายอดเบิก';
+          if(vOver) tip+=' · บัญชีขึ้น '+b.ready+' ซึ่งเกินทะเบียน '+(b.ready-poNum(it.total))
+            +' — ยอดคืนมากกว่ายอดเบิก · ตัวเลขนี้ตัดไว้ที่ทะเบียนแล้ว';
           return '<div class="po-ir">'
             +'<span class="lw"><b class="l" title="'+poE(tip)+'">'+poE(it.label)+'</b>'
               +'<span class="po-chs">'+poStockChips(b)+'</span></span>'
             +'<span class="rw">'
             +poStockBar(b,'po-mb')
-            +'<span class="v"'+(vOver?' style="color:#C0271C" title="'+poE(tip)+'"':'')+'>'+b.ready+'</span>'
+            +'<span class="v"'+(vOver?' style="color:#C0271C" title="'+poE(tip)+'"':'')+'>'+poReadyShown(it,b)+'</span>'
             +'<span class="u">/'+poNum(it.total)+' '+poE(K.u)+'</span>'
             +'<span class="ac">'
               +(b.repair>0?'<button class="po-go" onclick="poFixOpen(\''+it.id+'\')" title="ซ่อมเสร็จ"'+(ro?' disabled':'')+'>ซ่อม&#10003;</button>':'')
