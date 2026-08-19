@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "task": "LAM-29",
+  "title": "Judge and document the three pier revert-to-seed load guards",
+  "status": "completed",
+  "agent": {
+    "sessionId": "",
+    "model": "claude-sonnet-5"
+  },
+  "git": {
+    "base": "refactor/booking-v2-migration",
+    "branch": "agent/LAM-29-revert-to-seed-stores",
+    "worktree": "D:/projects/wt-sprint2b/LAM-29-revert-to-seed-stores",
+    "commit": "e7d28f0487b2b51c621a89b21689bc649f7f980a",
+    "pr": {
+      "number": null,
+      "url": "",
+      "state": "none"
+    }
+  },
+  "input": {
+    "requestedOutcome": "Judge whether the Array.isArray(x) && x.length load guard on pier_lic_types/pier_lic_classes/pier_codes in _laReloadData is intentional; apply exactly one fix uniformly across all three sites (drop the guard, or keep it and comment it as deliberate).",
+    "acceptanceCriteria": [
+      "Investigate whether any UI lets a user legitimately clear these three lists",
+      "Investigate whether the seed is needed for a fresh install",
+      "Compare against how sb_bookings/sb_agents load (CLAUDE.md documents Array.isArray-only as deliberate there)",
+      "State the conclusion and reasoning explicitly",
+      "Apply exactly one fix uniformly across all three sites, not a mix",
+      "If evidence does not settle it, keep behavior + add comments + record an open-question follow-up",
+      "Verify every JS change with node --check on the extracted main <script>"
+    ],
+    "allowedScope": [
+      "allotment_v2/allotment_v2.html (explicitly approved for this task)",
+      "docs/development/tasks/LAM-29.md",
+      ".agent-reports/LAM-29.json"
+    ],
+    "constraints": [
+      "Minimal edits only",
+      "LAM-27 concurrently edits allotment_v2.html (cancelled-status constant) - avoid overlap",
+      "LAM-31 rebases on top of both afterwards",
+      "Never touch test/**, package.json, .github/**, tools/**"
+    ],
+    "assumptions": [
+      "docs/workflows/07-data-persistence-api.md section 10.6 correctly names the three call sites (:41597, :41598, :41601) as of doc-write time"
+    ]
+  },
+  "output": {
+    "summary": "Investigated both the _laReloadData soft-refresh loader and the separate boot-time loader/reseed IIFEs for pier_lic_types, pier_lic_classes, and pier_codes. Found the three stores carry hardcoded seed defaults and an unconditional boot-time reseed-when-empty step (:79712, :79729), unlike sb_bookings/sb_agents which have no seed data at all - so they follow the documented FL_DEFAULT_* seed pattern, not the sb_bookings/sb_agents pattern. Dropping the _laReloadData .length guard alone would not make 'clear stays cleared' true end-to-end (hard reload would still reseed) and would only create a new soft-refresh-vs-hard-reload inconsistency. Concluded the safer, evidence-supported option is to keep the guard and document it; added an explanatory comment at all three sites, no logic changed. Recorded the boot-time reseed inconsistency as a follow-up.",
+    "filesChanged": [
+      {
+        "path": "allotment_v2/allotment_v2.html",
+        "change": "modified",
+        "purpose": "Added explanatory comments at the three _laReloadData Array.isArray(x) && x.length load-guard sites (pier_lic_types, pier_lic_classes, pier_codes) documenting why the guard is kept deliberately; no logic changed"
+      },
+      {
+        "path": "docs/development/tasks/LAM-29.md",
+        "change": "added",
+        "purpose": "Task I/O development record: investigation, judgement, decision, verification evidence"
+      },
+      {
+        "path": ".agent-reports/LAM-29.json",
+        "change": "added",
+        "purpose": "Coordinator-readable machine manifest for this task"
+      }
+    ],
+    "behaviorChanges": [
+      {
+        "area": "_laReloadData() soft refresh of pier_lic_types/pier_lic_classes/pier_codes",
+        "before": ".length guard present - a soft refresh ignores an emptied incoming array and keeps the stale in-memory copy",
+        "after": "Unchanged - same guard, now with an explanatory comment; no functional change"
+      }
+    ],
+    "interfaces": {
+      "added": [],
+      "changed": [],
+      "removed": []
+    },
+    "dataPersistence": {
+      "impact": "none",
+      "details": [
+        "Comment-only change to a client-side load function; no persisted schema, mapper, or SQL touched"
+      ],
+      "migrationRequired": false
+    }
+  },
+  "verification": [
+    {
+      "command": "git status --short --branch",
+      "status": "passed",
+      "evidence": "Clean at session start: '## agent/LAM-29-revert-to-seed-stores...origin/refactor/booking-v2-migration', no pre-existing changes"
+    },
+    {
+      "command": "grep -n \"pier_lic_types\\|pier_lic_classes\\|pier_codes\" allotment_v2/allotment_v2.html",
+      "status": "passed",
+      "evidence": "Located all load/persist sites: :41597/:41598/:41601 in _laReloadData; :79683-79736 boot loader + reseed IIFEs (reseed checks at :79712 and :79729); :79756-79758 poPersist"
+    },
+    {
+      "command": "node --check <extracted main <script> block>",
+      "status": "passed",
+      "evidence": "Extracted the largest of 8 <script> blocks (44492 lines, 3481858 chars) to a scratch file and ran node --check; exited 0, no syntax errors"
+    },
+    {
+      "command": "git diff --stat && git diff --name-status",
+      "status": "passed",
+      "evidence": "Only allotment_v2/allotment_v2.html changed: 3 insertions(+), 3 deletions(-) - comment text appended to the 3 existing guard lines, no other lines touched"
+    },
+    {
+      "command": "npm test",
+      "status": "not_run",
+      "evidence": "Out of scope: task excludes test/**, and no existing test targets this comment-only pier-loader change"
+    },
+    {
+      "command": "Live app verification via logged-in Chrome tab against Postgres",
+      "status": "blocked",
+      "evidence": "No Postgres/prod service reachable from this isolated worker sandbox; no browser tooling available in this context"
+    }
+  ],
+  "decisions": [
+    "Keep the .length guard at all three _laReloadData sites unchanged; document the reasoning via inline comments rather than removing the guard.",
+    "Reasoning: removing the guard alone would not deliver 'clear stays cleared' end-to-end because the boot-time reseed IIFEs (:79712, :79729) independently revert an emptied pier_lic_types/pier_lic_classes/pier_codes list to seed on every hard reload regardless of this guard; a partial fix would only create a new soft-refresh-vs-hard-reload inconsistency.",
+    "These three stores follow the documented FL_DEFAULT_* seed-only-when-empty pattern (CLAUDE.md section 2), not the sb_bookings/sb_agents no-seed pattern, which supports the guard being an intentional (if previously undocumented) consequence of that pattern rather than a bug to silently drop."
+  ],
+  "risks": [
+    "The underlying inconsistency (a deliberate user clear of pier_codes/pier_lic_classes still reverts to seed on the next hard reload) remains unresolved - it is now documented, not fixed, per the ticket's explicit fallback instruction for genuinely unsettled evidence."
+  ],
+  "blockers": [],
+  "dependencies": [
+    "LAM-27 concurrently edits allotment_v2.html (cancelled-status constant) in a different region of the file; no line overlap observed with :41597-:41601.",
+    "LAM-31 rebases on top of both this task and LAM-27 afterwards."
+  ],
+  "followUps": [
+    "Consider a dedicated ticket to change the boot-time reseed IIFEs for pier_lic_types/pier_lic_classes/pier_codes (:79712, :79729) to distinguish 'key absent from the blob (fresh install)' from 'key present and empty (user deliberately cleared it)', so a deliberate clear survives both soft refresh and hard reload consistently, matching the sb_bookings/sb_agents rule end-to-end."
+  ],
+  "rollback": "git revert the commit on this branch, or manually strip the added comment text back to the original three lines at :41597, :41598, :41601 - no logic changes to undo."
+}
