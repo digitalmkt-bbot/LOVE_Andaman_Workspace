@@ -4,7 +4,7 @@
 > Purpose: let a human **or an AI assistant** quickly understand the modules, their data stores, key fields, and how they connect — without reading the 2.9 MB source file.
 > Scope here: **Program/Routes · Boat Status · Boat Operation · Pickup Setup · Rate Types · B2C Channels · Agent List · Booking · Seat Locks · Accounting · Weather cancellation.**
 > Companion file: `CLAUDE.md` (deeper schemas, safety rules, change log). This file = the big picture.
-> Last updated: 2026-06-04.
+> Last updated: 2026-08-19.
 
 ---
 
@@ -14,6 +14,7 @@
 - **Relationships** (§3) is an explicit edge list: `SOURCE --(field/mechanism)--> TARGET`. This is the part an AI should parse to reason about data flow.
 - **Diagram** (§4) is the same graph in Mermaid (renders on GitHub / most viewers; AIs read it directly).
 - **Derived rules** (§5) are the non-obvious calculations (sellable seats, credit, weather) that tie modules together.
+- **Modernization architecture decision:** [ADR 001 — Next.js App Router with strict TypeScript](docs/adr/001-nextjs-app-router.md) defines the additive shell and strangler-migration boundaries; this map remains the compatibility reference for the legacy application.
 
 All state persists in **one** localStorage key: `loveandaman_v2` (read-modify-write; never clobber). Seed constants (`DEFAULT_*` / `SB_*` / `FL_*`) populate it on first load; after that localStorage is the source of truth.
 

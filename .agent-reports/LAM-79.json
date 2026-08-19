@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 1,
+  "task": "LAM-79",
+  "title": "Record the Next.js App Router modernization decision",
+  "status": "completed",
+  "agent": {
+    "sessionId": "01a0184f-9f8e-75ad-a457-d523cb32accb",
+    "model": "openai-codex/gpt-5.6-terra"
+  },
+  "git": {
+    "base": "origin/main",
+    "branch": "LAM-79-nextjs-app-router-adr",
+    "worktree": "C:/Users/ta-za/.pi/workflows/projects/wt-coordinator-6d3a93079ab9/sessions/01a01848-e03b-7eaf-b0b1-c703097d7229/runs/203096be-3173-4143-858b-c601e9ce8a3b/worktrees/395ca071fce37b5c",
+    "commit": "Pending initial implementation commit; final SHA is recorded in the publication metadata update.",
+    "pr": {
+      "number": null,
+      "url": "Not published yet",
+      "state": "none"
+    }
+  },
+  "input": {
+    "requestedOutcome": "Create and publish an ADR that selects Next.js App Router with strict TypeScript, documents migration constraints, and is linked from SYSTEM_MAP.md.",
+    "acceptanceCriteria": [
+      "Create docs/adr/001-nextjs-app-router.md.",
+      "Record the Next.js App Router and strict TypeScript decision.",
+      "Compare React plus Vite.",
+      "Document strangler migration, initial module boundaries, deployment implications, compatibility, and rollback constraints.",
+      "Link the ADR from SYSTEM_MAP.md."
+    ],
+    "allowedScope": [
+      "docs/adr/**",
+      "The required architecture-documentation link in SYSTEM_MAP.md",
+      "docs/development/tasks/LAM-79.md",
+      ".agent-reports/LAM-79.json"
+    ],
+    "constraints": [
+      "Documentation-only change; do not modify application, test, database, or persistence code.",
+      "Do not modify apps/web/**, tests/legacy/**, or allotment_v2/allotment_v2.html.",
+      "Do not replace a production module or change persistence behavior.",
+      "Publish a pull request targeting main without merging it or transitioning Jira."
+    ],
+    "assumptions": [
+      "The task branch is based exactly on origin/main at 17a15c46429b126d6e2eda9f2ebcd6b26cb31351.",
+      "The legacy application remains the compatibility baseline while the new shell is introduced additively.",
+      "LAM-76 and LAM-77 provide the later shell implementation and characterization coverage referenced by the ADR."
+    ]
+  },
+  "output": {
+    "summary": "Added ADR 001 selecting an additive Next.js App Router shell with strict TypeScript and documented the strangler migration, module boundaries, deployment, compatibility, and rollback gates. Linked the decision from SYSTEM_MAP.md.",
+    "filesChanged": [
+      {
+        "path": "docs/adr/001-nextjs-app-router.md",
+        "change": "added",
+        "purpose": "Architecture decision record for the new shell and incremental migration constraints."
+      },
+      {
+        "path": "SYSTEM_MAP.md",
+        "change": "modified",
+        "purpose": "Required architecture-documentation link to ADR 001."
+      },
+      {
+        "path": "docs/development/tasks/LAM-79.md",
+        "change": "added",
+        "purpose": "Human-readable task input/output and publication handoff."
+      },
+      {
+        "path": ".agent-reports/LAM-79.json",
+        "change": "added",
+        "purpose": "Machine-readable coordinator handoff."
+      }
+    ],
+    "behaviorChanges": [
+      {
+        "area": "Modernization architecture documentation",
+        "before": "No root-level ADR recorded the framework selection or incremental migration guardrails.",
+        "after": "ADR 001 records the additive Next.js App Router and strict-TypeScript shell plus enforceable migration constraints."
+      },
+      {
+        "area": "Architecture map navigation",
+        "before": "SYSTEM_MAP.md did not link to a framework decision for the modernization path.",
+        "after": "SYSTEM_MAP.md links to ADR 001 and identifies the map as the legacy compatibility reference."
+      }
+    ],
+    "interfaces": {
+      "added": [
+        "Documentation contract for App Router route, component, feature, legacy-adapter, and server-only boundaries.",
+        "Documentation contract for feature-gated strangler migration and rollback gates."
+      ],
+      "changed": [
+        "SYSTEM_MAP.md reader guide now exposes the ADR link."
+      ],
+      "removed": []
+    },
+    "dataPersistence": {
+      "impact": "none",
+      "details": [
+        "No application, database, API, mapper, localStorage, or backend blob code changed.",
+        "The ADR requires future slices to preserve existing persistence contracts and to have a data rollback plan before writes are enabled."
+      ],
+      "migrationRequired": false
+    }
+  },
+  "verification": [
+    {
+      "command": "git status --short --branch",
+      "status": "passed",
+      "evidence": "Before branch creation the isolated runtime-snapshot worktree showed only its branch line and no modified or untracked paths."
+    },
+    {
+      "command": "git rev-parse --verify origin/main && git merge-base origin/main HEAD",
+      "status": "passed",
+      "evidence": "After creating LAM-79-nextjs-app-router-adr, both commands returned 17a15c46429b126d6e2eda9f2ebcd6b26cb31351."
+    },
+    {
+      "command": "node -e \"const fs=require('fs'); const p='docs/adr/001-nextjs-app-router.md'; const text=fs.readFileSync(p,'utf8'); const required=['Next.js with the App Router and strict TypeScript','React plus Vite','Strangler migration strategy','Initial module boundaries','Deployment implications','Compatibility constraints','Rollback constraints and procedure']; const missing=required.filter(x=>!text.includes(x)); if(missing.length) throw new Error('Missing: '+missing.join(', ')); console.log('ADR requirements: '+required.length+'/'+required.length+' present');\"",
+      "status": "passed",
+      "evidence": "Output: ADR requirements: 7/7 present."
+    },
+    {
+      "command": "node -e \"const fs=require('fs'); const map=fs.readFileSync('SYSTEM_MAP.md','utf8'); const href='docs/adr/001-nextjs-app-router.md'; if(!map.includes(href)) throw new Error('Missing SYSTEM_MAP link'); if(!fs.existsSync(href)) throw new Error('Broken ADR target'); console.log('SYSTEM_MAP ADR link: valid');\"",
+      "status": "passed",
+      "evidence": "Output: SYSTEM_MAP ADR link: valid."
+    },
+    {
+      "command": "git diff --check",
+      "status": "passed",
+      "evidence": "Exited 0 with no whitespace errors."
+    },
+    {
+      "command": "node C:/Users/ta-za/.pi/agent/git/github.com/TheTaTha5/my-own-skills/skills/agent-change-pr/scripts/change-report.mjs --validate .agent-reports/LAM-79.json --report docs/development/tasks/LAM-79.md",
+      "status": "passed",
+      "evidence": "Output: valid: LAM-79."
+    }
+  ],
+  "decisions": [
+    "Select Next.js App Router with strict TypeScript for the additive modernization shell.",
+    "Use a strangler migration with typed legacy adapters and one vertical slice at a time.",
+    "Keep the legacy application and persistence behavior authoritative until individual slices have characterization evidence and explicit approval."
+  ],
+  "risks": [
+    "Next.js introduces Node runtime and deployment complexity.",
+    "Typed adapters can still encode legacy assumptions if a workflow is extracted without characterization evidence.",
+    "Routing rollback cannot undo incompatible future writes, so writing slices need separate data rollback plans."
+  ],
+  "blockers": [],
+  "dependencies": [
+    "LAM-76 for the additive shell implementation.",
+    "LAM-77 for legacy characterization tests before workflow extraction or write enablement."
+  ],
+  "followUps": [
+    "Implement the shell as an additive route or service with explicit feature gating.",
+    "Create a per-slice migration, compatibility, and data rollback plan before enabling writes.",
+    "Retire a legacy path only through a separately approved migration decision."
+  ],
+  "rollback": "For the initial shell, disable its distinct route or feature flag and continue serving the unmodified legacy application. Do not couple the initial shell to destructive data changes. Any future slice that writes data must have an approved backward-compatible data rollback plan before rollout."
+}
