@@ -1,0 +1,51 @@
+name: Mapping Drift Check
+
+# LAM-28 (S2-04) — a new persisted field needs FOUR registrations: the store's persist
+# helper, both client load paths, field_mapping.json, and operation_schemas_model.json —
+# plus a real DB column. Miss any one and the data silently disappears (see
+# allotment_v2/docs/workflows/07-data-persistence-api.md §4 and §10 invariant 5, and
+# docs/development/four-registration-trap.md).
+#
+# This job restores the capability of the deleted os-backend/scripts/check_mapping_drift.js
+# (removed at 094dde1) for the two registrations that are mechanically checkable without a
+# database: it statically compares os-backend/src/mapping/field_mapping.json against
+# os-backend/src/mapping/operation_schemas_model.json and fails if either file has an entry
+# the other doesn't — a model column with no mapping entry, or a mapping entry with no
+# column. It does not (and cannot, without a live DB) check the persist helper or the two
+# client load paths, or that a real column exists in Postgres — see
+# .github/workflows/ci-boot-smoke.yml (LAM-16) for the boot-time db.missing/map.* check that
+# covers the database side.
+#
+# This workflow only defines the check; making it REQUIRED to merge is a branch-protection
+# setting on refactor/booking-v2-migration, configured separately in repo settings.
+
+on:
+  pull_request:
+    branches:
+      - refactor/booking-v2-migration
+      - main
+  push:
+    branches:
+      - refactor/booking-v2-migration
+
+concurrency:
+  group: mapping-drift-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mapping-drift:
+    name: field_mapping.json <-> operation_schemas_model.json drift check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check mapping drift
+        run: npm run check:mapping-drift
