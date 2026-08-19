@@ -11,7 +11,7 @@
     "base": "refactor/booking-v2-migration",
     "branch": "agent/LAM-26-seat-lock-invariants",
     "worktree": "D:/projects/wt-sprint2b/LAM-26-seat-lock-invariants",
-    "commit": "e7d28f0487b2b51c621a89b21689bc649f7f980a",
+    "commit": "cf95d582fb5afc0396e67c05fb0b202c14e9c30e",
     "pr": {
       "number": 20,
       "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/20",
