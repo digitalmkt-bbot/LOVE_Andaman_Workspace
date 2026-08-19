@@ -163,8 +163,9 @@ added	tools/scaffold-registration.mjs
 - **Branch:** `agent/LAM-28-mapping-drift-check`
 - **Worktree:** `D:/projects/wt-sprint2b/LAM-28-mapping-drift-check`
 - **HEAD at scaffold:** `e7d28f0487b2b51c621a89b21689bc649f7f980a`
+- **Final commit:** `95ebdebd005d47f360994fbedb4f703d21bd5e53`
 - **Merge base:** `e7d28f0487b2b51c621a89b21689bc649f7f980a`
-- **PR:** Not yet created at commit time; filled in below after push (see PR metadata step)
+- **PR:** [#16](https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/16) — `agent/LAM-28-mapping-drift-check` → `refactor/booking-v2-migration`, state OPEN (verified via `gh pr view 16 --json number,url,title,state,baseRefName,headRefName`)
 - **Unrelated changes left untouched:** All files outside the owned list, including
   `os-backend/src/mapping/field_mapping.json`, `os-backend/src/mapping/operation_schemas_model.json`,
   `.github/workflows/ci-boot-smoke.yml`, `.github/workflows/tests.yml`,

@@ -11,11 +11,11 @@
     "base": "refactor/booking-v2-migration",
     "branch": "agent/LAM-28-mapping-drift-check",
     "worktree": "D:/projects/wt-sprint2b/LAM-28-mapping-drift-check",
-    "commit": "e7d28f0487b2b51c621a89b21689bc649f7f980a",
+    "commit": "95ebdebd005d47f360994fbedb4f703d21bd5e53",
     "pr": {
-      "number": null,
-      "url": "",
-      "state": "none"
+      "number": 16,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/16",
+      "state": "open"
     }
   },
   "input": {
