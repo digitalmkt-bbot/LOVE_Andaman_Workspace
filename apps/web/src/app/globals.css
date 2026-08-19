@@ -1,0 +1,35 @@
+:root {
+  color-scheme: light;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #f5f8fb;
+  color: #12304a;
+}
+
+* { box-sizing: border-box; }
+
+body { margin: 0; }
+
+.site-header {
+  align-items: center;
+  background: #fff;
+  border-bottom: 1px solid #d7e1eb;
+  display: flex;
+  justify-content: space-between;
+  padding: 1rem 2rem;
+}
+
+.brand { color: #1683c7; font-weight: 700; }
+
+.navigation-list { display: flex; gap: 1rem; list-style: none; margin: 0; padding: 0; }
+
+.navigation-list a { color: #12304a; text-decoration: none; }
+.navigation-list a:hover, .navigation-list a:focus-visible { color: #1683c7; text-decoration: underline; }
+
+.content { margin: 0 auto; max-width: 56rem; padding: 4rem 2rem; }
+
+.eyebrow { color: #1683c7; font-size: 0.875rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+
+.health-details { display: grid; gap: 0.75rem; }
+.health-details div { background: #fff; border-radius: 0.5rem; padding: 0.75rem 1rem; }
+dt { font-weight: 700; }
+dd { margin: 0.25rem 0 0; }
