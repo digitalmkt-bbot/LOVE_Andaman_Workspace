@@ -84,7 +84,8 @@
 - **Worktree:** `C:/Users/ta-za/.pi/workflows/projects/wt-coordinator-6d3a93079ab9/sessions/01a01848-e03b-7eaf-b0b1-c703097d7229/runs/203096be-3173-4143-858b-c601e9ce8a3b/worktrees/6bdf1e7a29d9b824`
 - **HEAD at scaffold:** `17a15c46429b126d6e2eda9f2ebcd6b26cb31351`
 - **Merge base:** `17a15c46429b126d6e2eda9f2ebcd6b26cb31351`
-- **Commit:** Pending initial implementation commit; PR metadata will be recorded in a follow-up documentation commit.
-- **PR:** Pending publication to `main`.
+- **Implementation commit:** `234093cfb84b0adbad017c77361ad43ea3fabe66` (`LAM-76: create isolated Next.js application shell`)
+- **PR:** [#3](https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/3) — open; base `main`, head `lam-76-nextjs-shell`.
+- **PR metadata commit:** Recorded in the follow-up documentation commit.
 - **Manifest:** `.agent-reports/LAM-76.json`
 - **Unrelated changes left untouched:** None.
