@@ -4,6 +4,7 @@
 > Purpose: let a human **or an AI assistant** quickly understand the modules, their data stores, key fields, and how they connect — without reading the 2.9 MB source file.
 > Scope here: **Program/Routes · Boat Status · Boat Operation · Pickup Setup · Rate Types · B2C Channels · Agent List · Booking · Seat Locks · Accounting · Weather cancellation.**
 > Companion file: `CLAUDE.md` (deeper schemas, safety rules, change log). This file = the big picture.
+> Architecture decision records: `docs/adr/` — see [ADR-001: Next.js App Router + TypeScript](docs/adr/001-nextjs-app-router.md) for the modernization front-end stack decision.
 > Last updated: 2026-06-04.
 
 ---

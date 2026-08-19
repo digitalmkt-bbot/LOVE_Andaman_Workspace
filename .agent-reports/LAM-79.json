@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "task": "LAM-79",
+  "title": "Record the Next.js App Router + TypeScript architecture decision",
+  "status": "completed",
+  "agent": {
+    "sessionId": "",
+    "model": "claude-sonnet-5"
+  },
+  "git": {
+    "base": "main",
+    "branch": "agent/LAM-79-nextjs-architecture-adr",
+    "worktree": "D:/projects/wt-sprint2/LAM-79-nextjs-architecture-adr",
+    "commit": "17a15c46429b126d6e2eda9f2ebcd6b26cb31351",
+    "pr": {
+      "number": null,
+      "url": "",
+      "state": "none"
+    }
+  },
+  "input": {
+    "requestedOutcome": "Create docs/adr/001-nextjs-app-router.md recording why Next.js App Router and TypeScript were selected for the LOVE Andaman modernization front end, honestly comparing the React + Vite alternative, and documenting the strangler migration strategy, initial module boundaries, deployment implications, and rollback constraints.",
+    "acceptanceCriteria": [
+      "The ADR is reviewed and linked from the architecture documentation (SYSTEM_MAP.md)."
+    ],
+    "allowedScope": [
+      "docs/adr/**",
+      "SYSTEM_MAP.md (ADR link only)",
+      "docs/development/tasks/LAM-79.md",
+      ".agent-reports/LAM-79.json"
+    ],
+    "constraints": [
+      "No application, test, database, persistence, API, or legacy allotment_v2/allotment_v2.html changes.",
+      "SYSTEM_MAP.md is a surgical edit: add the ADR link and nothing else — no metadata, dates, version strings, or other lines touched.",
+      "Ground the ADR in this repository as it actually is (Railway auto-deploy from main, Postgres-backed persistence, real module boundaries), not generic Next.js boilerplate.",
+      "LAM-76 is concurrently building apps/web/**; describe intended boundaries without asserting unverified file-layout specifics.",
+      "Stage only owned paths explicitly; never git add -A or git add ."
+    ],
+    "assumptions": [
+      "Worktree started clean at origin/main (17a15c4).",
+      "No docs/adr/, apps/web/, or existing ADR tooling present in this repo yet.",
+      "SYSTEM_MAP.md, CLAUDE.md, README.md, and server.js are the authoritative sources for architecture facts used in the ADR."
+    ]
+  },
+  "output": {
+    "summary": "Added docs/adr/001-nextjs-app-router.md (ADR-001) documenting the Next.js App Router + TypeScript decision for the modernization front end, grounded in this repo's real Railway/Postgres/server.js architecture, with an honest React+Vite alternatives section, strangler migration strategy, initial module-boundary table, deployment implications, and rollback constraints. Linked it from SYSTEM_MAP.md with a single added line; no other line in that file was touched.",
+    "filesChanged": [
+      {
+        "path": "docs/adr/001-nextjs-app-router.md",
+        "change": "added",
+        "purpose": "ADR-001: records and justifies the Next.js App Router + TypeScript decision, alternatives, strangler migration strategy, module boundaries, deployment implications, and rollback constraints."
+      },
+      {
+        "path": "SYSTEM_MAP.md",
+        "change": "modified",
+        "purpose": "Add one line linking to the new ADR from the architecture documentation header block; no other content changed."
+      },
+      {
+        "path": "docs/development/tasks/LAM-79.md",
+        "change": "added",
+        "purpose": "Durable human-readable task I/O report for LAM-79."
+      },
+      {
+        "path": ".agent-reports/LAM-79.json",
+        "change": "added",
+        "purpose": "Machine-readable task manifest for LAM-79, coordinator-readable contract."
+      }
+    ],
+    "behaviorChanges": [
+      {
+        "area": "Architecture decision records",
+        "before": "No docs/adr/ directory or ADR existed in the repo.",
+        "after": "docs/adr/001-nextjs-app-router.md exists, documenting the Next.js App Router + TypeScript decision, the React+Vite alternative (including where Vite would honestly have been the better choice), strangler migration strategy, module-boundary table, deployment implications, and rollback constraints."
+      },
+      {
+        "area": "SYSTEM_MAP.md discoverability",
+        "before": "No pointer to any ADR in the architecture documentation.",
+        "after": "One new line under the header block links to docs/adr/001-nextjs-app-router.md; every pre-existing line, including the Last updated date, is unchanged."
+      }
+    ],
+    "interfaces": {
+      "added": [
+        "docs/adr/001-nextjs-app-router.md (new documentation file, ADR-001)"
+      ],
+      "changed": [],
+      "removed": []
+    },
+    "dataPersistence": {
+      "impact": "none",
+      "details": [
+        "Documentation-only change. No code, schema, API, or runtime behavior touched. allotment_v2/allotment_v2.html, server.js, package.json, and railway.json are all unmodified."
+      ],
+      "migrationRequired": false
+    }
+  },
+  "verification": [
+    {
+      "command": "git status --short --branch (run before any change)",
+      "status": "passed",
+      "evidence": "Clean worktree at task start on agent/LAM-79-nextjs-architecture-adr, confirming no pre-existing modifications before work began."
+    },
+    {
+      "command": "git diff -- SYSTEM_MAP.md",
+      "status": "passed",
+      "evidence": "Diff shows exactly one added line (the ADR link under the header block); no other line, date, or metadata touched."
+    },
+    {
+      "command": "git status --porcelain / git diff --stat / git diff --name-status",
+      "status": "passed",
+      "evidence": "Only SYSTEM_MAP.md (modified) plus new docs/adr/, docs/development/tasks/, and .agent-reports/ paths are present in the working tree; nothing outside owned scope."
+    },
+    {
+      "command": "Manual cross-check of ADR claims against CLAUDE.md, SYSTEM_MAP.md, README.md, server.js",
+      "status": "passed",
+      "evidence": "Every concrete claim in the ADR (Railway/Nixpacks deploy, npm start, blob vs relational DATA_BACKEND modes, /api/v1/* mapping API, session cookie mechanics, module/store-key table) is traceable to a specific line or section read from those files in this worktree."
+    },
+    {
+      "command": "node --check <extracted script>",
+      "status": "not_run",
+      "evidence": "No JavaScript file was added or modified by this task; documentation-only change, nothing to check."
+    },
+    {
+      "command": "npm install / build / test suite",
+      "status": "not_run",
+      "evidence": "Task scope is documentation-only; no build or test tooling applies. Not claiming any result for package installability or builds in this sandbox."
+    }
+  ],
+  "decisions": [
+    "ADR status set to 'Proposed' rather than 'Accepted' since human review is still pending per the acceptance criterion.",
+    "Traffic-seam recommendation (path-prefix reverse proxy, same-origin) recorded as a recommendation for a future infra-owning task, not decided or implemented here.",
+    "Module-boundary table framed as a non-binding starting point since LAM-76's actual apps/web layout was not verified from this worktree."
+  ],
+  "risks": [
+    "The ADR's module-boundary table and deployment recommendation may need revision once LAM-76's real apps/web structure lands; the ADR frames these as starting points to mitigate that risk.",
+    "This worktree is 9 commits behind origin/main at time of work; the PR will show the true diff against current main at merge time."
+  ],
+  "blockers": [],
+  "dependencies": [
+    "LAM-76 (apps/web/** shell) — the ADR's module-boundary section depends on that work for concrete file-layout details not yet available here.",
+    "A future infra/root-config-owning task to decide and implement the traffic seam (reverse proxy vs subdomain) between the legacy app and apps/web."
+  ],
+  "followUps": [
+    "Human review/acceptance pass on the ADR to flip Status from Proposed to Accepted.",
+    "Follow-up task to decide and implement the traffic seam between the legacy app and apps/web.",
+    "Reconcile the manual GitHub-Desktop deploy ritual in CLAUDE.md with a normal CI/CD flow for apps/web, flagged in the ADR as an open question."
+  ],
+  "rollback": "git revert the commit, or manually delete docs/adr/001-nextjs-app-router.md and remove the single added line from SYSTEM_MAP.md. No data, schema, or running service is affected either way."
+}
