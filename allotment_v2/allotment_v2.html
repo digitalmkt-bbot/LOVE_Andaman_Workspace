@@ -81032,6 +81032,10 @@ var _poDate=poYMD(new Date());
 /* ── ทะเบียนของ · เฉพาะท่านี้ ── */
 function poItems(pier){ return (PIER_ITEMS||[]).filter(function(i){ return i.pier===pier && i.active!==false; })
   .sort(function(a,b){ return PO_KORDER.indexOf(a.kind)-PO_KORDER.indexOf(b.kind) || String(a.label).localeCompare(String(b.label)); }); }
+/* §poFix1 · รวมของที่ปิดใช้งานแล้วด้วย · ปิดใช้งาน = ไม่เบิกใหม่ ไม่ใช่ของหายไปจากโลก
+   ของที่ออกไปกับเรือก่อนถูกปิด ยังต้องตามคืนและยังต้องนับ */
+function poItemsAll(pier){ return (PIER_ITEMS||[]).filter(function(i){ return i.pier===pier; })
+  .sort(function(a,b){ return PO_KORDER.indexOf(a.kind)-PO_KORDER.indexOf(b.kind) || String(a.label).localeCompare(String(b.label)); }); }
 function poItem(id){ return (PIER_ITEMS||[]).filter(function(i){ return i.id===id; })[0]||null; }
 function poMoves(f){ return (PIER_MOVES||[]).filter(f||function(){return true;}); }
 
@@ -81110,7 +81114,7 @@ function poUnassigned(date, pier){
 /* ── ยอดเบิก / คืน ของลำหนึ่งในวันหนึ่ง ── */
 function poDayMoves(date, boatId){ return (PIER_MOVES||[]).filter(function(m){ return m.date===date && m.boatId===boatId; }); }
 function poBoatSum(date, boatId, pier){
-  var out={}; poItems(pier).forEach(function(it){ out[it.id]={iss:0,ret:0,rep:0,wo:0,lost:0,ob:0}; });
+  var out={}; poItemsAll(pier).forEach(function(it){ out[it.id]={iss:0,ret:0,rep:0,wo:0,lost:0,ob:0}; });
   poDayMoves(date, boatId).forEach(function(m){
     var o=out[m.itemId]; if(!o) return; var q=poNum(m.qty);
     if(m.type==='issue') o.iss+=q;
@@ -81126,18 +81130,41 @@ function poBoatSum(date, boatId, pier){
 function poBoatKindSum(date, boatId, pier){
   var S=poBoatSum(date,boatId,pier), K={};
   PO_KORDER.forEach(function(k){ K[k]={iss:0,back:0,miss:0}; });
-  poItems(pier).forEach(function(it){
+  poItemsAll(pier).forEach(function(it){
     var o=S[it.id]; if(!o) return; var k=K[it.kind]; if(!k) return;
     k.iss+=o.iss; k.back+=o.ret; k.miss+=(o.rep+o.wo+o.lost+o.ob);
   });
   return K;
 }
+/* §poFix2 · ของที่ยังอยู่กับลำนี้ตั้งแต่วันก่อน ๆ · รายไซส์
+   'onboard' (ยังอยู่บนเรือ) ตั้งใจไม่หักออก · ของยังอยู่บนเรือจริง จึงยกมาวันถัดไปเอง */
+function poBoatCarry(date, boatId){
+  var out={};
+  (PIER_MOVES||[]).forEach(function(m){
+    if(!m || m.boatId!==boatId) return;
+    if(!(String(m.date||'') < String(date||''))) return;
+    var q=poNum(m.qty), id=m.itemId;
+    if(m.type==='issue') out[id]=(out[id]||0)+q;
+    else if(m.type==='return'||m.type==='repair'||m.type==='writeoff'||m.type==='lost') out[id]=(out[id]||0)-q;
+  });
+  Object.keys(out).forEach(function(k){ if(!(out[k]>0)) delete out[k]; });
+  return out;
+}
+function poCarryTot(date, boatId){ var C=poBoatCarry(date,boatId), n=0;
+  Object.keys(C).forEach(function(k){ n+=C[k]; }); return n; }
 function poBoatStage(date, boatId, pier){
-  var S=poBoatSum(date,boatId,pier), iss=0, done=0;
-  Object.keys(S).forEach(function(id){ var o=S[id]; iss+=o.iss; done+=(o.ret+o.rep+o.wo+o.lost+o.ob); });
-  if(!iss) return {k:'none',t:'ยังไม่เบิก',c:'#9A9A93'};
-  if(done>=iss) return {k:'closed',t:'ปิดยอดแล้ว',c:'#1C7A4E'};
-  return {k:'open',t:'ค้างคืน '+(iss-done),c:'#B4560A'};
+  var S=poBoatSum(date,boatId,pier), iss=0, done=0, ob=0;
+  Object.keys(S).forEach(function(id){ var o=S[id];
+    iss+=o.iss; done+=(o.ret+o.rep+o.wo+o.lost+o.ob); ob+=o.ob; });
+  var carry=poCarryTot(date, boatId);
+  if(!iss && !carry) return {k:'none',t:'ยังไม่เบิก',c:'#9A9A93'};
+  /* ยอดค้างต้องหักของที่คืนไปแล้ววันนี้เสมอ · ไม่งั้นคืนครบแล้วการ์ดยังขึ้นเลขเดิม ดูเหมือนคืนไม่เข้า */
+  var left=carry+iss-done;
+  if(left<=0) return ob
+    ? {k:'closed',t:'ปิดยอดแล้ว · ยกไป '+ob,c:'#1C7A4E'}
+    : {k:'closed',t:'ปิดยอดแล้ว',c:'#1C7A4E'};
+  if(!iss) return {k:'carry',t:'ค้างจากวันก่อน '+left,c:'#B4560A'};
+  return {k:'open',t:'ค้างคืน '+left,c:'#B4560A'};
 }
 
 /* ── บันทึก move ── */
@@ -81410,7 +81437,7 @@ function poBoatTable(boats, items, ro){
       +'<td style="text-align:right">'
         +'<button class="po-btn" onclick="poDutyOpen(\''+b.bid+'\')"'+(ro?' disabled':'')+'>พนักงาน</button>'
         +'<button class="po-btn'+(st.k==='none'?' pri':'')+'" onclick="poIssueOpen(\''+b.bid+'\')"'+(ro?' disabled':'')+'>เบิก–คืน</button>'
-        +(st.k==='open'?'<button class="po-btn warn" onclick="poCloseOpen(\''+b.bid+'\')"'+(ro?' disabled':'')+'>ปิดยอด</button>':'')
+        +((st.k==='open'||st.k==='carry')?'<button class="po-btn warn" onclick="poCloseOpen(\''+b.bid+'\')"'+(ro?' disabled':'')+'>ปิดยอด</button>':'')
         +'<button class="po-btn" onclick="poSignSheet(\''+b.bid+'\')">ใบเซ็น</button>'
       +'</td></tr>';
   }).join('');
@@ -81581,6 +81608,11 @@ function poIsBuild(bid){
   if(!B) return null;
   var items=poItems(_poPier), S=poBoatSum(_poDate,bid,_poPier), SV=poIsSaved(_poDate,bid);
   var KS=PO_KORDER.filter(function(k){ return items.some(function(it){ return it.kind===k; }); });
+  /* §poFix1 · ของที่ปิดใช้งานแล้วแต่ยังมียอดของวันนี้ ต้องมีช่องให้ลง ไม่งั้นยอดยกมาไม่มีที่อยู่ */
+  var dead=poItemsAll(_poPier).filter(function(it){
+    return it.active===false && S[it.id] && (S[it.id].iss||S[it.id].ret); });
+  if(dead.length){ items=items.concat(dead);
+    KS=PO_KORDER.filter(function(k){ return items.some(function(it){ return it.kind===k; }); }); }
   var byKind={}; KS.forEach(function(k){ byKind[k]=items.filter(function(it){ return it.kind===k; }); });
   var issued=0; items.forEach(function(it){ if(S[it.id]) issued+=S[it.id].iss; });
 
@@ -81613,6 +81645,23 @@ function poIsBuild(bid){
     if(O2){ R.dep=+O2.dep||0; R.back=+O2.back||0; R.cut=+O2.cut||0; R.note=O2.note||''; }
     return R;
   });
+  /* §poFix3 · ยังไม่เคยบันทึกใบนี้ แต่ในบัญชีมียอดของลำนี้อยู่แล้ว (ของเดิม / เบิกจากที่อื่น)
+     ยกขึ้นตารางเป็นแถว "ยกมา" ให้ยอดตรงกันตั้งแต่เปิด · ไม่งั้นกดบันทึกครั้งเดียวยอดหายทั้งวัน
+     ผู้ใช้ย้ายตัวเลขจากแถวนี้ไปใส่แถวใบจองทีหลังได้ ยอดรวมไม่ขยับ จึงไม่เกิด move ใหม่ */
+  if(!SV){
+    var cIss={}, cRet={}, anyC=0;
+    KS.forEach(function(k){ var a=0, b2=0;
+      byKind[k].forEach(function(it){ if(S[it.id]){ a+=S[it.id].iss; b2+=S[it.id].ret; } });
+      cIss[k]=a; cRet[k]=b2; anyC+=a+b2; });
+    if(anyC){
+      var CR={ id:poUid('px_'), bkId:'', extra:true, agN:'ยกมา', agC:'',
+               names:['ยอดเดิมในบัญชีสต็อก'], sub:'ยังไม่ได้ระบุว่าเป็นของใบจองไหน',
+               ad:0, chd:0, inf:0, foc:0, iss:{}, ret:{}, dep:0, back:0, cut:0,
+               note:'ยกมาจากยอดที่บันทึกไว้ก่อนใช้ตารางนี้' };
+      KS.forEach(function(k){ CR.iss[k]=cIss[k]; CR.ret[k]=cRet[k]; });
+      rows.push(CR);
+    }
+  }
   if(SV && Array.isArray(SV.rows)) SV.rows.forEach(function(r){
     if(!r || !r.extra) return;
     var R={ id:r.id||poUid('px_'), bkId:'', extra:true, agN:r.agN||'พนักงาน', agC:'',
@@ -81962,10 +82011,12 @@ function poIsCommit(bid, quiet){
     /* เทียบกับที่ "ใบนี้" เคยเขียน ไม่ใช่ยอดรวมทั้งบัญชี · ของที่ปิดยอดไปแล้วจึงไม่โดนล้าง */
     if(_poIs.wrote && _poIs.wrote.ret && _poIs.wrote.ret[k]!=null) had=+_poIs.wrote.ret[k]||0;
     var d=tgt-had; if(!d) return;
+    var CY=poBoatCarry(_poDate,bid);
     var pool=(_poIs.items[k]||[]).map(function(it){
       var o=S[it.id]||{iss:0,ret:0,rep:0,wo:0,lost:0,ob:0};
       var extra=0; plan.forEach(function(p){ if(p.itemId===it.id && p.type==='issue') extra+=p.qty; });
-      return {id:it.id, out:Math.max(0, (o.iss+extra)-(o.ret+o.rep+o.wo+o.lost+o.ob)), ret:o.ret};
+      /* §poFix2 · ของที่ค้างมาจากวันก่อนก็คืนที่ตารางนี้ได้ ไม่ต้องย้อนไปเปิดวันเก่า */
+      return {id:it.id, out:Math.max(0, (CY[it.id]||0)+(o.iss+extra)-(o.ret+o.rep+o.wo+o.lost+o.ob)), ret:o.ret};
     }).sort(function(a,b){ return (d>0)?(b.out-a.out):(b.ret-a.ret); });
     var left=Math.abs(d);
     pool.forEach(function(x){
@@ -81977,6 +82028,18 @@ function poIsCommit(bid, quiet){
     });
     if(left>0 && pool.length) plan.push({itemId:pool[0].id, type:'return', qty:(d>0)?left:-left});
   });
+
+  /* §poFix3 · ยอดที่จะ "ลด" ต้องถามก่อนทุกครั้ง
+     การลดยอดเป็นการล้างสิ่งที่เคยบันทึกไปแล้ว · เงียบ ๆ แล้วยอดหายคือสิ่งที่แก้กลับไม่ได้ */
+  var cuts=plan.filter(function(p){ return p.qty<0; });
+  if(cuts.length){
+    var ctxt=cuts.map(function(p){ var it=poItem(p.itemId);
+      return '\u2022 '+((it&&it.label)||p.itemId)+' \u00b7 '+(p.type==='issue'?'เบิก':'คืน')
+        +' ลดลง '+Math.abs(p.qty); }).join('\n');
+    if(!confirm('บันทึกนี้จะ "ลด" ยอดที่เคยบันทึกไว้:\n\n'+ctxt
+      +'\n\nเกิดขึ้นเมื่อตัวเลขในตารางน้อยกว่ายอดที่อยู่ในบัญชี\n'
+      +'ถ้าไม่ได้ตั้งใจแก้ยอด ให้กดยกเลิกแล้วตรวจตารางก่อน\n\nยืนยันลดยอด?')) return false;
+  }
 
   /* 4 · เขียน */
   var note=quiet?'':'';
@@ -82016,18 +82079,21 @@ function poIsPrint(bid){
 function poCloseOpen(bid){
   if(!poCanEdit()) return;
   var boats=poBoats(_poDate,_poPier), B=boats.filter(function(x){return x.bid===bid;})[0]||{boat:{name:bid}};
-  var items=poItems(_poPier), S=poBoatSum(_poDate,bid,_poPier);
-  var rows=items.filter(function(it){ return S[it.id] && S[it.id].iss>0; });
-  if(!rows.length){ alert('ลำนี้ยังไม่มีการเบิกของในวันที่เลือก'); return; }
+  var items=poItemsAll(_poPier), S=poBoatSum(_poDate,bid,_poPier), C=poBoatCarry(_poDate,bid);
+  var rows=items.filter(function(it){ return (S[it.id] && S[it.id].iss>0) || (C[it.id]>0); });
+  if(!rows.length){ alert('ลำนี้ยังไม่มีของค้างอยู่ · ทั้งวันที่เลือกและวันก่อนหน้า'); return; }
   var body='<div style="font-size:12px;color:#7C8091;margin-bottom:12px">'
     +'กรอกจำนวนที่<b style="color:#16265C">คืนเข้ามาจริง</b> · ถ้าไม่ครบ ระบบจะบังคับให้ระบุว่าส่วนที่ขาดหายไปไหน จนครบทุกชิ้นถึงจะปิดยอดได้</div>';
   body+=rows.map(function(it){
-    var o=S[it.id], u=PO_KIND[it.kind].u;
-    var out=o.iss-(o.ret+o.rep+o.wo+o.lost+o.ob);
+    var o=S[it.id], u=(PO_KIND[it.kind]||{u:'ชิ้น'}).u, cy=C[it.id]||0;
+    var out=cy+o.iss-(o.ret+o.rep+o.wo+o.lost+o.ob);
     return '<div id="pocw_'+it.id+'" style="border:1px solid #E3E3DF;border-radius:10px;padding:11px 12px;margin-bottom:10px">'
       +'<div style="display:flex;align-items:center;gap:10px">'
-        +'<div style="flex:1"><div style="font-weight:700;font-size:12.5px">'+poE(it.label)+'</div>'
-        +'<div style="font-size:11px;color:#7C8091">เบิกไป '+o.iss+' '+u+' · ยังค้าง '+out+'</div></div>'
+        +'<div style="flex:1"><div style="font-weight:700;font-size:12.5px">'+poE(it.label)
+          +(it.active===false?' <span style="font-size:10px;font-weight:700;color:#8a8a82">(ปิดใช้งานแล้ว)</span>':'')+'</div>'
+        +'<div style="font-size:11px;color:#7C8091">'
+          +(cy?('<b style="color:#B4560A">ค้างจากวันก่อน '+cy+'</b> · '):'')
+          +'เบิกวันนี้ '+o.iss+' '+u+' · ยังค้าง '+out+'</div></div>'
         +'<span style="font-size:11.5px;color:#7C8091">คืน</span>'
         +'<input id="poret_'+it.id+'" value="'+out+'" oninput="poCloseCalc(\''+it.id+'\','+out+')" style="border:1px solid #D8D4CA;border-radius:8px;padding:6px 9px;font:700 13px inherit;width:70px;font-family:inherit">'
         +'<span style="font-size:11.5px;color:#7C8091;width:30px">'+u+'</span></div>'
@@ -82036,7 +82102,8 @@ function poCloseOpen(bid){
   poModal('ปิดยอด '+poE(B.boat.name||bid)+' · '+poE(_poDate), body,
     '<div id="pocwmsg" style="flex:1;font-size:11.5px;color:#C0271C;font-weight:700"></div>'
     +poBtn('ยกเลิก','poModalClose()')+poBtn('ปิดยอด',"poCloseSave('"+bid+"')",1), 680);
-  rows.forEach(function(it){ var o=S[it.id]; poCloseCalc(it.id, o.iss-(o.ret+o.rep+o.wo+o.lost+o.ob)); });
+  rows.forEach(function(it){ var o=S[it.id];
+    poCloseCalc(it.id, (C[it.id]||0)+o.iss-(o.ret+o.rep+o.wo+o.lost+o.ob)); });
 }
 function poCloseCalc(itemId, out){
   var box=document.getElementById('pomiss_'+itemId); if(!box) return;
@@ -82062,10 +82129,10 @@ function poMissSum(itemId, miss){
   el.textContent=(t===miss)?('ระบุครบแล้ว '+t+'/'+miss):('ระบุแล้ว '+t+' จาก '+miss+' · ยังขาด '+(miss-t));
 }
 function poCloseSave(bid){
-  var items=poItems(_poPier), S=poBoatSum(_poDate,bid,_poPier), bad=[], plan=[];
+  var items=poItemsAll(_poPier), S=poBoatSum(_poDate,bid,_poPier), C=poBoatCarry(_poDate,bid), bad=[], plan=[];
   items.forEach(function(it){
-    var o=S[it.id]; if(!o || !o.iss) return;
-    var out=o.iss-(o.ret+o.rep+o.wo+o.lost+o.ob); if(out<=0) return;
+    var o=S[it.id], cy=C[it.id]||0; if(!o || (!o.iss && !cy)) return;
+    var out=cy+o.iss-(o.ret+o.rep+o.wo+o.lost+o.ob); if(out<=0) return;
     var ret=poNum(poV('poret_'+it.id));
     if(ret<0 || ret>out){ bad.push(poE(it.label)+' · จำนวนคืนไม่ถูกต้อง'); return; }
     var miss=out-ret, sum=0, parts={};
