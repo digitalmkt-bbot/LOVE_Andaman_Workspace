@@ -93,5 +93,5 @@ added	.agent-reports/LAM-29.json
 - **Worktree:** `D:/projects/wt-sprint2b/LAM-29-revert-to-seed-stores`
 - **HEAD at scaffold:** `e7d28f0487b2b51c621a89b21689bc649f7f980a`
 - **Merge base:** `e7d28f0487b2b51c621a89b21689bc649f7f980a` (branch tip equals `origin/refactor/booking-v2-migration` at task start)
-- **PR:** Pending (filled in after publish step)
+- **PR:** [#15](https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/15) — `agent/LAM-29-revert-to-seed-stores` → `refactor/booking-v2-migration`, state OPEN
 - **Unrelated changes left untouched:** None — no unrelated pre-existing changes were present at task start

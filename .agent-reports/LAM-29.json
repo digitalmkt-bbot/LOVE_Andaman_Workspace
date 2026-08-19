@@ -11,11 +11,11 @@
     "base": "refactor/booking-v2-migration",
     "branch": "agent/LAM-29-revert-to-seed-stores",
     "worktree": "D:/projects/wt-sprint2b/LAM-29-revert-to-seed-stores",
-    "commit": "e7d28f0487b2b51c621a89b21689bc649f7f980a",
+    "commit": "97df901d74c78d138079c9099f2b371ecbe5ff40",
     "pr": {
-      "number": null,
-      "url": "",
-      "state": "none"
+      "number": 15,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/15",
+      "state": "open"
     }
   },
   "input": {
