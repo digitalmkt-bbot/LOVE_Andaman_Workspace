@@ -86,7 +86,7 @@ const ACCT_EXCLUDED_STATES = ['cancelled','rejected','cancelled_weather'];
   //   (เจอจริง 30 ก.ค. 2026 · เซิร์ฟเวอร์ตีกลับ trips 94→0 — ถ้าไม่มีตัวกันฝั่งนั้น ข้อมูลหายเกลี้ยง)
   _SP.removeItem=function(k){ if(_isLS(this)&&k===LS){ _mem=null; _dirty=false; try{ clearTimeout(_t); }catch(e){} return; } _oDel.call(this,k); };
   _SP.setItem=function(k,v){ if(!_isLS(this)||k!==LS){ return _oSet.call(this,k,v); } _mem=v;   // state blob → memory only (no quota)
-    if(_syncReady && typeof laCanEdit==='function' && laCanEdit()){ _dirty=true; clearTimeout(_t); _t=setTimeout(function(){ save(v); },1000); } };   // view-only users never sync
+    if(_syncReady && typeof laCanEdit==='function' && laCanEdit()){ _dirty=true; clearTimeout(_t); _t=setTimeout(function(){ _laSyncSave(v); },1000); } };   // view-only users never sync
   // Reclaim quota on devices poisoned by the broken shim: the pre-mem-store ~6MB blob still sitting
   // in real localStorage, the junk 'setItem'/'getItem'/'removeItem' items WebKit created from the old
   // instance assignments, and any oversized _snap_ full copies. All dead weight — SQL is the store.
@@ -165,7 +165,7 @@ const ACCT_EXCLUDED_STATES = ['cancelled','rejected','cancelled_weather'];
   // §syncGate (2026-07-30) · เปิด auto-save ได้ก็ต่อเมื่อ "ได้ข้อมูลจริงจากเซิร์ฟเวอร์แล้ว" เท่านั้น
   //   เดิมบรรทัดนี้เป็น _syncReady=true เสมอ แม้ /api/load จะล้มเหลว (502) และกำลัง retry แบบ async อยู่
   //   ช่วงนั้น _mem ยังว่าง แต่ flLoad() เห็น state ว่างแล้วเข้าโหมด "First-time" → seed อาร์เรย์เปล่า
-  //   แล้วเขียน blob → setItem → debounce 1 วิ → save() ยิงขึ้นเซิร์ฟเวอร์ = ลบข้อมูลจริงทั้งหมด
+  //   แล้วเขียน blob → setItem → debounce 1 วิ → _laSyncSave() ยิงขึ้นเซิร์ฟเวอร์ = ลบข้อมูลจริงทั้งหมด
   //   (เจอจริง 30 ก.ค. 2026 14:14 · /api/load 502 · เซิร์ฟเวอร์ตีกลับ trips 94→0 · ข้อมูลจริงมาถึงตอน 14:14:16
   //    หน้าต่างอันตราย 4 วินาที แล้วหายเอง — เลยดูเหมือน "แปปเดียว")
   //   ไม่ได้ข้อมูล = ไม่มีสิทธิ์เขียนทับของบนเซิร์ฟเวอร์ · overlay บังจออยู่แล้ว ผู้ใช้แก้อะไรไม่ได้ระหว่างนี้
@@ -216,18 +216,18 @@ const ACCT_EXCLUDED_STATES = ['cancelled','rejected','cancelled_weather'];
   // blob ว่าง/พังไม่เคยแปลว่า "ผู้ใช้ลบข้อมูลทั้งหมด" — มันแปลว่า state ยังไม่พร้อมหรือเพิ่งถูกล้าง
   // ปล่อยให้ diff เดินต่อคือเปิดทางลบข้อมูลทั้งระบบด้วยการเซฟครั้งเดียว
   function _laBlobUsable(cur){ return !!(cur && typeof cur==='object' && Object.keys(cur).length>0); }
-  function save(v, forceLegacy){ var cur; try{cur=JSON.parse(v);}catch(e){return;}
+  function _laSyncSave(v, forceLegacy){ var cur; try{cur=JSON.parse(v);}catch(e){return;}
     if(!_laBlobUsable(cur)){ try{ console.warn('[sync] blob ว่าง — ไม่ส่งขึ้นเซิร์ฟเวอร์ (กันลบข้อมูลทั้งระบบ)'); }catch(e){} _dirty=false; return; }
     var d=computeDiff(BASE,cur); if(!d._changed){ _dirty=false; return; }
     var ops = forceLegacy ? null : laDiffToOps(d, cur);
     var x=new XMLHttpRequest(); x.open('POST', ops?'/api/v1/_batch':'/api/save', true); x.setRequestHeader('Content-Type','application/json');
     x.onload=function(){ if(x.status===200){ var r={}; try{r=JSON.parse(x.responseText);}catch(e){} VER=r.version||VER; BASE=cur; _laMark(VER); _dirty=false; _laSaveErrClear(); window.__savedAt=Date.now(); badgeTick(); if(r.behind){ _laPending=r; _laTryRefresh(); } }
-      else if(ops && (x.status===404||x.status===400)){ save(v, true); }   // old server / op the batch can't express → legacy whole-diff save
+      else if(ops && (x.status===404||x.status===400)){ _laSyncSave(v, true); }   // old server / op the batch can't express → legacy whole-diff save
       else if(x.status===403){ _laSaveErr('บันทึกขึ้นระบบไม่ได้ · บัญชีนี้ไม่มีสิทธิ์แก้ไข (การเปลี่ยนแปลงยังไม่ถูกบันทึก) — กรุณา login ใหม่ หรือติดต่อ admin'); }   // will never succeed → stop retrying, tell the user
       else if(x.status===401){ _laSaveErr('เซสชันหมดอายุ · ข้อมูลยังอยู่ในเครื่อง — กรุณาเข้าสู่ระบบใหม่ แล้วระบบจะเซฟให้อัตโนมัติ','#7A4A00'); }
       else if(x.status===409){ var _r9={}; try{_r9=JSON.parse(x.responseText);}catch(e){} _laShrinkBlocked(_r9&&_r9.detail); }   // save-safety: server refused a wipe/shrink of existing data — do NOT retry, keep local, tell user to reload
-      else { _laSaveErr('กำลังลองบันทึกขึ้นระบบใหม่… (ข้อมูลยังอยู่ในเครื่อง อย่าเพิ่งปิดหน้า)','#7A4A00'); setTimeout(function(){ var nv=localStorage.getItem(LS); if(nv) save(nv); }, 5000); } };   // transient (5xx/0) → retry + warn
-    x.onerror=function(){ _laSaveErr('เชื่อมต่อระบบไม่ได้ · กำลังลองเซฟใหม่… (ข้อมูลยังอยู่ในเครื่อง อย่าเพิ่งปิดหน้า)','#7A4A00'); setTimeout(function(){ var nv=localStorage.getItem(LS); if(nv) save(nv); }, 5000); };
+      else { _laSaveErr('กำลังลองบันทึกขึ้นระบบใหม่… (ข้อมูลยังอยู่ในเครื่อง อย่าเพิ่งปิดหน้า)','#7A4A00'); setTimeout(function(){ var nv=localStorage.getItem(LS); if(nv) _laSyncSave(nv); }, 5000); } };   // transient (5xx/0) → retry + warn
+    x.onerror=function(){ _laSaveErr('เชื่อมต่อระบบไม่ได้ · กำลังลองเซฟใหม่… (ข้อมูลยังอยู่ในเครื่อง อย่าเพิ่งปิดหน้า)','#7A4A00'); setTimeout(function(){ var nv=localStorage.getItem(LS); if(nv) _laSyncSave(nv); }, 5000); };
     try{ x.send(JSON.stringify(ops ? {baseVersion:VER, ops:ops} : {baseVersion:VER, diff:{sets:d.sets,cols:d.cols,objs:d.objs}})); }catch(e){} }
   // FLUSH pending change before the page unloads (refresh/close) so a fast refresh never loses the last edit
   function _laFlush(){ if(!_dirty) return; try{ var cur=JSON.parse(localStorage.getItem(LS)||'{}');
@@ -243,7 +243,7 @@ const ACCT_EXCLUDED_STATES = ['cancelled','rejected','cancelled_weather'];
   window.addEventListener('beforeunload', _laFlush);
   window.addEventListener('pagehide', _laFlush);
   // recover unsaved local work detected at load (new bookings / edits that never reached the cloud) → push it now
-  if(_recoverPush){ _dirty=true; clearTimeout(_t); _t=setTimeout(function(){ try{ var nv=localStorage.getItem(LS); if(nv) save(nv); }catch(e){} }, 1500); }
+  if(_recoverPush){ _dirty=true; clearTimeout(_t); _t=setTimeout(function(){ try{ var nv=localStorage.getItem(LS); if(nv) _laSyncSave(nv); }catch(e){} }, 1500); }
   function _isPlainObj(x){ return x && typeof x==='object' && !Array.isArray(x); }
   // Deep diff of two plain objects → {p:{key:{v:val}|{m:subdiff}}, d:[deletedKeys]} or null if identical.
   function _deepDiff(b,c){ var p={}, d=[], ch=false;
@@ -5806,11 +5806,11 @@ function loadData(){
   return {routes:DEFAULT_ROUTES, boats:DEFAULT_BOATS, trips:{}};
 }
 
-/* §edit-guard · save() เขียน routes/boats (config) + trips (operations) ปนกัน — guard ตัวเดียวไม่ได้
+/* §edit-guard · saveData() เขียน routes/boats (config) + trips (operations) ปนกัน — guard ตัวเดียวไม่ได้
    จึงรับ area เป็นพารามิเตอร์: call ที่เป็น "user แก้" ส่ง area มา ('config' ตอนแก้โปรแกรม/เรือ ·
    'operations' ตอนจัด Boat Operation) → ถ้า view-only ของ area นั้น จะไม่ persist
-   call ภายใน (seed · migration · โหลด) เรียก save() เปล่า → ไม่ถูก guard ทำงานตามปกติ */
-function save(area){
+   call ภายใน (seed · migration · โหลด) เรียก saveData() เปล่า → ไม่ถูก guard ทำงานตามปกติ */
+function saveData(area){
   if(area && typeof window.laCanEditArea==='function' && !window.laCanEditArea(area)) return;
   // READ-MODIFY-WRITE: preserve fleet_* fields (managed by flSave) — do NOT clobber the whole key
   try{
@@ -8960,7 +8960,7 @@ function bsCleanupLog(bid){
     }
   });
   b.log = final;
-  if(typeof save==='function')save();
+  if(typeof saveData==='function')saveData();
   if(typeof renderBoats==='function')renderBoats();
   alert('เสร็จ! เหลือ '+b.log.length+' entries\n'+(activeMjNos.size?'(เก็บ '+activeMjNos.size+' fixing log ผูก MJ ที่เปิดอยู่)':''));
 }
@@ -9335,7 +9335,7 @@ function confirmCap(){
   const v=parseInt(document.getElementById('bdp-cap-inp').value);
   if(v>0){ b.cap=v; }
   document.getElementById('bdp-cap-val').textContent=b.cap;
-  cancelCap(); save('config');
+  cancelCap(); saveData('config');
 }
 function cancelCap(){
   document.getElementById('bdp-cap-display').style.display='inline-flex';
@@ -9353,7 +9353,7 @@ function confirmType(){
   const b=getBoat(selBoatId);if(!b)return;
   b.type=document.getElementById('bdp-type-sel').value;
   document.getElementById('bdp-meta-type').textContent=b.type;
-  cancelType(); save('config'); renderBoats();
+  cancelType(); saveData('config'); renderBoats();
 }
 function cancelType(){
   document.getElementById('bdp-type-display').style.display='inline-flex';
@@ -9371,13 +9371,13 @@ function confirmName(){
   const v=document.getElementById('bdp-name-inp').value.trim();
   if(v) b.name=v;
   document.getElementById('bdp-name-text').textContent=b.name;
-  cancelName(); renderBoats(); save('config');
+  cancelName(); renderBoats(); saveData('config');
 }
 // §set the boat identity colour · flows to every getBoatColor consumer (Boat Asset, Boat Status, By-trip, n8n, job rows)
 function flSetBoatColor(id,hex){
   const b=getBoat(id); if(!b) return;
   if(!/^#[0-9a-fA-F]{6}$/.test(String(hex||''))) return;
-  b.color=hex; save('config');
+  b.color=hex; saveData('config');
   try{ if(typeof flRenderBoatList==='function') flRenderBoatList(); }catch(_){}
   try{ if(typeof flRenderBoatDetailPink==='function') flRenderBoatDetailPink(); }catch(_){}
   try{ if(typeof renderBoats==='function') renderBoats(); }catch(_){}
@@ -9656,7 +9656,7 @@ function delStatus(bid,slid){
   if(!confirm('ลบ Status นี้?'))return;
   const b=getBoat(bid);if(!b)return;
   b.log=b.log.filter(e=>e.id!==slid);
-  renderTimeline(b);renderBoats();save('config');
+  renderTimeline(b);renderBoats();saveData('config');
 }
 function pickSt(v){
   selSt=v;updateStPicker(v);
@@ -9701,7 +9701,7 @@ function saveStatus(){
     autoClosePrevLog(b,from,to);
     b.log.push({id:'sl'+Date.now(),s:selSt,from,to,loc,province,locType,detail,note,reason});
   }
-  closeModal('status-modal');renderTimeline(b);renderBoats();save('config');
+  closeModal('status-modal');renderTimeline(b);renderBoats();saveData('config');
 }
 
 // auto-close previous open/overlapping log entries when adding a new one
@@ -9884,14 +9884,14 @@ function saveBoat(){
       autoClosePrevLog(b,TODAY_STR);
       b.log.push({id:'sl'+Date.now(),s:newSt,from:TODAY_STR,to:null,loc:locMap[pier]||pier,note:''});
     }
-    closeModal('boat-modal'); renderBoats(); save('config');
+    closeModal('boat-modal'); renderBoats(); saveData('config');
     if(typeof flRenderBoatList==='function'){flRenderBoatList();flSelBoat(bid);}
   } else {
     // ADD MODE
     fields.id=LA_UID('b');
     fields.log=[{id:'sl'+Date.now(),s:stMap[fmBoatSt],from:TODAY_STR,to:null,loc:locMap[pier]||pier,note:''}];
     BOATS.push(fields);
-    closeModal('boat-modal'); renderBoats(); save('config');
+    closeModal('boat-modal'); renderBoats(); saveData('config');
     if(typeof flRenderBoatList==='function') flRenderBoatList();
   }
 }
@@ -10289,7 +10289,7 @@ function bop2AssignBoat(routeId, date, boatId){
   } else {
     TRIPS[date][boatId] = { route: routeId, type: 'normal', booked: 0 };
   }
-  save('operations');
+  saveData('operations');
   renderOp();
 }
 function bop2UnassignBoat(date, boatId){
@@ -10306,7 +10306,7 @@ function bop2UnassignBoat(date, boatId){
     if(!confirm('เรือ '+bn+' มี '+ab.count+' booking ('+ab.pax+' pax) จัดอยู่วันนี้\n\nถอดออกจาก Boat Operation? — booking จะถูกติดธง ⚠ "เรือถูกถอด · จัดใหม่" ในหน้าจัดเรือ + Daily Fleet Log')) return;
   }
   delete TRIPS[date][boatId];
-  save('operations');
+  saveData('operations');
   renderOp();
 }
 
@@ -10662,7 +10662,7 @@ function bop2CopyWeekToNext(){
       copied++;
     });
   });
-  save('operations');
+  saveData('operations');
   alert('Copied ' + copied + ' assignments. Skipped ' + skipped + ' (existing/charter).');
   bop2ShiftWeek(offset);
 }
@@ -10683,7 +10683,7 @@ function bop2CopyDayToWeek(){
       copied++;
     });
   });
-  save('operations');
+  saveData('operations');
   alert('Copied to ' + copied + ' slot(s). Skipped ' + skipped + '.');
   renderOp();
 }
@@ -10815,7 +10815,7 @@ function bop2ApplyAssignRange(){
     TRIPS[ds][bid] = { route: rid, type: 'normal', booked: 0 };
     applied++;
   }
-  save('operations');
+  saveData('operations');
   bop2CloseModal();
   const parts = ['Applied to ' + applied + ' day(s)'];
   if(skipped > 0) parts.push(skipped + ' kept existing');
@@ -10961,7 +10961,7 @@ function bop2ApplyTemplate(){
       applied++;
     });
   }
-  save('operations');
+  saveData('operations');
   bop2CloseModal();
   alert('Applied ' + applied + ' slots from "' + tpl.name + '". Skipped ' + skipped + '. Chartered ' + chartered + '.'
     + (pastSkip>0 ? (' ข้าม ' + pastSkip + ' วัน (ผ่านมาแล้ว).') : ''));   // §bopPastLock
@@ -11024,7 +11024,7 @@ function bop2ApplySwap(){
   const tmpR = TRIPS[date][a].route, tmpT = TRIPS[date][a].type;
   TRIPS[date][a].route = TRIPS[date][b].route; TRIPS[date][a].type = TRIPS[date][b].type;
   TRIPS[date][b].route = tmpR; TRIPS[date][b].type = tmpT;
-  save('operations');
+  saveData('operations');
   bop2CloseModal();
   alert('Swapped.');
   renderOp();
@@ -11113,7 +11113,7 @@ function bop2ApplyWeekdayPattern(){
     TRIPS[ds][bid] = { route: rid, type: 'normal', booked: 0 };
     applied++;
   }
-  save('operations');
+  saveData('operations');
   bop2CloseModal();
   const parts = ['Found ' + totalDays + ' matching day(s)', 'Applied ' + applied];
   if(skipped > 0) parts.push(skipped + ' kept existing');
@@ -11209,7 +11209,7 @@ function bop2ClearWeek(){
     });
     if(Object.keys(TRIPS[d]).length === 0) delete TRIPS[d];
   });
-  save('operations');
+  saveData('operations');
   alert('Cleared ' + cleared + ' assignment(s).');
   renderOp();
 }
@@ -11842,7 +11842,7 @@ function initOpListeners(){
     } else {
       getOp(ds,bid).type=item.dataset.type;
     }
-    closeAllDd(); save(); renderOp();
+    closeAllDd(); saveData(); renderOp();
   });
 
   // step buttons — delegated via document
@@ -11863,7 +11863,7 @@ function initOpListeners(){
     const free=b.cap-v;
     const badge=btn.closest('.cell-line').querySelector('.op-free');
     if(badge){badge.textContent=(pct>=95?'✕':free)+'v/'+b.cap;badge.className='op-free '+(pct>=95?'full':pct>=70?'warn':'ok');}
-    save();
+    saveData();
   });
   document.addEventListener('click',function(e){
     const trigger=e.target.closest('#matrix-tbl [data-dd]');
@@ -11891,7 +11891,7 @@ function attachOpHandlers(){
       const free=b.cap-v;
       const badge=inp.closest('.cell-line').querySelector('.op-free');
       if(badge){badge.textContent=(pct>=95?'✕':free)+'v/'+b.cap;badge.className='op-free '+(pct>=95?'full':pct>=70?'warn':'ok');}
-      save();
+      saveData();
     });
   });
 }
@@ -12266,7 +12266,7 @@ function toggleDayOverride(rid,dateStr){
   } else {
     r.overrides[dateStr]='open'; // no season, default to open
   }
-  save('config');renderSettings();
+  saveData('config');renderSettings();
 }
 // Guarded · checks booking impact when toggling a day to CLOSED
 function toggleDayOverrideGuarded(rid, dateStr){
@@ -12422,7 +12422,7 @@ function stApplyRouteOrder(ids, pier){
   const next = ROUTES.map(r => r.pier===pier ? ordered[k++] : r);
   ROUTES.length=0; next.forEach(r=>ROUTES.push(r));
   ROUTES.forEach((r,i)=>{ r.sort = i; });        // explicit order → survives reload (scalar col · diffed as a normal field)
-  save('config');                                        // → localStorage → auto-sync to server
+  saveData('config');                                        // → localStorage → auto-sync to server
   renderSettings();
   const pn = pier==='panwa'?'VISIT PANWA':pier==='tublamu'?'TUB LAMU':pier.toUpperCase();
   if(typeof laSaveToast==='function') laSaveToast({kind:'success', title:'บันทึกลำดับ Program แล้ว', status:pn, sub:ordered.length+' โปรแกรม', dur:2600});
@@ -12969,7 +12969,7 @@ function saveNewSeason(rid){
   r.seasons.push({id:'s'+Date.now(),type:addSeasonType,from,to});
   r.seasons.sort((a,b)=>a.from.localeCompare(b.from));
   showSeasonForm=false;
-  save('config');renderSettings();
+  saveData('config');renderSettings();
 }
 
 // ─── Guarded save: warns if closing dates with existing bookings/assignments ───
@@ -13114,7 +13114,7 @@ function delSeason(rid,sid){
   const msg=`ลบ Season นี้?\n\n${typeLabel} · ${fmtD(s.from)} → ${fmtD(s.to)}\nโปรแกรม: ${r.name}\n\nการลบนี้ไม่สามารถยกเลิกได้`;
   if(!confirm(msg))return;
   r.seasons=(r.seasons||[]).filter(x=>x.id!==sid);
-  save('config');renderSettings();
+  saveData('config');renderSettings();
 }
 
 let selProgramStatus='active';
@@ -13156,7 +13156,7 @@ function saveRoute(){
   } else {
     ROUTES.push({id:'r'+Date.now(),name,islands,times,color:ROUTE_COLORS[ROUTES.length%ROUTE_COLORS.length],pier:selLoc,seasons:[]});
   }
-  closeModal('route-modal');renderSettings();save('config');
+  closeModal('route-modal');renderSettings();saveData('config');
 }
 function delRoute(id){
   const r=ROUTES.find(x=>x.id===id);if(!r)return;
@@ -13165,7 +13165,7 @@ function delRoute(id){
   if(!confirm(msg))return;
   ROUTES=ROUTES.filter(r=>r.id!==id);
   if(selProgId===id) selProgId=null;
-  renderSettings();save('config');
+  renderSettings();saveData('config');
 }
 
 // ══════════════════════════════════════
@@ -13180,7 +13180,7 @@ document.querySelectorAll('.modal-overlay').forEach(m=>{
 // ══════════════════════════════════════
 // INIT
 // ══════════════════════════════════════
-function refreshData(){seed();save();renderDash();}
+function refreshData(){seed();saveData();renderDash();}
 
 function exportHTML(){
   // ดึง HTML ของหน้าปัจจุบันจาก DOM (ไม่ใช้ fetch · ทำงานใน artifact preview ได้)
@@ -13292,7 +13292,7 @@ function resetAllData(){
 // One-click data backup -> downloads a timestamped JSON to the Downloads folder.
 function flBackupData(){
   try{
-    if(typeof save==='function') save();
+    if(typeof saveData==='function') saveData();
     if(typeof flSave==='function') flSave();
     const raw=localStorage.getItem(LS_KEY)||'{}';
     const n=new Date();
@@ -13336,7 +13336,7 @@ function flImportData(){
 
 updateDate();
 seed();
-save();
+saveData();
 initOpListeners();
 // Defer renderDash until DOMContentLoaded so FL_* arrays (declared in later script tags
 // like FL_MAINT, FL_ENGINES) are populated. setTimeout(0) can fire between inline scripts
@@ -19414,7 +19414,7 @@ function laRenumberSet(k){
   });
   if(changed.length){
     if(typeof flSave==='function') flSave();
-    if(typeof save==='function'){ try{ save('config'); }catch(e){} }
+    if(typeof saveData==='function'){ try{ saveData('config'); }catch(e){} }
   }
   return { n:changed.length, changed:changed };
 }
@@ -19448,7 +19448,7 @@ function laRenumberOne(k, id){
     }
   }
   if(typeof flSave==='function') flSave();
-  if(typeof save==='function'){ try{ save('config'); }catch(e){} }
+  if(typeof saveData==='function'){ try{ saveData('config'); }catch(e){} }
   return { from:oldNo, to:newNo };
 }
 function costNoRenumberOne(k, id){
@@ -19594,7 +19594,7 @@ function laDupClean(key){
   }
   if(removed>0){
     if(typeof flSave==='function') flSave();
-    if(typeof save==='function'){ try{ save('bookings'); }catch(e){} }
+    if(typeof saveData==='function'){ try{ saveData('bookings'); }catch(e){} }
   }
   return removed;
 }
@@ -19701,6 +19701,15 @@ function flDedupeMaint(list){
   });
   return out;
 }
+// LAM-31: flSave() persists BOATS on purpose, even though BOATS is a sales/schedule global
+// that saveData() (allotment_v2.html:5813) also owns. Fleet UI code (boat status editor, quick
+// swap, project close, etc.) mutates `b.log` on the shared BOATS array constantly, and it does
+// this ENTIRELY through flSave() call sites — it never calls saveData(). saveData() is gated by
+// laCanEditArea('config'|'operations'|'bookings') and is only invoked from Booking/Boat-Operation
+// screens, so a boat-status change made from the Fleet UI would never reach localStorage if
+// flSave() didn't also write d.boats=BOATS — the edit would be visible in-memory but vanish on
+// the next reload. Do not remove `d.boats=BOATS` here without first proving every fleet
+// call site that mutates BOATS also now calls saveData().
 function flSave(){
   if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('fleet')) return;   // fleet view-only → no save
   const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}');
@@ -19709,7 +19718,7 @@ function flSave(){
   d.fleet_inventory=FL_INVENTORY;d.fleet_memos=FL_MEMOS;d.fleet_safety=FL_SAFETY;d.fleet_projects=FL_PROJECTS;d.fleet_version=FLEET_VERSION;
   d.fleet_consumable_logs=FL_CONSUMABLE_LOGS;
   // §flBoatPersist · ฝั่ง Fleet แก้ b.log (สถานะเรือ) อยู่ตลอด แต่ BOATS ไม่เคยถูกเขียนลง
-  //   localStorage เพราะ save() เป็นคนเขียน ซึ่งฝั่งนี้ไม่ได้เรียก → แก้แล้วหายทุกครั้งที่ refresh
+  //   localStorage เพราะ saveData() เป็นคนเขียน ซึ่งฝั่งนี้ไม่ได้เรียก → แก้แล้วหายทุกครั้งที่ refresh
   d.boats=BOATS;
   localStorage.setItem(LS_KEY,JSON.stringify(d));
 }
@@ -22345,7 +22354,7 @@ function flDREdit(ds, pierKey){ flDRSetLock(ds, pierKey, false); }   // unlock f
 // Daily Fleet Log · "Save" — commits any field still being typed, persists, then LOCKS the pier (read-only until Edit).
 function flSaveDayLog(btn, pierKey, ds){
   try{ if(document.activeElement && typeof document.activeElement.blur==='function') document.activeElement.blur(); }catch(e){}
-  try{ flSave(); }catch(e){ try{ save(); }catch(_){} }
+  try{ flSave(); }catch(e){ try{ saveData(); }catch(_){} }
   if(pierKey && ds){ flDRSetLock(ds, pierKey, true); return; }   // lock + re-render (re-render replaces the button)
   if(btn){
     const _html=btn.innerHTML, _bg=btn.style.background, _col=btn.style.color, _bd=btn.style.borderColor;
@@ -28649,7 +28658,7 @@ function flProjStart(id){
       projectId: p.id
     });
   }
-  flSave(); save();
+  flSave(); saveData();
   flRenderProjects();
   flShowToast('Project started · boat removed from operation');
 }
@@ -28726,7 +28735,7 @@ function flProjCancel(id){
         note: `Returned · Project ${p.no} cancelled`
       });
     }
-    save();
+    saveData();
   }
   flSave();
   flRenderProjects();
@@ -28783,7 +28792,7 @@ function flProjMarkComplete(id){
       note: `Returned from Project ${p.no}`
     });
   }
-  flSave(); save();
+  flSave(); saveData();
   flRenderProjects();
   flShowToast(`Project ${p.no} completed · ${openKids.length} MJ auto-closed · boat returned`);
 }
@@ -39170,7 +39179,7 @@ function saveCharterBoat(){
     ownership:'charter',
     log:[{id:'sl'+Date.now(),s:'available',from,to,loc:locMap[pier]||pier,note}]
   });
-  closeModal('charter-modal');renderBoats();save('config');
+  closeModal('charter-modal');renderBoats();saveData('config');
 }
 </script>
 <!-- Doc Inline Edit Popup -->
@@ -39273,7 +39282,7 @@ function depSave(){
       .forEach(d=>d.renewStatus='done');
   }
 
-  save();
+  saveData();
   if(typeof flRenderDocsList==='function') flRenderDocsList();
   depClose();
 }
@@ -58372,7 +58381,7 @@ function mvToggle(id){ var x = mvGet(id); if(!x) return; x.active = (x.active ==
 function mvRouteSet(rid, vid){
   var r = (typeof getRoute === 'function') ? getRoute(rid) : null; if(!r) return;
   r.mealVenueId = vid || '';
-  if(typeof save === 'function') save();
+  if(typeof saveData === 'function') saveData();
   ctRender();
 }
 function ctOdFold(){ _ct.odOpen = !_ct.odOpen; ctRender(); }
@@ -63959,7 +63968,7 @@ function agEditRenderPP(p, i){
   // Effective travel dates always come from rate type; if missing → empty
   const travelFrom = rv ? (rv.from||'') : '';
   const travelTo   = rv ? (rv.to||'')   : '';
-  // Sync inherited dates back into draft so save() captures snapshot of rate type's dates
+  // Sync inherited dates back into draft so saveData() captures snapshot of rate type's dates
   if(_agEditDraft && _agEditDraft.programPeriods && _agEditDraft.programPeriods[i]){
     _agEditDraft.programPeriods[i].travelFrom = travelFrom;
     _agEditDraft.programPeriods[i].travelTo   = travelTo;
@@ -82793,10 +82802,10 @@ function pjProgColor(rid,hex){
   var okCfg=(typeof laCanEditArea==='function') ? laCanEditArea('config') : true;
   if(!okCfg && !poCanEdit()){ if(typeof laGuardEdit==='function') laGuardEdit('pier'); return; }
   for(var i=0;i<ROUTES.length;i++){ if(ROUTES[i].id===rid){ ROUTES[i].color=hex; break; } }
-  // §pierBlob · ห้ามใช้ save('config') · มันมีด่านสิทธิ์ของตัวเองแล้ว return เงียบ
+  // §pierBlob · ห้ามใช้ saveData('config') · มันมีด่านสิทธิ์ของตัวเองแล้ว return เงียบ
   //   คนหน้าท่าไม่มีสิทธิ์ config · สีจะเปลี่ยนบนจอแต่ไม่ถูกบันทึก แล้วเด้งกลับตอนรีเฟรช
   //   เขียนเฉพาะ routes ผ่านแคชกลาง · ตรงกับที่ตัดสินไว้ว่าแก้ท่าเรือได้ก็แต้มสีได้
-  try{ if(typeof laBlob==='function'){ laBlob().routes=ROUTES; laBlobSave(); } else save('config'); }catch(_){}
+  try{ if(typeof laBlob==='function'){ laBlob().routes=ROUTES; laBlobSave(); } else saveData('config'); }catch(_){}
   renderPierJob();
   if(window.event) window.event.stopPropagation();
 }
