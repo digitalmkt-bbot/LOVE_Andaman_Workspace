@@ -62,7 +62,7 @@
 | `grep -n "allotment_v2/start_server.command" allotment_v2/docs/workflows/07-data-persistence-api.md` | **Passed.** Line 569 confirms: "serves static files only on :8765 ... No /api ⇒ the degraded path of §2.1." |
 | `grep -n CHANGELOG CLAUDE.md` (after edits) | **Passed.** Only one hit remains, in the new intro line stating CHANGELOG.md does not exist / is not tracked in git; all 5 other references now point at `allotment_v2/docs/workflows/`. |
 | `node -e "require('./server.js')"` | **Passed (module load only).** `os-backend/src/mapping/os_repo.js` and `operation_schemas_model.json` load without error (this branch already has commit `1c10d84` restoring them). No `DATABASE_URL`/live Postgres in this sandbox, so login/sync were not exercised — stated plainly, not faked. |
-| `git diff --cached --name-status` after staging only owned paths | **Not run yet** — will run immediately before commit to confirm the staged set matches the owned-files list exactly. |
+| `git diff --cached --name-status` after `git add -- <owned paths>`, plus `git diff --cached --check` | **Passed.** Staged set was exactly `A .agent-reports/LAM-23.json`, `A ARCHITECTURE.md`, `M CLAUDE.md`, `M README.md`, `A docs/development/tasks/LAM-23.md` — matches the owned-files list exactly. No whitespace conflicts reported. |
 | `node --check` on the extracted `<script>` of `allotment_v2.html` | **Not applicable / not run** — this task made no edits to `allotment_v2.html`. |
 
 No Postgres instance and no network-reachable prod/staging service were available in this sandbox; nothing beyond static file inspection, git history, and a local `require()` smoke test was attempted, and none of that touches persistence.
@@ -86,9 +86,9 @@ No Postgres instance and no network-reachable prod/staging service were availabl
 ## Agent handoff
 
 - **Branch:** `agent/LAM-23-architecture-docs`
-- **Commit:** (pending — recorded here after commit)
+- **Commit:** `14822b150f3da80a9837624044e5a858a230e410`
 - **Worktree:** `D:/projects/wt-sprint1/LAM-23-architecture-docs`
 - **Jira:** LAM-23
-- **PR:** None (pending — recorded here after publish)
+- **PR:** [#6](https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/6) (open, base `refactor/booking-v2-migration` ← head `agent/LAM-23-architecture-docs`)
 - **Manifest:** `.agent-reports/LAM-23.json`
 - **Unrelated changes left untouched:** `os-backend/`, `database_migration/`, `db/`, `SYSTEM_MAP.md`, `BACKLOG.md`, `HANDOFF_2026-07-04.md`, and every other file in the worktree — none were modified; only the 5 owned paths above were touched.

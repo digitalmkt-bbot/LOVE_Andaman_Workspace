@@ -11,11 +11,11 @@
     "base": "refactor/booking-v2-migration",
     "branch": "agent/LAM-23-architecture-docs",
     "worktree": "D:/projects/wt-sprint1/LAM-23-architecture-docs",
-    "commit": "",
+    "commit": "14822b150f3da80a9837624044e5a858a230e410",
     "pr": {
-      "number": null,
-      "url": "",
-      "state": "none"
+      "number": 6,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/6",
+      "state": "open"
     }
   },
   "input": {
@@ -127,9 +127,9 @@
       "evidence": "os-backend/src/mapping/os_repo.js and operation_schemas_model.json load successfully (prints '[map] field_mapping.json covers every table and column...'); confirms server.js's require of os-backend (referenced indirectly while researching the persistence model for ARCHITECTURE.md) is intact on this branch after commit 1c10d84. No DATABASE_URL/live Postgres was available in this sandbox, so login/sync and any deeper backend behavior were not exercised beyond module load -- stated plainly rather than faked."
     },
     {
-      "command": "git diff --cached --name-status  (after staging only the owned paths)",
-      "status": "not_run",
-      "evidence": "To be run at commit time, immediately before `git commit`, to confirm the staged set matches the owned-files list exactly."
+      "command": "git diff --cached --name-status  (after staging only the owned paths with git add -- <path>)",
+      "status": "passed",
+      "evidence": "Staged set was exactly: A .agent-reports/LAM-23.json, A ARCHITECTURE.md, M CLAUDE.md, M README.md, A docs/development/tasks/LAM-23.md -- matches the owned-files list exactly, nothing extra. `git diff --cached --check` reported no whitespace conflicts."
     }
   ],
   "decisions": [
