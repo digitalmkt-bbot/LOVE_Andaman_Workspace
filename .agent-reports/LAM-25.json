@@ -11,11 +11,11 @@
     "base": "refactor/booking-v2-migration",
     "branch": "agent/LAM-25-edit-preserve-regression",
     "worktree": "D:/projects/wt-sprint2b/LAM-25-edit-preserve-regression",
-    "commit": "e7d28f0487b2b51c621a89b21689bc649f7f980a",
+    "commit": "b4b8c0b716d2081ada059dfba6f101366166393b",
     "pr": {
-      "number": null,
-      "url": "",
-      "state": "none"
+      "number": 17,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/17",
+      "state": "open"
     }
   },
   "input": {

@@ -179,7 +179,8 @@ the whole branch history's files; that table has been replaced with the actual d
 - **Branch:** `agent/LAM-25-edit-preserve-regression`
 - **Worktree:** `D:/projects/wt-sprint2b/LAM-25-edit-preserve-regression`
 - **HEAD at scaffold:** `e7d28f0487b2b51c621a89b21689bc649f7f980a`
-- **PR:** pending — will be filled in once opened (see Publish step)
+- **Final commit:** `b4b8c0b716d2081ada059dfba6f101366166393b`
+- **PR:** [#17](https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/17) — `agent/LAM-25-edit-preserve-regression` → `refactor/booking-v2-migration`, OPEN
 - **Unrelated changes left untouched:** All of `test/helpers/**`, `test/fixtures/**`,
   `test/unit/**`, `test/e2e/**`, root `package.json`, `allotment_v2/allotment_v2.html`,
   `test/regression/seat-locks/**` (LAM-26, concurrent) — none read-modified beyond a read of
