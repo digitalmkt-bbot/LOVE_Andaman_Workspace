@@ -64,9 +64,9 @@
 ## Agent handoff
 
 - **Branch:** `task/LAM-77`
-- **Commit:** Pending publication metadata commit.
+- **Commit:** `ad63bb00a81441c8e3c5b15afb04cd73c70bc645` (implementation); PR metadata follows in an artifact-only commit.
 - **Worktree:** `C:/Users/ta-za/.pi/workflows/projects/wt-coordinator-6d3a93079ab9/sessions/01a01848-e03b-7eaf-b0b1-c703097d7229/runs/203096be-3173-4143-858b-c601e9ce8a3b/worktrees/f68526b059ab576c`
 - **Jira:** LAM-77 (do not transition).
-- **PR:** Pending publication.
+- **PR:** #2 · https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/2 (open; base `main`, head `task/LAM-77`).
 - **Manifest:** `.agent-reports/LAM-77.json`
 - **Unrelated changes left untouched:** None.

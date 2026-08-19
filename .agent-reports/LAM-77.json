@@ -11,11 +11,11 @@
     "base": "origin/main",
     "branch": "task/LAM-77",
     "worktree": "C:/Users/ta-za/.pi/workflows/projects/wt-coordinator-6d3a93079ab9/sessions/01a01848-e03b-7eaf-b0b1-c703097d7229/runs/203096be-3173-4143-858b-c601e9ce8a3b/worktrees/f68526b059ab576c",
-    "commit": "pending initial task commit",
+    "commit": "ad63bb00a81441c8e3c5b15afb04cd73c70bc645",
     "pr": {
-      "number": null,
-      "url": "",
-      "state": "none"
+      "number": 2,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/2",
+      "state": "open"
     }
   },
   "input": {
