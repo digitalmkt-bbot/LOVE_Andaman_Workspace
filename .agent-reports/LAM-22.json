@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "task": "LAM-22",
+  "title": "Stand up the test harness (S1-08)",
+  "status": "partial",
+  "agent": {
+    "sessionId": "LAM-22-test-harness",
+    "model": "claude-sonnet-5"
+  },
+  "git": {
+    "base": "refactor/booking-v2-migration",
+    "branch": "agent/LAM-22-test-harness",
+    "worktree": "D:/projects/wt-sprint1/LAM-22-test-harness",
+    "commit": "4b297376bc4df5e55c13078d3355c981af60f9fa",
+    "pr": {
+      "number": 11,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/11",
+      "state": "open"
+    }
+  },
+  "input": {
+    "requestedOutcome": "Stand up a test harness for the areas that currently have no framework wired in: a runner in CI, an ephemeral-Postgres-per-run provisioning step, one end-to-end proof that creates a booking through the real write path and asserts the row in Postgres, and a fixture helper that builds a booking without the DOM.",
+    "acceptanceCriteria": [
+      "A CI workflow (.github/workflows/tests.yml) runs the test suite on push/PR against an ephemeral Postgres service container",
+      "A DOM-free fixture helper builds a valid SB_BOOKINGS-shaped booking object for reuse across tests",
+      "One end-to-end test creates a booking through the application's real write path (not a mock) and asserts the resulting row exists in Postgres",
+      "The existing informal checks (db/test_seat_lock_race.mjs, db/rt.cjs) are accounted for / wired where reasonable",
+      "No test is reported as passed unless it was actually executed and observed to pass"
+    ],
+    "allowedScope": [
+      "test/",
+      ".github/workflows/tests.yml",
+      "docs/development/tasks/LAM-22.md",
+      ".agent-reports/LAM-22.json"
+    ],
+    "constraints": [
+      "Do not edit root package.json (owned exclusively by LAM-16, running in parallel) — record needed devDependencies/scripts changes in this report instead",
+      "db/migrations/ does not exist on this base branch (deleted at 094dde1); LAM-73 (still To Do) owns whether it is rebuilt from pg_get_viewdef, restored as-is, or abandoned — do not invent migration SQL and do not restore deleted files",
+      "No Postgres is reachable from the target sandbox for this task; any test that cannot actually be executed there must be reported not_run or blocked, never passed",
+      "Do not edit allotment_v2/allotment_v2.html",
+      "Stage only the owned paths, explicitly, never `git add .`/`-A`"
+    ],
+    "assumptions": [
+      "The 'real write path' the Jira scope refers to is the relational backend's REST API (POST /api/v1/_batch -> restApplyOp -> operation_schemas.sb_bookings via os_repo.decomposeBlob), matching CLAUDE.md's statement that prod currently runs DATA_BACKEND=relational — not the legacy whole-blob /api/save path",
+      "Node's built-in test runner (node:test, stable since Node 18) is an acceptable runner given the package.json edit restriction, since it needs zero new devDependencies",
+      "A local, fully ephemeral Postgres instance stood up solely inside this session for verifying the harness's own logic (never committed, discarded before finishing) does not conflict with 'no Postgres is reachable from this sandbox' as a description of the delivered CI/test artifacts' environment"
+    ]
+  },
+  "output": {
+    "summary": "Added a DOM-free booking fixture builder verified field-for-field against os-backend/src/mapping/field_mapping.json, a unit suite for it (10/10 passing, zero dependencies), Postgres/server helper modules, one end-to-end test that drives server.js's real POST /api/v1/_batch write path and reads the row back via an independent Postgres connection, and a GitHub Actions workflow that provisions an ephemeral Postgres, applies db/migrations if present, and runs the suite. The e2e test's schema-precondition gate (hasBookingSchema) and safe-skip behavior were verified for real against a throwaway, fully isolated local Postgres cluster created and destroyed within this session (initdb on a scratch temp dir, custom port, never touched any shared instance) — including confirming server.js itself boots without crashing against a Postgres missing every operation_schemas table. The e2e test's actual PASS path (write + readback against a real provisioned schema) could not be executed or verified, and is not claimed as passing: operation_schemas.sb_bookings does not exist on this branch until LAM-73 resolves db/migrations.",
+    "filesChanged": [
+      { "path": "test/fixtures/booking.mjs", "change": "added", "purpose": "DOM-free builder for a valid SB_BOOKINGS record (buildBooking/buildTrip/buildPassenger), field names verified against os-backend field_mapping.json" },
+      { "path": "test/unit/booking-fixture.test.mjs", "change": "added", "purpose": "Unit tests for the fixture's own shape; always runs, no DB, no dependencies beyond node:test" },
+      { "path": "test/helpers/db.mjs", "change": "added", "purpose": "pg Pool wrapper (mirrors server.js's Railway-only SSL logic), hasBookingSchema() precondition gate, fetchBookingRow()/deleteBooking() for the e2e test" },
+      { "path": "test/helpers/server.mjs", "change": "added", "purpose": "Spawns the real server.js as a child process, waits for readiness, returns a session-cookie-bound HTTP client" },
+      { "path": "test/e2e/booking-write-path.test.mjs", "change": "added", "purpose": "The required end-to-end proof: login -> POST /api/v1/_batch a fixture booking -> assert the row in Postgres via an independent connection. Self-skips with a precise reason when DATABASE_URL is unset or the relational booking schema is missing" },
+      { "path": "test/README.md", "change": "added", "purpose": "Harness orientation: layout, why the e2e test currently skips, how CI wires it up" },
+      { "path": ".github/workflows/tests.yml", "change": "added", "purpose": "CI: ephemeral postgres:16 service container, applies db/migrations/*.sql if present, runs `node --test`, then db/test_seat_lock_race.mjs (non-blocking, see file comment)" },
+      { "path": "docs/development/tasks/LAM-22.md", "change": "added", "purpose": "Change report (this task, agent-change-pr skill scaffold)" },
+      { "path": ".agent-reports/LAM-22.json", "change": "added", "purpose": "Machine-readable manifest for this task" }
+    ],
+    "behaviorChanges": [
+      { "area": "CI", "before": "No workflow runs any test on push/PR; db/test_seat_lock_race.mjs and db/rt.cjs are runnable scripts but not wired into any pipeline", "after": ".github/workflows/tests.yml runs node --test (unit + e2e, e2e self-skipping until LAM-73) plus db/test_seat_lock_race.mjs on every push to agent/** and refactor/booking-v2-migration, and on PRs into refactor/booking-v2-migration or main" },
+      { "area": "Booking test fixtures", "before": "No way to construct a valid SB_BOOKINGS object outside the browser/DOM; every existing check either hits a live prod-shaped DB directly (db/rt.cjs) or fabricates its own unrelated scratch schema (db/test_seat_lock_race.mjs)", "after": "test/fixtures/booking.mjs builds a DOM-free, schema-verified booking (+trip+passenger) object reusable by any future test" },
+      { "area": "Write-path coverage", "before": "No test exercises POST /api/v1/_batch (the relational booking write path) end to end", "after": "test/e2e/booking-write-path.test.mjs exists, is correct against server.js's actual code paths (verified: server.js field names, restApplyOp, decomposeBlob, login/session flow), and will start actually running once LAM-73 provisions operation_schemas.sb_bookings" }
+    ],
+    "interfaces": {
+      "added": [
+        "test/fixtures/booking.mjs: buildBooking(overrides), buildTrip(overrides), buildPassenger(overrides), zzTestId(prefix), CANCELLED_STATUSES",
+        "test/helpers/db.mjs: getPool(), closePool(), hasBookingSchema(pool), fetchBookingRow(pool,id), deleteBooking(pool,id)",
+        "test/helpers/server.mjs: startServer(opts), loginClient(baseUrl,username,password)"
+      ],
+      "changed": [],
+      "removed": []
+    },
+    "dataPersistence": {
+      "impact": "write-path",
+      "details": [
+        "No schema or persistence code was changed. test/e2e/booking-write-path.test.mjs, when its precondition is met, POSTs one scratch booking (id prefixed zz_test_) through the existing /api/v1/_batch endpoint and deletes it again in a finally block — no different from a normal app write, and inert everywhere else because the schema precondition is not currently met.",
+        "Migration required to actually exercise the e2e test: operation_schemas.sb_bookings, sb_bookings__trips, sb_bookings__passengers, and operation_schemas.users must exist on DATABASE_URL. That is db/migrations/002_add_operation_schemas.sql, tracked by LAM-73 — not authored or restored here."
+      ],
+      "migrationRequired": false
+    }
+  },
+  "verification": [
+    {
+      "command": "node --test   (run from repo root, no DATABASE_URL set)",
+      "status": "passed",
+      "evidence": "12 passed, 1 skipped (\"DATABASE_URL not set — no Postgres reachable from this environment\"), 0 failed. test/unit/booking-fixture.test.mjs: 10/10 assertions passed."
+    },
+    {
+      "command": "node --test   (DATABASE_URL pointing at a fresh, fully isolated, session-local ephemeral Postgres with NO operation_schemas schema at all — initdb'd to a scratch temp dir on a non-default port, destroyed at the end of this session, never a shared/CI/prod instance)",
+      "status": "passed",
+      "evidence": "e2e test correctly self-skips with \"operation_schemas.sb_bookings/users not provisioned on this DATABASE_URL — blocked on LAM-73 (db/migrations was removed at 094dde1 and not yet rebuilt/restored)\"; 12 passed, 1 skipped, 0 failed."
+    },
+    {
+      "command": "DATA_BACKEND=relational DATABASE_URL=<same ephemeral instance> ADMIN_USER=admin ADMIN_PASS=*** node server.js  (boot only, against a Postgres with zero operation_schemas tables)",
+      "status": "passed",
+      "evidence": "Server boots and listens (\"LOVE Andaman on 8790 - db on\") without crashing. initDb() logs the exact expected gap: [db] init failed at step \"sb_markets.sort col\": relation \"operation_schemas.sb_markets\" does not exist. Because that abort happens before the admin-seed step, POST /api/login correctly returns a normal 401 (not a crash) for any credentials — confirmed with curl. This is the exact behavior test/e2e/booking-write-path.test.mjs's precondition check is built to detect and skip on."
+    },
+    {
+      "command": "node --test test/e2e/booking-write-path.test.mjs against a Postgres with the relational booking schema actually provisioned (the test's PASS path: real write + readback)",
+      "status": "not_run",
+      "evidence": "Cannot be executed: operation_schemas.sb_bookings does not exist on this branch (db/migrations deleted at 094dde1, not yet rebuilt — LAM-73). Hand-authoring that schema locally to force a green run was deliberately avoided per this task's explicit constraint not to invent migration SQL, even uncommitted/local-only. The test's logic was instead verified by code inspection against server.js's restApplyOp/decomposeBlob/os_repo mapping and field_mapping.json, plus the boot-safety check above."
+    },
+    {
+      "command": "db/test_seat_lock_race.mjs against the same session-local ephemeral Postgres (DATABASE_URL set, no SSL)",
+      "status": "failed",
+      "evidence": "Error: The server does not support SSL connections. Pre-existing bug in a file outside LAM-22's owned paths: db/test_seat_lock_race.mjs hardcodes `ssl:{rejectUnauthorized:false}` in its Pool config, which makes node-postgres require TLS; a plain ephemeral/CI Postgres (including the stock postgres:16 GitHub Actions service container this task's own workflow provisions) does not speak TLS. Wired into .github/workflows/tests.yml as continue-on-error:true with this exact explanation, rather than either hiding the failure or leaving it unwired. See followUps."
+    },
+    {
+      "command": ".github/workflows/tests.yml (GitHub Actions YAML)",
+      "status": "not_run",
+      "evidence": "No GitHub Actions runner or actionlint/yaml validator was available in this sandbox. Reviewed by hand (no tabs, consistent indentation, structure matches GitHub's documented postgres-service-container example) and its steps individually reproduce, one by one, the exact commands verified above against the equivalent local ephemeral Postgres — but the workflow file itself was not executed end-to-end by a real Actions runner."
+    }
+  ],
+  "decisions": [
+    "Used Node's built-in test runner (node:test) instead of Jest/Vitest/Mocha, since it needs zero new devDependencies and root package.json is off-limits this run (LAM-16 owns it exclusively in parallel)",
+    "Targeted the relational REST write path (POST /api/v1/_batch) as 'the real write path' for the e2e proof, since CLAUDE.md states prod currently runs DATA_BACKEND=relational, rather than the legacy whole-blob /api/save path",
+    "Built and destroyed a throwaway, fully isolated local Postgres cluster (own datadir, own port, initdb'd and dropped within this session) purely to verify the harness's own precondition/skip logic and server.js's boot behavior for real — never to fabricate a passing result for the e2e test's actual write+readback assertions, and never touching any shared or pre-existing Postgres instance found in the environment",
+    "Declined to hand-write a local-only operation_schemas.sb_bookings schema to force the e2e test's happy path green, even uncommitted, because the task explicitly forbids inventing migration SQL and that decision belongs to LAM-73",
+    "Wired db/test_seat_lock_race.mjs into CI as continue-on-error rather than omitting it (Jira scope calls it out by name) or leaving it as a hard-required gate the harness cannot currently pass through no fault of the harness itself"
+  ],
+  "risks": [
+    "The e2e test has only ever been verified on its SKIP path (schema absent). Its PASS path (real write + readback assertions, field name matches like row.booking.leadpax/row.trips[0].routeid) is correct by code review against field_mapping.json but has not been exercised against a live populated schema — a genuine mismatch (e.g. a column name) would only surface once LAM-73 lands and CI runs it for real",
+    "db/test_seat_lock_race.mjs will keep failing in the CI workflow this task adds (continue-on-error masks it from blocking, but it is still red) until its SSL option is made conditional the way server.js's own Pool setup already is",
+    ".github/workflows/tests.yml was authored and manually reviewed but never executed by an actual GitHub Actions runner in this sandbox"
+  ],
+  "blockers": [
+    "test/e2e/booking-write-path.test.mjs cannot be proven to pass until LAM-73 provisions operation_schemas.sb_bookings/__trips/__passengers and operation_schemas.users (db/migrations/002_add_operation_schemas.sql, deleted at 094dde1) on the environment CI uses"
+  ],
+  "dependencies": [
+    "root package.json (owned by LAM-16, not edited here) would benefit from: scripts.test = \"node --test\"; scripts[\"test:e2e\"] = \"node --test test/e2e\". No new devDependencies are required — node:test is built into Node >=18 (already the package.json engines floor) and `pg` is already a dependency.",
+    "db/package.json / db/test_seat_lock_race.mjs (not owned by this task) needs its Pool ssl option made conditional the same way server.js:1411 already is (ssl only when the URL looks like Railway, or PGSSL is set) — otherwise it cannot pass against any plain ephemeral/CI Postgres, including the one this task's own workflow provisions.",
+    "LAM-73: rebuild/restore/abandon db/migrations/ decides whether test/e2e/booking-write-path.test.mjs and the CI workflow's 'apply db/migrations' step ever activate. No code change is needed in this task's files once that lands — hasBookingSchema() will simply start returning true."
+  ],
+  "followUps": [
+    "Once LAM-73 lands: run the CI workflow for real and confirm test/e2e/booking-write-path.test.mjs's PASS path (not just its skip path) actually passes; fix any field-name mismatch it surfaces",
+    "Fix db/test_seat_lock_race.mjs's hardcoded ssl:{rejectUnauthorized:false} to match server.js's conditional pattern, then flip continue-on-error back to false (or remove it) in .github/workflows/tests.yml",
+    "Once LAM-16 lands root package.json changes, add the test/test:e2e npm scripts listed under dependencies above",
+    "Consider wiring db/rt.cjs (the live-prod round-trip safety gate) into a separate, manually-triggered workflow — it intentionally reads a live prod-shaped DB and does not belong in the per-PR ephemeral-Postgres job this task added"
+  ],
+  "rollback": "Revert the merge commit / close the PR without merging. Every file this task touches is net-new (test/, .github/workflows/tests.yml, docs/development/tasks/LAM-22.md, .agent-reports/LAM-22.json) — nothing existing was modified, so rollback is a pure deletion with no data or schema effect."
+}
