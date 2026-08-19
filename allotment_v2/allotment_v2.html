@@ -70498,7 +70498,7 @@ function bkV2Render(){
     // Stack the sticky headers below the (sticky) day header · set LITERAL px offsets (no calc-in-custom-prop, which can fail to resolve)
     requestAnimationFrame(()=>{ try{
       const vb=document.getElementById('view-booking'); if(!vb) return;
-      const hd=host.querySelector('.t2-hd'); const h=hd?hd.offsetHeight:0;
+      const h=0;   // day header is NOT sticky (scrolls away) - downstream sticky bars pin straight under the topbar
       const TOP=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--topbar'))||0;   // topbar height (0 after topbar removal · auto-reverts if bar restored)
       const vanOn=!!(typeof _bkV2!=='undefined'&&_bkV2&&_bkV2.vanAssignMode);
       // measure the actual van+grouping strip height (was hardcoded 96 → gap/overlap when real height differed)
@@ -74262,7 +74262,7 @@ function bkV2RenderTab2(){
     .t2-side{width:226px;flex:none;background:var(--white);border-right:1px solid var(--border);padding:16px 14px;position:sticky;top:0;align-self:stretch;min-height:100%}
     .t2-main{flex:1;min-width:0}
     #view-booking .bkv2-bodycard{overflow:visible}
-    .t2-hd{padding:9px 14px;background:var(--white);border-bottom:1px solid var(--border);box-shadow:0 2px 6px -3px rgba(15,23,42,.18);position:sticky;top:var(--topbar,52px);z-index:45}
+    .t2-hd{padding:9px 14px;background:var(--white);border-bottom:1px solid var(--border);box-shadow:0 2px 6px -3px rgba(15,23,42,.18);position:relative;z-index:45}
     .t2-hd-top{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
     .t2-hd-nav{display:flex;gap:5px;padding-top:4px}
     .t2-hd-dwrap{flex:none;min-width:0}
