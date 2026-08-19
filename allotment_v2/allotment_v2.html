@@ -63782,6 +63782,7 @@ var _agEditRTAll=false;
 function agEditRTToggleAll(){ _agEditRTAll=!_agEditRTAll; agEditRender(); }
 function agEditBuildRateTypePicker(){
   const d = _agEditDraft;
+  const esc = s => String(s||'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const currentId = d.rateTypeId;
   // §rtBySales · เห็นเฉพาะเรทของเซลล์เจ้าของ + ส่วนกลาง · เรทของเซลล์อื่นซ่อนไว้ กดดูได้
   const _G = rtForSales(d.sales||'', currentId);

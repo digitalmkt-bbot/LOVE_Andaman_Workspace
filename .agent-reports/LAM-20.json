@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "task": "LAM-20",
+  "title": "Fix esc undefined in the rate-type picker",
+  "status": "completed",
+  "agent": {
+    "sessionId": "LAM-20-esc-rate-type-picker",
+    "model": "claude-sonnet-5"
+  },
+  "git": {
+    "base": "refactor/booking-v2-migration",
+    "branch": "agent/LAM-20-esc-rate-type-picker",
+    "worktree": "D:/projects/wt-sprint1/LAM-20-esc-rate-type-picker",
+    "commit": "",
+    "pr": {
+      "number": null,
+      "url": "",
+      "state": "none"
+    }
+  },
+  "input": {
+    "requestedOutcome": "agEditBuildRateTypePicker (~line 63783 of allotment_v2/allotment_v2.html) calls a bare esc(...) in the branch taken whenever the agent has a sales owner. No global esc exists in this file, so the picker throws ReferenceError and renders nothing for most agents. Add a local const esc per file convention, and grep every top-level render function for the same class of bug and report what is found.",
+    "acceptanceCriteria": [
+      "agEditBuildRateTypePicker declares a local const esc consistent with the file's per-function esc convention",
+      "The bare esc(_salesNm||'เซลล์ผู้ดูแล') call at the former line 63867 resolves to the local esc instead of throwing ReferenceError",
+      "node --check passes on the extracted main <script> block after the edit",
+      "A sweep of every top-level function in allotment_v2.html for the same class of bug (bare esc(/escapeHTML( call with no local declaration) is performed and reported, but any additional sites found are NOT fixed in this diff (reported as follow-ups only)",
+      "Only agEditBuildRateTypePicker is modified in allotment_v2.html for this task"
+    ],
+    "allowedScope": [
+      "allotment_v2/allotment_v2.html (fix ONLY agEditBuildRateTypePicker)",
+      "docs/development/tasks/LAM-20.md",
+      ".agent-reports/LAM-20.json"
+    ],
+    "constraints": [
+      "FIX ONLY agEditBuildRateTypePicker in this task; any other bare-esc sites found go into the report as follow-ups, not into this diff, to avoid colliding with LAM-17/18/19 which edit the same file concurrently",
+      "Never touch package.json, test/**, .github/**, CLAUDE.md, README.md",
+      "esc/escapeHTML is not global in this file — every top-level render function must declare its own local esc",
+      "Stage only the three owned paths explicitly with git add -- <path>, never git add -A / git add .",
+      "No Postgres/network-dependent prod service reachable from this sandbox"
+    ],
+    "assumptions": [
+      "The per-function local-esc convention already used elsewhere in the file (e.g. agEditBuildTmplPicker at line 63754) is the correct pattern to replicate here",
+      "Merge conflicts with LAM-17/LAM-18/LAM-19 (which also edit allotment_v2.html) are accepted per task instructions and not this worker's concern to resolve"
+    ]
+  },
+  "output": {
+    "summary": "Added a local `const esc = s => String(s||'').replace(/[&<>\"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));` at the top of agEditBuildRateTypePicker (allotment_v2/allotment_v2.html), matching the exact convention already used one function above it in agEditBuildTmplPicker. This resolves the previously bare esc(_salesNm||'เซลล์ผู้ดูแล') call in the sales-owner hint branch, which threw ReferenceError: esc is not defined and rendered nothing for most agents. A file-wide sweep of all 3071 top-level functions found no other bare esc()/escapeHTML() call sites without a local declaration after this fix; the sweep script and methodology are documented in the report for reproducibility, and the tool was validated against the pre-fix backup (correctly flagged the known bug) and a set of legitimate multi-helper functions (bop2RenderShell family, no false positive once per-identifier scoping was corrected).",
+    "filesChanged": [
+      {
+        "path": "allotment_v2/allotment_v2.html",
+        "change": "modified",
+        "purpose": "Added local `const esc` declaration inside agEditBuildRateTypePicker so the sales-owner hint branch's esc(_salesNm||...) call resolves instead of throwing ReferenceError"
+      },
+      {
+        "path": "docs/development/tasks/LAM-20.md",
+        "change": "added",
+        "purpose": "Durable human-readable I/O development record for this task"
+      },
+      {
+        "path": ".agent-reports/LAM-20.json",
+        "change": "added",
+        "purpose": "Coordinator-readable JSON manifest contract for this task"
+      }
+    ],
+    "behaviorChanges": [
+      {
+        "area": "Agent Edit modal > Rate Type picker (agEditBuildRateTypePicker)",
+        "before": "For any agent that has a sales owner set (the common case, non-noSales branch), the picker's hint text called a bare esc(_salesNm||'เซลล์ผู้ดูแล') with no esc defined anywhere in scope (esc/escapeHTML is not global in this file). This threw a synchronous ReferenceError inside the template literal, so agEditBuildRateTypePicker's return statement never completed and the Rate Type picker section rendered blank/broken for most agents opening Agent Edit.",
+        "after": "agEditBuildRateTypePicker now declares its own local const esc (same HTML-escaping convention as the neighboring agEditBuildTmplPicker). The sales-owner hint renders correctly with the sales name (or 'เซลล์ผู้ดูแล' fallback) HTML-escaped, and the picker's rate-type list, hint text, and 'show other sales' toggle all render as designed."
+      }
+    ],
+    "interfaces": {
+      "added": [],
+      "changed": [],
+      "removed": []
+    },
+    "dataPersistence": {
+      "impact": "none",
+      "details": [
+        "Pure client-side render-function fix; no localStorage/blob shape change, no server.js/API change, no new field added to any persisted record"
+      ],
+      "migrationRequired": false
+    }
+  },
+  "verification": [
+    {
+      "command": "node --check <extracted lines 39187-83627 of allotment_v2/allotment_v2.html, the main <script> block containing agEditBuildRateTypePicker>",
+      "status": "passed",
+      "evidence": "Extracted the top-level script block (real <script> open at line 39186 / close </script> at line 83628, verified by pairing every <script>/</script> tag in the file and excluding matches that are inside JS string/template literals, e.g. lines 13211, 50865, 51208, 55143, 83305, 83619) to /tmp/mainscript_final.js and ran `node --check` (Node v24.18.0). Output: no errors, exit 0 ('SYNTAX_OK_FINAL')."
+    },
+    {
+      "command": "git diff -- allotment_v2/allotment_v2.html",
+      "status": "passed",
+      "evidence": "git diff shows exactly one line added inside agEditBuildRateTypePicker: `+  const esc = s => String(s||'').replace(/[&<>\"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));` — no other lines in the file changed, and the file's CRLF line endings were preserved (verified with `sed -b` binary-mode diff before applying, byte-identical elsewhere)."
+    },
+    {
+      "command": "Custom Node sweep script (scratchpad find-bare-esc.js): brace-matches every top-level `function NAME(){...}` (3071 found) and flags any whose body calls a bare esc(/escapeHTML( with no local const/let/var/function/param declaration of that identifier in scope",
+      "status": "passed",
+      "evidence": "Run against the fixed allotment_v2.html: 'Top-level functions scanned: 3071' / 'Functions with bare esc()/escapeHTML() and no local declaration: 0'. Sanity-checked the detector against the pre-fix BACKUP copy of the file, where it correctly flagged exactly agEditBuildRateTypePicker (fn L63783-63875, bare call at L63867) and nothing else, confirming the detector reproduces the known bug and is not silently over- or under-matching."
+    },
+    {
+      "command": "Manual review of agEditBuildTmplPicker (the function immediately preceding agEditBuildRateTypePicker) to confirm the local-esc convention being replicated",
+      "status": "passed",
+      "evidence": "Line 63754: `const esc = s => String(s||'').replace(/[&<>\"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));` — identical pattern now added to agEditBuildRateTypePicker."
+    },
+    {
+      "command": "Manual browser / live-app verification of the rendered Agent Edit > Rate Type picker (e.g. via Claude-in-Chrome against a logged-in prod tab, or localhost:8765)",
+      "status": "not_run",
+      "evidence": "No live browser session or Postgres-backed server was available to this sandboxed worker; this is a static/offline worktree with no prod Chrome tab or local server access. The fix was verified statically (syntax check + convention match + sweep) only. Recommend a human or the coordinator do a quick visual check of Agent Edit for any agent with a sales owner set before/after merge."
+    }
+  ],
+  "decisions": [
+    "Matched the existing per-function local-esc convention exactly (same escape map, same arrow-function shape) rather than introducing a shared/global esc helper, per CLAUDE.md's 'esc is not global — every new render fn must declare its own' rule and to avoid a structural change that could collide with LAM-17/18/19's concurrent edits to the same file.",
+    "Scoped the file-wide bug sweep to top-level `function NAME(){...}` declarations at column 0, since a check confirmed all render/build-style functions in this file use that pattern (only 2 top-level arrow-const declarations exist file-wide, neither named Render/Build-like), so this scope matches the task's ask to 'grep every top-level render function'.",
+    "Did not fix any of the other potential sites (none were found after correcting the sweep script's per-identifier scoping) — reported the sweep methodology and zero-result outcome instead of expanding this diff, per the explicit instruction to fix only agEditBuildRateTypePicker in this task."
+  ],
+  "risks": [
+    "The brace-matching sweep script is a best-effort heuristic (handles strings/template literals/line+block comments but not all edge cases of nested template-literal ${...} expressions); it was validated against the known LAM-20 bug and against the bop2Render* family (multiple nested per-block escapeHTML declarations) with no false positive/negative in those cases, but a residual chance of an undetected site elsewhere in 3071 functions cannot be fully ruled out without a real JS parser (acorn/espree not available in this sandbox).",
+    "This task's diff was not exercised in a live browser/server session (no Postgres/network access from this sandbox), so the fix is verified by static analysis (node --check + convention match) only, not by an actual rendered-DOM click-through."
+  ],
+  "blockers": [],
+  "dependencies": [
+    "LAM-17, LAM-18, LAM-19 edit allotment_v2/allotment_v2.html concurrently on sibling branches off the same base; merge conflicts against this PR are expected and accepted per task instructions, not something this worker resolves."
+  ],
+  "followUps": [
+    "No other bare esc()/escapeHTML() call sites without a local declaration were found in any of the 3071 top-level functions in allotment_v2.html as of this task's HEAD, per the validated sweep script — no further follow-up fixes of this exact bug class are currently outstanding.",
+    "Recommended (not performed here): a lightweight lint/CI check that greps new top-level render functions for `esc(`/`escapeHTML(` usage without a matching local declaration, to catch this class of bug before merge in future PRs (per the recurring-gotcha note in CLAUDE.md section 6, 'esc / escapeHTML is NOT global').",
+    "Recommended: once LAM-17/18/19 land, a human should smoke-test Agent Edit > Rate Type picker for an agent with a sales owner set, since this was verified statically only (no live browser/server session available to this worker)."
+  ],
+  "rollback": "Revert the single added line in agEditBuildRateTypePicker (allotment_v2/allotment_v2.html): remove the `const esc = s => String(s||'').replace(/[&<>\"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));` line immediately after `const d = _agEditDraft;`. This restores the pre-fix ReferenceError behavior with no data/schema impact either way, since the change is a pure client-side render-function fix with no persisted state involved."
+}
