@@ -81471,7 +81471,11 @@ function poStockBar(b, cls){
 function poStockChips(b){
   return PO_BUCKET.filter(function(k){ return k.k!=='ready'; }).map(function(k){
     var v=b[k.k]; if(!v) return '';
-    return '<span class="po-ch" style="background:'+k.c+'14;color:'+k.c+'" title="'+poE(k.t)+'">'
+    /* §poNoNeg · ติดลบ = ไม่มีทางเป็นจริง · ต้องสะดุดตา ไม่ใช่กลมกลืนไปกับยอดปกติ */
+    var bad=(v<0), c=bad?'#C0271C':k.c;
+    var tip=bad?(k.t+' ติดลบ · เป็นไปไม่ได้ · ตรวจใบเบิก–คืนของวันที่แก้ยอดล่าสุด'):k.t;
+    return '<span class="po-ch" style="background:'+c+(bad?'22':'14')+';color:'+c
+      +(bad?';font-weight:800':'')+'" title="'+poE(tip)+'">'
       +poE(k.t.split(' ')[0])+'<b>'+v+'</b></span>'; }).join('');
 }
 /* §poCatFilter · กรองตามประเภท · ไม่เก็บลงข้อมูล เป็นมุมมองชั่วคราวของคนที่กำลังดู */
@@ -81508,12 +81512,15 @@ function poStockTable(items, ro){
       + list.map(function(it){
           var b=poBal(it.id);
           var tip=it.label+' · ทะเบียน '+poNum(it.total)+' '+K.u+(b.gone?(' · ตัดออกสะสม '+b.gone):'');
+          /* §poNoNeg · พร้อมใช้เกินทะเบียนแปลว่ามีของคืนกลับมามากกว่าที่เบิกออกไป · ไม่ใช่ของที่มีจริง */
+          var vOver=(b.ready>poNum(it.total));
+          if(vOver) tip+=' · พร้อมใช้เกินทะเบียน '+(b.ready-poNum(it.total))+' — ยอดคืนมากกว่ายอดเบิก';
           return '<div class="po-ir">'
             +'<span class="lw"><b class="l" title="'+poE(tip)+'">'+poE(it.label)+'</b>'
               +'<span class="po-chs">'+poStockChips(b)+'</span></span>'
             +'<span class="rw">'
             +poStockBar(b,'po-mb')
-            +'<span class="v">'+b.ready+'</span>'
+            +'<span class="v"'+(vOver?' style="color:#C0271C" title="'+poE(tip)+'"':'')+'>'+b.ready+'</span>'
             +'<span class="u">/'+poNum(it.total)+' '+poE(K.u)+'</span>'
             +'<span class="ac">'
               +(b.repair>0?'<button class="po-go" onclick="poFixOpen(\''+it.id+'\')" title="ซ่อมเสร็จ"'+(ro?' disabled':'')+'>ซ่อม&#10003;</button>':'')
@@ -82020,6 +82027,35 @@ function poIsCommit(bid, quiet){
     });
     if(left>0 && pool.length) plan.push({itemId:pool[0].id, type:'return', qty:(d>0)?left:-left});
   });
+
+  /* 3.5 · §poNoNeg · ยอดคืนถูกเกลี่ยลงไซส์ตั้งแต่ตอนคืน · พอมาแก้ไซส์ฝั่งเบิกทีหลัง
+     การเกลี่ยเดิมค้างอยู่กับไซส์เก่า ไซส์ที่ถูกลดจึงกลายเป็น "คืนมากกว่าที่เบิก"
+     ปล่อยไว้จะได้ อยู่กับเรือ -2 และ พร้อมใช้ 90 จากทะเบียน 88 ซึ่งเป็นสถานะที่ไม่มีจริง
+     ทางแก้คือย้ายยอดคืนจากไซส์ที่เกินไปให้ไซส์ที่ขาด · ยอดคืนรวมของประเภทนั้นเท่าเดิม */
+  var realloc=[];
+  KS.forEach(function(k){
+    var net={};
+    plan.forEach(function(p){ if(!net[p.itemId]) net[p.itemId]={iss:0,ret:0};
+      net[p.itemId][p.type==='issue'?'iss':'ret']+=p.qty; });
+    var rows=(_poIs.items[k]||[]).map(function(it){
+      var o=S[it.id]||{iss:0,ret:0,rep:0,wo:0,lost:0,ob:0}, x=net[it.id]||{iss:0,ret:0};
+      return {id:it.id, label:it.label,
+              out:(o.iss+x.iss)-(o.ret+x.ret+o.rep+o.wo+o.lost+o.ob)}; });
+    var under=rows.filter(function(r){ return r.out>0; });
+    rows.filter(function(r){ return r.out<0; }).forEach(function(a){
+      under.forEach(function(b){
+        if(a.out>=0 || b.out<=0) return;
+        var q=Math.min(-a.out, b.out);
+        plan.push({itemId:a.id, type:'return', qty:-q});
+        plan.push({itemId:b.id, type:'return', qty:q});
+        a.out+=q; b.out-=q;
+        realloc.push(a.label+' → '+b.label+' · ย้ายยอดคืน '+q); });
+      /* ไม่มีไซส์ไหนรับไปได้ = ใบนี้คืนมากกว่าที่เบิกจริง ๆ · ตัดยอดคืนลงให้เหลือศูนย์ */
+      if(a.out<0){ plan.push({itemId:a.id, type:'return', qty:a.out});
+        realloc.push(a.label+' · ลดยอดคืน '+(-a.out)+' (คืนมากกว่าที่เบิก)'); a.out=0; } });
+  });
+  if(realloc.length && !confirm('ใบนี้บันทึกการคืนไปแล้ว · แก้ยอดเบิกจึงต้องขยับยอดคืนตามด้วย:\n\n'
+      +realloc.join('\n')+'\n\nไม่ขยับตาม ยอด "อยู่กับเรือ" จะติดลบ และ "พร้อมใช้" จะเกินทะเบียน\nบันทึกต่อไหม?')) return false;
 
   /* 4 · เขียน */
   var note=quiet?'':'';
