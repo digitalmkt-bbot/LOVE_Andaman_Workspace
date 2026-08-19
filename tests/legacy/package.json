@@ -1,0 +1,9 @@
+{
+  "name": "loveandaman-legacy-characterization-tests",
+  "private": true,
+  "type": "module",
+  "description": "LAM-77: characterization tests for allotment_v2.html / server.js legacy behavior. Self-contained — no dependency on the repo root package.json. Requires only Node >=18 (uses the built-in node:test runner and node:vm; no npm install needed).",
+  "scripts": {
+    "test": "node --test *.test.mjs"
+  }
+}

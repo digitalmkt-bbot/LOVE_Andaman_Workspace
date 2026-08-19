@@ -1,89 +1,79 @@
 {
   "schemaVersion": 1,
   "task": "LAM-77",
-  "title": "Characterize critical legacy booking workflows",
+  "title": "Legacy characterization tests for critical workflows",
   "status": "completed",
   "agent": {
-    "sessionId": "01a0184f-9ec5-7cb8-86fe-ae4a1d8b24c2",
-    "model": "openai-codex/gpt-5.6-terra"
+    "sessionId": "LAM-77-characterization-tests",
+    "model": "claude-sonnet-5"
   },
   "git": {
-    "base": "origin/main",
-    "branch": "task/LAM-77",
-    "worktree": "C:/Users/ta-za/.pi/workflows/projects/wt-coordinator-6d3a93079ab9/sessions/01a01848-e03b-7eaf-b0b1-c703097d7229/runs/203096be-3173-4143-858b-c601e9ce8a3b/worktrees/f68526b059ab576c",
-    "commit": "ad63bb00a81441c8e3c5b15afb04cd73c70bc645",
+    "base": "main",
+    "branch": "agent/LAM-77-characterization-tests",
+    "worktree": "D:/projects/wt-sprint2/LAM-77-characterization-tests",
+    "commit": "bffa1d9c80d858499b9bad8c50873c28c1b2b4ba",
     "pr": {
-      "number": 2,
-      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/2",
+      "number": 14,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/14",
       "state": "open"
     }
   },
   "input": {
-    "requestedOutcome": "Add and publish repeatable characterization tests for LAM-77 without changing production behavior.",
+    "requestedOutcome": "Capture current behavior of allotment_v2.html / server.js before the LAM-79/LAM-80+ modular extraction, prioritizing booking persistence, edit-preserve fields, cancelled-status aggregates, seat locks, boat assignment, and rate-type pricing, so that behavior which looks wrong can be flagged as an intentional exception rather than silently 'fixed' during extraction.",
     "acceptanceCriteria": [
-      "Document booking persistence, edit-preserve fields, cancelled-status aggregates, seat locks, boat assignment, and rate-type pricing.",
-      "Document intentional exceptions before modular extraction.",
-      "Do not modify production behavior, persistence, schema, root configuration, ADRs, or SYSTEM_MAP.md."
+      "Repeatable tests document current behavior and identify any intentional exceptions before modular extraction.",
+      "Tests characterize (assert what the code does today) rather than refactor or fix anything, including behavior that looks wrong.",
+      "All six named areas are covered: booking persistence, edit-preserve fields, cancelled-status aggregates, seat locks, boat assignment, rate-type pricing.",
+      "Tests are repeatable and runnable without manual setup beyond a Node install."
     ],
     "allowedScope": [
-      "tests/legacy/**",
+      "tests/legacy/** (new)",
+      "isolated legacy-test configuration and fixtures, inside tests/legacy/ only",
       "docs/development/tasks/LAM-77.md",
       ".agent-reports/LAM-77.json"
     ],
     "constraints": [
-      "Base the isolated task branch on origin/main.",
-      "Use only Node built-ins and test-owned globals; do not install dependencies or change shared configuration.",
-      "Create a PR but do not merge it or transition Jira."
+      "Never alter production code: allotment_v2/allotment_v2.html is read-only for this task (reading via grep + narrow windows is fine; editing is not).",
+      "Never alter apps/web/** (owned by LAM-76 this run).",
+      "Never alter docs/adr/** or SYSTEM_MAP.md (owned by LAM-79 this run).",
+      "Keep every test config/fixture inside tests/legacy/ — no shared root configuration.",
+      "Do not edit the root package.json or .github/ — not owned this run; if unavoidable, only record as a declared dependency/follow-up, do not edit.",
+      "No characterization may itself change persistence/schema/SQL/API behavior.",
+      "Read allotment_v2.html and server.js only via grep + narrow windows, never a whole-file read (the file is ~76.5k lines / ~4MB).",
+      "Stage only the owned path list; never `git add .` / `git add -A`.",
+      "No Postgres/prod service reachable from this sandbox; no claim of a check passing without actually running it."
     ],
     "assumptions": [
-      "The monolithic HTML is the behavior source under characterization.",
-      "The repository's Node 18+ engine supports node:test and vm."
+      "The worktree's base ref (origin/main at commit 17a15c4) predates an already-merged, separate prior run of LAM-77 (PR #2, branch task/LAM-77) now sitting on the live origin/main tip. Per explicit task instructions this is expected: that older PR is left untouched, and this task's own independent characterization work is produced fresh on this branch and published as its own PR — the eventual merge/reconciliation of the two is the coordinator's concern, not this agent's.",
+      "No npm registry access can be assumed in this sandbox, so the test suite is built entirely on Node's built-in node:test / node:vm / node:assert (Node >=18) rather than a third-party test runner, to guarantee it is runnable without `npm install`.",
+      "'Characterize' is read literally: every test asserts current, real, executed behavior of source extracted verbatim from allotment_v2.html at test-run time (via a brace-aware extractor + a node:vm sandbox with stub globals) rather than a hand-written paraphrase of what the function is believed to do.",
+      "Where a function's dependency graph was too wide to extract cleanly within this task's scope (e.g. baAssignedPax's boat-split model, the full bkV2CommitBooking UI flow), the corresponding dependency is stubbed and that choice is documented in-file and in EXCEPTIONS.md/this report, rather than silently narrowing coverage."
     ]
   },
   "output": {
-    "summary": "Added eight isolated Node characterization tests plus an intentional-exceptions fixture for critical legacy booking workflows.",
+    "summary": "Added a self-contained characterization-test suite (tests/legacy/, 70 tests across 15 suites, 100% passing) covering all six LAM-77 areas by extracting real function/inline-block source from allotment_v2.html at test-run time (brace-aware extractor + marker-based extractor) and executing it in an isolated node:vm sandbox with fixture data and stub globals — plus source-level scans for a few status-list checks. Documented 4 intentional/observed exceptions (3 newly found by this pass, 1 restated from an existing source comment) in tests/legacy/EXCEPTIONS.md with file-level references and each backed by a test assertion, none fixed. No production code was modified; allotment_v2.html and server.js were only read.",
     "filesChanged": [
-      {
-        "path": "tests/legacy/helpers/legacy-source.mjs",
-        "change": "added",
-        "purpose": "Extract selected production functions into a test-owned VM context."
-      },
-      {
-        "path": "tests/legacy/legacy-characterization.test.mjs",
-        "change": "added",
-        "purpose": "Exercise persistence, aggregate, lock, boat, rate, and edit-preserve behavior."
-      },
-      {
-        "path": "tests/legacy/fixtures/intentional-exceptions.json",
-        "change": "added",
-        "purpose": "Record intentional compatibility exceptions for future extraction."
-      },
-      {
-        "path": "docs/development/tasks/LAM-77.md",
-        "change": "added",
-        "purpose": "Record task inputs, observable output, verification, risks, and rollback."
-      },
-      {
-        "path": ".agent-reports/LAM-77.json",
-        "change": "added",
-        "purpose": "Provide the coordinator-readable handoff manifest."
-      }
+      { "path": "tests/legacy/lib/source.mjs", "change": "added", "purpose": "Shared extraction utility: loads/caches allotment_v2.html (CRLF-normalized), brace-aware extractFunction(name), marker-based extractBetween(start,end) for inline (non-function) blocks, occurrences()/lineOf() for source scans." },
+      { "path": "tests/legacy/lib/sandbox.mjs", "change": "added", "purpose": "Runs extracted source in a node:vm context with caller-supplied stub globals; tiny in-memory localStorage stand-in (makeLocalStorage)." },
+      { "path": "tests/legacy/booking-persistence.test.mjs", "change": "added", "purpose": "Area: booking persistence. Executes save(area) (read-modify-write + per-area edit guard), the sb_bookings Array.isArray load condition, and the SB_BOOKINGS placement (replace-in-place on edit vs unshift on create) + final localStorage read-modify-write inside bkV2CommitBooking. 13 tests." },
+      { "path": "tests/legacy/edit-preserve.test.mjs", "change": "added", "purpose": "Area: edit-preserve fields. Executes the 3 real if(editing){...} carry-over sub-blocks from bkV2CommitBooking (history/weatherResolve/rebook/invoiceId/paymentStatus/ops; upgrades/feeItems/reschedule/partialCancels/cancellation/cancelCategory; travel-date-change ops clearing with charter exemption). 8 tests." },
+      { "path": "tests/legacy/cancelled-status-aggregates.test.mjs", "change": "added", "purpose": "Area: cancelled-status aggregates. Executes getSeatsConsumed (+bkPendHoldsSeat, +getTripPaxTotal) against the documented 3-status exclusion; source-scans every cancelled-status exclusion literal in the file and documents 2 places it diverges from the documented invariant. 12 tests." },
+      { "path": "tests/legacy/seat-locks.test.mjs", "change": "added", "purpose": "Area: seat locks. Executes the full bkV2Lock* pool-hold/parent-child/rolling-release cluster (bkV2LockPoolHold, bkV2LockedTotal, month/bulk-scope range+dow filtering, per-date rolling release cutoff) and the tiered anti-overbook guard block (lockViolation/overCapApproval/licenseBlock) from bkV2CommitBooking. 11 tests." },
+      { "path": "tests/legacy/boat-assignment.test.mjs", "change": "added", "purpose": "Area: boat assignment. Executes bkV2AssignBoat + baCharterBoatMap/baCharterBoatMapMemo/baCharterBoatIds + the bkOps*/bkTripDates/bkIsFirstDay cluster: charter-boat exclusion from the seat-pool picker, and the cap+BA_CAP_TOL tolerance boundary (reading the live constant, not hardcoding it). 9 tests." },
+      { "path": "tests/legacy/rate-type-pricing.test.mjs", "change": "added", "purpose": "Area: rate-type pricing. Executes tsNetOf (+_tsNum) for real seat-mode and charter-mode net pricing (zone-guessing, fr/th pax-type breakdown, starter+extra-per-pax charter math) and _rtNormalizeLongtail/_rtLongtailForRoute for per-route longtail add-on pricing across its 3 legacy-shape migrations. 17 tests." },
+      { "path": "tests/legacy/package.json", "change": "added", "purpose": "Isolated ESM + `npm test` config scoped to tests/legacy/ only (type:module) — does not touch or require the repo root package.json." },
+      { "path": "tests/legacy/README.md", "change": "added", "purpose": "How/why this suite works, exact run commands (including a documented gotcha: `node --test tests/legacy` as a bare directory path does not recurse on this Node build — the glob form must be used), file map, and the deliberate scoping choices (what was stubbed instead of extracted, and why)." },
+      { "path": "tests/legacy/EXCEPTIONS.md", "change": "added", "purpose": "The 4 intentional/observed exceptions this pass found or confirmed, each with a file/behavior description, the observable effect, and a suggested follow-up — not fixed here." },
+      { "path": "docs/development/tasks/LAM-77.md", "change": "added", "purpose": "Agent-change-pr task report (this task's I/O record)." },
+      { "path": ".agent-reports/LAM-77.json", "change": "added", "purpose": "Agent-change-pr machine-readable manifest (this file)." }
     ],
     "behaviorChanges": [
-      {
-        "area": "Legacy characterization coverage",
-        "before": "Critical behavior was only represented by the monolithic implementation.",
-        "after": "Eight executable tests pin selected current behavior without changing the implementation."
-      },
-      {
-        "area": "Production behavior and persistence",
-        "before": "Existing behavior and data paths were unchanged.",
-        "after": "Existing behavior and data paths remain unchanged; tests use in-memory test doubles."
-      }
+      { "area": "Repository", "before": "No characterization tests existed for allotment_v2.html's booking-persistence / edit-preserve / cancelled-status / seat-lock / boat-assignment / rate-type-pricing behavior on this branch.", "after": "70 repeatable, passing tests (tests/legacy/*.test.mjs) assert the real, currently-executing behavior of those six areas by extracting and running the actual source, runnable via `node --test 'tests/legacy/*.test.mjs'` with zero npm installs. No application behavior itself changed — this task adds only tests and documentation." }
     ],
     "interfaces": {
       "added": [
-        "node --test tests/legacy/legacy-characterization.test.mjs"
+        "tests/legacy/lib/source.mjs: getSource(), extractFunction(name), extractBetween(startMarker,endMarker,opts), assertUnique(src,marker), occurrences(marker), lineOf(marker), findMatchingBrace(src,openIdx)",
+        "tests/legacy/lib/sandbox.mjs: runInSandbox(code, globals, exportNames), makeLocalStorage(initial)"
       ],
       "changed": [],
       "removed": []
@@ -91,39 +81,48 @@
     "dataPersistence": {
       "impact": "read-only",
       "details": [
-        "Tests read the legacy HTML source and use an in-memory localStorage double.",
-        "No production persistence, API, schema, or migration behavior changed."
+        "Tests read allotment_v2/allotment_v2.html from disk (never write to it) to extract real source text for execution.",
+        "Tests use an in-memory localStorage stand-in (tests/legacy/lib/sandbox.mjs: makeLocalStorage) — no real browser localStorage, no Postgres, no server.js process, and no network calls are touched by any test in this suite.",
+        "No schema, migration, or API contract was changed by this task."
       ],
       "migrationRequired": false
     }
   },
   "verification": [
-    {
-      "command": "node --test tests/legacy/legacy-characterization.test.mjs",
-      "status": "passed",
-      "evidence": "8 tests passed, 0 failed."
-    },
-    {
-      "command": "git diff --check",
-      "status": "passed",
-      "evidence": "No whitespace errors reported."
-    }
+    { "command": "cd tests/legacy && node --test *.test.mjs", "status": "passed", "evidence": "70 tests, 15 suites, 70 pass / 0 fail / 0 cancelled / 0 skipped. Re-run after every source edit during development; last clean run before commit." },
+    { "command": "cd tests/legacy && npm test", "status": "passed", "evidence": "Same 70/70 pass via the isolated tests/legacy/package.json 'test' script (confirms the suite is runnable via npm without touching the repo root package.json)." },
+    { "command": "node --test 'tests/legacy/*.test.mjs'   (run from repo root)", "status": "passed", "evidence": "Same 70/70 pass when invoked from the repository root using the documented glob form." },
+    { "command": "node --test tests/legacy   (bare directory path, repo root)", "status": "failed", "evidence": "MODULE_NOT_FOUND: Node's --test does not recurse into a bare directory path on this Node build/version (v24.18.0) the way it does with an explicit glob. Documented as a gotcha in tests/legacy/README.md so nobody mistakes '0 tests found, exit success' for a clean run; the glob form is the documented/verified way to run this suite." },
+    { "command": "node -e \"require('node:test')\" / node --version", "status": "passed", "evidence": "Node v24.18.0 confirmed available with a working built-in node:test module before writing any test — no npm install was needed or attempted for this suite." },
+    { "command": "git status --short --branch (start of task, before any change)", "status": "passed", "evidence": "Branch agent/LAM-77-characterization-tests was clean at HEAD 17a15c46429b126d6e2eda9f2ebcd6b26cb31351 with no pre-existing uncommitted changes — no hard-stop condition #1." },
+    { "command": "git status --short --branch (after writing owned files, before staging)", "status": "passed", "evidence": "Only untracked paths reported were tests/, docs/, and .agent-reports/ — i.e. only newly-added files inside the owned scope; nothing outside tests/legacy/**, docs/development/tasks/LAM-77.md, or .agent-reports/LAM-77.json was touched, and allotment_v2/allotment_v2.html / server.js / root package.json / .github/ show no modifications." }
   ],
   "decisions": [
-    "Extract individual named functions instead of executing the entire legacy application.",
-    "Select the second save declaration explicitly because the first is the cloud-sync helper and the second is the localStorage persistence implementation."
+    "Built the suite on Node's built-in node:test/node:vm/node:assert instead of a third-party runner (vitest/jest/mocha), because network/npm-install availability could not be assumed in this sandbox and the task instructions require the suite to need no shared root configuration.",
+    "Characterization is done by extracting REAL source text from allotment_v2.html at test-run time (via a hand-rolled brace-aware extractor that understands strings/templates/comments, plus a marker-based extractor for inline non-function blocks) and executing it in an isolated vm context with stub globals — not by hand-writing a paraphrase of the function's believed behavior. This means a future behavior-changing edit to the real source will make the matching test fail, while a pure refactor (same behavior, different code shape) keeps passing as long as the anchor markers/function names survive.",
+    "Marker-based extraction (extractBetween) requires each start/end marker to be a UNIQUE literal substring of the file, verified at extraction time (assertUnique throws otherwise) — chosen so a future source edit that makes an anchor ambiguous fails loudly at test-run time instead of silently extracting the wrong span.",
+    "allotment_v2.html is saved with CRLF line endings; getSource() normalizes to LF once so multi-line marker strings can be written as plain JS template literals without a silent non-match. Documented inline in source.mjs.",
+    "Where a target function's dependency graph was too wide to extract cleanly within this task's scope (baAssignedPax's boat-split model in boat-assignment.test.mjs; the full bkV2CommitBooking UI/alert/confirm flow as a whole), the corresponding dependency was stubbed with fixture-controlled behavior instead of extracted, and that scoping choice is documented in the test file's header comment, in README.md's 'Deliberate scoping choices' section, and cross-referenced in EXCEPTIONS.md where relevant — so the boundary of what was actually executed vs. stubbed is auditable, not implicit.",
+    "For the anti-overbook guard, edit-preserve carry-over, and the SB_BOOKINGS-placement+persist block — none of which are standalone functions in the source — the exact inline code span was extracted via unique text markers and wrapped in a minimal harness function (adding back only the one enclosing brace the marker boundary excluded, verified by re-reading the surrounding source before writing the marker) rather than re-implemented by hand.",
+    "Found and documented (not fixed) 3 new source inconsistencies plus restated 1 already-source-commented behavior as EXCEPTIONS.md items #1-4, each backed by a passing test assertion: (1) three different cancelled/closed status lists disagree across bkV2DetailCancel/canCancel/canEdit; (2) bkPendHoldsSeat gates only the seat-pool math, not Boat-Op pax counts; (3) the anti-overbook guard silently skips a route/date with no boat assigned yet (source already comments this as intentional); (4) save(area) bypasses its edit-guard entirely when called with no area argument (source already comments this as intentional)."
   ],
   "risks": [
-    "The extraction harness intentionally depends on named function declarations and selected source structure; a rename or conversion may require test-harness migration."
-  ],
+    "Marker-based extraction (extractBetween) is inherently coupled to the exact literal text of allotment_v2.html at the anchor points. A future edit that changes so much as whitespace/wording inside a chosen marker will make that test's extraction throw (assertUnique / 'end marker not found') rather than silently pass on stale logic — a loud failure, but it will require someone to re-anchor the marker as part of that future change. This is called out in README.md.",
+    "Coverage is real-execution for the core decision logic of each area but not exhaustive of every code path in the ~76.5k-line file (e.g. B2C-owned-booking override behavior and the 'self-arrive cancels outbound van' sub-block inside the edit-preserve if(editing) block were read and confirmed present but not independently executed — narrower in scope than the 3 sub-blocks that were extracted and run). Anyone extending this suite for modular extraction should treat it as a strong starting baseline for the 6 named areas, not a 100%-branch-coverage guarantee.",
+    "This suite was developed and verified only in this sandboxed worktree (no live Postgres, no browser, no server.js process running) — it characterizes the pure-JS decision logic reachable via source extraction, not the full browser/DOM/network-integrated runtime behavior of allotment_v2.html.",
+    "The already-merged, separate prior LAM-77 run (PR #2 on branch task/LAM-77, now part of origin/main) also added tests/legacy/**, docs/development/tasks/LAM-77.md, and .agent-reports/LAM-77.json with independently-chosen content. This branch was not rebased onto that history (per this task's explicit instructions to leave that older PR untouched and publish independently), so merging this PR into main will very likely show these same paths as conflicting/duplicate additions. Reconciling the two LAM-77 outputs (keep one, merge both, or supersede) is a coordinator-level decision, not something resolved by this agent."
+    ],
   "blockers": [],
   "dependencies": [
-    "Node.js 18+.",
-    "allotment_v2/allotment_v2.html present in the checkout."
+    "None required to run this suite today (Node's built-in test runner is sufficient). If a project-wide CI workflow is later added for tests/legacy/ (e.g. a GitHub Actions job running `node --test 'tests/legacy/*.test.mjs'` on PRs), that wiring belongs in .github/, which this task does not own this run (LAM-76 owns .github/ this run) — filed as a follow-up rather than edited here.",
+    "Reconciling this branch's tests/legacy/**, docs/development/tasks/LAM-77.md, and .agent-reports/LAM-77.json with the already-merged, separate prior LAM-77 run's identically-named files on main (see Risks) is a coordinator-level follow-up, not something this task can resolve from an isolated worktree."
   ],
   "followUps": [
-    "Move the cases to module-level tests as corresponding legacy modules are extracted.",
-    "Retain fixture exceptions until a separately approved behavior change replaces them."
+    "File a ticket for EXCEPTIONS.md #1: unify (or explicitly document the deliberate difference between) the 3 different closed/cancelled status lists used by bkV2DetailCancel / canCancel / canEdit on the Booking detail screen.",
+    "File a ticket for EXCEPTIONS.md #2: decide whether Boat Operation's baAssignedPax/baAssignedBookings and the seat displacement list (getBookingsForRouteDate) should also gate on bkPendHoldsSeat for over-capacity pending_approval bookings, or add a comment at each call site explaining why they intentionally don't.",
+    "If/when CI wiring for this suite is added, add a job that runs `node --test 'tests/legacy/*.test.mjs'` on PRs touching tests/legacy/** or allotment_v2/allotment_v2.html — to be done by whoever owns .github/ (LAM-76 this run), not this task.",
+    "When the modular extraction work (the eventual LAM-7x task this suite was written ahead of) begins, extend this suite's coverage of the B2C-owned-booking override sub-block and the 'self-arrive cancels outbound van' sub-block inside bkV2CommitBooking's edit-preserve block (currently read and confirmed present, not independently executed — see Risks).",
+    "Coordinate with whoever owns the already-merged prior LAM-77 run's output (PR #2 / branch task/LAM-77) on how to reconcile the two independently-produced tests/legacy/** trees before/at merge time."
   ],
-  "rollback": "Revert the LAM-77 commit; no production code or persisted data is affected."
+  "rollback": "Revert the single commit on branch agent/LAM-77-characterization-tests (or close the PR without merging). All changes are additive — new files only under tests/legacy/**, docs/development/tasks/LAM-77.md, and .agent-reports/LAM-77.json — nothing existing was modified, so a revert has zero effect on any other code path, data, or running service."
 }
