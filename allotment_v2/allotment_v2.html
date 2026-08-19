@@ -60031,6 +60031,10 @@ function bkV2WeatherResolveOne(bkId,pfx){
   const paid=inv?acctInvoicePaid(inv):0;
   if(out==='reschedule'){
     const ndv=(document.getElementById(pfx+'date-'+bkId)||{}).value||date;
+    // New day → the OLD boat/van assignment no longer applies (matches bkV2RescheduleBooking / the edit-path
+    // date change) · clear the OLD date's per-day ops block BEFORE moving the trip, using the shared
+    // bkOpsRead/bkOpsFor-aware helper so it lands on bk.ops (day 1) or the right t.ops (later days).
+    if(ndv!==date && typeof bkOpsClear==='function') bkOpsClear(bk, date);
     (bk.trips||[]).forEach(t=>{ if(t.routeId===routeId && t.date===date) t.date=ndv; });
     bk.rebook={from:date,to:ndv,reason:'weather',at:new Date().toISOString()};
     bk.weatherResolve.newDate=ndv;
