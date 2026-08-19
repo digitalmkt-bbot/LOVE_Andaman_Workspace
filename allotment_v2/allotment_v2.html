@@ -81231,15 +81231,79 @@ function poStaffName(id){ var s=(PIER_STAFF||[]).filter(function(x){ return x.id
 
 /* ── ผ้าค้างร้านซัก · เตือนเมื่อเกิน N วัน ── */
 var PO_LAUNDRY_DUE=2;
-function poLaundryOpen(pier){
-  var out=[];
-  poItems(pier).filter(function(i){ return i.kind==='towel'; }).forEach(function(it){
-    var b=poBal(it.id); if(b.laundry<=0) return;
-    var last='';
-    (PIER_MOVES||[]).forEach(function(m){ if(m.itemId===it.id && m.type==='laundry_out' && m.date>last) last=m.date; });
-    var days=last?Math.round((new Date(_poDate+'T12:00:00')-new Date(last+'T12:00:00'))/86400000):0;
-    out.push({it:it, qty:b.laundry, since:last, days:days});
+/* ผ้ารอส่งซักค้างอยู่ที่ท่าเราเอง · ข้ามคืนแล้วขึ้นรา · เตือนเร็วกว่าฝั่งร้านซัก */
+var PO_DIRTY_DUE=1;
+function poTodayYMD(){ try{ return poYMD(new Date()); }catch(_){ return _poDate; } }
+function poDaysAgo(ymd){
+  if(!ymd) return 0;
+  var a=new Date(String(ymd)+'T12:00:00'), b=new Date(poTodayYMD()+'T12:00:00');
+  if(isNaN(a)||isNaN(b)) return 0;
+  return Math.round((b-a)/86400000);
+}
+function poDShort(ymd){
+  var p=String(ymd||'').split('-'), m=+p[1], d=+p[2];
+  if(!m||!d) return String(ymd||'');
+  var MS=(typeof MONTHS_TH_SHORT!=='undefined')?MONTHS_TH_SHORT:[];
+  return d+' '+(MS[m-1]||m);
+}
+/* §towelQ · เดินรายการเคลื่อนไหวเรียงตามวัน แล้วต่อคิวเข้าก่อนออกก่อน
+   คืนกอง {date, q} เรียงเก่า → ใหม่ ของแต่ละถัง · ยอดรวมแต่ละถังเท่ากับ poBal เสมอ */
+function poTowelQ(pier, only){
+  var ids={};
+  poItemsAll(pier).forEach(function(it){ if(it.kind==='towel' && (!only||it.id===only)) ids[it.id]=1; });
+  var mv=[];
+  (PIER_MOVES||[]).forEach(function(m,i){ if(m && ids[m.itemId]) mv.push({m:m,i:i}); });
+  mv.sort(function(a,b){
+    var d=String(a.m.date||'').localeCompare(String(b.m.date||'')); if(d) return d;
+    var t=String(a.m.at||'').localeCompare(String(b.m.at||'')); if(t) return t;
+    return a.i-b.i; });
+  var Q={onboat:[], dirty:[], laundry:[]};
+  var push=function(q,date,n){ if(n<=0) return;
+    var t=q[q.length-1]; if(t && t.date===date) t.q+=n; else q.push({date:date,q:n}); };
+  var takeF=function(q,n){ while(n>0 && q.length){ var h=q[0];
+    if(h.q<=n){ n-=h.q; q.shift(); } else { h.q-=n; n=0; } } };
+  var takeB=function(q,n){ while(n>0 && q.length){ var t=q[q.length-1];
+    if(t.q<=n){ n-=t.q; q.pop(); } else { t.q-=n; n=0; } } };
+  mv.forEach(function(x){
+    var m=x.m, q=poNum(m.qty), d=String(m.date||'');
+    if(!q) return;
+    switch(m.type){
+      case 'issue':
+        if(q>0) push(Q.onboat,d,q); else takeB(Q.onboat,-q); break;
+      case 'return':
+        /* ผ้าที่คืนเข้ามาเริ่มนับอายุกองสกปรกตั้งแต่วันที่คืน ไม่ใช่วันที่เบิก */
+        if(q>0){ takeF(Q.onboat,q); push(Q.dirty,d,q); }
+        else { takeB(Q.dirty,-q); push(Q.onboat,d,-q); } break;
+      case 'repair': case 'writeoff': case 'lost':
+        if(q>0) takeF(Q.onboat,q); else push(Q.onboat,d,-q); break;
+      case 'laundry_out':
+        if(q>0){ takeF(Q.dirty,q); push(Q.laundry,d,q); }
+        else { takeB(Q.laundry,-q); push(Q.dirty,d,-q); } break;
+      case 'laundry_in':
+        if(q>0) takeF(Q.laundry,q); else push(Q.laundry,d,-q); break;
+    }
   });
+  /* บังคับให้ยอดรวมของคิวเท่ากับยอดจริงเสมอ
+     เกิน = ตัดกองเก่าสุดทิ้ง (ของที่ออกไปแล้วย่อมเป็นกองเก่าก่อน)
+     ขาด = เติมกองท้ายคิวแบบไม่ทราบวัน · ดีกว่าโชว์ตัวเลขที่บวกกันไม่ได้ */
+  var bal={onboat:0,dirty:0,laundry:0};
+  Object.keys(ids).forEach(function(id){ var b=poBal(id);
+    bal.onboat+=b.onboat; bal.dirty+=b.dirty; bal.laundry+=b.laundry; });
+  ['onboat','dirty','laundry'].forEach(function(k){
+    var q=Q[k], t=poQTot(q), n;
+    if(t>bal[k]){ n=t-bal[k];
+      while(n>0 && q.length){ var h=q[0]; if(h.q<=n){ n-=h.q; q.shift(); } else { h.q-=n; n=0; } } }
+    else if(t<bal[k]) q.push({date:'', q:bal[k]-t});
+  });
+  return Q;
+}
+function poQTot(a){ var n=0; (a||[]).forEach(function(x){ n+=x.q; }); return n; }
+/* ผ้าที่ค้างร้านซักนานผิดปกติ · ดูจากกอง "เก่าสุดที่ยังไม่ได้รับกลับ" ไม่ใช่ครั้งที่ส่งล่าสุด
+   ของเดิมอ่านวันที่ส่งครั้งล่าสุด · ส่งกองใหม่ทับ กองเก่าที่ค้างอยู่ก็หายจากคำเตือนทันที */
+function poLaundryOpen(pier){
+  var Q=poTowelQ(pier), out=[];
+  Q.laundry.forEach(function(b){ if(!b.date) return;
+    out.push({qty:b.q, since:b.date, days:poDaysAgo(b.date)}); });
   return out;
 }
 
@@ -81351,6 +81415,18 @@ function poCSS(){
   +H+" .po-fl .v{font:800 28px 'DM Mono',monospace;margin-top:5px;line-height:1.1;color:#0F172A;letter-spacing:-.02em}"
   +H+' .po-fl .v em{font-style:normal;font-size:11px;font-weight:500;color:#94A3B8;margin-left:5px;font-family:inherit}'
   +H+' .po-fl .a{margin-top:8px}'
+  /* §towelQ · อายุกอง + รายการวันที่เข้าคิว */
+  +H+' .po-fl .ag{margin-top:6px;font-size:10.5px;font-weight:700;color:var(--st,#64748B)}'
+  +H+' .po-fl .ag.w{color:#B4560A}'
+  +H+" .po-fl .bl{margin-top:6px;display:flex;flex-direction:column;gap:2px}"
+  +H+" .po-fl .bl div{display:flex;align-items:baseline;gap:7px;font:500 10.5px 'DM Mono',monospace;color:#64748B}"
+  +H+' .po-fl .bl div i{font-style:normal;min-width:46px}'
+  +H+' .po-fl .bl div s{text-decoration:none;font-weight:700;color:#334155}'
+  +H+' .po-fl .bl div.o{color:#B4560A}'
+  +H+' .po-fl .bl div.o s{color:#B4560A}'
+  +H+" .po-fl .bl div.o:after{content:'เก่าสุด';font-family:inherit;font-size:9px;font-weight:700;"
+     +"background:#FEF3E2;border:1px solid #EFD9AE;border-radius:999px;padding:0 7px;color:#8A5A00}"
+  +H+' .po-fl .bl div.more{color:#94A3B8;font-size:10px}'
   +H+' .po-fl.zero{background:#FCFDFE}'
   +H+' .po-fl.zero .v{color:#CBD5E1}'
   +H+' .po-arw{align-self:center;color:#E2E8F0;font-size:15px;line-height:1;margin:0 -9px;padding:0 3px;'
@@ -81571,6 +81647,26 @@ function poLaundryBlock(ro){
   if(!tw.length) return '<div class="po-card"><div class="po-empty">ท่านี้ยังไม่มีผ้าเช็ดตัวในทะเบียน</div></div>';
   var t={ready:0,onboat:0,dirty:0,laundry:0};
   tw.forEach(function(it){ var b=poBal(it.id); t.ready+=b.ready; t.onboat+=b.onboat; t.dirty+=b.dirty; t.laundry+=b.laundry; });
+  /* §towelQ · กองของแต่ละขั้น เรียงเก่า → ใหม่ */
+  var Q=poTowelQ(_poPier), TODAY=poTodayYMD();
+  var blist=function(arr, due){
+    if(!arr.length) return '';
+    var show=arr.slice(0,3), rest=arr.length-show.length, restQ=0;
+    arr.slice(3).forEach(function(b){ restQ+=b.q; });
+    return '<div class="bl">'+show.map(function(b,i){
+        var old=(i===0 && b.date && due!=null && poDaysAgo(b.date)>due);
+        return '<div'+(old?' class="o"':'')+'><i>'+(b.date?poE(poDShort(b.date)):'ไม่ทราบวัน')+'</i>'
+          +'<s>'+b.q+'</s></div>'; }).join('')
+      +(rest>0?('<div class="more">+ อีก '+rest+' วัน · '+restQ+' ผืน</div>'):'')+'</div>';
+  };
+  var ageLine=function(arr, due, one, many){
+    if(!arr.length || !arr[0].date) return '';
+    var d=poDaysAgo(arr[0].date), w=(due!=null && d>due);
+    return '<div class="ag'+(w?' w':'')+'">'+(d<=0?one:many.replace('{d}',d))+'</div>';
+  };
+  /* ผ้าที่ยังอยู่กับเรือจากวันก่อน ๆ · ตัวที่ไม่เคยกลับมามักจมอยู่ในยอดรวมนี้ */
+  var obOld=0; Q.onboat.forEach(function(b){ if(b.date<TODAY) obOld+=b.q; });
+  var obNew=t.onboat-obOld;
   // §poSkin · แต่ละขั้นมีสีของตัวเอง · แถบซ้าย ตัวเลข และป้ายเลขขั้น ใช้สีเดียวกัน
   var st=[['พร้อมใช้ในคลัง',t.ready,'#059669','#ECFDF5','ผ้าสะอาดพร้อมแจกจ่าย'],
           ['อยู่กับเรือ',t.onboat,'#2563EB','#EFF6FF','ออกเที่ยวทะเลวันนี้'],
@@ -81578,16 +81674,40 @@ function poLaundryBlock(ro){
           ['อยู่ร้านซัก',t.laundry,'#7C3AED','#F5F3FF','ซักและอบแห้งนอกสถานที่']];
   // §poFlowStrip · ลูกศรบอกว่าสี่ขั้นนี้ต่อกัน · ขั้นที่ยังไม่มีของจางลง จะได้เห็นว่าคิวอยู่ตรงไหน
   var flow=st.map(function(x,i){
-    var act='';
-    if(i===2 && x[1]>0) act='<div class="a"><button class="po-btn pri" onclick="poLaundryOutOpen()"'+(ro?' disabled':'')+'>ส่งซัก '+x[1]+' ผืน</button></div>';
-    if(i===3 && x[1]>0) act='<div class="a"><button class="po-btn pri" onclick="poLaundryInOpen()"'+(ro?' disabled':'')+'>รับเข้า</button></div>';
+    var act='', extra='';
+    if(i===1 && t.onboat>0){
+      extra=(obOld>0
+        ? '<div class="ag w">ค้างจากวันก่อน '+obOld+' ผืน'+(obNew>0?(' · ออกวันนี้ '+obNew):'')+'</div>'
+        : '<div class="ag">ออกวันนี้ '+obNew+' ผืน</div>')
+        + blist(Q.onboat, 0);
+    }
+    if(i===2 && t.dirty>0){
+      extra=ageLine(Q.dirty, PO_DIRTY_DUE, 'คืนเข้ามาวันนี้', 'เก่าสุดค้างมา {d} วัน')
+          + blist(Q.dirty, PO_DIRTY_DUE);
+      act='<div class="a"><button class="po-btn pri" onclick="poLaundryOutOpen()"'+(ro?' disabled':'')
+        +' title="ส่งซักตัดจากกองเก่าสุดก่อนเสมอ">ส่งซัก '+t.dirty+' ผืน</button></div>';
+    }
+    if(i===3 && t.laundry>0){
+      extra=ageLine(Q.laundry, PO_LAUNDRY_DUE, 'ส่งไปวันนี้', 'ส่งไปแล้ว {d} วัน')
+          + blist(Q.laundry, PO_LAUNDRY_DUE);
+      act='<div class="a"><button class="po-btn pri" onclick="poLaundryInOpen()"'+(ro?' disabled':'')+'>รับเข้า</button></div>';
+    }
     return '<div class="po-fl'+(x[1]?'':' zero')+'" style="--sc:'+x[2]+';--st:'+x[2]+';--sb:'+x[3]+'">'
       +'<div class="t"><b>'+(i+1)+'</b>'+x[0]+'</div>'
-      +'<div class="v"'+(x[1]?(' style="color:'+x[2]+'"'):'')+'>'+x[1]+'<em>ผืน</em></div>'+act+'</div>';
+      +'<div class="v"'+(x[1]?(' style="color:'+x[2]+'"'):'')+'>'+x[1]+'<em>ผืน</em></div>'+extra+act+'</div>';
   }).join('<div class="po-arw">&#10230;</div>');
-  var op=poLaundryOpen(_poPier).filter(function(o){ return o.days>PO_LAUNDRY_DUE; });
-  var warn=op.length?('<div class="po-warn"><b>ผ้าค้างที่ร้านซักนานผิดปกติ</b> — '
-    +op.map(function(o){ return poE(o.it.label)+' '+o.qty+' ผืน · ส่งไปตั้งแต่ '+poE(o.since)+' ('+o.days+' วัน)'; }).join(' · ')+'</div>'):'';
+  /* §towelQ · เตือนสองฝั่ง · ของเดิมเตือนเฉพาะผ้าที่อยู่ร้านซัก
+     ผ้าที่รอส่งซักกองอยู่ที่ท่าเราเองไม่เคยเตือน ทั้งที่เป็นกองที่เราสั่งได้เอง */
+  var W=[];
+  var lo=Q.laundry.filter(function(b){ return b.date && poDaysAgo(b.date)>PO_LAUNDRY_DUE; });
+  if(lo.length) W.push('<b>ผ้าค้างที่ร้านซักนานผิดปกติ</b> — '
+    +lo.map(function(b){ return poE(poDShort(b.date))+' '+b.q+' ผืน ('+poDaysAgo(b.date)+' วัน)'; }).join(' · ')
+    +' · เกิน '+PO_LAUNDRY_DUE+' วันที่ตั้งไว้ ควรโทรตามร้าน');
+  var dv=Q.dirty.filter(function(b){ return b.date && poDaysAgo(b.date)>PO_DIRTY_DUE; });
+  if(dv.length) W.push('<b>ผ้ารอส่งซักค้างที่ท่า</b> — '
+    +dv.map(function(b){ return poE(poDShort(b.date))+' '+b.q+' ผืน ('+poDaysAgo(b.date)+' วัน)'; }).join(' · ')
+    +' · ยังไม่ได้ส่งซัก');
+  var warn=W.length?('<div class="po-warn">'+W.join('<br>')+'</div>'):'';
   return '<div class="po-flow">'+flow+'</div>'+warn;
 }
 
@@ -82473,13 +82593,23 @@ function poFixSave(itemId){
   poPersist(); poModalClose(); renderPierOffice();
 }
 
+/* §towelQ · อายุกองรายชิ้น · ใช้ในกล่องส่งซัก/รับเข้า */
+function poQAge(itemId, bucket){
+  var Q=poTowelQ(_poPier, itemId), a=Q[bucket]||[];
+  if(!a.length || !a[0].date) return '';
+  var d=poDaysAgo(a[0].date);
+  var due=(bucket==='laundry')?PO_LAUNDRY_DUE:PO_DIRTY_DUE;
+  return ' · <span style="color:'+(d>due?'#B4560A':'#7C8091')+';font-weight:'+(d>due?'700':'500')+'">'
+    +'เก่าสุด '+poE(poDShort(a[0].date))+' ('+d+' วัน)</span>';
+}
 function poLaundryOutOpen(){
   if(!poCanEdit()) return;
   var tw=poItems(_poPier).filter(function(i){ return i.kind==='towel'; });
-  var body='<div style="font-size:12px;color:#7C8091;margin-bottom:11px">ผ้าที่คืนเข้ามาแล้วรอส่งซัก · กรอกจำนวนที่ส่งออกไปวันนี้</div>'
+  var body='<div style="font-size:12px;color:#7C8091;margin-bottom:11px">ผ้าที่คืนเข้ามาแล้วรอส่งซัก · กรอกจำนวนที่ส่งออกไปวันนี้<br>'
+    +'<b style="color:#16265C">ระบบตัดจากกองเก่าสุดก่อนเสมอ</b> · ไม่ต้องเลือกเองว่าส่งกองไหน</div>'
     +tw.map(function(it){ var b=poBal(it.id);
       return '<div style="'+poRowCss()+'"><div style="flex:1"><div style="font-weight:700;font-size:12.5px">'+poE(it.label)+'</div>'
-        +'<div style="font-size:11px;color:#7C8091">รอส่งซัก '+b.dirty+' ผืน</div></div>'
+        +'<div style="font-size:11px;color:#7C8091">รอส่งซัก '+b.dirty+' ผืน'+poQAge(it.id,'dirty')+'</div></div>'
         +poIn('polo_'+it.id, b.dirty, '', 70)+'</div>'; }).join('')
     +'<div style="margin-top:11px"><input id="ponote_l" placeholder="ร้านซัก / เลขที่ใบส่ง" style="border:1px solid #D8D4CA;border-radius:8px;padding:7px 10px;font:500 12.5px inherit;width:100%;font-family:inherit"></div>';
   poModal('ส่งผ้าไปซัก · '+poE(_poDate), body, poBtn('ยกเลิก','poModalClose()')+poBtn('บันทึก','poLaundrySave(1)',1), 560);
@@ -82490,7 +82620,7 @@ function poLaundryInOpen(){
   var body='<div style="font-size:12px;color:#7C8091;margin-bottom:11px">ผ้าที่ร้านซักส่งกลับ · เข้าคลังพร้อมใช้ทันที ถ้าขาดให้ปรับยอดแยก</div>'
     +tw.map(function(it){ var b=poBal(it.id);
       return '<div style="'+poRowCss()+'"><div style="flex:1"><div style="font-weight:700;font-size:12.5px">'+poE(it.label)+'</div>'
-        +'<div style="font-size:11px;color:#7C8091">อยู่ร้านซัก '+b.laundry+' ผืน</div></div>'
+        +'<div style="font-size:11px;color:#7C8091">อยู่ร้านซัก '+b.laundry+' ผืน'+poQAge(it.id,'laundry')+'</div></div>'
         +poIn('poli_'+it.id, b.laundry, '', 70)+'</div>'; }).join('')
     +'<div style="margin-top:11px"><input id="ponote_l" placeholder="หมายเหตุ" style="border:1px solid #D8D4CA;border-radius:8px;padding:7px 10px;font:500 12.5px inherit;width:100%;font-family:inherit"></div>';
   poModal('รับผ้าเข้าจากร้านซัก · '+poE(_poDate), body, poBtn('ยกเลิก','poModalClose()')+poBtn('บันทึก','poLaundrySave(0)',1), 560);
