@@ -132,6 +132,10 @@
         "type": "text"
       },
       {
+        "name": "nameth",
+        "type": "text"
+      },
+      {
         "name": "type",
         "type": "text"
       },
@@ -237,6 +241,10 @@
       },
       {
         "name": "owneraddr",
+        "type": "text"
+      },
+      {
+        "name": "note",
         "type": "text"
       },
       {

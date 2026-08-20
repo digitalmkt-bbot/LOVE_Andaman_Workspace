@@ -5476,6 +5476,14 @@ window.addEventListener('resize',function(){ if(window.innerWidth>820) laNavClos
       </div>
 
       <div style="height:1px;background:var(--border)"></div>
+      <div class="section-form-lbl">ประเภททรัพย์สิน</div>
+      <div style="display:flex;gap:6px" id="fm-boat-own-grid">
+        <div class="fl-st-opt" onclick="fmPickBoatOwn(0)" style="flex:1;border-radius:var(--r-sm);padding:6px;text-align:center;cursor:pointer;border:1px solid #185FA5;background:#E6F1FB"><div style="font-size:11px;font-weight:500;color:#185FA5">เรือบริษัท · Asset</div></div>
+        <div class="fl-st-opt" onclick="fmPickBoatOwn(1)" style="flex:1;border-radius:var(--r-sm);padding:6px;text-align:center;cursor:pointer;border:1px solid var(--border);background:var(--white)"><div style="font-size:11px;font-weight:500;color:var(--ink-soft)">เรือเช่า / เรือร่วม</div></div>
+      </div>
+      <div id="fm-boat-own-hint" style="font-size:10.5px;color:var(--ink-soft);line-height:1.6"></div>
+
+      <div style="height:1px;background:var(--border)"></div>
       <div class="section-form-lbl">เจ้าของเรือ / ผู้รับผิดชอบ</div>
       <div class="form-2">
         <div class="form-row"><label class="form-label">ชื่อบริษัท / เจ้าของ</label><input type="text" id="fm-boat-owner" placeholder="เช่น บริษัท เลิฟ ไอแลนด์ จำกัด"></div>
@@ -9773,7 +9781,7 @@ function getEngPositions(n){
 let fmBoatSt=0;
 let fmBoatDocs=[];
 function openBoatModal(){
-  fmBoatSt=0; fmBoatDocs=[];
+  fmBoatSt=0; fmBoatDocs=[]; fmBoatOwn=0;
   const ids=['fm-boat-name','fm-boat-brand','fm-boat-model','fm-boat-reg','fm-boat-callsign',
     'fm-boat-imo','fm-boat-year','fm-boat-port','fm-boat-gt','fm-boat-nt','fm-boat-dwt',
     'fm-boat-loa','fm-boat-beam','fm-boat-depth','fm-boat-draft','fm-boat-lbp','fm-boat-bhp',
@@ -9785,6 +9793,7 @@ function openBoatModal(){
   document.getElementById('fm-boat-pier').value='tublamu';
   document.querySelectorAll('#fm-boat-pier-pills .loc-pill').forEach((el,i)=>el.classList.toggle('on',i===0));
   fmRenderBoatSt(0);
+  fmRenderBoatOwn(0);
   fmRenderDocs();
   document.getElementById('boat-modal-title').textContent='เพิ่มเรือใหม่';
   // auto-total listeners
@@ -9805,6 +9814,22 @@ function fmSelPier(val,el){
   document.getElementById('fm-boat-pier').value=val;
   document.querySelectorAll('#fm-boat-pier-pills .loc-pill').forEach(p=>p.classList.remove('on'));
   el.classList.add('on');
+}
+/* §boatOwn · 0 = เรือบริษัท · 1 = เรือเช่า/เรือร่วม (ownership==='charter')
+   เกณฑ์เดียวกับที่ทั้งแอปใช้กรองอยู่แล้ว · ไม่ได้เพิ่มสถานะใหม่ แค่เปิดให้ตั้งค่าได้ */
+let fmBoatOwn=0;
+function fmPickBoatOwn(idx){ fmBoatOwn=idx; fmRenderBoatOwn(idx); }
+function fmRenderBoatOwn(idx){
+  const opts=document.querySelectorAll('#fm-boat-own-grid .fl-st-opt');
+  const cfg=[{border:'#185FA5',bg:'#E6F1FB',txt:'#185FA5'},{border:'#C9922B',bg:'#FBF0E0',txt:'#9A5B00'}];
+  opts.forEach((el,i)=>{
+    if(i===idx){el.style.border=`1px solid ${cfg[i].border}`;el.style.background=cfg[i].bg;el.querySelector('div').style.color=cfg[i].txt;}
+    else{el.style.border='1px solid var(--border)';el.style.background='var(--white)';el.querySelector('div').style.color='var(--ink-soft)';}
+  });
+  const h=document.getElementById('fm-boat-own-hint');
+  if(h) h.textContent = idx===1
+    ? 'เช่ามา / เรือร่วม · ไม่ขึ้นในทะเบียนเครื่องยนต์ เอกสารเรือ และต้นทุนกองเรือ เพราะไม่ใช่ทรัพย์สินของเรา'
+    : 'เรือของบริษัท · นับเป็นทรัพย์สิน ติดเครื่องยนต์ เก็บเอกสาร และคิดต้นทุนกองเรือได้';
 }
 function fmPickBoatSt(idx){
   fmBoatSt=idx;fmRenderBoatSt(idx);
@@ -9866,6 +9891,7 @@ function saveBoat(){
     loa:n('fm-boat-loa'), beam:n('fm-boat-beam'), depth:n('fm-boat-depth'),
     draft:n('fm-boat-draft'), lbp:n('fm-boat-lbp'), bhp:n('fm-boat-bhp'),
     owner:g('fm-boat-owner'), homeport:g('fm-boat-homeport'), ownerAddr:g('fm-boat-owneraddr'),
+    ownership:(fmBoatOwn===1?'charter':'own'),
     note:g('fm-boat-note'), docs:[...fmBoatDocs],
   };
   if(window._editBoatId){
@@ -28828,11 +28854,12 @@ function flProjCreateMJ(projId){
 function flProjOpenNew(){ flProjOpenModal(null); }
 function flProjOpenEdit(id){ flProjOpenModal(id); }
 function flProjOpenModal(editId){
-  // Populate boat dropdown
+  // Populate boat dropdown · §boatOwn เรือบริษัทเท่านั้น (คงเรือเดิมของงานไว้ถ้าเคยผูกไว้แล้ว)
   const boatSel = document.getElementById('fl-proj-boat');
   if(boatSel){
+    const _curB = editId ? ((flProjGetById(editId)||{}).boatId||'') : '';
     boatSel.innerHTML = '<option value="">— Select boat / เลือกเรือ —</option><option value="__none__">⚙ General · ไม่เกี่ยวกับเรือ</option>' +
-      BOATS.map(b=>`<option value="${b.id}">${b.name}</option>`).join('');
+      flBoatsForInstall(_curB).map(b=>`<option value="${b.id}">${flBoatInstallLabel(b)}</option>`).join('');
   }
   document.getElementById('fl-proj-edit-id').value = editId||'';
   if(editId){
@@ -35991,13 +36018,27 @@ function flPickSt(type,idx){
   if(installRow)installRow.style.display=idx===3?'none':(type==='prop'?'grid':'grid');
 }
 
+/* §boatOwn · เรือที่ "ติดเครื่องได้" คือเรือบริษัทที่ยังไม่ปลดระวางเท่านั้น
+   ถ้าเครื่องตัวนี้ถูกผูกกับเรือนอกกลุ่มไว้ก่อนหน้า ยังคงโชว์ค้างไว้พร้อมป้ายกำกับ
+   จะได้เห็นแล้วย้ายออกเอง · ไม่ใช่หายเงียบแล้วโดนเซฟทับเป็น "ยังไม่ติดตั้ง" */
+function flBoatsForInstall(curId){
+  let ok=BOATS.filter(b=>!b.retired && b.ownership!=='charter');
+  if(curId && !ok.some(b=>b.id===curId)){
+    const cur=BOATS.filter(b=>b.id===curId)[0];
+    if(cur) ok=[cur].concat(ok);
+  }
+  return ok;
+}
+function flBoatInstallLabel(b){
+  return b.name + (b.retired ? ' · ปลดระวางแล้ว' : (b.ownership==='charter' ? ' · เรือเช่า/ร่วม' : ''));
+}
 function flOpenAddEngineModal(id){
   flEditEngId=id||null;
   const e=id?flGetEng(id):null;
   document.getElementById('fl-eng-modal-title').textContent=e?'แก้ไขเครื่องยนต์':'เพิ่มเครื่องยนต์';
   ['fl-eng-model','fl-eng-serial','fl-eng-hp','fl-eng-buydate','fl-eng-price','fl-eng-base-hours','fl-eng-svc','fl-eng-note'].forEach(fid=>{document.getElementById(fid).value=e?e[fid.replace('fl-eng-','').replace('-','')]||'':''});
   if(e){document.getElementById('fl-eng-brand').value=e.brand;document.getElementById('fl-eng-model').value=e.model;document.getElementById('fl-eng-serial').value=e.serial;document.getElementById('fl-eng-base-hours').value=e.baseHours||'';document.getElementById('fl-eng-svc').value=e.serviceInterval||'';}
-  document.getElementById('fl-eng-boat-sel').innerHTML='<option value="">— ยังไม่ติดตั้ง —</option>'+BOATS.map(b=>`<option value="${b.id}"${e&&e.boatId===b.id?' selected':''}>${b.name}</option>`).join('');
+  document.getElementById('fl-eng-boat-sel').innerHTML='<option value="">— ยังไม่ติดตั้ง —</option>'+flBoatsForInstall(e&&e.boatId).map(b=>`<option value="${b.id}"${e&&e.boatId===b.id?' selected':''}>${flBoatInstallLabel(b)}</option>`).join('');
   // preselect the engine's current position · add a legacy option if its saved pos isn't in the standard list
   { const _ps=document.getElementById('fl-eng-pos-sel'); const _p=(e&&e.pos)||''; if(_p){ _ps.value=_p; if(_ps.value!==_p){ const o=document.createElement('option'); o.value=_p; o.textContent=_p; o.selected=true; _ps.appendChild(o); } } else { _ps.selectedIndex=0; } }
   flPickSt('eng',e?flStValues.indexOf(e.status):0);
@@ -36404,6 +36445,7 @@ function flOpenEditBoatModal(bid){
   // status
   const st=getCurStatus(b,TODAY_STR);
   fmBoatSt={available:0,fixing:1,unavailable:2}[st.s]||0;
+  fmBoatOwn=(b.ownership==='charter')?1:0; fmRenderBoatOwn(fmBoatOwn);
   fmRenderBoatSt(fmBoatSt);
   fmRenderDocs();
   document.getElementById('boat-modal-title').textContent='แก้ไขข้อมูลเรือ';
