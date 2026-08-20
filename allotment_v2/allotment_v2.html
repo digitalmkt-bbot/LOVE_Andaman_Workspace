@@ -49714,6 +49714,49 @@ var PCK_MEALS = [
   { k:'vegan', l:'วีแกน',     c:'#0F6E56', bg:'#E7F4EF', bd:'#BEE0D2' },
   { k:'halal', l:'ฮาลาล',     c:'#185FA5', bg:'#E9F1FB', bd:'#C3D9F0' }
 ];
+/* §mealOvn · รวมอาหารหรือไม่ · เก็บรายใบจอง ในก้อน trip_actuals ของลำ/วันนั้น */
+function pckMealOvnMap(date, bid){
+  var A=(typeof taGet==='function')?(taGet(date,bid)||{}):{}, m=A.mealOvn;
+  return (m && typeof m==='object')?m:{};
+}
+function pckMealOvnOf(date, bid, bkId){
+  var v=pckMealOvnMap(date,bid)[bkId];
+  return (v==='in'||v==='out')?v:'';
+}
+function pckMealOvnSet(date, bid, bkId, v){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('operations')) return;
+  var m={}, cur=pckMealOvnMap(date,bid);
+  Object.keys(cur).forEach(function(k){ m[k]=cur[k]; });
+  if(v==='in'||v==='out') m[bkId]=v; else delete m[bkId];
+  taSet(date, bid, { mealOvn: Object.keys(m).length?m:null });
+  if(typeof renderPierCheckin==='function') renderPierCheckin();
+}
+/* ใบจอง "รับกลับจากเกาะ" ของลำนั้นวันนั้น · รูปทรงเดียวกับแถวเช็คอิน จะได้ต่อเข้ากันได้ */
+function pckMealOvnRows(date, bid){
+  var out=[];
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    var t=(typeof ckTripOn==='function')?ckTripOn(b,date):null; if(!t) return;
+    if(!(typeof bkIsOvnReturn==='function' && bkIsOvnReturn(t))) return;
+    var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
+    if((O.boatId||t.charterBoatId)!==bid) return;
+    var vd=(typeof pckVoidInfo==='function')?pckVoidInfo(b,date,t):null;
+    if(vd) return;
+    var booked=(typeof ckBookedPax==='function')?ckBookedPax(t):0;
+    var exp=(typeof pckExpected==='function')?pckExpected(b,date,booked):booked;
+    var ck=O.pierCheckin||null, ns=(ck&&ck.at)?(+ck.noShow||0):0;
+    var pax=Math.max(0,((exp!=null?exp:booked)||0)-ns);
+    if(!pax) return;
+    out.push({ b:b, t:t, O:O, booked:booked, expect:exp, ck:ck, _vd:null,
+               pax:pax, inc:pckMealOvnOf(date,bid,b.id),
+               outDate:(typeof _ovnOutDate==='function')?_ovnOutDate(b,t):'' });
+  });
+  out.sort(function(a,b){ return String(a.b.leadPax||'').localeCompare(String(b.b.leadPax||''),'th'); });
+  return out;
+}
+function pckMealOvnNeed(date, bid){
+  return pckMealOvnRows(date,bid).filter(function(x){ return !x.inc; });
+}
 /* §mealNote · โน้ตของลำนั้นวันนั้น · เก็บที่ TRIP_ACT ก้อนเดียวกับยอดอาหารที่ส่งไปแล้ว
    รับของเก่าที่เคยเก็บเป็นสตริงล้วนด้วย เผื่อมีคนเขียนไว้ก่อนแยกเป็นอ็อบเจกต์ */
 function pckMealNoteObj(date, bid){
@@ -51657,6 +51700,8 @@ function pckMealCount(rows){
   var o={ad:0, chd:0, inf:0, tot:0, book:0, veg:0, vegan:0, halal:0, allergy:0};
   (rows||[]).forEach(function(r){
     if(r._vd) return;                                        /* ปิดรายการแล้ว ไม่ต้องสั่งอาหาร */
+    /* §mealOvn · ขากลับค้างคืนที่ไม่ได้ระบุว่ารวมอาหาร ไม่นับเข้ายอดที่จะจ่ายร้าน */
+    if(r.t && r.t.ovnLeg && r.__inc!=='in') return;
     /* หัวที่จะไปจริง · หัก no-show ทั้งฝั่งรถและฝั่งท่า
        ร้านคิดเงินตามคนที่นั่งลงกินจริง ไม่ได้คิดตามคนที่จองไว้ */
     var tot=Math.max(0, ((r.expect!=null?r.expect:r.booked)||0)
@@ -51694,8 +51739,14 @@ function pckKitchenHtml(border, boats, date, bare){
     var rid=(B.torder||[])[0]||'';
     var V=(typeof mvForTrip==='function')?mvForTrip(date,bid,rid):null;
     var raw=(typeof mvTripRaw==='function')?mvTripRaw(date,bid):'';
-    var C=pckMealCount(B.rows);
+    /* §mealOvn · ขากลับค้างคืนของลำนี้ · ต่อเข้ากับแถวปกติ แล้วให้ตัวนับตัดสินจากธง __inc
+       การ์ดกับยอดที่บันทึกจะได้มาจากชุดเดียวกัน ไม่ใช่คนละชุดเหมือนเดิม */
+    var OV=pckMealOvnRows(date,bid);
+    var MR=(B.rows||[]).concat(OV.map(function(x){
+      var y={}; Object.keys(x).forEach(function(k){ y[k]=x[k]; }); y.__inc=x.inc; return y; }));
+    var C=pckMealCount(MR);
     var amt=(typeof mvCost==='function')?mvCost(V,C.ad,C.chd):null;
+    var need=OV.filter(function(x){ return !x.inc; }).length;
     var sent=(taGet(date,bid)||{}).meal||null;
     var col=pckBoatColor(bid);
     var chip=function(t,bg,bd,c){ return '<span style="font-size:11px;font-weight:700;border-radius:999px;'
@@ -51716,7 +51767,7 @@ function pckKitchenHtml(border, boats, date, bare){
         + (C.allergy?(' '+chip('&#9888; แพ้อาหาร '+C.allergy,'#FEF2F2','#F5CFCF','#B91C1C')):'')
         + (C.book>C.tot?(' '+chip('จอง '+C.book+' · ไปจริง '+C.tot,'#FEF6E7','#EFD9AE','#8A5A00')):'');
     }
-    var al=V?pckAllergyList(B.rows):[];
+    var al=V?pckAllergyList(MR):[];
     cards+='<div style="background:#fff;border:1px solid #E7EBF0;border-radius:15px;padding:13px 15px;margin-bottom:9px">'
       +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:'+(body?'9px':'0')+'">'
         +'<span style="width:10px;height:10px;border-radius:3px;background:'+col+';flex:none"></span>'
@@ -51730,9 +51781,11 @@ function pckKitchenHtml(border, boats, date, bare){
               +'border:1px solid #EFD9AE;border-radius:999px;padding:2px 9px">เปลี่ยนเฉพาะวันนี้</span>':'')
         + (amt!=null?('<span style="margin-left:auto;font:800 15px \'DM Mono\',monospace;color:#5B289A">&#3647;'
               +Math.round(amt).toLocaleString()+'</span>'):'<span style="margin-left:auto"></span>')
-        + (V?('<button onclick="pckMealSend(\''+bid+'\')" style="border:1px solid '
-              +(sent?'#BFE0CD':'#0F172A')+';background:'+(sent?'#ECFDF5':'#0F172A')+';color:'+(sent?'#047857':'#fff')
-              +';border-radius:10px;padding:6px 14px;font:700 11.5px inherit;cursor:pointer">'
+        + (V?('<button'+(need?' disabled title="ยังมีใบจองรับกลับจากเกาะที่ยังไม่ได้ระบุว่ารวมอาหารหรือไม่"'
+              :(' onclick="pckMealSend(\''+bid+'\')"'))+' style="border:1px solid '
+              +(need?'#E2E8F0':(sent?'#BFE0CD':'#0F172A'))+';background:'+(need?'#F1F5F9':(sent?'#ECFDF5':'#0F172A'))
+              +';color:'+(need?'#94A3B8':(sent?'#047857':'#fff'))
+              +';border-radius:10px;padding:6px 14px;font:700 11.5px inherit;cursor:'+(need?'not-allowed':'pointer')+'">'
               +(sent?('&#10003; ส่งแล้ว &#3647;'+Math.round(sent.amount||0).toLocaleString()
                       +(mvLunchOk(rid)?' · เปิดใบอีกครั้ง':''))
                     :(mvLunchOk(rid)?'ส่งรายการให้ร้าน · เปิดใบ':'บันทึกยอดอาหาร'))+'</button>'):'')
@@ -51752,6 +51805,40 @@ function pckKitchenHtml(border, boats, date, bare){
               +'&#9998; '+e(MN)+'</div>'):'')
             +'</div>';
         })()
+      /* §mealOvn · กลุ่มรับกลับจากเกาะ · ต้องเลือกทีละใบว่ารวมอาหารหรือไม่ */
+      + (OV.length?('<div style="margin-top:11px;border:1px solid #DDD0F5;background:#FBF9FF;border-radius:12px;overflow:hidden">'
+          +'<div style="background:#F1ECFB;padding:7px 12px;font-size:11.5px;font-weight:800;color:#4A2E86;'
+            +'display:flex;gap:9px;align-items:center;flex-wrap:wrap">&#127765; รับกลับจากเกาะ · ค้างคืน'
+            +'<span style="font-weight:600;color:#6b5a95;font-size:10.5px">'+OV.length+' ใบจอง · '
+            +OV.reduce(function(a,x){ return a+x.pax; },0)+' ท่าน</span>'
+            +(need?('<span style="margin-left:auto;background:#FFECCB;border:1px solid #E0A800;color:#7A4A00;'
+              +'border-radius:999px;padding:2px 10px;font-size:10.5px;font-weight:800">ยังไม่ระบุ '+need+' ใบ</span>'):'')
+          +'</div>'
+          + OV.map(function(x){
+              var on=function(v){ return x.inc===v; };
+              var btn=function(v,lb,col){
+                return '<button onclick="pckMealOvnSet(\''+e(date)+'\',\''+e(bid)+'\',\''+e(x.b.id)+'\',\''+v+'\')" '
+                  +'style="border:0;background:'+(on(v)?col:'#fff')+';color:'+(on(v)?'#fff':'#5F5E5A')+';'
+                  +'font:700 11px inherit;padding:5px 13px;cursor:pointer;font-family:inherit">'+lb+'</button>'; };
+              return '<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;'
+                +'border-top:1px solid #EFEAF9;flex-wrap:wrap">'
+                +'<div style="flex:1;min-width:160px"><b style="display:block;font-size:12.5px;font-weight:700">'
+                  +e(String(x.b.leadPax||'').trim()||'—')+'</b>'
+                +'<small style="display:block;font-size:10.5px;color:#8b83a5">'
+                  +(x.outDate?('ค้างคืน '+e(x.outDate)+' · '):'')+e(x.b.hotelName||x.b.pickup||'')+'</small></div>'
+                +'<div style="font:700 13px \'DM Mono\',monospace;color:#4A2E86;min-width:52px;text-align:right">'
+                  +x.pax+' ท่าน</div>'
+                +'<div style="display:flex;border:1px solid '+(x.inc?'#D8D4CA':'#E0A800')+';border-radius:8px;'
+                  +'overflow:hidden'+(x.inc?'':';box-shadow:0 0 0 2px #FFECCB')+'">'
+                  +btn('in','รวมอาหาร','#0F6E56')
+                  +'<span style="width:1px;background:#E7E4DC"></span>'
+                  +btn('out','ไม่รวม','#5F6B7C')
+                +'</div></div>';
+            }).join('')
+          +'</div>'
+          +(need?('<div style="margin-top:7px;font-size:11px;color:#B4560A;line-height:1.6">'
+             +'ปุ่มส่งกดไม่ได้จนกว่าจะระบุครบ · ระบบไม่เดาให้ เพราะเดาผิดคือร้านทำอาหารขาดหรือเราจ่ายซ้ำ</div>'):'')
+          ):'')
       + (al.length?('<div style="background:#FEF2F2;border:1px solid #F5CFCF;color:#B91C1C;border-radius:10px;'
           +'padding:7px 12px;font-size:11.5px;font-weight:600;margin-top:9px">แพ้อาหาร — '
           + al.map(function(x){ return '<b>'+e(x.name)+' &times;'+x.qty+'</b>'; }).join(' · ')
@@ -51852,9 +51939,17 @@ function mvLunchRows(date, bid){
     (Array.isArray(sm.allergyList)?sm.allergyList:[]).forEach(function(a){
       if(a&&a.name) sr.push('แพ้ '+a.name+' ×'+Math.max(1,+a.qty||1)); });
     if(String(sm.allergies||'').trim()) sr.push(String(sm.allergies).trim());
-    out.push({lead:String(b.leadPax||'').trim()||'—', ad:ad, chd:chd, inf:inf, foc:foc, sr:sr.join('\n')});
+    /* §mealOvn · ขากลับค้างคืน · คิดอาหารก็ต่อเมื่อระบุว่า "รวม" เท่านั้น
+       ยังไม่ระบุ = ยังไม่คิด · ปุ่มส่งถูกล็อกไว้อยู่แล้วจนกว่าจะระบุครบ */
+    var _ovn=!!(typeof bkIsOvnReturn==='function' && bkIsOvnReturn(t));
+    var _inc=_ovn?pckMealOvnOf(date,bid,b.id):'in';
+    out.push({lead:String(b.leadPax||'').trim()||'—', ad:ad, chd:chd, inf:inf, foc:foc, sr:sr.join('\n'),
+              ovn:_ovn, inc:_inc, bkId:b.id,
+              outDate:(_ovn && typeof _ovnOutDate==='function')?_ovnOutDate(b,t):''});
   });
-  out.sort(function(a,b){ return String(a.lead).localeCompare(String(b.lead),'th'); });
+  /* ทริปวันนี้ก่อน แล้วค่อยกลุ่มรับกลับ · ใบจะได้เรียงเหมือนที่ครัวต้องอ่าน */
+  out.sort(function(a,b){ return (a.ovn?1:0)-(b.ovn?1:0)
+    || String(a.lead).localeCompare(String(b.lead),'th'); });
   return out;
 }
 /* ท่าที่ใช้ใบแบบนี้ได้ · ทับละมุใช้ใบคนละแบบ ยังไม่ได้ทำ */
@@ -51919,6 +52014,19 @@ function mvOrderSlip(date, bid, V, rid){
    +"table.gs td.n{text-align:center;font:700 14px 'DM Mono',monospace}"
    +'table.gs td.sr{background:#00E64D;font-weight:700;font-size:12.5px;line-height:1.5;text-align:center;color:#0B3D1A}'
    +'table.gs td.sr.l{text-align:left}'
+   /* §mealOvn · กลุ่มรับกลับจากเกาะ · แถบม่วงคั่น แล้วยอดย่อยของแต่ละกลุ่ม */
+   +'table.gs tr.sub td{background:#E8EFF9;font-weight:800}'
+   +'table.gs tr.sub td.lb{text-align:right;font-size:14px}'
+   +'table.gs tr.sub td.n{font-size:15px}'
+   +'table.gs tr.grp td{background:#5B289A;color:#fff;font-weight:800;font-size:13px;padding:5px 10px}'
+   +'table.gs tr.grp td span{font-weight:600;font-size:11.5px;opacity:.85;margin-left:8px}'
+   +'table.gs tr.xout td{background:#F4F5F7;color:#8b93a1}'
+   +'table.gs tr.xout td.n{color:#b6bcc7}'
+   +'table.gs .mpill{display:inline-block;font-size:11px;font-weight:800;border-radius:3px;'
+     +'padding:1px 8px;border:1px solid;margin-left:6px}'
+   +'table.gs .mpill.i{background:#E7F4EF;border-color:#7FBFA4;color:#0B5136}'
+   +'table.gs .mpill.o{background:#EDEFF3;border-color:#C3C9D4;color:#5F6B7C}'
+   +'table.gs .mpill.q{background:#FFECCB;border-color:#E0A800;color:#7A4A00}'
    +'table.gs tr.tot td{background:#C9D9F0;font-weight:800}'
    +'table.gs tr.tot td.lb{text-align:right;font-size:17px}'
    +'table.gs tr.tot td.n{font-size:17px}'
@@ -51942,12 +52050,41 @@ function mvOrderSlip(date, bid, V, rid){
       +'<td class="v'+(g?'':' none')+'" colspan="2">'+(g?e(g):'— ยังไม่ได้จัดไกด์ —')+'</td>'
       +'<td class="blank"></td>'+subCell(i===0)+'</tr>'; }).join('');
 
-  var body=rows.map(function(r){
-    return '<tr><td class="nm">'+e(r.lead)+'</td>'
+  /* §mealOvn · หนึ่งแถวปกติ · ใช้ร่วมกันทั้งสองกลุ่ม */
+  var line=function(r, extra){
+    return '<tr'+(extra||'')+'><td class="nm">'+e(r.lead)
+      +(r.ovn?('<span class="mpill '+(r.inc==='in'?'i':(r.inc==='out'?'o':'q'))+'">'
+          +(r.inc==='in'?'รวมอาหาร':(r.inc==='out'?'ไม่รวมอาหาร':'ยังไม่ระบุ'))+'</span>'):'')
+      +'</td>'
       +'<td class="n">'+(r.ad||'')+'</td><td class="n">'+(r.chd||'')+'</td>'
       +'<td class="n">'+(r.inf||'')+'</td>'
       +(r.sr ? ('<td class="sr'+(r.sr.length>40?' l':'')+'">'+e(r.sr).replace(/\n/g,'<br>')+'</td>') : '<td></td>')
-      +'</tr>'; }).join('');
+      +'</tr>'; };
+  /* ไม่คิดอาหาร · ยังต้องอยู่บนใบ ร้านจะได้รู้ว่ามีคนนั่งอยู่ แค่ไม่ต้องทำให้ */
+  var lineOut=function(r){
+    return '<tr class="xout"><td class="nm">'+e(r.lead)
+      +'<span class="mpill '+(r.inc==='out'?'o':'q')+'">'
+      +(r.inc==='out'?'ไม่รวมอาหาร':'ยังไม่ระบุ')+'</span></td>'
+      +'<td class="n">&mdash;</td><td class="n">&mdash;</td><td class="n">&mdash;</td>'
+      +'<td style="font-size:11.5px;color:#8b93a1">อยู่บนเรือ '+(r.ad+r.chd+r.inf)+' ท่าน · ไม่ต้องทำอาหาร</td></tr>'; };
+  var MAIN=rows.filter(function(r){ return !r.ovn; });
+  var OVN =rows.filter(function(r){ return  r.ovn; });
+  var OIN =OVN.filter(function(r){ return r.inc==='in'; });
+  var OOUT=OVN.filter(function(r){ return r.inc!=='in'; });
+  var sum=function(a,k){ var n=0; a.forEach(function(r){ n+=(r[k]||0); }); return n; };
+  var M={ad:sum(MAIN,'ad'), chd:sum(MAIN,'chd'), inf:sum(MAIN,'inf')};
+  var O={ad:sum(OIN,'ad'),  chd:sum(OIN,'chd'),  inf:sum(OIN,'inf')};
+  var nOut=sum(OOUT,'ad')+sum(OOUT,'chd')+sum(OOUT,'inf');
+  var subRow=function(lb,x){ return '<tr class="sub"><td class="lb">'+lb+'</td>'
+      +'<td class="n">'+x.ad+'</td><td class="n">'+x.chd+'</td><td class="n">'+x.inf+'</td><td></td></tr>'; };
+  var body=MAIN.map(function(r){ return line(r); }).join('');
+  if(OVN.length){
+    body+=subRow('รวม · ทริปวันนี้', M)
+      +'<tr class="grp"><td colspan="5">&#127765; รับกลับจากเกาะ · ค้างคืน'
+        +'<span>ขึ้นเรือที่ท่าเกาะ · ไม่ได้มากับรถรอบเช้า</span></td></tr>'
+      + OVN.map(function(r){ return (r.inc==='in')?line(r):lineOut(r); }).join('')
+      + subRow('รวม · รับกลับที่คิดอาหาร', O);
+  }
 
   /* §mealNote · มีโน้ตค่อยสลับเป็นหัวสามคอลัมน์ · ไม่มีโน้ตหัวใบเหมือนเดิมเป๊ะ */
   var MN=(typeof pckMealNote==='function')?pckMealNote(date,bid):'';
@@ -51976,8 +52113,12 @@ function mvOrderSlip(date, bid, V, rid){
      +'<thead><tr><th style="text-align:left;padding-left:10px">Customer&#39;s Name</th>'
        +'<th>AD</th><th>CHD</th><th>INF</th><th>Special Request</th></tr></thead>'
      +'<tbody>'+body
-     +'<tr class="tot"><td class="lb">Total</td><td class="n">'+T.ad+'</td><td class="n">'+T.chd+'</td>'
-       +'<td class="n">'+T.inf+'</td><td></td></tr></tbody></table>'
+     +'<tr class="tot"><td class="lb">'+(OVN.length?'อาหารที่ต้องทำทั้งหมด':'Total')+'</td>'
+       +'<td class="n">'+(M.ad+O.ad)+'</td><td class="n">'+(M.chd+O.chd)+'</td>'
+       +'<td class="n">'+(M.inf+O.inf)+'</td><td></td></tr></tbody></table>'
+   +(nOut?('<div style="margin-top:7px;font-size:11px;color:#475569;line-height:1.6">'
+       +'บนเรือมีทั้งหมด '+(M.ad+M.chd+M.inf+sum(OVN,'ad')+sum(OVN,'chd')+sum(OVN,'inf'))+' ท่าน · '
+       +'<b>ไม่คิดอาหาร '+nOut+' ท่าน</b> (รับกลับจากเกาะ · อาหารไม่ได้อยู่กับเรา)</div>'):'')
    +(T.foc?('<div style="margin-top:6px;font-size:10.5px;color:#475569;font-weight:600">'
        +'\u0e23\u0e27\u0e21 FOC '+T.foc+' \u0e04\u0e19\u0e2d\u0e22\u0e39\u0e48\u0e43\u0e19\u0e0a\u0e48\u0e2d\u0e07 AD '
        +'\u0e41\u0e25\u0e49\u0e27 \u00b7 \u0e17\u0e33\u0e2d\u0e32\u0e2b\u0e32\u0e23\u0e40\u0e2b\u0e21\u0e37\u0e2d\u0e19\u0e1c\u0e39\u0e49\u0e43\u0e2b\u0e0d\u0e48</div>'):'')
@@ -52021,6 +52162,15 @@ function pckMealSend(bid){
                ck:O.pierCheckin||null,
                _vd:(typeof pckVoidInfo==='function')?pckVoidInfo(b,date,t):null});
   });
+  /* §mealOvn · ขากลับค้างคืนต้องถูกระบุก่อนเสมอ · กันไว้ที่นี่อีกชั้นเผื่อกดจากที่อื่น */
+  var _need=(typeof pckMealOvnNeed==='function')?pckMealOvnNeed(date,bid):[];
+  if(_need.length){
+    alert('ยังไม่ได้ระบุว่ารับกลับจากเกาะรวมอาหารหรือไม่ '+_need.length+' ใบ\n\n'
+      +_need.map(function(x){ return '\u2022 '+(String(x.b.leadPax||'').trim()||'—')+' · '+x.pax+' ท่าน'; }).join('\n')
+      +'\n\nระบุที่กล่อง "รับกลับจากเกาะ" ในการ์ดครัวก่อน แล้วค่อยส่ง');
+    return;
+  }
+  rows.forEach(function(r){ r.__inc=(r.t&&r.t.ovnLeg)?pckMealOvnOf(date,bid,r.b.id):'in'; });
   var C=pckMealCount(rows), amt=mvCost(V,C.ad,C.chd);
   if(!(C.ad+C.chd)){ alert('ลำนี้ยังไม่มีคนที่จะไปจริง · ไม่ต้องสั่งอาหาร'); return; }
   /* บันทึกก่อน เปิดใบทีหลัง · ถ้า pop-up โดนบล็อก ต้นทุนก็ยังถูกบันทึกไว้แล้ว
