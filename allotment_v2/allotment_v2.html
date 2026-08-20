@@ -85469,20 +85469,42 @@ function pjPrint(){
   var PX=GO.map(function(B){ var p=pjPax(_poDate,B.bid,_poPier); p.all=p.ad+p.chd+p.inf+p.foc; return p; });
   var totPax=0; PX.forEach(function(p){ totPax+=p.all; });
   var mx=function(a){ var m=0; a.forEach(function(v){ if(v>m) m=v; }); return m; };
-  var nCrew=Math.max(2, Math.min(4, mx(J.map(function(j){ return (j.crew||[]).filter(Boolean).length; }))));
-  var nIsl =Math.max(1, Math.min(2, mx(J.map(function(j){ return (j.island||[]).filter(Boolean).length; }))));
+
+  /* §pjWork2 · ทีมช่างของลำที่ไม่ได้ออก · ตำแหน่งเรียงตรงกับช่องลูกเรือพอดี */
+  var WROLE=['หัวหน้าช่าง','ช่าง 1','ช่าง 2','ช่วยงาน 1','ช่วยงาน 2','ช่วยงาน 3','ช่วยงาน 4'];
+  var WK={};
+  boats.forEach(function(B){
+    if(isGo(B)) return;
+    var R=(typeof pjRaw==='function')?pjRaw(_poDate,B.bid):null; if(!R) return;
+    var ids=[R.cap||'', R.asst||''];
+    for(var c=0;c<3;c++) ids.push((R.crew||[])[c]||'');
+    for(var c=0;c<2;c++) ids.push((R.island||[])[c]||'');
+    if(ids.filter(Boolean).length) WK[B.bid]={ids:ids, note:R.note||''};
+  });
+  var isWk=function(B){ return !!WK[B.bid]; };
+  var WKL=Object.keys(WK).map(function(k){ return WK[k]; });
+  var nWk=WKL.length;
+
+  /* ลำที่จอดก็กินช่องเด็กเรือ/ประจำเกาะเหมือนกัน · ไม่นับด้วยแถวจะขาด ชื่อช่างหาย */
+  var CJ=J.concat(WKL.map(function(w){ return {crew:[w.ids[2],w.ids[3],w.ids[4]], island:[w.ids[5],w.ids[6]]}; }));
+  var nCrew=Math.max(2, Math.min(4, mx(CJ.map(function(j){ return (j.crew||[]).filter(Boolean).length; }))));
+  var nIsl =Math.max(1, Math.min(2, mx(CJ.map(function(j){ return (j.island||[]).filter(Boolean).length; }))));
   /* §gdRole · เดิมล็อก 3 · ลำที่จ่ายไกด์ 5 คนจะหายไป 2 คนเงียบ ๆ · ปล่อยตามจริง กัน 8 ไว้กันตารางบาน */
   var nGd  =Math.max(1, Math.min(8, mx(Gs.map(function(g){ return g.filter(Boolean).length; }))));
   /* จำนวนแถวในตัวตาราง · ช่องของลำที่ไม่ออกต้องคลุมให้ครบพอดี ไม่งั้นตารางเบี้ยว */
   var SPAN = 1 /*โปรแกรม*/ + 1 /*หัวกลุ่มคน*/ + 2 + nCrew + nIsl
            + 1 /*หัวไกด์*/ + nGd + 1 /*หัวลูกค้า*/ + 2 + 1 /*ลค*/ + 1 /*หัวหมายเหตุ*/ + 1;
+  /* §pjWork2 · ลำที่มีทีมช่าง · ช่องบนพิมพ์จริง เหลือช่วงไกด์+ลูกค้าที่คลุมเป็นช่องเดียว
+     หัวไกด์ + ไกด์ nGd + หัวลูกค้า + สายรัด + ภาษา + ลค + หัวหมายเหตุ = nGd + 6
+     แถวหมายเหตุไม่รวม · ลำที่จอดก็เขียนหมายเหตุได้เหมือนกัน */
+  var WKSPAN = nGd + 6;
 
   /* §pjSheet2 · ลำที่ออกจริงได้คอลัมน์กว้างเป็นสองเท่า · ลำที่จอดไม่มีอะไรให้อ่าน */
   /* §pjSheet3 · GAP เป็นพิกเซลจริง · ต้องหักออกจากเปอร์เซ็นต์ ไม่งั้นตารางล้นหน้ากระดาษ
      SHEETW = ความกว้างเนื้อหาของ A4 แนวนอนขอบ 8 มม. โดยประมาณ · ตีต่ำไว้ปลอดภัยกว่าตีสูง */
   var GAP=5, SHEETW=1040;
   var gapPct=(boats.length+2)*GAP/SHEETW*100, avail=100-gapPct;
-  var LW=7.6*avail/100, WT=boats.map(function(B){ return isGo(B)?2:1; });
+  var LW=7.6*avail/100, WT=boats.map(function(B){ return isGo(B)?2:(isWk(B)?1.5:1); });
   var SUM=0; WT.forEach(function(w){ SUM+=w; });
   var cols='<colgroup><col style="width:'+LW+'%">'
     + WT.map(function(w){ return '<col style="width:'+((avail-LW)*w/SUM).toFixed(3)+'%">'; }).join('')
@@ -85509,9 +85531,9 @@ function pjPrint(){
    +'@media print{body{background:#fff;padding:0}.tb{display:none}'
      +'.sheet{max-width:none;border:0;border-radius:0;box-shadow:none;padding:0;margin:0}}'
    +'.shead{display:flex;justify-content:space-between;align-items:flex-end;gap:18px;'
-     +'border-bottom:2px solid #0F172A;padding-bottom:9px;margin-bottom:11px}'
+     +'border-bottom:2px solid #1B4A87;padding-bottom:9px;margin-bottom:11px}'
    +'.eyebrow{font-size:9.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#94A3B8}'
-   +'.dt{font-size:22px;font-weight:800;color:#0F172A;letter-spacing:-.01em;line-height:1.2;margin-top:3px}'
+   +'.dt{font-size:22px;font-weight:800;color:#1B4A87;letter-spacing:-.01em;line-height:1.2;margin-top:3px}'
    +'.en{font-size:11px;font-weight:600;color:#64748B;margin-top:2px}'
    +'.rt{text-align:right;flex:0 0 auto}'
    +'.pills{display:flex;gap:6px;justify-content:flex-end;margin-bottom:5px;flex-wrap:wrap}'
@@ -85539,7 +85561,10 @@ function pjPrint(){
    +'tr.rt td .sub{font-weight:500;opacity:.9;font-size:'+(fs-1.4)+'px;display:block;margin-top:1px}'
    +'th.k{background:#F8FAFC;text-align:left;font-size:7.5px;font-weight:800;letter-spacing:.05em;'
      +'text-transform:uppercase;color:#64748B;padding:3px 7px}'
-   +'thead th.k{background:#0F172A;color:#fff;vertical-align:bottom;padding:9px 8px;border-radius:11px 11px 0 0}'
+   +'thead th.k{background:#1B4A87;color:#fff;vertical-align:bottom;padding:9px 8px;border-radius:11px 11px 0 0}'
+   /* §pjWork2 · ช่องสถานะของลำที่จอด · อยู่แถวเดียวกับโปรแกรม แต่เป็นสีอ่อนของสถานะ */
+   +'tr.rt td.wk{border:1px solid rgba(15,23,42,.10);border-radius:0}'
+   +'tr.rt td.wk .sub{opacity:.78}'
    +'tr.gh th,tr.gh td{font-size:7px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;padding:2px 6px}'
    +'tr.gh.crew th{background:#EAF0F9;color:#1B4A87;box-shadow:inset 3px 0 0 #1B4A87}'
    +'tr.gh.crew td{background:#F4F7FC}'
@@ -85557,6 +85582,7 @@ function pjPrint(){
      +'text-align:center;vertical-align:middle;padding:6px 4px}'
    +'td.off .sq{display:inline-block;font-size:'+fs+'px;font-weight:800;border-radius:999px;padding:3px 9px;line-height:1.3}'
    +'td.off .sm{display:block;font-size:'+(fs-1)+'px;color:#94A3B8;margin-top:5px;line-height:1.4}'
+   +'td.off.wki{vertical-align:top;padding-top:9px}'
    +'td.px{padding:3px 5px;text-align:center;background:#FAFBFC}'
    +"td.px .a{font:700 "+(fs-0.5)+"px 'DM Mono',monospace;color:#64748B;letter-spacing:-.02em}"
    +"td.px .t{font:800 "+(fs+5)+"px 'DM Mono',monospace;color:#0F6E56;line-height:1.15}"
@@ -85581,16 +85607,53 @@ function pjPrint(){
       +(sub?('<span class="sm">'+sub+'</span>'):'')+'</td>';
   };
   var gi=function(B){ var k=-1; GO.forEach(function(x,i){ if(x===B) k=i; }); return k; };
-  var row=function(k,fn,first){
+
+  /* §pjWork2 · ชื่อช่าง + ป้ายตำแหน่งจริง · ป้ายซ้ายมือยังเป็นชื่อช่องของลูกเรือ */
+  var wkWho=function(B,pos){
+    var w=WK[B.bid]; if(!w) return '';
+    var nm=who(w.ids[pos],0);
+    return nm?(nm+' <span class="rl">· '+WROLE[pos]+'</span>'):'';
+  };
+  /* แถบสถานะของลำที่จอด · แทนช่องโปรแกรม · สีเดียวกับป้ายสถานะบนหน้าจอ */
+  var wkHead=function(B){
+    var SM=PJ_ST[B._st.k]||PJ_ST.idle;
+    var mj=(B._st.mj||[]), M=null;
+    try{ M=pjMjOf(_poDate,B.bid,mj); }catch(_){}
+    var sub=[ M?((M.no?(M.no+' · '):'')+(M.title||M.type||'')).trim():'', B._st.loc||'' ]
+      .filter(function(x){ var v=String(x||'').trim(); return v && v!=='-' && v!=='—'; }).join(' \u00b7 ');
+    return '<td class="wk" style="background:'+SM.bg+';color:'+SM.fg+'">'+e(SM.t)
+      +(sub?('<span class="sub">'+e(sub)+'</span>'):'')+'</td>';
+  };
+  /* ช่องล่างของลำที่จอด · ไม่มีไกด์ ไม่มีลูกค้า · เอาช่วงงานมาลงแทน */
+  var wkInfo=function(B){
+    var ST=B._st, mj=ST.mj||[], M=null; try{ M=pjMjOf(_poDate,B.bid,mj); }catch(_){}
+    var L=[];
+    if(M) L.push((pjMjPlanned(M)?'ตามแผน':'ซ่อมแก้ไข')
+      +(M.startDate?(' \u00b7 เริ่ม '+pjDocDate(M.startDate)):'')
+      +(M.location?(' \u00b7 '+M.location):''));
+    var Fm=(ST.log&&ST.log.from)||'', To=(ST.log&&ST.log.to)||'';
+    var d=0; try{ if(Fm) d=Math.max(0,Math.round((new Date(_poDate+'T12:00:00')-new Date(Fm+'T12:00:00'))/86400000))+1; }catch(_){}
+    if(Fm) L.push('เริ่ม '+pjDocDate(Fm)+(d?(' \u00b7 วันที่ '+d):''));
+    L.push('กลับใช้งาน '+(To?pjDocDate(To):'ยังไม่ระบุ'));
+    if(mj.length>1) L.push('งานเปิด '+mj.length+' ใบ');
+    return L;
+  };
+  var row=function(k,fn,first,wfn){
     return '<tr><th class="k">'+k+'</th>'
       + boats.map(function(B){
-          if(!isGo(B)) return first?offCell(B):'';
-          var v=fn(B, gi(B)); return v?('<td class="v">'+v+'</td>'):'<td class="mut">—</td>';
+          if(isGo(B)){ var v=fn(B, gi(B)); return v?('<td class="v">'+v+'</td>'):'<td class="mut">—</td>'; }
+          if(isWk(B)){ if(!wfn) return ''; var w=wfn(B); return w?('<td class="v">'+w+'</td>'):'<td class="mut">—</td>'; }
+          return first?offCell(B):'';
         }).join('') + '</tr>'; };
-  var gh=function(t,cls){
-    return '<tr class="gh '+cls+'"><th>'+t+'</th>'+GO.map(function(){ return '<td></td>'; }).join('')+'</tr>'; };
+  var gh=function(t,cls,wcell){
+    return '<tr class="gh '+cls+'"><th>'+t+'</th>'
+      + boats.map(function(B){
+          if(isGo(B)) return '<td></td>';
+          if(isWk(B)) return wcell?wcell(B):'';
+          return '';
+        }).join('')+'</tr>'; };
 
-  var head='<thead><tr><th class="k" style="background:#0F172A;color:#fff;vertical-align:bottom;padding:8px 6px">เรือ</th>'
+  var head='<thead><tr><th class="k" style="background:#1B4A87;color:#fff;vertical-align:bottom;padding:8px 6px">เรือ</th>'
     + boats.map(function(B){
         var go=isGo(B);
         var raw=(typeof pckBoatColor==='function')?pckBoatColor(B.bid):'#185FA5';
@@ -85606,19 +85669,27 @@ function pjPrint(){
   var body='<tbody>'
     +'<tr class="rt"><th class="k">โปรแกรม</th>'
       + boats.map(function(B){
-          if(!isGo(B)) return offCell(B);
-          var rt=B.route||{};
-          return '<td style="background:'+(rt.color||'#64748B')+'">'+e(rt.name||'—')
-            +(rt.islands?('<span class="sub">'+e(rt.islands)+'</span>'):'')+'</td>'; }).join('')
+          if(isGo(B)){
+            var rt=B.route||{};
+            return '<td style="background:'+(rt.color||'#64748B')+'">'+e(rt.name||'—')
+              +(rt.islands?('<span class="sub">'+e(rt.islands)+'</span>'):'')+'</td>';
+          }
+          return isWk(B) ? wkHead(B) : offCell(B); }).join('')
     +'</tr>'
-    + gh('Captain &amp; Crew','crew')
-    + row('กัปตัน',function(B,i){ return who(J[i].cap,1); })
-    + row('ผู้ช่วยกัปตัน',function(B,i){ return who(J[i].asst,1); })
+    + gh(nWk?'Captain &amp; Crew &nbsp;·&nbsp; ทีมช่าง':'Captain &amp; Crew','crew')
+    + row('กัปตัน',function(B,i){ return who(J[i].cap,1); },0,function(B){ return wkWho(B,0); })
+    + row('ผู้ช่วยกัปตัน',function(B,i){ return who(J[i].asst,1); },0,function(B){ return wkWho(B,1); })
     + (function(){ var o=''; for(var c=0;c<nCrew;c++){ (function(c){
-        o+=row('เด็กเรือ '+(c+1),function(B,i){ return who((J[i].crew||[])[c],0); }); })(c); } return o; })()
+        o+=row('เด็กเรือ '+(c+1),function(B,i){ return who((J[i].crew||[])[c],0); },0,
+               (c<3)?function(B){ return wkWho(B,2+c); }:null); })(c); } return o; })()
     + (function(){ var o=''; for(var c=0;c<nIsl;c++){ (function(c){
-        o+=row('ประจำเกาะ'+(nIsl>1?(' '+(c+1)):''),function(B,i){ return who((J[i].island||[])[c],0); }); })(c); } return o; })()
-    + gh('Guides &amp; Trainee','guide')
+        o+=row('ประจำเกาะ'+(nIsl>1?(' '+(c+1)):''),function(B,i){ return who((J[i].island||[])[c],0); },0,
+               (c<2)?function(B){ return wkWho(B,5+c); }:null); })(c); } return o; })()
+    + gh('Guides &amp; Trainee','guide',function(B){
+        var L=wkInfo(B);
+        return '<td class="off wki" rowspan="'+WKSPAN+'">'
+          + L.map(function(x,i){ return '<span class="sm"'+(i?'':' style="margin-top:0"')+'>'+e(x)+'</span>'; }).join('')
+          +'</td>'; })
     + (function(){ var o=''; for(var c=0;c<nGd;c++){ (function(c){
         o+=row('ไกด์ '+(c+1),function(B,i){ return e(Gs[i][c]||''); }); })(c); } return o; })()
     + gh('Customer','cust')
@@ -85631,7 +85702,10 @@ function pjPrint(){
     +'</tr>'
     + gh('Note','note')
     +'<tr><th class="k">หมายเหตุ</th>'
-      + GO.map(function(B,i){ return '<td class="nt">'+e(J[i].note||'')+'</td>'; }).join('')
+      + boats.map(function(B){
+          if(isGo(B)) return '<td class="nt">'+e(J[gi(B)].note||'')+'</td>';
+          if(isWk(B)) return '<td class="nt">'+e(WK[B.bid].note||'')+'</td>';
+          return ''; }).join('')
     +'</tr></tbody>';
 
   var DW=pjDateWords(_poDate);
