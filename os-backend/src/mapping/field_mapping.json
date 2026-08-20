@@ -7148,6 +7148,25 @@
       "note": "ของจริงรายทริป · ตอนนี้มี meal (ต้นทุนอาหารที่ส่งร้านจริง) · หน้า P&L ใช้ทับค่าประมาณจากสูตร"
     }
   },
+  "pier_sheet": {
+    "id": {
+      "source": "pier_sheet map key (generated id)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "key": {
+      "source": "pier_sheet map key (original)",
+      "kind": "map_key",
+      "db_type": "text",
+      "note": "'YYYY-MM-DD::boatId' \u00b7 \u0e04\u0e35\u0e22\u0e4c\u0e40\u0e14\u0e35\u0e22\u0e27\u0e01\u0e31\u0e1a trip_actuals / pier_job / fleet_daily"
+    },
+    "value": {
+      "source": "pier_sheet[key] value",
+      "kind": "map_value_json",
+      "db_type": "text",
+      "note": "\u0e43\u0e1a\u0e40\u0e1a\u0e34\u0e01\u2013\u0e04\u0e37\u0e19\u0e23\u0e32\u0e22\u0e25\u0e33 \u00b7 rows[] \u0e15\u0e48\u0e2d\u0e43\u0e1a\u0e08\u0e2d\u0e07 + \u0e40\u0e07\u0e34\u0e19\u0e21\u0e31\u0e14\u0e08\u0e33 + size[] \u0e41\u0e22\u0e01\u0e44\u0e0b\u0e2a\u0e4c \u00b7 pier_moves \u0e04\u0e37\u0e2d\u0e15\u0e31\u0e27\u0e08\u0e23\u0e34\u0e07\u0e02\u0e2d\u0e07\u0e2a\u0e15\u0e47\u0e2d\u0e01"
+    }
+  },
   "pier_cfg": {
     "id": {
       "source": "pier_cfg map key (generated id)",

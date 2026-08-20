@@ -6604,6 +6604,25 @@
     "foreign_keys": [],
     "rows": 0
   },
+  "pier_sheet": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "text"
+      },
+      {
+        "name": "key",
+        "type": "text"
+      },
+      {
+        "name": "value",
+        "type": "text"
+      }
+    ],
+    "primary_key": "id",
+    "foreign_keys": [],
+    "rows": 0
+  },
   "pier_cfg": {
     "columns": [
       {
