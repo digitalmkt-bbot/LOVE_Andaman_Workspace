@@ -1698,6 +1698,14 @@ async function initDb(){
         `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."fleet_daily__boat" (row_pk text PRIMARY KEY, fleet_daily_id text, ${qic('key')} text, value text)`);
       await sq('fleet_daily__boat index',
         `CREATE INDEX IF NOT EXISTS idx_fleetdaily_boat ON ${OS_SCHEMA}."fleet_daily__boat"(fleet_daily_id)`);
+      // §openMap · เรือที่ deploy ในหน้า Boat Operation · 1 แถวต่อ (วัน, เรือ)
+      //   เดิม trips มีคอลัมน์ b1_route…b15_booked เท่าที่มีเรือตอน gen mapping · เรือที่เพิ่มมาทีหลัง
+      //   (Tri Star 01 · เรือเช่าท่าระนอง ที่วิ่งโปรแกรมพม่า Se La Va / Nyaung Oo Phee) ไม่มีคอลัมน์ลง
+      //   → ถูกทิ้งเงียบทุกครั้งที่ save · จัดเรือแล้วหายหลังรีเฟรช · โปรแกรมเลยไม่มีที่นั่งให้ขาย
+      await sq('trips__boat table',
+        `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."trips__boat" (row_pk text PRIMARY KEY, trips_id text, ${qic('key')} text, value text)`);
+      await sq('trips__boat index',
+        `CREATE INDEX IF NOT EXISTS idx_trips_boat ON ${OS_SCHEMA}."trips__boat"(trips_id)`);
       await sq('boats.color col', `ALTER TABLE ${OS_SCHEMA}."boats" ADD COLUMN IF NOT EXISTS "color" text`);
       // §B2C paid state (2026-07-30, from lk-inbox): B2C's payment_type is a BILLING TERM
       // (proforma/invoice/bt/cot) and says nothing about whether money arrived — paid state must be
