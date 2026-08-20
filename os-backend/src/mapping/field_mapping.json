@@ -6769,6 +6769,28 @@
       "db_type": "text"
     }
   },
+  "trips__boat": {
+    "trips_id": {
+      "source": "(link) trips.id",
+      "kind": "fk",
+      "db_type": "text"
+    },
+    "key": {
+      "source": "(map key of trips[key].boats)",
+      "kind": "map_key",
+      "db_type": "text"
+    },
+    "row_pk": {
+      "source": "(generated child key)",
+      "kind": "synthetic-pk",
+      "db_type": "text"
+    },
+    "value": {
+      "source": "trips[key][boat] whole op object",
+      "kind": "map_value_json",
+      "db_type": "text"
+    }
+  },
   "fleet_daily__boat": {
     "fleet_daily_id": {
       "source": "(link) fleet_daily.id",

@@ -8486,8 +8486,10 @@ function renderDA(){
 
   // left visual — same grouping as text preview
   let html='';
-  ['tublamu','panwa'].forEach(pier=>{
-    const pm={tublamu:{label:'Tub Lamu Pier',dot:'var(--ocean-mid)'},panwa:{label:'Visit Panwa',dot:'var(--green)'}}[pier];
+  // §ranongDA · ท่าที่เพิ่มมาทีหลัง (ระนอง · โปรแกรมพม่า) ต้องขึ้นในข้อความที่นั่งว่างด้วย
+  //   เดิมวนแค่ 2 ท่า · เที่ยวระนองจึงไม่เคยถูกส่งให้เอเจ้น = ไม่มีใครรู้ว่าขายได้
+  ['tublamu','panwa'].concat(Object.keys(groups.ranong||{}).length?['ranong']:[]).forEach(pier=>{
+    const pm={tublamu:{label:'Tub Lamu Pier',dot:'var(--ocean-mid)'},panwa:{label:'Visit Panwa',dot:'var(--green)'},ranong:{label:'Ranong Pier',dot:'var(--amber)'}}[pier];
     const rows=_daSortRows(Object.values(groups[pier]||{}));
     if(!rows.length) return;
     html+=`<div class="da-pier-lbl"><div style="width:6px;height:6px;border-radius:50%;background:${pm.dot}"></div>${pm.label}</div>`;
@@ -8520,8 +8522,8 @@ function renderDA(){
 
   // text preview · สร้าง "บล็อกที่นั่งว่าง" (pier + routes) แล้วแทนลง template ที่ user แก้เองได้ (token {date} {availability})
   const availLines=[];
-  ['tublamu','panwa'].forEach(pier=>{
-    const pm={tublamu:'Tub Lamu Pier',panwa:'Visit Panwa Pier'}[pier];
+  ['tublamu','panwa'].concat(Object.keys(groups.ranong||{}).length?['ranong']:[]).forEach(pier=>{
+    const pm={tublamu:'Tub Lamu Pier',panwa:'Visit Panwa Pier',ranong:'Ranong Pier'}[pier];
     const rows=_daSortRows(Object.values(groups[pier]||{}));
     if(!rows.length) return;
     availLines.push('📍 '+pm);

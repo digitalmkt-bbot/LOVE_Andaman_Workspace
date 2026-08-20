@@ -160,6 +160,40 @@ function fleetDailyDecompose(blob, out) {
   }
 }
 
+// ---------- trips__boat special-case (2026-08) ----------
+// Boat Operation deployments live in trips[date][boatId] = {route,type,booked,charterBookingId,…} —
+// an open-ended boat map that the generated mapping flattened into one fixed column triple per boat
+// that happened to exist when it was written (b1_route … b15_booked). Any boat added AFTER that had
+// nowhere to land, so decomposeBlob dropped its deployment on every save: the boat looked assigned in
+// Boat Operation, then vanished on the next /api/load, the route never gained an allotment, and the
+// program could not be booked. Hit for real with Tri Star 01 (b1784877193883), the Ranong charter that
+// runs the Myanmar day trips (Se La Va · Nyaung Oo Phee).
+// Same fix as fleet_daily__boat: one row per (date, boat) with the whole op object as JSON — lossless
+// for any boat and any field, past or future. The old b*_ columns are LEFT IN PLACE and still written,
+// so nothing depends on the DDL having run before the first save.
+const TRIPS_BOAT = 'trips__boat';
+function tripsAssembleFix(blob, tablesData) {
+  const tp = blob.trips; if (!tp || typeof tp !== 'object') return;
+  for (const day of Object.values(tp)) { if (day && typeof day === 'object') delete day.boats; }   // bogus merged day-level key (generic artifact)
+  for (const row of (tablesData[TRIPS_BOAT] || [])) {
+    if (row.trips_id == null || row.key == null) continue;
+    const v = safeParse(row.value); if (!v || typeof v !== 'object') continue;
+    Object.assign(((tp[row.trips_id] ||= {})[row.key] ||= {}), v);
+  }
+}
+function tripsDecompose(blob, out) {
+  out[TRIPS_BOAT] = [];
+  const tp = blob.trips; if (!tp || typeof tp !== 'object') return;
+  for (const [day, dayObj] of Object.entries(tp)) {
+    if (!dayObj || typeof dayObj !== 'object') continue;
+    for (const [boatId, op] of Object.entries(dayObj)) {
+      if (!op || typeof op !== 'object') continue;
+      out[TRIPS_BOAT].push({ trips_id: day, key: boatId,
+                             value: JSON.stringify(op), row_pk: rowPk(TRIPS_BOAT) });
+    }
+  }
+}
+
 // ---------- ASSEMBLE: rows -> blob ----------
 function buildElement(p, row) {
   if (p.elementScalar) return row[p.elementScalar];         // array-of-scalars element
@@ -237,6 +271,7 @@ function assembleBlob(tablesData) {
     }
   }
   fleetDailyAssembleFix(blob, tablesData);   // rebuild the boat dimension the mapping dropped
+  tripsAssembleFix(blob, tablesData);        // §openMap · เรือที่เพิ่มมาทีหลัง ไม่มีคอลัมน์ b*_ ของตัวเอง
   return blob;
 }
 
@@ -316,6 +351,7 @@ function decomposeBlob(blob) {
     }
   }
   fleetDailyDecompose(blob, out);   // emit one row per (day, boat, trip) — overrides the generic (which can't see boats)
+  tripsDecompose(blob, out);        // one row per (date, boat) — carries boats the b*_ columns can't
   return out;
 }
 

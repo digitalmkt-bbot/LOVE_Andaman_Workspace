@@ -6277,6 +6277,34 @@
     "foreign_keys": [],
     "rows": 0
   },
+  "trips__boat": {
+    "columns": [
+      {
+        "name": "trips_id",
+        "type": "text"
+      },
+      {
+        "name": "key",
+        "type": "text"
+      },
+      {
+        "name": "row_pk",
+        "type": "text"
+      },
+      {
+        "name": "value",
+        "type": "text"
+      }
+    ],
+    "primary_key": "row_pk",
+    "foreign_keys": [
+      {
+        "column": "trips_id",
+        "references": "trips.id"
+      }
+    ],
+    "rows": 0
+  },
   "fleet_daily__boat": {
     "columns": [
       {
