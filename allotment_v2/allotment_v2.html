@@ -49714,6 +49714,59 @@ var PCK_MEALS = [
   { k:'vegan', l:'วีแกน',     c:'#0F6E56', bg:'#E7F4EF', bd:'#BEE0D2' },
   { k:'halal', l:'ฮาลาล',     c:'#185FA5', bg:'#E9F1FB', bd:'#C3D9F0' }
 ];
+/* §mealNote · โน้ตของลำนั้นวันนั้น · เก็บที่ TRIP_ACT ก้อนเดียวกับยอดอาหารที่ส่งไปแล้ว
+   รับของเก่าที่เคยเก็บเป็นสตริงล้วนด้วย เผื่อมีคนเขียนไว้ก่อนแยกเป็นอ็อบเจกต์ */
+function pckMealNoteObj(date, bid){
+  var A=(typeof taGet==='function')?(taGet(date,bid)||{}):{}, v=A.mealNote;
+  if(!v) return null;
+  if(typeof v==='string'){ var t0=v.trim(); return t0?{t:t0,at:'',by:''}:null; }
+  var t=String(v.t||'').trim();
+  return t?{t:t, at:String(v.at||''), by:String(v.by||'')}:null;
+}
+function pckMealNote(date, bid){ var n=pckMealNoteObj(date,bid); return n?n.t:''; }
+var _pckMealNoteBid='';
+function pckMealNoteOpen(bid){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('operations')) return;
+  var date=_pckDate, e=ckEsc;
+  _pckMealNoteBid=bid;
+  var N=pckMealNoteObj(date,bid), cur=N?N.t:'';
+  var who=(N&&N.by)?(' · '+N.by):'';
+  var at=(N&&N.at&&typeof pckHHMM==='function')?(' '+pckHHMM(N.at)):'';
+  var QUICK=['อัพเดท · ใช้ใบนี้แทนใบเดิม','เพิ่มจากที่แจ้งไปรอบแรก','ลดจำนวนจากที่แจ้งไว้',
+             'เรือถึงช้ากว่านัด','ขอข้าวเพิ่ม','ยังไม่ยืนยัน · รอแจ้งอีกครั้ง'];
+  acctModal(pckNoteCss()
+    +'<div class="pn-hd"><div><div class="pn-t">โน้ตถึงร้านอาหาร</div>'
+      +'<div class="pn-s">'+e(pckBoatName(bid)+' · '+date)+(cur?e(' · แก้ล่าสุด'+at+who):'')+'</div></div>'
+      +'<button class="pn-x" onclick="acctModalClose()">&#10005;</button></div>'
+    +'<div class="pn-bd">'
+      +'<div class="pn-lab">ข้อความถึงร้าน <span>ขึ้นมุมขวาบนของใบแจ้งอาหาร</span></div>'
+      +'<textarea id="pck-mnote-tx" rows="4" placeholder="เช่น อัพเดท · เพิ่มจากรอบแรก 2 ท่าน ใช้ใบนี้แทนใบเดิม">'+e(cur)+'</textarea>'
+      +'<div class="pn-q">'+QUICK.map(function(q){
+          return '<button onclick="pckMealNoteQuick(\''+e(q).replace(/'/g,"")+'\')">'+e(q)+'</button>'; }).join('')+'</div>'
+      +'<div class="pn-act">'
+        +(cur?'<button class="pn-del" onclick="pckMealNoteSave(1)">ลบโน้ต</button>':'')
+        +'<button class="pn-b2" onclick="acctModalClose()">ยกเลิก</button>'
+        +'<button class="pn-b1" onclick="pckMealNoteSave(0)">บันทึก</button>'
+      +'</div>'
+    +'</div>');
+  setTimeout(function(){ var t=document.getElementById('pck-mnote-tx');
+    if(t){ t.focus(); t.setSelectionRange(t.value.length,t.value.length); } },60);
+}
+function pckMealNoteQuick(q){
+  var t=document.getElementById('pck-mnote-tx'); if(!t) return;
+  var v=String(t.value||'').trim();
+  t.value = v ? (v+' · '+q) : q;
+  t.focus();
+}
+function pckMealNoteSave(clear){
+  var bid=_pckMealNoteBid; if(!bid) return;
+  var t=document.getElementById('pck-mnote-tx');
+  var txt=clear?'':String((t&&t.value)||'').trim();
+  taSet(_pckDate, bid, { mealNote: txt ? { t:txt, at:new Date().toISOString(),
+                          by:(typeof ckMe==='function')?ckMe():'' } : null });
+  acctModalClose();
+  if(typeof renderPierCheckin==='function') renderPierCheckin();
+}
 function pckMealChips(b){
   var m = b.specialMeals || {}, out = [];
   PCK_MEALS.forEach(function(x){ if(+m[x.k] > 0) out.push({ t:x.l + ' ' + (+m[x.k]), c:x.c, bg:x.bg, bd:x.bd }); });
@@ -51685,6 +51738,20 @@ function pckKitchenHtml(border, boats, date, bare){
                     :(mvLunchOk(rid)?'ส่งรายการให้ร้าน · เปิดใบ':'บันทึกยอดอาหาร'))+'</button>'):'')
       +'</div>'
       + (body?('<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+body+'</div>'):'')
+      /* §mealNote · ปุ่มโน้ต · อยู่ใต้ป้ายจำนวนคน ที่เดียวกับที่คนกำลังตรวจยอดอยู่ */
+      + (function(){
+          var MN=pckMealNote(date,bid);
+          return '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:9px">'
+            +'<button onclick="pckMealNoteOpen(\''+bid+'\')" style="border:1px '
+              +(MN?'solid #EEDFAE':'dashed #D8D4CA')+';background:'+(MN?'#FFF8E6':'#fff')+';color:'
+              +(MN?'#7A4A00':'#8a8a82')+';border-radius:8px;padding:3px 11px;font:700 11px inherit;'
+              +'cursor:pointer;font-family:inherit" title="ขึ้นมุมขวาบนของใบแจ้งอาหาร">'
+              +(MN?'&#9998; โน้ตถึงร้าน':'+ โน้ตถึงร้าน')+'</button>'
+            +(MN?('<div style="flex:1 0 100%;background:#FFF8E6;border:1px solid #EEDFAE;border-radius:8px;'
+              +'padding:5px 10px;font-size:11.5px;font-weight:600;color:#7A4A00;line-height:1.5;margin-top:2px">'
+              +'&#9998; '+e(MN)+'</div>'):'')
+            +'</div>';
+        })()
       + (al.length?('<div style="background:#FEF2F2;border:1px solid #F5CFCF;color:#B91C1C;border-radius:10px;'
           +'padding:7px 12px;font-size:11.5px;font-weight:600;margin-top:9px">แพ้อาหาร — '
           + al.map(function(x){ return '<b>'+e(x.name)+' &times;'+x.qty+'</b>'; }).join(' · ')
@@ -51854,7 +51921,17 @@ function mvOrderSlip(date, bid, V, rid){
    +'table.gs td.sr.l{text-align:left}'
    +'table.gs tr.tot td{background:#C9D9F0;font-weight:800}'
    +'table.gs tr.tot td.lb{text-align:right;font-size:17px}'
-   +'table.gs tr.tot td.n{font-size:17px}';
+   +'table.gs tr.tot td.n{font-size:17px}'
+   /* §mealNote · โน้ตมุมขวาบน · ชื่อใบยังอยู่กลางหน้าเพราะกันที่ซ้ายไว้เท่ากัน
+      วางทับด้วย absolute ไม่ได้ · โน้ตยาวแล้วจะไปทับหัวใบตอนพิมพ์ */
+   +'.hdw{display:flex;align-items:flex-start;gap:12px;margin-bottom:9px}'
+   +'.hdw .sp,.hdw .nb{flex:0 0 210px}'
+   +'.hdw .mid{flex:1;min-width:0}'
+   +'.hdw .ttl{font-size:22px}'
+   +'.hdw .dat{margin-bottom:0}'
+   +'.nb{border:2px solid #E0A800;background:#FFFBEA;border-radius:5px;padding:7px 11px}'
+   +'.nb .h{font-size:10.5px;font-weight:800;color:#8A5A00;letter-spacing:.08em;margin-bottom:2px}'
+   +'.nb .t{font-size:14px;font-weight:700;color:#3F2D00;line-height:1.5;word-break:break-word}';
 
   var sub=[V.place||'', V.eta?('เรือถึง ~'+V.eta):'', V.phone||''].filter(Boolean).join(' · ');
   /* บรรทัดรายละเอียดร้านขึ้นแถวเดียว ใต้ชื่อร้านพอดี · ซ้ำทุกแถวแล้วรก */
@@ -51872,9 +51949,17 @@ function mvOrderSlip(date, bid, V, rid){
       +(r.sr ? ('<td class="sr'+(r.sr.length>40?' l':'')+'">'+e(r.sr).replace(/\n/g,'<br>')+'</td>') : '<td></td>')
       +'</tr>'; }).join('');
 
+  /* §mealNote · มีโน้ตค่อยสลับเป็นหัวสามคอลัมน์ · ไม่มีโน้ตหัวใบเหมือนเดิมเป๊ะ */
+  var MN=(typeof pckMealNote==='function')?pckMealNote(date,bid):'';
+  var headBlock = MN
+    ? ('<div class="hdw"><div class="sp"></div><div class="mid">'
+        +'<div class="ttl">Love Andaman - Lunch</div>'
+        +'<div class="dat">'+e(DW.big||date)+'</div></div>'
+        +'<div class="nb"><div class="h">NOTE</div>'
+        +'<div class="t">'+e(MN).replace(/\n/g,'<br>')+'</div></div></div>')
+    : ('<div class="ttl">Love Andaman - Lunch</div><div class="dat">'+e(DW.big||date)+'</div>');
   var sheet='<div class="sheet" id="sheet">'
-   +'<div class="ttl">Love Andaman - Lunch</div>'
-   +'<div class="dat">'+e(DW.big||date)+'</div>'
+   + headBlock
    +'<table class="hd"><colgroup><col style="width:132px"><col><col style="width:70px"><col style="width:70px"><col style="width:250px"></colgroup>'
      +'<tr><td class="k">เรือ</td>'
        +'<td class="boat" colspan="2" style="background:'+e(bcol)+';color:'+bink+'">'+e(boat.name||bid)+'</td>'
