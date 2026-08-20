@@ -44047,6 +44047,7 @@ function renderInsurance(){
     return `<div style="background:#fff;border:1px solid #E7E5DD;border-radius:14px;overflow:hidden;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;border-left:4px solid #185FA5;background:#F7FAFC;flex-wrap:wrap">
         <div><div style="font-size:14px;font-weight:800;color:#1B2A55">${e(insRouteName(g.routeId))}</div><div style="font-size:11px;color:#8a8f93">${e(dateLbl)} · ${g.bookings.length} booking</div></div>
+        <button onclick="insPrint('${e(g.routeId)}')" title="พิมพ์เฉพาะเส้นทางนี้" style="border:1px solid #C7D6E6;background:#fff;color:#185FA5;border-radius:8px;padding:5px 11px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">&#128424; พิมพ์เส้นทางนี้</button>
         <div style="margin-left:auto;display:flex;align-items:center;gap:16px">
           <div style="text-align:center"><div style="font-size:18px;font-weight:800;color:#1B2A55;font-variant-numeric:tabular-nums">${tPax}</div><div style="font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:#9aa49c">pax</div></div>
           <div style="text-align:center"><div style="font-size:18px;font-weight:800;color:${tNoAge?'#A32D2D':'#0F6E56'};font-variant-numeric:tabular-nums">${tNoAge}</div><div style="font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:${tNoAge?'#A32D2D':'#9aa49c'}">no age</div></div>
@@ -44071,7 +44072,7 @@ function renderInsurance(){
       </div>
       <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
         ${laDateBar(_insDate,'insDateShift','insToday','')}
-        <button onclick="insPrint()" style="display:inline-flex;align-items:center;gap:6px;border:1px solid #185FA5;background:#185FA5;color:#fff;border-radius:9px;padding:7px 14px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">&#128424; พิมพ์</button>
+        <button onclick="insPrint()" title="พิมพ์ทุกเส้นทางของวันนี้ · หนึ่งเส้นทางต่อหนึ่งแผ่น" style="display:inline-flex;align-items:center;gap:6px;border:1px solid #185FA5;background:#185FA5;color:#fff;border-radius:9px;padding:7px 14px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">&#128424; พิมพ์ทุกเส้นทาง</button>
       </div>
     </div>
     ${trips.length?`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
@@ -44084,11 +44085,14 @@ function renderInsurance(){
     <div style="font-size:10.5px;color:#9aa49c;margin-top:6px;line-height:1.6"><span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px"><span style="width:8px;height:8px;border-radius:50%;background:#7F77DD"></span>แก้ทับแล้ว (override)</span>ข้อมูลที่แก้เก็บแยกสำหรับประกันเท่านั้น · ชื่อ/สัญชาติหลักใน Booking ไม่เปลี่ยน · &#8634; = คืนค่าจาก Booking</div>
   </div>`;
 }
-function insPrint(){
+/* §insRoute · rid ว่าง = ทุกเส้นทาง (คนละแผ่น) · ใส่ rid = พิมพ์เฉพาะเส้นทางนั้น */
+function insPrint(rid){
   const e=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const ds=_insDate; const dt=new Date(ds+'T00:00:00');
   const dateLbl=isNaN(dt)?ds:dt.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-  const trips=insTripsForDate(ds);
+  let trips=insTripsForDate(ds);
+  if(rid) trips=trips.filter(g=>String(g.routeId)===String(rid));
+  if(!trips.length && rid){ alert('ไม่พบเส้นทางนี้ในวันที่เลือก'); return; }
   let body='';
   trips.forEach(g=>{
     g.bookings.sort((a,b)=>String(a.id||'').localeCompare(String(b.id||'')));
@@ -44097,10 +44101,32 @@ function insPrint(){
       const fn=insEff(b.id,p.key,'firstName',sn.f); const ln=insEff(b.id,p.key,'lastName',sn.l);
       const age=insEff(b.id,p.key,'age',''); const nat=insEff(b.id,p.key,'nat',insNatLabel(p.natCode));
       rows+=`<tr><td class="c">${i}</td><td>${e(fn)}</td><td>${e(ln)}</td><td class="c">${e(age)||'-'}</td><td>${e(nat)||'-'}</td></tr>`; }); });
-    body+=`<h2>${e(insRouteName(g.routeId))} — ${e(dateLbl)}</h2><table><thead><tr><th class="c">#</th><th>First name</th><th>Last name</th><th class="c">Age</th><th>Nationality</th></tr></thead><tbody>${rows}</tbody></table>`;
+    /* §insRoute · หนึ่งเส้นทาง = หนึ่งแผ่น · หัวใบซ้ำทุกแผ่น เพราะแต่ละแผ่นถูกยื่นแยกกัน
+       ยอดคนต่อท้ายตาราง · คนรับประกันนับหัวจากตรงนี้ ไม่ต้องไล่นับบรรทัด */
+    body+=`<section class="rt"><h1>Passenger list for insurance</h1>`
+      +`<div class="meta">Operation LOVE Andaman · ${e(dateLbl)}</div>`
+      +`<h2>${e(insRouteName(g.routeId))}</h2>`
+      +`<table><thead><tr><th class="c">#</th><th>First name</th><th>Last name</th><th class="c">Age</th><th>Nationality</th></tr></thead>`
+      +`<tbody>${rows}</tbody></table>`
+      +`<div class="tot">รวม ${i} ท่าน · ${g.bookings.length} booking</div></section>`;
   });
-  if(!body) body='<p>No trips on this date.</p>';
-  const html=`<!doctype html><html><head><meta charset="utf-8"><title>Insurance · ${e(dateLbl)}</title><style>body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:24px}h1{font-size:18px;margin:0 0 4px}h2{font-size:14px;margin:20px 0 6px;border-bottom:2px solid #185FA5;padding-bottom:3px}table{width:100%;border-collapse:collapse;margin-bottom:8px}th,td{border:1px solid #bbb;padding:5px 8px;font-size:12px;text-align:left}th{background:#eef3f8}.c{text-align:center}@media print{@page{size:A4;margin:14mm}}</style></head><body><h1>Passenger list for insurance</h1><div style="font-size:12px;color:#555;margin-bottom:6px">Operation LOVE Andaman · ${e(dateLbl)}</div>${body}</body></html>`;
+  if(!body) body='<h1>Passenger list for insurance</h1><p>No trips on this date.</p>';
+  const ttl='Insurance · '+(rid?(insRouteName(rid)+' · '):'')+dateLbl;
+  const html=`<!doctype html><html><head><meta charset="utf-8"><title>${e(ttl)}</title><style>`
+   +`body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:24px}`
+   +`h1{font-size:18px;margin:0 0 4px}`
+   +`h2{font-size:14px;margin:14px 0 6px;border-bottom:2px solid #185FA5;padding-bottom:3px}`
+   +`.meta{font-size:12px;color:#555;margin-bottom:6px}`
+   +`table{width:100%;border-collapse:collapse;margin-bottom:6px}`
+   +`th,td{border:1px solid #bbb;padding:5px 8px;font-size:12px;text-align:left}`
+   +`th{background:#eef3f8}.c{text-align:center}`
+   +`.tot{font-size:12px;font-weight:700;color:#1B2A55}`
+   +`.rt+.rt{margin-top:26px;border-top:1px dashed #bbb;padding-top:18px}`
+   /* หัวตารางซ้ำเมื่อเส้นทางเดียวยาวเกินหน้า · แถวไม่ถูกผ่ากลาง */
+   +`@media print{@page{size:A4;margin:14mm}`
+     +`.rt+.rt{break-before:page;page-break-before:always;margin-top:0;border-top:0;padding-top:0}`
+     +`thead{display:table-header-group}tr{break-inside:avoid;page-break-inside:avoid}}`
+   +`</style></head><body>${body}</body></html>`;
   const w=window.open('','_blank'); if(!w){ alert('Popup blocked'); return; } w.document.write(html); w.document.close(); w.focus(); setTimeout(()=>{ try{w.print();}catch(e){} }, 300);
 }
 // ── FOC Detail (own sidebar view) ──
