@@ -1,0 +1,28 @@
+{
+  "name": "@la/db",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Postgres access layer, migrations and fixtures. The only package that opens a database connection.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.10",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.4"
+  }
+}

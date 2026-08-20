@@ -1,0 +1,28 @@
+{
+  "name": "@la/api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Fastify API — the only thing that talks to Postgres. Serves ops app, B2C, ERP and the agent portal.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -b",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.2",
+    "@la/contracts": "workspace:*",
+    "@la/db": "workspace:*",
+    "@la/pricing": "workspace:*",
+    "fastify": "^5.2.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.4"
+  }
+}
