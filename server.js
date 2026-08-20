@@ -1706,6 +1706,21 @@ async function initDb(){
         `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."trips__boat" (row_pk text PRIMARY KEY, trips_id text, ${qic('key')} text, value text)`);
       await sq('trips__boat index',
         `CREATE INDEX IF NOT EXISTS idx_trips_boat ON ${OS_SCHEMA}."trips__boat"(trips_id)`);
+      //   §cascade · ตารางลูกตัวอื่นมี FK ON DELETE CASCADE ครบ · ตัวนี้ตอนแรกลืมใส่
+      //   REST put ลบแถวแม่ใน trips แล้ว insert ใหม่ · ลูกที่ไม่ cascade จึงค้างทับกันไปเรื่อย ๆ
+      //   ผลคือถอดเรือออกแล้วเรือกลับมาเอง และที่นั่งของวันนั้นถูกนับซ้ำ
+      //   ล้างของซ้ำ/กำพร้าให้เกลี้ยงก่อน แล้วค่อยผูก FK (ไม่งั้น ADD CONSTRAINT ล้ม)
+      await sq('trips__boat dedupe', `DELETE FROM ${OS_SCHEMA}."trips__boat" a
+         USING ${OS_SCHEMA}."trips__boat" b
+         WHERE a.trips_id = b.trips_id AND a.${qic('key')} = b.${qic('key')} AND a.row_pk < b.row_pk`);
+      await sq('trips__boat orphan sweep', `DELETE FROM ${OS_SCHEMA}."trips__boat" tb
+         WHERE NOT EXISTS (SELECT 1 FROM ${OS_SCHEMA}."trips" t WHERE t.id = tb.trips_id)`);
+      await sq('trips__boat fk', `DO $do$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_trips_boat') THEN
+            ALTER TABLE ${OS_SCHEMA}."trips__boat" ADD CONSTRAINT fk_trips_boat
+              FOREIGN KEY (trips_id) REFERENCES ${OS_SCHEMA}."trips"(id) ON DELETE CASCADE;
+          END IF;
+        END $do$`);
       await sq('boats.color col', `ALTER TABLE ${OS_SCHEMA}."boats" ADD COLUMN IF NOT EXISTS "color" text`);
       // §B2C paid state (2026-07-30, from lk-inbox): B2C's payment_type is a BILLING TERM
       // (proforma/invoice/bt/cot) and says nothing about whether money arrived — paid state must be
