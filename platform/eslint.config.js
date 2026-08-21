@@ -17,8 +17,16 @@ export default tseslint.config(
       ],
       // `any` defeats the point of sharing contracts between api and ops-web.
       '@typescript-eslint/no-explicit-any': 'error',
-      'no-console': ['warn', { allow: ['warn', 'error'] }],
+      // An error, not a warning: `eslint .` exits 0 with any number of warnings,
+      // so as a warning this rule could not stop a console.log of a booking
+      // payload — request PII in the production log stream — from passing CI.
+      'no-console': ['error', { allow: ['warn', 'error'] }],
       eqeqeq: ['error', 'always'],
     },
+  },
+  {
+    // The migration CLI's entire job is to talk to a human on stdout.
+    files: ['packages/db/src/cli.ts'],
+    rules: { 'no-console': 'off' },
   },
 );
