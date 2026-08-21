@@ -18,22 +18,36 @@ export const SCHEMA = {
 
 export type SchemaName = (typeof SCHEMA)[keyof typeof SCHEMA];
 
-let pool: pg.Pool | undefined;
+/**
+ * One pool per distinct connection string.
+ *
+ * Keyed deliberately: an earlier single-pool version memoised on first call and
+ * then ignored its own argument, so the first caller that followed the
+ * "use a READ-ONLY role for anything that only reads" advice on DATABASE_URL
+ * silently got the read-write pool back and wrote through it unchecked.
+ */
+const pools = new Map<string, pg.Pool>();
 
-/** Lazily-created shared pool. `apps/api` is the only intended caller. */
+/** Lazily-created pool for `connectionString`. `apps/api` is the only intended caller. */
 export function getPool(connectionString: string): pg.Pool {
-  pool ??= new pg.Pool({
-    connectionString,
-    max: 10,
-    idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 5_000,
-  });
-  return pool;
+  let existing = pools.get(connectionString);
+  if (!existing) {
+    existing = new pg.Pool({
+      connectionString,
+      max: 10,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 5_000,
+    });
+    pools.set(connectionString, existing);
+  }
+  return existing;
 }
 
+/** Closes every pool. Safe to call more than once. */
 export async function closePool(): Promise<void> {
-  await pool?.end();
-  pool = undefined;
+  const open = [...pools.values()];
+  pools.clear();
+  await Promise.all(open.map((p) => p.end()));
 }
 
 /** Liveness probe used by /readyz. */

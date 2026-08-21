@@ -4,5 +4,9 @@ packages:
 
 # pnpm 10+ blocks dependency build scripts by default. esbuild needs its one to
 # fetch the platform binary, and Vite will not build without it.
+#
+# `allowBuilds` is the pnpm 11 spelling and it is load-bearing: replacing it with
+# `onlyBuiltDependencies` makes install fail with ERR_PNPM_IGNORED_BUILDS, and
+# pnpm rewrites this stanza back in asking to be told true or false.
 allowBuilds:
   esbuild: true
