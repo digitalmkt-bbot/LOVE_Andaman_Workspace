@@ -1,0 +1,1813 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Boat Operations &amp; Pier</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f8fa; --panel:#ffffff; --panel-2:#fbfcfd;
+  --ink:#0f2029; --ink-2:#31485a; --muted:#68808f;
+  --line:#e1e8ee; --line-2:#eef2f6;
+  --accent:#1683C7; --accent-ink:#0f6ba6; --accent-soft:#e8f3fb;
+  --danger:#c8384c; --danger-soft:#fdecee;
+  --warn:#b46a00; --warn-soft:#fdf3e3;
+  --ok:#137a52; --ok-soft:#e6f5ee;
+  --violet:#6a4bbd; --violet-soft:#f0ecfb;
+  --code-bg:#f0f4f8; --code-ink:#173446;
+  --shadow:0 1px 2px rgba(15,32,41,.05), 0 8px 24px -14px rgba(15,32,41,.22);
+  --radius:14px;
+}
+:root:not([data-theme="light"]){ }
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b1317; --panel:#111d24; --panel-2:#0e181e;
+    --ink:#e7eff5; --ink-2:#bfd0dc; --muted:#89a0af;
+    --line:#1f313c; --line-2:#182831;
+    --accent:#49b2ee; --accent-ink:#7ccbf8; --accent-soft:#0f2c3d;
+    --danger:#f2798c; --danger-soft:#33161c;
+    --warn:#e0a24a; --warn-soft:#33260f;
+    --ok:#4ccb95; --ok-soft:#0f2b21;
+    --violet:#a48bef; --violet-soft:#221b3a;
+    --code-bg:#0d1b23; --code-ink:#cfe0eb;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b1317; --panel:#111d24; --panel-2:#0e181e;
+  --ink:#e7eff5; --ink-2:#bfd0dc; --muted:#89a0af;
+  --line:#1f313c; --line-2:#182831;
+  --accent:#49b2ee; --accent-ink:#7ccbf8; --accent-soft:#0f2c3d;
+  --danger:#f2798c; --danger-soft:#33161c;
+  --warn:#e0a24a; --warn-soft:#33260f;
+  --ok:#4ccb95; --ok-soft:#0f2b21;
+  --violet:#a48bef; --violet-soft:#221b3a;
+  --code-bg:#0d1b23; --code-ink:#cfe0eb;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px; line-height:1.62; -webkit-font-smoothing:antialiased;
+}
+code,kbd,.mono{font-family:"DM Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+
+/* ---------- layout ---------- */
+.wrap{display:grid; grid-template-columns:264px minmax(0,1fr); gap:0; max-width:1420px; margin:0 auto}
+.side{
+  position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+  border-right:1px solid var(--line); padding:26px 18px 60px; background:var(--panel-2);
+}
+.main{min-width:0; padding:34px 42px 120px}
+@media (max-width:960px){
+  .wrap{grid-template-columns:1fr}
+  .side{position:static; height:auto; border-right:0; border-bottom:1px solid var(--line); padding:20px 22px}
+  .main{padding:24px 20px 80px}
+}
+
+/* ---------- sidebar ---------- */
+.brand{display:flex; align-items:center; gap:10px; margin-bottom:4px}
+.brand .dot{width:26px;height:26px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px;flex:none}
+.brand b{font-size:14px; letter-spacing:-.01em}
+.brand small{display:block; color:var(--muted); font-size:11px; font-weight:400; line-height:1.3}
+.nav{margin-top:20px; display:flex; flex-direction:column; gap:1px}
+.nav a{
+  display:flex; gap:9px; align-items:baseline; text-decoration:none; color:var(--ink-2);
+  padding:6px 10px; border-radius:8px; font-size:13.5px; border-left:2px solid transparent;
+}
+.nav a .n{color:var(--muted); font-size:11px; font-family:"DM Mono",monospace; min-width:16px}
+.nav a:hover{background:var(--line-2); color:var(--ink)}
+.nav a.on{background:var(--accent-soft); color:var(--accent-ink); font-weight:500; border-left-color:var(--accent)}
+.nav .sub{padding-left:34px; font-size:12.5px; color:var(--muted)}
+.nav .sub:hover{color:var(--ink)}
+.backlink{
+  display:inline-block; margin-top:14px; font-size:12.5px; color:var(--muted); text-decoration:none;
+  border-bottom:1px solid transparent;
+}
+.backlink:hover{color:var(--accent-ink); border-bottom-color:var(--accent)}
+.themebtn{
+  margin-top:22px; width:100%; border:1px solid var(--line); background:var(--panel); color:var(--ink-2);
+  border-radius:9px; padding:7px 10px; font:inherit; font-size:12.5px; cursor:pointer;
+}
+.themebtn:hover{border-color:var(--accent); color:var(--accent-ink)}
+
+/* ---------- header ---------- */
+.hero{border-bottom:1px solid var(--line); padding-bottom:22px; margin-bottom:30px}
+.eyebrow{font-family:"DM Mono",monospace; font-size:12px; color:var(--accent-ink); letter-spacing:.06em; text-transform:uppercase}
+h1{font-size:34px; line-height:1.15; letter-spacing:-.025em; margin:6px 0 10px}
+.lede{font-size:16px; color:var(--ink-2); max-width:74ch; margin:0}
+.chips{display:flex; flex-wrap:wrap; gap:7px; margin-top:16px}
+.chip{
+  font-family:"DM Mono",monospace; font-size:11.5px; padding:3px 9px; border-radius:999px;
+  border:1px solid var(--line); background:var(--panel); color:var(--muted);
+}
+.chip b{color:var(--ink-2); font-weight:500}
+
+/* ---------- sections ---------- */
+section{scroll-margin-top:20px; margin-bottom:46px}
+h2{
+  font-size:23px; letter-spacing:-.02em; margin:0 0 14px; padding-bottom:9px;
+  border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:11px;
+}
+h2 .num{font-family:"DM Mono",monospace; font-size:14px; color:var(--accent); font-weight:500}
+h3{font-size:17px; letter-spacing:-.01em; margin:28px 0 10px; color:var(--ink)}
+h4{font-size:13.5px; margin:18px 0 7px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; font-weight:500}
+p{margin:0 0 12px; max-width:82ch}
+ul,ol{margin:0 0 12px; padding-left:22px; max-width:82ch}
+li{margin-bottom:5px}
+a{color:var(--accent-ink)}
+
+/* ---------- inline bits ---------- */
+code:not(pre code){
+  background:var(--code-bg); color:var(--code-ink); padding:1px 5px; border-radius:5px;
+  font-size:.875em; border:1px solid var(--line-2); white-space:nowrap;
+}
+.ln{color:var(--accent-ink); font-family:"DM Mono",monospace; font-size:.82em; white-space:nowrap}
+pre{
+  background:var(--code-bg); border:1px solid var(--line); border-radius:10px;
+  padding:14px 16px; overflow-x:auto; font-size:12.8px; line-height:1.6; color:var(--code-ink); margin:0 0 14px;
+}
+pre code{background:none;border:0;padding:0;white-space:pre}
+
+/* ---------- cards & callouts ---------- */
+.card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px; box-shadow:var(--shadow); margin:0 0 16px}
+.note{
+  border-left:3px solid var(--accent); background:var(--accent-soft); border-radius:0 10px 10px 0;
+  padding:12px 16px; margin:0 0 16px; font-size:14.2px; color:var(--ink-2);
+}
+.note.warn{border-left-color:var(--warn); background:var(--warn-soft)}
+.note.danger{border-left-color:var(--danger); background:var(--danger-soft)}
+.note.ok{border-left-color:var(--ok); background:var(--ok-soft)}
+.note b{color:var(--ink)}
+.note .lbl{display:block; font-size:11px; text-transform:uppercase; letter-spacing:.07em; font-weight:700; margin-bottom:4px; color:var(--accent-ink)}
+.note.warn .lbl{color:var(--warn)} .note.danger .lbl{color:var(--danger)} .note.ok .lbl{color:var(--ok)}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius); margin:0 0 16px; background:var(--panel)}
+table{border-collapse:collapse; width:100%; font-size:13.6px; min-width:520px}
+th{
+  text-align:left; font-weight:500; font-size:11.5px; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--muted); padding:10px 14px; border-bottom:1px solid var(--line); background:var(--panel-2); white-space:nowrap;
+}
+td{padding:9px 14px; border-bottom:1px solid var(--line-2); vertical-align:top; color:var(--ink-2)}
+tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--panel-2)}
+td code{white-space:nowrap}
+
+/* ---------- badges ---------- */
+.b{display:inline-block; font-family:"DM Mono",monospace; font-size:11px; padding:2px 8px; border-radius:999px; white-space:nowrap; border:1px solid transparent}
+.b.blue{background:var(--accent-soft); color:var(--accent-ink); border-color:color-mix(in srgb,var(--accent) 25%, transparent)}
+.b.red{background:var(--danger-soft); color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%, transparent)}
+.b.amber{background:var(--warn-soft); color:var(--warn); border-color:color-mix(in srgb,var(--warn) 30%, transparent)}
+.b.green{background:var(--ok-soft); color:var(--ok); border-color:color-mix(in srgb,var(--ok) 30%, transparent)}
+.b.violet{background:var(--violet-soft); color:var(--violet); border-color:color-mix(in srgb,var(--violet) 30%, transparent)}
+.b.gray{background:var(--line-2); color:var(--muted); border-color:var(--line)}
+
+/* ---------- rail (vertical flow) ---------- */
+.rail{position:relative; margin:6px 0 18px; padding-left:30px}
+.rail:before{content:""; position:absolute; left:9px; top:8px; bottom:8px; width:2px; background:var(--line)}
+.step{position:relative; margin-bottom:13px}
+.step:before{
+  content:""; position:absolute; left:-26px; top:6px; width:11px; height:11px; border-radius:50%;
+  background:var(--panel); border:2px solid var(--accent);
+}
+.step.block:before{border-color:var(--danger); background:var(--danger)}
+.step.ask:before{border-color:var(--warn)}
+.step.done:before{border-color:var(--ok); background:var(--ok)}
+.step .t{font-weight:500; color:var(--ink); font-size:14.4px}
+.step .d{font-size:13.4px; color:var(--muted)}
+
+/* ---------- stage flow (horizontal) ---------- */
+.flow{display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; margin:6px 0 18px}
+.stage{
+  flex:1 1 150px; min-width:140px; background:var(--panel); border:1px solid var(--line);
+  border-radius:11px; padding:11px 13px; position:relative;
+}
+.stage .k{font-family:"DM Mono",monospace; font-size:10.5px; color:var(--muted); letter-spacing:.05em; text-transform:uppercase}
+.stage .v{font-size:13.6px; font-weight:500; margin-top:3px; color:var(--ink)}
+.stage .s{font-size:12.4px; color:var(--muted); margin-top:3px}
+.arrow{display:grid; place-items:center; color:var(--line); font-size:18px; flex:0 0 14px}
+@media(max-width:700px){.arrow{transform:rotate(90deg)}}
+
+/* ---------- outcome grid ---------- */
+.grid2{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px; margin:6px 0 18px}
+.mini{background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:13px 15px}
+.mini h5{margin:0 0 5px; font-size:13.6px; letter-spacing:-.01em}
+.mini p{margin:0; font-size:12.9px; color:var(--muted)}
+
+/* ---------- function index filter ---------- */
+.filter{
+  width:100%; max-width:340px; padding:8px 12px; border-radius:9px; border:1px solid var(--line);
+  background:var(--panel); color:var(--ink); font:inherit; font-size:13.5px; margin-bottom:12px;
+}
+.filter:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft)}
+.hidden{display:none !important}
+.count{font-size:12.5px; color:var(--muted); margin-left:10px}
+
+/* ---------- footer ---------- */
+footer{border-top:1px solid var(--line); padding-top:18px; color:var(--muted); font-size:12.8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ===== SIDEBAR: replace dot number, title, and nav links ===== -->
+<aside class="side">
+  <div class="brand">
+    <div class="dot">03</div>
+    <div><b>Boat Operations &amp; Pier</b><small>allotment_v2 · workflow docs</small></div>
+  </div>
+  <nav class="nav" id="nav">
+    <a href="#s1"><span class="n">1</span> What this is</a>
+    <a href="#s2"><span class="n">2</span> The operational day</a>
+    <a href="#s3"><span class="n">3</span> Entry points</a>
+    <a href="#s4"><span class="n">4</span> Workflows</a>
+    <a href="#w-deploy" class="sub">4.1 Deploy a boat</a>
+    <a href="#w-weather" class="sub">4.2 Weather cancel</a>
+    <a href="#w-assign" class="sub">4.3 Bookings → boats</a>
+    <a href="#w-split" class="sub">4.4 Split across boats</a>
+    <a href="#w-checkin" class="sub">4.5 Pier check-in</a>
+    <a href="#w-money" class="sub">4.6 Money at the pier</a>
+    <a href="#w-guides" class="sub">4.7 Guides</a>
+    <a href="#w-poj" class="sub">4.8 ใบงานเรือ</a>
+    <a href="#w-po" class="sub">4.9 เบิก-คืนอุปกรณ์</a>
+    <a href="#w-poa" class="sub">4.10 ตารางการทำงาน</a>
+    <a href="#w-pol" class="sub">4.11 ใบอนุญาต</a>
+    <a href="#w-doc" class="sub">4.12 Doc-Check + OCR</a>
+    <a href="#w-rc" class="sub">4.13 Re-confirm</a>
+    <a href="#w-ts" class="sub">4.14 Travel Summary</a>
+    <a href="#w-dr" class="sub">4.15 Daily Report</a>
+    <a href="#s5"><span class="n">5</span> Data model touched</a>
+    <a href="#s6"><span class="n">6</span> Capacity &amp; assignment</a>
+    <a href="#s7"><span class="n">7</span> Persistence path</a>
+    <a href="#s8"><span class="n">8</span> Cross-module contracts</a>
+    <a href="#s9"><span class="n">9</span> Invariants &amp; gotchas</a>
+    <a href="#s10"><span class="n">10</span> Function index</a>
+  </nav>
+  <a class="backlink" href="index.html">← All workflow docs</a>
+  <button class="themebtn" id="themebtn" type="button">Toggle theme</button>
+</aside>
+
+<main class="main">
+
+<!-- ===== HERO: replace eyebrow / h1 / lede / chips ===== -->
+<header class="hero">
+  <div class="eyebrow">Workflow doc 03</div>
+  <h1>Boat Operations &amp; Pier</h1>
+  <p class="lede">Everything between “the bookings exist” and “the day is closed” — deploying boats to
+  route&nbsp;×&nbsp;date, putting bookings on those boats, the four per-pier back-office pages, day-of
+  check-in at the pier, and the closing documents.</p>
+  <div class="chips">
+    <span class="chip"><b>Code</b> allotment_v2.html</span>
+    <span class="chip"><b>Commit</b> 094dde1</span>
+    <span class="chip"><b>Branch</b> refactor/booking-v2-migration</span>
+    <span class="chip"><b>Source</b> docs/workflows/03-boat-operations-pier.md</span>
+  </div>
+  <div class="note warn" style="margin-top:18px">
+    <span class="lbl">Line numbers drift</span>
+    Every <span class="ln">:12345</span> reference means “roughly here”. Grep the symbol name instead —
+    the <a href="#s10">function index</a> at the bottom is the fastest way to find anything.
+  </div>
+</header>
+
+<!-- ============ 1 ============ -->
+<section id="s1">
+  <h2><span class="num">01</span> What this does &amp; who uses it</h2>
+  <p>Three different teams share this domain, and the code keeps them apart.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:200px">Who</th><th>What they do here</th><th style="width:270px">Views</th></tr></thead>
+    <tbody>
+      <tr><td><b>Ops / dispatch office</b> (Phuket HQ)</td>
+        <td>Decide which boat runs which route on which date; assign each booking to a boat; cancel trips for weather.</td>
+        <td>Boat Operation, Fleet Calendar, Booking▸By-trip “Boat Assign mode”</td></tr>
+      <tr><td><b>Sales-ops / admin</b></td>
+        <td>Verify agent paperwork, re-confirm pickup times with agents, publish the pre-departure report.</td>
+        <td>ตรวจเอกสาร (Doc-Check), Re-confirm, Daily Report</td></tr>
+      <tr><td><b>Pier staff</b> (Visit Panwa / Tub Lamu / Ranong)</td>
+        <td>Crew the boats, issue equipment, keep the duty roster and marine licences, check guests in, take money,
+        print the guide/crew job sheets, close the day.</td>
+        <td>เช็คอินหน้าท่า, the four Pier-Office pages, Travel Summary</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Two of the permission areas in <code>LA_AREAS</code> <span class="ln">:407</span> cover this domain:
+  <span class="b blue">operations</span> (Boat Op, Boat Assign, pier check-in, Travel Summary, Daily Report,
+  Doc-Check, Re-confirm) and <span class="b violet">pier</span> (the four <code>po*</code> pages).
+  <code>poCanEdit()</code> <span class="ln">:79712</span> deliberately falls back to <code>operations</code> for
+  accounts created before <code>pier</code> was split out.</p>
+
+  <div class="note">
+    <span class="lbl">The pivot of the whole domain</span>
+    <code>TRIPS[date][boatId] = {route, type, booked, charterBookingId?}</code> — Boat Operation writes it,
+    everything else reads it.
+  </div>
+</section>
+
+<!-- ============ 2 ============ -->
+<section id="s2">
+  <h2><span class="num">02</span> The operational day</h2>
+  <p>A trip date <code>D</code> moves through these stages. Each row is one screen.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:130px">When</th><th style="width:330px">Step</th><th>View / function</th></tr></thead>
+    <tbody>
+      <tr><td>D−30 … D−1</td>
+        <td><b>Deploy the fleet.</b> For each route × date, pick which boats run it. Only boats whose
+        <code>getCurStatus()</code> is <code>available</code> on that date and whose pier matches the route’s pier are offered.</td>
+        <td>Boat Operation <code>renderOp</code> <span class="ln">:11209</span> → <code>bop2AssignBoat</code> <span class="ln">:10266</span></td></tr>
+      <tr><td>any</td>
+        <td><b>Sanity read</b> of a whole month (which boat is out, which is spare, which is in the shop, which route is
+        weather-closed). Read-only — clicking a day jumps back to Boat Operation.</td>
+        <td>Fleet Calendar <code>renderFleetCal</code> <span class="ln">:10386</span>, <code>fcOpenDay</code> <span class="ln">:10327</span></td></tr>
+      <tr><td>D−n</td>
+        <td><b>Weather cancel</b> a route × date → tags every affected booking <code>weatherResolve</code> for Sales to resolve.</td>
+        <td>popover button → <code>bkV2WeatherMark</code> <span class="ln">:59915</span> → <code>bkV2WeatherMarkConfirm</code> <span class="ln">:59929</span></td></tr>
+      <tr><td>D−3 … D−1</td>
+        <td><b>Check agent documents</b> (voucher / date / name / pax / route / payment) against the attached files,
+        optionally OCR-assisted.</td>
+        <td>ตรวจเอกสาร <code>renderDocCheck</code> <span class="ln">:75902</span>, <code>docCheckRunPre</code> <span class="ln">:75217</span></td></tr>
+      <tr><td>D−2 … D−1</td>
+        <td><b>Assign bookings to boats.</b> Per route, drop each seat booking onto one of that route’s deployed boats.
+        Auto-assign fills first-fit.</td>
+        <td>Booking ▸ By-trip ▸ 🚤 Boat Assign mode (<code>bkV2ToggleBoatMode</code> <span class="ln">:45676</span>) →
+        <code>bkV2AssignBoat</code> <span class="ln">:45500</span>; legacy standalone page <code>renderBoatAssign</code> <span class="ln">:55235</span></td></tr>
+      <tr><td>D−1</td>
+        <td><b>Re-confirm</b> every agent’s pickup list by WhatsApp/phone; print a per-agent sheet.</td>
+        <td>Re-confirm <code>renderReconfirm</code> <span class="ln">:44688</span>, <code>rcSheet</code> <span class="ln">:44618</span></td></tr>
+      <tr><td>D−1</td>
+        <td><b>Crew the boats</b> — captain / assistant / crew / island staff per boat, wristband colour, boat-specific
+        notes; licence check per boat.</td>
+        <td>ใบงานเรือ <code>renderPierJob</code> <span class="ln">:82990</span> → <code>pjPick</code> <span class="ln">:82695</span></td></tr>
+      <tr><td>D−1</td>
+        <td><b>Assign guides</b> and issue the government guide job order (มัคคุเทศก์).</td>
+        <td><code>goSetupOpen</code> <span class="ln">:50714</span> → <code>goSetupSave</code> <span class="ln">:50753</span>,
+        sheet <code>goSheet</code> <span class="ln">:50540</span></td></tr>
+      <tr><td>D−1 evening</td>
+        <td><b>Pre-departure management report</b> (pax, boats, vans, finance) + emailable HTML.</td>
+        <td>Daily Report <code>renderDailyReport</code> <span class="ln">:54603</span>, <code>drData</code> <span class="ln">:52795</span>,
+        <code>drMailShow</code> <span class="ln">:54485</span></td></tr>
+      <tr><td>D morning</td>
+        <td><b>Van check-in</b> at the hotels — actual pax vs booked, no-show reasons.</td>
+        <td>เช็คอินรถ <code>renderVanCheckin</code> <span class="ln">:48205</span> → <code>ckToggle(…,'van')</code> <span class="ln">:47755</span></td></tr>
+      <tr><td>D morning</td>
+        <td><b>Pier check-in</b> — three stages per booking: ถึงท่า → เคลียร์ → ขึ้นเรือ; collect money; sell extras;
+        record meals/allergies.</td>
+        <td>เช็คอินหน้าท่า <code>renderPierCheckin</code> <span class="ln">:51256</span> → <code>pckStageSet</code> <span class="ln">:47392</span></td></tr>
+      <tr><td>D morning</td>
+        <td><b>Kitchen order</b> per boat (heads that will actually travel, not booked heads).</td>
+        <td><code>pckMealSend</code> <span class="ln">:51217</span> → <code>taSet</code> <span class="ln">:57712</span></td></tr>
+      <tr><td>D morning</td>
+        <td><b>Print the guide job sheet</b> (crew-facing manifest, one A4 landscape page per boat).</td>
+        <td><code>pckGuideJobOrder</code> <span class="ln">:50815</span> → <code>pckGuideJobSheet</code> <span class="ln">:49898</span></td></tr>
+      <tr><td>D morning</td>
+        <td><b>Issue equipment</b> to each boat (towels, masks, fins …).</td>
+        <td>เบิก-คืนอุปกรณ์ <code>renderPierOffice</code> <span class="ln">:80026</span> →
+        <code>poIssueOpen</code> <span class="ln">:80237</span> / <code>poIssueSave</code> <span class="ln">:80283</span></td></tr>
+      <tr><td>D — boat leaves</td>
+        <td>(no explicit “departed” flag; <code>pierCheckin.at</code> on every row is the de-facto signal)</td>
+        <td>—</td></tr>
+      <tr><td>D afternoon</td>
+        <td><b>Equipment close-out</b> — what came back, what is dirty / to repair / lost (+ fine).</td>
+        <td><code>poCloseOpen</code> <span class="ln">:80301</span> → <code>poCloseSave</code> <span class="ln">:80349</span></td></tr>
+      <tr><td>D evening</td>
+        <td><b>Travel Summary</b> — the day-close document: who actually travelled, penalty decisions for
+        no-shows/on-site cancels, cash collected by method, Cash-on-Tour settlement, and the full manifest.</td>
+        <td>Travel Summary <code>renderTravelSum</code> <span class="ln">:54632</span>, <code>tsRows</code> <span class="ln">:51587</span>,
+        print <code>tsPrintSheet</code> <span class="ln">:52192</span></td></tr>
+      <tr><td>monthly</td>
+        <td><b>Duty roster</b> — auto-derived from the boat job sheets over a 26→25 cycle, hand-overridable per cell.</td>
+        <td>ตารางการทำงาน <code>renderPierAtt</code> <span class="ln">:81159</span></td></tr>
+      <tr><td>rolling</td>
+        <td><b>Marine licences</b> — captain/engineer certificates, expiry warnings, per-boat coverage check.</td>
+        <td>ใบอนุญาต <code>renderPierLic</code> <span class="ln">:81938</span>, <code>plCheckBoat</code> <span class="ln">:81870</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============ 3 ============ -->
+<section id="s3">
+  <h2><span class="num">03</span> Entry points</h2>
+  <p>Router: <code>nav(el)</code> at <span class="ln">:6027</span>; the four <code>po*</code> prefixes are matched
+  longest-first at <span class="ln">:6080–:6083</span>.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:210px">view id</th><th style="width:150px">sidebar label</th><th style="width:230px">render fn:line</th><th>purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>#view-operation</code></td><td><code>Boat Operation</code> <span class="ln">:4221</span></td>
+        <td><code>renderOp</code> <span class="ln">:11209</span> (shell <code>bop2RenderShell</code> <span class="ln">:11216</span>)</td>
+        <td>Route × date heat-map; assign/unassign boats; weather-cancel. Host <code>#bop2-host</code> <span class="ln">:4700</span>.</td></tr>
+      <tr><td><code>#view-fleetcal</code></td><td><code>Fleet Calendar</code> <span class="ln">:4225</span></td>
+        <td><code>renderFleetCal</code> <span class="ln">:10386</span></td>
+        <td>Read-only month calendar of the whole fleet per day. Host <code>#fc-host</code> <span class="ln">:4705</span>.</td></tr>
+      <tr><td><code>#view-boatassign</code></td><td><i>(none — not in <code>LA_NAV</code> <span class="ln">:411</span>)</i></td>
+        <td><code>renderBoatAssign</code> <span class="ln">:55235</span></td>
+        <td>Legacy standalone booking→boat page. Superseded by By-trip “Boat Assign mode”;
+        <code>bkV2GoBoatAssign</code> <span class="ln">:45683</span> redirects there.</td></tr>
+      <tr><td><code>#view-doccheck</code></td><td><code>ตรวจเอกสาร</code> <span class="ln">:4217</span></td>
+        <td><code>renderDocCheck</code> <span class="ln">:75902</span></td>
+        <td>Verify B2B booking data against attached documents, with Tesseract OCR pre-check.</td></tr>
+      <tr><td><code>#view-reconfirm</code></td><td><code>Re-confirm</code> <span class="ln">:4209</span></td>
+        <td><code>renderReconfirm</code> <span class="ln">:44688</span></td>
+        <td>Per-agent / per-trip re-confirmation of the day’s bookings + printable sheet.</td></tr>
+      <tr><td><code>#view-vancheckin</code></td><td><code>เช็คอินรถ</code> <span class="ln">:4241</span></td>
+        <td><code>renderVanCheckin</code> <span class="ln">:48205</span></td>
+        <td>Van-side check-in (adjacent domain; feeds <code>pckExpected</code>).</td></tr>
+      <tr><td><code>#view-piercheckin</code></td><td><code>เช็คอินหน้าท่า</code> <span class="ln">:4245</span></td>
+        <td><code>renderPierCheckin</code> <span class="ln">:51256</span></td>
+        <td>The pier operations console: boat → trip → zone → van-group → booking.</td></tr>
+      <tr><td><code>#view-travelsum</code></td><td><code>Travel Summary</code> <span class="ln">:4249</span></td>
+        <td><code>renderTravelSum</code> <span class="ln">:54632</span></td>
+        <td>Day-close document: real pax, penalty decisions, cash, COT settlement, manifest.</td></tr>
+      <tr><td><code>#view-dailyreport</code></td><td><code>Daily Report</code> <span class="ln">:4253</span></td>
+        <td><code>renderDailyReport</code> <span class="ln">:54603</span></td>
+        <td>5-tab management summary for a date + emailable HTML.</td></tr>
+      <tr><td><code>#view-poj-{panwa,tublamu,ranong}</code></td>
+        <td><code>ใบงานเรือ</code> <span class="ln">:4270</span>, <span class="ln">:4291</span>, <span class="ln">:4312</span></td>
+        <td><code>renderPierJob(pier)</code> <span class="ln">:82990</span></td>
+        <td><b>Boat job sheet</b> — crew each boat for the day, wristband, notes, licence check. Host <code>#pj-host-&lt;pier&gt;</code>.</td></tr>
+      <tr><td><code>#view-po-{…}</code></td>
+        <td><code>เบิก-คืนอุปกรณ์</code> <span class="ln">:4274</span>, <span class="ln">:4295</span>, <span class="ln">:4316</span></td>
+        <td><code>renderPierOffice(pier)</code> <span class="ln">:80026</span></td>
+        <td><b>Equipment issue/return</b> ledger + stock + laundry cycle. Host <code>#po-host-&lt;pier&gt;</code>.</td></tr>
+      <tr><td><code>#view-poa-{…}</code></td>
+        <td><code>ตารางการทำงาน</code> <span class="ln">:4278</span>, <span class="ln">:4299</span>, <span class="ln">:4320</span></td>
+        <td><code>renderPierAtt(pier)</code> <span class="ln">:81159</span></td>
+        <td><b>Work schedule / duty roster</b>, 26→25 cycle, derived from the job sheets. Also the registry hub
+        (see <a href="#w-poa">4.10</a>).</td></tr>
+      <tr><td><code>#view-pol-{…}</code></td>
+        <td><code>ใบอนุญาต</code> <span class="ln">:4282</span>, <span class="ln">:4303</span>, <span class="ln">:4324</span></td>
+        <td><code>renderPierLic(pier)</code> <span class="ln">:81938</span></td>
+        <td><b>Marine licences</b> of pier staff (captain / engineer), expiry + coverage. Host <code>#pl-host-&lt;pier&gt;</code>.</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Pier group headers (<code>Phuket</code> / <code>Tub Lamu</code> / <code>Ranong</code>) collapse via
+  <code>poNavGroup</code> <span class="ln">:5990</span>; state in <code>localStorage.la_pogrp</code>.</p>
+
+  <div class="note warn">
+    <span class="lbl">Pier enum vs label</span>
+    <code>panwa</code> is labelled <b>Phuket</b> in the sidebar <span class="ln">:4265</span> but the enum value is
+    <code>panwa</code> and the long name is <b>ท่าวิสิษฐ์พันวา</b> (<code>bop2PierName</code> <span class="ln">:10716</span>).
+    Never write <code>visitpanwa</code>.
+  </div>
+</section>
+
+<!-- ============ 4 ============ -->
+<section id="s4">
+  <h2><span class="num">04</span> Workflows</h2>
+
+  <!-- 4.1 -->
+  <h3 id="w-deploy">4.1 Deploy a boat to a route × date (Boat Operation)</h3>
+  <p><b>Trigger</b> — ops opens Boat Operation and clicks a cell in the route × day matrix.</p>
+
+  <h4>Steps</h4>
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>bop2SelectCell(routeId, date)</code> <span class="ln">:10079</span></div>
+      <div class="d">Click a heat-map cell → sets <code>_bop2.selRoute</code>/<code>selDate</code>, re-renders, then opens the popover.</div></div>
+    <div class="step"><div class="t">2 · <code>bop2OpenCellPopover(routeId, dateStr, anchorEl)</code> <span class="ln">:10086</span></div>
+      <div class="d">Builds three lists from <code>bop2FleetStatus(dateStr)</code> <span class="ln">:10552</span>:
+      <b>assigned</b> — boats already in <code>TRIPS[date]</code> with a route; <b>available</b> — status
+      <code>available</code> that day and <b>not</b> in <code>TRIPS[date]</code>; <b>unavailable</b> — status ≠
+      <code>available</code>, reason enriched with the open <code>FL_PROJECTS</code> entry <span class="ln">:10562–:10567</span>.</div></div>
+    <div class="step"><div class="t">3 · Pier re-filter</div>
+      <div class="d">The available list is re-filtered by the <b>route’s pier</b>: a boat whose
+      <code>getBoatCurrentPier(boat, dateStr)</code> <span class="ln">:9920</span> ≠ <code>route.pier</code> is moved into
+      the unavailable group with a reason such as <code>ท่าทับละมุ</code> or <code>อยู่ที่อู่ · &lt;shop&gt;</code>
+      <span class="ln">:10104–:10114</span>. It is never silently dropped.</div></div>
+    <div class="step"><div class="t">4 · <code>bop2AssignBoat(routeId, date, boatId)</code> <span class="ln">:10266</span></div>
+      <div class="d">Click a boat under <code>+ ADD AVAILABLE</code>.</div></div>
+    <div class="step"><div class="t">5 · <code>bop2UnassignBoat(date, boatId)</code> <span class="ln">:10287</span></div>
+      <div class="d">Click ✕ on an assigned boat.</div></div>
+  </div>
+
+  <h4>Data written</h4>
+  <p><code>TRIPS[date][boatId] = {route: routeId, type:'normal', booked:0}</code> <span class="ln">:10282</span>, or
+  <code>TRIPS[date][boatId].route = routeId</code> when the boat is re-pointed <span class="ln">:10280</span>.
+  Persisted by <code>save('operations')</code> <span class="ln">:5805</span> → blob key <code>trips</code>.</p>
+
+  <h4>Validation / guards</h4>
+  <ul>
+    <li><code>bop2GuardPast(ds)</code> <span class="ln">:10261</span> — any date <code>&lt; TODAY_STR</code> is
+      <span class="b red">hard-blocked</span> with <code>'วันที่ … ผ่านมาแล้ว · แก้เรือที่ deploy ไม่ได้'</code>, because
+      closed days already fed Daily Report / Travel Summary / trip P&amp;L.</li>
+    <li>A boat carrying <code>charterBookingId</code> cannot be re-routed
+      (<code>'Boat is chartered · cannot reassign'</code>, <span class="ln">:10270</span>) nor unassigned <span class="ln">:10291</span>.</li>
+    <li>Re-routing or unassigning a boat that already has seat bookings on it prompts a confirm listing
+      <code>baAssignedBookings(date, boatId)</code> count/pax <span class="ln">:10274–:10278</span>,
+      <span class="ln">:10295–:10299</span>; the bookings are <b>not</b> moved, they get flagged ⚠ “จัดเรือใหม่” on the
+      assign screens via <code>bkV2BoatPulled</code> <span class="ln">:45465</span>.</li>
+  </ul>
+
+  <h4>Failure modes</h4>
+  <ul>
+    <li>Assign a boat, then mark it <code>fixing</code> in Boat Status → <code>bop2RouteDaysNeedingBoats</code>
+      <span class="ln">:10599</span> raises <code>reason:'boat_broken'</code> and the day is flagged even with 0 pax,
+      because the schedule is now invalid.</li>
+    <li>Pax exist with no boat at all → <code>reason:'no_boat'</code> <span class="ln">:10616</span>.</li>
+    <li>A charter booking split over 2+ boats: only the first boat is flagged in <code>TRIPS</code>;
+      <code>getAssignedBoatsForRouteDate</code> <span class="ln">:12096</span> therefore consults
+      <code>baCharterBoatMapMemo(dateStr)</code> and forces <code>type:'charter'</code> for the extra hulls
+      <span class="ln">:12108–:12115</span>, otherwise those hulls would be resold as seats.</li>
+  </ul>
+
+  <h4>The assign decision path</h4>
+  <div class="rail">
+    <div class="step"><div class="t">Click cell route × date</div><div class="d"></div></div>
+    <div class="step block"><div class="t">date &lt; today? → alert: past day locked</div>
+      <div class="d"><code>bop2GuardPast</code> — no override.</div></div>
+    <div class="step"><div class="t">otherwise: <code>bop2OpenCellPopover</code> · <code>bop2FleetStatus</code></div><div class="d"></div></div>
+    <div class="step block"><div class="t">boat status not <code>available</code> that date → UNAVAILABLE</div>
+      <div class="d">Reason taken from <code>FL_PROJECTS</code>.</div></div>
+    <div class="step block"><div class="t"><code>getBoatCurrentPier</code> ≠ <code>route.pier</code> → UNAVAILABLE</div>
+      <div class="d">Shows which pier it sits at instead of hiding the boat.</div></div>
+    <div class="step"><div class="t">available &amp; right pier → <code>+ ADD AVAILABLE</code> → <code>bop2AssignBoat</code></div><div class="d"></div></div>
+    <div class="step block"><div class="t">existing <code>TRIPS</code> entry is a charter → block “chartered”</div><div class="d"></div></div>
+    <div class="step ask"><div class="t">existing entry is another route <b>and</b> has bookings → confirm</div>
+      <div class="d">Bookings stay put and get flagged ⚠.</div></div>
+    <div class="step done"><div class="t"><code>TRIPS[date][boatId] = {route, 'normal', 0}</code> → <code>save('operations')</code> → blob <code>trips</code></div><div class="d"></div></div>
+  </div>
+
+  <!-- 4.2 -->
+  <h3 id="w-weather">4.2 Weather-cancel a route × date</h3>
+  <p><b>Trigger</b> — ⛈ button at the bottom of the Boat-Operation cell popover <span class="ln">:10218–:10220</span>;
+  hidden on past dates.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>bkV2WeatherMark(routeId, date)</code> <span class="ln">:59915</span></div>
+      <div class="d">Opens a modal asking for a note (<code>'high waves 3m · port closed …'</code>).</div></div>
+    <div class="step done"><div class="t">2 · <code>bkV2WeatherMarkConfirm</code> <span class="ln">:59929</span></div>
+      <div class="d">Pushes <code>{routeId, date, reason:'weather', note, at}</code> into <code>SB_WEATHER_CLOSURES</code>,
+      calls <code>bkV2WeatherTagBookings</code> <span class="ln">:59963</span>, persists with
+      <code>sbWeatherPersist()</code> <span class="ln">:59906</span>, and re-renders Boat Operation + By-trip.</div></div>
+  </div>
+
+  <p><b>Data written</b> — <code>SB_WEATHER_CLOSURES[]</code> (blob key <code>sb_weather</code>) and, per affected
+  booking, <code>bk.weatherResolve</code> + a <code>Weather</code> history entry.</p>
+  <p><b>Guards</b> — <code>sbWeatherPersist</code> is a no-op for view-only <code>operations</code> users.</p>
+
+  <div class="note warn">
+    <span class="lbl">Failure mode</span>
+    The boats stay in <code>TRIPS</code>. Fleet Calendar compensates by listing the route under <code>out.wx</code> and
+    treating its boats as spare (<code>fcDay</code> <span class="ln">:10370–:10376</span>). Boat Operation does not.
+  </div>
+
+  <!-- 4.3 -->
+  <h3 id="w-assign">4.3 Assign bookings to boats</h3>
+  <p><b>Trigger</b> — Booking ▸ By-trip-date, header toggle 🚤 (<code>bkV2ToggleBoatMode</code> <span class="ln">:45676</span>),
+  or the ⚠ chip “Boat · N” at <span class="ln">:72087</span>. The standalone <code>#view-boatassign</code> page still works
+  but has no menu entry.</p>
+
+  <h4>Steps</h4>
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>baBoatCellHTML(bk, routeId, date, alloc)</code> <span class="ln">:45567</span></div>
+      <div class="d">Renders the per-row Boat cell. A charter booking’s cell is locked
+      (<code>baBoatSplitCellHTML</code> <span class="ln">:45607</span>) — its boat is <code>trip.charterBoatId</code> and
+      changing it means editing the booking.</div></div>
+    <div class="step"><div class="t">2 · <code>bkV2AssignBoat(bkId, boatId, date)</code> <span class="ln">:45500</span></div>
+      <div class="d">Pick a boat.</div></div>
+    <div class="step"><div class="t">3 · Bulk</div>
+      <div class="d">Tick rows (<code>bkV2BoatSelToggle</code> <span class="ln">:45534</span>) →
+      <code>bkV2BoatAssignSelected(date, routeId, boatId)</code> <span class="ln">:45537</span>.</div></div>
+    <div class="step"><div class="t">4 · Auto — <code>baAutoAssign(date, routeId)</code> <span class="ln">:55208</span></div>
+      <div class="d">Keeps existing assignments, then first-fit into a boat with room ≤ <code>cap</code>, else the
+      least-loaded boat that still fits within <code>cap + BA_CAP_TOL</code>, else leaves the booking unassigned.</div></div>
+    <div class="step"><div class="t">5 · Emergency move — <code>bkV2BoatUpgrade(bkId)</code> <span class="ln">:55223</span></div>
+      <div class="d">Prompts reason + charge, writes <code>b.ops.upgrade</code>, and from then on the picker offers
+      <b>every</b> boat running that day (<code>renderBoatAssign</code> pool switch at <span class="ln">:55247</span>).</div></div>
+  </div>
+
+  <h4>Data written</h4>
+  <p><code>bkOpsFor(b, date).boatId</code> <span class="ln">:45527</span> — i.e. <code>b.ops.boatId</code> on the
+  <b>first</b> travel day and <code>trip.ops.boatId</code> on any later day (see <a href="#s8">§8.1</a>).
+  <code>b.ops.upgrade = {reason, charge, by, at}</code> <span class="ln">:55231</span> +
+  <code>bkV2AddHistory(…,'Edit')</code>. Persisted with <code>acctPersistBookings()</code> <span class="ln">:42877</span>.</p>
+
+  <h4>Validation / guards</h4>
+  <ul>
+    <li>Boat used as a charter on any of the booking’s dates → <span class="b red">hard alert</span>, assignment refused
+      <span class="ln">:45508</span>.</li>
+    <li>Cap: <code>next = baAssignedPax(date, boatId) − self + myPax</code>; if <code>next &gt; cap + BA_CAP_TOL</code> the
+      assignment is refused with an explicit message <span class="ln">:45520–:45522</span>. <code>cap</code> comes from
+      <code>boatCapFor(boatId, date)</code> <span class="ln">:47018</span>, which honours the per-day cap override
+      <code>BOAT_CAP_OVR</code>.</li>
+    <li>Bulk assign <b>skips</b> (does not block) the rows that would overflow and reports them <span class="ln">:45560</span>.</li>
+    <li>Picking one boat for a booking that is currently split across hulls asks for confirmation and deletes
+      <code>ops.boatSplits</code> <span class="ln">:45505</span>.</li>
+  </ul>
+
+  <h4>Failure modes</h4>
+  <ul>
+    <li>Boat pulled out of <code>TRIPS</code> after assignment, or now serving another route, or chartered by someone
+      else → <code>bkV2BoatPulled</code> <span class="ln">:45465</span> paints the cell red with ⚠
+      <code>เรือถูกถอดจาก Boat Operation · จัดเรือใหม่</code>. A charter’s own boat and an OVN return leg are explicitly
+      exempt <span class="ln">:45476</span>, <span class="ln">:45483</span>.</li>
+    <li>Nothing deployed on the route yet → auto-assign alerts
+      <code>'No boat assigned to this route yet · assign boats in Boat Operation first'</code> <span class="ln">:55209</span>.</li>
+  </ul>
+
+  <!-- 4.4 -->
+  <h3 id="w-split">4.4 Split one booking across several boats</h3>
+  <p><b>Trigger</b> — ⇄ button on the boat cell, shown when the booking has ≥2 heads on that date or is already split
+  <span class="ln">:45581</span>.</p>
+  <p><b>Steps</b> — <code>bkV2BoatSplit(bkId, date)</code> <span class="ln">:46076</span> seeds a modal with the day’s pax
+  pool (<code>bkBoatPoolOn</code> <span class="ln">:46022</span>) split into parts; edit parts; save writes
+  <code>ops.boatSplits</code>.</p>
+  <p><b>Data written</b> — <code>bkOpsFor(b,date).boatSplits = [{boatId, ad, chd, inf, foc}]</code>.</p>
+  <p><b>Downstream</b> — every load calculation is split-aware: <code>bkBoatIdsOn</code> <span class="ln">:46036</span>,
+  <code>bkBoatPaxOnBoat</code> <span class="ln">:46042</span>, <code>baAssignedPax</code> <span class="ln">:45457</span>,
+  <code>baAssignedBookings</code> <span class="ln">:45489</span>, and the pier check-in row expander
+  <code>pckExpandBoatSplits</code> <span class="ln">:49181</span> (1 row per hull).</p>
+
+  <div class="note warn">
+    <span class="lbl">Failure mode</span>
+    A split whose parts do not add up to the day pool silently leaves people unassigned; the split row cell shows
+    <code>⚠ ยังไม่เลือกลำ</code> when a part has no boat <span class="ln">:45598</span>.
+  </div>
+
+  <!-- 4.5 -->
+  <h3 id="w-checkin">4.5 Pier check-in — the three-stage machine</h3>
+  <p><b>Trigger</b> — pier staff open เช็คอินหน้าท่า for today.</p>
+
+  <h4>Page build — <code>renderPierCheckin</code> <span class="ln">:51256</span></h4>
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>bkV2CharterBoatHeal(date)</code> <span class="ln">:45435</span></div>
+      <div class="d">Mirrors <code>trip.charterBoatId</code> → <code>ops.boatId</code> for charters that were never
+      assigned manually.</div></div>
+    <div class="step"><div class="t">2 · Row build</div>
+      <div class="d">Every non-cancelled booking with a trip on that date becomes a row
+      <code>{b,t,O,booked,expect,ck,van,vanId,bid,arr,money,_vd}</code> <span class="ln">:51271–:51276</span>; OVN return
+      legs go to a separate <code>ovnAll</code> bucket so their money is not counted twice <span class="ln">:51280–:51285</span>.</div></div>
+    <div class="step"><div class="t">3 · Nesting</div>
+      <div class="d">Rows are expanded per hull (<code>pckExpandBoatSplits</code>) and nested
+      <b>boat → trip(route) → arrival zone → van group → row</b> <span class="ln">:51326–:51344</span>, zone loop
+      <span class="ln">:51413</span>. Zones: <code>PK</code> / <code>KL</code> / <code>OWN</code> (self-arrive or agent car) /
+      <code>NOVAN</code> (<code>pckArrivalOf</code> <span class="ln">:48337</span>, labels <code>PCK_ARR_LBL</code>
+      <span class="ln">:48343</span>).</div></div>
+  </div>
+
+  <h4>Stages — <code>PCK_STAGES</code> <span class="ln">:47250</span></h4>
+  <div class="flow">
+    <div class="stage"><div class="k">stage 1</div><div class="v"><code>arr</code> · ถึงท่า</div><div class="s">Guest reached the pier</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">stage 2</div><div class="v"><code>clr</code> · เคลียร์</div><div class="s">Paperwork / money cleared</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">stage 3</div><div class="v"><code>on</code> · ขึ้นเรือ</div>
+      <div class="s"><code>'on'</code> is the pre-existing <code>ck.at</code>, so old data needs no migration <span class="ln">:47249</span></div></div>
+  </div>
+
+  <h4>Steps</h4>
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>pckStageSet(bkId, date, stage)</code> <span class="ln">:47392</span></div>
+      <div class="d">Click a stage chip. Clicking a stage you already passed steps <b>back</b> one
+      (<code>to = (at===want) ? want-1 : want</code>, <span class="ln">:47398</span>). Reaching <code>on</code> delegates
+      to <code>ckToggle(bkId,date,'pier')</code> <span class="ln">:47755</span> because that path counts pax and asks for a reason.</div></div>
+    <div class="step"><div class="t">2 · <code>ckStep(bkId,date,'pier',delta)</code> <span class="ln">:47741</span></div>
+      <div class="d">± buttons adjust the travelling count, clamped to <code>[0, cap]</code> where
+      <code>cap = pckExpected(…)</code>.</div></div>
+    <div class="step ask"><div class="t">3 · Reductions need a reason</div>
+      <div class="d">Any reduction with no reason opens <code>ckReasonOpen</code> <span class="ln">:47452</span>; on-site
+      cancels / no-shows are recorded as <b>events</b> via <code>ckEventOpen</code> <span class="ln">:47526</span> /
+      <code>ckEvSave</code> <span class="ln">:47606</span>, and can be undone with <code>ckEventUndo</code> <span class="ln">:47373</span>.</div></div>
+  </div>
+
+  <h4>Data written</h4>
+  <p>All under <code>bkOpsFor(b,date).pierCheckin</code> (and <code>.vanCheckin</code> for the van stage) through
+  <code>ckWrite</code> <span class="ln">:47239</span>:</p>
+<pre><code>{ actualPax, noShow, expected, at, by,
+  events:[{type:'ns'|'cxl', pax, reasonCode, note, at, by, ts}],
+  reasonCode, reasonNote, reasonAt,
+  arrivedAt, arrivedBy, clearedAt, clearedBy, reinstate }</code></pre>
+  <p><code>CK_STAGE_KEYS</code> <span class="ln">:47238</span> is merged forward on every write so
+  <code>arrivedAt</code>/<code>clearedAt</code>/<code>reinstate</code> survive a ± press.</p>
+
+  <h4>Validation / guards</h4>
+  <ul>
+    <li><code>ckGuard()</code> <span class="ln">:47208</span> — needs
+      <code>laCanEditArea('operations') || laCanEditArea('pier')</code>. Before this existed, pier-only accounts could
+      click check-in and have it silently discarded (comment <span class="ln">:47197–:47202</span>).</li>
+    <li><code>ckPersist()</code> <span class="ln">:47213</span> writes <code>laBlob().sb_bookings</code> directly
+      (<b>not</b> <code>acctPersistBookings</code>, which requires <code>operations</code>).</li>
+    <li>Boarding a booking that still owes money pops <code>pckPayWarn</code> (see <a href="#w-money">4.6</a>) — a
+      <span class="b amber">warn</span>, not a block: “เรือรอไม่ได้” <span class="ln">:47760</span>.</li>
+  </ul>
+
+  <h4>Failure modes</h4>
+  <ul>
+    <li>A booking with no boat lands in the <code>noBoat</code> bucket and never appears on any job sheet
+      (<code>pckGuideJobOrder</code> skips <code>!row.bid</code>, <span class="ln">:50832</span>).</li>
+    <li><code>pckExpected</code> <span class="ln">:48896</span> subtracts van no-shows — unless the reason is one of the
+      “will come to the pier themselves” codes (<code>ckExpectAtPier</code> <span class="ln">:47161</span>), in which case
+      the pier still expects them.</li>
+    <li><code>ckPierReinstate</code> <span class="ln">:47169</span> lets the pier overrule a van no-show;
+      <code>ckLostByType</code> <span class="ln">:47123</span> then stops counting those heads as lost.</li>
+  </ul>
+
+  <h4>The full stage machine, van → pier → day close</h4>
+  <div class="rail">
+    <div class="step"><div class="t">Van check-in · <code>ckToggle</code> kind=<code>van</code></div>
+      <div class="d"><code>noShow</code> + <code>reasonCode</code> feed <code>pckExpected</code>.</div></div>
+    <div class="step"><div class="t">wait · ยังไม่มา</div><div class="d">Pier is expecting the heads <code>pckExpected</code> computed.</div></div>
+    <div class="step"><div class="t"><code>pckStageSet arr</code> → <code>arr</code> · ถึงท่า</div><div class="d"></div></div>
+    <div class="step"><div class="t"><code>pckStageSet clr</code> → <code>clr</code> · เคลียร์</div><div class="d"></div></div>
+    <div class="step ask"><div class="t"><code>pckStageSet on</code> → <code>money.due &gt; 0</code>?</div>
+      <div class="d">Yes → <code>pckPayWarn</code> with two exits: <b>เก็บเงินเลย</b> → <code>pckPaySave</code> →
+      <code>bk.pierPayments</code>, or <b>ขึ้นเรือก่อน</b> → <code>_pckPaySkip</code> flag. Either way it continues to boarding.</div></div>
+    <div class="step done"><div class="t"><code>on</code> · ขึ้นเรือ · <code>ck.at</code> set</div>
+      <div class="d">No money due → straight here.</div></div>
+    <div class="step"><div class="t">branch from <code>arr</code>: <code>ckStep -N</code> / <code>ckEventOpen</code></div>
+      <div class="d">Writes events <code>ns</code> / <code>cxl</code> + reason.</div></div>
+    <div class="step block"><div class="t">all heads gone → stage <code>'vd'</code></div>
+      <div class="d">ยกเลิกหน้างาน / ไม่มาทั้งใบ.</div></div>
+    <div class="step done"><div class="t">→ Travel Summary · penalty decision</div><div class="d">See <a href="#w-ts">4.14</a>.</div></div>
+  </div>
+
+  <!-- 4.6 -->
+  <h3 id="w-money">4.6 Collect money at the pier</h3>
+  <p><b>Trigger</b> — the money column button <code>เก็บเงิน</code> / <code>แนบสลิป</code> / <code>ดูรายการ</code>
+  <span class="ln">:48429</span>, or automatically when boarding an unpaid booking.</p>
+
+  <div class="rail">
+    <div class="step ask"><div class="t">1 · <code>pckPayGuard(bkId, date)</code> <span class="ln">:48496</span> → <code>pckPayWarn</code> <span class="ln">:48504</span></div>
+      <div class="d">Shows the breakdown (COT / B2C balance / uncollected upgrade / already collected) with two exits:
+      <code>ขึ้นเรือก่อน · ยังไม่เก็บ</code> (<code>pckPaySkipOn</code> <span class="ln">:48503</span>, sets a one-shot skip
+      flag) or <code>เก็บเงินเลย</code>.</div></div>
+    <div class="step"><div class="t">2 · <code>pckPayOpen(bkId, thenCk)</code> <span class="ln">:48538</span></div>
+      <div class="d">Opens the split-payment form; each line is
+      <code>{m:'cash'|'transfer'|'card', amt, feeMode, feePct, fee, note, slips[]}</code>
+      (<code>pckLineNew</code> <span class="ln">:48534</span>).</div></div>
+    <div class="step done"><div class="t">3 · <code>pckPaySave()</code> <span class="ln">:48596</span></div>
+      <div class="d">Drops zero lines, confirms over-payment, appends one <code>pierPayments</code> entry per line, then if
+      the balance is now zero and the form was opened from a check-in click, boards the guest automatically
+      <span class="ln">:48634–:48637</span>.</div></div>
+  </div>
+
+  <p><b>Data written</b> — <code>bk.pierPayments[] = {id, date, amount, method, fee, feePct, note, slips[], by, at}</code>
+  <span class="ln">:48610–:48616</span> + a <code>Pier</code>-tagged history entry <span class="ln">:48620</span>.
+  Persisted via <code>acctPersistBookings()</code>.</p>
+
+  <h4>Validation / guards</h4>
+  <ul>
+    <li>Card fee is stored <b>separately</b> from <code>amount</code>: <code>amount</code> reduces the booking debt,
+      <code>fee</code> is pass-through to the bank; <code>amount+fee</code> is what the EDC slip shows
+      <span class="ln">:48438–:48440</span>. Merging them would inflate revenue.</li>
+    <li>Non-cash lines without a slip are counted by <code>pckNoSlip</code> <span class="ln">:48449</span> and shown as
+      <code>⚠ รอสลิป n</code> — the day cannot be reconciled without them.</li>
+  </ul>
+
+  <div class="note danger">
+    <span class="lbl">Failure mode — separate pot</span>
+    Pier money is intentionally <b>not</b> written to <code>SB_PAYMENTS</code>; it is a separate pot that must be
+    reconciled at day close (comment <span class="ln">:48435–:48436</span>). Anything that reads only
+    <code>SB_PAYMENTS</code> will not see it.
+  </div>
+
+  <h4>Money model — <code>pckMoney(b,date)</code> <span class="ln">:48350</span></h4>
+<pre><code>due = max(0, (cashOnTour + uncollected upgrades + paymentSnapshot.balance) − pierPaid)</code></pre>
+  <p>OVN return legs return <code>ovnSettled</code> and zero out COT/balance/upgrades so the pier does not charge twice
+  <span class="ln">:48351–:48356</span>.</p>
+
+  <!-- 4.7 -->
+  <h3 id="w-guides">4.7 Guides — assignment, government order, job sheet</h3>
+  <p>Three different documents; do not confuse them.</p>
+
+  <div class="card">
+    <h4 style="margin-top:0">a) ใบสั่งงานมัคคุเทศก์ — <code>goSheet</code> <span class="ln">:50540</span></h4>
+    <p>The Tourism-Department form declaring who guided which boat. Assign guides with
+    <code>goSetupOpen(bid)</code> <span class="ln">:50714</span> → <code>goSetupSave(bid, doPrint)</code>
+    <span class="ln">:50753</span>; print via <code>goPrint</code> <span class="ln">:50642</span>.</p>
+    <ul>
+      <li><b>Registry</b>: <code>goGuides()</code> / <code>goGuidesSet()</code> <span class="ln">:50457–:50458</span> →
+        blob key <code>guides</code> via <code>ctRead</code>/<code>ctWrite</code> <span class="ln">:55967</span>,
+        <span class="ln">:55972</span>.</li>
+      <li><b>Record shape</b> (<code>goRegAdd</code> <span class="ln">:50806</span>):
+        <code>{id, name, nick, license, lang:[], role:'guide'|'trainee'|'intern'|'staff', active}</code>.
+        Roles <code>GO_ROLES</code> <span class="ln">:50445</span> = ไกด์ / ไกด์ฝึกหัด / นักศึกษาฝึกงาน / สตาฟ.</li>
+      <li><b>Assignment</b>: <code>goAsn(date,bid)</code> <span class="ln">:50468</span> / <code>goAsnSet</code>
+        <span class="ln">:50473</span> → blob key <code>go_asn</code>, key <code>date|boatId</code>, value
+        <code>{g:[guideId], other:Number, sign:Number}</code>.</li>
+      <li><b>Document number</b>: <code>goNoFor(date,bid,issue)</code> <span class="ln">:50478</span> → blob key
+        <code>go_no</code>; issued <b>once</b> per (date, boat), so reprinting does not burn a number.</li>
+      <li><b>Counting rule</b> <span class="ln">:50544–:50549</span>: only <code>guide</code>/<code>trainee</code> count as
+        มัคคุเทศก์ (ผู้ติดตาม); <code>intern</code>/<code>staff</code> roll into อื่นๆ together with the manual
+        <code>A.other</code> count.</li>
+      <li><b>Pax</b> on the form come from <code>goCounts(date,bid)</code> <span class="ln">:50519</span> — heads that
+        actually travelled (<code>ckPaxLeft</code>), FOC folded into adults.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4 style="margin-top:0">b) ใบงานไกด์ — <code>pckGuideJobOrder</code> <span class="ln">:50815</span> → <code>pckGuideJobSheet</code> <span class="ln">:49898</span></h4>
+    <p>The crew-facing manifest, A4 landscape, one page per boat, printed from the pier check-in boat card
+    <span class="ln">:51393</span>.</p>
+    <ul>
+      <li>Excludes bookings with no boat <span class="ln">:50832</span> and bookings voided on site
+        (<code>pckVoidInfo</code>, kept only as a header tally <span class="ln">:50838</span>).</li>
+      <li>Header stats from <code>pckTripStats(rows, date)</code> <span class="ln">:49746</span> — real pax by type,
+        guide-language counts, special meals, longtail join/charter counts. Every per-head figure uses <b>travelled</b>
+        heads, not booked <span class="ln">:49749–:49752</span>.</li>
+      <li>Layout auto-fits to one page by measuring a 210 mm probe and stepping density <code>d1 → d2</code>, then
+        padding rows to fill the page <span class="ln">:50865–:50891</span>.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4 style="margin-top:0">c) Guide <i>languages</i> requested by the customer</h4>
+    <p style="margin:0">These live on the booking: <code>b.guides = {english, russian, chinese, otherLang}</code> →
+    normalised by <code>pckGuideLangs(b)</code> <span class="ln">:50211</span> / <code>pckLangNorm</code>
+    <span class="ln">:50196</span> (strips “Guide”/“speaking”, maps to 2-letter codes via <code>PCK_LANG_MAP</code>
+    <span class="ln">:50181</span>). This is a <b>request</b>, not an assignment.</p>
+  </div>
+
+  <p><b>Guards</b> — <code>goSetupSave</code> and the registry go through <code>ctWrite</code>, i.e. the ordinary blob
+  path; <code>pjGuideOpen(bid)</code> <span class="ln">:82776</span> reuses the same modal from the boat job-sheet page
+  after syncing <code>_pckDate = _poDate</code>.</p>
+
+  <div class="note warn">
+    <span class="lbl">Failure mode — fixed</span>
+    Before commit <code>9500688</code> the sheet read only <code>G[0..2]</code>, so guides 4-5 vanished silently, and
+    interns/staff never reached the job sheet at all. <code>pjGuidesFull(date, boatId)</code> <span class="ln">:82142</span>
+    now returns every assigned person with <code>{id,name,langs,role,guide}</code>; <code>pjGuides</code>
+    <span class="ln">:82155</span> keeps the old string-array shape for the kitchen sheet.
+  </div>
+
+  <!-- 4.8 -->
+  <h3 id="w-poj">4.8 ใบงานเรือ — the pier boat job sheet (<code>poj</code>)</h3>
+  <p><b>Trigger</b> — pier supervisor opens <code>Pier Office ▸ &lt;pier&gt; ▸ ใบงานเรือ</code> the day before.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>renderPierJob(pier)</code> <span class="ln">:82990</span></div>
+      <div class="d">Lists every boat that belongs to that pier that day via <code>pjAllBoats(date, pier)</code>
+      <span class="ln">:82281</span> — boats running from the pier (<code>poBoats</code> <span class="ln">:79771</span>)
+      plus every other boat whose <code>pjPierOf(boat,date)</code> <span class="ln">:82273</span> is this pier.</div></div>
+    <div class="step"><div class="t">2 · Status per boat — <code>pjBoatSt</code> <span class="ln">:82228</span></div>
+      <div class="d">One of <code>PJ_ST</code> <span class="ln">:82194</span>: <code>clash</code> (deployed but the shop
+      says it is not available), <code>run</code>, <code>away</code> (running from another pier today), <code>idle</code>,
+      <code>broke</code>, <code>maint</code>, <code>dd</code> (ขึ้นคาน), <code>donor</code>, <code>off</code>.
+      Grouped <code>go | ready | work | down</code> (<code>pjGrp</code> <span class="ln">:82206</span>) and used as the
+      filter chips.</div></div>
+    <div class="step"><div class="t">3 · <code>pjPick(bid, slot, val)</code> <span class="ln">:82695</span></div>
+      <div class="d">Fill the crew selects, where <code>slot</code> is <code>cap</code>, <code>asst</code>,
+      <code>crew&lt;i&gt;</code> or <code>island&lt;j&gt;</code>. Options come from <code>pjOpts(pier, sel, roles)</code>
+      <span class="ln">:82640</span> — staff from all three piers, other piers grouped as “มาช่วย”.</div></div>
+    <div class="step"><div class="t">4 · Other per-day fields</div>
+      <div class="d">Wristband <code>pjWbSet(bid,t,c)</code> <span class="ln">:82722</span> (palette <code>PJ_WB</code>
+      <span class="ln">:82159</span>), note <code>pjNote</code> <span class="ln">:82706</span> (400 chars), meal venue
+      <code>pjMvSet</code> <span class="ln">:82705</span>, maintenance job <code>pjMjPick</code> <span class="ln">:82254</span>,
+      lock <code>pjLockSet</code> <span class="ln">:82717</span>.</div></div>
+    <div class="step"><div class="t">5 · <code>pjCopyYday(pier)</code> <span class="ln">:82758</span></div>
+      <div class="d">Copies yesterday’s sheets, <b>skipping locked ones</b>, and reports
+      <code>คัดลอกมา N ลำ · ข้าม M ลำที่กดจัดเสร็จแล้วไว้</code>.</div></div>
+    <div class="step done"><div class="t">6 · <code>pjTeamSave(bid)</code> <span class="ln">:82750</span></div>
+      <div class="d">Promotes today’s crew to the boat’s standing team.</div></div>
+  </div>
+
+  <h4>Data written</h4>
+  <ul>
+    <li><code>PIER_JOB['YYYY-MM-DD::boatId'] = {cap, asst, crew[], island[], note, wb, wbc, lock, mv, mj}</code> — writer
+      <code>pjSet</code> <span class="ln">:82106</span>.</li>
+    <li><code>PIER_TEAM[boatId] = {cap, asst, crew[]}</code> — the standing crew.</li>
+    <li><code>PIER_CFG.stBand[statusKey]</code> for custom status colours (<code>pjStColor</code> <span class="ln">:82213</span>).</li>
+    <li>Route colour edits write <code>ROUTES[i].color</code> straight into <code>laBlob().routes</code> on purpose, not
+      through <code>save('config')</code> <span class="ln">:82730–:82739</span>.</li>
+  </ul>
+
+  <div class="note danger">
+    <span class="lbl">Validation / guards — the <code>pjOf</code> whitelist</span>
+    Every writer calls <code>poGuard()</code> <span class="ln">:79724</span> (<code>pier</code>, falling back to
+    <code>operations</code>). <code>pjOf(d,b)</code> <span class="ln">:82096</span> returns the standing team with
+    <code>_std:true</code> when the day has no record — <b>displayed but not written</b>. The whitelist inside
+    <code>pjOf</code> <span class="ln">:82102–:82104</span> is why <code>lock</code> and <code>mv</code> carry explicit
+    warnings: a field missing from that list is dropped on the next save.
+  </div>
+
+  <p><b>Failure modes</b> — licence coverage is checked per card with
+  <code>plBoatBad(bid, [cap, asst, …crew])</code> <span class="ln">:81899</span>; a boat can be crewed by people whose
+  certificate does not cover its GT/BHP and it only shows as a warning.</p>
+
+  <!-- 4.9 -->
+  <h3 id="w-po">4.9 เบิก-คืนอุปกรณ์ — equipment issue/return (<code>po</code>)</h3>
+  <p><b>Trigger</b> — pier staff hand out towels/masks/fins before departure; close out after the boat returns.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>renderPierOffice(pier)</code> <span class="ln">:80026</span></div>
+      <div class="d">Three sections: <code>1 เบิก – คืน รายลำ</code> <span class="ln">:80076</span>,
+      <code>2 สต็อกคงเหลือ · แยกตามถัง</code> <span class="ln">:80079</span>,
+      <code>3 วงจรผ้าเช็ดตัว</code> <span class="ln">:80081</span>.</div></div>
+    <div class="step"><div class="t">2 · Issue</div>
+      <div class="d"><code>poIssueOpen(bid)</code> <span class="ln">:80237</span> (suggests
+      <code>min(boat pax, ready)</code> for single-SKU kinds, <span class="ln">:80257</span>) →
+      <code>poIssueSave(bid)</code> <span class="ln">:80283</span>.</div></div>
+    <div class="step"><div class="t">3 · Close-out</div>
+      <div class="d"><code>poCloseOpen(bid)</code> <span class="ln">:80301</span> → <code>poCloseCalc</code>
+      <span class="ln">:80326</span> → <code>poCloseSave(bid)</code> <span class="ln">:80349</span>.</div></div>
+    <div class="step done"><div class="t">4 · Laundry cycle</div>
+      <div class="d"><code>poLaundryOutOpen</code> <span class="ln">:80604</span> / <code>poLaundryInOpen</code>
+      <span class="ln">:80615</span> → <code>poLaundrySave(isOut)</code> <span class="ln">:80626</span>.</div></div>
+  </div>
+
+  <h4>Data written</h4>
+  <p>One append-only ledger row per action, via <code>poAdd(o)</code> <span class="ln">:79852</span> which stamps
+  <code>id</code>, <code>at</code>, <code>by</code>:</p>
+<pre><code>PIER_MOVES[] = {id, date, pier, itemId, boatId, type, qty, note, at, by}
+type ∈ issue | return | repair | fixed | writeoff | lost | laundry_out | laundry_in | adjust</code></pre>
+  <p>Lost items may also carry <code>fine</code> / <code>finePaid:false</code> <span class="ln">:80368</span>.
+  Crew-on-duty for equipment: <code>PIER_DUTY['date::boatId'] = [staffId]</code>
+  (<code>poDutySave</code> <span class="ln">:80389</span>).</p>
+
+  <h4>Validation / guards</h4>
+  <ul>
+    <li>Balances are <b>never stored</b>: <code>poBal(itemId)</code> <span class="ln">:79747</span> replays the whole
+      ledger from <code>item.total</code> into buckets <code>ready / onboat / dirty / laundry / repair / gone</code>
+      <span class="ln">:79754–:79764</span>. A returned towel goes to <code>dirty</code>, everything else back to
+      <code>ready</code> <span class="ln">:79756</span>.</li>
+    <li>Close-out refuses to save unless the shortfall is fully explained: <code>sum !== miss</code> →
+      <code>'· ระบุของที่ขาดได้ N จาก M'</code> <span class="ln">:80358</span>; a return quantity outside
+      <code>[0, outstanding]</code> → <code>'· จำนวนคืนไม่ถูกต้อง'</code> <span class="ln">:80355</span>.</li>
+    <li>Closing a boat that never drew anything alerts <code>'ลำนี้ยังไม่มีการเบิกของในวันที่เลือก'</code>
+      <span class="ln">:80306</span>.</li>
+  </ul>
+
+  <div class="note">
+    <span class="lbl">Failure mode</span>
+    The ledger <b>is</b> the truth; correcting a mistake means adding an <code>adjust</code> move
+    (<code>poAdjOpen</code> <span class="ln">:80571</span>), never editing history.
+  </div>
+
+  <!-- 4.10 -->
+  <h3 id="w-poa">4.10 ตารางการทำงาน — duty roster (<code>poa</code>)</h3>
+  <p><b>What it is</b> — a monthly crew roster that <b>derives itself from the boat job sheets</b> and lets you override
+  cell by cell. Subtitle at <span class="ln">:81263</span>: <code>ขึ้นเองจากใบงานเรือ · แก้ทับรายช่องได้</code>.</p>
+
+  <p><b>Cycle</b> — <code>paCycleStart()</code> <span class="ln">:80677</span> reads <code>PIER_CFG.cycleStart</code>
+  clamped to 1..28, <b>default 26</b>. <code>paCycle(anchor)</code> <span class="ln">:80761</span> builds
+  <code>from = &lt;cycleStart&gt; of the month</code> → <code>to = day before &lt;cycleStart&gt; of the next month</code>,
+  so the standard period is <b>26 → 25</b> and always straddles two calendar months (header spans at
+  <span class="ln">:81185</span>).</p>
+
+  <h4>Cell resolution — four layers (<code>paCell(date, pier, staff, dayIndex)</code> <span class="ln">:80809</span>)</h4>
+  <div class="flow">
+    <div class="stage"><div class="k">layer 1</div><div class="v">Manual override</div>
+      <div class="s"><code>PIER_SHIFT[date::staffId]</code> with no <code>plan</code> flag → wins</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">layer 2</div><div class="v">Job-sheet assignment</div>
+      <div class="s">Indexed by <code>paDayIdx</code> <span class="ln">:80783</span> straight off <code>PIER_JOB</code>
+      (<code>cap</code>, <code>asst</code>, <code>crew[]</code>, <code>island[]</code>); the code becomes the dry-dock code,
+      the maintenance code, or <code>paRouteCode(rid) || paOnBoatCode()</code> <span class="ln">:80818</span></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">layer 3</div><div class="v">Plan layer</div>
+      <div class="s">A <code>PIER_SHIFT</code> entry with <code>plan:1</code></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">layer 4</div><div class="v">Empty</div>
+      <div class="s">Marked <code>todo</code> if the person’s pier had work that day</div></div>
+  </div>
+
+  <h4>Steps</h4>
+  <div class="rail">
+    <div class="step"><div class="t">1 · Click a cell</div>
+      <div class="d"><code>paPick(ev,date,sid)</code> <span class="ln">:81302</span> → pick a code →
+      <code>paSet(date,sid,code,plan)</code> <span class="ln">:81413</span> → <code>paSetManual</code>
+      <span class="ln">:80775</span> → <code>poPersist()</code>.</div></div>
+    <div class="step"><div class="t">2 · Bulk fill a date range</div>
+      <div class="d">(+ weekday filter, + overwrite flag) → <code>paRangeOpen</code> <span class="ln">:81697</span> /
+      <code>paRangeApply</code> <span class="ln">:81743</span>. Defaults to the <i>plan</i> layer and skips existing manual
+      cells unless overwrite is ticked.</div></div>
+    <div class="step"><div class="t">3 · Reorder rows by drag</div>
+      <div class="d"><code>paDragStart</code> <span class="ln">:80877</span> … <code>paDrop</code>
+      <span class="ln">:80890</span> → writes <code>staff.ord</code>.</div></div>
+    <div class="step done"><div class="t">4 · Export / print</div>
+      <div class="d"><code>paExport()</code> <span class="ln">:81767</span> (CSV) / <code>paPrint()</code>
+      <span class="ln">:81789</span> (<code>CREW DUTY ROSTER · from – to · PIER</code>, <span class="ln">:81191</span>).</div></div>
+  </div>
+
+  <p><b>Data written</b> — <code>PIER_SHIFT['YYYY-MM-DD::staffId'] = {c, by, at, plan?}</code> — <b>only hand-touched
+  cells</b>. <code>PIER_SECT</code> for row groups, <code>PIER_STAFF[].ord/.sect/.defCode/.note</code> for layout.</p>
+
+  <h4>Registry hub (commit <code>3f96494</code>)</h4>
+  <p>Every registry button in the Pier Office now lives on this page’s toolbar <span class="ln">:81280–:81286</span>,
+  each renamed to start with <code>ทะเบียน</code>:</p>
+  <div class="tw"><table>
+    <thead><tr><th style="width:240px">button</th><th>handler</th></tr></thead>
+    <tbody>
+      <tr><td><code>ทะเบียนพนักงาน</code></td><td><code>poStaffOpen()</code> <span class="ln">:80395</span></td></tr>
+      <tr><td><code>ทะเบียนไกด์</code></td><td><code>goRegOpen('')</code> <span class="ln">:50764</span></td></tr>
+      <tr><td><code>ทะเบียนกลุ่ม</code></td><td><code>paSectOpen()</code> <span class="ln">:81534</span></td></tr>
+      <tr><td><code>ทะเบียนรหัส</code></td><td><code>paCodesOpen()</code> <span class="ln">:81621</span></td></tr>
+      <tr><td><code>ทะเบียนประเภทใบ</code></td><td><code>plTypesOpen()</code> <span class="ln">:81997</span></td></tr>
+    </tbody>
+  </table></div>
+  <p>They were removed from <code>po</code> (staff), <code>poj</code> (staff), <code>pol</code> (staff + licence types) and
+  from the unlabeled gear on pier check-in. <code>ทะเบียนของ</code> (items) stays on the <code>po</code> page — it is
+  things, not people; <code>ทะเบียนไกด์</code> also stays inside the guide-assignment modal <span class="ln">:50746</span>
+  because it returns to that modal instead of jumping pages. Two empty-state strings now point people here
+  <span class="ln">:80385</span>, <span class="ln">:81991</span>.</p>
+
+  <h4>Codes</h4>
+  <p><code>PIER_CODES</code> <span class="ln">:79636</span>, seeded at <span class="ln">:79662–:79674</span>:
+  <code>PP</code> ทำงาน (ลงเรือ), <code>SE</code> เข้าเวร, <code>OFF</code> หยุดประจำสัปดาห์,
+  <code>PH</code> วันหยุดนักขัตฤกษ์, <code>LWOP</code>, <code>LWP</code>, <code>SC</code>, <code>SR</code>,
+  <code>5</code>, <code>ABS</code> ขาดงาน, <code>MT</code> งานซ่อม / ขึ้นคาน; each has
+  <code>kind ∈ work|off|leave|none</code> which drives the summary totals. Route codes come from
+  <code>ROUTES[].code</code> or the guess table <code>RT_CODE_GUESS</code> <span class="ln">:80684</span>
+  (<code>WS/KB/SR/SL/PP/RY/CR/JB</code>); <code>paCodeMeta(code)</code> <span class="ln">:80715</span> lets a route’s
+  meaning override the registry entry.</p>
+
+  <!-- 4.11 -->
+  <h3 id="w-pol">4.11 ใบอนุญาต — marine licences (<code>pol</code>)</h3>
+  <p><b>Trigger</b> — checking whether the people you just put on a boat may legally run it.</p>
+  <p><b>Steps</b> — <code>renderPierLic(pier)</code> <span class="ln">:81938</span> lists staff <b>home-based at this
+  pier</b>, each with their licences and a state chip. Add <code>plAdd(staffId)</code> <span class="ln">:82066</span> →
+  <code>plSave</code> <span class="ln">:82078</span>; delete <code>plDel</code> <span class="ln">:82086</span>;
+  class/type registry <code>plTypesOpen</code> <span class="ln">:81997</span> (now reached from the <code>poa</code> toolbar).</p>
+
+  <h4>Data written</h4>
+  <p><code>PIER_LICENSES[] = {id:'pl_…', staffId, classId, no, exp, issuedAt, issuer, note}</code>; taxonomy in
+  <code>PIER_LIC_TYPES</code> (<code>{id, side:'deck'|'eng', short, formal, perBoat, active}</code>, seeded
+  <span class="ln">:79680</span>) and <code>PIER_LIC_CLASSES</code>
+  (<code>{id, typeId, name, maxGt, maxBhp, ord}</code>, seeded <span class="ln">:79684</span> — deck ≤500/≤60 GT,
+  eng ≤3000/≤1000 BHP). Warning window in <code>PIER_CFG.licWarnDays</code>
+  (<code>plWarnDays</code> <span class="ln">:81836</span>, default 60).</p>
+
+  <h4>Validation</h4>
+  <p><code>plState(l)</code> <span class="ln">:81846</span> →
+  <span class="b gray">noexp</span> <span class="b red">bad</span> <span class="b amber">soon</span>
+  <span class="b green">ok</span>; <code>plCovers(l, boat)</code> <span class="ln">:81849</span> compares the class
+  ceiling against the boat’s GT/BHP. The load-bearing call is <code>plCheckBoat(boatId, crewIds)</code>
+  <span class="ln">:81870</span>, which per licence type needing <code>perBoat</code> holders reports:</p>
+  <div class="grid2">
+    <div class="mini"><h5>Expired only <span class="ln">:81891</span></h5>
+      <p><code>'…หมดอายุแล้ว … — ยังจ่ายงานได้ แต่ต้องรีบต่อ'</code></p></div>
+    <div class="mini"><h5>Class too small <span class="ln">:81892</span></h5>
+      <p><code>'…ชั้นไม่ครอบคลุมลำนี้ (ลำนี้ X ตันกรอส · Y แรงม้า)'</code></p></div>
+    <div class="mini"><h5>Missing <span class="ln">:81894</span></h5>
+      <p><code>'ยังขาด&lt;type&gt; N ใบ'</code></p></div>
+  </div>
+
+  <div class="note danger">
+    <span class="lbl">Failure mode</span>
+    <code>plBoatBad</code> <span class="ln">:81899</span> is only a badge on the job-sheet card
+    <span class="ln">:83004</span>; <b>nothing blocks dispatching an under-licensed crew</b>.
+  </div>
+
+  <!-- 4.12 -->
+  <h3 id="w-doc">4.12 Doc-Check + OCR pre-check</h3>
+  <p><b>Trigger</b> — admin opens <code>ตรวจเอกสาร</code> for a travel date and works the list.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>renderDocCheck</code> <span class="ln">:75902</span></div>
+      <div class="d">Lists via <code>_docCheckList(date)</code> <span class="ln">:75370</span> → every booking where
+      <code>_docIsB2B(b)</code> (<code>schemaVer===2 &amp;&amp; agentId</code>, <span class="ln">:75341</span>), status ≠
+      <code>rejected</code>, with a trip on that date. Cancelled bookings stay, greyed with <code>✕ ยกเลิก</code>.
+      Ordering/filtering by <code>_docCheckOrdered</code> <span class="ln">:75372</span> (route → voucher).</div></div>
+    <div class="step"><div class="t">2 · Open a row → the 6-item checklist</div>
+      <div class="d"><code>DOCCHK_ITEMS</code> <span class="ln">:75162</span>: <code>route</code> เส้นทาง / โปรแกรม,
+      <code>date</code> วันเดินทาง, <code>lead</code> ชื่อ, <code>pax</code> จำนวนคน, <code>voucher</code> Voucher / Ref,
+      <code>payment</code> Payment.</div></div>
+    <div class="step"><div class="t">3 · Optional OCR pre-check — <code>docCheckRunPre(bkId)</code> <span class="ln">:75217</span></div>
+      <div class="d">Lazy-loads <b>Tesseract.js v5</b> from <code>cdn.jsdelivr.net</code>
+      (<code>_docOcrEnsureLib</code> <span class="ln">:75172</span>), one shared worker, language <b><code>eng</code> only</b>
+      <span class="ln">:75189</span>. Image attachments only; PDFs are skipped with
+      <code>'Pre-Check supports image attachments only (PDF must be checked manually).'</code> <span class="ln">:75220</span>.
+      Each image is fetched from <code>/api/attach/&lt;id&gt;</code> and the texts concatenated <span class="ln">:75226</span>.</div></div>
+    <div class="step"><div class="t">4 · <code>_docPreCheckMatch</code> <span class="ln">:75251</span></div>
+      <div class="d">Fuzzy-matches the six fields — <b>it does not read MRZ</b>. Voucher = alphanumeric substring /
+      last-8 tail; date = ~14 format candidates; lead = order-independent token match; pax = regex on
+      <code>adult|child|infant|pax|ท่าน|คน</code> compared per type with FOC folded into adults; route = keyword score
+      ≥0.5; payment = keyword set per <code>agent.payType</code>.</div></div>
+    <div class="step"><div class="t">5 · Auto-tick</div>
+      <div class="d">Items scoring <code>match</code> are auto-ticked when <code>laCanEditArea('operations')</code>; then
+      <code>_docCheckPersist()</code>.</div></div>
+    <div class="step done"><div class="t">6 · Decide — <code>docCheckSetStatus</code> <span class="ln">:75368</span></div>
+      <div class="d"><code>✅ ถูกต้อง</code> / <code>⚠ มีปัญหา</code>.</div></div>
+    <div class="step done"><div class="t">7 · Print A4 pack — <code>docCheckPrintPack()</code> <span class="ln">:75547</span></div>
+      <div class="d">1 voucher = 1 page; <code>{onlyIncomplete:true}</code> keeps rows where
+      <code>attachments.length &lt; pax</code>. PDFs are rasterised with pdf.js 3.11 from cdnjs.</div></div>
+  </div>
+
+  <h4>Data written</h4>
+  <p>On the booking: <code>bk.docCheck = {status, items:{}, note, by, at, pre}</code> where</p>
+<pre><code>bk.docCheck.pre = {at, lang:'eng', autoTick, results,
+                   summary:{match, maybe, mismatch, none}, text}</code></pre>
+  <p>(<code>text</code> truncated to 3000 chars, <span class="ln">:75234–:75240</span>). Persisted by
+  <code>_docCheckPersist</code> <span class="ln">:75344</span> → <code>acctPersistBookings()</code> with a
+  raw-localStorage fallback. <code>docCheckSetStatus</code> also appends a <code>DocCheck</code>-tagged history entry.</p>
+
+  <p><b>Validation / guards</b> — <code>laGuardEdit('operations')</code> on toggle and status;
+  <code>docCheckSetNote</code> <span class="ln">:75369</span> is <b>not</b> guarded (writes without permission check,
+  deliberately no re-render to keep focus).</p>
+
+  <h4>Failure modes</h4>
+  <ul>
+    <li>No network → the CDN load rejects with <code>'OCR library load failed (no network?)'</code> and the bar shows
+      <code>Pre-Check ไม่สำเร็จ: …</code> + <code>ลองใหม่</code>. The error object is written to
+      <code>bk.docCheck.pre</code> but <b>not persisted</b> <span class="ln">:75242–:75244</span>.</li>
+    <li>Status derivation: <code>docCheckStatus(bk)</code> <span class="ln">:75342</span> = explicit
+      <code>bk.docCheck.status</code>, else <code>pending</code> if there are attachments, else <code>nofiles</code>.
+      Enum: <code>verified | issue | pending | nofiles</code>. Other views (Travel Summary <span class="ln">:52315</span>,
+      Daily Report <span class="ln">:53774</span>) call this same function so the counts always agree.</li>
+  </ul>
+
+  <!-- 4.13 -->
+  <h3 id="w-rc">4.13 Re-confirm</h3>
+  <p><b>Trigger</b> — the day before travel, sales-ops walks the agent list confirming pickup times.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>renderReconfirm</code> <span class="ln">:44688</span></div>
+      <div class="d">Builds two groupings from <code>_rcActiveRows(date)</code> <span class="ln">:44585</span> — by agent
+      (default) and by trip. Agent key <code>_rcAgentKey(bk)</code> <span class="ln">:44579</span> =
+      <code>agentId || 'b2c:&lt;channel&gt;'</code>.</div></div>
+    <div class="step"><div class="t">2 · Per booking</div>
+      <div class="d">Click the status cell → <code>rcStatusPop</code> <span class="ln">:44534</span> →
+      <code>rcSetStatus(bkId, v)</code> <span class="ln">:44513</span>.</div></div>
+    <div class="step"><div class="t">3 · Per agent</div>
+      <div class="d"><code>Send re-confirm</code> → <code>rcSendAgent(key)</code> <span class="ln">:44606</span> marks
+      every one of that agent’s non-cancelled bookings that day as done; <code>Undo</code> →
+      <code>rcUnsendAgent</code> <span class="ln">:44611</span>.</div></div>
+    <div class="step done"><div class="t">4 · <code>Sheet</code> → <code>rcSheet(key)</code> <span class="ln">:44618</span></div>
+      <div class="d">Printable A4-landscape per-agent sheet grouped by route (columns
+      <code>#, Booking #, Customer, Phone, AD, CHD, INF, FOC, Pick-up, Hotel, Room, Zone, Add-on, Special request,
+      Payment</code>), ref <code>RC-YYMMDD-&lt;agentCode&gt;</code>.</div></div>
+  </div>
+
+  <p><b>Data written</b> — <code>bk.ops.reconfirm = {status, via:'reconfirm', at, by}</code> <span class="ln">:44515</span>
+  — the <b>same field</b> the By-trip “Re-Confirm mode” writes (<code>bkV2Reconfirm</code> <span class="ln">:45680</span>
+  uses <code>via:'list'|'phone'</code>), so both surfaces stay in sync. History entries tagged <code>Notify</code>.</p>
+
+  <h4>States — <code>RC_STATES</code> <span class="ln">:44504</span></h4>
+  <div class="tw"><table>
+    <thead><tr><th style="width:130px">value</th><th>meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>''</code></td><td>Not started</td></tr>
+      <tr><td><code>wa</code></td><td>WhatsApp sent · awaiting</td></tr>
+      <tr><td><code>noans</code></td><td>Called · no answer</td></tr>
+      <tr><td><code>off</code></td><td>Called · phone off</td></tr>
+      <tr><td><code>callback</code></td><td>Call back later</td></tr>
+      <tr><td><code>done</code></td><td><span class="b green">Confirmed</span> — only <code>done</code> counts as confirmed</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note warn">
+    <span class="lbl">Guards — none</span>
+    <code>rcSetStatus</code> / <code>rcSendAgent</code> / <code>rcUnsendAgent</code> have <b>no</b>
+    <code>laGuardEdit</code> call; they rely on <code>acctPersistBookings()</code> silently refusing to persist for
+    view-only users.
+  </div>
+
+  <p><b>Colours</b> — user-editable per state, stored as a JSON string under the top-level blob key
+  <code>rc_status_colors</code> (<code>rcSaveStatusColor</code> <span class="ln">:44532</span>), memoised in
+  <code>_rcColorCache</code> because re-parsing the ~9 MB blob per cell cost 1.3 s on a 43-row page
+  <span class="ln">:44519</span>.</p>
+
+  <!-- 4.14 -->
+  <h3 id="w-ts">4.14 Travel Summary — closing the day</h3>
+  <p><b>Trigger</b> — end of the operating day; pier/ops decide what to charge for the people who did not travel and
+  reconcile the cash.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>renderTravelSum</code> <span class="ln">:54632</span> builds <code>tsRows(date)</code> <span class="ln">:51587</span></div>
+      <div class="d">Every non-cancelled booking with a trip that day, carrying <code>booked</code>,
+      <code>travelled = booked − noShow</code>, the raw <code>events[]</code> from both check-in stages, van/boat ids,
+      <code>amount</code> (<code>tsTripAmount</code>), <code>policy</code> (<code>tsPolicyText</code>), and the existing
+      decision.</div></div>
+    <div class="step"><div class="t">2 · Section 2 “ตัดสินค่าปรับ”</div>
+      <div class="d">Rows land there only when someone really did not travel:
+      <code>issue = noShow&gt;0 || ckLostByType(…).total&gt;0 || decision already exists</code>
+      <span class="ln">:51612–:51615</span> — pressing something at the pier is not enough.</div></div>
+    <div class="step"><div class="t">3 · Decide per row</div>
+      <div class="d"><code>tsPick(bkId,date,kind,amt)</code> <span class="ln">:51708</span> (shortcut buttons),
+      <code>tsCustom</code> <span class="ln">:51714</span> (typed amount), <code>tsPostpone</code>
+      <span class="ln">:51721</span>, <code>tsClear</code> <span class="ln">:51713</span>.</div></div>
+    <div class="step"><div class="t">4 · Cash-on-Tour settlement</div>
+      <div class="d"><code>tsCotPick(bkId,date,mode,cot)</code> <span class="ln">:51649</span> with
+      <code>mode ∈ full|part|none|payout</code>, suggested by <code>tsCotSugMode(M)</code> <span class="ln">:51645</span>
+      (<code>'none'</code> when the agent handles COT separately); reference <code>tsCotRefSave</code>
+      <span class="ln">:51666</span>, undo <code>tsCotClear</code> <span class="ln">:51668</span>.</div></div>
+    <div class="step done"><div class="t">5 · Print the day-close pack — <code>tsPrintSheet()</code> <span class="ln">:52192</span></div>
+      <div class="d">Four sections in one document (<code>§tsManifest</code>, <span class="ln">:51727</span>): route
+      summary · penalty decisions · on-site money by method · <b><code>04 Manifest ประจำวัน</code></b>
+      <span class="ln">:55031</span>. Reference list <code>tsRefPackList</code> <span class="ln">:52179</span> uses the
+      identical ordering.</div></div>
+    <div class="step"><div class="t">6 · Cross-navigation</div>
+      <div class="d"><code>tsGoDoc(bkId,date)</code> <span class="ln">:52342</span> jumps to Doc-Check;
+      <code>tsSendBack(b,date)</code> <span class="ln">:52356</span> sends a row back.</div></div>
+  </div>
+
+  <h4>Data written</h4>
+  <ul>
+    <li><code>TRAVEL_SUM['YYYY-MM-DD::bookingId'] = {decision, amount, note, by, at}</code> — <code>tsSet</code>
+      <span class="ln">:51546</span>, store declared <span class="ln">:51537</span>, blob key <code>travel_sum</code>
+      via <code>tsPersist</code> <span class="ln">:51539</span>.</li>
+    <li><code>TS_COT['YYYY-MM-DD::bookingId'] = {mode, deduct, payout, ref, by, at}</code> — declared
+      <span class="ln">:51634</span>, blob key <code>ts_cot</code> via <code>tsCotPersist</code> <span class="ln">:51638</span>.</li>
+    <li>Money itself is not re-written here; it is read from <code>bk.pierPayments</code> (pier),
+      <code>SB_EXTRAS</code> (on-site sales) and the invoices.</li>
+  </ul>
+
+  <p><b>Validation / guards</b> — <code>tsSet</code> calls <code>laGuardEdit('operations')</code> and tells the user when
+  they are view-only <span class="ln">:51547</span>; <code>tsPersist</code>/<code>tsCotPersist</code> additionally bail on
+  <code>!laCanEditArea('operations')</code>. Both go through <code>laBlob()</code>/<code>laBlobSave()</code> — raw
+  localStorage writes here would clobber other modules <span class="ln">:51541</span>.</p>
+
+  <div class="note warn">
+    <span class="lbl">Failure modes</span>
+    Sorting is route → agency A-Z → voucher <span class="ln">:51624–:51630</span>, matching the reference pack; changing
+    one without the other breaks the paper cross-check. OVN return legs appear in the manifest (they are on the boat) but
+    <code>tsTripAmount</code> returns 0 for them so the money is not double-counted <span class="ln">:51592–:51593</span>.
+  </div>
+
+  <!-- 4.15 -->
+  <h3 id="w-dr">4.15 Daily Report + email</h3>
+  <p><b>Trigger</b> — the evening before travel (“สรุปก่อนวันเดินทาง”, subtitle at <span class="ln">:54620</span>).</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>renderDailyReport</code> <span class="ln">:54603</span></div>
+      <div class="d">Computes <code>drData(date)</code> <span class="ln">:52795</span> once and renders one of five tabs,
+      <code>DR_TABS</code> <span class="ln">:52675</span>: <code>ov</code> <b>ภาพรวม</b> (<code>drPaneOv</code>
+      <span class="ln">:53320</span>) · <code>px</code> <b>ผู้โดยสาร</b> (<code>drPanePx</code> <span class="ln">:53437</span>) ·
+      <code>bt</code> <b>เรือ</b> (<code>drPaneBt</code> <span class="ln">:53548</span>) · <code>vn</code> <b>รถรับส่ง</b>
+      (<code>drPaneVn</code> <span class="ln">:53633</span>) · <code>fi</code> <b>การเงิน</b> (<code>drPaneFi</code>
+      <span class="ln">:53727</span>).</div></div>
+    <div class="step"><div class="t">2 · Date stepper + output buttons</div>
+      <div class="d"><code>🖨 พิมพ์ / PDF</code> (<code>drPrint</code> <span class="ln">:53837</span>) +
+      <code>✉ ส่งอีเมล</code> (<code>drMailShow</code> <span class="ln">:54485</span>).</div></div>
+    <div class="step done"><div class="t">3 · The mail composer</div>
+      <div class="d">Builds a self-contained HTML mail (<code>drMailHTML</code> <span class="ln">:54114</span>, subject
+      <code>drMailSubject</code> <span class="ln">:54433</span>, text alternative <code>drMailText</code>
+      <span class="ln">:54437</span>) with PNG-rendered trend/donut charts (<code>drmPngTrend</code>
+      <span class="ln">:54008</span>, <code>drmPngDonut</code> <span class="ln">:54064</span>, uploaded through
+      <code>drmUpload</code> <span class="ln">:54086</span>); output via clipboard (<code>drMailCopy</code>
+      <span class="ln">:54494</span>), <code>.eml</code> file (<code>drMailEml</code> <span class="ln">:54521</span>) or
+      <code>mailto:</code> (<code>drMailto</code> <span class="ln">:54550</span>).</div></div>
+    <div class="step"><div class="t">4 · Trend window</div>
+      <div class="d">Toggles between travel-date and booking-date via <code>_drTrendMode</code> <span class="ln">:52673</span> /
+      <code>drTrendMode</code> <span class="ln">:52674</span>; series from <code>drTrend</code> <span class="ln">:52959</span> /
+      <code>drTrendBooked</code> <span class="ln">:52989</span>, drawn by <code>drChart</code> <span class="ln">:53031</span>.</div></div>
+  </div>
+
+  <p><b>Data written</b> — the report itself writes nothing about bookings. Configuration only:
+  <code>drCfg</code>/<code>drCfgSet</code> <span class="ln">:52677</span>/<span class="ln">:52683</span> → blob key
+  <code>dr_cfg</code>, and mail settings <code>drMailCfg</code>/<code>drMailSet</code> <span class="ln">:53845</span>/<span class="ln">:53850</span>
+  → blob key <code>dr_mail</code>, both through <code>ctRead</code>/<code>ctWrite</code> <span class="ln">:55967</span>,
+  <span class="ln">:55972</span>.</p>
+
+  <div class="note warn">
+    <span class="lbl">Failure modes</span>
+    <code>drData</code> is wrapped in try/catch; a throw renders <code>โหลดข้อมูลไม่สำเร็จ · &lt;message&gt;</code>
+    instead of a blank page <span class="ln">:54607–:54609</span>. Chart PNG generation and mail upload need network.
+  </div>
+</section>
+
+<!-- ============ 5 ============ -->
+<section id="s5">
+  <h2><span class="num">05</span> Data model touched</h2>
+
+  <h3 id="dm-written">Written by this domain</h3>
+  <div class="tw"><table>
+    <thead><tr><th style="width:200px">Store</th><th>Key / shape</th><th style="width:250px">Written by</th></tr></thead>
+    <tbody>
+      <tr><td><code>TRIPS</code></td>
+        <td><code>TRIPS[date][boatId] = {route, type:'normal' | 'charter', booked, charterBookingId?}</code> · blob key <code>trips</code></td>
+        <td><code>bop2AssignBoat</code> <span class="ln">:10266</span>, <code>bop2UnassignBoat</code> <span class="ln">:10287</span></td></tr>
+      <tr><td><code>SB_WEATHER_CLOSURES</code></td>
+        <td><code>[{routeId, date, reason:'weather', note, at}]</code> · blob key <code>sb_weather</code></td>
+        <td><code>bkV2WeatherMarkConfirm</code> <span class="ln">:59929</span></td></tr>
+      <tr><td>booking <code>ops</code> (per day)</td>
+        <td><code>.boatId</code>, <code>.boatSplits[]</code>, <code>.upgrade</code>, <code>.vanCheckin</code>,
+        <code>.pierCheckin</code>, <code>.reconfirm</code></td>
+        <td><code>bkV2AssignBoat</code>, <code>ckWrite</code> <span class="ln">:47239</span>, <code>rcSetStatus</code></td></tr>
+      <tr><td>booking fields</td>
+        <td><code>bk.pierPayments[]</code>, <code>bk.docCheck{}</code>, <code>bk.history[]</code></td>
+        <td><code>pckPaySave</code> <span class="ln">:48596</span>, <code>docCheckSetStatus</code> <span class="ln">:75368</span></td></tr>
+      <tr><td><code>TRAVEL_SUM</code></td>
+        <td><code>['date::bookingId'] = {decision, amount, note, by, at}</code> · blob key <code>travel_sum</code></td>
+        <td><code>tsSet</code> <span class="ln">:51546</span></td></tr>
+      <tr><td><code>TS_COT</code></td>
+        <td><code>['date::bookingId'] = {mode, deduct, payout, ref, by, at}</code> · blob key <code>ts_cot</code></td>
+        <td><code>tsCotPick</code> <span class="ln">:51649</span></td></tr>
+      <tr><td><code>TRIP_ACT</code></td>
+        <td><code>['date::boatId'] = {meal:{venueId,name,ad,chd,priceAd,priceCh,amount,at,by}, …}</code> · blob key <code>trip_actuals</code></td>
+        <td><code>taSet</code> <span class="ln">:57712</span> (from <code>pckMealSend</code> <span class="ln">:51217</span>)</td></tr>
+      <tr><td><code>PIER_JOB</code></td>
+        <td><code>['YYYY-MM-DD::boatId'] = {cap, asst, crew[], island[], note, wb, wbc, lock, mv, mj}</code></td>
+        <td><code>pjSet</code> <span class="ln">:82106</span></td></tr>
+      <tr><td><code>PIER_TEAM</code></td>
+        <td><code>[boatId] = {cap, asst, crew[]}</code></td>
+        <td><code>pjTeamSave</code> <span class="ln">:82750</span></td></tr>
+      <tr><td><code>PIER_MOVES</code></td>
+        <td>append-only <code>{id, date, pier, itemId, boatId, type, qty, note, fine?, at, by}</code></td>
+        <td><code>poAdd</code> <span class="ln">:79852</span></td></tr>
+      <tr><td><code>PIER_ITEMS</code> / <code>PIER_KINDS</code></td>
+        <td>item + category registries</td>
+        <td><code>poItemsSave</code> <span class="ln">:80543</span>, <code>poKindAdd</code> <span class="ln">:80444</span></td></tr>
+      <tr><td><code>PIER_STAFF</code></td>
+        <td><code>{id:'ps_…', pier, nick, name, role, phone, active, defCode, ord, sect, note}</code></td>
+        <td><code>poStaffAdd</code> <span class="ln">:80420</span>, <code>paStaffFld</code> <span class="ln">:81383</span></td></tr>
+      <tr><td><code>PIER_DUTY</code></td>
+        <td><code>['date::boatId'] = [staffId]</code></td>
+        <td><code>poDutySave</code> <span class="ln">:80389</span></td></tr>
+      <tr><td><code>PIER_SHIFT</code></td>
+        <td><code>['YYYY-MM-DD::staffId'] = {c, by, at, plan?}</code> — hand-touched cells only</td>
+        <td><code>paSetManual</code> <span class="ln">:80775</span></td></tr>
+      <tr><td><code>PIER_CODES</code> / <code>PIER_SECT</code></td>
+        <td>roster code + row-group registries</td>
+        <td><code>paCodesOpen</code> <span class="ln">:81621</span>, <code>paSectOpen</code> <span class="ln">:81534</span></td></tr>
+      <tr><td><code>PIER_LIC_TYPES</code> / <code>_CLASSES</code> / <code>PIER_LICENSES</code></td>
+        <td>licence taxonomy + records</td>
+        <td><code>plSave</code> <span class="ln">:82078</span>, <code>plClassAdd</code> <span class="ln">:82032</span></td></tr>
+      <tr><td><code>PIER_CFG</code></td>
+        <td><code>{licWarnDays, cycleStart, onBoatCode, mtCode, ddCode, defCode, stBand{}}</code></td>
+        <td><code>plSetWarn</code> <span class="ln">:81994</span>, <code>pjStColor</code> <span class="ln">:82213</span></td></tr>
+      <tr><td>guide stores</td>
+        <td>blob keys <code>guides</code> (registry), <code>go_asn</code> (<code>date|boatId</code> →
+        <code>{g[],other,sign}</code>), <code>go_no</code>, <code>go_cfg</code></td>
+        <td><code>goGuidesSet</code> <span class="ln">:50458</span>, <code>goAsnSet</code> <span class="ln">:50473</span>,
+        <code>goNoFor</code> <span class="ln">:50478</span></td></tr>
+      <tr><td>UI colour prefs</td>
+        <td>blob keys <code>rc_status_colors</code>, <code>pck_svc_colors</code>, <code>pck_svc_rules</code></td>
+        <td><code>rcSaveStatusColor</code> <span class="ln">:44532</span>, <code>_pckSvcWrite</code> <span class="ln">:50228</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="dm-read">Read but never written here</h3>
+  <p><code>BOATS</code> (+ <code>log[]</code>, <code>assignments[]</code>), <code>ROUTES</code> (<code>pier</code>,
+  <code>times[]</code>, <code>color</code>, <code>seasons[]</code>), <code>SB_BOOKINGS</code> identity/pricing,
+  <code>SB_VEHICLES</code>, <code>FL_MAINT</code>, <code>FL_PROJECTS</code>, <code>SB_EXTRAS</code>,
+  <code>BOAT_CAP_OVR</code>.</p>
+</section>
+
+<!-- ============ 6 ============ -->
+<section id="s6">
+  <h2><span class="num">06</span> Capacity &amp; assignment rules</h2>
+
+  <div class="grid2">
+    <div class="mini"><h5><code>cap</code> — the booking cap</h5>
+      <p>What the company sells. <code>getAllotment</code> <span class="ln">:12145</span> derives
+      <code>availableCapacity</code> from it.</p></div>
+    <div class="mini"><h5><code>licensePax</code> — registered seats</h5>
+      <p>The physical/legal maximum. <code>licenseCapacity</code> comes from it, falling back to <code>cap</code> when
+      the licence figure is missing <span class="ln">:12162</span>.</p></div>
+  </div>
+
+  <p><b>Per-day cap override</b> — <code>boatCapFor(boatId, date)</code> <span class="ln">:47018</span> (backed by
+  <code>BOAT_CAP_OVR</code>, setter <code>boatCapSet</code> <span class="ln">:47027</span>) is what every assignment path
+  uses, not <code>boat.cap</code> directly. <code>boatCapSet</code> clamps the override to <code>licensePax</code>
+  <span class="ln">:47031–:47032</span>.</p>
+
+  <h3 id="cap-pool">The seat pool — <code>getAllotment(routeId, dateStr)</code> <span class="ln">:12145</span></h3>
+<pre><code>totalCapacity      = Σ boatCapFor(boat, date)   over TRIPS[date] boats on this route
+charterCapacity    = Σ cap of the chartered subset
+availableCapacity  = totalCapacity − charterCapacity
+seatsConsumed      = getSeatsConsumed(routeId, date)
+lockedSeats        = bkV2LockedTotal(routeId, date)
+seatsAvailable     = max(0, availableCapacity − seatsConsumed − lockedSeats)
+licenseAvailable   = max(0, licenseCapacity − seatsConsumed)
+state              = all-chartered | full | tight (fill ≥80%) | open | no-allotment</code></pre>
+
+  <h3 id="cap-charter">Charter exclusion — four independent mechanisms</h3>
+  <div class="note warn">
+    <span class="lbl">Why four</span>
+    <code>TRIPS</code> alone is not trustworthy: a split charter only ever flagged its <b>first</b> hull in Boat Operation.
+  </div>
+  <ol>
+    <li><code>getSeatsConsumed</code> <span class="ln">:12046</span> skips <code>t.bookingMode==='charter'</code>
+      <span class="ln">:12058</span> — a charter consumes a hull, not seats.</li>
+    <li><code>baDayBoats(date)</code> <span class="ln">:45445</span> filters out both <code>op.charterBookingId</code>
+      <b>and</b> anything in <code>baCharterBoatIds(date)</code> <span class="ln">:45336</span>, so a chartered hull is
+      never offered to a seat booking.</li>
+    <li><code>baCharterBoatMap(date)</code> <span class="ln">:45315</span> derives charter hulls from the <b>bookings</b>,
+      not from <code>TRIPS</code>, because a split charter (<code>ops.boatSplits</code>) only ever flagged its first hull
+      in Boat Operation; without this the 2nd hull was resold as seats <span class="ln">:45312–:45314</span>.
+      <code>getAssignedBoatsForRouteDate</code> <span class="ln">:12096</span> applies the same map.</li>
+    <li><code>bkV2CharterBoatHeal(date)</code> <span class="ln">:45435</span> mirrors <code>trip.charterBoatId</code> →
+      <code>ops.boatId</code> (idempotent, skips bookings that already have <code>boatSplits</code>) so charters count as
+      “assigned” everywhere that keys off <code>ops.boatId</code>.</li>
+  </ol>
+
+  <h3 id="cap-tol">Tolerance, approvals, exclusions</h3>
+  <ul>
+    <li><b>Assignment tolerance</b> — <code>BA_CAP_TOL = 2</code> <span class="ln">:45499</span>. A boat may be filled to
+      <code>cap + 2</code>; beyond that <code>bkV2AssignBoat</code> refuses outright <span class="ln">:45520</span>.
+      <code>baAutoAssign</code> prefers a boat under <code>cap</code> and only uses the tolerance as a second pass
+      <span class="ln">:55217–:55218</span>.</li>
+    <li><b>Over-cap → <code>pending_approval</code></b> — set on the booking side, not here. What this domain must know is
+      <code>bkPendHoldsSeat(bk)</code> <span class="ln">:12040</span>: a <code>pending_approval</code> booking whose
+      <code>approval.over[]</code> is non-empty (or <code>totOver &gt; 0</code>) <b>does not hold a seat</b> and is
+      excluded from <code>getSeatsConsumed</code>. Any other pending booking does hold its seats.</li>
+    <li><b>Cancelled statuses</b> — <code>['cancelled','rejected','cancelled_weather']</code> are excluded from every
+      count in this domain: <code>getSeatsConsumed</code> <span class="ln">:12052</span>, <code>baDayBoats</code>
+      consumers, <code>poBoats</code> <span class="ln">:79785</span>, <code>pjPax</code> <span class="ln">:82129</span>,
+      <code>tsRows</code> <span class="ln">:51590</span>, <code>goRows</code> <span class="ln">:50503</span>,
+      <code>pckGuideJobOrder</code> <span class="ln">:50821</span>, <code>_rcActiveRows</code> (<code>_RC_CXL</code>
+      <span class="ln">:44501</span>).</li>
+    <li><b>On-site losses feed back into capacity</b> — <code>getSeatsConsumed</code> subtracts
+      <code>ckLostByType(bk,date).total</code> <span class="ln">:12061</span>, so a booking whose guests no-showed at the
+      pier frees its seats in the allotment for that (past) day.</li>
+  </ul>
+</section>
+
+<!-- ============ 7 ============ -->
+<section id="s7">
+  <h2><span class="num">07</span> Persistence path</h2>
+  <p>Everything in this domain lands in the one RAM blob keyed <code>loveandaman_v2</code> and is synced by the boot shim
+  (<code>save(v)</code> at <span class="ln">:211</span>) to <code>POST /api/v1/_batch</code>. Four different writers
+  appear here — using the wrong one is the usual cause of “I saved it and it came back empty”.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:200px">Writer</th><th style="width:80px">Line</th><th>What it writes</th><th style="width:250px">Permission area</th></tr></thead>
+    <tbody>
+      <tr><td><code>save(area)</code></td><td class="mono">:5805</td>
+        <td><code>routes</code>, <code>boats</code>, <b><code>trips</code></b> — read-modify-write of the raw key</td>
+        <td><code>'operations'</code> for Boat Op, <code>'config'</code> for programs</td></tr>
+      <tr><td><code>acctPersistBookings()</code></td><td class="mono">:42877</td>
+        <td><code>sb_bookings</code> via <code>laBlob()</code>; clears <code>_baChMemo</code> first</td>
+        <td><code>operations</code> — <b>silently returns</b> otherwise</td></tr>
+      <tr><td><code>ckPersist()</code></td><td class="mono">:47213</td>
+        <td><code>sb_bookings</code> via <code>laBlob()</code></td>
+        <td><code>operations</code> <b>or</b> <code>pier</code> — exists precisely because pier-only staff could not
+        persist a check-in <span class="ln">:47197</span></td></tr>
+      <tr><td><code>poPersist()</code></td><td class="mono">:79690</td>
+        <td>the 13 <code>pier_*</code> blob keys <span class="ln">:79702–:79707</span></td>
+        <td><code>pier</code>, falling back to <code>operations</code> for legacy accounts</td></tr>
+    </tbody>
+  </table></div>
+
+  <p><b>Other small writers</b> — <code>sbWeatherPersist</code> <span class="ln">:59906</span> (<code>sb_weather</code>),
+  <code>tsPersist</code> <span class="ln">:51539</span> (<code>travel_sum</code>), <code>tsCotPersist</code>
+  <span class="ln">:51638</span> (<code>ts_cot</code>), <code>taSet</code> <span class="ln">:57712</span>
+  (<code>trip_actuals</code>), <code>ctWrite(k, val)</code> <span class="ln">:55972</span> — the generic
+  <b>JSON-string</b> blob-key writer used for <code>guides</code>, <code>go_asn</code>, <code>go_no</code>,
+  <code>go_cfg</code>, <code>dr_cfg</code>, <code>dr_mail</code> (matching reader <code>ctRead</code>
+  <span class="ln">:55967</span> parses the string back).</p>
+
+  <h3 id="p-rules">Rules that hold everywhere here</h3>
+  <ul>
+    <li>Always go through <code>laBlob()</code> / <code>laBlobSave()</code> <span class="ln">:42860</span>,
+      <span class="ln">:42869</span>. <code>poPersist</code> documents why <span class="ln">:79692–:79695</span>: a raw
+      <code>localStorage.getItem</code> reads a stale snapshot and overwrites whatever another module just wrote — the
+      symptom staff report is “กรอกแล้วรีเฟรชเด้งกลับ”.</li>
+    <li>Read-modify-write; never assign a fresh object to the blob.</li>
+    <li>A new persisted field also needs a mapper / REST-index entry server-side or it is dropped on the next SQL
+      round-trip.</li>
+    <li><code>TRIPS</code> is the only store here written through the old <code>save()</code> path.</li>
+  </ul>
+
+  <h3 id="p-viewstate">View-state that is <i>not</i> in the blob</h3>
+  <p><code>_bop2</code> <span class="ln">:10005</span>, <code>_fc</code> <span class="ln">:10314</span>,
+  <code>_baDate</code> <span class="ln">:45307</span>,
+  <code>_pckDate</code>/<code>_pckFam</code>/<code>_pckRoute</code>/filters <span class="ln">:48319–:48324</span>,
+  <code>_tsDate</code> <span class="ln">:51553</span>, <code>_drDate</code>/<code>_drTab</code>
+  <span class="ln">:52671–:52672</span>, <code>_docCheck</code> <span class="ln">:75161</span>,
+  <code>_rcDate</code>/<code>_rcView</code> <span class="ln">:44500</span>, <code>_poPier</code>/<code>_poDate</code>
+  <span class="ln">:79737–:79738</span>, <code>_paDate</code> <span class="ln">:80671</span>.
+  A few UI prefs go to real <code>localStorage</code>: <code>pck_showby</code> <span class="ln">:48324</span>,
+  <code>la_pjw</code> <span class="ln">:83075</span>, <code>la_pjf</code> <span class="ln">:83078</span>,
+  <code>la_pogrp</code> <span class="ln">:5997</span>.</p>
+</section>
+
+<!-- ============ 8 ============ -->
+<section id="s8">
+  <h2><span class="num">08</span> Cross-module contracts</h2>
+
+  <div class="card">
+    <h4 id="x-ops" style="margin-top:0">8.1 Booking → this domain: <code>bk.ops</code> is <b>per travel day</b></h4>
+    <p>The single most important contract (<code>§Per-trip ops</code>, block comment at <span class="ln">:45341–:45355</span>):</p>
+    <ul>
+      <li>Day 1 of a booking lives in <b><code>b.ops</code></b>; every later day lives in <b><code>trip.ops</code></b>
+        (its own DB columns on <code>sb_bookings__trips</code>).</li>
+      <li>Read with <code>bkOpsRead(b, date)</code> <span class="ln">:45392</span> (never creates), write with
+        <code>bkOpsFor(b, date)</code> <span class="ln">:45399</span> (creates on demand), clear with
+        <code>bkOpsClear(b, date, opts)</code> <span class="ln">:45407</span>, resolve the target day with
+        <code>bkOpsDate(b, date)</code> <span class="ln">:45421</span>.</li>
+      <li><code>bkIsFirstDay(b,date)</code> <span class="ln">:45387</span> returns true for single-day bookings, so all
+        legacy call sites keep working.</li>
+      <li>Reading <code>b.ops</code> directly on a multi-day booking gives you <b>day 1’s</b> boat/van — that was the bug
+        where an overnight’s return leg showed the outbound boat, the outbound van, and a hotel pickup for someone coming
+        back from the island.</li>
+      <li><code>bkOpsClear</code> also deletes <code>vanCheckin</code>/<code>pierCheckin</code>
+        <span class="ln">:47417</span> / <span class="ln">:45417</span> — moving a trip to a new date must not carry
+        yesterday’s “boarded” state.</li>
+    </ul>
+    <p><b>Fields this domain owns inside <code>ops</code>:</b> <code>boatId</code>, <code>boatSplits[]</code>,
+    <code>upgrade</code>, <code>vanCheckin</code>, <code>pierCheckin</code>, <code>reconfirm</code>, <code>pfm</code>.
+    <b>Fields the van domain owns:</b> <code>vanId</code>, <code>vanReturnId</code>, <code>returnSameVan</code>,
+    <code>vanGroup</code>, <code>vanSeq</code>, <code>vanSplits[]</code>, <code>pickupTimeFinal</code>.</p>
+    <div class="note danger" style="margin-bottom:0">
+      <span class="lbl">Edit-preserve</span>
+      <code>bkV2CommitBooking</code> rebuilds a fresh booking object on edit. Its <code>if(editing)</code> block must
+      carry <code>ops</code> over, or every boat/van assignment and both check-ins are wiped. See CLAUDE.md §3.4.
+    </div>
+  </div>
+
+  <div class="card">
+    <h4 id="x-bop" style="margin-top:0">8.2 Boat Operation → Booking</h4>
+    <p style="margin:0"><code>TRIPS[date][boatId]</code> is the capacity source. <code>getAllotment</code>
+    <span class="ln">:12145</span> and <code>getSeatsConsumed</code> <span class="ln">:12046</span> turn it into sellable
+    seats; Booking’s calendar, the seat-lock guard and the over-cap approval queue all read those two.</p>
+  </div>
+
+  <div class="card">
+    <h4 id="x-fleet" style="margin-top:0">8.3 Boat Status / Fleet → Boat Operation</h4>
+    <ul style="margin-bottom:0">
+      <li><code>getCurStatus(boat, ds)</code> <span class="ln">:5879</span> — the log entry covering <code>ds</code>,
+        latest <code>from</code> wins and, on ties, the later-recorded entry wins <span class="ln">:5880–:5885</span>.
+        Anything other than <code>available</code> removes the boat from the picker.</li>
+      <li><code>getBoatCurrentPier(b, ds)</code> <span class="ln">:9920</span> — 4-step resolution: active maintenance job
+        with a location and a non-available target status → <code>'shop'</code>; else an active
+        <code>b.assignments[]</code> row covering <code>ds</code> → <code>toPier</code>; else keyword match on the status
+        <code>loc</code>; else <code>b.pier</code>. This is what makes a Panwa boat unavailable for a Ranong route.</li>
+      <li><code>FL_PROJECTS</code> supplies the <code>[PROJ]</code>/<code>[HOLD]</code> reason strings in the unavailable
+        list <span class="ln">:10562</span>.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4 id="x-van" style="margin-top:0">8.4 This domain → Van / Transfer</h4>
+    <ul style="margin-bottom:0">
+      <li>Pier check-in groups rows by <code>ops.vanId</code> and orders van groups by <code>ops.vanGroup</code> then
+        <code>ops.vanSeq</code> <span class="ln">:51417–:51431</span>, i.e. exactly the ordering the van job order uses.</li>
+      <li><code>pckArrivalOf(r)</code> <span class="ln">:48337</span>: <code>OWN</code> when <code>bk.pickupSelf</code> or
+        the effective zone is <code>NoTransfer</code>; <code>NOVAN</code> when a transfer zone has no van yet; otherwise
+        <code>PK</code>/<code>KL</code>.</li>
+      <li>Van check-in no-shows flow into the pier via <code>pckExpected</code> <span class="ln">:48896</span>, unless the
+        reason is “will come to the pier themselves” (<code>ckExpectAtPier</code> <span class="ln">:47161</span>) or the
+        pier reinstates them (<code>ckPierReinstate</code> <span class="ln">:47169</span>).</li>
+      <li>OVN return legs read <code>ops.vanReturnId || ops.vanId</code> <span class="ln">:51283</span>,
+        <code>tsRows</code> <span class="ln">:51609</span>.</li>
+      <li>Van job order printing lives in the van domain:
+        <code>bkV2VanJobOrder(date, vanId, routeId, leg)</code> <span class="ln">:55138</span>.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4 id="x-acct" style="margin-top:0">8.5 This domain → Accounting</h4>
+    <ul style="margin-bottom:0">
+      <li>Pier cash is <b>not</b> posted to <code>SB_PAYMENTS</code>. It lives on <code>bk.pierPayments[]</code> and must
+        be reconciled at day close <span class="ln">:48435–:48436</span>. Card fees are held separately from
+        <code>amount</code> so revenue is not inflated.</li>
+      <li>Travel Summary decisions (<code>TRAVEL_SUM</code>, <code>TS_COT</code>) are the input to that reconciliation,
+        not ledger entries themselves.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4 id="x-pnl" style="margin-top:0">8.6 This domain → Trip P&amp;L / Costing</h4>
+    <p style="margin:0"><code>taSet(date, boatId, {meal:{…}})</code> <span class="ln">:57712</span> writes the actual meal
+    cost per boat-day into <code>TRIP_ACT</code> (<code>trip_actuals</code>), which the trip P&amp;L reads. Meal venue per
+    boat-day is <code>PIER_JOB[…].mv</code>, resolved by <code>mvForTrip(date, bid, routeId)</code> <span class="ln">:56305</span>.</p>
+  </div>
+
+  <div class="card">
+    <h4 id="x-guides" style="margin-top:0">8.7 Pier Office ↔ guides</h4>
+    <p style="margin:0">Guides are administered from the work-schedule page (<code>ทะเบียนไกด์</code>
+    <span class="ln">:81282</span>) and assigned from the boat job-sheet card (<code>pjGuideOpen</code>
+    <span class="ln">:82776</span> → <code>goSetupOpen</code>), but they are stored entirely in the guide-order module’s
+    blob keys (<code>guides</code> / <code>go_asn</code> / <code>go_cfg</code>) — <b>outside</b> <code>poPersist()</code>.
+    A monkey-patch wrapper on <code>goSetupSave</code> <span class="ln">:82777–:82784</span> re-renders the
+    <code>poj</code> page when it is the active view.</p>
+  </div>
+</section>
+
+<!-- ============ 9 ============ -->
+<section id="s9">
+  <h2><span class="num">09</span> Invariants &amp; gotchas</h2>
+  <ol>
+    <li><b><code>bk.ops</code> is day 1 only.</b> Use <code>bkOpsRead</code> / <code>bkOpsFor</code> /
+      <code>bkOpsDate</code> with an explicit date. Any new dispatch screen that reads <code>bk.ops</code> directly is
+      wrong for overnight and multi-programme bookings.</li>
+    <li><b>Past days are frozen in Boat Operation.</b> <code>bop2GuardPast</code> <span class="ln">:10261</span> blocks
+      edits because the day already produced Daily Report / Travel Summary / trip-P&amp;L numbers.</li>
+    <li><b>A chartered hull never carries seat pax</b> — and <code>TRIPS</code> is not sufficient to know which hulls are
+      chartered. Always go through <code>baCharterBoatIds</code> / <code>baCharterBoatMapMemo</code>
+      <span class="ln">:45331</span>. Call <code>baChMemoClear()</code> <span class="ln">:45330</span> after any booking
+      write; <code>acctPersistBookings</code> and <code>ckPersist</code> already do.</li>
+    <li><b><code>_baChMemo</code> lives one microtask.</b> It is cleared on the next
+      <code>Promise.resolve().then()</code> <span class="ln">:45332</span>, which is safe only because rendering is
+      synchronous. Do not make a render async without revisiting this.</li>
+    <li><b><code>cap</code> is <code>boatCapFor(id, date)</code>, not <code>boat.cap</code>.</b> The per-day override
+      exists and the assignment guard honours it.</li>
+    <li><b><code>ckWrite</code> rebuilds the whole check-in object.</b> Anything not in <code>CK_STAGE_KEYS</code>
+      <span class="ln">:47238</span> is lost on the next ± press — that is why <code>arrivedAt</code>,
+      <code>clearedAt</code> and <code>reinstate</code> are listed there. Same class of bug as <code>events</code>
+      disappearing.</li>
+    <li><b><code>pjOf</code> has a field whitelist</b> <span class="ln">:82102–:82104</span>. A new per-day job-sheet
+      field that is not added there is silently dropped on the next <code>pjSet</code>; the comments call this out for
+      <code>lock</code> (<code>§pjLock</code>) and <code>mv</code> (<code>§mealTrip</code>).</li>
+    <li><b><code>ckPersist</code> ≠ <code>acctPersistBookings</code>.</b> The former accepts the <code>pier</code>
+      permission area; the latter does not. Using the wrong one makes pier staff’s work vanish with no error.</li>
+    <li><b>Equipment balances are derived, never stored.</b> <code>poBal</code> <span class="ln">:79747</span> replays
+      <code>PIER_MOVES</code> from <code>item.total</code>. Fix mistakes with an <code>adjust</code> move, never by
+      editing a past row.</li>
+    <li><b>The roster is derived too.</b> <code>PIER_SHIFT</code> holds only manually-touched cells; everything else
+      re-reads <code>PIER_JOB</code> each render (<code>paDayIdx</code> <span class="ln">:80783</span>). Backfilling
+      <code>PIER_SHIFT</code> for every cell would break the “job sheet changed → roster follows” behaviour.</li>
+    <li><b>The roster cycle is 26 → 25 by default</b>, spanning two months (<code>paCycleStart</code>
+      <span class="ln">:80677</span>, <code>paCycle</code> <span class="ln">:80761</span>). Any month-based assumption in
+      new roster code will be off.</li>
+    <li><b>Pier enum:</b> <code>tublamu</code> · <code>panwa</code> · <code>ranong</code> (+ the pseudo-pier
+      <code>'shop'</code> returned by <code>getBoatCurrentPier</code>). <code>panwa</code> is displayed as “Phuket” in the
+      sidebar and “ท่าวิสิษฐ์พันวา” in the popover — different labels, same value.</li>
+    <li><b>Dates:</b> build <code>YYYY-MM-DD</code> with <code>bkV2LocalYMD</code> / <code>poYMD</code>
+      <span class="ln">:79733</span>. <code>bop2GetDates</code> <span class="ln">:10028</span> deliberately constructs
+      month days at 12:00 to dodge the UTC shift <span class="ln">:10033</span>; several older <code>dr*</code> helpers
+      still use <code>toISOString().slice(0,10)</code> (<code>drDateShift</code> <span class="ln">:52758</span>) — a
+      latent +07:00 bug.</li>
+    <li><b><code>esc</code> is local.</b> <code>ckEsc</code> <span class="ln">:47196</span> and <code>poE</code>
+      <span class="ln">:79730</span> are the shared helpers in this domain; a new top-level render function that calls a
+      bare <code>esc(…)</code> throws silently on click.</li>
+    <li><b>Cancelled-status list is duplicated ~10 times</b> as a literal array. Grep
+      <code>'cancelled_weather'</code> before adding a new aggregate and copy the same triple.</li>
+    <li><b>Guide roles:</b> only <code>guide</code> and <code>trainee</code> count as guides on the government form;
+      <code>intern</code> and <code>staff</code> go to “อื่นๆ” (<code>goIsGuide</code> <span class="ln">:50450</span>,
+      used at <span class="ln">:50547</span>). Data as of Aug 2026 had interns on 18 of 20 sheets, so this is not an edge
+      case.</li>
+    <li><b>Nothing blocks an under-licensed crew.</b> <code>plBoatBad</code> <span class="ln">:81899</span> is advisory
+      only.</li>
+    <li><b>OCR needs the internet</b> and reads English only. It never reads MRZ; it fuzzy-matches six fields. Treat
+      auto-ticks as a hint — the UI says so:
+      <code>ระบบติ๊กช่องที่ตรงให้อัตโนมัติ — โปรดตรวจขั้นสุดท้ายก่อนกด ✅</code>.</li>
+    <li><b>Re-confirm has no permission guard</b> on its writers; it relies on <code>acctPersistBookings</code> refusing.
+      If you add a stricter persist path, add the guard too.</li>
+    <li><b>Pier money is a separate pot</b> from <code>SB_PAYMENTS</code>. Never “helpfully” post
+      <code>pierPayments</code> into the ledger without the day-close reconciliation.</li>
+    <li><b>Scroll-jump:</b> <code>tsAfter</code> <span class="ln">:51557</span> and <code>drAfter</code>
+      <span class="ln">:52762</span> capture and restore <code>window.scrollY</code> around a full re-render — follow that
+      pattern for any new full-page re-render in this domain.</li>
+  </ol>
+</section>
+
+<!-- ============ 10 ============ -->
+<section id="s10">
+  <h2><span class="num">10</span> Function index</h2>
+  <p>Type to filter. Line numbers are as of <code>094dde1</code> and drift — grep the symbol name.</p>
+  <input class="filter" id="ffilter" type="search" placeholder="Filter functions… (e.g. pier, charter, roster)" autocomplete="off">
+  <span class="count" id="fcount"></span>
+  <div class="tw"><table id="ftable">
+    <thead><tr><th style="width:340px">Function</th><th style="width:140px">Line</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>nav</code></td><td class="mono">6027</td><td>View router; matches <code>poa-</code>/<code>pol-</code>/<code>poj-</code>/<code>po-</code> prefixes longest-first</td></tr>
+      <tr><td><code>poNavGroup</code></td><td class="mono">5990</td><td>Collapse/expand a pier group in the sidebar</td></tr>
+      <tr><td><code>renderOp</code></td><td class="mono">11209</td><td>Boat Operation page entry</td></tr>
+      <tr><td><code>bop2RenderShell</code></td><td class="mono">11216</td><td>Builds the whole Boat-Operation shell (KPIs, matrix, fleet pool)</td></tr>
+      <tr><td><code>bop2GetDates</code></td><td class="mono">10028</td><td>Week or month date list for the matrix (noon-anchored)</td></tr>
+      <tr><td><code>bop2FleetStatus</code></td><td class="mono">10552</td><td>Split the fleet into assigned / available / unavailable for a date</td></tr>
+      <tr><td><code>bop2OpenCellPopover</code></td><td class="mono">10086</td><td>Route×date popover; pier-filters the available list</td></tr>
+      <tr><td><code>bop2AssignBoat</code></td><td class="mono">10266</td><td>Write <code>TRIPS[date][boatId]</code></td></tr>
+      <tr><td><code>bop2UnassignBoat</code></td><td class="mono">10287</td><td>Remove a boat from a day, with a bookings-attached confirm</td></tr>
+      <tr><td><code>bop2GuardPast</code></td><td class="mono">10261</td><td>Hard block on editing a past operating day</td></tr>
+      <tr><td><code>bop2RouteDaysNeedingBoats</code></td><td class="mono">10599</td><td>Scan for <code>no_boat</code> / <code>boat_broken</code> route-days</td></tr>
+      <tr><td><code>bop2BoatsOnRouteDate</code></td><td class="mono">10627</td><td>Boats serving one route on one date (heat-map cells)</td></tr>
+      <tr><td><code>renderFleetCal</code></td><td class="mono">10386</td><td>Read-only fleet month calendar</td></tr>
+      <tr><td><code>fcDay</code></td><td class="mono">10343</td><td>One day’s routes / charters / ready-by-pier / fixing / weather</td></tr>
+      <tr><td><code>fcOpenDay</code></td><td class="mono">10327</td><td>Jump from the calendar into Boat Operation for that day</td></tr>
+      <tr><td><code>getCurStatus</code></td><td class="mono">5879</td><td>Boat status on a date from <code>log[]</code> (latest <code>from</code>, later entry wins)</td></tr>
+      <tr><td><code>getBoatCurrentPier</code></td><td class="mono">9920</td><td>Pier of a boat on a date: shop → assignment → loc keyword → home</td></tr>
+      <tr><td><code>getSeatsConsumed</code></td><td class="mono">12046</td><td>Seat pax on a route×date; excludes charter, cancelled, non-holding pending, on-site losses</td></tr>
+      <tr><td><code>getAssignedBoatsForRouteDate</code></td><td class="mono">12096</td><td><code>TRIPS</code> rows for a route×date, charter-corrected</td></tr>
+      <tr><td><code>getAllotment</code></td><td class="mono">12145</td><td>Full capacity object for a route×date</td></tr>
+      <tr><td><code>bkPendHoldsSeat</code></td><td class="mono">12040</td><td>Whether a <code>pending_approval</code> booking still occupies seats</td></tr>
+      <tr><td><code>boatCapFor</code></td><td class="mono">47018</td><td>Per-day effective cap (override-aware)</td></tr>
+      <tr><td><code>bkOpsRead</code> / <code>bkOpsFor</code> / <code>bkOpsClear</code> / <code>bkOpsDate</code></td><td class="mono">45392 / 45399 / 45407 / 45421</td><td>Per-travel-day ops accessors</td></tr>
+      <tr><td><code>bkV2CharterBoatHeal</code></td><td class="mono">45435</td><td>Mirror <code>trip.charterBoatId</code> → <code>ops.boatId</code> (idempotent)</td></tr>
+      <tr><td><code>baCharterBoatMap</code> / <code>baCharterBoatIds</code></td><td class="mono">45315 / 45336</td><td>Which hulls are chartered that day, derived from bookings</td></tr>
+      <tr><td><code>baDayBoats</code> / <code>baBoatsForRoute</code></td><td class="mono">45445 / 45450</td><td>Non-charter deployed boats for a date / route</td></tr>
+      <tr><td><code>baSeatBookingsForRoute</code></td><td class="mono">45451</td><td>Seat bookings on a route×date</td></tr>
+      <tr><td><code>baAssignedPax</code> / <code>baAssignedBookings</code></td><td class="mono">45457 / 45489</td><td>Load on a boat that day (split-aware)</td></tr>
+      <tr><td><code>bkV2BoatPulled</code></td><td class="mono">45465</td><td>Flag “boat removed / re-routed / chartered by someone else”</td></tr>
+      <tr><td><code>bkV2AssignBoat</code></td><td class="mono">45500</td><td>Assign one booking to a boat, with the cap+TOL guard</td></tr>
+      <tr><td><code>bkV2BoatAssignSelected</code></td><td class="mono">45537</td><td>Bulk assign ticked rows; skips overflowing ones</td></tr>
+      <tr><td><code>baAutoAssign</code></td><td class="mono">55208</td><td>First-fit auto assignment per route</td></tr>
+      <tr><td><code>bkV2BoatUpgrade</code></td><td class="mono">55223</td><td>Emergency upgrade; unlocks the all-boats picker</td></tr>
+      <tr><td><code>bkV2BoatSplit</code></td><td class="mono">46076</td><td>Split one booking’s pax across several hulls</td></tr>
+      <tr><td><code>bkBoatIdsOn</code> / <code>bkBoatPaxOnBoat</code></td><td class="mono">46036 / 46042</td><td>Split-aware hull and head lookups</td></tr>
+      <tr><td><code>renderBoatAssign</code></td><td class="mono">55235</td><td>Legacy standalone Boat Assign page</td></tr>
+      <tr><td><code>bkV2GoBoatAssign</code></td><td class="mono">45683</td><td>Redirect to Booking ▸ By-trip with boat mode on</td></tr>
+      <tr><td><code>bkV2WeatherMark</code> / <code>…Confirm</code></td><td class="mono">59915 / 59929</td><td>Weather-cancel a route×date and tag its bookings</td></tr>
+      <tr><td><code>renderPierCheckin</code></td><td class="mono">51256</td><td>Pier check-in console (boat → trip → zone → van group)</td></tr>
+      <tr><td><code>pckStage</code> / <code>pckStageSet</code></td><td class="mono">47273 / 47392</td><td>Stage of a booking and the stage state machine</td></tr>
+      <tr><td><code>ckToggle</code> / <code>ckStep</code></td><td class="mono">47755 / 47741</td><td>Board/unboard; adjust the travelling count</td></tr>
+      <tr><td><code>ckWrite</code> / <code>ckRead</code></td><td class="mono">47239 / 47235</td><td>Per-day check-in block accessors (merges <code>CK_STAGE_KEYS</code>)</td></tr>
+      <tr><td><code>ckLostByType</code></td><td class="mono">47123</td><td>Heads really lost, split ns/cxl, honouring self-arrive + reinstate</td></tr>
+      <tr><td><code>pckExpected</code></td><td class="mono">48896</td><td>Heads the pier should expect after the van stage</td></tr>
+      <tr><td><code>pckMoney</code> / <code>pckMoneyCell</code></td><td class="mono">48350 / 48379</td><td>Money owed/collected for a booking at the pier</td></tr>
+      <tr><td><code>pckPayGuard</code> / <code>pckPayWarn</code></td><td class="mono">48496 / 48504</td><td>Unpaid-boarding warning with skip / collect exits</td></tr>
+      <tr><td><code>pckPaySave</code></td><td class="mono">48596</td><td>Append split payment lines to <code>bk.pierPayments</code></td></tr>
+      <tr><td><code>pckGuideJobOrder</code> / <code>pckGuideJobSheet</code></td><td class="mono">50815 / 49898</td><td>Print the crew-facing manifest, one A4 page per boat</td></tr>
+      <tr><td><code>pckTripStats</code></td><td class="mono">49746</td><td>Real pax, guide languages, meals, longtail counts for a sheet</td></tr>
+      <tr><td><code>pckMealSend</code></td><td class="mono">51217</td><td>Send the kitchen order and record the meal cost in <code>TRIP_ACT</code></td></tr>
+      <tr><td><code>pckGuideLangs</code> / <code>pckLangNorm</code></td><td class="mono">50211 / 50196</td><td>Guide languages requested on a booking, normalised</td></tr>
+      <tr><td><code>goGuides</code> / <code>goAsn</code> / <code>goNoFor</code></td><td class="mono">50457 / 50468 / 50478</td><td>Guide registry, per-boat-day assignment, one-time doc number</td></tr>
+      <tr><td><code>goSheet</code> / <code>goSetupOpen</code></td><td class="mono">50540 / 50714</td><td>Government guide job order + its assignment modal</td></tr>
+      <tr><td><code>renderPierJob</code></td><td class="mono">82990</td><td>ใบงานเรือ — per-pier boat job sheets</td></tr>
+      <tr><td><code>pjOf</code> / <code>pjSet</code></td><td class="mono">82096 / 82106</td><td>Read (with standing-team fallback) / write a day’s job sheet</td></tr>
+      <tr><td><code>pjAllBoats</code> / <code>pjBoatSt</code></td><td class="mono">82281 / 82228</td><td>Every boat of a pier that day + its status bucket</td></tr>
+      <tr><td><code>pjPax</code></td><td class="mono">82126</td><td>Heads on a boat that day, by type, + requested guide languages</td></tr>
+      <tr><td><code>pjGuidesFull</code> / <code>pjGuides</code></td><td class="mono">82142 / 82155</td><td>All assigned guides with role+languages / names only</td></tr>
+      <tr><td><code>pjCopyYday</code> / <code>pjTeamSave</code></td><td class="mono">82758 / 82750</td><td>Copy yesterday (skipping locked) / promote today’s crew to standing</td></tr>
+      <tr><td><code>renderPierOffice</code></td><td class="mono">80026</td><td>เบิก-คืนอุปกรณ์ page</td></tr>
+      <tr><td><code>poBal</code></td><td class="mono">79747</td><td>Replay <code>PIER_MOVES</code> into stock buckets</td></tr>
+      <tr><td><code>poBoats</code> / <code>poUnassigned</code></td><td class="mono">79771 / 79806</td><td>Boats leaving this pier today / pax with no boat yet</td></tr>
+      <tr><td><code>poIssueSave</code> / <code>poCloseSave</code></td><td class="mono">80283 / 80349</td><td>Issue equipment / close out a boat with shortfall reasons</td></tr>
+      <tr><td><code>poAdd</code></td><td class="mono">79852</td><td>Append one stamped ledger row</td></tr>
+      <tr><td><code>poPersist</code> / <code>poCanEdit</code> / <code>poGuard</code></td><td class="mono">79690 / 79712 / 79724</td><td>Pier-Office persistence and permission trio</td></tr>
+      <tr><td><code>renderPierAtt</code></td><td class="mono">81159</td><td>ตารางการทำงาน — duty roster + registry hub</td></tr>
+      <tr><td><code>paCycle</code> / <code>paCycleStart</code></td><td class="mono">80761 / 80677</td><td>26→25 roster cycle</td></tr>
+      <tr><td><code>paCell</code> / <code>paDayIdx</code></td><td class="mono">80809 / 80783</td><td>Four-layer cell resolution / job-sheet index for a day</td></tr>
+      <tr><td><code>paSet</code> / <code>paSetManual</code></td><td class="mono">81413 / 80775</td><td>Write a manual (or plan) roster override</td></tr>
+      <tr><td><code>renderPierLic</code></td><td class="mono">81938</td><td>ใบอนุญาต — marine licences per pier</td></tr>
+      <tr><td><code>plCheckBoat</code> / <code>plBoatBad</code></td><td class="mono">81870 / 81899</td><td>Licence coverage of a crew for a boat</td></tr>
+      <tr><td><code>renderDocCheck</code></td><td class="mono">75902</td><td>ตรวจเอกสาร page</td></tr>
+      <tr><td><code>docCheckRunPre</code></td><td class="mono">75217</td><td>Tesseract OCR pre-check → <code>bk.docCheck.pre</code></td></tr>
+      <tr><td><code>docCheckStatus</code></td><td class="mono">75342</td><td><code>verified | issue | pending | nofiles</code> — shared by 3 views</td></tr>
+      <tr><td><code>docCheckPrintPack</code></td><td class="mono">75547</td><td>A4 document pack, 1 voucher per page</td></tr>
+      <tr><td><code>renderReconfirm</code></td><td class="mono">44688</td><td>Re-confirm page (by agent / by trip)</td></tr>
+      <tr><td><code>rcSetStatus</code> / <code>rcSendAgent</code></td><td class="mono">44513 / 44606</td><td>Per-booking / per-agent re-confirm state</td></tr>
+      <tr><td><code>rcSheet</code></td><td class="mono">44618</td><td>Printable per-agent re-confirmation sheet</td></tr>
+      <tr><td><code>renderTravelSum</code></td><td class="mono">54632</td><td>Travel Summary day-close page</td></tr>
+      <tr><td><code>tsRows</code></td><td class="mono">51587</td><td>The day’s rows with booked/travelled/events/decision</td></tr>
+      <tr><td><code>tsSet</code> / <code>tsCotPick</code></td><td class="mono">51546 / 51649</td><td>Penalty decision / Cash-on-Tour settlement</td></tr>
+      <tr><td><code>tsPrintSheet</code></td><td class="mono">52192</td><td>4-section day-close document incl. the full manifest</td></tr>
+      <tr><td><code>renderDailyReport</code></td><td class="mono">54603</td><td>Daily Report page (5 tabs)</td></tr>
+      <tr><td><code>drData</code></td><td class="mono">52795</td><td>Aggregate a date into the report model</td></tr>
+      <tr><td><code>drMailHTML</code> / <code>drMailShow</code></td><td class="mono">54114 / 54485</td><td>Emailable HTML report and its composer</td></tr>
+      <tr><td><code>save</code></td><td class="mono">5805</td><td>Persist <code>routes</code>/<code>boats</code>/<code>trips</code> (area-guarded)</td></tr>
+      <tr><td><code>acctPersistBookings</code></td><td class="mono">42877</td><td>Persist <code>sb_bookings</code> (<code>operations</code> only)</td></tr>
+      <tr><td><code>ckPersist</code></td><td class="mono">47213</td><td>Persist <code>sb_bookings</code> for pier staff (<code>operations</code> <b>or</b> <code>pier</code>)</td></tr>
+      <tr><td><code>ctRead</code> / <code>ctWrite</code></td><td class="mono">55967 / 55972</td><td>Generic JSON-string blob-key accessors (guides, <code>go_*</code>, <code>dr_*</code>)</td></tr>
+      <tr><td><code>taSet</code></td><td class="mono">57712</td><td>Write per-boat-day actuals (<code>trip_actuals</code>)</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<footer>
+  Rendered from <code>allotment_v2/docs/workflows/03-boat-operations-pier.md</code> ·
+  written against commit <code>094dde1</code> on <code>refactor/booking-v2-migration</code> ·
+  these docs describe <b>the code, not the intent</b> — where an older doc contradicts the code, the code won.
+</footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  // theme toggle
+  var btn = document.getElementById('themebtn');
+  var root = document.documentElement;
+  var saved = null;
+  try { saved = localStorage.getItem('la_doc_theme'); } catch(e){}
+  if (saved) root.setAttribute('data-theme', saved);
+  btn.addEventListener('click', function(){
+    var cur = root.getAttribute('data-theme');
+    var next;
+    if (cur === 'dark') next = 'light';
+    else if (cur === 'light') next = 'dark';
+    else next = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('la_doc_theme', next); } catch(e){}
+  });
+
+  // scrollspy
+  var links = Array.prototype.slice.call(document.querySelectorAll('#nav a'));
+  var targets = links.map(function(a){ return document.querySelector(a.getAttribute('href')); });
+  function spy(){
+    var best = 0, bestTop = -Infinity;
+    for (var i=0;i<targets.length;i++){
+      if (!targets[i]) continue;
+      var t = targets[i].getBoundingClientRect().top - 90;
+      if (t <= 0 && t > bestTop){ bestTop = t; best = i; }
+    }
+    links.forEach(function(a,i){ a.classList.toggle('on', i===best); });
+  }
+  var tick = false;
+  window.addEventListener('scroll', function(){
+    if (tick) return; tick = true;
+    requestAnimationFrame(function(){ spy(); tick = false; });
+  }, {passive:true});
+  spy();
+
+  // function-index filter (optional — skipped when the doc has no #ffilter)
+  var input = document.getElementById('ffilter');
+  var rows  = Array.prototype.slice.call(document.querySelectorAll('#ftable tbody tr'));
+  var count = document.getElementById('fcount');
+  if (input && rows.length){
+    var paint = function(){
+      var q = input.value.trim().toLowerCase();
+      var n = 0;
+      rows.forEach(function(r){
+        var hit = !q || r.textContent.toLowerCase().indexOf(q) !== -1;
+        r.classList.toggle('hidden', !hit);
+        if (hit) n++;
+      });
+      if (count) count.textContent = q ? (n + ' of ' + rows.length + ' shown') : (rows.length + ' functions');
+    };
+    input.addEventListener('input', paint);
+    paint();
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>allotment_v2 Workflow Docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f8fa; --panel:#ffffff; --panel-2:#fbfcfd;
+  --ink:#0f2029; --ink-2:#31485a; --muted:#68808f;
+  --line:#e1e8ee; --line-2:#eef2f6;
+  --accent:#1683C7; --accent-ink:#0f6ba6; --accent-soft:#e8f3fb;
+  --danger:#c8384c; --danger-soft:#fdecee;
+  --warn:#b46a00; --warn-soft:#fdf3e3;
+  --ok:#137a52; --ok-soft:#e6f5ee;
+  --violet:#6a4bbd; --violet-soft:#f0ecfb;
+  --code-bg:#f0f4f8; --code-ink:#173446;
+  --shadow:0 1px 2px rgba(15,32,41,.05), 0 8px 24px -14px rgba(15,32,41,.22);
+  --radius:14px;
+}
+:root:not([data-theme="light"]){ }
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b1317; --panel:#111d24; --panel-2:#0e181e;
+    --ink:#e7eff5; --ink-2:#bfd0dc; --muted:#89a0af;
+    --line:#1f313c; --line-2:#182831;
+    --accent:#49b2ee; --accent-ink:#7ccbf8; --accent-soft:#0f2c3d;
+    --danger:#f2798c; --danger-soft:#33161c;
+    --warn:#e0a24a; --warn-soft:#33260f;
+    --ok:#4ccb95; --ok-soft:#0f2b21;
+    --violet:#a48bef; --violet-soft:#221b3a;
+    --code-bg:#0d1b23; --code-ink:#cfe0eb;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b1317; --panel:#111d24; --panel-2:#0e181e;
+  --ink:#e7eff5; --ink-2:#bfd0dc; --muted:#89a0af;
+  --line:#1f313c; --line-2:#182831;
+  --accent:#49b2ee; --accent-ink:#7ccbf8; --accent-soft:#0f2c3d;
+  --danger:#f2798c; --danger-soft:#33161c;
+  --warn:#e0a24a; --warn-soft:#33260f;
+  --ok:#4ccb95; --ok-soft:#0f2b21;
+  --violet:#a48bef; --violet-soft:#221b3a;
+  --code-bg:#0d1b23; --code-ink:#cfe0eb;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px; line-height:1.62; -webkit-font-smoothing:antialiased;
+}
+code,kbd,.mono{font-family:"DM Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+
+/* ---------- layout ---------- */
+.wrap{display:grid; grid-template-columns:264px minmax(0,1fr); gap:0; max-width:1420px; margin:0 auto}
+.side{
+  position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+  border-right:1px solid var(--line); padding:26px 18px 60px; background:var(--panel-2);
+}
+.main{min-width:0; padding:34px 42px 120px}
+@media (max-width:960px){
+  .wrap{grid-template-columns:1fr}
+  .side{position:static; height:auto; border-right:0; border-bottom:1px solid var(--line); padding:20px 22px}
+  .main{padding:24px 20px 80px}
+}
+
+/* ---------- sidebar ---------- */
+.brand{display:flex; align-items:center; gap:10px; margin-bottom:4px}
+.brand .dot{width:26px;height:26px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px;flex:none}
+.brand b{font-size:14px; letter-spacing:-.01em}
+.brand small{display:block; color:var(--muted); font-size:11px; font-weight:400; line-height:1.3}
+.nav{margin-top:20px; display:flex; flex-direction:column; gap:1px}
+.nav a{
+  display:flex; gap:9px; align-items:baseline; text-decoration:none; color:var(--ink-2);
+  padding:6px 10px; border-radius:8px; font-size:13.5px; border-left:2px solid transparent;
+}
+.nav a .n{color:var(--muted); font-size:11px; font-family:"DM Mono",monospace; min-width:16px}
+.nav a:hover{background:var(--line-2); color:var(--ink)}
+.nav a.on{background:var(--accent-soft); color:var(--accent-ink); font-weight:500; border-left-color:var(--accent)}
+.nav .sub{padding-left:34px; font-size:12.5px; color:var(--muted)}
+.nav .sub:hover{color:var(--ink)}
+.backlink{
+  display:inline-block; margin-top:14px; font-size:12.5px; color:var(--muted); text-decoration:none;
+  border-bottom:1px solid transparent;
+}
+.backlink:hover{color:var(--accent-ink); border-bottom-color:var(--accent)}
+.themebtn{
+  margin-top:22px; width:100%; border:1px solid var(--line); background:var(--panel); color:var(--ink-2);
+  border-radius:9px; padding:7px 10px; font:inherit; font-size:12.5px; cursor:pointer;
+}
+.themebtn:hover{border-color:var(--accent); color:var(--accent-ink)}
+
+/* ---------- header ---------- */
+.hero{border-bottom:1px solid var(--line); padding-bottom:22px; margin-bottom:30px}
+.eyebrow{font-family:"DM Mono",monospace; font-size:12px; color:var(--accent-ink); letter-spacing:.06em; text-transform:uppercase}
+h1{font-size:34px; line-height:1.15; letter-spacing:-.025em; margin:6px 0 10px}
+.lede{font-size:16px; color:var(--ink-2); max-width:74ch; margin:0}
+.chips{display:flex; flex-wrap:wrap; gap:7px; margin-top:16px}
+.chip{
+  font-family:"DM Mono",monospace; font-size:11.5px; padding:3px 9px; border-radius:999px;
+  border:1px solid var(--line); background:var(--panel); color:var(--muted);
+}
+.chip b{color:var(--ink-2); font-weight:500}
+
+/* ---------- sections ---------- */
+section{scroll-margin-top:20px; margin-bottom:46px}
+h2{
+  font-size:23px; letter-spacing:-.02em; margin:0 0 14px; padding-bottom:9px;
+  border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:11px;
+}
+h2 .num{font-family:"DM Mono",monospace; font-size:14px; color:var(--accent); font-weight:500}
+h3{font-size:17px; letter-spacing:-.01em; margin:28px 0 10px; color:var(--ink)}
+h4{font-size:13.5px; margin:18px 0 7px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; font-weight:500}
+p{margin:0 0 12px; max-width:82ch}
+ul,ol{margin:0 0 12px; padding-left:22px; max-width:82ch}
+li{margin-bottom:5px}
+a{color:var(--accent-ink)}
+
+/* ---------- inline bits ---------- */
+code:not(pre code){
+  background:var(--code-bg); color:var(--code-ink); padding:1px 5px; border-radius:5px;
+  font-size:.875em; border:1px solid var(--line-2); white-space:nowrap;
+}
+.ln{color:var(--accent-ink); font-family:"DM Mono",monospace; font-size:.82em; white-space:nowrap}
+pre{
+  background:var(--code-bg); border:1px solid var(--line); border-radius:10px;
+  padding:14px 16px; overflow-x:auto; font-size:12.8px; line-height:1.6; color:var(--code-ink); margin:0 0 14px;
+}
+pre code{background:none;border:0;padding:0;white-space:pre}
+
+/* ---------- cards & callouts ---------- */
+.card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px; box-shadow:var(--shadow); margin:0 0 16px}
+.note{
+  border-left:3px solid var(--accent); background:var(--accent-soft); border-radius:0 10px 10px 0;
+  padding:12px 16px; margin:0 0 16px; font-size:14.2px; color:var(--ink-2);
+}
+.note.warn{border-left-color:var(--warn); background:var(--warn-soft)}
+.note.danger{border-left-color:var(--danger); background:var(--danger-soft)}
+.note.ok{border-left-color:var(--ok); background:var(--ok-soft)}
+.note b{color:var(--ink)}
+.note .lbl{display:block; font-size:11px; text-transform:uppercase; letter-spacing:.07em; font-weight:700; margin-bottom:4px; color:var(--accent-ink)}
+.note.warn .lbl{color:var(--warn)} .note.danger .lbl{color:var(--danger)} .note.ok .lbl{color:var(--ok)}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius); margin:0 0 16px; background:var(--panel)}
+table{border-collapse:collapse; width:100%; font-size:13.6px; min-width:520px}
+th{
+  text-align:left; font-weight:500; font-size:11.5px; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--muted); padding:10px 14px; border-bottom:1px solid var(--line); background:var(--panel-2); white-space:nowrap;
+}
+td{padding:9px 14px; border-bottom:1px solid var(--line-2); vertical-align:top; color:var(--ink-2)}
+tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--panel-2)}
+td code{white-space:nowrap}
+
+/* ---------- badges ---------- */
+.b{display:inline-block; font-family:"DM Mono",monospace; font-size:11px; padding:2px 8px; border-radius:999px; white-space:nowrap; border:1px solid transparent}
+.b.blue{background:var(--accent-soft); color:var(--accent-ink); border-color:color-mix(in srgb,var(--accent) 25%, transparent)}
+.b.red{background:var(--danger-soft); color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%, transparent)}
+.b.amber{background:var(--warn-soft); color:var(--warn); border-color:color-mix(in srgb,var(--warn) 30%, transparent)}
+.b.green{background:var(--ok-soft); color:var(--ok); border-color:color-mix(in srgb,var(--ok) 30%, transparent)}
+.b.violet{background:var(--violet-soft); color:var(--violet); border-color:color-mix(in srgb,var(--violet) 30%, transparent)}
+.b.gray{background:var(--line-2); color:var(--muted); border-color:var(--line)}
+
+/* ---------- rail (vertical flow) ---------- */
+.rail{position:relative; margin:6px 0 18px; padding-left:30px}
+.rail:before{content:""; position:absolute; left:9px; top:8px; bottom:8px; width:2px; background:var(--line)}
+.step{position:relative; margin-bottom:13px}
+.step:before{
+  content:""; position:absolute; left:-26px; top:6px; width:11px; height:11px; border-radius:50%;
+  background:var(--panel); border:2px solid var(--accent);
+}
+.step.block:before{border-color:var(--danger); background:var(--danger)}
+.step.ask:before{border-color:var(--warn)}
+.step.done:before{border-color:var(--ok); background:var(--ok)}
+.step .t{font-weight:500; color:var(--ink); font-size:14.4px}
+.step .d{font-size:13.4px; color:var(--muted)}
+
+/* ---------- stage flow (horizontal) ---------- */
+.flow{display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; margin:6px 0 18px}
+.stage{
+  flex:1 1 150px; min-width:140px; background:var(--panel); border:1px solid var(--line);
+  border-radius:11px; padding:11px 13px; position:relative;
+}
+.stage .k{font-family:"DM Mono",monospace; font-size:10.5px; color:var(--muted); letter-spacing:.05em; text-transform:uppercase}
+.stage .v{font-size:13.6px; font-weight:500; margin-top:3px; color:var(--ink)}
+.stage .s{font-size:12.4px; color:var(--muted); margin-top:3px}
+.arrow{display:grid; place-items:center; color:var(--line); font-size:18px; flex:0 0 14px}
+@media(max-width:700px){.arrow{transform:rotate(90deg)}}
+
+/* ---------- outcome grid ---------- */
+.grid2{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px; margin:6px 0 18px}
+.mini{background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:13px 15px}
+.mini h5{margin:0 0 5px; font-size:13.6px; letter-spacing:-.01em}
+.mini p{margin:0; font-size:12.9px; color:var(--muted)}
+
+/* ---------- function index filter ---------- */
+.filter{
+  width:100%; max-width:340px; padding:8px 12px; border-radius:9px; border:1px solid var(--line);
+  background:var(--panel); color:var(--ink); font:inherit; font-size:13.5px; margin-bottom:12px;
+}
+.filter:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft)}
+.hidden{display:none !important}
+.count{font-size:12.5px; color:var(--muted); margin-left:10px}
+
+/* ---------- footer ---------- */
+footer{border-top:1px solid var(--line); padding-top:18px; color:var(--muted); font-size:12.8px}
+</style>
+<style>
+/* ---------- index-only ---------- */
+.wrap{grid-template-columns:minmax(0,1fr); max-width:1080px}
+.main{padding:46px 42px 110px}
+@media (max-width:960px){ .main{padding:28px 20px 80px} }
+.idxtop{display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:26px}
+.doclist{display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:14px; margin:0 0 8px}
+a.doccard{
+  display:block; text-decoration:none; color:inherit; background:var(--panel);
+  border:1px solid var(--line); border-radius:var(--radius); padding:17px 19px;
+  box-shadow:var(--shadow); transition:border-color .13s, transform .13s;
+}
+a.doccard:hover{border-color:var(--accent); transform:translateY(-2px)}
+a.doccard .hd{display:flex; align-items:center; gap:11px; margin-bottom:7px}
+a.doccard .num{
+  width:30px;height:30px;border-radius:9px;background:var(--accent-soft);color:var(--accent-ink);
+  display:grid;place-items:center;font-family:"DM Mono",monospace;font-size:13px;font-weight:500;flex:none;
+}
+a.doccard h3{margin:0; font-size:16px; letter-spacing:-.015em; color:var(--ink)}
+a.doccard p{margin:0; font-size:13.2px; color:var(--muted); line-height:1.55}
+a.doccard .meta{margin-top:9px; font-family:"DM Mono",monospace; font-size:11px; color:var(--muted)}
+.startlist{list-style:none; padding:0; margin:0}
+.startlist li{
+  display:flex; gap:12px; padding:9px 0; border-bottom:1px solid var(--line-2); align-items:baseline; margin:0;
+}
+.startlist li:last-child{border-bottom:0}
+.startlist .w{flex:0 0 190px; font-weight:500; color:var(--ink); font-size:13.8px}
+.startlist .g{flex:1; color:var(--ink-2); font-size:13.8px}
+@media(max-width:640px){ .startlist li{flex-direction:column; gap:2px} .startlist .w{flex:none} }
+</style>
+</head>
+<body>
+<div class="wrap">
+<main class="main">
+
+<header class="hero">
+  <div class="idxtop">
+    <div class="eyebrow">allotment_v2 · documentation</div>
+    <button class="themebtn" id="themebtn" type="button" style="width:auto;margin:0">Toggle theme</button>
+  </div>
+  <h1>Workflow Documentation</h1>
+  <p class="lede">How this system actually works, one doc per domain. Eight explainers covering booking,
+  sales, boat ops, transfer, fleet, accounting, persistence and the app shell.</p>
+  <div class="chips">
+    <span class="chip"><b>Written against</b> 094dde1</span>
+    <span class="chip"><b>Branch</b> refactor/booking-v2-migration</span>
+    <span class="chip"><b>Source</b> allotment_v2/docs/workflows/*.md</span>
+  </div>
+  <div class="note warn" style="margin-top:18px">
+    <span class="lbl">Two standing rules</span>
+    <b>Line numbers drift.</b> Every <span class="ln">:12345</span> reference means &ldquo;roughly here&rdquo; — grep the symbol
+    name instead; each doc&rsquo;s function index is the fastest way to find anything.<br>
+    <b>These docs describe the code, not the intent.</b> Where an older doc contradicts the code, the code won.
+  </div>
+</header>
+
+<section id="docs">
+  <h2><span class="num">01</span> The docs</h2>
+  <div class="doclist">
+
+    <a class="doccard" href="01-booking-lifecycle.html">
+      <div class="hd"><div class="num">01</div><h3>Booking Lifecycle</h3></div>
+      <p>Booking v2 — create / edit / cancel / partial-cancel / reschedule / weather, approvals,
+      seat locks, allotment math, <code>priceBreakdown</code>.</p>
+      <div class="meta">591 lines · bkV2CommitBooking is the centre of gravity</div>
+    </a>
+
+    <a class="doccard" href="02-sales-agents-pricing.html">
+      <div class="hd"><div class="num">02</div><h3>Sales, Agents &amp; Pricing</h3></div>
+      <p>Agents, rate types, the data-driven add-on system, longtail, contracts + renewal, FOC, B2C/B2B.</p>
+      <div class="meta">737 lines · start here to add an add-on type</div>
+    </a>
+
+    <a class="doccard" href="03-boat-operations-pier.html">
+      <div class="hd"><div class="num">03</div><h3>Boat Operations &amp; Pier</h3></div>
+      <p>Boat op / <code>TRIPS</code>, boat assignment, pier check-in, POA/POL/POJ per pier,
+      doc-check OCR, reconfirm, guides.</p>
+      <div class="meta">683 lines</div>
+    </a>
+
+    <a class="doccard" href="04-transfer-vans-pickup.html">
+      <div class="hd"><div class="num">04</div><h3>Transfer, Vans &amp; Pickup</h3></div>
+      <p>Transfer fleet, van groups + job orders, pickup setup &amp; map, and the four overlapping
+      &ldquo;where&rdquo; concepts.</p>
+      <div class="meta">708 lines</div>
+    </a>
+
+    <a class="doccard" href="05-fleet-management.html">
+      <div class="hd"><div class="num">05</div><h3>Fleet Management</h3></div>
+      <p>Boats, engines / gearboxes / propellers, engine swap, maintenance, incidents, projects,
+      consumables, fuel, the <code>flLoad</code> lifecycle.</p>
+      <div class="meta">682 lines · read §6 before writing into flLoad</div>
+    </a>
+
+    <a class="doccard" href="06-accounting-finance.html">
+      <div class="hd"><div class="num">06</div><h3>Accounting &amp; Finance</h3></div>
+      <p>Invoices, payments, deposits, VAT, statements, Daily PFM, trip P&amp;L, costing.</p>
+      <div class="meta">430 lines</div>
+    </a>
+
+    <a class="doccard" href="07-data-persistence-api.html">
+      <div class="hd"><div class="num">07</div><h3>Data, Persistence &amp; API</h3></div>
+      <p>RAM working copy → diff → <code>_batch</code> → Postgres, the mapper, store inventory,
+      <code>server.js</code> routes, migrations, deploy.</p>
+      <div class="meta">767 lines · §4 is the most-often-got-wrong procedure in the repo</div>
+    </a>
+
+    <a class="doccard" href="08-shell-dashboards-config.html">
+      <div class="hd"><div class="num">08</div><h3>Shell, Dashboards &amp; Config</h3></div>
+      <p>File anatomy, boot, routing, <b>shared render utilities and their traps</b>, dashboards,
+      market intelligence, settings.</p>
+      <div class="meta">446 lines</div>
+    </a>
+
+    <a class="doccard" href="09-script-block-13762-36196.html">
+      <div class="hd"><div class="num">09</div><h3>The Fleet Script Block</h3></div>
+      <p><b>Deep dive.</b> A line-by-line map of <code>allotment_v2.html</code> 13762–36196 — the file's
+      largest <code>&lt;script&gt;</code>, and the 5,423-line <code>flLoad()</code> that opens it.</p>
+      <div class="meta">22,435 lines mapped · 531 symbols indexed</div>
+    </a>
+
+  </div>
+
+  <div class="note" style="margin-top:14px">
+    <span class="lbl">01–08 vs 09</span>
+    Docs <b>01–08</b> are organised by <i>domain</i> — what a module does and why. Doc <b>09</b> is organised by
+    <i>file position</i>, for when you are staring at a line number and need to know what you are looking at.
+    Read <a href="05-fleet-management.html">05</a> to understand Fleet; read
+    <a href="09-script-block-13762-36196.html">09</a> to navigate it.
+  </div>
+</section>
+
+<section id="start">
+  <h2><span class="num">02</span> Where to start</h2>
+  <div class="card">
+    <ul class="startlist">
+      <li><span class="w">New to the codebase</span><span class="g"><b>07 §1–3</b> (how data moves), then <b>08 §1 and §5</b>
+        (how the file is laid out and which render traps will bite you), then whichever domain you&rsquo;re touching.</span></li>
+      <li><span class="w">Fixing a booking bug</span><span class="g"><b>01</b>, then <b>03/04</b> for anything downstream of <code>bk.ops</code>.</span></li>
+      <li><span class="w">Adding a persisted field</span><span class="g"><b>07 §4</b>. This is the most-commonly-got-wrong procedure in the repo.</span></li>
+      <li><span class="w">Adding an add-on type</span><span class="g"><b>02 §6</b>.</span></li>
+      <li><span class="w">Touching fleet data</span><span class="g"><b>05 §6</b> before you write anything into <code>flLoad</code>.</span></li>
+    </ul>
+  </div>
+
+  <h3>The seams between domains</h3>
+  <p>Booking owns <code>bk.ops</code> but does not read it operationally; Boat Operations (03) and Vans (04) do.
+  Pricing is produced by 02, frozen into <code>bk.priceBreakdown</code> by 01, and consumed by 06 — three
+  different owners for one number, which is where most inconsistency lives.</p>
+</section>
+
+<section id="issues">
+  <h2><span class="num">03</span> Issues found while documenting</h2>
+  <p>Found by reading the code, not by testing. <b>Nothing here has been fixed.</b></p>
+
+  <div class="note danger">
+    <span class="lbl">Blocking</span>
+    <b><code>server.js</code> does not boot at <code>094dde1</code>.</b>
+    <code>server.js:34-35</code> unconditionally requires <code>./os-backend/src/mapping/os_repo.js</code>;
+    commit <code>094dde1</code> deleted that tree (83 files). Fires in blob mode too, not just
+    <code>DATA_BACKEND=relational</code>. The mapper (<code>field_mapping.json</code>) and the
+    <code>HANDOFF_2026-07-04.md</code> maintenance scripts went with it and have no surviving copy.<br>
+    Recovery: <code>git checkout HEAD~1 -- os-backend db/migrations</code>.
+    <b>Not on <code>main</code></b> — the break is confined to this branch.
+    Detail in <a href="07-data-persistence-api.html">07 §0</a>.
+  </div>
+
+  <h3>Silent data loss</h3>
+  <div class="grid2">
+    <div class="mini"><h5>Permission-gate mismatch</h5>
+      <p><code>sbInvoicesPersist:42846</code> gates on <code>laCanEditArea('accounting')</code> but calls
+      <code>acctPersistBookings:42877</code>, which gates on <code>'operations'</code>. An accounting-only user&rsquo;s
+      invoice saves; the booking-side write silently returns. <span class="b gray">06 §10</span></p></div>
+    <div class="mini"><h5>Weather reschedule keeps stale ops</h5>
+      <p><code>bkV2WeatherResolveOne:60032</code> changes the trip date without clearing <code>bk.ops</code>
+      boat/van/check-in. Every other date-change path clears it. The booking keeps the <i>old</i> day&rsquo;s boat and van.
+      <span class="b gray">01 §7</span></p></div>
+    <div class="mini"><h5>Partial cancel leaks seat locks</h5>
+      <p><code>bkV2PartialCancel:77728</code> reduces pax and total but never returns the seat-lock draws and
+      never touches the invoice. <span class="b gray">01 §7</span></p></div>
+    <div class="mini"><h5>Not persisted at all</h5>
+      <p><code>SB_ADDON_SVCS</code> (add-on services master list) and <code>ctRenewActivate:65317</code>
+      (contract renewal activation). Both are RAM-only — lost on reload. <span class="b gray">02</span></p></div>
+  </div>
+
+  <h3>Wrong numbers</h3>
+  <div class="grid2">
+    <div class="mini"><h5>Calendar zone split is meaningless for v2</h5>
+      <p><code>bkV2InferZone:69054</code> reads <code>bk.pickup</code>, a v1-only field the v2 form never writes,
+      so everything falls through to <code>PK</code>. <span class="b gray">01 §7</span></p></div>
+    <div class="mini"><h5><code>inv.whtAmount</code> always ฿0</h5>
+      <p>Rendered on the printed invoice but never written anywhere. <span class="b gray">06</span></p></div>
+    <div class="mini"><h5>Void doesn&rsquo;t reverse payments</h5>
+      <p>Voiding an invoice does not reverse its <code>SB_PAYMENTS</code> rows. <span class="b gray">06</span></p></div>
+    <div class="mini"><h5>Off-by-one day before 07:00</h5>
+      <p><code>toISOString().slice(0,10)</code> still used for <code>createdAt</code>/<code>bookingDate</code>
+      (<span class="ln">:76704</span>, <span class="ln">:76844</span>) despite the project&rsquo;s
+      <code>bkV2LocalYMD</code> rule. <span class="b gray">01</span></p></div>
+  </div>
+
+  <h3>Fragile by design — know before you touch</h3>
+  <ul>
+    <li><code>trips</code> maps to <b>hardcoded per-boat columns</b> (<code>bN_route</code>, <code>bN_booked</code>, …) —
+      adding a boat needs manual columns in <code>server.js:1637</code>. <span class="b gray">07 §5</span></li>
+    <li><code>pier_lic_types</code> / <code>pier_lic_classes</code> / <code>pier_codes</code> load with
+      <code>Array.isArray &amp;&amp; .length</code>, so <b>clearing the list reverts it to seed</b>. <span class="b gray">07 §5</span></li>
+    <li>Over-payment and deposit double-application have no guard. <span class="b gray">06 §10</span></li>
+  </ul>
+</section>
+
+<section id="drift">
+  <h2><span class="num">04</span> Drift in the pre-existing docs</h2>
+  <div class="tw"><table>
+    <thead><tr><th style="width:300px">Doc</th><th>Problem</th></tr></thead>
+    <tbody>
+      <tr><td><code>CHANGELOG.md</code></td><td><b>Does not exist.</b> <code>CLAUDE.md</code> cites it six times as the authoritative per-feature history; <code>SYSTEM_MAP.md</code> points at it too. Every reference is dead.</td></tr>
+      <tr><td><code>README.md</code></td><td>Says set <code>APP_USER</code> / <code>APP_PASS</code>. <code>server.js:19-20</code> reads <code>ADMIN_USER</code> / <code>ADMIN_PASS</code>.</td></tr>
+      <tr><td><code>CLAUDE.md:51</code></td><td>Lists pier <code>ranong</code> as &ldquo;Planned&rdquo;. The code has first-class <code>ranong</code> support (98 references, full Pier-Office view family).</td></tr>
+      <tr><td><code>docs/BOOKING.md</code></td><td>Stale Phase-1 spec; line numbers ~35k off; claims the wizard/detail are unbuilt. <code>docs/booking.model.ts</code> is accurate.</td></tr>
+      <tr><td><code>database_migration/operation_schemas_model.json</code></td><td>An older, different file from the one <code>server.js</code> loaded — not a drop-in replacement for the deleted copy.</td></tr>
+      <tr><td><code>allotment_v2.html:68863</code></td><td><code>_bkV2</code> comment says 3 tabs; there are 6.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<footer>
+  Rendered from <code>allotment_v2/docs/workflows/*.md</code> ·
+  written against commit <code>094dde1</code> on <code>refactor/booking-v2-migration</code> ·
+  these docs describe <b>the code, not the intent</b>.
+</footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  var btn = document.getElementById('themebtn');
+  var root = document.documentElement;
+  var saved = null;
+  try { saved = localStorage.getItem('la_doc_theme'); } catch(e){}
+  if (saved) root.setAttribute('data-theme', saved);
+  btn.addEventListener('click', function(){
+    var cur = root.getAttribute('data-theme');
+    var next;
+    if (cur === 'dark') next = 'light';
+    else if (cur === 'light') next = 'dark';
+    else next = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('la_doc_theme', next); } catch(e){}
+  });
+})();
+</script>
+</body>
+</html>

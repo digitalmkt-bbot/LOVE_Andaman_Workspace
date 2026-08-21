@@ -1,0 +1,1573 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transfer, Vans &amp; Pickup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f8fa; --panel:#ffffff; --panel-2:#fbfcfd;
+  --ink:#0f2029; --ink-2:#31485a; --muted:#68808f;
+  --line:#e1e8ee; --line-2:#eef2f6;
+  --accent:#1683C7; --accent-ink:#0f6ba6; --accent-soft:#e8f3fb;
+  --danger:#c8384c; --danger-soft:#fdecee;
+  --warn:#b46a00; --warn-soft:#fdf3e3;
+  --ok:#137a52; --ok-soft:#e6f5ee;
+  --violet:#6a4bbd; --violet-soft:#f0ecfb;
+  --code-bg:#f0f4f8; --code-ink:#173446;
+  --shadow:0 1px 2px rgba(15,32,41,.05), 0 8px 24px -14px rgba(15,32,41,.22);
+  --radius:14px;
+}
+:root:not([data-theme="light"]){ }
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b1317; --panel:#111d24; --panel-2:#0e181e;
+    --ink:#e7eff5; --ink-2:#bfd0dc; --muted:#89a0af;
+    --line:#1f313c; --line-2:#182831;
+    --accent:#49b2ee; --accent-ink:#7ccbf8; --accent-soft:#0f2c3d;
+    --danger:#f2798c; --danger-soft:#33161c;
+    --warn:#e0a24a; --warn-soft:#33260f;
+    --ok:#4ccb95; --ok-soft:#0f2b21;
+    --violet:#a48bef; --violet-soft:#221b3a;
+    --code-bg:#0d1b23; --code-ink:#cfe0eb;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b1317; --panel:#111d24; --panel-2:#0e181e;
+  --ink:#e7eff5; --ink-2:#bfd0dc; --muted:#89a0af;
+  --line:#1f313c; --line-2:#182831;
+  --accent:#49b2ee; --accent-ink:#7ccbf8; --accent-soft:#0f2c3d;
+  --danger:#f2798c; --danger-soft:#33161c;
+  --warn:#e0a24a; --warn-soft:#33260f;
+  --ok:#4ccb95; --ok-soft:#0f2b21;
+  --violet:#a48bef; --violet-soft:#221b3a;
+  --code-bg:#0d1b23; --code-ink:#cfe0eb;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px; line-height:1.62; -webkit-font-smoothing:antialiased;
+}
+code,kbd,.mono{font-family:"DM Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+
+/* ---------- layout ---------- */
+.wrap{display:grid; grid-template-columns:264px minmax(0,1fr); gap:0; max-width:1420px; margin:0 auto}
+.side{
+  position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+  border-right:1px solid var(--line); padding:26px 18px 60px; background:var(--panel-2);
+}
+.main{min-width:0; padding:34px 42px 120px}
+@media (max-width:960px){
+  .wrap{grid-template-columns:1fr}
+  .side{position:static; height:auto; border-right:0; border-bottom:1px solid var(--line); padding:20px 22px}
+  .main{padding:24px 20px 80px}
+}
+
+/* ---------- sidebar ---------- */
+.brand{display:flex; align-items:center; gap:10px; margin-bottom:4px}
+.brand .dot{width:26px;height:26px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px;flex:none}
+.brand b{font-size:14px; letter-spacing:-.01em}
+.brand small{display:block; color:var(--muted); font-size:11px; font-weight:400; line-height:1.3}
+.nav{margin-top:20px; display:flex; flex-direction:column; gap:1px}
+.nav a{
+  display:flex; gap:9px; align-items:baseline; text-decoration:none; color:var(--ink-2);
+  padding:6px 10px; border-radius:8px; font-size:13.5px; border-left:2px solid transparent;
+}
+.nav a .n{color:var(--muted); font-size:11px; font-family:"DM Mono",monospace; min-width:16px}
+.nav a:hover{background:var(--line-2); color:var(--ink)}
+.nav a.on{background:var(--accent-soft); color:var(--accent-ink); font-weight:500; border-left-color:var(--accent)}
+.nav .sub{padding-left:34px; font-size:12.5px; color:var(--muted)}
+.nav .sub:hover{color:var(--ink)}
+.backlink{
+  display:inline-block; margin-top:14px; font-size:12.5px; color:var(--muted); text-decoration:none;
+  border-bottom:1px solid transparent;
+}
+.backlink:hover{color:var(--accent-ink); border-bottom-color:var(--accent)}
+.themebtn{
+  margin-top:22px; width:100%; border:1px solid var(--line); background:var(--panel); color:var(--ink-2);
+  border-radius:9px; padding:7px 10px; font:inherit; font-size:12.5px; cursor:pointer;
+}
+.themebtn:hover{border-color:var(--accent); color:var(--accent-ink)}
+
+/* ---------- header ---------- */
+.hero{border-bottom:1px solid var(--line); padding-bottom:22px; margin-bottom:30px}
+.eyebrow{font-family:"DM Mono",monospace; font-size:12px; color:var(--accent-ink); letter-spacing:.06em; text-transform:uppercase}
+h1{font-size:34px; line-height:1.15; letter-spacing:-.025em; margin:6px 0 10px}
+.lede{font-size:16px; color:var(--ink-2); max-width:74ch; margin:0}
+.chips{display:flex; flex-wrap:wrap; gap:7px; margin-top:16px}
+.chip{
+  font-family:"DM Mono",monospace; font-size:11.5px; padding:3px 9px; border-radius:999px;
+  border:1px solid var(--line); background:var(--panel); color:var(--muted);
+}
+.chip b{color:var(--ink-2); font-weight:500}
+
+/* ---------- sections ---------- */
+section{scroll-margin-top:20px; margin-bottom:46px}
+h2{
+  font-size:23px; letter-spacing:-.02em; margin:0 0 14px; padding-bottom:9px;
+  border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:11px;
+}
+h2 .num{font-family:"DM Mono",monospace; font-size:14px; color:var(--accent); font-weight:500}
+h3{font-size:17px; letter-spacing:-.01em; margin:28px 0 10px; color:var(--ink)}
+h4{font-size:13.5px; margin:18px 0 7px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; font-weight:500}
+p{margin:0 0 12px; max-width:82ch}
+ul,ol{margin:0 0 12px; padding-left:22px; max-width:82ch}
+li{margin-bottom:5px}
+a{color:var(--accent-ink)}
+
+/* ---------- inline bits ---------- */
+code:not(pre code){
+  background:var(--code-bg); color:var(--code-ink); padding:1px 5px; border-radius:5px;
+  font-size:.875em; border:1px solid var(--line-2); white-space:nowrap;
+}
+.ln{color:var(--accent-ink); font-family:"DM Mono",monospace; font-size:.82em; white-space:nowrap}
+pre{
+  background:var(--code-bg); border:1px solid var(--line); border-radius:10px;
+  padding:14px 16px; overflow-x:auto; font-size:12.8px; line-height:1.6; color:var(--code-ink); margin:0 0 14px;
+}
+pre code{background:none;border:0;padding:0;white-space:pre}
+
+/* ---------- cards & callouts ---------- */
+.card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px; box-shadow:var(--shadow); margin:0 0 16px}
+.note{
+  border-left:3px solid var(--accent); background:var(--accent-soft); border-radius:0 10px 10px 0;
+  padding:12px 16px; margin:0 0 16px; font-size:14.2px; color:var(--ink-2);
+}
+.note.warn{border-left-color:var(--warn); background:var(--warn-soft)}
+.note.danger{border-left-color:var(--danger); background:var(--danger-soft)}
+.note.ok{border-left-color:var(--ok); background:var(--ok-soft)}
+.note b{color:var(--ink)}
+.note .lbl{display:block; font-size:11px; text-transform:uppercase; letter-spacing:.07em; font-weight:700; margin-bottom:4px; color:var(--accent-ink)}
+.note.warn .lbl{color:var(--warn)} .note.danger .lbl{color:var(--danger)} .note.ok .lbl{color:var(--ok)}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius); margin:0 0 16px; background:var(--panel)}
+table{border-collapse:collapse; width:100%; font-size:13.6px; min-width:520px}
+th{
+  text-align:left; font-weight:500; font-size:11.5px; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--muted); padding:10px 14px; border-bottom:1px solid var(--line); background:var(--panel-2); white-space:nowrap;
+}
+td{padding:9px 14px; border-bottom:1px solid var(--line-2); vertical-align:top; color:var(--ink-2)}
+tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--panel-2)}
+td code{white-space:nowrap}
+
+/* ---------- badges ---------- */
+.b{display:inline-block; font-family:"DM Mono",monospace; font-size:11px; padding:2px 8px; border-radius:999px; white-space:nowrap; border:1px solid transparent}
+.b.blue{background:var(--accent-soft); color:var(--accent-ink); border-color:color-mix(in srgb,var(--accent) 25%, transparent)}
+.b.red{background:var(--danger-soft); color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%, transparent)}
+.b.amber{background:var(--warn-soft); color:var(--warn); border-color:color-mix(in srgb,var(--warn) 30%, transparent)}
+.b.green{background:var(--ok-soft); color:var(--ok); border-color:color-mix(in srgb,var(--ok) 30%, transparent)}
+.b.violet{background:var(--violet-soft); color:var(--violet); border-color:color-mix(in srgb,var(--violet) 30%, transparent)}
+.b.gray{background:var(--line-2); color:var(--muted); border-color:var(--line)}
+
+/* ---------- rail (vertical flow) ---------- */
+.rail{position:relative; margin:6px 0 18px; padding-left:30px}
+.rail:before{content:""; position:absolute; left:9px; top:8px; bottom:8px; width:2px; background:var(--line)}
+.step{position:relative; margin-bottom:13px}
+.step:before{
+  content:""; position:absolute; left:-26px; top:6px; width:11px; height:11px; border-radius:50%;
+  background:var(--panel); border:2px solid var(--accent);
+}
+.step.block:before{border-color:var(--danger); background:var(--danger)}
+.step.ask:before{border-color:var(--warn)}
+.step.done:before{border-color:var(--ok); background:var(--ok)}
+.step .t{font-weight:500; color:var(--ink); font-size:14.4px}
+.step .d{font-size:13.4px; color:var(--muted)}
+
+/* ---------- stage flow (horizontal) ---------- */
+.flow{display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; margin:6px 0 18px}
+.stage{
+  flex:1 1 150px; min-width:140px; background:var(--panel); border:1px solid var(--line);
+  border-radius:11px; padding:11px 13px; position:relative;
+}
+.stage .k{font-family:"DM Mono",monospace; font-size:10.5px; color:var(--muted); letter-spacing:.05em; text-transform:uppercase}
+.stage .v{font-size:13.6px; font-weight:500; margin-top:3px; color:var(--ink)}
+.stage .s{font-size:12.4px; color:var(--muted); margin-top:3px}
+.arrow{display:grid; place-items:center; color:var(--line); font-size:18px; flex:0 0 14px}
+@media(max-width:700px){.arrow{transform:rotate(90deg)}}
+
+/* ---------- outcome grid ---------- */
+.grid2{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px; margin:6px 0 18px}
+.mini{background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:13px 15px}
+.mini h5{margin:0 0 5px; font-size:13.6px; letter-spacing:-.01em}
+.mini p{margin:0; font-size:12.9px; color:var(--muted)}
+
+/* ---------- function index filter ---------- */
+.filter{
+  width:100%; max-width:340px; padding:8px 12px; border-radius:9px; border:1px solid var(--line);
+  background:var(--panel); color:var(--ink); font:inherit; font-size:13.5px; margin-bottom:12px;
+}
+.filter:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft)}
+.hidden{display:none !important}
+.count{font-size:12.5px; color:var(--muted); margin-left:10px}
+
+/* ---------- footer ---------- */
+footer{border-top:1px solid var(--line); padding-top:18px; color:var(--muted); font-size:12.8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ===== SIDEBAR ===== -->
+<aside class="side">
+  <div class="brand">
+    <div class="dot">04</div>
+    <div><b>Transfer, Vans &amp; Pickup</b><small>allotment_v2 · workflow docs</small></div>
+  </div>
+  <nav class="nav" id="nav">
+    <a href="#s1"><span class="n">1</span> What this does</a>
+    <a href="#s2"><span class="n">2</span> Entry points</a>
+    <a href="#s3"><span class="n">3</span> Four “where” concepts</a>
+    <a href="#z-pier" class="sub">3.1 Pier</a>
+    <a href="#z-van" class="sub">3.2 Van zone</a>
+    <a href="#z-rate" class="sub">3.3 Rate-type zone</a>
+    <a href="#z-area" class="sub">3.4 Pickup area</a>
+    <a href="#z-overlap" class="sub">3.5 Overlap &amp; the trap</a>
+    <a href="#s4"><span class="n">4</span> Workflows</a>
+    <a href="#w-area" class="sub">4.1 Area &amp; times setup</a>
+    <a href="#w-group" class="sub">4.2 Group into a van</a>
+    <a href="#w-driver" class="sub">4.3 Driver / phone / plate</a>
+    <a href="#w-self" class="sub">4.4 Self-arrive</a>
+    <a href="#w-split" class="sub">4.5 Split across vans</a>
+    <a href="#w-disband" class="sub">4.6 Disband a group</a>
+    <a href="#w-return" class="sub">4.7 Return leg</a>
+    <a href="#w-mixed" class="sub">4.8 รถปนกัน conflicts</a>
+    <a href="#w-joborder" class="sub">4.9 Job order</a>
+    <a href="#w-checkin" class="sub">4.10 Van check-in</a>
+    <a href="#w-registry" class="sub">4.11 Registry &amp; matrix</a>
+    <a href="#s5"><span class="n">5</span> Pickup time resolution</a>
+    <a href="#s6"><span class="n">6</span> Data model touched</a>
+    <a href="#s7"><span class="n">7</span> Persistence path</a>
+    <a href="#s8"><span class="n">8</span> Cross-module contracts</a>
+    <a href="#s9"><span class="n">9</span> Invariants &amp; gotchas</a>
+    <a href="#s10"><span class="n">10</span> Function index</a>
+  </nav>
+  <a class="backlink" href="index.html">← All workflow docs</a>
+  <button class="themebtn" id="themebtn" type="button">Toggle theme</button>
+</aside>
+
+<main class="main">
+
+<!-- ===== HERO ===== -->
+<header class="hero">
+  <div class="eyebrow">Workflow doc 04</div>
+  <h1>Transfer Fleet, Vans &amp; Pickup</h1>
+  <p class="lede">Everything between “which hotel does the guest stand in front of” and “which van, with
+  which driver, prints on which job order” — vehicles, pickup areas and times, van grouping, job orders
+  and van check-in.</p>
+  <div class="chips">
+    <span class="chip"><b>Code</b> allotment_v2.html</span>
+    <span class="chip"><b>Commit</b> 094dde1</span>
+    <span class="chip"><b>Branch</b> refactor/booking-v2-migration</span>
+    <span class="chip"><b>Source</b> docs/workflows/04-transfer-vans-pickup.md</span>
+  </div>
+  <div class="note warn" style="margin-top:18px">
+    <span class="lbl">Line numbers drift</span>
+    Every <span class="ln">:12345</span> reference means “roughly here”. Grep the symbol name instead —
+    the <a href="#s10">function index</a> at the bottom is the fastest way to find anything.
+  </div>
+</header>
+
+<!-- ============ 1 ============ -->
+<section id="s1">
+  <h2><span class="num">01</span> What this does &amp; who uses it</h2>
+
+  <p>The marine tours sell a <i>seat on a boat</i>, but almost every guest also needs a <b>road transfer</b>:
+  a van collects them at their hotel in the morning, drives to the pier, and (usually) brings them back in
+  the afternoon. This domain is the dispatcher’s half of the product.</p>
+
+  <h4>Five screens, one shared data spine</h4>
+  <div class="grid2">
+    <div class="mini"><h5>Transfer Fleet</h5>
+      <p>The vehicle registry (own vans, rented vans, partner vans / “รถร่วม”), per-day status, and a month
+      matrix that says <i>which van runs which program on which day</i>.</p></div>
+    <div class="mini"><h5>Pickup time setup</h5>
+      <p>The master data: pickup <b>areas</b> (Patong, Kata, Maikhao…), the <b>time groups</b> they share, and
+      a per-season <b>schedule profile</b> holding <code>route × area → "07:30-07:45"</code>.</p></div>
+    <div class="mini"><h5>Booking → By-trip-date → Van Assign mode</h5>
+      <p>Where the actual grouping happens. This lives in the Booking module (<code>bkV2Render</code>), not in
+      a van-specific view, but every function it calls is documented here.</p></div>
+    <div class="mini"><h5>ใบงานรถ (Van Jobs)</h5>
+      <p>The printable/shareable driver sheet, one per van × program × day, with an outbound section and a
+      return section.</p></div>
+    <div class="mini"><h5>เช็คอินรถ (Van Check-in)</h5>
+      <p>Morning-of, the dispatcher ticks who actually boarded each van.</p></div>
+  </div>
+
+  <p><b>Users:</b> the ops/dispatch desk (Thai-speaking), plus drivers who receive a printed or PNG job order.
+  Almost every label on these screens is Thai; alerts and console logs are English per CLAUDE.md §1.</p>
+
+  <div class="note danger">
+    <span class="lbl">The guiding rule — ห้ามเดา</span>
+    <b>The system never guesses a van.</b> It will warn loudly that a booking has no van, or that a group has
+    two vans, but it will not silently pick one — except in the one explicit, user-triggered
+    <code>bkV2VanAutoAssign</code> button and the deliberately narrow <code>bkV2VanGroupHeal</code> safety net.
+  </div>
+</section>
+
+<!-- ============ 2 ============ -->
+<section id="s2">
+  <h2><span class="num">02</span> Entry points</h2>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:170px">view id</th><th style="width:190px">sidebar label</th><th style="width:230px">render fn : line</th><th>purpose</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>view-vehicles</code> <span class="ln">:5072</span></td>
+        <td><code>Transfer Fleet</code> <span class="ln">:4235</span></td>
+        <td><code>renderVehicles</code> <span class="ln">:55734</span> → host <code>#vehicles-host</code></td>
+        <td>Vehicle registry + 4 tabs: <code>สถานะ</code> / <code>ตารางเดือน</code> / <code>ทะเบียน</code> / <code>รายวัน</code> <span class="ln">:55746</span></td>
+      </tr>
+      <tr>
+        <td><code>view-vanjobs</code> <span class="ln">:5075</span></td>
+        <td><code>ใบงานรถ (Van Jobs)</code> <span class="ln">:4239</span></td>
+        <td><code>renderVanJobs</code> <span class="ln">:46547</span> → host <code>#vanjobs-host</code></td>
+        <td>Per-day list of van jobs; preview / full-screen / print / PNG of the job order</td>
+      </tr>
+      <tr>
+        <td><code>view-vancheckin</code> <span class="ln">:5076</span></td>
+        <td><code>เช็คอินรถ</code> <span class="ln">:4243</span></td>
+        <td><code>renderVanCheckin</code> <span class="ln">:48205</span> → host <code>#vancheckin-host</code></td>
+        <td>Morning boarding check-in per van group</td>
+      </tr>
+      <tr>
+        <td><code>view-pickup-setup</code> <span class="ln">:4960</span></td>
+        <td><code>Pickup time setup</code> (in <code>LA_NAV</code>, <span class="ln">:416</span>)</td>
+        <td><code>renderPickupSetup</code> <span class="ln">:40413</span> → host <code>#psu-host</code>, shell <code>psuRenderShell</code> <span class="ln">:40419</span></td>
+        <td>Tabs: <code>📅 Schedule Profiles</code> / <code>📍 Pickup Areas</code> / <code>⏱ Time Matrix</code> / <code>🏨 ชื่อโรงแรมซ้ำ</code> <span class="ln">:40509</span></td>
+      </tr>
+      <tr>
+        <td><code>view-pickupmap</code> <span class="ln">:5138</span></td>
+        <td><code>แผนที่จุดรับ</code> (<span class="ln">:417</span>, SALES group)</td>
+        <td><code>renderPickupMap</code> <span class="ln">:44792</span> → host <code>#pickupmap-wrap</code></td>
+        <td>Leaflet dot-density map of pickup demand by area/market/agent</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <p>The view dispatcher is a single <code>if/else</code> chain in <code>nav</code>/<code>showView</code> at
+  <span class="ln">:6071–6092</span>. Area gating: all of <code>vehicles</code>, <code>vanjobs</code>,
+  <code>vancheckin</code>, <code>pickup-setup</code> are area <code>operations</code>; <code>pickupmap</code> is
+  area <code>sales</code> (<code>LA_VIEW_AREA</code> <span class="ln">:409</span>). Persist helpers in this domain
+  all early-return when <code>laCanEditArea('operations')</code> is false.</p>
+
+  <div class="note">
+    <span class="lbl">The van-grouping UI is not one of these views</span>
+    It is Booking → tab <code>bytrip</code> with <code>_bkV2.vanAssignMode === true</code> (toggled by
+    <code>bkV2ToggleVanMode</code> <span class="ln">:45677</span>). See <a href="#w-group">§4.2</a>.
+  </div>
+</section>
+
+<!-- ============ 3 ============ -->
+<section id="s3">
+  <h2><span class="num">03</span> The four “where” concepts</h2>
+
+  <p>CLAUDE.md §3.3 flags this as a known trap. Four separately-stored notions of “where”, with partial and
+  <i>non-obvious</i> overlap.</p>
+
+  <h3 id="z-pier">3.1 Pier — where the boat leaves from</h3>
+  <ul>
+    <li><b>Stored on:</b> <code>route.pier</code> and <code>boat.pier</code>.</li>
+    <li><b>Enum (exact):</b> <code>'tublamu'</code>, <code>'panwa'</code>, planned <code>'ranong'</code>. Never
+      <code>'visitpanwa'</code> or the display strings.</li>
+    <li><b>Read by:</b> the Pickup-Setup matrix pier filter (<code>_psuMatrixPier</code>, <span class="ln">:40405</span>),
+      the job-order pier name (<code>vanJobsOrderInner</code> <span class="ln">:46839</span> →
+      <code>'Visit Panwa Pier'</code> / <code>'Tub Lamu Pier'</code>), and — critically — <code>_vehRouteZone</code>.</li>
+  </ul>
+
+  <h3 id="z-van">3.2 Van zone (a.k.a. pickup zone) — which pool of vans / which price band</h3>
+  <ul>
+    <li><b>Values:</b> <code>'PK'</code> (Phuket), <code>'KL'</code> (Khao Lak), <code>'NoTransfer'</code>
+      (aliased <code>'NT'</code> in many guards — always test both).</li>
+    <li><b>Stored on:</b> <code>trip.zone</code> (per trip), <code>bk.pickupZone</code> (booking fallback),
+      <code>vehicle.zoneBase</code> + <code>vehicle.zoneOverrides[]</code> + <code>vehicle.dayZone[date]</code>
+      (per vehicle).</li>
+    <li><b>Effective value for van ops</b> is <code>bkV2EffZone(b,t)</code> <span class="ln">:46355</span>: the seat
+      zone unless it is No-Transfer <i>and</i> the booking bought a private van add-on, in which case the van’s
+      zone wins. The comment at <span class="ln">:46353</span> is explicit: <b>this is for van ops only, never for
+      seat pricing</b> — pricing stays on <code>t.zone</code>.</li>
+    <li><b>Effective value for a vehicle</b> is <code>vehEffectiveZone(v,date)</code> <span class="ln">:46419</span>,
+      resolved in this order: (1) if the van has a <code>dayRoute[date]</code>, the zone implied by that route’s
+      pier; (2) <code>dayZone[date]</code>; (3) a matching <code>zoneOverrides[]</code> range; (4) <code>zoneBase</code>.</li>
+    <li>Zone labels/ordering/colors: <code>bkV2ZoneLabel</code> <span class="ln">:71715</span>,
+      <code>bkV2ZoneOrder</code> <span class="ln">:71718</span>, <code>bkV2ZoneColor</code> <span class="ln">:71719</span>.</li>
+    <li>A fifth pseudo-zone exists purely for grouping: <code>'__CHARTER__'</code> (<code>_bkV2InZone</code>
+      <span class="ln">:45737</span>) so charter (เหมาลำ) van groups never collide with seat groups.</li>
+  </ul>
+
+  <h3 id="z-rate">3.3 Rate-type zone — which seat price applies</h3>
+  <p>Same three tokens <code>PK / KL / NoTransfer</code>, but a <i>different store</i>:
+  <code>rateType.seatRates[route][zone][paxType]</code> (CLAUDE.md §3.2). Nothing in this domain writes it. The
+  only coupling is <code>bkV2SetPickupArea</code> <span class="ln">:74925</span>, which copies the chosen
+  <b>area’s</b> zone onto <code>t.zone</code> — and deliberately <b>skips</b> trips that carry a private-van
+  add-on <span class="ln">:74940</span>, because pushing a No-Transfer seat onto a PK zone can land on a rate cell
+  that does not exist (“no rate”).</p>
+
+  <h3 id="z-area">3.4 Pickup area — the actual named collection point</h3>
+  <ul>
+    <li><b>Store:</b> <code>SB_PICKUP_AREAS</code> <span class="ln">:40173</span>, an array of
+      <code>{ id, name, zone, region, timeGroup }</code>.</li>
+    <li><b>Booking field:</b> <code>bk.pickupAreaId</code> (booking-level, not per-trip). Drop-off counterpart:
+      <code>bk.dropoffAreaId</code> with <code>bk.dropoffSame === false</code>.</li>
+    <li>~38 seeded areas: 33 <code>PK</code>, 2 <code>KL</code> placeholders, 2 <code>NoTransfer</code> pier entries
+      (<code>nt-panwa-pier</code>, <code>nt-tublamu-pier</code>, both named “… (self-arrive)”).</li>
+    <li><code>region</code> is a loose grouping label only (<code>'phuket-north'</code>, <code>'phang-nga'</code>, …)
+      used for sort order in the marketing-card export (<code>psuGroupAreasByTime</code> <span class="ln">:41316</span>).
+      It is <b>not</b> a zone.</li>
+    <li><code>timeGroup</code> is the join key to pickup times: several areas that leave at the same minute share
+      one group (<code>pk-w2</code> = Patong + Karon + Kata). It is required on save
+      (<code>psuSaveArea</code> <span class="ln">:41040</span>).</li>
+  </ul>
+
+  <h3 id="z-overlap">3.5 How they overlap — and the trap</h3>
+  <pre><code>route.pier ──(_vehRouteZone:55400)──▶ van zone  'panwa'→'PK'  'tublamu'→'KL'
+area.zone  ──(bkV2SetPickupArea)────▶ trip.zone ─▶ rate-type zone lookup
+                                             └──▶ bkV2EffZone ─▶ van pool / van grouping key
+area.timeGroup ─▶ (legacy) SB_PICKUP_TIMES[route][timeGroup]
+area.id        ─▶ (current) profile.times[route][areaId]</code></pre>
+
+  <p>Two things bite here:</p>
+
+  <div class="note warn">
+    <span class="lbl">1 · Tub Lamu routes map to KL but pick up from PK areas</span>
+    <code>_vehRouteZone</code> maps Tub Lamu routes to <code>KL</code>, but Tub Lamu routes pick up from
+    <code>PK</code> areas. The seeded Similan schedule (<code>r5</code>, <span class="ln">:40259</span>) is all
+    <code>pk-*</code> groups, yet <code>_vehRouteZone('r5')</code> returns <code>'KL'</code>. This only matters
+    where the two are mixed: <code>bkV2VanAutoAssign</code> <span class="ln">:45708</span> computes
+    <code>z=_vehRouteZone(routeId)</code> and, <i>if no van has been assigned to the program in the month
+    matrix</i>, falls back to <code>vanVehiclesForZone(z,date)</code> — i.e. Khao Lak vans for a Phuket pickup
+    run. The primary path (<code>dayVans</code>, <span class="ln">:45709</span>) avoids this entirely, and the
+    manual per-group dropdown uses <code>vanVehiclesForRoute</code> which ignores the zone.
+    <b>(inferred: latent; not observed as a live bug, but the fallback branch is reachable.)</b>
+  </div>
+
+  <div class="note">
+    <span class="lbl">2 · Adding a real new zone touches ~5–6 places</span>
+    Per CLAUDE.md §3.3 the decision (2026-06-01, Option A) is <i>not</i> to refactor to a central
+    <code>SB_ZONES</code> yet. The Pickup Setup UI creates <b>Areas only</b> — the zone dropdown is hardcoded to
+    <code>['PK','KL','NoTransfer']</code>.
+  </div>
+</section>
+
+<!-- ============ 4 ============ -->
+<section id="s4">
+  <h2><span class="num">04</span> Workflows</h2>
+
+  <!-- 4.1 -->
+  <h3 id="w-area">4.1 Set up a pickup area and its times</h3>
+  <p><b>Trigger</b> — ops adds a new hotel cluster (e.g. a new resort strip) or a new season’s departure times land.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · Open the page</div>
+      <div class="d">Sidebar → <code>Pickup time setup</code> → <code>nav()</code> →
+      <code>renderPickupSetup</code> <span class="ln">:40413</span> → <code>psuRenderShell</code> <span class="ln">:40419</span>.</div></div>
+    <div class="step"><div class="t">2 · Tab <code>📍 Pickup Areas</code> → <code>psuRenderAreasTab</code> <span class="ln">:40920</span></div>
+      <div class="d"><code>+ Add</code> → <code>psuOpenAddArea</code> <span class="ln">:40998</span> seeds
+      <code>_psuAreaDraft = {id:'', name:'', zone:'PK', region:'', timeGroup:'', isNew:true}</code>.</div></div>
+    <div class="step"><div class="t">3 · Fill name / zone / region / <b>time group</b></div>
+      <div class="d"><code>psuSetDraftField</code> <span class="ln">:41010</span> — only re-renders on
+      <code>zone</code> so text inputs keep focus.</div></div>
+    <div class="step"><div class="t">4 · Save → <code>psuSaveArea</code> <span class="ln">:41035</span></div>
+      <div class="d">Id is slugged <code>${pk|kl|nt}-${name-slug}</code> and de-duplicated with a numeric suffix
+      <span class="ln">:41044–41049</span>.</div></div>
+    <div class="step"><div class="t">5 · <code>_psuInheritTimesForArea</code> <span class="ln">:41019</span> runs</div>
+      <div class="d">For every profile × route, if this area has no time yet, copy one from a sibling in the same
+      <code>timeGroup</code>; else fall back to the legacy <code>SB_PICKUP_TIMES[route][timeGroup]</code>.
+      <b>Only fills empty cells, never overwrites.</b> A toast reports how many cells were filled.</div></div>
+    <div class="step done"><div class="t">6 · Edit times on tab <code>⏱ Time Matrix</code></div>
+      <div class="d"><code>psuRenderMatrixTab</code> <span class="ln">:41131</span>, cell →
+      <code>psuSetTimeCell</code> <span class="ln">:41284</span>.</div></div>
+  </div>
+
+  <h4>Data written</h4>
+  <ul>
+    <li><code>SB_PICKUP_AREAS[]</code> — push or in-place field update.</li>
+    <li><code>SB_PICKUP_TIME_PROFILES[i].times[routeId][areaId] = 'HH:MM-HH:MM'</code>.</li>
+    <li>Persisted by <code>psuPersist</code> <span class="ln">:40357</span> → read-modify-write of
+      <code>loveandaman_v2</code> keys <code>sb_pickup_areas</code>, <code>sb_pickup_times</code>,
+      <code>sb_pickup_time_profiles</code>.</li>
+  </ul>
+
+  <h4>Validation / guards</h4>
+  <ul>
+    <li>Name required, time group required <span class="ln">:41039–41040</span>.</li>
+    <li><code>psuPersist</code> no-ops if <code>laCanEditArea('operations')</code> is false.</li>
+    <li><code>psuSetTimeCell</code> aborts with a <code>console.warn</code> if there is no active profile and
+      <b>does not re-render</b> (keeps the cursor in the cell).</li>
+    <li>Delete (<code>psuDeleteArea</code> <span class="ln">:41070</span>) confirms and notes that existing bookings
+      are unaffected — they snapshot area name + zone.</li>
+  </ul>
+
+  <h4>Failure modes</h4>
+  <ul>
+    <li>Deleting an area leaves orphan <code>pickupAreaId</code>s on old bookings; <code>bkV2GetArea</code> returns
+      <code>undefined</code> and downstream code falls back to <code>b.hotelName</code> / raw id. Not fatal, but the
+      check-in and job-order “Area” column will read blank.</li>
+    <li>An area with no <code>timeGroup</code> sibling and no legacy entry inherits nothing → the matrix cell stays
+      blank → <a href="#s5">§5</a> resolution returns <code>null</code>.</li>
+  </ul>
+
+  <!-- 4.2 -->
+  <h3 id="w-group">4.2 Group bookings into a van (the core workflow)</h3>
+  <p><b>Trigger</b> — dispatcher opens Booking → <code>By trip date</code> for tomorrow and presses the
+  Van-Assign toggle.</p>
+
+  <h4>The grouping decision flow</h4>
+  <div class="rail">
+    <div class="step"><div class="t">By-trip-date · <code>bkV2ToggleVanMode</code> <span class="ln">:45677</span></div>
+      <div class="d">Enter Van Assign mode.</div></div>
+    <div class="step"><div class="t">Rows rendered per zone</div>
+      <div class="d"><code>bkV2Render</code> <span class="ln">:71912</span> in <code>vanMode</code>.</div></div>
+    <div class="step ask"><div class="t">Tick rows — <code>bkV2VanSelToggle</code> <span class="ln">:45732</span></div>
+      <div class="d">The stored value is the tick order.</div></div>
+    <div class="step"><div class="t">Press “จับกลุ่ม” — <code>bkV2VanGroupSelected</code> <span class="ln">:45755</span></div>
+      <div class="d">Does the target group already have a van?</div></div>
+    <div class="step"><div class="t">Branch A · group has NO van</div>
+      <div class="d">Assign <code>gid</code> + <code>vanSeq</code>. No capacity check needed.</div></div>
+    <div class="step ask"><div class="t">Branch B · group HAS a van → capacity check</div>
+      <div class="d">Does <code>cur + add ≤ van.capacity</code>?</div></div>
+    <div class="step block"><div class="t">B-fail · <code>alert('ที่นั่งไม่พอ')</code> · ABORT</div>
+      <div class="d">Nothing is written.</div></div>
+    <div class="step"><div class="t">B-pass · assign <code>gid</code> + <code>vanSeq</code></div>
+      <div class="d">Plus <b>OVERWRITE <code>vanId</code></b> with the group’s van, and fill
+      <code>vanReturnId</code> <i>only if empty</i>.</div></div>
+    <div class="step"><div class="t">Group header dropdown — <code>bkV2VanGroupSetVan</code> <span class="ln">:45828</span></div>
+      <div class="d">Is <code>pax &gt; capacity</code>?</div></div>
+    <div class="step block"><div class="t">Over capacity · alert · ABORT · re-render</div>
+      <div class="d">The dropdown reverts.</div></div>
+    <div class="step"><div class="t">Within capacity · write <code>vanId</code> to every member</div>
+      <div class="d">One van per group, enforced by overwrite.</div></div>
+    <div class="step done"><div class="t"><code>acctPersistBookings()</code> → job order</div>
+      <div class="d"><code>renderVanJobs</code> / job order — <code>bkV2VanGroupHeal</code> runs first.</div></div>
+  </div>
+
+  <h4>Steps in detail</h4>
+  <ol>
+    <li><code>bkV2ToggleVanMode</code> <span class="ln">:45677</span> sets <code>_bkV2.vanAssignMode = true</code>
+      (and clears boat/reconfirm modes — they are mutually exclusive).</li>
+    <li>Rows are expanded into <b>allocations</b> by <code>_allocsOf</code> <span class="ln">:72374</span>: a booking
+      with <code>ops.vanSplits[]</code> becomes one row per split, keyed <code>bkId@index</code>; otherwise one row
+      keyed <code>bkId</code>. Boat-splits take priority over van-splits when both exist <span class="ln">:72380</span>.</li>
+    <li>Tick rows → <code>bkV2VanSelToggle</code> <span class="ln">:45732</span>. The stored value is the
+      <b>tick order</b>, later used as the pickup sequence.</li>
+    <li>Press the group button → <code>bkV2VanGroupSelected(date, routeId, zone, groupId)</code> <span class="ln">:45755</span>.
+      <ul>
+        <li><code>groupId === 'new'</code> → <code>_bkV2VanNextGroup</code> <span class="ln">:45743</span> returns
+          <code>max(vanGroup)+1</code> scanned across the whole <b>day + route, all zones and charter</b>. (It used to
+          number per-zone, which produced duplicate “กรุ๊ป 2” badges in the top VANS strip — see the comment at
+          <span class="ln">:45738</span>.)</li>
+        <li>Members are filtered to the same <code>date|routeId|zone</code> via <code>_bkV2InZone</code> <span class="ln">:45737</span>.</li>
+      </ul>
+    </li>
+    <li>Header controls per group (<code>_grpHeaderRow</code>, <span class="ln">:72417</span> for the editable form,
+      <span class="ln">:72426</span> for the read-only pill):
+      <ul>
+        <li>van dropdown → <code>bkV2VanGroupSetVan</code> <span class="ln">:45828</span></li>
+        <li>group pickup time → <code>bkV2VanGroupSetTime</code> <span class="ln">:45837</span> (writes
+          <code>ops.pickupTimeFinal</code> on every member; no re-render, to keep input focus)</li>
+        <li>return-van dropdown → <code>bkV2VanGroupSetReturn</code> <span class="ln">:45851</span></li>
+        <li>inline driver/phone/plate → <code>vanJobsSetDriver</code> (same store the Van Jobs page edits — <a href="#w-driver">§4.3</a>)</li>
+        <li><code>✓ Save</code> → <code>bkV2VanGroupSave(date)</code> <span class="ln">:45840</span> renumbers
+          <code>vanSeq</code> by tick order, per group</li>
+        <li><code>↻ เรียงตามเวลา</code> → <code>bkV2VanGroupClearSeq</code> <span class="ln">:45838</span></li>
+        <li><code>ยกเลิกกรุ๊ป</code> → <code>bkV2VanGroupDisband</code> <span class="ln">:45836</span></li>
+      </ul>
+    </li>
+  </ol>
+
+  <h4>Data written (all under the per-day ops block — see <a href="#s6">§6.2</a>)</h4>
+  <pre><code>ops.vanGroup            : number   (0 / absent = ungrouped)
+ops.vanSeq              : number   (manual pickup order inside the group)
+ops.vanId               : string|null  (the OUTBOUND van)
+ops.vanReturnId         : string|null  (per-booking; null = same van back)
+ops.returnSameVan       : boolean  (dispatcher confirmed "↩ กลับคันเดิม")
+ops.pickupTimeFinal     : string   (dispatcher's override, wins over trip.pickupTime)
+ops.vanSplits[i].{vanGroup,vanSeq,vanId,vanReturnId,pax,ad,chd,inf,foc}</code></pre>
+  <p>Persisted by <code>acctPersistBookings()</code> after every mutation.</p>
+
+  <h4>Validation / guards</h4>
+  <ul>
+    <li><b>Capacity on join</b> <span class="ln">:45766–45774</span>: if the target group already has a van, the
+      incoming pax are summed and compared to <code>vehicle.capacity</code>; over →
+      <code>alert('ที่นั่งไม่พอ · กรุ๊ป N …')</code> and abort.</li>
+    <li><b>Capacity on van select</b> (<code>bkV2VanGroupSetVan</code> <span class="ln">:45830</span>): same check,
+      aborts and re-renders.</li>
+    <li><b>One van per group is enforced by overwrite</b>: <span class="ln">:45776</span> writes
+      <code>s.vanId = _gVan</code> / <code>o.vanId = _gVan</code> unconditionally when the group has a van. The
+      comment at <span class="ln">:45775</span> spells out why — otherwise the booking keeps its old van, the job
+      order routes it to the wrong van, and the group header lies.</li>
+    <li><b>Return van is only inherited if empty</b> (<code>if(_gRet &amp;&amp; !s.vanReturnId)</code>), because it is
+      per-booking by design.</li>
+    <li><b>A van already used by another group is disabled</b> in the dropdown (<code>usedByOthers</code>,
+      <span class="ln">:72462</span>) — 1 รถ = 1 กรุ๊ป.</li>
+    <li>The van dropdown pool is <code>vanVehiclesForRoute(date, routeId, zone)</code> <span class="ln">:46426</span> =
+      <b>only vans assigned to this route in the Transfer-Fleet month matrix</b>, with no zone fallback (comment at
+      <span class="ln">:46424</span>: “a van not assigned in the month matrix must NOT be pickable here”). The
+      return-van pool is deliberately wider — matrix vans plus any usable van in the zone <span class="ln">:72472</span>.</li>
+  </ul>
+
+  <h4>Failure modes</h4>
+  <ul>
+    <li>A group with no van renders with a red frame and <code>⚠ ยังไม่เลือกรถ</code> <span class="ln">:72477–72479</span>.</li>
+    <li>Two different vans inside one group → “รถปนกัน” (<a href="#w-mixed">§4.8</a>).</li>
+    <li>Editing the booking wipes <code>ops</code> unless <code>bkV2CommitBooking</code>’s <code>if(editing)</code>
+      block carries it over — CLAUDE.md §3.4 / §6. <code>ops</code> is first in that list precisely because losing it
+      loses the van assignment.</li>
+  </ul>
+
+  <!-- 4.3 -->
+  <h3 id="w-driver">4.3 Assign a driver / phone / plate for one day</h3>
+  <p><b>Trigger</b> — partner vans (<code>รถร่วม</code>) send a different driver and often a different plate
+  every day.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · Open the editor</div>
+      <div class="d">Van Jobs page → expand a row (<code>vanJobsToggleExpand</code> <span class="ln">:46531</span>) →
+      panel at <span class="ln">:46646</span>, <b>or</b> the same three inputs inline on the By-trip group header
+      <span class="ln">:72485</span>.</div></div>
+    <div class="step"><div class="t">2 · <code>vanJobsSetDriver(date, vanId, field, el)</code> <span class="ln">:46539</span></div>
+      <div class="d">Writes and persists on every keystroke; <b>it does not re-render</b> (focus preservation).</div></div>
+    <div class="step done"><div class="t">3 · <code>↺ คืนค่าตั้งต้น</code> → <code>vanJobsResetDriver</code> <span class="ln">:46540</span></div>
+      <div class="d">Deletes the whole key and re-renders.</div></div>
+  </div>
+
+  <h4>Data written</h4>
+  <ul>
+    <li><code>VANJOB_DRIVER['YYYY-MM-DD::vanId'] = { driver?, phone?, plate? }</code> <span class="ln">:46535</span>.</li>
+    <li>Persisted by <code>vanJobsDriverPersist</code> <span class="ln">:46537</span> →
+      <code>loveandaman_v2.vanjob_driver</code>.</li>
+  </ul>
+
+  <h4>Resolution</h4>
+  <p><code>vanJobsDriverInfo(vanId, date)</code> <span class="ln">:46538</span> returns
+  <code>{driver, phone, plate, override, plateOverride}</code> — the per-date override if non-blank, else
+  <code>vehicle.driver</code> / <code>vehicle.driverPhone</code> / <code>vehicle.plate</code>. A 📌 pin glyph marks
+  an override wherever the value is shown.</p>
+
+  <h4>Guards / failure modes</h4>
+  <ul>
+    <li>The plate input only appears for <code>ownership === 'partner'</code> <span class="ln">:46651</span>.</li>
+    <li>Persist is a no-op without <code>operations</code> edit rights, so a view-only user types into an input that
+      silently never saves. <i>(inferred from the guard; there is no UI feedback.)</i></li>
+    <li>The key is <code>date::vanId</code> with <b>no route component</b>, so a van running two programs on one day
+      shares one driver record. That is intentional (one van, one driver, one day).</li>
+  </ul>
+
+  <!-- 4.4 -->
+  <h3 id="w-self">4.4 Self-arrive (ขารับ: ลูกค้ามาเองที่ท่าเรือ)</h3>
+  <p><b>Trigger</b> — the guest makes their own way to the pier; the seat rate is unchanged.</p>
+
+  <p>Two independent ways a booking becomes self-arrive on the outbound leg:</p>
+  <ul>
+    <li>an explicit checkbox <code>bk.pickupSelf</code> <span class="ln">:69630</span>, toggled by
+      <code>bkV2TogglePickupSelf</code> → <span class="ln">:74960</span>; or</li>
+    <li>the effective zone is <code>NoTransfer</code> / <code>NT</code> (i.e. a No-Transfer seat with no private-van
+      add-on), or the pickup <b>area</b> is one of the <code>nt-*</code> pier entries.</li>
+  </ul>
+
+  <h4>Effects</h4>
+  <div class="tw"><table>
+    <thead><tr><th style="width:230px">Place</th><th>Behaviour</th><th style="width:150px">Line</th></tr></thead>
+    <tbody>
+      <tr><td>Job order OUTBOUND section</td><td>row skipped entirely</td><td class="mono">46809</td></tr>
+      <tr><td>Van Jobs aggregation</td><td>not counted as an assigned van job, <b>and not counted as unassigned</b></td><td class="mono">46574–46576</td></tr>
+      <tr><td>Van Jobs late-booking guard</td><td>excluded</td><td class="mono">46958</td></tr>
+      <tr><td>Van Check-in</td><td>never lands in <code>unassigned</code></td><td class="mono">48223</td></tr>
+      <tr><td>By-trip van cell</td><td>renders the italic string <code>self-arrive</code></td><td class="mono">55174</td></tr>
+      <tr><td>Pickup-time heal</td><td><code>bkV2HealSelfArrivePickup</code> <span class="ln">:46361</span> rewrites a stale clock time (<code>07:30-07:45</code>) back to the area default (<code>Before 08:30 at pier</code>) and clears <code>ops.pickupTimeFinal</code></td><td class="mono">46372–46376</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note warn">
+    <span class="lbl">Mis-tick guard</span>
+    <code>renderVanJobs</code> <span class="ln">:46577</span> collects <code>selfWarn[]</code> — bookings ticked
+    self-arrive that <i>still</i> sit on a transfer zone or <i>still</i> carry a van. These are surfaced on the page
+    because they would otherwise silently vanish from the outbound sheet.
+  </div>
+
+  <h4>Self-return</h4>
+  <p>The mirror on the way back, and it is <b>computed, not stored</b>: <code>bkV2RetInfo(bk,date)</code>
+  <span class="ln">:45695</span> sets <code>selfRet = true</code> when the booking has a separate drop-off
+  (<code>dropoffSame === false</code>) whose area is <code>NoTransfer</code>/<code>NT</code>, <b>or</b> whose name
+  matches <code>/self-?arrive|กลับเอง|self[\s-]?return/i</code>. A <code>selfRet</code> booking is dropped from the
+  return job order <span class="ln">:46808</span> and never raises the “ยังไม่จัดรถกลับ” alert.</p>
+
+  <!-- 4.5 -->
+  <h3 id="w-split">4.5 Split a booking across two vans (✂ แยกคน)</h3>
+  <p><b>Trigger</b> — a 16-pax booking will not fit in one 9-seat van, or one couple is picked up somewhere else.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · Row action → <code>bkV2VanSplit(bkId, date)</code> <span class="ln">:45857</span></div>
+      <div class="d">The pool is the first split’s breakdown if already split, else the largest trip’s
+      <code>{ad,chd,inf,foc}</code>.</div></div>
+    <div class="step"><div class="t">2 · Modal <code>bkV2SplitRender</code> <span class="ln">:45902</span></div>
+      <div class="d">Lets the dispatcher set each pax type individually (<code>bkV2SplitSet</code> <span class="ln">:45875</span>,
+      <code>bkV2SplitAll</code> <span class="ln">:45880</span>). This replaced an older <code>prompt()</code> that only
+      asked “how many”, after which the system guessed who was a child — and guessed wrong.</div></div>
+    <div class="step done"><div class="t">3 · Apply → <code>bkV2SplitApply</code> <span class="ln">:45881</span></div>
+      <div class="d">Writes <code>ops.vanSplits</code>.</div></div>
+  </div>
+
+  <h4>Data written</h4>
+  <ul>
+    <li>First split ever: <code>ops.vanSplits = [ {…keep, pax, vanGroup, vanId, vanReturnId}, {…moved, pax, vanGroup:0, vanId:null, vanReturnId:null} ]</code>,
+      then <code>delete ops.vanGroup; delete ops.vanId</code> — the “main” allocation now lives in
+      <code>vanSplits[0]</code> <span class="ln">:45894–45896</span>.</li>
+    <li>Subsequent splits: <code>vanSplits[0]</code> is decremented and a new element pushed <span class="ln">:45889–45892</span>.</li>
+    <li>Undo: <code>bkV2VanUnsplit</code> <span class="ln">:45956</span> folds <code>vanSplits[0]</code>’s van fields
+      back to flat <code>ops.*</code> and deletes <code>vanSplits</code> + <code>altSplitAuto</code>.</li>
+  </ul>
+
+  <h4>Validation / guards</h4>
+  <ul>
+    <li>Cannot split a 1-pax allocation (<code>bkPaxSum(pool) &lt; 2</code> → toast <code>แยกไม่ได้</code>,
+      <span class="ln">:45866</span>).</li>
+    <li>Must leave ≥ 1 pax behind (<code>n &gt;= 1 &amp;&amp; n &lt; tot</code>, <span class="ln">:45886</span> /
+      <span class="ln">:45910</span>).</li>
+    <li>Warns (does not block) if either side ends up with children/infants and <b>no adult</b>
+      (<code>strand</code>, <span class="ln">:45908</span>).</li>
+    <li><code>pax</code> (headcount) and the <code>ad/chd/inf/foc</code> breakdown are always written together
+      <span class="ln">:45891</span> — a past bug let them drift, which made the job sheet print a child as an adult.</li>
+  </ul>
+
+  <div class="note">
+    <span class="lbl">Auto-splits from multi-point pickup (<code>bk.altPickups</code>)</span>
+    A separate producer of <code>vanSplits</code>: <code>bkV2SyncAltPickupSplits</code> <span class="ln">:46258</span>
+    rebuilds them (marking each with <code>fromAlt</code>, <code>pickAreaId</code>, <code>pickHotel</code>,
+    <code>pickZone</code>, <code>altWho</code>) and <b>leaves manual splits alone</b> <span class="ln">:46268</span>.
+    Because the <code>altSplitAuto</code> flag is a scalar that the relational backend does not map, auto-ness is
+    re-detected from the surviving split markers by <code>_bkV2IsAltAutoSplit</code> <span class="ln">:46295</span>.
+  </div>
+
+  <h4>Failure modes</h4>
+  <ul>
+    <li><code>bkV2HealSplitPax</code> <span class="ln">:46304</span> repairs splits whose headcount and breakdown
+      disagree, trusting the headcount and re-dealing types (adults to the split-off parts first), then swapping 1:1
+      so no van carries children without an adult. Called from <code>bkV2HealAltSplits</code> <span class="ln">:46381</span>
+      on every Van-Jobs render.</li>
+  </ul>
+
+  <!-- 4.6 -->
+  <h3 id="w-disband">4.6 Disband a group</h3>
+  <p><b>Trigger</b> — the plan changed; the group should go back to unassigned.</p>
+  <p><code>bkV2VanGroupDisband(date, routeId, zone, gid)</code> <span class="ln">:45836</span> — one line, but the
+  comment on it records two separate bugs:</p>
+
+  <pre><code>if(s){ s.vanGroup=0; s.vanId=null; s.vanReturnId=null; delete s.vanSeq; }
+else  { delete o.vanGroup; delete o.vanSeq; o.vanId=null; o.vanReturnId=null; }</code></pre>
+
+  <div class="note danger">
+    <span class="lbl">Two bugs baked into one line</span>
+    It <b>must</b> null <code>vanId</code> <i>and</i> <code>vanReturnId</code>. The non-split branch used to leave
+    them set, so a disbanded booking still shipped on the old van’s job order and re-grouping it elsewhere produced
+    “รถปนกัน”.<br>
+    It <b>must</b> delete <code>vanSeq</code>, or a stale manual pickup order freezes the row’s position after
+    re-grouping.
+  </div>
+
+  <p>Then <code>acctPersistBookings()</code> + <code>bkV2Render()</code>.</p>
+
+  <!-- 4.7 -->
+  <h3 id="w-return">4.7 Arrange the return leg</h3>
+  <p><b>Trigger</b> — the guest is being dropped somewhere other than where they were collected (hotel change,
+  airport, a different beach).</p>
+
+  <div class="note">
+    <span class="lbl">The model</span>
+    <b>The group has one outbound van; the return van is per booking.</b> There is no group-level return assignment
+    stored — <code>bkV2VanGroupSetReturn</code> <span class="ln">:45851</span> is a convenience that writes the same
+    value onto every member, and <code>bkV2VanGroupHeal</code> is explicitly forbidden from spreading it
+    (<a href="#s9">§9</a>).
+  </div>
+
+  <h4>State machine — <code>bkV2RetInfo(bk, date)</code> <span class="ln">:45695</span> returns</h4>
+  <div class="tw"><table>
+    <thead><tr><th style="width:150px">field</th><th>meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>sep</code></td><td><code>bk.dropoffSame === false</code> and some drop-off is named</td></tr>
+      <tr><td><code>drop</code></td><td>the drop-off text</td></tr>
+      <tr><td><code>retId</code></td><td><code>ops.vanReturnId</code> (or the first split’s)</td></tr>
+      <tr><td><code>arranged</code></td><td>a return van is set (for splits: <b>all</b> splits have one)</td></tr>
+      <tr><td><code>selfRet</code></td><td>drop-off is a self-arrive pier / matches the self-return regex</td></tr>
+      <tr><td><code>sameVan</code></td><td><code>ops.returnSameVan</code> — dispatcher pressed <code>↩ กลับคันเดิม</code></td></tr>
+      <tr><td><code>alert</code></td><td><code>sep &amp;&amp; !arranged &amp;&amp; !selfRet &amp;&amp; !sameVan</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <h4>Actions</h4>
+  <ul>
+    <li><code>bkV2AssignVanReturn(bkId, vanId, date)</code> <span class="ln">:45690</span> — picks a different return
+      van; also clears <code>returnSameVan</code>.</li>
+    <li><code>bkV2SetReturnSameVan(bkId, val, date)</code> <span class="ln">:45692</span> — confirms the outbound van
+      brings them back to the new place; clears <code>vanReturnId</code>. Mutually exclusive with the above.</li>
+    <li><code>bkV2AssignVanReturnSplit(bkId, ai, vanId, date)</code> <span class="ln">:55171</span> — per-split variant.</li>
+  </ul>
+
+  <h4>Where it surfaces</h4>
+  <ul>
+    <li>Van Jobs hero banner: amber <code>↩ ยังไม่จัดรถกลับ</code> with a per-route breakdown
+      <span class="ln">:46578–46598</span>.</li>
+    <li>By-trip header warn-chip <code>รถกลับ · …</code> <span class="ln">:72089</span>.</li>
+    <li>Job order: the return section is collected with <code>rv = ops.vanReturnId || ops.vanId</code>
+      <span class="ln">:46818–46819</span> — i.e. <b>the outbound van is the default return van</b>. Rows that arrived
+      on a different van are sorted last and tagged <code>· มาจากรถอื่น (ขาไป X)</code>; rows on the same van are
+      tagged <code>· กลับคันเดิม</code> <span class="ln">:46879</span>.</li>
+  </ul>
+
+  <h4>Overnight (OVN) special cases — these were real dispatch failures</h4>
+  <div class="grid2">
+    <div class="mini"><h5>OVN <b>return day</b></h5>
+      <p>The guest arrives by boat, so there is no hotel pickup: the leg is forced to <code>NoTransfer</code>
+      <span class="ln">:46567</span>, the pickup cell prints the pier name, and the row is excluded from the
+      outbound section <span class="ln">:46816</span>.</p></div>
+    <div class="mini"><h5>OVN <b>outbound day</b></h5>
+      <p>There is no return run at all <span class="ln">:46812</span>, and the drop-off cell prints
+      <code>🌙 ค้างคืนบนเกาะ · กลับ &lt;date&gt;</code> <span class="ln">:46883</span>.</p></div>
+  </div>
+
+  <!-- 4.8 -->
+  <h3 id="w-mixed">4.8 Detect and resolve “รถปนกัน” (mixed van in one group)</h3>
+  <p><b>Trigger</b> — every render; this is a passive scan, not a user action.</p>
+
+  <p><code>bkV2VanGroupConflicts(date)</code> <span class="ln">:45799</span> buckets every non-cancelled allocation
+  by <code>date|routeId|zone|gid</code> (skipping <code>NoTransfer</code>/<code>NT</code>), counts distinct
+  <code>vanId</code>s, and returns every bucket with <b>2 or more</b>:</p>
+
+  <pre><code>[{ date, routeId, zone, gid, routeName, vans:{vanId:count}, pax }]</code></pre>
+
+  <div class="note danger">
+    <span class="lbl">Design statement <span class="ln">:45795–45798</span></span>
+    This <i>should</i> be impossible now that <code>bkV2VanGroupSelected</code> and <code>bkV2VanGroupSetVan</code>
+    always write the group’s van, but every group is re-scanned on every render as a safety net for legacy data and
+    future code paths — and <b>there is deliberately no auto-pick</b> (“per user: ห้ามเดา”). Resolution is manual:
+    re-select the group’s van.
+  </div>
+
+  <h4>Surfaces</h4>
+  <div class="tw"><table>
+    <thead><tr><th>Where</th><th style="width:160px">Line</th></tr></thead>
+    <tbody>
+      <tr><td>By-trip sticky header chip <code>รถปนกัน · …</code> (<span class="b violet">#7A1FA2</span>), click → enter Van mode</td><td class="mono">72081, 72090</td></tr>
+      <tr><td>Per-group chip in the group header, listing the conflicting van names</td><td class="mono">72422–72424, 72480</td></tr>
+      <tr><td>Printed job order banner <code>⚠ รถปนกันในกรุ๊ป — บาง booking ถูกจัดไปคนละคัน ใบงานนี้อาจไม่ครบ/ผิดคัน</code>, filtered to conflicts involving <i>this</i> van</td><td class="mono">46967–46969</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note ok">
+    <span class="lbl">Related but distinct</span>
+    <code>bkV2VanGroupHeal(date)</code> <span class="ln">:45782</span> fixes the <i>opposite</i> problem — a member
+    with <b>no</b> van in a group where someone has one. It is idempotent, scoped to one date, and heals
+    <code>vanId</code> only (<a href="#s9">§9</a>).
+  </div>
+
+  <!-- 4.9 -->
+  <h3 id="w-joborder">4.9 Print / send the van job order</h3>
+  <p><b>Trigger</b> — the plan is final; drivers need paper or a LINE image.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>renderVanJobs</code> <span class="ln">:46547</span> runs three heals first</div>
+      <div class="d"><code>bkV2HealOvnLegs</code>, <code>bkV2HealAltSplits</code>, <code>bkV2VanGroupHeal</code>
+      <span class="ln">:46552–46554</span>, then aggregates.</div></div>
+    <div class="step"><div class="t">2 · A “job” is keyed <code>vanId~routeId</code></div>
+      <div class="d"><code>_addTo</code> <span class="ln">:46572</span> — a van running two programs in a day prints
+      two separate sheets.</div></div>
+    <div class="step"><div class="t">3 · Row click → drawer preview</div>
+      <div class="d"><code>vanJobsOpenPreview</code> <span class="ln">:46520</span>; drag-resize
+      <code>vjResizeStart</code> <span class="ln">:46511</span>, auto-fit <code>vjFit</code> <span class="ln">:46479</span>,
+      zoom <code>vanJobsSetZoom</code> <span class="ln">:46522</span>, full-screen <code>vanJobsOpenFull</code>
+      <span class="ln">:46528</span>.</div></div>
+    <div class="step"><div class="t">4 · Print → <code>bkV2VanJobOrder(date, vanId, routeId, leg)</code> <span class="ln">:55138</span></div>
+      <div class="d">Opens a popup with <code>vanJobsOrderCss(false)</code> + <code>vanJobsOrderInner(...)</code>
+      and auto-<code>print()</code>.</div></div>
+    <div class="step ask"><div class="t">5 · PNG → <code>vanJobsSaveImage</code> <span class="ln">:55150</span></div>
+      <div class="d">Lazy-loads html2canvas from a CDN and renders offscreen at scale 2. <b>Needs network.</b></div></div>
+    <div class="step done"><div class="t">6 · <code>ส่งคนขับ</code> toggle → <code>vanJobsToggleSent</code> <span class="ln">:46453</span></div>
+      <div class="d">Stamps <code>VANJOB_SENT['date::vanId~routeId'] = ISO</code>, preserving
+      <code>window.scrollY</code> across the re-render.</div></div>
+  </div>
+
+  <h4>Sheet content — <code>vanJobsOrderInner</code> <span class="ln">:46797</span></h4>
+  <ul>
+    <li>Header wears the van’s identity colour (<code>vehColor</code> <span class="ln">:39362</span> /
+      <code>vjShade</code> <span class="ln">:39355</span>).</li>
+    <li>Two tables with shared <code>&lt;colgroup&gt;</code> widths <span class="ln">:46826</span> so outbound and
+      return align.</li>
+    <li>Row sort <span class="ln">:46821–46823</span>: return rows that came from another van go last; then manual
+      <code>vanSeq</code>; then pickup time.</li>
+    <li>Per-row: pickup location (+ user-typed Thai label from <code>VANJOB_PICKUP_TH</code>), area with Thai name
+      from <code>VANJOB_AREA_TH</code> <span class="ln">:46758</span>, <code>AD/CHD/INF/FOC</code> breakdown, special
+      request, drop-off.</li>
+    <li><b>Return rows show the drop-off area’s zone, not the pickup’s</b> (<code>_dropAreaObj</code>,
+      <span class="ln">:46850</span>) — a real bug fix: a Patong→Chalong return used to print “Patong”.</li>
+    <li>Late-booking guard banner: any booking on this van’s route(s) that day with no van at all, excluding rows
+      already on this sheet <span class="ln">:46953–46965</span>.</li>
+  </ul>
+
+  <h4>Editable-per-sheet overrides, all keyed independently of the booking record</h4>
+  <div class="tw"><table>
+    <thead><tr><th style="width:190px">Store</th><th style="width:190px">Key</th><th>Fallback</th><th style="width:110px">Persist</th></tr></thead>
+    <tbody>
+      <tr><td><code>VANJOB_DRIVER</code> <span class="ln">:46535</span></td><td><code>date::vanId</code></td><td>vehicle registry</td><td class="mono">46537</td></tr>
+      <tr><td><code>VANJOB_PICKUP_TH</code> <span class="ln">:46433</span></td><td>pickup location <b>name</b> (global, reused everywhere)</td><td>none</td><td class="mono">46435</td></tr>
+      <tr><td><code>VANJOB_SREQ</code> <span class="ln">:46440</span></td><td><code>bookingId</code></td><td><code>vanJobsSreqAuto</code> = <code>bk.notes</code></td><td class="mono">46442</td></tr>
+      <tr><td><code>VANJOB_SENT</code> <span class="ln">:46449</span></td><td><code>date::vanId~routeId</code></td><td>—</td><td class="mono">46451</td></tr>
+    </tbody>
+  </table></div>
+
+  <p><code>VANJOB_SREQ</code> stores <code>''</code> deliberately — an empty override means “deleted from the sheet”,
+  distinct from “no override” (<code>vanJobsSreqFinal</code> <span class="ln">:46444</span> tests
+  <code>b.id in VANJOB_SREQ</code>).</p>
+
+  <!-- 4.10 -->
+  <h3 id="w-checkin">4.10 Van check-in (เช็คอินรถ)</h3>
+  <p><b>Trigger</b> — the morning of travel, as each van loads.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>renderVanCheckin</code> <span class="ln">:48205</span> heals first</div>
+      <div class="d">Runs <code>bkV2VanGroupHeal(date)</code> and <code>bkV2HealSelfArrivePickup(date)</code>
+      <span class="ln">:48208–48209</span>.</div></div>
+    <div class="step"><div class="t">2 · Bucket by <code>vanId~routeId</code> <span class="ln">:48222</span></div>
+      <div class="d">OVN return legs are excluded (they are drop-offs, not pickups, <span class="ln">:48215</span>);
+      a transfer-zone booking with no van and not <code>pickupSelf</code> lands in <code>unassigned</code>
+      <span class="ln">:48223</span>.</div></div>
+    <div class="step"><div class="t">3 · Group headers</div>
+      <div class="d">Ordered by zone (<code>bkV2ZoneOrder</code>) then route name then van id, showing the group
+      number, van pill, plate/driver/phone from <code>vanJobsDriverInfo</code>.</div></div>
+    <div class="step done"><div class="t">4 · Per row</div>
+      <div class="d"><code>−/+</code> headcount (<code>ckStep</code> <span class="ln">:47741</span>),
+      <code>No-show</code> / <code>CXL</code> event buttons (<code>ckEventOpen</code> <span class="ln">:47526</span>),
+      and the ✓ check-in toggle (<code>ckToggle</code> <span class="ln">:47755</span>).</div></div>
+  </div>
+
+  <h4>Data written</h4>
+  <ul>
+    <li><code>ops.vanCheckin = { actualPax, noShow, expected, at, by, events[], reasonCode, reasonNote, reasonAt }</code>,
+      written through <code>ckWrite</code> <span class="ln">:47239</span> which merges forward the pier-stage keys
+      <code>CK_STAGE_KEYS</code> <span class="ln">:47238</span> so <code>+/−</code> never drops them.</li>
+    <li>The pier equivalent is <code>ops.pierCheckin</code> (different screen, same helpers).</li>
+  </ul>
+
+  <h4>Validation / guards</h4>
+  <ul>
+    <li><code>ckGuard()</code> on every mutation.</li>
+    <li>Headcount clamped to <code>[0, cap]</code> where <code>cap = ckCap(...)</code>.</li>
+    <li>Reducing the count with no reason immediately opens the reason modal <span class="ln">:47753</span>.</li>
+    <li>Toggling ✓ again un-checks but keeps the counted values <span class="ln">:47762</span>.</li>
+  </ul>
+
+  <h4>Failure modes</h4>
+  <ul>
+    <li><code>bkOpsClear</code> <span class="ln">:45407</span> deletes <code>vanCheckin</code>/<code>pierCheckin</code>
+      when a day’s assignment is wiped, and <code>bkV2CommitBooking</code> does the same on a reschedule
+      <span class="ln">:77578</span>, <span class="ln">:77587</span> — otherwise the new date inherits yesterday’s
+      “boarded / no-show” and the Travel Summary totals are wrong.</li>
+  </ul>
+
+  <!-- 4.11 -->
+  <h3 id="w-registry">4.11 Manage the vehicle registry &amp; the month matrix</h3>
+  <p><b>Trigger</b> — a new partner van joins; a van goes in for service; the weekly program plan changes.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · Registry CRUD</div>
+      <div class="d"><code>renderVehicles</code> <span class="ln">:55734</span>, tab <code>ทะเบียน</code> →
+      <code>vehFormOpen</code> <span class="ln">:55514</span> → <code>vehFormSave</code> <span class="ln">:55525</span>
+      (or the quick <code>vehAdd</code> <span class="ln">:55493</span>).</div></div>
+    <div class="step"><div class="t">2 · Tab <code>ตารางเดือน</code> — program assignment</div>
+      <div class="d">Click a day cell → <code>vehDayCellClick</code> <span class="ln">:55413</span> cycles the day’s
+      program; two or more programs open the popup <code>vehDayPopup</code> <span class="ln">:55353</span>
+      (<code>vehDayToggleRoute</code> <span class="ln">:55410</span>).</div></div>
+    <div class="step"><div class="t">3 · Day status</div>
+      <div class="d"><code>vehStatusCycleDay</code> <span class="ln">:55457</span> cycles
+      <code>'' → available → maintenance → off</code>; longer ranges via <code>vehStatusOpen</code>
+      <span class="ln">:55463</span> → <code>statusRanges[]</code>.</div></div>
+    <div class="step done"><div class="t">4 · Zone swap ranges</div>
+      <div class="d"><code>vehZoneOpen</code> <span class="ln">:55600</span> →
+      <code>zoneOverrides[] = [{zone, from, to}]</code>.</div></div>
+  </div>
+
+  <h4>Data written — <code>SB_VEHICLES[]</code> <span class="ln">:39331</span></h4>
+  <p>Persisted by <code>sbVehiclesPersist</code> <span class="ln">:39340</span> → <code>loveandaman_v2.sb_vehicles</code>.</p>
+  <pre><code>{ id, name, plate, type:'sedan'|'van'|'minibus'|'bus', capacity,
+  ownership:'own'|'partner'|'rented', partnerName, zoneBase:'PK'|'KL',
+  driver, driverPhone, active, note, color?,
+  dayRoute:{ 'YYYY-MM-DD': routeId | routeId[] },
+  dayZone:{ date: 'PK'|'KL' },
+  dayStatus:{ date: 'available'|'maintenance'|'off' },
+  statusRanges:[{s,from,to,note}], zoneOverrides:[{zone,from,to}],
+  log:[{at,kind,text}]  // capped at 100, kind: created|status|zone|driver|edit
+}</code></pre>
+
+  <h4>Validation / guards</h4>
+  <ul>
+    <li>Every mutator is wrapped in <code>laGuardEdit('operations')</code>; <code>vehSetField</code> re-renders to
+      revert the control for a view-only user <span class="ln">:55500</span>.</li>
+    <li>Name required on save <span class="ln">:55527</span>.</li>
+    <li><code>vehAdd</code> appends a 3-char random suffix to the id for multi-user uniqueness
+      <span class="ln">:55496</span>; <code>vehFormSave</code>’s create path does <b>not</b> <span class="ln">:55538</span>
+      — <i>(inferred: a concurrent-add id collision is possible via the form path.)</i></li>
+    <li><code>ownership !== 'partner'</code> forces <code>partnerName = ''</code>.</li>
+  </ul>
+
+  <h4>Failure modes</h4>
+  <ul>
+    <li><code>v.color</code> needs a matching <code>sb_vehicles.color</code> column server-side or it is silently
+      dropped on the next SQL round-trip (comment at <span class="ln">:39347</span>).</li>
+    <li><code>_vehUsableOn</code> <span class="ln">:46421</span> excludes <code>off</code>/<code>maintenance</code> vans
+      from every pool — a van marked in service disappears from the group dropdowns for that day, but any group
+      already holding it keeps it.</li>
+    <li><code>ownership:'rented'</code> is counted in the header KPIs <span class="ln">:55751</span> and in
+      <code>vehBuildGrouped</code> <span class="ln">:55641</span>, but <code>vanJobsOwnerGroup</code>
+      <span class="ln">:46543</span> collapses everything non-partner to <code>'company'</code>, so the Van-Jobs owner
+      filter has only two buckets.</li>
+  </ul>
+</section>
+
+<!-- ============ 5 ============ -->
+<section id="s5">
+  <h2><span class="num">05</span> Pickup time resolution</h2>
+
+  <p>Given a booking, resolving “what time does the van come” is a <b>five-step fallback</b>, and three of the steps
+  live in different modules.</p>
+
+  <div class="flow">
+    <div class="stage"><div class="k">5.1</div><div class="v">Hotel → area</div><div class="s">Human choice; no automatic mapping</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">5.2</div><div class="v">Area → default time</div><div class="s"><code>bkV2GetPickupTime</code></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">5.3</div><div class="v">Stored on the trip</div><div class="s"><code>trip.pickupTime</code> snapshot</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">5.4</div><div class="v">Dispatcher’s final word</div><div class="s"><code>ops.pickupTimeFinal</code></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">5.5</div><div class="v">The read expression</div><div class="s">Three-term chain</div></div>
+  </div>
+
+  <h3 id="pt-hotel">5.1 Hotel → area</h3>
+  <p>There is <b>no automatic hotel→area mapping</b>. <code>bk.hotelName</code> is free text;
+  <code>bk.pickupAreaId</code> is chosen by a human in the booking form. The only machinery around hotel names is
+  de-duplication: <code>psuHotelGroups</code> <span class="ln">:40534</span> clusters near-identical spellings with
+  <code>bkV2HotelKey</code> <span class="ln">:76124</span> + <code>bkV2HotelSim</code> <span class="ln">:76135</span>
+  under a union-find at threshold <code>_psuHotelMin</code> (default <code>0.82</code>), <b>refusing to merge names
+  that have been seen in different pickup areas</b> unless <code>psuToggleHotelXArea</code> is on
+  (<code>sameArea</code>, <span class="ln">:40555</span>). <code>psuHotelMerge</code> <span class="ln">:40584</span>
+  then rewrites <code>hotelName</code>/<code>pickup</code> on the affected bookings and appends a history entry.
+  It is irreversible and says so in the confirm.</p>
+
+  <h3 id="pt-area">5.2 Area → default time (<code>bkV2GetPickupTime</code> <span class="ln">:40338</span>)</h3>
+  <pre><code>bkV2GetPickupTime(routeId, areaId, dateStr)
+ ├─ area = bkV2GetArea(areaId)                      :40321   → null if unknown → return null
+ ├─ prof = psuResolveProfile(dateStr)               :40326
+ │    profiles whose [from,to] contains dateStr
+ │    tiebreak: NARROWER range wins, then newer createdAt
+ ├─ 1. prof.times[routeId][areaId]                  ← current schema
+ ├─ 2. prof.times[routeId][area.timeGroup]          ← legacy key inside a profile
+ ├─ 3. SB_PICKUP_TIMES[routeId][area.timeGroup]     ← legacy flat matrix
+ └─ 4. null</code></pre>
+
+  <div class="note">
+    <span class="lbl">Clock vs prose</span>
+    Values are free text — usually <code>'07:30-07:45'</code>, but the pier rows carry prose like
+    <code>'Before 08:30 at pier'</code>. Code that must tell the two apart uses the <code>_isClock</code> predicate at
+    <span class="ln">:46363</span> (<code>/\d{1,2}[:.]\d{2}/</code> <b>and not</b> <code>/pier/i</code>).
+  </div>
+
+  <h3 id="pt-stored">5.3 Default → the booking’s stored time</h3>
+  <p><code>bk.trips[i].pickupTime</code> is snapshotted at booking time, not looked up at read time:</p>
+  <ul>
+    <li><code>bkV2SetPickupArea</code> <span class="ln">:74925</span> refills every trip’s <code>pickupTime</code>,
+      <b>skipping trips flagged <code>pickupTimeEdited</code></b>;</li>
+    <li>route change → <span class="ln">:73985</span>; date change → <span class="ln">:75027</span>; commit →
+      <span class="ln">:76764</span>.</li>
+  </ul>
+
+  <h3 id="pt-final">5.4 Stored → dispatcher’s final word</h3>
+  <p><code>ops.pickupTimeFinal</code> (per day) overrides everything, set by <code>bkV2SetPickupFinal</code>
+  <span class="ln">:46405</span> (one row) or <code>bkV2VanGroupSetTime</code> <span class="ln">:45837</span>
+  (whole group).</p>
+
+  <h3 id="pt-read">5.5 The read expression</h3>
+  <p>Every consumer uses the same three-term chain:</p>
+  <pre><code>ops.pickupTimeFinal || trip.pickupTime || bk.pickupTime || ''</code></pre>
+  <p>Job order <code>_ptime</code> <span class="ln">:46804</span> · check-in <span class="ln">:48131</span> ·
+  By-trip <code>_rowTime</code> <span class="ln">:72368</span> · daily report <span class="ln">:53494</span> ·
+  voucher <span class="ln">:77934</span>.</p>
+
+  <h3 id="pt-heal">5.6 The self-arrive normaliser</h3>
+  <p><code>bkV2HealSelfArrivePickup(date)</code> <span class="ln">:46361</span> runs on every Van-Check-in render.
+  For a self-arrive trip whose <code>pickupTime</code> is a real clock time, it rewrites it to the area default and
+  clears <code>ops.pickupTimeFinal</code>. Idempotent and targeted: it never touches an already-correct
+  <code>"… at pier"</code> string and never touches <code>hotelName</code>.</p>
+
+  <h3 id="pt-example">5.7 Worked example</h3>
+  <p>Booking with <code>pickupAreaId:'pk-patong'</code>, trip <code>{routeId:'r5', date:'2026-08-20'}</code>:</p>
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>bkV2GetArea('pk-patong')</code></div>
+      <div class="d">→ <code>{zone:'PK', region:'phuket-west', timeGroup:'pk-w2'}</code></div></div>
+    <div class="step"><div class="t">2 · <code>psuResolveProfile('2026-08-20')</code></div>
+      <div class="d">→ <code>prof-default-2026</code> (<code>2026-01-01 → 2026-12-31</code>)</div></div>
+    <div class="step"><div class="t">3 · <code>prof.times['r5']['pk-patong']</code></div>
+      <div class="d">The migration at <span class="ln">:40315</span> expanded
+      <code>SB_PICKUP_TIMES.r5['pk-w2'] = '06:00-06:15'</code> to every member of <code>pk-w2</code>, so this hits →
+      <b><code>06:00-06:15</code></b></div></div>
+    <div class="step"><div class="t">4 · Written to <code>trip.pickupTime</code> at booking time</div><div class="d"></div></div>
+    <div class="step done"><div class="t">5 · Dispatcher sets the whole group to <code>05:55</code></div>
+      <div class="d"><code>ops.pickupTimeFinal = '05:55'</code> → the job order prints <code>05:55</code>.</div></div>
+  </div>
+</section>
+
+<!-- ============ 6 ============ -->
+<section id="s6">
+  <h2><span class="num">06</span> Data model touched</h2>
+
+  <h3 id="dm-stores">6.1 Standalone stores</h3>
+  <div class="tw"><table>
+    <thead><tr><th style="width:200px">Variable</th><th style="width:80px">Line</th><th style="width:170px">Blob key</th><th style="width:190px">Persist fn</th><th>Shape</th></tr></thead>
+    <tbody>
+      <tr><td><code>SB_VEHICLES</code></td><td class="mono">39331</td><td><code>sb_vehicles</code></td><td><code>sbVehiclesPersist</code> <span class="ln">:39340</span></td><td>array, see <a href="#w-registry">§4.11</a></td></tr>
+      <tr><td><code>SB_PICKUP_AREAS</code></td><td class="mono">40173</td><td><code>sb_pickup_areas</code></td><td><code>psuPersist</code> <span class="ln">:40357</span></td><td><code>[{id,name,zone,region,timeGroup}]</code></td></tr>
+      <tr><td><code>SB_PICKUP_TIMES</code></td><td class="mono">40225</td><td><code>sb_pickup_times</code></td><td><code>psuPersist</code></td><td><code>{routeId:{timeGroup:'HH:MM-HH:MM'}}</code> — <b>legacy</b>, read-only fallback</td></tr>
+      <tr><td><code>SB_PICKUP_TIME_PROFILES</code></td><td class="mono">40279</td><td><code>sb_pickup_time_profiles</code></td><td><code>psuPersist</code></td><td><code>[{id,name,from,to,notes,clonedFrom,times:{routeId:{areaId:str}},createdAt}]</code></td></tr>
+      <tr><td><code>VANJOB_DRIVER</code></td><td class="mono">46535</td><td><code>vanjob_driver</code></td><td><span class="ln">:46537</span></td><td><code>{'date::vanId':{driver,phone,plate}}</code></td></tr>
+      <tr><td><code>VANJOB_PICKUP_TH</code></td><td class="mono">46433</td><td><code>vanjob_pickup_th</code></td><td><span class="ln">:46435</span></td><td><code>{pickupName: thaiLabel}</code></td></tr>
+      <tr><td><code>VANJOB_SREQ</code></td><td class="mono">46440</td><td><code>vanjob_sreq</code></td><td><span class="ln">:46442</span></td><td><code>{bookingId: text}</code> (<code>''</code> = deleted)</td></tr>
+      <tr><td><code>VANJOB_SENT</code></td><td class="mono">46449</td><td><code>vanjob_sent</code></td><td><span class="ln">:46451</span></td><td><code>{'date::vanId~routeId': ISO}</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <p><b>Constants:</b> <code>VANJOB_AREA_TH</code> <span class="ln">:46758</span> (English area name → Thai),
+  <code>PHUKET_LL</code> <span class="ln">:44131</span> (area name → <code>[lat,lng]</code>, pickup map only),
+  <code>VEH_COLORS</code> <span class="ln">:39348</span>, <code>VEH_ST_LBL</code> <span class="ln">:55456</span>,
+  <code>PAX_K</code>/<code>PAX_LBL</code> <span class="ln">:45968–45969</span>.</p>
+
+  <h3 id="dm-booking">6.2 Booking-side fields (<code>SB_BOOKINGS</code>)</h3>
+  <p><b>Booking level:</b> <code>pickupAreaId</code>, <code>pickupZone</code>, <code>pickupSelf</code>,
+  <code>hotelName</code> / <code>pickup</code> / <code>pickupArea</code>, <code>roomNumber</code>,
+  <code>dropoffSame</code>, <code>dropoffAreaId</code>, <code>dropoffHotelName</code> / <code>dropoffArea</code>,
+  <code>altPickups[]</code>, <code>notes</code>.</p>
+
+  <p><b>Trip level:</b> <code>trip.zone</code>, <code>trip.pickupTime</code>, <code>trip.pickupTimeEdited</code>,
+  <code>trip.ovnLeg</code>, <code>trip.ovn</code>, <code>trip.ovnReturnDate</code>, <code>trip.ops</code> (day 2+).</p>
+
+  <h4>Ops block — the per-day accessor triple</h4>
+  <p>This is the single most important thing to get right.</p>
+  <div class="tw"><table>
+    <thead><tr><th style="width:250px">fn</th><th style="width:80px">line</th><th>behaviour</th></tr></thead>
+    <tbody>
+      <tr><td><code>bkIsFirstDay(b,date)</code></td><td class="mono">45387</td><td>no date, single-day booking, or <code>date === trips[0].date</code></td></tr>
+      <tr><td><code>bkOpsRead(b,date)</code></td><td class="mono">45392</td><td>read-only; returns <code>b.ops</code> on day 1, else <code>trip.ops</code>, else <code>{}</code> — safe in a render loop, <b>never creates</b></td></tr>
+      <tr><td><code>bkOpsFor(b,date)</code></td><td class="mono">45399</td><td>read-write; creates the block on demand</td></tr>
+      <tr><td><code>bkOpsDate(b,date)</code></td><td class="mono">45421</td><td><code>date || trips[0].date</code> — dispatch screens always pass the date</td></tr>
+      <tr><td><code>bkOpsClear(b,date,opts)</code></td><td class="mono">45407</td><td>wipes one day’s <code>boatId</code>/<code>vanId</code>/<code>vanReturnId</code>/<code>returnSameVan</code>/<code>vanGroup</code>/<code>vanSeq</code>/<code>vanSplits</code>/<code>pickupTimeFinal</code> + both check-ins</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note danger">
+    <span class="lbl">Why the triple exists</span>
+    Every van function in this domain was retrofitted to it. The <code>§per-trip ops</code> comments
+    (<span class="ln">:45810–45815</span>, <span class="ln">:45785</span>, <span class="ln">:45839</span>,
+    <span class="ln">:46804</span>, <span class="ln">:46960</span>) all record the same class of bug: overnight (OVN)
+    bookings wrote day 2’s van into day 1’s <code>ops</code>, so day 2 read back as “ยังไม่จัด” forever, and heal
+    functions overwrote day 2 with day 1’s van every time a job order was opened.
+  </div>
+
+  <p><b>Ops fields owned by this domain:</b> <code>vanId</code>, <code>vanReturnId</code>, <code>returnSameVan</code>,
+  <code>vanGroup</code>, <code>vanSeq</code>, <code>vanSplits[]</code>, <code>altSplitAuto</code>,
+  <code>pickupTimeFinal</code>, <code>vanCheckin</code>. (<code>boatId</code>, <code>boatSplits</code>,
+  <code>pierCheckin</code>, <code>reconfirm</code> are neighbours.)</p>
+</section>
+
+<!-- ============ 7 ============ -->
+<section id="s7">
+  <h2><span class="num">07</span> Persistence path</h2>
+
+  <p>Per CLAUDE.md §2, <code>localStorage</code> here is a <b>RAM shim</b> over the <code>loveandaman_v2</code> key;
+  only tiny UI keys hit real disk.</p>
+
+  <pre><code>mutator (psuSaveArea / vehFormSave / vanJobsSetDriver / bkV2VanGroupSetVan …)
+  → mutate the in-memory array/map
+  → &lt;store&gt;Persist()            // read-modify-write of loveandaman_v2, one key only
+  → setItem shim → _mem, debounced
+  → computeDiff(BASE, cur)
+  → laDiffToOps:167             // per-record put/patch/del against REST_RESOURCES
+  → POST /api/v1/_batch         // one transaction; falls back to /api/save on drift or 400/404</code></pre>
+
+  <h4>Notes specific to this domain</h4>
+  <ul>
+    <li><b>Booking-side van data does not go through a van persist fn.</b> It rides
+      <code>acctPersistBookings()</code> on <code>SB_BOOKINGS</code>, so <code>ops.vanSplits</code> reaches SQL as the
+      <code>ops_vansplits</code> JSON column (comment at <span class="ln">:46294</span>). Extra keys inside a split
+      (<code>ad/chd/inf/foc</code>, <code>pickAreaId</code>, <code>altWho</code>) ride along for free.</li>
+    <li><b><code>ops.altSplitAuto</code> is a scalar that is NOT mapped</b> — it is lost on every round-trip, which is
+      why <code>_bkV2IsAltAutoSplit</code> <span class="ln">:46295</span> re-derives it from the split markers.</li>
+    <li><b><code>v.color</code> needs a <code>sb_vehicles.color</code> column</b> or it is dropped
+      <span class="ln">:39347</span>. Any new persisted field needs a mapper/REST-index entry — CLAUDE.md §4.</li>
+    <li>Every persist fn in this domain begins with <code>if(!laCanEditArea('operations')) return;</code> — a view-only
+      session mutates RAM but never saves. There is no toast for this.</li>
+    <li><b>Load conditions.</b> <code>_laReloadData</code> <span class="ln">:41535</span> re-reads all of these on a
+      server refresh: <code>sb_vehicles</code> <span class="ln">:41547</span>, <code>sb_pickup_areas</code>
+      <span class="ln">:41557</span>, <code>sb_pickup_times</code> <span class="ln">:41558</span>,
+      <code>sb_pickup_time_profiles</code> <span class="ln">:41559</span>, and the four <code>vanjob_*</code> maps
+      <span class="ln">:41583–41586</span>. A key persisted but not listed there vanishes on refresh — CLAUDE.md §2.</li>
+    <li><code>_psuRestore</code> <span class="ln">:40369</span> also runs a one-time idempotent migration on load: any
+      profile still keyed by <code>timeGroup</code> is expanded to per-area keys via
+      <code>_psuExpandTimesToAreas</code> <span class="ln">:40283</span>, logged and re-persisted.</li>
+  </ul>
+
+  <div class="note warn">
+    <span class="lbl">Array-length guards differ per key</span>
+    <code>sb_pickup_areas</code> and <code>sb_pickup_time_profiles</code> are restored only
+    <code>if(Array.isArray(...) &amp;&amp; .length)</code>, so an intentionally emptied list falls back to the seed.
+    <code>sb_vehicles</code> has no length guard, so an empty vehicle list stays empty.
+  </div>
+</section>
+
+<!-- ============ 8 ============ -->
+<section id="s8">
+  <h2><span class="num">08</span> Cross-module contracts</h2>
+
+  <div class="card">
+    <h3 id="x-in" style="margin-top:0">8.1 In — from Booking</h3>
+    <p>The booking form owns everything the dispatcher reads:</p>
+    <div class="tw"><table>
+      <thead><tr><th style="width:250px">Written by</th><th style="width:290px">Field</th><th>Consumed here</th></tr></thead>
+      <tbody>
+        <tr><td><code>bkV2SetPickupArea</code> <span class="ln">:74925</span></td><td><code>bk.pickupAreaId</code>, <code>trip.zone</code>, <code>trip.pickupTime</code>, <code>d.pickupZoneFilter</code></td><td>area name, zone bucket, default time</td></tr>
+        <tr><td><code>bkV2SetDropoffArea</code> <span class="ln">:74947</span> + <code>dropoffSame</code></td><td><code>bk.dropoffAreaId</code>, <code>bk.dropoffHotelName</code></td><td><code>bkV2RetInfo</code>, return-leg zone column</td></tr>
+        <tr><td><code>bkV2TogglePickupSelf</code> <span class="ln">:74960</span></td><td><code>bk.pickupSelf</code></td><td>outbound exclusion</td></tr>
+        <tr><td>add-on <code>transfer-&lt;route&gt;-&lt;zone&gt;-&lt;vehicle&gt;</code></td><td>parsed by <code>bkV2TripPrivateVan</code> <span class="ln">:46345</span></td><td>keeps a No-Transfer <i>seat</i> in the van pool via <code>bkV2EffZone</code></td></tr>
+        <tr><td>booking form</td><td><code>bk.altPickups[]</code></td><td>auto <code>vanSplits</code></td></tr>
+        <tr><td><code>bk.notes</code></td><td>—</td><td>job-order Special Request default</td></tr>
+      </tbody>
+    </table></div>
+    <div class="note danger" style="margin-bottom:0">
+      <span class="lbl">The contract that breaks most often</span>
+      <code>bkV2CommitBooking</code> rebuilds a fresh booking object on edit. Its <code>if(editing)</code> block must
+      carry <code>ops</code> across (CLAUDE.md §3.4). Miss it and every van assignment, group number, pickup sequence,
+      return van and check-in for that booking is wiped on the next save.
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 id="x-boat" style="margin-top:0">8.2 Out — to Boat Operations</h3>
+    <p>Van and boat are assigned <b>independently</b>, both onto the same per-day <code>ops</code> block:</p>
+    <ul>
+      <li>Van Assign mode writes <code>ops.vanId</code>; Boat Assign mode writes <code>ops.boatId</code> /
+        <code>ops.boatSplits</code>. The two modes are mutually exclusive in the UI <span class="ln">:45676–45677</span>.</li>
+      <li>Nothing links a van to a boat directly. <code>pckVanBoatSplit(vanId, date)</code> <span class="ln">:47279</span>
+        closes that gap for the dispatcher: it reports <code>[{bid, pax, n}]</code> — which boats this van’s passengers
+        are going onto — and renders as boat chips on the group header with a <code>⚠ แยกลง N ลำ</code> warning when
+        there is more than one <span class="ln">:72448–72454</span>. The comment at <span class="ln">:47275</span>
+        records why: “คนขับกับไกด์ไปเจอกันงงหน้าท่า”.</li>
+      <li><code>renderVehicles</code>’ month matrix is the <i>upstream</i> of boat ops in one direction only:
+        <code>v.dayRoute[date]</code> decides which vans may be picked for a program, and <code>_vehRouteDemand</code>
+        <span class="ln">:55405</span> shows how many pax on that program need a transfer.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3 id="x-checkin" style="margin-top:0">8.3 Out — to check-in, Travel Summary, Daily Report</h3>
+    <p><code>ops.vanCheckin</code> (this domain) and <code>ops.pierCheckin</code> (pier check-in) are both read by
+    Travel Summary (<span class="ln">:51535</span>, <span class="ln">:51597</span>) to decide charge/no-charge, and by
+    the By-trip page for the No-show badge. <code>ckLostByType</code> <span class="ln">:47123</span> walks both.</p>
+  </div>
+
+  <div class="card">
+    <h3 id="x-map" style="margin-top:0">8.4 Out — to the pickup map and Demand</h3>
+    <p><code>renderPickupMap</code> and <code>mdTabAgents</code> <span class="ln">:44054</span> both aggregate
+    <code>bk.pickupAreaId</code> → <code>bkV2GetArea(...).name</code>. The map additionally needs the name to exist in
+    the hardcoded <code>PHUKET_LL</code> table <span class="ln">:44131</span>, normalised by <code>pmNormArea</code>
+    <span class="ln">:44162</span> (strips <code>(self-arrive)</code>, <code>(beach)</code>, leading
+    <code>Visit </code>). Areas without coordinates fall into an “other” bucket — so <b>adding a pickup area does not
+    put it on the map</b>; <code>PHUKET_LL</code> must be edited too.</p>
+  </div>
+</section>
+
+<!-- ============ 9 ============ -->
+<section id="s9">
+  <h2><span class="num">09</span> Invariants &amp; gotchas</h2>
+
+  <div class="note danger">
+    <span class="lbl">A van group is ONE outbound van</span>
+    <code>bkV2VanGroupSelected</code> <span class="ln">:45776</span> overwrites each incoming member’s
+    <code>vanId</code> with the group’s van. <code>bkV2VanGroupSetVan</code> <span class="ln">:45834</span> writes it to
+    every member. <code>bkV2VanGroupConflicts</code> <span class="ln">:45799</span> scans for violations on every
+    render. The failure mode when this slips is precise and nasty: the group header shows van A, the job order for
+    van B silently carries the booking, and nobody notices until a guest is standing in a lobby.
+  </div>
+
+  <div class="note">
+    <span class="lbl">The return van is per booking</span>
+    <code>vanReturnId</code> lives on the booking/split, not the group. <code>bkV2VanGroupSetReturn</code> is a bulk
+    convenience, <code>bkV2VanGroupSelected</code> fills it only when empty, and empty means “returns on the outbound
+    van” — which is exactly how the job order reads it (<code>rv = vanReturnId || vanId</code>, <span class="ln">:46818</span>).
+  </div>
+
+  <div class="note danger">
+    <span class="lbl">Heal must NOT spread <code>vanReturnId</code></span>
+    <code>bkV2VanGroupHeal</code> <span class="ln">:45791</span> heals <code>vanId</code> only. The inline comment:
+    <i>“heal ONLY the outbound van (ป้องกันตกบุคกิ้ง) · vanReturnId เป็น per-booking (ว่าง = กลับคันเดิม) →
+    ไม่กระจายทั้งกรุ๊ป”</i>. Spreading it would silently arrange return vans nobody asked for.
+  </div>
+
+  <div class="note warn">
+    <span class="lbl">Never auto-pick a van (“ห้ามเดา”)</span>
+    Conflicts are surfaced, not resolved. The only automatic assignment is <code>bkV2VanAutoAssign</code>
+    <span class="ln">:45705</span>, which is an explicit button, and the heal, which only propagates a van a human
+    already chose. This matches CLAUDE.md §4 (“keep data fixes user-triggered”).
+  </div>
+
+  <div class="note">
+    <span class="lbl">Always read/write ops through <code>bkOpsRead</code>/<code>bkOpsFor</code> with an explicit date</span>
+    Touching <code>b.ops</code> directly is correct only for single-day bookings. Every OVN bug in this domain traces
+    back to a direct <code>b.ops</code> access.
+  </div>
+
+  <div class="note danger">
+    <span class="lbl">Disband must clear <code>vanId</code>, <code>vanReturnId</code> and <code>vanSeq</code></span>
+    See <a href="#w-disband">§4.6</a>.
+  </div>
+
+  <div class="note">
+    <span class="lbl">Cancelled statuses are excluded everywhere</span>
+    <code>['cancelled','rejected','cancelled_weather']</code> — check <code>renderVanJobs</code>
+    <span class="ln">:46560</span>, <code>vanJobsBookingsFor</code> <span class="ln">:46457</span>,
+    <code>bkV2VanGroupHeal</code> <span class="ln">:45783</span>, <code>bkV2VanGroupConflicts</code>
+    <span class="ln">:45800</span>, <code>vehJobsFor</code> <span class="ln">:55631</span>,
+    <code>renderVanCheckin</code> <span class="ln">:48213</span>.
+  </div>
+
+  <div class="note warn">
+    <span class="lbl">Always test <code>'NoTransfer' || 'NT'</code></span>
+    Both spellings are live across the codebase.
+  </div>
+
+  <div class="note">
+    <span class="lbl">Save-on-input, never re-render</span>
+    <code>vanJobsSetDriver</code>, <code>vanJobsSetPickupTh</code>, <code>vanJobsSetSreq</code>,
+    <code>bkV2VanGroupSetTime</code>, <code>bkV2SetPickupFinal</code>, <code>psuSetTimeCell</code> all persist without
+    re-rendering, because re-rendering the mount blows the caret out of the input (CLAUDE.md §6, scroll-jump). Where a
+    re-render is unavoidable (<code>vanJobsToggleSent</code> <span class="ln">:46453</span>) the code saves and
+    restores <code>window.scrollY</code>.
+  </div>
+
+  <div class="note danger">
+    <span class="lbl"><code>esc</code> is not global</span>
+    Every render fn here declares its own (<code>renderVanJobs</code> <span class="ln">:46549</span>,
+    <code>renderVehicles</code> <span class="ln">:55736</span>, <code>psuRenderProfileModal</code>
+    <span class="ln">:40843</span>, …). A new top-level fn that forgets this throws silently on click.
+  </div>
+
+  <div class="note warn">
+    <span class="lbl">Dates</span>
+    Use <code>bkV2LocalYMD(dt)</code>, never <code>toISOString().slice(0,10)</code>. <code>_vanJobsDate</code>,
+    <code>_vanCkDate</code>, <code>_vehDate</code> and all the <code>*DateShift</code> helpers do;
+    <code>psuResolveProfile</code> <span class="ln">:40327</span> and <code>psuOpenCloneProfile</code>
+    <span class="ln">:40763</span> still use <code>toISOString()</code>. <i>(inferred:
+    <code>psuResolveProfile</code>’s default-to-today can pick the previous day between 00:00 and 07:00 ICT; the
+    callers that matter pass an explicit date.)</i>
+  </div>
+
+  <div class="note">
+    <span class="lbl">Job orders need network</span>
+    PNG export lazy-loads html2canvas from a CDN (<code>_vjEnsureH2C</code> <span class="ln">:55149</span>); the pickup
+    map lazy-loads Leaflet + Carto tiles.
+  </div>
+
+  <div class="note">
+    <span class="lbl">Profile overlap is a warning, not a block</span>
+    <code>psuSaveProfile</code> <span class="ln">:40796</span> confirms and lets you continue;
+    <code>psuResolveProfile</code> then resolves narrower-range-wins, then newer-<code>createdAt</code>-wins. The
+    confirm text says “more recently-created profile”, which understates the narrower-range rule.
+  </div>
+
+  <div class="note ok">
+    <span class="lbl">Deleting an area or a profile does not touch bookings</span>
+    Both confirm dialogs say so, and it is true: bookings snapshot the time onto <code>trip.pickupTime</code>.
+  </div>
+</section>
+
+<!-- ============ 10 ============ -->
+<section id="s10">
+  <h2><span class="num">10</span> Function index</h2>
+
+  <input class="filter" id="ffilter" type="search" placeholder="Filter functions…" autocomplete="off">
+  <span class="count" id="fcount"></span>
+
+  <div class="tw"><table id="ftable">
+    <thead><tr><th>Function</th><th>Line</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>renderVehicles</code></td><td class="mono">55734</td><td>Transfer Fleet page; 4 tabs (สถานะ / ตารางเดือน / ทะเบียน / รายวัน)</td></tr>
+      <tr><td><code>renderVanJobs</code></td><td class="mono">46547</td><td>Van job orders page: aggregate <code>vanId~routeId</code> jobs for a day</td></tr>
+      <tr><td><code>renderVanCheckin</code></td><td class="mono">48205</td><td>Van boarding check-in, grouped by van</td></tr>
+      <tr><td><code>renderPickupSetup</code> / <code>psuRenderShell</code></td><td class="mono">40413 / 40419</td><td>Pickup Setup page + shell/KPIs/tabs</td></tr>
+      <tr><td><code>renderPickupMap</code></td><td class="mono">44792</td><td>Leaflet dot-density pickup map</td></tr>
+      <tr><td colspan="3"><b>Areas &amp; times</b></td></tr>
+      <tr><td><code>bkV2GetArea</code></td><td class="mono">40321</td><td>area lookup by id</td></tr>
+      <tr><td><code>psuResolveProfile</code></td><td class="mono">40326</td><td>pick the schedule profile covering a date (narrower → newer)</td></tr>
+      <tr><td><code>bkV2GetPickupTime</code></td><td class="mono">40338</td><td>route × area × date → time string, with 3 fallbacks</td></tr>
+      <tr><td><code>_psuExpandTimesToAreas</code></td><td class="mono">40283</td><td>migrate <code>timeGroup</code>-keyed times → <code>areaId</code>-keyed</td></tr>
+      <tr><td><code>_psuInheritTimesForArea</code></td><td class="mono">41019</td><td>fill a new area’s empty time cells from group siblings</td></tr>
+      <tr><td><code>psuSaveArea</code> / <code>psuDeleteArea</code></td><td class="mono">41035 / 41070</td><td>area CRUD</td></tr>
+      <tr><td><code>psuSaveProfile</code> / <code>psuDeleteProfile</code></td><td class="mono">40787 / 40830</td><td>profile CRUD (+ overlap confirm)</td></tr>
+      <tr><td><code>psuOpenCloneProfile</code></td><td class="mono">40755</td><td>clone a profile, dates shifted +1 year</td></tr>
+      <tr><td><code>psuSetTimeCell</code></td><td class="mono">41284</td><td>write one matrix cell into the active profile</td></tr>
+      <tr><td><code>psuGroupAreasByTime</code></td><td class="mono">41315</td><td>group areas sharing a time, for the marketing card</td></tr>
+      <tr><td><code>psuHotelGroups</code> / <code>psuHotelMerge</code></td><td class="mono">40534 / 40584</td><td>fuzzy-dedupe hotel spellings; rewrite bookings</td></tr>
+      <tr><td><code>psuPersist</code></td><td class="mono">40357</td><td>persist areas + times + profiles</td></tr>
+      <tr><td colspan="3"><b>Zones</b></td></tr>
+      <tr><td><code>bkV2EffZone</code></td><td class="mono">46355</td><td>effective van-ops zone (private van overrides No-Transfer)</td></tr>
+      <tr><td><code>vehEffectiveZone</code></td><td class="mono">46419</td><td>vehicle’s zone on a date (dayRoute → dayZone → override → base)</td></tr>
+      <tr><td><code>_vehRouteZone</code> / <code>_vehFamZone</code></td><td class="mono">55400 / 55396</td><td>route/family pier → van zone (<code>panwa</code>→PK, <code>tublamu</code>→KL)</td></tr>
+      <tr><td><code>bkV2ZoneLabel</code> / <code>Order</code> / <code>Color</code></td><td class="mono">71715–71719</td><td>zone display helpers</td></tr>
+      <tr><td><code>bkV2TripPrivateVan</code></td><td class="mono">46345</td><td>parse the <code>transfer-&lt;route&gt;-&lt;zone&gt;-&lt;vehicle&gt;</code> add-on</td></tr>
+      <tr><td colspan="3"><b>Vehicles</b></td></tr>
+      <tr><td><code>vehGet</code> / <code>vehName</code></td><td class="mono">39423 / 39424</td><td>vehicle lookup / display name</td></tr>
+      <tr><td><code>vehAdd</code> / <code>vehFormSave</code> / <code>vehDelete</code></td><td class="mono">55493 / 55525 / 55508</td><td>registry CRUD</td></tr>
+      <tr><td><code>vehSetField</code></td><td class="mono">55500</td><td>inline field edit + audit log</td></tr>
+      <tr><td><code>vehLog</code></td><td class="mono">39342</td><td>append to <code>v.log[]</code>, capped at 100</td></tr>
+      <tr><td><code>vehColor</code> / <code>vehGrad</code> / <code>vehChipPair</code></td><td class="mono">39362 / 39368 / 39376</td><td>stable per-vehicle identity colour</td></tr>
+      <tr><td><code>vehStatusOn</code></td><td class="mono">55452</td><td>day status (<code>dayStatus</code> override → <code>statusRanges</code>)</td></tr>
+      <tr><td><code>vehDaySetRoute</code> / <code>vehDayToggleRoute</code></td><td class="mono">55408 / 55410</td><td>month-matrix program assignment</td></tr>
+      <tr><td><code>_vehDayRoutes</code></td><td class="mono">55407</td><td>normalise <code>dayRoute[date]</code> (scalar or array)</td></tr>
+      <tr><td><code>vehZoneAdd/Set/Del</code></td><td class="mono">55596–55598</td><td>temporary zone-swap ranges</td></tr>
+      <tr><td><code>_vehUsableOn</code></td><td class="mono">46421</td><td>active and not off/maintenance on a date</td></tr>
+      <tr><td><code>vanVehiclesForZone</code></td><td class="mono">46422</td><td>usable vans in a zone (return-leg pool)</td></tr>
+      <tr><td><code>vanVehiclesForRoute</code></td><td class="mono">46426</td><td>vans assigned to this route in the month matrix (outbound pool)</td></tr>
+      <tr><td><code>vehJobsFor</code></td><td class="mono">55629</td><td>per-vehicle booking/pax load for a date</td></tr>
+      <tr><td><code>_vehRouteDemand</code></td><td class="mono">55405</td><td>pax and transfer-pax on a route+date</td></tr>
+      <tr><td><code>sbVehiclesPersist</code></td><td class="mono">39340</td><td>persist <code>sb_vehicles</code></td></tr>
+      <tr><td colspan="3"><b>Van grouping</b></td></tr>
+      <tr><td><code>bkOpsRead</code> / <code>bkOpsFor</code> / <code>bkOpsDate</code> / <code>bkOpsClear</code></td><td class="mono">45392 / 45399 / 45421 / 45407</td><td>per-day ops accessors</td></tr>
+      <tr><td><code>bkV2ToggleVanMode</code></td><td class="mono">45677</td><td>enter/exit Van Assign mode</td></tr>
+      <tr><td><code>bkV2VanSelToggle</code> / <code>bkV2VanSelClear</code></td><td class="mono">45732 / 45733</td><td>tick rows; value = tick order</td></tr>
+      <tr><td><code>_bkV2VanNextGroup</code></td><td class="mono">45743</td><td>next group number across the whole day+route</td></tr>
+      <tr><td><code>_bkV2InZone</code></td><td class="mono">45737</td><td>zone membership incl. the <code>__CHARTER__</code> namespace</td></tr>
+      <tr><td><code>bkV2VanGroupSelected</code></td><td class="mono">45755</td><td>group ticked rows; cap guard; van overwrite</td></tr>
+      <tr><td><code>_bkV2GrpApply</code></td><td class="mono">45816</td><td>iterate a group’s members with the right day’s ops</td></tr>
+      <tr><td><code>bkV2VanGroupPax</code></td><td class="mono">45818</td><td>total pax of a group</td></tr>
+      <tr><td><code>bkV2VanGroupSetVan</code></td><td class="mono">45828</td><td>set the group’s outbound van (cap-guarded)</td></tr>
+      <tr><td><code>bkV2VanGroupSetReturn</code></td><td class="mono">45851</td><td>bulk-set the return van</td></tr>
+      <tr><td><code>bkV2VanGroupSetTime</code></td><td class="mono">45837</td><td>set <code>pickupTimeFinal</code> on every member</td></tr>
+      <tr><td><code>bkV2VanGroupSave</code></td><td class="mono">45840</td><td>renumber <code>vanSeq</code> by tick order</td></tr>
+      <tr><td><code>bkV2VanGroupClearSeq</code></td><td class="mono">45838</td><td>drop manual order → back to time sort</td></tr>
+      <tr><td><code>bkV2VanGroupDisband</code></td><td class="mono">45836</td><td>clear group + van + return van + seq</td></tr>
+      <tr><td><code>bkV2VanGroupHeal</code></td><td class="mono">45782</td><td>propagate the group’s <code>vanId</code> to members missing one</td></tr>
+      <tr><td><code>bkV2VanGroupConflicts</code></td><td class="mono">45799</td><td>detect “รถปนกัน” (2+ vans in one group)</td></tr>
+      <tr><td><code>bkV2VanAutoAssign</code> / <code>bkV2VanClearRoute</code></td><td class="mono">45705 / 45723</td><td>fill-first auto-group; clear a program’s vans</td></tr>
+      <tr><td><code>bkV2AssignVan</code> / <code>bkV2AssignVanReturn</code></td><td class="mono">45689 / 45690</td><td>per-booking van / return van</td></tr>
+      <tr><td><code>bkV2SetReturnSameVan</code></td><td class="mono">45692</td><td>confirm “↩ กลับคันเดิม”</td></tr>
+      <tr><td><code>bkV2RetInfo</code></td><td class="mono">45695</td><td>return-leg state incl. <code>selfRet</code> and <code>alert</code></td></tr>
+      <tr><td><code>bkV2VanCellHTML</code></td><td class="mono">55172</td><td>the Van column cell in By-trip</td></tr>
+      <tr><td colspan="3"><b>Splits</b></td></tr>
+      <tr><td><code>bkV2VanSplit</code> / <code>bkV2SplitApply</code> / <code>bkV2VanUnsplit</code></td><td class="mono">45857 / 45881 / 45956</td><td>split a booking across vans; undo</td></tr>
+      <tr><td><code>bkV2SplitRender</code> / <code>bkV2SplitSet</code> / <code>bkV2SplitAll</code></td><td class="mono">45902 / 45875 / 45880</td><td>split modal</td></tr>
+      <tr><td><code>bkSplitPax</code> / <code>bkPaxSum</code> / <code>bkPaxSub</code> / <code>bkPaxAdd</code> / <code>bkPaxOfTrip</code></td><td class="mono">45989 / 45971 / 45972 / 45973 / 45970</td><td>pax-breakdown arithmetic</td></tr>
+      <tr><td><code>bkV2SyncAltPickupSplits</code></td><td class="mono">46258</td><td>rebuild auto splits from <code>altPickups[]</code></td></tr>
+      <tr><td><code>_bkV2IsAltAutoSplit</code></td><td class="mono">46295</td><td>detect an auto split from persisted markers</td></tr>
+      <tr><td><code>bkV2HealSplitPax</code> / <code>bkV2HealAltSplits</code></td><td class="mono">46304 / 46381</td><td>repair headcount↔breakdown drift</td></tr>
+      <tr><td colspan="3"><b>Job orders</b></td></tr>
+      <tr><td><code>vanJobsBookingsFor</code></td><td class="mono">46456</td><td>bookings on a van × route × leg</td></tr>
+      <tr><td><code>vanJobsOrderInner</code></td><td class="mono">46797</td><td>build the sheet (outbound + return sections, banners)</td></tr>
+      <tr><td><code>vanJobsOrderCss</code></td><td class="mono">46768</td><td>sheet stylesheet (scoped or standalone)</td></tr>
+      <tr><td><code>bkV2VanJobOrder</code></td><td class="mono">55138</td><td>open a print popup for one sheet</td></tr>
+      <tr><td><code>vanJobsSaveImage</code></td><td class="mono">55150</td><td>html2canvas → PNG download</td></tr>
+      <tr><td><code>vanJobsDriverInfo</code></td><td class="mono">46538</td><td>per-date driver/phone/plate with registry fallback</td></tr>
+      <tr><td><code>vanJobsSetDriver</code> / <code>vanJobsResetDriver</code></td><td class="mono">46539 / 46540</td><td>write/clear <code>VANJOB_DRIVER[date::vanId]</code></td></tr>
+      <tr><td><code>vanJobsGetPickupTh</code> / <code>vanJobsSetPickupTh</code></td><td class="mono">46437 / 46438</td><td>Thai label per pickup location name</td></tr>
+      <tr><td><code>vanJobsSreqAuto</code> / <code>SreqFinal</code> / <code>SetSreq</code> / <code>ResetSreq</code></td><td class="mono">46443–46446</td><td>special-request override chain</td></tr>
+      <tr><td><code>vanJobsToggleSent</code> / <code>vanJobsSentAt</code></td><td class="mono">46453 / 46452</td><td>“ส่งคนขับ” timestamp</td></tr>
+      <tr><td><code>vanJobsOwnerGroup</code> / <code>vanJobsOwnerTag</code></td><td class="mono">46543 / 46544</td><td>company vs รถร่วม bucketing + chip</td></tr>
+      <tr><td><code>vjFit</code> / <code>vjApplyZoom</code> / <code>vjSetPrevW</code> / <code>vjResizeStart</code></td><td class="mono">46479 / 46490 / 46501 / 46511</td><td>preview drawer sizing &amp; zoom</td></tr>
+      <tr><td colspan="3"><b>Check-in</b></td></tr>
+      <tr><td><code>ckTripOn</code> / <code>ckRead</code> / <code>ckWrite</code></td><td class="mono">47233 / 47235 / 47239</td><td>per-day check-in block access (stage-key merge)</td></tr>
+      <tr><td><code>ckStep</code> / <code>ckToggle</code></td><td class="mono">47741 / 47755</td><td>headcount ±, board/unboard</td></tr>
+      <tr><td><code>ckLostByType</code> / <code>ckPaxLeft</code></td><td class="mono">47123 / 47146</td><td>no-show/CXL deductions</td></tr>
+      <tr><td><code>pckVanBoatSplit</code></td><td class="mono">47279</td><td>which boats this van’s passengers board</td></tr>
+      <tr><td><code>pckJobDrop</code> / <code>ckRetVanTxt</code></td><td class="mono">50161 / 50172</td><td>return-leg summary on a check-in row</td></tr>
+      <tr><td colspan="3"><b>Self-arrive / OVN</b></td></tr>
+      <tr><td><code>bkV2HealSelfArrivePickup</code></td><td class="mono">46361</td><td>normalise a stale clock time on a self-arrive trip</td></tr>
+      <tr><td><code>bkV2HealOvnLegs</code></td><td class="mono">45360</td><td>strip the inherited pickup from an OVN return leg</td></tr>
+      <tr><td><code>bkIsOvnReturn</code> / <code>bkIsOvnOutbound</code></td><td class="mono">45425 / 45433</td><td>OVN leg predicates</td></tr>
+      <tr><td colspan="3"><b>Pickup map</b></td></tr>
+      <tr><td><code>pmapAgg</code> / <code>pmapBuildDots</code> / <code>pmapDraw</code></td><td class="mono">44163 / 44172 / 44242</td><td>aggregate by area, scatter dots, canvas render</td></tr>
+      <tr><td><code>pmNormArea</code></td><td class="mono">44162</td><td>normalise an area name for the <code>PHUKET_LL</code> lookup</td></tr>
+      <tr><td><code>pmapAreaDetail</code> / <code>pmapPanel</code> / <code>pmapZonePanel</code></td><td class="mono">44147 / 44408 / 44333</td><td>side panels</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<footer>
+  Rendered from <code>allotment_v2/docs/workflows/04-transfer-vans-pickup.md</code> ·
+  written against commit <code>094dde1</code> on <code>refactor/booking-v2-migration</code> ·
+  these docs describe <b>the code, not the intent</b> — where an older doc contradicts the code, the code won.
+</footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  // theme toggle
+  var btn = document.getElementById('themebtn');
+  var root = document.documentElement;
+  var saved = null;
+  try { saved = localStorage.getItem('la_doc_theme'); } catch(e){}
+  if (saved) root.setAttribute('data-theme', saved);
+  btn.addEventListener('click', function(){
+    var cur = root.getAttribute('data-theme');
+    var next;
+    if (cur === 'dark') next = 'light';
+    else if (cur === 'light') next = 'dark';
+    else next = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('la_doc_theme', next); } catch(e){}
+  });
+
+  // scrollspy
+  var links = Array.prototype.slice.call(document.querySelectorAll('#nav a'));
+  var targets = links.map(function(a){ return document.querySelector(a.getAttribute('href')); });
+  function spy(){
+    var best = 0, bestTop = -Infinity;
+    for (var i=0;i<targets.length;i++){
+      if (!targets[i]) continue;
+      var t = targets[i].getBoundingClientRect().top - 90;
+      if (t <= 0 && t > bestTop){ bestTop = t; best = i; }
+    }
+    links.forEach(function(a,i){ a.classList.toggle('on', i===best); });
+  }
+  var tick = false;
+  window.addEventListener('scroll', function(){
+    if (tick) return; tick = true;
+    requestAnimationFrame(function(){ spy(); tick = false; });
+  }, {passive:true});
+  spy();
+
+  // function-index filter (optional — skipped when the doc has no #ffilter)
+  var input = document.getElementById('ffilter');
+  var rows  = Array.prototype.slice.call(document.querySelectorAll('#ftable tbody tr'));
+  var count = document.getElementById('fcount');
+  if (input && rows.length){
+    var paint = function(){
+      var q = input.value.trim().toLowerCase();
+      var n = 0;
+      rows.forEach(function(r){
+        var hit = !q || r.textContent.toLowerCase().indexOf(q) !== -1;
+        r.classList.toggle('hidden', !hit);
+        if (hit) n++;
+      });
+      if (count) count.textContent = q ? (n + ' of ' + rows.length + ' shown') : (rows.length + ' functions');
+    };
+    input.addEventListener('input', paint);
+    paint();
+  }
+})();
+</script>
+</body>
+</html>

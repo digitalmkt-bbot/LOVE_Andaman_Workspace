@@ -1,0 +1,1401 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accounting &amp; Finance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f8fa; --panel:#ffffff; --panel-2:#fbfcfd;
+  --ink:#0f2029; --ink-2:#31485a; --muted:#68808f;
+  --line:#e1e8ee; --line-2:#eef2f6;
+  --accent:#1683C7; --accent-ink:#0f6ba6; --accent-soft:#e8f3fb;
+  --danger:#c8384c; --danger-soft:#fdecee;
+  --warn:#b46a00; --warn-soft:#fdf3e3;
+  --ok:#137a52; --ok-soft:#e6f5ee;
+  --violet:#6a4bbd; --violet-soft:#f0ecfb;
+  --code-bg:#f0f4f8; --code-ink:#173446;
+  --shadow:0 1px 2px rgba(15,32,41,.05), 0 8px 24px -14px rgba(15,32,41,.22);
+  --radius:14px;
+}
+:root:not([data-theme="light"]){ }
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b1317; --panel:#111d24; --panel-2:#0e181e;
+    --ink:#e7eff5; --ink-2:#bfd0dc; --muted:#89a0af;
+    --line:#1f313c; --line-2:#182831;
+    --accent:#49b2ee; --accent-ink:#7ccbf8; --accent-soft:#0f2c3d;
+    --danger:#f2798c; --danger-soft:#33161c;
+    --warn:#e0a24a; --warn-soft:#33260f;
+    --ok:#4ccb95; --ok-soft:#0f2b21;
+    --violet:#a48bef; --violet-soft:#221b3a;
+    --code-bg:#0d1b23; --code-ink:#cfe0eb;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b1317; --panel:#111d24; --panel-2:#0e181e;
+  --ink:#e7eff5; --ink-2:#bfd0dc; --muted:#89a0af;
+  --line:#1f313c; --line-2:#182831;
+  --accent:#49b2ee; --accent-ink:#7ccbf8; --accent-soft:#0f2c3d;
+  --danger:#f2798c; --danger-soft:#33161c;
+  --warn:#e0a24a; --warn-soft:#33260f;
+  --ok:#4ccb95; --ok-soft:#0f2b21;
+  --violet:#a48bef; --violet-soft:#221b3a;
+  --code-bg:#0d1b23; --code-ink:#cfe0eb;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px; line-height:1.62; -webkit-font-smoothing:antialiased;
+}
+code,kbd,.mono{font-family:"DM Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+
+/* ---------- layout ---------- */
+.wrap{display:grid; grid-template-columns:264px minmax(0,1fr); gap:0; max-width:1420px; margin:0 auto}
+.side{
+  position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+  border-right:1px solid var(--line); padding:26px 18px 60px; background:var(--panel-2);
+}
+.main{min-width:0; padding:34px 42px 120px}
+@media (max-width:960px){
+  .wrap{grid-template-columns:1fr}
+  .side{position:static; height:auto; border-right:0; border-bottom:1px solid var(--line); padding:20px 22px}
+  .main{padding:24px 20px 80px}
+}
+
+/* ---------- sidebar ---------- */
+.brand{display:flex; align-items:center; gap:10px; margin-bottom:4px}
+.brand .dot{width:26px;height:26px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px;flex:none}
+.brand b{font-size:14px; letter-spacing:-.01em}
+.brand small{display:block; color:var(--muted); font-size:11px; font-weight:400; line-height:1.3}
+.nav{margin-top:20px; display:flex; flex-direction:column; gap:1px}
+.nav a{
+  display:flex; gap:9px; align-items:baseline; text-decoration:none; color:var(--ink-2);
+  padding:6px 10px; border-radius:8px; font-size:13.5px; border-left:2px solid transparent;
+}
+.nav a .n{color:var(--muted); font-size:11px; font-family:"DM Mono",monospace; min-width:16px}
+.nav a:hover{background:var(--line-2); color:var(--ink)}
+.nav a.on{background:var(--accent-soft); color:var(--accent-ink); font-weight:500; border-left-color:var(--accent)}
+.nav .sub{padding-left:34px; font-size:12.5px; color:var(--muted)}
+.nav .sub:hover{color:var(--ink)}
+.backlink{
+  display:inline-block; margin-top:14px; font-size:12.5px; color:var(--muted); text-decoration:none;
+  border-bottom:1px solid transparent;
+}
+.backlink:hover{color:var(--accent-ink); border-bottom-color:var(--accent)}
+.themebtn{
+  margin-top:22px; width:100%; border:1px solid var(--line); background:var(--panel); color:var(--ink-2);
+  border-radius:9px; padding:7px 10px; font:inherit; font-size:12.5px; cursor:pointer;
+}
+.themebtn:hover{border-color:var(--accent); color:var(--accent-ink)}
+
+/* ---------- header ---------- */
+.hero{border-bottom:1px solid var(--line); padding-bottom:22px; margin-bottom:30px}
+.eyebrow{font-family:"DM Mono",monospace; font-size:12px; color:var(--accent-ink); letter-spacing:.06em; text-transform:uppercase}
+h1{font-size:34px; line-height:1.15; letter-spacing:-.025em; margin:6px 0 10px}
+.lede{font-size:16px; color:var(--ink-2); max-width:74ch; margin:0}
+.chips{display:flex; flex-wrap:wrap; gap:7px; margin-top:16px}
+.chip{
+  font-family:"DM Mono",monospace; font-size:11.5px; padding:3px 9px; border-radius:999px;
+  border:1px solid var(--line); background:var(--panel); color:var(--muted);
+}
+.chip b{color:var(--ink-2); font-weight:500}
+
+/* ---------- sections ---------- */
+section{scroll-margin-top:20px; margin-bottom:46px}
+h2{
+  font-size:23px; letter-spacing:-.02em; margin:0 0 14px; padding-bottom:9px;
+  border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:11px;
+}
+h2 .num{font-family:"DM Mono",monospace; font-size:14px; color:var(--accent); font-weight:500}
+h3{font-size:17px; letter-spacing:-.01em; margin:28px 0 10px; color:var(--ink)}
+h4{font-size:13.5px; margin:18px 0 7px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; font-weight:500}
+p{margin:0 0 12px; max-width:82ch}
+ul,ol{margin:0 0 12px; padding-left:22px; max-width:82ch}
+li{margin-bottom:5px}
+a{color:var(--accent-ink)}
+
+/* ---------- inline bits ---------- */
+code:not(pre code){
+  background:var(--code-bg); color:var(--code-ink); padding:1px 5px; border-radius:5px;
+  font-size:.875em; border:1px solid var(--line-2); white-space:nowrap;
+}
+.ln{color:var(--accent-ink); font-family:"DM Mono",monospace; font-size:.82em; white-space:nowrap}
+pre{
+  background:var(--code-bg); border:1px solid var(--line); border-radius:10px;
+  padding:14px 16px; overflow-x:auto; font-size:12.8px; line-height:1.6; color:var(--code-ink); margin:0 0 14px;
+}
+pre code{background:none;border:0;padding:0;white-space:pre}
+
+/* ---------- cards & callouts ---------- */
+.card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px; box-shadow:var(--shadow); margin:0 0 16px}
+.note{
+  border-left:3px solid var(--accent); background:var(--accent-soft); border-radius:0 10px 10px 0;
+  padding:12px 16px; margin:0 0 16px; font-size:14.2px; color:var(--ink-2);
+}
+.note.warn{border-left-color:var(--warn); background:var(--warn-soft)}
+.note.danger{border-left-color:var(--danger); background:var(--danger-soft)}
+.note.ok{border-left-color:var(--ok); background:var(--ok-soft)}
+.note b{color:var(--ink)}
+.note .lbl{display:block; font-size:11px; text-transform:uppercase; letter-spacing:.07em; font-weight:700; margin-bottom:4px; color:var(--accent-ink)}
+.note.warn .lbl{color:var(--warn)} .note.danger .lbl{color:var(--danger)} .note.ok .lbl{color:var(--ok)}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius); margin:0 0 16px; background:var(--panel)}
+table{border-collapse:collapse; width:100%; font-size:13.6px; min-width:520px}
+th{
+  text-align:left; font-weight:500; font-size:11.5px; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--muted); padding:10px 14px; border-bottom:1px solid var(--line); background:var(--panel-2); white-space:nowrap;
+}
+td{padding:9px 14px; border-bottom:1px solid var(--line-2); vertical-align:top; color:var(--ink-2)}
+tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--panel-2)}
+td code{white-space:nowrap}
+
+/* ---------- badges ---------- */
+.b{display:inline-block; font-family:"DM Mono",monospace; font-size:11px; padding:2px 8px; border-radius:999px; white-space:nowrap; border:1px solid transparent}
+.b.blue{background:var(--accent-soft); color:var(--accent-ink); border-color:color-mix(in srgb,var(--accent) 25%, transparent)}
+.b.red{background:var(--danger-soft); color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%, transparent)}
+.b.amber{background:var(--warn-soft); color:var(--warn); border-color:color-mix(in srgb,var(--warn) 30%, transparent)}
+.b.green{background:var(--ok-soft); color:var(--ok); border-color:color-mix(in srgb,var(--ok) 30%, transparent)}
+.b.violet{background:var(--violet-soft); color:var(--violet); border-color:color-mix(in srgb,var(--violet) 30%, transparent)}
+.b.gray{background:var(--line-2); color:var(--muted); border-color:var(--line)}
+
+/* ---------- rail (vertical flow) ---------- */
+.rail{position:relative; margin:6px 0 18px; padding-left:30px}
+.rail:before{content:""; position:absolute; left:9px; top:8px; bottom:8px; width:2px; background:var(--line)}
+.step{position:relative; margin-bottom:13px}
+.step:before{
+  content:""; position:absolute; left:-26px; top:6px; width:11px; height:11px; border-radius:50%;
+  background:var(--panel); border:2px solid var(--accent);
+}
+.step.block:before{border-color:var(--danger); background:var(--danger)}
+.step.ask:before{border-color:var(--warn)}
+.step.done:before{border-color:var(--ok); background:var(--ok)}
+.step .t{font-weight:500; color:var(--ink); font-size:14.4px}
+.step .d{font-size:13.4px; color:var(--muted)}
+
+/* ---------- stage flow (horizontal) ---------- */
+.flow{display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; margin:6px 0 18px}
+.stage{
+  flex:1 1 150px; min-width:140px; background:var(--panel); border:1px solid var(--line);
+  border-radius:11px; padding:11px 13px; position:relative;
+}
+.stage .k{font-family:"DM Mono",monospace; font-size:10.5px; color:var(--muted); letter-spacing:.05em; text-transform:uppercase}
+.stage .v{font-size:13.6px; font-weight:500; margin-top:3px; color:var(--ink)}
+.stage .s{font-size:12.4px; color:var(--muted); margin-top:3px}
+.arrow{display:grid; place-items:center; color:var(--line); font-size:18px; flex:0 0 14px}
+@media(max-width:700px){.arrow{transform:rotate(90deg)}}
+
+/* ---------- outcome grid ---------- */
+.grid2{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px; margin:6px 0 18px}
+.mini{background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:13px 15px}
+.mini h5{margin:0 0 5px; font-size:13.6px; letter-spacing:-.01em}
+.mini p{margin:0; font-size:12.9px; color:var(--muted)}
+
+/* ---------- function index filter ---------- */
+.filter{
+  width:100%; max-width:340px; padding:8px 12px; border-radius:9px; border:1px solid var(--line);
+  background:var(--panel); color:var(--ink); font:inherit; font-size:13.5px; margin-bottom:12px;
+}
+.filter:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft)}
+.hidden{display:none !important}
+.count{font-size:12.5px; color:var(--muted); margin-left:10px}
+
+/* ---------- footer ---------- */
+footer{border-top:1px solid var(--line); padding-top:18px; color:var(--muted); font-size:12.8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ===== SIDEBAR ===== -->
+<aside class="side">
+  <div class="brand">
+    <div class="dot">06</div>
+    <div><b>Accounting &amp; Finance</b><small>allotment_v2 · workflow docs</small></div>
+  </div>
+  <nav class="nav" id="nav">
+    <a href="#s1"><span class="n">1</span> What this does</a>
+    <a href="#s2"><span class="n">2</span> Entry points</a>
+    <a href="#s3"><span class="n">3</span> Money flow end to end</a>
+    <a href="#s4"><span class="n">4</span> Workflows</a>
+    <a href="#w-invoice" class="sub">4.1 Raise an invoice</a>
+    <a href="#w-pfm" class="sub">4.2 Proforma (Daily PFM)</a>
+    <a href="#w-payment" class="sub">4.3 Record a payment</a>
+    <a href="#w-deposit" class="sub">4.4 Deposits</a>
+    <a href="#w-void" class="sub">4.5 Void / credit note</a>
+    <a href="#w-print" class="sub">4.6 Print invoice / receipt</a>
+    <a href="#w-statement" class="sub">4.7 Agent statement</a>
+    <a href="#w-dashboard" class="sub">4.8 Aging dashboard</a>
+    <a href="#w-trippl" class="sub">4.9 Trip P&amp;L</a>
+    <a href="#w-close" class="sub">4.10 Close out a trip</a>
+    <a href="#w-costing" class="sub">4.11 Costing &amp; break-even</a>
+    <a href="#s5"><span class="n">5</span> VAT &amp; payment types</a>
+    <a href="#s6"><span class="n">6</span> Aggregation rules</a>
+    <a href="#s7"><span class="n">7</span> Data model touched</a>
+    <a href="#s8"><span class="n">8</span> Persistence path</a>
+    <a href="#s9"><span class="n">9</span> Cross-module contracts</a>
+    <a href="#s10"><span class="n">10</span> Invariants &amp; gotchas</a>
+    <a href="#s11"><span class="n">11</span> Function index</a>
+  </nav>
+  <a class="backlink" href="index.html">← All workflow docs</a>
+  <button class="themebtn" id="themebtn" type="button">Toggle theme</button>
+</aside>
+
+<main class="main">
+
+<!-- ===== HERO ===== -->
+<header class="hero">
+  <div class="eyebrow">Workflow doc 06</div>
+  <h1>Accounting &amp; Finance</h1>
+  <p class="lede">Everything that happens to the money after a booking is priced — invoices, payments,
+  deposits, VAT, agent statements and credit exposure (<code>#view-accounting</code>), pro-forma payment
+  follow-up before travel (<code>#view-dailypfm</code>), per-trip profit &amp; loss (<code>#view-trippl</code>)
+  and the cost-template / break-even engine that feeds it (<code>#view-costing</code>).</p>
+  <div class="chips">
+    <span class="chip"><b>Code</b> allotment_v2.html</span>
+    <span class="chip"><b>Commit</b> 094dde1</span>
+    <span class="chip"><b>Branch</b> refactor/booking-v2-migration</span>
+    <span class="chip"><b>Source</b> docs/workflows/06-accounting-finance.md</span>
+  </div>
+  <div class="note warn" style="margin-top:18px">
+    <span class="lbl">Line numbers drift</span>
+    Every <span class="ln">:12345</span> reference means “roughly here”. Grep the symbol name instead —
+    the <a href="#s11">function index</a> at the bottom is the fastest way to find anything.
+  </div>
+</header>
+
+<!-- ============ 1 ============ -->
+<section id="s1">
+  <h2><span class="num">01</span> What this does &amp; who uses it</h2>
+
+  <p>Once a booking is committed (see <code>docs/workflows/01-booking-lifecycle.md</code>) it carries a frozen
+  <code>priceBreakdown</code>/<code>total</code>. Everything in this domain either <b>collects</b> that money
+  (invoice → payment → deposit → statement) or <b>explains</b> it (Trip P&amp;L, Costing). Nothing here
+  re-prices a booking — <code>acctBookingBase()</code> only ever <i>reads</i> <code>bk.total</code>.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:230px">Page</th><th style="width:190px">Who uses it</th><th>What for</th></tr></thead>
+    <tbody>
+      <tr><td>Accounting (<code>#view-accounting</code>)</td><td>Accounting/finance staff</td><td>Raise invoices, record payments, take deposits, void, print docs, agent statements, aging</td></tr>
+      <tr><td>Daily PFM (<code>#view-dailypfm</code>)</td><td>Sales + accounting</td><td>Chase <b>proforma-agent</b> bookings for payment before their cutoff (18:00 the day before travel)</td></tr>
+      <tr><td>P&amp;L รายทริป (<code>#view-trippl</code>)</td><td>Ops/finance management</td><td>Per-boat, per-day revenue − cost = profit, using real check-in pax and real supplier costs where known</td></tr>
+      <tr><td>ต้นทุน &amp; จุดคุ้มทุน (<code>#view-costing</code>)</td><td>Finance/ops management</td><td>Define the cost-line template and per-route cost plans that Trip P&amp;L's cost side runs on; compute break-even pax</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note danger">
+    <span class="lbl">Roles</span>
+    Every write helper in this domain is gated by <code>laCanEditArea(area)</code> <span class="ln">:455</span> —
+    a per-user <code>editAreas[]</code> array, bypassed only for <code>role==='admin'</code>.
+    <b>The area name differs by store</b>, and this is the single most important gotcha in the domain —
+    see <a href="#s10">§10</a>.
+  </div>
+</section>
+
+<!-- ============ 2 ============ -->
+<section id="s2">
+  <h2><span class="num">02</span> Entry points</h2>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:170px">View id</th><th style="width:180px">Sidebar label</th><th style="width:210px">Render fn : line</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>#view-accounting</code></td><td>“Accounting”</td><td><code>renderAccounting()</code> <span class="ln">:58990</span></td><td>invoices list, KPIs, aging/collection dashboard</td></tr>
+      <tr><td><code>#view-costing</code></td><td>ต้นทุน &amp; จุดคุ้มทุน</td><td><code>ctRender()</code> <span class="ln">:57874</span></td><td>cost template, per-route plans, break-even</td></tr>
+      <tr><td><code>#view-trippl</code></td><td>P&amp;L รายทริป</td><td><code>renderTripPL()</code> <span class="ln">:57685</span></td><td>daily / monthly / analysis P&amp;L by boat</td></tr>
+      <tr><td><code>#view-dailypfm</code></td><td>Daily PFM</td><td><code>renderDailyPFM()</code> <span class="ln">:45062</span></td><td>pro-forma payment follow-up queue</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Nav dispatch is the flat <code>if/else</code> ladder in <code>nav(el)</code> <span class="ln">:6060-6087</span>:</p>
+<pre><code>else if(view==='costing')   ctRender();
+else if(view==='trippl')    renderTripPL();
+...
+else if(view==='dailypfm')  renderDailyPFM();
+else if(view==='accounting') renderAccounting();</code></pre>
+
+  <p>No modal/overlay in this domain has its own top-level view — invoice/payment/deposit/statement all run
+  inside <code>acctModal()</code> <span class="ln">:59046</span> or <code>acctOpenDoc()</code>
+  <span class="ln">:59335</span> over the current page.</p>
+
+  <div class="note">
+    <span class="lbl">Booking-side entry points</span>
+    <code>bkV2PayChip(bk)</code> <span class="ln">:59481</span> (the Pay-status chip on the Tab-2 manifest row) and
+    <code>bkV2RowPayAction(bkId)</code> <span class="ln">:59564</span> (click that chip → the same invoice/payment
+    modal, without leaving Booking).
+  </div>
+</section>
+
+<!-- ============ 3 ============ -->
+<section id="s3">
+  <h2><span class="num">03</span> Money flow end to end</h2>
+
+  <h4>Billing spine — booking → invoice → payment → status</h4>
+  <div class="rail">
+    <div class="step"><div class="t">Booking committed</div>
+      <div class="d"><code>bkV2CommitBooking</code> <span class="ln">:76469</span>
+      (<code>docs/workflows/01-booking-lifecycle.md</code>)</div></div>
+    <div class="step"><div class="t"><code>bk.total</code> / <code>bk.priceBreakdown</code></div>
+      <div class="d">frozen at save time</div></div>
+    <div class="step ask"><div class="t">Decision · How is it billed?</div>
+      <div class="d">Three creators, one resulting record — see the three branches below.</div></div>
+    <div class="step"><div class="t">Branch A · <code>payType=invoice</code>, staff issues</div>
+      <div class="d"><code>acctCreateInvoice</code> <span class="ln">:42921</span> (Accounting page)</div></div>
+    <div class="step"><div class="t">Branch B · <code>payType=proforma</code>, cutoff-driven</div>
+      <div class="d"><code>acctCreateInvoice(...,0)</code> <span class="ln">:42921</span> via
+      <code>pfmIssueInvoice</code> <span class="ln">:44926</span> (Daily PFM)</div></div>
+    <div class="step"><div class="t">Branch C · booking row “ออก…”</div>
+      <div class="d"><code>bkV2PayDoCreate</code> <span class="ln">:59595</span> (Booking Tab-2 chip)</div></div>
+    <div class="step"><div class="t">→ <code>SB_INVOICES</code> record</div><div class="d">all three branches converge here</div></div>
+    <div class="step"><div class="t">Record a payment</div>
+      <div class="d"><code>acctRecordPayment</code> <span class="ln">:42944</span> /
+      <code>pfmRecSubmit</code> <span class="ln">:44966</span> /
+      <code>bkV2PayDoRecord</code> <span class="ln">:59601</span></div></div>
+    <div class="step"><div class="t">→ <code>SB_PAYMENTS</code> record</div><div class="d"></div></div>
+    <div class="step ask"><div class="t">Decision · Balance &lt;= 0?</div><div class="d"></div></div>
+    <div class="step done"><div class="t">yes → <code>inv.status='paid'</code></div>
+      <div class="d"><code>bk.paymentStatus='paid'</code></div></div>
+    <div class="step ask"><div class="t">no → <code>inv.status='partial'</code></div>
+      <div class="d"><code>bk.paymentStatus='partial'</code></div></div>
+  </div>
+
+  <h4>Deposit lane</h4>
+  <div class="flow">
+    <div class="stage"><div class="k">create</div><div class="v"><code>acctCreateDeposit</code> <span class="ln">:59365</span></div><div class="s">“+ รับมัดจำ”, agent-level, no invoice yet</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">store</div><div class="v"><code>SB_DEPOSITS</code> record</div><div class="s">a standing agent-level credit</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">apply</div><div class="v"><code>acctApplyDeposit</code> <span class="ln">:59366</span></div><div class="s">writes a <code>SB_PAYMENTS</code> row <code>method:'deposit'</code></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">rejoin</div><div class="v">payment recording</div><div class="s">invoice/booking status recomputed exactly as for cash</div></div>
+  </div>
+
+  <h4>Statement lane</h4>
+  <div class="flow">
+    <div class="stage"><div class="k">input</div><div class="v"><code>SB_INVOICES</code></div><div class="s"></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">input</div><div class="v"><code>SB_PAYMENTS</code></div><div class="s"></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">input</div><div class="v"><code>SB_DEPOSITS</code></div><div class="s"></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">rollup</div><div class="v"><code>acctStatementOpen</code> <span class="ln">:59418</span></div><div class="s">per-agent rollup</div></div>
+  </div>
+
+  <h4>P&amp;L lane — independent of invoicing</h4>
+  <div class="flow">
+    <div class="stage"><div class="k">source</div><div class="v"><code>bk.total</code> / <code>priceBreakdown</code></div><div class="s">frozen at save time</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">revenue</div><div class="v"><code>tsTripAmount</code> <span class="ln">:51566</span></div><div class="s">Travel Summary / Trip P&amp;L revenue — independent of invoice status</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">cost</div><div class="v"><code>pxTrip</code> <span class="ln">:56478</span> → <code>ctCalc</code> <span class="ln">:56194</span></div><div class="s">Costing template + plan</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">result</div><div class="v">profit = revNet − cost</div><div class="s"><code>pxClose</code> <span class="ln">:56610</span> freezes it</div></div>
+  </div>
+
+  <h4>Reversal lane (dotted — back into <code>SB_INVOICES</code>)</h4>
+  <div class="flow">
+    <div class="stage"><div class="k">cancel / void</div><div class="v"><code>acctVoidInvoice</code> <span class="ln">:42961</span></div><div class="s">status → <code>void</code>, bookings unlinked</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">charge</div><div class="v"><code>bkV2CancelBooking</code> → <code>acctCreateFeeInvoice</code> <span class="ln">:76346</span></div><div class="s">standalone fee invoice for the cancellation charge</div></div>
+  </div>
+
+  <div class="note ok">
+    <span class="lbl">Key point</span>
+    <b>The P&amp;L side never reads <code>SB_INVOICES</code>.</b> Trip revenue comes straight from
+    <code>bk.total</code>/<code>trip.subtotal</code> via <code>tsTripAmount()</code>, so a trip's profit is known
+    the moment pax actually travel (from check-in), regardless of whether accounting has invoiced or collected
+    the money yet. Invoicing/payment and P&amp;L are two independent consumers of the same frozen
+    <code>priceBreakdown</code>.
+  </div>
+</section>
+
+<!-- ============ 4 ============ -->
+<section id="s4">
+  <h2><span class="num">04</span> Workflows</h2>
+
+  <!-- 4.1 -->
+  <h3 id="w-invoice">4.1 Raise an invoice (from Accounting)</h3>
+  <p><b>Trigger</b> — “+ New invoice” button on <code>#view-accounting</code> → <code>acctNewInvoiceOpen()</code>
+  <span class="ln">:59056</span>.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>acctNewInvoiceRender()</code> <span class="ln">:59057</span></div>
+      <div class="d">Lists agents that have at least one non-excluded, uninvoiced booking:
+      <code>(SB_AGENTS).filter(a =&gt; SB_BOOKINGS.some(b =&gt; b.agentId===a.id &amp;&amp; !ACCT_PAID_STATES.includes(b.status) &amp;&amp; !acctBookingInvoice(b.id)))</code>.</div></div>
+    <div class="step"><div class="t">2 · Pick an agent (<code>_acctNewInvAgent</code>)</div>
+      <div class="d">Re-renders the checklist of that agent's un-invoiced bookings, each pre-checked,
+      amount = <code>acctBookingTotal(b)</code> <span class="ln">:42883</span>.</div></div>
+    <div class="step"><div class="t">3 · <code>acctNewInvoiceSum()</code> <span class="ln">:59091</span></div>
+      <div class="d">Live-totals the ticked checkboxes (no full re-render — keeps checkbox state).</div></div>
+    <div class="step"><div class="t">4 · Submit → <code>acctNewInvoiceCreate()</code> <span class="ln">:59096</span></div>
+      <div class="d">Due days = <code>agent.creditDays || (payType==='invoice' ? 30 : 0)</code>, calls
+      <code>acctCreateInvoice(agentId, ids, dueDays)</code> <span class="ln">:42921</span>.</div></div>
+    <div class="step done"><div class="t">5 · <code>acctCreateInvoice</code> writes</div>
+      <div class="d">Sums <code>acctBookingTotal(b)</code> over the picked ids, applies the agent's
+      <code>vatMode</code> (see <a href="#s5">§5</a>), builds the <code>SB_INVOICES</code> record,
+      <code>sbInvoicesPersist()</code>, then stamps every booking with <code>invoiceId</code>/<code>paymentStatus:'invoiced'</code>,
+      a history line (<code>bkV2AddHistory</code>), and <code>acctPersistBookings()</code>.</div></div>
+  </div>
+
+  <h4>Data written</h4>
+  <p><code>SB_INVOICES[]</code> new record:
+  <code>{id, number, agentId, bookingIds[], lineItems:[], subtotal, netAmount, vatMode, vatRate, vatAmount,
+  depositApplied:0, total, issuedAt, dueAt, status:'issued', createdBy}</code>.
+  Each booking: <code>invoiceId</code>, <code>paymentStatus:'invoiced'</code>, <code>history[]</code> entry.</p>
+
+  <h4>Validation / guards</h4>
+  <p>“Select at least one booking” if none ticked <span class="ln">:59098</span>. <code>acctCreateInvoice</code>
+  itself does no further validation; an empty <code>bookingIds</code> returns <code>null</code>
+  <span class="ln">:42923</span>.</p>
+
+  <div class="note danger">
+    <span class="lbl">Failure mode</span>
+    A booking with status <code>quote</code> or <code>pending_approval</code> is <b>not</b> excluded from the
+    “agents with un-invoiced bookings” list (only <code>ACCT_PAID_STATES</code> =
+    <code>['cancelled','rejected','cancelled_weather']</code> is excluded) — it is possible to invoice a booking
+    that never made it to <code>confirmed</code>. Nothing in this path checks that.
+  </div>
+
+  <!-- 4.2 -->
+  <h3 id="w-pfm">4.2 Raise a proforma invoice from Daily PFM (cutoff-driven)</h3>
+  <p><b>Trigger</b> — individual “Issue PFM” button per row, or “Issue all” for the whole visible period.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>pfmBookingsForPeriod(date, mode)</code> <span class="ln">:44898</span></div>
+      <div class="d">Scopes to bookings whose agent is proforma (<code>pfmIsProforma(bk)</code>
+      <span class="ln">:44879</span> = <code>sbGetAgent(bk.agentId).payType==='proforma'</code>) and which have a trip
+      inside the selected day/week/month/year window.</div></div>
+    <div class="step"><div class="t">2 · <code>pfmIssueInvoice(bkId)</code> <span class="ln">:44926</span></div>
+      <div class="d">Refuses if <code>acctBookingInvoice(bkId)</code> already exists, else calls
+      <code>acctCreateInvoice(b.agentId, [bkId], 0)</code> — <b>due immediately</b> (0 days), unlike the
+      invoice-payType flow.</div></div>
+    <div class="step done"><div class="t">3 · <code>pfmIssueAll()</code> <span class="ln">:45043</span></div>
+      <div class="d">Does the same over every booking in the current period that has no invoice yet, with one
+      confirm.</div></div>
+  </div>
+
+  <p><b>Data written</b> — same <code>SB_INVOICES</code> shape as §4.1, <code>dueDays=0</code>.</p>
+
+  <div class="note warn">
+    <span class="lbl">Guards · cutoff</span>
+    <code>pfmCutoff(date)</code> <span class="ln">:44881</span> = 18:00 the day before travel. Past cutoff + still
+    unpaid + not extended/held → row is flagged <span class="b red">alert</span> (red, “เลย cutoff”) and floats into
+    the priority queue (<code>_prio</code>, <span class="ln">:45141</span>) regardless of period mode.
+  </div>
+
+  <!-- 4.3 -->
+  <h3 id="w-payment">4.3 Record a payment</h3>
+  <p>Three UI entry points, one function: <code>acctRecordPayment(invoiceId, amount, method, opt)</code>
+  <span class="ln">:42944</span>.</p>
+
+  <div class="flow">
+    <div class="stage"><div class="k">entry 1</div><div class="v">Accounting</div><div class="s">“บันทึกรับเงิน” in the invoice-row modal — <code>acctPayOpen</code> <span class="ln">:59105</span> → <code>acctPaySubmit</code> <span class="ln">:59129</span></div></div>
+    <div class="stage"><div class="k">entry 2</div><div class="v">Daily PFM</div><div class="s">Record modal — <code>pfmRecordPayment</code> <span class="ln">:44934</span> → <code>pfmRecSubmit</code> <span class="ln">:44966</span></div></div>
+    <div class="stage"><div class="k">entry 3</div><div class="v">Booking Tab-2 Pay chip</div><div class="s"><code>bkV2RowPayAction</code> <span class="ln">:59564</span> → <code>bkV2PayDoRecord</code> <span class="ln">:59601</span></div></div>
+  </div>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · Amount &amp; method</div>
+      <div class="d">Amount defaults to the invoice's current balance (<code>acctInvoiceBalance(inv)</code>
+      <span class="ln">:42889</span>), method is <code>transfer</code>/<code>cash</code>/<code>card</code>.</div></div>
+    <div class="step"><div class="t">2 · (Daily PFM only) payment-slip attachment</div>
+      <div class="d">Upload / screen-capture (<code>getDisplayMedia</code>) / clipboard-paste, all funnelled through
+      <code>pfmSlipUpload(file,kind)</code> <span class="ln">:44954</span> → <code>POST /api/attach</code>
+      (max 6 MB, downsized to 1600px if an image), producing <code>{id, name, mime, size, kind, at}</code> refs
+      held on <code>_pfmRec.slips[]</code> until submit.</div></div>
+    <div class="step"><div class="t">3 · <code>acctRecordPayment</code></div>
+      <div class="d">Pushes a <code>SB_PAYMENTS</code> row
+      <code>{id, invoiceId, agentId, amount, method, date, type:'payment', ref?, slips?}</code>,
+      <code>sbPaymentsPersist()</code>, recomputes <code>inv.status</code> (<code>paid</code> if balance ≤ 0 else
+      <code>partial</code>), <code>sbInvoicesPersist()</code>, stamps every linked booking's
+      <code>paymentStatus</code>, <code>bkV2AddHistory</code>, <code>acctPersistBookings()</code>.</div></div>
+    <div class="step done"><div class="t">4 · (Daily PFM only) slips onto the booking</div>
+      <div class="d"><code>pfmRecSubmit</code> <span class="ln">:44966</span> additionally copies the slip refs onto
+      <code>b.paymentSlips[]</code> (with <code>amount</code>/<code>at</code>/<code>by</code>) so they can be
+      reviewed later independent of the payment record, via <code>acctPersistBookings()</code>.</div></div>
+  </div>
+
+  <p><b>Data written</b> — <code>SB_PAYMENTS[]</code> new row; <code>inv.status</code>;
+  <code>bk.paymentStatus</code>; (PFM path) <code>bk.paymentSlips[]</code>.</p>
+
+  <p><b>Validation/guards</b> — amount must be <code>&gt; 0</code> (<code>alert</code> otherwise) in every UI path.
+  <code>acctRecordPayment</code> itself clamps to <code>Math.max(0, +amount||0)</code> and silently no-ops on
+  <code>&lt;= 0</code> or a missing invoice.</p>
+
+  <div class="note danger">
+    <span class="lbl">Failure mode</span>
+    Nothing stops <b>over-paying</b> an invoice (amount &gt; balance); <code>acctInvoiceBalance</code> just clamps
+    display to <code>Math.max(0, ...)</code>, so the excess payment is recorded but invisible as a “credit”
+    anywhere — it neither creates a deposit nor is refunded automatically.
+  </div>
+
+  <!-- 4.4 -->
+  <h3 id="w-deposit">4.4 Take &amp; apply a deposit</h3>
+  <p><b>Trigger</b> — “+ รับมัดจำ” — from the Accounting invoice-table header
+  (<code>acctDepositOpen('')</code> <span class="ln">:59388</span>) or from an agent's Statement modal
+  (<code>acctDepositOpen(agentId)</code>).</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>acctDepositRender()</code> <span class="ln">:59389</span></div>
+      <div class="d">Pick agent (if not preset), amount, method, note.</div></div>
+    <div class="step"><div class="t">2 · <code>acctDepositSubmit()</code> <span class="ln">:59409</span> → <code>acctCreateDeposit(agentId, amount, method, note)</code> <span class="ln">:59365</span></div>
+      <div class="d">Pushes a <code>SB_DEPOSITS</code> row <code>{id, agentId, amount, method, note, date}</code>,
+      <code>sbDepositsPersist()</code>. <b>Not tied to any invoice at creation time</b> — it's a standing
+      agent-level credit.</div></div>
+    <div class="step"><div class="t">3 · Applying it</div>
+      <div class="d">From the Pay-invoice modal, if <code>acctAgentDepositAvail(agentId) &gt; 0</code> a “หักมัดจำ”
+      button appears <span class="ln">:59122</span> → <code>acctPayUseDeposit(invId)</code>
+      <span class="ln">:59380</span> → <code>acctApplyDeposit(agentId, invoiceId, amount)</code>
+      <span class="ln">:59366</span>.</div></div>
+    <div class="step done"><div class="t">4 · <code>acctApplyDeposit</code> draws oldest-first</div>
+      <div class="d">Walks the agent's deposits oldest-first, draws <code>min(remaining, need)</code> from each into
+      new <code>SB_PAYMENTS</code> rows with <code>method:'deposit'</code>, <code>type:'deposit'</code>,
+      <code>depositId</code>, until <code>need</code> is exhausted or deposits run out. Recomputes invoice status
+      exactly as a cash payment would.</div></div>
+  </div>
+
+  <p><b>Data written</b> — <code>SB_DEPOSITS[]</code> on creation; one or more <code>SB_PAYMENTS[]</code> rows
+  (<code>type:'deposit'</code>) on application; invoice/booking status updates identical to §4.3.</p>
+
+  <p><b>Validation/guards</b> — agent required, amount <code>&gt; 0</code> on create.
+  <code>acctPayUseDeposit</code> refuses (“No deposit available”) if
+  <code>min(balance, availableDeposit) &lt;= 0</code>.</p>
+
+  <div class="note danger">
+    <span class="lbl">Failure mode · no locking</span>
+    <code>acctDepositRemaining(dep)</code> <span class="ln">:59362</span> is computed by summing every
+    <code>SB_PAYMENTS</code> row with that <code>depositId</code> — there is no reservation/locking, so two staff
+    applying the same deposit to two different invoices in quick succession (before either re-renders) could both
+    read the same “remaining” and jointly over-draw it. (inferred: no lock exists in this single-writer-blob model
+    — see <code>docs/workflows/07-data-persistence-api.md</code> §3 for the general race-window shape.)
+  </div>
+
+  <!-- 4.5 -->
+  <h3 id="w-void">4.5 Void an invoice / issue a credit note</h3>
+  <p>There is no separate “credit note” object — voiding is the correction mechanism, plus a fresh fee invoice
+  for a genuine charge.</p>
+  <p><b>Trigger</b> — “Void” button per invoice row → <code>acctVoidConfirm(invId)</code>
+  <span class="ln">:59136</span>.</p>
+
+  <div class="rail">
+    <div class="step ask"><div class="t">1 · Confirm</div>
+      <div class="d">“Void this invoice? Linked bookings return to unpaid (credit re-held).”</div></div>
+    <div class="step done"><div class="t">2 · <code>acctVoidInvoice(invoiceId)</code> <span class="ln">:42961</span></div>
+      <div class="d"><code>inv.status='void'</code>, <code>sbInvoicesPersist()</code>, then every linked booking
+      gets <code>invoiceId=null</code>, <code>paymentStatus='unpaid'</code>,
+      <code>acctPersistBookings()</code>.</div></div>
+  </div>
+
+  <p><b>Data written</b> — <code>inv.status</code>, cleared <code>bk.invoiceId</code>/<code>bk.paymentStatus</code>.</p>
+
+  <div class="note danger">
+    <span class="lbl">Guards / failure modes</span>
+    Voiding does <b>not</b> reverse any <code>SB_PAYMENTS</code> rows already recorded against it —
+    <code>acctInvoiceBalance</code> special-cases <code>status==='void'</code> to always return 0
+    <span class="ln">:42889</span>, so a voided-but-partially-paid invoice simply stops showing a balance; the
+    payment rows (and the money) are not touched or refunded automatically.
+    <code>acctInvoicePaid(inv)</code> still sums them if anyone reads it directly.
+  </div>
+
+  <div class="card">
+    <h4>Also the accounting half of booking cancellation</h4>
+    <p>(<code>docs/workflows/01-booking-lifecycle.md</code> §3.3) — <code>bkV2CancelBooking</code>
+    <span class="ln">:76325</span> calls <code>acctVoidInvoice</code> on the booking's existing invoice, then — if a
+    cancellation charge was set — <code>acctCreateFeeInvoice(agentId, bookingId, amount, note, 'cancellation')</code>
+    <span class="ln">:42937</span> raises a <b>standalone, VAT-free</b> invoice for just that charge
+    (<code>lineItems:[{label, amount}]</code>, no <code>bookingIds</code> price roll-up).</p>
+    <p>Weather cancellation resolves the same way (<code>docs/workflows/01-booking-lifecycle.md</code> §3.7):
+    refund outcome pushes a negative <code>SB_PAYMENTS</code> row (<code>type:'refund'</code>, subtracted in
+    <code>acctInvoicePaid</code> <span class="ln">:42886</span>) and voids the invoice; credit outcome calls
+    <code>acctCreateDeposit</code> instead.</p>
+  </div>
+
+  <!-- 4.6 -->
+  <h3 id="w-print">4.6 Print/view an invoice or receipt</h3>
+  <p><b>Trigger</b> — “View” button on an invoice row, or <code>acctOpenDoc(invId, mode)</code>
+  <span class="ln">:59335</span> called from Daily PFM / Booking's Pay chip.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · Build the document</div>
+      <div class="d"><code>acctOpenDoc</code> builds <code>acctInvoiceDocHtml(inv)</code> <span class="ln">:59195</span>
+      (or <code>acctReceiptDocHtml(inv)</code> <span class="ln">:59310</span> if <code>mode==='receipt'</code>, only
+      offered when at least one payment exists) into a full-page A4 overlay
+      <code>#acct-doc-modal</code>.</div></div>
+    <div class="step"><div class="t">2 · Fixed Thai commercial-invoice layout</div>
+      <div class="d">Seller block (hardcoded <code>SELL</code>/<code>CONTACT</code>/<code>BANK</code> constants
+      <span class="ln">:59205-59207</span>), buyer block from <code>agent.companyInfo</code>, one line per
+      <code>acctDocLineItems(inv)</code> <span class="ln">:59148</span> (one row per booking's base + one row per
+      <code>feeItems[]</code> entry; a standalone fee invoice renders its own <code>lineItems[]</code> instead),
+      VAT summary, a Baht-in-words total (<code>_acctBahtText</code> <span class="ln">:59178</span>), a decorative
+      deterministic QR (<code>_acctFauxQR</code> <span class="ln">:59187</span>, <b>not a real payment QR</b>), and a
+      WHT line that is always ฿0 (see <a href="#s10">§10</a>).</div></div>
+    <div class="step done"><div class="t">3 · Print</div>
+      <div class="d"><code>acctPrintDoc()</code> <span class="ln">:59354</span> toggles
+      <code>body.acct-printing</code>, which the injected <code>@media print</code> CSS
+      (<code>_acctInjectPrintCSS</code> <span class="ln">:59142</span>) uses to hide everything except
+      <code>#acct-doc-modal</code> and print only <code>#acct-doc-sheet</code> at A4. Browser “Save as PDF” is the
+      export mechanism — there is no server-side PDF generation.</div></div>
+  </div>
+
+  <p><b>Data written</b> — none; this workflow is read-only.</p>
+
+  <!-- 4.7 -->
+  <h3 id="w-statement">4.7 Run an agent statement</h3>
+  <p><b>Trigger</b> — click an agent's name on the invoice table, or “Statement” from anywhere that calls
+  <code>acctStatementOpen(agentId)</code> <span class="ln">:59418</span>.</p>
+  <p><b>Steps</b> — pure aggregation, no writes: total invoiced / paid / outstanding (from
+  <code>SB_INVOICES</code> where <code>agentId</code> matches and <code>status!=='void'</code>), deposit available
+  (<code>acctAgentDepositAvail</code>), credit usage (<code>agCreditState(agentId)</code> <span class="ln">:42900</span>,
+  only shown when <code>payType==='invoice'</code> and a limit is set), an invoice table and a deposit table, and a
+  “+ รับมัดจำ” shortcut into §4.4.</p>
+
+  <!-- 4.8 -->
+  <h3 id="w-dashboard">4.8 Accounting dashboard (aging / collection / top outstanding)</h3>
+  <p><code>acctDashboardHtml()</code> <span class="ln">:59456</span>, rendered inline above the invoice table on
+  every <code>renderAccounting()</code> call (not a separate view).</p>
+  <div class="grid2">
+    <div class="mini"><h5>Aging buckets</h5>
+      <p><code>Not due / 1–30d / 31–60d / 60d+</code>, bucketed on
+      <code>days = floor((now − dueAt) / 86400000)</code> per live (non-void) invoice with balance
+      <code>&gt; 0</code> <span class="ln">:59461</span>.</p></div>
+    <div class="mini"><h5>Collection trend</h5>
+      <p>Last 6 calendar months, summing <code>SB_PAYMENTS</code> where <code>type==='payment'</code> grouped by
+      <code>date.slice(0,7)</code> (deposit-draws and refunds excluded from this chart specifically).</p></div>
+    <div class="mini"><h5>Top outstanding agents</h5>
+      <p>Top 5 by summed live balance, click-through to <code>acctStatementOpen</code>.</p></div>
+  </div>
+
+  <!-- 4.9 -->
+  <h3 id="w-trippl">4.9 Trip P&amp;L — daily / monthly / analysis</h3>
+  <p><b>Trigger</b> — <code>#view-trippl</code> → <code>renderTripPL()</code> <span class="ln">:57685</span>, tab bar
+  <code>pxBar(e)</code> <span class="ln">:57116</span> (<code>pxTab('d'|'m'|'a')</code> <span class="ln">:56989</span>).</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · Daily — <code>pxDaily(e)</code> <span class="ln">:57144</span></div>
+      <div class="d"><code>pxDay(date, pier)</code> <span class="ln">:56597</span> lists every boat with a
+      <code>TRIPS[date][boatId]</code> entry (optionally filtered to one pier), calling
+      <code>pxTrip(date, bid)</code> <span class="ln">:56478</span> per boat.</div></div>
+    <div class="step"><div class="t">2a · <code>pxTrip</code> — Pax</div>
+      <div class="d"><code>pxPax(date, bid)</code> <span class="ln">:56339</span> sums <i>actual</i> travelling pax
+      (booked minus pier-checked-in no-shows, <code>O.pierCheckin.noShow</code>), pro-rated by nationality when some
+      pax didn't show, <b>not</b> the booked count. Revenue accumulator here (<code>o.rev</code>) is
+      <code>Σ tsTripAmount(b,t)</code> — the same function Travel Summary uses <span class="ln">:51566</span>
+      (the booking-domain shared revenue-per-trip helper: <code>t.ovnLeg</code> → 0; a multi-trip booking with a
+      positive <code>t.subtotal</code> → that subtotal; else the booking's whole
+      <code>priceBreakdown.total</code>/<code>total</code>).</div></div>
+    <div class="step"><div class="t">2b · <code>pxTrip</code> — Cost</div>
+      <div class="d"><code>plan = pxPlanFor(routeId)</code> <span class="ln">:56325</span> resolves the Costing plan
+      bound to this route/family (route-level binding wins over the older family-level one), then
+      <code>ctCalc(plan, ctx, template)</code> <span class="ln">:56194</span> (§4.11) produces the line-item cost
+      estimate. <code>ctx</code> pax/engine/fuel context comes from real numbers: <code>PX.tot/th/fr/chd</code>,
+      the boat's real <code>engineCount</code> (<code>&gt;=4</code> → <code>'4EN'</code> line variant), and an
+      effective fuel price <code>flFuelPriceEff(date, boat)</code> (fleet domain) falling back to the plan's own
+      <code>planFuel</code>.</div></div>
+    <div class="step"><div class="t">2c · Real numbers override the formula per cost line</div>
+      <div class="d">In priority order: (1) <code>FL_DAILY[date][bid].fuel</code> litres × the resolved fuel price,
+      if logged; (2) a closed meal-venue actual (<code>taGet(date,bid).meal</code>); (3) real van cost
+      <code>pxVanCost(date,bid,routeId)</code> <span class="ln">:56448</span> (drivers actually assigned that day,
+      cost split by pax share when one van serves two boats); (4) real longtail join/charter quantity from
+      <code>bkV2AddOnFlags</code> (never the formula's per-head estimate — a documented incident,
+      <a href="#s10">§10</a>). Anything without a real number stays the formula estimate, tagged
+      <code>src:'f'</code> (formula) vs <code>'r'</code> (real) vs <code>'p'</code> (plan-overridden) vs
+      <code>'w'</code> (waiting — a meal venue is set but no actual submitted yet).</div></div>
+    <div class="step"><div class="t">2d · <code>pxTrip</code> — Upsell</div>
+      <div class="d"><code>pxUpsell(date,bid)</code> <span class="ln">:56391</span> adds day-of <code>upgrades[]</code>
+      (from the booking) and <code>SB_EXTRAS</code> rows for that trip date, at the <b>company-net</b> amount only
+      (commission already excluded, so no separate commission cost line is needed).</div></div>
+    <div class="step done"><div class="t">2e · <code>pxTrip</code> — Freeze</div>
+      <div class="d">If <code>taGet(date,bid).closed</code> exists (§4.10), every row is overwritten from the frozen
+      snapshot instead of recomputed — pax stay live (a fact of the day), money does not (a decision made
+      once).</div></div>
+    <div class="step"><div class="t">3 · Monthly &amp; Analysis</div>
+      <div class="d"><code>pxMonth(e)</code> <span class="ln">:57323</span> and <code>pxAnalysis(e)</code>
+      <span class="ln">:57493</span> aggregate the same <code>pxTrip</code> output over a date range, using
+      <code>pxDayAgg</code>/<code>_pxAgg</code> memoization <span class="ln">:57256-57293</span> to avoid
+      recomputing per-boat P&amp;L for every day in a month view.</div></div>
+  </div>
+
+  <p><b>Data written</b> — none by default (read-only aggregation over live bookings/fleet data) until closed
+  (§4.10).</p>
+
+  <div class="note warn">
+    <span class="lbl">Failure modes</span>
+    <code>pxPax</code>'s no-show pro-ration assumes an even nationality split among the pax who <i>didn't</i> show,
+    which is a guess when a partial no-show is nationality-skewed. <code>plan=null</code> (no Costing plan bound to
+    the route) still computes a cost of ฿0 for every formula line rather than refusing — the daily summary counts
+    <code>nNoPlan</code> <span class="ln">:57153</span> precisely so staff notice this.
+  </div>
+
+  <!-- 4.10 -->
+  <h3 id="w-close">4.10 Close out (“freeze”) a trip's P&amp;L</h3>
+  <p><b>Trigger</b> — “ปิดยอด” button on a trip card in Daily view → <code>pxClose(bid)</code>
+  <span class="ln">:56610</span>.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>laGuardEdit('accounting')</code></div>
+      <div class="d">Permission gate.</div></div>
+    <div class="step ask"><div class="t">2 · If already closed: confirm to <b>re-open</b></div>
+      <div class="d"><code>taSet(date,bid,{closed:null})</code> — reverts to live formula.</div></div>
+    <div class="step done"><div class="t">3 · Else: confirm the exact revenue/cost/profit about to be frozen</div>
+      <div class="d">then <code>taSet(date,bid,{closed:{rev,cost,profit,rows:[{id,l,amt,real}],pax,at,by}})</code>.</div></div>
+  </div>
+
+  <p><b>Data written</b> — <code>TRIP_ACT[date::bid].closed</code> (see <a href="#s7">§7</a>);
+  <code>taSet</code> <span class="ln">:57712</span> is a read-modify-write into
+  <code>laBlob().trip_actuals</code>.</p>
+
+  <div class="note ok">
+    <span class="lbl">Why it exists</span>
+    A route price change or a cost-template edit next month must never retroactively change last month's
+    already-reported profit. Closing snapshots the exact ฿ amounts used; only the pax count stays live (a fact, not
+    a price).
+  </div>
+
+  <!-- 4.11 -->
+  <h3 id="w-costing">4.11 Build/edit the cost template and a route's cost plan (Costing)</h3>
+  <p><b>Trigger</b> — <code>#view-costing</code> → <code>ctRender()</code> <span class="ln">:57874</span>, tabs
+  <code>plan</code>/<code>match</code>/<code>tpl</code>/<code>ovr</code> etc. via <code>ctSetTab(t)</code>
+  <span class="ln">:57866</span>.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · Central template — <code>ctTplHtml()</code> <span class="ln">:58703</span></div>
+      <div class="d">One shared list of cost lines (<code>CT_DEFAULT.lines</code>, <span class="ln">:55975</span>),
+      each <code>{id, g:group, l:label, vat:bool, parts:[{k:'fix'|'var'|'step', u, uTH?, uCh?, uChTH?, q,
+      per:'boat'|null, fuel?, mode?, over?, every?, min?, add?}]}</code>.
+      <code>ctAddLine</code>/<code>ctDelLine</code>/<code>ctLineName</code>/<code>ctLineGroup</code>/<code>ctLineVat</code>
+      <span class="ln">:58930-58947</span> edit it; <code>ctVatSet(v)</code> <span class="ln">:58959</span> sets the
+      single global <code>vatRate</code> (default 7).</div></div>
+    <div class="step"><div class="t">2 · Per-route plan — <code>ctPlanHtml()</code> <span class="ln">:57892</span></div>
+      <div class="d"><code>ctPlans()</code> <span class="ln">:56062</span> is a user-defined list of
+      <code>{id, name, famId, note, eng, boats, cap, pax, paxTH, price, priceCh, chPct, comm, fuel, ovr:{}, grp:{}, od:{}}</code>.
+      <code>ctAddPlan</code>/<code>ctDupPlan</code>/<code>ctDelPlan</code> <span class="ln">:58690-58696</span>;
+      <code>ctFamSetPlan(famId,pid)</code> <span class="ln">:58453</span> binds a plan to a route family (or
+      <code>ctPlanSet('famId', routeId)</code> binds it to one specific route directly — route beats family per
+      <code>pxPlanFor</code>).</div></div>
+    <div class="step"><div class="t">3 · Overrides — <code>ctOvrHtml()</code> <span class="ln">:58813</span></div>
+      <div class="d">Per-plan, per-line: <code>pl.ovr[lineId] = {off, p:[{...partial part override}]}</code>
+      (blank field = inherit the central template's value) via <code>ctOvrToggle</code>/<code>ctOvrSet</code>
+      <span class="ln">:58975/58981</span>; per-<b>group</b> off/±% via <code>ctGrpToggle</code>/<code>ctGrpPct</code>
+      <span class="ln">:58963/58969</span> — <code>ctEffLine(line, plan)</code> <span class="ln">:56098</span> is the
+      single merge point every reader (<code>ctCalc</code>, <code>ctPartDesc</code>, Trip P&amp;L) goes
+      through.</div></div>
+    <div class="step"><div class="t">4 · Order-driven lines (“§ctOd”, <code>ln.od===true</code>)</div>
+      <div class="d">e.g. longtail join/charter, private van — price <b>quantity actually ordered</b>, not a per-head
+      formula: <code>ctOdQty(pl, ln, ctx)</code> <span class="ln">:56174</span> prefers
+      <code>ctx.odQty[lineId]</code> (the real count Trip P&amp;L passes in) over the plan's own estimate
+      <code>ctOdCfg</code> <span class="ln">:56161</span>.</div></div>
+    <div class="step done"><div class="t">5 · Break-even — <code>ctBreakEven(plan, cap, template)</code> <span class="ln">:56259</span></div>
+      <div class="d">Walks pax <code>1..cap</code> calling <code>ctProfitAt(plan, n, template)</code>
+      <span class="ln">:56232</span> (revenue at <code>n</code> pax at the plan's
+      <code>price</code>/<code>priceCh</code>/<code>comm</code>, minus <code>ctCalc</code> cost at <code>n</code>)
+      and returns the first <code>n</code> where profit turns positive. <b>A linear search, not a closed-form
+      formula</b> — deliberately, because <code>step</code>-kind cost parts (fixed jumps every <i>k</i> pax) break a
+      closed-form break-even equation <span class="ln">:58258</span> (code comment).</div></div>
+  </div>
+
+  <div class="note">
+    <span class="lbl">Data written</span>
+    <code>laBlob().cost_template</code>, <code>.cost_plans</code>, <code>.van_rates</code> — all JSON
+    <b>strings</b> written by <code>ctWrite(k,val)</code> <span class="ln">:55972</span>, read back by
+    <code>ctRead(k)</code> <span class="ln">:55967</span>. This is a deliberate departure from every other store in
+    the app: <b>there is no boot-time global for these</b> — every read goes straight to the live blob, so this data
+    needs no entry in <code>window._laReloadData()</code> and cannot go stale after a soft-refresh (see
+    <a href="#s8">§8</a>).
+  </div>
+
+  <p><b>Validation/guards</b> — none beyond numeric coercion (<code>+v||0</code> everywhere). Deleting a line the
+  user doesn't want is remembered in <code>t.dropped[]</code> so re-adding a future built-in default line doesn't
+  resurrect a deliberately-removed one (<code>ctTplFill</code> <span class="ln">:56023</span>).</p>
+</section>
+
+<!-- ============ 5 ============ -->
+<section id="s5">
+  <h2><span class="num">05</span> VAT &amp; payment-type rules</h2>
+
+  <p><b>VAT</b> is computed once, at invoice creation, from the agent's <code>vatMode</code>
+  (<code>acctCreateInvoice</code> <span class="ln">:42926-42929</span>), rate fixed at <b>7%</b>:</p>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:130px"><code>vatMode</code></th><th style="width:200px"><code>net</code></th><th style="width:210px"><code>vat</code></th><th><code>total</code></th></tr></thead>
+    <tbody>
+      <tr><td><code>none</code></td><td><code>subtotal</code></td><td><code>0</code></td><td><code>subtotal</code></td></tr>
+      <tr><td><code>exclude</code></td><td><code>subtotal</code></td><td><code>round(net × 0.07)</code></td><td><code>net + vat</code></td></tr>
+      <tr><td><code>include</code></td><td><code>round(subtotal / 1.07)</code></td><td><code>subtotal − net</code></td><td><code>subtotal</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <p><code>subtotal = Σ acctBookingTotal(booking)</code> over the invoiced booking ids, where
+  <code>acctBookingTotal(bk) = acctBookingBase(bk) + Σ bk.feeItems[].amount</code> and
+  <code>acctBookingBase(bk) = bk.total || bk.priceBreakdown.total</code> <span class="ln">:42882-42883</span>.
+  <b>This is already net of FOC and discounts</b> — see <a href="#s6">§6</a>. A booking's <code>total</code> was
+  itself computed under the agent's rate type in <code>bkV2CalcQuote</code>
+  (<code>docs/workflows/02-sales-agents-pricing.md</code> §5) — VAT here is a second, independent layer applied only
+  at invoicing time, never baked into the booking price.</p>
+
+  <div class="note warn">
+    <span class="lbl">Costing VAT is a different 7%</span>
+    Costing's VAT (<code>ctVatR(t)</code> <span class="ln">:56037</span>) is a <b>separate 7% concept</b> — it
+    computes the <b>input-VAT-recoverable</b> net cost per cost line
+    (<code>net = amt − amt×VATrate</code> when <code>line.vat===true</code>), used only inside Trip P&amp;L /
+    break-even cost math. It has no relationship to the invoice VAT above; they happen to share the same 7% rate by
+    convention, not by code sharing.
+  </div>
+
+  <p><code>payType</code> (<code>invoice</code>/<code>proforma</code>/<code>cot</code>/<code>bt</code>,
+  <code>SB_PAYMENT_TYPES</code> <code>docs/workflows/02-sales-agents-pricing.md:39296</code>) drives:</p>
+
+  <ul>
+    <li><b>Due date</b> — <code>invoice</code>: <code>agent.creditDays</code> (default 30 if unset);
+      <code>proforma</code> via Daily PFM: <b>0 days</b> (due on issue).</li>
+    <li><b>Credit exposure</b> — only <code>payType==='invoice'</code> participates in <code>agCreditState</code>
+      (<a href="#s6">§6</a>).</li>
+    <li><b>Daily PFM eligibility</b> — only <code>payType==='proforma'</code> bookings appear in
+      <code>pfmBookingsFor</code>/<code>pfmBookingsForPeriod</code> at all
+      <span class="ln">:44879</span>, <span class="ln">:44885</span>, <span class="ln">:44903</span>.</li>
+    <li><b>Pay-chip color/label on the booking manifest</b> (<code>bkV2PayChip</code> <span class="ln">:59481</span>) —
+      <code>invoice</code>/<code>credit</code> → <span class="b blue">blue</span>;
+      <code>proforma</code>/<code>prepaid</code> → <span class="b amber">amber</span>;
+      <code>cot</code> (Cash On Tour) → <span class="b violet">cyan</span>;
+      <code>bt</code> → <span class="b gray">neutral grey</span>.
+      For B2C bookings (<code>agentId==='a_b2c'</code>), the <b>billing-term chip and the money-received status are
+      deliberately separate</b> — <code>bk.paymentSnapshot.paidStatus</code>
+      (<code>paid</code>/<code>deposit</code>/<code>unpaid</code>, synced from the webshop) drives a second chip so a
+      COT order that's actually fully paid shows <b>Paid</b>, not “collect cash on tour”
+      <span class="ln">:59525-59541</span>.</li>
+    <li><code>paymentSnapshot.method</code> on the booking
+      (<code>docs/workflows/02-sales-agents-pricing.md</code> §5 Step 7) records <code>credit</code> vs
+      <code>prepaid</code> at save time as a point-in-time snapshot — it does not update itself if the agent's
+      <code>payType</code> changes later; only re-saving the booking refreshes it.</li>
+  </ul>
+</section>
+
+<!-- ============ 6 ============ -->
+<section id="s6">
+  <h2><span class="num">06</span> Aggregation rules</h2>
+
+  <div class="note danger">
+    <span class="lbl">Cancelled statuses are excluded everywhere in this domain</span>
+    Same three values as the rest of the app (<code>docs/workflows/01-booking-lifecycle.md</code> §7.2):
+    <code>ACCT_PAID_STATES = ['cancelled','rejected','cancelled_weather']</code> <span class="ln">:42881</span> —
+    despite its name, this constant is the <b>exclusion list</b>, not a list of paid states. It gates: the “agents
+    with un-invoiced bookings” list (<code>acctNewInvoiceRender</code> <span class="ln">:59059</span>), credit
+    exposure (<code>agCreditState</code> <span class="ln">:42907</span>), and both Daily PFM booking scopes
+    (<code>pfmBookingsFor</code>/<code>pfmBookingsForPeriod</code>). Trip P&amp;L's
+    <code>pxPax</code>/<code>pxAgents</code>/<code>pxUpsell</code>/<code>pxVanCost</code> each repeat the same
+    three-status filter independently against <code>SB_BOOKINGS</code>
+    (<span class="ln">:56343</span>, <span class="ln">:56374</span>, <span class="ln">:56394</span>,
+    <span class="ln">:56424</span>, <span class="ln">:56451</span>) — a new P&amp;L aggregate must add it too, it is
+    <b>not</b> centralised into one helper in this domain.
+  </div>
+
+  <h3 id="agg-money">What counts as “the booking's money”</h3>
+  <p><code>acctBookingBase(bk)</code> reads <code>bk.total</code> first, falling back to
+  <code>bk.priceBreakdown.total</code> only if <code>total</code> is unset. Both are already net of:</p>
+  <div class="grid2">
+    <div class="mini"><h5>FOC</h5>
+      <p><code>priceBreakdown.focDiscount</code> is stored negative and already subtracted into <code>total</code> at
+      commit time; FOC pax are never billed, but they <b>do</b> count as real travelling pax in Trip P&amp;L's
+      <code>pxPax</code> (they occupy a seat, they eat, they need a van).</p></div>
+    <div class="mini"><h5>Discounts / adjustments</h5>
+      <p><code>priceBreakdown.discount</code> (negative) and <code>.extra</code> (positive, includes OVN charges) are
+      likewise already folded into <code>total</code>.</p></div>
+    <div class="mini"><h5>Add-ons</h5>
+      <p><code>bk.addOns[].amount</code> is frozen into <code>priceBreakdown.addOn</code> and thus into
+      <code>total</code>; the invoice does <b>not</b> itemize add-ons separately — <code>acctDocLineItems</code>
+      shows one row per booking (its whole base) plus one row per <code>feeItems[]</code> entry. A customer-facing
+      invoice never shows “Longtail Join: ฿X” as its own line.</p></div>
+  </div>
+
+  <p><b>Fee items</b> (<code>bk.feeItems[]</code>, written by reschedule —
+  <code>docs/workflows/01-booking-lifecycle.md</code> §3.6) are additive on top of <code>acctBookingBase</code> in
+  <code>acctBookingTotal</code>, and each renders as its own labelled row on the invoice
+  (<code>acctDocLineItems</code> <span class="ln">:59162</span>).</p>
+
+  <h3 id="agg-charter">Charter vs seat</h3>
+  <p>Accounting and Trip P&amp;L revenue are agnostic to <code>bookingMode</code>;
+  <code>tsTripAmount</code>/<code>acctBookingBase</code> read the same <code>total</code>/<code>subtotal</code>
+  regardless of whether the trip was seat or charter. Trip P&amp;L's pax count (<code>pxPax</code>) also does not
+  distinguish — it counts whoever's <code>ops.boatId</code>/<code>t.charterBoatId</code> resolves to that boat, which
+  is correct for a charter (the whole party is “the pax”) but means a charter boat's revenue-per-head reads
+  oddly (few or many pax, one lump price).</p>
+
+  <h3 id="agg-ovn">OVN return legs</h3>
+  <p><code>tsTripAmount</code> returns <code>0</code> for any <code>trip.ovnLeg===true</code>
+  <span class="ln">:51569</span>; the money is entirely on the outbound leg's <code>ovnCharge</code>. This is the same
+  rule Travel Summary uses and prevents double-counting a two-leg overnight booking's revenue in daily P&amp;L.</p>
+
+  <h3 id="agg-credit">Agent credit exposure</h3>
+  <p><code>agCreditState(agentId)</code> <span class="ln">:42900</span> —
+  <code>used = Σ acctBookingTotal(bk)</code> over bookings where <code>agentId</code> matches,
+  <code>payType==='invoice'</code>, status is not in the exclusion list and not <code>quote</code>/<code>draft</code>,
+  <b>and</b> <code>!acctBookingPaid(bk)</code> (i.e. not already fully paid via some invoice).
+  <code>available = limit − used</code>. Paying an invoice in full immediately frees that booking's credit; a partial
+  payment does <b>not</b> — <code>acctBookingPaid</code> requires <code>acctInvoiceBalance(iv) &lt;= 0</code>.</p>
+</section>
+
+<!-- ============ 7 ============ -->
+<section id="s7">
+  <h2><span class="num">07</span> Data model touched</h2>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:170px">Store</th><th style="width:330px">Shape</th><th style="width:250px">Written by</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>SB_INVOICES</code></td>
+        <td><code>{id, number, agentId, bookingIds[], lineItems[], subtotal, netAmount, vatMode, vatRate, vatAmount, depositApplied, total, issuedAt, dueAt, status, createdBy, feeType?, note?, whtAmount?}</code></td>
+        <td><code>acctCreateInvoice</code> <span class="ln">:42921</span>, <code>acctCreateFeeInvoice</code> <span class="ln">:42937</span></td>
+        <td><code>status</code>: <code>issued</code>|<code>partial</code>|<code>paid</code>|<code>void</code>, derived by <code>acctInvoiceState</code> <span class="ln">:42890</span>, never stored redundantly except the field itself</td>
+      </tr>
+      <tr>
+        <td><code>SB_PAYMENTS</code></td>
+        <td><code>{id, invoiceId, agentId, amount, method, date, type:'payment'|'deposit'|'refund', ref?, slips?, depositId?}</code></td>
+        <td><code>acctRecordPayment</code> <span class="ln">:42944</span>, <code>acctApplyDeposit</code> <span class="ln">:59366</span>, weather-cancel refund path <span class="ln">:60040</span></td>
+        <td>negative-effect rows use <code>type:'refund'</code> and are subtracted in <code>acctInvoicePaid</code> <span class="ln">:42886</span></td>
+      </tr>
+      <tr>
+        <td><code>SB_DEPOSITS</code></td>
+        <td><code>{id, agentId, amount, method, note, date}</code></td>
+        <td><code>acctCreateDeposit</code> <span class="ln">:59365</span></td>
+        <td>agent-level, not invoice-level; drawn down via <code>SB_PAYMENTS</code> rows referencing <code>depositId</code></td>
+      </tr>
+      <tr>
+        <td><code>SB_EXTRAS</code></td>
+        <td>day-of upsell rows <code>{bookingId, tripDate, service, total, toCompany, commission, seller, settle}</code></td>
+        <td>booking-domain (<code>docs/workflows/01-booking-lifecycle.md</code> §4)</td>
+        <td>read by <code>pxUpsell</code> <span class="ln">:56391</span>; <b>not</b> part of <code>bk.total</code></td>
+      </tr>
+      <tr>
+        <td><code>bk.invoiceId</code> / <code>bk.paymentStatus</code></td>
+        <td>string / <code>unpaid</code>|<code>invoiced</code>|<code>partial</code>|<code>paid</code></td>
+        <td>invoice/payment/void functions via <code>acctPersistBookings()</code></td>
+        <td>mirrors the linked invoice's state onto the booking for fast manifest rendering</td>
+      </tr>
+      <tr>
+        <td><code>bk.paymentSlips[]</code></td>
+        <td><code>[{id,name,mime,size,kind,at,by,amount}]</code></td>
+        <td><code>pfmRecSubmit</code> <span class="ln">:44972</span>, <code>pfmSlipsAttach</code> <span class="ln">:75640</span></td>
+        <td>independent of the payment row's own <code>slips[]</code> — this is the booking's persistent view</td>
+      </tr>
+      <tr>
+        <td><code>bk.ops.pfm</code></td>
+        <td><code>{decision:'approved'|'hold', by, at, extendedBy?, alertedAt?, remindedAt?}</code></td>
+        <td><code>pfmApproveTravel</code> <span class="ln">:45025</span>, <code>pfmHold</code> <span class="ln">:45035</span>, <code>pfmRemindAll</code> <span class="ln">:45052</span></td>
+        <td>day-1 only (see <code>bkOpsFor</code> in <code>docs/workflows/01-booking-lifecycle.md</code> §6)</td>
+      </tr>
+      <tr>
+        <td><code>TRIP_ACT</code> (<code>trip_actuals</code>)</td>
+        <td><code>{ "date::boatId": {fuel?, meal?, closed?} }</code></td>
+        <td><code>taSet</code> <span class="ln">:57712</span></td>
+        <td><code>closed</code> freezes a Trip P&amp;L snapshot (§4.10); <code>fuel</code>/<code>meal</code> are real-cost overrides some other page may also write</td>
+      </tr>
+      <tr>
+        <td><code>laBlob().cost_template</code></td>
+        <td><code>{vatRate, lines:[...], dropped:[]}</code></td>
+        <td><code>ctTplSave</code> <span class="ln">:56036</span> via <code>ctWrite</code></td>
+        <td>stored as a <b>JSON string</b>, not a boot-loaded global — see <a href="#s8">§8</a></td>
+      </tr>
+      <tr>
+        <td><code>laBlob().cost_plans</code></td>
+        <td><code>[{id,name,famId,note,eng,boats,cap,pax,paxTH,price,priceCh,chPct,comm,fuel,ovr:{},grp:{},od:{}}]</code></td>
+        <td><code>ctPlansSave</code> <span class="ln">:56077</span></td>
+        <td>same string-blob pattern</td>
+      </tr>
+      <tr>
+        <td><code>laBlob().van_rates</code></td>
+        <td><code>{ groupKey: {base?, rt:{routeId:{base?,PK?,KL?}}} }</code></td>
+        <td><code>vanRatesSave</code> <span class="ln">:57757</span></td>
+        <td>feeds <code>pxVanCost</code>'s real-cost fallback</td>
+      </tr>
+      <tr>
+        <td><code>MEAL_VENUES</code></td>
+        <td><code>[{id,name,place,priceAd,priceCh,phone,note,active}]</code></td>
+        <td><code>mvPersist</code> <span class="ln">:56279</span></td>
+        <td>normal boot-loaded array (unlike the three above)</td>
+      </tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============ 8 ============ -->
+<section id="s8">
+  <h2><span class="num">08</span> Persistence path</h2>
+
+  <p>Two distinct patterns coexist in this domain — know which one you're editing before you add a field.</p>
+
+  <h3 id="p-normal">A. Normal blob stores</h3>
+  <p><code>SB_INVOICES</code>, <code>SB_PAYMENTS</code>, <code>SB_DEPOSITS</code>, <code>SB_EXTRAS</code> —
+  boot-loaded globals, each with its own persist helper doing the standard read-modify-write:</p>
+<pre><code>function sbInvoicesPersist(){ if(!laCanEditArea('accounting')) return;
+  const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}'); d.sb_invoices=SB_INVOICES; localStorage.setItem(LS_KEY, JSON.stringify(d)); }</code></pre>
+  <p><code>sbInvoicesPersist</code> <span class="ln">:42846</span>, <code>sbPaymentsPersist</code>
+  <span class="ln">:42847</span>, <code>sbDepositsPersist</code> <span class="ln">:42848</span> — all three gated on
+  the <b><code>'accounting'</code></b> edit area. These follow the general write path in
+  <code>docs/workflows/07-data-persistence-api.md</code> §3 (shim → <code>save()</code> → diff →
+  <code>/api/v1/_batch</code>) and must be listed in <code>window._laReloadData()</code> to survive a soft-refresh
+  (they are — <code>sb_invoices</code>/<code>sb_payments</code>/<code>sb_deposits</code> all appear in that doc's §5
+  store table).</p>
+
+  <div class="note danger">
+    <span class="lbl">Different gate for the booking side</span>
+    <code>acctPersistBookings()</code> <span class="ln">:42877</span> is the write path for every booking-side field
+    this domain touches (<code>invoiceId</code>, <code>paymentStatus</code>, <code>paymentSlips</code>,
+    <code>ops.pfm</code>) — it is gated on <b><code>'operations'</code></b>, not <code>'accounting'</code>
+    (see <a href="#s10">§10</a> gotcha #1). It also clears the charter-boat memo cache
+    (<code>baChMemoClear</code>) since a payment/invoice change can imply a booking edit elsewhere.
+  </div>
+
+  <h3 id="p-live">B. Live-blob scalars, no boot global</h3>
+  <p><code>cost_template</code>, <code>cost_plans</code>, <code>van_rates</code> —
+  <code>ctRead(k)</code>/<code>ctWrite(k,val)</code> <span class="ln">:55967</span>/<span class="ln">:55972</span>
+  go straight to <code>laBlob()[k]</code> on every call, storing the value <b>JSON-stringified as a single scalar
+  string</b>. The in-code rationale, verbatim <span class="ln">:55963</span>:
+  <i>“ที่เก็บ: laBlob() เป็น JSON string เหมือน pck_svc_colors → ไม่ต้องเพิ่มคอลัมน์ DB”</i>
+  (“stored as a JSON string like <code>pck_svc_colors</code> → no DB column needed”).</p>
+  <p>Consequence: these three keys need <b>no entry in <code>window._laReloadData()</code></b> — there is no cached
+  global that could go stale on a soft-refresh, because there is no cached global at all. On the wire they land in
+  <code>computeDiff</code>'s <code>sets</code> bucket → <code>{op:'meta'}</code> → the <code>app_meta</code>
+  key-value table (<code>docs/workflows/07-data-persistence-api.md</code> §3.1/§6), not a dedicated SQL table.</p>
+  <p><code>TRIP_ACT</code> (<code>trip_actuals</code>) is a hybrid: it <i>is</i> a boot-loaded global
+  (<code>var TRIP_ACT = {}</code>, loaded once at <span class="ln">:57705</span>) but persisted the same live-write
+  way through <code>taSet</code> → <code>laBlob()</code>/<code>laBlobSave()</code>.</p>
+
+  <div class="note ok">
+    <span class="lbl">The one standard array</span>
+    <code>MEAL_VENUES</code> is the one array in this domain that follows the fully standard pattern (boot IIFE +
+    <code>Array.isArray</code> load + <code>mvPersist()</code> read-modify-write), and does appear in
+    <code>_laReloadData()</code> (<code>docs/workflows/07-data-persistence-api.md</code> §5,
+    <code>meal_venues</code> row).
+  </div>
+</section>
+
+<!-- ============ 9 ============ -->
+<section id="s9">
+  <h2><span class="num">09</span> Cross-module contracts</h2>
+
+  <div class="card">
+    <h4>Accounting ← Booking (<code>docs/workflows/01-booking-lifecycle.md</code>)</h4>
+    <ul>
+      <li>Reads <code>bk.total</code>/<code>bk.priceBreakdown.total</code> (<code>acctBookingBase</code>),
+        <code>bk.feeItems[]</code> (<code>acctBookingTotal</code>), <code>bk.status</code> (exclusion filter
+        everywhere).</li>
+      <li>Writes back <code>bk.invoiceId</code>, <code>bk.paymentStatus</code>, <code>bk.paymentSlips[]</code>,
+        <code>bk.ops.pfm</code>, <code>bk.history[]</code> (via <code>bkV2AddHistory</code>).</li>
+      <li>Booking's cancel/reschedule/weather flows call <b>into</b> this domain:
+        <code>acctVoidInvoice</code>, <code>acctCreateFeeInvoice</code>, <code>acctCreateDeposit</code>
+        (see §4.5 and <code>docs/workflows/01-booking-lifecycle.md</code> §3.3/§3.6/§3.7).</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4>Accounting ← Sales/Agents (<code>docs/workflows/02-sales-agents-pricing.md</code>)</h4>
+    <ul>
+      <li>Reads <code>agent.payType</code>, <code>agent.vatMode</code>, <code>agent.creditDays</code>,
+        <code>agent.creditLimit</code>, <code>agent.companyInfo</code> (printed on the invoice doc),
+        <code>agent.contractVersion</code> (into <code>paymentSnapshot</code>, set at booking-commit time, not
+        here).</li>
+      <li><code>agent.rateTypeId</code>/<code>seatRates</code> are never read in this domain — the price is already
+        frozen on the booking by the time accounting sees it.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4>Trip P&amp;L / Costing ← Fleet <span class="b gray">not yet its own workflow file</span></h4>
+    <ul>
+      <li><code>pxTrip</code> reads <code>getBoat(bid).engineCount</code> (formula variant <code>3EN</code>/<code>4EN</code>),
+        <code>flFuelPriceEff(date, boat)</code> (effective fuel price for the day),
+        <code>FL_DAILY[date][bid]</code> (real fuel litres logged), <code>boatCapFor(bid,date)</code>
+        (break-even ceiling).</li>
+      <li><code>pxVanCost</code> reads <code>SB_VEHICLES</code> (via <code>vehGet</code>) and each booking's assigned
+        <code>O.vanId</code> (fleet/dispatch domain, <code>docs/workflows/01-booking-lifecycle.md</code> §6).</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4>Trip P&amp;L ← Check-in / Travel Summary</h4>
+    <ul>
+      <li><code>pxPax</code>/<code>pxAgents</code> read <code>ckTripOn</code>, <code>ckBookedPax</code>,
+        <code>pckExpected</code>, <code>O.pierCheckin.noShow</code>, <code>pckVoidInfo</code> — the
+        actual-attendance layer, not the booked pax. This is the same layer <code>getSeatsConsumed</code> subtracts
+        no-shows from (<code>docs/workflows/01-booking-lifecycle.md</code> §6, “Booking → Check-in / Travel
+        Summary”).</li>
+      <li>Both P&amp;L and Travel Summary call the same <code>tsTripAmount(b,t)</code> <span class="ln">:51566</span>
+        for per-trip revenue — a change to that function affects both pages identically.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4>Daily PFM → Booking manifest</h4>
+    <p><code>bkV2PayChip</code> <span class="ln">:59497</span> reads <code>bk.ops.pfm</code> directly so a decision
+    made on the Daily PFM page (Extend/Hold) is visible on the Booking Tab-2 row without any extra sync step; both
+    read/write the same <code>bk.ops.pfm</code> object.</p>
+  </div>
+</section>
+
+<!-- ============ 10 ============ -->
+<section id="s10">
+  <h2><span class="num">10</span> Invariants &amp; gotchas</h2>
+
+  <div class="note danger">
+    <span class="lbl">1 · Edit-area mismatch between invoices and bookings</span>
+    <code>sbInvoicesPersist</code>/<code>sbPaymentsPersist</code>/<code>sbDepositsPersist</code> are gated on
+    <code>laCanEditArea('accounting')</code>; <code>acctPersistBookings</code> (which every one of them calls to
+    stamp <code>bk.invoiceId</code>/<code>paymentStatus</code>) is gated on <code>laCanEditArea('operations')</code>.
+    A user with <code>accounting</code> rights but not <code>operations</code> can successfully create an
+    invoice/payment (it saves), but the linked booking's <code>invoiceId</code>/<code>paymentStatus</code>/history
+    update <b>silently stays in RAM only</b> and is lost on refresh — the booking will look un-invoiced again next
+    session even though the invoice exists. Give accounting staff both areas, or fix the guard.
+  </div>
+
+  <div class="note warn">
+    <span class="lbl">2 · <code>ACCT_PAID_STATES</code> is misleadingly named</span>
+    It is the three-value <b>exclusion</b> list (<code>cancelled</code>, <code>rejected</code>,
+    <code>cancelled_weather</code>), not “states where the booking is paid.” Read it as
+    <code>ACCT_EXCLUDED_STATES</code>.
+  </div>
+
+  <div class="note warn">
+    <span class="lbl">3 · WHT is always ฿0</span>
+    <code>acctInvoiceDocHtml</code> reads <code>inv.whtAmount</code> <span class="ln">:59202</span> but nothing
+    anywhere writes that field — every printed invoice shows a ฿0.00 withholding-tax line regardless of reality.
+    If WHT tracking is ever needed, this field needs a writer.
+  </div>
+
+  <div class="note warn">
+    <span class="lbl">4 · The invoice's faux-QR is decorative</span>
+    Not a real PromptPay/payment QR (<code>_acctFauxQR</code> <span class="ln">:59187</span>) — deterministic pixels
+    seeded from the invoice number, purely visual.
+  </div>
+
+  <div class="note danger">
+    <span class="lbl">5 · Over-payment is silently allowed</span>
+    <code>acctRecordPayment</code> does not cap <code>amount</code> at the invoice balance; excess money is recorded
+    but not reflected as agent credit anywhere (no automatic deposit is created from it).
+  </div>
+
+  <div class="note danger">
+    <span class="lbl">6 · Voiding an invoice does not reverse its payments</span>
+    <code>acctVoidInvoice</code> sets <code>status='void'</code> (which makes <code>acctInvoiceBalance</code> always
+    return 0) but leaves <code>SB_PAYMENTS</code> rows in place; the cash movement itself needs a manual
+    refund/deposit entry if the money must actually move.
+  </div>
+
+  <div class="note danger">
+    <span class="lbl">7 · Deposit application has no locking</span>
+    <code>acctApplyDeposit</code> recomputes “remaining” fresh each call by summing existing payment rows — two
+    concurrent applications against the same deposit can both read stale remaining and jointly over-draw it
+    (single-writer-blob model, see <code>docs/workflows/07-data-persistence-api.md</code> §3).
+  </div>
+
+  <div class="note">
+    <span class="lbl">8 · Trip P&amp;L revenue is independent of invoicing</span>
+    A trip shows its true profit the moment pax check in, whether or not accounting has invoiced or collected a
+    single baht — <code>tsTripAmount</code> reads the frozen booking price, never
+    <code>SB_INVOICES</code>/<code>SB_PAYMENTS</code>. Don't expect Trip P&amp;L and the Accounting “Outstanding” KPI
+    to reconcile against each other; they answer different questions.
+  </div>
+
+  <div class="note ok">
+    <span class="lbl">9 · Closing a trip (<code>pxClose</code>) freezes money, not pax</span>
+    Re-opening (<code>taSet(...,{closed:null})</code>) fully reverts to live formula recompute — a closed trip is not
+    immutable, it's a snapshot that can be explicitly discarded.
+  </div>
+
+  <div class="note warn">
+    <span class="lbl">10 · A trip with no Costing plan bound still “computes” ฿0 cost</span>
+    Rather than refusing to show a number — <code>nNoPlan</code> in the daily summary is the only signal that the
+    profit figure is meaningless for that boat/day. Always check that count before trusting a day's total.
+  </div>
+
+  <div class="note">
+    <span class="lbl">11 · <code>cost_template</code>/<code>cost_plans</code>/<code>van_rates</code> bypass the usual “add it to <code>_laReloadData</code>” rule entirely</span>
+    They're read live from <code>laBlob()</code> on every call, not cached in a boot global. This is a deliberate,
+    documented <span class="ln">:55963</span> departure from the store pattern in
+    <code>docs/workflows/07-data-persistence-api.md</code> §4 — don't “fix” it by adding a boot-loader for these
+    three keys; there's nothing to keep in sync.
+  </div>
+
+  <div class="note danger">
+    <span class="lbl">12 · Longtail/charter/van cost lines must be quantity-driven from real orders</span>
+    Not the per-head formula. A documented incident <span class="ln">:56152-56153</span>: a 35-pax boat with 2 real
+    longtail-join customers was costed at the formula's per-head rate × all 35 heads — <b>17× over</b>.
+    <code>ctOdQty</code>/<code>pxLongtail</code> exist specifically to feed the <i>real</i> ordered quantity into
+    <code>ctCalc</code> for <code>od</code>-marked lines; any new order-driven cost line must be marked
+    <code>od:true</code> and get its real quantity threaded through <code>ctx.odQty</code>, or it will repeat this
+    bug.
+  </div>
+
+  <div class="note">
+    <span class="lbl">13 · Add-ons are never itemized on a printed invoice</span>
+    They're folded into the booking's one base-price line via <code>priceBreakdown.addOn</code> →
+    <code>total</code>. Only <code>feeItems[]</code> (reschedule fees, etc.) get their own invoice line.
+  </div>
+
+  <div class="note warn">
+    <span class="lbl">14 · A booking can be invoiced before it's <code>confirmed</code></span>
+    <code>acctNewInvoiceRender</code>'s “agents with un-invoiced bookings” filter only excludes the three
+    cancelled-family statuses — a <code>quote</code> or <code>pending_approval</code> booking is not excluded from
+    being picked into an invoice.
+  </div>
+</section>
+
+<!-- ============ 11 ============ -->
+<section id="s11">
+  <h2><span class="num">11</span> Function index</h2>
+
+  <input class="filter" id="ffilter" type="search" placeholder="Filter functions…" autocomplete="off">
+  <span class="count" id="fcount"></span>
+
+  <div class="tw"><table id="ftable">
+    <thead><tr><th>Function</th><th>Line</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>renderAccounting</code></td><td class="mono">58990</td><td>Accounting page: KPIs, dashboard, invoice table</td></tr>
+      <tr><td><code>acctPersistBookings</code></td><td class="mono">42877</td><td>Read-modify-write <code>SB_BOOKINGS</code> into the blob; gated <code>'operations'</code></td></tr>
+      <tr><td><code>acctBookingBase</code></td><td class="mono">42882</td><td><code>bk.total || priceBreakdown.total</code></td></tr>
+      <tr><td><code>acctBookingTotal</code></td><td class="mono">42883</td><td>base + <code>Σ feeItems.amount</code></td></tr>
+      <tr><td><code>acctFmt</code></td><td class="mono">42884</td><td><code>฿</code> currency formatter</td></tr>
+      <tr><td><code>acctInvoicePaid</code></td><td class="mono">42885</td><td>Σ payments (refunds subtracted) for an invoice</td></tr>
+      <tr><td><code>acctInvoiceBalance</code></td><td class="mono">42889</td><td><code>max(0, total − paid)</code>, 0 if void</td></tr>
+      <tr><td><code>acctInvoiceState</code></td><td class="mono">42890</td><td>derives <code>issued</code>|<code>partial</code>|<code>paid</code>|<code>void</code></td></tr>
+      <tr><td><code>acctBookingInvoice</code></td><td class="mono">42896</td><td>find the live invoice covering a booking id</td></tr>
+      <tr><td><code>acctBookingPaid</code></td><td class="mono">42897</td><td>true if the booking's invoice balance is 0</td></tr>
+      <tr><td><code>agCreditState</code></td><td class="mono">42900</td><td>credit limit/used/available for an agent</td></tr>
+      <tr><td><code>acctNextInvoiceNo</code></td><td class="mono">42916</td><td><code>INV-YYMM-NNNN</code> sequence</td></tr>
+      <tr><td><code>acctCreateInvoice</code></td><td class="mono">42921</td><td>raise an invoice over booking ids, apply VAT</td></tr>
+      <tr><td><code>acctCreateFeeInvoice</code></td><td class="mono">42937</td><td>standalone fixed-amount fee invoice (e.g. cancellation)</td></tr>
+      <tr><td><code>acctRecordPayment</code></td><td class="mono">42944</td><td>record a payment row, update invoice/booking status</td></tr>
+      <tr><td><code>acctVoidInvoice</code></td><td class="mono">42961</td><td>void an invoice, clear booking invoice link</td></tr>
+      <tr><td><code>acctStateChip</code></td><td class="mono">42969</td><td>colored status pill</td></tr>
+      <tr><td><code>acctModal</code> / <code>acctModalClose</code></td><td class="mono">59046 / 59053</td><td>generic small modal shell</td></tr>
+      <tr><td><code>acctNewInvoiceOpen/Render/Sum/Create</code></td><td class="mono">59056–59103</td><td>new-invoice picker flow</td></tr>
+      <tr><td><code>acctPayOpen/Submit</code></td><td class="mono">59105 / 59129</td><td>record-payment modal</td></tr>
+      <tr><td><code>acctVoidConfirm</code></td><td class="mono">59136</td><td>confirm + void</td></tr>
+      <tr><td><code>acctDocLineItems</code></td><td class="mono">59148</td><td>invoice line items from bookings + feeItems</td></tr>
+      <tr><td><code>acctInvoiceDocHtml</code></td><td class="mono">59195</td><td>printable invoice HTML</td></tr>
+      <tr><td><code>acctReceiptDocHtml</code></td><td class="mono">59310</td><td>printable receipt HTML</td></tr>
+      <tr><td><code>acctOpenDoc/Close/PrintDoc</code></td><td class="mono">59335–59354</td><td>print-preview overlay</td></tr>
+      <tr><td><code>acctDepositRemaining</code></td><td class="mono">59362</td><td>deposit amount minus its draws</td></tr>
+      <tr><td><code>acctAgentDepositAvail</code></td><td class="mono">59363</td><td>Σ remaining deposits for an agent</td></tr>
+      <tr><td><code>acctDepositHeldTotal</code></td><td class="mono">59364</td><td>Σ remaining deposits, all agents</td></tr>
+      <tr><td><code>acctCreateDeposit</code></td><td class="mono">59365</td><td>new agent-level deposit</td></tr>
+      <tr><td><code>acctApplyDeposit</code></td><td class="mono">59366</td><td>draw deposit(s) into a payment against an invoice</td></tr>
+      <tr><td><code>acctPayUseDeposit</code></td><td class="mono">59380</td><td>UI shortcut: apply max available deposit</td></tr>
+      <tr><td><code>acctDepositOpen/Render/Submit</code></td><td class="mono">59388–59416</td><td>deposit-entry modal</td></tr>
+      <tr><td><code>acctStatementOpen</code></td><td class="mono">59418</td><td>per-agent statement modal</td></tr>
+      <tr><td><code>acctDashboardHtml</code></td><td class="mono">59456</td><td>aging / collection / top-outstanding cards</td></tr>
+      <tr><td><code>bkV2PayChip</code></td><td class="mono">59481</td><td>Pay-status chip on the booking manifest row</td></tr>
+      <tr><td><code>bkV2CotChip</code></td><td class="mono">59548</td><td>Cash-on-tour chip parser</td></tr>
+      <tr><td><code>bkV2RowPayAction</code></td><td class="mono">59564</td><td>booking-row → invoice/payment modal</td></tr>
+      <tr><td><code>bkV2PayDoCreate/Record</code></td><td class="mono">59595 / 59601</td><td>booking-row invoice/payment actions</td></tr>
+      <tr><td><code>sbExtrasPersist</code></td><td class="mono">59612</td><td>persist <code>SB_EXTRAS</code></td></tr>
+      <tr><td><code>renderDailyPFM</code></td><td class="mono">45062</td><td>Daily PFM page</td></tr>
+      <tr><td><code>pfmBookingsFor/ForPeriod</code></td><td class="mono">44882 / 44898</td><td>proforma bookings scoped to a day/period</td></tr>
+      <tr><td><code>pfmCutoff</code></td><td class="mono">44881</td><td>18:00 the day before travel</td></tr>
+      <tr><td><code>pfmChartBuckets</code></td><td class="mono">44910</td><td>collection-trend chart data</td></tr>
+      <tr><td><code>pfmIssueInvoice</code> / <code>pfmIssueAll</code></td><td class="mono">44926 / 45043</td><td>raise proforma invoice(s), due immediately</td></tr>
+      <tr><td><code>pfmRecordPayment</code> / <code>pfmRecSubmit</code></td><td class="mono">44934 / 44966</td><td>record-payment modal with slip attach</td></tr>
+      <tr><td><code>pfmSlipUpload</code></td><td class="mono">44954</td><td>upload/capture/paste a payment slip</td></tr>
+      <tr><td><code>pfmApproveTravel</code></td><td class="mono">45025</td><td>extend travel despite unpaid, past cutoff</td></tr>
+      <tr><td><code>pfmHold</code></td><td class="mono">45035</td><td>block travel until paid</td></tr>
+      <tr><td><code>pfmRemindAll</code></td><td class="mono">45052</td><td>log a reminder on every unpaid booking in period</td></tr>
+      <tr><td><code>pfmViewSlips</code> / <code>pfmSlipsRender</code></td><td class="mono">75573 / 75585</td><td>standalone slip gallery for a booking</td></tr>
+      <tr><td><code>pfmPrintReport</code></td><td class="mono">75711</td><td>printable PFM period report</td></tr>
+      <tr><td><code>renderTripPL</code></td><td class="mono">57685</td><td>Trip P&amp;L page</td></tr>
+      <tr><td><code>pxTrip</code></td><td class="mono">56478</td><td>full per-boat-per-day P&amp;L (revenue, cost, profit)</td></tr>
+      <tr><td><code>pxPax</code></td><td class="mono">56339</td><td>real travelling pax for a boat/day</td></tr>
+      <tr><td><code>pxUpsell</code></td><td class="mono">56391</td><td>day-of upgrades/extras, company-net</td></tr>
+      <tr><td><code>pxVanCost</code></td><td class="mono">56448</td><td>real van cost for a boat/day, split by pax share</td></tr>
+      <tr><td><code>pxLongtail</code></td><td class="mono">56371</td><td>real longtail join/charter quantity</td></tr>
+      <tr><td><code>pxDay</code> / <code>pxMonth</code> / <code>pxAnalysis</code></td><td class="mono">56597 / 57323 / 57493</td><td>daily / monthly / range aggregation</td></tr>
+      <tr><td><code>pxClose</code></td><td class="mono">56610</td><td>freeze a trip's P&amp;L</td></tr>
+      <tr><td><code>taGet</code> / <code>taSet</code></td><td class="mono">57711 / 57712</td><td>read/write <code>TRIP_ACT</code> real-cost overrides</td></tr>
+      <tr><td><code>tsTripAmount</code></td><td class="mono">51566</td><td>shared per-trip revenue (booking domain)</td></tr>
+      <tr><td><code>ctRender</code></td><td class="mono">57874</td><td>Costing page</td></tr>
+      <tr><td><code>ctTpl</code> / <code>ctTplSave</code></td><td class="mono">55999 / 56036</td><td>central cost-line template</td></tr>
+      <tr><td><code>ctPlans</code> / <code>ctPlan</code> / <code>ctPlanPut</code></td><td class="mono">56062 / 56078 / 56079</td><td>per-route cost plans</td></tr>
+      <tr><td><code>ctEffLine</code></td><td class="mono">56098</td><td>merge template line + plan override</td></tr>
+      <tr><td><code>ctCalc</code></td><td class="mono">56194</td><td>compute all cost lines for a given pax/context</td></tr>
+      <tr><td><code>ctProfitAt</code> / <code>ctBreakEven</code></td><td class="mono">56232 / 56259</td><td>profit at N pax / first profitable N</td></tr>
+      <tr><td><code>ctOdQty</code> / <code>ctOdRev</code></td><td class="mono">56174 / 56181</td><td>order-driven line quantity/revenue</td></tr>
+      <tr><td><code>ctRead</code> / <code>ctWrite</code></td><td class="mono">55967 / 55972</td><td>live scalar-string blob read/write (no boot global)</td></tr>
+      <tr><td><code>vanRate</code> / <code>vanDayCost</code></td><td class="mono">57778 / 57787</td><td>resolved van day-rate for a route/zone</td></tr>
+      <tr><td><code>mvCost</code> / <code>mvForTrip</code></td><td class="mono">56312 / 56305</td><td>meal-venue cost for a trip's pax</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<footer>
+  Rendered from <code>allotment_v2/docs/workflows/06-accounting-finance.md</code> ·
+  written against commit <code>094dde1</code> on <code>refactor/booking-v2-migration</code> ·
+  these docs describe <b>the code, not the intent</b> — where an older doc contradicts the code, the code won.
+</footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  // theme toggle
+  var btn = document.getElementById('themebtn');
+  var root = document.documentElement;
+  var saved = null;
+  try { saved = localStorage.getItem('la_doc_theme'); } catch(e){}
+  if (saved) root.setAttribute('data-theme', saved);
+  btn.addEventListener('click', function(){
+    var cur = root.getAttribute('data-theme');
+    var next;
+    if (cur === 'dark') next = 'light';
+    else if (cur === 'light') next = 'dark';
+    else next = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('la_doc_theme', next); } catch(e){}
+  });
+
+  // scrollspy
+  var links = Array.prototype.slice.call(document.querySelectorAll('#nav a'));
+  var targets = links.map(function(a){ return document.querySelector(a.getAttribute('href')); });
+  function spy(){
+    var best = 0, bestTop = -Infinity;
+    for (var i=0;i<targets.length;i++){
+      if (!targets[i]) continue;
+      var t = targets[i].getBoundingClientRect().top - 90;
+      if (t <= 0 && t > bestTop){ bestTop = t; best = i; }
+    }
+    links.forEach(function(a,i){ a.classList.toggle('on', i===best); });
+  }
+  var tick = false;
+  window.addEventListener('scroll', function(){
+    if (tick) return; tick = true;
+    requestAnimationFrame(function(){ spy(); tick = false; });
+  }, {passive:true});
+  spy();
+
+  // function-index filter (optional — skipped when the doc has no #ffilter)
+  var input = document.getElementById('ffilter');
+  var rows  = Array.prototype.slice.call(document.querySelectorAll('#ftable tbody tr'));
+  var count = document.getElementById('fcount');
+  if (input && rows.length){
+    var paint = function(){
+      var q = input.value.trim().toLowerCase();
+      var n = 0;
+      rows.forEach(function(r){
+        var hit = !q || r.textContent.toLowerCase().indexOf(q) !== -1;
+        r.classList.toggle('hidden', !hit);
+        if (hit) n++;
+      });
+      if (count) count.textContent = q ? (n + ' of ' + rows.length + ' shown') : (rows.length + ' functions');
+    };
+    input.addEventListener('input', paint);
+    paint();
+  }
+})();
+</script>
+</body>
+</html>

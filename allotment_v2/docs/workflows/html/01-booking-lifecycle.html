@@ -1,0 +1,1243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Booking Lifecycle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f8fa; --panel:#ffffff; --panel-2:#fbfcfd;
+  --ink:#0f2029; --ink-2:#31485a; --muted:#68808f;
+  --line:#e1e8ee; --line-2:#eef2f6;
+  --accent:#1683C7; --accent-ink:#0f6ba6; --accent-soft:#e8f3fb;
+  --danger:#c8384c; --danger-soft:#fdecee;
+  --warn:#b46a00; --warn-soft:#fdf3e3;
+  --ok:#137a52; --ok-soft:#e6f5ee;
+  --violet:#6a4bbd; --violet-soft:#f0ecfb;
+  --code-bg:#f0f4f8; --code-ink:#173446;
+  --shadow:0 1px 2px rgba(15,32,41,.05), 0 8px 24px -14px rgba(15,32,41,.22);
+  --radius:14px;
+}
+:root:not([data-theme="light"]){ }
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b1317; --panel:#111d24; --panel-2:#0e181e;
+    --ink:#e7eff5; --ink-2:#bfd0dc; --muted:#89a0af;
+    --line:#1f313c; --line-2:#182831;
+    --accent:#49b2ee; --accent-ink:#7ccbf8; --accent-soft:#0f2c3d;
+    --danger:#f2798c; --danger-soft:#33161c;
+    --warn:#e0a24a; --warn-soft:#33260f;
+    --ok:#4ccb95; --ok-soft:#0f2b21;
+    --violet:#a48bef; --violet-soft:#221b3a;
+    --code-bg:#0d1b23; --code-ink:#cfe0eb;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b1317; --panel:#111d24; --panel-2:#0e181e;
+  --ink:#e7eff5; --ink-2:#bfd0dc; --muted:#89a0af;
+  --line:#1f313c; --line-2:#182831;
+  --accent:#49b2ee; --accent-ink:#7ccbf8; --accent-soft:#0f2c3d;
+  --danger:#f2798c; --danger-soft:#33161c;
+  --warn:#e0a24a; --warn-soft:#33260f;
+  --ok:#4ccb95; --ok-soft:#0f2b21;
+  --violet:#a48bef; --violet-soft:#221b3a;
+  --code-bg:#0d1b23; --code-ink:#cfe0eb;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px; line-height:1.62; -webkit-font-smoothing:antialiased;
+}
+code,kbd,.mono{font-family:"DM Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+
+/* ---------- layout ---------- */
+.wrap{display:grid; grid-template-columns:264px minmax(0,1fr); gap:0; max-width:1420px; margin:0 auto}
+.side{
+  position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+  border-right:1px solid var(--line); padding:26px 18px 60px; background:var(--panel-2);
+}
+.main{min-width:0; padding:34px 42px 120px}
+@media (max-width:960px){
+  .wrap{grid-template-columns:1fr}
+  .side{position:static; height:auto; border-right:0; border-bottom:1px solid var(--line); padding:20px 22px}
+  .main{padding:24px 20px 80px}
+}
+
+/* ---------- sidebar ---------- */
+.brand{display:flex; align-items:center; gap:10px; margin-bottom:4px}
+.brand .dot{width:26px;height:26px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px;flex:none}
+.brand b{font-size:14px; letter-spacing:-.01em}
+.brand small{display:block; color:var(--muted); font-size:11px; font-weight:400; line-height:1.3}
+.nav{margin-top:20px; display:flex; flex-direction:column; gap:1px}
+.nav a{
+  display:flex; gap:9px; align-items:baseline; text-decoration:none; color:var(--ink-2);
+  padding:6px 10px; border-radius:8px; font-size:13.5px; border-left:2px solid transparent;
+}
+.nav a .n{color:var(--muted); font-size:11px; font-family:"DM Mono",monospace; min-width:16px}
+.nav a:hover{background:var(--line-2); color:var(--ink)}
+.nav a.on{background:var(--accent-soft); color:var(--accent-ink); font-weight:500; border-left-color:var(--accent)}
+.nav .sub{padding-left:34px; font-size:12.5px; color:var(--muted)}
+.nav .sub:hover{color:var(--ink)}
+.backlink{
+  display:inline-block; margin-top:14px; font-size:12.5px; color:var(--muted); text-decoration:none;
+  border-bottom:1px solid transparent;
+}
+.backlink:hover{color:var(--accent-ink); border-bottom-color:var(--accent)}
+.themebtn{
+  margin-top:22px; width:100%; border:1px solid var(--line); background:var(--panel); color:var(--ink-2);
+  border-radius:9px; padding:7px 10px; font:inherit; font-size:12.5px; cursor:pointer;
+}
+.themebtn:hover{border-color:var(--accent); color:var(--accent-ink)}
+
+/* ---------- header ---------- */
+.hero{border-bottom:1px solid var(--line); padding-bottom:22px; margin-bottom:30px}
+.eyebrow{font-family:"DM Mono",monospace; font-size:12px; color:var(--accent-ink); letter-spacing:.06em; text-transform:uppercase}
+h1{font-size:34px; line-height:1.15; letter-spacing:-.025em; margin:6px 0 10px}
+.lede{font-size:16px; color:var(--ink-2); max-width:74ch; margin:0}
+.chips{display:flex; flex-wrap:wrap; gap:7px; margin-top:16px}
+.chip{
+  font-family:"DM Mono",monospace; font-size:11.5px; padding:3px 9px; border-radius:999px;
+  border:1px solid var(--line); background:var(--panel); color:var(--muted);
+}
+.chip b{color:var(--ink-2); font-weight:500}
+
+/* ---------- sections ---------- */
+section{scroll-margin-top:20px; margin-bottom:46px}
+h2{
+  font-size:23px; letter-spacing:-.02em; margin:0 0 14px; padding-bottom:9px;
+  border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:11px;
+}
+h2 .num{font-family:"DM Mono",monospace; font-size:14px; color:var(--accent); font-weight:500}
+h3{font-size:17px; letter-spacing:-.01em; margin:28px 0 10px; color:var(--ink)}
+h4{font-size:13.5px; margin:18px 0 7px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; font-weight:500}
+p{margin:0 0 12px; max-width:82ch}
+ul,ol{margin:0 0 12px; padding-left:22px; max-width:82ch}
+li{margin-bottom:5px}
+a{color:var(--accent-ink)}
+
+/* ---------- inline bits ---------- */
+code:not(pre code){
+  background:var(--code-bg); color:var(--code-ink); padding:1px 5px; border-radius:5px;
+  font-size:.875em; border:1px solid var(--line-2); white-space:nowrap;
+}
+.ln{color:var(--accent-ink); font-family:"DM Mono",monospace; font-size:.82em; white-space:nowrap}
+pre{
+  background:var(--code-bg); border:1px solid var(--line); border-radius:10px;
+  padding:14px 16px; overflow-x:auto; font-size:12.8px; line-height:1.6; color:var(--code-ink); margin:0 0 14px;
+}
+pre code{background:none;border:0;padding:0;white-space:pre}
+
+/* ---------- cards & callouts ---------- */
+.card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px; box-shadow:var(--shadow); margin:0 0 16px}
+.note{
+  border-left:3px solid var(--accent); background:var(--accent-soft); border-radius:0 10px 10px 0;
+  padding:12px 16px; margin:0 0 16px; font-size:14.2px; color:var(--ink-2);
+}
+.note.warn{border-left-color:var(--warn); background:var(--warn-soft)}
+.note.danger{border-left-color:var(--danger); background:var(--danger-soft)}
+.note.ok{border-left-color:var(--ok); background:var(--ok-soft)}
+.note b{color:var(--ink)}
+.note .lbl{display:block; font-size:11px; text-transform:uppercase; letter-spacing:.07em; font-weight:700; margin-bottom:4px; color:var(--accent-ink)}
+.note.warn .lbl{color:var(--warn)} .note.danger .lbl{color:var(--danger)} .note.ok .lbl{color:var(--ok)}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius); margin:0 0 16px; background:var(--panel)}
+table{border-collapse:collapse; width:100%; font-size:13.6px; min-width:520px}
+th{
+  text-align:left; font-weight:500; font-size:11.5px; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--muted); padding:10px 14px; border-bottom:1px solid var(--line); background:var(--panel-2); white-space:nowrap;
+}
+td{padding:9px 14px; border-bottom:1px solid var(--line-2); vertical-align:top; color:var(--ink-2)}
+tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--panel-2)}
+td code{white-space:nowrap}
+
+/* ---------- badges ---------- */
+.b{display:inline-block; font-family:"DM Mono",monospace; font-size:11px; padding:2px 8px; border-radius:999px; white-space:nowrap; border:1px solid transparent}
+.b.blue{background:var(--accent-soft); color:var(--accent-ink); border-color:color-mix(in srgb,var(--accent) 25%, transparent)}
+.b.red{background:var(--danger-soft); color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%, transparent)}
+.b.amber{background:var(--warn-soft); color:var(--warn); border-color:color-mix(in srgb,var(--warn) 30%, transparent)}
+.b.green{background:var(--ok-soft); color:var(--ok); border-color:color-mix(in srgb,var(--ok) 30%, transparent)}
+.b.violet{background:var(--violet-soft); color:var(--violet); border-color:color-mix(in srgb,var(--violet) 30%, transparent)}
+.b.gray{background:var(--line-2); color:var(--muted); border-color:var(--line)}
+
+/* ---------- rail (vertical flow) ---------- */
+.rail{position:relative; margin:6px 0 18px; padding-left:30px}
+.rail:before{content:""; position:absolute; left:9px; top:8px; bottom:8px; width:2px; background:var(--line)}
+.step{position:relative; margin-bottom:13px}
+.step:before{
+  content:""; position:absolute; left:-26px; top:6px; width:11px; height:11px; border-radius:50%;
+  background:var(--panel); border:2px solid var(--accent);
+}
+.step.block:before{border-color:var(--danger); background:var(--danger)}
+.step.ask:before{border-color:var(--warn)}
+.step.done:before{border-color:var(--ok); background:var(--ok)}
+.step .t{font-weight:500; color:var(--ink); font-size:14.4px}
+.step .d{font-size:13.4px; color:var(--muted)}
+
+/* ---------- stage flow (horizontal) ---------- */
+.flow{display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; margin:6px 0 18px}
+.stage{
+  flex:1 1 150px; min-width:140px; background:var(--panel); border:1px solid var(--line);
+  border-radius:11px; padding:11px 13px; position:relative;
+}
+.stage .k{font-family:"DM Mono",monospace; font-size:10.5px; color:var(--muted); letter-spacing:.05em; text-transform:uppercase}
+.stage .v{font-size:13.6px; font-weight:500; margin-top:3px; color:var(--ink)}
+.stage .s{font-size:12.4px; color:var(--muted); margin-top:3px}
+.arrow{display:grid; place-items:center; color:var(--line); font-size:18px; flex:0 0 14px}
+@media(max-width:700px){.arrow{transform:rotate(90deg)}}
+
+/* ---------- outcome grid ---------- */
+.grid2{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px; margin:6px 0 18px}
+.mini{background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:13px 15px}
+.mini h5{margin:0 0 5px; font-size:13.6px; letter-spacing:-.01em}
+.mini p{margin:0; font-size:12.9px; color:var(--muted)}
+
+/* ---------- function index filter ---------- */
+.filter{
+  width:100%; max-width:340px; padding:8px 12px; border-radius:9px; border:1px solid var(--line);
+  background:var(--panel); color:var(--ink); font:inherit; font-size:13.5px; margin-bottom:12px;
+}
+.filter:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft)}
+.hidden{display:none !important}
+.count{font-size:12.5px; color:var(--muted); margin-left:10px}
+
+/* ---------- footer ---------- */
+footer{border-top:1px solid var(--line); padding-top:18px; color:var(--muted); font-size:12.8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<aside class="side">
+  <div class="brand">
+    <div class="dot">01</div>
+    <div><b>Booking Lifecycle</b><small>allotment_v2 · workflow docs</small></div>
+  </div>
+  <nav class="nav" id="nav">
+    <a href="#s1"><span class="n">1</span> What this is</a>
+    <a href="#s2"><span class="n">2</span> Entry points</a>
+    <a href="#s3"><span class="n">3</span> Workflows</a>
+    <a href="#w-create" class="sub">3.1 Create</a>
+    <a href="#w-edit" class="sub">3.2 Edit</a>
+    <a href="#w-cancel" class="sub">3.3–3.4 Cancel / restore</a>
+    <a href="#w-partial" class="sub">3.5 Partial cancel</a>
+    <a href="#w-resched" class="sub">3.6 Reschedule</a>
+    <a href="#w-weather" class="sub">3.7 Weather</a>
+    <a href="#w-approve" class="sub">3.8–3.9 FOC &amp; approvals</a>
+    <a href="#w-locks" class="sub">3.10 Seat locks</a>
+    <a href="#w-charter" class="sub">3.11–3.12 Charter &amp; OVN</a>
+    <a href="#w-cal" class="sub">3.13 Calendar / manifest</a>
+    <a href="#s4"><span class="n">4</span> Data model</a>
+    <a href="#s5"><span class="n">5</span> Persistence path</a>
+    <a href="#s6"><span class="n">6</span> Cross-module contracts</a>
+    <a href="#s7"><span class="n">7</span> Invariants &amp; gotchas</a>
+    <a href="#s8"><span class="n">8</span> Function index</a>
+  </nav>
+  <a class="backlink" href="index.html">← All workflow docs</a>
+  <button class="themebtn" id="themebtn" type="button">Toggle theme</button>
+</aside>
+
+<main class="main">
+
+<header class="hero">
+  <div class="eyebrow">Workflow doc 01</div>
+  <h1>Booking Lifecycle</h1>
+  <p class="lede">Everything that creates, prices, guards, mutates and retires a booking record
+  (<code>SB_BOOKINGS</code>) in Booking&nbsp;v2 — form, tabs, approvals, seat locks, and the
+  cancel / reschedule / partial / weather flows.</p>
+  <div class="chips">
+    <span class="chip"><b>Code</b> allotment_v2.html</span>
+    <span class="chip"><b>Commit</b> 094dde1</span>
+    <span class="chip"><b>Branch</b> refactor/booking-v2-migration</span>
+    <span class="chip"><b>Source</b> docs/workflows/01-booking-lifecycle.md</span>
+  </div>
+  <div class="note warn" style="margin-top:18px">
+    <span class="lbl">Line numbers drift</span>
+    Every <span class="ln">:12345</span> reference means “roughly here”. Grep the symbol name instead —
+    the <a href="#s8">function index</a> at the bottom is the fastest way to find anything.
+  </div>
+</header>
+
+<!-- ============ 1 ============ -->
+<section id="s1">
+  <h2><span class="num">01</span> What this does &amp; who uses it</h2>
+  <p>Booking&nbsp;v2 is the sales/ops hub of the app. <b>One booking = one customer group</b>, sold by one
+  agent (or a B2C channel), travelling on <b>one or more trips</b> (<code>routeId</code> × <code>date</code>),
+  each trip carrying its own pax mix and its own <code>seat</code>/<code>charter</code> mode.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:210px">Role</th><th>What they do here</th></tr></thead>
+    <tbody>
+      <tr><td>Sales / reservation staff</td><td>New booking, edit, quote, FOC reason, discounts, voucher ref</td></tr>
+      <tr><td>Ops / dispatch</td><td>By-trip-date manifest, boat/van assign, re-confirm, pickup times</td></tr>
+      <tr><td>Manager</td><td>Approvals tab (<code>pending_approval</code>), FOC approve/reject</td></tr>
+      <tr><td>Accounting</td><td>Reads <code>priceBreakdown</code> / <code>total</code> / <code>feeItems</code>, raises invoices</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>The single-file client keeps <code>SB_BOOKINGS</code> in RAM <span class="ln">:41531</span>, loaded from
+  the state blob at boot <span class="ln">:41533</span>. The durable store is Postgres. Two schemas coexist:</p>
+
+  <div class="grid2">
+    <div class="mini">
+      <h5><span class="b green">schemaVer 2</span> native</h5>
+      <p>Uses <code>trips[]</code>, per-trip pax and mode. Everything in this doc.</p>
+    </div>
+    <div class="mini">
+      <h5><span class="b gray">legacy v1</span> read-only</h5>
+      <p><code>programId</code> + <code>travelDate</code> + <code>pax{adult,child,infant}</code>.
+      <code>bkV2EditBooking</code> refuses it <span class="ln">:77822</span>.</p>
+    </div>
+  </div>
+
+  <div class="note">
+    <span class="lbl">Which doc to trust</span>
+    <code>docs/BOOKING.md</code> is the Phase-1 spec (2026-05-29) and is <b>substantially stale</b> — it still
+    calls the New Booking wizard “pending” and its line numbers are ~35k off.
+    <code>docs/booking.model.ts</code> is current and matches the runtime shape.
+  </div>
+</section>
+
+<!-- ============ 2 ============ -->
+<section id="s2">
+  <h2><span class="num">02</span> Entry points &amp; render tree</h2>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:180px">Thing</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td>View id</td><td><code>#view-booking</code> — CSS block starts <span class="ln">:2322</span></td></tr>
+      <tr><td>Sidebar</td><td>Operations → Booking · <code>&lt;div class="nav-item" data-view="booking"&gt;</code> <span class="ln">:4205</span></td></tr>
+      <tr><td>Nav dispatch</td><td><code>renderBooking()</code> <span class="ln">:68586</span> → delegates straight to <code>bkV2RenderList()</code> <span class="ln">:70744</span> (alias for <code>bkV2Render</code>). The v1 form below it only runs if <code>bkV2RenderList</code> is missing.</td></tr>
+      <tr><td>Top render fn</td><td><code>bkV2Render()</code> <span class="ln">:69225</span> — writes into <code>#bkv2-host</code></td></tr>
+      <tr><td>Client state</td><td><code>const _bkV2 = {…}</code> <span class="ln">:68862</span></td></tr>
+      <tr><td>Tab switcher</td><td><code>bkV2SwitchTab(t)</code> <span class="ln">:73397</span> → <code>_bkV2.tab</code>; body router <code>bkV2RenderTabBody()</code> <span class="ln">:70813</span></td></tr>
+      <tr><td>Topbar</td><td><code>bkV2RenderTopbar()</code> <span class="ln">:70746</span>, meta line <code>bkV2TopbarMeta()</code> <span class="ln">:70781</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>bkV2Render is a 3-way switch <span class="ln">:69230–:69239</span></h3>
+  <div class="flow">
+    <div class="stage"><div class="k">branch 1</div><div class="v">Detail page</div><div class="s"><code>detailId &amp;&amp; !newBooking</code> → <code>bkV2RenderBookingDetail()</code> <span class="ln">:78043</span></div></div>
+    <div class="stage"><div class="k">branch 2</div><div class="v">The form</div><div class="s"><code>newBooking</code> → <code>bkV2RenderNewBooking()</code> <span class="ln">:69258</span> — same form for create <b>and</b> edit</div></div>
+    <div class="stage"><div class="k">branch 3</div><div class="v">Tabs</div><div class="s">topbar + <code>bkV2RenderTabBody()</code> + lock modal + lock overlays</div></div>
+  </div>
+  <p>Everything is wrapped in try/catch; a render throw paints an inline error card with a
+  “Reset to Calendar view” button <span class="ln">:69251</span>.</p>
+
+  <h3>The six tabs</h3>
+  <div class="tw"><table>
+    <thead><tr><th style="width:110px">_bkV2.tab</th><th style="width:230px">Label</th><th>Renderer</th></tr></thead>
+    <tbody>
+      <tr><td><code>cal</code></td><td>Calendar (sub-view <code>_bkV2.view</code> = <code>cal</code>|<code>mx</code>)</td><td><code>bkV2RenderCalendar()</code> <span class="ln">:71029</span> / <code>bkV2RenderMatrix()</code> <span class="ln">:71499</span></td></tr>
+      <tr><td><code>bytrip</code></td><td>By trip · date (the ops manifest)</td><td><code>bkV2RenderTab2()</code> <span class="ln">:71907</span></td></tr>
+      <tr><td><code>all</code></td><td>All bookings (linear table)</td><td><code>bkV2RenderTab3()</code> <span class="ln">:73315</span></td></tr>
+      <tr><td><code>locks</code></td><td>Seat Locks</td><td><code>bkV2RenderLocks()</code> <span class="ln">:42218</span></td></tr>
+      <tr><td><code>approvals</code></td><td>รออนุมัติ (badge = count of <code>pending_approval</code>)</td><td><code>bkV2RenderApprovals()</code> <span class="ln">:70829</span></td></tr>
+      <tr><td><code>cancel</code></td><td>Cancellations report</td><td><code>bkV2RenderCancelReport()</code> <span class="ln">:70957</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note warn">
+    <span class="lbl">Stale comments</span>
+    The tab strip <span class="ln">:70754–:70759</span> has <b>six</b> tabs; the <code>_bkV2</code> state comment
+    and <code>BOOKING.md</code> both still say three. Follow the code.<br>
+    Sticky-header offsets <code>--t2-vangroup-top</code> / <code>--t2-head-top</code> are computed in the
+    <code>requestAnimationFrame</code> at <span class="ln">:69241</span> — never hardcode them.
+  </div>
+</section>
+
+<!-- ============ 3 ============ -->
+<section id="s3">
+  <h2><span class="num">03</span> Workflows</h2>
+
+  <!-- 3.1 -->
+  <h3 id="w-create">3.1 Create a booking</h3>
+  <p><b>Trigger</b> — <code>+ New booking</code> in the topbar <span class="ln">:70776</span>, or the <kbd>C</kbd> shortcut.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>bkV2NewBooking()</code> <span class="ln">:73427</span></div>
+      <div class="d"><code>laGuardEdit('operations')</code> permission gate, then builds the <code>_bkV2.newBooking</code> draft:
+      <code>code: bkV2GenerateBookingCode()</code>, <code>bookingDate</code> = today, <code>priceMode:'rate'</code>,
+      one empty trip from <code>bkV2NewTrip()</code> <span class="ln">:73469</span>.</div></div>
+    <div class="step"><div class="t">2 · <code>bkV2RenderNewBooking()</code> <span class="ln">:69258</span></div>
+      <div class="d">Paints the single-page form. Sections: pickup <span class="ln">:69522</span>, trips <span class="ln">:69717</span>,
+      add-ons <span class="ln">:70044</span>, review <span class="ln">:70247</span>, passengers <span class="ln">:70450</span>,
+      dietary/luggage <span class="ln">:70512</span>, cash-on-tour <span class="ln">:70554</span>, quote <span class="ln">:70598</span>,
+      payment <span class="ln">:70649</span>, FOC <span class="ln">:70680</span>, attachments <span class="ln">:75128</span>.</div></div>
+    <div class="step"><div class="t">3 · Field setters mutate the draft &amp; re-render</div>
+      <div class="d"><code>bkV2SetBookingField</code> <span class="ln">:76270</span>, <code>bkV2SetTripField</code> <span class="ln">:73951</span>,
+      <code>bkV2BumpPax</code> <span class="ln">:74657</span>, <code>bkV2ToggleAddOn</code> <span class="ln">:74890</span>,
+      <code>bkV2SetPickupArea</code> <span class="ln">:74925</span>, <code>bkV2AddAdjustment</code> <span class="ln">:77282</span>.
+      Text inputs listed in <code>_BKV2_NO_RENDER_KEYS</code> skip the re-render so focus survives <span class="ln">:76295</span>.</div></div>
+    <div class="step"><div class="t">4 · <code>bkV2SyncPassengers()</code> <span class="ln">:73767</span></div>
+      <div class="d">Passenger rows sized to the <b>largest single trip</b>, not the sum of trips. Lead is passenger #1
+      and occupies a real seat of its own type (<code>leadType</code>); <code>d.leadFoc</code> lets the lead take a FOC seat.</div></div>
+    <div class="step"><div class="t">5 · Pricing recomputes on every render</div>
+      <div class="d"><code>bkV2CalcQuote()</code> <span class="ln">:77221</span> → per-trip <code>bkV2TripSubtotal()</code> <span class="ln">:77122</span>
+      (+ <code>bkV2GetRTForTrip</code> <span class="ln">:77112</span> promo overlay) and <code>bkV2AddOnInfo()</code> <span class="ln">:77189</span>.</div></div>
+    <div class="step done"><div class="t">6 · Save</div>
+      <div class="d"><code>bkV2SaveDraft()</code> <span class="ln">:76298</span> → commit as <code>quote</code>, or
+      <code>bkV2SubmitBooking()</code> <span class="ln">:76316</span> → commit as <code>pending_foc</code> (if FOC) else <code>confirmed</code>.
+      Button state from <code>bkV2RenderSubmitButton()</code> <span class="ln">:70719</span> — disabled while any trip has no rate
+      (<code>bkV2NoRateTrips()</code> <span class="ln">:70707</span>).</div></div>
+  </div>
+
+  <h4>Three sub-rules worth knowing</h4>
+  <ul>
+    <li>Picking an agent auto-fills <code>rateTypeRef</code> from <code>agent.rateTypeId</code> and applies house-account rules —
+      WALKIN keeps manual pricing; STAFF forces <code>welfare</code>→rate and <code>inspection</code>→manual ฿0 <span class="ln">:76274–:76288</span>.</li>
+    <li>Changing <code>trip.date</code>/<code>trip.routeId</code> is blocked/warned against a <b>closed program day</b> via
+      <code>getDayStatus</code> <span class="ln">:73956–:73980</span>.</li>
+    <li>Changing <code>trip.zone</code> propagates to <code>d.pickupZoneFilter</code>, clears a mismatched pickup area, and for
+      <code>NoTransfer</code> auto-picks the pier area matching <code>route.pier</code> <span class="ln">:73988–:74006</span>.</li>
+  </ul>
+
+  <h3>The guard gauntlet — <code>bkV2CommitBooking(status)</code> <span class="ln">:76469</span></h3>
+  <p>This one function runs every guard, builds a <b>fresh</b> <code>newBk</code>, does
+  <code>SB_BOOKINGS.unshift(newBk)</code>, draws seat locks, wires charter → <code>TRIPS</code>, persists, then lands
+  on the <code>bytrip</code> tab at the earliest trip date <span class="ln">:77023–:77028</span>.
+  Each step <code>return</code>s out on failure.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t"><code>laGuardEdit('operations')</code></div><div class="d">Permission gate.</div></div>
+    <div class="step ask"><div class="t">Hotel canonicalise + near-duplicate prompt <span class="ln">:76474</span></div><div class="d">§hotelDedupe</div></div>
+    <div class="step ask"><div class="t">If agent = STAFF: <code>staffId</code> required, welfare FOC quota warn <span class="ln">:76500</span></div><div class="d"></div></div>
+    <div class="step block"><div class="t">Hard required fields <span class="ln">:76512</span></div>
+      <div class="d">Missing → <code>alert()</code> and return. Full list below.</div></div>
+    <div class="step ask"><div class="t">Contract programs whitelist confirm <span class="ln">:76564</span></div><div class="d">Agent’s <code>programPeriods</code>/<code>programs</code>.</div></div>
+    <div class="step ask"><div class="t">Duplicate-booking confirm <span class="ln">:76585</span></div><div class="d"><code>bkV2FindDuplicateBookings</code> <span class="ln">:76435</span></div></div>
+    <div class="step ask"><div class="t">Self-arrive + hotel mis-tick confirm <span class="ln">:76594</span></div><div class="d"></div></div>
+    <div class="step"><div class="t">Soft-missing flags → <code>bk.incomplete[]</code> <span class="ln">:76598</span></div><div class="d">Renders as ⚠ in the manifest instead of blocking.</div></div>
+    <div class="step ask"><div class="t">Lock-draw confirm <span class="ln">:76616</span> · unused-agent-lock reminder <span class="ln">:76621</span></div><div class="d"></div></div>
+    <div class="step block"><div class="t">Anti-overbook tiering <span class="ln">:76636</span></div>
+      <div class="d">The single most important guard — see the table below.</div></div>
+    <div class="step ask"><div class="t">Discount &gt; 0 on a <code>confirmed</code> save <span class="ln">:76689</span></div>
+      <div class="d">Alert, then <code>_approvalReq += discount</code> — forced to <code>pending_approval</code>.</div></div>
+    <div class="step"><div class="t">Build <code>newBk</code> <span class="ln">:76721</span> · approval → status <span class="ln">:76830</span> · edit-preserve block <span class="ln">:76855</span></div><div class="d"></div></div>
+    <div class="step done"><div class="t">Write <span class="ln">:76931</span> → return old lock draws &amp; draw new <span class="ln">:76952</span> → charter → <code>TRIPS</code> <span class="ln">:76989</span> → persist <span class="ln">:77005</span> → close form + toast <span class="ln">:77014</span></div><div class="d"></div></div>
+  </div>
+
+  <h4>Hard-required fields <span class="ln">:76516–:76559</span></h4>
+  <p>Agent or B2C channel · ≥1 trip with route + date · pax ≥ 1 · lead pax name · Rate Type (unless
+  <code>priceMode==='manual'</code>) · lead nationality (auto-guessed by <code>bkV2GuessNationality</code>
+  <span class="ln">:73698</span> first) · nationality for every <b>named</b> passenger · guide language ·
+  hotel when a pickup area is set (except <code>NoTransfer</code>) · <b>a pickup point when
+  <code>status !== 'quote'</code></b> (§pickup guard, 2026-07-11) · route must be running that day
+  (<code>bkV2IsRouteOpenOn</code> <span class="ln">:68978</span>).</p>
+  <div class="note">
+    <span class="lbl">B2C exemption</span>
+    B2C bookings (<code>bkV2IsB2CBk</code> <span class="ln">:77777</span>, id starts <code>b2c_</code>) are exempt from the
+    guide-language and route-closed hard blocks — those degrade to soft <code>incomplete</code> flags.
+  </div>
+
+  <h4>Anti-overbook tiering <span class="ln">:76636–:76697</span></h4>
+  <div class="tw"><table>
+    <thead><tr><th style="width:150px">Outcome</th><th>Condition</th><th style="width:230px">Result</th></tr></thead>
+    <tbody>
+      <tr><td><code>lockViolation</code></td><td><code>need &gt; seatsAvailable</code> but <code>need &lt;= seatsAvailable + lockedSeats</code></td><td><span class="b red">HARD BLOCK</span> no override <span class="ln">:76672</span></td></tr>
+      <tr><td><code>licenseBlock</code></td><td><code>need &gt; licenseAvailable</code> (over registered seats)</td><td><span class="b red">HARD BLOCK</span> <span class="ln">:76676</span></td></tr>
+      <tr><td><code>overCapApproval</code></td><td>over company <code>cap</code> but within license</td><td><span class="b amber">confirm()</span> → <code>pending_approval</code> + <code>bk.approval</code> <span class="ln">:76830</span></td></tr>
+      <tr><td>discount &gt; 0</td><td>on a <code>confirmed</code> save, any amount</td><td><span class="b amber">forced</span> <code>pending_approval</code>, reason <code>discount</code> <span class="ln">:76689</span></td></tr>
+    </tbody>
+  </table></div>
+  <p>When <b>editing</b>, only a genuine <b>increase</b> is guarded: <code>oldNeed</code> is the same trip’s previous
+  general-seat need, and the block fires only if <code>need &gt; al.seatsAvailable &amp;&amp; need &gt; oldNeed</code>
+  <span class="ln">:76656</span>. <code>getAllotment</code> is called with <code>excludeBkId = _bkV2.editingId</code>
+  so a booking never blocks itself.</p>
+
+  <h4>What gets written <span class="ln">:76721–:76825</span></h4>
+  <p><code>SB_BOOKINGS[]</code> gains a full <code>BookingV2</code>:
+  <code>id</code> (= <code>d.code</code>), <code>schemaVer:2</code>, <code>createdAt/createdBy</code>, <code>voucherRef</code>,
+  <code>agentId</code>, <code>rateTypeRef</code>, <code>leadPax/leadNationality/leadType/leadFoc/leadPhone/leadEmail</code>,
+  <code>attachments[]</code>, <code>docCheck</code>, <code>pickupAreaId/pickupSelf/pickupArea/pickupZone</code>,
+  <code>hotelName/roomNumber</code>, <code>dropoffSame/dropoffAreaId/dropoffArea/dropoffHotelName</code>,
+  <code>altPickups[]</code>, <code>guides{}</code>, <code>notes</code>, <code>passengers[]</code> (unnamed rows dropped),
+  <code>specialMeals{}</code>, <code>largeLuggage</code>, <code>cashOnTour</code>, <code>trips[]</code>, <code>addOns[]</code>,
+  <code>adjustments[]</code>, <code>focApproval</code>, <code>paymentSnapshot{}</code>, <code>priceBreakdown{}</code>,
+  <code>status</code>, <code>total</code>, <code>soldBy</code>, <code>priceMode/manualTotal</code>, <code>purpose</code>,
+  <code>staffId/staffPurpose</code>, <code>note</code>. Then <code>incomplete</code> <span class="ln">:76827</span>,
+  <code>approval</code> <span class="ln">:76832</span>, <code>bookedAt</code>/<code>bookingDate</code>/<code>marketSnapshot</code>
+  <span class="ln">:76843–:76845</span>, <code>confirmedBy/confirmedAt</code> <span class="ln">:76847</span>,
+  <code>history[]</code> and <code>ops.vanSplits</code> via <code>bkV2SyncAltPickupSplits</code> <span class="ln">:46258</span>.</p>
+
+  <h4>Failure modes</h4>
+  <ul>
+    <li>Any hard-block <code>alert()</code> leaves <code>_bkV2.newBooking</code> intact — the user stays in the form.</li>
+    <li><code>_bkV2._b2cClosedWarn</code> is deliberately <b>not</b> cleared before the confirm prompts (§eat <span class="ln">:76603</span>);
+      clearing it early made a re-attempted save go through silently.</li>
+    <li>The commit writes the blob with raw <code>JSON.parse/stringify</code> of <code>LS_KEY</code> <span class="ln">:77005</span>
+      rather than <code>laBlob()/laBlobSave()</code>. It is still read-modify-write so sibling keys survive, but it
+      bypasses the <code>_laBlob</code> cache — worth knowing when debugging stale-blob issues.</li>
+  </ul>
+
+  <!-- 3.2 -->
+  <h3 id="w-edit">3.2 Edit an existing booking</h3>
+  <p><b>Trigger</b> — <code>Edit</code> on the detail page <span class="ln">:78092</span>.</p>
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>bkV2EditBooking(id)</code> <span class="ln">:77819</span></div>
+      <div class="d">Refuses <code>schemaVer !== 2</code>; <code>confirm()</code>s if status is cancelled/completed/rejected;
+      checks the advisory edit lock <code>bkV2EditLockActive(bk)</code> <span class="ln">:77768</span>
+      (5-min TTL, <code>BK_EDITLOCK_TTL</code> <span class="ln">:77765</span>).</div></div>
+    <div class="step"><div class="t">2 · Deep-clone into <code>_bkV2.newBooking</code></div>
+      <div class="d">Deletes <code>editLock</code>, and <b>re-hydrates arrays the relational backend drops when empty</b>
+      (<code>addOns, passengers, adjustments, feeItems, altPickups</code> → <code>[]</code>, <span class="ln">:77833</span>) —
+      without this the form crashes with “reading 'forEach'”.</div></div>
+    <div class="step"><div class="t">3 · B2C special-case</div>
+      <div class="d"><code>priceMode='manual'</code>, <code>manualTotal</code> = existing total, and a <code>_b2cSnap</code>
+      of the B2C-owned fields <span class="ln">:77837</span>.</div></div>
+    <div class="step"><div class="t">4 · Set <code>_bkV2.editingId</code>, clear <code>detailId</code>, stamp the edit lock, render</div><div class="d"></div></div>
+    <div class="step done"><div class="t">5 · Save runs the same <code>bkV2CommitBooking</code></div>
+      <div class="d"><code>editing</code> looked up at <span class="ln">:76702</span>; <code>id</code> and <code>createdAt</code>
+      preserved, <code>updatedAt/updatedBy</code> added.</div></div>
+  </div>
+
+  <div class="note danger">
+    <span class="lbl">The edit-preserve block is load-bearing <span class="ln">:76855–:76919</span></span>
+    <code>newBk</code> is built from scratch, so <b>anything not explicitly carried over is destroyed</b>:
+    <code>history</code>, <code>weatherResolve</code>, <code>rebook</code>, <code>invoiceId</code>, <code>paymentStatus</code>,
+    <b><code>ops</code></b> (boat/van assignment!), <code>b2cOverride</code>, <code>upgrades</code>, <code>feeItems</code>,
+    <code>reschedule</code>, <code>partialCancels</code>, <code>cancellation</code>, <code>cancelCategory</code>,
+    plus a resolved <code>approval</code> <span class="ln">:76839</span> and a decided <code>focApproval</code> <span class="ln">:76936</span>.
+    Losing <code>ops</code> silently wiped every boat/van assignment (fixed 2026-06-14).
+  </div>
+
+  <h4>Two deliberate <i>un</i>-preserves</h4>
+  <div class="grid2">
+    <div class="mini"><h5>Travel date changed <span class="ln">:76883–:76896</span></h5>
+      <p>Boat + van + van group + <code>pickupTimeFinal</code> + per-trip <code>ops</code> are wiped (charter keeps its boat),
+      with a history line “วันเดินทางเปลี่ยน … ล้างการจัดเรือ/รถของวันเดิม”.</p></div>
+    <div class="mini"><h5>Pickup became self-arrive / NoTransfer <span class="ln">:76900–:76911</span></h5>
+      <p>If no alt-pickup still needs a van, clears the <b>outbound</b> van only (<code>vanId</code>, <code>vanGroup</code>,
+      <code>vanSeq</code>, splits). <code>vanReturnId</code> is kept.</p></div>
+  </div>
+  <p>Also: an already-approved FOC does <b>not</b> downgrade to <code>pending_foc</code> on re-submit — it snaps back to
+  <code>confirmed</code> <span class="ln">:76939</span>.</p>
+  <p><b>Seat-lock accounting on edit</b> <span class="ln">:76952–:76981</span> —
+  <code>bkV2ReturnBookingDraws(editing,'edit')</code> returns everything the old version held, then the new draws are taken.
+  Before this existed, editing a booking ten times counted the lock as used ten times (§lkReturn).</p>
+  <p><b>Failure modes</b> — the edit lock is advisory only (last write wins).
+  <code>_bkV2DoCloseNewBooking</code> <span class="ln">:75078</span> clears it on discard; a crashed tab leaves a stale
+  lock that expires after 5 minutes.</p>
+
+  <!-- 3.3 / 3.4 -->
+  <h3 id="w-cancel">3.3 Cancel (full) &amp; 3.4 Restore</h3>
+  <p><b>Trigger</b> — <code>Cancel</code> on the detail page <span class="ln">:78095</span> → <code>bkV2DetailCancel</code>
+  <span class="ln">:77404</span> → <code>bkV2CancelModal</code> <span class="ln">:77434</span>.</p>
+
+  <div class="flow">
+    <div class="stage"><div class="k">step 1</div><div class="v">Reason + charge modal</div>
+      <div class="s"><code>BKV2_CANCEL_REASONS</code> <span class="ln">:77414</span> — 8 codes with
+      <code>group</code> (<code>customer</code>/<code>operator</code>/<code>other</code>) and a <code>def</code> suggested charge.
+      Charge mode <code>none</code>/<code>full</code>/<code>partial</code> + free-text note. Agent’s contract cancel policy shown if present.</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">step 2</div><div class="v">Validate</div>
+      <div class="s"><code>bkV2CancelConfirm</code> <span class="ln">:77465</span> — category required, note required for
+      <code>other</code>, partial amount &gt; 0.</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">step 3</div><div class="v">Apply</div>
+      <div class="s"><code>bkV2CancelBooking(id, opts)</code> <span class="ln">:76325</span></div></div>
+  </div>
+
+  <p><b>What step 3 does:</b></p>
+  <ul>
+    <li><code>bk.status = 'cancelled'</code>, <code>bk.cancelledAt</code></li>
+    <li><code>bk.cancellation = {category, categoryLabel, group, note, reason, chargeType, chargeAmount, at, by}</code>
+      plus flat <code>bk.cancelCategory</code> / <code>bk.cancelReason</code></li>
+    <li>Accounting: voids the prior invoice (<code>acctVoidInvoice</code>) and, if charge &gt; 0, raises a fee invoice via
+      <code>acctCreateFeeInvoice</code> <span class="ln">:76346</span></li>
+    <li><code>bkV2ReturnBookingDraws(bk,'cancel')</code> returns drawn lock seats <span class="ln">:76353</span></li>
+    <li>Releases charter holds in <code>TRIPS[date][boatId]</code> — deletes <code>charterBookingId</code>,
+      sets <code>type='normal'</code> <span class="ln">:76361</span></li>
+    <li>History entry; persists <code>sb_bookings</code> (+ <code>trips</code> if a charter was released)</li>
+  </ul>
+  <div class="note warn">
+    <span class="lbl">Failure mode</span>
+    Accounting is wrapped in try/catch and only <code>console.warn</code>s <span class="ln">:76350</span> —
+    a failed invoice void does <b>not</b> roll the cancellation back.
+  </div>
+
+  <h4>Restore (un-cancel) — <code>bkV2RestoreBooking(id)</code> <span class="ln">:76386</span></h4>
+  <p>Trigger: <code>↩ กู้คืน (Restore)</code> on the detail page <span class="ln">:78096</span> or the Tab-2 ghost row <span class="ln">:72807</span>.</p>
+  <ol>
+    <li>Refuses unless status ∈ <code>cancelled|cancelled_weather|rejected</code>; <code>confirm()</code>s.</li>
+    <li>Voids any <code>feeType==='cancellation'</code> invoice.</li>
+    <li><code>status='confirmed'</code>; deletes <code>cancellation</code>, <code>cancelCategory</code>,
+      <code>cancelReason</code>, <code>cancelledAt</code>, <code>weatherResolve</code>.</li>
+    <li><b>Re-draws</b> the original lock seats from <code>trip.lockDraws</code> — may get back fewer than it wants if
+      someone else used them meanwhile; the shortfall is logged to history, not hidden <span class="ln">:76401</span>.</li>
+    <li>Re-applies charter holds in <code>TRIPS</code> only where the boat/day is still free; taken slots increment
+      <code>blocked</code> and are surfaced in the toast <span class="ln">:76411, :76426</span>.</li>
+  </ol>
+
+  <!-- 3.5 -->
+  <h3 id="w-partial">3.5 Partial cancel (“Reduce pax”)</h3>
+  <p><b>Trigger</b> — <code>− Reduce pax</code> on the detail page <span class="ln">:78094</span> →
+  <code>bkV2DetailPartial</code> <span class="ln">:77638</span> → <code>bkV2PartialModal</code> <span class="ln">:77658</span>.</p>
+  <ol>
+    <li>Modal lists every pax key in <code>BKV2_PAX_KEYS</code> <span class="ln">:77632</span> (12 keys:
+      <code>ad/ad_fr/ad_th</code>, <code>chd*</code>, <code>inf*</code>, <code>foc*</code>) with a “remove N” input,
+      plus a <b>charged vs waived</b> split (<code>bkV2PartialRecalc</code> <span class="ln">:77646</span> suggests ฿ amounts).</li>
+    <li><code>bkV2PartialConfirm(id, tripIdx)</code> <span class="ln">:77702</span> — category required, note required for
+      <code>other</code>, at least 1 pax removed; clamps each removal to the current <code>t.pax[k]</code>.</li>
+    <li><code>bkV2PartialCancel(id, tripIdx, opts)</code> <span class="ln">:77728</span> decrements
+      <code>bk.trips[tripIdx].pax[k]</code> (seats free automatically because <code>getSeatsConsumed</code> reads live pax),
+      reduces <code>bk.priceBreakdown.total</code> and <code>bk.total</code> by the refund, and appends to
+      <code>bk.partialCancels[]</code>.</li>
+  </ol>
+  <p><b>Guards</b> — refuses on <code>cancelled|completed|rejected|cancelled_weather</code> <span class="ln">:77640</span>.</p>
+  <div class="note danger">
+    <span class="lbl">Failure mode</span>
+    It does <b>not</b> return seat-lock draws for the removed pax, and it does <b>not</b> touch invoices —
+    the refund is a plain reduction of the stored total.
+  </div>
+
+  <!-- 3.6 -->
+  <h3 id="w-resched">3.6 Reschedule (move a trip date)</h3>
+  <p><b>Trigger</b> — <code>Reschedule</code> on the detail page <span class="ln">:78093</span> →
+  <code>bkV2DetailReschedule</code> <span class="ln">:77624</span> → <code>bkV2RescheduleModal</code> <span class="ln">:77486</span>.</p>
+  <ol>
+    <li>Modal: <i>Move from</i> (a <code>&lt;select&gt;</code> when the booking has &gt;1 distinct date), <i>New date</i>,
+      fee mode (<code>none</code>/<code>full</code>/<code>partial</code>), fee collection (<code>invoice</code> = extra line on
+      this booking’s own invoice, or <code>separate</code> = record only), a <b>required</b> reason, and an optional
+      “open the edit form afterwards to fix pickup”.</li>
+    <li><code>bkV2RescheduleConfirm</code> <span class="ln">:77526</span> validates (new date required, must differ,
+      reason required, partial amount &gt; 0).</li>
+    <li><code>bkV2RescheduleBooking(id, opts)</code> <span class="ln">:77545</span>:
+      <ul>
+        <li>moves every <code>trip.date === from</code> to <code>to</code>; carries the charter <code>TRIPS</code> hold with it <span class="ln">:77561</span></li>
+        <li><b>clears the day’s assignment</b> — <code>ops.boatId</code> (unless charter), <code>vanId</code>,
+          <code>vanReturnId</code>, <code>vanGroup</code>, <code>vanSeq</code>, <code>vanSplits</code>,
+          <code>pickupTimeFinal</code>, and deletes <code>ops.vanCheckin</code> / <code>ops.pierCheckin</code>;
+          same for every per-trip <code>t.ops</code> <span class="ln">:77572–:77589</span></li>
+        <li>writes <code>bk.reschedule = {fromDate,toDate,reason,chargeType,chargeAmount,collect,at,by}</code>
+          and <code>bk.rebook = {from,to,reason:'manual',at}</code></li>
+        <li>fee on invoice → pushes to <code>bk.feeItems[]</code> <b>and</b> tops up the existing invoice’s
+          <code>subtotal/netAmount/total/lineItems</code> <span class="ln">:77596</span></li>
+      </ul>
+    </li>
+  </ol>
+  <div class="note warn">
+    <span class="lbl">Failure mode</span>
+    The new date is <b>not</b> validated against route seasons or allotment. A reschedule can land on a closed day
+    or an over-full trip; only a subsequent edit-and-save would catch it.
+  </div>
+
+  <!-- 3.7 -->
+  <h3 id="w-weather">3.7 Weather cancellation &amp; per-booking resolve</h3>
+  <p>The <i>decision</i> is made in Boat Operation (<code>bkV2WeatherMark</code> is called from a cell popover
+  <span class="ln">:10219</span>); Booking owns the resolution.</p>
+
+  <div class="flow">
+    <div class="stage"><div class="k">1 · mark</div><div class="v">Cancel trip (weather)</div>
+      <div class="s"><code>bkV2WeatherMark</code> <span class="ln">:59915</span> → <code>…MarkConfirm</code> <span class="ln">:59929</span> →
+      push to <code>SB_WEATHER_CLOSURES</code></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">2 · tag</div><div class="v">Affected bookings</div>
+      <div class="s"><code>bkV2WeatherTagBookings</code> <span class="ln">:59963</span> — every non-cancelled booking with a
+      matching <b>seat-mode</b> trip gets <code>weatherResolve.status = 'awaiting'</code>. Charter excluded <span class="ln">:59968</span>.</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">3 · notify</div><div class="v">Tell the agent</div>
+      <div class="s"><code>bkV2WeatherPanel</code> <span class="ln">:59975</span> or inline cell <span class="ln">:60051</span> →
+      <code>bkV2WeatherNotify</code> <span class="ln">:60016</span> → status <code>notified</code></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">4 · resolve</div><div class="v">One of four outcomes</div>
+      <div class="s"><code>bkV2WeatherResolveOne</code> <span class="ln">:60024</span> → status <code>resolved</code> + <code>outcome</code></div></div>
+  </div>
+
+  <div class="grid2">
+    <div class="mini"><h5><span class="b blue">reschedule</span></h5><p><code>trip.date</code> = new date, <code>bk.rebook</code> set, status unchanged.</p></div>
+    <div class="mini"><h5><span class="b amber">refund</span></h5><p>Negative <code>SB_PAYMENTS</code> row (<code>type:'refund'</code>) + void invoice + <code>bk.refund={amount,status:'due'}</code> <span class="ln">:60040</span>.</p></div>
+    <div class="mini"><h5><span class="b violet">credit</span></h5><p><code>acctCreateDeposit</code> + void invoice.</p></div>
+    <div class="mini"><h5><span class="b red">cancel</span></h5><p>Void invoice.</p></div>
+  </div>
+  <p>Event key = <code>routeId + '|' + date</code> (<code>bkV2WeatherKey</code> <span class="ln">:59962</span>);
+  <code>weatherResolve = {event, status:'awaiting'|'notified'|'resolved', notifiedAt, outcome, newDate, resolvedAt}</code>.
+  Non-reschedule outcomes set <code>bk.status = 'cancelled_weather'</code> and <code>bk.cancelReason='weather'</code>
+  <span class="ln">:60039</span>.</p>
+  <div class="note danger">
+    <span class="lbl">Inconsistency worth flagging</span>
+    Weather <b>reschedule only moves the trip date</b> — unlike <code>bkV2RescheduleBooking</code> it does <b>not</b>
+    clear <code>ops</code> boat/van <span class="ln">:60032–:60037</span>. A weather-rescheduled booking keeps the old
+    day’s boat and van.
+  </div>
+
+  <!-- 3.8 / 3.9 -->
+  <h3 id="w-approve">3.8 FOC approval · 3.9 The approval queue</h3>
+
+  <h4>FOC</h4>
+  <p><b>Trigger</b> — any trip with <code>pax.foc &gt; 0</code>. <code>bkV2SubmitBooking</code> <span class="ln">:76316</span>
+  requires a <code>focReason</code> and commits with <code>status='pending_foc'</code>.</p>
+  <ul>
+    <li><code>focApproval = {count, reason, status, requestedAt, requestedBy}</code> <span class="ln">:76795</span>.
+      Status is <code>'approved'</code> immediately when the save status is <code>confirmed</code>, else <code>'pending'</code>.</li>
+    <li>Approve <code>bkV2FocApprove(id)</code> <span class="ln">:77360</span> — reason is <b>mandatory</b> (prompts if missing) →
+      <code>status='approved'</code>, <code>bk.status='confirmed'</code>. Reject <code>bkV2FocReject(id)</code> <span class="ln">:77387</span> →
+      <code>bk.status='rejected'</code>.</li>
+    <li>Boot-time reconcile <span class="ln">:41622</span> fixes bookings whose FOC was approved but whose status got stuck in
+      <code>pending_foc</code>/<code>pending</code>/<code>quote</code>.</li>
+    <li><b>Pricing:</b> <code>focDiscount</code> is the <i>forgone</i> revenue —
+      <code>adult-fr rate × foc_fr + adult-thai rate × foc_th</code> <span class="ln">:77246</span> — stored as a
+      <b>negative</b> number in <code>priceBreakdown.focDiscount</code>. FOC pax still occupy real seats in every allotment calc.</li>
+  </ul>
+
+  <h4>Approval queue (over-capacity / discount / B2C hold)</h4>
+  <p>Tab <code>รออนุมัติ</code> <span class="ln">:70758</span> → <code>bkV2RenderApprovals()</code> <span class="ln">:70829</span>.
+  The list filters purely on <code>status === 'pending_approval'</code>.</p>
+  <ul>
+    <li><code>bk.approval = {status, reason, targetStatus, over[], totOver, discount, saleName, requestedBy,
+      requestedAt, approvedBy, approvedAt, note}</code> <span class="ln">:76832</span>.</li>
+    <li>Reasons: <code>over_capacity</code>, <code>discount</code>, <code>over_capacity+discount</code>, and (server-side
+      B2C holds) none at all — <code>bkV2PendReason(b)</code> <span class="ln">:70874</span> infers
+      <code>closed_day</code> / <code>b2c_hold</code> / <code>over_cap</code>, and <code>bkV2EnsureApproval(b)</code>
+      <span class="ln">:70886</span> <b>creates</b> the missing <code>approval</code> object on button click.
+      Before this fix (§pendNoApproval 2026-07-31) the buttons silently did nothing for B2C-held rows.</li>
+    <li><code>bkV2ApprovalImpact(b)</code> <span class="ln">:70897</span> recomputes what the seats look like <i>after</i>
+      approval (calls <code>getAllotment(…, b.id)</code> to exclude the booking’s own seats);
+      <code>…ImpactText</code> <span class="ln">:70914</span> renders it into the prompt.
+      Over-license rows trigger a second <code>confirm()</code> <span class="ln">:70930</span>.</li>
+    <li>Approve <code>bkV2ApproveBooking(id)</code> <span class="ln">:70922</span> — prompts for the approver’s name
+      (required), sets <code>approval.status='approved'</code>, <code>bk.status = approval.targetStatus || 'confirmed'</code>,
+      stamps <code>confirmedBy/confirmedAt</code>. Reject <span class="ln">:70942</span> → <code>rejected</code>.</li>
+  </ul>
+  <div class="note">
+    <span class="lbl">Seat-holding rule — <code>bkPendHoldsSeat(bk)</code> <span class="ln">:12040</span></span>
+    A <code>pending_approval</code> booking holds seats <b>unless</b> it was held for over-capacity
+    (<code>approval.over.length &gt; 0 || approval.totOver &gt; 0</code>). Seats that don’t physically exist must not make
+    <code>seatsAvailable</code> go negative. Discount / B2C / closed-day holds <i>do</i> reserve their seats.
+  </div>
+
+  <!-- 3.10 -->
+  <h3 id="w-locks">3.10 Seat locks</h3>
+  <p>Store: <code>SB_SEAT_LOCKS</code> <span class="ln">:41646</span>, persisted by <code>sbSeatLocksPersist()</code>
+  <span class="ln">:41651</span> (blob key <code>sb_seat_locks</code>).</p>
+
+  <h4>Lock shape — <code>bkV2CreateLock</code> <span class="ln">:41818</span></h4>
+<pre><code>{ id, scope:'day'|'bulk'|'month',
+  routeId, date, dateFrom, dateTo, dow[], monthFrom, monthTo, month, boatId,
+  holderType:'agent'|'office'|'global', holderId, parentId?, subName?,
+  qty, used, usedBy{date:n}, reason,
+  expiry, releaseDaysBefore, releaseTime,
+  status:'active'|'depleted'|'expired', createdAt, createdBy, log[] }</code></pre>
+
+  <div class="grid2">
+    <div class="mini"><h5>Multi-day quota</h5>
+      <p><code>bkV2LockSpansDays(l)</code> <span class="ln">:41656</span> is true for <code>bulk</code> and <code>month</code>.
+      Those get a <b>per-round</b> counter <code>usedBy[date]</code>; <code>used</code> stays a lifetime total for reporting only.</p></div>
+    <div class="mini"><h5>Rolling release</h5>
+      <p><code>bkV2LockReleaseCutoff(l,tripDate)</code> <span class="ln">:41696</span> = <code>tripDate − releaseDaysBefore</code>
+      at <code>releaseTime</code>. <code>…ReleasedForDate</code> <span class="ln">:41708</span> hides the lock for
+      <b>that trip date only</b> while it stays active for later dates.</p></div>
+    <div class="mini"><h5>Expiry sweep</h5>
+      <p><code>bkV2LockExpireSweep()</code> <span class="ln">:41720</span> expires day locks past <code>expiry</code>, range locks
+      only when the whole range has passed — and <b>reactivates</b> a range lock wrongly expired by the old sweep.</p></div>
+  </div>
+
+  <h4>Pool math</h4>
+<pre><code>bkV2LocksFor(routeId,date)      :41738  active locks touching this trip (range + dow + release cutoff)
+bkV2LockPoolHold(l,date)        :41783  parent/standalone → held remaining; child → 0
+bkV2LockedTotal(routeId,date)   :41784  Σ pool hold  → getAllotment().lockedSeats
+getAllotment()                  :12145  seatsAvailable = availableCapacity − seatsConsumed − lockedSeats</code></pre>
+  <p><b>Children must return 0</b> or a parent’s seats are counted twice.</p>
+
+  <h4>Drawing</h4>
+  <ul>
+    <li><code>bkV2DrawSources(routeId,date,agentId)</code> <span class="ln">:41756</span> expands each drawable parent into its
+      sub-groups plus the parent’s unallocated remainder. Eligible holders: the agent’s own + <code>office</code> + <code>global</code>
+      (<code>bkV2LocksForAgent</code> <span class="ln">:41752</span>).</li>
+    <li>UI: <code>bkV2SetTripLockDraw(idx, lockId, qty)</code> <span class="ln">:74700</span> writes
+      <code>trip.lockDrawSel = {lockId:qty}</code> (total clamped to trip pax) and mirrors the sum into <code>trip.lockUse</code>.
+      <code>bkV2AutoDrawLocks(idx)</code> <span class="ln">:74715</span> fills greedily.</li>
+    <li>At commit <span class="ln">:76952</span>: old draws returned first, then explicit picks drawn per source via
+      <code>bkV2DrawLock(lockId, qty, bookingId, tripDate)</code> <span class="ln">:41835</span>; with no explicit picks it falls back
+      to <code>seatSource.locked</code> drawn by holder priority <b>agent → office → global</b>.
+      Result stored as <code>trip.lockDraws = [{lockId, qty}]</code> and
+      <code>trip.seatSource = {locked: drawn, general: pax − drawn}</code>.</li>
+    <li><code>bkV2ReturnLock</code> <span class="ln">:41853</span> / <code>bkV2ReturnBookingDraws</code> <span class="ln">:41868</span>
+      are the inverse; <code>depleted</code> flips back to <code>active</code> when room reappears.</li>
+  </ul>
+
+  <h4>Audit</h4>
+  <p><code>bkV2LockClaims(lockId)</code> <span class="ln">:41877</span> treats <code>trips[].lockDraws</code> on live bookings as
+  the source of truth (<b>not</b> the <code>used</code> counter); <code>bkV2LockAudit</code> <span class="ln">:41890</span> reports
+  <code>used − live</code> drift; <code>bkV2LockCoverage</code> <span class="ln">:41902</span> asks the reverse question (bookings
+  that <i>should</i> have drawn but didn’t). <code>bkV2LockFixUsed</code> <span class="ln">:41935</span> /
+  <code>bkV2LockFixTree</code> <span class="ln">:41951</span> repair the counters.</p>
+
+  <!-- 3.11 / 3.12 -->
+  <h3 id="w-charter">3.11 Charter bookings · 3.12 OVN legs</h3>
+
+  <h4>Charter</h4>
+  <ul>
+    <li><code>trip.bookingMode = 'charter'</code> (<code>bkV2SetTripBookingMode</code> <span class="ln">:74725</span>).
+      Charter trips consume a <b>whole boat, never seats</b>: <code>getSeatsConsumed</code> skips them <span class="ln">:12058</span>,
+      and <code>baDayBoats</code> / <code>baCharterBoatIds</code> remove chartered boats from the seat pool
+      <span class="ln">:45336, :45445</span>.</li>
+    <li>Picking a boat that already has seat bookings opens a displacement confirmation:
+      <code>bkV2SetTripCharterBoat</code> <span class="ln">:74733</span> builds <code>_bkV2CharterConfirm</code> from
+      <code>getBookingsForRouteDate</code> <span class="ln">:12189</span>, rendered by
+      <code>bkV2RenderCharterConfirmModal</code> <span class="ln">:70144</span>; <code>bkV2ConfirmCharter</code>
+      <span class="ln">:74768</span> sets <code>charterDisplacementAck = true</code>.</li>
+    <li>Pricing <span class="ln">:77128</span>:
+      <code>starterPrice + max(0, pax − starterIncludes) × extraPerPax + paid longtail bundle</code>, keyed by
+      <code>rt.charterRates[routeId][boat.type.toLowerCase()]</code>. <code>charterPriceMode:'manual'</code> overrides
+      and records <code>manualDelta</code>.</li>
+    <li>At commit <span class="ln">:76989</span> (only when <code>status !== 'quote'</code>) the boat is locked in Boat Operation:
+      <code>TRIPS[date][boatId] = {route, type:'charter', charterBookingId: bk.id}</code>. Editing releases the old holds first
+      <span class="ln">:76708</span>. <code>bkV2CharterBoatHeal(date)</code> <span class="ln">:45435</span> mirrors
+      <code>trip.charterBoatId</code> → <code>ops.boatId</code> so the charter booking appears on its own boat in the manifest.</li>
+  </ul>
+
+  <h4>OVN (overnight)</h4>
+  <ul>
+    <li><code>trip.ovn</code> = <code>null</code> | <code>'return'</code> (we bring them back) | <code>'self'</code> (one-way).
+      <code>bkV2SetTripOvn</code> <span class="ln">:73919</span>.</li>
+    <li><code>bkV2CreateOvnReturnLeg(idx)</code> <span class="ln">:73927</span> appends a second trip with the same route + pax,
+      <code>date = ovnReturnDate</code>, <code>ovnLeg:true</code>, <code>ovnOf: idx</code>. It <b>reserves seats on the return day
+      but prices at ฿0</b> — <code>bkV2TripSubtotal</code> returns 0 immediately for <code>ovnLeg</code>
+      <span class="ln">:77125</span>; the money sits on the outbound <code>ovnCharge</code>, added to <code>totalExtra</code>
+      in <code>bkV2CalcQuote</code> <span class="ln">:77271</span>.</li>
+    <li>The return leg keeps a real <code>zone</code> (it needs a drop-off van) but must have <b>no pickup time</b>.
+      <code>bkV2HealOvnLegs()</code> <span class="ln">:45360</span>, run at the top of <code>bkV2RenderTab2</code>, clears an
+      inherited <code>pickupTime</code> and restores a zone an older build wrongly set to <code>NoTransfer</code>.</li>
+  </ul>
+
+  <!-- 3.13 -->
+  <h3 id="w-cal">3.13 Calendar / matrix / by-trip drill-down</h3>
+  <ul>
+    <li><code>bkV2Aggregate()</code> <span class="ln">:69062</span> →
+      <code>{byDate: {date: {total, ad, chd, inf, foc, pk, kl, nt, hasFocPending, routes{}, bookings[], revenue}}}</code>.
+      Skips <code>['cancelled','cancelled_weather','rejected']</code> <span class="ln">:69090</span>. Revenue uses
+      <code>bk.total</code> for single-trip bookings (so adjustments count) and <code>trip.subtotal</code> for multi-trip
+      <span class="ln">:69102</span>.</li>
+    <li>Cell click → <code>bkV2SelectDay</code> <span class="ln">:73405</span> / <code>bkV2SelectCell</code> <span class="ln">:73406</span>;
+      “open list” → <code>bkV2OpenFiltered(routeId,date)</code> <span class="ln">:73408</span> sets
+      <code>filterRoute</code>/<code>filterDate</code> and switches to <code>bytrip</code>.</li>
+    <li>Tab 2 date resolution: <code>bkV2Tab2ActiveDate()</code> <span class="ln">:71733</span> = explicit <code>filterDate</code>,
+      else the nearest trip date ≥ today, else today. Extra filters live <b>outside</b> <code>_bkV2</code>:
+      <code>_bkV2T2Cursor</code> <span class="ln">:71766</span>, <code>_bkV2T2Pier</code>, <code>_bkV2T2Family</code>, <code>_bkV2T2Sort</code>.</li>
+    <li>Tab 2 runs idempotent self-heals on render <span class="ln">:71909–:71914</span>: <code>bkV2HealOvnLegs</code>,
+      <code>bkV2CharterBoatHeal</code>, <code>bkV2HealAltSplits</code>, <code>bkV2HealSelfArrivePickup</code>, and (van mode only)
+      <code>bkV2VanGroupHeal</code>.</li>
+    <li>Pending-approval rows are split into a separate <code>pendGroups</code> bucket before any pax/boat/van maths sees them
+      (§pendSeat, <span class="ln">~:71995</span>).</li>
+  </ul>
+  <div class="note warn">
+    <span class="lbl">Suspicious</span>
+    Zone in the calendar aggregate comes from <code>bkV2InferZone(bk)</code> <span class="ln">:69054</span>, which sniffs the
+    <b><code>bk.pickup</code> string</b> — a legacy field the v2 form no longer writes. In practice v2 bookings almost always
+    bucket to <code>PK</code>. The manifest instead uses <code>bkV2EffZone(bk,t)</code> <span class="ln">:46355</span>.
+  </div>
+</section>
+
+<!-- ============ 4 ============ -->
+<section id="s4">
+  <h2><span class="num">04</span> Data model touched</h2>
+  <p>The <code>SB_BOOKINGS</code> element (v2). Full TS in <code>docs/booking.model.ts</code>.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:170px">Field</th><th style="width:150px">Type</th><th style="width:190px">Written by</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>id</code></td><td>string</td><td><code>bkV2GenerateBookingCode</code> <span class="ln">:75089</span></td><td><code>BK-YYMMNNNN-XXXX</code>; the random suffix is <b>required</b> for multi-user safety</td></tr>
+      <tr><td><code>schemaVer</code></td><td><code>2</code></td><td>commit <span class="ln">:76723</span></td><td><code>!==2</code> ⇒ legacy, read-only</td></tr>
+      <tr><td><code>status</code></td><td>enum</td><td>commit / cancel / approve / weather</td><td><code>quote · pending_foc · pending_approval · confirmed · cancelled · cancelled_weather · rejected · completed</code></td></tr>
+      <tr><td><code>agentId</code></td><td>string|null</td><td>form <span class="ln">:76728</span></td><td>null ⇒ B2C</td></tr>
+      <tr><td><code>rateTypeRef</code></td><td>string</td><td>agent’s <code>rateTypeId</code> <span class="ln">:76276</span></td><td>snapshot at booking time</td></tr>
+      <tr><td><code>voucherRef</code></td><td>string</td><td>form</td><td>dup check <code>bkV2FindDuplicateBookings</code>; live warn <code>bkV2VoucherLiveCheck</code> <span class="ln">:76468</span></td></tr>
+      <tr><td><code>bookingDate</code> / <code>bookedAt</code></td><td>date / ISO</td><td><span class="ln">:76843</span></td><td><code>bookingDate</code> editable, <code>bookedAt</code> frozen</td></tr>
+      <tr><td><code>marketSnapshot</code></td><td><code>{market,sub,agentId,at}</code></td><td><span class="ln">:76845</span></td><td>frozen at create, never re-derived on edit</td></tr>
+      <tr><td><code>trips[]</code></td><td>array</td><td><span class="ln">:76756</span></td><td>allotment, manifest, pricing — see the sub-table</td></tr>
+      <tr><td><code>passengers[]</code></td><td>array</td><td><code>bkV2SyncPassengers</code> <span class="ln">:73767</span></td><td>unnamed rows dropped at save <span class="ln">:76752</span></td></tr>
+      <tr><td><code>priceBreakdown</code></td><td><code>{seat,addOn,focDiscount,discount,extra,total}</code></td><td><span class="ln">:76808</span></td><td><code>focDiscount</code>/<code>discount</code> stored <b>negative</b></td></tr>
+      <tr><td><code>total</code></td><td>number</td><td><span class="ln">:76817</span></td><td><code>acctBookingTotal</code> = total + Σ<code>feeItems</code></td></tr>
+      <tr><td><code>focApproval</code></td><td>object|null</td><td><span class="ln">:76795</span>, FocApprove/Reject</td><td></td></tr>
+      <tr><td><code>approval</code></td><td>object</td><td><span class="ln">:76832</span>, <code>bkV2EnsureApproval</code></td><td><code>over[]</code> presence decides seat-holding</td></tr>
+      <tr><td><code>paymentSnapshot</code></td><td><code>{method,netDays,source,contractVersion}</code></td><td><span class="ln">:76802</span></td><td>from <code>agent.payType</code>/<code>creditDays</code></td></tr>
+      <tr><td><code>ops</code></td><td>object</td><td>boat/van modules; day-1 only</td><td>see §6</td></tr>
+      <tr><td><code>history[]</code></td><td>array</td><td><code>bkV2AddHistory</code> <span class="ln">:59946</span></td><td>chips coloured by <code>bkV2HistTagColor</code></td></tr>
+      <tr><td><code>incomplete[]</code></td><td>string[]</td><td><span class="ln">:76827</span></td><td><code>'pickup'</code>, <code>'guide-lang'</code>, <code>'route-closed'</code></td></tr>
+      <tr><td><code>cancellation</code> / <code>cancelCategory</code> / <code>cancelReason</code></td><td>object / string</td><td><code>bkV2CancelBooking</code> <span class="ln">:76342</span></td><td>cancel report</td></tr>
+      <tr><td><code>partialCancels[]</code></td><td>array</td><td><code>bkV2PartialCancel</code> <span class="ln">:77746</span></td><td>cancel report</td></tr>
+      <tr><td><code>reschedule</code> / <code>rebook</code></td><td>object</td><td><code>bkV2RescheduleBooking</code> <span class="ln">:77590</span></td><td><code>rebook</code> also set by weather reschedule</td></tr>
+      <tr><td><code>weatherResolve</code></td><td><code>{event,status,outcome,newDate,…}</code></td><td><code>bkV2WeatherTagBookings</code> <span class="ln">:59969</span></td><td>weather panel, inline cell</td></tr>
+      <tr><td><code>feeItems[]</code></td><td>array</td><td>reschedule <span class="ln">:77598</span></td><td>counted by <code>acctBookingTotal</code></td></tr>
+      <tr><td><code>upgrades[]</code> / <code>SB_EXTRAS</code></td><td>array / separate store</td><td><code>bkV2UpgradeSave</code> / <code>bkV2ExtraSave</code></td><td><code>SB_EXTRAS</code> is <b>not</b> on the booking</td></tr>
+      <tr><td><code>editLock</code></td><td><code>{uid,by,at}</code></td><td><code>bkV2SetEditLock</code> <span class="ln">:77774</span></td><td>advisory, 5-min TTL</td></tr>
+      <tr><td><code>b2cOverride[]</code></td><td>string[] (DB columns)</td><td><span class="ln">:76877</span></td><td>fields ops touched that B2C must not overwrite</td></tr>
+      <tr><td><code>purpose</code> / <code>staffId</code> / <code>staffPurpose</code></td><td>string</td><td><span class="ln">:76821</span></td><td><code>sale</code> | <code>staff_welfare</code> | <code>staff_inspection</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3><code>trips[]</code> element</h3>
+  <div class="tw"><table>
+    <thead><tr><th style="width:230px">Field</th><th style="width:180px">Type</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>routeId</code>, <code>date</code></td><td>string</td><td>the trip identity; <code>date</code> is local <code>YYYY-MM-DD</code></td></tr>
+      <tr><td><code>zone</code></td><td><code>PK</code>|<code>KL</code>|<code>NoTransfer</code></td><td>pricing zone; drives <code>seatRates[route][zone]</code></td></tr>
+      <tr><td><code>pax</code></td><td><code>{ad_fr,ad_th,chd_fr,chd_th,inf_fr,inf_th,foc,…}</code></td><td>legacy <code>ad</code>/<code>chd</code>/<code>inf</code>/<code>foc</code> still tolerated by <code>bkV2PaxTot</code> <span class="ln">:73497</span></td></tr>
+      <tr><td><code>bookingMode</code></td><td><code>seat</code>|<code>charter</code></td><td>charter never consumes seats</td></tr>
+      <tr><td><code>charterBoatId</code>, <code>charterPriceMode</code>, <code>charterPriceManual</code>, <code>charterPriceNote</code>, <code>charterDisplacementAck</code></td><td></td><td>manual price wins over the rate card</td></tr>
+      <tr><td><code>seatSource</code></td><td><code>{locked, general}</code></td><td>rewritten from actual draws at <span class="ln">:76979</span></td></tr>
+      <tr><td><code>lockDrawSel</code></td><td><code>{lockId: qty}</code></td><td>staff picks in the form</td></tr>
+      <tr><td><code>lockDraws</code></td><td><code>[{lockId, qty}]</code></td><td><b>authoritative</b> record of what was drawn</td></tr>
+      <tr><td><code>ovn</code>, <code>ovnReturnDate</code>, <code>ovnCharge</code>, <code>ovnLeg</code>, <code>ovnOf</code></td><td></td><td>the return leg prices ฿0</td></tr>
+      <tr><td><code>pickupTime</code>, <code>subtotal</code></td><td></td><td><code>subtotal</code> = <code>bkV2TripSubtotal(t).total</code> at save time</td></tr>
+      <tr><td><code>ops</code></td><td>object</td><td>per-day boat/van for day 2+ of a multi-day booking</td></tr>
+    </tbody>
+  </table></div>
+
+  <p><b>Related stores:</b> <code>SB_SEAT_LOCKS</code> <span class="ln">:41646</span>,
+  <code>SB_WEATHER_CLOSURES</code> <span class="ln">:59905</span>, <code>TRIPS</code> (charter holds),
+  <code>SB_INVOICES</code>/<code>SB_PAYMENTS</code>/<code>SB_DEPOSITS</code> (accounting), <code>SB_EXTRAS</code> (day-of extras).</p>
+</section>
+
+<!-- ============ 5 ============ -->
+<section id="s5">
+  <h2><span class="num">05</span> Persistence path</h2>
+<pre><code>mutate SB_BOOKINGS (RAM array)
+   │
+   ├─ acctPersistBookings()  :42877   ← preferred; clears the charter memo (baChMemoClear)
+   │                                    then laBlob().sb_bookings = SB_BOOKINGS; laBlobSave()
+   ├─ bkV2PersistBookings()  :77383   ← delegates to acctPersistBookings when present,
+   │                                    else manual read-modify-write
+   └─ inline JSON.parse(localStorage[LS_KEY]) … obj.sb_bookings = … … setItem
+                                        (bkV2CommitBooking :77005, bkV2CancelBooking :76373,
+                                         bkV2RescheduleBooking :77613, bkV2PartialCancel :77757)
+   │
+   ▼
+localStorage.setItem(LS_KEY, …)   ← SHIMMED at :80 (Storage.prototype.setItem)
+   │  the blob never reaches disk; it lands in the in-RAM `_mem` variable
+   ▼
+debounce 1s → save(v)             ← only when `_syncReady` (real /api/load succeeded) AND laCanEdit()
+   │
+   ▼
+computeDiff(BASE, cur) → laDiffToOps() :167 → POST /api/v1/_batch   (put / per-field patch / del)
+   fallback: any key the REST index doesn't know → legacy whole-diff POST /api/save</code></pre>
+
+  <h4>Notes that matter for this domain</h4>
+  <ul>
+    <li><b>All four write paths are read-modify-write</b> on the whole blob — none clobber sibling keys, but each
+      re-serializes the entire ~6 MB state. Prefer <code>acctPersistBookings()</code> in new code: it goes through the
+      <code>laBlob()</code> cache <span class="ln">:42860</span> and invalidates the charter memo.</li>
+    <li><code>acctPersistBookings</code> and <code>sbSeatLocksPersist</code> are <b>permission-gated</b> by
+      <code>laCanEditArea('operations')</code> — a view-only user’s mutations stay in RAM and never sync.</li>
+    <li>Seat-lock writes go through <code>sbSeatLocksPersist()</code> <span class="ln">:41651</span> (blob key
+      <code>sb_seat_locks</code>), independent of the booking write — so a commit that draws locks issues two blob writes;
+      the 1 s debounce collapses them into one batch.</li>
+    <li>Load side: boot reads <code>d.sb_bookings</code> with <code>Array.isArray</code> <span class="ln">:41533</span> and
+      <code>window._laReloadData()</code> re-reads it on soft refresh. <b>A key persisted but not listed there vanishes on refresh.</b></li>
+    <li><code>TRIPS</code> is only written to the blob when a charter hold changed (<code>tripsModified</code>
+      <span class="ln">:76990</span>, <code>lockMoved</code> <span class="ln">:77618</span>).</li>
+  </ul>
+</section>
+
+<!-- ============ 6 ============ -->
+<section id="s6">
+  <h2><span class="num">06</span> Cross-module contracts</h2>
+
+  <div class="card">
+    <h4 style="margin-top:0">Booking → Boat Operation</h4>
+    <p style="margin:0">Charter: booking writes <code>TRIPS[date][boatId] = {route, type:'charter', charterBookingId}</code> at
+    commit <span class="ln">:76994</span>, deletes it on cancel <span class="ln">:76361</span> / edit <span class="ln">:76708</span>,
+    and moves it on reschedule <span class="ln">:77561</span>. Booking <i>reads</i> <code>TRIPS</code> for capacity through
+    <code>getAssignedBoatsForRouteDate</code> <span class="ln">:12096</span> → <code>getAllotment</code> <span class="ln">:12145</span>.</p>
+  </div>
+
+  <div class="card">
+    <h4 style="margin-top:0">Booking → boat/van assignment (another domain’s code)</h4>
+    <p>Booking owns the <b><code>ops</code> container</b>, not the assignment UI. Access it only via
+    <code>bkOpsRead(b,date)</code> <span class="ln">:45392</span> / <code>bkOpsFor(b,date)</code> <span class="ln">:45399</span> /
+    <code>bkOpsClear(b,date,opts)</code> <span class="ln">:45407</span>. Day 1 lives on <code>bk.ops</code>; day 2+ on
+    <code>trip.ops</code> (<code>bkIsFirstDay</code> <span class="ln">:45387</span>).</p>
+    <p>Assignment fns belong to fleet/dispatch: <code>bkV2AssignBoat</code> <span class="ln">:45500</span>
+    (guard <code>cap + BA_CAP_TOL(2)</code>), <code>bkV2AssignVan</code>, <code>bkV2AssignVanReturn</code>,
+    <code>bkV2SetReturnSameVan</code>, <code>bkV2VanGroupSetVan</code>, <code>bkV2VanSplit</code>, <code>bkV2BoatSplit</code>.</p>
+    <p style="margin:0"><b>What booking writes into <code>ops</code> itself:</b> only <i>clearing</i> — on a date change during
+    edit <span class="ln">:76886</span>, on self-arrive/NoTransfer <span class="ln">:76900</span>, and on reschedule
+    <span class="ln">:77572</span> — plus <code>bkV2SyncAltPickupSplits(newBk)</code> <span class="ln">:46258</span>, which builds
+    <code>ops.vanSplits[]</code> so each alt-pickup point can ride its own van.
+    <code>bkV2RetInfo(bk,date)</code> <span class="ln">:45695</span> is the contract for “is the return leg handled?”.</p>
+  </div>
+
+  <div class="card">
+    <h4 style="margin-top:0">Booking ← Rate Types</h4>
+    <p style="margin:0"><code>bkV2GetRT()</code> <span class="ln">:77091</span> (base rate) and
+    <code>bkV2GetRTForTrip(t)</code> <span class="ln">:77112</span> (per-trip promo overlay via
+    <code>bkV2ResolveRateType</code>, reading <code>SB_CONTRACTS</code> where <code>kind==='promo'</code>) — a promo is adopted
+    only if it actually prices that route. Reads
+    <code>rt.seatRates[routeId][zone]['adult-fr'|'child-fr'|'adult-thai'|'child-thai']</code>,
+    <code>rt.routeBundles[routeId].longtail</code> (gated by <code>_rtBundleAppliesTo</code>),
+    <code>rt.charterRates[routeId][boatType]</code>, <code>rt.addOns.longtail</code> (normalised by
+    <code>_rtNormalizeLongtail</code>) and <code>rt.addOns.privateTransfer[route][zone][vehicle]</code>.</p>
+  </div>
+
+  <div class="card">
+    <h4 style="margin-top:0">Booking ← Agent</h4>
+    <p style="margin:0"><code>sbGetAgent(bk.agentId)</code> gives <code>payType</code> → <code>paymentSnapshot.method</code>,
+    <code>creditDays</code> → <code>netDays</code>, <code>contractVersion</code>, <code>sales</code> (discount approval routing
+    <span class="ln">:76691</span>), <code>programPeriods</code>/<code>programs</code> (contract route whitelist
+    <span class="ln">:76570</span>), <code>bookingChannel.cancelPolicy</code> (shown in the cancel modal <span class="ln">:77439</span>).</p>
+  </div>
+
+  <div class="card">
+    <h4 style="margin-top:0">Booking → Accounting</h4>
+    <p style="margin:0"><code>acctBookingBase(bk)</code> <span class="ln">:42882</span> reads
+    <code>bk.total || bk.priceBreakdown.total</code>; <code>acctBookingTotal</code> adds <code>feeItems</code>.
+    Booking calls <code>acctVoidInvoice</code>, <code>acctCreateFeeInvoice</code>, <code>acctCreateDeposit</code>,
+    <code>acctBookingInvoice</code>, <code>acctInvoicePaid</code>, <code>sbInvoicesPersist</code>.
+    Credit exposure is <i>derived</i> from confirmed, credit-mode, unpaid bookings — booking stores no ledger.</p>
+  </div>
+
+  <div class="card">
+    <h4 style="margin-top:0">Booking ← B2C sync (server)</h4>
+    <p style="margin:0">Bookings whose <code>id</code> starts <code>b2c_</code> are owned by the B2C source.
+    <code>BKV2_B2C_OWN</code> <span class="ln">:77781</span> maps app field → DB column; <code>bkV2B2CSnap</code>/<code>bkV2B2CDiff</code>
+    record which of those fields ops changed into <code>bk.b2cOverride[]</code> so the next sync skips them.
+    Trips, pax, add-ons and money are <b>always</b> re-copied from editing on save <span class="ln">:76867</span> — never re-priced locally.</p>
+  </div>
+
+  <div class="card">
+    <h4 style="margin-top:0">Other</h4>
+    <p style="margin:0">
+      <b>Pickup Setup</b> — <code>bkV2GetArea(id)</code> <span class="ln">:40321</span> and
+      <code>bkV2GetPickupTime(routeId, areaId, date)</code> <span class="ln">:40338</span>.<br>
+      <b>Programs/Routes</b> — <code>bkV2IsRouteOpenOn</code> <span class="ln">:68978</span>, <code>getDayStatus</code>,
+      <code>bkV2RouteFamily</code> / <code>_BKV2_FAMILIES</code>, <code>route.pier</code>.<br>
+      <b>Check-in / Travel Summary</b> — <code>getSeatsConsumed</code> subtracts <code>ckLostByType(bk, date).total</code>
+      (no-show / on-site cancel) from the seats a trip consumes <span class="ln">:12061</span>.
+    </p>
+  </div>
+</section>
+
+<!-- ============ 7 ============ -->
+<section id="s7">
+  <h2><span class="num">07</span> Invariants &amp; gotchas</h2>
+
+  <ol>
+    <li><b>The edit-preserve block is load-bearing.</b> Anything not copied in the <code>if(editing){…}</code> block at
+      <span class="ln">:76855</span> is destroyed. Required: <code>history</code>, <code>weatherResolve</code>, <code>rebook</code>,
+      <code>invoiceId</code>, <code>paymentStatus</code>, <code>ops</code>, <code>b2cOverride</code>, <code>upgrades</code>,
+      <code>feeItems</code>, <code>reschedule</code>, <code>partialCancels</code>, <code>cancellation</code>,
+      <code>cancelCategory</code>, resolved <code>approval</code>, decided <code>focApproval</code>.</li>
+    <li><b>Cancelled statuses are excluded everywhere</b> — <code>['cancelled','cancelled_weather','rejected']</code> in
+      <code>getSeatsConsumed</code> <span class="ln">:12052</span>, <code>bkV2Aggregate</code> <span class="ln">:69090</span>,
+      <code>flBoatBookingsFor</code>, <code>baSeatBookingsForRoute</code>, <code>bkV2FindDuplicateBookings</code>,
+      <code>bkV2LockClaims</code>. <b>Add a new aggregate ⇒ add the filter.</b></li>
+    <li><b>A booking can never silently eat locked seats.</b> <code>lockViolation</code> <span class="ln">:76672</span> is a hard
+      block with no override; true physical oversell (over cap, within license) is a soft <code>confirm()</code> saving as
+      <code>pending_approval</code>; over license is another hard block.</li>
+    <li><b>Locks: children contribute 0 to the pool.</b> <code>bkV2LockPoolHold</code> <span class="ln">:41783</span> returns 0
+      for <code>parentId</code> locks — otherwise a parent’s seats are double-counted against <code>getAllotment</code>.</li>
+    <li><b>Month/bulk locks use rolling per-trip release</b>, not one global expiry —
+      <code>releaseDaysBefore</code> + <code>releaseTime</code> <span class="ln">:41696</span>. Don’t carry a stale
+      <code>expiry</code> onto a range lock.</li>
+    <li><b><code>trips[].lockDraws</code> is the source of truth for lock usage</b>, not the <code>used</code> counter.
+      Edit returns then re-draws; cancel returns; restore re-draws and reports shortfalls.</li>
+    <li><b><code>bkPendHoldsSeat</code></b> <span class="ln">:12040</span> — over-capacity pendings do <b>not</b> hold seats;
+      every other pending reason does. Changing this changes availability across the whole app.</li>
+    <li><b>Timezone</b> — build dates with <code>bkV2LocalYMD(dt)</code> <span class="ln">:71746</span>, never
+      <code>toISOString().slice(0,10)</code>. Some commit-path code still uses the latter for <code>createdAt</code>/<code>bookingDate</code>
+      <span class="ln">:76704, :76844</span>; in +07:00 those can land on the previous day before 07:00 local.</li>
+    <li><b><code>esc</code> / <code>escapeHTML</code> is not global.</b> Every renderer declares its own
+      <span class="ln">:69260, :70830, :77436, :78045</span>. A new top-level render fn that forgets it throws silently on click.</li>
+    <li><b>Scroll-jump</b> — replacing <code>#bkv2-host</code>’s <code>innerHTML</code> while focus is inside it scrolls to top.
+      Text inputs are protected by <code>_BKV2_NO_RENDER_KEYS</code> and targeted DOM updates like
+      <code>bkV2VoucherLiveCheck</code>. Follow that pattern for new inputs.</li>
+    <li><b>Booking ids need the random suffix.</b> <code>bkV2GenerateBookingCode</code> <span class="ln">:75089</span> uses
+      <code>MAX</code> (not count) for the sequence and appends 4 random chars; without it two concurrent tabs generate the same
+      id and the record-level diff merge silently overwrites one booking with the other.</li>
+    <li><b>Charter never consumes seats</b>, and availability only drops if the boat is reserved in Boat-Op <code>TRIPS</code>
+      (<code>getSeatsConsumed</code>, <code>baDayBoats</code>, <code>getAssignedBoatsForRouteDate</code> — which also consults
+      <code>baCharterBoatMapMemo</code> so a split-charter second boat isn’t resold).</li>
+    <li><b>The <code>_bkV2</code> state comment is stale</b> (says 3 tabs, there are 6) and so is <code>docs/BOOKING.md</code>.
+      <code>docs/booking.model.ts</code> is accurate.</li>
+    <li><b><code>CHANGELOG.md</code> does not exist in this repo</b>, so the in-code <code>§tag</code> comments are the only
+      surviving history: <code>§pendSeat</code> <span class="ln">:12037</span>, <code>§lkReturn</code> <span class="ln">:41849</span>,
+      <code>§lkBulk</code>, <code>§b2cSave</code>, <code>§b2cEdit</code>, <code>§eat</code>, <code>§pickup guard</code>,
+      <code>§altPickups</code>, <code>§OVN</code>, <code>§pendNoApproval</code>, <code>§bug1</code>, <code>§apprCap</code>,
+      <code>§down</code>, <code>§rate</code>, <code>§hotelDedupe</code>, <code>§syncGate</code>, <code>§emptyBlobGuard</code>.</li>
+  </ol>
+
+  <h3>Things that look wrong <span class="b amber">flagged, not fixed</span></h3>
+  <div class="grid2">
+    <div class="mini"><h5>Weather reschedule keeps the old boat/van</h5>
+      <p><code>bkV2WeatherResolveOne</code> <span class="ln">:60032</span> moves <code>trip.date</code> without clearing
+      <code>bk.ops</code> — unlike <code>bkV2RescheduleBooking</code> <span class="ln">:77572</span> and the edit-path date-change
+      wipe <span class="ln">:76886</span>.</p></div>
+    <div class="mini"><h5>Partial cancel leaks locks &amp; invoices</h5>
+      <p><code>bkV2PartialCancel</code> <span class="ln">:77728</span> reduces pax and money but never returns the corresponding
+      seat-lock draws and never touches the invoice.</p></div>
+    <div class="mini"><h5>Calendar zone split is meaningless for v2</h5>
+      <p><code>bkV2InferZone</code> <span class="ln">:69054</span> reads <code>bk.pickup</code>, a v1 field the v2 form never writes —
+      so v2 bookings effectively all bucket to <code>PK</code>.</p></div>
+    <div class="mini"><h5>Missing status labels</h5>
+      <p><code>bkV2StatusLabel</code> <span class="ln">:69213</span> has no entry for <code>pending_approval</code> or
+      <code>cancelled_weather</code>; those render as the raw status string.</p></div>
+  </div>
+</section>
+
+<!-- ============ 8 ============ -->
+<section id="s8">
+  <h2><span class="num">08</span> Function index</h2>
+  <p>Type to filter. <b>Bold</b> = the one function that does the most.</p>
+  <input class="filter" id="ffilter" type="search" placeholder="Filter functions… (e.g. lock, cancel, charter)" autocomplete="off">
+  <span class="count" id="fcount"></span>
+  <div class="tw"><table id="ftable">
+    <thead><tr><th style="width:330px">Function</th><th style="width:80px">Line</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>renderBooking</code></td><td class="mono">68586</td><td>Sidebar nav entry; delegates to <code>bkV2RenderList</code></td></tr>
+      <tr><td><code>bkV2Render</code></td><td class="mono">69225</td><td>Top render: detail / form / tabs; sets sticky-header CSS vars</td></tr>
+      <tr><td><code>bkV2RenderTopbar</code></td><td class="mono">70746</td><td>Tab strip (6 tabs), month nav, meta, New-booking button</td></tr>
+      <tr><td><code>bkV2RenderTabBody</code></td><td class="mono">70813</td><td>Routes <code>_bkV2.tab</code> to a tab renderer</td></tr>
+      <tr><td><code>bkV2SwitchTab</code> / <code>bkV2SwitchView</code></td><td class="mono">73397</td><td>Tab + calendar sub-view switch</td></tr>
+      <tr><td><code>bkV2NewBooking</code></td><td class="mono">73427</td><td>Create the <code>_bkV2.newBooking</code> draft</td></tr>
+      <tr><td><code>bkV2NewTrip</code></td><td class="mono">73469</td><td>Blank trip (date = tomorrow, zone PK, seat mode)</td></tr>
+      <tr><td><code>bkV2RenderNewBooking</code></td><td class="mono">69258</td><td>The single-page create/edit form</td></tr>
+      <tr><td><code>bkV2SetBookingField</code></td><td class="mono">76270</td><td>Draft field setter; agent change → rate type + house-account rules</td></tr>
+      <tr><td><code>bkV2SetTripField</code></td><td class="mono">73951</td><td>Trip field setter; closed-day guard + zone propagation</td></tr>
+      <tr><td><code>bkV2SyncPassengers</code></td><td class="mono">73767</td><td>Size/typing of passenger name rows (lead = #1)</td></tr>
+      <tr><td><code>bkV2ToggleLeadFoc</code> / <code>bkV2TogglePassengerFoc</code></td><td class="mono">73822</td><td>Assign FOC seats to specific people</td></tr>
+      <tr><td><code>bkV2GenerateBookingCode</code></td><td class="mono">75089</td><td><code>BK-YYMMNNNN-XXXX</code>, collision-safe</td></tr>
+      <tr><td><code>bkV2SaveDraft</code></td><td class="mono">76298</td><td>Save as <code>quote</code> (warns about downgrading a confirmed booking)</td></tr>
+      <tr><td><code>bkV2SubmitBooking</code></td><td class="mono">76316</td><td>Save as <code>confirmed</code> / <code>pending_foc</code></td></tr>
+      <tr><td><b><code>bkV2CommitBooking</code></b></td><td class="mono"><b>76469</b></td><td><b>All guards + build <code>newBk</code> + lock draws + charter holds + persist</b></td></tr>
+      <tr><td><code>bkV2CalcQuote</code></td><td class="mono">77221</td><td>Whole-booking totals; manual/B2C short-circuit</td></tr>
+      <tr><td><code>bkV2TripSubtotal</code></td><td class="mono">77122</td><td>Per-trip price: seat (fr/th) + bundle, or charter</td></tr>
+      <tr><td><code>bkV2AddOnInfo</code></td><td class="mono">77189</td><td>Add-on label + amount (longtail join/charter, transfer)</td></tr>
+      <tr><td><code>bkV2GetRT</code> / <code>GetRTForTrip</code> / <code>ResolveRateType</code></td><td class="mono">77091</td><td>Base rate, per-trip promo overlay</td></tr>
+      <tr><td><code>bkV2AddAdjustment</code> / <code>Set</code> / <code>Remove</code></td><td class="mono">77282</td><td>Discount + extra-charge rows</td></tr>
+      <tr><td><code>bkV2PaxTot</code> / <code>bkV2PaxAllTot</code></td><td class="mono">73497</td><td>Pax sums tolerant of legacy + fr/th shapes</td></tr>
+      <tr><td><code>getTripPaxTotal</code></td><td class="mono">11938</td><td>Same idea, used outside the bkV2 namespace</td></tr>
+      <tr><td><code>getSeatsConsumed</code></td><td class="mono">12046</td><td>Seats used on route+date (excludes charter, cancelled, no-shows)</td></tr>
+      <tr><td><code>getAllotment</code></td><td class="mono">12145</td><td>Capacity/consumed/locked/available/state for route+date</td></tr>
+      <tr><td><code>getAssignedBoatsForRouteDate</code></td><td class="mono">12096</td><td>Boats in <code>TRIPS</code> for route+date, with per-day cap override</td></tr>
+      <tr><td><code>bkPendHoldsSeat</code></td><td class="mono">12040</td><td>Does a <code>pending_approval</code> booking reserve seats?</td></tr>
+      <tr><td><code>getBookingsForRouteDate</code></td><td class="mono">12189</td><td>Seat-mode bookings on a trip (charter displacement modal)</td></tr>
+      <tr><td><code>bkV2FindDuplicateBookings</code></td><td class="mono">76435</td><td>Voucher match, or lead name + shared date/route</td></tr>
+      <tr><td><code>bkV2VoucherDupHtml</code> / <code>VoucherLiveCheck</code></td><td class="mono">76457</td><td>Live duplicate-voucher warning without re-render</td></tr>
+      <tr><td><code>bkV2EditBooking</code></td><td class="mono">77819</td><td>Clone booking into the form; edit-lock check + array re-hydration</td></tr>
+      <tr><td><code>bkV2EditLockActive</code> / <code>SetEditLock</code> / <code>ClearEditLock</code></td><td class="mono">77768</td><td>Advisory 5-min multi-user edit lock</td></tr>
+      <tr><td><code>bkV2CloseNewBooking</code> / <code>_bkV2DoCloseNewBooking</code></td><td class="mono">75062</td><td>Discard confirm + return to detail</td></tr>
+      <tr><td><code>bkV2OpenDetail</code> / <code>bkV2CloseDetail</code></td><td class="mono">77310</td><td>Detail view toggle</td></tr>
+      <tr><td><code>bkV2RenderBookingDetail</code></td><td class="mono">78043</td><td>Detail page (actions, FOC card, timeline, voucher)</td></tr>
+      <tr><td><code>bkV2VoucherTicket</code></td><td class="mono">77864</td><td>Boarding-pass style voucher header</td></tr>
+      <tr><td><code>bkV2CancelBooking</code></td><td class="mono">76325</td><td>Full cancel: status, <code>cancellation</code>, invoice, lock return, charter release</td></tr>
+      <tr><td><code>bkV2CancelModal</code> / <code>CancelConfirm</code></td><td class="mono">77434</td><td>Reason + charge UI and validation</td></tr>
+      <tr><td><code>BKV2_CANCEL_REASONS</code> / <code>bkV2CancelLabel</code></td><td class="mono">77414</td><td>Reason catalogue and display label</td></tr>
+      <tr><td><code>bkV2RestoreBooking</code></td><td class="mono">76386</td><td>Un-cancel: void fee, re-draw locks, re-lock charter</td></tr>
+      <tr><td><code>bkV2PartialCancel</code></td><td class="mono">77728</td><td>Reduce pax on one trip + record the charge/waive split</td></tr>
+      <tr><td><code>bkV2PartialModal</code> / <code>Confirm</code> / <code>Recalc</code></td><td class="mono">77658</td><td>Reduce-pax UI</td></tr>
+      <tr><td><code>bkV2RescheduleBooking</code></td><td class="mono">77545</td><td>Move trips to a new date; clear ops; bill the fee</td></tr>
+      <tr><td><code>bkV2RescheduleModal</code> / <code>Confirm</code></td><td class="mono">77486</td><td>Reschedule UI</td></tr>
+      <tr><td><code>bkV2FocApprove</code> / <code>bkV2FocReject</code></td><td class="mono">77360</td><td>FOC decision → confirmed / rejected</td></tr>
+      <tr><td><code>bkV2RenderApprovals</code></td><td class="mono">70829</td><td>Over-capacity / discount queue</td></tr>
+      <tr><td><code>bkV2ApproveBooking</code> / <code>bkV2RejectBooking</code></td><td class="mono">70922</td><td>Manager decision (prompts for approver name)</td></tr>
+      <tr><td><code>bkV2EnsureApproval</code> / <code>PendReason</code> / <code>PendLabel</code></td><td class="mono">70886</td><td>Synthesise a missing <code>approval</code> (B2C holds)</td></tr>
+      <tr><td><code>bkV2ApprovalImpact</code> / <code>…ImpactText</code></td><td class="mono">70897</td><td>Seats-after-approval preview</td></tr>
+      <tr><td><code>bkV2WeatherMark</code> / <code>…MarkConfirm</code></td><td class="mono">59915</td><td>Mark a route+date weather-closed</td></tr>
+      <tr><td><code>bkV2WeatherTagBookings</code></td><td class="mono">59963</td><td>Tag affected bookings <code>weatherResolve.awaiting</code></td></tr>
+      <tr><td><code>bkV2WeatherPanel</code> / <code>Notify</code> / <code>ResolveOne</code></td><td class="mono">59975</td><td>2-phase per-booking weather resolution</td></tr>
+      <tr><td><code>bkV2AddHistory</code> / <code>bkV2HistTagColor</code></td><td class="mono">59946</td><td>Audit timeline append + chip colour</td></tr>
+      <tr><td><code>bkV2LocksFor</code> / <code>LocksForAgent</code> / <code>DrawSources</code></td><td class="mono">41738</td><td>Which locks apply, who may draw, expanded sources</td></tr>
+      <tr><td><code>bkV2LockedTotal</code> / <code>LockPoolHold</code> / <code>LockHeldRemaining</code></td><td class="mono">41784</td><td>Pool reduction feeding <code>getAllotment.lockedSeats</code></td></tr>
+      <tr><td><code>bkV2CreateLock</code> / <code>DrawLock</code> / <code>ReturnLock</code></td><td class="mono">41818</td><td>Lock lifecycle primitives</td></tr>
+      <tr><td><code>bkV2ReturnBookingDraws</code></td><td class="mono">41868</td><td>Return everything a booking drew (edit / cancel)</td></tr>
+      <tr><td><code>bkV2LockExpireSweep</code> / <code>ReleaseCutoff</code> / <code>ReleasedForDate</code></td><td class="mono">41720</td><td>Expiry + rolling per-trip release</td></tr>
+      <tr><td><code>bkV2LockClaims</code> / <code>LockAudit</code> / <code>LockCoverage</code></td><td class="mono">41877</td><td>Counter-vs-reality audits</td></tr>
+      <tr><td><code>bkV2SetTripLockUse</code> / <code>SetTripLockDraw</code> / <code>AutoDrawLocks</code></td><td class="mono">74690</td><td>Lock-draw pickers in the form</td></tr>
+      <tr><td><code>bkV2RenderLocks</code></td><td class="mono">42218</td><td>Seat Locks tab</td></tr>
+      <tr><td><code>bkV2SetTripBookingMode</code> / <code>SetTripCharterBoat</code> / <code>ConfirmCharter</code></td><td class="mono">74725</td><td>Charter mode + displacement confirmation</td></tr>
+      <tr><td><code>bkV2CreateOvnReturnLeg</code> / <code>bkV2HealOvnLegs</code></td><td class="mono">73927</td><td>Overnight return leg create + self-heal</td></tr>
+      <tr><td><code>bkV2Aggregate</code></td><td class="mono">69062</td><td>Per-day / per-route pax + revenue rollup for the calendar</td></tr>
+      <tr><td><code>bkV2Norm</code></td><td class="mono">69140</td><td>v1/v2 → common row shape for lists</td></tr>
+      <tr><td><code>bkV2RenderCalendar</code> / <code>bkV2RenderMatrix</code></td><td class="mono">71029</td><td>Month grid / routes × days heatmap</td></tr>
+      <tr><td><code>bkV2RenderTab2</code></td><td class="mono">71907</td><td>By-trip-date manifest (+ boat/van/reconfirm modes)</td></tr>
+      <tr><td><code>bkV2RenderTab3</code></td><td class="mono">73315</td><td>All-bookings table</td></tr>
+      <tr><td><code>bkV2RenderCancelReport</code></td><td class="mono">70957</td><td>Cancellations statistics tab</td></tr>
+      <tr><td><code>bkV2Tab2ActiveDate</code> / <code>bkV2LocalYMD</code></td><td class="mono">71733</td><td>Active manifest date; local-safe <code>YYYY-MM-DD</code></td></tr>
+      <tr><td><code>bkOpsRead</code> / <code>bkOpsFor</code> / <code>bkOpsClear</code></td><td class="mono">45392</td><td>Per-day <code>ops</code> accessors (day 1 = <code>bk.ops</code>, day 2+ = <code>trip.ops</code>)</td></tr>
+      <tr><td><code>bkV2SyncAltPickupSplits</code></td><td class="mono">46258</td><td>Build <code>ops.vanSplits[]</code> from <code>altPickups[]</code></td></tr>
+      <tr><td><code>bkV2CharterBoatHeal</code></td><td class="mono">45435</td><td>Mirror <code>trip.charterBoatId</code> → <code>ops.boatId</code></td></tr>
+      <tr><td><code>bkV2RetInfo</code></td><td class="mono">45695</td><td>Return-leg state (separate drop-off, van arranged, self-return)</td></tr>
+      <tr><td><code>acctPersistBookings</code> / <code>bkV2PersistBookings</code></td><td class="mono">42877</td><td>Persist <code>sb_bookings</code> into the blob</td></tr>
+      <tr><td><code>laSaveToast</code></td><td class="mono">77044</td><td>Card-style save/cancel/approve toast</td></tr>
+      <tr><td><code>bkV2IsB2CBk</code> / <code>bkV2B2CSnap</code> / <code>bkV2B2CDiff</code></td><td class="mono">77777</td><td>B2C ownership + <code>b2cOverride</code> diffing</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<footer>
+  Rendered from <code>allotment_v2/docs/workflows/01-booking-lifecycle.md</code> ·
+  written against commit <code>094dde1</code> on <code>refactor/booking-v2-migration</code> ·
+  these docs describe <b>the code, not the intent</b> — where an older doc contradicts the code, the code won.
+</footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  // theme toggle
+  var btn = document.getElementById('themebtn');
+  var root = document.documentElement;
+  var saved = null;
+  try { saved = localStorage.getItem('la_doc_theme'); } catch(e){}
+  if (saved) root.setAttribute('data-theme', saved);
+  btn.addEventListener('click', function(){
+    var cur = root.getAttribute('data-theme');
+    var next;
+    if (cur === 'dark') next = 'light';
+    else if (cur === 'light') next = 'dark';
+    else next = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('la_doc_theme', next); } catch(e){}
+  });
+
+  // scrollspy
+  var links = Array.prototype.slice.call(document.querySelectorAll('#nav a'));
+  var targets = links.map(function(a){ return document.querySelector(a.getAttribute('href')); });
+  function spy(){
+    var best = 0, bestTop = -Infinity;
+    for (var i=0;i<targets.length;i++){
+      if (!targets[i]) continue;
+      var t = targets[i].getBoundingClientRect().top - 90;
+      if (t <= 0 && t > bestTop){ bestTop = t; best = i; }
+    }
+    links.forEach(function(a,i){ a.classList.toggle('on', i===best); });
+  }
+  var tick = false;
+  window.addEventListener('scroll', function(){
+    if (tick) return; tick = true;
+    requestAnimationFrame(function(){ spy(); tick = false; });
+  }, {passive:true});
+  spy();
+
+  // function-index filter (optional — skipped when the doc has no #ffilter)
+  var input = document.getElementById('ffilter');
+  var rows  = Array.prototype.slice.call(document.querySelectorAll('#ftable tbody tr'));
+  var count = document.getElementById('fcount');
+  if (input && rows.length){
+    var paint = function(){
+      var q = input.value.trim().toLowerCase();
+      var n = 0;
+      rows.forEach(function(r){
+        var hit = !q || r.textContent.toLowerCase().indexOf(q) !== -1;
+        r.classList.toggle('hidden', !hit);
+        if (hit) n++;
+      });
+      if (count) count.textContent = q ? (n + ' of ' + rows.length + ' shown') : (rows.length + ' functions');
+    };
+    input.addEventListener('input', paint);
+    paint();
+  }
+})();
+</script>
+</body>
+</html>

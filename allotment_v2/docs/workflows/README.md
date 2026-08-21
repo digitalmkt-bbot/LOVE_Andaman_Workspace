@@ -3,6 +3,12 @@
 How this system actually works, one doc per domain. Written against commit `094dde1` on
 `refactor/booking-v2-migration`.
 
+**Browsable HTML version:** open [`html/index.html`](html/index.html) — the same eight docs rendered
+as linked pages with a sticky table of contents, colour-coded flow diagrams (the mermaid charts are
+re-drawn as HTML so they render without a runtime) and a live filter over each function index.
+Self-contained; just double-click. `html/_shell.html` is the shared page template — reuse it if you
+add a doc 09.
+
 **Line numbers drift.** Every doc cites `allotment_v2.html:12345` style references. Treat them as
 "roughly here" — grep the symbol name instead. The function-index table at the end of each doc is
 the fastest way to find anything.

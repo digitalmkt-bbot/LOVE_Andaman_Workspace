@@ -1,0 +1,1575 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fleet Management</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f8fa; --panel:#ffffff; --panel-2:#fbfcfd;
+  --ink:#0f2029; --ink-2:#31485a; --muted:#68808f;
+  --line:#e1e8ee; --line-2:#eef2f6;
+  --accent:#1683C7; --accent-ink:#0f6ba6; --accent-soft:#e8f3fb;
+  --danger:#c8384c; --danger-soft:#fdecee;
+  --warn:#b46a00; --warn-soft:#fdf3e3;
+  --ok:#137a52; --ok-soft:#e6f5ee;
+  --violet:#6a4bbd; --violet-soft:#f0ecfb;
+  --code-bg:#f0f4f8; --code-ink:#173446;
+  --shadow:0 1px 2px rgba(15,32,41,.05), 0 8px 24px -14px rgba(15,32,41,.22);
+  --radius:14px;
+}
+:root:not([data-theme="light"]){ }
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b1317; --panel:#111d24; --panel-2:#0e181e;
+    --ink:#e7eff5; --ink-2:#bfd0dc; --muted:#89a0af;
+    --line:#1f313c; --line-2:#182831;
+    --accent:#49b2ee; --accent-ink:#7ccbf8; --accent-soft:#0f2c3d;
+    --danger:#f2798c; --danger-soft:#33161c;
+    --warn:#e0a24a; --warn-soft:#33260f;
+    --ok:#4ccb95; --ok-soft:#0f2b21;
+    --violet:#a48bef; --violet-soft:#221b3a;
+    --code-bg:#0d1b23; --code-ink:#cfe0eb;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b1317; --panel:#111d24; --panel-2:#0e181e;
+  --ink:#e7eff5; --ink-2:#bfd0dc; --muted:#89a0af;
+  --line:#1f313c; --line-2:#182831;
+  --accent:#49b2ee; --accent-ink:#7ccbf8; --accent-soft:#0f2c3d;
+  --danger:#f2798c; --danger-soft:#33161c;
+  --warn:#e0a24a; --warn-soft:#33260f;
+  --ok:#4ccb95; --ok-soft:#0f2b21;
+  --violet:#a48bef; --violet-soft:#221b3a;
+  --code-bg:#0d1b23; --code-ink:#cfe0eb;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px; line-height:1.62; -webkit-font-smoothing:antialiased;
+}
+code,kbd,.mono{font-family:"DM Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+
+/* ---------- layout ---------- */
+.wrap{display:grid; grid-template-columns:264px minmax(0,1fr); gap:0; max-width:1420px; margin:0 auto}
+.side{
+  position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+  border-right:1px solid var(--line); padding:26px 18px 60px; background:var(--panel-2);
+}
+.main{min-width:0; padding:34px 42px 120px}
+@media (max-width:960px){
+  .wrap{grid-template-columns:1fr}
+  .side{position:static; height:auto; border-right:0; border-bottom:1px solid var(--line); padding:20px 22px}
+  .main{padding:24px 20px 80px}
+}
+
+/* ---------- sidebar ---------- */
+.brand{display:flex; align-items:center; gap:10px; margin-bottom:4px}
+.brand .dot{width:26px;height:26px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px;flex:none}
+.brand b{font-size:14px; letter-spacing:-.01em}
+.brand small{display:block; color:var(--muted); font-size:11px; font-weight:400; line-height:1.3}
+.nav{margin-top:20px; display:flex; flex-direction:column; gap:1px}
+.nav a{
+  display:flex; gap:9px; align-items:baseline; text-decoration:none; color:var(--ink-2);
+  padding:6px 10px; border-radius:8px; font-size:13.5px; border-left:2px solid transparent;
+}
+.nav a .n{color:var(--muted); font-size:11px; font-family:"DM Mono",monospace; min-width:16px}
+.nav a:hover{background:var(--line-2); color:var(--ink)}
+.nav a.on{background:var(--accent-soft); color:var(--accent-ink); font-weight:500; border-left-color:var(--accent)}
+.nav .sub{padding-left:34px; font-size:12.5px; color:var(--muted)}
+.nav .sub:hover{color:var(--ink)}
+.backlink{
+  display:inline-block; margin-top:14px; font-size:12.5px; color:var(--muted); text-decoration:none;
+  border-bottom:1px solid transparent;
+}
+.backlink:hover{color:var(--accent-ink); border-bottom-color:var(--accent)}
+.themebtn{
+  margin-top:22px; width:100%; border:1px solid var(--line); background:var(--panel); color:var(--ink-2);
+  border-radius:9px; padding:7px 10px; font:inherit; font-size:12.5px; cursor:pointer;
+}
+.themebtn:hover{border-color:var(--accent); color:var(--accent-ink)}
+
+/* ---------- header ---------- */
+.hero{border-bottom:1px solid var(--line); padding-bottom:22px; margin-bottom:30px}
+.eyebrow{font-family:"DM Mono",monospace; font-size:12px; color:var(--accent-ink); letter-spacing:.06em; text-transform:uppercase}
+h1{font-size:34px; line-height:1.15; letter-spacing:-.025em; margin:6px 0 10px}
+.lede{font-size:16px; color:var(--ink-2); max-width:74ch; margin:0}
+.chips{display:flex; flex-wrap:wrap; gap:7px; margin-top:16px}
+.chip{
+  font-family:"DM Mono",monospace; font-size:11.5px; padding:3px 9px; border-radius:999px;
+  border:1px solid var(--line); background:var(--panel); color:var(--muted);
+}
+.chip b{color:var(--ink-2); font-weight:500}
+
+/* ---------- sections ---------- */
+section{scroll-margin-top:20px; margin-bottom:46px}
+h2{
+  font-size:23px; letter-spacing:-.02em; margin:0 0 14px; padding-bottom:9px;
+  border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:11px;
+}
+h2 .num{font-family:"DM Mono",monospace; font-size:14px; color:var(--accent); font-weight:500}
+h3{font-size:17px; letter-spacing:-.01em; margin:28px 0 10px; color:var(--ink)}
+h4{font-size:13.5px; margin:18px 0 7px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; font-weight:500}
+p{margin:0 0 12px; max-width:82ch}
+ul,ol{margin:0 0 12px; padding-left:22px; max-width:82ch}
+li{margin-bottom:5px}
+a{color:var(--accent-ink)}
+
+/* ---------- inline bits ---------- */
+code:not(pre code){
+  background:var(--code-bg); color:var(--code-ink); padding:1px 5px; border-radius:5px;
+  font-size:.875em; border:1px solid var(--line-2); white-space:nowrap;
+}
+.ln{color:var(--accent-ink); font-family:"DM Mono",monospace; font-size:.82em; white-space:nowrap}
+pre{
+  background:var(--code-bg); border:1px solid var(--line); border-radius:10px;
+  padding:14px 16px; overflow-x:auto; font-size:12.8px; line-height:1.6; color:var(--code-ink); margin:0 0 14px;
+}
+pre code{background:none;border:0;padding:0;white-space:pre}
+
+/* ---------- cards & callouts ---------- */
+.card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px; box-shadow:var(--shadow); margin:0 0 16px}
+.note{
+  border-left:3px solid var(--accent); background:var(--accent-soft); border-radius:0 10px 10px 0;
+  padding:12px 16px; margin:0 0 16px; font-size:14.2px; color:var(--ink-2);
+}
+.note.warn{border-left-color:var(--warn); background:var(--warn-soft)}
+.note.danger{border-left-color:var(--danger); background:var(--danger-soft)}
+.note.ok{border-left-color:var(--ok); background:var(--ok-soft)}
+.note b{color:var(--ink)}
+.note .lbl{display:block; font-size:11px; text-transform:uppercase; letter-spacing:.07em; font-weight:700; margin-bottom:4px; color:var(--accent-ink)}
+.note.warn .lbl{color:var(--warn)} .note.danger .lbl{color:var(--danger)} .note.ok .lbl{color:var(--ok)}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius); margin:0 0 16px; background:var(--panel)}
+table{border-collapse:collapse; width:100%; font-size:13.6px; min-width:520px}
+th{
+  text-align:left; font-weight:500; font-size:11.5px; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--muted); padding:10px 14px; border-bottom:1px solid var(--line); background:var(--panel-2); white-space:nowrap;
+}
+td{padding:9px 14px; border-bottom:1px solid var(--line-2); vertical-align:top; color:var(--ink-2)}
+tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--panel-2)}
+td code{white-space:nowrap}
+
+/* ---------- badges ---------- */
+.b{display:inline-block; font-family:"DM Mono",monospace; font-size:11px; padding:2px 8px; border-radius:999px; white-space:nowrap; border:1px solid transparent}
+.b.blue{background:var(--accent-soft); color:var(--accent-ink); border-color:color-mix(in srgb,var(--accent) 25%, transparent)}
+.b.red{background:var(--danger-soft); color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%, transparent)}
+.b.amber{background:var(--warn-soft); color:var(--warn); border-color:color-mix(in srgb,var(--warn) 30%, transparent)}
+.b.green{background:var(--ok-soft); color:var(--ok); border-color:color-mix(in srgb,var(--ok) 30%, transparent)}
+.b.violet{background:var(--violet-soft); color:var(--violet); border-color:color-mix(in srgb,var(--violet) 30%, transparent)}
+.b.gray{background:var(--line-2); color:var(--muted); border-color:var(--line)}
+
+/* ---------- rail (vertical flow) ---------- */
+.rail{position:relative; margin:6px 0 18px; padding-left:30px}
+.rail:before{content:""; position:absolute; left:9px; top:8px; bottom:8px; width:2px; background:var(--line)}
+.step{position:relative; margin-bottom:13px}
+.step:before{
+  content:""; position:absolute; left:-26px; top:6px; width:11px; height:11px; border-radius:50%;
+  background:var(--panel); border:2px solid var(--accent);
+}
+.step.block:before{border-color:var(--danger); background:var(--danger)}
+.step.ask:before{border-color:var(--warn)}
+.step.done:before{border-color:var(--ok); background:var(--ok)}
+.step .t{font-weight:500; color:var(--ink); font-size:14.4px}
+.step .d{font-size:13.4px; color:var(--muted)}
+
+/* ---------- stage flow (horizontal) ---------- */
+.flow{display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; margin:6px 0 18px}
+.stage{
+  flex:1 1 150px; min-width:140px; background:var(--panel); border:1px solid var(--line);
+  border-radius:11px; padding:11px 13px; position:relative;
+}
+.stage .k{font-family:"DM Mono",monospace; font-size:10.5px; color:var(--muted); letter-spacing:.05em; text-transform:uppercase}
+.stage .v{font-size:13.6px; font-weight:500; margin-top:3px; color:var(--ink)}
+.stage .s{font-size:12.4px; color:var(--muted); margin-top:3px}
+.arrow{display:grid; place-items:center; color:var(--line); font-size:18px; flex:0 0 14px}
+@media(max-width:700px){.arrow{transform:rotate(90deg)}}
+
+/* ---------- outcome grid ---------- */
+.grid2{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px; margin:6px 0 18px}
+.mini{background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:13px 15px}
+.mini h5{margin:0 0 5px; font-size:13.6px; letter-spacing:-.01em}
+.mini p{margin:0; font-size:12.9px; color:var(--muted)}
+
+/* ---------- function index filter ---------- */
+.filter{
+  width:100%; max-width:340px; padding:8px 12px; border-radius:9px; border:1px solid var(--line);
+  background:var(--panel); color:var(--ink); font:inherit; font-size:13.5px; margin-bottom:12px;
+}
+.filter:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft)}
+.hidden{display:none !important}
+.count{font-size:12.5px; color:var(--muted); margin-left:10px}
+
+/* ---------- footer ---------- */
+footer{border-top:1px solid var(--line); padding-top:18px; color:var(--muted); font-size:12.8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ===== SIDEBAR: replace dot number, title, and nav links ===== -->
+<aside class="side">
+  <div class="brand">
+    <div class="dot">05</div>
+    <div><b>Fleet Management</b><small>allotment_v2 · workflow docs</small></div>
+  </div>
+  <nav class="nav" id="nav">
+    <a href="#s1"><span class="n">1</span> What this does</a>
+    <a href="#s2"><span class="n">2</span> Entry points</a>
+    <a href="#s3"><span class="n">3</span> Asset model</a>
+    <a href="#a-links" class="sub">Link invariants</a>
+    <a href="#a-pos" class="sub">Position vocabulary</a>
+    <a href="#a-spare" class="sub">Spare locations</a>
+    <a href="#s4"><span class="n">4</span> Workflows</a>
+    <a href="#w-daily" class="sub">4.1 Daily Fleet Log</a>
+    <a href="#w-status" class="sub">4.2 Status &amp; piers</a>
+    <a href="#w-mj" class="sub">4.3 Maintenance job</a>
+    <a href="#w-swap" class="sub">4.4 Engine swap</a>
+    <a href="#w-inc" class="sub">4.5 Incidents</a>
+    <a href="#w-consume" class="sub">4.6 Consumables</a>
+    <a href="#w-proj" class="sub">4.7 Projects</a>
+    <a href="#w-memo" class="sub">4.8 Memo chain</a>
+    <a href="#s5"><span class="n">5</span> Derived numbers</a>
+    <a href="#d-hours" class="sub">5.1–5.3 Hours &amp; service</a>
+    <a href="#d-cost" class="sub">5.4–5.7 Cost</a>
+    <a href="#d-fuel" class="sub">5.8–5.9 Fuel &amp; health</a>
+    <a href="#s6"><span class="n">6</span> flLoad / flSave</a>
+    <a href="#s7"><span class="n">7</span> Data model touched</a>
+    <a href="#s8"><span class="n">8</span> Persistence path</a>
+    <a href="#s9"><span class="n">9</span> Cross-module contracts</a>
+    <a href="#s10"><span class="n">10</span> Invariants &amp; gotchas</a>
+    <a href="#s11"><span class="n">11</span> Function index</a>
+  </nav>
+  <a class="backlink" href="index.html">← All workflow docs</a>
+  <button class="themebtn" id="themebtn" type="button">Toggle theme</button>
+</aside>
+
+<main class="main">
+
+<!-- ===== HERO: replace eyebrow / h1 / lede / chips ===== -->
+<header class="hero">
+  <div class="eyebrow">Workflow doc 05</div>
+  <h1>Fleet Management</h1>
+  <p class="lede">Everything under the sidebar group <b>Fleet Management</b> — boats, engines, gearboxes,
+  propellers, the Daily Fleet Log, maintenance jobs, incidents, projects, inventory and memos, consumable requisitions,
+  and the cost / insights / fuel analytics built on top of them.</p>
+  <div class="chips">
+    <span class="chip"><b>Code</b> allotment_v2.html</span>
+    <span class="chip"><b>Commit</b> 094dde1</span>
+    <span class="chip"><b>Branch</b> refactor/booking-v2-migration</span>
+    <span class="chip"><b>Source</b> docs/workflows/05-fleet-management.md</span>
+  </div>
+  <div class="note warn" style="margin-top:18px">
+    <span class="lbl">Line numbers drift</span>
+    Every <span class="ln">:12345</span> reference means “roughly here”. Grep the symbol name instead —
+    the <a href="#s11">function index</a> at the bottom is the fastest way to find anything.
+  </div>
+</header>
+
+<!-- ============ 1 ============ -->
+<section id="s1">
+  <h2><span class="num">01</span> What this does &amp; who uses it</h2>
+
+  <p>The <code>fl*</code> module is the technical/engineering half of the app. Sales and Booking decide
+  <i>how many people</i> go out; Fleet decides <i>which hulls are physically able to go out</i>, and tracks the
+  money and hours it takes to keep them that way.</p>
+
+  <p>Users (inferred from UI language and the data): the pier/fleet supervisor at Tub Lamu and Visit Panwa, who —</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · Records what each boat did today</div>
+      <div class="d">PAX, fuel litres, ฿/L, engine meter readings — in <b>Daily Fleet Log</b>.</div></div>
+    <div class="step"><div class="t">2 · Opens an <b>Incident</b> (<code>INC-xxx</code>) when something breaks</div>
+      <div class="d"></div></div>
+    <div class="step"><div class="t">3 · Converts the incident into one or more <b>Maintenance Jobs</b> (<code>MJ-xxx</code>)</div>
+      <div class="d">Starts them (which flips boat status → <code>fixing</code>/<code>unavailable</code>), withdraws parts from
+      <b>Inventory</b>, raises <b>Memos</b> (<code>MO-xxx</code>) for purchases needing approval, and closes them.</div></div>
+    <div class="step"><div class="t">4 · Registers and moves the physical assets</div>
+      <div class="d">Engine swaps, gearbox/propeller stashing, spare pools.</div></div>
+    <div class="step"><div class="t">5 · Runs long jobs (drydock, overhaul) as <b>Projects</b> (<code>PRJ-xxx</code>)</div>
+      <div class="d">Projects own child MJs.</div></div>
+    <div class="step"><div class="t">6 · Reads the analytics pages</div>
+      <div class="d">Cost Analytics, Fleet Insights, Fuel Intelligence — for month-over-month spend and anomalies.</div></div>
+  </div>
+
+  <p>Everything in this module writes through <code>flSave()</code> <span class="ln">:19696</span> into the same single
+  in-RAM blob as the rest of the app (see <a href="#s8">§8</a>). Fleet is also the <i>only</i> writer of <code>d.boats</code>
+  from this side — <code>flSave()</code> explicitly persists <code>BOATS</code> because the sales-side <code>save()</code>
+  is never called from fleet code <span class="ln">:19703-19705</span>.</p>
+
+  <div class="note warn">
+    <span class="lbl">Read-only mode is only half-enforced</span>
+    A fleet-wide read-only mode exists: <code>flSave()</code> returns immediately if
+    <code>window.laCanEditArea('fleet')</code> is false <span class="ln">:19697</span>. Nothing else guards writes, so in
+    view-only mode the in-RAM objects still mutate — only persistence is skipped <b>(gotcha)</b>.
+  </div>
+</section>
+
+<!-- ============ 2 ============ -->
+<section id="s2">
+  <h2><span class="num">02</span> Entry points</h2>
+
+  <p>All fleet views are routed by <code>nav()</code> <span class="ln">:6027</span>, which strips the <code>fl-</code>
+  prefix and dispatches at <span class="ln">:6039-6052</span>. One special case: <code>data-view="fl-boatstatus"</code>
+  is remapped to the shared <code>view-boats</code> <span class="ln">:6032</span> and rendered by the sales-side
+  <code>renderBoats()</code>.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:190px">View id</th><th style="width:150px">Sidebar label</th><th style="width:210px">Render fn : line</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>view-fl-dashboard</code></td><td>FL Dashboard</td><td><code>flRenderDashboard</code> <span class="ln">:21024</span></td><td>one-day snapshot: boat availability, asset counts, spares, fuel, open MJ/INC, low stock, pending memos</td></tr>
+      <tr><td><code>view-boats</code> (nav <code>fl-boatstatus</code>)</td><td>Boat Status</td><td><code>renderBoats</code> <span class="ln">:8569</span></td><td>boat list grouped by <i>current</i> pier incl. <code>In Shop</code>; status timeline, detail panel</td></tr>
+      <tr><td><code>view-fl-dailyreport</code></td><td>Daily Fleet Log</td><td><code>flRenderDR</code> <span class="ln">:21792</span></td><td>per-day, per-pier entry of Fuel L, ฿/L, engine meter readings; Save locks the pier</td></tr>
+      <tr><td><code>view-fl-incident</code></td><td>Job Assignment</td><td><code>flRenderIncident</code> <span class="ln">:33327</span></td><td>incident register (<code>INC-xxx</code>), quick-fix, quick-swap of damaged gearbox/propeller</td></tr>
+      <tr><td><code>view-fl-projects</code></td><td>Projects</td><td><code>flRenderProjects</code> <span class="ln">:27162</span></td><td>drydock/overhaul projects, timeline, gantt, YoY, phase tracker</td></tr>
+      <tr><td><code>view-fl-maintenance</code></td><td>Maintenance</td><td><code>flRenderMaint</code> <span class="ln">:28967</span></td><td>MJ list + detail: start, parts withdrawal, engine swap, close</td></tr>
+      <tr><td><code>view-fl-inventory</code></td><td>Inventory / Memo</td><td><code>flRenderInventory</code> <span class="ln">:34612</span></td><td>multi-warehouse stock, receive/transfer, memo approval chain</td></tr>
+      <tr><td><code>view-fl-consumables</code></td><td>เบิกของใช้ / น้ำมัน</td><td><code>renderConsumables</code> <span class="ln">:19834</span></td><td>consumable requisition (oil/filters) → deducts stock, own cost bucket</td></tr>
+      <tr><td><code>view-fl-cost</code></td><td>Cost Analytics</td><td><code>flRenderCostAnalytics</code> <span class="ln">:29579</span></td><td>spend by boat / asset category / job status, time-filtered</td></tr>
+      <tr><td><code>view-fl-insights</code></td><td>Fleet Insights</td><td><code>flRenderInsights</code> <span class="ln">:30185</span></td><td>per-boat health scorecard, trends, recommendations</td></tr>
+      <tr><td><code>view-fl-fuel</code></td><td>Fuel · น้ำมัน</td><td><code>renderFuelIntel</code> <span class="ln">:29943</span></td><td>fuel litres/cost/efficiency by boat, route family, week</td></tr>
+      <tr><td><code>view-fl-asset</code></td><td>Company Asset</td><td><code>flRenderAsset</code> <span class="ln">:22466</span></td><td>tab host: Overview / Boats / Engines / Gearboxes / Propellers / Documents / Safety</td></tr>
+    </tbody>
+  </table></div>
+
+  <h4>view-fl-asset tabs <span class="ln">:5205-5220</span></h4>
+  <p>Switched by <code>flGoAssetTab</code> <span class="ln">:22475</span>, dispatched in <code>flRenderAsset</code>
+  <span class="ln">:22466</span>.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:160px">Tab</th><th>Render fn : line</th></tr></thead>
+    <tbody>
+      <tr><td>Overview</td><td><code>flRenderOverview</code> <span class="ln">:22543</span> (asset tree by boat)</td></tr>
+      <tr><td>Boats</td><td><code>flRenderBoatList</code> <span class="ln">:23279</span> → <code>flRenderBoatDetailPink</code> <span class="ln">:23450</span></td></tr>
+      <tr><td>Engines</td><td><code>flRenderEngList</code> <span class="ln">:23796</span> → <code>flRenderEngDetailPink</code> <span class="ln">:24016</span></td></tr>
+      <tr><td>Gearboxes</td><td><code>flRenderGbList</code> <span class="ln">:24263</span> → <code>flRenderGbDetailPink</code> <span class="ln">:24462</span></td></tr>
+      <tr><td>Propellers</td><td><code>flRenderPropList</code> <span class="ln">:24722</span> → <code>flRenderPropDetailPink</code> <span class="ln">:24933</span></td></tr>
+      <tr><td>Documents</td><td><code>flRenderDocsList</code> <span class="ln">:37841</span> (<code>FL_DOC_TYPES</code> <span class="ln">:36402</span>)</td></tr>
+      <tr><td>Safety</td><td><code>flRenderSafetyList</code> <span class="ln">:36506</span> (<code>FL_SAFETY_CATEGORIES</code> <span class="ln">:20615</span>)</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note">
+    <span class="lbl">Pink mounts vs legacy mounts</span>
+    Each list view renders into a <code>*-pink-wrap</code> div; the older non-pink mounts (<code>#fl-boat-list</code>,
+    <code>#fl-eng-detail</code>, …) still exist inside <code>display:none</code> wrappers <span class="ln">:5215-5219</span>
+    and the legacy <code>flRenderBoatDetail(id)</code> / <code>flRenderEngDetail(id)</code> shims
+    <span class="ln">:23787</span>, <span class="ln">:24250</span> delegate to the pink renderers.
+  </div>
+</section>
+
+<!-- ============ 3 ============ -->
+<section id="s3">
+  <h2><span class="num">03</span> Asset model</h2>
+
+  <p>Six record families, all living in the same blob:</p>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:190px">In-memory</th><th style="width:180px">Blob key</th><th style="width:230px">Seed</th><th>Shape notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>BOATS</code></td><td><code>boats</code></td><td><code>DEFAULT_BOATS</code> <span class="ln">:5586</span></td><td>hull + legal + <code>log[]</code> status history + <code>assignments[]</code> + <code>repairHistory[]</code> + <code>docs[]</code></td></tr>
+      <tr><td><code>FL_ENGINES</code></td><td><code>fleet_engines</code></td><td><code>FL_DEFAULT_ENGINES</code> <span class="ln">:19911</span></td><td><code>{id,brand,model,serial,hp,boatId,pos,status,baseHours,serviceInterval,lastServiceHours,lastServiceDate,spareLocation,retired,log[]}</code></td></tr>
+      <tr><td><code>FL_GEARBOXES</code></td><td><code>fleet_gearboxes</code></td><td><code>FL_DEFAULT_GEARBOXES</code> <span class="ln">:19981</span></td><td><code>{id,boatId,engineId,brand,model,serial,status,baseHours,installHours,serviceInterval,lastServiceHours,shaftLength,modelSuffix,note(=position),spareLocation,onBoatId,onBoatPos,log[]}</code></td></tr>
+      <tr><td><code>FL_PROPELLERS</code></td><td><code>fleet_propellers</code></td><td><code>FL_DEFAULT_PROPELLERS</code> <span class="ln">:20063</span></td><td><code>{id,boatId,gearboxId,brand,serial,diameter,pitch,size,blades,material,rotation,hubSize,cupping,cost,status,note,propPos,spareLocation,installHours,log[]}</code></td></tr>
+      <tr><td><code>FL_MAINT</code></td><td><code>fleet_maintenance</code></td><td><code>FL_DEFAULT_MAINTENANCE</code> <span class="ln">:20126</span></td><td>job <code>MJ-xxx</code>, see <a href="#w-mj">§4.3</a></td></tr>
+      <tr><td><code>FL_INCIDENTS</code></td><td><code>fleet_incidents</code></td><td><code>FL_DEFAULT_INCIDENTS</code> <span class="ln">:20200</span></td><td><code>INC-xxx</code>, see <a href="#w-inc">§4.5</a></td></tr>
+      <tr><td><code>FL_INVENTORY</code></td><td><code>fleet_inventory</code></td><td><code>FL_DEFAULT_INVENTORY</code> <span class="ln">:20272</span></td><td><code>{id,name,partNo,category,supplier,unit,cost,stocks[{location,qty,minQty}],qty(derived),history[]}</code></td></tr>
+      <tr><td><code>FL_MEMOS</code></td><td><code>fleet_memos</code></td><td><code>FL_DEFAULT_MEMOS</code> <span class="ln">:20391</span></td><td><code>MO-xxx</code> purchase/labour approval memo</td></tr>
+      <tr><td><code>FL_PROJECTS</code></td><td><code>fleet_projects</code></td><td>— (built by <code>flProjMigrate</code>)</td><td><code>PRJ-xxx</code>, see <a href="#w-proj">§4.7</a></td></tr>
+      <tr><td><code>FL_SAFETY</code></td><td><code>fleet_safety</code></td><td><code>_generateSafetySeed</code> <span class="ln">:20628</span></td><td>safety equipment per boat with inspection cadence</td></tr>
+      <tr><td><code>FL_CONSUMABLE_LOGS</code></td><td><code>fleet_consumable_logs</code></td><td>—</td><td>requisition rows</td></tr>
+      <tr><td><code>FL_DAILY</code></td><td><code>fleet_daily</code></td><td>—</td><td><code>FL_DAILY[date][boatId] = {fuel, paxActual, trips:{normal:{engines:{engId:meter}}}}</code></td></tr>
+      <tr><td><code>FL_FUEL_PRICE</code></td><td><code>fleet_fuelprice</code></td><td>—</td><td><code>[date][pierKey|boatId] = ฿/L</code></td></tr>
+      <tr><td><code>FL_DR_LOCK</code></td><td><code>fleet_drlock</code></td><td>—</td><td><code>[date][pierKey] = true</code> (Daily Log locked)</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Declared at <span class="ln">:20605-20609</span>, loaded at <span class="ln">:18525-18530</span> /
+  <span class="ln">:18581</span>, saved at <span class="ln">:19699-19702</span>.</p>
+
+  <h3 id="a-links">Link invariants</h3>
+
+  <div class="flow">
+    <div class="stage"><div class="k">hull</div><div class="v">BOAT</div><div class="s"><code>engine.boatId</code> + <code>engine.pos</code></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">1</div><div class="v">ENGINE</div><div class="s">the swappable unit; the meter lives here</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">1</div><div class="v">GEARBOX</div><div class="s"><code>gearbox.engineId → engine.id</code></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">1</div><div class="v">PROPELLER</div><div class="s"><code>propeller.gearboxId → gearbox.id</code></div></div>
+  </div>
+
+  <ul>
+    <li><b>1 engine ↔ 1 gearbox ↔ 1 propeller.</b> The chain is by pointer, not by boat. The Equipment bay builds each
+      drive column exactly this way <span class="ln">:22453</span>.</li>
+    <li>A <b>spare</b> part is a detached part: <code>flOpenSwapModal</code> treats “spare” as <i><code>spareLocation</code>
+      is truthy</i> and explicitly notes <code>status==='spare'</code> is the legacy marker
+      <span class="ln">:33852-33856</span>. <code>_flStashPartRecord</code> <span class="ln">:32061</span> sets
+      <code>status='spare'</code> <b>and</b> <code>spareLocation</code> <b>and</b> nulls <code>engineId</code>/<code>gearboxId</code>
+      together — that is the canonical stash.</li>
+    <li>During an engine swap a gearbox may be <i>parked on the boat</i>: <code>engineId=null</code> but
+      <code>onBoatId</code>/<code>onBoatPos</code> set — “คาเรือ รอเครื่อง” <span class="ln">:32301-32303</span>.
+      The incoming engine adopts it <span class="ln">:32374-32378</span>.</li>
+  </ul>
+
+  <h4>Entity relationships (from the ER diagram)</h4>
+  <div class="tw"><table>
+    <thead><tr><th style="width:180px">From</th><th style="width:80px">Card.</th><th style="width:190px">To</th><th>Via</th></tr></thead>
+    <tbody>
+      <tr><td>BOAT</td><td>1 — 0..n</td><td>ENGINE</td><td><code>engine.boatId</code> + <code>engine.pos</code></td></tr>
+      <tr><td>ENGINE</td><td>1 — 0..1</td><td>GEARBOX</td><td><code>gearbox.engineId</code></td></tr>
+      <tr><td>GEARBOX</td><td>1 — 0..1</td><td>PROPELLER</td><td><code>propeller.gearboxId</code></td></tr>
+      <tr><td>BOAT</td><td>1 — 0..n</td><td>STATUS_LOG</td><td><code>boat.log[]</code> (last open entry = current)</td></tr>
+      <tr><td>BOAT</td><td>1 — 0..n</td><td>ASSIGNMENT</td><td><code>boat.assignments[]</code> (pier moves)</td></tr>
+      <tr><td>BOAT</td><td>1 — 0..n</td><td>SAFETY_ITEM</td><td><code>FL_SAFETY.boatId</code></td></tr>
+      <tr><td>BOAT</td><td>1 — 0..n</td><td>INCIDENT</td><td><code>inc.boatId</code></td></tr>
+      <tr><td>INCIDENT</td><td>1 — 0..n</td><td>MAINT_JOB</td><td><code>mj.incidentId</code></td></tr>
+      <tr><td>MAINT_JOB</td><td>n — 1</td><td>BOAT</td><td><code>mj.boatId</code></td></tr>
+      <tr><td>MAINT_JOB</td><td>1 — 0..n</td><td>JOB_ASSET</td><td><code>mj.assets[] {engId|gbId|propId|hull}</code></td></tr>
+      <tr><td>MAINT_JOB</td><td>1 — 0..n</td><td>JOB_PART</td><td><code>mj.parts[]</code> (withdrawn stock)</td></tr>
+      <tr><td>MAINT_JOB</td><td>1 — 0..n</td><td>MEMO</td><td><code>memo.maintId</code></td></tr>
+      <tr><td>PROJECT</td><td>1 — 0..n</td><td>MAINT_JOB</td><td><code>mj.parentProjectId</code></td></tr>
+      <tr><td>PROJECT</td><td>1 — 0..n</td><td>MEMO</td><td><code>memo.projectId</code> (overhead)</td></tr>
+      <tr><td>INVENTORY_ITEM</td><td>1 — 0..n</td><td>STOCK_ROW</td><td><code>item.stocks[]</code> per warehouse</td></tr>
+      <tr><td>INVENTORY_ITEM</td><td>1 — 0..n</td><td>CONSUMABLE_LOG</td><td><code>FL_CONSUMABLE_LOGS.itemId</code></td></tr>
+      <tr><td>CONSUMABLE_LOG</td><td>n — 1</td><td>BOAT</td><td><code>rec.boatId</code> (+ optional <code>engineId</code>)</td></tr>
+      <tr><td>DAILY_LOG</td><td>n — 1</td><td>BOAT</td><td><code>FL_DAILY[date][boatId]</code></td></tr>
+      <tr><td>DAILY_LOG</td><td>1 — 0..n</td><td>METER_READING</td><td><code>trips.normal.engines[engId]</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="a-pos">Position vocabulary</h3>
+  <p><code>Port · C.Port · Center · C.Std · Std</code>. Canonicalised by <code>FL_POS_CANON</code>
+  <span class="ln">:23792</span> / <code>flPosLabel</code> <span class="ln">:23794</span> (Suzuki
+  “Starboard”/“Stbd”/“Starb” → <code>Std</code>); sort order via <code>FL_POS_RANK</code> <span class="ln">:23793</span> /
+  <code>flPosRank</code> <span class="ln">:23795</span> (unknown → 98, sorts last).</p>
+
+  <div class="note warn">
+    <span class="lbl">Gotcha — the Assign-Engine markup is not the enum</span>
+    The Assign-Engine modal’s position <code>&lt;select&gt;</code> is hard-coded HTML with a <i>different</i> vocabulary —
+    <code>Port / Starboard / Centre / C.STBD / P1 / P2 / S1 / S2</code> <span class="ln">:36218-36221</span> — while
+    <code>flOpenAssignEngModal</code> overwrites it with <code>getEngPositions(engineCount)</code> at runtime
+    <span class="ln">:36262-36264</span>. Do not read the static markup as the enum.
+  </div>
+
+  <h3 id="a-spare">Spare locations</h3>
+  <p><code>SPARE_LOC_LABELS</code> <span class="ln">:22371</span> defines the keyed vocabulary —
+  <code>pier:tublamu</code>, <code>pier:panwa</code>, <code>pier:central</code>, <code>shop:honda-phuket</code>,
+  <code>shop:suzuki-phuket</code>, <code>shop:prop-shop-phuket</code>; plus dynamic <code>boat:&lt;boatId&gt;</code>
+  handled by <code>flParseSpareLoc</code> <span class="ln">:22379</span>. <code>FL_STASH_LOCS</code>
+  <span class="ln">:32052</span> is the same list as pick-list options.</p>
+
+  <div class="grid2">
+    <div class="mini"><h5><span class="b blue">Parts</span> keyed</h5>
+      <p><code>SPARE_LOC_LABELS</code> / <code>FL_STASH_LOCS</code>: <code>pier:*</code>, <code>shop:*</code>, <code>boat:*</code>.</p></div>
+    <div class="mini"><h5><span class="b violet">Inventory</span> plain strings</h5>
+      <p><code>WAREHOUSE_LOCATIONS</code> <span class="ln">:20715</span> =
+      <code>['คลัง Tub Lamu','คลัง Visit Panwa','คลัง Ranong']</code>.</p></div>
+    <div class="mini"><h5><span class="b amber">Engines</span> free text</h5>
+      <p>Swap picker list <code>['อู่ซ่อม','คลังกลาง','คลัง Tub Lamu','คลัง Visit Panwa']</code>
+      <span class="ln">:32328</span>; <code>flUnassignEng</code> hard-codes <code>'คลังกลาง'</code>
+      <span class="ln">:38093</span>.</p></div>
+  </div>
+
+  <div class="note warn">
+    <span class="lbl">Gotcha</span>
+    Three unrelated location vocabularies coexist and do <b>not</b> interoperate.
+  </div>
+</section>
+
+<!-- ============ 4 ============ -->
+<section id="s4">
+  <h2><span class="num">04</span> Workflows</h2>
+
+  <!-- 4.1 -->
+  <h3 id="w-daily">4.1 Log a daily meter reading (Daily Fleet Log)</h3>
+  <p><b>Trigger</b> — supervisor opens <code>Daily Fleet Log</code>, picks a date, types into the Fuel / ฿-L /
+  engine-hour cells for a boat.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>nav()</code> → <code>flRenderDR()</code> <span class="ln">:21792</span></div>
+      <div class="d">First calls <code>bkV2CharterBoatHeal(ds)</code> so charter bookings’ boats appear in the day
+      <span class="ln">:21796</span>.</div></div>
+    <div class="step"><div class="t">2 · Boat set</div>
+      <div class="d">Company boats that have at least one engine:
+      <code>b.ownership!=='charter' &amp;&amp; !b.retired &amp;&amp; FL_ENGINES.some(e=&gt;e.boatId===b.id)</code>
+      <span class="ln">:21799</span>. Grouped into Tub Lamu / Visit Panwa / Ranong sections by
+      <code>getBoatCurrentPier(b)</code> <span class="ln">:21800-21802</span>, sections built at
+      <span class="ln">:22228-22230</span>.</div></div>
+    <div class="step"><div class="t">3 · PAX per boat is <b>read-only</b></div>
+      <div class="d">Pulled from bookings via <code>flBoatBookingsFor(boatId, ds)</code> <span class="ln">:12075</span>
+      (<span class="ln">:21808</span>, rendered read-only at <span class="ln">:22125-22128</span>).
+      <code>flSavePaxActual</code> <span class="ln">:22349</span> still exists and still writes
+      <code>FL_DAILY[ds][bid].paxActual</code>, but no input calls it any more <b>(dead-ish path)</b>.</div></div>
+    <div class="step"><div class="t">4 · Fuel litres</div>
+      <div class="d"><code>onchange="flSaveFuel(ds,bid,val)"</code> <span class="ln">:22112</span> →
+      <span class="ln">:22258</span>.</div></div>
+    <div class="step"><div class="t">5 · ฿/L</div>
+      <div class="d"><code>onchange="flSaveFuelPrice(ds,b.id,val)"</code> <span class="ln">:22121</span> →
+      <span class="ln">:22321</span>. The second argument is named <code>pierKey</code> but the row passes a
+      <b>boat id</b> — per-boat price is stored in the same map as pier price.</div></div>
+    <div class="step"><div class="t">6 · Engine meter</div>
+      <div class="d"><code>onchange="flSaveMeter(ds,bid,'normal',engId,val)"</code> <span class="ln">:22140</span> →
+      <span class="ln">:22357</span>. The trip bucket is always the literal <code>'normal'</code>; the <code>type</code>
+      parameter is a leftover generalisation.</div></div>
+    <div class="step"><div class="t">7 · Δ display</div>
+      <div class="d">Each cell shows Δ vs <code>flPrevMeter(engId, ds)</code> <span class="ln">:22245</span> — latest
+      reading strictly before <code>ds</code>, skipping <code>&lt;=0</code>.</div></div>
+    <div class="step done"><div class="t">8 · <b>Save</b> button per pier</div>
+      <div class="d"><code>flSaveDayLog(btn, pierKey, ds)</code> <span class="ln">:22338</span> → blurs the focused field so
+      the pending <code>onchange</code> commits → <code>flSave()</code> →
+      <code>flDRSetLock(ds,pierKey,true)</code> <span class="ln">:22330</span>. The section becomes read-only
+      (“บันทึกแล้ว”) until <b>Edit</b> → <code>flDREdit</code> <span class="ln">:22336</span>.</div></div>
+  </div>
+
+  <h4>Data written</h4>
+  <ul>
+    <li><code>FL_DAILY[ds][boatId].fuel</code> (float or <code>null</code>)</li>
+    <li><code>FL_DAILY[ds][boatId].trips.normal.engines[engineId]</code> (float or <code>null</code>)</li>
+    <li><code>FL_DAILY[ds][boatId].paxActual</code> (only via the legacy fn)</li>
+    <li><code>FL_FUEL_PRICE[ds][boatId]</code> (row input) or <code>FL_FUEL_PRICE[ds][pierKey]</code> (programmatic)</li>
+    <li><code>FL_DR_LOCK[ds][pierKey] = true</code></li>
+  </ul>
+
+  <h4>Validation / guards</h4>
+  <ul>
+    <li><code>flSaveMeter</code> defensively creates <code>trips</code> and <code>trips[type].engines</code> — a boat entry
+      saved fuel-first has no <code>trips</code>, which used to throw and silently lose the hours
+      <span class="ln">:22360</span>.</li>
+    <li>Empty / <code>NaN</code> price <b>deletes</b> the key rather than storing <code>0</code> <span class="ln">:22324</span>.</li>
+    <li>Inputs carry <code>_DIS</code> (disabled) when the pier day is locked.</li>
+    <li>A boat marked <code>fixing</code>/<code>unavailable</code> that nonetheless ran gets the
+      “ออกแล้ว · เข้าซ่อมเย็น” chip and keeps its entry cells; a boat that is unavailable <i>and</i> did not run gets
+      <code>noEntry</code> and no inputs <span class="ln">:22088-22101</span>, evidence rule at
+      <span class="ln">:21817-21821</span>.</li>
+  </ul>
+
+  <h4>Failure modes</h4>
+  <ul>
+    <li>A <code>0</code> meter placeholder is <i>skipped</i> everywhere (<code>flEngHours</code> <span class="ln">:22799</span>,
+      <code>flPrevMeter</code> <span class="ln">:22252</span>) — entering <code>0</code> does not zero the hours, but it also
+      does not register as a reading.</li>
+    <li>No price entered ⇒ fuel cost counts as ฿0 in <code>_fuelAgg</code> <span class="ln">:29886</span>.
+      <code>flFuelPriceEff</code> <span class="ln">:22289</span> exists for P&amp;L to fall back (boat → pier → sibling boat
+      at the same pier → up to <code>FL_FUEL_BACK_DAYS</code>=30 days back) but the Daily Log and <code>_fuelAgg</code>
+      deliberately use the strict <code>flFuelPriceForBoat</code> <span class="ln">:22266</span> instead.</li>
+    <li>Locking is per (date, pier). Moving a boat to another pier after locking leaves its row editable/locked according
+      to the <i>new</i> pier’s flag.</li>
+  </ul>
+
+  <!-- 4.2 -->
+  <h3 id="w-status">4.2 Change boat status / move a boat between piers</h3>
+  <p>Boat status is an append-only interval list <code>boat.log[]</code>; the <i>effective</i> status for a date comes from
+  <code>getCurStatus(boat, ds)</code> <span class="ln">:5879</span>, which sorts by <code>from</code> descending and, on ties,
+  by <b>insertion order descending</b> (later-saved entry wins — this was a real bug: fix today then set Available today
+  used to still read Fixing, <span class="ln">:5880-5885</span>).</p>
+
+  <p>Three ways status changes:</p>
+  <div class="tw"><table>
+    <thead><tr><th style="width:180px">Path</th><th style="width:290px">Fn</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td>manual status modal</td><td><code>saveStatus</code> <span class="ln">:9690-9696</span> → <code>autoClosePrevLog</code> <span class="ln">:9700</span> → <code>save('config')</code></td><td>free-form entry with <code>loc</code>, <code>province</code>, <code>locType</code>, <code>reason</code></td></tr>
+      <tr><td>via a maintenance job</td><td><code>_flMaintStartProceed</code> <span class="ln">:32443</span> / <code>flMaintClose</code> <span class="ln">:32539</span></td><td>pushes <code>fixing</code>/<code>unavailable</code> then restores</td></tr>
+      <tr><td>via a project</td><td><code>flProjStart</code> <span class="ln">:28621</span> / <code>flProjMarkComplete</code> <span class="ln">:28740</span> / <code>flProjCancel</code> <span class="ln">:28677</span></td><td>pushes <code>unavailable</code> with <code>projectId</code> on the entry</td></tr>
+    </tbody>
+  </table></div>
+
+  <p><code>autoClosePrevLog(b, newFrom, newTo)</code> <span class="ln">:9700</span> closes/splits overlapping earlier
+  entries so intervals do not overlap.</p>
+
+  <h4>Pier is derived, not stored per-day</h4>
+  <p><code>getBoatCurrentPier(b, ds)</code> <span class="ln">:9920</span>, in priority order:</p>
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>'shop'</code></div>
+      <div class="d">An <code>inprogress</code> MJ on that boat with a non-empty <code>location</code>, <b>and</b> the boat is
+      not <code>available</code> on that date.</div></div>
+    <div class="step"><div class="t">2 · <code>a.toPier</code></div>
+      <div class="d">An active <code>boat.assignments[]</code> row covering <code>ds</code>.</div></div>
+    <div class="step"><div class="t">3 · keyword match on the status entry’s <code>loc</code></div>
+      <div class="d"><code>panwa</code> / <code>ranong|grand andaman|se la va</code> / <code>tub|tublamu|tab lamu</code>.</div></div>
+    <div class="step"><div class="t">4 · fallback <code>b.pier</code></div><div class="d"></div></div>
+  </div>
+
+  <h4>Pier assignment</h4>
+  <p><code>flOpenNewAssignment(boatId)</code> <span class="ln">:35397</span> → <code>flSaveAssignment</code>
+  <span class="ln">:35420</span>. Validates from≠to, both dates present, end ≥ start. Writes
+  <code>boat.assignments[] {id,type:'temporary'|'permanent',fromPier,toPier,startDate,endDate,reason,cost,status,createdDate}</code>;
+  a <code>permanent</code> + currently-active assignment also rewrites <code>b.pier</code>
+  <span class="ln">:35457-35459</span>.</p>
+
+  <div class="note danger">
+    <span class="lbl">Gotcha — bypasses flSave</span>
+    <code>flSaveAssignment</code> writes <code>localStorage[LS_KEY].boats[...]</code> directly instead of calling
+    <code>flSave()</code> <span class="ln">:35462-35470</span> — same for <code>flCancelAssignment</code>
+    <span class="ln">:35481</span> and <code>flAutoUpdateAssignments</code> <span class="ln">:35505</span>.
+    If <code>ls.boats</code> is absent the change is in-memory only.
+  </div>
+
+  <h4>Boat status list grouping</h4>
+  <p><code>renderBoats</code> <span class="ln">:8569</span> sections the list by <code>getBoatCurrentPier</code>:
+  Tub Lamu / Visit Panwa / Ranong / 🔧 In Shop <span class="ln">:8765-8774</span>, plus a charter block. The same grouping
+  is repeated in <code>flRenderBoatList</code> <span class="ln">:23410-23423</span> with an extra <code>Other</code>
+  catch-all.</p>
+
+  <div class="note warn">
+    <span class="lbl">CLAUDE.md contradicts the code here</span>
+    CLAUDE.md §3.1 describes the three tabs as pier + <code>log[last].s==='fixing'</code>; the code actually uses the
+    derived <code>'shop'</code> pier (active MJ <i>with a location</i> + non-available status), so a boat that is
+    <code>fixing</code> with no MJ location stays in its pier section.
+  </div>
+
+  <h4>Retire</h4>
+  <p><code>flRetireBoat(boatId,reason)</code> <span class="ln">:32716</span> sets
+  <code>retired</code>/<code>retiredDate</code>/<code>retiredReason</code> and pushes a <code>s:'retired'</code> log entry;
+  <code>flUnretireBoat</code> <span class="ln">:32727</span> reverses it with an <code>available</code> entry. Retired boats
+  are filtered out of nearly every aggregate (<code>b.ownership!=='charter' &amp;&amp; !b.retired</code>).</p>
+
+  <!-- 4.3 -->
+  <h3 id="w-mj">4.3 Open, start and close a maintenance job</h3>
+  <p><b>Trigger</b> — <code>+ Create Job</code> on the Maintenance page <span class="ln">:29009</span>, or
+  <code>flCreateMaintFromInc(incId)</code> <span class="ln">:32144</span> from an incident, or
+  <code>flProjCreateMJ(projId)</code> <span class="ln">:28785</span> from a project.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t"><code>+ Create Job</code> · <code>flOpenCreateJobModal</code> <span class="ln">:33102</span></div>
+      <div class="d"></div></div>
+    <div class="step ask"><div class="t">Linked incident with ≥2 damaged assets?</div>
+      <div class="d"><b>yes</b> → <code>flOpenJobChoiceModal</code> <span class="ln">:32152</span> — single vs split.
+      <b>no</b> → single MJ, <code>flSaveCreateJob</code> <span class="ln">:33278</span>.</div></div>
+    <div class="step"><div class="t">split → one MJ per damaged asset</div>
+      <div class="d"><code>flSaveCreateJob</code> <span class="ln">:33177-33215</span>.</div></div>
+    <div class="step"><div class="t"><code>status='pending'</code></div><div class="d"></div></div>
+    <div class="step"><div class="t">Start · <code>flMaintStart</code> <span class="ln">:32250</span></div><div class="d"></div></div>
+    <div class="step ask"><div class="t">Does the engine asset carry a mounted gearbox/propeller?</div>
+      <div class="d"><b>no</b> → straight to <code>_flMaintStartProceed</code> <span class="ln">:32443</span>.
+      <b>yes</b> → <code>flStartGearOpen</code> <span class="ln">:32257</span> with three choices —
+      <b>keep</b> → proceed · <b>stash</b> → <code>_flStashPartRecord</code> <span class="ln">:32061</span> → spare → proceed ·
+      <b>swap</b> → <code>flStartGearSwap</code> <span class="ln">:32293</span> → <a href="#w-swap">§4.4</a>.</div></div>
+    <div class="step done"><div class="t"><code>status='inprogress'</code> · boat log pushed · asset status → <code>fixing</code></div>
+      <div class="d"></div></div>
+    <div class="step"><div class="t">Withdraw parts · <code>flMaintAddPart</code> <span class="ln">:32874</span></div><div class="d"></div></div>
+    <div class="step"><div class="t">Close · <code>flMaintOpenCloseModal</code> <span class="ln">:32510</span></div><div class="d"></div></div>
+    <div class="step"><div class="t"><code>flMaintClose</code> <span class="ln">:32539</span></div>
+      <div class="d">outcome ∈ <code>success</code> | <code>limited</code> | <code>rework</code> |
+      <code>decommission</code> | <code>cancelled</code>.</div></div>
+    <div class="step ask"><div class="t">Are all MJs of the linked INC now done?</div>
+      <div class="d"><b>yes</b> → incident <code>status='closed'</code>. <b>no</b> → incident stays open.</div></div>
+    <div class="step done"><div class="t"><code>flMaintServiceReset</code> <span class="ln">:20894</span></div>
+      <div class="d">Offers the service-hour baseline reset.</div></div>
+  </div>
+
+  <h4>Create — <code>flSaveCreateJob</code> <span class="ln">:33137</span></h4>
+  <ul>
+    <li>Required: boat + title <span class="ln">:33141</span>. Warns (confirm) if the boat already has a non-done job
+      <span class="ln">:33144-33149</span>.</li>
+    <li>Numbering: <code>MJ-</code> + <code>max(existing numeric suffix)+1</code>, deliberately <i>not</i>
+      <code>length+1</code>, so deletions don’t cause collisions <span class="ln">:33224-33229</span>;
+      <code>flAssertUniqueNo</code> <span class="ln">:26086</span> throws + alerts on a duplicate.</li>
+    <li>Split mode pre-computes the base number once and increments per asset <span class="ln">:33186-33192</span>, sets
+      <code>inc.maintId</code> to the first job and <code>inc.relatedMaintIds</code> to all
+      <span class="ln">:33208-33209</span>.</li>
+    <li>Preventive/scheduled jobs with no incident read asset checkboxes from the modal
+      <span class="ln">:33244-33271</span>; asset <code>status</code> mirrors the chosen boat status
+      (<code>available</code> → <code>ready</code>, else <code>fixing</code>).</li>
+    <li><code>boatStatus:'unavailable'</code> requires a reason <span class="ln">:33274-33277</span>.</li>
+  </ul>
+  <p>Written record
+  <span class="ln">:33278-33289</span>, unshifted into <code>FL_MAINT</code>:</p>
+<pre><code>{id, no, boatId, type:'corrective'|'preventive'|'scheduled', title, detail,
+ location, status:'pending', startDate, endDate:null, cost:0, incidentId,
+ assets[], progressLog[], boatStatus, boatStatusReason, setFixing}</code></pre>
+  <p><code>parentProjectId</code> added when created from a project <span class="ln">:33292-33301</span>.</p>
+
+  <h4>Start — <code>flMaintStart</code> <span class="ln">:32250</span> → <code>_flMaintStartProceed</code> <span class="ln">:32443</span></h4>
+  <ul>
+    <li><code>targetStatus = m.boatStatus || (m.setFixing===false ? 'available' : 'fixing')</code>
+      <span class="ln">:32448</span> — <code>boatStatus</code> is the new field, <code>setFixing</code> the legacy one;
+      both are still read everywhere.</li>
+    <li>If the boat already ran that day (<code>_flBoatRanOn</code> <span class="ln">:32436</span> — a Boat-Op
+      <code>TRIPS</code> row or a confirmed booking assigned to it), the unavailability starts <b>tomorrow</b>
+      (<code>_flDayAfter</code> <span class="ln">:32434</span>) so the day still counts as operated
+      <span class="ln">:32453-32463</span>.</li>
+    <li>Asset statuses cascade to <code>fixing</code> <b>only when</b> <code>targetStatus==='fixing'</code>
+      <span class="ln">:32469</span>, but every asset gets a <code>service-start</code> log line regardless.</li>
+  </ul>
+
+  <h4>Withdraw parts — <code>flMaintAddPart</code> <span class="ln">:32874</span></h4>
+  <ul>
+    <li>Requires a part <i>and</i> a warehouse <span class="ln">:32879-32880</span>; blocks if
+      <code>invQtyAt(inv,location) &lt; qty</code> <span class="ln">:32884-32885</span>; deducts via
+      <code>invRemoveAt</code> <span class="ln">:20753</span>.</li>
+    <li>Appends to <code>inv.history[]</code> (<code>type:'withdraw'</code>, <code>jobId</code>) and to
+      <code>m.parts[]</code> (merged by <code>invId+location+date+late</code>).</li>
+    <li>Withdrawing after the job is closed is allowed but flagged <code>late:true, lateBy</code> and tagged in the log
+      “ลงย้อนหลังหลังปิดงาน” <span class="ln">:32893-32899</span>. Editing parts after close is gated by
+      <code>flMaintCanEditParts</code> <span class="ln">:31485</span> + <code>flMaintLateEditOn</code>
+      <span class="ln">:31486</span>.</li>
+    <li>Reverses via <code>flMaintRemovePart</code> <span class="ln">:32908</span>, which returns stock to the <b>same</b>
+      warehouse.</li>
+    <li>Both call <code>flMaintRefreshParts(jobId)</code> <span class="ln">:31539</span> for a surgical DOM update — a full
+      re-render here caused the documented scroll-jump.</li>
+  </ul>
+
+  <h4>Close — <code>flMaintClose(id,outcome,note,awaitInvoice)</code> <span class="ln">:32539</span></h4>
+  <p>Outcome table <span class="ln">:32550-32556</span>:</p>
+  <div class="tw"><table>
+    <thead><tr><th style="width:150px">Outcome</th><th>Engine</th><th>Gearbox</th><th>Propeller</th><th>Boat</th></tr></thead>
+    <tbody>
+      <tr><td><span class="b green">success</span></td><td><code>ready</code></td><td><code>ready</code></td><td><code>active</code></td><td><code>available</code></td></tr>
+      <tr><td><span class="b amber">limited</span></td><td><code>limited</code></td><td><code>limited</code></td><td><code>limited</code></td><td><code>available</code></td></tr>
+      <tr><td><span class="b red">rework</span></td><td><code>fixing</code></td><td><code>fixing</code></td><td><code>fixing</code></td><td><code>fixing</code></td></tr>
+      <tr><td><span class="b red">decommission</span></td><td><code>broken</code> (+<code>retired</code>)</td><td><code>broken</code></td><td><code>broken</code></td><td><code>available</code></td></tr>
+      <tr><td><span class="b gray">cancelled</span></td><td>(unchanged; <code>fixing</code>→<code>ready</code>)</td><td>(same)</td><td>(same→<code>active</code>)</td><td><code>available</code></td></tr>
+    </tbody>
+  </table></div>
+  <ul>
+    <li><b>Respects the job’s intent</b>: if <code>m.setFixing===false</code> the close does <b>not</b> touch boat status at
+      all <span class="ln">:32581-32589</span>.</li>
+    <li>If other <code>inprogress</code> MJs remain on the boat, the strictest of their statuses is carried over
+      (<code>unavailable &gt; fixing &gt; available</code>) instead of returning the boat to service
+      <span class="ln">:32590-32605</span>.</li>
+    <li>Appends <code>boat.repairHistory[]</code> with the job’s cost/assets/dates <span class="ln">:32617-32623</span>.</li>
+    <li><code>decommission</code> on an engine also detaches its gearbox (<code>gb.engineId=null</code>) and logs on the
+      attached propeller — the gearbox/propeller are <i>not</i> marked broken by the engine’s retirement
+      <span class="ln">:32637-32646</span>.</li>
+    <li>Gearbox close with <code>success|limited</code> records <code>gb.installHours = flEngHours(linkedEngine)</code>
+      <span class="ln">:32658</span>.</li>
+    <li>Auto-closes the linked incident when every MJ of that incident is done and the outcome isn’t <code>cancelled</code>
+      <span class="ln">:32688-32705</span>.</li>
+    <li>Then offers the service-hour reset (<code>flMaintServiceReset</code>, <a href="#s5">§5</a>).</li>
+  </ul>
+
+  <h4>Data written</h4>
+  <p><code>FL_MAINT[i].{status,endDate,outcome,closeNote,awaitingInvoice,progressLog[],cost}</code>,
+  <code>boat.log[]</code>, <code>boat.repairHistory[]</code>, each asset’s <code>status</code> + <code>log[]</code>,
+  <code>FL_INCIDENTS[i].{status,closedDate,progressLog[]}</code>.</p>
+
+  <h4>Failure modes</h4>
+  <ul>
+    <li><code>flMaintClose</code> sets <code>m.endDate = TODAY_STR</code> unconditionally; back-dating requires manual
+      patching (the seed migrations do exactly that, e.g. <span class="ln">:32679-32681</span>).</li>
+    <li>If the boat-restore is skipped for any reason the boat is left stuck <code>fixing</code> — that is precisely what
+      the <code>flLoad</code> self-heal at <span class="ln">:18545-18565</span> exists to repair.</li>
+    <li><code>flDeleteMaint</code> <span class="ln">:32993</span> removes the job outright; withdrawn parts are <b>not</b>
+      returned to stock by deletion.</li>
+  </ul>
+
+  <!-- 4.4 -->
+  <h3 id="w-swap">4.4 Swap an engine</h3>
+  <p>The engine is the swappable unit. Gearbox + propeller stay at the boat’s drive position and the incoming engine
+  adopts them.</p>
+  <p><b>Trigger</b> — either at Start Job (<code>flMaintStart</code> → <code>flStartGearOpen</code> → the “swap” button)
+  or later from the engine row of an already-started job (<code>flMaintSwapEngine(jobId, idx)</code>
+  <span class="ln">:32416</span>, which sets <code>reentry:true, onlyEngId</code>).</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>flStartGearSwap</code> <span class="ln">:32293</span></div>
+      <div class="d">For each engine asset — every gearbox with <code>engineId===engine.id</code> gets
+      <code>onBoatId=m.boatId</code>, <code>onBoatPos=engine.pos</code>, <code>engineId=null</code>, plus a
+      <code>detach</code> log “คาเรือ รอเครื่อง”; the engine gets <code>boatId=null</code>,
+      <code>status='fixing'</code>, <code>remove</code> log; a <code>ctx.swaps[]</code> entry
+      <code>{oldEngId,pos,filled:false}</code> is queued.</div></div>
+    <div class="step"><div class="t">2 · <code>flStartSwapRenderPicker</code> <span class="ln">:32315</span></div>
+      <div class="d">Candidates = every engine not in the outgoing set, not already on this boat, and
+      <code>status!=='broken'</code>, sorted spares-first <span class="ln">:32323-32324</span>. Also asks where the pulled
+      engine goes (<code>ENG_LOCS</code>, <span class="ln">:32328</span>).</div></div>
+    <div class="step"><div class="t">3 · <code>flStartSwapInstall</code> <span class="ln">:32348</span></div>
+      <div class="d">Pulled engine: <code>spareLocation = &lt;chosen loc&gt;</code> + <code>move</code> log;
+      <code>m.location</code> synced <span class="ln">:32355-32358</span>. The incoming engine <b>sheds its own
+      gearbox/propeller</b>: they stay <code>onBoat*</code> at the source boat, or go <code>spare</code> if it came from
+      the spare pool <span class="ln">:32361-32366</span>. Incoming engine: <code>boatId</code>, <code>pos</code>,
+      <code>status</code> <code>spare</code>→<code>ready</code>, <code>install</code> log
+      <span class="ln">:32370-32372</span>. The waiting gearbox at that boat+position adopts the new engine:
+      <code>engineId=eNew.id</code>, <code>onBoatId/onBoatPos</code> cleared, <code>spare</code>→<code>ready</code>
+      <span class="ln">:32374-32378</span>. The propeller follows implicitly because it points at the gearbox.</div></div>
+    <div class="step done"><div class="t">4 · <code>flStartSwapSkip</code> <span class="ln">:32385</span> / <code>flStartSwapFinish</code> <span class="ln">:32393</span></div>
+      <div class="d"><code>Skip</code> marks remaining positions <code>'skipped'</code>; <code>Finish</code> closes the modal
+      and either refreshes the detail (re-entry) or runs the normal Start.</div></div>
+  </div>
+
+  <div class="note ok">
+    <span class="lbl">Hours travel with the engine</span>
+    Deliberately <i>not</i> reset or frozen: the meter travels with the engine and <code>flEngHours</code> is
+    <code>baseHours + (latest − first reading)</code> across all boats (comment at <span class="ln">:32368-32369</span>).
+  </div>
+
+  <h4>Other move paths</h4>
+  <ul>
+    <li><code>flSaveAssignEng</code> <span class="ln">:36293</span> — Assign/Replace from the boat detail. Detects a
+      position clash and offers to bump the occupant to spare in <code>คลังกลาง</code>
+      <span class="ln">:36303-36329</span>; the replaced engine likewise goes <code>spare</code> + <code>คลังกลาง</code>
+      <span class="ln">:36332-36339</span>. <b>Does not</b> carry the gearbox/propeller — no <code>onBoat*</code> handling
+      here <b>(gotcha: two different swap semantics)</b>.</li>
+    <li><code>flUnassignEng(engId,boatId)</code> <span class="ln">:38087</span> — plain detach to spare.</li>
+    <li><code>flEquipSwapDo(targetId)</code> <span class="ln">:22406</span> — the Equipment bay swaps two same-type pieces
+      (engine↔engine exchanges <code>boatId</code>+<code>pos</code>; gearbox↔gearbox exchanges <code>engineId</code>;
+      propeller↔propeller exchanges <code>gearboxId</code>) and auto-fixes <code>spare</code> status.</li>
+    <li><code>flOpenMoveSpare</code> <span class="ln">:34157</span> / <code>flConfirmMove</code>
+      <span class="ln">:34219</span> — relocate a spare between pier/shop/boat locations.</li>
+  </ul>
+
+  <h4>Validation / guards</h4>
+  <p>The picker is the only guard (broken engines excluded, same boat excluded). Nothing enforces
+  shaft-length/suffix compatibility on an engine swap; the gearbox suffix maps only exist inside the
+  <code>flLoad</code> migration <span class="ln">:13906-13923</span>.</p>
+
+  <h4>Failure modes</h4>
+  <p>A gearbox left with <code>onBoatId</code> set and <code>engineId=null</code> and no follow-up install is an orphan
+  “คาเรือ” part; nothing sweeps these (deliberately — see <a href="#s6">§6</a>).</p>
+
+  <!-- 4.5 -->
+  <h3 id="w-inc">4.5 Record an incident (and quick-swap a damaged part)</h3>
+  <p><b>Trigger</b> — Job Assignment page → add incident (<code>flOpenAddIncidentModal</code>
+  <span class="ln">:34336</span>).</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>flSaveIncident</code> <span class="ln">:34423</span></div>
+      <div class="d">Required boat + date + title <span class="ln">:34428</span>.</div></div>
+    <div class="step"><div class="t">2 · Damaged assets</div>
+      <div class="d">Collected from three checkbox classes plus a comma-separated free-text hull field
+      <span class="ln">:34430-34448</span> into <code>damagedAssets[] {type,id,label}</code>.</div></div>
+    <div class="step"><div class="t">3 · <code>severity</code> derived from <code>priority</code></div>
+      <div class="d"><code>&gt;=4 → critical</code>, <code>&gt;=3 → major</code>, else <code>minor</code>
+      <span class="ln">:34452</span>.</div></div>
+    <div class="step"><div class="t">4 · Numbering</div>
+      <div class="d"><code>INC-</code> + <code>max+1</code> <span class="ln">:34479-34482</span>,
+      <code>flAssertUniqueNo</code> guard.</div></div>
+    <div class="step done"><div class="t">5 · <b>Quick Fix</b> checkbox</div>
+      <div class="d">Status <code>resolved</code> immediately, <code>resolvedDate</code>, a <code>quickfix</code> log line
+      appended to each damaged asset <span class="ln">:34493-34522</span> — no MJ is created.</div></div>
+    <div class="step"><div class="t">6 · Edit mode</div>
+      <div class="d">Short-circuits at <span class="ln">:34455-34473</span> and appends an
+      <code>✎ แก้ไขรายละเอียด</code> progress line.</div></div>
+  </div>
+
+  <div class="note warn">
+    <span class="lbl">Gotcha — “major” means exactly priority 3</span>
+    The priority <code>&lt;select&gt;</code> and this mapping mean “major” is only priority 3; the dashboard counts
+    <code>major</code>/<code>minor</code> only <span class="ln">:21072-21073</span>, so <code>critical</code> incidents fall
+    out of that particular split.
+  </div>
+
+  <h4>Data written</h4>
+  <p><code>FL_INCIDENTS</code> (unshifted):</p>
+<pre><code>{id, no, boatId, date, time, title, detail, remark, damagedAssets[],
+ priority, severity, type:'incident', status:'open'|'resolved',
+ maintId, quickFix, resolvedDate, progressLog[]}</code></pre>
+  <p>Plus asset <code>log[]</code> on quick-fix.</p>
+
+  <h4>Quick swap of a damaged gearbox/propeller</h4>
+  <p><code>flOpenSwapModal(incId,type,assetId)</code> <span class="ln">:33842</span> →
+  <code>flConfirmSwap(spareId)</code> <span class="ln">:33921</span>:</p>
+  <ul>
+    <li>Candidate spares must have a truthy <code>spareLocation</code>, must not be at a <code>shop:*</code> location, and
+      are restricted to the <b>boat’s own pier or the boat itself</b> — cross-pier spares are intentionally invisible
+      (“แบบ A · เข้ม”, <span class="ln">:33852-33868</span>);</li>
+    <li>Compatibility is brand-only for gearboxes (model mismatch shows a ⚠ badge) and size-only for propellers
+      <span class="ln">:33859-33862</span>;</li>
+    <li>The swap moves the spare into the damaged part’s slot (<code>boatId</code>,
+      <code>engineId</code>/<code>gearboxId</code>, <code>note</code>, <code>propPos</code>,
+      <code>spareLocation=null</code>), sets <code>spare.baseHours = engine hours</code> (gearbox) or
+      <code>spare.installHours</code> (propeller), and pushes the damaged part to
+      <code>status='fixing'|'damaged'</code> + <code>spareLocation='shop:honda-phuket'</code> (hard-coded default,
+      <span class="ln">:33997</span>);</li>
+    <li><code>usedHours</code> on the removed part is computed from its last <code>install</code> log entry
+      <span class="ln">:33950-33951</span>;</li>
+    <li>Flags <code>inc.damagedAssets[i].{swapped,swappedTo,swappedDate}</code>;</li>
+    <li>If the swapped gearbox had propellers attached, <code>flOpenPropCascadeModal</code> <span class="ln">:34028</span>
+      asks keep / stock / repair (<code>flConfirmPropCascade</code> <span class="ln">:34081</span>).</li>
+  </ul>
+
+  <h4>Failure modes</h4>
+  <p>Spares stored at a shop are invisible; a boat whose <code>pier</code> is stale (the raw <code>b.pier</code>, not
+  <code>getBoatCurrentPier</code>, is used at <span class="ln">:33864</span>) sees the wrong pier’s spares.</p>
+
+  <!-- 4.6 -->
+  <h3 id="w-consume">4.6 Requisition a consumable (เบิกของใช้ / น้ำมัน)</h3>
+  <p>Separate from repair jobs by design: it deducts stock and books cost in its <b>own</b> bucket so
+  “Upkeep รวม = ค่าซ่อม(MJ) + ของใช้” <span class="ln">:19709-19711</span>.</p>
+  <p><b>Trigger</b> — <code>view-fl-consumables</code> → เบิก button → <code>flConsumeOpen</code>
+  <span class="ln">:19726</span>.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · Pick the item</div>
+      <div class="d">Item typeahead (<code>flConsumeItemFilter</code> <span class="ln">:19760</span> /
+      <code>flConsumeItemPick</code> <span class="ln">:19770</span>), warehouse, qty, boat, optional engine
+      (<code>flConsumeBoatChanged</code> <span class="ln">:19782</span> filters engines by boat).</div></div>
+    <div class="step"><div class="t">2 · <code>flConsumePreview</code> <span class="ln">:19788</span></div>
+      <div class="d">Shows cost <code>qty × item.cost</code> and remaining stock at that warehouse.</div></div>
+    <div class="step ask"><div class="t">3 · <code>flConsumeSubmit</code> <span class="ln">:19798</span></div>
+      <div class="d">Requires an item, <code>qty&gt;=1</code>, and a boat <span class="ln">:19801-19806</span>. If
+      <code>qty &gt; invQtyAt(...)</code> it asks for confirmation to go negative <span class="ln">:19812</span> and falls
+      back to a raw decrement when <code>invRemoveAt</code> refuses <span class="ln">:19813</span>.</div></div>
+  </div>
+
+  <h4>Data written</h4>
+  <ul>
+    <li><code>item.stocks[].qty</code> decremented (<code>invRemoveAt</code> <span class="ln">:20753</span> →
+      <code>invSyncLegacy</code> <span class="ln">:20718</span> recomputes
+      <code>qty</code>/<code>totalQty</code>/<code>primaryLocation</code>)</li>
+    <li><code>item.history[]</code> <code>{date,type:'withdraw',qty,location,note,by,consumeId}</code></li>
+    <li><code>FL_CONSUMABLE_LOGS[]</code>
+      <code>{id,date,itemId,itemName,unit,qty,unitCost,cost,location,boatId,engineId,engineLabel,by,note}</code></li>
+  </ul>
+
+  <h4>Reversal</h4>
+  <p><code>flConsumeDelete(id)</code> <span class="ln">:19826</span> returns qty to the same warehouse and strips the
+  matching <code>history</code> row by <code>consumeId</code>.</p>
+
+  <h4>Failure modes</h4>
+  <p>Negative stock is reachable by design; the requisition cost is <i>not</i> included in <code>flMaintCalcCost</code>
+  or Cost Analytics, only in <code>renderConsumables</code> (<code>flConsumeCostOf</code> <span class="ln">:19717</span>)
+  alongside <code>flBoatRepairCostMonth</code> <span class="ln">:19719</span>.</p>
+
+  <!-- 4.7 -->
+  <h3 id="w-proj">4.7 Run a project (drydock / overhaul)</h3>
+  <p><b>Trigger</b> — visiting <code>view-fl-projects</code> runs <code>flProjMigrate(false)</code> first
+  <span class="ln">:27164</span>, then the list or detail.</p>
+
+  <h4>Migration / backfill chain — <code>flProjMigrate</code> <span class="ln">:26554</span></h4>
+  <div class="flow">
+    <div class="stage"><div class="k">1</div><div class="v">flProjCleanupV2</div><div class="s"><span class="ln">:26371</span> unlink non-scheduled MJs</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">2</div><div class="v">flProjCleanupV3</div><div class="s"><span class="ln">:26522</span> clear default +30d <code>planTo</code></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">3</div><div class="v">flProjCleanupV4</div><div class="s"><span class="ln">:26505</span> backfill <code>originalPlanTo</code> baseline</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">4</div><div class="v">flProjResyncMJLinks</div><div class="s"><span class="ln">:26471</span></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">5</div><div class="v">flProjAutoCreateForScheduledMJs</div><div class="s"><span class="ln">:26400</span></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">6</div><div class="v">boat-log scan</div><div class="s">one-shot, guarded by <code>d._fl_proj_migrated_v1</code> <span class="ln">:26567</span>, <span class="ln">:26643</span></div></div>
+  </div>
+  <p>The scan creates a project for every boat-log entry with <code>reason==='dry_dock'</code> or an
+  <code>unavailable</code> stretch ≥14 days that isn’t already tagged with <code>entry.projectId</code>
+  <span class="ln">:26575-26621</span>, then links overlapping <code>type==='scheduled'</code> MJs
+  <span class="ln">:26625-26639</span>.</p>
+
+  <h4>Lifecycle</h4>
+  <div class="tw"><table>
+    <thead><tr><th style="width:120px">Action</th><th style="width:260px">Fn</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td>create/edit</td><td><code>flProjOpenModal</code> <span class="ln">:28812</span> → <code>flProjSaveModal</code> <span class="ln">:28862</span></td><td><code>PRJ-xxx</code></td></tr>
+      <tr><td>start</td><td><code>flProjStart</code> <span class="ln">:28621</span></td><td><code>status='inprogress'</code>, <code>actualFrom</code>, boat log entry <code>s:'unavailable'</code> with <code>reason:'dry_dock'|'overhaul'</code> and <code>projectId</code> <span class="ln">:28633-28642</span></td></tr>
+      <tr><td>hold</td><td><code>flProjHold</code> <span class="ln">:28649</span></td><td>requires a reason; <code>status='on_hold'</code>, <code>holdReason</code>, <code>holdSince</code></td></tr>
+      <tr><td>resume</td><td><code>flProjResume</code> <span class="ln">:28664</span></td><td>back to <code>inprogress</code>, clears hold meta (history stays in <code>log[]</code>)</td></tr>
+      <tr><td>cancel</td><td><code>flProjCancel</code> <span class="ln">:28677</span></td><td>requires a reason; offers to unlink open child MJs; closes the project’s boat-log entry and pushes <code>available</code></td></tr>
+      <tr><td>reopen</td><td><code>flProjReopen</code> <span class="ln">:28727</span></td><td>cancelled → <code>planned</code></td></tr>
+      <tr><td>complete</td><td><code>flProjMarkComplete</code> <span class="ln">:28740</span></td><td><b>cascade-closes every open child MJ</b> (<code>m.status='done'</code>, no outcome, no asset/boat cascade), sets <code>actualTo</code>, closes the boat log entry, pushes <code>available</code></td></tr>
+      <tr><td>add MJ</td><td><code>flProjCreateMJ</code> <span class="ln">:28785</span></td><td>opens Create Job pre-set to <code>scheduled</code> with <code>_projCreateForId</code></td></tr>
+      <tr><td>phase</td><td><code>flProjSetPhase</code> <span class="ln">:26676</span></td><td><code>PROJ_PHASES</code> <span class="ln">:26657</span> per type</td></tr>
+    </tbody>
+  </table></div>
+
+  <h4>Data written</h4>
+<pre><code>FL_PROJECTS[i] = {id, no, name, boatId, type, vendor, planFrom, planTo,
+  originalPlanTo, actualFrom, actualTo, status, phase, plannedBudget, notes,
+  holdReason, holdSince, cancelReason, cancelledOn, log[], plan[], docs[],
+  photos[], vendorVisits[], createdAt, createdBy}</code></pre>
+  <p>Plus <code>FL_MAINT[i].parentProjectId</code> and <code>boat.log[]</code> entries carrying <code>projectId</code>.</p>
+
+  <h4>Validation / guards</h4>
+  <p>Status transitions are gated (<code>flProjStart</code> only from <code>planned</code>, <code>flProjHold</code> only
+  from <code>inprogress</code>, etc.); hold/cancel demand a non-empty reason.</p>
+
+  <div class="note danger">
+    <span class="lbl">Important gotcha — the complete cascade bypasses flMaintClose</span>
+    <code>flProjMarkComplete</code>’s cascade close bypasses <code>flMaintClose</code> entirely: child assets stay
+    <code>fixing</code>, no <code>repairHistory</code>, no incident auto-close, no service-hour prompt.
+    <code>flProjStart</code>/<code>flProjCancel</code>/<code>flProjMarkComplete</code> call both <code>flSave()</code>
+    and <code>save()</code> because they touch <code>BOATS</code>.
+  </div>
+
+  <!-- 4.8 -->
+  <h3 id="w-memo">4.8 Purchase memo (MO) approval chain</h3>
+  <p>Memos are how money enters a job. <code>flMaintCalcCost</code> only counts memos in
+  <code>approved | received | paid</code>.</p>
+  <p><b>Steps</b> — <code>flSaveMemo</code> <span class="ln">:26139</span> creates the memo;
+  <code>flAdvanceMemo(id)</code> <span class="ln">:35841</span> walks the chain.</p>
+
+  <div class="flow">
+    <div class="stage"><div class="k">step 1</div><div class="v">created</div><div class="s"></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">step 2</div><div class="v">pending_approval</div><div class="s"></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">step 3</div><div class="v">approved</div><div class="s">diverts to <code>flOpenApproveModal</code> <span class="ln">:35869</span> → <code>flSaveApprove</code> <span class="ln">:35876</span> (approver name required)</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">step 4</div><div class="v">ordered</div><div class="s">parts / mixed only</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">step 5</div><div class="v">received</div><div class="s">diverts to <code>flOpenReceiveMemo</code> <span class="ln">:35898</span> → <code>flSaveReceive</code> <span class="ln">:35234</span></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">step 6</div><div class="v">paid</div><div class="s"></div></div>
+  </div>
+
+  <ul>
+    <li>parts / mixed: <code>created → pending_approval → approved → ordered → received → paid</code></li>
+    <li>labour-only: <code>created → pending_approval → approved → paid</code> (skips ordered/received)
+      <span class="ln">:35847-35848</span></li>
+    <li><code>flSaveReceive</code> receives all parts items into <b>one</b> warehouse guessed from the boat’s pier
+      (<code>flMemoWarehouse</code> <span class="ln">:35889</span>) and creates missing inventory items automatically</li>
+    <li>A memo with no parts items skips straight to <code>paid</code> <span class="ln">:35917-35923</span>.</li>
+  </ul>
+
+  <h4>Data written</h4>
+  <p><code>FL_MEMOS[i].{status,currentStep,approvedBy,approvedDate,approveNote,...}</code>, <code>item.stocks[]</code>,
+  <code>item.history[]</code>.</p>
+</section>
+
+<!-- ============ 5 ============ -->
+<section id="s5">
+  <h2><span class="num">05</span> Derived numbers</h2>
+
+  <h3 id="d-hours">5.1 Engine hours — <code>flEngHours(id)</code> <span class="ln">:20791</span></h3>
+<pre><code>hours = engine.baseHours + (latest meter reading − first meter reading)</code></pre>
+  <p>Scanning all of <code>FL_DAILY[*][*].trips[*].engines[id]</code>, <b>skipping any value <code>&lt;= 0</code></b>
+  (a <code>0</code> placeholder otherwise blows the total up, <span class="ln">:22799</span>). With no readings at all it
+  returns <code>baseHours</code>. Deliberately <b>not</b> scoped to the days the engine was on a given boat — the meter is
+  physically on the engine and travels with it (comment <span class="ln">:20793-20794</span>).</p>
+  <p>Applied in: engine detail/list, <code>flMaintAddAsset</code> logs, close-job logs, gearbox lifetime, the
+  assign-engine info card <span class="ln">:36277</span>, the fuel L/hr metric.</p>
+
+  <h3>5.2 Engine service countdown — <code>flEngServiceState(e)</code> <span class="ln">:20810</span></h3>
+<pre><code>base     = e.lastServiceHours ?? e.baseHours ?? 0
+since    = max(0, curH − base)
+next     = base + e.serviceInterval
+left     = next − curH        (negative ⇒ overdue)
+pct      = clamp(since / interval × 100, 0, 100)</code></pre>
+  <p>It is a countdown from the <b>last recorded service</b>, not a modulo of total hours. <code>interval===0</code>
+  returns a null-cycle object. Reset by <code>flEngMarkService</code> <span class="ln">:20823</span> (prompt for the
+  reading) or by <code>flMaintServiceReset</code> at job close.</p>
+  <div class="note warn">
+    <span class="lbl">Inconsistency</span>
+    <b>Not</b> applied in <code>flUpdateAssignEngInfo</code> <span class="ln">:36278</span>, which still uses the old
+    modulo <code>ceil(curH/interval)*interval</code>.
+  </div>
+
+  <h3>5.3 Gearbox lifetime + service — <code>flGbLifetimeHours(g)</code> <span class="ln">:20841</span> / <code>flGbServiceState(g)</code> <span class="ln">:20849</span></h3>
+<pre><code>curH      = attached engine hours − g.baseHours   (0 if detached)
+prevUsed  = Σ (log entries of type 'remove').usedHours
+lifetime  = prevUsed + curH
+interval  = g.serviceInterval || GB_DEF_SVC_INTERVAL(200)   (:20840)
+base      = g.lastServiceHours ?? lifetime   ← never serviced ⇒ assume "now",
+                                               so it doesn't spam overdue</code></pre>
+  <p>Reset by <code>flGbMarkService</code> <span class="ln">:20861</span>; interval edited by
+  <code>flGbSetInterval</code> <span class="ln">:20876</span>.</p>
+
+  <h3 id="d-cost">5.4 Per-asset maintenance cost share — <code>flMaintCostShare(m, kind)</code> <span class="ln">:20888</span></h3>
+<pre><code>share = flMaintCalcCost(m.id) / (count of m.assets having the matching id key)
+        kind 'gb'→gbId · 'prop'→propId · else engId   (min 1)</code></pre>
+  <p>Applied <b>only</b> on the Engine / Gearbox / Propeller detail pages, so a 4-engine oil change shows ~¼ each. Job
+  totals, boat totals, project totals and the dashboard still count the job once
+  <span class="ln">:20886-20887</span>.</p>
+
+  <h3>5.5 Job cost — <code>flMaintCalcCost(id)</code> <span class="ln">:32829</span></h3>
+<pre><code>memoCost  = Σ memo.amount   for memos with memo.maintId===job
+                            and status ∈ {paid, received, approved}
+partsCost = Σ part.qty × part.cost  for m.parts[], EXCLUDING parts whose
+            normalised name already appears in a 'parts'-type memo of this
+            job (no double counting)
+total     = partsCost + memoCost      → also written back to m.cost</code></pre>
+  <p><code>flMaintPartsCoveredByMemo(m)</code> <span class="ln">:32847</span> returns the excluded amount for display.</p>
+
+  <h3>5.6 Project cost / health</h3>
+  <ul>
+    <li><code>flProjCalcCost(projId)</code> <span class="ln">:27080</span> = Σ <code>flMaintCalcCost</code> over
+      <code>flProjChildMJs</code> <span class="ln">:27077</span> (<code>m.parentProjectId===projId</code>).</li>
+    <li><code>flProjCostBreakdown</code> <span class="ln">:27108</span> splits parts / labour / other by memo item
+      <code>category</code>, and adds project-level memos (<code>memo.projectId</code>) as overhead.</li>
+    <li><code>flProjHealth(p)</code> <span class="ln">:26690</span> — score starts at 100;
+      <code>−min(40, (budget% −100)×1.5)</code> when over budget; <code>−5</code> at 80–100 %;
+      <code>−min(35, daysLate×2)</code>; <code>−15</code> if &gt;80 % of the schedule elapsed with &gt;50 % of child MJs
+      still open; <code>−10</code> while <code>on_hold</code>. Buckets:
+      <span class="b red">&lt;40 CRITICAL</span> <span class="b amber">&lt;70 AT RISK</span>
+      <span class="b green">else ON TRACK</span>. Open-ended projects (<code>planTo</code> null) get no schedule
+      penalty.</li>
+    <li><code>flProjYoYStats(year)</code> <span class="ln">:26727</span> buckets projects by
+      <code>actualTo || planFrom || createdAt</code>.</li>
+  </ul>
+
+  <h3>5.7 Cost Analytics — <code>costAggregate()</code> <span class="ln">:29314</span></h3>
+  <ul>
+    <li>Pool = MJs with status <code>done | inprogress | on_hold</code> (cancelled excluded), time-filtered by
+      <code>endDate || startDate</code> against <code>_costTimeFilter</code>
+      (<code>all | ytd | month | last30</code>).</li>
+    <li>Each job’s cost is split <b>evenly across its assets</b>, bucketed by asset type into <code>COST_CATS</code>
+      <span class="ln">:29288</span> (<code>hull|engine|gearbox|propeller|other|memo</code>); a job touching several
+      assets of one category counts as <b>one</b> job for the counter but its money is still divided per piece
+      <span class="ln">:29353-29358</span>.</li>
+    <li>Standalone memos (no <code>maintId</code>) with a <code>boatId</code> are charged to that boat, but only the share
+      that never entered stock — <code>laMemoDirectShare(mo)</code> <span class="ln">:29302</span> = value of items without
+      <code>invId</code> ÷ total, so parts are not counted twice (once at purchase, once at withdrawal). The remainder
+      falls into a central-cost bucket.</li>
+  </ul>
+
+  <h3 id="d-fuel">5.8 Fuel metrics — <code>_fuelAgg(month)</code> <span class="ln">:29874</span> / <code>_fuelWkAgg</code> <span class="ln">:29910</span></h3>
+  <ul>
+    <li>A boat-day counts only if it actually ran: <code>info.pax&gt;0 || routes present || fuel&gt;0</code>
+      <span class="ln">:29882</span> — “ไม่ออก = ไม่นับ ไม่ใช่ 0”.</li>
+    <li><code>cost = fuel × flFuelPriceForBoat(ds, boat)</code>; missing price ⇒ ฿0 plus a <code>priceMissing</code> flag
+      <span class="ln">:29886</span>.</li>
+    <li><code>runH</code> per boat-day = <b>max</b> over that boat’s engines of
+      <code>(today's reading − flPrevMeter)</code> <span class="ln">:29887</span> — max, not sum, i.e. it approximates
+      elapsed running time.</li>
+    <li>Fuel is attributed to route families pro-rata by pax share <span class="ln">:29892-29893</span>.</li>
+    <li>Anomaly = a day whose fuel &gt; 1.3 × the boat’s month average, only when there are ≥3 fuelled days
+      <span class="ln">:29900</span>. The Daily Log has its own cruder anomaly: L/PAX &gt; 20
+      <span class="ln">:21839</span>.</li>
+    <li>Weekly buckets are <code>ceil(dayOfMonth/7)</code> → W1..W5 <span class="ln">:29927</span>. Metrics
+      <code>_fuelWkVal</code> <span class="ln">:29936</span>: <code>0 L/hr</code> (null if no run hours),
+      <code>1 L/day</code>, <code>2 L/pax</code> (null if no pax), <code>3 ฿</code> — null ≠ 0 by design.</li>
+  </ul>
+  <div class="note warn">
+    <span class="lbl">Gotcha — bypasses flSave</span>
+    Month budget lives outside the fleet keys, in <code>d.fleet_fuelbudget[YYYY-MM]</code>, written directly to
+    localStorage by <code>fuelSetBudget</code> <span class="ln">:29873</span>.
+  </div>
+
+  <h3>5.9 Fleet Insights health — <code>getHealth(s)</code> <span class="ln">:30259</span></h3>
+  <p>Per boat over the selected period: <code>jobs&gt;=3 || cost&gt;=100000</code> →
+  <span class="b red">Critical</span>; <code>jobs&gt;=1</code> → <span class="b amber">Watch</span>; else
+  <span class="b green">Healthy</span>. Period filter <code>_insightsTimeFilter</code> ∈
+  <code>month|quarter|ytd|all</code> <span class="ln">:30199-30211</span>.</p>
+</section>
+
+<!-- ============ 6 ============ -->
+<section id="s6">
+  <h2><span class="num">06</span> flLoad / flSave lifecycle</h2>
+
+  <p><code>FLEET_VERSION = 'fleet_v34'</code> <span class="ln">:13768</span>. <code>flLoad()</code>
+  <span class="ln">:13815</span> runs once at module init <span class="ln">:36192</span>, immediately followed by
+  <code>flValidateDataIntegrity()</code> <span class="ln">:36194</span>.</p>
+
+  <h4>Order of operations inside flLoad()</h4>
+  <div class="rail">
+    <div class="step"><div class="t">1 · Auto-snapshot <span class="ln">:13818-13843</span></div>
+      <div class="d">Before any migration, if the blob has maintenance/memo/incident data, copy the whole state to
+      <code>localStorage[LS_KEY + '_snap_' + Date.now()]</code>, keeping the newest 3. Snapshots larger than
+      <b>1.5 MB are refused</b> and all existing snapshots are dropped instead (a full ~6 MB state can never fit
+      Safari’s ~5 MB quota, <span class="ln">:13829-13832</span>); a <code>QuotaExceededError</code> also purges all
+      snapshots. Console helpers: <code>flListSnapshots()</code> <span class="ln">:13773</span>,
+      <code>flRestoreSnapshot(N)</code> <span class="ln">:13797</span> (confirm + overwrite + manual refresh).</div></div>
+    <div class="step"><div class="t">2 · Version whitelist <span class="ln">:13848</span></div>
+      <div class="d">A literal array <code>fleet_v2 … fleet_v34</code>. An unknown/absent version takes the
+      <b>first-time path</b>, which is defensive: it only fills arrays that are <i>empty</i>
+      <span class="ln">:13862-13869</span>, never overwrites existing data, and logs the pre-existing counts.</div></div>
+    <div class="step"><div class="t">3 · v2–v7 → current <span class="ln">:13876-13903</span></div>
+      <div class="d">Legacy one-off fixes plus a forced <code>fleet_gearboxes</code> refresh.</div></div>
+    <div class="step"><div class="t">4 · v8–v33 → v34 <span class="ln">:13905</span> onward</div>
+      <div class="d">The long tail: gearbox shaft/suffix normalisation via
+      <code>suffixMap</code>/<code>catamaranMap</code>/<code>df325Map</code> <span class="ln">:13906-13952</span>,
+      <code>DF250 → DF250W</code> renames, seeding of spare gearboxes <code>g54–g57</code>, gearbox serial re-encoding
+      <code>&lt;BOAT&gt;-&lt;BASE&gt;-&lt;SUFFIX&gt;-&lt;POS&gt;</code> /
+      <code>SPARE-&lt;BASE&gt;-&lt;SUFFIX&gt;-NN</code> <span class="ln">:13970-13998</span>, and a very large amount of
+      <b>scenario seeding</b> (Megazip inventory items i31–i52, memos MO-002…MO-004, incidents INC-001…, jobs
+      MJ-001…MJ-027) all guarded by <code>if(!existingIds.has(...))</code>. This block runs to roughly
+      <span class="ln">:18400</span>.</div></div>
+    <div class="step"><div class="t">5 · Deferred hooks <span class="ln">:18588-18700+</span></div>
+      <div class="d"><code>d._app_hooks._inc008_pending_start</code>, <code>_mj019_pending_start</code>,
+      <code>_mj021_close_pending</code>, … call the <i>real</i> <code>flMaintStart</code>/<code>flMaintClose</code> so the
+      seeded scenario goes through the same cascade a user click would, then <code>delete</code> the hook and
+      <code>flSave()</code>.</div></div>
+    <div class="step"><div class="t">6 · Hydrate the globals <span class="ln">:18525-18530</span>, <span class="ln">:18581</span></div>
+      <div class="d"><code>FL_MAINT</code> passes through <code>flDedupeMaint</code> <span class="ln">:19683</span>
+      (dedupe by <code>no|boatId|title|type|startDate</code>, unnumbered jobs pass through untouched) and
+      <code>FL_CONSUMABLE_LOGS</code> uses a strict <code>Array.isArray</code> check.</div></div>
+    <div class="step"><div class="t">7 · Idempotent back-fill <span class="ln">:18531-18544</span></div>
+      <div class="d">New <code>FL_DEFAULT_INVENTORY</code> rows whose <code>id</code> is missing are pushed. Adds only;
+      never touches an existing row. This is the sanctioned pattern for “items appended to a seed list after users were
+      already seeded”.</div></div>
+    <div class="step"><div class="t">8 · Sanctioned self-heals — exactly two</div>
+      <div class="d"><b>boat stuck fixing</b> <span class="ln">:18545-18565</span>: a boat whose latest <b>open</b> log
+      entry is <code>fixing</code>/<code>unavailable</code>, whose <code>note</code> references an <code>MJ-\d+</code>
+      that is now <code>done</code>, and which has no other <code>inprogress</code> MJ forcing downtime, gets that entry
+      closed at the MJ’s <code>endDate</code> and an <code>available</code> entry appended with note “Auto-restore”.<br>
+      <b>engine status vs active job</b> <span class="ln">:18566-18580</span>: an engine that is an asset of an
+      <code>inprogress</code> MJ reads <code>fixing</code> regardless of the job’s <code>boatStatus</code>; an engine
+      flagged <code>fixing</code> with no active job returns to <code>ready</code>. Skips <code>broken</code> and
+      <code>spare</code>.<br>
+      Both are narrow, keyed on an unambiguous signal, and produce the same result on every run.</div></div>
+    <div class="step done"><div class="t">9 · Safety seed if empty</div>
+      <div class="d"><code>_generateSafetySeed</code> <span class="ln">:20628</span>, then <code>invSyncLegacy</code> over
+      every inventory item <span class="ln">:18584-18587</span>.</div></div>
+  </div>
+
+  <h4><code>flSave()</code> <span class="ln">:19696</span></h4>
+  <p>Read-modify-write of the whole blob: writes the 13 <code>fleet_*</code> keys plus <code>fleet_version</code>
+  <b>plus <code>d.boats = BOATS</code></b>, then one <code>localStorage.setItem</code> (which is the shimmed RAM store,
+  see <a href="#s8">§8</a>). No merge logic: whatever is in the globals wins for those keys, sibling keys are preserved
+  because it re-reads first.</p>
+
+  <div class="grid2">
+    <div class="mini"><h5><span class="b green">Safe to add here</span></h5>
+      <p>Another idempotent id-keyed back-fill of a <code>FL_DEFAULT_*</code> list; a new whitelist entry + a migration
+      branch when you bump <code>FLEET_VERSION</code>; a self-heal only if it matches the bar above — single unambiguous
+      trigger, converges in one pass, logs what it changed, and cannot rewrite data a user legitimately entered.</p></div>
+    <div class="mini"><h5><span class="b red">Not safe</span></h5>
+      <p>Broad “clean-up” sweeps (an over-eager spare-detach/dedupe self-heal was removed for exactly this reason —
+      CLAUDE.md §4); writing seed data over a non-empty array; adding a persisted <code>fleet_*</code> key without also
+      adding it to <code>flSave()</code> <b>and</b> the reload path at <span class="ln">:41570-41582</span> — a key that is
+      saved but never loaded vanishes on refresh; snapshotting more state (the 1.5 MB ceiling is a hard Safari
+      constraint).</p></div>
+  </div>
+</section>
+
+<!-- ============ 7 ============ -->
+<section id="s7">
+  <h2><span class="num">07</span> Data model touched</h2>
+
+  <p>Written by this module:</p>
+  <div class="tw"><table>
+    <thead><tr><th style="width:230px">Store</th><th>Writers</th></tr></thead>
+    <tbody>
+      <tr><td><code>boats</code> (<code>BOATS</code>)</td><td><code>flSave</code> (bulk), <code>flMaintStart/Close</code>, <code>flProj*</code>, <code>flRetireBoat</code>/<code>flUnretireBoat</code>, <code>flSaveAssignment</code> (direct localStorage), <code>flOpenEditBoatModal</code>/save, <code>flSetBoatColor</code> <span class="ln">:9369</span></td></tr>
+      <tr><td><code>fleet_engines</code></td><td>assign/unassign/swap/equip, incident quick-fix, MJ start/close, <code>flSaveEngine</code> <span class="ln">:35994</span>, service reset</td></tr>
+      <tr><td><code>fleet_gearboxes</code></td><td>swap/stash/cascade, MJ close, <code>flSaveGearbox</code> <span class="ln">:36068</span>, <code>flGbMarkService</code>, <code>flGbSetInterval</code></td></tr>
+      <tr><td><code>fleet_propellers</code></td><td>swap/stash/cascade, MJ close, <code>flSavePropeller</code> <span class="ln">:36149</span></td></tr>
+      <tr><td><code>fleet_maintenance</code></td><td><code>flSaveCreateJob</code>, <code>flMaintStart/Close/Delete</code>, parts add/remove, asset add/remove, <code>flMaintTogglePin</code>, <code>flUpdateMaint</code> <span class="ln">:33001</span>, project link/unlink</td></tr>
+      <tr><td><code>fleet_incidents</code></td><td><code>flSaveIncident</code>, <code>flConfirmSwap</code>, <code>flAddIncLog</code> <span class="ln">:33803</span>, <code>flDeleteIncident</code> <span class="ln">:33538</span>, auto-close on MJ close</td></tr>
+      <tr><td><code>fleet_inventory</code></td><td><code>flMaintAddPart/RemovePart</code>, <code>flConsumeSubmit/Delete</code>, receive/transfer/edit (<code>flSaveReceive</code> <span class="ln">:35234</span>, <code>flSaveTransfer</code> <span class="ln">:35368</span>, <code>flSaveInvEdit</code> <span class="ln">:35167</span>, <code>flSaveAddStock</code> <span class="ln">:35708</span>)</td></tr>
+      <tr><td><code>fleet_memos</code></td><td><code>flSaveMemo</code> <span class="ln">:26139</span>, <code>flAdvanceMemo</code>, <code>flSaveApprove</code>, <code>flCancelMemo</code> <span class="ln">:26042</span>, <code>flEditMemo</code> <span class="ln">:26011</span></td></tr>
+      <tr><td><code>fleet_projects</code></td><td><code>flProj*</code></td></tr>
+      <tr><td><code>fleet_safety</code></td><td><code>flSaveSafety</code> <span class="ln">:37796</span>, <code>flSaveInspection</code> <span class="ln">:37673</span>, <code>flSafetyDelete</code> <span class="ln">:37001</span></td></tr>
+      <tr><td><code>fleet_consumable_logs</code></td><td><code>flConsumeSubmit/Delete</code></td></tr>
+      <tr><td><code>fleet_daily</code> / <code>fleet_fuelprice</code> / <code>fleet_drlock</code></td><td>Daily Fleet Log savers (<a href="#w-daily">§4.1</a>)</td></tr>
+      <tr><td><code>fleet_fuelbudget</code></td><td><code>fuelSetBudget</code> <span class="ln">:29873</span> — <b>direct localStorage, not via <code>flSave</code></b></td></tr>
+      <tr><td><code>_fl_proj_migrated_v1</code>, <code>_app_hooks.*</code></td><td>migration bookkeeping written by <code>flProjMigrate</code> / <code>flLoad</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note">
+    <span class="lbl">Read but not written</span>
+    <code>SB_BOOKINGS</code> (PAX per boat-day, charter detection), <code>TRIPS</code> (Boat-Op operating flags),
+    <code>ROUTES</code>/<code>getRoute</code>, <code>bkV2RouteFamily</code>, <code>acctBookingTotal</code>.
+  </div>
+</section>
+
+<!-- ============ 8 ============ -->
+<section id="s8">
+  <h2><span class="num">08</span> Persistence path</h2>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · Mutate then save</div>
+      <div class="d">Fleet code mutates the in-RAM globals, then calls <code>flSave()</code>.</div></div>
+    <div class="step"><div class="t">2 · Read-modify-write</div>
+      <div class="d"><code>flSave()</code> does <code>JSON.parse(localStorage.getItem(LS_KEY))</code> → assigns the
+      <code>fleet_*</code> keys + <code>boats</code> → <code>localStorage.setItem(LS_KEY, …)</code>.</div></div>
+    <div class="step"><div class="t">3 · localStorage is shimmed</div>
+      <div class="d"><code>localStorage.getItem/setItem</code> for the <code>loveandaman_v2</code> key are <b>shimmed to an
+      in-memory object</b> (<code>_mem</code>) at the top of the file <span class="ln">:62</span>,
+      <span class="ln">:153-164</span>. Nothing of this size ever reaches the real disk store.</div></div>
+    <div class="step"><div class="t">4 · Debounced diff → REST batch</div>
+      <div class="d">The shim’s <code>setItem</code> marks the state dirty and debounces <code>save(blob)</code>
+      <span class="ln">:211-223</span>, which computes a record-level diff against <code>BASE</code> and translates it to
+      REST ops via <code>laDiffToOps</code> <span class="ln">:167</span> → one transactional
+      <code>POST /api/v1/_batch</code>. A key the REST index (<code>GET /api/v1</code> resources) does not know forces a
+      fallback to the legacy whole-diff <code>POST /api/save</code> <span class="ln">:184</span>,
+      <span class="ln">:217</span>.</div></div>
+    <div class="step block"><div class="t">5 · Guards on the way out</div>
+      <div class="d">An empty/unparseable blob is never pushed (<code>_laBlobUsable</code> <span class="ln">:210</span>);
+      a server-side shrink refusal (HTTP 409) shows a blocking banner and does <b>not</b> retry
+      <span class="ln">:220</span>; <code>beforeunload</code>/<code>pagehide</code> flush synchronously
+      <span class="ln">:225-236</span>.</div></div>
+    <div class="step done"><div class="t">6 · Reload</div>
+      <div class="d"><code>/api/load</code> re-populates <code>_mem</code>, and <code>_laReloadData</code> re-hydrates every
+      fleet global with <code>Array.isArray</code> guards <span class="ln">:41570-41582</span>.
+      <b>Any new <code>fleet_*</code> key must be added there too.</b></div></div>
+  </div>
+
+  <div class="note">
+    <span class="lbl">The one real-disk write</span>
+    Snapshots (<code>LS_KEY + '_snap_*'</code>) are the <i>only</i> fleet writes that go to real localStorage, and only
+    when the state is under 1.5 MB.
+  </div>
+</section>
+
+<!-- ============ 9 ============ -->
+<section id="s9">
+  <h2><span class="num">09</span> Cross-module contracts</h2>
+
+  <h4>What other modules read from Fleet</h4>
+  <div class="tw"><table>
+    <thead><tr><th style="width:180px">Consumer</th><th style="width:300px">Reads</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td>Booking / boat assign</td><td><code>boat.cap</code> as the booking cap, <code>boat.licensePax</code> as the hard physical ceiling</td><td><code>BA_CAP_TOL = 2</code> <span class="ln">:45499</span> — assignment blocked above <code>cap + 2</code> <span class="ln">:45520-45521</span>; <code>boatCapLicense(boatId)</code> <span class="ln">:47007</span> = <code>licensePax || cap</code> is the hard block</td></tr>
+      <tr><td>Booking allotment</td><td><code>getCurStatus(b, date).s === 'available'</code> to decide whether a boat is sellable</td><td><code>renderBoats</code>/allotment paths, e.g. <span class="ln">:72317</span> seat-cap sum</td></tr>
+      <tr><td>Boat Operation / calendar</td><td><code>getBoatCurrentPier(b, ds)</code> for grouping, <code>getBoatShopLocation(b)</code> <span class="ln">:9958</span> for the subtitle</td><td><span class="ln">:9920</span>, <span class="ln">:9958</span></td></tr>
+      <tr><td>Trip P&amp;L / accounting</td><td><code>flFuelPriceEff(ds, boat)</code> <span class="ln">:22289</span> + <code>flFuelSrcTxt</code> <span class="ln">:22313</span> — the <i>lenient</i> price resolver with provenance, so a missing daily price doesn’t book ฿0</td><td><span class="ln">:22267-22320</span>; a fallback constant <code>32</code> ฿/L exists at <span class="ln">:58475</span></td></tr>
+      <tr><td>Trip P&amp;L / fuel</td><td><code>FL_DAILY[ds][boatId].fuel</code></td><td><code>_fuelAgg</code>, P&amp;L</td></tr>
+      <tr><td>Safety seed</td><td><code>boat.cap || boat.licensePax || 30</code> to size the life-jacket set</td><td><span class="ln">:20644</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h4>What Fleet reads from other modules</h4>
+  <div class="card">
+    <ul>
+      <li><code>SB_BOOKINGS</code> → <code>flBoatBookingsFor(boatId,date)</code> <span class="ln">:12075</span> for
+        PAX/routes/trips per boat-day (Daily Log, Fuel Intelligence). Cancelled statuses
+        <code>['cancelled','rejected','cancelled_weather']</code> are excluded everywhere
+        <span class="ln">:21844</span>, <span class="ln">:29902</span>, <span class="ln">:32439</span>.</li>
+      <li><code>bkV2CharterBoatHeal(ds)</code> is invoked by <code>flRenderDR</code> <span class="ln">:21796</span> so
+        charter bookings mirror <code>trip.charterBoatId → ops.boatId</code> before the day is summed.</li>
+      <li><code>TRIPS[ds][boatId]</code> for “did this boat run” (<code>_flBoatRanOn</code> <span class="ln">:32436</span>,
+        operating counts at <span class="ln">:22198</span>).</li>
+      <li><code>bkV2RouteFamily</code>, <code>getRoute</code>, <code>acctBookingTotal</code> for the fuel-vs-revenue
+        table.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ 10 ============ -->
+<section id="s10">
+  <h2><span class="num">10</span> Invariants &amp; gotchas</h2>
+
+  <div class="card">
+    <ol>
+      <li><b><code>flSave()</code> also persists <code>BOATS</code>.</b> Fleet mutates <code>b.log</code> constantly; the
+        sales-side <code>save()</code> is not called from here, so without <code>d.boats=BOATS</code> every status change
+        would vanish on refresh <span class="ln">:19703-19705</span>. Conversely, project actions call <b>both</b>
+        <code>flSave()</code> and <code>save()</code>.</li>
+      <li><b>Current boat status = last <i>open</i> entry, ties broken by insertion order</b>
+        (<code>getCurStatus</code> <span class="ln">:5879</span>). Never assume array order alone.</li>
+      <li><b><code>In Shop</code> is a derived pier, not a status.</b> <code>getBoatCurrentPier</code> returns
+        <code>'shop'</code> only for an <code>inprogress</code> MJ that has a non-empty <code>location</code> <i>and</i>
+        leaves the boat non-available <span class="ln">:9928-9938</span>. A <code>fixing</code> job with no location keeps
+        the boat in its physical pier group.</li>
+      <li><b>Two boat-status fields coexist</b>: <code>m.boatStatus</code> (new:
+        <code>available|fixing|unavailable</code> + <code>boatStatusReason</code>) and <code>m.setFixing</code> (legacy
+        boolean). Always read them together:
+        <code>m.boatStatus || (m.setFixing===false ? 'available' : 'fixing')</code>.</li>
+      <li><b><code>setFixing===false</code> means “don’t touch the boat”</b> — both at start <span class="ln">:32451</span>
+        and at close <span class="ln">:32581-32589</span>. Closing such a job must not force the boat back to
+        <code>available</code>.</li>
+      <li><b>Closing one MJ does not free a boat that has other open MJs</b> — the strictest remaining status is carried
+        over <span class="ln">:32590-32605</span>.</li>
+      <li><b>Meter readings <code>&lt;= 0</code> are skipped</b> in <code>flEngHours</code> and <code>flPrevMeter</code>.
+        A <code>0</code> is a placeholder, not data.</li>
+      <li><b>Engine hours are continuous across boats.</b> Never “freeze” or rebase them on a swap
+        <span class="ln">:32368-32369</span>.</li>
+      <li><b>Service countdown is relative to <code>lastServiceHours</code>,</b> not <code>curH % interval</code>.
+        <code>flUpdateAssignEngInfo</code> <span class="ln">:36278</span> still uses the old modulo — fix it if you touch
+        that card.</li>
+      <li><b>Gearbox “never serviced” defaults its baseline to <i>now</i></b> <span class="ln">:20853</span> so the fleet
+        doesn’t light up red on day one.</li>
+      <li><b><code>flMaintCostShare</code> is detail-page-only.</b> Applying it to job/boat/project totals would
+        under-count.</li>
+      <li><b>Memo-paid parts are subtracted from <code>m.parts</code> cost</b> by normalised name
+        (<code>_flCostNorm</code>) to avoid double counting <span class="ln">:32837-32841</span>. Renaming a part breaks
+        the match.</li>
+      <li><b>A spare is <code>spareLocation</code> truthy</b> (with <code>status==='spare'</code> as the legacy signal).
+        <code>_flStashPartRecord</code> <span class="ln">:32061</span> sets both plus the null’d link — use it rather than
+        hand-rolling.</li>
+      <li><b><code>onBoatId</code>/<code>onBoatPos</code> = “คาเรือ · รอเครื่อง”</b> — a gearbox waiting at a drive
+        position for a replacement engine. It is <i>not</i> a spare and must not be swept into the spare pool.</li>
+      <li><b>Three different location vocabularies</b>: <code>SPARE_LOC_LABELS</code>/<code>FL_STASH_LOCS</code> keys
+        (<code>pier:*</code>, <code>shop:*</code>, <code>boat:*</code>) for parts; <code>WAREHOUSE_LOCATIONS</code> plain
+        Thai strings for inventory; free-text <code>ENG_LOCS</code> + <code>'คลังกลาง'</code> for engines. They do not
+        interoperate.</li>
+      <li><b>Quick-swap spares are pier-locked and use <code>b.pier</code>, not <code>getBoatCurrentPier</code></b>
+        <span class="ln">:33864</span> — a boat temporarily at another pier still sees its home pier’s spares.</li>
+      <li><b><code>flProjMarkComplete</code> bypasses <code>flMaintClose</code></b> for its children: no outcome, no asset
+        status restore, no <code>repairHistory</code>, no incident auto-close.</li>
+      <li><b>Numbering is <code>max(existing)+1</code>, never <code>length+1</code></b> for MJ/INC (and
+        <code>flAssertUniqueNo</code> throws on collision). Gaps from deletions are expected;
+        <code>flValidateDataIntegrity</code> <span class="ln">:26098</span> logs them as informational.</li>
+      <li><b><code>flSaveAssignment</code> / <code>flCancelAssignment</code> / <code>flAutoUpdateAssignments</code> /
+        <code>fuelSetBudget</code> write localStorage directly</b> instead of going through <code>flSave()</code>. If you
+        refactor persistence, these four are easy to miss.</li>
+      <li><b>Daily Log PAX is read-only</b> <span class="ln">:22125-22128</span>; <code>flSavePaxActual</code> survives
+        only as an API. <code>boatPax.eff</code> still prefers <code>paxActual</code> when present
+        <span class="ln">:21821</span>.</li>
+      <li><b>Fleet is read-only when <code>laCanEditArea('fleet')</code> is false</b> — but only <code>flSave()</code>
+        checks it, so the UI still mutates memory. Anything you add that persists must go through
+        <code>flSave()</code>.</li>
+      <li><b><code>esc</code>/<code>escapeHTML</code> is not global.</b> Fleet renderers that build HTML define their own
+        (<code>flRenderCostAnalytics</code> <span class="ln">:29585</span> does; most others inline <code>${...}</code>
+        unescaped). Adding a new top-level renderer without a local <code>esc</code> throws silently on click.</li>
+      <li><b>Surgical re-render for lists.</b> <code>flMaintRefreshParts</code> <span class="ln">:31539</span> and
+        <code>fuelToggleBoat</code> <span class="ln">:29870</span> (<code>scrollY</code> save/restore) exist because
+        replacing a mount’s <code>innerHTML</code> while a button inside it has focus scrolls the page to the top.</li>
+      <li><b>Known gap (BACKLOG.md §“re-install”):</b> there is no one-click path to put a stashed gearbox/propeller back
+        onto an engine. The workaround is the gearbox/propeller edit form (set status back to
+        <code>ready</code>/<code>active</code>, pick the engine, which clears <code>spareLocation</code>).</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============ 11 ============ -->
+<section id="s11">
+  <h2><span class="num">11</span> Function index</h2>
+
+  <p>Line numbers are as of <code>094dde1</code> and drift — grep the symbol name.</p>
+
+  <input class="filter" id="ffilter" type="search" placeholder="Filter functions…" autocomplete="off">
+  <span class="count" id="fcount"></span>
+
+  <div class="tw"><table id="ftable">
+    <thead><tr><th>Function</th><th>Line</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>flListSnapshots</code></td><td class="mono">13773</td><td>console helper: list <code>LS_KEY_snap_*</code> backups with record counts</td></tr>
+      <tr><td><code>flRestoreSnapshot</code></td><td class="mono">13797</td><td>console helper: overwrite the blob with snapshot N (confirm + manual refresh)</td></tr>
+      <tr><td><code>flLoad</code></td><td class="mono">13815</td><td>snapshot → version whitelist → migrations → scenario seeds → hydrate globals → self-heals</td></tr>
+      <tr><td><code>flDedupeMaint</code></td><td class="mono">19683</td><td>dedupe MJs by <code>no|boatId|title|type|startDate</code>; unnumbered jobs pass through</td></tr>
+      <tr><td><code>flSave</code></td><td class="mono">19696</td><td>read-modify-write the blob: 13 <code>fleet_*</code> keys + <code>fleet_version</code> + <code>boats</code></td></tr>
+      <tr><td><code>flConsumeCostOf</code></td><td class="mono">19717</td><td>requisition row cost = <code>qty × unitCost</code></td></tr>
+      <tr><td><code>flBoatRepairCostMonth</code></td><td class="mono">19719</td><td>Σ <code>flMaintCalcCost</code> for a boat within a <code>YYYY-MM</code></td></tr>
+      <tr><td><code>flConsumeOpen</code> / <code>flConsumeSubmit</code> / <code>flConsumeDelete</code></td><td class="mono">19726 / 19798 / 19826</td><td>consumable requisition modal, commit (stock + log), reversal</td></tr>
+      <tr><td><code>renderConsumables</code></td><td class="mono">19834</td><td>เบิกของใช้ page: month buckets, per-boat upkeep</td></tr>
+      <tr><td><code>_generateSafetySeed</code></td><td class="mono">20628</td><td>one-time safety-equipment seed per boat (<code>FL_SAFETY_CATEGORIES</code> <span class="ln">:20615</span>)</td></tr>
+      <tr><td><code>invSyncLegacy</code> / <code>invQtyAt</code> / <code>invAddAt</code> / <code>invRemoveAt</code> / <code>invTransfer</code></td><td class="mono">20718 / 20733 / 20740 / 20753 / 20763</td><td>multi-warehouse stock primitives over <code>item.stocks[]</code></td></tr>
+      <tr><td><code>flGetEng</code> / <code>flGetGb</code></td><td class="mono">20789 / 20790</td><td>id lookups</td></tr>
+      <tr><td><code>flEngHours</code></td><td class="mono">20791</td><td><code>baseHours + (latest − first meter)</code>, skipping <code>&lt;=0</code></td></tr>
+      <tr><td><code>flEngServiceState</code> / <code>flEngMarkService</code></td><td class="mono">20810 / 20823</td><td>engine oil-change countdown; log a service and rebase</td></tr>
+      <tr><td><code>flGbLifetimeHours</code> / <code>flGbServiceState</code> / <code>flGbMarkService</code> / <code>flGbSetInterval</code></td><td class="mono">20841 / 20849 / 20861 / 20876</td><td>gearbox lifetime hours and gear-oil cycle</td></tr>
+      <tr><td><code>flMaintCostShare</code></td><td class="mono">20888</td><td>job cost ÷ same-kind assets (asset detail pages only)</td></tr>
+      <tr><td><code>flMaintServiceReset</code> / <code>flMaintServiceResetManual</code></td><td class="mono">20894 / 20925</td><td>offer to rebase engine+gearbox service baselines when a service job closes</td></tr>
+      <tr><td><code>flStatusPill</code> / <code>flFmtShort</code></td><td class="mono">20931 / 20936</td><td>status pill markup; short Thai date</td></tr>
+      <tr><td><code>flRenderDashboard</code> / <code>flDashShift</code></td><td class="mono">21024 / 20942</td><td>fleet dashboard for one date; date stepper</td></tr>
+      <tr><td><code>flRenderDR</code> / <code>flShiftDRDay</code></td><td class="mono">21792 / 21784</td><td>Daily Fleet Log page; day stepper</td></tr>
+      <tr><td><code>flPrevMeter</code></td><td class="mono">22245</td><td>latest engine reading strictly before a date (skips <code>&lt;=0</code>)</td></tr>
+      <tr><td><code>flSaveFuel</code> / <code>flSaveFuelPrice</code> / <code>flSaveMeter</code> / <code>flSavePaxActual</code></td><td class="mono">22258 / 22321 / 22357 / 22349</td><td>Daily Log field writers</td></tr>
+      <tr><td><code>flFuelPrice</code> / <code>flFuelPriceForBoat</code> / <code>flFuelPriceEff</code> / <code>flFuelSrcTxt</code></td><td class="mono">22264 / 22266 / 22289 / 22313</td><td>strict pier price, strict per-boat price, lenient resolver with provenance, provenance label</td></tr>
+      <tr><td><code>flDRLocked</code> / <code>flDRSetLock</code> / <code>flDREdit</code> / <code>flSaveDayLog</code></td><td class="mono">22329 / 22330 / 22336 / 22338</td><td>per-pier per-day lock of the Daily Log</td></tr>
+      <tr><td><code>flParseSpareLoc</code> / <code>flGetBoatSpares</code></td><td class="mono">22379 / 22392</td><td>decode a <code>spareLocation</code> key; spares carried on a boat</td></tr>
+      <tr><td><code>flEquipOpen</code> / <code>flEquipSwapDo</code> / <code>flEquipRemove</code> / <code>flRenderEquip</code></td><td class="mono">22427 / 22406 / 22419 / 22428</td><td>Equipment bay: swap or detach one piece at a time</td></tr>
+      <tr><td><code>flRenderAsset</code> / <code>flGoAssetTab</code> / <code>flGoToAsset</code></td><td class="mono">22466 / 22475 / 22485</td><td>Company Asset tab host and deep links</td></tr>
+      <tr><td><code>flGoToMaint</code> / <code>flGoToMaintTab</code> / <code>flGoToAwaitingInvoice</code> / <code>flGoToMemoTab</code></td><td class="mono">22496 / 22523 / 22528 / 22535</td><td>cross-view navigation helpers</td></tr>
+      <tr><td><code>flRenderOverview</code></td><td class="mono">22543</td><td>asset tree / fleet composition stats</td></tr>
+      <tr><td><code>flRenderBoatList</code> / <code>flRenderBoatDetailPink</code> / <code>flSelBoat</code></td><td class="mono">23279 / 23450 / 23441</td><td>boat registry list + detail</td></tr>
+      <tr><td><code>flPosLabel</code> / <code>flPosRank</code></td><td class="mono">23794 / 23795</td><td>canonical drive position label and sort rank</td></tr>
+      <tr><td><code>flRenderEngList</code> / <code>flRenderEngDetailPink</code> / <code>flChangeEngStatus</code></td><td class="mono">23796 / 24016 / 24254</td><td>engine registry</td></tr>
+      <tr><td><code>flRenderGbList</code> / <code>flRenderGbDetailPink</code></td><td class="mono">24263 / 24462</td><td>gearbox registry</td></tr>
+      <tr><td><code>flRenderPropList</code> / <code>flRenderPropDetailPink</code></td><td class="mono">24722 / 24933</td><td>propeller registry</td></tr>
+      <tr><td><code>flAssertUniqueNo</code> / <code>flValidateDataIntegrity</code></td><td class="mono">26086 / 26098</td><td>duplicate-number guard; post-load integrity console report</td></tr>
+      <tr><td><code>flSaveMemo</code> / <code>flEditMemo</code> / <code>flCancelMemo</code> / <code>flPrintMemo</code> / <code>flViewMemo</code></td><td class="mono">26139 / 26011 / 26042 / 25556 / 25905</td><td>purchase memo CRUD + print</td></tr>
+      <tr><td><code>flProjMigrate</code> / <code>flProjResyncMJLinks</code> / <code>flProjAutoCreateForScheduledMJs</code></td><td class="mono">26554 / 26471 / 26400</td><td>project backfill from boat logs + MJ linking</td></tr>
+      <tr><td><code>flProjCleanupV2</code> / <code>V3</code> / <code>V4</code></td><td class="mono">26371 / 26522 / 26505</td><td>one-shot project data cleanups</td></tr>
+      <tr><td><code>flProjPhasesFor</code> / <code>flProjCurrentPhaseIdx</code> / <code>flProjSetPhase</code></td><td class="mono">26664 / 26665 / 26676</td><td>phase model (<code>PROJ_PHASES</code> <span class="ln">:26657</span>)</td></tr>
+      <tr><td><code>flProjHealth</code> / <code>flProjYoYStats</code> / <code>flProjInsight</code></td><td class="mono">26690 / 26727 / 26964</td><td>project health score, YoY stats, narrative insight</td></tr>
+      <tr><td><code>flProjChildMJs</code> / <code>flProjCalcCost</code> / <code>flProjMJCostBreakdown</code> / <code>flProjCostBreakdown</code></td><td class="mono">27077 / 27080 / 27085 / 27108</td><td>project ↔ MJ cost rollups</td></tr>
+      <tr><td><code>flRenderProjects</code> / <code>flProjRenderList</code> / <code>flProjRenderTimeline</code> / <code>flProjRenderGantt</code> / <code>flProjRenderDetail</code></td><td class="mono">27162 / 27174 / 27462 / 27735 / 27976</td><td>project views</td></tr>
+      <tr><td><code>flProjStart</code> / <code>Hold</code> / <code>Resume</code> / <code>Cancel</code> / <code>Reopen</code> / <code>MarkComplete</code> / <code>CreateMJ</code></td><td class="mono">28621 / 28649 / 28664 / 28677 / 28727 / 28740 / 28785</td><td>project lifecycle</td></tr>
+      <tr><td><code>flMaintLinkProjectPick</code> / <code>flMaintUnlinkProject</code></td><td class="mono">28924 / 28947</td><td>attach/detach an MJ to a project</td></tr>
+      <tr><td><code>flRenderMaint</code> / <code>flSelMaint</code> / <code>flRenderMaintDetailPink</code></td><td class="mono">28967 / 29266 / 31555</td><td>maintenance list + detail</td></tr>
+      <tr><td><code>costAggregate</code> / <code>costSetFilter</code> / <code>flRenderCostAnalytics</code></td><td class="mono">29314 / 29285 / 29579</td><td>cost analytics aggregation and page</td></tr>
+      <tr><td><code>laMemoDirectShare</code></td><td class="mono">29302</td><td>share of a memo that is a direct boat expense (items without <code>invId</code>)</td></tr>
+      <tr><td><code>_fuelAgg</code> / <code>_fuelWkAgg</code> / <code>_fuelWkVal</code> / <code>renderFuelIntel</code></td><td class="mono">29874 / 29910 / 29936 / 29943</td><td>fuel intelligence aggregation and page</td></tr>
+      <tr><td><code>flRenderInsights</code></td><td class="mono">30185</td><td>health scorecard, trends, recommendations</td></tr>
+      <tr><td><code>flMaintCanEditParts</code> / <code>flMaintLateEditOn</code> / <code>flMaintRefreshParts</code></td><td class="mono">31485 / 31486 / 31539</td><td>post-close part editing gate; surgical parts re-render</td></tr>
+      <tr><td><code>flMaintAutoAddEngines</code> / <code>flEngAddAllToJob</code> / <code>flEngSplitIntoJobs</code> / <code>flSplitExistingJob</code></td><td class="mono">31887 / 31902 / 31944 / 31998</td><td>bulk engine handling on a job</td></tr>
+      <tr><td><code>_flStashPartRecord</code> / <code>flMaintStashOpen</code> / <code>flMaintStashConfirm</code></td><td class="mono">32061 / 32070 / 32084</td><td>detach a gearbox/propeller into the spare pool at a chosen location</td></tr>
+      <tr><td><code>flCreateMaintFromInc</code> / <code>flOpenJobChoiceModal</code> / <code>flChooseJobMode</code></td><td class="mono">32144 / 32152 / 32176</td><td>incident → job(s), single vs split</td></tr>
+      <tr><td><code>flMaintAddLog</code> / <code>flPushLog</code> / <code>flMaintTogglePin</code></td><td class="mono">32184 / 32203 / 32216</td><td>job progress log; pin a job</td></tr>
+      <tr><td><code>flMaintStart</code> / <code>_flMaintStartProceed</code> / <code>_flBoatRanOn</code> / <code>_flDayAfter</code></td><td class="mono">32250 / 32443 / 32436 / 32434</td><td>start a job; “ran today → downtime starts tomorrow” rule</td></tr>
+      <tr><td><code>flStartGearOpen</code> / <code>flStartGearChoice</code> / <code>flStartGearSwap</code></td><td class="mono">32257 / 32270 / 32293</td><td>keep / stash / swap decision for mounted gear at start</td></tr>
+      <tr><td><code>flStartSwapRenderPicker</code> / <code>flStartSwapInstall</code> / <code>flStartSwapSkip</code> / <code>flStartSwapFinish</code></td><td class="mono">32315 / 32348 / 32385 / 32393</td><td>replacement-engine picker loop</td></tr>
+      <tr><td><code>flMaintSetRepairLoc</code> / <code>flMaintSwapEngine</code></td><td class="mono">32403 / 32416</td><td>set job repair location (syncs pulled engines); swap from an already-started job</td></tr>
+      <tr><td><code>flMaintOpenCloseModal</code> / <code>flMaintCloseSelectOutcome</code> / <code>flMaintCloseConfirm</code> / <code>flMaintClose</code></td><td class="mono">32510 / 32525 / 32530 / 32539</td><td>close-job modal and the cascade</td></tr>
+      <tr><td><code>flRetireBoat</code> / <code>flUnretireBoat</code></td><td class="mono">32716 / 32727</td><td>retire / restore a hull</td></tr>
+      <tr><td><code>flMaintAddAsset</code> / <code>flMaintRemoveAsset</code></td><td class="mono">32737 / 32806</td><td>add/remove an asset on a job (sets asset status + logs)</td></tr>
+      <tr><td><code>flMaintCalcCost</code> / <code>flMaintPartsCoveredByMemo</code></td><td class="mono">32829 / 32847</td><td>job cost = parts (minus memo-covered) + counted memos</td></tr>
+      <tr><td><code>flMaintFillLoc</code> / <code>flMaintAddPart</code> / <code>flMaintRemovePart</code> / <code>flMaintUpdateCost</code></td><td class="mono">32860 / 32874 / 32908 / 32931</td><td>warehouse picker; withdraw / return parts; manual cost override</td></tr>
+      <tr><td><code>flMaintCreateMemo</code> / <code>flProjAddMemo</code></td><td class="mono">32965 / 32938</td><td>raise a memo from a job / from a project</td></tr>
+      <tr><td><code>flDeleteMaint</code> / <code>flUpdateMaint</code></td><td class="mono">32993 / 33001</td><td>delete a job; status transitions</td></tr>
+      <tr><td><code>flOpenCreateJobModal</code> / <code>flSaveCreateJob</code></td><td class="mono">33102 / 33137</td><td>create-job modal; numbering, split mode, asset pre-fill</td></tr>
+      <tr><td><code>flRenderIncident</code> / <code>flSelIncident</code> / <code>flRenderIncDetailPink</code> / <code>flDeleteIncident</code></td><td class="mono">33327 / 33537 / 33552 / 33538</td><td>incident register and detail</td></tr>
+      <tr><td><code>flAddIncLog</code> / <code>flIncUpdateDmgDropdowns</code></td><td class="mono">33803 / 33813</td><td>incident progress log; damaged-asset pickers</td></tr>
+      <tr><td><code>flOpenSwapModal</code> / <code>flConfirmSwap</code></td><td class="mono">33842 / 33921</td><td>quick-swap a damaged gearbox/propeller with a pier-local spare</td></tr>
+      <tr><td><code>flOpenPropCascadeModal</code> / <code>flConfirmPropCascade</code></td><td class="mono">34028 / 34081</td><td>decide what happens to propellers after a gearbox swap</td></tr>
+      <tr><td><code>flOpenMoveSpare</code> / <code>flConfirmMove</code> / <code>flOpenAddSpare</code> / <code>flSaveAddSpare</code></td><td class="mono">34157 / 34219 / 34262 / 34285</td><td>relocate / register spares</td></tr>
+      <tr><td><code>flOpenAddIncidentModal</code> / <code>flIncToggleQuickFix</code> / <code>flSaveIncident</code></td><td class="mono">34336 / 34319 / 34423</td><td>incident create/edit, quick-fix path</td></tr>
+      <tr><td><code>flRenderInventory</code> / <code>invSyncLegacy</code>-driven filters</td><td class="mono">34612</td><td>inventory + memo page</td></tr>
+      <tr><td><code>flOpenReceiveStock</code> / <code>flSaveReceive</code> / <code>flOpenTransfer</code> / <code>flSaveTransfer</code> / <code>flSaveInvEdit</code></td><td class="mono">35053 / 35234 / 35324 / 35368 / 35167</td><td>stock receive, transfer, edit</td></tr>
+      <tr><td><code>flOpenNewAssignment</code> / <code>flSaveAssignment</code> / <code>flCancelAssignment</code> / <code>flAutoUpdateAssignments</code></td><td class="mono">35397 / 35420 / 35481 / 35505</td><td>pier assignment CRUD (writes localStorage directly)</td></tr>
+      <tr><td><code>flOpenEditBoatStatus</code> / <code>flSaveEditBoatStatus</code></td><td class="mono">35535 / 35572</td><td>change a running job’s boat status</td></tr>
+      <tr><td><code>flShowToast</code></td><td class="mono">35817</td><td>transient toast</td></tr>
+      <tr><td><code>flOrderItem</code> / <code>flAdvanceMemo</code> / <code>flOpenApproveModal</code> / <code>flSaveApprove</code> / <code>flMemoWarehouse</code> / <code>flOpenReceiveMemo</code></td><td class="mono">35824 / 35841 / 35869 / 35876 / 35889 / 35898</td><td>memo lifecycle</td></tr>
+      <tr><td><code>flOpenAddEngineModal</code> / <code>flSaveEngine</code> / <code>flOpenAddGearboxModal</code> / <code>flSaveGearbox</code> / <code>flOpenAddPropModal</code> / <code>flSavePropeller</code></td><td class="mono">35976 / 35994 / 36020 / 36068 / 36110 / 36149</td><td>asset registration forms</td></tr>
+      <tr><td><code>flOpenAssignEngModal</code> / <code>flUpdateAssignEngInfo</code> / <code>flSaveAssignEng</code> / <code>flUnassignEng</code></td><td class="mono">36236 / 36272 / 36293 / 38087</td><td>assign / replace / detach an engine on a boat</td></tr>
+      <tr><td><code>flOpenEditBoatModal</code></td><td class="mono">36357</td><td>boat registry edit form</td></tr>
+      <tr><td><code>flGuessDocType</code> / <code>flDocBetter</code> / <code>flDocCurrent</code> / <code>flDocStatus</code> / <code>flRenderDocsList</code></td><td class="mono">36414 / 36429 / 36438 / 36447 / 37841</td><td>boat document matrix (<code>FL_DOC_TYPES</code> <span class="ln">:36402</span>)</td></tr>
+      <tr><td><code>flRenderSafetyList</code> / <code>flSelSafety</code> / <code>flRenderSafetyDetailPink</code> / <code>flOpenLogInspectionModal</code> / <code>flSaveInspection</code> / <code>flSaveSafety</code></td><td class="mono">36506 / 36687 / 36696 / 37627 / 37673 / 37796</td><td>safety equipment register and inspections</td></tr>
+      <tr><td><code>getCurStatus</code> / <code>getBoat</code> / <code>autoClosePrevLog</code> / <code>getBoatCurrentPier</code> / <code>getBoatShopLocation</code></td><td class="mono">5879 / 5888 / 9700 / 9920 / 9958</td><td>shared boat helpers the fleet module depends on</td></tr>
+      <tr><td><code>flBoatBookingsFor</code></td><td class="mono">12075</td><td>PAX / routes / trip count for a boat on a date (from bookings)</td></tr>
+      <tr><td><code>renderBoats</code></td><td class="mono">8569</td><td>Boat Status page (shared with the sales side)</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+
+<footer>
+  Rendered from <code>allotment_v2/docs/workflows/05-fleet-management.md</code> ·
+  written against commit <code>094dde1</code> on <code>refactor/booking-v2-migration</code> ·
+  these docs describe <b>the code, not the intent</b> — where an older doc contradicts the code, the code won.
+</footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  // theme toggle
+  var btn = document.getElementById('themebtn');
+  var root = document.documentElement;
+  var saved = null;
+  try { saved = localStorage.getItem('la_doc_theme'); } catch(e){}
+  if (saved) root.setAttribute('data-theme', saved);
+  btn.addEventListener('click', function(){
+    var cur = root.getAttribute('data-theme');
+    var next;
+    if (cur === 'dark') next = 'light';
+    else if (cur === 'light') next = 'dark';
+    else next = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('la_doc_theme', next); } catch(e){}
+  });
+
+  // scrollspy
+  var links = Array.prototype.slice.call(document.querySelectorAll('#nav a'));
+  var targets = links.map(function(a){ return document.querySelector(a.getAttribute('href')); });
+  function spy(){
+    var best = 0, bestTop = -Infinity;
+    for (var i=0;i<targets.length;i++){
+      if (!targets[i]) continue;
+      var t = targets[i].getBoundingClientRect().top - 90;
+      if (t <= 0 && t > bestTop){ bestTop = t; best = i; }
+    }
+    links.forEach(function(a,i){ a.classList.toggle('on', i===best); });
+  }
+  var tick = false;
+  window.addEventListener('scroll', function(){
+    if (tick) return; tick = true;
+    requestAnimationFrame(function(){ spy(); tick = false; });
+  }, {passive:true});
+  spy();
+
+  // function-index filter (optional — skipped when the doc has no #ffilter)
+  var input = document.getElementById('ffilter');
+  var rows  = Array.prototype.slice.call(document.querySelectorAll('#ftable tbody tr'));
+  var count = document.getElementById('fcount');
+  if (input && rows.length){
+    var paint = function(){
+      var q = input.value.trim().toLowerCase();
+      var n = 0;
+      rows.forEach(function(r){
+        var hit = !q || r.textContent.toLowerCase().indexOf(q) !== -1;
+        r.classList.toggle('hidden', !hit);
+        if (hit) n++;
+      });
+      if (count) count.textContent = q ? (n + ' of ' + rows.length + ' shown') : (rows.length + ' functions');
+    };
+    input.addEventListener('input', paint);
+    paint();
+  }
+})();
+</script>
+</body>
+</html>

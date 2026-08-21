@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="The relational booking schema replacing the JSON blob - BK-01 to BK-04 and RT-01.">
+<title>Booking Schema</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap">
+
+<style>
+/* ─────────────────────────────────────────────────────────────
+   Tokens. Light is the complete set; dark redefines tokens only.
+   Palette follows the app's own system (docs/design): Ocean blue
+   #1683C7, hairline rules, tint+dark-text status chips.
+   ───────────────────────────────────────────────────────────── */
+:root{
+  --ground:#F4F7F9;
+  --surface:#FFFFFF;
+  --surface-2:#EDF3F7;
+  --rule:rgba(15,34,51,.11);
+  --rule-soft:rgba(15,34,51,.06);
+  --ink:#0F2233;
+  --ink-mid:#33506A;
+  --ink-soft:#5B7488;
+  --accent:#1683C7;
+  --accent-deep:#0E4C6E;
+  --accent-tint:#E1F0FA;
+  --good:#0F6E56;
+  --good-tint:#E2F1EC;
+  --warn:#BA7517;
+  --warn-tint:#FAEEDA;
+  --bad:#A32D2D;
+  --bad-tint:#FCEBEB;
+  --shadow:0 1px 2px rgba(15,34,51,.05), 0 6px 18px rgba(15,34,51,.05);
+  --r-sm:6px; --r:10px; --r-lg:14px;
+  --rail:232px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#0A1620;
+    --surface:#10222E;
+    --surface-2:#16303F;
+    --rule:rgba(170,208,232,.16);
+    --rule-soft:rgba(170,208,232,.08);
+    --ink:#E4EFF6;
+    --ink-mid:#B4CEDF;
+    --ink-soft:#89A5B8;
+    --accent:#4FB3E8;
+    --accent-deep:#9AD5F5;
+    --accent-tint:rgba(79,179,232,.15);
+    --good:#5FC9A8;
+    --good-tint:rgba(95,201,168,.14);
+    --warn:#E0A54B;
+    --warn-tint:rgba(224,165,75,.14);
+    --bad:#E88080;
+    --bad-tint:rgba(232,128,128,.14);
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.32);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#0A1620;
+  --surface:#10222E;
+  --surface-2:#16303F;
+  --rule:rgba(170,208,232,.16);
+  --rule-soft:rgba(170,208,232,.08);
+  --ink:#E4EFF6;
+  --ink-mid:#B4CEDF;
+  --ink-soft:#89A5B8;
+  --accent:#4FB3E8;
+  --accent-deep:#9AD5F5;
+  --accent-tint:rgba(79,179,232,.15);
+  --good:#5FC9A8;
+  --good-tint:rgba(95,201,168,.14);
+  --warn:#E0A54B;
+  --warn-tint:rgba(224,165,75,.14);
+  --bad:#E88080;
+  --bad-tint:rgba(232,128,128,.14);
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.32);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--ground);
+  color:var(--ink);
+  font-family:'DM Sans',system-ui,-apple-system,sans-serif;
+  font-size:15px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+code,.mono{font-family:'DM Mono','SF Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums}
+
+/* ── shell ── */
+.shell{display:grid;grid-template-columns:var(--rail) minmax(0,1fr);gap:0;max-width:1240px;margin:0 auto}
+.rail{
+  position:sticky;top:0;align-self:start;height:100vh;
+  padding:38px 22px 38px 26px;
+  border-right:1px solid var(--rule);
+  display:flex;flex-direction:column;gap:26px;
+}
+.rail-mark{display:flex;align-items:baseline;gap:8px}
+.rail-mark b{font-family:'Manrope',sans-serif;font-weight:800;font-size:15px;letter-spacing:-.02em}
+.rail-mark span{font-family:'DM Mono',monospace;font-size:10.5px;color:var(--ink-soft)}
+.rail nav{display:flex;flex-direction:column;gap:1px}
+.rail a{
+  display:flex;gap:9px;align-items:baseline;
+  padding:5px 9px;margin-left:-9px;border-radius:var(--r-sm);
+  color:var(--ink-soft);text-decoration:none;font-size:13px;
+  transition:background .13s,color .13s;
+}
+.rail a i{font-family:'DM Mono',monospace;font-style:normal;font-size:10.5px;opacity:.65;min-width:14px}
+.rail a:hover{background:var(--surface-2);color:var(--ink)}
+.rail a:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.rail-foot{margin-top:auto;font-size:11.5px;color:var(--ink-soft);border-top:1px solid var(--rule-soft);padding-top:14px}
+
+main{padding:38px 44px 90px;min-width:0}
+
+/* ── masthead ── */
+.eyebrow{
+  font-family:'DM Mono',monospace;font-size:11px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--accent);margin-bottom:14px;
+}
+h1{
+  font-family:'Manrope',sans-serif;font-weight:800;
+  font-size:clamp(38px,5.2vw,60px);line-height:1.02;letter-spacing:-.035em;
+  margin:0 0 16px;text-wrap:balance;
+}
+.standfirst{font-size:18px;line-height:1.55;color:var(--ink-mid);max-width:60ch;margin:0 0 26px}
+.facts{display:flex;flex-wrap:wrap;gap:0;border:1px solid var(--rule);border-radius:var(--r);overflow:hidden;background:var(--surface)}
+.fact{flex:1 1 130px;padding:15px 18px;border-right:1px solid var(--rule-soft)}
+.fact:last-child{border-right:0}
+.fact b{display:block;font-family:'DM Mono',monospace;font-size:26px;font-weight:500;letter-spacing:-.03em;line-height:1.1}
+.fact span{display:block;font-size:11.5px;color:var(--ink-soft);margin-top:3px}
+
+/* ── sections ── */
+section{margin-top:58px;scroll-margin-top:22px}
+h2{
+  font-family:'Manrope',sans-serif;font-weight:700;font-size:26px;letter-spacing:-.025em;
+  margin:0 0 6px;display:flex;align-items:baseline;gap:11px;text-wrap:balance;
+}
+h2 em{font-family:'DM Mono',monospace;font-style:normal;font-size:12px;font-weight:400;color:var(--accent);letter-spacing:0}
+h3{font-family:'Manrope',sans-serif;font-weight:700;font-size:16px;letter-spacing:-.01em;margin:26px 0 8px}
+.lede{color:var(--ink-mid);max-width:66ch;margin:0 0 22px}
+p{max-width:66ch}
+a.tick{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-tint);font-family:'DM Mono',monospace;font-size:.92em}
+a.tick:hover{border-bottom-color:var(--accent)}
+
+/* ── deletes ── */
+.deletes{display:grid;grid-template-columns:repeat(auto-fit,minmax(255px,1fr));gap:14px}
+.del{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);padding:18px 19px;box-shadow:var(--shadow)}
+.del .from{font-family:'DM Mono',monospace;font-size:12px;color:var(--bad);text-decoration:line-through;text-decoration-thickness:1px;opacity:.85}
+.del .to{font-family:'DM Mono',monospace;font-size:13px;color:var(--good);margin:7px 0 10px;font-weight:500}
+.del p{font-size:13.5px;color:var(--ink-mid);margin:0;line-height:1.55}
+
+/* ── entity map ── */
+.map{display:grid;gap:12px}
+.anchor{
+  background:var(--accent-deep);color:#fff;border-radius:var(--r);
+  padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+}
+.anchor .n{font-family:'DM Mono',monospace;font-size:17px;font-weight:500}
+.anchor .d{font-size:13px;opacity:.85;max-width:62ch}
+.groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(228px,1fr));gap:12px}
+.grp{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);overflow:hidden}
+.grp header{
+  padding:9px 14px;border-bottom:1px solid var(--rule-soft);background:var(--surface-2);
+  font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);font-weight:600;
+  display:flex;justify-content:space-between;
+}
+.grp header span{font-family:'DM Mono',monospace;letter-spacing:0}
+.grp ul{list-style:none;margin:0;padding:9px 0}
+.grp li{
+  font-family:'DM Mono',monospace;font-size:12.5px;padding:3px 14px;color:var(--ink-mid);
+  display:flex;align-items:baseline;gap:7px;
+}
+.grp li b{font-weight:400;color:var(--ink)}
+.grp li u{
+  text-decoration:none;font-family:'DM Sans',sans-serif;font-size:9.5px;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--accent);background:var(--accent-tint);
+  padding:1px 5px;border-radius:20px;white-space:nowrap;
+}
+
+/* ── tables ── */
+.scroll{overflow-x:auto;border:1px solid var(--rule);border-radius:var(--r);background:var(--surface)}
+table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:520px}
+th{
+  text-align:left;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-soft);font-weight:600;padding:10px 14px;border-bottom:1px solid var(--rule);white-space:nowrap;
+}
+td{padding:10px 14px;border-bottom:1px solid var(--rule-soft);vertical-align:top;color:var(--ink-mid)}
+tr:last-child td{border-bottom:0}
+td.k{font-family:'DM Mono',monospace;color:var(--ink);white-space:nowrap}
+td.num{font-family:'DM Mono',monospace;text-align:right;color:var(--ink)}
+
+/* ── chips ── */
+.chip{
+  display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:20px;
+  font-size:11px;font-weight:500;white-space:nowrap;
+}
+.chip::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.85}
+.chip.todo{background:var(--accent-tint);color:var(--accent)}
+.chip.block{background:var(--bad-tint);color:var(--bad)}
+.chip.done{background:var(--good-tint);color:var(--good)}
+.chip.hold{background:var(--warn-tint);color:var(--warn)}
+
+/* ── callouts ── */
+.note{
+  border-left:3px solid var(--accent);background:var(--surface);
+  border-radius:0 var(--r-sm) var(--r-sm) 0;padding:15px 18px;margin:20px 0;
+}
+.note.danger{border-left-color:var(--bad)}
+.note.caution{border-left-color:var(--warn)}
+.note b{display:block;font-family:'Manrope',sans-serif;font-size:13px;margin-bottom:4px;letter-spacing:-.01em}
+.note p{margin:0;font-size:13.5px;color:var(--ink-mid);max-width:64ch}
+
+/* ── formula ── */
+.formula{
+  background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);
+  padding:22px;text-align:center;font-family:'DM Mono',monospace;font-size:15px;
+  color:var(--ink);margin:0 0 18px;overflow-x:auto;
+}
+.formula i{font-style:normal;color:var(--accent)}
+
+ul.rules{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+ul.rules li{
+  padding-left:20px;position:relative;font-size:14px;color:var(--ink-mid);max-width:66ch;
+}
+ul.rules li::before{
+  content:'';position:absolute;left:4px;top:9px;width:5px;height:5px;
+  border-radius:50%;background:var(--accent);
+}
+ul.rules li b{color:var(--ink);font-weight:600}
+
+footer{
+  margin-top:70px;padding-top:20px;border-top:1px solid var(--rule);
+  font-size:12.5px;color:var(--ink-soft);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;
+}
+
+@media (max-width:940px){
+  .shell{grid-template-columns:1fr}
+  .rail{position:static;height:auto;border-right:0;border-bottom:1px solid var(--rule);padding:24px 22px}
+  .rail nav{flex-direction:row;flex-wrap:wrap;gap:2px}
+  .rail-foot{display:none}
+  main{padding:28px 22px 70px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+<style>
+#theme-toggle{position:fixed;right:18px;bottom:18px;z-index:20;display:inline-flex;align-items:center;gap:7px;padding:8px 13px;border-radius:20px;border:1px solid var(--rule);background:var(--surface);color:var(--ink-soft);font-family:inherit;font-size:12px;cursor:pointer;box-shadow:var(--shadow);transition:color .13s,border-color .13s}
+#theme-toggle:hover{color:var(--accent);border-color:var(--accent)}
+#theme-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media print{#theme-toggle{display:none}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <div class="rail-mark"><b>Booking Schema</b><span>BK-01</span></div>
+    <nav>
+      <a href="#why"><i>01</i>Why it exists</a>
+      <a href="#model"><i>02</i>The model</a>
+      <a href="#anchors"><i>03</i>Anchor tables</a>
+      <a href="#keys"><i>04</i>Keys &amp; constraints</a>
+      <a href="#locks"><i>05</i>Seat locks</a>
+      <a href="#avail"><i>06</i>Availability</a>
+      <a href="#migration"><i>07</i>Migration</a>
+      <a href="#rates"><i>08</i>Rate types</a>
+      <a href="#blocked"><i>09</i>Blocked on</a>
+      <a href="#sequence"><i>10</i>Sequence</a>
+    </nav>
+    <div class="rail-foot">
+      Source: <span class="mono">docs/rewrite/TASKS.md</span><br>
+      Model of record: <span class="mono">docs/booking.model.ts</span>
+    </div>
+  </aside>
+
+  <main>
+    <p class="eyebrow">Phase 1 · Sprints 3–4 · Not started</p>
+    <h1>The booking aggregate, rebuilt relational</h1>
+    <p class="standfirst">Twenty-eight new tables replace one JSON blob. This is the foundation of Phase 1 — get it wrong and fifteen downstream tasks inherit the mistake.</p>
+
+    <div class="facts">
+      <div class="fact"><b>28</b><span>new tables</span></div>
+      <div class="fact"><b>5</b><span>tickets</span></div>
+      <div class="fact"><b>31</b><span>story points</span></div>
+      <div class="fact"><b>126</b><span>unenforced ref columns today</span></div>
+      <div class="fact"><b>52</b><span>of 133 ops tables have any FK</span></div>
+    </div>
+
+    <section id="why">
+      <h2>Why it exists <em>01</em></h2>
+      <p class="lede">The point is not tidier storage. Three whole classes of live bug stop being expressible once the shape changes — they are deleted by construction, not fixed by vigilance.</p>
+      <div class="deletes">
+        <div class="del">
+          <div class="from">pax{ ad_fr, ad_th, chd_fr, … }</div>
+          <div class="to">booking_trip_pax rows</div>
+          <p>One row per pax type per trip replaces the twelve-key object, and kills the legacy <code>ad</code> vs <code>ad_fr</code> dual shape that every aggregate has to special-case.</p>
+        </div>
+        <div class="del">
+          <div class="from">bk.ops (day 1) + trip.ops (day 2+)</div>
+          <div class="to">booking_ops per service_date</div>
+          <p>Every day gets a row. This is the split behind the edit-preserve bug, where rebuilding a booking silently wipes its boat and van assignment.</p>
+        </div>
+        <div class="del">
+          <div class="from">lock.used stored counter</div>
+          <div class="to">derived view over draws</div>
+          <p>A counter that drifts needs repair tools. Deriving it deletes <code>bkV2LockAudit</code>, <code>LockCoverage</code>, <code>LockFixUsed</code> and <code>LockFixTree</code> outright — the spec says do not port them.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="model">
+      <h2>The model <em>02</em></h2>
+      <p class="lede">Nineteen tables in the booking aggregate, anchored on one row per booking. Grouped here by what they carry rather than by table name, because that is how the write path reasons about them.</p>
+
+      <div class="map">
+        <div class="anchor">
+          <span class="n">booking</span>
+          <span class="d">Keeps the <b>BK-YYMMNNNN-XXXX</b> business code as a natural key, plus a surrogate UUID primary key.</span>
+        </div>
+        <div class="groups">
+          <div class="grp">
+            <header>Trip <span>2</span></header>
+            <ul>
+              <li><b>booking_trip</b><u>uniq idx</u></li>
+              <li><b>booking_trip_pax</b></li>
+            </ul>
+          </div>
+          <div class="grp">
+            <header>People <span>1</span></header>
+            <ul><li><b>booking_passenger</b><u>is_lead</u></li></ul>
+          </div>
+          <div class="grp">
+            <header>Money <span>4</span></header>
+            <ul>
+              <li><b>booking_addon</b></li>
+              <li><b>booking_adjustment</b></li>
+              <li><b>booking_fee_item</b></li>
+              <li><b>booking_price_breakdown</b><u>signed</u></li>
+            </ul>
+          </div>
+          <div class="grp">
+            <header>Operations <span>1</span></header>
+            <ul><li><b>booking_ops</b><u>by date</u></li></ul>
+          </div>
+          <div class="grp">
+            <header>Lifecycle <span>7</span></header>
+            <ul>
+              <li><b>booking_history</b><u>append</u></li>
+              <li><b>booking_cancellation</b></li>
+              <li><b>booking_partial_cancel</b></li>
+              <li><b>booking_reschedule</b></li>
+              <li><b>booking_approval</b></li>
+              <li><b>booking_foc_approval</b></li>
+              <li><b>booking_weather_resolve</b></li>
+            </ul>
+          </div>
+          <div class="grp">
+            <header>Links &amp; logistics <span>4</span></header>
+            <ul>
+              <li><b>booking_alt_pickup</b></li>
+              <li><b>booking_attachment</b><u>x-schema</u></li>
+              <li><b>booking_b2c_link</b><u>new</u></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="note">
+        <b>Empty means zero rows</b>
+        <p>Child tables have no sentinel and no re-hydration hack. Today an empty array round-trips as <code>undefined</code> and the edit form crashes on <code>undefined.forEach</code>; zero rows is simply a legitimate state.</p>
+      </div>
+    </section>
+
+    <section id="anchors">
+      <h2>Anchor tables <em>03</em></h2>
+      <p class="lede">Five of the nineteen carry design decisions worth stating explicitly. The rest are ordinary child tables.</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Table</th><th>Decision</th></tr></thead>
+          <tbody>
+            <tr><td class="k">booking</td><td>Business code survives as a natural key alongside a surrogate UUID PK. <b>Two formats exist in live data:</b> v2 generates <code>BK-YYMMNNNN-XXXX</code> from local time with a MAX-based sequence, legacy v1 generates <code>BK-YYMMDD-NNN-XXXX</code> from <code>toISOString()</code> with a count-based sequence. Both land in this column at BK-04, so no format constraint can assume one shape.</td></tr>
+            <tr><td class="k">booking_trip</td><td><code>(booking_id, trip_index)</code> unique. Carries route, date, zone, booking mode, charter fields and OVN fields.</td></tr>
+            <tr><td class="k">booking_trip_pax</td><td>One row per pax type per trip. Replaces the twelve-key <code>pax{}</code> object and the <code>ad</code>/<code>ad_fr</code> dual shape.</td></tr>
+            <tr><td class="k">booking_price_breakdown</td><td>Seat, addon, FOC discount, discount, extra, total — <b>signed</b>. Discounts stay negative exactly as today.</td></tr>
+            <tr><td class="k">booking_ops</td><td><code>(booking_id, service_date)</code>. Replaces the day-1 / day-2+ ops split entirely; every service day gets a row.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="keys">
+      <h2>Keys &amp; constraints <em>04</em></h2>
+      <p class="lede">The relationships that exist in people's heads today, written down where the database can enforce them.</p>
+
+      <h3>Foreign keys required</h3>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Column</th><th>References</th></tr></thead>
+          <tbody>
+            <tr><td class="k">agent_id</td><td class="k">agent</td></tr>
+            <tr><td class="k">rate_type_id</td><td class="k">rate_type</td></tr>
+            <tr><td class="k">route_id</td><td class="k">route</td></tr>
+            <tr><td class="k">charter_boat_id</td><td class="k">boat</td></tr>
+            <tr><td class="k">boat_id / van_id</td><td class="k">boat / vehicle</td></tr>
+            <tr><td class="k">pickup_area_id</td><td class="k">pickup_area</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Constraints</h3>
+      <ul class="rules">
+        <li><b>Status</b> as a Postgres enum or CHECK over the eight known values.</li>
+        <li>A trip in <b>charter mode</b> must have <code>charter_boat_id IS NOT NULL</code>.</li>
+        <li>All <b>pax counts &ge; 0</b>.</li>
+        <li>A <b>partial unique index</b> preventing two active bookings sharing a <code>voucher_ref</code>.</li>
+      </ul>
+
+      <div class="note">
+        <b>Cross-schema, by design</b>
+        <p><code>booking_attachment</code> takes a real FK to the booking table even though the rows live in the <code>allotment</code> schema — 3,038 of them. Cross-schema foreign keys are legal in Postgres and are the right first step; physically moving the table can wait. Separately, <code>booking_b2c_link</code> replaces the <code>b2c_&lt;lkId&gt;</code> string-prefix convention with an enforced link to <code>love_kingdom.bookings</code>.</p>
+      </div>
+    </section>
+
+    <section id="locks">
+      <h2>Seat locks <em>05</em></h2>
+      <p class="lede">The subtlest correctness area in the app, and the source of an entire class of counter-drift bugs. <a class="tick" href="#">LAM-94</a> · 5 pts</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Table</th><th>Role</th></tr></thead>
+          <tbody>
+            <tr><td class="k">seat_lock</td><td>Scope (<code>day</code>/<code>bulk</code>/<code>month</code>), route, date range, day-of-week, holder (<code>agent</code>/<code>office</code>/<code>global</code>), <code>parent_id</code> self-FK, qty, release rules, status.</td></tr>
+            <tr><td class="k">seat_lock_usage</td><td><code>(lock_id, trip_date)</code> unique. Replaces the <code>usedBy{date:n}</code> object.</td></tr>
+            <tr><td class="k">booking_trip_lock_draw</td><td><code>(booking_trip_id, lock_id)</code> with qty. <b>The single source of truth.</b></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Invariants to preserve</h3>
+      <ul class="rules">
+        <li>A <b>child lock contributes 0</b> to the available pool — only parent and standalone locks hold seats. Enforced in the pool view, not with a table constraint.</li>
+        <li>Month and bulk locks use <b>rolling per-trip release</b> (<code>release_days_before</code> + <code>release_time</code>), never a single global expiry.</li>
+      </ul>
+      <div class="note">
+        <b>The acceptance test should be impossible to fail</b>
+        <p>For any sequence of draw, return and edit operations, the derived <code>used</code> equals <code>SUM(booking_trip_lock_draw.qty)</code> for live bookings — by construction. That is the tell that the model is right rather than merely tested.</p>
+      </div>
+    </section>
+
+    <section id="avail">
+      <h2>Availability <em>06</em></h2>
+      <p class="lede"><code>getAllotment</code> is consulted by every consumer and is the thing that must never be wrong. It becomes a view. <a class="tick" href="#">LAM-96</a> · 5 pts</p>
+      <div class="formula">seats_available = available_capacity <i>&minus;</i> seats_consumed <i>&minus;</i> locked_seats</div>
+      <ul class="rules">
+        <li>Exclude <code>cancelled</code>, <code>cancelled_weather</code> and <code>rejected</code> from <b>every</b> aggregate.</li>
+        <li>Exclude <code>booking_mode = 'charter'</code> trips from seat consumption entirely, and remove charter boats from the pool.</li>
+        <li>Subtract <b>check-in losses</b> — no-show and on-site cancel.</li>
+        <li>A <code>pending_approval</code> booking <b>holds seats unless it was held for over-capacity</b>. Discount, B2C and closed-day holds do reserve.</li>
+      </ul>
+      <div class="note danger">
+        <b>Hazard — the view already exists and has drifted both ways</b>
+        <p>A <code>v_seat_availability</code> view is live in production and disagrees with the repo migration in <em>both</em> directions. Build from <code>pg_get_viewdef</code>, then supersede it with a new named view. Do not edit the old one in place, and do not trust the <code>.sql</code> file in the repo.</p>
+      </div>
+      <p>Acceptance is parity, not plausibility: for every <span class="mono">(route, date)</span> in the characterization fixtures, the view must return byte-identical numbers to the monolith. Differences get explained in writing, never adjusted away.</p>
+    </section>
+
+    <section id="migration">
+      <h2>Migration <em>07</em></h2>
+      <p class="lede">Backfilling the new tables from live production data — idempotent, re-runnable, and rehearsed on a clone rather than on fixtures. <a class="tick" href="#">LAM-100</a> · 8 pts</p>
+      <ul class="rules">
+        <li><code>schemaVer = 2</code> bookings migrate fully.</li>
+        <li>Legacy v1 bookings (<code>programId</code> + <code>travelDate</code> + <code>pax{adult,child,infant}</code>) migrate into the same tables behind a <b>legacy_v1 flag</b>, and stay read-only as they are today.</li>
+        <li>The dual pax shape normalises into <code>booking_trip_pax</code> rows.</li>
+        <li><code>bk.ops</code> and <code>trip.ops</code> collapse into <code>booking_ops</code> keyed by service date.</li>
+        <li>The 22 parentless <code>b2c_</code> bookings and 118 orphaned attachments carry through with the disposition assigned to them — <b>never dropped silently</b>.</li>
+      </ul>
+      <h3>What the migration must prove</h3>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Check</th><th>Bar</th></tr></thead>
+          <tbody>
+            <tr><td>Booking row count</td><td class="k">in = out</td></tr>
+            <tr><td>Money</td><td><code>SUM(total)</code> matches <code>SUM(price_breakdown.total)</code> <b>to the satang</b></td></tr>
+            <tr><td>Status distribution</td><td>count by status matches</td></tr>
+            <tr><td>Failures</td><td>every booking that failed, with a reason</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note caution">
+        <b>Failing loudly beats silently dropping</b>
+        <p>A migration that quietly loses eleven bookings looks exactly like one that succeeded. <code>MIGRATION_REPORT.md</code> exists so that it cannot.</p>
+      </div>
+    </section>
+
+    <section id="rates">
+      <h2>Rate types <em>08</em></h2>
+      <p class="lede">Booking cannot price a trip without rate types, so a minimum read-only slice of the sales domain is pulled forward. <a class="tick" href="#">LAM-87</a> · 5 pts</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Table</th><th>Carries</th></tr></thead>
+          <tbody>
+            <tr><td class="k">rate_type</td><td>the package itself</td></tr>
+            <tr><td class="k">rate_type_seat_rate</td><td>route &times; zone &times; pax type</td></tr>
+            <tr><td class="k">rate_type_route_validity</td><td>active period per route</td></tr>
+            <tr><td class="k">rate_type_route_bundle</td><td>forced add-ons baked into the seat price</td></tr>
+            <tr><td class="k">rate_type_charter_rate</td><td>starter price, includes, extra per pax</td></tr>
+            <tr><td class="k">rate_type_addon</td><td>optional add-ons</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The per-route longtail shape normalises <b>at migration time</b>, so the old flat shape never reaches the new schema. This is explicitly not the whole sales domain — that is Phase 2.</p>
+    </section>
+
+    <section id="blocked">
+      <h2>Blocked on <em>09</em></h2>
+      <p class="lede">Two prerequisites sit on the critical path and neither has a sprint. This is the scheduling hole worth fixing first.</p>
+      <div class="note danger">
+        <b>P0-09 · Orphan triage — adding a foreign key to data that already violates it simply fails</b>
+        <p>Three orphan sets are already known, and there are almost certainly more behind the 126 unenforced reference columns. Every one of those columns needs a recorded disposition before the FK migrations can run.</p>
+      </div>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Known orphan set</th><th>Count</th></tr></thead>
+          <tbody>
+            <tr><td><code>allotment.attachments</code> with no booking row</td><td class="num">118</td></tr>
+            <tr><td>ops <code>b2c_</code> bookings with no <code>love_kingdom</code> parent</td><td class="num">22</td></tr>
+            <tr><td><code>love_kingdom</code> bookings never synced to ops</td><td class="num">1</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note">
+        <b>Do not delete production rows to make a constraint pass</b>
+        <p>An orphan is evidence of a real process gap, and someone needs to see it before it disappears. Dispositions are backfill, relink, soft-delete, or accept and leave the column nullable with no FK.</p>
+      </div>
+      <p><b>P0-08 · Cross-schema ownership map</b> decides what the eight <code>public</code> tables actually are and how the B2C link works, before anything is built on top of them. <code>love_kingdom</code> is better modelled than <code>operation_schemas</code> — 39 of 39 tables have primary keys, against 120 of 133 — so where the two disagree, prefer its shapes.</p>
+    </section>
+
+    <section id="sequence">
+      <h2>Sequence <em>10</em></h2>
+      <p class="lede">Dependencies are real, not advisory. <code>BK-01</code> is marked serial: nothing else in Phase 1 starts until the model is signed off.</p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Ticket</th><th>Task</th><th>Depends on</th><th>Sprint</th><th>Pts</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td class="k">LAM-106</td><td>P0-08 Cross-schema ownership map</td><td class="k">P0-01 ✓</td><td class="k">—</td><td class="num">3</td><td><span class="chip block">unscheduled</span></td></tr>
+            <tr><td class="k">LAM-109</td><td>P0-09 Orphan triage</td><td class="k">P0-08</td><td class="k">—</td><td class="num">2</td><td><span class="chip block">unscheduled</span></td></tr>
+            <tr><td class="k">LAM-91</td><td>BK-01 Relational model</td><td class="k">P0-01 ✓ P0-05 ✓ P0-08</td><td class="k">3</td><td class="num">8</td><td><span class="chip todo">to do</span></td></tr>
+            <tr><td class="k">LAM-87</td><td>RT-01 Rate types</td><td class="k">P0-01 ✓ P0-05 ✓</td><td class="k">3</td><td class="num">5</td><td><span class="chip todo">to do</span></td></tr>
+            <tr><td class="k">LAM-94</td><td>BK-02 Seat lock model</td><td class="k">BK-01</td><td class="k">4</td><td class="num">5</td><td><span class="chip todo">to do</span></td></tr>
+            <tr><td class="k">LAM-96</td><td>BK-03 Availability view</td><td class="k">BK-01 BK-02 P0-06</td><td class="k">4</td><td class="num">5</td><td><span class="chip todo">to do</span></td></tr>
+            <tr><td class="k">LAM-100</td><td>BK-04 Data migration</td><td class="k">BK-01 BK-02 P0-06 P0-09</td><td class="k">4</td><td class="num">8</td><td><span class="chip todo">to do</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="margin-top:18px">Deliverables for <code>BK-01</code> are an ERD, the migration, and <code>MAPPING.md</code> — one row per old blob field to new column, covering <b>100%</b> of the fields in <code>booking.model.ts</code>. Any field dropped must be listed with a reason. Peer review sign-off is required before migration work starts.</p>
+    </section>
+
+    <footer>
+      <span>LOVE Andaman · Phase 1 booking migration</span>
+      <span class="mono">docs/rewrite/TASKS.md · BK-01…BK-04, RT-01</span>
+    </footer>
+  </main>
+</div>
+
+<button id="theme-toggle" type="button" aria-label="Switch colour theme">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <circle cx="12" cy="12" r="4"></circle>
+    <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+  </svg>
+  <span>Theme</span>
+</button>
+<script>
+(function(){
+  var b=document.getElementById('theme-toggle');
+  var root=document.documentElement;
+  try{ var s=localStorage.getItem('la-schema-theme'); if(s) root.setAttribute('data-theme',s); }catch(e){}
+  b.addEventListener('click',function(){
+    var cur=root.getAttribute('data-theme');
+    if(!cur){ cur=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'; }
+    var next=cur==='dark'?'light':'dark';
+    root.setAttribute('data-theme',next);
+    try{ localStorage.setItem('la-schema-theme',next); }catch(e){}
+  });
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1679 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sales, Agents &amp; Pricing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f8fa; --panel:#ffffff; --panel-2:#fbfcfd;
+  --ink:#0f2029; --ink-2:#31485a; --muted:#68808f;
+  --line:#e1e8ee; --line-2:#eef2f6;
+  --accent:#1683C7; --accent-ink:#0f6ba6; --accent-soft:#e8f3fb;
+  --danger:#c8384c; --danger-soft:#fdecee;
+  --warn:#b46a00; --warn-soft:#fdf3e3;
+  --ok:#137a52; --ok-soft:#e6f5ee;
+  --violet:#6a4bbd; --violet-soft:#f0ecfb;
+  --code-bg:#f0f4f8; --code-ink:#173446;
+  --shadow:0 1px 2px rgba(15,32,41,.05), 0 8px 24px -14px rgba(15,32,41,.22);
+  --radius:14px;
+}
+:root:not([data-theme="light"]){ }
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b1317; --panel:#111d24; --panel-2:#0e181e;
+    --ink:#e7eff5; --ink-2:#bfd0dc; --muted:#89a0af;
+    --line:#1f313c; --line-2:#182831;
+    --accent:#49b2ee; --accent-ink:#7ccbf8; --accent-soft:#0f2c3d;
+    --danger:#f2798c; --danger-soft:#33161c;
+    --warn:#e0a24a; --warn-soft:#33260f;
+    --ok:#4ccb95; --ok-soft:#0f2b21;
+    --violet:#a48bef; --violet-soft:#221b3a;
+    --code-bg:#0d1b23; --code-ink:#cfe0eb;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b1317; --panel:#111d24; --panel-2:#0e181e;
+  --ink:#e7eff5; --ink-2:#bfd0dc; --muted:#89a0af;
+  --line:#1f313c; --line-2:#182831;
+  --accent:#49b2ee; --accent-ink:#7ccbf8; --accent-soft:#0f2c3d;
+  --danger:#f2798c; --danger-soft:#33161c;
+  --warn:#e0a24a; --warn-soft:#33260f;
+  --ok:#4ccb95; --ok-soft:#0f2b21;
+  --violet:#a48bef; --violet-soft:#221b3a;
+  --code-bg:#0d1b23; --code-ink:#cfe0eb;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px; line-height:1.62; -webkit-font-smoothing:antialiased;
+}
+code,kbd,.mono{font-family:"DM Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+
+/* ---------- layout ---------- */
+.wrap{display:grid; grid-template-columns:264px minmax(0,1fr); gap:0; max-width:1420px; margin:0 auto}
+.side{
+  position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+  border-right:1px solid var(--line); padding:26px 18px 60px; background:var(--panel-2);
+}
+.main{min-width:0; padding:34px 42px 120px}
+@media (max-width:960px){
+  .wrap{grid-template-columns:1fr}
+  .side{position:static; height:auto; border-right:0; border-bottom:1px solid var(--line); padding:20px 22px}
+  .main{padding:24px 20px 80px}
+}
+
+/* ---------- sidebar ---------- */
+.brand{display:flex; align-items:center; gap:10px; margin-bottom:4px}
+.brand .dot{width:26px;height:26px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px;flex:none}
+.brand b{font-size:14px; letter-spacing:-.01em}
+.brand small{display:block; color:var(--muted); font-size:11px; font-weight:400; line-height:1.3}
+.nav{margin-top:20px; display:flex; flex-direction:column; gap:1px}
+.nav a{
+  display:flex; gap:9px; align-items:baseline; text-decoration:none; color:var(--ink-2);
+  padding:6px 10px; border-radius:8px; font-size:13.5px; border-left:2px solid transparent;
+}
+.nav a .n{color:var(--muted); font-size:11px; font-family:"DM Mono",monospace; min-width:16px}
+.nav a:hover{background:var(--line-2); color:var(--ink)}
+.nav a.on{background:var(--accent-soft); color:var(--accent-ink); font-weight:500; border-left-color:var(--accent)}
+.nav .sub{padding-left:34px; font-size:12.5px; color:var(--muted)}
+.nav .sub:hover{color:var(--ink)}
+.backlink{
+  display:inline-block; margin-top:14px; font-size:12.5px; color:var(--muted); text-decoration:none;
+  border-bottom:1px solid transparent;
+}
+.backlink:hover{color:var(--accent-ink); border-bottom-color:var(--accent)}
+.themebtn{
+  margin-top:22px; width:100%; border:1px solid var(--line); background:var(--panel); color:var(--ink-2);
+  border-radius:9px; padding:7px 10px; font:inherit; font-size:12.5px; cursor:pointer;
+}
+.themebtn:hover{border-color:var(--accent); color:var(--accent-ink)}
+
+/* ---------- header ---------- */
+.hero{border-bottom:1px solid var(--line); padding-bottom:22px; margin-bottom:30px}
+.eyebrow{font-family:"DM Mono",monospace; font-size:12px; color:var(--accent-ink); letter-spacing:.06em; text-transform:uppercase}
+h1{font-size:34px; line-height:1.15; letter-spacing:-.025em; margin:6px 0 10px}
+.lede{font-size:16px; color:var(--ink-2); max-width:74ch; margin:0}
+.chips{display:flex; flex-wrap:wrap; gap:7px; margin-top:16px}
+.chip{
+  font-family:"DM Mono",monospace; font-size:11.5px; padding:3px 9px; border-radius:999px;
+  border:1px solid var(--line); background:var(--panel); color:var(--muted);
+}
+.chip b{color:var(--ink-2); font-weight:500}
+
+/* ---------- sections ---------- */
+section{scroll-margin-top:20px; margin-bottom:46px}
+h2{
+  font-size:23px; letter-spacing:-.02em; margin:0 0 14px; padding-bottom:9px;
+  border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:11px;
+}
+h2 .num{font-family:"DM Mono",monospace; font-size:14px; color:var(--accent); font-weight:500}
+h3{font-size:17px; letter-spacing:-.01em; margin:28px 0 10px; color:var(--ink)}
+h4{font-size:13.5px; margin:18px 0 7px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; font-weight:500}
+p{margin:0 0 12px; max-width:82ch}
+ul,ol{margin:0 0 12px; padding-left:22px; max-width:82ch}
+li{margin-bottom:5px}
+a{color:var(--accent-ink)}
+
+/* ---------- inline bits ---------- */
+code:not(pre code){
+  background:var(--code-bg); color:var(--code-ink); padding:1px 5px; border-radius:5px;
+  font-size:.875em; border:1px solid var(--line-2); white-space:nowrap;
+}
+.ln{color:var(--accent-ink); font-family:"DM Mono",monospace; font-size:.82em; white-space:nowrap}
+pre{
+  background:var(--code-bg); border:1px solid var(--line); border-radius:10px;
+  padding:14px 16px; overflow-x:auto; font-size:12.8px; line-height:1.6; color:var(--code-ink); margin:0 0 14px;
+}
+pre code{background:none;border:0;padding:0;white-space:pre}
+
+/* ---------- cards & callouts ---------- */
+.card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px; box-shadow:var(--shadow); margin:0 0 16px}
+.note{
+  border-left:3px solid var(--accent); background:var(--accent-soft); border-radius:0 10px 10px 0;
+  padding:12px 16px; margin:0 0 16px; font-size:14.2px; color:var(--ink-2);
+}
+.note.warn{border-left-color:var(--warn); background:var(--warn-soft)}
+.note.danger{border-left-color:var(--danger); background:var(--danger-soft)}
+.note.ok{border-left-color:var(--ok); background:var(--ok-soft)}
+.note b{color:var(--ink)}
+.note .lbl{display:block; font-size:11px; text-transform:uppercase; letter-spacing:.07em; font-weight:700; margin-bottom:4px; color:var(--accent-ink)}
+.note.warn .lbl{color:var(--warn)} .note.danger .lbl{color:var(--danger)} .note.ok .lbl{color:var(--ok)}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius); margin:0 0 16px; background:var(--panel)}
+table{border-collapse:collapse; width:100%; font-size:13.6px; min-width:520px}
+th{
+  text-align:left; font-weight:500; font-size:11.5px; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--muted); padding:10px 14px; border-bottom:1px solid var(--line); background:var(--panel-2); white-space:nowrap;
+}
+td{padding:9px 14px; border-bottom:1px solid var(--line-2); vertical-align:top; color:var(--ink-2)}
+tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--panel-2)}
+td code{white-space:nowrap}
+
+/* ---------- badges ---------- */
+.b{display:inline-block; font-family:"DM Mono",monospace; font-size:11px; padding:2px 8px; border-radius:999px; white-space:nowrap; border:1px solid transparent}
+.b.blue{background:var(--accent-soft); color:var(--accent-ink); border-color:color-mix(in srgb,var(--accent) 25%, transparent)}
+.b.red{background:var(--danger-soft); color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%, transparent)}
+.b.amber{background:var(--warn-soft); color:var(--warn); border-color:color-mix(in srgb,var(--warn) 30%, transparent)}
+.b.green{background:var(--ok-soft); color:var(--ok); border-color:color-mix(in srgb,var(--ok) 30%, transparent)}
+.b.violet{background:var(--violet-soft); color:var(--violet); border-color:color-mix(in srgb,var(--violet) 30%, transparent)}
+.b.gray{background:var(--line-2); color:var(--muted); border-color:var(--line)}
+
+/* ---------- rail (vertical flow) ---------- */
+.rail{position:relative; margin:6px 0 18px; padding-left:30px}
+.rail:before{content:""; position:absolute; left:9px; top:8px; bottom:8px; width:2px; background:var(--line)}
+.step{position:relative; margin-bottom:13px}
+.step:before{
+  content:""; position:absolute; left:-26px; top:6px; width:11px; height:11px; border-radius:50%;
+  background:var(--panel); border:2px solid var(--accent);
+}
+.step.block:before{border-color:var(--danger); background:var(--danger)}
+.step.ask:before{border-color:var(--warn)}
+.step.done:before{border-color:var(--ok); background:var(--ok)}
+.step .t{font-weight:500; color:var(--ink); font-size:14.4px}
+.step .d{font-size:13.4px; color:var(--muted)}
+
+/* ---------- stage flow (horizontal) ---------- */
+.flow{display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; margin:6px 0 18px}
+.stage{
+  flex:1 1 150px; min-width:140px; background:var(--panel); border:1px solid var(--line);
+  border-radius:11px; padding:11px 13px; position:relative;
+}
+.stage .k{font-family:"DM Mono",monospace; font-size:10.5px; color:var(--muted); letter-spacing:.05em; text-transform:uppercase}
+.stage .v{font-size:13.6px; font-weight:500; margin-top:3px; color:var(--ink)}
+.stage .s{font-size:12.4px; color:var(--muted); margin-top:3px}
+.arrow{display:grid; place-items:center; color:var(--line); font-size:18px; flex:0 0 14px}
+@media(max-width:700px){.arrow{transform:rotate(90deg)}}
+
+/* ---------- outcome grid ---------- */
+.grid2{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px; margin:6px 0 18px}
+.mini{background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:13px 15px}
+.mini h5{margin:0 0 5px; font-size:13.6px; letter-spacing:-.01em}
+.mini p{margin:0; font-size:12.9px; color:var(--muted)}
+
+/* ---------- function index filter ---------- */
+.filter{
+  width:100%; max-width:340px; padding:8px 12px; border-radius:9px; border:1px solid var(--line);
+  background:var(--panel); color:var(--ink); font:inherit; font-size:13.5px; margin-bottom:12px;
+}
+.filter:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft)}
+.hidden{display:none !important}
+.count{font-size:12.5px; color:var(--muted); margin-left:10px}
+
+/* ---------- footer ---------- */
+footer{border-top:1px solid var(--line); padding-top:18px; color:var(--muted); font-size:12.8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ===== SIDEBAR ===== -->
+<aside class="side">
+  <div class="brand">
+    <div class="dot">02</div>
+    <div><b>Sales, Agents &amp; Pricing</b><small>allotment_v2 · workflow docs</small></div>
+  </div>
+  <nav class="nav" id="nav">
+    <a href="#s1"><span class="n">1</span> What this does</a>
+    <a href="#s2"><span class="n">2</span> Entry points</a>
+    <a href="#s3"><span class="n">3</span> Workflows</a>
+    <a href="#w-create" class="sub">3.1 Create an agent</a>
+    <a href="#w-edit" class="sub">3.2 Edit an agent</a>
+    <a href="#w-bulk" class="sub">3.3 Bulk-edit (table)</a>
+    <a href="#w-import" class="sub">3.4 Import agents</a>
+    <a href="#w-rt" class="sub">3.5 Build a rate type</a>
+    <a href="#w-bind" class="sub">3.6 Bind agents</a>
+    <a href="#w-addontype" class="sub">3.7 Add-on types</a>
+    <a href="#w-addonattach" class="sub">3.8 Attach an add-on</a>
+    <a href="#w-contract" class="sub">3.9 Contract PDF</a>
+    <a href="#w-renew" class="sub">3.10 Renewal</a>
+    <a href="#w-promo" class="sub">3.11 Promo overlay</a>
+    <a href="#w-foc" class="sub">3.12 FOC detail</a>
+    <a href="#w-matrix" class="sub">3.13 Pricing Matrix tab</a>
+    <a href="#s4"><span class="n">4</span> Data model</a>
+    <a href="#d-agents" class="sub">4.1 SB_AGENTS</a>
+    <a href="#d-ratetypes" class="sub">4.2 SB_RATE_TYPES</a>
+    <a href="#d-support" class="sub">4.3 Supporting stores</a>
+    <a href="#s5"><span class="n">5</span> Pricing resolution</a>
+    <a href="#p-step4" class="sub">Step 4 · trip subtotal</a>
+    <a href="#p-step5" class="sub">Step 5 · add-on layer</a>
+    <a href="#p-step6" class="sub">Step 6 · booking total</a>
+    <a href="#p-step8" class="sub">Step 8 · downstream money</a>
+    <a href="#s6"><span class="n">6</span> Extending add-ons</a>
+    <a href="#s7"><span class="n">7</span> Persistence path</a>
+    <a href="#s8"><span class="n">8</span> Cross-module contracts</a>
+    <a href="#s9"><span class="n">9</span> Invariants &amp; gotchas</a>
+    <a href="#s10"><span class="n">10</span> Function index</a>
+  </nav>
+  <a class="backlink" href="index.html">← All workflow docs</a>
+  <button class="themebtn" id="themebtn" type="button">Toggle theme</button>
+</aside>
+
+<main class="main">
+
+<!-- ===== HERO ===== -->
+<header class="hero">
+  <div class="eyebrow">Workflow doc 02</div>
+  <h1>Sales, Agents &amp; Pricing</h1>
+  <p class="lede">The B2B commercial side — agent master data, rate types (price packages), the data-driven
+  add-on system, contracts and renewal, and the pricing engine that turns
+  <i>(agent, route, date, pax, zone)</i> into money.</p>
+  <div class="chips">
+    <span class="chip"><b>Code</b> allotment_v2.html</span>
+    <span class="chip"><b>Commit</b> 094dde1</span>
+    <span class="chip"><b>Branch</b> refactor/booking-v2-migration</span>
+    <span class="chip"><b>Source</b> docs/workflows/02-sales-agents-pricing.md</span>
+  </div>
+  <div class="note warn" style="margin-top:18px">
+    <span class="lbl">Line numbers drift</span>
+    Every <span class="ln">:12345</span> reference means “roughly here”. Grep the symbol name instead —
+    the <a href="#s10">function index</a> at the bottom is the fastest way to find anything.
+  </div>
+</header>
+
+<!-- ============ 1 ============ -->
+<section id="s1">
+  <h2><span class="num">01</span> What this does &amp; who uses it</h2>
+
+  <p>Sales staff own an <b>agent</b> (a B2B buyer: DMC, OTA, hotel counter, street counter). Each agent is bound
+  to exactly one <b>rate type</b> (<code>agent.rateTypeId</code>) — a reusable price package covering seat rates
+  per route × zone × pax-type, charter rates, forced bundles, and optional add-ons. Booking reads the rate type;
+  accounting reads the agent’s <code>payType</code> / <code>vatMode</code> / <code>creditLimit</code>; the contract
+  wizard prints the rate type into a PDF the agent signs.</p>
+
+  <div class="flow">
+    <div class="stage"><div class="k">owner</div><div class="v">Sales user</div><div class="s"><code>agent.sales</code> → row-level scope</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">master data</div><div class="v">Agent</div><div class="s"><code>SB_AGENTS</code> · identity, credit, VAT, contract</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">pointer</div><div class="v"><code>rateTypeId</code></div><div class="s">the primary pricing pointer</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">package</div><div class="v">Rate Type</div><div class="s"><code>SB_RATE_TYPES</code> · seat / charter / bundle / add-ons</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">money</div><div class="v">Booking quote</div><div class="s"><code>bkV2TripSubtotal</code> → invoice</div></div>
+  </div>
+
+  <h4>Roles — <code>window.LA_ME</code> <span class="ln">:41802–:41817</span></h4>
+  <div class="tw"><table>
+    <thead><tr><th style="width:230px">Role</th><th>Sees</th></tr></thead>
+    <tbody>
+      <tr><td>admin (<code>role==='admin'</code>)</td><td>every agent, every rate type, may delete agents (<code>agDelete</code>, <span class="ln">:66139</span>) and set rate-type owners (<code>rtSetOwner</code>, <span class="ln">:61162</span>)</td></tr>
+      <tr><td>sales user (<code>salesId</code> set, not admin) — “scoped”</td><td>only agents where <code>a.sales === salesId</code> (<code>laScopeAgents</code>, <span class="ln">:41810</span>); only rate types they own or Shared (<code>_rtInScope</code>, <span class="ln">:61161</span>)</td></tr>
+      <tr><td>view-only</td><td>everything renders, but every persist helper early-returns on <code>laCanEditArea('sales')</code> (e.g. <code>sbAgentsPersist</code> <span class="ln">:39651</span>, <code>rtPersist</code> <span class="ln">:63046</span>)</td></tr>
+    </tbody>
+  </table></div>
+
+  <h4>Three house agents <span class="ln">:39662–:39695</span></h4>
+  <p>Auto-seeded and behaving like real agents in every aggregate:</p>
+  <div class="grid2">
+    <div class="mini"><h5><span class="b blue">a_walkin</span> WALKIN</h5><p>market <code>walkin</code>, rate type <code>rt003</code>.</p></div>
+    <div class="mini"><h5><span class="b violet">a_staff</span> STAFF</h5><p>market <code>staff</code>, rate type <code>rt_staff</code>.</p></div>
+    <div class="mini"><h5><span class="b green">a_b2c</span> B2C “Love Andaman”</h5><p>market <code>b2c</code>, rate type <code>rt003</code>, <code>vatMode:'include'</code>.</p></div>
+  </div>
+</section>
+
+<!-- ============ 2 ============ -->
+<section id="s2">
+  <h2><span class="num">02</span> Entry points</h2>
+
+  <p>All routed through <code>nav(el)</code> <span class="ln">:6027–:6096</span> which switches <code>.view</code>
+  visibility then calls one render function.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:200px">Sidebar item</th><th style="width:190px">View id</th><th>Render fn</th><th style="width:90px">Line</th></tr></thead>
+    <tbody>
+      <tr><td>Sales Board</td><td><code>#view-sales-board</code></td><td><code>renderSalesBoard()</code></td><td class="mono">67431</td></tr>
+      <tr><td>B2B Dashboard</td><td><code>#view-b2b-dash</code></td><td><code>renderB2BDash()</code></td><td class="mono">79312</td></tr>
+      <tr><td>Agent List</td><td><code>#view-agents</code></td><td><code>renderAgents()</code></td><td class="mono">60897</td></tr>
+      <tr><td>Rate Types</td><td><code>#view-rate-types</code></td><td><code>renderRateTypes()</code></td><td class="mono">60915</td></tr>
+      <tr><td>Contract Template</td><td><code>#view-contract-tmpl</code></td><td><code>renderContractTemplates()</code></td><td class="mono">67756</td></tr>
+      <tr><td>B2C</td><td><code>#view-b2c</code></td><td><code>renderB2C()</code></td><td class="mono">68504</td></tr>
+      <tr><td>FOC Detail</td><td><code>#view-focdetail</code></td><td><code>renderFocDetail()</code></td><td class="mono">43926</td></tr>
+      <tr><td>Insurance</td><td><code>#view-insurance</code></td><td><code>renderInsurance()</code></td><td class="mono">43814</td></tr>
+      <tr><td>Booking Flow</td><td><code>#view-bookingflow</code></td><td><code>renderBookingFlow()</code></td><td class="mono">43589</td></tr>
+      <tr><td>Add-on Services</td><td><code>#view-addonsvc</code></td><td><code>renderAddonSvc()</code></td><td class="mono">78841</td></tr>
+    </tbody>
+  </table></div>
+
+  <h4>Modal / overlay entry points (no view of their own)</h4>
+  <p><code>agEditOpen(section, agentId)</code> <span class="ln">:63387</span> ·
+  <code>agNew()</code> <span class="ln">:65868</span> ·
+  <code>rtOpenNew()</code> <span class="ln">:62365</span> /
+  <code>rtOpenEdit(rtId)</code> <span class="ln">:62341</span> /
+  <code>rtClone(rtId)</code> <span class="ln">:62350</span> ·
+  <code>rtOpenAgentPicker(rtId)</code> <span class="ln">:62104</span> ·
+  <code>rtAddonTypesOpen()</code> <span class="ln">:61755</span> ·
+  <code>ctDocOpen(agentId, opts)</code> <span class="ln">:66192</span> ·
+  <code>ctOpenRenewal(agentId)</code> <span class="ln">:65096</span> ·
+  <code>ctOpenAddPromo(agentId)</code> <span class="ln">:64357</span> ·
+  <code>agProgPicker(...)</code> <span class="ln">:60630</span> ·
+  <code>agImportPick()</code> <span class="ln">:60245</span>.</p>
+
+  <div class="note">
+    <span class="lbl">Two Agent List modes</span>
+    <code>renderAgents()</code> has two modes: <code>_agView==='card'</code> (sidebar + detail tabs) and
+    <code>_agView==='table'</code> (<code>agRenderTable()</code> <span class="ln">:60764</span> — a spreadsheet
+    over <code>SB_AGENTS</code>).
+  </div>
+</section>
+
+<!-- ============ 3 ============ -->
+<section id="s3">
+  <h2><span class="num">03</span> Workflows</h2>
+
+  <!-- 3.1 -->
+  <h3 id="w-create">3.1 Create an agent</h3>
+  <p><b>Trigger</b> — “＋ Agent” button → <code>agNew()</code> <span class="ln">:65868</span>, which seeds
+  <code>_agNewDraft</code> and opens the same modal shell as <code>agEditOpen</code> with
+  <code>_agEditSection='new'</code>.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · Fill the form</div>
+      <div class="d"><code>agNewSetField(k, v, rerender)</code> <span class="ln">:65882</span> mutates <code>_agNewDraft</code>.</div></div>
+    <div class="step"><div class="t">2 · Optional OCR of a name card / contract</div>
+      <div class="d"><code>agNewOcrPick()</code> <span class="ln">:65905</span> → <code>agNewOcrRun(file)</code> <span class="ln">:65911</span>
+      runs Tesseract → <code>_agOcrParse(text)</code> <span class="ln">:65926</span> →
+      <code>agNewOcrApply</code> <span class="ln">:65976</span> fills name / tax id / address / phone / email.</div></div>
+    <div class="step ask"><div class="t">3 · Live duplicate check</div>
+      <div class="d"><code>agNewDupCheck()</code> <span class="ln">:66091</span> /
+      <code>agFindDup(name, code, exceptId)</code> <span class="ln">:66081</span>.</div></div>
+    <div class="step"><div class="t">4 · Rate Type picker filtered by sales owner</div>
+      <div class="d"><code>_rtSel = d.sales || laMySalesId()</code> <span class="ln">:66003</span> →
+      <code>rtForSales</code> <span class="ln">:61146</span>.</div></div>
+    <div class="step"><div class="t">5 · Save</div>
+      <div class="d"><code>agEditSave()</code> <span class="ln">:64057</span> sees <code>_agEditSection==='new'</code>
+      and delegates to <code>agCreateSubmit()</code> <span class="ln">:66100</span>.</div></div>
+    <div class="step done"><div class="t">6 · <code>agCreateSubmit</code> commits</div>
+      <div class="d">Builds the object, calls <code>_seedAgentContractDefaults()</code> scoped to just the new agent
+      (<span class="ln">:66130</span> — it temporarily swaps <code>SB_AGENTS</code> to <code>[a]</code>),
+      <code>SB_AGENTS.unshift(a)</code>, <code>agLog(a.id,'created',…)</code>, <code>sbAgentsPersist()</code>.</div></div>
+  </div>
+
+  <h4>Data written</h4>
+  <p><code>SB_AGENTS[]</code> new element:
+  <code>{id (LA_UID('a')), code, name, market, sub, sales, payType, vatMode, creditDays, creditLimit,
+  creditBalance:0, contact, email, phone, note, programs:[], rateTypeId?,
+  companyInfo{legalName,taxId,tatLicense,address,website,tel},
+  agentSignatory{name,designation,tel,signedDate}, activity[]}</code>
+  plus the contract defaults (<code>contractStatus</code>, <code>contractVersion</code>,
+  <code>programPeriods[]</code>, <code>bookingChannel</code>, <code>contractStart/End</code>,
+  <code>contractHistory[]</code>) from <code>_seedAgentContractDefaults</code> <span class="ln">:39698</span>.
+  Blob key <code>sb_agents</code>.</p>
+
+  <h4>Validation / guards</h4>
+  <p>Hard-required <span class="ln">:66102</span>: <code>name</code>, <code>companyInfo.legalName</code>,
+  <code>address</code>, <code>market</code>, <code>rateTypeId</code>, <code>payType</code>, <code>vatMode</code>.
+  Missing → red outlines (<code>_agNewReqShow</code>) + <code>alert</code>. Near-duplicate name/code →
+  <code>confirm</code> <span class="ln">:66106</span>. <code>sbAgentsPersist</code> silently no-ops for
+  view-only users.</p>
+
+  <div class="note danger">
+    <span class="lbl">Failure modes</span>
+    <code>code</code> auto-derives from the name
+    (<code>d.name.toUpperCase().replace(/[^A-Z0-9]+/g,'').slice(0,8)</code>) and is <b>not uniqueness-checked</b> —
+    two agents can share a code.<br>
+    <code>companyInfo</code> sub-fields are only written when non-empty <span class="ln">:66116</span>; the
+    relational backend has one column per sub-field, so a flat write elsewhere is silently dropped (see the TRAP
+    comment at <span class="ln">:60421</span>).
+  </div>
+
+  <!-- 3.2 -->
+  <h3 id="w-edit">3.2 Edit an agent (sectioned modal)</h3>
+  <p><b>Trigger</b> — any “แก้ไข” pencil in the Info tab → <code>agEditOpen(section, agentId)</code>
+  <span class="ln">:63387</span>.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>agEditOpen</code> deep-clones one slice</div>
+      <div class="d">Only the relevant slice lands in <code>_agEditDraft</code>. Sections:
+      <code>sales · programs · profile · company · signatory · booking · notes · ratetype · contracttmpl</code>
+      <span class="ln">:63392–:63407</span>. An unknown section returns without opening.</div></div>
+    <div class="step"><div class="t">2 · <code>agEditRender()</code> <span class="ln">:63465</span> draws the body</div>
+      <div class="d"><code>agEditSetField(key,val)</code> <span class="ln">:63421</span> /
+      <code>agEditSetNested</code> <span class="ln">:63460</span> mutate the draft.</div></div>
+    <div class="step done"><div class="t">3 · Save → <code>agEditSave()</code> <span class="ln">:64057</span></div>
+      <div class="d">Snapshots <code>_b</code> (before), applies only that section’s fields, writes an
+      <code>agLog</code> diff line, then <code>sbAgentsPersist()</code> + <code>agRenderList()</code> +
+      <code>agRenderDetail()</code>.</div></div>
+  </div>
+
+  <h4>Data written — per section</h4>
+  <div class="tw"><table>
+    <thead><tr><th style="width:170px">section</th><th>writes</th></tr></thead>
+    <tbody>
+      <tr><td><code>sales</code></td><td><code>a.sales</code></td></tr>
+      <tr><td><code>programs</code></td><td><code>a.programPeriods[]</code>, <code>a.programs[]</code> (derived = <code>programPeriods.map(p=&gt;p.routeId)</code>)</td></tr>
+      <tr><td><code>profile</code></td><td><code>a.payType</code>, <code>a.creditDays</code>, <code>a.vatMode</code>, <code>a.creditLimit</code>, <code>a.creditBalance</code></td></tr>
+      <tr><td><code>company</code></td><td><code>a.name</code>, <code>a.market</code>, <code>a.sub</code>, <code>a.email</code>, <code>a.color</code>, <code>a.companyInfo{…}</code></td></tr>
+      <tr><td><code>signatory</code></td><td><code>a.agentSignatory</code></td></tr>
+      <tr><td><code>booking</code></td><td><code>a.bookingChannel</code></td></tr>
+      <tr><td><code>notes</code></td><td><code>a.note</code></td></tr>
+      <tr><td><code>ratetype</code></td><td><code>a.rateTypeId</code> (+ <code>rtPersist()</code> so the binding survives)</td></tr>
+      <tr><td><code>contracttmpl</code></td><td><code>a.contractTemplateId</code></td></tr>
+    </tbody>
+  </table></div>
+  <p>Every branch appends to <code>a.activity[]</code> via <code>agLog(agentId, kind, text)</code>
+  <span class="ln">:39654</span>, capped at 200 entries.</p>
+
+  <h4>Validation / guards</h4>
+  <p><code>sales</code> empty → <code>confirm</code>. <code>programs</code> non-array →
+  <code>alert('ข้อมูลผิดพลาด')</code>. <code>company</code> requires <code>name</code> + <code>legalName</code>.
+  <code>agSubMarketRemember(market, sub)</code> <span class="ln">:63442</span> persists a newly typed sub-market
+  so it reappears in the dropdown.</p>
+
+  <div class="note danger">
+    <span class="lbl">Failure modes</span>
+    <b><code>esc</code> is not defined in <code>agEditBuildRateTypePicker</code></b>
+    (<code>allotment_v2.html:63867</code> calls <code>esc(_salesNm||'เซลล์ผู้ดูแล')</code>). There is no global
+    <code>esc</code> in this file (every occurrence is a function-local <code>const</code>). The call sits in the
+    <i>else</i> branch of <code>_G.noSales</code>, i.e. it fires for <b>any agent that has a sales owner</b> —
+    which is most of them. This should throw a <code>ReferenceError</code> and blank the picker.
+    Flagged, not fixed.<br><br>
+    The <code>contracttmpl</code> branch diffs against <code>_b.contractTemplateId</code>, but <code>_b</code>
+    <span class="ln">:64063</span> never captures <code>contractTemplateId</code> — so the log line always fires
+    (<code>undefined → …</code>). Cosmetic.
+  </div>
+
+  <!-- 3.3 -->
+  <h3 id="w-bulk">3.3 Bulk-edit agents (table view)</h3>
+  <p><b>Trigger</b> — Agent List → view toggle → <code>agSetView('table')</code> <span class="ln">:60534</span>
+  → <code>agRenderTable()</code> <span class="ln">:60764</span>.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · Rows = <code>agTblRows()</code> <span class="ln">:60520</span></div>
+      <div class="d"><code>laScopeAgents(SB_AGENTS)</code> then market / sales / gap / search filters.
+      <code>_agGap</code> buckets: <code>all · programs · rate · docs · vat</code>
+      (<code>agGapCounts</code> <span class="ln">:60509</span>).</div></div>
+    <div class="step"><div class="t">2 · Click a cell to edit</div>
+      <div class="d"><code>agTblEdit(id,k)</code> <span class="ln">:60573</span> → edit →
+      <code>agTblCommit(save)</code> <span class="ln">:60582</span>. Tab/Enter walk the grid
+      (<code>agTblKey</code> <span class="ln">:60598</span>).</div></div>
+    <div class="step"><div class="t">3 · Tick rows for bulk operations</div>
+      <div class="d"><code>agBulkApply()</code> <span class="ln">:60712</span> sets one field across the selection,
+      or <code>agFillDown()</code> <span class="ln">:60749</span> copies the focused cell’s value down.</div></div>
+    <div class="step"><div class="t">4 · Programs cell → route picker</div>
+      <div class="d"><code>agTblProgramsOpen(id)</code> <span class="ln">:60618</span> →
+      <code>agProgPicker(current, onOk, title, rtId)</code> <span class="ln">:60630</span>. When the agent has no
+      programs yet the picker <b>pre-ticks every route in the rate type</b> (<code>autoFilled</code>,
+      <span class="ln">:60636</span>) and shows each route’s period + Active/Upcoming/Expired chip from
+      <code>rt.routeValidity[rId]</code> falling back to <code>rt.validFrom/validTo</code>
+      <span class="ln">:60639–:60650</span>. Routes outside the rate type are pushed into a separate section —
+      ticking one means selling a route with no agreed price.</div></div>
+    <div class="step block"><div class="t">5 · Delete selection</div>
+      <div class="d"><code>agTblDeleteSelected()</code> <span class="ln">:60559</span>.</div></div>
+  </div>
+
+  <h4>Data written</h4>
+  <p><code>SB_AGENTS</code> fields via <code>agGet</code>/<code>agSet</code>
+  (<span class="ln">:60480</span>/<span class="ln">:60486</span>), which understand dotted
+  <code>companyInfo.*</code> paths and <b>merge</b> rather than replace. Persist via
+  <code>agTblPersist()</code> <span class="ln">:60762</span> → <code>sbAgentsPersist()</code>.</p>
+
+  <h4>Validation / guards</h4>
+  <p><code>AG_COLS</code> <span class="ln">:60432</span> declares each column’s <code>type</code>
+  (<code>text|select|number</code>) and option list; selects are constrained to <code>SB_MARKETS</code> /
+  <code>SB_SALES</code> / rate types.</p>
+
+  <div class="note danger">
+    <span class="lbl">Failure mode</span>
+    Writing a company field flat (not through <code>agSet</code>) loses it on the next SQL round-trip; the comment
+    at <span class="ln">:60421</span> records that this cost a whole import once.
+  </div>
+
+  <!-- 3.4 -->
+  <h3 id="w-import">3.4 Import agents from a spreadsheet</h3>
+  <p><b>Trigger</b> — “นำเข้า” → <code>agImportPick()</code> <span class="ln">:60245</span> →
+  <code>agImportFile(file)</code> <span class="ln">:60253</span>. Template download:
+  <code>agImportTemplate()</code> <span class="ln">:60191</span>.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · Normalise each sheet row</div>
+      <div class="d"><code>_agImpRow(o)</code> <span class="ln">:60158</span> normalises headers
+      (<code>_agImpKeys</code> <span class="ln">:60109</span>), maps sales names → ids
+      (<code>_agImpSales</code> <span class="ln">:60138</span>), rate-type names → ids
+      (<code>_agImpRate</code> <span class="ln">:60143</span>), program name lists → routeIds
+      (<code>_agImpPrograms</code> <span class="ln">:60148</span>).</div></div>
+    <div class="step"><div class="t">2 · Match against existing agents</div>
+      <div class="d"><code>_agImpFind(src)</code> <span class="ln">:60118</span> matches by code / name.</div></div>
+    <div class="step"><div class="t">3 · Compute the write plan</div>
+      <div class="d"><code>agImportComputeWrites()</code> <span class="ln">:60280</span> computes per-row
+      <code>action:'create'|'update'</code> and the exact field list <code>writes[]</code>;
+      <code>agImportSetOverwrite(v)</code> <span class="ln">:60304</span> toggles whether non-empty existing
+      values may be overwritten.</div></div>
+    <div class="step done"><div class="t">4 · Apply</div>
+      <div class="d"><code>agImportApply()</code> <span class="ln">:60378</span>: creates or patches,
+      <code>sbAgentsPersist()</code>, toast.</div></div>
+  </div>
+
+  <h4>Data written</h4>
+  <p><code>SB_AGENTS</code> (create: whole object; update: only the listed <code>writes</code> paths, with
+  <code>companyInfo.*</code> merged, <span class="ln">:60394–:60398</span>).</p>
+
+  <h4>Validation / guards</h4>
+  <p>Only rows with <code>checked &amp;&amp; (create || writes.length)</code> are applied. <code>code</code>
+  falls back to <code>_agImpCode(name)</code> <span class="ln">:60132</span>,
+  <code>companyInfo.legalName</code> falls back to <code>a.name</code>.</p>
+
+  <div class="note danger">
+    <span class="lbl">Failure mode</span>
+    No id-collision guard beyond <code>LA_UID</code>; a row that fails to match creates a duplicate agent rather
+    than erroring.
+  </div>
+
+  <!-- 3.5 -->
+  <h3 id="w-rt">3.5 Build / edit a rate type</h3>
+  <p><b>Trigger</b> — Rate Types page → “＋ New” (<code>rtOpenNew</code> <span class="ln">:62365</span>) ·
+  card → Edit (<code>rtOpenEdit</code> <span class="ln">:62341</span>) ·
+  card → Clone (<code>rtClone</code> <span class="ln">:62350</span>).</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · Draft</div>
+      <div class="d"><code>_rtDraft = _rtCloneDeep(rt)</code> (or a blank skeleton at
+      <span class="ln">:62366–:62385</span>). <code>_rtDraftIsNew</code> marks push-vs-replace.</div></div>
+    <div class="step"><div class="t">2 · <code>rtModalRender()</code> <span class="ln">:62683</span> draws the sections</div>
+      <div class="d">In order: Routes covered → Seat rates → Price tiers → Nationality scope → Charter rates → Add-ons.</div></div>
+    <div class="step done"><div class="t">3 · Save → <code>rtSaveDraft()</code> <span class="ln">:62996</span></div>
+      <div class="d">Validate, prune, push/replace, persist.</div></div>
+  </div>
+
+  <div class="card">
+    <h4>Routes covered</h4>
+    <p><code>rtDraftToggleRoute(rId)</code> <span class="ln">:62456</span> adds/removes from <code>routes[]</code>
+    and seeds an all-zero <code>seatRates[rId]</code> skeleton for PK/KL/NoTransfer.</p>
+
+    <h4>Seat rates</h4>
+    <p>A 12-cell grid per route. <code>rtDraftSet(path, value)</code> <span class="ln">:62396</span> is a dot-path
+    setter into <code>_rtDraft</code>. Per-route <b>Active period</b> inputs write
+    <code>routeValidity.&lt;rId&gt;.from/.to</code>. Per-route <b>Bundle Longtail</b> toggle →
+    <code>rtToggleBundleLongtail</code> <span class="ln">:62425</span> /
+    <code>rtSetBundleMode</code> (<span class="ln">:62439</span>, <code>'free'</code> zeroes adult+child) /
+    <code>rtSetBundleApplyTo</code> (<span class="ln">:62448</span>, <code>'seat'|'charter'|'both'</code>).</p>
+
+    <h4>Price tiers</h4>
+    <p>The grid is <i>one</i> table switched between three layers by <code>_rtTier</code>
+    (<code>rtSetTier</code> <span class="ln">:62304</span>): <code>net</code> writes
+    <code>seatRates[r][z][p]</code>, <code>sell</code>/<code>minSell</code> write
+    <code>priceTiers[r][z][p].&lt;tier&gt;</code> (<code>_rtTierPath</code> <span class="ln">:62332</span>).
+    <code>rtCopyNetToTier()</code> <span class="ln">:62306</span> bulk-copies Net into the open tier.
+    <b>Only <code>net</code> is used for money</b> — see <a href="#s9">§9</a>.</p>
+
+    <h4>Nationality scope</h4>
+    <p><code>nationalityScope: 'both'|'thai'|'fr'</code> hides TH or FR columns everywhere
+    (<code>rtNatPax</code> <span class="ln">:62680</span>, <code>rtNatScopeOf</code> <span class="ln">:62681</span>).</p>
+
+    <h4>Charter rates</h4>
+    <p><code>rtAddCharterRow()</code> <span class="ln">:62475</span> finds the first free (route × boatType) slot
+    from <code>RT_BOAT_TYPES</code> <span class="ln">:62337</span> and seeds
+    <code>{starterPrice:0, starterIncludes:4, extraPerPax:0}</code>. Row edits:
+    <code>rtChangeCharterRoute</code> <span class="ln">:62584</span>,
+    <code>rtChangeCharterBoatType</code> <span class="ln">:62595</span>,
+    <code>rtRemoveCharterRow</code> <span class="ln">:62576</span>. Validity is read-only, inherited from
+    §1 <code>routeValidity</code>.</p>
+
+    <h4>Add-ons</h4>
+    <p>One card per entry in <code>RT_ADDON_DEFS</code> <span class="ln">:61750</span>, rendered by
+    <code>def.edit(_rtDraft)</code>. See <a href="#w-addonattach">§3.8</a> / <a href="#s6">§6</a>.</p>
+  </div>
+
+  <h4>Data written</h4>
+  <p><code>SB_RATE_TYPES[]</code>:
+  <code>{id, code, name, note, color, createdDate, owner, active, validFrom, validTo, routes[], seatRates{},
+  priceTiers{}, routeValidity{}, routeBundles{}, charterRates{}, addOns{}, nationalityScope?}</code>.
+  Blob key <code>sb_rate_types</code> via <code>rtPersist()</code> <span class="ln">:63045</span>, which
+  <b>also</b> writes a companion <code>sb_agents_rate_bindings</code> array
+  <code>[{id, rateTypeId}]</code> so bindings survive a rate-type delete.</p>
+
+  <h4>Validation / guards — <code>rtSaveDraft</code> <span class="ln">:62996–:63027</span></h4>
+  <ul>
+    <li><code>name</code> required. <code>validFrom &gt; validTo</code> → alert.</li>
+    <li>Cleanup: <code>seatRates</code> and <code>charterRates</code> entries for routes no longer in
+      <code>routes[]</code> are <b>deleted</b>. (<code>routeValidity</code>, <code>routeBundles</code>,
+      <code>addOns.*.applies</code> are <i>not</i> cleaned — orphans linger.)</li>
+    <li>New rate types get an auto <code>code</code> from <code>_rtAutoCode(name, owner)</code>
+      <span class="ln">:61123</span> = <code>SALESNAME-RATENAME</code>, uniquified with <code>-2</code>,
+      <code>-3</code>…</li>
+    <li>Id-collision belt-and-braces loop <span class="ln">:63010</span> regenerates the id if <code>LA_UID</code>
+      ever collides — this was a real incident (“Standard Tier 1” overwritten).</li>
+  </ul>
+
+  <div class="note danger">
+    <span class="lbl">Failure modes</span>
+    <code>rtDeleteRT(rtId)</code> <span class="ln">:63029</span> does <code>delete a.rateTypeId</code> on every
+    bound agent after a <code>confirm</code> — those agents then have <b>no price</b> and every booking for them
+    must be manual.<br>
+    <code>rtToggleZoneNotOffered</code> <span class="ln">:62410</span> stores
+    <code>seatRates[r][z] = null</code> for “No Offer”; <code>undefined</code> (never set) renders as “Not Set”.
+    Both are treated as no-rate by the engine.
+  </div>
+
+  <!-- 3.6 -->
+  <h3 id="w-bind">3.6 Bind agents to a rate type</h3>
+  <p>Two directions, both end at <code>agent.rateTypeId</code>.</p>
+
+  <div class="grid2">
+    <div class="mini">
+      <h5><span class="b blue">A</span> from the agent</h5>
+      <p><code>agEditOpen('ratetype', id)</code> → <code>agEditBuildRateTypePicker()</code> <span class="ln">:63783</span>.
+      The list is <code>rtForSales(agent.sales, currentId)</code> <span class="ln">:61146</span>: the agent’s sales
+      owner’s rates + Shared (<code>owner===''</code>) + the currently-bound rate even if it belongs to someone else
+      (<code>keepId</code>, so the existing value never vanishes). <code>rtScopeList</code> <span class="ln">:61141</span>
+      applies the <i>logged-in</i> user’s scope first. Inactive rates are greyed and unclickable unless currently
+      selected (then clicking unbinds). <code>agEditBuildRTPreview(rt)</code> <span class="ln">:63877</span> shows the
+      first route’s PK/NoTransfer prices. Save → <code>agEditSave</code> <code>sec==='ratetype'</code>.</p>
+    </div>
+    <div class="mini">
+      <h5><span class="b violet">B</span> from the rate type (bulk)</h5>
+      <p><code>rtOpenAgentPicker(rtId)</code> <span class="ln">:62104</span> → multi-select grouped by market
+      (<code>rtAgentPickerToggle</code> <span class="ln">:62120</span>,
+      <code>rtAgentPickerToggleGroup</code> <span class="ln">:62126</span>,
+      <code>rtAgentPickerSearch</code> <span class="ln">:62134</span>) →
+      <code>rtAgentPickerApply()</code> <span class="ln">:62136</span> sets <code>a.rateTypeId = rtId</code> for
+      every ticked agent, <b>skipping agents outside the caller’s sales scope</b>
+      (<code>laAgentInScope</code>, <span class="ln">:62142</span>) so you cannot accidentally unbind someone
+      else’s agent. <code>rtUnbindAgent(agentId, rtId, ev)</code> <span class="ln">:62278</span> is the single-row
+      inverse, with a confirm.</p>
+    </div>
+  </div>
+
+  <h4>Data written</h4>
+  <p><code>SB_AGENTS[i].rateTypeId</code>; persisted by both <code>rtPersist()</code> and
+  <code>sbAgentsPersist()</code> depending on the path.</p>
+
+  <div class="note warn">
+    <span class="lbl">Failure modes</span>
+    Path B persists via <code>rtPersist()</code> only, i.e. through the <code>sb_agents_rate_bindings</code>
+    mirror; the authoritative <code>sb_agents</code> blob is refreshed on the next <code>sbAgentsPersist()</code>.
+    <code>_rtRestore</code> <span class="ln">:63059</span> replays the mirror onto <code>SB_AGENTS</code> on boot,
+    which is what makes this safe.
+  </div>
+
+  <!-- 3.7 -->
+  <h3 id="w-addontype">3.7 Add-on type lifecycle (UI-created types)</h3>
+  <p><b>Trigger</b> — Rate Types page → “จัดการชนิด Add-on” → <code>rtAddonTypesOpen()</code>
+  <span class="ln">:61755</span>.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · List</div>
+      <div class="d"><code>rtAddonTypesRenderBody()</code> <span class="ln">:61771</span> lists
+      <code>RT_ADDON_BUILTIN</code> (badge <span class="b gray">built-in</span>, not deletable) then
+      <code>SB_ADDON_TYPES</code> (deletable).</div></div>
+    <div class="step done"><div class="t">2 · Create → <code>rtAddonTypeCreate()</code> <span class="ln">:61804</span></div>
+      <div class="d">Slugifies the EN name into a <code>key</code> (≤24 chars, uniquified against builtins +
+      customs), pushes <code>{key, label:{en,th}, model:'perPax'|'flat', unit, builtin:false}</code>,
+      <code>sbAddonTypesPersist()</code>, <code>rtRebuildAddonDefs()</code>.</div></div>
+    <div class="step block"><div class="t">3 · Delete → <code>rtAddonTypeDelete(key)</code> <span class="ln">:61818</span></div>
+      <div class="d">Removes from <code>SB_ADDON_TYPES</code> only — <b>prices already stored in
+      <code>rt.addOns[key]</code> are kept but become invisible</b>.</div></div>
+  </div>
+
+  <h4>Data written</h4>
+  <p><code>SB_ADDON_TYPES[]</code>, blob key <code>sb_addon_types</code>
+  (<code>sbAddonTypesPersist</code>, <span class="ln">:61629</span> — guarded by
+  <code>laCanEditArea('config')</code>, not <code>'sales'</code>).</p>
+
+  <h4>Validation / guards</h4>
+  <p>EN name required (<code>alert('Please enter the English name')</code>).</p>
+
+  <div class="note danger">
+    <span class="lbl">Failure mode</span>
+    A custom key that collides with a future built-in key would shadow it; <code>rtRebuildAddonDefs</code>
+    <span class="ln">:61751</span> concatenates builtins first, and
+    <code>RT_ADDON_DEFS.find(d=&gt;d.key===key)</code> therefore resolves to the built-in — the custom entry
+    becomes dead.
+  </div>
+
+  <!-- 3.8 -->
+  <h3 id="w-addonattach">3.8 Attach an add-on to a rate type</h3>
+
+  <div class="rail">
+    <div class="step"><div class="t">A · Edit modal · add-on card</div>
+      <div class="d"><code>def.edit(_rtDraft)</code> renders the card.</div></div>
+    <div class="step ask"><div class="t">B · Checkbox toggled</div>
+      <div class="d">On → <code>rtToggleAddOn(key,true)</code> <span class="ln">:62636</span>,
+      <code>_rtDraft.addOns[key] = def.init(draft)</code>. Off →
+      <code>delete _rtDraft.addOns[key]</code>.</div></div>
+    <div class="step"><div class="t">C/E · Which def? — the <code>init</code> shape</div>
+      <div class="d">
+        <b>longtail</b> → <code>{applies:[], byRoute:{}}</code><br>
+        <b>privateTransfer</b> → <code>{unit:'per trip', &lt;firstRoute&gt;:{PK:{sedan:0,van:0}}}</code><br>
+        <b>custom generic</b> → <code>_rtAddonInit_generic</code> <span class="ln">:61631</span>:
+        flat → <code>{applies:[],price:0}</code>; perPax → <code>{applies:[],adult:0,child:0}</code>
+      </div></div>
+    <div class="step"><div class="t">I · Route chips (longtail &amp; custom generic)</div>
+      <div class="d">Click route chips → <code>rtToggleAddOnRoute</code> <span class="ln">:62647</span> —
+      push/pull on <code>applies[]</code>.</div></div>
+    <div class="step"><div class="t">J · Transfer rows (privateTransfer)</div>
+      <div class="d"><code>rtAddTransferRoute</code> <span class="ln">:62505</span> /
+      <code>rtChangeTransferZone</code> <span class="ln">:62567</span>.</div></div>
+    <div class="step"><div class="t">K · Longtail per-route price grid</div>
+      <div class="d"><code>_rtAddonEdit_longtail</code> <span class="ln">:61445</span> seeds
+      <code>byRoute[rid]</code> for every <code>applies</code> route, then
+      <code>rtDraftSet('addOns.longtail.byRoute.rid.join.adult', n)</code>.</div></div>
+    <div class="step done"><div class="t">L · Commit</div>
+      <div class="d"><code>rtSaveDraft</code> <span class="ln">:62996</span> →
+      <code>rtPersist</code> <span class="ln">:63045</span>.</div></div>
+  </div>
+
+  <h4>Data written</h4>
+  <p><code>rt.addOns.&lt;key&gt;</code>. Longtail canonical shape:
+  <code>{applies:[rId], byRoute:{rId:{join:{adult,child}, charter:{price,capacity}}}}</code>.
+  Private transfer: <code>{unit, &lt;rId&gt;:{&lt;zone&gt;:{sedan,van}}}</code>.</p>
+
+  <h4>Validation / guards</h4>
+  <p><code>rtAddTransferRow</code> / <code>rtAddCharterRow</code> alert if <code>routes[]</code> is empty.
+  <code>_rtEnsureBothZones(pt, rId)</code> <span class="ln">:62541</span> keeps PK+KL present on a transfer
+  route.</p>
+
+  <div class="note danger">
+    <span class="lbl">Failure mode</span>
+    <code>_rtAddonEdit_longtail</code> <b>mutates <code>ltRaw.byRoute</code> during render</b>
+    <span class="ln">:61460–:61463</span> to seed missing routes. That is a render function writing to the draft;
+    it is idempotent, but a route removed from <code>applies</code> leaves its <code>byRoute</code> entry behind
+    forever.
+  </div>
+
+  <!-- 3.9 -->
+  <h3 id="w-contract">3.9 Generate a contract document (PDF)</h3>
+  <p><b>Trigger</b> — Agent detail → Generated Contracts tab → “ออกสัญญา”, or per-contract from the Contracts
+  panel → <code>ctDocOpen(agentId, opts)</code> <span class="ln">:66192</span>.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · Resolve &amp; freeze the template</div>
+      <div class="d"><code>ctTmplForAgent(a)</code> <span class="ln">:67234</span> resolves the template
+      (<code>a.contractTemplateId</code> → <code>ctTmplGet</code> → default). <code>ctDocOpen</code>
+      <b>freezes a copy</b> of the template’s section flags and all its text into <code>_ctDoc.tmplText</code> —
+      editing the template later never rewrites an open or archived document
+      <span class="ln">:66194–:66216</span>.</div></div>
+    <div class="step"><div class="t">2 · Per-document overrides (Phase 4)</div>
+      <div class="d"><code>opts</code> can override the rate type / program periods / version / window for this
+      one document: <code>_ctDocAgentRT()</code> <span class="ln">:66180</span> returns <code>{a, rt}</code>
+      with the overrides patched over the agent.</div></div>
+    <div class="step"><div class="t">3 · Build the A4 page stack</div>
+      <div class="d"><code>ctDocRender(hostId)</code> <span class="ln">:66517</span> →
+      <code>_ctDocRenderPages</code> <span class="ln">:66589</span> builds A4 pages from
+      <code>CT_DOC_SECTIONS</code> <span class="ln">:66158</span> grouped as
+      <code>[cover] [parties,programs] [pricing] [addons,payment] [booking,cancel,custom] [signature]</code>
+      (mirrored in <code>ctDocCountPages</code> <span class="ln">:66408</span>). Section bodies:
+      <code>ctDocRenderCover</code> <span class="ln">:67980</span> ·
+      <code>…Parties</code> <span class="ln">:68010</span> ·
+      <code>…Eligibility</code> <span class="ln">:68071</span> ·
+      <code>…Programs</code> <span class="ln">:68119</span> ·
+      <code>…Pricing</code> <span class="ln">:68176</span> ·
+      <code>…AddOns</code> <span class="ln">:68302</span> ·
+      <code>…Payment</code> <span class="ln">:68313</span> ·
+      <code>…Booking</code> <span class="ln">:68343</span> ·
+      <code>…Cancel</code> <span class="ln">:68362</span> ·
+      <code>…General</code> <span class="ln">:68394</span> ·
+      <code>…Custom</code> <span class="ln">:68416</span> ·
+      <code>…Signature</code> <span class="ln">:68463</span>.</div></div>
+    <div class="step"><div class="t">4 · Inline edits in edit mode</div>
+      <div class="d"><code>ctDocSaveField(key, el)</code> <span class="ln">:66436</span> into
+      <code>_ctDoc.overrides['section.field']</code>; <code>ctDocResetField</code> <span class="ln">:66446</span>
+      reverts to template text. Custom clauses: <code>ctDocAddClause</code> <span class="ln">:66453</span> /
+      <code>ctDocFillStandardClauses</code> <span class="ln">:66479</span>.</div></div>
+    <div class="step done"><div class="t">5 · Export</div>
+      <div class="d"><code>ctDocExportPDF()</code> <span class="ln">:66270</span> →
+      <code>_ctDocPrintFlow(setup)</code> <span class="ln">:66242</span> detaches the modal to
+      <code>&lt;body&gt;</code> (CSS <code>@media print</code> cannot un-hide ancestors), prints, and on
+      <code>afterprint</code> calls <code>ctArtifactSave()</code>.</div></div>
+  </div>
+
+  <h4>Data written</h4>
+  <p><code>_CT_ARTIFACTS[agentId].unshift(artifact)</code> where artifact =
+  <code>{id:'gc_'+ts, version, generatedAt, lang, sections{}, templateId, templateName, form, accent, accentHex,
+  font, tmplText, overrides, customClauses, rateTypeRef (rt.code), rateTypeName, contractId, pageCount}</code>
+  <span class="ln">:66331–:66352</span>, capped at 20 per agent. Blob key <code>agent_artifacts</code>
+  (<code>ctArtifactsPersist</code> <span class="ln">:66310</span>). If <code>_ctDoc.contractId</code> is set,
+  <code>SB_CONTRACTS[i].docId = artifact.id</code> <span class="ln">:66359</span>.
+  <code>agLog(a.id,'contract',…)</code>.</p>
+
+  <h4>Validation / guards</h4>
+  <p><code>ctDocRenderPricing</code> <span class="ln">:68176</span> prints only routes that are in <b>both</b>
+  <code>rt.routes</code> and <code>a.programPeriods</code> <span class="ln">:68190</span>. No rate type bound →
+  the pricing/add-on pages render a red “No Rate Type bound” placeholder rather than blank.</p>
+
+  <div class="note danger">
+    <span class="lbl">Failure mode</span>
+    The artifact is <i>metadata</i>, not the rendered PDF; reopening (<code>ctArtifactReopen</code>
+    <span class="ln">:66381</span>) re-renders from current <code>SB_AGENTS</code> + <code>SB_RATE_TYPES</code>
+    data with the frozen text, so <b>prices in a reopened old contract are today’s prices</b>, not the ones
+    printed.
+  </div>
+
+  <!-- 3.10 -->
+  <h3 id="w-renew">3.10 Renew a contract</h3>
+  <p><b>Trigger</b> — the amber renewal banner (shown when <code>ctIsExpiringSoon(a, 60)</code>
+  <span class="ln">:39851</span> or <code>ctIsExpired(a)</code> <span class="ln">:39855</span>) →
+  <code>ctOpenRenewal(agentId)</code> <span class="ln">:65096</span>.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · Pre-fill the draft</div>
+      <div class="d"><code>_ctRenewDraft = {newStart (old end +1d), newEnd (+1y −1d),
+      newVersion (vYYYY+1-1), carry:{programs,prices,addons,booking,signatory:false,company}}</code>
+      <span class="ln">:65115</span>.</div></div>
+    <div class="step ask"><div class="t">2 · 4-step wizard</div>
+      <div class="d"><code>ctRenewRender</code> <span class="ln">:65150</span>,
+      <code>ctRenewNext</code> <span class="ln">:65305</span>,
+      <code>ctRenewBack</code> <span class="ln">:65313</span>. Step 1 validates
+      <code>newEnd &gt; newStart</code>. <code>ctRenewPeriodPreset(years)</code> <span class="ln">:65141</span>.
+      Carry toggles: <code>ctRenewToggleCarry(key)</code> <span class="ln">:65136</span>.</div></div>
+    <div class="step done"><div class="t">3 · Activate → <code>ctRenewActivate()</code> <span class="ln">:65317</span></div>
+      <div class="d">Archives the old contract and activates the new one.</div></div>
+  </div>
+
+  <h4>Data written</h4>
+  <ul>
+    <li><code>a.contractHistory.unshift({version, archivedAt, contractStart, contractEnd,
+      snapshot:{rateTypeId, programPeriods, addonServices, agentSignatory, prices:SB_AGENT_PRICES[a.id]}})</code>.</li>
+    <li><code>a.contractVersion / contractStart / contractEnd / contractStatus='active'</code>;
+      <code>a.rateTypeId</code> if a new one was chosen <span class="ln">:65345</span>.</li>
+    <li>Carried programs are <b>date-shifted</b> by <code>newStart − oldStart</code> days
+      <span class="ln">:65350–:65363</span>. Unchecked carries blank the corresponding field
+      (<code>programPeriods=[]</code>, <code>addonServices=[]</code>, <code>bookingChannel</code> zeroed,
+      <code>companyInfo</code> zeroed, <code>SB_AGENT_PRICES[a.id]={}</code>).</li>
+  </ul>
+
+  <h4>Validation / guards</h4>
+  <p>Date order only.</p>
+
+  <div class="note danger">
+    <span class="lbl">Failure modes</span>
+    <b><code>ctRenewActivate</code> never calls <code>sbAgentsPersist()</code>.</b> The mutation lives in RAM
+    until some <i>other</i> action persists <code>sb_agents</code>; a reload before that loses the renewal.
+    (Flagged — verify before relying on it.)<br>
+    Unchecking “company” wipes <code>companyInfo</code> outright rather than marking it stale.<br>
+    Archived snapshots capture <code>SB_AGENT_PRICES</code> (the legacy per-agent matrix), <b>not</b> the rate
+    type’s <code>seatRates</code> — so the archived price record is empty for any agent priced purely from a rate
+    type.
+  </div>
+
+  <!-- 3.11 -->
+  <h3 id="w-promo">3.11 Promo contract overlay (time-boxed rate override)</h3>
+  <p><b>Trigger</b> — Agent detail → Generated Contracts tab → Contracts panel
+  (<code>ctContractsPanelHTML</code> <span class="ln">:64309</span>) → “＋ เพิ่ม Promotion” →
+  <code>ctOpenAddPromo(agentId)</code> <span class="ln">:64357</span>.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · Pick the overlay</div>
+      <div class="d">A rate type, an active window, per-route travel windows, and a <code>priority</code>.</div></div>
+    <div class="step done"><div class="t">2 · Save → <code>ctSaveAddPromo(agentId)</code> <span class="ln">:64400</span></div>
+      <div class="d">Validates (rate required, both dates, <code>to &gt;= from</code>, ≥1 route) and pushes to
+      <code>SB_CONTRACTS</code>.</div></div>
+    <div class="step"><div class="t">3 · Resolution at booking time</div>
+      <div class="d"><code>bkV2ResolveRateType(agentId, routeId, travelDate)</code> <span class="ln">:77099</span>
+      picks the highest-priority active promo whose <code>programPeriods</code> covers
+      <i>(route, travel date)</i>; ties break on later <code>activeFrom</code>.</div></div>
+  </div>
+
+  <h4>Data written</h4>
+  <p><code>SB_CONTRACTS[]</code>:
+  <code>{id, agentId, kind:'promo', rateTypeId, activeFrom, activeTo, priority, version:'promo-&lt;from&gt;',
+  status:'active', createdDate, createdBy, note, docId:null,
+  programPeriods:[{routeId,bookFrom,bookTo,travelFrom,travelTo,note}]}</code>.
+  Blob key <code>sb_contracts</code> (<code>sbContractsPersist</code> <span class="ln">:39800</span>).
+  Void → <code>ctVoidContract</code> <span class="ln">:64348</span> sets <code>status</code>, which drops it
+  out of the resolver.</p>
+
+  <h4>Validation / guards</h4>
+  <p><code>bkV2GetRTForTrip</code> <span class="ln">:77112</span> is <b>defensive</b>: it only adopts the promo
+  rate if that rate actually prices the route (<code>seatRates[routeId]</code> or
+  <code>charterRates[routeId]</code>), otherwise it silently keeps the base rate.</p>
+
+  <div class="note danger">
+    <span class="lbl">Failure mode</span>
+    The resolver keys on <b>travel date</b>, never booking date;
+    <code>programPeriods.bookFrom/bookTo</code> are written but never enforced.
+  </div>
+
+  <!-- 3.12 -->
+  <h3 id="w-foc">3.12 FOC · free-of-charge reporting</h3>
+  <p><b>Trigger</b> — sidebar “FOC Detail” → <code>renderFocDetail()</code> <span class="ln">:43926</span>.</p>
+  <p>FOC is not created here — it is a pax bucket (<code>trip.pax.foc</code> / <code>foc_fr</code> /
+  <code>foc_th</code>) set in the booking form, with
+  <code>bk.focApproval = {count, reason, status, requestedAt, requestedBy}</code> written by
+  <code>bkV2CommitBooking</code> <span class="ln">:76795</span>. This page aggregates: per agent → per date →
+  per route family, split Agent vs Staff (<code>a.code==='STAFF'</code>), with <code>≈ value</code> =
+  <code>focPax × (paidRevenue / paidPax)</code> per family <span class="ln">:43981</span>. Money forgone at quote
+  time is <code>quote.focDiscount</code> <span class="ln">:77239–:77247</span> =
+  <code>Σ foc_fr × adult-fr + foc_th × adult-thai</code> at the trip’s own (possibly promo) rate.</p>
+  <div class="note ok">
+    <span class="lbl">Data written</span>
+    None — read-only view over <code>SB_BOOKINGS</code> + <code>SB_AGENTS</code> + <code>SB_SALES</code>.
+  </div>
+
+  <!-- 3.13 -->
+  <h3 id="w-matrix">3.13 Agent Pricing Matrix tab</h3>
+  <p><b>Trigger</b> — Agent detail → “Pricing” tab → <code>agSwitchTab('prices', aId)</code>
+  <span class="ln">:65731</span> → <code>agTabPrices(a)</code> <span class="ln">:64794</span>.</p>
+  <ol>
+    <li>No <code>rateTypeId</code> → red “No rate type assigned” card + CTA to
+      <code>agEditOpen('ratetype')</code> <span class="ln">:64811–:64823</span>; the add-on section is skipped
+      entirely.</li>
+    <li>Otherwise a source chip (rate code, name, Inactive badge, validity hint) then
+      <b><code>rtBuildDetailBody(rt)</code></b> <span class="ln">:61826</span> — the exact same renderer the Rate
+      Type page uses, so the two pages can never disagree.</li>
+    <li>Mismatch warnings: routes in <code>a.programs</code> but not <code>rt.routes</code>
+      (<span class="b amber">amber</span>, “no price to resolve”) and vice-versa
+      (<span class="b gray">grey</span>, informational) <span class="ln">:64854–:64865</span>.</li>
+    <li>Section 2 = <code>agpRenderAddonSection(a)</code> <span class="ln">:64875</span> — the
+      <b>agent-level</b> add-on services (<code>a.addonServices</code>), a different concept from
+      <code>rt.addOns</code>; see <a href="#s9">§9</a>.</li>
+  </ol>
+</section>
+
+<!-- ============ 4 ============ -->
+<section id="s4">
+  <h2><span class="num">04</span> Data model touched</h2>
+
+  <h3 id="d-agents">4.1 <code>SB_AGENTS</code> — seed <span class="ln">:39569</span> · blob key <code>sb_agents</code></h3>
+  <div class="tw"><table>
+    <thead><tr><th style="width:180px">field</th><th style="width:190px">type</th><th style="width:200px">written by</th><th style="width:190px">read by</th><th>notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>id</code></td><td>string</td><td><code>agCreateSubmit</code> <span class="ln">:66100</span></td><td>everything</td><td><code>LA_UID('a')</code>; legacy seeds are <code>a01</code>…</td></tr>
+      <tr><td><code>code</code></td><td>string</td><td><code>agCreateSubmit</code>, import</td><td>contract, exports</td><td>not uniqueness-checked</td></tr>
+      <tr><td><code>name</code></td><td>string</td><td><code>agEditSave('company')</code></td><td>everywhere</td><td></td></tr>
+      <tr><td><code>market</code></td><td><code>SB_MARKETS.id</code></td><td><code>agEditSave('company')</code></td><td>KPI, Demand, <code>mkOf</code> <span class="ln">:43597</span></td><td><code>a_b2c</code> uses <code>'b2c'</code>, which is <b>not</b> in <code>SB_MARKETS</code></td></tr>
+      <tr><td><code>sub</code></td><td>string</td><td><code>agEditSave</code>, <code>agSubDDPick</code> <span class="ln">:63452</span></td><td>filters, analytics</td><td>free text remembered per market</td></tr>
+      <tr><td><code>sales</code></td><td><code>SB_SALES.id</code></td><td><code>agEditSave('sales')</code></td><td>scope, sales board, rate filter</td><td></td></tr>
+      <tr><td><code>rateTypeId</code></td><td><code>SB_RATE_TYPES.id</code></td><td><code>agEditSave('ratetype')</code>, <code>rtAgentPickerApply</code></td><td><b>pricing engine</b></td><td>primary pricing pointer</td></tr>
+      <tr><td><code>payType</code></td><td><code>invoice | proforma | cot | bt</code></td><td><code>agEditSave('profile')</code></td><td><code>paymentSnapshot</code> <span class="ln">:76802</span>, <code>agCreditState</code> <span class="ln">:42900</span></td><td><code>SB_PAYMENT_TYPES</code> <span class="ln">:39296</span></td></tr>
+      <tr><td><code>vatMode</code></td><td><code>none | exclude | include</code></td><td><code>agEditSave('profile')</code></td><td><code>acctCreateInvoice</code> <span class="ln">:42926</span></td><td>7%</td></tr>
+      <tr><td><code>creditDays</code> / <code>creditLimit</code> / <code>creditBalance</code></td><td>number</td><td><code>agEditSave('profile')</code></td><td><code>agCreditState</code>, invoice due date</td><td></td></tr>
+      <tr><td><code>programs[]</code></td><td>routeIds</td><td><code>agEditSave('programs')</code> (derived)</td><td>legacy display, mismatch warnings</td><td>prefer <code>rt.routes</code></td></tr>
+      <tr><td><code>programPeriods[]</code></td><td><code>{routeId,bookFrom,bookTo,travelFrom,travelTo,note}</code></td><td><code>agEditPPSet</code> <span class="ln">:64000</span>, renewal</td><td>contract Programs page <span class="ln">:68119</span></td><td></td></tr>
+      <tr><td><code>companyInfo{}</code></td><td>legalName, taxId, tatLicense, address, tel, hotline, fax, website</td><td><code>agEditSave('company')</code>, <code>agSet</code></td><td>contract Parties page</td><td>one SQL column per sub-field</td></tr>
+      <tr><td><code>agentSignatory{}</code></td><td>name, designation, tel, signedDate</td><td><code>agEditSave('signatory')</code></td><td>contract Signature page</td><td></td></tr>
+      <tr><td><code>bookingChannel{}</code></td><td>method, cutoff, cancelPolicy, email, phone</td><td><code>agEditSave('booking')</code></td><td>contract Booking page</td><td></td></tr>
+      <tr><td><code>contractVersion</code> / <code>contractStart</code> / <code>contractEnd</code> / <code>contractStatus</code></td><td>string</td><td><code>ctRenewActivate</code> <span class="ln">:65317</span></td><td>expiry chips, artifacts</td><td></td></tr>
+      <tr><td><code>contractHistory[]</code></td><td>archived snapshots</td><td><code>ctRenewActivate</code></td><td><code>ctViewContract</code> <span class="ln">:65387</span></td><td>also migrated into <code>SB_CONTRACTS</code></td></tr>
+      <tr><td><code>contractTemplateId</code></td><td><code>SB_CONTRACT_TEMPLATES</code> id</td><td><code>agEditSave('contracttmpl')</code></td><td><code>ctTmplForAgent</code> <span class="ln">:67234</span></td><td></td></tr>
+      <tr><td><code>addonServices[]</code></td><td><code>[{svcId, variants:[{varId, selling, net}]}]</code></td><td><code>agpAddonSaveVariants</code> <span class="ln">:65073</span></td><td>contract page 5, <code>aosUsedBy</code> <span class="ln">:78836</span></td><td><b>not</b> used by the pricing engine</td></tr>
+      <tr><td><code>activity[]</code></td><td><code>{at,by,kind,text}</code></td><td><code>agLog</code> <span class="ln">:39654</span></td><td><code>agTabActivity</code> <span class="ln">:65744</span></td><td>capped 200</td></tr>
+      <tr><td><code>color</code></td><td>hex</td><td><code>agEditSave('company')</code></td><td>list chips</td><td>null = auto</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="d-ratetypes">4.2 <code>SB_RATE_TYPES</code> — seed <span class="ln">:39959</span> · blob key <code>sb_rate_types</code></h3>
+  <div class="tw"><table>
+    <thead><tr><th style="width:190px">field</th><th style="width:180px">type</th><th style="width:190px">written by</th><th style="width:210px">read by</th><th>notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>id</code>, <code>code</code>, <code>name</code>, <code>note</code>, <code>color</code></td><td>string</td><td><code>rtSaveDraft</code> <span class="ln">:62996</span></td><td>everywhere</td><td><code>code</code> auto-generated <code>_rtAutoCode</code> <span class="ln">:61123</span></td></tr>
+      <tr><td><code>owner</code></td><td><code>SB_SALES.id</code> or <code>''</code></td><td><code>rtSetOwner</code> <span class="ln">:61162</span>, create</td><td><code>_rtInScope</code> <span class="ln">:61161</span>, <code>rtForSales</code> <span class="ln">:61146</span></td><td><code>''</code> = Shared</td></tr>
+      <tr><td><code>active</code></td><td>bool</td><td><code>rtToggleActive</code> <span class="ln">:61095</span></td><td>pickers, <code>/api/b2c/availability</code></td><td>inactive is unassignable but still prices existing bookings</td></tr>
+      <tr><td><code>validFrom</code> / <code>validTo</code></td><td>ISO date</td><td>modal</td><td>display only (<code>_rtValidityStatus</code> <span class="ln">:61080</span>)</td><td><b>not enforced at pricing</b></td></tr>
+      <tr><td><code>routes[]</code></td><td>routeIds</td><td><code>rtDraftToggleRoute</code> <span class="ln">:62456</span></td><td>every renderer</td><td></td></tr>
+      <tr><td><code>seatRates{r}{zone}{paxType}</code></td><td>number | <code>null</code></td><td>seat grid (<code>net</code> tier)</td><td><b><code>bkV2TripSubtotal</code> <span class="ln">:77160</span></b></td><td><code>null</code> = No Offer, <code>undefined</code> = Not Set</td></tr>
+      <tr><td><code>priceTiers{r}{z}{p}.sell/.minSell</code></td><td>number</td><td>seat grid (<code>sell</code>/<code>minSell</code> tiers)</td><td>contract only (<code>ctRtHasTiers</code> <span class="ln">:68168</span>)</td><td>never used for money</td></tr>
+      <tr><td><code>routeValidity{r}{from,to}</code></td><td>ISO dates</td><td>seat-rate row</td><td>display / program picker / contract</td><td><b>not enforced at pricing</b></td></tr>
+      <tr><td><code>routeBundles{r}.longtail</code></td><td><code>{mode:'free'|'paid', adult, child, applyTo}</code></td><td><code>rtToggleBundleLongtail</code> <span class="ln">:62425</span></td><td><code>bkV2TripSubtotal</code> bundle term, <code>bkV2AddOnFlags</code> <span class="ln">:71846</span></td><td><code>applyTo</code> gate: <code>_rtBundleAppliesTo</code> <span class="ln">:62454</span></td></tr>
+      <tr><td><code>charterRates{r}{boatType}</code></td><td><code>{starterPrice, starterIncludes, extraPerPax}</code></td><td><code>rtAddCharterRow</code> <span class="ln">:62475</span></td><td>charter branch of <code>bkV2TripSubtotal</code> <span class="ln">:77132</span></td><td><code>boatType</code> = lowercased <code>boat.type</code></td></tr>
+      <tr><td><code>addOns.longtail</code></td><td><code>{applies[], byRoute{r:{join{adult,child},charter{price,capacity}}}}</code></td><td><code>_rtAddonEdit_longtail</code> <span class="ln">:61445</span></td><td><code>bkV2AddOnInfo</code> <span class="ln">:77199</span></td><td>old flat shape migrated by <code>_rtNormalizeLongtail</code> <span class="ln">:62608</span></td></tr>
+      <tr><td><code>addOns.privateTransfer</code></td><td><code>{unit, r:{zone:{sedan,van}}}</code></td><td><code>_rtAddonEdit_privateTransfer</code> <span class="ln">:61517</span></td><td><code>bkV2AddOnInfo</code> <span class="ln">:77216</span></td><td>old <code>{PK:{…}}</code> shape migrated in <code>_rtRestore</code> <span class="ln">:63082</span></td></tr>
+      <tr><td><code>addOns.&lt;customKey&gt;</code></td><td><code>{applies[], price}</code> or <code>{applies[], adult, child}</code></td><td><code>_rtAddonEdit_generic</code> <span class="ln">:61706</span></td><td>contract + detail only</td><td><b>no booking consumer</b></td></tr>
+      <tr><td><code>nationalityScope</code></td><td><code>both | thai | fr</code></td><td>modal</td><td><code>rtNatPax</code> <span class="ln">:62680</span></td><td>column visibility only</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="d-support">4.3 Supporting stores</h3>
+  <div class="tw"><table>
+    <thead><tr><th style="width:200px">store</th><th style="width:130px">seed line</th><th style="width:170px">blob key</th><th style="width:210px">persist fn</th><th>notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>SB_MARKETS</code></td><td class="mono">39278</td><td><code>sb_markets</code></td><td><code>sbMarketsPersist</code> <span class="ln">:39290</span></td><td><code>laApplySort</code> on load; <code>walkin</code> + <code>staff</code> idempotently seeded</td></tr>
+      <tr><td><code>SB_SALES</code></td><td class="mono">39308</td><td><code>sb_sales</code></td><td><code>sbSalesPersist</code> <span class="ln">:39564</span></td><td>also holds <code>targets{YYYY-MM}</code> and <code>followup{}</code></td></tr>
+      <tr><td><code>SB_AGENT_PRICES</code></td><td class="mono">39914</td><td><i>(none)</i></td><td>—</td><td>legacy per-agent matrix, regenerated from seed each boot; only renewal snapshots read it</td></tr>
+      <tr><td><code>SB_CONTRACTS</code></td><td class="mono">39798</td><td><code>sb_contracts</code></td><td><code>sbContractsPersist</code> <span class="ln">:39800</span></td><td>+ child table <code>sb_contracts__programperiods</code></td></tr>
+      <tr><td><code>SB_ADDON_TYPES</code></td><td class="mono">61627</td><td><code>sb_addon_types</code></td><td><code>sbAddonTypesPersist</code> <span class="ln">:61629</span></td><td>guarded by <code>laCanEditArea('config')</code></td></tr>
+      <tr><td><code>SB_ADDON_SVCS</code></td><td class="mono">78802</td><td><b>none</b></td><td><b>none</b></td><td>see <a href="#s9">§9</a> — RAM only</td></tr>
+      <tr><td><code>_CT_ARTIFACTS</code></td><td class="mono">66298</td><td><code>agent_artifacts</code></td><td><code>ctArtifactsPersist</code> <span class="ln">:66310</span></td><td><code>{agentId:[artifact]}</code></td></tr>
+      <tr><td><code>SB_CONTRACT_TEMPLATES</code></td><td class="mono"><code>ctTmplLoad</code> :67187</td><td><code>contract_templates</code></td><td><code>ctTmplPersist</code> <span class="ln">:67197</span></td><td></td></tr>
+      <tr><td><code>SB_B2C</code> / <code>SB_B2C_BASE</code></td><td class="mono">40143 / 40156</td><td><i>(none)</i></td><td>—</td><td>channel &amp; campaign catalogue, display only</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============ 5 ============ -->
+<section id="s5">
+  <h2><span class="num">05</span> Pricing resolution</h2>
+
+  <p>Given a booking draft <code>_bkV2.newBooking</code> with <code>agentId</code>, and per trip
+  <code>{routeId, date, zone, bookingMode, pax{}, charterBoatId?}</code>:</p>
+
+  <div class="flow">
+    <div class="stage"><div class="k">step 1</div><div class="v">Base rate type</div><div class="s"><code>d.rateTypeRef</code> → <code>bkV2GetRT()</code></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">step 2</div><div class="v">Promo overlay</div><div class="s"><code>bkV2GetRTForTrip(trip)</code></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">step 3</div><div class="v">Zone</div><div class="s"><code>PK</code> / <code>KL</code> / <code>NoTransfer</code></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">step 4</div><div class="v">Trip subtotal</div><div class="s"><code>bkV2TripSubtotal</code></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">step 5</div><div class="v">Add-on layer</div><div class="s"><code>bkV2AddOnInfo</code></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">step 6</div><div class="v">Booking total</div><div class="s"><code>bkV2CalcQuote</code></div></div>
+  </div>
+
+  <h3 id="p-step1">Step 1 — base rate type</h3>
+  <p><code>d.rateTypeRef</code> is set when the agent is chosen: <code>bkV2SetField('agentId')</code>
+  <span class="ln">:76273</span> and the typeahead pick <span class="ln">:74467</span> both do
+  <code>d.rateTypeRef = agent.rateTypeId || null</code>. <code>bkV2GetRT()</code> <span class="ln">:77091</span>
+  resolves it to the object.</p>
+
+  <h3 id="p-step2">Step 2 — per-trip promo overlay</h3>
+  <p><code>bkV2GetRTForTrip(trip)</code> <span class="ln">:77112</span>:</p>
+<pre><code>rtId = bkV2ResolveRateType(d.agentId, trip.routeId, trip.date)   // :77099
+   → active, non-void promo contracts for this agent
+   → whose activeFrom..activeTo covers trip.date
+   → and whose programPeriods has this routeId with travelFrom..travelTo covering trip.date
+   → sort by priority desc, then activeFrom desc, take [0].rateTypeId
+if none, or same as base                       → base
+if the promo rate has no seatRates/charterRates for this route → base   (defensive, :77119)</code></pre>
+  <div class="note">
+    <span class="lbl">Today</span>
+    No promo contracts exist in prod today, so this is currently a pass-through.
+  </div>
+
+  <h3 id="p-step3">Step 3 — zone</h3>
+  <p><code>trip.zone</code> is set by <code>bkV2SetPickupArea(areaId)</code> <span class="ln">:74925</span> from
+  <code>SB_PICKUP_AREAS[areaId].zone</code> (<code>PK</code> / <code>KL</code> / <code>NoTransfer</code>),
+  <b>except</b> when the trip carries a private-van add-on (<code>bkV2TripPrivateVan</code>) — then the seat stays
+  No-Transfer so the van is not charged twice <span class="ln">:74938–:74942</span>. Conversely
+  <code>bkV2ToggleAddOn('transfer-…')</code> <span class="ln">:74899</span> forces the matching trip’s
+  <code>zone</code> to <code>NoTransfer</code>.</p>
+
+  <h3 id="p-step4">Step 4 — per-trip subtotal · <code>bkV2TripSubtotal(trip)</code> <span class="ln">:77122</span></h3>
+
+  <div class="rail">
+    <div class="step block"><div class="t">Guard · no rate or no <code>routeId</code></div>
+      <div class="d">All-zero.</div></div>
+    <div class="step block"><div class="t">Guard · <code>trip.ovnLeg</code> (overnight return leg)</div>
+      <div class="d">All-zero, <code>ovnLeg:true</code> — the seat is held but not charged twice.</div></div>
+  </div>
+
+  <h4>Charter branch — <code>bookingMode==='charter'</code> <span class="ln">:77128–:77156</span></h4>
+<pre><code>boatType = BOATS[charterBoatId].type.toLowerCase()
+cr       = rt.charterRates[routeId][boatType]        // missing → {total:0, error:'no charter rate'}
+totPax   = bkV2PaxAllTot(pax)                        // ad + chd + inf + foc, all nationalities
+extras   = max(0, totPax − cr.starterIncludes)
+rateTotal= cr.starterPrice + extras × cr.extraPerPax + cBundle
+cBundle  = bundle.mode==='paid' &amp;&amp; _rtBundleAppliesTo(bundle,true)
+           ? bundle.adult × Σad + bundle.child × Σchd : 0
+total    = (trip.charterPriceMode==='manual') ? round(trip.charterPriceManual) : rateTotal</code></pre>
+  <p>Returns <code>manualDelta</code> so the UI can show “differs from rate”.</p>
+
+  <h4>Seat branch <span class="ln">:77158–:77187</span></h4>
+<pre><code>if !trip.zone                                  → all-zero
+routeRates = rt.seatRates[routeId]
+sr         = routeRates[trip.zone]
+if !routeRates || !sr                          → {noRate:true, reason:'zone not in Rate Type for this route'}
+if sr['adult-fr']===0 &amp;&amp; sr['adult-thai']===0  → {noRate:true, reason:'both adult rates are 0'}
+
+seatFr = sr['adult-fr']   × (pax.ad_fr  || pax.ad)      // legacy flat pax.ad falls to FR
+       + sr['child-fr']   × (pax.chd_fr || pax.chd)
+seatTh = sr['adult-thai'] × pax.ad_th
+       + sr['child-thai'] × pax.chd_th
+bundle = rt.routeBundles[routeId].longtail
+         &amp;&amp; mode==='paid' &amp;&amp; _rtBundleAppliesTo(bundle,false)
+         ? bundle.adult × bkV2PaxTot(pax,'ad') + bundle.child × bkV2PaxTot(pax,'chd') : 0
+total  = seatFr + seatTh + bundle</code></pre>
+  <p>Infants and FOC contribute <b>zero</b> to the seat total (they are counted in
+  <code>bkV2PaxAllTot</code> for capacity only). <code>bkV2PaxTot(pax,kind)</code> <span class="ln">:73497</span>
+  = <code>pax[kind] + pax[kind+'_fr'] + pax[kind+'_th']</code>.</p>
+
+  <h3 id="p-step5">Step 5 — add-on layer · <code>bkV2AddOnInfo(type)</code> <span class="ln">:77189</span></h3>
+  <p>Uses <code>bkV2GetRT()</code> (<b>base rate, not the per-trip promo</b> — see <a href="#s9">§9</a>) and sums
+  across every trip in the booking:</p>
+  <div class="tw"><table>
+    <thead><tr><th style="width:250px"><code>type</code></th><th>resolution</th></tr></thead>
+    <tbody>
+      <tr><td><code>longtail-join</code></td><td><code>ltn = _rtNormalizeLongtail(rt.addOns.longtail)</code>; for each trip whose route is in <code>ltn.applies</code>, <code>price = ltn.byRoute[route].join</code> (fallback <code>ltn.join</code>); <code>total += adult×Σad + child×Σchd</code>. Label <code>Longtail Join (NA + NC)</code>. <span class="ln">:77199–:77205</span></td></tr>
+      <tr><td><code>longtail-charter</code></td><td>one boat per applied trip-route: <code>total += ltn.byRoute[route].charter.price</code>. <span class="ln">:77206–:77212</span></td></tr>
+      <tr><td><code>transfer-&lt;routeId&gt;-&lt;zone&gt;-&lt;vehicle&gt;</code></td><td><code>rt.addOns.privateTransfer[rid][zone][vehicle]</code>. <span class="ln">:77213–:77218</span></td></tr>
+      <tr><td>anything else (incl. every custom add-on key)</td><td><code>{label:type, total:0}</code> — <b>no price</b></td></tr>
+    </tbody>
+  </table></div>
+  <p><code>_rtNormalizeLongtail(lt)</code> <span class="ln">:62608</span> is the compatibility shim: it accepts
+  <code>{byRoute}</code> (current), <code>{join,charter}</code> (flat), and <code>{adult,child}</code> (oldest),
+  always returns <code>{applies, byRoute, join, charter}</code> where <code>join</code>/<code>charter</code> are
+  the first route’s prices. Old flat data with <code>applies</code> is spread across every applied route
+  <span class="ln">:62626</span>. <code>_rtLongtailForRoute(rt, routeId)</code> <span class="ln">:62630</span>
+  is the single-route accessor.</p>
+
+  <h3 id="p-step6">Step 6 — booking total · <code>bkV2CalcQuote()</code> <span class="ln">:77221</span></h3>
+<pre><code>if d.priceMode === 'manual':                                  // walk-in / B2C
+    grandTotal = max(0, d.manualTotal)
+    B2C: totalAddOn = Σ d.addOns[].amount (from the source)
+         totalSeat  = grandTotal − totalAddOn
+         perTrip    = trips.map(t =&gt; t.subtotal)               // as sent by B2C
+    else: totalSeat = grandTotal, totalAddOn = 0
+    → return (nothing below runs)
+
+totalSeat   = Σ bkV2TripSubtotal(t).total
+focDiscount = Σ over trips: adFrRate × (pax.foc_fr||pax.foc) + adThRate × pax.foc_th
+              (uses bkV2GetRTForTrip — promo-aware)
+anyBundled  = any trip route has an applicable routeBundles longtail
+totalAddOn  = Σ over d.addOns: bkV2AddOnInfo(a.type).total × (a.qty||1)
+              skipping type==='longtail-join' when anyBundled     // bundle already paid for it
+base        = totalSeat + totalAddOn
+totalDiscount = Σ adjustments kind==='discount'  (mode 'percent' → round(base × v/100), else round(v))
+totalExtra    = Σ adjustments kind!=='discount'  + Σ trips[].ovnCharge
+grandTotal  = max(0, base − totalDiscount + totalExtra)</code></pre>
+
+  <h3 id="p-step7">Step 7 — what is stored on the booking</h3>
+  <p><code>bkV2CommitBooking</code> <span class="ln">:76469</span> writes
+  <span class="ln">:76786–:76815</span>:</p>
+  <ul>
+    <li><code>trips[i].subtotal = bkV2TripSubtotal(t).total</code></li>
+    <li><code>addOns[] = {type, label, amount: info.total × qty, qty, note}</code> — <b>the amount is frozen at
+      save time</b></li>
+    <li><code>priceBreakdown = {seat: totalSeat, addOn: totalAddOn, focDiscount: −focDiscount,
+      discount: −totalDiscount, extra: totalExtra, total: grandTotal}</code></li>
+    <li><code>total = grandTotal</code>, <code>rateTypeRef = d.rateTypeRef</code></li>
+    <li><code>paymentSnapshot = {method: payType==='invoice'?'credit':'prepaid', netDays: agent.creditDays,
+      source:'contract', contractVersion: agent.contractVersion}</code></li>
+  </ul>
+
+  <h3 id="p-step8">Step 8 — downstream money</h3>
+  <div class="grid2">
+    <div class="mini"><h5>Invoice</h5>
+      <p><code>acctCreateInvoice(agentId, bookingIds, dueDays)</code> <span class="ln">:42921</span> sums
+      <code>acctBookingTotal</code> then applies <code>agent.vatMode</code>: <code>exclude</code> →
+      <code>net=subtotal, vat=round(net×0.07), total=net+vat</code>; <code>include</code> →
+      <code>total=subtotal, net=round(subtotal/1.07), vat=subtotal−net</code>; <code>none</code> → all equal.</p></div>
+    <div class="mini"><h5>Credit</h5>
+      <p><code>agCreditState(agentId)</code> <span class="ln">:42900</span> — only for
+      <code>payType==='invoice'</code>; <code>used</code> = Σ <code>acctBookingTotal</code> over non-cancelled,
+      non-draft, unpaid bookings; <code>available = limit − used</code>.</p></div>
+    <div class="mini"><h5>Travel Summary net</h5>
+      <p><code>tsNetOf(r)</code> <span class="ln">:52266</span> re-derives the trip’s net independently
+      (promo-aware, with its own zone-guessing fallback at <span class="ln">:52289–:52297</span> for legacy/B2C
+      rows that have no <code>t.zone</code>). Returns <code>null</code> rather than a wrong number when no rate
+      resolves.</p></div>
+    <div class="mini"><h5>Public API</h5>
+      <p><code>GET /api/b2c/availability?route=&amp;dateFrom=&amp;dateTo=[&amp;rateTypeId=]</code>
+      (<code>server.js:2463</code>) returns per-date seat availability plus a <code>pricing[]</code> array read
+      straight from <code>sb_rate_types__seatrates</code> for <b>active</b> rate types only.</p></div>
+  </div>
+</section>
+
+<!-- ============ 6 ============ -->
+<section id="s6">
+  <h2><span class="num">06</span> Extending the add-on type system</h2>
+
+  <p><code>RT_ADDON_DEFS</code> <span class="ln">:61750</span> = <code>RT_ADDON_BUILTIN</code>
+  <span class="ln">:61603</span> + <code>SB_ADDON_TYPES.map(_rtGenericDef)</code> <span class="ln">:61739</span>,
+  rebuilt by <code>rtRebuildAddonDefs()</code> <span class="ln">:61751</span>. Every consumer iterates
+  <code>RT_ADDON_DEFS</code>, so a new entry cascades automatically to:</p>
+  <ul>
+    <li>Rate Type detail page + Agent Pricing tab — <code>rtBuildDetailBody</code> calls
+      <code>def.detailPresent(rt)</code> then <code>def.detail(rt, subNo)</code></li>
+    <li>Rate Type edit modal — <code>rtModalRender</code> calls <code>def.edit(_rtDraft)</code></li>
+    <li>Contract PDF — <code>ctDocRenderAddOns</code> <span class="ln">:68302</span> calls
+      <code>def.contract(rt, ctx)</code></li>
+    <li>Rate-type card preview — <code>_rtAddonPreview</code> <span class="ln">:61597</span> calls
+      <code>def.summary(rt)</code></li>
+    <li>Enable/disable checkbox — <code>rtToggleAddOn(key, true)</code> <span class="ln">:62636</span> calls
+      <code>def.init(_rtDraft)</code></li>
+  </ul>
+
+  <div class="note warn">
+    <span class="lbl">No-code path (non-technical staff)</span>
+    Rate Types → “จัดการชนิด Add-on” → create. You get a generic <code>perPax</code> (adult/child) or
+    <code>flat</code> (single price) type with per-route <code>applies[]</code>. It appears in every rate type,
+    prints in the contract, and shows on both detail pages. <b>It will not price a booking</b> —
+    <code>bkV2AddOnInfo</code> <span class="ln">:77189</span> has no branch for it.
+  </div>
+
+  <h3 id="s6-code">Code-level path (new built-in)</h3>
+  <div class="rail">
+    <div class="step"><div class="t">1 · Push one object into <code>RT_ADDON_BUILTIN</code> <span class="ln">:61603</span></div>
+      <div class="d">
+        <code>key</code> — the storage key under <code>rt.addOns</code> and the <code>bk.addOns[].type</code>
+        prefix. Must not collide with an existing built-in or custom key.<br>
+        <code>label:{en, th}</code><br>
+        <code>detailPresent(rt) -&gt; bool</code> — “does this rate type carry this add-on?”<br>
+        <code>detail(rt, subNo) -&gt; html</code> — §3.N block on the detail page<br>
+        <code>contract(rt, ctx) -&gt; html</code> — <code>ctx = {T, fmtN, rName, lang}</code><br>
+        <code>edit(draft) -&gt; html</code> — must bind inputs to
+        <code>rtDraftSet('addOns.&lt;key&gt;....', value)</code> and the master checkbox to
+        <code>rtToggleAddOn('&lt;key&gt;', this.checked)</code><br>
+        <code>summary(rt) -&gt; {preview, lbl} | null</code> — one-line card preview<br>
+        <code>init(rt) -&gt; object</code> — the empty shape written when the checkbox is ticked
+      </div></div>
+    <div class="step"><div class="t">2 · Write the five functions</div>
+      <div class="d"><code>_rtAddon{Detail,Contract,Edit,Summary,Init}_&lt;key&gt;</code> next to the
+      longtail/privateTransfer pair <span class="ln">:61251–:61596</span> and reference them from the def object.
+      Follow the existing signature exactly.</div></div>
+    <div class="step"><div class="t">3 · If routes matter</div>
+      <div class="d">Include <code>applies:[]</code> in <code>init</code> and render route chips wired to
+      <code>rtToggleAddOnRoute('&lt;key&gt;', rId)</code> <span class="ln">:62647</span>.</div></div>
+    <div class="step block"><div class="t">4 · To make it price a booking</div>
+      <div class="d">This is the part the data-driven registry does <i>not</i> cover:
+      add a branch in <code>bkV2AddOnInfo(type)</code> <span class="ln">:77189</span> returning
+      <code>{label, total}</code>; add the picker UI in the booking review that calls
+      <code>bkV2ToggleAddOn('&lt;key&gt;…')</code> <span class="ln">:74890</span>; if it affects operations
+      (boat/van counts), teach <code>bkV2AddOnFlags(bk, routeId)</code> <span class="ln">:71835</span> about it —
+      today it only recognises <code>longtail-charter</code>, <code>longtail-join</code>,
+      <code>transfer-*</code>, and a <code>/longtail|หางยาว/i</code> text fallback.</div></div>
+    <div class="step"><div class="t">5 · If the shape is new, add a normaliser</div>
+      <div class="d">The <code>_rtNormalizeLongtail</code> pattern <span class="ln">:62608</span> — and call it
+      from every reader; never read <code>rt.addOns.&lt;key&gt;</code> raw.</div></div>
+    <div class="step"><div class="t">6 · Persistence</div>
+      <div class="d"><code>rt.addOns</code> is one JSON column, so no mapper change is needed for a new key
+      inside it. A new <b>top-level</b> rate-type field would need a REST-index/mapper entry (see
+      <code>server.js:1645-1650</code> for how <code>pricetiers</code>, <code>nationalityscope</code>,
+      <code>owner</code> were added).</div></div>
+    <div class="step ask"><div class="t">7 · Backup first</div>
+      <div class="d">This touches <code>RT_ADDON_BUILTIN</code> and the rate-type render path.</div></div>
+  </div>
+</section>
+
+<!-- ============ 7 ============ -->
+<section id="s7">
+  <h2><span class="num">07</span> Persistence path</h2>
+
+  <p>Everything here follows the house pattern (CLAUDE.md §2): mutate the RAM array → call the store’s persist
+  helper → the <code>localStorage</code> shim over <code>loveandaman_v2</code> syncs the diff to
+  <code>POST /api/v1/_batch</code>.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:230px">helper</th><th style="width:90px">line</th><th>writes key</th><th style="width:150px">edit-area guard</th></tr></thead>
+    <tbody>
+      <tr><td><code>sbAgentsPersist()</code></td><td class="mono">39651</td><td><code>sb_agents</code></td><td><code>sales</code></td></tr>
+      <tr><td><code>rtPersist()</code></td><td class="mono">63045</td><td><code>sb_rate_types</code> <b>+ <code>sb_agents_rate_bindings</code></b></td><td><code>sales</code></td></tr>
+      <tr><td><code>sbContractsPersist()</code></td><td class="mono">39800</td><td><code>sb_contracts</code></td><td><code>sales</code></td></tr>
+      <tr><td><code>sbAddonTypesPersist()</code></td><td class="mono">61629</td><td><code>sb_addon_types</code></td><td><code>config</code></td></tr>
+      <tr><td><code>sbMarketsPersist()</code></td><td class="mono">39290</td><td><code>sb_markets</code></td><td><code>config</code></td></tr>
+      <tr><td><code>sbSalesPersist()</code></td><td class="mono">39564</td><td><code>sb_sales</code></td><td><code>sales</code></td></tr>
+      <tr><td><code>ctArtifactsPersist()</code></td><td class="mono">66310</td><td><code>agent_artifacts</code></td><td><code>sales</code></td></tr>
+      <tr><td><code>ctTmplPersist()</code></td><td class="mono">67197</td><td><code>contract_templates</code></td><td><code>sales</code></td></tr>
+    </tbody>
+  </table></div>
+  <p>All are read-modify-write on the parsed blob — they never replace the whole object.</p>
+
+  <h3 id="s7-load">Load</h3>
+  <p>Load happens twice per key: once in an IIFE next to the seed (boot from whatever the shim already holds) and
+  once in <code>window._laReloadData</code> <span class="ln">:41535</span> after every <code>/api/load</code>.
+  Domain keys loaded there: <code>sb_agents</code> <span class="ln">:41544</span>,
+  <code>sb_rate_types</code> <span class="ln">:41545</span>,
+  <code>sb_contracts</code> <span class="ln">:41546</span>,
+  <code>sb_markets</code> <span class="ln">:41552</span> (with <code>laApplySort</code>),
+  <code>sb_sales</code> <span class="ln">:41553</span>,
+  <code>sb_addon_types</code> <span class="ln">:41555</span>,
+  <code>agent_artifacts</code> <span class="ln">:41560</span>,
+  <code>contract_templates</code> <span class="ln">:41563</span>.</p>
+  <div class="note danger">
+    <span class="lbl">Rule</span>
+    <b>A key persisted but not listed there vanishes on refresh.</b>
+  </div>
+
+  <h3 id="s7-migrations">Boot-time migrations (idempotent, run once per load)</h3>
+  <ul>
+    <li><code>_seedAgentContractDefaults()</code> <span class="ln">:39698</span> — fills
+      <code>contractStatus/Version/programPeriods/companyInfo/agentSignatory/bookingChannel/creditBalance/contractStart/End/contractHistory</code>.</li>
+    <li><code>_sbMigrateContracts()</code> <span class="ln">:39804</span> — each agent → one
+      <code>ct_main_&lt;agentId&gt;</code> contract; each <code>contractHistory[i]</code> →
+      <code>ct_hist_&lt;agentId&gt;_&lt;version&gt;</code>, status <code>expired</code>. Skips ids already
+      present.</li>
+    <li><code>_rtRestore()</code> <span class="ln">:63059</span> — charter <code>{high,low}</code> →
+      <code>{starterPrice,starterIncludes,extraPerPax}</code>; privateTransfer
+      <code>{PK:{sedan,van}}</code> → per-route×zone; replays <code>sb_agents_rate_bindings</code>.</li>
+    <li><code>_rtEnsureStaff()</code> <span class="ln">:63114</span> — re-injects <code>rt_staff</code> from
+      <code>_RT_STAFF_SEED</code> <span class="ln">:40135</span> if a pre-<code>rt_staff</code> saved list
+      overrode the seed.</li>
+    <li><code>_rtBackfillOwners()</code> <span class="ln">:61115</span> — one-time
+      <code>rateTypeId → salesId</code> map, only where <code>owner == null</code>.</li>
+    <li>House-agent seeds + <code>a_b2c</code> name/<code>vatMode</code> back-fills
+      <span class="ln">:39662–:39695</span>.</li>
+  </ul>
+
+  <h3 id="s7-relational">Relational schema (<code>server.js</code> <code>ensureCols</code>)</h3>
+  <p><code>sb_agents.companyinfo_taxid</code> <span class="ln">:1593</span> ·
+  <code>sb_rate_types.pricetiers</code> <span class="ln">:1645</span> ·
+  <code>.nationalityscope</code> <span class="ln">:1647</span> ·
+  <code>.owner</code> <span class="ln">:1650</span> ·
+  <code>sb_agents.contracttemplateid</code> <span class="ln">:1654</span> ·
+  <code>sb_contracts</code> + <code>sb_contracts__programperiods</code>
+  <span class="ln">:1662–:1664</span>.</p>
+  <div class="note warn">
+    <span class="lbl">Why seatRates cannot change shape</span>
+    Seat rates live in a flat child table <code>sb_rate_types__seatrates</code> with one column per zone×paxType
+    (<code>pk_adult_fr</code>, <code>kl_child_thai</code>, …) — that flatness is why <code>seatRates</code> must
+    not change shape and why the extra price tiers were parked in a single <code>pricetiers</code> JSON column
+    <span class="ln">:62375–:62379</span>.
+  </div>
+</section>
+
+<!-- ============ 8 ============ -->
+<section id="s8">
+  <h2><span class="num">08</span> Cross-module contracts</h2>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:190px">Consumer</th><th>Reads</th><th style="width:220px">Where</th></tr></thead>
+    <tbody>
+      <tr><td><b>Booking v2</b></td><td><code>agent.rateTypeId</code> → <code>bk.rateTypeRef</code>; <code>rt.seatRates</code> / <code>charterRates</code> / <code>routeBundles</code> / <code>addOns</code>; <code>agent.payType</code> + <code>creditDays</code> → <code>paymentSnapshot</code></td><td><span class="ln">:77091–:77275</span>, <span class="ln">:76802</span></td></tr>
+      <tr><td><b>Booking (hard gate)</b></td><td>Rate Type is a <b>required field</b> unless <code>priceMode==='manual'</code> or the booking is B2C</td><td><span class="ln">:76523</span></td></tr>
+      <tr><td><b>Accounting</b></td><td><code>agent.vatMode</code> (invoice VAT), <code>payType</code> (credit vs prepaid), <code>creditLimit</code>/<code>creditDays</code></td><td><span class="ln">:42900</span>, <span class="ln">:42921</span></td></tr>
+      <tr><td><b>Travel Summary</b></td><td>recomputes net from the rate type per trip, promo-aware</td><td><code>tsNetOf</code> <span class="ln">:52266</span></td></tr>
+      <tr><td><b>Ops / trip prep</b></td><td><code>bkV2AddOnFlags(bk, routeId)</code> decides the Longtail Join / เหมา chips and the boat count; it also honours a Rate-Type <b>bundle</b> that was never materialised as a booking add-on</td><td><span class="ln">:71835–:71853</span></td></tr>
+      <tr><td><b>Contract PDF</b></td><td>agent identity + <code>programPeriods</code> ∩ <code>rt.routes</code>; <code>rt.seatRates</code>, <code>priceTiers</code>, <code>charterRates</code>, <code>addOns</code> via <code>RT_ADDON_DEFS[].contract</code></td><td><span class="ln">:68119–:68310</span></td></tr>
+      <tr><td><b>Sales Board</b></td><td><code>SB_SALES.targets{YYYY-MM}</code> vs <code>salesPaxAgg(ym)</code> (pax attributed via <code>agent.sales</code>)</td><td><span class="ln">:11955–:12016</span></td></tr>
+      <tr><td><b>B2B Dashboard</b></td><td>trip-lines over <code>SB_BOOKINGS × SB_AGENTS × SB_SALES × SB_MARKETS</code></td><td><span class="ln">:79312</span></td></tr>
+      <tr><td><b>FOC / Booking Flow / Insurance</b></td><td>read-only over bookings + agents</td><td><span class="ln">:43926</span> / <span class="ln">:43589</span> / <span class="ln">:43814</span></td></tr>
+      <tr><td><b>B2C webshop</b></td><td><code>GET /api/b2c/availability</code> returns <code>pricing[]</code> from <code>sb_rate_types__seatrates</code> (active rate types only)</td><td><code>server.js:2463-2630</code></td></tr>
+      <tr><td><b>B2C import</b></td><td><code>mapB2CItemBooking</code> sets <code>agentId='a_b2c'</code> and (today) drops <code>addonsSelected</code>; ops does <b>not</b> re-price B2C from its own card</td><td><code>server.js</code> · <code>docs/B2C_LONGTAIL_ADDON.md</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============ 9 ============ -->
+<section id="s9">
+  <h2><span class="num">09</span> Invariants &amp; gotchas</h2>
+
+  <h3 id="g-pricing">Pricing</h3>
+  <div class="card">
+    <ol>
+      <li><b><code>seatRates</code> is the only money layer.</b> <code>priceTiers.sell</code> /
+        <code>.minSell</code> are contract print-outs; nothing computes from them
+        (<code>ctRtHasTiers</code> <span class="ln">:68168</span> is the only reader).</li>
+      <li><b>Validity dates never gate a price.</b> <code>rt.validFrom/validTo</code> and
+        <code>rt.routeValidity</code> drive chips, the program picker, and the contract —
+        <code>bkV2TripSubtotal</code> never looks at them. An expired rate still prices a booking. Only
+        <code>active===false</code> removes a rate from <i>pickers</i> (and from the public availability API),
+        not from existing bindings.</li>
+      <li><b>Add-ons are priced from the base rate, not the promo rate.</b> <code>bkV2AddOnInfo</code>
+        <span class="ln">:77190</span> calls <code>bkV2GetRT()</code>, while seats and FOC use
+        <code>bkV2GetRTForTrip()</code>. A promo that changes longtail prices will not take effect.
+        (Currently harmless — no promos exist.)</li>
+      <li><b><code>noRate</code> has two causes</b>: the zone cell is <code>null</code>/missing, or both adult
+        rates are 0 <span class="ln">:77163–:77173</span>. <code>null</code> is a deliberate “No Offer” marker
+        written by <code>rtToggleZoneNotOffered</code> <span class="ln">:62410</span>.</li>
+      <li><b>Legacy flat pax falls to foreigner rates.</b> <code>pax.ad</code> with no
+        <code>ad_fr</code>/<code>ad_th</code> is priced at <code>adult-fr</code> <span class="ln">:77177</span>.</li>
+      <li><b>Infants and FOC are always ฿0 in the seat total</b> but count toward capacity via
+        <code>bkV2PaxAllTot</code> — including charter <code>extras</code> over <code>starterIncludes</code>
+        <span class="ln">:77134</span>.</li>
+      <li><b>Charter <code>extraPerPax</code> is per pax over <code>starterIncludes</code>, not per pax
+        overall.</b></li>
+      <li><b>A <code>paid</code> bundle suppresses the <code>longtail-join</code> add-on</b> for the whole booking
+        (<code>anyBundled</code>, <span class="ln">:77253</span>) — not per trip. A two-route booking where only
+        one route bundles will drop the join charge on the other route too.</li>
+      <li><b><code>applyTo</code> defaults to <code>'seat'</code></b> (<code>_rtBundleAppliesTo</code>
+        <span class="ln">:62454</span>) — a bundle created before that field existed does not apply to charter
+        trips.</li>
+      <li><b>Prices are frozen on the booking at save time</b> (<code>trips[].subtotal</code>,
+        <code>addOns[].amount</code>, <code>priceBreakdown</code>). Changing a rate type never retro-prices
+        existing bookings.</li>
+    </ol>
+  </div>
+
+  <h3 id="g-structure">Structure / data</h3>
+  <div class="card">
+    <ol start="11">
+      <li><code>SB_ADDON_SVCS</code> (the Add-on Services master list behind <code>#view-addonsvc</code>,
+        <span class="ln">:78802</span>) is <b>never loaded from and never written to the blob</b> —
+        <code>aosSaveModal</code> <span class="ln">:79018</span> mutates the array and re-renders, nothing more.
+        Every edit is lost on reload; only the three seeded services survive.
+        <code>a.addonServices[].svcId</code> points into it, so agent-level add-on pricing depends on an
+        unpersisted list.</li>
+      <li><b>Two unrelated “add-on” concepts.</b> <code>rt.addOns</code> (rate type, priced by the booking engine)
+        vs <code>a.addonServices</code> (agent-level <code>{svcId, variants:[{selling, net}]}</code>, printed on
+        contract page 5 and edited by <code>agpAddonOpenVariantModal</code> <span class="ln">:65031</span>).
+        They never interact.</li>
+      <li><code>a_b2c.market === 'b2c'</code> but <code>SB_MARKETS</code> has no <code>b2c</code> entry —
+        <code>sbGetMarket('b2c')</code> returns <code>undefined</code>. Callers hard-code a fallback
+        (<code>renderBookingFlow</code> <span class="ln">:43597</span>). Don’t assume <code>agent.market</code>
+        resolves.</li>
+      <li><code>agent.programs[]</code> is legacy display; <code>rt.routes[]</code> is what prices.
+        <code>agTabPrices</code> surfaces the divergence as amber/grey warnings <span class="ln">:64854</span>.</li>
+      <li><code>rtSaveDraft</code> prunes orphaned <code>seatRates</code>/<code>charterRates</code> but <b>not</b>
+        <code>routeValidity</code>, <code>routeBundles</code>, or <code>addOns.*.applies</code> — those keep
+        pointing at removed routes.</li>
+      <li><code>_rtAddonEdit_longtail</code> writes to the draft while rendering <span class="ln">:61460</span>
+        to seed <code>byRoute</code> entries. Idempotent, but it means “just re-render” is not side-effect-free
+        here.</li>
+      <li><code>rtDeleteRT</code> detaches every bound agent (<code>delete a.rateTypeId</code>) — the agents
+        survive with no price.</li>
+      <li>Deleting a custom add-on type hides but does not remove <code>rt.addOns[key]</code> data
+        <span class="ln">:61819</span>.</li>
+      <li><code>agLog</code> caps <code>activity[]</code> at 200 and is the only audit trail; <b>rate-type price
+        edits are not versioned at all</b> (<code>BACKLOG.md:91</code> — the recommended workaround is Clone
+        rather than in-place edit).</li>
+    </ol>
+  </div>
+
+  <h3 id="g-suspicious">Known-suspicious (verify before trusting)</h3>
+  <div class="note danger">
+    <span class="lbl">20 · <code>esc</code> is undefined at <code>allotment_v2.html:63867</code></span>
+    Inside <code>agEditBuildRateTypePicker</code>, in the branch taken whenever the agent has a sales owner. No
+    global <code>esc</code> exists in this file. Expected symptom: the Rate Type picker throws and renders nothing
+    for most agents.
+  </div>
+  <div class="note danger">
+    <span class="lbl">21 · <code>ctRenewActivate</code> <span class="ln">:65317</span> never persists</span>
+    It mutates <code>a.contractVersion/Start/End/Status</code>, <code>contractHistory</code>,
+    <code>programPeriods</code> and returns — no <code>sbAgentsPersist()</code>.
+  </div>
+  <div class="note danger">
+    <span class="lbl">22 · <code>_seedContractExpiryVariety()</code> <span class="ln">:39725</span> is demo data</span>
+    It force-sets <code>contractEnd</code> on <code>a01</code>/<code>a10</code>/<code>a30</code> to “today + 25
+    days” and expires <code>a40</code> <b>on every boot</b>, relative to a hard-coded <code>2026-09-02</code>.
+    It runs unconditionally against whatever is loaded.
+  </div>
+  <div class="note danger">
+    <span class="lbl">23 · <code>SB_AGENT_PRICES</code> is synthetic</span>
+    Regenerated from <code>_seedAgentPrices()</code> on every boot <span class="ln">:39914</span> and never
+    persisted — the renewal snapshot that captures it <span class="ln">:65332</span> therefore records synthetic
+    prices, not real ones.
+  </div>
+</section>
+
+<!-- ============ 10 ============ -->
+<section id="s10">
+  <h2><span class="num">10</span> Function index</h2>
+
+  <input class="filter" id="ffilter" type="search" placeholder="Filter functions…" autocomplete="off">
+  <span class="count" id="fcount"></span>
+
+  <div class="tw"><table id="ftable">
+    <thead><tr><th>Function</th><th>Line</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>nav(el)</code></td><td class="mono">6027</td><td>view router; dispatches to every render fn below</td></tr>
+      <tr><td><code>salesPaxAgg(ym)</code></td><td class="mono">11955</td><td>pax + FOC per sales / per agent for a month</td></tr>
+      <tr><td><code>salesTargetFor(salesId, ym)</code></td><td class="mono">11972</td><td>monthly pax target from <code>SB_SALES.targets</code></td></tr>
+      <tr><td><code>salesSetTarget(salesId, ym, pax)</code></td><td class="mono">11978</td><td>write + persist a target</td></tr>
+      <tr><td><code>agentTrend(p, pp)</code></td><td class="mono">12022</td><td>up/down/new/gone classification for an agent</td></tr>
+      <tr><td><code>sbGetMarket(mId)</code> / <code>sbGetAgent(aId)</code></td><td class="mono">42795 / 42796</td><td>store lookups</td></tr>
+      <tr><td><code>agCreditState(agentId)</code></td><td class="mono">42900</td><td><code>{limit, used, available, pct, mode}</code> for credit agents</td></tr>
+      <tr><td><code>acctCreateInvoice(agentId, ids, dueDays)</code></td><td class="mono">42921</td><td>invoice + VAT from <code>agent.vatMode</code></td></tr>
+      <tr><td><code>renderBookingFlow()</code></td><td class="mono">43589</td><td>booking-intake funnel analytics</td></tr>
+      <tr><td><code>renderInsurance()</code></td><td class="mono">43814</td><td>per-trip passenger insurance manifest</td></tr>
+      <tr><td><code>renderFocDetail()</code></td><td class="mono">43926</td><td>FOC aggregation by agent / date / route family</td></tr>
+      <tr><td><code>sbAgentsPersist()</code></td><td class="mono">39651</td><td>write <code>sb_agents</code> (guard <code>sales</code>)</td></tr>
+      <tr><td><code>agLog(agentId, kind, text)</code></td><td class="mono">39654</td><td>append to <code>agent.activity[]</code> + persist</td></tr>
+      <tr><td><code>_seedAgentContractDefaults()</code></td><td class="mono">39698</td><td>fill missing contract fields on every agent</td></tr>
+      <tr><td><code>sbContractsPersist()</code></td><td class="mono">39800</td><td>write <code>sb_contracts</code></td></tr>
+      <tr><td><code>_sbMigrateContracts()</code></td><td class="mono">39804</td><td>agent contract fields → <code>SB_CONTRACTS</code> rows</td></tr>
+      <tr><td><code>ctDaysUntilExpiry(a)</code> / <code>ctIsExpiringSoon</code> / <code>ctIsExpired</code></td><td class="mono">39844 / 39851 / 39855</td><td>contract expiry maths (60-day threshold)</td></tr>
+      <tr><td><code>_seedAgentPrices()</code></td><td class="mono">39872</td><td>legacy per-agent price matrix generator</td></tr>
+      <tr><td><code>getRateType(rtId)</code></td><td class="mono">40138</td><td><code>SB_RATE_TYPES</code> lookup</td></tr>
+      <tr><td><code>getAgentsUsingRateType(rtId)</code></td><td class="mono">40140</td><td>reverse binding lookup</td></tr>
+      <tr><td><code>_laReloadData()</code></td><td class="mono">41535</td><td>re-hydrate every store after <code>/api/load</code></td></tr>
+      <tr><td><code>laScopeAgents(list)</code> / <code>laAgentInScope(a)</code></td><td class="mono">41810 / 41817</td><td>per-sales row-level scope</td></tr>
+      <tr><td><code>tsNetOf(r)</code></td><td class="mono">52266</td><td>Travel Summary net per trip (independent rate read)</td></tr>
+      <tr><td><code>agImportApply()</code></td><td class="mono">60378</td><td>commit a spreadsheet import into <code>SB_AGENTS</code></td></tr>
+      <tr><td><code>agGet(a,k)</code> / <code>agSet(a,k,v)</code></td><td class="mono">60480 / 60486</td><td>dotted-path get/merge-set (handles <code>companyInfo.*</code>)</td></tr>
+      <tr><td><code>agProgPicker(cur,onOk,title,rtId)</code></td><td class="mono">60630</td><td>route picker pre-ticked from the rate type</td></tr>
+      <tr><td><code>agRenderTable()</code></td><td class="mono">60764</td><td>spreadsheet view over <code>SB_AGENTS</code></td></tr>
+      <tr><td><code>renderAgents()</code></td><td class="mono">60897</td><td>Agent List entry (card or table mode)</td></tr>
+      <tr><td><code>renderRateTypes()</code></td><td class="mono">60915</td><td>Rate Types entry</td></tr>
+      <tr><td><code>rtRenderAgentColumn(rtId)</code></td><td class="mono">60984</td><td>3-col mode: agents bound to this rate</td></tr>
+      <tr><td><code>_rtValidityStatus(rt)</code></td><td class="mono">61080</td><td>Always / Upcoming / Active / Expiring / Expired</td></tr>
+      <tr><td><code>rtToggleActive(rtId, ev)</code></td><td class="mono">61095</td><td>flip <code>rt.active</code></td></tr>
+      <tr><td><code>_rtAutoCode(name, ownerSalesId)</code></td><td class="mono">61123</td><td>generate a unique rate-type code</td></tr>
+      <tr><td><code>rtScopeList(list, keepId)</code> / <code>rtForSales(salesId, keepId)</code></td><td class="mono">61141 / 61146</td><td>scope + own/shared/other grouping for pickers</td></tr>
+      <tr><td><code>rtRenderList()</code></td><td class="mono">61169</td><td>rate-type sidebar cards</td></tr>
+      <tr><td><code>_rtAddonDetail_longtail(rt, subNo)</code></td><td class="mono">61251</td><td>§3.x longtail block on the detail page</td></tr>
+      <tr><td><code>_rtAddonContract_longtail(rt, ctx)</code></td><td class="mono">61362</td><td>longtail block in the contract PDF</td></tr>
+      <tr><td><code>_rtAddonEdit_longtail(d)</code></td><td class="mono">61445</td><td>per-route Join/Charter price grid in the modal</td></tr>
+      <tr><td><code>_rtAddonPreview(rt)</code></td><td class="mono">61597</td><td>first non-null <code>def.summary</code> for the card</td></tr>
+      <tr><td><code>RT_ADDON_BUILTIN</code></td><td class="mono">61603</td><td>built-in add-on defs (longtail, privateTransfer)</td></tr>
+      <tr><td><code>sbAddonTypesPersist()</code></td><td class="mono">61629</td><td>write <code>sb_addon_types</code> (guard <code>config</code>)</td></tr>
+      <tr><td><code>_rtGenericDef(cfg)</code></td><td class="mono">61739</td><td>wrap a <code>SB_ADDON_TYPES</code> entry into a full def</td></tr>
+      <tr><td><code>rtRebuildAddonDefs()</code></td><td class="mono">61751</td><td><code>RT_ADDON_DEFS = builtins + customs</code></td></tr>
+      <tr><td><code>rtAddonTypeCreate()</code> / <code>rtAddonTypeDelete(key)</code></td><td class="mono">61804 / 61818</td><td>UI CRUD for custom add-on types</td></tr>
+      <tr><td><code>rtBuildDetailBody(rt)</code></td><td class="mono">61826</td><td>shared §1/§2/§3 detail renderer (Rate Type page + Agent Pricing tab)</td></tr>
+      <tr><td><code>rtRenderDetail(rtId)</code></td><td class="mono">62015</td><td>rate-type detail panel shell</td></tr>
+      <tr><td><code>rtOpenAgentPicker(rtId)</code> / <code>rtAgentPickerApply()</code></td><td class="mono">62104 / 62136</td><td>bulk-bind agents to a rate type</td></tr>
+      <tr><td><code>rtUnbindAgent(agentId, rtId, ev)</code></td><td class="mono">62278</td><td>single unbind with confirm</td></tr>
+      <tr><td><code>rtSetTier(t)</code> / <code>rtCopyNetToTier()</code> / <code>_rtTierGet</code> / <code>_rtTierPath</code></td><td class="mono">62304 / 62306 / 62327 / 62332</td><td>Net / Selling / Min-sell layer switching</td></tr>
+      <tr><td><code>rtOpenEdit</code> / <code>rtClone</code> / <code>rtOpenNew</code></td><td class="mono">62341 / 62350 / 62365</td><td>open the rate-type modal</td></tr>
+      <tr><td><code>rtDraftSet(path, value)</code></td><td class="mono">62396</td><td>dot-path setter into <code>_rtDraft</code></td></tr>
+      <tr><td><code>rtToggleZoneNotOffered(rId, zone)</code></td><td class="mono">62410</td><td>mark a zone <code>null</code> = No Offer</td></tr>
+      <tr><td><code>rtToggleBundleLongtail</code> / <code>rtSetBundleMode</code> / <code>rtSetBundleApplyTo</code></td><td class="mono">62425 / 62439 / 62448</td><td>forced longtail bundle per route</td></tr>
+      <tr><td><code>_rtBundleAppliesTo(b, isCharter)</code></td><td class="mono">62454</td><td>does the bundle apply to this trip mode</td></tr>
+      <tr><td><code>rtDraftToggleRoute(rId)</code></td><td class="mono">62456</td><td>add/remove a route + seed empty seat rates</td></tr>
+      <tr><td><code>rtAddCharterRow()</code></td><td class="mono">62475</td><td>first free (route × boat type) charter slot</td></tr>
+      <tr><td><code>_rtNormalizeLongtail(lt)</code></td><td class="mono">62608</td><td>migrate/normalise longtail to <code>{applies, byRoute, join, charter}</code></td></tr>
+      <tr><td><code>_rtLongtailForRoute(rt, routeId)</code></td><td class="mono">62630</td><td>effective longtail price for one route</td></tr>
+      <tr><td><code>rtToggleAddOn(key, on)</code> / <code>rtToggleAddOnRoute(key, rId)</code></td><td class="mono">62636 / 62647</td><td>enable an add-on / toggle its route</td></tr>
+      <tr><td><code>rtCopyFromRT(srcId)</code></td><td class="mono">62656</td><td>clone routes + all price layers from another rate</td></tr>
+      <tr><td><code>rtNatPax(scope)</code> / <code>rtNatScopeOf(rt)</code></td><td class="mono">62680 / 62681</td><td>nationality column visibility</td></tr>
+      <tr><td><code>rtModalRender()</code></td><td class="mono">62683</td><td>the whole edit modal body</td></tr>
+      <tr><td><code>rtSaveDraft()</code></td><td class="mono">62996</td><td>validate, prune, push/replace, persist</td></tr>
+      <tr><td><code>rtDeleteRT(rtId)</code></td><td class="mono">63029</td><td>delete + detach bound agents</td></tr>
+      <tr><td><code>rtPersist()</code></td><td class="mono">63045</td><td>write <code>sb_rate_types</code> + <code>sb_agents_rate_bindings</code></td></tr>
+      <tr><td><code>_rtRestore()</code></td><td class="mono">63059</td><td>boot migration of charter/transfer shapes</td></tr>
+      <tr><td><code>agRenderFilters()</code> / <code>renderAgKPI()</code> / <code>agRenderList()</code></td><td class="mono">63125 / 63200 / 63235</td><td>Agent List chrome</td></tr>
+      <tr><td><code>agIncompleteFields(a)</code></td><td class="mono">63225</td><td>which required fields are still blank</td></tr>
+      <tr><td><code>agEditOpen(section, agentId)</code></td><td class="mono">63387</td><td>open the sectioned edit modal</td></tr>
+      <tr><td><code>agEditRender()</code></td><td class="mono">63465</td><td>modal body per section</td></tr>
+      <tr><td><code>agEditBuildRateTypePicker()</code></td><td class="mono">63783</td><td>scoped rate-type list (⚠ <code>esc</code> bug at <span class="ln">:63867</span>)</td></tr>
+      <tr><td><code>agEditBuildRTPreview(rt)</code></td><td class="mono">63877</td><td>first-route price preview in the picker</td></tr>
+      <tr><td><code>agEditPPAddMissing()</code></td><td class="mono">64027</td><td>add every rate-type route missing from <code>programPeriods</code></td></tr>
+      <tr><td><code>agEditSave()</code></td><td class="mono">64057</td><td>apply one section + audit log + persist</td></tr>
+      <tr><td><code>agRenderDetail(aId)</code></td><td class="mono">64140</td><td>agent detail shell (scope-guarded)</td></tr>
+      <tr><td><code>ctContractsPanelHTML(agentId)</code></td><td class="mono">64309</td><td>Main + Promo contract rows</td></tr>
+      <tr><td><code>ctOpenAddPromo</code> / <code>ctSaveAddPromo</code></td><td class="mono">64357 / 64400</td><td>create a <code>kind:'promo'</code> contract</td></tr>
+      <tr><td><code>ctVoidContract(contractId, agentId)</code></td><td class="mono">64348</td><td>void a promo → falls back to Main</td></tr>
+      <tr><td><code>agTabInfo(a)</code></td><td class="mono">64429</td><td>Info tab</td></tr>
+      <tr><td><code>agTabPrices(a)</code></td><td class="mono">64794</td><td>Pricing Matrix tab (delegates to <code>rtBuildDetailBody</code>)</td></tr>
+      <tr><td><code>agpRenderAddonSection(a)</code></td><td class="mono">64875</td><td>agent-level <code>addonServices</code> block</td></tr>
+      <tr><td><code>agpAddonSaveVariants()</code></td><td class="mono">65073</td><td>write <code>a.addonServices[].variants[].selling/net</code></td></tr>
+      <tr><td><code>ctOpenRenewal(agentId)</code></td><td class="mono">65096</td><td>renewal wizard, pre-filled +1 year</td></tr>
+      <tr><td><code>ctRenewActivate()</code></td><td class="mono">65317</td><td>archive old contract, activate new (⚠ no persist)</td></tr>
+      <tr><td><code>ctViewContract(agentId, version)</code></td><td class="mono">65387</td><td>open an archived contract snapshot</td></tr>
+      <tr><td><code>agUpdateExpiringBadge()</code></td><td class="mono">65594</td><td>sidebar count of expiring/expired contracts</td></tr>
+      <tr><td><code>agTabContracts(a)</code></td><td class="mono">65617</td><td>Generated Contracts tab + Contracts panel</td></tr>
+      <tr><td><code>agTabHist(a)</code> / <code>agTabActivity(a)</code></td><td class="mono">65683 / 65744</td><td>recent bookings · audit timeline</td></tr>
+      <tr><td><code>agSwitchTab(tab, aId)</code></td><td class="mono">65731</td><td>tab dispatcher</td></tr>
+      <tr><td><code>agClearExecute()</code></td><td class="mono">65841</td><td>bulk-delete agents (typed confirmation)</td></tr>
+      <tr><td><code>agNew()</code> / <code>agCreateSubmit()</code></td><td class="mono">65868 / 66100</td><td>add-agent draft → commit</td></tr>
+      <tr><td><code>agNewOcrRun(file)</code> / <code>_agOcrParse(text)</code></td><td class="mono">65911 / 65926</td><td>OCR a name card into the draft</td></tr>
+      <tr><td><code>agDelete(id)</code></td><td class="mono">66139</td><td>admin-only agent delete</td></tr>
+      <tr><td><code>_ctDocAgentRT()</code></td><td class="mono">66180</td><td><code>{a, rt}</code> with per-contract overrides applied</td></tr>
+      <tr><td><code>ctDocOpen(agentId, opts)</code></td><td class="mono">66192</td><td>open the contract wizard, freezing template text</td></tr>
+      <tr><td><code>ctDocExportPDF()</code> / <code>_ctDocPrintFlow(setup)</code></td><td class="mono">66270 / 66242</td><td>print flow (detach modal → <code>window.print</code>)</td></tr>
+      <tr><td><code>ctArtifactsFor(agentId)</code> / <code>ctArtifactSave()</code> / <code>ctArtifactReopen()</code></td><td class="mono">66319 / 66325 / 66381</td><td>contract artifact history</td></tr>
+      <tr><td><code>ctDocSaveField(key, el)</code></td><td class="mono">66436</td><td>inline edit → <code>_ctDoc.overrides</code></td></tr>
+      <tr><td><code>ctDocRender(hostId)</code> / <code>_ctDocRenderPages</code></td><td class="mono">66517 / 66589</td><td>build the A4 page stack</td></tr>
+      <tr><td><code>ctTmplForAgent(a)</code> / <code>ctTmplGet(id)</code></td><td class="mono">67234 / 67228</td><td>contract template resolution</td></tr>
+      <tr><td><code>renderSalesBoard()</code></td><td class="mono">67431</td><td>per-salesperson pax vs target board</td></tr>
+      <tr><td><code>renderContractTemplates()</code></td><td class="mono">67756</td><td><code>#view-contract-tmpl</code> editor</td></tr>
+      <tr><td><code>ctRtHasTiers(rt)</code></td><td class="mono">68168</td><td>does the rate carry Selling/Min-sell values</td></tr>
+      <tr><td><code>ctDocRenderPricing(a, rt, lang, fmt)</code></td><td class="mono">68176</td><td>contract §04 seat + charter tables</td></tr>
+      <tr><td><code>ctDocRenderAddOns(a, rt, lang, fmt)</code></td><td class="mono">68302</td><td>contract add-on tables via <code>RT_ADDON_DEFS[].contract</code></td></tr>
+      <tr><td><code>renderB2C()</code></td><td class="mono">68504</td><td>direct-channel &amp; campaign cards</td></tr>
+      <tr><td><code>bkV2AddOnFlags(bk, routeId)</code></td><td class="mono">71835</td><td>join / charter / transfer flags for ops (bundle-aware)</td></tr>
+      <tr><td><code>bkV2PaxTot(pax, kind)</code> / <code>bkV2PaxAllTot(pax)</code></td><td class="mono">73497 / 73502</td><td>pax roll-ups across nationality suffixes</td></tr>
+      <tr><td><code>bkV2ToggleAddOn(type)</code></td><td class="mono">74890</td><td>add/remove a booking add-on (+ zone side-effects)</td></tr>
+      <tr><td><code>bkV2SetPickupArea(areaId)</code></td><td class="mono">74925</td><td>sets <code>trip.zone</code> from the pickup area</td></tr>
+      <tr><td><code>bkV2CommitBooking(status)</code></td><td class="mono">76469</td><td>validates, freezes the quote, writes the booking</td></tr>
+      <tr><td><code>bkV2GetRT()</code></td><td class="mono">77091</td><td>booking’s base rate type</td></tr>
+      <tr><td><code>bkV2ResolveRateType(agentId, routeId, travelDate)</code></td><td class="mono">77099</td><td>promo-contract overlay resolver</td></tr>
+      <tr><td><code>bkV2GetRTForTrip(trip)</code></td><td class="mono">77112</td><td>promo-or-base rate for one trip (defensive)</td></tr>
+      <tr><td><code>bkV2TripSubtotal(trip)</code></td><td class="mono">77122</td><td><b>the seat/charter price engine</b></td></tr>
+      <tr><td><code>bkV2AddOnInfo(type)</code></td><td class="mono">77189</td><td>add-on label + amount (longtail/transfer only)</td></tr>
+      <tr><td><code>bkV2CalcQuote()</code></td><td class="mono">77221</td><td>whole-booking totals, FOC, adjustments</td></tr>
+      <tr><td><code>SB_ADDON_SVCS</code> / <code>renderAddonSvc()</code></td><td class="mono">78802 / 78841</td><td>add-on services master list (⚠ not persisted)</td></tr>
+      <tr><td><code>aosSaveModal()</code></td><td class="mono">79018</td><td>commit a service/variant edit (RAM only)</td></tr>
+      <tr><td><code>renderB2BDash()</code></td><td class="mono">79312</td><td>B2B sales dashboard over trip-lines</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<footer>
+  Rendered from <code>allotment_v2/docs/workflows/02-sales-agents-pricing.md</code> ·
+  written against commit <code>094dde1</code> on <code>refactor/booking-v2-migration</code> ·
+  these docs describe <b>the code, not the intent</b> — where an older doc contradicts the code, the code won.
+</footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  // theme toggle
+  var btn = document.getElementById('themebtn');
+  var root = document.documentElement;
+  var saved = null;
+  try { saved = localStorage.getItem('la_doc_theme'); } catch(e){}
+  if (saved) root.setAttribute('data-theme', saved);
+  btn.addEventListener('click', function(){
+    var cur = root.getAttribute('data-theme');
+    var next;
+    if (cur === 'dark') next = 'light';
+    else if (cur === 'light') next = 'dark';
+    else next = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('la_doc_theme', next); } catch(e){}
+  });
+
+  // scrollspy
+  var links = Array.prototype.slice.call(document.querySelectorAll('#nav a'));
+  var targets = links.map(function(a){ return document.querySelector(a.getAttribute('href')); });
+  function spy(){
+    var best = 0, bestTop = -Infinity;
+    for (var i=0;i<targets.length;i++){
+      if (!targets[i]) continue;
+      var t = targets[i].getBoundingClientRect().top - 90;
+      if (t <= 0 && t > bestTop){ bestTop = t; best = i; }
+    }
+    links.forEach(function(a,i){ a.classList.toggle('on', i===best); });
+  }
+  var tick = false;
+  window.addEventListener('scroll', function(){
+    if (tick) return; tick = true;
+    requestAnimationFrame(function(){ spy(); tick = false; });
+  }, {passive:true});
+  spy();
+
+  // function-index filter (optional — skipped when the doc has no #ffilter)
+  var input = document.getElementById('ffilter');
+  var rows  = Array.prototype.slice.call(document.querySelectorAll('#ftable tbody tr'));
+  var count = document.getElementById('fcount');
+  if (input && rows.length){
+    var paint = function(){
+      var q = input.value.trim().toLowerCase();
+      var n = 0;
+      rows.forEach(function(r){
+        var hit = !q || r.textContent.toLowerCase().indexOf(q) !== -1;
+        r.classList.toggle('hidden', !hit);
+        if (hit) n++;
+      });
+      if (count) count.textContent = q ? (n + ' of ' + rows.length + ' shown') : (rows.length + ' functions');
+    };
+    input.addEventListener('input', paint);
+    paint();
+  }
+})();
+</script>
+</body>
+</html>

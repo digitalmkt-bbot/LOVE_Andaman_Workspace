@@ -1,0 +1,1641 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data, Persistence &amp; API</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f8fa; --panel:#ffffff; --panel-2:#fbfcfd;
+  --ink:#0f2029; --ink-2:#31485a; --muted:#68808f;
+  --line:#e1e8ee; --line-2:#eef2f6;
+  --accent:#1683C7; --accent-ink:#0f6ba6; --accent-soft:#e8f3fb;
+  --danger:#c8384c; --danger-soft:#fdecee;
+  --warn:#b46a00; --warn-soft:#fdf3e3;
+  --ok:#137a52; --ok-soft:#e6f5ee;
+  --violet:#6a4bbd; --violet-soft:#f0ecfb;
+  --code-bg:#f0f4f8; --code-ink:#173446;
+  --shadow:0 1px 2px rgba(15,32,41,.05), 0 8px 24px -14px rgba(15,32,41,.22);
+  --radius:14px;
+}
+:root:not([data-theme="light"]){ }
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b1317; --panel:#111d24; --panel-2:#0e181e;
+    --ink:#e7eff5; --ink-2:#bfd0dc; --muted:#89a0af;
+    --line:#1f313c; --line-2:#182831;
+    --accent:#49b2ee; --accent-ink:#7ccbf8; --accent-soft:#0f2c3d;
+    --danger:#f2798c; --danger-soft:#33161c;
+    --warn:#e0a24a; --warn-soft:#33260f;
+    --ok:#4ccb95; --ok-soft:#0f2b21;
+    --violet:#a48bef; --violet-soft:#221b3a;
+    --code-bg:#0d1b23; --code-ink:#cfe0eb;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b1317; --panel:#111d24; --panel-2:#0e181e;
+  --ink:#e7eff5; --ink-2:#bfd0dc; --muted:#89a0af;
+  --line:#1f313c; --line-2:#182831;
+  --accent:#49b2ee; --accent-ink:#7ccbf8; --accent-soft:#0f2c3d;
+  --danger:#f2798c; --danger-soft:#33161c;
+  --warn:#e0a24a; --warn-soft:#33260f;
+  --ok:#4ccb95; --ok-soft:#0f2b21;
+  --violet:#a48bef; --violet-soft:#221b3a;
+  --code-bg:#0d1b23; --code-ink:#cfe0eb;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px; line-height:1.62; -webkit-font-smoothing:antialiased;
+}
+code,kbd,.mono{font-family:"DM Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+
+/* ---------- layout ---------- */
+.wrap{display:grid; grid-template-columns:264px minmax(0,1fr); gap:0; max-width:1420px; margin:0 auto}
+.side{
+  position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+  border-right:1px solid var(--line); padding:26px 18px 60px; background:var(--panel-2);
+}
+.main{min-width:0; padding:34px 42px 120px}
+@media (max-width:960px){
+  .wrap{grid-template-columns:1fr}
+  .side{position:static; height:auto; border-right:0; border-bottom:1px solid var(--line); padding:20px 22px}
+  .main{padding:24px 20px 80px}
+}
+
+/* ---------- sidebar ---------- */
+.brand{display:flex; align-items:center; gap:10px; margin-bottom:4px}
+.brand .dot{width:26px;height:26px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px;flex:none}
+.brand b{font-size:14px; letter-spacing:-.01em}
+.brand small{display:block; color:var(--muted); font-size:11px; font-weight:400; line-height:1.3}
+.nav{margin-top:20px; display:flex; flex-direction:column; gap:1px}
+.nav a{
+  display:flex; gap:9px; align-items:baseline; text-decoration:none; color:var(--ink-2);
+  padding:6px 10px; border-radius:8px; font-size:13.5px; border-left:2px solid transparent;
+}
+.nav a .n{color:var(--muted); font-size:11px; font-family:"DM Mono",monospace; min-width:16px}
+.nav a:hover{background:var(--line-2); color:var(--ink)}
+.nav a.on{background:var(--accent-soft); color:var(--accent-ink); font-weight:500; border-left-color:var(--accent)}
+.nav .sub{padding-left:34px; font-size:12.5px; color:var(--muted)}
+.nav .sub:hover{color:var(--ink)}
+.backlink{
+  display:inline-block; margin-top:14px; font-size:12.5px; color:var(--muted); text-decoration:none;
+  border-bottom:1px solid transparent;
+}
+.backlink:hover{color:var(--accent-ink); border-bottom-color:var(--accent)}
+.themebtn{
+  margin-top:22px; width:100%; border:1px solid var(--line); background:var(--panel); color:var(--ink-2);
+  border-radius:9px; padding:7px 10px; font:inherit; font-size:12.5px; cursor:pointer;
+}
+.themebtn:hover{border-color:var(--accent); color:var(--accent-ink)}
+
+/* ---------- header ---------- */
+.hero{border-bottom:1px solid var(--line); padding-bottom:22px; margin-bottom:30px}
+.eyebrow{font-family:"DM Mono",monospace; font-size:12px; color:var(--accent-ink); letter-spacing:.06em; text-transform:uppercase}
+h1{font-size:34px; line-height:1.15; letter-spacing:-.025em; margin:6px 0 10px}
+.lede{font-size:16px; color:var(--ink-2); max-width:74ch; margin:0}
+.chips{display:flex; flex-wrap:wrap; gap:7px; margin-top:16px}
+.chip{
+  font-family:"DM Mono",monospace; font-size:11.5px; padding:3px 9px; border-radius:999px;
+  border:1px solid var(--line); background:var(--panel); color:var(--muted);
+}
+.chip b{color:var(--ink-2); font-weight:500}
+
+/* ---------- sections ---------- */
+section{scroll-margin-top:20px; margin-bottom:46px}
+h2{
+  font-size:23px; letter-spacing:-.02em; margin:0 0 14px; padding-bottom:9px;
+  border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:11px;
+}
+h2 .num{font-family:"DM Mono",monospace; font-size:14px; color:var(--accent); font-weight:500}
+h3{font-size:17px; letter-spacing:-.01em; margin:28px 0 10px; color:var(--ink)}
+h4{font-size:13.5px; margin:18px 0 7px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; font-weight:500}
+p{margin:0 0 12px; max-width:82ch}
+ul,ol{margin:0 0 12px; padding-left:22px; max-width:82ch}
+li{margin-bottom:5px}
+a{color:var(--accent-ink)}
+
+/* ---------- inline bits ---------- */
+code:not(pre code){
+  background:var(--code-bg); color:var(--code-ink); padding:1px 5px; border-radius:5px;
+  font-size:.875em; border:1px solid var(--line-2); white-space:nowrap;
+}
+.ln{color:var(--accent-ink); font-family:"DM Mono",monospace; font-size:.82em; white-space:nowrap}
+pre{
+  background:var(--code-bg); border:1px solid var(--line); border-radius:10px;
+  padding:14px 16px; overflow-x:auto; font-size:12.8px; line-height:1.6; color:var(--code-ink); margin:0 0 14px;
+}
+pre code{background:none;border:0;padding:0;white-space:pre}
+
+/* ---------- cards & callouts ---------- */
+.card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px; box-shadow:var(--shadow); margin:0 0 16px}
+.note{
+  border-left:3px solid var(--accent); background:var(--accent-soft); border-radius:0 10px 10px 0;
+  padding:12px 16px; margin:0 0 16px; font-size:14.2px; color:var(--ink-2);
+}
+.note.warn{border-left-color:var(--warn); background:var(--warn-soft)}
+.note.danger{border-left-color:var(--danger); background:var(--danger-soft)}
+.note.ok{border-left-color:var(--ok); background:var(--ok-soft)}
+.note b{color:var(--ink)}
+.note .lbl{display:block; font-size:11px; text-transform:uppercase; letter-spacing:.07em; font-weight:700; margin-bottom:4px; color:var(--accent-ink)}
+.note.warn .lbl{color:var(--warn)} .note.danger .lbl{color:var(--danger)} .note.ok .lbl{color:var(--ok)}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius); margin:0 0 16px; background:var(--panel)}
+table{border-collapse:collapse; width:100%; font-size:13.6px; min-width:520px}
+th{
+  text-align:left; font-weight:500; font-size:11.5px; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--muted); padding:10px 14px; border-bottom:1px solid var(--line); background:var(--panel-2); white-space:nowrap;
+}
+td{padding:9px 14px; border-bottom:1px solid var(--line-2); vertical-align:top; color:var(--ink-2)}
+tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--panel-2)}
+td code{white-space:nowrap}
+
+/* ---------- badges ---------- */
+.b{display:inline-block; font-family:"DM Mono",monospace; font-size:11px; padding:2px 8px; border-radius:999px; white-space:nowrap; border:1px solid transparent}
+.b.blue{background:var(--accent-soft); color:var(--accent-ink); border-color:color-mix(in srgb,var(--accent) 25%, transparent)}
+.b.red{background:var(--danger-soft); color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%, transparent)}
+.b.amber{background:var(--warn-soft); color:var(--warn); border-color:color-mix(in srgb,var(--warn) 30%, transparent)}
+.b.green{background:var(--ok-soft); color:var(--ok); border-color:color-mix(in srgb,var(--ok) 30%, transparent)}
+.b.violet{background:var(--violet-soft); color:var(--violet); border-color:color-mix(in srgb,var(--violet) 30%, transparent)}
+.b.gray{background:var(--line-2); color:var(--muted); border-color:var(--line)}
+
+/* ---------- rail (vertical flow) ---------- */
+.rail{position:relative; margin:6px 0 18px; padding-left:30px}
+.rail:before{content:""; position:absolute; left:9px; top:8px; bottom:8px; width:2px; background:var(--line)}
+.step{position:relative; margin-bottom:13px}
+.step:before{
+  content:""; position:absolute; left:-26px; top:6px; width:11px; height:11px; border-radius:50%;
+  background:var(--panel); border:2px solid var(--accent);
+}
+.step.block:before{border-color:var(--danger); background:var(--danger)}
+.step.ask:before{border-color:var(--warn)}
+.step.done:before{border-color:var(--ok); background:var(--ok)}
+.step .t{font-weight:500; color:var(--ink); font-size:14.4px}
+.step .d{font-size:13.4px; color:var(--muted)}
+
+/* ---------- stage flow (horizontal) ---------- */
+.flow{display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; margin:6px 0 18px}
+.stage{
+  flex:1 1 150px; min-width:140px; background:var(--panel); border:1px solid var(--line);
+  border-radius:11px; padding:11px 13px; position:relative;
+}
+.stage .k{font-family:"DM Mono",monospace; font-size:10.5px; color:var(--muted); letter-spacing:.05em; text-transform:uppercase}
+.stage .v{font-size:13.6px; font-weight:500; margin-top:3px; color:var(--ink)}
+.stage .s{font-size:12.4px; color:var(--muted); margin-top:3px}
+.arrow{display:grid; place-items:center; color:var(--line); font-size:18px; flex:0 0 14px}
+@media(max-width:700px){.arrow{transform:rotate(90deg)}}
+
+/* ---------- outcome grid ---------- */
+.grid2{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px; margin:6px 0 18px}
+.mini{background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:13px 15px}
+.mini h5{margin:0 0 5px; font-size:13.6px; letter-spacing:-.01em}
+.mini p{margin:0; font-size:12.9px; color:var(--muted)}
+
+/* ---------- function index filter ---------- */
+.filter{
+  width:100%; max-width:340px; padding:8px 12px; border-radius:9px; border:1px solid var(--line);
+  background:var(--panel); color:var(--ink); font:inherit; font-size:13.5px; margin-bottom:12px;
+}
+.filter:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft)}
+.hidden{display:none !important}
+.count{font-size:12.5px; color:var(--muted); margin-left:10px}
+
+/* ---------- footer ---------- */
+footer{border-top:1px solid var(--line); padding-top:18px; color:var(--muted); font-size:12.8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ===== SIDEBAR ===== -->
+<aside class="side">
+  <div class="brand">
+    <div class="dot">07</div>
+    <div><b>Data, Persistence &amp; API</b><small>allotment_v2 · workflow docs</small></div>
+  </div>
+  <nav class="nav" id="nav">
+    <a href="#s0"><span class="n">0</span> STOP — HEAD is broken</a>
+    <a href="#s1"><span class="n">1</span> The three layers</a>
+    <a href="#l-quota" class="sub">1.1 Why never localStorage</a>
+    <a href="#l-tiny" class="sub">1.2 The allowed tiny keys</a>
+    <a href="#l-save2" class="sub">1.3 The two save() functions</a>
+    <a href="#s2"><span class="n">2</span> Boot &amp; load sequence</a>
+    <a href="#b-degraded" class="sub">2.1 Degraded mode</a>
+    <a href="#b-soft" class="sub">2.2 Soft refresh</a>
+    <a href="#s3"><span class="n">3</span> The write path</a>
+    <a href="#w-steps" class="sub">3.1 Step by step</a>
+    <a href="#w-batch" class="sub">3.2 Server — _batch</a>
+    <a href="#w-legacy" class="sub">3.3 Legacy /api/save</a>
+    <a href="#w-shrink" class="sub">3.4 The shrink guard</a>
+    <a href="#s4"><span class="n">4</span> Adding a persisted field</a>
+    <a href="#f-pier" class="sub">4.1 Worked example</a>
+    <a href="#f-seeds" class="sub">4.2 The DEFAULT_* trap</a>
+    <a href="#s5"><span class="n">5</span> Store inventory</a>
+    <a href="#s6"><span class="n">6</span> server.js API surface</a>
+    <a href="#api-data" class="sub">Data &amp; REST v1</a>
+    <a href="#api-b2c" class="sub">B2C &amp; static</a>
+    <a href="#s7"><span class="n">7</span> Schema &amp; migrations</a>
+    <a href="#m-add" class="sub">Adding a migration</a>
+    <a href="#m-drift" class="sub">The two drift checks</a>
+    <a href="#s8"><span class="n">8</span> Deployment &amp; envs</a>
+    <a href="#d-env" class="sub">Environment variables</a>
+    <a href="#d-local" class="sub">Local development</a>
+    <a href="#s9"><span class="n">9</span> Failure modes</a>
+    <a href="#fm-snap" class="sub">9.7 Snapshots are dead</a>
+    <a href="#fm-banner" class="sub">9.10 Banner decisions</a>
+    <a href="#s10"><span class="n">10</span> Invariants &amp; gotchas</a>
+    <a href="#doc-drift" class="sub">Documentation drift</a>
+    <a href="#s11"><span class="n">11</span> Function index</a>
+  </nav>
+  <a class="backlink" href="index.html">← All workflow docs</a>
+  <button class="themebtn" id="themebtn" type="button">Toggle theme</button>
+</aside>
+
+<main class="main">
+
+<!-- ===== HERO ===== -->
+<header class="hero">
+  <div class="eyebrow">Workflow doc 07</div>
+  <h1>Data, Persistence &amp; API</h1>
+  <p class="lede">How a value typed into the LOVE Andaman ops app reaches Postgres and comes back —
+  the RAM working copy, the boot/load path, the diff→REST write path, the mapper, the server API,
+  migrations, deployment, and every way the round-trip silently loses data.</p>
+  <div class="chips">
+    <span class="chip"><b>Code</b> server.js · allotment_v2.html</span>
+    <span class="chip"><b>Commit</b> 094dde1</span>
+    <span class="chip"><b>Branch</b> refactor/booking-v2-migration</span>
+    <span class="chip"><b>Source</b> docs/workflows/07-data-persistence-api.md</span>
+  </div>
+  <div class="note warn" style="margin-top:18px">
+    <span class="lbl">Line numbers drift</span>
+    Every <span class="ln">:12345</span> reference means “roughly here”. Grep the symbol name instead —
+    the <a href="#s11">function index</a> at the bottom is the fastest way to find anything.
+  </div>
+</header>
+
+<!-- ============ 0 ============ -->
+<section id="s0">
+  <h2><span class="num">00</span> STOP — HEAD is broken</h2>
+
+  <div class="note danger">
+    <span class="lbl">Read this before §1 if you are about to run anything</span>
+    At <code>094dde1</code> <b>the server does not boot.</b> <code>server.js:34-35</code> unconditionally
+    <code>require</code>s <code>./os-backend/src/mapping/os_repo.js</code> and
+    <code>./os-backend/src/mapping/operation_schemas_model.json</code>, and <code>os-backend/</code> was deleted
+    wholesale by that very commit (“chore: remove os-backend, erp, db/migrations, and stale mockups”).
+    Recovery is one command:
+    <code>git checkout HEAD~1 -- os-backend db/migrations</code>.
+  </div>
+
+  <p><code>server.js:34-35</code> does:</p>
+<pre><code>const osRepo  = require('./os-backend/src/mapping/os_repo.js');
+const osModel = require('./os-backend/src/mapping/operation_schemas_model.json');</code></pre>
+
+  <p><code>os-backend/</code> is <b>not</b> gitignored (<code>.gitignore</code> only excludes
+  <code>os-backend/data_snapshots/</code>), so this is a real deletion, not a local-checkout artifact. Verified:</p>
+<pre><code>$ node -e "require('./server.js')"
+Error: Cannot find module './os-backend/src/mapping/os_repo.js'
+    at Object.&lt;anonymous&gt; (D:\projects\LOVE_Andaman_Workspace\server.js:34:17)</code></pre>
+
+  <p>The <code>require</code> is unconditional and at module top level — it fires in <b>blob mode too</b>, not just
+  <code>DATA_BACKEND=relational</code>. The commit message claims “server.js:1494 treats a missing migration folder
+  as a no-op, so boot is unaffected”; that is true of <code>db/migrations/</code>, and false of <code>os-backend/</code>.
+  Three things went with it and have <b>no surviving copy anywhere in the repo</b>:</p>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:300px">File</th><th style="width:90px">Status</th><th>Consequence</th></tr></thead>
+    <tbody>
+      <tr><td><code>os-backend/src/mapping/os_repo.js</code></td><td><span class="b red">gone</span></td>
+        <td><code>assembleBlob</code> / <code>decomposeBlob</code> / <code>_plan</code> / <code>_children</code> — the entire blob↔rows engine</td></tr>
+      <tr><td><code>os-backend/src/mapping/field_mapping.json</code></td><td><span class="b red">gone</span></td>
+        <td>the mapper’s field→column table. <code>find . -name "field_mapping*"</code> returns nothing</td></tr>
+      <tr><td><code>os-backend/scripts/*</code></td><td><span class="b red">gone</span></td>
+        <td><code>check_mapping_drift.js</code>, <code>fast_import.js</code>, <code>migrate_dev_2026_07.js</code>,
+        <code>update_mapping_*.js</code> — every procedure <code>HANDOFF_2026-07-04.md</code> §“Operational procedures” tells you to run</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note warn">
+    <span class="lbl">Not a drop-in replacement</span>
+    <code>database_migration/operation_schemas_model.json</code> survives but is a <b>different, older file</b>
+    (100,288 bytes vs the 117,509-byte copy <code>server.js</code> actually required at <code>HEAD~1</code>) —
+    do not assume it substitutes.
+  </div>
+
+  <p><code>db/migrations/</code> is also gone (18 <code>.sql</code> files). <code>runMigrations()</code>
+  (<code>server.js:1495</code>) swallows the missing folder and returns a no-op, so boot would survive that alone —
+  but as the commit itself notes, <b>a fresh database can no longer be provisioned from this repo</b>, and
+  <code>tools/apply-migration.js</code> documents <code>db/migrations/003_v_seat_availability.sql</code> as its
+  example argument, a path that no longer exists.</p>
+
+  <div class="note ok">
+    <span class="lbl">Recovery</span>
+    <code>git checkout HEAD~1 -- os-backend db/migrations</code> restores all of it. Everything below describes the
+    system as the code expects it to be, i.e. with <code>os-backend</code> present.
+  </div>
+</section>
+
+<!-- ============ 1 ============ -->
+<section id="s1">
+  <h2><span class="num">01</span> The three layers</h2>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:130px">Layer</th><th>What it is</th><th>Allowed to hold</th><th>Never holds</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>Postgres</b></td>
+        <td><code>operation_schemas.*</code> — 103 tables (<code>database_migration/operation_schemas_structure.sql</code>
+          has exactly 103 <code>CREATE TABLE</code>), plus unqualified <code>app_state</code>, <code>attachments</code>, and <code>users</code></td>
+        <td><b>The truth.</b> Every business record.</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td><b>RAM (<code>_mem</code>)</b></td>
+        <td>one JSON string, the whole ~6 MB state blob, held in a closure variable at
+          <code>allotment_v2.html</code> <span class="ln">:63</span></td>
+        <td>a working copy, re-fetched from <code>/api/load</code> on every page load</td>
+        <td>anything durable — a tab close without a flush loses it</td>
+      </tr>
+      <tr>
+        <td><b>localStorage</b></td>
+        <td>real browser storage</td>
+        <td>tiny UI/cache keys only (<a href="#l-tiny">§1.2</a>)</td>
+        <td><b>the state blob — ever</b></td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <p><code>app_state</code> in relational mode is a <b>version counter only</b>: every write path stores
+  <code>data=NULL</code> and bumps <code>version</code> (<code>server.js</code> <span class="ln">:1403</span>,
+  <span class="ln">:2077</span>, <span class="ln">:1446</span>, <span class="ln">:2177</span>). The blob column is
+  only used in <code>DATA_BACKEND=blob</code> mode.</p>
+
+  <h4>Write direction — RAM to Postgres</h4>
+  <div class="flow">
+    <div class="stage"><div class="k">browser</div><div class="v">in-memory globals</div>
+      <div class="s"><code>SB_BOOKINGS</code> · <code>SB_AGENTS</code> · <code>BOATS</code> · <code>FL_*</code> …</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">persist helper</div><div class="v">read-modify-write</div>
+      <div class="s"><code>flSave()</code> / <code>rtPersist()</code> / <code>sbAgentsPersist()</code> / <code>save(area)</code></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">shim</div><div class="v">Storage.prototype</div>
+      <div class="s"><span class="ln">:70–86</span> — routes key <code>loveandaman_v2</code> to <code>_mem</code>;
+      tiny keys pass through to <b>real localStorage</b></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">RAM</div><div class="v"><code>_mem</code></div>
+      <div class="s"><span class="ln">:63</span> — the whole ~6 MB blob as a string</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">diff</div><div class="v"><code>computeDiff</code> vs <code>BASE</code></div>
+      <div class="s">then <code>laDiffToOps</code></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">server</div><div class="v">POST <code>/api/v1/_batch</code></div>
+      <div class="s"><code>server.js</code> <span class="ln">:2406</span> — the normal path.
+      On mapper drift only: POST <code>/api/save</code> <span class="ln">:2254</span></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">mapper</div><div class="v"><code>os_repo</code></div>
+      <div class="s"><code>decomposeBlob</code> / <code>assembleBlob</code></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">store</div><div class="v">Postgres</div>
+      <div class="s"><b><code>operation_schemas.*</code></b> — 103 tables · SOURCE OF TRUTH · + <code>app_state.version</code></div></div>
+  </div>
+
+  <h4>Read direction — Postgres back to RAM</h4>
+  <div class="flow">
+    <div class="stage"><div class="k">store</div><div class="v">Postgres</div><div class="s"><code>operation_schemas.*</code></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">mapper</div><div class="v"><code>os_repo.assembleBlob</code></div><div class="s">103 rows-sets → one blob</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">server</div><div class="v">GET <code>/api/load</code></div><div class="s"><code>server.js</code> <span class="ln">:2125</span></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">RAM</div><div class="v"><code>_mem</code></div><div class="s">the working copy for this tab</div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">browser</div><div class="v"><code>_laReloadData()</code></div><div class="s">re-points every global at the new blob</div></div>
+  </div>
+
+  <h3 id="l-quota">1.1 Why the blob must never touch real localStorage</h3>
+  <p>Two independent failures, both real incidents recorded in the source:</p>
+  <div class="rail">
+    <div class="step block"><div class="t">1 · Quota</div>
+      <div class="d">The state is ~6 MB; the browser quota is ~5 MB. <code>setItem</code> throws
+      <code>QuotaExceededError</code>, which aborted the whole boot <code>&lt;script&gt;</code> before
+      <code>window.LA_UID</code> was defined → the “LA_UID is not defined” cascade across every fleet view
+      (<code>HANDOFF_2026-07-04.md</code> §1; comment at <code>allotment_v2.html</code> <span class="ln">:64-69</span>).</div></div>
+    <div class="step block"><div class="t">2 · Safari doesn’t override instance methods</div>
+      <div class="d">Assigning <code>localStorage.setItem = fn</code> does <i>not</i> replace the method in WebKit —
+      the <code>Storage</code> named-property setter stores the function as a <b>data item</b> called
+      <code>"setItem"</code>. The shim was therefore a silent no-op on Safari and every write hit real storage.
+      Fixed by patching <code>Storage.prototype</code> instead and routing on <code>this</code>
+      (<span class="ln">:70-74</span>), which also leaves <code>sessionStorage</code> untouched.</div></div>
+    <div class="step done"><div class="t">Quota reclaim on poisoned devices</div>
+      <div class="d">The boot code deletes the old blob, the junk <code>setItem</code>/<code>getItem</code>/<code>removeItem</code>
+      data items WebKit created, and any oversized <code>_snap_</code> copies (<span class="ln">:85-86</span>).</div></div>
+  </div>
+
+  <h3 id="l-tiny">1.2 The allowed tiny keys</h3>
+  <div class="tw"><table>
+    <thead><tr><th style="width:230px">Key</th><th style="width:120px">Store</th><th style="width:170px">Written at</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>loveandaman_v2__v</code></td><td>localStorage</td><td><code>_laMark()</code> <span class="ln">:90</span></td>
+        <td>server version this tab’s data is synced to; survives reload, drives the unsaved-work recovery at <span class="ln">:141</span></td></tr>
+      <tr><td><code>sb_collapsed</code>, <code>la_sbcolor_*</code>, <code>la_sbacc_*</code>, <code>la_pogrp</code></td>
+        <td>localStorage</td><td>sidebar prefs</td><td>per-user UI, never synced</td></tr>
+      <tr><td><code>la_view</code></td><td><b>sessionStorage</b></td><td><code>_laSaveView()</code> <span class="ln">:284</span></td>
+        <td>current view + booking tab + scroll, so an auto-refresh returns you where you were. Per-tab by design</td></tr>
+      <tr><td><code>loveandaman_v2_snap_&lt;ts&gt;</code></td><td>localStorage</td><td><code>flLoad()</code> <span class="ln">:13827</span></td>
+        <td>fleet auto-snapshot — <b>effectively dead, see <a href="#fm-snap">§9.7</a></b></td></tr>
+    </tbody>
+  </table></div>
+  <p>Everything else — bookings, fleet, rates, agents, any business record — goes in the blob. Do not add new
+  localStorage writes for them.</p>
+
+  <h3 id="l-save2">1.3 The two <code>save()</code> functions — a real trap</h3>
+  <p>There are two, in different scopes, and they do unrelated things:</p>
+  <div class="tw"><table>
+    <thead><tr><th style="width:130px"></th><th style="width:230px">Scope</th><th style="width:190px">Signature</th><th>Job</th></tr></thead>
+    <tbody>
+      <tr><td><code>save</code> @ <b><span class="ln">:211</span></b></td>
+        <td>inside the boot IIFE (<code>allotment_v2.html</code> <span class="ln">:10</span>)</td>
+        <td><code>save(v, forceLegacy)</code></td>
+        <td>the <b>cloud sync</b> — diff, translate to ops, POST</td></tr>
+      <tr><td><code>save</code> @ <b><span class="ln">:5805</span></b></td><td>global</td><td><code>save(area)</code></td>
+        <td>a <b>persist helper</b> — writes <code>routes</code>/<code>boats</code>/<code>trips</code> into the blob</td></tr>
+    </tbody>
+  </table></div>
+  <p>The global one shadows nothing (the IIFE one is closure-private), so both coexist.
+  CLAUDE.md §2’s “persist helpers <code>save()</code>…” means the one at <b><span class="ln">:5805</span></b>.</p>
+</section>
+
+<!-- ============ 2 ============ -->
+<section id="s2">
+  <h2><span class="num">02</span> Boot &amp; load sequence</h2>
+  <p>All of this is one IIFE at <code>allotment_v2.html</code> <span class="ln">:10</span>, running in
+  <code>&lt;head&gt;</code> before anything else.</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>window.LA_UID</code> <span class="ln">:16</span></div>
+      <div class="d">Defined first — deliberately before any early return, because a failed/401 boot used to leave it
+      undefined and crash every fleet view on Safari.</div></div>
+    <div class="step"><div class="t">2 · <code>GET /api/me</code> via <code>sxr()</code> <span class="ln">:46</span></div>
+      <div class="d">A <i>synchronous</i> XHR with up to 3 retries at 600 ms / 1400 ms / 1400 ms for status <code>0</code>,
+      <code>404</code>, or <code>5xx</code> (<span class="ln">:28-35</span>). <code>404</code> is retried on purpose: it is
+      the window during a Railway deploy where the old instance is down and the new one is not up.</div></div>
+    <div class="step block"><div class="t">2a · <code>401</code> → <code>showLogin()</code>, <b>return</b> <span class="ln">:47</span></div><div class="d"></div></div>
+    <div class="step ask"><div class="t">2b · other non-200 on <b>localhost</b> → <b>return</b> <span class="ln">:49</span></div>
+      <div class="d">The degraded path, <a href="#b-degraded">§2.1</a>.</div></div>
+    <div class="step block"><div class="t">2c · other non-200 elsewhere → full-screen <code>bootFail()</code> overlay <span class="ln">:52</span></div><div class="d"></div></div>
+    <div class="step"><div class="t">3 · Install the storage shim <span class="ln">:70-86</span></div>
+      <div class="d"><code>Storage.prototype.{get,set,remove}Item</code> are replaced; only
+      <code>this === window.localStorage &amp;&amp; key === 'loveandaman_v2'</code> is diverted to <code>_mem</code>.
+      <code>setItem</code> additionally arms a 1000 ms debounced <code>save(v)</code> — but only if
+      <code>_syncReady &amp;&amp; laCanEdit()</code> (<span class="ln">:81</span>), so view-only users never sync.</div></div>
+    <div class="step"><div class="t">4 · <code>GET /api/load</code> synchronously <span class="ln">:98</span></div>
+      <div class="d">On 200 the response is <code>{data:&lt;blob as string&gt;, version, updated_by, updated_at}</code>.</div></div>
+    <div class="step"><div class="t">5 · Reconcile server vs local <span class="ln">:132-151</span> — the unsaved-work recovery</div>
+      <div class="d">
+        <b>BASE</b> = a pure parse of the <i>server</i> string. Every later diff is against this.<br>
+        If a local blob exists <b>and</b> <code>localStorage['loveandaman_v2__v'] === VER</code>, the local copy was
+        synced to exactly this server version, so any difference is <b>this user’s unsaved work</b> → keep it entirely
+        and set <code>_recoverPush</code> (<span class="ln">:143-144</span>).<br>
+        Otherwise the server has moved on → adopt the server blob, but <b>graft local-only records</b> (ids the server
+        has never seen, e.g. a booking created seconds before a crash) via <code>_laGraftLocalOnly()</code>
+        (<span class="ln">:92-97</span>). Additive only — it never overwrites a server record, so it cannot cause a revert.<br>
+        No server blob at all → <code>seedFull(local)</code> pushes the local copy as
+        <code>{baseVersion:0, full:&lt;string&gt;}</code> to <code>/api/save</code> (<span class="ln">:187</span>).
+      </div></div>
+    <div class="step"><div class="t">6 · <code>_syncReady = (ld.status===200 &amp;&amp; !!ld.json)</code> <span class="ln">:164</span></div>
+      <div class="d">This is the <b>sync gate</b> and it is load-bearing — see <a href="#s9">§9.1</a>.</div></div>
+    <div class="step"><div class="t">7 · <code>GET /api/v1</code> synchronously <span class="ln">:166</span></div>
+      <div class="d">→ <code>REST_RESOURCES = {entityName: 'array'|'map'}</code>. If this is null (blob mode returns 503)
+      every save falls back to <code>/api/save</code>.</div></div>
+    <div class="step"><div class="t">8 · Store globals populate</div>
+      <div class="d">There is <b>no single <code>load()</code></b>. Each store has its own inline IIFE near its
+      declaration, e.g. <code>SB_AGENTS</code> at <span class="ln">:39650</span> and <code>SB_BOOKINGS</code> at
+      <span class="ln">:41533</span>. <code>getItem</code> is shimmed, so this reads <code>_mem</code>. Fleet has its own
+      consolidated loader, <code>flLoad()</code> (<span class="ln">:13815</span>). Routes/boats/trips have
+      <code>loadData()</code> (<span class="ln">:5785</span>).</div></div>
+    <div class="step"><div class="t">9 · <code>_laStartSSE()</code> <span class="ln">:354-355</span></div>
+      <div class="d">Opens <code>EventSource('/api/events')</code>; a 10 s <code>/api/version</code> poll
+      (<span class="ln">:324</span>) is the fallback; a 3 s timer (<span class="ln">:357</span>) saves the view and
+      soft-refreshes when idle.</div></div>
+    <div class="step done"><div class="t">10 · UI mounts <span class="ln">:397</span></div>
+      <div class="d">User badge, <code>laApplyPerms()</code>, <code>_laRestoreView()</code> after 850 ms.</div></div>
+  </div>
+
+  <p>The shape of every store’s boot IIFE:</p>
+<pre><code>(function(){ try{ const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}');
+  if(Array.isArray(d.sb_bookings)) SB_BOOKINGS = d.sb_bookings; }catch(e){…} })();</code></pre>
+
+  <h3 id="b-degraded">2.1 Degraded mode (localhost without <code>/api</code>)</h3>
+  <p><code>_laLocalHost()</code> (<span class="ln">:36</span>) matches <code>localhost</code>, <code>127.</code>,
+  <code>192.168.</code>, <code>10.</code>, <code>[::1]</code>. If <code>/api/me</code> fails on such a host the IIFE
+  <b>returns at <span class="ln">:49</span></b> — before step 3. Consequences, in order of how much they will surprise you:</p>
+  <ul>
+    <li><b>The shim is never installed.</b> <code>localStorage.setItem(LS_KEY, …)</code> writes the real blob to real
+      localStorage. That works while the dataset is small and throws <code>QuotaExceededError</code> once it passes
+      ~5 MB. This mode is only viable on a toy dataset.</li>
+    <li>No <code>_syncReady</code>, no <code>BASE</code>, no auto-save — nothing reaches any server.</li>
+    <li>No <code>LASTBY</code>, no SSE, no version poll.</li>
+  </ul>
+  <p><code>allotment_v2/start_server.command</code> is a plain static file server
+  (<code>ruby -run -e httpd . -p 8765</code>, else <code>python3 -m http.server 8765</code>) — it serves no
+  <code>/api</code>, so double-clicking it lands you here. CLAUDE.md §4 is right that this is a last-resort fallback;
+  prefer <code>node server.js</code> with a real <code>DATABASE_URL</code>.</p>
+  <div class="note danger">
+    <span class="lbl"><code>file://</code> is broken</span>
+    …for a different reason: <code>fetch</code>/XHR to <code>/api</code> has no origin to resolve against and cookies
+    (the <code>sess</code> session) are not sent. Always use <code>http://localhost:…</code>.
+  </div>
+
+  <h3 id="b-soft">2.2 Soft refresh (someone else saved)</h3>
+  <p><code>_laSoftRefresh()</code> (<span class="ln">:297</span>) re-fetches <code>/api/load</code>, writes it with
+  <code>_orig(LS, j.data)</code> (<span class="ln">:73</span>, <span class="ln">:308</span>) — the <b>raw</b> setter that
+  does <i>not</i> trigger a save — resets <code>BASE</code>/<code>VER</code>, then calls
+  <code>window._laReloadData()</code> (<span class="ln">:41535</span>) to re-point every global at the new blob, then
+  <code>_laRerender()</code> (<span class="ln">:41612</span>).</p>
+  <p><code>_laBusy()</code> (<span class="ln">:266</span>) blocks a refresh while: unsaved changes exist, a booking form
+  is open, focus is in an input, a modal is open, the doc-check drawer is open, an agent detail is open, or the user
+  interacted in the last 2 s. If <code>_laReloadData()</code> returns false, it falls back to a full
+  <code>location.reload()</code>.</p>
+</section>
+
+<!-- ============ 3 ============ -->
+<section id="s3">
+  <h2><span class="num">03</span> The write path</h2>
+
+  <div class="rail">
+    <div class="step"><div class="t">User edits a record</div>
+      <div class="d">Mutates a global — <code>SB_BOOKINGS</code>, <code>FL_ENGINES</code>, …</div></div>
+    <div class="step"><div class="t">Persist helper</div>
+      <div class="d"><code>bkV2CommitBooking</code> / <code>flSave</code> / <code>rtPersist</code> …:
+      <code>d = JSON.parse(getItem(LS)||'{}')</code> ← reads <code>_mem</code>, then
+      <code>d.&lt;key&gt; = &lt;global&gt;</code> (read-modify-write), then <code>setItem(LS, JSON.stringify(d))</code>.</div></div>
+    <div class="step"><div class="t">Shim <code>setItem</code> <span class="ln">:80</span></div>
+      <div class="d"><code>_mem = v</code>. If <code>_syncReady &amp;&amp; laCanEdit()</code>: <code>_dirty=true</code>
+      and a 1000 ms debounce onto <code>save(v)</code>.</div></div>
+    <div class="step block"><div class="t">Guard: <code>_laBlobUsable(cur)</code>? else <b>ABORT</b></div>
+      <div class="d">An empty or unparseable blob never reaches the wire.</div></div>
+    <div class="step"><div class="t"><code>d = computeDiff(BASE, cur)</code> → <code>ops = laDiffToOps(d, cur)</code></div><div class="d"></div></div>
+    <div class="step"><div class="t">Branch A — every key known to the REST index</div>
+      <div class="d"><code>POST /api/v1/_batch {baseVersion:VER, ops}</code> →
+      <code>restTxn</code>: <code>BEGIN</code> + <code>pg_advisory_xact_lock(918273645)</code> →
+      <code>behind = baseVersion &lt; curVer</code> → for each op
+      <code>restApplyOp → decomposeBlob → DELETE+INSERT subtree</code> →
+      <code>app_state.version = curVer+1</code> → <code>COMMIT</code> → <code>200 {version, behind}</code>.</div></div>
+    <div class="step ask"><div class="t">Branch B — a key the index does not know</div>
+      <div class="d"><code>POST /api/save {baseVersion:VER, diff}</code> → <code>relApplyAndSave</code>: assemble whole
+      blob, <code>applyDiff</code>, decompose, shrinkGuard, <code>DELETE ALL</code> + re-<code>INSERT ALL</code> →
+      <code>200 {version, behind}</code>.</div></div>
+    <div class="step done"><div class="t">Commit locally</div>
+      <div class="d"><code>BASE = cur</code>; <code>_laMark(VER)</code>; <code>_dirty=false</code>. The server
+      <code>sseBroadcast({version})</code>s → every other tab soft-refreshes.</div></div>
+  </div>
+
+  <h3 id="w-steps">3.1 Step by step</h3>
+
+  <h4>1 · Persist helper</h4>
+  <p>Every store has one, and the contract is <b>read-modify-write on the whole blob</b>.
+  <code>flSave()</code> (<span class="ln">:19696</span>) is the canonical shape:</p>
+<pre><code>function flSave(){
+  if(typeof window.laCanEditArea==='function' &amp;&amp; !window.laCanEditArea('fleet')) return;
+  const d=JSON.parse(localStorage.getItem(LS_KEY)||'{}');   // read
+  d.fleet_engines=FL_ENGINES; d.fleet_gearboxes=FL_GEARBOXES; … d.boats=BOATS;   // modify
+  localStorage.setItem(LS_KEY,JSON.stringify(d));           // write
+}</code></pre>
+  <p><code>d = JSON.parse(...)</code> then assigning only your own keys is what stops you clobbering siblings.
+  <b>Never</b> <code>setItem(LS_KEY, JSON.stringify({sb_bookings: …}))</code>.</p>
+  <div class="note">
+    <span class="lbl">Why <code>flSave</code> also writes <code>d.boats</code></span>
+    The fleet side edits <code>boat.log</code> constantly but <code>save()</code> (the <span class="ln">:5805</span> one)
+    is the only other writer of <code>boats</code>, and fleet never calls it — so without this line every boat-status
+    edit vanished on refresh.
+  </div>
+
+  <h4>2 · Shim <code>setItem</code> <span class="ln">:80</span></h4>
+  <p><code>_mem = v</code>, then <code>_dirty=true</code> and a 1000 ms debounce onto <code>save(v)</code>.
+  Gated on <code>_syncReady &amp;&amp; laCanEdit()</code>.</p>
+
+  <h4>3 · <code>save(v, forceLegacy)</code> <span class="ln">:211</span></h4>
+  <ul>
+    <li><b>Empty-blob guard</b> — <code>_laBlobUsable(cur)</code> (<span class="ln">:210</span>) requires a plain object
+      with ≥1 key. An empty or unparseable blob <b>never</b> means “the user deleted everything”; it means the state is
+      not ready or was just cleared. Without this, one save wipes the database.
+      (Real incident 30 Jul 2026: the server bounced <code>trips</code> 94→0.)</li>
+    <li><code>computeDiff(BASE, cur)</code> (<span class="ln">:247</span>) classifies every top-level key:
+      <ul>
+        <li><b>collection</b> (<code>cols</code>) — a non-empty array whose every element is an object with
+          <code>id</code>. Produces <code>{idf:'id', up:[…], patch:[…], del:[…]}</code>. A <i>changed</i> record becomes
+          a per-<b>field</b> <code>patch</code> via <code>_deepDiff</code> (<span class="ln">:241</span>), so two users
+          editing different fields of the same booking both survive; only records where <code>_deepDiff</code> can’t
+          apply fall back to a whole-record <code>up</code>.</li>
+        <li><b>object map</b> (<code>objs</code>) — a plain object → <code>{p,d}</code> per-sub-key diff, no clobber.</li>
+        <li><b>scalar / everything else</b> (<code>sets</code>) — whole-value replace, <code>null</code> = delete.</li>
+      </ul>
+    </li>
+  </ul>
+
+  <h4>4 · <code>laDiffToOps(d, cur)</code> <span class="ln">:167</span></h4>
+  <p>Translates the diff into REST ops using <code>REST_RESOURCES</code>:</p>
+  <div class="tw"><table>
+    <thead><tr><th style="width:230px">diff bucket</th><th>op emitted</th></tr></thead>
+    <tbody>
+      <tr><td><code>cols[k].up[]</code></td><td><code>{op:'put', r:k, id, body:rec}</code></td></tr>
+      <tr><td><code>cols[k].patch[]</code></td><td><code>{op:'patch', r:k, id, body:{m:&lt;deep diff&gt;, full:&lt;current record as fallback&gt;}}</code></td></tr>
+      <tr><td><code>cols[k].del[]</code></td><td><code>{op:'del', r:k, id}</code></td></tr>
+      <tr><td><code>objs[k].p{}</code></td><td><code>{op:'put', r:k, id:&lt;sub-key&gt;, body:v}</code></td></tr>
+      <tr><td><code>objs[k].d[]</code></td><td><code>{op:'del', r:k, id:&lt;sub-key&gt;}</code></td></tr>
+      <tr><td><code>sets[k]</code>, k in index</td><td><code>{op:'putall', r:k, body:v}</code></td></tr>
+      <tr><td><code>sets[k]</code>, k not in index</td><td><code>{op:'meta', id:k, body:v}</code> → <code>app_meta</code></td></tr>
+    </tbody>
+  </table></div>
+  <div class="note warn">
+    <span class="lbl">The fallback trigger</span>
+    <code>laDiffToOps</code> returns <b><code>null</code> if any <code>cols</code>/<code>objs</code> key is missing from
+    <code>REST_RESOURCES</code></b> (<span class="ln">:171</span>, <span class="ln">:178</span>), logging
+    <code>"[sync] diff has a key the REST index does not know -&gt; legacy /api/save"</code>. That <code>null</code> is
+    what routes the save to the legacy path.
+  </div>
+
+  <h4>5 · POST <span class="ln">:215</span></h4>
+  <p>To <code>/api/v1/_batch</code> if <code>ops</code>, else <code>/api/save</code>.
+  Response handling (<span class="ln">:216-222</span>):</p>
+  <div class="tw"><table>
+    <thead><tr><th style="width:200px">status</th><th>behaviour</th></tr></thead>
+    <tbody>
+      <tr><td><span class="b green">200</span></td><td><code>VER=r.version</code>, <code>BASE=cur</code>,
+        <code>_laMark(VER)</code>, <code>_dirty=false</code>. If <code>r.behind</code> → queue a soft refresh</td></tr>
+      <tr><td><span class="b amber">400/404</span> on the batch path</td><td>retry once as <code>save(v, true)</code> — forced legacy</td></tr>
+      <tr><td><span class="b red">403</span></td><td>permanent: “no edit rights” banner, <b>stop</b></td></tr>
+      <tr><td><span class="b amber">401</span></td><td>“session expired, data still local” banner</td></tr>
+      <tr><td><span class="b red">409</span></td><td><code>_laShrinkBlocked(detail)</code> — persistent red banner +
+        Reload button. <b>Does not retry and does not advance <code>BASE</code></b></td></tr>
+      <tr><td><span class="b amber">other 5xx / 0</span></td><td>amber banner + retry in 5 s</td></tr>
+    </tbody>
+  </table></div>
+
+  <h4>6 · Flush on unload</h4>
+  <p><code>_laFlush()</code> (<span class="ln">:225</span>) on <code>beforeunload</code> and <code>pagehide</code>
+  re-runs the same diff and posts it <b>synchronously</b> (<code>x.open(…, false)</code>), falling back to
+  <code>navigator.sendBeacon</code>. Synchronous on purpose: a fast refresh would otherwise reload stale data and
+  appear to revert the edit. It repeats the empty-blob guard (<span class="ln">:226</span>).</p>
+  <p><code>removeItem</code> (<span class="ln">:79</span>) therefore also clears <code>_dirty</code> and the pending
+  timer — otherwise a Reset-then-reload had <code>_laFlush</code> read <code>null</code>, treat it as “delete
+  everything”, and post it synchronously.</p>
+
+  <h3 id="w-batch">3.2 Server side — <code>/api/v1/_batch</code></h3>
+  <p><code>restTxn(username, baseVersion, ops)</code> (<code>server.js:2066</code>):</p>
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>BEGIN</code> + <code>SELECT pg_advisory_xact_lock(918273645)</code></div>
+      <div class="d"><b>The same lock number the legacy path uses</b> (<span class="ln">:1373</span>), so per-entity and
+      whole-blob saves serialize against each other.</div></div>
+    <div class="step"><div class="t">2 · <code>behind = baseVersion !== -1 &amp;&amp; baseVersion != null &amp;&amp; baseVersion &lt; curVer</code></div>
+      <div class="d">Advisory only. <b>This is optimistic concurrency, not a rejection:</b> being behind never blocks the
+      write; it tells the client to refresh afterwards. Correctness comes from the per-field <code>patch</code> merge,
+      not from the version.</div></div>
+    <div class="step"><div class="t">3 · Each op through <code>restApplyOp</code> <span class="ln">:2014</span></div>
+      <div class="d">
+        <code>put</code> — <code>decomposeBlob({appKey: [body]})</code>,
+        <code>DELETE FROM &lt;table&gt; WHERE pk=$1</code> (children cascade), re-insert the whole subtree parents-first
+        (<code>_restInsertRows</code> <span class="ln">:1995</span>).<br>
+        <code>patch</code> — re-<code>restLoad</code>s the record <b>inside the open transaction</b> (so it sees earlier
+        ops in the same batch), <code>applyObj</code>s the deep diff onto the server’s <i>current</i> record, then
+        recurses as a <code>put</code>. Falls back to <code>body.full</code> if the record is gone.<br>
+        <code>del</code> — delete by pk, children cascade.<br>
+        <code>putall</code> — shrink-guarded (<a href="#w-shrink">§3.4</a>), then <code>DELETE FROM &lt;table&gt;</code>
+        and re-insert the whole collection.<br>
+        <code>meta</code> — upsert one scalar into <code>app_meta</code>.
+      </div></div>
+    <div class="step"><div class="t">4 · <code>app_state.version = curVer + 1</code></div>
+      <div class="d">Single row, <code>data</code> stays NULL.</div></div>
+    <div class="step done"><div class="t">5 · <code>COMMIT</code>, then <code>sseBroadcast({version, updated_by})</code> <span class="ln">:2416</span></div>
+      <div class="d">Every other tab refreshes.</div></div>
+    <div class="step"><div class="t">6 · Audit log <span class="ln">:2415</span></div>
+      <div class="d">Every batch is logged with the username and first 25 ops — added 2026-07-10 because per-entity
+      saves previously had no user trail and an incident was untraceable.</div></div>
+  </div>
+
+  <h3 id="w-legacy">3.3 The legacy <code>/api/save</code> fallback</h3>
+  <p><code>relApplyAndSave</code> (<code>server.js:1369</code>) is the whole-blob path: <code>SELECT *</code> from all
+  103 tables, <code>assembleBlob</code>, <code>applyDiff</code>, <code>decomposeBlob</code>, shrink-guard,
+  <code>DELETE FROM</code> every table children-first (<code>OS_DESC</code>), re-<code>INSERT</code> every table
+  parents-first (<code>OS_ASC</code>). ~14k rows for a one-field edit.</p>
+  <p>In relational mode landing here is <b>logged as an anomaly</b> (<span class="ln">:2262-2266</span>):</p>
+<pre><code>[save] LEGACY whole-blob path · user=… · diff sets=[…] cols=[…] objs=[…]
+  — run os-backend/scripts/check_mapping_drift.js if this repeats</code></pre>
+  <p>Three legitimate causes: a first-push seed (<code>payload.full</code>), an old client, or <b>mapping drift</b>.
+  If it repeats, a key the client persists has no REST resource — fix the mapping, don’t ignore it.
+  (The drift-check script it names is one of the files <a href="#s0">§0</a> says is gone.)</p>
+
+  <h3 id="w-shrink">3.4 The shrink guard (<code>SHRINK_GUARD</code> → 409)</h3>
+  <p><code>shrinkGuard(curCount, incCount)</code> (<code>server.js:149</code>) refuses any save that would wipe or
+  heavily shrink a top-level table that currently holds data. Thresholds <code>GUARD_MINROWS=5</code>,
+  <code>GUARD_LOSS_ABS=20</code>, <code>GUARD_LOSS_FRAC=0.5</code> (<span class="ln">:148</span>): a table with ≥5 rows
+  is protected if the incoming count is 0, <b>or</b> it loses ≥20 rows <i>and</i> drops below half. Bypass an
+  intentional bulk clear with <code>payload.confirm</code> (whole-blob) / <code>op.confirm</code> (per-entity
+  <code>putall</code>).</p>
+  <div class="note ok">
+    <span class="lbl">Why it exists</span>
+    This is the server-side twin of the client’s empty-blob guard, and it is what saved the data on 30 Jul 2026 when
+    the client posted <code>trips</code> 94→0.
+  </div>
+</section>
+
+<!-- ============ 4 ============ -->
+<section id="s4">
+  <h2><span class="num">04</span> Adding a new persisted field</h2>
+
+  <div class="note danger">
+    <span class="lbl">This is the thing people get wrong, and the failure is silent</span>
+    The symptom is always identical and always misread as a UI bug: <i>you fill the field in, it saves with no error,
+    you refresh, it’s gone.</i> There are four different root causes with that one symptom
+    (<a href="#s9">§9.2–§9.5</a>). Work the checklist.
+  </div>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · Add the field to the client global</div>
+      <div class="d">Give it a default. Never rename or delete an existing field — mark it inactive instead.</div></div>
+    <div class="step"><div class="t">2 · Persist it</div>
+      <div class="d">Extend the store’s existing persist helper. Read-modify-write; assign only your keys.</div></div>
+    <div class="step block"><div class="t">3 · Load it — in BOTH places</div>
+      <div class="d">The most-missed step, because there are two independent load paths: the store’s own boot IIFE /
+      <code>flLoad()</code> / <code>loadData()</code>; and <b><code>window._laReloadData()</code> at
+      <code>allotment_v2.html:41535</code></b>, used by every soft-refresh and by the async-load recovery. Miss the
+      second and the value survives a hard reload but vanishes the moment a colleague saves anything (that fires an
+      SSE refresh).</div></div>
+    <div class="step"><div class="t">4 · Use the right load condition</div>
+      <div class="d">Arrays: <code>if(Array.isArray(d.k)) G = d.k;</code> — accepts an empty array so a
+      deliberately-cleared list <b>stays cleared</b> and does not revert to seed (<code>sb_agents</code>
+      <span class="ln">:39650</span> spells this out). Maps: <code>if(d.k) G = d.k;</code>. Optional globals declared
+      elsewhere also need <code>typeof G !== 'undefined'</code> (see the pier block
+      <span class="ln">:41590-41603</span>).</div></div>
+    <div class="step"><div class="t">5 · Add the column to the mapper — <code>os-backend/src/mapping/field_mapping.json</code></div>
+      <div class="d">Choose the kind: plain value → <code>scalar</code>; nested object/array that you don’t want to
+      shred into a child table → <code>json_text</code> (this is what <code>ops.vanSplits</code>,
+      <code>ops.boatSplits</code>, <code>pierPayments</code>, <code>ops.pierNote</code> all do); open-ended keyed map
+      (dates, ids) → a <code>map_key</code> + <code>map_value_json</code> table, <b>not</b> one column per key.
+      <code>trips</code> is the standing counter-example: it hardcodes <code>b1_route</code>, <code>b2_route</code>…
+      and silently dropped <code>b8</code>/<code>b14</code>/<code>b15</code> until someone noticed boats disappearing
+      from schedules (<code>server.js:1637-1644</code>).</div></div>
+    <div class="step"><div class="t">6 · Add the column to <code>operation_schemas_model.json</code></div>
+      <div class="d"><code>OS_COLS</code> is built from it (<code>server.js:38</code>) and drives the
+      <code>INSERT</code> column list on every save.</div></div>
+    <div class="step"><div class="t">7 · Create the column in the database</div>
+      <div class="d">Either a new file in <code>db/migrations/</code> (auto-run at boot, <a href="#s7">§7</a>) or an
+      <code>ALTER TABLE … ADD COLUMN IF NOT EXISTS</code> in the <code>initDb()</code> relational block
+      (<code>server.js:1590-1723</code>). The initDb block is where ~30 fields already live; it is idempotent and runs
+      before the app serves.</div></div>
+    <div class="step done"><div class="t">8 · Redeploy and read <code>/api/version</code></div>
+      <div class="d"><code>map.tables</code>/<code>map.columns</code> and <code>db.missing</code> must both be 0.</div></div>
+  </div>
+
+  <div class="note">
+    <span class="lbl">The source says so itself <span class="ln">:41561</span></span>
+    <i>“ต้องโหลดตรงนี้ด้วย ไม่งั้น key ที่ persist แล้วแต่ไม่มีใครโหลด = หายทุกครั้งที่ refresh
+    (บั๊กนี้เคยกิน <code>sb_bookings</code> มาแล้ว)”</i>
+  </div>
+
+  <h3 id="f-pier">4.1 Worked example — <code>ops.pierNote</code></h3>
+  <p>Booking gained “what the customer said at the pier” = <code>{t, at, by}</code>. Third time the same bug shipped
+  (<code>server.js:1624-1629</code>). What it took:</p>
+  <div class="tw"><table>
+    <thead><tr><th style="width:170px">Step</th><th>Change</th></tr></thead>
+    <tbody>
+      <tr><td>client field</td><td><code>bk.ops.pierNote = {t,at,by}</code> on the booking record</td></tr>
+      <tr><td>persist</td><td>already covered — booking’s helper writes <code>d.sb_bookings</code> wholesale</td></tr>
+      <tr><td>load</td><td>already covered — <code>_laReloadData</code> <span class="ln">:41538</span> reloads
+        <code>sb_bookings</code> wholesale</td></tr>
+      <tr><td><b>edit-preserve</b></td><td><code>bkV2CommitBooking</code>’s <code>if(editing)</code> block must carry
+        <code>ops</code> over — it rebuilds a fresh object (CLAUDE.md §3.4)</td></tr>
+      <tr><td>mapper</td><td><code>ops.pierNote</code> → <code>ops_piernote</code>, kind <code>json_text</code> (whole
+        blob in one column, so later fields inside the note need no backend change)</td></tr>
+      <tr><td>model</td><td><code>ops_piernote text</code> on <code>sb_bookings</code> <b>and</b>
+        <code>sb_bookings__trips</code></td></tr>
+      <tr><td>DDL</td><td><code>server.js:1627-1629</code> — <code>ALTER TABLE … ADD COLUMN IF NOT EXISTS
+        "ops_piernote" text</code>, for both tables</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note warn">
+    <span class="lbl">It lands on two tables</span>
+    <code>ops</code> exists at booking level and at trip level; adding it to only one loses half the data.
+    <code>ops_vancheckin</code> / <code>ops_piercheckin</code> / <code>ops_boatsplits</code> are all done in pairs for
+    the same reason.
+  </div>
+
+  <h3 id="f-seeds">4.2 The <code>DEFAULT_*</code> / append-to-default trap</h3>
+  <p>Seeds (<code>DEFAULT_*</code>, <code>SB_*</code>, <code>FL_*</code>) fill <b>empty first-run arrays only</b>.
+  <code>flLoad()</code>’s first-time path (<span class="ln">:13861-13869</span>):</p>
+<pre><code>if(!d.fleet_engines || d.fleet_engines.length === 0) d.fleet_engines = FL_DEFAULT_ENGINES;</code></pre>
+  <p>Once a row exists, the seed is never consulted again. So <b>appending an item to
+  <code>FL_DEFAULT_ENGINES</code> does not reach any already-seeded database.</b> To ship new default rows you must
+  write an idempotent merge in <code>flLoad()</code> that pushes only missing ids — and per CLAUDE.md §4, keep it
+  targeted and idempotent: an over-eager self-heal was removed for rewriting legitimate data.</p>
+  <p><code>FLEET_VERSION</code> (<span class="ln">:13768</span>, currently <code>'fleet_v34'</code>) gates the fleet
+  migration ladder in <code>flLoad()</code>. Bump it and add a branch for structural fleet changes.
+  <code>DATA_VERSION</code> (<span class="ln">:5782</span>, currently <code>'2026o'</code>) is written by
+  <code>save()</code> (<span class="ln">:5810</span>) but — since the 2026-07-10 incident —
+  <b><code>loadData()</code> deliberately ignores it</b> (<span class="ln">:5790-5795</span>):</p>
+  <div class="note danger">
+    <span class="lbl">Comment at <span class="ln">:5790</span></span>
+    <i>“a version-tag mismatch must NEVER reset boats/routes to DEFAULT … a transient missing <code>version</code>
+    scalar used to reset them to seed here, then a save pushed the seed over everyone’s data.”</i>
+  </div>
+  <p>So <code>DATA_VERSION</code> is now a written-but-unused marker. Treat any proposal to re-arm it as a migration,
+  not a version check.</p>
+</section>
+
+<!-- ============ 5 ============ -->
+<section id="s5">
+  <h2><span class="num">05</span> Store inventory</h2>
+  <p>Blob keys and their globals, from <code>_laReloadData()</code>
+  (<code>allotment_v2.html</code> <span class="ln">:41535-41608</span>) — the single most complete list in the
+  codebase. <code>SQL table</code> is the <code>operation_schemas</code> table of the same name unless noted (the
+  mapper’s default <code>appKey</code> for a non-map top-level table <b>is</b> the table name —
+  <code>os_repo.js</code> <code>buildPlan</code>).</p>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:190px">RAM key</th><th style="width:200px">Global</th><th style="width:230px">Load condition (line)</th><th style="width:160px">Persist</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>sb_bookings</code></td><td><code>SB_BOOKINGS</code></td><td><code>Array.isArray</code> <span class="ln">:41538</span> · boot <span class="ln">:41533</span></td><td>booking commit</td>
+        <td>+ child tables <code>sb_bookings__{trips,passengers,addons,adjustments,feeitems,history,over,partialcancels,upgrades}</code></td></tr>
+      <tr><td><code>sb_invoices</code></td><td><code>SB_INVOICES</code></td><td><code>Array.isArray</code> <span class="ln">:41539</span></td><td>accounting</td><td></td></tr>
+      <tr><td><code>sb_payments</code></td><td><code>SB_PAYMENTS</code></td><td><code>Array.isArray</code> <span class="ln">:41540</span></td><td>accounting</td><td></td></tr>
+      <tr><td><code>sb_deposits</code></td><td><code>SB_DEPOSITS</code></td><td><code>Array.isArray</code> <span class="ln">:41541</span></td><td>accounting</td><td></td></tr>
+      <tr><td><code>sb_extras</code></td><td><code>SB_EXTRAS</code></td><td><code>Array.isArray</code> <span class="ln">:41542</span></td><td>—</td><td>separate store; unaffected by booking edit-preserve</td></tr>
+      <tr><td><code>sb_seat_locks</code></td><td><code>SB_SEAT_LOCKS</code></td><td><code>Array.isArray</code> <span class="ln">:41543</span></td><td>—</td><td>tree via <code>parentid</code>; see <a href="#s6">§6</a> availability note</td></tr>
+      <tr><td><code>sb_agents</code></td><td><code>SB_AGENTS</code></td><td><code>Array.isArray</code> <span class="ln">:41544</span> · boot <span class="ln">:39650</span></td><td><code>sbAgentsPersist()</code></td><td>empty array <b>stays empty</b>, does not revert to seed</td></tr>
+      <tr><td><code>sb_rate_types</code></td><td><code>SB_RATE_TYPES</code></td><td><code>Array.isArray</code> <span class="ln">:41545</span></td><td><code>rtPersist()</code></td><td>+ <code>sb_rate_types__seatrates</code> child</td></tr>
+      <tr><td><code>sb_contracts</code></td><td><code>SB_CONTRACTS</code></td><td><code>Array.isArray</code> + <code>typeof</code> <span class="ln">:41546</span></td><td>—</td><td>+ <code>sb_contracts__programperiods</code></td></tr>
+      <tr><td><code>sb_vehicles</code></td><td><code>SB_VEHICLES</code></td><td><code>Array.isArray</code> <span class="ln">:41547</span></td><td>—</td><td><code>dayroute</code>/<code>daystatus</code> are open-ended maps → key-value rows</td></tr>
+      <tr><td><code>sb_markets</code></td><td><code>SB_MARKETS</code></td><td><code>Array.isArray</code> + <code>laApplySort</code> <span class="ln">:41552</span></td><td>—</td><td><b>sorted on load</b> — see <a href="#s10">§10</a></td></tr>
+      <tr><td><code>sb_sales</code></td><td><code>SB_SALES</code></td><td><code>Array.isArray</code> <span class="ln">:41553</span></td><td>—</td><td></td></tr>
+      <tr><td><code>sb_staff</code></td><td><code>SB_STAFF</code></td><td><code>Array.isArray</code> <span class="ln">:41554</span></td><td>—</td><td></td></tr>
+      <tr><td><code>sb_addon_types</code></td><td><code>SB_ADDON_TYPES</code></td><td><code>Array.isArray</code> <span class="ln">:41555</span></td><td><code>rtPersist</code> family</td><td>feeds <code>RT_ADDON_DEFS</code></td></tr>
+      <tr><td><code>sb_nationalities</code></td><td><code>SB_CUSTOM_NATIONALITIES</code></td><td><code>Array.isArray</code> <span class="ln">:41556</span></td><td>—</td><td></td></tr>
+      <tr><td><code>sb_pickup_areas</code></td><td><code>SB_PICKUP_AREAS</code></td><td><code>Array.isArray</code> + <code>typeof</code> <span class="ln">:41557</span></td><td>—</td><td></td></tr>
+      <tr><td><code>sb_pickup_times</code></td><td><code>SB_PICKUP_TIMES</code></td><td>truthy + <code>typeof</code> <span class="ln">:41558</span></td><td>—</td><td>map</td></tr>
+      <tr><td><code>sb_pickup_time_profiles</code></td><td><code>SB_PICKUP_TIME_PROFILES</code></td><td><code>Array.isArray</code> + <code>typeof</code> <span class="ln">:41559</span></td><td>—</td><td></td></tr>
+      <tr><td><code>agent_artifacts</code></td><td><code>_CT_ARTIFACTS</code></td><td>truthy + <code>typeof</code> <span class="ln">:41560</span></td><td>—</td><td>open-ended map</td></tr>
+      <tr><td><code>contract_templates</code></td><td><code>SB_CONTRACT_TEMPLATES</code></td><td>truthy + <code>typeof</code> <span class="ln">:41563</span></td><td>—</td><td>table created in <code>initDb</code> <span class="ln">:1653</span></td></tr>
+      <tr><td><code>sb_market_stats</code></td><td><code>SB_MARKET_STATS</code></td><td>truthy <span class="ln">:41564</span></td><td>—</td><td>date-keyed map</td></tr>
+      <tr><td><code>sb_market_monthly</code></td><td><code>SB_MARKET_MONTHLY</code></td><td>truthy <span class="ln">:41565</span></td><td>—</td><td></td></tr>
+      <tr><td><code>sb_weather</code></td><td><code>SB_WEATHER_CLOSURES</code></td><td>truthy <span class="ln">:41566</span></td><td>—</td><td></td></tr>
+      <tr><td><code>trips</code></td><td><code>TRIPS</code></td><td>truthy <span class="ln">:41567</span></td><td><code>save('operations')</code> <span class="ln">:5805</span></td>
+        <td><span class="b red">⚠</span> per-boat <b>hardcoded columns</b> <code>bN_route/type/booked/charterbookingid</code>; a new boat needs manual columns (<code>server.js:1637</code>)</td></tr>
+      <tr><td><code>boats</code></td><td><code>BOATS</code></td><td><code>Array.isArray</code> <span class="ln">:41568</span></td><td><code>save('config')</code> <span class="ln">:5805</span> <b>and</b> <code>flSave()</code> <span class="ln">:19705</span></td><td></td></tr>
+      <tr><td><code>routes</code></td><td><code>ROUTES</code></td><td><code>Array.isArray</code> + <code>laApplySort</code> <span class="ln">:41569</span></td><td><code>save('config')</code> <span class="ln">:5805</span></td><td>+ <code>routes__seasons</code>, <code>routes__overrides</code> (open map)</td></tr>
+      <tr><td><code>fleet_engines</code></td><td><code>FL_ENGINES</code></td><td><code>Array.isArray</code> <span class="ln">:41570</span></td><td><code>flSave()</code> <span class="ln">:19696</span></td><td></td></tr>
+      <tr><td><code>fleet_gearboxes</code></td><td><code>FL_GEARBOXES</code></td><td><code>Array.isArray</code> <span class="ln">:41571</span></td><td><code>flSave()</code></td><td></td></tr>
+      <tr><td><code>fleet_propellers</code></td><td><code>FL_PROPELLERS</code></td><td><code>Array.isArray</code> <span class="ln">:41572</span></td><td><code>flSave()</code></td><td></td></tr>
+      <tr><td><code>fleet_incidents</code></td><td><code>FL_INCIDENTS</code></td><td><code>Array.isArray</code> <span class="ln">:41573</span></td><td><code>flSave()</code></td><td></td></tr>
+      <tr><td><code>fleet_maintenance</code></td><td><code>FL_MAINT</code></td><td><code>Array.isArray</code> + <code>flDedupeMaint</code> <span class="ln">:41574</span></td><td><code>flSave()</code></td><td>deduped on load</td></tr>
+      <tr><td><code>fleet_inventory</code></td><td><code>FL_INVENTORY</code></td><td><code>Array.isArray</code> <span class="ln">:41575</span></td><td><code>flSave()</code></td><td></td></tr>
+      <tr><td><code>fleet_memos</code></td><td><code>FL_MEMOS</code></td><td><code>Array.isArray</code> <span class="ln">:41576</span></td><td><code>flSave()</code></td><td><code>fleet_memos__items.qty/discountpct</code> widened to <code>double precision</code> (<code>server.js:1668</code>)</td></tr>
+      <tr><td><code>fleet_projects</code></td><td><code>FL_PROJECTS</code></td><td><code>Array.isArray</code> <span class="ln">:41577</span></td><td><code>flSave()</code></td><td></td></tr>
+      <tr><td><code>fleet_safety</code></td><td><code>FL_SAFETY</code></td><td><code>Array.isArray</code> <span class="ln">:41578</span></td><td><code>flSave()</code></td><td></td></tr>
+      <tr><td><code>fleet_consumable_logs</code></td><td><code>FL_CONSUMABLE_LOGS</code></td><td><code>Array.isArray</code> <span class="ln">:41579</span></td><td><code>flSave()</code></td><td></td></tr>
+      <tr><td><code>fleet_daily</code></td><td><code>FL_DAILY</code></td><td>truthy <span class="ln">:41580</span></td><td><code>flSave()</code></td><td>+ <code>fleet_daily__trips</code> (day,boat,tripKey→JSON) and <code>fleet_daily__boat</code> (<code>initDb</code> <span class="ln">:1697</span>)</td></tr>
+      <tr><td><code>fleet_drlock</code></td><td><code>FL_DR_LOCK</code></td><td>truthy <span class="ln">:41581</span></td><td><code>flSave()</code></td><td>migrated to a single <code>value</code> JSON column (<code>initDb</code> <span class="ln">:1677</span>)</td></tr>
+      <tr><td><code>fleet_fuelprice</code></td><td><code>FL_FUEL_PRICE</code></td><td>truthy <span class="ln">:41582</span></td><td><code>flSave()</code> / <code>flSaveFuelPrice</code> <span class="ln">:22321</span></td><td>same <code>value</code> JSON migration</td></tr>
+      <tr><td><code>fleet_version</code></td><td>—</td><td>(gate, not a store)</td><td><code>flSave()</code> <span class="ln">:19701</span></td><td><code>'fleet_v34'</code></td></tr>
+      <tr><td><code>vanjob_pickup_th</code></td><td><code>VANJOB_PICKUP_TH</code></td><td>truthy + <code>typeof</code> <span class="ln">:41583</span></td><td>—</td><td>open map</td></tr>
+      <tr><td><code>vanjob_sreq</code></td><td><code>VANJOB_SREQ</code></td><td>truthy + <code>typeof</code> <span class="ln">:41584</span></td><td>—</td><td>open map</td></tr>
+      <tr><td><code>vanjob_sent</code></td><td><code>VANJOB_SENT</code></td><td>truthy + <code>typeof</code> <span class="ln">:41585</span></td><td>—</td><td>open map</td></tr>
+      <tr><td><code>vanjob_driver</code></td><td><code>VANJOB_DRIVER</code></td><td>truthy + <code>typeof</code> <span class="ln">:41586</span></td><td>—</td><td>keyed <code>date::vanId</code></td></tr>
+      <tr><td><code>boat_capovr</code></td><td><code>BOAT_CAP_OVR</code></td><td>truthy + <code>typeof</code> <span class="ln">:41587</span></td><td>—</td><td>keyed <code>YYYY-MM-DD::boatId</code>; table <code>initDb</code> <span class="ln">:1632</span>; read by the B2C availability API</td></tr>
+      <tr><td><code>meal_venues</code></td><td><code>MEAL_VENUES</code></td><td><code>Array.isArray</code> + <code>typeof</code> <span class="ln">:41588</span></td><td>—</td><td></td></tr>
+      <tr><td><code>trip_actuals</code></td><td><code>TRIP_ACT</code></td><td>truthy + <code>typeof</code> <span class="ln">:41589</span></td><td>—</td><td></td></tr>
+      <tr><td><code>pier_kinds</code></td><td><code>PIER_KINDS</code></td><td><code>Array.isArray</code> + <code>typeof</code> <span class="ln">:41590</span></td><td>—</td><td></td></tr>
+      <tr><td><code>pier_items</code></td><td><code>PIER_ITEMS</code></td><td><code>Array.isArray</code> + <code>typeof</code> <span class="ln">:41591</span></td><td>—</td><td></td></tr>
+      <tr><td><code>pier_moves</code></td><td><code>PIER_MOVES</code></td><td><code>Array.isArray</code> + <code>typeof</code> <span class="ln">:41592</span></td><td>—</td><td></td></tr>
+      <tr><td><code>pier_staff</code></td><td><code>PIER_STAFF</code></td><td><code>Array.isArray</code> + <code>typeof</code> <span class="ln">:41593</span></td><td>—</td><td><code>.sect</code>/<code>.note</code> were the 14 Aug 2026 mapping-drift casualty</td></tr>
+      <tr><td><code>pier_duty</code></td><td><code>PIER_DUTY</code></td><td>truthy + <code>typeof</code> <span class="ln">:41594</span></td><td>—</td><td></td></tr>
+      <tr><td><code>pier_team</code></td><td><code>PIER_TEAM</code></td><td>truthy + <code>typeof</code> <span class="ln">:41595</span></td><td>—</td><td></td></tr>
+      <tr><td><code>pier_job</code></td><td><code>PIER_JOB</code></td><td>truthy + <code>typeof</code> <span class="ln">:41596</span></td><td>—</td><td></td></tr>
+      <tr><td><code>pier_lic_types</code></td><td><code>PIER_LIC_TYPES</code></td><td><code>Array.isArray</code> <b>&amp;&amp; <code>.length</code></b> <span class="ln">:41597</span></td><td>—</td><td><span class="b red">⚠</span> non-empty required — a cleared list reverts to seed</td></tr>
+      <tr><td><code>pier_lic_classes</code></td><td><code>PIER_LIC_CLASSES</code></td><td><code>Array.isArray</code> <b>&amp;&amp; <code>.length</code></b> <span class="ln">:41598</span></td><td>—</td><td><span class="b red">⚠</span> same</td></tr>
+      <tr><td><code>pier_licenses</code></td><td><code>PIER_LICENSES</code></td><td><code>Array.isArray</code> + <code>typeof</code> <span class="ln">:41599</span></td><td>—</td><td></td></tr>
+      <tr><td><code>pier_cfg</code></td><td><code>PIER_CFG</code></td><td>truthy + <code>typeof</code> <span class="ln">:41600</span></td><td>—</td><td></td></tr>
+      <tr><td><code>pier_codes</code></td><td><code>PIER_CODES</code></td><td><code>Array.isArray</code> <b>&amp;&amp; <code>.length</code></b> <span class="ln">:41601</span></td><td>—</td><td><span class="b red">⚠</span> same</td></tr>
+      <tr><td><code>pier_shift</code></td><td><code>PIER_SHIFT</code></td><td>truthy + <code>typeof</code> <span class="ln">:41602</span></td><td>—</td><td></td></tr>
+      <tr><td><code>pier_sect</code></td><td><code>PIER_SECT</code></td><td><code>Array.isArray</code> + <code>typeof</code> <span class="ln">:41603</span></td><td>—</td><td><code>pier_sect</code> was the other 14 Aug drift casualty</td></tr>
+      <tr><td><code>travel_sum</code></td><td><code>TRAVEL_SUM</code></td><td>truthy + <code>typeof</code> <span class="ln">:41604</span></td><td>—</td><td>keyed <code>YYYY-MM-DD::bookingId</code>; table <code>initDb</code> <span class="ln">:1634</span></td></tr>
+      <tr><td><code>ts_cot</code></td><td><code>TS_COT</code></td><td>truthy + <code>typeof</code> <span class="ln">:41605</span></td><td>—</td><td>table <code>initDb</code> <span class="ln">:1636</span></td></tr>
+      <tr><td><code>cal_route_names</code></td><td><code>CAL_ROUTE_NAMES</code></td><td>truthy + <code>typeof</code>, <b>string-or-object</b> <span class="ln">:41606</span></td><td>—</td><td>tolerates a JSON string</td></tr>
+      <tr><td><code>version</code></td><td>—</td><td><b>deliberately unused</b> <span class="ln">:5790</span></td><td><code>save()</code> <span class="ln">:5810</span></td><td><code>DATA_VERSION='2026o'</code></td></tr>
+      <tr><td><i>(top-level scalars)</i></td><td>—</td><td>—</td><td><code>sets</code> → <code>{op:'meta'}</code></td><td>land in <code>app_meta</code> (6 rows)</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note warn">
+    <span class="lbl">Attachments are not in the blob</span>
+    They live in the unqualified <code>attachments</code> table as BYTEA and the booking keeps only an
+    <code>att_…</code> ref. A blob synced without its attachment rows shows broken previews
+    (<code>HANDOFF</code> §Gotchas).
+  </div>
+</section>
+
+<!-- ============ 6 ============ -->
+<section id="s6">
+  <h2><span class="num">06</span> server.js API surface</h2>
+  <p>All routes are in one <code>http.createServer</code> handler (<code>server.js:2083-2657</code>), matched
+  top-to-bottom on <code>u = url.split('?')[0]</code>. Auth is a signed cookie <code>sess</code> — HMAC-SHA256 over a
+  base64url JSON payload (<code>sign</code>/<code>verify</code> <span class="ln">:1827-1828</span>), <b>stateless</b>:
+  no server-side session table, only <code>exp</code> and a per-user logout epoch
+  (<code>LOGOUT_AFTER</code> <span class="ln">:1836</span>, <code>revoked()</code> <span class="ln">:1837</span>)
+  checked in <code>verify</code>.</p>
+
+  <div class="note">
+    <span class="lbl">Auth column legend</span>
+    <b>none</b> · <b>session</b> = valid <code>sess</code> cookie · <b>edit</b> = session and
+    (<code>role==='admin'</code> or <code>edit!==false</code>) · <b>admin</b> ·
+    <b>apikey</b> = <code>X-Api-Key</code> vs <code>B2C_API_KEY</code>.
+  </div>
+
+  <h3 id="api-auth">Auth</h3>
+  <div class="tw"><table>
+    <thead><tr><th style="width:100px">Method</th><th style="width:180px">Path</th><th>Purpose</th><th style="width:170px">Auth</th><th style="width:90px">Handler</th></tr></thead>
+    <tbody>
+      <tr><td>POST</td><td><code>/api/login</code></td><td>verify scrypt password, mint 30-day <code>sess</code> cookie</td><td><span class="b gray">none</span></td><td><span class="ln">:2088</span></td></tr>
+      <tr><td>GET/POST</td><td><code>/api/logout</code></td><td>revoke server-side <b>first</b>, then clear cookie (Safari may ignore the clear)</td><td><span class="b gray">none</span></td><td><span class="ln">:2114</span></td></tr>
+      <tr><td>GET</td><td><code>/api/me</code></td><td>current user + perms + <code>editAreas</code></td><td><span class="b gray">none</span> (401 if no session)</td><td><span class="ln">:2122</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="api-data">Data</h3>
+  <div class="tw"><table>
+    <thead><tr><th style="width:100px">Method</th><th style="width:180px">Path</th><th>Purpose</th><th style="width:110px">Auth</th><th style="width:90px">Handler</th></tr></thead>
+    <tbody>
+      <tr><td>GET</td><td><code>/api/load</code></td>
+        <td>full blob. Relational: <code>relSyncB2C()</code> → version check → <code>_loadCache</code> hit or
+        <code>relLoad()</code> (103 parallel <code>SELECT</code>s) → <code>assembleBlob</code>. Cached by
+        <code>app_state.version</code>, compressed per encoding</td>
+        <td><span class="b blue">session</span></td><td><span class="ln">:2125</span></td></tr>
+      <tr><td>POST</td><td><code>/api/save</code></td>
+        <td>legacy whole-blob diff. <b>Fallback only</b> in relational mode; logs a LEGACY warning</td>
+        <td><span class="b violet">edit</span></td><td><span class="ln">:2254</span></td></tr>
+      <tr><td>GET</td><td><code>/api/version</code></td>
+        <td><code>{version, updated_by, updated_at, b2c, mig, map, db}</code> — the health dashboard. Client polls every 10 s</td>
+        <td><span class="b blue">session</span></td><td><span class="ln">:2216</span></td></tr>
+      <tr><td>GET</td><td><code>/api/events</code></td>
+        <td>SSE stream; server pushes <code>{version, updated_by}</code> on every write</td>
+        <td><span class="b blue">session</span></td><td><span class="ln">:2245</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="api-rest">Per-entity REST v1 — requires <code>DATA_BACKEND=relational</code>, else <span class="b red">503</span></h3>
+  <div class="tw"><table>
+    <thead><tr><th style="width:100px">Method</th><th style="width:230px">Path</th><th>Purpose</th><th style="width:110px">Auth</th><th style="width:90px">Handler</th></tr></thead>
+    <tbody>
+      <tr><td>GET</td><td><code>/api/v1</code></td><td>resource index <code>{name: 'array'|'map'}</code></td><td><span class="b blue">session</span></td><td><span class="ln">:2404</span></td></tr>
+      <tr><td>GET</td><td><code>/api/v1/&lt;entity&gt;[/&lt;id&gt;]</code></td><td>list / one record with children assembled</td><td><span class="b blue">session</span></td><td><span class="ln">:2425</span></td></tr>
+      <tr><td>POST</td><td><code>/api/v1/&lt;entity&gt;[/&lt;id&gt;]</code></td><td>create (201)</td><td><span class="b violet">edit</span></td><td><span class="ln">:2433</span></td></tr>
+      <tr><td>PUT</td><td><code>/api/v1/&lt;entity&gt;/&lt;id&gt;</code></td><td>replace</td><td><span class="b violet">edit</span></td><td><span class="ln">:2433</span></td></tr>
+      <tr><td>DELETE</td><td><code>/api/v1/&lt;entity&gt;/&lt;id&gt;</code></td><td>delete, children cascade</td><td><span class="b violet">edit</span></td><td><span class="ln">:2432</span></td></tr>
+      <tr><td>POST</td><td><code>/api/v1/_batch</code></td><td><code>{baseVersion, ops[]}</code> — many ops, ONE transaction. <b>The normal write path</b></td><td><span class="b violet">edit</span></td><td><span class="ln">:2406</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="api-attach">Attachments</h3>
+  <div class="tw"><table>
+    <thead><tr><th style="width:100px">Method</th><th style="width:230px">Path</th><th>Purpose</th><th style="width:110px">Auth</th><th style="width:90px">Handler</th></tr></thead>
+    <tbody>
+      <tr><td>POST</td><td><code>/api/attach</code></td><td>upload base64, max 6 MB</td><td><span class="b violet">edit</span></td><td><span class="ln">:2288</span></td></tr>
+      <tr><td>GET</td><td><code>/api/attach?booking=&lt;id&gt;</code></td><td>list metadata</td><td><span class="b blue">session</span></td><td><span class="ln">:2305</span></td></tr>
+      <tr><td>GET</td><td><code>/api/attach/&lt;id&gt;</code></td><td>stream one file inline</td><td><span class="b blue">session</span></td><td><span class="ln">:2311</span></td></tr>
+      <tr><td>DELETE</td><td><code>/api/attach/&lt;id&gt;</code></td><td>delete</td><td><span class="b violet">edit</span></td><td><span class="ln">:2321</span></td></tr>
+      <tr><td>POST</td><td><code>/api/mailimg</code></td><td>store a Daily-Report chart PNG, max 3 MB, <code>booking_id='__mailimg__'</code>, 120-day sweep</td><td><span class="b blue">session</span></td><td><span class="ln">:2333</span></td></tr>
+      <tr><td>GET</td><td><code>/m/&lt;id&gt;.png</code></td><td><b>public</b> read of a mail image</td><td><span class="b red">none</span></td><td><span class="ln">:2351</span></td></tr>
+    </tbody>
+  </table></div>
+  <div class="note">
+    <span class="lbl">Why <code>/m/</code> is unauthenticated</span>
+    The recipient’s mail client has no session. It is safe because the id is a random 10-byte token <b>and</b> the query
+    is filtered to <code>booking_id='__mailimg__'</code>, so real booking documents cannot leak through it
+    (<span class="ln">:2330-2332</span>).
+  </div>
+
+  <h3 id="api-admin">Admin</h3>
+  <div class="tw"><table>
+    <thead><tr><th style="width:100px">Method</th><th style="width:230px">Path</th><th>Purpose</th><th style="width:110px">Auth</th><th style="width:90px">Handler</th></tr></thead>
+    <tbody>
+      <tr><td>GET</td><td><code>/api/users</code></td><td>list users</td><td><span class="b red">admin</span></td><td><span class="ln">:2367</span></td></tr>
+      <tr><td>POST</td><td><code>/api/users</code></td><td>create (409 on duplicate)</td><td><span class="b red">admin</span></td><td><span class="ln">:2368</span></td></tr>
+      <tr><td>DELETE</td><td><code>/api/users?id=N</code></td><td>delete (cannot delete self)</td><td><span class="b red">admin</span></td><td><span class="ln">:2373</span></td></tr>
+      <tr><td>POST</td><td><code>/api/users/password</code></td><td>reset a password</td><td><span class="b red">admin</span></td><td><span class="ln">:2376</span></td></tr>
+      <tr><td>POST</td><td><code>/api/users/perms</code></td><td>set perms / role / <code>edit_areas</code> / dept / <code>sales_id</code></td><td><span class="b red">admin</span></td><td><span class="ln">:2381</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="api-b2c">B2C integration</h3>
+  <div class="tw"><table>
+    <thead><tr><th style="width:100px">Method</th><th style="width:230px">Path</th><th>Purpose</th><th style="width:170px">Auth</th><th style="width:90px">Handler</th></tr></thead>
+    <tbody>
+      <tr><td>GET</td><td><code>/api/b2c/availability</code></td><td>sellable seats + pricing for a route/date range</td><td><span class="b amber">apikey</span></td><td><span class="ln">:2463</span></td></tr>
+      <tr><td>POST</td><td><code>/api/b2c/reset</code></td><td>wipe every <code>b2c_</code> booking + children, full re-sync</td><td><span class="b blue">session</span></td><td><span class="ln">:2151</span></td></tr>
+      <tr><td>GET</td><td><code>/api/b2c/raw?id=</code></td><td>read-only source inspector</td><td><span class="b blue">session</span></td><td><span class="ln">:2189</span></td></tr>
+      <tr><td>GET</td><td><code>/api/b2c/health</code></td><td>uptime probe: 200 healthy / 503 not</td><td><span class="b gray">none</span> (error text hidden unless session)</td><td><span class="ln">:2240</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="card">
+    <h4><code>/api/b2c/availability</code> is a contract <span class="ln">:2445-2462</span></h4>
+    <p>This is the one endpoint an outside system consumes, and its header comment is a <b>contract</b>:
+    <code>seatsAvailable</code> is the answer; do not re-derive it. It already accounts for per-day cap overrides
+    clamped to <code>licensepax</code>, chartered boats removed from the pool, agent seat locks subtracted,
+    <code>pending_approval</code> counted as consuming, and closed days forced to 0.
+    <code>status</code> explains a zero: <code>open</code> / <code>sold_out</code> / <code>not_deployed</code> /
+    <code>closed</code>. It deliberately does <b>not</b> expose the two tiers staff can reach (drawing an agent’s locks,
+    over-cap-within-license with manager approval).</p>
+  </div>
+
+  <h3 id="api-static">Static</h3>
+  <p>Everything else falls through to a file read rooted at <code>__dirname</code> with a
+  <code>fp.startsWith(ROOT)</code> traversal guard (<span class="ln">:2636</span>). <code>/</code> →
+  <code>/allotment_v2/allotment_v2.html</code>. ETag = sha1 prefix, <code>Cache-Control: no-cache</code> (revalidate
+  every time), 304 on <code>If-None-Match</code>. Text assets are brotli q11 / gzip cached per
+  <code>(path, etag)</code>; <code>prewarmStatic()</code> (<span class="ln">:2661</span>) pays the ~7 s q11
+  compression of the 4.9 MB app file at startup so no user waits for it. <code>/api/load</code> uses brotli
+  <b>q5</b> instead because its cache key is <code>app_state.version</code>, which every write invalidates
+  (<span class="ln">:1870-1878</span>).</p>
+</section>
+
+<!-- ============ 7 ============ -->
+<section id="s7">
+  <h2><span class="num">07</span> Schema &amp; migrations</h2>
+
+  <h3 id="m-org">How <code>operation_schemas</code> is organised</h3>
+  <p>103 tables. Naming and conventions, from
+  <code>database_migration/operation_schemas_data_dictionary.md</code>:</p>
+  <ul>
+    <li><b>Parent tables</b> = one top-level app collection each, PK <code>id</code> (text).</li>
+    <li><b>Child tables</b> = <code>parent__field</code>, one per nested array/map, PK <code>row_pk</code> (synthetic),
+      FK <code>&lt;parent&gt;_id</code>. Depth is literally the count of <code>__</code>
+      (<code>_osDepth</code> <code>server.js:135</code>), which is how insert order (<code>OS_ASC</code>, parents first)
+      and delete order (<code>OS_DESC</code>, children first) are derived.</li>
+    <li><b>Array order</b> is preserved in an <code>idx</code> column. <b>Map keys</b> in a <code>key</code> column.</li>
+    <li><b>Nested objects/arrays</b> that aren’t shredded are stored as JSON text.</li>
+    <li><b><code>app_meta</code></b> holds loose top-level scalars as <code>(key, value)</code> — the
+      <code>{op:'meta'}</code> target.</li>
+    <li><b>Ordering is explicit</b>, because Postgres does not guarantee row order and an updated row moves to the heap
+      tail. <code>OS_ORDER</code> (<code>server.js:163-174</code>) builds an <code>ORDER BY</code> per table: children by
+      <code>(fk, idx)</code>, parents by <code>sort NULLS LAST, pk</code> if a <code>sort</code> column exists, else by
+      pk. Without this, a hand-arranged list silently reshuffled itself between sessions.</li>
+  </ul>
+  <p>The mapper (<code>os_repo.js</code>, <a href="#s0">§0</a>) is driven entirely by <code>field_mapping.json</code>.
+  <code>buildPlan()</code> derives, per table: <code>pkCol</code>, <code>fkCol</code>, <code>idxCol</code>,
+  <code>rowPkCol</code>, <code>keyCol</code>, <code>valueCol</code>, <code>dataCols[]</code>, and a
+  <code>container</code> of <code>'array'</code> / <code>'map'</code> / <code>'scalars'</code>.
+  <code>container</code> + <code>appKey</code> are what <code>REST_RES</code> (<code>server.js:1961</code>) turns into
+  the <code>/api/v1</code> resource index the client reads.</p>
+  <div class="note danger">
+    <span class="lbl">The consequence</span>
+    <b>A table absent from <code>field_mapping.json</code> gets no resource, so its key falls out of the REST index and
+    every save touching it drops to legacy.</b>
+  </div>
+
+  <h3 id="m-add">Where migrations live and how to add one</h3>
+  <p><code>db/migrations/*.sql</code>, auto-run at boot by <code>runMigrations()</code>
+  (<code>server.js:1492</code>), called from <code>initDb()</code> <b>after</b> the hand-written ensure block
+  (<span class="ln">:1737</span>) so a migration can rely on those tables. <i>(Currently empty —
+  <a href="#s0">§0</a>.)</i></p>
+  <p>Rules baked into the runner, each for a reason spelled out at <span class="ln">:1459-1485</span>:</p>
+  <div class="rail">
+    <div class="step"><div class="t">One <code>pg_try_advisory_lock(4820261)</code></div>
+      <div class="d">A second booting instance skips rather than blocking the pool.</div></div>
+    <div class="step"><div class="t">Baseline</div>
+      <div class="d">If <code>schema_migrations</code> is empty but <code>operation_schemas</code> already has tables,
+      every existing migration is recorded as applied <b>without running</b> (<span class="ln">:1515-1527</span>).
+      Re-running is not harmless: <code>003</code> recreates <code>v_seat_availability</code> from the repo file, and
+      the repo file has drifted from what prod actually runs. Only files added <i>after</i> the baseline execute. A
+      genuinely empty database runs the whole set in order.</div></div>
+    <div class="step"><div class="t"><code>*rollback*</code> files are skipped <span class="ln">:1497</span></div>
+      <div class="d"><code>004</code> ships as a pair and filename order puts the undo first
+      (<code>004_rollback_…</code> &lt; <code>004_v_…</code>); running the folder blindly would apply an undo then the
+      thing it undoes.</div></div>
+    <div class="step block"><div class="t">One transaction per file, and the run <b>stops at the first failure</b> <span class="ln">:1554</span></div>
+      <div class="d">A later migration may depend on it.</div></div>
+    <div class="step"><div class="t">A failure never blocks boot</div>
+      <div class="d">It is logged loudly and published on <code>/api/version</code> under <code>mig</code>
+      (<span class="ln">:2224-2227</span>), because the outage this replaces was caused by silence.</div></div>
+    <div class="step ask"><div class="t">Editing an applied file is detected via sha1 and warned about, not re-run <span class="ln">:1532</span></div>
+      <div class="d">Add a new file instead.</div></div>
+  </div>
+  <p><b>Adding one:</b> drop <code>NNN_description.sql</code> into <code>db/migrations/</code>, use
+  <code>ADD COLUMN IF NOT EXISTS</code> / <code>CREATE TABLE IF NOT EXISTS</code>, deploy, then check
+  <code>/api/version</code> → <code>mig.applied</code> and <code>db.missing</code>.</p>
+  <p><b>Manual application</b> (a view, a rollback, a one-off):
+  <code>node tools/apply-migration.js &lt;file.sql&gt;</code> — reads
+  <code>OPS_DATABASE_URL</code>/<code>DATABASE_URL</code> from the environment and <b>never prints it</b>, runs inside
+  one transaction, and finishes with verification queries against <code>v_seat_availability</code>.
+  <code>--check</code> connects and runs only the checks.</p>
+  <div class="note warn">
+    <span class="lbl">⚠ Known trap, recorded in this workspace’s memory</span>
+    Prod and <code>db/migrations/003_v_seat_availability.sql</code> disagree <b>in both directions</b>. Build any view
+    migration from <code>pg_get_viewdef</code> against the live database, never from the repo file.
+  </div>
+
+  <h3 id="m-drift">The two drift checks</h3>
+  <p>Both run at boot, both publish to <code>/api/version</code>, and they catch <i>different</i> failures that present
+  identically to the user:</p>
+  <div class="tw"><table>
+    <thead><tr><th style="width:150px"></th><th><code>MAP_DRIFT</code> (<code>server.js:52</code>)</th><th><code>DB_DRIFT</code> (<code>server.js:83</code>)</th></tr></thead>
+    <tbody>
+      <tr><td>Compares</td><td><code>operation_schemas_model.json</code> vs <code>field_mapping.json</code></td>
+        <td><code>operation_schemas_model.json</code> vs <code>information_schema.columns</code></td></tr>
+      <tr><td>When</td><td>module load, once</td><td>after migrations, when the schema is final</td></tr>
+      <tr><td>Failure it finds</td><td>table/column the model declares but the mapper doesn’t map</td>
+        <td>column the model declares but the database lacks</td></tr>
+      <tr><td>Mechanism of loss</td><td><code>DELETE</code>d on every save, never re-<code>INSERT</code>ed, never
+        returned by <code>assembleBlob</code></td>
+        <td>one missing column aborts the whole multi-row <code>INSERT</code> → transaction rolls back →
+        <b>nothing</b> saves</td></tr>
+      <tr><td>Real case</td><td>14 Aug 2026: <code>pier_sect</code>, <code>pier_staff.sect/note</code>,
+        <code>routes.code</code></td>
+        <td>the 12 Aug outage — 10 <code>pier_*</code> tables in the mapping, absent from prod</td></tr>
+    </tbody>
+  </table></div>
+  <p><code>/api/version</code> returns
+  <code>{map:{tables,columns,detail}, db:{checked,missing,extraInDb,detail,at}}</code>. <b>Both must be 0.</b></p>
+</section>
+
+<!-- ============ 8 ============ -->
+<section id="s8">
+  <h2><span class="num">08</span> Deployment &amp; environments</h2>
+  <p><b>Railway</b>, Nixpacks, <code>startCommand: npm start</code> → <code>node server.js</code>, restart
+  <code>ON_FAILURE</code> max 5 (<code>railway.json</code>). Node ≥18, one runtime dependency: <code>pg</code>
+  (<code>package.json</code>). <code>.railwayignore</code> trims the deploy to what <code>server.js</code> actually
+  serves — note it still says <i>“os-backend kept: server.js requires its os_repo mapping engine in relational
+  mode”</i>, which is now a comment describing a directory that no longer exists (<a href="#s0">§0</a>).</p>
+
+  <h3 id="d-env">Environment variables</h3>
+  <div class="tw"><table>
+    <thead><tr><th style="width:230px">Var</th><th style="width:140px">Default</th><th>Effect</th></tr></thead>
+    <tbody>
+      <tr><td><code>PORT</code></td><td><code>3000</code></td><td>listen port (Railway injects it)</td></tr>
+      <tr><td><code>DATABASE_URL</code></td><td>—</td>
+        <td><b>absent ⇒ no pool ⇒ login and sync disabled</b> (<span class="ln">:1415</span>). SSL auto-enabled when the
+        URL contains <code>rlwy</code>/<code>railway</code>, or via <code>PGSSL</code> (<span class="ln">:1411</span>)</td></tr>
+      <tr><td><code>DATA_BACKEND</code></td><td><code>blob</code></td>
+        <td><code>relational</code> switches storage to <code>operation_schemas</code>, moves the users table to
+        <code>operation_schemas.users</code>, and enables <code>/api/v1</code> (503 otherwise)</td></tr>
+      <tr><td><code>SESSION_SECRET</code></td><td>random per boot</td>
+        <td><b>set it</b> — otherwise every redeploy invalidates all sessions</td></tr>
+      <tr><td><code>ADMIN_USER</code> / <code>ADMIN_PASS</code></td><td>—</td>
+        <td>seeds one admin <b>only when the users table is empty</b> (<span class="ln">:1729</span>)</td></tr>
+      <tr><td><code>B2C_DB_URL</code></td><td>—</td>
+        <td>external B2C Postgres; enables the LISTEN/NOTIFY listener and the 45 s poller</td></tr>
+      <tr><td><code>B2C_SCHEMA</code></td><td><code>public</code></td>
+        <td>schema holding B2C tables (<code>love_kingdom</code> on shared dev)</td></tr>
+      <tr><td><code>B2C_API_KEY</code></td><td>—</td>
+        <td>required by <code>/api/b2c/availability</code>; unset ⇒ endpoint always 401</td></tr>
+      <tr><td><code>B2C_POLL_MS</code></td><td><code>45000</code></td><td>background sync interval</td></tr>
+      <tr><td><code>B2C_SYNC_DAYS_BACK</code> / <code>B2C_SYNC_MAX_ROWS</code></td><td><code>90</code> / <code>20000</code></td><td>sync window</td></tr>
+      <tr><td><code>OPS_DATABASE_URL</code></td><td>—</td><td><code>tools/apply-migration.js</code> only</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note warn">
+    <span class="lbl">⚠ doc drift — README.md</span>
+    It tells you to set <b><code>APP_USER</code> / <code>APP_PASS</code></b>. Those names appear nowhere in
+    <code>server.js</code>; the code reads <code>ADMIN_USER</code> / <code>ADMIN_PASS</code>
+    (<code>server.js:19-20</code>). The same README also says <i>“all runtime data lives in the browser’s
+    localStorage”</i> and <i>“Each browser keeps its own data in localStorage”</i> — the exact model
+    <a href="#s1">§1</a> exists to prevent. Treat README.md as pre-migration.
+  </div>
+
+  <h3 id="d-envs">The two environments</h3>
+  <p>Per <code>HANDOFF_2026-07-04.md</code> §“The two environments” — <b>verify before trusting, this is a 2026-07-04
+  snapshot</b>:</p>
+  <div class="tw"><table>
+    <thead><tr><th style="width:190px"></th><th>PROD</th><th>DEV</th></tr></thead>
+    <tbody>
+      <tr><td>Railway project</td><td><code>operation-system</code></td><td><code>ERP-Loveandaman</code></td></tr>
+      <tr><td>Service</td><td><code>LOVE_Andaman_Workspace</code></td><td><code>Allotment_service(FrontEnd)</code></td></tr>
+      <tr><td><code>DATA_BACKEND</code></td><td><code>blob</code> <i>(as of 2026-07-04)</i></td><td><code>relational</code></td></tr>
+      <tr><td>Source of truth</td><td><code>public.app_state</code> blob</td><td><code>operation_schemas.*</code></td></tr>
+      <tr><td>Users / attachments</td><td><code>public.users</code> / <code>public.attachments</code></td>
+        <td><code>allotment.users</code> / <code>allotment.attachments</code></td></tr>
+    </tbody>
+  </table></div>
+  <div class="note danger">
+    <span class="lbl">Dev must connect as <code>allotment_app</code></span>
+    Search path <code>allotment, public</code> — <b>not</b> <code>postgres</code>. Connecting as <code>postgres</code>
+    hits a <i>different app’s</i> <code>public.users</code> and yields login 500 with empty data. Prod’s
+    <code>norm</code> schema is a stale relational snapshot; ignore it.
+  </div>
+  <div class="note">
+    <span class="lbl">Confirm the live value before assuming which path a bug is on</span>
+    The whole <code>db/</code>+<code>initDb</code> relational apparatus in the current code —
+    <code>operation_schemas</code> DDL, <code>/api/v1</code>, the drift checks — only does anything under
+    <code>DATA_BACKEND=relational</code>. If prod is still <code>blob</code>, all of it is dormant there and
+    <code>/api/v1</code> returns 503, which is exactly how this code was safe to merge to main
+    (<code>HANDOFF</code> §Next steps 1).
+  </div>
+
+  <h3 id="d-local">Local development</h3>
+  <div class="grid2">
+    <div class="mini"><h5><span class="b green">Preferred</span> <code>node server.js</code></h5>
+      <p>With a real <code>DATABASE_URL</code> → <code>http://localhost:3000</code>, full <code>/api</code>, real
+      behaviour.</p></div>
+    <div class="mini"><h5><span class="b amber">Static only</span> <code>start_server.command</code></h5>
+      <p><code>allotment_v2/start_server.command</code> serves static files only on <code>:8765</code>
+      (<code>ruby -run -e httpd</code>, else <code>python3 -m http.server</code>). No <code>/api</code> ⇒ the degraded
+      path of <a href="#b-degraded">§2.1</a>. CLAUDE.md points at
+      <code>http://localhost:8765/allotment_v2.html</code>; that URL works but gives you no backend.</p></div>
+    <div class="mini"><h5><span class="b red">Never</span> <code>file://</code></h5>
+      <p>No origin for <code>/api</code>, no cookies for the <code>sess</code> session.</p></div>
+    <div class="mini"><h5><span class="b red">One tab only</span></h5>
+      <p>Two tabs each hold their own <code>_mem</code> and their own <code>BASE</code>; both diff against their own
+      snapshot and race the 1 s debounce.</p></div>
+    <div class="mini"><h5><span class="b red">Never</span> an artifact preview</h5>
+      <p>Isolated storage, no backend.</p></div>
+  </div>
+</section>
+
+<!-- ============ 9 ============ -->
+<section id="s9">
+  <h2><span class="num">09</span> Failure modes &amp; recovery</h2>
+
+  <h3 id="fm-empty">9.1 Empty state saved over live data</h3>
+  <p><b>Symptom:</b> a whole collection collapses to 0 rows for everyone.<br>
+  <b>Cause:</b> the client saved while <code>_mem</code> was empty. Happened 30 Jul 2026 14:14 —
+  <code>/api/load</code> returned 502, <code>_syncReady</code> was set unconditionally, <code>flLoad()</code> saw an
+  empty state, took its “first-time” branch, seeded empty arrays, wrote the blob, and the 1 s debounce posted
+  <code>trips</code> 94→0. A 4-second window that then healed itself, so it looked like “just a blip”.</p>
+  <p><b>Defences, all three now in place:</b></p>
+  <ul>
+    <li><code>_syncReady</code> is only true when real data arrived (<span class="ln">:164</span>), and the async-load
+      path clears <code>_dirty</code> and the pending timer when data lands (<span class="ln">:121</span>);</li>
+    <li><code>_laBlobUsable()</code> refuses to diff an empty blob (<span class="ln">:210</span>, repeated in
+      <code>_laFlush</code> <span class="ln">:226</span>);</li>
+    <li>server-side <code>shrinkGuard</code> → 409 (<code>server.js:149</code>).</li>
+  </ul>
+  <p><b>Recovery:</b> none needed if the guard fired. If it didn’t, restore from a Postgres backup — the client has
+  nothing.</p>
+
+  <h3 id="fm-noload">9.2 Persisted but never loaded</h3>
+  <p><b>Symptom:</b> field saves, survives a hard reload, <b>vanishes when a colleague saves anything</b>.<br>
+  <b>Cause:</b> registered in the boot loader but not in <code>_laReloadData()</code>
+  (<span class="ln">:41535</span>), which every SSE-driven soft refresh calls. Has previously eaten
+  <code>sb_bookings</code> (<span class="ln">:41561</span>).<br>
+  <b>Fix:</b> add the <code>if(...) GLOBAL = d.key;</code> line at <span class="ln">:41535</span>.
+  <b>Recovery: none</b> — the value never left the tab.</p>
+
+  <h3 id="fm-drift">9.3 Mapping drift (field in the model, not in <code>field_mapping.json</code>)</h3>
+  <p><b>Symptom:</b> saves with no error, gone on the next load-from-cloud.<br>
+  <b>Cause:</b> <code>decomposeBlob</code> doesn’t know the column so it writes nothing; <code>assembleBlob</code>
+  doesn’t emit the key. Worse, tables in the model but not the mapping are <code>DELETE</code>d on every save and never
+  re-inserted.<br>
+  <b>Detect:</b> boot log
+  <code>[map] operation_schemas_model.json has table(s)/column(s) that field_mapping.json does not map</code>, and
+  <code>/api/version</code> → <code>map.tables</code>/<code>map.columns</code>.<br>
+  <b>Fix:</b> add the entry to <code>field_mapping.json</code>. Historically also
+  <code>os-backend/scripts/check_mapping_drift.js &lt;blob.json&gt;</code> — <i>gone, <a href="#s0">§0</a></i>.</p>
+
+  <h3 id="fm-dbdrift">9.4 DB drift (column in the model, not in the table)</h3>
+  <p><b>Symptom:</b> identical to 9.3, but <b>the whole batch fails</b>, not one field.<br>
+  <b>Cause:</b> <code>_restInsertRows</code> builds the column list from <code>OS_COLS</code> without checking
+  existence. One missing column aborts the <code>INSERT</code>, the transaction rolls back, nothing saves.<br>
+  <b>Detect:</b> boot log <code>[db] operation_schemas is MISSING column(s)…</code>, <code>/api/version</code> →
+  <code>db.missing</code>.<br>
+  <b>Fix:</b> <code>ALTER TABLE … ADD COLUMN IF NOT EXISTS</code> as a migration or in the <code>initDb</code> block.</p>
+
+  <h3 id="fm-edit">9.5 Edit wipes sibling data on a booking</h3>
+  <p><b>Symptom:</b> editing a booking clears its boat/van assignment, upgrades, fees, cancellation history…<br>
+  <b>Cause:</b> <code>bkV2CommitBooking</code> rebuilds a fresh object; the <code>if(editing)</code> block must carry
+  over <code>ops</code>, <code>upgrades</code>, <code>feeItems</code>, <code>reschedule</code>,
+  <code>partialCancels</code>, <code>cancellation</code>, <code>cancelCategory</code>, <code>history</code>,
+  <code>weatherResolve</code>, <code>rebook</code>, <code>invoiceId</code>, <code>paymentStatus</code>. Missing one
+  wipes it on <b>every</b> edit. (CLAUDE.md §3.4 / §6.)<br>
+  <b>Recovery:</b> none once saved.</p>
+
+  <h3 id="fm-clobber">9.6 Clobbered sibling keys</h3>
+  <p><b>Symptom:</b> saving in module A erases module B’s data.<br>
+  <b>Cause:</b> a persist helper that writes <code>setItem(LS_KEY, JSON.stringify({myKey: …}))</code> instead of
+  read-modify-write.<br>
+  <b>Fix:</b> always <code>const d = JSON.parse(localStorage.getItem(LS_KEY)||'{}')</code> first.</p>
+
+  <h3 id="fm-snap">9.7 The fleet snapshots do not exist</h3>
+  <div class="note danger">
+    <span class="lbl">CLAUDE.md §4 is wrong here</span>
+    It lists <code>flLoad()</code> auto-snapshot + <code>flListSnapshots()</code> / <code>flRestoreSnapshot(N)</code>
+    as a runtime safety system. <b>On the real dataset it is dead</b>, for two independent reasons.
+  </div>
+  <div class="rail">
+    <div class="step block"><div class="t">1 · <code>flLoad()</code> refuses to write a snapshot over 1.5 MB <span class="ln">:13831-13832</span></div>
+      <div class="d">…and instead deletes every existing one. The real state is ~6 MB, so no snapshot is ever
+      written.</div></div>
+    <div class="step block"><div class="t">2 · The boot shim deletes <b>all</b> <code>loveandaman_v2_snap_*</code> keys on every page load <span class="ln">:85-86</span></div>
+      <div class="d">Part of reclaiming quota.</div></div>
+  </div>
+  <p><code>flListSnapshots()</code> will report 0 on any production browser. The functions still work — they are just
+  never fed. Also note <code>flRestoreSnapshot()</code> calls <code>localStorage.setItem(LS_KEY, snapData)</code>
+  (<span class="ln">:13810</span>), which goes through the shim and therefore <b>pushes the restored snapshot to the
+  server</b>. It is not a local-only operation.</p>
+  <p><b>Real recovery paths:</b> the Postgres backup, and
+  <code>git checkout HEAD~1 -- os-backend</code> for the import scripts.</p>
+
+  <h3 id="fm-safari">9.8 Boot fails on Safari</h3>
+  <p><b>Symptom:</b> empty app, or <code>LA_UID is not defined</code> across fleet views.</p>
+  <p><b>Causes seen:</b> <code>QuotaExceededError</code> killing the boot script (fixed by the prototype shim + quota
+  reclaim); WebKit aborting long synchronous XHR on slow links (fixed by <code>_laAsyncLoad</code>
+  <span class="ln">:103</span>, behind a blocking overlay so nobody edits empty state); a sign-out cookie whose
+  attributes didn’t match the login cookie, so Safari refused to overwrite it (fixed at <code>server.js:2119</code> —
+  same <code>SameSite=Lax; Secure</code>, both <code>Max-Age=0</code> <b>and</b> a past <code>Expires</code>, and
+  server-side revocation happens <b>first</b> because the cookie clear is best-effort).</p>
+
+  <h3 id="fm-concurrent">9.9 Two clients, same record</h3>
+  <div class="note ok">
+    <span class="lbl">Not a failure — this is designed for</span>
+    <code>computeDiff</code> emits a per-<b>field</b> <code>patch</code>, and <code>restApplyOp</code>’s
+    <code>patch</code> re-reads the server’s current record inside the transaction and merges onto it. Two users editing
+    different fields of one booking both survive. <code>baseVersion</code> only sets <code>behind</code>, which triggers
+    a refresh <i>after</i> the write; it never rejects.
+  </div>
+
+  <h3 id="fm-banner">9.10 Save rejected — the banner decision table</h3>
+  <div class="tw"><table>
+    <thead><tr><th style="width:180px">Status</th><th style="width:250px">Banner</th><th style="width:170px">Retries?</th><th>What to do</th></tr></thead>
+    <tbody>
+      <tr><td><span class="b red">403</span></td><td>red, “no edit rights”</td><td>no</td><td>re-login or ask an admin</td></tr>
+      <tr><td><span class="b amber">401</span></td><td>amber, “session expired”</td><td>no</td><td>log in; data is still in <code>_mem</code></td></tr>
+      <tr><td><span class="b red">409 <code>SHRINK_GUARD</code></span></td><td>red, blocking, + Reload button</td>
+        <td><b>no</b>, and <code>BASE</code> is not advanced</td>
+        <td><b>Reload.</b> The correct data is on the server; the local copy is the wrong one</td></tr>
+      <tr><td><span class="b amber">5xx / 0</span></td><td>amber</td><td>yes, 5 s</td><td>leave the tab open</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============ 10 ============ -->
+<section id="s10">
+  <h2><span class="num">10</span> Invariants &amp; gotchas</h2>
+  <ol>
+    <li><b>The blob never touches real localStorage.</b> Quota + the Safari prototype trap.
+      <a href="#l-quota">§1.1</a>.</li>
+    <li><b><code>app_state.data</code> is NULL in relational mode.</b> <code>app_state</code> is a version counter and
+      an <code>updated_by</code> stamp. Don’t read it for data.</li>
+    <li><b>Optimistic concurrency is advisory.</b> <code>behind</code> never blocks a write. Safety comes from the
+      per-field patch merge and the advisory lock, not from the version.</li>
+    <li><b>Both write paths share <code>pg_advisory_xact_lock(918273645)</code></b> (<code>server.js:1373</code>,
+      <span class="ln">:2070</span>). If you add a third write path, use the same number.</li>
+    <li><b>A new persisted field needs FOUR registrations</b> — persist helper, <i>both</i> client load paths,
+      <code>field_mapping.json</code>, <code>operation_schemas_model.json</code> — plus a real column. Miss any and the
+      data silently disappears. <a href="#s4">§4</a>.</li>
+    <li><b><code>Array.isArray(x)</code> accepts <code>[]</code> on purpose.</b> A cleared list must stay cleared.
+      Three pier stores break this rule with <code>&amp;&amp; x.length</code> (<span class="ln">:41597</span>,
+      <span class="ln">:41598</span>, <span class="ln">:41601</span>) — clearing those reverts them to seed.
+      Deliberate or not, know it before you copy the pattern.</li>
+    <li><b>Seeds only fill empty arrays.</b> Appending to a <code>DEFAULT_*</code>/<code>FL_*</code> list never reaches
+      a seeded database. <a href="#f-seeds">§4.2</a>.</li>
+    <li><b><code>DATA_VERSION</code> is written but never checked</b> (<span class="ln">:5790</span>). Re-arming it is
+      a migration, not a version bump.</li>
+    <li><b><code>_orig(LS, v)</code> (<span class="ln">:73</span>) writes without triggering a save.</b> Use it for
+      anything applying server data; use <code>setItem</code> only for user edits.</li>
+    <li><b><code>removeItem</code> must also clear <code>_dirty</code> and the timer</b> (<span class="ln">:79</span>)
+      — otherwise the unload flush interprets the cleared blob as “delete everything”.</li>
+    <li><b><code>ORDER BY</code> is not optional.</b> Postgres returns no guaranteed order and moves updated rows to
+      the heap tail. <code>OS_ORDER</code> (<code>server.js:163</code>) fixes it server-side; <code>laApplySort</code>
+      re-applies it client-side on <code>routes</code> and <code>sb_markets</code> in <b>both</b> <code>loadData</code>
+      and <code>_laReloadData</code> (<span class="ln">:41552</span>, <span class="ln">:41569</span>). Forgetting the
+      client half made lists reshuffle after every cloud refresh (<span class="ln">:41548-41551</span>).</li>
+    <li><b><code>trips</code> has hardcoded per-boat columns</b> (<code>b1_route</code>, <code>b1_type</code>, …).
+      <code>b8</code>/<code>b14</code>/<code>b15</code> were missing from the start and their assignments vanished on
+      sync (<code>server.js:1637-1644</code>). Every new boat needs manual columns. Flagged as fragile in the source;
+      see BACKLOG.</li>
+    <li><b><code>_bindVal</code> coerces bad scalars rather than letting them wedge a batch</b>
+      (<code>server.js:114</code>). <code>""</code> into a bigint → NULL; <code>3.6</code> into a bigint → rounded.
+      One bad value used to throw mid-transaction and wedge a user’s save forever on retry (a bulk agent import shipped
+      <code>creditDays:""</code>).</li>
+    <li><b>Attachments are outside the blob.</b> Copy them separately, into the app’s schema —
+      <code>allotment.attachments</code>, not <code>public.attachments</code>, or previews 404.</li>
+    <li><b><code>fast_import</code> does not bump <code>app_state.version</code></b>, so open clients won’t notice an
+      import. Hard-refresh.</li>
+    <li><b><code>/api/load</code> cache invalidates on every write.</b> That’s why it uses brotli q5, not q11.
+      Don’t “optimise” it upward.</li>
+    <li><b>View-only users never sync</b> (<span class="ln">:81</span> gates on <code>laCanEdit()</code>; helpers gate
+      per-area via <code>laCanEditArea</code> — <code>flSave</code> <span class="ln">:19697</span>,
+      <code>save(area)</code> <span class="ln">:5806</span>). A view-only user’s edits stay in RAM and are lost on
+      reload, by design; the amber “ดูอย่างเดียว” badge says so.</li>
+    <li><b><code>/api/version</code> is the first thing to check on any “data disappears” report.</b>
+      <code>map.*</code> and <code>db.*</code> must be 0 and <code>mig.failed</code>/<code>mig.pending</code> must be 0.</li>
+  </ol>
+
+  <h3 id="doc-drift">Documentation drift found</h3>
+  <div class="tw"><table>
+    <thead><tr><th style="width:230px">Doc</th><th style="width:330px">Claim</th><th>Reality</th></tr></thead>
+    <tbody>
+      <tr><td><code>README.md</code></td>
+        <td>“all runtime data lives in the browser’s <code>localStorage</code>”; “Each browser keeps its own data in localStorage”</td>
+        <td>Postgres is the store; the blob must never be in localStorage (<a href="#s1">§1</a>)</td></tr>
+      <tr><td><code>README.md</code></td><td>set <code>APP_USER</code> / <code>APP_PASS</code></td>
+        <td>code reads <code>ADMIN_USER</code> / <code>ADMIN_PASS</code> (<code>server.js:19-20</code>)</td></tr>
+      <tr><td><code>README.md</code></td><td>“serves on <code>http://localhost:3000</code> → opens the app”</td>
+        <td><code>npm start</code> serves on 3000 but opens nothing</td></tr>
+      <tr><td><code>SYSTEM_MAP.md</code> §0</td>
+        <td>“All state persists in <b>one</b> localStorage key <code>loveandaman_v2</code> … after that localStorage is the source of truth”</td>
+        <td>stale; CLAUDE.md §2 already flags SYSTEM_MAP’s store notes as unreliable, and it is right</td></tr>
+      <tr><td><code>SYSTEM_MAP.md</code> §6</td><td>“localStorage key (under <code>loveandaman_v2</code>)” column</td>
+        <td>these are RAM-blob keys / SQL tables, not localStorage</td></tr>
+      <tr><td><code>CLAUDE.md</code> §0, §3.3, §6, and the §13–§87 pointer</td>
+        <td>“Per-feature history lives in <b>CHANGELOG.md</b> — grep it” (~6 references)</td>
+        <td><b><code>CHANGELOG.md</code> does not exist and was never tracked in git</b>
+        (<code>git log --all -- CHANGELOG.md</code> is empty)</td></tr>
+      <tr><td><code>CLAUDE.md</code> §4</td>
+        <td><code>flLoad()</code> auto-snapshot + <code>flListSnapshots()</code>/<code>flRestoreSnapshot(N)</code> listed as a live safety system</td>
+        <td>dead on the real dataset — <a href="#fm-snap">§9.7</a></td></tr>
+      <tr><td><code>CLAUDE.md</code> §4</td><td>“Double-click <code>start_server.command</code>”</td>
+        <td>the file is at <code>allotment_v2/start_server.command</code>, not the repo root; and it gives you no
+        <code>/api</code> (<a href="#b-degraded">§2.1</a>)</td></tr>
+      <tr><td><code>.railwayignore</code></td>
+        <td>“os-backend kept: server.js requires its os_repo mapping engine”</td>
+        <td><code>os-backend/</code> was deleted at HEAD (<a href="#s0">§0</a>)</td></tr>
+      <tr><td><code>tools/apply-migration.js</code> header</td>
+        <td>example <code>db/migrations/003_v_seat_availability.sql</code></td>
+        <td><code>db/migrations/</code> was deleted at HEAD</td></tr>
+      <tr><td><code>HANDOFF_2026-07-04.md</code></td><td>“44 top-level entities”, “107 tables”</td>
+        <td>dictionary and <code>operation_schemas_structure.sql</code> both say <b>103</b> tables. The handoff is a
+        2026-07-04 snapshot; the count moved</td></tr>
+      <tr><td><code>HANDOFF_2026-07-04.md</code> §Operational procedures</td><td>run <code>os-backend/scripts/*</code></td>
+        <td>every one of those scripts is deleted (<a href="#s0">§0</a>)</td></tr>
+      <tr><td><code>server.js:2</code> header</td><td>“Data is one JSON blob (loveandaman_v2) in Postgres”</td>
+        <td>true only in <code>DATA_BACKEND=blob</code>; the file’s own §relational block contradicts it</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============ 11 ============ -->
+<section id="s11">
+  <h2><span class="num">11</span> Function/route index</h2>
+  <p>Client symbols live in <code>allotment_v2/allotment_v2.html</code> (boot IIFE at <span class="ln">:10</span>);
+  server symbols live in <code>server.js</code>.</p>
+
+  <input class="filter" id="ffilter" type="search" placeholder="Filter functions…" autocomplete="off">
+  <span class="count" id="fcount"></span>
+  <div class="tw"><table id="ftable">
+    <thead><tr><th>Function</th><th>Line</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>LS</code> / <code>LS_KEY</code></td><td class="mono">:11 / :5781</td><td><span class="b blue">client</span> <code>'loveandaman_v2'</code></td></tr>
+      <tr><td><code>window.LA_UID</code></td><td class="mono">:16</td><td><span class="b blue">client</span> collision-safe record ids</td></tr>
+      <tr><td><code>bust</code>, <code>sx</code>, <code>sxr</code></td><td class="mono">:18, :19, :28</td><td><span class="b blue">client</span> cache-busted sync XHR + boot retry</td></tr>
+      <tr><td><code>_laLocalHost</code></td><td class="mono">:36</td><td><span class="b blue">client</span> degraded-mode predicate</td></tr>
+      <tr><td><code>bootFail</code></td><td class="mono">:38</td><td><span class="b blue">client</span> blocking boot-error overlay</td></tr>
+      <tr><td><code>_mem</code>, <code>_syncReady</code></td><td class="mono">:63</td><td><span class="b blue">client</span> the RAM blob + the sync gate</td></tr>
+      <tr><td><code>Storage.prototype</code> shim</td><td class="mono">:70-86</td><td><span class="b blue">client</span> <code>getItem</code>/<code>setItem</code>/<code>removeItem</code></td></tr>
+      <tr><td><code>_orig</code></td><td class="mono">:73</td><td><span class="b blue">client</span> raw write, <b>no</b> save trigger</td></tr>
+      <tr><td><code>_laMark</code></td><td class="mono">:90</td><td><span class="b blue">client</span> writes <code>loveandaman_v2__v</code></td></tr>
+      <tr><td><code>_laGraftLocalOnly</code></td><td class="mono">:92</td><td><span class="b blue">client</span> rescue local-only records at load</td></tr>
+      <tr><td><code>_laAsyncLoad</code></td><td class="mono">:103</td><td><span class="b blue">client</span> overlay + retry when sync load fails</td></tr>
+      <tr><td><code>laDiffToOps</code></td><td class="mono">:167</td><td><span class="b blue">client</span> diff → REST ops, or <code>null</code> on drift</td></tr>
+      <tr><td><code>seedFull</code></td><td class="mono">:187</td><td><span class="b blue">client</span> first push of a local blob</td></tr>
+      <tr><td><code>_laShrinkBlocked</code></td><td class="mono">:194</td><td><span class="b blue">client</span> the 409 blocking banner</td></tr>
+      <tr><td><code>_laBlobUsable</code></td><td class="mono">:210</td><td><span class="b blue">client</span> <b>the empty-blob guard</b></td></tr>
+      <tr><td><code>save(v, forceLegacy)</code></td><td class="mono">:211</td><td><span class="b blue">client</span> <b>the cloud sync</b></td></tr>
+      <tr><td><code>_laFlush</code></td><td class="mono">:225</td><td><span class="b blue">client</span> synchronous save on unload</td></tr>
+      <tr><td><code>_deepDiff</code></td><td class="mono">:241</td><td><span class="b blue">client</span> per-field diff</td></tr>
+      <tr><td><code>computeDiff</code></td><td class="mono">:247</td><td><span class="b blue">client</span> blob diff → <code>{sets, cols, objs}</code></td></tr>
+      <tr><td><code>_laBusy</code></td><td class="mono">:266</td><td><span class="b blue">client</span> refresh suppression</td></tr>
+      <tr><td><code>_laSaveView</code> / <code>_laRestoreView</code></td><td class="mono">:278 / :287</td><td><span class="b blue">client</span> <code>sessionStorage.la_view</code></td></tr>
+      <tr><td><code>_laSoftRefresh</code></td><td class="mono">:297</td><td><span class="b blue">client</span> in-place refresh, no reload</td></tr>
+      <tr><td><code>_laStartSSE</code></td><td class="mono">:354</td><td><span class="b blue">client</span> <code>EventSource('/api/events')</code></td></tr>
+      <tr><td><code>loadData</code></td><td class="mono">:5785</td><td><span class="b blue">client</span> <code>routes</code> / <code>boats</code> / <code>trips</code></td></tr>
+      <tr><td><code>save(area)</code></td><td class="mono">:5805</td><td><span class="b blue">client</span> persist <code>routes</code>/<code>boats</code>/<code>trips</code></td></tr>
+      <tr><td><code>DATA_VERSION</code></td><td class="mono">:5782</td><td><span class="b blue">client</span> <code>'2026o'</code> — written, unchecked</td></tr>
+      <tr><td><code>flListSnapshots</code> / <code>flRestoreSnapshot</code></td><td class="mono">:13773 / :13797</td><td><span class="b blue">client</span> see <a href="#fm-snap">§9.7</a></td></tr>
+      <tr><td><code>FLEET_VERSION</code></td><td class="mono">:13768</td><td><span class="b blue">client</span> <code>'fleet_v34'</code></td></tr>
+      <tr><td><code>flLoad</code></td><td class="mono">:13815</td><td><span class="b blue">client</span> fleet load + seed + migration ladder</td></tr>
+      <tr><td><code>flSave</code></td><td class="mono">:19696</td><td><span class="b blue">client</span> fleet persist (also writes <code>boats</code>)</td></tr>
+      <tr><td><code>sbAgentsPersist</code></td><td class="mono">grep</td><td><span class="b blue">client</span> agents persist</td></tr>
+      <tr><td><code>rtPersist</code></td><td class="mono">grep</td><td><span class="b blue">client</span> rate-types persist</td></tr>
+      <tr><td><code>_laReloadData</code></td><td class="mono">:41535</td><td><span class="b blue">client</span> <b>the consolidated re-load — register new keys here</b></td></tr>
+      <tr><td><code>_laRerender</code></td><td class="mono">:41612</td><td><span class="b blue">client</span> re-render current view, keep scroll</td></tr>
+      <tr><td><code>DATA_BACKEND</code>, <code>OS_SCHEMA</code>, <code>USERS_T</code></td><td class="mono">:26-32</td><td><span class="b violet">server</span> mode switches</td></tr>
+      <tr><td><code>osRepo</code> / <code>osModel</code> require</td><td class="mono">:34-35</td><td><span class="b violet">server</span> <b>broken at HEAD — <a href="#s0">§0</a></b></td></tr>
+      <tr><td><code>MAP_DRIFT</code> / <code>mapDriftSummary</code></td><td class="mono">:52 / :73</td><td><span class="b violet">server</span> mapper-vs-model check</td></tr>
+      <tr><td><code>dbDriftCheck</code> / <code>dbDriftSummary</code></td><td class="mono">:83 / :110</td><td><span class="b violet">server</span> model-vs-database check</td></tr>
+      <tr><td><code>_bindVal</code></td><td class="mono">:114</td><td><span class="b violet">server</span> scalar coercion</td></tr>
+      <tr><td><code>OS_ASC</code> / <code>OS_DESC</code></td><td class="mono">:136-137</td><td><span class="b violet">server</span> insert / delete order</td></tr>
+      <tr><td><code>shrinkGuard</code> / <code>shrinkErr</code></td><td class="mono">:149 / :158</td><td><span class="b violet">server</span> save-safety, → 409</td></tr>
+      <tr><td><code>OS_ORDER</code> / <code>ordSql</code></td><td class="mono">:163 / :175</td><td><span class="b violet">server</span> deterministic row order</td></tr>
+      <tr><td><code>relLoad</code></td><td class="mono">:177</td><td><span class="b violet">server</span> 103 parallel SELECTs → <code>assembleBlob</code></td></tr>
+      <tr><td><code>relSyncB2C</code></td><td class="mono">:983</td><td><span class="b violet">server</span> B2C upsert into <code>operation_schemas</code></td></tr>
+      <tr><td><code>relApplyAndSave</code></td><td class="mono">:1369</td><td><span class="b violet">server</span> legacy whole-blob write</td></tr>
+      <tr><td><code>startB2CListener</code></td><td class="mono">:1428</td><td><span class="b violet">server</span> LISTEN/NOTIFY + reconnect</td></tr>
+      <tr><td><code>runMigrations</code> / <code>migSummary</code></td><td class="mono">:1492 / :1566</td><td><span class="b violet">server</span> <code>db/migrations</code> autorun</td></tr>
+      <tr><td><code>initDb</code></td><td class="mono">:1572</td><td><span class="b violet">server</span> DDL ensure block + migrations + drift + admin seed</td></tr>
+      <tr><td><code>hashPw</code> / <code>verifyPw</code></td><td class="mono">:1823 / :1824</td><td><span class="b violet">server</span> scrypt</td></tr>
+      <tr><td><code>sign</code> / <code>verify</code> / <code>revoked</code></td><td class="mono">:1827 / :1828 / :1837</td><td><span class="b violet">server</span> stateless session cookie</td></tr>
+      <tr><td><code>compress</code> / <code>pickEncoding</code></td><td class="mono">:1884 / :1883</td><td><span class="b violet">server</span> brotli q11 static, q5 dynamic</td></tr>
+      <tr><td><code>sendLoadPayload</code> / <code>_loadCache</code></td><td class="mono">:1915 / :1896</td><td><span class="b violet">server</span> <code>/api/load</code> cache by version</td></tr>
+      <tr><td><code>sseBroadcast</code></td><td class="mono">:1927</td><td><span class="b violet">server</span> push version bumps</td></tr>
+      <tr><td><code>applyObj</code> / <code>applyDiff</code></td><td class="mono">:1929 / :1938</td><td><span class="b violet">server</span> server-side diff merge</td></tr>
+      <tr><td><code>REST_RES</code></td><td class="mono">:1960</td><td><span class="b violet">server</span> resource index from <code>os_repo._plan</code></td></tr>
+      <tr><td><code>restLoad</code> / <code>restGet</code></td><td class="mono">:1968 / :1986</td><td><span class="b violet">server</span> scoped subtree read</td></tr>
+      <tr><td><code>_restInsertRows</code></td><td class="mono">:1995</td><td><span class="b violet">server</span> batched parents-first insert</td></tr>
+      <tr><td><code>restApplyOp</code></td><td class="mono">:2014</td><td><span class="b violet">server</span> put / patch / del / putall / meta</td></tr>
+      <tr><td><code>restTxn</code></td><td class="mono">:2066</td><td><span class="b violet">server</span> one transaction, one version bump</td></tr>
+      <tr><td>HTTP handler</td><td class="mono">:2083-2657</td><td><span class="b violet">server</span> every route (<a href="#s6">§6</a>)</td></tr>
+      <tr><td><code>prewarmStatic</code></td><td class="mono">:2661</td><td><span class="b violet">server</span> brotli-q11 the app HTML at boot</td></tr>
+      <tr><td>B2C poller</td><td class="mono">:2681</td><td><span class="b violet">server</span> <code>relSyncB2C</code> every <code>B2C_POLL_MS</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3 id="repo-files">Repo files</h3>
+  <div class="tw"><table>
+    <thead><tr><th style="width:360px">Path</th><th>Role</th></tr></thead>
+    <tbody>
+      <tr><td><code>server.js</code></td><td>the whole backend, 2,690 lines</td></tr>
+      <tr><td><code>allotment_v2/allotment_v2.html</code></td><td>the whole frontend, 83,629 lines</td></tr>
+      <tr><td><code>database_migration/operation_schemas_data_dictionary.md</code></td>
+        <td>103 tables, every column, row counts — <b>read this before touching the schema</b></td></tr>
+      <tr><td><code>database_migration/operation_schemas_structure.sql</code></td><td>the DDL, 103 <code>CREATE TABLE</code></td></tr>
+      <tr><td><code>database_migration/operation_schemas_model.json</code></td>
+        <td><span class="b red">⚠</span> a stale copy of the model (<a href="#s0">§0</a>)</td></tr>
+      <tr><td><code>database_migration/b2c_v_booking_passengers.sql</code></td>
+        <td>the B2C passenger view <code>relSyncB2C</code> probes</td></tr>
+      <tr><td><code>db/rt.cjs</code>, <code>db/test_seat_lock_race.mjs</code></td>
+        <td>seat-lock concurrency checks (<code>npm test</code> in <code>db/</code>)</td></tr>
+      <tr><td><code>tools/apply-migration.js</code></td><td>manual <code>.sql</code> apply, one transaction, secret never printed</td></tr>
+      <tr><td><code>tools/safari-smoke.js</code></td><td><code>npm run safari</code> (playwright)</td></tr>
+      <tr><td><code>railway.json</code>, <code>.railwayignore</code>, <code>package.json</code></td><td>deploy config</td></tr>
+      <tr><td><code>allotment_v2/start_server.command</code></td><td>static-only local server, port 8765 (<a href="#b-degraded">§2.1</a>)</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<footer>
+  Rendered from <code>allotment_v2/docs/workflows/07-data-persistence-api.md</code> ·
+  written against commit <code>094dde1</code> on <code>refactor/booking-v2-migration</code> ·
+  these docs describe <b>the code, not the intent</b> — where an older doc contradicts the code, the code won.
+</footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  // theme toggle
+  var btn = document.getElementById('themebtn');
+  var root = document.documentElement;
+  var saved = null;
+  try { saved = localStorage.getItem('la_doc_theme'); } catch(e){}
+  if (saved) root.setAttribute('data-theme', saved);
+  btn.addEventListener('click', function(){
+    var cur = root.getAttribute('data-theme');
+    var next;
+    if (cur === 'dark') next = 'light';
+    else if (cur === 'light') next = 'dark';
+    else next = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('la_doc_theme', next); } catch(e){}
+  });
+
+  // scrollspy
+  var links = Array.prototype.slice.call(document.querySelectorAll('#nav a'));
+  var targets = links.map(function(a){ return document.querySelector(a.getAttribute('href')); });
+  function spy(){
+    var best = 0, bestTop = -Infinity;
+    for (var i=0;i<targets.length;i++){
+      if (!targets[i]) continue;
+      var t = targets[i].getBoundingClientRect().top - 90;
+      if (t <= 0 && t > bestTop){ bestTop = t; best = i; }
+    }
+    links.forEach(function(a,i){ a.classList.toggle('on', i===best); });
+  }
+  var tick = false;
+  window.addEventListener('scroll', function(){
+    if (tick) return; tick = true;
+    requestAnimationFrame(function(){ spy(); tick = false; });
+  }, {passive:true});
+  spy();
+
+  // function-index filter (optional — skipped when the doc has no #ffilter)
+  var input = document.getElementById('ffilter');
+  var rows  = Array.prototype.slice.call(document.querySelectorAll('#ftable tbody tr'));
+  var count = document.getElementById('fcount');
+  if (input && rows.length){
+    var paint = function(){
+      var q = input.value.trim().toLowerCase();
+      var n = 0;
+      rows.forEach(function(r){
+        var hit = !q || r.textContent.toLowerCase().indexOf(q) !== -1;
+        r.classList.toggle('hidden', !hit);
+        if (hit) n++;
+      });
+      if (count) count.textContent = q ? (n + ' of ' + rows.length + ' shown') : (rows.length + ' functions');
+    };
+    input.addEventListener('input', paint);
+    paint();
+  }
+})();
+</script>
+</body>
+</html>

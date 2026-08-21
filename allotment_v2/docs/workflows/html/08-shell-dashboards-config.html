@@ -1,0 +1,1240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shell, Dashboards &amp; Config</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f8fa; --panel:#ffffff; --panel-2:#fbfcfd;
+  --ink:#0f2029; --ink-2:#31485a; --muted:#68808f;
+  --line:#e1e8ee; --line-2:#eef2f6;
+  --accent:#1683C7; --accent-ink:#0f6ba6; --accent-soft:#e8f3fb;
+  --danger:#c8384c; --danger-soft:#fdecee;
+  --warn:#b46a00; --warn-soft:#fdf3e3;
+  --ok:#137a52; --ok-soft:#e6f5ee;
+  --violet:#6a4bbd; --violet-soft:#f0ecfb;
+  --code-bg:#f0f4f8; --code-ink:#173446;
+  --shadow:0 1px 2px rgba(15,32,41,.05), 0 8px 24px -14px rgba(15,32,41,.22);
+  --radius:14px;
+}
+:root:not([data-theme="light"]){ }
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b1317; --panel:#111d24; --panel-2:#0e181e;
+    --ink:#e7eff5; --ink-2:#bfd0dc; --muted:#89a0af;
+    --line:#1f313c; --line-2:#182831;
+    --accent:#49b2ee; --accent-ink:#7ccbf8; --accent-soft:#0f2c3d;
+    --danger:#f2798c; --danger-soft:#33161c;
+    --warn:#e0a24a; --warn-soft:#33260f;
+    --ok:#4ccb95; --ok-soft:#0f2b21;
+    --violet:#a48bef; --violet-soft:#221b3a;
+    --code-bg:#0d1b23; --code-ink:#cfe0eb;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b1317; --panel:#111d24; --panel-2:#0e181e;
+  --ink:#e7eff5; --ink-2:#bfd0dc; --muted:#89a0af;
+  --line:#1f313c; --line-2:#182831;
+  --accent:#49b2ee; --accent-ink:#7ccbf8; --accent-soft:#0f2c3d;
+  --danger:#f2798c; --danger-soft:#33161c;
+  --warn:#e0a24a; --warn-soft:#33260f;
+  --ok:#4ccb95; --ok-soft:#0f2b21;
+  --violet:#a48bef; --violet-soft:#221b3a;
+  --code-bg:#0d1b23; --code-ink:#cfe0eb;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px; line-height:1.62; -webkit-font-smoothing:antialiased;
+}
+code,kbd,.mono{font-family:"DM Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+
+/* ---------- layout ---------- */
+.wrap{display:grid; grid-template-columns:264px minmax(0,1fr); gap:0; max-width:1420px; margin:0 auto}
+.side{
+  position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+  border-right:1px solid var(--line); padding:26px 18px 60px; background:var(--panel-2);
+}
+.main{min-width:0; padding:34px 42px 120px}
+@media (max-width:960px){
+  .wrap{grid-template-columns:1fr}
+  .side{position:static; height:auto; border-right:0; border-bottom:1px solid var(--line); padding:20px 22px}
+  .main{padding:24px 20px 80px}
+}
+
+/* ---------- sidebar ---------- */
+.brand{display:flex; align-items:center; gap:10px; margin-bottom:4px}
+.brand .dot{width:26px;height:26px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px;flex:none}
+.brand b{font-size:14px; letter-spacing:-.01em}
+.brand small{display:block; color:var(--muted); font-size:11px; font-weight:400; line-height:1.3}
+.nav{margin-top:20px; display:flex; flex-direction:column; gap:1px}
+.nav a{
+  display:flex; gap:9px; align-items:baseline; text-decoration:none; color:var(--ink-2);
+  padding:6px 10px; border-radius:8px; font-size:13.5px; border-left:2px solid transparent;
+}
+.nav a .n{color:var(--muted); font-size:11px; font-family:"DM Mono",monospace; min-width:16px}
+.nav a:hover{background:var(--line-2); color:var(--ink)}
+.nav a.on{background:var(--accent-soft); color:var(--accent-ink); font-weight:500; border-left-color:var(--accent)}
+.nav .sub{padding-left:34px; font-size:12.5px; color:var(--muted)}
+.nav .sub:hover{color:var(--ink)}
+.backlink{
+  display:inline-block; margin-top:14px; font-size:12.5px; color:var(--muted); text-decoration:none;
+  border-bottom:1px solid transparent;
+}
+.backlink:hover{color:var(--accent-ink); border-bottom-color:var(--accent)}
+.themebtn{
+  margin-top:22px; width:100%; border:1px solid var(--line); background:var(--panel); color:var(--ink-2);
+  border-radius:9px; padding:7px 10px; font:inherit; font-size:12.5px; cursor:pointer;
+}
+.themebtn:hover{border-color:var(--accent); color:var(--accent-ink)}
+
+/* ---------- header ---------- */
+.hero{border-bottom:1px solid var(--line); padding-bottom:22px; margin-bottom:30px}
+.eyebrow{font-family:"DM Mono",monospace; font-size:12px; color:var(--accent-ink); letter-spacing:.06em; text-transform:uppercase}
+h1{font-size:34px; line-height:1.15; letter-spacing:-.025em; margin:6px 0 10px}
+.lede{font-size:16px; color:var(--ink-2); max-width:74ch; margin:0}
+.chips{display:flex; flex-wrap:wrap; gap:7px; margin-top:16px}
+.chip{
+  font-family:"DM Mono",monospace; font-size:11.5px; padding:3px 9px; border-radius:999px;
+  border:1px solid var(--line); background:var(--panel); color:var(--muted);
+}
+.chip b{color:var(--ink-2); font-weight:500}
+
+/* ---------- sections ---------- */
+section{scroll-margin-top:20px; margin-bottom:46px}
+h2{
+  font-size:23px; letter-spacing:-.02em; margin:0 0 14px; padding-bottom:9px;
+  border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:11px;
+}
+h2 .num{font-family:"DM Mono",monospace; font-size:14px; color:var(--accent); font-weight:500}
+h3{font-size:17px; letter-spacing:-.01em; margin:28px 0 10px; color:var(--ink)}
+h4{font-size:13.5px; margin:18px 0 7px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; font-weight:500}
+p{margin:0 0 12px; max-width:82ch}
+ul,ol{margin:0 0 12px; padding-left:22px; max-width:82ch}
+li{margin-bottom:5px}
+a{color:var(--accent-ink)}
+
+/* ---------- inline bits ---------- */
+code:not(pre code){
+  background:var(--code-bg); color:var(--code-ink); padding:1px 5px; border-radius:5px;
+  font-size:.875em; border:1px solid var(--line-2); white-space:nowrap;
+}
+.ln{color:var(--accent-ink); font-family:"DM Mono",monospace; font-size:.82em; white-space:nowrap}
+pre{
+  background:var(--code-bg); border:1px solid var(--line); border-radius:10px;
+  padding:14px 16px; overflow-x:auto; font-size:12.8px; line-height:1.6; color:var(--code-ink); margin:0 0 14px;
+}
+pre code{background:none;border:0;padding:0;white-space:pre}
+
+/* ---------- cards & callouts ---------- */
+.card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px; box-shadow:var(--shadow); margin:0 0 16px}
+.note{
+  border-left:3px solid var(--accent); background:var(--accent-soft); border-radius:0 10px 10px 0;
+  padding:12px 16px; margin:0 0 16px; font-size:14.2px; color:var(--ink-2);
+}
+.note.warn{border-left-color:var(--warn); background:var(--warn-soft)}
+.note.danger{border-left-color:var(--danger); background:var(--danger-soft)}
+.note.ok{border-left-color:var(--ok); background:var(--ok-soft)}
+.note b{color:var(--ink)}
+.note .lbl{display:block; font-size:11px; text-transform:uppercase; letter-spacing:.07em; font-weight:700; margin-bottom:4px; color:var(--accent-ink)}
+.note.warn .lbl{color:var(--warn)} .note.danger .lbl{color:var(--danger)} .note.ok .lbl{color:var(--ok)}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius); margin:0 0 16px; background:var(--panel)}
+table{border-collapse:collapse; width:100%; font-size:13.6px; min-width:520px}
+th{
+  text-align:left; font-weight:500; font-size:11.5px; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--muted); padding:10px 14px; border-bottom:1px solid var(--line); background:var(--panel-2); white-space:nowrap;
+}
+td{padding:9px 14px; border-bottom:1px solid var(--line-2); vertical-align:top; color:var(--ink-2)}
+tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--panel-2)}
+td code{white-space:nowrap}
+
+/* ---------- badges ---------- */
+.b{display:inline-block; font-family:"DM Mono",monospace; font-size:11px; padding:2px 8px; border-radius:999px; white-space:nowrap; border:1px solid transparent}
+.b.blue{background:var(--accent-soft); color:var(--accent-ink); border-color:color-mix(in srgb,var(--accent) 25%, transparent)}
+.b.red{background:var(--danger-soft); color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%, transparent)}
+.b.amber{background:var(--warn-soft); color:var(--warn); border-color:color-mix(in srgb,var(--warn) 30%, transparent)}
+.b.green{background:var(--ok-soft); color:var(--ok); border-color:color-mix(in srgb,var(--ok) 30%, transparent)}
+.b.violet{background:var(--violet-soft); color:var(--violet); border-color:color-mix(in srgb,var(--violet) 30%, transparent)}
+.b.gray{background:var(--line-2); color:var(--muted); border-color:var(--line)}
+
+/* ---------- rail (vertical flow) ---------- */
+.rail{position:relative; margin:6px 0 18px; padding-left:30px}
+.rail:before{content:""; position:absolute; left:9px; top:8px; bottom:8px; width:2px; background:var(--line)}
+.step{position:relative; margin-bottom:13px}
+.step:before{
+  content:""; position:absolute; left:-26px; top:6px; width:11px; height:11px; border-radius:50%;
+  background:var(--panel); border:2px solid var(--accent);
+}
+.step.block:before{border-color:var(--danger); background:var(--danger)}
+.step.ask:before{border-color:var(--warn)}
+.step.done:before{border-color:var(--ok); background:var(--ok)}
+.step .t{font-weight:500; color:var(--ink); font-size:14.4px}
+.step .d{font-size:13.4px; color:var(--muted)}
+
+/* ---------- stage flow (horizontal) ---------- */
+.flow{display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; margin:6px 0 18px}
+.stage{
+  flex:1 1 150px; min-width:140px; background:var(--panel); border:1px solid var(--line);
+  border-radius:11px; padding:11px 13px; position:relative;
+}
+.stage .k{font-family:"DM Mono",monospace; font-size:10.5px; color:var(--muted); letter-spacing:.05em; text-transform:uppercase}
+.stage .v{font-size:13.6px; font-weight:500; margin-top:3px; color:var(--ink)}
+.stage .s{font-size:12.4px; color:var(--muted); margin-top:3px}
+.arrow{display:grid; place-items:center; color:var(--line); font-size:18px; flex:0 0 14px}
+@media(max-width:700px){.arrow{transform:rotate(90deg)}}
+
+/* ---------- outcome grid ---------- */
+.grid2{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px; margin:6px 0 18px}
+.mini{background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:13px 15px}
+.mini h5{margin:0 0 5px; font-size:13.6px; letter-spacing:-.01em}
+.mini p{margin:0; font-size:12.9px; color:var(--muted)}
+
+/* ---------- function index filter ---------- */
+.filter{
+  width:100%; max-width:340px; padding:8px 12px; border-radius:9px; border:1px solid var(--line);
+  background:var(--panel); color:var(--ink); font:inherit; font-size:13.5px; margin-bottom:12px;
+}
+.filter:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft)}
+.hidden{display:none !important}
+.count{font-size:12.5px; color:var(--muted); margin-left:10px}
+
+/* ---------- footer ---------- */
+footer{border-top:1px solid var(--line); padding-top:18px; color:var(--muted); font-size:12.8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ===== SIDEBAR ===== -->
+<aside class="side">
+  <div class="brand">
+    <div class="dot">08</div>
+    <div><b>Shell, Dashboards &amp; Config</b><small>allotment_v2 · workflow docs</small></div>
+  </div>
+  <nav class="nav" id="nav">
+    <a href="#s1"><span class="n">1</span> Anatomy of the file</a>
+    <a href="#s2"><span class="n">2</span> Boot order</a>
+    <a href="#s3"><span class="n">3</span> Navigation &amp; routing</a>
+    <a href="#s4"><span class="n">4</span> Sidebar &amp; layout state</a>
+    <a href="#s5"><span class="n">5</span> Shared render utilities</a>
+    <a href="#u-esc" class="sub">5.1 esc is not global</a>
+    <a href="#u-date" class="sub">5.2 bkV2LocalYMD</a>
+    <a href="#u-scroll" class="sub">5.3 Scroll-jump</a>
+    <a href="#u-backdrop" class="sub">5.4 backdrop-filter</a>
+    <a href="#u-sticky" class="sub">5.5 Sticky offsets</a>
+    <a href="#u-modal" class="sub">5.6 Modal system</a>
+    <a href="#u-toast" class="sub">5.7 Toast / alert</a>
+    <a href="#s6"><span class="n">6</span> Dashboards &amp; reports</a>
+    <a href="#d-dash" class="sub">6.1 Dashboard</a>
+    <a href="#d-cal" class="sub">6.2 Calendar</a>
+    <a href="#d-da" class="sub">6.3 Daily Availability</a>
+    <a href="#d-boats" class="sub">6.4 Boat Status</a>
+    <a href="#s7"><span class="n">7</span> Market Intelligence</a>
+    <a href="#m-tabs" class="sub">7.1 The six tabs</a>
+    <a href="#m-import" class="sub">7.2 .xls import pipeline</a>
+    <a href="#s8"><span class="n">8</span> Staff &amp; team views</a>
+    <a href="#st-staff" class="sub">8.1 Staff &amp; Welfare</a>
+    <a href="#st-team" class="sub">8.2 Team &amp; Markets</a>
+    <a href="#s9"><span class="n">9</span> Settings &amp; dev tools</a>
+    <a href="#cfg-prog" class="sub">9.1 Config → Programs</a>
+    <a href="#cfg-devlog" class="sub">9.2 Dev tools</a>
+    <a href="#s10"><span class="n">10</span> Visual system</a>
+    <a href="#s11"><span class="n">11</span> Invariants &amp; gotchas</a>
+    <a href="#s12"><span class="n">12</span> Function index</a>
+  </nav>
+  <a class="backlink" href="index.html">← All workflow docs</a>
+  <button class="themebtn" id="themebtn" type="button">Toggle theme</button>
+</aside>
+
+<main class="main">
+
+<!-- ===== HERO ===== -->
+<header class="hero">
+  <div class="eyebrow">Workflow doc 08</div>
+  <h1>Shell, Dashboards &amp; Config</h1>
+  <p class="lede">The single-file app's structural skeleton — head/style/body/script anatomy, boot order,
+  the sidebar router, and the modal/toast/skin conventions — plus the four view-groups that hang off it:
+  Dashboards &amp; Reports, Market/Demand Intelligence, Staff &amp; Team, and Config/Dev tools.</p>
+  <div class="chips">
+    <span class="chip"><b>Code</b> allotment_v2.html</span>
+    <span class="chip"><b>Commit</b> 094dde1</span>
+    <span class="chip"><b>Branch</b> refactor/booking-v2-migration</span>
+    <span class="chip"><b>Source</b> docs/workflows/08-shell-dashboards-config.md</span>
+  </div>
+  <div class="note warn" style="margin-top:18px">
+    <span class="lbl">Line numbers drift</span>
+    Every <span class="ln">:12345</span> reference means “roughly here”. Grep the symbol name instead —
+    the <a href="#s12">function index</a> at the bottom is the fastest way to find anything.
+  </div>
+</header>
+
+<!-- ============ 1 ============ -->
+<section id="s1">
+  <h2><span class="num">01</span> Anatomy of the single file</h2>
+
+  <p>Persistence, boot/load sequencing, and the write path are owned by
+  <a href="07-data-persistence-api.html">07 · Data, Persistence &amp; API</a> — this doc only describes what the shell
+  does <i>after</i> a value is in RAM. Booking-specific rendering is owned by
+  <a href="01-booking-lifecycle.html">01 · Booking Lifecycle</a>; this doc borrows a few shared utilities from it
+  (<code>bkV2LocalYMD</code>, <code>bkV2ConfirmModal</code>, the <code>bkV2Render</code> sticky-offset rAF) because every
+  other module depends on them.</p>
+
+  <p>The file is not modular in any build-tool sense — it's one <code>&lt;head&gt;</code> + one <code>&lt;body&gt;</code>
+  with ~15 <code>&lt;script&gt;</code>/<code>&lt;style&gt;</code> tags, most of them thousands of lines long.</p>
+
+  <div class="note danger">
+    <span class="lbl">Fake tag boundaries</span>
+    A few <code>&lt;style&gt;</code>/<code>&lt;script&gt;</code> open/close tags reported by a naive grep are
+    <b>not real top-level tags</b> — they're literal <code>&lt;style&gt;...&lt;/style&gt;</code> text inside a JS template
+    string (e.g. the printable-memo HTML built at <span class="ln">:25628-25633</span>, or the Calendar's
+    <code>CAL2CSS</code> template at <span class="ln">:7347</span>). Verify any boundary you rely on by reading a few
+    lines of context, not just the grep hit.
+  </div>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:150px">Approx. lines</th><th>Content</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">1–4</td><td><code>&lt;!DOCTYPE html&gt;</code>, <code>&lt;html&gt;</code>, <code>&lt;head&gt;</code>, <code>&lt;meta charset&gt;</code></td></tr>
+      <tr><td class="mono"><b>5–719</b></td><td><code>&lt;script&gt;</code> — the login + cloud-sync boot IIFE. Storage shim, <code>/api/me</code>, <code>/api/load</code>, permission model (<code>LA_NAV</code>, <code>LA_AREAS</code>, <code>laAllowed</code>/<code>laApplyPerms</code>), user badge, toast (<code>_laToast</code>), SSE. Full detail in doc 07 §2; <a href="#s4">§4</a> of this doc covers the permission/nav pieces.</td></tr>
+      <tr><td class="mono">720–726</td><td>Google Fonts <code>&lt;link&gt;</code> — DM Sans, DM Mono, Inter, Manrope, IBM Plex Sans Thai, Noto Sans Thai, Quicksand, Sarabun <span class="ln">:726</span></td></tr>
+      <tr><td class="mono">727–1198</td><td><code>&lt;style&gt;</code> — <code>#view-costing</code>-scoped design tokens (<code>ct-*</code> classes) for the Cost &amp; Break-even page. Sits <i>before</i> the global stylesheet even though it's a single-page skin — historical placement, not a convention to copy.</td></tr>
+      <tr><td class="mono"><b>1199–3336</b></td><td><code>&lt;style&gt;</code> — the base design system: <code>:root</code> tokens (<code>--ocean</code>, <code>--ink</code>, <code>--sidebar:220px</code>, <code>--topbar:52px</code>, <code>--r</code>, <code>--shadow</code>…), <code>.topbar</code>, <code>.sidebar</code>, <code>.app</code> layout, <code>.card</code>, <code>.modal</code>/<code>.modal-overlay</code>, buttons, form controls. Every other view's inline styles build on these tokens.</td></tr>
+      <tr><td class="mono">3337–3899</td><td>Ten reversible <code>&lt;style id="*-skin"&gt;</code> blocks (<a href="#s10">§10</a>) — ocean-blue re-skin, several glass/liquid treatments, topbar-float, sidebar-glass</td></tr>
+      <tr><td class="mono">3729–3747</td><td><code>&lt;script&gt;</code> — <code>initGlassSidebar</code> (paired with <code>sidebar-glass-skin</code>)</td></tr>
+      <tr><td class="mono">3900–4126</td><td><code>&lt;style id="la-mobile"&gt;</code> — the mobile layer, <code>@media (max-width:820px)</code>, hamburger nav, floating topbar tools</td></tr>
+      <tr><td class="mono">4127</td><td><code>&lt;script src="…xlsx.full.min.js"&gt;</code> — SheetJS, the only external runtime dependency, loaded for the Market Intelligence <code>.xls</code> importer (<a href="#s7">§7</a>)</td></tr>
+      <tr><td class="mono">4132–4157</td><td><code>&lt;header class="topbar"&gt;</code> markup</td></tr>
+      <tr><td class="mono">4158–4184</td><td><code>&lt;script&gt;</code> — mobile nav toggles (<code>toggleTopbarTools</code>, <code>laNavOpen/Close/Toggle</code>, <code>laUbPlace</code>)</td></tr>
+      <tr><td class="mono"><b>4187–4492</b></td><td><code>&lt;nav class="sidebar"&gt;</code> — every <code>.nav-item[data-view]</code> in the app, grouped into <code>.nav-section</code>s (<a href="#s3">§3</a>/<a href="#s4">§4</a>)</td></tr>
+      <tr><td class="mono"><b>4493–5546</b></td><td>The view containers — one <code>&lt;div id="view-*" class="view"&gt;</code> per module, empty or with a <code>&lt;div id="*-host"&gt;</code> mount point, in sidebar order. See the tables in <a href="#s6">§6</a>–<a href="#s9">§9</a> for which id belongs to which renderer.</td></tr>
+      <tr><td class="mono"><b>5547–13339</b></td><td><code>&lt;script&gt;</code> — the core render engine: <code>nav()</code> (the router), <code>renderDash</code>, <code>renderCal</code>, <code>renderDA</code>, <code>renderBoats</code>, sidebar personalization (<code>laSb*</code>), <code>openModal</code>/<code>closeModal</code>, <code>renderSettings</code>/<code>renderSettingsLegacy</code>, ending in the legacy boot tail (<code>updateDate();seed();save();initOpListeners();</code> + deferred <code>renderDash()</code> on <code>DOMContentLoaded</code>)</td></tr>
+      <tr><td class="mono">13762–36196</td><td><code>&lt;script&gt;</code> — the largest single business-logic block: Agents, Rate Types, most of Booking v2 (<code>bkV2*</code>), the start of Fleet (<code>fl*</code>), ending in <code>flLoad()</code> (fleet store init)</td></tr>
+      <tr><td class="mono">36198–38097</td><td>Fleet modal markup interleaved with a <code>&lt;script&gt;</code> of fleet modal logic (engine assign, etc.)</td></tr>
+      <tr><td class="mono"><b>39186–83627</b></td><td><code>&lt;script&gt;</code> — the remaining ~44k lines: Staff &amp; Welfare (<code>staff*</code>), Team &amp; Markets (<code>tm*</code>), Market/Demand Intelligence (<code>md*</code>), System Log (<code>devlog*</code>), Re-confirm, Pier Office, Accounting, and the tail of Booking v2. This is where most of §6–§9 of this doc lives.</td></tr>
+      <tr><td class="mono">83627</td><td>final <code>&lt;/script&gt;</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note">
+    <span class="lbl">Practical consequence</span>
+    “Which script tag is this function in” is almost never useful — the file behaves as one global scope regardless of
+    tag boundaries. Always locate code by <code>grep -n "function xyz"</code>, never by counting
+    <code>&lt;script&gt;</code> tags.
+  </div>
+</section>
+
+<!-- ============ 2 ============ -->
+<section id="s2">
+  <h2><span class="num">02</span> Boot order</h2>
+
+  <p>Full detail (storage shim, <code>/api/load</code>, diff/sync) is doc 07 §2. The parts that matter for the
+  <b>shell</b>:</p>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · Head IIFE runs <span class="ln">:10</span></div>
+      <div class="d">Login gate, storage shim install, <code>/api/load</code>, <code>/api/v1</code> resource index.
+      <code>window.LA_UID</code> defined first, deliberately before any early return.</div></div>
+    <div class="step"><div class="t">2 · <code>onReady(fn)</code> <span class="ln">:396</span></div>
+      <div class="d">Defined inside the IIFE — runs immediately if <code>document.body</code> already exists, else waits for
+      <code>DOMContentLoaded</code>. Used to defer any DOM-touching boot step until the body markup exists.</div></div>
+    <div class="step"><div class="t">3 · Inside <code>onReady</code> <span class="ln">:397-405</span></div>
+      <div class="d">Inject the user-badge <code>&lt;style&gt;</code>, mount <code>#la-userbadge</code>, mount
+      <code>#la-viewonly</code> banner if the user can't edit, then
+      <b><code>laWrapNav()</code> → <code>laApplyPerms()</code> → <code>laApplyAdminOnly()</code></b>, each re-run again at
+      <code>setTimeout(...,600)</code> (safety net for a nav re-render that lost the permission hiding), and
+      <b><code>_laRestoreView</code> at <code>setTimeout(...,850)</code></b> — this re-selects whatever view/tab/scroll
+      position was saved to <code>sessionStorage.la_view</code> before the last reload (<a href="#s3">§3</a>).</div></div>
+    <div class="step"><div class="t">4 · The body markup parses</div>
+      <div class="d">Topbar, sidebar, all <code>#view-*</code> containers.</div></div>
+    <div class="step"><div class="t">5 · Main script block executes top-to-bottom</div>
+      <div class="d">Defines <code>nav()</code> and every top-level render function, then at its tail
+      <span class="ln">:13329-13338</span>: <code>updateDate(); seed(); save(); initOpListeners();</code> and a
+      <b>deferred</b> <code>renderDash()</code> gated on <code>DOMContentLoaded</code>.</div></div>
+    <div class="step"><div class="t">6 · Every remaining <code>&lt;script&gt;</code> tag runs in file order</div>
+      <div class="d">Each declaring its own store globals and calling its own boot IIFE / loader (e.g.
+      <code>flLoad()</code> at <span class="ln">:36192</span>) — see doc 07 §5 for the full store inventory.</div></div>
+    <div class="step done"><div class="t">7 · Sidebar personalization attaches</div>
+      <div class="d"><code>sidebar-glass-skin</code>'s <code>initGlassSidebar</code> <span class="ln">:3729-3747</span> and
+      this doc's <code>laSbInit()</code> <span class="ln">:6016</span> (called from inside <code>nav()</code> on the first
+      click if the color-picker swatch is missing) attach the sidebar's per-user accordion/color UI.</div></div>
+  </div>
+
+  <div class="note warn">
+    <span class="lbl">Why <code>DOMContentLoaded</code>, not <code>setTimeout(0)</code></span>
+    <code>renderDash()</code> is deliberately deferred because <code>FL_*</code> arrays declared in later
+    <code>&lt;script&gt;</code> tags aren't populated yet if <code>renderDash</code> (indirectly, via other calls) touches
+    them before all inline scripts have run. A bare <code>setTimeout(0)</code> can fire <b>between two inline
+    <code>&lt;script&gt;</code> tags</b> in Chrome and throw <code>ReferenceError</code>, so <code>DOMContentLoaded</code>
+    (which only fires after every inline script has executed) is the correct gate.
+  </div>
+
+  <div class="note">
+    <span class="lbl">Net effect</span>
+    <b>Dashboard is the default active view</b> (<code>#view-dashboard.view.active</code> and the first
+    <code>.nav-item.active</code> are hardcoded in the markup), and <code>_laRestoreView</code> (step 3) overrides that
+    ~850&nbsp;ms later if a saved <code>sessionStorage.la_view</code> exists <b>and</b> the role permits that view.
+  </div>
+</section>
+
+<!-- ============ 3 ============ -->
+<section id="s3">
+  <h2><span class="num">03</span> Navigation &amp; routing</h2>
+
+  <p>There is <b>one router function</b>: <code>nav(el)</code> at <code>allotment_v2.html</code>
+  <span class="ln">:6027</span>. Every <code>.nav-item</code> in the sidebar carries
+  <code>data-view="&lt;key&gt;"</code> and <code>onclick="nav(this)"</code> — clicking calls <code>nav</code> with the
+  clicked DOM element, not a view name.</p>
+
+<pre><code>function nav(el){
+  const view = el.dataset.view;
+  const actualView = view==='fl-boatstatus' ? 'boats' : view;   // alias: two menu keys, one view+renderer
+  document.querySelectorAll('.nav-item').forEach(n=&gt;n.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v=&gt;v.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('view-'+actualView)?.classList.add('active');
+  if(view.startsWith('fl-')) { /* dispatch to flRender* */ }
+  else { /* one long if/else-if chain dispatching view → render function */ }
+}</code></pre>
+
+  <div class="note danger">
+    <span class="lbl">No lookup table</span>
+    No view-key → function lookup table exists — it's a <b>hardcoded if/else-if chain</b>
+    <span class="ln">:6053-6095</span> mapping <code>view==='dashboard'</code> → <code>renderDash()</code>,
+    <code>view==='calendar'</code> → <code>renderCal()</code>, etc. Adding a new view means adding <b>all three</b>: a
+    <code>data-view</code> nav-item, a <code>#view-&lt;key&gt;</code> container, <b>and</b> a branch in this chain (or the
+    <code>fl-</code> chain if it's a fleet view). Pier-office views
+    (<code>poa-*</code>/<code>pol-*</code>/<code>poj-*</code>/<code>po-*</code>) are matched by <b>prefix</b> instead of
+    exact key, because they're parameterized by pier (<code>panwa</code>/<code>tublamu</code>/<code>ranong</code>).
+  </div>
+
+  <h4>Housekeeping <code>nav()</code> does before switching</h4>
+  <ul>
+    <li><code>laNavClose()</code> — closes the mobile drawer (<code>body.la-nav-open</code> class) so picking a menu item on
+      mobile auto-dismisses it.</li>
+    <li><code>laSbInit()</code> — re-attaches the sidebar color-picker swatch if a prior full re-render of the sidebar
+      dropped it (defensive, checks <code>!document.getElementById('la-sbcolor-sw')</code> first).</li>
+  </ul>
+
+  <h3 id="nav-perm">Permission gating happens one layer up</h3>
+  <p><code>laWrapNav()</code> <span class="ln">:482</span> monkey-patches <code>window.nav</code> once: it checks
+  <code>laAllowed(view)</code> before calling the original <code>nav</code>, and alerts + returns if the current role can't
+  see that view. <code>laApplyPerms()</code> <span class="ln">:464</span> separately hides/shows
+  <code>.nav-item[data-view]</code> elements and <code>.nav-section</code> headers based on the same permission set — so a
+  role restriction affects both what's <b>clickable</b> and what's <b>visible</b>.</p>
+
+  <h4>The click path</h4>
+  <div class="rail">
+    <div class="step"><div class="t">User clicks a <code>.nav-item</code></div>
+      <div class="d"><code>onclick="nav(this)"</code> — the element, not a key.</div></div>
+    <div class="step ask"><div class="t">The <code>laWrapNav</code>-wrapped <code>nav(el)</code> decides</div>
+      <div class="d">Calls <code>laAllowed(view)</code>.</div></div>
+    <div class="step block"><div class="t">Not allowed → deny</div>
+      <div class="d"><code>alert('ไม่มีสิทธิ์')</code> · <code>return</code>. Nothing repaints.</div></div>
+    <div class="step"><div class="t">Allowed → original <code>nav(el)</code></div>
+      <div class="d"><code>laNavClose()</code> closes the mobile drawer, then <code>.active</code> is toggled on the
+      nav-item and on <code>#view-&lt;key&gt;</code>.</div></div>
+    <div class="step"><div class="t">Dispatch — does <code>view.startsWith('fl-')</code>?</div>
+      <div class="d"><b>Yes</b> → the <code>fl-</code>-prefixed if/else chain →
+      <code>flRenderDashboard</code> / <code>flRenderMaint</code> / … &nbsp;·&nbsp;
+      <b>No</b> → the main if/else chain → <code>renderDash</code> / <code>renderCal</code> /
+      <code>renderBooking</code> / …</div></div>
+    <div class="step done"><div class="t">Painted</div>
+      <div class="d">The view's render function repaints its <code>#…-wrap</code> / <code>#…-host</code> mount.</div></div>
+  </div>
+
+  <h3 id="nav-session">Session-scoped view memory</h3>
+  <p>Not synced, per-tab. <code>_laSaveView()</code> <span class="ln">:278</span> (inside the head IIFE) snapshots the
+  active nav-item's <code>data-view</code>, Booking v2's tab/filter/detail state, the open Agent-detail id, and
+  <code>main</code>/<code>window</code> scroll into <code>sessionStorage.la_view</code> every 3s
+  (<code>setInterval</code>, <span class="ln">:357</span>) and on <code>beforeunload</code>.
+  <code>_laRestoreView()</code> <span class="ln">:287</span> reads it back, clicks the matching <code>.nav-item</code>
+  (re-running the whole <code>nav()</code> flow above), restores the booking/agent sub-state, then restores scroll after a
+  220&nbsp;ms <code>setTimeout</code> (long enough for the view's render to finish painting).</p>
+</section>
+
+<!-- ============ 4 ============ -->
+<section id="s4">
+  <h2><span class="num">04</span> Sidebar &amp; layout state</h2>
+
+  <p>All of these are <b>localStorage-only, per-device, never synced to Postgres</b> — explicitly allowed by
+  CLAUDE.md §2's “tiny UI/cache keys” exception.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:190px">Key</th><th style="width:210px">Written by</th><th style="width:210px">Read by</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>sb_collapsed</code></td><td><code>setC()</code> inside <code>initGlassSidebar</code> <span class="ln">:3740-3742</span></td><td>same</td><td>rail-only collapsed sidebar (<code>body.sb-collapsed</code>)</td></tr>
+      <tr><td><code>la_sbcolor_&lt;username&gt;</code></td><td><code>laSetSidebarColor()</code> <span class="ln">:5955</span></td><td><code>laApplySidebarColor()</code> <span class="ln">:5947</span></td><td>per-user active-tab accent color, one of <code>LA_SB_COLORS</code> (7 swatches) or cleared (default ocean blue)</td></tr>
+      <tr><td><code>la_sbacc_&lt;username&gt;</code></td><td><code>laSbSetCollapsed()</code> <span class="ln">:5971</span></td><td><code>laSbCollapsed()</code> <span class="ln">:5970</span>, <code>laSbInitAccordion()</code> <span class="ln">:5978</span></td><td>which <code>.nav-section</code> groups are collapsed, keyed by a truncated label of the section's text</td></tr>
+      <tr><td><code>la_pogrp</code></td><td><code>poNavGroup()</code> <span class="ln">:5990-5997</span> / <code>poNavGroupOpen()</code> <span class="ln">:5999</span></td><td><code>poNavGroupInit()</code> <span class="ln">:6005</span></td><td>collapsed/expanded state of the three Pier Office sub-groups (<code>panwa</code>/<code>tublamu</code>/<code>ranong</code>), single JSON object <code>{panwa:0|1, tublamu:0|1, ranong:0|1}</code></td></tr>
+      <tr><td><code>sessionStorage.la_view</code></td><td><code>_laSaveView()</code> (<a href="#s3">§3</a>)</td><td><code>_laRestoreView()</code> (<a href="#s3">§3</a>)</td><td>current view + Booking v2 sub-state + scroll, <b>per-tab</b>, not <code>localStorage</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <p><code>laSbUser()</code> <span class="ln">:5945</span> keys the color/accordion prefs by
+  <code>LA_ME.username||LA_ME.name</code> (falls back to <code>'guest'</code>), so two users sharing a browser profile each
+  keep their own sidebar look — but this is <b>per-device</b>, not per-account across devices.</p>
+
+  <div class="note ok">
+    <span class="lbl">Deliberate guard</span>
+    <code>poNavGroupInit()</code> never force-collapses a group whose active child is inside it, even if the stored state
+    says collapsed <span class="ln">:6009-6010</span> — “กลุ่มที่กำลังเปิดอยู่ ห้ามพับ” (<i>the currently-open group must
+    not be collapsed</i>). Navigating directly into a pier sub-page therefore never hides the very menu you're standing in.
+  </div>
+</section>
+
+<!-- ============ 5 ============ -->
+<section id="s5">
+  <h2><span class="num">05</span> Shared render utilities &amp; conventions</h2>
+
+  <p>This is the section every other module's developer needs. All five traps below are called out in CLAUDE.md §6;
+  here's the code-level detail.</p>
+
+  <h3 id="u-esc">5.1 <code>esc</code> / <code>escapeHTML</code> is NOT global</h3>
+
+  <div class="note danger">
+    <span class="lbl">Trap 1 — <code>esc</code> is local, always</span>
+    There is <b>no single global <code>esc()</code></b>. It is declared <b>locally, per function</b>, and its
+    implementation varies slightly between call sites (some also escape <code>'</code>, some don't; some are arrow
+    functions, some <code>function</code>). Assuming it exists because you saw it used two functions away throws
+    <code>ReferenceError: esc is not defined</code> — <b>silently, on first click</b>, into the console.
+  </div>
+
+  <h4>A representative instance — inside <code>renderDevLog</code> <span class="ln">:44460</span></h4>
+<pre><code>function renderDevLog(){
+  var esc = function(s){ return String(s==null?'':s).replace(/&amp;/g,'&amp;amp;').replace(/&lt;/g,'&amp;lt;').replace(/&gt;/g,'&amp;gt;').replace(/"/g,'&amp;quot;'); };
+  // esc is NOT global in this app — must be local, or this line throws silently on click
+  ...
+}</code></pre>
+
+  <h4>Wrong way — assume <code>esc</code> exists</h4>
+<pre><code>function myNewRenderFn(){
+  return `&lt;div&gt;${esc(userInput)}&lt;/div&gt;`;   // ReferenceError: esc is not defined — the fn that had it was a different one
+}</code></pre>
+
+  <h4>Right way — declare your own at the top</h4>
+<pre><code>function myNewRenderFn(){
+  const esc = s =&gt; String(s==null?'':s).replace(/&amp;/g,'&amp;amp;').replace(/&lt;/g,'&amp;lt;').replace(/&gt;/g,'&amp;gt;').replace(/"/g,'&amp;quot;');
+  return `&lt;div&gt;${esc(userInput)}&lt;/div&gt;`;
+}</code></pre>
+
+  <div class="note">
+    <span class="lbl">Not an oversight</span>
+    There are <b>25+</b> independent <code>const esc=...</code> / <code>function esc(...)</code> declarations scattered
+    through the file (<code>grep -n "const esc="</code> to see them all) — this is <b>intentional repetition</b>, not
+    something to “fix” by hoisting one global.
+  </div>
+
+  <h3 id="u-date">5.2 Date/timezone — <code>bkV2LocalYMD</code></h3>
+
+<pre><code>function bkV2LocalYMD(dt){ return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`; }   // allotment_v2.html:71746</code></pre>
+
+  <div class="note danger">
+    <span class="lbl">Trap 2 — never <code>toISOString().slice(0,10)</code></span>
+    <code>dt.toISOString().slice(0,10)</code> converts to <b>UTC first</b>. At UTC+7 (Thailand), any local time before
+    <b>07:00</b> rolls back to the <i>previous</i> calendar day once converted to UTC, silently shifting
+    bookings/dashboards by one day.
+  </div>
+
+  <div class="note ok">
+    <span class="lbl">Right way</span>
+    <code>bkV2LocalYMD(dt)</code> everywhere a <code>YYYY-MM-DD</code> string is derived from a <code>Date</code> object —
+    it reads <code>getFullYear/getMonth/getDate</code>, which are local-timezone accessors. Dashboards use it for date math
+    (<code>pfmSetDate</code>, <code>pfmPeriodRange</code>) and Market Intelligence uses it via <code>mdToday()</code>
+    <span class="ln">:43100</span>, which falls back to the UTC-slice form only if <code>bkV2LocalYMD</code> isn't loaded
+    yet — a defensive fallback, <b>not a recommended pattern</b>.
+  </div>
+
+  <h3 id="u-scroll">5.3 Scroll-jump on re-render → surgical update</h3>
+
+  <div class="note warn">
+    <span class="lbl">Trap 3 — replacing <code>innerHTML</code> scrolls the container to 0</span>
+    Replacing a mount's <code>innerHTML</code> while the focused/clicked element lives inside it makes the browser scroll
+    the container back to <code>0</code>. Two fix patterns recur throughout the shell/dashboard code.
+  </div>
+
+  <h4>Pattern A — preserve &amp; restore scroll around a full re-render <span class="ln">:24003-24014</span></h4>
+<pre><code>function flSelEng(id){
+  flSelEngId = id;
+  const lp = document.getElementById('fl-eng-listpanel');
+  const lt = lp ? lp.scrollTop : 0;
+  const wy = window.scrollY || window.pageYOffset || 0;
+  if(document.activeElement &amp;&amp; document.activeElement.blur) document.activeElement.blur();   // blur first — a focused element fights the scroll restore
+  flRenderEngList();
+  const _restore = () =&gt; { const p=document.getElementById('fl-eng-listpanel'); if(p) p.scrollTop=lt; window.scrollTo(0,wy); };
+  _restore();
+  requestAnimationFrame(_restore);   // once more after layout settles
+}</code></pre>
+
+  <h4>Pattern B — surgical update of just the changed sub-region</h4>
+  <p>Avoids the full re-render entirely (<code>flMaintRefreshParts</code>, referenced at <span class="ln">:32905</span> /
+  <span class="ln">:32928</span> — “surgical update · keeps +Withdraw button alive → no scroll jump”). Extract an
+  inner-render function that only updates one <code>#...-list</code>/<code>#...-body</code> element instead of the whole
+  page mount.</p>
+
+  <p>Contract templates <span class="ln">:67765</span> capture-and-restore a preview box's own scroll before any DOM
+  rebuild, with the comment pointing straight back at this convention:
+  <i>“เก็บตำแหน่งสกรอลล์ของกล่องพรีวิวไว้ก่อนทุบ DOM (ดู CLAUDE.md §6 'scroll-jump on re-render')”</i>.</p>
+
+  <h3 id="u-backdrop">5.4 <code>backdrop-filter</code> traps typeahead dropdowns</h3>
+
+  <div class="note danger">
+    <span class="lbl">Trap 4 — a new stacking context swallows the dropdown</span>
+    <code>backdrop-filter</code> creates a new CSS stacking context. A dropdown positioned
+    <code>absolute</code>/<code>fixed</code> <i>inside</i> an ancestor with <code>backdrop-filter</code> gets trapped under
+    later-painted siblings — it renders <b>behind</b> other cards (“ซ้อนกัน”, <i>stacked/overlapping</i>) instead of on
+    top.
+  </div>
+
+  <h4>The fix, documented inline at <span class="ln">:3656</span></h4>
+<pre><code>/* form-body cards hold typeahead dropdowns → NO backdrop-filter (it traps the dropdown in a stacking
+   context = "ซ้อนกัน"). Translucent bg keeps the glass tint. */
+#view-booking .bkv2-nb-sec,
+#view-booking .bkv2-nb-card{
+  background: linear-gradient(135deg, rgba(255,255,255,.78), rgba(255,255,255,.66)) !important;   /* translucent, no blur */
+}
+/* topbar + right review panel have no dropdowns → safe to frost */
+#view-booking .bkv2-nb-topbar,
+#view-booking .bkv2-review-sticky{
+  backdrop-filter: blur(20px) saturate(1.35);   /* fine here — nothing inside pops a dropdown */
+}</code></pre>
+
+  <div class="note ok">
+    <span class="lbl">Rule of thumb</span>
+    Before adding <code>backdrop-filter</code> to any card, ask whether anything inside it renders a
+    typeahead/autocomplete dropdown. If yes, use a <b>translucent background gradient</b> instead — same glass look, no
+    trap.
+  </div>
+
+  <h3 id="u-sticky">5.5 Sticky-header offsets — <code>--topbar</code> / <code>--t2-vangroup-top</code></h3>
+
+  <div class="note danger">
+    <span class="lbl">Trap 5 — never hardcode <code>52</code></span>
+    <code>52</code> is only the topbar's <i>nominal</i> height. Two CSS custom properties carry the real, current value —
+    read them, never a literal.
+  </div>
+
+  <ul>
+    <li><code>--topbar</code> — defined on <code>:root</code> at <span class="ln">1213</span> (<code>52px</code>),
+      overridden to <code>0px</code> by the <code>topbar-float-skin</code> block <span class="ln">:3634</span> which removed
+      the visible top bar and floats its controls instead. <b>Any code that assumes <code>52</code> breaks the moment that
+      skin is toggled.</b></li>
+    <li><code>--t2-vangroup-top</code> / <code>--t2-head-top</code> — computed <b>at runtime</b>, not in CSS, inside the
+      <code>bkV2Render()</code> rAF (<code>allotment_v2.html</code> <span class="ln">:69240-69250</span>, Booking v2's
+      tab-2 view).</li>
+  </ul>
+
+<pre><code>requestAnimationFrame(() =&gt; {
+  const TOP = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--topbar')) || 0;
+  const vs = host.querySelector('.bkv2-vanstrip');
+  const VANGROUP = (vanOn &amp;&amp; vs) ? vs.offsetHeight : 0;   // measured, not hardcoded — a fixed 96 gapped/overlapped when real height differed
+  vb.style.setProperty('--t2-vangroup-top', (TOP + h) + 'px');
+  vb.style.setProperty('--t2-head-top', (TOP + h + VANGROUP) + 'px');
+});</code></pre>
+
+  <p>Any other view that stacks multiple sticky headers below the topbar should follow the same
+  measure-in-rAF-then-<code>setProperty</code> pattern rather than assuming a literal pixel offset — Vehicles' matrix
+  scroll box <span class="ln">:55891</span> and both <code>.t2-hd</code>/<code>.t2-boatpin</code> sticky rules
+  <span class="ln">:73006</span>, <span class="ln">:73093</span> consume these vars with a literal fallback
+  (<code>var(--topbar,52px)</code>) <b>only</b> for the case the JS hasn't run yet.</p>
+
+  <h3 id="u-modal">5.6 Modal system</h3>
+  <p>Two coexisting patterns, both still active:</p>
+
+  <div class="card">
+    <h4>1 · Static markup + class toggle <span class="b gray">older, still dominant</span></h4>
+    <p>Every modal is pre-baked into the body HTML as
+    <code>&lt;div class="modal-overlay" id="some-modal"&gt;&lt;div class="modal"&gt;…&lt;/div&gt;&lt;/div&gt;</code>
+    (hidden by default via CSS), and:</p>
+<pre><code>function openModal(id){ document.getElementById(id).classList.add('open'); }     // :13166
+function closeModal(id){ document.getElementById(id).classList.remove('open'); } // :13167
+document.querySelectorAll('.modal-overlay').forEach(m =&gt; m.addEventListener('click', e =&gt; { if(e.target===m) m.classList.remove('open'); }));  // click-outside-closes, wired once at boot</code></pre>
+    <p>Used everywhere from Boat Status (<code>status-modal</code>, <code>boat-modal</code>) to every Fleet modal
+    (<code>fl-modal-*</code>).</p>
+  </div>
+
+  <div class="card">
+    <h4>2 · Dynamically created overlay <span class="b blue">newer</span></h4>
+    <p>Booking v2, dev-log, and most confirm dialogs build a <code>.la-modal</code>/<code>.la-card</code> (or a bespoke
+    <code>&lt;div style="position:fixed;inset:0..."&gt;</code>) with <code>document.createElement</code>, append it to
+    <code>body</code>, and remove it on close. The reusable instance of this pattern is
+    <code>bkV2ConfirmModal(opts)</code> (<code>allotment_v2.html</code> <span class="ln">:75032</span>) — despite the
+    <code>bkV2</code> prefix it's used <b>app-wide</b> (e.g. <code>devlogDelete</code> at <span class="ln">:44457</span>)
+    as the de-facto standard confirm/cancel dialog:
+    <code>{title, message, okText, cancelText, danger, onConfirm, onCancel}</code>, Escape/Enter keyboard support,
+    click-outside-cancels.</p>
+  </div>
+
+  <div class="note warn">
+    <span class="lbl">Asymmetry worth remembering</span>
+    <code>_laBusy()</code> (doc 07 §2.2) checks for <code>document.querySelector('.la-modal')</code> when deciding whether
+    an auto soft-refresh may proceed — so a <code>.la-modal</code> dialog left open <b>blocks</b> background refreshes,
+    but a <code>.modal-overlay</code> classic modal does <b>not</b> (only checked implicitly through the “focus in an
+    input” / “interacted in last 2s” heuristics). Keep that in mind if you add a long-lived dialog.
+  </div>
+
+  <h3 id="u-toast">5.7 Toast / alert conventions</h3>
+  <p><code>_laToast(msg)</code> <span class="ln">:456</span> (inside the head IIFE) is the one shared toast — a
+  bottom-right amber pill, 2.6s auto-dismiss, reused via <code>window.laGuardEdit()</code> for permission denials
+  (“👁 ส่วนนี้คุณมีสิทธิ์ดูอย่างเดียว”). Most feature code instead calls the browser's native
+  <code>alert()</code>/<code>confirm()</code> directly (e.g. every <code>md*</code> import-error path,
+  <code>staffDelete</code>).</p>
+
+  <div class="note warn">
+    <span class="lbl">English/ASCII only in alert() and console.log()</span>
+    Per CLAUDE.md §1, any new <code>alert()</code>/<code>console.log()</code> text must stay English/ASCII — Thai encoding
+    is known to break in some contexts there, even though Thai is fine in rendered HTML.
+  </div>
+</section>
+
+<!-- ============ 6 ============ -->
+<section id="s6">
+  <h2><span class="num">06</span> Dashboards &amp; reports</h2>
+
+  <h3 id="d-dash">6.1 Dashboard — <code>#view-dashboard</code> / <code>renderDash()</code> <span class="ln">:6271</span></h3>
+  <p>The default landing view. Mounts into <code>#dash-wrap</code>. Selected date is <code>window._dashDate</code>
+  (defaults to <code>TODAY_STR</code>), stepped via <code>setDashDate(d)</code>/<code>resetDashDate()</code>
+  <span class="ln">:6107-6115</span>, each just re-running <code>renderDash()</code>.</p>
+
+  <h4>Aggregation for the selected date <span class="ln">:6294-6330</span></h4>
+  <ul>
+    <li>Iterates <code>TRIPS[_ds]</code> (per-boat trip assignments for that date) to sum capacity (<code>totAllot</code>)
+      per available, non-weather-closed boat, splitting <b>charter</b> trips (counted directly from <code>op.booked</code>)
+      from <b>seat</b> trips (routes collected into a <code>Set</code>, counted afterward).</li>
+    <li>Separately walks <code>SB_BOOKINGS</code> for schema-v2 bookings on that date to catch boats/routes assigned purely
+      through a booking (not present in <code>TRIPS</code>), adding their capacity too so the card total matches what the
+      seat chart below it shows.</li>
+    <li>For every seat-mode route touched, calls <code>getSeatsConsumed(routeId, date)</code> <span class="ln">:12046</span>
+      <b>exactly once</b> to get real booked pax — avoids double-counting a route with multiple boats.</li>
+    <li>The center card renders a month calendar (<code>_dashSeatCalHtml</code>, <span class="ln">:6117</span>) color-tiered
+      by sell-through percentage using <code>getAllotment(routeId, date)</code> <span class="ln">:12145</span> per day,
+      skipping days a route's season/override marks closed (<code>bkV2IsRouteOpenOn</code>) and flagging weather-cancelled
+      trips (<code>bkV2IsWeatherClosed</code>) separately from “no data”.</li>
+  </ul>
+
+  <h3 id="d-cal">6.2 Calendar — <code>#view-calendar</code> / <code>renderCal()</code> <span class="ln">:7330</span></h3>
+  <p>A full-month, per-pier grid (<code>CAL_PIERS = ['tublamu','panwa','ranong']</code>), 5-tier color scale identical in
+  spirit to the Dashboard's (<code>colorFor</code>/<code>bgFor</code>, <span class="ln">:7343-7344</span>) — <b>INVERTED</b>
+  so high sell-through = green, many free seats = amber/red (“aware”). Injects its own scoped <code>&lt;style&gt;</code>
+  block (<code>CAL2CSS</code>, <span class="ln">:7347</span>) once per render into the mount, containing a two-pane layout:
+  a fixed left “today” side panel and a scrollable route/day grid.</p>
+
+  <h3 id="d-da">6.3 Daily Availability — <code>#view-daily</code> / <code>renderDA()</code> <span class="ln">:8479</span></h3>
+  <p>Produces the “seat availability announcement” staff paste to agents — a formatted Thai text block plus a matching
+  visual card list, grouped by pier then route, for a single selectable date (<code>daDate</code>). Uses
+  <code>buildDAGroups(ds)</code> to aggregate allotment/booked/locked per route, <code>freeClass</code>/<code>freeColor</code>
+  for tiering.</p>
+
+  <div class="note warn">
+    <span class="lbl">Its own “full” threshold</span>
+    Daily Availability treats <b>full</b> as <code>free&lt;=0 || pct&gt;=100</code> — matching the wording sent to agents,
+    <b>not</b> the looser 95% threshold used elsewhere. Don't reuse the generic threshold here without checking this one
+    first.
+  </div>
+
+  <h3 id="d-boats">6.4 Boat Status — <code>#view-boats</code> / <code>renderBoats()</code> <span class="ln">:8569</span></h3>
+  <p>Also reachable via the Fleet-menu alias <code>fl-boatstatus</code> — <code>nav()</code> maps both keys to the same
+  <code>#view-boats</code> container and this same renderer (<a href="#s3">§3</a>). Filters <code>BOATS</code> by
+  <code>boatPier</code>/<code>boatSt</code>/<code>boatLocType</code> globals, but computes its KPI counts
+  (<code>availCount</code>, <code>fixCount</code>, <code>unavCount</code>, per-pier counts) from <b>the unfiltered
+  <code>BOATS</code></b> so the summary numbers never shift when a filter is applied — only the list below does. Splits
+  <code>companyBoats</code> vs <code>charterBoats</code> by <code>b.ownership==='charter'</code>.</p>
+
+  <p>Per CLAUDE.md §2.1, the 3-tab grouping (Tub Lamu / Visit Panwa / In Shop) is driven by
+  <code>getBoatCurrentPier(b)</code> <span class="ln">:9920</span> (current physical location, falling back to
+  <code>b.pier</code>) combined with <code>getCurStatus(b, TODAY_STR).s</code> <span class="ln">:5879</span> (the boat's
+  live status from <code>log[last]</code>) — <b>a boat with status <code>fixing</code> always lands in “In Shop”
+  regardless of its <code>pier</code>.</b></p>
+</section>
+
+<!-- ============ 7 ============ -->
+<section id="s7">
+  <h2><span class="num">07</span> Market / Demand Intelligence</h2>
+
+  <p><code>#view-marketdata</code> / <code>renderMarketData()</code> <span class="ln">:44807</span>, mounting into
+  <code>#md-body</code>. Backed by <code>SB_MARKET_STATS</code> (date-keyed daily immigration counts) and
+  <code>SB_MARKET_MONTHLY</code> (older monthly-only totals). If neither has data, shows an empty state pointing at the
+  import button.</p>
+
+  <h3 id="m-tabs">7.1 The six tabs</h3>
+  <p>A <code>tabs</code> array <span class="ln">:44814</span> drives both the tab strip and the dispatch:</p>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:130px">Key</th><th style="width:200px">Label</th><th>Render fn</th></tr></thead>
+    <tbody>
+      <tr><td><code>overview</code></td><td>Overview</td><td><code>mdTabOverview(days)</code> <span class="ln">:43146</span></td></tr>
+      <tr><td><code>forecast</code></td><td>① Forecast</td><td><code>mdTabForecast(days)</code> <span class="ln">:43313</span></td></tr>
+      <tr><td><code>gap</code></td><td>② Market Gap</td><td><code>mdTabGap(days)</code> <span class="ln">:43329</span></td></tr>
+      <tr><td><code>season</code></td><td>③ Season &amp; Pricing</td><td><code>mdTabSeason(days)</code> <span class="ln">:43357</span></td></tr>
+      <tr><td><code>ops</code></td><td>④ Ops &amp; Guides</td><td><code>mdTabOps(days)</code> <span class="ln">:43369</span></td></tr>
+      <tr><td><code>sales</code></td><td>⑤ Sales &amp; Agents</td><td><code>mdTabSales(days)</code> <span class="ln">:43381</span></td></tr>
+      <tr><td><code>agents</code></td><td>⑥ Agents</td><td><code>mdTabAgents(days)</code> <span class="ln">:44054</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Selection is <code>_mdTab</code> (module-level var), switched by <code>mdSetTab(t)</code> <span class="ln">:43099</span>
+  which just sets it and re-runs <code>renderMarketData()</code>. Overview and Agents render full-width
+  (<code>max-width:100%</code>); the other four tabs cap at 1200px. <code>mdOvInit()</code> <span class="ln">:43311</span>
+  runs once <b>after</b> Overview paints to draw its interactive chart (<code>mdOvDraw</code>), because the chart needs real
+  DOM dimensions that don't exist mid-<code>innerHTML</code>-assignment.</p>
+
+  <h3 id="m-import">7.2 The immigration <code>.xls</code> import pipeline</h3>
+  <p>Entry point is the file input at <span class="ln">:5125</span> (<code>Import .xls</code> button, accepts
+  <code>.xls,.xlsx</code>, <code>multiple</code>), wired to <code>mdImportFiles(this.files)</code>.</p>
+
+  <div class="flow">
+    <div class="stage"><div class="k">step 1</div><div class="v">Read</div><div class="s"><code>mdImportFiles(files)</code> <span class="ln">:43018</span></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">step 2</div><div class="v">Direction</div><div class="s"><code>mdDetectDir(aoa, fname)</code> <span class="ln">:42993</span></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">step 3</div><div class="v">Date</div><div class="s"><code>mdThaiDateToISO(str)</code> <span class="ln">:42992</span></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">step 4</div><div class="v">Rows</div><div class="s">grand total + per-nationality <span class="ln">:42998-43009</span></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">step 5</div><div class="v">Write</div><div class="s"><code>sbMarketStatsPersist()</code> <span class="ln">:42974</span></div></div>
+    <div class="arrow">→</div>
+    <div class="stage"><div class="k">step 6</div><div class="v">Reconcile</div><div class="s">nationality mix vs our sales</div></div>
+  </div>
+
+  <div class="rail">
+    <div class="step"><div class="t">1 · <code>mdImportFiles(files)</code> <span class="ln">:43018</span></div>
+      <div class="d">Guards that SheetJS (<code>XLSX</code>, loaded via the CDN <code>&lt;script&gt;</code> at
+      <span class="ln">:4127</span>) is present, then for each file:
+      <code>FileReader.readAsArrayBuffer</code> → <code>XLSX.read</code> →
+      <code>sheet_to_json(sh, {header:1, raw:false, defval:''})</code> to get a raw array-of-arrays (<code>aoa</code>).
+      Calls <code>mdIngest(aoa, file.name)</code> per file; once every file has been read, calls
+      <code>renderMarketData()</code> once.</div></div>
+    <div class="step block"><div class="t">2 · <code>mdDetectDir(aoa, fname)</code> <span class="ln">:42993</span></div>
+      <div class="d">Decides arrivals vs departures: filename containing <code>IN1</code> → <code>'in'</code>,
+      <code>OUT1</code> → <code>'out'</code>; otherwise scans the sheet text for the Thai words ขาเข้า (<i>inbound</i>) /
+      ขาออก (<i>outbound</i>). Returns <code>null</code> — <b>import aborts with an alert</b> — if neither matches.</div></div>
+    <div class="step block"><div class="t">3 · Date extraction</div>
+      <div class="d">Scans every row for a cell containing ประจำวันที่ (<i>“for the date of”</i>) and parses the Thai date
+      via <code>mdThaiDateToISO(str)</code> <span class="ln">:42992</span> (converts a Buddhist-era
+      <code>D Month YYYY</code> string to Gregorian ISO). <b>Import aborts if no date row is found.</b></div></div>
+    <div class="step"><div class="t">4 · Row parsing <span class="ln">:42998-43009</span></div>
+      <div class="d">For each row, finds the official grand-total row (รวม/รวมทั้งสิ้น/ผลรวม) and remembers its number as
+      the authoritative day total; otherwise finds the nationality cell (contains <code>/</code> and Thai script), takes
+      the segment after the last <code>/</code> as the nationality name, and sums all numeric-looking cells into
+      <code>data[nat]</code>.</div></div>
+    <div class="step done"><div class="t">5 · Write</div>
+      <div class="d"><code>SB_MARKET_STATS[iso][dir] = data</code>,
+      <code>SB_MARKET_STATS[iso][dir+'Total'] = grand || sum(data)</code> (official total wins over the computed sum when
+      present), <code>SB_MARKET_STATS[iso][dir+'At'] = now</code>, then <code>sbMarketStatsPersist()</code>
+      <span class="ln">:42974</span> — the standard read-modify-write persist helper, gated on
+      <code>laCanEditArea('sales')</code>.</div></div>
+    <div class="step"><div class="t">6 · Nationality reconciliation</div>
+      <div class="d"><code>mdArrivalsByCode()</code> sums imported arrivals by 2-letter code (via
+      <code>MD_NAT_TH2CODE</code>); <code>mdOurMixByCode()</code>/<code>mdBkMix(b)</code> <span class="ln">:43046</span>
+      distribute each booking's pax across its <i>actual</i> passengers' nationalities (not just the lead's) to compare our
+      sales against the immigration data. <code>mdMissingNat()</code> <span class="ln">:43067</span> lists bookings the
+      guesser can't resolve at all, surfaced as an actionable card (<code>mdMissingNatCard</code>,
+      <span class="ln">:43070</span>) with a direct “Fix →” link into that booking's detail (<code>mdOpenBk</code>,
+      <span class="ln">:43068</span>, which drives the shell's own <code>nav()</code> under the hood).
+      <code>mdBackfillNat()</code> <span class="ln">:43082</span> is a one-time, confirm-gated batch fill for existing
+      bookings, keeping any nationality already set.</div></div>
+  </div>
+
+  <p><b>Deleting one imported day:</b> <code>mdDeleteDay(iso)</code> <span class="ln">:43028</span>, a plain
+  <code>delete SB_MARKET_STATS[iso]</code> + persist, confirm-gated.</p>
+</section>
+
+<!-- ============ 8 ============ -->
+<section id="s8">
+  <h2><span class="num">08</span> Staff &amp; team views</h2>
+
+  <h3 id="st-staff">8.1 Staff &amp; Welfare — <code>#view-staff</code> / <code>renderStaff()</code> <span class="ln">:39508</span></h3>
+  <p>Manages <code>SB_STAFF</code> — the employee roster plus an annual free-trip welfare quota. Two tabs
+  (<code>_staffTab</code>, <code>staffSetTab</code>):</p>
+  <div class="grid2">
+    <div class="mini"><h5>Roster</h5>
+      <p>Editable table — code/name/dept, via <code>staffSetField</code>.</p></div>
+    <div class="mini"><h5>Trips report</h5>
+      <p><code>staffTripsReport(yr)</code> <span class="ln">:39459</span> — which staff took which welfare trip that
+      year.</p></div>
+  </div>
+  <p>Quota math is <b>per-year</b>: <code>staffQuota(id, year)</code> reads <code>s.quota[String(year)]</code>;
+  <code>staffWelfareUsed(id, year)</code> <span class="ln">:39428</span> counts consumed seats; <code>staffRemaining</code>
+  is the difference, colored red when negative.</p>
+  <div class="note">
+    <span class="lbl">Permission area</span>
+    <code>staffSetQuota</code>/<code>staffSetField</code>/<code>staffDelete</code> all funnel through
+    <code>sbStaffPersist()</code> <span class="ln">:39327</span> — edit-guarded on the <code>'sales'</code> area. Staff
+    &amp; Welfare lives under the <b>Sales</b> permission group per <code>LA_VIEW_AREA</code>, not a dedicated HR area.
+  </div>
+
+  <h3 id="st-team">8.2 Team &amp; Markets — <code>#view-teammkt</code> / <code>renderTeamMkt()</code> <span class="ln">:78473</span></h3>
+  <p>A single view managing two registries side by side: <b>Sales people</b> (<code>SB_SALES</code>, persisted by
+  <code>sbSalesPersist()</code> <span class="ln">:39564</span>) and <b>Markets</b> (<code>SB_MARKETS</code>, persisted by
+  <code>sbMarketsPersist()</code> <span class="ln">:39290</span>). Each row shows a live-computed agent count
+  (<code>SB_AGENTS.filter(a=&gt;a.sales===s.id)</code> / <code>a.market===m.id</code>) so removing a sales person or market
+  that still has agents attached is <b>visibly risky before you click delete</b>.</p>
+  <p>CRUD via <code>tmAddSales</code>/<code>tmEditSales</code>/<code>tmDeleteSales</code>
+  <span class="ln">:78538-78554+</span> and the market equivalents <code>tmAddMarket</code>/<code>tmEditMarket</code>
+  <span class="ln">:78569+</span>; <code>tmApplyMarketOrder(ids)</code> <span class="ln">:12424</span> persists a
+  drag-reordered market list.</p>
+</section>
+
+<!-- ============ 9 ============ -->
+<section id="s9">
+  <h2><span class="num">09</span> Settings &amp; dev tools</h2>
+
+  <h3 id="cfg-prog">9.1 Config → Programs — <code>renderSettings()</code> vs <code>renderSettingsLegacy()</code></h3>
+  <p><code>#view-settings</code> / <code>renderSettings()</code> <span class="ln">:12437</span> vs
+  <code>renderSettingsLegacy()</code> <span class="ln">:12796</span>. The view's markup
+  <span class="ln">:5145-5167</span> contains <b>both</b> layouts simultaneously: a visible
+  <code>&lt;div id="prog-pink-wrap"&gt;</code> (empty, JS-filled) and a <code>display:none</code> legacy two-column block
+  (<code>#prog-list-main</code> + <code>#prog-detail-content</code>).</p>
+
+  <p><code>renderSettings()</code> is the live implementation — a KPI-strip + pier-grouped program list styled to match the
+  “pink/glass” design language shared with Boat Status. Its <b>first line</b> is the split:</p>
+
+<pre><code>function renderSettings(){
+  const wrap = document.getElementById('prog-pink-wrap');
+  if(!wrap) return renderSettingsLegacy();   // legacy path — fallback to old render if wrap not found
+  ...
+}</code></pre>
+
+  <div class="note warn">
+    <span class="lbl"><code>renderSettingsLegacy()</code> is dead code</span>
+    Since <code>#prog-pink-wrap</code> is always present in the current markup, <code>renderSettingsLegacy()</code> is
+    <b>effectively dead code</b> under normal operation — it only fires if that specific <code>&lt;div&gt;</code> were ever
+    removed from the body markup (e.g. a partial revert of the redesign). It's kept as a safety fallback, <b>not an
+    alternate UI a user can reach</b>. Don't “fix” bugs by editing it; edit <code>renderSettings()</code>.
+  </div>
+
+  <p>Both call <code>renderProgDetail()</code> at the end to paint the selected route's season editor into
+  <code>#prog-detail-content</code> / its pink-wrap equivalent. <code>openRouteModal()</code> opens the shared
+  add/edit-route dialog (classic <code>.modal-overlay</code> pattern, <a href="#u-modal">§5.6</a>).</p>
+
+  <h3 id="cfg-devlog">9.2 Dev tools — <code>#view-devlog</code> / <code>renderDevLog()</code> <span class="ln">:44459</span></h3>
+  <p>“System Log” — an admin-only running to-do/bug/idea list, gated by <code>devlogIsAdmin()</code>
+  <span class="ln">:44449</span> (<code>role==='admin'</code> <b>or</b> no <code>LA_ME</code> at all — i.e. also open on the
+  degraded localhost path where there's no login).</p>
+
+  <div class="note danger">
+    <span class="lbl"><code>admin_devlog</code> is a double-encoded JSON string</span>
+    Data is <code>admin_devlog</code>, a <b>JSON-string-in-a-string</b> top-level scalar in the blob
+    (<code>devlogLoad</code>/<code>devlogSave</code>, <span class="ln">:44447-44448</span> — note the double
+    <code>JSON.stringify</code>/<code>JSON.parse</code>, not a plain array field), so on the write path (doc 07 §3.1) it
+    lands in the <code>sets</code> bucket → <code>app_meta</code>, <b>not a proper collection table</b>. A new persisted
+    dev-tool field should probably not copy this shape.
+  </div>
+
+  <p>Entries: <code>{id, text, tag ('task'|'bug'|'idea'), by, at, done, doneAt, doneBy}</code>.
+  <code>devlogAdd</code>/<code>devlogToggle</code>/<code>devlogDelete</code> (the last routed through
+  <code>bkV2ConfirmModal</code>, <a href="#u-modal">§5.6</a>) all read-modify-write the whole array through
+  <code>devlogSave</code>.</p>
+
+  <div class="note ok">
+    <span class="lbl">Belt and suspenders</span>
+    The sidebar nav item (<code>data-view="devlog"</code>, <span class="ln">:4388</span>) carries
+    <code>data-adminonly="1"</code>, hidden for non-admins by <code>laApplyAdminOnly()</code> <b>independently</b> of the
+    <code>devlogIsAdmin()</code> check inside the renderer itself.
+  </div>
+</section>
+
+<!-- ============ 10 ============ -->
+<section id="s10">
+  <h2><span class="num">10</span> Visual system</h2>
+
+  <h4>Fonts</h4>
+  <p>DM Sans (body text) and DM Mono (numbers/monospace figures), both loaded from Google Fonts alongside Inter, Manrope,
+  IBM Plex Sans Thai, Noto Sans Thai, Quicksand, and Sarabun in one combined <code>&lt;link&gt;</code>
+  <span class="ln">:726</span> — different feature areas pick a different display font for their headers/branding (Manrope
+  for the Dashboard, IBM Plex Sans Thai for Costing, Quicksand for the Calendar's big date, etc.) while DM Sans/DM Mono
+  stay the shared defaults (<code>body{font-family:'DM Sans',...}</code> <span class="ln">:1217</span>).</p>
+
+  <h4>Ocean-blue skin</h4>
+  <p><code>&lt;style id="softui-ocean-skin"&gt;</code> <span class="ln">:3443-3469</span> recolors the brand accent from the
+  original coral to <code>#1683C7</code> by overriding the <code>--coral</code>/<code>--fd-coral</code>/<code>--aos-coral</code>
+  CSS variable families plus a handful of hardcoded topbar/sidebar selectors (soft-UI neumorphic shadows).</p>
+  <div class="note ok">
+    <span class="lbl">To revert</span>
+    Delete this one <code>&lt;style&gt;</code> block — nothing else references it by name, and every consumer reads through
+    the CSS variables it redefines. This is the reference example for the <b>reversible skin block</b> convention used
+    throughout the file.
+  </div>
+
+  <h4>Full skin-block inventory</h4>
+  <p><code>&lt;style id="*-skin"&gt;</code> — all self-contained and independently deletable:</p>
+  <div class="tw"><table>
+    <thead><tr><th style="width:220px">id</th><th style="width:90px">Line</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>bkv2-buildaxis-skin</code></td><td class="mono">3337</td><td>Booking v2 build-axis styling</td></tr>
+      <tr><td><code>softui-ocean-skin</code></td><td class="mono">3443</td><td>brand accent → ocean blue (see above)</td></tr>
+      <tr><td><code>md-glass-skin</code></td><td class="mono">3470</td><td>Market Intelligence glass-card treatment</td></tr>
+      <tr><td><code>bkv2-liquid-skin</code></td><td class="mono">3520</td><td>Booking v2 liquid-glass accents</td></tr>
+      <tr><td><code>cal-liquid-skin</code></td><td class="mono">3546</td><td>Calendar liquid-glass accents</td></tr>
+      <tr><td><code>dash-glass-skin</code></td><td class="mono">3551</td><td>Dashboard glass-card treatment</td></tr>
+      <tr><td><code>bop-glass-skin</code></td><td class="mono">3601</td><td>Boat Operation glass treatment</td></tr>
+      <tr><td><code>topbar-float-skin</code></td><td class="mono">3632</td><td>removes the fixed top bar, floats controls top-right, sets <code>--topbar:0px</code></td></tr>
+      <tr><td><code>bkv2-nb-glass-skin</code></td><td class="mono">3647</td><td>Booking v2 “New Booking” form glass cards (with the backdrop-filter dropdown-trap fix, <a href="#u-backdrop">§5.4</a>)</td></tr>
+      <tr><td><code>sidebar-glass-skin</code></td><td class="mono">3673</td><td>floating rounded-card sidebar</td></tr>
+      <tr><td><code>bkv2-cal-filter-skin</code></td><td class="mono">3748</td><td>Booking v2 calendar filter chips</td></tr>
+      <tr><td><code>cost-v2-skin</code></td><td class="mono">3761</td><td>Costing page v2 styling</td></tr>
+      <tr><td><code>bkv2-vc-skin</code></td><td class="mono">3804</td><td>Booking v2 voucher/contract styling</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note warn">
+    <span class="lbl"><code>la-mobile</code> is not a skin</span>
+    <code>la-mobile</code> <span class="ln">:3900</span> is a related but different animal — a genuine responsive layer
+    (<code>@media (max-width:820px)</code> rules), <b>not</b> a reversible aesthetic skin. Don't delete it to “revert”
+    anything.
+  </div>
+
+  <h4>Icon convention</h4>
+  <p>No icon font or Tabler webfont anywhere in the app — every icon is inline
+  <code>&lt;svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"&gt;...&lt;/svg&gt;</code>, hand-written
+  per usage. This keeps icons themeable via <code>currentColor</code>/<code>stroke</code> without any extra asset loading,
+  at the cost of duplicated SVG path data across the file.</p>
+</section>
+
+<!-- ============ 11 ============ -->
+<section id="s11">
+  <h2><span class="num">11</span> Invariants &amp; gotchas</h2>
+
+  <div class="note danger">
+    <span class="lbl">1 · <code>nav()</code> dispatch is a hardcoded if/else chain, not a lookup table</span>
+    A new view needs a nav-item + <code>#view-&lt;key&gt;</code> container + a new branch in <code>nav()</code> (or the
+    <code>fl-</code> sub-chain) — <b>nothing auto-wires</b> from the <code>data-view</code> attribute.
+  </div>
+
+  <div class="note danger">
+    <span class="lbl">2 · <code>esc</code> is local, always</span>
+    Any new top-level HTML-building function needs its own <code>const esc=...</code> at the top or it throws on first
+    click, silently, into the console. See <a href="#u-esc">§5.1</a>.
+  </div>
+
+  <div class="note danger">
+    <span class="lbl">3 · Never <code>toISOString().slice(0,10)</code></span>
+    For a date derived from a <code>Date</code> object — use <code>bkV2LocalYMD</code>. UTC+7 makes this a silent
+    one-day-off bug for anything before 07:00 local. See <a href="#u-date">§5.2</a>.
+  </div>
+
+  <div class="note warn">
+    <span class="lbl">4 · <code>backdrop-filter</code> on a card containing a typeahead dropdown</span>
+    …traps the dropdown behind other content. Check what's inside before adding it. See <a href="#u-backdrop">§5.4</a>.
+  </div>
+
+  <div class="note warn">
+    <span class="lbl">5 · Sticky offsets must read <code>--topbar</code>/<code>--t2-vangroup-top</code></span>
+    Never a literal <code>52</code>. The <code>topbar-float-skin</code> re-skin already zeroes <code>--topbar</code>, and
+    <code>--t2-vangroup-top</code> is measured at runtime, not authored. See <a href="#u-sticky">§5.5</a>.
+  </div>
+
+  <div class="note warn">
+    <span class="lbl">6 · <code>renderSettingsLegacy()</code> is dead code under normal operation</span>
+    It only runs if <code>#prog-pink-wrap</code> is missing from the markup. Don't “fix” bugs by editing it; edit
+    <code>renderSettings()</code>.
+  </div>
+
+  <div class="note warn">
+    <span class="lbl">7 · <code>admin_devlog</code> is a double-encoded JSON string</span>
+    Not a real collection — <code>devlogLoad</code>/<code>devlogSave</code> <code>JSON.parse</code>/<code>JSON.stringify</code>
+    it a second time on top of the blob's own serialization. A new persisted dev-tool field should probably not copy this
+    shape.
+  </div>
+
+  <div class="note">
+    <span class="lbl">8 · Boat Status's KPI counts always read unfiltered <code>BOATS</code></span>
+    …even while the visible list is filtered by pier/status/location-type. This is <b>intentional</b> (the summary
+    shouldn't shift under a filter), but easy to “fix” into a bug if you don't notice the two separate
+    <code>boats</code>/<code>allCompany</code> variables.
+  </div>
+
+  <div class="note">
+    <span class="lbl">9 · <code>_laBusy()</code> only special-cases <code>.la-modal</code> dialogs</span>
+    Not classic <code>.modal-overlay</code> ones, when deciding whether a background soft-refresh may proceed. A long-lived
+    classic modal relies on the “input focused” / “interacted in last 2s” heuristics instead.
+  </div>
+
+  <div class="note">
+    <span class="lbl">10 · Sidebar/layout prefs are per-device, not per-account</span>
+    <code>la_sbcolor_*</code>/<code>la_sbacc_*</code>/<code>la_pogrp</code>/<code>sb_collapsed</code> never sync — a user
+    switching machines starts over on sidebar personalization, <b>by design</b> (CLAUDE.md §2's “tiny UI/cache keys”
+    exception).
+  </div>
+
+  <div class="note warn">
+    <span class="lbl">11 · Pier enum reality check — the shell has moved ahead of CLAUDE.md</span>
+    <code>CLAUDE.md</code> marks <code>ranong</code> as <span class="b gray">Planned</span>, but by <code>094dde1</code>
+    the Calendar (<code>CAL_PIERS</code>), Settings/Programs (<code>PIER_INFO</code>), and the entire Pier-Office nav group
+    (<code>poa/pol/poj/po-ranong</code>) already have <b>full first-class <code>ranong</code> support</b> in this doc's
+    domain. Verify current enum usage with <code>[...new Set(d.boats.map(b=&gt;b.pier))]</code> before assuming which piers
+    are “real” versus planned.
+  </div>
+
+  <div class="note danger">
+    <span class="lbl">12 · <code>devlogIsAdmin()</code> returns <code>true</code> when there's no <code>LA_ME</code> at all</span>
+    I.e. the degraded localhost-without-<code>/api</code> path (doc 07 §2.1) gets <b>full System Log access with no
+    login</b>. Harmless for a dev toy dataset, worth remembering if that path is ever pointed at real data.
+  </div>
+</section>
+
+<!-- ============ 12 ============ -->
+<section id="s12">
+  <h2><span class="num">12</span> Function index</h2>
+
+  <input class="filter" id="ffilter" type="search" placeholder="Filter functions…" autocomplete="off">
+  <span class="count" id="fcount"></span>
+
+  <div class="tw"><table id="ftable">
+    <thead><tr><th>Function</th><th>Line</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>nav(el)</code></td><td class="mono">6027</td><td>The router — toggles <code>.active</code>, dispatches to the right <code>render*()</code></td></tr>
+      <tr><td><code>laWrapNav()</code></td><td class="mono">482</td><td>Monkey-patches <code>window.nav</code> to enforce <code>laAllowed()</code> before dispatch</td></tr>
+      <tr><td><code>laApplyPerms()</code></td><td class="mono">464</td><td>Hides nav-items/sections the current role can't see</td></tr>
+      <tr><td><code>laApplyAdminOnly()</code></td><td class="mono">450</td><td>Hides every <code>[data-adminonly]</code> node for non-admins</td></tr>
+      <tr><td><code>laAllowed(view)</code></td><td class="mono">463</td><td>True if the current role's permission set includes this view key</td></tr>
+      <tr><td><code>laFullAccess()</code></td><td class="mono">462</td><td>True if no <code>ME</code>, role is admin, or perms array is absent (unrestricted)</td></tr>
+      <tr><td><code>laCanEdit()</code></td><td class="mono">454</td><td>Global “can this user save anything” gate</td></tr>
+      <tr><td><code>laCanEditArea(area)</code></td><td class="mono">455</td><td>Per-section (“sales”/“fleet”/“pier”/…) edit gate, used by every <code>*Persist()</code> helper</td></tr>
+      <tr><td><code>laExpandPerms(perms)</code></td><td class="mono">426</td><td>Expands a stored perms array (which may hold group keys) into a Set of view keys</td></tr>
+      <tr><td><code>laGuessDept(u)</code> / <code>laDeptOf(u)</code></td><td class="mono">565/573</td><td>Infer a user's department from username if not explicitly set</td></tr>
+      <tr><td><code>laAreaBadges(u)</code> / <code>laAreaState(u,area)</code></td><td class="mono">583/575</td><td>Render the per-area access chips in the user-admin UI</td></tr>
+      <tr><td><code>_laSaveView()</code></td><td class="mono">278</td><td>Snapshots current view + booking sub-state + scroll to <code>sessionStorage.la_view</code></td></tr>
+      <tr><td><code>_laRestoreView()</code></td><td class="mono">287</td><td>Restores the above 850ms after boot</td></tr>
+      <tr><td><code>onReady(fn)</code></td><td class="mono">396</td><td>Run now if <code>document.body</code> exists, else on <code>DOMContentLoaded</code></td></tr>
+      <tr><td><code>laNavOpen/Close/Toggle()</code></td><td class="mono">4160-4162</td><td>Mobile drawer open/close/toggle (<code>body.la-nav-open</code>)</td></tr>
+      <tr><td><code>laUbPlace()</code></td><td class="mono">4167</td><td>Moves the user badge into/out of the sidebar depending on viewport width</td></tr>
+      <tr><td><code>toggleTopbarTools()</code></td><td class="mono">4158</td><td>Toggles the floated topbar tools panel (<code>.topbar.tools-open</code>)</td></tr>
+      <tr><td><code>laSbUser()</code></td><td class="mono">5945</td><td>Resolve the current username for keying per-user sidebar prefs</td></tr>
+      <tr><td><code>laApplySidebarColor()</code></td><td class="mono">5947</td><td>Injects a <code>&lt;style&gt;</code> overriding <code>.nav-item.active</code> background with the user's chosen color</td></tr>
+      <tr><td><code>laSetSidebarColor(c)</code> / <code>laSbResetColor()</code></td><td class="mono">5955/5956</td><td>Set/clear <code>la_sbcolor_&lt;user&gt;</code></td></tr>
+      <tr><td><code>laSbColorPickerHTML()</code> / <code>laSbToggleColorPicker()</code></td><td class="mono">5957/5963</td><td>Render/toggle the sidebar footer color swatch picker</td></tr>
+      <tr><td><code>laSbCollapsed()</code> / <code>laSbSetCollapsed(a)</code></td><td class="mono">5970/5971</td><td>Read/write <code>la_sbacc_&lt;user&gt;</code> (collapsed nav-section labels)</td></tr>
+      <tr><td><code>laSbToggleSection(sec)</code> / <code>laSbInitAccordion()</code></td><td class="mono">5973/5978</td><td>Collapse/expand a nav-section, attach click handlers once</td></tr>
+      <tr><td><code>poNavGroup(el)</code> / <code>poNavGroupOpen(g)</code> / <code>poNavGroupInit()</code></td><td class="mono">5990/5999/6005</td><td>Pier-Office sidebar sub-group collapse, open, and boot-time restore</td></tr>
+      <tr><td><code>laSbInit()</code></td><td class="mono">6016</td><td>Attaches accordion + pier-group + color-picker behavior; re-run defensively from <code>nav()</code></td></tr>
+      <tr><td><code>openModal(id)</code> / <code>closeModal(id)</code></td><td class="mono">13166/13167</td><td>Classic <code>.modal-overlay</code> show/hide via <code>.open</code> class</td></tr>
+      <tr><td><code>bkV2ConfirmModal(opts)</code></td><td class="mono">75032</td><td>App-wide dynamic confirm/cancel dialog (despite the <code>bkV2</code> prefix)</td></tr>
+      <tr><td><code>_laToast(msg)</code></td><td class="mono">456</td><td>Bottom-right amber toast, 2.6s auto-dismiss</td></tr>
+      <tr><td><code>bkV2LocalYMD(dt)</code></td><td class="mono">71746</td><td>Local-timezone <code>YYYY-MM-DD</code> — the timezone-safe date formatter</td></tr>
+      <tr><td><code>updateDate()</code></td><td class="mono">6100</td><td>Paints the topbar date label</td></tr>
+      <tr><td><code>refreshData()</code></td><td class="mono">6097</td><td><code>seed(); renderDash();</code> — manual “↻ Refresh” topbar button</td></tr>
+      <tr><td><code>renderDash()</code></td><td class="mono">6271</td><td>Dashboard renderer</td></tr>
+      <tr><td><code>setDashDate(d)</code> / <code>resetDashDate()</code></td><td class="mono">6107/6112</td><td>Change the Dashboard's selected date</td></tr>
+      <tr><td><code>_dashSeatCalHtml(dx,F)</code></td><td class="mono">6117</td><td>Dashboard's month seat-availability calendar widget</td></tr>
+      <tr><td><code>renderCal()</code></td><td class="mono">7330</td><td>Calendar view renderer</td></tr>
+      <tr><td><code>renderDA()</code></td><td class="mono">8479</td><td>Daily Availability (agent announcement text) renderer</td></tr>
+      <tr><td><code>_daSortRows</code> / <code>daEditRouteName</code></td><td class="mono">(near 8489/8510)</td><td>DA row ordering / inline route short-name editing</td></tr>
+      <tr><td><code>renderBoats()</code></td><td class="mono">8569</td><td>Boat Status board renderer (shared by <code>boats</code> and <code>fl-boatstatus</code> nav keys)</td></tr>
+      <tr><td><code>getCurStatus(boat, ds)</code></td><td class="mono">5879</td><td>Boat's live status (<code>log[last]</code>) as of a date</td></tr>
+      <tr><td><code>getBoatCurrentPier(b, ds)</code></td><td class="mono">9920</td><td>Boat's real current physical pier (vs. its home <code>pier</code>)</td></tr>
+      <tr><td><code>getDayStatus(r, dateStr)</code></td><td class="mono">11915</td><td>A route's open/closed status for one date (seasons + overrides)</td></tr>
+      <tr><td><code>getSeatsConsumed(routeId, dateStr, excludeBkId)</code></td><td class="mono">12046</td><td>Real booked pax for a seat-mode route/date</td></tr>
+      <tr><td><code>getAllotment(routeId, dateStr, excludeBkId)</code></td><td class="mono">12145</td><td>Full allotment object (capacity/booked/free/locked) for a route/date</td></tr>
+      <tr><td><code>renderSettings()</code></td><td class="mono">12437</td><td>Config → Programs, live implementation</td></tr>
+      <tr><td><code>renderSettingsLegacy()</code></td><td class="mono">12796</td><td>Dead-code fallback, only runs if <code>#prog-pink-wrap</code> is missing</td></tr>
+      <tr><td><code>renderProgDetail()</code></td><td class="mono">12851</td><td>Paints the selected route's season editor</td></tr>
+      <tr><td><code>openRouteModal(id?)</code></td><td class="mono">(called from 12467/12825/etc.)</td><td>Opens the add/edit-route classic modal</td></tr>
+      <tr><td><code>renderMarketData()</code></td><td class="mono">44807</td><td>Market/Demand Intelligence shell — band, tabs, dispatch</td></tr>
+      <tr><td><code>mdSetTab(t)</code></td><td class="mono">43099</td><td>Switch <code>_mdTab</code>, re-render</td></tr>
+      <tr><td><code>mdImportFiles(files)</code></td><td class="mono">43018</td><td><code>.xls</code>/<code>.xlsx</code> file input handler — reads via SheetJS</td></tr>
+      <tr><td><code>mdDetectDir(aoa,fname)</code></td><td class="mono">42993</td><td>Arrivals vs departures detection</td></tr>
+      <tr><td><code>mdIngest(aoa,fname)</code></td><td class="mono">42994</td><td>Parses one sheet, writes into <code>SB_MARKET_STATS</code></td></tr>
+      <tr><td><code>mdThaiDateToISO(str)</code></td><td class="mono">42992</td><td>Buddhist-era Thai date string → ISO</td></tr>
+      <tr><td><code>mdDeleteDay(iso)</code></td><td class="mono">43028</td><td>Removes one imported day, confirm-gated</td></tr>
+      <tr><td><code>mdArrivalsByCode()</code></td><td class="mono">43033</td><td>Imported arrivals summed by nationality code</td></tr>
+      <tr><td><code>mdBkMix(b)</code> / <code>mdOurMixByCode()</code></td><td class="mono">43046/43064</td><td>Per-booking / aggregate nationality mix from actual passengers</td></tr>
+      <tr><td><code>mdMissingNat()</code> / <code>mdMissingNatCard()</code></td><td class="mono">43067/43070</td><td>Bookings with unresolvable nationality + the actionable UI card</td></tr>
+      <tr><td><code>mdBackfillNat()</code></td><td class="mono">43082</td><td>One-time confirm-gated nationality auto-fill for existing bookings</td></tr>
+      <tr><td><code>mdTabOverview/Forecast/Gap/Season/Ops/Sales/Agents(days)</code></td><td class="mono">43146/43313/43329/43357/43369/43381/44054</td><td>The six tab bodies</td></tr>
+      <tr><td><code>sbMarketStatsPersist()</code></td><td class="mono">42974</td><td>Persist helper for <code>SB_MARKET_STATS</code></td></tr>
+      <tr><td><code>renderStaff()</code></td><td class="mono">39508</td><td>Staff &amp; Welfare renderer</td></tr>
+      <tr><td><code>staffQuota(id,year)</code> / <code>staffWelfareUsed(id,year)</code></td><td class="mono">39426/39428</td><td>Per-staff annual welfare quota / consumption</td></tr>
+      <tr><td><code>staffSetQuota</code> / <code>staffSetField</code> / <code>staffDelete</code></td><td class="mono">39506/39505/39507</td><td>Staff row edits</td></tr>
+      <tr><td><code>sbStaffPersist()</code></td><td class="mono">39327</td><td>Persist helper for <code>SB_STAFF</code></td></tr>
+      <tr><td><code>renderTeamMkt()</code></td><td class="mono">78473</td><td>Team &amp; Markets renderer</td></tr>
+      <tr><td><code>tmAddSales/tmEditSales/tmDeleteSales</code></td><td class="mono">78538/78546/78554</td><td><code>SB_SALES</code> CRUD</td></tr>
+      <tr><td><code>tmAddMarket/tmEditMarket</code></td><td class="mono">78569/78576</td><td><code>SB_MARKETS</code> CRUD</td></tr>
+      <tr><td><code>sbSalesPersist()</code> / <code>sbMarketsPersist()</code></td><td class="mono">39564/39290</td><td>Persist helpers for the two registries</td></tr>
+      <tr><td><code>tmApplyMarketOrder(ids)</code></td><td class="mono">12424</td><td>Persist a drag-reordered market list</td></tr>
+      <tr><td><code>renderDevLog()</code></td><td class="mono">44459</td><td>System Log (dev to-do) renderer</td></tr>
+      <tr><td><code>devlogLoad()</code> / <code>devlogSave(arr)</code></td><td class="mono">44447/44448</td><td>Read/write the double-JSON-encoded <code>admin_devlog</code> blob scalar</td></tr>
+      <tr><td><code>devlogIsAdmin()</code></td><td class="mono">44449</td><td>Gate — admin role, or no <code>LA_ME</code> (degraded localhost)</td></tr>
+      <tr><td><code>devlogAdd/Toggle/Delete</code></td><td class="mono">44452/44456/44457</td><td>System Log entry CRUD</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<footer>
+  Rendered from <code>allotment_v2/docs/workflows/08-shell-dashboards-config.md</code> ·
+  written against commit <code>094dde1</code> on <code>refactor/booking-v2-migration</code> ·
+  these docs describe <b>the code, not the intent</b> — where an older doc contradicts the code, the code won.
+</footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  // theme toggle
+  var btn = document.getElementById('themebtn');
+  var root = document.documentElement;
+  var saved = null;
+  try { saved = localStorage.getItem('la_doc_theme'); } catch(e){}
+  if (saved) root.setAttribute('data-theme', saved);
+  btn.addEventListener('click', function(){
+    var cur = root.getAttribute('data-theme');
+    var next;
+    if (cur === 'dark') next = 'light';
+    else if (cur === 'light') next = 'dark';
+    else next = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('la_doc_theme', next); } catch(e){}
+  });
+
+  // scrollspy
+  var links = Array.prototype.slice.call(document.querySelectorAll('#nav a'));
+  var targets = links.map(function(a){ return document.querySelector(a.getAttribute('href')); });
+  function spy(){
+    var best = 0, bestTop = -Infinity;
+    for (var i=0;i<targets.length;i++){
+      if (!targets[i]) continue;
+      var t = targets[i].getBoundingClientRect().top - 90;
+      if (t <= 0 && t > bestTop){ bestTop = t; best = i; }
+    }
+    links.forEach(function(a,i){ a.classList.toggle('on', i===best); });
+  }
+  var tick = false;
+  window.addEventListener('scroll', function(){
+    if (tick) return; tick = true;
+    requestAnimationFrame(function(){ spy(); tick = false; });
+  }, {passive:true});
+  spy();
+
+  // function-index filter (optional — skipped when the doc has no #ffilter)
+  var input = document.getElementById('ffilter');
+  var rows  = Array.prototype.slice.call(document.querySelectorAll('#ftable tbody tr'));
+  var count = document.getElementById('fcount');
+  if (input && rows.length){
+    var paint = function(){
+      var q = input.value.trim().toLowerCase();
+      var n = 0;
+      rows.forEach(function(r){
+        var hit = !q || r.textContent.toLowerCase().indexOf(q) !== -1;
+        r.classList.toggle('hidden', !hit);
+        if (hit) n++;
+      });
+      if (count) count.textContent = q ? (n + ' of ' + rows.length + ' shown') : (rows.length + ' functions');
+    };
+    input.addEventListener('input', paint);
+    paint();
+  }
+})();
+</script>
+</body>
+</html>
