@@ -8,6 +8,7 @@ import {
   createMigration,
   diffMigrations,
   loadMigrations,
+  prepareBaselineSql,
   status,
   up,
   type Migration,
@@ -81,6 +82,28 @@ describe('diffMigrations', () => {
   it('detects an applied migration whose file was deleted', () => {
     const d = diffMigrations([], [{ version: '0007', checksum: 'abc' }]);
     expect(d).toEqual([{ version: '0007', name: '(file missing)', state: 'missing' }]);
+  });
+});
+
+describe('prepareBaselineSql', () => {
+  it('drops the psql meta-commands pg_dump 18 emits', () => {
+    const out = prepareBaselineSql('\\restrict abc123\nCREATE TABLE t ();\n\\unrestrict abc123\n');
+    expect(out).not.toContain('\\restrict');
+    expect(out).not.toContain('\\unrestrict');
+    expect(out).toContain('CREATE TABLE t ();');
+  });
+
+  it('guards CREATE SCHEMA so the always-present public schema does not abort the dump', () => {
+    expect(prepareBaselineSql('CREATE SCHEMA public;')).toBe('CREATE SCHEMA IF NOT EXISTS public;');
+    expect(prepareBaselineSql('CREATE SCHEMA operation_schemas;')).toBe(
+      'CREATE SCHEMA IF NOT EXISTS operation_schemas;',
+    );
+  });
+
+  it('leaves an already-guarded statement alone', () => {
+    expect(prepareBaselineSql('CREATE SCHEMA IF NOT EXISTS x;')).toBe(
+      'CREATE SCHEMA IF NOT EXISTS x;',
+    );
   });
 });
 

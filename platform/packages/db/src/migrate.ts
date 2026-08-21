@@ -234,11 +234,27 @@ function stripPsqlMetaCommands(sql: string): string {
     .join('\n');
 }
 
+/**
+ * `CREATE SCHEMA x;` -> `CREATE SCHEMA IF NOT EXISTS x;`
+ *
+ * Every fresh Postgres already owns a `public` schema, so `public_*.sql`'s
+ * unguarded CREATE aborts the whole dump. Guarding all four also makes re-running
+ * the baseline against an already-seeded database a no-op rather than an error.
+ */
+function guardSchemaCreation(sql: string): string {
+  return sql.replace(/^CREATE SCHEMA (?!IF NOT EXISTS)/gm, 'CREATE SCHEMA IF NOT EXISTS ');
+}
+
+/** Prepares a pg_dump file for execution over the pg protocol. Exported for testing. */
+export function prepareBaselineSql(sql: string): string {
+  return guardSchemaCreation(stripPsqlMetaCommands(sql));
+}
+
 /** Applies the P0-01 baseline dumps, in the given order, to an empty database. */
 export async function applyBaseline(pool: pg.Pool, dir: string, files: string[]): Promise<void> {
   for (const file of files) {
     const sql = await readFile(path.join(dir, file), 'utf8');
-    await pool.query(stripPsqlMetaCommands(sql));
+    await pool.query(prepareBaselineSql(sql));
   }
 }
 
