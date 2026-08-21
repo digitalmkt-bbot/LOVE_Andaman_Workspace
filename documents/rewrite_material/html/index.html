@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rewrite Material</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f8fa; --panel:#ffffff; --panel-2:#fbfcfd;
+  --ink:#0f2029; --ink-2:#31485a; --muted:#68808f;
+  --line:#e1e8ee; --line-2:#eef2f6;
+  --accent:#1683C7; --accent-ink:#0f6ba6; --accent-soft:#e8f3fb;
+  --danger:#c8384c; --danger-soft:#fdecee;
+  --warn:#b46a00; --warn-soft:#fdf3e3;
+  --ok:#137a52; --ok-soft:#e6f5ee;
+  --violet:#6a4bbd; --violet-soft:#f0ecfb;
+  --code-bg:#f0f4f8; --code-ink:#173446;
+  --shadow:0 1px 2px rgba(15,32,41,.05), 0 8px 24px -14px rgba(15,32,41,.22);
+  --radius:14px;
+}
+:root:not([data-theme="light"]){ }
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b1317; --panel:#111d24; --panel-2:#0e181e;
+    --ink:#e7eff5; --ink-2:#bfd0dc; --muted:#89a0af;
+    --line:#1f313c; --line-2:#182831;
+    --accent:#49b2ee; --accent-ink:#7ccbf8; --accent-soft:#0f2c3d;
+    --danger:#f2798c; --danger-soft:#33161c;
+    --warn:#e0a24a; --warn-soft:#33260f;
+    --ok:#4ccb95; --ok-soft:#0f2b21;
+    --violet:#a48bef; --violet-soft:#221b3a;
+    --code-bg:#0d1b23; --code-ink:#cfe0eb;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b1317; --panel:#111d24; --panel-2:#0e181e;
+  --ink:#e7eff5; --ink-2:#bfd0dc; --muted:#89a0af;
+  --line:#1f313c; --line-2:#182831;
+  --accent:#49b2ee; --accent-ink:#7ccbf8; --accent-soft:#0f2c3d;
+  --danger:#f2798c; --danger-soft:#33161c;
+  --warn:#e0a24a; --warn-soft:#33260f;
+  --ok:#4ccb95; --ok-soft:#0f2b21;
+  --violet:#a48bef; --violet-soft:#221b3a;
+  --code-bg:#0d1b23; --code-ink:#cfe0eb;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px; line-height:1.62; -webkit-font-smoothing:antialiased;
+}
+code,kbd,.mono{font-family:"DM Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+
+/* ---------- layout ---------- */
+.wrap{display:grid; grid-template-columns:264px minmax(0,1fr); gap:0; max-width:1420px; margin:0 auto}
+.side{
+  position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+  border-right:1px solid var(--line); padding:26px 18px 60px; background:var(--panel-2);
+}
+.main{min-width:0; padding:34px 42px 120px}
+@media (max-width:960px){
+  .wrap{grid-template-columns:1fr}
+  .side{position:static; height:auto; border-right:0; border-bottom:1px solid var(--line); padding:20px 22px}
+  .main{padding:24px 20px 80px}
+}
+
+/* ---------- sidebar ---------- */
+.brand{display:flex; align-items:center; gap:10px; margin-bottom:4px}
+.brand .dot{width:26px;height:26px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px;flex:none}
+.brand b{font-size:14px; letter-spacing:-.01em}
+.brand small{display:block; color:var(--muted); font-size:11px; font-weight:400; line-height:1.3}
+.nav{margin-top:20px; display:flex; flex-direction:column; gap:1px}
+.nav a{
+  display:flex; gap:9px; align-items:baseline; text-decoration:none; color:var(--ink-2);
+  padding:6px 10px; border-radius:8px; font-size:13.5px; border-left:2px solid transparent;
+}
+.nav a .n{color:var(--muted); font-size:11px; font-family:"DM Mono",monospace; min-width:16px}
+.nav a:hover{background:var(--line-2); color:var(--ink)}
+.nav a.on{background:var(--accent-soft); color:var(--accent-ink); font-weight:500; border-left-color:var(--accent)}
+.nav .sub{padding-left:34px; font-size:12.5px; color:var(--muted)}
+.nav .sub:hover{color:var(--ink)}
+.backlink{
+  display:inline-block; margin-top:14px; font-size:12.5px; color:var(--muted); text-decoration:none;
+  border-bottom:1px solid transparent;
+}
+.backlink:hover{color:var(--accent-ink); border-bottom-color:var(--accent)}
+.themebtn{
+  margin-top:22px; width:100%; border:1px solid var(--line); background:var(--panel); color:var(--ink-2);
+  border-radius:9px; padding:7px 10px; font:inherit; font-size:12.5px; cursor:pointer;
+}
+.themebtn:hover{border-color:var(--accent); color:var(--accent-ink)}
+
+/* ---------- header ---------- */
+.hero{border-bottom:1px solid var(--line); padding-bottom:22px; margin-bottom:30px}
+.eyebrow{font-family:"DM Mono",monospace; font-size:12px; color:var(--accent-ink); letter-spacing:.06em; text-transform:uppercase}
+h1{font-size:34px; line-height:1.15; letter-spacing:-.025em; margin:6px 0 10px}
+.lede{font-size:16px; color:var(--ink-2); max-width:74ch; margin:0}
+.chips{display:flex; flex-wrap:wrap; gap:7px; margin-top:16px}
+.chip{
+  font-family:"DM Mono",monospace; font-size:11.5px; padding:3px 9px; border-radius:999px;
+  border:1px solid var(--line); background:var(--panel); color:var(--muted);
+}
+.chip b{color:var(--ink-2); font-weight:500}
+
+/* ---------- sections ---------- */
+section{scroll-margin-top:20px; margin-bottom:46px}
+h2{
+  font-size:23px; letter-spacing:-.02em; margin:0 0 14px; padding-bottom:9px;
+  border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:11px;
+}
+h2 .num{font-family:"DM Mono",monospace; font-size:14px; color:var(--accent); font-weight:500}
+h3{font-size:17px; letter-spacing:-.01em; margin:28px 0 10px; color:var(--ink)}
+h4{font-size:13.5px; margin:18px 0 7px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; font-weight:500}
+p{margin:0 0 12px; max-width:82ch}
+ul,ol{margin:0 0 12px; padding-left:22px; max-width:82ch}
+li{margin-bottom:5px}
+a{color:var(--accent-ink)}
+
+/* ---------- inline bits ---------- */
+code:not(pre code){
+  background:var(--code-bg); color:var(--code-ink); padding:1px 5px; border-radius:5px;
+  font-size:.875em; border:1px solid var(--line-2); white-space:nowrap;
+}
+.ln{color:var(--accent-ink); font-family:"DM Mono",monospace; font-size:.82em; white-space:nowrap}
+pre{
+  background:var(--code-bg); border:1px solid var(--line); border-radius:10px;
+  padding:14px 16px; overflow-x:auto; font-size:12.8px; line-height:1.6; color:var(--code-ink); margin:0 0 14px;
+}
+pre code{background:none;border:0;padding:0;white-space:pre}
+
+/* ---------- cards & callouts ---------- */
+.card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px; box-shadow:var(--shadow); margin:0 0 16px}
+.note{
+  border-left:3px solid var(--accent); background:var(--accent-soft); border-radius:0 10px 10px 0;
+  padding:12px 16px; margin:0 0 16px; font-size:14.2px; color:var(--ink-2);
+}
+.note.warn{border-left-color:var(--warn); background:var(--warn-soft)}
+.note.danger{border-left-color:var(--danger); background:var(--danger-soft)}
+.note.ok{border-left-color:var(--ok); background:var(--ok-soft)}
+.note b{color:var(--ink)}
+.note .lbl{display:block; font-size:11px; text-transform:uppercase; letter-spacing:.07em; font-weight:700; margin-bottom:4px; color:var(--accent-ink)}
+.note.warn .lbl{color:var(--warn)} .note.danger .lbl{color:var(--danger)} .note.ok .lbl{color:var(--ok)}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius); margin:0 0 16px; background:var(--panel)}
+table{border-collapse:collapse; width:100%; font-size:13.6px; min-width:520px}
+th{
+  text-align:left; font-weight:500; font-size:11.5px; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--muted); padding:10px 14px; border-bottom:1px solid var(--line); background:var(--panel-2); white-space:nowrap;
+}
+td{padding:9px 14px; border-bottom:1px solid var(--line-2); vertical-align:top; color:var(--ink-2)}
+tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--panel-2)}
+td code{white-space:nowrap}
+
+/* ---------- badges ---------- */
+.b{display:inline-block; font-family:"DM Mono",monospace; font-size:11px; padding:2px 8px; border-radius:999px; white-space:nowrap; border:1px solid transparent}
+.b.blue{background:var(--accent-soft); color:var(--accent-ink); border-color:color-mix(in srgb,var(--accent) 25%, transparent)}
+.b.red{background:var(--danger-soft); color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%, transparent)}
+.b.amber{background:var(--warn-soft); color:var(--warn); border-color:color-mix(in srgb,var(--warn) 30%, transparent)}
+.b.green{background:var(--ok-soft); color:var(--ok); border-color:color-mix(in srgb,var(--ok) 30%, transparent)}
+.b.violet{background:var(--violet-soft); color:var(--violet); border-color:color-mix(in srgb,var(--violet) 30%, transparent)}
+.b.gray{background:var(--line-2); color:var(--muted); border-color:var(--line)}
+
+/* ---------- rail (vertical flow) ---------- */
+.rail{position:relative; margin:6px 0 18px; padding-left:30px}
+.rail:before{content:""; position:absolute; left:9px; top:8px; bottom:8px; width:2px; background:var(--line)}
+.step{position:relative; margin-bottom:13px}
+.step:before{
+  content:""; position:absolute; left:-26px; top:6px; width:11px; height:11px; border-radius:50%;
+  background:var(--panel); border:2px solid var(--accent);
+}
+.step.block:before{border-color:var(--danger); background:var(--danger)}
+.step.ask:before{border-color:var(--warn)}
+.step.done:before{border-color:var(--ok); background:var(--ok)}
+.step .t{font-weight:500; color:var(--ink); font-size:14.4px}
+.step .d{font-size:13.4px; color:var(--muted)}
+
+/* ---------- stage flow (horizontal) ---------- */
+.flow{display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; margin:6px 0 18px}
+.stage{
+  flex:1 1 150px; min-width:140px; background:var(--panel); border:1px solid var(--line);
+  border-radius:11px; padding:11px 13px; position:relative;
+}
+.stage .k{font-family:"DM Mono",monospace; font-size:10.5px; color:var(--muted); letter-spacing:.05em; text-transform:uppercase}
+.stage .v{font-size:13.6px; font-weight:500; margin-top:3px; color:var(--ink)}
+.stage .s{font-size:12.4px; color:var(--muted); margin-top:3px}
+.arrow{display:grid; place-items:center; color:var(--line); font-size:18px; flex:0 0 14px}
+@media(max-width:700px){.arrow{transform:rotate(90deg)}}
+
+/* ---------- outcome grid ---------- */
+.grid2{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px; margin:6px 0 18px}
+.mini{background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:13px 15px}
+.mini h5{margin:0 0 5px; font-size:13.6px; letter-spacing:-.01em}
+.mini p{margin:0; font-size:12.9px; color:var(--muted)}
+
+/* ---------- function index filter ---------- */
+.filter{
+  width:100%; max-width:340px; padding:8px 12px; border-radius:9px; border:1px solid var(--line);
+  background:var(--panel); color:var(--ink); font:inherit; font-size:13.5px; margin-bottom:12px;
+}
+.filter:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft)}
+.hidden{display:none !important}
+.count{font-size:12.5px; color:var(--muted); margin-left:10px}
+
+/* ---------- footer ---------- */
+footer{border-top:1px solid var(--line); padding-top:18px; color:var(--muted); font-size:12.8px}
+</style>
+<style>
+/* ---------- index-only ---------- */
+.wrap{grid-template-columns:minmax(0,1fr); max-width:1080px}
+.main{padding:46px 42px 110px}
+@media (max-width:960px){ .main{padding:28px 20px 80px} }
+.idxtop{display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:26px}
+.doclist{display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:14px; margin:0 0 8px}
+a.doccard{
+  display:block; text-decoration:none; color:inherit; background:var(--panel);
+  border:1px solid var(--line); border-radius:var(--radius); padding:17px 19px;
+  box-shadow:var(--shadow); transition:border-color .13s, transform .13s;
+}
+a.doccard:hover{border-color:var(--accent); transform:translateY(-2px)}
+a.doccard .hd{display:flex; align-items:center; gap:11px; margin-bottom:7px}
+a.doccard .num{
+  width:30px;height:30px;border-radius:9px;background:var(--accent-soft);color:var(--accent-ink);
+  display:grid;place-items:center;font-family:"DM Mono",monospace;font-size:13px;font-weight:500;flex:none;
+}
+a.doccard h3{margin:0; font-size:16px; letter-spacing:-.015em; color:var(--ink)}
+a.doccard p{margin:0; font-size:13.2px; color:var(--muted); line-height:1.55}
+a.doccard .meta{margin-top:9px; font-family:"DM Mono",monospace; font-size:11px; color:var(--muted)}
+.startlist{list-style:none; padding:0; margin:0}
+.startlist li{
+  display:flex; gap:12px; padding:9px 0; border-bottom:1px solid var(--line-2); align-items:baseline; margin:0;
+}
+.startlist li:last-child{border-bottom:0}
+.startlist .w{flex:0 0 190px; font-weight:500; color:var(--ink); font-size:13.8px}
+.startlist .g{flex:1; color:var(--ink-2); font-size:13.8px}
+@media(max-width:640px){ .startlist li{flex-direction:column; gap:2px} .startlist .w{flex:none} }
+</style>
+</head>
+<body>
+<div class="wrap">
+<main class="main">
+
+<header class="hero">
+  <div class="idxtop">
+    <div class="eyebrow">LOVE Andaman &middot; rewrite material</div>
+    <button class="themebtn" id="themebtn" type="button" style="width:auto;margin:0">Toggle theme</button>
+  </div>
+  <h1>Rewrite Material</h1>
+  <p class="lede">Three build specifications for rebuilding the LOVE Andaman ops platform on a
+  relational database behind a REST API. Written for a developer who has never seen the current
+  system: every rule is stated, not referenced.</p>
+  <div class="chips">
+    <span class="chip"><b>Written against</b> 094dde1</span>
+    <span class="chip"><b>Branch</b> refactor/booking-v2-migration</span>
+    <span class="chip"><b>Backend</b> framework-neutral</span>
+    <span class="chip"><b>Frontend</b> React SPA</span>
+  </div>
+  <div class="note warn" style="margin-top:18px">
+    <span class="lbl">Two standing rules</span>
+    <b>Line numbers drift.</b> Every <span class="ln">:12345</span> reference means &ldquo;roughly here&rdquo; &mdash;
+    grep the symbol name instead.<br>
+    <b>These specs describe the code, not the intent.</b> Where an older doc contradicts the code,
+    the code won &mdash; and each spec says so where it happened.
+  </div>
+</header>
+
+<section id="docs">
+  <h2><span class="num">01</span> The specs</h2>
+  <div class="doclist">
+
+    <a class="doccard" href="01-booking-system.html">
+      <div class="hd"><div class="num">01</div><h3>Booking System</h3></div>
+      <p>Domain model, lifecycle state machine, seat inventory and locks, the full pricing
+      calculation, mutation flows, the <code>ops</code> seam, target schema, REST surface, and
+      twenty bugs not to reproduce.</p>
+      <div class="meta">3,569 lines &middot; sections 4 and 5 are the hard parts</div>
+    </a>
+
+    <a class="doccard" href="02-fleet-and-boat-assignment.html">
+      <div class="hd"><div class="num">02</div><h3>Fleet &amp; Boat Assignment</h3></div>
+      <p>Boats and the status log, drivetrain and engine swap, engine hours, maintenance cost
+      share, boat assignment rules, pier ops, vans and pickup, target schema, REST surface,
+      acceptance criteria.</p>
+      <div class="meta">3,569 lines &middot; sections 5 and 7 are the operational core</div>
+    </a>
+
+    <a class="doccard" href="03-design-principles.html">
+      <div class="hd"><div class="num">03</div><h3>Design Principles</h3></div>
+      <p>83 tokens with dark overrides, the per-view skin system, eleven component contracts,
+      print documents, data display rules, and the render traps that are really design
+      constraints. Live specimens throughout.</p>
+      <div class="meta">2,065 lines &middot; section 14 is the page to keep open</div>
+    </a>
+
+  </div>
+</section>
+
+<section id="start">
+  <h2><span class="num">02</span> Where to start</h2>
+  <ul class="startlist">
+    <li><span class="w">Building the API</span><span class="g">01 &sect;9 (schema) and &sect;10 (endpoints), then 02 &sect;9 and &sect;10. Read 01 &sect;11 and 02 &sect;11 before writing a single handler &mdash; they list every invariant that currently lives in browser JavaScript and must not stay there.</span></li>
+    <li><span class="w">Building the UI</span><span class="g">03 &sect;2 (tokens) and &sect;4 (components), then &sect;10 (render traps). &sect;11 covers migrating without a visual regression staff will notice.</span></li>
+    <li><span class="w">Understanding the business</span><span class="g">01 &sect;1 and 02 &sect;1. Both are written in plain language before any schema appears, and 02 &sect;1 walks a trip day end to end.</span></li>
+    <li><span class="w">Pricing anything</span><span class="g">01 &sect;5, all of it. The price is produced by rate types, frozen at commit, and consumed by accounting &mdash; three owners for one number.</span></li>
+    <li><span class="w">Seat availability</span><span class="g">01 &sect;4. Locks, the cap/licence distinction, and why the <code>used</code> counter becomes a derived view.</span></li>
+    <li><span class="w">Assigning boats or vans</span><span class="g">02 &sect;5 and &sect;7, plus 01 &sect;7 for the other side of the <code>ops</code> seam.</span></li>
+    <li><span class="w">Planning the work</span><span class="g">01 &sect;15 and 02 &sect;15. Both re-express the existing <code>P0-*</code> / <code>BK-*</code> decomposition framework-neutrally as work packages.</span></li>
+  </ul>
+</section>
+
+<section id="conventions">
+  <h2><span class="num">03</span> Conventions</h2>
+  <div class="grid2">
+    <div class="mini"><h5>Backend: framework-neutral</h5><p>PostgreSQL DDL, REST endpoint tables, JSON shapes and language-agnostic pseudocode. No Fastify, FastAPI, ORM or validation-library code anywhere.</p></div>
+    <div class="mini"><h5>Frontend: React SPA</h5><p>Doc 03 is the one place a frontend framework is named &mdash; tokens as CSS custom properties, components as React prop contracts.</p></div>
+    <div class="mini"><h5>Currency and time</h5><p>Thai Baht, Asia/Bangkok (+07:00). Bilingual Thai/English UI throughout, with the Thai-script type rules stated in 03.</p></div>
+    <div class="mini"><h5>Bugs are marked</h5><p>Where current behaviour is a defect rather than a rule, the spec says so and specifies the correct behaviour instead. Do not port the bug.</p></div>
+  </div>
+  <div class="note danger">
+    <span class="lbl">Supersedes decision D3</span>
+    <code>allotment_v2/docs/rewrite/README.md</code> records decision <b>D3</b> &mdash; &ldquo;Vite React SPA +
+    Fastify API&rdquo; &mdash; as binding. These specs are framework-neutral on the backend by explicit
+    instruction, so D3&rsquo;s backend half no longer holds. Update that file so the plan of record does
+    not contradict its own specs. The React SPA half of D3 stands.
+  </div>
+</section>
+
+<section id="provenance">
+  <h2><span class="num">04</span> Provenance</h2>
+  <p>These specs were built from the existing documentation set, verified against the code and the
+  production schema dump rather than trusted:</p>
+  <div class="tw"><table>
+    <thead><tr><th>Source</th><th>Used for</th></tr></thead>
+    <tbody>
+      <tr><td><code>allotment_v2/docs/workflows/*.md</code></td><td>Eight domain docs, roughly 5,000 lines, written against <code>094dde1</code>. The primary source for all three specs.</td></tr>
+      <tr><td><code>allotment_v2/docs/design/*.md</code></td><td>Seven design docs. The primary source for spec 03.</td></tr>
+      <tr><td><code>allotment_v2/docs/booking.model.ts</code></td><td>The accurate booking data model.</td></tr>
+      <tr><td><code>allotment_v2/docs/rewrite/README.md</code> &middot; <code>TASKS.md</code></td><td>Target architecture and the <code>P0-*</code> / <code>BK-*</code> task decomposition.</td></tr>
+      <tr><td><code>db/baseline/</code></td><td>The real production schema &mdash; 4 schemas, 184 tables, 56,832 rows. Several new bugs were found by diffing the app&rsquo;s reads against these columns.</td></tr>
+      <tr><td><code>allotment_v2/allotment_v2.html</code></td><td>Grepped to resolve specific ambiguities. Where a doc and the code disagreed, the code won.</td></tr>
+      <tr><td><code>CLAUDE.md</code></td><td>Project rules and gotchas &mdash; with the drift noted in each spec where it was found.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note">
+    <span class="lbl">Not a source</span>
+    <code>allotment_v2/docs/BOOKING.md</code> is a stale Phase-1 spec with line numbers roughly 35k off.
+    It was deliberately not used.
+  </div>
+</section>
+
+<footer>
+  Rendered from <code>documents/rewrite_material/*.md</code> &middot;
+  written against commit <code>094dde1</code> on <code>refactor/booking-v2-migration</code> &middot;
+  the markdown files beside these pages carry identical content.
+</footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  var btn = document.getElementById('themebtn');
+  var root = document.documentElement;
+  var saved = null;
+  try { saved = localStorage.getItem('la_doc_theme'); } catch(e){}
+  if (saved) root.setAttribute('data-theme', saved);
+  btn.addEventListener('click', function(){
+    var cur = root.getAttribute('data-theme');
+    var next;
+    if (cur === 'dark') next = 'light';
+    else if (cur === 'light') next = 'dark';
+    else next = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('la_doc_theme', next); } catch(e){}
+  });
+})();
+</script>
+</body>
+</html>

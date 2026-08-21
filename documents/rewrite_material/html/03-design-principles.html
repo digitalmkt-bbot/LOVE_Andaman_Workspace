@@ -1,0 +1,2126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design Principles</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f8fa; --panel:#ffffff; --panel-2:#fbfcfd;
+  --ink:#0f2029; --ink-2:#31485a; --muted:#68808f;
+  --line:#e1e8ee; --line-2:#eef2f6;
+  --accent:#1683C7; --accent-ink:#0f6ba6; --accent-soft:#e8f3fb;
+  --danger:#c8384c; --danger-soft:#fdecee;
+  --warn:#b46a00; --warn-soft:#fdf3e3;
+  --ok:#137a52; --ok-soft:#e6f5ee;
+  --violet:#6a4bbd; --violet-soft:#f0ecfb;
+  --code-bg:#f0f4f8; --code-ink:#173446;
+  --shadow:0 1px 2px rgba(15,32,41,.05), 0 8px 24px -14px rgba(15,32,41,.22);
+  --radius:14px;
+}
+:root:not([data-theme="light"]){ }
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b1317; --panel:#111d24; --panel-2:#0e181e;
+    --ink:#e7eff5; --ink-2:#bfd0dc; --muted:#89a0af;
+    --line:#1f313c; --line-2:#182831;
+    --accent:#49b2ee; --accent-ink:#7ccbf8; --accent-soft:#0f2c3d;
+    --danger:#f2798c; --danger-soft:#33161c;
+    --warn:#e0a24a; --warn-soft:#33260f;
+    --ok:#4ccb95; --ok-soft:#0f2b21;
+    --violet:#a48bef; --violet-soft:#221b3a;
+    --code-bg:#0d1b23; --code-ink:#cfe0eb;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b1317; --panel:#111d24; --panel-2:#0e181e;
+  --ink:#e7eff5; --ink-2:#bfd0dc; --muted:#89a0af;
+  --line:#1f313c; --line-2:#182831;
+  --accent:#49b2ee; --accent-ink:#7ccbf8; --accent-soft:#0f2c3d;
+  --danger:#f2798c; --danger-soft:#33161c;
+  --warn:#e0a24a; --warn-soft:#33260f;
+  --ok:#4ccb95; --ok-soft:#0f2b21;
+  --violet:#a48bef; --violet-soft:#221b3a;
+  --code-bg:#0d1b23; --code-ink:#cfe0eb;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px; line-height:1.62; -webkit-font-smoothing:antialiased;
+}
+code,kbd,.mono{font-family:"DM Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+
+/* ---------- layout ---------- */
+.wrap{display:grid; grid-template-columns:264px minmax(0,1fr); gap:0; max-width:1420px; margin:0 auto}
+.side{
+  position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto;
+  border-right:1px solid var(--line); padding:26px 18px 60px; background:var(--panel-2);
+}
+.main{min-width:0; padding:34px 42px 120px}
+@media (max-width:960px){
+  .wrap{grid-template-columns:1fr}
+  .side{position:static; height:auto; border-right:0; border-bottom:1px solid var(--line); padding:20px 22px}
+  .main{padding:24px 20px 80px}
+}
+
+/* ---------- sidebar ---------- */
+.brand{display:flex; align-items:center; gap:10px; margin-bottom:4px}
+.brand .dot{width:26px;height:26px;border-radius:8px;background:var(--accent);display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px;flex:none}
+.brand b{font-size:14px; letter-spacing:-.01em}
+.brand small{display:block; color:var(--muted); font-size:11px; font-weight:400; line-height:1.3}
+.nav{margin-top:20px; display:flex; flex-direction:column; gap:1px}
+.nav a{
+  display:flex; gap:9px; align-items:baseline; text-decoration:none; color:var(--ink-2);
+  padding:6px 10px; border-radius:8px; font-size:13.5px; border-left:2px solid transparent;
+}
+.nav a .n{color:var(--muted); font-size:11px; font-family:"DM Mono",monospace; min-width:16px}
+.nav a:hover{background:var(--line-2); color:var(--ink)}
+.nav a.on{background:var(--accent-soft); color:var(--accent-ink); font-weight:500; border-left-color:var(--accent)}
+.nav .sub{padding-left:34px; font-size:12.5px; color:var(--muted)}
+.nav .sub:hover{color:var(--ink)}
+.backlink{
+  display:inline-block; margin-top:14px; font-size:12.5px; color:var(--muted); text-decoration:none;
+  border-bottom:1px solid transparent;
+}
+.backlink:hover{color:var(--accent-ink); border-bottom-color:var(--accent)}
+.themebtn{
+  margin-top:22px; width:100%; border:1px solid var(--line); background:var(--panel); color:var(--ink-2);
+  border-radius:9px; padding:7px 10px; font:inherit; font-size:12.5px; cursor:pointer;
+}
+.themebtn:hover{border-color:var(--accent); color:var(--accent-ink)}
+
+/* ---------- header ---------- */
+.hero{border-bottom:1px solid var(--line); padding-bottom:22px; margin-bottom:30px}
+.eyebrow{font-family:"DM Mono",monospace; font-size:12px; color:var(--accent-ink); letter-spacing:.06em; text-transform:uppercase}
+h1{font-size:34px; line-height:1.15; letter-spacing:-.025em; margin:6px 0 10px}
+.lede{font-size:16px; color:var(--ink-2); max-width:74ch; margin:0}
+.chips{display:flex; flex-wrap:wrap; gap:7px; margin-top:16px}
+.chip{
+  font-family:"DM Mono",monospace; font-size:11.5px; padding:3px 9px; border-radius:999px;
+  border:1px solid var(--line); background:var(--panel); color:var(--muted);
+}
+.chip b{color:var(--ink-2); font-weight:500}
+
+/* ---------- sections ---------- */
+section{scroll-margin-top:20px; margin-bottom:46px}
+h2{
+  font-size:23px; letter-spacing:-.02em; margin:0 0 14px; padding-bottom:9px;
+  border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:11px;
+}
+h2 .num{font-family:"DM Mono",monospace; font-size:14px; color:var(--accent); font-weight:500}
+h3{font-size:17px; letter-spacing:-.01em; margin:28px 0 10px; color:var(--ink)}
+h4{font-size:13.5px; margin:18px 0 7px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; font-weight:500}
+p{margin:0 0 12px; max-width:82ch}
+ul,ol{margin:0 0 12px; padding-left:22px; max-width:82ch}
+li{margin-bottom:5px}
+a{color:var(--accent-ink)}
+
+/* ---------- inline bits ---------- */
+code:not(pre code){
+  background:var(--code-bg); color:var(--code-ink); padding:1px 5px; border-radius:5px;
+  font-size:.875em; border:1px solid var(--line-2); white-space:nowrap;
+}
+.ln{color:var(--accent-ink); font-family:"DM Mono",monospace; font-size:.82em; white-space:nowrap}
+pre{
+  background:var(--code-bg); border:1px solid var(--line); border-radius:10px;
+  padding:14px 16px; overflow-x:auto; font-size:12.8px; line-height:1.6; color:var(--code-ink); margin:0 0 14px;
+}
+pre code{background:none;border:0;padding:0;white-space:pre}
+
+/* ---------- cards & callouts ---------- */
+.card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px 20px; box-shadow:var(--shadow); margin:0 0 16px}
+.note{
+  border-left:3px solid var(--accent); background:var(--accent-soft); border-radius:0 10px 10px 0;
+  padding:12px 16px; margin:0 0 16px; font-size:14.2px; color:var(--ink-2);
+}
+.note.warn{border-left-color:var(--warn); background:var(--warn-soft)}
+.note.danger{border-left-color:var(--danger); background:var(--danger-soft)}
+.note.ok{border-left-color:var(--ok); background:var(--ok-soft)}
+.note b{color:var(--ink)}
+.note .lbl{display:block; font-size:11px; text-transform:uppercase; letter-spacing:.07em; font-weight:700; margin-bottom:4px; color:var(--accent-ink)}
+.note.warn .lbl{color:var(--warn)} .note.danger .lbl{color:var(--danger)} .note.ok .lbl{color:var(--ok)}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius); margin:0 0 16px; background:var(--panel)}
+table{border-collapse:collapse; width:100%; font-size:13.6px; min-width:520px}
+th{
+  text-align:left; font-weight:500; font-size:11.5px; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--muted); padding:10px 14px; border-bottom:1px solid var(--line); background:var(--panel-2); white-space:nowrap;
+}
+td{padding:9px 14px; border-bottom:1px solid var(--line-2); vertical-align:top; color:var(--ink-2)}
+tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--panel-2)}
+td code{white-space:nowrap}
+
+/* ---------- badges ---------- */
+.b{display:inline-block; font-family:"DM Mono",monospace; font-size:11px; padding:2px 8px; border-radius:999px; white-space:nowrap; border:1px solid transparent}
+.b.blue{background:var(--accent-soft); color:var(--accent-ink); border-color:color-mix(in srgb,var(--accent) 25%, transparent)}
+.b.red{background:var(--danger-soft); color:var(--danger); border-color:color-mix(in srgb,var(--danger) 30%, transparent)}
+.b.amber{background:var(--warn-soft); color:var(--warn); border-color:color-mix(in srgb,var(--warn) 30%, transparent)}
+.b.green{background:var(--ok-soft); color:var(--ok); border-color:color-mix(in srgb,var(--ok) 30%, transparent)}
+.b.violet{background:var(--violet-soft); color:var(--violet); border-color:color-mix(in srgb,var(--violet) 30%, transparent)}
+.b.gray{background:var(--line-2); color:var(--muted); border-color:var(--line)}
+
+/* ---------- rail (vertical flow) ---------- */
+.rail{position:relative; margin:6px 0 18px; padding-left:30px}
+.rail:before{content:""; position:absolute; left:9px; top:8px; bottom:8px; width:2px; background:var(--line)}
+.step{position:relative; margin-bottom:13px}
+.step:before{
+  content:""; position:absolute; left:-26px; top:6px; width:11px; height:11px; border-radius:50%;
+  background:var(--panel); border:2px solid var(--accent);
+}
+.step.block:before{border-color:var(--danger); background:var(--danger)}
+.step.ask:before{border-color:var(--warn)}
+.step.done:before{border-color:var(--ok); background:var(--ok)}
+.step .t{font-weight:500; color:var(--ink); font-size:14.4px}
+.step .d{font-size:13.4px; color:var(--muted)}
+
+/* ---------- stage flow (horizontal) ---------- */
+.flow{display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; margin:6px 0 18px}
+.stage{
+  flex:1 1 150px; min-width:140px; background:var(--panel); border:1px solid var(--line);
+  border-radius:11px; padding:11px 13px; position:relative;
+}
+.stage .k{font-family:"DM Mono",monospace; font-size:10.5px; color:var(--muted); letter-spacing:.05em; text-transform:uppercase}
+.stage .v{font-size:13.6px; font-weight:500; margin-top:3px; color:var(--ink)}
+.stage .s{font-size:12.4px; color:var(--muted); margin-top:3px}
+.arrow{display:grid; place-items:center; color:var(--line); font-size:18px; flex:0 0 14px}
+@media(max-width:700px){.arrow{transform:rotate(90deg)}}
+
+/* ---------- outcome grid ---------- */
+.grid2{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px; margin:6px 0 18px}
+.mini{background:var(--panel); border:1px solid var(--line); border-radius:11px; padding:13px 15px}
+.mini h5{margin:0 0 5px; font-size:13.6px; letter-spacing:-.01em}
+.mini p{margin:0; font-size:12.9px; color:var(--muted)}
+
+/* ---------- function index filter ---------- */
+.filter{
+  width:100%; max-width:340px; padding:8px 12px; border-radius:9px; border:1px solid var(--line);
+  background:var(--panel); color:var(--ink); font:inherit; font-size:13.5px; margin-bottom:12px;
+}
+.filter:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft)}
+.hidden{display:none !important}
+.count{font-size:12.5px; color:var(--muted); margin-left:10px}
+
+/* ---------- footer ---------- */
+footer{border-top:1px solid var(--line); padding-top:18px; color:var(--muted); font-size:12.8px}
+</style>
+
+<!-- ============================================================
+     APPENDED — live specimen styles. Nothing above this line is
+     modified. Every specimen below is built from the same custom
+     properties the spec defines, so the page proves its own tokens.
+     ============================================================ -->
+<style>
+/* the tokens the spec adds on top of the shell's set, in the same three-state pattern */
+:root{
+  --panel-3:#f1f5f8; --line-strong:#cbd7e1;
+  --accent-deep:#0E6AA8; --accent-faint:#f4fafd;
+  --ink-on-accent:#ffffff; --overlay:rgba(15,32,41,.45);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --panel-3:#0d1b23; --line-strong:#2e4655;
+    --accent-deep:#8ad4fb; --accent-faint:#0d222f;
+    --ink-on-accent:#07141b; --overlay:rgba(0,0,0,.6);
+  }
+}
+:root[data-theme="dark"]{
+  --panel-3:#0d1b23; --line-strong:#2e4655;
+  --accent-deep:#8ad4fb; --accent-faint:#0d222f;
+  --ink-on-accent:#07141b; --overlay:rgba(0,0,0,.6);
+}
+
+/* specimen shell */
+.spec{border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); padding:16px 18px; margin:0 0 16px}
+.spec-hd{font-family:"DM Mono",monospace; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin-bottom:12px; display:flex; gap:9px; align-items:baseline; flex-wrap:wrap}
+.spec-hd .tag{color:var(--accent-ink)}
+
+/* --- colour swatches --- */
+.swgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(156px,1fr)); gap:10px}
+.sw{border:1px solid var(--line); border-radius:10px; overflow:hidden; background:var(--panel)}
+.sw .swchip{height:50px; border-bottom:1px solid var(--line)}
+.sw .swmeta{padding:7px 9px}
+.sw .swnm{font-family:"DM Mono",monospace; font-size:11px; color:var(--ink); display:block; word-break:break-all; line-height:1.35}
+.sw .swhx{font-family:"DM Mono",monospace; font-size:10.5px; color:var(--muted)}
+.sw .swuse{font-size:11px; color:var(--muted); margin-top:3px; line-height:1.35}
+/* the hex label follows the theme — same three-state pattern the spec mandates */
+.hx-d{display:none}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .hx-l{display:none}
+  :root:not([data-theme="light"]) .hx-d{display:inline}
+}
+:root[data-theme="dark"] .hx-l{display:none}
+:root[data-theme="dark"] .hx-d{display:inline}
+
+/* --- type scale --- */
+.tscale{display:flex; flex-direction:column}
+.trow{display:grid; grid-template-columns:minmax(0,1fr) 244px; gap:16px; align-items:baseline; padding:10px 0; border-bottom:1px solid var(--line-2)}
+.trow:last-child{border-bottom:0}
+.trow .samp{color:var(--ink); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.trow .tmeta{font-family:"DM Mono",monospace; font-size:10.5px; color:var(--muted); text-align:right; white-space:nowrap}
+.t-label{font-size:10px;font-weight:600;line-height:1.4;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.t-micro{font-size:11px;line-height:1.45}
+.t-table{font-size:12px;line-height:1.45}
+.t-body{font-size:13px;line-height:1.55}
+.t-bodylg{font-size:14px;font-weight:500;line-height:1.55}
+.t-h3{font-size:17px;font-weight:500;line-height:1.3;letter-spacing:-.01em}
+.t-h2{font-size:20px;font-weight:600;line-height:1.25;letter-spacing:-.015em}
+.t-h1{font-size:24px;font-weight:700;line-height:1.2;letter-spacing:-.02em}
+.t-kpi{font-family:"DM Mono",monospace;font-size:26px;font-weight:500;line-height:1;letter-spacing:-.01em}
+.t-hero{font-family:"DM Mono",monospace;font-size:42px;font-weight:500;line-height:1;letter-spacing:-.035em}
+
+/* --- status pills --- */
+.pillrow{display:flex; flex-wrap:wrap; gap:7px; align-items:center}
+.pill{display:inline-flex; align-items:center; gap:4px; padding:2px 9px; border-radius:999px;
+      font-size:10.5px; font-weight:500; line-height:1.75; border:1px solid transparent; white-space:nowrap}
+.pill:before{content:""; width:4px; height:4px; border-radius:50%; flex:none}
+.pill.ok{background:var(--ok-soft); color:var(--ok); border-color:color-mix(in srgb,var(--ok) 28%,transparent)}
+.pill.ok:before{background:var(--ok)}
+.pill.warn{background:var(--warn-soft); color:var(--warn); border-color:color-mix(in srgb,var(--warn) 28%,transparent)}
+.pill.warn:before{background:var(--warn)}
+.pill.danger{background:var(--danger-soft); color:var(--danger); border-color:color-mix(in srgb,var(--danger) 28%,transparent)}
+.pill.danger:before{background:var(--danger)}
+.pill.info{background:var(--accent-soft); color:var(--accent-ink); border-color:color-mix(in srgb,var(--accent) 28%,transparent)}
+.pill.info:before{background:var(--accent)}
+.pill.exception{background:var(--violet-soft); color:var(--violet); border-color:color-mix(in srgb,var(--violet) 28%,transparent)}
+.pill.exception:before{background:var(--violet)}
+.pill.neutral{background:var(--line-2); color:var(--muted); border-color:var(--line)}
+.pill.neutral:before{background:var(--muted)}
+
+/* --- radii --- */
+.radrow{display:flex; gap:14px; flex-wrap:wrap}
+.radbox{width:132px; padding:14px 12px; background:var(--panel-2); border:1px solid var(--line-strong); text-align:center}
+.radbox .rv{font-family:"DM Mono",monospace; font-size:15px; color:var(--ink)}
+.radbox .rn{font-family:"DM Mono",monospace; font-size:10.5px; color:var(--accent-ink); margin-top:2px}
+.radbox .ru{font-size:11px; color:var(--muted); margin-top:5px; line-height:1.35}
+.rad-sm{border-radius:6px} .rad-md{border-radius:10px} .rad-lg{border-radius:14px}
+.rad-pill{border-radius:999px}
+
+/* --- dense table specimen --- */
+.tw.dense{border-radius:10px}
+.tw.scrolly{max-height:274px; overflow-y:auto}
+.tw.dense table{font-size:12px; min-width:640px}
+.tw.dense th{font-size:10px; font-weight:600; letter-spacing:.05em; padding:7px 10px;
+             background:var(--panel-2); border-bottom:0; box-shadow:inset 0 -1px 0 var(--line);
+             position:sticky; top:0; z-index:2}
+.tw.dense td{padding:9px 10px; border-bottom:1px solid var(--line-2); vertical-align:middle; color:var(--ink-2)}
+.tw.dense td.num,.tw.dense th.num{text-align:right; font-family:"DM Mono",monospace; font-variant-numeric:tabular-nums}
+.tw.dense td.num{color:var(--ink)}
+.tw.dense tbody tr:hover td{background:var(--panel-2)}
+.tw.dense tr.sel td{background:var(--accent-faint)}
+.tw.dense tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+.tw.dense tr.flag-warn td:first-child{box-shadow:inset 3px 0 0 var(--warn)}
+.tw.dense tr.flag-danger td:first-child{box-shadow:inset 3px 0 0 var(--danger)}
+.tw.dense tr.cxl td{opacity:.5}
+.tw.dense tr.cxl td.nm{text-decoration:line-through}
+.tw.dense td.dash{color:var(--muted)}
+
+/* --- skin strip --- */
+.skins{display:grid; grid-template-columns:repeat(auto-fill,minmax(214px,1fr)); gap:9px}
+.skin{display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:10px; padding:8px 10px; background:var(--panel)}
+.skin .sq{width:28px; height:28px; border-radius:7px; flex:none; background:var(--c); border:1px solid rgba(0,0,0,.12)}
+.skin .st{min-width:0}
+.skin .sn{font-size:12.5px; color:var(--ink); line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.skin .sh{font-family:"DM Mono",monospace; font-size:10.5px; color:var(--muted)}
+.skin.keep{border-color:color-mix(in srgb,var(--ok) 40%,transparent)}
+
+/* --- buttons --- */
+.btnrow{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px}
+.btn{display:inline-flex; align-items:center; gap:5px; padding:7px 14px; border-radius:6px;
+     border:1px solid transparent; font-family:"DM Sans",sans-serif; font-size:12px; font-weight:500;
+     line-height:1.5; cursor:pointer; transition:background 150ms cubic-bezier(.2,.6,.3,1), border-color 150ms, color 150ms}
+.btn:focus-visible{outline:none; box-shadow:0 0 0 3px var(--accent-soft)}
+.btn.primary{background:var(--accent); color:var(--ink-on-accent); border-color:var(--accent)}
+.btn.primary:hover{background:var(--accent-deep); border-color:var(--accent-deep)}
+.btn.secondary{background:var(--panel); border-color:var(--line); color:var(--ink-2)}
+.btn.secondary:hover{background:var(--panel-2); border-color:var(--line-strong)}
+.btn.ghost{background:transparent; color:var(--ink-2)}
+.btn.ghost:hover{background:var(--panel-2)}
+.btn.danger{background:transparent; border-color:var(--danger-soft); color:var(--danger)}
+.btn.danger:hover{background:var(--danger-soft)}
+.btn.dangersolid{background:var(--danger); color:var(--ink-on-accent); border-color:var(--danger)}
+.btn[disabled]{opacity:.45; cursor:not-allowed}
+.btn.sm{padding:5px 10px; font-size:11px}
+.btn.lg{padding:9px 18px; font-size:13px}
+.btn .sp{width:11px; height:11px; border-radius:50%; border:2px solid currentColor; border-top-color:transparent; animation:spin .7s linear infinite; flex:none}
+.btn.ico{padding:0; width:30px; height:30px; justify-content:center}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* --- form fields --- */
+.fgrid{display:grid; grid-template-columns:repeat(auto-fit,minmax(186px,1fr)); gap:12px}
+.fld label{display:block; font-size:10px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); margin-bottom:3px}
+.fld .req{color:var(--danger)}
+.fld .ctl{width:100%; font-family:"DM Sans",sans-serif; font-size:12px; line-height:1.5; padding:6px 9px;
+          border:1px solid var(--line); border-radius:6px; background:var(--panel); color:var(--ink); outline:none;
+          transition:border-color 150ms, box-shadow 150ms}
+.fld .ctl:focus-visible{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft)}
+.fld .ctl.mono{font-family:"DM Mono",monospace; font-variant-numeric:tabular-nums; text-align:right}
+.fld .ctl.bad{border-color:var(--danger)}
+.fld .ctl.bad:focus-visible{box-shadow:0 0 0 3px var(--danger-soft)}
+.fld .ctl[disabled],.fld .ctl[readonly]{background:var(--panel-3); color:var(--muted)}
+.fld .err{font-size:11px; color:var(--danger); margin-top:3px}
+.fld .hint{font-size:11px; color:var(--muted); margin-top:3px}
+.cur{position:relative}
+.cur .sym{position:absolute; left:9px; top:50%; transform:translateY(-50%); font-family:"DM Mono",monospace; font-size:12px; color:var(--muted); pointer-events:none}
+.cur .ctl{padding-left:22px}
+
+/* --- KPI / hero figure --- */
+.kpirow{display:grid; grid-template-columns:repeat(auto-fit,minmax(158px,1fr)); gap:12px}
+.kpi{position:relative; overflow:hidden; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px}
+.kpi:after{content:""; position:absolute; top:0; left:0; right:0; height:3px; background:var(--tone,var(--accent))}
+.kpi .kl{font-size:10px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:var(--muted)}
+.kpi .kv{font-family:"DM Mono",monospace; font-variant-numeric:tabular-nums; font-size:26px; font-weight:500; line-height:1; color:var(--ink); margin-top:5px}
+.kpi .ks{font-size:11px; color:var(--muted); margin-top:4px}
+.herofig{font-family:"DM Mono",monospace; font-variant-numeric:tabular-nums; font-size:42px; font-weight:500; letter-spacing:-.035em; line-height:1; color:var(--ink)}
+
+/* --- badges / chips --- */
+.bdg{display:inline-block; font-family:"DM Mono",monospace; font-size:10.5px; padding:2px 7px; border-radius:6px; border:1px solid var(--line); background:var(--panel-2); color:var(--ink-2)}
+.tokchip{display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:999px; padding:3px 8px 3px 7px; background:var(--panel); font-size:11.5px; color:var(--ink-2)}
+.tokchip .cd{width:8px; height:8px; border-radius:50%; background:var(--c,var(--accent)); flex:none}
+.tokchip .x{color:var(--muted); font-size:12px; line-height:1}
+
+/* --- misc --- */
+.shellsvg{width:100%; max-width:560px; height:auto; display:block; margin:4px 0 16px}
+.legend{display:flex; flex-wrap:wrap; gap:14px; font-size:12px; color:var(--muted); margin:-6px 0 16px}
+.legend i{display:inline-block; width:9px; height:9px; border-radius:3px; margin-right:5px; vertical-align:-1px}
+.thai{font-size:13px; line-height:1.7}
+.two{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px; margin-bottom:16px}
+.prop{font-family:"DM Mono",monospace; font-size:11.5px}
+/* genuinely visually hidden — still read by screen readers, unlike .hidden */
+.vh{position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0}
+@media (prefers-reduced-motion: reduce){
+  *,*:before,*:after{transition-duration:1ms !important; animation-duration:1ms !important; animation-iteration-count:1 !important}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<aside class="side">
+  <div class="brand">
+    <div class="dot">03</div>
+    <div><b>Design Principles</b><small>LOVE Andaman · rewrite material</small></div>
+  </div>
+  <nav class="nav" id="nav">
+    <a href="#s1"><span class="n">1</span> Design principles</a>
+    <a href="#s2"><span class="n">2</span> Foundations &amp; tokens</a>
+    <a href="#t-type" class="sub">2.1 Typography</a>
+    <a href="#t-thai" class="sub">2.2 Thai script</a>
+    <a href="#t-color" class="sub">2.3 Color</a>
+    <a href="#t-space" class="sub">2.4 Space &amp; layout</a>
+    <a href="#t-shape" class="sub">2.5 Radii &amp; elevation</a>
+    <a href="#t-motion" class="sub">2.6 Motion</a>
+    <a href="#t-tokens" class="sub">2.7 The token block</a>
+    <a href="#s3"><span class="n">3</span> The skin system</a>
+    <a href="#s4"><span class="n">4</span> Component inventory</a>
+    <a href="#c-pill" class="sub">4.1 Status pills</a>
+    <a href="#c-map" class="sub">4.2 Status map</a>
+    <a href="#c-table" class="sub">4.3 Data tables</a>
+    <a href="#c-card" class="sub">4.4 Cards &amp; panels</a>
+    <a href="#c-form" class="sub">4.5 Forms</a>
+    <a href="#c-btn" class="sub">4.6 Buttons</a>
+    <a href="#c-badge" class="sub">4.7 Badges &amp; chips</a>
+    <a href="#c-overlay" class="sub">4.8 Overlays</a>
+    <a href="#c-nav" class="sub">4.9 Tabs &amp; navigation</a>
+    <a href="#c-flow" class="sub">4.10 Flow &amp; rails</a>
+    <a href="#c-kpi" class="sub">4.11 KPI &amp; skeletons</a>
+    <a href="#s5"><span class="n">5</span> Layout patterns</a>
+    <a href="#s6"><span class="n">6</span> Iconography</a>
+    <a href="#s7"><span class="n">7</span> Print &amp; documents</a>
+    <a href="#s8"><span class="n">8</span> Data display rules</a>
+    <a href="#s9"><span class="n">9</span> Interaction &amp; a11y</a>
+    <a href="#s10"><span class="n">10</span> Render traps</a>
+    <a href="#s11"><span class="n">11</span> Migration</a>
+    <a href="#s12"><span class="n">12</span> Governance</a>
+    <a href="#s13"><span class="n">13</span> Open questions</a>
+    <a href="#s14"><span class="n">14</span> Quick reference</a>
+  </nav>
+  <a class="backlink" href="index.html">← All rewrite material</a>
+  <button class="themebtn" id="themebtn" type="button">Toggle theme</button>
+</aside>
+
+<main class="main">
+
+<header class="hero">
+  <div class="eyebrow">Rebuild spec 03</div>
+  <h1>Design Principles</h1>
+  <p class="lede">The design system of a production ops tool, captured precisely enough to rebuild.
+  Tokens, components, layout, print and the render traps that constrain how any of it may be built —
+  for a React&nbsp;+&nbsp;Vite SPA consuming the REST API. Everything on this page is rendered from
+  the tokens it specifies, so the page is its own proof.</p>
+  <div class="chips">
+    <span class="chip"><b>Source</b> docs/design/00–06</span>
+    <span class="chip"><b>Also</b> CLAUDE.md §7–§8</span>
+    <span class="chip"><b>Also</b> workflows/08-shell</span>
+    <span class="chip"><b>Code</b> allotment_v2.html</span>
+    <span class="chip"><b>Branch</b> refactor/booking-v2-migration</span>
+    <span class="chip"><b>Date</b> 2026-08-22</span>
+  </div>
+</header>
+
+<div class="grid2">
+  <div class="mini">
+    <h5>What this governs</h5>
+    <p>Tokens · type · color · space · shape · elevation · motion · skins · components and their
+    states · layout · icons · print · number and date display · accessibility · migration ·
+    governance.</p>
+  </div>
+  <div class="mini">
+    <h5>What it does not</h5>
+    <p>Business logic, data shapes, API contracts, permissions, pricing. Those live in docs 01–02
+    and the workflow docs. Those specs are framework-neutral; nothing here changes that.</p>
+  </div>
+  <div class="mini">
+    <h5>Target</h5>
+    <p>React + Vite + TypeScript. Tokens ship as CSS custom properties; components ship as typed
+    React contracts. This is the one document that names a frontend framework, and only for the
+    frontend.</p>
+  </div>
+</div>
+
+<div class="note warn">
+  <span class="lbl">The honest starting position</span>
+  The audit's headline finding: <b>this is not one design system — it is a shared shell hosting ~15
+  independent visual languages</b> (seventeen are identifiable). Ocean blue <code>#1683C7</code>
+  reaches far less of the app than its name suggests: it exists only as a token override on the
+  <code>--coral</code> family, so every view that hardcoded an accent is untouched by it. In the
+  entire pier-ops and print slice, Ocean blue appears in exactly one place — the Dev Log
+  “+ Add” button. Underneath the divergence, eleven principles hold across every language, in
+  print, and in every sub-brand. <b>Those principles are the design system.</b>
+</div>
+
+<section id="s1">
+<h2><span class="num">01</span> Design principles</h2>
+
+<p>Every rule below is traceable to how the product is used, not to taste. Staff run this all day —
+at a desk, and on a tablet on a pier in bright sun, under time pressure, entering numbers that
+become money.</p>
+
+<div class="tw">
+<table>
+<thead><tr><th style="width:150px">Principle</th><th>The rule</th><th>Why it exists</th></tr></thead>
+<tbody>
+<tr><td><b>P1</b> Density over decoration</td>
+    <td>13px body / 1.55. 12px tables. 10px uppercase labels. 22px page gutter. 6–9px control padding. Whitespace groups; it never “breathes”.</td>
+    <td>A manifest is 40+ rows and the dispatcher needs the whole trip on one screen. A scroll during a departure window is a mistake waiting to happen.</td></tr>
+<tr><td><b>P2</b> Numbers get their own typeface</td>
+    <td>DM&nbsp;Mono + <code>tabular-nums</code> for <b>every</b> money, count, date, time, hours, pax and serial. No exceptions on screen.</td>
+    <td>Column alignment (a proportional column doesn’t line up digit-for-digit) · digit legibility (<code>1</code>/<code>7</code>, <code>0</code>/<code>O</code> at 11px in sun) · tabular comparison (cap vs licence is read as a pair).</td></tr>
+<tr><td><b>P3</b> Color is data</td>
+    <td>Green good · amber caution · red bad · violet exception · gray inactive. Never recolor a status for aesthetics.</td>
+    <td>It survives into print, where the code forces <code>print-color-adjust:exact</code> with comments saying the color <i>is</i> the data. If a red row prints gray the driver misses the no-show.</td></tr>
+<tr><td><b>P4</b> Status = tint + dot + label</td>
+    <td>Full-round, 10px/500, a 4px leading dot in the solid hue, ~10% tint background. Six colors. No solid-filled status chips.</td>
+    <td>A tinted pill sits quietly in a dense table; thirty solid chips is a christmas tree. The dot restores the signal the tint gives up — and is a second channel, so hue is never alone.</td></tr>
+<tr><td><b>P5</b> Elevation is nearly flat</td>
+    <td>One workhorse shadow. One hairline border. State is a 3px colored left border, not elevation. Real depth only for modals, drawers, popovers.</td>
+    <td>Depth is a scarce signal. If every card floats, nothing reads as “this is on top of the page and wants an answer”.</td></tr>
+<tr><td><b>P6</b> Three radii, and they mean something</td>
+    <td>6 controls · 10 containers · 14 floating. Three. Full-round is a shape, not a step.</td>
+    <td>Radius is grammar for “what kind of thing is this”. When a card and a button share a radius the hierarchy collapses.</td></tr>
+<tr><td><b>P7</b> Motion signals response, never delight</td>
+    <td>120ms tight chrome · 150ms controls · 300ms fill bars. No entrance animation. Banned in dense tables and anywhere it delays a keystroke.</td>
+    <td>A check-in operator taps forty rows in ninety seconds. A 200ms row animation is 8 seconds of waiting, and makes the app feel like it is thinking when it should feel like it already knew.</td></tr>
+<tr><td><b>P8</b> Figures are always legible</td>
+    <td>Min 11px for any figure in a column. Right-align numerics. Never truncate a number — truncate the label.</td>
+    <td>Sun on a pier + a tablet at half brightness + a number that becomes an invoice. A clipped <code>฿12,4…</code> is the same problem as a wrong number.</td></tr>
+<tr><td><b>P9</b> Per-view identity, centrally governed</td>
+    <td>A route may set its accent. It may not set type, spacing, radii, shadows or status colors. A skin is four tokens deep.</td>
+    <td>Staff navigate partly by color — “the pink one” means Fleet. Worth keeping. Fifteen independent implementations of the same table is not.</td></tr>
+<tr><td><b>P10</b> Print is a first-class output</td>
+    <td>A4 landscape default. Color that carries meaning is forced to print. Thai government-adjacent forms use Sarabun by purpose.</td>
+    <td>Much of this system’s output leaves the building on paper — guide sheets, job orders, vouchers, manifests. An afterthought print layer fails at the moment it matters.</td></tr>
+<tr><td><b>P11</b> Bilingual by construction</td>
+    <td>Every surface survives Thai and English in the same line, cell and button. Thai needs more line-height and an explicit font.</td>
+    <td>A boat name is English, its status is Thai, and they share a row. The monolith records what happens when this is ignored — Thai falls to the system font, <i>“different weight, different height than the English on the same line.”</i></td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+
+<section id="s2">
+<h2><span class="num">02</span> Foundations &amp; tokens</h2>
+
+<h3 id="t-type">2.1 Typography</h3>
+<p>Two families on screen. The monolith loads <b>eight</b> in one request — DM Sans, DM Mono, Inter,
+Manrope, IBM Plex Sans Thai, Noto Sans Thai, Quicksand, Sarabun — of which only two are used by the
+global layer. The rewrite loads three (DM Sans, DM Mono, Noto Sans Thai) and adds Sarabun only on the
+print documents that need it.</p>
+
+<div class="spec">
+  <div class="spec-hd"><span class="tag">Live specimen</span> type scale · every step rendered at its real size</div>
+  <div class="tscale">
+    <div class="trow"><span class="samp t-label">Booking cap · ห้องพัก · label</span><span class="tmeta">--fs-label · 10px · 600 · 1.4 · .05em</span></div>
+    <div class="trow"><span class="samp t-micro">Meta, sub-values and hints · ข้อมูลย่อย</span><span class="tmeta">--fs-micro · 11px · 400 · 1.45</span></div>
+    <div class="trow"><span class="samp t-table">Table cells, buttons, inputs · ตารางและปุ่ม</span><span class="tmeta">--fs-table · 12px · 400 · 1.45</span></div>
+    <div class="trow"><span class="samp t-body">Body default — the reading size · เนื้อความ</span><span class="tmeta">--fs-body · 13px · 400 · 1.55</span></div>
+    <div class="trow"><span class="samp t-bodylg">Modal titles and emphasized body</span><span class="tmeta">--fs-body-lg · 14px · 500 · 1.55</span></div>
+    <div class="trow"><span class="samp t-h3">Section heading inside a page</span><span class="tmeta">--fs-h3 · 17px · 500 · 1.3 · -.01em</span></div>
+    <div class="trow"><span class="samp t-h2">Page heading</span><span class="tmeta">--fs-h2 · 20px · 600 · 1.25 · -.015em</span></div>
+    <div class="trow"><span class="samp t-h1">Dashboard heading</span><span class="tmeta">--fs-h1 · 24px · 700 · 1.2 · -.02em</span></div>
+    <div class="trow"><span class="samp t-kpi">฿1,284,500</span><span class="tmeta">--fs-kpi · 26px · mono · 1 · -.01em</span></div>
+    <div class="trow"><span class="samp t-hero">16</span><span class="tmeta">--fs-hero · 42px · mono · 1 · -.035em</span></div>
+  </div>
+</div>
+
+<div class="note">
+  <span class="lbl">The hard rules</span>
+  <b>1.</b> Every figure in DM&nbsp;Mono with <code>tabular-nums</code> — money, counts, dates, times,
+  hours, pax, serials, percentages, IDs. <b>2.</b> Labels are the only uppercase in the product, at
+  10px/600 with <code>.05em</code> tracking. <b>3.</b> Never uppercase Thai — it has no case, and
+  transforming a mixed string produces a mismatched pair. <b>4.</b> Never set a font-size that is not
+  a token.
+</div>
+
+<h3 id="t-thai">2.2 Thai script — the real constraint</h3>
+<p>Three facts drive every rule here. <b>Neither DM Sans nor DM Mono contains Thai glyphs</b>, so
+Thai on a DM-Sans-only stack falls back per-glyph, mid-line. <b>Thai glyph height exceeds Latin at the
+same px</b> — up to two marks above the base and one below. <b>Thai has no case and no word spaces</b>,
+so uppercase does nothing, line-breaking differs, and character-count truncation cuts mid-cluster.</p>
+
+<div class="spec">
+  <div class="spec-hd"><span class="tag">Live specimen</span> the same row, both scripts, one stack</div>
+  <div class="thai">
+    <div><b>Sea Angel 7</b> · <span class="pill ok">Available</span> · เรือพร้อมออกเดินทาง · ท่าเรือทับละมุ · <span class="mono">07:30</span></div>
+    <div><b>Ocean Pearl</b> · <span class="pill warn">In shop</span> · เข้าซ่อมบำรุงตามแผน · ต้องรออะไหล่ · <span class="mono">฿48,200</span></div>
+  </div>
+</div>
+
+<div class="tw">
+<table>
+<thead><tr><th style="width:44px">#</th><th>Rule</th></tr></thead>
+<tbody>
+<tr><td class="mono">T1</td><td>Every font stack that can receive Thai names a Thai font. Both <code>--font-sans</code> and <code>--font-mono</code> carry <code>"Noto Sans Thai"</code> as the second family. Enforced by the token, never per component.</td></tr>
+<tr><td class="mono">T2</td><td><b>One Thai font in the product.</b> Noto Sans Thai on screen; Sarabun in print, and only where the document is government-adjacent. Never two Thai fonts on one screen.</td></tr>
+<tr><td class="mono">T3</td><td><b>Line-height floor 1.55</b> for any block that can contain Thai — which is all body text. Headings use 1.3, never below. Print goes to 1.7.</td></tr>
+<tr><td class="mono">T4</td><td>Thai runs ~8% shorter but needs ~10% more vertical room. Size by the taller requirement and the longer string; test every label in both languages.</td></tr>
+<tr><td class="mono">T5</td><td>Never <code>text-transform:uppercase</code> on a string that may contain Thai. The Label component’s <code>uppercase</code> prop must be <code>false</code> for Thai keys.</td></tr>
+<tr><td class="mono">T6</td><td>Truncate with CSS <code>text-overflow</code>, never a JS <code>slice()</code> — it can cut between a base glyph and its tone mark and render a broken cluster.</td></tr>
+<tr><td class="mono">T7</td><td>Thai figures still use DM Mono via the Thai fallback. The <b>one sanctioned exception</b> is a fully-Thai document surface where a single font matters more than digit alignment — the monolith’s Trip&nbsp;P&amp;L uses Sarabun throughout with <code>tabular-nums</code> instead, <i>“so there is one font on the page.”</i> Legitimate for print-like documents; not a licence to drop DM Mono on a data screen.</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3 id="t-color">2.3 Color</h3>
+<p>Ocean blue <code>#1683C7</code> is the accent, lifting to <code>#49b2ee</code> in dark — the light
+blue fails contrast on a <code>#0b1317</code> ground and reads muddy for fills. Six semantic tones, and
+only six: every business status in the product maps onto one of them.</p>
+
+<div class="note danger">
+  <span class="lbl">Proposal · collapse the two blues</span>
+  The monolith runs brand Ocean <code>#1683C7</code> alongside legacy info-blue <code>#185FA5</code> —
+  audit defect&nbsp;#11, <i>“close enough to read as a mistake, far enough to look wrong side by
+  side.”</i> The rewrite has <b>one blue</b>. Anywhere the monolith used <code>#185FA5</code> for an
+  informational chip, a link or an “invoice” pay-type, use <code>--accent</code>. There is no separate
+  <code>--info</code> token.
+</div>
+
+<div class="spec">
+  <div class="spec-hd"><span class="tag">Live specimen</span> every token · swatches and hex labels both follow the theme toggle</div>
+
+  <h4>Surface layers</h4>
+  <div class="swgrid">
+    <div class="sw"><div class="swchip" style="background:var(--bg)"></div><div class="swmeta"><span class="swnm">--bg</span><span class="swhx hx-l">#f6f8fa</span><span class="swhx hx-d">#0b1317</span><div class="swuse">Page ground</div></div></div>
+    <div class="sw"><div class="swchip" style="background:var(--panel)"></div><div class="swmeta"><span class="swnm">--panel</span><span class="swhx hx-l">#ffffff</span><span class="swhx hx-d">#111d24</span><div class="swuse">Card, table, modal surface</div></div></div>
+    <div class="sw"><div class="swchip" style="background:var(--panel-2)"></div><div class="swmeta"><span class="swnm">--panel-2</span><span class="swhx hx-l">#fbfcfd</span><span class="swhx hx-d">#0e181e</span><div class="swuse">Table header, row hover</div></div></div>
+    <div class="sw"><div class="swchip" style="background:var(--panel-3)"></div><div class="swmeta"><span class="swnm">--panel-3</span><span class="swhx hx-l">#f1f5f8</span><span class="swhx hx-d">#0d1b23</span><div class="swuse">Sunken well, disabled field</div></div></div>
+    <div class="sw"><div class="swchip" style="background:var(--overlay)"></div><div class="swmeta"><span class="swnm">--overlay</span><span class="swhx hx-l">rgba(15,32,41,.45)</span><span class="swhx hx-d">rgba(0,0,0,.6)</span><div class="swuse">Modal scrim</div></div></div>
+  </div>
+
+  <h4>Ink</h4>
+  <div class="swgrid">
+    <div class="sw"><div class="swchip" style="background:var(--ink)"></div><div class="swmeta"><span class="swnm">--ink</span><span class="swhx hx-l">#0f2029</span><span class="swhx hx-d">#e7eff5</span><div class="swuse">Primary text, figures</div></div></div>
+    <div class="sw"><div class="swchip" style="background:var(--ink-2)"></div><div class="swmeta"><span class="swnm">--ink-2</span><span class="swhx hx-l">#31485a</span><span class="swhx hx-d">#bfd0dc</span><div class="swuse">Secondary text, table cells</div></div></div>
+    <div class="sw"><div class="swchip" style="background:var(--muted)"></div><div class="swmeta"><span class="swnm">--muted</span><span class="swhx hx-l">#68808f</span><span class="swhx hx-d">#89a0af</span><div class="swuse">Labels, meta, headers, placeholders</div></div></div>
+    <div class="sw"><div class="swchip" style="background:var(--ink-on-accent)"></div><div class="swmeta"><span class="swnm">--ink-on-accent</span><span class="swhx hx-l">#ffffff</span><span class="swhx hx-d">#07141b</span><div class="swuse">Text on any filled surface</div></div></div>
+  </div>
+
+  <h4>Lines</h4>
+  <div class="swgrid">
+    <div class="sw"><div class="swchip" style="background:var(--line)"></div><div class="swmeta"><span class="swnm">--line</span><span class="swhx hx-l">#e1e8ee</span><span class="swhx hx-d">#1f313c</span><div class="swuse">The hairline — cards, tables, inputs</div></div></div>
+    <div class="sw"><div class="swchip" style="background:var(--line-2)"></div><div class="swmeta"><span class="swnm">--line-2</span><span class="swhx hx-l">#eef2f6</span><span class="swhx hx-d">#182831</span><div class="swuse">Fainter — row dividers</div></div></div>
+    <div class="sw"><div class="swchip" style="background:var(--line-strong)"></div><div class="swmeta"><span class="swnm">--line-strong</span><span class="swhx hx-l">#cbd7e1</span><span class="swhx hx-d">#2e4655</span><div class="swuse">Emphasis — hover border, selected edge</div></div></div>
+  </div>
+
+  <h4>Accent · Ocean</h4>
+  <div class="swgrid">
+    <div class="sw"><div class="swchip" style="background:var(--accent)"></div><div class="swmeta"><span class="swnm">--accent</span><span class="swhx hx-l">#1683C7</span><span class="swhx hx-d">#49b2ee</span><div class="swuse">Fills, focus, active nav</div></div></div>
+    <div class="sw"><div class="swchip" style="background:var(--accent-ink)"></div><div class="swmeta"><span class="swnm">--accent-ink</span><span class="swhx hx-l">#0f6ba6</span><span class="swhx hx-d">#7ccbf8</span><div class="swuse">Accent text on a light ground</div></div></div>
+    <div class="sw"><div class="swchip" style="background:var(--accent-deep)"></div><div class="swmeta"><span class="swnm">--accent-deep</span><span class="swhx hx-l">#0E6AA8</span><span class="swhx hx-d">#8ad4fb</span><div class="swuse">Pressed / active fill</div></div></div>
+    <div class="sw"><div class="swchip" style="background:var(--accent-soft)"></div><div class="swmeta"><span class="swnm">--accent-soft</span><span class="swhx hx-l">#e8f3fb</span><span class="swhx hx-d">#0f2c3d</span><div class="swuse">Tint background, focus ring</div></div></div>
+    <div class="sw"><div class="swchip" style="background:var(--accent-faint)"></div><div class="swmeta"><span class="swnm">--accent-faint</span><span class="swhx hx-l">#f4fafd</span><span class="swhx hx-d">#0d222f</span><div class="swuse">Selected-row wash</div></div></div>
+  </div>
+
+  <h4>Status</h4>
+  <div class="swgrid">
+    <div class="sw"><div class="swchip" style="background:var(--ok)"></div><div class="swmeta"><span class="swnm">--ok</span><span class="swhx hx-l">#137a52</span><span class="swhx hx-d">#4ccb95</span><div class="swuse">Good · available · paid</div></div></div>
+    <div class="sw"><div class="swchip" style="background:var(--ok-soft)"></div><div class="swmeta"><span class="swnm">--ok-soft</span><span class="swhx hx-l">#e6f5ee</span><span class="swhx hx-d">#0f2b21</span><div class="swuse">Tint pair</div></div></div>
+    <div class="sw"><div class="swchip" style="background:var(--warn)"></div><div class="swmeta"><span class="swnm">--warn</span><span class="swhx hx-l">#b46a00</span><span class="swhx hx-d">#e0a24a</span><div class="swuse">Pending · fixing · expiring</div></div></div>
+    <div class="sw"><div class="swchip" style="background:var(--warn-soft)"></div><div class="swmeta"><span class="swnm">--warn-soft</span><span class="swhx hx-l">#fdf3e3</span><span class="swhx hx-d">#33260f</span><div class="swuse">Tint pair</div></div></div>
+    <div class="sw"><div class="swchip" style="background:var(--danger)"></div><div class="swmeta"><span class="swnm">--danger</span><span class="swhx hx-l">#c8384c</span><span class="swhx hx-d">#f2798c</span><div class="swuse">Bad · blocked · overdue</div></div></div>
+    <div class="sw"><div class="swchip" style="background:var(--danger-soft)"></div><div class="swmeta"><span class="swnm">--danger-soft</span><span class="swhx hx-l">#fdecee</span><span class="swhx hx-d">#33161c</span><div class="swuse">Tint pair</div></div></div>
+    <div class="sw"><div class="swchip" style="background:var(--violet)"></div><div class="swmeta"><span class="swnm">--violet</span><span class="swhx hx-l">#6a4bbd</span><span class="swhx hx-d">#a48bef</span><div class="swuse">Exception · conflict · weather</div></div></div>
+    <div class="sw"><div class="swchip" style="background:var(--violet-soft)"></div><div class="swmeta"><span class="swnm">--violet-soft</span><span class="swhx hx-l">#f0ecfb</span><span class="swhx hx-d">#221b3a</span><div class="swuse">Tint pair</div></div></div>
+  </div>
+</div>
+
+<div class="note warn">
+  <span class="lbl">Audit defect #2 · the highest-leverage fix available</span>
+  The monolith re-declares the semantic triad on almost every page with near-identical but
+  non-identical hexes — <code>#0F6E56</code>/<code>#1D9E75</code>/<code>#2d9a6a</code> green,
+  <code>#854F0B</code>/<code>#A05A1A</code>/<code>#7A4A00</code> amber,
+  <code>#A32D2D</code>/<code>#E24B4A</code>/<code>#C44A36</code> red. <b>One token source. No page
+  re-declares a status color.</b>
+</div>
+
+<h3 id="t-space">2.4 Spacing and layout</h3>
+<p>2 · 4 · 6 · 8 · 10 · 12 · 14 · 16 · 18 · 22 · 28 · 36 · 48. Denser than a 4/8 scale at the bottom
+because control padding lives at 6–9px, and rounding that to 8 loses a whole row per ten table rows.
+Above 16 it goes coarse — nothing needs 20.</p>
+
+<div class="tw">
+<table>
+<thead><tr><th>Measurement</th><th>Value</th><th>Measurement</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td>Topbar height</td><td class="mono">52px <code>--topbar</code></td><td>Card padding</td><td class="mono">16px 18px</td></tr>
+<tr><td>Sidebar width</td><td class="mono">220px / rail 84px</td><td>KPI tile padding</td><td class="mono">14px 16px</td></tr>
+<tr><td>Page gutter</td><td class="mono">22px</td><td>Table th / td</td><td class="mono">7px 10px / 9px 10px</td></tr>
+<tr><td>Page bottom reserve</td><td class="mono">64px</td><td>Control / input padding</td><td class="mono">7px 14px / 6px 9px</td></tr>
+<tr><td>Modal hd / body / footer</td><td class="mono">14 18 12 / 16 18 / 12 18</td><td>Grid gaps</td><td class="mono">14 · 12 · 8 (forms)</td></tr>
+</tbody>
+</table>
+</div>
+
+<p><b>Container.</b> The monolith sets <i>no</i> page max-width anywhere in its base CSS.
+<b>Proposal:</b> <code>--page-max: 1320px</code> for form-shaped and document-shaped pages (its own
+booking form already caps there), and keep list, matrix and manifest pages fluid — a 40-column
+manifest on a 32″ monitor should use the monitor.</p>
+
+<p><b>Page bottom reserve.</b> <code>padding-bottom: 64px</code> exists because fixed bottom chrome
+(user badge, view-only banner, refresh) otherwise covers the last table row. Keep it, as a layout
+constant rather than a per-page style.</p>
+
+<h3 id="t-shape">2.5 Radii, borders and elevation</h3>
+
+<div class="spec">
+  <div class="spec-hd"><span class="tag">Live specimen</span> three radii · three, not four</div>
+  <div class="radrow">
+    <div class="radbox rad-sm"><div class="rv">6px</div><div class="rn">--r-sm</div><div class="ru">Buttons · inputs · chips · icon buttons · badges</div></div>
+    <div class="radbox rad-md"><div class="rv">10px</div><div class="rn">--r</div><div class="ru">Cards · panels · KPI tiles · table wrappers</div></div>
+    <div class="radbox rad-lg"><div class="rv">14px</div><div class="rn">--r-lg</div><div class="ru">Modals · drawers · popovers</div></div>
+    <div class="radbox rad-pill" style="background:var(--panel-3); border-style:dashed"><div class="rv">999px</div><div class="rn">--r-pill</div><div class="ru">A <i>shape</i>, not a step — pills and segmented tracks</div></div>
+  </div>
+</div>
+
+<p><b>Borders.</b> One weight, one color: <code>1px solid var(--line)</code>. Table body rows use the
+fainter <code>--line-2</code> — the two weights are intentionally different, and a table whose header
+rule matches its row rules loses its header. A <b>3px colored left border</b> marks list-item state;
+that is load-bearing, readable down a 40-row list in a way a pill in column 6 is not.</p>
+
+<div class="tw">
+<table>
+<thead><tr><th style="width:170px">Shadow token</th><th>Value</th><th>Used for</th></tr></thead>
+<tbody>
+<tr><td class="mono">--shadow-sm</td><td class="mono">0 1px 2px rgba(15,32,41,.05)</td><td>Almost nothing. A raised segmented-control thumb.</td></tr>
+<tr><td class="mono">--shadow</td><td class="mono">0 1px 2px …, 0 8px 24px -14px …</td><td>Cards and panels — the workhorse.</td></tr>
+<tr><td class="mono">--shadow-pop</td><td class="mono">0 8px 24px -6px rgba(15,32,41,.18)</td><td>Dropdowns, popovers, typeaheads, pickers.</td></tr>
+<tr><td class="mono">--shadow-modal</td><td class="mono">0 24px 60px -12px rgba(15,32,41,.35)</td><td>Modals and drawers only.</td></tr>
+<tr><td class="mono">--focus-ring</td><td class="mono">0 0 0 3px var(--accent-soft)</td><td>The <i>only</i> focus treatment. Fixes defect&nbsp;#8 — the monolith hardcodes its glow twice, derived from a hue no longer in the palette.</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="note danger">
+  <span class="lbl">Glass is out</span>
+  The monolith has seven glassmorphism skins built on <code>backdrop-filter</code>. They look good and
+  they cost: a stacking context that traps every dropdown inside them (§10), a real compositing cost on
+  the low-end tablets used at the pier, and a translucency that fights “figures always legible” under
+  sun. <b>The rewrite does not use <code>backdrop-filter</code>.</b> A floating surface separates itself
+  with an opaque <code>--panel</code> and <code>--shadow-pop</code>. Staff will notice — ship the removal
+  <i>with</i> each module port, never as a standalone release.
+</div>
+
+<h3 id="t-motion">2.6 Motion</h3>
+<div class="two">
+  <div class="mini"><h5>The four tokens</h5><p><code>--dur-fast</code> 120ms — list rows, icon buttons, hover tints.<br><code>--dur</code> 150ms — buttons, inputs, nav, tabs. The default.<br><code>--dur-slow</code> 300ms — fill-bar width, drawer slide.<br><code>--ease</code> <code>cubic-bezier(.2,.6,.3,1)</code>. One curve.</p></div>
+  <div class="mini"><h5>Where motion is banned</h5><p>Inside dense tables — no row-enter, no reorder, no stagger. On anything in the input path. On the number itself — <b>counting-up KPI values are banned</b>: a figure mid-animation is a figure that is wrong, and someone will read it. Under <code>prefers-reduced-motion</code> everything resolves to 1ms.</p></div>
+</div>
+<p>Animate <code>opacity</code>, <code>transform</code>, <code>background-color</code>,
+<code>border-color</code>, <code>box-shadow</code> and <code>width</code> (fill bars only). Never
+<code>height</code> or layout-affecting properties on a list.</p>
+
+<h3 id="t-tokens">2.7 The token block</h3>
+<p>The full set is in <code>03-design-principles.md</code> §2.2.3 — 83 tokens, copy-pasteable. The
+structural part, which is what people get wrong:</p>
+
+<pre><code>/* light — the COMPLETE palette lives on bare :root. Nothing has its
+   only definition inside a media query or an attribute selector. */
+:root{ --bg:#f6f8fa; --panel:#ffffff; --ink:#0f2029; --accent:#1683C7; /* …all 83… */ }
+
+/* system preference — guarded, so an explicit light choice still wins */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:#0b1317; --panel:#111d24; /* …dark set… */ }
+}
+
+/* explicit choice — repeated verbatim, so the toggle wins in both directions */
+:root[data-theme="dark"]{ --bg:#0b1317; --panel:#111d24; /* …identical dark set… */ }</code></pre>
+
+<div class="tw">
+<table>
+<thead><tr><th style="width:180px">Theme state</th><th style="width:200px">Root attribute</th><th>Resolved by</th></tr></thead>
+<tbody>
+<tr><td>Explicit light</td><td class="mono">data-theme="light"</td><td>bare <code>:root</code></td></tr>
+<tr><td>Explicit dark</td><td class="mono">data-theme="dark"</td><td><code>:root[data-theme="dark"]</code></td></tr>
+<tr><td><b>System (default)</b></td><td class="mono">— none —</td><td><code>@media (prefers-color-scheme: dark)</code>, guarded</td></tr>
+</tbody>
+</table>
+</div>
+
+<p><b>Why each piece.</b> The guard <code>:not([data-theme="light"])</code> is what lets “I chose light
+on a dark machine” work — without it the media block wins by source order. The duplicated dark block is
+what lets “I chose dark on a light machine” work. Keep the two dark blocks byte-identical; a divergence
+is a bug that only shows on one kind of machine. And <b>body must paint an explicit
+<code>background: var(--bg)</code></b> — a transparent body borrows the host’s ground, which is how a
+theme-aware page ends up with light text on a light background.</p>
+
+<pre><code>type Theme = 'light' | 'dark' | null;   // null = follow the system — three states, not two
+function applyTheme(t: Theme) {
+  const root = document.documentElement;
+  if (t) root.setAttribute('data-theme', t); else root.removeAttribute('data-theme');
+  try { t ? localStorage.setItem('la_theme', t) : localStorage.removeItem('la_theme'); } catch {}
+}</code></pre>
+<p style="font-size:13px;color:var(--muted)">The theme button in this page’s sidebar runs exactly that
+pattern — every specimen above re-renders correctly because each is built from custom properties, not
+from a literal hex.</p>
+</section>
+
+
+<section id="s3">
+<h2><span class="num">03</span> The skin system</h2>
+
+<p>The most distinctive thing in this product, and the part most likely to be thrown away by someone
+who does not understand why it is there.</p>
+
+<div class="two">
+  <div class="mini"><h5>What a skin is</h5><p>In the monolith: a named, additive, reversible
+  <code>&lt;style id="…-skin"&gt;</code> block appended before <code>&lt;/head&gt;</code>. It overrides
+  by specificity rather than editing base CSS, so deleting the block reverts the look. Thirteen sit in
+  the head stack; eleven more are injected at runtime into component hosts.</p></div>
+  <div class="mini"><h5>Why per-view palettes exist</h5><p><b>Instant orientation</b> — a dispatcher
+  context-switches between Booking, Boat Operation, Van Jobs and Check-in dozens of times an hour, often
+  mid-call; the accent answers “which screen am I on” before anything is read. <b>Error prevention</b> —
+  assigning a boat and assigning a van look different, so a muscle-memory click in the wrong module is
+  caught by the eye. Staff name modules by color: “the pink one”.</p></div>
+</div>
+
+<div class="spec">
+  <div class="spec-hd"><span class="tag">Live specimen</span> the seventeen visual languages in the monolith today · green edge = survives into the rewrite</div>
+  <div class="skins">
+    <div class="skin keep" style="--c:#1683C7"><div class="sq"></div><div class="st"><div class="sn">Global shell · Ocean</div><div class="sh">#1683C7</div></div></div>
+    <div class="skin keep" style="--c:#3A6FF7"><div class="sq"></div><div class="st"><div class="sn">BuildAxis navy · Booking</div><div class="sh">#3A6FF7</div></div></div>
+    <div class="skin" style="--c:#0A6B3F"><div class="sq"></div><div class="st"><div class="sn">Cream / lime · Dashboard</div><div class="sh">#0A6B3F + #A6EB7E</div></div></div>
+    <div class="skin keep" style="--c:#E03B7E"><div class="sq"></div><div class="st"><div class="sn">Fleet pink · 10 views</div><div class="sh">#E03B7E</div></div></div>
+    <div class="skin keep" style="--c:#0F6E56"><div class="sq"></div><div class="st"><div class="sn">Mint-teal ops</div><div class="sh">#0F6E56</div></div></div>
+    <div class="skin" style="--c:#185FA5"><div class="sq"></div><div class="st"><div class="sn">Legacy blue · pier + print</div><div class="sh">#185FA5</div></div></div>
+    <div class="skin keep" style="--c:#16265C"><div class="sq"></div><div class="st"><div class="sn">Slate navy · Pier Office</div><div class="sh">#16265C</div></div></div>
+    <div class="skin keep" style="--c:#163d2b"><div class="sq"></div><div class="st"><div class="sn">Finexy · Daily PFM</div><div class="sh">#163d2b + #9fdb4a</div></div></div>
+    <div class="skin" style="--c:#4F46E5"><div class="sq"></div><div class="st"><div class="sn">Tailwind indigo · Trip P&amp;L</div><div class="sh">#4F46E5</div></div></div>
+    <div class="skin" style="--c:#8b5cf6"><div class="sq"></div><div class="st"><div class="sn">SaaS violet · Daily Report</div><div class="sh">#4f46e5 · #8b5cf6</div></div></div>
+    <div class="skin" style="--c:#ff4c00"><div class="sq"></div><div class="st"><div class="sn">Vivid orange · Costing</div><div class="sh">#ff4c00</div></div></div>
+    <div class="skin" style="--c:#00D084"><div class="sq"></div><div class="st"><div class="sn">InvestIQ · B2B dash</div><div class="sh">#00D084</div></div></div>
+    <div class="skin" style="--c:#F4762E"><div class="sq"></div><div class="st"><div class="sn">Market orange + glass</div><div class="sh">#F4762E</div></div></div>
+    <div class="skin keep" style="--c:#d44a7f"><div class="sq"></div><div class="st"><div class="sn">Sales pink</div><div class="sh">#d44a7f</div></div></div>
+    <div class="skin" style="--c:#1B2A55"><div class="sq"></div><div class="st"><div class="sn">Ops navy</div><div class="sh">#1B2A55 · #1A2B43</div></div></div>
+    <div class="skin keep" style="--c:#a3e635"><div class="sq"></div><div class="st"><div class="sn">Lime / zinc · Travel Sum</div><div class="sh">#a3e635</div></div></div>
+    <div class="skin" style="--c:#C00000"><div class="sq"></div><div class="st"><div class="sn">Excel replica · print only</div><div class="sh">#FFF200 · #C00000 · #00B050</div></div></div>
+  </div>
+</div>
+
+<h3>The React translation</h3>
+<p><b>A skin is four tokens. Nothing else.</b> It may set <code>--accent</code>,
+<code>--accent-ink</code>, <code>--accent-deep</code>, <code>--accent-soft</code> and their dark
+counterparts. It may <b>not</b> set type, spacing, radii, shadows, motion, surfaces, ink, lines, or any
+status color. There is no per-skin table, no per-skin button, no per-skin pill.</p>
+
+<pre><code>export type Skin = {
+  key: string;          // 'booking' | 'fleet' | 'pier' | …
+  accent: string;       // fills, focus, active nav
+  accentInk: string;    // accent-coloured text on a light ground
+  accentDeep: string;   // pressed / active fill
+  accentSoft: string;   // tint background, focus ring
+  dark: Pick&lt;Skin,'accent'|'accentInk'|'accentDeep'|'accentSoft'&gt;;
+};
+
+export function SkinProvider({ skin, children }: { skin: Skin; children: React.ReactNode }) {
+  const style = {
+    '--accent':      skin.accent,
+    '--accent-ink':  skin.accentInk,
+    '--accent-deep': skin.accentDeep,
+    '--accent-soft': skin.accentSoft,
+  } as React.CSSProperties;
+  return &lt;div className="route-root" data-skin={skin.key} style={style}&gt;{children}&lt;/div&gt;;
+}</code></pre>
+
+<p><b>How it cannot leak.</b> Custom properties inherit down the subtree and stop at its boundary, so
+one route-root element is the whole scoping mechanism. <b>Portals are the exception</b> — modals,
+drawers, popovers and toasts render outside that subtree and lose the skin. Decide once and be
+consistent: <b>chrome is global</b> (modals, drawers and toasts keep the Ocean accent regardless of who
+opened them — recommended, it makes “you are in a dialog” a distinct state) and <b>popovers inherit</b>
+(a typeahead menu belongs to the field that opened it, so pass the four properties through to the portal
+container explicitly rather than relying on inheritance).</p>
+
+<div class="note">
+  <span class="lbl">Target: 8 skins, not 17</span>
+  <code>core</code> Ocean (absorbs global, legacy blue, ops navy) · <code>booking</code> #3A6FF7 ·
+  <code>fleet</code> #E03B7E · <code>ops</code> #0F6E56 · <code>pier</code> #16265C ·
+  <code>finance</code> #163d2b (absorbs PFM, Trip P&amp;L, Daily Report, Costing) · <code>sales</code>
+  #d44a7f (absorbs dashboard, B2B, market data) · <code>manifest</code> #65a30d. The Excel replica is
+  print-only and correct as it is — it deliberately reproduces a spreadsheet staff still cross-check
+  against. It is not a skin; it is a document template.
+</div>
+</section>
+
+
+<section id="s4">
+<h2><span class="num">04</span> Component inventory</h2>
+<p>Each component specifies purpose, anatomy, variants, states, sizing, accessibility and a prop
+contract. The full state set is always <b>default · hover · focus-visible · active · disabled ·
+loading · empty · error</b> — a component that cannot be in a state still declares that it cannot.</p>
+
+<h3 id="c-pill">4.1 Status pills — the signature pattern</h3>
+<p>Anatomy: <code>[ dot ][ 3px gap ][ label ]</code> inside a full-round tinted container. No
+per-status hexes, ever — every part derives from the tone token.</p>
+
+<div class="tw">
+<table>
+<thead><tr><th style="width:150px">Part</th><th>Derivation</th></tr></thead>
+<tbody>
+<tr><td>Background</td><td>the tone’s <code>-soft</code> token</td></tr>
+<tr><td>Dot</td><td>the tone’s solid token · <b>4px</b>. Not 5, not 6 — at 10px text this is the largest dot that still reads as a marker rather than a bullet.</td></tr>
+<tr><td>Text</td><td>the tone’s solid token</td></tr>
+<tr><td>Border</td><td><code>color-mix(in srgb, &lt;tone&gt; 28%, transparent)</code> — invisible on light, a defining edge on dark</td></tr>
+<tr><td>Shape</td><td><code>--r-pill</code>, padding <code>2px 8px</code>, 10px/500</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="spec">
+  <div class="spec-hd"><span class="tag">Live specimen</span> six tones · toggle the theme — the border appears in dark and disappears in light, by design</div>
+  <div class="pillrow" style="margin-bottom:14px">
+    <span class="pill ok">ok</span><span class="pill warn">warn</span><span class="pill danger">danger</span>
+    <span class="pill info">info</span><span class="pill exception">exception</span><span class="pill neutral">neutral</span>
+  </div>
+  <h4>Booking status</h4>
+  <div class="pillrow" style="margin-bottom:12px">
+    <span class="pill neutral">Quote</span><span class="pill warn">FOC pending</span>
+    <span class="pill warn">Awaiting approval</span><span class="pill ok">Confirmed</span>
+    <span class="pill info">Completed</span><span class="pill danger">Rejected</span>
+    <span class="pill neutral">Cancelled</span><span class="pill exception">Weather</span>
+  </div>
+  <h4>Boat &amp; asset</h4>
+  <div class="pillrow" style="margin-bottom:12px">
+    <span class="pill ok">Available</span><span class="pill warn">In shop</span>
+    <span class="pill danger">Unavailable</span><span class="pill ok">Ready</span>
+    <span class="pill neutral">Spare</span><span class="pill danger">Broken</span>
+  </div>
+  <h4>Payment &amp; approval</h4>
+  <div class="pillrow" style="margin-bottom:12px">
+    <span class="pill warn">Awaiting payment</span><span class="pill info">Partly paid</span>
+    <span class="pill ok">Paid</span><span class="pill danger">Overdue</span>
+    <span class="pill exception">On hold</span><span class="pill neutral">Void</span>
+    <span class="pill ok">Approved</span><span class="pill danger">Rejected</span>
+  </div>
+  <h4>Check-in, countdown, documents, dispatch</h4>
+  <div class="pillrow">
+    <span class="pill neutral">Waiting</span><span class="pill info">Arrived</span>
+    <span class="pill warn">Cleared</span><span class="pill ok">On board</span>
+    <span class="pill danger">No-show</span><span class="pill warn">Soon</span>
+    <span class="pill info">Due</span><span class="pill danger">Late</span>
+    <span class="pill neutral">Missed</span><span class="pill ok">Verified</span>
+    <span class="pill danger">Doc issue</span><span class="pill neutral">No files</span>
+    <span class="pill ok">Dispatched</span><span class="pill warn">Return unassigned</span>
+    <span class="pill danger">Unassigned</span><span class="pill exception">รถปนกัน · van conflict</span>
+  </div>
+</div>
+
+<pre><code>type StatusTone = 'ok' | 'warn' | 'danger' | 'info' | 'exception' | 'neutral';
+
+interface StatusPillProps {
+  tone: StatusTone;
+  children: React.ReactNode;   // the label — required, never omitted
+  size?: 'sm' | 'md';          // default 'sm'; sm is what tables use
+  onClick?: () =&gt; void;        // presence makes it a filter toggle
+  selected?: boolean;          // only meaningful with onClick
+  disabled?: boolean;
+  title?: string;              // long-form explanation on hover
+}</code></pre>
+
+<div class="note">
+  <span class="lbl">Accessibility</span>
+  The dot is decorative (<code>aria-hidden</code>); the label carries the meaning. <b>Never render a
+  pill with no text label</b> — a dot-only status is a color-only signal. An interactive pill is a
+  <code>&lt;button aria-pressed&gt;</code>, not a div.
+</div>
+
+<h3 id="c-map">4.2 Status map — every business status on six colors</h3>
+<p>“Current” is what the monolith renders; “Spec” is the rewrite. Differences are marked and justified.</p>
+
+<div class="tw">
+<table>
+<thead><tr><th>Status</th><th style="width:130px">Current</th><th style="width:150px">Spec</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td class="mono">quote</td><td>gray</td><td><span class="pill neutral">neutral</span></td><td></td></tr>
+<tr><td class="mono">pending_foc</td><td>amber</td><td><span class="pill warn">warn</span></td><td></td></tr>
+<tr><td class="mono">pending_approval</td><td>red inline badge</td><td><span class="pill warn">warn</span></td><td><b>Proposal.</b> An approval queue is not an error. Red already carries <code>rejected</code>, and the monolith renders the two at <code>#A32D2D</code> and <code>#791f1f</code> — visually one thing with opposite meanings.</td></tr>
+<tr><td class="mono">confirmed</td><td>green</td><td><span class="pill ok">ok</span></td><td></td></tr>
+<tr><td class="mono">completed</td><td>blue</td><td><span class="pill info">info</span></td><td></td></tr>
+<tr><td class="mono">rejected</td><td>red</td><td><span class="pill danger">danger</span></td><td></td></tr>
+<tr><td class="mono">cancelled</td><td>gray</td><td><span class="pill neutral">neutral</span></td><td>Customer/agent cancellation</td></tr>
+<tr><td class="mono">cancelled_weather</td><td>red-tinted, ad hoc</td><td><span class="pill exception">exception</span></td><td><b>Proposal.</b> The three cancelled statuses have different financial consequences and must be distinguishable at a glance. Violet already means “conflict / not-an-error exception” elsewhere.</td></tr>
+<tr><td class="mono">issued</td><td>amber</td><td><span class="pill warn">warn</span></td><td>Awaiting payment</td></tr>
+<tr><td class="mono">partial</td><td>blue</td><td><span class="pill info">info</span></td><td></td></tr>
+<tr><td class="mono">paid</td><td>green</td><td><span class="pill ok">ok</span></td><td></td></tr>
+<tr><td class="mono">overdue</td><td><b>no chip exists</b></td><td><span class="pill danger">danger</span></td><td><b>Proposal.</b> The worst status gap in the product: overdue surfaces only as a red KPI count while the individual overdue invoice still shows amber “Awaiting payment”. The one row you need to find looks identical to the forty you do not.</td></tr>
+<tr><td class="mono">hold</td><td>red</td><td><span class="pill exception">exception</span></td><td><b>Proposal.</b> Distinguishes “we stopped it” from “they did not pay”.</td></tr>
+<tr><td class="mono">available / fixing / unavailable</td><td>green / amber / red</td><td><span class="pill ok">ok</span> <span class="pill warn">warn</span> <span class="pill danger">danger</span></td><td>Boat status, from <code>log[last].s</code></td></tr>
+<tr><td class="mono">ready / fixing / spare / broken</td><td>green / amber / gray / red</td><td>ok · warn · neutral · danger</td><td>Engines, gearboxes, propellers</td></tr>
+<tr><td class="mono">waiting / arrived / cleared / on_board / no_show</td><td>gray / blue / gold / green / red</td><td>neutral · info · warn · ok · danger</td><td>Check-in stage</td></tr>
+<tr><td class="mono">soon / due / late / done / missed</td><td>amber / blue / red / green / gray</td><td>warn · info · danger · ok · neutral</td><td>Countdown to departure</td></tr>
+<tr><td class="mono">verified / issue / pending / no_files</td><td>green / red / amber / gray</td><td>ok · danger · warn · neutral</td><td>Document check</td></tr>
+<tr><td class="mono">active / expiring / expired / none</td><td>green / amber / red / gray</td><td>ok · warn · danger · neutral</td><td>Contracts and licences</td></tr>
+<tr><td class="mono">dispatched / return_unassigned / unassigned / mixed_van</td><td>green / amber / red / purple</td><td>ok · warn · danger · exception</td><td>Van dispatch. The mixed-van purple is already stand-alone in the monolith and used for nothing else.</td></tr>
+<tr><td class="mono">open / closed / weather_closed / over_capacity / over_licence</td><td>—</td><td>neutral · neutral (hatched) · exception · danger · danger</td><td>Over-licence is <b>blocked</b>, not warned — see §8</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="note ok">
+  <span class="lbl">Build this second</span>
+  After tokens, the status map is the highest-leverage single artifact in the migration. A test that
+  asserts every value in every status enum has a tone and a bilingual label — failing the build on a gap
+  — would have caught audit defect&nbsp;#7 (<code>cancelled_weather</code> and
+  <code>pending_approval</code> have no chip entry at all) years ago.
+</div>
+
+<h3 id="c-table">4.3 Data tables — the core surface</h3>
+<p>The product is mostly tables. This component carries more weight than anything else in the inventory.
+There is <b>one</b> density; a “comfortable” mode is not offered.</p>
+
+<div class="spec">
+  <div class="spec-hd"><span class="tag">Live specimen</span> real density · right-aligned DM Mono figures · sticky header (scroll inside the box) · row states</div>
+  <div class="tw dense scrolly">
+    <table>
+      <caption class="vh">Trip manifest specimen — lead passenger, route, status and pax counts</caption>
+      <thead><tr>
+        <th>Lead pax</th><th>Route</th><th>Status</th>
+        <th class="num">AD</th><th class="num">CHD</th><th class="num">Pax</th><th class="num">Total</th>
+      </tr></thead>
+      <tbody>
+        <tr class="sel"><td class="nm">Somchai P.</td><td>Similan Day Trip</td><td><span class="pill ok">Confirmed</span></td><td class="num">4</td><td class="num">2</td><td class="num">6</td><td class="num">฿18,400</td></tr>
+        <tr><td class="nm">Anna Müller</td><td>Surin Snorkel</td><td><span class="pill warn">FOC pending</span></td><td class="num">2</td><td class="num">0</td><td class="num">2</td><td class="num">฿7,200</td></tr>
+        <tr class="flag-warn"><td class="nm">Wanida S.</td><td>Phi Phi Premium</td><td><span class="pill warn">Awaiting approval</span></td><td class="num">12</td><td class="num">4</td><td class="num">16</td><td class="num">฿52,800</td></tr>
+        <tr><td class="nm">J. Tanaka</td><td>Phang Nga Bay</td><td><span class="pill info">Completed</span></td><td class="num">3</td><td class="num">1</td><td class="num">4</td><td class="num">฿11,600</td></tr>
+        <tr class="flag-danger"><td class="nm">R. Okonkwo</td><td>Whale Shark</td><td><span class="pill danger">Unassigned</span></td><td class="num">8</td><td class="num">0</td><td class="num">8</td><td class="num">฿31,200</td></tr>
+        <tr class="cxl"><td class="nm">L. Rossi</td><td>Similan Day Trip</td><td><span class="pill exception">Weather</span></td><td class="num">5</td><td class="num">2</td><td class="num">7</td><td class="num">฿0</td></tr>
+        <tr><td class="nm">ปิยะ ว.</td><td>Surin Snorkel</td><td><span class="pill ok">Confirmed</span></td><td class="num">2</td><td class="num">0</td><td class="num">2</td><td class="num">฿6,800</td></tr>
+        <tr><td class="nm">M. Dubois</td><td>Phi Phi Premium</td><td><span class="pill neutral">Quote</span></td><td class="num">6</td><td class="num">3</td><td class="num">9</td><td class="num dash">—</td></tr>
+        <tr><td class="nm">K. Larsen</td><td>Phang Nga Bay</td><td><span class="pill ok">Confirmed</span></td><td class="num">2</td><td class="num">0</td><td class="num">2</td><td class="num">฿5,900</td></tr>
+        <tr><td class="nm">อรุณี ก.</td><td>Whale Shark</td><td><span class="pill warn">FOC pending</span></td><td class="num">4</td><td class="num">1</td><td class="num">5</td><td class="num">฿16,750</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--accent)"></i>selected</span>
+    <span><i style="background:var(--warn)"></i>needs attention</span>
+    <span><i style="background:var(--danger)"></i>blocked</span>
+    <span><i style="background:var(--line)"></i>cancelled — 50% opacity, name struck</span>
+    <span><i style="background:var(--muted)"></i>— is missing; <b>0</b> would be a measurement</span>
+  </div>
+</div>
+
+<div class="two">
+  <div class="mini"><h5>Geometry</h5><p><code>th</code> 7px 10px, 10px/600 uppercase, <code>--muted</code>.
+  <code>td</code> 9px 10px, 12px, <code>--ink-2</code>. Row height ~33px. Figures right-aligned, DM Mono,
+  <code>tabular-nums</code>. Dates left — they read as labels.</p></div>
+  <div class="mini"><h5>No zebra</h5><p>Hairline dividers plus a hover tint. Zebra + a 3px status left
+  border + a tinted row state is three background signals fighting, and the row states carry
+  information.</p></div>
+  <div class="mini"><h5>Sticky header</h5><p>Offset from a CSS variable, never a literal (§5). Uses
+  <code>box-shadow: inset 0 -1px 0 var(--line)</code> rather than <code>border-bottom</code> — a
+  bordered sticky header hairline-flickers during scroll in Blink.</p></div>
+  <div class="mini"><h5>Sorting &amp; selection</h5><p>Header is a <code>&lt;button&gt;</code> inside the
+  <code>&lt;th&gt;</code>; <code>aria-sort</code> on the <code>&lt;th&gt;</code>. The caret always renders
+  (in <code>--line</code> when inactive) so the column does not reflow on sort. Bulk-action bar sits
+  <i>above</i> the table, never floating over it — floating covers the last row.</p></div>
+</div>
+
+<div class="note warn">
+  <span class="lbl">The rule that keeps the page from breaking</span>
+  A wide table scrolls <b>inside its own container</b>; the page body never scrolls horizontally.
+  <code>.tw{overflow-x:auto}</code> with the <code>min-width</code> on the inner
+  <code>&lt;table&gt;</code>. The monolith learned this the hard way — check-in tables set
+  <code>min-width:1420px</code>, and letting the body scroll dragged the topbar and nav drawer sideways
+  with the content.
+</div>
+
+<pre><code>interface Column&lt;T&gt; {
+  key: string;
+  header: React.ReactNode;
+  align?: 'left' | 'right' | 'center';
+  numeric?: boolean;            // implies align:'right' + mono + tabular-nums
+  width?: string;
+  sortable?: boolean;
+  sticky?: 'left';              // pins the first column(s)
+  render: (row: T) =&gt; React.ReactNode;
+}
+
+interface DataTableProps&lt;T&gt; {
+  columns: Column&lt;T&gt;[];
+  rows: T[];
+  rowKey: (row: T) =&gt; string;   // a STABLE domain id — never an index (§10)
+  minWidth?: number;
+  stickyHeader?: boolean;                 // default true
+  stickyOffsetVar?: string;               // default 'var(--topbar)'
+  rowState?: (row: T) =&gt; RowState | undefined;
+  sort?: { key: string; dir: 'asc' | 'desc' };
+  onSortChange?: (s: { key: string; dir: 'asc' | 'desc' }) =&gt; void;
+  selection?: { selected: Set&lt;string&gt;; onChange: (s: Set&lt;string&gt;) =&gt; void };
+  loading?: boolean;
+  error?: { message: string; onRetry?: () =&gt; void };
+  empty?: React.ReactNode;
+  caption: string;              // required, visually hidden
+}</code></pre>
+
+<p><b>Accessibility.</b> Real <code>&lt;table&gt;</code> semantics — never a div grid. A visually-hidden
+<code>&lt;caption&gt;</code> names the table. Row actions are real buttons in the tab order — <b>do not
+hide them behind <code>:hover</code> opacity</b>; the monolith does this in three places and it makes
+those actions keyboard-invisible and touch-invisible.</p>
+
+<h3 id="c-card">4.4 Cards and panels</h3>
+<p><b>Card</b> — <code>--panel</code>, <code>1px solid var(--line)</code>, <code>--r</code>,
+<code>16px 18px</code>, <code>--shadow</code>. <b>Panel</b> — the same recipe <i>without</i> the shadow,
+for a container that is structurally part of the page rather than sitting on it. The monolith
+copy-pastes the card recipe onto 10+ panel classes rather than composing it (audit defect&nbsp;#3); this
+is one component with four variants.</p>
+
+<div class="tw">
+<table>
+<thead><tr><th style="width:130px">Variant</th><th>Treatment</th><th>Use</th></tr></thead>
+<tbody>
+<tr><td class="mono">default</td><td>panel + line + shadow</td><td>Content sitting on the page</td></tr>
+<tr><td class="mono">flat</td><td>panel + line, no shadow</td><td>List rail beside a detail pane</td></tr>
+<tr><td class="mono">inset</td><td><code>--panel-2</code> ground, no shadow</td><td>A well inside a card</td></tr>
+<tr><td class="mono">accent</td><td>3px top stripe in the tone color</td><td>KPI tiles</td></tr>
+</tbody>
+</table>
+</div>
+<p><b>Interactive cards</b> (a whole card that is a link) get hover
+<code>border-color:var(--line-strong)</code> and a focus ring. Non-interactive cards have <b>no hover
+state at all</b> — a hover effect on a non-clickable surface is a lie.</p>
+
+<h3 id="c-form">4.5 Forms</h3>
+<p><code>Field</code> wraps every control: label (10px/500 <code>--muted</code>) → control → description
+or error. Required is a <code>*</code> in <code>--danger</code> <i>after</i> the label, plus
+<code>aria-required</code>. <b>Optional is never marked</b> — most fields are required, so marking
+optional inverts the signal.</p>
+
+<div class="spec">
+  <div class="spec-hd"><span class="tag">Live specimen</span> field states · currency and number are mono and right-aligned</div>
+  <div class="fgrid">
+    <div class="fld"><label for="f1">Lead passenger <span class="req">*</span></label>
+      <input class="ctl" id="f1" value="Somchai Prasert"></div>
+    <div class="fld"><label for="f2">Adult pax <span class="req">*</span></label>
+      <input class="ctl mono" id="f2" value="12" inputmode="numeric"></div>
+    <div class="fld"><label for="f3">Total</label>
+      <div class="cur"><span class="sym">฿</span><input class="ctl mono" id="f3" value="52,800"></div></div>
+    <div class="fld"><label for="f4">Travel date <span class="req">*</span></label>
+      <input class="ctl mono" id="f4" value="2026-09-12"></div>
+    <div class="fld"><label for="f5">Agent</label>
+      <select class="ctl" id="f5"><option>Andaman Blue Travel · ABT</option><option>Siam Sea Tours · SST</option></select></div>
+    <div class="fld"><label for="f6">Hotel</label>
+      <input class="ctl bad" id="f6" value="" aria-invalid="true" aria-describedby="f6e" placeholder="Required for pickup">
+      <div class="err" id="f6e">Hotel is required when a pickup zone is set.</div></div>
+    <div class="fld"><label for="f7">Voucher ref</label>
+      <input class="ctl mono" id="f7" value="BK-2609-0184-4F2A" readonly>
+      <div class="hint">Read-only fields stay in the tab order — staff copy values out of them.</div></div>
+    <div class="fld"><label for="f8">Boat</label>
+      <input class="ctl" id="f8" value="Assign after approval" disabled></div>
+  </div>
+  <div style="margin-top:12px" class="pillrow">
+    <span class="tokchip" style="--c:var(--accent)"><span class="cd"></span>Similan Day Trip<span class="x">×</span></span>
+    <span class="tokchip" style="--c:var(--ok)"><span class="cd"></span>Surin Snorkel<span class="x">×</span></span>
+    <span class="tokchip" style="--c:var(--violet)"><span class="cd"></span>Whale Shark<span class="x">×</span></span>
+  </div>
+</div>
+
+<div class="tw">
+<table>
+<thead><tr><th style="width:130px">Control</th><th>Rules</th></tr></thead>
+<tbody>
+<tr><td><b>NumberField</b></td><td><b>DM Mono, right-aligned, tabular-nums.</b> <code>inputMode="numeric"</code>. <b>No spinner arrows</b> — they are 8px targets and a mis-click on a pax count is a real cost. Step with ↑/↓ (Shift for 10).</td></tr>
+<tr><td><b>CurrencyField</b></td><td>NumberField + a <code>฿</code> prefix as a non-focusable adornment inside the border. Formats with separators on blur, strips on focus. Zero decimals.</td></tr>
+<tr><td><b>DateField</b></td><td>Native <code>input[type=date]</code> — the OS picker beats anything we would build and staff know it. DM Mono. Value is always a local <code>YYYY-MM-DD</code> string, never a <code>Date</code>.</td></tr>
+<tr><td><b>Select</b></td><td>Native, for ≤12 static options. Above that, Typeahead.</td></tr>
+<tr><td><b>Typeahead</b></td><td>Filtered async list in a portal popover. <b>Its container must never create a stacking context</b> (§10.1). Full combobox semantics: <code>role="combobox"</code>, <code>aria-expanded</code>, <code>aria-controls</code>, <code>aria-activedescendant</code>; ↑/↓ move, Enter selects, Esc closes and restores, Tab commits the highlight.</td></tr>
+<tr><td><b>MultiSelect</b></td><td>Typeahead + removable chips in the field. Backspace on an empty input removes the last chip. Chips wrap and the field grows — never a fixed-height field with hidden chips.</td></tr>
+<tr><td><b>Checkbox / Radio</b></td><td>16px visual, 40px tap target via padding — never by growing the control. Radios always in a <code>&lt;fieldset&gt;</code> with a <code>&lt;legend&gt;</code>.</td></tr>
+<tr><td><b>Toggle</b></td><td>34×20 track, 16px thumb. <b>Only for settings that apply immediately.</b> A toggle behind a Save button is a checkbox wearing a costume.</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="note warn">
+  <span class="lbl">Validation timing</span>
+  Errors appear <b>below</b> the field, 11px <code>--danger</code>, with <code>aria-invalid</code> and
+  <code>aria-describedby</code>. <b>Validate on blur and on submit, never on keystroke</b> — a
+  required-field error that appears after the first character is hostile. On a failed submit, move focus
+  to the first invalid field and announce the count.
+</div>
+
+<h3 id="c-btn">4.6 Buttons</h3>
+<div class="spec">
+  <div class="spec-hd"><span class="tag">Live specimen</span> variants · sizes · states — tab to one to see the focus ring</div>
+  <div class="btnrow">
+    <button class="btn primary">Confirm booking</button>
+    <button class="btn secondary">Save draft</button>
+    <button class="btn ghost">Cancel</button>
+    <button class="btn danger">Cancel booking</button>
+    <button class="btn dangersolid">Yes, cancel it</button>
+  </div>
+  <div class="btnrow">
+    <button class="btn primary sm">Small</button>
+    <button class="btn primary">Medium</button>
+    <button class="btn primary lg">Large</button>
+    <button class="btn secondary ico" aria-label="Edit booking">✎</button>
+    <button class="btn primary" disabled>Over licence — blocked</button>
+    <button class="btn primary" aria-busy="true"><span class="sp"></span> Saving…</button>
+  </div>
+</div>
+
+<div class="two">
+  <div class="mini"><h5>Destructive treatment</h5><p>Outline <code>danger</code> is the default in a row
+  or toolbar. <code>danger-solid</code> is reserved for the confirming button <i>inside</i> a
+  confirmation dialog — the one place the user has already committed. An action that cannot be undone
+  gets a dialog; one that can gets a toast with Undo, which is faster and safer.</p></div>
+  <div class="mini"><h5>States</h5><p><code>focus-visible</code> is never removed.
+  <code>disabled</code> is <code>opacity:.45</code> with <code>pointer-events</code> retained so the
+  tooltip explaining <i>why</i> still works — the monolith has no base <code>:disabled</code> rule at all
+  (defect&nbsp;#10) and every module invents one. <code>loading</code> swaps the leading icon for a
+  spinner, keeps the label, <b>locks the width</b>, and sets <code>aria-busy</code>.</p></div>
+</div>
+<p><b>Icon buttons require <code>aria-label</code>.</b> A tooltip is not a label. Minimum tap target
+40×40 on touch, via a transparent expanded hit area — never by inflating the visual control.</p>
+
+<h3 id="c-badge">4.7 Badges and chips</h3>
+<div class="spec">
+  <div class="spec-hd"><span class="tag">Live specimen</span> badge · token chip · removable chip</div>
+  <div class="pillrow">
+    <span class="bdg">BK-2609-0184</span>
+    <span class="bdg">ABT</span>
+    <span class="bdg">r12</span>
+    <span class="b blue">12 trips</span>
+    <span class="b green">3 boats</span>
+    <span class="b amber">2 pending</span>
+    <span class="b red">1 overdue</span>
+    <span class="b violet">charter</span>
+    <span class="b gray">archived</span>
+    <span class="tokchip" style="--c:var(--warn)"><span class="cd"></span>Khao Lak<span class="x">×</span></span>
+  </div>
+</div>
+<p><b>Badge</b> — non-interactive label, same tint recipe as a pill but <b>no dot</b> and
+<code>--r-sm</code>, not pill. Counts, codes, tags. A badge never carries a status; if it would, it is a
+StatusPill. <b>Chip</b> — interactive and removable, pill radius, a leading color dot when it represents
+a colored entity, and a trailing <code>×</code> that is <b>always visible</b>. A hover-revealed remove
+button is unreachable by keyboard and invisible on touch; the monolith hides it at
+<code>opacity:0</code> in three places.</p>
+
+<h3 id="c-overlay">4.8 Overlays</h3>
+<div class="tw">
+<table>
+<thead><tr><th style="width:110px">Component</th><th style="width:120px">Layer</th><th>Shape</th><th>Dismiss</th></tr></thead>
+<tbody>
+<tr><td><b>Modal</b></td><td class="mono">--z-modal 400</td><td>Centered, <code>--r-lg</code>, max-width 420/640/960, <code>max-height:88vh</code></td><td>Esc · scrim · close button</td></tr>
+<tr><td><b>Drawer</b></td><td class="mono">--z-drawer 300</td><td>Right edge, <code>min(420px,92vw)</code>, full height</td><td>Esc · scrim</td></tr>
+<tr><td><b>Popover</b></td><td class="mono">--z-popover 500</td><td>Anchored, <code>--r-lg</code>, <code>--shadow-pop</code>, collision-aware</td><td>Esc · outside click</td></tr>
+<tr><td><b>Tooltip</b></td><td class="mono">--z-popover 500</td><td>Anchored, <code>--r-sm</code>, dark ground, 11px</td><td>blur / mouseleave</td></tr>
+<tr><td><b>Toast</b></td><td class="mono">--z-toast 600</td><td>Bottom-right stack, <code>--r</code></td><td>5s auto · dismiss</td></tr>
+</tbody>
+</table>
+</div>
+<div class="note">
+  <span class="lbl">A modal is for a decision, not a form</span>
+  The monolith’s Booking v2 deliberately avoids modals for its main flows and uses full-page takeovers
+  instead. That is correct and the rewrite keeps it: <b>a create/edit flow with more than ~6 fields is a
+  route, not a modal.</b> Modals trap focus, lock background scroll, carry
+  <code>role="dialog" aria-modal="true"</code>, move focus in on open and return it to the trigger on
+  close. Popovers never trap focus — that is what makes them popovers.
+</div>
+<p><b>Tooltips are supplementary only.</b> Never the sole carrier of information, never the label of an
+icon button, never interactive. 500ms open delay, 0ms close. <b>Suppressed on touch entirely</b> — there
+is no hover on a pier tablet, so anything tooltip-only is invisible to half the users. Error toasts do
+not auto-dismiss and use <code>role="alert"</code>; the rest use <code>role="status"</code>.</p>
+
+<h3 id="c-nav">4.9 Tabs and navigation</h3>
+<p><b>Tabs are underlines, not pills.</b> <code>border-bottom:2px solid transparent</code>; active sets
+border and text to <code>--accent</code> at weight 600, idle is <code>--muted</code>. Full ARIA tabs
+with roving tabindex, ←/→ to move, Home/End to jump. A count badge sits after the label — neutral
+normally, <code>--danger-soft</code> when the count is an alert (pending approvals).</p>
+<p><b>Segmented controls are a different component</b>: <code>--panel-3</code> track,
+<code>--r-sm</code>, 2px padding, active segment <code>--panel</code> fill + <code>--shadow-sm</code>.
+For a view-mode switch (card/table, day/week/month) — never for navigation.</p>
+
+<div class="note warn">
+  <span class="lbl">Sidebar groups — the shipped list is eight, not six</span>
+  In production markup order: <b>Overview · Operations · Pier Office · Sales · Accounting &amp; Finance ·
+  Admin · Fleet Management · Config</b>. Fleet Management has five sub-groups; Admin is
+  <code>data-adminonly</code>. Pier Office and Admin are real groups that summaries commonly omit —
+  the code wins.
+</div>
+
+<h3 id="c-flow">4.10 Flow and rails</h3>
+<div class="two">
+  <div>
+    <h4 style="margin-top:0">Rail — vertical process</h4>
+    <div class="rail">
+      <div class="step"><div class="t">Quote created</div><div class="d">Priced from the agent’s rate type</div></div>
+      <div class="step ask"><div class="t">FOC review</div><div class="d">Decision point — amber outline node</div></div>
+      <div class="step block"><div class="t">Over licence</div><div class="d">Hard block — filled danger node</div></div>
+      <div class="step done"><div class="t">Confirmed</div><div class="d">Complete — filled ok node</div></div>
+    </div>
+  </div>
+  <div>
+    <h4 style="margin-top:0">Flow — horizontal stages</h4>
+    <div class="flow">
+      <div class="stage"><div class="k">stage 1</div><div class="v">Quote</div><div class="s">no seats held</div></div>
+      <div class="arrow">›</div>
+      <div class="stage"><div class="k">stage 2</div><div class="v">Confirmed</div><div class="s">seats consumed</div></div>
+      <div class="arrow">›</div>
+      <div class="stage"><div class="k">stage 3</div><div class="v">Completed</div><div class="s">travelled</div></div>
+    </div>
+  </div>
+</div>
+<p>Both are presentational: <code>aria-hidden</code> on the connector line and arrows; the content is a
+real ordered list.</p>
+
+<h3 id="c-kpi">4.11 KPI tiles, skeletons and empty states</h3>
+<div class="spec">
+  <div class="spec-hd"><span class="tag">Live specimen</span> KPI tiles with tone stripes · the 42px hero figure</div>
+  <div class="kpirow" style="margin-bottom:14px">
+    <div class="kpi" style="--tone:var(--accent)"><div class="kl">Bookings today</div><div class="kv">184</div><div class="ks">+12 vs last week</div></div>
+    <div class="kpi" style="--tone:var(--ok)"><div class="kl">Collected</div><div class="kv">฿1,284,500</div><div class="ks">92% of issued</div></div>
+    <div class="kpi" style="--tone:var(--warn)"><div class="kl">Awaiting approval</div><div class="kv">7</div><div class="ks">oldest 2 days</div></div>
+    <div class="kpi" style="--tone:var(--danger)"><div class="kl">Overdue invoices</div><div class="kv">3</div><div class="ks">฿148,200</div></div>
+    <div class="kpi" style="--tone:var(--muted)"><div class="kl">Fuel logged</div><div class="kv" style="color:var(--muted)">—</div><div class="ks">no entries yet</div></div>
+  </div>
+  <div style="display:flex;align-items:baseline;gap:10px">
+    <span class="herofig">16</span>
+    <span style="font-size:13px;color:var(--muted)">boats</span>
+    <span class="pill ok">11 available</span><span class="pill warn">3 fixing</span><span class="pill danger">2 unavailable</span>
+  </div>
+</div>
+<p>The <code>42px / 700 / -.035em</code> hero recipe recurs <i>identically</i> across every Fleet KPI
+strip in the monolith — treat it as fixed. <b>A KPI value never animates.</b> A KPI with no data shows
+<code>—</code> in <code>--muted</code>, never <code>0</code>. Deltas take tone from <i>business</i>
+meaning, not sign — falling cancellations are <code>ok</code> even though the number went down.</p>
+
+<div class="two">
+  <div class="mini"><h5>Skeletons</h5><p><code>--line-2</code> blocks at <code>--r-sm</code>, sized to
+  the real content, with a 1.4s opacity pulse and nothing more. <b>Shimmer gradients are banned</b> —
+  motion in a dense layout. A skeleton of the wrong height causes a layout shift when it resolves, which
+  is worse than a spinner; if the geometry is unknown, use a spinner in a fixed-height container.</p></div>
+  <div class="mini"><h5>Empty states</h5><p>What is missing · why · the action that fixes it. Never “No
+  data”. Write “No bookings on 12 Sep” and “No boats are marked available at Tub Lamu today”.
+  Distinguish <b>nothing exists yet</b> (offer create) from <b>the filter excludes everything</b> (offer
+  clear filters) from <b>the request failed</b> (that is an error state with Retry, not an empty
+  state).</p></div>
+</div>
+</section>
+
+
+<section id="s5">
+<h2><span class="num">05</span> Layout patterns</h2>
+
+<svg class="shellsvg" viewBox="0 0 560 260" role="img" aria-label="App shell: 52px topbar, 220px sidebar, fluid main with a 22px gutter and a 64px bottom reserve">
+  <rect x="1" y="1" width="558" height="258" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+  <rect x="1" y="1" width="558" height="34" rx="10" fill="var(--panel-2)"/>
+  <rect x="1" y="26" width="558" height="9" fill="var(--panel-2)"/>
+  <line x1="1" y1="35" x2="559" y2="35" stroke="var(--line)"/>
+  <text x="16" y="23" font-family="DM Mono, monospace" font-size="11" fill="var(--muted)">Topbar · 52px · --topbar · z 100</text>
+  <rect x="1" y="35" width="150" height="224" fill="var(--panel-2)"/>
+  <line x1="151" y1="35" x2="151" y2="259" stroke="var(--line)"/>
+  <text x="16" y="58" font-family="DM Mono, monospace" font-size="11" fill="var(--muted)">Sidebar</text>
+  <text x="16" y="74" font-family="DM Mono, monospace" font-size="11" fill="var(--muted)">220px</text>
+  <text x="16" y="90" font-family="DM Mono, monospace" font-size="11" fill="var(--muted)">rail 84px</text>
+  <rect x="173" y="57" width="366" height="160" rx="8" fill="var(--panel)" stroke="var(--line-strong)" stroke-dasharray="4 3"/>
+  <text x="187" y="78" font-family="DM Mono, monospace" font-size="11" fill="var(--muted)">Main · padding 22px</text>
+  <text x="187" y="96" font-family="DM Mono, monospace" font-size="11" fill="var(--muted)">--page-max 1320px on form/doc pages</text>
+  <text x="187" y="114" font-family="DM Mono, monospace" font-size="11" fill="var(--muted)">fluid on list / matrix / manifest</text>
+  <rect x="173" y="225" width="366" height="22" rx="6" fill="var(--warn-soft)" stroke="var(--warn)" stroke-opacity=".35"/>
+  <text x="187" y="240" font-family="DM Mono, monospace" font-size="10.5" fill="var(--warn)">64px bottom reserve — fixed badge chrome sits here</text>
+</svg>
+
+<div class="tw">
+<table>
+<thead><tr><th style="width:130px">Template</th><th>Shape</th><th>Used by</th></tr></thead>
+<tbody>
+<tr><td><b>List</b></td><td>Page header → filter bar → DataTable → pagination</td><td>All bookings, invoices, agents, assets</td></tr>
+<tr><td><b>List + detail</b></td><td>340px list rail + fluid detail pane, rail scrolls independently</td><td>Agents, Rate Types, Boat Status</td></tr>
+<tr><td><b>Detail</b></td><td>Header with status + actions → tab strip → tab body, capped at <code>--page-max</code></td><td>Booking detail, boat detail</td></tr>
+<tr><td><b>Form</b></td><td>Full-page takeover, section cards, sticky 320px review rail, sticky footer actions</td><td>New / edit booking</td></tr>
+<tr><td><b>Dashboard</b></td><td>KPI strip → 2–3 column card grid</td><td>Overview, Fleet dashboard</td></tr>
+<tr><td><b>Wizard</b></td><td>Step rail (340px) + step body + Back/Next footer</td><td>Contract document</td></tr>
+<tr><td><b>Matrix</b></td><td>Sticky first column + sticky header + scrolling grid, wrapped in <code>.tw</code></td><td>Availability matrix, attendance</td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>Responsive</h3>
+<p>The monolith has <b>no responsive breakpoints in its base CSS at all</b> — mobile is one 226-line
+block. Defensible for a desktop tool with a tablet afterthought; not right now that pier check-in is a
+tablet-first task.</p>
+<div class="tw">
+<table>
+<thead><tr><th style="width:130px">Breakpoint</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td class="mono">≥1180px</td><td>Full shell. Sidebar docked. Multi-column grids at full width.</td></tr>
+<tr><td class="mono">820–1180px</td><td>Sidebar collapses to the 84px rail. 4-col grids → 2. Detail panes stack below their list.</td></tr>
+<tr><td class="mono">≤820px</td><td>Sidebar becomes an off-canvas drawer with a scrim; topbar tools collapse behind <code>⋯</code>; <code>main</code> becomes the scroll container; grids → 1–2 columns; <b>all inputs forced to 16px</b> (below 16, iOS zooms on focus and does not zoom back); tap targets floored at 40px; tables keep their <code>min-width</code> and scroll inside <code>.tw</code>.</td></tr>
+</tbody>
+</table>
+</div>
+<p><b>Calendar and matrix grids are exempt from column collapsing</b> — a 7-column month grid stays 7
+columns and scrolls horizontally. Collapsing it produces a list that is not a calendar.</p>
+
+<h3>Sticky offsets — never hardcode 52</h3>
+<div class="note danger">
+  <span class="lbl">Why the rule exists</span>
+  <code>--topbar</code> is <b>not a constant</b>. The monolith’s <code>topbar-float-skin</code> sets
+  <code>:root{--topbar:0px}</code> — it removes the docked bar entirely and floats its controls. Every
+  sticky element that hardcoded <code>52</code> gaps by 52px the moment that skin is on. Print and embed
+  contexts re-declare it to <code>0px</code> too. And a <b>stacked</b> sticky bar’s offset depends on the
+  measured height of the bar above it — the monolith notes that a fixed <code>96</code> both gapped and
+  overlapped depending on real content.
+</div>
+
+<pre><code>/** Measures a stacked sticky bar and publishes its offset as a CSS var on `scopeRef`. */
+function useStickyOffset(
+  scopeRef: React.RefObject&lt;HTMLElement&gt;,
+  barRef:   React.RefObject&lt;HTMLElement&gt;,
+  varName:  string,
+) {
+  useLayoutEffect(() =&gt; {
+    const publish = () =&gt; {
+      const top = parseInt(
+        getComputedStyle(document.documentElement).getPropertyValue('--topbar')
+      ) || 0;
+      const h = barRef.current?.offsetHeight ?? 0;
+      scopeRef.current?.style.setProperty(varName, `${top + h}px`);
+    };
+    publish();
+    const ro = new ResizeObserver(publish);      // replaces the monolith's rAF-and-hope
+    if (barRef.current) ro.observe(barRef.current);
+    return () =&gt; ro.disconnect();
+  }, [scopeRef, barRef, varName]);
+}</code></pre>
+<p><b>Lint rule:</b> no numeric literal in a <code>top</code> declaration on a
+<code>position:sticky</code> element. It is mechanically checkable, so check it.</p>
+</section>
+
+
+<section id="s6">
+<h2><span class="num">06</span> Iconography</h2>
+
+<div class="note danger">
+  <span class="lbl">Say it plainly</span>
+  <b>Icons are inline SVG. There is no Tabler webfont.</b> The monolith’s Dashboard contains
+  <code>ti ti-bolt</code> and <code>ti ti-refresh</code> class names that render as <i>nothing</i>,
+  because no icon font is loaded anywhere in the file. If an icon-font class name appears in ported
+  markup, it is dead — replace it, do not carry it over.
+</div>
+
+<div class="tw">
+<table>
+<thead><tr><th style="width:130px">Property</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td>Grid</td><td class="mono">24 × 24 viewBox</td></tr>
+<tr><td>Stroke</td><td class="mono">stroke="currentColor" · stroke-width="2" · fill="none" · round caps and joins</td></tr>
+<tr><td>Sizes</td><td class="mono">13px in buttons · 14px nav/inline · 16px standalone · 20px empty states</td></tr>
+<tr><td>Color</td><td>Always <code>currentColor</code>. An icon never sets its own color.</td></tr>
+<tr><td>Alignment</td><td><code>vertical-align:-0.125em</code> inline; flexbox <code>align-items:center</code> in a control</td></tr>
+</tbody>
+</table>
+</div>
+
+<pre><code>// packages/ui/icons.tsx — one file, one export per glyph
+export const IconBoat = (p: IconProps) =&gt; (
+  &lt;svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}
+       strokeLinecap="round" strokeLinejoin="round"
+       width={p.size ?? 16} height={p.size ?? 16}
+       aria-hidden={p.label ? undefined : true}
+       role={p.label ? 'img' : undefined} aria-label={p.label}&gt;
+    &lt;path d="…" /&gt;
+  &lt;/svg&gt;
+);
+export type IconName = keyof typeof icons;
+export const icons = { boat: IconBoat, van: IconVan, /* … */ } as const;</code></pre>
+
+<p><b>Why typed components rather than <code>&lt;Icon name="boat" /&gt;</code>:</b> a typo in a string
+name fails silently at runtime and renders nothing; a typo in an import fails at build. Every icon in
+this product sits next to a number that matters, and a silently-missing icon is a silently-missing
+signal. The string-keyed <code>icons</code> map exists only for names that genuinely come from data
+(a route’s chosen icon) — and that lookup has a fallback glyph.</p>
+<p>An icon-only control has <code>aria-label</code>; a decorative icon beside text has
+<code>aria-hidden="true"</code>. <b>One glyph per concept across the whole product</b> — the icon set is
+a reviewed registry, not a folder anyone can add to.</p>
+</section>
+
+
+<section id="s7">
+<h2><span class="num">07</span> Print and document design</h2>
+
+<p>A first-class output, not an afterthought. The monolith ships <b>15 print documents</b> carrying real
+operational weight: the guide gets a job sheet, the driver gets a job order, the agent gets a voucher,
+the pier gets a manifest, immigration gets a passenger list.</p>
+
+<div class="tw">
+<table>
+<thead><tr><th style="width:180px">Property</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td>Default</td><td class="mono">@page { size: A4 landscape; margin: 9mm }</td></tr>
+<tr><td>Portrait documents</td><td class="mono">@page { size: A4 portrait; margin: 10mm }</td></tr>
+<tr><td>Dense manifests</td><td class="mono">margin 7–8mm</td></tr>
+<tr><td>Body / table type</td><td class="mono">9–10pt / 8–9pt</td></tr>
+<tr><td>Rules</td><td class="mono">0.5pt #111827 — hairlines that survive a laser printer</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="note warn">
+  <span class="lbl">The margin trap — a real, recorded bug</span>
+  A <code>@page</code> margin of 10mm double-counted against an on-screen preview sized at 1123px (A4 at
+  96dpi), so print output did not match the preview. The fix was <code>@page{margin:0}</code> with the
+  page element owning the entire margin as padding. <b>Rule: one owner for the margin.</b> Either
+  <code>@page</code> owns it and the page element has zero padding, or <code>@page</code> is zero and the
+  page element owns it. Never both.
+</div>
+
+<pre><code>@media print {
+  :root { --topbar:0px; --shadow:none; --shadow-pop:none; --shadow-modal:none }
+  .app-chrome, .sidebar, .topbar, .toast-root, .no-print { display:none !important }
+  .print-page { break-after: always; box-shadow:none; border-radius:0 }
+  a[href]::after { content:none }        /* never print URLs — these go to guides, not readers */
+  table { break-inside: auto }
+  tr, .keep { break-inside: avoid }
+  thead { display: table-header-group }  /* repeat headers across pages */
+  tfoot { display: table-footer-group }
+  .prints-color { -webkit-print-color-adjust: exact; print-color-adjust: exact }
+}</code></pre>
+
+<p>The rewrite prints <b>from the live document</b>, not from the monolith’s
+<code>window.open('','_blank')</code> + <code>document.write</code> popup. That pattern exists because
+the monolith has no build step and no way to render a second tree; the rewrite does. Consequences: no
+popup-blocker guard, no per-document font re-injection, no blank-page race — and the print view becomes
+a route (<code>/print/voucher/:id</code>) that is linkable, testable and previewable.</p>
+
+<h3>Bilingual print</h3>
+<div class="tw">
+<table>
+<thead><tr><th style="width:230px">Document class</th><th style="width:190px">Font</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td>Operational data sheets — manifests, job orders, job sheets</td><td class="mono">DM Sans + Noto Sans Thai, DM Mono figures</td><td>Matches screen; staff cross-check between the two</td></tr>
+<tr><td>Thai government-adjacent forms — guide registration, staff attendance</td><td class="mono">Sarabun</td><td>Read alongside official documents that use Sarabun; matching is the point</td></tr>
+<tr><td>Legacy spreadsheet replicas — sign sheet, lunch slip</td><td class="mono">DM Sans + Noto Sans Thai at original metrics</td><td>Staff cross-check against an old Excel file</td></tr>
+</tbody>
+</table>
+</div>
+<p>Label in Thai above value in English, or a two-column EN/TH pair — <b>never inline
+<i>Thai (English)</i></b>, which breaks at the line end. Thai line-height goes to <b>1.7</b> in print;
+marks clip at print DPI more readily than on screen. Never justify Thai text — there are no word spaces
+to distribute and the result is glyph-spaced.</p>
+<p>And because a printer can fail or a sheet can be photocopied, <b>every printed status carries a text
+label or a glyph as well as a color</b>. A sheet readable only in color is one photocopy from useless.</p>
+
+<h3>The shared hero image system</h3>
+<div class="two">
+  <div class="mini"><h5>What exists</h5><p>Route hero photos at
+  <code>assets/hero/&lt;routeId&gt;.jpg</code>, resolved as explicit <code>route.heroImage</code> →
+  convention path → gradient fallback. Twelve files (<code>r1</code>–<code>r12</code>). The only consumer
+  today is the <b>Pickup Setup export card</b>.</p></div>
+  <div class="mini"><h5>The history</h5><p>The image was shared between the voucher and the pickup card.
+  It came from marketing, so <b>the marketing text is baked into the pixels</b> — route name, tagline,
+  sometimes a price. Fine on a marketing card; wrong on a voucher, where the text is already rendered
+  live and now appears twice, in two typefaces, sometimes contradicting each other after a price change.
+  The fix was an override layer: <code>assets/voucher/&lt;routeId&gt;.jpg</code>, a clean plate,
+  composited on top for the voucher only.</p></div>
+</div>
+
+<div class="note danger">
+  <span class="lbl">Doc / code disagreement — the code wins</span>
+  <code>CLAUDE.md</code> §8 describes the voucher override layer as live. <b>It is not.</b> A repo-wide
+  grep finds <b>zero</b> references to <code>assets/voucher</code> in any source file — the only mention
+  is in <code>CLAUDE.md</code> itself. The directory exists on disk with exactly <b>one orphan file,
+  <code>r12.jpg</code></b>. And <code>bkV2VoucherTicket()</code> renders <b>no photograph at all</b> —
+  it is a navy card with a route-colored left border and typographic content. The layer was built, one
+  route was migrated, the voucher was later redesigned to drop imagery, and the mechanism was orphaned.
+  The doc kept describing it.
+</div>
+
+<p><b>How the rewrite handles it properly.</b> The underlying mistake was one image serving two
+purposes. Fix it at the data model:</p>
+<pre><code>interface RouteImagery {
+  marketing?: string;  // text baked in — marketing card, pickup export. NEVER a document.
+  plate?: string;      // clean plate, no text — vouchers, documents, anything with live text over it
+  thumb?: string;      // 16:9 crop for list rows and cards
+  alt: { en: string; th: string };   // required — these reach printed customer documents
+}</code></pre>
+<ol>
+  <li><b>A document never renders an image with baked-in text.</b> If only <code>marketing</code> exists,
+  the document renders the gradient fallback. A missing image beats a contradictory one.</li>
+  <li><b>Images are route data, not convention paths.</b> The API returns URLs. Convention lookup is how
+  one route ended up with a file nobody references.</li>
+  <li><b>The gradient fallback stays</b>, and stays good — it uses the route color and is the correct
+  rendering more often than people expect.</li>
+  <li><b>Delete <code>assets/voucher/r12.jpg</code></b> during migration, or promote it to
+  <code>plate</code> for route 12. Do not leave it.</li>
+</ol>
+</section>
+
+
+<section id="s8">
+<h2><span class="num">08</span> Data display rules</h2>
+
+<div class="two">
+  <div class="mini"><h5>Numbers</h5><p>Right-aligned, DM Mono, <code>tabular-nums</code>, <code>,</code>
+  thousands separators. A true minus <code>−</code> (U+2212), not a hyphen — and <code>--danger</code>
+  <b>only when negative is bad</b>; a negative variance on a cost line is good news. Never abbreviate on a
+  data screen (<code>1.2k</code> in a table is a rounding error waiting to be argued about). Abbreviation
+  is allowed on a hero figure, with the full value in <code>title</code>.</p></div>
+  <div class="mini"><h5>Currency</h5><p><code>฿12,450</code> — prefix, no space, comma groups,
+  <b>zero decimals</b> on all operational surfaces. Every price in this business is a whole Baht and a
+  trailing <code>.00</code> on forty rows is forty units of noise. Grouping locale is
+  <code>en-US</code>, matching the monolith and what staff read. Refunds and cash-out render as
+  <code>−฿1,200</code> in <code>--danger</code>, never in parentheses.</p></div>
+</div>
+
+<div class="note danger">
+  <span class="lbl">Dates · the most expensive bug class in this codebase</span>
+  Everything is <b>Asia/Bangkok (+07:00)</b>; there is no second timezone in this product. Build a
+  <code>YYYY-MM-DD</code> from <b>local</b> accessors, never from
+  <code>toISOString().slice(0,10)</code> — at +07:00 any local time before 07:00 converts to the
+  <i>previous</i> calendar day in UTC, so a booking made at 06:00 lands on yesterday.
+</div>
+
+<pre><code>export const localYMD = (d: Date): string =&gt;
+  `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;</code></pre>
+
+<div class="tw">
+<table>
+<thead><tr><th style="width:200px">Context</th><th style="width:180px">Format</th><th>Example</th></tr></thead>
+<tbody>
+<tr><td>Table cell</td><td class="mono">DD MMM</td><td class="mono">12 Sep</td></tr>
+<tr><td>Table cell, cross-year</td><td class="mono">DD MMM YY</td><td class="mono">12 Sep 25</td></tr>
+<tr><td>Detail / document</td><td class="mono">DD MMM YYYY</td><td class="mono">12 Sep 2025</td></tr>
+<tr><td>Machine / input value</td><td class="mono">YYYY-MM-DD</td><td class="mono">2025-09-12</td></tr>
+<tr><td>Time</td><td class="mono">HH:mm · 24-hour</td><td class="mono">07:30</td></tr>
+<tr><td>Timestamp</td><td class="mono">DD MMM · HH:mm</td><td class="mono">12 Sep · 07:30</td></tr>
+<tr><td>Range, same month</td><td class="mono">DD – DD MMM</td><td class="mono">12 – 15 Sep</td></tr>
+<tr><td>Range, crossing</td><td class="mono">DD MMM – DD MMM</td><td class="mono">28 Sep – 3 Oct</td></tr>
+</tbody>
+</table>
+</div>
+<p>Month names are English abbreviations even in Thai UI — unambiguous, what the monolith prints, and
+Thai abbreviations collide (มี.ค. / พ.ค.). <b>The day number and year are DM Mono; the month name is DM
+Sans</b> — the monolith’s voucher does exactly this, with the comment <i>“month as letters · day number
+and year in mono so the figures line up on every voucher.”</i> Thai official print documents use
+Buddhist era (Gregorian + 543); the formatter takes an <code>era</code> parameter and never infers it
+from the locale.</p>
+
+<h3>Pax counts</h3>
+<p>Always integer, always DM Mono. The breakdown displays as short labels with counts:
+<code>AD 12 · CHD 3 · INF 1 · FOC 2</code>. <b>A zero category still renders</b>, dimmed to
+<code>--muted</code> — the monolith’s voucher makes this explicit: <i>“every ticket always shows four
+chips · the zero ones fade but never disappear.”</i> Foreign/Thai splits render as
+<code>12 FR / 4 TH</code> where the split matters (pricing, manifests) and as a single total where it
+does not (capacity).</p>
+
+<h3>Capacity — <code>cap</code> vs <code>licensePax</code></h3>
+<div class="tw">
+<table>
+<thead><tr><th style="width:150px">Field</th><th style="width:230px">Meaning</th><th>Consequence of exceeding</th></tr></thead>
+<tbody>
+<tr><td class="mono">cap</td><td><b>Booking cap</b> — the commercial limit we sell to</td><td>Booking goes to <code>pending_approval</code>. <b>Soft.</b></td></tr>
+<tr><td class="mono">licensePax</td><td><b>Licensed seats</b> — the registered legal maximum</td><td><b>Hard block.</b> Not a warning.</td></tr>
+</tbody>
+</table>
+</div>
+<div class="note warn">
+  <span class="lbl">Two numbers that must never be confused visually</span>
+  <b>1.</b> Never render them adjacent as two bare numbers — <code>45 / 47</code> is unreadable and will
+  be read backwards. Render <code>45 booked · cap 47</code>, or as a labelled pair. <b>2.</b> The capacity
+  bar plots against <code>cap</code>, with <code>licensePax</code> marked as a distinct tick on the same
+  bar — one bar, two references. <b>3.</b> Three zones: <code>≤ cap</code> ok · <code>cap</code> to
+  <code>cap + 2</code> (<code>BA_CAP_TOL</code>) warn, labelled “over cap, needs approval” ·
+  <code>&gt; licensePax</code> danger, and <b>the control that would cause it is disabled</b>. A hard block
+  must not be expressible in the UI. <b>4.</b> The bare word “capacity” is banned in UI copy — say
+  “booking cap” or “licensed seats”. Ambiguity here has a legal edge.
+</div>
+
+<h3>Null, empty and zero</h3>
+<div class="note danger">
+  <span class="lbl">A zero and a missing value must never look the same</span>
+  <code>0 boats available</code> is an operational emergency. <code>— boats available</code> means the
+  query did not answer. If they render identically, the emergency is invisible.
+</div>
+<div class="tw">
+<table>
+<thead><tr><th style="width:170px">Value</th><th style="width:120px">Renders as</th><th>Style</th></tr></thead>
+<tbody>
+<tr><td class="mono">0</td><td class="mono">0</td><td>Normal ink, DM Mono — it is a real measurement</td></tr>
+<tr><td class="mono">null / undefined</td><td class="mono">—</td><td><code>--muted</code></td></tr>
+<tr><td>Empty string</td><td class="mono">—</td><td><code>--muted</code></td></tr>
+<tr><td>Not applicable</td><td class="mono">—</td><td><code>--muted</code>, with <code>title</code> explaining why</td></tr>
+<tr><td>Failed to load</td><td class="mono">⚠</td><td><code>--danger</code>, with <code>title</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>Enforced through the formatter, not per component. Related: an average computed from a single sample
+carries an <code>n=1</code> marker — a real pattern in the monolith’s fuel page and good practice. A
+low-confidence figure that looks like a high-confidence figure is worse than no figure.</p>
+
+<h3>Truncation</h3>
+<p>CSS <code>text-overflow: ellipsis</code>, always with the full value in <code>title</code>.
+<b>Never truncate</b> a figure, a currency amount, a date, a status label or an ID. <b>Do truncate</b>
+names, hotel names, notes, addresses. Long free text in a cell gets
+<code>-webkit-line-clamp: 2</code> rather than a single-line ellipsis — two lines of a hotel name usually
+identifies it, one line often does not. Never truncate by JS <code>slice()</code> on a string that may
+contain Thai.</p>
+</section>
+
+
+<section id="s9">
+<h2><span class="num">09</span> Interaction and accessibility</h2>
+
+<div class="tw">
+<table>
+<thead><tr><th style="width:180px">Context</th><th>Keys</th></tr></thead>
+<tbody>
+<tr><td>Global</td><td>Tab / Shift+Tab; <code>/</code> focuses the page search where one exists</td></tr>
+<tr><td>Modal / Drawer</td><td>Focus trapped · Esc closes · focus returns to the trigger</td></tr>
+<tr><td>Popover</td><td>Esc closes · focus returns to the anchor · focus is <b>not</b> trapped</td></tr>
+<tr><td>Tabs</td><td>←/→ move · Home/End jump · roving tabindex (only the active tab is tabbable)</td></tr>
+<tr><td>Typeahead</td><td>↑/↓ move · Enter selects · Esc closes and restores · Tab commits the highlight</td></tr>
+<tr><td>Table</td><td>Tab reaches row actions · sort headers are buttons, Enter/Space activates</td></tr>
+<tr><td>Number field</td><td>↑/↓ step by 1 · Shift+↑/↓ by 10</td></tr>
+<tr><td>Destructive dialog</td><td>Focus lands on <b>Cancel</b>, never on the destructive button</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="two">
+  <div class="mini"><h5>Focus management</h5><p><code>:focus-visible</code> only — never
+  <code>:focus</code>, so a mouse click leaves no ring. The ring is <b>never removed</b>. After an action
+  that changes context, move focus deliberately: a deleted row → the next row; a failed submit → the
+  first invalid field; a closed dialog → its trigger; a route change → the page
+  <code>&lt;h1&gt;</code> (<code>tabIndex={-1}</code>).</p></div>
+  <div class="mini"><h5>Tab order in dense forms</h5><p>Tab order follows visual order, so <b>DOM order
+  must follow visual order</b>. Never <code>tabIndex</code> above 0 to patch a mismatch — fix the DOM. In
+  a multi-column grid, order runs <b>down each logical group then to the next</b>, not left-to-right
+  across unrelated fields, which is what a naive 3-column grid produces. Group with
+  <code>&lt;fieldset&gt;</code>. Read-only fields stay in the order (staff copy from them); disabled
+  fields leave it.</p></div>
+  <div class="mini"><h5>Screen readers</h5><p>Landmarks: <code>header</code> topbar, <code>nav</code>
+  sidebar, <code>main</code>, <code>footer</code>. One <code>h1</code> per page; headings never skip a
+  level. A toast root at <code>aria-live="polite"</code> (<code>assertive</code> for errors) and a status
+  region announcing async result counts — <b>debounced to 500ms</b>, never per keystroke.</p></div>
+  <div class="mini"><h5>Touch</h5><p>Minimum 40×40 targets via padding or a transparent expanded hit
+  area — never by inflating the visual control. Row actions on touch are always visible or behind an
+  explicit overflow menu. <b>No hover-only affordances anywhere</b>: if it only appears on hover, it does
+  not exist on a tablet.</p></div>
+</div>
+
+<div class="note">
+  <span class="lbl">Contrast targets · WCAG AA floors, not goals</span>
+  Body text and figures <b>≥ 4.5:1</b> against their background. Large text (≥18.66px bold or ≥24px)
+  <b>≥ 3:1</b>. UI component boundaries and focus indicators <b>≥ 3:1</b>. A pier tablet in sunlight is
+  a low-contrast environment before the design starts. The token set hits these in both themes;
+  <code>--muted</code> on <code>--panel</code> is the tightest pair in the light palette, which is why it
+  cannot get lighter without re-checking everything downstream.
+</div>
+
+<div class="note ok">
+  <span class="lbl">Color alone never carries meaning</span>
+  This is why a status pill is tint <b>plus</b> dot <b>plus</b> label — three channels, of which two
+  survive a color-blind reader and one survives a photocopier. Same rule everywhere: a red row also has
+  a label; a green tick also has text; a chart series gets a direct label, not only a legend swatch.
+</div>
+</section>
+
+
+<section id="s10">
+<h2><span class="num">10</span> Render traps that are really design constraints</h2>
+<p>These read as bugs. They are constraints on how components may be built, and each has already cost
+this project real time.</p>
+
+<div class="note danger">
+  <span class="lbl">10.1 · backdrop-filter traps dropdowns</span>
+  <b>Symptom.</b> A typeahead renders <i>behind</i> the cards next to it, no matter what
+  <code>z-index</code> it gets. The monolith’s own word for it: ซ้อนกัน — “stacked/overlapping”.<br>
+  <b>Cause.</b> <code>backdrop-filter</code> creates a new stacking context; an absolutely-positioned
+  child is confined to it and cannot rise above later-painted siblings. <code>filter</code>,
+  <code>transform</code>, <code>will-change</code>, <code>contain</code>, <code>perspective</code>,
+  <code>opacity&lt;1</code> and <code>position:fixed</code> on an ancestor all do the same.<br>
+  <b>Rule.</b> (1) The rewrite does not use <code>backdrop-filter</code> at all. (2) <b>Every popover,
+  dropdown, tooltip, menu and typeahead renders in a portal</b> at the document root with collision-aware
+  anchoring — which makes the ancestor’s stacking context irrelevant <i>by construction</i>. (3) Lint for
+  <code>backdrop-filter</code>, <code>filter</code>, <code>transform</code> and <code>contain</code> on
+  any card or field container.
+</div>
+
+<div class="note danger">
+  <span class="lbl">10.2 · Scroll-jump on re-render</span>
+  <b>Symptom.</b> Typing in a filter, toggling a row or saving a field scrolls the list to the top and
+  drops focus.<br>
+  <b>Cause in the monolith.</b> Replacing a mount’s <code>innerHTML</code> destroys the focused element;
+  the browser resets <code>scrollTop</code> and focus falls back to <code>&lt;body&gt;</code>.<br>
+  <b>Cause in React</b> — the same failure, and <i>easier</i> to hit: <code>key={index}</code> on a
+  filtered list changes every item’s identity when the filter changes · a <b>component defined inside
+  another component’s render body</b> is a new type every render, so React unmounts its entire subtree
+  (invisible in code review) · a conditional wrapper
+  (<code>cond ? &lt;div&gt;&lt;Form/&gt;&lt;/div&gt; : &lt;Form/&gt;</code>) remounts <code>Form</code> ·
+  a <code>key</code> on a container that changes with data deliberately remounts.<br>
+  <b>Rules.</b> <code>key</code> is a stable domain id, never an index · never define a component inside
+  a render body (lint it) · keep the element-tree shape constant, branching on props not on wrapper
+  structure · never conditionally remount a subtree that owns focus · if a remount is genuinely needed,
+  capture <code>activeElement</code> and <code>scrollTop</code> in <code>useLayoutEffect</code> and
+  restore after commit · async results update rows in place, never replacing the whole list ·
+  virtualized lists key by domain id.
+</div>
+
+<div class="note warn">
+  <span class="lbl">10.3 · Sticky offsets from CSS variables</span>
+  <b>Symptom.</b> Sticky headers gap or overlap by exactly 52px, or by a variable amount when a second
+  bar is stacked. <b>Cause.</b> A hardcoded <code>52</code>, or an assumed height for a bar whose height
+  depends on content. <b>Rule.</b> Read <code>--topbar</code>; measure stacked bars with
+  <code>ResizeObserver</code> and publish the offset as a custom property (§5).
+</div>
+
+<div class="note warn">
+  <span class="lbl">10.4 · 100vh on iOS</span>
+  <b>Symptom.</b> The bottom of a full-height panel is cut off, and the amount changes as the URL bar
+  hides. <b>Cause.</b> <code>100vh</code> includes the hideable browser chrome. <b>Rule.</b> Use
+  <code>100dvh</code> behind <code>@supports (height:100dvh)</code>, with <code>100vh</code> as fallback.
+</div>
+
+<div class="note warn">
+  <span class="lbl">10.5 · iOS input zoom</span>
+  <b>Symptom.</b> Tapping a field on a phone zooms the page in and never zooms back out. <b>Cause.</b>
+  Any <code>font-size</code> below 16px on a focusable input. <b>Rule.</b> At ≤820px force
+  <code>input/select/textarea</code> to 16px — this overrides the 12px control size and is correct; a
+  zoomed page is a worse density problem than a larger field. Pair with
+  <code>html{-webkit-text-size-adjust:100%}</code> to stop iOS font-boosting tables on rotate.
+</div>
+
+<div class="note warn">
+  <span class="lbl">10.6 · min-width always beats max-width</span>
+  <b>Symptom.</b> A table with a large <code>min-width</code> overflows its container and pushes the page
+  sideways; adding <code>max-width:100%</code> does nothing. <b>Cause.</b> In CSS,
+  <code>min-width</code> wins the conflict — the table cannot shrink. <b>Rule.</b> The <i>wrapper</i>
+  scrolls, not the table: <code>.tw{overflow-x:auto}</code> with the <code>min-width</code> on the inner
+  <code>&lt;table&gt;</code>. Never put <code>overflow</code> on the table itself.
+</div>
+
+<div class="note warn">
+  <span class="lbl">10.7 · Sticky header hairline flicker</span>
+  <b>Symptom.</b> A sticky header’s bottom border shimmers or vanishes during scroll in Blink.
+  <b>Cause.</b> Sub-pixel positioning of a <code>border-bottom</code> on a sticky element. <b>Rule.</b>
+  <code>box-shadow: inset 0 -1px 0 var(--line)</code> instead. The monolith already does this on its
+  manifest table.
+</div>
+
+<div class="note warn">
+  <span class="lbl">10.8 · Fonts not ready at print time</span>
+  <b>Symptom.</b> A printed document comes out in a fallback font, or blank, intermittently.
+  <b>Cause.</b> <code>window.print()</code> fires before webfonts and images have loaded. <b>Rule.</b>
+  Gate on <code>await document.fonts.ready</code> plus every image’s decode. Printing from the live
+  document (§7) covers the common case, but a print route entered directly still needs the gate.
+</div>
+
+<div class="note">
+  <span class="lbl">10.9 · Escaping is not automatic in string-built HTML</span>
+  <b>Symptom in the monolith.</b> A passenger name containing <code>&lt;</code> breaks a render.
+  <b>Cause.</b> Template-string HTML with no escaping, and <code>esc()</code> declared locally in 25+
+  places rather than globally. <b>In React this trap disappears</b> — JSX escapes by default. The rule is
+  therefore narrow and absolute: <b><code>dangerouslySetInnerHTML</code> is forbidden</b> outside a single
+  reviewed, allow-list sanitizer used for one purpose.
+</div>
+</section>
+
+
+<section id="s11">
+<h2><span class="num">11</span> Migration guidance</h2>
+<p>The goal is that staff experience the rewrite as continuity, not as a new product to relearn during
+high season.</p>
+
+<h3>Extraction order</h3>
+<div class="rail">
+  <div class="step done"><div class="t">1 · Tokens, with no visual change</div><div class="d">Publish <code>packages/ui/tokens.css</code> and verify against the monolith’s computed values. Mechanical and independently reviewable.</div></div>
+  <div class="step"><div class="t">2 · The status map</div><div class="d">Build <code>StatusPill</code> plus the complete status→tone table. Every status in the product is enumerated here; a status not on the list is a bug in the data model. <b>The highest-leverage single artifact in the migration.</b></div></div>
+  <div class="step"><div class="t">3 · DataTable</div><div class="d">Most screens are a table plus a filter bar. A correct DataTable makes every subsequent screen small.</div></div>
+  <div class="step"><div class="t">4 · Forms, Typeahead first</div><div class="d">Typeahead is the highest-risk control — portal positioning, keyboard, async — and everything else follows the pattern it sets.</div></div>
+  <div class="step"><div class="t">5 · Layout shell</div><div class="d">Topbar, sidebar, page templates, the sticky-offset hook.</div></div>
+  <div class="step ask"><div class="t">6 · Print, as its own project</div><div class="d">Print shares no code with the screen layer beyond tokens. Treating it as a phase rather than a footnote is what stops it being skipped.</div></div>
+</div>
+<p>Screens follow booking first, per the strangler plan.</p>
+
+<div class="two">
+  <div>
+    <h4 style="margin-top:0">Must stay pixel-identical</h4>
+    <div class="tw"><table style="min-width:0">
+      <tbody>
+        <tr><td><b>Dense table geometry</b><br><span style="font-size:12.5px;color:var(--muted)">Row count per screen is a learned quantity — change it and every “third row down” reflex is wrong.</span></td></tr>
+        <tr><td><b>Status colors and their meanings</b><br><span style="font-size:12.5px;color:var(--muted)">Green-is-good is read pre-attentively. Remapping a hue costs weeks.</span></td></tr>
+        <tr><td><b>The pill recipe</b> — tint + 4px dot + label<br><span style="font-size:12.5px;color:var(--muted)">The most repeated visual in the product.</span></td></tr>
+        <tr><td><b>Figures in DM Mono, right-aligned</b><br><span style="font-size:12.5px;color:var(--muted)">Scanning a column is a trained skill.</span></td></tr>
+        <tr><td><b>Print documents, all of them</b><br><span style="font-size:12.5px;color:var(--muted)">These leave the building. A guide sheet that looks different is a support call from a pier.</span></td></tr>
+        <tr><td><b>Sidebar group order and labels</b> · <b>the 42px hero KPI figure</b></td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <div>
+    <h4 style="margin-top:0">May safely improve</h4>
+    <div class="tw"><table style="min-width:0">
+      <tbody>
+        <tr><td>Radius normalization to 6/10/14 — most visible improvement per unit of risk</td></tr>
+        <tr><td>Dropping glass — ship it <i>with</i> the module port, never as a standalone “we removed the pretty thing” release</td></tr>
+        <tr><td>One green, one amber, one red, one blue — nobody can name the current variants; nobody will miss them</td></tr>
+        <tr><td>Focus rings everywhere · consistent disabled states · real empty states — currently absent, pure gain</td></tr>
+        <tr><td>Skin consolidation 17 → 8 — per-module as each is ported, never in one sweep</td></tr>
+        <tr><td>Dark mode — new capability, opt-in, system default</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+</div>
+
+<h3>Verifying parity</h3>
+<ol>
+  <li><b>Token diff.</b> A script reads the monolith’s computed <code>:root</code> and diffs it against
+  <code>tokens.css</code>. Every intentional difference is listed with a reason — that list is the review
+  artifact.</li>
+  <li><b>Status coverage test.</b> Assert every value in every status enum has a tone and a bilingual
+  label. Fails the build on a gap. This alone would have caught audit defect&nbsp;#7.</li>
+  <li><b>Side-by-side screenshots</b> at 1440 and 1024, per screen, reviewed by someone who <i>uses</i>
+  the screen.</li>
+  <li><b>Print diff.</b> Print each document from both systems to PDF; compare page count, breaks and
+  column positions. A changed page count is a regression even when it looks fine.</li>
+  <li><b>The 40-row test.</b> Every list screen reviewed with 40+ rows of real data. Density problems are
+  invisible at 5 rows of fixtures.</li>
+  <li><b>Both languages, every screen</b>, with the longest real strings — not lorem.</li>
+</ol>
+</section>
+
+
+<section id="s12">
+<h2><span class="num">12</span> Governance</h2>
+
+<div class="grid2">
+  <div class="mini"><h5>Adding a token</h5><p><b>Rare, and it should feel rare.</b> Is this a new
+  <i>concept</i>, or a value that belongs to a component? Propose with three call sites → confirm nothing
+  existing covers it → add with <b>both</b> theme values (light on bare <code>:root</code>, dark repeated
+  in both dark blocks) → add a swatch to the specimen grid → review. <b>Never</b> add a tint or shade of
+  an existing token to solve one component’s problem — use <code>color-mix()</code> at the call
+  site.</p></div>
+  <div class="mini"><h5>Adding a component</h5><p>Check the inventory first — the answer is usually a
+  variant. If genuinely new: specify purpose, anatomy, variants, <b>the full state set</b>, a11y and the
+  prop contract <i>before</i> writing it. It ships with all eight states, keyboard operation, both themes,
+  both languages and a specimen. Missing any of those, it is not done.</p></div>
+  <div class="mini"><h5>Adding a skin</h5><p><b>The highest bar in this document.</b> Justify why an
+  existing skin cannot serve → provide four tokens for <b>both</b> themes → prove AA contrast for
+  text-on-accent and accent-on-panel in both → register and review. A proposal that needs a fifth token is
+  not a skin; it is a request to change the design system.</p></div>
+  <div class="mini"><h5>Composition</h5><p>Components compose <b>downward only</b>: primitives (Button,
+  Field, Icon) know nothing about domain; patterns (DataTable, FormGrid, Modal) compose primitives;
+  features compose patterns and may know domain. A primitive importing a domain type is a layering
+  violation and fails review.</p></div>
+</div>
+
+<h3>Keeping the system from drifting back into per-page CSS</h3>
+<div class="tw">
+<table>
+<thead><tr><th style="width:44px">#</th><th>Mechanism</th></tr></thead>
+<tbody>
+<tr><td class="mono">1</td><td><b>No literal colors in feature code.</b> Lint bans hex, <code>rgb()</code> and <code>hsl()</code> outside <code>tokens.css</code> and <code>skins.ts</code>. <b>The single most important rule here</b> — it is what the monolith lacked, and it is why the monolith has seventeen visual languages.</td></tr>
+<tr><td class="mono">2</td><td>No literal font sizes, radii or durations outside the token file.</td></tr>
+<tr><td class="mono">3</td><td>No numeric literal in a sticky <code>top</code>.</td></tr>
+<tr><td class="mono">4</td><td>No component definitions inside render bodies.</td></tr>
+<tr><td class="mono">5</td><td>No <code>backdrop-filter</code>; no <code>filter</code>/<code>transform</code> on card or field containers.</td></tr>
+<tr><td class="mono">6</td><td>No <code>dangerouslySetInnerHTML</code> outside the one reviewed sanitizer.</td></tr>
+<tr><td class="mono">7</td><td><b>Social:</b> this document’s specimens render from the real tokens. If a token changes and a specimen looks wrong, the doc has caught it. <b>The page is its own regression test.</b></td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+
+<section id="s13">
+<h2><span class="num">13</span> Open questions</h2>
+<p>Genuinely ambiguous in the sources. Each needs a decision before the corresponding work starts.</p>
+<div class="tw">
+<table>
+<thead><tr><th style="width:44px">#</th><th>Question</th><th style="width:190px">Blocks</th></tr></thead>
+<tbody>
+<tr><td class="mono">Q1</td><td><b>Does the rewrite keep per-view accents at all?</b> This doc assumes yes and specifies eight. The alternative — one accent product-wide — is simpler and cheaper, and loses the orientation benefit staff actually use.</td><td>Skin registry · all module ports</td></tr>
+<tr><td class="mono">Q2</td><td><b><code>pending_approval</code>: warn or danger?</b> Spec’d as warn; the monolith renders red. Ops decides — is an approval queue a caution or an alert?</td><td>Status map</td></tr>
+<tr><td class="mono">Q3</td><td><b><code>cancelled_weather</code>: violet or gray?</b> Spec’d as violet to separate three cancellation types with different refund rules. Confirm the refund rules genuinely differ.</td><td>Status map</td></tr>
+<tr><td class="mono">Q4</td><td><b>Is dark mode in scope for v1?</b> Tokens support it; shipping it means testing every screen twice. May be worth deferring to v1.1 while keeping the token structure.</td><td>Test matrix · estimate</td></tr>
+<tr><td class="mono">Q5</td><td><b>Where does the voucher hero image stand?</b> <code>assets/voucher/</code> holds one orphan file, no code references it, and the voucher renders no image. Is imagery wanted back, or is the text-only design final?</td><td><code>RouteImagery</code> model</td></tr>
+<tr><td class="mono">Q6</td><td><b>Do print documents keep their per-document accents?</b> Fifteen documents, most with their own color, two deliberately replicating a legacy spreadsheet. Unification would break the Excel cross-check. Which are cosmetic and which are load-bearing?</td><td>Print phase</td></tr>
+<tr><td class="mono">Q7</td><td><b>Is <code>ranong</code> a real pier?</b> <code>CLAUDE.md</code> calls it planned; the shipped Calendar, Programs and the whole Pier Office nav group already treat it as first-class. Affects every 3-vs-4-group layout.</td><td>Pier grouping components</td></tr>
+<tr><td class="mono">Q8</td><td><b>Does Thai UI text need a size bump, or only line-height?</b> This doc specifies line-height only (1.55 / 1.7). If Thai at 13px tests poorly at the pier, a <code>--fs-body-th: 14px</code> token is the fix — but it needs testing on the actual devices first.</td><td>Type scale</td></tr>
+<tr><td class="mono">Q9</td><td><b>Mobile scope.</b> Is tablet-first pier check-in a v1 target, or does the pier keep using the monolith through cutover?</td><td>Responsive effort</td></tr>
+<tr><td class="mono">Q10</td><td><b>Does anything still need <code>#185FA5</code>?</b> Collapsing info-blue into Ocean is proposed. Confirm no printed document or external artifact depends on the exact legacy blue.</td><td>Token set</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+
+<section id="s14">
+<h2><span class="num">14</span> Quick reference</h2>
+<p>The page people will actually keep open.</p>
+
+<div class="grid2">
+  <div class="mini"><h5>Surface &amp; ink</h5><p class="mono" style="font-size:12px">--bg · --panel · --panel-2 · --panel-3 · --overlay<br>--ink · --ink-2 · --muted · --ink-on-accent</p></div>
+  <div class="mini"><h5>Lines &amp; accent</h5><p class="mono" style="font-size:12px">--line · --line-2 · --line-strong<br>--accent · --accent-ink · --accent-deep · --accent-soft · --accent-faint</p></div>
+  <div class="mini"><h5>Status</h5><p class="mono" style="font-size:12px">--ok / --ok-soft · --warn / --warn-soft<br>--danger / --danger-soft · --violet / --violet-soft</p></div>
+  <div class="mini"><h5>Type</h5><p class="mono" style="font-size:12px">--font-sans · --font-mono<br>--fs- label 10 · micro 11 · table 12 · body 13 · body-lg 14 · h3 17 · h2 20 · h1 24 · kpi 26 · hero 42</p></div>
+  <div class="mini"><h5>Space</h5><p class="mono" style="font-size:12px">--space- 2 4 6 8 10 12 14 16 18 22 28 36 48</p></div>
+  <div class="mini"><h5>Radii — three</h5><p class="mono" style="font-size:12px">--r-sm 6 controls · --r 10 containers · --r-lg 14 floating<br>--r-pill 999 is a shape, not a step</p></div>
+  <div class="mini"><h5>Elevation &amp; motion</h5><p class="mono" style="font-size:12px">--shadow-sm · --shadow · --shadow-pop · --shadow-modal · --focus-ring<br>--dur-fast 120 · --dur 150 · --dur-slow 300 · --ease</p></div>
+  <div class="mini"><h5>Layout &amp; z</h5><p class="mono" style="font-size:12px">--topbar 52 · --sidebar 220 · --page-gutter 22 · --page-max 1320 · --badge-gap 64<br>sticky 40 · topbar 100 · drawer 300 · modal 400 · popover 500 · toast 600</p></div>
+</div>
+
+<h4>Status tones — six, and every business status maps to one</h4>
+<div class="tw">
+<table>
+<thead><tr><th style="width:120px">Tone</th><th style="width:150px">Means</th><th>Examples</th></tr></thead>
+<tbody>
+<tr><td><span class="pill ok">ok</span></td><td>good · done · paid</td><td>confirmed · available · paid · verified · ready · on-board · dispatched · approved</td></tr>
+<tr><td><span class="pill warn">warn</span></td><td>pending · caution</td><td>pending FOC · awaiting approval · fixing · awaiting payment · expiring · over cap · cleared · soon</td></tr>
+<tr><td><span class="pill danger">danger</span></td><td>bad · blocked</td><td>rejected · unavailable · overdue · no-show · broken · over licence · unassigned · late</td></tr>
+<tr><td><span class="pill info">info</span></td><td>in progress</td><td>completed · partly paid · arrived · due</td></tr>
+<tr><td><span class="pill exception">exception</span></td><td>not-an-error exception</td><td>weather cancelled · van conflict · on hold · charter</td></tr>
+<tr><td><span class="pill neutral">neutral</span></td><td>inactive · n/a</td><td>quote · cancelled · void · spare · waiting · missed · no data</td></tr>
+</tbody>
+</table>
+</div>
+
+<h4>The twenty hard rules</h4>
+<input class="filter" id="ffilter" type="search" placeholder="Filter rules — try “mono”, “Thai”, “sticky”…" aria-label="Filter hard rules">
+<span class="count" id="fcount"></span>
+<div class="tw">
+<table id="ftable">
+<thead><tr><th style="width:44px">#</th><th style="width:190px">Rule</th><th>Detail</th></tr></thead>
+<tbody>
+<tr><td class="mono">01</td><td><b>Every figure in DM Mono</b></td><td>Tabular-nums, right-aligned. Money, counts, dates, times, hours, pax, serials, IDs. No exceptions on screen.</td></tr>
+<tr><td class="mono">02</td><td><b>Thai font in every stack</b></td><td>Both <code>--font-sans</code> and <code>--font-mono</code> name Noto Sans Thai. One Thai font in the product. Line-height floor 1.55 (print 1.7).</td></tr>
+<tr><td class="mono">03</td><td><b>Three radii: 6 / 10 / 14</b></td><td>Controls · containers · floating. Full-round and 50% are shapes, not scale steps.</td></tr>
+<tr><td class="mono">04</td><td><b>Six status tones, one source</b></td><td>No page re-declares a status color. Fixes audit defect #2 — the highest-leverage structural fix available.</td></tr>
+<tr><td class="mono">05</td><td><b>Status = tint + 4px dot + label</b></td><td>Color alone never carries meaning. Never a dot-only status.</td></tr>
+<tr><td class="mono">06</td><td><b>Zero ≠ missing</b></td><td><code>0</code> is normal ink; missing is <code>—</code> in <code>--muted</code>. “0 boats available” is an emergency; “— boats available” means the query did not answer.</td></tr>
+<tr><td class="mono">07</td><td><b>cap ≠ licensePax</b></td><td>Never two bare adjacent numbers. Over cap → approval (soft). Over licence → <b>hard block, disabled control</b>. The bare word “capacity” is banned in copy.</td></tr>
+<tr><td class="mono">08</td><td><b>Dates via localYMD()</b></td><td>Never <code>toISOString().slice(0,10)</code>. Asia/Bangkok, always. At +07:00 anything before 07:00 lands on yesterday in UTC.</td></tr>
+<tr><td class="mono">09</td><td><b>Currency ฿12,450</b></td><td>Prefix, no space, comma groups, zero decimals. Negatives as <code>−฿1,200</code> in danger, never parentheses.</td></tr>
+<tr><td class="mono">10</td><td><b>Sticky top reads a CSS var</b></td><td>Never <code>52</code>. <code>topbar-float-skin</code> already zeroes <code>--topbar</code>. Stacked bars are measured with ResizeObserver.</td></tr>
+<tr><td class="mono">11</td><td><b>Popovers render in portals</b></td><td>No <code>backdrop-filter</code> anywhere; no stacking context on a form card. This makes the dropdown trap impossible by construction.</td></tr>
+<tr><td class="mono">12</td><td><b>key is a stable domain id</b></td><td>Never an index. Never define a component inside a render body. Never conditionally remount a subtree that owns focus.</td></tr>
+<tr><td class="mono">13</td><td><b>Tables scroll inside .tw</b></td><td>The page body never scrolls horizontally. <code>min-width</code> goes on the inner table, <code>overflow-x</code> on the wrapper.</td></tr>
+<tr><td class="mono">14</td><td><b>Icons are inline SVG</b></td><td>24×24, stroke 2, <code>currentColor</code>. <b>There is no Tabler webfont</b> — icon-font class names in the monolith render nothing.</td></tr>
+<tr><td class="mono">15</td><td><b>focus-visible is never removed</b></td><td>One ring: <code>0 0 0 3px var(--accent-soft)</code>. Focus moves deliberately after every context change.</td></tr>
+<tr><td class="mono">16</td><td><b>Motion is banned where it costs</b></td><td>Dense tables, the input path, and KPI figures — a number mid-animation is a number that is wrong, and someone will read it.</td></tr>
+<tr><td class="mono">17</td><td><b>No literals in feature code</b></td><td>Colors, font sizes, radii, durations live in <code>tokens.css</code> and <code>skins.ts</code>. Lint it. This is what the monolith lacked.</td></tr>
+<tr><td class="mono">18</td><td><b>A skin sets four tokens</b></td><td>accent · accent-ink · accent-deep · accent-soft. Nothing else. Scoped to one route-root element; portals are handled explicitly.</td></tr>
+<tr><td class="mono">19</td><td><b>Print is a product surface</b></td><td>A4 landscape default, one owner for the margin, <code>print-color-adjust:exact</code> where color is data, and every printed status carries a label as well as a color.</td></tr>
+<tr><td class="mono">20</td><td><b>Density over decoration</b></td><td>13px body, 12px tables, 33px rows. If a screen looks airy, it is off-system — the answer is fewer columns, not more padding.</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+
+<footer>
+  Companion to <code>documents/rewrite_material/03-design-principles.md</code> ·
+  written against <code>refactor/booking-v2-migration</code> ·
+  where a source doc and the code disagreed, <b>the code won</b> and the disagreement is recorded in place.
+</footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  // theme toggle
+  var btn = document.getElementById('themebtn');
+  var root = document.documentElement;
+  var saved = null;
+  try { saved = localStorage.getItem('la_doc_theme'); } catch(e){}
+  if (saved) root.setAttribute('data-theme', saved);
+  btn.addEventListener('click', function(){
+    var cur = root.getAttribute('data-theme');
+    var next;
+    if (cur === 'dark') next = 'light';
+    else if (cur === 'light') next = 'dark';
+    else next = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('la_doc_theme', next); } catch(e){}
+  });
+
+  // scrollspy
+  var links = Array.prototype.slice.call(document.querySelectorAll('#nav a'));
+  var targets = links.map(function(a){ return document.querySelector(a.getAttribute('href')); });
+  function spy(){
+    var best = 0, bestTop = -Infinity;
+    for (var i=0;i<targets.length;i++){
+      if (!targets[i]) continue;
+      var t = targets[i].getBoundingClientRect().top - 90;
+      if (t <= 0 && t > bestTop){ bestTop = t; best = i; }
+    }
+    links.forEach(function(a,i){ a.classList.toggle('on', i===best); });
+  }
+  var tick = false;
+  window.addEventListener('scroll', function(){
+    if (tick) return; tick = true;
+    requestAnimationFrame(function(){ spy(); tick = false; });
+  }, {passive:true});
+  spy();
+
+  // function-index filter (optional — skipped when the doc has no #ffilter)
+  var input = document.getElementById('ffilter');
+  var rows  = Array.prototype.slice.call(document.querySelectorAll('#ftable tbody tr'));
+  var count = document.getElementById('fcount');
+  if (input && rows.length){
+    var paint = function(){
+      var q = input.value.trim().toLowerCase();
+      var n = 0;
+      rows.forEach(function(r){
+        var hit = !q || r.textContent.toLowerCase().indexOf(q) !== -1;
+        r.classList.toggle('hidden', !hit);
+        if (hit) n++;
+      });
+      if (count) count.textContent = q ? (n + ' of ' + rows.length + ' shown') : (rows.length + ' rules');
+    };
+    input.addEventListener('input', paint);
+    paint();
+  }
+})();
+</script>
+</body>
+</html>
