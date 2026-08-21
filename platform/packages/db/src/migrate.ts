@@ -3,12 +3,24 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type pg from 'pg';
 
-/** Bookkeeping table. Created by the runner itself, never by a migration. */
-export const MIGRATIONS_TABLE = 'schema_migrations';
+/**
+ * Bookkeeping table. Created by the runner itself, never by a migration.
+ *
+ * NOT `schema_migrations`. The monolith's boot runner (server.js, live since
+ * 2026-08-12) already owns an unqualified `schema_migrations` in the same
+ * database, with an incompatible shape: `(name, sha1, applied_at, baseline, ms,
+ * err)` against this runner's `(version, name, checksum, applied_at,
+ * execution_ms)`. Sharing the name means whichever runs second finds the table
+ * already present, skips its CREATE, and then fails on the missing columns.
+ * The two systems coexist until the monolith is deleted at Phase 8, so they get
+ * separate ledgers.
+ */
+export const MIGRATIONS_TABLE = 'platform_migrations';
 
 /**
  * Advisory lock id, so two runners (a deploy and a human) cannot apply the same
- * migration concurrently. Arbitrary but must stay stable.
+ * migration concurrently. Deliberately different from the monolith runner's
+ * 4820261 — they guard different ledgers and must not block each other.
  */
 const LOCK_ID = 8_150_237;
 

@@ -140,7 +140,7 @@ describeDb('against a real database', () => {
     const dir = await tempDir();
     const table = `mig_test_${Date.now()}`;
 
-    await pool.query('drop table if exists schema_migrations');
+    await pool.query('drop table if exists platform_migrations');
     await writeFile(
       path.join(dir, '0001_create.sql'),
       `create table ${table} (id int primary key);`,
@@ -166,6 +166,6 @@ describeDb('against a real database', () => {
     await expect(up(pool, dir)).rejects.toThrow(/no longer match the files/);
 
     await pool.query(`drop table if exists ${table}`);
-    await pool.query('drop table if exists schema_migrations');
+    await pool.query('drop table if exists platform_migrations');
   });
 });
