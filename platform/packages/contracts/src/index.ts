@@ -10,3 +10,4 @@
  * dependency graph so it stays independently publishable.
  */
 export * from './common.js';
+export * from './rate-type.js';
