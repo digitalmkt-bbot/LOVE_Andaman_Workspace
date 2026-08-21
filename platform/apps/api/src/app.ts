@@ -14,6 +14,7 @@ import { z } from 'zod';
 import { ErrorEnvelope } from '@la/contracts';
 import { getPool, ping } from '@la/db';
 import { corsAllowList, type Config } from './config.js';
+import { rateTypeRoutes } from './routes/rate-types.js';
 
 /**
  * Codes a client is allowed to see and branch on.
@@ -224,6 +225,11 @@ export async function buildApp(
       }
     },
   );
+
+  // Domain routes. Registered as plugins so each owns its own encapsulated
+  // context; the validator/serializer compilers and the error handler set above
+  // are inherited, so every route answers with the same envelope.
+  await app.register(rateTypeRoutes, { config });
 
   return app;
 }
