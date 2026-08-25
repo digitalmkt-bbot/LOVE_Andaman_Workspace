@@ -1,0 +1,26 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap');
+
+:root { font-family: 'DM Sans', system-ui, sans-serif; color: #193043; background: #f4f8fa; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, input { font: inherit; }
+.ops-page { max-width: 1440px; margin: 0 auto; padding: 44px 32px 72px; }
+.masthead { max-width: 700px; margin-bottom: 30px; }
+h1, h2, h3, p { margin-top: 0; }
+h1 { font-size: clamp(2rem, 5vw, 3.4rem); letter-spacing: -.05em; margin-bottom: 10px; }
+h2 { font-size: 1.05rem; margin-bottom: 0; } h3 { font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: #587082; }
+.eyebrow { color: #1683c7; font: 500 .72rem 'DM Mono', monospace; letter-spacing: .12em; margin-bottom: 7px; }
+code, pre, .status, .section-heading > span, small { font-family: 'DM Mono', monospace; }
+.filters, .booking-id { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; margin-bottom: 18px; }
+label { color: #587082; font-size: .77rem; font-weight: 600; display: grid; gap: 5px; }
+input { border: 1px solid #cddbe2; border-radius: 6px; background: white; padding: 9px 10px; color: #193043; min-width: 140px; }
+.booking-id input { flex: 1; min-width: min(100%, 320px); }
+button { background: #1683c7; color: white; border: 0; border-radius: 6px; padding: 10px 14px; font-weight: 700; cursor: pointer; }
+button:hover { background: #0e6fae; }
+.workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 18px; align-items: start; }
+.card { background: #fff; border: 1px solid #dbe6eb; border-radius: 10px; padding: 20px; box-shadow: 0 8px 26px rgba(17, 60, 82, .04); }
+.detail { margin-top: 18px; }.section-heading { display: flex; justify-content: space-between; gap: 12px; align-items: start; padding-bottom: 14px; border-bottom: 1px solid #e6eef1; margin-bottom: 14px; }.section-heading > span { color: #587082; font-size: .75rem; }
+.table-wrap { overflow-x: auto; } table { width: 100%; border-collapse: collapse; font-size: .88rem; } th { color: #587082; text-align: left; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; padding: 9px 8px; } td { border-top: 1px solid #edf2f4; padding: 11px 8px; vertical-align: top; } tr { cursor: pointer; } tbody tr:hover, tr.selected { background: #f0f8fc; } small { display: block; color: #7a8e9a; font-size: .68rem; margin-top: 3px; }.status { background: #e7f4fb; color: #116a9f; border-radius: 20px; padding: 3px 7px; font-size: .68rem; white-space: nowrap; }
+.detail-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 18px 0; }.detail-summary div { background: #f7fafb; border-radius: 6px; padding: 11px; }.detail-summary span { color: #587082; display: block; font-size: .72rem; margin-bottom: 4px; }.detail-summary strong { font-size: .87rem; overflow-wrap: anywhere; }
+.json-panel { margin-top: 16px; }.json-panel pre { max-height: 420px; overflow: auto; background: #102b3a; color: #dff2fa; border-radius: 6px; padding: 14px; font-size: .72rem; line-height: 1.55; }.muted { color: #587082; }.error { color: #b5223c; background: #fff0f2; padding: 10px; border-radius: 6px; }
+@media (max-width: 850px) { .ops-page { padding: 28px 16px 48px; }.workspace { grid-template-columns: 1fr; }.detail-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
