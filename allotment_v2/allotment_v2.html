@@ -543,6 +543,10 @@
   }
 
   // ── Admin: user management + area permissions ──
+  /* §laUsers2 · ตั้งแต่หน้าต่างผู้ใช้เปลี่ยนเป็นตัวใหม่ ชุดฟังก์ชันข้างล่างนี้ไม่มีใครเรียกแล้ว
+     (laPermBoxesHTML · laEditBoxesHTML · laPresetBtnsHTML · laReadBoxes · laReadEditBoxes ·
+      laDeptSelectHTML · laSalesSelectHTML · laAreaBadges · laAvatar · laPermSummary)
+     คงไว้ก่อน ยังไม่ลบ · เผื่อต้องถอยกลับไปใช้หน้าต่างเดิม แล้วค่อยเก็บกวาดรอบหน้า */
   function laPermBoxesHTML(prefix, sel){ sel=sel||[]; var on={}; sel.forEach(function(v){on[v]=1;});
     return '<div style="margin-top:8px;max-height:46vh;overflow:auto">'+LA_AREAS.map(function(a){
       var items=LA_NAV.filter(function(n){return n.a===a.k;});
@@ -598,123 +602,747 @@
       '<option value="">— ไม่จำกัด (เห็นทุกเอเยนต์) —</option>'+
       list.map(function(s){ return '<option value="'+esc(s.id)+'"'+(s.id===cur?' selected':'')+'>'+esc(s.name||s.code||s.id)+'</option>'; }).join('')+'</select>'; }
 
-  window.__laTab='list';
-  window.__laSetTab=function(t){ window.__laTab=t; __laRenderTabs(); __laLoadUsers(); };
-  window.__laRenderTabs=function(){ var el=document.getElementById('la-tabs'); if(!el) return;
-    el.innerHTML=[['overview','ภาพรวม'],['list','รายชื่อผู้ใช้'],['add','+ เพิ่มผู้ใช้']].map(function(p){
-      var on=window.__laTab===p[0];
-      return '<button onclick="__laSetTab(\''+p[0]+'\')" style="border:0;border-radius:8px;padding:6px 13px;font-size:12.5px;font-weight:'+(on?'700':'500')+';cursor:pointer;font-family:inherit;background:'+(on?'#fff':'transparent')+';color:'+(on?'#15396B':'#8b9a94')+';box-shadow:'+(on?'0 1px 3px rgba(0,0,0,.09)':'none')+'">'+p[1]+'</button>';
-    }).join(''); };
+  /* ══════════════════════════════════════════════════════════════════════════
+     §laUsers2 · หน้าต่างจัดการผู้ใช้ + สิทธิ์เข้าถึง
+       ของเดิมเป็นลิสต์เดียวยาว ๆ ในการ์ดกว้าง 760px · ดูออกว่าใครมีสิทธิ์อะไร
+       แต่ตอบไม่ได้ว่า "ใครแก้บัญชีได้บ้าง" หรือ "คนไหนถือสิทธิ์เกินงาน"
+       ต้องไล่เปิดทีละคน
 
+       สี่หน้าจอ · รายชื่อ (แยกแผนก) · ตารางสิทธิ์ (เทียบทุกคนพร้อมกัน) ·
+       ภาพรวม (สรุป + เตือน) · เพิ่มผู้ใช้
+
+       เก็บโครงสิทธิ์เดิมไว้ทั้งหมด ไม่ได้ลดทอน:
+         perms     · รายเมนู 59 หน้า ไม่ใช่ราย "พื้นที่" — พื้นที่ที่ถือไม่ครบขึ้นเป็น 4/12
+         editAreas · พื้นที่ที่แก้ไขได้ · ไม่อยู่ในนี้ = ดูอย่างเดียว
+         role      · admin ข้ามทั้งสองอย่าง
+         salesId   · ผูกกับเซลล์ เห็นเฉพาะเอเยนต์ของตัวเอง
+         dept      · ไม่ได้ตั้ง = เดาจากคำนำหน้า username
+
+       ตารางสิทธิ์กดแล้วยังไม่ยิงเซิร์ฟเวอร์ทันที · เก็บไว้ก่อนแล้วขึ้นแถบให้กดบันทึก
+       เพราะกดพลาดในตารางสิทธิ์คือคนเข้าระบบไม่ได้ทั้งวัน
+     ══════════════════════════════════════════════════════════════════════════ */
+  window.__laTab='list';
+  var LAU={q:'',dept:'',area:'',role:'',hideOff:1,rows:null,err:'',
+           draft:null,cur:null,add:null,dirty:{},pwd:null,del:null};
+
+  function lauMenus(k){ return LA_NAV.filter(function(n){ return n.a===k; }); }
+  function lauPerms(u){ return laPermViewList(u.perms); }
+  function lauEditOf(u){ return Array.isArray(u.editAreas)?u.editAreas.slice():LA_AREAS.map(function(a){return a.k;}); }
+  function lauGot(P,k){ var n=0; lauMenus(k).forEach(function(m){ if(P.indexOf(m.v)>=0) n++; }); return n; }
+  /* สถานะของพื้นที่หนึ่ง · no = ไม่มีสิทธิ์ · part = ถือบางเมนู · view = ครบแต่ดูอย่างเดียว · edit = ครบและแก้ได้ */
+  function lauLvl(role,P,E,k){
+    if(role==='admin') return 'edit';
+    var g=lauGot(P,k), n=lauMenus(k).length;
+    if(!g) return 'no';
+    if(g<n) return 'part';
+    return E.indexOf(k)>=0?'edit':'view';
+  }
+  var LAU_C={overview:'#5B4BC4',operations:'#0F6E56',sales:'#185FA5',accounting:'#7A3FA8',
+             fleet:'#8A5A00',pier:'#0E6E7A',config:'#B4436C'};
+  function lauAC(k){ return LAU_C[k]||'#5A6270'; }
+  function lauArea(k){ return LA_AREAS.filter(function(a){return a.k===k;})[0]||{t:k}; }
+  function lauAT(k){ return String(lauArea(k).t).split(' · ')[0]; }
+  function lauAS(k){ return String(lauArea(k).t).split(' · ')[1]||''; }
+  function lauDeptT(k){ for(var i=0;i<LA_DEPTS.length;i++) if(LA_DEPTS[i].k===k) return LA_DEPTS[i].t; return k; }
+  function lauSalesList(){ return (typeof SB_SALES!=='undefined' && Array.isArray(SB_SALES))?SB_SALES:[]; }
+  function lauSalesName(id){ var l=lauSalesList(); for(var i=0;i<l.length;i++) if(l[i].id===id) return l[i].name||l[i].code||id; return id; }
+  function lauIsMe(u){ return String(u.username)===String(ME.username); }
+  function lauAvC(u){ var C=['#534AB7','#0F6E56','#993C1D','#185FA5','#993556','#854F0B','#0E6E7A'];
+    var n=String(u.username); return C[(n.charCodeAt(0)+n.length)%C.length]; }
+
+  function lauCSS(){ return ''
+   +'#la-uwin{position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.5);backdrop-filter:blur(5px);'
+     +'display:flex;align-items:center;justify-content:center;padding:20px;'
+     +'font-family:"Sarabun","Noto Sans Thai",sans-serif;color:#0F172A;font-size:14px}'
+   +'#la-uwin *{box-sizing:border-box}'
+   +'#la-uwin button,#la-uwin input,#la-uwin select{font-family:inherit}'
+   +'#la-uwin .shell{width:100%;max-width:1240px;max-height:94vh;background:#F5F7FB;border-radius:26px;'
+     +'border:1px solid rgba(15,23,42,.08);box-shadow:0 24px 70px -20px rgba(15,23,42,.34);'
+     +'display:flex;flex-direction:column;overflow:hidden}'
+   +'#la-uwin .hd{background:rgba(255,255,255,.9);border-bottom:1px solid #E6EAF0;padding:13px 20px;'
+     +'display:flex;align-items:center;gap:13px;flex-wrap:wrap;flex:none}'
+   +'#la-uwin .hd h1{font-size:16px;font-weight:800;margin:0;letter-spacing:-.01em;line-height:1.25}'
+   +'#la-uwin .hd .s{font-size:11.5px;color:#94A3B8;font-weight:500;margin-top:1px}'
+   +'#la-uwin .mk{width:38px;height:38px;border-radius:12px;background:#15396B;display:flex;'
+     +'align-items:center;justify-content:center;flex:none;color:#9FD3B8;font-size:17px}'
+   +'#la-uwin .sp{flex:1}'
+   +'#la-uwin .tabs{display:flex;gap:2px;background:#EEF1F6;border:1px solid #E6EAF0;border-radius:99px;padding:4px}'
+   +'#la-uwin .tabs button{border:0;background:transparent;border-radius:99px;padding:7px 15px;font-size:12.5px;'
+     +'font-weight:600;color:#475569;cursor:pointer;white-space:nowrap}'
+   +'#la-uwin .tabs button.on{background:#15396B;color:#fff;font-weight:700}'
+   +'#la-uwin .b{border:1px solid #E6EAF0;background:#fff;border-radius:99px;padding:8px 15px;font-size:12.5px;'
+     +'font-weight:600;color:#475569;cursor:pointer;white-space:nowrap}'
+   +'#la-uwin .b:hover{border-color:#C6CEDA;color:#0F172A}'
+   +'#la-uwin .b:disabled{opacity:.42;cursor:not-allowed}'
+   +'#la-uwin .b.pri{background:#15396B;border-color:#15396B;color:#fff;font-weight:700}'
+   +'#la-uwin .b.dgr{background:#B4392B;border-color:#B4392B;color:#fff;font-weight:700}'
+   +'#la-uwin .b.gh{background:#F1F4F8}'
+   +'#la-uwin .b.sm{padding:5px 12px;font-size:11.5px}'
+   +'#la-uwin .ic{width:34px;height:34px;border-radius:99px;border:1px solid #E6EAF0;background:#fff;'
+     +'color:#94A3B8;cursor:pointer;font-size:13px;line-height:1;flex:none}'
+   +'#la-uwin .ic:hover{background:#F1F4F8;color:#0F172A}'
+   +'#la-uwin .ic:disabled{opacity:.33;cursor:not-allowed}'
+   +'#la-uwin .body{flex:1;min-height:0;overflow:auto;padding:17px 20px;display:flex;flex-direction:column;gap:13px}'
+   +'#la-uwin .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}'
+   +'#la-uwin .stat{background:#fff;border:1px solid #E6EAF0;border-radius:18px;padding:14px 16px;'
+     +'display:flex;align-items:center;justify-content:space-between;gap:10px;box-shadow:0 3px 16px -6px rgba(15,23,42,.10)}'
+   +'#la-uwin .stat .k{font-size:11.5px;font-weight:600;color:#94A3B8;display:block;margin-bottom:3px}'
+   +'#la-uwin .stat .v{font-size:22px;font-weight:800;letter-spacing:-.02em;line-height:1.1}'
+   +'#la-uwin .stat .v small{font-size:12px;font-weight:600;color:#94A3B8;margin-left:3px}'
+   +'#la-uwin .stat .sic{width:38px;height:38px;border-radius:12px;display:flex;align-items:center;'
+     +'justify-content:center;flex:none;font-size:17px}'
+   +'#la-uwin .tool{background:#fff;border:1px solid #E6EAF0;border-radius:18px;padding:11px 12px;'
+     +'display:flex;gap:9px;align-items:center;flex-wrap:wrap;box-shadow:0 3px 16px -6px rgba(15,23,42,.10)}'
+   +'#la-uwin .srch{position:relative;flex:1;min-width:190px;max-width:300px}'
+   +'#la-uwin .srch input{width:100%;border:1px solid #E6EAF0;background:#F8FAFC;border-radius:99px;'
+     +'padding:9px 14px 9px 34px;font-size:13px;font-weight:500;outline:none}'
+   +'#la-uwin .srch input:focus{border-color:#15396B;background:#fff}'
+   +'#la-uwin .srch i{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:#94A3B8;font-style:normal}'
+   +'#la-uwin select.pill{border:1px solid #E6EAF0;background:#F8FAFC;border-radius:99px;padding:9px 14px;'
+     +'font-size:12.5px;font-weight:600;color:#475569;outline:none;cursor:pointer}'
+   +'#la-uwin .grp{background:#fff;border:1px solid #E6EAF0;border-radius:18px;padding:15px 16px;margin-bottom:12px;'
+     +'box-shadow:0 3px 16px -6px rgba(15,23,42,.10)}'
+   +'#la-uwin .grp .gh{display:flex;align-items:center;gap:9px;border-bottom:1px solid #F1F4F8;padding-bottom:10px;margin-bottom:10px}'
+   +'#la-uwin .grp .gh h2{font-size:13px;font-weight:800;margin:0}'
+   +'#la-uwin .grp .gh .n{background:#EEF1F6;color:#475569;border-radius:99px;padding:1px 9px;font-size:11.5px;font-weight:700}'
+   +'#la-uwin .grp .gh .ad{margin-left:auto;border:0;background:none;color:#185FA5;font-size:12px;font-weight:700;cursor:pointer}'
+   +'#la-uwin .dot{width:9px;height:9px;border-radius:99px;flex:none}'
+   +'#la-uwin .row{display:flex;align-items:center;gap:13px;padding:11px 12px;border:1px solid #F1F4F8;'
+     +'border-radius:14px;background:#FBFCFE;margin-bottom:8px;flex-wrap:wrap}'
+   +'#la-uwin .row:last-child{margin-bottom:0}'
+   +'#la-uwin .row:hover{background:#fff;border-color:#E6EAF0}'
+   +'#la-uwin .row.self{background:#F7FBF9;border-color:#D5E9E0}'
+   +'#la-uwin .who{display:flex;align-items:center;gap:10px;width:236px;flex:none;min-width:0}'
+   +'#la-uwin .av{width:36px;height:36px;border-radius:99px;flex:none;display:flex;align-items:center;'
+     +'justify-content:center;font-size:12px;font-weight:800;color:#fff}'
+   +'#la-uwin .who .u{font-size:13.5px;font-weight:700;line-height:1.3;display:flex;align-items:center;gap:5px;flex-wrap:wrap}'
+   +'#la-uwin .who .u em{font-style:normal;font-weight:600;color:#94A3B8;font-size:12px}'
+   +'#la-uwin .who .m{font-size:11.5px;color:#94A3B8;font-weight:500;margin-top:2px}'
+   +'#la-uwin .who .m b{color:#475569}'
+   +'#la-uwin .bds{flex:1;display:flex;flex-wrap:wrap;gap:5px;min-width:200px}'
+   +'#la-uwin .bd{display:inline-flex;align-items:center;gap:5px;border-radius:99px;padding:3px 10px;'
+     +'font-size:11.5px;font-weight:700;border:1px solid}'
+   +'#la-uwin .bd .fr{font-size:10px;font-weight:800;opacity:.75}'
+   +'#la-uwin .bd.off{background:#F5F7FA;border-color:#EDF0F4;color:#CBD5E1;font-weight:500}'
+   +'#la-uwin .acts{display:flex;gap:6px;flex:none;margin-left:auto}'
+   +'#la-uwin .tg{border-radius:99px;padding:2px 8px;font-size:10px;font-weight:800;letter-spacing:.04em;border:1px solid}'
+   +'#la-uwin .tg.adm{background:#FDF1E4;color:#8A5A00;border-color:#F3E0C6}'
+   +'#la-uwin .tg.me{background:#E9F3EE;color:#0F6E56;border-color:#C7E3D6}'
+   +'#la-uwin .tg.sl{background:#EAF1FA;color:#185FA5;border-color:#CFE0F3}'
+   +'#la-uwin .mx{background:#fff;border:1px solid #E6EAF0;border-radius:18px;overflow:auto}'
+   +'#la-uwin table{border-collapse:separate;border-spacing:0;width:100%}'
+   +'#la-uwin .mx th,#la-uwin .mx td{padding:10px;font-size:12.5px;text-align:center;white-space:nowrap}'
+   +'#la-uwin .mx thead th{background:#F7F9FC;border-bottom:1px solid #E6EAF0;font-size:11px;font-weight:800;'
+     +'color:#475569;position:sticky;top:0;z-index:3}'
+   +'#la-uwin .mx th.nm,#la-uwin .mx td.nm{text-align:left;position:sticky;left:0;background:#fff;z-index:2;'
+     +'border-right:1px solid #F1F4F8;min-width:190px}'
+   +'#la-uwin .mx thead th.nm{background:#F7F9FC;z-index:4}'
+   +'#la-uwin .mx tbody td{border-bottom:1px solid #F1F4F8}'
+   +'#la-uwin .mx tr.dt td,#la-uwin .mx tr.dt td.nm{background:#FFFCF3}'
+   +'#la-uwin .cl{width:34px;height:30px;border-radius:9px;border:1px solid transparent;cursor:pointer;'
+     +'font-size:11px;font-weight:800;line-height:1}'
+   +'#la-uwin .cl.no{background:#F1F4F8;color:#D2D9E2;border-color:#EAEEF3}'
+   +'#la-uwin .cl.part{background:#FDF4E3;color:#8A5A00;border-color:#F0E1C2}'
+   +'#la-uwin .cl.view{background:#E7F0FA;color:#185FA5;border-color:#CADCF0}'
+   +'#la-uwin .cl.edit{background:#0F6E56;color:#fff;border-color:#0F6E56}'
+   +'#la-uwin .lg{display:flex;gap:15px;align-items:center;padding:11px 14px;font-size:11.5px;color:#475569;'
+     +'border-top:1px solid #F1F4F8;background:#FBFCFE;flex-wrap:wrap}'
+   +'#la-uwin .lg span{display:inline-flex;align-items:center;gap:7px}'
+   +'#la-uwin .savebar{position:sticky;bottom:0;background:#FFFBF0;border:1px solid #F0E1C2;border-radius:14px;'
+     +'padding:10px 14px;display:flex;align-items:center;gap:12px;font-size:12.5px;font-weight:600;color:#8A5A00;'
+     +'box-shadow:0 -6px 18px -10px rgba(15,23,42,.24);margin-top:10px}'
+   +'#la-uwin .ov{display:grid;grid-template-columns:2fr 1fr;gap:13px}'
+   +'#la-uwin .card{background:#fff;border:1px solid #E6EAF0;border-radius:18px;padding:18px;'
+     +'box-shadow:0 3px 16px -6px rgba(15,23,42,.10)}'
+   +'#la-uwin .card h3{font-size:14px;font-weight:800;margin:0 0 14px}'
+   +'#la-uwin .bars{display:grid;grid-template-columns:1fr 1fr;gap:11px}'
+   +'#la-uwin .bar{background:#F8FAFC;border:1px solid #F1F4F8;border-radius:14px;padding:12px 13px}'
+   +'#la-uwin .bar .t{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;'
+     +'font-size:12.5px;font-weight:700}'
+   +'#la-uwin .bar .t .c{background:#15396B;color:#fff;border-radius:99px;padding:1px 9px;font-size:11px;font-weight:700}'
+   +'#la-uwin .bar .tr{height:7px;border-radius:99px;background:#E7EBF1;overflow:hidden;display:flex}'
+   +'#la-uwin .bar .f1{background:#0F6E56}#la-uwin .bar .f2{background:#9DC4E8}'
+   +'#la-uwin .bar .cap{font-size:10.5px;color:#94A3B8;margin-top:6px;font-weight:500}'
+   +'#la-uwin .note{background:linear-gradient(150deg,#123A5E,#0E5A6E 60%,#0F6E56);color:#fff;border-radius:18px;'
+     +'padding:20px;display:flex;flex-direction:column;justify-content:space-between;min-height:250px;position:relative;overflow:hidden}'
+   +'#la-uwin .note .bl{position:absolute;right:-60px;bottom:-70px;width:220px;height:220px;border-radius:99px;background:rgba(255,255,255,.09)}'
+   +'#la-uwin .note .kk{display:inline-flex;background:rgba(255,255,255,.16);border-radius:99px;padding:4px 12px;'
+     +'font-size:11.5px;font-weight:700;margin-bottom:13px;position:relative}'
+   +'#la-uwin .note h3{font-size:16.5px;font-weight:800;line-height:1.5;margin:0 0 9px;position:relative}'
+   +'#la-uwin .note p{font-size:12.5px;line-height:1.85;color:rgba(255,255,255,.84);margin:0;position:relative}'
+   +'#la-uwin .note .nf{border-top:1px solid rgba(255,255,255,.22);padding-top:13px;margin-top:16px;display:flex;'
+     +'justify-content:space-between;align-items:center;font-size:12px;font-weight:700;position:relative}'
+   +'#la-uwin .note .nf b{background:#fff;color:#0E4A3C;border-radius:99px;padding:3px 12px}'
+   +'#la-uwin .ftr{background:#fff;border-top:1px solid #E6EAF0;padding:10px 20px;display:flex;'
+     +'justify-content:space-between;align-items:center;font-size:11.5px;color:#94A3B8;font-weight:500;flex:none}'
+   +'#la-uwin .fg{display:grid;grid-template-columns:1fr 1fr;gap:11px}'
+   +'#la-uwin .f{margin-bottom:11px}'
+   +'#la-uwin .f label{display:block;font-size:11px;font-weight:700;color:#475569;letter-spacing:.03em;margin-bottom:5px}'
+   +'#la-uwin .f input,#la-uwin .f select{width:100%;border:1px solid #E6EAF0;background:#F8FAFC;border-radius:10px;'
+     +'padding:10px 13px;font-size:13px;font-weight:500;outline:none}'
+   +'#la-uwin .f input:focus,#la-uwin .f select:focus{border-color:#15396B;background:#fff}'
+   +'#la-uwin .f .hint{font-size:11px;color:#94A3B8;margin-top:5px;line-height:1.6}'
+   +'#la-uwin .sect{font-size:11.5px;font-weight:800;color:#475569;letter-spacing:.04em;margin:18px 0 9px;'
+     +'padding-top:14px;border-top:1px solid #F1F4F8}'
+   +'#la-uwin .pset{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:13px}'
+   +'#la-uwin .pset .pl{font-size:11.5px;color:#94A3B8;font-weight:600}'
+   +'#la-uwin .pset button{border:1px solid #E6EAF0;background:#F8FAFC;border-radius:99px;padding:5px 12px;'
+     +'font-size:11.5px;font-weight:700;color:#475569;cursor:pointer}'
+   +'#la-uwin .ar{border:1px solid #E6EAF0;border-radius:14px;margin-bottom:9px;overflow:hidden;background:#fff}'
+   +'#la-uwin .ar.has{border-color:#BFD4EE;background:#FBFDFF}'
+   +'#la-uwin .ar .top{display:flex;align-items:center;gap:10px;padding:10px 12px}'
+   +'#la-uwin .ar .nm{flex:1;min-width:0}'
+   +'#la-uwin .ar .nm b{display:block;font-size:13px;font-weight:700}'
+   +'#la-uwin .ar .nm span{display:block;font-size:11px;color:#94A3B8;font-weight:500;margin-top:1px}'
+   +'#la-uwin .fr2{background:#EEF1F6;color:#475569;border-radius:99px;padding:1px 8px;font-size:10.5px;font-weight:800;flex:none}'
+   +'#la-uwin .fr2.part{background:#FDF4E3;color:#8A5A00}'
+   +'#la-uwin .fr2.all{background:#E9F3EE;color:#0F6E56}'
+   +'#la-uwin .seg{display:flex;border:1px solid #E6EAF0;border-radius:99px;overflow:hidden;background:#fff;flex:none}'
+   +'#la-uwin .seg button{border:0;background:#fff;padding:5px 11px;font-size:11px;font-weight:700;color:#94A3B8;cursor:pointer}'
+   +'#la-uwin .seg button+button{border-left:1px solid #E6EAF0}'
+   +'#la-uwin .seg button.on.v{background:#185FA5;color:#fff}'
+   +'#la-uwin .seg button.on.e{background:#0F6E56;color:#fff}'
+   +'#la-uwin .seg button.on.n{background:#98A2B0;color:#fff}'
+   +'#la-uwin .ar .ex{border:0;background:none;color:#94A3B8;font-size:11.5px;font-weight:700;cursor:pointer;flex:none}'
+   +'#la-uwin .mns{display:none;padding:2px 12px 11px;flex-wrap:wrap;gap:5px}'
+   +'#la-uwin .ar.open .mns{display:flex}'
+   +'#la-uwin .mn{border:1px solid #E6EAF0;background:#fff;border-radius:99px;padding:3px 10px;font-size:11px;'
+     +'font-weight:600;color:#94A3B8;cursor:pointer;user-select:none}'
+   +'#la-uwin .mn.on{background:#E9F3EE;border-color:#BFE0CD;color:#0F6E56}'
+   +'#la-uwin .mask{position:fixed;inset:0;z-index:100001;background:rgba(15,23,42,.46);backdrop-filter:blur(4px);'
+     +'display:flex;align-items:center;justify-content:center;padding:20px}'
+   +'#la-uwin .dlg{background:#fff;border-radius:22px;box-shadow:0 28px 80px -18px rgba(15,23,42,.5);'
+     +'width:100%;max-width:620px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden}'
+   +'#la-uwin .dlg.sm{max-width:420px}'
+   +'#la-uwin .dlg .dh{background:#F8FAFC;border-bottom:1px solid #E6EAF0;padding:15px 20px;display:flex;'
+     +'justify-content:space-between;align-items:center;gap:12px;flex:none}'
+   +'#la-uwin .dlg .dh h3{font-size:15px;font-weight:800;margin:0}'
+   +'#la-uwin .dlg .dh p{font-size:12px;color:#94A3B8;margin:2px 0 0;font-weight:500}'
+   +'#la-uwin .dlg .db{padding:16px 20px;overflow:auto;flex:1;min-height:0}'
+   +'#la-uwin .dlg .df{background:#F8FAFC;border-top:1px solid #E6EAF0;padding:13px 20px;display:flex;'
+     +'justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;flex:none}'
+   +'#la-uwin .tst{position:fixed;right:22px;bottom:22px;z-index:100002;background:#0F172A;color:#fff;'
+     +'border-radius:99px;padding:11px 18px;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:10px;'
+     +'box-shadow:0 14px 34px -10px rgba(15,23,42,.6)}'
+   +'#la-uwin .tst i{width:8px;height:8px;border-radius:99px;background:#34D399;display:block;flex:none;font-style:normal}'
+   +'#la-uwin .tst.err i{background:#F87171}'
+   +'@media(max-width:900px){#la-uwin .stats{grid-template-columns:repeat(2,1fr)}'
+     +'#la-uwin .ov{grid-template-columns:1fr}#la-uwin .who{width:auto}#la-uwin .acts{margin-left:0}'
+     +'#la-uwin .fg{grid-template-columns:1fr}}';
+  }
+
+  /* ── หน้าต่างหลัก ── */
   window.__laUsers=function(){
-    var old=document.getElementById('la-umodal'); if(old) old.remove();
-    window.__laTab='list'; window.__laQ='';
-    var ov=document.createElement('div'); ov.className='la-modal'; ov.id='la-umodal'; ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
-    ov.innerHTML='<div class="la-card" style="padding:16px 18px;width:760px">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
-        +'<div style="font-size:16px;font-weight:800;color:#15396B">จัดการผู้ใช้ + สิทธิ์เข้าถึง</div>'
-        +'<button class="la-ub-btn" style="background:#eee;color:#444" onclick="document.getElementById(\'la-umodal\').remove()">ปิด</button></div>'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px">'
-        +'<div id="la-tabs" style="display:flex;gap:3px;background:#f1efe9;border-radius:10px;padding:3px"></div>'
-        +'<input id="la-q" placeholder="ค้นหาชื่อ / username" oninput="window.__laQ=this.value;__laLoadUsers()" style="flex:1;max-width:230px;border:1px solid #d7d3ca;border-radius:8px;padding:7px 10px;font-size:12.5px;font-family:inherit">'
+    var old=document.getElementById('la-uwin'); if(old) old.remove();
+    if(!document.getElementById('la-uwin-css')){
+      var st=document.createElement('style'); st.id='la-uwin-css'; st.textContent=lauCSS();
+      document.head.appendChild(st);
+    }
+    window.__laTab='list';
+    LAU={q:'',dept:'',area:'',role:'',hideOff:1,rows:null,err:'',draft:null,cur:null,add:null,dirty:{},pwd:null,del:null};
+    var ov=document.createElement('div'); ov.id='la-uwin';
+    ov.onclick=function(e){ if(e.target===ov) __laClose(); };
+    ov.innerHTML='<div class="shell">'
+      +'<div class="hd">'
+        +'<div class="mk">&#9783;</div>'
+        +'<div><h1>จัดการผู้ใช้ + สิทธิ์เข้าถึง</h1><div class="s">LOVE Andaman · Operations</div></div>'
+        +'<div class="sp"></div>'
+        +'<div class="tabs" id="la-tabs"></div>'
+        +'<button class="ic" onclick="__laClose()">&#10005;</button>'
       +'</div>'
-      +'<div id="la-ulist" style="font-size:13px;color:#555;max-height:62vh;overflow:auto">กำลังโหลด...</div></div>';
-    document.body.appendChild(ov); __laRenderTabs(); __laLoadUsers();
+      +'<div class="body"><div class="stats" id="la-stats"></div>'
+        +'<div class="tool" id="la-tool"></div><div id="la-main"></div></div>'
+      +'<div class="ftr"><span id="la-ftl">—</span><span>ผู้ใช้ต้องออกแล้วเข้าใหม่ สิทธิ์ใหม่จึงจะมีผล</span></div>'
+    +'</div>';
+    document.body.appendChild(ov);
+    __laLoadUsers();
   };
+  window.__laClose=function(){ var w=document.getElementById('la-uwin'); if(w) w.remove(); };
+  window.__laSetTab=function(t){
+    if(Object.keys(LAU.dirty).length && t!=='matrix'){
+      if(!confirm('ยังมีสิทธิ์ที่แก้ในตารางแต่ยังไม่ได้บันทึก · ออกจากแท็บนี้แล้วจะหายไป')) return;
+      LAU.dirty={};
+    }
+    window.__laTab=t; __laRender();
+  };
+  window.__laFld=function(k,v){ LAU[k]=v; __laRender(); };
+  /* inline onclick/oninput อยู่นอก closure นี้ · มองไม่เห็นตัวแปร LAU ตรง ๆ
+     ต้องผ่านตัวช่วยที่แขวนไว้บน window เท่านั้น */
+  window.__laAddSet=function(k,v){ if(!LAU.add) return; LAU.add[k]=v;
+    if(k==='role') __laRender(); else if(k==='u') __laAddHint(); };
+  window.__laAddCancel=function(){ LAU.add=null; __laSetTab('list'); };
+  window.__laDirtyDrop=function(){ LAU.dirty={}; __laRender(); };
+  window.__laToggleOff=function(){ LAU.hideOff=LAU.hideOff?0:1; __laRender(); };
 
   window.__laLoadUsers=function(){
-    var el=document.getElementById('la-ulist'); if(!el) return;
-    if(!window.__laUserList || window.__laTab!=='add'){
-      var r=sx('GET','/api/users');
-      if(r.status!==200||!r.json){ el.textContent='โหลดรายชื่อไม่ได้'; return; }
-      window.__laUserList=r.json.users||[];
-    }
-    var qEl=document.getElementById('la-q'); if(qEl) qEl.style.display = (window.__laTab==='add') ? 'none' : '';
-    var US=window.__laUserList||[];
-    var q=String(window.__laQ||'').toLowerCase();
-    var F=US.filter(function(u){ return !q || (String(u.username)+String(u.name||'')).toLowerCase().indexOf(q)>=0; });
-
-    if(window.__laTab==='overview'){
-      var byD={}; US.forEach(function(u){ var d=laDeptOf(u); (byD[d]=byD[d]||[]).push(u); });
-      el.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(228px,1fr));gap:9px">'
-       + LA_DEPTS.filter(function(d){return byD[d.k];}).map(function(d){ var ms=byD[d.k];
-          return '<div style="background:#faf9f6;border:1px solid #eee9e0;border-radius:11px;padding:11px 12px">'
-           +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">'
-             +'<span style="font-size:13px;font-weight:700;color:#2b3a34">'+esc(d.t)+'</span>'
-             +'<span style="font-size:11px;color:#98a29c">'+ms.length+' คน</span></div>'
-           +laAreaBadges(ms[0])
-           +'<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:9px">'+ms.map(function(u){ return '<span title="'+esc(u.username+' · '+(u.name||''))+'">'+laAvatar(u,22)+'</span>'; }).join('')+'</div></div>';
-         }).join('')
-       +'</div><div style="font-size:11px;color:#9aa8a2;margin-top:10px;border-top:1px solid #f1efe9;padding-top:8px">– ไม่มีสิทธิ์ · <span style="color:#185FA5">👁 ดูอย่างเดียว</span> · <span style="color:#0F6E56">✎ แก้ไขได้</span> &nbsp;(สิทธิ์ที่โชว์ = ของคนแรกในแผนก)</div>';
-      return;
-    }
-
-    if(window.__laTab==='add'){
-      el.innerHTML='<div style="display:flex;gap:6px;flex-wrap:wrap">'
-        +'<input id="la-nu" placeholder="username" style="flex:1;min-width:120px;border:1px solid #d7d3ca;border-radius:7px;padding:7px 9px;font-size:13px;font-family:inherit">'
-        +'<input id="la-nn" placeholder="ชื่อ" style="flex:1;min-width:100px;border:1px solid #d7d3ca;border-radius:7px;padding:7px 9px;font-size:13px;font-family:inherit">'
-        +'<input id="la-np" type="password" placeholder="รหัสผ่าน" style="flex:1;min-width:120px;border:1px solid #d7d3ca;border-radius:7px;padding:7px 9px;font-size:13px;font-family:inherit">'
-        +laDeptSelectHTML('la-nd','rsvn')
-        +'<select id="la-nr" style="border:1px solid #d7d3ca;border-radius:7px;padding:7px;font-size:13px;font-family:inherit"><option value="staff">staff</option><option value="admin">admin</option></select></div>'
-        +'<div style="font-size:11px;color:#999;margin-top:8px">เป็นเซลล์ (เห็นเฉพาะเอเยนต์ของตัวเอง): '+laSalesSelectHTML('la-ns','')+'</div>'
-        +'<div style="font-size:11px;color:#999;margin-top:11px">เข้าถึงเมนู (staff):</div>'
-        +laPresetBtnsHTML('na')+laPermBoxesHTML('na',LA_NAV.map(function(n){return n.v;}))
-        +'<div style="font-size:11px;color:#999;margin-top:9px">สิทธิ์แก้ไข ราย section <span style="color:#bbb">(ไม่ติ๊ก = ดูอย่างเดียว):</span></div>'
-        +laEditBoxesHTML('naE',LA_AREAS.map(function(a){return a.k;}))
-        +'<button class="la-ub-btn" style="background:#1C4A30;margin-top:12px" onclick="__laAddUser()">เพิ่มผู้ใช้</button>';
-      return;
-    }
-
-    // ── รายชื่อผู้ใช้ · แยกแผนก ──
-    var byD={}; F.forEach(function(u){ var d=laDeptOf(u); (byD[d]=byD[d]||[]).push(u); });
-    var groups=LA_DEPTS.filter(function(d){ return byD[d.k]; });
-    if(!groups.length){ el.innerHTML='<div style="padding:20px;text-align:center;color:#9aa8a2;font-size:12px">ไม่พบผู้ใช้ที่ค้นหา</div>'; return; }
-    el.innerHTML=groups.map(function(d){ var ms=byD[d.k];
-      return '<div style="display:flex;align-items:center;gap:7px;margin:12px 0 5px"><span style="font-size:12px;font-weight:700;color:#2b3a34">'+esc(d.t)+'</span>'
-        +'<span style="font-size:10.5px;color:#a8b0aa;background:#f1efe9;border-radius:9px;padding:1px 7px">'+ms.length+'</span>'
-        +'<span style="flex:1;height:1px;background:#f1efe9"></span></div>'
-      + ms.map(function(u){
-        var isMe=(u.role==='admin'&&u.username===ME.username);
-        return '<div style="display:grid;grid-template-columns:28px 1fr auto;gap:9px;align-items:center;padding:8px 6px;border-bottom:1px solid #f5f3ee">'
-          +laAvatar(u,28)
-          +'<div style="min-width:0">'
-            +'<div style="font-size:12.5px;font-weight:700;color:#2b3a34">'+esc(u.username)+(u.role==='admin'?' <span style="font-size:9px;color:#993C1D;background:#FAECE7;border-radius:7px;padding:1px 6px;font-weight:700">ADMIN</span>':'')+'</div>'
-            +'<div style="font-size:10.5px;color:#98a29c;margin:1px 0 4px">'+esc(u.name||'')+'</div>'
-            +laAreaBadges(u)
-          +'</div>'
-          +'<div style="display:flex;gap:4px">'
-            +'<button class="la-ub-btn" onclick="__laEditPerms('+u.id+')">สิทธิ์</button>'
-            +'<button class="la-ub-btn" style="background:#8a7f6a" onclick="__laReset('+u.id+',\''+esc(u.username)+'\')">รหัส</button>'
-            +(isMe?'':'<button class="la-ub-btn" style="background:#A32D2D" onclick="__laDelUser('+u.id+',\''+esc(u.username)+'\')">ลบ</button>')
-          +'</div></div>';
-      }).join('');
-    }).join('')
-    +'<div style="font-size:11px;color:#9aa8a2;margin-top:12px;border-top:1px solid #f1efe9;padding-top:8px">– ไม่มีสิทธิ์ · <span style="color:#185FA5">👁 ดูอย่างเดียว</span> · <span style="color:#0F6E56">✎ แก้ไขได้</span></div>';
+    var m=document.getElementById('la-main');
+    if(m) m.innerHTML='<div class="card" style="text-align:center;padding:40px;color:#94A3B8">กำลังโหลดรายชื่อ…</div>';
+    var r=sx('GET','/api/users');
+    if(r.status!==200||!r.json){ LAU.rows=null; LAU.err=(r.json&&r.json.error)||('โหลดรายชื่อไม่ได้ (HTTP '+r.status+')'); }
+    else { LAU.err=''; LAU.rows=(r.json.users||[]).map(function(u){
+      return {id:u.id,username:u.username,name:u.name||'',role:u.role||'staff',
+              dept:laDeptOf(u),salesId:u.salesId||'',
+              perms:lauPerms(u),edit:lauEditOf(u)}; }); }
+    __laRender();
   };
 
+  function lauToast(msg,err){
+    var w=document.getElementById('la-uwin'); if(!w) return;
+    var t=w.querySelector('.tst'); if(t) t.remove();
+    var d=document.createElement('div'); d.className='tst'+(err?' err':'');
+    d.innerHTML='<i></i><span></span>'; d.querySelector('span').textContent=msg;
+    w.appendChild(d); setTimeout(function(){ try{ d.remove(); }catch(_){} },2800);
+  }
+
+  function lauFiltered(){
+    var q=String(LAU.q||'').toLowerCase();
+    return (LAU.rows||[]).filter(function(u){
+      if(q && (u.username+' '+u.name).toLowerCase().indexOf(q)<0) return false;
+      if(LAU.dept && u.dept!==LAU.dept) return false;
+      if(LAU.area && lauLvl(u.role,u.perms,u.edit,LAU.area)==='no') return false;
+      if(LAU.role==='admin' && u.role!=='admin') return false;
+      if(LAU.role==='staff' && u.role==='admin') return false;
+      if(LAU.role==='ro' && (u.role==='admin'||u.edit.length)) return false;
+      if(LAU.role==='sales' && !u.salesId) return false;
+      return true;
+    });
+  }
+
+  window.__laRender=function(){
+    var w=document.getElementById('la-uwin'); if(!w) return;
+    var T=window.__laTab;
+    document.getElementById('la-tabs').innerHTML=[['list','รายชื่อ'],['matrix','ตารางสิทธิ์'],
+      ['ov','ภาพรวม'],['add','+ เพิ่มผู้ใช้']].map(function(p){
+        return '<button class="'+(T===p[0]?'on':'')+'" onclick="__laSetTab(\''+p[0]+'\')">'+p[1]+'</button>'; }).join('');
+
+    var US=LAU.rows||[];
+    document.getElementById('la-stats').innerHTML=lauStats(US);
+    document.getElementById('la-ftl').textContent = LAU.err ? LAU.err : (US.length+' บัญชี');
+
+    var tool=document.getElementById('la-tool');
+    tool.style.display=(T==='add')?'none':'';
+    if(T!=='add') tool.innerHTML=lauTool();
+
+    var el=document.getElementById('la-main');
+    if(LAU.err){ el.innerHTML='<div class="card" style="text-align:center;padding:36px">'
+      +'<div style="font-size:13px;font-weight:700;color:#B4392B">'+esc(LAU.err)+'</div>'
+      +'<button class="b" style="margin-top:12px" onclick="__laLoadUsers()">ลองใหม่</button></div>'; return; }
+    var F=lauFiltered();
+    el.innerHTML = T==='list' ? lauList(F) : T==='matrix' ? lauMatrix(F)
+                 : T==='ov' ? lauOverview(US) : lauAdd();
+    if(T==='add') __laAddHint();
+  };
+
+  function lauStats(US){
+    var n=US.length, adm=0, ro=0, sl=0;
+    US.forEach(function(u){ if(u.role==='admin') adm++;
+      else { if(!u.edit.length) ro++; } if(u.salesId) sl++; });
+    var S=[['ผู้ใช้ทั้งหมด',n,'คน','#15396B','👥'],
+           ['ผู้ดูแลระบบ',adm,'คน','#8A5A00','🔑'],
+           ['ดูอย่างเดียว',ro,'คน','#185FA5','👁'],
+           ['ผูกกับเซลล์',sl,'คน','#0F6E56','🏷']];
+    return S.map(function(x){ return '<div class="stat"><div><span class="k">'+x[0]+'</span>'
+      +'<div class="v">'+x[1]+'<small>'+x[2]+'</small></div></div>'
+      +'<div class="sic" style="background:'+x[3]+'18;color:'+x[3]+'">'+x[4]+'</div></div>'; }).join('');
+  }
+
+  function lauTool(){
+    var opt=function(v,t,cur){ return '<option value="'+esc(v)+'"'+(cur===v?' selected':'')+'>'+esc(t)+'</option>'; };
+    return '<div class="srch"><i>&#128269;</i>'
+      +'<input value="'+esc(LAU.q)+'" placeholder="ค้นหา username หรือ ชื่อ…" oninput="__laFld(\'q\',this.value)"></div>'
+      +'<select class="pill" onchange="__laFld(\'dept\',this.value)">'+opt('','ทุกแผนก',LAU.dept)
+        +LA_DEPTS.map(function(d){ return opt(d.k,d.t,LAU.dept); }).join('')+'</select>'
+      +'<select class="pill" onchange="__laFld(\'area\',this.value)">'+opt('','ทุกพื้นที่',LAU.area)
+        +LA_AREAS.map(function(a){ return opt(a.k,lauAT(a.k),LAU.area); }).join('')+'</select>'
+      +'<select class="pill" onchange="__laFld(\'role\',this.value)">'+opt('','ทุกบทบาท',LAU.role)
+        +opt('admin','admin',LAU.role)+opt('staff','staff',LAU.role)
+        +opt('ro','ดูอย่างเดียว',LAU.role)+opt('sales','ผูกกับเซลล์',LAU.role)+'</select>'
+      +'<div class="sp"></div>'
+      +'<button class="b gh" onclick="__laToggleOff()">'+(LAU.hideOff?'ซ่อนพื้นที่ที่ไม่มีสิทธิ์':'แสดงทุกพื้นที่')+'</button>';
+  }
+
+  /* ── รายชื่อ ── */
+  function lauList(F){
+    if(!F.length) return '<div class="card" style="text-align:center;padding:44px">'
+      +'<div style="font-weight:700">ไม่พบผู้ใช้ที่ตรงเงื่อนไข</div>'
+      +'<div style="font-size:12px;color:#94A3B8;margin-top:4px">ลองเปลี่ยนคำค้นหรือตัวกรอง</div></div>';
+    var by={}; F.forEach(function(u){ (by[u.dept]=by[u.dept]||[]).push(u); });
+    return LA_DEPTS.filter(function(d){ return by[d.k]; }).map(function(d){
+      var ms=by[d.k];
+      return '<div class="grp"><div class="gh"><span class="dot" style="background:'+lauAvC(ms[0])+'"></span>'
+        +'<h2>'+esc(d.t)+'</h2><span class="n">'+ms.length+'</span>'
+        +'<button class="ad" onclick="__laSetTab(\'add\')">+ เพิ่มผู้ใช้</button></div>'
+        +ms.map(lauRow).join('')+'</div>';
+    }).join('');
+  }
+  function lauRow(u){
+    var me=lauIsMe(u);
+    var bds = u.role==='admin'
+      ? '<span class="bd" style="background:#FDF1E4;border-color:#F3E0C6;color:#8A5A00">ทุกพื้นที่ · แก้ได้ทุกอย่าง</span>'
+      : LA_AREAS.map(function(a){
+          var L=lauLvl(u.role,u.perms,u.edit,a.k);
+          if(L==='no') return LAU.hideOff?'':'<span class="bd off">'+esc(lauAT(a.k))+'</span>';
+          var g=lauGot(u.perms,a.k), n=lauMenus(a.k).length, C=lauAC(a.k);
+          return '<span class="bd" style="background:'+C+'14;border-color:'+C+'33;color:'+C+'">'
+            +esc(lauAT(a.k))+(L==='part'?('<span class="fr">'+g+'/'+n+'</span>'):'')
+            +'<span style="font-size:10px;opacity:.9">'+(L==='edit'?'✎':'👁')+'</span></span>';
+        }).join('');
+    return '<div class="row'+(me?' self':'')+'">'
+      +'<div class="who"><div class="av" style="background:'+lauAvC(u)+'">'
+        +esc(String(u.name||u.username).trim().slice(0,2).toUpperCase())+'</div>'
+        +'<div style="min-width:0"><div class="u">'+esc(u.username)
+          +(u.name?(' <em>('+esc(u.name)+')</em>'):'')
+          +(u.role==='admin'?'<span class="tg adm">ADMIN</span>':'')
+          +(me?'<span class="tg me">คุณ</span>':'')
+          +(u.salesId?('<span class="tg sl" title="เห็นเฉพาะเอเยนต์ของเซลล์คนนี้">'+esc(lauSalesName(u.salesId))+'</span>'):'')
+        +'</div><div class="m">'+(u.role==='admin'?LA_NAV.length:u.perms.length)+' เมนู · <b>'
+          +(u.role==='admin'?'admin':(u.edit.length?(u.edit.length+' พื้นที่แก้ไขได้'):'ดูอย่างเดียว'))+'</b></div></div></div>'
+      +'<div class="bds">'+(bds||'<span style="font-size:12px;color:#CBD5E1">ยังไม่มีสิทธิ์เข้าหน้าไหนเลย</span>')+'</div>'
+      +'<div class="acts">'
+        +'<button class="b sm" onclick="__laEditPerms('+u.id+')">สิทธิ์</button>'
+        +'<button class="b sm" onclick="__laReset('+u.id+')">รหัสผ่าน</button>'
+        +'<button class="ic" title="'+(me?'ลบบัญชีตัวเองไม่ได้':'ลบผู้ใช้')+'"'+(me?' disabled':'')
+          +' onclick="__laDelUser('+u.id+')">&#128465;</button>'
+      +'</div></div>';
+  }
+
+  /* ── ตารางสิทธิ์ ── */
+  function lauDraftOf(u){ var d=LAU.dirty[u.id]; return d?d:{perms:u.perms,edit:u.edit}; }
+  function lauMatrix(F){
+    var nd=Object.keys(LAU.dirty).length;
+    return '<div class="mx"><table><thead><tr><th class="nm">ผู้ใช้งาน</th><th>แผนก</th>'
+      +LA_AREAS.map(function(a){ return '<th>'+esc(lauAT(a.k))
+        +'<div style="font-size:9.5px;font-weight:600;color:#94A3B8;margin-top:2px">'+lauMenus(a.k).length+' เมนู</div></th>'; }).join('')
+      +'</tr></thead><tbody>'
+      +F.map(function(u){ var D=lauDraftOf(u), dirty=!!LAU.dirty[u.id];
+        return '<tr class="'+(dirty?'dt':'')+'"><td class="nm"><b style="font-size:13px">'+esc(u.username)+'</b>'
+          +(u.name?('<span style="color:#94A3B8;font-weight:600;font-size:11.5px"> ('+esc(u.name)+')</span>'):'')
+          +(u.role==='admin'?'<span class="tg adm">ADMIN</span>':'')
+          +(lauIsMe(u)?'<span class="tg me">คุณ</span>':'')+'</td>'
+          +'<td style="font-size:11.5px;color:#475569;font-weight:600">'+esc(lauDeptT(u.dept))+'</td>'
+          +LA_AREAS.map(function(a){
+              var L=lauLvl(u.role,D.perms,D.edit,a.k), g=lauGot(D.perms,a.k), n=lauMenus(a.k).length;
+              var lab=L==='edit'?'✎':L==='view'?'👁':L==='part'?(g+'/'+n):'·';
+              var ti=u.role==='admin'?'admin · แก้ได้ทุกอย่าง'
+                :L==='edit'?'ทุกเมนู · แก้ไขได้':L==='view'?'ทุกเมนู · ดูอย่างเดียว'
+                :L==='part'?(g+' จาก '+n+' เมนู · กดเพื่อเปิดครบ'):'ไม่มีสิทธิ์';
+              return '<td><button class="cl '+L+'" title="'+esc(ti)+'"'
+                +(u.role==='admin'?' disabled style="cursor:default"':(' onclick="__laCycle('+u.id+',\''+a.k+'\')"'))
+                +'>'+lab+'</button></td>'; }).join('')
+          +'</tr>'; }).join('')
+      +'</tbody></table>'
+      +'<div class="lg">'
+        +'<span><span class="cl no" style="display:inline-flex;align-items:center;justify-content:center">&#183;</span> ไม่มีสิทธิ์</span>'
+        +'<span><span class="cl part" style="display:inline-flex;align-items:center;justify-content:center;font-size:9px">3/12</span> บางเมนู</span>'
+        +'<span><span class="cl view" style="display:inline-flex;align-items:center;justify-content:center">&#128065;</span> ครบ · ดูอย่างเดียว</span>'
+        +'<span><span class="cl edit" style="display:inline-flex;align-items:center;justify-content:center">&#9998;</span> ครบ · แก้ไขได้</span>'
+        +'<span style="color:#94A3B8;margin-left:auto">คลิกเพื่อวน · เลือกรายเมนูได้ที่ปุ่ม “สิทธิ์”</span>'
+      +'</div></div>'
+      +(nd?('<div class="savebar">&#9888; แก้สิทธิ์ไว้ '+nd+' คน ยังไม่ได้บันทึก<div class="sp"></div>'
+        +'<button class="b" onclick="__laDirtyDrop()">ทิ้งการแก้ไข</button>'
+        +'<button class="b pri" onclick="__laSaveMatrix()">บันทึกทั้งหมด</button></div>'):'');
+  }
+  window.__laCycle=function(id,k){
+    var u=(LAU.rows||[]).filter(function(x){return x.id===id;})[0]; if(!u||u.role==='admin') return;
+    var D=LAU.dirty[id]||{perms:u.perms.slice(),edit:u.edit.slice()};
+    var L=lauLvl(u.role,D.perms,D.edit,k), M=lauMenus(k).map(function(m){return m.v;});
+    if(L==='no'||L==='part'){ M.forEach(function(v){ if(D.perms.indexOf(v)<0) D.perms.push(v); });
+      D.edit=D.edit.filter(function(x){return x!==k;}); }
+    else if(L==='view'){ D.edit.push(k); }
+    else { D.perms=D.perms.filter(function(v){ return M.indexOf(v)<0; });
+      D.edit=D.edit.filter(function(x){return x!==k;}); }
+    LAU.dirty[id]=D; __laRender();
+  };
+  window.__laSaveMatrix=function(){
+    var ids=Object.keys(LAU.dirty), ok=0, bad=[];
+    ids.forEach(function(id){
+      var u=(LAU.rows||[]).filter(function(x){return String(x.id)===String(id);})[0]; if(!u) return;
+      var D=LAU.dirty[id];
+      var r=sx('POST','/api/users/perms',JSON.stringify({id:u.id,role:u.role,dept:u.dept,
+        perms:D.perms,editAreas:D.edit,salesId:u.salesId}),'application/json');
+      if(r.status===200) ok++; else bad.push(u.username);
+    });
+    LAU.dirty={};
+    lauToast(bad.length?('บันทึกไม่สำเร็จ: '+bad.join(', ')):('บันทึกสิทธิ์แล้ว '+ok+' คน'), bad.length);
+    __laLoadUsers();
+  };
+
+  /* ── ภาพรวม ── */
+  function lauOverview(US){
+    var n=US.length||1;
+    var bars=LA_AREAS.map(function(a){
+      var e=0,v=0;
+      US.forEach(function(u){ var L=lauLvl(u.role,u.perms,u.edit,a.k);
+        if(L==='no') return; if(L==='edit') e++; else v++; });
+      var C=lauAC(a.k);
+      return '<div class="bar"><div class="t"><span style="color:'+C+'">'+esc(lauAT(a.k))+'</span>'
+        +'<span class="c">'+(e+v)+' คน</span></div>'
+        +'<div class="tr"><div class="f1" style="width:'+(e/n*100)+'%"></div>'
+          +'<div class="f2" style="width:'+(v/n*100)+'%"></div></div>'
+        +'<div class="cap">✎ แก้ไขได้ '+e+' · 👁 ดู/บางส่วน '+v+' · ไม่มีสิทธิ์ '+(US.length-e-v)+'</div></div>';
+    }).join('');
+    var wide=US.filter(function(u){ return u.role!=='admin' && u.perms.length>=LA_NAV.length*0.6; });
+    var none=US.filter(function(u){ return u.role!=='admin' && !u.perms.length; });
+    var adm =US.filter(function(u){ return u.role==='admin'; });
+    var iss=[];
+    if(wide.length) iss.push('<b>'+wide.length+' บัญชีถือสิทธิ์กว้าง</b> — '
+      +esc(wide.map(function(u){return u.username;}).join(' · '))+' เข้าได้เกิน 60% ของเมนูทั้งหมด');
+    if(none.length) iss.push('<b>'+none.length+' บัญชีเข้าไม่ได้เลย</b> — '
+      +esc(none.map(function(u){return u.username;}).join(' · '))+' ล็อกอินได้แต่ไม่มีหน้าให้เปิด');
+    if(adm.length>2) iss.push('<b>admin '+adm.length+' บัญชี</b> — '+esc(adm.map(function(u){return u.username;}).join(' · ')));
+    return '<div class="ov"><div class="card"><h3>สิทธิ์แยกตามพื้นที่</h3><div class="bars">'+bars+'</div></div>'
+      +'<div class="note"><div class="bl"></div><div><span class="kk">ตรวจสิทธิ์</span>'
+        +'<h3>'+(iss.length?('พบ '+iss.length+' เรื่องที่ควรทบทวน'):'ไม่พบสิทธิ์ที่เกินงาน')+'</h3>'
+        +'<p>'+(iss.length?iss.join('<br><br>'):'ทุกบัญชีถือสิทธิ์เท่าที่งานต้องใช้')+'</p></div>'
+        +'<div class="nf"><span>บัญชีที่แก้ไขข้อมูลได้</span><b>'
+          +US.filter(function(u){ return u.role==='admin'||u.edit.length; }).length+' / '+US.length+'</b></div></div></div>';
+  }
+
+  /* ── ตัวเลือกสิทธิ์ · ใช้ร่วมกันทั้งหน้าเพิ่มและหน้าต่างแก้ ── */
+  function lauPermHTML(D,pfx){
+    return LA_AREAS.map(function(a){
+      var M=lauMenus(a.k), g=lauGot(D.perms,a.k), ed=D.edit.indexOf(a.k)>=0;
+      var L=!g?'no':(g<M.length?'part':(ed?'edit':'view'));
+      return '<div class="ar '+(g?'has':'')+'" id="'+pfx+'-ar-'+a.k+'">'
+        +'<div class="top"><span class="dot" style="background:'+lauAC(a.k)+'"></span>'
+          +'<div class="nm"><b>'+esc(lauAT(a.k))+'</b><span>'+esc(lauAS(a.k))+'</span></div>'
+          +'<span class="fr2 '+(L==='part'?'part':(g?'all':''))+'">'+g+'/'+M.length+'</span>'
+          +'<button class="ex" onclick="document.getElementById(\''+pfx+'-ar-'+a.k+'\').classList.toggle(\'open\')">เมนู &#9662;</button>'
+          +'<div class="seg">'
+            +'<button class="'+(L==='no'?'on n':'')+'" onclick="__laSetArea(\''+pfx+'\',\''+a.k+'\',\'no\')">ไม่มี</button>'
+            +'<button class="'+(L==='view'?'on v':'')+'" onclick="__laSetArea(\''+pfx+'\',\''+a.k+'\',\'view\')">ดู</button>'
+            +'<button class="'+(L==='edit'?'on e':'')+'" onclick="__laSetArea(\''+pfx+'\',\''+a.k+'\',\'edit\')">แก้ไข</button>'
+          +'</div></div>'
+        +'<div class="mns">'+M.map(function(m){
+            return '<span class="mn '+(D.perms.indexOf(m.v)>=0?'on':'')+'" onclick="__laTogMenu(\''+pfx+'\',\''+a.k+'\',\''+m.v+'\')">'
+              +esc(m.t)+'</span>'; }).join('')+'</div></div>';
+    }).join('');
+  }
+  function lauTarget(pfx){ return pfx==='a'?LAU.add:LAU.draft; }
+  function lauRepaint(pfx){
+    var el=document.getElementById(pfx==='a'?'la-aperm':'la-pbody'); if(!el) return;
+    var open=[]; Array.prototype.forEach.call(el.querySelectorAll('.ar.open'),function(x){ open.push(x.id); });
+    el.innerHTML=lauPermHTML(lauTarget(pfx),pfx);
+    open.forEach(function(id){ var n=document.getElementById(id); if(n) n.classList.add('open'); });
+  }
+  window.__laSetArea=function(pfx,k,L){
+    var D=lauTarget(pfx), M=lauMenus(k).map(function(m){return m.v;});
+    D.perms=D.perms.filter(function(v){ return M.indexOf(v)<0; });
+    D.edit=D.edit.filter(function(x){ return x!==k; });
+    if(L!=='no') D.perms=D.perms.concat(M);
+    if(L==='edit') D.edit.push(k);
+    lauRepaint(pfx);
+  };
+  window.__laTogMenu=function(pfx,k,v){
+    var D=lauTarget(pfx);
+    if(D.perms.indexOf(v)>=0) D.perms=D.perms.filter(function(x){ return x!==v; }); else D.perms.push(v);
+    var M=lauMenus(k).map(function(m){return m.v;});
+    if(!M.some(function(x){ return D.perms.indexOf(x)>=0; })) D.edit=D.edit.filter(function(x){ return x!==k; });
+    lauRepaint(pfx);
+  };
+  function lauPresetKeys(name){
+    return name==='ALL'?LA_AREAS.map(function(a){return a.k;}) : name==='NONE'?[] : (LA_PRESETS[name]||[]);
+  }
+  window.__laPreset=function(pfx,name){
+    var D=lauTarget(pfx), ks=lauPresetKeys(name);
+    D.perms=[]; ks.forEach(function(k){ D.perms=D.perms.concat(lauMenus(k).map(function(m){return m.v;})); });
+    D.edit=ks.filter(function(k){ return k!=='overview'; });
+    lauRepaint(pfx); lauToast('ใช้ชุดลัด '+name);
+  };
+  function lauPsetHTML(pfx){
+    var names=Object.keys(LA_PRESETS).concat(['ALL','NONE']);
+    return '<div class="pset"><span class="pl">ชุดลัด:</span>'+names.map(function(n){
+      return '<button onclick="__laPreset(\''+pfx+'\',\''+n+'\')">'+(n==='ALL'?'ทุกพื้นที่':n==='NONE'?'ล้าง':n)+'</button>'; }).join('')+'</div>';
+  }
+
+  /* ── หน้าต่างสิทธิ์ ── */
+  window.__laEditPerms=function(id){
+    var u=(LAU.rows||[]).filter(function(x){return x.id===id;})[0]; if(!u) return;
+    LAU.cur=u; LAU.draft={perms:u.perms.slice(),edit:u.edit.slice()};
+    var w=document.getElementById('la-uwin'); if(!w) return;
+    var old=w.querySelector('#la-pmask'); if(old) old.remove();
+    var d=document.createElement('div'); d.className='mask'; d.id='la-pmask';
+    d.onclick=function(e){ if(e.target===d) d.remove(); };
+    d.innerHTML='<div class="dlg"><div class="dh"><div><h3>สิทธิ์เข้าใช้งาน</h3>'
+      +'<p>'+esc(u.username)+(u.name?(' ('+esc(u.name)+')'):'')+'</p></div>'
+      +'<button class="ic" onclick="document.getElementById(\'la-pmask\').remove()">&#10005;</button></div>'
+      +'<div class="db">'
+        +'<div class="fg">'
+          +'<div class="f"><label>บทบาท</label><select id="la-p-role" onchange="__laDrawPerm()">'
+            +'<option value="staff"'+(u.role!=='admin'?' selected':'')+'>staff · สิทธิ์ตามที่ติ๊ก</option>'
+            +'<option value="admin"'+(u.role==='admin'?' selected':'')+'>admin · เข้าได้ทุกที่ แก้ได้ทุกอย่าง</option>'
+          +'</select></div>'
+          +'<div class="f"><label>แผนก</label><select id="la-p-dept">'
+            +LA_DEPTS.map(function(x){ return '<option value="'+x.k+'"'+(x.k===u.dept?' selected':'')+'>'+esc(x.t)+'</option>'; }).join('')
+          +'</select></div></div>'
+        +'<div class="f"><label>เป็นเซลล์คนไหน</label><select id="la-p-sales">'
+          +'<option value="">— ไม่จำกัด (เห็นทุกเอเยนต์) —</option>'
+          +lauSalesList().map(function(x){ return '<option value="'+esc(x.id)+'"'+(x.id===u.salesId?' selected':'')+'>'
+            +esc(x.name||x.code||x.id)+'</option>'; }).join('')
+        +'</select><div class="hint">ตั้งไว้แล้วผู้ใช้จะเห็นเฉพาะใบจองของเอเยนต์ที่เซลล์คนนั้นดูแล</div></div>'
+        +'<div class="sect">พื้นที่และเมนู</div>'
+        +'<div id="la-pset">'+lauPsetHTML('p')+'</div>'
+        +'<div id="la-pbody"></div>'
+      +'</div>'
+      +'<div class="df"><span style="font-size:11.5px;color:#94A3B8">กด <b style="color:#475569">เมนู &#9662;</b> เพื่อเลือกทีละหน้า</span>'
+        +'<div style="display:flex;gap:8px"><button class="b" onclick="document.getElementById(\'la-pmask\').remove()">ยกเลิก</button>'
+        +'<button class="b pri" onclick="__laSavePerms('+u.id+')">บันทึกสิทธิ์</button></div></div></div>';
+    w.appendChild(d);
+    __laDrawPerm();
+  };
+  window.__laDrawPerm=function(){
+    var isAdm=(document.getElementById('la-p-role')||{}).value==='admin';
+    var ps=document.getElementById('la-pset'); if(ps) ps.style.display=isAdm?'none':'';
+    var el=document.getElementById('la-pbody'); if(!el) return;
+    el.innerHTML=isAdm
+      ? '<div style="background:#FDF8F0;border:1px solid #F0E1C2;border-radius:14px;padding:14px 16px;'
+        +'font-size:12.5px;color:#8A5A00;line-height:1.85"><b>admin เข้าได้ทุกหน้าและแก้ได้ทุกอย่าง</b><br>'
+        +'สิทธิ์รายเมนูจะถูกข้ามทั้งหมด · เปลี่ยนกลับเป็น staff ถ้าต้องการจำกัด</div>'
+      : lauPermHTML(LAU.draft,'p');
+  };
+  window.__laSavePerms=function(id){
+    var u=LAU.cur; if(!u) return;
+    var role=document.getElementById('la-p-role').value;
+    if(lauIsMe(u) && role!=='admin'){ lauToast('ถอดสิทธิ์ admin ของตัวเองไม่ได้',1); return; }
+    var dept=document.getElementById('la-p-dept').value;
+    var salesId=document.getElementById('la-p-sales').value;
+    var perms, editAreas;
+    if(role==='admin'){ perms=LA_NAV.map(function(n){return n.v;}); editAreas=LA_AREAS.map(function(a){return a.k;}); }
+    else { perms=LAU.draft.perms.slice(); editAreas=LAU.draft.edit.slice(); }
+    if(role!=='admin' && !perms.length && !confirm('ยังไม่ได้เลือกสิทธิ์เลย · ผู้ใช้คนนี้จะล็อกอินได้แต่เปิดหน้าไหนไม่ได้ ยืนยันไหม')) return;
+    var r=sx('POST','/api/users/perms',JSON.stringify({id:id,role:role,dept:dept,perms:perms,
+      editAreas:editAreas,salesId:salesId}),'application/json');
+    if(r.status!==200){ lauToast((r.json&&r.json.error)||'บันทึกไม่สำเร็จ',1); return; }
+    var m=document.getElementById('la-pmask'); if(m) m.remove();
+    __laLoadUsers(); lauToast('บันทึกสิทธิ์ของ '+u.username+' แล้ว');
+  };
+
+  /* ── เพิ่มผู้ใช้ ── */
+  function lauAdd(){
+    if(!LAU.add) LAU.add={u:'',n:'',pw:'',dept:'rsvn',role:'staff',salesId:'',perms:[],edit:[]};
+    var D=LAU.add;
+    return '<div class="card">'
+      +'<div class="sect" style="margin-top:0;padding-top:0;border-top:0">บัญชี</div>'
+      +'<div class="fg">'
+        +'<div class="f"><label>Username *</label>'
+          +'<input id="la-a-u" value="'+esc(D.u)+'" placeholder="เช่น RSVN07" oninput="__laAddSet(\'u\',this.value)">'
+          +'<div class="hint" id="la-a-hint"></div></div>'
+        +'<div class="f"><label>ชื่อเรียก</label>'
+          +'<input id="la-a-n" value="'+esc(D.n)+'" placeholder="เช่น Joy" oninput="__laAddSet(\'n\',this.value)"></div></div>'
+      +'<div class="fg">'
+        +'<div class="f"><label>รหัสผ่านเริ่มต้น *</label>'
+          +'<input id="la-a-p" type="password" placeholder="อย่างน้อย 6 ตัวอักษร" oninput="__laAddSet(\'pw\',this.value)"></div>'
+        +'<div class="f"><label>แผนก</label><select id="la-a-d" onchange="__laAddSet(\'dept\',this.value)">'
+          +LA_DEPTS.map(function(x){ return '<option value="'+x.k+'"'+(x.k===D.dept?' selected':'')+'>'+esc(x.t)+'</option>'; }).join('')
+        +'</select></div></div>'
+      +'<div class="fg">'
+        +'<div class="f"><label>บทบาท</label><select onchange="__laAddSet(\'role\',this.value)">'
+          +'<option value="staff"'+(D.role==='staff'?' selected':'')+'>staff · สิทธิ์ตามที่ติ๊ก</option>'
+          +'<option value="admin"'+(D.role==='admin'?' selected':'')+'>admin · เข้าได้ทุกที่</option></select></div>'
+        +'<div class="f"><label>เป็นเซลล์คนไหน</label><select onchange="__laAddSet(\'salesId\',this.value)">'
+          +'<option value="">— ไม่จำกัด —</option>'
+          +lauSalesList().map(function(x){ return '<option value="'+esc(x.id)+'"'+(x.id===D.salesId?' selected':'')+'>'
+            +esc(x.name||x.code||x.id)+'</option>'; }).join('')
+        +'</select><div class="hint">ตั้งไว้ = เห็นเฉพาะเอเยนต์ของเซลล์คนนั้น</div></div></div>'
+      +(D.role==='admin'
+        ? '<div class="sect">สิทธิ์</div><div style="background:#FDF8F0;border:1px solid #F0E1C2;border-radius:14px;'
+          +'padding:14px 16px;font-size:12.5px;color:#8A5A00;line-height:1.85">'
+          +'<b>admin เข้าได้ทุกหน้าและแก้ได้ทุกอย่างอยู่แล้ว</b><br>ไม่ต้องเลือกสิทธิ์รายเมนู</div>'
+        : '<div class="sect">สิทธิ์เข้าใช้งาน</div>'+lauPsetHTML('a')+'<div id="la-aperm">'+lauPermHTML(D,'a')+'</div>')
+      +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;padding-top:14px;border-top:1px solid #F1F4F8">'
+        +'<button class="b" onclick="__laAddCancel()">ยกเลิก</button>'
+        +'<button class="b pri" onclick="__laAddUser()">สร้างบัญชี</button></div></div>';
+  }
+  window.__laAddHint=function(){
+    var el=document.getElementById('la-a-hint'); if(!el) return;
+    var v=String((LAU.add&&LAU.add.u)||'').trim();
+    if(!v){ el.innerHTML='แผนกจะเดาจากคำนำหน้าให้เอง — RSVN / TRANSFER / Pier / GSA'; return; }
+    var g=laGuessDept({username:v,role:(LAU.add.role||'staff')});
+    LAU.add.dept=g; var s=document.getElementById('la-a-d'); if(s) s.value=g;
+    el.innerHTML='เดาแผนกจากชื่อได้เป็น <b style="color:#475569">'+esc(lauDeptT(g))+'</b> — เปลี่ยนเองได้ที่ช่องแผนก';
+  };
   window.__laAddUser=function(){
-    var u=document.getElementById('la-nu').value.trim(), n=document.getElementById('la-nn').value.trim(),
-        p=document.getElementById('la-np').value, role=document.getElementById('la-nr').value,
-        dept=document.getElementById('la-nd').value,
-        salesId=(document.getElementById('la-ns')||{}).value||'';
-    if(!u||!p){ alert('ต้องมี username + รหัสผ่าน'); return; }
-    var perms=laReadBoxes('na'); var editAreas=laReadEditBoxes('naE');
-    var r=sx('POST','/api/users',JSON.stringify({username:u,name:n,password:p,role:role,dept:dept,perms:perms,editAreas:editAreas,salesId:salesId}),'application/json');
-    if(r.status===200){ window.__laUserList=null; window.__laSetTab('list'); }
-    else alert((r.json&&r.json.error)||'เพิ่มผู้ใช้ไม่สำเร็จ');
+    var D=LAU.add||{};
+    var u=String(D.u||'').trim(), n=String(D.n||'').trim(), p=String(D.pw||'');
+    if(!u){ lauToast('ต้องกรอก Username',1); return; }
+    if(p.length<6){ lauToast('รหัสผ่านต้องยาวอย่างน้อย 6 ตัวอักษร',1); return; }
+    var perms,editAreas;
+    if(D.role==='admin'){ perms=LA_NAV.map(function(x){return x.v;}); editAreas=LA_AREAS.map(function(a){return a.k;}); }
+    else { perms=D.perms.slice(); editAreas=D.edit.slice();
+      if(!perms.length && !confirm('ยังไม่ได้เลือกสิทธิ์เลย · บัญชีนี้จะล็อกอินได้แต่เปิดหน้าไหนไม่ได้ ยืนยันไหม')) return; }
+    var r=sx('POST','/api/users',JSON.stringify({username:u,name:n,password:p,role:D.role||'staff',
+      dept:D.dept,perms:perms,editAreas:editAreas,salesId:D.salesId||''}),'application/json');
+    if(r.status!==200){ lauToast((r.json&&r.json.error)||'เพิ่มผู้ใช้ไม่สำเร็จ',1); return; }
+    LAU.add=null; window.__laTab='list'; __laLoadUsers(); lauToast('สร้างบัญชี '+u+' แล้ว');
   };
 
-  window.__laEditPerms=function(id){ var u=(window.__laUserList||[]).filter(function(x){return x.id===id;})[0]; if(!u) return; var old=document.getElementById('la-pmodal'); if(old) old.remove();
-    var sel=laPermViewList(u.perms);
-    var esel=Array.isArray(u.editAreas)?u.editAreas:LA_AREAS.map(function(a){return a.k;});
-    var udept=laDeptOf(u);
-    var ov=document.createElement('div'); ov.className='la-modal'; ov.id='la-pmodal'; ov.style.zIndex='100000'; ov.onclick=function(e){ if(e.target===ov) ov.remove(); };
-    ov.innerHTML='<div class="la-card" style="padding:18px 20px;width:520px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div style="font-size:15px;font-weight:800;color:#15396B">สิทธิ์ของ '+esc(u.username)+'</div><button class="la-ub-btn" style="background:#eee;color:#444" onclick="document.getElementById(\'la-pmodal\').remove()">ปิด</button></div><div style="font-size:11px;color:#999;margin-bottom:4px">Role: <select id="la-ed-role" style="border:1px solid #d7d3ca;border-radius:6px;padding:4px 7px;font-size:12px;font-family:inherit"><option value="staff"'+(u.role!=='admin'?' selected':'')+'>staff</option><option value="admin"'+(u.role==='admin'?' selected':'')+'>admin (เห็นทุกอย่าง)</option></select>'+'<span style="font-size:11px;color:#999;margin-left:10px">แผนก</span> '+laDeptSelectHTML('la-ed-dept',udept)+'</div>'+'<div style="font-size:11px;color:#999;margin:6px 0 4px">เป็นเซลล์ (เห็นเฉพาะเอเยนต์ของตัวเอง): '+laSalesSelectHTML('la-ed-sales',u.salesId||'')+'</div>'+laPresetBtnsHTML('ed')+laPermBoxesHTML('ed',sel)+'<div style="font-size:11px;color:#999;margin-top:9px">สิทธิ์แก้ไข ราย section <span style="color:#bbb">(ไม่ติ๊ก = ดูอย่างเดียว):</span></div>'+laEditBoxesHTML('edE',esel)+'<button class="la-ub-btn" style="background:#1C4A30;margin-top:12px" onclick="__laSavePerms('+id+')">บันทึก</button></div>';
-    document.body.appendChild(ov);
+  /* ── รหัสผ่าน ── */
+  window.__laReset=function(id){
+    var u=(LAU.rows||[]).filter(function(x){return x.id===id;})[0]; if(!u) return;
+    LAU.pwd=u;
+    var w=document.getElementById('la-uwin'); var old=w.querySelector('#la-wmask'); if(old) old.remove();
+    var d=document.createElement('div'); d.className='mask'; d.id='la-wmask';
+    d.onclick=function(e){ if(e.target===d) d.remove(); };
+    d.innerHTML='<div class="dlg sm"><div class="dh"><div><h3>เปลี่ยนรหัสผ่าน</h3>'
+      +'<p>'+esc(u.username)+(u.name?(' ('+esc(u.name)+')'):'')+'</p></div>'
+      +'<button class="ic" onclick="document.getElementById(\'la-wmask\').remove()">&#10005;</button></div>'
+      +'<div class="db"><div class="f"><label>รหัสผ่านใหม่</label>'
+        +'<input type="password" id="la-w1" placeholder="อย่างน้อย 6 ตัวอักษร" oninput="__laPwChk()"></div>'
+        +'<div class="f"><label>พิมพ์ซ้ำอีกครั้ง</label>'
+        +'<input type="password" id="la-w2" placeholder="พิมพ์รหัสผ่านเดิมอีกครั้ง" oninput="__laPwChk()">'
+        +'<div class="hint" id="la-wmsg">&nbsp;</div></div></div>'
+      +'<div class="df"><span></span><div style="display:flex;gap:8px">'
+        +'<button class="b" onclick="document.getElementById(\'la-wmask\').remove()">ยกเลิก</button>'
+        +'<button class="b pri" id="la-wgo" disabled onclick="__laPwSave()">บันทึกรหัสผ่าน</button></div></div></div>';
+    w.appendChild(d);
+    var i=document.getElementById('la-w1'); if(i) i.focus();
   };
-  window.__laSavePerms=function(id){ var role=document.getElementById('la-ed-role').value; var perms=laReadBoxes('ed'); var editAreas=laReadEditBoxes('edE'); var dEl=document.getElementById('la-ed-dept'); var dept=dEl?dEl.value:null; var sEl=document.getElementById('la-ed-sales'); var salesId=sEl?sEl.value:''; var r=sx('POST','/api/users/perms',JSON.stringify({id:id,role:role,dept:dept,perms:perms,editAreas:editAreas,salesId:salesId}),'application/json'); if(r.status===200){ var pm=document.getElementById('la-pmodal'); if(pm) pm.remove(); window.__laUserList=null; __laLoadUsers(); alert('บันทึกสิทธิ์แล้ว · ผู้ใช้คนนั้นต้องออกแล้วเข้าใหม่จึงจะเห็นผล'); } else alert((r.json&&r.json.error)||'บันทึกไม่สำเร็จ'); };
-  window.__laDelUser=function(id,un){ if(!confirm('ลบผู้ใช้ "'+un+'"?')) return; var r=sx('DELETE','/api/users?id='+id); if(r.status===200){ window.__laUserList=null; __laLoadUsers(); } else alert((r.json&&r.json.error)||'ลบไม่สำเร็จ'); };
-  window.__laReset=function(id,un){ var p=prompt('ตั้งรหัสผ่านใหม่ของ "'+un+'":'); if(!p) return; var r=sx('POST','/api/users/password',JSON.stringify({id:id,password:p}),'application/json'); alert(r.status===200?'เปลี่ยนรหัสแล้ว':((r.json&&r.json.error)||'ไม่สำเร็จ')); };
+  window.__laPwChk=function(){
+    var a=(document.getElementById('la-w1')||{}).value||'', b=(document.getElementById('la-w2')||{}).value||'';
+    var m=document.getElementById('la-wmsg'), go=document.getElementById('la-wgo');
+    var ok=false, msg='&nbsp;';
+    if(a && a.length<6) msg='<span style="color:#B4392B">สั้นเกินไป · ต้องอย่างน้อย 6 ตัวอักษร</span>';
+    else if(a && b && a!==b) msg='<span style="color:#B4392B">สองช่องไม่ตรงกัน</span>';
+    else if(a && b && a===b){ msg='<span style="color:#0F6E56">ตรงกันแล้ว</span>'; ok=true; }
+    if(m) m.innerHTML=msg; if(go) go.disabled=!ok;
+  };
+  window.__laPwSave=function(){
+    var u=LAU.pwd; if(!u) return;
+    var p=(document.getElementById('la-w1')||{}).value||'';
+    var r=sx('POST','/api/users/password',JSON.stringify({id:u.id,password:p}),'application/json');
+    if(r.status!==200){ lauToast((r.json&&r.json.error)||'เปลี่ยนรหัสไม่สำเร็จ',1); return; }
+    var m=document.getElementById('la-wmask'); if(m) m.remove();
+    lauToast('เปลี่ยนรหัสผ่านของ '+u.username+' แล้ว');
+  };
+
+  /* ── ลบผู้ใช้ ── */
+  window.__laDelUser=function(id){
+    var u=(LAU.rows||[]).filter(function(x){return x.id===id;})[0]; if(!u) return;
+    if(lauIsMe(u)){ lauToast('ลบบัญชีตัวเองไม่ได้',1); return; }
+    LAU.del=u;
+    var w=document.getElementById('la-uwin'); var old=w.querySelector('#la-dmask'); if(old) old.remove();
+    var d=document.createElement('div'); d.className='mask'; d.id='la-dmask';
+    d.onclick=function(e){ if(e.target===d) d.remove(); };
+    d.innerHTML='<div class="dlg sm"><div class="db" style="text-align:center;padding:26px 24px 20px">'
+      +'<div style="width:48px;height:48px;border-radius:15px;background:#FBEDEB;color:#B4392B;display:flex;'
+        +'align-items:center;justify-content:center;font-size:20px;margin:0 auto 12px">&#128465;</div>'
+      +'<h3 style="font-size:15.5px;font-weight:800;margin:0 0 6px">ลบผู้ใช้นี้?</h3>'
+      +'<p style="font-size:12.5px;color:#475569;margin:0;line-height:1.8"><b>'+esc(u.username)+'</b>'
+        +(u.name?(' ('+esc(u.name)+')'):'')+' · '+esc(lauDeptT(u.dept))+'</p>'
+      +'<p style="font-size:11.5px;color:#94A3B8;margin:10px 0 0;line-height:1.7">'
+        +'ประวัติงานที่ผู้ใช้นี้เคยบันทึกไว้ยังอยู่ครบ · ลบเฉพาะบัญชีเข้าใช้งาน</p></div>'
+      +'<div class="df" style="justify-content:center">'
+        +'<button class="b" style="flex:1" onclick="document.getElementById(\'la-dmask\').remove()">ยกเลิก</button>'
+        +'<button class="b dgr" style="flex:1" onclick="__laDelGo()">ลบบัญชี</button></div></div>';
+    w.appendChild(d);
+  };
+  window.__laDelGo=function(){
+    var u=LAU.del; if(!u) return;
+    var r=sx('DELETE','/api/users?id='+u.id);
+    if(r.status!==200){ lauToast((r.json&&r.json.error)||'ลบไม่สำเร็จ',1); return; }
+    var m=document.getElementById('la-dmask'); if(m) m.remove();
+    __laLoadUsers(); lauToast('ลบบัญชี '+u.username+' แล้ว');
+  };
 })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
