@@ -632,10 +632,13 @@
   /* สถานะของพื้นที่หนึ่ง · no = ไม่มีสิทธิ์ · part = ถือบางเมนู · view = ครบแต่ดูอย่างเดียว · edit = ครบและแก้ได้ */
   function lauLvl(role,P,E,k){
     if(role==='admin') return 'edit';
-    var g=lauGot(P,k), n=lauMenus(k).length;
-    if(!g) return 'no';
-    if(g<n) return 'part';
+    if(!lauGot(P,k)) return 'no';
     return E.indexOf(k)>=0?'edit':'view';
+  }
+  /* ถือไม่ครบทุกหน้าในพื้นที่นั้นหรือเปล่า · แยกจากระดับสิทธิ์ ไม่ใช่ระดับที่สี่ */
+  function lauPart(role,P,k){
+    if(role==='admin') return false;
+    var g=lauGot(P,k); return g>0 && g<lauMenus(k).length;
   }
   var LAU_C={overview:'#5B4BC4',operations:'#0F6E56',sales:'#185FA5',accounting:'#7A3FA8',
              fleet:'#8A5A00',pier:'#0E6E7A',config:'#B4436C'};
@@ -742,7 +745,7 @@
    +'#la-uwin .cl{width:34px;height:30px;border-radius:9px;border:1px solid transparent;cursor:pointer;'
      +'font-size:11px;font-weight:800;line-height:1}'
    +'#la-uwin .cl.no{background:#F1F4F8;color:#D2D9E2;border-color:#EAEEF3}'
-   +'#la-uwin .cl.part{background:#FDF4E3;color:#8A5A00;border-color:#F0E1C2}'
+   +'#la-uwin .cl.pt{border-style:dashed;border-width:1.5px;font-size:9.5px;letter-spacing:-.02em}'
    +'#la-uwin .cl.view{background:#E7F0FA;color:#185FA5;border-color:#CADCF0}'
    +'#la-uwin .cl.edit{background:#0F6E56;color:#fff;border-color:#0F6E56}'
    +'#la-uwin .lg{display:flex;gap:15px;align-items:center;padding:11px 14px;font-size:11.5px;color:#475569;'
@@ -984,7 +987,7 @@
           if(L==='no') return LAU.hideOff?'':'<span class="bd off">'+esc(lauAT(a.k))+'</span>';
           var g=lauGot(u.perms,a.k), n=lauMenus(a.k).length, C=lauAC(a.k);
           return '<span class="bd" style="background:'+C+'14;border-color:'+C+'33;color:'+C+'">'
-            +esc(lauAT(a.k))+(L==='part'?('<span class="fr">'+g+'/'+n+'</span>'):'')
+            +esc(lauAT(a.k))+(lauPart(u.role,u.perms,a.k)?('<span class="fr">'+g+'/'+n+'</span>'):'')
             +'<span style="font-size:10px;opacity:.9">'+(L==='edit'?'✎':'👁')+'</span></span>';
         }).join('');
     return '<div class="row'+(me?' self':'')+'">'
@@ -1022,21 +1025,23 @@
           +'<td style="font-size:11.5px;color:#475569;font-weight:600">'+esc(lauDeptT(u.dept))+'</td>'
           +LA_AREAS.map(function(a){
               var L=lauLvl(u.role,D.perms,D.edit,a.k), g=lauGot(D.perms,a.k), n=lauMenus(a.k).length;
-              var lab=L==='edit'?'✎':L==='view'?'👁':L==='part'?(g+'/'+n):'·';
+              var pt=lauPart(u.role,D.perms,a.k);
+              var lab=L==='no'?'·':(pt?(g+'/'+n):(L==='edit'?'✎':'👁'));
               var ti=u.role==='admin'?'admin · แก้ได้ทุกอย่าง'
-                :L==='edit'?'ทุกเมนู · แก้ไขได้':L==='view'?'ทุกเมนู · ดูอย่างเดียว'
-                :L==='part'?(g+' จาก '+n+' เมนู · กดเพื่อเปิดครบ'):'ไม่มีสิทธิ์';
-              return '<td><button class="cl '+L+'" title="'+esc(ti)+'"'
+                : L==='no' ? 'ไม่มีสิทธิ์'
+                : (pt?(g+' จาก '+n+' เมนู'):'ทุกเมนู')+' · '+(L==='edit'?'แก้ไขได้':'ดูอย่างเดียว');
+              return '<td><button class="cl '+L+(pt?' pt':'')+'" title="'+esc(ti)+'"'
                 +(u.role==='admin'?' disabled style="cursor:default"':(' onclick="__laCycle('+u.id+',\''+a.k+'\')"'))
                 +'>'+lab+'</button></td>'; }).join('')
           +'</tr>'; }).join('')
       +'</tbody></table>'
       +'<div class="lg">'
         +'<span><span class="cl no" style="display:inline-flex;align-items:center;justify-content:center">&#183;</span> ไม่มีสิทธิ์</span>'
-        +'<span><span class="cl part" style="display:inline-flex;align-items:center;justify-content:center;font-size:9px">3/12</span> บางเมนู</span>'
-        +'<span><span class="cl view" style="display:inline-flex;align-items:center;justify-content:center">&#128065;</span> ครบ · ดูอย่างเดียว</span>'
-        +'<span><span class="cl edit" style="display:inline-flex;align-items:center;justify-content:center">&#9998;</span> ครบ · แก้ไขได้</span>'
-        +'<span style="color:#94A3B8;margin-left:auto">คลิกเพื่อวน · เลือกรายเมนูได้ที่ปุ่ม “สิทธิ์”</span>'
+        +'<span><span class="cl view" style="display:inline-flex;align-items:center;justify-content:center">&#128065;</span> ดูอย่างเดียว</span>'
+        +'<span><span class="cl edit" style="display:inline-flex;align-items:center;justify-content:center">&#9998;</span> แก้ไขได้</span>'
+        +'<span><span class="cl view pt" style="display:inline-flex;align-items:center;justify-content:center;font-size:9px">3/12</span>'
+          +' ตัวเลข = ถือไม่ครบทุกหน้า (สียังบอกว่าดูหรือแก้)</span>'
+        +'<span style="color:#94A3B8;margin-left:auto">คลิกเพื่อวน · เลือกรายหน้าได้ที่ปุ่ม “สิทธิ์”</span>'
       +'</div></div>'
       +(nd?('<div class="savebar">&#9888; แก้สิทธิ์ไว้ '+nd+' คน ยังไม่ได้บันทึก<div class="sp"></div>'
         +'<button class="b" onclick="__laDirtyDrop()">ทิ้งการแก้ไข</button>'
@@ -1046,8 +1051,9 @@
     var u=(LAU.rows||[]).filter(function(x){return x.id===id;})[0]; if(!u||u.role==='admin') return;
     var D=LAU.dirty[id]||{perms:u.perms.slice(),edit:u.edit.slice()};
     var L=lauLvl(u.role,D.perms,D.edit,k), M=lauMenus(k).map(function(m){return m.v;});
-    if(L==='no'||L==='part'){ M.forEach(function(v){ if(D.perms.indexOf(v)<0) D.perms.push(v); });
-      D.edit=D.edit.filter(function(x){return x!==k;}); }
+    /* วน ไม่มี → ดู → แก้ไข → ไม่มี · พื้นที่ที่เลือกไว้บางหน้า กดแล้วยังคงหน้าที่เลือกไว้เท่าเดิม
+       เปลี่ยนแค่ดู/แก้ · จะเปิดครบทุกหน้าต้องไปกดที่ปุ่ม "สิทธิ์" ซึ่งเห็นรายชื่อหน้าจริง */
+    if(L==='no'){ D.perms=D.perms.concat(M); D.edit=D.edit.filter(function(x){return x!==k;}); }
     else if(L==='view'){ D.edit.push(k); }
     else { D.perms=D.perms.filter(function(v){ return M.indexOf(v)<0; });
       D.edit=D.edit.filter(function(x){return x!==k;}); }
@@ -1102,11 +1108,11 @@
   function lauPermHTML(D,pfx){
     return LA_AREAS.map(function(a){
       var M=lauMenus(a.k), g=lauGot(D.perms,a.k), ed=D.edit.indexOf(a.k)>=0;
-      var L=!g?'no':(g<M.length?'part':(ed?'edit':'view'));
+      var L=!g?'no':(ed?'edit':'view'), pt=(g>0&&g<M.length);
       return '<div class="ar '+(g?'has':'')+'" id="'+pfx+'-ar-'+a.k+'">'
         +'<div class="top"><span class="dot" style="background:'+lauAC(a.k)+'"></span>'
           +'<div class="nm"><b>'+esc(lauAT(a.k))+'</b><span>'+esc(lauAS(a.k))+'</span></div>'
-          +'<span class="fr2 '+(L==='part'?'part':(g?'all':''))+'">'+g+'/'+M.length+'</span>'
+          +'<span class="fr2 '+(pt?'part':(g?'all':''))+'" title="'+(pt?('ถือ '+g+' จาก '+M.length+' หน้า'):(g?'ครบทุกหน้า':'ไม่มีสิทธิ์'))+'">'+g+'/'+M.length+'</span>'
           +'<button class="ex" onclick="document.getElementById(\''+pfx+'-ar-'+a.k+'\').classList.toggle(\'open\')">เมนู &#9662;</button>'
           +'<div class="seg">'
             +'<button class="'+(L==='no'?'on n':'')+'" onclick="__laSetArea(\''+pfx+'\',\''+a.k+'\',\'no\')">ไม่มี</button>'
@@ -1125,12 +1131,19 @@
     el.innerHTML=lauPermHTML(lauTarget(pfx),pfx);
     open.forEach(function(id){ var n=document.getElementById(id); if(n) n.classList.add('open'); });
   }
+  /* ปุ่มชุดนี้ตอบคำถามเดียว · "ดูหรือแก้ได้" · ไม่ใช่ "กี่หน้า"
+     กดบนพื้นที่ที่ติ๊กหน้าไว้บางส่วนแล้ว จะคงหน้าที่ติ๊กไว้เท่าเดิม เปลี่ยนแค่สิทธิ์แก้ไข
+     (ของเดิมกดแล้วเปิดครบทุกหน้าให้เงียบ ๆ · คนที่ตั้งใจให้เห็นแค่ 4 หน้าจะได้ทั้ง 12 หน้าไปโดยไม่รู้ตัว)
+     ยกเว้นพื้นที่ที่ยังไม่มีสิทธิ์เลย · กดดู/แก้ = เปิดให้ทั้งพื้นที่ เพราะเป็นสิ่งที่ตั้งใจแน่ ๆ */
   window.__laSetArea=function(pfx,k,L){
     var D=lauTarget(pfx), M=lauMenus(k).map(function(m){return m.v;});
-    D.perms=D.perms.filter(function(v){ return M.indexOf(v)<0; });
+    var g=lauGot(D.perms,k);
     D.edit=D.edit.filter(function(x){ return x!==k; });
-    if(L!=='no') D.perms=D.perms.concat(M);
-    if(L==='edit') D.edit.push(k);
+    if(L==='no'){ D.perms=D.perms.filter(function(v){ return M.indexOf(v)<0; }); }
+    else {
+      if(!g) D.perms=D.perms.concat(M);
+      if(L==='edit') D.edit.push(k);
+    }
     lauRepaint(pfx);
   };
   window.__laTogMenu=function(pfx,k,v){
@@ -1181,6 +1194,9 @@
             +esc(x.name||x.code||x.id)+'</option>'; }).join('')
         +'</select><div class="hint">ตั้งไว้แล้วผู้ใช้จะเห็นเฉพาะใบจองของเอเยนต์ที่เซลล์คนนั้นดูแล</div></div>'
         +'<div class="sect">พื้นที่และเมนู</div>'
+        +'<div style="font-size:11.5px;color:#94A3B8;line-height:1.75;margin:-2px 0 11px">'
+          +'ปุ่ม <b style="color:#185FA5">ดู</b> / <b style="color:#0F6E56">แก้ไข</b> = ทำอะไรได้ &nbsp;·&nbsp; '
+          +'ตัวเลข <b style="color:#8A5A00">n/N</b> = เข้าได้กี่หน้าจากทั้งหมด (กด “เมนู” เพื่อเลือกทีละหน้า)</div>'
         +'<div id="la-pset">'+lauPsetHTML('p')+'</div>'
         +'<div id="la-pbody"></div>'
       +'</div>'
