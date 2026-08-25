@@ -6,7 +6,7 @@
   "description": "LOVE Andaman platform — Fastify API + React ops app. Replaces allotment_v2.html by strangler migration.",
   "packageManager": "pnpm@11.22.0",
   "engines": {
-    "node": ">=22"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "pnpm build:packages && pnpm --parallel --filter \"./apps/*\" dev",
