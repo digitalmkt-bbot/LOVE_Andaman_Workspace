@@ -12,11 +12,13 @@ export type OidcTokens = {
 const TRANSACTION_KEY = 'la.ops.oidc.transaction';
 const issuer = (import.meta.env.VITE_AUTH_ISSUER ?? '').trim().replace(/\/+$/, '');
 const clientId = (import.meta.env.VITE_AUTH_CLIENT_ID ?? '').trim();
-const redirectUri = (import.meta.env.VITE_AUTH_REDIRECT_URI ?? '').trim();
+// The callback must be on the same deployed frontend origin. Deriving it avoids
+// deploying a stale Railway hostname into the bundle when a service is renamed.
+const redirectUri = `${window.location.origin}/auth/callback`;
 
 function configured(): void {
-  if (!issuer || !clientId || !redirectUri) {
-    throw new Error('Authentication is not configured. Set VITE_AUTH_ISSUER, VITE_AUTH_CLIENT_ID, and VITE_AUTH_REDIRECT_URI.');
+  if (!issuer || !clientId) {
+    throw new Error('Authentication is not configured. Set VITE_AUTH_ISSUER and VITE_AUTH_CLIENT_ID.');
   }
 }
 
@@ -34,10 +36,26 @@ async function sha256(value: string): Promise<string> {
   return base64Url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))));
 }
 
+function authentikEndpoints(): Discovery | null {
+  const match = /^(https:\/\/[^/]+)\/application\/o\/[^/]+$/.exec(issuer);
+  if (!match) return null;
+  const base = `${match[1]}/application/o`;
+  return {
+    authorization_endpoint: `${base}/authorize/`,
+    token_endpoint: `${base}/token/`,
+    end_session_endpoint: `${issuer}/end-session/`,
+  };
+}
+
 async function discovery(): Promise<Discovery> {
   configured();
+  // Authentik's discovery document is not CORS-enabled, whereas its OAuth
+  // authorization/token endpoints are. Its documented endpoint layout is
+  // deterministic, so do not make a browser request that CORS will block.
+  const authentik = authentikEndpoints();
+  if (authentik) return authentik;
   const response = await fetch(`${issuer}/.well-known/openid-configuration`, { cache: 'no-store' });
-  if (!response.ok) throw new Error(`Unable to load Authentik configuration (${response.status})`);
+  if (!response.ok) throw new Error(`Unable to load OIDC configuration (${response.status})`);
   return response.json() as Promise<Discovery>;
 }
 
