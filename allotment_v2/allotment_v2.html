@@ -8408,7 +8408,7 @@ function changeDA(n){daDate=addDays(daDate,n);renderDA();}
 
 // §Daily Availability message template · user แก้ข้อความเองได้ (เขียนสไตล์ตัวเอง) · token {date} {availability}
 //   ถูกแทนด้วยข้อมูลจริงทุกวัน → ไม่ต้องพิมพ์ที่นั่งใหม่ · เก็บใน blob (da_template · sync app_meta)
-const DA_DEFAULT_TEMPLATE = '🌊 LOVE ANDAMAN — Seats Available\n📅 {date}\n\n{availability}\n\n📩 Book now · LINE @loveandaman\n☎️ 088-765-4678';
+const DA_DEFAULT_TEMPLATE = '🌊 LOVE ANDAMAN — Seats Available\n🗓️ {date}\n\n{availability}\n\n📩 Book now · LINE @loveandaman\n☎️ 088-765-4678';
 let DA_TEMPLATE='';
 (function(){ try{ const d=JSON.parse(localStorage.getItem('loveandaman_v2')||'{}'); if(typeof d.da_template==='string') DA_TEMPLATE=d.da_template; }catch(e){} })();
 function daSaveTemplate(){
