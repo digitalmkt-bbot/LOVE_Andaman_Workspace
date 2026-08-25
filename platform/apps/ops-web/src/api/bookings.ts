@@ -27,8 +27,17 @@ export type BookingDetail = BookingSummary & {
 
 export type Manifest = Record<string, unknown>;
 
+// Empty keeps same-origin `/v1` requests. Set this to the Railway API origin when
+// the web app and API cannot be served behind one domain. This is public build
+// configuration only — never put database credentials in a VITE_* variable.
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/+$/, '');
+
+function apiUrl(path: string): string {
+  return apiBaseUrl ? `${apiBaseUrl}${path}` : path;
+}
+
 async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(path, { headers: { Accept: 'application/json' } });
+  const response = await fetch(apiUrl(path), { headers: { Accept: 'application/json' } });
   if (!response.ok) throw new Error(`Request failed (${response.status})`);
   return response.json() as Promise<T>;
 }
