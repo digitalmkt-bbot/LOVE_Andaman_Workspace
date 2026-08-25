@@ -9,6 +9,7 @@
     "node": "22.x"
   },
   "scripts": {
+    "start": "cd apps/ops-web && node node_modules/vite/bin/vite.js preview --host 0.0.0.0 --port $PORT",
     "dev": "pnpm build:packages && pnpm --parallel --filter \"./apps/*\" dev",
     "build": "pnpm -r build",
     "build:packages": "pnpm --filter \"./packages/*\" build",
