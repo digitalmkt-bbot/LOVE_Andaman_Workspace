@@ -78,7 +78,7 @@ Key fields: `id`, `name`, `type`; location `pier` (home, operational), `homeport
 
 **Location disambiguation:** "อยู่ท่าไหน" (operational) → `pier`; "ตอนนี้อยู่ที่ไหนจริง" → `log[last].loc` else `pier`; "จดทะเบียนจังหวัดอะไร" → `homeportCity`. When quoting boat data, say which field you're using.
 
-**Pier enum (exact — don't guess from UI labels):** `tublamu` (Tub Lamu, Similan/Surin), `panwa` (Visit Panwa, Phi Phi). Planned: `ranong`. ❌ Never `visitpanwa` / `"Tub Lamu"` / `"Visit Panwa"` — breaks UI grouping. Before assigning any enum string, list current values first: `[...new Set(d.boats.map(b=>b.field))]`.
+**Pier enum (exact — don't guess from UI labels):** `tublamu` (Tub Lamu, Similan/Surin), `panwa` (Visit Panwa, Phi Phi), `ranong` (Ranong — **live since 2026-08**, runs the Myanmar day trips Se La Va + Nyaung Oo Phee out of Grand Andaman Pier; wired into Boat Op groups/pills, Boat Status tabs, Pier Office `PO_PIERS`, `CAL_PIERS`, daily-availability broadcast). ❌ Never `visitpanwa` / `"Tub Lamu"` / `"Visit Panwa"` — breaks UI grouping. Before assigning any enum string, list current values first: `[...new Set(d.boats.map(b=>b.field))]`.
 
 **Boat Status UI groups into 3 tabs by (pier + status):** Tub Lamu = `pier==='tublamu' && last.s!=='fixing'`; Visit Panwa = `pier==='panwa' && last.s!=='fixing'`; In Shop = `last.s==='fixing'` (any pier).
 

@@ -1408,7 +1408,25 @@ async function relApplyAndSave(payload, username, base) {
 
 let pool = null, dbReady = false;
 if (Pool && DB_URL) {
-  pool = new Pool({ connectionString: DB_URL, ssl: (DB_URL.includes('rlwy')||DB_URL.includes('railway')||process.env.PGSSL) ? { rejectUnauthorized:false } : false });
+  // §poolHang · ทุกค่าด้านล่างมีไว้กันอาการ "เว็บค้าง ต้อง redeploy ทุก 2 ชม."
+  // อาการ: request ค้างใน Network ไม่ error ไม่ timeout · CPU ~0 · memory นิ่ง · Postgres ว่าง
+  // สาเหตุ: DB ต่อผ่าน Railway TCP proxy ซึ่งตัด connection ที่ idle ทิ้งเงียบ ๆ
+  //   pg ไม่รู้ว่า socket ตาย (ไม่มี keepAlive) → ส่ง query ไปยัง socket ที่ไม่มีวันตอบ
+  //   ไม่มี query_timeout ฝั่ง client · statement_timeout=0 ฝั่ง server → ค้างถาวร
+  //   client ตัวนั้นไม่เคยถูก release → พอครบ max ทั้งหมด pool เต็ม แล้วทุก request ต่อจากนั้น
+  //   รอคิวตลอดกาล เพราะ connectionTimeoutMillis ที่ไม่ตั้งไว้ = 0 = รอไม่มีกำหนด
+  // ตัวเร่ง: relLoad() ยิง SELECT พร้อมกัน 132 ตาราง (1 ตาราง 1 query) ต่อ 1 /api/load
+  //   ดังนั้น proxy ตัดทีเดียว = พังทั้ง pool ไม่ใช่ทีละเส้น
+  pool = new Pool({
+    connectionString: DB_URL,
+    ssl: (DB_URL.includes('rlwy')||DB_URL.includes('railway')||process.env.PGSSL) ? { rejectUnauthorized:false } : false,
+    max: 20,                            // เดิมไม่ได้ตั้ง = default 10 · น้อยไปสำหรับ fan-out 132 query
+    idleTimeoutMillis: 30_000,          // คืน connection ก่อน proxy จะตัดเอง
+    keepAlive: true,                    // ให้ OS ตรวจว่าปลายทางตายหรือยัง แทนที่จะเชื่อว่า socket ยังดี
+    keepAliveInitialDelayMillis: 10_000,
+    connectionTimeoutMillis: 10_000,    // pool เต็ม → error ทันที ดีกว่าค้างเงียบ ๆ
+    query_timeout: 120_000              // query ที่ไม่มีวันตอบ ต้องยอมแพ้ · สูงพอสำหรับ /api/load และ migration
+  });
   pool.on('error', e => console.error('[db] idle client error (ignored):', e.message));   // a dropped idle connection must not crash the process
   initDb();
 } else {
