@@ -31,13 +31,21 @@ export type Manifest = Record<string, unknown>;
 // the web app and API cannot be served behind one domain. This is public build
 // configuration only — never put database credentials in a VITE_* variable.
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/+$/, '');
+let accessToken: string | null = null;
+
+/** The OIDC callback keeps tokens in memory; they are never written to localStorage. */
+export function setApiAccessToken(token: string | null): void {
+  accessToken = token;
+}
 
 function apiUrl(path: string): string {
   return apiBaseUrl ? `${apiBaseUrl}${path}` : path;
 }
 
 async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(apiUrl(path), { headers: { Accept: 'application/json' } });
+  const response = await fetch(apiUrl(path), {
+    headers: { Accept: 'application/json', ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
+  });
   if (!response.ok) throw new Error(`Request failed (${response.status})`);
   return response.json() as Promise<T>;
 }
