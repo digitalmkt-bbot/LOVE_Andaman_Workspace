@@ -18,10 +18,10 @@ changelog.
 
 ## The system in one paragraph
 
-`allotment_v2/allotment_v2.html` (~524KB of markup + CSS) plus `allotment_v2/js/01..08-*.js`
-(~6.2MB, where all the code lives) is the front end; it talks to `server.js` (Node, no framework)
-over a REST API. Until 2026-08-27 that was one 6.7MB HTML file with the JS inline — the split moved
-the bytes and nothing else. The eight files are **classic scripts loaded in order**, so they still
+`allotment_v2/allotment_v2.html` (~228KB of markup) plus `allotment_v2/js/01..08-*.js` (~6.2MB,
+where all the code lives) and `allotment_v2/css/{01-base,02-skins}.css` (~295KB) is the front end;
+it talks to `server.js` (Node, no framework) over a REST API. Until 2026-08-27 that was one 6.7MB
+HTML file with the JS and CSS inline — the two splits moved the bytes and nothing else. The eight files are **classic scripts loaded in order**, so they still
 share one global scope exactly as the inline blocks did; `allotment_v2/js/README.md` explains why
 `defer` / `async` / `type="module"` must never be added to those tags. **Postgres is the durable
 source of truth** — `server.js` reads and writes an `operation_schemas` schema (~103 tables) via a

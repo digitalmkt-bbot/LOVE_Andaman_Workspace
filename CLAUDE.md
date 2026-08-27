@@ -5,7 +5,7 @@
 
 ## 0. START HERE (new-chat orientation)
 
-**What this is:** one giant web app for LOVE Andaman (Phuket marine tours) — `allotment_v2/allotment_v2.html` (~6.3k lines of markup + CSS) plus **`allotment_v2/js/01..08-*.js` (~80k lines, ~6.2MB)**, which is where essentially all the code lives. It was a single 86k-line file until 2026-08-27; the JS was lifted out verbatim into 8 classic `<script src>` files in load order. **This is a file split, not modularization** — still one global scope, ~3,100 top-level functions, ~2,500 inline `onclick=` handlers in the HTML calling them by name. Read `allotment_v2/js/README.md` before touching the script tags: adding `defer`, `async`, or `type="module"`, or reordering them, breaks every inline handler in the app. Runs on Railway, served to staff at `rsvn.loveandaman.com` (behind Cloudflare — **Rocket Loader must stay off**, it defers scripts and kills every inline `onclick`, and looks exactly like a permissions bug). Verify any data claim against live data before asserting it: a logged-in prod Chrome tab is usually open (Claude-in-Chrome tools), but the extension is often not connected — when it isn't, query the prod Postgres directly (credentials under *Verifying what is actually live* below) instead of reasoning from the source alone.
+**What this is:** one giant web app for LOVE Andaman (Phuket marine tours) — `allotment_v2/allotment_v2.html` (~2.9k lines, markup only) plus **`allotment_v2/js/01..08-*.js` (~80k lines, ~6.2MB)** where essentially all the code lives, and `allotment_v2/css/01-base.css` + `02-skins.css` (~295KB). It was a single 86k-line file until 2026-08-27; the JS was lifted out verbatim into 8 classic `<script src>` files in load order. **This is a file split, not modularization** — still one global scope, ~3,100 top-level functions, ~2,500 inline `onclick=` handlers in the HTML calling them by name. Read `allotment_v2/js/README.md` before touching the script tags: adding `defer`, `async`, or `type="module"`, or reordering them, breaks every inline handler in the app. Runs on Railway, served to staff at `rsvn.loveandaman.com` (behind Cloudflare — **Rocket Loader must stay off**, it defers scripts and kills every inline `onclick`, and looks exactly like a permissions bug). Verify any data claim against live data before asserting it: a logged-in prod Chrome tab is usually open (Claude-in-Chrome tools), but the extension is often not connected — when it isn't, query the prod Postgres directly (credentials under *Verifying what is actually live* below) instead of reasoning from the source alone.
 
 **Starting a new chat:**
 1. Do NOT dump the changelog back at the user or re-read the whole file.
@@ -40,8 +40,9 @@
 LOVE_Andaman_Workspace/
 ├── CLAUDE.md · ARCHITECTURE.md · SYSTEM_MAP.md · BACKLOG.md
 └── allotment_v2/
-    ├── allotment_v2.html      ← markup + CSS + the <script src> tags (~6.3k lines)
+    ├── allotment_v2.html      ← markup + the <link>/<script src> tags (~2.9k lines)
     ├── js/01..08-*.js         ← ALL the app code (~80k lines) · see js/README.md
+    ├── css/01-base.css        ← base sheet · css/02-skins.css = the 14 re-skin layers
     ├── start_server.command   ← static local server, no /api (§4)
     ├── docs/workflows/        ← per-domain workflow docs (see ARCHITECTURE.md)
     ├── BACKUP/                ← timestamped pre-edit copies
@@ -123,7 +124,7 @@ Key fields: `id`, `name`, `code`, `companyInfo{legalName,taxId,address}`, `conta
 
 - The files are huge (`js/08-app.js` alone is ~47k lines) — never read one whole. `grep -rn` over `allotment_v2/js/` to locate → read a 30–50 line window → targeted `str_replace` with unique surrounding context → re-read only the changed section. Verify with `node --check <that file>`.
 - **Line citations written before 2026-08-27** (`bkV2InferZone:69054`, `pjOf:82102`, …, all over this file and `docs/workflows/`) point into the pre-split HTML. Translate with `node tools/js-split-linemap.mjs 69054`, or ignore the number and grep the function name — every citation carries one.
-- **Visual system:** DM Sans body / DM Mono for numbers; brand accent recolored coral→**Ocean blue `#1683C7`** via the reversible `<style id="softui-ocean-skin">` block. Most re-skins are single reversible `<style id="...-skin">` blocks before `</head>` — delete the block to revert. **No Tabler webfont in the app** — icons are inline SVG.
+- **Visual system:** DM Sans body / DM Mono for numbers; brand accent recolored coral→**Ocean blue `#1683C7`** via the reversible `softui-ocean-skin` layer. The CSS lives in `allotment_v2/css/`: `01-base.css` is the base sheet, `02-skins.css` holds the 14 re-skin layers in cascade order, each behind a `/* ==== <id> ==== */` marker — **delete the marked section to revert a skin** (they were `<style id="...-skin">` blocks in the HTML before 2026-08-27; same layers, same order). Two tiny `<style>` blocks remain inline in `<body>` on purpose. **No Tabler webfont in the app** — icons are inline SVG.
 - **Comms:** concise, show snippets, ask before big refactors, remind about backups before core-data edits, state the diff after edits (e.g. "added 3 entries to `FL_DEFAULT_ENGINES` at line 3045").
 
 ---

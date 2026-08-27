@@ -2714,10 +2714,12 @@ const server = http.createServer((req, res) => {
 // Warm each one in sequence — sequential, not parallel, so the boot doesn't peg every core at once.
 function prewarmStatic(){
   const rel = ['/allotment_v2/allotment_v2.html'];
-  try{
-    const jsDir = path.join(ROOT,'allotment_v2','js');
-    for(const f of fs.readdirSync(jsDir).filter(f=>f.endsWith('.js')).sort()) rel.push('/allotment_v2/js/'+f);
-  }catch(_){}
+  for(const [dir, ext] of [['css','.css'], ['js','.js']]){       // css first — it is render-blocking
+    try{
+      for(const f of fs.readdirSync(path.join(ROOT,'allotment_v2',dir)).filter(f=>f.endsWith(ext)).sort())
+        rel.push('/allotment_v2/'+dir+'/'+f);
+    }catch(_){}
+  }
   let i = 0;
   (function next(){
     if(i >= rel.length) return;
