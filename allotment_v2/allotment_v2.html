@@ -48033,6 +48033,30 @@ function ckLostByType(b, date){
       else out.unalloc+=n;
     });
   });
+  /* §ckSelfLost · หน้าท่ายืนยันแล้วว่าคนกลุ่มนี้มาถึงจริง · ถอนออกจากยอดหาย */
+  var _sa=(O.pierCheckin && O.pierCheckin.selfAdd && (+O.pierCheckin.selfAdd.pax||0)>0)
+          ? O.pierCheckin.selfAdd : null;
+  if(_sa){
+    var back=Math.min(out.total, Math.max(0,+_sa.pax||0));
+    if(back>0){
+      var rest=back;
+      /* ถอนตามประเภทที่ระบุไว้ในหน้าต่างยืนยันก่อน */
+      PAXK.forEach(function(k){
+        var q=Math.min(out[k], Math.max(0,+_sa[k]||0), rest); out[k]-=q; rest-=q; });
+      /* ของเก่าที่ไม่ได้แยกประเภท · ถอนจากกองที่ไม่รู้ประเภทก่อน แล้วค่อยกองที่ใหญ่สุด */
+      if(rest>0){ var u=Math.min(out.unalloc, rest); out.unalloc-=u; rest-=u; }
+      while(rest>0){
+        var big='', bn=0;
+        PAXK.forEach(function(k){ if(out[k]>bn){ bn=out[k]; big=k; } });
+        if(!big) break;
+        out[big]--; rest--;
+      }
+      var used=back-rest;
+      var nn=Math.min(out.ns, used); out.ns-=nn;
+      out.cxl=Math.max(0, out.cxl-(used-nn));
+      out.total-=used; out.selfPier+=used;
+    }
+  }
   return out;
 }
 // จำนวนที่ "เดินทางจริง" ของแต่ละประเภท · k = ad|chd|inf|foc
@@ -48052,8 +48076,7 @@ function ckPaxLeft(b, date, k, booked){
   var L=ckLostByType(b,date);
   var left=Math.max(0, (booked||0)-(L[k]||0));
   if(L.unalloc>0 && k==='ad') left=Math.max(0, left-L.unalloc);   // ข้อมูลเก่าที่ไม่ได้แยกประเภท · หักจากผู้ใหญ่ก่อน
-  /* §ckSelfAlloc · ที่ท่ายืนยันว่ามาถึงจริง · คืนกลับเข้าประเภทเดิม แต่ไม่เกินยอดจองของประเภทนั้น */
-  left=Math.min((booked||0), left+ckSelfK(b,date,k));
+  /* §ckSelfLost · คนที่ตามมาเองที่ท่าถูกหักคืนไปแล้วใน ckLostByType() · บวกซ้ำตรงนี้จะเกินยอดจอง */
   return left;
 }
 // รวม pax ตามประเภทเหตุการณ์ · {no_show:n, cxl:n, total:n}
@@ -53472,12 +53495,15 @@ function tsRows(date){
     const events=[].concat((v&&v.events)||[], (pcv&&pcv.events)||[]);
     const booked=s.booked, noShow=s.noShow||0;
     // §tsIssueReal · คนที่ไม่ได้เดินทางจริง (หักเคสมาเองที่ท่า / หน้าท่ายืนยันแล้วออกให้)
-    const _lostTot=(typeof ckLostByType==='function')?(((ckLostByType(b,date)||{}).total)||0):0;
+    const _L=(typeof ckLostByType==='function')?(ckLostByType(b,date)||{}):{};
+    const _lostTot=(+_L.total||0);
     const _decNow=tsGet(b.id,date);
     out.push({
       b:b, t:t, O:O, routeId:t.routeId||'',
       booked:booked, travelled:Math.max(0,booked-noShow), noShow:noShow,
-      ns:evV.no_show+evP.no_show, cxl:evV.cxl+evP.cxl, events:events,
+      /* §ckSelfLost · เดิมนับดิบจาก events[] · คนที่แจ้งไปเองที่ท่าแล้วมาถึงจริงยังถูกนับเป็น No-show
+         ทั้งที่ขึ้นเรือไปแล้ว · ยอดรวมทั้งวันเลยสูงกว่าความจริง · ใช้ยอดที่หักคืนแล้วแทน */
+      ns:(+_L.ns||0), cxl:(+_L.cxl||0), events:events,
       /* §ovnDaily · ขากลับไม่มีรถไปรับ มีแต่รถพากลับ · vanReturnId ว่าง = กลับคันเดิม */
       van:(_ovnB?(O.vanReturnId||O.vanId||''):(O.vanId||'')), vanCk:v, vanDone:!!(v&&v.at), vanActual:(v&&v.actualPax!=null)?v.actualPax:null,
       boat:O.boatId||t.charterBoatId||'', pierCk:pcv, pierDone:!!(pcv&&pcv.at),
@@ -83019,8 +83045,9 @@ function poIsBuild(bid){
   });
 
   /* ไซส์ · เคยเบิกไปแล้ววันนี้ก็ยกตัวเลขจริงมา · ยังไม่เคยก็เกลี่ยจากของที่มี */
-  var size={};
-  _poIs={ bid:bid, B:B, KS:KS, items:byKind, base:S, rows:rows, size:size, all:items,
+  var size={}, rsz={};
+  _poIs={ bid:bid, B:B, KS:KS, items:byKind, base:S, rows:rows, size:size, rsz:rsz, all:items,
+          cy:(typeof poBoatCarry==='function')?poBoatCarry(_poDate,bid):{},
           ledRet:ledRet, wrote:(SV&&SV.wrote&&typeof SV.wrote==='object')?SV.wrote:null };
   KS.forEach(function(k){
     size[k]={};
@@ -83029,6 +83056,12 @@ function poIsBuild(bid){
     if(saved){ byKind[k].forEach(function(it){ size[k][it.id]=+saved[it.id]||0; }); }
     else if(issued){ byKind[k].forEach(function(it){ size[k][it.id]=S[it.id]?S[it.id].iss:0; }); }
     else size[k]=poIsDist(k, need);
+    /* §poRetSplit · ฝั่งคืนแยกรายชิ้นเหมือนฝั่งเบิก
+       ใบเก่าที่ยังไม่มี rsz · ตั้งต้นจากยอดคืนที่อยู่ในบัญชีสต็อกจริง ส่วนต่างจึงเป็นศูนย์ */
+    rsz[k]={};
+    var savedR=(SV&&SV.rsz&&SV.rsz[k])?SV.rsz[k]:null;
+    byKind[k].forEach(function(it){
+      rsz[k][it.id]= savedR ? (+savedR[it.id]||0) : (S[it.id]?S[it.id].ret:0); });
   });
   return _poIs;
 }
@@ -83048,9 +83081,18 @@ function poIsRead(){
   });
   _poIs.KS.forEach(function(k){
     (_poIs.items[k]||[]).forEach(function(it){
-      if(document.getElementById('poiz_'+it.id)) _poIs.size[k][it.id]=poIsNum('poiz_'+it.id);
+      if(document.getElementById('poiz_'+it.id))  _poIs.size[k][it.id]=poIsNum('poiz_'+it.id);
+      if(document.getElementById('poirz_'+it.id)) _poIs.rsz[k][it.id]=poIsNum('poirz_'+it.id);   /* §poRetSplit */
     });
   });
+}
+/* §poRetSplit · ของชิ้นนี้ยังอยู่กับเรืออีกกี่ชิ้น · ค้างจากวันก่อน + เบิกวันนี้ − คืน/ซ่อม/ทิ้ง/หาย */
+function poIsOut(it){
+  var o=(_poIs.base||{})[it.id]||{iss:0,ret:0,rep:0,wo:0,lost:0,ob:0};
+  var k=it.kind, cy=(_poIs.cy||{})[it.id]||0;
+  var iss=+(((_poIs.size||{})[k]||{})[it.id])||0;
+  var ret=+(((_poIs.rsz ||{})[k]||{})[it.id])||0;
+  return cy+iss-(ret+o.rep+o.wo+o.lost+o.ob);
 }
 
 function poIsRowState(r, KS){
@@ -83089,13 +83131,28 @@ function poIsCalc(){
     var lw=(_poIs.wrote&&_poIs.wrote.ret&&_poIs.wrote.ret[k]!=null)?(+_poIs.wrote.ret[k]||0):0;
     if(((_poIs.ledRet||{})[k]||0)>lw) elsewhere.push(PO_KIND[k].t+' '+(((_poIs.ledRet||{})[k]||0)-lw));
     /* แถบไซส์ · ต้องรวมได้เท่ายอดเบิกของประเภทนั้น */
-    var z=0; (_poIs.items[k]||[]).forEach(function(it){ z+=(+_poIs.size[k][it.id]||0); });
+    var z=0, zr=0;
+    (_poIs.items[k]||[]).forEach(function(it){ z+=(+_poIs.size[k][it.id]||0); zr+=(+_poIs.rsz[k][it.id]||0); });
     var sb=document.getElementById('poizs_'+k);
     if(sb){
       var ok=(z===tI[k]);
       sb.className='poi-zs '+(ok?'ok':'no');
-      sb.textContent=ok?(z+' / '+tI[k]+' ✓'):(z+' / '+tI[k]+' · '+(z<tI[k]?('ขาด '+(tI[k]-z)):('เกิน '+(z-tI[k]))));
+      sb.textContent=ok?('เบิก '+z+' ✓'):('เบิก '+z+' / '+tI[k]+' · '+(z<tI[k]?('ขาด '+(tI[k]-z)):('เกิน '+(z-tI[k]))));
     }
+    /* §poRetSplit · ฝั่งคืนก็ต้องตรงกับตารางเหมือนกัน */
+    var rb=document.getElementById('poizr_'+k);
+    if(rb){
+      var okr=(zr===tR[k]);
+      rb.className='poi-zs '+(okr?'ok':'no');
+      rb.textContent=okr?('คืน '+zr+' ✓'):('คืน '+zr+' / '+tR[k]+' · '+(zr<tR[k]?('ขาด '+(tR[k]-zr)):('เกิน '+(zr-tR[k]))));
+    }
+    /* §poRetSplit · ของที่ยังอยู่กับเรือ รายชิ้น · เห็นตั้งแต่ตรงนี้ ไม่ต้องรอหน้าปิดยอด */
+    (_poIs.items[k]||[]).forEach(function(it){
+      var u=document.getElementById('poizl_'+it.id); if(!u) return;
+      var left=poIsOut(it), un=(PO_KIND[k]||{u:'ชิ้น'}).u;
+      u.className=(left>0?'w':(left<0?'x':''));
+      u.textContent=(left>0)?('ค้าง '+left+' '+un):((left<0)?('คืนเกิน '+(-left)):'ครบ · ไม่ค้าง');
+    });
   });
   var set=function(id,v){ var x=document.getElementById(id); if(x) x.innerHTML=v; };
   set('poimd', poBaht(dep));      set('poimdn', nDep+' แถว');
@@ -83124,6 +83181,17 @@ function poIsAuto(k){
   poIsCalc();
 }
 
+/* §poRetSplit · วันที่ของกลับครบ · เติมให้เท่าที่ยังค้างอยู่ทุกชิ้น จะได้ไม่ต้องพิมพ์ทีละช่อง */
+function poIsAutoR(k){
+  poIsRead();
+  (_poIs.items[k]||[]).forEach(function(it){
+    var o=(_poIs.base||{})[it.id]||{rep:0,wo:0,lost:0,ob:0};
+    var full=Math.max(0, ((_poIs.cy||{})[it.id]||0)+(+_poIs.size[k][it.id]||0)-(o.rep+o.wo+o.lost+o.ob));
+    _poIs.rsz[k][it.id]=full;
+    var el=document.getElementById('poirz_'+it.id); if(el) el.value=full;
+  });
+  poIsCalc();
+}
 function poIsAddRow(){
   poIsRead();
   var R={ id:poUid('px_'), bkId:'', extra:true, agN:'พนักงาน', agC:'',
@@ -83193,6 +83261,19 @@ function poIsCss(){
   +H+' .szr:last-child{border-bottom:0}'
   +H+' .szk{font-size:11.5px;font-weight:800;min-width:74px}'
   +H+' .szi{display:flex;align-items:center;gap:5px;background:#fff;border:1px solid #E6E4DD;border-radius:8px;padding:3px 6px}'
+  /* §poRetSplit · หนึ่งกล่อง = หนึ่งลาย · มีทั้งเบิกและคืน แล้วบอกว่าค้างเท่าไหร่ */
+  +H+' .szi2{display:flex;flex-direction:column;gap:4px;background:#fff;border:1px solid #E6E4DD;border-radius:10px;padding:6px 9px 7px}'
+  +H+' .szi2 label{font-size:10.5px;font-weight:700;color:#3a3a36;white-space:nowrap}'
+  +H+' .szi2 .bx{display:flex;gap:6px;align-items:center}'
+  +H+' .szi2 .b1{display:flex;align-items:center;gap:4px;border:1px solid #E6E4DD;border-radius:7px;padding:2px 5px}'
+  +H+' .szi2 .b1.p{background:#F7FAFF;border-color:#D6E2F5}'
+  +H+' .szi2 .b1.r{background:#F6FBF8;border-color:#CFE9DF}'
+  +H+' .szi2 .b1 i{font-style:normal;font-size:9.5px;font-weight:700;color:#7C8091}'
+  +H+' .szi2 .b1 input{width:36px;border:none;text-align:center;font:800 12.5px "DM Mono",monospace;background:none;outline:none;font-family:"DM Mono",monospace}'
+  +H+' .szi2 u{text-decoration:none;font-size:9.5px;font-weight:700;color:#9A9A93}'
+  +H+' .szi2 u.w{color:#B4560A}'
+  +H+' .szi2 u.x{color:#C0271C}'
+  +H+' .szbs{display:flex;gap:5px}'
   +H+' .szi label{font-size:10px;color:#7C8091;white-space:nowrap}'
   +H+' .szi input{width:40px;border:none;text-align:center;font:700 12px "DM Mono",monospace;background:none;outline:none;font-family:"DM Mono",monospace}'
   +H+' .poi-zs{font-size:11px;font-weight:700;border-radius:999px;padding:3px 11px}'
@@ -83270,21 +83351,27 @@ function poIsInner(){
    +'<span class="tip">แถวที่เพิ่มเองไม่ผูกกับใบจอง แต่ยังตัดสต็อกและนับเงินตามปกติ</span></div></div>'
    +'<div class="ew" id="poi-ew" style="display:none"></div>';
 
-  /* ── แยกไซส์ ── */
-  h+='<div class="sz"><div class="szh"><b>แยกไซส์เพื่อตัดสต็อก</b>'
-   +'<p>ตารางข้างบนนับ<b>รายประเภท</b>เหมือนใบเซ็น · สต็อกเก็บ<b>รายไซส์</b> จึงต้องบอกอีกทีว่ายอดรวมของแต่ละประเภทเป็นไซส์ไหนบ้าง<br>'
-   +'ป้ายท้ายแถวเขียวเมื่อยอดตรงกับตารางข้างบน · กด <b>เกลี่ยให้</b> ให้ระบบจัดตามของที่มีในสต็อก</p></div>';
+  /* ── แยกลาย / ไซส์ · §poRetSplit · ทั้งฝั่งเบิกและฝั่งคืน ── */
+  h+='<div class="sz"><div class="szh"><b>แยกลาย / ไซส์ เพื่อตัดสต็อก</b>'
+   +'<p>ตารางข้างบนนับ<b>รายประเภท</b>เหมือนใบเซ็น · สต็อกเก็บ<b>รายลาย/รายไซส์</b> จึงต้องบอกอีกทีว่ายอดรวมเป็นลายไหนบ้าง<br>'
+   +'กรอกทั้งฝั่ง<b>เบิก</b>และฝั่ง<b>คืน</b> · ระบบไม่เกลี่ยยอดคืนให้เอง จะได้รู้ว่าของที่หายเป็นลายไหนจริง ๆ<br>'
+   +'ป้ายท้ายแถวเขียวเมื่อยอดตรงกับตารางข้างบน · ตัวเลขใต้กล่องคือของที่ยังอยู่กับเรือ</p></div>';
   h+=KS.map(function(k){
     var K=PO_KIND[k];
     return '<div class="szr"><span class="szk" style="color:'+e(K.c)+'">'+e(K.t)+'</span>'
       +(_poIs.items[k]||[]).map(function(it){
           var lb=String(it.label||'').replace(K.t,'').replace(/^\s*[·\-]\s*/,'') || it.label;
-          return '<span class="szi" title="'+e(it.label)+' · พร้อมใช้ '+poBal(it.id).ready+'">'
+          return '<span class="szi2" title="'+e(it.label)+' · พร้อมใช้ '+poBal(it.id).ready+'">'
             +'<label>'+e(lb)+'</label>'
-            +'<input id="poiz_'+it.id+'" value="'+(_poIs.size[k][it.id]||0)+'" oninput="poIsCalc()"></span>';
+            +'<span class="bx">'
+              +'<span class="b1 p"><i>เบิก</i><input id="poiz_'+it.id+'" value="'+(_poIs.size[k][it.id]||0)+'" oninput="poIsCalc()"></span>'
+              +'<span class="b1 r"><i>คืน</i><input id="poirz_'+it.id+'" value="'+(_poIs.rsz[k][it.id]||0)+'" oninput="poIsCalc()"></span>'
+            +'</span><u id="poizl_'+it.id+'"></u></span>';
         }).join('')
-      +'<button class="szb" onclick="poIsAuto(\''+e(k)+'\')">เกลี่ยให้</button>'
-      +'<span class="poi-zs" id="poizs_'+k+'"></span></div>';
+      +'<span class="szbs"><button class="szb" onclick="poIsAuto(\''+e(k)+'\')" title="เกลี่ยยอดเบิกตามของที่มีในสต็อก">เกลี่ยเบิก</button>'
+      +'<button class="szb" onclick="poIsAutoR(\''+e(k)+'\')" title="ของกลับครบทุกชิ้น · เติมยอดคืนให้เท่าที่ค้างอยู่">คืนครบ</button></span>'
+      +'<span class="poi-zs" id="poizs_'+k+'"></span>'
+      +'<span class="poi-zs" id="poizr_'+k+'"></span></div>';
   }).join('');
   h+='</div>';
 
@@ -83361,6 +83448,7 @@ function poIsCommit(bid, mode){
     PIER_SHEET[poIsKey(_poDate,bid)]={
       pier:_poPier, boatId:bid, date:_poDate, at:new Date().toISOString(), by:poWho(),
       size:JSON.parse(JSON.stringify(_poIs.size)),
+      rsz:JSON.parse(JSON.stringify(_poIs.rsz)),                       /* §poRetSplit */
       wrote:(OLD&&OLD.wrote)?OLD.wrote:null,
       rows:poIsRowsOut()
     };
@@ -83373,11 +83461,15 @@ function poIsCommit(bid, mode){
   KS.forEach(function(k){
     var need=0; _poIs.rows.forEach(function(r){ need+=(+r.iss[k]||0); });
     var got=0; (_poIs.items[k]||[]).forEach(function(it){ got+=(+_poIs.size[k][it.id]||0); });
-    if(got!==need) bad.push(PO_KIND[k].t+' · ตาราง '+need+' แต่แยกไซส์ได้ '+got);
+    if(got!==need) bad.push(PO_KIND[k].t+' · เบิก · ตาราง '+need+' แต่แยกลายได้ '+got);
+    /* §poRetSplit · ฝั่งคืนก็ต้องตรง · ไม่งั้นสต็อกรายลายเพี้ยนทันทีเหมือนกัน */
+    var needR=0; _poIs.rows.forEach(function(r){ needR+=(+r.ret[k]||0); });
+    var gotR=0; (_poIs.items[k]||[]).forEach(function(it){ gotR+=(+_poIs.rsz[k][it.id]||0); });
+    if(gotR!==needR) bad.push(PO_KIND[k].t+' · คืน · ตาราง '+needR+' แต่แยกลายได้ '+gotR);
   });
   if(bad.length){
-    alert('ยอดแยกไซส์ยังไม่ตรงกับตาราง · แก้ให้ตรงก่อนบันทึก\n\n'+bad.join('\n')
-      +'\n\n(กดปุ่ม "เกลี่ยให้" ให้ระบบจัดให้ก็ได้)');
+    alert('ยอดแยกลาย/ไซส์ยังไม่ตรงกับตาราง · แก้ให้ตรงก่อนบันทึก\n\n'+bad.join('\n')
+      +'\n\n(ปุ่ม "เกลี่ยเบิก" และ "คืนครบ" ช่วยเติมให้ได้)');
     return false;
   }
 
@@ -83394,30 +83486,20 @@ function poIsCommit(bid, mode){
   if(over.length && !confirm('เบิกเกินจำนวนที่พร้อมใช้:\n'+over.join('\n')
       +'\n\nบันทึกต่อไหม? (ยอดพร้อมใช้จะติดลบ ให้ไปปรับยอดทีหลัง)')) return false;
 
-  /* 3 · ส่วนต่างฝั่งคืน · ตารางนับรายประเภท จึงเกลี่ยลงไซส์ตามของที่ยังค้างอยู่ ไซส์ที่ค้างเยอะก่อน */
-  /* §poFix2 · ของที่ค้างจากวันก่อนนับเป็นของที่ยังอยู่กับลำนี้ · ทั้งตอนเกลี่ยและตอนกันยอดติดลบ */
+  /* 3 · ส่วนต่างฝั่งคืน · §poRetSplit · รายลาย/ไซส์ตรง ๆ · ระบบไม่เดาให้แล้ว
+     ของที่หายผูกกับค่าปรับและทะเบียนรายลาย · เกลี่ยให้เท่ากับสร้างตัวเลขที่ไม่มีอยู่จริง */
+  /* §poFix2 · ของที่ค้างจากวันก่อนนับเป็นของที่ยังอยู่กับลำนี้ */
   var CY=poBoatCarry(_poDate,bid);
+  var WR=(_poIs.wrote && _poIs.wrote.rsz && typeof _poIs.wrote.rsz==='object')?_poIs.wrote.rsz:null;
   KS.forEach(function(k){
-    var tgt=0; _poIs.rows.forEach(function(r){ tgt+=(+r.ret[k]||0); });
-    var had=0; (_poIs.items[k]||[]).forEach(function(it){ had+=(S[it.id]?S[it.id].ret:0); });
-    /* เทียบกับที่ "ใบนี้" เคยเขียน ไม่ใช่ยอดรวมทั้งบัญชี · ของที่ปิดยอดไปแล้วจึงไม่โดนล้าง */
-    if(_poIs.wrote && _poIs.wrote.ret && _poIs.wrote.ret[k]!=null) had=+_poIs.wrote.ret[k]||0;
-    var d=tgt-had; if(!d) return;
-    var pool=(_poIs.items[k]||[]).map(function(it){
-      var o=S[it.id]||{iss:0,ret:0,rep:0,wo:0,lost:0,ob:0};
-      var extra=0; plan.forEach(function(p){ if(p.itemId===it.id && p.type==='issue') extra+=p.qty; });
-      /* §poFix2 · ของที่ค้างมาจากวันก่อนก็คืนที่ตารางนี้ได้ ไม่ต้องย้อนไปเปิดวันเก่า */
-      return {id:it.id, out:Math.max(0, (CY[it.id]||0)+(o.iss+extra)-(o.ret+o.rep+o.wo+o.lost+o.ob)), ret:o.ret};
-    }).sort(function(a,b){ return (d>0)?(b.out-a.out):(b.ret-a.ret); });
-    var left=Math.abs(d);
-    pool.forEach(function(x){
-      if(left<=0) return;
-      var q=Math.min(left, (d>0)?x.out:x.ret);
-      if(q<=0) return;
-      plan.push({itemId:x.id, type:'return', qty:(d>0)?q:-q});
-      left-=q;
+    (_poIs.items[k]||[]).forEach(function(it){
+      var tgt=+_poIs.rsz[k][it.id]||0;
+      /* เทียบกับที่ "ใบนี้" เคยเขียนรายชิ้น · ใบเก่าที่ยังไม่มี rsz เทียบกับบัญชีจริง
+         ส่วนต่างจึงเป็นศูนย์ตอนเปิดครั้งแรก ไม่มีการเขียนซ้ำโดยไม่ได้ตั้งใจ */
+      var had=WR ? (+WR[it.id]||0) : (S[it.id]?S[it.id].ret:0);
+      var d=tgt-had; if(!d) return;
+      plan.push({itemId:it.id, type:'return', qty:d});
     });
-    if(left>0 && pool.length) plan.push({itemId:pool[0].id, type:'return', qty:(d>0)?left:-left});
   });
 
   /* 3.5 · §poNoNeg · ยอดคืนถูกเกลี่ยลงไซส์ตั้งแต่ตอนคืน · พอมาแก้ไซส์ฝั่งเบิกทีหลัง
@@ -83474,8 +83556,13 @@ function poIsCommit(bid, mode){
   PIER_SHEET[poIsKey(_poDate,bid)]={
     pier:_poPier, boatId:bid, date:_poDate, at:new Date().toISOString(), by:poWho(),
     size:JSON.parse(JSON.stringify(_poIs.size)),
+    rsz:JSON.parse(JSON.stringify(_poIs.rsz)),                         /* §poRetSplit */
     wrote:{ ret:(function(){ var o={};
-      KS.forEach(function(k){ var t=0; _poIs.rows.forEach(function(r){ t+=(+r.ret[k]||0); }); o[k]=t; }); return o; })() },
+      KS.forEach(function(k){ var t=0; _poIs.rows.forEach(function(r){ t+=(+r.ret[k]||0); }); o[k]=t; }); return o; })(),
+      /* §poRetSplit · จำรายชิ้นไว้ด้วย · รอบหน้าจะได้คิดส่วนต่างรายชิ้นได้ตรง */
+      rsz:(function(){ var o={};
+        KS.forEach(function(k){ (_poIs.items[k]||[]).forEach(function(it){ o[it.id]=+_poIs.rsz[k][it.id]||0; }); });
+        return o; })() },
     rows:poIsRowsOut()
   };
   poPersist();
@@ -85354,7 +85441,14 @@ function pjPax(date, boatId, pier){
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
     if((O.boatId||t.charterBoatId||'')!==boatId) return;
     var p=(typeof ckPaxBreak==='function')?ckPaxBreak(t.pax):{ad:0,chd:0,inf:0,foc:0};
-    out.ad+=p.ad; out.chd+=p.chd; out.inf+=p.inf; out.foc+=p.foc; out.n++;
+    /* §pjPaxReal · เช็คอินแล้วใช้คนที่เดินทางจริง · ยังไม่เช็คอินคืนยอดจองเต็มอยู่แล้ว
+       แหล่งเดียวกับทะเบียนรายชื่อผู้เดินทางและ Travel Summary · เลขสองใบจึงตรงกันเสมอ */
+    if(typeof ckPaxLeft==='function'){
+      p={ ad:ckPaxLeft(b,date,'ad',p.ad), chd:ckPaxLeft(b,date,'chd',p.chd),
+          inf:ckPaxLeft(b,date,'inf',p.inf), foc:ckPaxLeft(b,date,'foc',p.foc) };
+    }
+    out.ad+=p.ad; out.chd+=p.chd; out.inf+=p.inf; out.foc+=p.foc;
+    if(p.ad+p.chd+p.inf+p.foc>0) out.n++;      /* ทั้งใบไม่มาเลย ไม่ต้องนับเป็นใบบนเรือ */
     if(typeof pckGuideLangs==='function') pckGuideLangs(b).forEach(function(L){ out.langs[L]=1; });
   });
   return out;
