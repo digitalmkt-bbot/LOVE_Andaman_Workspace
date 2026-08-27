@@ -32,6 +32,7 @@ const OS_SCHEMA = 'operation_schemas';
 const USERS_T = DATA_BACKEND === 'relational' ? OS_SCHEMA + '.users' : 'users';
 // os_repo mapping engine + schema model — used by the relational save path AND the per-entity REST API.
 const osRepo  = require('./os-backend/src/mapping/os_repo.js');
+const oidc    = require('./auth/oidc.js');   // Authentik SSO · inert unless AUTH_OIDC_* is configured
 const osModel = require('./os-backend/src/mapping/operation_schemas_model.json');
 const OS_TABLES = Object.keys(osModel);
 const OS_COLS = {};
@@ -1907,6 +1908,47 @@ async function loadLogoutEpochs(){
   }catch(e){ console.error('[auth] logout_after load failed:', e.message); }   // column missing = migration not applied yet; fall back to old behaviour rather than locking everyone out
 }
 function cookies(req){ const h = req.headers.cookie||''; const o={}; h.split(';').forEach(s=>{ const i=s.indexOf('='); if(i>0) o[s.slice(0,i).trim()] = decodeURIComponent(s.slice(i+1).trim()); }); return o; }
+// ── Authentik claims → a row in USERS_T (2026-08-27) ───────────────────────────────────────────
+// The users row is what carries perms / edit_areas / sales_id, and every screen in the app is gated
+// on them, so an Authentik identity is not by itself an authorisation to do anything here.
+//
+// Matching is on username: this table has no email column, so preferred_username is tried first and
+// then the local part of the email, both case-insensitively.
+//
+// AUTH_OIDC_AUTOCREATE=full provisions a missing user as a FULL-ACCESS ADMIN — perms NULL and
+// edit_areas NULL both mean "no restriction" (parsePerms/editInfo above), and role 'admin' opens
+// user management and the System Log. That means anyone Authentik will admit becomes an ops admin
+// on first sign-in. It is off by default for that reason; turn it on deliberately, for testing, on
+// a deployment where you control who Authentik lets in.
+async function oidcResolveUser(claims){
+  const preferred = String(claims.preferred_username || '').trim();
+  const email     = String(claims.email || '').trim();
+  const candidates = [preferred, email, email.split('@')[0]].map(s => s.trim()).filter(Boolean);
+  if(!candidates.length) throw new Error('Authentik returned no username or email to match on.');
+
+  for(const c of candidates){
+    const r = await pool.query(`SELECT * FROM ${USERS_T} WHERE lower(username)=lower($1)`, [c]);
+    if(r.rows[0]) return r.rows[0];
+  }
+
+  if(oidc.autocreateMode() !== 'full')
+    throw new Error('Signed in to Authentik as "' + (candidates[0]) + '", but there is no matching user in '
+      + 'this app. Ask an admin to create one — or set AUTH_OIDC_AUTOCREATE=full to provision Authentik '
+      + 'users automatically as full-access admins.');
+
+  const username = candidates[0];
+  const name = String(claims.name || claims.given_name || username).trim();
+  // Password login must be impossible for a provisioned account: store a real scrypt hash of a
+  // random secret nobody holds, rather than a sentinel that verifyPw might treat leniently.
+  const unusable = hashPw(crypto.randomBytes(32).toString('hex'));
+  const ins = await pool.query(
+    `INSERT INTO ${USERS_T}(username,pass_hash,name,role,perms,can_edit,edit_areas)
+     VALUES($1,$2,$3,'admin',NULL,true,NULL)
+     ON CONFLICT (username) DO UPDATE SET name=EXCLUDED.name
+     RETURNING *`, [username, unusable, name]);
+  console.warn('[oidc] AUTOCREATE=full provisioned "' + username + '" as a full-access admin');
+  return ins.rows[0];
+}
 function session(req){ return verify(cookies(req).sess||''); }
 // Daily session reset (2026-07-08): sessions expire at the next 03:00 ICT so every user re-logs in each morning → fresh data on login.
 const ICT_OFFSET_MS = 7*3600e3, DAILY_RESET_HOUR = 3;
@@ -1947,6 +1989,10 @@ function compress(enc, data, quality, cb){
 let _loadCache = null;   // { version, str, br?, gzip? }  (compressed buffers filled in lazily per encoding)
 function readBody(req, cb){ let ch=[], n=0; req.on('data',c=>{ n+=c.length; if(n>20*1024*1024){req.destroy();return;} ch.push(c); }); req.on('end',()=>cb(Buffer.concat(ch).toString('utf8'))); }
 function J(res, code, obj, extra){ const h=Object.assign({'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}, extra||{}); res.writeHead(code,h); res.end(JSON.stringify(obj)); }
+// Plain-text reply + HTML escaping — the OIDC routes answer a browser navigation, not fetch(), so a
+// JSON body would be shown to a human as raw JSON.
+function T(res, code, text, extra){ const h=Object.assign({'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}, extra||{}); res.writeHead(code,h); res.end(String(text)); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 // JSON headers · Vary matters as soon as more than one encoding is on offer: without it a proxy can
 // hand a brotli body to a client that only asked for gzip.
 function _jsonHead(enc){ const h={'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','Vary':'Accept-Encoding'};
@@ -2134,6 +2180,42 @@ async function restTxn(username, baseVersion, ops){
 const server = http.createServer((req, res) => {
   const u = (req.url||'/').split('?')[0];
   const q = (req.url||'').split('?')[1]||'';
+
+  // ───── AUTH · Authentik SSO (2026-08-27) ─────
+  // Both routes are no-ops unless AUTH_OIDC_ISSUER + AUTH_OIDC_CLIENT_ID are set; password login
+  // via /api/login is untouched either way. The whole point of doing the exchange here rather than
+  // in the ops-web SPA is that the session cookie has to be minted on THIS origin — see auth/oidc.js.
+  if(u === '/auth/login' && req.method === 'GET'){
+    if(!oidc.enabled()) return T(res,404,'Authentik sign-in is not configured on this deployment.');
+    return oidc.buildAuthorize(req, SECRET, new URLSearchParams(q).get('next'))
+      .then(({url, cookie}) => { res.writeHead(302,{Location:url,'Set-Cookie':cookie,'Cache-Control':'no-store'}); res.end(); })
+      .catch(e => { console.error('[oidc] authorize failed:', e.message); T(res,502,'Could not start the Authentik sign-in: '+e.message); });
+  }
+  if(u === oidc.CALLBACK_PATH && req.method === 'GET'){
+    if(!oidc.enabled()) return T(res,404,'Authentik sign-in is not configured on this deployment.');
+    if(!pool) return T(res,503,'No database — the session cannot be created.');
+    return oidc.completeCallback(req, SECRET, q, cookies(req)[oidc.TX_COOKIE])
+      .then(({claims, next}) => oidcResolveUser(claims).then(usr => {
+        const perms = parsePerms(usr.perms), ei = editInfo(usr);
+        const EXP = Date.now() + SESS_DAYS*864e5;      // same lifetime as a password login
+        const tok = sign({uid:usr.id, username:usr.username, name:usr.name, role:usr.role, perms:perms,
+                          edit:ei.canEditAny, editAreas:ei.editAreas, salesId:usr.sales_id||null,
+                          iat:Date.now(), exp:EXP});
+        console.log('[oidc] signed in '+usr.username+' via Authentik -> '+next);
+        res.writeHead(302, {Location: next, 'Cache-Control':'no-store', 'Set-Cookie': [
+          `sess=${tok}; HttpOnly; Path=/; SameSite=Lax; Secure; Max-Age=${Math.max(60,Math.floor((EXP-Date.now())/1000))}`,
+          oidc.clearTxCookie(),
+        ]});
+        res.end();
+      }))
+      .catch(e => { console.warn('[oidc] callback rejected:', e.message);
+        res.writeHead(403,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Set-Cookie':oidc.clearTxCookie()});
+        res.end('<!doctype html><meta charset="utf-8"><title>Sign-in failed</title>'
+          +'<div style="font:15px/1.6 system-ui;max-width:34rem;margin:14vh auto;padding:0 1.5rem">'
+          +'<h1 style="font-size:1.25rem">Sign-in failed</h1><p>'+esc(e.message)+'</p>'
+          +'<p><a href="/auth/login">Try again</a> · <a href="'+esc(oidc.DEFAULT_NEXT)+'">Sign in with a password</a></p></div>');
+      });
+  }
 
   // ───── AUTH ─────
   if(u === '/api/login' && req.method === 'POST'){

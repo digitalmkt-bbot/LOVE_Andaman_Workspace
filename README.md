@@ -1,7 +1,7 @@
 # LOVE Andaman — Allotment v2
 
 Phuket marine-tourism operations app (bookings, fleet, transfers, accounting).
-Single-file front-end (`allotment_v2/allotment_v2.html`) talking to a Node backend (`server.js`) backed by **Postgres — the durable source of truth**. The browser keeps a working copy of the current state in memory/`localStorage` for the UI to read, but every change is synced to Postgres; `localStorage` alone is not where the data lives. See `ARCHITECTURE.md` for the full data-flow write-up.
+Front-end in `allotment_v2/` — `allotment_v2.html` (markup) plus `js/01..08-*.js` (all the app code) and `css/01-base.css` + `css/02-skins.css` — talking to a Node backend (`server.js`) backed by **Postgres — the durable source of truth**. The browser keeps a working copy of the current state in memory/`localStorage` for the UI to read, but every change is synced to Postgres; `localStorage` alone is not where the data lives. See `ARCHITECTURE.md` for the full data-flow write-up.
 
 ## Run locally
 ```bash
@@ -17,6 +17,27 @@ Set these variables in Railway → **Variables** to lock the public URL behind a
 - `ADMIN_PASS` — password
 
 (If unset, the app is open to anyone with the URL.)
+
+### Authentik single sign-on (optional)
+
+With these set, `GET /auth/login` runs the whole authorization-code + PKCE flow **server-side** and
+drops the browser into `allotment_v2/allotment_v2.html` already signed in — no second login. Leave
+them unset and the routes 404; password login is unaffected either way. See `auth/oidc.js`.
+
+- `AUTH_OIDC_ISSUER` — e.g. `https://auth.example.com/application/o/<slug>/`
+- `AUTH_OIDC_CLIENT_ID`
+- `AUTH_OIDC_CLIENT_SECRET` — omit for a public client (PKCE still applies)
+- `AUTH_OIDC_SCOPES` — default `openid profile email`
+- `AUTH_OIDC_REDIRECT_URI` — override; normally derived from the request host as `<origin>/auth/callback`
+- `AUTH_OIDC_AUTOCREATE` — `off` (default) or `full`
+
+In Authentik, the provider's redirect URI must be `https://<your-host>/auth/callback`.
+
+⚠ `AUTH_OIDC_AUTOCREATE=full` provisions any unknown Authentik user as a **full-access admin** on
+first sign-in (`perms` NULL and `edit_areas` NULL both mean "no restriction"; role `admin` opens user
+management and the System Log). It exists for testing on a deployment where you control who
+Authentik admits. Left `off`, an Authentik user with no row in the app's `users` table is refused
+with a message saying so.
 
 ## Data
 - No customer data is stored in this repo. Postgres (via `server.js`) is the durable store; each browser's `localStorage`/in-memory copy is a working cache, not the source of truth.
