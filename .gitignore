@@ -2,6 +2,11 @@
 .DS_Store
 *~
 .~lock.*#
+# FUSE orphans: deleting a file another process still has open on a FUSE mount (sshfs, NTFS-3G,
+# gvfs, rclone…) renames it to .fuse_hiddenXXXX instead of unlinking, and an unclean unmount or a
+# crashed holder leaves it there forever. One 3.2MB copy of allotment_v2.html rode along in the
+# Initial commit this way and sat in every clone and worktree until 2026-08-27.
+.fuse_hidden*
 
 # ── Node ──
 node_modules/
