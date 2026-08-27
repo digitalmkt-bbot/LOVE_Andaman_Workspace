@@ -51,15 +51,18 @@
  * Exit code 0 = no findings. Exit code 1 = findings printed to stderr.
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DEFAULT_TARGET = path.resolve(__dirname, '..', 'allotment_v2', 'allotment_v2.html');
+// §jsSplit (2026-08-27): the inline <script> blocks now live in allotment_v2/js/*.js. The default
+// target is that directory; passing the old allotment_v2.html still works (see step 1 below).
+const DEFAULT_TARGET = path.resolve(__dirname, '..', 'allotment_v2', 'js');
 const targetPath = process.argv[2] ? path.resolve(process.argv[2]) : DEFAULT_TARGET;
 
-const html = readFileSync(targetPath, 'utf8');
+const isDir = (() => { try { return statSync(targetPath).isDirectory(); } catch (_) { return false; } })();
+const html = isDir ? '' : readFileSync(targetPath, 'utf8');
 
 // ---------------------------------------------------------------------------
 // 1. Extract the main app <script> block (the one containing the persist
@@ -71,6 +74,32 @@ const html = readFileSync(targetPath, 'utf8');
 //    closes the trailing main app script, and the nearest real "<script>"
 //    open that precedes the first known persist-helper definition.
 // ---------------------------------------------------------------------------
+//
+// §jsSplit (2026-08-27): with the JS extracted to allotment_v2/js/*.js there is nothing to unwrap —
+// a directory target is every .js file concatenated in load order (which is also a SUPERSET of what
+// the old HTML path saw: it only ever scanned the trailing main app block, so a persist helper in
+// the fleet or data-core block was invisible to it), and a single .js target is used verbatim.
+let script;
+// Maps a line number in `script` back to a human label. With a directory target `script` is a
+// concatenation, so a bare offset into it points at no real file — resolve it to <file>:<line>.
+let lineLabel = (n) => 'line ~' + n;
+if (isDir || targetPath.endsWith('.js')) {
+  const files = isDir
+    ? readdirSync(targetPath).filter(f => f.endsWith('.js')).sort().map(f => path.join(targetPath, f))
+    : [targetPath];
+  const parts = files.map(f => ({ name: path.basename(f), text: readFileSync(f, 'utf8') }));
+  script = parts.map(p => p.text).join('\n');
+  let at = 1;
+  for (const p of parts) { p.from = at; at += p.text.split('\n').length; p.to = at - 1; }
+  lineLabel = (n) => {
+    const p = parts.find(p => n >= p.from && n <= p.to);
+    return p ? `js/${p.name}:${n - p.from + 1}` : 'line ~' + n;
+  };
+  if (!script.includes('function sbInvoicesPersist')) {
+    console.error('check-persist-gates: anchor function sbInvoicesPersist not found in ' + targetPath + ' — file shape changed, update this tool.');
+    process.exit(2);
+  }
+} else {
 const lastCloseIdx = html.lastIndexOf('</script>');
 if (lastCloseIdx === -1) {
   console.error('check-persist-gates: no </script> found in ' + targetPath);
@@ -89,7 +118,8 @@ if (openIdx === -1 || openIdx > anchor) {
   process.exit(2);
 }
 const scriptStart = openIdx + '<script>'.length;
-const script = html.slice(scriptStart, lastCloseIdx);
+script = html.slice(scriptStart, lastCloseIdx);
+}
 
 // ---------------------------------------------------------------------------
 // 2. Locate every top-level `function NAME(...) { ... }` definition whose
@@ -250,9 +280,9 @@ if (findings.length === 0) {
 console.error(`check-persist-gates: ${findings.length} finding(s):\n`);
 for (const f of findings) {
   if (f.kind === 'nested-stricter-callee') {
-    console.error(`[nested-stricter-callee] ${f.caller} (line ~${f.callerLine}) -> ${f.callee} (line ~${f.calleeLine})`);
+    console.error(`[nested-stricter-callee] ${f.caller} (${lineLabel(f.callerLine)}) -> ${f.callee} (${lineLabel(f.calleeLine)})`);
   } else {
-    console.error(`[sibling-disjoint-gates] ${f.caller} (line ~${f.callerLine}): ${f.calleeA} vs ${f.calleeB}`);
+    console.error(`[sibling-disjoint-gates] ${f.caller} (${lineLabel(f.callerLine)}): ${f.calleeA} vs ${f.calleeB}`);
   }
   console.error('  ' + f.detail + '\n');
 }

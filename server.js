@@ -1847,7 +1847,11 @@ function cleanAreas(a){
 //   อ่านครั้งเดียวตอนเริ่ม ไม่แตะ request path จึงไม่มีผลกับความเร็ว
 function laSyncPermKeys(){
   try{
-    const fp = path.join(ROOT, 'allotment_v2', 'allotment_v2.html');
+    // §jsSplit (2026-08-27): LA_NAV ย้ายออกจาก allotment_v2.html ไปอยู่ js/01-auth-sync.js แล้ว
+    //   (ทุก inline <script> ถูกแยกออกเป็นไฟล์ .js) · เผื่อ rollback ไฟล์เดียว ยังอ่าน HTML เป็นตัวสำรอง
+    const cands = [ path.join(ROOT, 'allotment_v2', 'js', '01-auth-sync.js'),
+                    path.join(ROOT, 'allotment_v2', 'allotment_v2.html') ];
+    const fp = cands.find(f => { try { return fs.statSync(f).isFile(); } catch(_) { return false; } }) || cands[0];
     const head = fs.readFileSync(fp, 'utf8').slice(0, 400000);   // LA_NAV/LA_AREAS อยู่ต้นไฟล์
     // เอาเฉพาะรูปทรงของ LA_NAV เท่านั้น · {v:'view',t:'...',a:'area'}
     //   ชื่อ area เอาจากช่อง a: ของ LA_NAV ไม่ใช่จาก LA_AREAS เพราะรูปทรง {k:'..',t:'..'}
@@ -1856,11 +1860,11 @@ function laSyncPermKeys(){
     const addP=[], addA=[];
     navs.forEach(m=>{ if(!PERM_KEYS.has(m[1])){ PERM_KEYS.add(m[1]); addP.push(m[1]); }
                       if(!AREA_KEYS.has(m[2])){ AREA_KEYS.add(m[2]); addA.push(m[2]); } });
-    if(!navs.length) console.warn('[perms] LA_NAV not found in allotment_v2.html — using the built-in key list only');
+    if(!navs.length) console.warn('[perms] LA_NAV not found in '+path.basename(fp)+' — using the built-in key list only');
     else console.log('[perms] synced from LA_NAV: '+navs.length+' views, '+AREA_KEYS.size+' areas'
       +(addP.length?(' · added views: '+addP.join(',')):'')
       +(addA.length?(' · added areas: '+[...new Set(addA)].join(',')):''));
-  }catch(e){ console.warn('[perms] could not read LA_NAV from allotment_v2.html: '+e.message+' — using the built-in key list only'); }
+  }catch(e){ console.warn('[perms] could not read LA_NAV from js/01-auth-sync.js: '+e.message+' — using the built-in key list only'); }
 }
 laSyncPermKeys();
 // A user's editable-areas + "can edit anything" flag · editAreas null → falls back to legacy can_edit
@@ -2705,17 +2709,30 @@ const server = http.createServer((req, res) => {
 // Pre-warm the app HTML's brotli buffer at startup. q11 takes ~7s on the 4.9MB file — cheap once per
 // deploy, but only if nobody is waiting on it, so pay it here rather than on the first user's request.
 // Same fp/etag derivation as the static handler above, or the cache would not be hit.
+// §jsSplit (2026-08-27): the JS is no longer inline in the HTML, so pre-warming the HTML alone left
+// the heavy files (js/08-app.js ~4MB, js/05-fleet.js ~1.6MB) to pay q11 on the first user's request.
+// Warm each one in sequence — sequential, not parallel, so the boot doesn't peg every core at once.
 function prewarmStatic(){
-  const fp = path.normalize(path.join(ROOT,'/allotment_v2/allotment_v2.html'));
-  fs.readFile(fp,(err,data)=>{ if(err||!data) return;
-    const etag='"'+crypto.createHash('sha1').update(data).digest('hex').slice(0,20)+'"';
-    const t0=Date.now();
-    compress('br', data, BR_STATIC, (cErr,buf)=>{ if(cErr) return;
-      const hit=_gzCache.get(fp), slot=(hit&&hit.etag===etag)?hit:{etag};
-      slot.br=buf; _gzCache.set(fp,slot);
-      console.log('[prewarm] app html br: '+(data.length/1048576).toFixed(2)+'MB -> '
-        +(buf.length/1048576).toFixed(2)+'MB in '+(Date.now()-t0)+'ms'); });
-  });
+  const rel = ['/allotment_v2/allotment_v2.html'];
+  try{
+    const jsDir = path.join(ROOT,'allotment_v2','js');
+    for(const f of fs.readdirSync(jsDir).filter(f=>f.endsWith('.js')).sort()) rel.push('/allotment_v2/js/'+f);
+  }catch(_){}
+  let i = 0;
+  (function next(){
+    if(i >= rel.length) return;
+    const fp = path.normalize(path.join(ROOT, rel[i++]));
+    fs.readFile(fp,(err,data)=>{ if(err||!data) return next();
+      const etag='"'+crypto.createHash('sha1').update(data).digest('hex').slice(0,20)+'"';
+      const t0=Date.now();
+      compress('br', data, BR_STATIC, (cErr,buf)=>{ if(cErr) return next();
+        const hit=_gzCache.get(fp), slot=(hit&&hit.etag===etag)?hit:{etag};
+        slot.br=buf; _gzCache.set(fp,slot);
+        console.log('[prewarm] '+path.basename(fp)+' br: '+(data.length/1048576).toFixed(2)+'MB -> '
+          +(buf.length/1048576).toFixed(2)+'MB in '+(Date.now()-t0)+'ms');
+        next(); });
+    });
+  })();
 }
 server.listen(PORT, ()=>{ console.log('LOVE Andaman on '+PORT+(pool?' · db on':' · db off')); prewarmStatic(); });
 
