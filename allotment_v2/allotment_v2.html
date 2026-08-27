@@ -49353,17 +49353,17 @@ function pckMoney(b, date){
   // fee ไม่เข้า got เพราะไม่ใช่รายได้เรา — เป็นเงินที่ส่งต่อธนาคาร (ดูคอมเมนต์ §pierPay)
   var pierPaid=(typeof pckPaidSum==='function')?pckPaidSum(b,date):0;
   var pierFee =(typeof pckFeeSum==='function') ?pckFeeSum(b,date) :0;
-  var gross=cot+upDue+bal+exDue;
+  var gross=pckN(cot+upDue+bal+exDue);
   return { cot:cot, cur:(b.cashOnTour&&b.cashOnTour.currency)||'THB', handling:(b.cashOnTour&&b.cashOnTour.handling)||'',
            note:(b.cashOnTour&&b.cashOnTour.note)||'', extras:ex, extrasTot:exTot,
            exGot:exGot, exDue:exDue, upgrades:ups, upDue:upDue, upGot:upGot,
            balance:bal, gross:gross, pierPaid:pierPaid, pierFee:pierFee, ovnSettled:_ovnBack,
            noSlip:(typeof pckNoSlip==='function')?pckNoSlip(b,date):0,
-           due:Math.max(0, gross-pierPaid), got:exGot+upGot+pierPaid, payType:(ag&&ag.payType)||'' };
+           due:Math.max(0, pckN(gross-pierPaid)), got:pckN(exGot+upGot+pierPaid), payType:(ag&&ag.payType)||'' };
 }
 function pckMoneyCell(b, date){
   var e=ckEsc, M=pckMoney(b,date);
-  var m=function(n){ return '฿'+Math.round(n||0).toLocaleString(); };
+  var m=function(n){ return '฿'+pckNum(n); };
   var out='';
   // §payChips (2026-08-02) · เงื่อนไขการชำระเงินอ่านจากป้ายชุดเดียวกับหน้า By-trip
   //   Invoice / Pro Forma / COT / Paid — หน้าท่าเคยเห็นแค่ "ยอดที่ต้องเก็บ" ซึ่งไม่บอกว่าใบนี้เป็นเครดิต
@@ -49427,12 +49427,17 @@ function pckPaysFor(b, date){
   var arr=(b && Array.isArray(b.pierPayments)) ? b.pierPayments : [];
   return date ? arr.filter(function(p){ return p && p.date===date; }) : arr.slice();
 }
-function pckPaidSum(b,date){ return pckPaysFor(b,date).reduce(function(s,p){ return s+(+p.amount||0); },0); }
-function pckFeeSum(b,date){  return pckPaysFor(b,date).reduce(function(s,p){ return s+(+p.fee||0); },0); }
-function pckFeeBase(b,date){ return pckPaysFor(b,date).filter(function(p){ return (+p.fee||0)>0; }).reduce(function(s,p){ return s+(+p.amount||0); },0); }
+function pckPaidSum(b,date){ return pckN(pckPaysFor(b,date).reduce(function(s,p){ return s+(+p.amount||0); },0)); }
+function pckFeeSum(b,date){  return pckN(pckPaysFor(b,date).reduce(function(s,p){ return s+(+p.fee||0); },0)); }
+function pckFeeBase(b,date){ return pckN(pckPaysFor(b,date).filter(function(p){ return (+p.fee||0)>0; }).reduce(function(s,p){ return s+(+p.amount||0); },0)); }
 // เงินสดตรวจได้จากลิ้นชัก · โอน/บัตรถ้าไม่มีสลิปจะกระทบยอดกับ statement ไม่ได้ → ต้องตามให้ครบก่อนปิดวัน
 function pckNoSlip(b,date){ return pckPaysFor(b,date).filter(function(p){ return p.method!=='cash' && !(Array.isArray(p.slips)&&p.slips.length); }).length; }
-function pckB(n){ return '&#3647;'+Math.round(+n||0).toLocaleString(); }
+// §pierDecimal (2026-08-27) · ยอดเงิน/ค่าธรรมเนียมเก็บเป็นทศนิยมได้
+//   เครื่อง EDC คิด % แล้วออกมาเป็นเศษสตางค์ (750 x 5% = 37.50) · ปัดเป็นบาทเต็มทำให้ยอดที่บันทึกไม่ตรง statement
+//   pckN = ปัด 2 ตำแหน่งทุกจุดที่คำนวณ กัน float noise ไม่ให้ยอดค้างเหลือ 0.0000001
+function pckN(n){ var v=(+n||0)*100; return Math.round(v+(v<0?-1e-9:1e-9))/100; }
+function pckNum(n){ var v=pckN(n); return v.toLocaleString('en-US',{minimumFractionDigits:(v%1?2:0),maximumFractionDigits:2}); }
+function pckB(n){ return '&#3647;'+pckNum(n); }
 function pckMLabel(m){ return m==='cash'?'เงินสด':m==='transfer'?'โอนเงิน':m==='card'?'บัตรเครดิต':m||'—'; }
 function pckHHMMloc(iso){ return pckHHMM(iso); }   // §localTime · ใช้ helper ตัวเดียวกันทั้งหน้า
 
@@ -49517,7 +49522,7 @@ var _pckPay=null;
 //   thenCk จำไว้ว่ามาจากทางไหน · เก็บครบเมื่อไรก็เช็คอินต่อให้เลย · เปิดจากปุ่ม "เก็บเงิน" ในคอลัมน์เงินไม่เช็คอินให้
 // §paySplit · หนึ่งบรรทัด = หนึ่งวิธีรับเงิน · บันทึกแล้วกลายเป็น pierPayments หนึ่งรายการ
 function pckLineNew(amt){
-  return { k:'l'+Math.random().toString(36).slice(2,8), m:'cash', amt:Math.max(0,Math.round(+amt||0)),
+  return { k:'l'+Math.random().toString(36).slice(2,8), m:'cash', amt:Math.max(0,pckN(amt)),
            feeMode:'pct', feePct:3, fee:0, note:'', slips:[] };
 }
 function pckPayOpen(bkId, thenCk){
@@ -49529,10 +49534,10 @@ function pckPayOpen(bkId, thenCk){
 function pckPayDue(){                      // ยอดค้างของใบนี้ (ยังไม่หักบรรทัดที่กำลังกรอก)
   if(!_pckPay) return 0;
   var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===_pckPay.bkId; }); if(!b) return 0;
-  return Math.round(pckMoney(b,_pckPay.date).due||0);
+  return pckN(pckMoney(b,_pckPay.date).due||0);
 }
-function pckPayTotal(){ return (_pckPay?_pckPay.lines:[]).reduce(function(s,L){ return s+Math.round(+L.amt||0); },0); }
-function pckPayLeft(){ return pckPayDue()-pckPayTotal(); }
+function pckPayTotal(){ return pckN((_pckPay?_pckPay.lines:[]).reduce(function(s,L){ return s+pckN(L.amt); },0)); }
+function pckPayLeft(){ return pckN(pckPayDue()-pckPayTotal()); }
 function pckLineAt(i){ return (_pckPay && _pckPay.lines[i])||null; }
 function pckLineAdd(){
   if(!_pckPay) return;
@@ -49544,20 +49549,29 @@ function pckLineDel(i){
   _pckPay.lines.splice(i,1); pckPayRender();
 }
 function pckLineSet(i,k,v){ var L=pckLineAt(i); if(!L) return; L[k]=v; pckPayRender(); }
+// §pierDecimal · ช่องเงินเป็น type=text เพราะ type=number จะทิ้งจุดที่ยังพิมพ์ไม่จบ ('750.') ตอน render ใหม่
+//   เก็บสิ่งที่พิมพ์ไว้ตามจริง (กรองเหลือตัวเลข+จุดเดียว) แล้วค่อยแปลงเป็นตัวเลขด้วย pckN ตอนคิดเงิน
+function pckNumStr(v){
+  var s=String(v==null?'':v).replace(/[^0-9.]/g,'');
+  var i=s.indexOf('.');
+  if(i>=0) s=s.slice(0,i+1)+s.slice(i+1).replace(/\./g,'').slice(0,2);   // จุดเดียว · สตางค์พอ 2 ตำแหน่ง
+  return s;
+}
+function pckLineNum(i,k,v){ var L=pckLineAt(i); if(!L) return; L[k]=pckNumStr(v); pckPayRender(); }
 function pckLineSetM(i,m){ var L=pckLineAt(i); if(!L) return; L.m=m; if(m!=='card') L.fee=0; pckPayRender(); }
-// เติมยอดให้บรรทัดนี้ · 'rest' = ที่เหลือทั้งหมด · 'half' = ครึ่งหนึ่งของยอดค้าง (ปัดขึ้นเป็นบาทเต็ม)
+// เติมยอดให้บรรทัดนี้ · 'rest' = ที่เหลือทั้งหมด · 'half' = ครึ่งหนึ่งของยอดค้าง (ทศนิยม 2 ตำแหน่ง)
 function pckLineFill(i, how){
   var L=pckLineAt(i); if(!L) return;
-  var other=pckPayTotal()-Math.round(+L.amt||0), due=pckPayDue();
-  L.amt = (how==='half') ? Math.max(0, Math.round(due/2)) : Math.max(0, due-other);
+  var other=pckN(pckPayTotal()-pckN(L.amt)), due=pckPayDue();
+  L.amt = (how==='half') ? Math.max(0, pckN(due/2)) : Math.max(0, pckN(due-other));
   pckPayRender();
 }
 // ค่าธรรมเนียมบัตร · คิดต่อบรรทัด · กรอกเป็นบาทตรง ๆ หรือกรอก % แล้วให้ระบบคูณให้ (ปัดเป็นบาทเต็ม)
 function pckLineFee(L){
   if(!L || L.m!=='card') return 0;
-  return L.feeMode==='pct' ? Math.round((+L.amt||0)*(+L.feePct||0)/100) : Math.round(+L.fee||0);
+  return L.feeMode==='pct' ? pckN((+L.amt||0)*(+L.feePct||0)/100) : pckN(L.fee);
 }
-function pckPayFeeTotal(){ return (_pckPay?_pckPay.lines:[]).reduce(function(s,L){ return s+pckLineFee(L); },0); }
+function pckPayFeeTotal(){ return pckN((_pckPay?_pckPay.lines:[]).reduce(function(s,L){ return s+pckLineFee(L); },0)); }
 function pckPayPickSlip(i, inp){
   var f=(inp&&inp.files&&inp.files[0])||null; if(inp) inp.value='';
   if(!f||!_pckPay) return;
@@ -49582,16 +49596,16 @@ function pckPaySave(){
   if(!_pckPay) return;
   var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===_pckPay.bkId; }); if(!b) return;
   // §paySplit · บรรทัดยอด 0 ทิ้งไปเงียบ ๆ · กด "เพิ่มวิธีจ่าย" แล้วไม่ได้ใช้ ไม่ควรกลายเป็นรายการ ฿0 ในประวัติ
-  var use=_pckPay.lines.filter(function(L){ return Math.round(+L.amt||0)>0; });
+  var use=_pckPay.lines.filter(function(L){ return pckN(L.amt)>0; });
   if(!use.length){ alert('ใส่จำนวนเงินก่อน'); return; }
-  var total=use.reduce(function(s,L){ return s+Math.round(+L.amt||0); },0);
+  var total=pckN(use.reduce(function(s,L){ return s+pckN(L.amt); },0));
   var due=pckPayDue();
-  if(total>due && !confirm('ยอดที่รับ '+ (' ฿'+total.toLocaleString()) +' มากกว่ายอดค้าง'+(' ฿'+due.toLocaleString())
+  if(total>due && !confirm('ยอดที่รับ '+ (' ฿'+pckNum(total)) +' มากกว่ายอดค้าง'+(' ฿'+pckNum(due))
       +'\n\nบันทึกต่อไหม?')) return;
   b.pierPayments=Array.isArray(b.pierPayments)?b.pierPayments:[];
   var stamp=new Date().toISOString(), who=(typeof ckMe==='function'?ckMe():''), parts=[], feeAll=0;
   use.forEach(function(L){
-    var amt=Math.round(+L.amt||0), fee=pckLineFee(L); feeAll+=fee;
+    var amt=pckN(L.amt), fee=pckLineFee(L); feeAll=pckN(feeAll+fee);
     b.pierPayments.push({
       id:(typeof LA_UID==='function'?LA_UID('pp_'):('pp_'+Date.now()+'_'+Math.random().toString(36).slice(2,6))),
       date:_pckPay.date, amount:amt, method:L.m, fee:fee,
@@ -49599,13 +49613,13 @@ function pckPaySave(){
       note:String(L.note||''), slips:L.slips.slice(),
       by:who, at:stamp
     });
-    parts.push(pckMLabel(L.m)+' ฿'+amt.toLocaleString()+(fee>0?(' +ธรรมเนียม ฿'+fee.toLocaleString()):''));
+    parts.push(pckMLabel(L.m)+' ฿'+pckNum(amt)+(fee>0?(' +ธรรมเนียม ฿'+pckNum(fee)):''));
   });
   try{ acctPersistBookings(); }catch(_){}
   if(typeof bkV2AddHistory==='function')
-    bkV2AddHistory(b,'payment','เก็บเงินหน้าท่า ฿'+total.toLocaleString()
+    bkV2AddHistory(b,'payment','เก็บเงินหน้าท่า ฿'+pckNum(total)
       +(use.length>1?(' · แบ่งจ่าย '+use.length+' วิธี ('+parts.join(' · ')+')')
-                    :(' ('+pckMLabel(use[0].m)+')'+(feeAll>0?(' + ค่าธรรมเนียม ฿'+feeAll.toLocaleString()):''))),'Pier');
+                    :(' ('+pckMLabel(use[0].m)+')'+(feeAll>0?(' + ค่าธรรมเนียม ฿'+pckNum(feeAll)):''))),'Pier');
   _pckPay.lines=[pckLineNew(0)];
   var _thenCk=!!_pckPay.thenCk, _bkId=_pckPay.bkId, _dt=_pckPay.date;
   var M=pckMoney(b,_dt);
@@ -49631,8 +49645,20 @@ function pckPayDel(payId){
   try{ acctPersistBookings(); }catch(_){}
   pckPayRender(); if(typeof renderPierCheckin==='function') renderPierCheckin();
 }
+// §pierDecimal · acctModal เขียนทับ innerHTML ทั้งกล่อง → ช่องที่โฟกัสอยู่ถูกทิ้งทุก keystroke
+//   จำ data-pck + ตำแหน่ง caret ไว้ก่อน แล้วคืนให้หลังวาดใหม่ ไม่งั้นพิมพ์ทศนิยมไม่ได้
+function pckPayRefocus(key, pos){
+  if(!key) return;
+  var el=document.querySelector('#acct-modal [data-pck="'+key+'"]'); if(!el) return;
+  try{ el.focus(); if(pos!=null) el.setSelectionRange(pos,pos); }catch(_){}
+}
 function pckPayRender(){
   if(!_pckPay) return;
+  var _ae=document.activeElement;
+  var _fk=(_ae && _ae.getAttribute) ? _ae.getAttribute('data-pck') : null;
+  var _fp=(_fk && typeof _ae.selectionStart==='number') ? _ae.selectionStart : null;
+  var _pckSc0=document.querySelector('#acct-modal > div');
+  var _pckScroll=_pckSc0?_pckSc0.scrollTop:null;
   var e=ckEsc, b=(SB_BOOKINGS||[]).find(function(x){ return x.id===_pckPay.bkId; }); if(!b) return;
   var date=_pckPay.date, M=pckMoney(b,date);
   var due=M.due;
@@ -49669,7 +49695,7 @@ function pckPayRender(){
 
       form+='<div class="'+(L.m==='card'?'pckp-g2':'')+'">';
       form+='<div class="pckp-fld"><label class="pckp-lbl">จำนวนเงินที่รับ &#3647;</label>'
-        +'<input class="pckp-amt" type="number" min="0" value="'+(L.amt||0)+'" oninput="pckLineAt('+i+').amt=this.value;pckPayRender()">'
+        +'<input class="pckp-amt" type="text" inputmode="decimal" data-pck="amt'+i+'" value="'+e(String(L.amt==null?0:L.amt))+'" oninput="pckLineNum('+i+',\'amt\',this.value)">'
         +'<div class="pckp-quick">'
           +'<button onclick="pckLineFill('+i+',\'rest\')">ที่เหลือทั้งหมด</button>'
           +'<button onclick="pckLineFill('+i+',\'half\')">ครึ่งหนึ่ง</button>'
@@ -49682,15 +49708,15 @@ function pckPayRender(){
           +'<button class="'+(L.feeMode==='baht'?'on':'')+'" onclick="pckLineSet('+i+',\'feeMode\',\'baht\')">&#3647;</button>'
           +'</span></label>';
         if(L.feeMode==='pct'){
-          form+='<input class="pckp-amt" type="number" step="0.1" min="0" value="'+(L.feePct||0)+'" oninput="pckLineAt('+i+').feePct=this.value;pckPayRender()">'
+          form+='<input class="pckp-amt" type="text" inputmode="decimal" data-pck="pct'+i+'" value="'+e(String(L.feePct==null?0:L.feePct))+'" oninput="pckLineNum('+i+',\'feePct\',this.value)">'
             +'<div class="pckp-pct">'
             + [1.5,2,2.5,3,3.5,4,4.5,5].map(function(x){ return '<button class="'+((+L.feePct===x)?'on':'')+'" onclick="pckLineSet('+i+',\'feePct\','+x+')">'+x+'%</button>'; }).join('')
             + '<button class="'+((+L.feePct===0)?'on':'')+'" onclick="pckLineSet('+i+',\'feePct\',0)">ไม่ชาร์จ</button></div>'
-            +'<div class="pckp-hint">คิดจาก '+pckB(L.amt)+' &times; '+(+L.feePct||0)+'% = <b style="color:#5B289A;font-family:\'DM Mono\',monospace">'+pckB(fee)+'</b> (ปัดเป็นบาทเต็ม)</div>'
+            +'<div class="pckp-hint">คิดจาก '+pckB(L.amt)+' &times; '+(+L.feePct||0)+'% = <b style="color:#5B289A;font-family:\'DM Mono\',monospace">'+pckB(fee)+'</b> (ทศนิยมได้ถึง 2 ตำแหน่ง)</div>'
             +((+L.feePct||0)>5?'<div class="pckp-hint" style="color:#A32D2D;font-weight:700">&#9888; เกิน 5% แล้ว — เช็คอีกทีว่ากรอกถูกไหม (บันทึกได้ ไม่บล็อก)</div>':'');
         } else {
-          form+='<input class="pckp-amt" type="number" min="0" value="'+(L.fee||0)+'" oninput="pckLineAt('+i+').fee=this.value;pckPayRender()">'
-            +'<div class="pckp-hint">กรอกยอดบาทตามที่เครื่องคิดจริง'
+          form+='<input class="pckp-amt" type="text" inputmode="decimal" data-pck="fee'+i+'" value="'+e(String(L.fee==null?0:L.fee))+'" oninput="pckLineNum('+i+',\'fee\',this.value)">'
+            +'<div class="pckp-hint">กรอกยอดบาทตามที่เครื่องคิดจริง · ใส่สตางค์ได้ เช่น 37.50'
             +(((+L.amt>0)&&fee>0)?(' · เท่ากับ <b style="color:#5B289A">'+(Math.round(fee/(+L.amt)*1000)/10)+'%</b> ของยอดที่รับ'):'')+'</div>'
             +(((+L.amt>0)&&(fee/(+L.amt)*100>5))?'<div class="pckp-hint" style="color:#A32D2D;font-weight:700">&#9888; เกิน 5% แล้ว — เช็คอีกทีว่ากรอกถูกไหม (บันทึกได้ ไม่บล็อก)</div>':'');
         }
@@ -49731,11 +49757,12 @@ function pckPayRender(){
 
     // สรุปเทียบยอด · ตัวเลขที่คนหน้าท่าต้องเห็นก่อนกดบันทึก
     var tot=pckPayTotal(), left=due-tot, feeAll=pckPayFeeTotal();
-    form+='<div class="pckp-tot'+(left<0?' over':(left>0?' short':' ok'))+'">'
+    var _lz=Math.abs(left)<0.005;   // §pierDecimal · เศษต่ำกว่าสตางค์ = ตรงพอดี
+    form+='<div class="pckp-tot'+(_lz?' ok':(left<0?' over':' short'))+'">'
       +'<div class="r"><span>รวมที่รับครั้งนี้</span><b>'+pckB(tot)+'</b></div>'
       +(feeAll>0?('<div class="r f"><span>ค่าธรรมเนียมบัตรรวม (ไม่ตัดยอดค้าง)</span><b>'+pckB(feeAll)+'</b></div>'):'')
-      +'<div class="r m"><span>'+(left>0?'จะยังค้างอยู่':(left<0?'เกินยอดค้าง':'ตรงพอดี · ไม่มียอดค้างเหลือ'))+'</span>'
-        +'<b>'+(left===0?'&#10003;':pckB(Math.abs(left)))+'</b></div></div>';
+      +'<div class="r m"><span>'+(_lz?'ตรงพอดี · ไม่มียอดค้างเหลือ':(left>0?'จะยังค้างอยู่':'เกินยอดค้าง'))+'</span>'
+        +'<b>'+(_lz?'&#10003;':pckB(Math.abs(left)))+'</b></div></div>';
   }
 
   var paid=pckPaysFor(b,date), hist='';
@@ -49764,9 +49791,13 @@ function pckPayRender(){
     +'<div class="pckp-bd">'+brk+form+hist+'</div>'
     +'<div class="pckp-ft"><button class="pckp-btn" onclick="acctModalClose()">ปิด</button>'
     +(due>0?('<button class="pckp-btn pri" onclick="pckPaySave()">บันทึกการรับเงิน'
-        +(_pckPay.lines.filter(function(L){ return Math.round(+L.amt||0)>0; }).length>1
-          ?(' · '+_pckPay.lines.filter(function(L){ return Math.round(+L.amt||0)>0; }).length+' วิธี'):'')+'</button>'):'')
+        +(_pckPay.lines.filter(function(L){ return pckN(L.amt)>0; }).length>1
+          ?(' · '+_pckPay.lines.filter(function(L){ return pckN(L.amt)>0; }).length+' วิธี'):'')+'</button>'):'')
     +'</div>');
+  // §pierDecimal · คืน focus/caret + ตำแหน่ง scroll หลังวาดใหม่ (กล่องถูกเขียนทับทั้งใบทุก keystroke)
+  var _sc=document.querySelector('#acct-modal > div');
+  if(_sc && _pckScroll!=null) _sc.scrollTop=_pckScroll;
+  pckPayRefocus(_fk,_fp);
 }
 
 function pckPayCSS(){ return ''
@@ -50030,7 +50061,7 @@ function pckDetailOpen(bkId){
   var pb=ckPaxBreak(t.pax), P=t.pax||{};
   var M=pckMoney(b,date);
   var vck=O.vanCheckin||null, pck=O.pierCheckin||null;
-  var m=function(n){ return '฿'+Math.round(n||0).toLocaleString(); };
+  var m=function(n){ return '฿'+pckNum(n); };
   var pArea=(b.pickupAreaId&&typeof bkV2GetArea==='function')?((bkV2GetArea(b.pickupAreaId)||{}).name||''):'';
   var sreq=(typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim());
   var row=function(k,v){ return v?('<div class="pd-r"><span class="pd-k">'+e(k)+'</span><span class="pd-v">'+v+'</span></div>'):''; };
@@ -54138,7 +54169,7 @@ function tsNoCollect(r, paid){
 }
 function tsPayCell(r, date){
   var b=r.b, e=ckEsc, L=[];
-  var m=function(n){ return '฿'+Math.round(n||0).toLocaleString('en-US'); };
+  var m=function(n){ return '฿'+pckNum(n); };   // §pierDecimal · ยอดหน้าท่ามีสตางค์ได้ ต้องโชว์ให้ตรงกับกล่องเก็บเงิน
   var X=tsMoneyOf(b, date), M=X.M;
   // เงื่อนไขการชำระของใบนี้ · Invoice = เครดิต ไม่ต้องเก็บหน้างาน
   var PT={ invoice:['Invoice','n'], credit:['Invoice','n'], proforma:['Proforma','e'], prepaid:['Proforma','e'],
