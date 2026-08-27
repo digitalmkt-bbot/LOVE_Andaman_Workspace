@@ -28,6 +28,10 @@ const AUTOCREATE    = (process.env.AUTH_OIDC_AUTOCREATE || 'off').trim().toLower
 const REDIRECT_OVERRIDE = (process.env.AUTH_OIDC_REDIRECT_URI || '').trim();
 
 const CALLBACK_PATH = '/auth/callback';
+// Escape hatch. With SSO on, an unauthenticated page load goes straight to Authentik — so if
+// Authentik is down or misconfigured there is otherwise NO way into the app, including for the
+// admin who needs to fix it. `?login=password` always serves the built-in form instead.
+const PASSWORD_ESCAPE = 'login';
 const TX_COOKIE     = 'oidc_tx';
 const TX_TTL_MS     = 10 * 60e3;          // a login that takes longer than this starts over
 const DEFAULT_NEXT  = '/allotment_v2/allotment_v2.html';
@@ -154,11 +158,18 @@ async function verifyIdToken(idToken, nonce){
 }
 
 // ── request helpers ──
+// Behind Railway's proxy TLS is terminated upstream, so x-forwarded-proto is the only truth. Fall
+// back to whether THIS socket is encrypted rather than assuming https, or a plain-http local run
+// builds https:// URLs that Authentik will reject as an unregistered redirect.
+function originOf(req){
+  const proto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim()
+             || (req.socket && req.socket.encrypted ? 'https' : 'http');
+  const host  = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
+  return proto + '://' + host;
+}
 function redirectUri(req){
   if(REDIRECT_OVERRIDE) return REDIRECT_OVERRIDE;
-  const proto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() || 'https';
-  const host  = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
-  return proto + '://' + host + CALLBACK_PATH;
+  return originOf(req) + CALLBACK_PATH;
 }
 // Only same-site absolute paths may be returned to. "//evil.example" is a protocol-relative URL and
 // would be an open redirect, so a second leading slash disqualifies it.
@@ -214,13 +225,25 @@ async function completeCallback(req, secret, query, txCookieValue){
   return { claims, next: safeNext(tx.next) };
 }
 
+/** RP-initiated logout: end the session at Authentik too, then come back to `postLogout`.
+ *  Without this, clearing the app's own cookie is pointless — the next page load bounces to
+ *  /auth/login, Authentik still has its own session, and it signs the user straight back in. */
+async function buildLogout(req, postLogout){
+  let d = null;
+  try{ d = await discovery(); }catch(e){ d = null; }
+  if(!d || !d.end_session_endpoint) return null;
+  const url = new URL(d.end_session_endpoint);
+  url.searchParams.set('post_logout_redirect_uri', originOf(req) + safeNext(postLogout));
+  return url.toString();
+}
+
 /** Cookie that clears the transaction — attributes must match the one set above or it will not overwrite. */
 function clearTxCookie(){
   return `${TX_COOKIE}=; HttpOnly; Path=/; SameSite=Lax; Secure; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0`;
 }
 
 module.exports = {
-  enabled, autocreateMode, buildAuthorize, completeCallback, clearTxCookie, discovery,
-  CALLBACK_PATH, TX_COOKIE, DEFAULT_NEXT,
+  enabled, autocreateMode, buildAuthorize, completeCallback, buildLogout, clearTxCookie, discovery,
+  CALLBACK_PATH, TX_COOKIE, DEFAULT_NEXT, PASSWORD_ESCAPE,
   _internal: { txSign, txVerify, verifyIdToken, safeNext, redirectUri },
 };

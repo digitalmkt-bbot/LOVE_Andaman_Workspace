@@ -20,9 +20,18 @@ Set these variables in Railway → **Variables** to lock the public URL behind a
 
 ### Authentik single sign-on (optional)
 
-With these set, `GET /auth/login` runs the whole authorization-code + PKCE flow **server-side** and
-drops the browser into `allotment_v2/allotment_v2.html` already signed in — no second login. Leave
-them unset and the routes 404; password login is unaffected either way. See `auth/oidc.js`.
+With these set, **Authentik becomes the login page**: opening the app unauthenticated redirects to
+Authentik, and on success the browser lands in `allotment_v2/allotment_v2.html` already signed in —
+the built-in username/password modal never appears. The whole authorization-code + PKCE flow runs
+**server-side**. Leave them unset and the routes 404, the gate is off, and password login is
+exactly as before. See `auth/oidc.js`.
+
+- **Escape hatch:** `…/allotment_v2/allotment_v2.html?login=password` always serves the built-in
+  form. Without it, a misconfigured or unreachable Authentik would lock out everyone — including the
+  admin who has to fix it.
+- **Signing out** ends the Authentik session too (`/auth/logout` → the provider's `end_session`
+  endpoint). Clearing only the app's own cookie would be pointless: the next page load hits the gate,
+  Authentik still holds its session, and the user is signed straight back in.
 
 - `AUTH_OIDC_ISSUER` — e.g. `https://auth.example.com/application/o/<slug>/`
 - `AUTH_OIDC_CLIENT_ID`

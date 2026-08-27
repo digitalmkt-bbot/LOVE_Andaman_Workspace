@@ -2217,6 +2217,18 @@ const server = http.createServer((req, res) => {
       });
   }
 
+  // Ends the Authentik session too, then comes back to the app. The client calls this instead of
+  // reloading after /api/logout when the server told it SSO is on — see /api/logout below.
+  if(u === '/auth/logout' && req.method === 'GET'){
+    const s = session(req); if(s && s.username) revokeSessions(s.username);
+    const clear = 'sess=; HttpOnly; Path=/; SameSite=Lax; Secure; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0';
+    const back  = '/allotment_v2/allotment_v2.html?' + oidc.PASSWORD_ESCAPE + '=password';
+    if(!oidc.enabled()){ res.writeHead(302,{Location:back,'Set-Cookie':clear,'Cache-Control':'no-store'}); return res.end(); }
+    return oidc.buildLogout(req, back)
+      .then(url => { res.writeHead(302,{Location:url||back,'Set-Cookie':clear,'Cache-Control':'no-store'}); res.end(); })
+      .catch(() => { res.writeHead(302,{Location:back,'Set-Cookie':clear,'Cache-Control':'no-store'}); res.end(); });
+  }
+
   // ───── AUTH ─────
   if(u === '/api/login' && req.method === 'POST'){
     if(!pool) return J(res,503,{error:'no database'});
@@ -2249,7 +2261,11 @@ const server = http.createServer((req, res) => {
     // Safari was ignoring — so the session must already be dead by the time we answer, not conditional
     // on the browser cooperating.
     const s = session(req); if(s && s.username) revokeSessions(s.username);
-    J(res,200,{ok:true},{'Set-Cookie':'sess=; HttpOnly; Path=/; SameSite=Lax; Secure; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0'});
+    // ssoLogout tells the client to finish at Authentik instead of just reloading. Reloading would
+    // hit the SSO redirect below, Authentik would still hold its own session, and the user would be
+    // signed straight back in — a sign-out button that visibly does nothing.
+    J(res,200,{ok:true, ssoLogout: oidc.enabled() ? '/auth/logout' : null},
+      {'Set-Cookie':'sess=; HttpOnly; Path=/; SameSite=Lax; Secure; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0'});
     return;
   }
   if(u === '/api/me'){ const s=session(req); return s ? J(res,200,{username:s.username,name:s.name,role:s.role,perms:(s.perms!==undefined?s.perms:null),canEdit:(s.edit!==false),editAreas:(s.editAreas!==undefined?s.editAreas:null),salesId:(s.salesId!==undefined?s.salesId:null)}) : J(res,401,{error:'not logged in'}); }
@@ -2774,6 +2790,22 @@ const server = http.createServer((req, res) => {
   // references resolve correctly here AND under allotment_v2/start_server.command (whose web root is
   // allotment_v2/ itself). 302, not 301: a permanent redirect is cached hard and painful to undo.
   if(u==='/'||u===''){ res.writeHead(302,{Location:'/allotment_v2/allotment_v2.html'+(q?('?'+q):''),'Cache-Control':'no-store'}); return res.end(); }
+
+  // §ssoGate (2026-08-27): with Authentik configured, IT is the login page. Without this the app
+  // still loads its own username/password modal (js/01-auth-sync.js showLogin(), reached when
+  // /api/me answers 401) and the Authentik routes just sit there unused. Redirecting server-side
+  // rather than from the client means no flash of the built-in form on the way through.
+  //   · only a top-level browser navigation for the app page — never a fetch/XHR, never an asset
+  //   · never when a session already exists
+  //   · ?login=password always wins, so a broken Authentik cannot lock everyone out (PASSWORD_ESCAPE)
+  if(u === '/allotment_v2/allotment_v2.html' && req.method === 'GET' && oidc.enabled() && !session(req)
+     && String(req.headers.accept||'').includes('text/html')
+     && new URLSearchParams(q).get(oidc.PASSWORD_ESCAPE) !== 'password'){
+    const next = u + (q ? ('?' + q) : '');
+    res.writeHead(302, {Location:'/auth/login?next=' + encodeURIComponent(next), 'Cache-Control':'no-store'});
+    return res.end();
+  }
+
   let p = decodeURIComponent(u);
   const fp = path.normalize(path.join(ROOT,p));
   if(!fp.startsWith(ROOT)){ res.writeHead(403); return res.end('Forbidden'); }

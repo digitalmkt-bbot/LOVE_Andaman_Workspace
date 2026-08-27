@@ -514,10 +514,19 @@
         yes.disabled=false; no.disabled=false; yes.textContent='ลองใหม่'; yes.style.background='#A32D2D';
       };
       try{
+        // §ssoLogout (2026-08-27): when Authentik SSO is on, the server answers /api/logout with
+        // {ssoLogout:'/auth/logout'}. Reloading the page instead would bounce through the SSO gate,
+        // Authentik would still be holding its own session, and the user would land back inside the
+        // app — a sign-out button that appears to do nothing. Go end that session too.
+        var sso=null;
         fetch('/api/logout',{credentials:'same-origin',cache:'no-store'})
-          .then(function(){ return fetch('/api/me',{credentials:'same-origin',cache:'no-store'}); })
           .then(function(r){ return r.ok?r.json():null; })
-          .then(function(j){ if(j && (j.username||j.name)) fail('เซิร์ฟเวอร์ยังจำ session นี้อยู่'); else done(); })
+          .then(function(j){ if(j && j.ssoLogout) sso=j.ssoLogout;
+                             return fetch('/api/me',{credentials:'same-origin',cache:'no-store'}); })
+          .then(function(r){ return r.ok?r.json():null; })
+          .then(function(j){ if(j && (j.username||j.name)) fail('เซิร์ฟเวอร์ยังจำ session นี้อยู่');
+                             else if(sso) location.replace(sso);
+                             else done(); })
           .catch(function(e){ fail(String((e&&e.message)||e)); });
       }catch(e){ fail(String((e&&e.message)||e)); }
     };
