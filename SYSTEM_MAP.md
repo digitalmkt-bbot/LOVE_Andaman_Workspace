@@ -1,7 +1,8 @@
 # LOVE Andaman — System Map (Sales & Booking + Operations)
 
-> Machine-readable architecture map of `allotment_v2.html`.
-> Purpose: let a human **or an AI assistant** quickly understand the modules, their data stores, key fields, and how they connect — without reading the 2.9 MB source file.
+> Machine-readable architecture map of the allotment_v2 front end — `allotment_v2.html` (markup +
+> CSS) and `allotment_v2/js/01..08-*.js` (all ~80k lines of code; see `allotment_v2/js/README.md`).
+> Purpose: let a human **or an AI assistant** quickly understand the modules, their data stores, key fields, and how they connect — without reading the ~6.2 MB of source.
 > Scope here: **Program/Routes · Boat Status · Boat Operation · Pickup Setup · Rate Types · B2C Channels · Agent List · Booking · Seat Locks · Accounting · Weather cancellation.**
 > Companion file: `CLAUDE.md` (deeper schemas, safety rules, change log). This file = the big picture.
 > Last updated: 2026-06-04.

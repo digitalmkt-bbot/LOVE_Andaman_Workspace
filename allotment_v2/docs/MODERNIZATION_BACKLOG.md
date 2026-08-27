@@ -36,7 +36,7 @@ unverifiable by construction.
 | E8 | Permission Model Coherence | Correctness | Edit-area gates disagree between callers and callees |
 | E9 | Documentation Truth | Foundation | 12 documented drift items; the cited history file does not exist |
 | E10 | Observability & Drift Detection | Foundation | Drift checks exist as endpoints but their tooling was deleted |
-| E11 | Modularize `allotment_v2.html` | Architecture | 83,629 lines, one file, one global scope |
+| E11 | Modularize the front end | Architecture | ~80k lines across `allotment_v2/js/*.js`, still one global scope |
 | E12 | Multi-day / OVN Correctness | Correctness | `bk.ops` is day-1-only; every OVN bug traces to direct access |
 | E13 | Fleet Data Integrity | Correctness | Four writers bypass `flSave()`; dead snapshot system |
 | E14 | Performance & Load Path | Quality | Whole-blob load, brotli-tuned cache, synchronous render assumptions |
@@ -352,7 +352,7 @@ Everything below is real and cited, but does not need scheduling yet.
 
 | ID | Story | Epic | Est |
 |---|---|---|---|
-| B-15 | Modularize `allotment_v2.html` (83,629 lines, one global scope) — spike the split first; domain boundaries are already mapped by docs 01–08 | E11 | 21 |
+| B-15 | Modularize the front end — the **mechanical** file split is DONE (2026-08-27: 8 classic-script files under `allotment_v2/js/`, byte-identical, no semantic change). What remains is the real thing: ESM, explicit imports, and killing the ~2,500 inline `onclick=` handlers + ~3,100 window globals that keep it one global scope. Domain boundaries are mapped by docs 01–08. Note this now costs about what the `platform/` strangler rewrite costs — weigh before scheduling | E11 | 21 |
 | B-16 | `_baChMemo` lives exactly one microtask (`:45332`); safe only because rendering is synchronous. Blocks any async render work | E11 | 5 |
 | B-17 | `admin_devlog` is a double-encoded JSON string, not a collection | E4 | 2 |
 | B-18 | `_bindVal` coercion (`server.js:114`) silently rounds floats into bigints — surface these instead of swallowing | E10 | 3 |

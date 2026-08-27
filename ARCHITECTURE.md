@@ -18,12 +18,17 @@ changelog.
 
 ## The system in one paragraph
 
-`allotment_v2/allotment_v2.html` is a single-file front end (~4MB) that talks to `server.js` (Node,
-no framework) over a REST API. **Postgres is the durable source of truth** — `server.js` reads and
-writes an `operation_schemas` schema (~103 tables) via a mapping layer in `os-backend/`. The
-browser keeps a working copy of the current state in memory and in `localStorage` under the key
-`loveandaman_v2`, seeded from HTML default constants on first run and refreshed from the server on
-login; every change the user makes is diffed and synced back to Postgres. `localStorage` is a
+`allotment_v2/allotment_v2.html` (~524KB of markup + CSS) plus `allotment_v2/js/01..08-*.js`
+(~6.2MB, where all the code lives) is the front end; it talks to `server.js` (Node, no framework)
+over a REST API. Until 2026-08-27 that was one 6.7MB HTML file with the JS inline — the split moved
+the bytes and nothing else. The eight files are **classic scripts loaded in order**, so they still
+share one global scope exactly as the inline blocks did; `allotment_v2/js/README.md` explains why
+`defer` / `async` / `type="module"` must never be added to those tags. **Postgres is the durable
+source of truth** — `server.js` reads and writes an `operation_schemas` schema (~103 tables) via a
+mapping layer in `os-backend/`. The browser keeps a working copy of the current state in memory and
+in `localStorage` under the key `loveandaman_v2`, seeded from the `DEFAULT_*` constants in
+`js/04-data-core.js` / `js/05-fleet.js` on first run and refreshed from the server on login; every
+change the user makes is diffed and synced back to Postgres. `localStorage` is a
 working cache for the UI, not the store of record — see
 `allotment_v2/docs/workflows/07-data-persistence-api.md` §1 for the full three-layer breakdown
 (Postgres / RAM / localStorage) and §4 for the four-registration checklist a new persisted field

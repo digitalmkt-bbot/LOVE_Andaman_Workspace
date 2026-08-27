@@ -5,7 +5,7 @@
 
 ## 0. START HERE (new-chat orientation)
 
-**What this is:** one giant single-file web app `allotment_v2/allotment_v2.html` (~4MB / ~46k lines) for LOVE Andaman (Phuket marine tours). Runs on Railway, served to staff at `rsvn.loveandaman.com` (behind Cloudflare — **Rocket Loader must stay off**, it kills every inline `onclick` and looks exactly like a permissions bug). Verify any data claim against live data before asserting it: a logged-in prod Chrome tab is usually open (Claude-in-Chrome tools), but the extension is often not connected — when it isn't, query the prod Postgres directly (credentials under *Verifying what is actually live* below) instead of reasoning from the source alone.
+**What this is:** one giant web app for LOVE Andaman (Phuket marine tours) — `allotment_v2/allotment_v2.html` (~6.3k lines of markup + CSS) plus **`allotment_v2/js/01..08-*.js` (~80k lines, ~6.2MB)**, which is where essentially all the code lives. It was a single 86k-line file until 2026-08-27; the JS was lifted out verbatim into 8 classic `<script src>` files in load order. **This is a file split, not modularization** — still one global scope, ~3,100 top-level functions, ~2,500 inline `onclick=` handlers in the HTML calling them by name. Read `allotment_v2/js/README.md` before touching the script tags: adding `defer`, `async`, or `type="module"`, or reordering them, breaks every inline handler in the app. Runs on Railway, served to staff at `rsvn.loveandaman.com` (behind Cloudflare — **Rocket Loader must stay off**, it defers scripts and kills every inline `onclick`, and looks exactly like a permissions bug). Verify any data claim against live data before asserting it: a logged-in prod Chrome tab is usually open (Claude-in-Chrome tools), but the extension is often not connected — when it isn't, query the prod Postgres directly (credentials under *Verifying what is actually live* below) instead of reasoning from the source alone.
 
 **Starting a new chat:**
 1. Do NOT dump the changelog back at the user or re-read the whole file.
@@ -13,7 +13,7 @@
 2. On a task: `grep` for the relevant function → read a small window → targeted `Edit` → verify.
 
 **Deploy workflow (verified 2026-08-17):**
-- Edit → extract the main `<script>` and run `node --check` → back up to `BACKUP/`.
+- Edit → `node --check allotment_v2/js/<file>.js` on each file you touched → back up to `BACKUP/`. (The old "extract the main `<script>` out of the HTML first" ritual is gone — since 2026-08-27 the JS is real `.js` files.)
 - **`lk-inbox` IS production.** Railway auto-deploys it (~1–2 min), so **`git push origin lk-inbox` is a production release** — staff see the change minutes later, and its migrations run against the live database on the way. Treat every push as shipping, not as saving work. (This changed on 2026-08-12; older notes saying "pushing to lk-inbox doesn't touch prod" are obsolete.)
 - Plain git from the sandbox works — auth is configured. GitHub Desktop / computer-use is NOT needed.
 - Verify: `git ls-remote origin refs/heads/lk-inbox` must equal `git rev-parse lk-inbox`.
@@ -40,7 +40,8 @@
 LOVE_Andaman_Workspace/
 ├── CLAUDE.md · ARCHITECTURE.md · SYSTEM_MAP.md · BACKLOG.md
 └── allotment_v2/
-    ├── allotment_v2.html      ← main file
+    ├── allotment_v2.html      ← markup + CSS + the <script src> tags (~6.3k lines)
+    ├── js/01..08-*.js         ← ALL the app code (~80k lines) · see js/README.md
     ├── start_server.command   ← static local server, no /api (§4)
     ├── docs/workflows/        ← per-domain workflow docs (see ARCHITECTURE.md)
     ├── BACKUP/                ← timestamped pre-edit copies
@@ -51,7 +52,7 @@ LOVE_Andaman_Workspace/
 
 ## 2. Data storage model (read carefully)
 
-**Backend = Postgres via `server.js` (`DATA_BACKEND=relational`, ~103 tables).** The single-file client keeps a working copy in **localStorage `loveandaman_v2` (`LS_KEY`)** — seeded from HTML default constants on first run, refreshed from the cloud blob on login — and syncs every change to Postgres through a REST API. localStorage is the in-browser working store; Postgres is the durable source of truth.
+**Backend = Postgres via `server.js` (`DATA_BACKEND=relational`, ~103 tables).** The browser client keeps a working copy in **localStorage `loveandaman_v2` (`LS_KEY`)** — seeded from the `DEFAULT_*` / `FL_DEFAULT_*` constants in `js/04-data-core.js` and `js/05-fleet.js` on first run, refreshed from the cloud blob on login — and syncs every change to Postgres through a REST API. localStorage is the in-browser working store; Postgres is the durable source of truth.
 
 
 Key default constants (grep for line): `DEFAULT_ROUTES`, `DEFAULT_BOATS`, `FL_DEFAULT_ENGINES`, `FL_DEFAULT_GEARBOXES`, `FL_DEFAULT_PROPELLERS`, `FL_DEFAULT_MAINTENANCE`, `FL_DEFAULT_INCIDENTS`, `FL_DEFAULT_INVENTORY`, `FL_DEFAULT_MEMOS`.
@@ -120,7 +121,8 @@ Key fields: `id`, `name`, `code`, `companyInfo{legalName,taxId,address}`, `conta
 
 ## 5. Working with the file, look & feel, comms
 
-- File is huge — never read it whole. `grep -n` to locate → read a 30–50 line window → targeted `str_replace` with unique surrounding context → re-read only the changed section. Verify with `node --check` on the extracted `<script>`.
+- The files are huge (`js/08-app.js` alone is ~47k lines) — never read one whole. `grep -rn` over `allotment_v2/js/` to locate → read a 30–50 line window → targeted `str_replace` with unique surrounding context → re-read only the changed section. Verify with `node --check <that file>`.
+- **Line citations written before 2026-08-27** (`bkV2InferZone:69054`, `pjOf:82102`, …, all over this file and `docs/workflows/`) point into the pre-split HTML. Translate with `node tools/js-split-linemap.mjs 69054`, or ignore the number and grep the function name — every citation carries one.
 - **Visual system:** DM Sans body / DM Mono for numbers; brand accent recolored coral→**Ocean blue `#1683C7`** via the reversible `<style id="softui-ocean-skin">` block. Most re-skins are single reversible `<style id="...-skin">` blocks before `</head>` — delete the block to revert. **No Tabler webfont in the app** — icons are inline SVG.
 - **Comms:** concise, show snippets, ask before big refactors, remind about backups before core-data edits, state the diff after edits (e.g. "added 3 entries to `FL_DEFAULT_ENGINES` at line 3045").
 
