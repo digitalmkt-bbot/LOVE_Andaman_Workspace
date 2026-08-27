@@ -2764,7 +2764,17 @@ const server = http.createServer((req, res) => {
   }
 
   // ───── static files ─────
-  let p = decodeURIComponent(u); if(p==='/'||p==='') p='/allotment_v2/allotment_v2.html';
+  // §rootRedirect (2026-08-27): "/" used to SERVE the app file while leaving the browser's document
+  // URL at "/", so every relative reference in the page resolved one directory too high. That was
+  // already quietly breaking the app's own relative assets — `assets/hero/<routeId>.jpg` and
+  // `assets/logo.png` (js/08-app.js) resolve against the document, so at "/" they asked for
+  // /assets/... and 404'd — and once the CSS and JS moved out of the HTML it broke the whole page:
+  // href="css/01-base.css" became /css/01-base.css, src="js/08-app.js" became /js/08-app.js.
+  // Redirecting instead of rewriting means the document URL is always the real path, so relative
+  // references resolve correctly here AND under allotment_v2/start_server.command (whose web root is
+  // allotment_v2/ itself). 302, not 301: a permanent redirect is cached hard and painful to undo.
+  if(u==='/'||u===''){ res.writeHead(302,{Location:'/allotment_v2/allotment_v2.html'+(q?('?'+q):''),'Cache-Control':'no-store'}); return res.end(); }
+  let p = decodeURIComponent(u);
   const fp = path.normalize(path.join(ROOT,p));
   if(!fp.startsWith(ROOT)){ res.writeHead(403); return res.end('Forbidden'); }
   fs.readFile(fp,(err,data)=>{ if(err){ res.writeHead(404,{'Content-Type':'text/plain; charset=utf-8'}); return res.end('Not found'); }
