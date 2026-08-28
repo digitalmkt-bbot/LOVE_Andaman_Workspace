@@ -48,6 +48,28 @@ management and the System Log). It exists for testing on a deployment where you 
 Authentik admits. Left `off`, an Authentik user with no row in the app's `users` table is refused
 with a message saying so.
 
+### Switching `/api` to the new backend
+
+`allotment_v2` has no API base URL to change — every call is a hardcoded same-origin absolute path
+(`/api/load`, `/api/save`, `/api/v1/_batch`, `/api/me`, …, mostly in
+`allotment_v2/js/01-auth-sync.js`), and it is classic `<script src>` files, so the Vite
+`VITE_API_BASE_URL` never reaches it. The switch is therefore server-side, in `api-proxy.js`.
+
+- `API_PROXY_URL` — target origin, e.g. `https://operationbackend-production.up.railway.app`.
+  **Unset = nothing changes at all.**
+- `API_PROXY_ROUTES` — comma-separated path prefixes to send upstream, e.g.
+  `/api/v1/rate-types,/api/agents`. Default `*` = every `/api` route.
+- `API_PROXY_TIMEOUT_MS` — default `30000`.
+
+Proxying, rather than pointing the client at another origin, keeps every request same-origin: the
+existing `SameSite=Lax` session cookie keeps working and no CORS setup is needed. Only `/api` paths
+are ever proxied — the app HTML, the js/css files and `/auth/*` cannot be, by construction.
+
+⚠ **`API_PROXY_ROUTES` is the point.** Move routes across one at a time, as the new backend
+implements them; anything unlisted is still served by `server.js` from the same database. Setting
+only `API_PROXY_URL` sends **everything** upstream — including `/api/login` and `/api/load` — so if
+the target does not implement them yet, the app is down.
+
 ## Data
 - No customer data is stored in this repo. Postgres (via `server.js`) is the durable store; each browser's `localStorage`/in-memory copy is a working cache, not the source of truth.
 - Use the in-app **💾 Backup** button to export/import data between machines.

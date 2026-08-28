@@ -32,6 +32,7 @@ const OS_SCHEMA = 'operation_schemas';
 const USERS_T = DATA_BACKEND === 'relational' ? OS_SCHEMA + '.users' : 'users';
 // os_repo mapping engine + schema model — used by the relational save path AND the per-entity REST API.
 const osRepo  = require('./os-backend/src/mapping/os_repo.js');
+const apiProxy= require('./api-proxy.js');   // backend switch · inert unless API_PROXY_URL is set
 const oidc    = require('./auth/oidc.js');   // Authentik SSO · inert unless AUTH_OIDC_* is configured
 const osModel = require('./os-backend/src/mapping/operation_schemas_model.json');
 const OS_TABLES = Object.keys(osModel);
@@ -2181,6 +2182,12 @@ const server = http.createServer((req, res) => {
   const u = (req.url||'/').split('?')[0];
   const q = (req.url||'').split('?')[1]||'';
 
+  // ───── BACKEND SWITCH · route-level /api proxy (2026-08-28) ─────
+  // First thing in the handler, so a proxied route never reaches a local one. Inert unless
+  // API_PROXY_URL is set, and matches() can only ever be true for an /api path — the app HTML,
+  // the js/css files and /auth/* are structurally unreachable from here. See api-proxy.js.
+  if(apiProxy.enabled() && apiProxy.matches(u)) return apiProxy.forward(req, res, u, q);
+
   // ───── AUTH · Authentik SSO (2026-08-27) ─────
   // Both routes are no-ops unless AUTH_OIDC_ISSUER + AUTH_OIDC_CLIENT_ID are set; password login
   // via /api/login is untouched either way. The whole point of doing the exchange here rather than
@@ -2860,7 +2867,9 @@ function prewarmStatic(){
     });
   })();
 }
-server.listen(PORT, ()=>{ console.log('LOVE Andaman on '+PORT+(pool?' · db on':' · db off')); prewarmStatic(); });
+server.listen(PORT, ()=>{ console.log('LOVE Andaman on '+PORT+(pool?' · db on':' · db off'));
+  const px = apiProxy.describe(); if(px) console.log(px);
+  prewarmStatic(); });
 
 // §B2C background poller (2026-07-24): relSyncB2C only ran on /api/load, so a new B2C booking sat in
 // the source pool until someone manually refreshed. Poll it on a timer so new bookings are pulled in,
