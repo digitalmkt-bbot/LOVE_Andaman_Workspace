@@ -6775,7 +6775,7 @@ function nav(el){
     else if(view==='teammkt') renderTeamMkt();
     else if(view==='addonsvc') renderAddonSvc();
     else if(view==='dailypfm') renderDailyPFM();
-    else if(view==='vanbill') renderVanBill();
+    else if(view==='vanbill'){ _vb.open={}; _vb.foc=''; renderVanBill(); }
     else if(view==='vehicles') renderVehicles();
     else if(view==='vanjobs') renderVanJobs();
     else if(view==='vancheckin') renderVanCheckin();
@@ -48103,17 +48103,38 @@ function vbPersist(){
   if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('accounting')) return;
   try{ laBlob().van_bill=VAN_BILL; laBlobSave(); }catch(_){}
 }
-var _vb={sup:'', van:'', ym:'', per:2, edit:0, snap:null};
+var _vb={sup:'', van:'', ym:'', per:2, edit:0, snap:null, open:{}, foc:''};
+/* ── §vbFill · ช่องที่ยังไม่เคยกรอก คีย์ได้เลย ──────────────────────────
+   งานหลักของหน้านี้คือ "กรอกครั้งแรก" · บังคับให้กดแก้ไขก่อนทุกครั้งคือขวางงานหลัก
+   สิ่งที่โหมดแก้ไขมีไว้กันจริง ๆ คือการเผลอทับตัวเลขที่ตกลงกับเจ้าของรถไปแล้ว
+   → ช่องว่าง = กรอกได้ทันที บันทึกเลย · ช่องที่มีตัวเลขแล้ว = ต้องกดแก้ไขก่อน
+   ช่องที่เพิ่งกรอกไปในรอบนี้ยังเปิดค้างไว้ พิมพ์ผิดตัวเดียวจะได้ไม่ต้องกดแก้ไขทั้งหน้า
+   (_vb.open ล้างทุกครั้งที่เปลี่ยนรอบบิล / เข้าออกโหมดแก้ไข) */
+function vbCanSet(cur, k){
+  if(_vb.edit) return true;
+  if(k && _vb.open[k]) return true;
+  if(cur!=null && cur!=='' && +cur!==0) return false;
+  if(typeof laGuardEdit==='function' && !laGuardEdit('accounting')) return false;
+  return true;
+}
+/* กรอกนอกโหมดแก้ไข = บันทึกทันที · ไม่มีปุ่มบันทึกให้กดในเส้นทางนี้ */
+function vbStamp(k){
+  if(_vb.edit) return;
+  if(k){ _vb.open[k]=1; _vb.foc=k; }
+  var st=vbState();
+  st.by=(typeof laBy==='function')?laBy():''; st.at=new Date().toISOString();
+  vbPersist();
+}
 /* ── โหมดแก้ไข ─────────────────────────────────────────────────────────
    ใบวางบิลเป็นเอกสารที่ส่งให้เจ้าของรถ · เผลอปัดโดนช่องแล้วตัวเลขเปลี่ยนทันที
    โดยไม่มีใครรู้ คือเรื่องใหญ่ · ปกติหน้านี้จึงอ่านอย่างเดียว ต้องกดแก้ไขก่อน */
 function vbEdit(){
   if(typeof laGuardEdit==='function' && !laGuardEdit('accounting')) return;
   _vb.snap=JSON.stringify(vbState());
-  _vb.edit=1; renderVanBill();
+  _vb.edit=1; _vb.open={}; _vb.foc=''; renderVanBill();
 }
 function vbSave(){
-  _vb.edit=0; _vb.snap=null;
+  _vb.edit=0; _vb.snap=null; _vb.open={}; _vb.foc='';
   var st=vbState();
   st.by=(typeof laBy==='function')?laBy():''; st.at=new Date().toISOString();
   vbPersist(); renderVanBill();
@@ -48122,7 +48143,7 @@ function vbSave(){
 function vbCancel(quiet){
   if(!quiet && !confirm('ทิ้งที่แก้ไว้ กลับไปเป็นค่าที่บันทึกไว้ล่าสุด?')) return;
   if(_vb.snap){ try{ VAN_BILL[vbKey()]=JSON.parse(_vb.snap); }catch(_){} }
-  _vb.edit=0; _vb.snap=null; renderVanBill();
+  _vb.edit=0; _vb.snap=null; _vb.open={}; _vb.foc=''; renderVanBill();
 }
 /* เปลี่ยนรอบบิล/เจ้าของรถระหว่างแก้ไข = ที่แก้ไว้ของรอบเดิมหลุด · ถามก่อน */
 function vbLeave(){
@@ -48206,29 +48227,35 @@ function vbRows(){
   return Object.keys(map).sort().map(function(k){ return map[k]; });
 }
 function vbSet(field,val){
-  if(!_vb.edit) return;
-  var st=vbState(); st[field]=Math.max(0, parseFloat(String(val).replace(/[^0-9.]/g,''))||0);
-  renderVanBill();
+  var st=vbState(), k='@'+field;
+  if(!vbCanSet(st[field], k)) return;
+  st[field]=Math.max(0, parseFloat(String(val).replace(/[^0-9.]/g,''))||0);
+  vbStamp(k); renderVanBill();
 }
 function vbSetRow(rk, field, val){
-  if(!_vb.edit) return;
-  var st=vbState(); if(!st.rows[rk]) st.rows[rk]={};
+  var st=vbState(), k=rk+'|'+field;
+  if(!vbCanSet((st.rows[rk]||{})[field], k)) return;
+  if(!st.rows[rk]) st.rows[rk]={};
   /* §vbMinus · ช่องหักแสดงเป็นลบ · ตัดเครื่องหมายทิ้งแล้วเก็บเป็นบวก
      พิมพ์ "-100" หรือ "100" ได้ค่าเดียวกัน ไม่ต้องมาลุ้นว่าต้องใส่ลบไหม */
   st.rows[rk][field]=Math.max(0, parseFloat(String(val).replace(/[^0-9.]/g,''))||0);
-  renderVanBill();
+  vbStamp(k); renderVanBill();
 }
 function vbAddExtra(){
-  if(!_vb.edit) return;
+  if(!_vb.edit && typeof laGuardEdit==='function' && !laGuardEdit('accounting')) return;
   var st=vbState(); var P=vbPeriod();
-  st.extra.push({id:'x'+Date.now().toString(36), date:P.from, note:'รถนอก', van:1, pax:0, rate:0, ex:0, cut:0, per:0});
-  vbPersist(); renderVanBill();
+  var id='x'+Date.now().toString(36);
+  st.extra.push({id:id, date:P.from, note:'รถนอก', van:1, pax:0, rate:0, ex:0, cut:0, per:0});
+  /* แถวที่เพิ่งเพิ่มมีค่าเริ่มต้นอยู่แล้ว · ถ้าไม่เปิดไว้จะล็อกทันทีที่เพิ่ม แก้อะไรไม่ได้เลย */
+  ['date','note','van','pax','rate','ex','cut','per'].forEach(function(f){ _vb.open['x'+id+'|'+f]=1; });
+  vbStamp(''); renderVanBill();
 }
 function vbSetExtra(id, field, val){
-  if(!_vb.edit) return;
   var st=vbState(), r=st.extra.filter(function(x){ return x.id===id; })[0]; if(!r) return;
+  var k='x'+id+'|'+field;
+  if(!vbCanSet(r[field], k)) return;
   r[field]=(field==='date'||field==='note')?String(val):Math.max(0, parseFloat(String(val).replace(/[^0-9.]/g,''))||0);
-  renderVanBill();
+  vbStamp(k); renderVanBill();
 }
 function vbDelExtra(id){
   if(!_vb.edit) return;
@@ -48237,10 +48264,14 @@ function vbDelExtra(id){
 }
 function vbPick(field,val){
   if(!vbLeave()){ renderVanBill(); return; }
+  /* §vbFill · ออกจากรอบบิลนี้แล้ว ช่องที่เพิ่งกรอกไปต้องกลับไปล็อก
+     ไม่งั้นเดินออกไปงวดอื่นแล้วกลับมา ยังพิมพ์ทับตัวเลขที่บันทึกแล้วได้อยู่ */
+  _vb.open={}; _vb.foc='';
   _vb[field]=(field==='per')?(+val||1):val; if(field==='sup') _vb.van=''; renderVanBill();
 }
 function vbShiftMonth(n){
   if(!vbLeave()) return;
+  _vb.open={}; _vb.foc='';
   var y=+_vb.ym.slice(0,4), m=+_vb.ym.slice(5,7)-1+n, d=new Date(y,m,1);
   _vb.ym=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); renderVanBill();
 }
@@ -48283,12 +48314,13 @@ function renderVanBill(){
   var ED=!!_vb.edit;
   /* §vbEdit · ไม่ได้อยู่ในโหมดแก้ไข = ไม่มีช่องให้พิมพ์เลย · กันปัดโดนแล้วตัวเลขเปลี่ยนเงียบ ๆ
      §vbMinus · neg=1 คือช่องหัก · แสดงติดลบให้เห็นว่าเป็นรายการที่เอาออกจากบิล */
-  var IN=function(fn,val,w,neg){
+  var IN=function(fn,val,w,neg,k){
     var has=(val||val===0), txt=has?((neg?'-':'')+val):'';
-    if(!ED) return '<span class="vb-ro'+(neg?' neg':'')+(has?'':' mut')+'" style="min-width:'+(w||58)+'px">'
-      +(has?e(txt):'·')+'</span>';
-    return '<input value="'+e(txt)+'" onchange="'+fn+'" class="vb-in'+(neg?' neg':'')+'" '
-      +'style="width:'+(w||58)+'px">';
+    /* §vbFill · ว่าง = เปิดให้คีย์เลย · มีตัวเลขแล้ว = อ่านอย่างเดียวจนกว่าจะกดแก้ไข */
+    var open=ED || !has || (k && _vb.open[k]);
+    if(!open) return '<span class="vb-ro'+(neg?' neg':'')+'" style="min-width:'+(w||58)+'px">'+e(txt)+'</span>';
+    return '<input value="'+e(txt)+'" onchange="'+fn+'"'+(k?(' data-vbk="'+e(k)+'"'):'')
+      +' class="vb-in'+(neg?' neg':'')+'" style="width:'+(w||58)+'px">';
   };
   /* จำนวนลบสำหรับช่องที่ระบบคิดให้ (แถวรวม / การ์ดสรุป) */
   var NEG=function(n){ return (+n>0) ? ('−'+Math.round(n).toLocaleString()) : '0'; };
@@ -48322,11 +48354,11 @@ function renderVanBill(){
      +'<td><b>'+r.ad+'</b></td><td>'+(r.chd||'<span class="vb-mut">·</span>')+'</td>'
      +'<td>'+(r.inf||'<span class="vb-mut">·</span>')+'</td><td>'+(r.foc||'<span class="vb-mut">·</span>')+'</td>'
      +'<td><b>1</b></td><td><b>'+r.pax+'</b></td>'
-     +'<td>'+IN("vbSetRow('"+x.rk+"','rate',this.value)", x.rate||'')+'</td>'
-     +'<td>'+IN("vbSetRow('"+x.rk+"','ex',this.value)", x.ex||'', 50)+'</td>'
-     +'<td>'+IN("vbSetRow('"+x.rk+"','cut',this.value)", x.cut||'', 52, 1)+'</td>'
+     +'<td>'+IN("vbSetRow('"+x.rk+"','rate',this.value)", x.rate||'', 58, 0, x.rk+'|rate')+'</td>'
+     +'<td>'+IN("vbSetRow('"+x.rk+"','ex',this.value)", x.ex||'', 50, 0, x.rk+'|ex')+'</td>'
+     +'<td>'+IN("vbSetRow('"+x.rk+"','cut',this.value)", x.cut||'', 52, 1, x.rk+'|cut')+'</td>'
      +'<td class="r"><b>'+B(x.bill)+'</b></td>'
-     +'<td>'+IN("vbSetRow('"+x.rk+"','per',this.value)", x.per||'', 50)+'</td>'
+     +'<td>'+IN("vbSetRow('"+x.rk+"','per',this.value)", x.per||'', 50, 0, x.rk+'|per')+'</td>'
      +'<td class="r"><b>'+B(x.sale)+'</b><div class="vb-sub">'+r.pax+' × '+(x.per||0)+'</div></td>'
      +'<td class="r" style="font-weight:800;color:'+((x.sale-x.bill)<0?'#A32D2D':'#0F6E56')+'">'
        +((x.sale-x.bill)<0?'−':'')+B(Math.abs(x.sale-x.bill))+'</td></tr>';
@@ -48335,18 +48367,18 @@ function renderVanBill(){
   var exBody=st.extra.map(function(x){
     var bill=(+x.van||0)*(+x.rate||0)+(+x.ex||0)-(+x.cut||0), sale=(+x.pax||0)*(+x.per||0);
     return '<tr class="vb-ex">'
-     +'<td class="l">'+(ED?('<input type="date" value="'+e(x.date||'')+'" onchange="vbSetExtra(\''+x.id+'\',\'date\',this.value)" class="vb-din">')
+     +'<td class="l">'+((ED||_vb.open['x'+x.id+'|date'])?('<input type="date" value="'+e(x.date||'')+'" onchange="vbSetExtra(\''+x.id+'\',\'date\',this.value)" class="vb-din">')
         :('<span class="vb-mono">'+e(x.date?(x.date.slice(8,10)+'/'+(+x.date.slice(5,7))+'/'+x.date.slice(2,4)):'—')+'</span>'))+'</td>'
-     +'<td class="l" colspan="2">'+(ED?('<input value="'+e(x.note||'')+'" onchange="vbSetExtra(\''+x.id+'\',\'note\',this.value)" class="vb-tin" placeholder="รถนอก · งานที่ไม่ได้ผ่านใบงาน">')
+     +'<td class="l" colspan="2">'+((ED||_vb.open['x'+x.id+'|note'])?('<input value="'+e(x.note||'')+'" onchange="vbSetExtra(\''+x.id+'\',\'note\',this.value)" class="vb-tin" placeholder="รถนอก · งานที่ไม่ได้ผ่านใบงาน">')
         :('<span class="vb-rn">'+e(x.note||'รถนอก')+'</span>'))+'</td>'
      +'<td colspan="4" class="vb-mut">กรอกเอง</td>'
-     +'<td>'+IN("vbSetExtra('"+x.id+"','van',this.value)", x.van||'', 40)+'</td>'
-     +'<td>'+IN("vbSetExtra('"+x.id+"','pax',this.value)", x.pax||'', 44)+'</td>'
-     +'<td>'+IN("vbSetExtra('"+x.id+"','rate',this.value)", x.rate||'')+'</td>'
-     +'<td>'+IN("vbSetExtra('"+x.id+"','ex',this.value)", x.ex||'', 50)+'</td>'
-     +'<td>'+IN("vbSetExtra('"+x.id+"','cut',this.value)", x.cut||'', 52, 1)+'</td>'
+     +'<td>'+IN("vbSetExtra('"+x.id+"','van',this.value)", x.van||'', 40, 0, 'x'+x.id+'|van')+'</td>'
+     +'<td>'+IN("vbSetExtra('"+x.id+"','pax',this.value)", x.pax||'', 44, 0, 'x'+x.id+'|pax')+'</td>'
+     +'<td>'+IN("vbSetExtra('"+x.id+"','rate',this.value)", x.rate||'', 58, 0, 'x'+x.id+'|rate')+'</td>'
+     +'<td>'+IN("vbSetExtra('"+x.id+"','ex',this.value)", x.ex||'', 50, 0, 'x'+x.id+'|ex')+'</td>'
+     +'<td>'+IN("vbSetExtra('"+x.id+"','cut',this.value)", x.cut||'', 52, 1, 'x'+x.id+'|cut')+'</td>'
      +'<td class="r"><b>'+B(bill)+'</b></td>'
-     +'<td>'+IN("vbSetExtra('"+x.id+"','per',this.value)", x.per||'', 50)+'</td>'
+     +'<td>'+IN("vbSetExtra('"+x.id+"','per',this.value)", x.per||'', 50, 0, 'x'+x.id+'|per')+'</td>'
      +'<td class="r"><b>'+B(sale)+'</b></td>'
      +'<td class="r">'+(ED?('<a onclick="vbDelExtra(\''+x.id+'\')" style="color:#A32D2D;cursor:pointer;font-weight:700">ลบ</a>'):'')+'</td></tr>';
   }).join('');
@@ -48361,8 +48393,8 @@ function renderVanBill(){
    +'<div class="vb">'
    +'<div class="vb-h1">&#128656; วางบิลรถร่วม · Van Supplier Billing</div>'
    +'<div class="vb-sub2"><span class="vb-k1">พื้นขาว = ระบบดึงให้เอง</span> &nbsp;·&nbsp; <span class="vb-k2">ช่องเส้นประฟ้า = กรอกเอง</span>'
-     +' &nbsp;·&nbsp; '+(ED?'<b style="color:#0E6AA8">แก้ได้แล้ว · กดบันทึกเมื่อเสร็จ</b>'
-                          :'<span style="color:#98A2AD">อ่านอย่างเดียว · กด “แก้ไข” ก่อนถึงจะกรอกได้</span>')+'</div>'
+     +' &nbsp;·&nbsp; '+(ED?'<b style="color:#0E6AA8">แก้ได้ทุกช่อง · กดบันทึกเมื่อเสร็จ</b>'
+                          :'<span style="color:#98A2AD">ช่องที่ยังว่าง คีย์ได้เลย บันทึกให้ทันที · ช่องที่มีตัวเลขแล้วกด “แก้ไข” ก่อน</span>')+'</div>'
    +'<div class="vb-bar">'+supSel+vanSel
    +'<span class="vb-segwrap">'+segBtn(1,'1–10')+segBtn(2,'11–20')+segBtn(3,'21–สิ้นเดือน')+'</span>'
    +'<span class="vb-mo"><button onclick="vbShiftMonth(-1)">&lsaquo;</button><b>'+e(mLbl)+'</b><button onclick="vbShiftMonth(1)">&rsaquo;</button></span>'
@@ -48377,9 +48409,9 @@ function renderVanBill(){
      +'<div class="m">'+e(whoMeta)+'</div></div>'
      +'<div style="text-align:right"><div class="vb-lab">รอบบิล</div>'
      +'<div style="font:800 13.5px \'DM Mono\',monospace">'+P.label+' '+e(mLbl)+'</div></div></div>'
-   +'<div class="vb-set"><span>ตั้ง <b>ราคาขาย / คน</b> ทั้งรอบ</span>'+IN("vbSet('perPax',this.value)", st.perPax||'', 66)+'<span>บาท</span>'
+   +'<div class="vb-set"><span>ตั้ง <b>ราคาขาย / คน</b> ทั้งรอบ</span>'+IN("vbSet('perPax',this.value)", st.perPax||'', 66, 0, '@perPax')+'<span>บาท</span>'
      +'<span class="vb-hint">→ ระบบคูณจำนวนคนของแต่ละวันให้เอง · แถวไหนคิดต่างแก้เฉพาะแถวได้</span>'
-     +'<span style="flex:1"></span><span>เรต / คัน ตั้งต้น</span>'+IN("vbSet('rate',this.value)", st.rate||'', 66)+'<span>บาท</span></div>'
+     +'<span style="flex:1"></span><span>เรต / คัน ตั้งต้น</span>'+IN("vbSet('rate',this.value)", st.rate||'', 66, 0, '@rate')+'<span>บาท</span></div>'
    +'<div class="vb-kpi">'
      +'<div class="k"><div class="l">จำนวนลูกค้า</div><div class="v">'+T.pax+' <s>คน</s></div></div>'
      +'<div class="k"><div class="l">จำนวนรถ</div><div class="v">'+T.van+' <s>คัน</s></div></div>'
@@ -48396,8 +48428,8 @@ function renderVanBill(){
      +'<th style="width:92px">ราคาเรียกเก็บ</th><th class="man">ขาย/คน</th>'
      +'<th style="width:86px">ราคาขาย</th><th style="width:92px">กำไร/ขาดทุน</th></tr></thead>'
    +'<tbody>'+(body||'<tr><td colspan="16" style="padding:26px;text-align:center;color:#98A2AD">ไม่มีงานของเจ้านี้ในรอบบิลนี้</td></tr>')+exBody
-   +(ED?('<tr><td colspan="16" class="l" style="padding:9px 8px;background:#F7F8FB">'
-     +'<a onclick="vbAddExtra()" style="font-size:11.5px;color:#0E6AA8;font-weight:700;cursor:pointer">+ เพิ่มแถว (รถนอก · งานที่ไม่ได้ผ่านใบงาน)</a></td></tr>'):'')+'</tbody>'
+   +'<tr><td colspan="16" class="l" style="padding:9px 8px;background:#F7F8FB">'
+     +'<a onclick="vbAddExtra()" style="font-size:11.5px;color:#0E6AA8;font-weight:700;cursor:pointer">+ เพิ่มแถว (รถนอก · งานที่ไม่ได้ผ่านใบงาน)</a></td></tr></tbody>'
    +'<tfoot><tr><td class="l" colspan="3">รวม '+T.van+' เที่ยว</td>'
      +'<td>'+T.ad+'</td><td>'+T.chd+'</td><td>'+T.inf+'</td><td>'+T.foc+'</td>'
      +'<td>'+T.van+'</td><td>'+T.pax+'</td><td>—</td><td>'+(T.ex||0)+'</td>'
@@ -48410,6 +48442,11 @@ function renderVanBill(){
      +'<div class="vb-sb dark"><div class="t">รวมเรียกเก็บ</div><div class="b">'+B(T.bill)+'</div>'
        +'<div class="s">'+(st.by?('แก้ล่าสุด '+e(st.by)+(st.at?(' · '+String(st.at).slice(0,10)):'')):'ยังไม่ได้กรอก')+'</div></div>'
    +'</div></div>';
+  /* §vbFill · วาดใหม่ทั้งหน้าทุกครั้งที่กรอก · ไม่คืนโฟกัสให้ ผู้ใช้จะต้องคลิกใหม่ทุกช่อง */
+  if(_vb.foc){ var _k=_vb.foc; _vb.foc='';
+    try{ var _el=host.querySelector('[data-vbk="'+_k+'"]');
+      if(_el){ _el.focus(); if(_el.select) _el.select(); } }catch(_){}
+  }
 }
 function vbPrint(){
   var el=document.getElementById('vanbill-host'); if(!el) return;
