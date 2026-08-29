@@ -52900,6 +52900,31 @@ function goRouteOf(date,bid){
   var rid=use.length?(use[0].t.routeId||''):'';
   return (typeof getRoute==='function'?getRoute(rid):null)||{};
 }
+/* §goCrewJob · "กัปตันและนายท้ายเรือ" นับจากคนที่จัดลงใบงานเรือของวันนั้น
+   ไม่ใช่ช่อง "ลูกเรือ" ในทะเบียนเรือ · ทะเบียนเรือคือโครงมาตรฐานของลำ
+   ใบงานเรือคือคนที่ลงเรือจริงวันนั้น (มีคนแทน มีคนขาด ก็เห็นตรงนั้น)
+   ยังไม่ได้จัดใบงานเลยสักช่อง ค่อยถอยไปใช้เลขในทะเบียนเรือ ใบจะได้ไม่ว่าง
+   หมายเหตุ pjOf() คืนทีมประจำเรือให้เองเมื่อยังไม่เคยแตะใบของวันนั้น */
+function goCrewN(date,bid){
+  try{
+    var J=(typeof pjOf==='function')?pjOf(date,bid):null;
+    if(J){
+      var n=(J.cap?1:0)+(J.asst?1:0);
+      (J.crew||[]).forEach(function(x){ if(x) n++; });
+      if(n>0) return n;
+    }
+  }catch(_){}
+  var b=(typeof getBoat==='function')?getBoat(bid):null;
+  return (b&&+b.crew>0)?+b.crew:0;
+}
+/* ผช.ไกด์ในใบงานเรือ · ไม่ใช่ลูกเรือ ไม่ใช่มัคคุเทศก์ → ลงช่อง "อื่นๆ" ตามแบบกรมการท่องเที่ยว */
+function goIslandN(date,bid){
+  try{
+    var J=(typeof pjOf==='function')?pjOf(date,bid):null; if(!J) return 0;
+    var n=0; (J.island||[]).forEach(function(x){ if(x) n++; }); return n;
+  }catch(_){}
+  return 0;
+}
 // ── ใบเดียว ────────────────────────────────────────────────────────────
 function goSheet(date,bid,issue){
   var e=ckEsc, C=goCfg(), H=C.head, A=goAsn(date,bid);
@@ -52910,9 +52935,12 @@ function goSheet(date,bid,issue){
   var picked=A.g.map(goGuide).filter(Boolean);
   var gs=picked.filter(goIsGuide);
   var oth=picked.filter(function(g){ return !goIsGuide(g); });
-  var othN=(+A.other||0)+oth.length;
+  /* §goCrewJob · ผช.ไกด์ที่จัดไว้ในใบงานเรือก็อยู่บนเรือด้วย · ต้องนับในช่อง "อื่นๆ"
+     ไม่งั้นยอดรวมของใบสั่งงานกับทะเบียนรายชื่อที่พิมพ์ต่อกันจะไม่เท่ากัน
+     แล้วเจ้าหน้าที่จะเจอเลขขัดกันเองในชุดเดียวกัน */
+  var othN=(+A.other||0)+oth.length+goIslandN(date,bid);
   var lead=gs[0]||null;
-  var crew=(boat&&+boat.crew>0)?+boat.crew:0;
+  var crew=goCrewN(date,bid);
   var esc=(boat&&+boat.licensePax>0)?+boat.licensePax:((boat&&+boat.cap)||0);
   var no=goNoFor(date,bid,issue);
   var dep=(typeof pckDepOf==='function')?pckDepOf(rt.id||''):'';
@@ -53002,6 +53030,27 @@ function goCss(){ return '<style>'
     +'.gopg{box-shadow:none;margin:0;padding:0;max-width:none}'
     +'.gopg + .gopg{break-before:page}}'
   +'</style>'; }
+/* §goCombo · ใบสั่งงานกับทะเบียนรายชื่อใช้สไตล์คนละชุดและคนละขอบกระดาษ
+   พอพิมพ์ต่อกันในหน้าต่างเดียว @page / body / table ของสองชุดจะชนกัน
+   แทนที่จะไปแก้ไฟล์เดิมสองที่ (แล้วต้องคอยดูแลให้ตรงกันตลอด) แก้ทับตรงนี้ที่เดียว
+   ขอบกระดาษใช้ 7mm ของทะเบียน แล้วชดเชยให้ใบสั่งงานด้วย padding 3/5mm
+   ผลลัพธ์ที่พิมพ์ออกมาเท่าเดิมทั้งสองใบ */
+function goComboCss(){ return '<style>'
+  +'@page{size:A4 portrait;margin:7mm}'
+  +'body{margin:0;padding:18px 16px 60px;background:#E9EBEF}'
+  +'.gopg{font-family:"Sarabun",system-ui,sans-serif;color:#000;font-size:13px}'
+  +'.gopg table{table-layout:auto}'
+  +'.sheet{font-family:"Noto Sans Thai","DM Sans",sans-serif;color:#111}'
+  +'.gotool{max-width:820px}'
+  +'.gotool button.on{background:#0F6E56}'
+  +'.gotool button.gh{background:#fff;color:#5F5E5A;border:1px solid #ddd}'
+  +'@media print{'
+    +'body{background:#fff;padding:0}'
+    +'.gopg{padding:3mm 5mm;margin:0;max-width:none;box-shadow:none}'
+    +'.sheet{padding:0;margin:0;max-width:none;border:0;border-radius:0;box-shadow:none}'
+    +'.gopg+.sheet,.sheet+.gopg{break-before:page;page-break-before:always}'
+  +'}'
+  +'</style>'; }
 // bid = รหัสเรือ หรือ 'all'
 function goPrint(bid){
   var date=_pckDate, e=ckEsc;
@@ -53019,13 +53068,29 @@ function goPrint(bid){
   if(!ids.length){ alert('ยังไม่มีเรือที่จัดไว้ในวันนี้ — จัดเรือก่อนถึงพิมพ์ใบสั่งงานได้'); return; }
   var miss=ids.filter(function(k){ return !goAsn(date,k).g.length; });
   if(miss.length && !confirm('ยังไม่ได้จ่ายไกด์ให้ '+miss.length+' ลำ ('+miss.map(goBoatTh).join(', ')+')\nช่องมัคคุเทศก์จะว่างไว้ให้เขียนมือ · พิมพ์ต่อเลยไหม')) return;
-  var sheets=ids.map(function(k){ return goSheet(date,k,true); }).join('');
-  var title='ใบสั่งงานมัคคุเทศก์ · '+(bid==='all'?('ทุกลำ '+ids.length+' ใบ'):goBoatTh(bid))+' · '+date;
+  /* §goCombo · เจ้าท่ารับใบสั่งงานกับทะเบียนรายชื่อพร้อมกันอยู่แล้ว
+     แยกพิมพ์คนละหน้าต่างทำให้ต้องมาจับคู่ว่าใบไหนของลำไหนเอง · ออกต่อกันเป็นชุดเดียว
+     ลำละ 2 หน้า เรียงใบสั่งงานก่อน แล้วทะเบียนของลำเดียวกันตามทันที */
+  var sheets=ids.map(function(k){
+    return goSheet(date,k,true)+((typeof pckTravelSheet==='function')?pckTravelSheet(k,date):'');
+  }).join('');
+  var title='ใบสั่งงาน + ทะเบียนรายชื่อ · '+(bid==='all'?('ทุกลำ '+ids.length+' ชุด'):goBoatTh(bid))+' · '+date;
   var html='<!doctype html><html lang="th"><head><meta charset="utf-8"><title>'+e(title)+'</title>'
-    +'<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">'
-    +goCss()+'</head><body>'
-    +'<div class="gotool"><b>ใบสั่งงานมัคคุเทศก์</b><span class="h">'+e(title)+' · A4 แนวตั้ง · 1 ลำ = 1 ใบ</span>'
-    +'<button onclick="window.print()">พิมพ์ / บันทึก PDF</button></div>'+sheets+'</body></html>';
+    +'<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&family=DM+Mono:wght@400;700&family=Noto+Sans+Thai:wght@400;600;700;800&display=swap" rel="stylesheet">'
+    +goCss()+((typeof pckTravelCss==='function')?pckTravelCss():'')+goComboCss()+'</head><body>'
+    +'<div class="gotool"><b>ใบสั่งงาน + ทะเบียนรายชื่อ</b><span class="h">'+e(title)
+      +' · A4 แนวตั้ง · 1 ลำ = ใบสั่งงาน 1 หน้า + ทะเบียน 1 หน้า</span>'
+    +'<button onclick="window.print()">พิมพ์ / บันทึก PDF</button>'
+    +'<button id="bOut" class="gh on" onclick="goDir(1)">ออกภูเก็ต</button>'
+    +'<button id="bIn" class="gh" onclick="goDir(0)">เข้าภูเก็ต</button></div>'+sheets
+    +'<' + 'script>function goDir(o){'
+      +'var a=document.getElementById("bOut"),b=document.getElementById("bIn");'
+      +'if(a) a.className="gh"+(o?" on":""); if(b) b.className="gh"+(o?"":" on");'
+      +'Array.prototype.forEach.call(document.querySelectorAll(".sheet"),function(s){'
+        +'var x=s.querySelectorAll(".cb")[0], y=s.querySelectorAll(".cb")[1];'
+        +'if(x){x.className="cb"+(o?" on":"");x.innerHTML=o?"&#10003;":"&nbsp;";}'
+        +'if(y){y.className="cb"+(o?"":" on");y.innerHTML=o?"&nbsp;":"&#10003;";}});}<' + '/script>'
+    +'</body></html>';
   var w=window.open('','_blank'); if(!w){ alert('เปิดหน้าต่างไม่ได้ · อนุญาต pop-up ก่อน'); return; }
   w.document.write(html); w.document.close(); w.focus();
 }
@@ -53096,7 +53161,7 @@ function goSetupOpen(bid){
   var sgn=C.signers.map(function(x,i){ return '<option value="'+i+'"'+(i===A.sign?' selected':'')+'>'+e(x.name+' ('+x.title+')')+'</option>'; }).join('');
   acctModal(goModalCss()+'<div class="go-hd"><div><div class="go-t">ใบสั่งงานมัคคุเทศก์ · '+e(goBoatTh(bid))+'</div>'
     +'<div class="go-s">'+e(date)+' · ผู้ใหญ่ '+cnt.ad+' · เด็กโต '+cnt.chd+' · เด็กเล็ก '+cnt.inf
-      +' · กัปตัน/นายท้าย '+((boat&&boat.crew)||0)+(no?(' · เลขที่ '+no):' · ยังไม่ออกเลขที่')+'</div></div>'
+      +' · กัปตัน/นายท้าย '+goCrewN(date,bid)+' (จากใบงานเรือ)'+(no?(' · เลขที่ '+no):' · ยังไม่ออกเลขที่')+'</div></div>'
     +'<button class="go-x" onclick="acctModalClose()">&#10005;</button></div>'
     +'<div class="go-bd">'
       +'<div class="go-lab">มัคคุเทศก์ที่ขึ้นลำนี้ <span>คนแรกคือผู้รับผิดชอบใบ · ที่เหลือนับเป็นผู้ติดตาม</span></div>'
@@ -53311,17 +53376,19 @@ function pckTravelCrew(bid, date){
   GF.forEach(function(g){
     out.push({ name:g.name||'', pos:(g.guide?'ไกด์':'ผช. ไกด์'), grp:(g.guide?'guide':'staff') });
   });
-  /* จำนวนคนอื่นที่ใบสั่งงานนับไว้แต่ไม่ได้ระบุชื่อ · ให้ที่ว่างไว้เขียนมือ ไม่ใช่ทำหาย */
-  var oth=(GF&&GF.other)?(+GF.other||0):0;
-  for(var i=0;i<oth;i++) out.push({ name:'', pos:'ผช. ไกด์', grp:'staff' });
-  return out;
+  /* §regNoBlank · คนที่ใบสั่งงานนับไว้แต่ไม่ได้ระบุชื่อ · เดิมเว้นบรรทัดว่างไว้ให้เขียนมือ
+     ตอนนี้ใบเอาเฉพาะบรรทัดที่มีชื่อ · เก็บเป็นจำนวนติดมากับ list ไว้ให้ยอดท้ายใบยังตรง
+     แล้วขึ้นบรรทัดบอกท้ายใบว่ามีกี่คนที่ยังไม่ได้ระบุชื่อ ไม่ใช่ทำหายเงียบ ๆ */
+  var res=out.filter(function(x){ return String(x.name||'').trim(); });
+  res.blank=(GF&&GF.other)?(+GF.other||0):0;
+  return res;
 }
 /* ── ลูกค้า · หนึ่งคน = หนึ่งบรรทัด ──────────────────────────────────────
    คืน { people, pax, th, fr, over } · people เรียงตามใบจองเพื่อให้ครอบครัวอยู่ติดกัน
    คนที่ใบจองไม่ได้พิมพ์ชื่อไว้ ยังได้บรรทัดของตัวเอง (ว่าง) ไว้ให้หน้าท่าเขียนมือ
    ตัดบรรทัดทิ้งเลยจะทำให้จำนวนบรรทัดไม่ตรงกับยอดรวมท้ายใบ */
 function pckTravelRows(bid, date){
-  var people=[], pax=0, th=0, fr=0, over=0, list=[];
+  var people=[], pax=0, th=0, fr=0, over=0, noname=0, list=[];
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=(typeof ckTripOn==='function')?ckTripOn(b,date):null; if(!t) return;
@@ -53363,10 +53430,11 @@ function pckTravelRows(bid, date){
     nm.forEach(function(p,i){
       people.push({ name:p.name, nat:p.nat||'', phone:(i===0?phone:'') });
     });
-    /* ยังไม่ได้พิมพ์ชื่อ · เว้นบรรทัดไว้ ไม่เติมอะไรทั้งนั้น */
-    for(var k=nm.length;k<tot;k++) people.push({ name:'', nat:'', phone:'' });
+    /* §regNoBlank · ใบจองยังไม่ได้พิมพ์ชื่อ · ไม่เว้นบรรทัดว่างแล้ว นับไว้บอกท้ายใบแทน
+       ยอดรวมยังใช้จำนวนคนจริงที่อยู่บนเรือ · บรรทัดในตารางจึงน้อยกว่ายอดได้ ตั้งใจให้เป็นแบบนั้น */
+    noname += Math.max(0, tot-nm.length);
   });
-  return { people:people, pax:pax, th:th, fr:fr, over:over };
+  return { people:people, pax:pax, th:th, fr:fr, over:over, noname:noname };
 }
 function pckTravelCss(){
   return '<style id="sty">'
@@ -53432,7 +53500,10 @@ function pckTravelSheet(bid, date){
   /* ── ยอดท้ายใบ ── */
   var cnt={cap:0,eng:0,crew:0,guide:0,staff:0};
   CR.forEach(function(c){ cnt[c.grp]=(cnt[c.grp]||0)+1; });
-  var nCrew=CR.length, pax=PP.pax, th=PP.th, fr=PP.fr;
+  /* §regNoBlank · คนที่ไม่ได้ระบุชื่อไม่มีบรรทัดในตารางแล้ว แต่ยังอยู่บนเรือจริง · ยอดต้องนับ */
+  var blankCrew=(+CR.blank||0);
+  cnt.staff+=blankCrew;
+  var nCrew=CR.length+blankCrew, pax=PP.pax, th=PP.th, fr=PP.fr;
   var unspec=Math.max(0, pax-th-fr);
   /* ไม่ระบุสัญชาติ · ใบมีแค่สองช่อง จึงต้องเลือกข้าง · ลงต่างชาติแล้วบอกไว้ท้ายใบว่ากี่คน
      เงียบไว้แล้วยอดสองช่องไม่บวกกันเป็นยอดรวม คนตรวจจะสงสัยก่อน แล้วไม่รู้ว่าเพราะอะไร */
@@ -53458,11 +53529,10 @@ function pckTravelSheet(bid, date){
    +'<th>ชนิดวัคซีน<br>ยี่ห้อ / กี่โดส</th><th>ผลตรวจ<br>หาเชื้อ</th><th>ตำแหน่งในเรือ</th></tr></thead>';
 
   var band=function(txt){ return '<tr class="band"><td colspan="12">'+e(txt||'')+'</td></tr>'; };
-  var CREW_MIN=10;
+  /* §regNoBlank · เอาเฉพาะคนที่มีชื่อ · ไม่ยืดตารางให้ครบ 10 บรรทัดแล้ว */
   var cb='';
-  for(var i=0;i<Math.max(CREW_MIN,CR.length);i++){
+  for(var i=0;i<CR.length;i++){
     var c=CR[i];
-    /* §travelReg2 · ไม่มีชื่อ = ไม่มีข้อมูลอื่น · เหลือไว้แค่เลขลำดับกับเส้นบรรทัด */
     cb+='<tr><td class="no">'+(i+1)+'</td><td class="nm">'+(c?e(c.name):'')+'</td><td></td><td></td><td></td>'
       +'<td>'+(c?'ไทย':'')+'</td><td></td><td>'+(c?'ภูเก็ต':'')+'</td><td>'+(c?'-':'')+'</td><td></td>'
       +'<td>'+(c?'Negative':'')+'</td><td>'+(c?e(c.pos):'')+'</td></tr>';
@@ -53474,11 +53544,6 @@ function pckTravelSheet(bid, date){
       +'<td></td><td></td><td>'+e(r.phone)+'</td><td>'+e(r.nat)+'</td><td></td><td></td><td></td><td></td>'
       +'<td>'+(has?'Negative':'')+'</td><td>'+(has?'ลูกค้า ทั่วไป':'')+'</td></tr>';
   });
-  /* แถวว่างท้ายใบ · หน้าท่ามีคนเพิ่มหน้างานเสมอ เขียนมือลงไปได้เลย
-     ไม่ใส่เลขลำดับ ไม่ใส่อะไรทั้งนั้น · บรรทัดสุดท้ายที่มีเลขจะได้เท่ากับยอดผู้โดยสารพอดี */
-  for(var q=0;q<6;q++)
-    pb+='<tr><td></td><td class="nm"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>'
-      +'<td></td><td></td></tr>';
 
   var L=function(t,n){ return '<tr><td>'+e(t)+'</td><td class="n">'+n+'</td><td>ท่าน</td></tr>'; };
   var rep=(function(){ try{ var c=goCfg(); return ((c.signers||[])[0]||{}).name||''; }catch(_){ return ''; } })();
@@ -53493,7 +53558,12 @@ function pckTravelSheet(bid, date){
     +(unspec?('<div class="warn">ไม่ได้ระบุสัญชาติ '+unspec+' ท่าน &middot; นับรวมไว้ในช่อง'
         +'<b>ชาวต่างชาติ</b> เพื่อให้ยอดรวมตรง &middot; แก้สัญชาติได้ที่ใบจอง</div>'):'')
     +(PP.over?('<div class="warn">ใบจองมีชื่อมากกว่าจำนวนที่เดินทางจริง '+PP.over+' ท่าน &middot; '
-        +'เป็นคนที่แจ้งไม่มา &middot; ไม่ได้พิมพ์ลงใบ เพราะใบนี้ต้องตรงกับคนที่อยู่บนเรือ</div>'):'');
+        +'เป็นคนที่แจ้งไม่มา &middot; ไม่ได้พิมพ์ลงใบ เพราะใบนี้ต้องตรงกับคนที่อยู่บนเรือ</div>'):'')
+    /* §regNoBlank · ตารางเอาเฉพาะบรรทัดที่มีชื่อ · ถ้ายอดกับจำนวนบรรทัดไม่เท่ากันต้องบอกว่าเพราะอะไร */
+    +(PP.noname?('<div class="warn">ใบจองยังไม่ได้พิมพ์ชื่อ '+PP.noname+' ท่าน &middot; '
+        +'นับรวมในยอดท้ายใบแล้ว แต่ไม่มีบรรทัดในตาราง &middot; เติมชื่อได้ที่ใบจอง</div>'):'')
+    +(blankCrew?('<div class="warn">ทีมงานที่ยังไม่ได้ระบุชื่อ '+blankCrew+' ท่าน &middot; '
+        +'นับรวมในยอดท้ายใบแล้ว &middot; ระบุชื่อได้ที่ใบสั่งงานมัคคุเทศก์</div>'):'');
 
   return '<div class="sheet">'
     +'<div class="ttl">ทะเบียนรายชื่อผู้เดินทางเข้า-ออก จังหวัดภูเก็ตช่องทางน้ำ (ท่าเทียบเรือวิสิษฐ์พันวา)</div>'
@@ -53585,8 +53655,8 @@ function pckBoatTabs(all){
     }catch(_){}
   });
   return h+'<button class="pck-joball" onclick="pckGuideJobOrder(\'all\')" title="ใบงานไกด์ทุกลำของวันนี้ · A4 แนวนอน · 1 ลำ = 1 ใบ">&#128196;</button>'
-    +'<button class="pck-joball go" onclick="goPrint(\'all\')" title="ใบสั่งงานมัคคุเทศก์ทุกลำ · A4 แนวตั้ง · 1 ลำ = 1 ใบ">&#128220;</button>'
-    +'<button class="pck-joball reg" onclick="pckTravelReg(\'all\')" title="ทะเบียนรายชื่อผู้เดินทางเข้า-ออก จังหวัดภูเก็ตช่องทางน้ำ · ทุกลำ · A4 แนวตั้ง · 1 ลำ = 1 ใบ">&#128203;</button>'
+    +'<button class="pck-joball go" onclick="goPrint(\'all\')" title="ใบสั่งงานมัคคุเทศก์ + ทะเบียนรายชื่อ ทุกลำ · A4 แนวตั้ง · 1 ลำ = 2 หน้า">&#128220;</button>'
+    +'<button class="pck-joball reg" onclick="pckTravelReg(\'all\')" title="ทะเบียนรายชื่ออย่างเดียว · ทุกลำ · A4 แนวตั้ง · 1 ลำ = 1 ใบ (ปุ่มใบสั่งงานออกให้ทั้งสองใบอยู่แล้ว)">&#128203;</button>'
     +'<button class="pck-joball kit" onclick="pckKitchenOpen()" title="ครัว · อาหารกลางวันวันนี้ · จำนวนหัวนับจากคนที่ไปจริง">&#127869;'
       +(kitDue?('<span class="dot" title="'+kitDue+' ลำยังไม่ได้ส่งรายการให้ร้าน">'+kitDue+'</span>'):'')+'</button>'
     +'</div>';
@@ -54263,11 +54333,11 @@ function renderPierCheckin(){
         +(ovnByBoat[bid]?('<div class="pck-bchip" style="background:#EDE7FB;border:1px solid #fff;color:#5B289A;font-weight:800" title="ค้างคืนบนเกาะ · วันนี้เรือลำนี้ต้องไปรับกลับ · ไม่ต้องเช็คอินที่ท่า"><span class="k" style="opacity:.85">&#8617; รับกลับ</span><span class="v">'+ovnByBoat[bid].pax+'</span></div>'):'')
         +(a.due>0?bchip('ค้างเก็บ','&#3647;'+Math.round(a.due).toLocaleString()):'')
         +'<div class="pck-bchip" style="background:#fff;border:1px solid #fff;color:'+pckInkOnWhite(col)+'"><span class="k" style="opacity:.8">ที่นั่ง</span><span class="v">'+a.pax+(cap?('/'+cap):'')+'</span></div>'
-        +'<button class="pck-jobbtn go" onclick="event.stopPropagation();goSetupOpen(\''+bid+'\')" title="ใบสั่งงานมัคคุเทศก์ของลำนี้ · จ่ายไกด์แล้วพิมพ์">&#128220; ใบสั่งงาน'
+        +'<button class="pck-jobbtn go" onclick="event.stopPropagation();goSetupOpen(\''+bid+'\')" title="จ่ายไกด์แล้วพิมพ์ ใบสั่งงานมัคคุเทศก์ + ทะเบียนรายชื่อ ต่อกันเป็นชุดเดียว">&#128220; ใบสั่งงาน + ทะเบียน'
           +((goAsn(_pckDate,bid).g.length)?'':' <b style="color:#B4560A">&#9679;</b>')+'</button>'
         +'<button class="pck-jobbtn" onclick="event.stopPropagation();pckGuideJobOrder(\''+bid+'\')" title="พิมพ์ใบงานไกด์ของลำนี้ · A4 แนวนอน">&#128196; ใบงานไกด์</button>'
         /* §travelReg · ใบยื่นเจ้าท่า · ออกต่อจากใบงานไกด์ ชุดคนเดียวกัน */
-        +'<button class="pck-jobbtn" onclick="event.stopPropagation();pckTravelReg(\''+bid+'\')" title="ทะเบียนรายชื่อผู้เดินทางเข้า-ออก จังหวัดภูเก็ตช่องทางน้ำ (ท่าเทียบเรือวิสิษฐ์พันวา) · A4 แนวตั้ง">&#128203; ทะเบียนรายชื่อ</button>'
+        +'<button class="pck-jobbtn" onclick="event.stopPropagation();pckTravelReg(\''+bid+'\')" title="ทะเบียนรายชื่ออย่างเดียว · ท่าเทียบเรือวิสิษฐ์พันวา · A4 แนวตั้ง">&#128203; ทะเบียนอย่างเดียว</button>'
       +'</div></div>'+pckBoatMeta(B.rows.concat(B.ovn||[]), date)+'<div class="pck-bbody">';
     B.torder.forEach(function(rk){
       var T=B.trips[rk];
