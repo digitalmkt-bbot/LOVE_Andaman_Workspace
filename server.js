@@ -1652,6 +1652,10 @@ async function initDb(){
       await sq('travel_sum table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."travel_sum" (id text PRIMARY KEY, key text, decision text, amount bigint, note text, "by" text, at text)`);
       // §tsCot · คำตัดสินเงิน COT · เดิมไม่มีตาราง → decompose ทิ้งทุกครั้ง คนอื่นจึงไม่เคยเห็นว่ามีการตัดสินแล้ว
       await sq('ts_cot table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."ts_cot" (id text PRIMARY KEY, key text, mode text, deduct bigint, payout bigint, ref text, "by" text, at text)`);
+      // §vanBill · ใบวางบิลรถร่วม · VAN_BILL['ผู้ให้บริการ|รถ|YYYY-MM|งวด'] = {perPax,rate,rows,extra,by,at}
+      // ค่าเป็น object ซ้อน map + array → เก็บทั้งก้อนเป็น JSON text แบบ vanjob_sent
+      // เพิ่มช่องในใบวางบิลภายหลังไม่ต้องแตะ DB อีก
+      await sq('van_bill table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."van_bill" (id text PRIMARY KEY, key text, value text)`);
       // §trips: ตารางนี้ map แบบระบุชื่อเรือตายตัว (b1_route, b2_route, …) และตกหล่น b8/b14/b15 ไปตั้งแต่ต้น
       // → ถ้าจัด Tadeo / Juliet / Rolanda ลงเส้นทาง การจัดนั้นจะหายตอน sync. เติมคอลัมน์ให้ครบ.
       // ⚠ โครงนี้ยังเปราะ — เรือลำใหม่หลังจากนี้ก็ต้องมาเติมมืออีก (ดู BACKLOG)

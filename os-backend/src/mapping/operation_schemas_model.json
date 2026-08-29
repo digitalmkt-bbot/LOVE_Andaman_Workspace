@@ -6859,5 +6859,24 @@
     "primary_key": "id",
     "foreign_keys": [],
     "rows": 0
+  },
+  "van_bill": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "text"
+      },
+      {
+        "name": "key",
+        "type": "text"
+      },
+      {
+        "name": "value",
+        "type": "text"
+      }
+    ],
+    "primary_key": "id",
+    "foreign_keys": [],
+    "rows": 0
   }
 }

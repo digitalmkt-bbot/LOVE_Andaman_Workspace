@@ -7380,5 +7380,23 @@
       "kind": "map_value_json",
       "db_type": "text"
     }
+  },
+  "van_bill": {
+    "id": {
+      "source": "van_bill map key (generated id)",
+      "kind": "pk",
+      "db_type": "text"
+    },
+    "key": {
+      "source": "van_bill map key (original)",
+      "kind": "map_key",
+      "db_type": "text"
+    },
+    "value": {
+      "source": "van_bill[key] value",
+      "kind": "map_value_json",
+      "db_type": "text",
+      "note": "ทั้งก้อนเป็น JSON text เหมือน vanjob_sent — perPax/rate/rows/extra/by/at เพิ่มช่องได้โดยไม่ต้องแตะ DB"
+    }
   }
 }
