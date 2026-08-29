@@ -44691,6 +44691,7 @@ function insToggleReviewed(bkId,pk){ const s=insEnsure(); const k=insKey(bkId,pk
 function insRevertRow(bkId,pk){ const s=insEnsure(); const o=s[insKey(bkId,pk)]; if(!o) return; delete o.firstName; delete o.lastName; delete o.age; delete o.nat; insPersist(); renderInsurance(); }
 function insDateShift(n){ const d=new Date(_insDate+'T00:00:00'); d.setDate(d.getDate()+n); _insDate=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(d):d.toISOString().slice(0,10); renderInsurance(); }
 function insToday(){ _insDate=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10); renderInsurance(); }
+function insSetDate(ds){ if(!ds) return; _insDate=ds; renderInsurance(); }   /* §laDatePick */
 function insSplitName(nm){ nm=String(nm||'').trim(); if(!nm) return {f:'',l:''}; nm=nm.replace(/\s*\+?\d[\d\s().\-]{5,}\d\s*$/,'').trim(); nm=nm.replace(/^(mr|mrs|ms|miss|mstr|master|dr|prof|mx|khun)\b\.?\s*/i,'').trim(); if(!nm) return {f:'',l:''}; const p=nm.split(/\s+/); return {f:p[0], l:p.slice(1).join(' ')}; }
 function insNatLabel(code){ if(!code) return ''; try{ return (typeof bkV2NatDDLabel==='function')?bkV2NatDDLabel(code):code; }catch(e){ return code; } }
 function insBkPax(b){ const rows=[]; rows.push({key:'lead', name:b.leadPax||'', natCode:b.leadNationality||'', lead:true}); (b.passengers||[]).forEach((p,i)=>{ rows.push({key:String(i), name:(p&&p.name)||'', natCode:(p&&p.nationality)||''}); }); return rows; }
@@ -45003,7 +45004,7 @@ function renderInsurance(){
         <div><div style="font-size:18px;font-weight:800;color:#1B2A55">Insurance · passenger list</div><div style="font-size:12px;color:#8a8f93">รีวิว อายุ + สัญชาติ ลูกค้าอีกรอบ · แก้ทับได้ · ไม่กระทบ Booking หลัก</div></div>
       </div>
       <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
-        ${laDateBar(_insDate,'insDateShift','insToday','')}
+        ${laDateBar(_insDate,'insDateShift','insToday','','insSetDate')}
         <button onclick="insPrint()" title="พิมพ์ทุกเส้นทางของวันนี้ · หนึ่งเส้นทางต่อหนึ่งแผ่น" style="display:inline-flex;align-items:center;gap:6px;border:1px solid #185FA5;background:#185FA5;color:#fff;border-radius:9px;padding:7px 14px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">&#128424; พิมพ์ทุกเส้นทาง</button>
       </div>
     </div>
@@ -45699,17 +45700,97 @@ function rcColorPanel(ev){ if(ev&&ev.stopPropagation) ev.stopPropagation(); rcSt
 function _rcYMD(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function rcDateShift(n){ if(!_rcDate)_rcDate=_rcYMD(new Date()); var d=new Date(_rcDate+'T00:00:00'); d.setDate(d.getDate()+n); _rcDate=_rcYMD(d); renderReconfirm(); }
 function rcToday(){ _rcDate=_rcYMD(new Date()); renderReconfirm(); }
+function rcSetDate(ds){ if(!ds) return; _rcDate=ds; renderReconfirm(); }     /* §laDatePick */
+/* ══ §laDatePick · ปฏิทินเลือกวันของแถบวันที่ · ใช้ร่วมกันทุกหน้า ══════ */
+var _laDP={set:'',ds:'',month:'',x:0,y:0};
+function laDatePopClose(){
+  var h=document.getElementById('la-dp'); if(h) h.remove();
+  document.removeEventListener('mousedown', _laDPOutside, true);
+}
+function _laDPOutside(ev){
+  var h=document.getElementById('la-dp');
+  if(h && !h.contains(ev.target)) laDatePopClose();
+}
+/* เปิดใต้ปุ่มที่กด · จำตำแหน่งไว้ เปลี่ยนเดือนแล้วปฏิทินไม่กระโดด */
+function laDatePop(setFn, ds, ev){
+  if(document.getElementById('la-dp')){ laDatePopClose(); return; }
+  ev = ev || window.event;
+  var el = ev && (ev.currentTarget || ev.target);
+  var r = (el && el.getBoundingClientRect) ? el.getBoundingClientRect() : null;
+  _laDP = { set:setFn, ds:String(ds||''), month:String(ds||'').slice(0,7),
+            x: r?r.left:80, y: r?(r.bottom+8):80 };
+  laDatePopPaint();
+}
+function laDatePopShift(n){
+  var m=_laDP.month || String(_laDP.ds).slice(0,7);
+  var d=new Date(+m.slice(0,4), +m.slice(5,7)-1+n, 1);
+  _laDP.month = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  laDatePopPaint();
+}
+function laDatePopPick(ds){
+  var f=_laDP.set; laDatePopClose();
+  if(f && typeof window[f]==='function') window[f](ds);
+}
+function laDatePopPaint(){
+  var old=document.getElementById('la-dp'); if(old) old.remove();
+  var m=_laDP.month || String(_laDP.ds).slice(0,7) || new Date().toISOString().slice(0,7);
+  var yy=+m.slice(0,4), mm=+m.slice(5,7);
+  var first=new Date(yy,mm-1,1), startDow=(first.getDay()+6)%7, dim=new Date(yy,mm,0).getDate();
+  var monLbl=first.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+  var today=(typeof TODAY_STR!=='undefined')?TODAY_STR:new Date().toISOString().slice(0,10);
+  var cells='';
+  for(var i=0;i<startDow;i++) cells+='<div></div>';
+  for(var d=1;d<=dim;d++){
+    var dsx=yy+'-'+String(mm).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    var sel=(dsx===_laDP.ds), isT=(dsx===today), we=((startDow+d-1)%7)>=5;
+    cells+='<div onclick="laDatePopPick(\''+dsx+'\')" style="text-align:center;font-size:12px;padding:6px 0;border-radius:7px;cursor:pointer;'
+      +(sel?'background:#1B2A55;color:#fff;font-weight:800'
+        :(isT?'background:#EAF3FB;color:#185FA5;font-weight:800'
+          :('color:'+(we?'#9aa0aa':'#3F4654'))))+'" '
+      +'>'+d+'</div>';
+  }
+  var w=268, x=Math.max(8, Math.min(_laDP.x, (window.innerWidth||1200)-w-8));
+  var y=Math.max(8, Math.min(_laDP.y, (window.innerHeight||800)-350));
+  var nav=function(n,lbl,ttl){ return '<button onclick="laDatePopShift('+n+')" title="'+ttl+'" style="border:none;background:transparent;cursor:pointer;font-size:15px;color:#8B96A0;padding:2px 6px;font-family:inherit;line-height:1">'+lbl+'</button>'; };
+  var h=document.createElement('div');
+  h.id='la-dp';
+  h.style.cssText='position:fixed;left:'+x+'px;top:'+y+'px;width:'+w+'px;background:#fff;border:1px solid #e3e6e1;'
+    +'border-radius:14px;box-shadow:0 16px 44px rgba(15,23,42,.20);padding:12px;z-index:99980;'
+    +'font-family:\'DM Sans\',\'Noto Sans Thai\',sans-serif';
+  h.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+    +'<span style="display:flex">'+nav(-12,'&laquo;','ปีก่อน')+nav(-1,'&lsaquo;','เดือนก่อน')+'</span>'
+    +'<span style="font-size:13px;font-weight:800;color:#1A1A1A">'+monLbl+'</span>'
+    +'<span style="display:flex">'+nav(1,'&rsaquo;','เดือนถัดไป')+nav(12,'&raquo;','ปีถัดไป')+'</span></div>'
+    +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;font-size:10px;color:#9aa0aa;text-align:center;margin-bottom:4px">'
+    +'<div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div><div>S</div></div>'
+    +'<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px">'+cells+'</div>'
+    +'<div style="display:flex;gap:6px;margin-top:10px;padding-top:9px;border-top:1px solid #F0EEE8">'
+    +'<button onclick="laDatePopPick(\''+today+'\')" style="flex:1;border:1px solid #d7dbe2;background:#fff;border-radius:8px;padding:6px;font:700 12px inherit;color:#185FA5;cursor:pointer;font-family:inherit">วันนี้</button>'
+    +'<button onclick="laDatePopClose()" style="flex:1;border:1px solid #E4E1D9;background:#fff;border-radius:8px;padding:6px;font:600 12px inherit;color:#6b7280;cursor:pointer;font-family:inherit">ปิด</button></div>';
+  document.body.appendChild(h);
+  setTimeout(function(){ document.addEventListener('mousedown', _laDPOutside, true); }, 0);
+}
+
 // Shared clear date header (weekday + big date + arrows + Today) · used by Re-confirm, Doc Check, Insurance, Van Job Orders
-function laDateBar(ds, shiftFn, todayFn, dateClickFn){
+// §laDatePick · setFn = ชื่อฟังก์ชัน global ที่รับ 'YYYY-MM-DD' · ใส่แล้วกดที่วันที่จะเปิดปฏิทินให้เอง
+function laDateBar(ds, shiftFn, todayFn, dateClickFn, setFn){
   var dObj; try{ dObj=new Date(ds+'T12:00:00'); if(isNaN(dObj)) dObj=new Date(); }catch(e){ dObj=new Date(); }
   var wd=dObj.toLocaleDateString('en-GB',{weekday:'short'}).toUpperCase();
   var dl=dObj.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
   var todayStr=(typeof TODAY_STR!=='undefined')?TODAY_STR:(new Date().toISOString().slice(0,10));
   var isT=(ds===todayStr);
-  var clk=dateClickFn?(' onclick="'+dateClickFn+'()" title="เลือกวันจากปฏิทิน" style="cursor:pointer;display:flex;align-items:center;gap:9px;padding:0 6px"'):' style="display:flex;align-items:center;gap:9px;padding:0 6px"';
+  var _base='display:flex;align-items:center;gap:9px;padding:0 6px';
+  var clk = dateClickFn
+    ? (' onclick="'+dateClickFn+'()" title="เลือกวันจากปฏิทิน" style="cursor:pointer;'+_base+'"')
+    : (setFn
+       /* §laDatePick · ปฏิทินกลาง · หน้าไหนส่ง setFn มาก็กดเลือกวันได้ทันที */
+       ? (' onclick="laDatePop(\''+setFn+'\',\''+ds+'\',event)" title="เลือกวันจากปฏิทิน" style="cursor:pointer;'+_base+'"')
+       : (' style="'+_base+'"'));
+  var _caret = (dateClickFn||setFn)
+    ? '<span style="font-size:9px;color:#9aa0aa;margin-left:-3px;line-height:1">&#9660;</span>' : '';
   return '<div style="display:inline-flex;align-items:center;gap:3px;border:1px solid #E1DED6;border-radius:13px;padding:5px;background:#fff">'
     +'<button onclick="'+shiftFn+'(-1)" aria-label="previous day" style="width:30px;height:40px;border:none;background:#F4F2EC;border-radius:9px;color:#6b7280;cursor:pointer;font-size:17px;font-family:inherit;line-height:1">&#8249;</button>'
-    +'<div'+clk+'><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#185FA5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span style="line-height:1.02;text-align:left"><span style="display:block;font-size:10px;font-weight:700;letter-spacing:.12em;color:#185FA5">'+wd+(isT?' &middot; TODAY':'')+'</span><span style="display:block;font-size:18px;font-weight:700;color:#1A1A1A;white-space:nowrap">'+dl+'</span></span></div>'
+    +'<div'+clk+'><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#185FA5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span style="line-height:1.02;text-align:left"><span style="display:block;font-size:10px;font-weight:700;letter-spacing:.12em;color:#185FA5">'+wd+(isT?' &middot; TODAY':'')+'</span><span style="display:block;font-size:18px;font-weight:700;color:#1A1A1A;white-space:nowrap">'+dl+'</span></span>'+_caret+'</div>'
     +'<button onclick="'+shiftFn+'(1)" aria-label="next day" style="width:30px;height:40px;border:none;background:#F4F2EC;border-radius:9px;color:#6b7280;cursor:pointer;font-size:17px;font-family:inherit;line-height:1">&#8250;</button>'
     +(todayFn?('<button onclick="'+todayFn+'()" style="height:40px;padding:0 13px;border:1px solid #d7dbe2;background:#fff;border-radius:9px;font-size:12.5px;font-weight:600;color:#185FA5;cursor:pointer;font-family:inherit;margin-left:3px">Today</button>'):'')
     +'</div>';
@@ -45871,7 +45952,7 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
   out+='<div style="max-width:100%;margin:0;font-family:\'DM Sans\',sans-serif">';
   out+='<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:2px 2px 12px">'
     +'<span style="font-size:22px;font-weight:700;color:#1A1A1A">Re-confirm</span>'
-    +laDateBar(date,'rcDateShift','rcToday','')
+    +laDateBar(date,'rcDateShift','rcToday','','rcSetDate')
     +'<span style="font-size:12.5px;color:#5F5E5A">'+agentKeys.length+' agents · '+Object.keys(byRoute).length+' trips · <b>'+totPax+' pax</b></span>'
     +'<span style="margin-left:auto;font-size:12.5px;color:'+(sentAgents===agentKeys.length&&agentKeys.length?'#0F6E56':'#5F5E5A')+'">Sent '+sentAgents+' / '+agentKeys.length+' agents</span>'
     +'</div>';
@@ -47683,6 +47764,7 @@ function vanJobsOwnerGroup(vid){ const ow=((typeof vehGet==='function'?vehGet(vi
 function vanJobsOwnerTag(vid){ const ow=((typeof vehGet==='function'?vehGet(vid):null)||{}).ownership; if(ow==='partner') return {t:'รถร่วม',bg:'#FBF0E0',c:'#9A5B00'}; if(ow==='rental'||ow==='charter') return {t:'เช่า',bg:'#EAF1FB',c:'#185FA5'}; return {t:'บริษัท',bg:'#E3F0EA',c:'#0F6E56'}; }
 function vanJobsDateShift(delta){ const d=new Date(_vanJobsDate+'T12:00:00'); d.setDate(d.getDate()+delta); _vanJobsDate=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(d):d.toISOString().slice(0,10); renderVanJobs(); }
 function vanJobsToday(){ _vanJobsDate=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10); renderVanJobs(); }
+function vanJobsSetDate(ds){ if(!ds) return; _vanJobsDate=ds; renderVanJobs(); }   /* §laDatePick */
 function renderVanJobs(){
   const host=document.getElementById('vanjobs-host'); if(!host) return;
   const e=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -47828,7 +47910,7 @@ function renderVanJobs(){
   const routeVan={}; ids.forEach(function(k){ Object.keys((agg[k]||{}).routes||{}).forEach(function(r){ routeVan[r]=(routeVan[r]||0)+1; }); });
   const routeSeg=Object.keys(routeVan).sort(function(a,b){return routeVan[b]-routeVan[a];});
   const _routeColors=['#13B96A','#19A7C9','#8B5CF6','#F25CA2','#BA7517'];
-  const _dateStep=laDateBar(date,'vanJobsDateShift','vanJobsToday','');
+  const _dateStep=laDateBar(date,'vanJobsDateShift','vanJobsToday','','vanJobsSetDate');
   const _filters=`<span style="display:inline-flex;border:1px solid #cfe0d8;border-radius:18px;overflow:hidden">${segBtn('all','ทั้งหมด')}${segBtn('company','บริษัท+เช่า')}${segBtn('partner','รถร่วม')}</span> <select onchange="vanJobsSetRoute(this.value)" style="border:1px solid #d7dbe2;border-radius:18px;padding:6px 12px;font-size:11.5px;color:#3F4654;font-family:inherit;background:#fff;cursor:pointer">${routeOpts}</select>`;
   const headerMini=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px"><span style="font-size:17px;font-weight:600;color:#1A1A1A">&#128656; ใบงานรถ</span>${_dateStep}</div>`;
   const _segBar = routeSeg.length ? routeSeg.slice(0,4).map(function(r,i){ var pct=ids.length?Math.round(routeVan[r]/ids.length*100):0; var c=(((typeof getRoute==='function')&&getRoute(r))||{}).color||_routeColors[i%5]; return '<div style="display:flex;align-items:center;gap:9px;background:'+(i===0?'#ECF7DB':'#fff')+';border:0.5px solid '+(i===0?'#d4e8b8':'rgba(0,0,0,.08)')+';border-radius:12px;padding:10px 13px"><span style="width:10px;height:10px;border-radius:50%;background:'+c+';flex:none"></span><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:500;color:#1A1A1A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+e(rName(r))+'</div><div style="font-size:10.5px;color:#999">'+routeVan[r]+' คัน</div></div><b style="font-size:12.5px;color:#1A1A1A">'+pct+'%</b></div>'; }).join('') : '';
