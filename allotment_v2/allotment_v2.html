@@ -48161,8 +48161,17 @@ function vbLeave(){
 }
 /* รหัสสั้นบนใบวางบิล · ตามที่ใช้กันในใบจริง */
 var VB_CODE={ r10:{c:'PP',col:'#C0392B'}, r7:{c:'PP',col:'#C0392B'}, r8:{c:'PP',col:'#C0392B'}, r9:{c:'PP',col:'#C0392B'},
-              r11:{c:'PB',col:'#1C7A4E'}, r12:{c:'MT',col:'#BA7517'} };
+              r11:{c:'PB',col:'#1C7A4E'}, r12:{c:'MT',col:'#BA7517'},
+              /* §vbRateCode · สิมิลัน/สุรินทร์ ออกจากท่าทับละมุ ไม่ใช่พันวา
+                 รถวิ่งไกลกว่ามาก เรตต่อคันจึงคนละราคา (van_rates: พันวา 1,700 · ทับละมุ 3,000)
+                 ต้องมีรหัสของตัวเอง ไม่งั้นไปกองรวมกับ "—" แล้วใช้เรตเดียวกับพีพี */
+              r1:{c:'SM',col:'#185FA5'}, r2:{c:'SM',col:'#185FA5'}, r3:{c:'SM',col:'#185FA5'},
+              r4:{c:'SM',col:'#185FA5'}, r5:{c:'SM',col:'#185FA5'}, r6:{c:'SR',col:'#5B289A'} };
 function vbCode(rid){ return VB_CODE[rid] || {c:'—', col:'#8B96A0'}; }
+var VB_CODE_TH={ PP:'พีพี', PB:'กระบี่+พังงา', MT:'วาฬ/ไม้ท่อน', SM:'สิมิลัน', SR:'สุรินทร์', '—':'อื่นๆ' };
+var VB_PIER_TH={ panwa:'พันวา', tublamu:'ทับละมุ', ranong:'ระนอง' };
+var VB_PIER_COL={ panwa:{bg:'#E6F1FB',c:'#185FA5'}, tublamu:{bg:'#EDE7FB',c:'#5B289A'}, ranong:{bg:'#FBF3E6',c:'#8A5B00'} };
+function vbPierOf(rid){ return String((((typeof getRoute==='function')?getRoute(rid):null)||{}).pier||''); }
 /* จุดรับที่คิดค่าวิ่งเพิ่ม · ใช้แค่ทำสีให้เห็น ไม่ได้คิดเงินให้เอง */
 var VB_FAR={ naiyang:1, naithon:1, 'ในยาง':1, 'ในทอน':1 };
 /* §vbAreaTh · จุดรับใช้ตารางชื่อไทยตัวเดียวกับใบงานรถ (VANJOB_AREA_TH)
@@ -48204,6 +48213,22 @@ function vbState(){
   var st=VAN_BILL[k];
   if(!st.rows) st.rows={}; if(!Array.isArray(st.extra)) st.extra=[];
   return st;
+}
+/* §vbRateCode · เรตตั้งต้นของรหัสหนึ่ง · ไม่มีค่ารายรหัส ค่อยถอยไปใช้ st.rate ตัวเดิม
+   (ของที่กรอกไว้ก่อนมีรหัสจึงยังใช้ได้ ไม่ต้องมาไล่กรอกใหม่) */
+function vbRateOf(code, st){
+  var C=st && st.rateC;
+  if(C && C[code]!=null && C[code]!=='') return +C[code]||0;
+  return +(st&&st.rate)||0;
+}
+/* รหัสที่มีงานจริงในรอบนี้ · เรียงตามจำนวนเที่ยว · รอบไหนมีรหัสเดียวก็เห็นช่องเดียว */
+function vbCodesIn(rows){
+  var m={}, out=[];
+  (rows||[]).forEach(function(r){ var c=vbCode(r.routeId);
+    if(!m[c.c]){ m[c.c]={c:c.c, col:c.col, n:0, rid:r.routeId}; out.push(m[c.c]); }
+    m[c.c].n++; });
+  out.sort(function(a,b){ return b.n-a.n; });
+  return out;
 }
 /* อ่านอย่างเดียว · ห้ามสร้างระเบียนเปล่า ไม่งั้นแค่เปิดดูภาพรวมก็เกิดใบเปล่าทุกเจ้าทุกงวด */
 function vbStateOf(k){
@@ -48249,6 +48274,52 @@ function vbSet(field,val){
   if(!vbCanSet(st[field], k)) return;
   st[field]=Math.max(0, parseFloat(String(val).replace(/[^0-9.]/g,''))||0);
   vbStamp(k); renderVanBill();
+}
+function vbSetRateC(code, val){
+  var st=vbState(), k='@rate:'+code;
+  if(!st.rateC) st.rateC={};
+  if(!vbCanSet(st.rateC[code], k)) return;
+  st.rateC[code]=Math.max(0, parseFloat(String(val).replace(/[^0-9.]/g,''))||0);
+  vbStamp(k); renderVanBill();
+}
+/* §vbRateCode · เติมเรตจากที่ตั้งไว้ในหน้า Transfer Fleet (van_rates)
+   ไม่ผูกกันอัตโนมัติ · กดเองเมื่ออยากใช้ แล้วแก้ทับได้
+   เหตุผลที่ไม่ผูก: van_rates เป็นค่าที่ตั้งไว้ล่วงหน้า ส่วนใบวางบิลคือที่ตกลงกันจริงในรอบนั้น
+   วันไหนสองอันไม่ตรงกัน ใบวางบิลต้องชนะเสมอ ไม่ใช่โดนเรตกลางเขียนทับเงียบ ๆ */
+function vbPullRates(){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('accounting')) return;
+  if(typeof vanRate!=='function'){ alert('ยังไม่มีตารางเรตรถในระบบ'); return; }
+  var st=vbState(), rows=vbRows(), codes=vbCodesIn(rows);
+  var vans=vbVans().filter(function(v){ return vbSupOf(v)===_vb.sup; });
+  var gk=(typeof vanGroupKey==='function' && vans[0]) ? vanGroupKey(vans[0]) : ('p:'+_vb.sup);
+  var zone=String((vans[0]||{}).zoneBase||'PK');
+  if(!st.rateC) st.rateC={};
+  var got=[], none=[], gen=[];
+  codes.forEach(function(C){
+    /* หาเรตจากเส้นทางที่มีงานจริงของรหัสนั้น · เจอตัวแรกที่ไม่เป็นศูนย์ก็พอ */
+    var v=0, spec=false;
+    rows.forEach(function(r){ if(v||vbCode(r.routeId).c!==C.c) return;
+      var x=+vanRate(gk, r.routeId, zone)||0; if(!(x>0)) return;
+      v=x;
+      /* ตั้งไว้เจาะจงเส้นทางนี้จริง หรือหล่นมาใช้เรตกลางของเจ้านี้ (base)
+         ต่างกันมาก · สิมิลันวิ่งไกลกว่าพีพีเกือบเท่าตัว ถ้าเงียบไว้จะเรียกเก็บต่ำไปโดยไม่รู้ตัว */
+      if(typeof vanRateRaw==='function'){
+        var q=vanRateRaw(gk, r.routeId, zone);
+        spec = (q!=='' && q!=null && +q>0);
+      }
+    });
+    if(v>0){ st.rateC[C.c]=v; _vb.open['@rate:'+C.c]=1;
+      got.push(C.c+' '+v.toLocaleString()+(spec?'':' *'));
+      if(!spec) gen.push(C.c);
+    } else none.push(C.c);
+  });
+  if(!got.length){ alert('ยังไม่ได้ตั้งเรตของ "'+_vb.sup+'" ไว้ในหน้า Transfer Fleet'); return; }
+  vbStamp('');
+  renderVanBill();
+  var msg='ดึงเรตมาแล้ว · '+got.join(' · ')
+    +(none.length?(' · ยังไม่มีเรตของ '+none.join(', ')):'')
+    +(gen.length?(' · * '+gen.join(', ')+' ยังไม่ได้ตั้งเรตของเส้นทางนี้ ใช้เรตกลางของเจ้านี้ไปก่อน — ตรวจก่อนวางบิล'):'');
+  if(typeof flShowToast==='function') flShowToast(msg); else console.warn(msg);
 }
 function vbSetRow(rk, field, val){
   var st=vbState(), k=rk+'|'+field;
@@ -48319,7 +48390,7 @@ function vbAgg(){
       };
       rows.forEach(function(r){
         var m=(st.rows||{})[r.date+'~'+r.routeId+'~'+r.vanId]||{};
-        take((m.rate!=null?m.rate:st.rate)||0, +m.ex||0, +m.cut||0,
+        take((m.rate!=null?m.rate:vbRateOf(vbCode(r.routeId).c, st))||0, +m.ex||0, +m.cut||0,
              (m.per!=null?m.per:st.perPax)||0, r.pax, r.routeId, 1);
       });
       (st.extra||[]).forEach(function(x){
@@ -48432,14 +48503,14 @@ function renderVanBill(){
   if(_vb.mode==='ov'){ vbRenderOv(host); return; }
   var myVans=vbVans().filter(function(v){ return vbSupOf(v)===_vb.sup; });
   if(_vb.van && !myVans.some(function(v){ return v.id===_vb.van; })) _vb.van='';
-  var P=vbPeriod(), st=vbState(), rows=vbRows();
+  var P=vbPeriod(), st=vbState(), rows=vbRows(), codes=vbCodesIn(rows);
   var vg=function(id){ return myVans.filter(function(v){ return v.id===id; })[0]||{}; };
 
   /* ── คิดเงินทีละแถว ── */
   var T={pax:0,ad:0,chd:0,inf:0,foc:0,van:0,ex:0,cut:0,bill:0,sale:0}, byCode={};
   var calc=rows.map(function(r){
     var rk=r.date+'~'+r.routeId+'~'+r.vanId, m=st.rows[rk]||{};
-    var rate=(m.rate!=null?m.rate:st.rate)||0, ex=+m.ex||0, cut=+m.cut||0;
+    var rate=(m.rate!=null?m.rate:vbRateOf(vbCode(r.routeId).c, st))||0, ex=+m.ex||0, cut=+m.cut||0;
     var per=(m.per!=null?m.per:st.perPax)||0;
     var bill=1*rate+ex-cut, sale=r.pax*per;
     T.pax+=r.pax; T.ad+=r.ad; T.chd+=r.chd; T.inf+=r.inf; T.foc+=r.foc;
@@ -48495,7 +48566,10 @@ function renderVanBill(){
       :'<span class="vb-area">—</span>';
     return '<tr>'
      +'<td class="l vb-mono">'+e(r.date.slice(8,10)+'/'+(+r.date.slice(5,7))+'/'+r.date.slice(2,4))+'</td>'
+     /* §vbRateCode · ติดป้ายท่าเรือไว้ · เหตุผลที่เรตต่างคือรถวิ่งคนละที่ ไม่ใช่ชื่อโปรแกรมคนละชื่อ */
      +'<td class="l"><span class="vb-code" style="background:'+C.col+'">'+C.c+'</span><span class="vb-rn">'+e(rn)+'</span>'
+       +(function(){ var pr=vbPierOf(r.routeId), pc=VB_PIER_COL[pr];
+          return pc?('<span class="vb-pier" style="background:'+pc.bg+';color:'+pc.c+'">'+e(VB_PIER_TH[pr]||pr)+'</span>'):''; })()
        +(_vb.van?'':('<div style="font-size:10px;color:#98A2AD;margin-top:2px">'+e((vg(r.vanId).name)||r.vanId)+'</div>'))+'</td>'
      +'<td class="l">'+aHtml+'</td>'
      +'<td><b>'+r.ad+'</b></td><td>'+(r.chd||'<span class="vb-mut">·</span>')+'</td>'
@@ -48556,9 +48630,20 @@ function renderVanBill(){
      +'<div class="m">'+e(whoMeta)+'</div></div>'
      +'<div style="text-align:right"><div class="vb-lab">รอบบิล</div>'
      +'<div style="font:800 13.5px \'DM Mono\',monospace">'+P.label+' '+e(mLbl)+'</div></div></div>'
+   /* §vbRateCode · เรตตั้งต้นแยกตามรหัส · ขึ้นเฉพาะรหัสที่มีงานจริงในรอบนี้
+      รอบที่มีแต่พีพีจึงเห็นช่องเดียวเหมือนเดิม · รอบที่ปนสิมิลันถึงจะมีหลายช่อง */
    +'<div class="vb-set"><span>ตั้ง <b>ราคาขาย / คน</b> ทั้งรอบ</span>'+IN("vbSet('perPax',this.value)", st.perPax||'', 66, 0, '@perPax')+'<span>บาท</span>'
      +'<span class="vb-hint">→ ระบบคูณจำนวนคนของแต่ละวันให้เอง · แถวไหนคิดต่างแก้เฉพาะแถวได้</span>'
-     +'<span style="flex:1"></span><span>เรต / คัน ตั้งต้น</span>'+IN("vbSet('rate',this.value)", st.rate||'', 66, 0, '@rate')+'<span>บาท</span></div>'
+     +'<span style="flex:1"></span><span>เรต / คัน</span>'
+     + (codes.length
+        ? codes.map(function(C){
+            return '<span class="vb-rt" title="'+e(VB_CODE_TH[C.c]||C.c)+' · '+C.n+' เที่ยวในรอบนี้">'
+              +'<span class="c" style="background:'+C.col+'">'+e(C.c)+'</span>'
+              +IN("vbSetRateC('"+C.c+"',this.value)", (st.rateC&&st.rateC[C.c]!=null&&st.rateC[C.c]!=='')?st.rateC[C.c]:(st.rate||''), 58, 0, '@rate:'+C.c)
+              +'</span>'; }).join('')
+        : '<span class="vb-mut">ไม่มีงานในรอบนี้</span>')
+     + '<button class="vb-btn sm" onclick="vbPullRates()" title="เติมเรตจากที่ตั้งไว้ในหน้า Transfer Fleet · แก้ทับได้">&#8681; ดึงจากเรตรถ</button>'
+   +'</div>'
    +'<div class="vb-kpi">'
      +'<div class="k"><div class="l">จำนวนลูกค้า</div><div class="v">'+T.pax+' <s>คน</s></div></div>'
      +'<div class="k"><div class="l">จำนวนรถ</div><div class="v">'+T.van+' <s>คัน</s></div></div>'
@@ -48695,6 +48780,13 @@ function vbCss(){
   +'.vb-pill.part{background:#FBF3E6;color:#8A5B00}'
   +'.vb-pill.none{background:#EEF0F4;color:#8B96A0}'
   +'.vb-go{color:#0E6AA8;font-weight:800;font-size:15px}'
+  /* §vbRateCode · ช่องเรตรายรหัส + ป้ายท่าเรือ */
+  +'.vb-rt{display:inline-flex;align-items:center;gap:5px;background:#fff;border:1px solid #CFE2F2;'
+    +'border-radius:9px;padding:3px 5px 3px 3px;margin-left:5px}'
+  +'.vb-rt .c{display:inline-block;font:800 10px "DM Mono",monospace;border-radius:6px;padding:3px 7px;color:#fff}'
+  +'.vb-rt .vb-in,.vb-rt .vb-ro{border-radius:6px;padding:3px 6px}'
+  +'.vb-btn.sm{padding:5px 11px;font-size:11.5px;margin-left:7px;border-color:#CFE2F2;color:#0E6AA8}'
+  +'.vb-pier{display:inline-block;font-size:9.5px;font-weight:800;border-radius:6px;padding:2px 7px;margin-left:6px}'
   +'</style>';
 }
 function renderVanJobs(){
@@ -48917,6 +49009,9 @@ const VANJOB_AREA_TH={
   'Patong':'ป่าตอง','Phuket Town':'เมืองภูเก็ต','Rawai':'ราไวย์','Saiyuan':'ไสยวน','Sapam':'สะปำ',
   'Siray':'สิเหร่','Surin (beach)':'สุรินทร์','Talang':'ถลาง','Thalang':'ถลาง','Tritrang':'ตรีตรัง',
   'Nang Thong':'นางทอง','Poseidon':'โพไซดอน',
+  /* §vbRateCode · จุดรับฝั่งพังงา · มาพร้อมสิมิลัน/สุรินทร์ ที่ออกจากท่าทับละมุ
+     ฐานข้อมูลมีอยู่แล้ว 26 ใบ แต่ยังไม่มีชื่อไทย เลยขึ้นเป็นอังกฤษปนอยู่ */
+  'Khaolak':'เขาหลัก','Khuk Khak':'คึกคัก','Bang Sak':'บางสัก','Num Khem':'น้ำเค็ม','Merlin':'เมอร์ลิน',
   'Tub Lamu Pier (self-arrive)':'ท่าเรือทับละมุ','Visit Panwa Pier (self-arrive)':'ท่าเรือวิสิทพันวา','Yamu':'ยามู'
 };
 function vanJobsOrderCss(scoped){ const p=scoped?'.vjo ':'';
