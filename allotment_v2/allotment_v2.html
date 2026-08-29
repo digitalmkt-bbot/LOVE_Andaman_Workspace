@@ -4077,6 +4077,49 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
 /* Matrix · selected data/empty cell = filled (not just outline) */
 #view-booking .bkv2-mx td.cell.sel{outline:none;box-shadow:inset 0 0 0 2px #3A6FF7;background:#3A6FF7;color:#fff}
 #view-booking .bkv2-mx td.cell.empty.sel{background:#3A6FF7;color:#fff}
+/* ===== §mxRead · Matrix อ่านง่ายขึ้น ===== */
+/* คอลัมน์รวมเดือน */
+#view-booking .bkv2-mx col.sumcol{width:86px}
+#view-booking .bkv2-mx th.rowh.sumh{text-align:right;padding-right:9px}
+#view-booking .bkv2-mx td.sum{background:#F1F2F5;text-align:right;padding:4px 9px;border-radius:4px;white-space:nowrap;font-family:'DM Mono',monospace}
+#view-booking .bkv2-mx td.sum b{font-size:12px;font-weight:800;font-variant-numeric:tabular-nums}
+#view-booking .bkv2-mx td.sum i{font-style:normal;font-size:9px;color:#98A2AD;display:block;margin-top:1px}
+/* เสาร์-อาทิตย์ · แรเงาทั้งคอลัมน์ให้เห็นรอบสัปดาห์ */
+#view-booking .bkv2-mx td.cell.wk{box-shadow:inset 0 0 0 99px rgba(31,42,68,.035)}
+#view-booking .bkv2-mx th.dh.weekend{background:#F5F6F8;border-radius:3px}
+/* ตัวเลขในช่อง · หนาขึ้นและเป็นตัวเลขความกว้างเท่ากัน */
+#view-booking .bkv2-mx td.cell{font-weight:700;font-size:11px;font-variant-numeric:tabular-nums}
+#view-booking .bkv2-mx tr.sub td.cell{font-weight:600;font-size:10.5px;color:inherit}
+/* แถวย่อยเดิมโดนสั่งให้พื้นหลังโปร่ง · กางออกมาสีหายเกลี้ยง */
+#view-booking .bkv2-mx tr.sub td.cell.lo,#view-booking .bkv2-mx tr.sub td.cell.mid,
+#view-booking .bkv2-mx tr.sub td.cell.hi,#view-booking .bkv2-mx tr.sub td.cell.peak{background:inherit}
+/* กางกลุ่มออก · แถวแม่ปล่อยว่าง ไม่ให้อ่านเลขซ้ำกับแถวลูก */
+#view-booking .bkv2-mx td.cell.blank{background:#F1F4F9;cursor:default}
+#view-booking .bkv2-mx tr.fam.expanded td.rowh{background:#F1F4F9}
+/* variant ที่ไม่มีคนทั้งเดือน */
+#view-booking .bkv2-mx td.rowh.mxmore{font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;color:#5B6670;background:#FAFBFC;padding:6px 9px 6px 28px;cursor:pointer;border-left:2px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:none}
+#view-booking .bkv2-mx td.rowh.mxmore u{text-decoration:none;color:#2952C8;font-weight:700}
+#view-booking .bkv2-mx td.rowh.mxmore .mxmore-n{color:#A6AEB6;font-size:10px;margin-left:6px}
+/* แถวรวมทั้งวัน · เดิมเทาบนเทา ทั้งที่ต้องอ่านที่สุด */
+#view-booking .bkv2-mx tr.tot td{background:#1F2A44;color:#fff;text-align:center;padding:5px 0 7px;vertical-align:top;border-radius:0}
+#view-booking .bkv2-mx tr.tot td.rowh{text-align:left;font-family:'DM Sans',sans-serif;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#B9C4D4;padding:7px 8px;border-left:0}
+#view-booking .bkv2-mx tr.tot .tn{font-family:'DM Mono',monospace;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}
+#view-booking .bkv2-mx tr.tot .ttrack{height:4px;border-radius:2px;background:rgba(255,255,255,.16);margin:4px 4px 0}
+#view-booking .bkv2-mx tr.tot .tbar{height:4px;border-radius:2px;background:#7FA6E8}
+#view-booking .bkv2-mx tr.tot td.today .tbar{background:#fff}
+#view-booking .bkv2-mx tr.tot td.today{background:#2952C8;color:#fff}
+#view-booking .bkv2-mx tr.tot td.sum{background:#0F1626;text-align:right;padding:6px 9px}
+#view-booking .bkv2-mx tr.tot td.sum b{font-size:13px;color:#fff}
+#view-booking .bkv2-mx tr.tot td.sum i{color:#8494AC}
+/* ป้ายสีท้ายตาราง */
+#view-booking .bkv2-foot-hints .sw.mxlo{background:#F2D9D5}
+#view-booking .bkv2-foot-hints .sw.mxhi{background:#C0392B}
+#view-booking .bkv2-foot-hints .sw.mxempty{background:#E9F7EF}
+#view-booking .bkv2-foot-hints .sw.mxclosed{background:repeating-linear-gradient(45deg,#f0ebe0,#f0ebe0 3px,transparent 3px,transparent 6px)}
+/* การ์ดสถิติ · ใบที่ยังไม่ยืนยัน */
+#view-booking .bkv2-stat.alert{background:#FFF6F5;border-color:#F2D2CC}
+#view-booking .bkv2-stat.alert .s-val{color:#A32D2D}
+#view-booking .bkv2-stat.alert .s-foot b{color:#A32D2D;font-weight:800}
 /* Calendar · day cell · Today = ring on white · Selected = filled */
 #view-booking .bkv2-cal-cell.today{background:#fff;border:2px solid #9DBFF6}
 #view-booking .bkv2-cal-cell.weekend.today{background:#fff}
@@ -71814,6 +71857,28 @@ function bkV2Aggregate(){
 }
 
 // Intensity classes
+/* §mxRead · ผสมสีประจำโปรแกรมกับขาว · t=0 ขาว · t=1 สีเต็ม */
+function bkV2Mix(hex, t){
+  var h=String(hex||'#5B6670').replace('#','');
+  if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  if(!/^[0-9a-f]{6}$/i.test(h)) h='5B6670';
+  var p=function(i){ return parseInt(h.substr(i*2,2),16); };
+  var f=function(i){ return Math.round(255+(p(i)-255)*t); };
+  return 'rgb('+f(0)+','+f(1)+','+f(2)+')';
+}
+/* §mxRead · สีของช่องหนึ่ง · เทียบกับต่ำสุด-สูงสุดของแถวนั้น ไม่ใช่เกณฑ์ตายตัว
+   วันเงียบของโปรแกรมใหญ่จึงดูเงียบจริง · แถวย่อยใช้สีเดียวกันแต่จางลง */
+function bkV2MxHeat(v, lo, hi, color, fade){
+  var t = (hi<=lo) ? 0.55 : (0.14 + 0.72*((v-lo)/(hi-lo)));
+  if(fade) t = t*0.45;
+  return 'background:'+bkV2Mix(color,t)+';color:'+((t>0.55 && !fade)?'#fff':'#26313B');
+}
+/* variant ที่ไม่มีคนทั้งเดือน · พับเก็บไว้ กดกางดูได้ */
+function bkV2ToggleEmptyVars(famId){
+  if(!_bkV2.mxEmpty) _bkV2.mxEmpty = new Set();
+  if(_bkV2.mxEmpty.has(famId)) _bkV2.mxEmpty.delete(famId); else _bkV2.mxEmpty.add(famId);
+  bkV2Render();
+}
 function bkV2CellIntensity(total){
   if(total === 0) return 'empty';
   if(total <= 10) return 'lo';
@@ -73854,27 +73919,48 @@ function bkV2RenderStats(){
   const tBookings = tx?.bookings?.length || 0;
   const tIsCur = todayKey.startsWith(ym);
 
+  /* §mxRead · การ์ดเดิมซ้ำกับชิปมุมขวาบน (993 bookings · 2553 pax) และ "987 confirmed"
+     ต้องลบเลขในหัวเองถึงจะรู้ว่าค้างกี่ใบ · ยกส่วนต่างขึ้นมาตรง ๆ แล้วเอาช่องที่เหลือ
+     ไปใส่ของที่หาจากที่อื่นไม่ได้ คือวันแน่นสุด/เบาสุดของเดือน */
+  const _dayVals = Object.entries(agg.byDate).filter(([d]) => d.startsWith(ym))
+                     .map(([d,x]) => ({ d, v: x.total })).filter(o => o.v > 0)
+                     .sort((a,b) => b.v - a.v);
+  const _hiDay = _dayVals[0] || null, _loDay = _dayVals[_dayVals.length-1] || null;
+  const _dNum = k => Number(String(k).slice(8,10));
+  const _mDays = new Date(cur.getFullYear(), cur.getMonth()+1, 0).getDate();
+  const _pendBk = mBkSet.size - mConfirmed, _pendPax = mPax - mConfirmedPax;
+  /* ทริปจริง = จำนวนเส้นทางที่ออกวันนั้น · ของเดิมนับใบจองแล้วเขียนว่า trips */
+  const tTrips = tx ? Object.keys(tx.routes || {}).length : 0;
+
+  const card3 = mFocPending > 0
+    ? `<div class="bkv2-stat warn">
+        <div class="s-lab">รอ FOC</div>
+        <div class="s-val">${mFocPending} <span class="s-unit">ใบ</span></div>
+        <div class="s-foot">ต้องตรวจก่อนออกเรือ</div>
+      </div>`
+    : `<div class="bkv2-stat">
+        <div class="s-lab">วันแน่นสุด / เบาสุด</div>
+        <div class="s-val">${_hiDay?_hiDay.v:'—'} <span class="s-unit">${_loDay?('/ '+_loDay.v):''}</span></div>
+        <div class="s-foot">${_hiDay?(_dNum(_hiDay.d)+' · '+_dNum(_loDay.d)+' ของเดือน'):'ยังไม่มีข้อมูล'}</div>
+      </div>`;
+
   return `
     <div class="bkv2-stats">
       <div class="bkv2-stat hero">
         <div class="s-lab">${monthLbl}</div>
-        <div class="s-val">${mBkSet.size} <span class="s-unit">bookings</span></div>
-        <div class="s-foot">${mPax} pax &middot; avg ${avgPerWeek}/week</div>
+        <div class="s-val">${mPax.toLocaleString()} <span class="s-unit">pax</span></div>
+        <div class="s-foot">${mBkSet.size} ใบจอง &middot; เฉลี่ย ${Math.round(mPax/_mDays)} pax/วัน</div>
       </div>
-      <div class="bkv2-stat success">
-        <div class="s-lab">Confirmed</div>
-        <div class="s-val">${mConfirmed} <span class="s-unit">bookings</span></div>
-        <div class="s-foot">${mConfirmedPax} pax in month</div>
+      <div class="bkv2-stat${_pendBk>0?' alert':' success'}">
+        <div class="s-lab">${_pendBk>0?'ยังไม่ยืนยัน':'ยืนยันครบแล้ว'}</div>
+        <div class="s-val">${_pendBk>0?_pendBk:mConfirmed} <span class="s-unit">ใบ</span></div>
+        <div class="s-foot">${_pendBk>0?(`<b>${_pendPax} pax</b> &middot; จาก ${mBkSet.size} ใบ`):(mConfirmedPax.toLocaleString()+' pax')}</div>
       </div>
-      <div class="bkv2-stat warn">
-        <div class="s-lab">Pending FOC</div>
-        <div class="s-val">${mFocPending} <span class="s-unit">awaiting</span></div>
-        <div class="s-foot">${mFocPending>0?'review needed':'all clear'}</div>
-      </div>
+      ${card3}
       <div class="bkv2-stat">
-        <div class="s-lab">Today</div>
+        <div class="s-lab">${tIsCur?'วันนี้':'Today'}</div>
         <div class="s-val">${tIsCur?tPax:'—'} <span class="s-unit">${tIsCur?'pax':''}</span></div>
-        <div class="s-foot">${tIsCur?(tBookings+' trips today'):'not in view'}</div>
+        <div class="s-foot">${tIsCur?(tBookings+' ใบจอง &middot; '+tTrips+' ทริป'):'ไม่ได้อยู่ในเดือนที่ดู'}</div>
       </div>
     </div>
   `;
@@ -74199,10 +74285,12 @@ function bkV2RenderMatrix(){
 
   let headers = `<th class="rowh">Route</th>`;
   const dayTotals = [];
+  const wkArr = [];                                   /* §mxRead · เสาร์-อาทิตย์ */
   for(let d = 1; d <= lastDay; d++){
     const dt = new Date(year, month, d);
     const dow = dt.getDay();
     const weekend = dow === 0 || dow === 6;
+    wkArr.push(weekend);
     const dowLetter = ['S','M','T','W','T','F','S'][dow];
     const dateKey = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const isToday = dateKey === todayKey;
@@ -74210,52 +74298,88 @@ function bkV2RenderMatrix(){
     headers += `<th class="dh ${weekend?'weekend':''} ${isToday?'today':''} ${dhSel}" onclick="bkV2SelectDay('${dateKey}')" title="View ${dateKey}">${dowLetter}<span class="dnum">${d}</span></th>`;
     dayTotals.push(0);
   }
+  headers += `<th class="rowh sumh">รวมเดือน</th>`;   /* §mxRead */
+  const _dk = d => `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
 
   // Family-grouped rows · parent rows shown by default · click to expand sub-routes
   const fams = bkV2Families();
+  const _sumCell = (val, foot, col) =>
+    `<td class="sum"><b${col?` style="color:${col}"`:''}>${val.toLocaleString()}</b><i>${foot}</i></td>`;
   const rows = fams.map(fam => {
     const subRoutes = bkV2FamilyRoutes(fam.id);
     const isExpanded = _bkV2.expanded.has(fam.id);
+    /* §mxRead · เก็บค่าทั้งเดือนก่อน · ต้องรู้ต่ำสุด-สูงสุดของแถวถึงจะไล่สีได้ */
+    const famDay = [], famOpenD = [];
+    for(let d = 1; d <= lastDay; d++){
+      famOpenD.push(bkV2IsFamilyOpenOn(fam.id, _dk(d)));
+      famDay.push(bkV2FamilyAggregate(fam.id, _dk(d), agg));
+    }
+    const famLive = famDay.map(x => x.total).filter(v => v > 0);
+    const fLo = famLive.length ? Math.min(...famLive) : 0;
+    const fHi = famLive.length ? Math.max(...famLive) : 0;
+    const fSum = famLive.reduce((a,b) => a+b, 0);
+    famDay.forEach((x, i) => { dayTotals[i] += x.total; });
 
-    // Parent row · aggregate pax across all sub-routes per day
     let parentRow = `<td class="rowh" onclick="bkV2ToggleFamily('${fam.id}')" style="border-left-color:${fam.color}"><span class="caret">${isExpanded?'▾':'▸'}</span>${fam.name}<span class="subc">${subRoutes.length} variant${subRoutes.length===1?'':'s'}</span></td>`;
     for(let d = 1; d <= lastDay; d++){
-      const dateKey = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-      const famOpen = bkV2IsFamilyOpenOn(fam.id, dateKey);
-      const famData = bkV2FamilyAggregate(fam.id, dateKey, agg);
+      const dateKey = _dk(d), wk = wkArr[d-1] ? ' wk' : '';
+      /* §mxRead · กางออกแล้วแถวแม่ปล่อยว่าง · เลขอยู่ที่แถวลูกอย่างเดียว ไม่ต้องอ่านซ้ำ */
+      if(isExpanded){ parentRow += `<td class="cell blank${wk}"></td>`; continue; }
+      const famOpen = famOpenD[d-1], famData = famDay[d-1];
       const sel = _bkV2.selected?.date === dateKey && _bkV2.selected?.familyId === fam.id;
-      // All sub-routes closed AND no bookings → off-season hatch
-      if(!famOpen && famData.total === 0){ parentRow += `<td class="cell closed" title="All routes in this family closed">&times;</td>`; continue; }
-      // Family open but no bookings → empty (available · clickable)
-      if(famData.total === 0){ parentRow += `<td class="cell empty${sel?' sel':''}" onclick="bkV2SelectFamilyCell('${dateKey}','${fam.id}')">&mdash;</td>`; continue; }
-      const intensity = bkV2CellIntensity(famData.total);
-      const cls = ['cell', intensity, famData.hasFocPending?'foc':'', sel?'sel':'', famData.hasFocPending?'focdot':''].filter(Boolean).join(' ');
-      parentRow += `<td class="${cls}" onclick="bkV2SelectFamilyCell('${dateKey}','${fam.id}')">${famData.total}</td>`;
-      dayTotals[d-1] += famData.total;
+      if(!famOpen && famData.total === 0){ parentRow += `<td class="cell closed${wk}" title="All routes in this family closed">&times;</td>`; continue; }
+      if(famData.total === 0){ parentRow += `<td class="cell empty${wk}${sel?' sel':''}" onclick="bkV2SelectFamilyCell('${dateKey}','${fam.id}')">&mdash;</td>`; continue; }
+      const cls = ['cell', famData.hasFocPending?'foc':'', sel?'sel':'', famData.hasFocPending?'focdot':'', wk.trim()].filter(Boolean).join(' ');
+      const st = (famData.hasFocPending || sel) ? '' : ` style="${bkV2MxHeat(famData.total, fLo, fHi, fam.color, false)}"`;
+      parentRow += `<td class="${cls}"${st} onclick="bkV2SelectFamilyCell('${dateKey}','${fam.id}')">${famData.total}</td>`;
     }
+    parentRow += _sumCell(fSum, isExpanded ? 'รวมทุก variant' : (famLive.length ? Math.round(fSum/famLive.length)+'/วันที่ออก' : 'ไม่ได้ออกเลย'),
+                          isExpanded ? '#5B6670' : fam.color);
     let html = `<tr class="fam ${isExpanded?'expanded':''}">${parentRow}</tr>`;
 
     // Sub-routes (rendered when expanded)
     if(isExpanded){
-      subRoutes.forEach(rDef => {
+      /* §mxRead · แยกตัวที่มีคนกับตัวที่ว่างทั้งเดือน · ตัวว่างพับเก็บ กินที่เปล่า ๆ */
+      const subInfo = subRoutes.map(rDef => {
+        const vals = [];
+        for(let d = 1; d <= lastDay; d++){ vals.push((agg.byDate[_dk(d)]?.routes?.[rDef.id]?.total) || 0); }
+        const live = vals.filter(v => v > 0);
+        return { rDef, vals, live, sum: live.reduce((a,b)=>a+b,0) };
+      });
+      const withData = subInfo.filter(o => o.live.length);
+      const noData   = subInfo.filter(o => !o.live.length);
+      const showEmpty = !!(_bkV2.mxEmpty && _bkV2.mxEmpty.has(fam.id));
+      const shown = showEmpty ? subInfo : (withData.length ? withData : subInfo);
+
+      shown.forEach(o => {
+        const rDef = o.rDef;
+        const sLo = o.live.length ? Math.min(...o.live) : 0;
+        const sHi = o.live.length ? Math.max(...o.live) : 0;
         let subRow = `<td class="rowh" title="${rDef.full}">${rDef.full}</td>`;
         for(let d = 1; d <= lastDay; d++){
-          const dateKey = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+          const dateKey = _dk(d), wk = wkArr[d-1] ? ' wk' : '';
           const isOpen = bkV2IsRouteOpenOn(rDef.id, dateKey);
-          const x = agg.byDate[dateKey];
-          const r = x?.routes?.[rDef.id];
-          if(!isOpen && !r){ subRow += `<td class="cell closed" title="Route closed">&times;</td>`; continue; }
-          if(!r){ const eSel=(_bkV2.selected?.date===dateKey && _bkV2.selected?.routeId===rDef.id)?' sel':''; subRow += `<td class="cell empty${eSel}" onclick="bkV2SelectCell('${dateKey}','${rDef.id}')">&mdash;</td>`; continue; }
+          const r = agg.byDate[dateKey]?.routes?.[rDef.id];
+          if(!isOpen && !r){ subRow += `<td class="cell closed${wk}" title="Route closed">&times;</td>`; continue; }
+          if(!r){ const eSel=(_bkV2.selected?.date===dateKey && _bkV2.selected?.routeId===rDef.id)?' sel':''; subRow += `<td class="cell empty${wk}${eSel}" onclick="bkV2SelectCell('${dateKey}','${rDef.id}')">&mdash;</td>`; continue; }
           const sel = _bkV2.selected?.date === dateKey && _bkV2.selected?.routeId === rDef.id;
           if(!isOpen){
-            subRow += `<td class="cell closed-with-data ${sel?'sel':''}" onclick="bkV2SelectCell('${dateKey}','${rDef.id}')" title="Bookings on closed route">${r.total}</td>`;
+            subRow += `<td class="cell closed-with-data${wk} ${sel?'sel':''}" onclick="bkV2SelectCell('${dateKey}','${rDef.id}')" title="Bookings on closed route">${r.total}</td>`;
             continue;
           }
-          const cls = ['cell', bkV2CellIntensity(r.total), r.hasFocPending?'foc':'', sel?'sel':'', r.hasFocPending?'focdot':''].filter(Boolean).join(' ');
-          subRow += `<td class="${cls}" onclick="bkV2SelectCell('${dateKey}','${rDef.id}')">${r.total}</td>`;
+          const cls = ['cell', r.hasFocPending?'foc':'', sel?'sel':'', r.hasFocPending?'focdot':'', wk.trim()].filter(Boolean).join(' ');
+          const st = (r.hasFocPending || sel) ? '' : ` style="${bkV2MxHeat(r.total, sLo, sHi, fam.color, false)}"`;
+          subRow += `<td class="${cls}"${st} onclick="bkV2SelectCell('${dateKey}','${rDef.id}')">${r.total}</td>`;
         }
+        subRow += _sumCell(o.sum, o.live.length + ' วัน', o.live.length ? fam.color : '#B6BCC3');
         html += `<tr class="sub">${subRow}</tr>`;
       });
+
+      if(noData.length && withData.length){
+        html += `<tr class="sub emptyvars"><td class="rowh mxmore" colspan="${lastDay+2}" onclick="bkV2ToggleEmptyVars('${fam.id}')">`
+              + `${showEmpty?'▾':'▸'} <u>อีก ${noData.length} variant${noData.length===1?'':'s'} ไม่มีคนทั้งเดือน</u>`
+              + ` <span class="mxmore-n">${noData.map(o=>o.rDef.full).join(' · ')}</span></td></tr>`;
+      }
     }
     return html;
   }).join('');
@@ -74264,16 +74388,22 @@ function bkV2RenderMatrix(){
   const anyExpanded = _bkV2.expanded.size > 0;
   const toolbar = `<div class="bkv2-mx-toolbar"><span>${fams.length} programs &middot; ${bkV2Routes().length} variants</span><span style="margin-left:auto"></span><button onclick="bkV2ExpandAllFamilies()">Expand all</button>${anyExpanded?`<button onclick="bkV2CollapseAllFamilies()">Collapse all</button>`:''}</div>`;
 
-  let totRow = `<td class="rowh">Day total</td>`;
+  /* §mxRead · บรรทัดที่ต้องอ่านที่สุดของหน้านี้ · บาร์ใต้ตัวเลขทำให้เห็นจังหวะทั้งเดือนในตาเดียว */
+  const _maxDay = Math.max(1, ...dayTotals);
+  let totRow = `<td class="rowh">รวมทั้งวัน</td>`;
   for(let d = 1; d <= lastDay; d++){
-    const dateKey = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    const isToday = dateKey === todayKey;
-    totRow += `<td class="${isToday?'today':''}">${dayTotals[d-1] || ''}</td>`;
+    const isToday = _dk(d) === todayKey;
+    const v = dayTotals[d-1] || 0;
+    totRow += `<td class="${isToday?'today':''}"><div class="tn">${v || '·'}</div>`
+            + `<div class="ttrack"><div class="tbar" style="width:${v?Math.max(8,Math.round(v/_maxDay*100)):0}%"></div></div></td>`;
   }
+  const _grand = dayTotals.reduce((a,b) => a+b, 0);
+  totRow += `<td class="sum"><b>${_grand.toLocaleString()}</b><i>เฉลี่ย ${Math.round(_grand/lastDay)}/วัน</i></td>`;
 
   // Colgroup enforces equal day column widths (works with table-layout:fixed)
   let colgroup = '<col class="label">';
   for(let d = 1; d <= lastDay; d++) colgroup += '<col class="day">';
+  colgroup += '<col class="sumcol">';                 /* §mxRead */
 
   return `
     ${bkV2RenderStats()}
@@ -74388,10 +74518,10 @@ function bkV2RenderFooterHints(viewMode){
   // Matrix view: keep heatmap legend
   return `
     <div class="bkv2-foot-hints">
-      <span class="bkv2-legend"><span class="sw lo"></span>1&ndash;10 pax</span>
-      <span class="bkv2-legend"><span class="sw mid"></span>11&ndash;24</span>
-      <span class="bkv2-legend"><span class="sw hi"></span>25&ndash;50</span>
-      <span class="bkv2-legend"><span class="sw peak"></span>51+</span>
+      <span class="bkv2-legend"><span class="sw mxlo"></span>วันเงียบของโปรแกรมนั้น</span>
+      <span class="bkv2-legend"><span class="sw mxhi"></span>วันแน่นของโปรแกรมนั้น</span>
+      <span class="bkv2-legend"><span class="sw mxempty"></span>เปิดแต่ยังไม่มีคน</span>
+      <span class="bkv2-legend"><span class="sw mxclosed"></span>ไม่ออกวันนั้น</span>
       <span class="bkv2-legend"><span class="sw focdot"></span>FOC pending</span>
       <span style="margin-left:auto" class="gp"><span class="bkv2-kbd">M</span>back to calendar</span>
     </div>
