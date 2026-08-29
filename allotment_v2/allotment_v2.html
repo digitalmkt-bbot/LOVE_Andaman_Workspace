@@ -35642,7 +35642,7 @@ function flRenderInventory(){
   const CAT_LBL={engine:'Engine',gearbox:'Gearbox',propeller:'Propeller',hull:'Hull',general:'General'};
   const catPills=topCats.map(function(x){var cat=x[0],c=x[1];return '<div style="display:flex;align-items:center;gap:6px;background:white;border:1px solid '+dim.line+';border-radius:20px;padding:3px 12px 3px 3px"><div style="width:24px;height:24px;border-radius:50%;background:'+(CAT_COLOR[cat]||'#666')+';color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">'+(CAT_ABBR[cat]||cat.slice(0,2).toUpperCase())+'</div><span style="font-size:12px;font-weight:500">'+(CAT_LBL[cat]||cat)+' \u00b7 '+c+'</span></div>'}).join('');
 
-  const headerBar='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px"><div style="display:flex;align-items:center;gap:6px">'+catPills+'<div style="width:32px;height:32px;border-radius:50%;background:'+dim.ink+';color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">I</div></div><div style="display:flex;gap:6px"><button onclick="flOpenReceiveStock()" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:500;cursor:pointer">+ Receive</button><button onclick="flOpenAddStockModal()" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:500;cursor:pointer">+ Add item</button><button onclick="invDupOpen()" title="ตรวจรายการที่ชื่อซ้ำกัน · ของชิ้นเดียวกันแตกเป็นหลายรายการทำให้ยอดคงเหลือกระจาย" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:500;cursor:pointer">&#9888; ตรวจของซ้ำ</button><button onclick="flOpenMemoFromInventory()" style="background:'+dim.ink+';color:white;border:none;border-radius:20px;padding:7px 16px;font-size:11px;font-weight:600;cursor:pointer">+ Create Memo</button></div></div>';
+  const headerBar='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px"><div style="display:flex;align-items:center;gap:6px">'+catPills+'<div style="width:32px;height:32px;border-radius:50%;background:'+dim.ink+';color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">I</div></div><div style="display:flex;gap:6px"><button onclick="flOpenReceiveStock()" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:500;cursor:pointer">+ Receive</button><button onclick="flOpenAddStockModal()" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:500;cursor:pointer">+ Add item</button><button onclick="invDupOpen()" title="ตรวจรายการที่ชื่อซ้ำกัน · ของชิ้นเดียวกันแตกเป็นหลายรายการทำให้ยอดคงเหลือกระจาย" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:500;cursor:pointer">&#9888; ตรวจคลัง</button><button onclick="flOpenMemoFromInventory()" style="background:'+dim.ink+';color:white;border:none;border-radius:20px;padding:7px 16px;font-size:11px;font-weight:600;cursor:pointer">+ Create Memo</button></div></div>';
 
   const kpiStrip='<div style="display:grid;grid-template-columns:1.6fr 0.85fr 0.85fr 0.85fr 1fr;gap:8px;margin-bottom:14px;align-items:stretch"><div style="grid-column:1;align-self:end;padding-bottom:6px"><div style="font-size:13px;font-weight:500;color:'+dim.ink4+';margin-bottom:2px">Inventory & Memos</div><div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:42px;font-weight:700;letter-spacing:-1.5px;line-height:1">'+totalItems+'</span><span style="font-size:18px;color:'+dim.ink3+';font-weight:500">items</span><span style="display:inline-flex;align-items:center;background:'+SVG_PINK.accent+';color:white;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">\u25b4 \u0e3f'+totalValue.toLocaleString()+' value</span>'+(cntLow?'<span style="display:inline-flex;align-items:center;background:#FCEBEB;color:#A32D2D;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">'+cntLow+' low stock</span>':'')+'</div><div style="font-size:11px;color:'+dim.ink3+'">2 warehouses \u00b7 Tub Lamu ('+tubCount+') \u00b7 Visit Panwa ('+panwaCount+')</div></div><div style="grid-column:2;background:white;border-radius:14px;padding:11px 13px;border:2px solid '+(cntLow?'#A32D2D':dim.line)+'"><div style="font-size:10px;color:'+dim.ink3+'">Low stock</div><div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span style="background:#A32D2D;color:white;padding:2px 9px;border-radius:14px;font-size:14px;font-weight:700">'+cntLow+'</span><span style="font-size:11px;color:'+dim.ink3+';margin-left:2px">items</span></div><div style="font-size:11px;color:#A32D2D;margin-top:7px;font-weight:600">need restock</div></div><div style="grid-column:3;background:white;border-radius:14px;padding:11px 13px;border:2px solid '+(cntPendingMemo?'#BA7517':dim.line)+'"><div style="font-size:10px;color:'+dim.ink3+'">Pending memos</div><div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span style="background:#BA7517;color:white;padding:2px 9px;border-radius:14px;font-size:14px;font-weight:700">'+cntPendingMemo+'</span><span style="font-size:11px;color:'+dim.ink3+';margin-left:2px">memos</span></div><div style="font-size:11px;color:#854F0B;margin-top:7px;font-weight:600">\u0e3f'+pendingAmount.toLocaleString()+' awaiting</div></div><div style="grid-column:4;background:white;border-radius:14px;padding:11px 13px;border:1px solid '+dim.line+'"><div style="font-size:10px;color:'+dim.ink3+'">Paid this month</div><div style="display:flex;align-items:baseline;gap:3px;margin-top:2px"><span style="font-size:18px;font-weight:700;line-height:1.2;color:#1D9E75">'+paidThisMonth.length+'</span><span style="font-size:11px;color:'+dim.ink3+';font-weight:500">memos</span></div><div style="font-size:11px;color:#0F6E56;margin-top:6px;font-weight:600">\u0e3f'+paidAmount.toLocaleString()+' spent</div></div><div style="grid-column:5;background:'+dim.ink+';color:white;border-radius:14px;padding:11px 13px"><div style="font-size:10px;color:#aaa">By status</div><div style="display:flex;flex-direction:column;gap:3px;margin-top:4px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Pending</span><span style="font-size:11px;font-weight:600;color:'+(cntPendingMemo?'#FF8FA8':'white')+'">'+cntPendingMemo+'</span></div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Approved</span><span style="font-size:11px;font-weight:600;color:white">'+cntApprovedMemo+'</span></div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Received</span><span style="font-size:11px;font-weight:600;color:white">'+cntReceivedMemo+'</span></div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Paid</span><span style="font-size:11px;font-weight:600;color:#9BE6BC">'+cntPaidMemo+'</span></div></div></div></div>';
 
@@ -36783,8 +36783,86 @@ function invDupScan(){
   });
   return out;
 }
+/* §invLostLine · บรรทัดที่รับของแล้วแต่ไม่มีรายการในคลังเลย */
+function invLostScan(){
+  var out=[], DONE={received:1, paid:1};
+  (typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).forEach(function(m){
+    if(!DONE[m.status]) return;
+    (m.items||[]).forEach(function(it, idx){
+      if((it.category||m.memoType||'parts')==='labor') return;
+      var t=it.invId?_invAll().find(function(x){ return x.id===it.invId; }):null;
+      if(t && _invSameName(t.name, it.name)) return;          /* ผูกถูกอยู่แล้ว */
+      if(_invSameNameList(it.name, null).length) return;      /* มีของชื่อนี้อยู่ · แค่ยังไม่ผูก ไม่ใช่ของหาย */
+      out.push({m:m, idx:idx, it:it, wrong:t||null});
+    });
+  });
+  return out;
+}
+/* ของที่ถูกบวกผิดชิ้น · เกินมากี่หน่วยจากใบนี้ */
+function _invSurplus(wrong, m){
+  if(!wrong) return {rows:[], sum:0, own:0, over:0};
+  var rows=(wrong.history||[]).filter(function(h){
+    return h.type==='receive' && (h.memoId===m.id || String(h.note||'').indexOf(m.no)>=0); });
+  var sum=rows.reduce(function(a,h){ return a+(+h.qty||0); },0);
+  var own=(m.items||[]).filter(function(x){ return x.invId===wrong.id && _invSameName(x.name, wrong.name); })
+            .reduce(function(a,x){ return a+(+x.qty||0); },0);
+  return {rows:rows, sum:sum, own:own, over:sum-own};
+}
+function invLostFix(memoId, idx){
+  var m=(typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).find(function(x){ return x.id===memoId; });
+  if(!m) return;
+  var it=(m.items||[])[idx]; if(!it) return;
+  var wrong=it.invId?_invAll().find(function(x){ return x.id===it.invId; }):null;
+  var qty=Math.max(0,+it.qty||0);
+  var S=_invSurplus(wrong, m);
+  /* คลังปลายทาง · เอาตามแถวที่บวกผิดไว้ ถ้าไม่มีค่อยดูที่ใบ */
+  var loc=(S.rows[0]&&S.rows[0].location) || m.receivedLocation || 'คลัง Tub Lamu';
+  var canPull = !!(wrong && S.over>=qty && qty>0);
+  var msg='ซ่อมรายการ "'+it.name+'" ของ '+m.no+'\n\n'
+    +'1. สร้างรายการในคลัง · '+qty+' '+(it.unit||'ชิ้น')+' @ '+loc+'\n';
+  msg += canPull
+    ? ('2. ถอน '+qty+' '+(it.unit||'ชิ้น')+' ออกจาก "'+wrong.name+'" ที่ถูกบวกเกินไว้\n   (ตอนนี้ '
+       +(wrong.totalQty!=null?wrong.totalQty:wrong.qty||0)+' → '+((wrong.totalQty!=null?wrong.totalQty:wrong.qty||0)-qty)+')\n\nยอดรวมทั้งระบบเท่าเดิม')
+    : ('2. ไม่แตะยอดของชิ้นอื่น'+(wrong?(' · คำนวณส่วนเกินของ "'+wrong.name+'" ไม่ลงตัว ต้องไปตรวจเอง'):''));
+  if(!confirm(msg)) return;
+
+  var nv={ id:_invNewId('i'), name:it.name, partNo:it.partNo||'', category:'general',
+    supplier:m.supplier||'', location:loc, unit:it.unit||'ชิ้น', minQty:0, cost:it.price||0,
+    stocks:[], qty:0, totalQty:0, primaryLocation:loc,
+    note:'ซ่อมจาก '+m.no+' · รับเข้าแล้วแต่ไม่มีรายการในคลัง',
+    createdFrom:m.no, createdDate:(typeof TODAY_STR!=='undefined'?TODAY_STR:''),
+    history:[{date:(typeof TODAY_STR!=='undefined'?TODAY_STR:''), type:'register', qty:0,
+      note:'สร้างย้อนหลัง · บรรทัดใน '+m.no+' รับของแล้วแต่ไม่มีรายการในคลัง (id ชนกัน)',
+      by:(typeof laBy==='function')?laBy():''}] };
+  FL_INVENTORY.push(nv);
+  invAddAt(nv, loc, qty);
+  nv.history.push({ date:(m.receivedDate||m.createdDate||(typeof TODAY_STR!=='undefined'?TODAY_STR:'')),
+    type:'receive', qty:qty, location:loc, memoId:m.id,
+    note:'จาก '+m.no+' · ลงย้อนหลังตอนซ่อมรายการ · @ '+loc,
+    by:(typeof laBy==='function')?laBy():'' });
+
+  if(canPull){
+    /* ถอนแถวที่เกินออก · เลือกแถวที่จำนวนตรงกันก่อน ไม่งั้นตัดจากแถวท้ายสุด */
+    var row=S.rows.filter(function(h){ return (+h.qty||0)===qty; }).pop() || S.rows[S.rows.length-1];
+    if(row){
+      var hi=wrong.history.indexOf(row);
+      if((+row.qty||0)===qty){ if(hi>=0) wrong.history.splice(hi,1); }
+      else row.qty=(+row.qty||0)-qty;
+    }
+    invAddAt(wrong, loc, -qty);
+    wrong.history.push({ date:(typeof TODAY_STR!=='undefined'?TODAY_STR:''), type:'adjust_out', qty:qty,
+      location:loc, note:'ถอนของที่บวกผิดชิ้นจาก '+m.no+' · ย้ายไปที่ "'+it.name+'"',
+      by:(typeof laBy==='function')?laBy():'' });
+  }
+  it.invId=nv.id;
+  if(typeof flSave==='function') flSave();
+  if(typeof flShowToast==='function') flShowToast('ซ่อมแล้ว · '+it.name+' คงเหลือ '+qty+' '+(it.unit||'ชิ้น')+' @ '+loc);
+  if(typeof flRenderInventory==='function') flRenderInventory();
+  invDupOpen();
+}
 function invDupOpen(){
   var R=invDupScan(), e=(typeof ckEsc==='function')?ckEsc:function(x){ return String(x==null?'':x); };
+  var LOST=invLostScan();
   var qty=function(x){ return (x.totalQty!=null?x.totalQty:(x.qty||0)); };
   var row=function(x){
     return '<div style="display:flex;gap:10px;align-items:center;padding:5px 0;font-size:11.5px;border-top:1px solid #F3F1EC">'
@@ -36823,16 +36901,39 @@ function invDupOpen(){
     +R.ok.slice(0,10).map(function(gr){ return '&middot; '+e(gr.name)+' <span style="color:#98A2AD">('+gr.list.length+' เบอร์)</span>'; }).join('<br>')
     +(R.ok.length>10?('<br>&middot; ... อีก '+(R.ok.length-10)+' ชื่อ'):'')+'</div></div>';
 
-  var body = (R.dup.length||R.needPn.length||R.ok.length)
-    ? (secDup+secPn+secOk)
-    : '<div style="padding:26px 0;text-align:center;color:#0F6E56;font-size:13px;font-weight:700">&#10003; ไม่มีรายการซ้ำในคลัง</div>';
+  /* §invLostLine · ของหายทั้งรายการ · ร้ายแรงกว่าซ้ำ เอาขึ้นก่อน */
+  var secLost = !LOST.length ? '' :
+    '<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:800;color:#A32D2D;letter-spacing:.05em;text-transform:uppercase;margin-bottom:7px">'
+    +'รับของแล้วแต่ไม่มีในคลัง &middot; '+LOST.length+' รายการ</div>'
+    +'<div style="font-size:11.5px;color:#7A4A00;background:#FFF8EC;border:1px solid #F0DFB8;border-radius:9px;padding:8px 11px;margin-bottom:9px;line-height:1.7">'
+    +'บรรทัดใน memo รับของแล้ว แต่ไม่มีรายการในคลังเลย &middot; เกิดจาก id ชนกันตอนลงทะเบียน ของไปบวกเข้าชิ้นอื่นแทน<br>'
+    +'ปุ่มซ่อมจะสร้างรายการให้ ลงรับเข้าตามใบ และถอนส่วนที่เกินออกจากชิ้นที่ถูกบวกผิด &middot; <b>ยอดรวมทั้งระบบเท่าเดิม</b></div>'
+    +LOST.map(function(L){
+      var S=_invSurplus(L.wrong, L.m), q=Math.max(0,+L.it.qty||0);
+      var can=!!(L.wrong && S.over>=q && q>0);
+      return '<div style="border:1px solid #F0D5CE;background:#FFFAF8;border-radius:11px;padding:10px 13px;margin-bottom:8px">'
+        +'<div style="display:flex;align-items:center;gap:10px"><b style="flex:1;font-size:12.5px">'+e(L.it.name)+'</b>'
+        +'<span style="font-size:11px;color:#A32D2D;font-weight:700">'+e(L.m.no)+' &middot; '+q+' '+e(L.it.unit||'ชิ้น')+'</span>'
+        +'<button onclick="invLostFix(\''+e(L.m.id)+'\','+L.idx+')" style="border:none;background:#A32D2D;color:#fff;border-radius:8px;padding:6px 13px;font:700 11.5px inherit;cursor:pointer;font-family:inherit">ซ่อมรายการนี้</button></div>'
+        +'<div style="font-size:11.5px;color:#7A848E;padding-top:5px;border-top:1px solid #F3F1EC;margin-top:6px;line-height:1.7">'
+        +(L.wrong
+           ? ('ของไปบวกเข้า <b style="color:#3F4654">'+e(L.wrong.name)+'</b> (คงเหลือ '+(L.wrong.totalQty!=null?L.wrong.totalQty:L.wrong.qty||0)+')'
+              +(can?(' &middot; <span style="color:#0F6E56;font-weight:700">เกินมา '+S.over+' &middot; ถอนคืนได้</span>')
+                   :' &middot; <span style="color:#B4560A;font-weight:700">คำนวณส่วนเกินไม่ลงตัว &middot; จะสร้างรายการให้อย่างเดียว</span>'))
+           : 'ไม่ได้ผูกกับรายการไหนเลย &middot; จะสร้างรายการใหม่ให้')
+        +'</div></div>';
+    }).join('')+'</div>';
+
+  var body = (LOST.length||R.dup.length||R.needPn.length||R.ok.length)
+    ? (secLost+secDup+secPn+secOk)
+    : '<div style="padding:26px 0;text-align:center;color:#0F6E56;font-size:13px;font-weight:700">&#10003; คลังสะอาด &middot; ไม่มีของหายและไม่มีรายการซ้ำ</div>';
 
   var host=document.getElementById('inv-dup-host');
   if(!host){ host=document.createElement('div'); host.id='inv-dup-host'; document.body.appendChild(host); }
   host.innerHTML='<div id="inv-dup-ov" onclick="if(event.target===this)invDupClose()" style="position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:99970;display:flex;align-items:center;justify-content:center;padding:20px;font-family:\'DM Sans\',\'Noto Sans Thai\',sans-serif">'
    +'<div style="background:#fff;border-radius:16px;width:min(720px,96vw);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 22px 60px rgba(15,23,42,.3)">'
    +'<div style="padding:17px 22px;border-bottom:1px solid #EFECE4;display:flex;align-items:center;justify-content:space-between">'
-   +'<div><div style="font-size:15.5px;font-weight:800;color:#1F2A44">ตรวจรายการซ้ำในคลัง</div>'
+   +'<div><div style="font-size:15.5px;font-weight:800;color:#1F2A44">ตรวจคลัง &middot; ของหาย และรายการซ้ำ</div>'
    +'<div style="font-size:11.5px;color:#7A848E;margin-top:2px">กุญแจของรายการคลังคือ <b>ชื่อ + Part Number</b></div></div>'
    +'<button onclick="invDupClose()" style="border:none;background:#F0F0EC;border-radius:8px;width:28px;height:28px;font-size:16px;color:#5F5E5A;cursor:pointer">&times;</button></div>'
    +'<div style="padding:16px 22px;overflow:auto;flex:1">'+body+'</div></div></div>';
