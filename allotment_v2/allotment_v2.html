@@ -48097,10 +48097,39 @@ let VAN_BILL={};
   const d=JSON.parse(localStorage.getItem(k)||'{}');
   if(d && d.van_bill && typeof d.van_bill==='object') VAN_BILL=d.van_bill; }catch(_){} })();
 function vbPersist(){
+  /* §vbEdit · ระหว่างแก้ไขยังไม่เขียนขึ้นเซิร์ฟเวอร์ · ไม่งั้นปุ่มยกเลิกจะไม่มีความหมาย
+     เพราะของเดิมถูกทับไปแล้วตั้งแต่พิมพ์ตัวแรก */
+  if(_vb.edit) return;
   if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('accounting')) return;
   try{ laBlob().van_bill=VAN_BILL; laBlobSave(); }catch(_){}
 }
-var _vb={sup:'', van:'', ym:'', per:2};
+var _vb={sup:'', van:'', ym:'', per:2, edit:0, snap:null};
+/* ── โหมดแก้ไข ─────────────────────────────────────────────────────────
+   ใบวางบิลเป็นเอกสารที่ส่งให้เจ้าของรถ · เผลอปัดโดนช่องแล้วตัวเลขเปลี่ยนทันที
+   โดยไม่มีใครรู้ คือเรื่องใหญ่ · ปกติหน้านี้จึงอ่านอย่างเดียว ต้องกดแก้ไขก่อน */
+function vbEdit(){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('accounting')) return;
+  _vb.snap=JSON.stringify(vbState());
+  _vb.edit=1; renderVanBill();
+}
+function vbSave(){
+  _vb.edit=0; _vb.snap=null;
+  var st=vbState();
+  st.by=(typeof laBy==='function')?laBy():''; st.at=new Date().toISOString();
+  vbPersist(); renderVanBill();
+  if(typeof flShowToast==='function') flShowToast('บันทึกใบวางบิลแล้ว');
+}
+function vbCancel(quiet){
+  if(!quiet && !confirm('ทิ้งที่แก้ไว้ กลับไปเป็นค่าที่บันทึกไว้ล่าสุด?')) return;
+  if(_vb.snap){ try{ VAN_BILL[vbKey()]=JSON.parse(_vb.snap); }catch(_){} }
+  _vb.edit=0; _vb.snap=null; renderVanBill();
+}
+/* เปลี่ยนรอบบิล/เจ้าของรถระหว่างแก้ไข = ที่แก้ไว้ของรอบเดิมหลุด · ถามก่อน */
+function vbLeave(){
+  if(!_vb.edit) return true;
+  if(!confirm('ยังไม่ได้บันทึก · ออกจากรอบบิลนี้แล้วที่แก้ไว้จะหาย · ไปต่อไหม')) return false;
+  vbCancel(1); return true;
+}
 /* รหัสสั้นบนใบวางบิล · ตามที่ใช้กันในใบจริง */
 var VB_CODE={ r10:{c:'PP',col:'#C0392B'}, r7:{c:'PP',col:'#C0392B'}, r8:{c:'PP',col:'#C0392B'}, r9:{c:'PP',col:'#C0392B'},
               r11:{c:'PB',col:'#1C7A4E'}, r12:{c:'MT',col:'#BA7517'} };
@@ -48171,37 +48200,41 @@ function vbRows(){
   return Object.keys(map).sort().map(function(k){ return map[k]; });
 }
 function vbSet(field,val){
-  if(typeof laGuardEdit==='function' && !laGuardEdit('accounting')) return;
+  if(!_vb.edit) return;
   var st=vbState(); st[field]=Math.max(0, parseFloat(String(val).replace(/[^0-9.]/g,''))||0);
-  st.by=(typeof laBy==='function')?laBy():''; st.at=new Date().toISOString();
-  vbPersist(); renderVanBill();
+  renderVanBill();
 }
 function vbSetRow(rk, field, val){
-  if(typeof laGuardEdit==='function' && !laGuardEdit('accounting')) return;
+  if(!_vb.edit) return;
   var st=vbState(); if(!st.rows[rk]) st.rows[rk]={};
+  /* §vbMinus · ช่องหักแสดงเป็นลบ · ตัดเครื่องหมายทิ้งแล้วเก็บเป็นบวก
+     พิมพ์ "-100" หรือ "100" ได้ค่าเดียวกัน ไม่ต้องมาลุ้นว่าต้องใส่ลบไหม */
   st.rows[rk][field]=Math.max(0, parseFloat(String(val).replace(/[^0-9.]/g,''))||0);
-  st.by=(typeof laBy==='function')?laBy():''; st.at=new Date().toISOString();
-  vbPersist(); renderVanBill();
+  renderVanBill();
 }
 function vbAddExtra(){
-  if(typeof laGuardEdit==='function' && !laGuardEdit('accounting')) return;
+  if(!_vb.edit) return;
   var st=vbState(); var P=vbPeriod();
   st.extra.push({id:'x'+Date.now().toString(36), date:P.from, note:'รถนอก', van:1, pax:0, rate:0, ex:0, cut:0, per:0});
   vbPersist(); renderVanBill();
 }
 function vbSetExtra(id, field, val){
-  if(typeof laGuardEdit==='function' && !laGuardEdit('accounting')) return;
+  if(!_vb.edit) return;
   var st=vbState(), r=st.extra.filter(function(x){ return x.id===id; })[0]; if(!r) return;
   r[field]=(field==='date'||field==='note')?String(val):Math.max(0, parseFloat(String(val).replace(/[^0-9.]/g,''))||0);
-  vbPersist(); renderVanBill();
+  renderVanBill();
 }
 function vbDelExtra(id){
-  if(typeof laGuardEdit==='function' && !laGuardEdit('accounting')) return;
+  if(!_vb.edit) return;
   var st=vbState(); st.extra=st.extra.filter(function(x){ return x.id!==id; });
-  vbPersist(); renderVanBill();
+  renderVanBill();
 }
-function vbPick(field,val){ _vb[field]=(field==='per')?(+val||1):val; if(field==='sup') _vb.van=''; renderVanBill(); }
+function vbPick(field,val){
+  if(!vbLeave()){ renderVanBill(); return; }
+  _vb[field]=(field==='per')?(+val||1):val; if(field==='sup') _vb.van=''; renderVanBill();
+}
 function vbShiftMonth(n){
+  if(!vbLeave()) return;
   var y=+_vb.ym.slice(0,4), m=+_vb.ym.slice(5,7)-1+n, d=new Date(y,m,1);
   _vb.ym=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); renderVanBill();
 }
@@ -48238,10 +48271,21 @@ function renderVanBill(){
     T.bill+=bill; T.sale+=sale;
   });
   var pl=T.sale-T.bill, avg=T.van?(T.pax/T.van):0;
-  var B=function(n){ return '฿'+Math.round(n||0).toLocaleString(); };
-  var IN=function(fn,val,w){ return '<input value="'+(val||val===0?e(val):'')+'" onchange="'+fn+'" '
-    +'style="border:1px dashed #9EC4E4;background:#F8FCFF;border-radius:7px;padding:4px 7px;width:'+(w||58)+'px;'
-    +'text-align:right;font:700 12px \'DM Mono\',monospace;color:#0B4F7E">'; };
+  /* §vbMinus · ยอดติดลบต้องอ่านออกว่าเป็นลบ · '฿-150' อ่านยากกว่า '−฿150' */
+  var B=function(n){ n=Math.round(n||0);
+    return (n<0?'−฿':'฿')+Math.abs(n).toLocaleString(); };
+  var ED=!!_vb.edit;
+  /* §vbEdit · ไม่ได้อยู่ในโหมดแก้ไข = ไม่มีช่องให้พิมพ์เลย · กันปัดโดนแล้วตัวเลขเปลี่ยนเงียบ ๆ
+     §vbMinus · neg=1 คือช่องหัก · แสดงติดลบให้เห็นว่าเป็นรายการที่เอาออกจากบิล */
+  var IN=function(fn,val,w,neg){
+    var has=(val||val===0), txt=has?((neg?'-':'')+val):'';
+    if(!ED) return '<span class="vb-ro'+(neg?' neg':'')+(has?'':' mut')+'" style="min-width:'+(w||58)+'px">'
+      +(has?e(txt):'·')+'</span>';
+    return '<input value="'+e(txt)+'" onchange="'+fn+'" class="vb-in'+(neg?' neg':'')+'" '
+      +'style="width:'+(w||58)+'px">';
+  };
+  /* จำนวนลบสำหรับช่องที่ระบบคิดให้ (แถวรวม / การ์ดสรุป) */
+  var NEG=function(n){ return (+n>0) ? ('−'+Math.round(n).toLocaleString()) : '0'; };
 
   var supSel='<select onchange="vbPick(\'sup\',this.value)" class="vb-sel">'
     +sups.map(function(x){ return '<option value="'+e(x)+'"'+(x===_vb.sup?' selected':'')+'>'+e(x)+'</option>'; }).join('')+'</select>';
@@ -48274,7 +48318,7 @@ function renderVanBill(){
      +'<td><b>1</b></td><td><b>'+r.pax+'</b></td>'
      +'<td>'+IN("vbSetRow('"+x.rk+"','rate',this.value)", x.rate||'')+'</td>'
      +'<td>'+IN("vbSetRow('"+x.rk+"','ex',this.value)", x.ex||'', 50)+'</td>'
-     +'<td>'+IN("vbSetRow('"+x.rk+"','cut',this.value)", x.cut||'', 46)+'</td>'
+     +'<td>'+IN("vbSetRow('"+x.rk+"','cut',this.value)", x.cut||'', 52, 1)+'</td>'
      +'<td class="r"><b>'+B(x.bill)+'</b></td>'
      +'<td>'+IN("vbSetRow('"+x.rk+"','per',this.value)", x.per||'', 50)+'</td>'
      +'<td class="r"><b>'+B(x.sale)+'</b><div class="vb-sub">'+r.pax+' × '+(x.per||0)+'</div></td>'
@@ -48285,18 +48329,20 @@ function renderVanBill(){
   var exBody=st.extra.map(function(x){
     var bill=(+x.van||0)*(+x.rate||0)+(+x.ex||0)-(+x.cut||0), sale=(+x.pax||0)*(+x.per||0);
     return '<tr class="vb-ex">'
-     +'<td class="l"><input type="date" value="'+e(x.date||'')+'" onchange="vbSetExtra(\''+x.id+'\',\'date\',this.value)" class="vb-din"></td>'
-     +'<td class="l" colspan="2"><input value="'+e(x.note||'')+'" onchange="vbSetExtra(\''+x.id+'\',\'note\',this.value)" class="vb-tin" placeholder="รถนอก · งานที่ไม่ได้ผ่านใบงาน"></td>'
+     +'<td class="l">'+(ED?('<input type="date" value="'+e(x.date||'')+'" onchange="vbSetExtra(\''+x.id+'\',\'date\',this.value)" class="vb-din">')
+        :('<span class="vb-mono">'+e(x.date?(x.date.slice(8,10)+'/'+(+x.date.slice(5,7))+'/'+x.date.slice(2,4)):'—')+'</span>'))+'</td>'
+     +'<td class="l" colspan="2">'+(ED?('<input value="'+e(x.note||'')+'" onchange="vbSetExtra(\''+x.id+'\',\'note\',this.value)" class="vb-tin" placeholder="รถนอก · งานที่ไม่ได้ผ่านใบงาน">')
+        :('<span class="vb-rn">'+e(x.note||'รถนอก')+'</span>'))+'</td>'
      +'<td colspan="4" class="vb-mut">กรอกเอง</td>'
      +'<td>'+IN("vbSetExtra('"+x.id+"','van',this.value)", x.van||'', 40)+'</td>'
      +'<td>'+IN("vbSetExtra('"+x.id+"','pax',this.value)", x.pax||'', 44)+'</td>'
      +'<td>'+IN("vbSetExtra('"+x.id+"','rate',this.value)", x.rate||'')+'</td>'
      +'<td>'+IN("vbSetExtra('"+x.id+"','ex',this.value)", x.ex||'', 50)+'</td>'
-     +'<td>'+IN("vbSetExtra('"+x.id+"','cut',this.value)", x.cut||'', 46)+'</td>'
+     +'<td>'+IN("vbSetExtra('"+x.id+"','cut',this.value)", x.cut||'', 52, 1)+'</td>'
      +'<td class="r"><b>'+B(bill)+'</b></td>'
      +'<td>'+IN("vbSetExtra('"+x.id+"','per',this.value)", x.per||'', 50)+'</td>'
      +'<td class="r"><b>'+B(sale)+'</b></td>'
-     +'<td class="r"><a onclick="vbDelExtra(\''+x.id+'\')" style="color:#A32D2D;cursor:pointer;font-weight:700">ลบ</a></td></tr>';
+     +'<td class="r">'+(ED?('<a onclick="vbDelExtra(\''+x.id+'\')" style="color:#A32D2D;cursor:pointer;font-weight:700">ลบ</a>'):'')+'</td></tr>';
   }).join('');
 
   var codeCards=['PP','PB','MT'].map(function(c){
@@ -48308,12 +48354,18 @@ function renderVanBill(){
   host.innerHTML=vbCss()
    +'<div class="vb">'
    +'<div class="vb-h1">&#128656; วางบิลรถร่วม · Van Supplier Billing</div>'
-   +'<div class="vb-sub2"><span class="vb-k1">พื้นขาว = ระบบดึงให้เอง</span> &nbsp;·&nbsp; <span class="vb-k2">ช่องเส้นประฟ้า = กรอกเอง</span></div>'
+   +'<div class="vb-sub2"><span class="vb-k1">พื้นขาว = ระบบดึงให้เอง</span> &nbsp;·&nbsp; <span class="vb-k2">ช่องเส้นประฟ้า = กรอกเอง</span>'
+     +' &nbsp;·&nbsp; '+(ED?'<b style="color:#0E6AA8">แก้ได้แล้ว · กดบันทึกเมื่อเสร็จ</b>'
+                          :'<span style="color:#98A2AD">อ่านอย่างเดียว · กด “แก้ไข” ก่อนถึงจะกรอกได้</span>')+'</div>'
    +'<div class="vb-bar">'+supSel+vanSel
    +'<span class="vb-segwrap">'+segBtn(1,'1–10')+segBtn(2,'11–20')+segBtn(3,'21–สิ้นเดือน')+'</span>'
    +'<span class="vb-mo"><button onclick="vbShiftMonth(-1)">&lsaquo;</button><b>'+e(mLbl)+'</b><button onclick="vbShiftMonth(1)">&rsaquo;</button></span>'
    +'<span style="flex:1"></span>'
-   +'<button class="vb-btn pri" onclick="vbPrint()">&#128424; พิมพ์ใบวางบิล</button></div>'
+   +(ED?('<span class="vb-dirty">&#9679; กำลังแก้ไข · ยังไม่บันทึก</span>'
+       +'<button class="vb-btn" onclick="vbCancel()">ยกเลิก</button>'
+       +'<button class="vb-btn ok" onclick="vbSave()">&#10003; บันทึก</button>')
+      :('<button class="vb-btn" onclick="vbEdit()">&#9998; แก้ไข</button>'
+       +'<button class="vb-btn pri" onclick="vbPrint()">&#128424; พิมพ์ใบวางบิล</button>'))+'</div>'
    +'<div class="vb-who"><div class="av">'+e((head&&head.name)||_vb.sup).slice(0,7)+'</div>'
      +'<div style="flex:1"><div class="n">'+e(whoName)+' <span style="font-weight:600;color:#6B7280">('+e(_vb.sup)+')</span></div>'
      +'<div class="m">'+e(whoMeta)+'</div></div>'
@@ -48338,16 +48390,17 @@ function renderVanBill(){
      +'<th style="width:92px">ราคาเรียกเก็บ</th><th class="man">ขาย/คน</th>'
      +'<th style="width:86px">ราคาขาย</th><th style="width:92px">กำไร/ขาดทุน</th></tr></thead>'
    +'<tbody>'+(body||'<tr><td colspan="16" style="padding:26px;text-align:center;color:#98A2AD">ไม่มีงานของเจ้านี้ในรอบบิลนี้</td></tr>')+exBody
-   +'<tr><td colspan="16" class="l" style="padding:9px 8px;background:#FBFAF7">'
-     +'<a onclick="vbAddExtra()" style="font-size:11.5px;color:#0E6AA8;font-weight:700;cursor:pointer">+ เพิ่มแถว (รถนอก · งานที่ไม่ได้ผ่านใบงาน)</a></td></tr></tbody>'
+   +(ED?('<tr><td colspan="16" class="l" style="padding:9px 8px;background:#F7F8FB">'
+     +'<a onclick="vbAddExtra()" style="font-size:11.5px;color:#0E6AA8;font-weight:700;cursor:pointer">+ เพิ่มแถว (รถนอก · งานที่ไม่ได้ผ่านใบงาน)</a></td></tr>'):'')+'</tbody>'
    +'<tfoot><tr><td class="l" colspan="3">รวม '+T.van+' เที่ยว</td>'
      +'<td>'+T.ad+'</td><td>'+T.chd+'</td><td>'+T.inf+'</td><td>'+T.foc+'</td>'
-     +'<td>'+T.van+'</td><td>'+T.pax+'</td><td>—</td><td>'+(T.ex||0)+'</td><td>'+(T.cut||0)+'</td>'
+     +'<td>'+T.van+'</td><td>'+T.pax+'</td><td>—</td><td>'+(T.ex||0)+'</td>'
+     +'<td style="color:'+(T.cut?'#FFB4B4':'#9FB3D8')+'">'+NEG(T.cut)+'</td>'
      +'<td class="r">'+B(T.bill)+'</td><td>—</td><td class="r">'+B(T.sale)+'</td>'
      +'<td class="r" style="color:'+(pl<0?'#FF9E9E':'#9BE6BC')+'">'+(pl<0?'−':'')+B(Math.abs(pl))+'</td></tr></tfoot></table></div>'
    +'<div class="vb-sum">'+codeCards
      +'<div class="vb-sb"><div class="t">EXTRA − หัก</div><div class="b">'+B(T.ex-T.cut)+'</div>'
-       +'<div class="s">extra '+T.ex+' · หัก '+T.cut+'</div></div>'
+       +'<div class="s">extra +'+T.ex+' · หัก <b style="color:#A32D2D">'+NEG(T.cut)+'</b></div></div>'
      +'<div class="vb-sb dark"><div class="t">รวมเรียกเก็บ</div><div class="b">'+B(T.bill)+'</div>'
        +'<div class="s">'+(st.by?('แก้ล่าสุด '+e(st.by)+(st.at?(' · '+String(st.at).slice(0,10)):'')):'ยังไม่ได้กรอก')+'</div></div>'
    +'</div></div>';
@@ -48357,46 +48410,52 @@ function vbPrint(){
   var w=window.open('','_blank'); if(!w) return;
   w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>ใบวางบิลรถร่วม</title>'
     +'<style>@page{size:A4 landscape;margin:8mm}body{font-family:Sarabun,sans-serif;margin:0}'
-    +'.vb-bar,.vb-set,.vb-btn,.vb-segwrap,.vb-mo,select,input[type=date]{display:none!important}'
+    +'.vb-bar,.vb-set,.vb-btn,.vb-segwrap,.vb-mo,.vb-dirty,select,input[type=date]{display:none!important}'
+    +'.vb-ro{border:0!important;padding:0!important}'
     +'input{border:0!important;background:transparent!important;padding:0!important;text-align:right}'
     +'</style></head><body>'+el.innerHTML+'</body></html>');
   w.document.close(); w.focus(); setTimeout(function(){ try{ w.print(); }catch(_){} }, 400);
 }
 function vbCss(){
   return '<style>'
+  /* §vbGrey · พื้นหลังเทาเต็มพื้นที่เหมือนหน้า P&L รายทริป · การ์ดขาวจะได้ลอยขึ้นมา
+     .main มี padding ที่ถูก !important ทับในหลาย breakpoint · ระบายที่ .main ด้วย :has()
+     เบราว์เซอร์ที่ไม่รู้จัก :has() จะได้เทาเฉพาะในกรอบ view ซึ่งยังดูได้ ไม่พัง */
+  +'.main:has(#view-vanbill.active){background:#F3F4F8}'
+  +'#view-vanbill{background:#F3F4F8;min-height:calc(100vh - 120px)}'
   +'.vb{padding:16px 18px 60px;font-family:Sarabun,"DM Sans","Noto Sans Thai",sans-serif;color:#1A1A1A}'
   +'.vb-h1{font-size:19px;font-weight:800;margin-bottom:3px}'
   +'.vb-sub2{font-size:12px;color:#6B7280;margin-bottom:14px}'
-  +'.vb-k1{border-bottom:2px solid #DEDAD0}.vb-k2{border-bottom:2px dashed #9EC4E4;color:#0E6AA8}'
+  +'.vb-k1{border-bottom:2px solid #DDE1E9}.vb-k2{border-bottom:2px dashed #9EC4E4;color:#0E6AA8}'
   +'.vb-bar{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin-bottom:12px}'
-  +'.vb-sel{border:1px solid #DEDAD0;background:#fff;border-radius:11px;padding:8px 12px;font:700 12.5px inherit;color:#16265C;font-family:inherit}'
-  +'.vb-segwrap{display:flex;background:#F1EFE9;border-radius:11px;padding:3px}'
+  +'.vb-sel{border:1px solid #DDE1E9;background:#fff;border-radius:11px;padding:8px 12px;font:700 12.5px inherit;color:#16265C;font-family:inherit}'
+  +'.vb-segwrap{display:flex;background:#EAEDF3;border-radius:11px;padding:3px}'
   +'.vb-seg{border:none;background:transparent;border-radius:9px;padding:6px 13px;font:600 12px inherit;color:#6B7280;cursor:pointer;font-family:inherit}'
   +'.vb-seg.on{background:#16265C;color:#fff;font-weight:700}'
-  +'.vb-mo{display:flex;align-items:center;gap:3px;border:1px solid #DEDAD0;background:#fff;border-radius:11px;padding:4px 6px}'
+  +'.vb-mo{display:flex;align-items:center;gap:3px;border:1px solid #DDE1E9;background:#fff;border-radius:11px;padding:4px 6px}'
   +'.vb-mo b{font-size:12.5px;padding:0 6px}'
-  +'.vb-mo button{border:none;background:#F4F2EC;border-radius:8px;width:24px;height:26px;cursor:pointer;color:#6b7280;font-size:14px;font-family:inherit}'
-  +'.vb-btn{border:1px solid #DEDAD0;background:#fff;border-radius:11px;padding:8px 14px;font:600 12.5px inherit;color:#3F4654;cursor:pointer;font-family:inherit}'
+  +'.vb-mo button{border:none;background:#EFF1F6;border-radius:8px;width:24px;height:26px;cursor:pointer;color:#6b7280;font-size:14px;font-family:inherit}'
+  +'.vb-btn{border:1px solid #DDE1E9;background:#fff;border-radius:11px;padding:8px 14px;font:600 12.5px inherit;color:#3F4654;cursor:pointer;font-family:inherit}'
   +'.vb-btn.pri{background:#16265C;border-color:#16265C;color:#fff;font-weight:700}'
-  +'.vb-who{display:flex;align-items:center;gap:12px;background:#FBFAF7;border:1px solid #EDE9E0;border-radius:13px;padding:11px 15px;margin-bottom:12px}'
+  +'.vb-who{display:flex;align-items:center;gap:12px;background:#FFFFFF;border:1px solid #E4E7EE;border-radius:13px;padding:11px 15px;margin-bottom:12px}'
   +'.vb-who .av{min-width:44px;height:38px;padding:0 8px;border-radius:11px;background:#16265C;color:#fff;display:flex;align-items:center;justify-content:center;font:800 11px "DM Mono",monospace;flex:none}'
   +'.vb-who .n{font-size:14px;font-weight:800}.vb-who .m{font-size:11.5px;color:#6B7280;margin-top:2px;font-family:"DM Mono",monospace}'
   +'.vb-lab{font-size:10px;font-weight:800;letter-spacing:.06em;color:#A9AFB6;text-transform:uppercase}'
   +'.vb-set{display:flex;align-items:center;gap:9px;background:#F2F7FC;border:1px solid #CFE2F2;border-radius:12px;padding:9px 15px;margin-bottom:13px;font-size:12.5px;color:#0E6AA8}'
   +'.vb-set b{color:#0B4F7E}.vb-hint{color:#5C86A8}'
   +'.vb-kpi{display:grid;grid-template-columns:repeat(6,1fr);gap:9px;margin-bottom:13px}'
-  +'.vb-kpi .k{background:#fff;border:1px solid #E7E4DC;border-radius:13px;padding:11px 13px}'
+  +'.vb-kpi .k{background:#fff;border:1px solid #E4E7EE;border-radius:13px;padding:11px 13px}'
   +'.vb-kpi .l{font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#A9AFB6}'
   +'.vb-kpi .v{font-size:21px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums;line-height:1.1}'
   +'.vb-kpi .v s{text-decoration:none;font-size:11px;font-weight:600;color:#9AA0A6}'
   +'.vb-kpi .k.bill{background:#16265C;border-color:#16265C}.vb-kpi .k.bill .l{color:#9FB3D8}.vb-kpi .k.bill .v{color:#fff}'
   +'.vb-kpi .k.loss{background:#FFF6F5;border-color:#F2D2CC}.vb-kpi .k.loss .v{color:#A32D2D}'
   +'.vb-kpi .k.gain .v{color:#0F6E56}'
-  +'.vb-card{background:#fff;border:1px solid #E7E4DC;border-radius:16px;overflow-x:auto}'
+  +'.vb-card{background:#fff;border:1px solid #E4E7EE;border-radius:16px;overflow-x:auto}'
   +'.vb-t{width:100%;border-collapse:separate;border-spacing:0;font-size:12px}'
-  +'.vb-t th{font:700 9.5px "DM Sans",sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#8B96A0;padding:7px 8px;text-align:center;background:#FAF9F5;border-bottom:1px solid #E7E4DC;white-space:nowrap}'
+  +'.vb-t th{font:700 9.5px "DM Sans",sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#8B96A0;padding:7px 8px;text-align:center;background:#F7F8FB;border-bottom:1px solid #E4E7EE;white-space:nowrap}'
   +'.vb-t th.l{text-align:left}.vb-t th.man{background:#F2F7FC;color:#0E6AA8}'
-  +'.vb-t td{padding:7px 8px;border-bottom:1px solid #F2F0EA;text-align:center;font-variant-numeric:tabular-nums}'
+  +'.vb-t td{padding:7px 8px;border-bottom:1px solid #EDEFF4;text-align:center;font-variant-numeric:tabular-nums}'
   +'.vb-t td.l{text-align:left}.vb-t td.r{text-align:right}'
   +'.vb-mono{font-family:"DM Mono",monospace;font-weight:700}'
   +'.vb-code{display:inline-block;font:800 10px "DM Mono",monospace;border-radius:6px;padding:2px 7px;margin-right:6px;color:#fff}'
@@ -48405,18 +48464,28 @@ function vbCss(){
   +'.vb-area.far{background:#FBF3E6;color:#8A5B00;border-color:#EEDCBE}'
   +'.vb-sub{font-size:9.5px;color:#9AA0A6;font-weight:500}'
   +'.vb-mut{color:#B6BCC3}'
-  +'.vb-t tr.vb-ex td{background:#FCFBF7}'
+  +'.vb-t tr.vb-ex td{background:#F8FAFD}'
   +'.vb-din,.vb-tin{border:1px dashed #9EC4E4;background:#F8FCFF;border-radius:7px;padding:4px 7px;font:600 11.5px inherit;color:#0B4F7E;font-family:inherit}'
   +'.vb-tin{width:100%}'
   +'.vb-t tfoot td{background:#16265C;color:#fff;font-weight:800;border:0;padding:10px 8px}'
   +'.vb-t tfoot td.l{color:#9FB3D8;font-size:10px;letter-spacing:.05em;text-transform:uppercase}'
   +'.vb-sum{display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin-top:13px}'
-  +'.vb-sb{border:1px solid #E7E4DC;border-radius:12px;padding:10px 13px;background:#FBFAF7}'
+  +'.vb-sb{border:1px solid #E4E7EE;border-radius:12px;padding:10px 13px;background:#FFFFFF}'
   +'.vb-sb .t{font-size:10px;font-weight:800;letter-spacing:.05em;color:#8B96A0;text-transform:uppercase}'
   +'.vb-sb .b{font-size:16px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums}'
   +'.vb-sb .s{font-size:11px;color:#6B7280;margin-top:2px}'
   +'.vb-sb.dark{background:#16265C;border-color:#16265C}.vb-sb.dark .t,.vb-sb.dark .s{color:#9FB3D8}.vb-sb.dark .b{color:#fff}'
   +'.vb-lg{display:inline-block;width:10px;height:10px;border-radius:3px;vertical-align:-1px;margin-right:5px}'
+  /* §vbEdit · ช่องกรอกกับช่องอ่านอย่างเดียวต้องกินที่เท่ากัน ตารางจะได้ไม่ขยับตอนสลับโหมด */
+  +'.vb-in{border:1px dashed #9EC4E4;background:#F8FCFF;border-radius:7px;padding:4px 7px;'
+    +'text-align:right;font:700 12px "DM Mono",monospace;color:#0B4F7E;font-family:"DM Mono",monospace}'
+  +'.vb-in.neg{border-color:#E8B4B4;background:#FFF8F8;color:#A32D2D}'
+  +'.vb-ro{display:inline-block;text-align:right;font:700 12px "DM Mono",monospace;'
+    +'color:#3F4654;padding:4px 7px;border:1px solid transparent}'
+  +'.vb-ro.neg{color:#A32D2D}.vb-ro.mut{color:#C2C7CE;font-weight:600}'
+  +'.vb-btn.ok{background:#0F6E56;border-color:#0F6E56;color:#fff;font-weight:700}'
+  +'.vb-dirty{font-size:11.5px;font-weight:700;color:#8A5B00;background:#FBF3E6;'
+    +'border:1px solid #EEDCBE;border-radius:9px;padding:6px 11px}'
   +'</style>';
 }
 function renderVanJobs(){
