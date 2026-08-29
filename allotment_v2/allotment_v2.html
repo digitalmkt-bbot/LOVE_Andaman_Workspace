@@ -13653,6 +13653,8 @@ function saveNewSeason(rid){
 }
 
 // ─── Guarded save: warns if closing dates with existing bookings/assignments ───
+/* §closeImpact · เลขที่ใบจองที่คนอ่านออก · ชุดเดียวกับที่ทั้งระบบใช้ */
+function _impRef(bk){ return (bk && (bk.voucherRef || bk.code || bk.ref || bk.id)) || '—'; }
 function progCountBookingImpact(routeId, from, to){
   // Scan SB_BOOKINGS for trips in range × route
   const affectedBookings = [];
@@ -13660,12 +13662,23 @@ function progCountBookingImpact(routeId, from, to){
   if(typeof SB_BOOKINGS !== 'undefined' && Array.isArray(SB_BOOKINGS)){
     SB_BOOKINGS.forEach(bk => {
       if(bk.status === 'cancelled' || bk.status === 'rejected' || bk.status === 'cancelled_weather') return;
-      if(bk.schemaVer !== 2 || !Array.isArray(bk.trips)) return;
+      /* §closeImpact · ใบรุ่นเก่า · วันอยู่ที่ travelDate เส้นทางอยู่ที่ programId
+         ใช้เกณฑ์ชุดเดียวกับ getAllotment() ที่นับที่นั่งของใบรุ่นเก่าอยู่แล้ว */
+      if(bk.schemaVer !== 2 || !Array.isArray(bk.trips)){
+        if(bk.programId === routeId && bk.travelDate >= from && bk.travelDate <= to){
+          const p = bk.pax || {};
+          const pax = (p.adult||0) + (p.child||0) + (p.infant||0);
+          affectedBookings.push({ bookingId: bk.id, ref: _impRef(bk), date: bk.travelDate, pax,
+                                  leadName: bk.leadPax || bk.customerName || '—', legacy:true });
+          totalPax += pax;
+        }
+        return;
+      }
       bk.trips.forEach(t => {
         if(t.routeId !== routeId) return;
         if(t.date < from || t.date > to) return;
         const pax = (typeof getTripPaxTotal === 'function') ? getTripPaxTotal(t) : ((t.ad||0) + (t.chd||0));
-        affectedBookings.push({ bookingId: bk.id, ref: bk.ref || bk.id, date: t.date, pax, leadName: bk.leadPax || '—' });
+        affectedBookings.push({ bookingId: bk.id, ref: _impRef(bk), date: t.date, pax, leadName: bk.leadPax || '—' });
         totalPax += pax;
       });
     });
