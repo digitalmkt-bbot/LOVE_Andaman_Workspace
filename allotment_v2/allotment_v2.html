@@ -48136,9 +48136,15 @@ var VB_CODE={ r10:{c:'PP',col:'#C0392B'}, r7:{c:'PP',col:'#C0392B'}, r8:{c:'PP',
 function vbCode(rid){ return VB_CODE[rid] || {c:'—', col:'#8B96A0'}; }
 /* จุดรับที่คิดค่าวิ่งเพิ่ม · ใช้แค่ทำสีให้เห็น ไม่ได้คิดเงินให้เอง */
 var VB_FAR={ naiyang:1, naithon:1, 'ในยาง':1, 'ในทอน':1 };
-var VB_TH={ Naiyang:'ในยาง', Naithon:'ในทอน', Patong:'ป่าตอง', Kamala:'กมลา', Bangtao:'บางเทา',
-            Kata:'กะตะ', Karon:'กะรน', Rawai:'ราไวย์', Chalong:'ฉลอง', 'Mai Khao':'ไม้ขาว' };
-function vbArea(a){ return VB_TH[a] || a; }
+/* §vbAreaTh · จุดรับใช้ตารางชื่อไทยตัวเดียวกับใบงานรถ (VANJOB_AREA_TH)
+   เดิมหน้านี้มีตารางย่อของตัวเองแค่ 10 ชื่อ · จุดรับที่ไม่อยู่ในนั้นขึ้นเป็นภาษาอังกฤษ
+   คอลัมน์เดียวกันเลยมีทั้งไทยและอังกฤษปนกัน (กมลา · Kalim · Phuket Town)
+   มีตารางเดียวก็พอ · ชื่อใหม่เติมที่เดียวแล้วได้ทุกหน้า ไม่ต้องมาไล่เติมสองที่ */
+function vbArea(a){
+  var k=String(a||'').trim(); if(!k) return '';
+  try{ if(typeof VANJOB_AREA_TH!=='undefined' && VANJOB_AREA_TH[k]) return VANJOB_AREA_TH[k]; }catch(_){}
+  return k;
+}
 function vbIsFar(a){ return !!VB_FAR[String(a||'').trim().toLowerCase()] || !!VB_FAR[String(a||'').trim()]; }
 function vbVans(){
   var V=(typeof SB_VEHICLES!=='undefined'&&Array.isArray(SB_VEHICLES))?SB_VEHICLES:
@@ -48706,7 +48712,8 @@ const VANJOB_AREA_TH={
   'Layan':'ลายัน','Maikhao':'ไม้ขาว','Monument':'อนุสาวรีย์','Naithon':'ในทอน','Naiyang':'ในยาง',
   'Naiharn':'ในหาน','Nang Thong / La Flora':'นางทอง','Natai':'นาใต้','Pa Khlok':'ป่าคลอก','Panwa':'พันวา',
   'Patong':'ป่าตอง','Phuket Town':'เมืองภูเก็ต','Rawai':'ราไวย์','Saiyuan':'ไสยวน','Sapam':'สะปำ',
-  'Siray':'สิเหร่','Surin (beach)':'สุรินทร์','Talang':'ถลาง','Tritrang':'ตรีตรัง',
+  'Siray':'สิเหร่','Surin (beach)':'สุรินทร์','Talang':'ถลาง','Thalang':'ถลาง','Tritrang':'ตรีตรัง',
+  'Nang Thong':'นางทอง','Poseidon':'โพไซดอน',
   'Tub Lamu Pier (self-arrive)':'ท่าเรือทับละมุ','Visit Panwa Pier (self-arrive)':'ท่าเรือวิสิทพันวา','Yamu':'ยามู'
 };
 function vanJobsOrderCss(scoped){ const p=scoped?'.vjo ':'';
