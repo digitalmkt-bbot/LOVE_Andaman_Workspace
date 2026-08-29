@@ -26960,6 +26960,8 @@ function flSaveMemo(){
   };
 
   // ════ Phase 3: Auto-register inventory items ════
+  /* §invIdSafe · id ของคลังต้องไม่ซ้ำกับของที่มีอยู่ · เช็คจริงก่อนใช้
+     ของเดิมสุ่มแค่ 1000 ค่าใน ms เดียวกัน · สั่งของทีละ 20 รายการชนได้จริง */
   // สำหรับ items ที่มี autoRegister:true → สร้าง inventory item ใหม่ + ผูก invId เข้า memo
   let autoCreatedCount = 0;
   memo.items.forEach(it => {
@@ -26973,7 +26975,7 @@ function flSaveMemo(){
         return;
       }
       // สร้าง inventory item ใหม่
-      const newId = 'i_auto_'+Date.now()+'_'+Math.floor(Math.random()*1000);
+      const newId = _invNewId('i_auto_');
       const newInv = {
         id: newId,
         name: it.name,
@@ -27844,6 +27846,23 @@ function flProjBillGate(p){
   if(!flProjBillDoc(p)) miss.push('ยังไม่ได้แนบ Final Invoice ในเอกสาร');
   if(!(cost>0))         miss.push('ต้นทุนที่ลงไว้ยังเป็น ฿0 · ลงยอดที่ MJ ลูก หรือ Project Memo');
   return {ok:!miss.length, miss:miss, cost:cost};
+}
+/* §invIdSafe · id ใหม่ของรายการคลัง · กันชนกับของที่มีอยู่จริงเสมอ
+   ของเดิมสุ่ม 3 หลักต่อท้าย Date.now() · ลงทะเบียน 20 รายการในลูปเดียว
+   เวลาเท่ากันหมด โอกาสได้เลขซ้ำราว 19% · พอซ้ำแล้วของสองชิ้นกลายเป็นชิ้นเดียว */
+function _invNewId(prefix){
+  var inv=(typeof FL_INVENTORY!=='undefined' && Array.isArray(FL_INVENTORY))?FL_INVENTORY:[];
+  var used={}; inv.forEach(function(x){ if(x && x.id) used[x.id]=1; });
+  for(var i=0;i<50;i++){
+    var id=(prefix||'i_')+Date.now().toString(36)+'_'
+          +Math.random().toString(36).slice(2,8)+(i?('_'+i):'');
+    if(!used[id]) return id;
+  }
+  return (prefix||'i_')+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,12);
+}
+/* §invIdSafe · เทียบชื่อแบบไม่ถือสาตัวพิมพ์เล็กใหญ่กับช่องว่างหัวท้าย */
+function _invSameName(a,b){
+  return String(a==null?'':a).trim().toLowerCase()===String(b==null?'':b).trim().toLowerCase();
 }
 function flProjCalcCost(projId){
   const kids = flProjChildMJs(projId);
@@ -36185,7 +36204,18 @@ function flSaveReceive(){
         let inv=it.invId
           ?FL_INVENTORY.find(x=>x.id===it.invId)
           :FL_INVENTORY.find(x=>x.name===it.name||it.name.includes(x.name));
+        /* §invIdSafe · invId ชี้ไปที่ของคนละชื่อ = id ชนกันตอนลงทะเบียน
+           เชื่อต่อไปของจะไปเข้าผิดชิ้น และชิ้นที่ถูกจะหายจากคลังทั้งที่รับมาแล้ว
+           หาใหม่จากชื่อ ไม่เจอก็ปล่อยให้ไปสร้างใหม่ แล้วซ่อม invId ใน memo ให้ด้วย */
+        if(inv && !_invSameName(inv.name, it.name)){
+          const byName=FL_INVENTORY.find(x=>_invSameName(x.name,it.name));
+          console.warn('[invIdSafe] '+mo.no+' · "'+it.name+'" ผูกอยู่กับ id '+it.invId
+            +' ซึ่งเป็นของ "'+inv.name+'" · '+(byName?'ย้ายไปที่ของชื่อเดียวกัน':'สร้างรายการใหม่ให้'));
+          inv = byName || null;
+          it.invId = byName ? byName.id : '';
+        }
         if(inv){
+          if(it.invId!==inv.id) it.invId=inv.id;
           // Ensure stocks[] exists, then add at chosen location
           invSyncLegacy(inv);
           invAddAt(inv, memoLocation, qty);
@@ -36195,7 +36225,7 @@ function flSaveReceive(){
         } else {
           // Auto-create new inventory item from memo line — with multi-warehouse stocks
           const newInv={
-            id:'i'+Date.now()+Math.floor(Math.random()*1000),
+            id:_invNewId('i'),                       /* §invIdSafe */
             name:it.name,
             partNo:'',
             category:'อื่นๆ',
