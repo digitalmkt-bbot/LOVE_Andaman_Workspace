@@ -27765,6 +27765,30 @@ function flProjLightbox(url, caption){
 function flProjChildMJs(projId){
   return (FL_MAINT||[]).filter(m=>m.parentProjectId===projId);
 }
+/* ══ §prjAwaitBill · เครื่องมือกลางของ "รอวางบิล" ══════════════════════ */
+/* ใบวางบิลตัวจริงในกองเอกสาร · ชื่อที่คนกรอกใช้มีทั้งไทยและอังกฤษ รับทั้งคู่ */
+function flProjBillDoc(p){
+  return ((p&&p.docs)||[]).filter(function(d){
+    if(!d || d.type==='photo') return false;
+    var n=String(d.name||'').toLowerCase();
+    return n.indexOf('final invoice')>=0 || n.indexOf('ใบวางบิล')>=0
+        || n.indexOf('invoice')>=0 || n.indexOf('ใบแจ้งหนี้')>=0;
+  })[0]||null;
+}
+/* รอบิลมากี่วันแล้ว · นับจากวันที่งานเสร็จ ไม่ใช่วันเริ่มโปรเจค */
+function flProjBillDays(p){
+  var d=(p&&(p.workDoneOn||p.actualTo))||''; if(!d) return 0;
+  try{ return Math.max(0, Math.round((new Date(TODAY_STR)-new Date(d))/86400000)); }catch(_){ return 0; }
+}
+/* ปิดโปรเจคได้หรือยัง · ต้องมีทั้งใบวางบิลและยอด ไม่งั้นปิดไปก็เป็นตัวเลขปลอม */
+function flProjBillGate(p){
+  var miss=[];
+  if(p && p.noCost) return {ok:true, miss:[], cost:0};
+  var cost=flProjCalcCost(p.id);
+  if(!flProjBillDoc(p)) miss.push('ยังไม่ได้แนบ Final Invoice ในเอกสาร');
+  if(!(cost>0))         miss.push('ต้นทุนที่ลงไว้ยังเป็น ฿0 · ลงยอดที่ MJ ลูก หรือ Project Memo');
+  return {ok:!miss.length, miss:miss, cost:cost};
+}
 function flProjCalcCost(projId){
   const kids = flProjChildMJs(projId);
   return kids.reduce((s,m)=>s+(typeof flMaintCalcCost==='function'?flMaintCalcCost(m.id):(m.cost||0)),0);
@@ -27868,6 +27892,7 @@ function flProjRenderList(){
     planned:   all.filter(p=>p.status==='planned'),
     inprogress:all.filter(p=>p.status==='inprogress'),
     on_hold:   all.filter(p=>p.status==='on_hold'),
+    awaiting_bill: all.filter(p=>p.status==='awaiting_bill'),   /* §prjAwaitBill */
     completed: all.filter(p=>p.status==='completed'),
     cancelled: all.filter(p=>p.status==='cancelled')
   };
@@ -27962,8 +27987,9 @@ function flProjRenderList(){
       ${kpiTile('coin',        '#F3E8FF',  P.purple,  'YTD Spend',       '฿'+(ytdSpend>=1000?(ytdSpend/1000).toFixed(0)+'K':ytdSpend), 'across all projects', P.ink3)}
     </div>`;
 
-  const tabs = ['planned','inprogress','on_hold','completed','cancelled'];
-  const tabLabel = {planned:'Scheduled', inprogress:'In Progress', on_hold:'On Hold', completed:'Completed', cancelled:'Cancelled'};
+  const tabs = ['planned','inprogress','on_hold','awaiting_bill','completed','cancelled'];
+  const tabLabel = {planned:'Scheduled', inprogress:'In Progress', on_hold:'On Hold',
+                    awaiting_bill:'รอวางบิล', completed:'Completed', cancelled:'Cancelled'};
   const tabStrip = `
     <div style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid ${P.line};padding-bottom:0">
       ${tabs.map(t=>{
@@ -27971,6 +27997,17 @@ function flProjRenderList(){
         return `<button onclick="_projTab='${t}';flRenderProjects()" style="background:none;border:none;padding:8px 14px 10px;font-size:12px;font-weight:600;color:${on?P.navy:P.ink3};border-bottom:2px solid ${on?P.navy:'transparent'};cursor:pointer">${tabLabel[t]} <span style="color:${P.ink4};font-weight:500">· ${byStatus[t].length}</span></button>`;
       }).join('')}
     </div>`;
+
+  /* §prjAwaitBill · ใบที่รอบิลไม่ควรต้องกดเข้าไปดูถึงจะรู้ว่ามี · บิลยิ่งค้างนานยิ่งตามยาก */
+  const _wb = byStatus.awaiting_bill||[];
+  const _wbOld = _wb.map(p=>flProjBillDays(p)).sort((a,b)=>b-a)[0]||0;
+  const billStrip = _wb.length ? `
+    <div onclick="_projTab='awaiting_bill';flRenderProjects()" style="display:flex;align-items:center;gap:11px;background:#FAF5FF;border:1px solid #E9D5FF;border-radius:12px;padding:10px 15px;margin-bottom:12px;cursor:pointer">
+      <span style="background:#A855F7;color:white;width:26px;height:26px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0">&#3647;</span>
+      <div style="flex:1;font-size:12.5px;color:#6B21A8;line-height:1.6"><b>งานเสร็จแล้ว รอใบวางบิล ${_wb.length} ใบ</b>${_wbOld?` · เก่าสุดรอมา ${_wbOld} วัน`:''}
+        <span style="color:#9333EA"> · ต้นทุนก้อนนี้ยังไม่เข้า YTD Spend</span></div>
+      <span style="font-size:11.5px;font-weight:700;color:#7E22CE">ดูรายการ &rsaquo;</span>
+    </div>` : '';
 
   const list = visible.length ? `
     <div style="display:flex;flex-direction:column;gap:10px">
@@ -27981,7 +28018,7 @@ function flProjRenderList(){
     </div>`;
 
   // Hub Dashboard panels (At Risk · Upcoming · Activity · Spend trend) shown above list only
-  const hubPanels = _projViewMode==='list' ? flProjRenderHubPanels(all) : '';
+  const hubPanels = _projViewMode==='list' ? (billStrip + flProjRenderHubPanels(all)) : '';
   // Dispatch by view mode
   let mainBody;
   if(_projViewMode==='timeline')      mainBody = flProjRenderTimeline(all);
@@ -28578,6 +28615,7 @@ function flProjStatusPillStyle(status, P){
   if(status==='completed') return {bg:P.mintSoft, color:P.mintInk, label:'COMPLETED'};
   if(status==='inprogress') return {bg:P.amberSoft, color:P.amber, label:'IN PROGRESS'};
   if(status==='on_hold') return {bg:'#FFF4E1', color:'#996A14', label:'ON HOLD'};
+  if(status==='awaiting_bill') return {bg:'#F3E8FF', color:'#7E22CE', label:'รอวางบิล'};   /* §prjAwaitBill */
   if(status==='cancelled') return {bg:P.redSoft, color:P.red, label:'CANCELLED'};
   return {bg:P.blueSoft, color:P.blue, label:'SCHEDULED'};
 }
@@ -28591,7 +28629,11 @@ function flProjRowCard(p){
   const sp = flProjStatusPillStyle(p.status, P);
   const statusPill = `<span style="background:${sp.bg};color:${sp.color};padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700">${sp.label}</span>`;
   const health = flProjHealth(p);
-  const healthPill = `<span style="background:${health.bg};color:${health.color};padding:3px 8px;border-radius:10px;font-size:9px;font-weight:700" title="Health ${health.score}/100">${health.label}</span>`;
+  const healthPill = p.status==='awaiting_bill'
+    /* §prjAwaitBill · งานจบแล้ว คะแนนสุขภาพงานไม่มีความหมาย · สิ่งที่ต้องรู้คือรอบิลมากี่วัน */
+    ? (function(){ const d=flProjBillDays(p), hot=d>=14;
+        return `<span style="background:${hot?'#FEE7E7':'#F3E8FF'};color:${hot?'#B91C1C':'#7E22CE'};padding:3px 8px;border-radius:10px;font-size:9px;font-weight:700" title="นับจากวันที่งานเสร็จ">รอบิล ${d} วัน</span>`; })()
+    : `<span style="background:${health.bg};color:${health.color};padding:3px 8px;border-radius:10px;font-size:9px;font-weight:700" title="Health ${health.score}/100">${health.label}</span>`;
   const budget = p.plannedBudget||0;
   const variance = cost - budget;
   const varianceColor = budget ? (cost>budget?P.red:P.mintInk) : P.ink3;
@@ -28684,15 +28726,31 @@ function flProjRenderDetail(id){
   const reopenBtn = `<button onclick="flProjReopen('${p.id}')" style="background:${P.blue};color:white;border:none;${btnBase};box-shadow:0 2px 6px rgba(58,111,247,.3)">${flProjIcon('refresh',13,'white')} Reopen</button>`;
   const startBtn  = `<button onclick="flProjStart('${p.id}')" style="background:${P.amber};color:white;border:none;${btnBase};box-shadow:0 2px 6px rgba(245,158,11,.3)">${flProjIcon('play',13,'white')} Start Project</button>`;
   const completeBtn = `<button onclick="flProjMarkComplete('${p.id}')" style="background:${P.mintInk};color:white;border:none;${btnBase};box-shadow:0 2px 6px rgba(16,185,129,.3)">${flProjIcon('check',13,'white')} Mark Complete${openKids.length?` (closes ${openKids.length} MJ)`:''}</button>`;
+  /* §prjAwaitBill · งานจบแล้ว เหลือแค่เงิน · ปุ่มจึงเป็นคนละชุดกับตอนงานยังเดินอยู่ */
+  const billCloseBtn = `<button onclick="flProjBillClose('${p.id}')" style="background:#7E22CE;color:white;border:none;${btnBase};box-shadow:0 2px 6px rgba(126,34,206,.28)">${flProjIcon('check',13,'white')} ปิดบิล &middot; ปิดโปรเจค</button>`;
+  const billBackBtn  = `<button onclick="flProjBillBack('${p.id}')" style="background:white;border:1px solid #FDE68A;color:${P.amberInk};${btnBase};box-shadow:${P.shadow}">${flProjIcon('refresh',13,P.amberInk)} กลับไปแก้งาน</button>`;
   const actionBtns = (function(){
     if(p.status==='completed')  return editBtn;
     if(p.status==='cancelled')  return `${editBtn}${reopenBtn}`;
     if(p.status==='on_hold')    return `${editBtn}${cancelBtn}${resumeBtn}`;
     if(p.status==='planned')    return `${editBtn}${cancelBtn}${startBtn}`;
+    if(p.status==='awaiting_bill') return `${editBtn}${billBackBtn}${billCloseBtn}`;
     return `${editBtn}${cancelBtn}${holdBtn}${completeBtn}`;
   })();
   // Hold/Cancel reason banner
   const reasonBanner = (function(){
+    /* §prjAwaitBill · บอกให้ชัดว่าค้างอะไรอยู่ และขาดอะไรถึงจะปิดได้ */
+    if(p.status==='awaiting_bill'){
+      const g = flProjBillGate(p), dz = flProjBillDays(p);
+      return `<div style="background:#FAF5FF;border:1px solid #E9D5FF;border-radius:12px;padding:13px 17px;margin-top:14px;display:flex;align-items:center;gap:13px">
+        <span style="background:#A855F7;color:white;width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px;font-weight:800">&#3647;</span>
+        <div style="flex:1">
+          <div style="font-size:10px;color:#7E22CE;font-weight:700;letter-spacing:.6px;text-transform:uppercase">รอใบวางบิล${p.vendor?` จาก ${p.vendor}`:''}${dz?` &middot; ${dz} วัน`:''}</div>
+          <div style="font-size:12px;color:#6B21A8;margin-top:3px;line-height:1.65">งานเสร็จแล้ว${p.workDoneOn?` เมื่อ ${p.workDoneOn}`:''} &middot; เรือกลับไปวิ่งแล้ว &middot; MJ ลูกปิดครบ${p.billNote?` &middot; ${p.billNote}`:''}
+          ${g.ok?'<b> &middot; ครบแล้ว กดปิดบิลได้เลย</b>':`<br><b>ยังปิดไม่ได้:</b> ${g.miss.join(' &middot; ')}`}</div>
+        </div>
+      </div>`;
+    }
     if(p.status==='on_hold' && p.holdReason)
       return `<div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:12px;padding:12px 16px;margin-top:14px;display:flex;align-items:center;gap:12px">
         <span style="background:${P.amber};color:white;width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${flProjIcon('pause',16,'white')}</span>
@@ -29429,6 +29487,9 @@ function flProjMarkComplete(id){
   const p = flProjGetById(id);
   if(!p) return;
   if(p.status==='completed'){ flShowToast('Already completed'); return; }
+  /* §prjAwaitBill · ไม่มีบิลหรือยังไม่มียอด = ยังไม่ใช่งานที่ปิดจบได้ · ถามก่อน
+     ปิดเงียบ ๆ ที่ ฿0 คือจุดที่ต้นทุนหายไปจากระบบแบบที่ไม่มีใครรู้ตัว */
+  if(!flProjBillGate(p).ok){ flProjBillAsk(id); return; }
   const kids = flProjChildMJs(p.id);
   const openKids = kids.filter(m=>m.status!=='done');
   const msg = openKids.length
@@ -29466,6 +29527,135 @@ function flProjMarkComplete(id){
   flSave(); save();
   flRenderProjects();
   flShowToast(`Project ${p.no} completed · ${openKids.length} MJ auto-closed · boat returned`);
+}
+
+/* ══ §prjAwaitBill · ปิดงานเมื่อบิลยังไม่มา ════════════════════════════ */
+/* งานที่จบหน้างานแล้วแต่บิลยังไม่มา · ทำทุกอย่างเหมือนปิดโปรเจค ยกเว้นไม่ปิด
+   ปล่อยเรือ ปิด MJ ลูก แล้วพักไว้ที่ awaiting_bill รอเงินอย่างเดียว */
+function flProjWorkDone(id, note){
+  const p = flProjGetById(id); if(!p) return;
+  const kids = flProjChildMJs(p.id);
+  const openKids = kids.filter(m=>m.status!=='done');
+  openKids.forEach(m=>{
+    m.status='done';
+    m.endDate = m.endDate || TODAY_STR;
+    if(!m.progressLog) m.progressLog=[];
+    m.progressLog.push({date:TODAY_STR, text:`✓ ปิดตามโปรเจค ${p.no} · งานเสร็จ (รอใบวางบิล)`, by:'cascade'});
+  });
+  p.status='awaiting_bill';
+  p.workDoneOn = p.workDoneOn || TODAY_STR;
+  p.actualTo = p.actualTo || TODAY_STR;
+  p.billNote = String(note||'').trim();
+  if(!p.log) p.log=[];
+  p.log.push({date:TODAY_STR, text:`✓ งานเสร็จ · ปิด MJ ${openKids.length} ใบ · เรือกลับไปวิ่ง · รอใบวางบิล`, by:'user'});
+  /* เรือกลับไปวิ่งได้จริงตั้งแต่วันนี้ · ไม่ต้องรอบิล */
+  const boat = BOATS.find(b=>b.id===p.boatId);
+  if(boat && boat.log){
+    boat.log.forEach(e=>{ if(e.projectId===p.id && !e.to) e.to = TODAY_STR; });
+    boat.log.push({ id:'sl_'+Date.now(), s:'available', from:TODAY_STR, to:null,
+                    note:`Returned from Project ${p.no} · รอใบวางบิล` });
+  }
+  flSave(); save();
+  flRenderProjects();
+  flShowToast(`${p.no} · งานเสร็จ · เรือกลับแล้ว · รอใบวางบิล`);
+}
+/* งานยังไม่จบจริง · ดึงกลับมาทำต่อ · เรือต้องถูกกันออกจากตารางวิ่งอีกครั้ง */
+function flProjBillBack(id){
+  const p = flProjGetById(id); if(!p) return;
+  if(p.status!=='awaiting_bill'){ flShowToast('ใบนี้ไม่ได้อยู่ในสถานะรอวางบิล'); return; }
+  if(!confirm(`ดึง ${p.no} กลับมาทำต่อ?\n\nเรือจะถูกกันออกจากตารางวิ่งอีกครั้ง\nMJ ที่ปิดไปแล้วไม่ถูกเปิดคืนให้เอง`)) return;
+  p.status='inprogress';
+  p.workDoneOn=null; p.actualTo=null;
+  if(!p.log) p.log=[];
+  p.log.push({date:TODAY_STR, text:'▶ ดึงกลับมาทำต่อ · งานยังไม่จบ', by:'user'});
+  const boat = BOATS.find(b=>b.id===p.boatId);
+  if(boat){
+    if(!boat.log) boat.log=[];
+    boat.log.forEach(e=>{ if(e.s==='available' && !e.to) e.to = TODAY_STR; });
+    boat.log.push({ id:'sl_'+Date.now(), s:'unavailable', from:TODAY_STR, to:null,
+                    loc:p.vendor||'', note:`Project ${p.no} · ${p.name}`,
+                    reason:(p.type==='drydock'?'dry_dock':'overhaul'), projectId:p.id });
+  }
+  flSave(); save();
+  flRenderProjects();
+  flShowToast('ดึงกลับมาทำต่อแล้ว · เรือถูกกันออกจากตารางวิ่ง');
+}
+/* ปิดบิล = ปิดโปรเจคจริง · ผ่านด่านเดียวกับ Mark Complete ทุกประการ */
+function flProjBillClose(id){
+  const p = flProjGetById(id); if(!p) return;
+  const g = flProjBillGate(p);
+  if(!g.ok){ flProjBillAsk(id); return; }
+  if(!confirm(`ปิดโปรเจค ${p.no}?\n\nต้นทุนที่จะบันทึก ฿${(g.cost||0).toLocaleString()}\nใบนี้จะเข้า YTD Spend และย้ายไปคลังงานที่ปิดแล้ว`)) return;
+  p.status='completed';
+  p.actualTo = p.actualTo || TODAY_STR;
+  p.billClosedOn = TODAY_STR;
+  if(!p.log) p.log=[];
+  p.log.push({date:TODAY_STR, text:`✓ ปิดบิล · ปิดโปรเจค · ต้นทุน ฿${(g.cost||0).toLocaleString()}`, by:'user'});
+  flSave(); save();
+  flRenderProjects();
+  flShowToast(`${p.no} ปิดแล้ว · ฿${(g.cost||0).toLocaleString()}`);
+}
+/* หน้าต่างเลือกทาง · โผล่ตอนกดปิดทั้งที่บิลยังไม่ครบ */
+var _prjBillId=null;
+function flProjBillAsk(id){
+  const p = flProjGetById(id); if(!p) return;
+  _prjBillId=id;
+  const g = flProjBillGate(p);
+  const kids = flProjChildMJs(p.id).filter(m=>m.status!=='done').length;
+  const esc = (typeof ckEsc==='function')?ckEsc:function(x){ return String(x==null?'':x); };
+  const already = (p.status==='awaiting_bill');
+  const opt = (k,h,d,on)=>`<div onclick="flProjBillPick('${k}')" data-bo="${k}" style="border:1px solid ${on?'#A855F7':'#E5E7EB'};background:${on?'#FAF5FF':'#fff'};border-radius:12px;padding:13px 15px;margin-bottom:9px;cursor:pointer">
+      <div style="font-size:13px;font-weight:800;color:#1F2A44">${h}</div>
+      <div style="font-size:11.5px;color:#475569;margin-top:4px;line-height:1.65">${d}</div></div>`;
+  let host=document.getElementById('prj-bill-host');
+  if(!host){ host=document.createElement('div'); host.id='prj-bill-host'; document.body.appendChild(host); }
+  host.innerHTML=`
+   <div id="prj-bill-ov" onclick="if(event.target===this)flProjBillClose_()" style="position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9200;display:flex;align-items:center;justify-content:center;padding:18px;font-family:'DM Sans','Noto Sans Thai',sans-serif">
+    <div style="background:#fff;border-radius:16px;width:min(540px,96vw);max-height:90vh;overflow:auto;box-shadow:0 22px 60px rgba(15,23,42,.3)">
+     <div style="padding:18px 22px 4px">
+      <div style="font-size:16px;font-weight:800;color:#1F2A44">ปิดโปรเจค ${esc(p.no)}</div>
+      <div style="font-size:12.5px;color:#475569;margin-top:6px;line-height:1.75">
+        ${g.miss.map(m=>'&bull; '+esc(m)).join('<br>')}<br>เลือกว่าจะปิดแบบไหน</div>
+     </div>
+     <div style="padding:14px 22px 4px">
+      ${already?'':opt('wait','&#9678;&nbsp; งานเสร็จ &middot; รอวางบิล',
+         `ปล่อยเรือกลับไปวิ่ง${kids?` &middot; ปิด MJ ลูก ${kids} ใบ`:''} &middot; โปรเจคยังอยู่บนบอร์ดในแท็บ <b>รอวางบิล</b><br>พอบิลมาค่อยแนบแล้วกดปิดจริง — ต้นทุนไม่หาย`, true)}
+      ${opt('nocost','&#9675;&nbsp; ปิดจบเลย &middot; ไม่มีค่าใช้จ่าย',
+         'งานในประกัน / ทำเอง / ไม่มีบิลจริง ๆ &middot; ปิดที่ ฿0 แล้วเข้าคลัง <b>ต้องเขียนเหตุผล</b>', already)}
+      <div style="font-size:10px;font-weight:700;color:#94A3B8;letter-spacing:.05em;text-transform:uppercase;margin:14px 0 6px">หมายเหตุ</div>
+      <input id="prj-bill-note" type="text" value="${esc(p.billNote||'')}" placeholder="เช่น อู่แจ้งว่าจะส่งบิลต้นเดือน &middot; ติดต่อคุณเอ 08x" style="width:100%;border:1px solid #E5E7EB;border-radius:10px;padding:9px 12px;font-size:13px;font-family:inherit">
+     </div>
+     <div style="padding:16px 22px;display:flex;justify-content:flex-end;gap:8px">
+      <button onclick="flProjBillClose_()" style="border:1px solid #E5E7EB;background:#fff;color:#475569;border-radius:12px;padding:9px 16px;font:600 12.5px inherit;cursor:pointer;font-family:inherit">ยังไม่ปิด</button>
+      <button id="prj-bill-go" onclick="flProjBillGo()" style="border:none;background:#7E22CE;color:#fff;border-radius:12px;padding:9px 18px;font:700 12.5px inherit;cursor:pointer;font-family:inherit">ยืนยัน</button>
+     </div>
+    </div></div>`;
+  _prjBillPick = already?'nocost':'wait';
+}
+var _prjBillPick='wait';
+function flProjBillPick(k){
+  _prjBillPick=k;
+  document.querySelectorAll('#prj-bill-ov [data-bo]').forEach(function(el){
+    var on=(el.getAttribute('data-bo')===k);
+    el.style.borderColor=on?'#A855F7':'#E5E7EB';
+    el.style.background=on?'#FAF5FF':'#fff';
+  });
+}
+function flProjBillClose_(){ var h=document.getElementById('prj-bill-host'); if(h) h.innerHTML=''; _prjBillId=null; }
+function flProjBillGo(){
+  const id=_prjBillId, p=flProjGetById(id); if(!p) return flProjBillClose_();
+  const note=(document.getElementById('prj-bill-note')||{}).value||'';
+  if(_prjBillPick==='wait'){ flProjBillClose_(); flProjWorkDone(id, note); return; }
+  /* ปิดที่ ฿0 · ต้องมีเหตุผลเสมอ · ไม่งั้นอีกหกเดือนไม่มีใครตอบได้ว่าทำไมงานอู่ถึงไม่มีต้นทุน */
+  if(!String(note).trim()){
+    alert('ปิดแบบไม่มีค่าใช้จ่าย ต้องเขียนเหตุผลไว้ในหมายเหตุ\n\nเช่น "งานในประกัน" · "ช่างบริษัททำเอง" · "อู่ไม่คิดเงิน"');
+    return;
+  }
+  p.noCost = {reason:String(note).trim(), by:'user', at:TODAY_STR};
+  p.billNote = String(note).trim();
+  flProjBillClose_();
+  if(p.status==='awaiting_bill') flProjBillClose(id);
+  else flProjMarkComplete(id);
 }
 
 // ── Create MJ from project · prefills boat + scheduled type + dates + location ──
