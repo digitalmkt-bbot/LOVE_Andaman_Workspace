@@ -48246,21 +48246,41 @@ function vbRows(){
     (b.trips||[]).forEach(function(t){
       var ds=t.date||''; if(ds<P.from || ds>P.to) return;
       var O=(typeof bkOpsRead==='function')?bkOpsRead(b,ds):(b.ops||{});
+      /* §vbPaxReal · ราคาขายคิดจากคนที่ขึ้นรถจริง ไม่ใช่ยอดจอง
+         แหล่งเดียวกับใบงานเรือและทะเบียนรายชื่อ (ckPaxLeft) เลขสามใบจึงตรงกันเสมอ
+         ⚠ แถวยังต้องอยู่แม้คนเหลือ 0 · รถออกไปแล้วและเจ้าของรถยังวางบิลตามปกติ
+           ตัดแถวทิ้งเมื่อไหร่ = พลาดรถที่ต้องจ่ายจริง */
+      var pb=(typeof ckPaxBreak==='function')?ckPaxBreak(t.pax):{ad:0,chd:0,inf:0,foc:0};
+      var RL=function(kk,v){ return (typeof ckPaxLeft==='function')?ckPaxLeft(b,ds,kk,v):v; };
+      var real={ad:RL('ad',pb.ad||0), chd:RL('chd',pb.chd||0),
+                inf:RL('inf',pb.inf||0), foc:RL('foc',pb.foc||0)};
+      var bkN=(pb.ad||0)+(pb.chd||0)+(pb.inf||0)+(pb.foc||0);
+      var rlN=real.ad+real.chd+real.inf+real.foc;
       /* รถหลายคันในใบเดียว · แยกตามที่จัดไว้ */
       var legs=(Array.isArray(O.vanSplits)&&O.vanSplits.length)
         ? O.vanSplits.map(function(x){ return {vid:x.vanId, pax:+x.pax||0}; })
         : [{vid:O.vanId, pax:null}];
+      /* คนที่ไม่ได้ไปเป็นของทั้งใบ ระบุไม่ได้ว่าหายจากคันไหน · เกลี่ยตามสัดส่วนที่จัดไว้
+         แล้วโยนเศษให้คันสุดท้าย ผลรวมของทุกคันจะได้เท่ากับยอดจริงของใบเป๊ะ */
+      if(legs.length && legs[0].pax!=null){
+        var tb=0; legs.forEach(function(x){ tb+=(+x.pax||0); });
+        var used=0;
+        legs.forEach(function(x,i){
+          x.real=(i===legs.length-1) ? Math.max(0, rlN-used)
+                                     : ((tb>0)?Math.round((+x.pax||0)*rlN/tb):0);
+          used+=x.real;
+        });
+      }
       legs.forEach(function(L){
         if(!L.vid || !ok[L.vid]) return;
         var k=ds+'~'+(t.routeId||'')+'~'+L.vid;
         if(!map[k]) map[k]={date:ds, routeId:t.routeId||'', vanId:L.vid,
-                            ad:0,chd:0,inf:0,foc:0, pax:0, bk:0, areas:{}};
+                            ad:0,chd:0,inf:0,foc:0, pax:0, bkPax:0, bk:0, areas:{}};
         var r=map[k];
-        if(L.pax!=null){ r.pax+=L.pax; r.ad+=L.pax; }
+        if(L.pax!=null){ r.pax+=(+L.real||0); r.ad+=(+L.real||0); r.bkPax+=L.pax; }
         else {
-          var pb=(typeof ckPaxBreak==='function')?ckPaxBreak(t.pax):{ad:0,chd:0,inf:0,foc:0};
-          r.ad+=pb.ad; r.chd+=pb.chd; r.inf+=pb.inf; r.foc+=pb.foc;
-          r.pax+=(pb.ad+pb.chd+pb.inf+pb.foc);
+          r.ad+=real.ad; r.chd+=real.chd; r.inf+=real.inf; r.foc+=real.foc;
+          r.pax+=rlN; r.bkPax+=bkN;
         }
         r.bk++;
         var a=String(b.pickupArea||'').trim(); if(a) r.areas[a]=1;
@@ -48376,7 +48396,7 @@ function vbAgg(){
       _vb.sup=sup;
       var rows=vbRows(), st=vbStateOf(vbKey());
       var g={ sup:sup, vans:vbVans().filter(function(v){ return vbSupOf(v)===sup; }),
-              trips:0, pax:0, miss:0, bill:0, sale:0, ex:0, cut:0, code:{} };
+              trips:0, pax:0, bkPax:0, miss:0, bill:0, sale:0, ex:0, cut:0, code:{} };
       var take=function(rate,ex,cut,per,pax,rid,n){
         g.trips+=n; g.pax+=pax; g.ex+=ex; g.cut+=cut;
         /* "ยังไม่ได้กรอก" = ยังไม่มีเรต · ไม่มีเรตคือยังไม่มีตัวเลขจะเรียกเก็บ
@@ -48390,10 +48410,12 @@ function vbAgg(){
       };
       rows.forEach(function(r){
         var m=(st.rows||{})[r.date+'~'+r.routeId+'~'+r.vanId]||{};
+        g.bkPax+=(+r.bkPax||0);
         take((m.rate!=null?m.rate:vbRateOf(vbCode(r.routeId).c, st))||0, +m.ex||0, +m.cut||0,
              (m.per!=null?m.per:st.perPax)||0, r.pax, r.routeId, 1);
       });
       (st.extra||[]).forEach(function(x){
+        g.bkPax+=(+x.pax||0);
         take(+x.rate||0, +x.ex||0, +x.cut||0, +x.per||0, +x.pax||0, null, +x.van||0);
       });
       if(g.trips>0) out.push(g);
@@ -48415,9 +48437,9 @@ function vbRenderOv(host){
   var mLbl=new Date(+_vb.ym.slice(0,4), +_vb.ym.slice(5,7)-1, 1).toLocaleDateString('th-TH',{month:'long',year:'numeric'});
   var segBtn=function(n,l){ return '<button onclick="vbPick(\'per\','+n+')" class="vb-seg'+(_vb.per===n?' on':'')+'">'+l+'</button>'; };
 
-  var T={vans:0,trips:0,pax:0,bill:0,sale:0,miss:0,ex:0,cut:0}, byCode={};
+  var T={vans:0,trips:0,pax:0,bkPax:0,bill:0,sale:0,miss:0,ex:0,cut:0}, byCode={};
   G.forEach(function(g){
-    T.vans+=g.vans.length; T.trips+=g.trips; T.pax+=g.pax; T.bill+=g.bill;
+    T.vans+=g.vans.length; T.trips+=g.trips; T.pax+=g.pax; T.bkPax+=(+g.bkPax||0); T.bill+=g.bill;
     T.sale+=g.sale; T.miss+=g.miss; T.ex+=g.ex; T.cut+=g.cut;
     Object.keys(g.code).forEach(function(c){ var x=g.code[c];
       if(!byCode[c]) byCode[c]={van:0,pax:0,bill:0,col:x.col};
@@ -48439,7 +48461,10 @@ function vbRenderOv(host){
      +'<td class="l"><span class="vb-av">'+e(String(g.sup).slice(0,6))+'</span>'
        +'<span class="vb-supn">'+e(g.sup)+'</span>'
        +'<div class="vb-supm">'+e(g.vans.map(function(v){ return v.name||v.id; }).join(' · ')||'—')+'</div></td>'
-     +'<td><b>'+g.vans.length+'</b></td><td><b>'+g.trips+'</b></td><td><b>'+g.pax+'</b></td>'
+     +'<td><b>'+g.vans.length+'</b></td><td><b>'+g.trips+'</b></td>'
+     +'<td><b>'+g.pax+'</b>'+((g.bkPax>g.pax)
+        ? ('<div class="vb-cxl" title="ใบจองรวม '+g.bkPax+' คน · ไม่ได้ขึ้นรถ '+(g.bkPax-g.pax)+' คน">จอง '+g.bkPax+' · −'+(g.bkPax-g.pax)+'</div>')
+        : '')+'</td>'
      +'<td>'+(g.trips?(g.pax/g.trips).toFixed(2):'0.00')+'</td>'
      +'<td class="r"><b>'+M(g.bill)+'</b></td><td class="r">'+M(g.sale)+'</td>'
      +'<td class="r" style="font-weight:800;color:'+(none?'#B6BCC3':(gp<0?'#A32D2D':'#0F6E56'))+'">'+M(gp)+'</td>'
@@ -48457,7 +48482,8 @@ function vbRenderOv(host){
    +'<div class="vb-h1">&#128656; วางบิลรถร่วม · Van Supplier Billing</div>'
    +'<div class="vb-sub2"><span class="vb-k1">พื้นขาว = ระบบดึงให้เอง</span> &nbsp;·&nbsp; '
      +'<span class="vb-k2">ช่องเส้นประฟ้า = กรอกเอง</span> &nbsp;·&nbsp; '
-     +'<span style="color:#98A2AD">ภาพรวมทุกเจ้าในรอบบิลนี้ · กดที่แถวเพื่อเปิดใบของเจ้านั้น</span></div>'
+     +'<span style="color:#98A2AD">ภาพรวมทุกเจ้าในรอบบิลนี้ · กดที่แถวเพื่อเปิดใบของเจ้านั้น · '
+       +'ยอดคน = คนที่ขึ้นรถจริง</span></div>'
    +'<div class="vb-bar">'+vbModeTabs()
    +'<span class="vb-segwrap">'+segBtn(1,'1–10')+segBtn(2,'11–20')+segBtn(3,'21–สิ้นเดือน')+'</span>'
    +'<span class="vb-mo"><button onclick="vbShiftMonth(-1)">&lsaquo;</button><b>'+e(mLbl)+'</b><button onclick="vbShiftMonth(1)">&rsaquo;</button></span>'
@@ -48480,7 +48506,9 @@ function vbRenderOv(host){
      +'<th style="width:136px">สถานะการกรอก</th><th style="width:40px"></th></tr></thead>'
    +'<tbody>'+(body||'<tr><td colspan="10" style="padding:26px;text-align:center;color:#98A2AD">ไม่มีงานรถร่วมในรอบบิลนี้</td></tr>')+'</tbody>'
    +'<tfoot><tr><td class="l">รวม '+G.length+' เจ้า</td>'
-     +'<td>'+T.vans+'</td><td>'+T.trips+'</td><td>'+T.pax+'</td><td>'+avg.toFixed(2)+'</td>'
+     +'<td>'+T.vans+'</td><td>'+T.trips+'</td>'
+     +'<td>'+T.pax+(T.bkPax>T.pax?('<div class="vb-cxl" style="color:#FFD79A">จอง '+T.bkPax+' · −'+(T.bkPax-T.pax)+'</div>'):'')+'</td>'
+     +'<td>'+avg.toFixed(2)+'</td>'
      +'<td class="r">'+B(T.bill)+'</td><td class="r">'+B(T.sale)+'</td>'
      +'<td class="r" style="color:'+(pl<0?'#FF9E9E':'#9BE6BC')+'">'+B(pl)+'</td>'
      +'<td colspan="2" style="color:'+(T.miss?'#FFD79A':'#9BE6BC')+'">'
@@ -48507,13 +48535,13 @@ function renderVanBill(){
   var vg=function(id){ return myVans.filter(function(v){ return v.id===id; })[0]||{}; };
 
   /* ── คิดเงินทีละแถว ── */
-  var T={pax:0,ad:0,chd:0,inf:0,foc:0,van:0,ex:0,cut:0,bill:0,sale:0}, byCode={};
+  var T={pax:0,bkPax:0,ad:0,chd:0,inf:0,foc:0,van:0,ex:0,cut:0,bill:0,sale:0}, byCode={};
   var calc=rows.map(function(r){
     var rk=r.date+'~'+r.routeId+'~'+r.vanId, m=st.rows[rk]||{};
     var rate=(m.rate!=null?m.rate:vbRateOf(vbCode(r.routeId).c, st))||0, ex=+m.ex||0, cut=+m.cut||0;
     var per=(m.per!=null?m.per:st.perPax)||0;
     var bill=1*rate+ex-cut, sale=r.pax*per;
-    T.pax+=r.pax; T.ad+=r.ad; T.chd+=r.chd; T.inf+=r.inf; T.foc+=r.foc;
+    T.pax+=r.pax; T.bkPax+=(+r.bkPax||0); T.ad+=r.ad; T.chd+=r.chd; T.inf+=r.inf; T.foc+=r.foc;
     T.van+=1; T.ex+=ex; T.cut+=cut; T.bill+=bill; T.sale+=sale;
     var c=vbCode(r.routeId).c;
     if(!byCode[c]) byCode[c]={van:0,pax:0,bill:0,col:vbCode(r.routeId).col};
@@ -48574,7 +48602,12 @@ function renderVanBill(){
      +'<td class="l">'+aHtml+'</td>'
      +'<td><b>'+r.ad+'</b></td><td>'+(r.chd||'<span class="vb-mut">·</span>')+'</td>'
      +'<td>'+(r.inf||'<span class="vb-mut">·</span>')+'</td><td>'+(r.foc||'<span class="vb-mut">·</span>')+'</td>'
-     +'<td><b>1</b></td><td><b>'+r.pax+'</b></td>'
+     +'<td><b>1</b></td>'
+     /* §vbPaxReal · เลขหลักคือคนที่ขึ้นรถจริง · ต่างจากยอดจองเมื่อไหร่ค่อยบอกใต้เลข
+        แถวที่ตรงกันไม่ต้องรก · แถวที่ต่างต้องเห็นทันที ไม่ใช่ไปรู้ตอนลูกค้าทัก */
+     +'<td><b>'+r.pax+'</b>'+(((+r.bkPax||0)>r.pax)
+        ? ('<div class="vb-cxl" title="ใบจอง '+r.bkPax+' คน · ไม่ได้ขึ้นรถ '+(r.bkPax-r.pax)+' คน">จอง '+r.bkPax+' · −'+(r.bkPax-r.pax)+'</div>')
+        : '')+'</td>'
      +'<td>'+IN("vbSetRow('"+x.rk+"','rate',this.value)", x.rate||'', 58, 0, x.rk+'|rate')+'</td>'
      +'<td>'+IN("vbSetRow('"+x.rk+"','ex',this.value)", x.ex||'', 50, 0, x.rk+'|ex')+'</td>'
      +'<td>'+IN("vbSetRow('"+x.rk+"','cut',this.value)", x.cut||'', 52, 1, x.rk+'|cut')+'</td>'
@@ -48664,7 +48697,9 @@ function renderVanBill(){
      +'<a onclick="vbAddExtra()" style="font-size:11.5px;color:#0E6AA8;font-weight:700;cursor:pointer">+ เพิ่มแถว (รถนอก · งานที่ไม่ได้ผ่านใบงาน)</a></td></tr></tbody>'
    +'<tfoot><tr><td class="l" colspan="3">รวม '+T.van+' เที่ยว</td>'
      +'<td>'+T.ad+'</td><td>'+T.chd+'</td><td>'+T.inf+'</td><td>'+T.foc+'</td>'
-     +'<td>'+T.van+'</td><td>'+T.pax+'</td><td>—</td><td>'+(T.ex||0)+'</td>'
+     +'<td>'+T.van+'</td>'
+     +'<td>'+T.pax+(T.bkPax>T.pax?('<div class="vb-cxl" style="color:#FFD79A">จอง '+T.bkPax+' · −'+(T.bkPax-T.pax)+'</div>'):'')+'</td>'
+     +'<td>—</td><td>'+(T.ex||0)+'</td>'
      +'<td style="color:'+(T.cut?'#FFB4B4':'#9FB3D8')+'">'+NEG(T.cut)+'</td>'
      +'<td class="r">'+B(T.bill)+'</td><td>—</td><td class="r">'+B(T.sale)+'</td>'
      +'<td class="r" style="color:'+(pl<0?'#FF9E9E':'#9BE6BC')+'">'+(pl<0?'−':'')+B(Math.abs(pl))+'</td></tr></tfoot></table></div>'
@@ -48787,6 +48822,7 @@ function vbCss(){
   +'.vb-rt .vb-in,.vb-rt .vb-ro{border-radius:6px;padding:3px 6px}'
   +'.vb-btn.sm{padding:5px 11px;font-size:11.5px;margin-left:7px;border-color:#CFE2F2;color:#0E6AA8}'
   +'.vb-pier{display:inline-block;font-size:9.5px;font-weight:800;border-radius:6px;padding:2px 7px;margin-left:6px}'
+  +'.vb-cxl{font-size:9px;font-weight:700;color:#B98A2A;margin-top:1px;white-space:nowrap;line-height:1.2}'
   +'</style>';
 }
 function renderVanJobs(){
