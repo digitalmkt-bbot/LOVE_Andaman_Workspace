@@ -48103,7 +48103,15 @@ function vbPersist(){
   if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('accounting')) return;
   try{ laBlob().van_bill=VAN_BILL; laBlobSave(); }catch(_){}
 }
-var _vb={sup:'', van:'', ym:'', per:2, edit:0, snap:null, open:{}, foc:''};
+var _vb={sup:'', van:'', ym:'', per:2, edit:0, snap:null, open:{}, foc:'', mode:'ov'};
+function vbMode(m){
+  if(!vbLeave()) return;
+  _vb.mode=m; _vb.open={}; _vb.foc=''; renderVanBill();
+}
+function vbOpenSup(sup){
+  if(!vbLeave()) return;
+  _vb.sup=String(sup||''); _vb.van=''; _vb.mode='one'; _vb.open={}; _vb.foc=''; renderVanBill();
+}
 /* ── §vbFill · ช่องที่ยังไม่เคยกรอก คีย์ได้เลย ──────────────────────────
    งานหลักของหน้านี้คือ "กรอกครั้งแรก" · บังคับให้กดแก้ไขก่อนทุกครั้งคือขวางงานหลัก
    สิ่งที่โหมดแก้ไขมีไว้กันจริง ๆ คือการเผลอทับตัวเลขที่ตกลงกับเจ้าของรถไปแล้ว
@@ -48184,13 +48192,23 @@ function vbPeriod(){
   var p=function(d){ return ym+'-'+String(d).padStart(2,'0'); };
   return {from:p(a), to:p(b), label:a+'–'+b, last:last};
 }
-function vbKey(){ return _vb.sup+'|'+(_vb.van||'*')+'|'+_vb.ym+'|'+_vb.per; }
+/* §vbOv · คีย์ผูกกับ เจ้าของรถ + เดือน + งวด เท่านั้น · ไม่ผูกกับคันรถแล้ว
+   ของเดิมเลือกคันไหนก็ได้ใบคนละใบ · ตัวเลือกคันคือ "ตัวกรองสำหรับดู" ไม่ใช่คนละบิล
+   (บิลออกให้เจ้าของรถ ไม่ได้ออกรายคัน · แต่ละแถวบอกคันอยู่แล้ว)
+   ถ้ายังผูกกับคัน หน้าภาพรวมจะรวมเลขไม่ได้ เพราะเงินกระจายอยู่หลายคีย์
+   เปลี่ยนตอนนี้ไม่มีข้อมูลเสียหาย · หน้านี้เพิ่งเปิดใช้ ยังไม่มีใครกรอก */
+function vbKey(){ return _vb.sup+'|'+_vb.ym+'|'+_vb.per; }
 function vbState(){
   var k=vbKey();
   if(!VAN_BILL[k]) VAN_BILL[k]={ perPax:0, rate:0, rows:{}, extra:[], by:'', at:'' };
   var st=VAN_BILL[k];
   if(!st.rows) st.rows={}; if(!Array.isArray(st.extra)) st.extra=[];
   return st;
+}
+/* อ่านอย่างเดียว · ห้ามสร้างระเบียนเปล่า ไม่งั้นแค่เปิดดูภาพรวมก็เกิดใบเปล่าทุกเจ้าทุกงวด */
+function vbStateOf(k){
+  var st=VAN_BILL[k];
+  return st ? st : { perPax:0, rate:0, rows:{}, extra:[], by:'', at:'' };
 }
 /* ── ดึงงานจริงจากใบจอง · หนึ่งแถว = หนึ่งวัน หนึ่งเส้นทาง หนึ่งคัน ── */
 function vbRows(){
@@ -48275,6 +48293,134 @@ function vbShiftMonth(n){
   var y=+_vb.ym.slice(0,4), m=+_vb.ym.slice(5,7)-1+n, d=new Date(y,m,1);
   _vb.ym=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); renderVanBill();
 }
+/* ── §vbOv · ยอดของทุกเจ้าในงวดเดียวกัน ────────────────────────────────
+   ยืม vbRows() ตัวเดิมมาใช้ โดยสลับ _vb.sup ชั่วคราวแล้วคืนค่าเมื่อจบ
+   เขียนตัวรวมแยกอีกตัวก็ได้ แต่วันไหนกติกาการดึงงานเปลี่ยน สองที่จะเพี้ยนไม่ตรงกัน */
+function vbAgg(){
+  var keepS=_vb.sup, keepV=_vb.van;
+  _vb.van='';
+  var out=[];
+  try{
+    vbSuppliers().forEach(function(sup){
+      _vb.sup=sup;
+      var rows=vbRows(), st=vbStateOf(vbKey());
+      var g={ sup:sup, vans:vbVans().filter(function(v){ return vbSupOf(v)===sup; }),
+              trips:0, pax:0, miss:0, bill:0, sale:0, ex:0, cut:0, code:{} };
+      var take=function(rate,ex,cut,per,pax,rid,n){
+        g.trips+=n; g.pax+=pax; g.ex+=ex; g.cut+=cut;
+        /* "ยังไม่ได้กรอก" = ยังไม่มีเรต · ไม่มีเรตคือยังไม่มีตัวเลขจะเรียกเก็บ
+           กรอก EXTRA ไปแล้วแต่ยังไม่มีเรต ก็ยังถือว่าไม่ครบ */
+        if(!(rate>0)) g.miss+=n;
+        var bill=n*rate+ex-cut;
+        g.bill+=bill; g.sale+=pax*per;
+        if(rid!=null){ var c=vbCode(rid);
+          if(!g.code[c.c]) g.code[c.c]={van:0,pax:0,bill:0,col:c.col};
+          g.code[c.c].van+=n; g.code[c.c].pax+=pax; g.code[c.c].bill+=bill; }
+      };
+      rows.forEach(function(r){
+        var m=(st.rows||{})[r.date+'~'+r.routeId+'~'+r.vanId]||{};
+        take((m.rate!=null?m.rate:st.rate)||0, +m.ex||0, +m.cut||0,
+             (m.per!=null?m.per:st.perPax)||0, r.pax, r.routeId, 1);
+      });
+      (st.extra||[]).forEach(function(x){
+        take(+x.rate||0, +x.ex||0, +x.cut||0, +x.per||0, +x.pax||0, null, +x.van||0);
+      });
+      if(g.trips>0) out.push(g);
+    });
+  } finally { _vb.sup=keepS; _vb.van=keepV; }
+  out.sort(function(a,b){ return (b.trips-a.trips) || String(a.sup).localeCompare(String(b.sup),'th'); });
+  return out;
+}
+/* แถบสลับ ภาพรวม / รายเจ้า · ใช้ร่วมกันสองหน้า */
+function vbModeTabs(){
+  return '<span class="vb-mode">'
+    +'<button class="'+(_vb.mode==='ov'?'on':'')+'" onclick="vbMode(\'ov\')">ภาพรวม</button>'
+    +'<button class="'+(_vb.mode==='ov'?'':'on')+'" onclick="vbMode(\'one\')">รายเจ้า</button></span>';
+}
+function vbRenderOv(host){
+  var e=(typeof ckEsc==='function')?ckEsc:function(x){ return String(x==null?'':x); };
+  var P=vbPeriod(), G=vbAgg();
+  var B=function(n){ n=Math.round(n||0); return (n<0?'−฿':'฿')+Math.abs(n).toLocaleString(); };
+  var mLbl=new Date(+_vb.ym.slice(0,4), +_vb.ym.slice(5,7)-1, 1).toLocaleDateString('th-TH',{month:'long',year:'numeric'});
+  var segBtn=function(n,l){ return '<button onclick="vbPick(\'per\','+n+')" class="vb-seg'+(_vb.per===n?' on':'')+'">'+l+'</button>'; };
+
+  var T={vans:0,trips:0,pax:0,bill:0,sale:0,miss:0,ex:0,cut:0}, byCode={};
+  G.forEach(function(g){
+    T.vans+=g.vans.length; T.trips+=g.trips; T.pax+=g.pax; T.bill+=g.bill;
+    T.sale+=g.sale; T.miss+=g.miss; T.ex+=g.ex; T.cut+=g.cut;
+    Object.keys(g.code).forEach(function(c){ var x=g.code[c];
+      if(!byCode[c]) byCode[c]={van:0,pax:0,bill:0,col:x.col};
+      byCode[c].van+=x.van; byCode[c].pax+=x.pax; byCode[c].bill+=x.bill; });
+  });
+  var done=G.filter(function(g){ return g.miss===0; }).length;
+  var pl=T.sale-T.bill, avg=T.trips?(T.pax/T.trips):0;
+
+  var body=G.map(function(g){
+    /* ยังไม่แตะเลย ช่องเงินขึ้นเป็นจุด ไม่ใช่ ฿0 · ศูนย์บาทจริงกับยังไม่ได้กรอกเป็นคนละเรื่อง
+       ถ้าขึ้น ฿0 เหมือนกันหมด จะแยกไม่ออกว่าเจ้าไหนกรอกแล้วได้ศูนย์ เจ้าไหนยังไม่เริ่ม */
+    var none=(g.miss===g.trips);
+    var M=function(v){ return none?'<span class="vb-mut">·</span>':B(v); };
+    var pill = (g.miss===0) ? '<span class="vb-pill ok">&#10003; กรอกครบ</span>'
+      : (none ? '<span class="vb-pill none">ยังไม่เริ่ม · '+g.trips+' รายการ</span>'
+              : '<span class="vb-pill part">ขาด '+g.miss+' รายการ</span>');
+    var gp=g.sale-g.bill;
+    return '<tr class="vb-clk" data-sup="'+e(g.sup)+'" onclick="vbOpenSup(this.dataset.sup)">'
+     +'<td class="l"><span class="vb-av">'+e(String(g.sup).slice(0,6))+'</span>'
+       +'<span class="vb-supn">'+e(g.sup)+'</span>'
+       +'<div class="vb-supm">'+e(g.vans.map(function(v){ return v.name||v.id; }).join(' · ')||'—')+'</div></td>'
+     +'<td><b>'+g.vans.length+'</b></td><td><b>'+g.trips+'</b></td><td><b>'+g.pax+'</b></td>'
+     +'<td>'+(g.trips?(g.pax/g.trips).toFixed(2):'0.00')+'</td>'
+     +'<td class="r"><b>'+M(g.bill)+'</b></td><td class="r">'+M(g.sale)+'</td>'
+     +'<td class="r" style="font-weight:800;color:'+(none?'#B6BCC3':(gp<0?'#A32D2D':'#0F6E56'))+'">'+M(gp)+'</td>'
+     +'<td>'+pill+'</td><td class="vb-go">&rsaquo;</td></tr>';
+  }).join('');
+
+  var codeCards=['PP','PB','MT'].map(function(c){
+    var g=byCode[c]||{van:0,pax:0,bill:0,col:(c==='PP'?'#C0392B':c==='PB'?'#1C7A4E':'#BA7517')};
+    return '<div class="vb-sb"><div class="t"><span class="vb-lg" style="background:'+g.col+'"></span>'+c+'</div>'
+      +'<div class="b">'+B(g.bill)+'</div><div class="s">'+(g.van?(g.van+' คัน · '+g.pax+' คน'):'ไม่มีงานรอบนี้')+'</div></div>';
+  }).join('');
+
+  host.innerHTML=vbCss()
+   +'<div class="vb">'
+   +'<div class="vb-h1">&#128656; วางบิลรถร่วม · Van Supplier Billing</div>'
+   +'<div class="vb-sub2"><span class="vb-k1">พื้นขาว = ระบบดึงให้เอง</span> &nbsp;·&nbsp; '
+     +'<span class="vb-k2">ช่องเส้นประฟ้า = กรอกเอง</span> &nbsp;·&nbsp; '
+     +'<span style="color:#98A2AD">ภาพรวมทุกเจ้าในรอบบิลนี้ · กดที่แถวเพื่อเปิดใบของเจ้านั้น</span></div>'
+   +'<div class="vb-bar">'+vbModeTabs()
+   +'<span class="vb-segwrap">'+segBtn(1,'1–10')+segBtn(2,'11–20')+segBtn(3,'21–สิ้นเดือน')+'</span>'
+   +'<span class="vb-mo"><button onclick="vbShiftMonth(-1)">&lsaquo;</button><b>'+e(mLbl)+'</b><button onclick="vbShiftMonth(1)">&rsaquo;</button></span>'
+   +'<span style="flex:1"></span>'
+   +'<button class="vb-btn pri" onclick="vbPrint()">&#128424; พิมพ์สรุปรอบบิล</button></div>'
+   +'<div class="vb-kpi">'
+     +'<div class="k"><div class="l">เจ้าของรถ</div><div class="v">'+G.length+' <s>เจ้า</s></div></div>'
+     +'<div class="k"><div class="l">เที่ยวรวม</div><div class="v">'+T.trips+' <s>คัน</s></div></div>'
+     +'<div class="k"><div class="l">ลูกค้ารวม</div><div class="v">'+T.pax+' <s>คน</s></div></div>'
+     +'<div class="k bill"><div class="l">ราคาเรียกเก็บ</div><div class="v">'+B(T.bill)+'</div></div>'
+     +'<div class="k '+(pl<0?'loss':'gain')+'"><div class="l">กำไร / ขาดทุน</div><div class="v">'+B(pl)+'</div></div>'
+     +'<div class="k '+(T.miss?'todo':'')+'"><div class="l">ยังไม่ได้กรอก</div>'
+       +'<div class="v">'+(T.miss?(T.miss+' <s>รายการ</s>'):'&#10003; <s>ครบแล้ว</s>')+'</div></div>'
+   +'</div>'
+   +'<div class="vb-card"><table class="vb-t vb-ovt"><thead><tr>'
+     +'<th class="l" style="min-width:230px">เจ้าของรถ</th>'
+     +'<th style="width:60px">รถ</th><th style="width:70px">เที่ยว</th><th style="width:70px">คน</th>'
+     +'<th style="width:86px">เฉลี่ย</th><th style="width:108px">ราคาเรียกเก็บ</th>'
+     +'<th style="width:98px">ราคาขาย</th><th style="width:108px">กำไร/ขาดทุน</th>'
+     +'<th style="width:136px">สถานะการกรอก</th><th style="width:40px"></th></tr></thead>'
+   +'<tbody>'+(body||'<tr><td colspan="10" style="padding:26px;text-align:center;color:#98A2AD">ไม่มีงานรถร่วมในรอบบิลนี้</td></tr>')+'</tbody>'
+   +'<tfoot><tr><td class="l">รวม '+G.length+' เจ้า</td>'
+     +'<td>'+T.vans+'</td><td>'+T.trips+'</td><td>'+T.pax+'</td><td>'+avg.toFixed(2)+'</td>'
+     +'<td class="r">'+B(T.bill)+'</td><td class="r">'+B(T.sale)+'</td>'
+     +'<td class="r" style="color:'+(pl<0?'#FF9E9E':'#9BE6BC')+'">'+B(pl)+'</td>'
+     +'<td colspan="2" style="color:'+(T.miss?'#FFD79A':'#9BE6BC')+'">'
+       +(T.miss?('ยังไม่ได้กรอก '+T.miss+' รายการ'):'กรอกครบทุกเจ้า')+'</td></tr></tfoot></table></div>'
+   +'<div class="vb-sum">'+codeCards
+     +'<div class="vb-sb"><div class="t">EXTRA − หัก</div><div class="b">'+B(T.ex-T.cut)+'</div>'
+       +'<div class="s">extra +'+T.ex+' · หัก <b style="color:#A32D2D">'+(T.cut>0?('−'+T.cut.toLocaleString()):'0')+'</b></div></div>'
+     +'<div class="vb-sb dark"><div class="t">รวมเรียกเก็บ</div><div class="b">'+B(T.bill)+'</div>'
+       +'<div class="s">'+done+' เจ้าครบแล้ว · '+(G.length-done)+' เจ้ายังไม่ครบ</div></div>'
+   +'</div></div>';
+}
 function renderVanBill(){
   var host=document.getElementById('vanbill-host'); if(!host) return;
   var e=(typeof ckEsc==='function')?ckEsc:function(x){ return String(x==null?'':x); };
@@ -48283,6 +48429,7 @@ function renderVanBill(){
     _vb.ym=t.slice(0,7); var dd=+t.slice(8,10); _vb.per=(dd<=10)?1:(dd<=20?2:3); }
   if(!_vb.sup || sups.indexOf(_vb.sup)<0) _vb.sup=sups[0]||'';
   if(!sups.length){ host.innerHTML='<div style="padding:40px;text-align:center;color:#8B96A0;font-size:13px">ยังไม่มีรถร่วมในระบบ · เพิ่มที่หน้า Transfer Fleet แล้วตั้ง "ผู้ให้บริการ" ให้รถแต่ละคัน</div>'; return; }
+  if(_vb.mode==='ov'){ vbRenderOv(host); return; }
   var myVans=vbVans().filter(function(v){ return vbSupOf(v)===_vb.sup; });
   if(_vb.van && !myVans.some(function(v){ return v.id===_vb.van; })) _vb.van='';
   var P=vbPeriod(), st=vbState(), rows=vbRows();
@@ -48395,7 +48542,7 @@ function renderVanBill(){
    +'<div class="vb-sub2"><span class="vb-k1">พื้นขาว = ระบบดึงให้เอง</span> &nbsp;·&nbsp; <span class="vb-k2">ช่องเส้นประฟ้า = กรอกเอง</span>'
      +' &nbsp;·&nbsp; '+(ED?'<b style="color:#0E6AA8">แก้ได้ทุกช่อง · กดบันทึกเมื่อเสร็จ</b>'
                           :'<span style="color:#98A2AD">ช่องที่ยังว่าง คีย์ได้เลย บันทึกให้ทันที · ช่องที่มีตัวเลขแล้วกด “แก้ไข” ก่อน</span>')+'</div>'
-   +'<div class="vb-bar">'+supSel+vanSel
+   +'<div class="vb-bar">'+vbModeTabs()+supSel+vanSel
    +'<span class="vb-segwrap">'+segBtn(1,'1–10')+segBtn(2,'11–20')+segBtn(3,'21–สิ้นเดือน')+'</span>'
    +'<span class="vb-mo"><button onclick="vbShiftMonth(-1)">&lsaquo;</button><b>'+e(mLbl)+'</b><button onclick="vbShiftMonth(1)">&rsaquo;</button></span>'
    +'<span style="flex:1"></span>'
@@ -48529,6 +48676,25 @@ function vbCss(){
   +'.vb-btn.ok{background:#0F6E56;border-color:#0F6E56;color:#fff;font-weight:700}'
   +'.vb-dirty{font-size:11.5px;font-weight:700;color:#8A5B00;background:#FBF3E6;'
     +'border:1px solid #EEDCBE;border-radius:9px;padding:6px 11px}'
+  /* §vbOv · หน้าภาพรวม */
+  +'.vb-mode{display:flex;background:#EAEDF3;border-radius:11px;padding:3px;margin-right:4px}'
+  +'.vb-mode button{border:none;background:transparent;border-radius:9px;padding:6px 15px;'
+    +'font:700 12px inherit;color:#6B7280;cursor:pointer;font-family:inherit}'
+  +'.vb-mode button.on{background:#fff;color:#16265C;box-shadow:0 1px 3px rgba(22,38,92,.14)}'
+  +'.vb-kpi .k.todo{background:#FFF9EF;border-color:#EFD9AE}'
+  +'.vb-kpi .k.todo .l{color:#B98A2A}.vb-kpi .k.todo .v{color:#8A5B00}'
+  +'.vb-ovt td{padding:10px 8px}'
+  +'.vb-clk{cursor:pointer}.vb-clk:hover td{background:#F7FAFE}'
+  +'.vb-av{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:26px;'
+    +'padding:0 8px;border-radius:8px;background:#16265C;color:#fff;font:800 10px "DM Mono",monospace;'
+    +'margin-right:9px;vertical-align:middle}'
+  +'.vb-supn{font-size:13px;font-weight:800;vertical-align:middle}'
+  +'.vb-supm{font-size:10.5px;color:#98A2AD;margin-top:2px;margin-left:43px}'
+  +'.vb-pill{display:inline-block;font-size:10.5px;font-weight:800;border-radius:999px;padding:3px 11px;white-space:nowrap}'
+  +'.vb-pill.ok{background:#E3F0EA;color:#0F6E56}'
+  +'.vb-pill.part{background:#FBF3E6;color:#8A5B00}'
+  +'.vb-pill.none{background:#EEF0F4;color:#8B96A0}'
+  +'.vb-go{color:#0E6AA8;font-weight:800;font-size:15px}'
   +'</style>';
 }
 function renderVanJobs(){
