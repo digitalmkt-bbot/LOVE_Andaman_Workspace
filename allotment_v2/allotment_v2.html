@@ -27864,6 +27864,22 @@ function _invNewId(prefix){
 function _invSameName(a,b){
   return String(a==null?'':a).trim().toLowerCase()===String(b==null?'':b).trim().toLowerCase();
 }
+/* §invIdSafe2 · หาของจากชื่อ · คืนค่าเฉพาะตอนที่ชี้ได้ตัวเดียวจริง ๆ
+   ชื่ออย่าง "Anode, Protection" หรือ "โอริง" มีหลายเบอร์ในคลัง
+   คว้าตัวแรกคือการเดาเบอร์อะไหล่ · คืน null ให้ไปสร้างใหม่ดีกว่า จะได้เห็นแล้วตามแก้ */
+function _invPickByName(name, partNo){
+  var inv=(typeof FL_INVENTORY!=='undefined' && Array.isArray(FL_INVENTORY))?FL_INVENTORY:[];
+  var c=inv.filter(function(x){ return _invSameName(x.name, name); });
+  if(c.length===1) return c[0];
+  if(c.length>1){
+    var pn=String(partNo==null?'':partNo).trim();
+    if(pn){
+      var m=c.filter(function(x){ return String(x.partNo==null?'':x.partNo).trim()===pn; });
+      if(m.length===1) return m[0];
+    }
+  }
+  return null;
+}
 function flProjCalcCost(projId){
   const kids = flProjChildMJs(projId);
   return kids.reduce((s,m)=>s+(typeof flMaintCalcCost==='function'?flMaintCalcCost(m.id):(m.cost||0)),0);
@@ -36201,18 +36217,21 @@ function flSaveReceive(){
         const cat=it.category||mo.memoType||'parts';
         if(cat==='labor') return;
         // match by invId first, then by exact name
+        /* §invIdSafe2 · ของเดิมมี it.name.includes(x.name) ด้วย · ชื่อกว้าง ๆ อย่าง "โอริง"
+           จะดูดบรรทัด "โอริงฝาครอบ 20mm" เข้าไปรวมทั้งที่เป็นคนละเบอร์ · ตัดออก */
         let inv=it.invId
           ?FL_INVENTORY.find(x=>x.id===it.invId)
-          :FL_INVENTORY.find(x=>x.name===it.name||it.name.includes(x.name));
+          :_invPickByName(it.name, it.partNo);
         /* §invIdSafe · invId ชี้ไปที่ของคนละชื่อ = id ชนกันตอนลงทะเบียน
            เชื่อต่อไปของจะไปเข้าผิดชิ้น และชิ้นที่ถูกจะหายจากคลังทั้งที่รับมาแล้ว
            หาใหม่จากชื่อ ไม่เจอก็ปล่อยให้ไปสร้างใหม่ แล้วซ่อม invId ใน memo ให้ด้วย */
         if(inv && !_invSameName(inv.name, it.name)){
-          const byName=FL_INVENTORY.find(x=>_invSameName(x.name,it.name));
+          /* §invIdSafe2 · ชื่อเดียวกันมีได้หลายเบอร์ · ชี้ชัดไม่ได้ห้ามเดา ให้สร้างใหม่ */
+          const pick=_invPickByName(it.name, it.partNo);
           console.warn('[invIdSafe] '+mo.no+' · "'+it.name+'" ผูกอยู่กับ id '+it.invId
-            +' ซึ่งเป็นของ "'+inv.name+'" · '+(byName?'ย้ายไปที่ของชื่อเดียวกัน':'สร้างรายการใหม่ให้'));
-          inv = byName || null;
-          it.invId = byName ? byName.id : '';
+            +' ซึ่งเป็นของ "'+inv.name+'" · '+(pick?'ย้ายไปที่ '+pick.id:'ชี้ชัดไม่ได้ · สร้างรายการใหม่ให้'));
+          inv = pick;
+          it.invId = pick ? pick.id : '';
         }
         if(inv){
           if(it.invId!==inv.id) it.invId=inv.id;
