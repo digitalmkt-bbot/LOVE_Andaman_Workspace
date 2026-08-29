@@ -26046,7 +26046,18 @@ function memoAddItem(){
     });
   } else {
     // ไม่ได้เลือกจาก dropdown · ตรวจหาก match ชื่อตรงๆ ใน inventory ก่อน
-    const existing = (FL_INVENTORY||[]).find(x => x.name === name);
+    /* §invKeyPartNo · ชื่อเดียวกันมีได้หลายเบอร์ · คว้าตัวแรกคือเดาเบอร์อะไหล่
+       ชี้ชัดไม่ได้ให้ผู้ใช้เลือกจากรายการเอง จะได้เห็นเบอร์ก่อนตัดสินใจ */
+    const _cands = _invSameNameList(name, null);
+    if(_cands.length>1){
+      alert('ชื่อ "'+name+'" มีในคลัง '+_cands.length+' รายการ คนละ Part Number\n\n'
+        +_cands.slice(0,6).map(function(x){ return '  \u00b7 '+_invPnLabel(x)
+          +' · คงเหลือ '+(x.totalQty!=null?x.totalQty:x.qty||0)+' '+(x.unit||'ชิ้น'); }).join('\n')
+        +(_cands.length>6?('\n  \u00b7 ... อีก '+(_cands.length-6)):'')
+        +'\n\nกรุณาเลือกจากรายการที่เด้งขึ้นตอนพิมพ์ เพื่อระบุเบอร์ให้ถูก');
+      return;
+    }
+    const existing = _invPickByName(name, '');
     if(existing){
       // มีอยู่แล้ว → ลิ้งโดยอัตโนมัติ
       _memoItems.push({
@@ -26967,7 +26978,8 @@ function flSaveMemo(){
   memo.items.forEach(it => {
     if(it.autoRegister && !it.invId){
       // Double-check: หากระหว่างที่กรอก memo มีคนสร้าง inv ชื่อเดียวกันไปก่อน → ลิ้งของเดิม
-      const existing = (FL_INVENTORY||[]).find(x => x.name === it.name);
+      /* §invKeyPartNo · ชี้ชัดไม่ได้ก็ไม่ลิ้ง · ปล่อยให้สร้างรายการใหม่ที่เห็นได้ */
+      const existing = _invPickByName(it.name, it.partNo);
       if(existing){
         it.invId = existing.id;
         it.fromInventory = true;
@@ -27867,6 +27879,22 @@ function _invSameName(a,b){
 /* §invIdSafe2 · หาของจากชื่อ · คืนค่าเฉพาะตอนที่ชี้ได้ตัวเดียวจริง ๆ
    ชื่ออย่าง "Anode, Protection" หรือ "โอริง" มีหลายเบอร์ในคลัง
    คว้าตัวแรกคือการเดาเบอร์อะไหล่ · คืน null ให้ไปสร้างใหม่ดีกว่า จะได้เห็นแล้วตามแก้ */
+/* §invKeyPartNo · กุญแจของรายการคลัง = ชื่อ + Part No. */
+function _invKeyOf(name, partNo){
+  return String(name==null?'':name).trim().toLowerCase()
+       + '\u0000' + String(partNo==null?'':partNo).trim().toLowerCase();
+}
+function _invAll(){ return (typeof FL_INVENTORY!=='undefined' && Array.isArray(FL_INVENTORY))?FL_INVENTORY:[]; }
+/* ของชิ้นเดียวกันเป๊ะ (ชื่อ+เบอร์ตรงกัน) ที่มีอยู่แล้ว */
+function _invFindDup(name, partNo, skipId){
+  var k=_invKeyOf(name,partNo);
+  return _invAll().find(function(x){ return x.id!==skipId && _invKeyOf(x.name,x.partNo)===k; })||null;
+}
+/* ของที่ชื่อเดียวกันแต่คนละเบอร์ · ใช้เตือนตอนจะสร้างของใหม่โดยไม่ใส่เบอร์ */
+function _invSameNameList(name, skipId){
+  return _invAll().filter(function(x){ return x.id!==skipId && _invSameName(x.name,name); });
+}
+function _invPnLabel(x){ return (x.partNo&&String(x.partNo).trim())?String(x.partNo).trim():'(ไม่มีเบอร์)'; }
 function _invPickByName(name, partNo){
   var inv=(typeof FL_INVENTORY!=='undefined' && Array.isArray(FL_INVENTORY))?FL_INVENTORY:[];
   var c=inv.filter(function(x){ return _invSameName(x.name, name); });
@@ -35614,7 +35642,7 @@ function flRenderInventory(){
   const CAT_LBL={engine:'Engine',gearbox:'Gearbox',propeller:'Propeller',hull:'Hull',general:'General'};
   const catPills=topCats.map(function(x){var cat=x[0],c=x[1];return '<div style="display:flex;align-items:center;gap:6px;background:white;border:1px solid '+dim.line+';border-radius:20px;padding:3px 12px 3px 3px"><div style="width:24px;height:24px;border-radius:50%;background:'+(CAT_COLOR[cat]||'#666')+';color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">'+(CAT_ABBR[cat]||cat.slice(0,2).toUpperCase())+'</div><span style="font-size:12px;font-weight:500">'+(CAT_LBL[cat]||cat)+' \u00b7 '+c+'</span></div>'}).join('');
 
-  const headerBar='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px"><div style="display:flex;align-items:center;gap:6px">'+catPills+'<div style="width:32px;height:32px;border-radius:50%;background:'+dim.ink+';color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">I</div></div><div style="display:flex;gap:6px"><button onclick="flOpenReceiveStock()" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:500;cursor:pointer">+ Receive</button><button onclick="flOpenAddStockModal()" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:500;cursor:pointer">+ Add item</button><button onclick="flOpenMemoFromInventory()" style="background:'+dim.ink+';color:white;border:none;border-radius:20px;padding:7px 16px;font-size:11px;font-weight:600;cursor:pointer">+ Create Memo</button></div></div>';
+  const headerBar='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px"><div style="display:flex;align-items:center;gap:6px">'+catPills+'<div style="width:32px;height:32px;border-radius:50%;background:'+dim.ink+';color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">I</div></div><div style="display:flex;gap:6px"><button onclick="flOpenReceiveStock()" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:500;cursor:pointer">+ Receive</button><button onclick="flOpenAddStockModal()" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:500;cursor:pointer">+ Add item</button><button onclick="invDupOpen()" title="ตรวจรายการที่ชื่อซ้ำกัน · ของชิ้นเดียวกันแตกเป็นหลายรายการทำให้ยอดคงเหลือกระจาย" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:500;cursor:pointer">&#9888; ตรวจของซ้ำ</button><button onclick="flOpenMemoFromInventory()" style="background:'+dim.ink+';color:white;border:none;border-radius:20px;padding:7px 16px;font-size:11px;font-weight:600;cursor:pointer">+ Create Memo</button></div></div>';
 
   const kpiStrip='<div style="display:grid;grid-template-columns:1.6fr 0.85fr 0.85fr 0.85fr 1fr;gap:8px;margin-bottom:14px;align-items:stretch"><div style="grid-column:1;align-self:end;padding-bottom:6px"><div style="font-size:13px;font-weight:500;color:'+dim.ink4+';margin-bottom:2px">Inventory & Memos</div><div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:42px;font-weight:700;letter-spacing:-1.5px;line-height:1">'+totalItems+'</span><span style="font-size:18px;color:'+dim.ink3+';font-weight:500">items</span><span style="display:inline-flex;align-items:center;background:'+SVG_PINK.accent+';color:white;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">\u25b4 \u0e3f'+totalValue.toLocaleString()+' value</span>'+(cntLow?'<span style="display:inline-flex;align-items:center;background:#FCEBEB;color:#A32D2D;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">'+cntLow+' low stock</span>':'')+'</div><div style="font-size:11px;color:'+dim.ink3+'">2 warehouses \u00b7 Tub Lamu ('+tubCount+') \u00b7 Visit Panwa ('+panwaCount+')</div></div><div style="grid-column:2;background:white;border-radius:14px;padding:11px 13px;border:2px solid '+(cntLow?'#A32D2D':dim.line)+'"><div style="font-size:10px;color:'+dim.ink3+'">Low stock</div><div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span style="background:#A32D2D;color:white;padding:2px 9px;border-radius:14px;font-size:14px;font-weight:700">'+cntLow+'</span><span style="font-size:11px;color:'+dim.ink3+';margin-left:2px">items</span></div><div style="font-size:11px;color:#A32D2D;margin-top:7px;font-weight:600">need restock</div></div><div style="grid-column:3;background:white;border-radius:14px;padding:11px 13px;border:2px solid '+(cntPendingMemo?'#BA7517':dim.line)+'"><div style="font-size:10px;color:'+dim.ink3+'">Pending memos</div><div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span style="background:#BA7517;color:white;padding:2px 9px;border-radius:14px;font-size:14px;font-weight:700">'+cntPendingMemo+'</span><span style="font-size:11px;color:'+dim.ink3+';margin-left:2px">memos</span></div><div style="font-size:11px;color:#854F0B;margin-top:7px;font-weight:600">\u0e3f'+pendingAmount.toLocaleString()+' awaiting</div></div><div style="grid-column:4;background:white;border-radius:14px;padding:11px 13px;border:1px solid '+dim.line+'"><div style="font-size:10px;color:'+dim.ink3+'">Paid this month</div><div style="display:flex;align-items:baseline;gap:3px;margin-top:2px"><span style="font-size:18px;font-weight:700;line-height:1.2;color:#1D9E75">'+paidThisMonth.length+'</span><span style="font-size:11px;color:'+dim.ink3+';font-weight:500">memos</span></div><div style="font-size:11px;color:#0F6E56;margin-top:6px;font-weight:600">\u0e3f'+paidAmount.toLocaleString()+' spent</div></div><div style="grid-column:5;background:'+dim.ink+';color:white;border-radius:14px;padding:11px 13px"><div style="font-size:10px;color:#aaa">By status</div><div style="display:flex;flex-direction:column;gap:3px;margin-top:4px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Pending</span><span style="font-size:11px;font-weight:600;color:'+(cntPendingMemo?'#FF8FA8':'white')+'">'+cntPendingMemo+'</span></div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Approved</span><span style="font-size:11px;font-weight:600;color:white">'+cntApprovedMemo+'</span></div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Received</span><span style="font-size:11px;font-weight:600;color:white">'+cntReceivedMemo+'</span></div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Paid</span><span style="font-size:11px;font-weight:600;color:#9BE6BC">'+cntPaidMemo+'</span></div></div></div></div>';
 
@@ -36246,7 +36274,7 @@ function flSaveReceive(){
           const newInv={
             id:_invNewId('i'),                       /* §invIdSafe */
             name:it.name,
-            partNo:'',
+            partNo:it.partNo||'',                    /* §invKeyPartNo · ไม่งั้นของใหม่ไม่มีกุญแจ */
             category:'อื่นๆ',
             supplier:mo.supplier||'',
             location:memoLocation,
@@ -36692,13 +36720,34 @@ function flOpenAddStockModal(){
 function flSaveAddStock(){
   const name=document.getElementById('add-inv-name').value.trim();
   if(!name){alert('กรุณากรอกชื่อรายการ');return;}
+  /* §invKeyPartNo · ชื่อ+เบอร์ตรงกัน = ของชิ้นเดียวกัน ห้ามสร้างซ้ำ
+     ชื่อชนของเดิมแต่ยังไม่ใส่เบอร์ = แยกกันไม่ออก ระบบจะจับคู่ผิดตอนรับของ */
+  const _pn=(document.getElementById('add-inv-partno').value||'').trim();
+  const _dup=_invFindDup(name,_pn,null);
+  if(_dup){
+    alert('มีรายการนี้อยู่แล้วในคลัง\n\n'+_dup.name+' · '+_invPnLabel(_dup)
+      +'\nคงเหลือ '+(_dup.totalQty!=null?_dup.totalQty:_dup.qty||0)+' '+(_dup.unit||'ชิ้น')
+      +'\n\nถ้าเป็นของชิ้นเดียวกัน ให้รับเข้าที่รายการเดิม\nถ้าคนละเบอร์ ให้กรอก Part Number ให้ต่างกัน');
+    return;
+  }
+  if(!_pn){
+    const _same=_invSameNameList(name,null);
+    if(_same.length){
+      alert('ชื่อนี้มีอยู่แล้ว '+_same.length+' รายการ · ต้องกรอก Part Number เพื่อแยกให้ออก\n\n'
+        +_same.slice(0,6).map(function(x){ return '  \u00b7 '+_invPnLabel(x)
+          +' · คงเหลือ '+(x.totalQty!=null?x.totalQty:x.qty||0); }).join('\n')
+        +(_same.length>6?('\n  \u00b7 ... อีก '+(_same.length-6)):'')
+        +'\n\nถ้าเป็นของชิ้นเดียวกับข้างบน ไม่ต้องสร้างใหม่');
+      return;
+    }
+  }
   // Build note: engine model first (for group detection), then extra note
   const engineModel=document.getElementById('add-inv-engine')?.value||'';
   const extraNote=document.getElementById('add-inv-note-extra')?.value.trim()||'';
   const combinedNote=[engineModel, extraNote].filter(Boolean).join(' · ');
   FL_INVENTORY.push({
-    id:LA_UID('i'),name,
-    partNo:document.getElementById('add-inv-partno').value.trim(),
+    id:_invNewId('i'),name,                      /* §invIdSafe */
+    partNo:_pn,
     category:document.getElementById('add-inv-cat').value,
     supplier:document.getElementById('add-inv-supplier').value.trim(),
     location:document.getElementById('add-inv-location').value.trim(),
@@ -36710,6 +36759,126 @@ function flSaveAddStock(){
     history:[]
   });
   flSave();closeModal('fl-modal-add-inv');flRenderInventory();
+}
+/* ══ §invDupFix · ตรวจรายการซ้ำในคลัง ═══════════════════════════════ */
+function invDupScan(){
+  var g={}, out={dup:[], needPn:[], ok:[]};
+  _invAll().forEach(function(x){
+    var k=String(x.name==null?'':x.name).trim().toLowerCase();
+    if(!k) return; (g[k]=g[k]||[]).push(x);
+  });
+  Object.keys(g).forEach(function(k){
+    var L=g[k]; if(L.length<2) return;
+    /* ซ้ำจริง = ชื่อ+เบอร์ตรงกัน */
+    var byKey={};
+    L.forEach(function(x){ var kk=_invKeyOf(x.name,x.partNo); (byKey[kk]=byKey[kk]||[]).push(x); });
+    var merged=false;
+    Object.keys(byKey).forEach(function(kk){
+      if(byKey[kk].length>1){ out.dup.push({key:kk, name:byKey[kk][0].name, pn:byKey[kk][0].partNo||'', list:byKey[kk]}); merged=true; }
+    });
+    if(merged) return;
+    var noPn=L.filter(function(x){ return !String(x.partNo||'').trim(); });
+    if(noPn.length) out.needPn.push({name:L[0].name, list:L, noPn:noPn.length});
+    else out.ok.push({name:L[0].name, list:L});
+  });
+  return out;
+}
+function invDupOpen(){
+  var R=invDupScan(), e=(typeof ckEsc==='function')?ckEsc:function(x){ return String(x==null?'':x); };
+  var qty=function(x){ return (x.totalQty!=null?x.totalQty:(x.qty||0)); };
+  var row=function(x){
+    return '<div style="display:flex;gap:10px;align-items:center;padding:5px 0;font-size:11.5px;border-top:1px solid #F3F1EC">'
+      +'<span style="flex:1;color:#3F4654">'+e(_invPnLabel(x))+'</span>'
+      +'<span style="color:#8B96A0">'+e(x.supplier||'—')+'</span>'
+      +'<b style="width:56px;text-align:right;font-family:\'DM Mono\',monospace">'+qty(x)+' '+e(x.unit||'')+'</b></div>';
+  };
+  var secDup = !R.dup.length ? '' :
+    '<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:800;color:#A32D2D;letter-spacing:.05em;text-transform:uppercase;margin-bottom:7px">'
+    +'ซ้ำจริง &middot; '+R.dup.length+' กลุ่ม &middot; ต้องรวม</div>'
+    +'<div style="font-size:11.5px;color:#7A4A00;background:#FFF8EC;border:1px solid #F0DFB8;border-radius:9px;padding:8px 11px;margin-bottom:9px;line-height:1.7">'
+    +'ชื่อและ Part Number ตรงกัน = ของชิ้นเดียวกันแตกเป็นหลายรายการ &middot; ยอดคงเหลือกระจาย เบิกจากตัวที่เหลือ 0 ไม่ได้ทั้งที่ของมีอยู่</div>'
+    +R.dup.map(function(gr){
+      return '<div style="border:1px solid #F0D5CE;background:#FFFAF8;border-radius:11px;padding:10px 13px;margin-bottom:8px">'
+        +'<div style="display:flex;align-items:center;gap:10px"><b style="flex:1;font-size:12.5px">'+e(gr.name)+'</b>'
+        +'<span style="font-size:11px;color:#A32D2D;font-weight:700">'+gr.list.length+' รายการ &middot; รวม '+gr.list.reduce(function(a,b){return a+qty(b);},0)+'</span>'
+        +'<button onclick="invDupMerge(\''+encodeURIComponent(gr.key)+'\')" style="border:none;background:#A32D2D;color:#fff;border-radius:8px;padding:6px 13px;font:700 11.5px inherit;cursor:pointer;font-family:inherit">รวมเป็นรายการเดียว</button></div>'
+        +gr.list.map(row).join('')+'</div>';
+    }).join('')+'</div>';
+  var secPn = !R.needPn.length ? '' :
+    '<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:800;color:#B4560A;letter-spacing:.05em;text-transform:uppercase;margin-bottom:7px">'
+    +'ต้องเติม Part Number &middot; '+R.needPn.length+' ชื่อ</div>'
+    +'<div style="font-size:11.5px;color:#7A4A00;background:#FFF8EC;border:1px solid #F0DFB8;border-radius:9px;padding:8px 11px;margin-bottom:9px;line-height:1.7">'
+    +'ชื่อชนกันแต่ยังมีตัวที่ไม่มีเบอร์ &middot; ระบบแยกไม่ออกว่าเป็นอะไหล่ตัวไหน ครั้งหน้าที่รับของอาจเข้าผิดตัว &middot; กรอกเบอร์ให้ครบทุกตัว</div>'
+    +R.needPn.map(function(gr){
+      return '<div style="border:1px solid #F0DFB8;background:#FFFDF7;border-radius:11px;padding:10px 13px;margin-bottom:8px">'
+        +'<div style="display:flex;align-items:center;gap:10px"><b style="flex:1;font-size:12.5px">'+e(gr.name)+'</b>'
+        +'<span style="font-size:11px;color:#B4560A;font-weight:700">'+gr.list.length+' รายการ &middot; ไม่มีเบอร์ '+gr.noPn+'</span></div>'
+        +gr.list.map(row).join('')+'</div>';
+    }).join('')+'</div>';
+  var secOk = !R.ok.length ? '' :
+    '<div><div style="font-size:11px;font-weight:800;color:#0F6E56;letter-spacing:.05em;text-transform:uppercase;margin-bottom:7px">'
+    +'ปกติ &middot; '+R.ok.length+' ชื่อ &middot; คนละอะไหล่</div>'
+    +'<div style="font-size:11.5px;color:#5B6670;background:#F3FAF7;border:1px solid #CFE9DF;border-radius:9px;padding:8px 11px;line-height:1.7">'
+    +'ชื่อเหมือนกันแต่เบอร์ครบทุกตัว = คนละอะไหล่ที่แคตตาล็อกตั้งชื่อซ้ำ ปล่อยไว้ได้<br>'
+    +R.ok.slice(0,10).map(function(gr){ return '&middot; '+e(gr.name)+' <span style="color:#98A2AD">('+gr.list.length+' เบอร์)</span>'; }).join('<br>')
+    +(R.ok.length>10?('<br>&middot; ... อีก '+(R.ok.length-10)+' ชื่อ'):'')+'</div></div>';
+
+  var body = (R.dup.length||R.needPn.length||R.ok.length)
+    ? (secDup+secPn+secOk)
+    : '<div style="padding:26px 0;text-align:center;color:#0F6E56;font-size:13px;font-weight:700">&#10003; ไม่มีรายการซ้ำในคลัง</div>';
+
+  var host=document.getElementById('inv-dup-host');
+  if(!host){ host=document.createElement('div'); host.id='inv-dup-host'; document.body.appendChild(host); }
+  host.innerHTML='<div id="inv-dup-ov" onclick="if(event.target===this)invDupClose()" style="position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:99970;display:flex;align-items:center;justify-content:center;padding:20px;font-family:\'DM Sans\',\'Noto Sans Thai\',sans-serif">'
+   +'<div style="background:#fff;border-radius:16px;width:min(720px,96vw);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 22px 60px rgba(15,23,42,.3)">'
+   +'<div style="padding:17px 22px;border-bottom:1px solid #EFECE4;display:flex;align-items:center;justify-content:space-between">'
+   +'<div><div style="font-size:15.5px;font-weight:800;color:#1F2A44">ตรวจรายการซ้ำในคลัง</div>'
+   +'<div style="font-size:11.5px;color:#7A848E;margin-top:2px">กุญแจของรายการคลังคือ <b>ชื่อ + Part Number</b></div></div>'
+   +'<button onclick="invDupClose()" style="border:none;background:#F0F0EC;border-radius:8px;width:28px;height:28px;font-size:16px;color:#5F5E5A;cursor:pointer">&times;</button></div>'
+   +'<div style="padding:16px 22px;overflow:auto;flex:1">'+body+'</div></div></div>';
+}
+function invDupClose(){ var h=document.getElementById('inv-dup-host'); if(h) h.innerHTML=''; }
+/* รวมรายการที่ชื่อ+เบอร์ตรงกันให้เหลือตัวเดียว · ของทุกคลัง ประวัติ และการอ้างอิงย้ายตามไปหมด */
+function invDupMerge(keyEnc){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('fleet')){ /* ไม่มีสิทธิ์แก้ก็หยุด */ }
+  var key=decodeURIComponent(keyEnc||'');
+  var L=_invAll().filter(function(x){ return _invKeyOf(x.name,x.partNo)===key; });
+  if(L.length<2){ invDupOpen(); return; }
+  /* เก็บตัวที่มีประวัติมากสุดไว้ · ถ้าเท่ากันเอาตัวที่ของเหลือเยอะกว่า */
+  L=L.slice().sort(function(a,b){
+    return ((b.history||[]).length-(a.history||[]).length)
+        || (((b.totalQty!=null?b.totalQty:b.qty||0))-((a.totalQty!=null?a.totalQty:a.qty||0)));
+  });
+  var keep=L[0], drop=L.slice(1);
+  var totQ=L.reduce(function(a,x){ return a+(x.totalQty!=null?x.totalQty:(x.qty||0)); },0);
+  if(!confirm('รวม "'+keep.name+' · '+_invPnLabel(keep)+'" '+L.length+' รายการเป็นรายการเดียว?\n\n'
+    +'ยอดรวมหลังรวม '+totQ+' '+(keep.unit||'ชิ้น')+' (เท่าเดิม ไม่มีของหาย)\n'
+    +'ประวัติและการอ้างอิงจาก memo / ใบซ่อม จะย้ายมาที่รายการที่เก็บไว้')) return;
+  if(typeof invSyncLegacy==='function') invSyncLegacy(keep);
+  drop.forEach(function(d){
+    if(typeof invSyncLegacy==='function') invSyncLegacy(d);
+    (d.stocks||[]).forEach(function(st){
+      var q=+st.qty||0; if(q && typeof invAddAt==='function') invAddAt(keep, st.location, q);
+    });
+    keep.history=(keep.history||[]).concat((d.history||[]).map(function(h){
+      return Object.assign({}, h, {note:(h.note||'')+' · รวมจากรายการซ้ำ'}); }));
+    if(!String(keep.partNo||'').trim() && d.partNo) keep.partNo=d.partNo;
+    if(!keep.cost && d.cost) keep.cost=d.cost;
+    if(!keep.supplier && d.supplier) keep.supplier=d.supplier;
+    /* การอ้างอิงต้องย้ายตาม ไม่งั้นใบเก่าชี้ไปที่ของที่ถูกลบ */
+    (typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).forEach(function(m){
+      (m.items||[]).forEach(function(it){ if(it.invId===d.id) it.invId=keep.id; }); });
+    (typeof FL_MAINT!=='undefined'?FL_MAINT:[]).forEach(function(m){
+      (m.parts||[]).forEach(function(p){ if(p.invId===d.id) p.invId=keep.id; }); });
+  });
+  keep.history=(keep.history||[]).concat([{date:(typeof TODAY_STR!=='undefined'?TODAY_STR:''),
+    type:'merge', qty:0, note:'รวมรายการซ้ำ '+drop.length+' รายการเข้าด้วยกัน',
+    by:(typeof laBy==='function')?laBy():''}]);
+  drop.forEach(function(d){ var i=FL_INVENTORY.indexOf(d); if(i>=0) FL_INVENTORY.splice(i,1); });
+  if(typeof flSave==='function') flSave();
+  if(typeof flShowToast==='function') flShowToast('รวมแล้ว · '+keep.name+' คงเหลือ '+(keep.totalQty!=null?keep.totalQty:keep.qty||0));
+  if(typeof flRenderInventory==='function') flRenderInventory();
+  invDupOpen();
 }
 function flOpenMemoFromInventory(){
   _memoMaintId=null;
