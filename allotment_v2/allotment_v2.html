@@ -4079,11 +4079,17 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
 #view-booking .bkv2-mx td.cell.empty.sel{background:#3A6FF7;color:#fff}
 /* ===== §mxRead · Matrix อ่านง่ายขึ้น ===== */
 /* คอลัมน์รวมเดือน */
-#view-booking .bkv2-mx col.sumcol{width:86px}
+#view-booking .bkv2-mx col.sumcol{width:108px}
 #view-booking .bkv2-mx th.rowh.sumh{text-align:right;padding-right:9px}
 #view-booking .bkv2-mx td.sum{background:#F1F2F5;text-align:right;padding:4px 9px;border-radius:4px;white-space:nowrap;font-family:'DM Mono',monospace}
 #view-booking .bkv2-mx td.sum b{font-size:12px;font-weight:800;font-variant-numeric:tabular-nums}
 #view-booking .bkv2-mx td.sum i{font-style:normal;font-size:9px;color:#98A2AD;display:block;margin-top:1px}
+/* §mxBrk · แยกประเภทผู้โดยสารใต้ยอดรวม · ป้ายเทาเล็ก ตัวเลขเข้ม สายตากวาดหาตัวเลขก่อน */
+#view-booking .bkv2-mx td.sum u{text-decoration:none;display:flex;flex-wrap:wrap;gap:2px 6px;justify-content:flex-end;margin-top:3px}
+#view-booking .bkv2-mx td.sum u span{font-size:8.5px;color:#A6AEB6;letter-spacing:.02em;white-space:nowrap}
+#view-booking .bkv2-mx td.sum u b{font-size:9px;font-weight:700;color:#5B6670;margin-left:2px;font-variant-numeric:tabular-nums}
+#view-booking .bkv2-mx tr.tot td.sum u span{color:#7F8FA8}
+#view-booking .bkv2-mx tr.tot td.sum u b{color:#DCE4F0}
 /* เสาร์-อาทิตย์ · แรเงาทั้งคอลัมน์ให้เห็นรอบสัปดาห์ */
 #view-booking .bkv2-mx td.cell.wk{box-shadow:inset 0 0 0 99px rgba(31,42,68,.035)}
 #view-booking .bkv2-mx th.dh.weekend{background:#F5F6F8;border-radius:3px}
@@ -75647,6 +75653,7 @@ function bkV2RenderMatrix(){
 
   let headers = `<th class="rowh">Route</th>`;
   const dayTotals = [];
+  const dayBrk = [];                                  /* §mxBrk · แยกประเภทของแต่ละวัน */
   const wkArr = [];                                   /* §mxRead · เสาร์-อาทิตย์ */
   for(let d = 1; d <= lastDay; d++){
     const dt = new Date(year, month, d);
@@ -75658,15 +75665,29 @@ function bkV2RenderMatrix(){
     const isToday = dateKey === todayKey;
     const dhSel = _bkV2.selected?.date === dateKey ? 'sel' : '';
     headers += `<th class="dh ${weekend?'weekend':''} ${isToday?'today':''} ${dhSel}" onclick="bkV2SelectDay('${dateKey}')" title="View ${dateKey}">${dowLetter}<span class="dnum">${d}</span></th>`;
-    dayTotals.push(0);
+    dayTotals.push(0); dayBrk.push({ad:0,chd:0,inf:0,foc:0});
   }
   headers += `<th class="rowh sumh">รวมเดือน</th>`;   /* §mxRead */
   const _dk = d => `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
 
   // Family-grouped rows · parent rows shown by default · click to expand sub-routes
   const fams = bkV2Families();
-  const _sumCell = (val, foot, col) =>
-    `<td class="sum"><b${col?` style="color:${col}"`:''}>${val.toLocaleString()}</b><i>${foot}</i></td>`;
+  /* §mxBrk · ผลรวมต้องบอกด้วยว่าเป็นผู้ใหญ่/เด็ก/ทารก/FOC กี่คน
+     เลขรวมอย่างเดียวใช้วางแผนที่นั่งกับคิดเงินไม่ได้ — เด็กกับทารกคิดคนละราคา
+     ประเภทที่เป็นศูนย์ไม่ต้องขึ้น · เดือนที่ไม่มีทารกเลยจะได้ไม่มี "INF 0" มารกทุกแถว */
+  const _brkOf = o => {
+    if(!o) return '';
+    const P = [['AD',o.ad],['CHD',o.chd],['INF',o.inf],['FOC',o.foc]].filter(x => (+x[1]||0) > 0);
+    if(!P.length) return '';
+    return `<u>${P.map(x => `<span>${x[0]}<b>${(+x[1]).toLocaleString()}</b></span>`).join('')}</u>`;
+  };
+  const _sumCell = (val, foot, col, brk) =>
+    `<td class="sum"><b${col?` style="color:${col}"`:''}>${val.toLocaleString()}</b>${_brkOf(brk)}<i>${foot}</i></td>`;
+  /* รวม ad/chd/inf/foc ของหลายวัน · ใช้ทั้งแถวแม่ แถวลูก และแถวรวมทั้งวัน */
+  const _brkAdd = (t, x) => { if(!x) return t;
+    t.ad+=(+x.ad||0); t.chd+=(+x.chd||0); t.inf+=(+x.inf||0); t.foc+=(+x.foc||0); return t; };
+  const _brkNew = () => ({ad:0,chd:0,inf:0,foc:0});
+  const _brkTitle = x => x ? `AD ${(+x.ad||0)} · CHD ${(+x.chd||0)} · INF ${(+x.inf||0)} · FOC ${(+x.foc||0)}` : '';
   const rows = fams.map(fam => {
     const subRoutes = bkV2FamilyRoutes(fam.id);
     const isExpanded = _bkV2.expanded.has(fam.id);
@@ -75680,7 +75701,8 @@ function bkV2RenderMatrix(){
     const fLo = famLive.length ? Math.min(...famLive) : 0;
     const fHi = famLive.length ? Math.max(...famLive) : 0;
     const fSum = famLive.reduce((a,b) => a+b, 0);
-    famDay.forEach((x, i) => { dayTotals[i] += x.total; });
+    const fBrk = famDay.reduce((t,x) => _brkAdd(t,x), _brkNew());   /* §mxBrk */
+    famDay.forEach((x, i) => { dayTotals[i] += x.total; _brkAdd(dayBrk[i], x); });
 
     let parentRow = `<td class="rowh" onclick="bkV2ToggleFamily('${fam.id}')" style="border-left-color:${fam.color}"><span class="caret">${isExpanded?'▾':'▸'}</span>${fam.name}<span class="subc">${subRoutes.length} variant${subRoutes.length===1?'':'s'}</span></td>`;
     for(let d = 1; d <= lastDay; d++){
@@ -75696,17 +75718,21 @@ function bkV2RenderMatrix(){
       parentRow += `<td class="${cls}"${st} onclick="bkV2SelectFamilyCell('${dateKey}','${fam.id}')">${famData.total}</td>`;
     }
     parentRow += _sumCell(fSum, isExpanded ? 'รวมทุก variant' : (famLive.length ? Math.round(fSum/famLive.length)+'/วันที่ออก' : 'ไม่ได้ออกเลย'),
-                          isExpanded ? '#5B6670' : fam.color);
+                          isExpanded ? '#5B6670' : fam.color, fBrk);
     let html = `<tr class="fam ${isExpanded?'expanded':''}">${parentRow}</tr>`;
 
     // Sub-routes (rendered when expanded)
     if(isExpanded){
       /* §mxRead · แยกตัวที่มีคนกับตัวที่ว่างทั้งเดือน · ตัวว่างพับเก็บ กินที่เปล่า ๆ */
       const subInfo = subRoutes.map(rDef => {
-        const vals = [];
-        for(let d = 1; d <= lastDay; d++){ vals.push((agg.byDate[_dk(d)]?.routes?.[rDef.id]?.total) || 0); }
+        const vals = [], brk = _brkNew();
+        for(let d = 1; d <= lastDay; d++){
+          const cell = agg.byDate[_dk(d)]?.routes?.[rDef.id];
+          vals.push((cell?.total) || 0);
+          _brkAdd(brk, cell);                                        /* §mxBrk */
+        }
         const live = vals.filter(v => v > 0);
-        return { rDef, vals, live, sum: live.reduce((a,b)=>a+b,0) };
+        return { rDef, vals, live, brk, sum: live.reduce((a,b)=>a+b,0) };
       });
       const withData = subInfo.filter(o => o.live.length);
       const noData   = subInfo.filter(o => !o.live.length);
@@ -75733,7 +75759,7 @@ function bkV2RenderMatrix(){
           const st = (r.hasFocPending || sel) ? '' : ` style="${bkV2MxHeat(r.total, sLo, sHi, fam.color, false)}"`;
           subRow += `<td class="${cls}"${st} onclick="bkV2SelectCell('${dateKey}','${rDef.id}')">${r.total}</td>`;
         }
-        subRow += _sumCell(o.sum, o.live.length + ' วัน', o.live.length ? fam.color : '#B6BCC3');
+        subRow += _sumCell(o.sum, o.live.length + ' วัน', o.live.length ? fam.color : '#B6BCC3', o.brk);
         html += `<tr class="sub">${subRow}</tr>`;
       });
 
@@ -75756,11 +75782,14 @@ function bkV2RenderMatrix(){
   for(let d = 1; d <= lastDay; d++){
     const isToday = _dk(d) === todayKey;
     const v = dayTotals[d-1] || 0;
-    totRow += `<td class="${isToday?'today':''}"><div class="tn">${v || '·'}</div>`
+    /* §mxBrk · ช่องวันแคบเกินกว่าจะพิมพ์ 4 ประเภทลงไป · ใส่ไว้ใน tooltip แทน
+       เลขที่อ่านทุกวันคือยอดรวม · รายละเอียดหาได้เมื่ออยากรู้ ไม่ต้องรกทั้งแถว */
+    totRow += `<td class="${isToday?'today':''}"${v?` title="${_dk(d)} · ${_brkTitle(dayBrk[d-1])}"`:''}><div class="tn">${v || '·'}</div>`
             + `<div class="ttrack"><div class="tbar" style="width:${v?Math.max(8,Math.round(v/_maxDay*100)):0}%"></div></div></td>`;
   }
   const _grand = dayTotals.reduce((a,b) => a+b, 0);
-  totRow += `<td class="sum"><b>${_grand.toLocaleString()}</b><i>เฉลี่ย ${Math.round(_grand/lastDay)}/วัน</i></td>`;
+  const _gBrk = dayBrk.reduce((t,x) => _brkAdd(t,x), _brkNew());     /* §mxBrk */
+  totRow += _sumCell(_grand, 'เฉลี่ย '+Math.round(_grand/lastDay)+'/วัน', '', _gBrk);
 
   // Colgroup enforces equal day column widths (works with table-layout:fixed)
   let colgroup = '<col class="label">';
