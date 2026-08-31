@@ -23389,9 +23389,12 @@ function flRenderOverview(){
       if(!types.includes(t))types.push(t);
       ecs.add(ec); mats.add(mat);
       const k=`${t}|${ec}|${mat}`;
-      if(!cellMap[k])cellMap[k]={count:0,engs:0};
+      /* §flBoatNm · เก็บชื่อไว้ด้วย ไม่ใช่แค่นับ · "6 ลำ" ตอบได้แค่ว่ามีเท่าไหร่
+         แต่คำถามที่คนถามต่อทุกครั้งคือ "ลำไหนบ้าง" แล้วต้องไปเปิดหน้าอื่นหา */
+      if(!cellMap[k])cellMap[k]={count:0,engs:0,names:[]};
       cellMap[k].count++;
       cellMap[k].engs+=ec;
+      cellMap[k].names.push(b.name||b.id||'—');
     });
     // Type sort: Speedboat first
     types.sort((a,b)=>a==='Speedboat'?-1:b==='Speedboat'?1:a.localeCompare(b));
@@ -23424,7 +23427,13 @@ function flRenderOverview(){
         const cells=ecList.map(ec=>{
           const c=cellMap[`${t}|${ec}|${mat}`];
           if(!c)return`<td style="text-align:center;padding:0;color:var(--ink-soft);font-size:11px">—</td>`;
-          return`<td style="padding:1px"><div style="background:${sty.bg};color:${sty.color};border-radius:4px;padding:3px 4px;text-align:center;font-family:'DM Mono',monospace;font-size:10px;font-weight:600">${c.count}</div></td>`;
+          /* §flBoatNm · ชื่อเรียงตามลำดับใน BOATS (ลำดับที่ทีมจัดไว้เอง) ไม่ใช่ ก-ฮ
+             คั่นด้วย · ให้ตัดบรรทัดเองตามความกว้างช่อง จะได้ไม่ต้องเดาว่ากี่ชื่อต่อแถว
+             ตัวเลขยังเป็นพระเอก ชื่อเป็นตัวรอง — สายตากวาดหาจำนวนก่อนเสมอ */
+          const _nm=(c.names||[]).map(x=>String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;')).join(' \u00b7 ');
+          return`<td style="padding:1px;vertical-align:top"><div style="background:${sty.bg};color:${sty.color};border-radius:4px;padding:3px 4px;text-align:center;font-family:'DM Mono',monospace;font-size:10px;font-weight:600">${c.count}`
+            +(_nm?`<div style="font-family:'DM Sans',sans-serif;font-size:8.5px;font-weight:500;line-height:1.35;letter-spacing:-.1px;color:#6E6A62;margin-top:2px;overflow-wrap:anywhere" title="${_nm}">${_nm}</div>`:'')
+            +`</div></td>`;
         }).join('');
         return`<tr>
           <td style="font-size:9px;color:var(--ink-soft);padding-left:14px;padding-right:4px;font-family:'DM Sans',sans-serif">${mat}</td>
