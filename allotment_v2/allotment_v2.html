@@ -6605,7 +6605,23 @@ function getCurStatus(boat,ds){
   const sorted=(boat.log||[]).map((e,i)=>({e,i}))
     .sort((a,b)=> b.e.from.localeCompare(a.e.from) || (b.i-a.i))
     .map(x=>x.e);
-  return sorted.find(e=>e.from<=ds&&(!e.to||e.to>=ds))||{s:'available',loc:'-'};
+  const hit=sorted.find(e=>e.from<=ds&&(!e.to||e.to>=ds));
+  if(hit) return hit;
+  /* ══ §chWin · "ไม่มีรายการคลุมวันนั้น" แปลไม่เหมือนกันระหว่างเรือสองแบบ ═════════
+     log สถานะถูกออกแบบเป็น "รายการข้อยกเว้น" ไม่ใช่ "ปฏิทินว่าเรือมีอยู่วันไหน"
+
+     เรือบริษัท · เรือมีอยู่ตลอด · สิ่งที่ใส่ใน log คือวันที่ผิดปกติ (ซ่อม/ไม่พร้อม)
+       วันที่ไม่ได้ใส่ = ปกติ → ตั้งต้นเป็น available ถูกแล้ว
+
+     เรือเช่า · เรือไม่ได้มีอยู่ตลอด · สิ่งที่ใส่ใน log คือ "วันที่เรามีเรือ"
+       วันที่ไม่ได้ใส่ = ไม่มีเรือ → ตั้งต้นเป็น available คือคำตอบที่ผิด
+       เคสจริง: LKC66 เช่ามาวันเดียว (4 ก.ย.) แต่โผล่ให้เลือกในหน้าจัดเรือทุกวันตลอดไป
+       เพราะทุกวันที่ไม่ใช่ 4 ก.ย. หา entry ไม่เจอ แล้วตกมาที่ค่าตั้งต้นนี้
+
+     ไม่แตะเรือบริษัท 15 ลำ · ของเดิมยังตั้งต้นเป็น available เหมือนเดิมทุกประการ */
+  if(String(boat&&boat.ownership||'')==='charter')
+    return {s:'unavailable', loc:'-', noCharter:true};
+  return {s:'available',loc:'-'};
 }
 function getBoat(id){return BOATS.find(b=>b.id===id);}
 
@@ -11392,10 +11408,14 @@ function bop2FleetStatus(dateStr){
   BOATS.forEach(b => {
     if(b.retired) return;
     if(_bop2.pier !== 'all' && getBoatCurrentPier(b, dateStr) !== _bop2.pier) return;   // §boatPierDate
-    const st = getCurStatus(b, dateStr).s;
+    const _cs = getCurStatus(b, dateStr);
+    const st = _cs.s;
     if(st !== 'available'){
       // Enrich reason with active project info if any
-      let reason = st === 'fixing' ? 'Fixing' : st;
+      /* §chWin · เรือเช่านอกช่วง · บอกให้ตรงว่า "ไม่ได้เช่าวันนี้"
+         ไม่ใช่ "unavailable" เฉย ๆ ซึ่งอ่านเหมือนเรือเสีย */
+      let reason = _cs.noCharter ? 'ไม่ได้เช่าวันนี้' : (st === 'fixing' ? 'Fixing' : st);
+      if(_cs.noCharter){ out.unavailable.push({ boat:b, reason }); return; }
       if(typeof FL_PROJECTS!=='undefined' && FL_PROJECTS){
         const proj = FL_PROJECTS.find(p=>p.boatId===b.id && (p.status==='inprogress'||p.status==='on_hold'));
         if(proj){
@@ -87560,6 +87580,10 @@ function pjStColorReset(k){
 function pjMjPlanned(m){ return /^(scheduled|preventive|planned)$/i.test(String((m&&m.type)||'')); }
 function pjBoatSt(date, boat, op){
   var st=pjLogAt(boat,date), s=st?String(st.s||''):'';
+  /* §chWin · กติกาเดียวกับ getCurStatus · เรือเช่าที่ไม่มีช่วงคลุมวันนั้น = ไม่มีเรือ
+     ตรงนี้ต้องเขียนซ้ำเพราะหน้านี้อ่าน log เอง (pjLogAt) ไม่ได้ผ่าน getCurStatus */
+  var _noCh=false;
+  if(!st && String((boat&&boat.ownership)||'')==='charter'){ s='unavailable'; _noCh=true; }
   var mj=pjOpenJobs(boat&&boat.id);
   var rsn=String((st&&st.reason)||'').toLowerCase();
   // เหตุผลอาจอยู่ที่ log หรือที่ MJ ที่สั่งให้เรือหยุด · ดูทั้งสองที่
@@ -87578,8 +87602,9 @@ function pjBoatSt(date, boat, op){
   else k='idle';
   /* มีโปรแกรมบนกระดาน แต่ลำนี้ไม่ได้อยู่ในสถานะที่ออกได้ = แผนค้าง ยังไม่มีใครเอาออก */
   var stale=!!(op && k!=='run');
-  return {k:k, stale:stale, log:st, s:s, mj:mj, reason:rsn,
-          loc:(st&&st.loc)||'', note:(st&&(st.note||st.reason))||''};
+  return {k:k, stale:stale, log:st, s:s, mj:mj, reason:rsn, noCharter:_noCh,
+          loc:(st&&st.loc)||'',
+          note:_noCh ? 'ไม่ได้เช่าวันนี้' : ((st&&(st.note||st.reason))||'')};
 }
 /* MJ ที่เลือกไว้ว่าวันนี้ทำใบไหน · ไม่ได้เลือก = ใบแรกที่เปิดอยู่ */
 function pjMjOf(date, bid, mjList){
