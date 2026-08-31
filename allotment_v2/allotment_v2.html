@@ -60012,8 +60012,32 @@ function pxTrip(date, bid){
     cost=+Z.cost||0; revNet=+Z.rev||0;
     frozen={ at:Z.at||'', by:Z.by||'', pax:Z.pax };
   }
+  /* ══ §pxNoSail · เรือที่อยู่บนกระดาน แต่ไม่มีใครขึ้นเลย ═══════════════════
+     pxDay หยิบ "ทุกลำที่มีเส้นทางอยู่ใน TRIPS ของวันนั้น" มาคิดต้นทุน
+     ซึ่งแปลว่า "จัดเรือไว้" ไม่ใช่ "เรือออก" — สองอย่างนี้ไม่เหมือนกัน
+     สูตรต้นทุนส่วนใหญ่ไม่ผูกกับจำนวนคน (ค่าเสื่อม กัปตัน เด็กเรือ ไกด์ ค่าเทียบท่า
+     และน้ำมันที่คิดจากชั่วโมงเครื่อง) ลำที่ไม่มีใครขึ้นจึงยังโดนชาร์จเต็มจำนวน
+     ตัวอย่างจริง 30 ส.ค. 2026 · Aluminous2 Whale Shark 0 คน แต่ ฿32,764
+     ทั้งเดือน ก.ค. มี 18 ลำแบบนี้ รวม ฿466,683 ดัน cost ratio ของเดือนจาก 89% เป็น 98%
+
+     กติกา: 0 คน + 0 ใบจอง = ไม่ได้ออก · ต้นทุนเป็น 0
+     "0 ใบจอง" สำคัญกว่า "0 คน" — ลำที่มีใบจองแต่ลูกค้าไม่มาทั้งลำ ยังถือว่าออก
+     และของที่ลงจริงไว้แล้ว (น้ำมันจากใบงานเรือ / ค่าอาหารร้าน / ค่ารถ) ก็หายไปด้วย
+     ซึ่งถูกแล้ว: ถ้าเรือไม่ได้ออก ของพวกนั้นไม่ควรมีตั้งแต่แรก มีเมื่อไหร่ = สัญญาณว่าออกจริง
+     → จึงมีปุ่ม "ออกจริง" (A.ran) ให้กดกลับเมื่อเรือออกแต่ไม่มีผู้โดยสาร
+       (ออกไปส่งของ · กลุ่มยกเลิกหน้างานหลังเติมน้ำมันแล้ว · เรือสำรองที่ต้องวิ่งตาม)
+     est ของทุกบรรทัดยังอยู่ครบ ไม่ได้ลบทิ้ง จึงยังเปิดดูได้ว่า "ถ้าออกจะเท่าไหร่" */
+  var estCost=cost;
+  var noSail=(PX.tot===0 && PX.bk===0 && !A.ran);
+  if(noSail){
+    rows=rows.map(function(r){
+      return { id:r.id, g:r.g, l:r.l, vat:r.vat, est:r.est, real:r.real, why:r.why,
+               src:r.src, gross:r.gross, use:0 };
+    });
+    cost=0;
+  }
   var nReal=rows.filter(function(r){ return r.real!=null; }).length;
-  var st = A.closed ? 'done' : (nReal ? 'part' : 'est');
+  var st = noSail ? 'nosail' : (A.closed ? 'done' : (nReal ? 'part' : 'est'));
   var be=null;
   try{ if(typeof ctBreakEven==='function'){
     var cap=(typeof boatCapFor==='function')?boatCapFor(bid,date):(boat.cap||0);
@@ -60022,6 +60046,7 @@ function pxTrip(date, bid){
   } }catch(_){}
   return { bid:bid, boat:boat, name:boat.name||bid, rid:rid, route:rt, dep:(rt.times&&rt.times[0])||'',
            px:PX, ctx:ctx, plan:plan, rows:rows, cost:Math.round(cost), up:UP, lt:LT, fp:FP,
+           noSail:noSail, ran:!!A.ran, wouldCost:Math.round(estCost),   /* §pxNoSail */
            revGross:Math.round(revGross), rev:Math.round(revNet),
            profit:Math.round(revNet-cost), st:st, nReal:nReal, closed:!!A.closed, frozen:frozen, be:be,
            fuelPr:fuelPr };
@@ -60053,6 +60078,21 @@ function pxClose(bid){
     rows:t.rows.map(function(r){ return {id:r.id,l:r.l,amt:Math.round(r.use),real:r.real!=null}; }),
     pax:t.px.tot, at:new Date().toISOString(), by:(typeof ckMe==='function')?ckMe():''}});
   renderTripPL();
+}
+/* §pxNoSail · ยืนยันว่าลำนี้ออกจริงทั้งที่ไม่มีผู้โดยสาร · กดซ้ำเพื่อยกเลิก
+   เก็บใน trip_actuals ที่เดียวกับการปิดยอด จึงติดไปกับวัน+ลำนั้นตลอด ไม่ใช่ค่าชั่วคราวบนหน้าจอ */
+function pxRan(bid){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('accounting')) return;
+  var date=_px.date, A=(taGet(date,bid)||{});
+  if(A.ran){
+    if(!confirm('\u0e01\u0e25\u0e31\u0e1a\u0e44\u0e1b\u0e40\u0e1b\u0e47\u0e19 "\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e2d\u0e2d\u0e01"? \u00b7 \u0e15\u0e49\u0e19\u0e17\u0e38\u0e19\u0e02\u0e2d\u0e07\u0e25\u0e33\u0e19\u0e35\u0e49\u0e08\u0e30\u0e01\u0e25\u0e31\u0e1a\u0e44\u0e1b\u0e40\u0e1b\u0e47\u0e19 0')) return;
+    taSet(date,bid,{ran:null}); renderTripPL(); return;
+  }
+  var t=pxTrip(date,bid);
+  if(!confirm('ยืนยันว่าเรือลำนี้ออกจริง?\n\n'+t.name+' · '+(t.route.name||'')+'\n'
+    +'ไม่มีผู้โดยสารและไม่มีใบจองเลย · ถ้าออกจริงจะคิดต้นทุน '+pxN(t.wouldCost)+' ฿\n\n'
+    +'ต้นทุนก้อนนี้จะถูกนับรวมในยอดของวันและของเดือนทันที')) return;
+  taSet(date,bid,{ran:1}); renderTripPL();
 }
 function pxShift(n){ var d=new Date(_px.date+'T12:00:00'); d.setDate(d.getDate()+n);
   _px.date=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(d):d.toISOString().slice(0,10); renderTripPL(); }
@@ -60126,6 +60166,16 @@ function pxCSS(){ return ''
  +'#trippl-host .htag{display:inline-flex;align-items:center;gap:6px;background:#ECFDF5;border:1px solid #A7F3D0;'
    +'color:#047857;font-weight:700;padding:3px 10px;border-radius:9px}'
  +'#trippl-host .htag.w{background:#FFFBEB;border-color:#FDE68A;color:#B45309}'
+ /* §pxNoSail · เรือที่ไม่ได้ออก · เทาเรียบ ไม่ใช่แดง · ไม่ใช่ความผิดพลาด แค่ไม่มีอะไรเกิดขึ้น */
+ +'#trippl-host .htag.ns{background:#F1F5F9;border-color:#DDE3EA;color:#64748B}'
+ +'#trippl-host .pill.ns{background:#F1F5F9;color:#64748B;border:1px solid #DDE3EA}'
+ +'#trippl-host .pill.ns.clk:hover{background:#E7ECF2;color:#334155}'
+ +'#trippl-host .nsx{color:#94A3B8;font-weight:600}'
+ +'#trippl-host table.sum tr.nosail td{background:#FAFBFC;color:#94A3B8}'
+ +'#trippl-host table.sum tr.nosail:hover td{background:#F3F5F8}'
+ +'#trippl-host table.sum tr.nosail td.netc{background:#FAFBFC}'
+ +'#trippl-host table.sum tr.nosail .num,#trippl-host table.sum tr.nosail .net{color:#A9B2BC}'
+ +'#trippl-host table.sum tr.nosail .bn b{color:#7C8794}'
  +'#trippl-host .pnet{display:flex;align-items:center;gap:13px;background:rgba(16,185,129,.09);'
    +'border:1px solid rgba(16,185,129,.22);padding:11px 18px;border-radius:20px}'
  +'#trippl-host .pnet.neg{background:rgba(225,29,72,.07);border-color:rgba(225,29,72,.2)}'
@@ -60579,7 +60629,20 @@ function pxDetail(t, e, GORD, DAVG){
   var O=[];
 
   /* 1 · หัวเรือ */
-  var stTxt={est:'Estimated', part:'Actuals on '+t.nReal, done:'Locked'}[t.st]||'';
+  var stTxt={est:'Estimated', part:'Actuals on '+t.nReal, done:'Locked', nosail:'ไม่ได้ออก'}[t.st]||'';
+  /* §pxNoSail · ทางกลับมีอยู่เสมอ · ระบบเดาว่า "ไม่ได้ออก" จากการไม่มีใบจอง
+     ซึ่งผิดได้ (เรือออกไปส่งของ · กลุ่มยกเลิกหน้างานหลังเติมน้ำมันแล้ว)
+     ปุ่มจึงบอกทั้งสถานะปัจจุบันและตัวเลขที่จะกลับมาถ้ากด */
+  var nsPill = t.noSail
+    ? ('<span class="pill ns clk" onclick="pxRan(\''+e(t.bid)+'\')" title="'
+       +e('ไม่มีผู้โดยสารและไม่มีใบจองเลย ระบบจึงถือว่าเรือไม่ได้ออกและไม่คิดต้นทุน '
+         +'· ถ้าออกจริง ต้นทุนจะเป็น '+pxN(t.wouldCost)+' ฿ · กดเพื่อยืนยันว่าออกจริง')
+       +'">ไม่ได้ออก · กดถ้าออกจริง</span>')
+    : ((t.ran && t.px.tot===0)
+       ? ('<span class="pill am clk" onclick="pxRan(\''+e(t.bid)+'\')" title="'
+          +e('ยืนยันไว้แล้วว่าลำนี้ออกจริงทั้งที่ไม่มีผู้โดยสาร · ต้นทุนจึงถูกคิดตามสูตร · กดเพื่อยกเลิก')
+          +'">ออกจริง · ไม่มีผู้โดยสาร</span>')
+       : '');
   /* §revFlag · เตือนตรงหัวลำเลย · คนที่เปิดหน้านี้คือคนที่แก้ใบจองได้ */
   var rphNow=t.rev/pax, revBad=(DAVG>0 && t.px.tot>0 && rphNow<DAVG*0.3);
   var revPill=revBad
@@ -60593,9 +60656,11 @@ function pxDetail(t, e, GORD, DAVG){
     +'<div class="bar" style="background:'+e(col)+'"></div>'
     +'<div style="min-width:0"><h2>'+e(t.name)
       +'<span class="pill '+(loss?'ro':'pu')+' n">'+e(t.dep||'--:--')+'</span>'
-      +'<span class="pill g clk" onclick="pxClose(\''+e(t.bid)+'\')" title="'
-        +(t.closed?'Re-open this trip':'Lock the numbers for this trip')+'">'+stTxt+'</span>'
-      +revPill+'</h2>'
+      /* §pxNoSail · ลำที่ไม่ได้ออกไม่ต้องมีปุ่มปิดยอด · ไม่มีตัวเลขอะไรให้แช่
+         และคำว่า "ไม่ได้ออก" อยู่ในปุ่มถัดไปแล้ว จะได้ไม่ขึ้นซ้ำสองป้าย */
+      +(t.noSail?'':('<span class="pill g clk" onclick="pxClose(\''+e(t.bid)+'\')" title="'
+        +(t.closed?'Re-open this trip':'Lock the numbers for this trip')+'">'+stTxt+'</span>'))
+      +revPill+nsPill+'</h2>'
     +'<div class="rt">'+e(t.route.name||'—')
       +(t.plan?(' · plan "'+e(t.plan.name||'')+'"')
              :' · <b style="color:#B45309">no cost plan — using the default formula</b>')
@@ -60729,20 +60794,31 @@ function pxDaily(e){
   var D=pxDay(_px.date,_px.pier);
   var DW=(typeof pjDateWords==='function')?pjDateWords(_px.date):{sm:_px.date};
   var tR=0,tC=0,tP=0,tPax=0,tBk=0,tGross=0,nLoss=0,nReal=0,nProfit=0;
-  D.forEach(function(t){ tR+=t.rev; tC+=t.cost; tP+=t.profit; tPax+=t.px.tot; tBk+=t.px.bk; tGross+=t.revGross;
+  /* §pxNoSail · ลำที่ไม่ได้ออกมีต้นทุน 0 อยู่แล้ว แต่ตัวนับสถานะต้องตัดออกด้วย
+     ไม่งั้นกำไร 0 บาทจะถูกนับเป็น "ทริปที่ทำกำไร" และตัวหารของ Data confidence จะเกินจริง */
+  var SAIL=D.filter(function(t){ return !t.noSail; }), nNo=D.length-SAIL.length, noCost=0;
+  D.forEach(function(t){ tR+=t.rev; tC+=t.cost; tPax+=t.px.tot; tBk+=t.px.bk; tGross+=t.revGross;
+    if(t.noSail) noCost+=(+t.wouldCost||0); });
+  SAIL.forEach(function(t){ tP+=t.profit;
     if(t.profit<0) nLoss++; else nProfit++; if(t.nReal) nReal++; });
   var per=tPax?Math.round(tP/tPax):0;
   var tgt=(typeof drCfg==='function')?((drCfg()||{}).targetPerPax||0):0;
   var pct=tR?Math.round(tC/tR*100):0;
-  var nNoPlan=D.filter(function(t){ return !t.plan; }).length;
-  var nNoFuel=D.filter(function(t){ return !t.fuelPr; }).length;
-  var nFuelBack=D.filter(function(t){ return t.fp && (t.fp.src==='back'||t.fp.src==='sib'||t.fp.src==='plan'); }).length;
+  /* §pxNoSail · เตือนเรื่องแผนต้นทุน/ราคาน้ำมันเฉพาะลำที่ออกจริง
+     ลำที่ไม่ได้ออกไม่ได้ใช้ทั้งสองอย่าง เตือนไปก็ไม่มีอะไรให้แก้ */
+  var nNoPlan=SAIL.filter(function(t){ return !t.plan; }).length;
+  var nNoFuel=SAIL.filter(function(t){ return !t.fuelPr; }).length;
+  var nFuelBack=SAIL.filter(function(t){ return t.fp && (t.fp.src==='back'||t.fp.src==='sib'||t.fp.src==='plan'); }).length;
 
   if(!D.length) return '<div class="phero"><div><h1>Daily performance <span>('+e(DW.sm||_px.date)+')</span></h1></div></div>'
     +'<div class="empty">No boats scheduled on this date'+(_px.pier?' at this pier':'')+'</div>';
 
   var hero='<div class="phero"><div><h1>Daily performance <span>('+e(DW.sm||_px.date)+')</span></h1>'
-    +'<p><span class="htag">'+D.length+' trip'+(D.length===1?'':'s')+' · '+tPax+' pax</span>'
+    +'<p><span class="htag">'+SAIL.length+' trip'+(SAIL.length===1?'':'s')+' · '+tPax+' pax</span>'
+    +(nNo?('<span class="htag ns" title="'+e('เรือที่จัดไว้บนกระดานแต่ไม่มีผู้โดยสารและไม่มีใบจองเลย '
+        +'· ถือว่าไม่ได้ออก จึงไม่คิดต้นทุน (ถ้าออกจริงจะเป็น '+pxN(noCost)+' ฿) '
+        +'· ถ้าลำไหนออกจริง กดปุ่ม "ไม่ได้ออก" บนการ์ดของลำนั้นเพื่อให้คิดต้นทุน')+'">'
+      +nNo+' boat'+(nNo===1?'':'s')+' did not sail · '+pxN(noCost)+' ฿ not charged</span>'):'')
     +(nNoPlan?('<span class="htag w">'+nNoPlan+' boat'+(nNoPlan===1?'':'s')+' not mapped to a cost plan</span>'):'')
     +(nNoFuel?('<span class="htag w">'+nNoFuel+' boat'+(nNoFuel===1?'':'s')+' with no fuel price</span>'):'')
     +'Costs use the same formula as the Costing &amp; Break-even page</p></div>'
@@ -60759,7 +60835,7 @@ function pxDaily(e){
       +'<h3 class="n">'+pxN(tC)+'<u>฿</u></h3></div><div class="pxico or">'+pxIcoSvg(PX_SVG.cost)+'</div></div>'
       +'<div class="kft"><span><b class="n">'+pxN(tC/Math.max(1,tPax))+'</b> ฿/pax</span>'
       +'<span class="pill '+(nNoFuel?'ro':(nFuelBack?'am':'g'))+'">'
-      +(nNoFuel?(nNoFuel+' with no fuel price'):(nFuelBack?('fuel borrowed on '+nFuelBack):('actuals on '+nReal+'/'+D.length)))
+      +(nNoFuel?(nNoFuel+' with no fuel price'):(nFuelBack?('fuel borrowed on '+nFuelBack):('actuals on '+nReal+'/'+SAIL.length)))
       +'</span></div></div>'
     +'<div class="kc"><div class="k1"><div><p class="lb">Net profit '
       +'<span class="pill '+(tP<0?'ro':'em')+'">'+(tR?((tP<0?'':'+')+Math.round(tP/tR*100)+'%'):'—')+'</span></p>'
@@ -60770,32 +60846,39 @@ function pxDaily(e){
       +(per<0?'−':'+')+pxN(Math.abs(per))+' ฿/pax'+(tgt?(' · target '+tgt):'')+'</span>'
       +'<span class="pill '+(nLoss?'ro':'em')+'">'+nProfit+' profitable · '+nLoss+' loss</span></div></div>'
     +'<div class="kc"><div class="k1"><div><p class="lb">Data confidence</p>'
-      +'<h3 class="n">'+nReal+' / '+D.length+'<u>boats</u></h3></div>'
+      +'<h3 class="n">'+nReal+' / '+SAIL.length+'<u>boats</u></h3></div>'
       +'<div class="pxico pu">'+pxIcoSvg(PX_SVG.ok)+'</div></div>'
-      +'<div class="kft"><span>Plan mapped <b>'+(D.length-nNoPlan)+'/'+D.length+'</b></span>'
+      +'<div class="kft"><span>Plan mapped <b>'+(SAIL.length-nNoPlan)+'/'+SAIL.length+'</b></span>'
       +'<span class="pill pu">'+D.filter(function(t){ return t.closed; }).length+' locked</span></div></div>'
     +'</div>';
 
   var sumRows=D.map(function(t){
-    var loss=t.profit<0, ratio=t.rev?Math.min(140, t.cost/t.rev*100):100;
-    var bc=(ratio>=100)?'#E11D48':(ratio>=70?'#F59E0B':'#10B981');
+    /* §pxNoSail · ลำที่ไม่ได้ออกต้องไม่ขึ้นแถบแดง 100% · ไม่มีรายได้ ไม่มีต้นทุน ไม่มีอะไรให้เทียบ */
+    var loss=t.profit<0, ratio=t.rev?Math.min(140, t.cost/t.rev*100):(t.noSail?0:100);
+    var bc=t.noSail?'#CBD5E1':((ratio>=100)?'#E11D48':(ratio>=70?'#F59E0B':'#10B981'));
     var col=(typeof pckBoatColor==='function'?pckBoatColor(t.bid):'')||t.route.color||'#64748B';
-    return '<tr class="br'+(loss?' loss':'')+'" onclick="pxJump(\''+e(t.bid)+'\')">'
+    return '<tr class="br'+(t.noSail?' nosail':(loss?' loss':''))+'" onclick="pxJump(\''+e(t.bid)+'\')">'
       +'<td class="l"><div class="bn"><i style="background:'+e(col)+'"></i><div><b>'+e(t.name)+'</b>'
         +'<small>'+e(t.route.name||'—')+(t.plan?'':' · no cost plan')+'</small></div></div></td>'
       +'<td class="c"><span class="tm n">'+e(t.dep||'--:--')+'</span></td>'
       +'<td class="c"><span class="num n">'+t.px.tot+'</span><div class="per">TH '+t.px.th+' · FR '+t.px.fr+'</div></td>'
       +'<td><span class="num n">'+pxN(t.rev)+'</span><div class="per n">'+pxN(t.rev/Math.max(1,t.px.tot))+' / pax</div></td>'
-      +'<td><span class="num cost n">'+pxN(t.cost)+'</span><div class="per n">'+pxN(t.cost/Math.max(1,t.px.tot))+' / pax</div></td>'
-      +'<td class="netc'+(loss?' neg':'')+'"><span class="net'+(loss?' neg':'')+' n">'
+      +'<td><span class="num cost'+(t.noSail?' mut':'')+' n">'+pxN(t.cost)+'</span><div class="per n">'
+        +(t.noSail?('<span class="nsx">ถ้าออกจริง '+pxN(t.wouldCost)+'</span>')
+                  :(pxN(t.cost/Math.max(1,t.px.tot))+' / pax'))+'</div></td>'
+      +(t.noSail
+        ? ('<td class="netc"><span class="net mut n">—</span><div class="per">ไม่ได้ออก · ไม่คิดต้นทุน</div></td>')
+        : ('<td class="netc'+(loss?' neg':'')+'"><span class="net'+(loss?' neg':'')+' n">'
         +(loss?'−':'+')+pxN(Math.abs(t.profit))+'</span>'
         +'<div class="per '+(loss?'negp':'pos')+' n">'+(loss?'−':'+')
-        +pxN(Math.abs(t.profit/Math.max(1,t.px.tot)))+' / pax'+(t.rev?(' · '+Math.round(t.profit/t.rev*100)+'%'):'')+'</div></td>'
+        +pxN(Math.abs(t.profit/Math.max(1,t.px.tot)))+' / pax'+(t.rev?(' · '+Math.round(t.profit/t.rev*100)+'%'):'')+'</div></td>'))
       +'<td><div class="bars"><i style="width:'+Math.min(100,ratio).toFixed(0)+'%;background:'+bc+'"></i></div>'
-        +'<div class="bmeta"><span class="a" style="color:'+bc+'">Cost '+Math.round(ratio)+'%</span>'
-        +'<span class="b">'+(t.be?('B/E '+t.be+' pax'):'—')+'</span></div></td></tr>';
+        +'<div class="bmeta"><span class="a" style="color:'+(t.noSail?'#94A3B8':bc)+'">'
+          +(t.noSail?'ไม่ได้ออก':('Cost '+Math.round(ratio)+'%'))+'</span>'
+        +'<span class="b">'+(t.noSail?'—':(t.be?('B/E '+t.be+' pax'):'—'))+'</span></div></td></tr>';
   }).join('');
-  var totRow='<tr class="tot"><td class="l">Σ Day total · '+D.length+' boats</td>'
+  var totRow='<tr class="tot"><td class="l">Σ Day total · '+SAIL.length+' boat'+(SAIL.length===1?'':'s')
+    +(nNo?(' <span class="nsx">+'+nNo+' ไม่ได้ออก</span>'):'')+'</td>'
     +'<td class="c"><span class="num mut">—</span></td>'
     +'<td class="c"><span class="num n">'+tPax+'</span><div class="per">'+tBk+' bookings</div></td>'
     +'<td><span class="num n">'+pxN(tR)+'</span><div class="per n">avg '+pxN(tR/Math.max(1,tPax))+' / pax</div></td>'
@@ -60816,7 +60899,8 @@ function pxDaily(e){
 
   return hero+kpi
     +'<div class="eg"><div class="phd"><div><h2>Boat summary '
-      +'<span class="pill pu">'+D.length+' boat'+(D.length===1?'':'s')+' scheduled</span></h2>'
+      +'<span class="pill pu">'+D.length+' boat'+(D.length===1?'':'s')+' scheduled</span>'
+      +(nNo?('<span class="pill ns">'+nNo+' did not sail</span>'):'')+'</h2>'
       +'<p>Which route each boat ran, how many pax it carried, what came in, what went out, what is left · '
       +'click a row to jump to that boat</p></div></div>'
     +'<div class="twrap"><div class="tscroll"><table class="sum" style="min-width:760px">'
