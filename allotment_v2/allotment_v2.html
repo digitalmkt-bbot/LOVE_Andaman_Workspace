@@ -6928,33 +6928,106 @@ function _dashBoardData(){
   var pend=BK.filter(function(b){return b.status==='pending_approval';}).length;
   var wxDates=[]; var wx=BK.filter(function(b){ var ok=b.weatherResolve && b.weatherResolve.status && b.weatherResolve.status!=='resolved' && CXL.indexOf(b.status)<0; if(ok){ (b.trips||[]).forEach(function(t){ if(t.date)wxDates.push(t.date); }); } return ok; }).length;
   wxDates.sort(); var wxDate=wxDates[0]||today;
-  var fin=0;
-  BK.forEach(function(b){ if(CXL.indexOf(b.status)>=0||b.status==='pending_approval')return; var a=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null; var pt=a?a.payType:''; if(pt!=='invoice'&&pt!=='proforma')return; if(typeof acctBookingPaid==='function'&&acctBookingPaid(b))return; var ds=(b.trips||[]).map(function(t){return t.date;}).filter(Boolean).sort(); if(!ds.length)return; var c=(typeof pfmCutoff==='function')?pfmCutoff(ds[0]):null; if(c&&Date.now()>c.getTime())fin++; });
-  var seen={}; BK.forEach(function(b){ if(!b.agentId||seen[b.agentId])return; seen[b.agentId]=1; if(typeof agCreditState==='function'){ var cs=agCreditState(b.agentId); if(cs.limit>0&&cs.available<0)fin++; } });
+  /* §dashLeft · เดิมบวก "เลย cutoff แล้วยังไม่จ่าย" กับ "เอเจนต์เครดิตเกิน" รวมเป็นเลขเดียว
+     ชื่อว่า "การเงินเสี่ยง" · พอรันกับข้อมูลจริงได้ 2,562 จาก 3,205 ใบ = เตือน 80% ของทั้งระบบ
+     เลขที่เตือนเกือบทุกอย่างไม่ได้บอกอะไร คนอ่านก็เลิกอ่าน
+
+     ของสองอย่างนี้เป็นคนละเรื่องและต้องทำคนละแบบ จึงต้องแยกกัน:
+     · ยังไม่ได้วางบิล = เดินทางแล้ว เลย cutoff แล้ว แต่ยังไม่เคยผูกกับใบแจ้งหนี้เลย
+       (เพิ่มเงื่อนไข !b.invoiceId — ของเดิมไม่มี ใบที่ออกบิลไปแล้วแต่ยังไม่ได้เก็บเงินจึงถูกนับด้วย)
+       เป็นสภาพคลังที่ค้างสะสม ไม่ใช่งานที่โผล่มาวันนี้ — บอกเป็นจำนวนใบ + ยอดเงิน + กี่เจ้า
+     · เอเจนต์เครดิตเกิน = ต้องตัดสินใจจริงว่าจะปล่อยจองต่อไหม — บอกเป็นจำนวนเจ้า + เกินเท่าไหร่ */
+  var unN=0, unB=0, unAg={};
+  BK.forEach(function(b){
+    if(CXL.indexOf(b.status)>=0||b.status==='pending_approval')return;
+    var a=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null; var pt=a?a.payType:'';
+    if(pt!=='invoice'&&pt!=='proforma')return;
+    if(typeof acctBookingPaid==='function'&&acctBookingPaid(b))return;
+    if(b.invoiceId)return;
+    var ds=(b.trips||[]).map(function(t){return t.date;}).filter(Boolean).sort(); if(!ds.length)return;
+    var c=(typeof pfmCutoff==='function')?pfmCutoff(ds[0]):null;
+    if(c&&Date.now()>c.getTime()){ unN++; unAg[b.agentId||'?']=1;
+      unB+=(typeof acctBookingTotal==='function')?(+acctBookingTotal(b)||0):(+b.total||0); }
+  });
+  var crL=[], seen={};
+  BK.forEach(function(b){ if(!b.agentId||seen[b.agentId])return; seen[b.agentId]=1;
+    if(typeof agCreditState!=='function')return;
+    var cs=agCreditState(b.agentId); if(!cs||!(cs.limit>0)||!(cs.available<0))return;
+    var a=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
+    crL.push({n:(a&&(a.name||a.code))||b.agentId, over:-cs.available});
+  });
+  crL.sort(function(x,y){ return y.over-x.over; });
+  var crB=0; crL.forEach(function(x){ crB+=x.over; });
   var cxl=BK.filter(function(b){ if(CXL.indexOf(b.status)<0)return false; var at=((b.cancellation&&b.cancellation.at)||b.cancelledAt||'').slice(0,10); return at===today; }).length;
-  return {pend:pend, wx:wx, wxDate:wxDate, fin:fin, cxl:cxl};
+  return {pend:pend, wx:wx, wxDate:wxDate, cxl:cxl,
+          unN:unN, unB:Math.round(unB), unAg:Object.keys(unAg).length,
+          crN:crL.length, crB:Math.round(crB), crL:crL};
 }
-function _dashBoardRow(icon, bg, fg, title, sub, n, onclick){
-  var active=n>0;
+/* §dashLeft · n2 = บรรทัดเล็กใต้ตัวเลข (ยอดเงิน) · แถวค้างสะสมต้องบอกทั้งจำนวนและมูลค่า
+   "2,278 ใบ" อย่างเดียวไม่บอกว่าหนักแค่ไหน · "฿11.5M" ต่างหากที่ทำให้คนลุกไปทำ */
+/* ══ §dashIco · <i class="ti ti-…"> ทั้งหน้านี้ไม่ขึ้นเลยสักตัว ═══════════════════
+   ทั้งไฟล์ไม่มี @font-face และไม่มี <link> ไปหา tabler-icons — คลาส .ti ไม่มีนิยามอยู่จริง
+   ผลคือกล่องไอคอนขึ้นเป็นสี่เหลี่ยมสีเปล่า ๆ (เห็นได้ที่หัวการ์ด Live bookings บนโปรดักชัน)
+   ส่วนอื่นของ Dashboard ใช้ inline SVG อยู่แล้ว (ICON_BOAT ฯลฯ) เลยใช้วิธีเดียวกัน
+   ไม่ไปโหลดฟอนต์เพิ่ม — หน้านี้หนักพออยู่แล้ว และ SVG ตัวเดียวเบากว่าฟอนต์ทั้งชุด */
+var _DICO_W='<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" '
+  +'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block">';
+var DASH_ICO={
+  clock: _DICO_W+'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  storm: _DICO_W+'<path d="M7 16a4 4 0 0 1 .5-7.97 5.5 5.5 0 0 1 10.6 1.03A3.5 3.5 0 0 1 17.5 16"/>'
+    +'<path d="M13 13l-3 5h4l-2 4"/></svg>',
+  ban:   _DICO_W+'<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>',
+  bill:  _DICO_W+'<path d="M5 3h11l3 3v15l-2.5-1.5L14 21l-2.5-1.5L9 21l-2.5-1.5L5 21z"/>'
+    +'<path d="M9 8h6M9 12h6M9 16h3"/></svg>',
+  card:  _DICO_W+'<rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19"/>'
+    +'<path d="M6.5 15h3"/></svg>',
+  bell:  _DICO_W+'<path d="M10 5a2 2 0 1 1 4 0 6 6 0 0 1 4 5.5v3l1.5 3H4.5L6 13.5v-3A6 6 0 0 1 10 5z"/>'
+    +'<path d="M9.5 21h5"/></svg>',
+  bolt:  _DICO_W+'<path d="M13 3L5 14h6l-1 7 8-11h-6z"/></svg>',
+  sync:  _DICO_W+'<path d="M20 11a8 8 0 0 0-14-4.5L4 9"/><path d="M4 13a8 8 0 0 0 14 4.5L20 15"/>'
+    +'<path d="M4 5v4h4M20 19v-4h-4"/></svg>',
+  chev:  '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" '
+    +'stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="display:block"><path d="M9 5l7 7-7 7"/></svg>'
+};
+function _dashBoardRow(icon, bg, fg, title, sub, n, onclick, n2){
+  var active=(+String(n).replace(/,/g,''))>0;
   var chipBg=active?bg:'#F3F2EE', chipFg=active?fg:'#b7b1a6';
   return '<div onclick="'+onclick+'" style="display:flex;align-items:center;gap:10px;padding:8px 9px;border-radius:11px;background:'+(active?'#FBF9F5':'#FAFAF8')+';cursor:pointer">'
-    +'<span style="width:26px;height:26px;border-radius:7px;background:'+chipBg+';display:inline-flex;align-items:center;justify-content:center;color:'+chipFg+';flex:none"><i class="ti '+icon+'" style="font-size:15px"></i></span>'
+    +'<span style="width:26px;height:26px;border-radius:7px;background:'+chipBg+';display:inline-flex;align-items:center;justify-content:center;color:'+chipFg+';flex:none">'+(DASH_ICO[icon]||'')+'</span>'
     +'<div style="min-width:0;flex:1"><div style="font-size:12.5px;font-weight:600;color:'+(active?'#1a1a1a':'#9a958c')+'">'+title+'</div><div style="font-size:11px;color:#9a958c">'+sub+'</div></div>'
-    +'<span style="font-size:13px;font-weight:700;color:'+(active?fg:'#c3beb4')+';font-family:Manrope,sans-serif">'+n+'</span>'
-    +'<i class="ti ti-chevron-right" style="font-size:15px;color:#c3beb4"></i></div>';
+    +'<span style="font-size:13px;font-weight:700;color:'+(active?fg:'#c3beb4')+';font-family:Manrope,sans-serif;text-align:right;flex:none">'+n
+      +(n2?('<small style="display:block;font-size:9px;font-weight:600;color:#9a958c;margin-top:1px">'+n2+'</small>'):'')+'</span>'
+    +'<span style="color:#c3beb4;flex:none;display:inline-flex">'+DASH_ICO.chev+'</span></div>';
+}
+/* §dashLeft · ย่อเงินให้อ่านได้ในที่แคบ · ฿11,484,383 ไม่มีทางลงช่องกว้าง 60px
+   และคนอ่านไม่ได้ต้องการหลักหน่วย ต้องการรู้ว่า "ล้านต้น ๆ หรือสิบล้าน" */
+function _dashMoneyShort(v){
+  v=+v||0; if(v>=1e6) return '฿'+(v/1e6).toFixed(v>=1e8?0:1)+'M';
+  if(v>=1e4) return '฿'+Math.round(v/1e3)+'K'; return '฿'+Math.round(v).toLocaleString();
 }
 function _dashBookingBoardHtml(dx,F){
-  var d=_dashBoardData(); var total=d.pend+d.wx+d.fin+d.cxl;
+  var d=_dashBoardData();
+  /* ป้ายบนหัวนับเฉพาะ "งานของวันนี้" · ของค้างสะสมไม่นับรวม
+     ไม่งั้นป้ายจะขึ้น 2,000+ ทุกวันจนกลายเป็นวอลเปเปอร์ */
+  var total=d.pend+d.wx+d.cxl;
+  var _sep=function(t){ return '<div style="font-size:9.5px;font-weight:700;letter-spacing:.06em;'
+    +'text-transform:uppercase;color:#b0aaa0;padding:9px 2px 4px;border-top:1px solid rgba(0,0,0,.05);margin-top:4px">'+t+'</div>'; };
+  var _crSub=d.crL.slice(0,2).map(function(x){ return x.n; }).join(' · ')
+    +(d.crL.length>2?(' +'+(d.crL.length-2)):'');
   var rows=''
-    +_dashBoardRow('ti-clock-hour-4','#FAEEDA','#854F0B','รออนุมัติ','over-cap · discount · FOC',d.pend,'dashGoApprovals()')
-    +_dashBoardRow('ti-cloud-storm','#FCEBEB','#A32D2D','ทริป Cancel (weather)','รอ resolve',d.wx,"dashGoBytrip('"+d.wxDate+"')")
-    +_dashBoardRow('ti-cash','#EEEDFE','#534AB7','การเงินเสี่ยง','PFM เลย cutoff · เครดิตเกิน',d.fin,'dashGoAccounting()')
-    +_dashBoardRow('ti-ban','#F1EFE8','#5F5E5A','ยกเลิกวันนี้','booking ที่ถูกยกเลิก',d.cxl,'dashGoCancels()');
+    +_dashBoardRow('clock','#FAEEDA','#854F0B','รออนุมัติ','over-cap · discount · FOC',d.pend,'dashGoApprovals()')
+    +_dashBoardRow('storm','#FCEBEB','#A32D2D','ทริป cancel (weather)','รอ resolve',d.wx,"dashGoBytrip('"+d.wxDate+"')")
+    +_dashBoardRow('ban','#F1EFE8','#5F5E5A','ยกเลิกวันนี้','booking ที่ถูกยกเลิก',d.cxl,'dashGoCancels()')
+    +_sep('ค้างสะสม · ไม่ใช่งานวันนี้')
+    +_dashBoardRow('bill','#EEEDFE','#534AB7','ยังไม่ได้วางบิล',
+        'เลย cutoff · '+d.unAg+' เจ้า',d.unN.toLocaleString(),'dashGoAccounting()',_dashMoneyShort(d.unB))
+    +_dashBoardRow('card','#FCEBEB','#A32D2D','เอเจนต์เครดิตเกิน',
+        (_crSub||'ไม่มี'),d.crN,'dashGoAgents()',_dashMoneyShort(d.crB));
   return '<div style="background:'+dx.card+';border-radius:18px;padding:14px 15px;'+F+'">'
     +'<div style="display:flex;align-items:center;gap:9px;margin-bottom:11px">'
-      +'<span style="width:28px;height:28px;border-radius:8px;background:#FBEAEA;display:inline-flex;align-items:center;justify-content:center;color:#A32D2D"><i class="ti ti-bell" style="font-size:16px"></i></span>'
+      +'<span style="width:28px;height:28px;border-radius:8px;background:#FBEAEA;display:inline-flex;align-items:center;justify-content:center;color:#A32D2D">'+DASH_ICO.bell+'</span>'
       +'<span style="font-size:14px;font-weight:600;letter-spacing:-.015em;color:#1a1a1a">Booking board</span>'
-      +(total>0?'<span style="margin-left:auto;font-size:11px;font-weight:600;color:#A32D2D;background:#FCEBEB;border-radius:20px;padding:2px 9px">'+total+' need action</span>':'<span style="margin-left:auto;font-size:11px;font-weight:600;color:#1C7A43;background:#E7F5EC;border-radius:20px;padding:2px 9px">✓ all clear</span>')
+      +(total>0?'<span style="margin-left:auto;font-size:11px;font-weight:600;color:#A32D2D;background:#FCEBEB;border-radius:20px;padding:2px 9px">'+total+' ต้องจัดการ</span>':'<span style="margin-left:auto;font-size:11px;font-weight:600;color:#1C7A43;background:#E7F5EC;border-radius:20px;padding:2px 9px">✓ วันนี้เคลียร์</span>')
     +'</div>'
     +'<div style="display:flex;flex-direction:column;gap:7px">'+rows+'</div></div>';
 }
@@ -6969,25 +7042,34 @@ function _dashLiveFeedHtml(dx,F){
     var pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t0.pax||{}):0; var val=(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0);
     var ini=(nm||'?').replace(/[^A-Za-z0-9ก-๙ ]/g,'').trim().split(/\s+/).map(function(w){return w[0];}).join('').slice(0,2).toUpperCase()||'?';
     var pair=AV[i%AV.length].split('|'); var isNew=o.ts>0 && (Date.now()-o.ts)<600000; var cx=CXL.indexOf(b.status)>=0;
+    /* §liveVc · เลข voucher คือสิ่งที่คนใช้คุยกับเอเจนต์และใช้ค้นในระบบ
+       ลำดับ voucherRef → code → id เหมือนที่ทุกหน้าในระบบใช้กัน (PFM · Travel Summary · ใบงาน)
+       ของจริงยาวไม่เท่ากันมาก ("01158" ถึง "1385435725316487") จึงตัดท้ายที่ 18 ตัว
+       และมี 420 ใบที่ไม่มี voucherRef เลย ตัวนั้นจะตกไปใช้ id ซึ่งเป็นเลขที่ค้นได้เหมือนกัน */
+    var vcRaw=String(b.voucherRef||b.code||b.id||'');
+    var vc=vcRaw.length>18?(vcRaw.slice(0,17)+'\u2026'):vcRaw;
     rows+='<div onclick="dashOpenBooking(\''+b.id+'\')" style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;border:1px solid '+(isNew?'#CFEBB0':'#eee')+';cursor:pointer;'+(cx?'opacity:.55':'')+'">'
       +'<span style="width:32px;height:32px;border-radius:50%;background:'+pair[0]+';color:'+pair[1]+';display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none">'+ini+'</span>'
       +'<div style="min-width:0;flex:1"><div style="font-size:12.5px;font-weight:600;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+nm+' &middot; '+rn+(cx?' <span style="color:#A32D2D">· cancelled</span>':'')+'</div>'
-      +'<div style="font-size:11px;color:#9a958c">'+pax+' pax &middot; '+_dashDateShort(t0.date)+' &middot; ฿'+Math.round(val).toLocaleString()+'</div></div>'
+      +'<div style="font-size:11px;color:#9a958c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+        +(vc?('<span style="font-family:\'DM Mono\',ui-monospace,monospace;font-size:10.5px;color:#6b675f" title="'+vcRaw.replace(/"/g,'&quot;')+'">'+vc+'</span> &middot; '):'')
+        +pax+' pax &middot; '+_dashDateShort(t0.date)+' &middot; ฿'+Math.round(val).toLocaleString()+'</div></div>'
       +'<div style="text-align:right;flex:none">'+(isNew?'<span style="font-size:9.5px;font-weight:700;color:#1C7A43;background:#DFF3C4;border-radius:5px;padding:1px 6px">NEW</span>':'')+'<div style="font-size:10.5px;color:#9a958c;margin-top:3px">'+_dashAgo(o.ts)+'</div></div></div>';
   });
   if(!rows) rows='<div style="font-size:12px;color:#9a958c;text-align:center;padding:14px 0">ยังไม่มี booking</div>';
   return '<div style="background:'+dx.card+';border-radius:18px;padding:14px 15px;'+F+'box-shadow:0 1px 2px rgba(20,45,35,.05),0 12px 30px rgba(20,45,35,.11),inset 0 1px 0 rgba(255,255,255,.7);border:1px solid rgba(0,0,0,.05)">'
     +'<div style="display:flex;align-items:center;gap:9px;margin-bottom:11px">'
-      +'<span style="width:28px;height:28px;border-radius:8px;background:#E7F5EC;display:inline-flex;align-items:center;justify-content:center;color:#0A6B3F"><i class="ti ti-bolt" style="font-size:16px"></i></span>'
+      +'<span style="width:28px;height:28px;border-radius:8px;background:#E7F5EC;display:inline-flex;align-items:center;justify-content:center;color:#0A6B3F">'+DASH_ICO.bolt+'</span>'
       +'<span style="font-size:14px;font-weight:600;letter-spacing:-.015em;color:#1a1a1a">Live bookings</span>'
       +'<span style="margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#1C7A43;background:#E7F5EC;border-radius:20px;padding:3px 10px"><span style="width:8px;height:8px;border-radius:50%;background:#2F9E5B;animation:dashlvpulse 1.4s infinite"></span>live</span>'
     +'</div>'
     +'<div style="display:flex;flex-direction:column;gap:8px">'+rows+'</div>'
-    +'<div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:11px;font-size:10.5px;color:#9a958c"><i class="ti ti-refresh" style="font-size:13px"></i>streams in without refresh</div></div>';
+    +'<div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:11px;font-size:10.5px;color:#9a958c">'+DASH_ICO.sync+'อัปเดตเองไม่ต้องรีเฟรช</div></div>';
 }
 window.dashGoApprovals=function(){ var el=document.querySelector('[data-view=booking]'); if(el&&typeof nav==='function')nav(el); if(typeof bkV2SwitchTab==='function')bkV2SwitchTab('approvals'); };
 window.dashGoBytrip=function(ds){ if(typeof bkV2OpenFiltered==='function')bkV2OpenFiltered('',ds||TODAY_STR); };
 window.dashGoAccounting=function(){ var el=document.querySelector('[data-view=accounting]'); if(el&&typeof nav==='function')nav(el); };
+window.dashGoAgents=function(){ var el=document.querySelector('[data-view=agents]'); if(el&&typeof nav==='function')nav(el); };   /* §dashLeft */
 window.dashGoCancels=function(){ var el=document.querySelector('[data-view=booking]'); if(el&&typeof nav==='function')nav(el); if(typeof bkV2SwitchTab==='function')bkV2SwitchTab('all'); };
 window.dashOpenBooking=function(id){ var el=document.querySelector('[data-view=booking]'); if(el&&typeof nav==='function')nav(el); if(typeof bkV2OpenDetail==='function')bkV2OpenDetail(id); };
 
@@ -7385,6 +7467,7 @@ function renderDash(){
       </div>
     </div>
     ${pierRows||`<div style="padding:12px 4px 2px;text-align:center;font-size:10.5px;color:${dx.ink3};border-top:1px solid ${dx.line2}">ไม่มีเรือออกวันนี้</div>`}
+    <!--§dashLeft:boatlist-->
   </div>`;
 
   // Boats operating today card (replaces Notifications)
@@ -7405,14 +7488,15 @@ function renderDash(){
     </div>`;
   }).join('');
   const moreOps=Math.max(0,opBoatsAll.length-5);
-  const notifCard=`<div style="background:${dx.card};border-radius:18px;padding:12px 15px;${F}${GLASS}">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
-      <span style="font-size:13px;font-weight:600;letter-spacing:-.015em">Boats operating</span>
-      <span style="background:${dx.limeSoft};color:${dx.forestLight};padding:2px 7px;border-radius:7px;font-size:9.5px;font-weight:600;font-variant-numeric:tabular-nums">${opBoatsAll.length}</span>
-    </div>
-    ${opBoatRows||`<div style="padding:12px 4px;text-align:center;font-size:10.5px;color:${dx.ink3}">No boats operating today</div>`}
-    ${moreOps>0?`<div onclick="nav(document.querySelector('[data-view=op]'))" style="margin-top:6px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:10px;color:${dx.ink2};cursor:pointer"><span style="background:${dx.soft};color:${dx.forestLight};padding:1px 7px;border-radius:7px;font-weight:600;font-variant-numeric:tabular-nums">+${moreOps}</span> more boats <span style="opacity:.5;font-size:13px">›</span></div>`:''}
-  </div>`;
+  /* §dashLeft · เดิมเป็นการ์ด "Boats operating" ของตัวเอง วางอยู่ใต้ Boat Operating พอดี
+     ซึ่งบอกเรื่องเดียวกัน — วันที่ออกลำเดียวจะเห็นเลขชุดเดิมซ้ำสามรอบติดกัน
+     (การ์ดบน + การ์ดนี้ + Today's headline) ยุบมาเป็นท้ายการ์ดเดิมแทน
+     หัวเรือ/ท่า/ที่ว่าง ยังอยู่ครบ แค่ไม่ต้องมีกรอบของตัวเอง */
+  const boatListSlot = opBoatRows
+    ? `<div style="font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${dx.ink4};padding:9px 2px 2px;border-top:1px solid ${dx.line2};margin-top:4px">เรือที่ออกวันนี้</div>`
+      +opBoatRows
+      +(moreOps>0?`<div onclick="nav(document.querySelector('[data-view=op]'))" style="margin-top:6px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:10px;color:${dx.ink2};cursor:pointer"><span style="background:${dx.soft};color:${dx.forestLight};padding:1px 7px;border-radius:7px;font-weight:600;font-variant-numeric:tabular-nums">+${moreOps}</span> more boats <span style="opacity:.5;font-size:13px">›</span></div>`:'')
+    : '';
 
   // leftCol assembled below (after sched + filesCard are defined)
 
@@ -7758,7 +7842,17 @@ function renderDash(){
     <button onclick="nav(document.querySelector('[data-view=op]'))" style="display:block;width:100%;margin:10px 0 0;background:${dx.forest};color:#fff;border:none;border-radius:16px;padding:8px;font-size:11.5px;font-weight:500;cursor:pointer;${F}">Open Boat Operation</button>
   </div>`;
 
-  const leftCol=`<div style="display:flex;flex-direction:column;gap:18px">${profile}${todoCard}${notifCard}${sched}${filesCard}</div>`;
+  /* §dashLeft · 4 การ์ดเดิมมี 3 ใบที่บอกเรื่องเดียวกัน (ท่า · ลำ · %fill · ที่ว่าง)
+     เหลือ 3 ใบที่ไม่ซ้ำกันเลย แล้วเอา Booking board เข้ามาแทนที่ Today's headline
+     — การ์ดนั้นเขียนเสร็จอยู่ในไฟล์ตั้งนานแล้วแต่ไม่เคยถูกเรียกใช้สักที่
+     Today's headline ถูกตัดทิ้ง: แถบเขียวไล่สีไม่มีข้อมูลอะไรเลย ส่วนตัวเลขที่เหลือ
+     ซ้ำกับสองการ์ดข้างบนทั้งหมด */
+  const leftCol=`<div style="display:flex;flex-direction:column;gap:18px">`
+    +profile
+    +todoCard.replace('<!--\u00a7dashLeft:boatlist-->', boatListSlot)
+    +_dashBookingBoardHtml(dx,F)
+    +filesCard
+    +`</div>`;
   const rightCol=`<div style="display:flex;flex-direction:column;gap:18px">${ai}${_dashLiveFeedHtml(dx,F)}</div>`;
 
   // ── COMPOSE 3-column layout (match reference: 1 | 1.7 | 1) ──
