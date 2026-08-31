@@ -52517,6 +52517,48 @@ function pckBoatMeta(rows, date){
 
 // ยอดสรุปของกลุ่มแถว · ใช้ร่วมกันระหว่างแถบหัวเรือบนหน้าจอกับใบงานไกด์
 // แยกออกมาเพื่อไม่ให้สองที่คำนวณคนละทางแล้วเลขไม่ตรงกัน — ไกด์ถือกระดาษออกทะเลไปแล้วแก้ไม่ได้
+/* ══ §ltOne · เรือหางยาวของใบหนึ่ง "ที่ต้องจัดจริงวันนั้น" ═══════════════════
+   ก่อนหน้านี้ตอบคำถามนี้อยู่ 4 ที่ (หัวใบงานไกด์ · ช่อง Service · แถบสรุปเรือหน้าท่า ·
+   สรุปประจำวัน) กติกาไม่ตรงกันเมื่อไหร่ก็เพี้ยนเงียบ ๆ — และเพี้ยนมาแล้วจริง
+
+   ที่เจอ: "อัปเกรด Join → เหมา" หน้างาน ไม่มีที่ไหนอ่านเลยสักที่
+   เพราะอัปเกรดถูกเก็บเป็น "รายการเงิน + ข้อความ" (label/sellPrice/collected)
+   ไม่มีช่องไหนบอกว่าผลของมันคือการจัดเรือเปลี่ยนไป
+   ผลคือใบที่อัปเกรดเป็นเหมาแล้ว ใบงานไกด์ยังขึ้น "Longtail Join" หรือ "ไม่มี" อยู่
+   (ในฐานข้อมูลมี 7 ใบ · 3 ใบไม่มี add-on หางยาวเลย ใบงานเลยเงียบสนิท
+    ไกด์ไม่รู้ว่าต้องมีเรือเหมารออยู่)
+
+   ⚠ ตั้งใจไม่ไปแก้ bkV2AddOnFlags() เพราะตัวนั้นตอบว่า "ในวอยเชอร์มีอะไร"
+     ซึ่งงานต้นทุน/วางบิลเอเจนต์ต้องใช้คำตอบเดิม · ตัวนี้ตอบคนละคำถาม:
+     "วันนั้นต้องจัดเรืออะไรจริง" = วอยเชอร์ + ขายเพิ่มหน้างาน + อัปเกรด
+
+   ข้อจำกัดที่รู้ตัว: รายการอัปเกรดไม่มี tripDate (ต่างจาก SB_EXTRAS)
+     ใบค้างคืนที่อัปเกรดจึงนับให้ทั้งขาไปขากลับ · ยังไม่เคยเกิด ปล่อยไว้ก่อน */
+function bkLtUpgrade(b){
+  var n=0, due=0;
+  (Array.isArray(b&&b.upgrades)?b.upgrades:[]).forEach(function(u){
+    var s=String((u&&u.label)||'');
+    if(!/longtail|หางยาว/i.test(s)) return;
+    if(!/เหมา|charter|private|ไพรเวท|ส่วนตัว/i.test(s)) return;
+    n++; if(!u.collected) due++;
+  });
+  return {n:n, due:due};
+}
+function bkLtState(b, routeId, date){
+  var af=(typeof bkV2AddOnFlags==='function')?bkV2AddOnFlags(b,routeId):{};
+  var xPax=(typeof bkV2LongtailExtraPax==='function')?(bkV2LongtailExtraPax(b.id,date)||0):0;
+  var xBoat=(typeof bkV2LongtailCharterExtraBoats==='function')?(bkV2LongtailCharterExtraBoats(b.id,date)||0):0;
+  var U=bkLtUpgrade(b);
+  var booked=(af.charter?(+af.charterQty||1):0);
+  /* อัปเกรดคือ "เปลี่ยนของเดิมให้เป็นเหมา" ไม่ใช่ซื้อเพิ่มอีกลำ
+     ใบที่บันทึกทั้ง add-on เหมา และรายการอัปเกรด (มีจริง 1 ใบ) จึงต้องไม่กลายเป็น 2 ลำ */
+  var boats=Math.max(booked+xBoat, U.n>0?1:0);
+  if(boats>0) return {mode:'charter', boats:boats, joinBooked:false, joinExtra:0,
+                      up:U.n, upDue:U.due, fromUp:(U.n>0 && booked+xBoat===0)};
+  if(af.join || xPax>0) return {mode:'join', boats:0, joinBooked:!!af.join, joinExtra:xPax,
+                                up:0, upDue:0, fromUp:false};
+  return {mode:'none', boats:0, joinBooked:false, joinExtra:0, up:0, upDue:0, fromUp:false};
+}
 function pckTripStats(rows, date){
   var real={ad:0,chd:0,inf:0,foc:0}, book=0, lost=0;
   var lang={}, meal={veg:0,vegan:0,halal:0,allergy:0}, ltJoin=0, ltChtr=0;
@@ -52540,12 +52582,14 @@ function pckTripStats(rows, date){
     var mm=gone?{}:(b.specialMeals||{});
     meal.veg+=+mm.veg||0; meal.vegan+=+mm.vegan||0; meal.halal+=+mm.halal||0;
     meal.allergy+=(typeof bkV2AllergyCount==='function')?bkV2AllergyCount(mm):(String(mm.allergies||'').trim()?1:0);
-    var af=(typeof bkV2AddOnFlags==='function')?bkV2AddOnFlags(b,t.routeId):{};
-    if(af.charter){ if(!gone) ltChtr+=(af.charterQty||1); }   // เหมาลำ · ยังต้องออกถ้ายังมีคนไป
-    else if(af.join) ltJoin+=realTot;                          // จอย · คิดรายหัวตามคนที่ไปจริง
+    /* §ltOne · รวมของที่จองมา + ขายเพิ่มหน้างาน + อัปเกรด ไว้ที่ bkLtState ที่เดียว */
+    var LT=(typeof bkLtState==='function')?bkLtState(b,t.routeId,date):{mode:'none'};
     if(!gone){
-      if(typeof bkV2LongtailExtraPax==='function') ltJoin+=(bkV2LongtailExtraPax(b.id,date)||0);
-      if(typeof bkV2LongtailCharterExtraBoats==='function') ltChtr+=(bkV2LongtailCharterExtraBoats(b.id,date)||0);
+      if(LT.mode==='charter') ltChtr+=LT.boats;               // เหมาลำ · ยังต้องออกถ้ายังมีคนไป
+      else if(LT.mode==='join'){
+        if(LT.joinBooked) ltJoin+=realTot;                    // จอย · คิดรายหัวตามคนที่ไปจริง
+        ltJoin+=LT.joinExtra;                                 // ที่ขายเพิ่มหน้างาน · qty คือจำนวนคน
+      }
     }
   });
   real.all=real.ad+real.chd+real.inf+real.foc;
@@ -53161,12 +53205,15 @@ function pckSvcSetRender(){
 //   รวมของที่ขายเพิ่มหน้างานด้วย (bkV2LongtailExtraPax / bkV2LongtailCharterExtraBoats)
 function pckJobService(r, date){
   var b=r.b, rid=(r.t&&r.t.routeId)||'', out=[], CL=pckSvcColors();
-  var af=(typeof bkV2AddOnFlags==='function')?bkV2AddOnFlags(b,rid):{};
-  var xPax=(typeof bkV2LongtailExtraPax==='function')?(bkV2LongtailExtraPax(b.id,date)||0):0;
-  var xBoat=(typeof bkV2LongtailCharterExtraBoats==='function')?(bkV2LongtailCharterExtraBoats(b.id,date)||0):0;
-  var nBoat=(af.charter?(af.charterQty||1):0)+xBoat;
-  if(nBoat>0) out.push({c:CL.chtr, t:'Longtail Charter \u00b7 '+nBoat+' \u0e25\u0e33'});
-  else if(af.join || xPax>0) out.push({c:CL.join, t:'Longtail Join'+(xPax>0?(' +'+xPax):'')});
+  /* §ltOne · อัปเกรดหน้างานต้องเปลี่ยนป้ายนี้ด้วย · เดิมอ่านแต่ของที่จองมากับขายเพิ่ม
+     ใบที่อัปเกรด Join → เหมา จึงยังขึ้น "Join" (หรือไม่ขึ้นอะไรเลยถ้าไม่เคยมีหางยาว)
+     ⬆ = มาจากอัปเกรดหน้างาน ไม่ได้อยู่ในวอยเชอร์ · * = ยังไม่ได้เก็บเงิน */
+  var LT=(typeof bkLtState==='function')?bkLtState(b,rid,date):{mode:'none'};
+  if(LT.mode==='charter')
+    out.push({c:CL.chtr, t:'Longtail Charter \u00b7 '+LT.boats+' \u0e25\u0e33'
+      +(LT.up?(' \u2b06'+(LT.upDue?' *':'')):'')});
+  else if(LT.mode==='join')
+    out.push({c:CL.join, t:'Longtail Join'+(LT.joinExtra>0?(' +'+LT.joinExtra):'')});
   // add-on อื่นที่ไม่ใช่หางยาว · ไม่ลงสี เพราะสีสงวนไว้ให้เรื่องที่ต้องจัดเรือจริง
   try{ (ckAddonList(b,rid)||[]).forEach(function(a){
     if(a.kind==='longtail') return;
@@ -53184,6 +53231,9 @@ function pckJobService(r, date){
   // อัปเกรดหน้างาน · ยังไม่เก็บเงินใส่ดอกจันไว้ ไกด์จะได้ทวงถูกใบ
   try{ (Array.isArray(b.upgrades)?b.upgrades:[]).forEach(function(u){
     var lb=String(u.label||'upgrade');
+    /* §ltOne · อัปเกรดหางยาวนับอยู่ในป้าย Longtail ข้างบนแล้ว (พร้อม ⬆ และ *)
+       กติกาเดียวกับของขายเพิ่มหน้างาน · เขียนสองบรรทัดไกด์จะนึกว่าต้องจัดสองลำ */
+    if(/longtail|หางยาว/i.test(lb) && /เหมา|charter|private|ไพรเวท|ส่วนตัว/i.test(lb)) return;
     out.push({c:pckSvcRuleColor(lb), t:'\u2b06 '+lb+(u.collected?'':' *')});
   }); }catch(_){}
   return out;
@@ -56259,12 +56309,14 @@ function drData(date){
     if(b.agentId && st!=='verified') D.warn.doc++;
 
     // หางยาว · §ovnDaily · ของที่จองมากับใบถูกใช้และจ่ายไปแล้ววันขาไป · นับซ้ำ = ค่าใช้จ่ายเกินจริง
-    var af=(!_ovn && typeof bkV2AddOnFlags==='function')?bkV2AddOnFlags(b,rid):{};
+    /* §ltOne · คำถามเดียวกับใบงานไกด์ · ใช้ตัวเดียวกัน เลขสองหน้าจะได้ตรงกันเสมอ */
+    var LT=(_ovn || typeof bkLtState!=='function') ? {mode:'none'} : bkLtState(b,rid,date);
     if(!D.ltBy[rid]) D.ltBy[rid]={chtr:0, join:0};
-    if(af.charter){ D.ltChtr+=(af.charterQty||1); D.ltBy[rid].chtr+=(af.charterQty||1); }
-    else if(af.join){ D.ltJoin+=px.tot; D.ltBy[rid].join+=px.tot; }
-    if(typeof bkV2LongtailExtraPax==='function'){ var _xj=(bkV2LongtailExtraPax(b.id,date)||0); D.ltJoin+=_xj; D.ltBy[rid].join+=_xj; }
-    if(typeof bkV2LongtailCharterExtraBoats==='function'){ var _xc=(bkV2LongtailCharterExtraBoats(b.id,date)||0); D.ltChtr+=_xc; D.ltBy[rid].chtr+=_xc; }
+    if(LT.mode==='charter'){ D.ltChtr+=LT.boats; D.ltBy[rid].chtr+=LT.boats; }
+    else if(LT.mode==='join'){
+      if(LT.joinBooked){ D.ltJoin+=px.tot; D.ltBy[rid].join+=px.tot; }
+      if(LT.joinExtra){ D.ltJoin+=LT.joinExtra; D.ltBy[rid].join+=LT.joinExtra; }
+    }
   });
 
   // ความจุเรือลงไปที่เส้นทาง · เรือลำเดียวอาจวิ่งหลายเส้นทางในวันเดียว จึงเฉลี่ยตามสัดส่วนคน
