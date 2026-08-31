@@ -87517,7 +87517,16 @@ function pjOpenJobs(bid){
 /* work:true = วันนั้นมีคนต้องทำงานกับเรือลำนี้จริง · การ์ดจะเป็นใบงานซ่อม */
 var PJ_ST={
   /* grp = กลุ่มที่ใช้ทั้งเรียงลำดับและกรอง · go=วิ่ง ready=พร้อม work=ซ่อมบำรุง down=ไม่พร้อม */
-  clash:{t:'ขัดกัน · ช่างแจ้งไม่พร้อม', bg:'#FCEFEE', fg:'#A0342A', bd:'#F0CFCB', ord:0, grp:'go',    band:'#A0342A'},
+  /* ══ §pjStWin · เดิมมีสถานะ 'clash' อยู่ตรงนี้ · ตัดออกแล้ว ════════════════════
+     กติกาเดิมคือ "มีโปรแกรมวางไว้ + สถานะไม่ available" → ขึ้นเป็น clash
+     ซึ่งจัดอยู่ในกลุ่ม go (เรือที่วิ่ง) แปลว่าเรือที่ช่างเอาขึ้นทำแล้ว
+     ยังถูกนับเป็นเรือที่ออกวันนั้น และยอด ลค. ของวันก็รวมลำนั้นเข้าไปด้วย
+
+     ของสองอย่างนี้ไม่เท่ากัน: โปรแกรมคือ "แผนที่เคยวางไว้"
+     สถานะคือ "ของจริงตอนนี้" — เมื่อคนไปตั้งว่า fixing/unavailable เอง
+     นั่นคือคำตอบล่าสุดและตั้งใจกว่า ต้องชนะแผนที่ค้างอยู่
+     ส่วนแถวโปรแกรมที่ค้างบนกระดานไม่ได้หายไปไหน ยังเป็นข้อมูลจริงที่หน้าอื่นอ่าน
+     จึงเก็บเป็นธง ST.stale แล้วเตือนแยก + มีปุ่มให้เอาออก */
   run  :{t:'ออกทริปวันนี้',            bg:'#E1F5EE', fg:'#0F6E56', bd:'#B7E2D2', ord:1, grp:'go'},
   away :{t:'ไปวิ่งท่าอื่นวันนี้',        bg:'#EAF0F9', fg:'#1B4A87', bd:'#CFDCEF', ord:2, grp:'go',    band:'#4A6E9E'},
   idle :{t:'ว่าง · เรือพร้อม',          bg:'#EEF2F7', fg:'#4A5D7A', bd:'#D6DFEA', ord:3, grp:'ready'},
@@ -87555,18 +87564,21 @@ function pjBoatSt(date, boat, op){
   var rsn=String((st&&st.reason)||'').toLowerCase();
   // เหตุผลอาจอยู่ที่ log หรือที่ MJ ที่สั่งให้เรือหยุด · ดูทั้งสองที่
   if(!rsn) mj.forEach(function(m){ if(!rsn && m.boatStatusReason) rsn=String(m.boatStatusReason).toLowerCase(); });
+  /* §pjStWin · สถานะจริงมาก่อน · โปรแกรมที่ค้างบนกระดานไม่ทำให้เรือกลายเป็นเรือที่วิ่ง */
   var k;
-  if(op && s && s!=='available') k='clash';
-  else if(/dry.?dock|คาน/.test(rsn)) k='dd';
+  if(/dry.?dock|คาน/.test(rsn)) k='dd';
   else if(/donor/.test(rsn)) k='donor';
   else if(s==='fixing' || s==='unavailable'){
     // มีงานเปิดอยู่ → แยกว่าเสียหรือตามแผน · ไม่มีงานเลย → บอกได้แค่ว่าไม่พร้อม
     if(mj.length) k = mj.every(pjMjPlanned) ? 'maint' : 'broke';
     else k = (s==='fixing') ? 'broke' : 'off';
   }
+  else if(s && s!=='available') k='off';   // สถานะอื่นที่ไม่รู้จัก · ถือว่าใช้ไม่ได้ ปลอดภัยกว่าเดา
   else if(op) k='run';
   else k='idle';
-  return {k:k, log:st, s:s, mj:mj, reason:rsn,
+  /* มีโปรแกรมบนกระดาน แต่ลำนี้ไม่ได้อยู่ในสถานะที่ออกได้ = แผนค้าง ยังไม่มีใครเอาออก */
+  var stale=!!(op && k!=='run');
+  return {k:k, stale:stale, log:st, s:s, mj:mj, reason:rsn,
           loc:(st&&st.loc)||'', note:(st&&(st.note||st.reason))||''};
 }
 /* MJ ที่เลือกไว้ว่าวันนี้ทำใบไหน · ไม่ได้เลือก = ใบแรกที่เปิดอยู่ */
@@ -87576,6 +87588,32 @@ function pjMjOf(date, bid, mjList){
   return hit || (mjList||[])[0] || null;
 }
 function pjMjPick(bid, mjId){ pjSet(_poDate,bid,{mj:mjId||''}); renderPierJob(); }
+/* §pjStWin · เอาแถวโปรแกรมที่ค้างออกจากกระดาน Boat Operation ของวันนั้น
+   ต้องลบของจริงใน TRIPS ไม่ใช่แค่ซ่อนบนการ์ด · Trip P&L · Dashboard · Departures
+   อ่าน TRIPS ตัวเดียวกันหมด ถ้าไม่ลบ เลขที่หน้าอื่นก็ยังนับลำนี้เป็นเรือที่ออกอยู่ดี
+   ⚠ ถ้ายังมีใบจองผูกกับลำนี้อยู่ ห้ามลบเงียบ ๆ — ใบจองจะกลายเป็นไร้เรือ
+     ต้องไปย้ายลำที่หน้า Booking ก่อน */
+function pjOpDrop(bid){
+  if(!poCanEdit()) return;
+  var date=_poDate, day=(typeof TRIPS!=='undefined' && TRIPS[date])?TRIPS[date]:null;
+  var op=day&&day[bid]; if(!op) return;
+  var b=(typeof getBoat==='function')?getBoat(bid):null;
+  var rt=(typeof getRoute==='function')?getRoute(op.route):null;
+  var px=pjPax(date,bid,_poPier);
+  if(px.n>0){
+    alert('เอาโปรแกรมออกไม่ได้ · ยังมีใบจองผูกกับลำนี้อยู่ '+px.n+' ใบ ('+(px.ad+px.chd+px.inf+px.foc)+' คน)\n\n'
+      +'ต้องไปย้ายลำให้ใบจองพวกนี้ที่หน้า Booking ก่อน ไม่งั้นใบจองจะกลายเป็นไม่มีเรือ');
+    return;
+  }
+  if(!confirm('เอาโปรแกรมออกจากกระดานวันนี้?\n\n'
+    +((b&&b.name)||bid)+' · '+((rt&&rt.name)||op.route||'—')+' · '+date+'\n\n'
+    +'แถวนี้จะถูกลบออกจาก Boat Operation ของวันนั้น · ไม่มีใบจองผูกอยู่')) return;
+  delete day[bid];
+  if(!Object.keys(day).length) delete TRIPS[date];
+  if(typeof save==='function') save('operations');
+  renderPierJob();
+  if(typeof flShowToast==='function') flShowToast('เอาโปรแกรมออกจากกระดานแล้ว');
+}
 /* โปรแกรมของลำนี้วันนั้น · ไม่สนว่าเป็นท่าไหน · ใช้จับเคส "ย้ายไปวิ่งท่าอื่น" */
 function pjDayOp(date, bid){
   var day=(typeof TRIPS!=='undefined' && TRIPS[date])?TRIPS[date]:{};
@@ -87760,7 +87798,13 @@ function pjCSS(){
   +H+' .bc .foot button.done:hover{background:#0B5744;border-color:#0B5744;color:#fff}'
   +H+' .bc .foot button.edit{background:#FFF6E5;border-color:#EFD9AE;color:#8A5A00}'
   +H+' .bc .foot button.edit:hover{background:#FBEDD3;border-color:#E3C88F;color:#7A4E00}'
-  +H+' .bc.clash{border-color:#E8B4AE;box-shadow:0 0 0 2px rgba(192,39,28,.10)}'
+  /* §pjStWin · การ์ดที่มีแผนค้าง · ขอบเตือนแต่ไม่เปลี่ยนสีสถานะ · สถานะยังเป็นซ่อม/ไม่พร้อมตามจริง */
+  +H+' .bc.stale{border-color:#E8B4AE;box-shadow:0 0 0 2px rgba(192,39,28,.10)}'
+  +H+' .pj-stale{display:inline-flex;align-items:center;gap:5px;background:#FCEFEE;color:#A0342A;'
+    +'border:1px solid #F0CFCB;border-radius:999px;padding:2px 4px 2px 9px;font-size:10.5px;font-weight:700;white-space:nowrap}'
+  +H+' .pj-stale button{border:none;background:#A0342A;color:#fff;border-radius:999px;'
+    +'padding:2px 9px;font:700 10px inherit;font-family:inherit;cursor:pointer}'
+  +H+' .pj-stale button:hover{background:#7E2820}'
   +H+' .pj-stq{font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap}'
   +H+' .pj-stmeta{font-size:10px;color:#8B93A1;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
   +H+' .pj-chips{display:flex;gap:5px;background:#fff;border:1px solid #E1E4EA;border-radius:10px;padding:4px;flex-wrap:wrap}'
@@ -88111,7 +88155,7 @@ function pjGuideOpen(bid){ try{ _pckDate=_poDate; goSetupOpen(bid); }catch(_){} 
 function pjCard(B, pier, ro){
   var bid=B.bid, rt=B.route||{}, J=pjOf(_poDate,bid), SUB=pjSubList(_poDate,bid), n=Object.keys(SUB).length;
   var ST=B._st||pjBoatSt(_poDate,B.boat,!!rt.id), SM=PJ_ST[ST.k]||PJ_ST.idle;
-  var going=(ST.k==='run'||ST.k==='clash');
+  var going=(ST.k==='run');   /* §pjStWin · clash ไม่มีแล้ว · ลำที่ช่างเอาขึ้นทำไม่ใช่ลำที่วิ่ง */
   /* §pjLock · ro = ไม่มีสิทธิ์แก้เลย · lk = มีสิทธิ์ แต่ใบนี้ปิดไปแล้ว
      ทุกช่องที่เขียนค่าลงใบงานใช้ lro · ส่วนจานสีของโปรแกรม/สถานะยังใช้ ro
      เพราะนั่นเป็นค่าของเส้นทาง ไม่ใช่ของใบงานลำนี้วันนี้ */
@@ -88124,7 +88168,7 @@ function pjCard(B, pier, ro){
   var wbc=J.wbc||'', wbt=J.wb||'';
   var pid='pjpop-'+bid.replace(/[^A-Za-z0-9_-]/g,'_');
   var wid='pjwb-'+bid.replace(/[^A-Za-z0-9_-]/g,'_');
-  var h='<div class="bc'+(going?'':' dim')+(ST.k==='clash'?' clash':'')+(lk?' lk':'')+'" data-st="'+ST.k+'">'
+  var h='<div class="bc'+(going?'':' dim')+(ST.stale?' stale':'')+(lk?' lk':'')+'" data-st="'+ST.k+'">'
    +'<div class="top" style="background:'+col+'">'
      +'<div class="trow"><div class="l"><div class="bn">'+poE(B.boat.name||bid)+'</div>'
        +'<div class="be">'+poE(B.boat.type||'')+(B.boat.engineCount?(' &middot; '+B.boat.engineCount+' Eng'):'')
@@ -88165,6 +88209,12 @@ function pjCard(B, pier, ro){
      /* §pjLock2 · คนที่มีสิทธิ์แก้อ่านสถานะจากตัวปุ่มมุมขวาได้อยู่แล้ว · ป้ายนี้ไว้ให้คนที่ไม่มีปุ่ม */
      +((lk&&ro)?('<span class="pj-lock" title="ใบนี้ยืนยันแล้ว">&#128274; จัดเสร็จแล้ว</span>'):'')
      +(going&&pax.n?('<span class="pj-stmeta">'+pax.n+' booking</span>'):'')
+     /* §pjStWin · แผนค้าง · บอกว่าค้างเส้นไหน แล้วให้เอาออกได้ตรงนี้เลย */
+     +(ST.stale?('<span class="pj-stale" title="'+poE('วันนี้ยังมีโปรแกรม "'+((rt&&rt.name)||B.rid||'')
+          +'" วางไว้บนกระดาน Boat Operation ทั้งที่เรือไม่พร้อม '
+          +'· หน้าอื่น (Trip P&L · Dashboard · Departures) ก็ยังอ่านแถวนี้อยู่')+'">'
+        +'&#9888; โปรแกรมค้าง'+((rt&&rt.name)?(' \u00b7 '+poE(rt.name)):'')
+        +(ro?'':('<button onclick="pjOpDrop(\''+poE(bid)+'\')">เอาออก</button>'))+'</span>'):'')
      /* §pjPierNow · ลำนี้ไม่ใช่ของประจำท่า หรือไม่ได้อยู่ที่ท่า · ต้องบอกให้เห็นตั้งแต่แถบสถานะ */
      +((B._asn && B._asn.toPier===pier && B._asn.fromPier && B._asn.fromPier!==pier)
         ? ('<span class="pj-move" title="ใบย้ายท่า '+poE(B._asn.startDate||'')+' – '+poE(B._asn.endDate||'')
@@ -88316,12 +88366,14 @@ function renderPierJob(pier){
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
   var host=document.getElementById('pj-host-'+P.k); if(!host) return;
   var all=pjAllBoats(_poDate,_poPier), ro=!poCanEdit();
-  var cnt={all:all.length, go:0, ready:0, work:0, down:0, clash:0};
+  var cnt={all:all.length, go:0, ready:0, work:0, down:0, stale:0};
+  var staleL=[];
   var tot=0, subN=0, noCap=0, licBad=0;
   all.forEach(function(B){
     cnt[pjGrp(B._st.k)]=(cnt[pjGrp(B._st.k)]||0)+1;
-    if(B._st.k==='clash') cnt.clash++;
-    if(B._st.k!=='run' && B._st.k!=='clash') return;      // ตัวเลขงานวันนี้ นับเฉพาะลำที่ออกจากท่านี้
+    /* §pjStWin · แผนค้างไม่ใช่สถานะแล้ว · นับแยกจากกลุ่มสถานะ */
+    if(B._st.stale){ cnt.stale++; staleL.push((B.boat&&B.boat.name)||B.bid); }
+    if(B._st.k!=='run') return;      // ตัวเลขงานวันนี้ นับเฉพาะลำที่ออกจากท่านี้
     var p=pjPax(_poDate,B.bid,_poPier); tot+=p.ad+p.chd+p.inf+p.foc;
     var J=pjOf(_poDate,B.bid);
     subN+=pjSubN(_poDate,B.bid); if(!J.cap) noCap++;
@@ -88367,8 +88419,10 @@ function renderPierJob(pier){
         + chip('work','ซ่อมบำรุง · ใช้คน',cnt.work,'#8A5A00')
         + chip('down','ไม่พร้อม',cnt.down,'#8B93A1')
       +'</div>'
-      +(cnt.clash?('<span class="pj-warnc red">'
-        +'&#9888; ขัดกัน '+cnt.clash+' ลำ · ช่างแจ้งว่าไม่พร้อม แต่มีโปรแกรมวางไว้</span>'):'')
+      +(cnt.stale?('<span class="pj-warnc red" title="'+poE(staleL.join(' \u00b7 ')
+          +' — เรือไม่พร้อมแล้ว แต่แถวโปรแกรมยังอยู่ใน Boat Operation '
+          +'· กด "เอาออก" บนการ์ดของลำนั้นเพื่อลบแถวทิ้ง')+'">'
+        +'&#9888; โปรแกรมค้าง '+cnt.stale+' ลำ · เรือไม่พร้อมแล้ว แต่ยังไม่ได้เอาโปรแกรมออก</span>'):'')
       /* §pjAllDefault · เรือที่ยังไม่ได้ตั้งท่าประจำ จะไม่ขึ้นในหน้าท่าไหนเลย · ต้องบอก ไม่ใช่หายเงียบ */
       +(function(){ var np=(typeof BOATS!=='undefined'?BOATS:[]).filter(function(b){ return !(b.pier||''); });
         if(!np.length) return '';
