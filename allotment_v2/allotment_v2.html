@@ -86219,7 +86219,16 @@ function paCSS(){
      ในไฟล์มีที่เขียน 'Noto Sans Thai' ไว้แล้วหลายจุด (poModal · ใบพิมพ์) แต่ตัวฟอนต์ไม่เคยถูกโหลด
      จึงเติมเข้า <link> ตัวหลัก แล้วใช้ชุดเดียวกันทั้งหน้าท่าเรือ · จะได้ไม่มีสองฟอนต์ไทยในจอเดียว */
   return H+"{font-family:'DM Sans','Noto Sans Thai',sans-serif}"
-  +H+" table.pa,"+H+" .pa-lg,"+H+" .pa-pop{font-family:'DM Sans','Noto Sans Thai',sans-serif}"
+  +H+" table.pa,"+H+" .pa-lg{font-family:'DM Sans','Noto Sans Thai',sans-serif}"
+  /* ══ §paPopFix · ป๊อปอัพเลือกรหัสถูกต่อเข้า document.body ═══════════════════════
+     แต่กฎ CSS ทุกข้อของมันถูกเติม H ('.pj-host') ไว้ข้างหน้า
+     ป๊อปอัพจึงอยู่นอก .pj-host เสมอ → ไม่เข้าเงื่อนไขสักข้อ → ไม่มีสไตล์เลย
+     ที่สำคัญคือ position:fixed หายไปด้วย กล่องเลยกลายเป็น block ธรรมดาไหลไปต่อท้ายหน้า
+     inline style top/left ที่โค้ดคำนวณไว้ก็ไม่มีผลกับ element ที่เป็น static
+     ผลที่คนใช้เจอ: คลิกช่องแล้ว "ไม่มีอะไรเกิดขึ้น" เพราะรายการไปโผล่ใต้สุดของหน้า
+     (วัดจริงในเครื่องทดสอบ: กล่องไปอยู่ที่ top 1285px ขณะจอสูง 1100px)
+     คลาส .pa-pop / .pa-lay ตั้งชื่อเฉพาะอยู่แล้ว ไม่ต้องมี scope ก็ไม่ชนใคร */
+  +" .pa-pop{font-family:'DM Sans','Noto Sans Thai',sans-serif}"
   +H+' .pa-wrap{overflow:auto;max-height:calc(100vh - 250px)}'
   +H+' table.pa{border-collapse:separate;border-spacing:0;min-width:1400px;background:#fff}'
   /* §paSheet · เส้นครบทุกด้านเหมือนสเปรดชีต · ของเดิมมีแต่เส้นล่าง อ่านเป็นคอลัมน์ไม่ได้ */
@@ -86290,7 +86299,7 @@ function paCSS(){
   +H+' td.pa-sc.z{color:#DCD5C8}'
   +H+' td.pa-sc.tot{width:46px;min-width:46px;background:#F3E9D8;font-weight:700;color:#16233a}'
   +H+' tr.pa-tot td{background:#F2F5F9;border-top:2px solid #DCE3EC}'
-  +H+' .pa-pop .s{font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9AA3B0;padding:7px 8px 3px}'
+  +' .pa-pop .s{font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9AA3B0;padding:7px 8px 3px}'
   +H+' .pa-lg .i .rtag{font-size:9px;font-weight:700;color:#20477E;background:#EEF2F7;border-radius:4px;padding:1px 6px;margin-left:5px}'
   +H+' .pa-lg .i.off{opacity:.55}'
   /* §paLayers · ช่องที่ยังไม่ได้วางงาน · วันนั้นท่ามีใบงานอยู่ แปลว่าเป็นช่องที่ค้างอยู่จริง */
@@ -86327,18 +86336,26 @@ function paCSS(){
   +H+' .pa-lg .i{display:flex;align-items:center;gap:6px;font-size:11px;color:#5A6270;background:#fff;border:1px solid #E7EAEF;border-radius:8px;padding:4px 10px}'
   +H+' .pa-lg .i b{display:inline-block;min-width:36px;text-align:center;border-radius:5px;font-size:9.5px;font-weight:800;line-height:18px}'
   +H+' .pa-lg .i em{font-style:normal;color:#C0271C;font-weight:700}'
-  +H+' .pa-pop{position:fixed;z-index:99996;background:#fff;border:1px solid #E1E4EA;border-radius:12px;box-shadow:0 14px 34px rgba(20,30,50,.2);padding:10px;width:210px}'
-  +H+' .pa-pop .h{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8B93A1;margin-bottom:7px}'
+  /* §paPopFix · รหัสเยอะกว่าจอสูงได้ (เส้นทาง + ทะเบียนรหัส รวม 16 ปุ่มขึ้นไป)
+     จำกัดความสูงแล้วให้เลื่อนในกล่อง · ไม่งั้นปุ่มท้าย ๆ หลุดจอไปเงียบ ๆ */
+  +' .pa-pop{position:fixed;z-index:99996;background:#fff;border:1px solid #E1E4EA;border-radius:12px;'
+    +'box-shadow:0 14px 34px rgba(20,30,50,.2);padding:10px;width:210px;'
+    +'max-height:min(70vh,560px);overflow-y:auto;overscroll-behavior:contain}'
+  +' .pa-pop .h{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8B93A1;margin-bottom:7px}'
   /* §paLayers · สลับว่ากำลังวางโครงหรือแก้ทับ · ต้องเลือกก่อนกดรหัส ไม่ใช่รู้ทีหลัง */
-  +H+' .pa-lay{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px}'
-  +H+' .pa-lay button{display:block;width:100%;text-align:center;border:1px solid #DCE0E6;background:#fff;'
+  +' .pa-lay{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px}'
+  +' .pa-lay button{display:block;width:100%;text-align:center;border:1px solid #DCE0E6;background:#fff;'
      +'border-radius:8px;padding:5px 4px;font:700 10.5px inherit;color:#6E7684;cursor:pointer;line-height:1.35}'
-  +H+' .pa-lay button span{display:block;font-weight:500;font-size:8.5px;color:#A9B0BB}'
-  +H+' .pa-lay button.on{background:#16265C;border-color:#16265C;color:#fff}'
-  +H+' .pa-lay button.on span{color:#B9C6E4}'
-  +H+' .pa-pop button{display:flex;align-items:center;gap:8px;width:100%;border:1px solid #E7EAEF;background:#fff;border-radius:8px;padding:5px 8px;margin-bottom:4px;font:600 11.5px inherit;color:#242730;cursor:pointer;text-align:left}'
-  +H+' .pa-pop button:hover{border-color:#16265C}'
-  +H+' .pa-pop button i{font-style:normal;min-width:36px;text-align:center;border-radius:5px;font-size:9.5px;font-weight:800;line-height:18px}';
+  +' .pa-lay button span{display:block;font-weight:500;font-size:8.5px;color:#A9B0BB}'
+  +' .pa-lay button.on{background:#16265C;border-color:#16265C;color:#fff}'
+  +' .pa-lay button.on span{color:#B9C6E4}'
+  +' .pa-pop button{display:flex;align-items:center;gap:8px;width:100%;border:1px solid #E7EAEF;background:#fff;border-radius:8px;padding:5px 8px;margin-bottom:4px;font:600 11.5px inherit;color:#242730;cursor:pointer;text-align:left}'
+  +' .pa-pop button:hover{border-color:#16265C}'
+  +' .pa-pop button i{font-style:normal;min-width:36px;text-align:center;border-radius:5px;font-size:9.5px;font-weight:800;line-height:18px}'
+  /* §paPopFix · รหัสที่ช่องนี้ใช้อยู่ · ไม่ต้องไปจำว่าเมื่อกี้ช่องเขียนว่าอะไร */
+  +' .pa-pop button.cur{border-color:#16265C;background:#F3F6FC;box-shadow:inset 0 0 0 1px #16265C}'
+  +' .pa-pop button.cur:after{content:"\u2713";margin-left:auto;color:#16265C;font-weight:800}'
+  +' .pa-pop .cap{font-size:9.5px;color:#8B93A1;font-weight:600;padding:0 2px 7px;line-height:1.45}';
 }
 
 function paCellHtml(date, pier, st, day, hasJob, today, E){
@@ -86607,18 +86624,24 @@ function paPick(ev, date, sid){
   //   ค่าตั้งต้นคือแก้ทับ · คนที่มาคลิกทีละช่องมักกำลังแก้ให้ถูก ไม่ใช่วางแผน
   var _pl=(m&&m.plan)?1:0;
   var mk=function(code){ return 'paSet(\''+date+'\',\''+sid+'\',\''+code+'\',_paPlan)'; };
+  /* §paPopFix · cur ถูกคำนวณไว้ตั้งแต่แรกแต่ไม่เคยถูกใช้ · เอามาบอกว่าช่องนี้เป็นรหัสอะไรอยู่ */
+  var _curC=(cur&&cur.c)||'';
+  var _cls=function(code){ return (code&&code===_curC)?' class="cur"':''; };
+  var _srcTxt={manual:'แก้ทับรายช่อง', plan:'โครงที่วางไว้', boat:'มาจากใบงานเรือ', todo:'ยังไม่ได้วางงาน'}[cur&&cur.src]||'';
   d.innerHTML='<div class="h">'+poE(st.nick||st.name)+' · '+poE(date)+'</div>'
+    + (_curC?('<div class="cap">ตอนนี้คือ <b style="color:#16265C">'+poE(_curC)+'</b>'
+        +(_srcTxt?(' · '+poE(_srcTxt)):'')+'</div>'):'')
     + '<div class="pa-lay">'
       + '<button class="'+(_pl?'':'on')+'" onclick="paPlanMode(0,this)">แก้ทับ<span>ใบงานทับไม่ได้</span></button>'
       + '<button class="'+(_pl?'on':'')+'" onclick="paPlanMode(1,this)">วางโครง<span>ใบงานทับได้</span></button>'
     + '</div>'
     + (_rtOpts.length?('<div class="s">เส้นทางของท่านี้</div>'):'')
     + _rtOpts.map(function(c){
-        return '<button onclick="'+mk(poE(c.code))+'">'
+        return '<button'+_cls(c.code)+' onclick="'+mk(poE(c.code))+'">'
           +'<i style="background:'+c.bg+';color:'+c.color+'">'+poE(c.code)+'</i>'+poE(c.label||'')+'</button>'; }).join('')
     + (_rtOpts.length?('<div class="s">อื่น ๆ</div>'):'')
     + paCodes().filter(function(c){ return !_rtSeen[c.code]; }).map(function(c){
-        return '<button onclick="'+mk(poE(c.code))+'">'
+        return '<button'+_cls(c.code)+' onclick="'+mk(poE(c.code))+'">'
           +'<i style="background:'+c.bg+';color:'+c.color+'">'+poE(c.code)+'</i>'
           +(c.label?poE(c.label):'<span style="color:#C0271C">ยังไม่ใส่ความหมาย</span>')+'</button>'; }).join('')
     + '<button onclick="paSet(\''+date+'\',\''+sid+'\',\'\')" style="border-style:dashed;color:#8B93A1">'
@@ -86626,11 +86649,17 @@ function paPick(ev, date, sid){
   _paPlan=_pl;
   document.body.appendChild(d);
   var r=ev.currentTarget.getBoundingClientRect();
-  var top=Math.min(r.bottom+4, window.innerHeight-d.offsetHeight-10);
+  /* §paPopFix · กล่องสูงกว่าที่เหลือใต้ช่อง ให้เด้งขึ้นไปอยู่เหนือช่องแทนการล้นจอ */
+  var h=d.offsetHeight, below=window.innerHeight-r.bottom-10;
+  var top=(h<=below) ? (r.bottom+4) : Math.max(8, Math.min(r.top-h-4, window.innerHeight-h-10));
   d.style.left=Math.max(8, Math.min(r.left-90, window.innerWidth-d.offsetWidth-10))+'px';
   d.style.top=Math.max(8, top)+'px';
   setTimeout(function(){ document.addEventListener('click', paPopClose, {once:true}); },0);
 }
+/* §paPopFix · Esc ปิดได้ · คนที่เปิดผิดช่องจะได้ไม่ต้องเล็งคลิกที่ว่าง */
+document.addEventListener('keydown', function(e){
+  if(e.key==='Escape' && document.getElementById('pa-pop')) paPopClose();
+});
 function paPopClose(){ var d=document.getElementById('pa-pop'); if(d) d.remove(); }
 /* §paEditLock · ล็อกไว้ก่อน · ไม่เก็บลงข้อมูล รีเฟรชแล้วกลับมาล็อกเสมอ */
 var _paEdit=false;
