@@ -22681,9 +22681,25 @@ function flRenderDR(){
 
   // Computed metrics for the day
   const companyBoats=BOATS.filter(b=>b.ownership!=='charter'&&!b.retired&&FL_ENGINES.some(e=>e.boatId===b.id));
-  const tlBoats=companyBoats.filter(b=>(typeof getBoatCurrentPier==='function'?getBoatCurrentPier(b):b.pier)==='tublamu');
-  const vpBoats=companyBoats.filter(b=>(typeof getBoatCurrentPier==='function'?getBoatCurrentPier(b):b.pier)==='panwa');
-  const rnBoats=companyBoats.filter(b=>(typeof getBoatCurrentPier==='function'?getBoatCurrentPier(b):b.pier)==='ranong');
+  /* ══ §drDate · สองบั๊กซ้อนกันในสามบรรทัดนี้ ═══════════════════════════════════
+     1) เรียก getBoatCurrentPier(b) โดยไม่ส่งวันที่ · ในฟังก์ชันมี ds = ds || TODAY_STR
+        หน้านี้เลยเอา "ตัวเลขของวันที่เลือก" มาใส่ใน "ผังเรือของวันนี้" เสมอ
+        เปิดดูย้อนหลังจะเห็นเรือไปอยู่ท่าที่มันเพิ่งย้ายไปเมื่อวาน ไม่ใช่ท่าของวันนั้น
+     2) getBoatCurrentPier คืนค่าได้ 4 แบบ — tublamu / panwa / ranong / 'shop'
+        แต่ที่นี่แบ่งแค่ 3 ตะกร้า · ลำที่คืน 'shop' ไม่เข้าตะกร้าไหนเลย → หายจากหน้าไปทั้งลำ
+        ไม่ได้ขึ้นว่า "ไม่ออก" ด้วยซ้ำ คือไม่ถูกวาดตั้งแต่แรก
+        (เคสจริง: Aluminous2 พอถูกเอาขึ้นอู่ก็หายไปจากทุกวัน รวมวันที่ยังวิ่งอยู่)
+
+     'shop' ไม่ใช่ท่า แต่เป็น "เรือไม่ได้อยู่ที่ท่า" · ท่าประจำยังเป็นคนรับผิดชอบอยู่
+     จึงถอยไปจัดกลุ่มตามท่าประจำ แถวของลำนั้นขึ้นสถานะ Fixing/Unavailable อยู่แล้ว */
+  const _drPier=b=>{
+    if(typeof getBoatCurrentPier!=='function') return b.pier||'tublamu';
+    const p=getBoatCurrentPier(b, ds);
+    return (p==='shop') ? (b.pier||'tublamu') : p;
+  };
+  const tlBoats=companyBoats.filter(b=>_drPier(b)==='tublamu');
+  const vpBoats=companyBoats.filter(b=>_drPier(b)==='panwa');
+  const rnBoats=companyBoats.filter(b=>_drPier(b)==='ranong');
 
   // ── Per-boat effective PAX (booked from sales · manual actual overrides) — single source for KPIs + rows ──
   // eff = boat not available → 0 · else actual (FL_DAILY.paxActual, if entered) → else booked-from-bookings
@@ -22972,8 +22988,18 @@ function flRenderDR(){
     const ranChip = (isNotAvail && ran)
       ?`<div style="display:inline-flex;align-items:center;gap:5px;padding:2px 8px;background:${boatStat==='fixing'?'#FAEEDA':'#FCEBEB'};border-radius:6px;width:fit-content;margin-top:3px"><span style="width:5px;height:12px;background:${boatStat==='fixing'?'#854F0B':'#A32D2D'};border-radius:2px"></span><span style="font-size:9px;color:${boatStat==='fixing'?'#854F0B':'#A32D2D'};font-weight:700">ออกแล้ว · ${boatStat==='fixing'?'เข้าซ่อมเย็น':'หยุดเย็น'}</span></div>`
       :'';
+    /* §drDate · ลำที่ไม่ได้อยู่ที่ท่า · บอกว่าไปอยู่อู่ไหน
+       เดิมลำแบบนี้หายจากหน้าไปเลย พอเอากลับมาแล้วต้องบอกด้วยว่าทำไมยอดเป็น 0 */
+    const _shopAt=(isNotAvail && typeof getBoatCurrentPier==='function'
+        && getBoatCurrentPier(b, ds)==='shop'
+        && typeof getBoatShopLocation==='function')
+      ? String(getBoatShopLocation(b)||'อู่').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      : '';   /* esc() ไม่อยู่ใน scope ของ buildBoatRow · escape เองตรงนี้ */
+    const shopChip=_shopAt
+      ? `<div style="display:inline-flex;align-items:center;gap:5px;padding:2px 8px;background:#EEF0F3;border-radius:6px;width:fit-content;margin-top:3px"><span style="font-size:10px;color:#5A6270;font-weight:700">&#9875; อยู่อู่ ${_shopAt}</span></div>`
+      : '';
     const tripsHtml=(isNotAvail && !ran)
-      ?`<div style="display:flex;align-items:center;gap:6px;padding:3px 8px;background:${boatStat==='fixing'?'#FAEEDA':'#FCEBEB'};border-radius:6px;width:fit-content"><span style="width:5px;height:14px;background:${boatStat==='fixing'?'#854F0B':'#A32D2D'};border-radius:2px"></span><span style="font-size:10px;color:${boatStat==='fixing'?'#854F0B':'#A32D2D'};font-weight:700;text-transform:uppercase;letter-spacing:.04em">${boatStat==='fixing'?'Fixing':'Unavailable'}</span></div>`
+      ?`<div style="display:flex;align-items:center;gap:6px;padding:3px 8px;background:${boatStat==='fixing'?'#FAEEDA':'#FCEBEB'};border-radius:6px;width:fit-content"><span style="width:5px;height:14px;background:${boatStat==='fixing'?'#854F0B':'#A32D2D'};border-radius:2px"></span><span style="font-size:10px;color:${boatStat==='fixing'?'#854F0B':'#A32D2D'};font-weight:700;text-transform:uppercase;letter-spacing:.04em">${boatStat==='fixing'?'Fixing':'Unavailable'}</span></div>`+shopChip
       :(tripEntries.length?tripEntries.map(t=>{
       const ri=getRouteInfo(t.route);
       const bg=ri.isCharter?'#534AB7':`${ri.color}1A`;
