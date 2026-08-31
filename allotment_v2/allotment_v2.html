@@ -3087,7 +3087,7 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
 /* Matrix view (Tab 1 Matrix) */
 #view-booking .bkv2-mx{padding:12px 12px 4px;background:var(--white);overflow-x:auto}
 #view-booking .bkv2-mx table{width:100%;border-collapse:separate;border-spacing:1px;font-family:'DM Mono',monospace;table-layout:fixed}
-#view-booking .bkv2-mx col.label{width:230px}
+#view-booking .bkv2-mx col.label{width:150px}   /* §mxBrk2 · 230 ก็ตัดคำอยู่ดี · ยกที่ให้คอลัมน์ตัวเลข */
 #view-booking .bkv2-mx col.day{width:auto}
 #view-booking .bkv2-mx th.rowh{font-family:'DM Sans',sans-serif;text-align:left;padding:5px 8px;color:var(--ink-soft);font-weight:500;font-size:9px;letter-spacing:.04em;width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #view-booking .bkv2-mx td.rowh{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:230px}
@@ -4079,17 +4079,31 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
 #view-booking .bkv2-mx td.cell.empty.sel{background:#3A6FF7;color:#fff}
 /* ===== §mxRead · Matrix อ่านง่ายขึ้น ===== */
 /* คอลัมน์รวมเดือน */
-#view-booking .bkv2-mx col.sumcol{width:108px}
+#view-booking .bkv2-mx col.sumcol{width:86px}
 #view-booking .bkv2-mx th.rowh.sumh{text-align:right;padding-right:9px}
 #view-booking .bkv2-mx td.sum{background:#F1F2F5;text-align:right;padding:4px 9px;border-radius:4px;white-space:nowrap;font-family:'DM Mono',monospace}
 #view-booking .bkv2-mx td.sum b{font-size:12px;font-weight:800;font-variant-numeric:tabular-nums}
 #view-booking .bkv2-mx td.sum i{font-style:normal;font-size:9px;color:#98A2AD;display:block;margin-top:1px}
-/* §mxBrk · แยกประเภทผู้โดยสารใต้ยอดรวม · ป้ายเทาเล็ก ตัวเลขเข้ม สายตากวาดหาตัวเลขก่อน */
-#view-booking .bkv2-mx td.sum u{text-decoration:none;display:flex;flex-wrap:wrap;gap:2px 6px;justify-content:flex-end;margin-top:3px}
-#view-booking .bkv2-mx td.sum u span{font-size:8.5px;color:#A6AEB6;letter-spacing:.02em;white-space:nowrap}
-#view-booking .bkv2-mx td.sum u b{font-size:9px;font-weight:700;color:#5B6670;margin-left:2px;font-variant-numeric:tabular-nums}
-#view-booking .bkv2-mx tr.tot td.sum u span{color:#7F8FA8}
-#view-booking .bkv2-mx tr.tot td.sum u b{color:#DCE4F0}
+/* §mxBrk2 · คอลัมน์ AD / CHD / INF / FOC */
+#view-booking .bkv2-mx col.pxcol{width:40px}
+#view-booking .bkv2-mx th.pxh{background:#EFF1F5;color:#6B7280;font-size:9px;font-weight:700;text-align:right;padding:5px 7px 5px 0;border-bottom:1px solid #E7E4DC;white-space:nowrap}
+#view-booking .bkv2-mx td.px{background:#F7F8FA;text-align:right;padding:4px 7px;font-family:'DM Mono',monospace;font-size:10px;font-weight:700;color:#5B6670;font-variant-numeric:tabular-nums}
+#view-booking .bkv2-mx td.px.z{color:#C8CDD4;font-weight:500}
+#view-booking .bkv2-mx tr.tot td.px{background:#161E31;color:#DCE4F0;font-size:10.5px}
+#view-booking .bkv2-mx tr.tot td.px.z{color:#5A6880}
+/* §mxBrk2 · แผงขวาพับแล้ว · เหลือแถบบางให้กดกางกลับ */
+#view-booking .bkv2-split.nopanel{grid-template-columns:1fr 30px}
+#view-booking .bkv2-selrail{background:var(--white);border-left:1px solid var(--border);border-radius:0 var(--r-sm) var(--r-sm) 0;
+  min-height:280px;align-self:stretch;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+  gap:10px;padding:12px 0;cursor:pointer;color:#8B96A0}
+#view-booking .bkv2-selrail:hover{background:#F7FAFE;color:#2952C8}
+#view-booking .bkv2-selrail .ar{font-size:15px;font-weight:800;line-height:1}
+#view-booking .bkv2-selrail .tx{font-family:'DM Sans',sans-serif;font-size:10.5px;font-weight:700;letter-spacing:.05em;
+  writing-mode:vertical-rl;text-orientation:mixed;white-space:nowrap}
+#view-booking .bkv2-selday-lab{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#view-booking .bkv2-selhide{border:none;background:transparent;color:#98A2AD;font-family:inherit;font-size:13px;
+  font-weight:800;cursor:pointer;padding:0 2px;line-height:1}
+#view-booking .bkv2-selhide:hover{color:#2952C8}
 /* เสาร์-อาทิตย์ · แรเงาทั้งคอลัมน์ให้เห็นรอบสัปดาห์ */
 #view-booking .bkv2-mx td.cell.wk{box-shadow:inset 0 0 0 99px rgba(31,42,68,.035)}
 #view-booking .bkv2-mx th.dh.weekend{background:#F5F6F8;border-radius:3px}
@@ -72970,6 +72984,7 @@ const _bkV2 = {
   selected: null,       // { date:'YYYY-MM-DD', routeId?:'r5' }
   avgMode: 'week',      // 'week' | 'day' | 'total' (per-route avg cards mode)
   expanded: new Set(),  // family ids currently expanded in Matrix view
+  panelHid: false,      /* §mxBrk2 · พับแผง Selected Day · ตารางจะได้กว้างเต็มจอ */
   filterRoute: null,    // for Tab 2 'bytrip'
   filterDate: null,     // for Tab 2 'bytrip'
   search: '',           // for Tab 3 'all'
@@ -75450,7 +75465,7 @@ function bkV2RenderSelDay(){
   if(!sel){
     return `
       <div class="bkv2-selday">
-        <div class="bkv2-selday-lab">Selected Day</div>
+        <div class="bkv2-selday-lab">Selected Day<button class="bkv2-selhide" onclick="bkV2TogglePanel()" title="พับแผงนี้">&rsaquo;&rsaquo;</button></div>
         <div class="bkv2-selday-ttl">No day selected</div>
         <div class="bkv2-selday-empty">Click a day in the calendar to see breakdown<br>AD &middot; CHD &middot; INF &middot; FOC + PK &middot; KL &middot; NT</div>
       </div>
@@ -75484,7 +75499,7 @@ function bkV2RenderSelDay(){
   if(!x){
     return `
       <div class="bkv2-selday">
-        <div class="bkv2-selday-lab">Selected Day</div>
+        <div class="bkv2-selday-lab">Selected Day<button class="bkv2-selhide" onclick="bkV2TogglePanel()" title="พับแผงนี้">&rsaquo;&rsaquo;</button></div>
         <div class="bkv2-selday-ttl">${dateLbl}${isToday?'<span class="bkv2-selday-today">Today</span>':''}</div>
         <div class="bkv2-selday-empty">No bookings on this day</div>
         ${lockRouteSection}
@@ -75618,7 +75633,7 @@ function bkV2RenderSelDay(){
 
   return `
     <div class="bkv2-selday">
-      <div class="bkv2-selday-lab">Selected Day</div>
+      <div class="bkv2-selday-lab">Selected Day<button class="bkv2-selhide" onclick="bkV2TogglePanel()" title="พับแผงนี้">&rsaquo;&rsaquo;</button></div>
       <div class="bkv2-selday-ttl">${dateLbl}${isToday?'<span class="bkv2-selday-today">Today</span>':''}</div>
       <div class="bkv2-week-summary">
         <div>
@@ -75641,6 +75656,15 @@ function bkV2RenderSelDay(){
 
 // Event handler for avg mode toggle
 function bkV2SetAvgMode(m){ _bkV2.avgMode = m; bkV2Render(); }
+/* §mxBrk2 · แผงขวากิน 360px ตลอดเวลา ทั้งที่วันไหนไม่ได้เลือกก็ขึ้นแค่ "No day selected"
+   พับแล้วเหลือแถบบาง ๆ ให้กดกางกลับ · ไม่ซ่อนหายไปเลย ไม่งั้นหาทางกลับไม่เจอ */
+function bkV2TogglePanel(){ _bkV2.panelHid = !_bkV2.panelHid; bkV2Render(); }
+function bkV2PanelSlot(){
+  return _bkV2.panelHid
+    ? `<div class="bkv2-selrail" onclick="bkV2TogglePanel()" title="กางแผงรายละเอียดวัน">`
+      + `<span class="ar">&lsaquo;</span><span class="tx">รายละเอียดวัน</span></div>`
+    : bkV2RenderSelDay();
+}
 
 // ── Tab 1 · Matrix view ──
 function bkV2RenderMatrix(){
@@ -75668,6 +75692,8 @@ function bkV2RenderMatrix(){
     dayTotals.push(0); dayBrk.push({ad:0,chd:0,inf:0,foc:0});
   }
   headers += `<th class="rowh sumh">รวมเดือน</th>`;   /* §mxRead */
+  headers += `<th class="pxh" title="ผู้ใหญ่">AD</th><th class="pxh" title="เด็ก">CHD</th>`
+           + `<th class="pxh" title="ทารก">INF</th><th class="pxh" title="ฟรี / FOC">FOC</th>`;  /* §mxBrk2 */
   const _dk = d => `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
 
   // Family-grouped rows · parent rows shown by default · click to expand sub-routes
@@ -75675,14 +75701,17 @@ function bkV2RenderMatrix(){
   /* §mxBrk · ผลรวมต้องบอกด้วยว่าเป็นผู้ใหญ่/เด็ก/ทารก/FOC กี่คน
      เลขรวมอย่างเดียวใช้วางแผนที่นั่งกับคิดเงินไม่ได้ — เด็กกับทารกคิดคนละราคา
      ประเภทที่เป็นศูนย์ไม่ต้องขึ้น · เดือนที่ไม่มีทารกเลยจะได้ไม่มี "INF 0" มารกทุกแถว */
-  const _brkOf = o => {
-    if(!o) return '';
-    const P = [['AD',o.ad],['CHD',o.chd],['INF',o.inf],['FOC',o.foc]].filter(x => (+x[1]||0) > 0);
-    if(!P.length) return '';
-    return `<u>${P.map(x => `<span>${x[0]}<b>${(+x[1]).toLocaleString()}</b></span>`).join('')}</u>`;
-  };
+  /* §mxBrk2 · ประเภทผู้โดยสารเป็นคอลัมน์ของตัวเอง ไม่ใช่ป้ายซ้อนในช่องรวม
+     ยัดสี่ป้ายลงช่องกว้าง 108px มันตกบรรทัด แถวเลยสูงจาก 55 เป็น 74px ทั้งตาราง
+     แยกเป็นคอลัมน์แล้วอ่านลงแนวตั้งได้ด้วย เทียบข้ามโปรแกรมง่ายกว่าอ่านทีละแถว
+     ศูนย์ขึ้นเป็นจุด ไม่ใช่ 0 · ตาจะได้ข้ามไปหาตัวที่มีเลขจริง */
+  const _pxCells = o => ['ad','chd','inf','foc'].map(k => {
+    const v = +((o||{})[k]) || 0;
+    return v ? `<td class="px">${v.toLocaleString()}</td>` : `<td class="px z">&middot;</td>`;
+  }).join('');
   const _sumCell = (val, foot, col, brk) =>
-    `<td class="sum"><b${col?` style="color:${col}"`:''}>${val.toLocaleString()}</b>${_brkOf(brk)}<i>${foot}</i></td>`;
+    `<td class="sum"><b${col?` style="color:${col}"`:''}>${val.toLocaleString()}</b><i>${foot}</i></td>`
+    + _pxCells(brk);
   /* รวม ad/chd/inf/foc ของหลายวัน · ใช้ทั้งแถวแม่ แถวลูก และแถวรวมทั้งวัน */
   const _brkAdd = (t, x) => { if(!x) return t;
     t.ad+=(+x.ad||0); t.chd+=(+x.chd||0); t.inf+=(+x.inf||0); t.foc+=(+x.foc||0); return t; };
@@ -75764,7 +75793,7 @@ function bkV2RenderMatrix(){
       });
 
       if(noData.length && withData.length){
-        html += `<tr class="sub emptyvars"><td class="rowh mxmore" colspan="${lastDay+2}" onclick="bkV2ToggleEmptyVars('${fam.id}')">`
+        html += `<tr class="sub emptyvars"><td class="rowh mxmore" colspan="${lastDay+6}" onclick="bkV2ToggleEmptyVars('${fam.id}')">`
               + `${showEmpty?'▾':'▸'} <u>อีก ${noData.length} variant${noData.length===1?'':'s'} ไม่มีคนทั้งเดือน</u>`
               + ` <span class="mxmore-n">${noData.map(o=>o.rDef.full).join(' · ')}</span></td></tr>`;
       }
@@ -75774,7 +75803,8 @@ function bkV2RenderMatrix(){
 
   // Toolbar above matrix (expand/collapse all)
   const anyExpanded = _bkV2.expanded.size > 0;
-  const toolbar = `<div class="bkv2-mx-toolbar"><span>${fams.length} programs &middot; ${bkV2Routes().length} variants</span><span style="margin-left:auto"></span><button onclick="bkV2ExpandAllFamilies()">Expand all</button>${anyExpanded?`<button onclick="bkV2CollapseAllFamilies()">Collapse all</button>`:''}</div>`;
+  const toolbar = `<div class="bkv2-mx-toolbar"><span>${fams.length} programs &middot; ${bkV2Routes().length} variants</span><span style="margin-left:auto"></span><button onclick="bkV2ExpandAllFamilies()">Expand all</button>${anyExpanded?`<button onclick="bkV2CollapseAllFamilies()">Collapse all</button>`:''}`
+    + `<button onclick="bkV2TogglePanel()" title="${_bkV2.panelHid?'กางแผงรายละเอียดวัน':'พับแผงขวา · ตารางกว้างขึ้น 360px'}">${_bkV2.panelHid?'&rsaquo;&rsaquo; แผงขวา':'&lsaquo;&lsaquo; พับแผงขวา'}</button></div>`;
 
   /* §mxRead · บรรทัดที่ต้องอ่านที่สุดของหน้านี้ · บาร์ใต้ตัวเลขทำให้เห็นจังหวะทั้งเดือนในตาเดียว */
   const _maxDay = Math.max(1, ...dayTotals);
@@ -75795,11 +75825,12 @@ function bkV2RenderMatrix(){
   let colgroup = '<col class="label">';
   for(let d = 1; d <= lastDay; d++) colgroup += '<col class="day">';
   colgroup += '<col class="sumcol">';                 /* §mxRead */
+  colgroup += '<col class="pxcol"><col class="pxcol"><col class="pxcol"><col class="pxcol">';   /* §mxBrk2 */
 
   return `
     ${bkV2RenderStats()}
     ${bkV2RenderRouteAvgs()}
-    <div class="bkv2-split">
+    <div class="bkv2-split${_bkV2.panelHid?' nopanel':''}">
       <div class="bkv2-mx">
         ${toolbar}
         <table>
@@ -75811,7 +75842,7 @@ function bkV2RenderMatrix(){
           </tbody>
         </table>
       </div>
-      ${bkV2RenderSelDay()}
+      ${bkV2PanelSlot()}
     </div>
     ${bkV2RenderFooterHints('mx')}
   `;
