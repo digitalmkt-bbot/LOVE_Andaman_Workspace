@@ -40701,6 +40701,23 @@ const SB_PAYMENT_TYPES = [
 // transfer zones for pricing matrix
 const SB_TRANSFER_ZONES = ['PK','KL','NoTransfer'];
 
+/* ══ §rnZone · โซน "รับลูกค้า" กับโซน "ตั้งราคา" ไม่ใช่ตัวเดียวกัน ═══════════════════
+   SB_TRANSFER_ZONES ข้างบนคือคอลัมน์ของตารางราคาในสัญญาเอเจนต์ — แตะแล้วกระทบ
+   ทุกสัญญาที่มีอยู่ (จะมีคอลัมน์ว่างโผล่ทุกใบ) จึงไม่แตะ
+
+   ส่วนตัวนี้คือ "จุดรับลูกค้ามีที่ไหนบ้าง" ซึ่งเป็นเรื่องปฏิบัติการล้วน ๆ
+   ระนองเปิดเส้นทางแล้ว 2 เส้น (Se La Va · Nyaung Oo Phee) และวิ่งจากท่าระนอง
+   แต่หน้า Pickup Setup ให้เลือกได้แค่ PK / KL / No Transfer — คีย์จุดรับระนองไม่ได้เลย
+
+   ⚠ ตารางราคาในสัญญายังไม่มีคอลัมน์ RN · ใบที่เป็นโซน RN จะถูก tsTripRate()
+     ไล่หาโซนอื่นที่มีเรตแทน (ดูลำดับใน §tsNetRate) ซึ่งไม่พังแต่ก็ยังไม่ใช่เรตระนองจริง
+     ถ้าจะขายระนองผ่านเอเจนต์ ต้องเพิ่มคอลัมน์ RN ในสัญญาอีกงานหนึ่ง */
+var LA_PICKUP_ZONES = ['PK','KL','RN','NoTransfer'];
+function laZoneLabel(z){
+  return ({PK:'PK \u00b7 Phuket', KL:'KL \u00b7 Khao Lak', RN:'RN \u00b7 Ranong',
+           NoTransfer:'No Transfer', NT:'No Transfer'})[z] || (z||'No Transfer');
+}
+
 // ── Sales Person definitions ──
 // each agent is owned by 1 salesperson — for KPI tracking in next phase
 let SB_SALES = [
@@ -41863,6 +41880,7 @@ function psuRenderShell(){
       #view-pickup-setup .psu-zone-tag{display:inline-block;padding:2px 7px;font-size:10px;font-weight:700;letter-spacing:.04em;border-radius:3px;font-family:'DM Mono',monospace}
       #view-pickup-setup .psu-zone-tag.PK{background:#E8F2FB;color:#185FA5}
       #view-pickup-setup .psu-zone-tag.KL{background:#FFF2E8;color:#A05A1A}
+      #view-pickup-setup .psu-zone-tag.RN{background:#F3EEFB;color:#6A3FA0}   /* §rnZone */
       #view-pickup-setup .psu-zone-tag.NoTransfer{background:#F0F0EC;color:#6B6B62}
       #view-pickup-setup .psu-tg-pill{display:inline-block;padding:2px 8px;font-size:10px;font-weight:600;background:#F0EEE8;color:#5A5A52;border-radius:3px;font-family:'DM Mono',monospace}
       #view-pickup-setup .psu-pier-tag{display:inline-block;padding:2px 7px;font-size:9px;font-weight:700;letter-spacing:.04em;border-radius:3px;font-family:'DM Sans',sans-serif}
@@ -42317,8 +42335,8 @@ function psuRenderProfileModal(){
 
 function psuRenderAreasTab(){
   const escapeHTML = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
-  const zoneLabel = z => z==='PK'?'PK · Phuket':z==='KL'?'KL · Khao Lak':'No Transfer';
-  const zoneCounts = { PK:0, KL:0, NoTransfer:0 };
+  const zoneLabel = z => laZoneLabel(z);                  /* §rnZone */
+  const zoneCounts = { PK:0, KL:0, RN:0, NoTransfer:0 };
   (SB_PICKUP_AREAS||[]).forEach(a => { if(zoneCounts[a.zone]!==undefined) zoneCounts[a.zone]++; });
   const q = _psuAreaSearch.toLowerCase();
   const filtered = (SB_PICKUP_AREAS||[]).filter(a => {
@@ -42343,6 +42361,7 @@ function psuRenderAreasTab(){
           <button class="psu-zone-pill ${_psuAreaZoneFilter==='all'?'on':''}" onclick="psuSetAreaZoneFilter('all')">All</button>
           <button class="psu-zone-pill ${_psuAreaZoneFilter==='PK'?'on':''}" onclick="psuSetAreaZoneFilter('PK')">PK · ${zoneCounts.PK}</button>
           <button class="psu-zone-pill ${_psuAreaZoneFilter==='KL'?'on':''}" onclick="psuSetAreaZoneFilter('KL')">KL · ${zoneCounts.KL}</button>
+          <button class="psu-zone-pill ${_psuAreaZoneFilter==='RN'?'on':''}" onclick="psuSetAreaZoneFilter('RN')">RN · ${zoneCounts.RN}</button>
           <button class="psu-zone-pill ${_psuAreaZoneFilter==='NoTransfer'?'on':''}" onclick="psuSetAreaZoneFilter('NoTransfer')">NT · ${zoneCounts.NoTransfer}</button>
         </div>
         <div style="flex:1"></div>
@@ -42362,7 +42381,7 @@ function psuRenderAreasTab(){
           </thead>
           <tbody>
             ${Object.keys(grouped).length === 0 ? '<tr><td colspan="6" style="text-align:center;padding:30px;color:#8a8a82;font-style:italic">No areas match filter</td></tr>' : ''}
-            ${['PK','KL','NoTransfer'].filter(z => grouped[z]).flatMap(z => {
+            ${LA_PICKUP_ZONES.filter(z => grouped[z]).flatMap(z => {
               const out = [`<tr style="background:#f8f7f3"><td colspan="6" style="font-size:10px;font-weight:700;color:#5A5A52;letter-spacing:.08em;text-transform:uppercase;padding:8px 12px">${zoneLabel(z)} &middot; ${(Object.values(grouped[z]).flat()).length} area(s)</td></tr>`];
               Object.keys(grouped[z]).sort().forEach(reg => {
                 grouped[z][reg].forEach(a => {
@@ -42440,7 +42459,7 @@ function psuSaveArea(){
   if(d.isNew){
     // Generate ID from zone + name
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 20);
-    const zoneSlug = d.zone === 'PK' ? 'pk' : d.zone === 'KL' ? 'kl' : 'nt';
+    const zoneSlug = d.zone === 'PK' ? 'pk' : d.zone === 'KL' ? 'kl' : d.zone === 'RN' ? 'rn' : 'nt';   /* §rnZone */
     let id = `${zoneSlug}-${slug}`;
     // Ensure unique
     let i = 1;
@@ -42494,11 +42513,12 @@ function psuRenderAreaModal(){
           </div>
           <div class="psu-field">
             <label class="psu-label">Zone *</label>
-            <div style="display:flex;gap:6px">
-              ${['PK','KL','NoTransfer'].map(z => `
-                <label style="flex:1;display:flex;align-items:center;gap:6px;padding:8px 11px;background:${d.zone===z?'#E8F2FB':'#fff'};border:1px solid ${d.zone===z?'#1B2A55':'rgba(0,0,0,.1)'};border-radius:5px;cursor:pointer">
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              ${/* §rnZone · 4 โซนแล้ว · เรียงเป็น 2 แถวไม่ให้บีบจนอ่านไม่ออก */''}
+              ${LA_PICKUP_ZONES.map(z => `
+                <label style="flex:1 1 46%;display:flex;align-items:center;gap:6px;padding:8px 11px;background:${d.zone===z?'#E8F2FB':'#fff'};border:1px solid ${d.zone===z?'#1B2A55':'rgba(0,0,0,.1)'};border-radius:5px;cursor:pointer">
                   <input type="radio" name="psu-zone" ${d.zone===z?'checked':''} onchange="psuSetDraftField('zone','${z}')" style="accent-color:#1B2A55">
-                  <span style="font-size:12px;font-weight:600;color:${d.zone===z?'#1B2A55':'#5A5A52'}">${z==='PK'?'PK · Phuket':z==='KL'?'KL · Khao Lak':'No Transfer'}</span>
+                  <span style="font-size:12px;font-weight:600;color:${d.zone===z?'#1B2A55':'#5A5A52'};white-space:nowrap">${laZoneLabel(z)}</span>
                 </label>
               `).join('')}
             </div>
@@ -42541,9 +42561,9 @@ function psuRenderMatrixTab(){
   const cloneSrcTimes = cloneSrc?.times || null;
   const today = new Date().toISOString().slice(0,10);
   const isActiveNow = currentProf.from && currentProf.to && currentProf.from <= today && today <= currentProf.to;
-  // Columns = pickup areas (grouped by zone) · ordered PK → KL → NoTransfer
+  // Columns = pickup areas (grouped by zone) · ordered PK → KL → RN → NoTransfer
   const tgs = [];
-  ['PK','KL','NoTransfer'].forEach(z => {
+  LA_PICKUP_ZONES.forEach(z => {                          /* §rnZone */
     const inZone = (SB_PICKUP_AREAS||[]).filter(a => a.zone === z);
     // Sort by region then name for stable order
     inZone.sort((a,b) => (a.region||'').localeCompare(b.region||'') || (a.name||'').localeCompare(b.name||''));
@@ -42575,8 +42595,8 @@ function psuRenderMatrixTab(){
   }
 
   // Header per area · color band by zone
-  const zoneBg = z => z==='PK'?'#E8F2FB':z==='KL'?'#FFF2E8':'#F0F0EC';
-  const zoneTxt = z => z==='PK'?'#185FA5':z==='KL'?'#A05A1A':'#5A5A52';
+  const zoneBg = z => z==='PK'?'#E8F2FB':z==='KL'?'#FFF2E8':z==='RN'?'#F3EEFB':'#F0F0EC';   /* §rnZone */
+  const zoneTxt = z => z==='PK'?'#185FA5':z==='KL'?'#A05A1A':z==='RN'?'#6A3FA0':'#5A5A52';
   const headers = tgs.map(tg => `<th style="background:${zoneBg(tg.zone)};color:${zoneTxt(tg.zone)}"><div class="psu-tg-head" style="color:${zoneTxt(tg.zone)}">${escapeHTML(tg.name)}<span class="psu-tg-head-sub" style="color:${zoneTxt(tg.zone)};opacity:.7">${escapeHTML(tg.region||tg.zone)}</span></div></th>`).join('');
   const rows = filteredRoutes.map(r => {
     // Coverage: count filled cells for this route in current profile (per-area now)
@@ -42607,8 +42627,13 @@ function psuRenderMatrixTab(){
         </div>
         <div style="font-size:11px;color:#1a1a1a;font-weight:600;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${rname}</div>
         <div style="display:flex;align-items:center;gap:5px;margin-top:4px">
-          <button onclick="psuOpenExport('${r.id}','PK')" title="Export Phuket pickup card" style="background:transparent;border:1px solid #f5c4b3;font-size:9px;font-weight:700;color:#e63946;padding:2px 7px;border-radius:3px;cursor:pointer;font-family:inherit">↗ PK card</button>
-          <button onclick="psuOpenExport('${r.id}','KL')" title="Export Khao Lak pickup card" style="background:transparent;border:1px solid #b5d4f4;font-size:9px;font-weight:700;color:#185FA5;padding:2px 7px;border-radius:3px;cursor:pointer;font-family:inherit">↗ KL card</button>
+          ${/* §rnZone · เดิมขึ้นปุ่ม PK+KL ทุกเส้นทางไม่ว่าจะออกจากท่าไหน
+                เส้นระนองไม่มีทางรับที่ภูเก็ต การ์ดที่พิมพ์ออกมาจึงว่างเปล่า
+                ผูกกับท่าของเส้นทางแทน · ท่าอื่นยังได้ PK+KL เหมือนเดิม */''}
+          ${r.pier==='ranong'
+            ? `<button onclick="psuOpenExport('${r.id}','RN')" title="Export Ranong pickup card" style="background:transparent;border:1px solid #cdbaf0;font-size:9px;font-weight:700;color:#6A3FA0;padding:2px 7px;border-radius:3px;cursor:pointer;font-family:inherit">↗ RN card</button>`
+            : `<button onclick="psuOpenExport('${r.id}','PK')" title="Export Phuket pickup card" style="background:transparent;border:1px solid #f5c4b3;font-size:9px;font-weight:700;color:#e63946;padding:2px 7px;border-radius:3px;cursor:pointer;font-family:inherit">↗ PK card</button>
+               <button onclick="psuOpenExport('${r.id}','KL')" title="Export Khao Lak pickup card" style="background:transparent;border:1px solid #b5d4f4;font-size:9px;font-weight:700;color:#185FA5;padding:2px 7px;border-radius:3px;cursor:pointer;font-family:inherit">↗ KL card</button>`}
         </div>
       </td>
       ${cells}
@@ -42839,6 +42864,7 @@ function psuRenderExportModal(){
             <div class="ex-zone-pills">
               <button class="ex-zone-pill ${zone==='PK'?'on':''}" onclick="psuSetExportZone('PK')" style="${zone==='PK'?'background:#e63946;border-color:#e63946;color:#fff':''}">Phuket</button>
               <button class="ex-zone-pill ${zone==='KL'?'on':''}" onclick="psuSetExportZone('KL')" style="${zone==='KL'?'background:#185FA5;border-color:#185FA5;color:#fff':''}">Khao Lak</button>
+              <button class="ex-zone-pill ${zone==='RN'?'on':''}" onclick="psuSetExportZone('RN')" style="${zone==='RN'?'background:#6A3FA0;border-color:#6A3FA0;color:#fff':''}">Ranong</button>
             </div>
           </div>
           <div class="ex-side-row">
@@ -44933,7 +44959,7 @@ function mdTabOps(days){
   const lang=mdLangBuckets(arrByCode); const langRows=[{label:'🇷🇺 Russian guide',val:lang.Russian,col:'#A32D2D'},{label:'🇨🇳 Chinese guide',val:lang.Chinese,col:'#BA7517'},{label:'🇬🇧 English guide',val:lang.English,col:'#185FA5'}];
   // pickup zone demand from our bookings
   const zone={}; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return; (b.trips||[]).forEach(t=>{ const z=t.zone||b.pickupZone||'NoTransfer'; const pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; zone[z]=(zone[z]||0)+pax; }); });
-  const zlab=z=>({PK:'Phuket (PK)',KL:'Khao Lak (KL)',NoTransfer:'No transfer',NT:'No transfer'})[z]||z;
+  const zlab=z=>({PK:'Phuket (PK)',KL:'Khao Lak (KL)',RN:'Ranong (RN)',NoTransfer:'No transfer',NT:'No transfer'})[z]||z;   /* §rnZone */
   const zoneRows=Object.entries(zone).sort((a,b)=>b[1]-a[1]).map(([z,v])=>({label:zlab(z),val:v,col:'#0F6E56'}));
   return mdNote('Guide-language demand is estimated from arrival nationalities (latest day) — Russian/Chinese get their own guide, the rest map to English. Pickup-zone demand comes from your bookings.')
     +mdCard('Guide-language demand','from arrivals · '+latest.date,mdHbars(langRows,Math.max(lang.Russian,lang.Chinese,lang.English,1)))
@@ -45659,7 +45685,8 @@ function mdTabAgents(days){
     (b.trips||[]).forEach(t=>{ const px=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; const f=bkV2RouteFamily(t.routeId); if(f) o.fam[f.id]=(o.fam[f.id]||0)+px; const k=aid||('_z'+String(t.zone||b.pickupZone||'NT').toUpperCase()); o.area[k]=(o.area[k]||0)+px; });
     const iv=invOf(b); if(iv){o.paid+=Math.max(0,acctInvoicePaid(iv)); o.ar+=acctInvoiceBalance(iv);} });
   const zClr=z=>z==='PK'?['#E6F1FB','#185FA5']:z==='KL'?['#EAF3DE','#3B6D11']:['#F1EFE8','#5F5E5A'];
-  const areaInfo=k=>{ if(k && k.slice(0,2)==='_z'){ const z=k.slice(2); return {nm:(z==='PK'?'Phuket (no area)':z==='KL'?'Khao Lak (no area)':z==='NT'||z==='NOTRANSFER'?'No transfer':z),z:(z==='PK'||z==='KL')?z:'NT'}; } const ar=(typeof bkV2GetArea==='function')?bkV2GetArea(k):null; return {nm:ar?ar.name:(k||'—'), z:ar?ar.zone:'NT'}; };
+  /* §rnZone */
+  const areaInfo=k=>{ if(k && k.slice(0,2)==='_z'){ const z=k.slice(2); return {nm:(z==='PK'?'Phuket (no area)':z==='KL'?'Khao Lak (no area)':z==='RN'?'Ranong (no area)':z==='NT'||z==='NOTRANSFER'?'No transfer':z),z:(z==='PK'||z==='KL'||z==='RN')?z:'NT'}; } const ar=(typeof bkV2GetArea==='function')?bkV2GetArea(k):null; return {nm:ar?ar.name:(k||'—'), z:ar?ar.zone:'NT'}; };
   const list=Object.values(A).sort((x,y)=>y.val-x.val);
   if(!list.length) return mdNote('No agent bookings yet.');
   const th='font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--fd-ink-soft);text-align:right;padding:0 0 6px;font-weight:600';
@@ -55824,8 +55851,12 @@ function tsNetOf(r){
   var zone=t.zone || b.zone || '';
   if(!zone || !RR[zone]){
     var pier=(((typeof getRoute==='function'?getRoute(t.routeId):null)||{}).pier)||'';
-    var order=(b.hotelName||b.pickup) ? (pier==='tublamu'?['KL','PK','NoTransfer']:['PK','KL','NoTransfer'])
-                                      : ['NoTransfer','PK','KL'];
+    /* §rnZone · เส้นระนองต้องลองเรต RN ก่อน · ถ้าสัญญายังไม่มีคอลัมน์ RN
+       ก็ตกไปหาโซนอื่นเหมือนเดิม (ไม่พัง แต่ยังไม่ใช่เรตระนองจริง) */
+    var order=(b.hotelName||b.pickup)
+      ? (pier==='ranong'?['RN','PK','KL','NoTransfer']
+        :pier==='tublamu'?['KL','PK','RN','NoTransfer']:['PK','KL','RN','NoTransfer'])
+      : ['NoTransfer','RN','PK','KL'];
     zone=''; for(var z=0;z<order.length;z++) if(RR[order[z]]){ zone=order[z]; break; }
     if(!zone) zone=Object.keys(RR).filter(function(k){ return RR[k]; })[0]||'';
   }
@@ -72997,6 +73028,7 @@ function bkRenderForm(){
         <select onchange="bkSet('transfer',this.value)">
           <option value="PK" ${_bkDraft.transfer==='PK'?'selected':''}>PK · Phuket pickup</option>
           <option value="KL" ${_bkDraft.transfer==='KL'?'selected':''}>KL · Khao Lak pickup</option>
+          <option value="RN" ${_bkDraft.transfer==='RN'?'selected':''}>RN · Ranong pickup</option>
           <option value="NoTransfer" ${_bkDraft.transfer==='NoTransfer'?'selected':''}>No Transfer · มาเอง</option>
         </select>
       </div>
@@ -73007,6 +73039,7 @@ function bkRenderForm(){
           <option value="NoTransfer" ${_bkDraft.transfer==='NoTransfer'?'selected':''}>No Transfer · มาเอง</option>
           <option value="PK" ${_bkDraft.transfer==='PK'?'selected':''}>PK · Phuket pickup</option>
           <option value="KL" ${_bkDraft.transfer==='KL'?'selected':''}>KL · Khao Lak pickup</option>
+          <option value="RN" ${_bkDraft.transfer==='RN'?'selected':''}>RN · Ranong pickup</option>
         </select>
       </div>
       `}
@@ -73856,9 +73889,9 @@ function bkV2RenderPickupSection(){
     if(!grouped[a.zone]) grouped[a.zone] = [];
     grouped[a.zone].push(a);
   });
-  const zoneLabel = z => z==='PK'?'PK · Phuket':z==='KL'?'KL · Khao Lak':'No Transfer';
+  const zoneLabel = z => laZoneLabel(z);                  /* §rnZone */
   // Flat list for datalist · prefix area name with zone label
-  const areaFlat = ['PK','KL','NoTransfer'].filter(z => grouped[z]?.length).flatMap(z => grouped[z].map(a => ({ id:a.id, label:`[${zoneLabel(z)}] ${a.name}` })));
+  const areaFlat = LA_PICKUP_ZONES.filter(z => grouped[z]?.length).flatMap(z => grouped[z].map(a => ({ id:a.id, label:`[${zoneLabel(z)}] ${a.name}` })));
   const areaDataList = areaFlat.map(o => `<option value="${escapeHTML(o.label)}"></option>`).join('');
   const labelFromId = (aid) => {
     if(!aid) return '';
@@ -73906,7 +73939,7 @@ function bkV2RenderPickupSection(){
         ${(() => {
           const tripsZones = [...new Set((d.trips||[]).filter(t => t.zone).map(t => bkV2EffZone(d, t)))];   // private van → its pickup zone, not the No-Transfer seat
           const effectiveZone = tripsZones[0] || d.pickupZoneFilter || 'PK';
-          const zoneLbl = (z) => z==='PK'?'PK · Phuket' : z==='KL'?'KL · Khao Lak' : 'No Transfer';
+          const zoneLbl = (z) => laZoneLabel(z);           /* §rnZone */
           const mixed = tripsZones.length > 1;
           return `<div style="padding:8px 12px;background:var(--white);border:1px solid var(--border);border-radius:var(--r-sm);font-size:12px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:7px;height:34px;box-sizing:border-box">
             <span style="flex:1">${zoneLbl(effectiveZone)}${mixed?` <span style="font-size:9px;color:#a32d2d;font-weight:600;margin-left:4px">⚠ trips have mixed zones</span>`:''}</span>
@@ -73983,9 +74016,9 @@ function bkV2RenderPickupSection(){
       // §altPickups · รับหลายจุดในบุคกิ้งเดียว (บางคนรับคนละที่กับ pickup หลัก)
       // แถวละ: เลือกชื่อ → เลือกจุดรับ (Pickup area · โซนเด้ง auto) → ใส่ชื่อ Location
       const alt = Array.isArray(d.altPickups) ? d.altPickups : [];
-      const _zShort = z => z==='PK'?'PK · Phuket':z==='KL'?'KL · Khao Lak':z==='NoTransfer'?'No Transfer':'';
+      const _zShort = z => laZoneLabel(z);                 /* §rnZone */
       // dropdown จุดรับ · จัดกลุ่มตามโซน (แหล่งเดียวกับ Pickup area หลัก)
-      const areaOptGroups = ['PK','KL','NoTransfer'].filter(z=>grouped[z]&&grouped[z].length)
+      const areaOptGroups = LA_PICKUP_ZONES.filter(z=>grouped[z]&&grouped[z].length)
         .map(z=>`<optgroup label="${zoneLabel(z)}">${grouped[z].map(ar=>`<option value="${ar.id}">${escapeHTML(ar.name)}</option>`).join('')}</optgroup>`).join('');
       // รายชื่อจากส่วน Guests (lead + passengers ที่มีชื่อ) · ให้เลือก (พิมพ์เองได้ด้วย เช่น "2 คน")
       const guestNames = [...new Set([d.leadPax, ...((d.passengers)||[]).map(p=>p&&p.name)].map(s=>String(s||'').trim()).filter(Boolean))];
@@ -74059,8 +74092,8 @@ function bkV2RenderTripsSection(){
     return r ? { id:rid, name:r.name } : null;
   }).filter(Boolean);
 
-  const zones = ['PK', 'KL', 'NoTransfer'];
-  const zoneLabel = z => z === 'PK' ? 'PK · Phuket' : z === 'KL' ? 'KL · Khao Lak' : 'No transfer';
+  const zones = LA_PICKUP_ZONES;                          /* §rnZone */
+  const zoneLabel = z => laZoneLabel(z);
 
   // Compact pax stepper · used in 2x4 mixed grid
   const stepper = (idx, key, val) => `
@@ -74305,8 +74338,10 @@ function bkV2RenderTripsSection(){
                 return (sr['adult-fr']||0) > 0 || (sr['adult-thai']||0) > 0;
               };
               return `<div style="display:inline-flex;background:#f5f3ef;border-radius:var(--r-sm);padding:3px;height:34px;align-items:center;width:100%;box-sizing:border-box;gap:1px">
-                ${['PK','KL','NoTransfer'].map(z => {
-                  const lbl = z==='PK'?'PK · Phuket' : z==='KL'?'KL · Khao Lak' : 'No Transfer';
+                ${/* §rnZone · zoneAvailable() ซ่อนโซนที่สัญญาไม่มีเรตอยู่แล้ว
+                     RN จึงโผล่เฉพาะสัญญาที่ตั้งเรตระนองไว้ ไม่ไปรกใบอื่น */''}
+                ${LA_PICKUP_ZONES.map(z => {
+                  const lbl = laZoneLabel(z);
                   const on = (t.zone||'PK') === z;
                   const available = zoneAvailable(z);
                   if(!available){
@@ -76144,11 +76179,11 @@ function bkV2PayLabel(m){
   const map = { credit:'Invoice', invoice:'Invoice', prepaid:'PFM', proforma:'Proforma', bt:'Bank transfer', cot:'COT' };
   return map[m] || m;
 }
-function bkV2ZoneLabel(z){
-  return ({ PK:'Phuket', KL:'Khao Lak', NoTransfer:'Own transportation', NT:'Own transportation' })[z] || z || 'Own transportation';
+function bkV2ZoneLabel(z){   /* §rnZone */
+  return ({ PK:'Phuket', KL:'Khao Lak', RN:'Ranong', NoTransfer:'Own transportation', NT:'Own transportation' })[z] || z || 'Own transportation';
 }
-function bkV2ZoneOrder(z){ return ({ PK:0, KL:1, NoTransfer:2, NT:2 })[z] ?? 3; }
-function bkV2ZoneColor(z){ return ({ PK:'#185FA5', KL:'#3B6D11', NoTransfer:'#8b909c', NT:'#8b909c' })[z] || '#8b909c'; }
+function bkV2ZoneOrder(z){ return ({ PK:0, KL:1, RN:2, NoTransfer:3, NT:3 })[z] ?? 4; }
+function bkV2ZoneColor(z){ return ({ PK:'#185FA5', KL:'#3B6D11', RN:'#6A3FA0', NoTransfer:'#8b909c', NT:'#8b909c' })[z] || '#8b909c'; }
 // Boats assigned to a route on a date (from TRIPS ops) + any charter boats passed in
 function bkV2Tab2Boats(routeId, dateStr, charterBoatIds){
   const names = [];
@@ -78780,15 +78815,15 @@ let _bkV2AreaDDKind = null;
 let _bkV2AreaDDActive = -1;
 function bkV2AreaDDOpts(kind){
   if(typeof SB_PICKUP_AREAS === 'undefined') return [];
-  const zoneLbl = z => z==='PK'?'PK · Phuket' : z==='KL'?'KL · Khao Lak' : 'No Transfer';
-  const grouped = { PK:[], KL:[], NoTransfer:[] };
+  const zoneLbl = z => laZoneLabel(z);                    /* §rnZone */
+  const grouped = { PK:[], KL:[], RN:[], NoTransfer:[] };
   SB_PICKUP_AREAS.forEach(a => { if(grouped[a.zone]) grouped[a.zone].push(a); });
   // Usage from PAST bookings (count per pickup areaId) → areas actually used before surface first
   const usage = {};
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{ if(b&&b.pickupAreaId) usage[b.pickupAreaId]=(usage[b.pickupAreaId]||0)+1; });
   // Pickup: filter by the trip's pickup zone · Drop-off: show ALL zones (can drop anywhere · incl. self-arrive piers)
   const zoneFilter = (kind==='dropoff') ? null : _bkV2?.newBooking?.pickupZoneFilter;
-  const zones = (zoneFilter && grouped[zoneFilter]) ? [zoneFilter] : ['PK','KL','NoTransfer'];
+  const zones = (zoneFilter && grouped[zoneFilter]) ? [zoneFilter] : LA_PICKUP_ZONES;
   return zones.flatMap(z => (grouped[z]||[]).slice()
     .sort((a,b)=>{ const ca=usage[a.id]||0, cb=usage[b.id]||0; if(cb!==ca) return cb-ca; return String(a.name).localeCompare(String(b.name)); })   // used-most first, then A→Z
     .map(a => ({ id: a.id, zone: zoneLbl(z), name: a.name, count: usage[a.id]||0, label: `[${zoneLbl(z)}] ${a.name}` })));
@@ -79070,7 +79105,7 @@ function bkV2PickPickupAreaByText(txt){
   if(!trimmed){ bkV2SetPickupArea(null); return; }
   const norm = trimmed.toLowerCase();
   const area = (SB_PICKUP_AREAS||[]).find(a => {
-    const zoneLab = a.zone==='PK'?'PK · Phuket':a.zone==='KL'?'KL · Khao Lak':'No Transfer';
+    const zoneLab = laZoneLabel(a.zone);                   /* §rnZone */
     return `[${zoneLab}] ${a.name}`.toLowerCase() === norm || (a.name||'').toLowerCase() === norm;
   });
   if(area) bkV2SetPickupArea(area.id);
@@ -79081,7 +79116,7 @@ function bkV2PickDropoffAreaByText(txt){
   if(!trimmed){ bkV2SetDropoffArea(null); return; }
   const norm = trimmed.toLowerCase();
   const area = (SB_PICKUP_AREAS||[]).find(a => {
-    const zoneLab = a.zone==='PK'?'PK · Phuket':a.zone==='KL'?'KL · Khao Lak':'No Transfer';
+    const zoneLab = laZoneLabel(a.zone);                   /* §rnZone */
     return `[${zoneLab}] ${a.name}`.toLowerCase() === norm || (a.name||'').toLowerCase() === norm;
   });
   if(area) bkV2SetDropoffArea(area.id);
