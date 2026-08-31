@@ -77126,7 +77126,7 @@ function bkV2RenderTab2(){
             ${vanMode?`<td class="t2-c" style="background:#F3FBF7">${(typeof bkV2VanCellHTML==='function')?bkV2VanCellHTML(bk, r.zone, date, groupColor, rid, a.key, a.g, a.split, a.first):''}</td>`:''}
             <td>${(function(){ if(a.split && a.pick && !a.pick.main && (a.pick.hotel||a.pick.areaId)){ const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null; const _pl=a.pick.hotel||(_pa?_pa.name:'')||'—'; return `<span class="t2-pickcell" title="แยกรับ${a.pick.who?(' · '+esc(a.pick.who)):''} @ ${esc(_pl)}" style="color:#5B289A;font-weight:600">&#128652; ${esc(_pl)}</span>`; } if(_ovTrip && _ovTrip.ovnLeg) return '<span class="t2-pickcell" title="ขากลับ OVN · ลูกค้ากลับจากเกาะโดยเรือ · ไม่มีรถไปรับ" style="color:#8a5500;font-weight:600">&#8617; ไม่มีขารับ · มาจากเกาะ</span>';
               return (bk.hotelName||bk.pickup)?`<span class="t2-pickcell" title="${esc(bk.hotelName||bk.pickup)}">${esc(bk.hotelName||bk.pickup)}</span>`:'<span class="t2-needpickup" title="ยังไม่ได้ระบุจุดรับ · กดแก้ไขเพื่อเพิ่ม">&#9888; no pickup</span>'; })()}</td>
-            <td class="t2-c t2-mono">${esc(bk.roomNumber||'')||'<span class="t2-dim">—</span>'}</td>
+            <td class="t2-c">${esc(bk.roomNumber||'')?`<span class="t2-mono t2-room">${esc(bk.roomNumber)}</span>`:'<span class="t2-dim">—</span>'}</td>
             <td>${(a.split&&a.pick&&!a.pick.main)?(function(){const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null;const _zn=_pa?_pa.name:(a.pick.zone||'');return _zn?`<span class="t2-zonetag">${esc(_zn)}</span>`:'<span class="t2-dim">—</span>';})():(function(){
               // §Zone cell · เดิมอ่าน bk.pickupArea อย่างเดียว → booking B2C ที่ชื่อ area ไม่ตรงกับ sb_pickup_areas
               // ขึ้น "—" ทั้งที่ลูกค้าเลือก area มาแล้ว. อ่าน pickupAreaId ก่อน (ops แก้เองได้ · sync ไม่ทับ)
@@ -77744,7 +77744,10 @@ function bkV2RenderTab2(){
     .t2-zc{font-size:11px;color:var(--ink-soft);font-family:'DM Mono',monospace}
     .t2-tblscroll{overflow-x:auto;overflow-y:visible;position:relative;z-index:0}
     table.t2-mtbl{border-collapse:collapse;width:100%;min-width:1180px;font-size:12px}
-    table.t2-mtbl th{text-align:left;font-size:9px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.04em;padding:7px 10px;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;z-index:35;background:#fff;box-shadow:inset 0 -1px 0 var(--border)}
+    /* §t2Hdr · หัวตารางเดิมเป็นเทาอ่อน 9px บนพื้นขาว · จางกว่าเนื้อตารางที่มันกำกับอยู่
+       ตารางนี้กว้างกว่าจอต้องเลื่อนแนวนอน คนเลื่อนไปกลางตารางแล้วไม่รู้ว่าคอลัมน์ไหนคืออะไร
+       ทำเป็นพื้นทึบตัวหนังสือขาว · sticky อยู่แล้ว พอเลื่อนลงหัวยังติดอยู่และอ่านออก */
+    table.t2-mtbl th{text-align:left;font-size:9.5px;font-weight:800;color:#F2F5F9;text-transform:uppercase;letter-spacing:.06em;padding:8px 10px;white-space:nowrap;position:sticky;top:0;z-index:35;background:#2C3A52;box-shadow:inset 0 -1px 0 #1B2536}
     table.t2-mtbl td{padding:13px 8px;border-bottom:1px solid var(--border-2);vertical-align:middle;white-space:nowrap}
     table.t2-mtbl tr.t2-row:hover td{background:#fcfcfd;cursor:pointer}
     .t2-mtbl .t2-c,.t2-mtbl th.t2-c{text-align:center}
@@ -77754,13 +77757,17 @@ function bkV2RenderTab2(){
     .t2-agency{font-weight:600;color:#0f7a5a;white-space:nowrap;display:inline-block;max-width:130px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
     /* overflow-wrap:anywhere ทำให้ min-content ของช่องนี้เหลือ 1 ตัวอักษร → พอตารางถูกบีบ ชื่อโรงแรมถูกหั่นกลางคำ
        ("Novot / el Kamal / a Beach") · break-word ตัดที่ช่องว่างก่อน จะหั่นกลางคำเฉพาะคำที่ยาวเกินช่องจริงๆ */
-    .t2-pickcell{display:inline-block;max-width:230px;min-width:96px;white-space:normal;overflow-wrap:break-word;line-height:1.25;vertical-align:middle}
+    /* §t2Hdr · สามช่องนี้คือของที่คนจัดรถต้องอ่านทุกแถว (ไปรับที่ไหน ห้องอะไร โซนไหน)
+       เดิมเป็นตัวปกติสีเดียวกับทุกคอลัมน์ เลยกลืนไปกับ voucher/agency ที่อ่านนาน ๆ ครั้ง */
+    .t2-pickcell{display:inline-block;max-width:230px;min-width:96px;white-space:normal;overflow-wrap:break-word;line-height:1.25;vertical-align:middle;font-weight:700;font-size:12.5px;color:#111A2B}
     .t2-lead{font-weight:700;white-space:nowrap;display:inline-block;max-width:158px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
     .t2-vch{display:inline-block;max-width:128px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
     .t2-leadonly{font-size:10px;margin-left:4px}
     .t2-more{font-size:10px;border:1px solid var(--border);background:var(--bg);color:var(--ink-soft);border-radius:6px;padding:1px 7px;cursor:pointer;margin-left:5px;font-family:inherit}
     .t2-more:hover{border-color:var(--coral);color:var(--coral)}
-    .t2-zonetag{font-size:11px;background:#eef0f3;color:#4a5160;border-radius:6px;padding:2px 8px;white-space:nowrap}
+    .t2-zonetag{font-size:11px;font-weight:700;background:#DCE4EE;color:#28344A;border-radius:6px;padding:2px 9px;white-space:nowrap}
+    /* §t2Hdr · เลขห้องเป็นชิป · ตาจับได้ว่าเป็นค่าที่มีจริง ไม่ใช่ตัวเลขลอย ๆ ปนกับเวลา */
+    .t2-room{font-weight:700;color:#1B2A55;background:#EEF2F7;border-radius:5px;padding:2px 7px}
     .t2-sb{color:var(--ink-soft);display:inline-block;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
     .t2-req{max-width:196px;overflow:hidden}
     .t2-rbwrap{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px;max-width:186px}
