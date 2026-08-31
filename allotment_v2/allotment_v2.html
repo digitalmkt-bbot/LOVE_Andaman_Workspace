@@ -77124,7 +77124,7 @@ function bkV2RenderTab2(){
             <td class="t2-mono">${(_ovTrip&&_ovTrip.ovnLeg)?'<span style="color:#8a5500;font-weight:600">&#8617; ไม่มีขารับ</span>':vanMode?`<input type="text" value="${esc((typeof bkOpsRead==='function'?bkOpsRead(bk,date).pickupTimeFinal:(bk.ops&&bk.ops.pickupTimeFinal))||r.pickupTime||bk.pickupTime||'')}" placeholder="${esc(r.pickupTime||bk.pickupTime||'เวลา')}" onclick="event.stopPropagation()" oninput="bkV2SetPickupFinal('${esc(bk.id)}',this.value,'${esc(date)}')" title="เวลารับของโรงแรมนี้" style="border:1px solid var(--border);border-radius:6px;padding:2px 5px;font-size:10px;font-family:'DM Mono',monospace;width:98px;box-sizing:border-box">`:(function(){const orig=r.pickupTime||bk.pickupTime||''; const fin=(typeof bkOpsRead==='function'?bkOpsRead(bk,date).pickupTimeFinal:(bk.ops&&bk.ops.pickupTimeFinal))||''; if(fin && fin!==orig){ /* §เวลารับที่แก้แล้ว · เดิมต่อท้ายบรรทัดเดียวกัน "06.30 (07:30-07:45)" อ่านแวบเดียวแยกไม่ออกว่าอันไหนคือเวลาจริง → เวลาใหม่บรรทัดบน เวลาเดิมบรรทัดล่าง ตัวเล็กจางๆ */
                  return `<div style="font-weight:700;color:#0F6E56;line-height:1.25">${esc(fin)}</div>${orig?`<div style="font-size:9px;color:#b0b0a8;line-height:1.25;text-decoration:line-through" title="เวลารับเดิมก่อนแก้">${esc(orig)}</div>`:''}`; } return esc(orig||'—'); })()}${_vanChipHtml}</td>
             ${vanMode?`<td class="t2-c" style="background:#F3FBF7">${(typeof bkV2VanCellHTML==='function')?bkV2VanCellHTML(bk, r.zone, date, groupColor, rid, a.key, a.g, a.split, a.first):''}</td>`:''}
-            <td>${(function(){ if(a.split && a.pick && !a.pick.main && (a.pick.hotel||a.pick.areaId)){ const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null; const _pl=a.pick.hotel||(_pa?_pa.name:'')||'—'; return `<span class="t2-pickcell" title="แยกรับ${a.pick.who?(' · '+esc(a.pick.who)):''} @ ${esc(_pl)}" style="color:#5B289A;font-weight:600">&#128652; ${esc(_pl)}</span>`; } if(_ovTrip && _ovTrip.ovnLeg) return '<span class="t2-pickcell" title="ขากลับ OVN · ลูกค้ากลับจากเกาะโดยเรือ · ไม่มีรถไปรับ" style="color:#8a5500;font-weight:600">&#8617; ไม่มีขารับ · มาจากเกาะ</span>';
+            <td class="t2-pk">${(function(){ if(a.split && a.pick && !a.pick.main && (a.pick.hotel||a.pick.areaId)){ const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null; const _pl=a.pick.hotel||(_pa?_pa.name:'')||'—'; return `<span class="t2-pickcell" title="แยกรับ${a.pick.who?(' · '+esc(a.pick.who)):''} @ ${esc(_pl)}" style="color:#5B289A;font-weight:600">&#128652; ${esc(_pl)}</span>`; } if(_ovTrip && _ovTrip.ovnLeg) return '<span class="t2-pickcell" title="ขากลับ OVN · ลูกค้ากลับจากเกาะโดยเรือ · ไม่มีรถไปรับ" style="color:#8a5500;font-weight:600">&#8617; ไม่มีขารับ · มาจากเกาะ</span>';
               return (bk.hotelName||bk.pickup)?`<span class="t2-pickcell" title="${esc(bk.hotelName||bk.pickup)}">${esc(bk.hotelName||bk.pickup)}</span>`:'<span class="t2-needpickup" title="ยังไม่ได้ระบุจุดรับ · กดแก้ไขเพื่อเพิ่ม">&#9888; no pickup</span>'; })()}</td>
             <td class="t2-c">${esc(bk.roomNumber||'')?`<span class="t2-mono t2-room">${esc(bk.roomNumber)}</span>`:'<span class="t2-dim">—</span>'}</td>
             <td>${(a.split&&a.pick&&!a.pick.main)?(function(){const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null;const _zn=_pa?_pa.name:(a.pick.zone||'');return _zn?`<span class="t2-zonetag">${esc(_zn)}</span>`:'<span class="t2-dim">—</span>';})():(function(){
@@ -77187,7 +77187,7 @@ function bkV2RenderTab2(){
             <thead><tr>
               <th>Voucher</th>${agencyTh}<th>Customer (lead)</th>
               <th class="t2-c">AD</th><th class="t2-c">CHD</th><th class="t2-c">INF</th><th class="t2-c">FOC</th>
-              <th>Time</th>${vanMode?`<th class="t2-c" style="color:#0F6E56;background:#E1F5EE;white-space:nowrap" title="ติ๊กแถวที่จะไปด้วยกัน แล้วกดจับกลุ่ม">&#10003; กลุ่ม</th>`:''}<th>Pickup</th><th class="t2-c">Room</th>${zoneTh}<th>Send back</th>${vanMode?'':'<th>Add-on</th>'}<th>Special request</th>${vanMode?'':'<th>Pay</th><th class="t2-r">Total</th><th class="t2-c"></th>'}
+              <th>Time</th>${vanMode?`<th class="t2-c" style="color:#0F6E56;background:#E1F5EE;white-space:nowrap" title="ติ๊กแถวที่จะไปด้วยกัน แล้วกดจับกลุ่ม">&#10003; กลุ่ม</th>`:''}<th class="t2-pk">Pickup</th><th class="t2-c">Room</th>${zoneTh}<th>Send back</th>${vanMode?'':'<th>Add-on</th>'}<th>Special request</th>${vanMode?'':'<th>Pay</th><th class="t2-r">Total</th><th class="t2-c"></th>'}
               <th class="t2-c"${boatMode?' style="color:#185FA5;background:#EAF3FB;white-space:nowrap"':''}>&#128676; Boat${boatMode?` <button onclick="baAutoAssign('${date}','${rid}')" style="background:#185FA5;color:#fff;border:none;border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:4px">auto</button>`:''}</th>
               ${rcMode?`<th class="t2-c" style="color:#7A4A00;background:#FBF0DD;white-space:nowrap">&#9989; Re-confirm <button onclick="bkV2ReconfirmAll('${date}','${rid}','list')" title="ยืนยันทั้งหมด (list)" style="background:#7A4A00;color:#fff;border:none;border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:4px">all</button></th>`:''}
               ${wxClosed?'<th class="t2-c" style="color:#A32D2D;background:#FBE8E4;white-space:nowrap">&#9928; Manage</th>':''}
@@ -77759,7 +77759,18 @@ function bkV2RenderTab2(){
        ("Novot / el Kamal / a Beach") · break-word ตัดที่ช่องว่างก่อน จะหั่นกลางคำเฉพาะคำที่ยาวเกินช่องจริงๆ */
     /* §t2Hdr · สามช่องนี้คือของที่คนจัดรถต้องอ่านทุกแถว (ไปรับที่ไหน ห้องอะไร โซนไหน)
        เดิมเป็นตัวปกติสีเดียวกับทุกคอลัมน์ เลยกลืนไปกับ voucher/agency ที่อ่านนาน ๆ ครั้ง */
-    .t2-pickcell{display:inline-block;max-width:230px;min-width:96px;white-space:normal;overflow-wrap:break-word;line-height:1.25;vertical-align:middle;font-weight:700;font-size:12.5px;color:#111A2B}
+    /* §pickW · 230px รับได้ ~32 ตัวอักษรต่อบรรทัด · วัดจากชื่อจริง 2,711 ใบ (791 ชื่อไม่ซ้ำ)
+       มี 446 ใบ (16%) ที่ยาวเกินจนตกบรรทัด · ยาวเฉลี่ย 25 ตัว p90 34 ตัว ยาวสุด 68 ตัว
+       ขยับเป็น 320px (~45 ตัว) เหลือตกบรรทัดแค่ 2% · ที่ได้มาจากการบีบ Special request ข้างล่าง */
+    /* §pickW · max-width บน span อย่างเดียวไม่พอ · ตารางเป็น auto layout
+       ความกว้างคอลัมน์คิดจาก min-content ของเนื้อใน ซึ่งของ span ที่ตัดคำได้ = min-width (96px)
+       คอลัมน์เลยยุบเหลือ 96px แล้วชื่อตกบรรทัดทั้งที่ max-width ตั้งไว้ 320
+       ต้องบังคับที่ th/td ของคอลัมน์นั้นตรง ๆ
+       ลองวัด 3 วันจริง: 240px เหลือตกบรรทัด 7/31 · 270px เหลือ 2/31 · 300px เหลือ 1/31
+       เลือก 270 เพราะจาก 270→300 ได้เพิ่มแค่แถวเดียว แต่จ่ายความกว้างอีก 30px
+       วันที่มี 31 แถว: สูง 3,100 → 2,624px (-15%) · กว้าง 1,585 → 1,743px */
+    .t2-mtbl th.t2-pk,.t2-mtbl td.t2-pk{min-width:270px}
+    .t2-pickcell{display:inline-block;max-width:320px;min-width:96px;white-space:normal;overflow-wrap:break-word;line-height:1.25;vertical-align:middle;font-weight:700;font-size:12.5px;color:#111A2B}
     .t2-lead{font-weight:700;white-space:nowrap;display:inline-block;max-width:158px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
     .t2-vch{display:inline-block;max-width:128px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
     .t2-leadonly{font-size:10px;margin-left:4px}
@@ -77769,8 +77780,12 @@ function bkV2RenderTab2(){
     /* §t2Hdr · เลขห้องเป็นชิป · ตาจับได้ว่าเป็นค่าที่มีจริง ไม่ใช่ตัวเลขลอย ๆ ปนกับเวลา */
     .t2-room{font-weight:700;color:#1B2A55;background:#EEF2F7;border-radius:5px;padding:2px 7px}
     .t2-sb{color:var(--ink-soft);display:inline-block;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
-    .t2-req{max-width:196px;overflow:hidden}
-    .t2-rbwrap{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px;max-width:186px}
+    /* §pickW · Special request มีข้อความจริงแค่ 131 ใบจาก 3,205 (4%) แต่กินที่ 196px ทุกตาราง
+       บีบเหลือ 150px แล้วยกที่ให้ชื่อจุดรับที่ต้องอ่านทุกแถว
+       ชดเชยด้วยการเพิ่มจาก 2 เป็น 3 บรรทัด — แคบลงแต่ยังเห็นข้อความเท่าเดิม
+       แถวที่มีโน้ตจะสูงขึ้นบ้าง แต่มีแค่ 4% ของแถวทั้งหมด */
+    .t2-req{max-width:150px;overflow:hidden}
+    .t2-rbwrap{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px;max-width:142px}
     .t2-rb{font-size:10px;border-radius:5px;padding:2px 7px;font-weight:600;white-space:nowrap}
     /* Add-on cell: badges on top, action buttons (+ / upgrade) stacked below · smaller */
     .t2-addoncell{display:flex;flex-direction:column;gap:4px;max-width:200px}
@@ -77791,7 +77806,7 @@ function bkV2RenderTab2(){
     .t2-mtbl tr.t2-novan-last td{border-bottom:2px solid #E05B5B}
     /* §SPECIAL REQUEST · เดิม nowrap + max-width 230px → โน้ตยาวๆ ("Extra Person NT1300 Paid 13.07.26")
        ดันคอลัมน์นี้กว้างจนคอลัมน์อื่นถูกบีบ · ตอนนี้ตัดเป็น 2 บรรทัดแล้วใส่ … (ตัวเต็มอยู่ใน tooltip) */
-    .t2-allerg,.t2-note{font-size:11px;line-height:1.35;max-width:186px;white-space:normal;overflow-wrap:break-word;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    .t2-allerg,.t2-note{font-size:11px;line-height:1.35;max-width:142px;white-space:normal;overflow-wrap:break-word;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}   /* §pickW */
     .t2-allerg{color:#A32D2D}
     .t2-note{color:var(--ink-soft);margin-top:2px}
     .t2-pay{font-size:10px;background:#e7f0fb;color:#1d5fa5;border-radius:6px;padding:2px 8px;white-space:nowrap}
