@@ -74338,8 +74338,10 @@ function bkV2RenderTripsSection(){
                 return (sr['adult-fr']||0) > 0 || (sr['adult-thai']||0) > 0;
               };
               return `<div style="display:inline-flex;background:#f5f3ef;border-radius:var(--r-sm);padding:3px;height:34px;align-items:center;width:100%;box-sizing:border-box;gap:1px">
-                ${/* §rnZone · zoneAvailable() ซ่อนโซนที่สัญญาไม่มีเรตอยู่แล้ว
-                     RN จึงโผล่เฉพาะสัญญาที่ตั้งเรตระนองไว้ ไม่ไปรกใบอื่น */''}
+                ${/* §rnZone · zoneAvailable() ไม่ได้ "ซ่อน" โซนที่ไม่มีเรต แต่ขึ้นเป็นปุ่มขีดฆ่ากดไม่ได้
+                     ตั้งใจให้เห็นว่ามีโซนนี้อยู่ แต่สัญญาใบนี้ยังไม่ได้ตั้งราคาไว้ (tooltip บอกเหตุผล)
+                     ต่างจากการซ่อนซึ่งทำให้คนคิดว่าระบบไม่รองรับ แล้วไปหาทางอ้อมเอง
+                     RN จึงกดได้เฉพาะสัญญาที่ตั้งเรตระนองไว้จริง · ยังไม่ได้ตั้ง = เห็นแต่กดไม่ลง */''}
                 ${LA_PICKUP_ZONES.map(z => {
                   const lbl = laZoneLabel(z);
                   const on = (t.zone||'PK') === z;
