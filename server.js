@@ -191,14 +191,19 @@ async function relLoad() {                                           // operatio
 const B2C_SCHEMA = (process.env.B2C_SCHEMA || 'public').replace(/[^a-zA-Z0-9_]/g, '');
 const b2cT = t => `"${B2C_SCHEMA}"."${t}"`;
 //
-// Fill in null entries when the allotment route for each B2C product is decided:
+// ── Program → ops route (2026-08-31) ───────────────────────────────────────────────────────────
+// DAY TRIPS no longer live here. B2C owns the answer already — programs_own.ops_route_id, filled
+// for every program — and this table was a second copy of it that could only ever fall behind.
+// It did: B2C added POW-006 (Nyaung Oo Phee) and POW-007 (Phang-nga bay + Hong Krabi Early bird),
+// both correctly mapped on the B2C side, while this constant still stopped at POW-005. Four
+// bookings imported with routeId null and rendered a bare "—" where the route name goes.
+// Day trips now resolve through b2cProgramRouteCatalog() — see there for the fallback order.
+//
+// PRIVATE ROUTES stay, because there is nothing to read: private_routes has (id, name, duration,
+// description) and no ops_route_id column, and private_own items carry no details.opsRouteId
+// either — verified on prod, all 8 rows null. PR-* → route is only known here. Retiring these four
+// means adding ops_route_id to private_routes on the B2C side first; until then, this is the map.
 const B2C_ROUTE_MAP = {
-  // Day trip programs (matched via product_id)
-  'POW-001': 'r5',   // Day Trip - Similan Island → Similan Islands by Speedboat
-  'POW-002': 'r6',   // Day Trip - Surin Island → Surin Islands by Speedboat
-  'POW-003': 'r10',  // Day Trip - Phi Phi Island → Phi Phi Bamboo by Speedboat
-  'POW-004': 'r12',  // Day Trip - Phi Phi - Maiton → Whale Shark Phi Phi Maiton Sunset
-  'POW-005': 'r1784542898734',  // Day Trip - Se La Va (Ranong) → r1784542898734
   // Private routes (matched via route_id on private_own items)
   'PR-001':  'r5',   // Private Similan → Similan Islands by Speedboat
   'PR-002':  'r6',   // Private Surin → Surin Islands by Speedboat
@@ -299,7 +304,14 @@ const B2C_OWN_BK = new Set([
 //      the B2C_OWN_BK whitelist. The mapper has produced both all along and decomposeBlob dropped
 //      them for want of a column, so no source row changed and the hash would never re-fire — this
 //      bump is what back-fills the 92 orders carrying a deposit and the 9 with a balance owed.
-const B2C_MAP_VER = 20;
+// v21: day-trip routes resolve from B2C's own catalog (programs_own.ops_route_id), then
+//      details.opsRouteId, instead of a hardcoded copy that stopped at POW-005. POW-006
+//      (Nyaung Oo Phee → r1784882390130) and POW-007 (Phang-nga bay + Hong Krabi Early bird → r11)
+//      were importing with routeId null and showing "—" where the route name goes. The 4 affected
+//      bookings (LOV-7581478, LOV-8756036, LOV-0542142, LOV-7358225) can't heal on their own — the
+//      change detector hashes the B2C source rows, which never moved — so this bump is what
+//      backfills them. B2C_ROUTE_MAP is now private charters only.
+const B2C_MAP_VER = 21;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -462,7 +474,7 @@ function b2cMapAddOns(det, addOnTotal, programId, addonCat) {
 // new B2C ids already carry their own LOV- prefix); each carries a single trip.
 // isFirstLine: order-level payment (deposit/balance) attaches only to the first line of the order,
 // so a multi-item order's payment isn't multiplied across its item-bookings.
-function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat) {
+function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progCat) {
   const h = item;
   // pg returns date columns as JS Date objects — String(d).slice(0,10) gives "Sat Jul 18",
   // not YYYY-MM-DD, which the frontend cannot parse. Format in local time explicitly.
@@ -558,6 +570,20 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat) {
   const routeLookupId = isCharter
     ? (isPrivateId(h.product_id) ? h.product_id : (isPrivateId(h.route_id) ? h.route_id : detailProgramId))
     : (isPowId(h.product_id) ? h.product_id : (isPowId(h.route_id) ? h.route_id : detailProgramId));
+  // routeLookupId stays the B2C PROGRAM id — b2cMapAddOns keys the add-on catalog on it, and that
+  // key must never become an ops route id. The ops route is resolved separately, below.
+  //
+  // Order matters, and it is not "newest field first":
+  //   1. programs_own.ops_route_id — B2C's catalog. Covers every row ever imported, including the
+  //      60 older day trips written before details.opsRouteId existed (added ~2026-08).
+  //   2. details.opsRouteId — what the order itself was booked against. Second, not first, so a
+  //      program later re-pointed at a different ops route re-syncs to the new one; also the only
+  //      source if the catalog read failed or the program was deleted from it.
+  //   3. B2C_ROUTE_MAP — private charters only now; day trips can no longer reach it.
+  const opsRouteId = (progCat && progCat.get(String(routeLookupId || '').trim().toUpperCase()))
+    || String(det.opsRouteId || '').trim()
+    || B2C_ROUTE_MAP[routeLookupId]
+    || null;
   const pickupArea  = String(det.pickupLocation || '').trim();   // area name  → matches sb_pickup_areas
   const pickupHotel = String(det.pickupHotel || '').trim();      // hotel      → hotelName
   // Rows predating the pickupHotel field carry only pickupLocation, so fall back to it rather than
@@ -574,7 +600,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat) {
   const dropoffLoc = (det.dropoffSame === false) ? String(det.dropoffHotel || det.dropoffLocation || '').trim() : '';
   const trip = {
     id: 'b2c_' + h.booking_id + '_' + h.line_no + '_t0',
-    routeId: B2C_ROUTE_MAP[routeLookupId] || null,
+    routeId: opsRouteId,
     date: date,
     bookingMode: isCharter ? 'charter' : 'seat',
     pax: {
@@ -940,6 +966,47 @@ async function b2cAddonCatalog() {
   return map;
 }
 
+// B2C day-trip program catalog · "POW-007" → "r11".
+//
+// programs_own.ops_route_id is B2C's own statement of which allotment route a program runs, kept
+// current there because B2C needs it too. Reading it is what makes a NEW program (POW-008…) import
+// with its route on day one instead of waiting for someone to notice a "—" and edit a constant
+// here. Verified on prod 2026-08-31: 7/7 programs mapped, no nulls, and every value agrees with
+// both the old hardcoded map and the per-item details.opsRouteId — this is strictly more coverage,
+// not a different answer.
+//
+// Keyed on the program id (product_id), uppercased, same normalisation as the add-on catalog.
+// Loaded once per sync — seven rows — and a failed read degrades to the per-item opsRouteId rather
+// than killing the sync, same contract as the add-on catalog and the traveller view.
+const B2C_PROGRAM_TABLE = 'programs_own';
+let _b2cProgTblMissingAt = 0;
+const B2C_PROG_TBL_RETRY_MS = 10 * 60 * 1000;   // re-probe, so adding the column needs no restart
+
+async function b2cProgramRouteCatalog() {
+  const map = new Map();
+  if (!b2cPool) return map;
+  if (_b2cProgTblMissingAt && Date.now() - _b2cProgTblMissingAt < B2C_PROG_TBL_RETRY_MS) return map;
+  try {
+    const { rows } = await b2cPool.query(
+      `SELECT id, ops_route_id FROM ${b2cT(B2C_PROGRAM_TABLE)}`);
+    _b2cProgTblMissingAt = 0;
+    for (const r of rows) {
+      const rid = String(r.ops_route_id || '').trim();
+      if (!rid) continue;                        // program not mapped on the B2C side yet
+      map.set(String(r.id || '').trim().toUpperCase(), rid);
+    }
+  } catch (e) {
+    // 42P01 undefined_table · 42703 undefined_column — either way the catalog is simply unavailable
+    if (e && (e.code === '42P01' || e.code === '42703')) {
+      _b2cProgTblMissingAt = Date.now();
+      console.warn(`[b2c-sync] ${B2C_SCHEMA}.${B2C_PROGRAM_TABLE}.ops_route_id not readable — day-trip routes fall back to details.opsRouteId`);
+    } else {
+      console.warn('[b2c-sync] program route catalog read failed — details.opsRouteId this run:', e.message);
+    }
+  }
+  return map;
+}
+
 // Fallback for bookings the view did not supply — because it does not exist yet, or because the
 // read failed. bookings.passengers is already selected by the JOIN as bk_passengers, so the same
 // travellers can be had without any DDL; this mirrors the view's own normalisation (btrim, blanks
@@ -1052,11 +1119,16 @@ async function relSyncB2C(singleExtId = null) {
     // unrelated edit moved a booking.
     const addonCat = await b2cAddonCatalog();
 
+    // Same reasoning as the add-on catalog: re-pointing a program at a different ops route changes
+    // what ops should show while every booking row stays byte-identical, so the catalog has to feed
+    // the change hash or the remap would sit unsynced until an unrelated edit moved a booking.
+    const progCat = await b2cProgramRouteCatalog();
+
     let srcHash = null;
     if (!singleExtId) {
       srcHash = crypto.createHash('sha1')
         .update('v' + B2C_MAP_VER + '|' + JSON.stringify(itemRows) + '|' + JSON.stringify([...paxByBooking])
-                + '|' + JSON.stringify([...addonCat]))
+                + '|' + JSON.stringify([...addonCat]) + '|' + JSON.stringify([...progCat]))
         .digest('hex');
       try {
         const hr = await pool.query('SELECT data FROM app_state WHERE id=$1', ['b2c_sync_hash']);
@@ -1089,7 +1161,7 @@ async function relSyncB2C(singleExtId = null) {
     const b2cBks = [];
     for (const items of Object.values(byId)) {
       items.sort((a, b) => Number(a.line_no) - Number(b.line_no));
-      items.forEach((it, i) => b2cBks.push(mapB2CItemBooking(it, i === 0, findArea, paxByBooking.get(String(it.booking_id)), addonCat)));
+      items.forEach((it, i) => b2cBks.push(mapB2CItemBooking(it, i === 0, findArea, paxByBooking.get(String(it.booking_id)), addonCat, progCat)));
     }
     const tables  = osRepo.decomposeBlob({ sb_bookings: b2cBks });
     const b2cIds  = b2cBks.map(b => b.id);
@@ -2259,7 +2331,8 @@ const server = http.createServer((req, res) => {
         for (const [k, v] of b2cPassengersFromJson(j.rows)) if (!paxMap.has(k)) paxMap.set(k, v);
       }
       out.passengers = paxMap.get(String(id)) || [];     // normalised rows, before mapping
-      out.mapped = j.rows.map((r, i) => mapB2CItemBooking(r, i === 0, null, paxMap.get(String(id))));
+      const dbgProgCat = await b2cProgramRouteCatalog();   // else the inspector reports routeId null
+      out.mapped = j.rows.map((r, i) => mapB2CItemBooking(r, i === 0, null, paxMap.get(String(id)), null, dbgProgCat));
       J(res,200,out);
     })().catch(e => J(res,500,{error:e.message}));
     return;
