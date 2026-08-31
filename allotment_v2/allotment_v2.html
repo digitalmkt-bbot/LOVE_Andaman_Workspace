@@ -63118,6 +63118,75 @@ function _acctFauxQR(seed){
   r+=fnd(0,0)+fnd(N-7,0)+fnd(0,N-7);
   return `<svg width="78" height="78" viewBox="0 0 ${N*c} ${N*c}" fill="#1a1a1a"><rect width="${N*c}" height="${N*c}" fill="#fff"/>${r}</svg>`;
 }
+/* ══ §invEdit · หัวใบแจ้งหนี้ · เดิมเป็นค่าตายตัวในโค้ด ═══════════════════════
+   ชื่อบริษัท ที่อยู่ เลขผู้เสียภาษี เบอร์ อีเมล ผู้ติดต่อ และเลขบัญชี ถูกเขียนตายไว้
+   เปลี่ยนเบอร์หรือย้ายบัญชีทีต้องรอโปรแกรมเมอร์ · ย้ายมาเก็บเป็นค่าตั้งค่าแทน
+   ของเดิมเป็นค่าเริ่มต้น · ใบที่ออกไปแล้วจึงหน้าตาเหมือนเดิมทุกใบจนกว่าจะมีคนแก้ */
+var INV_HEAD_DEF={
+  seller:{ name:'เลิฟ ไอแลนด์ Company Limited',
+           addr:'เลขที่ 9/239-240 ถนน ศักดิเดช ตำบลตลาดเหนือ อำเภอเมืองภูเก็ต จังหวัดภูเก็ต 83000',
+           tax:'0825554000447 (Head Office)', tel:'098-6911063', email:'fc@loveandaman.com' },
+  contact:{ name:'Reservation LoveAndaman', tel:'0887654678', email:'book@loveandaman.com' },
+  bank:{ bank:'KBANK branch เจ้าฟ้า ภูเก็ต', acc:'Saving 574-2-18462-7', name:'เลิฟ ไอแลนด์', mark:'K', color:'#13a538' }
+};
+function acctInvCfg(){
+  var c=(typeof ctRead==='function')?ctRead('inv_cfg'):null; c=(c&&typeof c==='object')?c:{};
+  return { seller:Object.assign({}, INV_HEAD_DEF.seller,  c.seller||{}),
+           contact:Object.assign({}, INV_HEAD_DEF.contact, c.contact||{}),
+           bank:Object.assign({}, INV_HEAD_DEF.bank,    c.bank||{}) };
+}
+function acctInvCfgSet(grp, field, val){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('accounting')) return;
+  var c=(typeof ctRead==='function')?ctRead('inv_cfg'):null; c=(c&&typeof c==='object')?c:{};
+  if(!c[grp]) c[grp]={};
+  c[grp][field]=String(val==null?'':val);
+  if(typeof ctWrite==='function') ctWrite('inv_cfg', c);
+}
+/* ── ช่องบนใบที่เคยเป็นขีด "-" ตายตัว · ให้กรอกได้จริง ──────────────────
+   ref / dear / acceptAt / remark ไม่แตะเงิน แก้ได้ตลอด
+   whtAmount ไม่แตะยอดรวมเช่นกัน · มันหักตอน "จ่ายจริง" เท่านั้น (Payment Amount) */
+function acctInvSet(invId, field, val){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('accounting')) return;
+  var inv=SB_INVOICES.find(function(i){ return i.id===invId; }); if(!inv) return;
+  if(field==='whtAmount') inv[field]=Math.max(0, parseFloat(String(val).replace(/[^0-9.]/g,''))||0);
+  else inv[field]=String(val==null?'':val).trim();
+  sbInvoicesPersist();
+  acctOpenDoc(invId, 'invoice');
+}
+/* ── ส่วนลดรายบรรทัด ────────────────────────────────────────────────────
+   ⚠ ตัวนี้แตะเงินจริง · ยอดรวมของใบต้องคิดใหม่ ไม่งั้นใบขัดกันเอง
+      (Pre-VAT ลดแต่ Total เท่าเดิม = เอกสารบวกเลขไม่ตรง)
+   ใบที่รับเงินไปแล้วห้ามแก้ · ยอดค้างจะเพี้ยนย้อนหลังโดยไม่มีใครรู้ → ให้ยกเลิกใบแล้วออกใหม่ */
+function acctInvDiscKey(it, i){ return String(it.code||('#'+i))+'|'+i; }
+function acctInvDisc(invId, key, val){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('accounting')) return;
+  var inv=SB_INVOICES.find(function(i){ return i.id===invId; }); if(!inv) return;
+  if(acctInvoicePaid(inv)>0){ alert('ใบนี้รับเงินไปแล้ว แก้ส่วนลดไม่ได้ · ถ้าต้องแก้จริง ให้ยกเลิกใบแล้วออกใหม่'); return; }
+  if(!(+(inv.gross0!=null?inv.gross0:inv.subtotal)>0)){ alert('ใบนี้ไม่มียอดตั้งต้น ใส่ส่วนลดไม่ได้'); return; }
+  if(!inv.discounts || typeof inv.discounts!=='object') inv.discounts={};
+  var d=Math.max(0, parseFloat(String(val).replace(/[^0-9.]/g,''))||0);
+  if(d>0) inv.discounts[key]=d; else delete inv.discounts[key];
+  acctInvRecalc(inv);
+  sbInvoicesPersist();
+  acctOpenDoc(invId, 'invoice');
+}
+/* คิดยอดใหม่ · สูตร VAT เดียวกับตอนออกใบ (acctCreateInvoice)
+   ⚠ ห้ามไปบวกยอดใหม่จากใบจอง · ใบแจ้งหนี้ที่ออกไปแล้วคือตัวเลขที่ตกลงกันแล้ว
+     ราคาในใบจองถูกแก้ทีหลังได้ ใบจองถูกถอดออกจากใบได้ → ยอดจะเพี้ยนย้อนหลังเงียบ ๆ
+     (เจอตอนทดสอบจริง: ใบเดือน มิ.ย. ที่ใบจองไม่ได้โหลดมาด้วย ยอด 3,600 กลายเป็น 0)
+   ยึด gross0 = ยอดตอนออกใบ เก็บไว้ครั้งเดียว แล้วหักส่วนลดจากตัวนั้นอย่างเดียว */
+function acctInvRecalc(inv){
+  if(inv.gross0==null) inv.gross0=+inv.subtotal||0;
+  var D=inv.discounts||{}, disc=0;
+  Object.keys(D).forEach(function(k){ disc+=(+D[k]||0); });
+  disc=Math.min(disc, +inv.gross0||0);                 /* ส่วนลดเกินยอดไม่ได้ */
+  var sub=Math.max(0, (+inv.gross0||0)-disc), rate=inv.vatRate||0.07;
+  inv.subtotal=sub;
+  if(inv.vatMode==='exclude'){ inv.netAmount=sub; inv.vatAmount=Math.round(sub*rate); inv.total=inv.netAmount+inv.vatAmount; }
+  else if(inv.vatMode==='include'){ inv.total=sub; inv.netAmount=Math.round(sub/(1+rate)); inv.vatAmount=sub-inv.netAmount; }
+  else { inv.netAmount=sub; inv.vatAmount=0; inv.total=sub; }
+  return inv;
+}
 function acctInvoiceDocHtml(inv){
   const a=sbGetAgent(inv.agentId); const ci=(a&&a.companyInfo)||{};
   const isPF=(a&&a.payType==='proforma');
@@ -63127,21 +63196,33 @@ function acctInvoiceDocHtml(inv){
   const dmy=s=>{ if(!s)return'-'; try{ const d=new Date(s); const p=x=>String(x).padStart(2,'0'); return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+d.getFullYear(); }catch(e){return s;} };
   const wht=(+inv.whtAmount||0); const payAmt=(inv.total||0)-wht;
   const linePre=amt=>!hasVat?amt:(inv.vatMode==='include'?amt/(1+rate):amt);
-  const logo=`<img src="assets/logo.png" alt="LOVE Andaman" style="height:48px;width:auto;display:block">`;
-  const SELL={name:'เลิฟ ไอแลนด์ Company Limited',addr:'เลขที่ 9/239-240 ถนน ศักดิเดช ตำบลตลาดเหนือ อำเภอเมืองภูเก็ต จังหวัดภูเก็ต 83000',tax:'0825554000447 (Head Office)',tel:'098-6911063',email:'fc@loveandaman.com'};
-  const CONTACT={name:'Reservation LoveAndaman',tel:'0887654678',email:'book@loveandaman.com'};
-  const BANK={bank:'KBANK branch เจ้าฟ้า ภูเก็ต',acc:'Saving 574-2-18462-7',name:'เลิฟ ไอแลนด์'};
+  /* §invEdit · โลโก้เคยอ้าง assets/logo.png ซึ่งไม่มีไฟล์อยู่จริง (โฟลเดอร์มีแต่ bg.jpg / template_blank.jpg)
+     ใบแจ้งหนี้ทุกใบจึงรูปแตกสองจุด — หัวใบ กับช่อง Stamp (Seller)
+     ในไฟล์มีโลโก้ตัวจริงฝังเป็น data URI อยู่แล้ว (LA_LOGO_FULL) พร้อมหมายเหตุว่า
+     "ใบที่ถูก export เป็นไฟล์เดี่ยว อ้าง path แล้วรูปแตก" · ใช้ตัวนั้น */
+  const logo=(typeof LA_LOGO_FULL!=='undefined')
+    ? `<img src="${LA_LOGO_FULL}" alt="LOVE andaman" style="height:48px;width:auto;display:block">`
+    : `<div style="font-size:15px;font-weight:800;color:#0E6AA8">LOVE andaman</div>`;
+  const _CFG=acctInvCfg(), SELL=_CFG.seller, CONTACT=_CFG.contact, BANK=_CFG.bank;
+  const ED=!!_acctInvEdit;
+  const EIN=(fn,v,ph,w)=>ED
+    ? `<input value="${String(v==null?'':v).replace(/"/g,'&quot;')}" placeholder="${ph||''}" onchange="${fn}"
+        style="width:${w||'100%'};border:1px dashed #9EC4E4;background:#F8FCFF;border-radius:5px;padding:2px 6px;font:inherit;font-size:11px;color:#0B4F7E">`
+    : String(v==null?'':v);
   const ic=(p,col,sz)=>`<svg width="${sz||11}" height="${sz||11}" viewBox="0 0 24 24" fill="none" stroke="${col||'#666'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:6px">${p}</svg>`;
   const IPH='<path d="M5 4h4l2 5-3 2a14 14 0 0 0 6 6l2-3 5 2v4a2 2 0 0 1-2 2A18 18 0 0 1 3 6a2 2 0 0 1 2-2"/>',IML='<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',IWB='<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.6 2.5 15.4 0 18M12 3c-2.5 2.6-2.5 15.4 0 18"/>',ISUM='<path d="M9 5h6M9 9h6M9 13h4"/><rect x="4" y="3" width="16" height="18" rx="2"/>',ICARD='<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>',ICHAT='<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',ISHIELD='<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>';
   const lab='font-size:11px;color:#1a1a1a;font-weight:700;white-space:nowrap;vertical-align:top';
   const val='font-size:11px;color:#333';
   const boxShade='#EEF0FB';
-  const rowsH=items.map((it,i)=>{ const qty=(it.pax&&+it.pax)||1; const gross=it.amount||0; const price=qty?gross/qty:gross; const pre=linePre(gross);
+  const DIS=inv.discounts||{};
+  const rowsH=items.map((it,i)=>{ const qty=(it.pax&&+it.pax)||1; const gross=it.amount||0; const price=qty?gross/qty:gross;
+    /* §invEdit · Pre-VAT ต้องหักส่วนลดของบรรทัดนั้นด้วย · ไม่งั้นเอกสารบวกเลขไม่ตรงกับ Total */
+    const dcut=+DIS[acctInvDiscKey(it,i)]||0; const pre=linePre(Math.max(0,gross-dcut));
     return `<tr style="border-bottom:1px solid #eef0f3">
       <td style="padding:10px 8px;vertical-align:top;font-size:11.5px"><div style="font-weight:600">${i+1}.&nbsp; ${it.desc}</div>${it.code?`<div style="font-size:10px;color:#8a8a8a;margin-top:1px">VC: ${it.code}${it.date?(' · '+dmy(it.date)):''}</div>`:''}</td>
       <td style="padding:10px 8px;text-align:right;font-variant-numeric:tabular-nums;font-size:11.5px;vertical-align:top">${f2(qty)}</td>
       <td style="padding:10px 8px;text-align:right;font-variant-numeric:tabular-nums;font-size:11.5px;vertical-align:top">${f2(price)}</td>
-      <td style="padding:10px 8px;text-align:right;font-variant-numeric:tabular-nums;font-size:11.5px;vertical-align:top">0.00</td>
+      <td style="padding:10px 8px;text-align:right;font-variant-numeric:tabular-nums;font-size:11.5px;vertical-align:top">${ED?EIN(`acctInvDisc('${inv.id}','${acctInvDiscKey(it,i).replace(/'/g,"")}',this.value)`, dcut||'', '0', '64px'):f2(dcut)}</td>
       <td style="padding:10px 8px;text-align:right;font-size:11.5px;vertical-align:top">${hasVat?Math.round(rate*100)+'%':'-'}</td>
       <td style="padding:10px 8px;text-align:right;font-variant-numeric:tabular-nums;font-size:11.5px;vertical-align:top">${f2(pre)}</td></tr>`; }).join('');
   const thr='padding:9px 8px;text-align:right;font-size:10.5px;font-weight:700;color:#1a1a1a';
@@ -63155,21 +63236,22 @@ function acctInvoiceDocHtml(inv){
     <div style="display:flex;gap:24px;align-items:flex-start;margin-bottom:12px">
       <div style="flex:1">
         <table style="font-size:11px;border-collapse:collapse;width:100%"><tbody>
-          <tr><td style="${lab};padding:1px 12px 1px 0">Seller :</td><td style="${val};font-weight:600">${SELL.name}</td></tr>
-          <tr><td style="${lab};padding:1px 12px 1px 0">Address :</td><td style="${val}">${SELL.addr}</td></tr>
-          <tr><td style="${lab};padding:1px 12px 1px 0">Tax No. :</td><td style="${val}">${SELL.tax}</td></tr>
+          <tr><td style="${lab};padding:1px 12px 1px 0">Seller :</td><td style="${val};font-weight:600">${EIN(`acctInvCfgSet('seller','name',this.value);acctOpenDoc('${inv.id}','invoice')`, SELL.name)}</td></tr>
+          <tr><td style="${lab};padding:1px 12px 1px 0">Address :</td><td style="${val}">${EIN(`acctInvCfgSet('seller','addr',this.value);acctOpenDoc('${inv.id}','invoice')`, SELL.addr)}</td></tr>
+          <tr><td style="${lab};padding:1px 12px 1px 0">Tax No. :</td><td style="${val}">${EIN(`acctInvCfgSet('seller','tax',this.value);acctOpenDoc('${inv.id}','invoice')`, SELL.tax)}</td></tr>
         </tbody></table>
         <div style="display:flex;gap:20px;font-size:11px;color:#333;margin-top:8px;flex-wrap:wrap">
-          <span>${ic(IPH)}${SELL.tel}</span><span>${ic(IML)}${SELL.email}</span>
+          <span>${ic(IPH)}${EIN(`acctInvCfgSet('seller','tel',this.value);acctOpenDoc('${inv.id}','invoice')`, SELL.tel, '', '120px')}</span>
+          <span>${ic(IML)}${EIN(`acctInvCfgSet('seller','email',this.value);acctOpenDoc('${inv.id}','invoice')`, SELL.email, '', '170px')}</span>
         </div>
       </div>
       <div style="width:236px;flex:none;background:${boxShade};border-radius:6px;padding:12px 14px">
         <table style="font-size:11px;border-collapse:collapse;width:100%"><tbody>
           <tr><td style="font-weight:700;padding:2px 8px 2px 0;white-space:nowrap">Doc. No. :</td><td style="text-align:right;font-family:'DM Mono',monospace">${inv.number}</td></tr>
           <tr><td style="font-weight:700;padding:2px 8px 2px 0">Issue Date :</td><td style="text-align:right">${dmy(inv.issuedAt)}</td></tr>
-          <tr><td style="font-weight:700;padding:2px 8px 2px 0">Accept Date :</td><td style="text-align:right">-</td></tr>
+          <tr><td style="font-weight:700;padding:2px 8px 2px 0">Accept Date :</td><td style="text-align:right">${ED?EIN(`acctInvSet('${inv.id}','acceptAt',this.value)`, inv.acceptAt||'', 'dd/mm/yyyy', '110px'):(inv.acceptAt||'-')}</td></tr>
           <tr><td style="font-weight:700;padding:2px 8px 2px 0">Due Date :</td><td style="text-align:right">${dmy(inv.dueAt)}</td></tr>
-          <tr><td style="font-weight:700;padding:2px 8px 2px 0">Ref. :</td><td style="text-align:right">${inv.ref||'-'}</td></tr>
+          <tr><td style="font-weight:700;padding:2px 8px 2px 0">Ref. :</td><td style="text-align:right">${ED?EIN(`acctInvSet('${inv.id}','ref',this.value)`, inv.ref||'', 'เลขอ้างอิงของลูกค้า', '110px'):(inv.ref||'-')}</td></tr>
         </tbody></table>
       </div>
     </div>
@@ -63179,13 +63261,13 @@ function acctInvoiceDocHtml(inv){
         <tr><td style="${lab};padding:1px 12px 1px 0">Customer :</td><td style="${val};font-weight:600">${ci.legalName||(a?a.name:inv.agentId)}</td></tr>
         <tr><td style="${lab};padding:1px 12px 1px 0">Address :</td><td style="${val}">${ci.address||'-'}</td></tr>
         <tr><td style="${lab};padding:1px 12px 1px 0">Tax No. :</td><td style="${val}">${ci.taxId?(ci.taxId+' (Head Office)'):'-'}</td></tr>
-        <tr><td style="${lab};padding:1px 12px 1px 0">Dear :</td><td style="${val}">-</td></tr>
+        <tr><td style="${lab};padding:1px 12px 1px 0">Dear :</td><td style="${val}">${ED?EIN(`acctInvSet('${inv.id}','dear',this.value)`, inv.dear||'', 'ชื่อผู้รับ', '200px'):(inv.dear||'-')}</td></tr>
       </tbody></table>
       <div style="width:236px;flex:none;font-size:11px;color:#333">
         <div style="font-weight:700;margin-bottom:5px">Contact Person :</div>
-        <div style="margin-bottom:3px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" style="vertical-align:-1px;margin-right:6px"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>${CONTACT.name}</div>
-        <div style="margin-bottom:3px">${ic(IPH)}${CONTACT.tel}</div>
-        <div>${ic(IML)}${CONTACT.email}</div>
+        <div style="margin-bottom:3px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" style="vertical-align:-1px;margin-right:6px"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>${EIN(`acctInvCfgSet('contact','name',this.value);acctOpenDoc('${inv.id}','invoice')`, CONTACT.name, '', '160px')}</div>
+        <div style="margin-bottom:3px">${ic(IPH)}${EIN(`acctInvCfgSet('contact','tel',this.value);acctOpenDoc('${inv.id}','invoice')`, CONTACT.tel, '', '160px')}</div>
+        <div>${ic(IML)}${EIN(`acctInvCfgSet('contact','email',this.value);acctOpenDoc('${inv.id}','invoice')`, CONTACT.email, '', '160px')}</div>
       </div>
     </div>
 
@@ -63209,19 +63291,21 @@ function acctInvoiceDocHtml(inv){
       <div style="width:235px;background:${boxShade};border-radius:7px;padding:13px 15px;display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:12px;font-weight:600;color:#444">Total Amount</span><span style="font-size:20px;font-weight:800">${f2(inv.total)} <span style="font-size:11px;font-weight:500">Baht</span></span></div>
     </div>
     <div style="display:flex;justify-content:flex-end;margin-top:8px"><table style="font-size:11.5px"><tbody>
-      <tr><td style="padding:2px 14px 2px 0;font-weight:700;text-align:right">WHT Amount</td><td style="text-align:right;font-variant-numeric:tabular-nums;min-width:90px">${f2(wht)} Baht</td></tr>
+      <tr><td style="padding:2px 14px 2px 0;font-weight:700;text-align:right">WHT Amount</td><td style="text-align:right;font-variant-numeric:tabular-nums;min-width:90px">${ED?EIN(`acctInvSet('${inv.id}','whtAmount',this.value)`, wht||'', '0', '78px'):f2(wht)} Baht</td></tr>
       <tr><td style="padding:2px 14px 2px 0;font-weight:700;text-align:right">Payment Amount</td><td style="text-align:right;font-variant-numeric:tabular-nums">${f2(payAmt)} Baht</td></tr>
     </tbody></table></div>
 
     <div style="border-top:1px solid #d7d9de;margin-top:11px;padding-top:11px;display:flex;align-items:center;gap:16px">
       <div style="font-weight:700;font-size:12px;white-space:nowrap">${ic(ICARD,'#1a1a1a',14)}Payment</div>
       <div style="display:flex;align-items:center;gap:11px">
-        <span style="width:30px;height:30px;border-radius:50%;background:#13a538;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px">K</span>
-        <div style="font-size:11px;color:#333"><div>${BANK.bank}</div><div style="font-weight:700">${BANK.acc}</div><div>${BANK.name}</div></div>
+        <span style="width:30px;height:30px;border-radius:50%;background:${BANK.color||'#13a538'};display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px">${(BANK.mark||'K').slice(0,2)}</span>
+        <div style="font-size:11px;color:#333"><div>${EIN(`acctInvCfgSet('bank','bank',this.value);acctOpenDoc('${inv.id}','invoice')`, BANK.bank, 'ธนาคาร · สาขา', '230px')}</div>
+          <div style="font-weight:700">${EIN(`acctInvCfgSet('bank','acc',this.value);acctOpenDoc('${inv.id}','invoice')`, BANK.acc, 'ประเภท · เลขบัญชี', '230px')}</div>
+          <div>${EIN(`acctInvCfgSet('bank','name',this.value);acctOpenDoc('${inv.id}','invoice')`, BANK.name, 'ชื่อบัญชี', '230px')}</div></div>
       </div>
     </div>
 
-    <div style="border-top:1px solid #d7d9de;margin-top:11px;padding-top:11px"><div style="font-weight:700;font-size:12px">${ic(ICHAT,'#1a1a1a',14)}Remark</div><div style="min-height:16px;font-size:11px;color:#666">${inv.remark||''}</div></div>
+    <div style="border-top:1px solid #d7d9de;margin-top:11px;padding-top:11px"><div style="font-weight:700;font-size:12px">${ic(ICHAT,'#1a1a1a',14)}Remark</div><div style="min-height:16px;font-size:11px;color:#666">${ED?EIN(`acctInvSet('${inv.id}','remark',this.value)`, inv.remark||'', 'หมายเหตุบนใบ', '100%'):(inv.remark||'')}</div></div>
 
     <div style="border-top:1px solid #d7d9de;margin-top:11px;padding-top:11px;display:flex;gap:16px;align-items:flex-start">
       <div style="font-weight:700;font-size:12px;white-space:nowrap">${ic(ISHIELD,'#1a1a1a',14)}Certified</div>
@@ -63258,8 +63342,14 @@ function acctReceiptDocHtml(inv){
     </table></div>`;
   return _acctDocShell('RECEIPT', body);
 }
+/* §invEdit · โหมดแก้ไขของหน้าต่างเอกสาร · ปกติอ่านอย่างเดียว กันเผลอปัดโดนแล้วตัวเลขเปลี่ยน
+   ช่องเส้นประฟ้า = แก้ได้ · แก้แล้วบันทึกทันที เพราะเป็นเอกสารที่กำลังจะพิมพ์ ไม่มีขั้นตอนร่าง */
+var _acctInvEdit=false, _acctDocId='';
+function acctDocEdit(invId){ _acctInvEdit=!_acctInvEdit; acctOpenDoc(invId,'invoice'); }
 function acctOpenDoc(invId, mode){
   const inv=SB_INVOICES.find(i=>i.id===invId); if(!inv) return;
+  if(mode==='receipt') _acctInvEdit=false;
+  _acctDocId=invId;
   _acctInjectPrintCSS();
   const hasPay=SB_PAYMENTS.some(p=>p.invoiceId===inv.id && p.type!=='refund');
   const doc = (mode==='receipt') ? acctReceiptDocHtml(inv) : acctInvoiceDocHtml(inv);
@@ -63269,6 +63359,7 @@ function acctOpenDoc(invId, mode){
   ov.innerHTML=`<div style="max-width:210mm;margin:0 auto">
     <div class="acct-doc-actions" style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px">
       <button onclick="acctDocClose()" style="background:#fff;border:1px solid #d9d9d9;color:#333;font-family:inherit;font-size:12px;padding:8px 14px;border-radius:9px;cursor:pointer">ปิด</button>
+      ${mode==='receipt'?'':`<button onclick="acctDocEdit('${inv.id}')" style="background:${_acctInvEdit?'#0F6E56':'#fff'};border:1px solid ${_acctInvEdit?'#0F6E56':'#d9d9d9'};color:${_acctInvEdit?'#fff':'#333'};font-family:inherit;font-size:12px;font-weight:${_acctInvEdit?'700':'400'};padding:8px 14px;border-radius:9px;cursor:pointer">${_acctInvEdit?'&#10003; แก้เสร็จแล้ว':'&#9998; แก้ไขใบ'}</button>`}
       ${mode==='receipt'?`<button onclick="acctOpenDoc('${inv.id}','invoice')" style="background:#fff;border:1px solid #d9d9d9;color:#333;font-family:inherit;font-size:12px;padding:8px 14px;border-radius:9px;cursor:pointer">ดูใบแจ้งหนี้</button>`:(hasPay?`<button onclick="acctOpenDoc('${inv.id}','receipt')" style="background:#fff;border:1px solid #d9d9d9;color:#333;font-family:inherit;font-size:12px;padding:8px 14px;border-radius:9px;cursor:pointer">ดูใบเสร็จ</button>`:'')}
       <button onclick="acctPrintDoc()" style="background:#1683C7;color:#fff;border:none;font-family:inherit;font-size:12px;font-weight:600;padding:8px 16px;border-radius:9px;cursor:pointer">พิมพ์ / PDF</button>
     </div>
@@ -63276,8 +63367,11 @@ function acctOpenDoc(invId, mode){
   </div>`;
   ov.onclick=(e)=>{ if(e.target===ov) acctDocClose(); };
 }
-function acctDocClose(){ const ov=document.getElementById('acct-doc-modal'); if(ov) ov.remove(); }
+function acctDocClose(){ _acctInvEdit=false; const ov=document.getElementById('acct-doc-modal'); if(ov) ov.remove(); }
 function acctPrintDoc(){
+  /* §invEdit · ใบจริงต้องไม่มีกรอบเส้นประของช่องกรอกติดไปด้วย
+     วาดใหม่เป็นโหมดอ่านก่อนสั่งพิมพ์ · ไม่แก้ DOM ทิ้ง ไม่งั้นปิดกล่องพิมพ์แล้วหน้าต่างพัง */
+  if(_acctInvEdit && _acctDocId){ _acctInvEdit=false; acctOpenDoc(_acctDocId,'invoice'); }
   document.body.classList.add('acct-printing');
   const done=()=>{ document.body.classList.remove('acct-printing'); window.removeEventListener('afterprint',done); };
   window.addEventListener('afterprint',done);
