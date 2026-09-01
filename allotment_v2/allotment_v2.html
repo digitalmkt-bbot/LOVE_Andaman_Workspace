@@ -7970,11 +7970,26 @@ function _calTripsFor(ds, pier){
     const r=getRoute(op.route); if(!r) return;
     if(pier && r.pier!==pier) return;
     const b=getBoat(bid); if(!b) return;
-    if(getCurStatus(b,ds).s!=='available') return;
+    /* ══ §calDown · เดิม return ทิ้งทั้งวันเมื่อเรือไม่พร้อม ═════════════════════════
+       ผลคือวันนั้นไม่มี chip ไม่มีที่นั่ง และไม่ถูกนับใน Trips this month / Seats free
+       ทีมขายเปิดปฏิทินแล้วเห็นว่า "ไม่มีเที่ยว" ทั้งที่ความจริงคือ
+       มีโปรแกรมวางไว้ แต่เรือยังไม่พร้อมและยังไม่มีใครเปลี่ยนลำ
+
+       วัดจริงตอนเจอ: 240 วัน-ลำ ตั้งแต่ ก.ย. เป็นต้นไปหายจากปฏิทินแบบนี้
+       Zeus ลำเดียว 213 วัน (ต.ค. 69 – พ.ค. 70) เพราะถูกตั้ง fixing แบบไม่มีวันจบ
+       Aluminous2 อีก 26 วัน (24 วันคือ Whale Shark ทั้งเดือน ก.ย.)
+
+       มีทางกู้อยู่ในบล็อกถัดไป แต่ทำงานเฉพาะวันที่มีใบจองจริงแล้วเท่านั้น
+       วันที่ยังไม่มีใครจอง (ซึ่งคือวันที่ต้องรีบขาย) จึงไม่มีอะไรให้กู้
+
+       เปลี่ยนเป็นติดธง boatDown แล้วให้ chip ขึ้นป้ายเตือน · ที่นั่งยังนับตามจริง
+       เพราะที่นั่งมีอยู่จริง แค่ต้องเปลี่ยนลำก่อนถึงวันเดินทาง */
+    const _bst=getCurStatus(b,ds).s;
+    const _down=(_bst!=='available');
     // Program closed on this date → trip is stale/invalid · do not display
     const _rds=getDayStatus(r,ds);
     if(_rds && _rds.type==='closed') return;
-    raw.push({r,b,op});
+    raw.push({r,b,op,down:_down,downSt:_bst});
   });
   // ⚠ Also include routes that have ACTUAL sales bookings this day but no Boat-Op boat in raw
   //   (boat only on bk.ops.boatId, or its assigned boat got flagged unavailable after running) — use the boat the guests ride for capacity.
@@ -7992,7 +8007,7 @@ function _calTripsFor(ds, pier){
         const _rds=getDayStatus(r,ds); if(_rds && _rds.type==='closed') return;
         const abid=bk.ops&&bk.ops.boatId; const ab=abid?getBoat(abid):null;
         if(!ab || _rawBoats.has(ab.id)) return;   // need the actual boat (for capacity) and not already used
-        raw.push({r, b:ab, op:{route:rid, booked:0}});
+        raw.push({r, b:ab, op:{route:rid, booked:0}, down:false, downSt:''});
         _rawRoutes.add(rid); _rawBoats.add(ab.id);
       });
     });
@@ -8021,7 +8036,8 @@ function _calTripsFor(ds, pier){
     if(isCharter){ booked = (_chtrBoat[_ck]!==undefined) ? _chtrBoat[_ck] : (op.booked||0); free = 0; }   // whole boat chartered → 0 sellable seats
     else { const take=Math.min(cap, Math.max(0, remain[x.r.id]||0)); remain[x.r.id]=(remain[x.r.id]||0)-take; booked=take; free=Math.max(0, cap-booked); }
     const weatherClosed=(typeof bkV2IsWeatherClosed==='function' && bkV2IsWeatherClosed(x.r.id, ds));
-    out.push({r:x.r,b:x.b,op,free,cap,booked,locked:0,isCharter,routeClosed:false,weatherClosed});
+    out.push({r:x.r,b:x.b,op,free,cap,booked,locked:0,isCharter,routeClosed:false,weatherClosed,
+              boatDown:!!x.down, boatDownSt:x.downSt||'', boatName:x.b.name||x.b.id});   /* §calDown */
   });
   // §lkAvail · ที่นั่งที่ล็อกไว้ยังขายไม่ได้ · หักออกจากที่ว่าง
   //   หักเฉพาะส่วนที่ยังกันอยู่ · ส่วนที่ถูกดึงไปขายแล้วอยู่ใน seatsConsumed แล้ว
@@ -8281,6 +8297,10 @@ function renderCal(){
   .cal2-b,.cal2-fill,.cal2-cap{display:none}
   .cal2-n{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:-.005em}
   .cal2-t{font-size:8.5px;opacity:.6;flex:none;font-weight:600;font-family:'DM Mono',monospace}
+  /* §calDown · วันที่เรือยังไม่พร้อม · ขอบประ + ป้ายเตือน · สีพื้นยังเป็นสีเส้นทางเหมือนเดิม
+     เปลี่ยนสีพื้นไม่ได้ เพราะสีคือตัวบอกว่าเป็นเส้นทางไหน */
+  .cal2-rw.dn{border-style:dashed}
+  .cal2-bdn{flex:none;font-size:10px;color:#B45309;font-weight:800;line-height:1}
   .cal2-v{flex:0 0 auto;min-width:20px;height:20px;padding:0 6px;border-radius:999px;display:inline-flex;
           align-items:center;justify-content:center;font:800 10.5px 'DM Mono',monospace;color:#fff;
           letter-spacing:-.01em;background:#22C55E}
@@ -8597,10 +8617,12 @@ function renderCal(){
         if(_calPierClosed(pier,ds)){ if(closedDaysPier[pier]<daysInMonth) shutToday.push(pier); return; }
         _calTripsFor(ds,pier).forEach(t=>{
           if(_hidRt.has(t.r.id)) return;
-          const g=gmap[t.r.id]||(gmap[t.r.id]={r:t.r,free:0,cap:0,nb:0,wx:false,ch:false});
+          const g=gmap[t.r.id]||(gmap[t.r.id]={r:t.r,free:0,cap:0,nb:0,wx:false,ch:false,dn:0,dnB:[]});
           g.free+=(t.weatherClosed?0:t.free); g.cap+=t.cap; g.nb++;
           if(t.weatherClosed) g.wx=true;
           if(t.isCharter) g.ch=true;
+          /* §calDown · เรือของวันนั้นยังไม่พร้อม · ที่นั่งนับตามจริงแต่ต้องเตือน */
+          if(t.boatDown){ g.dn++; if(g.dnB.indexOf(t.boatName)<0) g.dnB.push(t.boatName); }
         });
       });
       // §เรียงตามเวลาเรือออก · เวลาเท่ากันเรียงตามชื่อ
@@ -8618,10 +8640,14 @@ function renderCal(){
         else if(g.ch && g.free<=0){ vCls='cal2-v ch'; vTxt='CH'; }
         else if(full){ vCls='cal2-v full'; }
         const tip=`${g.r.name} · ${g.free} of ${g.cap} seats free · ${pct}% sold`
-          +(g.nb>1?` · ${g.nb} boats`:'')+(g.wx?' · weather cancelled':'')+(g.ch?' · charter':'');
+          +(g.nb>1?` · ${g.nb} boats`:'')+(g.wx?' · weather cancelled':'')+(g.ch?' · charter':'')
+          +(g.dn?` · ⚠ เรือยังไม่พร้อม ${g.dn===g.nb?'':'('+g.dn+' of '+g.nb+') '}· ${g.dnB.join(' · ')} — ที่นั่งขายได้แต่ต้องเปลี่ยนลำก่อนวันเดินทาง`:'');
         const sk=_chSkin(g.r.color);
-        return `<div class="cal2-rw" title="${tip}" style="background:${sk.bg};border-color:${sk.bd};color:${sk.c}">
+        /* §calDown · ป้ายเล็ก ๆ บอกว่าวันนี้ยังไม่มีเรือที่พร้อม · ไม่เปลี่ยนสี chip
+           สีของ chip คือสีเส้นทาง เปลี่ยนแล้วอ่านว่าเป็นคนละเส้นทาง */
+        return `<div class="cal2-rw${g.dn?' dn':''}" title="${tip}" style="background:${sk.bg};border-color:${sk.bd};color:${sk.c}">
           <span class="cal2-n">${_calName(g.r)}</span>
+          ${g.dn?`<span class="cal2-bdn" title="เรือยังไม่พร้อม">&#9888;</span>`:''}
           ${g.nb>1?`<span class="cal2-t">${g.nb}b</span>`:''}
           <span class="${vCls}" style="${_chVst(full)}">${vTxt}</span>
         </div>`;
@@ -8737,6 +8763,7 @@ function renderCal(){
 
   const calLegend=`<div class="cal2-lg">
     <span>Chip colour = route</span>
+    <span style="display:inline-flex;align-items:center;gap:5px"><b style="color:#B45309">&#9888;</b> เรือยังไม่พร้อม · ต้องเปลี่ยนลำ</span>
     <span style="display:inline-flex;align-items:center;gap:6px">Seats free
       <span style="display:inline-flex;align-items:center;justify-content:center;border-radius:999px;
         font-family:'DM Mono',monospace;font-weight:800;${_chVst(false)}">13</span></span>
