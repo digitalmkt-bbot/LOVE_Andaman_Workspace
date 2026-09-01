@@ -59960,7 +59960,11 @@ function mvCost(venue, nAd, nCh){
 /* ═══ §tripPL · P&L รายทริป ══════════════════════════════════════════════════
    ไม่มีสูตรของตัวเอง · ป้อนของจริงเข้า ctCalc ของหน้าต้นทุน แล้วเอาผลมาแสดง
    ═══════════════════════════════════════════════════════════════════════════ */
-var _px = { date:'', pier:'', open:{}, tab:'d', mon:'', an:47, oc:{} };
+var _px = { date:'', pier:'', open:{}, tab:'d', mon:'', an:47, oc:{}, agAll:false };
+/* §agAll · ตาราง Agent contribution ตัดที่ 15 เจ้า · ที่เหลือเป็นบรรทัด "… N more" ที่กดไม่ได้
+   118 เจ้าเห็นแค่ 15 แปลว่า 103 เจ้าที่เหลือดูไม่ได้เลยจากหน้านี้
+   และเจ้าที่ขาดทุนมักไม่ได้อยู่ 15 อันดับแรก (เรียงตาม total net) — คือกลุ่มที่ต้องดูที่สุด */
+function pxAgAll(){ _px.agAll=!_px.agAll; renderTripPL(); }
 
 /* แผนต้นทุนของเส้นทางนี้ · ใช้แค่ ovr/grp (ที่ปรับ-ปิดรายเส้นทาง)
    ไม่ใช้ pax/price/boats/fuel ของแผน เพราะนั่นเป็นค่าไว้ลองเล่นในหน้าต้นทุน
@@ -60421,6 +60425,12 @@ function pxCSS(){ return ''
  +'#trippl-host .pill.ro{background:#FFF1F2;color:#BE123C;border:1px solid #FECDD3}'
  +'#trippl-host .pill.bl{background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE}'
  +'#trippl-host .pill.clk{cursor:pointer}'
+ /* §agAll · แถว "ดูครบทุกเจ้า" · เป็นปุ่มจริง ไม่ใช่ข้อความเทา */
+ +'#trippl-host table.sum tr.agmore td{background:#F7F9FC;cursor:pointer;font-size:11.5px;color:#5B6670;padding:10px 12px}'
+ +'#trippl-host table.sum tr.agmore:hover td{background:#EEF3FA;color:#16265C}'
+ +'#trippl-host table.sum tr.agmore td b{color:#16265C}'
+ +'#trippl-host table.sum tr.agmore .cv{display:inline-block;font-weight:800;transform:rotate(90deg);margin-left:4px}'
+ +'#trippl-host table.sum tr.agmore .cv.up{transform:rotate(-90deg)}'
  +'#trippl-host .phd{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;'
    +'margin-bottom:16px;flex-wrap:wrap}'
  +'#trippl-host .phd h2{margin:0;font-size:17px;font-weight:800;color:var(--pi);display:flex;'
@@ -61653,7 +61663,7 @@ function pxAnalysis(e){
 
   /* §agMx · เอเจนต์ × เส้นทาง · เอเจนต์คนเดียวกันกำไรคนละเรื่องในแต่ละเส้นทาง
      ตัวเลขรวมของเขาจึงกลบเส้นทางที่ขาดทุนไว้ · คอลัมน์เรียงตามหัวคน เส้นทางหลักอยู่ติดชื่อ */
-  var AGN_TOP=15;
+  var AGN_TOP=_px.agAll ? Math.max(1,AL.length) : 15;   /* §agAll */
   var RCOL=RL.slice().sort(function(a,b){ return b.pax-a.pax; });
   var mxStep=Math.max(1, +tgt||130);
   function pxMxCls(v){
@@ -61871,15 +61881,25 @@ function pxAnalysis(e){
     +'<div class="eg"><div class="phd"><div><h2>Agent contribution</h2>'
       +'<p>Net per pax, split by route \u00b7 the same agent earns a different margin on every route, '
       +'so their headline number hides the ones that lose money</p></div>'
-      +'<div><span class="pill pu">top '+Math.min(AGN_TOP,AL.length)+' of '+AL.length+' agents</span></div></div>'
+      +'<div><span class="pill pu clk" onclick="pxAgAll()" title="'
+        +(_px.agAll?'ย่อกลับเหลือ 15 อันดับแรก':'ดูครบทุกเจ้า')+'">'
+        +(_px.agAll?('ทั้งหมด '+AL.length+' agents'):('top '+Math.min(AGN_TOP,AL.length)+' of '+AL.length+' agents'))
+        +'</span></div></div>'   /* §agAll */
       +'<div class="twrap"><div class="tscroll"><table class="sum" style="min-width:'+mxWide+'px">'
       +'<thead><tr><th class="l stk" style="min-width:212px">Agent</th><th class="c">Pax</th>'
       +mxHead
       +'<th>Net / pax</th><th>Total net</th><th class="c">Status</th></tr></thead><tbody>'+agRows
-      +(AL.length>AGN_TOP?('<tr><td class="l stk" style="font-size:11.5px;color:#94A3B8">\u2026 '
-        +(AL.length-AGN_TOP)+' more</td><td colspan="'+(RCOL.length+4)+'" '
-        +'style="text-align:center;font-size:11.5px;color:#94A3B8">\u2026 '
-        +(AL.length-AGN_TOP)+' more agents \u00b7 '+below.length+' below cost in total</td></tr>'):'')
+      /* §agAll · เดิมเป็นบรรทัดเทาที่กดไม่ได้ · ทำให้กดได้ แล้วมีทางย่อกลับด้วย */
+      +(AL.length>AGN_TOP
+        ?('<tr class="agmore" onclick="pxAgAll()"><td class="l stk">\u2026 '
+          +(AL.length-AGN_TOP)+' more</td><td colspan="'+(RCOL.length+4)+'">'
+          +'<b>\u0e14\u0e39\u0e04\u0e23\u0e1a\u0e17\u0e38\u0e01\u0e40\u0e08\u0e49\u0e32</b> \u00b7 \u0e2d\u0e35\u0e01 '
+          +(AL.length-AGN_TOP)+' \u0e40\u0e08\u0e49\u0e32 \u00b7 '+below.length
+          +' \u0e40\u0e08\u0e49\u0e32\u0e02\u0e32\u0e14\u0e17\u0e38\u0e19\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14 <span class="cv">\u203a</span></td></tr>')
+        :(_px.agAll && AL.length>15
+          ?('<tr class="agmore" onclick="pxAgAll()"><td class="l stk">\u0e22\u0e48\u0e2d\u0e01\u0e25\u0e31\u0e1a</td>'
+            +'<td colspan="'+(RCOL.length+4)+'">\u0e40\u0e2b\u0e25\u0e37\u0e2d\u0e41\u0e04\u0e48 15 \u0e2d\u0e31\u0e19\u0e14\u0e31\u0e1a\u0e41\u0e23\u0e01 <span class="cv up">\u203a</span></td></tr>')
+          :''))
       +'<tr class="tot"><td class="l stk">\u03a3 '+AL.length+' agents</td>'
       +'<td class="c"><span class="num n">'+T.pax+'</span></td>'
       +mxFoot
