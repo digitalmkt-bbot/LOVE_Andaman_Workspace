@@ -237,7 +237,7 @@ const B2C_PAY_TYPES = new Set(['proforma', 'invoice', 'bt', 'cot']);
 // ฟิลด์ใหม่ = ถูกคุ้มครองโดยอัตโนมัติ · ถ้าลืมใส่ลิสต์ ผลคือค่าไม่อัปเดต (ไม่ใช่ข้อมูลหาย) ซึ่งปลอดภัยกว่ามาก
 // ไม่มี pickupareaid ในลิสต์ตั้งใจ — ฝั่ง ops แก้การจับคู่โซนเอง B2C ต้องไม่ทับ (เหมือนกติกาเดิม)
 const B2C_OWN_BK = new Set([
-  'schemaver','voucherref','agentid',
+  'schemaver','voucherref','agentid','createdby',   // §b2cBy · ผู้บันทึกฝั่ง B2C · ops แก้เองได้ (b2coverride คุ้มให้)
   'leadpax','leadnationality','leadphone','leademail',
   'status','total','note','bookingdate',
   'pickupself','pickuparea','pickupzone','hotelname','dropoffhotelname',
@@ -311,7 +311,12 @@ const B2C_OWN_BK = new Set([
 //      bookings (LOV-7581478, LOV-8756036, LOV-0542142, LOV-7358225) can't heal on their own — the
 //      change detector hashes the B2C source rows, which never moved — so this bump is what
 //      backfills them. B2C_ROUTE_MAP is now private charters only.
-const B2C_MAP_VER = 21;
+// v22: createdBy carries the B2C staff who keyed the order (bookings.booked_by_name) instead of the
+//      literal 'b2c_sync'. Every ops screen that shows "ผู้บันทึก / Submitted by / by" reads
+//      createdBy, so this is the field, not a new one; 'createdby' joins B2C_OWN_BK so rows already
+//      carrying 'b2c_sync' get the name on the corrective re-upsert this bump forces (only within the
+//      sync window — older orders keep 'b2c_sync', which the voucher hides).
+const B2C_MAP_VER = 22;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -531,6 +536,13 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
     if (Array.isArray(ps) && ps[0] && ps[0].name) leadFromPax = String(ps[0].name).trim();
   } catch (_) {}
   const leadName = String(h.bk_customer_name || h.customer_name || h.booked_by_name || leadFromPax || '').trim();
+  // §b2cBy · คนที่คีย์ใบนี้ฝั่ง B2C. bookings.booked_by_name/_email เป็นพนักงาน LOVE Andaman
+  // (bd@ / rung@ / noon@ …) ไม่ใช่ลูกค้า — 157/157 ใบมีค่าเสมอ. ลงช่อง createdBy เพราะทุกจอฝั่ง ops
+  // ("ผู้บันทึก" ในใบเช็คอิน · "Submitted by" ในหน้ารายละเอียด · voucher) อ่านช่องนี้อยู่แล้ว
+  // ค่าเดิมคือสตริงตายตัว 'b2c_sync' ซึ่งไม่บอกอะไรกับสตาฟฟ์เลย.
+  const bookedBy = String(h.booked_by_name || '').trim()
+                || String(h.booked_by_email || '').trim().split('@')[0]
+                || '';
   const leadNat  = b2cNatCode(h.bk_customer_nat || h.crm_nationality);
   // Nationality split: B2C carries pax_thai / pax_foreign per item, but leaves BOTH 0 when the split
   // was never captured — and the fallback then charged the whole line to foreigners. A Thai group
@@ -631,7 +643,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
     id: 'b2c_' + h.booking_id + '_' + h.line_no,
     schemaVer: 2,
     createdAt: h.bk_created_at ? new Date(h.bk_created_at).toISOString() : new Date().toISOString(),
-    createdBy: 'b2c_sync',
+    createdBy: bookedBy || 'b2c_sync',   // §b2cBy
     voucherRef: String(h.booking_id),
     agentId: 'a_b2c',
     leadPax: leadName,

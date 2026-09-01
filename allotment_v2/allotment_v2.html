@@ -82674,7 +82674,8 @@ function bkV2IsB2CBk(bk){ return /^b2c_/.test(String((bk&&bk.id)||'')); }
 var BKV2_B2C_OWN = { leadPax:'leadpax', leadNationality:'leadnationality', leadPhone:'leadphone',
   leadEmail:'leademail', hotelName:'hotelname', pickupArea:'pickuparea', pickupZone:'pickupzone',
   pickupSelf:'pickupself', dropoffHotelName:'dropoffhotelname', note:'note',
-  bookingDate:'bookingdate', voucherRef:'voucherref' };
+  bookingDate:'bookingdate', voucherRef:'voucherref',
+  createdBy:'createdby' };   // §b2cBy · ผู้บันทึกฝั่ง B2C (booked_by_name) · ops แก้ทับได้
 function bkV2B2CSnap(bk){
   var o={}; Object.keys(BKV2_B2C_OWN).forEach(function(k){ o[k]=(bk?bk[k]:undefined); }); return o;
 }
@@ -82768,6 +82769,9 @@ function bkV2VoucherTicket(bk, esc){
 
   const ag=(bk.agentId&&typeof sbGetAgent==='function')?sbGetAgent(bk.agentId):null;
   const agTxt=ag?[ag.name,ag.code].filter(Boolean).join(' \u00b7 '):(bk.channelType==='b2c'?'B2C \u00b7 Direct':'Walk-in / Direct');
+  // \u00a7b2cBy \u00b7 \u0e1c\u0e39\u0e49\u0e1a\u0e31\u0e19\u0e17\u0e36\u0e01\u0e43\u0e1a\u0e19\u0e35\u0e49 \u00b7 \u0e43\u0e1a B2C \u0e04\u0e37\u0e2d\u0e0a\u0e37\u0e48\u0e2d\u0e1e\u0e19\u0e31\u0e01\u0e07\u0e32\u0e19\u0e17\u0e35\u0e48\u0e04\u0e35\u0e22\u0e4c\u0e1d\u0e31\u0e48\u0e07 B2C (relSyncB2C \u0e43\u0e2a\u0e48 booked_by_name \u0e25\u0e07 createdBy)
+  //   'b2c_sync' \u0e04\u0e37\u0e2d\u0e04\u0e48\u0e32\u0e15\u0e01\u0e04\u0e49\u0e32\u0e07\u0e02\u0e2d\u0e07\u0e43\u0e1a\u0e40\u0e01\u0e48\u0e32\u0e17\u0e35\u0e48\u0e15\u0e49\u0e19\u0e17\u0e32\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e0a\u0e37\u0e48\u0e2d \u2014 \u0e44\u0e21\u0e48\u0e15\u0e49\u0e2d\u0e07\u0e40\u0e2d\u0e32\u0e02\u0e36\u0e49\u0e19\u0e43\u0e1a
+  const byTxt=(String(bk.createdBy||'').trim()==='b2c_sync')?'':String(bk.createdBy||'').trim();
 
   const PT=(px,k)=>(typeof bkV2PaxTot==='function')?bkV2PaxTot(px||{},k):0;
   // §pax · ทุกใบมีสี่ชิปเสมอ · ที่เป็น 0 จางลงแต่ไม่หาย
@@ -82894,7 +82898,8 @@ function bkV2VoucherTicket(bk, esc){
       + esc(bk.voucherRef || ((typeof bkV2DisplayCode==='function')?bkV2DisplayCode(bk):bk.id) || '\u2014')+'</span>'
     + '<span style="background:'+stCol+';color:#fff;border-radius:999px;padding:4px 13px;font-size:11px;font-weight:700">'+esc(stLbl)+'</span>'
     + '<span style="margin-left:auto;font-size:10.5px;color:'+MUT+';text-align:right;line-height:1.4">'+esc(agTxt)
-      + '<br>'+esc(bk.packageName||'One Day Tour')+'</span></div>'
+      + '<br>'+esc(bk.packageName||'One Day Tour')
+      + (byTxt?('<br><span style="color:'+NAVY+';font-weight:700">Booked by '+esc(byTxt)+'</span>'):'')+'</span></div>'
 
   + tripCards
 
