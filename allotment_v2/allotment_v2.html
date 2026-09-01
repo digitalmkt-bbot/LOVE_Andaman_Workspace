@@ -55916,7 +55916,8 @@ function tsNetOf(r){
     var all=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(p):0;
     var ex=Math.max(0, all-(+cr.starterIncludes||0));
     var ct=Math.round((+cr.starterPrice||0) + ex*(+cr.extraPerPax||0));
-    return { tot:ct, txt:'เหมาลำ '+_tsNum(cr.starterPrice)+(ex?(' + '+ex+'\u00d7'+_tsNum(cr.extraPerPax)):'') };
+    return { tot:ct, txt:'เหมาลำ '+_tsNum(cr.starterPrice)+(ex?(' + '+ex+'\u00d7'+_tsNum(cr.extraPerPax)):''),
+             zone:'charter', rt:(rt.name||rt.code||'') };
   }
   var RR=rt.seatRates && rt.seatRates[t.routeId];
   if(!RR) return null;
@@ -55946,7 +55947,8 @@ function tsNetOf(r){
     n += q*rate; parts.push(q+'\u00d7'+_tsNum(rate));
   });
   if(!parts.length) return null;
-  return { tot:Math.round(n), txt:parts.join(' + ') };
+  /* §agFair · โซนกับชื่อสัญญาที่ใช้ตั้งราคาใบนี้ · หน้าวิเคราะห์ต้องบอกได้ว่ากำลังเทียบกับอะไร */
+  return { tot:Math.round(n), txt:parts.join(' + '), zone:zone, rt:(rt.name||rt.code||'') };
 }
 function tsRouteColor(id){ var r=(typeof getRoute==='function'?getRoute(id):null)||{}; return r.color||'#8b909c'; }
 // §tsDocRef · อ้างอิงเอกสารจากหน้าตรวจเอกสาร · ป้ายเดียวกับที่หน้า By-trip ใช้
@@ -60063,6 +60065,10 @@ function pxUpsell(date, bid){
 }
 /* §pxAgent · เงินของลำนี้มาจากเจ้าไหนบ้าง · เงื่อนไขคัดใบจองต้องตรงกับ pxPax เป๊ะ
    ไม่งั้นยอดรวมสองที่จะไม่ตรงกัน แล้วไม่มีใครรู้ว่าอันไหนถูก */
+/* §agFair · รวมตัวนับสองก้อนเข้าด้วยกัน / หาคีย์ที่มีน้ำหนักมากสุด
+   ใช้บอกว่า "ช่องนี้ส่วนใหญ่เป็นสัญญาไหน โซนไหน" โดยไม่ต้องเก็บรายใบไว้ทั้งเดือน */
+function pxMrg(D,S){ if(!D||!S) return; Object.keys(S).forEach(function(k){ D[k]=(D[k]||0)+S[k]; }); }
+function pxTopK(m){ var b='',v=-1; Object.keys(m||{}).forEach(function(k){ if(m[k]>v){ v=m[k]; b=k; } }); return b; }
 function pxAgents(date, bid){
   var M={}, ord=[];
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
@@ -60078,11 +60084,25 @@ function pxAgents(date, bid){
     var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
     var nm=ag?(ag.name||ag.code||'—'):(b2c?'Love Andaman':String(b.channel||'walk-in'));
     var key=(ag&&ag.id)||(b2c?'_b2c':('_'+nm));
-    if(!M[key]){ M[key]={ key:key, name:nm, b2c:b2c, n:0, head:0, ad:0, chd:0, amt:0 }; ord.push(key); }
+    if(!M[key]){ M[key]={ key:key, name:nm, b2c:b2c, n:0, head:0, ad:0, chd:0, amt:0,
+                          exp:0, expAmt:0, expPax:0, expMiss:0, zn:{}, rtn:{} }; ord.push(key); }
     var A=M[key], px=t.pax||{}, PT=(typeof bkV2PaxTot==='function')?bkV2PaxTot:function(){return 0;};
     var chd=Math.min(PT(px,'chd'), tot);
     A.n++; A.head+=tot; A.chd+=chd; A.ad+=Math.max(0,tot-chd);
-    A.amt+=(typeof tsTripAmount==='function')?(+tsTripAmount(b,t)||0):0;
+    var _amt=(typeof tsTripAmount==='function')?(+tsTripAmount(b,t)||0):0;
+    A.amt+=_amt;
+    /* §agFair · ราคาที่ควรได้ตาม rate card ของใบนี้เอง (โซน สัญชาติ เด็ก/ผู้ใหญ่ ตามที่จองจริง)
+       ตัวเทียบเดิมคือค่าเฉลี่ยรวมทุกเอเจนต์ทุกโซน · สัญญาโปรฯ + โซนไม่รับส่ง จึงถูกฟ้องว่า
+       "จ่ายต่ำกว่าราคา" ทั้งที่จ่ายครบตามที่เราตั้งเอง
+       ฐานเทียบต้องเป็นจำนวนที่จอง ไม่ใช่จำนวนที่ขึ้นเรือ เพราะเงินคิดจากที่จอง
+       ใบไหนจับคู่เรตไม่ได้ (ตั้งราคาเอง / ไม่มี rate type) นับ expMiss แล้วกันออก ไม่เอามาเฉลี่ยปน */
+    var _nf=null;
+    try{ _nf=(typeof tsNetOf==='function')?tsNetOf({b:b,t:t}):null; }catch(_){ _nf=null; }
+    if(_nf && _nf.tot>0){
+      A.exp+=_nf.tot; A.expAmt+=_amt; A.expPax+=booked;
+      if(_nf.zone) A.zn[_nf.zone]=(A.zn[_nf.zone]||0)+booked;
+      if(_nf.rt)   A.rtn[_nf.rt]=(A.rtn[_nf.rt]||0)+booked;
+    } else A.expMiss++;
   });
   return ord.map(function(k){ return M[k]; }).sort(function(a,b){ return b.amt-a.amt; });
 }
@@ -60721,6 +60741,8 @@ function pxCSS(){ return ''
  +'#trippl-host td.mx u{display:block;text-decoration:none;font-size:9px;font-weight:700;'
    +'margin-top:3px;letter-spacing:.01em;color:#9F1239;opacity:.9}'
  +'#trippl-host td.mx u.dq{color:#B45309}'
+ /* §agFair · ป้ายที่ชี้ไปที่ "สัญญาของเราเอง" ไม่ใช่ที่เอเจนต์ · ต้องคนละสีกับป้ายกล่าวหา */
+ +'#trippl-host td.mx u.ct{color:#4338CA}'
  /* §revFlag · การ์ดรายได้ที่ต้องไปตรวจ */
  +'#trippl-host .eg.warn{border-color:#FECDD3;box-shadow:0 10px 30px -5px rgba(225,29,72,.06),'
    +'0 4px 12px -2px rgba(225,29,72,.04)}'
@@ -61183,12 +61205,21 @@ function pxDayAgg(date, pier){
     });
     var cph=t.cost/Math.max(1,t.px.tot);
     (pxAgents(date,t.bid)||[]).forEach(function(g){
-      var AA=a.agents[g.name]||(a.agents[g.name]={ name:g.name, b2c:!!g.b2c, n:0, pax:0, rev:0, cost:0, routes:{} });
+      var AA=a.agents[g.name]||(a.agents[g.name]={ name:g.name, b2c:!!g.b2c, n:0, pax:0, rev:0, cost:0, routes:{},
+        exp:0, expAmt:0, expPax:0, expMiss:0, zn:{}, rtn:{} });
       AA.n+=g.n; AA.pax+=g.head; AA.rev+=g.amt*(1-R); AA.cost+=cph*g.head;
+      /* §agFair · หัก VAT ด้วยตัวเดียวกับรายได้ ไม่งั้นสองตัวเลขเทียบกันไม่ได้ */
+      AA.exp+=(g.exp||0)*(1-R); AA.expAmt+=(g.expAmt||0)*(1-R);
+      AA.expPax+=(g.expPax||0); AA.expMiss+=(g.expMiss||0);
+      pxMrg(AA.zn,g.zn); pxMrg(AA.rtn,g.rtn);
       /* §agRoute · เอเจนต์คนเดียวกันส่งหลายเส้นทาง กำไรต่อหัวคนละเรื่องกัน ต้องแยกเก็บ */
       if(!AA.routes) AA.routes={};
-      var AR=AA.routes[rk]||(AA.routes[rk]={ n:0, pax:0, rev:0, cost:0 });
+      var AR=AA.routes[rk]||(AA.routes[rk]={ n:0, pax:0, rev:0, cost:0,
+        exp:0, expAmt:0, expPax:0, expMiss:0, zn:{}, rtn:{} });
       AR.n+=g.n; AR.pax+=g.head; AR.rev+=g.amt*(1-R); AR.cost+=cph*g.head;
+      AR.exp+=(g.exp||0)*(1-R); AR.expAmt+=(g.expAmt||0)*(1-R);
+      AR.expPax+=(g.expPax||0); AR.expMiss+=(g.expMiss||0);
+      pxMrg(AR.zn,g.zn); pxMrg(AR.rtn,g.rtn);
     });
     if(cap>0){
       var lf=t.px.tot/cap, i=(lf<0.4)?0:(lf<0.6?1:(lf<0.8?2:3));
@@ -61411,11 +61442,18 @@ function pxAnalysis(e){
       r.n+=s.n; r.pax+=s.pax; r.rev+=s.rev; r.cost+=s.cost; r.profit+=s.profit; r.cap+=s.cap;
       r.be+=s.be; r.beN+=s.beN; });
     Object.keys(x.agents).forEach(function(k){ var s=x.agents[k];
-      var g=AGN[k]||(AGN[k]={name:s.name,b2c:s.b2c,n:0,pax:0,rev:0,cost:0,routes:{}});
+      /* §agFair · ตัวเลขสัญญาต้องเดินทางมาถึงชั้นนี้ด้วย ไม่งั้นช่องในตารางไม่มีอะไรให้เทียบ */
+      var g=AGN[k]||(AGN[k]={name:s.name,b2c:s.b2c,n:0,pax:0,rev:0,cost:0,routes:{},
+        exp:0, expAmt:0, expPax:0, expMiss:0, zn:{}, rtn:{}});
       g.n+=s.n; g.pax+=s.pax; g.rev+=s.rev; g.cost+=s.cost;
+      g.exp+=(s.exp||0); g.expAmt+=(s.expAmt||0); g.expPax+=(s.expPax||0); g.expMiss+=(s.expMiss||0);
+      pxMrg(g.zn,s.zn); pxMrg(g.rtn,s.rtn);
       Object.keys(s.routes||{}).forEach(function(rk2){ var q=s.routes[rk2];
-        var d=g.routes[rk2]||(g.routes[rk2]={n:0,pax:0,rev:0,cost:0});
-        d.n+=q.n; d.pax+=q.pax; d.rev+=q.rev; d.cost+=q.cost; }); });
+        var d=g.routes[rk2]||(g.routes[rk2]={n:0,pax:0,rev:0,cost:0,
+          exp:0, expAmt:0, expPax:0, expMiss:0, zn:{}, rtn:{}});
+        d.n+=q.n; d.pax+=q.pax; d.rev+=q.rev; d.cost+=q.cost;
+        d.exp+=(q.exp||0); d.expAmt+=(q.expAmt||0); d.expPax+=(q.expPax||0); d.expMiss+=(q.expMiss||0);
+        pxMrg(d.zn,q.zn); pxMrg(d.rtn,q.rtn); }); });
     Object.keys(x.groups).forEach(function(k){ GRP[k]=(GRP[k]||0)+x.groups[k]; });
     for(var i=0;i<4;i++){ bandN[i]+=x.bandN[i]; bandNet[i]+=x.bandNet[i]; bandPax[i]+=x.bandPax[i]; }
   });
@@ -61681,6 +61719,15 @@ function pxAnalysis(e){
   function pxMxWhy(q, R0){
     var px=Math.max(1,q.pax), rph=q.rev/px, cph=q.cost/px;
     var rAvg=R0?(R0.rev/Math.max(1,R0.pax)):0, cAvg=R0?(R0.cost/Math.max(1,R0.pax)):0;
+    /* §agFair · ตัวเทียบที่ถูกต้องคือ rate card ของช่องนี้เอง ไม่ใช่ค่าเฉลี่ยรวมของเส้นทาง
+       eph = ราคาที่ควรได้ต่อหัว · aph = ที่เก็บได้จริงต่อหัว · คิดจากเฉพาะใบที่จับคู่เรตได้ */
+    var _ep=+q.expPax||0;
+    var eph=(_ep>0)?((+q.exp||0)/_ep):0;
+    var aph=(_ep>0)?((+q.expAmt||0)/_ep):0;
+    var zn=(typeof pxTopK==='function')?pxTopK(q.zn):'';
+    var rtn=(typeof pxTopK==='function')?pxTopK(q.rtn):'';
+    var ctx=(rtn||'rate card')+(zn?(' \u00b7 zone '+zn):'');
+    var miss=+q.expMiss||0;
     if(rph<=5) return { tag:'FOC', cls:'dq',
       txt:'No revenue recorded against these heads \u2014 free-of-charge or an internal trip. '
          +'The cost is real, the loss is a welfare cost, not a pricing problem.' };
@@ -61688,14 +61735,35 @@ function pxAnalysis(e){
       txt:'Takes only '+pxN(rph)+' \u0e3f per head against a route average of '+pxN(rAvg)
          +' \u0e3f \u2014 that is almost always a booking typed as a total instead of a per-head price. '
          +'Check it before treating this as a real loss.' };
+    /* จ่ายไม่ครบตามสัญญาของตัวเอง · นี่คือเงินหาย ต้องไปตาม ไม่ใช่เรื่องการตั้งราคา */
+    if(eph>0 && aph<eph*0.97) return { tag:'under contract', cls:'dq',
+      txt:'Its own rate card ('+ctx+') prices these heads at '+pxN(eph)
+         +' \u0e3f, but only '+pxN(aph)+' \u0e3f was taken \u2014 a gap of '+pxN(eph-aph)
+         +' \u0e3f per head, '+pxN((eph-aph)*_ep)+' \u0e3f on this cell. That is money not '
+         +'collected, not a pricing decision. Check these bookings before reading anything '
+         +'else in this row.' };
     if(cAvg>0 && cph>cAvg*1.15) return { tag:'empty boats', cls:'',
       txt:'Cost per head is '+Math.round((cph/cAvg-1)*100)+'% above the route average ('+pxN(cph)
          +' vs '+pxN(cAvg)+' \u0e3f) \u2014 these heads rode boats that sailed under-filled, so they '
          +'carried a bigger share of the fuel and crew. Fill the boat, not the rate card.' };
-    if(rAvg>0 && rph<rAvg*0.85) return { tag:'price '+Math.round((rph/rAvg-1)*100)+'%', cls:'',
+    /* จ่ายครบตามสัญญา แต่ยังต่ำกว่าค่าเฉลี่ยเส้นทาง · ตัวปัญหาคือสัญญาที่เราตั้งเอง ไม่ใช่เอเจนต์ */
+    if(eph>0 && rAvg>0 && rph<rAvg*0.85) return { tag:'contract < cost', cls:'ct',
+      txt:'Pays the rate card in full \u2014 '+ctx+' = '+pxN(eph)+' \u0e3f per head after VAT'
+         +(miss?(' ('+miss+' booking'+(miss===1?'':'s')+' here carry no rate card and are left '
+           +'out of this check)'):'')
+         +'. It reads '+Math.round((rph/rAvg-1)*100)+'% under the route average of '+pxN(rAvg)
+         +' \u0e3f only because that average blends every agent and every zone. The contract '
+         +'itself sits '+pxN(cph-rph)+' \u0e3f per head below cost \u2014 that moves at the next '
+         +'rate negotiation, not by chasing the agent.'
+         +(zn==='NoTransfer'?(' Note: the cost shown still spreads the route\u2019s van cost '
+           +'across these heads, and no-transfer guests never rode a van.'):'') };
+    /* จับคู่เรตไม่ได้เลย · บอกได้แค่ว่าต่ำกว่าค่าเฉลี่ย ซึ่งเป็นตัวเทียบที่หยาบ · อย่าสรุปแทน */
+    if(rAvg>0 && rph<rAvg*0.85) return { tag:'no rate card', cls:'dq',
       txt:'Pays '+pxN(rph)+' \u0e3f per head where the route averages '+pxN(rAvg)
-         +' \u0e3f, against a cost of '+pxN(cph)+' \u0e3f. The boats were normal \u2014 this is the rate '
-         +'card. Filling the boat will not fix it.' };
+         +' \u0e3f, against a cost of '+pxN(cph)+' \u0e3f. No rate card could be matched to these '
+         +'bookings \u2014 priced by hand, or no rate type on the booking \u2014 so this can only '
+         +'be read against the route average, which mixes every agent and zone. Check the rate '
+         +'type on these bookings first.' };
     var lf=(R0&&R0.lf)?Math.round(R0.lf*100):0;
     return { tag:'thin route', cls:'',
       txt:'Priced in line with the route \u2014 the route itself is the problem. It sails '
@@ -61708,8 +61776,17 @@ function pxAnalysis(e){
       return '<td class="mx e"><div><span>\u2014</span></div></td>';
     var px=Math.max(1,q.pax), nph=Math.round((q.rev-q.cost)/px), loss=nph<0;
     var W=(loss && !noWhy)?pxMxWhy(q,R0):null;
+    /* §agFair · ราคาตามสัญญาอยู่บรรทัดถัดจากรายได้จริงเสมอ · ไม่ต้องรอให้ขาดทุนถึงจะเห็น */
+    var _ep2=+q.expPax||0;
+    var _cp=(_ep2>0)?((+q.exp||0)/_ep2):0;      /* ควรได้ตามการ์ด */
+    var _ca=(_ep2>0)?((+q.expAmt||0)/_ep2):0;   /* เก็บได้จริง · ฐานเดียวกัน = จำนวนที่จอง */
+    var _cz=(typeof pxTopK==='function')?pxTopK(q.zn):'';
+    var _cr=(typeof pxTopK==='function')?pxTopK(q.rtn):'';
     var ttl=label+' \u00b7 '+q.pax+' pax \u00b7 rev '+pxN(q.rev/px)+'/pax \u00b7 cost '
       +pxN(q.cost/px)+'/pax \u00b7 net '+pxN(q.rev-q.cost)+' \u0e3f'
+      +(_cp>0?('\nRate card '+pxN(_cp)+' \u0e3f/pax \u00b7 taken '+pxN(_ca)+' \u0e3f/pax'
+        +'\nBasis: '+_ep2+' booked pax matched to a rate card'
+        +(_cr?(' \u00b7 '+_cr):'')+(_cz?(' \u00b7 zone '+_cz):'')):'')
       +(W?('\n\nWhy: '+W.txt):'');
     return '<td class="mx '+pxMxCls(nph)+'" title="'+e(ttl)+'">'
       +'<div><b class="'+(loss?'neg':'pos')+' n">'+(loss?'\u2212':'+')+pxN(Math.abs(nph))+'</b>'
