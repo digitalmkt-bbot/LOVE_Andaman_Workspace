@@ -88503,8 +88503,22 @@ function pjDocsHtml(boat, rt, date){
 /* สีประจำหมวดในการ์ด */
 var PJ_SEC={crew:{bg:'#EAF0F9',fg:'#1B4A87',bd:'#D3E0F2'},
             guide:{bg:'#F2EBFA',fg:'#5B3B96',bd:'#E2D6F3'},
+            /* §pjKit · ภาษากับครัวเคยเป็นแค่สองบรรทัดท้ายกลุ่มไกด์ · คนละเรื่องกับไกด์
+               และเป็นของที่ครัวกับหน้าท่าต้องอ่านคนละรอบ จึงแยกเป็นหัวข้อของตัวเอง */
+            lang:{bg:'#EAF1FB',fg:'#1F5FA8',bd:'#D5E4F6'},
+            kit: {bg:'#FBF1E4',fg:'#8A5100',bd:'#F0DEC4'},
             cust:{bg:'#EAF4EE',fg:'#14603E',bd:'#D2E7DA'},
             note:{bg:'#FDF3E2',fg:'#8A5A00',bd:'#F2E1C0'}};
+/* §pjKit · สีประจำร้านอาหาร · ทะเบียนร้านไม่มีช่องสี จึงคิดจาก id แบบเดิม ๆ ทุกครั้ง
+   ร้านเดิมได้สีเดิมเสมอ · เพิ่มหรือลบร้านแล้วสีของร้านอื่นไม่สลับตาม */
+var PJ_MV_PAL=[['#0B6552','#E2F5EF'],['#8A5100','#FDF0DC'],['#20477E','#E9EFF7'],
+               ['#96501E','#FBEEE4'],['#6B3A7A','#F4EAF7'],['#0E6E86','#E3F2F7'],
+               ['#9E1E5C','#FBE4EE'],['#5C6B12','#F1F4DC']];
+function pjMvCol(id){
+  var k=String(id||''); if(!k) return ['#9BA3B0','#F4F5F8'];
+  var n=0; for(var i=0;i<k.length;i++) n=(n*31+k.charCodeAt(i))%997;
+  return PJ_MV_PAL[n%PJ_MV_PAL.length];
+}
 
 function pjCSS(){
   var H='.pj-host';
@@ -88657,9 +88671,29 @@ function pjCSS(){
   +H+' .pj-pax .c{flex:1;padding:9px 6px;text-align:center;border-right:1px solid #EFF1F5}'
   +H+' .pj-pax .c:last-child{border-right:none}'
   +H+' .pj-pax .k{font-size:9px;font-weight:800;color:#9BA3B0;letter-spacing:.06em}'
-  +H+' .pj-pax .v{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;margin-top:1px}'
+  /* §pjKit · ตัวเลขคนคือของที่ต้องอ่านจากอีกฝั่งโต๊ะ · ตัวเดิม 15px เล็กเกินไป */
+  +H+' .pj-pax .v{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;'
+     +'margin-top:2px;letter-spacing:-.02em;color:#16265C;line-height:1.1}'
   +H+' .pj-pax .c.t{background:#F1F8F4}'
-  +H+' .pj-pax .c.t .v{color:#0F6E56;font-size:19px}'
+  +H+' .pj-pax .c.t .v{color:#0F6E56;font-size:26px}'
+  +H+' .pj-pax .k{font-size:9.5px}'
+  /* §pjKit · ภาษาที่ลูกค้าขอ · ชิปใหญ่ขึ้นให้เห็นจากระยะไกล */
+  +H+' .pj-langbox{display:flex;flex-wrap:wrap;gap:6px;padding:9px 15px;border-bottom:1px solid #F4F5F8}'
+  +H+' .pj-lgb{font-size:12px;font-weight:800;letter-spacing:.03em;padding:3px 11px;border-radius:99px;'
+     +'background:#E9EFF7;color:#20477E;border:1px solid #D3E0F2}'
+  +H+' .pj-noneb{font-size:11.5px;color:#C0C6CE}'
+  /* §pjKit · ชื่อร้านอาหาร · สีประจำร้านทำให้แยกออกตั้งแต่ยังไม่ทันอ่านชื่อ */
+  +H+' .pj-kit{padding:9px 15px 10px;border-bottom:1px solid #F4F5F8}'
+  +H+' .pj-kitn{display:flex;align-items:center;gap:8px;border:1px solid;border-radius:10px;padding:7px 11px}'
+  +H+' .pj-kitn i{width:9px;height:9px;border-radius:50%;flex:none}'
+  +H+' .pj-kitn b{font-size:13.5px;font-weight:800;letter-spacing:-.01em;flex:1;min-width:0;'
+     +'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  +H+' .pj-kitn .pr{font-size:10.5px;font-weight:700;color:#6B7280;flex:none;font-variant-numeric:tabular-nums}'
+  +H+' .pj-kitsel{margin-top:6px}'
+  +H+' .pj-kitsel select{width:100%;border:1px solid #E4E7EE;background:#fff;border-radius:8px;'
+     +'padding:5px 8px;font:600 11.5px inherit;font-family:inherit;color:#42506A}'
+  +H+' .pj-kitsel select:hover{border-color:#C9D2DE}'
+  +H+' .pj-kitsel select:disabled{background:#FAFBFC;color:#9BA3B0}'
   +H+' .pj-note{height:56px;overflow:auto;margin:10px 15px 12px;border:1px dashed #E5D3A8;border-radius:9px;background:#fff;padding:8px 11px;font-size:12px;font-weight:600;color:#7A4A00;line-height:1.55;outline:none}'
   +H+' .pj-note:focus{border-style:solid;border-color:#D9A441;box-shadow:0 0 0 3px rgba(217,164,65,.15)}'
   +H+' .pj-note:empty:before{content:attr(data-ph);color:#C9CFD8;font-weight:400}'
@@ -88759,7 +88793,10 @@ function pjGo(pfx){
   else if(pfx==='po' && typeof renderPierOffice==='function') renderPierOffice(_poPier);
 }
 
-function pjSecHd(t,k){ var S=PJ_SEC[k]; return '<div class="pj-gh" style="--bg:'+S.bg+';--fg:'+S.fg+';--bd:'+S.bd+'">'+t+'</div>'; }
+/* §pjAlign2 · ติดชื่อกลุ่มไว้กับหัวข้อ · ใบที่ออกเรือมีหัวข้อมากกว่าใบที่ไม่ออก
+   จัดระดับด้วยลำดับที่ (อันที่ 3 กับอันที่ 3) จึงจับคู่ผิดเรื่องกัน ต้องจับด้วยชื่อกลุ่ม */
+function pjSecHd(t,k){ var S=PJ_SEC[k]||PJ_SEC.crew;
+  return '<div class="pj-gh" data-sec="'+k+'" style="--bg:'+S.bg+';--fg:'+S.fg+';--bd:'+S.bd+'">'+t+'</div>'; }
 /* §pierRotate · เลือกคนได้จากทั้ง 3 ท่า · ท่านี้ขึ้นก่อน ท่าอื่นอยู่กลุ่ม "มาช่วย" */
 /* §pierBlob · ตำแหน่งของคนนี้เข้าข่ายที่ช่องนี้ต้องการไหม
    เทียบแบบ "มีคำนี้อยู่ในตำแหน่ง" ไม่ใช่ตรงเป๊ะ · ช่างกล ช่างยนต์ ช่างไฟฟ้า เข้ากลุ่ม "ช่าง" ทั้งหมด
@@ -89145,10 +89182,10 @@ function pjCard(B, pier, ro){
             var gd=GF.filter(function(x){ return x.guide; });
             var tr=GF.filter(function(x){ return !x.guide; });
             var need=Object.keys(pax.langs||{});
-            var out=gd.length
-              ? gd.map(function(x,i){ return pjGuideRow('Guide '+(i+1), x.name, x.langs); }).join('')
-              : pjGuideRow('Guide 1','',[]);
-            if(gd.length<3) for(var i=gd.length; i<3; i++) out+=pjGuideRow('Guide '+(i+1),'',[]);
+            /* §pjG1 · เดิมใบที่ยังไม่ได้จัดไกด์ขึ้น Guide 1 สองแถวซ้อนกัน
+               ช่องว่างมาจากตัวเติมอยู่แล้ว ไม่ต้องใส่ช่องแรกแยกอีก */
+            var out=gd.map(function(x,i){ return pjGuideRow('Guide '+(i+1), x.name, x.langs); }).join('');
+            for(var i=gd.length; i<3; i++) out+=pjGuideRow('Guide '+(i+1),'',[]);
             var trTxt=tr.map(function(x){ return x.name; }).join(' · ');
             var trN=tr.length+(+GF.other||0);
             if(!trTxt && GF.other>0) trTxt=GF.other+' คน';
@@ -89156,25 +89193,41 @@ function pjCard(B, pier, ro){
               (trTxt?('<div class="v">'+poE(trTxt)+'</div>'):'<div class="v e">—</div>')
               +(trN>1?('<span class="pj-lgs"><span class="pj-lg" style="background:#F1EFE8;color:#6B6B63">'
                        +trN+' คน</span></span>'):''), null);
-            if(need.length) out+=pjRow('ภาษาที่ลูกค้าขอ',
-              '<span class="pj-lgs" style="flex-wrap:wrap">'
-              +need.map(function(L){ return '<span class="pj-lg">'+poE(L)+'</span>'; }).join('')
-              +'</span><span style="flex:1"></span>', null);
-            return out;
+            return out;   /* §pjKit · ภาษาย้ายออกไปเป็นหัวข้อของตัวเองข้างล่าง */
           })()
-        /* §mealTrip · ร้านอาหารของลำนี้วันนี้ · ค่าเริ่มต้นมาจากเส้นทาง กดเปลี่ยนเฉพาะวันนี้ได้ */
+        /* §pjKit · ภาษาที่ลูกค้าขอ · เป็นของที่ไกด์กับหน้าท่าต้องเห็นก่อนออกเรือ
+           อยู่เป็นบรรทัดสุดท้ายของกลุ่มไกด์แล้วถูกมองข้ามตลอด */
+        + pjSecHd('ภาษาที่ลูกค้าขอ','lang')
+        + (function(){
+            var nd=Object.keys(pax.langs||{});
+            return '<div class="pj-langbox">'
+              +(nd.length
+                 ? nd.map(function(L){ return '<span class="pj-lgb">'+poE(L)+'</span>'; }).join('')
+                 : '<span class="pj-noneb">ไม่มีคำขอภาษาในวันนี้</span>')
+              +'</div>';
+          })()
+        /* §mealTrip · ร้านอาหารของลำนี้วันนี้ · ค่าเริ่มต้นมาจากเส้นทาง กดเปลี่ยนเฉพาะวันนี้ได้
+           §pjKit · ชื่อร้านต้องอ่านออกจากระยะไกล · ครัวใช้ใบนี้จัดของ ไม่ได้มานั่งอ่านทีละบรรทัด */
+        + pjSecHd('ครัว · ร้านอาหาร','kit')
         + (function(){
             var raw=mvTripRaw(_poDate,bid), V=mvForTrip(_poDate,bid,B.rid);
+            var col=pjMvCol(V?V.id:''), nm=V?(V.name||V.id):'';
             var sel='<select onchange="pjMvSet(\''+bid+'\',this.value)"'+(lro?' disabled':'')+'>'
               +'<option value=""'+(raw===''?' selected':'')+'>ตามเส้นทาง'
                 +(mvForRoute(B.rid)?(' · '+poE(mvForRoute(B.rid).name||'')):' · ยังไม่ได้ตั้ง')+'</option>'
               + mvList().map(function(x){ return '<option value="'+poE(x.id)+'"'+(raw===x.id?' selected':'')+'>'
                   +poE(x.name||x.id)+' · '+(+x.priceAd||0)+'/'+(+x.priceCh||0)+'</option>'; }).join('')
               +'<option value="-"'+(raw==='-'?' selected':'')+'>ไม่มีอาหารวันนี้</option>'
-              +'</select>'
-              +(raw?'<span class="pj-tag" title="เปลี่ยนเฉพาะวันนี้ · ไม่กระทบค่าปกติของเส้นทาง">วันนี้</span>':'')
-              +(V?'':'<span class="pj-was">ไม่มีค่าอาหารในทริปนี้</span>');
-            return pjRow('ครัว', sel, null);
+              +'</select>';
+            return '<div class="pj-kit">'
+              +'<div class="pj-kitn" style="background:'+col[1]+';border-color:'+col[0]+'33">'
+                +'<i style="background:'+col[0]+'"></i>'
+                +'<b style="color:'+col[0]+'">'+(nm?poE(nm):(raw==='-'?'ไม่มีอาหารวันนี้':'ยังไม่ได้ตั้งร้าน'))+'</b>'
+                +(V?('<span class="pr">'+(+V.priceAd||0)+' / '+(+V.priceCh||0)+' ฿</span>'):'')
+                +(raw&&raw!=='-'?'<span class="pj-tag" title="เปลี่ยนเฉพาะวันนี้ · ไม่กระทบค่าปกติของเส้นทาง">วันนี้</span>':'')
+              +'</div>'
+              +'<div class="pj-kitsel">'+sel+'</div>'
+            +'</div>';
           })() )
       /* §pjWork · ลำที่ไม่ได้ออก · ช่องนี้เปลี่ยนเป็น "งานที่ทำวันนี้" */
       : ( pjSecHd('งานของลำนี้','guide')   /* §pjSame · สองกรณีโชว์ช่องเดียวกันทุกช่อง */
@@ -89343,25 +89396,30 @@ function pjAlignSecs(){
       var c=h.parentElement; if(c && cards.indexOf(c)<0) cards.push(c);
     });
     if(cards.length<2) return;
-    var G=[];
-    cards.forEach(function(c){
-      var hs=Array.prototype.filter.call(c.children, function(e){
-        return e.classList && e.classList.contains('pj-gh'); });
-      hs.forEach(function(h,i){ (G[i]=G[i]||[]).push({c:c, h:h, n:hs[i+1]||null}); });
-    });
-    /* หัวข้อสุดท้าย (หมายเหตุ) ไม่ต้องเติม · ช่องนั้นยืดเองและปุ่มท้ายใบชิดล่างอยู่แล้ว
-       เติมไปก็ได้แค่การ์ดสูงขึ้นเปล่า ๆ */
-    for(var i=0;i<G.length-1;i++){
-      var row=G[i]; if(!row || row.length<2) continue;
-      var hh=row.map(function(x){ return (x.n?x.n.offsetTop:x.c.scrollHeight)-x.h.offsetTop; });
-      var mx=Math.max.apply(null,hh);
+    /* §pjAlign2 · จับคู่ด้วยชื่อกลุ่ม ไม่ใช่ลำดับที่ · ใบที่ออกเรือมีภาษา/ครัวเพิ่มมา
+       ถ้าจับด้วยลำดับ "ครัว" ของใบหนึ่งจะไปตรงกับ "ช่วงงาน" ของอีกใบ ซึ่งคนละเรื่องกัน
+       ใบไหนไม่มีกลุ่มนั้นก็ข้ามไป · กลุ่มถัดไปที่มันมีจะไปตรงกับใบอื่นเอง
+       ดันด้วยการแทรกช่องว่าง "ก่อน" หัวข้อ จึงไม่ต้องวัดความสูงของทั้งกลุ่ม */
+    var CANON=['crew','guide','lang','kit','cust','note'];
+    CANON.forEach(function(K, ki){
+      if(ki>=CANON.length-1) return;   /* กลุ่มสุดท้ายไม่ต้องดัน · ช่องหมายเหตุยืดเองอยู่แล้ว */
+      var row=[];
+      cards.forEach(function(c){
+        var h=Array.prototype.filter.call(c.children, function(e){
+          return e.classList && e.classList.contains('pj-gh')
+              && e.getAttribute('data-sec')===K; })[0];
+        if(h) row.push({c:c, h:h});
+      });
+      if(row.length<2) return;
+      var tops=row.map(function(x){ return x.h.offsetTop; });
+      var mx=Math.max.apply(null,tops);
       row.forEach(function(x,k){
-        var d=Math.round(mx-hh[k]); if(d<1) return;
+        var d=Math.round(mx-tops[k]); if(d<1) return;
         var sp=document.createElement('div');
         sp.className='pj-spx'; sp.style.height=d+'px';
-        if(x.n) x.c.insertBefore(sp, x.n); else x.c.appendChild(sp);
+        x.c.insertBefore(sp, x.h);
       });
-    }
+    });
   }catch(_){}
 }
 /* จอเปลี่ยนขนาด แถวในการ์ดตัดคำใหม่ · ต้องวัดใหม่ ไม่งั้นช่องว่างค้างผิดขนาด */
