@@ -59962,11 +59962,14 @@ function mvCost(venue, nAd, nCh){
 /* ═══ §tripPL · P&L รายทริป ══════════════════════════════════════════════════
    ไม่มีสูตรของตัวเอง · ป้อนของจริงเข้า ctCalc ของหน้าต้นทุน แล้วเอาผลมาแสดง
    ═══════════════════════════════════════════════════════════════════════════ */
-var _px = { date:'', pier:'', open:{}, tab:'d', mon:'', an:47, oc:{}, agAll:false };
+var _px = { date:'', pier:'', open:{}, tab:'d', mon:'', an:47, oc:{}, agAll:false, mkO:'' };
 /* §agAll · ตาราง Agent contribution ตัดที่ 15 เจ้า · ที่เหลือเป็นบรรทัด "… N more" ที่กดไม่ได้
    118 เจ้าเห็นแค่ 15 แปลว่า 103 เจ้าที่เหลือดูไม่ได้เลยจากหน้านี้
    และเจ้าที่ขาดทุนมักไม่ได้อยู่ 15 อันดับแรก (เรียงตาม total net) — คือกลุ่มที่ต้องดูที่สุด */
 function pxAgAll(){ _px.agAll=!_px.agAll; renderTripPL(); }
+/* §pxMkt · กางตลาดหนึ่งตลาดเพื่อดูว่าเจ้าไหนดันขึ้น เจ้าไหนถ่วงลง · ทีละตลาดพอ
+   กางพร้อมกันหลายตลาดทำให้ตารางยาวจนหาที่ค้างไว้ไม่เจอ */
+function pxMkOpen(k){ _px.mkO=(_px.mkO===k)?'':String(k||''); renderTripPL(); }
 
 /* แผนต้นทุนของเส้นทางนี้ · ใช้แค่ ovr/grp (ที่ปรับ-ปิดรายเส้นทาง)
    ไม่ใช้ pax/price/boats/fuel ของแผน เพราะนั่นเป็นค่าไว้ลองเล่นในหน้าต้นทุน
@@ -60084,7 +60087,9 @@ function pxAgents(date, bid){
     var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
     var nm=ag?(ag.name||ag.code||'—'):(b2c?'Love Andaman':String(b.channel||'walk-in'));
     var key=(ag&&ag.id)||(b2c?'_b2c':('_'+nm));
-    if(!M[key]){ M[key]={ key:key, name:nm, b2c:b2c, n:0, head:0, ad:0, chd:0, amt:0,
+    /* §pxMkt · ตลาดของเจ้านี้ · ใบตรง/หน้าเคาน์เตอร์ให้ตกไปอยู่ walkin ไม่ใช่ค้างเป็นช่องว่าง */
+    var mk=(ag&&ag.market)||(b2c?'walkin':'');
+    if(!M[key]){ M[key]={ key:key, name:nm, b2c:b2c, mk:mk, n:0, head:0, ad:0, chd:0, amt:0,
                           exp:0, expAmt:0, expPax:0, expMiss:0, zn:{}, rtn:{} }; ord.push(key); }
     var A=M[key], px=t.pax||{}, PT=(typeof bkV2PaxTot==='function')?bkV2PaxTot:function(){return 0;};
     var chd=Math.min(PT(px,'chd'), tot);
@@ -60743,6 +60748,33 @@ function pxCSS(){ return ''
  +'#trippl-host td.mx u.dq{color:#B45309}'
  /* §agFair · ป้ายที่ชี้ไปที่ "สัญญาของเราเอง" ไม่ใช่ที่เอเจนต์ · ต้องคนละสีกับป้ายกล่าวหา */
  +'#trippl-host td.mx u.ct{color:#4338CA}'
+ /* §pxMkt · สองแผงอันดับตลาด + แถวที่กางดูเอเย่นต์ข้างในได้ */
+ +'#trippl-host .mkw{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-bottom:14px}'
+ +'@media(max-width:900px){#trippl-host .mkw{grid-template-columns:1fr}}'
+ +'#trippl-host .mkp{border:1px solid #E2E8F0;border-radius:16px;padding:13px 15px 9px;background:#fff}'
+ +'#trippl-host .mkp.bad{border-color:#FECDD3;background:#FFFAFA}'
+ +'#trippl-host .mkp h3{font-size:12.5px;font-weight:800;margin:0;color:#0F172A;letter-spacing:-.01em}'
+ +'#trippl-host .mkp p{font-size:10.5px;color:#94A3B8;margin:2px 0 7px;line-height:1.5}'
+ +'#trippl-host .mkr{display:flex;align-items:center;gap:9px;padding:6px 0;border-top:1px solid #F1F5F9}'
+ +'#trippl-host .mkr .rk{width:16px;font:800 11px "DM Mono",monospace;color:#CBD5E1;flex:none;text-align:right}'
+ +'#trippl-host .mkr i{width:8px;height:8px;border-radius:3px;flex:none}'
+ +'#trippl-host .mkr .nm{flex:1;min-width:0}'
+ +'#trippl-host .mkr .nm b{display:block;font-size:12.5px;font-weight:700;color:#0F172A;'
+   +'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+ +'#trippl-host .mkr .nm small{font-size:10px;color:#94A3B8}'
+ +'#trippl-host .mkr .v{font:800 14px "DM Mono",monospace;letter-spacing:-.02em;white-space:nowrap;text-align:right}'
+ +'#trippl-host .mkr .v.neg{color:#BE123C}'
+ +'#trippl-host .mkr .v.pos{color:#047857}'
+ +'#trippl-host .mkr .v small{display:block;font:500 10px inherit;color:#94A3B8;font-family:inherit}'
+ +'#trippl-host tr.mkrow{cursor:pointer}'
+ +'#trippl-host tr.mkrow:hover td{background:#F8FAFC}'
+ +'#trippl-host tr.mkrow.on td{background:#F1F5F9}'
+ +'#trippl-host tr.mkdet>td{background:#F8FAFC;padding:0}'
+ +'#trippl-host .mkdw{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:12px 16px 14px;text-align:left}'
+ +'@media(max-width:900px){#trippl-host .mkdw{grid-template-columns:1fr}}'
+ +'#trippl-host .mkdw h4{font:800 10.5px inherit;letter-spacing:.05em;text-transform:uppercase;'
+   +'color:#94A3B8;margin:0 0 3px}'
+ +'#trippl-host .mkdw .none{font-size:11.5px;color:#94A3B8;padding:7px 0}'
  /* §revFlag · การ์ดรายได้ที่ต้องไปตรวจ */
  +'#trippl-host .eg.warn{border-color:#FECDD3;box-shadow:0 10px 30px -5px rgba(225,29,72,.06),'
    +'0 4px 12px -2px rgba(225,29,72,.04)}'
@@ -61205,7 +61237,7 @@ function pxDayAgg(date, pier){
     });
     var cph=t.cost/Math.max(1,t.px.tot);
     (pxAgents(date,t.bid)||[]).forEach(function(g){
-      var AA=a.agents[g.name]||(a.agents[g.name]={ name:g.name, b2c:!!g.b2c, n:0, pax:0, rev:0, cost:0, routes:{},
+      var AA=a.agents[g.name]||(a.agents[g.name]={ name:g.name, b2c:!!g.b2c, mk:(g.mk||''), n:0, pax:0, rev:0, cost:0, routes:{},
         exp:0, expAmt:0, expPax:0, expMiss:0, zn:{}, rtn:{} });
       AA.n+=g.n; AA.pax+=g.head; AA.rev+=g.amt*(1-R); AA.cost+=cph*g.head;
       /* §agFair · หัก VAT ด้วยตัวเดียวกับรายได้ ไม่งั้นสองตัวเลขเทียบกันไม่ได้ */
@@ -61443,8 +61475,9 @@ function pxAnalysis(e){
       r.be+=s.be; r.beN+=s.beN; });
     Object.keys(x.agents).forEach(function(k){ var s=x.agents[k];
       /* §agFair · ตัวเลขสัญญาต้องเดินทางมาถึงชั้นนี้ด้วย ไม่งั้นช่องในตารางไม่มีอะไรให้เทียบ */
-      var g=AGN[k]||(AGN[k]={name:s.name,b2c:s.b2c,n:0,pax:0,rev:0,cost:0,routes:{},
+      var g=AGN[k]||(AGN[k]={name:s.name,b2c:s.b2c,mk:(s.mk||''),n:0,pax:0,rev:0,cost:0,routes:{},
         exp:0, expAmt:0, expPax:0, expMiss:0, zn:{}, rtn:{}});
+      if(!g.mk && s.mk) g.mk=s.mk;
       g.n+=s.n; g.pax+=s.pax; g.rev+=s.rev; g.cost+=s.cost;
       g.exp+=(s.exp||0); g.expAmt+=(s.expAmt||0); g.expPax+=(s.expPax||0); g.expMiss+=(s.expMiss||0);
       pxMrg(g.zn,s.zn); pxMrg(g.rtn,s.rtn);
@@ -61816,6 +61849,125 @@ function pxAnalysis(e){
   /* เส้นทางที่ทั้งบริษัทขาดทุน · เอาไว้เขียนสรุปใต้ตาราง */
   var mxBad=RCOL.filter(function(r){ return r.nph<0; });
 
+  /* §pxMkt · รายตลาด · ตารางเอเย่นต์บอกว่า "เจ้าไหน" แต่ไม่บอกว่า "ตลาดไหน"
+     ซึ่งเป็นหน่วยที่ใช้ตัดสินใจจริง — จะไปออกงาน จะทำโปรฯ จะขึ้นราคา ทำกันเป็นตลาด ไม่ใช่รายเจ้า
+     เรียงด้วยกำไรต่อหัว เพื่อไม่ให้ตลาดใหญ่ที่กำไรบางกลบตลาดเล็กที่กำไรดี · ยอดรวมโชว์คู่ไว้ให้เห็นน้ำหนัก */
+  var MKM={};
+  AL.forEach(function(g){
+    var k=g.mk||'_none';
+    var M=MKM[k]||(MKM[k]={ k:k, n:0, pax:0, rev:0, cost:0, ags:[] });
+    M.n+=g.n; M.pax+=g.pax; M.rev+=g.rev; M.cost+=g.cost; M.ags.push(g);
+  });
+  var ML=Object.keys(MKM).map(function(k){
+    var m=MKM[k];
+    var mo=(k!=='_none' && typeof sbGetMarket==='function')?sbGetMarket(k):null;
+    /* §pxMkt · ใบตรงถูกตั้ง market เป็น b2c ซึ่งไม่ได้อยู่ในทะเบียนตลาด · ใส่ชื่อให้เอง
+       ไม่งั้นตารางขึ้นรหัสดิบ "b2c" ปนกับชื่อเต็มของตลาดอื่น */
+    var FB={ b2c:'Direct · B2C', walkin:'Walk-in / Direct', staff:'Staff / Internal' };
+    m.name=(mo&&mo.name)||FB[k]||(k==='_none'?'ไม่ระบุตลาด':String(k));
+    m.color=(mo&&mo.color)||'#94A3B8';
+    m.net=m.rev-m.cost;
+    m.rph=m.rev/Math.max(1,m.pax); m.cph=m.cost/Math.max(1,m.pax);
+    m.nph=m.net/Math.max(1,m.pax);
+    m.ags.sort(function(a,b){ return b.nph-a.nph; });
+    m.loss=m.ags.filter(function(a){ return a.nph<0; });
+    m.drag=m.loss.reduce(function(s2,a){ return s2+a.net; },0);
+    return m;
+  }).filter(function(m){ return m.pax>0; }).sort(function(a,b){ return b.nph-a.nph; });
+
+  var mkGood=ML.slice(0,5);
+  var mkLossAll=ML.filter(function(m){ return m.nph<0; });
+  /* §pxMkt · แผงขวาเป็น "5 อันดับท้าย" เสมอ ไม่ใช่เฉพาะตลาดที่ติดลบ
+     ถ้ามีตลาดขาดทุนน้อยกว่า 5 แผงจะเหลือแถวเดียวสองแถว อ่านแล้วเหมือนไม่มีอะไรต้องดู
+     ทั้งที่ตลาดที่กำไรบางเฉียบคือกลุ่มถัดไปที่จะพลิกเป็นลบ */
+  var mkBad=ML.slice().sort(function(a,b){ return a.nph-b.nph; }).slice(0,5);
+  var mkLossDrag=mkLossAll.reduce(function(s2,m){ return s2+m.net; },0);
+
+  function pxMkRow(m, i, neg){
+    return '<div class="mkr"><span class="rk">'+(i+1)+'</span>'
+      +'<i style="background:'+e(m.color)+'"></i>'
+      +'<div class="nm"><b>'+e(m.name)+'</b><small>'+m.ags.length+' agent'+(m.ags.length===1?'':'s')
+        +' · '+m.pax+' pax'
+        +(m.loss.length?(' · '+m.loss.length+' เจ้าขาดทุน'):'')+'</small></div>'
+      +'<div class="v '+(neg?'neg':'pos')+'">'+(neg?'\u2212':'+')+pxN(Math.abs(m.nph))
+        +'<small>'+(m.net<0?'\u2212':'+')+pxN(Math.abs(m.net))+' \u0e3f total</small></div></div>';
+  }
+  function pxMkAgLine(g, i){
+    var neg=g.nph<0;
+    return '<div class="mkr"><span class="rk">'+(i+1)+'</span>'
+      +'<i style="background:'+pxAColor(g)+'"></i>'
+      +'<div class="nm"><b>'+e(g.name)+'</b><small>'+g.pax+' pax · '+g.n+' booking'
+        +(g.n===1?'':'s')+'</small></div>'
+      +'<div class="v '+(neg?'neg':'pos')+'">'+(neg?'\u2212':'+')+pxN(Math.abs(g.nph))
+        +'<small>'+(g.net<0?'\u2212':'+')+pxN(Math.abs(g.net))+' \u0e3f total</small></div></div>';
+  }
+
+  var mktCard = ML.length ? ('<div class="eg mb"><div class="phd"><div><h2>Market contribution</h2>'
+    +'<p>Net per pax by market · ranked per head so a big thin market cannot hide a small strong one '
+    +'· คลิกแถวในตารางเพื่อดูว่าเจ้าไหนดันขึ้น เจ้าไหนถ่วงลง</p></div>'
+    +'<div><span class="pill pu">'+ML.length+' markets · '+AL.length+' agents</span></div></div>'
+    +'<div class="mkw">'
+      +'<div class="mkp"><h3>5 ตลาดที่กำไรต่อหัวดีที่สุด</h3>'
+      +'<p>เรียงตามกำไรต่อหัว · ตัวเลขเล็กด้านล่างคือกำไรรวมของตลาดนั้น</p>'
+      +mkGood.map(function(m,i){ return pxMkRow(m,i,m.nph<0); }).join('')+'</div>'
+      +'<div class="mkp bad"><h3>5 ตลาดที่อ่อนที่สุด</h3>'
+      +'<p>'+(mkLossAll.length
+        ?(mkLossAll.length+' ตลาดขาดทุน · ลากกำไรรวมลง '+pxN(Math.abs(mkLossDrag))
+          +' \u0e3f · ที่เหลือในแผงนี้คือกลุ่มถัดไปที่จะพลิกเป็นลบ')
+        :'ไม่มีตลาดไหนขาดทุน · นี่คือกลุ่มที่กำไรต่อหัวบางที่สุด')+'</p>'
+      +mkBad.map(function(m,i){ return pxMkRow(m,i,m.nph<0); }).join('')+'</div>'
+    +'</div>'
+    +'<div class="twrap"><div class="tscroll"><table class="sum" style="min-width:760px">'
+    +'<thead><tr><th class="l" style="min-width:212px">Market</th><th class="c">Agents</th>'
+    +'<th class="c">Pax</th><th>Rev / pax</th><th>Cost / pax</th><th>Net / pax</th>'
+    +'<th>Total net</th><th class="c">Status</th></tr></thead><tbody>'
+    +ML.map(function(m){
+      var neg=m.nph<0, on=(_px.mkO===m.k);
+      var row='<tr class="br mkrow'+(neg?' loss':'')+(on?' on':'')+'" onclick="pxMkOpen(\''+e(m.k)+'\')">'
+        +'<td class="l"><div class="bn"><i style="background:'+e(m.color)+'"></i><div>'
+          +'<b>'+e(m.name)+'</b><small>'+(m.loss.length
+            ?(m.loss.length+' เจ้าขาดทุน · ลาก '+pxN(Math.abs(m.drag))+' \u0e3f')
+            :'ทุกเจ้ากำไร')+'</small></div></div></td>'
+        +'<td class="c"><span class="num n">'+m.ags.length+'</span></td>'
+        +'<td class="c"><span class="num n">'+m.pax+'</span></td>'
+        +'<td><span class="num n">'+pxN(m.rph)+'</span></td>'
+        +'<td><span class="num n">'+pxN(m.cph)+'</span></td>'
+        +'<td class="netc'+(neg?' neg':'')+'"><span class="net'+(neg?' neg':'')+' n">'
+          +(neg?'\u2212':'+')+pxN(Math.abs(m.nph))+'</span></td>'
+        +'<td class="netc'+(m.net<0?' neg':'')+'"><span class="net'+(m.net<0?' neg':'')+' n">'
+          +(m.net<0?'\u2212':'+')+pxN(Math.abs(m.net))+'</span></td>'
+        +'<td class="c"><span class="pill '+(neg?'ro':(m.nph<(tgt||130)?'am':'em'))+'">'
+          +(neg?'Below cost':(m.nph<(tgt||130)?'Thin':'Strong'))+'</span></td></tr>';
+      if(!on) return row;
+      var best=m.ags.filter(function(a){ return a.nph>=0; }).slice(0,5);
+      var worst=m.loss.slice().sort(function(a,b){ return a.nph-b.nph; }).slice(0,5);
+      return row+'<tr class="mkdet"><td colspan="8"><div class="mkdw">'
+        +'<div><h4>Top 5 เจ้าที่ทำกำไรดีสุดในตลาดนี้</h4>'
+          +(best.length?best.map(pxMkAgLine).join('')
+            :'<div class="none">ไม่มีเจ้าที่กำไรเป็นบวกในตลาดนี้</div>')+'</div>'
+        +'<div><h4>Top 5 เจ้าที่ขาดทุนหนักสุดในตลาดนี้</h4>'
+          +(worst.length?worst.map(pxMkAgLine).join('')
+            :'<div class="none">ไม่มีเจ้าไหนขาดทุนในตลาดนี้</div>')+'</div>'
+        +'</div></td></tr>';
+    }).join('')
+    +'<tr class="tot"><td class="l">Σ '+ML.length+' markets</td>'
+    +'<td class="c"><span class="num n">'+AL.length+'</span></td>'
+    +'<td class="c"><span class="num n">'+T.pax+'</span></td>'
+    +'<td><span class="num n">'+pxN(T.rev/Math.max(1,T.pax))+'</span></td>'
+    +'<td><span class="num n">'+pxN(T.cost/Math.max(1,T.pax))+'</span></td>'
+    +'<td class="netc"><span class="net n">'+pxN(T.profit/Math.max(1,T.pax))+'</span></td>'
+    +'<td class="netc"><span class="net n">'+(T.profit<0?'\u2212':'+')+pxN(Math.abs(T.profit))+'</span></td>'
+    +'<td class="c"><span class="pill pu">'+(T.rev?Math.round(T.profit/T.rev*100):0)+'%</span></td>'
+    +'</tr></tbody></table></div></div>'
+    +'<div class="hint"><b>'+e(ML[0].name)+' ทำกำไรต่อหัวสูงสุดที่ '+pxN(ML[0].nph)+' \u0e3f</b>'
+      +(mkLossAll.length
+        ?(' ส่วน '+e(mkBad[0].name)+' ขาดทุน '+pxN(Math.abs(mkBad[0].nph))
+          +' \u0e3f ต่อหัว รวม '+pxN(Math.abs(mkBad[0].net))+' \u0e3f จาก '+mkBad[0].ags.length
+          +' เจ้า · คลิกแถวนั้นเพื่อดูว่าเจ้าไหนเป็นตัวถ่วงจริง ๆ ก่อนจะไปแก้ทั้งตลาด')
+        :(' ท้ายตาราง '+e(mkBad[0].name)+' เหลือ '+pxN(mkBad[0].nph)
+          +' \u0e3f ต่อหัว · ยังบวกอยู่แต่บางที่สุด'))+'</div>'
+    +'</div>') : '';
+
   /* §revFlag · การ์ดนี้ต้องอยู่ก่อนทุกอย่าง · ถ้าตัวเลขต้นทางผิด ทุกตารางข้างล่างก็ผิดตาม */
   var flagCard = FLAG.length ? ('<div class="eg warn mb"><div class="phd">'
     +'<div><h2>Revenue to check <span class="pill ro">'+FLAG.length+' trip'
@@ -61955,6 +62107,7 @@ function pxAnalysis(e){
         +pxN(wWorst.rph)+' \u0e3f of revenue per head.'):'')+'</div>')
       :'<div class="empty">Not enough days to draw a weekly trend</div>')
       +'</div></div>'
+    +mktCard
     +'<div class="eg"><div class="phd"><div><h2>Agent contribution</h2>'
       +'<p>Net per pax, split by route \u00b7 the same agent earns a different margin on every route, '
       +'so their headline number hides the ones that lose money</p></div>'
