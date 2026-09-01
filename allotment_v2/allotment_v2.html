@@ -88546,6 +88546,8 @@ function pjCSS(){
   +H+' .pj-rx{border:none;background:none;color:#CFD4DC;font-size:11px;cursor:pointer;padding:0 2px;flex:none;line-height:1}'
   +H+' .pj-rx:hover{color:#C0271C}'
   +H+' .pj-slotn{font-size:9.5px;font-weight:700;letter-spacing:.04em;color:#9BA3B0;padding:4px 15px 0;text-align:right}'
+  /* §pjAlign · ตัวเว้นช่องระหว่างหัวข้อ · การ์ดเป็น flex column จึงต้องห้ามยืด/หด */
+  +H+' .pj-spx{flex:0 0 auto;pointer-events:none}'
   +H+' .pj-addw{display:flex;align-items:center;gap:9px;padding:7px 15px;border-bottom:1px solid #F4F5F8;background:#FAFBFD;position:relative}'
   +H+' .pj-addb{font-size:11.5px;font-weight:700;color:#31507F;background:#fff;border:1px dashed #B9C7DE;'
      +'border-radius:7px;padding:5px 11px;cursor:pointer;font-family:inherit}'
@@ -89244,7 +89246,55 @@ function renderPierJob(pier){
   if(!host.__pjClose){ host.__pjClose=1;
     document.addEventListener('click', function(){ try{ host.querySelectorAll('.pj-pop').forEach(function(p){ p.classList.remove('on'); }); }catch(_){} });
   }
+  pjAlignSecs();   /* §pjAlign */
 }
+/* §pjAlign · การ์ดวางเรียงกันเป็นแถบ · หัวข้อของแต่ละใบต้องอยู่ระดับเดียวกัน
+   ถึงจำนวนแถวข้างในจะไม่เท่ากัน · ไม่งั้นสายตาต้องไล่หาหัวข้อใหม่ทุกใบ
+   ทำหลังวาดเสร็จ เพราะความสูงจริงรู้ได้ตอนขึ้นจอแล้วเท่านั้น — ชื่อยาว ป้ายภาษา
+   หรือ SUB ทำให้แถวเดียวกันสูงไม่เท่ากัน คำนวณจากจำนวนแถวล่วงหน้าจึงไม่พอ
+   ไล่ทีละหัวข้อจากบนลงล่าง · เติมช่องว่างท้ายหัวข้อที่สั้นกว่าให้เท่าใบที่ยาวสุด
+   ต้องไล่ตามลำดับ เพราะเติมหัวข้อบนแล้วตำแหน่งของหัวข้อล่างขยับตาม จึงวัดใหม่ทุกรอบ */
+function pjAlignSecs(){
+  try{
+    var host=document.getElementById('pj-host-'+_poPier); if(!host) return;
+    host.querySelectorAll('.pj-spx').forEach(function(e){ if(e.parentNode) e.parentNode.removeChild(e); });
+    var cards=[];
+    host.querySelectorAll('.pj-gh').forEach(function(h){
+      var c=h.parentElement; if(c && cards.indexOf(c)<0) cards.push(c);
+    });
+    if(cards.length<2) return;
+    var G=[];
+    cards.forEach(function(c){
+      var hs=Array.prototype.filter.call(c.children, function(e){
+        return e.classList && e.classList.contains('pj-gh'); });
+      hs.forEach(function(h,i){ (G[i]=G[i]||[]).push({c:c, h:h, n:hs[i+1]||null}); });
+    });
+    /* หัวข้อสุดท้าย (หมายเหตุ) ไม่ต้องเติม · ช่องนั้นยืดเองและปุ่มท้ายใบชิดล่างอยู่แล้ว
+       เติมไปก็ได้แค่การ์ดสูงขึ้นเปล่า ๆ */
+    for(var i=0;i<G.length-1;i++){
+      var row=G[i]; if(!row || row.length<2) continue;
+      var hh=row.map(function(x){ return (x.n?x.n.offsetTop:x.c.scrollHeight)-x.h.offsetTop; });
+      var mx=Math.max.apply(null,hh);
+      row.forEach(function(x,k){
+        var d=Math.round(mx-hh[k]); if(d<1) return;
+        var sp=document.createElement('div');
+        sp.className='pj-spx'; sp.style.height=d+'px';
+        if(x.n) x.c.insertBefore(sp, x.n); else x.c.appendChild(sp);
+      });
+    }
+  }catch(_){}
+}
+/* จอเปลี่ยนขนาด แถวในการ์ดตัดคำใหม่ · ต้องวัดใหม่ ไม่งั้นช่องว่างค้างผิดขนาด */
+(function(){ var _t=null;
+  window.addEventListener('resize', function(){
+    clearTimeout(_t);
+    _t=setTimeout(function(){ try{
+      if(typeof _poPier==='undefined') return;
+      if(!document.getElementById('pj-host-'+_poPier)) return;
+      pjAlignSecs();
+    }catch(_){} }, 160);
+  });
+})();
 /* §pjDocs · จำนวนลำต่อจอ · จอเล็กเลือก 3 อ่านสบาย จอใหญ่เลือก 5 เห็นเยอะ */
 var _pjW=(function(){ try{ var v=+localStorage.getItem('la_pjw'); return (v===3||v===4||v===5)?v:4; }catch(_){ return 4; } })();
 function pjWide(n){ _pjW=n; try{ localStorage.setItem('la_pjw',String(n)); }catch(_){} renderPierJob(); }
