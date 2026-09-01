@@ -48657,6 +48657,31 @@ function vbShiftMonth(n){
 /* ── §vbOv · ยอดของทุกเจ้าในงวดเดียวกัน ────────────────────────────────
    ยืม vbRows() ตัวเดิมมาใช้ โดยสลับ _vb.sup ชั่วคราวแล้วคืนค่าเมื่อจบ
    เขียนตัวรวมแยกอีกตัวก็ได้ แต่วันไหนกติกาการดึงงานเปลี่ยน สองที่จะเพี้ยนไม่ตรงกัน */
+/* §vbCalc · การ์ดสรุปเดิมบอกแค่ยอดรวมกับ "3 คัน · 21 คน" · คนวางบิลอ่านแล้วยังต้อง
+   เปิดใบรายเจ้าไปไล่เองว่ายอดนี้มาจากเรตเท่าไร คูณกี่คัน
+   เรตในรอบเดียวกันไม่จำเป็นต้องเท่ากัน (แก้รายแถวได้) จึงจับกลุ่มตามเรตแล้วต่อกันด้วย +
+   คันที่ยังไม่ใส่เรตแยกออกมาบอกต่างหาก · เอาไปรวมเป็น "฿0 × n" จะอ่านเหมือนคิดเงินศูนย์บาท */
+function vbCalcTxt(g, B){
+  var R=(g&&g.rates)||{};
+  var keys=Object.keys(R).map(Number).filter(function(v){ return v>0; })
+    .sort(function(a,b){ return b-a; });
+  var base=keys.reduce(function(t,r){ return t+r*R[r]; },0);
+  var ex=+g.ex||0, cut=+g.cut||0, nz=+R['0']||0, out;
+  if(!keys.length){
+    /* ยังไม่มีเรตสักคัน · บอกจำนวนคันพอ ไม่ต้องบอกซ้ำว่ายังไม่ใส่เรตอีกกี่คัน */
+    out='ยังไม่ได้ใส่เรต · '+(+g.van||0)+' คัน';
+    if(ex)  out+='  ·  extra '+B(ex);
+    if(cut) out+='  ·  หัก '+B(cut);
+    return out;
+  }
+  /* มีเรตแล้ว · โชว์ผลลัพธ์ทุกครั้ง แม้เรตเดียวคูณคันเดียว — คนอ่านจะได้ไม่ต้องคูณเอง */
+  out=keys.map(function(r){ return B(r)+' × '+R[r]+' คัน'; }).join('  +  ')+'  =  '+B(base);
+  if(ex)  out+='  +  extra '+B(ex);
+  if(cut) out+='  −  หัก '+B(cut);
+  if(ex||cut) out+='  =  '+B(base+ex-cut);
+  if(nz) out+='  ·  ยังไม่ใส่เรตอีก '+nz+' คัน';
+  return out;
+}
 function vbAgg(){
   var keepS=_vb.sup, keepV=_vb.van;
   _vb.van='';
@@ -48675,8 +48700,11 @@ function vbAgg(){
         var bill=n*rate+ex-cut;
         g.bill+=bill; g.sale+=pax*per;
         if(rid!=null){ var c=vbCode(rid);
-          if(!g.code[c.c]) g.code[c.c]={van:0,pax:0,bill:0,col:c.col};
-          g.code[c.c].van+=n; g.code[c.c].pax+=pax; g.code[c.c].bill+=bill; }
+          /* §vbCalc · เก็บเรตไว้ด้วย เพื่อประกอบข้อความ "เรต × คัน" ที่การ์ดสรุป */
+          if(!g.code[c.c]) g.code[c.c]={van:0,pax:0,bill:0,ex:0,cut:0,rates:{},col:c.col};
+          var C=g.code[c.c];
+          C.van+=n; C.pax+=pax; C.bill+=bill; C.ex+=ex; C.cut+=cut;
+          if(n>0) C.rates[rate]=(C.rates[rate]||0)+n; }
       };
       rows.forEach(function(r){
         var m=(st.rows||{})[r.date+'~'+r.routeId+'~'+r.vanId]||{};
@@ -48712,8 +48740,10 @@ function vbRenderOv(host){
     T.vans+=g.vans.length; T.trips+=g.trips; T.pax+=g.pax; T.bkPax+=(+g.bkPax||0); T.bill+=g.bill;
     T.sale+=g.sale; T.miss+=g.miss; T.ex+=g.ex; T.cut+=g.cut;
     Object.keys(g.code).forEach(function(c){ var x=g.code[c];
-      if(!byCode[c]) byCode[c]={van:0,pax:0,bill:0,col:x.col};
-      byCode[c].van+=x.van; byCode[c].pax+=x.pax; byCode[c].bill+=x.bill; });
+      if(!byCode[c]) byCode[c]={van:0,pax:0,bill:0,ex:0,cut:0,rates:{},col:x.col};
+      var Y=byCode[c];
+      Y.van+=x.van; Y.pax+=x.pax; Y.bill+=x.bill; Y.ex+=(+x.ex||0); Y.cut+=(+x.cut||0);
+      Object.keys(x.rates||{}).forEach(function(r){ Y.rates[r]=(Y.rates[r]||0)+x.rates[r]; }); });
   });
   var done=G.filter(function(g){ return g.miss===0; }).length;
   var pl=T.sale-T.bill, avg=T.trips?(T.pax/T.trips):0;
@@ -48742,9 +48772,11 @@ function vbRenderOv(host){
   }).join('');
 
   var codeCards=['PP','PB','MT'].map(function(c){
-    var g=byCode[c]||{van:0,pax:0,bill:0,col:(c==='PP'?'#C0392B':c==='PB'?'#1C7A4E':'#BA7517')};
+    var g=byCode[c]||{van:0,pax:0,bill:0,ex:0,cut:0,rates:{},col:(c==='PP'?'#C0392B':c==='PB'?'#1C7A4E':'#BA7517')};
     return '<div class="vb-sb"><div class="t"><span class="vb-lg" style="background:'+g.col+'"></span>'+c+'</div>'
-      +'<div class="b">'+B(g.bill)+'</div><div class="s">'+(g.van?(g.van+' คัน · '+g.pax+' คน'):'ไม่มีงานรอบนี้')+'</div></div>';
+      +'<div class="b">'+B(g.bill)+'</div><div class="s">'+(g.van?(g.van+' คัน · '+g.pax+' คน'):'ไม่มีงานรอบนี้')+'</div>'
+      /* §vbCalc · บรรทัดที่มาของยอด · โผล่เฉพาะรหัสที่มีงานจริงในรอบนี้ */
+      +(g.van?('<div class="s2">'+vbCalcTxt(g,B)+'</div>'):'')+'</div>';
   }).join('');
 
   host.innerHTML=vbCss()
@@ -48785,9 +48817,13 @@ function vbRenderOv(host){
        +(T.miss?('ยังไม่ได้กรอก '+T.miss+' รายการ'):'กรอกครบทุกเจ้า')+'</td></tr></tfoot></table></div>'
    +'<div class="vb-sum">'+codeCards
      +'<div class="vb-sb"><div class="t">EXTRA − หัก</div><div class="b">'+B(T.ex-T.cut)+'</div>'
-       +'<div class="s">extra +'+T.ex+' · หัก <b style="color:#A32D2D">'+(T.cut>0?('−'+T.cut.toLocaleString()):'0')+'</b></div></div>'
+       +'<div class="s">extra +'+T.ex+' · หัก <b style="color:#A32D2D">'+(T.cut>0?('−'+T.cut.toLocaleString()):'0')+'</b></div>'
+       +'<div class="s2">'+B(T.ex)+'  −  '+B(T.cut)+'  =  '+B(T.ex-T.cut)+'</div></div>'
+     /* §vbCalc · ยอดรวมต้องอ่านออกว่าประกอบจากอะไร · ค่ารถล้วน + extra − หัก */
      +'<div class="vb-sb dark"><div class="t">รวมเรียกเก็บ</div><div class="b">'+B(T.bill)+'</div>'
-       +'<div class="s">'+done+' เจ้าครบแล้ว · '+(G.length-done)+' เจ้ายังไม่ครบ</div></div>'
+       +'<div class="s">'+done+' เจ้าครบแล้ว · '+(G.length-done)+' เจ้ายังไม่ครบ</div>'
+       +'<div class="s2">ค่ารถ '+B(T.bill-T.ex+T.cut)+'  +  extra '+B(T.ex)
+         +'  −  หัก '+B(T.cut)+'  =  '+B(T.bill)+'</div></div>'
    +'</div></div>';
 }
 function renderVanBill(){
@@ -48814,8 +48850,10 @@ function renderVanBill(){
     T.pax+=r.pax; T.bkPax+=(+r.bkPax||0); T.ad+=r.ad; T.chd+=r.chd; T.inf+=r.inf; T.foc+=r.foc;
     T.van+=1; T.ex+=ex; T.cut+=cut; T.bill+=bill; T.sale+=sale;
     var c=vbCode(r.routeId).c;
-    if(!byCode[c]) byCode[c]={van:0,pax:0,bill:0,col:vbCode(r.routeId).col};
+    if(!byCode[c]) byCode[c]={van:0,pax:0,bill:0,ex:0,cut:0,rates:{},col:vbCode(r.routeId).col};
     byCode[c].van+=1; byCode[c].pax+=r.pax; byCode[c].bill+=bill;
+    byCode[c].ex+=ex; byCode[c].cut+=cut;                     /* §vbCalc */
+    byCode[c].rates[rate]=(byCode[c].rates[rate]||0)+1;
     return {r:r, rk:rk, rate:rate, ex:ex, cut:cut, per:per, bill:bill, sale:sale};
   });
   st.extra.forEach(function(x){
@@ -48908,9 +48946,11 @@ function renderVanBill(){
   }).join('');
 
   var codeCards=['PP','PB','MT'].map(function(c){
-    var g=byCode[c]||{van:0,pax:0,bill:0,col:(c==='PP'?'#C0392B':c==='PB'?'#1C7A4E':'#BA7517')};
+    var g=byCode[c]||{van:0,pax:0,bill:0,ex:0,cut:0,rates:{},col:(c==='PP'?'#C0392B':c==='PB'?'#1C7A4E':'#BA7517')};
     return '<div class="vb-sb"><div class="t"><span class="vb-lg" style="background:'+g.col+'"></span>'+c+'</div>'
-      +'<div class="b">'+B(g.bill)+'</div><div class="s">'+(g.van?(g.van+' คัน · '+g.pax+' คน'):'ไม่มีงานรอบนี้')+'</div></div>';
+      +'<div class="b">'+B(g.bill)+'</div><div class="s">'+(g.van?(g.van+' คัน · '+g.pax+' คน'):'ไม่มีงานรอบนี้')+'</div>'
+      /* §vbCalc · บรรทัดที่มาของยอด · โผล่เฉพาะรหัสที่มีงานจริงในรอบนี้ */
+      +(g.van?('<div class="s2">'+vbCalcTxt(g,B)+'</div>'):'')+'</div>';
   }).join('');
 
   host.innerHTML=vbCss()
@@ -48975,9 +49015,12 @@ function renderVanBill(){
      +'<td class="r" style="color:'+(pl<0?'#FF9E9E':'#9BE6BC')+'">'+(pl<0?'−':'')+B(Math.abs(pl))+'</td></tr></tfoot></table></div>'
    +'<div class="vb-sum">'+codeCards
      +'<div class="vb-sb"><div class="t">EXTRA − หัก</div><div class="b">'+B(T.ex-T.cut)+'</div>'
-       +'<div class="s">extra +'+T.ex+' · หัก <b style="color:#A32D2D">'+NEG(T.cut)+'</b></div></div>'
+       +'<div class="s">extra +'+T.ex+' · หัก <b style="color:#A32D2D">'+NEG(T.cut)+'</b></div>'
+       +'<div class="s2">'+B(T.ex)+'  −  '+B(T.cut)+'  =  '+B(T.ex-T.cut)+'</div></div>'
      +'<div class="vb-sb dark"><div class="t">รวมเรียกเก็บ</div><div class="b">'+B(T.bill)+'</div>'
-       +'<div class="s">'+(st.by?('แก้ล่าสุด '+e(st.by)+(st.at?(' · '+String(st.at).slice(0,10)):'')):'ยังไม่ได้กรอก')+'</div></div>'
+       +'<div class="s">'+(st.by?('แก้ล่าสุด '+e(st.by)+(st.at?(' · '+String(st.at).slice(0,10)):'')):'ยังไม่ได้กรอก')+'</div>'
+       +'<div class="s2">ค่ารถ '+B(T.bill-T.ex+T.cut)+'  +  extra '+B(T.ex)
+         +'  −  หัก '+B(T.cut)+'  =  '+B(T.bill)+'</div></div>'
    +'</div></div>';
   /* §vbFill · วาดใหม่ทั้งหน้าทุกครั้งที่กรอก · ไม่คืนโฟกัสให้ ผู้ใช้จะต้องคลิกใหม่ทุกช่อง */
   if(_vb.foc){ var _k=_vb.foc; _vb.foc='';
@@ -49054,7 +49097,11 @@ function vbCss(){
   +'.vb-sb .t{font-size:10px;font-weight:800;letter-spacing:.05em;color:#8B96A0;text-transform:uppercase}'
   +'.vb-sb .b{font-size:16px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums}'
   +'.vb-sb .s{font-size:11px;color:#6B7280;margin-top:2px}'
+  /* §vbCalc · บรรทัดที่มาของยอด · เล็กกว่าบรรทัดสรุป แต่ตัวเลขต้องกว้างเท่ากันเพื่อไล่สายตา */
+  +'.vb-sb .s2{font-size:10.5px;color:#98A2AD;margin-top:4px;line-height:1.6;'
+    +'font-variant-numeric:tabular-nums;border-top:1px dashed #E4E7EE;padding-top:5px}'
   +'.vb-sb.dark{background:#16265C;border-color:#16265C}.vb-sb.dark .t,.vb-sb.dark .s{color:#9FB3D8}.vb-sb.dark .b{color:#fff}'
+  +'.vb-sb.dark .s2{color:#B9C9E6;border-top-color:rgba(255,255,255,.16)}'
   +'.vb-lg{display:inline-block;width:10px;height:10px;border-radius:3px;vertical-align:-1px;margin-right:5px}'
   /* §vbEdit · ช่องกรอกกับช่องอ่านอย่างเดียวต้องกินที่เท่ากัน ตารางจะได้ไม่ขยับตอนสลับโหมด */
   +'.vb-in{border:1px dashed #9EC4E4;background:#F8FCFF;border-radius:7px;padding:4px 7px;'
