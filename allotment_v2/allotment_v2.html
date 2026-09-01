@@ -88534,23 +88534,13 @@ function pjCSS(){
   +H+' .pj-bar button.pri{background:#16265C;border-color:#16265C;color:#fff}'
   +H+' .pj-bar button.gh{background:#F0F6F3;border-color:#BFE0CD;color:#0F6E56}'
   /* §pjDocs · แถวเดียว เลื่อนแนวนอน · ทุกใบสูงเท่ากันและบรรทัดตรงกัน */
-  /* §pjStick · แถบการ์ดเลื่อนเองทั้งสองแกน · หน้าเว็บทั้งหน้าไม่เลื่อน
-     ความสูงตั้งด้วย pjStripFit() ตอนวาดเสร็จ · เขียนเป็นตัวเลขตายตัวไม่ได้
-     เพราะของที่อยู่เหนือแถบ (วันที่ · ชิปกรอง) สูงไม่เท่ากันในแต่ละท่า/แต่ละจอ
-     ⚙ แถบเลิกเป็น flex เอง · ถ้าเป็น flex ทั้งที่ตัวมันเองสูงคงที่
-       align-items:stretch จะยืดการ์ดให้เท่าความสูงแถบ แล้วแถวข้างในถูกบีบจนแบน
-       จึงต้องมีชั้นแถวขั้นกลาง ที่สูงตามเนื้อหาจริง แล้วเทียบกันเองข้างใน */
-  /* ขอบบน 2px เดิมทำให้เนื้อการ์ดโผล่พ้นหัวที่ตรึงไว้เป็นเส้นบาง ๆ
-     เพราะ sticky top:0 นับจากขอบใน (padding box) แต่กล่องตัดที่ขอบนอก */
-  +H+' .pj-strip{overflow:auto;overscroll-behavior:contain;padding:0 2px 14px}'
-  +H+' .pj-strip::-webkit-scrollbar{width:9px}'
-  +H+' .pj-row{display:flex;gap:15px;align-items:stretch;min-height:100%}'
+  +H+' .pj-strip{display:flex;gap:15px;align-items:stretch;overflow-x:auto;padding:2px 2px 14px}'
   +H+' .pj-strip::-webkit-scrollbar{height:9px}'
   +H+' .pj-strip::-webkit-scrollbar-track{background:#E4E3DE;border-radius:6px}'
   +H+' .pj-strip::-webkit-scrollbar-thumb{background:#B9BDC5;border-radius:6px}'
-  +H+' .pj-row.w3 .bc{flex:0 0 clamp(310px,31.4%,470px)}'
-  +H+' .pj-row.w4 .bc{flex:0 0 clamp(292px,23.5%,400px)}'
-  +H+' .pj-row.w5 .bc{flex:0 0 clamp(276px,18.6%,344px)}'
+  +H+' .pj-strip.w3 .bc{flex:0 0 clamp(310px,31.4%,470px)}'
+  +H+' .pj-strip.w4 .bc{flex:0 0 clamp(292px,23.5%,400px)}'
+  +H+' .pj-strip.w5 .bc{flex:0 0 clamp(276px,18.6%,344px)}'
   +H+' .pj-wsw{display:flex;gap:4px;background:#fff;border:1px solid #E1E4EA;border-radius:9px;padding:3px}'
   +H+' .pj-wsw button{border:none;background:transparent;border-radius:6px;padding:4px 10px;font:700 11.5px inherit;color:#6E7684;cursor:pointer}'
   +H+' .pj-wsw button.on{background:#EAF0F9;color:#1B4A87}'
@@ -88583,11 +88573,8 @@ function pjCSS(){
   +H+' .pj-chips button.on{background:#16265C;color:#fff}'
   +H+' .pj-chips button i{width:7px;height:7px;border-radius:50%;display:inline-block;font-style:normal;flex:none}'
   +H+' .pj-chips button .n{font-variant-numeric:tabular-nums;font-size:11px;opacity:.72}'
-  +H+' .bc{display:flex;flex-direction:column;border:1px solid #E1E4EA;border-radius:13px;background:#fff;position:relative;overflow:clip;min-width:0;box-shadow:0 1px 2px rgba(20,30,50,.04)}'
-  /* §pjStick · หัวการ์ดค้างไว้ตอนเลื่อนลง · ชื่อเรือ ใบอนุญาต และแถบโปรแกรม
-     เลื่อนไปถึงท้ายใบแล้วยังบอกได้ว่ากำลังดูลำไหน วิ่งโปรแกรมอะไร */
-  +H+' .pj-hdw{position:sticky;top:0;z-index:6}'
-  +H+' .bc .top{padding:11px 15px 10px;color:#fff;display:block;border-radius:12px 12px 0 0}'
+  +H+' .bc{display:flex;flex-direction:column;border:1px solid #E1E4EA;border-radius:13px;background:#fff;position:relative;overflow:hidden;box-shadow:0 1px 2px rgba(20,30,50,.04)}'
+  +H+' .bc .top{padding:11px 15px 10px;color:#fff;display:block}'
   +H+' .bc .trow{display:flex;align-items:flex-start;gap:12px}'
   +H+' .bc .top .l{flex:1;min-width:0}'
   /* §pjDocs · สองบรรทัดใบอนุญาต ใต้ชื่อเรือ */
@@ -88710,7 +88697,7 @@ function pjCSS(){
   +H+' .pj-note{height:56px;overflow:auto;margin:10px 15px 12px;border:1px dashed #E5D3A8;border-radius:9px;background:#fff;padding:8px 11px;font-size:12px;font-weight:600;color:#7A4A00;line-height:1.55;outline:none}'
   +H+' .pj-note:focus{border-style:solid;border-color:#D9A441;box-shadow:0 0 0 3px rgba(217,164,65,.15)}'
   +H+' .pj-note:empty:before{content:attr(data-ph);color:#C9CFD8;font-weight:400}'
-  +H+' .bc .foot{margin-top:auto;height:46px;display:flex;align-items:center;gap:8px;padding:0 15px;border-top:1px solid #EFF1F5;overflow:hidden;border-radius:0 0 12px 12px}'
+  +H+' .bc .foot{margin-top:auto;height:46px;display:flex;align-items:center;gap:8px;padding:0 15px;border-top:1px solid #EFF1F5;overflow:hidden}'
   +H+' .bc .foot button{border:1px solid #D9DDE4;background:#fff;border-radius:7px;padding:4px 10px;font:700 11px inherit;color:#5A6270;cursor:pointer}'
   +H+' .bc .foot button:hover{border-color:#16265C;color:#16265C}'
   +H+' .bc .foot button.gh{background:#F0F6F3;border-color:#BFE0CD;color:#0F6E56}'
@@ -88967,13 +88954,11 @@ function pjNote(bid,txt){ pjSet(_poDate,bid,{note:String(txt||'').slice(0,400)})
 /* §pjLock · แถบการ์ดเลื่อนแนวนอน · วาดใหม่แล้วเด้งกลับซ้ายสุด จะกดล็อกลำที่ห้าไม่ได้เลย
    จำตำแหน่งไว้ก่อน แล้วคืนให้หลังวาดเสร็จ */
 function pjKeep(fn){
-  /* §pjStick · แถบเป็นตัวเลื่อนทั้งสองแกนแล้ว · เดิมเก็บแค่แนวนอน
-     กดปุ่มท้ายการ์ดแล้วเด้งกลับขึ้นหัวใบทุกครั้ง เพราะ scrollTop ไม่ถูกเก็บ */
   var w=document.querySelector('.pj-host.sk .pj-strip');
-  var x=w?w.scrollLeft:0, t=w?w.scrollTop:0, y=window.scrollY;
+  var x=w?w.scrollLeft:0, y=window.scrollY;
   fn();
   var w2=document.querySelector('.pj-host.sk .pj-strip');
-  if(w2){ w2.scrollLeft=x; w2.scrollTop=t; }
+  if(w2) w2.scrollLeft=x;
   try{ window.scrollTo(0,y); }catch(_){}
 }
 function pjLockSet(bid,v){
@@ -89063,7 +89048,6 @@ function pjCard(B, pier, ro){
   var pid='pjpop-'+bid.replace(/[^A-Za-z0-9_-]/g,'_');
   var wid='pjwb-'+bid.replace(/[^A-Za-z0-9_-]/g,'_');
   var h='<div class="bc'+(going?'':' dim')+(ST.stale?' stale':'')+(lk?' lk':'')+'" data-st="'+ST.k+'">'
-   +'<div class="pj-hdw">'   /* §pjStick · ตรึงถึงแถบโปรแกรม */
    +'<div class="top" style="background:'+col+'">'
      +'<div class="trow"><div class="l"><div class="bn">'+poE(B.boat.name||bid)+'</div>'
        +'<div class="be">'+poE(B.boat.type||'')+(B.boat.engineCount?(' &middot; '+B.boat.engineCount+' Eng'):'')
@@ -89098,7 +89082,6 @@ function pjCard(B, pier, ro){
             +(pjStIsCustom(ST.k)?('<button class="pj-rst" onclick="pjStColorReset(\''+ST.k+'\')">คืนค่าสีเดิมของสถานะนี้</button>'):'')
             +'</div></div>'))
      +'</div>'
-   +'</div>'   /* §pjStick · ปิดตัวตรึง · แถบสถานะลงมาเลื่อนตามปกติ */
    +'<div class="stbar"><span class="stw">'
      +'<span class="pj-stq" style="background:'+SM.bg+';color:'+SM.fg+';border:1px solid '+SM.bd+'">'+poE(SM.t)+'</span>'
      +(going
@@ -89387,8 +89370,7 @@ function renderPierJob(pier){
       +'</div>'
     +'</div>'
     +(boats.length
-      ? ('<div class="pj-strip"><div class="pj-row w'+_pjW+'">'
-          +boats.map(function(B){ return pjCard(B,_poPier,ro); }).join('')+'</div></div>')
+      ? ('<div class="pj-strip w'+_pjW+'">'+boats.map(function(B){ return pjCard(B,_poPier,ro); }).join('')+'</div>')
       : ('<div class="pj-empty">'
           +(all.length
             ? ('ไม่มีเรือที่ตรงตัวกรองนี้<br><span style="font-size:11.5px">ท่านี้มีเรือ '+all.length+' ลำ — กด <b>ทั้งหมด</b> เพื่อดูทุกลำ</span>')
@@ -89397,36 +89379,7 @@ function renderPierJob(pier){
   if(!host.__pjClose){ host.__pjClose=1;
     document.addEventListener('click', function(){ try{ host.querySelectorAll('.pj-pop').forEach(function(p){ p.classList.remove('on'); }); }catch(_){} });
   }
-  pjStripFit();    /* §pjStick · ตั้งความสูงก่อน แล้วค่อยวัดหัวข้อ */
   pjAlignSecs();   /* §pjAlign */
-}
-/* §pjStick · แถบการ์ดต้องสูงพอดีจอ ไม่ใช่สูงตามเนื้อหา
-   ถ้าปล่อยให้สูงตามเนื้อหา หน้าเว็บจะเป็นตัวเลื่อนแทน แล้ว sticky ในการ์ด
-   ไปยึดกับแถบ (ซึ่งไม่เคยเลื่อน) หัวการ์ดจึงไม่ค้าง
-   ของแถม · แถบเลื่อนแนวนอนมาอยู่ก้นจอ ไม่ต้องเลื่อนลงไปหามันใต้การ์ดสูงพันพิกเซล */
-function pjStripFit(){
-  try{
-    var w=document.querySelector('#pj-host-'+_poPier+' .pj-strip'); if(!w) return;
-    /* วัดจากขอบบนของแถบเทียบกับหน้าเอกสาร · rect.top เฉย ๆ ใช้ไม่ได้
-       เพราะมันขยับตามที่หน้าถูกเลื่อนอยู่ตอนนั้น */
-    var top=w.getBoundingClientRect().top+(window.scrollY||window.pageYOffset||0);
-    var h=Math.round((window.innerHeight||0)-top-10);
-    if(h<360) h=360;                 /* จอเตี้ยมาก · อย่าบีบจนอ่านไม่ออก */
-    w.style.height=h+'px';
-    /* ของที่อยู่ใต้แถบ (ระยะขอบล่างของ view/main) ทำให้หน้ายังเลื่อนได้อีกนิด
-       แล้วหัวการ์ดจะกระตุกตอนเลื่อน · หักส่วนเกินออกอีกรอบ วัดหลังจัดวางจริงแล้ว */
-    var de=document.scrollingElement||document.documentElement;
-    for(var i=0;i<3;i++){
-      var ex=de.scrollHeight-de.clientHeight;
-      if(ex<1) break;
-      var nh=h-ex; if(nh<360) break;
-      w.style.height=nh+'px';
-      /* .pj-host.sk ตั้ง min-height:calc(100vh-44px) ไว้ · หดแถบต่อไม่ได้ช่วยแล้ว
-         เจอแบบนั้นให้คืนค่าเดิม ไม่งั้นเสียความสูงเปล่า ๆ ทั้งที่หน้ายังเลื่อนเท่าเดิม */
-      if(de.scrollHeight-de.clientHeight>=ex){ w.style.height=h+'px'; break; }
-      h=nh;
-    }
-  }catch(_){}
 }
 /* §pjAlign · การ์ดวางเรียงกันเป็นแถบ · หัวข้อของแต่ละใบต้องอยู่ระดับเดียวกัน
    ถึงจำนวนแถวข้างในจะไม่เท่ากัน · ไม่งั้นสายตาต้องไล่หาหัวข้อใหม่ทุกใบ
@@ -89476,7 +89429,6 @@ function pjAlignSecs(){
     _t=setTimeout(function(){ try{
       if(typeof _poPier==='undefined') return;
       if(!document.getElementById('pj-host-'+_poPier)) return;
-      pjStripFit();   /* §pjStick */
       pjAlignSecs();
     }catch(_){} }, 160);
   });
