@@ -86835,30 +86835,44 @@ function paCSS(){
   +H+' .pa-wrap{overflow:auto;max-height:calc(100vh - 250px)}'
   +H+' table.pa{border-collapse:separate;border-spacing:0;min-width:1400px;background:#fff}'
   /* §paSheet · เส้นครบทุกด้านเหมือนสเปรดชีต · ของเดิมมีแต่เส้นล่าง อ่านเป็นคอลัมน์ไม่ได้ */
-  +H+' table.pa th,table.pa td{padding:0;border:1px solid #D9DEE6}'
+  +H+' table.pa th,'+H+' table.pa td{padding:0;border:1px solid #D9DEE6}'
   +H+' table.pa{border-collapse:collapse !important}'
   +H+' .pa-nm{position:sticky;left:0;z-index:3;background:#fff;width:236px;min-width:236px;padding:6px 12px !important;border-right:1px solid #E7EAEF;text-align:left}'
   /* §paCols · แยกเป็นคอลัมน์จริง · ตรึงสี่คอลัมน์แรกไว้ตอนเลื่อนดูปลายรอบ */
   +H+' .pa-no{position:sticky;left:0;z-index:3;background:#fff;width:38px;min-width:38px;text-align:center;'
      +"font:500 10.5px 'DM Mono',monospace;color:#A9B0BB;padding:5px 0 !important}"
-  +H+' .pa-nm2{position:sticky;left:38px;z-index:3;background:#fff;width:196px;min-width:196px;padding:5px 10px !important;'
+  /* §paStick · ระยะตรึง (left) เป็นตัวเลขตายตัว จึงต้องเท่ากับความกว้างจริงเป๊ะ ๆ
+     ของเดิมประกาศชื่อเล่นไว้ 74 แต่หัวคอลัมน์ NICKNAME ดันจนกลายเป็น 88
+     ตำแหน่งถัดไปเลยควรเป็น 322 ไม่ใช่ 308 · เหลื่อม 14px ทับคอลัมน์ชื่อเล่นทุกครั้งที่เลื่อน
+     ปิดท้ายด้วย max-width + ตัดคำ เพื่อกันไม่ให้ชื่อยาว ๆ ดันคอลัมน์จนระยะเพี้ยนอีก
+     รวมสี่คอลัมน์ = 38 + 196 + 88 + 206 = 528 ซึ่งเป็นความกว้างของหัวตารางแถวแรกพอดี */
+  +H+' .pa-nm2{position:sticky;left:38px;z-index:3;background:#fff;width:196px;min-width:196px;max-width:196px;'
+     +'overflow:hidden;text-overflow:ellipsis;padding:5px 10px !important;'
      +'text-align:left;font-size:12px;font-weight:700;color:#242730;white-space:nowrap}'
-  +H+' .pa-nk{position:sticky;left:234px;z-index:3;background:#fff;width:74px;min-width:74px;padding:5px 9px !important;'
+  +H+' .pa-nk{position:sticky;left:234px;z-index:3;background:#fff;width:88px;min-width:88px;max-width:88px;'
+     +'overflow:hidden;text-overflow:ellipsis;padding:5px 9px !important;'
      +'text-align:left;font-size:11.5px;color:#5A6270;white-space:nowrap}'
-  +H+' .pa-rl{position:sticky;left:308px;z-index:3;background:#fff;width:206px;min-width:206px;padding:5px 10px !important;'
+  +H+' .pa-rl{position:sticky;left:322px;z-index:3;background:#fff;width:206px;min-width:206px;max-width:206px;'
+     +'overflow:hidden;text-overflow:ellipsis;padding:5px 10px !important;'
      +'text-align:left;font-size:11.5px;color:#5A6270;white-space:nowrap;border-right:2px solid #97A0AE !important}'
   +H+" .pa-rl i{font-style:normal;font-size:9.5px;font-weight:700;color:#8B93A1;background:#F2F4F7;border-radius:4px;padding:1px 6px;margin-left:6px}"
   +H+' .pa-away{font-size:9.5px;font-weight:800;color:#20477E;background:#E9EFF7;border-radius:4px;padding:1px 6px;margin-left:5px}'
-  +H+' th.pa-h0{position:sticky;top:0;z-index:6;background:#1F3C88;color:#fff;text-align:left;padding:7px 11px !important;'
+  /* §paStick · ช่องชื่อรอบคร่อมสี่คอลัมน์แรกซึ่งตรึงซ้ายอยู่แล้ว แต่ตัวมันเองตรึงแค่ด้านบน
+     พอเลื่อนไปดูปลายรอบ ข้อความ "CREW DUTY ROSTER · ..." จึงไหลไปซ้ายจนถูกตัดครึ่ง
+     ต้องสูงกว่าชื่อเดือน (z 5) ไม่งั้นเดือนเลื่อนมาทับ */
+  +H+' th.pa-h0{position:sticky;top:0;left:0;z-index:7;background:#1F3C88;color:#fff;text-align:left;padding:7px 11px !important;'
      +'font-size:11.5px;font-weight:700;letter-spacing:.05em;white-space:nowrap}'
-  +H+' th.pa-h0.nt{text-align:center;font-size:10px;letter-spacing:.08em}'
+  +H+' th.pa-h0.nt{position:sticky;left:auto;text-align:center;font-size:10px;letter-spacing:.08em}'
   +H+' th.pa-mo{position:sticky;top:0;z-index:5;background:#DFE5EE;color:#1F3C88;'
      +'font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;padding:6px 0 !important}'
   +H+' th.pa-mo.sum{background:#E8E2D3;color:#6B4B12}'
-  +H+' th.pa-no,th.pa-nm2,th.pa-nk,th.pa-rl{position:sticky;top:27px;z-index:4;background:#F2F4F7;'
+  /* §paStick · หัวสี่คอลัมน์แรกตรึงสองแกน ต้องสูงกว่าหัววันที่ (z 4) ที่ตรึงแกนบนอย่างเดียว */
+  /* §paStick · ต้องเติม H ให้ทุกตัวในลิสต์ · ไม่งั้นสามตัวหลังหลุดขอบเขตแล้วแพ้ .pa-nm2 ที่ scope ไว้
+     z ต้องสูงกว่าหัววันที่ (4) และหัวคอลัมน์สรุป (4) แต่ต่ำกว่าช่องชื่อรอบ (7) */
+  +H+' th.pa-no,'+H+' th.pa-nm2,'+H+' th.pa-nk,'+H+' th.pa-rl{position:sticky;top:27px;z-index:6;background:#F2F4F7;'
      +'font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#5A6472;padding:5px 9px !important;text-align:left}'
   +H+' th.pa-no{text-align:center}'
-  +H+' th.pa-d,th.pa-sh{top:27px}'
+  +H+' th.pa-d,'+H+' th.pa-sh{top:27px}'
   +H+' .pa-nt{width:158px;min-width:158px;padding:3px 8px !important;text-align:left}'
   +H+' th.pa-nt{position:sticky;top:27px;z-index:4;background:#F7F8FA}'
   +H+" .pa-nti{width:100%;border:1px solid transparent;background:transparent;border-radius:6px;padding:4px 7px;font:600 11px inherit;color:#8A5A00}"
@@ -86887,11 +86901,11 @@ function paCSS(){
      +H+' table.pa.ed .pa-nt{background:#FFFDF5}'
   +H+' table.pa.ed tr.pa-band .pa-nm2,'+H+' table.pa.ed tr.pa-tot .pa-nm2{background:#EAEEF4}'
   +H+' .pa-dash{color:#C6CCD5}'
-  +H+' tr.pa-band .pa-no,tr.pa-band .pa-nm2{background:#EAEEF4}'
+  +H+' tr.pa-band .pa-no,'+H+' tr.pa-band .pa-nm2{background:#EAEEF4}'
   +H+' tr.pa-band td{background:#EAEEF4;font-size:9.5px;font-weight:800;letter-spacing:.1em;color:#1F3C88}'
   /* เสาร์-อาทิตย์ · เข้มขึ้นทับสีของรหัส ไม่ใช่แทนที่ */
   +H+' td.pa-c.we::before{content:"";position:absolute;inset:0;background:rgba(20,30,50,.05);pointer-events:none}'
-  +H+' tr.pa-tot .pa-no,tr.pa-tot .pa-nm2{background:#F2F5F9;font-size:11px;font-weight:800;color:#20477E}'
+  +H+' tr.pa-tot .pa-no,'+H+' tr.pa-tot .pa-nm2{background:#F2F5F9;font-size:11px;font-weight:800;color:#20477E}'
   /* §paSum · คอลัมน์สรุปท้ายรอบ · พื้นครีมแยกออกจากช่องวันให้ชัด */
   +H+' th.pa-sh{width:34px;min-width:34px;text-align:center;padding:5px 0 !important;background:#F4F1E8;position:sticky;top:27px;z-index:4;'
      +'font-size:9px;font-weight:700;color:#6B4B12}'
@@ -87166,10 +87180,14 @@ function renderPierAtt(pier){
             ?('<div class="pa-rlw">'+paEi(st.id,'role',st.role,'ตำแหน่ง')+paDefSel(st)+'</div>')
             :poE(st.role||''))+'</td>'
         +tds+sums
-        +'<td class="pa-nt">'+(ed
-            ?('<input class="pa-nti" value="'+poE(st.note||'')+'" placeholder="—" '
-              +'onchange="paNote(\''+poE(st.id)+'\',this.value)">')
-            :(poE(st.note||'')||'<span class="pa-dash">—</span>'))+'</td></tr>';
+        /* §paNoteEd · หมายเหตุคือของที่คนหน้าท่าพิมพ์ระหว่างวัน ไม่ใช่ของที่ต้องวางแผนก่อน
+           บังคับให้กด "แก้ไข" ทั้งแถบก่อนถึงจะพิมพ์ได้ ทำให้ไม่มีใครใช้ · เปิดให้พิมพ์ได้เลย
+           คนที่สิทธิ์ดูอย่างเดียว (ro) ยังเห็นเป็นข้อความเหมือนเดิม */
+        +'<td class="pa-nt">'+(ro
+            ?(poE(st.note||'')||'<span class="pa-dash">—</span>')
+            :('<input class="pa-nti" value="'+poE(st.note||'')+'" placeholder="เพิ่มหมายเหตุ…" '
+              +'title="พิมพ์แล้วออกจากช่อง = บันทึกเลย" '
+              +'onchange="paNote(\''+poE(st.id)+'\',this.value)">'))+'</td></tr>';
     });
   });
   /* แถวรวมท้ายตาราง · ทั้งท่าใช้คนไปกี่วัน-คน กับแต่ละรหัสไปเท่าไหร่ */
