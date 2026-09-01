@@ -6833,7 +6833,7 @@ function nav(el){
     else if(view==='reconfirm') renderReconfirm();
   }
 }
-function refreshData(){seed();renderDash();}
+/* §rfSoft · ของจริงอยู่ที่ประกาศตัวหลัง · ตัวนี้เคยเป็นตัวซ้ำที่ไม่มีใครเรียกถึง */
 
 // topbar date
 function updateDate(){
@@ -14083,7 +14083,14 @@ document.querySelectorAll('.modal-overlay').forEach(m=>{
 // ══════════════════════════════════════
 // INIT
 // ══════════════════════════════════════
-function refreshData(){seed();save();renderDash();}
+/* §rfSoft · ปุ่ม ↻ Refresh เดิมเรียก save() ซึ่งเป็นการ "ดันข้อมูลขึ้น" ไม่ใช่ "ดึงลง"
+   ไม่มีบรรทัดไหนอ่านของใหม่จากเซิร์ฟเวอร์เลย · แถม version ขยับทุกครั้งที่กด
+   เครื่องคนอื่นเลยเด้งแถบ "มีข้อมูลใหม่จากคนอื่น" ทั้งที่ไม่มีใครแก้อะไร
+   ตัวที่ทำถูกมีอยู่แล้วคือ _laSoftRefresh() · ดึงของใหม่แล้ววาดหน้าเดิมซ้ำ ไม่กระเด็นออกจากหน้า */
+function refreshData(){
+  if(typeof window._laSoftRefresh==='function'){ window._laSoftRefresh(); return; }
+  location.reload();
+}
 
 function exportHTML(){
   // ดึง HTML ของหน้าปัจจุบันจาก DOM (ไม่ใช้ fetch · ทำงานใน artifact preview ได้)
@@ -43108,13 +43115,53 @@ window._laReloadData=function(){
     return true;
   }catch(e){ console.warn('_laReloadData', e); return false; }
 };
+/* §rfSoft · ตารางกว้าง ๆ (ตารางการทำงาน ตารางวิเคราะห์) เลื่อนอยู่ในกล่องของตัวเอง
+   ไม่ใช่ที่ main · วาดใหม่ทีไรจึงเด้งกลับซ้ายสุดทุกที ทั้งที่ผู้ใช้ไม่ได้สั่งอะไร
+   จำเฉพาะกล่องที่ "เลื่อนค้างไว้จริง" ในหน้าที่เปิดอยู่ แล้วคืนค่าให้หลังวาดเสร็จ */
+function _laScrollKey(el){
+  var p=[], n=el, d=0;
+  while(n && n.nodeType===1 && d<6){
+    var c=(typeof n.className==='string' && n.className)
+      ? ('.'+n.className.trim().split(/\s+/).slice(0,2).join('.')) : '';
+    var ix=0; try{ ix=Array.prototype.indexOf.call(n.parentNode.children, n); }catch(_){}
+    p.unshift(n.tagName+(n.id?('#'+n.id):'')+c+'['+ix+']');
+    if(n.id) break;
+    n=n.parentNode; d++;
+  }
+  return p.join('>');
+}
+function _laScrollSnap(){
+  var out=[];
+  try{
+    var els=document.querySelectorAll('.view.active div, .view.active table');
+    for(var i=0;i<els.length;i++){
+      var e=els[i];
+      if(e.scrollLeft>0 || e.scrollTop>0) out.push({k:_laScrollKey(e), l:e.scrollLeft, t:e.scrollTop});
+    }
+  }catch(_){}
+  return out;
+}
+function _laScrollBack(list){
+  if(!list || !list.length) return;
+  try{
+    var m={}; list.forEach(function(x){ m[x.k]=x; });
+    var els=document.querySelectorAll('.view.active div, .view.active table');
+    for(var i=0;i<els.length;i++){
+      var e=els[i], x=m[_laScrollKey(e)];
+      if(x){ if(x.l) e.scrollLeft=x.l; if(x.t) e.scrollTop=x.t; }
+    }
+  }catch(_){}
+}
 window._laRerender=function(){
   try{
     var mn=document.querySelector('main'); var sc=mn?mn.scrollTop:0; var scw=window.scrollY||0;
+    var inner=_laScrollSnap();
     var act=document.querySelector('.nav-item.active'); var v=act&&act.dataset?act.dataset.view:'';
     if(v==='booking' && typeof bkV2Render==='function') bkV2Render();
     else if(act && typeof nav==='function') nav(act);
-    setTimeout(function(){ try{ var m2=document.querySelector('main'); if(m2&&sc) m2.scrollTop=sc; if(scw) window.scrollTo(0,scw); }catch(e){} }, 60);
+    _laScrollBack(inner);
+    setTimeout(function(){ try{ var m2=document.querySelector('main'); if(m2&&sc) m2.scrollTop=sc; if(scw) window.scrollTo(0,scw);
+      _laScrollBack(inner); }catch(e){} }, 60);
   }catch(e){}
 };
 // One-time reconcile: FOC already approved but status stuck in pending/quote (e.g. edited after approval) → Confirmed
@@ -86541,6 +86588,12 @@ function paJobKind(date, bid){
     var k=pjBoatSt(date,b,hasTrip).k;
     if(k==='dd') return 'dd';
     if(k==='broke'||k==='maint') return 'mt';
+    /* §pjWorkCode · ไม่มีทริป = คนบนใบนี้ไม่ได้ออกเรือ · ห้ามลงรหัสเส้นทางเด็ดขาด
+       มีใบซ่อมเปิดอยู่ก็คืองานซ่อม · ไม่มีก็ยังไม่รู้ ปล่อยเป็นช่องค้างดีกว่าเดาผิด */
+    if(!hasTrip){
+      var _mj=(typeof pjBoatSt==='function')?(pjBoatSt(date,b,hasTrip).mj||[]):[];
+      return _mj.length ? 'mt' : 'none';
+    }
     return 'boat';
   }catch(_){ return 'boat'; }
 }
@@ -86625,10 +86678,11 @@ function paDayIdx(date){
     if(!pk) pk=(b&&b.pier)||'';
     if(pk) E.piers[pk]=1;
     var kind=(typeof paJobKind==='function')?paJobKind(date,bid):'boat';
+    var wc=String(o.wc||'');   /* §pjWorkCode · รหัสที่ใบงานระบุไว้เอง · ชนะการเดาทุกกรณี */
     // §rtCode · เก็บเส้นทางของวันนั้นไว้ด้วย · ช่องในตารางจะได้บอกว่าลงสายไหน
     var rid=''; try{ var tp=(typeof TRIPS!=='undefined'&&TRIPS[date])?TRIPS[date][bid]:null; rid=(tp&&tp.route)||''; }catch(_){}
     [o.cap,o.asst].concat(o.crew||[], o.island||[]).forEach(function(sid){
-      if(sid && !E.byStaff[sid]) E.byStaff[sid]={boat:(b&&b.name)||bid, pier:pk, kind:kind, rid:rid};
+      if(sid && !E.byStaff[sid]) E.byStaff[sid]={boat:(b&&b.name)||bid, pier:pk, kind:kind, rid:rid, wc:wc};
     });
   });
   return E;
@@ -86647,7 +86701,12 @@ function paCell(date, pier, st, E){
   // §paLayers ชั้น ๒ · ใบงานเรือ · ทับโครงที่วางไว้
   // §pjWork · ลงเรือ / ลงงานซ่อม / ลงคาน ใช้รหัสคนละตัว · ทั้งหมดตั้งเองได้
   // §rtCode · ลงเรือ = ใช้รหัสของเส้นทางที่วิ่งวันนั้น · ไม่รู้เส้นทางค่อยถอยไปใช้รหัสรวม
-  if(on) return {c:(on.kind==='dd'?paDdCode():(on.kind==='mt'?paMtCode():(paRouteCode(on.rid)||paOnBoatCode()))),
+  /* §pjWorkCode · รหัสที่คนทำใบงานเลือกไว้เอง ชนะการเดาทั้งหมด
+     ไม่ได้เลือก และเดาไม่ออก (kind 'none') → ไม่รีเทิร์นตรงนี้ ปล่อยให้ชั้นโครงงานทำงานต่อ
+     จบที่ช่องค้าง ซึ่งอ่านว่า "ยังไม่ได้วางงานให้คนนี้" ตรงกับความจริงมากกว่าลง PP ให้ */
+  if(on && on.wc) return {c:on.wc, src:'boat', boat:on.boat, atPier:on.pier, rid:on.rid||''};
+  if(on && on.kind!=='none')
+    return {c:(on.kind==='dd'?paDdCode():(on.kind==='mt'?paMtCode():(paRouteCode(on.rid)||paOnBoatCode()))),
                  src:(on.kind==='boat'?'boat':on.kind), boat:on.boat, atPier:on.pier, rid:on.rid||''};
   // §paLayers ชั้น ๓ · โครงงานที่วางไว้ล่วงหน้า · เป็นฐาน ไม่ใช่คำสั่งสุดท้าย
   if(m && m.plan) return {c:m.c, src:'plan', boat:'', atPier:''};
@@ -87993,10 +88052,12 @@ function pjOf(d,b){
   /* §pjLock · lock ต้องอยู่ในรายการนี้ด้วย · ฟังก์ชันนี้คัดเฉพาะช่องที่รู้จัก
      ตกหล่นเมื่อไหร่ ล็อกจะหลุดทุกครั้งที่มีการบันทึกช่องอื่น */
   /* §mealTrip · mv (ร้านอาหารของลำนี้วันนี้) ต้องอยู่ในรายการนี้ด้วย ด้วยเหตุผลเดียวกับ lock */
-  if(!o) return {cap:T.cap||'', asst:T.asst||'', crew:(T.crew||[]).slice(), island:[], note:'', wb:'', wbc:'', lock:0, mv:'', _std:true};
+  /* §pjWorkCode · wc = รหัสที่จะไปโผล่ในตารางการทำงานของทุกคนบนใบนี้
+     ต้องอยู่ในรายการช่องที่รู้จัก ด้วยเหตุผลเดียวกับ lock/mv ไม่งั้นหลุดทุกครั้งที่บันทึกช่องอื่น */
+  if(!o) return {cap:T.cap||'', asst:T.asst||'', crew:(T.crew||[]).slice(), island:[], note:'', wb:'', wbc:'', lock:0, mv:'', wc:'', _std:true};
   return {cap:o.cap||'', asst:o.asst||'', crew:Array.isArray(o.crew)?o.crew.slice():[],
           island:Array.isArray(o.island)?o.island.slice():[], note:o.note||'', wb:o.wb||'', wbc:o.wbc||'',
-          lock:(o.lock?1:0), mv:(o.mv||''), _std:false};
+          lock:(o.lock?1:0), mv:(o.mv||''), wc:(o.wc||''), _std:false};
 }
 function pjSet(d,b,patch){
   if(!poGuard()) return;
@@ -88652,6 +88713,26 @@ function pjPick(bid, slot, val){
   pjSet(_poDate,bid,{cap:J.cap,asst:J.asst,crew:J.crew,island:J.island});
   renderPierJob();
 }
+/* §pjWorkCode · ลำที่ไม่ได้ออกเรือ · ใบงานเปลี่ยนช่องเป็นช่างไปแล้ว แต่ตารางการทำงาน
+   ยังลงรหัสเส้นทางให้ เพราะมันตัดสินจากสถานะเรือ ไม่ได้ถามว่าวันนั้นมีทริปไหม
+   แก้ด้วยการให้ "คนทำใบงาน" เป็นคนบอกเองว่าวันนี้คนบนใบนี้ทำงานอะไร แล้วตารางอ่านตาม
+   ว่างไว้ = ให้ระบบเดา (มีใบซ่อมเปิด → รหัสงานซ่อม · ไม่มี → ปล่อยเป็นช่องค้างให้ไปวางเอง) */
+function pjWcAuto(ST){ return (ST && ST.mj && ST.mj.length) ? paMtCode() : ''; }
+function pjWcSet(bid, val){ pjSet(_poDate,bid,{wc:String(val||'')}); renderPierJob(); }
+function pjWcRow(bid, cur, ro, ST){
+  var au=pjWcAuto(ST);
+  var cs=((typeof paCodes==='function')?paCodes():[]).filter(function(c){ return c && c.kind==='work'; });
+  var seen={}; cs.forEach(function(c){ seen[c.code]=1; });
+  if(cur && !seen[cur]) cs.push({code:cur, label:'(ไม่มีในทะเบียน)'});
+  var sel='<select onchange="pjWcSet(\''+poE(bid)+'\',this.value)"'+(ro?' disabled':'')
+    +' title="รหัสนี้จะไปขึ้นในตารางการทำงานให้ทุกคนที่อยู่บนใบนี้">'
+    +'<option value=""'+(cur?'':' selected')+'>'
+      +(au?('อัตโนมัติ · '+poE(au)):'ยังไม่ระบุ')+'</option>'
+    +cs.map(function(c){ return '<option value="'+poE(c.code)+'"'+(c.code===cur?' selected':'')+'>'
+        +poE(c.code)+(c.label?(' · '+poE(c.label)):'')+'</option>'; }).join('')
+    +'</select>';
+  return pjRow('รหัสในตารางงาน', sel, null);
+}
 /* §mealTrip · '' = ตามเส้นทาง · '-' = วันนี้ไม่มีอาหาร · อื่น ๆ = id ร้าน */
 function pjMvSet(bid, val){ pjSet(_poDate,bid,{mv:String(val||'')}); renderPierJob(); }
 function pjNote(bid,txt){ pjSet(_poDate,bid,{note:String(txt||'').slice(0,400)}); }
@@ -88818,6 +88899,7 @@ function pjCard(B, pier, ro){
    /* §pjWork · ชื่อตำแหน่งเปลี่ยนตามงาน · ชื่อคนยังมาจากทะเบียนพนักงานท่าเรือชุดเดิม
       ช่องที่เก็บยังเป็น cap/asst/crew/island ชุดเดิม จึงไหลเข้าตารางการทำงานเองอยู่แล้ว */
    + pjSecHd(going?'Captain &amp; Crew':(SM.work?'ทีมงานวันนี้':'ทีมงาน (ไม่บังคับ)'),'crew')
+   + (going?'':pjWcRow(bid, J.wc, lro, ST))   /* §pjWorkCode */
    + (function(){
        var LB = going
          ? ['Captain','Asst. Captain','Crew 1','Crew 2','Crew 3','Island Staff 1','Island Staff 2']
