@@ -86564,8 +86564,51 @@ function paManual(date,sid){ var o=paManualRec(date,sid); return o?o.c:''; }
 function paSetManual(date,sid,code,plan){
   if(!poCanEdit()) return;
   var k=paShiftKey(date,sid);
-  if(!code) delete PIER_SHIFT[k];
-  else { var o={c:code, by:poWho(), at:new Date().toISOString()}; if(plan) o.plan=1; PIER_SHIFT[k]=o; }
+  /* §paNight · เวรกลางคืนอยู่ในระเบียนเดียวกัน (คีย์ n) · ล้างงานกลางวันต้องไม่ล้างเวรทิ้งไปด้วย
+     สองอย่างนี้เป็นคนละเรื่อง คนที่กด "ล้างช่องนี้" หมายถึงงานกลางวันเท่านั้น */
+  var nOld=(PIER_SHIFT[k]||{}).n||'';
+  if(!code){
+    if(nOld) PIER_SHIFT[k]={n:nOld, nby:(PIER_SHIFT[k]||{}).nby||'', nat:(PIER_SHIFT[k]||{}).nat||''};
+    else delete PIER_SHIFT[k];
+    return;
+  }
+  var o={c:code, by:poWho(), at:new Date().toISOString()};
+  if(plan) o.plan=1;
+  if(nOld){ o.n=nOld; o.nby=(PIER_SHIFT[k]||{}).nby||''; o.nat=(PIER_SHIFT[k]||{}).nat||''; }
+  PIER_SHIFT[k]=o;
+}
+/* §paNight · เวรกลางคืน · ชั้นที่สองของช่องเดียวกัน ไม่ใช่รหัสที่แย่งที่กับงานกลางวัน
+   เหตุผล: คนคนเดียวลงเรือกลางวันแล้วต่อเวรคืนเดียวกันได้จริง · ถ้าใช้รหัสเดียวช่อง
+   ใบงานเรือจะทับเวรทิ้งทุกครั้งที่ลงเรือ (paCell ชั้น ๒ ชนะชั้น ๓ เสมอ)
+   เวรที่คาบสองวัน (เข้าค่ำ ออกเช้า) นับที่ "วันเริ่มเวร" เป็นมาตรฐานเดียวทั้งระบบ */
+function paNightCode(){ return PIER_CFG.nightCode || 'N'; }
+function paNight(date,sid){ var o=PIER_SHIFT[paShiftKey(date,sid)]; return (o&&o.n)?String(o.n):''; }
+function paSetNight(date,sid,code){
+  if(!poCanEdit()) return;
+  var k=paShiftKey(date,sid), o=PIER_SHIFT[k]||{};
+  if(code){ o.n=String(code); o.nby=poWho(); o.nat=new Date().toISOString(); PIER_SHIFT[k]=o; }
+  else {
+    delete o.n; delete o.nby; delete o.nat;
+    if(o.c) PIER_SHIFT[k]=o; else delete PIER_SHIFT[k];
+  }
+}
+function paNightToggle(date,sid){
+  if(!poGuard()) return;
+  paSetNight(date, sid, paNight(date,sid) ? '' : paNightCode());
+  poPersist(); paPopClose(); paKeep(function(){ renderPierAtt(); });
+}
+/* รหัสเวรกลางคืนต้องมีในทะเบียน ไม่งั้นช่องไม่มีสีและแถบรหัสท้ายหน้าไม่มีคำอธิบาย */
+function paEnsureNightCode(){
+  try{
+    if(!Array.isArray(PIER_CODES) || !PIER_CODES.length) return;
+    var want=String(paNightCode()||'N').trim(); if(!want) return;
+    var has=PIER_CODES.some(function(c){ return String(c.code||'').trim().toUpperCase()===want.toUpperCase(); });
+    if(has) return;
+    var mx=PIER_CODES.reduce(function(a,c){ return Math.max(a,+c.ord||0); },0);
+    PIER_CODES.push({id:'c_night_'+Date.now().toString(36), code:want, label:'เวรกลางคืน',
+                     color:'#FFFFFF', bg:'#1F2937', kind:'night', ord:mx+1, active:true});
+    if(typeof poCanEdit==='function' && poCanEdit()) poPersist();
+  }catch(_){}
 }
 /* §pierRotate · ดัชนีของหนึ่งวัน · อ่านตรงจาก PIER_JOB ไม่ต้องวน poBoats() ต่อช่อง
    {byStaff:{sid:{boat,pier}}, piers:{pier:1}}  ครอบทั้ง 3 ท่าในรอบเดียว */
@@ -86828,6 +86871,15 @@ function paCSS(){
      +'display:flex;align-items:center;justify-content:center;line-height:1}'
   /* §paNoMark · ไม่มีเครื่องหมายในช่องแล้ว · ดูได้จากคำโปรยตอนชี้ค้าง */
   +H+' .pa-away{position:absolute;left:2px;bottom:1px;z-index:2;font-size:7.5px;font-weight:800;letter-spacing:.02em;color:#20477E;background:#E9EFF7;border-radius:3px;padding:0 3px;line-height:11px}'
+  /* §paNight · ชั้นที่สองของช่อง · งานกลางวันหดขึ้นให้พอดี ความสูงแถวเท่าเดิม */
+  +H+' td.pa-c.nt .pa-cd{bottom:9px}'
+  +H+' td.pa-c.nt .pa-away{bottom:10px}'
+  +H+' .pa-nb{position:absolute;left:0;right:0;bottom:0;height:9px;line-height:9px;z-index:2;'
+     +'font-size:7px;font-weight:900;letter-spacing:.05em;text-align:center;'
+     +'color:#EDEFF3;background:#F5F6F8;border-top:1px solid #fff}'
+  +H+' .pa-nb.on{color:#fff;background:#1F2937}'
+  +H+' th.pa-sh.ngt,td.pa-sc.ngt{background:#EEF0F4}'
+  +H+' th.pa-sh.ngt{color:#1F2937}'
   +H+' .pa-sum{position:sticky;right:0;background:#FAFBFC;border-left:1px solid #E7EAEF;padding:5px 11px !important;white-space:nowrap;text-align:right;z-index:3}'
   +H+' .pa-sum b{font-size:12.5px;font-weight:800;color:#0F6E56;font-variant-numeric:tabular-nums}'
   +H+' .pa-sum span{font-size:10px;color:#8B93A1;margin-left:6px;font-variant-numeric:tabular-nums}'
@@ -86859,7 +86911,7 @@ function paCSS(){
   +' .pa-pop .cap{font-size:9.5px;color:#8B93A1;font-weight:600;padding:0 2px 7px;line-height:1.45}';
 }
 
-function paCellHtml(date, pier, st, day, hasJob, today, E){
+function paCellHtml(date, pier, st, day, hasJob, today, E, nOn){
   var v=paCell(date,pier,st,E), C=paCodeMeta(v.c);
   var bg=C?C.bg:'transparent', fg=C?C.color:'#D5D9E0';
   var we=(day.w===0||day.w===6);
@@ -86870,10 +86922,16 @@ function paCellHtml(date, pier, st, day, hasJob, today, E){
      :(v.src==='plan'?' · โครงงานที่วางไว้ (ใบงานทับได้)'
      :(v.src==='boat'?' · จากใบงานเรือ'
      :(v.src==='todo'?' · ยังไม่ได้วางงานให้คนนี้':''))));
-  return '<td class="pa-c'+(!hasJob?' nf':(we?' we':''))+(v.src==='todo'?' todo':'')+'" title="'+poE(tip)+'"'
+  /* §paNight · แถบล่างของช่อง · โผล่เฉพาะรอบที่มีเวรกลางคืนจริง
+     รอบไหนไม่มีใครเข้าเวร ตารางหน้าตาเหมือนเดิมทุกประการ ไม่ต้องเสียความสูงเปล่า */
+  var nc=nOn?paNight(date,st.id):'';
+  if(nOn) tip+=' · '+(nc?('เวรกลางคืน '+nc):'ไม่มีเวรกลางคืน');
+  return '<td class="pa-c'+(!hasJob?' nf':(we?' we':''))+(v.src==='todo'?' todo':'')
+      +(nOn?' nt':'')+'" title="'+poE(tip)+'"'
     +' onclick="paPick(event,\''+date+'\',\''+st.id+'\')">'
     +'<span class="pa-cd" style="background:'+bg+';color:'+fg+'">'+poE(v.c||'·')+'</span>'
-    +(away?'<span class="pa-away">'+poE(pjPierShort(away))+'</span>':'')+'</td>';
+    +(away?'<span class="pa-away">'+poE(pjPierShort(away))+'</span>':'')
+    +(nOn?('<span class="pa-nb'+(nc?' on':'')+'">'+poE(nc||'')+'</span>'):'')+'</td>';
 }
 
 /* §paRtSkin · ชุดสีของรหัสเส้นทางในตารางการทำงาน · [สีตัวอักษร, สีพื้น]
@@ -86963,7 +87021,7 @@ function paEnsureMtCode(){
   }catch(_){}
 }
 function renderPierAtt(pier){
-  paEnsureMtCode(); paSkinApply();
+  paEnsureMtCode(); paEnsureNightCode(); paSkinApply();
   if(pier) _poPier=pier;
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
   var host=document.getElementById('pa-host-'+P.k); if(!host) return;
@@ -86986,6 +87044,14 @@ function renderPierAtt(pier){
     return ((ma.ord!=null?ma.ord:99)-(mb.ord!=null?mb.ord:99)) || String(a).localeCompare(String(b));
   });
 
+  /* §paNight · รอบนี้มีเวรกลางคืนหรือเปล่า · มีแม้ช่องเดียวก็เปิดแถบล่างทั้งตาราง
+     ไม่งั้นบางช่องสูงไม่เท่ากันแล้วอ่านเป็นตารางคนละอัน · นับจำนวนคืนของแต่ละคนไปเลยในรอบเดียว */
+  var nOn=false, nCnt={}, nTot=0;
+  groups.forEach(function(G){ G.rows.forEach(function(st){
+    CY.days.forEach(function(d){
+      if(paNight(d.s, st.id)){ nOn=true; nCnt[st.id]=(nCnt[st.id]||0)+1; nTot++; }
+    }); }); });
+
   /* §paCols · รอบ 26–25 คร่อมสองเดือนเสมอ · ต้องบอกให้ชัดว่าเลข 1 กับ 26 คนละเดือน */
   var MTH=['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
   var spans=[]; CY.days.forEach(function(d){
@@ -86996,7 +87062,7 @@ function renderPierAtt(pier){
   var head='<tr>'
     + '<th class="pa-h0" colspan="4">CREW DUTY ROSTER &nbsp;&middot;&nbsp; '+poE(CY.from)+' – '+poE(CY.to)+' &nbsp;&middot;&nbsp; '+poE(String(P.n||P.t).toUpperCase())+'</th>'
     + spans.map(function(sp){ return '<th class="pa-mo" colspan="'+sp.n+'">'+MTH[sp.m]+' '+sp.y+'</th>'; }).join('')
-    + '<th class="pa-mo sum" colspan="'+(SUMC.length+1)+'">MONTHLY SUMMARY (DAYS)</th>'
+    + '<th class="pa-mo sum" colspan="'+(SUMC.length+1+(nOn?1:0))+'">MONTHLY SUMMARY (DAYS)</th>'
     + '<th class="pa-h0 nt">REMARKS</th></tr>'
     + '<tr><th class="pa-no">No.</th><th class="pa-nm2">Full name</th><th class="pa-nk">Nickname</th><th class="pa-rl">Position</th>'
     + CY.days.map(function(d){
@@ -87005,12 +87071,14 @@ function renderPierAtt(pier){
           +'<div class="dd">'+d.n+'</div><div class="dw">'+WD[d.w]+'</div></th>'; }).join('')
     + SUMC.map(function(c){ var m=paCodeMeta(c)||{};
         return '<th class="pa-sh'+(m.route?' rt':'')+'" title="'+poE(m.label||c)+'">'+poE(c)+'</th>'; }).join('')
+    + (nOn?('<th class="pa-sh ngt" title="จำนวนคืนที่เข้าเวร · นับที่วันเริ่มเวร">'
+        +poE(paNightCode())+'</th>'):'')
     + '<th class="pa-sh tot">TOTAL</th><th class="pa-nt">Notes</th></tr>';
 
   var body='', totW=0, totO=0, totL=0, totAway=0, totTodo=0, gTot={}, _n=0;
   groups.forEach(function(G){
     body+='<tr class="pa-band"><td class="pa-no"></td><td class="pa-nm2" colspan="3">'+poE(G.t)+'</td>'
-      +'<td colspan="'+(CY.days.length+SUMC.length+2)+'"></td></tr>';
+      +'<td colspan="'+(CY.days.length+SUMC.length+2+(nOn?1:0))+'"></td></tr>';
     G.rows.forEach(function(st){
       var w=0,o=0,l=0,aw=0,cnt={};
       var tds=CY.days.map(function(d){
@@ -87019,11 +87087,13 @@ function renderPierAtt(pier){
                  if(k==='work') w++; else if(k==='off') o++; else if(k==='leave') l++; }
         else if(v.src==='todo') totTodo++;   // §paLayers · ช่องค้าง · ต้องมีตัวเลขให้เห็น ไม่งั้นช่องว่างอ่านเป็น "ไม่มีอะไรต้องทำ"
         if(v.atPier && v.atPier!==P.k) aw++;
-        return paCellHtml(d.s,P.k,st,d,hasJob[d.s],today,E);
+        return paCellHtml(d.s,P.k,st,d,hasJob[d.s],today,E,nOn);
       }).join('');
       totW+=w; totO+=o; totL+=l; totAway+=aw;
+      var _nc=nCnt[st.id]||0;
       var sums=SUMC.map(function(c){ var v=cnt[c]||0;
         return '<td class="pa-sc'+(v?'':' z')+'">'+(v||'·')+'</td>'; }).join('')
+        + (nOn?('<td class="pa-sc ngt'+(_nc?'':' z')+'">'+(_nc||'·')+'</td>'):'')
         + '<td class="pa-sc tot">'+w+'</td>';
       _n++;
       // §paEdit · สี่ช่องแรกพิมพ์ทับได้ตรงนี้ · ออกจากช่องแล้วบันทึกเลย
@@ -87047,6 +87117,7 @@ function renderPierAtt(pier){
   body+='<tr class="pa-tot"><td class="pa-no"></td><td class="pa-nm2" colspan="3">TOTAL &middot; ALL STAFF</td>'
     + CY.days.map(function(){ return '<td></td>'; }).join('')
     + SUMC.map(function(c){ return '<td class="pa-sc">'+(gTot[c]||0)+'</td>'; }).join('')
+    + (nOn?('<td class="pa-sc ngt">'+nTot+'</td>'):'')
     + '<td class="pa-sc tot">'+totW+'</td><td class="pa-nt"></td></tr>';
 
   // §rtLegend · รหัสที่โผล่จริงในรอบนี้มาก่อน (รวมรหัสเส้นทาง) แล้วค่อยรหัสอื่นในทะเบียน
@@ -87129,6 +87200,7 @@ function paPick(ev, date, sid){
   var _curC=(cur&&cur.c)||'';
   var _cls=function(code){ return (code&&code===_curC)?' class="cur"':''; };
   var _srcTxt={manual:'แก้ทับรายช่อง', plan:'โครงที่วางไว้', boat:'มาจากใบงานเรือ', todo:'ยังไม่ได้วางงาน'}[cur&&cur.src]||'';
+  var _nOn=!!paNight(date,sid);   /* §paNight */
   d.innerHTML='<div class="h">'+poE(st.nick||st.name)+' · '+poE(date)+'</div>'
     + (_curC?('<div class="cap">ตอนนี้คือ <b style="color:#16265C">'+poE(_curC)+'</b>'
         +(_srcTxt?(' · '+poE(_srcTxt)):'')+'</div>'):'')
@@ -87141,12 +87213,17 @@ function paPick(ev, date, sid){
         return '<button'+_cls(c.code)+' onclick="'+mk(poE(c.code))+'">'
           +'<i style="background:'+c.bg+';color:'+c.color+'">'+poE(c.code)+'</i>'+poE(c.label||'')+'</button>'; }).join('')
     + (_rtOpts.length?('<div class="s">อื่น ๆ</div>'):'')
-    + paCodes().filter(function(c){ return !_rtSeen[c.code]; }).map(function(c){
+    + paCodes().filter(function(c){ return !_rtSeen[c.code] && c.kind!=='night'; }).map(function(c){
         return '<button'+_cls(c.code)+' onclick="'+mk(poE(c.code))+'">'
           +'<i style="background:'+c.bg+';color:'+c.color+'">'+poE(c.code)+'</i>'
           +(c.label?poE(c.label):'<span style="color:#C0271C">ยังไม่ใส่ความหมาย</span>')+'</button>'; }).join('')
+    /* §paNight · แยกออกมาเป็นสวิตช์ เพราะเวรกลางคืนไม่ได้แทนงานกลางวัน แต่บวกเพิ่ม */
+    + '<div class="s">เวรกลางคืน</div>'
+    + '<button'+(_nOn?' class="cur"':'')+' onclick="paNightToggle(\''+date+'\',\''+sid+'\')">'
+      +'<i style="background:#1F2937;color:#fff">'+poE(paNightCode())+'</i>'
+      +(_nOn?'เอาเวรกลางคืนออก':'ใส่เวรกลางคืน · ไม่ทับงานกลางวัน')+'</button>'
     + '<button onclick="paSet(\''+date+'\',\''+sid+'\',\'\')" style="border-style:dashed;color:#8B93A1">'
-      +'<i style="background:#F4F6FA;color:#8B93A1">auto</i>ล้างช่องนี้ · กลับไปใช้ใบงาน</button>';
+      +'<i style="background:#F4F6FA;color:#8B93A1">auto</i>ล้างงานกลางวัน · กลับไปใช้ใบงาน</button>';
   _paPlan=_pl;
   document.body.appendChild(d);
   var r=ev.currentTarget.getBoundingClientRect();
