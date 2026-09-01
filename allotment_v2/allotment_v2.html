@@ -88539,6 +88539,22 @@ function pjCSS(){
   +H+' .pj-rw .v{font-size:12px;font-weight:600;color:#242730;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
   +H+' .pj-rw .v.e{color:#CFD4DC;font-weight:400}'
   +H+' .pj-rw.sw2{background:#FFFCF3}'
+  /* §pjSlots · ชื่อช่องพิมพ์ทับได้ · ปุ่มเอาคนออก · แถบปุ่มเพิ่มคน */
+  +H+' .pj-rw .k .pj-kx{display:inline-block;cursor:text;border-radius:4px;padding:1px 3px;margin:-1px -3px;outline:none;min-width:24px}'
+  +H+' .pj-rw .k .pj-kx:hover{background:#EEF3FB;color:#31507F}'
+  +H+' .pj-rw .k .pj-kx:focus{background:#fff;color:#16265C;box-shadow:0 0 0 1px #3E6FD0}'
+  +H+' .pj-rx{border:none;background:none;color:#CFD4DC;font-size:11px;cursor:pointer;padding:0 2px;flex:none;line-height:1}'
+  +H+' .pj-rx:hover{color:#C0271C}'
+  +H+' .pj-slotn{font-size:9.5px;font-weight:700;letter-spacing:.04em;color:#9BA3B0;padding:4px 15px 0;text-align:right}'
+  +H+' .pj-addw{display:flex;align-items:center;gap:9px;padding:7px 15px;border-bottom:1px solid #F4F5F8;background:#FAFBFD;position:relative}'
+  +H+' .pj-addb{font-size:11.5px;font-weight:700;color:#31507F;background:#fff;border:1px dashed #B9C7DE;'
+     +'border-radius:7px;padding:5px 11px;cursor:pointer;font-family:inherit}'
+  +H+' .pj-addb:hover{background:#EEF3FB;border-style:solid}'
+  +H+' .pj-addn{font-size:10.5px;color:#9BA3B0}'
+  +H+' .pj-pop.pj-addp{width:186px;left:15px;right:auto;top:38px;padding:6px}'
+  +H+' .pj-pop.pj-addp button{display:block;width:100%;text-align:left;border:none;background:none;'
+     +'font:600 12px inherit;font-family:inherit;color:#242730;padding:6px 8px;border-radius:6px;cursor:pointer}'
+  +H+' .pj-pop.pj-addp button:hover{background:#EEF3FB;color:#20477E}'
   /* §pjRowFit · เว้นขวาให้ลูกศรของ select · ไม่งั้นชื่อยาววิ่งไปทับ */
   +H+' .pj-rw select{flex:1;min-width:0;border:1px solid transparent;background:transparent;border-radius:7px;'
      +'padding:3px 22px 3px 7px;font:600 12px inherit;color:#242730;cursor:pointer;text-overflow:ellipsis}'
@@ -88707,6 +88723,63 @@ function pjRow(label, html, subOld){
   return '<div class="pj-rw'+(subOld?' sw2':'')+'"><div class="k">'+label+'</div>'+html
     +(subOld?('<span class="pj-tag">SUB</span><span class="pj-was" title="ปกติคือ '+poE(pjStaffName(subOld))+'">ปกติ '+poE(pjStaffName(subOld))+'</span>'):'')+'</div>';
 }
+/* §pjSlots · ชื่อช่องเก็บไว้ที่เดียวทั้งระบบ (PIER_CFG.slotLb) แยกสองชุด
+     go = ใบที่ออกเรือ · wk = ใบที่ไม่ได้ออก (ช่าง/ช่วยงาน)
+   ตั้งชื่อทับได้ · ลบข้อความจนว่าง = กลับไปใช้ชื่อตั้งต้น ไม่ต้องมีปุ่มรีเซ็ตแยก */
+function pjSlotLb(kind, slot, def){
+  try{ var S=(PIER_CFG.slotLb||{})[kind]||{}; var v=String(S[slot]||'').trim(); return v||def; }
+  catch(_){ return def; }
+}
+function pjSlotLbSet(kind, slot, txt, def){
+  if(!poGuard()) return;
+  var o=PIER_CFG.slotLb||(PIER_CFG.slotLb={});
+  var S=o[kind]||(o[kind]={});
+  /* textContent ไม่ใช่ innerText · .k มี text-transform:uppercase อยู่
+     ถ้าอ่าน innerText จะได้ตัวใหญ่ทั้งหมดแล้วบันทึกตัวใหญ่ติดไปด้วย */
+  var v=String(txt==null?'':txt).replace(/\s+/g,' ').trim().slice(0,24);
+  if(!v || v===def) delete S[slot]; else S[slot]=v;
+  poPersist(); renderPierJob();
+}
+/* ช่องว่างที่กด "เพิ่มคน" เปิดไว้ · อยู่ในหน่วยความจำอย่างเดียว
+   ไม่เก็บลงข้อมูล เพราะมันคือสถานะของการกรอก ไม่ใช่ข้อเท็จจริงของวันนั้น */
+var _pjAdd={};
+function pjSlotKey(bid,slot){ return String(bid)+'::'+String(slot); }
+function pjSlotAdd(bid, slot){
+  _pjAdd[pjSlotKey(bid,slot)]=1;
+  try{ document.querySelectorAll('.pj-pop').forEach(function(p){ p.classList.remove('on'); }); }catch(_){}
+  renderPierJob();
+}
+function pjSlotDrop(bid, slot){
+  delete _pjAdd[pjSlotKey(bid,slot)];
+  pjPick(bid, slot, '');          /* บันทึก + วาดใหม่ในตัว */
+}
+function pjSlotVal(J, slot){
+  if(slot==='cap') return J.cap||'';
+  if(slot==='asst') return J.asst||'';
+  if(slot.indexOf('crew')===0) return (J.crew||[])[+slot.slice(4)]||'';
+  if(slot.indexOf('island')===0) return (J.island||[])[+slot.slice(6)]||'';
+  return '';
+}
+/* แถวหนึ่งช่อง · เหมือน pjSelRow แต่ชื่อช่องพิมพ์ทับได้ และมีปุ่มเอาคนออก */
+function pjSlotRow(pier,bid,kind,slot,defLb,val,subOld,roles,ro,boat){
+  var lb=pjSlotLb(kind,slot,defLb);
+  var kHtml = ro ? poE(lb)
+    : ('<span class="pj-kx" contenteditable="true" spellcheck="false"'
+      +' title="แก้ชื่อช่องนี้ได้ · มีผลทุกท่าทุกลำ · ลบจนว่าง = กลับเป็น '+poE(defLb)+'"'
+      +' onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}'
+        +'if(event.key===\'Escape\'){this.textContent=this.dataset.o;this.blur();}"'
+      +' data-o="'+poE(lb)+'"'
+      +' onblur="pjSlotLbSet(\''+kind+'\',\''+slot+'\',this.textContent,\''+poE(defLb)+'\')">'
+      +poE(lb)+'</span>');
+  var badge='';
+  var hp=val?pjHomePier(val):'';
+  if(hp && hp!==pier) badge+='<span class="pj-away" title="มาช่วยจาก '+poE((PO_PIERS.filter(function(x){return x.k===hp;})[0]||{}).t||hp)+'">'+poE(pjPierShort(hp))+'</span>';
+  var sel=(badge?('<span style="display:inline-flex;flex:none">'+badge+'</span>'):'')
+    +'<select onchange="pjPick(\''+bid+'\',\''+slot+'\',this.value)"'+(ro?' disabled':'')+'>'+pjOpts(pier,val,roles)+'</select>'
+    +((ro||!val)?'':('<button class="pj-rx" onclick="pjSlotDrop(\''+bid+'\',\''+slot+'\')" title="เอาคนออกจากช่องนี้">&#10005;</button>'));
+  return '<div class="pj-rw'+(subOld?' sw2':'')+'"><div class="k">'+kHtml+'</div>'+sel
+    +(subOld?('<span class="pj-tag">SUB</span><span class="pj-was" title="ปกติคือ '+poE(pjStaffName(subOld))+'">ปกติ '+poE(pjStaffName(subOld))+'</span>'):'')+'</div>';
+}
 function pjSelRow(pier,bid,label,slot,val,subOld,roles,ro,boat){
   /* §pjRowFit · ชิปใบอนุญาตรายคน (ก / ช) ออก · บรรทัดสรุปใต้การ์ดบอกเรื่องเดียวกันอยู่แล้ว */
   var badge='';
@@ -88865,12 +88938,15 @@ function pjCard(B, pier, ro){
      + pjDocsHtml(B.boat, rt, _poDate)
    +'</div>'
    +'<div class="pg" style="background:'+(rt.id?pcol:pjBand(ST.k))+'">'
+     /* §pjSame · ของเดิมบรรทัดล่างถอยไปใช้ SM.t เป็นค่าสำรอง · ลำที่ไม่มี loc/note
+        จึงขึ้นชื่อสถานะซ้ำกันสองบรรทัด · เปลี่ยนเป็นชื่อเรือบน สถานะล่าง
+        อ่านคู่กับใบที่ออกทริป (ชื่อโปรแกรมบน เกาะล่าง) ได้เป็นแบบเดียวกัน */
      +'<div class="pn">'+(rt.id?poE(rt.name||B.rid)
         :(B._away?('วันนี้ไปวิ่งที่ '+poE(((PO_PIERS.filter(function(x){ return x.k===(B._away.route.pier||''); })[0])||{}).n||B._away.route.pier||'ท่าอื่น'))
-                 :poE(SM.t)))+'</div>'
+                 :poE(B.boat.name||bid)))+'</div>'
      +'<div class="pr">'+(rt.id?poE(rt.islands||'')
         :(B._away?poE(B._away.route.name||'')
-                 :poE([ST.loc||'', ST.note||''].filter(Boolean).join(' \u00b7 ')||(SM.t))))+'</div>'
+                 :poE([SM.t, ST.loc||'', ST.note||''].filter(Boolean).join(' \u00b7 '))))+'</div>'
      +(ro?'':'<button class="pj-pen" onclick="pjPopToggle(\''+pid+'\')" title="'+(rt.id?'แต้มสีโปรแกรมนี้':'แต้มสีสถานะนี้')+'">&#9998;</button>')
      /* §pjStColor · ลำที่ไม่มีโปรแกรม แถบนี้แทนสถานะ · จานสีจึงต้องแก้สีของสถานะ ไม่ใช่ของโปรแกรม */
      +(rt.id
@@ -88921,19 +88997,52 @@ function pjCard(B, pier, ro){
    +'</div>'
    /* §pjWork · ชื่อตำแหน่งเปลี่ยนตามงาน · ชื่อคนยังมาจากทะเบียนพนักงานท่าเรือชุดเดิม
       ช่องที่เก็บยังเป็น cap/asst/crew/island ชุดเดิม จึงไหลเข้าตารางการทำงานเองอยู่แล้ว */
-   + pjSecHd(going?'Captain &amp; Crew':(SM.work?'ทีมงานวันนี้':'ทีมงาน (ไม่บังคับ)'),'crew')
+   /* §pjSame · ชื่อหัวข้อเดิมเปลี่ยนตาม SM.work · ใบสองใบที่ไม่ได้ออกเหมือนกัน
+      แต่ใบหนึ่งมีงานอีกใบไม่มี เลยได้ชื่อหัวข้อคนละชุด อ่านเป็นคนละหน้าจอ */
+   + pjSecHd(going?'Captain &amp; Crew':'ทีมงานวันนี้','crew')
    + (going?'':pjWcRow(bid, J.wc, lro, ST))   /* §pjWorkCode */
+   /* §pjSlots · เดิมโชว์ครบ 7 ช่องเสมอ · ใบที่ใส่คนสองคนจึงมี "— ว่าง —" ค้างอีกห้าบรรทัด
+      การ์ดสูงไม่เท่ากันและอ่านยากเวลาเรียงกันหลายลำ · โชว์เฉพาะช่องที่ใส่แล้ว
+      ที่เหลืออยู่หลังปุ่ม "เพิ่มคน" · ใบเปล่าเหลือช่องแรกไว้หนึ่งช่องเสมอ จะได้มีที่ให้เริ่ม */
    + (function(){
-       var LB = going
-         ? ['Captain','Asst. Captain','Crew 1','Crew 2','Crew 3','Island Staff 1','Island Staff 2']
-         : ['หัวหน้าช่าง','ช่าง 1','ช่าง 2','ช่วยงาน 1','ช่วยงาน 2','ช่วยงาน 3','ช่วยงาน 4'];
-       var RL = going
-         ? [['กัปตัน','captain'],['กัปตัน','captain'],['เด็กเรือ','crew','ลูกเรือ'],['เด็กเรือ','crew','ลูกเรือ'],['เด็กเรือ','crew','ลูกเรือ'],['อุปกรณ์','equipment','ไกด์เกาะ'],['อุปกรณ์','equipment','ไกด์เกาะ']]
-         : [['ช่าง','engineer','mechanic'],['ช่าง','engineer','mechanic'],['ช่าง','engineer','mechanic'],[],[],[],[]];
-       return pjSelRow(pier,bid,LB[0],'cap',J.cap,SUB.cap,RL[0],lro,B.boat)
-         + pjSelRow(pier,bid,LB[1],'asst',J.asst,SUB.asst,RL[1],lro,B.boat)
-         + [0,1,2].map(function(i){ return pjSelRow(pier,bid,LB[2+i],'crew'+i,(J.crew||[])[i]||'',SUB['crew'+i],RL[2+i],lro,B.boat); }).join('')
-         + [0,1].map(function(i){ return pjSelRow(pier,bid,LB[5+i],'island'+i,(J.island||[])[i]||'',null,RL[5+i],lro,B.boat); }).join('');
+       var KIND = going ? 'go' : 'wk';
+       var SL = going
+         ? [['cap','Captain',['กัปตัน','captain']],
+            ['asst','Asst. Captain',['กัปตัน','captain']],
+            ['crew0','Crew 1',['เด็กเรือ','crew','ลูกเรือ']],
+            ['crew1','Crew 2',['เด็กเรือ','crew','ลูกเรือ']],
+            ['crew2','Crew 3',['เด็กเรือ','crew','ลูกเรือ']],
+            ['island0','Island Staff 1',['อุปกรณ์','equipment','ไกด์เกาะ']],
+            ['island1','Island Staff 2',['อุปกรณ์','equipment','ไกด์เกาะ']]]
+         : [['cap','หัวหน้าช่าง',['ช่าง','engineer','mechanic']],
+            ['asst','ช่าง 1',['ช่าง','engineer','mechanic']],
+            ['crew0','ช่าง 2',['ช่าง','engineer','mechanic']],
+            ['crew1','ช่วยงาน 1',[]],
+            ['crew2','ช่วยงาน 2',[]],
+            ['island0','ช่วยงาน 3',[]],
+            ['island1','ช่วยงาน 4',[]]];
+       /* ช่องแรก (กัปตัน / หัวหน้าช่าง) โชว์เสมอ แม้ยังไม่ได้ใส่ใคร
+          ใบเปล่าจะได้มีที่ให้เริ่ม และไม่หายไปตอนกดเพิ่มช่องอื่นเป็นช่องแรก */
+       var shown=[], rest=[];
+       SL.forEach(function(x,i){
+         if(i===0 || pjSlotVal(J,x[0]) || _pjAdd[pjSlotKey(bid,x[0])]) shown.push(x); else rest.push(x);
+       });
+       var nMan=SL.filter(function(x){ return pjSlotVal(J,x[0]); }).length;
+       var out=shown.map(function(x){
+         return pjSlotRow(pier,bid,KIND,x[0],x[1],pjSlotVal(J,x[0]),SUB[x[0]],x[2],lro,B.boat);
+       }).join('');
+       if(!lro && rest.length){
+         var aid='pja_'+bid;
+         out+='<div class="pj-addw">'
+           +'<button class="pj-addb" onclick="pjPopToggle(\''+aid+'\')">&#65291; เพิ่มคน</button>'
+           +'<span class="pj-addn">เหลือ '+rest.length+' ช่อง</span>'
+           +'<div class="pj-pop pj-addp" id="'+aid+'"><div class="ph">เลือกช่องที่จะเพิ่ม</div>'
+           + rest.map(function(x){
+               return '<button onclick="pjSlotAdd(\''+bid+'\',\''+x[0]+'\')">'
+                 +poE(pjSlotLb(KIND,x[0],x[1]))+'</button>'; }).join('')
+           +'</div></div>';
+       }
+       return '<div class="pj-slotn">'+nMan+' คน</div>'+out;
      })()
    + '<div class="pj-licbox">'+(function(){ try{
        // §pjAll · ลำที่ไม่ได้ออก ไม่ต้องเตือนใบอนุญาต · ไม่มีใครต้องคุมเรือ
@@ -88986,7 +89095,7 @@ function pjCard(B, pier, ro){
             return pjRow('ครัว', sel, null);
           })() )
       /* §pjWork · ลำที่ไม่ได้ออก · ช่องนี้เปลี่ยนเป็น "งานที่ทำวันนี้" */
-      : ( pjSecHd(SM.work?'งานที่ทำวันนี้':'สถานะเรือ','guide')
+      : ( pjSecHd('งานของลำนี้','guide')   /* §pjSame · สองกรณีโชว์ช่องเดียวกันทุกช่อง */
         + (function(){
             var M=pjMjOf(_poDate,bid,ST.mj);
             if(!ST.mj.length){
@@ -89023,7 +89132,7 @@ function pjCard(B, pier, ro){
         return '<div class="c"><div class="k">'+x[0]+'</div><div class="v"'+(x[1]?'':' style="color:#CFD4DC"')+'>'+x[1]+'</div></div>'; }).join('')
      +'<div class="c t"><div class="k">TOTAL</div><div class="v">'+(pax.ad+pax.chd+pax.inf+pax.foc)+'</div></div></div>' )
    /* §pjWork · ลำที่ไม่ได้ออกไม่มี ลค · ช่องนี้บอกช่วงเวลาของงานแทน */
-   : ( pjSecHd(SM.work?'ช่วงงาน':'ข้อมูลเรือ','cust')
+   : ( pjSecHd('ช่วงงาน','cust')   /* §pjSame */
    +'<div class="pj-wbrow"><span class="k">ที่อยู่</span>'
      +'<span style="font-size:12px;font-weight:700">'+poE(ST.loc||'—')+'</span>'
      +'<span style="flex:1"></span>'
