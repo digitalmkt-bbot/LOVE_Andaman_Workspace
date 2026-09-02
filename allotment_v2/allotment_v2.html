@@ -51830,6 +51830,10 @@ function pcCSS(scope){
   +scope+' .pc-t .rt{font-size:10.5px;color:#8A9099}'
   /* §pcSum · สีเส้นทาง */
   +scope+' .pc-t .pc-rn{font-weight:700;font-size:11.5px}'
+  /* §ltUpg · เรือเหมาที่มาจากอัปเกรดหน้างาน · ดอกจัน = ยังไม่ได้เก็บเงิน */
+  +scope+' .pc-t .pc-up{font-style:normal;margin-left:3px;font-size:10px;opacity:.85}'
+  +scope+' .pc-t .pc-up.due{color:#A32D2D;opacity:1}'
+  +scope+' .pc-t .pc-up.due:after{content:"*"}'
   +scope+' .pc-t .pc-dot{display:inline-block;width:8px;height:8px;border-radius:3px;'
     +'margin-right:6px;vertical-align:1px}'
   +scope+' .pc-t .v{font-weight:700;text-align:center}'
@@ -52061,7 +52065,10 @@ function pcSheetLT(pier){
       rows+='<tr><td class="rn">'+rn+'</td><td class="bn">'+pcE(B.name)+'</td>'
         +'<td class="rt">'+pcRouteName(B.rid,B.route)+'</td>'
         +'<td class="c">'+(L.join?('<span class="pc-pill pc-pj">'+L.join+'</span>'):'<span class="v z">0</span>')+'</td>'
-        +'<td class="c">'+(L.chtr?('<span class="pc-pill pc-pc">'+L.chtr+'</span>'):'<span class="v z">0</span>')+'</td>'
+        +'<td class="c">'+(L.chtr
+            ? ('<span class="pc-pill pc-pc" title="'+(L.upg>0?('มาจากอัปเกรดหน้างาน '+L.upg+' ใบ'+(L.upgDue>0?(' · ยังไม่เก็บเงิน '+L.upgDue+' ใบ'):'')):'ตามใบจอง')+'">'
+               +L.chtr+(L.upg>0?('<i class="pc-up'+(L.upgDue>0?' due':'')+'">⬆</i>'):'')+'</span>')
+            : '<span class="v z">0</span>')+'</td>'
         +'<td class="cb"><input value="'+(C.n||'')+'" placeholder="—" inputmode="numeric" '
           +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'n\',this.value)"></td>'
         +'<td class="cy"><input value="'+(C.amt?pcN(C.amt):'')+'" placeholder="—" inputmode="numeric" '
@@ -61706,22 +61713,34 @@ function pxPax(date, bid){
 }
 /* §pxOd · หางยาวที่ลูกค้าสั่งจริงของลำนั้น · เหมากี่ลำ จอยกี่คน
    เดิม P&L เอาเรตต่อหัวไปคูณหัวทั้งลำ ทั้งที่คนซื้อจริงมีไม่กี่คน */
+/* §ltUpg (2 ก.ย. 2026) · ใบที่จอยแล้วอัปเกรดเป็นเหมาหน้างาน ตัวนี้ไม่เคยเห็น
+   เดิมอ่านจาก bkV2AddOnFlags + ของขายเพิ่มหน้างานเท่านั้น · รายการอัปเกรดอยู่ที่ b.upgrades
+   ซึ่งเก็บเป็น "รายการเงิน + ข้อความ" ไม่มีช่องไหนบอกว่าการจัดเรือเปลี่ยนไป
+   ผลคือคนที่อัปเกรดแล้วยังถูกนับเป็นจอยอยู่ และเรือเหมาที่ต้องจัดจริงไม่โผล่เลย
+   (ในฐานข้อมูลมี 7 ใบ)
+
+   ระบบมีคำตอบที่ถูกอยู่แล้วที่ bkLtState() (§ltOne) ซึ่งรวม วอยเชอร์ + ขายเพิ่ม + อัปเกรด
+   ใบงานไกด์กับสรุปหัวทริปใช้ตัวนี้อยู่แล้ว · ชีทหางยาวกับ P&L รายทริปยังไม่ได้ใช้
+   ย้ายมาใช้ตัวเดียวกันทั้งหมด จะได้ไม่มีสองคำตอบในระบบเดียว */
 function pxLongtail(date, bid){
-  var chtr = 0, join = 0;
+  var chtr = 0, join = 0, upg = 0, upgDue = 0;
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
     if((O.boatId||t.charterBoatId)!==bid) return;
     if(typeof pckVoidInfo==='function' && pckVoidInfo(b,date,t)) return;
-    if(typeof bkV2AddOnFlags!=='function') return;
-    var f=bkV2AddOnFlags(b, t.routeId);
-    var pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
-    if(f.charter) chtr += (+f.charterQty||1); else if(f.join) join += pax;
-    try{ if(typeof bkV2LongtailExtraPax==='function') join += (bkV2LongtailExtraPax(b.id,date)||0); }catch(_){}
-    try{ if(typeof bkV2LongtailCharterExtraBoats==='function') chtr += (bkV2LongtailCharterExtraBoats(b.id,date)||0); }catch(_){}
+    var LT=(typeof bkLtState==='function')?bkLtState(b, t.routeId, date):null;
+    if(!LT || LT.mode==='none') return;
+    if(LT.mode==='charter'){
+      chtr += (+LT.boats||0);
+      upg += (+LT.up||0); upgDue += (+LT.upDue||0);
+    } else {
+      var pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
+      join += (LT.joinBooked?pax:0) + (+LT.joinExtra||0);
+    }
   });
-  return { chtr:chtr, join:join };
+  return { chtr:chtr, join:join, upg:upg, upgDue:upgDue };
 }
 /* §pxOd · ของที่ขายเพิ่มหน้างาน · เก็บอยู่สองที่ (ขายเพิ่ม กับ อัพเกรด) โครงเดียวกัน
    นับเฉพาะ "บริษัทได้" ไม่ใช่ยอดขาย · ค่าคอมหักอยู่ในนั้นแล้ว จึงไม่ต้องมีบรรทัดต้นทุนค่าคอม
