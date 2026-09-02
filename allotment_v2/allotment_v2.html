@@ -50927,8 +50927,8 @@ function ckSharedCSS(scope){
   +scope+' table.ck-tbl tr.ck-row.vst:hover>td{background:var(--vst-chip)!important}'
   /* ต้องแรงกว่า ck-lost>td:first-child ที่ specificity สูงกว่า ไม่งั้นแถบซ้ายยังเป็นแดงของเดิม */
   +scope+' table.ck-tbl tr.ck-row.vst>td:first-child{box-shadow:inset 5px 0 0 var(--vst-bar)!important}'
-  +scope+' tr.vst .vck-sel{background:var(--vst-chip);border-color:var(--vst-bar);color:var(--vst-ink)}'
-  +scope+' tr.vst .vck-nt{color:var(--vst-ink)}'
+  +scope+' tr.vstv .vck-sel{background:var(--vst-chip);border-color:var(--vst-bar);color:var(--vst-ink)}'
+  +scope+' tr.vstv .vck-nt{color:var(--vst-ink)}'
   +scope+' .vck-sel{border:2px solid #DCD9D1;background:#fff;color:#5F5E5A;border-radius:9px;'
     +'padding:5px 6px;font:700 11px inherit;font-family:inherit;cursor:pointer;max-width:124px}'
   +scope+' .vck-nt{font-size:11px;font-weight:700;line-height:1.35;white-space:normal;'
@@ -51365,7 +51365,13 @@ function ckRowHtml(r, date, kind, extraHtml){
      ที่ไม่เขียนเป็นคลาสตายตัวเพราะสีตั้งเองได้ · หน้าท่ายังใช้ของเดิมทุกอย่าง */
   var _isVan=(typeof _ckBase==='function' && _ckBase(kind)==='van');
   var _vst='', _vsty='';
-  if(_isVan){ _vst=vckRowSt(ck); if(_vst!=='wait'){ cls+=' vst'; _vsty=' style="'+vckStVars(_vst)+'"'; } }
+  if(_isVan){
+    _vst=vckRowSt(ck);
+    /* ตัวแปรสีติดทุกแถว (ชิป Status ใช้) แต่ระบายพื้นเฉพาะแถวที่แขกคนนั้นมีผลจริงแล้ว
+       รอ / Standby = ยังไม่ได้รับใครขึ้นรถ → ซีดไว้ ไม่งั้นแถวที่ยังไม่ได้ทำจะเด่นกว่าแถวที่ทำแล้ว */
+    cls+=' vstv'+((_vst==='wait'||_vst==='standby')?' vck-pale':' vst');
+    _vsty=' style="'+vckStVars(_vst)+'"';
+  }
   return '<tr class="'+cls+'"'+_vsty+'>'
    +'<td><span class="ck-vch" title="'+e(b.voucherRef||b.code||'')+'">'+e(b.voucherRef||b.code||'—')+'</span></td>'
    +agCell
@@ -52625,6 +52631,128 @@ function vckPickDay(ds){ if(ds){ _vanCkDate=ds; renderVanCheckin(); } }
 function _vckBooked(t){ return ckBookedPax(t); }
 function _vckPaxBreak(p){ return ckPaxBreak(p); }
 
+/* ══ §vckSheet (2026-09-02) · ตารางเช็คอินรถหน้าตาแบบตารางชีท ══════════════
+   ck-tbl ใช้ร่วมกับหน้าท่า (pck-tbl) ทุก selector ที่นี่จึงต้องมี .vck-sheet คั่น
+   ไม่งั้นหน้าท่าเปลี่ยนตามไปด้วยทั้งที่ไม่ได้สั่ง
+   หลักคิดเรื่องสี · สีบนจอ = "มีอะไรเกิดขึ้นแล้ว" ของที่ยังไม่ได้ทำต้องซีดหมด
+   ทั้งแถวข้อมูลและแถบหัวคัน · สีประจำรถโผล่ตอนชี้เมาส์ ไว้ยืนยันว่าคันไหน */
+function vckSheetCSS(){
+  var S='#vancheckin-host table.ck-tbl.vck-sheet';
+  return ''
+  /* กล่องเลื่อนของตัวเอง · การตรึงคอลัมน์ซ้ายต้องมีตัวเลื่อนของตัวเอง
+     ถ้าปล่อยให้ทั้งหน้าเว็บเลื่อนแนวนอนเหมือนเดิม คอลัมน์ที่ตรึงจะไปมุดใต้เมนูซ้าย */
+  +'#vancheckin-host .vck-tw{overflow:auto;max-height:calc(100vh - 232px);min-height:340px;'
+    +'border-radius:13px;-webkit-overflow-scrolling:touch}'
+  +'#vancheckin-host .ck-card.vck-card{overflow:hidden;padding:0}'
+  +S+'{border-collapse:separate;border-spacing:0;min-width:1600px}'
+  +S+' th,'+S+' td{border-right:1px solid #D8DCE3;border-bottom:1px solid #D8DCE3;'
+    +'padding:0 7px;height:29px;white-space:nowrap;vertical-align:middle;background-clip:padding-box}'
+  +S+' thead th{background:#EDF0F5;color:#3C4A63;font-weight:800;font-size:9.5px;letter-spacing:.04em;'
+    +'text-align:center;border-bottom:2px solid #A9B2C2;box-shadow:none;padding:0 7px;height:32px;'
+    +'overflow:hidden;text-overflow:ellipsis}'
+  +S+' thead th:nth-child(4),'+S+' thead th:nth-child(10),'+S+' thead th:nth-child(13){text-align:left}'
+  /* ── ตรึงสี่คอลัมน์ซ้าย · Voucher · Agency · Submitted by · ลูกค้า
+        เลื่อนขวาไปดูช่องท้าย ๆ ยังรู้ว่าเป็นแถวของใคร ── */
+  /* พื้นขาวทุกช่อง · ช่องที่ตรึงไว้ต้องทึบ ไม่งั้นแถวข้างหลังทะลุขึ้นมาตอนเลื่อน
+     แถวที่มีสีทับด้วย tr.vst>td ที่เป็น !important อยู่แล้ว */
+  +S+' tr.ck-row>td,'+S+' tr.ck-unassigned>td{background:#fff}'
+  +S+' tr.ck-row>td:nth-child(-n+4),'+S+' tr.ck-unassigned>td:nth-child(-n+4),'
+    +S+' thead th:nth-child(-n+4){position:sticky;z-index:12}'
+  +S+' thead th:nth-child(-n+4){z-index:36}'
+  /* หัวตารางกับหัวคันตรึงกับกล่องนี้ ไม่ใช่กับหน้าเว็บ · ทับค่าที่ ckSyncSticky ตั้งไว้ */
+  +S+' thead th{top:0 !important}'
+  +S+' tr.ck-ghd>td{top:32px !important}'
+  +S+' tr.ck-row>td:nth-child(1),'+S+' tr.ck-unassigned>td:nth-child(1),'
+    +S+' thead th:nth-child(1){left:0;width:150px;min-width:150px;max-width:150px;padding-left:12px}'
+  +S+' tr.ck-row>td:nth-child(2),'+S+' tr.ck-unassigned>td:nth-child(2),'
+    +S+' thead th:nth-child(2){left:150px;width:132px;min-width:132px;max-width:132px;padding:0}'
+  +S+' tr.ck-row>td:nth-child(3),'+S+' tr.ck-unassigned>td:nth-child(3),'
+    +S+' thead th:nth-child(3){left:282px;width:64px;min-width:64px;max-width:64px;text-align:center}'
+  +S+' tr.ck-row>td:nth-child(4),'+S+' tr.ck-unassigned>td:nth-child(4),'
+    +S+' thead th:nth-child(4){left:346px;width:220px;min-width:220px;max-width:220px;'
+    +'border-right:2px solid #A9B2C2}'
+  /* ── แถวสูงเท่ากันบรรทัดเดียว · ของที่เดิมอยู่บรรทัดสอง (เบอร์โทร ยอดจอง รถขากลับ)
+        ดันมาต่อท้ายบรรทัดเดียวกัน จะได้กวาดสายตาลงมาตรง ๆ ได้ ── */
+  +S+' tr.ck-row>td{overflow:hidden}'
+  +S+' tr.ck-row td>div{display:inline;margin:0 0 0 6px !important;font-size:9.5px;line-height:1}'
+  +S+' .ck-bk{font-size:8.5px;color:#A8AEBB}'
+  +S+' .ck-vch{max-width:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
+    +'line-height:1.2;font-size:11.5px}'
+  +S+' .ck-lead{max-width:150px;padding:1px 7px;font-size:11.5px}'
+  +S+' .ck-tel{margin:0 0 0 6px;font-size:10.5px;max-width:none;white-space:nowrap;font-weight:600}'
+  +S+' .ck-pick{max-width:250px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
+    +'line-height:1.2}'
+  +S+' .ck-sreq{max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
+    +'padding:1px 7px;font-size:10.5px}'
+  +S+' .ck-area{font-size:10px;padding:1px 7px}'
+  +S+' .ck-agblk{margin:0 !important;padding:0 8px !important;border-radius:0 !important;'
+    +'box-shadow:none !important;max-width:none !important;height:29px;line-height:29px;'
+    +'text-align:center;font-size:11px}'
+  +S+' .ck-stp button{width:20px;height:20px;font-size:13px}'
+  +S+' .ck-n{font-size:12.5px}'
+  +S+' .vck-sel{padding:2px 4px;font-size:10.5px;max-width:114px;border-width:1.5px;border-radius:6px}'
+  +S+' .vck-nt{max-width:250px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10.5px}'
+  +S+' .ck-gtm{font-size:10.5px;padding:2px 8px}'
+  /* เวลารับ · เดิมป้ายสถานะอยู่บรรทัดสอง ทำให้แถวสูงไม่เท่ากัน · ดันมาต่อท้ายบรรทัดเดียว */
+  +S+' .ck-tm{flex-direction:row;align-items:center;gap:5px;font-size:11px}'
+  +S+' .ck-tm b{font-size:8.5px;padding:0 5px}'
+  /* ── ตัวเลขใช้ Sarabun เหมือนตัวหนังสือ · tabular-nums หลักตรงกันทุกแถว ──
+        [style*=DM Mono] กวาดของที่ฝัง font-family ไว้ใน inline style ด้วย */
+  +S+' td,'+S+' th{font-variant-numeric:tabular-nums}'
+  +S+' .ck-vch,'+S+' .ck-mono,'+S+' .ck-tel,'+S+' .ck-n,'+S+' .ck-bk,'
+    +S+' .ck-gtm{font-family:Sarabun,sans-serif}'
+  +S+' [style*="DM Mono"]{font-family:Sarabun,sans-serif !important}'
+  /* ── แถบหัวคัน ── */
+  +S+' tr.ck-ghd>td{height:32px;padding:0 10px 0 14px !important;box-shadow:none;'
+    +'border-top:2px solid var(--vedge);border-bottom:1px solid var(--vedge);'
+    +'border-left:6px solid var(--vedge)}'
+  /* ช่องหัวคันกว้างเท่าตารางทั้งใบ จะตรึงตัว td เองไม่ได้ (ไม่มีที่ให้ขยับ)
+     ต้องตรึงกล่องข้างในแทน เลื่อนขวาไปไกลแค่ไหนก็ยังเห็นว่ากำลังดูรถคันไหนอยู่ */
+  +S+' tr.ck-ghd>td>div{gap:10px !important;flex-wrap:nowrap !important;'
+    +'position:sticky;left:0;width:-moz-fit-content;width:fit-content;max-width:100%}'
+  /* คันที่ยังไม่ได้ติ๊กสแตนบาย = ยังไม่ได้เริ่มทำ → ไม่มีสีเลย เทาล้วน */
+  +S+' tr.ck-ghd.vck-gpale>td{background:#F7F8FA !important;color:#98A0AC}'
+  +S+' tr.ck-ghd.vck-gpale>td>div{filter:grayscale(1);opacity:.7}'
+  +S+' tr.ck-ghd.vck-gpale:hover>td{background:var(--vbg2) !important;border-color:var(--vc)}'
+  +S+' tr.ck-ghd.vck-gpale:hover>td>div{filter:none;opacity:1}'
+  /* ติ๊กแล้ว = ทั้งแถบเป็นสีสแตนบาย (พื้นมาจาก tr.ck-ghd.vck-sb ของเดิม) */
+  +S+' tr.ck-ghd.vck-sb>td{color:#0F6E56}'
+  /* ── แถวที่ยังไม่ได้รับขึ้นรถ · ซีดทั้งแถว ชี้เมาส์แล้วกลับมาชัดเพื่อให้ทำงานต่อได้ ── */
+  +S+' tr.ck-row.vck-pale>td{color:#A2AAB6}'
+  +S+' tr.ck-row.vck-pale>td:first-child{box-shadow:inset 5px 0 0 #E3E6EC}'
+  +S+' tr.ck-row.vck-pale .ck-agblk,'+S+' tr.ck-row.vck-pale .ck-lead{filter:grayscale(1);opacity:.45}'
+  +S+' tr.ck-row.vck-pale .ck-area,'+S+' tr.ck-row.vck-pale .ck-sreq{filter:grayscale(1);opacity:.6}'
+  +S+' tr.ck-row.vck-pale .ck-vch,'+S+' tr.ck-row.vck-pale .ck-by,'
+    +S+' tr.ck-row.vck-pale .ck-pick,'+S+' tr.ck-row.vck-pale .ck-mono{color:#A2AAB6}'
+  +S+' tr.ck-row.vck-pale .ck-tel{color:#AEBAC8}'
+  +S+' tr.ck-row.vck-pale .ck-dim{color:#DCE0E6}'
+  +S+' tr.ck-row.vck-pale .vck-sel{opacity:.55}'
+  +S+' tr.ck-row.vck-pale .ck-stp{border-color:#E3E7ED}'
+  +S+' tr.ck-row.vck-pale .ck-stp button{color:#CBD1DA}'
+  +S+' tr.ck-row.vck-pale:hover>td{color:#3C4451}'
+  +S+' tr.ck-row.vck-pale:hover .ck-agblk,'+S+' tr.ck-row.vck-pale:hover .ck-lead,'
+    +S+' tr.ck-row.vck-pale:hover .ck-area,'+S+' tr.ck-row.vck-pale:hover .ck-sreq{filter:none;opacity:1}'
+  +S+' tr.ck-row.vck-pale:hover .ck-vch,'+S+' tr.ck-row.vck-pale:hover .ck-by,'
+    +S+' tr.ck-row.vck-pale:hover .ck-pick{color:#15201a}'
+  +S+' tr.ck-row.vck-pale:hover .vck-sel{opacity:1}';
+}
+/* ก้นกล่องตารางต้องพอดีขอบล่างจอเสมอ · ถ้าตั้งความสูงตายตัว กล่องจะยาวเลยจอ
+   แล้วหัวตารางที่ตรึงไว้จะหลุดขึ้นไปเหนือจอตอนเลื่อนหน้า กลายเป็นไม่มีหัวตาราง */
+var _vckFitRaf=0;
+function vckFitPane(){
+  if(_vckFitRaf) return;
+  _vckFitRaf=requestAnimationFrame(function(){
+    _vckFitRaf=0;
+    var w=document.querySelector('#vancheckin-host .vck-tw'); if(!w) return;
+    var h=Math.max(320,(window.innerHeight||800)-w.getBoundingClientRect().top-14);
+    if(w._vh!==h){ w._vh=h; w.style.maxHeight=h+'px'; }
+  });
+}
+if(!window._vckFitBound){
+  window._vckFitBound=1;
+  window.addEventListener('resize', vckFitPane);
+  window.addEventListener('scroll', vckFitPane, true);
+}
 function renderVanCheckin(){
   var host=document.getElementById('vancheckin-host'); if(!host) return;
   var e=ckEsc, date=_vanCkDate;
@@ -52717,7 +52845,10 @@ function renderVanCheckin(){
     var gt=ckGroupTime(g.rows, date);
     var gtChip=gt.label?('<span class="ck-gtm ck-gtm-'+gt.state+'">&#9200; '+e(gt.label)+(gt.state==='late'?(' · เลยเวลา'+(gt.late>1?(' '+gt.late+' ราย'):'')):gt.state==='due'?' · ถึงเวลา':gt.state==='soon'?' · ใกล้ถึง':gt.state==='miss'?' · ยังไม่เช็คอิน':'')+'</span>'):'';
     var _sbNow=!!vckArrGet(date,k) && vckOpenRows(g.rows)>0;
-    bodyHtml+='</tbody><tbody><tr class="ck-ghd'+(_sbNow?' vck-sb':'')+'"><td colspan="17" style="background:'+soft+';padding:7px 12px">'
+    /* §vckSheet · --vc สีประจำรถตัวจริง (ใช้ตอน hover) · --vbg2 พื้นอ่อนของคันนั้น
+       --vedge สีขอบ · ยังไม่ติ๊ก = เทา ติ๊กแล้ว = เขียวสแตนบาย */
+    var _gv=' style="--vc:'+(c[1]||'#3A6FF7')+';--vbg2:'+soft+';--vedge:'+(_sbNow?'#12A46F':'#DFE3E9')+'"';
+    bodyHtml+='</tbody><tbody><tr class="ck-ghd'+(_sbNow?' vck-sb':' vck-gpale')+'"'+_gv+'><td colspan="17" style="background:'+soft+';padding:7px 12px">'
       +'<div id="vckg-'+k.replace(/[^A-Za-z0-9_-]/g,'_')+'" style="display:flex;align-items:center;gap:11px;flex-wrap:wrap;border-radius:8px">'
       +vanPill+gtChip+vckArrChip(date,k,(veh.name||vid),g.rows)+infoHtml
       +'<span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:'+(rt.color||'#5F5E5A')+'"><span style="width:8px;height:8px;border-radius:50%;background:'+(rt.color||'#999')+'"></span>'+e(rt.name||g.routeId||'—')+'</span>'
@@ -52771,7 +52902,7 @@ function renderVanCheckin(){
         +kchip('#FCEBEB','#A32D2D','No-show',sN,'ไม่ได้ขึ้นรถและยังไม่มีใครยืนยันว่ามาถึงท่า')
         +kchip('#FBF3E6','#8A5B00','CXL',sC,'ยกเลิกหน้างาน')
         +kchip('#F4E8FB','#6B289A','ไปเจอที่ท่า',sP,'ไปเองที่ท่า/ไปรถคันอื่น · ยังถือว่าเดินทาง รอหน้าท่ายืนยัน');
-  host.innerHTML='<style id="vck-style">'+ckSharedCSS('#vancheckin-host')+'</style>'
+  host.innerHTML='<style id="vck-style">'+ckSharedCSS('#vancheckin-host')+vckSheetCSS()+'</style>'
     +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px"><h1 style="margin:0;font-size:19px;font-weight:700">เช็คอินรถ</h1>'
     +'<span style="font-size:11px;color:#8a8a82">บันทึกคนขึ้นรถจริง → ป้าย No-show ไปโผล่ที่ By trip · date และส่งต่อ Pier Check-in</span></div>'
     +ckDayHeader({date:date, shiftFn:'vanCkDateShift', todayFn:'vanCkToday', pickFn:'vckPickDay',
@@ -52779,12 +52910,12 @@ function renderVanCheckin(){
                   totalBreak:(pills.lost>0?('เดินทางจริง · จอง '+pills.booked+' หาย '+pills.lost):(pills.dA+'A·'+pills.dC+'C·'+pills.dI+'I·'+pills.dF+'F'))})
     +ckUnitBar(groups, gkeys, 'van', 'vckg-')
     +vckLegend()
-    +'<div class="ck-card"><table class="ck-tbl"><thead><tr>'
+    +'<div class="ck-card vck-card"><div class="vck-tw"><table class="ck-tbl vck-sheet"><thead><tr>'
     +'<th>Voucher</th><th>Agency</th><th>Submitted by</th><th>Customer (lead) · โทร</th><th class="ck-c">AD</th><th class="ck-c">CHD</th><th class="ck-c">INF</th><th class="ck-c">FOC</th><th>Time</th><th>Pickup</th><th class="ck-c">Room</th><th>Pickup area</th><th>Special request</th>'
     +'<th class="ck-c ck-in" style="border-left:2px solid #BFE3CC;color:#0F6E56">ขึ้นรถจริง</th><th class="ck-in"></th>'
     +'<th class="ck-c ck-in">Status</th><th class="ck-in">สถานะ / บันทึกหน้างาน</th>'
-    +'</tr></thead><tbody>'+bodyHtml+'</tbody></table></div>';
-  ckSyncSticky(host); ckStartTick('vancheckin', renderVanCheckin);
+    +'</tr></thead><tbody>'+bodyHtml+'</tbody></table></div></div>';
+  ckSyncSticky(host); vckFitPane(); ckStartTick('vancheckin', renderVanCheckin);
 }
 
 // ══ §Pier Check-in (2026-07-25) · เช็คอินหน้าท่า · จัดกลุ่มตามเรือ × เส้นทาง ══
