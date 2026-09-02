@@ -50920,6 +50920,14 @@ function pckExtraCSS(){ return ''
 }
 function ckSharedCSS(scope){
   return ''
+  /* §vckArr · ปุ่มถึงจุดรับ */
+  +scope+' .vck-arr{border:1.5px solid #BFD9EE;background:#fff;color:#185FA5;border-radius:999px;'
+    +'padding:3px 12px;font:700 11px inherit;font-family:inherit;cursor:pointer;white-space:nowrap}'
+  +scope+' .vck-arr:hover{background:#EAF4FB;border-color:#8FB8E0}'
+  +scope+' .vck-arr.on{background:#E1F5EE;border-color:#8ACBB4;color:#0F6E56}'
+  +scope+' .vck-arr.on b{font-weight:800}'
+  +scope+' .vck-arr.late{background:#FBF3E6;border-color:#EBD9AE;color:#8A5B00}'
+  
   +scope+' .ck-hd{padding:9px 14px;background:#fff;border:1px solid var(--border,#E7E4DC);border-radius:14px;box-shadow:0 2px 6px -3px rgba(15,23,42,.18);margin-bottom:12px;position:sticky;top:var(--ck-hd-top,0px);z-index:45}'
   +scope+' .ck-hd-top{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}'
   +scope+' .ck-hd-nav{display:flex;gap:5px;padding-top:6px;flex:none}'
@@ -52191,6 +52199,74 @@ function renderPierCash(pier){
   if(_pcJump){ _pcJump=false; if(_pcTab===1||_pcTab===2) setTimeout(pcJumpToday,0); }
 }
 
+/* ══ §vckArr · คนขับถึงจุดรับแรกแล้ว ═══════════════════════════════════════
+   หน้างานจริง · คนขับไปถึงโรงแรมแรกแล้วจอดรอ · ลูกค้ายังไม่ลงมา
+   ก่อนหน้านี้ระบบไม่มีที่ให้บันทึกนาทีที่รถไปถึง มีแต่ "ช่วงเวลารับ" ที่วางแผนไว้
+   พอจะกด No-show ตามกฎรอ 15 นาที ก็เถียงกันไม่จบว่านับจากตรงไหน
+
+   กดปุ่มนี้แล้วระบบจับเวลาให้ · นาฬิกาเดินจากนาทีที่คนขับบอกว่าถึง ไม่ใช่เวลาที่วางแผน
+   ครบ 15 นาทีขึ้นป้ายเตือน · ใครกด กดกี่โมง เก็บไว้หมด
+
+   เก็บเป็นสตริง JSON (vck_arrive) · key = วันที่::รถ~เส้นทาง เดียวกับที่จัดกลุ่มในหน้า
+   ที่ต้องเป็นสตริงเพราะ key ที่ยังไม่มีตารางใน DB ถ้าเป็น object จะโดนทิ้งตอนเซฟ
+   (เจอมาแล้วกับ po_cash · ดู §pcFix)
+   ═════════════════════════════════════════════════════════════════════════ */
+var _VCK_ARR=null, _VCK_ARR_SRC=null;
+function vckArrAll(){
+  var b, raw='';
+  try{ b=laBlob(); raw=(typeof b.vck_arrive==='string')?b.vck_arrive:''; }catch(_){ return _VCK_ARR||(_VCK_ARR={}); }
+  if(_VCK_ARR===null || _VCK_ARR_SRC!==raw){
+    var o={}; if(raw){ try{ o=JSON.parse(raw)||{}; }catch(_){ o={}; } }
+    _VCK_ARR=o; _VCK_ARR_SRC=raw;
+  }
+  return _VCK_ARR;
+}
+function vckArrSave(){
+  try{
+    var b=laBlob(), o=vckArrAll();
+    if(Object.keys(o).length){ var str=JSON.stringify(o); b.vck_arrive=str; _VCK_ARR_SRC=str; }
+    else { delete b.vck_arrive; _VCK_ARR_SRC=''; }
+    laBlobSave();
+  }catch(e){ try{ console.warn('[vckArr] save failed', e && e.message); }catch(_){} }
+}
+function vckArrKey(date,gk){ return date+'::'+gk; }
+function vckArrGet(date,gk){ return vckArrAll()[vckArrKey(date,gk)]||null; }
+/* กดถึง / ยกเลิกการกด · ยกเลิกต้องยืนยัน เพราะเวลานี้เอาไปใช้ตัดสิน No-show */
+function vckArrToggle(date,gk,vanName){
+  if(typeof ckGuard==='function' && !ckGuard()) return;
+  var A=vckArrAll(), key=vckArrKey(date,gk), cur=A[key];
+  if(cur){
+    if(!confirm('ยกเลิกการบันทึก "ถึงจุดรับแล้ว"?\n'+(vanName||'')+' · บันทึกไว้ '+(cur.at||'')+' โดย '+(cur.by||'')+'\n\nนาฬิการอลูกค้าจะหยุดนับ')) return;
+    delete A[key];
+  } else {
+    A[key]={ at:ckNowHM(), by:ckMe(), ts:new Date().toISOString() };
+  }
+  vckArrSave();
+  if(typeof renderVanCheckin==='function') renderVanCheckin();
+}
+/* รอมากี่นาทีแล้ว · null = ยังไม่ได้กดถึง หรือดูวันอื่นที่ไม่ใช่วันนี้ */
+function vckArrWait(date,gk){
+  var a=vckArrGet(date,gk); if(!a||!a.at) return null;
+  if(typeof ckIsToday==='function' && !ckIsToday(date)) return null;
+  var m=/^(\d{1,2}):(\d{2})$/.exec(String(a.at)); if(!m) return null;
+  return Math.max(0, ckNowMin() - (+m[1]*60 + +m[2]));
+}
+/* ป้าย/ปุ่มในหัวกลุ่มรถ */
+var VCK_WAIT_RULE=15;   /* กฎรอ 15 นาทีก่อนถือว่า No-show */
+function vckArrChip(date,gk,vanName){
+  var e=ckEsc, a=vckArrGet(date,gk), w=vckArrWait(date,gk);
+  var q="vckArrToggle('"+e(date)+"','"+String(gk).replace(/'/g,"\\'")+"','"+e(vanName||'').replace(/'/g,"\\'")+"')";
+  if(!a){
+    return '<button class="vck-arr" onclick="event.stopPropagation();'+q+'" '
+      +'title="คนขับไปถึงจุดรับแรกแล้ว · กดแล้วระบบจับเวลารอให้">🚐 ถึงจุดรับแล้ว</button>';
+  }
+  var late=(w!=null && w>=VCK_WAIT_RULE);
+  var txt='🚐 ถึงจุดรับ '+e(a.at)
+    +(w!=null?('<b> · รอ '+w+' น.</b>'):'')
+    +(late?' · ครบ '+VCK_WAIT_RULE+' นาทีแล้ว':'');
+  return '<button class="vck-arr on'+(late?' late':'')+'" onclick="event.stopPropagation();'+q+'" '
+    +'title="บันทึกโดย '+e(a.by||'')+' · กดอีกครั้งเพื่อยกเลิก">'+txt+'</button>';
+}
 // ══ §เช็คอินรถ (Van Check-in) ══
 var _vanCkDate = (typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10);
 var _vckFam=null, _vckRoute=null;
@@ -52293,7 +52369,8 @@ function renderVanCheckin(){
     var gt=ckGroupTime(g.rows, date);
     var gtChip=gt.label?('<span class="ck-gtm ck-gtm-'+gt.state+'">&#9200; '+e(gt.label)+(gt.state==='late'?(' · เลยเวลา'+(gt.late>1?(' '+gt.late+' ราย'):'')):gt.state==='due'?' · ถึงเวลา':gt.state==='soon'?' · ใกล้ถึง':gt.state==='miss'?' · ยังไม่เช็คอิน':'')+'</span>'):'';
     bodyHtml+='</tbody><tbody><tr class="ck-ghd"><td colspan="17" style="background:'+soft+';padding:7px 12px">'
-      +'<div id="vckg-'+k.replace(/[^A-Za-z0-9_-]/g,'_')+'" style="display:flex;align-items:center;gap:11px;flex-wrap:wrap;border-radius:8px">'+vanPill+gtChip+infoHtml
+      +'<div id="vckg-'+k.replace(/[^A-Za-z0-9_-]/g,'_')+'" style="display:flex;align-items:center;gap:11px;flex-wrap:wrap;border-radius:8px">'
+      +vanPill+gtChip+vckArrChip(date,k,(veh.name||vid))+infoHtml
       +'<span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:'+(rt.color||'#5F5E5A')+'"><span style="width:8px;height:8px;border-radius:50%;background:'+(rt.color||'#999')+'"></span>'+e(rt.name||g.routeId||'—')+'</span>'
       +'<span style="margin-left:auto;font-size:11px;color:#8a8a82;font-family:\'DM Mono\',monospace;white-space:nowrap">ขึ้นรถ '+vChecked+'/'+g.rows.length+' · '
         +(vLost>0?('<b style="color:#A32D2D;font-size:13px">'+vGo+'</b> pax <s style="color:#c2c0b7">'+vPax+'</s>'):(vPax+' pax'))
@@ -52319,9 +52396,30 @@ function renderVanCheckin(){
   if(!bodyHtml) bodyHtml='<tr class="ck-empty"><td colspan="17">ไม่มี booking ที่ต้องเช็คอินรถในวันนี้</td></tr>';
 
   var pills=ckRoutePills(date, _vckFam, _vckRoute, 'vckSetFam', 'vckSetRoute', 'van');
+  /* §vckArr · สรุปยอดแยกสถานะ · นับเป็น "คน" ไม่ใช่ "บรรทัด" เพราะหน้างานคิดเป็นหัว
+     นับเฉพาะฝั่งรถ · ที่ท่ามีสรุปของตัวเองอยู่แล้ว */
+  var sN=0, sC=0, sP=0, sIn=0, sAll=0;
+  gkeys.forEach(function(kk){
+    groups[kk].rows.forEach(function(r){
+      sAll+=r.booked;
+      var ck=(typeof ckRead==='function')?ckRead(r.b,date,'van'):null;
+      if(ck && ck.at) sIn+=Math.max(0,+ck.actualPax||0);
+      ckEvLive(ck&&ck.events).forEach(function(x){
+        var n=Math.max(0,+x.pax||0); if(!n) return;
+        if(x.type==='cxl') sC+=n;
+        else if(ckExpectAtPier(x.reasonCode)) sP+=n;
+        else sN+=n;
+      });
+    });
+  });
+  var sWait=Math.max(0, sAll-sIn-sN-sC-sP);
+  var kchip=function(bg,fg,lbl,n,tip){ return n>0
+    ? '<span title="'+ckEsc(tip||'')+'" style="background:'+bg+';color:'+fg+'">'+lbl+' '+n+'</span>' : ''; };
   var kpi='<span style="background:#E1F5EE;color:#0F6E56">ขึ้นรถแล้ว '+tChecked+'/'+tRows+'</span>'
-        +(tNoShow>0?'<span style="background:#FCEBEB;color:#A32D2D">No-show '+tNoShow+'</span>':'')
-        +'<span style="background:#F1EFE8;color:#5F5E5A">เหลือ '+(tRows-tChecked)+'</span>';
+        +kchip('#F1EFE8','#5F5E5A','รอ',sWait,'ยังไม่ได้เช็คอินและยังไม่ได้กด No-show')
+        +kchip('#FCEBEB','#A32D2D','No-show',sN,'ไม่ได้ขึ้นรถและยังไม่มีใครยืนยันว่ามาถึงท่า')
+        +kchip('#FBF3E6','#8A5B00','CXL',sC,'ยกเลิกหน้างาน')
+        +kchip('#F4E8FB','#6B289A','ไปเจอที่ท่า',sP,'ไปเองที่ท่า/ไปรถคันอื่น · ยังถือว่าเดินทาง รอหน้าท่ายืนยัน');
   host.innerHTML='<style id="vck-style">'+ckSharedCSS('#vancheckin-host')+'</style>'
     +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px"><h1 style="margin:0;font-size:19px;font-weight:700">เช็คอินรถ</h1>'
     +'<span style="font-size:11px;color:#8a8a82">บันทึกคนขึ้นรถจริง → ป้าย No-show ไปโผล่ที่ By trip · date และส่งต่อ Pier Check-in</span></div>'
