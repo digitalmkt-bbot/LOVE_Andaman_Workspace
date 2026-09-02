@@ -52717,6 +52717,8 @@ function vckSheetCSS(){
   +S+' tr.ck-ghd.vck-gpale:hover>td>div{filter:none;opacity:1}'
   /* ติ๊กแล้ว = ทั้งแถบเป็นสีสแตนบาย (พื้นมาจาก tr.ck-ghd.vck-sb ของเดิม) */
   +S+' tr.ck-ghd.vck-sb>td{color:#0F6E56}'
+  /* เริ่มทำแล้ว หรือรับครบแล้ว = คืนสีประจำรถ · พื้นอ่อนของคันนั้น ขอบสีเต็ม */
+  +S+' tr.ck-ghd.vck-gon>td{color:#3a3a36}'
   /* ── แถวที่ยังไม่ได้รับขึ้นรถ · ซีดทั้งแถว ชี้เมาส์แล้วกลับมาชัดเพื่อให้ทำงานต่อได้ ── */
   +S+' tr.ck-row.vck-pale>td{color:#A2AAB6}'
   +S+' tr.ck-row.vck-pale>td:first-child{box-shadow:inset 5px 0 0 #E3E6EC}'
@@ -52844,11 +52846,17 @@ function renderVanCheckin(){
     var soft=(typeof _bkV2Soft==='function')?_bkV2Soft(c[0],0.92):c[0];
     var gt=ckGroupTime(g.rows, date);
     var gtChip=gt.label?('<span class="ck-gtm ck-gtm-'+gt.state+'">&#9200; '+e(gt.label)+(gt.state==='late'?(' · เลยเวลา'+(gt.late>1?(' '+gt.late+' ราย'):'')):gt.state==='due'?' · ถึงเวลา':gt.state==='soon'?' · ใกล้ถึง':gt.state==='miss'?' · ยังไม่เช็คอิน':'')+'</span>'):'';
-    var _sbNow=!!vckArrGet(date,k) && vckOpenRows(g.rows)>0;
-    /* §vckSheet · --vc สีประจำรถตัวจริง (ใช้ตอน hover) · --vbg2 พื้นอ่อนของคันนั้น
-       --vedge สีขอบ · ยังไม่ติ๊ก = เทา ติ๊กแล้ว = เขียวสแตนบาย */
-    var _gv=' style="--vc:'+(c[1]||'#3A6FF7')+';--vbg2:'+soft+';--vedge:'+(_sbNow?'#12A46F':'#DFE3E9')+'"';
-    bodyHtml+='</tbody><tbody><tr class="ck-ghd'+(_sbNow?' vck-sb':' vck-gpale')+'"'+_gv+'><td colspan="17" style="background:'+soft+';padding:7px 12px">'
+    /* §vckBand · แถบหัวคันมี 3 สถานะ · เทา = ยังไม่มีอะไรเกิดขึ้นกับคันนี้เลย
+       เขียว = คนขับสแตนบายแล้วและยังรับไม่ครบ · สีประจำรถ = เริ่มทำแล้ว หรือรับครบแล้ว
+       ที่ต้องคืนสีรถ เพราะคันที่รับครบแล้วไม่ใช่ "ยังไม่ได้ทำ" ปล่อยเทาไว้จะอ่านผิด */
+    var _sbOn=!!vckArrGet(date,k), _open=vckOpenRows(g.rows);
+    var _sbNow=_sbOn && _open>0;
+    var _gAny=_sbOn || g.rows.some(function(r){
+      var st=vckRowSt(r.ck); return st!=='wait' && st!=='standby'; });
+    var _gEdge=_sbNow?'#12A46F':(_gAny?(c[1]||'#3A6FF7'):'#DFE3E9');
+    /* §vckSheet · --vc สีประจำรถตัวจริง (ใช้ตอน hover) · --vbg2 พื้นอ่อนของคันนั้น */
+    var _gv=' style="--vc:'+(c[1]||'#3A6FF7')+';--vbg2:'+soft+';--vedge:'+_gEdge+'"';
+    bodyHtml+='</tbody><tbody><tr class="ck-ghd'+(_sbNow?' vck-sb':(_gAny?' vck-gon':' vck-gpale'))+'"'+_gv+'><td colspan="17" style="background:'+soft+';padding:7px 12px">'
       +'<div id="vckg-'+k.replace(/[^A-Za-z0-9_-]/g,'_')+'" style="display:flex;align-items:center;gap:11px;flex-wrap:wrap;border-radius:8px">'
       +vanPill+gtChip+vckArrChip(date,k,(veh.name||vid),g.rows)+infoHtml
       +'<span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:'+(rt.color||'#5F5E5A')+'"><span style="width:8px;height:8px;border-radius:50%;background:'+(rt.color||'#999')+'"></span>'+e(rt.name||g.routeId||'—')+'</span>'
