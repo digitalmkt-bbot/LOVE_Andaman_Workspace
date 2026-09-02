@@ -83132,13 +83132,45 @@ function bkV2PayToggle(){
    แล้วถ้ายอด booking ไม่ตรงกับยอดที่ออกบิล ก็บอกไว้เป็นบรรทัดต่างหาก
    ใบแจ้งหนี้หนึ่งใบคลุมได้หลาย booking (ตอนนี้ 1:1 ทั้ง 330 ใบ แต่โครงสร้างเปิดทางไว้)
    ถ้าวันไหนคลุมหลายใบ ห้ามหารเดาให้ · บอกไปตรง ๆ */
-function bkV2PayOf(bk){
-  var out={tot:0, paid:0, bal:0, over:0, inv:null, shared:0, bkTot:0, state:'noinv'};
+/* §vcCot · เงินเก็บหน้างาน (Cash on Tour)
+   bk.cashOnTour = แผนที่ตั้งไว้ตอนเปิดใบ · handling 'deduct' = หักจากใบแจ้งหนี้ของ agent
+     (agent ค้างเราน้อยลงเท่านั้น) · 'separate' = เก็บแยก ใบแจ้งหนี้ไม่เกี่ยว
+   TS_COT = คำตัดสินจริงหลังจบทริปที่หน้า Travel Summary · deduct / payout เท่าไร
+   ต้องแยกสองอันนี้ให้ชัด · แผนไม่ใช่ของจริง ตราบใดที่ยังไม่มีใครตัดสิน */
+function bkV2CotOf(bk){
+  var o={amt:0, cur:'THB', handling:'', use:0, settled:null, deduct:0, payout:0};
   try{
+    var C=bk && bk.cashOnTour;
+    if(!C || !(+C.amount>0)) return o;
+    o.amt=+C.amount||0; o.cur=C.currency||'THB'; o.handling=C.handling||'deduct';
+    if(typeof tsCotGet==='function'){
+      var any=null, dd=0, pp=0;
+      (bk.trips||[]).forEach(function(t){
+        var k=t&&t.date; if(!k) return;
+        var st=tsCotGet(bk.id,k); if(!st) return;
+        any=st; dd+=(+st.deduct||0); pp+=(+st.payout||0);
+      });
+      if(any){ o.settled=any; o.deduct=dd; o.payout=pp; }
+    }
+    /* ตัดสินแล้วใช้ของจริง · ยังไม่ตัดสินก็ใช้แผน แต่ต้องบอกว่ายังเป็นแผน */
+    o.use = o.settled ? o.deduct : (o.handling==='deduct' ? o.amt : 0);
+    o.mode = o.settled ? (o.settled.mode||'') : '';
+  }catch(_){}
+  return o;
+}
+function bkV2PayOf(bk){
+  var out={tot:0, paid:0, bal:0, over:0, inv:null, shared:0, bkTot:0, state:'noinv', cot:null, billable:0};
+  try{
+    out.cot=bkV2CotOf(bk);
     out.bkTot=(typeof acctBookingTotal==='function')?acctBookingTotal(bk):(+bk.total||0);
     out.tot=out.bkTot;
+    /* §vcCot · ที่เหลือวางบิล agent · เงินที่เก็บหน้างานแล้วหักออกไม่ต้องเก็บซ้ำ
+       ข้อมูลจริงมี 11 ใบที่เงินหน้างานมากกว่ายอดทัวร์ (มีค่าอุทยาน/ของเพิ่มปนมา
+       หรือกรอกผิด) · clamp ที่ 0 แล้วเงียบไม่ได้ ต้องเก็บส่วนเกินไว้บอก */
+    out.billable=Math.max(0, out.bkTot-((out.cot&&out.cot.use)||0));
+    if(out.cot) out.cot.over=Math.max(0, ((out.cot.use||0)-out.bkTot));
     var inv=(typeof acctBookingInvoice==='function')?acctBookingInvoice(bk.id):null;
-    if(!inv){ out.bal=out.tot; return out; }
+    if(!inv){ out.bal=out.billable; return out; }
     out.inv=inv;
     out.shared=((inv.bookingIds||[]).length>1)?(inv.bookingIds||[]).length:0;
     out.tot=(+inv.total||0);
@@ -83282,10 +83314,13 @@ function bkV2VoucherTicket(bk, esc){
         +'<span style="margin-left:auto">'+_tg+'</span></div>';
     } else {
       const _p=bkV2PayOf(bk);
+      const _C=_p.cot||{amt:0};
       const _S={ paid:{t:'จ่ายครบ',   c:'#0F6E56', bg:'#E1F5EE', bd:'#B7E2D2'},
                  partial:{t:'จ่ายบางส่วน', c:'#854F0B', bg:'#FAEEDA', bd:'#EBD9AE'},
                  due:{t:'ค้างชำระ',  c:'#A32D2D', bg:'#FCEBEB', bd:'#E6C9C3'},
-                 noinv:{t:'ยังไม่ออกใบแจ้งหนี้', c:'#5F5E5A', bg:'#F1EFE8', bd:'#E1DED5'} }[_p.state];
+                 noinv:(_C.amt>0
+                   ? {t:'เก็บเงินหน้างาน', c:'#7A4A00', bg:'#FBF1E0', bd:'#EBD9AE'}
+                   : {t:'ยังไม่ออกใบแจ้งหนี้', c:'#5F5E5A', bg:'#F1EFE8', bd:'#E1DED5'}) }[_p.state];
       const _cell=(lb,v,col,strong)=>'<div style="flex:1;min-width:0">'
         +'<div style="font-size:9px;font-weight:800;letter-spacing:.09em;color:'+MUT+'">'+lb+'</div>'
         +'<div style="font-family:\'DM Mono\',monospace;font-size:'+(strong?'20px':'17px')+';font-weight:800;'
@@ -83296,20 +83331,60 @@ function bkV2VoucherTicket(bk, esc){
           +'<span style="background:'+_S.bg+';color:'+_S.c+';border:1px solid '+_S.bd+';border-radius:999px;'
             +'padding:2px 10px;font-size:10px;font-weight:800">'+_S.t+'</span>'
           +'<span style="margin-left:auto">'+_tg+'</span></div>'
-        +'<div style="display:flex;gap:14px;align-items:flex-end">'
-          +_cell('TOTAL', _p.tot, NAVY, true)
-          +_cell('PAID', _p.paid, _p.paid>0?'#0F6E56':'#B9BCC6')
-          +_cell('BALANCE', _p.bal, _p.bal>0?RED:'#B9BCC6')
-        +'</div>'
+        /* §vcCot · ใบที่เก็บเงินหน้างานและยังไม่ออกบิล · สามช่องต้องตอบว่า
+           ยอดทั้งหมดเท่าไร · เก็บหน้างานเท่าไร · เหลือวางบิล agent เท่าไร
+           ไม่ใช่ TOTAL/PAID/BALANCE ที่อ่านแล้วเหมือน agent ค้างเราเต็มจำนวน */
+        +((_C.amt>0 && !_p.inv)
+          ? ('<div style="display:flex;gap:14px;align-items:flex-end">'
+              +_cell('TOTAL', _p.bkTot, NAVY, true)
+              +_cell('COT · เก็บหน้างาน', _C.amt, '#7A4A00')
+              +_cell('คงเหลือวางบิล', _p.billable, _p.billable>0?RED:'#0F6E56')
+            +'</div>')
+          : ('<div style="display:flex;gap:14px;align-items:flex-end">'
+              +_cell('TOTAL', _p.tot, NAVY, true)
+              +_cell('PAID', _p.paid, _p.paid>0?'#0F6E56':'#B9BCC6')
+              +_cell('BALANCE', _p.bal, _p.bal>0?RED:'#B9BCC6')
+            +'</div>'))
         /* สามบรรทัดข้างบนคือของใบแจ้งหนี้ · อะไรที่ไม่ตรงกับ booking ต้องบอกไว้
            ไม่ใช่เกลี่ยให้ดูสวยแล้วปล่อยให้คนอ่านเข้าใจผิด */
+        /* §vcCot · เงินหน้างานเป็นเรื่องของหน้างานกับบัญชี ไม่ใช่ของใบแจ้งหนี้
+           ต้องบอกให้ครบว่าเป็นแผนหรือตัดสินแล้ว · ไม่งั้นคนอ่านนึกว่าหักไปแล้วจริง */
         +(function(){
-            if(!_p.inv) return '<div style="font-size:10.5px;color:'+MUT+';margin-top:7px">'
-              +'ยังไม่ได้ออกใบแจ้งหนี้ · ยอดคงค้างจึงเท่ากับยอดรวมของ booking</div>';
+            if(!(_C.amt>0)) return '';
+            var wrap=(txt,col)=>'<div style="font-size:10.5px;margin-top:7px;line-height:1.5;color:'+(col||MUT)+'">'+txt+'</div>';
+            var head='<b style="color:#7A4A00">เก็บเงินหน้างาน '+esc(_C.cur)+' '
+              +Math.round(_C.amt).toLocaleString('en-US')+'</b> &middot; '
+              +(_C.handling==='separate' ? 'เก็บแยก ไม่หักจากใบแจ้งหนี้' : 'หักจากใบแจ้งหนี้ของ agent');
+            var over=(_C.over>0)
+              ? ('<br><b style="color:'+RED+'">&#9888; เงินหน้างานที่หัก '+money(_C.use)
+                 +' มากกว่ายอดทัวร์ '+money(_p.bkTot)+' อยู่ '+money(_C.over)
+                 +'</b> &middot; ให้บัญชีตรวจว่ามีค่าอุทยาน/ของเพิ่มปนมา หรือกรอกผิด')
+              : '';
+            if(_C.settled){
+              var by=_C.settled.by?(' &middot; '+esc(_C.settled.by)):'';
+              var rf=_C.settled.ref?(' &middot; อ้างอิง '+esc(_C.settled.ref)):'';
+              /* โหมดที่ตัดสินได้ · full/part = หักบางส่วนหรือทั้งหมด · none = ไม่หัก เงินเข้าบริษัท
+                 · payout = จ่ายคืน agent · ถ้าเขียนว่า "หัก 0" เฉย ๆ คนอ่านนึกว่าลืมกรอก */
+              var what;
+              if(_C.deduct>0 && _C.payout>0) what='หัก '+money(_C.deduct)+' &middot; จ่ายคืน agent '+money(_C.payout);
+              else if(_C.deduct>0)           what='หักจากใบแจ้งหนี้ '+money(_C.deduct);
+              else if(_C.payout>0)           what='จ่ายคืน agent '+money(_C.payout);
+              else                           what='ไม่หักจากใบแจ้งหนี้ &middot; เงินเก็บเข้าบริษัท';
+              return wrap(head+'<br>&#10003; ตัดสินที่ Travel Summary แล้ว &middot; '+what+by+rf+over, '#0F6E56');
+            }
+            return wrap(head+'<br>&#9888; <b>ยังไม่ได้ตัดสินที่ Travel Summary</b> &middot; '
+              +'ตัวเลขนี้เป็นไปตามที่ตั้งไว้ตอนเปิดใบ ยังไม่ใช่ยอดที่เก็บได้จริง'+over, '#8A5B00');
+          })()
+        +(function(){
+            if(!_p.inv) return (_C.amt>0)?'':('<div style="font-size:10.5px;color:'+MUT+';margin-top:7px">'
+              +'ยังไม่ได้ออกใบแจ้งหนี้ · ยอดคงค้างจึงเท่ากับยอดรวมของ booking</div>');
             var L=['ใบแจ้งหนี้ '+esc(_p.inv.id||'')];
             if(_p.shared) L.push('<b>รวม '+_p.shared+' booking</b> ยอดข้างบนไม่ใช่ของใบนี้ใบเดียว');
             if(Math.round(_p.bkTot)!==Math.round(_p.tot))
               L.push('<b>ยอดของ booking ใบนี้ '+money(_p.bkTot)+'</b> ไม่เท่ากับที่ออกบิลไว้');
+            /* §vcCot · ออกบิลไปแล้วโดยไม่ได้หักเงินที่เก็บหน้างาน = เก็บซ้ำสองรอบ */
+            if(!_p.shared && _C.use>0 && Math.round(_p.tot)===Math.round(_p.bkTot))
+              L.push('<b style="color:'+RED+'">ใบแจ้งหนี้ยังไม่ได้หักเงินหน้างาน '+money(_C.use)+'</b>');
             return '<div style="font-size:10.5px;color:'+MUT+';margin-top:7px;line-height:1.45">'
               +L.join(' · ')+'</div>'
               +(_p.over>0
