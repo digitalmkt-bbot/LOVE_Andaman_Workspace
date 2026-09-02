@@ -84335,6 +84335,8 @@ var BKV2_B2C_OWN = { leadPax:'leadpax', leadNationality:'leadnationality', leadP
   leadEmail:'leademail', hotelName:'hotelname', pickupArea:'pickuparea', pickupZone:'pickupzone',
   pickupSelf:'pickupself', dropoffHotelName:'dropoffhotelname', note:'note',
   bookingDate:'bookingdate', voucherRef:'voucherref',
+  // §b2cSreq · notes มาจาก "Special request" + "Internal remark" ที่ B2C · ops แก้ทับได้ แล้ว sync จะไม่ย้อนกลับ
+  notes:'notes',
   createdBy:'createdby' };   // §b2cBy · ผู้บันทึกฝั่ง B2C (booked_by_name) · ops แก้ทับได้
 function bkV2B2CSnap(bk){
   var o={}; Object.keys(BKV2_B2C_OWN).forEach(function(k){ o[k]=(bk?bk[k]:undefined); }); return o;
