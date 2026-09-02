@@ -50939,6 +50939,10 @@ function ckSharedCSS(scope){
     +'border:1px solid #E7E4DC;border-radius:12px;padding:8px 12px;margin:0 0 9px}'
   +scope+' .vck-lgbar .t{font-size:11.5px;font-weight:700;color:#5F5E5A}'
   /* แบบพับ · เหลือแค่ปุ่มเล็ก ๆ ไม่กินที่ */
+  +scope+' .vck-q{height:28px;font-size:11.5px;font-family:inherit;border:1.5px solid #E7E4DC;'
+    +'border-radius:8px;padding:2px 10px;background:#fff;min-width:230px;margin-left:auto;flex:none}'
+  +scope+' .vck-q.on{border-color:#185FA5;background:#F8FBFF}'
+  +scope+' .vck-q:focus{outline:none;border-color:#185FA5}'
   +scope+' .vck-lgt{border:1px solid #E4E1D9;background:#fff;color:#8a8a82;'
     +'font:700 10.5px inherit;font-family:inherit;cursor:pointer;padding:3px 10px;'
     +'border-radius:999px;white-space:nowrap;margin-left:10px;flex:none}'
@@ -51266,7 +51270,7 @@ function ckJump(id){
 // กดแล้วเด้งไปที่หัวคันนั้นในตาราง
 function ckUnitBar(groups, gkeys, kind, anchorPrefix, tailHtml){
   var e=ckEsc, isPier=(kind==='pier');
-  if(!gkeys.length) return '';
+  if(!gkeys.length) return tailHtml?('<div class="ck-unitbar">'+tailHtml+'</div>'):'';
   var chips=gkeys.map(function(k){
     var g=groups[k], uid=isPier?g.bid:g.vid;
     /* §ckPierSelf2 · คนตามมาเองที่ท่าทำให้ขึ้นจริงเกินยอดที่รอรับได้ · ตัวหารต้องขยายตาม
@@ -51298,7 +51302,7 @@ function ckUnitBar(groups, gkeys, kind, anchorPrefix, tailHtml){
   }).join('');
   return '<div class="ck-unitbar">'
     +'<span class="ck-unitbar-lbl">'+(isPier?'&#128676; เรือวันนี้':'&#128656; รถวันนี้')+'</span>'+chips
-    +'<span style="margin-left:auto;font-size:10.5px;color:#a5a49d;white-space:nowrap">คลิกการ์ดเพื่อเด้งไปที่'+(isPier?'ลำ':'คัน')+'นั้น</span>'
+    +'<span style="'+(tailHtml?'':'margin-left:auto;')+'font-size:10.5px;color:#a5a49d;white-space:nowrap">คลิกการ์ดเพื่อเด้งไปที่'+(isPier?'ลำ':'คัน')+'นั้น</span>'
     +(tailHtml||'')+'</div>';
 }
 /* §vckFlow · dropdown เลือกสถานะ · สีของกล่องเปลี่ยนตามสถานะที่เป็นอยู่
@@ -52507,6 +52511,34 @@ function vckLegendToggle(){
   try{ localStorage.setItem('vck_legend', _VCK_LG?'1':'0'); }catch(_){}
   if(typeof renderVanCheckin==='function') renderVanCheckin();
 }
+/* ค้นหาแบบพิมพ์แล้วกรองทันที · หน้างานคนโทรมาบอกแค่ชื่อ หรือเบอร์ 4 ตัวท้าย
+   re-render ทั้งหน้าแล้วคืนโฟกัส+ตำแหน่ง cursor ไม่งั้นต้องคลิกช่องใหม่ทุกตัวอักษร */
+var _vckQ='';
+function vckSetQ(v){
+  _vckQ=String(v||'');
+  if(typeof renderVanCheckin==='function') renderVanCheckin();
+  var el=document.getElementById('vck-q');
+  if(el){ el.focus(); try{ el.setSelectionRange(el.value.length, el.value.length); }catch(_){} }
+}
+/* เทียบแบบตัดอักขระที่ไม่ใช่ตัวเลขออกด้วย · เบอร์ในระบบเขียนกันคนละแบบ
+   +66 81-691-6571 / 081 691 6571 · พิมพ์ 6916571 ต้องเจอ */
+function vckQMatch(b, date){
+  var q=(_vckQ||'').toLowerCase().trim();
+  if(!q) return true;
+  var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
+  var hay=[b.voucherRef, b.code, b.leadPax, b.leadPhone, b.phone, b.customerPhone,
+           b.hotelName, b.pickup, b.roomNo, b.roomNumber, b.createdBy,
+           ag&&(ag.name||ag.code)].join(' ').toLowerCase();
+  if(hay.indexOf(q)>=0) return true;
+  var dq=q.replace(/[^0-9]/g,'');
+  if(dq.length>=3 && hay.replace(/[^0-9]/g,'').indexOf(dq)>=0) return true;
+  return false;
+}
+function vckSearchBox(){
+  var e=ckEsc;
+  return '<input id="vck-q" class="vck-q'+(_vckQ?' on':'')+'" value="'+e(_vckQ)+'"'
+    +' oninput="vckSetQ(this.value)" placeholder="&#128269; voucher / ชื่อ / เบอร์ / โรงแรม">';
+}
 /* ปุ่มกาง/พับ ไปฝากไว้ท้ายแถบ "รถวันนี้" · ไม่กินบรรทัดของตัวเอง
    ตอนพับ vckLegend() คืนสตริงว่าง แถวนั้นหายไปทั้งแถว ได้พื้นที่คืนเต็ม ๆ */
 function vckLegendBtn(){
@@ -52687,18 +52719,20 @@ function vckSheetCSS(){
   +S+' thead th{top:0 !important}'
   +S+' tr.ck-ghd>td{top:32px !important}'
   +S+' tr.ck-row>td:nth-child(1),'+S+' tr.ck-unassigned>td:nth-child(1),'
-    +S+' thead th:nth-child(1){left:0;width:150px;min-width:150px;max-width:150px;padding-left:12px}'
+    +S+' thead th:nth-child(1){left:0;width:144px;min-width:144px;max-width:144px;padding-left:12px}'
   +S+' tr.ck-row>td:nth-child(2),'+S+' tr.ck-unassigned>td:nth-child(2),'
-    +S+' thead th:nth-child(2){left:150px;width:132px;min-width:132px;max-width:132px;padding:0}'
+    +S+' thead th:nth-child(2){left:144px;width:120px;min-width:120px;max-width:120px;padding:0}'
   +S+' tr.ck-row>td:nth-child(3),'+S+' tr.ck-unassigned>td:nth-child(3),'
-    +S+' thead th:nth-child(3){left:282px;width:134px;min-width:134px;max-width:134px;'
+    +S+' thead th:nth-child(3){left:264px;width:120px;min-width:120px;max-width:120px;'
     +'text-align:center;white-space:normal}'
+  /* ชื่อ+เบอร์ ลค · ตัดเบอร์ทิ้งไม่ได้ ต้องโทรตามจากช่องนี้ · ยาวเกินก็ตกบรรทัดสอง */
   +S+' tr.ck-row>td:nth-child(4),'+S+' tr.ck-unassigned>td:nth-child(4),'
-    +S+' thead th:nth-child(4){left:416px;width:220px;min-width:220px;max-width:220px;'
+    +S+' thead th:nth-child(4){left:384px;width:252px;min-width:252px;max-width:252px;'
     +'border-right:2px solid #A9B2C2}'
+  +S+' tr.ck-row>td:nth-child(4){white-space:normal;overflow:visible;line-height:1.25}'
   /* ผู้บันทึกบางรายชื่อยาว (ชื่อ+เบอร์) · ตัดทิ้งแล้วอ่านไม่รู้เรื่อง ให้ตกบรรทัดสองแทน */
   +S+' .ck-by{max-width:none;white-space:normal;line-height:1.2;font-size:10px;'
-    +'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}'
+    +'max-height:24px;overflow:hidden}'
   /* ── แถวสูงเท่ากันบรรทัดเดียว · ของที่เดิมอยู่บรรทัดสอง (เบอร์โทร ยอดจอง รถขากลับ)
         ดันมาต่อท้ายบรรทัดเดียวกัน จะได้กวาดสายตาลงมาตรง ๆ ได้ ── */
   +S+' tr.ck-row>td{overflow:hidden}'
@@ -52716,19 +52750,22 @@ function vckSheetCSS(){
   +S+' .ck-bk{font-size:8.5px;color:#A8AEBB}'
   +S+' .ck-vch{max-width:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
     +'line-height:1.2;font-size:11.5px}'
-  +S+' .ck-lead{max-width:150px;padding:1px 7px;font-size:11.5px}'
-  +S+' .ck-tel{margin:0 0 0 6px;font-size:10.5px;max-width:none;white-space:nowrap;font-weight:600}'
+  +S+' .ck-lead{max-width:none;white-space:normal;padding:1px 7px;font-size:11.5px}'
+  +S+' .ck-tel{margin:0 0 0 6px;font-size:10.5px;max-width:none;white-space:nowrap;'
+    +'font-weight:600;display:inline-block}'
   /* หน้ารถไม่ต้องมีอิโมจิโทรศัพท์ · ทั้งคอลัมน์เป็นเบอร์อยู่แล้ว ไม่ต้องมีไอคอนย้ำ
      ซ่อนแทนที่จะลบ เพราะ ckRowHtml ใช้ร่วมกับหน้าท่า */
   +'#vancheckin-host .ck-telic{display:none}'
   +S+' .ck-pick{max-width:300px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
     +'line-height:1.2;font-size:12.5px;font-weight:600;color:#15201a}'
   /* overflow ต้องเป็น visible ไม่งั้นแถวไม่ยอมสูงขึ้นตามบรรทัดที่สอง ตัดหายเหมือนเดิม */
-  +S+' tr.ck-row>td:nth-child(13){white-space:normal;overflow:visible;'
-    +'width:224px;min-width:224px;max-width:224px}'
-  +S+' thead th:nth-child(13){width:224px;min-width:224px;max-width:224px}'
-  +S+' .ck-sreq{max-width:210px;white-space:normal;line-height:1.22;padding:2px 7px;font-size:10.5px;'
-    +'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}'
+  +S+' tr.ck-row>td:nth-child(13){white-space:normal;overflow:hidden;'
+    +'width:158px;min-width:158px;max-width:158px}'
+  +S+' thead th:nth-child(13){width:158px;min-width:158px;max-width:158px}'
+  /* จำกัดสองบรรทัดด้วย max-height ไม่ใช้ -webkit-line-clamp
+     line-clamp ไม่ยอมตัดจริงในตารางนี้ บรรทัดสามล้นไปทับแถวถัดไป */
+  +S+' .ck-sreq{max-width:144px;max-height:26px;white-space:normal;line-height:1.25;'
+    +'padding:1px 6px;font-size:10px;overflow:hidden}'
   +S+' .ck-area{font-size:10px;padding:1px 7px}'
   +S+' .ck-agblk{margin:0 !important;padding:0 8px !important;border-radius:0 !important;'
     +'box-shadow:none !important;max-width:none !important;height:29px;line-height:29px;'
@@ -52819,6 +52856,7 @@ function renderVanCheckin(){
     if(typeof bkIsOvnReturn==='function' && bkIsOvnReturn(t)) return;   // ขากลับ OVN = ส่งกลับ ไม่ใช่รับขึ้นรถ
     if(_vckRoute){ if(t.routeId!==_vckRoute) return; }
     else if(_vckFam){ var f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(t.routeId):null; if(!f||f.id!==_vckFam) return; }
+    if(!vckQMatch(b, date)) return;   /* §vckSrch */
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
     var z=(typeof bkV2EffZone==='function')?bkV2EffZone(b,t):(t.zone||b.pickupZone||'NoTransfer');
     var priv=(typeof bkV2TripPrivateVan==='function')?bkV2TripPrivateVan(b,t):null;
@@ -52930,7 +52968,9 @@ function renderVanCheckin(){
     });
   }
   bodyHtml = warnHtml + bodyHtml;
-  if(!bodyHtml) bodyHtml='<tr class="ck-empty"><td colspan="17">ไม่มี booking ที่ต้องเช็คอินรถในวันนี้</td></tr>';
+  if(!bodyHtml) bodyHtml='<tr class="ck-empty"><td colspan="17">'
+    +(_vckQ?('ไม่พบรายการที่ตรงกับ &ldquo;'+ckEsc(_vckQ)+'&rdquo; &nbsp; <a onclick="vckSetQ(\'\')" style="color:#185FA5;cursor:pointer">ล้างคำค้น</a>')
+           :'ไม่มี booking ที่ต้องเช็คอินรถในวันนี้')+'</td></tr>';
 
   var pills=ckRoutePills(date, _vckFam, _vckRoute, 'vckSetFam', 'vckSetRoute', 'van');
   /* §vckArr · สรุปยอดแยกสถานะ · นับเป็น "คน" ไม่ใช่ "บรรทัด" เพราะหน้างานคิดเป็นหัว
@@ -52963,7 +53003,7 @@ function renderVanCheckin(){
     +ckDayHeader({date:date, shiftFn:'vanCkDateShift', todayFn:'vanCkToday', pickFn:'vckPickDay',
                   kpiHtml:kpi, pillsHtml:pills.html, totalPax:pills.total,
                   totalBreak:(pills.lost>0?('เดินทางจริง · จอง '+pills.booked+' หาย '+pills.lost):(pills.dA+'A·'+pills.dC+'C·'+pills.dI+'I·'+pills.dF+'F'))})
-    +ckUnitBar(groups, gkeys, 'van', 'vckg-', vckLegendBtn())
+    +ckUnitBar(groups, gkeys, 'van', 'vckg-', vckSearchBox()+vckLegendBtn())
     +vckLegend()
     +'<div class="ck-card vck-card"><div class="vck-tw"><table class="ck-tbl vck-sheet"><thead><tr>'
     +'<th>Voucher</th><th>Agency</th><th>Submitted by</th><th>Customer (lead) · โทร</th><th class="ck-c">AD</th><th class="ck-c">CHD</th><th class="ck-c">INF</th><th class="ck-c">FOC</th><th>Time</th><th>Pickup</th><th class="ck-c">Room</th><th>Pickup area</th><th>Special request</th>'
