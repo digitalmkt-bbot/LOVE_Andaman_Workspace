@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>เช็คอินรถ · No-show ทำยังไง</title>
+<style>
+@page{size:A4 portrait;margin:9mm}
+*{box-sizing:border-box}
+body{margin:0;background:#DEDCD6;color:#1E1D1A;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans Thai',sans-serif;
+  font-size:11px;line-height:1.5;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.pg{width:210mm;min-height:297mm;margin:14px auto;background:#fff;padding:11mm 11mm 9mm;
+  box-shadow:0 6px 24px rgba(20,24,22,.16)}
+@media print{body{background:#fff}.pg{margin:0;box-shadow:none;width:auto;min-height:0;padding:0}
+  .pg+.pg{page-break-before:always}}
+
+/* ── หัว ── */
+.hd{display:flex;align-items:flex-end;gap:14px;border-bottom:3px solid #1F3A2E;padding-bottom:9px}
+.hd h1{margin:0;font-size:25px;font-weight:800;letter-spacing:-.01em;line-height:1.1}
+.hd .s{font-size:11.5px;color:#6b6a63;font-weight:600;margin-top:3px}
+.hd .r{margin-left:auto;text-align:right;font-size:10px;color:#8a8a82;line-height:1.5}
+.hd .r b{display:block;font-size:12px;color:#1F3A2E}
+
+/* ── กฎ 3 ข้อ ── */
+.rules{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:11px 0 0}
+.rule{background:#F4F2ED;border:1px solid #E1DED5;border-left:4px solid #1F3A2E;border-radius:8px;padding:8px 10px}
+.rule b{display:block;font-size:11.5px;margin-bottom:2px}
+.rule span{font-size:10px;color:#5a594f;line-height:1.45;display:block}
+
+h2{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#8a8a82;
+  margin:16px 0 8px;padding-bottom:4px;border-bottom:1px solid #E7E4DC}
+
+/* ── แผนผัง ── */
+.flow{display:flex;align-items:stretch;gap:0;flex-wrap:nowrap}
+.fbox{flex:1;border-radius:9px;padding:9px 10px;border:1.5px solid;min-width:0}
+.fbox .q{font-size:11px;font-weight:800;line-height:1.35}
+.fbox .a{font-size:10px;margin-top:5px;line-height:1.45}
+.fbox .btn{display:inline-block;font-size:10.5px;font-weight:800;border-radius:6px;
+  padding:3px 8px;margin-top:5px;border:1.5px solid}
+.arw{flex:none;width:20px;display:flex;align-items:center;justify-content:center;
+  font-size:15px;color:#B9B6AC;font-weight:800}
+.f-start{background:#F4F2ED;border-color:#D8D5CB}
+.f-ns{background:#FCEBEB;border-color:#E6C9C3}
+.f-ns .btn{background:#A32D2D;color:#fff;border-color:#A32D2D}
+.f-again{background:#F7F6F3;border-color:#D8D5CB}
+.f-again .btn{background:#fff;color:#3f3e39;border-color:#B9B6AC}
+.f-back{background:#E9F7F0;border-color:#B7E2D2}
+.f-back .btn{background:#0F6E56;color:#fff;border-color:#0F6E56}
+
+/* ── การ์ดสถานการณ์ ── */
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.c{border:1px solid #E1DED5;border-radius:10px;overflow:hidden;background:#fff;break-inside:avoid}
+.c .t{padding:7px 10px;display:flex;align-items:center;gap:7px;font-size:12px;font-weight:800}
+.c .t .n{width:19px;height:19px;border-radius:50%;background:rgba(255,255,255,.32);
+  display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex:none}
+.c .bd{padding:8px 10px 10px}
+.c .do{font-size:11px;font-weight:700;line-height:1.5}
+.c .do em{font-style:normal;display:inline-block;border-radius:6px;padding:2px 7px;
+  font-size:10.5px;font-weight:800;border:1.5px solid;margin:0 1px;white-space:nowrap}
+.c .ef{font-size:10px;color:#5a594f;margin-top:6px;padding-top:6px;border-top:1px dashed #E1DED5;line-height:1.5}
+.c .ef b{color:#1E1D1A}
+.t-red{background:#A32D2D;color:#fff}
+.t-gray{background:#55544e;color:#fff}
+.t-green{background:#0F6E56;color:#fff}
+.t-purple{background:#6B289A;color:#fff}
+.t-blue{background:#20477E;color:#fff}
+.t-amber{background:#8A5B00;color:#fff}
+em.e-ns{background:#FCEBEB;color:#A32D2D;border-color:#E6C9C3}
+em.e-cx{background:#FBF3E6;color:#8A5B00;border-color:#EBDCC2}
+em.e-bk{background:#E9F7F0;color:#0F6E56;border-color:#B7E2D2}
+em.e-ag{background:#F4F2ED;color:#3f3e39;border-color:#D8D5CB}
+em.e-ok{background:#0F6E56;color:#fff;border-color:#0F6E56}
+
+/* ── เตือน ── */
+.warn{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}
+.w{border-radius:10px;padding:9px 11px;border:1.5px solid}
+.w b{display:block;font-size:12px;font-weight:800;margin-bottom:3px}
+.w span{font-size:10.5px;line-height:1.55;display:block}
+.w1{background:#FFF6E2;border-color:#EBD9AE;color:#6E4700}
+.w2{background:#FCEBEB;border-color:#E6C9C3;color:#8A2620}
+.pair{display:flex;align-items:center;gap:7px;margin:4px 0}
+.pair i{font-style:normal;font-size:10.5px;flex:none}
+.pair::after{content:"";flex:1;border-bottom:1px dotted currentColor;opacity:.32;order:1}
+.pair u{order:2;text-decoration:none;font-weight:800;font-size:10.5px;background:#fff;
+  border:1.5px solid currentColor;border-radius:6px;padding:2px 8px;white-space:nowrap;flex:none}
+.w2 .pair i:last-of-type{order:3;flex:none}
+.ft{margin-top:11px;padding-top:7px;border-top:1px solid #E7E4DC;
+  font-size:9.5px;color:#9a998f;display:flex;gap:10px}
+.ft span:last-child{margin-left:auto}
+</style></head><body>
+
+<div class="pg">
+
+  <div class="hd">
+    <div><h1>เช็คอินรถ · ลูกค้าไม่มา ทำยังไง</h1>
+      <div class="s">No-show · วนกลับไปรับ · รับกลับ · กดผิด — ใช้ได้ทั้งหน้าเช็คอินรถและเช็คอินหน้าท่า</div></div>
+    <div class="r"><b>LOVE Andaman</b>คู่มือหน้างาน · ก.ย. 2569</div>
+  </div>
+
+  <div class="rules">
+    <div class="rule"><b>ไม่แก้ยอดจอง ไม่แก้ราคา</b>
+      <span>ปุ่มพวกนี้บันทึกว่า “หน้างานเกิดอะไรขึ้น” เท่านั้น จะชาร์จเท่าไรตัดสินที่ Travel Summary</span></div>
+    <div class="rule"><b>ไม่มีอะไรถูกลบ</b>
+      <span>ทุกครั้งที่กด เก็บเวลา + ชื่อคนกดไว้เสมอ · ย้อนดูได้ทุกเคส แม้จะกดผิดแล้วแก้</span></div>
+    <div class="rule"><b>กดตามที่เกิดจริง</b>
+      <span>อย่าเดาแทนลูกค้า ไม่แน่ใจให้ใส่หมายเหตุไว้ · ออฟฟิศอ่านย้อนได้ทีหลัง</span></div>
+  </div>
+
+  <h2>ไล่ตามนี้</h2>
+  <div class="flow">
+    <div class="fbox f-start"><div class="q">ถึงเวลารับ<br>ลูกค้าไม่ลงมา</div>
+      <div class="a">โทรแล้ว ตามที่ล็อบบี้แล้ว</div></div>
+    <div class="arw">→</div>
+    <div class="fbox f-ns"><div class="q">บันทึกว่าไม่มา</div>
+      <div class="a">ระบุจำนวน · เหตุผล · เวลา</div>
+      <span class="btn">No-show</span></div>
+    <div class="arw">→</div>
+    <div class="fbox f-again"><div class="q">วนกลับไปอีกรอบ<br>ยังไม่เจอ</div>
+      <div class="a">ตัวเลขไม่เปลี่ยน แค่เก็บรอบ</div>
+      <span class="btn">🔁 วนแล้วไม่เจอ</span></div>
+    <div class="arw">→</div>
+    <div class="fbox f-back"><div class="q">เจอแล้ว<br>รับขึ้นรถได้</div>
+      <div class="a">คืนคนเข้ายอด แล้วอย่าลืมกด ✓</div>
+      <span class="btn">↩️ รับกลับ</span></div>
+  </div>
+
+  <h2>6 สถานการณ์ที่เจอบ่อย</h2>
+  <div class="cards">
+
+    <div class="c">
+      <div class="t t-red"><span class="n">1</span> ลูกค้าไม่ลงมา · ติดต่อไม่ได้</div>
+      <div class="bd">
+        <div class="do">กด <em class="e-ns">No-show</em> → เลือกจำนวน (แยก AD / CHD / INF / FOC)
+          → เลือกเหตุผล → ใส่เวลาและหมายเหตุ</div>
+        <div class="ef">ยอด <b>ขึ้นจริง</b> ลดลง · แถวเป็นสีแดง · <b>ยอดที่หน้าท่ารอรับลดตามให้เอง</b>
+          ไม่ต้องไปแจ้งหน้าท่าซ้ำ</div>
+      </div>
+    </div>
+
+    <div class="c">
+      <div class="t t-gray"><span class="n">2</span> วนกลับไปอีกรอบ · ยังไม่เจอ</div>
+      <div class="bd">
+        <div class="do">กด <em class="e-ag">🔁</em> → ใส่เวลา + หมายเหตุ → บันทึกรอบนี้</div>
+        <div class="ef"><b>ตัวเลขไม่เปลี่ยนเลย</b> แค่ต่อรอบเข้าไปในรายการเดิม ·
+          แถวขึ้นป้าย “วน 2 รอบ · 08:24 · 08:47” · กล่องบอกให้ว่ารอบนี้เป็นรอบที่เท่าไร จะได้ไม่กดซ้ำ</div>
+      </div>
+    </div>
+
+    <div class="c">
+      <div class="t t-green"><span class="n">3</span> วนไปแล้วเจอ · รับขึ้นรถได้</div>
+      <div class="bd">
+        <div class="do">กด <em class="e-bk">↩️</em> → เลือก <b>🙋 เจอตัวรอบวน</b> → ใส่หมายเหตุ → ยืนยัน</div>
+        <div class="ef">คนกลับเข้ายอดขึ้นจริงครบ · เลิกนับเป็นคนหาย · รายการเดิมยังอยู่ในประวัติ
+          ขีดฆ่าไว้พร้อมบอกว่ารับกลับกี่โมง<br>
+          <b>⚠ ถ้ายังไม่เคยกด ✓ ต้องกด <em class="e-ok">✓ ขึ้นรถ</em> ด้วย</b> — ปุ่มรับกลับคืนแค่จำนวน ไม่ได้เช็คอินให้</div>
+      </div>
+    </div>
+
+    <div class="c">
+      <div class="t t-purple"><span class="n">4</span> กด No-show ผิดใบ · ผิดคน</div>
+      <div class="bd">
+        <div class="do">กด <em class="e-bk">↩️</em> → เลือก <b>✎ กดผิด</b> → ยืนยัน</div>
+        <div class="ef">ตัวเลขกลับเหมือนเดิมทุกตัว · รายการเดิมติดป้าย “กดผิด”
+          <b>ไม่นับเป็นประวัติ No-show ของลูกค้า</b> แต่ยังรู้ว่าใครกดผิดตอนไหน<br>
+          ต่างกับข้อ 3 ตรงนี้ — <b>เจอตัวรอบวน</b> = ลูกค้าไม่มาจริงตอนนั้น ·
+          <b>กดผิด</b> = ไม่ได้เกิดขึ้นเลย</div>
+      </div>
+    </div>
+
+    <div class="c">
+      <div class="t t-blue"><span class="n">5</span> เจอแค่บางคน · จอง 4 ลงมา 2</div>
+      <div class="bd">
+        <div class="do">กด <em class="e-bk">↩️</em> <b>รับกลับทั้งรายการ</b> ก่อน →
+          แล้วกด <em class="e-ns">No-show</em> ใหม่ 2 คน ตามที่ยังไม่มา</div>
+        <div class="ef">ทำแบบนี้เพราะระบบจะได้ไม่ต้องเดาว่า 2 คนที่กลับมาเป็นผู้ใหญ่หรือเด็ก
+          — <b>ให้คนหน้างานระบุเอง</b> ตัวเลขแยกประเภทจะได้ไม่เพี้ยน</div>
+      </div>
+    </div>
+
+    <div class="c">
+      <div class="t t-amber"><span class="n">6</span> ลูกค้าจะไปเองที่ท่า · ไปรถคันอื่น</div>
+      <div class="bd">
+        <div class="do">กด <em class="e-ns">No-show</em> แล้วเลือกเหตุผลที่มีป้าย
+          <b>“ไปเจอที่ท่า”</b> (ลูกค้าไปเองที่ท่าเรือ · ไปกับรถคันอื่น / รถส่วนตัว)</div>
+        <div class="ef"><b>ไม่นับเป็นคนหาย</b> เพราะยังเดินทางอยู่ · หน้าท่าจะยังรอรับตามปกติ
+          ถ้าไม่มาจริง ค่อยให้หน้าท่ากด No-show อีกที <b>อันนั้นถึงนับ</b></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="warn">
+    <div class="w w1"><b>No-show ไม่เท่ากับ CXL</b>
+      <span><span class="pair"><i>ไม่มา ไม่แจ้งล่วงหน้า</i> <u>No-show</u></span>
+        <span class="pair"><i>ลูกค้าโทรมาบอกยกเลิกหน้างาน</i> <u>CXL</u></span>
+        สองอันนี้นโยบายเก็บเงินคนละแบบ · กดผิดปุ่มยอดเงินเพี้ยน</span></div>
+    <div class="w w2"><b>อย่ากด + ที่ปุ่มนับแทนการรับกลับ</b>
+      <span>กด + เพิ่มแค่ตัวเลข · รายการ No-show ยังค้างอยู่ ป้ายยังขึ้น
+        และ Travel Summary ยังนับเป็นคนหาย
+        <span class="pair" style="margin-top:5px"><i>เจอลูกค้าแล้ว ต้องใช้</i> <u>↩️ รับกลับ</u> <i>เท่านั้น</i></span></span></div>
+  </div>
+
+  <div class="ft"><span>rsvn.loveandaman.com · เช็คอินรถ / เช็คอินหน้าท่า</span>
+    <span>ไม่แน่ใจให้ถ่ายรูปหน้าจอส่งออฟฟิศ ก่อนกดทับ</span></div>
+
+</div>
+</body></html>

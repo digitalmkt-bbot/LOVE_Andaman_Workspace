@@ -83089,6 +83089,54 @@ function _bkV2FamIcon(famId, color, size){
   return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 48 48" aria-hidden="true">'+body+'</svg>';
 }
 // Boarding-pass / ticket header for the Voucher detail · left route panel + trip/date/VC hero
+/* ══ §vcPay · แถบเงินบน voucher ═══════════════════════════════════════════
+   voucher ถูกเปิดดูทั้งจากออฟฟิศและจากคนที่ต้องคุยกับ agent · บางรอบอยากเห็นยอด
+   บางรอบไม่อยากให้ตัวเลขเงินติดไปกับหน้าจอที่หันให้คนอื่นดู จึงต้องปิดได้
+
+   สวิตช์เก็บที่ blob ตรง ๆ ไม่ตั้งตัวแปร global · ตัวแปร global ต้องไปผูกตอนบูต
+   อีกจุดหนึ่ง ลืมเมื่อไรค่าที่เซฟไว้ก็หายเงียบ (เจอมาแล้วกับ PIER_CFG)
+   ค่าเริ่มต้น = เปิด · ต้องตั้งใจปิดเท่านั้นถึงจะหาย */
+function bkV2PayShow(){
+  try{ var c=(laBlob()||{}).bk_cfg||{}; return !(c.vcPay===0||c.vcPay===false); }catch(_){ return true; }
+}
+function bkV2PayToggle(){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')){
+    alert('เปิด/ปิดแถบเงินเป็นค่าของทั้งระบบ · ต้องมีสิทธิ์แก้ไข Operations');
+    return;
+  }
+  try{ var B=laBlob(); B.bk_cfg=B.bk_cfg||{}; B.bk_cfg.vcPay = bkV2PayShow()?0:1; laBlobSave(); }catch(_){}
+  /* วาดหน้า Booking ใหม่ · หน้ารายละเอียดใช้ตัววาดตัวเดียวกับหน้ารายการ */
+  try{ if(typeof bkV2Render==='function') bkV2Render(); }catch(_){}
+}
+/* ยอดของใบนี้
+   ⚠ อย่าคิด PAID จาก "ยอด booking ลบยอดค้างของใบแจ้งหนี้" แบบที่หน้า PFM ทำ
+     สูตรนั้นเดาว่าส่วนที่ไม่ได้อยู่บนใบแจ้งหนี้คือจ่ายแล้ว · ในข้อมูลจริงมี 5 ใบ
+     จาก 304 ที่ยอดบน booking ไม่เท่ายอดบนใบแจ้งหนี้ (ใบมัดจำ / ออกบิลบางส่วน)
+     แล้วมันโชว์ PAID 4,400 ทั้งที่ยังไม่มีใครจ่ายสักบาท
+   ตรงนี้ยึดตัวใบแจ้งหนี้เป็นหลัก · TOTAL = PAID + BALANCE เสมอ
+   แล้วถ้ายอด booking ไม่ตรงกับยอดที่ออกบิล ก็บอกไว้เป็นบรรทัดต่างหาก
+   ใบแจ้งหนี้หนึ่งใบคลุมได้หลาย booking (ตอนนี้ 1:1 ทั้ง 330 ใบ แต่โครงสร้างเปิดทางไว้)
+   ถ้าวันไหนคลุมหลายใบ ห้ามหารเดาให้ · บอกไปตรง ๆ */
+function bkV2PayOf(bk){
+  var out={tot:0, paid:0, bal:0, over:0, inv:null, shared:0, bkTot:0, state:'noinv'};
+  try{
+    out.bkTot=(typeof acctBookingTotal==='function')?acctBookingTotal(bk):(+bk.total||0);
+    out.tot=out.bkTot;
+    var inv=(typeof acctBookingInvoice==='function')?acctBookingInvoice(bk.id):null;
+    if(!inv){ out.bal=out.tot; return out; }
+    out.inv=inv;
+    out.shared=((inv.bookingIds||[]).length>1)?(inv.bookingIds||[]).length:0;
+    out.tot=(+inv.total||0);
+    out.bal=(typeof acctInvoiceBalance==='function')?acctInvoiceBalance(inv):0;
+    out.paid=Math.max(0,(typeof acctInvoicePaid==='function')?acctInvoicePaid(inv):(out.tot-out.bal));
+    /* จ่ายเกินยอดบิล · acctInvoiceBalance ตัดที่ 0 ให้ ส่วนเกินจึงหายไปเงียบ ๆ
+       ข้อมูลจริงมี 3 ใบเป็นแบบนี้ (เช่น ออกบิล 6,000 แต่มีรายการจ่าย 11,200)
+       จะโยนทิ้งไม่ได้ · ไม่งั้น TOTAL ไม่เท่ากับ PAID + BALANCE แล้วคนอ่านงง */
+    out.over=Math.max(0, out.paid-out.tot);
+    out.state=(out.bal<=0)?'paid':(out.paid>0?'partial':'due');
+  }catch(_){}
+  return out;
+}
 function bkV2VoucherTicket(bk, esc){
   esc = esc || (s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]));
   const NAVY='#16265C', CYAN='#4FA9DC', ROW='#F2F3F5', MUT='#7C8091', RED='#E0232A';
@@ -83202,6 +83250,63 @@ function bkV2VoucherTicket(bk, esc){
     + '<div style="font-size:9px;font-weight:800;letter-spacing:.09em;color:'+NAVY+';margin-bottom:5px">'+h+'</div>'+body+'</div>';
   const FV=(t,extra)=>'<div style="font-size:12px;line-height:1.45;margin-top:1px'+(extra||'')+'">'+t+'</div>';
 
+  // ── §vcPay · เงิน · ปิดได้ทั้งระบบ ──
+  let payHtml='';
+  try{
+    const _on=bkV2PayShow();
+    const _tg='<button onclick="event.stopPropagation();bkV2PayToggle()" '
+      + 'title="เปิด/ปิดแถบนี้ · เป็นค่าของทั้งระบบ ทุกใบเหมือนกันหมด" '
+      + 'style="border:1px solid rgba(22,38,92,.18);background:#fff;color:'+MUT+';border-radius:999px;'
+      + 'padding:3px 11px;font-size:10px;font-weight:800;cursor:pointer;font-family:inherit;letter-spacing:.04em">'
+      + (_on?'ซ่อน':'แสดง')+'</button>';
+    if(!_on){
+      payHtml='<div style="background:'+ROW+';border-radius:18px;padding:9px 14px;margin-top:9px;'
+        +'display:flex;align-items:center;gap:10px">'
+        +'<span style="font-size:9px;font-weight:800;letter-spacing:.09em;color:'+MUT+'">PAYMENT</span>'
+        +'<span style="font-size:11px;color:#B9BCC6">ซ่อนอยู่</span>'
+        +'<span style="margin-left:auto">'+_tg+'</span></div>';
+    } else {
+      const _p=bkV2PayOf(bk);
+      const _S={ paid:{t:'จ่ายครบ',   c:'#0F6E56', bg:'#E1F5EE', bd:'#B7E2D2'},
+                 partial:{t:'จ่ายบางส่วน', c:'#854F0B', bg:'#FAEEDA', bd:'#EBD9AE'},
+                 due:{t:'ค้างชำระ',  c:'#A32D2D', bg:'#FCEBEB', bd:'#E6C9C3'},
+                 noinv:{t:'ยังไม่ออกใบแจ้งหนี้', c:'#5F5E5A', bg:'#F1EFE8', bd:'#E1DED5'} }[_p.state];
+      const _cell=(lb,v,col,strong)=>'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:9px;font-weight:800;letter-spacing:.09em;color:'+MUT+'">'+lb+'</div>'
+        +'<div style="font-family:\'DM Mono\',monospace;font-size:'+(strong?'20px':'17px')+';font-weight:800;'
+        +'color:'+col+';margin-top:2px;letter-spacing:-.01em">'+money(v)+'</div></div>';
+      payHtml='<div style="background:'+ROW+';border-radius:18px;padding:11px 14px;margin-top:9px">'
+        +'<div style="display:flex;align-items:center;gap:9px;margin-bottom:7px">'
+          +'<span style="font-size:9px;font-weight:800;letter-spacing:.09em;color:'+NAVY+'">PAYMENT</span>'
+          +'<span style="background:'+_S.bg+';color:'+_S.c+';border:1px solid '+_S.bd+';border-radius:999px;'
+            +'padding:2px 10px;font-size:10px;font-weight:800">'+_S.t+'</span>'
+          +'<span style="margin-left:auto">'+_tg+'</span></div>'
+        +'<div style="display:flex;gap:14px;align-items:flex-end">'
+          +_cell('TOTAL', _p.tot, NAVY, true)
+          +_cell('PAID', _p.paid, _p.paid>0?'#0F6E56':'#B9BCC6')
+          +_cell('BALANCE', _p.bal, _p.bal>0?RED:'#B9BCC6')
+        +'</div>'
+        /* สามบรรทัดข้างบนคือของใบแจ้งหนี้ · อะไรที่ไม่ตรงกับ booking ต้องบอกไว้
+           ไม่ใช่เกลี่ยให้ดูสวยแล้วปล่อยให้คนอ่านเข้าใจผิด */
+        +(function(){
+            if(!_p.inv) return '<div style="font-size:10.5px;color:'+MUT+';margin-top:7px">'
+              +'ยังไม่ได้ออกใบแจ้งหนี้ · ยอดคงค้างจึงเท่ากับยอดรวมของ booking</div>';
+            var L=['ใบแจ้งหนี้ '+esc(_p.inv.id||'')];
+            if(_p.shared) L.push('<b>รวม '+_p.shared+' booking</b> ยอดข้างบนไม่ใช่ของใบนี้ใบเดียว');
+            if(Math.round(_p.bkTot)!==Math.round(_p.tot))
+              L.push('<b>ยอดของ booking ใบนี้ '+money(_p.bkTot)+'</b> ไม่เท่ากับที่ออกบิลไว้');
+            return '<div style="font-size:10.5px;color:'+MUT+';margin-top:7px;line-height:1.45">'
+              +L.join(' · ')+'</div>'
+              +(_p.over>0
+                ? ('<div style="font-size:10.5px;font-weight:700;color:'+RED+';margin-top:4px;line-height:1.45">'
+                   +'&#9888; รายการที่จ่ายเข้ามารวม '+money(_p.paid)+' เกินยอดบิล '+money(_p.over)+' &middot; '
+                   +'ให้บัญชีตรวจว่าจ่ายเกิน หรือมีรายการไปลงผิดใบ</div>')
+                : '');
+          })()
+      +'</div>';
+    }
+  }catch(_){ payHtml=''; }
+
   // ── ยกเลิก / ไม่มา หน้างาน ──
   let lostHtml='';
   try{
@@ -83253,6 +83358,7 @@ function bkV2VoucherTicket(bk, esc){
     + TILE('SERVICES', (svcBits.length?svcBits.join(''):FV(Z))
         + FV('Guide language '+(langs.length?langs.map(l=>chip(l,'#E9F5FC','#0E5E80','#C9E6F5')).join(''):Z)))
   + '</div>'
+  + payHtml
   + lostHtml
   + '</div>';
 }
