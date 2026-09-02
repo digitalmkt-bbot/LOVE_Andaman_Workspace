@@ -50966,6 +50966,9 @@ function ckSharedCSS(scope){
   +scope+' .vck-arr.on{background:#0F6E56;border-color:#0F6E56;color:#fff;'
     +'display:inline-flex;align-items:center;gap:8px}'
   +scope+' .vck-arr.late{background:#8A5B00;border-color:#8A5B00}'
+  /* รับครบแล้ว · สีสงบ ไม่ใช่สีเตือน · นาฬิกาหยุดนับ */
+  +scope+' .vck-arr.on.done{background:#fff;border-color:#8ACBB4;color:#0F6E56}'
+  +scope+' .vck-arr.on.done .sbt{background:#E1F5EE;color:#0F6E56}'
   +scope+' .vck-arr .sbt{background:rgba(255,255,255,.22);border-radius:7px;padding:1px 8px;'
     +'font-size:10.5px;font-family:\'DM Mono\',monospace;font-weight:500}'
   /* หัวคันที่สแตนบายแล้ว · ทั้งแถบเปลี่ยนเป็นเขียวอ่อน จะได้เห็นจากไกล */
@@ -52574,7 +52577,17 @@ function vckArrWait(date,gk){
 }
 /* ป้าย/ปุ่มในหัวกลุ่มรถ */
 var VCK_WAIT_RULE=15;   /* กฎรอ 15 นาทีก่อนถือว่า No-show */
-function vckArrChip(date,gk,vanName){
+/* §vckDone · แถวที่ยังไม่จบเรื่องของคันนี้ · รอ / สแตนบาย / ตามแขก
+   ขึ้นรถแล้ว · ไม่มา · ยกเลิก · ไปเจอที่ท่า = จบเรื่องแล้ว ไม่ต้องรออีก */
+function vckOpenRows(rows){
+  var n=0;
+  (rows||[]).forEach(function(r){
+    var st=vckRowSt(r&&r.ck);
+    if(st==='wait'||st==='standby'||st==='pending') n++;
+  });
+  return n;
+}
+function vckArrChip(date,gk,vanName,rows){
   var e=ckEsc, a=vckArrGet(date,gk), w=vckArrWait(date,gk);
   var q='vckArrToggle(' + JSON.stringify(date) + ',' + JSON.stringify(gk) + ',' + JSON.stringify(vanName||'') + ')';
   q=q.replace(/"/g,'&quot;');
@@ -52583,11 +52596,23 @@ function vckArrChip(date,gk,vanName){
       +'title="กดเมื่อคนขับไปถึงจุดรับแรก · ทุกแถวของคันนี้จะกลายเป็น Standby และระบบเริ่มจับเวลารอ">'
       +'&#9744; ติ๊กเมื่อคนขับสแตนบายจุดแรก</button>';
   }
+  /* §vckDone · รับครบแล้วต้องหยุดนับ · ไม่งั้นปุ่มยังขึ้น "ครบ 15 นาที" สีเตือนค้างทั้งวัน
+     ทั้งที่ไม่มีใครให้รออีกแล้ว · เตือนตลอดเวลา = เลิกอ่านคำเตือน */
+  var open=vckOpenRows(rows);
+  if(open===0){
+    return '<button class="vck-arr on done" onclick="event.stopPropagation();'+q+'" '
+      +'title="ทุกรายของคันนี้จบเรื่องแล้ว · บันทึกถึงจุดรับไว้ '+e(a.at)+' โดย '+e(a.by||'')
+      +' · กดอีกครั้งเพื่อยกเลิก">&#9745; รับครบแล้ว<span class="sbt">'+e(a.at)+'</span></button>';
+  }
   var late=(w!=null && w>=VCK_WAIT_RULE);
   var txt='&#9745; คนขับสแตนบายแล้ว<span class="sbt">'+e(a.at)
-    +(w!=null?(' · รอ '+w+' น.'):'')+(late?' · ครบ '+VCK_WAIT_RULE+' นาที':'')+'</span>';
+    +(w!=null?(' · รอ '+w+' น.'):'')
+    +(late?(' · ครบ '+VCK_WAIT_RULE+' นาที'):'')
+    +' · ค้าง '+open+' ราย</span>';
   return '<button class="vck-arr on'+(late?' late':'')+'" onclick="event.stopPropagation();'+q+'" '
-    +'title="บันทึกโดย '+e(a.by||'')+' · กดอีกครั้งเพื่อยกเลิก">'+txt+'</button>';
+    +'title="บันทึกโดย '+e(a.by||'')+' · ยังเหลืออีก '+open+' รายที่ยังไม่จบเรื่อง'
+    +(late?(' · รอเกิน '+VCK_WAIT_RULE+' นาทีแล้ว กด No-show ได้'):'')
+    +' · กดอีกครั้งเพื่อยกเลิก">'+txt+'</button>';
 }
 // ══ §เช็คอินรถ (Van Check-in) ══
 var _vanCkDate = (typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):new Date().toISOString().slice(0,10);
@@ -52691,10 +52716,10 @@ function renderVanCheckin(){
     var soft=(typeof _bkV2Soft==='function')?_bkV2Soft(c[0],0.92):c[0];
     var gt=ckGroupTime(g.rows, date);
     var gtChip=gt.label?('<span class="ck-gtm ck-gtm-'+gt.state+'">&#9200; '+e(gt.label)+(gt.state==='late'?(' · เลยเวลา'+(gt.late>1?(' '+gt.late+' ราย'):'')):gt.state==='due'?' · ถึงเวลา':gt.state==='soon'?' · ใกล้ถึง':gt.state==='miss'?' · ยังไม่เช็คอิน':'')+'</span>'):'';
-    var _sbNow=!!vckArrGet(date,k);
+    var _sbNow=!!vckArrGet(date,k) && vckOpenRows(g.rows)>0;
     bodyHtml+='</tbody><tbody><tr class="ck-ghd'+(_sbNow?' vck-sb':'')+'"><td colspan="17" style="background:'+soft+';padding:7px 12px">'
       +'<div id="vckg-'+k.replace(/[^A-Za-z0-9_-]/g,'_')+'" style="display:flex;align-items:center;gap:11px;flex-wrap:wrap;border-radius:8px">'
-      +vanPill+gtChip+vckArrChip(date,k,(veh.name||vid))+infoHtml
+      +vanPill+gtChip+vckArrChip(date,k,(veh.name||vid),g.rows)+infoHtml
       +'<span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:'+(rt.color||'#5F5E5A')+'"><span style="width:8px;height:8px;border-radius:50%;background:'+(rt.color||'#999')+'"></span>'+e(rt.name||g.routeId||'—')+'</span>'
       +'<span style="margin-left:auto;font-size:11px;color:#8a8a82;font-family:\'DM Mono\',monospace;white-space:nowrap">ขึ้นรถ '+vChecked+'/'+g.rows.length+' · '
         +(vLost>0?('<b style="color:#A32D2D;font-size:13px">'+vGo+'</b> pax <s style="color:#c2c0b7">'+vPax+'</s>'):(vPax+' pax'))
