@@ -50037,7 +50037,8 @@ function _ckLegacySeed(L){
 }
 // §pierStage · ckStep / ckToggle / ckEvSave ต่างสร้าง object ใหม่ทั้งก้อน ถ้าไม่พกขั้น "ถึงท่า / เคลียร์"
 // มาด้วย จะหายทุกครั้งที่กด +/- (บั๊กแบบเดียวกับที่เคยทำ events หาย) — merge จากของเดิมที่จุดเดียวตรงนี้
-var CK_STAGE_KEYS=['arrivedAt','arrivedBy','clearedAt','clearedBy','reinstate','selfAdd'];   // §ckPierFix · reinstate ต้องไม่หายตอนกด +/- หรือเช็คอิน · §ckPierSelf · selfAdd ก็เหมือนกัน
+var CK_STAGE_KEYS=['arrivedAt','arrivedBy','clearedAt','clearedBy','reinstate','selfAdd',
+                   'flow','flowAt','flowBy','flowNote'];   /* §vckFlow · สถานะรายแถวก็ต้องไม่หายตอนกด +/- */   // §ckPierFix · reinstate ต้องไม่หายตอนกด +/- หรือเช็คอิน · §ckPierSelf · selfAdd ก็เหมือนกัน
 function ckWrite(b, date, kind, val){
   var o=(typeof bkOpsFor==='function')?bkOpsFor(b, (typeof bkOpsDate==='function'?bkOpsDate(b,date):date)):(b.ops=b.ops||{});
   var sl=_ckSlot(kind);
@@ -50920,13 +50921,53 @@ function pckExtraCSS(){ return ''
 }
 function ckSharedCSS(scope){
   return ''
+  /* §vckFlow · ทั้งแถวเปลี่ยนสีตามสถานะ · ตัวแปรสีมาจาก inline บนแถว
+     ต้อง !important เพราะคลาสเดิม (ck-done/ck-lost/ck-late) ทาพื้นไว้แล้ว */
+  +scope+' tr.vst>td{background:var(--vst-bg)!important}'
+  +scope+' tr.vst>td:first-child{box-shadow:inset 4px 0 0 var(--vst-bar)}'
+  +scope+' tr.vst .vck-sel{background:var(--vst-chip);border-color:var(--vst-bar);color:var(--vst-ink)}'
+  +scope+' tr.vst .vck-nt{color:var(--vst-ink)}'
+  +scope+' .vck-sel{border:2px solid #DCD9D1;background:#fff;color:#5F5E5A;border-radius:9px;'
+    +'padding:5px 6px;font:700 11px inherit;font-family:inherit;cursor:pointer;max-width:124px}'
+  +scope+' .vck-nt{font-size:11px;font-weight:700;line-height:1.35;white-space:normal;'
+    +'display:inline-block;max-width:230px;color:#5F5E5A}'
+  +scope+' .vck-rsn{margin-top:3px}'
+  /* แถบสี · กดเปลี่ยนสีได้ */
+  +scope+' .vck-lgbar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;background:#fff;'
+    +'border:1px solid #E7E4DC;border-radius:12px;padding:8px 12px;margin:0 0 9px}'
+  +scope+' .vck-lgbar .t{font-size:11.5px;font-weight:700;color:#5F5E5A}'
+  +scope+' .vck-lgb{display:inline-flex;align-items:center;gap:6px;border:1.5px solid #E4E1D9;background:#fff;'
+    +'border-radius:999px;padding:3px 11px 3px 4px;font:600 11px inherit;font-family:inherit;color:#4a4a45;cursor:pointer}'
+  +scope+' .vck-lgb:hover{border-color:#B9B5AA;background:#FBFAF7}'
+  +scope+' .vck-lgb i{width:16px;height:16px;border-radius:6px;display:inline-block;border:2px solid}'
+  +scope+' .vck-lgb small{font-size:9.5px;color:#a3a39b;font-weight:500}'
+  +scope+' .vck-rs{margin-left:auto;border:1px solid #E4E1D9;background:#fff;border-radius:8px;'
+    +'padding:4px 11px;font:600 10.5px inherit;font-family:inherit;color:#8a8a82;cursor:pointer}'
+  +scope+' .vck-rs:hover{color:#A32D2D;border-color:#E7C4C0}'
+  +'.vck-cdlg{width:400px}'
+  +'.vck-sw{display:grid;grid-template-columns:repeat(9,1fr);gap:7px;margin-bottom:14px}'
+  +'.vck-sw button{width:100%;aspect-ratio:1;border-radius:9px;border:2px solid transparent;cursor:pointer;padding:0}'
+  +'.vck-sw button.on{border-color:#15201a;box-shadow:0 0 0 2px #fff inset}'
+  +'.vck-cst{display:flex;align-items:center;gap:9px;margin-bottom:13px;flex-wrap:wrap}'
+  +'.vck-cst input[type=color]{width:46px;height:34px;border:1px solid #E4E1D9;border-radius:9px;background:#fff;cursor:pointer;padding:2px}'
+  +'.vck-prev{border:1px solid #EFEDE7;border-radius:11px;overflow:hidden}'
+  +'.vck-prev .ph{font-size:9.5px;color:#a3a39b;padding:6px 11px;background:#FAF9F6;'
+    +'border-bottom:1px solid #EFEDE7;text-transform:uppercase;letter-spacing:.04em;font-weight:700}'
+  +'.vck-prev .prow{display:flex;align-items:center;gap:10px;padding:10px 12px;font-size:12.5px}'
+  +'.vck-prev .pb{width:4px;align-self:stretch;border-radius:2px;min-height:22px}'
+  +'.vck-prev .ph2{color:#8a8a82;flex:1}'
+  +'.vck-prev .pc{border:2px solid;border-radius:9px;padding:3px 10px;font-weight:700;font-size:11px}'
   /* §vckArr · ปุ่มถึงจุดรับ */
-  +scope+' .vck-arr{border:1.5px solid #BFD9EE;background:#fff;color:#185FA5;border-radius:999px;'
-    +'padding:3px 12px;font:700 11px inherit;font-family:inherit;cursor:pointer;white-space:nowrap}'
-  +scope+' .vck-arr:hover{background:#EAF4FB;border-color:#8FB8E0}'
-  +scope+' .vck-arr.on{background:#E1F5EE;border-color:#8ACBB4;color:#0F6E56}'
-  +scope+' .vck-arr.on b{font-weight:800}'
-  +scope+' .vck-arr.late{background:#FBF3E6;border-color:#EBD9AE;color:#8A5B00}'
+  +scope+' .vck-arr{border:1.5px solid #C8C5BC;background:#fff;color:#4a4a45;border-radius:9px;'
+    +'padding:5px 13px;font:700 11.5px inherit;font-family:inherit;cursor:pointer;white-space:nowrap}'
+  +scope+' .vck-arr:hover{border-color:#8a8a82;background:#FBFAF7}'
+  +scope+' .vck-arr.on{background:#0F6E56;border-color:#0F6E56;color:#fff;'
+    +'display:inline-flex;align-items:center;gap:8px}'
+  +scope+' .vck-arr.late{background:#8A5B00;border-color:#8A5B00}'
+  +scope+' .vck-arr .sbt{background:rgba(255,255,255,.22);border-radius:7px;padding:1px 8px;'
+    +'font-size:10.5px;font-family:\'DM Mono\',monospace;font-weight:500}'
+  /* หัวคันที่สแตนบายแล้ว · ทั้งแถบเปลี่ยนเป็นเขียวอ่อน จะได้เห็นจากไกล */
+  +scope+' tr.ck-ghd.vck-sb>td{background:#E6F6EE!important}'
   
   +scope+' .ck-hd{padding:9px 14px;background:#fff;border:1px solid var(--border,#E7E4DC);border-radius:14px;box-shadow:0 2px 6px -3px rgba(15,23,42,.18);margin-bottom:12px;position:sticky;top:var(--ck-hd-top,0px);z-index:45}'
   +scope+' .ck-hd-top{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}'
@@ -51228,6 +51269,9 @@ function ckUnitBar(groups, gkeys, kind, anchorPrefix){
       nm=bo.name||uid; col=bo.color||(bc&&bc.text&&bc.text!=='#666'?bc.text:'')||'#185FA5'; }
     else { var v=(typeof vehGet==='function'?vehGet(uid):null)||{}; var cp=(typeof vehChipPair==='function')?vehChipPair(uid):['#EEEDF0','#555'];
       nm=v.name||uid; col=cp[1]||'#5F5E5A'; }
+    /* §vckFlow · คันไหนคนขับสแตนบายแล้ว ติดจุดเขียวไว้ · กวาดตาแถบเดียวรู้ว่ารถถึงจุดรับกี่คัน */
+    var _sbOn=(!isPier && typeof vckArrGet==='function')
+      ? !!vckArrGet((typeof _vanCkDate!=='undefined'?_vanCkDate:''), k) : false;
     var full=(tot>0&&done>=tot), part=(done>0&&!full);
     var numCol=full?'#0C6B47':part?'#854F0B':'#5F5E5A';
     var numBg =full?'#DCF4E8':part?'#FAEEDA':'#F1EFE8';
@@ -51238,12 +51282,33 @@ function ckUnitBar(groups, gkeys, kind, anchorPrefix){
     return '<button onclick="ckJump(\''+anchorPrefix+k.replace(/[^A-Za-z0-9_-]/g,'_')+'\')" title="'+e(nm)+' · '+e(rt.name||'')+' · '+(isPier?'ขึ้นเรือ':'ขึ้นรถ')+'แล้ว '+done+'/'+tot+' pax'+(gt.label?(' · รับ '+e(gt.label)):'')+(lateCard?(' · เลยเวลา '+gt.late+' ราย'):'')+' · คลิกเพื่อเด้งไปที่คันนี้" style="display:inline-flex;align-items:center;gap:7px;border:1.5px solid '+(lateCard?'#C0392B':(col+'55'))+';background:'+(lateCard?'#FFF7F6':'#fff')+';border-radius:11px;padding:5px 10px 5px 6px;cursor:pointer;font-family:inherit;white-space:nowrap">'
       +'<span style="width:8px;height:8px;border-radius:50%;background:'+col+';flex:none"></span>'
       +'<span style="font-size:12px;font-weight:700;color:#3a3a36">'+e(nm)+'</span>'
+      +(_sbOn?'<span title="คนขับสแตนบายถึงจุดรับแล้ว" style="width:8px;height:8px;border-radius:50%;background:#12A46F;flex:none;box-shadow:0 0 0 2px #D6F2E6"></span>':'')
       +(gt.label?'<span style="font-family:\'DM Mono\',monospace;font-size:10.5px;color:'+(lateCard?'#A32D2D':'#a5a49d')+'">'+e(gt.label.split('-')[0])+'</span>':'')
       +'<span style="font-family:\'DM Mono\',monospace;font-size:12.5px;font-weight:700;color:'+numCol+';background:'+numBg+';border-radius:7px;padding:2px 8px">'+done+'/'+tot+'</span></button>';
   }).join('');
   return '<div class="ck-unitbar">'
     +'<span class="ck-unitbar-lbl">'+(isPier?'&#128676; เรือวันนี้':'&#128656; รถวันนี้')+'</span>'+chips
     +'<span style="margin-left:auto;font-size:10.5px;color:#a5a49d;white-space:nowrap">คลิกการ์ดเพื่อเด้งไปที่'+(isPier?'ลำ':'คัน')+'นั้น</span></div>';
+}
+/* §vckFlow · dropdown เลือกสถานะ · สีของกล่องเปลี่ยนตามสถานะที่เป็นอยู่
+   'รอ' กับ 'ไปเจอที่ท่า' ไม่ใช่ตัวเลือก · เป็นผลจากสิ่งที่เกิดขึ้น จึงโชว์เป็นบรรทัดแรกที่เลือกไม่ได้ */
+function vckSelHtml(bkId,date,kind,st){
+  var e=ckEsc, d=vckStDef(st), lead='';
+  if(st==='wait'||st==='pier') lead='<option value="" selected>'+e(d.lbl)+'</option>';
+  var opts=['standby','pending','checkin','cxl','noshow'].map(function(k){
+    return '<option value="'+k+'"'+((k===st)?' selected':'')+'>'+e(VCK_SEL_LBL[k])+'</option>'; }).join('');
+  return '<select class="vck-sel" title="เปลี่ยนสถานะของแถวนี้"'
+    +' onchange="vckStatus(\''+bkId+'\',\''+date+'\',\''+kind+'\',this.value)"'
+    +' onclick="event.stopPropagation()">'+lead+opts+'</select>';
+}
+/* ช่องขวาสุด · เขียนสิ่งที่เกิดขึ้นจริงเป็นภาษาคน · ยังกดแก้เหตุผลเดิมได้ */
+function vckNoteHtml(ck,st,r,rsn){
+  var arr=null;
+  try{ if(r && r._gk) arr=vckArrGet(r._date||_vanCkDate, r._gk); }catch(_){}
+  var txt=vckRowNote(ck, st, arr&&arr.at);
+  var d=vckStDef(st);
+  var body = txt ? ('<span class="vck-nt">'+d.ic+' '+txt+'</span>') : '<span class="ck-dim">—</span>';
+  return body + (rsn && st!=='wait' ? ('<div class="vck-rsn">'+rsn+'</div>') : '');
 }
 // แถวลูกค้า · ใช้ร่วม 2 หน้า (kind='van'|'pier') · extra = html คอลัมน์เพิ่ม (แทรกก่อนบล็อกเช็คอิน)
 function ckRowHtml(r, date, kind, extraHtml){
@@ -51291,7 +51356,12 @@ function ckRowHtml(r, date, kind, extraHtml){
   var _lost=(typeof ckLostByType==='function')?ckLostByType(b,date):null;
   var _stg=(kind==='pier'&&!on)?pckStage(ck):'';
   var cls='ck-row'+(on?' ck-done':(_stg==='clr'?' ck-plain ck-clr':(_stg==='arr'?' ck-plain ck-arr':' ck-plain')))+(((_lost&&_lost.total>0)||noShow>0)?' ck-lost':'')+((noShow>=booked&&booked>0&&(on||(_lost&&_lost.total>0)))?' ck-nsfull':'')+(tst.k==='late'?' ck-late':'');
-  return '<tr class="'+cls+'">'
+  /* §vckFlow · เฉพาะหน้าเช็คอินรถ · ทั้งแถวเปลี่ยนสีตามสถานะ ตัวแปรสีวางเป็น inline
+     ที่ไม่เขียนเป็นคลาสตายตัวเพราะสีตั้งเองได้ · หน้าท่ายังใช้ของเดิมทุกอย่าง */
+  var _isVan=(typeof _ckBase==='function' && _ckBase(kind)==='van');
+  var _vst='', _vsty='';
+  if(_isVan){ _vst=vckRowSt(ck); if(_vst!=='wait'){ cls+=' vst'; _vsty=' style="'+vckStVars(_vst)+'"'; } }
+  return '<tr class="'+cls+'"'+_vsty+'>'
    +'<td><span class="ck-vch" title="'+e(b.voucherRef||b.code||'')+'">'+e(b.voucherRef||b.code||'—')+'</span></td>'
    +agCell
    +'<td>'+(by?'<span class="ck-by" title="ผู้บันทึก booking · '+e(by)+'">'+e(by)+'</span>':'<span class="ck-dim">—</span>')+'</td>'
@@ -51322,8 +51392,9 @@ function ckRowHtml(r, date, kind, extraHtml){
    +'<td class="ck-c ck-in" style="border-left:2px solid #BFE3CC"><span class="ck-stp"><button onclick="ckStep(\''+b.id+'\',\''+date+'\',\''+kind+'\',-1)">&minus;</button><span class="ck-n">'+actual+'</span><button onclick="ckStep(\''+b.id+'\',\''+date+'\',\''+kind+'\',1)">+</button></span>'
      +'<div class="ck-bk" title="ยอดที่จองมา'+(booked!==r.booked?(' · หักคนที่หายตอนรถรับแล้ว เหลือรอรับ '+booked):'')+'">จอง '+r.booked+'</div></td>'
    +'<td class="ck-in">'
-     +'<div class="ck-evb"><button class="ck-ev ck-ev-ns" onclick="ckEventOpen(\''+b.id+'\',\''+date+'\',\''+kind+'\',\'no_show\')" title="ลูกค้าไม่มา · ไม่แจ้งล่วงหน้า">No-show</button>'
-     +'<button class="ck-ev ck-ev-cx" onclick="ckEventOpen(\''+b.id+'\',\''+date+'\',\''+kind+'\',\'cxl\')" title="ลูกค้าแจ้งยกเลิกหน้างาน">CXL</button></div>'
+     /* §vckFlow · หน้ารถย้ายไปสั่งจาก dropdown แล้ว · ปุ่มคู่นี้เหลือไว้ให้หน้าท่า */
+     +(_isVan?'':'<div class="ck-evb"><button class="ck-ev ck-ev-ns" onclick="ckEventOpen(\''+b.id+'\',\''+date+'\',\''+kind+'\',\'no_show\')" title="ลูกค้าไม่มา · ไม่แจ้งล่วงหน้า">No-show</button>'
+       +'<button class="ck-ev ck-ev-cx" onclick="ckEventOpen(\''+b.id+'\',\''+date+'\',\''+kind+'\',\'cxl\')" title="ลูกค้าแจ้งยกเลิกหน้างาน">CXL</button></div>')
      +(tally.no_show>0?'<div><span class="ck-ns">No-show '+tally.no_show+'</span></div>':'')
      +(tally.cxl>0?'<div><span class="ck-cx">CXL '+tally.cxl+'</span></div>':'')
      +((noShow>0 && tally.total<noShow)?'<div><span class="ck-ns">ไม่ระบุเหตุ '+(noShow-tally.total)+'</span></div>':'')
@@ -51334,8 +51405,11 @@ function ckRowHtml(r, date, kind, extraHtml){
         : '')
      +ckBackChips(ck)
    +'</td>'
-   +'<td class="ck-c ck-in"><button class="ck-ck '+(on?'on':'')+'" onclick="ckToggle(\''+b.id+'\',\''+date+'\',\''+kind+'\')" title="'+(on?('เช็คอินแล้ว · '+e(ck.by||'')):'กดเมื่อขึ้น'+(kind==='pier'?'เรือ':'รถ'))+'">&#10003;</button></td>'
-   +'<td class="ck-in">'+rsn+'</td>'
+   +(_isVan
+      ? ('<td class="ck-c ck-in">'+vckSelHtml(b.id,date,kind,_vst)+'</td>'
+         +'<td class="ck-in">'+vckNoteHtml(ck,_vst,r,rsn)+'</td>')
+      : ('<td class="ck-c ck-in"><button class="ck-ck '+(on?'on':'')+'" onclick="ckToggle(\''+b.id+'\',\''+date+'\',\''+kind+'\')" title="'+(on?('เช็คอินแล้ว · '+e(ck.by||'')):'กดเมื่อขึ้น'+(kind==='pier'?'เรือ':'รถ'))+'">&#10003;</button></td>'
+         +'<td class="ck-in">'+rsn+'</td>'))
    +'</tr>';
 }
 
@@ -52199,6 +52273,202 @@ function renderPierCash(pier){
   if(_pcJump){ _pcJump=false; if(_pcTab===1||_pcTab===2) setTimeout(pcJumpToday,0); }
 }
 
+/* ══ §vckFlow · สถานะรายแถวของหน้าเช็คอินรถ ════════════════════════════════
+   หน้างานเดินเป็นลำดับ · รอ → สแตนบาย → ตามแขก → ขึ้นรถ / CXL / ไม่มา
+   ของเดิมมีแค่ "ติ๊กแล้ว / ยังไม่ติ๊ก" กับป้าย No-show · ช่วงที่คนขับไปถึงแล้ว
+   โทรแล้ว ยังไม่เจอตัว แต่ยังไม่ถึงขั้นตัดสินว่าไม่มา — ไม่มีที่ให้บันทึก
+   หัวหน้าเปิดมาดูก็ไม่รู้ว่าคันไหนกำลังติดอะไรอยู่
+
+   สองสถานะใหม่เก็บที่ ck.flow ('standby' | 'pending') ในบุ๊กกิ้ง
+   ที่เหลืออ่านจากของเดิมทั้งหมด ไม่เก็บซ้ำ · ไม่งั้นเลขจะขัดกันเอง
+     ขึ้นรถแล้ว = ck.at · CXL / ไม่มา / ไปเจอที่ท่า = events[] ที่ยังไม่ถูกถอน
+
+   สีตั้งเองได้ · เลือกสีเดียวต่อสถานะ แล้วไล่เฉดให้ (พื้น/ขอบ/ตัวหนังสือ)
+   ถ้าให้เลือกทีละ 3 ค่า คนตั้งจะจับคู่กันไม่สวยและอ่านไม่ออก
+   ═════════════════════════════════════════════════════════════════════════ */
+var VCK_STATES=[
+  {k:'wait',    lbl:'รอ',          full:'ยังไม่ถึงคิว',                 c:'#B7B3A8', ic:'·',  pick:false},
+  {k:'standby', lbl:'Standby',     full:'คนขับถึงจุดรับแล้ว',           c:'#12A46F', ic:'⏱', pick:true },
+  {k:'pending', lbl:'ตามแขก',       full:'ถึงแล้วแต่ยังไม่เจอตัว',       c:'#84CC16', ic:'⚠', pick:true },
+  {k:'checkin', lbl:'ขึ้นรถแล้ว',   full:'เช็คอินขึ้นรถเรียบร้อย',       c:'#E8B93A', ic:'✓', pick:true },
+  {k:'cxl',     lbl:'CXL',         full:'ยกเลิกหน้างาน',               c:'#E0724F', ic:'⚠', pick:true },
+  {k:'noshow',  lbl:'No show',     full:'ไม่มา',                       c:'#D9534F', ic:'⚠', pick:true },
+  {k:'pier',    lbl:'ไปเจอที่ท่า',  full:'ไปเองที่ท่า · ยังถือว่าเดินทาง', c:'#A855F7', ic:'🛥', pick:false}
+];
+var VCK_SEL_LBL={standby:'Standby (สแตนบาย)', pending:'Pending (ตามแขก)',
+                 checkin:'Check - in (เช็คอิน)', cxl:'CXL (ยกเลิกหน้างาน)', noshow:'No show (ไม่มา)'};
+function vckStDef(k){ for(var i=0;i<VCK_STATES.length;i++){ if(VCK_STATES[i].k===k) return VCK_STATES[i]; } return VCK_STATES[0]; }
+
+/* ── สี · เก็บเป็นสตริง JSON เหมือน pck_svc_colors · ตั้งครั้งเดียวใช้ทั้งบริษัท ── */
+var _VCK_COL=null, _VCK_COL_SRC=null;
+function vckColors(){
+  var b, raw='';
+  try{ b=laBlob(); raw=(typeof b.vck_status_colors==='string')?b.vck_status_colors:''; }catch(_){ raw=''; }
+  if(_VCK_COL===null || _VCK_COL_SRC!==raw){
+    var o={}; if(raw){ try{ o=JSON.parse(raw)||{}; }catch(_){ o={}; } }
+    var out={}; VCK_STATES.forEach(function(s){ out[s.k]=(typeof o[s.k]==='string'&&/^#[0-9a-fA-F]{6}$/.test(o[s.k]))?o[s.k]:s.c; });
+    _VCK_COL=out; _VCK_COL_SRC=raw;
+  }
+  return _VCK_COL;
+}
+function vckColorSet(k,hex){
+  if(typeof ckGuard==='function' && !ckGuard()) return;
+  if(!/^#[0-9a-fA-F]{6}$/.test(String(hex||''))) return;
+  try{
+    var b=laBlob(), C=vckColors(); C[k]=hex;
+    var keep={}; VCK_STATES.forEach(function(s){ if(C[s.k]&&C[s.k].toLowerCase()!==s.c.toLowerCase()) keep[s.k]=C[s.k]; });
+    if(Object.keys(keep).length){ var str=JSON.stringify(keep); b.vck_status_colors=str; _VCK_COL_SRC=str; }
+    else { delete b.vck_status_colors; _VCK_COL_SRC=''; }
+    laBlobSave();
+  }catch(e){ try{ console.warn('[vckFlow] color save failed', e && e.message); }catch(_){} }
+}
+function vckColorsReset(){
+  if(typeof ckGuard==='function' && !ckGuard()) return;
+  if(!confirm('คืนค่าสีของทุกสถานะกลับเป็นค่าเริ่มต้น?')) return;
+  try{ var b=laBlob(); delete b.vck_status_colors; _VCK_COL=null; _VCK_COL_SRC=null; laBlobSave(); }catch(_){}
+  vckColorClose(); if(typeof renderVanCheckin==='function') renderVanCheckin();
+}
+/* ── ไล่เฉดจากสีเดียว ── */
+function vckRGB(c){ var h=String(c||'').replace('#',''); if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  if(!/^[0-9a-fA-F]{6}$/.test(h)) h='888888';
+  var n=parseInt(h,16); return [(n>>16)&255,(n>>8)&255,n&255]; }
+function _vckHx(v){ v=Math.max(0,Math.min(255,Math.round(v))); return ('0'+v.toString(16)).slice(-2); }
+function vckTint(c,t){ var a=vckRGB(c); return '#'+_vckHx(a[0]+(255-a[0])*t)+_vckHx(a[1]+(255-a[1])*t)+_vckHx(a[2]+(255-a[2])*t); }
+function vckDark(c,f){ var a=vckRGB(c); return '#'+_vckHx(a[0]*f)+_vckHx(a[1]*f)+_vckHx(a[2]*f); }
+/* ตัวแปรสีของสถานะหนึ่ง · เอาไปวางเป็น inline style บนแถว */
+function vckStVars(k){
+  var c=vckColors()[k]||vckStDef(k).c;
+  return '--vst-bar:'+c+';--vst-bg:'+vckTint(c,0.90)+';--vst-chip:'+vckTint(c,0.80)+';--vst-ink:'+vckDark(c,0.60);
+}
+
+/* ── สถานะของแถว · อ่านจากของเดิมเป็นหลัก ไม่เก็บซ้ำ ── */
+function vckRowSt(ck){
+  ck=ck||{};
+  if(ck.at) return 'checkin';
+  var ev=(typeof ckEvLive==='function')?ckEvLive(ck.events):[];
+  for(var i=ev.length-1;i>=0;i--){
+    var x=ev[i]; if(!x || !(+x.pax>0)) continue;
+    if(x.type==='cxl') return 'cxl';
+    return (typeof ckExpectAtPier==='function' && ckExpectAtPier(x.reasonCode)) ? 'pier' : 'noshow';
+  }
+  if(ck.flow==='pending') return 'pending';
+  if(ck.flow==='standby') return 'standby';
+  return 'wait';
+}
+/* ข้อความ "เกิดอะไรขึ้น" ของแถว · เขียนเป็นภาษาคน พร้อมเวลา */
+function vckRowNote(ck, st, arrAt){
+  ck=ck||{};
+  var e=ckEsc;
+  if(st==='checkin'){ var hm=''; try{ hm=ck.at?new Date(ck.at).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}):''; }catch(_){}
+    return 'ขึ้นรถแล้ว'+(hm?(' '+hm):'')+(ck.by?(' · '+e(ck.by)):''); }
+  var ev=(typeof ckEvLive==='function')?ckEvLive(ck.events):[], last=null;
+  for(var i=ev.length-1;i>=0;i--){ if(ev[i] && +ev[i].pax>0){ last=ev[i]; break; } }
+  if(st==='cxl'||st==='noshow'||st==='pier'){
+    if(!last) return '';
+    var head=(st==='cxl')?'ยกเลิกหน้างาน':(st==='pier'?'ไปเองที่ท่า':'ไม่มา');
+    var rl=(last.reasonCode&&typeof ckReasonLabel==='function')?ckReasonLabel(last.reasonCode):'';
+    var tries=(typeof ckEvTries==='function')?ckEvTries(ck.events).length:0;
+    return head+(last.at?(' '+e(last.at)):'')
+      +(rl?(' · '+e(rl)):'')+(last.note?(' · '+e(last.note)):'')
+      +(st==='pier'?' · รอหน้าท่ายืนยัน':'')
+      +(tries>0?(' · วนกลับแล้ว '+tries+' รอบ'):'');
+  }
+  if(st==='pending') return (ck.flowNote?e(ck.flowNote):'ไม่เจอแขก · กำลังตาม')+(ck.flowAt?(' '+e(ck.flowAt)):'');
+  if(st==='standby') return 'สแตนบายถึงจุดแรกแล้ว'+((arrAt||ck.flowAt)?(' '+e(arrAt||ck.flowAt)):'');
+  return '';
+}
+/* ── เปลี่ยนสถานะจาก dropdown ── */
+function vckSetFlow(bkId,date,kind,val,note){
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
+  var cur=ckRead(b,date,kind)||{}, o={};
+  Object.keys(cur).forEach(function(k){ o[k]=cur[k]; });
+  o.flow=val||''; o.flowAt=val?ckNowHM():''; o.flowBy=val?ckMe():'';
+  if(note!==undefined) o.flowNote=note||'';
+  ckWrite(b,date,kind,o);
+}
+function vckStatus(bkId,date,kind,val){
+  if(!ckGuard()) return;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
+  var cur=ckRead(b,date,kind)||{};
+  if(val==='checkin'){ if(!cur.at) ckToggle(bkId,date,kind); else ckAfter(kind); return; }
+  if(val==='cxl'||val==='noshow'){ ckEventOpen(bkId,date,kind,(val==='cxl'?'cxl':'no_show')); return; }
+  if(val==='standby'||val==='pending'){
+    /* เคยติ๊กขึ้นรถไว้แล้วแต่เลือกย้อนกลับ · ต้องถอนติ๊กก่อน ไม่งั้นสถานะกับยอดจะขัดกัน */
+    if(cur.at){ if(!confirm('แถวนี้ติ๊กขึ้นรถไว้แล้ว · ถอนติ๊กแล้วเปลี่ยนเป็น "'+vckStDef(val).lbl+'"?')) { ckAfter(kind); return; }
+      ckToggle(bkId,date,kind); }
+    vckSetFlow(bkId,date,kind,val); ckPersist(); ckAfter(kind); return;
+  }
+  ckAfter(kind);
+}
+/* ── หน้าต่างเลือกสี ── */
+var _vckPick=null;
+function vckColorOpen(k){
+  if(typeof ckGuard==='function' && !ckGuard()) return;
+  var s=vckStDef(k); _vckPick={k:k, c:vckColors()[k]||s.c};
+  var host=document.getElementById('ck-reason-host');
+  if(!host){ host=document.createElement('div'); host.id='ck-reason-host'; document.body.appendChild(host); }
+  host.innerHTML=''
+   +'<div id="ck-reason-ov" onclick="if(event.target===this)vckColorClose()" class="ck-ovl"><div class="ck-dlg vck-cdlg">'
+   +'  <div class="ck-dh"><div><div class="t1">สีของสถานะ &ldquo;'+ckEsc(s.lbl)+'&rdquo;</div>'
+   +'    <div class="t2">'+ckEsc(s.full)+'</div></div>'
+   +'    <button class="x" onclick="vckColorClose()">&times;</button></div>'
+   +'  <div class="ck-db">'
+   +'    <div class="lb">สีที่ใช้บ่อย</div><div class="vck-sw" id="vck-sw"></div>'
+   +'    <div class="lb">หรือเลือกเอง</div>'
+   +'    <div class="vck-cst">'
+   +'      <input type="color" id="vck-cin" value="'+ckEsc(_vckPick.c)+'" oninput="vckColorPick(this.value)">'
+   +'      <input type="text" id="vck-hin" class="ck-inp" value="'+ckEsc(_vckPick.c)+'" oninput="vckColorPick(this.value)" style="width:118px">'
+   +'      <span class="ck-fn" style="margin:0">เลือกสีเดียว · เฉดที่เหลือระบบไล่ให้</span></div>'
+   +'    <div class="vck-prev"><div class="ph">ตัวอย่างแถวจริง</div><div id="vck-pv"></div></div>'
+   +'  </div>'
+   +'  <div class="ck-df"><button class="c" onclick="vckColorsReset()">↺ คืนค่าทุกสี</button>'
+   +'    <span style="flex:1"></span>'
+   +'    <button class="c" onclick="vckColorClose()">ยกเลิก</button>'
+   +'    <button class="k" onclick="vckColorApply()">ใช้สีนี้</button></div>'
+   +'</div></div>';
+  vckColorSw(); vckColorPv();
+}
+var VCK_PRESET=['#B7B3A8','#12A46F','#0F6E56','#84CC16','#65A30D','#E8B93A','#F59E0B','#E0724F','#D9534F',
+                '#A855F7','#7C3AED','#3B82F6','#0EA5E9','#14B8A6','#EC4899','#78716C','#1F2937','#DC2626'];
+function vckColorSw(){
+  var el=document.getElementById('vck-sw'); if(!el||!_vckPick) return;
+  el.innerHTML=VCK_PRESET.map(function(p){
+    return '<button style="background:'+p+'" class="'+((p.toLowerCase()===String(_vckPick.c).toLowerCase())?'on':'')
+      +'" title="'+p+'" onclick="vckColorPick(\''+p+'\')"></button>'; }).join('');
+}
+function vckColorPv(){
+  var el=document.getElementById('vck-pv'); if(!el||!_vckPick) return;
+  var c=_vckPick.c, s=vckStDef(_vckPick.k);
+  el.innerHTML='<div class="prow" style="background:'+vckTint(c,0.90)+'">'
+    +'<span class="pb" style="background:'+c+'"></span>'
+    +'<b>Marina Mosina</b><span class="ph2">GLOW Mira Karon Beach</span>'
+    +'<span class="pc" style="background:'+vckTint(c,0.80)+';border-color:'+c+';color:'+vckDark(c,0.60)+'">'
+    +ckEsc(s.lbl)+'</span></div>';
+}
+function vckColorPick(v){
+  if(!_vckPick) return;
+  v=String(v||'').trim(); if(v.charAt(0)!=='#') v='#'+v;
+  if(!/^#[0-9a-fA-F]{6}$/.test(v)) return;
+  _vckPick.c=v;
+  var ci=document.getElementById('vck-cin'), hi=document.getElementById('vck-hin');
+  if(ci&&ci.value.toLowerCase()!==v.toLowerCase()) ci.value=v;
+  if(hi&&hi.value.toLowerCase()!==v.toLowerCase()) hi.value=v;
+  vckColorSw(); vckColorPv();
+}
+function vckColorApply(){ if(!_vckPick) return; vckColorSet(_vckPick.k,_vckPick.c);
+  vckColorClose(); if(typeof renderVanCheckin==='function') renderVanCheckin(); }
+function vckColorClose(){ _vckPick=null; if(typeof ckReasonClose==='function') ckReasonClose(); }
+/* ── แถบสีใต้หัวหน้า · กดเพื่อเปลี่ยน ── */
+function vckLegend(){
+  var C=vckColors();
+  return '<div class="vck-lgbar"><span class="t">แถบสี</span>'
+   +VCK_STATES.map(function(s){
+      var c=C[s.k]||s.c;
+      return '<button class="vck-lgb" onclick="vckColorOpen(\''+s.k+'\')" title="กดเพื่อเปลี่ยนสีของสถานะนี้">'
+        +'<i style="background:'+vckTint(c,0.86)+';border-color:'+c+'"></i>'
+        +ckEsc(s.lbl)+' <small>'+ckEsc(s.full)+'</small></button>'; }).join('')
+   +'<button class="vck-rs" onclick="vckColorsReset()" title="คืนค่าสีของทุกสถานะ">↺ คืนค่าสีเริ่มต้น</button></div>';
+}
 /* ══ §vckArr · คนขับถึงจุดรับแรกแล้ว ═══════════════════════════════════════
    หน้างานจริง · คนขับไปถึงโรงแรมแรกแล้วจอดรอ · ลูกค้ายังไม่ลงมา
    ก่อนหน้านี้ระบบไม่มีที่ให้บันทึกนาทีที่รถไปถึง มีแต่ "ช่วงเวลารับ" ที่วางแผนไว้
@@ -52232,17 +52502,45 @@ function vckArrSave(){
 function vckArrKey(date,gk){ return date+'::'+gk; }
 function vckArrGet(date,gk){ return vckArrAll()[vckArrKey(date,gk)]||null; }
 /* กดถึง / ยกเลิกการกด · ยกเลิกต้องยืนยัน เพราะเวลานี้เอาไปใช้ตัดสิน No-show */
+/* แถวของแต่ละคัน · เก็บไว้ตอนวาด เพื่อให้ปุ่มสแตนบายรู้ว่าต้องไปแตะแถวไหนบ้าง
+   ที่ไม่ไล่หาเองใหม่เพราะบุ๊กกิ้งใบเดียวแยกได้หลายจุดรับ (van#0 van#1) ต้องตรงกับที่วาดจริง */
+var _VCK_ROWKINDS={};
 function vckArrToggle(date,gk,vanName){
   if(typeof ckGuard==='function' && !ckGuard()) return;
-  var A=vckArrAll(), key=vckArrKey(date,gk), cur=A[key];
+  var A=vckArrAll(), key=vckArrKey(date,gk), cur=A[key], on=!cur;
   if(cur){
-    if(!confirm('ยกเลิกการบันทึก "ถึงจุดรับแล้ว"?\n'+(vanName||'')+' · บันทึกไว้ '+(cur.at||'')+' โดย '+(cur.by||'')+'\n\nนาฬิการอลูกค้าจะหยุดนับ')) return;
+    if(!confirm('ยกเลิกการบันทึก "ถึงจุดรับแล้ว"?' + String.fromCharCode(10)
+       + (vanName||'') + ' · บันทึกไว้ ' + (cur.at||'') + ' โดย ' + (cur.by||'')
+       + String.fromCharCode(10,10)
+       + 'นาฬิการอลูกค้าจะหยุดนับ · แถวที่เป็น Standby อยู่จะกลับเป็น "รอ"')) return;
     delete A[key];
   } else {
     A[key]={ at:ckNowHM(), by:ckMe(), ts:new Date().toISOString() };
   }
   vckArrSave();
+  vckArrFlow(date, gk, on);
+  if(typeof ckPersist==='function') ckPersist();
   if(typeof renderVanCheckin==='function') renderVanCheckin();
+}
+/* ติ๊ก = แถวที่ยังไม่ได้ทำอะไรเลยกลายเป็น Standby พร้อมกัน
+   ไม่แตะแถวที่เช็คอินแล้ว / มีเหตุการณ์แล้ว / คนกดเปลี่ยนเป็นตามแขกเองแล้ว
+   เอาติ๊กออก = คืนเฉพาะแถวที่เป็น Standby กลับเป็น "รอ" */
+function vckArrFlow(date, gk, on){
+  var list=_VCK_ROWKINDS[gk]||[], n=0;
+  list.forEach(function(it){
+    var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===it.id; }); if(!b) return;
+    var cur=ckRead(b,date,it.kind)||{};
+    if(on){
+      if(cur.at) return;
+      if(cur.flow) return;
+      if(ckEvLive(cur.events).length) return;
+      vckSetFlow(it.id,date,it.kind,'standby'); n++;
+    } else {
+      if(cur.flow!=='standby') return;
+      vckSetFlow(it.id,date,it.kind,''); n++;
+    }
+  });
+  return n;
 }
 /* รอมากี่นาทีแล้ว · null = ยังไม่ได้กดถึง หรือดูวันอื่นที่ไม่ใช่วันนี้ */
 function vckArrWait(date,gk){
@@ -52255,15 +52553,16 @@ function vckArrWait(date,gk){
 var VCK_WAIT_RULE=15;   /* กฎรอ 15 นาทีก่อนถือว่า No-show */
 function vckArrChip(date,gk,vanName){
   var e=ckEsc, a=vckArrGet(date,gk), w=vckArrWait(date,gk);
-  var q="vckArrToggle('"+e(date)+"','"+String(gk).replace(/'/g,"\\'")+"','"+e(vanName||'').replace(/'/g,"\\'")+"')";
+  var q='vckArrToggle(' + JSON.stringify(date) + ',' + JSON.stringify(gk) + ',' + JSON.stringify(vanName||'') + ')';
+  q=q.replace(/"/g,'&quot;');
   if(!a){
     return '<button class="vck-arr" onclick="event.stopPropagation();'+q+'" '
-      +'title="คนขับไปถึงจุดรับแรกแล้ว · กดแล้วระบบจับเวลารอให้">🚐 ถึงจุดรับแล้ว</button>';
+      +'title="กดเมื่อคนขับไปถึงจุดรับแรก · ทุกแถวของคันนี้จะกลายเป็น Standby และระบบเริ่มจับเวลารอ">'
+      +'&#9744; ติ๊กเมื่อคนขับสแตนบายจุดแรก</button>';
   }
   var late=(w!=null && w>=VCK_WAIT_RULE);
-  var txt='🚐 ถึงจุดรับ '+e(a.at)
-    +(w!=null?('<b> · รอ '+w+' น.</b>'):'')
-    +(late?' · ครบ '+VCK_WAIT_RULE+' นาทีแล้ว':'');
+  var txt='&#9745; คนขับสแตนบายแล้ว<span class="sbt">'+e(a.at)
+    +(w!=null?(' · รอ '+w+' น.'):'')+(late?' · ครบ '+VCK_WAIT_RULE+' นาที':'')+'</span>';
   return '<button class="vck-arr on'+(late?' late':'')+'" onclick="event.stopPropagation();'+q+'" '
     +'title="บันทึกโดย '+e(a.by||'')+' · กดอีกครั้งเพื่อยกเลิก">'+txt+'</button>';
 }
@@ -52288,6 +52587,7 @@ function renderVanCheckin(){
   if(typeof bkV2HealSelfArrivePickup==='function'){ try{ bkV2HealSelfArrivePickup(date); }catch(_){} }
   var zoneLbl=function(z){ return (typeof bkV2ZoneLabel==='function')?bkV2ZoneLabel(z):(z||'—'); };
   var groups={}, unassigned=[];
+  _VCK_ROWKINDS={};   /* §vckFlow · สร้างใหม่ทุกครั้งที่วาด */
   (SB_BOOKINGS||[]).forEach(function(b){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=ckTripOn(b,date); if(!t) return;
@@ -52368,7 +52668,8 @@ function renderVanCheckin(){
     var soft=(typeof _bkV2Soft==='function')?_bkV2Soft(c[0],0.92):c[0];
     var gt=ckGroupTime(g.rows, date);
     var gtChip=gt.label?('<span class="ck-gtm ck-gtm-'+gt.state+'">&#9200; '+e(gt.label)+(gt.state==='late'?(' · เลยเวลา'+(gt.late>1?(' '+gt.late+' ราย'):'')):gt.state==='due'?' · ถึงเวลา':gt.state==='soon'?' · ใกล้ถึง':gt.state==='miss'?' · ยังไม่เช็คอิน':'')+'</span>'):'';
-    bodyHtml+='</tbody><tbody><tr class="ck-ghd"><td colspan="17" style="background:'+soft+';padding:7px 12px">'
+    var _sbNow=!!vckArrGet(date,k);
+    bodyHtml+='</tbody><tbody><tr class="ck-ghd'+(_sbNow?' vck-sb':'')+'"><td colspan="17" style="background:'+soft+';padding:7px 12px">'
       +'<div id="vckg-'+k.replace(/[^A-Za-z0-9_-]/g,'_')+'" style="display:flex;align-items:center;gap:11px;flex-wrap:wrap;border-radius:8px">'
       +vanPill+gtChip+vckArrChip(date,k,(veh.name||vid))+infoHtml
       +'<span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:'+(rt.color||'#5F5E5A')+'"><span style="width:8px;height:8px;border-radius:50%;background:'+(rt.color||'#999')+'"></span>'+e(rt.name||g.routeId||'—')+'</span>'
@@ -52376,7 +52677,9 @@ function renderVanCheckin(){
         +(vLost>0?('<b style="color:#A32D2D;font-size:13px">'+vGo+'</b> pax <s style="color:#c2c0b7">'+vPax+'</s>'):(vPax+' pax'))
         +(vLost>0?' · <span style="color:#A32D2D;font-weight:700">หาย '+vLost+'</span>':'')+'</span>'
       +'</div></td></tr>';
-    g.rows.forEach(function(r){ bodyHtml+=ckRowHtml(r, date, (r.si!=null?('van#'+r.si):'van'), ''); });
+    /* §vckFlow · จดไว้ว่าคันนี้มีแถวไหนบ้าง · ปุ่มสแตนบายใช้ต่อ */
+    _VCK_ROWKINDS[k]=g.rows.map(function(r){ return {id:r.b.id, kind:(r.si!=null?('van#'+r.si):'van')}; });
+    g.rows.forEach(function(r){ r._gk=k; r._date=date; bodyHtml+=ckRowHtml(r, date, (r.si!=null?('van#'+r.si):'van'), ''); });
   });
   // §topWarn · booking ที่ยังไม่จัดรถคือของที่ต้องลงมือก่อนใคร เดิมต่อท้ายสุดของตาราง ต้องเลื่อนผ่าน
   // ทุกคันกว่าจะเจอ · ย้ายมาไว้บนสุดแทน (สร้างแยกไว้ใน warnHtml แล้วค่อยเอาไปต่อหน้า)
@@ -52427,9 +52730,11 @@ function renderVanCheckin(){
                   kpiHtml:kpi, pillsHtml:pills.html, totalPax:pills.total,
                   totalBreak:(pills.lost>0?('เดินทางจริง · จอง '+pills.booked+' หาย '+pills.lost):(pills.dA+'A·'+pills.dC+'C·'+pills.dI+'I·'+pills.dF+'F'))})
     +ckUnitBar(groups, gkeys, 'van', 'vckg-')
+    +vckLegend()
     +'<div class="ck-card"><table class="ck-tbl"><thead><tr>'
     +'<th>Voucher</th><th>Agency</th><th>Submitted by</th><th>Customer (lead) · โทร</th><th class="ck-c">AD</th><th class="ck-c">CHD</th><th class="ck-c">INF</th><th class="ck-c">FOC</th><th>Time</th><th>Pickup</th><th class="ck-c">Room</th><th>Pickup area</th><th>Special request</th>'
-    +'<th class="ck-c ck-in" style="border-left:2px solid #BFE3CC;color:#0F6E56">ขึ้นรถจริง</th><th class="ck-in"></th><th class="ck-c ck-in">&#10003;</th><th class="ck-in">เหตุผล</th>'
+    +'<th class="ck-c ck-in" style="border-left:2px solid #BFE3CC;color:#0F6E56">ขึ้นรถจริง</th><th class="ck-in"></th>'
+    +'<th class="ck-c ck-in">Status</th><th class="ck-in">สถานะ / บันทึกหน้างาน</th>'
     +'</tr></thead><tbody>'+bodyHtml+'</tbody></table></div>';
   ckSyncSticky(host); ckStartTick('vancheckin', renderVanCheckin);
 }
