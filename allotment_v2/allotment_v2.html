@@ -49742,6 +49742,37 @@ var CK_EVENT_TYPES = {
   no_show:{key:'no_show', label:'No-show', full:'ไม่มา · ไม่แจ้งล่วงหน้า', color:'#A32D2D', bg:'#FCEBEB', bd:'#E6C9C3'},
   cxl:    {key:'cxl',     label:'CXL',     full:'ยกเลิกหน้างาน',          color:'#8A5B00', bg:'#FBF3E6', bd:'#EBDCC2'}
 };
+/* §ckBack · กล่องยืนยัน · แปะที่ body จึงอยู่นอก scope ของหน้า ต้องฉีดสไตล์เอง */
+(function(){ try{
+  if(document.getElementById('ck-bk-style')) return;
+  var st=document.createElement('style'); st.id='ck-bk-style';
+  st.textContent=''
+   +'.ck-ovl{position:fixed;inset:0;background:rgba(20,24,22,.45);backdrop-filter:blur(2px);z-index:9000;'
+     +'display:flex;align-items:center;justify-content:center;padding:18px}'
+   +'.ck-dlg{background:#fff;border-radius:16px;width:min(460px,96vw);max-height:92vh;overflow:auto;'
+     +'box-shadow:0 18px 50px rgba(0,0,0,.28);font-family:inherit}'
+   +'.ck-dh{padding:15px 18px;border-bottom:1px solid #EFECE4;display:flex;align-items:flex-start;gap:12px}'
+   +'.ck-dh .t1{font-size:15.5px;font-weight:800;color:#242320}'
+   +'.ck-dh .t2{font-size:11.5px;color:#8a8a82;margin-top:3px;font-family:"DM Mono",ui-monospace,monospace}'
+   +'.ck-dh .x{margin-left:auto;background:transparent;border:none;font-size:21px;color:#9a9a92;cursor:pointer;line-height:1}'
+   +'.ck-db{padding:15px 18px}'
+   +'.ck-db .lb{font-size:10px;font-weight:800;color:#8a8a82;text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px}'
+   +'.ck-bkopt{display:grid;gap:8px;margin-bottom:15px}'
+   +'.ck-bkopt button{text-align:left;border:1.5px solid #E4E1D9;background:#fff;border-radius:11px;'
+     +'padding:11px 13px;cursor:pointer;font-family:inherit}'
+   +'.ck-bkopt button.on{border-color:#0F6E56;background:#F2FAF5}'
+   +'.ck-bkopt .o1{font-size:13px;font-weight:800;color:#242320}'
+   +'.ck-bkopt button.on .o1{color:#0F6E56}'
+   +'.ck-bkopt .o2{font-size:11px;color:#8a8a82;margin-top:3px;line-height:1.45}'
+   +'.ck-inp{width:100%;border:1px solid #E4E1D9;border-radius:10px;padding:10px 12px;font-size:13px;'
+     +'font-family:inherit;box-sizing:border-box}'
+   +'.ck-fn{font-size:11.5px;color:#8a8a82;margin-top:12px;line-height:1.55}'
+   +'.ck-df{padding:12px 18px 16px;display:flex;gap:9px;justify-content:flex-end;border-top:1px solid #EFECE4}'
+   +'.ck-df button{border-radius:10px;padding:11px 20px;font:800 12.5px inherit;cursor:pointer;border:1.5px solid;font-family:inherit}'
+   +'.ck-df .c{border-color:#E4E1D9;background:#fff;color:#5F5E5A}'
+   +'.ck-df .k{border-color:#0F6E56;background:#0F6E56;color:#fff}';
+  document.head.appendChild(st);
+}catch(_){} })();
 var CK_NOSHOW_REASONS = [
   {code:'no_contact',    label:'ติดต่อลูกค้าไม่ได้'},
   {code:'not_down',      label:'รอแล้วไม่ลงมา'},
@@ -49753,6 +49784,33 @@ var CK_NOSHOW_REASONS = [
   {code:'sick',          label:'ป่วย / เหตุสุดวิสัย'},
   {code:'other',         label:'อื่นๆ'}
 ];
+/* ══ §ckBack · ทางกลับของ No-show ที่ไม่ลบประวัติ ════════════════════════════
+   ของเดิมมีแต่ปุ่ม "ถอน" ที่หน้าท่า และมันลบรายการทิ้งจริง ๆ (ev.pop())
+   พอลบแล้วไม่เหลือร่องรอยว่าเคยเกิดอะไร · มีเรื่องกับ agent ทีหลังก็ไล่ย้อนไม่ได้
+   และหน้าเช็คอินรถไม่มีทางกลับเลยสักทาง — กด + ที่ปุ่มนับก็ได้แค่เลข
+   รายการใน events[] ยังอยู่ ป้าย No-show ยังขึ้น Travel Summary ยังนับเป็นคนหาย
+
+   ทางใหม่ · ไม่ลบ แต่ทำเครื่องหมาย undone ให้รายการนั้น
+     why:'found'   = วนกลับไปเจอตัว รับขึ้นรถแล้ว   (ประวัติ No-show ของลูกค้ายังจริง)
+     why:'mistake' = กดผิด ไม่ได้ No-show จริงเลย   (ไม่ใช่ประวัติของลูกค้า แต่รู้ว่าใครกดผิด)
+   ทั้งสองแบบหักออกจากยอดคนหายเหมือนกัน ต่างกันแค่ป้ายที่โชว์
+
+   ⚠ ทุกที่ที่นับจาก events[] ต้องกรองด้วย ckEvLive() ไม่งั้นตัวเลขขัดกันเอง
+     ตอนนี้มี 7 จุด · ckLostByType · ckEventTally · ckVanNsPax · pckVoidInfo
+     · pckSelfPierNote · แผงรายละเอียด booking · Travel Summary
+   ═════════════════════════════════════════════════════════════════════════ */
+function ckEvLive(ev){
+  return (Array.isArray(ev)?ev:[]).filter(function(x){ return x && !x.undone; });
+}
+/* รอบที่วนกลับไปหาแล้วไม่เจอ · เก็บไว้ในรายการเดิม ไม่ได้แตะตัวเลข */
+function ckEvTries(ev){
+  var out=[];
+  (Array.isArray(ev)?ev:[]).forEach(function(x){
+    if(!x || x.undone) return;
+    (Array.isArray(x.tries)?x.tries:[]).forEach(function(t){ out.push(t); });
+  });
+  return out;
+}
 // pax ที่ไม่ได้เดินทาง แยกตามประเภทผู้โดยสาร · รวมทั้งเช็คอินรถและหน้าท่า
 // ใช้ paxBreak ที่บันทึกตอนกดปุ่ม No-show/CXL · ถ้าไม่มี (ข้อมูลเก่า) จะคืน unalloc ไว้ให้หักจากยอดรวมแทน
 function ckLostByType(b, date){
@@ -49761,7 +49819,7 @@ function ckLostByType(b, date){
   var _reins=!!(O.pierCheckin && O.pierCheckin.reinstate);   // §ckPierFix
   [[ 'van', O.vanCheckin ], [ 'pier', O.pierCheckin ]].forEach(function(pair){
     var kind=pair[0], ck=pair[1];
-    var ev=(ck&&Array.isArray(ck.events))?ck.events:[];
+    var ev=ckEvLive(ck&&ck.events);   /* §ckBack */
     ev.forEach(function(x){
       var n=Math.max(0,+x.pax||0); if(!n) return;
       // §ckSelfPier · ไม่ได้ขึ้นรถ แต่แจ้งว่าไปเองที่ท่า/ไปรถคันอื่น → ยังถือว่าเดินทาง
@@ -49824,7 +49882,7 @@ function ckPaxLeft(b, date, k, booked){
 // รวม pax ตามประเภทเหตุการณ์ · {no_show:n, cxl:n, total:n}
 function ckEventTally(ck){
   var out={no_show:0, cxl:0, total:0};
-  var ev=(ck&&Array.isArray(ck.events))?ck.events:[];
+  var ev=ckEvLive(ck&&ck.events);   /* §ckBack */
   ev.forEach(function(x){ var n=Math.max(0,+x.pax||0); if(!n) return; if(out[x.type]!=null) out[x.type]+=n; out.total+=n; });
   return out;
 }
@@ -49836,7 +49894,7 @@ function ckReinstateOf(b, date){ var p=ckRead(b,date,'pier'); return (p && p.rei
 // มี No-show ฝั่งรถอยู่ไหม (ไว้ตัดสินว่าจะโชว์ปุ่ม "มาแล้ว" หรือปุ่ม "ถอน")
 function ckVanNsPax(b, date){
   var v=ckRead(b,date,'van'); if(!v || !Array.isArray(v.events)) return 0;
-  return v.events.reduce(function(s,x){ return s + ((x.type!=='cxl') ? Math.max(0,+x.pax||0) : 0); }, 0);
+  return ckEvLive(v.events).reduce(function(s,x){ return s + ((x.type!=='cxl') ? Math.max(0,+x.pax||0) : 0); }, 0);   /* §ckBack */
 }
 function ckPierReinstate(bkId, date, on){
   if(!ckGuard()) return;                                   /* §ckPerm */
@@ -50056,7 +50114,7 @@ function pckVoidInfo(b, date, t){
   var L=ckLostByType(b,date), last=null;
   var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):((b&&b.ops)||{});
   [O.vanCheckin,O.pierCheckin].forEach(function(ck){
-    ((ck&&ck.events)||[]).forEach(function(x){ if(!last || String(x.ts||'')>String(last.ts||'')) last=x; });
+    ckEvLive(ck&&ck.events).forEach(function(x){ if(!last || String(x.ts||'')>String(last.ts||'')) last=x; });   /* §ckBack */
   });
   return { pax:booked, cxl:L.cxl, ns:L.ns, kind:((L.cxl>=L.ns)?'cxl':'ns'),
            at:(last&&last.at)||'', by:(last&&last.by)||'',
@@ -50069,7 +50127,7 @@ function pckSelfPierNote(b, date){
   var v=(typeof ckRead==='function')?ckRead(b,date,'van'):null;
   if(!v || !Array.isArray(v.events)) return null;
   var n=0, at='', code='';
-  v.events.forEach(function(x){
+  ckEvLive(v.events).forEach(function(x){   /* §ckBack */
     if(x.type==='cxl' || !ckExpectAtPier(x.reasonCode)) return;
     n+=Math.max(0,+x.pax||0); at=x.at||at; code=x.reasonCode||code;
   });
@@ -50097,6 +50155,174 @@ function ckEventUndo(bkId, date, kind){
     at:cur.at||null, by:cur.by||null, events:ev,
     reasonCode:prev?(prev.reasonCode||''):'', reasonNote:prev?(prev.note||''):'', reasonAt:prev?(prev.at||''):'' });
   ckPersist(); ckAfter(kind);
+}
+/* ── §ckBack · ↩️ รับกลับ ─────────────────────────────────────────────────
+   คืนคนเข้ายอด "ขึ้นจริง" แล้วทำเครื่องหมายรายการเดิมว่ายกเลิกแล้ว (ไม่ลบ)
+   ทำทีละรายการเต็มใบ ไม่แบ่งครึ่ง · paxBreak จะได้ไม่ต้องเดาว่าใครกลับมา
+   เจอครึ่งเดียวก็รับกลับทั้งรายการ แล้วกด No-show ใหม่ตามจำนวนที่ยังไม่มา */
+var _ckBk={bkId:null, date:'', kind:'van', ix:-1, why:'found'};
+function ckBackList(cur){
+  var ev=(cur&&Array.isArray(cur.events))?cur.events:[], out=[];
+  ev.forEach(function(x,i){ if(x && !x.undone && (+x.pax||0)>0) out.push({i:i, x:x}); });
+  return out;
+}
+function ckBackOpen(bkId, date, kind){
+  if(!ckGuard()) return;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
+  kind=kind||'van';
+  var cur=ckRead(b,date,kind)||{}, live=ckBackList(cur);
+  if(!live.length){ alert('ใบนี้ไม่มีรายการ No-show / CXL ที่ยังมีผลอยู่'); return; }
+  var t=ckTripOn(b,date)||{}, booked=ckBookedPax(t);
+  _ckBk={bkId:bkId, date:date, kind:kind, ix:live[live.length-1].i, why:'found'};
+  var actual=(cur.actualPax!=null?cur.actualPax:0);
+  var host=document.getElementById('ck-reason-host');
+  if(!host){ host=document.createElement('div'); host.id='ck-reason-host'; document.body.appendChild(host); }
+  var evRows=(live.length>1)
+    ? '<div class="lb">รับกลับรายการไหน</div><div class="ck-bkopt" id="ck-bk-ev">'
+      + live.map(function(o){
+          var T=CK_EVENT_TYPES[o.x.type]||CK_EVENT_TYPES.no_show;
+          return '<button type="button" class="'+((o.i===_ckBk.ix)?'on':'')+'" onclick="ckBackPickEv('+o.i+')">'
+            +'<div class="o1">'+ckEsc(T.label)+' '+(+o.x.pax||0)+' คน · '+ckEsc(o.x.at||'')+'</div>'
+            +'<div class="o2">'+ckEsc(ckReasonLabel(o.x.reasonCode)+(o.x.note?(' · '+o.x.note):''))+'</div></button>'; }).join('')
+      +'</div>'
+    : '';
+  host.innerHTML=''
+   +'<div id="ck-reason-ov" onclick="if(event.target===this)ckReasonClose()" class="ck-ovl">'
+   +'<div class="ck-dlg">'
+   +'  <div class="ck-dh"><div><div class="t1">&#8617;&#65039; รับกลับขึ้น'+(_ckBase(kind)==='pier'?'เรือ':'รถ')+'</div>'
+   +'    <div class="t2">'+ckEsc(b.voucherRef||b.code||b.id)+' · '+ckEsc(b.leadPax||'')+' · จอง '+booked+' · ตอนนี้ขึ้นจริง '+actual+'</div></div>'
+   +'    <button class="x" onclick="ckReasonClose()">&times;</button></div>'
+   +'  <div class="ck-db">'+evRows
+   +'    <div class="lb">เพราะอะไร</div>'
+   +'    <div class="ck-bkopt" id="ck-bk-why">'
+   +'      <button type="button" class="on" onclick="ckBackWhy(\'found\',this)"><div class="o1">&#128587; เจอตัวรอบวน · รับขึ้นรถแล้ว</div>'
+   +'        <div class="o2">รายการ No-show เดิมยังอยู่ในประวัติ ขีดฆ่าไว้ แล้วต่อบรรทัดว่ารับกลับกี่โมง — ใช้ดูภายหลังได้ว่าใบไหนหรือโรงแรมไหนต้องวนซ้ำบ่อย</div></button>'
+   +'      <button type="button" onclick="ckBackWhy(\'mistake\',this)"><div class="o1">&#9998; กดผิด · ไม่ได้ No-show จริง</div>'
+   +'        <div class="o2">ติดป้าย “กดผิด” ให้รายการเดิม ไม่ลบทิ้ง จะได้รู้ว่าใครกดผิดตอนไหน แต่ไม่นับเป็นประวัติ No-show ของลูกค้า</div></button>'
+   +'    </div>'
+   +'    <div class="lb">หมายเหตุ (ไม่บังคับ)</div>'
+   +'    <input id="ck-bk-note" class="ck-inp" type="text" placeholder="เช่น ลงมาแล้ว รับรอบสอง">'
+   +'    <div class="ck-fn">ยอดขึ้นจริงจะคืนให้ตามจำนวนของรายการที่เลือก · ยอดจองและราคาไม่ถูกแก้</div>'
+   +'  </div>'
+   +'  <div class="ck-df"><button class="c" onclick="ckReasonClose()">ยกเลิก</button>'
+   +'    <button class="k" onclick="ckBackSave()">ยืนยันรับกลับ</button></div>'
+   +'</div></div>';
+}
+function ckBackPickEv(i){
+  _ckBk.ix=i;
+  var box=document.getElementById('ck-bk-ev'); if(!box) return;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===_ckBk.bkId; });
+  var live=ckBackList(ckRead(b,_ckBk.date,_ckBk.kind)||{});
+  Array.prototype.forEach.call(box.children, function(btn,k){
+    btn.classList.toggle('on', !!(live[k] && live[k].i===i)); });
+}
+function ckBackWhy(k, el){
+  _ckBk.why=k;
+  var box=document.getElementById('ck-bk-why'); if(!box) return;
+  Array.prototype.forEach.call(box.children, function(b){ b.classList.remove('on'); });
+  if(el) el.classList.add('on');
+}
+function ckBackSave(){
+  var st=_ckBk; if(!st.bkId) return ckReasonClose();
+  if(!ckGuard()) return;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===st.bkId; }); if(!b) return ckReasonClose();
+  var cur=ckRead(b,st.date,st.kind)||{};
+  var ev=(Array.isArray(cur.events)?cur.events.slice():[]);
+  var hit=ev[st.ix];
+  if(!hit || hit.undone){ alert('รายการนี้ถูกจัดการไปแล้ว'); return ckReasonClose(); }
+  var noteEl=document.getElementById('ck-bk-note');
+  ev[st.ix]=Object.assign({}, hit, { undone:{ why:(st.why==='mistake'?'mistake':'found'),
+      at:ckNowHM(), by:ckMe(), ts:new Date().toISOString(),
+      note:(noteEl?noteEl.value.trim():'') } });
+  var t=ckTripOn(b,st.date)||{}, booked=ckBookedPax(t);
+  var cap=(typeof ckCap==='function')?ckCap(b,st.date,st.kind,booked):booked;
+  /* §ckPierSelf · ที่ท่าเรือคืนได้ถึงยอดจองเต็ม · ฝั่งรถเพดานคือยอดจองอยู่แล้ว */
+  var ceil=(typeof ckCeil==='function')?ckCeil(b,st.date,st.kind,booked):cap;
+  var back=Math.min(ceil, ((cur.actualPax!=null)?cur.actualPax:0)+Math.max(0,+hit.pax||0));
+  /* เหตุผลที่โชว์บนแถว = รายการที่ยังมีผลล่าสุด · ไม่มีแล้วก็ต้องล้างทิ้ง
+     ไม่งั้นแถวยังติดป้าย "รอแล้วไม่ลงมา" ทั้งที่คนขึ้นรถครบแล้ว */
+  var last=ckEvLive(ev).slice(-1)[0]||null;
+  ckWrite(b, st.date, st.kind, { actualPax:back, noShow:Math.max(0,cap-back), expected:cap,
+    selfAdd:(back>cap)?{pax:back-cap, at:ckNowHM(), by:ckMe(), ts:new Date().toISOString()}:null,
+    at:cur.at||null, by:cur.by||null, events:ev,
+    reasonCode:last?(last.reasonCode||''):'', reasonNote:last?(last.note||''):'', reasonAt:last?(last.at||''):'' });
+  ckPersist(); ckReasonClose(); ckAfter(st.kind);
+}
+/* ── §ckBack · 🔁 วนแล้วไม่เจอ ─────────────────────────────────────────────
+   ไม่แตะตัวเลขเลย · ต่อรอบเข้าไปในรายการเดิม เก็บเวลา + คนกด + หมายเหตุ
+   ของเดิมต้องไปพิมพ์ทับหมายเหตุเดียวที่มี แล้วรอบแรกหายทุกครั้ง */
+var _ckTry={bkId:null, date:'', kind:'van', ix:-1};
+function ckTryOpen(bkId, date, kind){
+  if(!ckGuard()) return;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===bkId; }); if(!b) return;
+  kind=kind||'van';
+  var cur=ckRead(b,date,kind)||{}, live=ckBackList(cur);
+  if(!live.length){ alert('ใบนี้ไม่มีรายการ No-show / CXL ที่ยังมีผลอยู่'); return; }
+  var pick=live[live.length-1];
+  _ckTry={bkId:bkId, date:date, kind:kind, ix:pick.i};
+  var was=(Array.isArray(pick.x.tries)?pick.x.tries:[]);
+  var seq=was.map(function(t){ return ckEsc(t.at||''); });
+  seq.unshift(ckEsc(pick.x.at||''));
+  var host=document.getElementById('ck-reason-host');
+  if(!host){ host=document.createElement('div'); host.id='ck-reason-host'; document.body.appendChild(host); }
+  host.innerHTML=''
+   +'<div id="ck-reason-ov" onclick="if(event.target===this)ckReasonClose()" class="ck-ovl">'
+   +'<div class="ck-dlg">'
+   +'  <div class="ck-dh"><div><div class="t1">&#128257; วนกลับไปแล้ว ยังไม่เจอ</div>'
+   +'    <div class="t2">'+ckEsc(b.voucherRef||b.code||b.id)+' · '+ckEsc(b.leadPax||'')+'</div></div>'
+   +'    <button class="x" onclick="ckReasonClose()">&times;</button></div>'
+   +'  <div class="ck-db">'
+   +'    <div class="ck-fn" style="margin:0 0 14px">ตัวเลขไม่เปลี่ยน · บันทึกไว้เฉย ๆ ว่าวนกลับไปอีกรอบแล้วยังไม่เจอ<br>'
+   +'      <b>รอบนี้จะเป็นรอบที่ '+(seq.length+1)+'</b> · รอบก่อนหน้า '+(seq.join(' · ')||'—')+'</div>'
+   +'    <div style="display:flex;gap:11px;flex-wrap:wrap">'
+   +'      <div style="flex:none"><div class="lb">เวลา</div>'
+   +'        <input id="ck-try-at" class="ck-inp" type="time" value="'+ckNowHM()+'" style="width:135px"></div>'
+   +'      <div style="flex:1;min-width:180px"><div class="lb">หมายเหตุ</div>'
+   +'        <input id="ck-try-note" class="ck-inp" type="text" placeholder="เช่น ล็อบบี้ไม่มีใคร โทรอีกครั้งไม่รับ"></div>'
+   +'    </div>'
+   +'  </div>'
+   +'  <div class="ck-df"><button class="c" onclick="ckReasonClose()">ยกเลิก</button>'
+   +'    <button class="k" onclick="ckTrySave()">บันทึกรอบนี้</button></div>'
+   +'</div></div>';
+}
+function ckTrySave(){
+  var st=_ckTry; if(!st.bkId) return ckReasonClose();
+  if(!ckGuard()) return;
+  var b=(SB_BOOKINGS||[]).find(function(x){ return x.id===st.bkId; }); if(!b) return ckReasonClose();
+  var cur=ckRead(b,st.date,st.kind)||{};
+  var ev=(Array.isArray(cur.events)?cur.events.slice():[]);
+  var hit=ev[st.ix];
+  if(!hit || hit.undone){ alert('รายการนี้ถูกจัดการไปแล้ว'); return ckReasonClose(); }
+  var atEl=document.getElementById('ck-try-at'), noteEl=document.getElementById('ck-try-note');
+  ev[st.ix]=Object.assign({}, hit, { tries:(Array.isArray(hit.tries)?hit.tries.slice():[]).concat([{
+    at:(atEl?atEl.value:'')||ckNowHM(), by:ckMe(),
+    note:(noteEl?noteEl.value.trim():''), ts:new Date().toISOString() }]) });
+  /* เขียนกลับทุกค่าเดิมเป๊ะ · เปลี่ยนแค่ events[] · ตัวเลขห้ามขยับ */
+  ckWrite(b, st.date, st.kind, { actualPax:cur.actualPax, noShow:cur.noShow, expected:cur.expected,
+    at:cur.at||null, by:cur.by||null, events:ev,
+    reasonCode:cur.reasonCode||'', reasonNote:cur.reasonNote||'', reasonAt:cur.reasonAt||'' });
+  ckPersist(); ckReasonClose(); ckAfter(st.kind);
+}
+/* ป้ายประวัติของแถว · รอบที่วน + รายการที่รับกลับไปแล้ว */
+function ckBackChips(ck){
+  var ev=(ck&&Array.isArray(ck.events))?ck.events:[]; if(!ev.length) return '';
+  var out='';
+  var tr=ckEvTries(ev);
+  if(tr.length){
+    out+='<div><span class="ck-try" title="'+ckEsc(tr.map(function(t){
+        return (t.at||'')+(t.by?(' · '+t.by):'')+(t.note?(' · '+t.note):''); }).join('\n'))
+      +'">&#128257; วน '+(tr.length+1)+' รอบ · '+ckEsc(tr.map(function(t){ return t.at||''; }).join(' · '))+'</span></div>';
+  }
+  ev.forEach(function(x){
+    var U=x.undone; if(!U) return;
+    var T=CK_EVENT_TYPES[x.type]||CK_EVENT_TYPES.no_show;
+    var mis=(U.why==='mistake');
+    out+='<div><span class="'+(mis?'ck-mis':'ck-gone')+'" title="'+ckEsc(
+        T.label+' '+(+x.pax||0)+' · '+(x.at||'')+' · '+ckReasonLabel(x.reasonCode)
+        +' → '+(mis?'กดผิด':'รับกลับ')+' '+(U.at||'')+' · '+(U.by||'')+(U.note?(' · '+U.note):''))+'">'
+      +(mis?'&#9998; กดผิด · ':'&#8617;&#65039; รับกลับ ')+(mis?'':(+x.pax||0)+' · ')+ckEsc(U.at||'')+'</span></div>';
+  });
+  return out;
 }
 // กดขั้นไหน = ไปถึงขั้นนั้น (ขั้นก่อนหน้าเติมให้อัตโนมัติ) · กดขั้นที่ทำแล้ว = ถอยกลับหนึ่งขั้น
 /* §pckSplit · kind = 'pier' หรือ 'pier#<i>' ของจุดรับย่อย · ต้องแยกสถานะรายจุด
@@ -50684,6 +50910,20 @@ function ckSharedCSS(scope){
   +scope+' table.ck-tbl tr.ck-row.ck-lost:hover>td{background:#F2C2BD}'
   +scope+' table.ck-tbl tr.ck-row.ck-lost>td:first-child{box-shadow:inset 5px 0 0 #C0392B}'
   +scope+' table.ck-tbl tr.ck-row.ck-nsfull>td{background:#F1B8B2}'
+  /* §ckBack · ปุ่มทางกลับ + ป้ายประวัติ */
+  +scope+' .ck-bkb{display:inline-flex;gap:4px;margin-top:5px}'
+  +scope+' .ck-ic{width:32px;height:32px;border-radius:9px;border:1.5px solid;cursor:pointer;'
+    +'font-size:15px;line-height:1;padding:0;font-family:inherit;background:#fff}'
+  +scope+' .ck-ic.bk{border-color:#BFE3CC;background:#E4F5EC}'
+  +scope+' .ck-ic.bk:hover{background:#CFEDDD}'
+  +scope+' .ck-ic.ag{border-color:#E4E1D9}'
+  +scope+' .ck-ic.ag:hover{background:#F7F6F3}'
+  +scope+' .ck-try{display:inline-block;font-size:10px;font-weight:700;border-radius:6px;padding:2px 7px;'
+    +'margin-top:3px;background:#F4F2ED;border:1px solid #E7E4DC;color:#6b6a63}'
+  +scope+' .ck-gone{display:inline-block;font-size:10px;font-weight:700;border-radius:6px;padding:2px 7px;'
+    +'margin-top:3px;background:#E4F5EC;border:1px solid #BFE3CC;color:#0F6E56}'
+  +scope+' .ck-mis{display:inline-block;font-size:10px;font-weight:700;border-radius:6px;padding:2px 7px;'
+    +'margin-top:3px;background:#F4E8FB;border:1px solid #E3D0F0;color:#6B289A}'
   /* ── ยังไม่เช็คอิน = สีจาง · เช็คอินแล้วสีกลับมาปกติ ─────────────────── */
   +scope+' .ck-row.ck-plain .ck-agblk{filter:grayscale(1);opacity:.5}'
   +scope+' .ck-row.ck-plain .ck-lead{background:#F1EFE8 !important;color:#8a8a82}'
@@ -51039,6 +51279,12 @@ function ckRowHtml(r, date, kind, extraHtml){
      +(tally.no_show>0?'<div><span class="ck-ns">No-show '+tally.no_show+'</span></div>':'')
      +(tally.cxl>0?'<div><span class="ck-cx">CXL '+tally.cxl+'</span></div>':'')
      +((noShow>0 && tally.total<noShow)?'<div><span class="ck-ns">ไม่ระบุเหตุ '+(noShow-tally.total)+'</span></div>':'')
+     /* §ckBack · ทางกลับ · โผล่เฉพาะแถวที่มีรายการค้างอยู่จริง */
+     +(ckEvLive(ck.events).length
+        ? ('<div class="ck-bkb"><button class="ck-ic bk" onclick="event.stopPropagation();ckBackOpen(\''+b.id+'\',\''+date+'\',\''+kind+'\')" title="เจอลูกค้าแล้ว · รับกลับขึ้นรถ หรือแก้กรณีกดผิด">&#8617;&#65039;</button>'
+           +'<button class="ck-ic ag" onclick="event.stopPropagation();ckTryOpen(\''+b.id+'\',\''+date+'\',\''+kind+'\')" title="วนกลับไปแล้วยังไม่เจอ · บันทึกอีกรอบ">&#128257;</button></div>')
+        : '')
+     +ckBackChips(ck)
    +'</td>'
    +'<td class="ck-c ck-in"><button class="ck-ck '+(on?'on':'')+'" onclick="ckToggle(\''+b.id+'\',\''+date+'\',\''+kind+'\')" title="'+(on?('เช็คอินแล้ว · '+e(ck.by||'')):'กดเมื่อขึ้น'+(kind==='pier'?'เรือ':'รถ'))+'">&#10003;</button></td>'
    +'<td class="ck-in">'+rsn+'</td>'
@@ -52023,7 +52269,14 @@ function pckDetailOpen(bkId){
               +'title="ไม่ได้ขึ้นรถมา แต่มาถึงท่าเอง">&#8617; ตามมาเอง +'+over+'</span>'):'')
       +'<div style="font-size:10px;color:#a5a49d;margin-top:2px">'+e((c.by||'')+(c.at?(' · '+String(c.at).slice(0,16).replace('T',' ')):''))+'</div>'
       +((c.events||[]).map(function(x){ var T=(CK_EVENT_TYPES[x.type]||CK_EVENT_TYPES.no_show);
-          return '<div style="font-size:10.5px;margin-top:3px;color:'+T.color+'">'+T.label+' '+x.pax+' · '+e(ckReasonLabel(x.reasonCode)+(x.note?(' · '+x.note):''))+'</div>'; }).join(''))
+          /* §ckBack · รายการที่รับกลับแล้วยังต้องเห็น · ขีดฆ่าไว้พร้อมบอกว่าเพราะอะไร */
+          var U=x.undone||null;
+          return '<div style="font-size:10.5px;margin-top:3px;color:'+(U?'#a9a7a0':T.color)+'">'
+            +'<span'+(U?' style="text-decoration:line-through"':'')+'>'+T.label+' '+x.pax+' · '
+            +e(ckReasonLabel(x.reasonCode)+(x.note?(' · '+x.note):''))+'</span>'
+            +(U?(' <b style="color:'+(U.why==='mistake'?'#6B289A':'#0F6E56')+'">'
+                 +(U.why==='mistake'?'กดผิด':'รับกลับแล้ว')+' '+e(U.at||'')+(U.by?(' · '+e(U.by)):'')+'</b>'):'')
+            +'</div>'; }).join(''))
       +'</span></div>';
   };
   var exHtml=M.extras.map(function(x){ var _g=(typeof bkxExGot==='function')?bkxExGot(x):true;
@@ -52765,7 +53018,8 @@ function pckRowHtml(r, date){
        //   ให้ปุ่มยืนยันว่ามาจริงแทน · บันทึกฝั่งรถไม่ถูกแตะ
        +((ckVanNsPax(b,date)>0 && !(ck.events&&ck.events.length))
          ? '<button onclick="event.stopPropagation();ckPierReinstate(\''+b.id+'\',\''+date+'\',true)" title="ลูกค้าตามมาเองที่ท่า · กดเพื่อเปิดแถวนี้ให้เช็คอินได้ (บันทึกของเช็คอินรถยังอยู่)" style="border:1px solid #B7E2D2;background:#E1F5EE;color:#0F6E56;border-radius:999px;padding:5px 11px;font-size:10.5px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap">&#8617; มาแล้ว · เปิดเช็คอิน</button>'
-         : '<button class="pck-undo" onclick="event.stopPropagation();ckEventUndo(\''+b.id+'\',\''+date+'\',\'pier\')" title="กดผิด? ถอนรายการล่าสุดคืน">&#8630; ถอน</button>')):(
+         /* §ckBack · ของเดิมคือ ckEventUndo ที่ลบรายการทิ้งจริง · เปลี่ยนเป็นรับกลับที่เก็บประวัติ */
+         : '<button class="pck-undo" onclick="event.stopPropagation();ckBackOpen(\''+b.id+'\',\''+date+'\',\'pier\')" title="เจอลูกค้าแล้ว รับกลับ · หรือแก้กรณีกดผิด">&#8617;&#65039; รับกลับ</button>')):(
       '<span class="ck-stp" title="จำนวนคนที่ขึ้นเรือจริง &#183; กดขึ้นได้ถึงยอดจอง '+r.booked+' แม้เช้าจะไม่ได้ขึ้นรถมา"><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\''+_kd+'\',-1)">&minus;</button><span class="ck-n">'+actual+'</span><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\'pier\',1)">+</button></span>'
      +'<span style="display:inline-flex;gap:4px"><button class="ck-ev ck-ev-ns" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'no_show\')" title="ลูกค้าไม่มา · ไม่แจ้งล่วงหน้า">No-show</button>'
      +'<button class="ck-ev ck-ev-cx" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'cxl\')" title="ลูกค้าแจ้งยกเลิกหน้างาน">CXL</button></span>'
@@ -55354,7 +55608,7 @@ function tsRows(date){
     const s=ckSummary(b,date)||{booked:ckBookedPax(t),noShow:0};
     const v=O.vanCheckin||null, pcv=O.pierCheckin||null;
     const evV=ckEventTally(v), evP=ckEventTally(pcv);
-    const events=[].concat((v&&v.events)||[], (pcv&&pcv.events)||[]);
+    const events=[].concat(ckEvLive(v&&v.events), ckEvLive(pcv&&pcv.events));   /* §ckBack */
     const booked=s.booked, noShow=s.noShow||0;
     // §tsIssueReal · คนที่ไม่ได้เดินทางจริง (หักเคสมาเองที่ท่า / หน้าท่ายืนยันแล้วออกให้)
     const _L=(typeof ckLostByType==='function')?(ckLostByType(b,date)||{}):{};
