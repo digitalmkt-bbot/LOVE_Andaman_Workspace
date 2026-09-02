@@ -51385,11 +51385,96 @@ function pcPax(date,bid,pier){
   return o;
 }
 var PC_PK=['ad_th','chd_th','inf_th','ad_fr','chd_fr','inf_fr'];
+/* ── ราคาค่าอุทยาน · ดึงจากแผนต้นทุนของเส้นทางนั้น ─────────────────────────
+   ราคาอยู่ที่เดียวคือหน้า ต้นทุน & จุดคุ้มทุน · ที่นี่แค่อ่านมาใช้
+   แก้ราคาที่นั่นแล้วหน้านี้เปลี่ยนตาม จะได้ไม่ต้องมาไล่แก้สองที่แล้วเลขไม่ตรงกัน
+   แผนผูกกับเส้นทางผ่าน famId (ชื่อฟิลด์ชวนงง แต่ค่าที่เก็บคือ route id)
+   เส้นทางที่ยังไม่มีแผนของตัวเอง ถอยไปใช้แผนของเส้นทางพี่น้องในตระกูลเดียวกัน */
+var _PC_RATE={};
+function pcParkRate(rid){
+  if(!rid) return {ok:false, why:'ยังไม่รู้ว่าเรือลำนี้ไปเส้นทางไหน'};
+  if(_PC_RATE[rid]) return _PC_RATE[rid];
+  var R={ok:false, why:'เส้นทางนี้ยังไม่มีแผนต้นทุน'};
+  try{
+    var pl=(typeof ctPlanOfFam==='function')?ctPlanOfFam(rid):null, how='';
+    if(pl) how='';
+    else if(typeof ctSiblingPlan==='function'){
+      var sb=ctSiblingPlan(rid);
+      if(sb&&sb.plan){ pl=sb.plan; how='ยืมจาก '+((sb.route&&sb.route.name)||'เส้นทางพี่น้อง'); }
+    }
+    if(pl){
+      var T=(typeof ctTpl==='function')?ctTpl():null;
+      var ln=T&&(T.lines||[]).filter(function(x){ return x.id==='park'; })[0];
+      if(!ln) R={ok:false, why:'สูตรกลางไม่มีบรรทัดค่าเข้าอุทยาน'};
+      else{
+        var L=ctEffLine(ln,pl);
+        if(L.off) R={ok:false, why:'แผน «'+(pl.name||'')+'» ปิดบรรทัดค่าอุทยานไว้', plan:pl.name};
+        else{
+          var a=0,aTH=0,c=0,cTH=0,miss={};
+          (L.parts||[]).forEach(function(p){
+            if(!p||p.k!=='var') return;
+            var u=+p.u||0;
+            var hTH=(p.uTH!=null&&p.uTH!==''), hCh=(p.uCh!=null&&p.uCh!=='');
+            var hChTH=(p.uChTH!=null&&p.uChTH!=='');
+            var uTH=hTH?(+p.uTH||0):u;
+            var uCh=hCh?(+p.uCh||0):u;
+            var uChTH=hChTH?(+p.uChTH||0):(hCh?uCh:uTH);
+            /* ช่องที่ไม่ได้ตั้ง จะถอยไปใช้ราคาผู้ใหญ่ต่างชาติ = แพงเกินจริง · ต้องฟ้อง */
+            if(u>0&&!hTH) miss['ราคาคนไทย']=1;
+            if(u>0&&!hCh) miss['ราคาเด็ก']=1;
+            a+=u; aTH+=uTH; c+=uCh; cTH+=uChTH;
+          });
+          R={ ok:true, ad_th:aTH, chd_th:cTH, inf_th:0, ad_fr:a, chd_fr:c, inf_fr:0,
+              plan:pl.name||'', how:how, miss:Object.keys(miss) };
+        }
+      }
+    }
+  }catch(_){ R={ok:false, why:'อ่านแผนต้นทุนไม่ได้'}; }
+  _PC_RATE[rid]=R; return R;
+}
+/* INF คิด 0 · แผนต้นทุนไม่มีช่องราคาเด็กเล็ก · ด่านไหนเก็บจริงจะไปโผล่เป็นส่วนต่าง */
+function pcParkAmt(R,cnt){
+  if(!R||!R.ok||!cnt) return null;
+  return (+cnt.ad_th||0)*R.ad_th + (+cnt.chd_th||0)*R.chd_th
+       + (+cnt.ad_fr||0)*R.ad_fr + (+cnt.chd_fr||0)*R.chd_fr;
+}
+/* ป้ายราคาใต้ชื่อโปรแกรม · ให้ตรวจย้อนได้ว่าเลขที่คำนวณมาจากราคาไหน */
+function pcRateChip(R){
+  if(!R.ok) return '<span class="pc-rc no" title="'+pcE(R.why||'')+'">⚠ ยังไม่มีราคาอุทยาน</span>';
+  var w=(R.miss&&R.miss.length)?(' ⚠'):'';
+  var tip='จากแผน «'+(R.plan||'')+'»'+(R.how?(' · '+R.how):'')
+    +((R.miss&&R.miss.length)?(' · ยังไม่ได้ตั้ง'+R.miss.join(' และ')+' เลยถอยไปใช้ราคาผู้ใหญ่ต่างชาติ'):'');
+  return '<span class="pc-rc'+((R.miss&&R.miss.length)?' w':'')+'" title="'+pcE(tip)+'">'
+    +'อุทยาน · ตปท '+pcN(R.ad_fr)+'/'+pcN(R.chd_fr)
+    +' · ไทย '+pcN(R.ad_th)+'/'+pcN(R.chd_th)+w+'</span>';
+}
+/* §pcCalc · เติมจำนวนจากใบจองลงช่องคีย์ทีเดียวทั้ง 6 ช่อง
+   กันกับดัก · พอคีย์ช่องเดียว อีก 5 ช่องกลายเป็น 0 แล้วยอดคำนวณตกโดยไม่ตั้งใจ
+   ให้เติมของจริงมาก่อนแล้วค่อยแก้เฉพาะช่องที่ต่าง */
+function pcFillPK(ds,bid,pier){
+  if(!pcGuard()) return;
+  var X=pcPax(ds,bid,pier||_pcPier);
+  var D=pcDay(_pcPier,ds,true); D.pk[bid]=D.pk[bid]||{};
+  PC_PK.forEach(function(k){ D.pk[bid][k]=+X[k]||0; });
+  D.pk[bid].by=pcWho(); D.pk[bid].ts=new Date().toISOString();
+  var any=PC_PK.some(function(k){ return +D.pk[bid][k]>0; })||+D.pk[bid].amt>0;
+  if(!any) delete D.pk[bid];
+  pcSave(); pcKeep();
+}
+/* ช่องส่วนต่าง · จ่ายจริง − ยอดคำนวณ */
+function pcDiffCell(paid,exp){
+  if(exp==null||!(paid>0)) return '<td class="pc-df">—</td>';
+  var d=paid-exp;
+  if(d===0) return '<td class="pc-df ok">✓ ตรง</td>';
+  if(d>0)   return '<td class="pc-df over" title="จ่ายมากกว่าที่คำนวณ">+'+pcN(d)+'</td>';
+  return '<td class="pc-df under" title="จ่ายน้อยกว่าที่คำนวณ">−'+pcN(-d)+'</td>';
+}
 /* ลำที่ออกวันนั้นของท่านั้น · เอาเฉพาะลำที่มีโปรแกรมจริง ไม่เอาลำที่จอด */
 function pcBoats(date,pier){
   var out=[];
   ((typeof poBoats==='function')?poBoats(date,pier):[]).forEach(function(B){
-    out.push({bid:B.bid, name:(B.boat&&B.boat.name)||B.bid, route:(B.route&&B.route.name)||B.rid||''});
+    out.push({bid:B.bid, name:(B.boat&&B.boat.name)||B.bid, rid:B.rid||'',
+              route:(B.route&&B.route.name)||B.rid||''});
   });
   return out;
 }
@@ -51591,7 +51676,27 @@ function pcCSS(scope){
   +scope+' .pc-add.o{border-color:#EBD9AE;background:#FFF7E6;color:#7A4A00}'
   +scope+' .pc-del{border:none;background:transparent;color:#C9CFD8;cursor:pointer;font-size:14px;padding:0 4px}'
   +scope+' .pc-del:hover{color:#A32D2D}'
-  +scope+' .pc-lnk{color:#1D5FA8;font-weight:700;cursor:pointer;text-decoration:underline}';
+  +scope+' .pc-lnk{color:#1D5FA8;font-weight:700;cursor:pointer;text-decoration:underline}'
+  /* §pcCalc · ป้ายราคา · ยอดคำนวณ · ส่วนต่าง */
+  +scope+' .pc-rc{display:inline-block;margin-top:3px;font-size:10.5px;font-weight:600;'
+    +'background:#EEF4FF;border:1px solid #CFDDF5;color:#2C4F8A;border-radius:6px;padding:1px 7px;cursor:help}'
+  +scope+' .pc-rc.w{background:#FFF6E3;border-color:#EBD9AE;color:#7A4A00}'
+  +scope+' .pc-rc.no{background:#FDF0F0;border-color:#F0CFCF;color:#A32D2D}'
+  +scope+' td.pc-ex{text-align:right;background:#F0F7F2;line-height:1.25;padding:5px 8px}'
+  +scope+' td.pc-ex b{display:block;font-size:14px;font-weight:800;color:#0F6E56}'
+  +scope+' td.pc-ex i{display:block;font-style:normal;font-size:10px;color:#7E9B8C;font-weight:500}'
+  +scope+' td.pc-ex.na b{font-size:11.5px;font-weight:600;color:#B9BCC6}'
+  +scope+' tr.sum td.pc-ex,'+scope+' tr.grand td.pc-ex{background:#E4F1E9}'
+  +scope+' tr.grand td.pc-ex{background:#0F6E56}'
+  +scope+' tr.grand td.pc-ex b{color:#fff}'
+  +scope+' td.pc-df{text-align:center;font-weight:700;font-size:12px;color:#C3C8D2}'
+  +scope+' td.pc-df.ok{color:#0F6E56;background:#EDF7F2}'
+  +scope+' td.pc-df.over{color:#7A4A00;background:#FFF7E6}'
+  +scope+' td.pc-df.under{color:#A32D2D;background:#FDF0F0}'
+  +scope+' td.cy.mm input{border-color:#E0A800;background:#FFF9E8;box-shadow:0 0 0 2px #FFF0C4 inset}'
+  +scope+' .pc-fill{display:inline-block;margin:3px 0 0 5px;border:1px solid #CFDDF5;background:#fff;'
+    +'color:#2C4F8A;border-radius:6px;padding:1px 8px;font:600 10.5px inherit;font-family:inherit;cursor:pointer}'
+  +scope+' .pc-fill:hover{background:#EEF4FF;border-color:#9CBCE8}';
 }
 /* ── ชีท 1 · หน้าหลัก ────────────────────────────────────────────────── */
 function pcSheetMain(pier){
@@ -51715,11 +51820,11 @@ function pcSheetLT(pier){
 /* ── ชีท 3 · ค่าอุทยาน ───────────────────────────────────────────────── */
 function pcSheetPK(pier){
   var dates=pcDates(pier,_pcYM), body='', rn=0, nb=0;
-  var GT=[0,0,0,0,0,0], GK=[0,0,0,0,0,0], gtot=0, gktot=0, gm=0;
+  var GT=[0,0,0,0,0,0], GK=[0,0,0,0,0,0], gtot=0, gktot=0, gm=0, gex=0;
   dates.forEach(function(ds){
     var BS=pcBoats(ds,pier); if(!BS.length) return;
     var D=pcDay(pier,ds,false)||{pk:{}};
-    var DT=[0,0,0,0,0,0], DK=[0,0,0,0,0,0], dtot=0, dktot=0, dm=0, anyk=false, rows='';
+    var DT=[0,0,0,0,0,0], DK=[0,0,0,0,0,0], dtot=0, dktot=0, dm=0, dex=0, anyk=false, anyx=false, rows='';
     BS.forEach(function(B){
       rn++; nb++;
       var X=pcPax(ds,B.bid,pier), C=(D.pk||{})[B.bid]||{};
@@ -51727,47 +51832,68 @@ function pcSheetPK(pier){
       PC_PK.forEach(function(k,i){ DT[i]+=X[k]; if(+C[k]>0){ hasK=true; } kt+=(+C[k]||0); DK[i]+=(+C[k]||0); });
       if(hasK||+C.amt>0) anyk=true;
       dtot+=X.tot; dktot+=kt; dm+=(+C.amt||0);
+      /* §pcCalc · คีย์แล้วคิดตามที่คีย์ · ยังไม่คีย์คิดตามใบจองไปก่อน จะได้เห็นตัวเลขตั้งแต่ก่อนออกเรือ */
+      var R=pcParkRate(B.rid);
+      var basis=hasK?C:X;
+      var exp=pcParkAmt(R,basis);
+      if(exp!=null){ dex+=exp; anyx=true; }
       var cells=PC_PK.map(function(k,i){
         var cls=(i<3)?'th2':'fr2';
         return '<td class="v '+cls+(X[k]?'':' z')+'">'+X[k]+'</td>'; }).join('');
       var keys=PC_PK.map(function(k,i){
-        return '<td class="cy ct'+(i===0?' gs':'')+'"><input value="'+(C[k]||'')+'" placeholder="—" '
+        /* ขอบเข้ม = จำนวนที่คีย์ไม่ตรงกับใบจอง · ไม่ใช่ error แต่ต้องเห็น */
+        var mm=(hasK && (+C[k]||0)!==(+X[k]||0))?' mm':'';
+        return '<td class="cy ct'+(i===0?' gs':'')+mm+'"><input value="'+(C[k]||'')+'" placeholder="—" '
           +'inputmode="numeric" onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\''+k+'\',this.value)"></td>'; }).join('');
+      var exc=(exp==null)
+        ? '<td class="pc-ex na"><b>—</b><i>'+pcE((R.why||'ไม่มีราคา'))+'</i></td>'
+        : '<td class="pc-ex"><b>'+pcN(exp)+'</b><i>'+(hasK?'ตามที่คีย์':'ตามใบจอง')+'</i></td>';
       rows+='<tr><td class="rn">'+rn+'</td><td class="bn">'+pcE(B.name)+'</td>'
-        +'<td class="rt">'+pcE(B.route)+'</td>'+cells
+        +'<td class="rt">'+pcE(B.route)+'<br>'+pcRateChip(R)
+          +(hasK?'':'<button class="pc-fill" title="คัดลอกจำนวนจากใบจองมาใส่ช่องคีย์ทั้ง 6 ช่อง แล้วค่อยแก้เฉพาะที่ต่าง" '
+            +'onclick="pcFillPK(\''+ds+'\',\''+B.bid+'\',\''+pier+'\')">⤓ เติมจากใบจอง</button>')
+          +'</td>'+cells
         +'<td class="v">'+X.tot+'</td>'+keys
         +'<td class="v gs"'+(hasK?' style="background:#FFFDF5;color:#7A4A00"':'')+'>'+(hasK?kt:'—')+'</td>'
+        +exc
         +'<td class="cy"><input value="'+(C.amt?pcN(C.amt):'')+'" placeholder="—" inputmode="numeric" '
-          +'onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'amt\',this.value)"></td></tr>';
+          +'onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'amt\',this.value)"></td>'
+        +pcDiffCell(+C.amt||0, exp)+'</tr>';
     });
     PC_PK.forEach(function(k,i){ GT[i]+=DT[i]; GK[i]+=DK[i]; });
-    gtot+=dtot; gktot+=dktot; gm+=dm;
-    body+='<tr class="day"><td colspan="18">'+pcE(pcDL(ds))
+    gtot+=dtot; gktot+=dktot; gm+=dm; gex+=dex;
+    body+='<tr class="day"><td colspan="20">'+pcE(pcDL(ds))
       +'<span class="d2">'+BS.length+' ลำ · '+dtot+' คน</span></td></tr>'+rows
       +'<tr class="sum"><td class="rn"></td><td colspan="2">รวม '+pcE(pcDS(ds))+'</td>'
       +DT.map(function(v){ return '<td class="v">'+v+'</td>'; }).join('')
       +'<td class="v">'+dtot+'</td>'
       +DK.map(function(v,i){ return '<td class="v'+(i===0?' gs':'')+'">'+(anyk?v:'—')+'</td>'; }).join('')
       +'<td class="v gs">'+(anyk?dktot:'—')+'</td>'
-      +'<td class="r">'+(dm?pcN(dm):'—')+'</td></tr>';
+      +'<td class="pc-ex"><b>'+(anyx?pcN(dex):'—')+'</b></td>'
+      +'<td class="r">'+(dm?pcN(dm):'—')+'</td>'
+      +pcDiffCell(dm, anyx?dex:null)+'</tr>';
   });
-  if(!body) body='<tr><td colspan="18" style="color:#B9BCC6;padding:20px 12px">ไม่มีเรือออกในเดือนนี้</td></tr>';
+  if(!body) body='<tr><td colspan="20" style="color:#B9BCC6;padding:20px 12px">ไม่มีเรือออกในเดือนนี้</td></tr>';
   return '<div class="pc-sheet">'
    +'<div class="pc-tb"><b>🏝️ สรุปค่าอุทยานรายวัน</b>'
      +'<input class="pc-dt" type="month" value="'+_pcYM+'" onchange="pcMonth(this.value)">'
      +'<span class="n">'+dates.length+' วัน · '+nb+' ลำ · '+gtot+' คน</span>'
-     +'<span class="sp"></span><span class="n">รวม '+pcMoney(gm)+'</span></div>'
+     +'<span class="sp"></span><span class="n">คำนวณ '+pcMoney(gex)+'</span>'
+     +'<span class="n">จ่ายจริง '+pcMoney(gm)+'</span></div>'
    +'<div class="pc-gw"><table class="pc-t"><thead>'
      +'<tr><th class="rn" rowspan="3">#</th>'
        +'<th rowspan="3" style="width:126px;vertical-align:bottom">เรือ</th>'
        +'<th rowspan="3" style="vertical-align:bottom">โปรแกรม</th>'
        +'<th class="g" colspan="7" style="background:#EDF7F2;color:#0F6E56">ตามใบจอง · ระบบอ่านให้</th>'
        +'<th class="g key gs" colspan="7">จ่ายจริงที่ด่าน · คีย์เอง</th>'
-       +'<th class="r key gs" rowspan="3" style="width:110px;vertical-align:bottom">เงินที่จ่าย</th></tr>'
+       +'<th class="g" colspan="3" style="background:#EEF4FF;color:#2C4F8A">เงิน</th></tr>'
      +'<tr><th class="g th2" colspan="3">คนไทย</th><th class="g fr2" colspan="3">ต่างชาติ</th>'
        +'<th class="c" rowspan="2" style="width:50px;vertical-align:bottom">รวม</th>'
        +'<th class="g key gs" colspan="3">คนไทย</th><th class="g key" colspan="3">ต่างชาติ</th>'
-       +'<th class="c key" rowspan="2" style="width:50px;vertical-align:bottom">รวม</th></tr>'
+       +'<th class="c key" rowspan="2" style="width:50px;vertical-align:bottom">รวม</th>'
+       +'<th class="r" rowspan="2" style="width:118px;vertical-align:bottom;background:#F0F7F2;color:#0F6E56">ยอดคำนวณ</th>'
+       +'<th class="r key gs" rowspan="2" style="width:110px;vertical-align:bottom">เงินที่จ่าย</th>'
+       +'<th class="c" rowspan="2" style="width:86px;vertical-align:bottom">ต่าง</th></tr>'
      +'<tr><th class="c th2" style="width:44px">ผญ</th><th class="c th2" style="width:44px">เด็ก</th>'
        +'<th class="c th2" style="width:44px">INF</th>'
        +'<th class="c fr2" style="width:44px">ผญ</th><th class="c fr2" style="width:44px">เด็ก</th>'
@@ -51780,13 +51906,23 @@ function pcSheetPK(pier){
        +GT.map(function(v){ return '<td class="v">'+v+'</td>'; }).join('')
        +'<td class="v">'+gtot+'</td>'
        +GK.map(function(v,i){ return '<td class="v'+(i===0?' gs':'')+'">'+v+'</td>'; }).join('')
-       +'<td class="v gs">'+gktot+'</td><td class="r">'+pcMoney(gm)+'</td></tr></tfoot></table></div>'
+       +'<td class="v gs">'+gktot+'</td>'
+       +'<td class="pc-ex"><b>'+pcMoney(gex)+'</b></td>'
+       +'<td class="r">'+pcMoney(gm)+'</td>'
+       +pcDiffCell(gm, gex)+'</tr></tfoot></table></div>'
    +'<div class="pc-note"><b>ฝั่งซ้ายเขียว = ตามใบจอง</b> ระบบอ่านให้ แก้ไม่ได้ · '
      +'<b>ฝั่งขวาเหลือง = จ่ายจริงที่ด่าน</b> คีย์จำนวนคนเองได้ครบทั้ง 6 ช่อง แล้วค่อยใส่เงินที่จ่าย<br>'
      +'ที่ต้องคีย์เองเพราะหน้าด่านมักไม่ตรงกับใบจอง — เด็กต่ำกว่า 3 ขวบไม่เก็บ · บางคนไม่ขึ้นเกาะ · '
      +'บางเกาะคนละราคา · <b>เก็บไว้ทั้งสองฝั่งจะเทียบทีหลังได้ว่าต่างกันกี่คน เพราะอะไร</b><br>'
      +'แยกไทย/ต่างชาติเพราะราคาต่อหัวไม่เท่ากัน · '
-     +'<b>คนที่ไม่ระบุสัญชาติ นับเป็นต่างชาติไว้ก่อน</b> คิดสูงไว้ดีกว่าคิดต่ำแล้วเงินขาด</div>'
+     +'<b>คนที่ไม่ระบุสัญชาติ นับเป็นต่างชาติไว้ก่อน</b> คิดสูงไว้ดีกว่าคิดต่ำแล้วเงินขาด<br>'
+     +'<b>ยอดคำนวณ</b> = ราคาอุทยานของเส้นทางนั้น × จำนวนคน · คีย์จำนวนแล้วคิดตามที่คีย์ '
+     +'ยังไม่คีย์คิดตามใบจองไปก่อน · <b>ราคามาจากแผนต้นทุน</b> แก้ที่หน้า ต้นทุน &amp; จุดคุ้มทุน '
+     +'แล้วหน้านี้เปลี่ยนตาม ไม่ต้องแก้สองที่ · ป้ายใต้ชื่อโปรแกรมบอกราคาที่ใช้อยู่<br>'
+     +'<b>INF คิด 0</b> เพราะแผนต้นทุนไม่มีช่องราคาเด็กเล็ก · ด่านไหนเก็บจริงจะไปโผล่เป็นส่วนต่างให้เห็น · '
+     +'<b>ต่าง</b> = เงินที่จ่าย − ยอดคำนวณ · ช่องคีย์ที่<b>ขอบเข้ม</b> คือจำนวนที่ไม่ตรงกับใบจอง<br>'
+     +'<b>พอเริ่มคีย์ ช่องที่ยังว่างจะนับเป็น 0</b> ถ้าจะแก้แค่บางช่อง ให้กด '
+     +'<b>⤓ เติมจากใบจอง</b> ดึงเลขจริงมาก่อน แล้วค่อยแก้เฉพาะช่องที่ต่าง</div>'
    +'</div>';
 }
 /* ชื่อวัน · ยาวสำหรับหัวกลุ่ม สั้นสำหรับแถวรวม */
@@ -51795,6 +51931,7 @@ function pcDL(ds){ try{ var d=new Date(ds+'T12:00:00'); if(isNaN(d.getTime())) r
 function pcDS(ds){ try{ var d=new Date(ds+'T12:00:00'); if(isNaN(d.getTime())) return ds;
   return d.toLocaleDateString('th-TH',{day:'numeric',month:'short'}); }catch(_){ return ds; } }
 function renderPierCash(pier){
+  _PC_RATE={};   /* §pcCalc · ราคาอาจถูกแก้ที่หน้าต้นทุนระหว่างนี้ */
   _pcPier=pier||_pcPier;
   var host=document.getElementById('pc-host-'+_pcPier); if(!host) return;
   var P=(typeof PO_PIERS!=='undefined')?(PO_PIERS.filter(function(x){ return x.k===_pcPier; })[0]||{}):{};
