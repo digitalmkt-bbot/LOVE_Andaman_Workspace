@@ -239,7 +239,7 @@ const B2C_PAY_TYPES = new Set(['proforma', 'invoice', 'bt', 'cot']);
 const B2C_OWN_BK = new Set([
   'schemaver','voucherref','agentid','createdby',   // §b2cBy · ผู้บันทึกฝั่ง B2C · ops แก้เองได้ (b2coverride คุ้มให้)
   'leadpax','leadnationality','leadphone','leademail',
-  'status','total','note','bookingdate',
+  'status','total','note','notes','bookingdate',   // §b2cSreq · notes = B2C special request + internal remark
   'pickupself','pickuparea','pickupzone','hotelname','dropoffhotelname',
   'paymentsnapshot_method','paymentsnapshot_netdays','paymentsnapshot_source',
   'paymentsnapshot_contractversion','paymentsnapshot_paid','paymentsnapshot_paidstatus',
@@ -316,7 +316,13 @@ const B2C_OWN_BK = new Set([
 //      createdBy, so this is the field, not a new one; 'createdby' joins B2C_OWN_BK so rows already
 //      carrying 'b2c_sync' get the name on the corrective re-upsert this bump forces (only within the
 //      sync window — older orders keep 'b2c_sync', which the voucher hides).
-const B2C_MAP_VER = 22;
+// v23: imports booking_items.special_request + .remark into `notes`, so the Special request typed on
+//      the B2C item finally reaches the van job order and the boat job sheet — until now neither box
+//      crossed over and a private charter booked with "เรือสบายดีทัวร์" in the special request arrived
+//      blank. 44 items on file carry one. Migration 022 seeds b2coverride='["notes"]' on every b2c_
+//      booking whose notes ops had already typed by hand (3 rows), so this back-fill adds the field
+//      where it was empty and never overwrites an ops note.
+const B2C_MAP_VER = 23;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -658,6 +664,24 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
     pickupAreaId: areaId,
     pickupArea: areaName,
     dropoffHotelName: dropoffLoc,
+    // §b2cSreq (2026-09-02): the two free-text boxes B2C sales fills in on the item — "Special request
+    // (sent to ops team)" and "Internal remark". Neither used to cross over at all, so a private
+    // charter booked with the boat name typed into the special request arrived here blank.
+    //
+    // They land in `notes`, NOT in `note` below: `notes` is the field ops actually reads — it prints as
+    // the Special request on van job orders (vanJobsSreqAuto), as Request on the boat job sheet, and as
+    // "Notes / special request" on the booking detail. `note` is the B2C breadcrumb line and shows only
+    // inside the booking card. One field for both, because ops has nowhere else to put the remark; the
+    // "Remark:" prefix keeps the two readable apart.
+    //
+    // B2C sales very often paste the same text into both boxes (14 of the 14 remarks on file at the
+    // time of writing repeat their special request verbatim). Appending blindly printed it twice on
+    // the boat job sheet, so an identical remark is dropped rather than echoed.
+    notes: (() => {
+      const sreq = String(h.special_request || '').trim();
+      const rem  = String(h.remark || '').trim();
+      return [sreq, (rem && rem !== sreq) ? 'Remark: ' + rem : ''].filter(Boolean).join('\n');
+    })(),
     note: ['B2C', h.channel_name, String(h.booking_id), B2C_PRODUCT_NAME[h.product_id] || B2C_PRODUCT_NAME[h.route_id] || h.product_id,
            // Show ops the AREA that failed to match, not the hotel — the area is what they need to
            // pick by hand, and naming it makes a missing sb_pickup_areas entry obvious.
@@ -713,6 +737,10 @@ const B2C_ITEM_SOURCE = `(
          COALESCE(bi.pax_thai,0)::numeric AS pax_thai,
          COALESCE(bi.pax_foreign,0)::numeric AS pax_foreign,
          COALESCE(bi.subtotal,0)::numeric AS subtotal,
+         -- Read through to_jsonb so an older B2C schema without these columns degrades to NULL
+         -- instead of erroring the whole item source out (same guard the bookings enrichment uses).
+         to_jsonb(bi)->>'special_request' AS special_request,
+         to_jsonb(bi)->>'remark'          AS remark,
          to_jsonb(bi.details) AS details,
          'booking_items'::text AS _sync_source
   FROM ${b2cT('booking_items')} bi
@@ -729,6 +757,8 @@ const B2C_ITEM_SOURCE = `(
          CASE WHEN COALESCE(it.obj->>'paxThai','0')   ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (it.obj->>'paxThai')::numeric   ELSE 0 END AS pax_thai,
          CASE WHEN COALESCE(it.obj->>'paxForeign','0')~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (it.obj->>'paxForeign')::numeric ELSE 0 END AS pax_foreign,
          CASE WHEN COALESCE(it.obj->>'subtotal','0')  ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (it.obj->>'subtotal')::numeric  ELSE 0 END AS subtotal,
+         COALESCE(it.obj->>'specialRequest', it.obj->>'special_request') AS special_request,
+         it.obj->>'remark' AS remark,
          it.obj AS details,
          'bookings.items'::text AS _sync_source
   FROM ${b2cT('bookings')} b
