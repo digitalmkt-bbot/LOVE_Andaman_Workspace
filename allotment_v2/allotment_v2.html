@@ -9788,12 +9788,9 @@ function bsCleanupLog(bid){
     const cur=filtered[i],nxt=filtered[i+1];
     if(!nxt.from)continue;
     if(!cur.to||cur.to>=nxt.from){
-      // Don't trim if cur is fixing linked to active MJ AND nxt is available (anomaly)
-      if(isLinkedToActiveMj(cur) && nxt.s==='available'){
-        // Remove the conflicting available entry instead
-        nxt._remove = true;
-        continue;
-      }
+      /* §bsFuture · ของเดิมลบ available ทิ้งแล้วเก็บช่วงซ่อมไว้
+         แต่ available ที่มาทีหลังคือคนบอกว่าเรือกลับมาใช้ได้แล้ว ทั้งที่ใบซ่อมยังไม่ปิด
+         (รออะไหล่ / รอเอกสาร) · เกิดขึ้นจริงตลอด · ให้ปิดช่วงซ่อมแทน ไม่ลบของคน */
       cur.to=dayBefore(nxt.from);
       if(cur.to<cur.from){cur._remove=true;}
     }
@@ -9807,9 +9804,11 @@ function bsCleanupLog(bid){
       last.to = last.from;
     }
   }
-  // Force reopen any fixing log linked to active MJ
-  final.forEach(e=>{
-    if(isLinkedToActiveMj(e)){
+  /* Force reopen any fixing log linked to active MJ
+     §bsFuture · เปิดค้างได้เฉพาะอันสุดท้ายของไทม์ไลน์ · ถ้ามีสถานะอื่นตามหลังอยู่
+     แล้วยังดันเปิดคืน ช่วงซ่อมจะคร่อมทับสถานะที่คนตั้งไว้ทีหลังทั้งหมด */
+  final.forEach((e,i)=>{
+    if(isLinkedToActiveMj(e) && i===final.length-1){
       e.to = null;
     }
   });
@@ -19357,7 +19356,16 @@ function flLoad(){
     localStorage.setItem(LS_KEY,JSON.stringify(d));
   }
   
-  // Hook: Boat status sync v3 — FORCE reopen + dedupe + fix overlap (runs every load)
+  /* Hook: Boat status sync v3 — FORCE reopen + dedupe + fix overlap (runs every load)
+     §bsFuture · ตัวนี้เคยลบสถานะที่คนตั้งไว้ล่วงหน้าทิ้งทุกครั้งที่โหลดหน้า
+       ใบซ่อมที่ยังเปิดอยู่มี to:null คือ "ยังไม่รู้ว่าจบเมื่อไร" ไม่ใช่ "ซ่อมตลอดกาล"
+       แต่โค้ดเดิมถือว่าทุกวันหลัง startDate อยู่ในช่วงซ่อม แล้ว _remove ทิ้ง
+       Aluminous2 · MJ-095 เริ่ม 1 ก.ย. ยังเปิดอยู่ · ตั้ง available 8 ก.ย. ไว้
+       รีเฟรชทีเดียวหาย เพราะ 09-08 >= 09-01 · ซ้ำร้าย FORCE reopen เปิดช่วงซ่อมคืนด้วย
+       ตั้งใหม่กี่รอบก็โดนล้างทุกรอบ
+     ทางที่ถูก · available ที่เริ่มหลังวันเริ่มซ่อม = คนบอกว่าเรือกลับมาใช้ได้วันนั้น
+       ให้ปิดช่วงซ่อมที่วันก่อนหน้าแทน · ห้ามลบของที่คนกรอกไว้เอง
+       ใบซ่อมยังเปิดค้างได้ตามจริง (รออะไหล่ / รอเอกสาร) โดยที่เรือกลับมาวิ่งแล้ว */
   if(d.fleet_maintenance && d.boats){
     let anyChanged = false;
     d.fleet_maintenance.forEach(mj=>{
@@ -19366,6 +19374,11 @@ function flLoad(){
       const boat = d.boats.find(b=>b.id===mj.boatId);
       if(!boat || !boat.log) return;
       const startDate = mj.startDate || TODAY_STR;
+      /* §bsFuture · มีใครตั้งไว้ไหมว่าเรือกลับมาใช้ได้วันไหน (หลังวันเริ่มซ่อม)
+         เอาอันที่เร็วที่สุด · อันนั้นคือวันปิดช่วงซ่อม */
+      const nextAvail = boat.log
+        .filter(e => e && e.s === 'available' && e.from && e.from > startDate)
+        .sort((a,z) => String(a.from).localeCompare(String(z.from)))[0] || null;
       
       // 1. Find ALL fixing logs that reference this MJ (in note)
       const allFixingForMj = boat.log.filter(e => 
@@ -19382,8 +19395,14 @@ function flLoad(){
       } else {
         // Keep the FIRST one (typically most descriptive), reopen it
         const keep = allFixingForMj[0];
-        // REOPEN if to !== null (including to===from "closed single-day" case)
-        if(keep.to !== null){
+        /* §bsFuture · เปิดค้างไว้ได้เฉพาะตอนที่ยังไม่มีใครบอกว่าเรือกลับมาวันไหน
+           ถ้ามีวันกลับมาแล้ว ต้องปิดที่วันก่อนหน้า ไม่ใช่ดันเปิดคืนทุกรอบ */
+        if(nextAvail){
+          const _p=String(nextAvail.from).split('-').map(Number);
+          const _d=new Date(_p[0], _p[1]-1, _p[2]); _d.setDate(_d.getDate()-1);
+          const _want=`${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;
+          if(keep.to !== _want && _want >= (keep.from||startDate)){ keep.to = _want; anyChanged = true; }
+        } else if(keep.to !== null){
           keep.to = null;
           anyChanged = true;
         }
@@ -19416,16 +19435,12 @@ function flLoad(){
               anyChanged = true;
             }
           }
-          // Case 2: available is entirely within fixing range — mark for removal
-          else if(e.from >= startDate){
-            e._remove = true;
-            anyChanged = true;
-          }
+          /* §bsFuture · Case 2 เดิมลบทิ้งเลย · เอาออก
+             available ที่เริ่มหลังวันเริ่มซ่อมคือ "เรือกลับมาใช้ได้วันนี้"
+             ช่วงซ่อมถูกปิดให้แล้วข้างบน ไม่มีอะไรทับกันอีก
+             เท่ากับตอนนี้ไม่มีทางที่ตัวซิงก์จะลบของที่คนกรอกไว้เอง */
         }
       });
-      
-      // Remove marked
-      boat.log = boat.log.filter(e => !e._remove);
     });
     if(anyChanged){
       localStorage.setItem(LS_KEY,JSON.stringify(d));
