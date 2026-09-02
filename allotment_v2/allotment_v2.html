@@ -50923,8 +50923,10 @@ function ckSharedCSS(scope){
   return ''
   /* §vckFlow · ทั้งแถวเปลี่ยนสีตามสถานะ · ตัวแปรสีมาจาก inline บนแถว
      ต้อง !important เพราะคลาสเดิม (ck-done/ck-lost/ck-late) ทาพื้นไว้แล้ว */
-  +scope+' tr.vst>td{background:var(--vst-bg)!important}'
-  +scope+' tr.vst>td:first-child{box-shadow:inset 4px 0 0 var(--vst-bar)}'
+  +scope+' table.ck-tbl tr.ck-row.vst>td{background:var(--vst-bg)!important}'
+  +scope+' table.ck-tbl tr.ck-row.vst:hover>td{background:var(--vst-chip)!important}'
+  /* ต้องแรงกว่า ck-lost>td:first-child ที่ specificity สูงกว่า ไม่งั้นแถบซ้ายยังเป็นแดงของเดิม */
+  +scope+' table.ck-tbl tr.ck-row.vst>td:first-child{box-shadow:inset 5px 0 0 var(--vst-bar)!important}'
   +scope+' tr.vst .vck-sel{background:var(--vst-chip);border-color:var(--vst-bar);color:var(--vst-ink)}'
   +scope+' tr.vst .vck-nt{color:var(--vst-ink)}'
   +scope+' .vck-sel{border:2px solid #DCD9D1;background:#fff;color:#5F5E5A;border-radius:9px;'
@@ -52338,7 +52340,9 @@ function vckDark(c,f){ var a=vckRGB(c); return '#'+_vckHx(a[0]*f)+_vckHx(a[1]*f)
 /* ตัวแปรสีของสถานะหนึ่ง · เอาไปวางเป็น inline style บนแถว */
 function vckStVars(k){
   var c=vckColors()[k]||vckStDef(k).c;
-  return '--vst-bar:'+c+';--vst-bg:'+vckTint(c,0.90)+';--vst-chip:'+vckTint(c,0.80)+';--vst-ink:'+vckDark(c,0.60);
+  /* §vckFix · เดิมจาง 90% แล้วแถว No-show/CXL ซีดกว่าของเดิม (#F6CFCB) จนดูเหมือนสีไม่เปลี่ยน
+     0.82 ให้ความเข้มใกล้ของเดิม และยังอ่านตัวหนังสือดำบนพื้นได้สบาย */
+  return '--vst-bar:'+c+';--vst-bg:'+vckTint(c,0.82)+';--vst-chip:'+vckTint(c,0.72)+';--vst-ink:'+vckDark(c,0.58);
 }
 
 /* ── สถานะของแถว · อ่านจากของเดิมเป็นหลัก ไม่เก็บซ้ำ ── */
