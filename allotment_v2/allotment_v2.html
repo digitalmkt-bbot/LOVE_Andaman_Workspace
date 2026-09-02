@@ -50939,10 +50939,10 @@ function ckSharedCSS(scope){
     +'border:1px solid #E7E4DC;border-radius:12px;padding:8px 12px;margin:0 0 9px}'
   +scope+' .vck-lgbar .t{font-size:11.5px;font-weight:700;color:#5F5E5A}'
   /* แบบพับ · เหลือแค่ปุ่มเล็ก ๆ ไม่กินที่ */
-  +scope+' .vck-lgbar-min{display:inline-flex;padding:3px 5px;border-radius:999px;margin-bottom:9px}'
-  +scope+' .vck-lgt{border:none;background:none;color:#8a8a82;font:700 11.5px inherit;font-family:inherit;'
-    +'cursor:pointer;padding:2px 8px;border-radius:999px}'
-  +scope+' .vck-lgt:hover{background:#F1EFE8;color:#3a3a36}'
+  +scope+' .vck-lgt{border:1px solid #E4E1D9;background:#fff;color:#8a8a82;'
+    +'font:700 10.5px inherit;font-family:inherit;cursor:pointer;padding:3px 10px;'
+    +'border-radius:999px;white-space:nowrap;margin-left:10px;flex:none}'
+  +scope+' .vck-lgt:hover{border-color:#B9B5AA;background:#FBFAF7;color:#3a3a36}'
   +scope+' .vck-lgb{display:inline-flex;align-items:center;gap:6px;border:1.5px solid #E4E1D9;background:#fff;'
     +'border-radius:999px;padding:3px 11px 3px 4px;font:600 11px inherit;font-family:inherit;color:#4a4a45;cursor:pointer}'
   +scope+' .vck-lgb:hover{border-color:#B9B5AA;background:#FBFAF7}'
@@ -51264,7 +51264,7 @@ function ckJump(id){
 }
 // การ์ดรถ/เรือของเส้นทางที่กำลังดูอยู่ · สร้างจาก groups ก้อนเดียวกับตาราง → ตัวเลขตรงกันเสมอ
 // กดแล้วเด้งไปที่หัวคันนั้นในตาราง
-function ckUnitBar(groups, gkeys, kind, anchorPrefix){
+function ckUnitBar(groups, gkeys, kind, anchorPrefix, tailHtml){
   var e=ckEsc, isPier=(kind==='pier');
   if(!gkeys.length) return '';
   var chips=gkeys.map(function(k){
@@ -51298,7 +51298,8 @@ function ckUnitBar(groups, gkeys, kind, anchorPrefix){
   }).join('');
   return '<div class="ck-unitbar">'
     +'<span class="ck-unitbar-lbl">'+(isPier?'&#128676; เรือวันนี้':'&#128656; รถวันนี้')+'</span>'+chips
-    +'<span style="margin-left:auto;font-size:10.5px;color:#a5a49d;white-space:nowrap">คลิกการ์ดเพื่อเด้งไปที่'+(isPier?'ลำ':'คัน')+'นั้น</span></div>';
+    +'<span style="margin-left:auto;font-size:10.5px;color:#a5a49d;white-space:nowrap">คลิกการ์ดเพื่อเด้งไปที่'+(isPier?'ลำ':'คัน')+'นั้น</span>'
+    +(tailHtml||'')+'</div>';
 }
 /* §vckFlow · dropdown เลือกสถานะ · สีของกล่องเปลี่ยนตามสถานะที่เป็นอยู่
    'รอ' กับ 'ไปเจอที่ท่า' ไม่ใช่ตัวเลือก · เป็นผลจากสิ่งที่เกิดขึ้น จึงโชว์เป็นบรรทัดแรกที่เลือกไม่ได้ */
@@ -52318,8 +52319,10 @@ var VCK_STATES=[
   {k:'noshow',  lbl:'No show',     full:'ไม่มา',                       c:'#D9534F', ic:'⚠', pick:true },
   {k:'pier',    lbl:'ไปเจอที่ท่า',  full:'ไปเองที่ท่า · ยังถือว่าเดินทาง', c:'#A855F7', ic:'🛥', pick:false}
 ];
-var VCK_SEL_LBL={standby:'Standby (สแตนบาย)', pending:'Pending (ตามแขก)',
-                 checkin:'Check - in (เช็คอิน)', cxl:'CXL (ยกเลิกหน้างาน)', noshow:'No show (ไม่มา)'};
+/* ป้ายใน dropdown · เอาคำไทยในวงเล็บออก ช่องแคบอยู่แล้ว วงเล็บดันชื่อจริงจนอ่านไม่ทัน
+   ความหมายเต็มของแต่ละสถานะอยู่ที่แถบสีและช่องบันทึกหน้างานแล้ว */
+var VCK_SEL_LBL={standby:'Standby', pending:'Pending',
+                 checkin:'Check-in', cxl:'CXL', noshow:'No show'};
 function vckStDef(k){ for(var i=0;i<VCK_STATES.length;i++){ if(VCK_STATES[i].k===k) return VCK_STATES[i]; } return VCK_STATES[0]; }
 
 /* ── สี · เก็บเป็นสตริง JSON เหมือน pck_svc_colors · ตั้งครั้งเดียวใช้ทั้งบริษัท ── */
@@ -52504,13 +52507,17 @@ function vckLegendToggle(){
   try{ localStorage.setItem('vck_legend', _VCK_LG?'1':'0'); }catch(_){}
   if(typeof renderVanCheckin==='function') renderVanCheckin();
 }
-function vckLegend(){
-  var C=vckColors();
-  var tog='<button class="vck-lgt" onclick="vckLegendToggle()" title="'
+/* ปุ่มกาง/พับ ไปฝากไว้ท้ายแถบ "รถวันนี้" · ไม่กินบรรทัดของตัวเอง
+   ตอนพับ vckLegend() คืนสตริงว่าง แถวนั้นหายไปทั้งแถว ได้พื้นที่คืนเต็ม ๆ */
+function vckLegendBtn(){
+  return '<button class="vck-lgt" onclick="vckLegendToggle()" title="'
     +(_VCK_LG?'ซ่อนแถบสี':'ตั้งสีของแต่ละสถานะ')+'">'
     +(_VCK_LG?'&#9662;':'&#9656;')+' แถบสี</button>';
-  if(!_VCK_LG) return '<div class="vck-lgbar vck-lgbar-min">'+tog+'</div>';
-  return '<div class="vck-lgbar">'+tog
+}
+function vckLegend(){
+  if(!_VCK_LG) return '';
+  var C=vckColors();
+  return '<div class="vck-lgbar">'
    +VCK_STATES.map(function(s){
       var c=C[s.k]||s.c;
       return '<button class="vck-lgb" onclick="vckColorOpen(\''+s.k+'\')" title="กดเพื่อเปลี่ยนสีของสถานะนี้">'
@@ -52956,7 +52963,7 @@ function renderVanCheckin(){
     +ckDayHeader({date:date, shiftFn:'vanCkDateShift', todayFn:'vanCkToday', pickFn:'vckPickDay',
                   kpiHtml:kpi, pillsHtml:pills.html, totalPax:pills.total,
                   totalBreak:(pills.lost>0?('เดินทางจริง · จอง '+pills.booked+' หาย '+pills.lost):(pills.dA+'A·'+pills.dC+'C·'+pills.dI+'I·'+pills.dF+'F'))})
-    +ckUnitBar(groups, gkeys, 'van', 'vckg-')
+    +ckUnitBar(groups, gkeys, 'van', 'vckg-', vckLegendBtn())
     +vckLegend()
     +'<div class="ck-card vck-card"><div class="vck-tw"><table class="ck-tbl vck-sheet"><thead><tr>'
     +'<th>Voucher</th><th>Agency</th><th>Submitted by</th><th>Customer (lead) · โทร</th><th class="ck-c">AD</th><th class="ck-c">CHD</th><th class="ck-c">INF</th><th class="ck-c">FOC</th><th>Time</th><th>Pickup</th><th class="ck-c">Room</th><th>Pickup area</th><th>Special request</th>'
