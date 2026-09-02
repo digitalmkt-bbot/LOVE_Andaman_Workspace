@@ -52355,13 +52355,22 @@ function vckStVars(k){
 /* ── สถานะของแถว · อ่านจากของเดิมเป็นหลัก ไม่เก็บซ้ำ ── */
 function vckRowSt(ck){
   ck=ck||{};
+  var ev=(typeof ckEvLive==='function')?ckEvLive(ck.events):[], last=null;
+  for(var i=ev.length-1;i>=0;i--){ if(ev[i] && +ev[i].pax>0){ last=ev[i]; break; } }
+  var evSt=null;
+  if(last) evSt=(last.type==='cxl') ? 'cxl'
+    : ((typeof ckExpectAtPier==='function' && ckExpectAtPier(last.reasonCode)) ? 'pier' : 'noshow');
+  /* §vckSt2 · ck.at ห้ามชนะแบบไม่มีเงื่อนไข
+     ckEvSave() เก็บ at เดิมไว้เสมอ (ตั้งใจ · ประวัติว่าเคยติ๊กขึ้นรถต้องไม่หาย)
+     ผลคือแถวที่กด No-show จนไม่เหลือใครขึ้นรถ ยังอ่านว่า "ขึ้นรถแล้ว"
+     dropdown เด้งกลับเป็น Check-in ทันทีที่เลือก และสีที่ตั้งให้ No-show ไม่มีวันขึ้น
+     ของจริงในระบบมีแบบนี้เยอะ (จอง 1 · ขึ้นจริง 0 · No-show 1)
+     เกณฑ์ · ไม่เหลือใครขึ้นรถเลย = สถานะของแถวคือเหตุการณ์นั้น
+             ยังเหลือคนขึ้น = ขึ้นรถแล้ว (บางส่วนไม่มา ไปโชว์เป็นป้ายในแถว) */
+  var actual=(ck.actualPax!=null)?(+ck.actualPax||0):null;
+  if(evSt && actual!==null && actual<=0) return evSt;
   if(ck.at) return 'checkin';
-  var ev=(typeof ckEvLive==='function')?ckEvLive(ck.events):[];
-  for(var i=ev.length-1;i>=0;i--){
-    var x=ev[i]; if(!x || !(+x.pax>0)) continue;
-    if(x.type==='cxl') return 'cxl';
-    return (typeof ckExpectAtPier==='function' && ckExpectAtPier(x.reasonCode)) ? 'pier' : 'noshow';
-  }
+  if(evSt) return evSt;
   if(ck.flow==='pending') return 'pending';
   if(ck.flow==='standby') return 'standby';
   return 'wait';
@@ -52377,9 +52386,10 @@ function vckRowNote(ck, st, arrAt){
   if(st==='cxl'||st==='noshow'||st==='pier'){
     if(!last) return '';
     var head=(st==='cxl')?'ยกเลิกหน้างาน':(st==='pier'?'ไปเองที่ท่า':'ไม่มา');
+    var pre=(ck.at&&st!=='pier')?'ไม่เหลือคนขึ้นรถ · ':'';
     var rl=(last.reasonCode&&typeof ckReasonLabel==='function')?ckReasonLabel(last.reasonCode):'';
     var tries=(typeof ckEvTries==='function')?ckEvTries(ck.events).length:0;
-    return head+(last.at?(' '+e(last.at)):'')
+    return pre+head+(last.at?(' '+e(last.at)):'')
       +(rl?(' · '+e(rl)):'')+(last.note?(' · '+e(last.note)):'')
       +(st==='pier'?' · รอหน้าท่ายืนยัน':'')
       +(tries>0?(' · วนกลับแล้ว '+tries+' รอบ'):'');
@@ -52405,7 +52415,9 @@ function vckStatus(bkId,date,kind,val){
   if(val==='cxl'||val==='noshow'){ ckEventOpen(bkId,date,kind,(val==='cxl'?'cxl':'no_show')); return; }
   if(val==='standby'||val==='pending'){
     /* เคยติ๊กขึ้นรถไว้แล้วแต่เลือกย้อนกลับ · ต้องถอนติ๊กก่อน ไม่งั้นสถานะกับยอดจะขัดกัน */
-    if(cur.at){ if(!confirm('แถวนี้ติ๊กขึ้นรถไว้แล้ว · ถอนติ๊กแล้วเปลี่ยนเป็น "'+vckStDef(val).lbl+'"?')) { ckAfter(kind); return; }
+    if(cur.at){ if(!confirm('แถวนี้ติ๊กขึ้นรถไว้แล้ว'+String.fromCharCode(10)
+        +'ถอนติ๊กแล้วเปลี่ยนเป็น "'+vckStDef(val).lbl+'" ใช่ไหม?'+String.fromCharCode(10,10)
+        +'ยอดขึ้นจริงกับประวัติที่บันทึกไว้ยังอยู่ครบ')) { ckAfter(kind); return; }
       ckToggle(bkId,date,kind); }
     vckSetFlow(bkId,date,kind,val); ckPersist(); ckAfter(kind); return;
   }
