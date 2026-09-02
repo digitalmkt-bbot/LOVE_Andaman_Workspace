@@ -50938,6 +50938,11 @@ function ckSharedCSS(scope){
   +scope+' .vck-lgbar{display:flex;align-items:center;gap:7px;flex-wrap:wrap;background:#fff;'
     +'border:1px solid #E7E4DC;border-radius:12px;padding:8px 12px;margin:0 0 9px}'
   +scope+' .vck-lgbar .t{font-size:11.5px;font-weight:700;color:#5F5E5A}'
+  /* แบบพับ · เหลือแค่ปุ่มเล็ก ๆ ไม่กินที่ */
+  +scope+' .vck-lgbar-min{display:inline-flex;padding:3px 5px;border-radius:999px;margin-bottom:9px}'
+  +scope+' .vck-lgt{border:none;background:none;color:#8a8a82;font:700 11.5px inherit;font-family:inherit;'
+    +'cursor:pointer;padding:2px 8px;border-radius:999px}'
+  +scope+' .vck-lgt:hover{background:#F1EFE8;color:#3a3a36}'
   +scope+' .vck-lgb{display:inline-flex;align-items:center;gap:6px;border:1.5px solid #E4E1D9;background:#fff;'
     +'border-radius:999px;padding:3px 11px 3px 4px;font:600 11px inherit;font-family:inherit;color:#4a4a45;cursor:pointer}'
   +scope+' .vck-lgb:hover{border-color:#B9B5AA;background:#FBFAF7}'
@@ -51377,7 +51382,7 @@ function ckRowHtml(r, date, kind, extraHtml){
    +agCell
    +'<td>'+(by?'<span class="ck-by" title="ผู้บันทึก booking · '+e(by)+'">'+e(by)+'</span>':'<span class="ck-dim">—</span>')+'</td>'
    +'<td><span class="ck-lead" style="background:'+((b.ops&&b.ops.reconfirm&&b.ops.reconfirm.status&&typeof rcStateColor==='function')?rcStateColor(b.ops.reconfirm.status):'#F6E27A')+'">'+e(b.leadPax||'—')+'</span>'
-     +(phone?'<div><a class="ck-tel" href="tel:'+e(String(phone).split(/[,;\/]|\sหรือ\s/)[0].replace(/[^0-9+]/g,''))+'" onclick="event.stopPropagation()" title="โทรหาลูกค้า · '+e(phone)+'">&#128222; '+e(phone)+'</a></div>':'')+'</td>'
+     +(phone?'<div><a class="ck-tel" href="tel:'+e(String(phone).split(/[,;\/]|\sหรือ\s/)[0].replace(/[^0-9+]/g,''))+'" onclick="event.stopPropagation()" title="โทรหาลูกค้า · '+e(phone)+'"><span class="ck-telic">&#128222;</span> '+e(phone)+'</a></div>':'')+'</td>'
    +(function(){ var L=(typeof ckLostByType==='function')?ckLostByType(b,date):null;
        return ['ad','chd','inf','foc'].map(function(k){
          var bkd=pb[k]||0;
@@ -52491,9 +52496,21 @@ function vckColorApply(){ if(!_vckPick) return; vckColorSet(_vckPick.k,_vckPick.
   vckColorClose(); if(typeof renderVanCheckin==='function') renderVanCheckin(); }
 function vckColorClose(){ _vckPick=null; if(typeof ckReasonClose==='function') ckReasonClose(); }
 /* ── แถบสีใต้หัวหน้า · กดเพื่อเปลี่ยน ── */
+/* แถบสีเป็นของที่ตั้งครั้งเดียวแล้วแทบไม่แตะอีก · กางค้างไว้กินที่หน้าจอทุกวัน
+   พับเก็บเป็นค่าเริ่มต้น จำสถานะไว้ในเครื่องคนใช้ ใครอยากกางค้างก็กางได้ */
+var _VCK_LG=(function(){ try{ return localStorage.getItem('vck_legend')==='1'; }catch(_){ return false; } })();
+function vckLegendToggle(){
+  _VCK_LG=!_VCK_LG;
+  try{ localStorage.setItem('vck_legend', _VCK_LG?'1':'0'); }catch(_){}
+  if(typeof renderVanCheckin==='function') renderVanCheckin();
+}
 function vckLegend(){
   var C=vckColors();
-  return '<div class="vck-lgbar"><span class="t">แถบสี</span>'
+  var tog='<button class="vck-lgt" onclick="vckLegendToggle()" title="'
+    +(_VCK_LG?'ซ่อนแถบสี':'ตั้งสีของแต่ละสถานะ')+'">'
+    +(_VCK_LG?'&#9662;':'&#9656;')+' แถบสี</button>';
+  if(!_VCK_LG) return '<div class="vck-lgbar vck-lgbar-min">'+tog+'</div>';
+  return '<div class="vck-lgbar">'+tog
    +VCK_STATES.map(function(s){
       var c=C[s.k]||s.c;
       return '<button class="vck-lgb" onclick="vckColorOpen(\''+s.k+'\')" title="กดเพื่อเปลี่ยนสีของสถานะนี้">'
@@ -52694,6 +52711,9 @@ function vckSheetCSS(){
     +'line-height:1.2;font-size:11.5px}'
   +S+' .ck-lead{max-width:150px;padding:1px 7px;font-size:11.5px}'
   +S+' .ck-tel{margin:0 0 0 6px;font-size:10.5px;max-width:none;white-space:nowrap;font-weight:600}'
+  /* หน้ารถไม่ต้องมีอิโมจิโทรศัพท์ · ทั้งคอลัมน์เป็นเบอร์อยู่แล้ว ไม่ต้องมีไอคอนย้ำ
+     ซ่อนแทนที่จะลบ เพราะ ckRowHtml ใช้ร่วมกับหน้าท่า */
+  +'#vancheckin-host .ck-telic{display:none}'
   +S+' .ck-pick{max-width:300px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
     +'line-height:1.2;font-size:12.5px;font-weight:600;color:#15201a}'
   /* overflow ต้องเป็น visible ไม่งั้นแถวไม่ยอมสูงขึ้นตามบรรทัดที่สอง ตัดหายเหมือนเดิม */
@@ -52861,7 +52881,7 @@ function renderVanCheckin(){
     var info=[];
     if(rd.plate) info.push('<span style="display:inline-flex;align-items:center;gap:4px"><span style="font-size:9px;color:#a3a39b;text-transform:uppercase;letter-spacing:.03em">ทะเบียน</span><b style="font-weight:700;color:#3a3a36;font-family:\'DM Mono\',monospace">'+e(rd.plate)+'</b>'+pin(rd.plateOverride)+'</span>');
     if(rd.driver) info.push('<span style="display:inline-flex;align-items:center;gap:4px"><span style="font-size:9px;color:#a3a39b;text-transform:uppercase;letter-spacing:.03em">คนขับ</span><b style="font-weight:700;color:#3a3a36">'+e(rd.driver)+'</b>'+pin(rd.override&&!rd.plateOverride)+'</span>');
-    if(rd.phone) info.push('<a href="tel:'+e(rd.phone)+'" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;text-decoration:none;color:#185FA5"><span style="font-size:11px">&#128222;</span><b style="font-weight:700;font-family:\'DM Mono\',monospace">'+e(rd.phone)+'</b></a>');
+    if(rd.phone) info.push('<a href="tel:'+e(rd.phone)+'" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;text-decoration:none;color:#185FA5"><span style="font-size:9px;color:#a3a39b;text-transform:uppercase;letter-spacing:.03em">เบอร์</span><b style="font-weight:700;font-family:\'DM Mono\',monospace">'+e(rd.phone)+'</b></a>');
     var infoHtml=info.length?'<span style="display:inline-flex;align-items:center;gap:13px;flex-wrap:wrap">'+info.join('<span style="width:1px;height:12px;background:#dcdad3"></span>')+'</span>':'';
     var soft=(typeof _bkV2Soft==='function')?_bkV2Soft(c[0],0.92):c[0];
     var gt=ckGroupTime(g.rows, date);
@@ -52899,7 +52919,7 @@ function renderVanCheckin(){
       var agName=ag?(ag.name||ag.code||'—'):(b.channel||'walk-in'), pb=ckPaxBreak(t.pax);
       var agColor=(b.agentId&&typeof bkV2AgentColor==='function')?bkV2AgentColor(b.agentId):((ag&&ag.color)||'#64748B');
       var pa=b.pickupArea||(b.pickupAreaId&&typeof bkV2GetArea==='function'?((bkV2GetArea(b.pickupAreaId)||{}).name||''):'')||'';
-      warnHtml+='<tr class="ck-unassigned" style="opacity:.75"><td><span class="ck-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'+((typeof laAgencyMark==='function'&&laAgencyMark(b,20))?('<td style="padding:0">'+laAgencyMark(b,20)+'</td>'):b.agentId?('<td style="padding:0"><div style="background:'+agColor+';color:'+((typeof bkV2ContrastInk==='function')?bkV2ContrastInk(agColor):'#fff')+';margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">'+e(agName)+'</div></td>'):('<td><span style="color:#8a8a82;font-weight:600">'+e(agName)+'</span></td>'))+'<td>'+(b.createdBy?('<span class="ck-by">'+e(b.createdBy)+'</span>'):'<span class="ck-dim">—</span>')+'</td><td><span class="ck-lead" style="background:#F6E27A">'+e(b.leadPax||'—')+'</span>'+((b.leadPhone||b.phone||'')?('<div><a class="ck-tel" href="tel:'+e(String(b.leadPhone||b.phone).split(/[,;\/]/)[0].replace(/[^0-9+]/g,''))+'">&#128222; '+e(b.leadPhone||b.phone)+'</a></div>'):'')+'</td><td class="ck-c">'+(pb.ad||0)+'</td><td class="ck-c">'+(pb.chd||0)+'</td><td class="ck-c">'+(pb.inf||0)+'</td><td class="ck-c">'+(pb.foc||0)+'</td><td class="ck-mono">'+e(r.O.pickupTimeFinal||t.pickupTime||'—')+'</td><td><span class="ck-pick">'+e(b.hotelName||b.pickup||'—')+'</span></td><td class="ck-c ck-mono">'+e(b.roomNo||b.roomNumber||'—')+'</td><td>'+(pa?'<span class="ck-area">'+e(pa)+'</span>':'<span class="ck-dim">—</span>')+'</td><td>'+(((typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim()))?('<span class="ck-sreq">'+e((typeof vanJobsSreqFinal==='function')?vanJobsSreqFinal(b):(b.notes||''))+'</span>'):'<span class="ck-dim">—</span>')+'</td><td class="ck-c ck-in" style="border-left:2px solid #EBD9BE;color:#b0aea6">—</td><td class="ck-in"></td><td class="ck-c ck-in" style="color:#b0aea6">—</td><td class="ck-in"></td></tr>';
+      warnHtml+='<tr class="ck-unassigned" style="opacity:.75"><td><span class="ck-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'+((typeof laAgencyMark==='function'&&laAgencyMark(b,20))?('<td style="padding:0">'+laAgencyMark(b,20)+'</td>'):b.agentId?('<td style="padding:0"><div style="background:'+agColor+';color:'+((typeof bkV2ContrastInk==='function')?bkV2ContrastInk(agColor):'#fff')+';margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">'+e(agName)+'</div></td>'):('<td><span style="color:#8a8a82;font-weight:600">'+e(agName)+'</span></td>'))+'<td>'+(b.createdBy?('<span class="ck-by">'+e(b.createdBy)+'</span>'):'<span class="ck-dim">—</span>')+'</td><td><span class="ck-lead" style="background:#F6E27A">'+e(b.leadPax||'—')+'</span>'+((b.leadPhone||b.phone||'')?('<div><a class="ck-tel" href="tel:'+e(String(b.leadPhone||b.phone).split(/[,;\/]/)[0].replace(/[^0-9+]/g,''))+'">'+e(b.leadPhone||b.phone)+'</a></div>'):'')+'</td><td class="ck-c">'+(pb.ad||0)+'</td><td class="ck-c">'+(pb.chd||0)+'</td><td class="ck-c">'+(pb.inf||0)+'</td><td class="ck-c">'+(pb.foc||0)+'</td><td class="ck-mono">'+e(r.O.pickupTimeFinal||t.pickupTime||'—')+'</td><td><span class="ck-pick">'+e(b.hotelName||b.pickup||'—')+'</span></td><td class="ck-c ck-mono">'+e(b.roomNo||b.roomNumber||'—')+'</td><td>'+(pa?'<span class="ck-area">'+e(pa)+'</span>':'<span class="ck-dim">—</span>')+'</td><td>'+(((typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim()))?('<span class="ck-sreq">'+e((typeof vanJobsSreqFinal==='function')?vanJobsSreqFinal(b):(b.notes||''))+'</span>'):'<span class="ck-dim">—</span>')+'</td><td class="ck-c ck-in" style="border-left:2px solid #EBD9BE;color:#b0aea6">—</td><td class="ck-in"></td><td class="ck-c ck-in" style="color:#b0aea6">—</td><td class="ck-in"></td></tr>';
     });
   }
   bodyHtml = warnHtml + bodyHtml;
