@@ -52773,7 +52773,15 @@ function vckSheetCSS(){
   +S+' .ck-stp button{width:20px;height:20px;font-size:13px}'
   +S+' .ck-n{font-size:12.5px}'
   +S+' .vck-sel{padding:2px 4px;font-size:10.5px;max-width:114px;border-width:1.5px;border-radius:6px}'
-  +S+' .vck-nt{max-width:250px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10.5px}'
+  /* บันทึกหน้างาน · เหตุผลจริงยาวกว่าบรรทัดเดียวเสมอ ("ไม่มา 07:02 · อื่นๆ · เลื่อนวัน รออัปเดต")
+     ตัดทิ้งแล้วเหลือแต่ต้นประโยค อ่านไม่ได้ความ · ให้สองบรรทัด จำกัดด้วย max-height */
+  +S+' tr.ck-row>td:nth-child(17){white-space:normal;overflow:hidden;line-height:1.3;'
+    +'width:352px;min-width:352px;max-width:352px;padding:2px 8px}'
+  +S+' thead th:nth-child(17){width:352px;min-width:352px;max-width:352px}'
+  +S+' .vck-nt{max-width:336px;max-height:28px;white-space:normal;overflow:hidden;'
+    +'line-height:1.3;font-size:10.5px;display:inline-block;vertical-align:top}'
+  +S+' .vck-rsn{display:inline !important;margin:0 0 0 5px !important}'
+  +S+' .ck-rsn{font-size:9.5px;padding:1px 7px;max-width:200px;vertical-align:top}'
   +S+' .ck-gtm{font-size:10.5px;padding:2px 8px}'
   /* เวลารับ · เดิมป้ายสถานะอยู่บรรทัดสอง ทำให้แถวสูงไม่เท่ากัน · ดันมาต่อท้ายบรรทัดเดียว */
   +S+' .ck-tm{flex-direction:row;align-items:center;gap:5px;font-size:11px}'
