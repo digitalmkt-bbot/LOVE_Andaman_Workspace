@@ -56785,7 +56785,7 @@ function pckTravelReg(bid){
 }
 
 // แถบแท็บเรือ · ทำหน้าที่เป็นตัวกรองเรือไปในตัว (แทน select เดิมในแถบตัวกรอง)
-function pckBoatTabs(all){
+function pckBoatTabs(all, part){
   var e=ckEsc, m={}, ks=[];
   all.forEach(function(r){
     if(!r.bid) return;
@@ -56818,12 +56818,17 @@ function pckBoatTabs(all){
       if(V && !((taGet(_pckDate,k)||{}).meal)) kitDue++;
     }catch(_){}
   });
-  return h+'<button class="pck-joball" onclick="pckGuideJobOrder(\'all\')" title="ใบงานไกด์ทุกลำของวันนี้ · A4 แนวนอน · 1 ลำ = 1 ใบ">&#128196;</button>'
+  /* §pckHead4 · ปุ่มใบงานแยกออกมาได้ · หัวใหม่เอาไปวางมุมขวาบนของการ์ดเรือ
+     ของเดิมต่อท้ายแถวชิปเรือ พอการ์ดแคบชิปก็ดันปุ่มตกไปอีกบรรทัดทั้งแถว
+     part='tabs' = เอาแค่ชิปเรือ · part='jobs' = เอาแค่ปุ่มใบงาน · ไม่ส่งมา = ได้ทั้งชุดเหมือนเดิม */
+  var jobs='<button class="pck-joball" onclick="pckGuideJobOrder(\'all\')" title="ใบงานไกด์ทุกลำของวันนี้ · A4 แนวนอน · 1 ลำ = 1 ใบ">&#128196;</button>'
     +'<button class="pck-joball go" onclick="goPrint(\'all\')" title="ใบสั่งงานมัคคุเทศก์ + ทะเบียนรายชื่อ ทุกลำ · A4 แนวตั้ง · 1 ลำ = 2 หน้า">&#128220;</button>'
     +'<button class="pck-joball reg" onclick="pckTravelReg(\'all\')" title="ทะเบียนรายชื่ออย่างเดียว · ทุกลำ · A4 แนวตั้ง · 1 ลำ = 1 ใบ (ปุ่มใบสั่งงานออกให้ทั้งสองใบอยู่แล้ว)">&#128203;</button>'
     +'<button class="pck-joball kit" onclick="pckKitchenOpen()" title="ครัว · อาหารกลางวันวันนี้ · จำนวนหัวนับจากคนที่ไปจริง">&#127869;'
-      +(kitDue?('<span class="dot" title="'+kitDue+' ลำยังไม่ได้ส่งรายการให้ร้าน">'+kitDue+'</span>'):'')+'</button>'
-    +'</div>';
+      +(kitDue?('<span class="dot" title="'+kitDue+' ลำยังไม่ได้ส่งรายการให้ร้าน">'+kitDue+'</span>'):'')+'</button>';
+  if(part==='jobs') return '<span class="pkh-jobs">'+jobs+'</span>';
+  if(part==='tabs') return h+'</div>';
+  return h+jobs+'</div>';
 }
 // §ovnCard · หัวกลุ่ม "รถที่พากลับ" ของบล็อกรับกลับ
 //   ขากลับไม่มีการเช็คอินรถ ตัวเลข "เช็คอินรถแล้ว x/y" ของหัวปกติจึงไม่มีความหมาย
@@ -57617,7 +57622,8 @@ function pckHeadHtml(o){
     pckProgAllBtn()+'<span class="pkh-csp"></span>'+pckPierBar(o.date),
     '<div class="pkh-plist" id="pkh-plist">'+pckProgList(o.date)+'</div>');
   B.boats=pckHeadCard('boats','เรือ',
-    '<span class="pkh-selnm">'+ckEsc(pckSelName(o.date))+'</span><span class="pkh-csp"></span>',
+    '<span class="pkh-selnm">'+ckEsc(pckSelName(o.date))+'</span><span class="pkh-csp"></span>'
+      +(o.jobsHtml||''),
     '<div class="pkh-boats">'+(o.boatsHtml||'<span class="pkh-none">— ไม่มีเรือ —</span>')+'</div>');
   B.search=pckHeadCard('search','ค้นหา','', o.searchHtml||'');
   /* ตัวกรองกับมุมมองอยู่ในกล่อง flex เดียวกัน · แยกสองบล็อกเมื่อไหร่ก็กินไปอีกบรรทัด */
@@ -57670,8 +57676,10 @@ function pckHeadCSS(){
   +H+' .pgz{display:inline-flex;align-items:center;gap:3px;border-radius:6px;padding:1px 6px;font-size:8.5px;font-weight:700;white-space:nowrap}'
   +H+' .pgz b{font-size:10px;font-family:\'DM Mono\',monospace}'
   /* ── แถบวันที่ ── */
-  +H+' .pkh{background:#FAF9F6;border-radius:14px;padding:9px;margin-bottom:10px;'
-    +'box-shadow:0 1px 3px rgba(0,0,0,.05)}'
+  /* §pckHead4 · ตรึงหัวไว้ · เลื่อนหน้าลงไปดูแถวท้าย ๆ ยังกดเปลี่ยนวัน/กรอง/ค้นหาได้ทันที
+     ไม่ต้องเลื่อนกลับขึ้นมาทุกครั้ง · z สูงกว่าหัวตารางที่ตรึงในกล่องของมันเอง (z 30/34) */
+  +H+' .pkh{position:sticky;top:0;z-index:60;background:#FAF9F6;border-radius:14px;padding:9px;'
+    +'margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.05),0 6px 14px -8px rgba(15,23,42,.14)}'
   +H+' .pkh-day{display:flex;align-items:center;gap:8px;padding:0 2px 8px}'
   +H+' .pkh-nav{width:24px;height:24px;border-radius:50%;border:1px solid #E1DED5;background:#fff;'
     +'cursor:pointer;font-size:13px;line-height:1;color:#6b6a63;flex:none;font-family:inherit}'
@@ -57689,16 +57697,19 @@ function pckHeadCSS(){
   +H+' .pkh-tot b{font-size:13px}'
   +H+' .pkh-tot .ck-mono{font-size:9.5px;color:#a5a49d}'
   /* ── สองคอลัมน์ ── */
+  /* stretch · การ์ดโปรแกรมยืดเท่าคอลัมน์ขวา รายการจะได้ใช้ที่ว่างที่เหลือทั้งหมด
+     ของเดิม align-items:start ทำให้การ์ดซ้ายเตี้ยแล้วเหลือช่องว่างใต้การ์ดเปล่า ๆ */
   +H+' .pkh-grid{display:grid;grid-template-columns:minmax(300px,1.05fr) minmax(400px,1.35fr);'
-    +'gap:8px;align-items:start}'
+    +'gap:8px;align-items:stretch}'
   +H+' .pkh-col{display:flex;flex-direction:column;gap:8px;min-width:0}'
+  +H+' .pkh-col:first-child>.pkh-card{flex:1;display:flex;flex-direction:column;min-height:0}'
   +H+' .pkh-card{background:#fff;border:1px solid #E7E4DC;border-radius:11px;overflow:hidden}'
   +H+' .pkh-chd{display:flex;align-items:center;gap:7px;padding:5px 9px;border-bottom:1px solid #EFECE4;background:#FBFAF7}'
   +H+' .pkh-chd.plain{display:none}'
   +H+' .pkh-ct{font-size:10px;font-weight:800;color:#6b6a63;letter-spacing:.05em;white-space:nowrap}'
   +H+' .pkh-csp{flex:1}'
   +H+' .pkh-selnm{font-size:10.5px;font-weight:800;color:#2c2c2a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
-  +H+' .pkh-plist{max-height:118px;overflow-y:auto;overscroll-behavior:contain}'
+  +H+' .pkh-plist{flex:1;min-height:96px;max-height:none;overflow-y:auto;overscroll-behavior:contain}'
   +H+' .pkh-plist::-webkit-scrollbar{width:6px}'
   +H+' .pkh-plist::-webkit-scrollbar-thumb{background:#DAD6CC;border-radius:3px}'
   +H+' .pkh-boats{padding:5px 8px}'
@@ -57708,6 +57719,9 @@ function pckHeadCSS(){
   +H+' .pkh-card .pcs-bar{margin:0;padding:0 9px 7px}'
   +H+' .pkh-card .pck-btabs{margin:0;padding:0;border:0;background:none;box-shadow:none}'
   +H+' .pkh-card .ck-unitbar-lbl{display:none}'
+  /* ปุ่มใบงานมุมขวาบนของการ์ดเรือ */
+  +H+' .pkh-jobs{display:inline-flex;gap:4px;flex:none;margin-left:6px}'
+  +H+' .pkh-jobs .pck-joball{width:23px !important;height:23px !important;font-size:11px !important;margin:0 !important}'
   /* ── ปุ่มท่าเรือ ── */
   +H+' .pkh-allbtn{border:1px solid #E6C9C3;background:#fff;color:#A32D2D;border-radius:999px;'
     +'padding:2px 9px;font:800 9.5px inherit;font-family:inherit;cursor:pointer;white-space:nowrap}'
@@ -58270,7 +58284,8 @@ function renderPierCheckin(){
         dayHtml:pckDayBar(date, kpi, pills.total,
           (pills.lost>0?('เดินทางจริง · จอง '+pills.booked+' หาย '+pills.lost)
                        :(pills.dA+'A·'+pills.dC+'C·'+pills.dI+'I·'+pills.dF+'F'))),
-        boatsHtml:pckBoatTabs(all),
+        boatsHtml:pckBoatTabs(all,'tabs'),
+        jobsHtml:pckBoatTabs(all,'jobs'),
         searchHtml:pckFilterBar(all, cnt, nHidden, 'search'),
         chipsHtml:pckFilterBar(all, cnt, nHidden, 'chips')})
     +warnHtml+(sheetHtml||cardsHtml);
