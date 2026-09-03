@@ -51379,6 +51379,12 @@ function vckNoteHtml(ck,st,r,rsn){
   var body = txt ? ('<span class="vck-nt">'+d.ic+' '+txt+'</span>') : '<span class="ck-dim">—</span>';
   return body + (rsn && st!=='wait' ? ('<div class="vck-rsn">'+rsn+'</div>') : '');
 }
+/* §pickShort (2026-09-03) · ชื่อจุดรับที่ลงท้ายด้วย (self-arrive) ยาวเกินช่อง
+   และซ้ำกับสิ่งที่คอลัมน์โซนบอกอยู่แล้ว · ตัดเฉพาะตอนแสดงผล ไม่แตะข้อมูล
+   ในฐานมีเกือบพันใบที่บันทึกชื่อเต็มไว้แล้ว แก้ที่ข้อมูลคือไปไล่แก้ของเก่าทั้งหมด */
+function ckPickShort(v){
+  return String(v==null?'':v).replace(/\s*\((self[\s-]?arrive|มาเอง)\)\s*$/i,'').trim();
+}
 // แถวลูกค้า · ใช้ร่วม 2 หน้า (kind='van'|'pier') · extra = html คอลัมน์เพิ่ม (แทรกก่อนบล็อกเช็คอิน)
 function ckRowHtml(r, date, kind, extraHtml){
   var e=ckEsc, b=r.b, t=r.t;
@@ -51407,6 +51413,7 @@ function ckRowHtml(r, date, kind, extraHtml){
       pArea=_ar.name||pArea;
     }
   }
+  pickup=ckPickShort(pickup)||'—'; pArea=ckPickShort(pArea);   /* §pickShort · ชื่อโซนก็ยาวแบบเดียวกัน */
   var room=b.roomNo||b.room||b.roomNumber||'—';
   var phone=b.leadPhone||b.phone||b.customerPhone||'';
   var by=b.createdBy||'';
@@ -53034,7 +53041,7 @@ function renderVanCheckin(){
       var agName=ag?(ag.name||ag.code||'—'):(b.channel||'walk-in'), pb=ckPaxBreak(t.pax);
       var agColor=(b.agentId&&typeof bkV2AgentColor==='function')?bkV2AgentColor(b.agentId):((ag&&ag.color)||'#64748B');
       var pa=b.pickupArea||(b.pickupAreaId&&typeof bkV2GetArea==='function'?((bkV2GetArea(b.pickupAreaId)||{}).name||''):'')||'';
-      warnHtml+='<tr class="ck-unassigned" style="opacity:.75"><td><span class="ck-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'+((typeof laAgencyMark==='function'&&laAgencyMark(b,20))?('<td style="padding:0">'+laAgencyMark(b,20)+'</td>'):b.agentId?('<td style="padding:0"><div style="background:'+agColor+';color:'+((typeof bkV2ContrastInk==='function')?bkV2ContrastInk(agColor):'#fff')+';margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">'+e(agName)+'</div></td>'):('<td><span style="color:#8a8a82;font-weight:600">'+e(agName)+'</span></td>'))+'<td>'+(b.createdBy?('<span class="ck-by">'+e(b.createdBy)+'</span>'):'<span class="ck-dim">—</span>')+'</td><td><span class="ck-lead" style="background:#F6E27A">'+e(b.leadPax||'—')+'</span>'+((b.leadPhone||b.phone||'')?('<div><a class="ck-tel" href="tel:'+e(String(b.leadPhone||b.phone).split(/[,;\/]/)[0].replace(/[^0-9+]/g,''))+'">'+e(b.leadPhone||b.phone)+'</a></div>'):'')+'</td><td class="ck-c">'+(pb.ad||0)+'</td><td class="ck-c">'+(pb.chd||0)+'</td><td class="ck-c">'+(pb.inf||0)+'</td><td class="ck-c">'+(pb.foc||0)+'</td><td class="ck-mono">'+e(r.O.pickupTimeFinal||t.pickupTime||'—')+'</td><td><span class="ck-pick">'+e(b.hotelName||b.pickup||'—')+'</span></td><td class="ck-c ck-mono">'+e(b.roomNo||b.roomNumber||'—')+'</td><td>'+(pa?'<span class="ck-area">'+e(pa)+'</span>':'<span class="ck-dim">—</span>')+'</td><td>'+(((typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim()))?('<span class="ck-sreq">'+e((typeof vanJobsSreqFinal==='function')?vanJobsSreqFinal(b):(b.notes||''))+'</span>'):'<span class="ck-dim">—</span>')+'</td><td class="ck-c ck-in" style="border-left:2px solid #EBD9BE;color:#b0aea6">—</td><td class="ck-in"></td><td class="ck-c ck-in" style="color:#b0aea6">—</td><td class="ck-in"></td></tr>';
+      warnHtml+='<tr class="ck-unassigned" style="opacity:.75"><td><span class="ck-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'+((typeof laAgencyMark==='function'&&laAgencyMark(b,20))?('<td style="padding:0">'+laAgencyMark(b,20)+'</td>'):b.agentId?('<td style="padding:0"><div style="background:'+agColor+';color:'+((typeof bkV2ContrastInk==='function')?bkV2ContrastInk(agColor):'#fff')+';margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">'+e(agName)+'</div></td>'):('<td><span style="color:#8a8a82;font-weight:600">'+e(agName)+'</span></td>'))+'<td>'+(b.createdBy?('<span class="ck-by">'+e(b.createdBy)+'</span>'):'<span class="ck-dim">—</span>')+'</td><td><span class="ck-lead" style="background:#F6E27A">'+e(b.leadPax||'—')+'</span>'+((b.leadPhone||b.phone||'')?('<div><a class="ck-tel" href="tel:'+e(String(b.leadPhone||b.phone).split(/[,;\/]/)[0].replace(/[^0-9+]/g,''))+'">'+e(b.leadPhone||b.phone)+'</a></div>'):'')+'</td><td class="ck-c">'+(pb.ad||0)+'</td><td class="ck-c">'+(pb.chd||0)+'</td><td class="ck-c">'+(pb.inf||0)+'</td><td class="ck-c">'+(pb.foc||0)+'</td><td class="ck-mono">'+e(r.O.pickupTimeFinal||t.pickupTime||'—')+'</td><td><span class="ck-pick">'+e(ckPickShort(b.hotelName||b.pickup)||'—')+'</span></td><td class="ck-c ck-mono">'+e(b.roomNo||b.roomNumber||'—')+'</td><td>'+(pa?'<span class="ck-area">'+e(ckPickShort(pa))+'</span>':'<span class="ck-dim">—</span>')+'</td><td>'+(((typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim()))?('<span class="ck-sreq">'+e((typeof vanJobsSreqFinal==='function')?vanJobsSreqFinal(b):(b.notes||''))+'</span>'):'<span class="ck-dim">—</span>')+'</td><td class="ck-c ck-in" style="border-left:2px solid #EBD9BE;color:#b0aea6">—</td><td class="ck-in"></td><td class="ck-c ck-in" style="color:#b0aea6">—</td><td class="ck-in"></td></tr>';
     });
   }
   bodyHtml = warnHtml + bodyHtml;
@@ -54668,6 +54675,7 @@ function pckRowHtml(r, date, sheet){
   var pArea=b.pickupArea||(b.pickupAreaId&&typeof bkV2GetArea==='function'?((bkV2GetArea(b.pickupAreaId)||{}).name||''):'')||'';
   /* §pckSplit · แถวของจุดรับย่อย · โรงแรม/โซน เป็นของจุดนั้น ไม่ใช่ของ Lead */
   if(r._pickHotel!=null){ pickup=r._pickHotel||pickup; pArea=r._pickArea||pArea; }
+  pickup=ckPickShort(pickup); pArea=ckPickShort(pArea);   /* §pickShort · ชื่อโซนก็ยาวแบบเดียวกัน */
   var room=b.roomNo||b.room||b.roomNumber||'';
   var by=b.createdBy||'';
   var sreq=(typeof vanJobsSreqFinal==='function')?(vanJobsSreqFinal(b)||''):((b.notes||'').trim());
@@ -76075,8 +76083,6 @@ const _bkV2 = {
   filterDate: null,     // for Tab 2 'bytrip'
   search: '',           // for Tab 3 'all'
   statusFilter: 'all',  // for Tab 3 'all'
-  page: 1,              // §bkPage · Tab 3 'all' · 1-based page · reset to 1 whenever the filter/search changes
-  pageSize: 50,         // §bkPage · rows per page · 'all' renders every match (slow above ~500 rows)
   newBooking: null,     // P2 · draft object when form is open · null when closed
   detailId: null,       // P3 · booking id when detail view is open · null when on list
   editingId: null,      // P3 · booking id when editing existing · used by Edit mode
@@ -80704,17 +80710,6 @@ function bkV2RenderTab3(){
     {k:'rejected', label:'Rejected', n:all.filter(b=>b.status==='rejected').length}
   ];
 
-  // §bkPage · slice before rendering · the row template below does per-row work that is O(SB_BOOKINGS),
-  // so the page size is what actually bounds the cost of this tab, not the DOM node count alone.
-  const pageSize = _bkV2.pageSize === 'all' ? Math.max(filtered.length, 1) : _bkV2.pageSize;
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const page = Math.min(Math.max(1, _bkV2.page || 1), pageCount);   // clamp · a filter change can shrink the list under the current page
-  _bkV2.page = page;
-  const from = (page - 1) * pageSize;
-  const pageRows = filtered.slice(from, from + pageSize);
-  // One id→record map instead of an SB_BOOKINGS.find() per row (that find was O(n) inside an O(n) map).
-  const rawById = new Map((SB_BOOKINGS||[]).map(b => [b.id, b]));
-
   return `
     <div class="bkv2-kpis">
       <div class="bkv2-kpi"><div class="bkv2-kpi-lab">Total</div><div class="bkv2-kpi-val">${kCount}</div><div class="bkv2-kpi-foot">all time</div></div>
@@ -80736,9 +80731,9 @@ function bkV2RenderTab3(){
       <table class="bkv2-tbl">
         <thead><tr><th style="width:120px">BOOKING</th><th>AGENT</th><th>TRIP</th><th>TRAVEL</th><th class="num">PAX</th><th class="num">TOTAL</th><th>STATUS</th></tr></thead>
         <tbody>
-          ${pageRows.map(b => `
+          ${filtered.map(b => `
             <tr onclick="bkV2OpenDetail('${b.id}')">
-              <td><div class="bk-id">${b.id.startsWith('b2c_') ? escapeHTML(bkV2DisplayCode(b)) : b.id}</div><div class="trip-date">created ${bkV2FmtDate(b.createdAt)}</div>${b.id.startsWith('b2c_')?'<span style="display:inline-block;margin-top:3px;background:#E6F7F9;color:#0E7D8A;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.03em">'+bkV2B2CMark(11)+'Love Andaman</span>':''}${(function(){ const _o=rawById.get(b.id); if(!_o||['cancelled','rejected','cancelled_weather'].includes(_o.status)||typeof bkV2FindDuplicateBookings!=='function')return''; const _dd=bkV2FindDuplicateBookings(_o,_o.id); if(!_dd.length)return''; const _vc=_dd.map(x=>x.bk.voucherRef||x.bk.code||x.bk.id).slice(0,3).join(', '); const _rs=[...new Set(_dd.reduce((a,x)=>a.concat(x.reasons),[]))].join(' · '); return `<div title="อาจซ้ำกับ: ${escapeHTML(_vc)} (${escapeHTML(_rs)})" style="display:inline-block;margin-top:3px;background:#FBE9D6;color:#9A5B00;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;cursor:help">&#9888; อาจซ้ำ</div>`; })()}</td>
+              <td><div class="bk-id">${b.id.startsWith('b2c_') ? escapeHTML(bkV2DisplayCode(b)) : b.id}</div><div class="trip-date">created ${bkV2FmtDate(b.createdAt)}</div>${b.id.startsWith('b2c_')?'<span style="display:inline-block;margin-top:3px;background:#E6F7F9;color:#0E7D8A;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.03em">'+bkV2B2CMark(11)+'Love Andaman</span>':''}${(function(){ const _o=(SB_BOOKINGS||[]).find(x=>x.id===b.id); if(!_o||['cancelled','rejected','cancelled_weather'].includes(_o.status)||typeof bkV2FindDuplicateBookings!=='function')return''; const _dd=bkV2FindDuplicateBookings(_o,_o.id); if(!_dd.length)return''; const _vc=_dd.map(x=>x.bk.voucherRef||x.bk.code||x.bk.id).slice(0,3).join(', '); const _rs=[...new Set(_dd.reduce((a,x)=>a.concat(x.reasons),[]))].join(' · '); return `<div title="อาจซ้ำกับ: ${escapeHTML(_vc)} (${escapeHTML(_rs)})" style="display:inline-block;margin-top:3px;background:#FBE9D6;color:#9A5B00;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;cursor:help">&#9888; อาจซ้ำ</div>`; })()}</td>
               <td><div class="agent-name">${escapeHTML(b.agentName)}</div><div class="agent-rt">${escapeHTML(b.agentSub)}</div></td>
               <td><div class="trip-name">${escapeHTML(b.tripSummary)}</div></td>
               <td><div class="trip-date">${bkV2FmtDate(b.travelDate)}</div></td>
@@ -80750,61 +80745,11 @@ function bkV2RenderTab3(){
         </tbody>
       </table>
     `}
-    ${filtered.length === 0 ? '' : bkV2PagerHtml(page, pageCount, from, pageRows.length, filtered.length)}
     <div class="bkv2-foot-hints">
       <span class="gp"><span class="bkv2-kbd">${'⌘'}K</span>commands</span>
       <span class="gp"><span class="bkv2-kbd">C</span>new booking</span>
       <span class="gp"><span class="bkv2-kbd">/</span>search</span>
       <span style="margin-left:auto;font-style:italic">Showing ${filtered.length} of ${kCount}</span>
-    </div>
-  `;
-}
-
-// §bkPage · pager strip · window of page numbers around the current one, with first/last always
-// reachable so 68 pages never turns into 68 buttons.
-function bkV2PagerHtml(page, pageCount, from, shown, total){
-  const size = _bkV2.pageSize;
-  const btn = (label, target, opts={}) => {
-    const on = !!opts.on, dis = !!opts.dis;
-    return `<button ${dis?'disabled':`onclick="bkV2SetPage(${target})"`}
-      style="min-width:30px;height:28px;padding:0 8px;border-radius:7px;cursor:${dis?'default':'pointer'};font-family:inherit;
-        font-size:11.5px;font-weight:${on?800:600};font-variant-numeric:tabular-nums;
-        border:1px solid ${on?'var(--bk-navy,#185FA5)':'#E2E0DA'};
-        background:${on?'var(--bk-navy,#185FA5)':'#fff'};
-        color:${on?'#fff':(dis?'#C4C2BB':'var(--ink-soft,#6b6862)')}">${label}</button>`;
-  };
-  const nums = [];
-  if(pageCount <= 7){
-    for(let i=1;i<=pageCount;i++) nums.push(i);
-  } else {
-    // Fixed-width window that slides and clamps, so page 1 and the last page still show a full run
-    // of neighbours rather than collapsing to "1 2 … 68".
-    const W = 5;
-    let start = Math.max(2, page - Math.floor(W/2));
-    let end   = Math.min(pageCount - 1, start + W - 1);
-    start = Math.max(2, end - W + 1);
-    nums.push(1);
-    if(start > 2) nums.push('…');
-    for(let i=start;i<=end;i++) nums.push(i);
-    if(end < pageCount - 1) nums.push('…');
-    nums.push(pageCount);
-  }
-  const gap = `<span style="color:#C4C2BB;font-size:11.5px;padding:0 2px">…</span>`;
-  return `
-    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:12px 2px 4px">
-      <span style="font-size:11px;color:var(--ink-soft,#6b6862);font-variant-numeric:tabular-nums">
-        ${total === 0 ? '0' : `${from+1}&ndash;${from+shown}`} of ${total}
-      </span>
-      <div style="margin-left:auto;display:flex;align-items:center;gap:5px;flex-wrap:wrap">
-        ${btn('&lsaquo; Prev', page-1, {dis: page<=1})}
-        ${nums.map(n => n === '…' ? gap : btn(String(n), n, {on: n===page})).join('')}
-        ${btn('Next &rsaquo;', page+1, {dis: page>=pageCount})}
-        <select onchange="bkV2SetPageSize(this.value)" title="Rows per page"
-          style="height:28px;margin-left:6px;border:1px solid #E2E0DA;border-radius:7px;background:#fff;
-            font-family:inherit;font-size:11.5px;color:var(--ink-soft,#6b6862);cursor:pointer;padding:0 4px">
-          ${[50,100,200,'all'].map(v => `<option value="${v}" ${String(size)===String(v)?'selected':''}>${v==='all'?'All':v+' / page'}</option>`).join('')}
-        </select>
-      </div>
     </div>
   `;
 }
@@ -80837,29 +80782,12 @@ function bkV2ClearFilter(which){
   if(which === 'date') _bkV2.filterDate = null;
   bkV2Render();
 }
-function bkV2SetFilter(k){ _bkV2.statusFilter = k; _bkV2.page = 1; bkV2Render(); }
+function bkV2SetFilter(k){ _bkV2.statusFilter = k; bkV2Render(); }
 function bkV2SetSearch(v){
   _bkV2.search = v;
-  _bkV2.page = 1;           // §bkPage · a new search must land on page 1, not page 47 of the old result set
   bkV2Render();
   const inp = document.getElementById('bkv2-search-input');
   if(inp){ inp.focus(); inp.setSelectionRange(v.length, v.length); }
-}
-// §bkPage (2026-09-03) · All-bookings pager. The tab rendered every matching booking in one pass —
-// at 3,355 rows that is ~70k DOM nodes, and worse, two O(n) scans PER ROW inside the row template
-// (an SB_BOOKINGS.find for the raw record + bkV2FindDuplicateBookings over the whole list), so the
-// tab cost ~22M iterations to draw. Paging cuts both, because both live inside the row map.
-function bkV2SetPage(n){
-  _bkV2.page = Math.max(1, n|0);
-  bkV2Render();
-  // Land at the top of the list, not wherever the old page left the scroll.
-  const tbl = document.querySelector('.bkv2-tbl');
-  if(tbl && tbl.scrollIntoView) tbl.scrollIntoView({block:'start'});
-}
-function bkV2SetPageSize(v){
-  _bkV2.pageSize = (v === 'all') ? 'all' : (parseInt(v,10) || 50);
-  _bkV2.page = 1;
-  bkV2Render();
 }
 // P2 · New Booking form handlers
 function bkV2NewBooking(){
