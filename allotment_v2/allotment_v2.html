@@ -54328,13 +54328,27 @@ function pckCardCSS(scope){ return ''
   ;
 }
 // ชื่อผู้โดยสารทุกคน · กรมเจ้าท่าต้องการรายชื่อครบ · โชว์ได้ถึง PCK_MAX_NAMES ชื่อ ที่เหลือกดขยาย
-function pckNameCell(r, sheet){
-  var e=ckEsc, b=r.b;
-  var lead=String(b.leadPax||'').trim();
-  var ex=(b.passengers||[]).map(function(p){ return String((p&&p.name)||'').trim(); })
+/* §pckName2 · รายชื่อทั้งใบ · ใช้ทั้งตอนวาดเซลล์และตอนตัดสินว่าเซลล์นี้กดกางได้ไหม */
+function pckNameList(b){
+  var lead=String((b&&b.leadPax)||'').trim();
+  var ex=((b&&b.passengers)||[]).map(function(p){ return String((p&&p.name)||'').trim(); })
           .filter(function(n){ return n && n!==lead; });
   var list=(lead?[lead]:[]).concat(ex);
-  if(!list.length) list=['—'];
+  return list.length?list:['—'];
+}
+/* คุณสมบัติของ td ช่องชื่อ · ในตารางทั้งช่องคือปุ่มกาง กดซ้ำย่อกลับ
+   ของเดิมเป็นปุ่ม "+N คน" ต่อท้ายชื่อ · เป็นเป้าเล็ก ๆ ที่ต้องเล็งกด และกินที่ในบรรทัดชื่อ */
+function pckNameTdAttr(r, sheet){
+  if(!sheet) return '';
+  var b=r.b, list=pckNameList(b);
+  if(list.length<=1) return '';
+  var open=!!_pckOpenNames[b.id];
+  return ' data-more="1" onclick="event.stopPropagation();pckNamesToggle(\''+b.id+'\')"'
+    +' title="'+(open?'กดเพื่อย่อรายชื่อ':('กดเพื่อดูรายชื่อทั้งหมด '+list.length+' คน'))+'"';
+}
+function pckNameCell(r, sheet){
+  var e=ckEsc, b=r.b;
+  var list=pckNameList(b);
   var open=!!_pckOpenNames[b.id];
   /* §pckLock · ในโหมดตารางโชว์ชื่อหัวใบคนเดียว ที่เหลือกดปุ่ม "+N คน" แล้วกางลงมา
      ตารางไว้กวาดสายตาหาแถว ไม่ใช่ไว้อ่านรายชื่อ · การ์ดยังโชว์ถึง PCK_MAX_NAMES เหมือนเดิม */
@@ -54345,10 +54359,15 @@ function pckNameCell(r, sheet){
   var h='<span class="ck-lead" style="background:'+rcCol+'" title="'+e(show[0])+'">'+e(show[0])+'</span>'
     +((typeof pckBoatSplitBadge==='function')?pckBoatSplitBadge(r):'');   // §boatSplit
   h+=show.slice(1).map(function(n){ return '<div class="pck-gsub">'+e(n)+'</div>'; }).join('');
-  /* ในตารางปุ่มกางชื่อไปต่อท้ายชื่อหัวใบบรรทัดเดียวกัน · ห่อ div เมื่อไหร่ก็กินไปอีกหนึ่งบรรทัดทุกแถว */
-  var _w0=sheet?'':'<div>', _w1=sheet?'':'</div>';
-  if(hidden>0) h+=_w0+'<button class="pck-gmore" onclick="event.stopPropagation();pckNamesToggle(\''+b.id+'\')" title="แสดงชื่อที่เหลือทั้งหมด">+'+hidden+' คน</button>'+_w1;
-  else if(open && list.length>maxN) h+=_w0+'<button class="pck-gmore" onclick="event.stopPropagation();pckNamesToggle(\''+b.id+'\')">ย่อ</button>'+_w1;
+  /* §pckName2 · ในตารางไม่มีปุ่มแล้ว · ทั้งช่องกดได้ (ดู pckNameTdAttr)
+     เหลือลูกศรจาง ๆ ท้ายชื่อไว้บอกว่าใบนี้มีชื่อซ่อนอยู่ · ไม่กินบรรทัด ไม่ต้องเล็งกด
+     โหมดการ์ดยังใช้ปุ่มเดิม เพราะการ์ดไม่ได้เอาทั้งกล่องไปผูกคลิก */
+  if(sheet){
+    if(list.length>1) h+='<span class="pck-gcar">'+(open?'&#9650;':'&#9660;')+'</span>';
+  } else {
+    if(hidden>0) h+='<div><button class="pck-gmore" onclick="event.stopPropagation();pckNamesToggle(\''+b.id+'\')" title="แสดงชื่อที่เหลือทั้งหมด">+'+hidden+' คน</button></div>';
+    else if(open && list.length>maxN) h+='<div><button class="pck-gmore" onclick="event.stopPropagation();pckNamesToggle(\''+b.id+'\')">ย่อ</button></div>';
+  }
   var pax=(r.expect!=null?r.expect:r.booked);
   /* §ckTight · ในตารางชีทไม่ต้องนับชื่อให้ · รายชื่ออยู่ใต้ชื่อหลักครบอยู่แล้ว
      "2 ชื่อ / 5 ชื่อ" กินไปหนึ่งบรรทัดต่อแถวโดยไม่ได้บอกอะไรใหม่
@@ -54389,7 +54408,10 @@ function pckMgCore(r, b, date, kd, on, ck, actual, sheet){
     +'<button class="ck-ev ck-ev-cx" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'cxl\')" title="ลูกค้าแจ้งยกเลิกหน้างาน">CXL</button></span>';
   if(!sheet) return stp+evs+okBtn;
   if(on && !_pckMgOpen[b.id])
-    return okBtn+'<button class="pck-mgedit" onclick="event.stopPropagation();pckMgUnlock(\''+b.id+'\')" title="เช็คอินแล้ว · ล็อกไว้กันกดโดน · กดเพื่อเปิดแก้จำนวน / No-show / CXL">&#9998; แก้</button>';
+    /* §pckName2 · ล็อกคือ "แก้ไม่ได้" ไม่ใช่ "มองไม่เห็น"
+       ตัวเลขคนขึ้นเรือจริงยังต้องอ่านได้ทุกแถวโดยไม่ต้องกดปลดล็อกก่อน */
+    return '<span class="ck-stp lk" title="ขึ้นเรือจริง '+actual+' คน · ล็อกอยู่ กดปุ่มแก้เพื่อปลดล็อก"><span class="ck-n">'+actual+'</span></span>'
+      +okBtn+'<button class="pck-mgedit" onclick="event.stopPropagation();pckMgUnlock(\''+b.id+'\')" title="เช็คอินแล้ว · ล็อกไว้กันกดโดน · กดเพื่อเปิดแก้จำนวน / No-show / CXL">&#9998; แก้</button>';
   return stp+evs+okBtn
     +(on?'<button class="pck-mgedit on" onclick="event.stopPropagation();pckMgUnlock(\''+b.id+'\')" title="ล็อกกลับ · กันกดโดนหลังเช็คอินแล้ว">&#128274;</button>':'');
 }
@@ -54773,7 +54795,7 @@ function pckRowHtml(r, date, sheet){
   }
   return '<tr class="'+cls+'">'
    +headCells
-   +'<td class="pcs-nm">'+pckNameCell(r, sheet)+'</td>'
+   +'<td class="pcs-nm"'+pckNameTdAttr(r, sheet)+'>'+pckNameCell(r, sheet)+'</td>'
    +px('ad')+px('chd')+px('inf')+px('foc')
    +(sheet
      ? ('<td class="pcs-tm">'+(r._ovnBack
@@ -57403,7 +57425,14 @@ function pckSheetCSS(){
     +'padding:3px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}'
   +S+' .pck-mgedit:hover{border-color:#A32D2D;color:#A32D2D}'
   +S+' .pck-mgedit.on{background:#FDF6E6;border-color:#E3C77A;color:#7A4A00}'
-  +S+' td.pcs-nm .pck-gmore{margin-left:6px;vertical-align:middle}'
+  /* ทั้งช่องชื่อกดกางได้ · ต้องมีสัญญาณว่ากดได้ ไม่งั้นไม่มีใครรู้ */
+  +S+' td.pcs-nm[data-more]{cursor:pointer}'
+  +S+' td.pcs-nm[data-more]:hover{background:#F7F5EF !important}'
+  +S+' td.pcs-nm .pck-gcar{margin-left:5px;font-size:8px;color:#b8b6ad;vertical-align:middle}'
+  +S+' td.pcs-nm[data-more]:hover .pck-gcar{color:#6b6a63}'
+  /* ตัวเลขคนขึ้นเรือของแถวที่ล็อก · อ่านได้แต่กดไม่ได้ ไม่ทำให้ดูเหมือนปุ่ม */
+  +S+' .ck-stp.lk{border:0;background:none;padding:0 4px;min-width:26px;text-align:center}'
+  +S+' .ck-stp.lk .ck-n{color:#6b6a63}'
   +S+' .pck-acts .ck-stp button{width:20px;height:20px;font-size:12px}'
   +S+' .pck-acts .ck-ev{font-size:9px;padding:1px 6px}'
   +S+' .pck-acts .pck-ok{padding:3px 10px;font-size:10px}'
