@@ -50033,6 +50033,72 @@ function ckPersist(){
   catch(e){ console.warn('persist check-in failed', e); return false; }
 }
 function ckBookedPax(t){ return (typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot((t&&t.pax)||{}):0; }
+
+/* ══ §strand (2026-09-03) · ของที่ "จัดการไปแล้ว" ห้ามหายเงียบ ══════════════
+   เดิมพอใบจองถูกยกเลิก ทุกหน้าปฏิบัติการปัดทิ้งที่บรรทัดแรกด้วย status
+   ทั้งที่ ops.vanId / vanGroup / boatId ยังอยู่ครบ และใบงานที่พิมพ์ส่งคนขับไป
+   ก็ยังมีชื่อคนนั้นอยู่ · ผลคือคนขับไปจอดรอคนที่ไม่มีแล้ว และไม่มีใครรู้ว่าหายไปไหน
+   กติกา: ยกเลิกแล้ว "แต่จัดการไปแล้ว" → คาไว้ที่เดิม ขีดฆ่า ไม่นับเข้ายอดใดๆ
+          หายได้ทางเดียวคือมีคนกดล้างการจัดการออก ไม่หายเองไม่ว่ากรณีใด        */
+var CK_CXL_ST=['cancelled','rejected','cancelled_weather'];
+function ckIsCxl(b){ return !!b && CK_CXL_ST.indexOf(b.status)>=0; }
+// "จัดการไปแล้ว" = มีร่องรอยการลงมือของคน ไม่ใช่แค่ใบจองที่ยังไม่มีใครแตะ
+function ckHasArrange(b, date){
+  var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):((b&&b.ops)||{});
+  if(!O) return false;
+  if(O.vanId || O.vanReturnId || O.boatId) return true;
+  if((+O.vanGroup||0)>0) return true;
+  if(Array.isArray(O.vanSplits) && O.vanSplits.some(function(x){
+    return x && (x.vanId || x.vanReturnId || (+x.vanGroup||0)>0); })) return true;
+  if(Array.isArray(O.boatSplits) && O.boatSplits.some(function(x){ return x && x.boatId; })) return true;
+  /* เช็คอินแล้วก็นับ · รวมช่องเช็คอินของแถวที่แยกจุดรับ (ops.vanCheckin._s) ด้วย */
+  var hit=false;
+  [O.vanCheckin, O.pierCheckin].forEach(function(c){
+    if(!c) return;
+    if(c.at) hit=true;
+    if(c._s) Object.keys(c._s).forEach(function(i){ if(c._s[i] && c._s[i].at) hit=true; });
+  });
+  return hit;
+}
+function ckStrandOn(b, date){ return ckIsCxl(b) && ckHasArrange(b, date); }
+// วันที่แบบสั้นไทย · ใช้บอกว่ายกเลิกเมื่อไหร่ ไม่ใช่รูปแบบ ISO ที่คนหน้างานอ่านไม่ออก
+function ckShortDay(iso){
+  if(!iso) return '';
+  var d=new Date(iso); if(isNaN(d)) return String(iso).slice(0,10);
+  var M=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  return d.getDate()+' '+M[d.getMonth()]
+    +' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+function ckStrandWhy(b){
+  var C=(b&&b.cancellation)||{};
+  var who=(C.by||'').trim(), when=ckShortDay(C.at||'');
+  var head=(b&&b.status==='cancelled_weather')?'ยกเลิกเพราะสภาพอากาศ'
+          :(b&&b.status==='rejected')?'ถูกปฏิเสธ':'ยกเลิก';
+  var tail=[when, who].filter(Boolean).join(' · ');
+  return head+(tail?(' '+tail):'')+((C.reason||'').trim()?(' · '+C.reason.trim()):'');
+}
+/* ล้างการจัดการของ "วันนั้นวันเดียว" · ตัวใบจองไม่ถูกแตะ
+   นี่คือทางเดียวที่แถวค้างจะหายไป */
+function ckStrandClear(bkId, date){
+  var b=(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).filter(function(x){ return x.id===bkId; })[0];
+  if(!b) return;
+  var nm=b.leadPax||b.voucherRef||b.code||bkId;
+  if(!confirm('ล้างการจัดรถ/เรือของ '+nm+' ออกจากวันที่ '+date+' ?\n\n'
+    +'รายการจะหายจากใบงานรถ · เช็คอินรถ · เช็คอินหน้าท่า\n'
+    +'ตัวใบจองและประวัติการยกเลิกไม่ถูกแตะ')) return;
+  if(typeof bkOpsClear==='function') bkOpsClear(b, (typeof bkOpsDate==='function')?bkOpsDate(b,date):date);
+  if(typeof bkV2AddHistory==='function')
+    bkV2AddHistory(b,'ops','ล้างการจัดรถ/เรือของวันที่ '+date+' (ใบจองถูกยกเลิกแล้ว)','Cleared');
+  if(typeof acctPersistBookings==='function') acctPersistBookings();
+  if(typeof laSaveToast==='function') laSaveToast({kind:'neutral', title:'ล้างการจัดรถ/เรือแล้ว', id:bkId,
+    status:'CLEARED', sub:nm+' · '+date});
+  ['vancheckin-host','piercheckin-host','vanjobs-host'].forEach(function(h){
+    var el=document.getElementById(h); if(!el || !el.offsetParent) return;
+    if(h==='vancheckin-host' && typeof renderVanCheckin==='function') renderVanCheckin();
+    if(h==='piercheckin-host' && typeof renderPierCheckin==='function') renderPierCheckin();
+    if(h==='vanjobs-host'    && typeof renderVanJobs==='function')    renderVanJobs();
+  });
+}
 // §focSplit (2026-07-31) · FOC ที่แยก FR/TH ถูกลืมอีกแล้ว
 //   ad / chd / inf บวกครบทั้ง 3 ทรง (flat + _fr + _th) แต่ foc อ่านแค่ p.foc ตัวเดียว
 //   บุ๊คกิ้งที่เก็บ FOC เป็น foc_fr / foc_th จึงขึ้น 0 ทุกที่ที่ใช้ฟังก์ชันนี้ —
@@ -51006,6 +51072,27 @@ function pckExtraCSS(){ return ''
   +'#pck-drawer .pd-btn{flex:1;border:1px solid #D8D4CA;background:#fff;color:#3a3a36;border-radius:8px;padding:8px 10px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit}'
   +'#pck-drawer .pd-btn-p{background:#1C4A30;border-color:#1C4A30;color:#fff}';
 }
+function ckStrandCSS(S){
+  /* §strand · แถวค้าง · ต้องอ่านออกว่า "ไม่ต้องรอคนนี้" ในครึ่งวินาที
+     ขีดแดงหน้าแถว + ชื่อขีดฆ่า + ทั้งแถวจาง · แต่ยังอ่านชื่อ/เวลา/จุดรับได้ครบ
+     เพราะคนขับต้องเทียบกับใบงานที่ถืออยู่ในมือว่าใช่บรรทัดเดียวกัน */
+  return S+' tr.ck-strand>td{background:#FBFAF8 !important;color:#9b9a93 !important}'
+    +S+' tr.ck-strand:hover>td{background:#F6F4F1 !important}'
+    +S+' tr.ck-strand td:first-child{box-shadow:inset 4px 0 0 #C0392B}'
+    +S+' tr.ck-strand .ck-lead{background:#EDEBE7 !important;color:#8f8e88 !important;'
+      +'text-decoration:line-through;text-decoration-thickness:1.5px}'
+    +S+' tr.ck-strand .ck-agblk{filter:grayscale(.85);opacity:.55}'
+    +S+' tr.ck-strand .ck-pick,'+S+' tr.ck-strand .ck-area,'+S+' tr.ck-strand .ck-sreq{opacity:.7}'
+    +S+' .ck-sbadge{display:inline-block;font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;'
+      +'letter-spacing:.03em;background:#FCE4E4;color:#A32D2D;vertical-align:middle;margin-left:5px}'
+    +S+' .ck-swhy{font-size:10.5px;color:#8a5b00;background:#FBF3E6;border-radius:6px;padding:2px 9px;'
+      +'display:inline-block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:340px}'
+    +S+' .ck-sclr{border:1px solid #D8D4CA;background:#fff;color:#6b6a63;border-radius:8px;padding:3px 11px;'
+      +'font-size:10.5px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;margin-left:8px}'
+    +S+' .ck-sclr:hover{background:#FCEBEB;border-color:#E6C9C3;color:#A32D2D}'
+    +S+' .ck-scount{display:inline-block;font-size:10.5px;font-weight:700;border-radius:999px;'
+      +'padding:2px 10px;background:#FCE4E4;color:#A32D2D;margin-left:6px}';
+}
 function ckSharedCSS(scope){
   return ''
   /* §vckFlow · ทั้งแถวเปลี่ยนสีตามสถานะ · ตัวแปรสีมาจาก inline บนแถว
@@ -51421,6 +51508,35 @@ function ckPickShort(v){
 // แถวลูกค้า · ใช้ร่วม 2 หน้า (kind='van'|'pier') · extra = html คอลัมน์เพิ่ม (แทรกก่อนบล็อกเช็คอิน)
 function ckRowHtml(r, date, kind, extraHtml){
   var e=ckEsc, b=r.b, t=r.t;
+  /* §strand · แถวค้าง · ตัดปุ่มสั่งการทิ้งทั้งหมด กดอะไรกับใบที่ยกเลิกแล้วไม่ได้
+     เหลือแค่ "ทำไมถึงค้าง" กับปุ่มล้าง · คอลัมน์หน้ายังเหมือนแถวปกติ
+     เพราะคนขับต้องเทียบกับใบงานในมือว่าเป็นบรรทัดเดียวกัน */
+  if(r.strand){
+    var _sag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
+    var _sagN=_sag?(_sag.name||_sag.code||'—'):(b.channel||'walk-in');
+    var _sp0=r.sp||null, _spb=ckPaxBreak(t.pax);
+    if(_sp0) _spb={ad:+_sp0.ad||0, chd:+_sp0.chd||0, inf:+_sp0.inf||0, foc:+_sp0.foc||0};
+    var _stm=r.O.pickupTimeFinal||t.pickupTime||t.pickupFinal||'—';
+    var _spk=ckPickShort(b.hotelName||b.pickup||'')||'—';
+    var _sar=ckPickShort(b.pickupArea||'')||'';
+    return '<tr class="ck-row ck-strand">'
+     +'<td><span class="ck-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'
+     +'<td>'+e(_sagN)+'</td>'
+     +'<td>'+(b.createdBy?e(b.createdBy):'—')+'</td>'
+     +'<td><span class="ck-lead">'+e(b.leadPax||'—')+'</span>'
+       +'<span class="ck-sbadge">'+e(r.strand==='mv'?'เลื่อนวัน':'CXL')+'</span></td>'
+     +['ad','chd','inf','foc'].map(function(k){ return '<td class="ck-c">'+(_spb[k]||0)+'</td>'; }).join('')
+     +'<td class="ck-mono">'+e(_stm)+'</td>'
+     +'<td><span class="ck-pick">'+e(_spk)+'</span></td>'
+     +'<td class="ck-c ck-mono">'+e(b.roomNo||b.roomNumber||'—')+'</td>'
+     +'<td>'+(_sar?'<span class="ck-area">'+e(_sar)+'</span>':'—')+'</td>'
+     +'<td>—</td>'
+     +'<td colspan="'+(r.strandTail||4)+'" class="ck-in">'
+       +'<span class="ck-swhy" title="'+e(r.strandWhy||'')+'">'+e(r.strandWhy||'')+'</span>'
+       +'<button class="ck-sclr" onclick="event.stopPropagation();ckStrandClear(\''+b.id+'\',\''+date+'\')" '
+       +'title="ล้างการจัดรถ/เรือของวันนี้ · แถวนี้จะหายจากทุกหน้าปฏิบัติการ · ใบจองไม่ถูกแตะ">ล้างการจัดรถ</button>'
+     +'</td></tr>';
+  }
   /* §vckSplit · แถวของจุดรับย่อย · โรงแรม/โซน/จำนวนคน เป็นของจุดนั้น ไม่ใช่ของ Lead */
   var _sp=r.sp||null;
   var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
@@ -53003,8 +53119,12 @@ function renderVanCheckin(){
   var zoneLbl=function(z){ return (typeof bkV2ZoneLabel==='function')?bkV2ZoneLabel(z):(z||'—'); };
   var groups={}, unassigned=[];
   _VCK_ROWKINDS={};   /* §vckFlow · สร้างใหม่ทุกครั้งที่วาด */
+  var _nStrand=0;
   (SB_BOOKINGS||[]).forEach(function(b){
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    /* §strand · ยกเลิกแล้ว "แต่จัดรถไว้แล้ว" ต้องคาไว้ในกลุ่มรถเดิม
+       ปัดทิ้งเงียบ ๆ = คนขับไปจอดรอคนที่ไม่มีแล้ว เพราะใบงานในมือยังมีชื่อ */
+    var _sx=false;
+    if(ckIsCxl(b)){ if(!ckHasArrange(b,date)) return; _sx=true; }
     var t=ckTripOn(b,date); if(!t) return;
     if(typeof bkIsOvnReturn==='function' && bkIsOvnReturn(t)) return;   // ขากลับ OVN = ส่งกลับ ไม่ใช่รับขึ้นรถ
     if(_vckRoute){ if(t.routeId!==_vckRoute) return; }
@@ -53016,8 +53136,13 @@ function renderVanCheckin(){
     var need=function(zz){ return zz && zz!=='NoTransfer' && zz!=='NT' && !b.pickupSelf; };
     var put=function(row, vid, zz){
       if(vid){ var k=vid+'~'+(t.routeId||'');
-        var G=(groups[k]=groups[k]||{vid:vid, routeId:t.routeId||'', zone:zz, rows:[], gno:0, seq:1e9});
-        G.rows.push(row);
+        var G=(groups[k]=groups[k]||{vid:vid, routeId:t.routeId||'', zone:zz, rows:[], sx:[], gno:0, seq:1e9});
+        /* §strand · เข้ากอง sx · ทุกยอดในหน้านี้วิ่งบน g.rows อย่างเดียว
+           แยกกองตั้งแต่ตรงนี้จึงไม่ต้องไปไล่ยกเว้นทีละจุด (pax · ที่นั่ง · ตัวหารเช็คอิน
+           · เวลารับของกลุ่ม · แถบชิปด้านบน) และไม่มีทางนับพลาดตอนแก้โค้ดวันหลัง
+           แต่เลขกลุ่ม/ลำดับยังเก็บ เพราะคันที่เหลือแต่ของค้างก็ยังต้องอยู่ตำแหน่งเดิม */
+        if(row.strand){ G.sx.push(row); _nStrand++; }
+        else G.rows.push(row);
         /* §vckOrder · จำเลขกลุ่ม + ลำดับรับที่ User จัดไว้ใน By-trip ไว้ใช้เรียงคัน
            split ต้องอ่านจากตัว split เอง · พอแยกจุดรับแล้ว ops.vanGroup ถูกลบทิ้ง
            (ดู bkV2SyncAltPickupSplits · "main now lives in split[0]") อ่านจาก r.O จะได้ 0 หมด */
@@ -53028,7 +53153,7 @@ function renderVanCheckin(){
         if(_g>0 && (!G.gno || _g<G.gno)) G.gno=_g;
         if(_q>0 && _q<G.seq) G.seq=_q;
       }
-      else if(need(zz)) unassigned.push(row);
+      else if(!row.strand && need(zz)) unassigned.push(row);
     };
     /* §vckSplit · รับหลายจุด = ขึ้นรถคนละคัน · ต้องเป็นคนละแถว ติ๊กแยกกัน
        ยอดคนของแต่ละแถวมาจาก split ไม่ใช่ยอดทั้งบุคกิ้ง ไม่งั้นนับซ้ำ */
@@ -53041,11 +53166,13 @@ function renderVanCheckin(){
         if(!n) n=Math.max(0,+sp.pax||0);
         put({b:b, t:t, O:O, z:zz, priv:priv, booked:n,
              ck:ckSlotGet(O,'van',i),
+             strand:(_sx?'cxl':null), strandWhy:(_sx?ckStrandWhy(b):''),
              si:i, sp:sp, nSplit:SP.length}, sp.vanId||'', zz);
       });
       return;
     }
-    put({b:b, t:t, O:O, z:z, priv:priv, booked:ckBookedPax(t), ck:O.vanCheckin||null},
+    put({b:b, t:t, O:O, z:z, priv:priv, booked:ckBookedPax(t), ck:O.vanCheckin||null,
+         strand:(_sx?'cxl':null), strandWhy:(_sx?ckStrandWhy(b):'')},
         O.vanId || (SP&&SP[0]&&SP[0].vanId) || '', z);
   });
   var tBooked=0,tNoShow=0,tChecked=0,tRows=0;
@@ -53124,6 +53251,7 @@ function renderVanCheckin(){
       +'<div id="vckg-'+k.replace(/[^A-Za-z0-9_-]/g,'_')+'" style="display:flex;align-items:center;gap:11px;flex-wrap:wrap;border-radius:8px">'
       +vanPill+gtChip+vckArrChip(date,k,(veh.name||vid),g.rows)+infoHtml
       +'<span style="display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:'+(rt.color||'#5F5E5A')+'"><span style="width:8px;height:8px;border-radius:50%;background:'+(rt.color||'#999')+'"></span>'+e(rt.name||g.routeId||'—')+'</span>'
+      +((g.sx&&g.sx.length)?('<span class="ck-scount" title="จัดรถคันนี้ไว้แล้วแต่ใบจองถูกยกเลิก · ยังไม่มีใครล้างการจัดรถออก · ไม่นับเข้ายอด pax และที่นั่ง">ค้าง '+g.sx.length+'</span>'):'')
       +'<span style="margin-left:auto;font-size:11px;color:#8a8a82;font-family:\'DM Mono\',monospace;white-space:nowrap">ขึ้นรถ '+vChecked+'/'+g.rows.length+' · '
         +(vLost>0?('<b style="color:#A32D2D;font-size:13px">'+vGo+'</b> pax <s style="color:#c2c0b7">'+vPax+'</s>'):(vPax+' pax'))
         +(vLost>0?' · <span style="color:#A32D2D;font-weight:700">หาย '+vLost+'</span>':'')+'</span>'
@@ -53131,6 +53259,10 @@ function renderVanCheckin(){
     /* §vckFlow · จดไว้ว่าคันนี้มีแถวไหนบ้าง · ปุ่มสแตนบายใช้ต่อ */
     _VCK_ROWKINDS[k]=g.rows.map(function(r){ return {id:r.b.id, kind:(r.si!=null?('van#'+r.si):'van')}; });
     g.rows.forEach(function(r){ r._gk=k; r._date=date; bodyHtml+=ckRowHtml(r, date, (r.si!=null?('van#'+r.si):'van'), ''); });
+    /* §strand · ต่อท้ายกลุ่มรถเดิม ไม่แทรกกลางคนที่ยังเดินทางจริง
+       อยู่ใต้คันที่ถูกจัดไว้ คนขับจึงเห็นว่าเป็นคันของตัวเอง */
+    (g.sx||[]).forEach(function(r){ r._gk=k; r._date=date; r.strandTail=4;
+      bodyHtml+=ckRowHtml(r, date, (r.si!=null?('van#'+r.si):'van'), ''); });
   });
   // §topWarn · booking ที่ยังไม่จัดรถคือของที่ต้องลงมือก่อนใคร เดิมต่อท้ายสุดของตาราง ต้องเลื่อนผ่าน
   // ทุกคันกว่าจะเจอ · ย้ายมาไว้บนสุดแทน (สร้างแยกไว้ใน warnHtml แล้วค่อยเอาไปต่อหน้า)
@@ -53172,11 +53304,12 @@ function renderVanCheckin(){
   var kchip=function(bg,fg,lbl,n,tip){ return n>0
     ? '<span title="'+ckEsc(tip||'')+'" style="background:'+bg+';color:'+fg+'">'+lbl+' '+n+'</span>' : ''; };
   var kpi='<span style="background:#E1F5EE;color:#0F6E56">ขึ้นรถแล้ว '+tChecked+'/'+tRows+'</span>'
+        +(_nStrand>0?('<span title="จัดรถไว้แล้วแต่ใบจองถูกยกเลิก · ยังคาอยู่ในกลุ่มรถเดิมจนกว่าจะมีคนกดล้างการจัดรถ" style="background:#FCE4E4;color:#A32D2D">ค้างจัดการ '+_nStrand+'</span>'):'')
         +kchip('#F1EFE8','#5F5E5A','รอ',sWait,'ยังไม่ได้เช็คอินและยังไม่ได้กด No-show')
         +kchip('#FCEBEB','#A32D2D','No-show',sN,'ไม่ได้ขึ้นรถและยังไม่มีใครยืนยันว่ามาถึงท่า')
         +kchip('#FBF3E6','#8A5B00','CXL',sC,'ยกเลิกหน้างาน')
         +kchip('#F4E8FB','#6B289A','ไปเจอที่ท่า',sP,'ไปเองที่ท่า/ไปรถคันอื่น · ยังถือว่าเดินทาง รอหน้าท่ายืนยัน');
-  host.innerHTML='<style id="vck-style">'+ckSharedCSS('#vancheckin-host')+vckSheetCSS()+'</style>'
+  host.innerHTML='<style id="vck-style">'+ckSharedCSS('#vancheckin-host')+vckSheetCSS()+ckStrandCSS('#vancheckin-host')+'</style>'
     +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px"><h1 style="margin:0;font-size:19px;font-weight:700">เช็คอินรถ</h1>'
     +'<span style="font-size:11px;color:#8a8a82">บันทึกคนขึ้นรถจริง → ป้าย No-show ไปโผล่ที่ By trip · date และส่งต่อ Pier Check-in</span></div>'
     +ckDayHeader({date:date, shiftFn:'vanCkDateShift', todayFn:'vanCkToday', pickFn:'vckPickDay',
