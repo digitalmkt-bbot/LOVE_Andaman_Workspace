@@ -53750,7 +53750,7 @@ function pckExpected(b, date, booked){
 }
 // ปุ่มขั้นตอนหน้าท่า · ถึงท่า / เคลียร์ · ขั้น "ขึ้นเรือ" ยังใช้ปุ่ม ✓ เดิม (มันนับ pax + ถามเหตุผลให้ด้วย)
 // จะได้ไม่มีปุ่มสองที่ทำเรื่องเดียวกัน
-function pckStageCell(r, date){
+function pckStageCell(r, date, sheet){
   var e=ckEsc, ck=r.ck||{}, st=pckStage(ck);
   // §ckSelfPier · ไม่ได้ขึ้นรถ แต่แจ้งว่ามาเองที่ท่า · ยังเช็คอินได้ตามปกติ
   var _sp=pckSelfPierNote(r.b, date);
@@ -53791,7 +53791,34 @@ function pckStageCell(r, date){
     return '<button onclick="pckStageSet(\''+r.b.id+'\',\''+date+'\',\''+S.k+'\',\''+(r._ckKind||'pier')+'\')" title="'+e(S.lbl+(done?(' · '+((S.k==='arr'?ck.arrivedBy:ck.clearedBy)||'')+(when?(' '+when):'')):' · กดเพื่อบันทึก'))+'" style="border:1.5px solid '+(done?S.bd:'#E7E4DC')+';background:'+(done?S.bg:'#fff')+';color:'+(done?S.col:'#a5a49d')+';border-radius:7px;padding:3px 9px;font-size:10.5px;font-weight:'+(done?'800':'600')+';cursor:pointer;font-family:inherit;white-space:nowrap;margin:0 3px 3px 0">'
       +(done?'&#10003; ':'')+e(S.short)+(done&&when?('<span style="font-family:\'DM Mono\',monospace;font-weight:600;margin-left:5px;opacity:.75">'+when+'</span>'):'')+'</button>';
   };
-  var html=_reTag+_saTag+_spTag+btn(PCK_STAGES[0])+btn(PCK_STAGES[1]);
+  /* §pckSheet6 · โหมดตารางโชว์เฉพาะด่านถัดไปที่ต้องทำ กดแล้วเลื่อนไปเอง
+     ของเดิมโชว์สองปุ่มค้างไว้ตลอด คนหน้าท่าต้องอ่านเองว่าอันไหนถึงคิว
+     บรรทัดเล็กใต้ปุ่มบอกด่านที่เพิ่งผ่าน + เวลา + คนกด · กดที่บรรทัดนั้น = ถอยกลับ
+     (ของเดิมถอยด้วยการกดปุ่มเดิมซ้ำ ทางถอยจึงต้องไม่หายไปพร้อมปุ่มที่ตัดออก) */
+  var html;
+  if(sheet){
+    var _q=function(k){ return 'event.stopPropagation();pckStageSet(\''+r.b.id+'\',\''+date+'\',\''+k+'\',\''+(r._ckKind||'pier')+'\')'; };
+    var _mk=function(k,lbl,cls,tip){
+      return '<button class="pcs-sb '+cls+'" onclick="'+_q(k)+'" title="'+e(tip)+'">'+lbl+'</button>'; };
+    var _back=function(k,txt,tip){
+      return '<span class="pcs-sbs" onclick="'+_q(k)+'" title="'+e(tip)+'">'+txt+'</span>'; };
+    var _wArr=hhmm(ck.arrivedAt), _wClr=hhmm(ck.clearedAt);
+    var _one;
+    if(st==='wait'){
+      _one=_mk('arr','ถึงท่า &rsaquo;','a','บันทึกว่าลูกค้ามาถึงท่าแล้ว');
+    } else if(st==='arr'){
+      _one=_mk('clr','เคลียร์ &rsaquo;','c','ตรวจลูกค้าและเก็บเงินครบแล้ว')
+        +_back('arr','ถึงท่า '+e(_wArr||'')+(ck.arrivedBy?(' &middot; '+e(ck.arrivedBy)):''),
+               'กดเพื่อถอยกลับเป็นยังไม่ถึงท่า');
+    } else {
+      _one=_mk('clr','&#10003; เคลียร์แล้ว','ok','กดเพื่อถอยกลับเป็นถึงท่า (ยังไม่เคลียร์)')
+        +_back('clr',e(_wClr||'')+(ck.clearedBy?(' &middot; '+e(ck.clearedBy)):''),
+               'กดเพื่อถอยกลับเป็นถึงท่า');
+    }
+    html=_reTag+_saTag+_spTag+_one;
+  } else {
+    html=_reTag+_saTag+_spTag+btn(PCK_STAGES[0])+btn(PCK_STAGES[1]);
+  }
   if(st==='on') html+='<div style="font-size:10px;font-weight:800;color:#0F6E56">&#10003; ขึ้นเรือแล้ว</div>';
   else if(st==='clr' && due>0) html+='<div style="font-size:9.5px;color:#7A4A00">เคลียร์แล้ว · รอขึ้นเรือ</div>';
   else if(st==='arr' && due>0) html+='<div style="font-size:9.5px;color:#A32D2D;font-weight:700">&#9888; ยังไม่เก็บเงิน</div>';
@@ -54443,7 +54470,7 @@ function pckGuideCell(b){
     +(gc?(' style="background:'+gc+';border-color:'+gc+';color:'+gInk+'"'):'')
     +' title="ใบนี้ขอไกด์พูด '+ckEsc(gl.join(' / '))+'">'+gl.map(ckEsc).join('/')+'</span>';
 }
-function pckMealCell(b, date, noGuide){
+function pckMealCell(b, date, noGuide, sheet){
   var chips = pckMealChips(b), m = b.specialMeals || {};
   /* §pierGuide · ภาษาไกด์ของใบนี้ · อ่านจากที่เดียวกับใบงานไกด์ (pckGuideLangs)
      ไม่ได้ตีความ notes เอง · ใบไหนติ๊กไว้ในใบจองเท่านั้นที่ขึ้น */
@@ -54464,9 +54491,12 @@ function pckMealCell(b, date, noGuide){
   // §pierNote · เรื่องที่ลูกค้าแจ้งที่ท่า · ข้อความอิสระ แยกจากอาหารพิเศษที่เป็นตัวเลข
   var nt=(typeof pckNoteGet==='function')?pckNoteGet(b,date):'';
   var ntHtml = nt ? ('<div class="pck-note" title="'+ckEsc(nt)+'">&#9998; '+ckEsc(nt)+'</div>') : '';
+  /* §pckSheet6 · ในตารางชีท บรรทัดบน = ของที่มีอยู่จริง บรรทัดล่าง = ปุ่มไว้เติม
+     ปนกันแล้วแยกไม่ออกว่าอะไรคือข้อมูล อะไรคือช่องว่างรอให้กรอก */
+  var _btns='<button class="pck-mbtn" onclick="event.stopPropagation();pckMealOpen(\'' + b.id + '\',\'' + date + '\')" title="เพิ่ม/แก้อาหารพิเศษหน้างาน">' + (chips.length ? '✎' : '+ อาหารพิเศษ') + '</button>'
+       + '<button class="pck-mbtn note' + (nt?' on':'') + '" onclick="event.stopPropagation();pckNoteOpen(\'' + b.id + '\',\'' + date + '\')" title="โน้ตหน้างาน · เรื่องที่ลูกค้าแจ้งที่ท่า">' + (nt ? '✎ โน้ต' : '+ โน้ต') + '</button>';
   return '<div class="pck-mcell">' + gHtml + (html || ((nt||gHtml)?'':'<span class="ck-dim">—</span>'))
-       + '<button class="pck-mbtn" onclick="event.stopPropagation();pckMealOpen(\'' + b.id + '\',\'' + date + '\')" title="เพิ่ม/แก้อาหารพิเศษหน้างาน">' + (chips.length ? '✎' : '+ อาหารพิเศษ') + '</button>'
-       + '<button class="pck-mbtn note' + (nt?' on':'') + '" onclick="event.stopPropagation();pckNoteOpen(\'' + b.id + '\',\'' + date + '\')" title="โน้ตหน้างาน · เรื่องที่ลูกค้าแจ้งที่ท่า">' + (nt ? '✎ โน้ต' : '+ โน้ต') + '</button>'
+       + (sheet ? ('<div class="pck-mact">'+_btns+'</div>') : _btns)
        + ntHtml + '</div>';
 }
 // §pierNote · โน้ตหน้างานของวันนั้น · เก็บที่ ops ของวัน ไม่ใช่ที่ booking
@@ -54714,9 +54744,9 @@ function pckRowHtml(r, date, sheet){
    +'</td>')
    +'<td class="pcs-ao">'+pckAddonCell(r,date)+'</td>'
    +'<td class="pcs-sq">'+(sreq?'<div style="margin-bottom:5px"><span class="ck-sreq" title="'+e(sreq)+'">'+e(sreq)+'</span></div>':'')
-     +pckMealCell(b, date, !!sheet)+'</td>'
+     +pckMealCell(b, date, !!sheet, !!sheet)+'</td>'
    +(sheet?('<td class="ck-c pcs-gdc">'+pckGuideCell(b)+'</td>'):'')
-   +'<td class="pcs-st">'+pckStageCell(r,date)+'</td>'
+   +'<td class="pcs-st">'+pckStageCell(r,date,sheet)+'</td>'
    +'<td class="pcs-mn">'+pckMoneyCell(b,date,sheet)+'</td>'
    +'<td class="pcs-mg"><div class="pck-acts">'
      +(_vd?('<span class="pck-vdchip" title="'+e(pckVoidLabel(_vd)+' · '+_vd.pax+' คน'+(_vd.reason?(' · '+_vd.reason):''))+'">&#10007; '+e(pckVoidLabel(_vd))+' · ไม่ต้องเช็คอิน</span>'
@@ -57231,7 +57261,7 @@ function pckSheetCSS(){
   +S+' td.pcs-zn{width:96px;text-align:center}'
   +S+' td.pcs-ao{width:150px}'
   +S+' td.pcs-sq{width:210px}'
-  +S+' td.pcs-st{width:150px}'
+  +S+' td.pcs-st{width:132px;text-align:center}'
   +S+' td.pcs-mn{width:150px}'
   +S+' td.pcs-mg{width:300px}'
   +S+' .pcs-prv{display:inline-block;background:#F4E8FB;color:#6B289A;font-weight:700;font-size:9px;'
@@ -57265,7 +57295,18 @@ function pckSheetCSS(){
   +S+' td.pcs-ao,'+S+' td.pcs-sq{white-space:normal;line-height:1.3}'
   +S+' td.pcs-ao .ck-aoact{display:inline-flex !important;gap:4px;margin:0 0 0 4px !important;'
     +'vertical-align:middle}'
-  +S+' td.pcs-sq .pck-mcell{display:inline !important;margin:0 !important}'
+  +S+' td.pcs-sq .pck-mcell{display:block !important;margin:0 !important}'
+  +S+' td.pcs-sq .pck-mact{display:flex !important;gap:4px;margin:3px 0 0 0 !important}'
+  +S+' td.pcs-ao .ck-aoact{display:flex !important;gap:4px;margin:3px 0 0 0 !important}'
+  /* ── สถานะหน้าท่า · ปุ่มเดียว + บรรทัดถอยกลับ ── */
+  +S+' .pcs-sb{display:inline-block;border:1.5px solid;border-radius:8px;padding:3px 11px;'
+    +'font:800 11px inherit;font-family:inherit;cursor:pointer;white-space:nowrap}'
+  +S+' .pcs-sb.a{background:#E6F1FB;border-color:#7EAED8;color:#0C447C}'
+  +S+' .pcs-sb.c{background:#FDF6E6;border-color:#E3C77A;color:#7A4A00}'
+  +S+' .pcs-sb.ok{background:#FDF6E6;border-color:#E3C77A;color:#7A4A00}'
+  +S+' .pcs-sbs{display:block;font-size:9px;color:#a5a49d;margin-top:2px;white-space:nowrap;'
+    +'cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px}'
+  +S+' .pcs-sbs:hover{color:#A32D2D}'
   +S+' td.pcs-sq .pck-note{display:block !important;margin:2px 0 0 0 !important;'
     +'max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
   +S+' .ck-ao{max-width:140px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}'
