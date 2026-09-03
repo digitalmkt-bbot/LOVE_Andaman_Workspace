@@ -52832,12 +52832,19 @@ function vckSheetCSS(){
      สีเอเจนซี่คือตัวที่ใช้กวาดตาหาแถวเร็วที่สุดในตาราง เต็มช่องแล้วเห็นเป็นแถบสีต่อเนื่อง
      บังคับที่ลูกโดยตรงของ td เพราะแต่ละแบบวาดมาไม่เหมือนกัน (ป้ายสี · โลโก้ B2C · ข้อความเปล่า) */
   +S+' tr.ck-row>td:nth-child(2),'+S+' tr.ck-unassigned>td:nth-child(2){padding:0 !important}'
+  /* §ckTight · ชื่อเอเจนซี่ยาว ๆ ถูกจัดกลางแล้วตัดทั้งหัวและท้าย
+     เหลือ "avorn Palm Beach Reso" อ่านไม่ออกว่าเจ้าไหน หาไม่เจอด้วย
+     ให้ตกบรรทัดสองแทน · ชื่อเอเจนซี่คือตัวที่ใช้ไล่หาแถวมากที่สุดในตาราง
+     white-space / text-overflow ต้องมี !important · ตัวจริงเขียน nowrap ไว้ที่ style ของ tag */
   +S+' tr.ck-row>td:nth-child(2)>*,'+S+' tr.ck-unassigned>td:nth-child(2)>*{'
-    +'display:flex !important;align-items:center;justify-content:center;'
-    +'width:100% !important;max-width:none !important;height:29px;'
-    +'margin:0 !important;padding:0 7px !important;border-radius:0 !important;'
-    +'box-shadow:none !important;border:0 !important;font-size:11px;line-height:1.15;'
-    +'overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+    +'display:flex !important;align-items:center;justify-content:center;text-align:center;'
+    +'width:100% !important;max-width:none !important;min-height:29px;'
+    +'margin:0 !important;padding:1px 5px !important;border-radius:0 !important;'
+    +'box-shadow:none !important;border:0 !important;font-size:10px;line-height:1.12;'
+    +'white-space:normal !important;text-overflow:clip !important;'
+    +'word-break:break-word;overflow:hidden}'
+  /* ห้ามแตะ position ของ td ช่องนี้ · เป็นคอลัมน์ตรึงที่ตั้ง left:144px ไว้
+     ถ้าเปลี่ยนเป็น relative ค่า left จะกลายเป็นการเลื่อนช่องไปขวา 144px ทั้งช่อง */
   +S+' .ck-agblk{font-weight:700}'
   +S+' .ck-stp button{width:20px;height:20px;font-size:13px}'
   +S+' .ck-n{font-size:12.5px}'
@@ -54321,7 +54328,7 @@ function pckCardCSS(scope){ return ''
   ;
 }
 // ชื่อผู้โดยสารทุกคน · กรมเจ้าท่าต้องการรายชื่อครบ · โชว์ได้ถึง PCK_MAX_NAMES ชื่อ ที่เหลือกดขยาย
-function pckNameCell(r){
+function pckNameCell(r, sheet){
   var e=ckEsc, b=r.b;
   var lead=String(b.leadPax||'').trim();
   var ex=(b.passengers||[]).map(function(p){ return String((p&&p.name)||'').trim(); })
@@ -54338,8 +54345,13 @@ function pckNameCell(r){
   if(hidden>0) h+='<div><button class="pck-gmore" onclick="event.stopPropagation();pckNamesToggle(\''+b.id+'\')" title="แสดงชื่อที่เหลือทั้งหมด">+'+hidden+' คน</button></div>';
   else if(open && list.length>PCK_MAX_NAMES) h+='<div><button class="pck-gmore" onclick="event.stopPropagation();pckNamesToggle(\''+b.id+'\')">ย่อ</button></div>';
   var pax=(r.expect!=null?r.expect:r.booked);
-  if(list.length>1) h+='<div class="pck-gcount">'+list.length+' ชื่อ</div>';
-  else if(pax>1) h+='<div class="pck-gwarn" title="ระบบมีชื่อเดียว แต่จองมา '+pax+' ที่นั่ง — manifest กรมเจ้าท่าต้องการรายชื่อครบ">มีชื่อเดียว · '+pax+' pax</div>';
+  /* §ckTight · ในตารางชีทไม่ต้องนับชื่อให้ · รายชื่ออยู่ใต้ชื่อหลักครบอยู่แล้ว
+     "2 ชื่อ / 5 ชื่อ" กินไปหนึ่งบรรทัดต่อแถวโดยไม่ได้บอกอะไรใหม่
+     ป้ายเตือน "มีชื่อเดียว" ยังอยู่ในมุมมองการ์ด ซึ่งเป็นที่ที่ไล่เก็บรายชื่อให้ครบจริง ๆ */
+  if(!sheet){
+    if(list.length>1) h+='<div class="pck-gcount">'+list.length+' ชื่อ</div>';
+    else if(pax>1) h+='<div class="pck-gwarn" title="ระบบมีชื่อเดียว แต่จองมา '+pax+' ที่นั่ง — manifest กรมเจ้าท่าต้องการรายชื่อครบ">มีชื่อเดียว · '+pax+' pax</div>';
+  }
   var phone=b.leadPhone||b.phone||b.customerPhone||'';
   if(phone) h+='<div><a class="ck-tel" href="tel:'+e(String(phone).split(/[,;\/]|\sหรือ\s/)[0].replace(/[^0-9+]/g,''))+'" onclick="event.stopPropagation()" title="โทรหาลูกค้า">&#128222; '+e(phone)+'</a></div>';
   return h;
@@ -54724,7 +54736,7 @@ function pckRowHtml(r, date, sheet){
   }
   return '<tr class="'+cls+'">'
    +headCells
-   +'<td class="pcs-nm">'+pckNameCell(r)+'</td>'
+   +'<td class="pcs-nm">'+pckNameCell(r, sheet)+'</td>'
    +px('ad')+px('chd')+px('inf')+px('foc')
    +(sheet
      ? ('<td class="pcs-tm">'+(r._ovnBack
@@ -57337,7 +57349,12 @@ function pckSheetCSS(){
   +S+' .ck-vch{font-size:11px;line-height:1.2;max-width:138px}'
   /* ── บีบแถวให้เตี้ย · ในการ์ดของเดิมทุกอย่างวางเป็นบล็อกซ้อนกัน แถวเลยสูง 150px
      ตารางชีทต้องกวาดตาลงมาได้ ของที่เดิมซ้อนกันจึงดันมาต่อกันในบรรทัดเดียว ── */
-  +S+' tr.ck-row>td{padding:4px 8px;vertical-align:middle;overflow:hidden}'
+  +S+' tr.ck-row>td{padding:3px 7px;vertical-align:middle;overflow:hidden}'
+  /* เบอร์โทรต่อท้ายชื่อในบรรทัดเดียวกัน · ของเดิมขึ้นบรรทัดใหม่ กินไปแถวละบรรทัด */
+  +S+' td.pcs-nm .ck-tel{display:inline-block !important;margin:0 0 0 6px !important;'
+    +'font-size:10.5px;font-weight:600;white-space:nowrap}'
+  +S+' td.pcs-nm .pck-gsub{font-size:9.5px;line-height:1.15;color:#7a7972}'
+  +S+' td.pcs-nm .ck-lead{font-size:11.5px;padding:1px 7px}'
   +S+' tr.ck-row td>div{display:inline-block;vertical-align:middle;margin:0 4px 0 0 !important}'
   /* ช่องชื่อ ลค · ชื่อคนที่ 2-3 กับเบอร์ ต้องอยู่คนละบรรทัด ดันมาต่อกันแล้วล้นไปทับคอลัมน์ถัดไป */
   +S+' tr.ck-row td.pcs-nm>div{display:block !important;margin:1px 0 0 0 !important;'
