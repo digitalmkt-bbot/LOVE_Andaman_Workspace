@@ -53764,8 +53764,12 @@ function pckExpected(b, date, booked){
 }
 // ปุ่มขั้นตอนหน้าท่า · ถึงท่า / เคลียร์ · ขั้น "ขึ้นเรือ" ยังใช้ปุ่ม ✓ เดิม (มันนับ pax + ถามเหตุผลให้ด้วย)
 // จะได้ไม่มีปุ่มสองที่ทำเรื่องเดียวกัน
-function pckStageCell(r, date, sheet){
-  var e=ckEsc, ck=r.ck||{}, st=pckStage(ck);
+/* §pckNoStage · ป้ายบอกเคสพิเศษของแถว · เคยแปะไว้หัวช่อง "สถานะหน้าท่า"
+   ช่องนั้นถูกตัดออกจากโหมดตารางแล้ว แต่ป้ายพวกนี้เป็นของที่คนหน้าท่าต้องเห็น
+   (ยืนยันว่ามาแล้ว / ตามมาเองที่ท่า / ไม่ได้ขึ้นรถแต่จะมาเอง) จึงย้ายไปช่องการจัดการ
+   แยกเป็นฟังก์ชันเดียวเพื่อไม่ให้สองที่วาดคนละแบบแล้วเพี้ยนกันทีหลัง */
+function pckFlagTags(r, date){
+  var e=ckEsc, ck=r.ck||{};
   // §ckSelfPier · ไม่ได้ขึ้นรถ แต่แจ้งว่ามาเองที่ท่า · ยังเช็คอินได้ตามปกติ
   var _sp=pckSelfPierNote(r.b, date);
   // §ckPierFix · หน้าท่ายืนยันเองว่ามาจริง · โชว์ให้เห็นว่าใครกด เวลาไหน · กดยกเลิกได้
@@ -53792,6 +53796,15 @@ function pckStageCell(r, date, sheet){
   var _spTag=_sp ? ('<div style="font-size:10px;font-weight:700;color:#6B289A;background:#F4E8FB;border:1px solid #E2CDF2;border-radius:7px;padding:2px 8px;margin-bottom:4px;display:inline-block" '
       +'title="เช็คอินรถบันทึกว่าไม่ได้ขึ้นรถ แต่ให้เหตุผลว่าจะมาเองที่ท่า · ยังนับว่ารอรับอยู่ เช็คอินได้ตามปกติ">&#128694; ไม่ได้ขึ้นรถ · '
       +e(_sp.label)+' '+_sp.pax+' คน'+(_sp.at?(' · '+e(_sp.at)):'')+'</div>') : '';
+  return {re:_reTag, sa:_saTag, sp:_spTag};
+}
+function pckFlagTagsHtml(r, date){
+  var t=pckFlagTags(r, date);
+  return t.re+t.sa+t.sp;
+}
+function pckStageCell(r, date, sheet){
+  var e=ckEsc, ck=r.ck||{}, st=pckStage(ck);
+  var _ft=pckFlagTags(r, date), _reTag=_ft.re, _saTag=_ft.sa, _spTag=_ft.sp;
   var _vd=pckVoidOf(r, date);
   if(_vd) return _saTag+_spTag+'<div class="pck-void"><b>&#10007; '+e(pckVoidLabel(_vd))+'</b>'
     +'<span>'+_vd.pax+' คน · ไม่ต้องเช็คอิน</span>'
@@ -54169,7 +54182,7 @@ var PCK_SHEET_THEAD='<thead><tr>'
  +'<th class="ck-c pck-px">AD</th><th class="ck-c pck-px">CHD</th><th class="ck-c pck-px">INF</th><th class="ck-c pck-px">FOC</th>'
  +'<th>เวลา</th><th class="l">จุดรับ (Pickup)</th><th class="ck-c">ห้อง</th><th>โซน</th>'
  +'<th class="l">Add-on</th><th class="l">Special request</th><th>ไกด์</th>'
- +'<th>สถานะหน้าท่า</th><th>เงินหน้าท่า</th><th class="l">การจัดการ</th>'
+ +'<th>เงินหน้าท่า</th><th class="l">การจัดการ</th>'
  +'</tr></thead>';
 var PCK_THEAD='<thead><tr>'
  +'<th style="width:11%">Voucher / Agency</th>'
@@ -54830,9 +54843,10 @@ function pckRowHtml(r, date, sheet){
    +'<td class="pcs-sq">'+(sreq?'<div style="margin-bottom:5px"><span class="ck-sreq" title="'+e(sreq)+'">'+e(sreq)+'</span></div>':'')
      +pckMealCell(b, date, !!sheet, !!sheet)+'</td>'
    +(sheet?('<td class="ck-c pcs-gdc">'+pckGuideCell(b)+'</td>'):'')
-   +'<td class="pcs-st">'+pckStageCell(r,date,sheet)+'</td>'
+   /* §pckNoStage · โหมดตารางไม่มีช่องสถานะแล้ว · ถึงท่า/เคลียร์ ทำที่โหมดการ์ด */
+   +(sheet?'':('<td class="pcs-st">'+pckStageCell(r,date,sheet)+'</td>'))
    +'<td class="pcs-mn">'+pckMoneyCell(b,date,sheet)+'</td>'
-   +'<td class="pcs-mg"><div class="pck-acts">'
+   +'<td class="pcs-mg">'+(sheet?pckFlagTagsHtml(r,date):'')+'<div class="pck-acts">'
      +(_vd?('<span class="pck-vdchip" title="'+e(pckVoidLabel(_vd)+' · '+_vd.pax+' คน'+(_vd.reason?(' · '+_vd.reason):''))+'">&#10007; '+e(pckVoidLabel(_vd))+' · ไม่ต้องเช็คอิน</span>'
        // §ckPierFix · ปิดมาจากฝั่งรถ → ปุ่ม "ถอน" ของหน้าท่าใช้ไม่ได้ (ไม่มีรายการฝั่งนี้)
        //   ให้ปุ่มยืนยันว่ามาจริงแทน · บันทึกฝั่งรถไม่ถูกแตะ
@@ -57185,7 +57199,7 @@ function pckSheetBand(kind, key, rows, date, lvl){
   ink=cold?'#98A0AC':col;
   var edge=cold?'#DFE3E9':col;
   return '<tr class="pcs-g'+lvl+(cold?' cold':'')+'" style="--c:'+e(col)+';--bg:'+e(bg)+';--ink:'+e(ink)+';--edge:'+e(edge)+'">'
-    +'<td colspan="17"><div class="pcs-w">'
+    +'<td colspan="16"><div class="pcs-w">'
     +'<span class="pcs-kind">'+(isBoat?'เรือ':'รถ')+'</span>'
     +'<span class="pcs-pill" style="background:'+e(col)+';color:'
       +((typeof bkV2ContrastInk==='function')?bkV2ContrastInk(col):'#fff')+'">'+e(nm)+'</span>'
@@ -57215,7 +57229,7 @@ function pckSheetOvn(boats, border, date){
   var pax=rows.reduce(function(a,r){ return a+(r.expect!=null?r.expect:r.booked); },0);
   var nNo=(g['__none']||[]).length;
   var out='<tbody><tr class="pcs-g1 pcs-ovn" style="--c:#5B289A;--bg:#F4EEFD;--ink:#5B289A;--edge:#5B289A">'
-    +'<td colspan="17"><div class="pcs-w">'
+    +'<td colspan="16"><div class="pcs-w">'
     +'<span class="pcs-kind">OVN</span>'
     +'<span class="pcs-pill" style="background:#5B289A;color:#fff">&#8617; รับกลับจากเกาะ</span>'
     +'<span class="pcs-sm">'+rows.length+' booking &middot; '+pax+' pax</span>'
@@ -57227,7 +57241,7 @@ function pckSheetOvn(boats, border, date){
     var nm=(vk==='__none')?'ยังไม่จัดรถกลับ':(vk==='__self'?'ลูกค้ากลับเอง':pckVanName(vk));
     var col=(vk==='__none')?'#A32D2D':(vk==='__self'?'#8a8a82':'#5B289A');
     out+='<tbody class="pcs-set" style="--wb:#5B289A;--wbbg:#F4EEFD;--wbink:#3d1a68">'
-      +'<tr class="pcs-g2" style="--c:'+col+'"><td colspan="17"><div class="pcs-w">'
+      +'<tr class="pcs-g2" style="--c:'+col+'"><td colspan="16"><div class="pcs-w">'
       +'<span class="pcs-kind">รถกลับ</span>'
       +'<span class="pcs-pill" style="background:'+col+';color:#fff">'+ckEsc(nm)+'</span>'
       +'<span class="pcs-sm">'+rs.length+' ใบ</span></div></td></tr>'
@@ -57497,6 +57511,25 @@ function pckSheetCSS(){
   +'#piercheckin-host .pcs-ckv{font-size:9.5px;font-weight:700;color:#a5a49d;background:#F1EFE8;'
     +'border-radius:6px;padding:1px 7px;white-space:nowrap}'
   +'#piercheckin-host .pcs-ckv.full{color:#0F6E56;background:#E1F5EE}';
+}
+/* ══ §pckNoStage · บั๊ก "กดแล้วเด้ง" ═════════════════════════════════════════
+   ทุกการกดในหน้านี้ (กางชื่อ · ปลดล็อก · เช็คอิน) เรียก renderPierCheckin ใหม่ทั้งหน้า
+   host.innerHTML ถูกเขียนทับ กล่องเลื่อน .pcs-tw จึงเป็นของใหม่ที่ scroll = 0 เสมอ
+   เลื่อนมาดูแถวกลาง ๆ แล้วกดอะไรสักอย่าง หน้าก็ดีดกลับไปแถวแรก ต้องไล่หาใหม่ทุกครั้ง
+   ตัวจับเวลาที่วาดซ้ำเองเป็นระยะก็ดีดแบบเดียวกัน
+   → จำตำแหน่งเลื่อนไว้ก่อนวาด แล้วคืนให้ทันทีหลังวาด (ทั้งในกล่องและของหน้าเว็บ) */
+var _pckScr=null;
+function pckScrollSave(host){
+  var w=host&&host.querySelector('.pcs-tw');
+  _pckScr={ l:w?w.scrollLeft:0, t:w?w.scrollTop:0,
+            y:(window.pageYOffset||document.documentElement.scrollTop||0) };
+}
+function pckScrollRestore(host){
+  var m=_pckScr; _pckScr=null;
+  if(!m) return;
+  var w=host&&host.querySelector('.pcs-tw');
+  if(w){ if(m.l) w.scrollLeft=m.l; if(m.t) w.scrollTop=m.t; }
+  if(m.y && (window.pageYOffset||document.documentElement.scrollTop||0)!==m.y) window.scrollTo(0,m.y);
 }
 function renderPierCheckin(){
   var host=document.getElementById('piercheckin-host'); if(!host) return;
@@ -57784,6 +57817,7 @@ function renderPierCheckin(){
   var sheetHtml='';
   if(_pckView==='sheet'){ try{ sheetHtml=pckSheetHtml(boats, border, date); }catch(err){
     try{ console.warn('[pckSheet] fallback to cards', err && err.message); }catch(_){} sheetHtml=''; } }
+  pckScrollSave(host);
   host.innerHTML='<style id="pck-style">'+ckSharedCSS('#piercheckin-host')+pckExtraCSS()+pckCardCSS('#piercheckin-host')+pckPayCSS()+pckSheetCSS()+'</style>'
     +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px"><h1 style="margin:0;font-size:19px;font-weight:700">เช็คอินหน้าท่า (Pier Check-in)</h1>'
     +'<span style="font-size:11px;color:#8a8a82">รับช่วงต่อจากเช็คอินรถ · คนที่ No-show ตอนรถรับจะถูกหักออกจากยอดรอรับ (ยกเว้นแจ้งว่าไปเองที่ท่า)</span></div>'
@@ -57794,6 +57828,7 @@ function renderPierCheckin(){
     +pckFilterBar(all, cnt, nHidden)
     +pckViewBar()
     +warnHtml+(sheetHtml||cardsHtml);
+  pckScrollRestore(host);
   ckSyncSticky(host); pckFitPane(); ckStartTick('piercheckin', renderPierCheckin);
   if(_pckKitOpen) pckKitchenRender();   /* §kitPop · เปิดค้างอยู่ก็ให้ตัวเลขในหน้าต่างเดินตามหน้าจอ */
 }
