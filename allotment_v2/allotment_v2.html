@@ -54358,27 +54358,32 @@ function pckNameCell(r, sheet){
   var rcCol=(b.ops&&b.ops.reconfirm&&b.ops.reconfirm.status&&typeof rcStateColor==='function')?rcStateColor(b.ops.reconfirm.status):'#F6E27A';
   var h='<span class="ck-lead" style="background:'+rcCol+'" title="'+e(show[0])+'">'+e(show[0])+'</span>'
     +((typeof pckBoatSplitBadge==='function')?pckBoatSplitBadge(r):'');   // §boatSplit
-  h+=show.slice(1).map(function(n){ return '<div class="pck-gsub">'+e(n)+'</div>'; }).join('');
-  /* §pckName2 · ในตารางไม่มีปุ่มแล้ว · ทั้งช่องกดได้ (ดู pckNameTdAttr)
-     เหลือลูกศรจาง ๆ ท้ายชื่อไว้บอกว่าใบนี้มีชื่อซ่อนอยู่ · ไม่กินบรรทัด ไม่ต้องเล็งกด
-     โหมดการ์ดยังใช้ปุ่มเดิม เพราะการ์ดไม่ได้เอาทั้งกล่องไปผูกคลิก */
+  var phone=b.leadPhone||b.phone||b.customerPhone||'';
+  var telHtml=phone
+    ? '<a class="ck-tel" href="tel:'+e(String(phone).split(/[,;\/]|\sหรือ\s/)[0].replace(/[^0-9+]/g,''))+'" onclick="event.stopPropagation()" title="โทรหาลูกค้า">'+e(phone)+'</a>'
+    : '';
+  /* §pckName3 · ในตาราง บรรทัดแรกคือ ชื่อหัวใบ + เบอร์ ตายตัว
+     ชื่อที่กางออกมาไปต่อท้ายด้านล่างเท่านั้น · กดกาง/ย่อแล้วบรรทัดแรกจึงไม่ขยับเลย
+     ของเดิมเบอร์อยู่ล่างสุด พอกางชื่อ เบอร์ก็ถูกดันลง ตาต้องไล่หาใหม่ทุกครั้ง
+     และไม่มีลูกศรแล้ว · ทั้งช่องคือปุ่มกาง (ดู pckNameTdAttr) */
   if(sheet){
-    if(list.length>1) h+='<span class="pck-gcar">'+(open?'&#9650;':'&#9660;')+'</span>';
-  } else {
-    if(hidden>0) h+='<div><button class="pck-gmore" onclick="event.stopPropagation();pckNamesToggle(\''+b.id+'\')" title="แสดงชื่อที่เหลือทั้งหมด">+'+hidden+' คน</button></div>';
-    else if(open && list.length>maxN) h+='<div><button class="pck-gmore" onclick="event.stopPropagation();pckNamesToggle(\''+b.id+'\')">ย่อ</button></div>';
+    /* ห่อบรรทัดแรกเป็นแถวเดียวกัน · เบอร์จองที่ไว้ก่อน ชื่อยาว ๆ ค่อยย่อเอา
+       เบอร์คือของที่ต้องกดโทรได้จริง ถูกตัดครึ่งแล้วใช้ไม่ได้เลย ส่วนชื่อยังมี tooltip */
+    h='<div class="pck-hd">'+h+(telHtml||'')+'</div>';
+    h+=show.slice(1).map(function(n){ return '<div class="pck-gsub">'+e(n)+'</div>'; }).join('');
+    return h;
   }
+  h+=show.slice(1).map(function(n){ return '<div class="pck-gsub">'+e(n)+'</div>'; }).join('');
+  if(hidden>0) h+='<div><button class="pck-gmore" onclick="event.stopPropagation();pckNamesToggle(\''+b.id+'\')" title="แสดงชื่อที่เหลือทั้งหมด">+'+hidden+' คน</button></div>';
+  else if(open && list.length>maxN) h+='<div><button class="pck-gmore" onclick="event.stopPropagation();pckNamesToggle(\''+b.id+'\')">ย่อ</button></div>';
   var pax=(r.expect!=null?r.expect:r.booked);
   /* §ckTight · ในตารางชีทไม่ต้องนับชื่อให้ · รายชื่ออยู่ใต้ชื่อหลักครบอยู่แล้ว
      "2 ชื่อ / 5 ชื่อ" กินไปหนึ่งบรรทัดต่อแถวโดยไม่ได้บอกอะไรใหม่
      ป้ายเตือน "มีชื่อเดียว" ยังอยู่ในมุมมองการ์ด ซึ่งเป็นที่ที่ไล่เก็บรายชื่อให้ครบจริง ๆ */
-  if(!sheet){
-    if(list.length>1) h+='<div class="pck-gcount">'+list.length+' ชื่อ</div>';
-    else if(pax>1) h+='<div class="pck-gwarn" title="ระบบมีชื่อเดียว แต่จองมา '+pax+' ที่นั่ง — manifest กรมเจ้าท่าต้องการรายชื่อครบ">มีชื่อเดียว · '+pax+' pax</div>';
-  }
-  var phone=b.leadPhone||b.phone||b.customerPhone||'';
+  if(list.length>1) h+='<div class="pck-gcount">'+list.length+' ชื่อ</div>';
+  else if(pax>1) h+='<div class="pck-gwarn" title="ระบบมีชื่อเดียว แต่จองมา '+pax+' ที่นั่ง — manifest กรมเจ้าท่าต้องการรายชื่อครบ">มีชื่อเดียว · '+pax+' pax</div>';
   /* §pckLock · ตัดอิโมจิโทรศัพท์ออก · ตัวเลขอ่านง่ายกว่าอยู่แล้ว ไอคอนกินที่เปล่า ๆ */
-  if(phone) h+='<div><a class="ck-tel" href="tel:'+e(String(phone).split(/[,;\/]|\sหรือ\s/)[0].replace(/[^0-9+]/g,''))+'" onclick="event.stopPropagation()" title="โทรหาลูกค้า">'+e(phone)+'</a></div>';
+  if(telHtml) h+='<div>'+telHtml+'</div>';
   return h;
 }
 /* ══ §pckLock · แผงจัดการของโหมดตาราง ════════════════════════════════════════
@@ -57309,6 +57314,8 @@ function pckSheetCSS(){
   +S+'{border-collapse:separate;border-spacing:0;min-width:1500px;width:-moz-max-content;width:max-content}'
   +S+' th,'+S+' td{border-right:1px solid #D8DCE3;border-bottom:1px solid #D8DCE3;'
     +'vertical-align:middle;background-clip:padding-box}'
+  /* §pckName3 · เส้นคั่นแถวเข้มกว่าเส้นคั่นคอลัมน์ · ตาไล่ตามแถวเป็นหลัก ไม่ได้ไล่ตามคอลัมน์ */
+  +S+' tr.ck-row>td{border-bottom:1px solid #AEB7C4}'
   +S+' td{padding:5px 8px}'
   +S+' thead th{background:#EDF0F5;color:#3C4A63;font-weight:800;font-size:9.5px;letter-spacing:.04em;'
     +'text-align:center;border-bottom:2px solid #A9B2C2;box-shadow:none;padding:0 7px;height:32px;'
@@ -57320,8 +57327,8 @@ function pckSheetCSS(){
   +S+' tr.ck-row>td:nth-child(1),'+S+' thead th:nth-child(1){left:0;width:150px;min-width:150px;max-width:150px}'
   +S+' tr.ck-row>td:nth-child(2),'+S+' thead th:nth-child(2){left:150px;width:128px;min-width:128px;'
     +'max-width:128px;padding:0 !important}'
-  +S+' tr.ck-row>td:nth-child(3),'+S+' thead th:nth-child(3){left:278px;width:240px;min-width:240px;'
-    +'max-width:240px;border-right:2px solid #A9B2C2}'
+  +S+' tr.ck-row>td:nth-child(3),'+S+' thead th:nth-child(3){left:278px;width:300px;min-width:300px;'
+    +'max-width:300px;border-right:2px solid #A9B2C2}'
   +S+' tr.ck-row>td:nth-child(-n+3),'+S+' thead th:nth-child(-n+3){position:sticky;z-index:12}'
   +S+' thead th:nth-child(-n+3){z-index:34}'
   /* ── ช่อง Agency เป็นสีเต็มช่อง · สีเอเจนซี่คือตัวที่ใช้กวาดตาหาแถวเร็วที่สุด ── */
@@ -57406,13 +57413,25 @@ function pckSheetCSS(){
   /* เบอร์โทรต่อท้ายชื่อในบรรทัดเดียวกัน · ของเดิมขึ้นบรรทัดใหม่ กินไปแถวละบรรทัด */
   +S+' td.pcs-nm .ck-tel{display:inline-block !important;margin:0 0 0 6px !important;'
     +'font-size:10.5px;font-weight:600;white-space:nowrap}'
-  +S+' td.pcs-nm .pck-gsub{font-size:9.5px;line-height:1.15;color:#7a7972}'
+  /* (ขนาดชื่อรองย้ายไปตั้งหลังกฎ >div ด้านล่าง · ไม่งั้นโดนกฎนั้นทับ) */
   +S+' td.pcs-nm .ck-lead{font-size:11.5px;padding:1px 7px}'
   +S+' tr.ck-row td>div{display:inline-block;vertical-align:middle;margin:0 4px 0 0 !important}'
   /* ช่องชื่อ ลค · ชื่อคนที่ 2-3 กับเบอร์ ต้องอยู่คนละบรรทัด ดันมาต่อกันแล้วล้นไปทับคอลัมน์ถัดไป */
   +S+' tr.ck-row td.pcs-nm>div{display:block !important;margin:1px 0 0 0 !important;'
     +'max-width:224px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}'
   +S+' td.pcs-nm .ck-lead{max-width:224px}'
+  /* §pckName3 · ชื่อที่กางออกมาต้องตัวเท่าชื่อหัวใบ · เป็นผู้โดยสารเหมือนกัน ไม่ใช่หมายเหตุ
+     ต้องประกาศหลังกฎ td.pcs-nm>div ข้างบน (specificity เท่ากัน · ตัวหลังชนะ) */
+  +S+' tr.ck-row td.pcs-nm>div.pck-gsub{font-size:11.5px;line-height:1.35;color:#3C3B37;'
+    +'font-weight:600;padding:0 7px}'
+  /* ช่องชื่อจับขอบบน · ถ้าจัดกลางแนวตั้ง พอกางชื่อเพิ่มมาหนึ่งบรรทัด ของทั้งช่องจะเลื่อนขึ้น
+     ชื่อหัวใบกับเบอร์ที่เพิ่งอ่านอยู่ก็ขยับหนีตาไปด้วยทุกครั้งที่กด */
+  +S+' tr.ck-row>td.pcs-nm{vertical-align:top;padding-top:6px}'
+  +S+' tr.ck-row td.pcs-nm>div.pck-hd{display:flex !important;align-items:center;gap:6px;'
+    +'max-width:none;overflow:visible}'
+  +S+' .pck-hd .ck-lead{flex:0 1 auto;min-width:0;max-width:none;overflow:hidden;'
+    +'text-overflow:ellipsis;white-space:nowrap}'
+  +S+' .pck-hd .ck-tel{flex:none;margin:0 !important}'
   /* ช่อง Agency · ให้สีเต็มช่องจริง ๆ ทั้งสูงและกว้าง td ยืดตามแถวไม่ได้ ต้องวางทับด้วย absolute */
   +S+' td.pcs-ag{position:relative}'
   +S+' tr.ck-row td.pcs-ag>*{position:absolute;inset:0;display:flex !important;'
@@ -57428,8 +57447,6 @@ function pckSheetCSS(){
   /* ทั้งช่องชื่อกดกางได้ · ต้องมีสัญญาณว่ากดได้ ไม่งั้นไม่มีใครรู้ */
   +S+' td.pcs-nm[data-more]{cursor:pointer}'
   +S+' td.pcs-nm[data-more]:hover{background:#F7F5EF !important}'
-  +S+' td.pcs-nm .pck-gcar{margin-left:5px;font-size:8px;color:#b8b6ad;vertical-align:middle}'
-  +S+' td.pcs-nm[data-more]:hover .pck-gcar{color:#6b6a63}'
   /* ตัวเลขคนขึ้นเรือของแถวที่ล็อก · อ่านได้แต่กดไม่ได้ ไม่ทำให้ดูเหมือนปุ่ม */
   +S+' .ck-stp.lk{border:0;background:none;padding:0 4px;min-width:26px;text-align:center}'
   +S+' .ck-stp.lk .ck-n{color:#6b6a63}'
