@@ -57034,6 +57034,47 @@ function pckSheetBand(kind, key, rows, date, lvl){
     +'</div></td></tr>';
 }
 
+/* แถบรับกลับจากเกาะ · ไม่มีขั้นเช็คอินที่ท่าและไม่มีเงินต้องเก็บ แต่ต้องเห็นว่ามีงานนี้อยู่
+   จัดกลุ่มตามรถที่พากลับ · ยังไม่จัดรถกลับ = ต้องแก้ก่อน จึงอยู่บนสุดของบล็อก */
+function pckSheetOvn(boats, border, date){
+  var rows=[];
+  border.forEach(function(bid){ (boats[bid].ovn||[]).forEach(function(r){ rows.push(r); }); });
+  if(!rows.length) return '';
+  var g={}, ord=[];
+  rows.forEach(function(r){
+    var vk=r._retSelf?'__self':(r._retVan||'__none');
+    if(!g[vk]){ g[vk]=[]; ord.push(vk); }
+    g[vk].push(r);
+  });
+  ord.sort(function(x,y){
+    if(x==='__none') return -1; if(y==='__none') return 1;
+    if(x==='__self') return 1;  if(y==='__self') return -1;
+    return String(pckVanName(x)).localeCompare(String(pckVanName(y))); });
+  var pax=rows.reduce(function(a,r){ return a+(r.expect!=null?r.expect:r.booked); },0);
+  var nNo=(g['__none']||[]).length;
+  var out='<tbody><tr class="pcs-g1 pcs-ovn" style="--c:#5B289A;--bg:#F4EEFD;--ink:#5B289A;--edge:#5B289A">'
+    +'<td colspan="17"><div class="pcs-w">'
+    +'<span class="pcs-kind">OVN</span>'
+    +'<span class="pcs-pill" style="background:#5B289A;color:#fff">&#8617; รับกลับจากเกาะ</span>'
+    +'<span class="pcs-sm">'+rows.length+' booking &middot; '+pax+' pax</span>'
+    +'<span class="pcs-ok" style="background:#EDE7FB;color:#5B289A">ไม่ต้องเช็คอินที่ท่า</span>'
+    +(nNo?('<span class="pcs-due">&#9888; ยังไม่จัดรถกลับ '+nNo+' ใบ</span>'):'')
+    +'</div></td></tr></tbody>';
+  ord.forEach(function(vk){
+    var rs=g[vk];
+    var nm=(vk==='__none')?'ยังไม่จัดรถกลับ':(vk==='__self'?'ลูกค้ากลับเอง':pckVanName(vk));
+    var col=(vk==='__none')?'#A32D2D':(vk==='__self'?'#8a8a82':'#5B289A');
+    out+='<tbody class="pcs-set" style="--wb:#5B289A;--wbbg:#F4EEFD;--wbink:#3d1a68">'
+      +'<tr class="pcs-g2" style="--c:'+col+'"><td colspan="17"><div class="pcs-w">'
+      +'<span class="pcs-kind">รถกลับ</span>'
+      +'<span class="pcs-pill" style="background:'+col+';color:#fff">'+ckEsc(nm)+'</span>'
+      +'<span class="pcs-sm">'+rs.length+' ใบ</span></div></td></tr>'
+      +rs.map(function(r){ return pckRowHtml(r,date,true); }).join('')
+      +'</tbody>';
+  });
+  return out;
+}
+
 function pckSheetHtml(boats, border, date, warnRows){
   var G=pckSheetGroups(boats, border), body='';
   var secKind=(_pckGrp==='van')?'boat':'van';
@@ -57052,6 +57093,7 @@ function pckSheetHtml(boats, border, date, warnRows){
         +'</tbody>';
     });
   });
+  body+=pckSheetOvn(boats, border, date);
   if(!body) return '';
   return '<div class="ck-card pcs-card"><div class="pcs-tw"><table class="ck-tbl pck-tbl pck-sheet">'
     +PCK_SHEET_THEAD+body+'</table></div></div>';
@@ -57071,6 +57113,23 @@ function pckViewBar(){
     +'</div>';
 }
 
+/* ก้นกล่องตารางต้องพอดีขอบล่างจอ · ถ้าตั้งความสูงตายตัว กล่องจะยาวเลยจอ
+   แล้วหัวตารางที่ตรึงไว้จะหลุดขึ้นไปเหนือจอตอนเลื่อนหน้า กลายเป็นไม่มีหัวตาราง */
+var _pckFitRaf=0;
+function pckFitPane(){
+  if(_pckFitRaf) return;
+  _pckFitRaf=requestAnimationFrame(function(){
+    _pckFitRaf=0;
+    var w=document.querySelector('#piercheckin-host .pcs-tw'); if(!w) return;
+    var h=Math.max(320,(window.innerHeight||800)-w.getBoundingClientRect().top-14);
+    if(w._ph!==h){ w._ph=h; w.style.maxHeight=h+'px'; }
+  });
+}
+if(!window._pckFitBound){
+  window._pckFitBound=1;
+  window.addEventListener('resize', pckFitPane);
+  window.addEventListener('scroll', pckFitPane, true);
+}
 function pckSheetCSS(){
   var S='#piercheckin-host table.ck-tbl.pck-sheet';
   return ''
@@ -57142,6 +57201,9 @@ function pckSheetCSS(){
     +'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
   /* ── คอลัมน์ไกด์ · แคบที่สุดเท่าที่ยังอ่านออก เหลือแค่รหัสภาษา ── */
   +S+' td.pcs-gdc{width:56px}'
+  /* หัวคอลัมน์ยาวเกินช่อง · ตัดด้วย ellipsis ไม่ให้ดันความกว้างคอลัมน์ */
+  +S+' thead th{overflow:hidden;text-overflow:ellipsis}'
+  +S+' tr.pcs-g1.pcs-ovn>td{border-top-width:3px}'
   +S+' .pck-gchip.pcs-gd{font-size:9.5px;font-weight:800;padding:1px 7px;letter-spacing:.02em}'
   /* ── ปุ่มเช็คอิน = ปุ่มที่ยื่นสายรัดให้แขก สีจึงต้องอยู่ตรงนั้น ──
      ยังไม่กด = ขอบสีสายรัด เครื่องหมายถูกสีสายรัด หยิบถูกเส้นตั้งแต่ยังไม่กด
@@ -57508,7 +57570,7 @@ function renderPierCheckin(){
     +pckFilterBar(all, cnt, nHidden)
     +pckViewBar()
     +warnHtml+(sheetHtml||cardsHtml);
-  ckSyncSticky(host); ckStartTick('piercheckin', renderPierCheckin);
+  ckSyncSticky(host); pckFitPane(); ckStartTick('piercheckin', renderPierCheckin);
   if(_pckKitOpen) pckKitchenRender();   /* §kitPop · เปิดค้างอยู่ก็ให้ตัวเลขในหน้าต่างเดินตามหน้าจอ */
 }
 // ══ §Travel Summary (2026-07-26) · สรุปหน้างานรายวัน → ตัดสินว่าเก็บเท่าไร / เลื่อนวัน ══
