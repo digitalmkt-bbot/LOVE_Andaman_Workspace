@@ -54050,6 +54050,18 @@ function pckAgg(rows){
   });
   return a;
 }
+/* §pckSheet2 · หัวตารางของมุมมองตาราง
+   ของเดิมยัด Voucher กับ Agency ไว้ช่องเดียว และยัด เวลา/สถานะ/โรงแรม/ห้อง/โซน ไว้ช่องเดียว
+   อ่านทีละใบพอไหว แต่กวาดตาเป็นคอลัมน์ไม่ได้ · ตารางชีทจึงต้องแยกออกมา
+   แยกเฉพาะการแสดงผล ข้อมูลชุดเดิมทุกตัว */
+var PCK_SHEET_THEAD='<thead><tr>'
+ +'<th class="l">Voucher</th><th>Agency</th>'
+ +'<th class="l">ลูกค้า (lead) · โทร</th>'
+ +'<th class="ck-c pck-px">AD</th><th class="ck-c pck-px">CHD</th><th class="ck-c pck-px">INF</th><th class="ck-c pck-px">FOC</th>'
+ +'<th>เวลา</th><th class="l">จุดรับ (Pickup)</th><th class="ck-c">ห้อง</th><th>โซน</th>'
+ +'<th class="l">Add-on</th><th class="l">Special request</th>'
+ +'<th>สถานะหน้าท่า</th><th>เงินหน้าท่า</th><th class="l">การจัดการ</th>'
+ +'</tr></thead>';
 var PCK_THEAD='<thead><tr>'
  +'<th style="width:11%">Voucher / Agency</th>'
  +'<th style="width:15%">ลูกค้า (lead) · โทร</th>'
@@ -54532,7 +54544,7 @@ function pckMealSave(){
   pckMealClose();
   if(typeof renderPierCheckin === 'function') renderPierCheckin();
 }
-function pckRowHtml(r, date){
+function pckRowHtml(r, date, sheet){
   var e=ckEsc, b=r.b, t=r.t;
   var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
   var agName=ag?(ag.name||ag.code||'—'):(b.channel||'walk-in');
@@ -54579,14 +54591,34 @@ function pckRowHtml(r, date){
     return '<td class="ck-c pck-px" title="จองมา '+bkd+' · เดินทางจริง '+left+'"><span style="font-family:\'DM Mono\',monospace;font-weight:800;font-size:14px;color:'+(left?'#A32D2D':'#c8c6be')+'">'+left+'</span>'
       +'<div style="font-size:9px;color:#c2c0b7;line-height:1.1;text-decoration:line-through">'+bkd+'</div></td>';
   };
+  /* §pckSheet2 · โหมดตาราง · Voucher กับ Agency แยกช่อง · ช่อง Agency เป็นสีเต็มช่อง */
+  var headCells;
+  if(sheet){
+    headCells='<td class="pcs-vch"><span class="ck-vch" title="'+e(b.voucherRef||b.code||'')+'">'+e(b.voucherRef||b.code||'—')+'</span>'
+      +((_pckShowBy&&by)?'<div class="pcs-by">โดย <b>'+e(by)+'</b></div>':'')+'</td>'
+      +'<td class="pcs-ag">'+(((typeof laAgencyMark==='function')&&laAgencyMark(b,12,{pad:'0',radius:'0',margin:false}))
+        ||('<div class="ck-agblk" title="'+e(agName)+'" style="background:'+agColor+';color:'+agInk+'">'+e(agName)+'</div>'))+'</td>';
+  } else {
+    headCells='<td><span class="ck-vch" title="'+e(b.voucherRef||b.code||'')+'">'+e(b.voucherRef||b.code||'—')+'</span>'
+      +'<div style="margin-top:5px">'+(((typeof laAgencyMark==='function')&&laAgencyMark(b,12,{pad:'3px 9px',radius:'999px',margin:false,inline:true}))||('<span class="ck-agblk" title="'+e(agName)+'" style="display:inline-block;background:'+agColor+';color:'+agInk+';padding:3px 10px;border-radius:999px;font-size:10.5px;font-weight:700;max-width:175px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle">'+e(agName)+'</span>'))+'</div>'
+      +((_pckShowBy&&by)?'<div style="margin-top:3px;font-size:10px;color:#a5a49d">โดย <b style="color:#5F5E5A;font-weight:700">'+e(by)+'</b></div>':'')
+    +'</td>';
+  }
   return '<tr class="'+cls+'">'
-   +'<td><span class="ck-vch" title="'+e(b.voucherRef||b.code||'')+'">'+e(b.voucherRef||b.code||'—')+'</span>'
-     +'<div style="margin-top:5px">'+(((typeof laAgencyMark==='function')&&laAgencyMark(b,12,{pad:'3px 9px',radius:'999px',margin:false,inline:true}))||('<span class="ck-agblk" title="'+e(agName)+'" style="display:inline-block;background:'+agColor+';color:'+agInk+';padding:3px 10px;border-radius:999px;font-size:10.5px;font-weight:700;max-width:175px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle">'+e(agName)+'</span>'))+'</div>'
-     +((_pckShowBy&&by)?'<div style="margin-top:3px;font-size:10px;color:#a5a49d">โดย <b style="color:#5F5E5A;font-weight:700">'+e(by)+'</b></div>':'')
-   +'</td>'
-   +'<td>'+pckNameCell(r)+'</td>'
+   +headCells
+   +'<td class="pcs-nm">'+pckNameCell(r)+'</td>'
    +px('ad')+px('chd')+px('inf')+px('foc')
-   +'<td>'+(r._ovnBack
+   +(sheet
+     ? ('<td class="pcs-tm">'+(r._ovnBack
+          ? '<span class="ck-pick" style="background:#EDE7FB;color:#5B289A;font-weight:800" title="ขากลับค้างคืน · ขึ้นเรือที่ท่าเกาะ ไม่มีรถไปรับ">&#8617; ไม่มีขารับ</span>'
+          : ckTimeChip(tst, time, 'pier'))+'</td>'
+        +'<td class="pcs-pk">'+(pickup?('<span class="ck-pick">'+(r._ovnBack?'&#8627; ส่ง ':'')+e(pickup)+'</span>'):'<span class="ck-dim">—</span>')
+          +(r.priv?' <span class="pcs-prv" title="รถเหมา · ไม่แชร์">เหมา'+(r.priv.qty>1?(' ×'+r.priv.qty):'')+'</span>':'')
+          +pckDropHtml(b, date)
+          +(r._ovnBack&&r._ovnOut?('<div class="pcs-sub">ไปเมื่อ <b>'+e((typeof ovnDayTh==='function')?ovnDayTh(r._ovnOut):r._ovnOut)+'</b></div>'):'')+'</td>'
+        +'<td class="ck-c pcs-rm">'+(room?('<span class="ck-mono">'+e(room)+'</span>'):'<span class="ck-dim">—</span>')+'</td>'
+        +'<td class="pcs-zn">'+(pArea?('<span class="ck-area">'+e(pArea)+'</span>'):'<span class="ck-dim">—</span>')+'</td>')
+     : '<td>'+(r._ovnBack
        /* §ovnCard · ขากลับไม่มีเวลารับ · ชิปเวลาจะกลายเป็น "สาย" ทั้งที่ไม่เคยมีนัดรับ */
        ? '<span class="ck-pick" style="background:#EDE7FB;color:#5B289A;font-weight:800" title="ขากลับค้างคืน · ขึ้นเรือที่ท่าเกาะ ไม่มีรถไปรับ">&#8617; ไม่มีขารับ &middot; มาจากเกาะ</span>'
          +(r._ovnOut?('<div style="margin-top:4px;font-size:10.5px;color:#a5a49d">ไปเมื่อ <b style="color:#5B289A">'+e((typeof ovnDayTh==='function')?ovnDayTh(r._ovnOut):r._ovnOut)+'</b></div>'):'')
@@ -54599,13 +54631,13 @@ function pckRowHtml(r, date){
         +(r.priv?' <span title="รถเหมา · ไม่แชร์" style="display:inline-block;background:#F4E8FB;color:#6B289A;font-weight:700;font-size:9px;padding:1px 6px;border-radius:6px;white-space:nowrap">เหมา'+(r.priv.qty>1?(' ×'+r.priv.qty):'')+'</span>':'')
       +'</div>':'')
      +pckDropHtml(b, date)
-   +'</td>'
-   +'<td>'+pckAddonCell(r,date)+'</td>'
-   +'<td>'+(sreq?'<div style="margin-bottom:5px"><span class="ck-sreq" title="'+e(sreq)+'">'+e(sreq)+'</span></div>':'')
+   +'</td>')
+   +'<td class="pcs-ao">'+pckAddonCell(r,date)+'</td>'
+   +'<td class="pcs-sq">'+(sreq?'<div style="margin-bottom:5px"><span class="ck-sreq" title="'+e(sreq)+'">'+e(sreq)+'</span></div>':'')
      +pckMealCell(b, date)+'</td>'
-   +'<td>'+pckStageCell(r,date)+'</td>'
-   +'<td>'+pckMoneyCell(b,date)+'</td>'
-   +'<td><div class="pck-acts">'
+   +'<td class="pcs-st">'+pckStageCell(r,date)+'</td>'
+   +'<td class="pcs-mn">'+pckMoneyCell(b,date)+'</td>'
+   +'<td class="pcs-mg"><div class="pck-acts">'
      +(_vd?('<span class="pck-vdchip" title="'+e(pckVoidLabel(_vd)+' · '+_vd.pax+' คน'+(_vd.reason?(' · '+_vd.reason):''))+'">&#10007; '+e(pckVoidLabel(_vd))+' · ไม่ต้องเช็คอิน</span>'
        // §ckPierFix · ปิดมาจากฝั่งรถ → ปุ่ม "ถอน" ของหน้าท่าใช้ไม่ได้ (ไม่มีรายการฝั่งนี้)
        //   ให้ปุ่มยืนยันว่ามาจริงแทน · บันทึกฝั่งรถไม่ถูกแตะ
@@ -56955,7 +56987,7 @@ function pckSheetBand(kind, key, rows, date, lvl){
   ink=cold?'#98A0AC':col;
   var edge=cold?'#DFE3E9':col;
   return '<tr class="pcs-g'+lvl+(cold?' cold':'')+'" style="--c:'+e(col)+';--bg:'+e(bg)+';--ink:'+e(ink)+';--edge:'+e(edge)+'">'
-    +'<td colspan="12"><div class="pcs-w">'
+    +'<td colspan="16"><div class="pcs-w">'
     +'<span class="pcs-kind">'+(isBoat?'เรือ':'รถ')+'</span>'
     +'<span class="pcs-pill" style="background:'+e(col)+';color:'
       +((typeof bkV2ContrastInk==='function')?bkV2ContrastInk(col):'#fff')+'">'+e(nm)+'</span>'
@@ -56979,13 +57011,13 @@ function pckSheetHtml(boats, border, date, warnRows){
       var W=pckWb(date,bid), wc=W?pckWbBase(W.c):'#12A46F';
       body+='<tbody class="pcs-set" style="--wb:'+ckEsc(wc)+';--wbbg:'+ckEsc(pckTint(wc,0.86))+'">'
         +pckSheetBand(secKind, sk, rows, date, 2)
-        +rows.map(function(r){ return pckRowHtml(r,date); }).join('')
+        +rows.map(function(r){ return pckRowHtml(r,date,true); }).join('')
         +'</tbody>';
     });
   });
   if(!body) return '';
   return '<div class="ck-card pcs-card"><div class="pcs-tw"><table class="ck-tbl pck-tbl pck-sheet">'
-    +PCK_THEAD+body+'</table></div></div>';
+    +PCK_SHEET_THEAD+body+'</table></div></div>';
 }
 
 /* ปุ่มสลับมุมมอง + แกนการเรียง · วางไว้ท้ายแถบกรอง ไม่กินบรรทัดของตัวเอง */
@@ -57026,9 +57058,60 @@ function pckSheetCSS(){
   +S+' tr.ck-row>td{background:#fff}'
   +S+' tr.ck-row>td:nth-child(-n+2),'+S+' thead th:nth-child(-n+2){position:sticky;z-index:12}'
   +S+' thead th:nth-child(-n+2){z-index:34}'
-  +S+' tr.ck-row>td:nth-child(1),'+S+' thead th:nth-child(1){left:0;width:172px;min-width:172px;max-width:172px}'
-  +S+' tr.ck-row>td:nth-child(2),'+S+' thead th:nth-child(2){left:172px;width:230px;min-width:230px;'
-    +'max-width:230px;border-right:2px solid #A9B2C2}'
+  +S+' tr.ck-row>td:nth-child(1),'+S+' thead th:nth-child(1){left:0;width:150px;min-width:150px;max-width:150px}'
+  +S+' tr.ck-row>td:nth-child(2),'+S+' thead th:nth-child(2){left:150px;width:128px;min-width:128px;'
+    +'max-width:128px;padding:0 !important}'
+  +S+' tr.ck-row>td:nth-child(3),'+S+' thead th:nth-child(3){left:278px;width:240px;min-width:240px;'
+    +'max-width:240px;border-right:2px solid #A9B2C2}'
+  +S+' tr.ck-row>td:nth-child(-n+3),'+S+' thead th:nth-child(-n+3){position:sticky;z-index:12}'
+  +S+' thead th:nth-child(-n+3){z-index:34}'
+  /* ── ช่อง Agency เป็นสีเต็มช่อง · สีเอเจนซี่คือตัวที่ใช้กวาดตาหาแถวเร็วที่สุด ── */
+  +S+' td.pcs-ag>*{display:flex !important;align-items:center;justify-content:center;'
+    +'width:100% !important;max-width:none !important;min-height:34px;height:100%;'
+    +'margin:0 !important;padding:0 8px !important;border-radius:0 !important;'
+    +'box-shadow:none !important;border:0 !important;font-size:11px;font-weight:700;'
+    +'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.15}'
+  /* ── ความกว้างคอลัมน์ที่แยกใหม่ ── */
+  +S+' .pcs-vch{font-size:11px;line-height:1.2}'
+  +S+' .pcs-by{font-size:9px;color:#a5a49d;margin-top:2px}'
+  +S+' .pcs-by b{color:#5F5E5A;font-weight:700}'
+  +S+' td.pcs-tm{width:104px;text-align:center}'
+  +S+' td.pcs-pk{min-width:230px;max-width:230px}'
+  +S+' td.pcs-rm{width:58px}'
+  +S+' td.pcs-zn{width:96px;text-align:center}'
+  +S+' td.pcs-ao{width:150px}'
+  +S+' td.pcs-sq{width:210px}'
+  +S+' td.pcs-st{width:150px}'
+  +S+' td.pcs-mn{width:150px}'
+  +S+' td.pcs-mg{width:300px}'
+  +S+' .pcs-prv{display:inline-block;background:#F4E8FB;color:#6B289A;font-weight:700;font-size:9px;'
+    +'padding:0 6px;border-radius:6px;vertical-align:middle;white-space:nowrap}'
+  +S+' .pcs-sub{font-size:9.5px;color:#a5a49d;margin-top:2px}'
+  /* ── บีบความสูง · ป้ายและปุ่มในตารางชีทเล็กกว่าในการ์ด ── */
+  +S+' .ck-pick{max-width:220px;font-size:12px;font-weight:600;line-height:1.2}'
+  +S+' .ck-sreq{max-width:196px;font-size:10px;line-height:1.25;padding:1px 6px}'
+  +S+' .ck-area{font-size:10px;padding:1px 7px}'
+  +S+' .ck-tm{font-size:11px}'
+  +S+' .ck-vch{font-size:11px;line-height:1.2;max-width:138px}'
+  /* ── บีบแถวให้เตี้ย · ในการ์ดของเดิมทุกอย่างวางเป็นบล็อกซ้อนกัน แถวเลยสูง 150px
+     ตารางชีทต้องกวาดตาลงมาได้ ของที่เดิมซ้อนกันจึงดันมาต่อกันในบรรทัดเดียว ── */
+  +S+' tr.ck-row>td{padding:4px 8px;vertical-align:middle;overflow:hidden}'
+  +S+' tr.ck-row td>div{display:inline-block;vertical-align:middle;margin:0 4px 0 0 !important}'
+  /* ช่องชื่อ ลค · ชื่อคนที่ 2-3 กับเบอร์ ต้องอยู่คนละบรรทัด ดันมาต่อกันแล้วล้นไปทับคอลัมน์ถัดไป */
+  +S+' tr.ck-row td.pcs-nm>div{display:block !important;margin:1px 0 0 0 !important;'
+    +'max-width:224px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}'
+  +S+' td.pcs-nm .ck-lead{max-width:224px}'
+  /* ช่อง Agency · ให้สีเต็มช่องจริง ๆ ทั้งสูงและกว้าง td ยืดตามแถวไม่ได้ ต้องวางทับด้วย absolute */
+  +S+' td.pcs-ag{position:relative}'
+  +S+' tr.ck-row td.pcs-ag>*{position:absolute;inset:0;display:flex !important;'
+    +'width:auto !important;height:auto !important;min-height:0;margin:0 !important}'
+  +S+' .pck-acts{display:flex !important;flex-wrap:nowrap !important;align-items:center;'
+    +'gap:4px;margin:0 !important}'
+  +S+' .pck-acts .ck-stp button{width:20px;height:20px;font-size:12px}'
+  +S+' .pck-acts .ck-ev{font-size:9px;padding:1px 6px}'
+  +S+' .pck-acts .pck-ok{padding:3px 10px;font-size:10px}'
+  +S+' .pck-acts button{white-space:nowrap}'
+  +S+' .pck-paychips{display:inline-flex !important;gap:3px;flex-wrap:nowrap}'
   /* ── สีแถวมีแค่ 2 แบบ · ไม่มีสี กับ สีสายรัดของลำนั้น ── */
   +S+' tbody.pcs-set tr.ck-row.ck-done>td{background:var(--wbbg) !important}'
   +S+' tbody.pcs-set tr.ck-row.ck-done>td:first-child{box-shadow:inset 5px 0 0 var(--wb) !important}'
