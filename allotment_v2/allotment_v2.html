@@ -46541,6 +46541,19 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet (all their
 function _rcAgentColorOf(bk){ return (bk&&bk.agentId&&typeof bkV2AgentColor==='function')?bkV2AgentColor(bk.agentId):'#EDEBE4'; }
 function _rcInkOf(hex, hasAg){ if(!hasAg) return '#5F5E5A'; return (typeof bkV2ContrastInk==='function')?bkV2ContrastInk(hex):'#fff'; }
 function _rcSentRing(invoiceOrPaid){ return invoiceOrPaid?'#9A6A00':'#5B4FC4'; }   // gold = invoice/paid · purple = unpaid
+/* ══ §tiFix (2026-09-03) · <i class="ti ti-…"> ไม่ขึ้นเลยสักตัว ═══════════════
+   ทั้งไฟล์ไม่มี @font-face และไม่มี <link> ไปหา tabler-icons · คลาส .ti ไม่มีนิยามอยู่จริง
+   ป้าย Sent / Not sent ของหน้ารีคอนเฟิร์มจึงเหลือแต่ตัวหนังสือ ไอคอนหายไปเฉย ๆ
+   ใช้ inline SVG แบบเดียวกับ §dashIco ที่แก้ไปแล้ว ไม่โหลดฟอนต์ทั้งชุดมาเพื่อไอคอน 3 ตัว
+   ต้องประกาศไว้ระดับบนสุด · ของสองที่ที่ใช้อยู่คนละฟังก์ชันกัน */
+function _TICO(d,sz){
+  return '<svg viewBox="0 0 24 24" width="'+(sz||13)+'" height="'+(sz||13)+'" fill="none" '
+    +'stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" '
+    +'style="vertical-align:-2px;flex:none">'+d+'</svg>';
+}
+var TI_CHECK  =_TICO('<path d="M5 12.5l4.5 4.5L19 7"/>', 11);
+var TI_CIRCLE =_TICO('<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.7 2.7L16 9.5"/>', 13);
+var TI_CLOCK  =_TICO('<circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/>', 13);
 function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); if(!host)return;
   var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
   if(!_rcDate)_rcDate=_rcYMD(new Date());
@@ -46556,7 +46569,7 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
   // Agent name = agency colour (same as By-trip-date · bkV2AgentColor) · after re-confirm sent, a ring shows payment: gold = invoice/paid, purple = unpaid
   function agChip(d, big){ var hasAg=!!d.bk.agentId, ac=_rcAgentColorOf(d.bk), ink=_rcInkOf(ac,hasAg), sent=_rcSent(d.bk);
     var ring=sent?(';box-shadow:0 0 0 2px '+_rcSentRing(_rcIsInvoiceAgent(d.ag)||d.paid)):'';
-    return '<span style="display:inline-block;background:'+ac+';color:'+ink+';padding:'+(big?'4px 11px':'3px 9px')+';border-radius:7px;font-weight:600;font-size:'+(big?'13px':'11.5px')+';white-space:nowrap;max-width:210px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle'+ring+'">'+esc(d.agentName)+(sent?' <i class="ti ti-check" style="font-size:11px"></i>':'')+'</span>'; }
+    return '<span style="display:inline-block;background:'+ac+';color:'+ink+';padding:'+(big?'4px 11px':'3px 9px')+';border-radius:7px;font-weight:600;font-size:'+(big?'13px':'11.5px')+';white-space:nowrap;max-width:210px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle'+ring+'">'+esc(d.agentName)+(sent?(' '+TI_CHECK):'')+'</span>'; }
   function fmtTime(iso){ try{ return new Date(iso).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
   var COLDEFS=[{k:'prog',l:'Program',w:176},{k:'agent',l:'Agent',w:146},{k:'voucher',l:'Booking #',w:124},{k:'lead',l:'Customer',w:148},{k:'phone',l:'Phone',w:130},{k:'ad',l:'AD',w:32},{k:'chd',l:'CHD',w:38},{k:'inf',l:'INF',w:34},{k:'foc',l:'FOC',w:34},{k:'time',l:'Pick-up',w:124},{k:'hotel',l:'Hotel',w:180},{k:'room',l:'Room',w:64},{k:'zone',l:'Zone',w:108},{k:'addon',l:'Add-on',w:128},{k:'special',l:'Special request',w:164},{k:'payment',l:'Payment',w:150},{k:'status',l:'Re-confirm status',w:196}];
   function _rcCols(withAgent){ return COLDEFS.filter(function(c){ return withAgent||c.k!=='agent'; }); }
@@ -46622,13 +46635,13 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
       var allPaid=grp.every(function(r){return r.d.paid;}), invoice=_rcIsInvoiceAgent(ag);
       var hasAg=!!(grp[0].bk.agentId), ac=_rcAgentColorOf(grp[0].bk), ink=_rcInkOf(ac,hasAg);
       var hring=allSent?(';box-shadow:0 0 0 2px '+_rcSentRing(invoice||allPaid)):'';
-      var nameChip='<span style="display:inline-block;background:'+ac+';color:'+ink+';font-weight:600;font-size:13px;padding:4px 11px;border-radius:7px;max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle'+hring+'">'+esc(grp[0].d.agentName)+(allSent?' <i class="ti ti-check" style="font-size:11px"></i>':'')+'</span>';
+      var nameChip='<span style="display:inline-block;background:'+ac+';color:'+ink+';font-weight:600;font-size:13px;padding:4px 11px;border-radius:7px;max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle'+hring+'">'+esc(grp[0].d.agentName)+(allSent?(' '+TI_CHECK):'')+'</span>';
       var payChip=invoice?'invoice':(allPaid?'paid':((typeof bkV2PayLabel==='function'?bkV2PayLabel(ag&&ag.payType):(ag&&ag.payType))||'—'));
       var payColor=invoice?'#0C447C':(allPaid?'#0F6E56':'#993C1D');
       var sentTimes=grp.map(function(r){return _rcSentAt(r.bk);}).filter(Boolean).sort();
-      var statusHtml=allSent?('<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#0F6E56"><i class="ti ti-circle-check"></i> Sent'+(sentTimes[0]?' '+esc(fmtTime(sentTimes[0])):'')+'</span>')
+      var statusHtml=allSent?('<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#0F6E56">'+TI_CIRCLE+' Sent'+(sentTimes[0]?' '+esc(fmtTime(sentTimes[0])):'')+'</span>')
         :(anySent?('<span style="font-size:12px;color:#993C1D">Partial '+grp.filter(function(r){return _rcSent(r.bk);}).length+'/'+grp.length+'</span>')
-        :('<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#8A8880"><i class="ti ti-clock"></i> Not sent</span>'));
+        :('<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#8A8880">'+TI_CLOCK+' Not sent</span>'));
       var btn=allSent?('<button onclick="rcSendAgent(\''+key+'\')" style="border:1px solid #E1DED6;background:#fff;border-radius:8px;padding:5px 12px;font-size:12px;color:#5F5E5A">Resend</button>'
               +' <button onclick="rcUnsendAgent(\''+key+'\')" title="Undo sent status" style="border:1px solid #E9C9C9;background:#fff;border-radius:8px;padding:5px 10px;font-size:12px;color:#A32D2D">Undo</button>')
         :('<button onclick="rcSendAgent(\''+key+'\')" style="border:none;background:#1683C7;color:#fff;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600">Send re-confirm</button>');
