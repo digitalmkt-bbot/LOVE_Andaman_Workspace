@@ -53111,7 +53111,7 @@ function pckMoney(b, date){
            noSlip:(typeof pckNoSlip==='function')?pckNoSlip(b,date):0,
            due:Math.max(0, pckN(gross-pierPaid)), got:pckN(exGot+upGot+pierPaid), payType:(ag&&ag.payType)||'' };
 }
-function pckMoneyCell(b, date){
+function pckMoneyCell(b, date, sheet){
   var e=ckEsc, M=pckMoney(b,date);
   var m=function(n){ return '฿'+pckNum(n); };
   var out='';
@@ -53124,12 +53124,26 @@ function pckMoneyCell(b, date){
     if(!M.ovnSettled && typeof bkV2CotChip==='function'){ var _c=bkV2CotChip(b,''); if(_c&&_c.chip) _chips+=_c.chip; }
     if(_chips) out+='<div class="pck-paychips">'+_chips+'</div>';
   }catch(_){}
+  var parts=[];
   if(M.due>0){
-    var parts=[];
     if(M.cot>0) parts.push('COT '+m(M.cot));
     if(M.balance>0) parts.push('ค้าง '+m(M.balance));
     if(M.upDue>0) parts.push('upgrade '+m(M.upDue));
     if(M.pierPaid>0) parts.push('เก็บแล้ว '+m(M.pierPaid));
+  }
+  /* §pckSheet3 · โหมดตาราง · ของเดิมเห็นแค่ตัวเลขกับป้าย Invoice ต้องเดาเองว่าต้องเก็บหรือไม่ต้องเก็บ
+     บรรทัดบนจึงตอบคำถามเดียว "ต้องเก็บเงินใบนี้ไหม" · เหลือง=ต้องเก็บ เขียว=เก็บแล้ว เทา=ไม่ต้องเก็บ
+     รายละเอียดที่เหลือ (ที่มาของยอด · ค่าธรรมเนียม · แบ่งจ่าย · รอสลิป · ปุ่มเก็บเงิน) ยังอยู่ครบข้างล่าง */
+  if(sheet){
+    var _v;
+    if(M.due>0) _v='<span class="pcs-pay due" title="'+e(parts.join(' · ')+(M.note?(' · '+M.note):''))+'">เก็บที่ท่า <b>'+m(M.due)+'</b></span>';
+    else if(M.pierPaid>0) _v='<span class="pcs-pay ok">&#10003; เก็บครบ <b>'+m(M.pierPaid)+'</b></span>';
+    else if(M.payType==='cot') _v='<span class="pcs-pay warn">COT &middot; ยังไม่ระบุยอด</span>';
+    else if(M.ovnSettled) _v='<span class="pcs-pay ok">&#10003; ชำระแล้ววันขาไป</span>';
+    else _v='<span class="pcs-pay none">ไม่ต้องเก็บ</span>';
+    out=_v+out+(parts.length?('<div class="pcs-payp">'+e(parts.join(' · '))+'</div>'):'');
+  }
+  else if(M.due>0){
     out+='<div title="'+e(parts.join(' · ')+(M.note?(' · '+M.note):''))+'" style="display:inline-block;background:#FBF0DD;color:#7A4A00;border:1px solid #EAD9B0;border-radius:7px;padding:3px 9px;font-weight:800;font-family:\'DM Mono\',monospace;font-size:12.5px;white-space:nowrap">'+m(M.due)+'</div>'
        +'<div style="font-size:9px;color:#a08a5f;margin-top:2px;white-space:nowrap">'+e(parts.join(' · '))+'</div>';
   } else if(M.pierPaid>0){
@@ -54059,7 +54073,7 @@ var PCK_SHEET_THEAD='<thead><tr>'
  +'<th class="l">ลูกค้า (lead) · โทร</th>'
  +'<th class="ck-c pck-px">AD</th><th class="ck-c pck-px">CHD</th><th class="ck-c pck-px">INF</th><th class="ck-c pck-px">FOC</th>'
  +'<th>เวลา</th><th class="l">จุดรับ (Pickup)</th><th class="ck-c">ห้อง</th><th>โซน</th>'
- +'<th class="l">Add-on</th><th class="l">Special request</th>'
+ +'<th class="l">Add-on</th><th class="l">Special request</th><th>ไกด์</th>'
  +'<th>สถานะหน้าท่า</th><th>เงินหน้าท่า</th><th class="l">การจัดการ</th>'
  +'</tr></thead>';
 var PCK_THEAD='<thead><tr>'
@@ -54363,13 +54377,25 @@ function pckMealChips(b){
   if(al) out.push({ t:'⚠ แพ้อาหาร ' + al, c:'#A32D2D', bg:'#FCEBEB', bd:'#F0C9C9' });
   return out;
 }
-function pckMealCell(b, date){
+/* §pckSheet3 · ป้ายภาษาไกด์อย่างเดียว · ในตารางชีทไกด์เป็นคอลัมน์ของตัวเอง
+   ช่องแคบมาก จึงเหลือแค่รหัสภาษากับสีประจำภาษา · ข้อความเต็มอยู่ใน title */
+function pckGuideCell(b){
+  var gl=(typeof pckGuideLangs==='function')?pckGuideLangs(b):[];
+  if(!gl.length) return '<span class="ck-dim">—</span>';
+  var gc=(typeof pckGuideColorOf==='function')?pckGuideColorOf(gl):'';
+  var gInk=(gc && typeof bkV2ContrastInk==='function')?bkV2ContrastInk(gc):'';
+  var gEn=(gl.length===1 && gl[0]==='EN');
+  return '<span class="pck-gchip pcs-gd'+((gEn&&!gc)?' en':'')+'"'
+    +(gc?(' style="background:'+gc+';border-color:'+gc+';color:'+gInk+'"'):'')
+    +' title="ใบนี้ขอไกด์พูด '+ckEsc(gl.join(' / '))+'">'+gl.map(ckEsc).join('/')+'</span>';
+}
+function pckMealCell(b, date, noGuide){
   var chips = pckMealChips(b), m = b.specialMeals || {};
   /* §pierGuide · ภาษาไกด์ของใบนี้ · อ่านจากที่เดียวกับใบงานไกด์ (pckGuideLangs)
      ไม่ได้ตีความ notes เอง · ใบไหนติ๊กไว้ในใบจองเท่านั้นที่ขึ้น */
   var gl=(typeof pckGuideLangs==='function')?pckGuideLangs(b):[];
   var gHtml='';
-  if(gl.length){
+  if(gl.length && !noGuide){
     var gc=(typeof pckGuideColorOf==='function')?pckGuideColorOf(gl):'';
     var gInk=(gc && typeof bkV2ContrastInk==='function')?bkV2ContrastInk(gc):'';
     var gEn=(gl.length===1 && gl[0]==='EN');   /* กติกาเดียวกับป้ายบนใบงานไกด์ */
@@ -54634,9 +54660,10 @@ function pckRowHtml(r, date, sheet){
    +'</td>')
    +'<td class="pcs-ao">'+pckAddonCell(r,date)+'</td>'
    +'<td class="pcs-sq">'+(sreq?'<div style="margin-bottom:5px"><span class="ck-sreq" title="'+e(sreq)+'">'+e(sreq)+'</span></div>':'')
-     +pckMealCell(b, date)+'</td>'
+     +pckMealCell(b, date, !!sheet)+'</td>'
+   +(sheet?('<td class="ck-c pcs-gdc">'+pckGuideCell(b)+'</td>'):'')
    +'<td class="pcs-st">'+pckStageCell(r,date)+'</td>'
-   +'<td class="pcs-mn">'+pckMoneyCell(b,date)+'</td>'
+   +'<td class="pcs-mn">'+pckMoneyCell(b,date,sheet)+'</td>'
    +'<td class="pcs-mg"><div class="pck-acts">'
      +(_vd?('<span class="pck-vdchip" title="'+e(pckVoidLabel(_vd)+' · '+_vd.pax+' คน'+(_vd.reason?(' · '+_vd.reason):''))+'">&#10007; '+e(pckVoidLabel(_vd))+' · ไม่ต้องเช็คอิน</span>'
        // §ckPierFix · ปิดมาจากฝั่งรถ → ปุ่ม "ถอน" ของหน้าท่าใช้ไม่ได้ (ไม่มีรายการฝั่งนี้)
@@ -56904,6 +56931,15 @@ function pckWbBase(c){
   var r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
   return ((0.299*r+0.587*g+0.114*b)/255 > 0.88) ? '#B9BFC9' : ('#'+h);
 }
+/* คู่กับ pckTint · ใช้ทำสีตัวหนังสือของสายรัดบนพื้นขาว */
+function pckShade(c,k){
+  var h=String(c||'#888').replace('#',''); if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  if(!/^[0-9a-f]{6}$/i.test(h)) h='888888';
+  var o='#';
+  for(var i=0;i<3;i++){ var v=parseInt(h.substr(i*2,2),16);
+    o+=('0'+Math.round(v*k).toString(16)).slice(-2); }
+  return o;
+}
 function pckTint(c,t){
   var h=String(c||'#888').replace('#',''); if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
   if(!/^[0-9a-f]{6}$/i.test(h)) h='888888';
@@ -56987,7 +57023,7 @@ function pckSheetBand(kind, key, rows, date, lvl){
   ink=cold?'#98A0AC':col;
   var edge=cold?'#DFE3E9':col;
   return '<tr class="pcs-g'+lvl+(cold?' cold':'')+'" style="--c:'+e(col)+';--bg:'+e(bg)+';--ink:'+e(ink)+';--edge:'+e(edge)+'">'
-    +'<td colspan="16"><div class="pcs-w">'
+    +'<td colspan="17"><div class="pcs-w">'
     +'<span class="pcs-kind">'+(isBoat?'เรือ':'รถ')+'</span>'
     +'<span class="pcs-pill" style="background:'+e(col)+';color:'
       +((typeof bkV2ContrastInk==='function')?bkV2ContrastInk(col):'#fff')+'">'+e(nm)+'</span>'
@@ -57009,7 +57045,8 @@ function pckSheetHtml(boats, border, date, warnRows){
       /* สีสายรัดของลำที่แถวชุดนี้จะขึ้น · ตั้งเป็นตัวแปรไว้ที่ tbody แถวที่เช็คอินแล้วหยิบไปใช้ */
       var bid=(secKind==='boat')?sk:gr.key;
       var W=pckWb(date,bid), wc=W?pckWbBase(W.c):'#12A46F';
-      body+='<tbody class="pcs-set" style="--wb:'+ckEsc(wc)+';--wbbg:'+ckEsc(pckTint(wc,0.86))+'">'
+      body+='<tbody class="pcs-set" style="--wb:'+ckEsc(wc)+';--wbbg:'+ckEsc(pckTint(wc,0.86))
+        +';--wbink:'+ckEsc(pckShade(wc,0.55))+'">'
         +pckSheetBand(secKind, sk, rows, date, 2)
         +rows.map(function(r){ return pckRowHtml(r,date,true); }).join('')
         +'</tbody>';
@@ -57092,6 +57129,26 @@ function pckSheetCSS(){
   +S+' .ck-sreq{max-width:196px;font-size:10px;line-height:1.25;padding:1px 6px}'
   +S+' .ck-area{font-size:10px;padding:1px 7px}'
   +S+' .ck-tm{font-size:11px}'
+  /* ── ช่องเงิน · บรรทัดบนคือคำตอบ บรรทัดล่างคือที่มา ── */
+  +S+' td.pcs-mn{white-space:nowrap}'
+  +S+' .pcs-pay{display:inline-block;border-radius:7px;padding:2px 9px;font-size:10.5px;'
+    +'font-weight:800;white-space:nowrap;margin:0 4px 2px 0;vertical-align:middle}'
+  +S+' .pcs-pay b{font-size:13px;font-weight:800;margin-left:3px;font-variant-numeric:tabular-nums}'
+  +S+' .pcs-pay.due{background:#FBF0DD;color:#7A4A00;border:1px solid #EAD9B0}'
+  +S+' .pcs-pay.ok{background:#DCF4E8;color:#0F6E56;border:1px solid #B7E2D2}'
+  +S+' .pcs-pay.none{background:#F3F4F6;color:#9AA1AC;border:1px solid #E4E7EC}'
+  +S+' .pcs-pay.warn{background:#FBF3E6;color:#8A5B00;border:1px solid #EBDCC2}'
+  +S+' .pcs-payp{display:block !important;font-size:9px;color:#a08a5f;margin:1px 0 0 0 !important;'
+    +'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  /* ── คอลัมน์ไกด์ · แคบที่สุดเท่าที่ยังอ่านออก เหลือแค่รหัสภาษา ── */
+  +S+' td.pcs-gdc{width:56px}'
+  +S+' .pck-gchip.pcs-gd{font-size:9.5px;font-weight:800;padding:1px 7px;letter-spacing:.02em}'
+  /* ── ปุ่มเช็คอิน = ปุ่มที่ยื่นสายรัดให้แขก สีจึงต้องอยู่ตรงนั้น ──
+     ยังไม่กด = ขอบสีสายรัด เครื่องหมายถูกสีสายรัด หยิบถูกเส้นตั้งแต่ยังไม่กด
+     กดแล้ว = ปุ่มทึบสีนั้น และทั้งแถวเปลี่ยนตาม ยืนยันว่าแจกถูก */
+  +S+' tbody.pcs-set .pck-ok{background:var(--wb);border-color:var(--wb);color:#fff}'
+  +S+' tbody.pcs-set .pck-ok.off{background:#fff;border-color:var(--wb);color:var(--wbink)}'
+  +S+' tbody.pcs-set .pck-ok.off .tk{color:var(--wb)}'
   +S+' .ck-vch{font-size:11px;line-height:1.2;max-width:138px}'
   /* ── บีบแถวให้เตี้ย · ในการ์ดของเดิมทุกอย่างวางเป็นบล็อกซ้อนกัน แถวเลยสูง 150px
      ตารางชีทต้องกวาดตาลงมาได้ ของที่เดิมซ้อนกันจึงดันมาต่อกันในบรรทัดเดียว ── */
