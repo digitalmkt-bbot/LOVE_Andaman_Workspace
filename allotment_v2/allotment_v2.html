@@ -49283,6 +49283,19 @@ function renderVanJobs(){
     // RETURN leg not yet arranged (separate drop-off · not self-return · no return van assigned)
     if(!_ovnRet && typeof bkV2RetInfo==='function'){ const _ri=bkV2RetInfo(b,date); if(_ri&&_ri.alert){ unRet+=full||1; unRetList.push({name:(b.leadPax||b.voucherRef||b.id||'-'), drop:(_ri.drop||'?'), route:t.routeId||''}); const k=t.routeId||'_'; unRetByRoute[k]=(unRetByRoute[k]||0)+(full||1); } }
   });
+  /* §strandMove · คันที่เคยมีงานในวันนี้ แต่ใบถูกเลื่อนวันออกไปแล้ว */
+  if(typeof ckStrandMovedRows==='function') ckStrandMovedRows(date).forEach(r=>{
+    if(!r.vanId) return;
+    const mk=r.vanId+'~'+(r.t.routeId||'');
+    const E=(agg[mk]=agg[mk]||{vid:r.vanId,routeId:r.t.routeId||'',pax:0,bk:0,
+                               zones:{},routes:{},pickups:{},gno:0,seq:1e9,sx:0});
+    if(r.t.routeId) E.routes[r.t.routeId]=1;
+    if(r.t.zone) E.zones[r.t.zone]=1;
+    const mg=+r.O.vanGroup||0, ms=+r.O.vanSeq||0;
+    if(mg>0 && (!E.gno || mg<E.gno)) E.gno=mg;
+    if(ms>0 && ms<E.seq) E.seq=ms;
+    E.sx++; _sxTot++;
+  });
   const allIds=Object.keys(agg);   // each id = "van~route" job key
   // route options (distinct routeIds across all jobs that day)
   const routeIdSet={}; allIds.forEach(k=>{ if(agg[k].routeId) routeIdSet[agg[k].routeId]=1; });
@@ -49562,6 +49575,14 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
       if(Array.isArray(_O.vanSplits)&&_O.vanSplits.length){ _O.vanSplits.forEach(s=>{ const ov=s.vanId||null; const rv=s.vanReturnId||ov; const hit=isRet?(rv===vanId):(ov===vanId); if(hit) rows.push({b,t,strand:_sx,splitPax:+s.pax||0,splitBd:bkSplitPax(s),retId:s.vanReturnId||null,outVid:ov,seq:+s.vanSeq||0, sHotel:s.pickHotel||'', sAreaId:s.pickAreaId||'', sZone:s.pickZone||'', sWho:s.altWho||'', sMain:!!s.main}); }); }
       else { const o=_O; const ov=o.vanId||null; const rv=o.vanReturnId||ov; const hit=isRet?(rv===vanId):(ov===vanId); if(hit) rows.push({b,t,strand:_sx,splitPax:null,retId:o.vanReturnId||null,outVid:ov,seq:+(o.vanSeq)||0}); }
     }); });
+    /* §strandMove · ใบที่เลื่อนวันไปแล้วแต่เคยอยู่ในใบงานของคันนี้ · พิมพ์ขีดฆ่าคาไว้ */
+    if(typeof ckStrandMovedRows==='function') ckStrandMovedRows(date).forEach(function(r){
+      if(routeId && r.t.routeId!==routeId) return;
+      var hit=isRet ? ((r.O.vanReturnId||r.O.vanId)===vanId) : (r.O.vanId===vanId);
+      if(!hit) return;
+      rows.push({b:r.b, t:r.t, strand:'mv', strandWhy:r.strandWhy, splitPax:null,
+                 retId:r.O.vanReturnId||null, outVid:r.O.vanId||null, seq:+r.O.vanSeq||0});
+    });
     rows.sort((a,b)=>{
       if(isRet){ const ea=(a.outVid&&a.outVid!==vanId)?1:0, eb=(b.outVid&&b.outVid!==vanId)?1:0; if(ea!==eb) return ea-eb; }   // return: "came from another van" rows go LAST
       const sa=a.seq||0, sb=b.seq||0; if(sa||sb){ const da=sa||9999, db=sb||9999; if(da!==db) return da-db; } return String(_ptime(a.b,a.t)).localeCompare(String(_ptime(b.b,b.t))); });
@@ -49662,8 +49683,9 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
       const _rowBg = _sxR
         ? ' style="background:#F5F3F0;color:#9b9a93;-webkit-print-color-adjust:exact;print-color-adjust:exact"'
         : (_extra ? ' style="background:#FFF6E6;-webkit-print-color-adjust:exact;print-color-adjust:exact"' : '');
+      const _sxMv = x.strand==='mv';
       const _sxTag = _sxR
-        ? `<div style="margin-top:3px"><span style="display:inline-block;background:#FBE3E1;color:#B5271F;font-weight:700;font-size:11px;border-radius:7px;padding:2px 8px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#10007; ยกเลิกแล้ว · ไม่ต้องไปรับ</span></div>`
+        ? `<div style="margin-top:3px"><span style="display:inline-block;background:${_sxMv?'#EDE3FB':'#FBE3E1'};color:${_sxMv?'#5B289A':'#B5271F'};font-weight:700;font-size:11px;border-radius:7px;padding:2px 8px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#10007; ${_sxMv?('เลื่อนวันแล้ว'+(x.strandWhy?(' · '+e(String(x.strandWhy).split(' · ')[0])):'')):'ยกเลิกแล้ว'} · ไม่ต้องไปรับ</span></div>`
         : '';
       return `<tr${_rowBg}>
         <td style="text-align:center;${_sxR?'color:#B5271F;font-weight:700':''}">${_no}</td>
@@ -49696,7 +49718,7 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
       <tfoot><tr style="font-weight:700;background:#F4F8FC;color:#15396B">
         <td colspan="3" style="text-align:right">รวม / Total</td>
         <td style="text-align:center">${totAd}</td><td style="text-align:center">${totChd}</td><td style="text-align:center">${totInf}</td><td style="text-align:center">${totFoc}</td>
-        <td colspan="7">${totPax} pax · ${rows.length-_nSx} booking${_nSx>0?` <span style="color:#B5271F">· ค้างจัดการ ${_nSx} (ยกเลิกแล้ว ไม่นับ)</span>`:''}</td>
+        <td colspan="7">${totPax} pax · ${rows.length-_nSx} booking${_nSx>0?` <span style="color:#B5271F">· ค้างจัดการ ${_nSx} (ยกเลิก/เลื่อนวัน · ไม่นับ)</span>`:''}</td>
       </tr></tfoot>
     </table>`;
     return {rows, totPax, html:secHd+table};
@@ -50117,6 +50139,91 @@ function ckHasArrange(b, date){
   return hit;
 }
 function ckStrandOn(b, date){ return ckIsCxl(b) && ckHasArrange(b, date); }
+
+/* ══ §strandMove · เคส "เลื่อนวัน" ════════════════════════════════════════
+   ต่างจาก CXL ตรงที่อันนี้ "ล้างของจริง" · bkV2RescheduleBooking ลบ boatId /
+   vanId / vanGroup / vanSeq / vanSplits / pickupTimeFinal และผลเช็คอินทิ้ง
+   แล้วย้าย t.date ไปวันใหม่ · วันเดิมจึงไม่เหลือ trip ให้หน้าไหนหาเจอเลย
+   ต้องถ่ายภาพไว้ก่อนล้าง แล้วปั้นแถวขึ้นมาใหม่บนวันเดิมจากภาพนั้น
+
+   ที่เก็บ: blob key ระดับบน เก็บเป็น "สตริง" · ops.* เพิ่มช่องใหม่ไม่ได้
+   เพราะ field_mapping มีแค่ 13 ช่อง อะไรที่ไม่อยู่ในนั้นหายเงียบตอนขึ้นฐาน
+   (แพตเทิร์นเดียวกับ van_rates / pck_svc_colors ที่ใช้อยู่แล้ว)              */
+function ckStrandStore(){
+  try{ var raw=(laBlob()||{}).ops_stranded; return raw?(JSON.parse(raw)||{}):{}; }
+  catch(_){ return {}; }
+}
+function ckStrandStoreSave(o){
+  try{ var b=laBlob();
+    if(o && Object.keys(o).length) b.ops_stranded=JSON.stringify(o); else delete b.ops_stranded;
+    laBlobSave();
+  }catch(e){ console.warn('[strand] save failed', e&&e.message); }
+}
+/* ถ่ายภาพ · เรียกก่อนล้างเสมอ · O กับ t ส่งเข้ามาตรง ๆ เพราะตอนเรียกจริง
+   trip ถูกย้ายวันไปแล้ว อ่านย้อนจาก bkOpsRead(b, วันเดิม) จะได้ {} */
+function ckStrandSnap(b, date, O, t, to, why){
+  if(!b || !date || !O) return false;
+  var has=(O.vanId||O.vanReturnId||O.boatId||(+O.vanGroup||0)>0
+    || (Array.isArray(O.vanSplits)&&O.vanSplits.some(function(x){ return x&&(x.vanId||(+x.vanGroup||0)>0); }))
+    || (O.vanCheckin&&O.vanCheckin.at) || (O.pierCheckin&&O.pierCheckin.at));
+  if(!has) return false;   /* ไม่เคยมีใครจัดอะไร ก็ไม่มีอะไรให้ค้าง */
+  t=t||{};
+  var S=ckStrandStore();
+  S[b.id+'|'+date]={
+    to:to||'', why:why||'moved', at:new Date().toISOString(),
+    by:(typeof laBy==='function')?laBy():'',
+    vanId:O.vanId||'', vanReturnId:O.vanReturnId||'',
+    vanGroup:+O.vanGroup||0, vanSeq:+O.vanSeq||0, boatId:O.boatId||'',
+    pickupTime:O.pickupTimeFinal||t.pickupTime||'',
+    routeId:t.routeId||'', zone:t.zone||b.pickupZone||'', pax:t.pax||{},
+    ckVan:!!(O.vanCheckin&&O.vanCheckin.at), ckPier:!!(O.pierCheckin&&O.pierCheckin.at),
+    splits:(Array.isArray(O.vanSplits)?O.vanSplits.map(function(x){
+      return {vanId:(x&&x.vanId)||'', vanGroup:+((x&&x.vanGroup)||0), vanSeq:+((x&&x.vanSeq)||0), pax:+((x&&x.pax)||0)};
+    }):[])
+  };
+  ckStrandStoreSave(S);
+  return true;
+}
+function ckStrandMvWhy(R){
+  var bits=[];
+  /* วันปลายทางเขียนแบบไทยสั้น · หน้างานอ่าน 15 ส.ค. เร็วกว่า 2026-08-15 */
+  var _to=R.to||'';
+  try{ if(/^\d{4}-\d{2}-\d{2}$/.test(_to)){
+    var M=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    var p=_to.split('-'); _to=(+p[2])+' '+M[(+p[1])-1];
+  } }catch(_){}
+  bits.push(_to?('เลื่อนไป '+_to):'ย้ายวันออกไป');
+  var w=ckShortDay(R.at||''); if(w) bits.push(w);
+  if(R.by) bits.push(R.by);
+  if(R.ckVan||R.ckPier) bits.push('เคยเช็คอินแล้ว');
+  return bits.join(' · ');
+}
+/* ปั้นแถวของวันเดิมขึ้นมาจากภาพที่ถ่ายไว้ · ตัวเลขเป็นศูนย์ทั้งหมด ไม่เข้ายอดใด */
+function ckStrandMovedRows(date){
+  var S=ckStrandStore(), out=[];
+  Object.keys(S).forEach(function(k){
+    var i=k.lastIndexOf('|'); if(i<0) return;
+    if(k.slice(i+1)!==date) return;
+    var id=k.slice(0,i), R=S[k]||{};
+    var b=(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).filter(function(x){ return x.id===id; })[0];
+    if(!b) return;   /* ใบถูกลบไปแล้ว ก็ไม่มีอะไรให้แสดง */
+    var vid=R.vanId||((R.splits||[]).filter(function(x){ return x.vanId; })[0]||{}).vanId||'';
+    out.push({
+      b:b,
+      t:{routeId:R.routeId||'', date:date, zone:R.zone||'', pax:R.pax||{}, pickupTime:R.pickupTime||''},
+      O:{vanId:vid, vanReturnId:R.vanReturnId||'', vanGroup:+R.vanGroup||0, vanSeq:+R.vanSeq||0,
+         boatId:R.boatId||'', pickupTimeFinal:R.pickupTime||''},
+      booked:0, expect:0, ck:null, van:null, _vd:null,
+      vanId:vid, vanIds:vid?[vid]:[], bid:R.boatId||'',
+      strand:'mv', strandWhy:ckStrandMvWhy(R), _mvKey:k
+    });
+  });
+  return out;
+}
+function ckStrandMvDrop(key){
+  var S=ckStrandStore(); if(!(key in S)) return false;
+  delete S[key]; ckStrandStoreSave(S); return true;
+}
 // วันที่แบบสั้นไทย · ใช้บอกว่ายกเลิกเมื่อไหร่ ไม่ใช่รูปแบบ ISO ที่คนหน้างานอ่านไม่ออก
 function ckShortDay(iso){
   if(!iso) return '';
@@ -50139,6 +50246,23 @@ function ckStrandClear(bkId, date){
   var b=(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).filter(function(x){ return x.id===bkId; })[0];
   if(!b) return;
   var nm=b.leadPax||b.voucherRef||b.code||bkId;
+  /* §strandMove · เคสเลื่อนวัน ของจริงถูกล้างไปตั้งแต่ตอนเลื่อนแล้ว
+     ที่ต้องลบคือ "ภาพที่ถ่ายไว้" · ไม่ต้องไปแตะ ops ของวันใหม่เด็ดขาด */
+  var _mk=bkId+'|'+date;
+  if(_mk in ckStrandStore()){
+    if(!confirm('ล้างรายการค้างของ '+nm+' ออกจากวันที่ '+date+' ?\n\n'
+      +'ใบนี้ถูกเลื่อนวันไปแล้ว · การจัดรถ/เรือของวันใหม่ไม่ถูกแตะ')) return;
+    ckStrandMvDrop(_mk);
+    if(typeof laSaveToast==='function') laSaveToast({kind:'neutral', title:'ล้างรายการค้างแล้ว', id:bkId,
+      status:'CLEARED', sub:nm+' · '+date});
+    ['vancheckin-host','piercheckin-host','vanjobs-host'].forEach(function(h){
+      var el=document.getElementById(h); if(!el || !el.offsetParent) return;
+      if(h==='vancheckin-host' && typeof renderVanCheckin==='function') renderVanCheckin();
+      if(h==='piercheckin-host' && typeof renderPierCheckin==='function') renderPierCheckin();
+      if(h==='vanjobs-host'    && typeof renderVanJobs==='function')    renderVanJobs();
+    });
+    return;
+  }
   if(!confirm('ล้างการจัดรถ/เรือของ '+nm+' ออกจากวันที่ '+date+' ?\n\n'
     +'รายการจะหายจากใบงานรถ · เช็คอินรถ · เช็คอินหน้าท่า\n'
     +'ตัวใบจองและประวัติการยกเลิกไม่ถูกแตะ')) return;
@@ -51135,6 +51259,10 @@ function ckStrandCSS(S){
   return S+' tr.ck-strand>td{background:#FBFAF8 !important;color:#9b9a93 !important}'
     +S+' tr.ck-strand:hover>td{background:#F6F4F1 !important}'
     +S+' tr.ck-strand td:first-child{box-shadow:inset 4px 0 0 #C0392B}'
+    /* §strandMove · เลื่อนวัน = ม่วง · ยกเลิก = แดง · แยกสีตั้งแต่ขอบแถว
+       เพราะสองอย่างนี้คนหน้างานต้องทำคนละแบบ (เลื่อนวัน = ใบยังอยู่ แค่ไปวันอื่น) */
+    +S+' tr.ck-strand.mv td:first-child{box-shadow:inset 4px 0 0 #7C4DBE}'
+    +S+' tr.ck-strand.mv .ck-sbadge{background:#EDE3FB;color:#5B289A}'
     +S+' tr.ck-strand .ck-lead{background:#EDEBE7 !important;color:#8f8e88 !important;'
       +'text-decoration:line-through;text-decoration-thickness:1.5px}'
     +S+' tr.ck-strand .ck-agblk{filter:grayscale(.85);opacity:.55}'
@@ -51575,7 +51703,7 @@ function ckRowHtml(r, date, kind, extraHtml){
     var _stm=r.O.pickupTimeFinal||t.pickupTime||t.pickupFinal||'—';
     var _spk=ckPickShort(b.hotelName||b.pickup||'')||'—';
     var _sar=ckPickShort(b.pickupArea||'')||'';
-    return '<tr class="ck-row ck-strand">'
+    return '<tr class="ck-row ck-strand'+(r.strand==='mv'?' mv':'')+'">'
      +'<td><span class="ck-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'
      +'<td>'+e(_sagN)+'</td>'
      +'<td>'+(b.createdBy?e(b.createdBy):'—')+'</td>'
@@ -53231,6 +53359,23 @@ function renderVanCheckin(){
          strand:(_sx?'cxl':null), strandWhy:(_sx?ckStrandWhy(b):'')},
         O.vanId || (SP&&SP[0]&&SP[0].vanId) || '', z);
   });
+  /* §strandMove · รายการที่ย้ายวันออกไปแล้ว แต่เคยจัดรถไว้ในวันนี้
+     ปั้นขึ้นมาจากภาพที่ถ่ายไว้ตอนเลื่อน · เข้ากอง sx เหมือนเคส CXL */
+  if(typeof ckStrandMovedRows==='function') ckStrandMovedRows(date).forEach(function(r){
+    if(!r.vanId) return;
+    if(_vckRoute){ if(r.t.routeId!==_vckRoute) return; }
+    else if(_vckFam){ var f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(r.t.routeId):null;
+      if(!f||f.id!==_vckFam) return; }
+    if(!vckQMatch(r.b, date)) return;
+    var mk=r.vanId+'~'+(r.t.routeId||'');
+    var MG=(groups[mk]=groups[mk]||{vid:r.vanId, routeId:r.t.routeId||'', zone:r.t.zone||'PK',
+                                    rows:[], sx:[], gno:0, seq:1e9});
+    var mg=+r.O.vanGroup||0, ms=+r.O.vanSeq||0;
+    if(mg>0 && (!MG.gno || mg<MG.gno)) MG.gno=mg;
+    if(ms>0 && ms<MG.seq) MG.seq=ms;
+    MG.sx.push(r); _nStrand++;
+  });
+
   /* §ckRowOrder · เรียงในคันก่อนนับ/วาด · ตรงกับใบงานที่คนขับถืออยู่ */
   Object.keys(groups).forEach(function(k){
     groups[k].rows.sort(ckRowCmp);
@@ -55389,9 +55534,9 @@ function pckRowHtml(r, date, sheet){
       +'<button class="ck-sclr" onclick="event.stopPropagation();ckStrandClear(\''+_b.id+'\',\''+date+'\')" '
       +'title="ล้างการจัดรถ/เรือของวันนี้ · แถวนี้จะหายจากทุกหน้าปฏิบัติการ · ใบจองไม่ถูกแตะ">ล้างการจัดเรือ</button></td>';
     var _nm='<td class="l"><span class="ck-lead">'+_e(_b.leadPax||'—')+'</span>'
-      +'<span class="ck-sbadge">CXL</span></td>';
+      +'<span class="ck-sbadge">'+(r.strand==='mv'?'เลื่อนวัน':'CXL')+'</span></td>';
     if(sheet){
-      return '<tr class="ck-row ck-strand">'
+      return '<tr class="ck-row ck-strand'+(r.strand==='mv'?' mv':'')+'">'
         +'<td class="l"><span class="ck-vch">'+_e(_b.voucherRef||_b.code||'—')+'</span></td>'
         +'<td>'+_e(_agN)+'</td>'+_nm+_px
         +'<td class="ck-mono">'+_e(_tm)+'</td>'
@@ -55400,7 +55545,7 @@ function pckRowHtml(r, date, sheet){
         +'<td>'+_e(ckPickShort(_b.pickupArea||'')||'—')+'</td>'
         +_act+'</tr>';
     }
-    return '<tr class="ck-row ck-strand">'
+    return '<tr class="ck-row ck-strand'+(r.strand==='mv'?' mv':'')+'">'
       +'<td><span class="ck-vch">'+_e(_b.voucherRef||_b.code||'—')+'</span>'
         +'<div style="font-size:10px">'+_e(_agN)+'</div></td>'
       +_nm+_px
@@ -58594,6 +58739,19 @@ function renderPierCheckin(){
     }
     return true;
   };
+  /* §strandMove · รายการที่ย้ายวันออกไปแล้ว แต่เคยจัดเรือ/รถไว้ในวันนี้ */
+  if(typeof ckStrandMovedRows==='function') ckStrandMovedRows(date).forEach(function(r){
+    if(_pckPier && pckPierOf(r.t.routeId)!==_pckPier) return;
+    if(_pckRoute){ if(r.t.routeId!==_pckRoute) return; }
+    else if(_pckFam){ var f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(r.t.routeId):null;
+      if(!f||f.id!==_pckFam) return; }
+    r.arr='OWN'; r.priv=null;
+    r.money={cot:0,cur:'THB',handling:'',note:'',extras:[],extrasTot:0,exGot:0,exDue:0,
+             upgrades:[],upDue:0,upGot:0,balance:0,gross:0,pierPaid:0,pierFee:0,
+             ovnSettled:false,noSlip:0,due:0,got:0,payType:''};
+    _pckSx++; all.push(r);
+  });
+
   /* §ckRowOrder · เรียงที่ต้นทางครั้งเดียว · การจัดกลุ่มทุกชั้นข้างล่างใช้ push
      ซึ่งเสถียร ลำดับนี้จึงติดไปทุกกลุ่มทั้งมุมมองตารางและมุมมองการ์ด */
   all.sort(ckRowCmp); ovnAll.sort(ckRowCmp);
@@ -85387,6 +85545,12 @@ function bkV2CommitBooking(status){
       const _oldD=[...new Set((editing.trips||[]).map(t=>t.date).filter(Boolean))].sort().join(',');
       const _newD=[...new Set((newBk.trips||[]).map(t=>t.date).filter(Boolean))].sort().join(',');
       if(_oldD && _newD && _oldD!==_newD && newBk.ops){
+        /* §strandMove · ถ่ายภาพก่อนล้าง · ใช้ trips ของใบเดิม เพราะ newBk ย้ายวันไปแล้ว */
+        if(typeof ckStrandSnap==='function'){
+          try{ ckStrandSnap(newBk, _oldD.split(',')[0], newBk.ops,
+            (editing.trips||[]).filter(t=>t && t.date===_oldD.split(',')[0])[0]||null,
+            _newD.split(',')[0], 'edit'); }catch(_){}
+        }
         const _isCharter=(newBk.trips||[]).some(t=>t.bookingMode==='charter');
         if(!_isCharter) newBk.ops.boatId=null;
         newBk.ops.vanId=null; newBk.ops.vanReturnId=null; newBk.ops.returnSameVan=false;
@@ -86095,6 +86259,12 @@ function bkV2RescheduleBooking(bookingId, opts){
   });
   // New day → the OLD boat/van assignment no longer applies · clear it so dispatch re-arranges on the new date.
   // (Charter keeps its boat: the TRIPS lock + t.charterBoatId are carried above.)
+  /* §strandMove · ถ่ายภาพการจัดการของวันเดิมไว้ก่อน แล้วค่อยล้าง
+     ต้องอยู่เหนือบล็อกล้างเสมอ · ทำทีหลังจะไม่เหลืออะไรให้ถ่าย */
+  if(bk.ops && moved>0 && typeof ckStrandSnap==='function'){
+    try{ ckStrandSnap(bk, from, bk.ops,
+      (bk.trips||[]).filter(t=>t && t.date===to)[0]||null, to, 'reschedule'); }catch(_){}
+  }
   if(bk.ops && moved>0){
     const _isCharterBk=(bk.trips||[]).some(t=>t.bookingMode==='charter');
     if(!_isCharterBk) bk.ops.boatId=null;
