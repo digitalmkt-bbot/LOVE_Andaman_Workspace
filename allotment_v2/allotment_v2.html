@@ -50018,7 +50018,37 @@ function _ckSplitPax(b, date, kind){
     ? bkPaxSum({ad:+sp.ad||0, chd:+sp.chd||0, inf:+sp.inf||0, foc:+sp.foc||0}) : 0;
   return n || Math.max(0, +sp.pax||0);
 }
-function _ckBag(o, sl){ return (sl.k==='pier')?o.pierCkS:o.vanCkS; }
+/* ══ §ckSlotFix (2026-09-03) · บั๊กข้อมูลหาย ══════════════════════════════════
+   เช็คอินของจุดรับย่อยเคยเก็บที่ ops.vanCkS / ops.pierCkS ซึ่ง "ไม่มีคอลัมน์ใน DB"
+   (field_mapping.json มีแค่ ops.vanCheckin / ops.pierCheckin)
+   คีย์ที่ไม่มีคอลัมน์และค่าเป็น object จะถูกทิ้งเงียบ ๆ ตอนเซฟ ไม่มี error ไม่มีใครรู้
+   → บุคกิ้งที่รับหลายจุด เช็คอินไปแล้ว พอรีเฟรชกลับมาเป็นยังไม่เช็คอิน
+
+   ย้ายไปเก็บซ้อนใน ops.vanCheckin._s / ops.pierCheckin._s แทน
+   สองคีย์นั้นเป็น json_text ที่มีคอลัมน์จริง คีย์ลูกที่เพิ่มเข้าไปจึงรอด
+   ยังอ่านของเก่าที่ ops.vanCkS ได้อยู่ ของใหม่ชนะเป็นรายช่อง (ไม่ต้อง migrate) */
+function _ckHost(sl){ return (sl.k==='pier')?'pierCheckin':'vanCheckin'; }
+function _ckBag(o, sl){
+  var h=_ckHost(sl);
+  var nw=(o[h] && o[h]._s) || null;
+  var old=(sl.k==='pier')?o.pierCkS:o.vanCkS;
+  if(nw && old){ var out={};
+    Object.keys(old).forEach(function(k){ out[k]=old[k]; });
+    Object.keys(nw).forEach(function(k){ out[k]=nw[k]; });
+    return out; }
+  return nw || old || null;
+}
+function _ckBagMake(o, sl){
+  var h=_ckHost(sl);
+  o[h]=o[h]||{}; o[h]._s=o[h]._s||{};
+  return o[h]._s;
+}
+/* อ่านช่องย่อยจาก ops ที่อ่านมาแล้ว · ใช้ที่หน้าเช็คอินรถกับหน้าท่าตอนไล่สร้างแถว */
+function ckSlotGet(o, k, i){
+  var bag=_ckBag(o||{}, {k:k, i:i}), v=(bag && bag[i]) || null;
+  if(!v && i===0) v=_ckLegacySeed((k==='pier')?(o||{}).pierCheckin:(o||{}).vanCheckin);
+  return v;
+}
 function ckRead(b, date, kind){
   var o=(typeof bkOpsRead==='function')?bkOpsRead(b,date):((b&&b.ops)||{});
   var sl=_ckSlot(kind);
@@ -50046,9 +50076,20 @@ function ckWrite(b, date, kind, val){
   if(prev && val && typeof val==='object'){
     CK_STAGE_KEYS.forEach(function(k){ if(val[k]===undefined && prev[k]!==undefined) val[k]=prev[k]; });
   }
-  if(sl){ if(sl.k==='pier'){ o.pierCkS=o.pierCkS||{}; o.pierCkS[sl.i]=val; }
-          else { o.vanCkS=o.vanCkS||{}; o.vanCkS[sl.i]=val; } }
-  else if(kind==='pier') o.pierCheckin=val; else o.vanCheckin=val;
+  if(sl){
+    _ckBagMake(o, sl)[sl.i]=val;                      /* ที่ที่รอดตอนเซฟ */
+    /* เขียนที่เดิมไว้ด้วย · โค้ดเก่าที่ยังอ่าน o.vanCkS ตรง ๆ ในรอบเดียวกันจะได้ไม่พัง
+       ค่านี้จะถูกทิ้งตอนเซฟตามเดิม แต่ไม่เป็นไร ของจริงอยู่ใน _s แล้ว */
+    if(sl.k==='pier'){ o.pierCkS=o.pierCkS||{}; o.pierCkS[sl.i]=val; }
+    else { o.vanCkS=o.vanCkS||{}; o.vanCkS[sl.i]=val; }
+  }
+  else {
+    /* เขียนทับทั้งก้อนของจุดหลัก ต้องพก _s ของจุดย่อยไปด้วย ไม่งั้นลบทิ้งหมด */
+    var _h=(kind==='pier')?'pierCheckin':'vanCheckin';
+    var _keep=(o[_h] && o[_h]._s) || null;
+    if(_keep && val && typeof val==='object' && val._s===undefined) val._s=_keep;
+    o[_h]=val;
+  }
   return val;
 }
 // ขั้นของการเช็คอินหน้าท่า · wait → arr (ถึงท่า) → clr (ตรวจ+เก็บเงินแล้ว) → on (ขึ้นเรือ · นับเข้า manifest)
@@ -52892,7 +52933,7 @@ function renderVanCheckin(){
           ? bkPaxSum({ad:+sp.ad||0, chd:+sp.chd||0, inf:+sp.inf||0, foc:+sp.foc||0}) : 0;
         if(!n) n=Math.max(0,+sp.pax||0);
         put({b:b, t:t, O:O, z:zz, priv:priv, booked:n,
-             ck:(O.vanCkS&&O.vanCkS[i])||(i===0?_ckLegacySeed(O.vanCheckin):null),
+             ck:ckSlotGet(O,'van',i),
              si:i, sp:sp, nSplit:SP.length}, sp.vanId||'', zz);
       });
       return;
@@ -54034,7 +54075,7 @@ function pckExpandVanSplits(row, b, date, out){
     r2.vsIdx=i; r2.vsN=sp.length; r2.vsPaxBd=pb; r2.vsp=x;
     r2.booked=np; r2.expect=Math.max(0,np-take);
     r2.vanId=x.vanId||'';
-    r2.ck=(O.pierCkS&&O.pierCkS[i])||(i===0?_ckLegacySeed(O.pierCheckin):null);
+    r2.ck=ckSlotGet(O,'pier',i);
     r2._ckKind='pier#'+i;
     if(!x.main){
       var ar=(x.pickAreaId && typeof bkV2GetArea==='function')?(bkV2GetArea(x.pickAreaId)||{}):{};
@@ -57204,6 +57245,20 @@ function pckSheetCSS(){
   /* หัวคอลัมน์ยาวเกินช่อง · ตัดด้วย ellipsis ไม่ให้ดันความกว้างคอลัมน์ */
   +S+' thead th{overflow:hidden;text-overflow:ellipsis}'
   +S+' tr.pcs-g1.pcs-ovn>td{border-top-width:3px}'
+  /* แถบชื่อเรือตรึงใต้หัวตาราง · เลื่อนลงไปกลางลำยาว ๆ ต้องยังรู้ว่ากำลังดูลำไหนอยู่ */
+  +S+' tr.pcs-g1>td{position:sticky;top:32px;z-index:20}'
+  /* ── ช่องที่มีทั้งป้ายข้อมูลและปุ่ม · ล้นแล้วให้ตกบรรทัดสอง ไม่ตัดทิ้ง
+        Add-on กับ Special request เป็นของที่หน้าท่าต้องอ่านครบ ── */
+  +S+' td.pcs-ao,'+S+' td.pcs-sq{white-space:normal;line-height:1.3}'
+  +S+' td.pcs-ao .ck-aoact{display:inline-flex !important;gap:4px;margin:0 0 0 4px !important;'
+    +'vertical-align:middle}'
+  +S+' td.pcs-sq .pck-mcell{display:inline !important;margin:0 !important}'
+  +S+' td.pcs-sq .pck-note{display:block !important;margin:2px 0 0 0 !important;'
+    +'max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+  +S+' .ck-ao{max-width:140px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}'
+  /* แถวที่ยังไม่มีใครแตะ · ซีดลงเหมือนหน้าเช็คอินรถ สายตาจะได้ไปที่แถวที่กำลังทำ */
+  +S+' tr.ck-row.ck-plain:not(.ck-arr):not(.ck-clr):not(.pck-rvoid) .ck-agblk{filter:grayscale(1) brightness(1.9) contrast(.35)}'
+  +S+' tr.ck-row.ck-plain:not(.ck-arr):not(.ck-clr):not(.pck-rvoid):hover .ck-agblk{filter:none}'
   +S+' .pck-gchip.pcs-gd{font-size:9.5px;font-weight:800;padding:1px 7px;letter-spacing:.02em}'
   /* ── ปุ่มเช็คอิน = ปุ่มที่ยื่นสายรัดให้แขก สีจึงต้องอยู่ตรงนั้น ──
      ยังไม่กด = ขอบสีสายรัด เครื่องหมายถูกสีสายรัด หยิบถูกเส้นตั้งแต่ยังไม่กด
