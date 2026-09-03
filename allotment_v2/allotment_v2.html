@@ -52752,7 +52752,7 @@ function vckSheetCSS(){
   /* กล่องเลื่อนของตัวเอง · การตรึงคอลัมน์ซ้ายต้องมีตัวเลื่อนของตัวเอง
      ถ้าปล่อยให้ทั้งหน้าเว็บเลื่อนแนวนอนเหมือนเดิม คอลัมน์ที่ตรึงจะไปมุดใต้เมนูซ้าย */
   +'#vancheckin-host .vck-tw{overflow:auto;max-height:calc(100vh - 232px);min-height:340px;'
-    +'border-radius:13px;-webkit-overflow-scrolling:touch}'
+    +'border-radius:13px;-webkit-overflow-scrolling:touch;contain:paint;overscroll-behavior:contain}'
   +'#vancheckin-host .ck-card.vck-card{overflow:hidden;padding:0}'
   +S+'{border-collapse:separate;border-spacing:0;min-width:1600px}'
   +S+' th,'+S+' td{border-right:1px solid #D8DCE3;border-bottom:1px solid #D8DCE3;'
@@ -52907,7 +52907,7 @@ function vckFitPane(){
 if(!window._vckFitBound){
   window._vckFitBound=1;
   window.addEventListener('resize', vckFitPane);
-  window.addEventListener('scroll', vckFitPane, true);
+  window.addEventListener('scroll', vckFitPane, {passive:true});   /* เหตุผลเดียวกับ pckFitPane */
 }
 function renderVanCheckin(){
   var host=document.getElementById('vancheckin-host'); if(!host) return;
@@ -57212,7 +57212,10 @@ function pckFitPane(){
 if(!window._pckFitBound){
   window._pckFitBound=1;
   window.addEventListener('resize', pckFitPane);
-  window.addEventListener('scroll', pckFitPane, true);
+  /* ห้ามใช้ capture · การเลื่อน "ในตาราง" จะยิงตัวนี้ทุกเฟรม แล้ว getBoundingClientRect
+     บังคับให้เบราว์เซอร์คำนวณ layout ใหม่กลางการเลื่อน = กระตุก
+     ความสูงกล่องเปลี่ยนก็ต่อเมื่อของด้านบนขยับ ซึ่งคือตอนวาดใหม่กับตอนย่อ/ขยายหน้าต่าง */
+  window.addEventListener('scroll', pckFitPane, {passive:true});
 }
 function pckSheetCSS(){
   var S='#piercheckin-host table.ck-tbl.pck-sheet';
@@ -57225,9 +57228,12 @@ function pckSheetCSS(){
     +'padding:4px 14px;cursor:pointer;color:#6b6a64}'
   +'#piercheckin-host .pcs-seg.on{background:#15201a;color:#fff}'
   /* กล่องเลื่อนของตัวเอง · การตรึงคอลัมน์ซ้ายต้องมีตัวเลื่อนของตัวเอง */
-  +'#piercheckin-host .pcs-tw{overflow:auto;max-height:calc(100vh - 250px);min-height:340px;border-radius:13px}'
+  +'#piercheckin-host .pcs-tw{overflow:auto;max-height:calc(100vh - 250px);min-height:340px;'
+    +'border-radius:13px;contain:paint;overscroll-behavior:contain}'
   +'#piercheckin-host .ck-card.pcs-card{overflow:hidden;padding:0}'
-  +S+'{border-collapse:separate;border-spacing:0;min-width:1500px}'
+  /* width:max-content · ไม่งั้นตารางยืดเต็มความกว้างจอ แล้วเอาที่ว่างไปแจกให้คอลัมน์
+     ที่ไม่ได้ล็อกความกว้างไว้ (เงินหน้าท่า / การจัดการ) กลายเป็นช่องยาวโล่ง ๆ */
+  +S+'{border-collapse:separate;border-spacing:0;min-width:1500px;width:-moz-max-content;width:max-content}'
   +S+' th,'+S+' td{border-right:1px solid #D8DCE3;border-bottom:1px solid #D8DCE3;'
     +'vertical-align:middle;background-clip:padding-box}'
   +S+' td{padding:5px 8px}'
@@ -57259,11 +57265,11 @@ function pckSheetCSS(){
   +S+' td.pcs-pk{min-width:230px;max-width:230px}'
   +S+' td.pcs-rm{width:58px}'
   +S+' td.pcs-zn{width:96px;text-align:center}'
-  +S+' td.pcs-ao{width:150px}'
-  +S+' td.pcs-sq{width:210px}'
-  +S+' td.pcs-st{width:132px;text-align:center}'
-  +S+' td.pcs-mn{width:150px}'
-  +S+' td.pcs-mg{width:300px}'
+  +S+' td.pcs-ao{width:150px;min-width:150px;max-width:150px}'
+  +S+' td.pcs-sq{width:210px;min-width:210px;max-width:210px}'
+  +S+' td.pcs-st{width:132px;min-width:132px;max-width:132px;text-align:center}'
+  +S+' td.pcs-mn{width:158px;min-width:158px;max-width:158px}'
+  +S+' td.pcs-mg{width:308px;min-width:308px;max-width:308px}'
   +S+' .pcs-prv{display:inline-block;background:#F4E8FB;color:#6B289A;font-weight:700;font-size:9px;'
     +'padding:0 6px;border-radius:6px;vertical-align:middle;white-space:nowrap}'
   +S+' .pcs-sub{font-size:9.5px;color:#a5a49d;margin-top:2px}'
