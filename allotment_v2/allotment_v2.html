@@ -50065,6 +50065,31 @@ function ckPersist(){
 }
 function ckBookedPax(t){ return (typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot((t&&t.pax)||{}):0; }
 
+/* ══ §ckRowOrder (2026-09-04) · ลำดับแถว "ภายในคัน" ════════════════════════
+   หน้าเช็คอินทั้งสองหน้าดันแถวเข้ากลุ่มตามลำดับที่เจอใน SB_BOOKINGS เฉย ๆ
+   ไม่เคยเรียงเลย · ส่วนใบงานที่พิมพ์ส่งคนขับเรียง ลำดับรับในกลุ่ม (vanSeq)
+   แล้วค่อยเวลารับ · ผลคือคนขับไล่ตามใบงานในมือทีละบรรทัด แต่บนจอสลับกันหมด
+   ใช้กติกาเดียวกับ vanJobsOrderInner._collect เป๊ะ ๆ จะได้ตรงบรรทัดต่อบรรทัด
+   ไม่มี vanSeq (ยังไม่เคยจัดลำดับรับ) = ไปท้ายคัน แล้วเรียงตามเวลารับ       */
+function ckRowSeq(r){
+  var sp=r&&(r.sp||r.vsp), O=r&&r.O;
+  var v=+(((sp&&sp.vanSeq)||(O&&O.vanSeq))||0);
+  return v>0?v:9999;
+}
+function ckRowTime(r){
+  var O=r&&r.O, t=r&&r.t;
+  return String((O&&O.pickupTimeFinal)||(t&&(t.pickupTime||t.pickupFinal))||'~~');
+}
+function ckRowCmp(a,b){
+  var sa=ckRowSeq(a), sb=ckRowSeq(b); if(sa!==sb) return sa-sb;
+  var ta=ckRowTime(a), tb=ckRowTime(b); if(ta!==tb) return ta<tb?-1:1;
+  var va=String((a.b&&(a.b.voucherRef||a.b.code||a.b.id))||''),
+      vb=String((b.b&&(b.b.voucherRef||b.b.code||b.b.id))||'');
+  if(va!==vb) return va.localeCompare(vb);
+  /* แถวที่แยกจุดรับของใบเดียวกัน ต้องอยู่เรียงตามลำดับ split ไม่สลับกันเอง */
+  return (((a.si!=null?a.si:(a.vsIdx!=null?a.vsIdx:0))|0) - ((b.si!=null?b.si:(b.vsIdx!=null?b.vsIdx:0))|0));
+}
+
 /* ══ §strand (2026-09-03) · ของที่ "จัดการไปแล้ว" ห้ามหายเงียบ ══════════════
    เดิมพอใบจองถูกยกเลิก ทุกหน้าปฏิบัติการปัดทิ้งที่บรรทัดแรกด้วย status
    ทั้งที่ ops.vanId / vanGroup / boatId ยังอยู่ครบ และใบงานที่พิมพ์ส่งคนขับไป
@@ -53206,6 +53231,11 @@ function renderVanCheckin(){
          strand:(_sx?'cxl':null), strandWhy:(_sx?ckStrandWhy(b):'')},
         O.vanId || (SP&&SP[0]&&SP[0].vanId) || '', z);
   });
+  /* §ckRowOrder · เรียงในคันก่อนนับ/วาด · ตรงกับใบงานที่คนขับถืออยู่ */
+  Object.keys(groups).forEach(function(k){
+    groups[k].rows.sort(ckRowCmp);
+    if(groups[k].sx) groups[k].sx.sort(ckRowCmp);
+  });
   var tBooked=0,tNoShow=0,tChecked=0,tRows=0;
   Object.keys(groups).forEach(function(k){ groups[k].rows.forEach(function(r){ tRows++; tBooked+=r.booked; if(r.ck&&r.ck.at){ tChecked++; tNoShow+=(r.ck.noShow||0); } }); });
   var pct=tRows?Math.round(tChecked/tRows*100):0;
@@ -53289,10 +53319,11 @@ function renderVanCheckin(){
       +'</div></td></tr>';
     /* §vckFlow · จดไว้ว่าคันนี้มีแถวไหนบ้าง · ปุ่มสแตนบายใช้ต่อ */
     _VCK_ROWKINDS[k]=g.rows.map(function(r){ return {id:r.b.id, kind:(r.si!=null?('van#'+r.si):'van')}; });
-    g.rows.forEach(function(r){ r._gk=k; r._date=date; bodyHtml+=ckRowHtml(r, date, (r.si!=null?('van#'+r.si):'van'), ''); });
-    /* §strand · ต่อท้ายกลุ่มรถเดิม ไม่แทรกกลางคนที่ยังเดินทางจริง
-       อยู่ใต้คันที่ถูกจัดไว้ คนขับจึงเห็นว่าเป็นคันของตัวเอง */
-    (g.sx||[]).forEach(function(r){ r._gk=k; r._date=date; r.strandTail=4;
+    /* §ckRowOrder · แถวค้างวาดคาไว้ "ตรงตำแหน่งเดิม" ไม่ใช่ต่อท้ายกลุ่ม
+       เพราะใบงานที่พิมพ์ก็ขีดฆ่าคาไว้ตรงบรรทัดเดิม · สองอย่างต้องตรงกันบรรทัดต่อบรรทัด
+       ยอดยังนับจาก g.rows อย่างเดียวเหมือนเดิม กองค้างมาเฉพาะตอนวาด */
+    var _draw=(g.sx&&g.sx.length)?g.rows.concat(g.sx).sort(ckRowCmp):g.rows;
+    _draw.forEach(function(r){ r._gk=k; r._date=date; if(r.strand) r.strandTail=4;
       bodyHtml+=ckRowHtml(r, date, (r.si!=null?('van#'+r.si):'van'), ''); });
   });
   // §topWarn · booking ที่ยังไม่จัดรถคือของที่ต้องลงมือก่อนใคร เดิมต่อท้ายสุดของตาราง ต้องเลื่อนผ่าน
@@ -58563,6 +58594,9 @@ function renderPierCheckin(){
     }
     return true;
   };
+  /* §ckRowOrder · เรียงที่ต้นทางครั้งเดียว · การจัดกลุ่มทุกชั้นข้างล่างใช้ push
+     ซึ่งเสถียร ลำดับนี้จึงติดไปทุกกลุ่มทั้งมุมมองตารางและมุมมองการ์ด */
+  all.sort(ckRowCmp); ovnAll.sort(ckRowCmp);
   // §pierHierarchy · เรือ → ทริป → โซน → กลุ่มรถ · เรือลำเดียวอาจวิ่งได้หลายรอบในวันเดียว จึงแยกชั้นทริปไว้
   var boats={}, border=[], noBoat=[], nHidden=0;
   all.forEach(function(r){
