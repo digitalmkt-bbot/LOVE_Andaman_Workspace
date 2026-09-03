@@ -57708,7 +57708,9 @@ function pckHeadCSS(){
   +H+' .pgf-cv.op{transform:rotate(90deg)}'
   +H+' .pgf-cv:hover{border-color:#185FA5;color:#185FA5}'
   +H+' .pgf-h>i{width:8px;height:8px;border-radius:50%;flex:none}'
-  +H+' .pgf-nm{font-size:12px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  /* §pckHead6 · ชื่อคือของที่กวาดตาหา ต้องใหญ่กว่าตัวเลขรอบ ๆ */
+  +H+' .pgf-nm{font-size:13.5px;font-weight:800;letter-spacing:-.2px;'
+    +'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
   +H+' .pgf-px{font-size:11px;font-weight:700;flex:none;opacity:.82}'
   +H+' .pgf-vn{font-size:9px;font-weight:700;background:rgba(255,255,255,.7);border-radius:999px;'
     +'padding:1px 6px;flex:none;opacity:.85}'
@@ -57723,7 +57725,8 @@ function pckHeadCSS(){
     +'background:none;text-align:left;padding:3px 9px 3px 7px;cursor:pointer;font-family:inherit}'
   +H+' .pgv:hover{filter:brightness(.97)}'
   +H+' .pgv.off{opacity:.5;cursor:default}'
-  +H+' .pgv-nm{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:135px}'
+  +H+' .pgv-nm{font-size:12px;font-weight:800;white-space:nowrap;overflow:hidden;'
+    +'text-overflow:ellipsis;max-width:150px}'
   +H+' .pgv-tm{font-size:10px;color:#6b6a63;background:#F1EFE8;border-radius:5px;padding:1px 5px;flex:none}'
   +H+' .pgv-px{font-size:10px;color:#8a8a82;flex:none}'
   +H+' .pgv-off{font-size:9px;font-weight:700;color:#A32D2D;background:#FCEBEB;border-radius:999px;padding:1px 7px}'
@@ -57736,8 +57739,10 @@ function pckHeadCSS(){
   /* §pckHead5 · หัวชิดขอบ sidebar และตรึงค้างไว้ · ดึงออกนอก padding ของ .main
      (บน 22 · ซ้าย 14 · ขวา 22) แล้วเอา padding นั้นมาไว้ในตัวเองแทน
      ตรึงแบบ sticky top:0 · เลื่อนตารางยังไงหัวก็ไม่ขยับ */
-  +H+' .pkh{position:sticky;top:0;z-index:60;background:#FAF9F6;'
-    +'margin:-22px -22px 10px -14px;border-radius:0;border-bottom:1px solid #E7E4DC;'
+  /* §pckHead6 · พื้นหัวเป็นเทากลาง ๆ · การ์ดขาวลอยขึ้นมาชัดกว่าเดิม
+     และสีประจำโปรแกรมเด้งกว่าตอนวางบนพื้นครีม */
+  +H+' .pkh{position:sticky;top:0;z-index:60;background:#EDEFF2;'
+    +'margin:-22px -22px 10px -14px;border-radius:0;border-bottom:1px solid #DCE0E6;'
     +'padding:10px 22px 10px 14px;'
     +'box-shadow:0 6px 14px -8px rgba(15,23,42,.16)}'
   +H+' .pkh-day{display:flex;align-items:center;gap:8px;padding:0 2px 8px}'
@@ -57756,7 +57761,7 @@ function pckHeadCSS(){
   +H+' .pkh-sp{flex:1}'
   +H+' .pkh-kpi{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}'
   +H+' .pkh-kpi>span{border-radius:999px;padding:3px 10px;font-size:10.5px;font-weight:700;white-space:nowrap}'
-  +H+' .pkh-tot{background:#fff;border:1px solid #E7E4DC;color:#3C3B37}'
+  +H+' .pkh-tot{background:#fff;border:1px solid #DFE3E9;color:#3C3B37}'
   +H+' .pkh-tot b{font-size:13px}'
   +H+' .pkh-tot .ck-mono{font-size:9.5px;color:#a5a49d}'
   /* ── สองคอลัมน์ ── */
@@ -57766,12 +57771,14 @@ function pckHeadCSS(){
     +'gap:8px;align-items:stretch}'
   +H+' .pkh-col{display:flex;flex-direction:column;gap:8px;min-width:0}'
   +H+' .pkh-col:first-child>.pkh-card{flex:1;display:flex;flex-direction:column;min-height:0}'
-  +H+' .pkh-card{background:#fff;border:1px solid #E7E4DC;border-radius:11px;overflow:hidden}'
-  +H+' .pkh-chd{display:flex;align-items:center;gap:7px;padding:5px 9px;border-bottom:1px solid #EFECE4;background:#FBFAF7}'
+  +H+' .pkh-card{background:#fff;border:1px solid #DFE3E9;border-radius:11px;overflow:hidden}'
+  +H+' .pkh-chd{display:flex;align-items:center;gap:7px;padding:4px 9px;'
+    +'border-bottom:1px solid #EBEEF2;background:#F6F7F9}'
   +H+' .pkh-chd.plain{display:none}'
   +H+' .pkh-ct{font-size:10px;font-weight:800;color:#6b6a63;letter-spacing:.05em;white-space:nowrap}'
   +H+' .pkh-csp{flex:1}'
-  +H+' .pkh-selnm{font-size:10.5px;font-weight:800;color:#2c2c2a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  +H+' .pkh-selnm{font-size:12.5px;font-weight:800;color:#2c2c2a;letter-spacing:-.2px;'
+    +'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
   +H+' .pkh-plist{flex:1;min-height:96px;max-height:none;overflow-y:auto;overscroll-behavior:contain}'
   +H+' .pkh-plist::-webkit-scrollbar{width:6px}'
   +H+' .pkh-plist::-webkit-scrollbar-thumb{background:#DAD6CC;border-radius:3px}'
@@ -57786,8 +57793,12 @@ function pckHeadCSS(){
   +H+' .pkh-jobs{display:inline-flex;gap:4px;flex:none;margin-left:6px}'
   +H+' .pkh-jobs .pck-joball{width:23px !important;height:23px !important;font-size:11px !important;margin:0 !important}'
   /* ── ปุ่มท่าเรือ ── */
+  /* §pckHead6 · ปุ่มล้างตัวกรองสองอันนี้กดนาน ๆ ครั้ง · ตัวเล็กลงเพื่อคืนสายตาให้ชื่อ */
   +H+' .pkh-allbtn{border:1px solid #E6C9C3;background:#fff;color:#A32D2D;border-radius:999px;'
-    +'padding:2px 9px;font:800 9.5px inherit;font-family:inherit;cursor:pointer;white-space:nowrap}'
+    +'padding:1px 7px;font:800 8.5px inherit;font-family:inherit;cursor:pointer;white-space:nowrap}'
+  +H+' .pkh-chd .pck-btab{padding:1px 8px !important;font-size:8.5px !important;'
+    +'font-weight:800 !important;gap:4px !important;border-radius:999px !important}'
+  +H+' .pkh-chd .pck-btab .c{font-size:8.5px !important;padding:0 5px !important}'
   +H+' .pkh-piers{display:inline-flex;border:1px solid #E1DED5;border-radius:999px;overflow:hidden;background:#fff;flex:none}'
   +H+' .pkh-piers button{border:0;background:none;font:700 10px inherit;font-family:inherit;'
     +'padding:3px 9px;cursor:pointer;color:#6b6a63;white-space:nowrap}'
@@ -57804,7 +57815,9 @@ function pckHeadCSS(){
   +H+' .pkh-card .ck-fsep{margin:0 1px}'
   /* เรือ · ชิปเล็กลงและปุ่มไอคอนไหลต่อท้ายในแถวเดียวกัน */
   +H+' .pkh-boats .pck-btabs{display:flex;flex-wrap:wrap;align-items:center;gap:5px}'
-  +H+' .pkh-boats .pck-btab{padding:3px 9px !important;font-size:10.5px !important;gap:5px !important}'
+  +H+' .pkh-boats .pck-btab{padding:3px 10px !important;font-size:10.5px !important;gap:6px !important}'
+  /* ชื่อเรือคือช่องที่สองของชิป · ตัวแรกเป็นจุดสี */
+  +H+' .pkh-boats .pck-btab>span:nth-child(2){font-size:13px;font-weight:800;letter-spacing:-.2px}'
   +H+' .pkh-boats .pck-btab .rt{font-size:9px !important}'
   +H+' .pkh-boats .pck-btab .c{font-size:9.5px !important}'
   +H+' .pkh-boats .pck-joball{width:23px !important;height:23px !important;font-size:11px !important;margin:0 !important}'
