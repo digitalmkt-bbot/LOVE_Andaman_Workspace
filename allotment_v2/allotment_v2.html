@@ -54154,6 +54154,41 @@ function pckProgList(date){
   return h;
 }
 /* ชื่อของสิ่งที่กำลังกรองอยู่ · ใช้พาดหัวการ์ดเรือ */
+/* ── §pckHead7 · สีกับชื่อของสิ่งที่กำลังกรองอยู่ ─────────────────────────
+   เลือก variant = ใช้สีของเส้นทางนั้น (แต่ละ variant มีสีของตัวเองใน ROUTES)
+   เลือกทั้งโปรแกรม = ใช้สีของโปรแกรม · ไม่ได้กรอง = ไม่มีสี พื้นหัวเป็นเทาตามเดิม */
+/* §pckHead7b · สีเส้นทางบางเส้นอ่อนมาก (Phi Phi by Speedboat = #ff9999)
+   เอาไป tint ต่ออีกทีจะได้เกือบขาว มองไม่ออกว่าพื้นเปลี่ยนสี · หรี่ลงก่อนถ้าสว่างเกิน */
+function pckBandBase(c){
+  var h=String(c||'').replace('#',''); if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  if(!/^[0-9a-f]{6}$/i.test(h)) return '#8b909c';
+  var r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
+  var L=(0.299*r+0.587*g+0.114*b)/255;
+  return (L>0.60) ? pckShade('#'+h, 0.60/L) : ('#'+h);
+}
+function pckSelColor(){
+  if(_pckRoute){
+    var rt=(typeof getRoute==='function'?getRoute(_pckRoute):null)||{};
+    if(rt.color) return rt.color;
+    var f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(_pckRoute):null;
+    return (f&&f.color)||null;
+  }
+  if(_pckFam){
+    var F=(typeof _BKV2_FAMILIES!=='undefined'?_BKV2_FAMILIES:[]).filter(function(x){ return x.id===_pckFam; })[0];
+    return (F&&F.color)||null;
+  }
+  return null;
+}
+/* ชื่อที่ขึ้นกลางหัว · ไม่ได้กรองอะไร = ชื่อบริษัท · กรองอยู่ = ชื่อโปรแกรม (+ variant) */
+function pckBrandTitle(date){
+  if(!_pckFam && !_pckRoute) return 'LOVE ANDAMAN';
+  var out='';
+  pckProgData(date).forEach(function(A){
+    if(_pckRoute && A.v[_pckRoute]) out=A.f.name+' \u00b7 '+pckVarLbl(A.f,_pckRoute);
+    else if(!_pckRoute && _pckFam===A.f.id) out=A.f.name;
+  });
+  return out||'LOVE ANDAMAN';
+}
 /* ปุ่มล้างตัวกรองโปรแกรม · โผล่เฉพาะตอนกรองอยู่จริง */
 function pckProgAllBtn(){
   if(!_pckFam && !_pckRoute) return '';
@@ -57638,7 +57673,7 @@ if(!window._pckFitBound){
 /* ── แถบวันที่แบบบรรทัดเดียว · ของเดิม ckDayHeader กินสองแถวและมีเส้นคั่น ──
    หัวข้อหน้ากับคำอธิบายถูกตัดออกแล้ว เมนูซ้ายบอกอยู่แล้วว่ากำลังอยู่หน้าไหน */
 function pckDayBar(date, kpiHtml, totalPax, totalBreak){
-  var e=ckEsc;
+  var e=ckEsc, brandCol=pckSelColor();
   var isToday=(date===((typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):''));
   var _d=new Date(date+'T00:00');
   var dnum=_d.toLocaleDateString('en-GB',{day:'numeric'});
@@ -57654,10 +57689,14 @@ function pckDayBar(date, kpiHtml, totalPax, totalBreak){
         +'<span class="pkh-dmy">'+e(dmy)+'</span></span>'
       +'<input type="date" value="'+e(date)+'" onclick="event.stopPropagation();try{this.showPicker()}catch(_){}" onchange="if(this.value)pckPickDay(this.value)">'
     +'</label>'
-    +(isToday?'<span class="pkh-today">TODAY</span>'
-             :'<button class="pkh-back" onclick="pckToday()" title="กลับไปวันนี้">วันนี้</button>')
+    /* §pckHead7 · ของเดิมเป็น "TODAY" กับ "วันนี้" คนละภาษาในที่เดียวกัน อ่านแล้วนึกว่าบั๊ก
+       ป้ายดำ = กำลังดูวันนี้อยู่ · ปุ่มขาวมีลูกศร = กดเพื่อกลับมาวันนี้ */
+    +(isToday?'<span class="pkh-today">วันนี้</span>'
+             :'<button class="pkh-back" onclick="pckToday()" title="กลับไปวันนี้">&#8617; กลับวันนี้</button>')
     +'<button class="pkh-nav" onclick="pckDateShift(1)" title="วันถัดไป">&rsaquo;</button>'
     +'<span class="pkh-sp"></span>'
+    +'<div class="pkh-brand'+(brandCol?' on':'')+'"'+(brandCol?(' style="color:'+pckShade(pckBandBase(brandCol),.62)+'"'):'')+'>'
+      +e(pckBrandTitle(date))+'</div>'
     +'<div class="pkh-kpi">'+kpiHtml
       +'<span class="pkh-tot">รวม <b class="ck-mono">'+totalPax+'</b> pax <span class="ck-mono">'+e(totalBreak||'')+'</span></span>'
     +'</div>'
@@ -57685,7 +57724,12 @@ function pckHeadHtml(o){
   /* ตัวกรองกับมุมมองอยู่ในกล่อง flex เดียวกัน · แยกสองบล็อกเมื่อไหร่ก็กินไปอีกบรรทัด */
   B.filters=pckHeadCard('filters','ตัวกรอง','',
     '<div class="pkh-fwrap">'+(o.chipsHtml||'')+pckViewBar()+'</div>');
-  return '<div class="pkh">'+o.dayHtml
+  /* §pckHead7 · กรองเส้นทางไหนอยู่ พื้นหัวเปลี่ยนเป็นสีนั้นทั้งแถบ
+     เงยหน้าจากตารางแล้วรู้ทันทีว่ากำลังดูโปรแกรมไหน โดยไม่ต้องอ่านตัวหนังสือ */
+  var _bc=pckSelColor();
+  var _bb=_bc?pckBandBase(_bc):null;
+  var _bs=_bb?(' style="background:'+pckTint(_bb,.86)+';border-bottom-color:'+pckTint(_bb,.52)+'"'):'';
+  return '<div class="pkh"'+_bs+'>'+o.dayHtml
     +'<div class="pkh-grid">'
       +'<div class="pkh-col">'+B.prog+'</div>'
       +'<div class="pkh-col">'+B.boats+B.search+B.filters+'</div>'
@@ -57745,7 +57789,7 @@ function pckHeadCSS(){
     +'margin:-22px -22px 10px -14px;border-radius:0;border-bottom:1px solid #DCE0E6;'
     +'padding:10px 22px 10px 14px;'
     +'box-shadow:0 6px 14px -8px rgba(15,23,42,.16)}'
-  +H+' .pkh-day{display:flex;align-items:center;gap:8px;padding:0 2px 8px}'
+  +H+' .pkh-day{position:relative;display:flex;align-items:center;gap:8px;padding:0 2px 8px}'
   +H+' .pkh-nav{width:24px;height:24px;border-radius:50%;border:1px solid #E1DED5;background:#fff;'
     +'cursor:pointer;font-size:13px;line-height:1;color:#6b6a63;flex:none;font-family:inherit}'
   +H+' .pkh-dt{position:relative;display:inline-flex;align-items:center;gap:9px;cursor:pointer;'
@@ -57756,9 +57800,18 @@ function pckHeadCSS(){
   +H+' .pkh-dmy{font-size:9px;font-weight:700;color:#a5a49d;letter-spacing:.1em}'
   +H+' .pkh-dt input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}'
   +H+' .pkh-today{background:#15201a;color:#fff;border-radius:999px;padding:2px 9px;font-size:9.5px;font-weight:800}'
-  +H+' .pkh-back{border:1px solid #E1DED5;background:#fff;border-radius:999px;padding:2px 10px;'
-    +'font:800 9.5px inherit;font-family:inherit;color:#6b6a63;cursor:pointer}'
+  +H+' .pkh-back{border:1px solid #D5D9E0;background:#fff;border-radius:999px;padding:2px 10px;'
+    +'font:800 9.5px inherit;font-family:inherit;color:#5F6570;cursor:pointer;white-space:nowrap}'
+  +H+' .pkh-back:hover{border-color:#185FA5;color:#185FA5}'
   +H+' .pkh-sp{flex:1}'
+  /* ชื่อกลางหัว · จัดกลางจริงด้วย absolute จะได้ไม่เลื่อนตามความกว้างของสองฝั่ง
+     pointer-events:none เพื่อไม่ให้บังปุ่มที่อยู่ข้างใต้ · จอแคบซ่อนไปเลย */
+  +H+' .pkh-brand{position:absolute;left:50%;top:12px;transform:translateX(-50%);'
+    +'pointer-events:none;font-size:15px;font-weight:800;letter-spacing:.16em;'
+    +'color:#A9AFB8;white-space:nowrap;max-width:26vw;overflow:hidden;text-overflow:ellipsis}'
+  +H+' .pkh-brand.on{letter-spacing:-.2px;font-size:16px}'
+  /* จอแคบพื้นที่ตรงกลางไม่พอ ชนกับยอดรวมฝั่งขวา · ซ่อนไปเลยดีกว่าให้ทับกัน */
+  +'@media(max-width:1360px){'+H+' .pkh-brand{display:none}}'
   +H+' .pkh-kpi{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}'
   +H+' .pkh-kpi>span{border-radius:999px;padding:3px 10px;font-size:10.5px;font-weight:700;white-space:nowrap}'
   +H+' .pkh-tot{background:#fff;border:1px solid #DFE3E9;color:#3C3B37}'
