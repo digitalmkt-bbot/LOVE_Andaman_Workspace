@@ -54772,14 +54772,33 @@ function pckMgCore(r, b, date, kd, on, ck, actual, sheet){
   var stp='<span class="ck-stp" title="จำนวนคนที่ขึ้นเรือจริง &#183; กดขึ้นได้ถึงยอดจอง '+r.booked+' แม้เช้าจะไม่ได้ขึ้นรถมา"><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\''+kd+'\',-1)">&minus;</button><span class="ck-n">'+actual+'</span><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\'pier\',1)">+</button></span>';
   var evs='<span style="display:inline-flex;gap:4px"><button class="ck-ev ck-ev-ns" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'no_show\')" title="ลูกค้าไม่มา · ไม่แจ้งล่วงหน้า">No-show</button>'
     +'<button class="ck-ev ck-ev-cx" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'cxl\')" title="ลูกค้าแจ้งยกเลิกหน้างาน">CXL</button></span>';
-  if(!sheet) return stp+evs+okBtn;
+  if(!sheet) return stp+evs+okBtn;   /* โหมดการ์ดไม่แตะ · ปุ่มคำเต็มเหมือนเดิม */
+
+  /* ══ §pckMgTight · โหมดตาราง · ช่องการจัดการกินความกว้าง 318px กับสูงสองบรรทัด
+     ทั้งที่คนหน้าท่ากดจริงแค่ปุ่มเช็คอิน · ที่เหลือกดนาน ๆ ครั้ง
+       · ยอดจองย้ายเข้าไปอยู่ในตัวเลขเลย "ขึ้นเรือ/จอง" บรรทัด "จอง N" จึงหายไปทั้งบรรทัด
+       · No-show / CXL เป็นไอคอน ✕ / ⊘ วางใต้ตัวเลข (ชี้เมาส์มีคำเต็ม กดตรงได้ ไม่ต้องเปิดเมนู)
+       · ปุ่มเช็คอินเหลือ ✓ · ปุ่มรายละเอียดเป็นลูกศรอยู่แล้ว
+     ทุกปุ่มยังกดถึงได้ในคลิกเดียวเหมือนเดิม ไม่มีอะไรถูกซ่อนเข้าเมนู ══ */
+  var stp2='<span class="ck-stp" title="ขึ้นเรือจริง '+actual+' จากยอดจอง '+r.booked+' คน &#183; กดขึ้นได้ถึงยอดจอง แม้เช้าจะไม่ได้ขึ้นรถมา">'
+    +'<button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\''+kd+'\',-1)">&minus;</button>'
+    +'<span class="ck-n">'+actual+'<i>/'+r.booked+'</i></span>'
+    +'<button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\'pier\',1)">+</button></span>';
+  var evs2='<span class="pcs-evs">'
+    +'<button class="ck-ev ck-ev-ns ico" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'no_show\')" title="No-show · ลูกค้าไม่มา ไม่แจ้งล่วงหน้า">&#10005;</button>'
+    +'<button class="ck-ev ck-ev-cx ico" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'cxl\')" title="CXL · ลูกค้าแจ้งยกเลิกหน้างาน">&#8856;</button>'
+    +'</span>';
+  var okIco='<button class="pck-ok ico'+(on?'':' off')+'" onclick="event.stopPropagation();ckToggle(\''+b.id+'\',\''+date+'\',\''+kd+'\')" title="'+e(on?('เช็คอินขึ้นเรือแล้ว · '+(ck.by||'')+' '+pckHHMM(ck.at)):'กดเพื่อเช็คอินขึ้นเรือ')+'">&#10003;'
+    +(on?('<span class="tm">'+e(pckHHMM(ck.at)||'')+'</span>'):'')+'</button>';
+
   if(on && !_pckMgOpen[b.id])
-    /* §pckName2 · ล็อกคือ "แก้ไม่ได้" ไม่ใช่ "มองไม่เห็น"
-       ตัวเลขคนขึ้นเรือจริงยังต้องอ่านได้ทุกแถวโดยไม่ต้องกดปลดล็อกก่อน */
-    return '<span class="ck-stp lk" title="ขึ้นเรือจริง '+actual+' คน · ล็อกอยู่ กดปุ่มแก้เพื่อปลดล็อก"><span class="ck-n">'+actual+'</span></span>'
-      +okBtn+'<button class="pck-mgedit" onclick="event.stopPropagation();pckMgUnlock(\''+b.id+'\')" title="เช็คอินแล้ว · ล็อกไว้กันกดโดน · กดเพื่อเปิดแก้จำนวน / No-show / CXL">&#9998; แก้</button>';
-  return stp+evs+okBtn
-    +(on?'<button class="pck-mgedit on" onclick="event.stopPropagation();pckMgUnlock(\''+b.id+'\')" title="ล็อกกลับ · กันกดโดนหลังเช็คอินแล้ว">&#128274;</button>':'');
+    /* ล็อกคือ "แก้ไม่ได้" ไม่ใช่ "มองไม่เห็น" · ตัวเลขยังอ่านได้โดยไม่ต้องปลดล็อก */
+    return '<span class="ck-stp lk" title="ขึ้นเรือจริง '+actual+' จากยอดจอง '+r.booked+' คน · ล็อกอยู่ กดปุ่มแก้เพื่อปลดล็อก">'
+        +'<span class="ck-n">'+actual+'<i>/'+r.booked+'</i></span></span>'
+      +okIco+'<button class="pck-mgedit ico" onclick="event.stopPropagation();pckMgUnlock(\''+b.id+'\')" title="เช็คอินแล้ว · ล็อกไว้กันกดโดน · กดเพื่อเปิดแก้จำนวน / No-show / CXL">&#9998;</button>';
+
+  return '<span class="pcs-numcol">'+stp2+evs2+'</span>'+okIco
+    +(on?'<button class="pck-mgedit ico on" onclick="event.stopPropagation();pckMgUnlock(\''+b.id+'\')" title="ล็อกกลับ · กันกดโดนหลังเช็คอินแล้ว">&#128274;</button>':'');
 }
 // แถวลูกค้าของหน้าท่า · ต่างจาก ckRowHtml ตรงที่ยุบคอลัมน์ที่หัวการ์ดตอบไปแล้ว (เรือ / รถ / โซน)
 // แล้วเอาที่ว่างไปให้ชื่อผู้โดยสาร · add-on · เงิน · ปุ่มเช็คอิน
@@ -55208,7 +55227,11 @@ function pckRowHtml(r, date, sheet){
        ? '<button class="pck-go" onclick="event.stopPropagation();pckDetailOpen(\''+b.id+'\')" title="ดูรายละเอียดทั้งหมดของ booking นี้">&rsaquo;</button>'
        : '<button onclick="event.stopPropagation();pckDetailOpen(\''+b.id+'\')" title="ดูรายละเอียดทั้งหมดของ booking นี้" style="border:1px solid #D8D4CA;background:#fff;color:#4a4a45;border-radius:999px;padding:5px 11px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">รายละเอียด</button>')
      +'</div>'
-     +'<div style="text-align:right;font-size:9px;color:#a5a49d;font-family:\'DM Mono\',monospace;margin-top:4px">จอง '+r.booked+(booked!==r.booked?(' · รอรับ '+booked):'')+'</div>'
+     /* §pckMgTight · ยอดจองไปอยู่ในตัวเลขแล้ว (ขึ้นเรือ/จอง)
+        เหลือบรรทัดนี้เฉพาะตอนยอดรอรับไม่ตรงยอดจอง ซึ่งเป็นเคสที่ต้องสะดุดตาจริง ๆ */
+     +((!sheet || booked!==r.booked)
+        ? ('<div style="text-align:right;font-size:9px;color:#a5a49d;font-family:\'DM Mono\',monospace;margin-top:4px">จอง '+r.booked+(booked!==r.booked?(' · รอรับ '+booked):'')+'</div>')
+        : '')
      +(tally.no_show>0?'<div style="text-align:right"><span class="ck-ns">No-show '+tally.no_show+'</span></div>':'')
      +(tally.cxl>0?'<div style="text-align:right"><span class="ck-cx">CXL '+tally.cxl+'</span></div>':'')
      +((noShow>0 && tally.total<noShow)?'<div style="text-align:right"><span class="ck-ns">ไม่ระบุเหตุ '+(noShow-tally.total)+'</span></div>':'')
@@ -57951,7 +57974,7 @@ function pckSheetCSS(){
   +S+' td.pcs-sq{width:210px;min-width:210px;max-width:210px}'
   +S+' td.pcs-st{width:132px;min-width:132px;max-width:132px;text-align:center}'
   +S+' td.pcs-mn{width:158px;min-width:158px;max-width:158px}'
-  +S+' td.pcs-mg{width:318px;min-width:318px;max-width:318px}'
+  +S+' td.pcs-mg{width:186px;min-width:186px;max-width:186px}'
   +S+' .pcs-prv{display:inline-block;background:#F4E8FB;color:#6B289A;font-weight:700;font-size:9px;'
     +'padding:0 6px;border-radius:6px;vertical-align:middle;white-space:nowrap}'
   +S+' .pcs-sub{font-size:9.5px;color:#a5a49d;margin-top:2px}'
@@ -58056,6 +58079,19 @@ function pckSheetCSS(){
     +'padding:3px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}'
   +S+' .pck-mgedit:hover{border-color:#A32D2D;color:#A32D2D}'
   +S+' .pck-mgedit.on{background:#FDF6E6;border-color:#E3C77A;color:#7A4A00}'
+  /* §pckMgTight · ตัวเลขกับปุ่มเหตุการณ์ซ้อนกันเป็นคอลัมน์เดียว ปุ่มจึงไม่กินความกว้าง */
+  +S+' .pcs-numcol{display:inline-flex;flex-direction:column;align-items:stretch;gap:3px;flex:none}'
+  +S+' .pcs-evs{display:flex;gap:4px;justify-content:center}'
+  +S+' .pcs-numcol .ck-stp{justify-content:space-between}'
+  +S+' .ck-ev.ico{width:26px;height:20px;padding:0 !important;font-size:12px !important;line-height:1;'
+    +'display:inline-flex;align-items:center;justify-content:center;flex:none}'
+  /* ตัวเลขเป็น ขึ้นเรือ/จอง · ตัวหารตัวเล็กและจางกว่า จะได้ไม่แย่งสายตากับตัวที่ต้องกด */
+  +S+' .ck-stp .ck-n i{font-style:normal;font-size:.82em;opacity:.5;margin-left:1px}'
+  +S+' .pck-ok.ico{padding:0 !important;min-width:34px;height:26px;border-radius:999px;'
+    +'display:inline-flex;align-items:center;justify-content:center;gap:3px;font-size:14px;flex:none}'
+  +S+' .pck-ok.ico .tm{font-family:\'DM Mono\',monospace;font-size:9.5px;font-weight:700}'
+  +S+' .pck-mgedit.ico{width:24px;height:22px;padding:0;font-size:11px;display:inline-flex;'
+    +'align-items:center;justify-content:center;flex:none}'
   +S+' .pck-go{border:1px solid #D8D4CA;background:#fff;color:#6b6a63;border-radius:50%;'
     +'width:22px;height:22px;padding:0;font-size:15px;font-weight:800;line-height:1;cursor:pointer;'
     +'font-family:inherit;display:inline-flex;align-items:center;justify-content:center;flex:none}'
