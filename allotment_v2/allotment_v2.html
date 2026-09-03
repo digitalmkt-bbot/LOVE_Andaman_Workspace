@@ -57753,15 +57753,15 @@ function pckHeadCSS(){
   +H+' .pgf-cv:hover{border-color:#185FA5;color:#185FA5}'
   +H+' .pgf-h>i{width:8px;height:8px;border-radius:50%;flex:none}'
   /* §pckHead6 · ชื่อคือของที่กวาดตาหา ต้องใหญ่กว่าตัวเลขรอบ ๆ */
-  +H+' .pgf-nm{font-size:13.5px;font-weight:800;letter-spacing:-.2px;'
+  +H+' .pgf-nm{font-size:15px;font-weight:800;letter-spacing:-.2px;'
     +'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
-  +H+' .pgf-px{font-size:11px;font-weight:700;flex:none;opacity:.82}'
-  +H+' .pgf-vn{font-size:9px;font-weight:700;background:rgba(255,255,255,.7);border-radius:999px;'
-    +'padding:1px 6px;flex:none;opacity:.85}'
+  +H+' .pgf-px{font-size:12px;font-weight:700;flex:none;opacity:.82}'
+  +H+' .pgf-vn{font-size:9.5px;font-weight:700;background:rgba(255,255,255,.7);border-radius:999px;'
+    +'padding:1px 7px;flex:none;opacity:.85}'
   +H+' .pgf-cv{background:rgba(255,255,255,.75) !important;border-color:rgba(0,0,0,.08) !important}'
   +H+' .pgf-sp{flex:1}'
   +H+' .pgf-due{font-size:9.5px;font-weight:800;color:#7A4A00;background:#FBF0DD;border-radius:999px;padding:1px 7px;white-space:nowrap}'
-  +H+' .pgf-st{font-size:9px;font-weight:800;border-radius:999px;padding:2px 8px;white-space:nowrap;flex:none}'
+  +H+' .pgf-st{font-size:9.5px;font-weight:800;border-radius:999px;padding:2px 9px;white-space:nowrap;flex:none}'
   +H+' .pgf-bar{height:3px;background:rgba(255,255,255,.6);overflow:hidden}'
   +H+' .pgf-bar s{display:block;height:100%;text-decoration:none}'
   +H+' .pgf-vars{padding:2px 0 4px 30px}'
@@ -57769,14 +57769,16 @@ function pckHeadCSS(){
     +'background:none;text-align:left;padding:3px 9px 3px 7px;cursor:pointer;font-family:inherit}'
   +H+' .pgv:hover{filter:brightness(.97)}'
   +H+' .pgv.off{opacity:.5;cursor:default}'
-  +H+' .pgv-nm{font-size:12px;font-weight:800;white-space:nowrap;overflow:hidden;'
-    +'text-overflow:ellipsis;max-width:150px}'
-  +H+' .pgv-tm{font-size:10px;color:#6b6a63;background:#F1EFE8;border-radius:5px;padding:1px 5px;flex:none}'
-  +H+' .pgv-px{font-size:10px;color:#8a8a82;flex:none}'
+  +H+' .pgv-nm{font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;'
+    +'text-overflow:ellipsis;max-width:158px}'
+  +H+' .pgv-tm{font-size:11px;color:#6b6a63;background:rgba(255,255,255,.75);border-radius:5px;'
+    +'padding:1px 6px;flex:none}'
+  +H+' .pgv-px{font-size:11px;color:#8a8a82;flex:none}'
   +H+' .pgv-off{font-size:9px;font-weight:700;color:#A32D2D;background:#FCEBEB;border-radius:999px;padding:1px 7px}'
   +H+' .pgv-z{display:inline-flex;gap:3px;margin-left:auto;flex:none}'
-  +H+' .pgz{display:inline-flex;align-items:center;gap:3px;border-radius:6px;padding:1px 6px;font-size:8.5px;font-weight:700;white-space:nowrap}'
-  +H+' .pgz b{font-size:10px;font-family:\'DM Mono\',monospace}'
+  +H+' .pgz{display:inline-flex;align-items:center;gap:3px;border-radius:6px;padding:1px 7px;'
+    +'font-size:9px;font-weight:700;white-space:nowrap}'
+  +H+' .pgz b{font-size:11px;font-family:\'DM Mono\',monospace}'
   /* ── แถบวันที่ ── */
   /* §pckHead4 · ตรึงหัวไว้ · เลื่อนหน้าลงไปดูแถวท้าย ๆ ยังกดเปลี่ยนวัน/กรอง/ค้นหาได้ทันที
      ไม่ต้องเลื่อนกลับขึ้นมาทุกครั้ง · z สูงกว่าหัวตารางที่ตรึงในกล่องของมันเอง (z 30/34) */
@@ -57785,21 +57787,24 @@ function pckHeadCSS(){
      ตรึงแบบ sticky top:0 · เลื่อนตารางยังไงหัวก็ไม่ขยับ */
   /* §pckHead6 · พื้นหัวเป็นเทากลาง ๆ · การ์ดขาวลอยขึ้นมาชัดกว่าเดิม
      และสีประจำโปรแกรมเด้งกว่าตอนวางบนพื้นครีม */
-  +H+' .pkh{position:sticky;top:0;z-index:60;background:#EDEFF2;'
+  /* host กินเต็มพื้นที่เนื้อหา · ดึงออกนอก padding ของ .main แล้วเอา padding มาไว้ในตัวเอง
+     สีพื้นจึงเต็มขอบจริง ไม่เหลือกรอบขาวรอบ ๆ */
+  +H+'{margin:-22px -22px -22px -14px;padding:22px 22px 22px 14px;transition:background .18s}'
+  +H+' .pkh{position:sticky;top:-22px;z-index:60;background:#EDEFF2;'
     +'margin:-22px -22px 10px -14px;border-radius:0;border-bottom:1px solid #DCE0E6;'
-    +'padding:10px 22px 10px 14px;'
+    +'padding:11px 22px 11px 14px;'
     +'box-shadow:0 6px 14px -8px rgba(15,23,42,.16)}'
   +H+' .pkh-day{position:relative;display:flex;align-items:center;gap:8px;padding:0 2px 8px}'
-  +H+' .pkh-nav{width:24px;height:24px;border-radius:50%;border:1px solid #E1DED5;background:#fff;'
-    +'cursor:pointer;font-size:13px;line-height:1;color:#6b6a63;flex:none;font-family:inherit}'
+  +H+' .pkh-nav{width:26px;height:26px;border-radius:50%;border:1px solid #D5D9E0;background:#fff;'
+    +'cursor:pointer;font-size:14px;line-height:1;color:#6b6a63;flex:none;font-family:inherit}'
   +H+' .pkh-dt{position:relative;display:inline-flex;align-items:center;gap:9px;cursor:pointer;'
     +'white-space:nowrap;color:#15201a}'
-  +H+' .pkh-dnum{font-size:27px;font-weight:800;line-height:1;letter-spacing:-1px}'
-  +H+' .pkh-dcol{display:flex;flex-direction:column;line-height:1.12}'
-  +H+' .pkh-dow{font-size:13px;font-weight:800;letter-spacing:-.2px}'
-  +H+' .pkh-dmy{font-size:9px;font-weight:700;color:#a5a49d;letter-spacing:.1em}'
+  +H+' .pkh-dnum{font-size:32px;font-weight:800;line-height:1;letter-spacing:-1.2px}'
+  +H+' .pkh-dcol{display:flex;flex-direction:column;line-height:1.1}'
+  +H+' .pkh-dow{font-size:15px;font-weight:800;letter-spacing:-.2px}'
+  +H+' .pkh-dmy{font-size:10px;font-weight:700;color:#98A0AC;letter-spacing:.1em}'
   +H+' .pkh-dt input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}'
-  +H+' .pkh-today{background:#15201a;color:#fff;border-radius:999px;padding:2px 9px;font-size:9.5px;font-weight:800}'
+  +H+' .pkh-today{background:#15201a;color:#fff;border-radius:999px;padding:3px 11px;font-size:10.5px;font-weight:800}'
   +H+' .pkh-back{border:1px solid #D5D9E0;background:#fff;border-radius:999px;padding:2px 10px;'
     +'font:800 9.5px inherit;font-family:inherit;color:#5F6570;cursor:pointer;white-space:nowrap}'
   +H+' .pkh-back:hover{border-color:#185FA5;color:#185FA5}'
@@ -57807,16 +57812,16 @@ function pckHeadCSS(){
   /* ชื่อกลางหัว · จัดกลางจริงด้วย absolute จะได้ไม่เลื่อนตามความกว้างของสองฝั่ง
      pointer-events:none เพื่อไม่ให้บังปุ่มที่อยู่ข้างใต้ · จอแคบซ่อนไปเลย */
   +H+' .pkh-brand{position:absolute;left:50%;top:12px;transform:translateX(-50%);'
-    +'pointer-events:none;font-size:15px;font-weight:800;letter-spacing:.16em;'
-    +'color:#A9AFB8;white-space:nowrap;max-width:26vw;overflow:hidden;text-overflow:ellipsis}'
-  +H+' .pkh-brand.on{letter-spacing:-.2px;font-size:16px}'
+    +'pointer-events:none;font-size:17px;font-weight:800;letter-spacing:.18em;'
+    +'color:#A9AFB8;white-space:nowrap;max-width:28vw;overflow:hidden;text-overflow:ellipsis}'
+  +H+' .pkh-brand.on{letter-spacing:-.3px;font-size:21px}'
   /* จอแคบพื้นที่ตรงกลางไม่พอ ชนกับยอดรวมฝั่งขวา · ซ่อนไปเลยดีกว่าให้ทับกัน */
   +'@media(max-width:1360px){'+H+' .pkh-brand{display:none}}'
   +H+' .pkh-kpi{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}'
-  +H+' .pkh-kpi>span{border-radius:999px;padding:3px 10px;font-size:10.5px;font-weight:700;white-space:nowrap}'
+  +H+' .pkh-kpi>span{border-radius:999px;padding:4px 11px;font-size:11.5px;font-weight:700;white-space:nowrap}'
   +H+' .pkh-tot{background:#fff;border:1px solid #DFE3E9;color:#3C3B37}'
-  +H+' .pkh-tot b{font-size:13px}'
-  +H+' .pkh-tot .ck-mono{font-size:9.5px;color:#a5a49d}'
+  +H+' .pkh-tot b{font-size:14px}'
+  +H+' .pkh-tot .ck-mono{font-size:10px;color:#a5a49d}'
   /* ── สองคอลัมน์ ── */
   /* stretch · การ์ดโปรแกรมยืดเท่าคอลัมน์ขวา รายการจะได้ใช้ที่ว่างที่เหลือทั้งหมด
      ของเดิม align-items:start ทำให้การ์ดซ้ายเตี้ยแล้วเหลือช่องว่างใต้การ์ดเปล่า ๆ */
@@ -57828,9 +57833,9 @@ function pckHeadCSS(){
   +H+' .pkh-chd{display:flex;align-items:center;gap:7px;padding:4px 9px;'
     +'border-bottom:1px solid #EBEEF2;background:#F6F7F9}'
   +H+' .pkh-chd.plain{display:none}'
-  +H+' .pkh-ct{font-size:10px;font-weight:800;color:#6b6a63;letter-spacing:.05em;white-space:nowrap}'
+  +H+' .pkh-ct{font-size:10.5px;font-weight:800;color:#6b6a63;letter-spacing:.05em;white-space:nowrap}'
   +H+' .pkh-csp{flex:1}'
-  +H+' .pkh-selnm{font-size:12.5px;font-weight:800;color:#2c2c2a;letter-spacing:-.2px;'
+  +H+' .pkh-selnm{font-size:14px;font-weight:800;color:#2c2c2a;letter-spacing:-.2px;'
     +'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
   +H+' .pkh-plist{flex:1;min-height:96px;max-height:none;overflow-y:auto;overscroll-behavior:contain}'
   +H+' .pkh-plist::-webkit-scrollbar{width:6px}'
@@ -57844,7 +57849,7 @@ function pckHeadCSS(){
   +H+' .pkh-card .ck-unitbar-lbl{display:none}'
   /* ปุ่มใบงานมุมขวาบนของการ์ดเรือ */
   +H+' .pkh-jobs{display:inline-flex;gap:4px;flex:none;margin-left:6px}'
-  +H+' .pkh-jobs .pck-joball{width:23px !important;height:23px !important;font-size:11px !important;margin:0 !important}'
+  +H+' .pkh-jobs .pck-joball{width:25px !important;height:25px !important;font-size:12px !important;margin:0 !important}'
   /* ── ปุ่มท่าเรือ ── */
   /* §pckHead6 · ปุ่มล้างตัวกรองสองอันนี้กดนาน ๆ ครั้ง · ตัวเล็กลงเพื่อคืนสายตาให้ชื่อ */
   +H+' .pkh-allbtn{border:1px solid #E6C9C3;background:#fff;color:#A32D2D;border-radius:999px;'
@@ -57861,16 +57866,18 @@ function pckHeadCSS(){
         ตัวกรองกับมุมมองต้องไหลรวมเป็นแถวเดียวกัน จึงให้ตัวห่อของเดิมเป็น display:contents */
   +H+' .pkh-fwrap{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:6px 9px}'
   +H+' .pkh-fwrap>.ck-fbar,'+H+' .pkh-fwrap>.pcs-bar{display:contents}'
-  +H+' .pkh-card .ck-fbar button,'+H+' .pkh-fwrap button{padding:3px 9px !important;font-size:10px !important}'
-  +H+' .pkh-card .ck-fbar input,'+H+' .pkh-card .ck-fbar select{height:27px !important;font-size:11px !important}'
-  +H+' .pkh-fwrap .pcs-seg{padding:3px 11px !important;font-size:10px !important}'
-  +H+' .pkh-fwrap .k{font-size:9.5px}'
+  +H+' .pkh-card .ck-fbar button,'+H+' .pkh-fwrap button{padding:4px 11px !important;font-size:11.5px !important}'
+  +H+' .pkh-card .ck-fbar input,'+H+' .pkh-card .ck-fbar select{height:32px !important;font-size:13px !important}'
+  +H+' .pkh-fwrap .pcs-seg{padding:4px 13px !important;font-size:11.5px !important}'
+  +H+' .pkh-fwrap .k{font-size:10.5px}'
   +H+' .pkh-card .ck-fsep{margin:0 1px}'
   /* เรือ · ชิปเล็กลงและปุ่มไอคอนไหลต่อท้ายในแถวเดียวกัน */
   +H+' .pkh-boats .pck-btabs{display:flex;flex-wrap:wrap;align-items:center;gap:5px}'
-  +H+' .pkh-boats .pck-btab{padding:3px 10px !important;font-size:10.5px !important;gap:6px !important}'
+  +H+' .pkh-boats .pck-btab{padding:3px 11px !important;font-size:11px !important;gap:7px !important}'
   /* ชื่อเรือคือช่องที่สองของชิป · ตัวแรกเป็นจุดสี */
-  +H+' .pkh-boats .pck-btab>span:nth-child(2){font-size:13px;font-weight:800;letter-spacing:-.2px}'
+  +H+' .pkh-boats .pck-btab>span:nth-child(2){font-size:14px;font-weight:800;letter-spacing:-.2px}'
+  +H+' .pkh-boats .pck-btab .rt{font-size:10px !important}'
+  +H+' .pkh-boats .pck-btab .c{font-size:10px !important}'
   +H+' .pkh-boats .pck-btab .rt{font-size:9px !important}'
   +H+' .pkh-boats .pck-btab .c{font-size:9.5px !important}'
   +H+' .pkh-boats .pck-joball{width:23px !important;height:23px !important;font-size:11px !important;margin:0 !important}'
@@ -58419,6 +58426,14 @@ function renderPierCheckin(){
         searchHtml:pckFilterBar(all, cnt, nHidden, 'search'),
         chipsHtml:pckFilterBar(all, cnt, nHidden, 'chips')})
     +warnHtml+(sheetHtml||cardsHtml);
+  /* §pckHead8 · สีของสิ่งที่กรองอยู่ลามทั้งหน้า ไม่ใช่แค่แถบหัว
+     พื้นหน้าจางกว่าหัวหนึ่งขั้น (tint .92 vs .86) เพื่อให้ยังแยกออกว่าตรงไหนคือหัว
+     ทาที่ตัว host เอง ไม่ไปยุ่ง body/.main · ออกจากหน้านี้แล้วสีหายไปเองไม่ต้องล้าง
+     ตรวจแล้วช่องในตารางทาสีพื้นทึบครบทุกช่อง (464/464) สีข้างนอกจึงทะลุเข้าไปไม่ได้ */
+  (function(){
+    var _c=pckSelColor(), _b=_c?pckBandBase(_c):null;
+    host.style.background=_b?pckTint(_b,.92):'#F2F3F5';
+  })();
   ckSyncSticky(host); pckFitPane();
   pckScrollRestore(host);   /* ต้องหลัง pckFitPane · กล่องยังไม่ได้ความสูงจริง ค่าที่ตั้งจะโดนบีบ */
   ckStartTick('piercheckin', renderPierCheckin);
