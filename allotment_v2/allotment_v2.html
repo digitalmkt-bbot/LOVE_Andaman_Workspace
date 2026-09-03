@@ -51788,18 +51788,35 @@ function pcKeep(){
 /* ── เขียนค่า ─────────────────────────────────────────────────────────── */
 function pcGuard(){ if(typeof poCanEdit==='function' && !poCanEdit()){ alert('ไม่มีสิทธิ์แก้ข้อมูลหน้าท่า'); return false; } return true; }
 function pcWho(){ return (typeof ckMe==='function')?ckMe():'—'; }
+/* §pcLtSplit · "ใช้จริง" แยกเป็นสองช่อง · nj = จอยกี่ลำ · nc = เหมากี่ลำ
+   ยังเขียน n = nj+nc ไว้เหมือนเดิม เพราะเป็นยอดที่ของเก่าอ่านอยู่ (และไว้เทียบกับข้อมูลเดิม)
+   แถวเก่าที่มีแต่ n ยังอ่านได้ · ตัววาดจะโชว์เป็นป้าย "เดิม N" ให้เห็นว่ายังไม่ได้แยก */
+function pcLtUsed(C){
+  C=C||{};
+  var j=(C.nj!=null&&C.nj!=='')?(+C.nj||0):null;
+  var c=(C.nc!=null&&C.nc!=='')?(+C.nc||0):null;
+  var legacy=(j===null&&c===null)?(+C.n||0):0;
+  return {j:j, c:c, legacy:legacy, tot:(j||0)+(c||0)+legacy};
+}
 function pcSetLT(ds,bid,fld,val){
   if(!pcGuard()) return;
   var D=pcDay(_pcPier,ds,true); D.lt[bid]=D.lt[bid]||{};
   D.lt[bid][fld]=pcNum(val); D.lt[bid].by=pcWho(); D.lt[bid].ts=new Date().toISOString();
-  if(!D.lt[bid].n && !D.lt[bid].amt && !(D.lt[bid].note||'').trim()) delete D.lt[bid];
+  if(fld==='nj'||fld==='nc'){
+    var R=D.lt[bid];
+    R.n=(+R.nj||0)+(+R.nc||0);          /* ยอดรวมยังอยู่ที่ n ตามเดิม */
+    if(!R.n) delete R.n;
+  }
+  var Q=D.lt[bid];
+  if(!Q.n && !Q.nj && !Q.nc && !Q.amt && !(Q.note||'').trim()) delete D.lt[bid];
   pcSave(); pcKeep();
 }
 function pcSetLTNote(ds,bid,val){
   if(!pcGuard()) return;
   var D=pcDay(_pcPier,ds,true); D.lt[bid]=D.lt[bid]||{};
   D.lt[bid].note=String(val||'').trim(); D.lt[bid].by=pcWho();
-  if(!D.lt[bid].n && !D.lt[bid].amt && !D.lt[bid].note) delete D.lt[bid];
+  var Q=D.lt[bid];
+  if(!Q.n && !Q.nj && !Q.nc && !Q.amt && !Q.note) delete D.lt[bid];
   pcSave(); pcKeep();
 }
 function pcSetPK(ds,bid,fld,val){
@@ -51999,7 +52016,12 @@ function pcCSS(scope){
   +scope+' .pc-t td.cy.mm input{color:#7A4A00;font-weight:800}'
   +scope+' .pc-fill{display:inline-block;margin:3px 0 0 5px;border:1px solid #CFDDF5;background:#fff;'
     +'color:#2C4F8A;border-radius:6px;padding:1px 8px;font:600 10.5px inherit;font-family:inherit;cursor:pointer}'
-  +scope+' .pc-fill:hover{background:#EEF4FF;border-color:#9CBCE8}';
+  +scope+' .pc-fill:hover{background:#EEF4FF;border-color:#9CBCE8}'
+  /* §pcLtSplit · หัวคอลัมน์ "ใช้จริง" สองบรรทัด + ป้ายข้อมูลเดิมที่ยังไม่ได้แยกจอย/เหมา */
+  +scope+' .pc-t th .sub{display:block;font-size:8.5px;font-weight:600;opacity:.78;margin-top:1px}'
+  +scope+' .pc-oldn{display:inline-block;margin-left:7px;background:#FBF0DD;color:#7A4A00;'
+    +'border:1px solid #EAD9B0;border-radius:999px;padding:1px 7px;font:700 9px inherit;'
+    +'font-family:inherit;white-space:nowrap;vertical-align:middle}';
 }
 /* ── ชีท 1 · หน้าหลัก ────────────────────────────────────────────────── */
 function pcSheetMain(pier){
@@ -52132,39 +52154,50 @@ function pcMonthTable(pier){
 }
 /* ── ชีท 2 · เรือหางยาว ──────────────────────────────────────────────── */
 function pcSheetLT(pier){
-  var dates=pcDates(pier,_pcYM), body='', rn=0, gj=0,gc=0,gu=0,gm=0, nb=0;
+  var dates=pcDates(pier,_pcYM), body='', rn=0, gj=0,gc=0,guj=0,guc=0,gm=0, nb=0;
   dates.forEach(function(ds){
     var BS=pcBoats(ds,pier); if(!BS.length) return;
     var D=pcDay(pier,ds,false)||{lt:{}};
-    var dj=0,dc=0,du=0,dm=0, rows='';
+    var dj=0,dc=0,duj=0,duc=0,dm=0, rows='';
     BS.forEach(function(B){
       rn++; nb++;
       var L=(typeof pxLongtail==='function')?pxLongtail(ds,B.bid):{chtr:0,join:0};
       var C=(D.lt||{})[B.bid]||{};
-      dj+=(+L.join||0); dc+=(+L.chtr||0); du+=(+C.n||0); dm+=(+C.amt||0);
+      var U=pcLtUsed(C);
+      dj+=(+L.join||0); dc+=(+L.chtr||0);
+      duj+=(U.j||0); duc+=(U.c||0); dm+=(+C.amt||0);
       rows+='<tr><td class="rn">'+rn+'</td><td class="bn">'+pcE(B.name)+'</td>'
-        +'<td class="rt">'+pcRouteName(B.rid,B.route)+'</td>'
+        +'<td class="rt">'+pcRouteName(B.rid,B.route)
+          +(U.legacy?('<span class="pc-oldn" title="ข้อมูลเดิมที่ยังไม่ได้แยกจอย/เหมา · กรอกทับได้เลย แล้วป้ายนี้จะหายไป">ใช้จริงเดิม '+U.legacy+' ลำ</span>'):'')
+          +'</td>'
         +'<td class="c">'+(L.join?('<span class="pc-pill pc-pj">'+L.join+'</span>'):'<span class="v z">0</span>')+'</td>'
         +'<td class="c">'+(L.chtr
             ? ('<span class="pc-pill pc-pc" title="'+(L.upg>0?('มาจากอัปเกรดหน้างาน '+L.upg+' ใบ'+(L.upgDue>0?(' · ยังไม่เก็บเงิน '+L.upgDue+' ใบ'):'')):'ตามใบจอง')+'">'
                +L.chtr+(L.upg>0?('<i class="pc-up'+(L.upgDue>0?' due':'')+'">⬆</i>'):'')+'</span>')
             : '<span class="v z">0</span>')+'</td>'
-        +'<td class="cb"><input value="'+(C.n||'')+'" placeholder="—" inputmode="numeric" '
-          +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'n\',this.value)"></td>'
+        /* §pcLtSplit · ใช้จริงแยกสองช่อง · หน้างานจอยอาจยุบลำ เหมาอาจใช้น้อยกว่าที่จอง
+           รวมกันเป็นเลขเดียวแล้วดูย้อนหลังไม่ออกว่าที่ต่างจากใบจองคือฝั่งไหน */
+        +'<td class="cb"><input value="'+(U.j!=null?U.j:'')+'" placeholder="—" inputmode="numeric" '
+          +'title="จำนวนลำที่ใช้จริงของฝั่งจอย" '
+          +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'nj\',this.value)"></td>'
+        +'<td class="cb"><input value="'+(U.c!=null?U.c:'')+'" placeholder="—" inputmode="numeric" '
+          +'title="จำนวนลำที่ใช้จริงของฝั่งเหมา" '
+          +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'nc\',this.value)"></td>'
         +'<td class="cy"><input value="'+(C.amt?pcN(C.amt):'')+'" placeholder="—" inputmode="numeric" '
           +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'amt\',this.value)"></td>'
         +'<td class="ctx"><input value="'+pcE(C.note||'')+'" placeholder="—" '
           +'onchange="pcSetLTNote(\''+ds+'\',\''+B.bid+'\',this.value)"></td></tr>';
     });
-    gj+=dj; gc+=dc; gu+=du; gm+=dm;
-    body+='<tr class="day'+(ds===pcNowDS()?' now':'')+'" id="pcd-'+pier+'-'+ds+'"><td colspan="8">'
+    gj+=dj; gc+=dc; guj+=duj; guc+=duc; gm+=dm;
+    body+='<tr class="day'+(ds===pcNowDS()?' now':'')+'" id="pcd-'+pier+'-'+ds+'"><td colspan="9">'
       +pcE(pcDL(ds))+(ds===pcNowDS()?'<span class="tdy">วันนี้</span>':'')
       +'<span class="d2">'+BS.length+' ลำ · จอย '+dj+' · เหมา '+dc+'</span></td></tr>'+rows
       +'<tr class="sum"><td class="rn"></td><td colspan="2">รวม '+pcE(pcDS(ds))+'</td>'
       +'<td class="v">'+dj+'</td><td class="v">'+dc+'</td>'
-      +'<td class="v">'+(du||'—')+'</td><td class="r">'+(dm?pcN(dm):'—')+'</td><td></td></tr>';
+      +'<td class="v">'+(duj||'—')+'</td><td class="v">'+(duc||'—')+'</td>'
+      +'<td class="r">'+(dm?pcN(dm):'—')+'</td><td></td></tr>';
   });
-  if(!body) body='<tr><td colspan="8" style="color:#B9BCC6;padding:20px 12px">ไม่มีเรือออกในเดือนนี้</td></tr>';
+  if(!body) body='<tr><td colspan="9" style="color:#B9BCC6;padding:20px 12px">ไม่มีเรือออกในเดือนนี้</td></tr>';
   return '<div class="pc-sheet">'
    +'<div class="pc-tb"><b>🛶 สรุปเรือหางยาวรายวัน</b>'
      +'<input class="pc-dt" type="month" value="'+_pcYM+'" onchange="pcMonth(this.value)">'
@@ -52173,16 +52206,19 @@ function pcSheetLT(pier){
    +'<div class="pc-gw"><table class="pc-t"><thead><tr>'
      +'<th class="rn">#</th><th style="width:150px">เรือ</th><th>โปรแกรม</th>'
      +'<th class="c" style="width:74px">จอย</th><th class="c" style="width:74px">เหมา</th>'
-     +'<th class="c key" style="width:100px">ใช้จริง (ลำ)</th>'
+     +'<th class="c key" style="width:88px">ใช้จริง<span class="sub">จอย (ลำ)</span></th>'
+     +'<th class="c key" style="width:88px">ใช้จริง<span class="sub">เหมา (ลำ)</span></th>'
      +'<th class="r key" style="width:118px">จ่ายจริง</th>'
      +'<th style="width:170px">หมายเหตุ</th></tr></thead>'
      +'<tbody>'+body+'</tbody>'
      +'<tfoot><tr class="grand"><td class="rn"></td><td colspan="2">รวมทั้งเดือน</td>'
-       +'<td class="v">'+gj+'</td><td class="v">'+gc+'</td><td class="v">'+gu+'</td>'
+       +'<td class="v">'+gj+'</td><td class="v">'+gc+'</td>'
+       +'<td class="v">'+guj+'</td><td class="v">'+guc+'</td>'
        +'<td class="r">'+pcMoney(gm)+'</td><td></td></tr></tfoot></table></div>'
    +'<div class="pc-note"><b>ช่องขาว = ระบบอ่านให้</b> จอย/เหมามาจากใบจอง · '
      +'<b>ช่องฟ้ากับช่องเหลือง = คนหน้าท่ากรอกเอง</b> เพราะหน้างานมักไม่ตรงกับที่จองมา — '
      +'จอย 3 คนอาจลงลำเดียว หรือเหมา 2 ลำแต่ใช้จริงลำเดียว · '
+     +'<b>ใช้จริงแยกจอย/เหมา</b> เพื่อดูย้อนหลังได้ว่าที่ต่างจากใบจองคือฝั่งไหน · '
      +'ยอดจ่ายจริงของแต่ละวันจะไปโผล่เป็นบรรทัดเดียวในชีทหน้าหลัก</div>'
    +'</div>';
 }
