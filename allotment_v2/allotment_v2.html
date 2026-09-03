@@ -57658,7 +57658,7 @@ function pckFitPane(){
   _pckFitRaf=requestAnimationFrame(function(){
     _pckFitRaf=0;
     var w=document.querySelector('#piercheckin-host .pcs-tw'); if(!w) return;
-    var h=Math.max(320,(window.innerHeight||800)-w.getBoundingClientRect().top-14);
+    var h=Math.max(320,(window.innerHeight||800)-w.getBoundingClientRect().top-8);
     w.style.maxHeight=h+'px';
     /* §pckHead9 · ก่อนหน้านี้หน้าเว็บล้นออกนอกจอ 73px (มาจาก padding ใต้ view)
        เลยมีแถบเลื่อนสองอัน · หน้าเว็บหนึ่ง กล่องตารางหนึ่ง เลื่อนแล้วงงว่าอันไหนขยับ
@@ -57736,7 +57736,7 @@ function pckHeadHtml(o){
      เงยหน้าจากตารางแล้วรู้ทันทีว่ากำลังดูโปรแกรมไหน โดยไม่ต้องอ่านตัวหนังสือ */
   var _bc=pckSelColor();
   var _bb=_bc?pckBandBase(_bc):null;
-  var _bs=_bb?(' style="background:'+pckTint(_bb,.86)+';border-bottom-color:'+pckTint(_bb,.52)+'"'):'';
+  var _bs=_bb?(' style="background:'+pckTint(_bb,.78)+';border-bottom-color:'+pckTint(_bb,.44)+'"'):'';
   return '<div class="pkh"'+_bs+'>'+o.dayHtml
     +'<div class="pkh-grid">'
       +'<div class="pkh-col">'+B.prog+'</div>'
@@ -57798,7 +57798,9 @@ function pckHeadCSS(){
   /* host กินเต็มพื้นที่เนื้อหา · ดึงออกนอก padding ของ .main แล้วเอา padding มาไว้ในตัวเอง
      สีพื้นจึงเต็มขอบจริง ไม่เหลือกรอบขาวรอบ ๆ */
   +H+'{margin:-22px -22px -22px -14px;padding:22px 22px 0 14px;transition:background .18s}'
-  +H+' .pkh{position:sticky;top:-22px;z-index:60;background:#EDEFF2;'
+  /* §pckHead10 · หน้านี้ไม่ต้องเว้นก้นหน้า · ที่เว้นย้ายเข้าไปอยู่ในกล่องเลื่อนแทน */
+  +'#view-piercheckin{padding-bottom:0 !important}'
+  +H+' .pkh{position:sticky;top:-22px;z-index:60;background:#E4E7EC;'
     +'margin:-22px -22px 10px -14px;border-radius:0;border-bottom:1px solid #DCE0E6;'
     +'padding:11px 22px 11px 14px;'
     +'box-shadow:0 6px 14px -8px rgba(15,23,42,.16)}'
@@ -57903,7 +57905,9 @@ function pckSheetCSS(){
   +'#piercheckin-host .pcs-seg.on{background:#15201a;color:#fff}'
   /* กล่องเลื่อนของตัวเอง · การตรึงคอลัมน์ซ้ายต้องมีตัวเลื่อนของตัวเอง */
   +'#piercheckin-host .pcs-tw{overflow:auto;max-height:calc(100vh - 250px);min-height:340px;'
-    +'border-radius:13px;contain:paint;overscroll-behavior:contain}'
+    +'border-radius:13px;contain:paint;overscroll-behavior:contain;'
+    /* เว้นไว้ในตัวกล่อง · เลื่อนสุดแล้วแถวสุดท้ายยังพ้นป้ายมุมซ้ายล่าง (250x65 ห่างก้นจอ 10) */
+    +'padding-bottom:78px}'
   +'#piercheckin-host .ck-card.pcs-card{overflow:hidden;padding:0;'
     +'background:var(--pck-band,#EDEFF2) !important;'
     +'border:1px solid var(--pck-bandb,#DCE0E6) !important;transition:background .18s}'
@@ -58442,11 +58446,11 @@ function renderPierCheckin(){
      ตรวจแล้วช่องในตารางทาสีพื้นทึบครบทุกช่อง (464/464) สีข้างนอกจึงทะลุเข้าไปไม่ได้ */
   (function(){
     var _c=pckSelColor(), _b=_c?pckBandBase(_c):null;
-    host.style.background=_b?pckTint(_b,.92):'#F2F3F5';
+    host.style.background=_b?pckTint(_b,.86):'#EAECF0';
     /* §pckHead9 · การ์ดที่ครอบตารางใช้สีเดียวกับแถบหัว · ของเดิมเป็นแผ่นขาวโด่
        ช่องในตารางทาสีพื้นทึบของตัวเองอยู่แล้ว สีนี้จึงเห็นแค่ขอบกับที่ว่างใต้แถวสุดท้าย */
-    host.style.setProperty('--pck-band', _b?pckTint(_b,.86):'#EDEFF2');
-    host.style.setProperty('--pck-bandb', _b?pckTint(_b,.52):'#DCE0E6');
+    host.style.setProperty('--pck-band', _b?pckTint(_b,.78):'#E4E7EC');
+    host.style.setProperty('--pck-bandb', _b?pckTint(_b,.44):'#CFD4DC');
   })();
   ckSyncSticky(host); pckFitPane();
   pckScrollRestore(host);   /* ต้องหลัง pckFitPane · กล่องยังไม่ได้ความสูงจริง ค่าที่ตั้งจะโดนบีบ */
