@@ -54336,14 +54336,19 @@ function pckNameCell(r, sheet){
   var list=(lead?[lead]:[]).concat(ex);
   if(!list.length) list=['—'];
   var open=!!_pckOpenNames[b.id];
-  var show=(open||list.length<=PCK_MAX_NAMES)?list:list.slice(0,PCK_MAX_NAMES);
+  /* §pckLock · ในโหมดตารางโชว์ชื่อหัวใบคนเดียว ที่เหลือกดปุ่ม "+N คน" แล้วกางลงมา
+     ตารางไว้กวาดสายตาหาแถว ไม่ใช่ไว้อ่านรายชื่อ · การ์ดยังโชว์ถึง PCK_MAX_NAMES เหมือนเดิม */
+  var maxN=sheet?1:PCK_MAX_NAMES;
+  var show=(open||list.length<=maxN)?list:list.slice(0,maxN);
   var hidden=list.length-show.length;
   var rcCol=(b.ops&&b.ops.reconfirm&&b.ops.reconfirm.status&&typeof rcStateColor==='function')?rcStateColor(b.ops.reconfirm.status):'#F6E27A';
   var h='<span class="ck-lead" style="background:'+rcCol+'" title="'+e(show[0])+'">'+e(show[0])+'</span>'
     +((typeof pckBoatSplitBadge==='function')?pckBoatSplitBadge(r):'');   // §boatSplit
   h+=show.slice(1).map(function(n){ return '<div class="pck-gsub">'+e(n)+'</div>'; }).join('');
-  if(hidden>0) h+='<div><button class="pck-gmore" onclick="event.stopPropagation();pckNamesToggle(\''+b.id+'\')" title="แสดงชื่อที่เหลือทั้งหมด">+'+hidden+' คน</button></div>';
-  else if(open && list.length>PCK_MAX_NAMES) h+='<div><button class="pck-gmore" onclick="event.stopPropagation();pckNamesToggle(\''+b.id+'\')">ย่อ</button></div>';
+  /* ในตารางปุ่มกางชื่อไปต่อท้ายชื่อหัวใบบรรทัดเดียวกัน · ห่อ div เมื่อไหร่ก็กินไปอีกหนึ่งบรรทัดทุกแถว */
+  var _w0=sheet?'':'<div>', _w1=sheet?'':'</div>';
+  if(hidden>0) h+=_w0+'<button class="pck-gmore" onclick="event.stopPropagation();pckNamesToggle(\''+b.id+'\')" title="แสดงชื่อที่เหลือทั้งหมด">+'+hidden+' คน</button>'+_w1;
+  else if(open && list.length>maxN) h+=_w0+'<button class="pck-gmore" onclick="event.stopPropagation();pckNamesToggle(\''+b.id+'\')">ย่อ</button>'+_w1;
   var pax=(r.expect!=null?r.expect:r.booked);
   /* §ckTight · ในตารางชีทไม่ต้องนับชื่อให้ · รายชื่ออยู่ใต้ชื่อหลักครบอยู่แล้ว
      "2 ชื่อ / 5 ชื่อ" กินไปหนึ่งบรรทัดต่อแถวโดยไม่ได้บอกอะไรใหม่
@@ -54353,8 +54358,40 @@ function pckNameCell(r, sheet){
     else if(pax>1) h+='<div class="pck-gwarn" title="ระบบมีชื่อเดียว แต่จองมา '+pax+' ที่นั่ง — manifest กรมเจ้าท่าต้องการรายชื่อครบ">มีชื่อเดียว · '+pax+' pax</div>';
   }
   var phone=b.leadPhone||b.phone||b.customerPhone||'';
-  if(phone) h+='<div><a class="ck-tel" href="tel:'+e(String(phone).split(/[,;\/]|\sหรือ\s/)[0].replace(/[^0-9+]/g,''))+'" onclick="event.stopPropagation()" title="โทรหาลูกค้า">&#128222; '+e(phone)+'</a></div>';
+  /* §pckLock · ตัดอิโมจิโทรศัพท์ออก · ตัวเลขอ่านง่ายกว่าอยู่แล้ว ไอคอนกินที่เปล่า ๆ */
+  if(phone) h+='<div><a class="ck-tel" href="tel:'+e(String(phone).split(/[,;\/]|\sหรือ\s/)[0].replace(/[^0-9+]/g,''))+'" onclick="event.stopPropagation()" title="โทรหาลูกค้า">'+e(phone)+'</a></div>';
   return h;
+}
+/* ══ §pckLock · แผงจัดการของโหมดตาราง ════════════════════════════════════════
+   สองปัญหาที่แก้พร้อมกัน เพราะมันเป็นเรื่องเดียวกัน คือของในช่องเยอะเกินช่อง
+
+   1) ปุ่มทั้งชุด (−/+ · No-show · CXL · เช็คอิน · รายละเอียด) เรียงบรรทัดเดียว
+      ยาวเกินความกว้างคอลัมน์ ปุ่ม + กับปุ่มเช็คอินหลุดออกนอกช่องที่ overflow:hidden
+      มองเห็นครึ่งเดียวและกดไม่โดน
+   2) แถวที่เช็คอินขึ้นเรือไปแล้ว ยังกด −/+ หรือ No-show โดนได้
+      ปัดนิ้วโดนทีเดียวยอดขึ้นเรือเปลี่ยนเงียบ ๆ ไม่มีใครรู้ว่าใครแก้เมื่อไหร่
+
+   → เช็คอินแล้ว = ล็อก เหลือปุ่มยืนยัน + ปุ่ม "แก้" ที่ต้องกดปลดล็อกก่อน
+     ล็อกอยู่จึงเหลือปุ่มน้อยลง ของก็ไม่ล้นช่องไปด้วย
+   ล็อกเป็นของหน้าจอ ไม่ได้เก็บลงข้อมูล · รีเฟรชแล้วกลับมาล็อกเหมือนเดิมทุกแถว
+   โหมดการ์ดไม่แตะ · ยังเป็นแผงเดิมทุกปุ่มตามที่ตกลงกันไว้ */
+var _pckMgOpen={};
+function pckMgUnlock(id){
+  if(_pckMgOpen[id]) delete _pckMgOpen[id]; else _pckMgOpen[id]=1;
+  renderPierCheckin();
+}
+function pckMgCore(r, b, date, kd, on, ck, actual, sheet){
+  var e=ckEsc;
+  var okBtn='<button class="pck-ok'+(on?'':' off')+'" onclick="event.stopPropagation();ckToggle(\''+b.id+'\',\''+date+'\',\''+kd+'\')" title="'+e(on?('เช็คอินขึ้นเรือแล้ว · '+(ck.by||'')+' '+pckHHMM(ck.at)):'กดเพื่อเช็คอินขึ้นเรือ')+'">'
+    +'<span class="tk">&#10003;</span><span class="lb">'+(on?e(pckHHMM(ck.at)||'ขึ้นเรือ'):'เช็คอิน')+'</span></button>';
+  var stp='<span class="ck-stp" title="จำนวนคนที่ขึ้นเรือจริง &#183; กดขึ้นได้ถึงยอดจอง '+r.booked+' แม้เช้าจะไม่ได้ขึ้นรถมา"><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\''+kd+'\',-1)">&minus;</button><span class="ck-n">'+actual+'</span><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\'pier\',1)">+</button></span>';
+  var evs='<span style="display:inline-flex;gap:4px"><button class="ck-ev ck-ev-ns" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'no_show\')" title="ลูกค้าไม่มา · ไม่แจ้งล่วงหน้า">No-show</button>'
+    +'<button class="ck-ev ck-ev-cx" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'cxl\')" title="ลูกค้าแจ้งยกเลิกหน้างาน">CXL</button></span>';
+  if(!sheet) return stp+evs+okBtn;
+  if(on && !_pckMgOpen[b.id])
+    return okBtn+'<button class="pck-mgedit" onclick="event.stopPropagation();pckMgUnlock(\''+b.id+'\')" title="เช็คอินแล้ว · ล็อกไว้กันกดโดน · กดเพื่อเปิดแก้จำนวน / No-show / CXL">&#9998; แก้</button>';
+  return stp+evs+okBtn
+    +(on?'<button class="pck-mgedit on" onclick="event.stopPropagation();pckMgUnlock(\''+b.id+'\')" title="ล็อกกลับ · กันกดโดนหลังเช็คอินแล้ว">&#128274;</button>':'');
 }
 // แถวลูกค้าของหน้าท่า · ต่างจาก ckRowHtml ตรงที่ยุบคอลัมน์ที่หัวการ์ดตอบไปแล้ว (เรือ / รถ / โซน)
 // แล้วเอาที่ว่างไปให้ชื่อผู้โดยสาร · add-on · เงิน · ปุ่มเช็คอิน
@@ -54775,13 +54812,7 @@ function pckRowHtml(r, date, sheet){
        +((ckVanNsPax(b,date)>0 && !(ck.events&&ck.events.length))
          ? '<button onclick="event.stopPropagation();ckPierReinstate(\''+b.id+'\',\''+date+'\',true)" title="ลูกค้าตามมาเองที่ท่า · กดเพื่อเปิดแถวนี้ให้เช็คอินได้ (บันทึกของเช็คอินรถยังอยู่)" style="border:1px solid #B7E2D2;background:#E1F5EE;color:#0F6E56;border-radius:999px;padding:5px 11px;font-size:10.5px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap">&#8617; มาแล้ว · เปิดเช็คอิน</button>'
          /* §ckBack · ของเดิมคือ ckEventUndo ที่ลบรายการทิ้งจริง · เปลี่ยนเป็นรับกลับที่เก็บประวัติ */
-         : '<button class="pck-undo" onclick="event.stopPropagation();ckBackOpen(\''+b.id+'\',\''+date+'\',\'pier\')" title="เจอลูกค้าแล้ว รับกลับ · หรือแก้กรณีกดผิด">&#8617;&#65039; รับกลับ</button>')):(
-      '<span class="ck-stp" title="จำนวนคนที่ขึ้นเรือจริง &#183; กดขึ้นได้ถึงยอดจอง '+r.booked+' แม้เช้าจะไม่ได้ขึ้นรถมา"><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\''+_kd+'\',-1)">&minus;</button><span class="ck-n">'+actual+'</span><button onclick="event.stopPropagation();ckStep(\''+b.id+'\',\''+date+'\',\'pier\',1)">+</button></span>'
-     +'<span style="display:inline-flex;gap:4px"><button class="ck-ev ck-ev-ns" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'no_show\')" title="ลูกค้าไม่มา · ไม่แจ้งล่วงหน้า">No-show</button>'
-     +'<button class="ck-ev ck-ev-cx" onclick="event.stopPropagation();ckEventOpen(\''+b.id+'\',\''+date+'\',\'pier\',\'cxl\')" title="ลูกค้าแจ้งยกเลิกหน้างาน">CXL</button></span>'
-     +'<button class="pck-ok'+(on?'':' off')+'" onclick="event.stopPropagation();ckToggle(\''+b.id+'\',\''+date+'\',\''+_kd+'\')" title="'+e(on?('เช็คอินขึ้นเรือแล้ว · '+(ck.by||'')+' '+pckHHMM(ck.at)):'กดเพื่อเช็คอินขึ้นเรือ')+'">'
-       +'<span class="tk">&#10003;</span><span class="lb">'+(on?e(pckHHMM(ck.at)||'ขึ้นเรือ'):'เช็คอิน')+'</span></button>'
-     ))
+         : '<button class="pck-undo" onclick="event.stopPropagation();ckBackOpen(\''+b.id+'\',\''+date+'\',\'pier\')" title="เจอลูกค้าแล้ว รับกลับ · หรือแก้กรณีกดผิด">&#8617;&#65039; รับกลับ</button>')):(pckMgCore(r, b, date, _kd, on, ck, actual, !!sheet)))
      +'<button onclick="event.stopPropagation();pckDetailOpen(\''+b.id+'\')" title="ดูรายละเอียดทั้งหมดของ booking นี้" style="border:1px solid #D8D4CA;background:#fff;color:#4a4a45;border-radius:999px;padding:5px 11px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">รายละเอียด</button>'
      +'</div>'
      +'<div style="text-align:right;font-size:9px;color:#a5a49d;font-family:\'DM Mono\',monospace;margin-top:4px">จอง '+r.booked+(booked!==r.booked?(' · รอรับ '+booked):'')+'</div>'
@@ -57289,7 +57320,7 @@ function pckSheetCSS(){
   +S+' td.pcs-sq{width:210px;min-width:210px;max-width:210px}'
   +S+' td.pcs-st{width:132px;min-width:132px;max-width:132px;text-align:center}'
   +S+' td.pcs-mn{width:158px;min-width:158px;max-width:158px}'
-  +S+' td.pcs-mg{width:308px;min-width:308px;max-width:308px}'
+  +S+' td.pcs-mg{width:390px;min-width:390px;max-width:390px}'
   +S+' .pcs-prv{display:inline-block;background:#F4E8FB;color:#6B289A;font-weight:700;font-size:9px;'
     +'padding:0 6px;border-radius:6px;vertical-align:middle;white-space:nowrap}'
   +S+' .pcs-sub{font-size:9.5px;color:#a5a49d;margin-top:2px}'
@@ -57364,8 +57395,15 @@ function pckSheetCSS(){
   +S+' td.pcs-ag{position:relative}'
   +S+' tr.ck-row td.pcs-ag>*{position:absolute;inset:0;display:flex !important;'
     +'width:auto !important;height:auto !important;min-height:0;margin:0 !important}'
-  +S+' .pck-acts{display:flex !important;flex-wrap:nowrap !important;align-items:center;'
-    +'gap:4px;margin:0 !important}'
+  /* ตอนปลดล็อกปุ่มจะครบชุดและยาวเกินช่อง · ให้ตกบรรทัดสองแทนที่จะโดนตัดหาย
+     nowrap เดิมคือต้นเหตุที่ปุ่ม + กับปุ่มเช็คอินหลุดออกนอกช่องจนกดไม่ได้ */
+  +S+' .pck-acts{display:flex !important;flex-wrap:wrap !important;align-items:center;'
+    +'gap:4px;margin:0 !important;justify-content:flex-end}'
+  +S+' .pck-mgedit{border:1px solid #D8D4CA;background:#fff;color:#6b6a63;border-radius:999px;'
+    +'padding:3px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}'
+  +S+' .pck-mgedit:hover{border-color:#A32D2D;color:#A32D2D}'
+  +S+' .pck-mgedit.on{background:#FDF6E6;border-color:#E3C77A;color:#7A4A00}'
+  +S+' td.pcs-nm .pck-gmore{margin-left:6px;vertical-align:middle}'
   +S+' .pck-acts .ck-stp button{width:20px;height:20px;font-size:12px}'
   +S+' .pck-acts .ck-ev{font-size:9px;padding:1px 6px}'
   +S+' .pck-acts .pck-ok{padding:3px 10px;font-size:10px}'
