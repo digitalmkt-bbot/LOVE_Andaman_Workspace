@@ -52983,7 +52983,18 @@ function renderVanCheckin(){
     var need=function(zz){ return zz && zz!=='NoTransfer' && zz!=='NT' && !b.pickupSelf; };
     var put=function(row, vid, zz){
       if(vid){ var k=vid+'~'+(t.routeId||'');
-        (groups[k]=groups[k]||{vid:vid, routeId:t.routeId||'', zone:zz, rows:[]}); groups[k].rows.push(row); }
+        var G=(groups[k]=groups[k]||{vid:vid, routeId:t.routeId||'', zone:zz, rows:[], gno:0, seq:1e9});
+        G.rows.push(row);
+        /* §vckOrder · จำเลขกลุ่ม + ลำดับรับที่ User จัดไว้ใน By-trip ไว้ใช้เรียงคัน
+           split ต้องอ่านจากตัว split เอง · พอแยกจุดรับแล้ว ops.vanGroup ถูกลบทิ้ง
+           (ดู bkV2SyncAltPickupSplits · "main now lives in split[0]") อ่านจาก r.O จะได้ 0 หมด */
+        var _sc=row.sp||row.O||{};
+        var _g=+(_sc.vanGroup||0), _q=+(_sc.vanSeq||0);
+        if(!_g && row.O && Array.isArray(row.O.vanSplits) && row.O.vanSplits[0]){
+          _g=+(row.O.vanSplits[0].vanGroup||0); if(!_q) _q=+(row.O.vanSplits[0].vanSeq||0); }
+        if(_g>0 && (!G.gno || _g<G.gno)) G.gno=_g;
+        if(_q>0 && _q<G.seq) G.seq=_q;
+      }
       else if(need(zz)) unassigned.push(row);
     };
     /* §vckSplit · รับหลายจุด = ขึ้นรถคนละคัน · ต้องเป็นคนละแถว ติ๊กแยกกัน
@@ -53011,11 +53022,24 @@ function renderVanCheckin(){
   var bodyHtml='';
   var zord=function(z){ return (typeof bkV2ZoneOrder==='function')?bkV2ZoneOrder(z):(({PK:0,KL:1,NoTransfer:9})[z]!=null?({PK:0,KL:1,NoTransfer:9})[z]:5); };
   var zcol=function(z){ return (typeof bkV2ZoneColor==='function')?bkV2ZoneColor(z):'#8a8a82'; };
+  /* §vckOrder · ชื่อรถที่คนเรียกกันจริง (Love5) ไม่ใช่รหัสในระบบ (veh05)
+     ลำดับตัวเลขในชื่อจึงต้องเทียบแบบตัวเลข ไม่งั้น Love10 มาก่อน Love2 */
+  var vnm=function(vid){ var v=(typeof vehGet==='function'?vehGet(vid):null)||{}; return String(v.name||vid||''); };
+  var vcmp=function(x,y){ try{ return String(x).localeCompare(String(y),'th',{numeric:true}); }
+                          catch(_){ return String(x).localeCompare(String(y)); } };
   var gkeys=Object.keys(groups).sort(function(a,b){
     var ga=groups[a], gb=groups[b], za=zord(ga.zone), zb=zord(gb.zone);
     if(za!==zb) return za-zb;
     var ra=((typeof getRoute==='function'?getRoute(ga.routeId):null)||{}), rb=((typeof getRoute==='function'?getRoute(gb.routeId):null)||{});
-    return String(ra.name||'').localeCompare(String(rb.name||'')) || String(ga.vid).localeCompare(String(gb.vid));
+    var rc=String(ra.name||'').localeCompare(String(rb.name||''));
+    if(rc) return rc;
+    /* §vckOrder · จากตรงนี้ลงไปคือลำดับที่ User จัดเอง · เดิมเรียงด้วยรหัสรถล้วน ๆ
+       ตรวจกับข้อมูลจริงวันที่ 31 ก.ค. (15 คัน) ตรงกับที่จัดไว้แค่ 1 ตำแหน่ง
+       คันที่ยังไม่ได้จัดกลุ่ม (gno=0) ให้ไปท้ายเส้นทางนั้น ไม่ใช่แทรกกลางลำดับที่จัดไว้ */
+    var Ag=ga.gno||9999, Bg=gb.gno||9999;
+    if(Ag!==Bg) return Ag-Bg;
+    if(ga.seq!==gb.seq) return ga.seq-gb.seq;
+    return vcmp(vnm(ga.vid), vnm(gb.vid)) || String(ga.vid).localeCompare(String(gb.vid));
   });
   var prevZone=null;
   gkeys.forEach(function(k){
@@ -53032,7 +53056,9 @@ function renderVanCheckin(){
     var c=(typeof vehChipPair==='function')?vehChipPair(vid):['#EEEDF0','#555'];
     var rd=(typeof vanJobsDriverInfo==='function')?vanJobsDriverInfo(vid,date)
           :{driver:veh.driver||'',phone:veh.driverPhone||'',plate:veh.plate||'',override:false,plateOverride:false};
-    var gno=0; g.rows.some(function(r){ var n=+((r.O&&r.O.vanGroup)||0); if(n>0){ gno=n; return true; } return false; });
+    /* §vckOrder · ใช้เลขกลุ่มตัวเดียวกับที่ใช้เรียง · เดิมอ่าน r.O.vanGroup ตรง ๆ
+       แถวที่แยกจุดรับเลยไม่ขึ้นเลขกลุ่ม ทั้งที่จัดกลุ่มไว้แล้ว */
+    var gno=g.gno||0;
     var rt=(typeof getRoute==='function'?getRoute(g.routeId):null)||{};
     var vChecked=g.rows.filter(function(r){ return r.ck&&r.ck.at; }).length;
     var vNo=g.rows.reduce(function(s,r){ return s+((r.ck&&r.ck.at)?(r.ck.noShow||0):0); },0);
