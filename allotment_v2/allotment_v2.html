@@ -54109,8 +54109,14 @@ function pckProgList(date){
     var st=pckProgStatus(A), bar=A.pax?Math.round(A.brd*100/A.pax):0;
     var live=A.vord.filter(function(rid){
       return (typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(rid,date); }).length;
-    var out='<div class="pgf'+(famOn?' on':'')+'">'
-      +'<button class="pgf-h" onclick="pckSetFam(\''+A.f.id+'\')" title="กรองเฉพาะ '+e(A.f.name)+'">'
+    /* §pckHead5 · พื้นหลังเป็นสีของโปรแกรมนั้น · กวาดตาหาโปรแกรมด้วยสีได้เหมือนที่ทำกับเอเจนซี่
+       ที่เลือกอยู่เข้มขึ้นหนึ่งขั้น + มีแถบสีด้านซ้าย จะได้ยังแยกออกว่ากำลังกรองอันไหน */
+    var _col=A.f.color||'#8b909c';
+    var _bg=famOn?pckTint(_col,.80):pckTint(_col,.93);
+    var _ink=pckShade(_col,.62);
+    var out='<div class="pgf'+(famOn?' on':'')+'" style="background:'+_bg
+      +';box-shadow:inset 4px 0 0 '+(famOn?_col:pckTint(_col,.55))+'">'
+      +'<button class="pgf-h" style="color:'+_ink+'" onclick="pckSetFam(\''+A.f.id+'\')" title="กรองเฉพาะ '+e(A.f.name)+'">'
         +'<span class="pgf-cv'+(op?' op':'')+'" onclick="event.stopPropagation();pckProgToggle(\''+A.f.id+'\')" title="'+(op?'พับ':'กางดู variant')+'">&#9656;</span>'
         +'<i style="background:'+(A.f.color||'#8b909c')+'"></i>'
         +'<span class="pgf-nm">'+e(A.f.name)+'</span>'
@@ -54125,12 +54131,15 @@ function pckProgList(date){
       out+='<div class="pgf-vars">'+A.vord.map(function(rid){
         var V=A.v[rid], lbl=pckVarLbl(A.f, rid), dep=pckDepOf(rid)||'';
         var open=(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(rid,date);
-        if(!open) return '<div class="pgv off" title="'+e(lbl)+' · ไม่ออกวันนี้">'
+        var _vbg=pckTint(_col,.965);
+        if(!open) return '<div class="pgv off" style="background:'+_vbg+'" title="'+e(lbl)+' · ไม่ออกวันนี้">'
           +'<span class="pgv-nm">'+e(lbl)+'</span>'
           +(dep?('<span class="pgv-tm ck-mono">'+e(dep)+'</span>'):'')
           +'<span class="pgv-off">ไม่ออกวันนี้</span></div>';
         var von=(_pckRoute===rid);
-        return '<button class="pgv'+(von?' on':'')+'" onclick="pckSetRoute(\''+rid+'\')" '
+        return '<button class="pgv'+(von?' on':'')+'" style="background:'
+          +(von?pckTint(_col,.86):_vbg)+';border-left-color:'+(von?_col:pckTint(_col,.62))+'" '
+          +'onclick="pckSetRoute(\''+rid+'\')" '
           +'title="'+e(lbl)+(dep?(' · ออก '+dep):'')+' · ขึ้นเรือแล้ว '+V.brd+' จาก '+V.pax+' คน · คลิกกรองเฉพาะทริปนี้">'
           +'<span class="pgv-nm">'+e(lbl)+'</span>'
           +(dep?('<span class="pgv-tm ck-mono">'+e(dep)+'</span>'):'')
@@ -56833,8 +56842,12 @@ function pckBoatTabs(all, part){
     return String(pckDepOf(m[a].rid)||'99').localeCompare(String(pckDepOf(m[b].rid)||'99'))
         || String(pckBoatName(a)).localeCompare(String(pckBoatName(b)));
   });
+  /* §pckHead5 · ปุ่ม "เรือทั้งหมด" คือปุ่มล้างตัวกรองเรือ · หัวใหม่เอาไปไว้หัวการ์ด
+     คู่กับ "ทุกโปรแกรม" ของการ์ดซ้าย ปุ่มล้างของสองระดับจะได้อยู่ที่เดียวกัน */
+  var allBtn='<button class="pck-btab'+(_pckBoat?'':' on')+'" onclick="pckSetBoat(\'\')" style="'+(_pckBoat?'':'background:#2f2f2b;color:#fff')+'">เรือทั้งหมด <span class="c"'+(_pckBoat?'':' style="background:rgba(255,255,255,.25);color:#fff"')+'>'+ks.length+'</span></button>';
+  if(part==='all') return allBtn;
   var h='<div class="pck-btabs"><span class="ck-unitbar-lbl">เรือวันนี้</span>'
-   +'<button class="pck-btab'+(_pckBoat?'':' on')+'" onclick="pckSetBoat(\'\')" style="'+(_pckBoat?'':'background:#2f2f2b;color:#fff')+'">เรือทั้งหมด <span class="c"'+(_pckBoat?'':' style="background:rgba(255,255,255,.25);color:#fff"')+'>'+ks.length+'</span></button>';
+   +((part==='tabs')?'':allBtn);
   ks.forEach(function(k){
     var col=pckBoatColor(k), ink=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(col):'#fff';
     var rt=(typeof getRoute==='function'?getRoute(m[k].rid):null)||{}, a=pckAgg(m[k].rows), dep=pckDepOf(m[k].rid);
@@ -57627,11 +57640,18 @@ if(!window._pckFitBound){
 function pckDayBar(date, kpiHtml, totalPax, totalBreak){
   var e=ckEsc;
   var isToday=(date===((typeof bkV2LocalYMD==='function')?bkV2LocalYMD(new Date()):''));
-  var dow=new Date(date+'T00:00').toLocaleDateString('en-GB',{weekday:'short'});
-  var dstr=new Date(date+'T00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+  var _d=new Date(date+'T00:00');
+  var dnum=_d.toLocaleDateString('en-GB',{day:'numeric'});
+  var dowLong=_d.toLocaleDateString('en-GB',{weekday:'long'});
+  var dmy=_d.toLocaleDateString('en-GB',{month:'long',year:'numeric'}).toUpperCase();
   return '<div class="pkh-day">'
     +'<button class="pkh-nav" onclick="pckDateShift(-1)" title="วันก่อนหน้า">&lsaquo;</button>'
-    +'<label class="pkh-dt" title="เลือกวันที่"><small>'+e(dow)+'</small>'+e(dstr)
+    /* §pckHead5 · เลขวันตัวใหญ่อ่านปราดเดียว · ชื่อวันกับเดือน/ปีเป็นบรรทัดรอง
+       ของเดิม "THU 3 Sept 2026" เรียงเป็นบรรทัดเดียวขนาดเท่ากันหมด ต้องอ่านทีละคำ */
+    +'<label class="pkh-dt" title="เลือกวันที่">'
+      +'<b class="pkh-dnum">'+e(dnum)+'</b>'
+      +'<span class="pkh-dcol"><span class="pkh-dow">'+e(dowLong)+'</span>'
+        +'<span class="pkh-dmy">'+e(dmy)+'</span></span>'
       +'<input type="date" value="'+e(date)+'" onclick="event.stopPropagation();try{this.showPicker()}catch(_){}" onchange="if(this.value)pckPickDay(this.value)">'
     +'</label>'
     +(isToday?'<span class="pkh-today">TODAY</span>'
@@ -57658,8 +57678,8 @@ function pckHeadHtml(o){
     pckProgAllBtn()+'<span class="pkh-csp"></span>'+pckPierBar(o.date),
     '<div class="pkh-plist" id="pkh-plist">'+pckProgList(o.date)+'</div>');
   B.boats=pckHeadCard('boats','เรือ',
-    '<span class="pkh-selnm">'+ckEsc(pckSelName(o.date))+'</span><span class="pkh-csp"></span>'
-      +(o.jobsHtml||''),
+    '<span class="pkh-selnm">'+ckEsc(pckSelName(o.date))+'</span>'
+      +(o.allBoatHtml||'')+'<span class="pkh-csp"></span>'+(o.jobsHtml||''),
     '<div class="pkh-boats">'+(o.boatsHtml||'<span class="pkh-none">— ไม่มีเรือ —</span>')+'</div>');
   B.search=pckHeadCard('search','ค้นหา','', o.searchHtml||'');
   /* ตัวกรองกับมุมมองอยู่ในกล่อง flex เดียวกัน · แยกสองบล็อกเมื่อไหร่ก็กินไปอีกบรรทัด */
@@ -57679,30 +57699,29 @@ function pckHeadCSS(){
   +H+' .pgf-all{display:block;width:100%;border:0;border-bottom:1px solid #EFECE4;background:#fff;'
     +'text-align:left;padding:5px 11px;font:700 10.5px inherit;font-family:inherit;color:#6b6a63;cursor:pointer}'
   +H+' .pgf-all.on{background:#15201a;color:#fff}'
-  +H+' .pgf{border-bottom:1px solid #EFECE4}'
-  +H+' .pgf.on{background:#F7F9FC}'
+  +H+' .pgf{border-bottom:1px solid rgba(255,255,255,.85)}'
   +H+' .pgf-h{display:flex;align-items:center;gap:7px;width:100%;border:0;background:none;'
     +'text-align:left;padding:5px 9px 4px;cursor:pointer;font-family:inherit}'
-  +H+' .pgf-h:hover{background:#FBFAF7}'
-  +H+' .pgf.on .pgf-h{box-shadow:inset 3px 0 0 #15201a}'
+  +H+' .pgf-h:hover{background:rgba(255,255,255,.45)}'
   +H+' .pgf-cv{width:15px;height:15px;border-radius:4px;display:flex;align-items:center;justify-content:center;'
     +'font-size:9px;color:#8a8a82;flex:none;border:1px solid #E7E4DC;background:#fff;transition:transform .12s}'
   +H+' .pgf-cv.op{transform:rotate(90deg)}'
   +H+' .pgf-cv:hover{border-color:#185FA5;color:#185FA5}'
   +H+' .pgf-h>i{width:8px;height:8px;border-radius:50%;flex:none}'
   +H+' .pgf-nm{font-size:12px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
-  +H+' .pgf-px{font-size:11px;font-weight:700;color:#5F5E5A;flex:none}'
-  +H+' .pgf-vn{font-size:9px;font-weight:700;color:#a5a49d;background:#F1EFE8;border-radius:999px;padding:1px 6px;flex:none}'
+  +H+' .pgf-px{font-size:11px;font-weight:700;flex:none;opacity:.82}'
+  +H+' .pgf-vn{font-size:9px;font-weight:700;background:rgba(255,255,255,.7);border-radius:999px;'
+    +'padding:1px 6px;flex:none;opacity:.85}'
+  +H+' .pgf-cv{background:rgba(255,255,255,.75) !important;border-color:rgba(0,0,0,.08) !important}'
   +H+' .pgf-sp{flex:1}'
   +H+' .pgf-due{font-size:9.5px;font-weight:800;color:#7A4A00;background:#FBF0DD;border-radius:999px;padding:1px 7px;white-space:nowrap}'
   +H+' .pgf-st{font-size:9px;font-weight:800;border-radius:999px;padding:2px 8px;white-space:nowrap;flex:none}'
-  +H+' .pgf-bar{height:3px;background:#EFECE4;overflow:hidden}'
+  +H+' .pgf-bar{height:3px;background:rgba(255,255,255,.6);overflow:hidden}'
   +H+' .pgf-bar s{display:block;height:100%;text-decoration:none}'
   +H+' .pgf-vars{padding:2px 0 4px 30px}'
   +H+' .pgv{display:flex;align-items:center;gap:6px;width:100%;border:0;border-left:2px solid #E7E4DC;'
     +'background:none;text-align:left;padding:3px 9px 3px 7px;cursor:pointer;font-family:inherit}'
-  +H+' .pgv:hover{background:#F1F5FA;border-left-color:#B9CBDD}'
-  +H+' .pgv.on{background:#E9F1FA;border-left-color:#185FA5}'
+  +H+' .pgv:hover{filter:brightness(.97)}'
   +H+' .pgv.off{opacity:.5;cursor:default}'
   +H+' .pgv-nm{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:135px}'
   +H+' .pgv-tm{font-size:10px;color:#6b6a63;background:#F1EFE8;border-radius:5px;padding:1px 5px;flex:none}'
@@ -57714,14 +57733,22 @@ function pckHeadCSS(){
   /* ── แถบวันที่ ── */
   /* §pckHead4 · ตรึงหัวไว้ · เลื่อนหน้าลงไปดูแถวท้าย ๆ ยังกดเปลี่ยนวัน/กรอง/ค้นหาได้ทันที
      ไม่ต้องเลื่อนกลับขึ้นมาทุกครั้ง · z สูงกว่าหัวตารางที่ตรึงในกล่องของมันเอง (z 30/34) */
-  +H+' .pkh{position:sticky;top:0;z-index:60;background:#FAF9F6;border-radius:14px;padding:9px;'
-    +'margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.05),0 6px 14px -8px rgba(15,23,42,.14)}'
+  /* §pckHead5 · หัวชิดขอบ sidebar และตรึงค้างไว้ · ดึงออกนอก padding ของ .main
+     (บน 22 · ซ้าย 14 · ขวา 22) แล้วเอา padding นั้นมาไว้ในตัวเองแทน
+     ตรึงแบบ sticky top:0 · เลื่อนตารางยังไงหัวก็ไม่ขยับ */
+  +H+' .pkh{position:sticky;top:0;z-index:60;background:#FAF9F6;'
+    +'margin:-22px -22px 10px -14px;border-radius:0;border-bottom:1px solid #E7E4DC;'
+    +'padding:10px 22px 10px 14px;'
+    +'box-shadow:0 6px 14px -8px rgba(15,23,42,.16)}'
   +H+' .pkh-day{display:flex;align-items:center;gap:8px;padding:0 2px 8px}'
   +H+' .pkh-nav{width:24px;height:24px;border-radius:50%;border:1px solid #E1DED5;background:#fff;'
     +'cursor:pointer;font-size:13px;line-height:1;color:#6b6a63;flex:none;font-family:inherit}'
-  +H+' .pkh-dt{position:relative;display:inline-flex;align-items:baseline;gap:7px;cursor:pointer;'
-    +'font-size:15px;font-weight:800;letter-spacing:-.2px;white-space:nowrap;color:#15201a}'
-  +H+' .pkh-dt small{font-size:10px;font-weight:700;color:#a5a49d;letter-spacing:.06em;text-transform:uppercase}'
+  +H+' .pkh-dt{position:relative;display:inline-flex;align-items:center;gap:9px;cursor:pointer;'
+    +'white-space:nowrap;color:#15201a}'
+  +H+' .pkh-dnum{font-size:27px;font-weight:800;line-height:1;letter-spacing:-1px}'
+  +H+' .pkh-dcol{display:flex;flex-direction:column;line-height:1.12}'
+  +H+' .pkh-dow{font-size:13px;font-weight:800;letter-spacing:-.2px}'
+  +H+' .pkh-dmy{font-size:9px;font-weight:700;color:#a5a49d;letter-spacing:.1em}'
   +H+' .pkh-dt input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}'
   +H+' .pkh-today{background:#15201a;color:#fff;border-radius:999px;padding:2px 9px;font-size:9.5px;font-weight:800}'
   +H+' .pkh-back{border:1px solid #E1DED5;background:#fff;border-radius:999px;padding:2px 10px;'
@@ -58322,6 +58349,7 @@ function renderPierCheckin(){
                        :(pills.dA+'A·'+pills.dC+'C·'+pills.dI+'I·'+pills.dF+'F'))),
         boatsHtml:pckBoatTabs(all,'tabs'),
         jobsHtml:pckBoatTabs(all,'jobs'),
+        allBoatHtml:pckBoatTabs(all,'all'),
         searchHtml:pckFilterBar(all, cnt, nHidden, 'search'),
         chipsHtml:pckFilterBar(all, cnt, nHidden, 'chips')})
     +warnHtml+(sheetHtml||cardsHtml);
