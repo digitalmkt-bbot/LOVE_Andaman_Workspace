@@ -57466,9 +57466,12 @@ function pckSheetCSS(){
      ต้องประกาศหลังกฎ td.pcs-nm>div ข้างบน (specificity เท่ากัน · ตัวหลังชนะ) */
   +S+' tr.ck-row td.pcs-nm>div.pck-gsub{font-size:11.5px;line-height:1.35;color:#3C3B37;'
     +'font-weight:600;padding:0 7px}'
-  /* ช่องชื่อจับขอบบน · ถ้าจัดกลางแนวตั้ง พอกางชื่อเพิ่มมาหนึ่งบรรทัด ของทั้งช่องจะเลื่อนขึ้น
-     ชื่อหัวใบกับเบอร์ที่เพิ่งอ่านอยู่ก็ขยับหนีตาไปด้วยทุกครั้งที่กด */
-  +S+' tr.ck-row>td.pcs-nm{vertical-align:top;padding-top:6px}'
+  /* §pckMid · ช่องชื่อจัดกลางแนวตั้งเหมือนช่องอื่นทั้งแถว
+     เคยจับขอบบนไว้กันชื่อขยับตอนกางชื่อ แต่ผลคือแถวที่ยังไม่ได้กด (เกือบทั้งตาราง)
+     ชื่อไปเกาะขอบบนแล้วเหลือที่ว่างข้างล่าง ทั้งตารางดูโหว่และไม่ตรงกับช่องอื่น
+     ส่วนเรื่องขยับ ตัวที่แก้จริงคือ pckNamesToggle ที่ตรึงแถวที่กดไว้กับที่บนจอแล้ว
+     แถวจะสูงขึ้นเฉพาะตอนกดกางชื่อเท่านั้น */
+  +S+' tr.ck-row>td.pcs-nm{vertical-align:middle}'
   +S+' tr.ck-row td.pcs-nm>div.pck-hd{display:flex !important;align-items:center;gap:6px;'
     +'max-width:none;overflow:visible}'
   +S+' .pck-hd .ck-lead{flex:0 1 auto;min-width:0;max-width:none;overflow:hidden;'
