@@ -53208,7 +53208,9 @@ function pckMoneyCell(b, date, sheet){
     else if(M.pierPaid>0) _v='<span class="pcs-pay ok">&#10003; เก็บครบ <b>'+m(M.pierPaid)+'</b></span>';
     else if(M.payType==='cot') _v='<span class="pcs-pay warn">COT &middot; ยังไม่ระบุยอด</span>';
     else if(M.ovnSettled) _v='<span class="pcs-pay ok">&#10003; ชำระแล้ววันขาไป</span>';
-    else _v='<span class="pcs-pay none">ไม่ต้องเก็บ</span>';
+    /* §pckTrim · ช่องว่าง = ไม่มีอะไรต้องเก็บ · ป้าย "ไม่ต้องเก็บ" อยู่แทบทุกแถว
+       ของที่ขึ้นทุกแถวเท่ากันหมดไม่ได้บอกอะไร มีแต่ทำให้ป้ายที่ต้องรีบเห็นจมหาย */
+    else _v='';
     out=_v+out+(parts.length?('<div class="pcs-payp">'+e(parts.join(' · '))+'</div>'):'');
   }
   else if(M.due>0){
@@ -54064,7 +54066,29 @@ function pckDetailOpen(bkId){
 // เรือลำเดียววิ่งมากกว่าหนึ่งรอบในวันเดียว ซึ่งเป็นกรณีเดียวที่ชื่อบนแถบเรือตอบไม่ได้ว่าแถวนี้อยู่รอบไหน
 var PCK_MAX_NAMES=4;
 var _pckOpenNames={};
-function pckNamesToggle(id){ if(_pckOpenNames[id]) delete _pckOpenNames[id]; else _pckOpenNames[id]=1; renderPierCheckin(); }
+/* §pckTrim · กางชื่อแล้วแถวที่กดต้องอยู่ตรงเดิมบนจอ
+   คืนค่า scrollTop ดิบ ๆ ยังไม่พอ · ความสูงของเนื้อในกล่องเปลี่ยนไปตอนกางหรือย่อ
+   ถ้ากำลังดูแถวท้าย ๆ ที่เลื่อนสุดอยู่ พอย่อแล้วเนื้อสั้นลง เบราว์เซอร์จะบีบ scrollTop ลงเอง
+   = แถวที่เพิ่งกดกระโดดหนีตา (เจอกับใบท้ายกลุ่ม เช่น EXC31416)
+   → จับระยะจากขอบบนกล่องถึงแถวนั้นไว้ แล้วเลื่อนชดเชยให้เท่าเดิมหลังวาดใหม่ */
+function _pckRowTop(id){
+  var w=document.querySelector('#piercheckin-host .pcs-tw');
+  var el=w&&w.querySelector('td.pcs-nm[data-bk="'+id+'"]');
+  if(!w||!el) return null;
+  return {w:w, off:el.getBoundingClientRect().top-w.getBoundingClientRect().top};
+}
+function pckNamesToggle(id){
+  var a=_pckRowTop(id);
+  if(_pckOpenNames[id]) delete _pckOpenNames[id]; else _pckOpenNames[id]=1;
+  renderPierCheckin();
+  if(!a) return;
+  var fix=function(){
+    var b=_pckRowTop(id);
+    if(b && Math.abs(b.off-a.off)>0.5) b.w.scrollTop += (b.off-a.off);
+  };
+  fix();
+  if(window.requestAnimationFrame) requestAnimationFrame(fix);
+}
 // §localTime (2026-07-30) · เวลาเช็คอินเก็บเป็น ISO ซึ่งเป็น UTC เสมอ (new Date().toISOString())
 // การตัด slice(11,16) จึงได้เวลา UTC ดิบ → หน้าท่าเห็น "01:29" ทั้งที่กดตอน 08:29 (ช้าไป 7 ชม.)
 // ต้องแปลงผ่าน Date ให้เป็นเวลาเครื่องก่อนเสมอ · รองรับค่าที่เก็บมาเป็น HH:MM อยู่แล้วด้วย
@@ -54356,7 +54380,7 @@ function pckNameTdAttr(r, sheet){
   var b=r.b, list=pckNameList(b);
   if(list.length<=1) return '';
   var open=!!_pckOpenNames[b.id];
-  return ' data-more="1" onclick="event.stopPropagation();pckNamesToggle(\''+b.id+'\')"'
+  return ' data-more="1" data-bk="'+b.id+'" onclick="event.stopPropagation();pckNamesToggle(\''+b.id+'\')"'
     +' title="'+(open?'กดเพื่อย่อรายชื่อ':('กดเพื่อดูรายชื่อทั้งหมด '+list.length+' คน'))+'"';
 }
 function pckNameCell(r, sheet){
@@ -54854,7 +54878,11 @@ function pckRowHtml(r, date, sheet){
          ? '<button onclick="event.stopPropagation();ckPierReinstate(\''+b.id+'\',\''+date+'\',true)" title="ลูกค้าตามมาเองที่ท่า · กดเพื่อเปิดแถวนี้ให้เช็คอินได้ (บันทึกของเช็คอินรถยังอยู่)" style="border:1px solid #B7E2D2;background:#E1F5EE;color:#0F6E56;border-radius:999px;padding:5px 11px;font-size:10.5px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap">&#8617; มาแล้ว · เปิดเช็คอิน</button>'
          /* §ckBack · ของเดิมคือ ckEventUndo ที่ลบรายการทิ้งจริง · เปลี่ยนเป็นรับกลับที่เก็บประวัติ */
          : '<button class="pck-undo" onclick="event.stopPropagation();ckBackOpen(\''+b.id+'\',\''+date+'\',\'pier\')" title="เจอลูกค้าแล้ว รับกลับ · หรือแก้กรณีกดผิด">&#8617;&#65039; รับกลับ</button>')):(pckMgCore(r, b, date, _kd, on, ck, actual, !!sheet)))
-     +'<button onclick="event.stopPropagation();pckDetailOpen(\''+b.id+'\')" title="ดูรายละเอียดทั้งหมดของ booking นี้" style="border:1px solid #D8D4CA;background:#fff;color:#4a4a45;border-radius:999px;padding:5px 11px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">รายละเอียด</button>'
+     /* §pckTrim · โหมดตารางเหลือลูกศรพอ · คำว่า "รายละเอียด" ยาวกว่าปุ่มที่ต้องกดจริงทุกวัน
+        โหมดการ์ดมีที่เหลือเฟือ เก็บคำไว้ตามเดิม */
+     +(sheet
+       ? '<button class="pck-go" onclick="event.stopPropagation();pckDetailOpen(\''+b.id+'\')" title="ดูรายละเอียดทั้งหมดของ booking นี้">&rsaquo;</button>'
+       : '<button onclick="event.stopPropagation();pckDetailOpen(\''+b.id+'\')" title="ดูรายละเอียดทั้งหมดของ booking นี้" style="border:1px solid #D8D4CA;background:#fff;color:#4a4a45;border-radius:999px;padding:5px 11px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">รายละเอียด</button>')
      +'</div>'
      +'<div style="text-align:right;font-size:9px;color:#a5a49d;font-family:\'DM Mono\',monospace;margin-top:4px">จอง '+r.booked+(booked!==r.booked?(' · รอรับ '+booked):'')+'</div>'
      +(tally.no_show>0?'<div style="text-align:right"><span class="ck-ns">No-show '+tally.no_show+'</span></div>':'')
@@ -57363,7 +57391,7 @@ function pckSheetCSS(){
   +S+' td.pcs-sq{width:210px;min-width:210px;max-width:210px}'
   +S+' td.pcs-st{width:132px;min-width:132px;max-width:132px;text-align:center}'
   +S+' td.pcs-mn{width:158px;min-width:158px;max-width:158px}'
-  +S+' td.pcs-mg{width:390px;min-width:390px;max-width:390px}'
+  +S+' td.pcs-mg{width:318px;min-width:318px;max-width:318px}'
   +S+' .pcs-prv{display:inline-block;background:#F4E8FB;color:#6B289A;font-weight:700;font-size:9px;'
     +'padding:0 6px;border-radius:6px;vertical-align:middle;white-space:nowrap}'
   +S+' .pcs-sub{font-size:9.5px;color:#a5a49d;margin-top:2px}'
@@ -57373,7 +57401,7 @@ function pckSheetCSS(){
   +S+' .ck-area{font-size:10px;padding:1px 7px}'
   +S+' .ck-tm{font-size:11px}'
   /* ── ช่องเงิน · บรรทัดบนคือคำตอบ บรรทัดล่างคือที่มา ── */
-  +S+' td.pcs-mn{white-space:nowrap}'
+  +S+' td.pcs-mn{white-space:normal;line-height:1.45}'
   +S+' .pcs-pay{display:inline-block;border-radius:7px;padding:2px 9px;font-size:10.5px;'
     +'font-weight:800;white-space:nowrap;margin:0 4px 2px 0;vertical-align:middle}'
   +S+' .pcs-pay b{font-size:13px;font-weight:800;margin-left:3px;font-variant-numeric:tabular-nums}'
@@ -57458,6 +57486,10 @@ function pckSheetCSS(){
     +'padding:3px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}'
   +S+' .pck-mgedit:hover{border-color:#A32D2D;color:#A32D2D}'
   +S+' .pck-mgedit.on{background:#FDF6E6;border-color:#E3C77A;color:#7A4A00}'
+  +S+' .pck-go{border:1px solid #D8D4CA;background:#fff;color:#6b6a63;border-radius:50%;'
+    +'width:22px;height:22px;padding:0;font-size:15px;font-weight:800;line-height:1;cursor:pointer;'
+    +'font-family:inherit;display:inline-flex;align-items:center;justify-content:center;flex:none}'
+  +S+' .pck-go:hover{border-color:#185FA5;color:#185FA5}'
   /* ทั้งช่องชื่อกดกางได้ · ต้องมีสัญญาณว่ากดได้ ไม่งั้นไม่มีใครรู้ */
   +S+' td.pcs-nm[data-more]{cursor:pointer}'
   +S+' td.pcs-nm[data-more]:hover{background:#F7F5EF !important}'
@@ -57527,9 +57559,15 @@ function pckScrollSave(host){
 function pckScrollRestore(host){
   var m=_pckScr; _pckScr=null;
   if(!m) return;
-  var w=host&&host.querySelector('.pcs-tw');
-  if(w){ if(m.l) w.scrollLeft=m.l; if(m.t) w.scrollTop=m.t; }
-  if(m.y && (window.pageYOffset||document.documentElement.scrollTop||0)!==m.y) window.scrollTo(0,m.y);
+  var apply=function(){
+    var w=document.querySelector('#piercheckin-host .pcs-tw');
+    if(w){ if(m.l && w.scrollLeft!==m.l) w.scrollLeft=m.l;
+           if(m.t && w.scrollTop!==m.t) w.scrollTop=m.t; }
+    if(m.y && (window.pageYOffset||document.documentElement.scrollTop||0)!==m.y) window.scrollTo(0,m.y);
+  };
+  apply();
+  /* กล่องเพิ่งถูกสร้างใหม่ ความสูงอาจยังไม่นิ่งในเฟรมนี้ · ค่าที่ตั้งไปจะโดนบีบเงียบ ๆ */
+  if(window.requestAnimationFrame) requestAnimationFrame(apply);
 }
 function renderPierCheckin(){
   var host=document.getElementById('piercheckin-host'); if(!host) return;
@@ -57828,8 +57866,9 @@ function renderPierCheckin(){
     +pckFilterBar(all, cnt, nHidden)
     +pckViewBar()
     +warnHtml+(sheetHtml||cardsHtml);
-  pckScrollRestore(host);
-  ckSyncSticky(host); pckFitPane(); ckStartTick('piercheckin', renderPierCheckin);
+  ckSyncSticky(host); pckFitPane();
+  pckScrollRestore(host);   /* ต้องหลัง pckFitPane · กล่องยังไม่ได้ความสูงจริง ค่าที่ตั้งจะโดนบีบ */
+  ckStartTick('piercheckin', renderPierCheckin);
   if(_pckKitOpen) pckKitchenRender();   /* §kitPop · เปิดค้างอยู่ก็ให้ตัวเลขในหน้าต่างเดินตามหน้าจอ */
 }
 // ══ §Travel Summary (2026-07-26) · สรุปหน้างานรายวัน → ตัดสินว่าเก็บเท่าไร / เลื่อนวัน ══
