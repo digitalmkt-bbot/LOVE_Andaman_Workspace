@@ -57659,7 +57659,15 @@ function pckFitPane(){
     _pckFitRaf=0;
     var w=document.querySelector('#piercheckin-host .pcs-tw'); if(!w) return;
     var h=Math.max(320,(window.innerHeight||800)-w.getBoundingClientRect().top-14);
-    if(w._ph!==h){ w._ph=h; w.style.maxHeight=h+'px'; }
+    w.style.maxHeight=h+'px';
+    /* §pckHead9 · ก่อนหน้านี้หน้าเว็บล้นออกนอกจอ 73px (มาจาก padding ใต้ view)
+       เลยมีแถบเลื่อนสองอัน · หน้าเว็บหนึ่ง กล่องตารางหนึ่ง เลื่อนแล้วงงว่าอันไหนขยับ
+       หักส่วนที่ยังล้นออกจากความสูงกล่อง จนหน้าเว็บไม่เลื่อน เหลือแถบเลื่อนแค่ในกล่อง
+       วัดเอาแทนการเดาตัวเลข เพราะ padding ของ view เปลี่ยนได้ตามขนาดจอ */
+    var de=document.documentElement;
+    var over=de.scrollHeight-de.clientHeight;
+    if(over>0){ h=Math.max(260,h-over); w.style.maxHeight=h+'px'; }
+    w._ph=h;
   });
 }
 if(!window._pckFitBound){
@@ -57789,7 +57797,7 @@ function pckHeadCSS(){
      และสีประจำโปรแกรมเด้งกว่าตอนวางบนพื้นครีม */
   /* host กินเต็มพื้นที่เนื้อหา · ดึงออกนอก padding ของ .main แล้วเอา padding มาไว้ในตัวเอง
      สีพื้นจึงเต็มขอบจริง ไม่เหลือกรอบขาวรอบ ๆ */
-  +H+'{margin:-22px -22px -22px -14px;padding:22px 22px 22px 14px;transition:background .18s}'
+  +H+'{margin:-22px -22px -22px -14px;padding:22px 22px 0 14px;transition:background .18s}'
   +H+' .pkh{position:sticky;top:-22px;z-index:60;background:#EDEFF2;'
     +'margin:-22px -22px 10px -14px;border-radius:0;border-bottom:1px solid #DCE0E6;'
     +'padding:11px 22px 11px 14px;'
@@ -57896,7 +57904,9 @@ function pckSheetCSS(){
   /* กล่องเลื่อนของตัวเอง · การตรึงคอลัมน์ซ้ายต้องมีตัวเลื่อนของตัวเอง */
   +'#piercheckin-host .pcs-tw{overflow:auto;max-height:calc(100vh - 250px);min-height:340px;'
     +'border-radius:13px;contain:paint;overscroll-behavior:contain}'
-  +'#piercheckin-host .ck-card.pcs-card{overflow:hidden;padding:0}'
+  +'#piercheckin-host .ck-card.pcs-card{overflow:hidden;padding:0;'
+    +'background:var(--pck-band,#EDEFF2) !important;'
+    +'border:1px solid var(--pck-bandb,#DCE0E6) !important;transition:background .18s}'
   /* width:max-content · ไม่งั้นตารางยืดเต็มความกว้างจอ แล้วเอาที่ว่างไปแจกให้คอลัมน์
      ที่ไม่ได้ล็อกความกว้างไว้ (เงินหน้าท่า / การจัดการ) กลายเป็นช่องยาวโล่ง ๆ */
   +S+'{border-collapse:separate;border-spacing:0;min-width:1500px;width:-moz-max-content;width:max-content}'
@@ -58433,6 +58443,10 @@ function renderPierCheckin(){
   (function(){
     var _c=pckSelColor(), _b=_c?pckBandBase(_c):null;
     host.style.background=_b?pckTint(_b,.92):'#F2F3F5';
+    /* §pckHead9 · การ์ดที่ครอบตารางใช้สีเดียวกับแถบหัว · ของเดิมเป็นแผ่นขาวโด่
+       ช่องในตารางทาสีพื้นทึบของตัวเองอยู่แล้ว สีนี้จึงเห็นแค่ขอบกับที่ว่างใต้แถวสุดท้าย */
+    host.style.setProperty('--pck-band', _b?pckTint(_b,.86):'#EDEFF2');
+    host.style.setProperty('--pck-bandb', _b?pckTint(_b,.52):'#DCE0E6');
   })();
   ckSyncSticky(host); pckFitPane();
   pckScrollRestore(host);   /* ต้องหลัง pckFitPane · กล่องยังไม่ได้ความสูงจริง ค่าที่ตั้งจะโดนบีบ */
