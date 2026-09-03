@@ -54065,6 +54065,8 @@ function pckDetailOpen(bkId){
 // ชื่อเส้นทางกับเวลาออกอยู่บนแถบเรือแล้ว จึงไม่ต้องมีการ์ดทริปซ้ำอีกชั้น · หัวทริปจะโผล่ก็ต่อเมื่อ
 // เรือลำเดียววิ่งมากกว่าหนึ่งรอบในวันเดียว ซึ่งเป็นกรณีเดียวที่ชื่อบนแถบเรือตอบไม่ได้ว่าแถวนี้อยู่รอบไหน
 var PCK_MAX_NAMES=4;
+/* §pckNameCap · จำนวนบรรทัดรายชื่อที่กล่องในตารางโชว์ได้ก่อนต้องเลื่อน */
+var PCK_SUB_LINES=4;
 var _pckOpenNames={};
 /* §pckTrim · กางชื่อแล้วแถวที่กดต้องอยู่ตรงเดิมบนจอ
    คืนค่า scrollTop ดิบ ๆ ยังไม่พอ · ความสูงของเนื้อในกล่องเปลี่ยนไปตอนกางหรือย่อ
@@ -54406,8 +54408,21 @@ function pckNameCell(r, sheet){
   if(sheet){
     /* ห่อบรรทัดแรกเป็นแถวเดียวกัน · เบอร์จองที่ไว้ก่อน ชื่อยาว ๆ ค่อยย่อเอา
        เบอร์คือของที่ต้องกดโทรได้จริง ถูกตัดครึ่งแล้วใช้ไม่ได้เลย ส่วนชื่อยังมี tooltip */
+    /* §pckNameCap · ใบหมู่คณะมีได้ถึงสิบกว่าชื่อ · ปล่อยให้ยืดตามจำนวนคน
+       แถวเดียวจะสูงกินครึ่งจอ แถวอื่นถูกดันหายไปหมด ตารางใช้กวาดตาไม่ได้อีก
+       → ให้กล่องรายชื่อสูงได้ 4 บรรทัด ที่เหลือเลื่อนอ่านในกล่อง
+       ใบ 10 ชื่อจึงสูงเท่าใบ 5 ชื่อ ความสูงแถวคาดเดาได้เสมอ
+       เกินเพดานเมื่อไหร่ กล่องจะกินคลิกของตัวเอง (เลื่อนอ่านโดยไม่ยุบทิ้ง)
+       ย่อกลับด้วยการกดที่บรรทัดชื่อหัวใบซึ่งอยู่นอกกล่อง */
     h='<div class="pck-hd">'+h+(telHtml||'')+'</div>';
-    h+=show.slice(1).map(function(n){ return '<div class="pck-gsub">'+e(n)+'</div>'; }).join('');
+    var subs=show.slice(1);
+    if(subs.length){
+      var over=subs.length>PCK_SUB_LINES;
+      h+='<div class="pck-gsubs'+(over?' scr':'')+'"'
+        +(over?' onclick="event.stopPropagation()" title="เลื่อนดูรายชื่อที่เหลือ · ย่อกลับได้ที่บรรทัดชื่อหัวใบ"':'')+'>'
+        +subs.map(function(n){ return '<div class="pck-gsub" title="'+e(n)+'">'+e(n)+'</div>'; }).join('')
+        +'</div>';
+    }
     return h;
   }
   h+=show.slice(1).map(function(n){ return '<div class="pck-gsub">'+e(n)+'</div>'; }).join('');
@@ -57464,8 +57479,15 @@ function pckSheetCSS(){
   +S+' td.pcs-nm .ck-lead{max-width:224px}'
   /* §pckName3 · ชื่อที่กางออกมาต้องตัวเท่าชื่อหัวใบ · เป็นผู้โดยสารเหมือนกัน ไม่ใช่หมายเหตุ
      ต้องประกาศหลังกฎ td.pcs-nm>div ข้างบน (specificity เท่ากัน · ตัวหลังชนะ) */
-  +S+' tr.ck-row td.pcs-nm>div.pck-gsub{font-size:11.5px;line-height:1.35;color:#3C3B37;'
-    +'font-weight:600;padding:0 7px}'
+  +S+' td.pcs-nm .pck-gsub{font-size:11.5px;line-height:1.35;color:#3C3B37;'
+    +'font-weight:600;padding:0 7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  /* เพดานความสูงของกล่องรายชื่อ · 4 บรรทัด แล้วเลื่อนเอาในกล่อง */
+  +S+' tr.ck-row td.pcs-nm>div.pck-gsubs{display:block !important;max-width:none;'
+    +'margin:1px 0 0 0 !important;overflow:visible;white-space:normal}'
+  +S+' td.pcs-nm .pck-gsubs.scr{max-height:63px;overflow-y:auto;overscroll-behavior:contain;'
+    +'cursor:default;border-left:2px solid #E7E4DC;padding-left:3px}'
+  +S+' td.pcs-nm .pck-gsubs.scr::-webkit-scrollbar{width:5px}'
+  +S+' td.pcs-nm .pck-gsubs.scr::-webkit-scrollbar-thumb{background:#CFCBC0;border-radius:3px}'
   /* §pckMid · ช่องชื่อจัดกลางแนวตั้งเหมือนช่องอื่นทั้งแถว
      เคยจับขอบบนไว้กันชื่อขยับตอนกางชื่อ แต่ผลคือแถวที่ยังไม่ได้กด (เกือบทั้งตาราง)
      ชื่อไปเกาะขอบบนแล้วเหลือที่ว่างข้างล่าง ทั้งตารางดูโหว่และไม่ตรงกับช่องอื่น
