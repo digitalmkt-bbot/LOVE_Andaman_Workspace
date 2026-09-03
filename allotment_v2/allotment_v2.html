@@ -49241,7 +49241,16 @@ function renderVanJobs(){
   let unRet=0; const unRetList=[]; const unRetByRoute={};   // return-leg not arranged (separate drop-off · not self-return · no return van)
   const selfWarn=[];   // §guard: booking ticked self-arrive but still on a transfer zone / has a van assigned → silently excluded from ① OUTBOUND (likely a mis-tick)
   const _addUn=(rid,pax)=>{ unTot+=pax; const k=rid||'_'; unByRoute[k]=(unByRoute[k]||0)+pax; };
-  (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status))return; if(!(b.trips||[]).some(t=>(t.date||'')===date))return;
+  let _sxTot=0;
+  (SB_BOOKINGS||[]).forEach(b=>{
+    /* §strandVj · ยกเลิกแล้วแต่จัดรถไว้แล้ว = ใบงานที่ส่งคนขับไปแล้วยังมีชื่อคนนี้
+       ต้องขึ้นให้เห็นว่ามีของค้าง ไม่ใช่หายไปเฉย ๆ แล้วไม่มีใครสั่งพิมพ์ใบใหม่ */
+    let _sx=false;
+    if(typeof ckIsCxl==='function' && ckIsCxl(b)){
+      if(!(typeof ckHasArrange==='function' && ckHasArrange(b,date))) return;
+      _sx=true;
+    }
+    if(!(b.trips||[]).some(t=>(t.date||'')===date))return;
     const t=(b.trips||[]).find(t=>(t.date||'')===date)||{};
     // §OVN — the return leg is a DROP-OFF day. The customer is coming back from the island on a boat;
     // nobody is waiting in a hotel lobby. Before this, the leg inherited b.hotelName + the outbound
@@ -49256,10 +49265,16 @@ function renderVanJobs(){
     /* §vjOrder · src = ที่มาของเลขกลุ่ม · เป็น split เมื่อบุ๊กกิ้งแยกจุดรับ ไม่งั้นเป็น ops
        ต้องรับเข้ามา ไม่ใช่อ่านจาก O ข้างใน เพราะพอแยกจุดรับแล้ว ops.vanGroup ถูกลบทิ้ง
        (bkV2SyncAltPickupSplits · "main now lives in split[0]") อ่านจาก O ตรง ๆ ได้ 0 หมด */
-    const _addTo=(map,vid,pax,src)=>{ const _k=vid+'~'+(t.routeId||''); (map[_k]=map[_k]||{vid:vid,routeId:t.routeId||'',pax:0,bk:0,zones:{},routes:{},pickups:{},gno:0,seq:1e9}); map[_k].pax+=pax; map[_k].bk++; if(z)map[_k].zones[z]=1; if(t.routeId)map[_k].routes[t.routeId]=1; if(_pk) map[_k].pickups[_pk]=1;
+    const _addTo=(map,vid,pax,src)=>{ const _k=vid+'~'+(t.routeId||''); (map[_k]=map[_k]||{vid:vid,routeId:t.routeId||'',pax:0,bk:0,zones:{},routes:{},pickups:{},gno:0,seq:1e9,sx:0});
+      const _E=map[_k];
+      if(z)_E.zones[z]=1; if(t.routeId)_E.routes[t.routeId]=1;
       const _g=+((src&&src.vanGroup)||0), _q=+((src&&src.vanSeq)||0);
-      if(_g>0 && (!map[_k].gno || _g<map[_k].gno)) map[_k].gno=_g;
-      if(_q>0 && _q<map[_k].seq) map[_k].seq=_q; };
+      if(_g>0 && (!_E.gno || _g<_E.gno)) _E.gno=_g;
+      if(_q>0 && _q<_E.seq) _E.seq=_q;
+      /* §strandVj · ของค้างนับแยก ไม่แตะ pax / bk / จุดรับ
+         (จุดรับป้อนตัวแก้ชื่อไทย · ใบที่ยกเลิกแล้วไม่ควรไปสร้างงานให้ใครแก้) */
+      if(_sx){ _E.sx++; _sxTot++; return; }
+      _E.pax+=pax; _E.bk++; if(_pk) _E.pickups[_pk]=1; };
     const addVan=(vid,pax,src)=>_addTo(agg,vid,pax,src);
     const _selfPick=!!b.pickupSelf;   // ขารับมาเอง → ไม่มีรถไปรับ (ไม่ addVan/ไม่นับ unassigned) · ขากลับยังจัดได้
     if(Array.isArray(O.vanSplits)&&O.vanSplits.length){ O.vanSplits.forEach(s=>{ const hp=+s.pax||0; if(!_selfPick){ if(s.vanId) addVan(s.vanId,hp,s); else if(z&&z!=='NoTransfer'&&z!=='NT') _addUn(t.routeId,hp); } if(s.vanReturnId && s.vanReturnId!==s.vanId && !_ovnOut) _addTo(aggRet,s.vanReturnId,hp,s); }); }
@@ -49344,7 +49359,7 @@ function renderVanJobs(){
       const retBadge=hasRet?`<span style="font-size:9px;font-weight:700;background:#FBE4C9;color:#8a5500;border-radius:5px;padding:1px 7px;margin-left:7px;letter-spacing:.02em">↩ ขากลับ ${retBk}</span>`:'';
       const td='padding:0 9px;height:50px;vertical-align:middle;white-space:nowrap;'+bb;
       const row=`<tr onclick="vanJobsOpenPreview('${key}')" style="cursor:pointer${sel?';background:#EAF5F0':''}" title="คลิกดูใบงาน">
-        <td style="padding:0;${bb}"><div onclick="vehColorPick('${vid}',event)" title="คลิกเพื่อตั้งสีประจำรถ" style="background:linear-gradient(135deg,${gr[0]},${gr[1]});height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 11px;color:#fff;cursor:pointer;position:relative" onmouseover="var d=this.querySelector('[data-pal]');if(d)d.style.opacity='1'" onmouseout="var d=this.querySelector('[data-pal]');if(d)d.style.opacity='0'"><span data-pal style="position:absolute;top:3px;left:4px;font-size:9px;opacity:0;transition:opacity .12s;pointer-events:none">&#127912;</span><div style="line-height:1.15;min-width:0"><div style="font-size:13.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e(v.name||vid)}${retBadge}</div>${_drv.plate&&_drv.plate!=='-'?`<div style="font-size:9.5px;opacity:.85;font-family:'DM Mono',monospace">${e(_drv.plate)}${_drv.plateOverride?' &#128204;':''}</div>`:''}</div><div style="font-size:15px;font-weight:700;flex:none;margin-left:6px;${over?'color:#FFE08A':''}">${dispPax}/${cap||'?'}</div></div></td>
+        <td style="padding:0;${bb}"><div onclick="vehColorPick('${vid}',event)" title="คลิกเพื่อตั้งสีประจำรถ" style="background:linear-gradient(135deg,${gr[0]},${gr[1]});height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 11px;color:#fff;cursor:pointer;position:relative" onmouseover="var d=this.querySelector('[data-pal]');if(d)d.style.opacity='1'" onmouseout="var d=this.querySelector('[data-pal]');if(d)d.style.opacity='0'"><span data-pal style="position:absolute;top:3px;left:4px;font-size:9px;opacity:0;transition:opacity .12s;pointer-events:none">&#127912;</span><div style="line-height:1.15;min-width:0"><div style="font-size:13.5px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e(v.name||vid)}${retBadge}${((g&&g.sx)?`<span title="จัดรถคันนี้ไว้แล้วแต่ใบจองถูกยกเลิก · ใบงานที่ส่งไปแล้วยังมีชื่ออยู่ — สั่งพิมพ์ใบใหม่หรือกดล้างการจัดรถที่หน้าเช็คอินรถ" style="background:#FCE4E4;color:#A32D2D;font-size:9px;font-weight:800;border-radius:5px;padding:1px 6px;margin-left:6px;-webkit-print-color-adjust:exact">ค้าง ${g.sx}</span>`:'')}</div>${_drv.plate&&_drv.plate!=='-'?`<div style="font-size:9.5px;opacity:.85;font-family:'DM Mono',monospace">${e(_drv.plate)}${_drv.plateOverride?' &#128204;':''}</div>`:''}</div><div style="font-size:15px;font-weight:700;flex:none;margin-left:6px;${over?'color:#FFE08A':''}">${dispPax}/${cap||'?'}</div></div></td>
         <td style="${td}"><span style="font-size:11px;font-weight:600;background:${tag.bg};color:${tag.c};padding:2px 9px;border-radius:9px">${tag.t}</span></td>
         <td style="${td};font-size:13px;font-weight:500;color:#1B2A55">${e(_drv.driver||'—')}${_drv.override?' <span title="คนขับวันนี้ (อัปเดตแล้ว)" style="font-size:10px">📌</span>':''}</td>
         <td style="${td};font-family:'DM Mono',monospace;font-size:12px">${_drv.phone?`<a href="tel:${e(_drv.phone)}" onclick="event.stopPropagation()" style="color:#185FA5;text-decoration:none">${e(_drv.phone)}</a>`:'<span style="color:#bbb">—</span>'}</td>
@@ -49421,7 +49436,7 @@ function renderVanJobs(){
         <div style="font-size:13px;color:#bbb;margin-bottom:2px">ใบงานวันนี้</div>
         <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap"><span style="font-size:40px;font-weight:500;color:#1A1A1A;line-height:1">${ids.length}</span><span style="font-size:14px;color:#888">งาน · ${totPax} pax</span>
           <span style="font-size:11px;font-weight:600;background:#E7F5D8;color:#3B6D11;padding:3px 9px;border-radius:11px">▲ ${compN} บริษัท+เช่า</span>${partN?`<span style="font-size:11px;font-weight:600;color:#9A6B00">${partN} รถร่วม</span>`:''}${unTot>0?`<span style="font-size:11px;font-weight:600;color:#C2185B">${unTot} pax ยังไม่จัด</span>`:''}</div>
-        <div style="font-size:11.5px;color:#999;margin-top:7px">บริษัท+เช่า ${compN} · รถร่วม ${partN} · กำกับไทย ${thN} จุดรับ · ${Object.keys(routeIdSet).length} เส้นทาง</div>
+        <div style="font-size:11.5px;color:#999;margin-top:7px">บริษัท+เช่า ${compN} · รถร่วม ${partN} · กำกับไทย ${thN} จุดรับ · ${Object.keys(routeIdSet).length} เส้นทาง${_sxTot>0?` · <b style="color:#A32D2D">ค้างจัดการ ${_sxTot}</b>`:''}</div>
       </div>
       <div style="flex:1.2;min-width:230px;background:${_heroBg};color:#fff;border-radius:14px;padding:14px 17px;position:relative;${_heroClick?'cursor:pointer;box-shadow:0 0 0 2px '+_heroRing:''}"${_heroClick?` onclick="nav(document.querySelector('[data-view=booking]'))"`:''}>
         <div style="font-size:10px;color:${_heroTagCol};font-weight:700;letter-spacing:.02em">${_heroTag}</div>
@@ -49526,7 +49541,15 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
   const _allRoutes={};
   // RETURN leg = every booking this van brings back: returnVan = vanReturnId || outbound vanId (default same-van return).
   // OUTBOUND leg = bookings this van picks up (vanId). outVid carried so the return row can show กลับคันเดิม / มาจากรถอื่น.
-  const _collect=isRet=>{ const rows=[]; (SB_BOOKINGS||[]).forEach(b=>{ if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return; if(isRet && typeof bkV2RetInfo==='function' && bkV2RetInfo(b,date).selfRet) return;   // ขากลับ "กลับเอง" (drop-off ท่า self-arrive) → ไม่ต้องมีรถไปส่ง → ไม่ขึ้นในใบงานขากลับ
+  const _collect=isRet=>{ const rows=[]; (SB_BOOKINGS||[]).forEach(b=>{
+      /* §strandVj · ยกเลิกแล้วแต่จัดรถไว้แล้ว → ยังพิมพ์ในใบ แต่ขีดฆ่าและไม่นับยอด
+         เพื่อให้ใบใหม่เทียบกับใบเก่าที่คนขับถืออยู่ได้บรรทัดต่อบรรทัด */
+      let _sx=false;
+      if(typeof ckIsCxl==='function' && ckIsCxl(b)){
+        if(!(typeof ckHasArrange==='function' && ckHasArrange(b,date))) return;
+        _sx=true;
+      }
+      if(isRet && typeof bkV2RetInfo==='function' && bkV2RetInfo(b,date).selfRet) return;   // ขากลับ "กลับเอง" (drop-off ท่า self-arrive) → ไม่ต้องมีรถไปส่ง → ไม่ขึ้นในใบงานขากลับ
       if(!isRet && b.pickupSelf) return;   // ขารับ "มาเอง" (self-arrive) → ไม่มีรถไปรับ → ไม่ขึ้นในใบงานขาไป
     (b.trips||[]).forEach(t=>{ if((t.date||'')!==date) return; if(routeId && t.routeId!==routeId) return;   // this sheet = one program(route) only
       // §OVN outbound — they sleep on the island. No return run for them TODAY (the return is its own day).
@@ -49536,8 +49559,8 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
          แถวเลยโผล่ทั้งสองตาราง คนขับเห็น "ไปรับที่ท่าเรือ" ตอนเช้าทั้งที่แขกยังไม่กลับมา */
       if(!isRet && t.ovnLeg) return;
       const _O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
-      if(Array.isArray(_O.vanSplits)&&_O.vanSplits.length){ _O.vanSplits.forEach(s=>{ const ov=s.vanId||null; const rv=s.vanReturnId||ov; const hit=isRet?(rv===vanId):(ov===vanId); if(hit) rows.push({b,t,splitPax:+s.pax||0,splitBd:bkSplitPax(s),retId:s.vanReturnId||null,outVid:ov,seq:+s.vanSeq||0, sHotel:s.pickHotel||'', sAreaId:s.pickAreaId||'', sZone:s.pickZone||'', sWho:s.altWho||'', sMain:!!s.main}); }); }
-      else { const o=_O; const ov=o.vanId||null; const rv=o.vanReturnId||ov; const hit=isRet?(rv===vanId):(ov===vanId); if(hit) rows.push({b,t,splitPax:null,retId:o.vanReturnId||null,outVid:ov,seq:+(o.vanSeq)||0}); }
+      if(Array.isArray(_O.vanSplits)&&_O.vanSplits.length){ _O.vanSplits.forEach(s=>{ const ov=s.vanId||null; const rv=s.vanReturnId||ov; const hit=isRet?(rv===vanId):(ov===vanId); if(hit) rows.push({b,t,strand:_sx,splitPax:+s.pax||0,splitBd:bkSplitPax(s),retId:s.vanReturnId||null,outVid:ov,seq:+s.vanSeq||0, sHotel:s.pickHotel||'', sAreaId:s.pickAreaId||'', sZone:s.pickZone||'', sWho:s.altWho||'', sMain:!!s.main}); }); }
+      else { const o=_O; const ov=o.vanId||null; const rv=o.vanReturnId||ov; const hit=isRet?(rv===vanId):(ov===vanId); if(hit) rows.push({b,t,strand:_sx,splitPax:null,retId:o.vanReturnId||null,outVid:ov,seq:+(o.vanSeq)||0}); }
     }); });
     rows.sort((a,b)=>{
       if(isRet){ const ea=(a.outVid&&a.outVid!==vanId)?1:0, eb=(b.outVid&&b.outVid!==vanId)?1:0; if(ea!==eb) return ea-eb; }   // return: "came from another van" rows go LAST
@@ -49548,8 +49571,11 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
   // Build one detail section (table) for a leg — SAME columns as the original job order
   const _section=isRet=>{
     const rows=_collect(isRet); if(!rows.length) return {rows:[], totPax:0, html:''};
-    let totPax=0, totAd=0, totChd=0, totInf=0, totFoc=0;
-    const tr=rows.map((x,i)=>{ const b=x.b,t=x.t; const pax=(x.splitPax!=null)?x.splitPax:((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0); totPax+=pax;
+    let totPax=0, totAd=0, totChd=0, totInf=0, totFoc=0, _nSx=0, _seqNo=0;
+    const tr=rows.map((x,i)=>{ const b=x.b,t=x.t; const pax=(x.splitPax!=null)?x.splitPax:((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0);
+      /* §strandVj · ของค้างไม่เข้ายอดและไม่กินเลขลำดับ · เลขต้องตรงกับใบเก่าที่คนขับถืออยู่ */
+      const _sxR=!!x.strand; if(_sxR) _nSx++; else totPax+=pax;
+      const _no=_sxR?'&#10007;':(++_seqNo);
       const route=(typeof getRoute==='function'?getRoute(t.routeId):null);
       if(route&&route.name) _allRoutes[route.name]=1; else if(t.routeId) _allRoutes[t.routeId]=1;
       // §altPickups · an alt-pickup split allocation carries its OWN pickup location (Lead/main uses the booking's)
@@ -49576,7 +49602,7 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
       // §pax breakdown · a split now carries its own ad/chd/inf/foc, so a child on a second pickup
       // point stays a child. (Old data with only a headcount reads back as all-adult — same as before.)
       const _bd = (x.splitPax!=null) ? (x.splitBd || {ad:pax,chd:0,inf:0,foc:0}) : {ad:_ad,chd:_chd,inf:_inf,foc:_foc};
-      totAd+=_bd.ad; totChd+=_bd.chd; totInf+=_bd.inf; totFoc+=_bd.foc;
+      if(!_sxR){ totAd+=_bd.ad; totChd+=_bd.chd; totInf+=_bd.inf; totFoc+=_bd.foc; }
       const _pc='text-align:center;font-size:16.5px;font-weight:700;color:#15396B';
       const _pcSplit=_pc+';color:#5B289A';   // split pax shown in the AD column · purple to signal it's a split portion
       // split rows are tinted purple in the AD column only so the eye can tell a split portion from a
@@ -49633,11 +49659,16 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
           }
         }catch(_e){}
       }
-      const _rowBg = _extra ? ' style="background:#FFF6E6;-webkit-print-color-adjust:exact;print-color-adjust:exact"' : '';
+      const _rowBg = _sxR
+        ? ' style="background:#F5F3F0;color:#9b9a93;-webkit-print-color-adjust:exact;print-color-adjust:exact"'
+        : (_extra ? ' style="background:#FFF6E6;-webkit-print-color-adjust:exact;print-color-adjust:exact"' : '');
+      const _sxTag = _sxR
+        ? `<div style="margin-top:3px"><span style="display:inline-block;background:#FBE3E1;color:#B5271F;font-weight:700;font-size:11px;border-radius:7px;padding:2px 8px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#10007; ยกเลิกแล้ว · ไม่ต้องไปรับ</span></div>`
+        : '';
       return `<tr${_rowBg}>
-        <td style="text-align:center">${i+1}</td>
+        <td style="text-align:center;${_sxR?'color:#B5271F;font-weight:700':''}">${_no}</td>
         <td style="font-size:12.5px;word-break:break-all;font-variant-numeric:tabular-nums;color:#444">${e(b.voucherRef||b.code||b.id)}</td>
-        <td style="font-size:15.5px;font-weight:700;color:#1B2A55">${e(b.leadPax||'-')}${_ckTag}${(_ovnRet||_ovnOut)?`<div style="margin-top:2px"><span style="display:inline-block;background:${_ovnOut?'#EDE7FB':'#FBE4C9'};color:${_ovnOut?'#4A2E86':'#8a5500'};font-weight:700;font-size:10px;border-radius:7px;padding:1px 7px;white-space:nowrap">${_ovnOut?'&#127765; OVN':'&#8617; OVN'}</span></div>`:''}${(function(){ const _lead=String(b.leadPax||'').trim(); const _ex=(b.passengers||[]).map(p=>String((p&&p.name)||'').trim()).filter(n=>n&&n!==_lead); if(_ex.length){ let h=_ex.slice(0,2).map(n=>`<div class="ag" style="font-weight:600;color:#3F4654">${e(n)}</div>`).join(''); if(_ex.length>2) h+=`<div class="ag">+${_ex.length-2} more</div>`; return h; } return (b.passengers&&b.passengers.length)?`<div class="ag">+${b.passengers.length} more</div>`:''; })()}${x.splitPax!=null?`<div class="ag" style="color:#5B289A">${x.sMain?('&#128652; จุดหลัก'):('&#128652; แยกรับ'+(x.sWho?(' · '+e(x.sWho)):''))} · เดียวกัน ${e(b.voucherRef||b.code||b.id)}</div>`:''}</td>
+        <td style="font-size:15.5px;font-weight:700;color:${_sxR?'#8f8e88':'#1B2A55'}${_sxR?';text-decoration:line-through;text-decoration-thickness:1.5px':''}">${e(b.leadPax||'-')}${_sxTag}${_ckTag}${(_ovnRet||_ovnOut)?`<div style="margin-top:2px"><span style="display:inline-block;background:${_ovnOut?'#EDE7FB':'#FBE4C9'};color:${_ovnOut?'#4A2E86':'#8a5500'};font-weight:700;font-size:10px;border-radius:7px;padding:1px 7px;white-space:nowrap">${_ovnOut?'&#127765; OVN':'&#8617; OVN'}</span></div>`:''}${(function(){ const _lead=String(b.leadPax||'').trim(); const _ex=(b.passengers||[]).map(p=>String((p&&p.name)||'').trim()).filter(n=>n&&n!==_lead); if(_ex.length){ let h=_ex.slice(0,2).map(n=>`<div class="ag" style="font-weight:600;color:#3F4654">${e(n)}</div>`).join(''); if(_ex.length>2) h+=`<div class="ag">+${_ex.length-2} more</div>`; return h; } return (b.passengers&&b.passengers.length)?`<div class="ag">+${b.passengers.length} more</div>`:''; })()}${x.splitPax!=null?`<div class="ag" style="color:#5B289A">${x.sMain?('&#128652; จุดหลัก'):('&#128652; แยกรับ'+(x.sWho?(' · '+e(x.sWho)):''))} · เดียวกัน ${e(b.voucherRef||b.code||b.id)}</div>`:''}</td>
         ${paxCells}
         <td style="text-align:center;font-variant-numeric:tabular-nums;font-weight:800;font-size:17px;color:#C0271C;white-space:nowrap">${isRet?'<span style="color:#aaa;font-weight:400;font-size:14px">—</span>':(e(_ptime(b,t))||'-')}</td>
         <td style="font-size:14.5px;font-weight:600;color:#1B2A55">${e(pickup)||'<span style="color:#b00">— no pickup —</span>'}${_pkTh?`<div class="ag" style="color:#185FA5;font-size:18px;font-weight:600;line-height:1.3;margin-top:1px">${e(_pkTh)}</div>`:''}${(!isRet&&Array.isArray(b.altPickups)&&b.altPickups.some(a=>(a.who||'').trim()||(a.place||'').trim()))?b.altPickups.filter(a=>(a.who||'').trim()||(a.place||'').trim()||a.area||a.areaId).map(a=>`<div style="color:#5B289A;font-size:11.5px;margin-top:2px">&#128652; <b>${Math.max(1,parseInt(a.qty)||1)} คน</b>${(a.who||'').trim()?(' · '+e((a.who||'').trim())):''}${a.zone?(' ['+e(a.zone)+']'):''} @ ${e((a.place||'').trim()||a.area||'?')}</div>`).join(''):''}</td>
@@ -49665,7 +49696,7 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
       <tfoot><tr style="font-weight:700;background:#F4F8FC;color:#15396B">
         <td colspan="3" style="text-align:right">รวม / Total</td>
         <td style="text-align:center">${totAd}</td><td style="text-align:center">${totChd}</td><td style="text-align:center">${totInf}</td><td style="text-align:center">${totFoc}</td>
-        <td colspan="7">${totPax} pax · ${rows.length} booking</td>
+        <td colspan="7">${totPax} pax · ${rows.length-_nSx} booking${_nSx>0?` <span style="color:#B5271F">· ค้างจัดการ ${_nSx} (ยกเลิกแล้ว ไม่นับ)</span>`:''}</td>
       </tr></tfoot>
     </table>`;
     return {rows, totPax, html:secHd+table};
@@ -54685,8 +54716,9 @@ function pckExpandVanSplits(row, b, date, out){
 }
 function pckAgg(rows){
   // §pckCountPax · arrP/clrP/onP = รายคน · arr/clr/on = รายใบ (เก็บไว้ให้ tooltip)
-  var a={n:0, pax:0, arr:0, clr:0, on:0, arrP:0, clrP:0, onP:0, due:0, ns:0, vd:0};
+  var a={n:0, pax:0, arr:0, clr:0, on:0, arrP:0, clrP:0, onP:0, due:0, ns:0, vd:0, sx:0};
   rows.forEach(function(r){
+    if(r.strand){ a.sx++; return; }   /* §strandPck · ค้างจัดการ · นับแยก ไม่เข้ายอดใด */
     if(r._vd){ if(r.money && r.money.due>0) a.due+=r.money.due; a.vd++; return; }   // §onsiteVoid · ปิดรายการแล้ว ไม่นับใน ถึงท่า/เคลียร์/ขึ้นเรือ/ที่นั่ง · เงินค้างยังนับ
     a.n++;
     var _px=(r.expect!=null?r.expect:r.booked);
@@ -55310,6 +55342,41 @@ function pckMealSave(){
   if(typeof renderPierCheckin === 'function') renderPierCheckin();
 }
 function pckRowHtml(r, date, sheet){
+  /* §strandPck · แถวค้าง · ตัดปุ่มสั่งการทิ้งหมด เหลือเหตุผลกับปุ่มล้าง
+     คอลัมน์หน้ายังครบ เพราะหน้าท่าต้องเทียบกับใบงานไกด์ที่ถืออยู่ว่าเป็นบรรทัดเดียวกัน
+     ตารางแผ่นใหญ่ 16 ช่อง · แบบการ์ด 12 ช่อง · ท้ายแถวเหลือ 5 ช่องเท่ากันทั้งคู่ */
+  if(r.strand){
+    var _e=ckEsc, _b=r.b, _t=r.t;
+    var _ag=(typeof sbGetAgent==='function')?sbGetAgent(_b.agentId):null;
+    var _agN=_ag?(_ag.name||_ag.code||'—'):(_b.channel||'walk-in');
+    var _pb=ckPaxBreak(_t.pax);
+    var _tm=(r.O&&r.O.pickupTimeFinal)||_t.pickupTime||_t.pickupFinal||'—';
+    var _pk=ckPickShort(_b.hotelName||_b.pickup||'')||'—';
+    var _px=['ad','chd','inf','foc'].map(function(k){ return '<td class="ck-c pck-px">'+(_pb[k]||0)+'</td>'; }).join('');
+    var _act='<td colspan="5" class="l">'
+      +'<span class="ck-swhy" title="'+_e(r.strandWhy||'')+'">'+_e(r.strandWhy||'')+'</span>'
+      +'<button class="ck-sclr" onclick="event.stopPropagation();ckStrandClear(\''+_b.id+'\',\''+date+'\')" '
+      +'title="ล้างการจัดรถ/เรือของวันนี้ · แถวนี้จะหายจากทุกหน้าปฏิบัติการ · ใบจองไม่ถูกแตะ">ล้างการจัดเรือ</button></td>';
+    var _nm='<td class="l"><span class="ck-lead">'+_e(_b.leadPax||'—')+'</span>'
+      +'<span class="ck-sbadge">CXL</span></td>';
+    if(sheet){
+      return '<tr class="ck-row ck-strand">'
+        +'<td class="l"><span class="ck-vch">'+_e(_b.voucherRef||_b.code||'—')+'</span></td>'
+        +'<td>'+_e(_agN)+'</td>'+_nm+_px
+        +'<td class="ck-mono">'+_e(_tm)+'</td>'
+        +'<td class="l"><span class="ck-pick">'+_e(_pk)+'</span></td>'
+        +'<td class="ck-c ck-mono">'+_e(_b.roomNo||_b.roomNumber||'—')+'</td>'
+        +'<td>'+_e(ckPickShort(_b.pickupArea||'')||'—')+'</td>'
+        +_act+'</tr>';
+    }
+    return '<tr class="ck-row ck-strand">'
+      +'<td><span class="ck-vch">'+_e(_b.voucherRef||_b.code||'—')+'</span>'
+        +'<div style="font-size:10px">'+_e(_agN)+'</div></td>'
+      +_nm+_px
+      +'<td><span class="ck-mono">'+_e(_tm)+'</span>'
+        +'<div><span class="ck-pick">'+_e(_pk)+'</span></div></td>'
+      +_act+'</tr>';
+  }
   var e=ckEsc, b=r.b, t=r.t;
   var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
   var agName=ag?(ag.name||ag.code||'—'):(b.channel||'walk-in');
@@ -57702,19 +57769,42 @@ function pckTint(c,t){
 }
 
 /* จัดกลุ่มสองชั้นตามแกนที่เลือก · ใช้แถวชุดเดียวกับการ์ด */
+/* §strandPck · ลำดับรถในตารางแผ่นใหญ่เคยเป็น "ลำดับที่เจอใน SB_BOOKINGS" ล้วน ๆ
+   ซึ่งไม่ใช่ลำดับที่ใครจัด และขยับได้เองเมื่อมีแถวค้างมาถึงก่อน
+   เรียงชุดเดียวกับที่อื่น · เลขกลุ่ม → ลำดับในกลุ่ม → ชื่อรถ · "มาเอง" ท้ายสุด */
+function _pckVanKeyOrd(rows){
+  var g=0, q=1e9;
+  (rows||[]).forEach(function(r){
+    var O=r&&r.O, sp=r&&r.vsp;
+    var _g=+(((sp&&sp.vanGroup)||(O&&O.vanGroup))||0);
+    var _q=+(((sp&&sp.vanSeq)||(O&&O.vanSeq))||0);
+    if(_g>0 && (!g || _g<g)) g=_g;
+    if(_q>0 && _q<q) q=_q;
+  });
+  return {g:g||9999, q:q};
+}
+function _pckVanCmp(map){
+  return function(a,b){
+    if(a==='__own') return 1; if(b==='__own') return -1;
+    var A=_pckVanKeyOrd(map[a]), B=_pckVanKeyOrd(map[b]);
+    if(A.g!==B.g) return A.g-B.g;
+    if(A.q!==B.q) return A.q-B.q;
+    try{ return String(pckVanName(a)).localeCompare(String(pckVanName(b)),'th',{numeric:true}); }
+    catch(_){ return String(pckVanName(a)).localeCompare(String(pckVanName(b))); }
+  };
+}
 function pckSheetGroups(boats, border){
   var out=[];
   if(_pckGrp==='van'){
-    var vg={}, vord=[];
+    var vg={}, vord=[], vrows={};
     border.forEach(function(bid){ (boats[bid].rows||[]).forEach(function(r){
       var vk=r.vanId||'__own';
-      if(!vg[vk]){ vg[vk]={subs:{}, sord:[]}; vord.push(vk); }
+      if(!vg[vk]){ vg[vk]={subs:{}, sord:[]}; vord.push(vk); vrows[vk]=[]; }
+      vrows[vk].push(r);
       var G=vg[vk]; if(!G.subs[r.bid]){ G.subs[r.bid]=[]; G.sord.push(r.bid); }
       G.subs[r.bid].push(r);
     }); });
-    vord.sort(function(a,b){
-      if(a==='__own') return 1; if(b==='__own') return -1;
-      return String(pckVanName(a)).localeCompare(String(pckVanName(b))); });
+    vord.sort(_pckVanCmp(vrows));
     vord.forEach(function(vk){ out.push({key:vk, g:vg[vk]}); });
   } else {
     border.forEach(function(bid){
@@ -57724,6 +57814,7 @@ function pckSheetGroups(boats, border){
         if(!G.subs[vk]){ G.subs[vk]=[]; G.sord.push(vk); }
         G.subs[vk].push(r);
       });
+      G.sord.sort(_pckVanCmp(G.subs));
       if(G.sord.length) out.push({key:bid, g:G});
     });
   }
@@ -57731,8 +57822,9 @@ function pckSheetGroups(boats, border){
 }
 
 function pckSheetAgg(rows){
-  var a={n:0,pax:0,arr:0,on:0,due:0,ckv:0};
+  var a={n:0,pax:0,arr:0,on:0,due:0,ckv:0,sx:0};
   rows.forEach(function(r){
+    if(r.strand){ a.sx++; return; }   /* §strandPck */
     a.n++; a.pax+=(r.expect!=null?r.expect:r.booked);
     var st=(r.ck&&r.ck.at)?'on':pckStage(r.ck);
     if(st==='arr'||st==='clr'||st==='on') a.arr++;
@@ -57783,6 +57875,8 @@ function pckSheetBand(kind, key, rows, date, lvl){
     +'<span class="pcs-sm">ถึงท่า <b>'+a.arr+'/'+a.n+'</b> &middot; ขึ้นเรือ <b>'+a.on+'</b> &middot; '+a.pax+' pax</span>'
     +(a.due>0?('<span class="pcs-due">ค้างเก็บ &#3647;'+Math.round(a.due).toLocaleString()+'</span>'):'')
     +(a.on===a.n&&a.n?'<span class="pcs-ok">&#10003; ขึ้นเรือครบ</span>':'')
+    /* §strandPck · จัดไว้แล้วแต่ถูกยกเลิก · ยังไม่มีใครล้างการจัดการออก */
+    +(a.sx?('<span class="ck-scount" title="จัดเรือ/จัดรถไว้แล้วแต่ใบจองถูกยกเลิก · ยังไม่มีใครล้างการจัดการออก · ไม่นับเข้ายอด pax และเงิน">ค้าง '+a.sx+'</span>'):'')
     +'</div></td></tr>';
 }
 
@@ -58377,8 +58471,15 @@ function renderPierCheckin(){
   // §pierFilter · เก็บทุกแถวของวันก่อน (ผ่านตัวกรองเส้นทางแล้ว) → นับเลขบนชิป → ค่อยกรอง → ค่อยจัดชั้น
   // นับจาก all เสมอ ตัวเลขบนชิปจะได้ไม่กระโดดตามตัวกรองที่เพิ่งกดไป
   var all=[], ovnAll=[];
+  var _pckSx=0;
   (SB_BOOKINGS||[]).forEach(function(b){
-    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    /* §strandPck · ยกเลิกแล้วแต่จัดเรือ/จัดรถไว้แล้ว ต้องคาไว้ในกลุ่มเดิม
+       ไม่งั้นหน้าท่ายืนรอคนที่ออฟฟิศยกเลิกไปแล้วโดยไม่มีใครบอก */
+    var _sx=false;
+    if(typeof ckIsCxl==='function' && ckIsCxl(b)){
+      if(!(typeof ckHasArrange==='function' && ckHasArrange(b,date))) return;
+      _sx=true;
+    }
     var t=ckTripOn(b,date); if(!t) return;
     var _ovnBack=(typeof bkIsOvnReturn==='function') && bkIsOvnReturn(t);
     if(_pckPier && pckPierOf(t.routeId)!==_pckPier) return;   /* §pckHead3 · กรองตามท่า */
@@ -58408,6 +58509,17 @@ function renderPierCheckin(){
     /* §boatSplit แยกลำ → 1 แถวต่อลำ · §pckSplit ถ้าไม่ได้แยกลำ ค่อยแยกตามจุดรับ
        ไม่ซ้อนกันสองชั้น เพราะจะได้ N×M แถว อ่านไม่รู้เรื่อง */
     var _tgt=_ovnBack?ovnAll:all, _tmp=[];
+    /* §strandPck · แถวค้างเข้าไปตรง ๆ ไม่ต้องกางตามจุดรับ/ตามลำ (ใบที่ยกเลิกแล้วไม่มีอะไรให้แบ่ง)
+       ตัวเลขทุกช่องถูกล้างเป็นศูนย์ด้วย · ต่อให้มีที่นับที่ผมมองไม่เห็น ก็บวกศูนย์ ไม่ทำยอดเพี้ยน
+       ยอดคนจริงยังโชว์ได้ เพราะแถวค้างอ่านจาก b/t ตรง ๆ ไม่ได้อ่านจาก expect */
+    if(_sx){
+      row.strand='cxl'; row.strandWhy=(typeof ckStrandWhy==='function')?ckStrandWhy(b):'';
+      row.booked=0; row.expect=0;
+      row.money={cot:0,cur:'THB',handling:'',note:'',extras:[],extrasTot:0,exGot:0,exDue:0,
+                 upgrades:[],upDue:0,upGot:0,balance:0,gross:0,pierPaid:0,pierFee:0,
+                 ovnSettled:false,noSlip:0,due:0,got:0,payType:''};
+      _pckSx++; _tgt.push(row); return;
+    }
     pckExpandBoatSplits(row, b, date, _tmp);
     if(_tmp.length>1) _tmp.forEach(function(x){ _tgt.push(x); });
     else pckExpandVanSplits(_tmp[0]||row, b, date, _tgt);
@@ -58415,6 +58527,7 @@ function renderPierCheckin(){
   var cnt={boat:{},van:{},arr:{},stat:{wait:0,arr:0,clr:0,on:0,due:0,ns:0,vd:0}};
   var tExpect=0, tNoShow=0, tDue=0, tSlip=0, tFee=0, tGot=0;
   all.forEach(function(r){
+    if(r.strand) return;   /* §strandPck · ยกเลิกแล้ว ไม่เข้าตัวนับสถานะ/เงิน/ชิปตัวกรอง */
     if(r.bid) cnt.boat[r.bid]=(cnt.boat[r.bid]||0)+1;
     if(r.vanId) cnt.van[r.vanId]=(cnt.van[r.vanId]||0)+1;
     cnt.arr[r.arr]=(cnt.arr[r.arr]||0)+1;
@@ -58515,6 +58628,7 @@ function renderPierCheckin(){
       +'<div class="pck-bstat">'+bchip('ถึงท่า',a.arrP+'/'+a.pax)+bchip('เคลียร์',a.clrP)+bchip('ขึ้นเรือ',a.onP)
         +(ovnByBoat[bid]?('<div class="pck-bchip" style="background:#EDE7FB;border:1px solid #fff;color:#5B289A;font-weight:800" title="ค้างคืนบนเกาะ · วันนี้เรือลำนี้ต้องไปรับกลับ · ไม่ต้องเช็คอินที่ท่า"><span class="k" style="opacity:.85">&#8617; รับกลับ</span><span class="v">'+ovnByBoat[bid].pax+'</span></div>'):'')
         +(a.due>0?bchip('ค้างเก็บ','&#3647;'+Math.round(a.due).toLocaleString()):'')
+        +(a.sx?('<div class="pck-bchip" style="background:#FCE4E4;border:1px solid #fff;color:#A32D2D;font-weight:800" title="จัดเรือ/จัดรถไว้แล้วแต่ใบจองถูกยกเลิก · ยังไม่มีใครล้างการจัดการออก · ไม่นับเข้ายอดใด"><span class="k" style="opacity:.85">&#10007; ค้างจัดการ</span><span class="v">'+a.sx+'</span></div>'):'')
         +'<div class="pck-bchip" style="background:#fff;border:1px solid #fff;color:'+pckInkOnWhite(col)+'"><span class="k" style="opacity:.8">ที่นั่ง</span><span class="v">'+a.pax+(cap?('/'+cap):'')+'</span></div>'
         +'<button class="pck-jobbtn go" onclick="event.stopPropagation();goSetupOpen(\''+bid+'\')" title="จ่ายไกด์แล้วพิมพ์ ใบสั่งงานมัคคุเทศก์ + ทะเบียนรายชื่อ ต่อกันเป็นชุดเดียว">&#128220; ใบสั่งงาน + ทะเบียน'
           +((goAsn(_pckDate,bid).g.length)?'':' <b style="color:#B4560A">&#9679;</b>')+'</button>'
@@ -58657,7 +58771,7 @@ function renderPierCheckin(){
   pckScrollSave(host);
   /* §pckHead · หัวข้อหน้ากับคำอธิบายถูกตัดออก · เมนูซ้ายบอกอยู่แล้วว่าอยู่หน้าไหน
      ที่ประหยัดได้เอาไปให้ตาราง ซึ่งเป็นของที่ต้องอ่านจริงทุกเช้า */
-  host.innerHTML='<style id="pck-style">'+ckSharedCSS('#piercheckin-host')+pckExtraCSS()+pckCardCSS('#piercheckin-host')+pckPayCSS()+pckHeadCSS()+pckSheetCSS()+'</style>'
+  host.innerHTML='<style id="pck-style">'+ckStrandCSS('#piercheckin-host')+ckSharedCSS('#piercheckin-host')+pckExtraCSS()+pckCardCSS('#piercheckin-host')+pckPayCSS()+pckHeadCSS()+pckSheetCSS()+'</style>'
     +pckHeadHtml({date:date,
         dayHtml:pckDayBar(date, kpi, pills.total,
           (pills.lost>0?('เดินทางจริง · จอง '+pills.booked+' หาย '+pills.lost)
