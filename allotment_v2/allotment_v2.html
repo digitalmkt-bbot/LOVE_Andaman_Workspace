@@ -81062,7 +81062,10 @@ function bkV2RenderTab2(){
     if(typeof bkV2RetInfo==='function'){ const _ri=bkV2RetInfo(b,date); if(_ri.alert){ _unRetN++; _unRetPax+=pax; _unRetR[_lbl]=(_unRetR[_lbl]||0)+pax; } }
     if(!(b.ops&&b.ops.reconfirm&&b.ops.reconfirm.status==='done')){ _unRcN++; _unRcPax+=pax; _unRcR[_lbl]=(_unRcR[_lbl]||0)+pax; }   // re-confirm not yet done
   });
-  const _brkHtml = m => Object.keys(m).sort((a,b)=>m[b]-m[a]).map(k=>`${esc(k)} <b>${m[k]}</b>`).join(' · ');
+  /* §btUnit · ตัวเลขในแถบนี้เป็น "pax" ส่วนเลขบนการ์ดโหมดเป็น "booking"
+     ของเดิมสองอันอยู่คนละที่จึงไม่ชนกัน · ตอนนี้อยู่ในหัวเดียวกันแล้ว
+     ไม่บอกหน่วยจะอ่านเป็น Re-confirm 4 กับ Phi Phi Bamboo 8 ขัดกันเอง */
+  const _brkHtml = m => Object.keys(m).sort((a,b)=>m[b]-m[a]).map(k=>`${esc(k)} <b>${m[k]}</b>`).join(' · ') + ' pax';
   // ⚠ van-group conflict (รถปนกันในกรุ๊ป) → must resolve or a booking ships on the wrong van's job order
   const _vanConf = (typeof bkV2VanGroupConflicts==='function') ? bkV2VanGroupConflicts(date) : [];
   const _confTip = _vanConf.map(c=>`${c.routeName} กรุ๊ป ${c.gid}: `+Object.keys(c.vans).map(v=>((typeof vehGet==='function'&&vehGet(v)||{}).name||v)+'×'+c.vans[v]).join(' / ')).join(' · ');
@@ -82754,7 +82757,13 @@ function bkV2RenderTab2(){
     .bt-nc.warn{background:#FDF6E9;color:#7A4A00}
     .bt-nc.ok{background:#F0F9F4;color:#0F6E56}
     /* แถบเตือนเดิมสองตัวถูกยกมาไว้ในการ์ด Notice · บีบให้พอดีกล่อง */
-    .bt-ncb .t2-hd-warn{margin:0;padding:7px 10px;border-radius:9px;flex-wrap:wrap}
+    /* §btUnit · แถบเตือนเดิมเป็นชมพูแดง · ในการ์ด Notice มันเป็นบล็อกสีเดียวที่หลุด
+       จากโทนของการ์ด (เหลือง=ต้องทำ / เขียว=ทำแล้ว) · ปรับให้เข้าชุดกัน
+       สีแดงสงวนไว้ให้เรื่องที่แก้ไม่ได้แล้ว เช่น เรือเกินความจุ */
+    .bt-ncb .t2-hd-warn{margin:0;padding:7px 10px;border-radius:9px;flex-wrap:wrap;
+      background:#FDF6E9;border-color:#EBD9B4}
+    .bt-ncb .t2-hd-warnico{color:#B4560A}
+    .bt-ncb .t2-hd-warntxt{color:#7A4A00}
     .bt-ncb > div[style*="F1F8F5"]{margin-top:0 !important}
   </style>`;
 
