@@ -94797,7 +94797,6 @@ function renderPrPo(){
       +'<button class="pp-btn'+(ppRangeIs('m0')?' on':'')+'" onclick="ppMonth(0)">เดือนนี้</button>'
       +'<button class="pp-btn'+(ppRangeIs('m1')?' on':'')+'" onclick="ppMonth(1)">เดือนหน้า</button>'
       +'<button class="pp-btn pri" onclick="ppPrint()">&#128424; พิมพ์ / PDF</button>'
-      + ppSkinSeg()
     +'</div></div>';
 
   var K=function(cls,lb,val,unit,note){
@@ -94859,18 +94858,12 @@ function renderPrPo(){
    board    · บอร์ดสรุป · เอายอด "ที่ต้องเตรียม" ขึ้นเป็นพระเอก สำหรับแปะจอ/พิมพ์แจกครัว
    ทั้งสามอ่านจาก P / pOrd / GT ชุดเดียวกัน ไม่มีใครคำนวณเลขเองซ้ำ
    ═══════════════════════════════════════════════════════════════════════════ */
-var PP_SKINS=[['sheet','ตาราง'],['friendly','การ์ด'],['board','บอร์ด']];
-var _ppSkin=(function(){ try{ var v=localStorage.getItem('pp_skin');
-  return (v==='friendly'||v==='board')?v:'sheet'; }catch(_){ return 'sheet'; } })();
-/* เก็บไว้คนละคีย์กับ LS_KEY · เป็นความชอบส่วนตัวของเครื่องนั้น ไม่ใช่ข้อมูลบริษัท
-   จึงต้องไม่ไปแตะก้อน loveandaman_v2 ที่ sync ขึ้นเซิร์ฟเวอร์ */
-function ppSetSkin(k){ _ppSkin=k; try{ localStorage.setItem('pp_skin',k); }catch(_){} ppAfter(); }
-function ppSkinSeg(){
-  var e=ckEsc;
-  return '<div class="pp-seg">'+PP_SKINS.map(function(s){
-    return '<button class="pp-sg'+(s[0]===_ppSkin?' on':'')+'" onclick="ppSetSkin(\''+s[0]+'\')">'
-      +e(s[1])+'</button>'; }).join('')+'</div>';
-}
+
+/* เลือกแบบตารางอย่างเดียว · ปุ่มสลับหน้าตาถูกเอาออกแล้ว
+   ห้ามอ่านค่าเก่าจาก localStorage ต่อ · ใครที่เคยเลือกการ์ด/บอร์ดไว้จะค้างอยู่แบบนั้น
+   แล้วไม่มีปุ่มให้กดกลับ · ตัวเรนเดอร์ของอีกสองแบบยังอยู่ เผื่อวันหลังอยากเปิดใช้อีก
+   (เทสต์ยังคุมทั้งสามแบบอยู่ · ตั้ง _ppSkin ตรง ๆ ได้จาก console ถ้าจะลองดู) */
+var _ppSkin='sheet';
 function ppBody(P,pOrd,GT){
   if(_ppSkin==='friendly') return ppBodyFriendly(P,pOrd,GT);
   if(_ppSkin==='board')    return ppBodyBoard(P,pOrd,GT);
@@ -95034,16 +95027,8 @@ function ppSkinCSS(){
   if(_ppSkin==='board')    return ppCSSBoard();
   return ppCSSSheet();
 }
-/* ปุ่มสลับหน้าตา · ใช้ร่วมทุกสกิน */
-function ppCSSSeg(){ var S='#prpo-host'; return ''
- +S+' .pp-seg{display:inline-flex;border:1px solid #D5DCE4;border-radius:4px;overflow:hidden;background:#fff}'
- +S+' .pp-sg{border:0;border-right:1px solid #E8EDF2;background:#fff;color:#64748B;padding:6px 12px;'
-   +'font:700 11.5px inherit;font-family:inherit;cursor:pointer}'
- +S+' .pp-sg:last-child{border-right:0}'
- +S+' .pp-sg.on{background:#0F172A;color:#fff}';
-}
 /* ─── A · Google Sheets · รางเลขแถว + หัว A-J + ฟอนต์แบบ Sheets ─────────── */
-function ppCSSSheet(){ var S='#prpo-host'; return ppCSSSeg()
+function ppCSSSheet(){ var S='#prpo-host'; return ''
  +S+' .pp-sheet{border:1px solid #C0C0C0}'
  +S+' table.pp-t{font-family:Roboto,Arial,"DM Sans",sans-serif;font-size:12.5px}'
  +S+' .pp-t th{background:#F8F9FA;color:#5F6368;border:1px solid #C0C0C0;font-weight:600;letter-spacing:0}'
@@ -95065,7 +95050,7 @@ function ppCSSSheet(){ var S='#prpo-host'; return ppCSSSeg()
    ;
 }
 /* ─── B · การ์ด · ตัวโต เว้นเยอะ แตะง่าย ────────────────────────────────── */
-function ppCSSFriendly(){ var S='#prpo-host'; return ppCSSSeg()
+function ppCSSFriendly(){ var S='#prpo-host'; return ''
  +S+' .fr-wrap{display:block}'
  +S+' .fr-pier{margin:0 0 26px}'
  +S+' .fr-pier + .fr-pier{margin-top:30px}'
@@ -95125,7 +95110,7 @@ function ppCSSFriendly(){ var S='#prpo-host'; return ppCSSSeg()
    +S+' .fr-cards{grid-template-columns:repeat(3,1fr)}}';
 }
 /* ─── C · บอร์ด · ยอดที่ต้องเตรียมเป็นพระเอก ────────────────────────────── */
-function ppCSSBoard(){ var S='#prpo-host'; return ppCSSSeg()
+function ppCSSBoard(){ var S='#prpo-host'; return ''
  +S+' .bd-wrap{display:block}'
  +S+' .bd-p{margin:0 0 22px}'
  +S+' .bd-p + .bd-p{margin-top:26px}'
