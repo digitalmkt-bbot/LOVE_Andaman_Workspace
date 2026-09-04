@@ -81627,12 +81627,49 @@ function bkV2RenderTab2(){
       <span class="sp"><span class="bt-tag run">${nRun} running</span>${rids.length-nRun>0?`<span class="bt-tag no">${rids.length-nRun} not running</span>`:''}</span></div>${vars}`;
   }).join('') || '<div class="bt-none">No programme on this day</div>';
 
-  const _btProg = `<div class="bt-c"><div class="bt-ct"><span class="big">Programmes</span>
-      <span class="bt-cnt">${_famList.length} route${_famList.length===1?'':'s'}</span><span class="sp"></span>
+  /* §btTune · ชิปท่าเคยกินแถวของตัวเองใต้หัวการ์ด · ย้ายขึ้นไปอยู่แถวเดียวกับชื่อ
+     การ์ด คืนที่ให้รายการโปรแกรมอีกหนึ่งบรรทัดเต็ม ๆ */
+  const _btProg = `<div class="bt-c bt-prog"><div class="bt-ct"><span class="big">Programmes</span>
+      <span class="bt-cnt">${_famList.length} route${_famList.length===1?'':'s'}</span>
+      <span class="bt-seg">${_btPierBtn('all','All')}${_btPierBtn('panwa','Panwa')}${_btPierBtn('tublamu','Tub Lamu')}${_btPierBtn('ranong','Ranong')}</span>
+      ${(pierF!=='all'||famF||routeF)?`<button class="bt-clear" onclick="bkV2Tab2ClearFilters()">Clear</button>`:''}
+      <span class="sp"></span>
       <span class="bt-daytot"><b>${rows.filter(r=>!r.cxl).length}</b> booking &middot; <b>${_dPax}</b> pax<i>${_dAD}A&middot;${_dCHD}C&middot;${_dINF}I&middot;${_dFOC}F</i></span></div>
-    <div class="bt-pierrow"><span class="bt-seg">${_btPierBtn('all','All piers')}${_btPierBtn('panwa','Panwa')}${_btPierBtn('tublamu','Tub Lamu')}${_btPierBtn('ranong','Ranong')}</span>
-      ${(pierF!=='all'||famF||routeF)?`<button class="bt-clear" onclick="bkV2Tab2ClearFilters()">Clear filters</button>`:''}</div>
     <div class="bt-pgbody">${_btProgBody}</div></div>`;
+
+  /* §btTune · ไกด์ / อาหาร / เรือหางยาว ของทริปหนึ่ง · เดิมมีแต่ในตัวกางท้ายตาราง
+     การ์ดเรือมีที่ว่างอยู่แล้ว และสามอย่างนี้คือของที่ต้องสั่งล่วงหน้า ควรเห็นตั้งแต่แรก */
+  const _btPrep = rid => {
+    const lang={}; let veg=0,vegan=0,halal=0,allerg=0,ltJoin=0,ltChtr=0;
+    (groups[rid]||[]).forEach(r=>{ if(r.cxl) return;
+      const t=P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc');
+      const gd=r.bk.guides||{}, mm=r.bk.specialMeals||{};
+      if(gd.english) lang['EN']=(lang['EN']||0)+t;
+      if(gd.russian) lang['RU']=(lang['RU']||0)+t;
+      if(gd.chinese) lang['CN']=(lang['CN']||0)+t;
+      const ol=(gd.otherLang||'').trim(); if(ol) lang[ol]=(lang[ol]||0)+t;
+      veg+=+mm.veg||0; vegan+=+mm.vegan||0; halal+=+mm.halal||0;
+      allerg+=(typeof bkV2AllergyCount==='function')?bkV2AllergyCount(mm):((mm.allergies||'').trim()?1:0);
+      const af=(typeof bkV2AddOnFlags==='function')?bkV2AddOnFlags(r.bk,rid):null;
+      if(af){ if(af.charter) ltChtr+=(af.charterQty||1); else if(af.join) ltJoin+=t; }
+      if(typeof bkV2LongtailExtraPax==='function') ltJoin+=(bkV2LongtailExtraPax(r.bk.id,date)||0);
+      if(typeof bkV2LongtailCharterExtraBoats==='function') ltChtr+=(bkV2LongtailCharterExtraBoats(r.bk.id,date)||0);
+    });
+    return {lang,veg,vegan,halal,allerg,ltJoin,ltChtr};
+  };
+  const _btPrepHtml = rid => {
+    const p=_btPrep(rid); const out=[];
+    Object.keys(p.lang).sort((a,b)=>p.lang[b]-p.lang[a]).forEach(k=>{
+      const c=(typeof bkV2LangColors==='function')?bkV2LangColors(k):['#EEF2F7','#3a4150'];
+      out.push(`<span class="bt-pc" style="background:${c[0]};color:${c[1]}">${esc(k)} &middot; ${p.lang[k]}</span>`); });
+    if(p.veg)   out.push(`<span class="bt-pc" style="background:#EAF6EE;color:#0F6E56">${p.veg} veg</span>`);
+    if(p.vegan) out.push(`<span class="bt-pc" style="background:#EAF6EE;color:#0F6E56">${p.vegan} vegan</span>`);
+    if(p.halal) out.push(`<span class="bt-pc" style="background:#EAF6EE;color:#0F6E56">${p.halal} halal</span>`);
+    if(p.allerg)out.push(`<span class="bt-pc" style="background:#FBEAE7;color:#A32D2D">&#9888; ${p.allerg} allergy</span>`);
+    if(p.ltJoin)out.push(`<span class="bt-pc" style="background:#F1EFE8;color:#3C3B37">Longtail join &middot; ${p.ltJoin}</span>`);
+    if(p.ltChtr)out.push(`<span class="bt-pc" style="background:#EFEAFB;color:#5B289A">Longtail charter &middot; ${p.ltChtr}</span>`);
+    return out.length?`<div class="bt-prep"><span class="l">Prep</span>${out.join('')}</div>`:'';
+  };
 
   /* ══ กรอบกลาง · เรือของทริปที่เลือก ══════════════════════════════════════ */
   let _btBoatCard;
@@ -81652,7 +81689,8 @@ function bkV2RenderTab2(){
         <span class="bt-av"><span class="k">Booked</span><span class="v">${bkd}</span></span><span class="bt-avs"></span>
         <span class="bt-av"><span class="k">Capacity</span><span class="v dim">${cp}</span></span><span class="bt-avs"></span>
         <span class="bt-av"><span class="k">Locked</span><span class="v lk">${lk}</span></span></div>
-      <div class="bt-blist">${bl.length?bl.map(b=>`<span class="bt-brow${b.over?' over':''}"><span class="d" style="background:${b.col}"></span><span class="nm">${esc(b.name)}</span><span class="ld">${b.pax}${b.cap?('/'+b.cap):''}${b.over?(' +'+(b.pax-b.cap)):''}</span></span>`).join(''):'<span class="bt-none2">No boat assigned to this trip</span>'}</div></div>`;
+      <div class="bt-blist">${bl.length?bl.map(b=>`<span class="bt-brow${b.over?' over':''}"><span class="d" style="background:${b.col}"></span><span class="nm">${esc(b.name)}</span><span class="ld">${b.pax}${b.cap?('/'+b.cap):''}${b.over?(' +'+(b.pax-b.cap)):''}</span></span>`).join(''):'<span class="bt-none2">No boat assigned to this trip</span>'}</div>
+      ${_btPrepHtml(_btSelRid)}</div>`;
   } else {
     const _tg = routeIds.filter(rid=>(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(rid,date)).map(rid=>{
       const f=bkV2RouteFamily(rid)||{}, col=f.color||'#8b909c';
@@ -81663,7 +81701,8 @@ function bkV2RenderTab2(){
       return `<div class="bt-tgp" style="--tc:${col}" onclick="bkV2Tab2SetRoute('${rid}')" title="Select this trip">
         <div class="bt-tgh"><i></i><span class="nm">${esc(rnm)}</span><span class="tm">${esc(_btDep(rid))}${_btPier(rid)?' · '+esc(_btPier(rid)):''}</span>
           <span class="sm">${bkd}/${cp}<em class="${av<=0?'full':(cp&&av/cp<0.2?'low':'ok')}">${av<=0?'full':(av+' free')}</em></span></div>
-        <div class="bt-tgb">${bl.length?bl.map(b=>`<span class="bt-tbc${b.over?' over':''}"><i style="background:${b.col}"></i>${esc(b.name)}<s>${b.pax}${b.cap?('/'+b.cap):''}${b.over?(' +'+(b.pax-b.cap)):''}</s></span>`).join(''):'<span class="bt-tbc none">no boat</span>'}</div></div>`;
+        <div class="bt-tgb">${bl.length?bl.map(b=>`<span class="bt-tbc${b.over?' over':''}"><i style="background:${b.col}"></i>${esc(b.name)}<s>${b.pax}${b.cap?('/'+b.cap):''}${b.over?(' +'+(b.pax-b.cap)):''}</s></span>`).join(''):'<span class="bt-tbc none">no boat</span>'}</div>
+        ${_btPrepHtml(rid)}</div>`;
     }).join('');
     const _nB=routeIds.reduce((n,rid)=>n+_btBoats(rid).length,0);
     const _nT=routeIds.filter(rid=>(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(rid,date)).length;
@@ -81707,7 +81746,7 @@ function bkV2RenderTab2(){
   const _lkList=Object.values(_lkBy).sort((a,b)=>(b.left-a.left)||(b.qty-a.qty));
   const _lkTot=_lkList.reduce((n,a)=>n+a.qty,0), _lkLeft=_lkList.reduce((n,a)=>n+a.left,0);
   const _lkN=routeIds.reduce((n,rid)=>n+((typeof bkV2LocksFor==='function')?bkV2LocksFor(rid,date):[]).length,0);
-  const _btLock = `<div class="bt-c"><div class="bt-ct">Seat Lock<span class="sp"></span>
+  const _btLock = `<div class="bt-c bt-lockc"><div class="bt-ct">Seat Lock<span class="sp"></span>
       ${_btLkSel?`<span class="bt-lkhi">&#9679; ${_btLkHitN} highlighted</span>`:''}
       ${_lkLeft>0?`<span class="bt-lkbadge">${_lkLeft} left</span>`:'<span class="bt-cnt">none left</span>'}
       ${_btSelRid?`<button class="bt-lkbtn" onclick="bkV2LockFromCalendar('${_btSelRid}','${date}')" title="Lock seats on this trip">&#128274; Lock seats</button>`:''}
@@ -82531,12 +82570,14 @@ function bkV2RenderTab2(){
       });
       const vcards=Object.keys(vagg).map(vid=>{ const v=vehGet(vid)||{}; const g=vagg[vid]; const cap=v.capacity||0; const over=g.pax>cap; const c=vanColor[vid]||['#E1F5EE','#0F6E56'];
         const _grps=Object.keys(g.grp||{}).map(Number).filter(x=>x>0).sort((a,b)=>a-b);
-        const _grpBadge=_grps.length?`<span style="background:${c[1]};color:#fff;font-size:9px;font-weight:700;border-radius:5px;padding:1px 6px;margin-right:6px;white-space:nowrap;flex:none">กรุ๊ป ${_grps.join('+')}</span>`:'';
+        const _grpBadge=_grps.length?`<span style="background:${c[1]};color:#fff;font-size:8.5px;font-weight:700;border-radius:4px;padding:0 5px;margin-right:5px;white-space:nowrap;flex:none">${_grps.join('+')}</span>`:'';
         const _areas=Object.keys(g.area||{}).filter(Boolean);
-        const _areaLine=_areas.length?`<div style="font-size:9px;color:#B07A1F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="รับที่: ${esc(_areas.join(' · '))}">&#128205; ${esc(_areas.join(' · '))}</div>`:'';
-        return `<div onclick="event.stopPropagation();bkV2ScrollToVan('${rid}','${vid}')" title="คลิกเพื่อเลื่อนไปที่แถวของ ${esc(v.name||vid)}" style="background:#fff;border:1px solid ${over?'#E6C9C3':'#e6e4dd'};border-radius:9px;padding:6px 10px;display:flex;align-items:center;gap:9px;min-width:220px;box-sizing:border-box;cursor:pointer">
-          <span style="width:9px;height:9px;border-radius:50%;background:${c[1]};flex:none"></span>
-          <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center">${_grpBadge}<span style="overflow:hidden;text-overflow:ellipsis">${esc(v.name||vid)}${v.plate&&v.plate!=='-'?` <span style="font-size:9.5px;color:#999;font-family:'DM Mono',monospace">${esc(v.plate)}</span>`:''}</span></div><div style="font-size:9.5px;color:#7a7a72">${g.bk} booking · <span style="font-weight:700;color:${over?'#A32D2D':'#0F6E56'}">${g.pax}${cap?'/'+cap:''} pax</span></div>${_areaLine}</div>
+        const _areaLine=_areas.length?`<div style="font-size:8.5px;color:#B07A1F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px" title="รับที่: ${esc(_areas.join(' · '))}">&#128205; ${esc(_areas.join(' · '))}</div>`:'';
+        /* §btTune · ชิปรถตู้เดิมกว้างขั้นต่ำ 220px · สามคันก็เต็มแถบ ต้องไถหาคันที่สี่
+           ลดขนาดตัวหนังสือกับระยะขอบ แล้วปล่อยความกว้างให้พอดีเนื้อหา */
+        return `<div onclick="event.stopPropagation();bkV2ScrollToVan('${rid}','${vid}')" title="คลิกเพื่อเลื่อนไปที่แถวของ ${esc(v.name||vid)}" style="background:#fff;border:1px solid ${over?'#E6C9C3':'#e6e4dd'};border-radius:8px;padding:4px 8px;display:flex;align-items:center;gap:6px;min-width:0;box-sizing:border-box;cursor:pointer">
+          <span style="width:8px;height:8px;border-radius:50%;background:${c[1]};flex:none"></span>
+          <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center">${_grpBadge}<span style="overflow:hidden;text-overflow:ellipsis">${esc(v.name||vid)}${v.plate&&v.plate!=='-'?` <span style="font-size:9px;color:#999;font-family:'DM Mono',monospace">${esc(v.plate)}</span>`:''}</span></div><div style="font-size:9px;color:#7a7a72">${g.bk} booking · <span style="font-weight:700;color:${over?'#A32D2D':'#0F6E56'}">${g.pax}${cap?'/'+cap:''} pax</span></div>${_areaLine}</div>
         </div>`; }).join('');
       const extra=[]; if(unTot>0) extra.push(`<span style="font-size:11px;font-weight:700;color:#9A5B00;background:#FFF9F0;border:1px solid #E6B97A;border-radius:8px;padding:6px 10px">&#9888; ยังไม่จัดรถ ${unTot} pax</span>`);
       if(selfTot>0) extra.push(`<span style="font-size:11px;color:#5F5E5A;background:#F1EFE8;border-radius:8px;padding:6px 10px">self-arrive ${selfTot} pax</span>`);
@@ -82544,7 +82585,7 @@ function bkV2RenderTab2(){
       // Two stacked rows — Van summary + Grouping bar — both shown from the start of Van Assign mode, pinned together as one sticky unit (total 96px)
       const _selKeys=Object.keys(window._bkV2VanSel||{}).filter(k=>window._bkV2VanSel[k]);
       const _selTrip=[]; _selKeys.forEach(k=>{ const p=String(k).split('@'); const r=grp.find(rr=>!rr.cxl&&rr.bk.id===p[0]); if(!r)return; const _ro=(typeof bkOpsRead==='function')?bkOpsRead(r.bk,date):(r.bk.ops||{}); let head; if(p.length>1 && _ro&&Array.isArray(_ro.vanSplits)&&_ro.vanSplits[+p[1]]) head=+_ro.vanSplits[+p[1]].pax||0; else head=P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'); _selTrip.push({zone:((r.charter&&!r.cxl)?'__CHARTER__':r.zone), head}); });   /* §charter · ต้องใช้ pseudo-zone เดียวกับที่ _bkV2InZone รู้จัก */
-      const vanRow = `<div style="display:flex;align-items:center;gap:10px;height:52px;box-sizing:border-box;padding:0 16px 0 21px;background:#F3FBF7;overflow-x:auto;flex-wrap:nowrap"><span class="t2-boatstrip-lbl" style="color:#0F6E56;flex:none">&#128656; Vans</span>${vanBtns}<div class="t2-boats" style="flex-wrap:nowrap;gap:9px">${vcards||''}${extra.join('')||(!vcards?'<span style="font-size:11px;color:#8a8a82;white-space:nowrap">ยังไม่มีการจัดรถ</span>':'')}</div></div>`;
+      const vanRow = `<div style="display:flex;align-items:center;gap:7px;height:44px;box-sizing:border-box;padding:0 16px 0 21px;background:#F3FBF7;overflow-x:auto;flex-wrap:nowrap"><span class="t2-boatstrip-lbl" style="color:#0F6E56;flex:none">&#128656; Vans</span>${vanBtns}<div class="t2-boats" style="flex-wrap:nowrap;gap:9px">${vcards||''}${extra.join('')||(!vcards?'<span style="font-size:11px;color:#8a8a82;white-space:nowrap">ยังไม่มีการจัดรถ</span>':'')}</div></div>`;
       let groupRow;
       if(_selTrip.length){
         const _sz=_selTrip[0].zone;
@@ -83128,41 +83169,49 @@ function bkV2RenderTab2(){
       .bt-pair,.bt-pair2{grid-template-columns:minmax(0,1fr)}
     }
     .bt-c{background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:12px;overflow:hidden}
+    /* §btTune · หัวการ์ดเคยดำเหมือนกันหมดสี่ใบ ตาต้องอ่านคำถึงจะรู้ว่ากรอบไหนเรื่องอะไร
+       ให้สีประจำเรื่องไปเลย · ฟ้า=โปรแกรม แดง=เรือ ส้มแดง=ล็อคที่นั่ง ม่วง=Notice */
     .bt-ct{font-size:10px;font-weight:800;letter-spacing:.07em;color:#1F2124;text-transform:uppercase;
-      padding:8px 12px 5px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+      padding:7px 11px 5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+    .bt-prog>.bt-ct,.bt-prog>.bt-ct .big{color:#12518F}
+    .bt-boat>.bt-ct{color:#A32D2D}
+    .bt-lockc>.bt-ct{color:#9A3B21}
+    .bt-notice>.bt-ct{color:#5B289A}
     .bt-ct .big{font-size:13.5px;font-weight:800;letter-spacing:0;text-transform:none}
     .bt-ct .sp{margin-left:auto}
     .bt-cnt{background:#EFEBE7;color:#403833;border-radius:999px;padding:2px 9px;font-size:10.5px;font-weight:800;letter-spacing:0}
     .bt-cnt.over{background:#FBEAE7;color:#A32D2D}
-    .bt-daytot{font-size:11px;color:#6b6660;font-weight:600;letter-spacing:0;text-transform:none;text-align:right;line-height:1.25}
+    /* §btTune · พอชิปท่ามาอยู่แถวเดียวกัน ยอดรวมวันตกบรรทัด · .sp เดิมกินที่ว่าง
+       ไปแล้วบรรทัดล่างจึงชิดซ้าย · ให้ยอดรวมดันตัวเองไปขวาไม่ว่าจะอยู่บรรทัดไหน */
+    .bt-daytot{margin-left:auto;font-size:10.5px;color:#6b6660;font-weight:600;letter-spacing:0;text-transform:none;text-align:right;line-height:1.25}
     .bt-daytot b{font-family:'DM Mono',monospace;font-size:12.5px;font-weight:800;color:#3a3a36}
     .bt-daytot i{display:block;font-style:normal;font-family:'DM Mono',monospace;font-size:9.5px;color:#a3a099;font-weight:600}
     /* โปรแกรมวันนี้ */
-    .bt-pierrow{display:flex;align-items:center;gap:7px;padding:0 10px 7px}
     .bt-seg{display:inline-flex;border:1px solid #E0DBD5;border-radius:999px;overflow:hidden;background:#fff}
-    .bt-seg-b{font-size:11px;font-weight:700;padding:5px 11px;color:#5b6472;background:transparent;border:none;cursor:pointer;font-family:inherit}
+    .bt-seg-b{font-size:10px;font-weight:700;padding:3px 8px;color:#5b6472;background:transparent;border:none;cursor:pointer;font-family:inherit;letter-spacing:0;text-transform:none}
     .bt-seg-b.on{background:#22262e;color:#fff}
-    .bt-clear{margin-left:auto;font-size:10.5px;font-weight:700;color:#A32D2D;background:#fff;
-      border:1px solid #E6C9C3;border-radius:7px;padding:4px 9px;cursor:pointer;font-family:inherit}
+    .bt-clear{font-size:9.5px;font-weight:700;color:#A32D2D;background:#fff;letter-spacing:0;text-transform:none;
+      border:1px solid #E6C9C3;border-radius:6px;padding:3px 7px;cursor:pointer;font-family:inherit}
     /* §btFix · ต่อไปทริปจะเยอะขึ้น · ถ้าปล่อยให้การ์ดยืดตามจำนวนทริป หัวจะสูงขึ้น
        เรื่อย ๆ แล้วกินพื้นที่ตารางไปหมด (แถมชั้นที่ตรึงต้องคำนวณใหม่ทุกครั้ง)
        ล็อกความสูงไว้ที่ราว 6 บรรทัด เกินนั้นไถในการ์ดเอง */
-    .bt-pgbody{padding-bottom:8px;overflow:auto;min-height:0;max-height:196px}
+    /* §btTune · เว้นก้นกล่อง · ของเดิมแถวสุดท้ายชนขอบล่างพอดี ดูเหมือนโดนตัด */
+    .bt-pgbody{padding-bottom:10px;overflow:auto;min-height:0;max-height:214px;scroll-padding-bottom:12px}
     .bt-tgl{max-height:196px}
     .bt-blist{max-height:196px;overflow:auto}
-    .bt-pgf{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:9px;margin:0 8px 5px;
+    .bt-pgf{display:flex;align-items:center;gap:8px;padding:5px 10px;border-radius:8px;margin:0 8px 3px;
       box-shadow:inset 4px 0 0 var(--e);cursor:pointer}
     .bt-pgf.on{box-shadow:inset 4px 0 0 var(--e),0 0 0 1.5px var(--e)}
     .bt-pgf .ar{color:#a6a29b;font-size:10px}
     .bt-pgf .dot{width:9px;height:9px;border-radius:50%;background:var(--e);flex:none}
-    .bt-pgf .nm{min-width:0;font-size:14px;font-weight:800;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .bt-pgf .n{font-family:'DM Mono',monospace;font-size:14px;font-weight:700;color:#4a4a45}
+    .bt-pgf .nm{min-width:0;font-size:12.5px;font-weight:800;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .bt-pgf .n{font-family:'DM Mono',monospace;font-size:12.5px;font-weight:700;color:#4a4a45}
     .bt-pgf .sp{margin-left:auto;display:flex;gap:6px}
-    .bt-tag{border-radius:7px;padding:2px 9px;font-size:10.5px;font-weight:700;white-space:nowrap}
+    .bt-tag{border-radius:6px;padding:1px 7px;font-size:9.5px;font-weight:700;white-space:nowrap}
     .bt-tag.run{background:#E6F5EC;color:#0F6E56}
     .bt-tag.no{background:#FBEDEA;color:#A32D2D}
-    .bt-pgv{display:flex;align-items:center;gap:8px;padding:5px 11px 5px 26px;font-size:11.5px;color:#5b6472;
-      margin:0 8px;white-space:nowrap;cursor:pointer;border-radius:8px}
+    .bt-pgv{display:flex;align-items:center;gap:7px;padding:3px 10px 3px 24px;font-size:11px;color:#5b6472;
+      margin:0 8px;white-space:nowrap;cursor:pointer;border-radius:7px}
     .bt-pgv:hover{background:#FAF8F5}
     .bt-pgv.on{background:#EFEAFB;box-shadow:inset 3px 0 0 #5B289A}
     .bt-pgv.off{opacity:.6;cursor:default}
@@ -83171,7 +83220,7 @@ function bkV2RenderTab2(){
     .bt-seat{font-family:'DM Mono',monospace;font-size:11px;color:#8a8a82}
     .bt-seat b{color:#3a3a36;font-weight:800}
     .bt-lk{font-size:10px;font-weight:700;color:#8A5B00;background:#FBF0DA;border-radius:6px;padding:1px 6px}
-    .bt-free{font-size:10.5px;font-weight:800;border-radius:7px;padding:2px 9px;white-space:nowrap}
+    .bt-free{font-size:10px;font-weight:800;border-radius:6px;padding:1px 7px;white-space:nowrap}
     .bt-free.ok{background:#DCF4E8;color:#0C6B47}
     .bt-free.low{background:#FAEEDA;color:#854F0B}
     .bt-free.full{background:#FCEBEB;color:#A32D2D}
@@ -83221,7 +83270,12 @@ function bkV2RenderTab2(){
     .bt-tbc i{width:7px;height:7px;border-radius:50%;flex:none}
     .bt-tbc s{text-decoration:none;font-family:'DM Mono',monospace;font-size:10.5px;font-weight:700;color:#8a857e}
     .bt-tbc.over s{color:#A32D2D}
-    .bt-tgfoot{padding:7px 12px 9px;border-top:1px solid #F2EEE9;font-size:10px;color:#948f88;text-align:center}
+    .bt-tgfoot{padding:6px 12px 8px;border-top:1px solid #F2EEE9;font-size:10px;color:#948f88;text-align:center}
+    /* §btTune · ไกด์ / อาหาร / เรือหางยาว · ของที่ต้องสั่งล่วงหน้า ควรเห็นตั้งแต่เปิดหน้า */
+    .bt-prep{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:6px 10px 9px;
+      border-top:1px dashed #EAE5DE;margin-top:auto}
+    .bt-prep .l{font-size:8.5px;font-weight:800;letter-spacing:.08em;color:#a09a92;text-transform:uppercase;flex:none}
+    .bt-pc{font-size:9.5px;font-weight:700;border-radius:5px;padding:1px 7px;white-space:nowrap}
     /* โหมด + ค้นหา */
     .bt-col3{display:flex;flex-direction:column;gap:9px}
     .bt-pair{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:9px;align-items:stretch;flex:none}
@@ -83249,8 +83303,12 @@ function bkV2RenderTab2(){
     .bt-mc.on .s{color:rgba(255,255,255,.86)}
     .bt-mc.on .n{background:rgba(255,255,255,.2);color:#fff}
     .bt-mc.dis{opacity:.45;cursor:not-allowed}
-    .bt-mc .x{margin-left:7px;flex:none;width:19px;height:19px;border-radius:50%;background:rgba(255,255,255,.22);
-      color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;font-weight:800}
+    .bt-mc .x{margin-left:5px;flex:none;width:16px;height:16px;border-radius:50%;background:rgba(255,255,255,.22);
+      color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:800}
+    /* §btTune · การ์ดที่เปิดอยู่มีปุ่มกากบาทเพิ่มมา ชื่อโหมดเลยถูกบีบจนขาด ("V…")
+       สีทึบกับกากบาทบอกอยู่แล้วว่ากำลังใช้โหมดนี้ · ซ่อนคำบรรยายใต้ชื่อตอนเปิด */
+    .bt-mc.on .s{display:none}
+    .bt-mc.on .t{font-size:13px}
     .bt-srow{display:flex;gap:7px;padding:9px 10px 10px;align-items:stretch}
     .bt-sbox{flex:1;display:flex;align-items:center;gap:7px;border:1px solid #E4DCD5;border-radius:10px;
       padding:4px 10px;background:#fff;min-width:0}
@@ -83292,18 +83350,25 @@ function bkV2RenderTab2(){
     .bt-lkfoot .hint{margin-left:auto;font-size:9.5px;color:#a89a9a;white-space:nowrap}
     /* Notice */
     .bt-notice{border-left:4px solid #6D28D9}
-    .bt-ncb{display:flex;flex-direction:column;gap:6px;padding:2px 10px 10px;overflow:auto;min-height:0}
-    .bt-nc{display:flex;gap:8px;border-radius:9px;padding:7px 10px;font-size:11.5px;line-height:1.45}
+    /* §btTune · Notice เล็กลงทั้งบล็อก · เป็นของที่อ่านผ่าน ๆ ไม่ใช่ตัวเลขที่ต้องเพ่ง */
+    .bt-ncb{display:flex;flex-direction:column;gap:4px;padding:2px 9px 8px;overflow:auto;min-height:0}
+    .bt-nc{display:flex;gap:7px;border-radius:8px;padding:5px 8px;font-size:10.5px;line-height:1.4}
     .bt-nc .i{flex:none;font-weight:800}
-    .bt-nc i{display:block;font-style:normal;font-size:10.5px;color:#7a8087;font-weight:400;margin-top:1px}
+    .bt-nc i{display:block;font-style:normal;font-size:9.5px;color:#7a8087;font-weight:400;margin-top:1px}
     .bt-nc.warn{background:#FDF6E9;color:#7A4A00}
     .bt-nc.ok{background:#F0F9F4;color:#0F6E56}
     /* แถบเตือนเดิมสองตัวถูกยกมาไว้ในการ์ด Notice · บีบให้พอดีกล่อง */
     /* §btUnit · แถบเตือนเดิมเป็นชมพูแดง · ในการ์ด Notice มันเป็นบล็อกสีเดียวที่หลุด
        จากโทนของการ์ด (เหลือง=ต้องทำ / เขียว=ทำแล้ว) · ปรับให้เข้าชุดกัน
        สีแดงสงวนไว้ให้เรื่องที่แก้ไม่ได้แล้ว เช่น เรือเกินความจุ */
-    .bt-ncb .t2-hd-warn{margin:0;padding:7px 10px;border-radius:9px;flex-wrap:wrap;
+    .bt-ncb .t2-hd-warn{margin:0;padding:5px 8px;border-radius:8px;flex-wrap:wrap;gap:5px;
       background:#FDF6E9;border-color:#EBD9B4}
+    .bt-ncb .t2-hd-warntxt{font-size:10px}
+    .bt-ncb .t2-hd-warnchip{font-size:9.5px;padding:2px 7px}
+    .bt-ncb .t2-hd-warnchip b{font-size:10px}
+    .bt-ncb > div[style*="F1F8F5"]{padding:4px 8px !important;gap:5px !important}
+    .bt-ncb > div[style*="F1F8F5"] span{font-size:10px !important}
+    .bt-ncb > div[style*="F1F8F5"] button{font-size:9.5px !important;padding:2px 7px !important}
     .bt-ncb .t2-hd-warnico{color:#B4560A}
     .bt-ncb .t2-hd-warntxt{color:#7A4A00}
     .bt-ncb > div[style*="F1F8F5"]{margin-top:0 !important}
