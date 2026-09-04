@@ -63341,27 +63341,30 @@ function bkV2VanCellHTML(bk, zone, date, groupColor, routeId, allocKey, allocG, 
   const vn = myVan ? ((vehGet(myVan)||{}).name||'') : '';
   const chk=`<span onclick="event.stopPropagation();bkV2VanSelToggle('${key}')" title="เลือกเพื่อจับกลุ่ม" style="display:inline-flex;width:18px;height:18px;border-radius:5px;cursor:pointer;align-items:center;justify-content:center;font-size:12px;${sel?'background:#185FA5;color:#fff':'border:1.5px solid #C9CDD4;color:transparent'}">&#10003;</span>`;
   const gchip=g
-    ? `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:5px;background:${gc?gc[0]:'#E6F1FB'};color:${gc?gc[1]:'#185FA5'};white-space:nowrap">กรุ๊ป ${g}${vn?' · '+e(vn):''}</span>`
-    : '<span style="font-size:10px;color:#c4c2ba">ยังไม่จัด</span>';
+    ? `<span title="กรุ๊ป ${g}${vn?' · '+e(vn):''}" style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;background:${gc?gc[0]:'#E6F1FB'};color:${gc?gc[1]:'#185FA5'};white-space:nowrap;max-width:96px;overflow:hidden;text-overflow:ellipsis">${g}${vn?' · '+e(vn):''}</span>`
+    : '<span style="font-size:10px;color:#c4c2ba">—</span>';
   let retSel='';
   if(g){
     const _rPool=(typeof vanVehiclesForRoute==='function')?vanVehiclesForRoute(date, routeId, zone):[];
     const _zPool=(typeof vanVehiclesForZone==='function')?vanVehiclesForZone(zone, date):[];
     const pool=[..._rPool, ..._zPool.filter(v=>!_rPool.some(r=>r.id===v.id))];   // return van = broader pool (any zone van that day · กลับกับรถคันอื่นได้)
     const rvid= isSplit ? ((_O.vanSplits&&_O.vanSplits[ai]&&_O.vanSplits[ai].vanReturnId)||'') : ((_O.vanReturnId)||'');
-    let ropts='<option value="">&#8617; กลับเหมือนเดิม</option>';
+    let ropts='<option value="">&#8617; เดิม</option>';
     pool.forEach(v=>{ ropts+=`<option value="${v.id}" ${rvid===v.id?'selected':''}>&#8617; ${e(v.name||v.id)}</option>`; });
     if(rvid && !pool.some(v=>v.id===rvid)){ const vo=vehGet(rvid); ropts+=`<option value="${rvid}" selected>&#8617; ${e((vo&&vo.name)||rvid)}</option>`; }
     const retCall = isSplit ? `bkV2AssignVanReturnSplit('${bk.id}',${ai},this.value,'${date}')` : `bkV2AssignVanReturn('${bk.id}',this.value,'${date}')`;
-    retSel=`<select onchange="event.stopPropagation();${retCall}" onclick="event.stopPropagation()" title="รถขากลับ (ถ้าต่างจากกรุ๊ป)" style="border:1px solid ${rvid?'#C7B8E8':'#e3e0d9'};border-radius:6px;padding:1px 4px;font-size:9.5px;font-family:inherit;background:#fff;color:${rvid?'#534AB7':'#a8a59e'};max-width:124px">${ropts}</select>`;
+    retSel=`<select onchange="event.stopPropagation();${retCall}" onclick="event.stopPropagation()" title="รถขากลับ (ถ้าต่างจากกรุ๊ป)" style="border:1px solid ${rvid?'#C7B8E8':'#e3e0d9'};border-radius:6px;padding:1px 4px;font-size:9.5px;font-family:inherit;background:#fff;color:${rvid?'#534AB7':'#a8a59e'};max-width:84px">${ropts}</select>`;
   }
   // split / un-split controls
   let splitBtn='';
-  if(!isSplit){ splitBtn=`<button onclick="event.stopPropagation();bkV2VanSplit('${bk.id}','${date}')" title="แยกคนขึ้นหลายคัน (เช่น 16 = 12 + 4)" style="font-size:9px;color:#5B289A;background:#F3EFFB;border:1px solid #D9CEF0;border-radius:5px;padding:1px 6px;cursor:pointer;font-family:inherit;white-space:nowrap">&#9986; แยกคน</button>`; }
+  if(!isSplit){ splitBtn=`<button onclick="event.stopPropagation();bkV2VanSplit('${bk.id}','${date}')" title="แยกคนขึ้นหลายคัน (เช่น 16 = 12 + 4)" style="font-size:9px;color:#5B289A;background:#F3EFFB;border:1px solid #D9CEF0;border-radius:5px;padding:1px 6px;cursor:pointer;font-family:inherit;white-space:nowrap">&#9986;</button>`; }
   else if(isFirst){ splitBtn=`<span style="display:inline-flex;gap:4px"><button onclick="event.stopPropagation();bkV2VanSplit('${bk.id}','${date}')" title="แยกเพิ่มอีกคัน" style="font-size:9px;color:#5B289A;background:#F3EFFB;border:1px solid #D9CEF0;border-radius:5px;padding:1px 6px;cursor:pointer;font-family:inherit">&#9986;+</button><button onclick="event.stopPropagation();bkV2VanUnsplit('${bk.id}','${date}')" title="รวมกลับเป็นก้อนเดียว" style="font-size:9px;color:#A32D2D;background:#fff;border:1px solid #E6C9C3;border-radius:5px;padding:1px 6px;cursor:pointer;font-family:inherit">รวม</button></span>`; }
-  return `<div style="display:flex;flex-direction:column;gap:3px;align-items:center">
-    <div style="display:flex;align-items:center;gap:6px;justify-content:center">${chk}${gchip}</div>
-    ${retSel}${splitBtn?`<div>${splitBtn}</div>`:''}
+  /* §btVCell · ของเดิมวางเป็นสามบรรทัดซ้อนกัน (ติ๊ก+ป้ายกรุ๊ป / รถขากลับ / แยกคน)
+     แถวในตารางเลยสูงเกือบ 80px ทั้งที่ข้อมูลจริงมีบรรทัดเดียว · ตาไล่ลงมาแล้วเหนื่อย
+     ยุบเป็นบรรทัดเดียว · คำยาว ๆ ย้ายไปอยู่ใน title (ชี้เมาส์ยังอ่านได้เหมือนเดิม)
+     กว้างขึ้นราว 50px แต่แถวเตี้ยลงราว 50px ต่อแถว · วันละร้อยกว่าแถวคุ้มกว่ามาก */
+  return `<div style="display:flex;align-items:center;gap:5px;justify-content:center;flex-wrap:nowrap;white-space:nowrap">
+    ${chk}${gchip}${retSel}${splitBtn}
   </div>`;
 }
 function baAutoAssign(date, routeId){
