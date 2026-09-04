@@ -82137,7 +82137,8 @@ function bkV2RenderTab2(){
         ${boatMode?`<div class="t2-boatpin">${boatStrip}${boatSelStrip}</div>`:''}
         ${vanStrip}
         ${rcStrip}
-        ${lockBar}
+        ${/* §btSlim · แถบล็อคที่นั่งรายทริปถูกยกไปอยู่การ์ด Seat Lock บนหัวหน้าแล้ว
+              (ยุบตามเอเยนต์ + ปุ่มล็อคที่นั่ง + ทั้งหมด ครบเหมือนเดิม) */''}
         ${pendBlock}
         ${(grp.length===0 && !_pendRows.length) ? '<div class="t2-nobk">No bookings yet · seats held by lock above</div>' : zoneTable}
         ${ghostBlock}
@@ -82209,10 +82210,24 @@ function bkV2RenderTab2(){
     .t2-trip{background:transparent;border:none;border-radius:0;margin-bottom:22px;overflow:visible}
     .t2-tripcard{background:var(--white);border:1px solid var(--border);border-left:5px solid var(--fam);border-radius:14px;overflow:hidden;margin-bottom:8px}
     .t2-listcard{background:var(--white);border:1px solid var(--border);border-radius:14px;overflow:visible}
-    .t2-triphead{display:flex;align-items:center;gap:10px;padding:8px 14px}
-    .t2-tt{min-width:0;flex:1}
-    .t2-tnm{font-size:13.5px;font-weight:700;line-height:1.15}
-    .t2-tmeta{font-size:10px;color:var(--ink-soft);font-family:'DM Mono',monospace;margin-top:1px}
+    /* ══ §btSlim · หัวการ์ดทริปเหลือเป็นแถบบาง ๆ ═══════════════════════════
+       ชื่อทริป เวลาออก ท่า ที่นั่งว่าง ขายแล้ว ความจุ และเรือทุกลำ ตอนนี้อยู่ใน
+       กรอบแดง "เรือที่วิ่ง" บนหัวหน้าแล้ว · หัวการ์ดเดิมจึงพูดซ้ำทั้งบล็อก
+       เหลือไว้เป็นแถบคาดบาง ๆ ที่ทำหน้าที่บอกว่า "ตารางข้างล่างนี้คือทริปไหน"
+       ยกเว้นวันที่ทริปถูกยกเลิกเพราะอากาศ · ตัวเลข original/rescheduled/cancelled
+       ไม่มีที่อื่นบอก ต้องคงไว้                                                 */
+    .t2-triphead{display:flex;align-items:center;gap:10px;padding:7px 14px;
+      background:#FBFAF8;box-shadow:inset 5px 0 0 var(--fam,#8b909c);border-bottom:1px solid var(--border-2)}
+    .t2-tt{min-width:0;flex:1;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+    .t2-tnm{font-size:13px;font-weight:800;line-height:1.15;color:var(--fam,#22262e)}
+    .t2-tmeta{font-size:10px;color:var(--ink-soft);font-family:'DM Mono',monospace;margin-top:0}
+    .t2-tripcard .t2-sum{display:none}
+    /* §btSlim · ชิปเรือในแถบนี้ซ้ำกับกรอบแดง "เรือที่วิ่ง" บนหัวหน้าทุกตัวเลข
+       ซ่อนเฉพาะชิป · ตัวกาง "ไกด์ · อาหารรายลำ" กับบรรทัดรวมภาษา/มื้ออาหาร
+       ไม่มีที่อื่นบอก ต้องคงไว้ */
+    .t2-boatbox .t2-minichips{display:none}
+    .t2-boatsummary{padding:4px 14px 4px 18px}
+    .t2-trip-wx .t2-sum{display:flex}
     .t2-sum{display:flex;align-items:center;gap:2px;flex-wrap:wrap}
     .t2-kpi{text-align:center;padding:0 8px;border-left:1px solid var(--border-2)}
     .t2-kpi:first-child{border-left:none}
@@ -82293,7 +82308,12 @@ function bkV2RenderTab2(){
     .t2-nobk{padding:11px 16px;font-size:11px;color:var(--ink-soft);font-style:italic;border-top:1px solid var(--border-2)}
     .t2-vcbtn{display:inline-flex;align-items:center;justify-content:center;width:27px;height:27px;border-radius:50%;font-size:11px;font-weight:600;letter-spacing:.02em;color:#5F5E5A;background:transparent;border:1px solid #B4B2A9;cursor:pointer;font-family:inherit;line-height:1}
     .t2-vcbtn:hover{border-color:#5F5E5A;background:#F1EFE8;color:#2C2C2A}
-    .t2-famcard{background:var(--white);border:1px solid var(--border);border-left:5px solid #8b909c;border-radius:14px;margin:13px 0 8px;overflow:hidden}
+    /* §btSlim · การ์ดตระกูลโปรแกรม · หัวหน้ามีการ์ด "โปรแกรมวันนี้" อยู่แล้ว
+       อันนี้เหลือหน้าที่เป็นตัวคั่น + ปุ่มกางดูเรือรายลำ จึงลดน้ำหนักลง */
+    .t2-famcard{background:var(--white);border:1px solid var(--border);border-left:3px solid #8b909c;border-radius:12px;margin:10px 0 7px;overflow:hidden}
+    .t2-famcard-hd{padding:5px 12px !important}
+    .t2-famnm{font-size:12.5px !important}
+    .t2-famcaret{width:20px !important;height:20px !important}
     .t2-famcard:first-child{margin-top:2px}
     .t2-famcard-hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 14px;cursor:pointer;list-style:none}
     .t2-famcard-hd::-webkit-details-marker{display:none}
