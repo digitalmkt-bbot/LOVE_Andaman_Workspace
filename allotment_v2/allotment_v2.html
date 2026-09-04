@@ -28099,108 +28099,6 @@ function flProjLightbox(url, caption){
 function flProjChildMJs(projId){
   return (FL_MAINT||[]).filter(m=>m.parentProjectId===projId);
 }
-
-/* ══ §slipView · กดดูสลิปที่แนบไว้ ═══════════════════════════════════════
-   สลิปอัปโหลดได้มานานแล้ว (pckSlipUpload → POST /api/attach → ตาราง attachments)
-   และเซิร์ฟเวอร์ก็มี GET /api/attach/<id> ที่เสิร์ฟไฟล์แบบ inline อยู่แล้ว
-   แต่ทุกหน้าที่โชว์สลิปเรนเดอร์แค่ "ชื่อไฟล์" เป็นตัวหนังสือตาย กดไม่ได้
-   บัญชีจึงต้องไปสแกนซัมลงไดร์ฟเอง ทั้งที่ไฟล์อยู่ในระบบแล้ว
-
-   เก็บแต่ ref ในบุ๊กกิ้ง ({id,name,mime,size}) ไม่เคยเก็บ base64 ลง blob
-   ตัวนี้จึงอ่านจาก URL อย่างเดียว ไม่แตะข้อมูล ไม่เพิ่มขนาด blob
-
-   z-index ต้องสูงกว่า acctModal (9999) และ .la-modal (99999)
-   ไม่งั้นเปิดจากในกล่อง Extra วันเดินทางแล้วจะโดนกล่องบัง
-   ═════════════════════════════════════════════════════════════════════════ */
-var _LA_SLIP=null;
-function laSlipUrl(s){ return '/api/attach/'+encodeURIComponent((s&&s.id)||''); }
-function laSlipIsImg(s){ return /^image\//i.test(String((s&&s.mime)||'')); }
-/* list = [{id,name,mime}] · title = ป้ายบอกว่าสลิปของก้อนเงินไหน */
-function laSlipView(list, title, i){
-  var L=(Array.isArray(list)?list:[list]).filter(function(s){ return s && s.id; });
-  if(!L.length){ alert('ยังไม่มีสลิปแนบไว้ในรายการนี้'); return; }
-  _LA_SLIP={ list:L, title:String(title||''), i:Math.max(0, Math.min(L.length-1, +i||0)) };
-  var ov=document.getElementById('la-slipview');
-  if(!ov){
-    ov=document.createElement('div'); ov.id='la-slipview';
-    ov.style.cssText='position:fixed;inset:0;z-index:100060;background:rgba(0,0,0,.86);'
-      +'display:flex;align-items:center;justify-content:center;font-family:"DM Sans",sans-serif';
-    ov.onclick=function(e){ if(e.target===ov) laSlipClose(); };
-    document.body.appendChild(ov);
-    document.addEventListener('keydown', laSlipKey);
-  }
-  laSlipRender();
-}
-function laSlipKey(e){
-  if(!document.getElementById('la-slipview')) return;
-  if(e.key==='Escape'){ laSlipClose(); }
-  else if(e.key==='ArrowRight'){ laSlipStep(1); }
-  else if(e.key==='ArrowLeft'){ laSlipStep(-1); }
-}
-function laSlipStep(n){
-  if(!_LA_SLIP) return;
-  var L=_LA_SLIP.list.length;
-  _LA_SLIP.i=((_LA_SLIP.i+n)%L+L)%L;
-  laSlipRender();
-}
-function laSlipClose(){
-  var ov=document.getElementById('la-slipview'); if(ov) ov.remove();
-  document.removeEventListener('keydown', laSlipKey);
-  _LA_SLIP=null;
-}
-function laSlipRender(){
-  var ov=document.getElementById('la-slipview'), S=_LA_SLIP; if(!ov||!S) return;
-  var esc=function(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
-  var s=S.list[S.i], url=laSlipUrl(s), many=(S.list.length>1);
-  var nav=function(d,ch){ return '<button onclick="laSlipStep('+d+')" title="'+(d>0?'ถัดไป':'ก่อนหน้า')+'" '
-    +'style="background:rgba(255,255,255,.14);border:none;color:#fff;width:38px;height:38px;border-radius:19px;'
-    +'font-size:19px;cursor:pointer;flex:0 0 auto">'+ch+'</button>'; };
-  /* รูปโชว์ในหน้าเดียวกันเลย · PDF กับไฟล์อื่นให้เปิดแท็บใหม่
-     iframe PDF ในโอเวอร์เลย์เล็ก ๆ อ่านไม่ออกอยู่ดี แท็บใหม่ได้ตัวอ่านเต็มของเบราว์เซอร์ */
-  var body = laSlipIsImg(s)
-    ? '<img src="'+esc(url)+'" alt="'+esc(s.name||'slip')+'" '
-      +'style="max-width:86vw;max-height:74vh;object-fit:contain;border-radius:10px;background:#fff;'
-      +'box-shadow:0 10px 40px rgba(0,0,0,.5)">'
-    : '<div style="background:#fff;border-radius:12px;padding:26px 30px;text-align:center;max-width:86vw">'
-      +'<div style="font-size:34px;line-height:1">&#128196;</div>'
-      +'<div style="font-size:13px;font-weight:700;margin:8px 0 3px;word-break:break-all">'+esc(s.name||'ไฟล์แนบ')+'</div>'
-      +'<div style="font-size:11px;color:#6b7280;margin-bottom:14px">'+esc(s.mime||'')+' &middot; ดูในแท็บใหม่ได้</div>'
-      +'<a href="'+esc(url)+'" target="_blank" rel="noopener" '
-      +'style="display:inline-block;background:#1683C7;color:#fff;text-decoration:none;border-radius:9px;'
-      +'padding:9px 18px;font-size:12.5px;font-weight:700">เปิดแท็บใหม่ &#8599;</a></div>';
-
-  ov.innerHTML='<div style="display:flex;align-items:center;gap:12px;max-width:96vw" onclick="event.stopPropagation()">'
-    +(many?nav(-1,'&#8249;'):'')
-    +'<div style="display:flex;flex-direction:column;align-items:center;gap:11px;min-width:0">'
-      +body
-      +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;'
-        +'background:rgba(0,0,0,.55);border-radius:16px;padding:7px 15px;color:#fff;font-size:12px">'
-        +(S.title?('<b style="font-weight:700">'+esc(S.title)+'</b>'):'')
-        +'<span style="opacity:.8">'+esc(s.name||'slip')+'</span>'
-        +(many?('<span style="opacity:.7;font-variant-numeric:tabular-nums">'+(S.i+1)+'/'+S.list.length+'</span>'):'')
-        +'<a href="'+esc(url)+'" target="_blank" rel="noopener" style="color:#8ED0F5">เปิดแท็บใหม่ &#8599;</a>'
-        +'<button onclick="laSlipClose()" style="background:rgba(255,255,255,.16);border:none;color:#fff;'
-          +'border-radius:12px;padding:4px 12px;font-size:11.5px;cursor:pointer;font-family:inherit">ปิด</button>'
-      +'</div>'
-    +'</div>'
-    +(many?nav(1,'&#8250;'):'')+'</div>';
-}
-/* ป้าย 📎 ที่กดดูได้ · ใช้ร่วมกันทุกหน้า เพื่อให้หน้าตากับพฤติกรรมตรงกัน
-   slips ถูกฝังเป็น JSON ใน onclick — ผ่าน encodeURIComponent กัน quote ในชื่อไฟล์พังแอตทริบิวต์
-
-   ระวัง · encodeURIComponent ไม่แปลง ' ให้ (เหลือไว้ตามสเปก พร้อมกับ ! ~ * ( ) )
-   ชื่อไฟล์อย่าง "bob's slip.jpg" จึงหลุด ' ออกมาปิดสตริงจาวาสคริปต์กลางคัน
-   ต้องแปลงเองอีกชั้น · " ถูกแปลงเป็น %22 อยู่แล้ว แอตทริบิวต์ HTML จึงปลอดภัย */
-function _laSlipEnc(s){ return encodeURIComponent(String(s==null?'':s)).replace(/'/g,'%27'); }
-function laSlipClickAttr(slips, title, i){
-  var j=JSON.stringify((Array.isArray(slips)?slips:[]).map(function(s){
-    return {id:s.id, name:s.name, mime:s.mime};
-  }));
-  return 'onclick="event.stopPropagation();laSlipView(JSON.parse(decodeURIComponent(\''
-    + _laSlipEnc(j) + '\')),decodeURIComponent(\'' + _laSlipEnc(title) + '\'),'
-    + (+i||0) + ')"';
-}
 /* ══ §prjAwaitBill · เครื่องมือกลางของ "รอวางบิล" ══════════════════════ */
 /* ใบวางบิลตัวจริงในกองเอกสาร · ชื่อที่คนกรอกใช้มีทั้งไทยและอังกฤษ รับทั้งคู่ */
 function flProjBillDoc(p){
@@ -52447,15 +52345,6 @@ function pcCSS(scope){
   +scope+' .pc-btn{border:1.5px solid #D5DAE5;background:#fff;border-radius:8px;padding:6px 12px;'
     +'font:700 11.5px inherit;font-family:inherit;color:#44506A;cursor:pointer}'
   +scope+' .pc-btn:hover{border-color:#16265C;color:#16265C}'
-  /* §pcPrint · ปุ่มพิมพ์ · เน้นให้เห็น แต่ไม่แย่งสายตาจากตัวเลขในตาราง */
-  +scope+' .pc-btn.pri{background:#16265C;border-color:#16265C;color:#fff}'
-  +scope+' .pc-btn.pri:hover{background:#0F1B45;color:#fff}'
-  /* §pcPrint · โหมดกระดาษ · ช่องที่ปกติเป็น input กลายเป็นตัวเลขเฉย ๆ
-     คงพื้นสีเดิมไว้ จะได้ยังอ่านออกว่าช่องไหนคือฝั่งที่หน้าท่ากรอกเอง */
-  +scope+' .pc-t td.pr{text-align:center;font-weight:700;color:#16265C}'
-  +scope+' .pc-t td.cy.pr{background:#FFFDF5;color:#7A4A00}'
-  +scope+' .pc-t td.cb.pr{background:#F7FBFF;color:#1D5FA8}'
-  +scope+' .pc-t td.ctx.pr{text-align:left;font-weight:500;color:#44506A;white-space:normal}'
   +scope+' .pc-dt{border:1.5px solid #D5DAE5;border-radius:8px;padding:5px 9px;font:700 12px inherit;'
     +'font-family:inherit;color:#16265C}'
   +scope+' .pc-gw{overflow:auto;max-height:calc(100vh - 300px)}'
@@ -52635,11 +52524,7 @@ function pcSheetMain(pier){
      +'<input class="pc-dt" type="date" value="'+ds+'" onchange="pcPickDay(this.value)">'
      +'<button class="pc-btn" onclick="pcShift(-1)">‹ วันก่อน</button>'
      +'<button class="pc-btn" onclick="pcShift(1)">วันถัดไป ›</button>'
-     +'<span class="sp"></span><span class="n">'+rows.length+' รายการ</span>'
-     /* §pcPrint · ใบรับรองฯ เอาไปเบิก Petty Cash · สมุดเดินบัญชีเอาไว้นับเงินในลิ้นชัก */
-     +'<button class="pc-btn pri" onclick="pcPrintCert()" title="ดึงเฉพาะรายจ่ายของวันที่เลือก ลงในแบบฟอร์มใบรับรองแทนใบเสร็จรับเงิน">&#128424; ใบรับรองแทนใบเสร็จ</button>'
-     +'<button class="pc-btn" onclick="pcPrintLedger()" title="พิมพ์สมุดเดินบัญชีของวันที่เลือก · ยอดยกมา รับ จ่าย คงเหลือ">&#128424; สมุดวันนี้</button>'
-     +'<button class="pc-btn" onclick="pcCoEdit()" title="ชื่อบริษัทที่พิมพ์ลงหัวใบรับรองแทนใบเสร็จรับเงิน">แก้ชื่อบริษัท</button></div>'
+     +'<span class="sp"></span><span class="n">'+rows.length+' รายการ</span></div>'
    +'<div class="pc-gw"><table class="pc-t"><thead><tr>'
      +'<th class="rn">#</th><th class="c" style="width:64px">เวลา</th><th>รายการ</th>'
      +'<th style="width:96px">หมวด</th><th style="width:96px">ผู้บันทึก</th>'
@@ -52718,15 +52603,8 @@ function pcMonthTable(pier){
      +'ยังไม่นับเป็นเงินออกจนกว่าจะกด <b>⤓ ดึง</b> เข้าสมุด</div>';
 }
 /* ── ชีท 2 · เรือหางยาว ──────────────────────────────────────────────── */
-/* §pcPrint · opt.only = เอาแค่วันเดียว · opt.print = โหมดกระดาษ (ช่องกรอกกลายเป็นตัวหนังสือ)
-   เรียกแบบไม่ส่ง opt คือของเดิมทุกประการ · แยกเป็นฟังก์ชันใหม่ไม่ได้ เดี๋ยวสองที่จะเพี้ยนกัน */
-function pcSheetLT(pier, opt){
-  opt=opt||{}; var PR=!!opt.print;
-  var dates=opt.only?[opt.only]:pcDates(pier,_pcYM), body='', rn=0, gj=0,gc=0,guj=0,guc=0,gm=0, nb=0;
-  /* โหมดกระดาษ · ช่องกรอกกลายเป็นค่าที่กรอกไว้ ไม่มีขีดเส้นใต้ ไม่มีกล่อง */
-  var box=function(cls,val,inner){ return PR
-    ? ('<td class="'+cls+' pr">'+pcE(val===''||val==null?'—':val)+'</td>')
-    : ('<td class="'+cls+'">'+inner+'</td>'); };
+function pcSheetLT(pier){
+  var dates=pcDates(pier,_pcYM), body='', rn=0, gj=0,gc=0,guj=0,guc=0,gm=0, nb=0;
   dates.forEach(function(ds){
     var BS=pcBoats(ds,pier); if(!BS.length) return;
     var D=pcDay(pier,ds,false)||{lt:{}};
@@ -52749,20 +52627,16 @@ function pcSheetLT(pier, opt){
             : '<span class="v z">0</span>')+'</td>'
         /* §pcLtSplit · ใช้จริงแยกสองช่อง · หน้างานจอยอาจยุบลำ เหมาอาจใช้น้อยกว่าที่จอง
            รวมกันเป็นเลขเดียวแล้วดูย้อนหลังไม่ออกว่าที่ต่างจากใบจองคือฝั่งไหน */
-        +box('cb', (U.j!=null?U.j:''),
-          '<input value="'+(U.j!=null?U.j:'')+'" placeholder="—" inputmode="numeric" '
+        +'<td class="cb"><input value="'+(U.j!=null?U.j:'')+'" placeholder="—" inputmode="numeric" '
           +'title="จำนวนลำที่ใช้จริงของฝั่งจอย" '
-          +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'nj\',this.value)">')
-        +box('cb', (U.c!=null?U.c:''),
-          '<input value="'+(U.c!=null?U.c:'')+'" placeholder="—" inputmode="numeric" '
+          +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'nj\',this.value)"></td>'
+        +'<td class="cb"><input value="'+(U.c!=null?U.c:'')+'" placeholder="—" inputmode="numeric" '
           +'title="จำนวนลำที่ใช้จริงของฝั่งเหมา" '
-          +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'nc\',this.value)">')
-        +box('cy', (C.amt?pcN(C.amt):''),
-          '<input value="'+(C.amt?pcN(C.amt):'')+'" placeholder="—" inputmode="numeric" '
-          +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'amt\',this.value)">')
-        +box('ctx', (C.note||''),
-          '<input value="'+pcE(C.note||'')+'" placeholder="—" '
-          +'onchange="pcSetLTNote(\''+ds+'\',\''+B.bid+'\',this.value)">')+'</tr>';
+          +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'nc\',this.value)"></td>'
+        +'<td class="cy"><input value="'+(C.amt?pcN(C.amt):'')+'" placeholder="—" inputmode="numeric" '
+          +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'amt\',this.value)"></td>'
+        +'<td class="ctx"><input value="'+pcE(C.note||'')+'" placeholder="—" '
+          +'onchange="pcSetLTNote(\''+ds+'\',\''+B.bid+'\',this.value)"></td></tr>';
     });
     gj+=dj; gc+=dc; guj+=duj; guc+=duc; gm+=dm;
     body+='<tr class="day'+(ds===pcNowDS()?' now':'')+'" id="pcd-'+pier+'-'+ds+'"><td colspan="9">'
@@ -52773,14 +52647,12 @@ function pcSheetLT(pier, opt){
       +'<td class="v">'+(duj||'—')+'</td><td class="v">'+(duc||'—')+'</td>'
       +'<td class="r">'+(dm?pcN(dm):'—')+'</td><td></td></tr>';
   });
-  if(!body) body='<tr><td colspan="9" style="color:#B9BCC6;padding:20px 12px">'
-    +(opt.only?'ไม่มีเรือออกในวันนี้':'ไม่มีเรือออกในเดือนนี้')+'</td></tr>';
+  if(!body) body='<tr><td colspan="9" style="color:#B9BCC6;padding:20px 12px">ไม่มีเรือออกในเดือนนี้</td></tr>';
   return '<div class="pc-sheet">'
-   +(PR?'':('<div class="pc-tb"><b>🛶 สรุปเรือหางยาวรายวัน</b>'
+   +'<div class="pc-tb"><b>🛶 สรุปเรือหางยาวรายวัน</b>'
      +'<input class="pc-dt" type="month" value="'+_pcYM+'" onchange="pcMonth(this.value)">'
      +'<span class="n">'+dates.length+' วัน · '+nb+' ลำ</span>'
-     +'<span class="sp"></span><span class="n">รวม '+pcMoney(gm)+'</span>'
-     +'<button class="pc-btn pri" onclick="pcPrintLT()">&#128424; พิมพ์วันที่เลือก</button></div>'))
+     +'<span class="sp"></span><span class="n">รวม '+pcMoney(gm)+'</span></div>'
    +'<div class="pc-gw"><table class="pc-t"><thead><tr>'
      +'<th class="rn">#</th><th style="width:150px">เรือ</th><th>โปรแกรม</th>'
      +'<th class="c" style="width:74px">จอย</th><th class="c" style="width:74px">เหมา</th>'
@@ -52789,25 +52661,20 @@ function pcSheetLT(pier, opt){
      +'<th class="r key" style="width:118px">จ่ายจริง</th>'
      +'<th style="width:170px">หมายเหตุ</th></tr></thead>'
      +'<tbody>'+body+'</tbody>'
-     +'<tfoot><tr class="grand"><td class="rn"></td><td colspan="2">'+(opt.only?'รวมทั้งวัน':'รวมทั้งเดือน')+'</td>'
+     +'<tfoot><tr class="grand"><td class="rn"></td><td colspan="2">รวมทั้งเดือน</td>'
        +'<td class="v">'+gj+'</td><td class="v">'+gc+'</td>'
        +'<td class="v">'+guj+'</td><td class="v">'+guc+'</td>'
        +'<td class="r">'+pcMoney(gm)+'</td><td></td></tr></tfoot></table></div>'
-   +(PR?'':('<div class="pc-note"><b>ช่องขาว = ระบบอ่านให้</b> จอยเป็นหัวที่ขึ้นเรือจริง (หักคนไม่มาแล้ว) · เหมาเป็นลำตามที่สั่งไว้ · '
+   +'<div class="pc-note"><b>ช่องขาว = ระบบอ่านให้</b> จอยเป็นหัวที่ขึ้นเรือจริง (หักคนไม่มาแล้ว) · เหมาเป็นลำตามที่สั่งไว้ · '
      +'<b>ช่องฟ้ากับช่องเหลือง = คนหน้าท่ากรอกเอง</b> เพราะหน้างานมักไม่ตรงกับที่จองมา — '
      +'จอย 3 คนอาจลงลำเดียว หรือเหมา 2 ลำแต่ใช้จริงลำเดียว · '
      +'<b>ใช้จริงแยกจอย/เหมา</b> เพื่อดูย้อนหลังได้ว่าที่ต่างจากใบจองคือฝั่งไหน · '
-     +'ยอดจ่ายจริงของแต่ละวันจะไปโผล่เป็นบรรทัดเดียวในชีทหน้าหลัก</div>'))
+     +'ยอดจ่ายจริงของแต่ละวันจะไปโผล่เป็นบรรทัดเดียวในชีทหน้าหลัก</div>'
    +'</div>';
 }
 /* ── ชีท 3 · ค่าอุทยาน ───────────────────────────────────────────────── */
-/* §pcPrint · opt เหมือน pcSheetLT · only = วันเดียว · print = โหมดกระดาษ */
-function pcSheetPK(pier, opt){
-  opt=opt||{}; var PR=!!opt.print;
-  var dates=opt.only?[opt.only]:pcDates(pier,_pcYM), body='', rn=0, nb=0;
-  var box=function(cls,val,inner){ return PR
-    ? ('<td class="'+cls+' pr">'+pcE(val===''||val==null?'—':val)+'</td>')
-    : ('<td class="'+cls+'">'+inner+'</td>'); };
+function pcSheetPK(pier){
+  var dates=pcDates(pier,_pcYM), body='', rn=0, nb=0;
   var Z=function(){ return PC_PK.map(function(){ return 0; }); };
   var GT=Z(), GK=Z(), gtot=0, gktot=0, gm=0, gex=0, gdk=0;
   dates.forEach(function(ds){
@@ -52833,26 +52700,23 @@ function pcSheetPK(pier, opt){
       var keys=PC_PK.map(function(k,i){
         /* ขอบเข้ม = จำนวนที่คีย์ไม่ตรงกับยอดเดินทางจริง · ไม่ใช่ error แต่ต้องเห็น */
         var mm=(hasK && (+C[k]||0)!==(+X[k]||0))?' mm':'';
-        return box('cy ct'+((i===0||i===HF)?' gs':'')+mm, (C[k]||''),
-          '<input value="'+(C[k]||'')+'" placeholder="—" '
-          +'inputmode="numeric" onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\''+k+'\',this.value)">'); }).join('');
+        return '<td class="cy ct'+((i===0||i===HF)?' gs':'')+mm+'"><input value="'+(C[k]||'')+'" placeholder="—" '
+          +'inputmode="numeric" onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\''+k+'\',this.value)"></td>'; }).join('');
       var exc=(exp==null)
         ? '<td class="pc-ex na"><b>—</b><i>'+pcE((R.why||'ไม่มีราคา'))+'</i></td>'
         : '<td class="pc-ex"><b>'+pcN(exp)+'</b><i>'+(hasK?'ตามที่คีย์':'ตามหัวจริง')+'</i></td>';
       rows+='<tr><td class="rn">'+rn+'</td><td class="bn">'+pcE(B.name)+'</td>'
         +'<td class="rt">'+pcRouteName(B.rid,B.route)+'<br>'+pcRateChip(R)
-          +((hasK||PR)?'':'<button class="pc-fill" title="คัดลอกยอดเดินทางจริง (หักคนที่ไม่ได้ขึ้นเรือแล้ว) มาใส่ช่องคีย์ทั้ง 8 ช่อง แล้วค่อยแก้เฉพาะที่ต่าง" '
+          +(hasK?'':'<button class="pc-fill" title="คัดลอกยอดเดินทางจริง (หักคนที่ไม่ได้ขึ้นเรือแล้ว) มาใส่ช่องคีย์ทั้ง 8 ช่อง แล้วค่อยแก้เฉพาะที่ต่าง" '
             +'onclick="pcFillPK(\''+ds+'\',\''+B.bid+'\',\''+pier+'\')">⤓ เติมจากใบจอง</button>')
           +'</td>'+cells
         +'<td class="v">'+X.tot+'</td>'+keys
-        +box('cy', (C.dock?pcN(C.dock):''),
-          '<input value="'+(C.dock?pcN(C.dock):'')+'" placeholder="—" inputmode="numeric" '
-          +'onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'dock\',this.value)">')
+        +'<td class="cy"><input value="'+(C.dock?pcN(C.dock):'')+'" placeholder="—" inputmode="numeric" '
+          +'onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'dock\',this.value)"></td>'
         +'<td class="v gs"'+(hasK?' style="background:#FFFDF5;color:#7A4A00"':'')+'>'+(hasK?kt:'—')+'</td>'
         +exc
-        +box('cy', (C.amt?pcN(C.amt):''),
-          '<input value="'+(C.amt?pcN(C.amt):'')+'" placeholder="—" inputmode="numeric" '
-          +'onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'amt\',this.value)">')
+        +'<td class="cy"><input value="'+(C.amt?pcN(C.amt):'')+'" placeholder="—" inputmode="numeric" '
+          +'onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'amt\',this.value)"></td>'
         +pcDiffCell(+C.amt||0, exp)+'</tr>';
     });
     PC_PK.forEach(function(k,i){ GT[i]+=DT[i]; GK[i]+=DK[i]; });
@@ -52870,16 +52734,14 @@ function pcSheetPK(pier, opt){
       +'<td class="r">'+(dm?pcN(dm):'—')+'</td>'
       +pcDiffCell(dm, anyx?dex:null)+'</tr>';
   });
-  if(!body) body='<tr><td colspan="25" style="color:#B9BCC6;padding:20px 12px">'
-    +(opt.only?'ไม่มีเรือออกในวันนี้':'ไม่มีเรือออกในเดือนนี้')+'</td></tr>';
+  if(!body) body='<tr><td colspan="25" style="color:#B9BCC6;padding:20px 12px">ไม่มีเรือออกในเดือนนี้</td></tr>';
   return '<div class="pc-sheet">'
-   +(PR?'':('<div class="pc-tb"><b>🏝️ สรุปค่าอุทยานรายวัน</b>'
+   +'<div class="pc-tb"><b>🏝️ สรุปค่าอุทยานรายวัน</b>'
      +'<input class="pc-dt" type="month" value="'+_pcYM+'" onchange="pcMonth(this.value)">'
      +'<span class="n">'+dates.length+' วัน · '+nb+' ลำ · '+gtot+' คน</span>'
      +'<span class="sp"></span><span class="n">คำนวณ '+pcMoney(gex)+'</span>'
      +'<span class="n">จ่ายจริง '+pcMoney(gm)+'</span>'
-     +'<span class="n">ค่าจอด '+pcMoney(gdk)+'</span>'
-     +'<button class="pc-btn pri" onclick="pcPrintPK()">&#128424; พิมพ์วันที่เลือก</button></div>'))
+     +'<span class="n">ค่าจอด '+pcMoney(gdk)+'</span></div>'
    +'<div class="pc-gw"><table class="pc-t"><thead>'
      +'<tr><th class="rn" rowspan="3">#</th>'
        +'<th rowspan="3" style="width:126px;vertical-align:bottom">เรือ</th>'
@@ -52904,7 +52766,7 @@ function pcSheetPK(pier, opt){
        +'<th class="c key gs" style="width:46px">ผญ</th><th class="c key" style="width:46px">เด็ก</th>'
        +'<th class="c key" style="width:46px">INF</th><th class="c key" style="width:46px">FOC</th></tr>'
      +'</thead><tbody>'+body+'</tbody>'
-     +'<tfoot><tr class="grand"><td class="rn"></td><td colspan="2">'+(opt.only?'รวมทั้งวัน':'รวมทั้งเดือน')+'</td>'
+     +'<tfoot><tr class="grand"><td class="rn"></td><td colspan="2">รวมทั้งเดือน</td>'
        +GT.map(function(v,i){ return '<td class="v'+(i===PC_PK.length/2?' gs':'')+'">'+v+'</td>'; }).join('')
        +'<td class="v">'+gtot+'</td>'
        +GK.map(function(v,i){ return '<td class="v'+((i===0||i===PC_PK.length/2)?' gs':'')+'">'+v+'</td>'; }).join('')
@@ -52913,7 +52775,7 @@ function pcSheetPK(pier, opt){
        +'<td class="pc-ex gs"><b>'+pcMoney(gex)+'</b></td>'
        +'<td class="r">'+pcMoney(gm)+'</td>'
        +pcDiffCell(gm, gex)+'</tr></tfoot></table></div>'
-   +(PR?'':('<div class="pc-note"><b>ฝั่งซ้ายเขียว = ตามใบจอง</b> ระบบอ่านให้ แก้ไม่ได้ · '
+   +'<div class="pc-note"><b>ฝั่งซ้ายเขียว = ตามใบจอง</b> ระบบอ่านให้ แก้ไม่ได้ · '
      +'<b>ฝั่งขวาเหลือง = จ่ายจริงที่ด่าน</b> คีย์จำนวนคนเองได้ครบทั้ง 8 ช่อง แล้วค่อยใส่ค่าจอดกับเงินที่จ่าย<br>'
      +'ที่ต้องคีย์เองเพราะหน้าด่านมักไม่ตรงกับใบจอง — เด็กต่ำกว่า 3 ขวบไม่เก็บ · บางคนไม่ขึ้นเกาะ · '
      +'บางเกาะคนละราคา · <b>เก็บไว้ทั้งสองฝั่งจะเทียบทีหลังได้ว่าต่างกันกี่คน เพราะอะไร</b><br>'
@@ -52928,7 +52790,7 @@ function pcSheetPK(pier, opt){
      +'<b>⤓ เติมจากใบจอง</b> ดึงเลขจริงมาก่อน แล้วค่อยแก้เฉพาะช่องที่ต่าง<br>'
      +'<b>FOC คิดราคาผู้ใหญ่ตามสัญชาติ</b> เพราะด่านไม่สนใจว่าเราเก็บเงินลูกค้าหรือเปล่า<br>'
      +'<b>ค่าจอด</b> เป็นคนละก้อนกับค่าอุทยาน · ใส่เงินอย่างเดียว ไม่ต้องนับหัว · '
-     +'ยอดรวมของวันจะไปโผล่เป็นบรรทัด “ค่าจอดเรือ” ในชีทหน้าหลัก</div>'))
+     +'ยอดรวมของวันจะไปโผล่เป็นบรรทัด “ค่าจอดเรือ” ในชีทหน้าหลัก</div>'
    +'</div>';
 }
 /* ชื่อวัน · ยาวสำหรับหัวกลุ่ม สั้นสำหรับแถวรวม */
@@ -52984,288 +52846,6 @@ function renderPierCash(pier){
    +body;
   pcStickHead();
   if(_pcJump){ _pcJump=false; if(_pcTab===1||_pcTab===2) setTimeout(pcJumpToday,0); }
-}
-
-/* ══ §pcPrint · พิมพ์เงินสดย่อยตามวันที่เลือก ═══════════════════════════════
-   ทั้งสามชีทเดิมพิมพ์ไม่ได้เลย · เป็นหน้าเดียวในกลุ่มหน้าท่าที่ไม่มีปุ่มพิมพ์
-   บัญชีจึงต้องคีย์รายจ่ายซ้ำลงใบรับรองแทนใบเสร็จรับเงินเองทุกวัน
-   ทั้งที่ตัวเลขทุกตัวอยู่ในระบบแล้ว · คีย์ซ้ำเมื่อไรก็มีโอกาสพิมพ์ผิดเมื่อนั้น
-
-   ใช้แบบ "เปิดหน้าต่างใหม่แล้วเขียน HTML ลงไป" ตามใบงานเรือ (pjPrint)
-   ได้ปุ่มบันทึก PNG มาฟรีจาก pjShotScript() ซึ่งบังคับว่าต้องมี
-     id="sheet" ที่กล่องกระดาษ · <style id="sty"> · ปุ่ม id="bimg"
-   สไตล์ตารางยกจาก pcCSS('#sheet') มาทั้งก้อน ตารางบนกระดาษจะได้เหมือนบนจอ
-
-   ชื่อบริษัทเก็บที่ po_cash_co · ต้องเป็นสตริงเท่านั้น (ดู §pcFix ข้างบน)
-   ═════════════════════════════════════════════════════════════════════════ */
-function pcCoName(){
-  try{ var b=laBlob(); return (typeof b.po_cash_co==='string')?b.po_cash_co:''; }catch(_){ return ''; }
-}
-function pcCoNameSet(v){
-  v=String(v==null?'':v).trim();
-  try{
-    var b=laBlob();
-    if(v) b.po_cash_co=v; else delete b.po_cash_co;
-    laBlobSave();
-  }catch(e){ try{ console.warn('[pcPrint] company name save failed', e && e.message); }catch(_){} }
-}
-/* กล่องกรอกชื่อบริษัท · ใช้กล่องกลางตัวเดียวกับ pcRowAdd
-   next = ฟังก์ชันที่จะเรียกต่อหลังบันทึก (กดพิมพ์ครั้งแรกแล้วยังไม่มีชื่อ) */
-var _pcCoNext=null;
-function pcCoEdit(next){
-  if(!pcGuard()) return;
-  _pcCoNext=(typeof next==='function')?next:null;
-  var host=document.getElementById('ck-reason-host');
-  if(!host){ host=document.createElement('div'); host.id='ck-reason-host'; document.body.appendChild(host); }
-  host.innerHTML=''
-   +'<div id="ck-reason-ov" onclick="if(event.target===this)ckReasonClose()" class="ck-ovl"><div class="ck-dlg">'
-   +'  <div class="ck-dh"><div><div class="t1">ชื่อบริษัทในใบรับรองแทนใบเสร็จรับเงิน</div>'
-   +'    <div class="t2">พิมพ์ครั้งเดียว ระบบจำไว้ให้ · ใช้ทุกท่า</div></div>'
-   +'    <button class="x" onclick="ckReasonClose()">&times;</button></div>'
-   +'  <div class="ck-db">'
-   +'    <div class="lb">ชื่อบริษัท (บจ. / หจก.)</div>'
-   +'    <input id="pc-co-inp" class="ck-inp" type="text" value="'+pcE(pcCoName())+'" placeholder="เช่น บริษัท เลิฟ ไอแลนด์ จำกัด">'
-   +'    <div class="ck-fn">ชื่อนี้จะไปอยู่หัวฟอร์มตรงช่อง บจ./หจก. และในประโยครับรองท้ายฟอร์ม<br>'
-   +'      ช่องผู้เบิกจ่าย ตำแหน่ง และลายเซ็น เว้นว่างไว้ให้เขียนมือตามเดิม</div>'
-   +'  </div>'
-   +'  <div class="ck-df"><button class="c" onclick="ckReasonClose()">ยกเลิก</button>'
-   +'    <button class="k" onclick="pcCoSave()">บันทึก</button></div>'
-   +'</div></div>';
-}
-function pcCoSave(){
-  var el=document.getElementById('pc-co-inp');
-  pcCoNameSet(el?el.value:'');
-  if(typeof ckReasonClose==='function') ckReasonClose();
-  var n=_pcCoNext; _pcCoNext=null;
-  if(n && pcCoName()) setTimeout(n,0); else pcKeep();
-}
-
-/* ── ตัวเลขเป็นคำอ่านไทย · ช่องซ้ายของแถวรวมในใบรับรอง ────────────────────
-   ไม่มีตัวช่วยแบบนี้ในไฟล์มาก่อน · เขียนใหม่ · รับเฉพาะจำนวนเต็มบาท
-   กฎที่คนมักพลาด · หลักสิบ 1 = "สิบ" ไม่ใช่ "หนึ่งสิบ" · หลักสิบ 2 = "ยี่สิบ"
-   หลักหน่วยที่ท้ายกลุ่มและมีหลักอื่นนำหน้า 1 = "เอ็ด" */
-var PC_TH_D=['','หนึ่ง','สอง','สาม','สี่','ห้า','หก','เจ็ด','แปด','เก้า'];
-var PC_TH_P=['','สิบ','ร้อย','พัน','หมื่น','แสน'];
-function _pcThGroup(s){          /* s = ตัวเลขไม่เกิน 6 หลัก (หนึ่งกลุ่มล้าน) */
-  var out='', L=s.length, prev=false;   /* prev = มีหลักที่ไม่ใช่ศูนย์มาก่อนในกลุ่มนี้แล้ว */
-  for(var i=0;i<L;i++){
-    var d=+s[i], pos=L-1-i;
-    if(!d) continue;
-    if(pos===1 && d===1) out+='สิบ';
-    else if(pos===1 && d===2) out+='ยี่สิบ';
-    /* "เอ็ด" ใช้ได้ต่อเมื่อมีหลักอื่นนำหน้าอยู่ในกลุ่มเดียวกัน
-       1,000,001 = หนึ่งล้านหนึ่งบาท ไม่ใช่ หนึ่งล้านเอ็ดบาท · กลุ่มหลังมีเลข 1 ตัวเดียว */
-    else if(pos===0 && d===1 && prev) out+='เอ็ด';
-    else out+=PC_TH_D[d]+PC_TH_P[pos];
-    prev=true;
-  }
-  return out;
-}
-function pcBahtText(n){
-  n=Math.round(Math.abs(+n||0));
-  if(!n) return 'ศูนย์บาทถ้วน';
-  var s=String(n), out='';
-  /* เกินล้าน · ตัดเป็นกลุ่มละ 6 หลักจากขวา แล้วต่อคำว่า "ล้าน" คั่น */
-  var groups=[];
-  while(s.length>6){ groups.unshift(s.slice(-6)); s=s.slice(0,-6); }
-  groups.unshift(s);
-  groups.forEach(function(g,i){
-    var t=_pcThGroup(g);
-    if(t) out+=t;
-    if(i<groups.length-1) out+='ล้าน';
-  });
-  return out+'บาทถ้วน';
-}
-/* วันที่แบบไทย พ.ศ. · DD/MM/2569 · ใช้ในตารางใบรับรอง */
-function pcThDate(ds){
-  try{
-    var d=new Date(ds+'T12:00:00'); if(isNaN(d.getTime())) return ds;
-    var p=function(v){ return (v<10?'0':'')+v; };
-    return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+(d.getFullYear()+543);
-  }catch(_){ return ds; }
-}
-
-/* ── หน้าต่างพิมพ์ · ตัวกลางของทุกปุ่ม ────────────────────────────────────
-   css = สไตล์เพิ่มเติมเฉพาะใบนั้น · sheet = เนื้อกระดาษ (จะถูกห่อด้วย #sheet) */
-function pcPrintWin(title, fname, css, sheet, land){
-  var scr=(typeof pjShotScript==='function')?pjShotScript(fname):'function shot(){}';
-  var base=pcCSS('#sheet')
-    +'body{margin:0;background:#EDF0F5;font-family:Sarabun,-apple-system,sans-serif}'
-    +'#sheet{background:#fff;margin:14px auto;padding:14mm 12mm;box-sizing:border-box;'
-      +'width:'+(land?'292mm':'205mm')+';max-width:calc(100vw - 28px);box-shadow:0 4px 18px rgba(0,0,0,.14)}'
-    /* บนจอตารางเลื่อนได้ · บนกระดาษต้องกางออกทั้งหมด ไม่งั้นโดนตัด */
-    +'#sheet .pc-gw{overflow:visible;max-height:none}'
-    +'#sheet .pc-t th{position:static}'
-    +'#sheet .pc-sheet{border:none;border-radius:0}'
-    /* บนจอทุกช่องห้ามตัดบรรทัด เพราะเลื่อนดูได้ · บนกระดาษเลื่อนไม่ได้
-       ช่องที่เป็นตัวหนังสือยาว (ชื่อโปรแกรม · รายการ · หมายเหตุ) ต้องยอมขึ้นบรรทัดใหม่
-       ไม่งั้นตารางดันกว้างเกินหน้าแล้วโดนตัดขวา */
-    +'#sheet .pc-t td.rt,#sheet .pc-t td.ctx,#sheet .pc-t td.tx{white-space:normal}'
-    +'#sheet .pc-t{table-layout:auto}'
-    +'.tb{display:flex;gap:9px;align-items:center;padding:11px 16px;background:#16265C;color:#fff;'
-      +'font:600 12px Sarabun,sans-serif;flex-wrap:wrap;position:sticky;top:0;z-index:9}'
-    +'.tb button{border:none;border-radius:8px;padding:8px 15px;font:700 12px Sarabun,sans-serif;cursor:pointer}'
-    +'.tb .pri{background:#fff;color:#16265C}'
-    +'.tb .img{background:rgba(255,255,255,.18);color:#fff}'
-    +'.tb .hint{opacity:.72;font-weight:400;font-size:11px}'
-    +'@media print{.tb{display:none!important}body{background:#fff}'
-      +'#sheet{margin:0;padding:0;width:auto;max-width:none;box-shadow:none}'
-      +'@page{size:A4'+(land?' landscape':'')+';margin:12mm}}';
-  var html='<!doctype html><html lang="th"><head><meta charset="utf-8">'
-   +'<title>'+pcE(title)+'</title>'
-   +'<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">'
-   +'<style id="sty">'+base+(css||'')+'</style></head><body>'
-   +'<div class="tb">'
-     +'<button class="pri" onclick="window.print()">&#128424; พิมพ์ / บันทึก PDF</button>'
-     +'<button class="img" id="bimg" onclick="shot()">&#128247; บันทึกเป็นรูป PNG</button>'
-     +'<span class="hint">ปุ่มสองปุ่มนี้อยู่บนหน้าจอเท่านั้น · ไม่ติดไปกับกระดาษและไม่ติดในรูป</span>'
-   +'</div>'
-   +'<div id="sheet">'+sheet+'</div>'
-   +'<script>'+scr+'<\/script></body></html>';
-  var w=window.open('','_blank','width=1220,height=880');
-  if(!w){ alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ · อนุญาต pop-up ของหน้านี้ก่อน'); return; }
-  w.document.open(); w.document.write(html); w.document.close();
-  setTimeout(function(){ try{ w.focus(); }catch(_){} }, 300);
-}
-/* หัวกระดาษที่ทุกใบใช้ร่วมกัน */
-function pcPierName(){
-  try{ var P=(typeof PO_PIERS!=='undefined')?(PO_PIERS.filter(function(x){ return x.k===_pcPier; })[0]||{}):{};
-       return P.n||_pcPier; }catch(_){ return _pcPier; }
-}
-function pcPrintHead(t1,t2){
-  return '<div class="pcp-hd"><div><div class="h1">'+pcE(t1)+'</div>'
-    +'<div class="h2">'+pcE(t2)+'</div></div>'
-    +'<div class="h3">'+pcE(pcPierName())+'<br><span>'+pcE(pcDL(_pcDate))+'</span></div></div>';
-}
-var PC_PRINT_HEAD_CSS=''
-  +'#sheet .pcp-hd{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;'
-    +'border-bottom:2px solid #16265C;padding-bottom:9px;margin-bottom:13px}'
-  +'#sheet .pcp-hd .h1{font-size:17px;font-weight:800;color:#16265C}'
-  +'#sheet .pcp-hd .h2{font-size:11px;color:#7C8091;margin-top:2px}'
-  +'#sheet .pcp-hd .h3{text-align:right;font-size:12px;font-weight:700;color:#16265C;white-space:nowrap}'
-  +'#sheet .pcp-hd .h3 span{font-weight:500;font-size:10.5px;color:#7C8091}';
-
-/* ── 1 · ใบรับรองแทนใบเสร็จรับเงิน ─────────────────────────────────────────
-   เอาเฉพาะ "รายจ่าย" ของวันที่เลือก · รายรับไม่เกี่ยว ฟอร์มนี้ใช้เบิกคืนเงิน
-   เรียงตามเวลาแบบเดียวกับสมุด · ที่ไม่ใส่เวลาไปท้าย (ดู pcRk ใน pcSheetMain) */
-function pcPrintCert(){
-  if(!pcCoName()){ pcCoEdit(pcPrintCert); return; }
-  var ds=_pcDate, D=pcDay(_pcPier,ds,false)||{out:[]};
-  var rk=function(at){ var m=/^(\d{1,2}):(\d{2})$/.exec(String(at||'')); return m?(+m[1]*60 + +m[2]):90000; };
-  var rows=(D.out||[]).slice().sort(function(a,b){ return rk(a.at)-rk(b.at); });
-  var CAT={lt:'ค่าเรือหางยาว',pk:'ค่าอุทยาน',dock:'ค่าจอดเรือ'};
-  var tot=0, body='';
-  rows.forEach(function(x){
-    var amt=+x.amt||0; tot+=amt;
-    body+='<tr><td class="d">'+pcE(pcThDate(ds))+'</td>'
-      +'<td class="t">'+pcE(x.txt||CAT[x.src]||'—')+'</td>'
-      +'<td class="m">'+pcN(amt)+'</td><td class="n"></td></tr>';
-  });
-  /* เติมแถวเปล่าให้เต็มหน้าเหมือนกระดาษจริง · เขียนเพิ่มด้วยมือได้ */
-  for(var i=rows.length;i<14;i++) body+='<tr><td class="d">&nbsp;</td><td class="t"></td><td class="m"></td><td class="n"></td></tr>';
-
-  var css=PC_PRINT_HEAD_CSS
-    +'#sheet .cf-t{font-size:16px;font-weight:800;text-align:center;color:#16265C;margin:2px 0 16px}'
-    +'#sheet .cf-co{display:flex;align-items:flex-end;gap:8px;font-size:12.5px;margin-bottom:10px}'
-    +'#sheet .cf-co .fill{flex:1;border-bottom:1px dotted #6b7280;font-weight:700;text-align:center;padding-bottom:2px}'
-    +'#sheet .cf-tb{width:100%;border-collapse:collapse;font-size:12px}'
-    +'#sheet .cf-tb th,#sheet .cf-tb td{border:1px solid #16265C;padding:5px 8px}'
-    +'#sheet .cf-tb th{background:#EEF1F6;font-size:11px;font-weight:800;color:#16265C;text-align:center}'
-    +'#sheet .cf-tb td.d{width:92px;text-align:center;white-space:nowrap}'
-    +'#sheet .cf-tb td.m{width:96px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}'
-    +'#sheet .cf-tb td.n{width:104px}'
-    +'#sheet .cf-tb tr.sum td{background:#EEF1F6;font-weight:800}'
-    +'#sheet .cf-tb tr.sum .w{text-align:center;font-weight:700}'
-    +'#sheet .cf-ft{font-size:12px;line-height:2.3;margin-top:16px}'
-    +'#sheet .cf-ft .u{display:inline-block;border-bottom:1px dotted #6b7280;min-width:170px}'
-    +'#sheet .cf-ft .u.s{min-width:96px}'
-    +'#sheet .cf-sg{display:flex;justify-content:flex-end;gap:64px;margin-top:26px;text-align:center;font-size:12px}'
-    +'#sheet .cf-sg .l{border-bottom:1px dotted #6b7280;min-width:168px;margin-bottom:4px}';
-
-  var sheet=pcPrintHead('เงินสดย่อย · ใบเบิก Petty Cash','ดึงรายจ่ายของวันที่เลือกจากสมุดเดินบัญชี ไม่ได้คีย์ใหม่')
-   +'<div class="cf-t">ใบรับรองแทนใบเสร็จรับเงิน</div>'
-   +'<div class="cf-co"><span>บจ. / หจก.</span><span class="fill">'+pcE(pcCoName())+'</span>'
-     +'<span>(ผู้ซื้อ/ผู้รับเงิน)</span></div>'
-   +'<table class="cf-tb"><thead><tr><th>วัน เดือน ปี</th><th>รายละเอียดรายจ่าย</th>'
-     +'<th>จำนวนเงิน</th><th>หมายเหตุ</th></tr></thead><tbody>'+body+'</tbody>'
-   +'<tfoot><tr class="sum"><td class="w" colspan="2">'+pcE(pcBahtText(tot))+'</td>'
-     +'<td class="m">'+pcN(tot)+'</td><td>รวมทั้งสิ้น</td></tr></tfoot></table>'
-   +'<div class="cf-ft">ข้าพเจ้า <span class="u"></span> (ผู้เบิกจ่าย) &nbsp; ตำแหน่ง <span class="u s"></span><br>'
-     +'ขอรับรองว่า รายจ่ายข้างต้นนี้ไม่อาจเรียกใบเสร็จรับเงินจากผู้รับได้ '
-     +'และข้าพเจ้าได้จ่ายไปในงานของ '+pcE(pcCoName())+' โดยแท้<br>'
-     +'ตั้งแต่วันที่ <span class="u s">'+pcE(pcThDate(ds))+'</span> ถึงวันที่ <span class="u s">'+pcE(pcThDate(ds))+'</span></div>'
-   +'<div class="cf-sg"><div><div class="l"></div>(ผู้เบิกจ่าย)</div>'
-     +'<div><div class="l"></div>(ผู้อนุมัติ)</div></div>';
-
-  pcPrintWin('ใบรับรองแทนใบเสร็จรับเงิน · '+pcPierName()+' · '+ds,
-    ('pettycash_cert_'+_pcPier+'_'+ds).replace(/[^A-Za-z0-9_.-]+/g,'_'), css, sheet, false);
-}
-
-/* ── 2 · สมุดเดินบัญชีของวัน ─────────────────────────────────────────────── */
-function pcPrintLedger(){
-  var ds=_pcDate, D=pcDay(_pcPier,ds,false)||{in:[],out:[]};
-  var T=pcTotals(_pcPier,ds), op=pcOpening(_pcPier,ds), bal=op+T.net;
-  var rk=function(at){ var m=/^(\d{1,2}):(\d{2})$/.exec(String(at||'')); return m?(+m[1]*60 + +m[2]):90000; };
-  var rows=[];
-  (D.in||[]).forEach(function(x){ rows.push({t:rk(x.at),k:'in',x:x}); });
-  (D.out||[]).forEach(function(x){ rows.push({t:rk(x.at),k:'out',x:x}); });
-  rows.sort(function(a,b){ return a.t-b.t; });
-  var run=op, body='', i=0;
-  body+='<tr><td class="rn">—</td><td class="c">—</td><td><i>ยอดยกมาจากวันก่อนหน้า</i></td>'
-    +'<td class="rt">ยกมา</td><td class="rt">ระบบ</td><td></td><td></td>'
-    +'<td class="r v">'+pcN(op)+'</td></tr>';
-  rows.forEach(function(r){
-    i++;
-    var isIn=(r.k==='in'), amt=+r.x.amt||0;
-    var cat=isIn?'รับเงิน':(r.x.src?({lt:'หางยาว',pk:'อุทยาน',dock:'ค่าจอด'}[r.x.src]||'จ่ายอื่น'):'จ่ายอื่น');
-    run += isIn ? amt : -amt;
-    body+='<tr><td class="rn">'+i+'</td><td class="c">'+pcE(r.x.at||'—')+'</td>'
-      +'<td class="tx">'+pcE(r.x.txt||'—')+'</td><td class="rt">'+cat+'</td><td class="rt">'+pcE(r.x.by||'—')+'</td>'
-      +'<td class="r v">'+(isIn?pcN(amt):'')+'</td><td class="r v">'+(!isIn?pcN(amt):'')+'</td>'
-      +'<td class="r v">'+pcN(run)+'</td></tr>';
-  });
-  if(!rows.length) body+='<tr><td class="rn"></td><td colspan="7" style="color:#B9BCC6;padding:18px 12px">'
-    +'ไม่มีรายการของวันนี้</td></tr>';
-
-  var css=PC_PRINT_HEAD_CSS
-    +'#sheet .pcp-sg{display:flex;justify-content:flex-end;gap:64px;margin-top:30px;text-align:center;font-size:12px}'
-    +'#sheet .pcp-sg .l{border-bottom:1px dotted #6b7280;min-width:168px;margin-bottom:4px}';
-  var sheet=pcPrintHead('สมุดเดินบัญชีเงินสดย่อย','ยอดยกมา · รับ · จ่าย · คงเหลือ ของวันที่เลือก')
-   +'<div class="pc-sheet"><div class="pc-gw"><table class="pc-t"><thead><tr>'
-     +'<th class="rn">#</th><th class="c" style="width:64px">เวลา</th><th>รายการ</th>'
-     +'<th style="width:96px">หมวด</th><th style="width:96px">ผู้บันทึก</th>'
-     +'<th class="r" style="width:104px">รับ</th><th class="r" style="width:104px">จ่าย</th>'
-     +'<th class="r" style="width:116px">คงเหลือ</th></tr></thead>'
-     +'<tbody>'+body+'</tbody>'
-     +'<tfoot><tr class="grand"><td class="rn"></td><td colspan="4">รวมวันนี้</td>'
-       +'<td class="r">'+pcN(T.in)+'</td><td class="r">'+pcN(T.out)+'</td>'
-       +'<td class="r">'+pcN(bal)+'</td></tr></tfoot></table></div></div>'
-   +'<div class="pcp-sg"><div><div class="l"></div>(ผู้บันทึก)</div>'
-     +'<div><div class="l"></div>(ผู้ตรวจ)</div></div>';
-
-  pcPrintWin('สมุดเดินบัญชี · '+pcPierName()+' · '+ds,
-    ('pettycash_book_'+_pcPier+'_'+ds).replace(/[^A-Za-z0-9_.-]+/g,'_'), css, sheet, false);
-}
-
-/* ── 3 · หางยาว / อุทยาน · เฉพาะวันที่เลือก ───────────────────────────────
-   ชีทบนจอเป็นมุมมองทั้งเดือน · ส่ง opt.only เข้าไปให้เหลือวันเดียว
-   opt.print ทำให้ช่องกรอกกลายเป็นตัวหนังสือ กระดาษจะได้ไม่มีกล่องว่างเปล่า */
-function pcPrintLT(){
-  var ds=_pcDate;
-  var sheet=pcPrintHead('สรุปเรือหางยาว','จอย/เหมาอ่านจากใบจอง · ใช้จริงกับเงินเป็นตัวที่หน้าท่ากรอกเอง')
-    +pcSheetLT(_pcPier,{only:ds, print:true});
-  pcPrintWin('เรือหางยาว · '+pcPierName()+' · '+ds,
-    ('longtail_'+_pcPier+'_'+ds).replace(/[^A-Za-z0-9_.-]+/g,'_'), PC_PRINT_HEAD_CSS, sheet, false);
-}
-function pcPrintPK(){
-  var ds=_pcDate;
-  var sheet=pcPrintHead('สรุปค่าอุทยาน','ฝั่งซ้ายตามใบจอง · ฝั่งขวาจ่ายจริงที่ด่าน · ต่างกันเพราะอะไรดูได้จากสองฝั่ง')
-    +pcSheetPK(_pcPier,{only:ds, print:true});
-  /* 25 คอลัมน์ · A4 แนวนอนถึงจะพอ · ตัวหนังสือย่อลงอีกนิดให้ครบหน้า */
-  pcPrintWin('ค่าอุทยาน · '+pcPierName()+' · '+ds,
-    ('parkfee_'+_pcPier+'_'+ds).replace(/[^A-Za-z0-9_.-]+/g,'_'),
-    PC_PRINT_HEAD_CSS+'#sheet .pc-t{font-size:10.5px}#sheet .pc-t th,#sheet .pc-t td{padding:4px 5px}',
-    sheet, true);
 }
 
 /* ══ §vckFlow · สถานะรายแถวของหน้าเช็คอินรถ ════════════════════════════════
@@ -54547,10 +54127,7 @@ function pckPayRender(){
         +(needSlip?'<span style="color:#A32D2D;font-weight:800">*ต้องมี</span><span class="pckp-soft"> — แนบทีหลังได้</span>'
                   :'<span class="pckp-soft">— ไม่ต้องแนบสำหรับเงินสด</span>')+'</label>';
       form+=L.slips.map(function(sl,j){
-        /* §slipView · ชื่อไฟล์กดเปิดดูได้ · ปุ่มลบยังทำงานเหมือนเดิม */
-        return '<div class="pckp-slip"><span>&#128206;</span>'
-          +'<span class="nm" style="cursor:pointer;text-decoration:underline" '
-          +laSlipClickAttr(L.slips, 'สลิปที่กำลังจะบันทึก', j)+' title="กดเพื่อเปิดดูสลิป">'+e(sl.name||'slip')+'</span>'
+        return '<div class="pckp-slip"><span>&#128206;</span><span class="nm">'+e(sl.name||'slip')+'</span>'
           +'<button class="rm" onclick="pckPayRmSlip('+i+','+j+')">&#10005;</button></div>';
       }).join('');
       form+='<label class="pckp-drop'+((needSlip&&!L.slips.length)?' need':'')+'">'
@@ -54583,11 +54160,7 @@ function pckPayRender(){
         +'<span style="flex:1;min-width:0"><b style="font-family:\'DM Mono\',monospace">'+pckB(p.amount)+'</b>'
         +((+p.fee||0)?('<span style="color:#a5a49d"> + ค่าธรรมเนียม '+pckB(p.fee)+(p.feePct?(' ('+p.feePct+'%)'):'')+'</span>'):'')
         +(p.note?('<div class="pckp-hnote">'+e(p.note)+'</div>'):'')
-        /* §slipView · ชื่อไฟล์แต่ละใบกดเปิดดูได้ · เดิมเป็นตัวหนังสือตาย */
-        +((p.slips&&p.slips.length)?('<div class="pckp-hslip">&#128206; '
-           +p.slips.map(function(s,si){ return '<span style="cursor:pointer;text-decoration:underline" '
-             +laSlipClickAttr(p.slips, pckMLabel(p.method)+' '+pckB(p.amount), si)
-             +' title="กดเพื่อเปิดดูสลิป">'+e(s.name||'slip')+'</span>'; }).join(' · ')+'</div>'):'')
+        +((p.slips&&p.slips.length)?('<div class="pckp-hslip">&#128206; '+p.slips.map(function(s){ return e(s.name||'slip'); }).join(' · ')+'</div>'):'')
         +(noSlip?('<div style="margin-top:4px"><span class="pckp-wait">&#9888; รอสลิป</span>'
            +'<label class="pckp-late"><input type="file" accept="image/*,application/pdf" style="display:none" onchange="pckPayAddSlip(\''+p.id+'\',this)">แนบสลิป</label></div>'):'')
         +'</span>'
@@ -60666,49 +60239,35 @@ function tsTotalOf(r, date){
 }
 // ของที่ขายเพิ่มหน้างานของใบนี้ · extras (SB_EXTRAS) + upgrade
 //   คืนทั้งรายการและยอดแยกตามวิธีรับเงิน เพื่อเอาไปรวมกับการ์ดด้านบน
-/* §tsComm · ค่าคอมคนขายต้องเดินทางมาถึงหน้าปิดวันด้วย
-   commission กับ toCompany มีอยู่ในทั้ง SB_EXTRAS และ bk.upgrades มานานแล้ว
-   แต่ตัวนี้อ่านแล้วทิ้ง ป้ายในตารางจึงเห็นแต่ยอดขาย ไม่เห็นว่าเงินก้อนไหน
-   เป็นของคนขาย · บรรทัด "เหลือเข้าบริษัท" ก็หักแต่ค่าจ่ายออก เลขเลยสูงเกินจริง
-   นับค่าคอมเฉพาะรายการที่เก็บเงินแล้ว ให้เข้าชุดกับ got/fee
-   ที่ยังไม่เก็บ (cot) ยังไม่มีเงินเข้ามือใคร จะหักออกจากยอดรับไม่ได้ */
 function tsSaleList(b, date){
-  var out=[], by={cash:0,transfer:0,card:0}, fee=0, got=0, due=0, noSlip=0, comm=0;
+  var out=[], by={cash:0,transfer:0,card:0}, fee=0, got=0, due=0, noSlip=0;
   try{ ((typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(b.id):[]).forEach(function(x){
     if(date && x.tripDate && x.tripDate!==date) return;
     var amt=+x.total||0; if(!amt) return;
     var mth=x.method||'cash'; if(by[mth]==null) by[mth]=0;
     /* §exCot · ยังไม่ได้เก็บ = ไม่เข้ายอดแยกตามวิธีรับเงิน · ไปอยู่ฝั่ง "ต้องเก็บ" เหมือนอัปเกรด */
     var _g=(typeof bkxExGot==='function')?bkxExGot(x):true;
-    var _cm=+x.commission||0;
-    if(_g){ by[mth]+=amt; got+=amt; fee+=(+x.fee||0); comm+=_cm; } else due+=amt;
+    if(_g){ by[mth]+=amt; got+=amt; fee+=(+x.fee||0); } else due+=amt;
     var slipMissing=(_g && mth!=='cash' && !((x.slips||[]).length));
     if(slipMissing) noSlip++;
     out.push({ kind:'ex', id:x.id||'', t:String(x.service||'ขายเพิ่ม'), qty:(+x.qty||1), amt:amt,
                // §tsSaleFee · fee ของรายการนี้ · รูดจริง = amt + fee (ตัวที่ตรงกับ statement)
                fee:(+x.fee||0), nSlip:((x.slips||[]).length),
-               // §slipView · ส่ง ref ของสลิปมาด้วย ของเดิมส่งแต่ตัวนับ กดดูไฟล์ไม่ได้
-               slips:(x.slips||[]).slice(),
-               // §tsComm · เงินก้อนนี้แบ่งเป็นของบริษัทเท่าไร ของคนขายเท่าไร
-               comm:_cm, toCompany:(+x.toCompany||0),
                method:mth, who:x.seller||'', done:_g, noSlip:slipMissing });
   }); }catch(_){}
   try{ (Array.isArray(b.upgrades)?b.upgrades:[]).forEach(function(u){
     var amt=+u.sellPrice||0; if(!amt) return;
     var m2=u.method||'cash';
-    if(u.collected){ if(by[m2]==null) by[m2]=0; by[m2]+=amt; got+=amt; fee+=(+u.fee||0);
-                     comm+=(+u.commission||0); }
+    if(u.collected){ if(by[m2]==null) by[m2]=0; by[m2]+=amt; got+=amt; fee+=(+u.fee||0); }
     else due+=amt;
     // §upgPay · รูดบัตร/โอนแล้วยังไม่มีสลิป ต้องขึ้นเตือนเหมือน Extra
     var _uNo=(!!u.collected && m2!=='cash' && !((u.slips||[]).length));
     if(_uNo) noSlip++;
     out.push({ kind:'up', id:u.id||'', t:String(u.label||'upgrade'), qty:1, amt:amt,
                fee:(+u.fee||0), nSlip:((u.slips||[]).length),
-               slips:(u.slips||[]).slice(),
-               comm:(+u.commission||0), toCompany:(+u.toCompany||0),
                method:m2, who:u.seller||'', done:!!u.collected, noSlip:_uNo });
   }); }catch(_){}
-  return { list:out, by:by, fee:fee, got:got, due:due, noSlip:noSlip, comm:comm, tot:got+due, n:out.length };
+  return { list:out, by:by, fee:fee, got:got, due:due, noSlip:noSlip, tot:got+due, n:out.length };
 }
 // ป้ายรายการขายเพิ่มสำหรับตารางส่วนที่ 3
 function tsSaleCell(S, money, e){
@@ -60718,15 +60277,11 @@ function tsSaleCell(S, money, e){
     var cls=x.kind==='up' ? 'ao-up' : 'ao-ex';
     // §tsSaleFee · บัตรมีค่าธรรมเนียมแยกจากยอดขายเสมอ · ต้องเห็นทั้งสองตัวถึงจะกระทบยอดได้
     var _fee=+x.fee||0;
-    /* §tsComm · ถ้อยคำเดียวกับที่ใช้ในกล่อง Extra กับ upgrade · หน้าท่าจะได้เห็นคำเดิม */
-    var _cm=+x.comm||0;
     var tip=(x.qty>1?('จำนวน '+x.qty+' · '):'')+(PM[x.method]||x.method)
-      +(_cm>0?(' · บริษัท '+money(x.toCompany)+' · คอม '+money(_cm)):'')
       +(_fee>0?(' · ค่าธรรมเนียมบัตร '+money(_fee)+' · รูดจริง '+money((+x.amt||0)+_fee)):'')
       +(x.who?(' · '+x.who):'')+(x.done?'':' · ยังไม่เก็บ')+(x.noSlip?' · ยังไม่มีสลิป':'');
     return '<span class="ts-ao '+cls+'" title="'+e(tip)+'">'+e(x.t)+(x.qty>1?(' ×'+x.qty):'')
       +' <b>'+money(x.amt)+'</b>'
-      +(_cm>0?(' <i style="font-style:normal;opacity:.78">· คอม '+money(_cm)+'</i>'):'')
       +(_fee>0?(' <i style="font-style:normal;opacity:.72">+fee '+money(_fee)+'</i>'):'')
       +(x.done?'':' <i style="font-style:normal;opacity:.75">รอเก็บ</i>')
       +(x.noSlip?' <i style="font-style:normal;color:#A32D2D">⚠</i>':'')+'</span>';
@@ -62785,15 +62340,14 @@ function renderTravelSum(){
     m.cxlKind = (m.r.cxl>0) ? 'ยกเลิกหน้างาน' : 'ไม่มา';
   });
   var nCollect=mRows.filter(function(m){ return !m.cxl; }).length;
-  var sumCash=0,sumTf=0,sumCard=0,sumDue=0,sumTarget=0,sumFee=0,sumSale=0,nSale=0,sumSaleDue=0,sumFeeSale=0,sumComm=0;
+  var sumCash=0,sumTf=0,sumCard=0,sumDue=0,sumTarget=0,sumFee=0,sumSale=0,nSale=0,sumSaleDue=0,sumFeeSale=0;
   mRows.forEach(function(m){
     sumCash+=(m.by.cash||0)+(m.S.by.cash||0);
     sumTf  +=(m.by.transfer||0)+(m.S.by.transfer||0);
     sumCard+=(m.by.card||0)+(m.S.by.card||0);
     if(!m.cxl){ sumDue+=m.due; sumTarget+=m.target; }   // §tsCxlNoCount · เงินที่เก็บไม่ได้ ไม่เข้ายอดต้องเก็บ
     sumFee+=(+m.M.pierFee||0)+(+m.S.fee||0); sumFeeSale+=(+m.S.fee||0);
-    sumSale+=m.S.tot; nSale+=m.S.n; sumSaleDue+=m.S.due;
-    sumComm+=(+m.S.comm||0); });   // §tsComm · ค่าคอมของที่เก็บเงินแล้ว
+    sumSale+=m.S.tot; nSale+=m.S.n; sumSaleDue+=m.S.due; });
 
   // §tsCashNet · แยกเงินที่ต้องจ่ายออกตามคำตัดสิน COT ออกจากยอดที่รับเข้า
   var sumPayout=0, sumDeduct=0, sumCotAll=0, nCotLeft=0, sumCotNo=0, nCotNo=0;
@@ -62810,9 +62364,7 @@ function renderTravelSum(){
     sumDeduct+=d; sumPayout+=p;
   });
   var sumIn=sumCash+sumTf+sumCard;
-  /* §tsComm · ค่าคอมคือเงินที่คนขายเก็บไว้ ไม่เคยเข้าบริษัท ต้องหักออกเหมือนเงินจ่ายออก
-     ของเดิมหักแต่ sumPayout · "เหลือเข้าบริษัท" จึงสูงกว่าที่เข้าจริงเท่ากับยอดค่าคอม */
-  var sumNet=Math.max(0, sumIn-sumPayout-sumComm);
+  var sumNet=Math.max(0, sumIn-sumPayout);
 
   var K=function(cls,lb,val,unit,note,noteCls){
     return '<div class="ts-k '+cls+'"><div class="kk">'+lb+'</div><div class="kv">'+val+(unit?('<em>'+unit+'</em>'):'')+'</div>'
@@ -62989,10 +62541,8 @@ function renderTravelSum(){
     m.pays.forEach(function(p){
       if((p.method||'cash')==='cash') return;
       var n=((p.slips||[]).length), lb=(PM[p.method||'cash']||['อื่นๆ'])[0]+' '+money(p.amount);
-      /* §slipView · มีสลิปแล้ว = กดเปิดดูได้เลย ไม่ต้องไปสแกนซัมลงไดร์ฟ */
       _slipBits.push(n
-        ? ('<span class="ts-slipok" style="cursor:pointer" '+laSlipClickAttr(p.slips, lb)
-           +' title="'+e(lb+' · มีสลิปแล้ว '+n+' ไฟล์ · กดเพื่อเปิดดู')+'">&#128206; '+e(lb)+'</span>')
+        ? ('<span class="ts-slipok" title="'+e(lb+' · มีสลิปแล้ว '+n+' ไฟล์')+'">&#128206; '+e(lb)+'</span>')
         : ('<label class="ts-slipb" title="'+e('แนบสลิป · '+lb)+'">&#128206; แนบสลิป '+e(lb)
            +'<input type="file" accept="image/*,application/pdf" style="display:none"'
            +' onchange="tsSlipPick(\'p\',\''+b.id+'\',\''+(p.id||'')+'\',this)"></label>'));
@@ -63002,8 +62552,7 @@ function renderTravelSum(){
       if((x.method||'cash')==='cash') return;
       var lb=String(x.t||'ขายเพิ่ม')+' '+money(x.amt);
       _slipBits.push((+x.nSlip>0)
-        ? ('<span class="ts-slipok" style="cursor:pointer" '+laSlipClickAttr(x.slips, lb)
-           +' title="'+e(lb+' · มีสลิปแล้ว · กดเพื่อเปิดดู')+'">&#128206; '+e(lb)+'</span>')
+        ? ('<span class="ts-slipok" title="'+e(lb+' · มีสลิปแล้ว')+'">&#128206; '+e(lb)+'</span>')
         : ('<label class="ts-slipb" title="'+e('แนบสลิป · '+lb)+'">&#128206; แนบสลิป '+e(lb)
            +'<input type="file" accept="image/*,application/pdf" style="display:none"'
            +' onchange="tsSlipPick(\'x\',\''+b.id+'\',\''+x.id+'\',this)"></label>'));
@@ -63055,8 +62604,6 @@ function renderTravelSum(){
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'
       +'<span class="ts-chip e" style="font-size:11px;padding:5px 12px">ต้องเก็บวันนี้ '+money(sumTarget)+'</span>'
       +(nSale?('<span class="ts-chip b" style="font-size:11px;padding:5px 12px">ขายเพิ่ม '+money(sumSale)+' · '+nSale+' รายการ</span>'):'')
-      // §tsComm · ยอดค่าคอมของวัน · หน้าท่าจะได้รู้ว่าเงินในลิ้นชักก้อนไหนไม่ใช่ของบริษัท
-      +(sumComm>0?('<span class="ts-chip p" style="font-size:11px;padding:5px 12px" title="ค่าคอมมิชชั่นของคนขาย · หักออกจากเงินที่รับมาแล้วในบรรทัดกระทบยอด">คอมคนขาย '+money(sumComm)+'</span>'):'')
       +(function(){   // §tsCotSettle · สรุปการจัดการ COT ของวัน · ตัวเลขคำนวณไว้ข้างบนแล้ว (§tsCashNet)
           if(!(sumCotAll>0)) return '';
           return '<span class="ts-chip n" style="font-size:11px;padding:5px 12px">COT '+money(sumCotAll)+'</span>'
@@ -63084,8 +62631,6 @@ function renderTravelSum(){
     +'<div class="ts-read" style="margin-top:0;margin-bottom:13px">รับเข้าวันนี้ <b>'+money(sumIn)+'</b>'
       +' (สด '+money(sumCash)+' &middot; โอน '+money(sumTf)+' &middot; บัตร '+money(sumCard)+')'
       +(sumPayout>0?(' &minus; จ่ายออกตาม COT <b style="color:var(--rs700)">'+money(sumPayout)+'</b>'):'')
-      // §tsComm · ค่าคอมคนขายไม่เคยเข้าบริษัท · เขียนตัวหักให้เห็น จะได้ไม่งงว่าเลขหายไปไหน
-      +(sumComm>0?(' &minus; คอมคนขาย <b style="color:var(--rs700)">'+money(sumComm)+'</b>'):'')
       +' = เหลือเข้าบริษัท <b>'+money(sumNet)+'</b>'
       +(sumDeduct>0?(' &middot; อีก <b>'+money(sumDeduct)+'</b> หักจากบิลเอเจนต์ (ไม่ผ่านมือหน้าท่า)'):'')
       +(sumFee>0?(' &middot; ค่าธรรมเนียมบัตร <b>'+money(sumFee)+'</b> ธนาคารหัก ไม่ใช่รายได้'):'')
@@ -68867,10 +68412,7 @@ function bkV2ExtraPayRender(){
     h+='<div style="margin:4px 0 4px">';
     P.slips.forEach(function(sp,i){
       h+='<div style="display:flex;align-items:center;gap:8px;font-size:11.5px;padding:4px 0;border-bottom:0.5px solid var(--fd-line-soft)">'
-        /* §slipView · กดชื่อไฟล์เปิดดูได้ · โอเวอร์เลย์ z-index สูงกว่ากล่องนี้ จึงไม่โดนบัง */
-        +'<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;text-decoration:underline" '
-          +laSlipClickAttr(P.slips, 'สลิปของรายการขายเพิ่ม', i)
-          +' title="กดเพื่อเปิดดูสลิป">&#128206; '+esc(sp.name||sp.url||'slip')+'</span>'
+        +'<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">&#128206; '+esc(sp.name||sp.url||'slip')+'</span>'
         +'<button type="button" onclick="bkV2ExtraRmSlip('+i+')" style="background:transparent;border:none;color:#A32D2D;cursor:pointer;font-size:12px">&#10005;</button></div>';
     });
     h+='<label style="display:block;border:1.5px dashed var(--fd-line);border-radius:9px;padding:10px;text-align:center;font-size:11.5px;color:var(--fd-ink-soft);cursor:pointer;margin-top:4px">'
@@ -78513,12 +78055,30 @@ function bkV2Render(){
       const vanOn=!!(typeof _bkV2!=='undefined'&&_bkV2&&_bkV2.vanAssignMode);
       // measure the actual van+grouping strip height (was hardcoded 96 → gap/overlap when real height differed)
       const vs=host.querySelector('.bkv2-vanstrip'); const VANGROUP=(vanOn&&vs)?vs.offsetHeight:0;
-      vb.style.setProperty('--t2-vangroup-top', (TOP+h)+'px');
-      vb.style.setProperty('--t2-head-top', (TOP+h+VANGROUP)+'px');
-      /* §btStick · ความสูงกล่องตาราง = ความสูงจอ ลบหัวที่ตรึงไว้ ลบขอบล่างไว้หายใจ
+      /* §btScroll · ตัวเลื่อนย้ายมาอยู่ที่ .t2-wrap แล้ว · ชั้นที่ตรึงต้องวัดจาก
+         ขอบบนของกล่องนั้น ไม่ใช่จากขอบจอ · ไม่งั้นแถบ VANS ไปลอยกลางตาราง */
+      vb.style.setProperty('--t2-vangroup-top', '0px');
+      vb.style.setProperty('--t2-head-top', VANGROUP+'px');
+      /* §btScroll · ความสูงกล่องรายวัน = จอ ลบแถบแท็บ ลบหัวที่ตรึง ลบขอบล่างไว้หายใจ
          ต้องอยู่หลัง TOP ถูกประกาศ ไม่งั้นชนกฎ let/const แล้วโยน ReferenceError เงียบ ๆ */
-      try{ if(_bth){ const _vh=window.innerHeight||900;
-        vb.style.setProperty('--bt-tblh', Math.max(260, _vh-(TOP+h)-26)+'px'); } }catch(_){}
+      try{ const _wp=host.querySelector('.t2-wrap');
+        if(_wp){ const _vh=window.innerHeight||900;
+          /* วัดจากตำแหน่งจริงของกล่อง · บวกลบความสูงทีละชิ้นพลาดไป ~34px
+             (ขอบ/มาร์จินของการ์ดครอบที่ไม่ได้นับ) แล้วหน้าเลื่อนได้อีกนิดหน่อย
+             กลายเป็นสองตัวเลื่อนซ้อนกัน */
+          const _top=_wp.getBoundingClientRect().top + (window.scrollY||0);
+          let _hh=Math.max(280, _vh-_top-12);
+          vb.style.setProperty('--bt-wraph', _hh+'px');
+          /* ยังมีขอบล่างของ #view (64px) กับ main (22px) ที่ไม่ได้อยู่ในสายที่วัด
+             ดันให้หน้ายังเลื่อนได้อีกนิด กลายเป็นสองตัวเลื่อนซ้อนกัน
+             หดความสูงกล่องไม่ได้ เพราะจะเสียพื้นที่ตารางไป 86px เปล่า ๆ
+             ดึงขอบล่างนั้นกลับด้วย margin ติดลบแทน · กล่องได้ความสูงเต็ม หน้าไม่เลื่อน */
+          _wp.style.marginBottom='0px';
+          requestAnimationFrame(()=>{ try{
+            const _ov=document.documentElement.scrollHeight-(window.innerHeight||900);
+            if(_ov>1) _wp.style.marginBottom=(-_ov)+'px';
+          }catch(_){} });
+        } }catch(_){}
     }catch(_){} });
   }catch(e){
     console.error('[bkV2Render] render failed:', e);
@@ -82705,7 +82265,10 @@ function bkV2RenderTab2(){
     .t2-puempty{font-size:11px;color:var(--ink-faint);font-style:italic;padding:4px 2px}
     /* §btGap · เดิมเว้นบน 16 + ตัวแถบหัวเว้นล่าง 10 + การ์ดทริปเว้นล่าง 8 = ห่างกันเกินไป
        ตอนนี้หัวกับตารางเป็นพื้นสีเดียวกันแล้ว ระยะห่างที่ต้องมีคือขอบการ์ดอย่างเดียว */
-    .t2-wrap{padding:8px 8px 40px}
+    /* §btScroll · padding-top ต้องเป็น 0 · เนื้อที่ไถผ่านยังถูกวาดในเขต padding
+       เศษแถวจะโผล่เหนือหัวตารางที่ตรึงไว้ */
+    .t2-wrap{box-sizing:border-box;padding:0 8px 40px;overflow:auto;max-height:var(--bt-wraph,72vh);
+      overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
     .t2-trip{background:transparent;border:none;border-radius:0;margin-bottom:12px;overflow:visible}
     .t2-tripcard{background:var(--white);border:1px solid var(--border);border-left:5px solid var(--fam);border-radius:14px;overflow:hidden;margin-bottom:0}
     /* การ์ดหัวทริปว่างแล้ว (ชื่อทริปย้ายลงตาราง) · ไม่ต้องกินที่เป็นกล่องเปล่า */
@@ -82952,22 +82515,27 @@ function bkV2RenderTab2(){
     .t2-zdot{width:8px;height:8px;border-radius:50%}
     .t2-zn{font-size:12px;font-weight:700}
     .t2-zc{font-size:11px;color:var(--ink-soft);font-family:'DM Mono',monospace}
-    /* ══ §btStick · กล่องตารางมีตัวเลื่อนของตัวเองทั้งสองแกน ═══════════════════
-       หัวตารางกับคอลัมน์ที่แช่แข็งไว้จะตรึงกับกล่องนี้ · ตรึงกับหน้าไม่ได้เพราะ
-       ตารางกว้างกว่าจอ ต้องมีตัวเลื่อนแนวนอน แล้ว overflow กลืน sticky ไปหมด
-       ความสูงกล่อง = ความสูงจอ ลบหัวที่ตรึงไว้ · ตั้งจาก JS หลัง render
-       (วัดจริงเพราะหัวสูงไม่เท่ากันตามความกว้างจอและจำนวนทริป)                */
-    .t2-tblscroll{overflow:auto;position:relative;z-index:0;
-      max-height:var(--bt-tblh,68vh);overscroll-behavior:contain;
-      -webkit-overflow-scrolling:touch}
-    table.t2-mtbl{border-collapse:collapse;width:100%;min-width:1180px;font-size:12px}
+    /* ══ §btScroll · ตัวเลื่อนเดียวสำหรับทั้งวัน ═════════════════════════════
+       ก่อนหน้านี้ให้ตารางของ "แต่ละทริป" มีกล่องเลื่อนของตัวเอง · วันที่มีหลายทริป
+       เลยมีตัวเลื่อนหลายตัวซ้อนกับตัวเลื่อนของหน้า · พอไถหน้าลงมา กล่องของทริปที่ 2
+       เลื่อนตามหน้าไปทั้งกล่อง หัวตารางที่ตรึงกับกล่องจึงหลุดออกนอกจอ
+       เห็นตารางที่ไม่มีหัวคอลัมน์ · แถมพอไถในกล่องจนสุดแล้วหน้าไม่ไถต่อ (รู้สึกค้าง)
+
+       ของใหม่: ทั้งวันอยู่ในกล่องเดียว (.t2-wrap) · หน้าไม่เลื่อน กล่องเลื่อนแทน
+       หัวตารางของทุกทริปตรึงกับกล่องนี้ ไถผ่านทริปไหนหัวของทริปนั้นขึ้นมาแทนเอง
+       คอลัมน์ซ้ายที่แช่แข็งไว้ก็เกาะกล่องนี้ ทุกทริปเลื่อนแนวนอนพร้อมกัน           */
+    .t2-tblscroll{overflow:visible;position:relative;z-index:0}
+    /* §btScroll · border-collapse:collapse ทำให้ position:sticky บน th ไม่ทำงาน
+       (หัวตารางไถหายไปทั้งที่ตั้ง sticky ไว้) · ต้องเป็น separate + border-spacing:0
+       เหมือนที่ตารางเช็คอินรถ/หน้าท่าใช้อยู่ · เส้นขอบวาดที่ td/th อยู่แล้วจึงไม่ซ้อน */
+    table.t2-mtbl{border-collapse:separate;border-spacing:0;width:100%;min-width:1180px;font-size:12px}
     /* §t2Hdr · หัวตารางเดิมเป็นเทาอ่อน 9px บนพื้นขาว · จางกว่าเนื้อตารางที่มันกำกับอยู่
        ตารางนี้กว้างกว่าจอต้องเลื่อนแนวนอน คนเลื่อนไปกลางตารางแล้วไม่รู้ว่าคอลัมน์ไหนคืออะไร
        ทำเป็นพื้นทึบ · sticky อยู่แล้ว พอเลื่อนลงหัวยังติดอยู่และอ่านออก
        §btHdr (2026-09-04) · เดิมเป็นน้ำเงินกรมท่า ซึ่งเป็นสีเดียวในหน้าที่ไม่เข้าชุด
        หลังทำหัวหน้าใหม่เป็นโทนอุ่น (ทราย/ชมพูตามสีโปรแกรม) · เปลี่ยนเป็นทรายเข้ม
        ยังทึบและอ่านออกเหมือนเดิม แต่ไม่ตัดกับหน้าเป็นแถบดำกลางจอ */
-    table.t2-mtbl th{text-align:left;font-size:9.5px;font-weight:800;color:#4A3C3C;text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;white-space:nowrap;position:sticky;top:0;z-index:35;background:#EDE6E6;box-shadow:inset 0 -2px 0 #C4B2B2}
+    table.t2-mtbl th{text-align:left;font-size:9.5px;font-weight:800;color:#4A3C3C;text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;white-space:nowrap;position:sticky;top:var(--t2-head-top,0px);z-index:35;background:#EDE6E6;box-shadow:inset 0 -2px 0 #C4B2B2}
     /* §btHdr · เส้นแบ่งคอลัมน์ · ตารางกว้างมาก ไม่มีเส้นตั้งแล้วตาไล่ข้ามคอลัมน์หลุด */
     /* §btCell · ของเดิมเว้นบน-ล่างช่องละ 13px · พอป้ายในช่องลูกค้าตกเป็นสองบรรทัด
        แถวสูงเกือบ 60px เห็นได้ 8 แถวต่อจอ · ลดเหลือ 6px ตามที่วางไว้ใน mockup
