@@ -94543,6 +94543,9 @@ function ppCSS(){ var S='#prpo-host'; return ''
  +S+' .pp-t tr.g-prog .mt{font-size:10.5px;font-weight:600;opacity:.82}'
  +S+' .pp-t tr.g-prog .sm{margin-left:auto;font-size:11px;font-weight:700;opacity:.93;'
    +'font-family:"DM Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;white-space:nowrap}'
+ /* ช่องว่างคั่นท่า · ไม่มีเส้น ไม่มีพื้น อ่านเป็นระยะห่างล้วน ๆ */
+ +S+' .pp-t tr.g-gap>td{height:18px;padding:0;background:#EEF2F6;border-left:0;border-right:0;'
+   +'border-top:0;border-bottom:0}'
  /* ท่าที่ไม่มีทัวร์ · แถบท่ายังอยู่ แต่จางลงและบอกเหตุผลแทนตัวเลข */
  +S+' .pp-t tr.g-pier.none>td{opacity:.72}'
  +S+' .pp-t td.notour{font-size:11.5px;font-weight:600;font-style:italic}'
@@ -94575,6 +94578,7 @@ function ppCSS(){ var S='#prpo-host'; return ''
    +S+' .pp-t td{padding:3px 5px}'+S+' .pp-t th{padding:4px 5px;position:static}'
    +S+' .pp-t tr{break-inside:avoid}'+S+' .pp-t thead{display:table-header-group}'
    +S+' .pp-t tr.g-pier,'+S+' .pp-t tr.g-prog{break-after:avoid}'
+   +S+' .pp-t tr.g-gap>td{background:#fff;height:10px}'
    +'body.pp-printing .sidebar{display:none!important}'
    +'body.pp-printing .app{display:block!important}'
    +'body.pp-printing .main{display:block!important;margin:0!important;padding:0!important;'
@@ -94803,8 +94807,11 @@ function ppBody(P,pOrd,GT){
 function ppBodySheet(P,pOrd,GT){
   var e=ckEsc;
   var trs='';
-  pOrd.forEach(function(pk){
+  pOrd.forEach(function(pk,pi){
     var PB=P[pk], M=ppPierMeta(pk), PA=PB.A, c=M.c||'#94A3B8';
+    /* เว้นระยะก่อนแถบท่าถัดไป · <tr> ใส่ margin ไม่ได้ ต้องเป็นแถวเปล่าคั่นเอา
+       ท่าแรกไม่ต้องเว้น จะได้ไม่ลอยห่างจากหัวตาราง */
+    if(pi) trs+='<tr class="g-gap"><td colspan="'+PP_COLS+'"></td></tr>';
     var lb='<div class="lb">'
         +'<span class="ps" style="background:'+e(c)+'">'+e(M.s||'—')+'</span>'
         +'<span class="pn">'+e(M.n)+'</span>'
@@ -94979,6 +94986,7 @@ function ppCSSSheet(){ var S='#prpo-host'; return ppCSSSeg()
 function ppCSSFriendly(){ var S='#prpo-host'; return ppCSSSeg()
  +S+' .fr-wrap{display:block}'
  +S+' .fr-pier{margin:0 0 26px}'
+ +S+' .fr-pier + .fr-pier{margin-top:30px}'
  +S+' .fr-ph{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;'
    +'border-radius:18px;padding:16px 20px;color:#fff;box-shadow:0 6px 18px rgba(15,23,42,.13)}'
  +S+' .fr-ph .l{display:flex;align-items:center;gap:13px}'
@@ -95038,6 +95046,7 @@ function ppCSSFriendly(){ var S='#prpo-host'; return ppCSSSeg()
 function ppCSSBoard(){ var S='#prpo-host'; return ppCSSSeg()
  +S+' .bd-wrap{display:block}'
  +S+' .bd-p{margin:0 0 22px}'
+ +S+' .bd-p + .bd-p{margin-top:26px}'
  +S+' .bd-p>header{display:flex;align-items:center;gap:11px;flex-wrap:wrap;background:#0F172A;color:#fff;'
    +'padding:11px 15px;border-radius:12px 12px 0 0;border-bottom:4px solid}'
  +S+' .bd-p>header .sq{font:800 10.5px inherit;letter-spacing:.05em;padding:3px 9px;border-radius:5px;flex:none}'
