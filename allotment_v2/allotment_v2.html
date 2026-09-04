@@ -50184,14 +50184,18 @@ function ckStrandSnap(b, date, O, t, to, why){
   ckStrandStoreSave(S);
   return true;
 }
+/* วันแบบไทยสั้น · หน้างานอ่าน 15 ส.ค. เร็วกว่า 2026-08-15
+   ใช้ร่วมกันทั้งเหตุผลและป้ายสถานะ จะได้ไม่มีสองรูปแบบในบรรทัดเดียวกัน */
+function ckDayShortTh(ymd){
+  var v=String(ymd||'');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  var M=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  var p=v.split('-');
+  return (+p[2])+' '+M[(+p[1])-1];
+}
 function ckStrandMvWhy(R){
   var bits=[];
-  /* วันปลายทางเขียนแบบไทยสั้น · หน้างานอ่าน 15 ส.ค. เร็วกว่า 2026-08-15 */
-  var _to=R.to||'';
-  try{ if(/^\d{4}-\d{2}-\d{2}$/.test(_to)){
-    var M=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-    var p=_to.split('-'); _to=(+p[2])+' '+M[(+p[1])-1];
-  } }catch(_){}
+  var _to=ckDayShortTh(R.to||'');
   bits.push(_to?('เลื่อนไป '+_to):'ย้ายวันออกไป');
   var w=ckShortDay(R.at||''); if(w) bits.push(w);
   if(R.by) bits.push(R.by);
@@ -50215,7 +50219,7 @@ function ckStrandMovedRows(date){
          boatId:R.boatId||'', pickupTimeFinal:R.pickupTime||''},
       booked:0, expect:0, ck:null, van:null, _vd:null,
       vanId:vid, vanIds:vid?[vid]:[], bid:R.boatId||'',
-      strand:'mv', strandWhy:ckStrandMvWhy(R), _mvKey:k
+      strand:'mv', strandWhy:ckStrandMvWhy(R), mvTo:(R.to||''), _mvKey:k
     });
   });
   return out;
@@ -59333,6 +59337,10 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-tbl td{padding:8px 11px;border-bottom:1px solid var(--zn100);vertical-align:top}'
  +S+' .ts-tbl tbody tr:last-child td{border-bottom:none}'
  +S+' .ts-tbl tbody tr:hover td{background:var(--lm50)}'
+ /* §tsManMv · แถวที่เลื่อนวันใน Manifest · ยืมโครงแถวยกเลิกแต่เป็นสีม่วง
+    ต้องแยกจาก "ยกเลิก" ให้ออก เพราะใบยังอยู่ แค่ไปวันอื่น */
+ +S+' .ts-tbl tbody tr.ts-mvrow>td:first-child{box-shadow:inset 4px 0 0 #7C4DBE}'
+ +S+' .ts-tbl tbody tr.ts-mvrow .ts-lead{text-decoration:line-through;text-decoration-thickness:1.5px}'
  /* §cotNoCol · ปุ่ม "เก็บไม่ได้" เป็นการปิดยอดโดยไม่ได้เงิน · ต้องดูต่างจากปุ่มที่แปลว่าได้เงิน */
  +S+' .ts-db.nocol{border-color:var(--rs200);color:var(--rs700)}'
  +S+' .ts-db.nocol.pick{background:var(--rs700);border-color:var(--rs700);color:#fff}'
@@ -59958,6 +59966,27 @@ function tsCxlRows(date){
                boat:'', pierCk:null, pierDone:false, pierActual:null, pierExp:null,
                issue:false, amount:(typeof tsTripAmount==='function')?tsTripAmount(b,t):0,
                policy:'', dec:null });
+  });
+  return out;
+}
+/* §tsManMv (2026-09-04) · ใบที่เลื่อนวันออกไปแล้ว ต้องคาอยู่ใน Manifest ประจำวันด้วย
+   ไม่ใช่โผล่แค่ตารางตัดสิน · Manifest คือรายชื่อของ "วันนั้น" ที่ต้องอ่านย้อนหลังได้ว่า
+   เดิมใบนี้อยู่ในลิสต์ ขึ้นรถคันไหน ลำไหน แล้วถูกย้ายออกไปวันไหน
+   ยืมโครง cxlRow ที่มีอยู่แล้ว (จอง N → ไปจริง 0 · ไม่เข้ายอดเดินทางจริงของวัน)
+   ต่างกันแค่ป้ายและสีเท่านั้น                                                 */
+function tsMvRows(date){
+  var out=[];
+  var MV=(typeof ckStrandMovedRows==='function')?ckStrandMovedRows(date):[];
+  MV.forEach(function(r){
+    out.push({ b:r.b, t:r.t, O:r.O, routeId:(r.t&&r.t.routeId)||'',
+      cxlRow:true, mvRow:true, mvWhy:r.strandWhy||'', mvTo:r.mvTo||'',
+      ovnBack:false, ovnOut:'',
+      booked:(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot((r.t&&r.t.pax)||{}):0, travelled:0,
+      ns:0, cxl:0, events:[],
+      van:(r.O&&r.O.vanId)||'', vanCk:null, vanDone:false, vanActual:null,
+      boat:(r.O&&r.O.boatId)||'', pierCk:null, pierDone:false, pierActual:null, pierExp:null,
+      issue:false, amount:0, policy:'',
+      dec:(typeof tsGet==='function')?tsGet(r.b.id,date):null });
   });
   return out;
 }
@@ -62526,8 +62555,12 @@ function renderTravelSum(){
   var cxlAll=(typeof tsCxlRows==='function')?tsCxlRows(date):[];
   if(_tsRoute) cxlAll=cxlAll.filter(function(x){ return (x.routeId||'')===_tsRoute; });
   if(_tsVatF)  cxlAll=cxlAll.filter(_vatKeep);   // §tsVatFilter · ใบที่ยกเลิกทั้งใบก็ต้องอยู่ชุดเดียวกับ agent เจ้านั้น
+  /* §tsManMv · ใบที่เลื่อนวันออกไปแล้ว · กรองเส้นทาง/ภาษีชุดเดียวกับแถวอื่น */
+  var mvAll=(typeof tsMvRows==='function')?tsMvRows(date):[];
+  if(_tsRoute) mvAll=mvAll.filter(function(x){ return (x.routeId||'')===_tsRoute; });
+  if(_tsVatF)  mvAll=mvAll.filter(_vatKeep);
   var _azM=function(a,b){ return String(a||'').localeCompare(String(b||''),'en',{numeric:true,sensitivity:'base'}); };
-  var mrows=rows.concat(cxlAll).sort(function(x,y){
+  var mrows=rows.concat(cxlAll).concat(mvAll).sort(function(x,y){
     var rx=((typeof getRoute==='function'?getRoute(x.routeId):null)||{}).name||x.routeId;
     var ry=((typeof getRoute==='function'?getRoute(y.routeId):null)||{}).name||y.routeId;
     return _azM(rx,ry)
@@ -62547,13 +62580,15 @@ function renderTravelSum(){
       prevRoute=r.routeId;
       var rt=(typeof getRoute==='function'?getRoute(r.routeId):null)||{};
       var grp=mrows.filter(function(x){ return x.routeId===r.routeId && !x.cxlRow; });
-      var gX=mrows.filter(function(x){ return x.routeId===r.routeId && x.cxlRow; });
+      var gX=mrows.filter(function(x){ return x.routeId===r.routeId && x.cxlRow && !x.mvRow; });
+      var gM=mrows.filter(function(x){ return x.routeId===r.routeId && x.mvRow; });
       var gB=grp.reduce(function(a,x){ return a+x.booked; },0), gT=grp.reduce(function(a,x){ return a+x.travelled; },0);
       body+='<tr class="ts-grow"><td colspan="16" style="padding:7px 11px">'
         +'<span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;color:'+(rt.color||'var(--zn700)')+'">'
         +'<i class="ts-dot" style="border-radius:50%;background:'+(rt.color||'#999')+'"></i>'+e(rt.name||r.routeId||'—')+'</span>'
         +'<span style="float:right" class="ts-tel">'+grp.length+' booking · จอง '+gB+' → เดินทางจริง '+gT+(gB-gT>0?(' · หาย '+(gB-gT)):'')
-        +(gX.length?(' · <b style="color:var(--rs700)">ยกเลิกทั้งใบ '+gX.length+' ใบ</b>'):'')+'</span>'
+        +(gX.length?(' · <b style="color:var(--rs700)">ยกเลิกทั้งใบ '+gX.length+' ใบ</b>'):'')
+        +(gM.length?(' · <b style="color:var(--pu700)">เลื่อนวันไปแล้ว '+gM.length+' ใบ</b>'):'')+'</span>'
         +'</td></tr>';
     }
     var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
@@ -62563,7 +62598,9 @@ function renderTravelSum(){
     var veh=r.van?((typeof vehGet==='function'?vehGet(r.van):null)||{}):null;
     var boat=r.boat?((typeof getBoat==='function'?getBoat(r.boat):null)||{}):null;
     var dec=r.dec, mm=tsMoneyOf(b,date);
-    var stat = r.cxlRow ? '<span class="ts-chip r">CXL &middot; ยกเลิก</span>' : r.issue
+    var stat = r.mvRow ? ('<span class="ts-chip p">&#10007; เลื่อนวัน</span>'
+        +(r.mvTo?('<div class="ts-tel" style="margin-top:3px">ไป '+e((typeof ckDayShortTh==='function')?ckDayShortTh(r.mvTo):r.mvTo)+'</div>'):''))
+      : r.cxlRow ? '<span class="ts-chip r">CXL &middot; ยกเลิก</span>' : r.issue
       ? (dec ? '<span class="ts-chip '+DEC[dec.decision][1]+'">'+DEC[dec.decision][0]+(dec.decision==='postpone'?'':(' · '+money(dec.amount)))+'</span>'
              : '<span class="ts-chip r">รอตัดสิน</span>')
       : (mm.due>0 ? '<span class="ts-chip a">รอเก็บ '+money(mm.due)+'</span>'
@@ -62572,7 +62609,7 @@ function renderTravelSum(){
     var pxCell=function(k){
       var v=px[k];
       if(!v.b) return '<td class="c ts-px zero">·</td>';
-      if(r.cxlRow) return '<td class="c ts-px zero" title="ยกเลิกทั้งใบ · จอง '+v.b+'">'+v.b+'</td>';
+      if(r.cxlRow) return '<td class="c ts-px zero" title="'+(r.mvRow?'เลื่อนวันออกไปแล้ว':'ยกเลิกทั้งใบ')+' · จอง '+v.b+'">'+v.b+'</td>';
       if(v.l===v.b) return '<td class="c ts-px">'+v.b+'</td>';
       return '<td class="c ts-px lost" title="จอง '+v.b+' → ไปจริง '+v.l+'">'+v.l+'<em>/'+v.b+'</em></td>';
     };
@@ -62586,7 +62623,7 @@ function renderTravelSum(){
     var noBoat = _gone || (r.pierDone && (r.pierActual!=null) && r.pierActual<=0)
                        || (!!r.pierCk && (typeof ckEventTally==='function') && ckEventTally(r.pierCk).total>=r.booked && r.booked>0);
     var room=b.roomNo||b.room||b.roomNumber||'';
-    body+='<tr'+(r.cxlRow?' class="ts-cxlrow"':'')+'>'
+    body+='<tr'+(r.mvRow?' class="ts-cxlrow ts-mvrow"':(r.cxlRow?' class="ts-cxlrow"':''))+'>'
       +'<td><span class="ts-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'
       +'<td>'+(((typeof laAgencyMark==='function')&&laAgencyMark(b,16,{pad:'5px 7px',margin:false}))||('<span class="ts-ag" style="background:'+agColor+';color:'+agInk+'" title="'+e(agName)+'">'+e(agName)+'</span>'))+'</td>'
       +'<td><div class="ts-lead">'+e(b.leadPax||'—')+'</div><div class="ts-tel">'+e(b.leadPhone||b.phone||'')+'</div></td>'
@@ -62607,8 +62644,12 @@ function renderTravelSum(){
               +'>&#128676; '+e(boat.name||r.boat)+'</span>')
               :(r.cxlRow?'':'<span class="ts-chip r">ยังไม่จัดเรือ</span>'))
          +((r.cxlRow&&!veh&&!boat)?'<span style="color:var(--zn400)">—</span>':''))+'</td>'
-      +'<td class="ts-paycol">'+tsPayCell(r, date)+'</td>'
+      /* §tsManMv · เงินย้ายไปกับวันใหม่แล้ว · โชว์ซ้ำที่นี่จะอ่านเป็นยอดของวันนี้ */
+      +'<td class="ts-paycol">'+(r.mvRow
+          ? '<span style="color:var(--zn400);font-size:10.5px">ยอดเงินไปอยู่กับวันใหม่แล้ว</span>'
+          : tsPayCell(r, date))+'</td>'
       +(function(){
+          if(r.mvRow) return '<td class="r ts-mono" style="font-weight:800;color:var(--zn400)">&mdash;</td>';
           var T=tsTotalOf(r, date), N=tsNetOf(r);
           // §tsNetRate · ที่มาของยอด Net ในรูป "จำนวน × เรตต่อคน" · หาเรตไม่เจอใส่ขีด ไม่เดา
           var nr='<span class="ts-net" title="'+(N?('ยอด Net '+money(N.tot)+' ตาม Rate Type'):'ไม่มีเรตใน Rate Type')+'">('
@@ -62620,7 +62661,10 @@ function renderTravelSum(){
             +(T.site?('<span class="ts-totb">'+money(T.base)+'<em>+'+money(T.site)+'</em></span>'):'')
             +nr+'</td>';
         })()
-      +'<td style="max-width:170px">'+tsCxlCell(r, date, DEC, money)+'</td>'
+      +'<td style="max-width:170px">'+(r.mvRow
+          ? ('<span class="ts-chip p">เลื่อนวันแล้ว</span>'
+             +(r.mvWhy?('<div class="ts-tel" style="margin-top:3px">'+e(r.mvWhy)+'</div>'):''))
+          : tsCxlCell(r, date, DEC, money))+'</td>'
       +'<td class="c">'+stat+'</td>'
       +'</tr>';
   });
