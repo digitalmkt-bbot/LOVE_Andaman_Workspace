@@ -28187,13 +28187,18 @@ function laSlipRender(){
     +(many?nav(1,'&#8250;'):'')+'</div>';
 }
 /* ป้าย 📎 ที่กดดูได้ · ใช้ร่วมกันทุกหน้า เพื่อให้หน้าตากับพฤติกรรมตรงกัน
-   slips ถูกฝังเป็น JSON ใน onclick — ผ่าน encodeURIComponent กัน quote ในชื่อไฟล์พังแอตทริบิวต์ */
+   slips ถูกฝังเป็น JSON ใน onclick — ผ่าน encodeURIComponent กัน quote ในชื่อไฟล์พังแอตทริบิวต์
+
+   ระวัง · encodeURIComponent ไม่แปลง ' ให้ (เหลือไว้ตามสเปก พร้อมกับ ! ~ * ( ) )
+   ชื่อไฟล์อย่าง "bob's slip.jpg" จึงหลุด ' ออกมาปิดสตริงจาวาสคริปต์กลางคัน
+   ต้องแปลงเองอีกชั้น · " ถูกแปลงเป็น %22 อยู่แล้ว แอตทริบิวต์ HTML จึงปลอดภัย */
+function _laSlipEnc(s){ return encodeURIComponent(String(s==null?'':s)).replace(/'/g,'%27'); }
 function laSlipClickAttr(slips, title, i){
   var j=JSON.stringify((Array.isArray(slips)?slips:[]).map(function(s){
     return {id:s.id, name:s.name, mime:s.mime};
   }));
   return 'onclick="event.stopPropagation();laSlipView(JSON.parse(decodeURIComponent(\''
-    + encodeURIComponent(j) + '\')),decodeURIComponent(\'' + encodeURIComponent(String(title||'')) + '\'),'
+    + _laSlipEnc(j) + '\')),decodeURIComponent(\'' + _laSlipEnc(title) + '\'),'
     + (+i||0) + ')"';
 }
 /* ══ §prjAwaitBill · เครื่องมือกลางของ "รอวางบิล" ══════════════════════ */
