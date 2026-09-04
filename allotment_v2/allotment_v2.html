@@ -81788,7 +81788,10 @@ function bkV2RenderTab2(){
         <div>${_btBoatCard}</div>
         <div class="bt-col3">
           <div class="bt-pair">${_btModes}${_btSearch}</div>
-          <div class="bt-pair2">${_btLock}${_btNotice}</div>
+          ${/* §btVanCard · โหมดจัดรถ · Seat Lock ไม่เกี่ยวกับการจัดรถเลย และบรรทัด
+                "ยังไม่จัดรถ" ของ Notice การ์ด VANS ก็มีอยู่แล้ว · สลับที่กันไปเลย
+                การ์ด VANS ต้องสร้างหลังวนทริปเสร็จ จึงเว้นที่ไว้แล้วค่อยแทนตอนท้าย */''}
+          ${vanMode ? '<!--BTVANCARD-->' : `<div class="bt-pair2">${_btLock}${_btNotice}</div>`}
         </div>
       </div>
     </div>`;
@@ -81796,6 +81799,7 @@ function bkV2RenderTab2(){
   const emptyMain = (routeIds.length === 0);
 
   let _prevFam = null;
+  const _btVanParts = [];   /* §btVanCard · ชิ้นส่วนแถบรถของแต่ละทริป · เอาไปประกอบเป็นการ์ดบนหัว */
   const trips = routeIds.map(rid=>{
     const grp = groups[rid] || [];
     // Per-boat color map for this route · shared by the row Boat chip + the summary cards (distinguish boats)
@@ -82604,7 +82608,17 @@ function bkV2RenderTab2(){
       } else {
         groupRow=`<div style="display:flex;align-items:center;gap:8px;height:44px;box-sizing:border-box;padding:0 16px 0 21px;background:#F7FAFE;border-top:1px solid #E6EEF7;color:#8a8a82;font-size:12px"><span style="color:#185FA5;font-weight:700;flex:none">&#9745; Grouping</span> ติ๊กแถวที่จะไปด้วยกัน แล้วกดจับกลุ่ม</div>`;
       }
-      vanStrip = `<div class="bkv2-vanstrip" style="position:sticky;top:var(--t2-vangroup-top,52px);z-index:40;box-shadow:0 3px 8px rgba(0,0,0,.08)">${vanRow}${groupRow}</div>`;
+      /* §btVanCard · ไม่วางแถบเหนือตารางแล้ว · ส่งชิ้นส่วนขึ้นไปประกอบเป็นการ์ดบนหัว
+         คืนพื้นที่ให้ตาราง 88px และไม่ต้องมองสองที่ */
+      void vanRow;
+      _btVanParts.push({ rid,
+        nm: esc((route&&route.name)||rid),
+        dep: esc(dep||''),
+        col: (bkV2RouteFamily(rid)||{}).color || '#8b909c',
+        n: Object.keys(vagg).length,
+        cards: vcards, extra: extra.join(''), btns: vanBtns,
+        grpRow: groupRow, sel: _selTrip.length>0 });
+      vanStrip = '';
     }
     // ── Re-confirm roll-up strip ──
     let rcStrip='';
@@ -82673,6 +82687,29 @@ function bkV2RenderTab2(){
         </div>
       </div>`;
   }).join('');
+
+  /* ══ §btVanCard · ประกอบการ์ด VANS ════════════════════════════════════════
+     เลือกโปรแกรมแล้ว = ทริปเดียว ชิปเรียงเป็นตาราง 3 คอลัมน์
+     ยังไม่เลือก = ไล่ทีละทริป มีหัวเล็ก ๆ คั่น (ข้อมูลจริง: รถต่อวันมัธยฐาน 8 มากสุด 17)
+     กรอบทั้งใบเป็นสีเข้ม · ตอนมีแถวถูกเลือกเปลี่ยนเป็นน้ำเงินทั้งใบ
+     แก้เรื่องปุ่มจับกลุ่มอยู่ไกลจากแถวที่เพิ่งติ๊ก ตาจะได้เด้งไปเจอเอง            */
+  let _btVanCard = '';
+  if(vanMode){
+    const _one = _btVanParts.length===1;
+    const _anySel = _btVanParts.some(p=>p.sel);
+    const _nVan = _btVanParts.reduce((n,p)=>n+p.n,0);
+    const _body = _btVanParts.length
+      ? _btVanParts.map(p=>(_one?'':`<span class="bt-vtrip"><i style="background:${p.col}"></i><b style="color:${p.col}">${p.nm}</b><span>${p.dep}${p.n?(' &middot; '+p.n+' van'+(p.n===1?'':'s')):''}</span></span>`)+p.cards+p.extra).join('')
+      : '<span class="bt-none2">No van assigned yet</span>';
+    const _grpSrc = _btVanParts.filter(p=>p.sel);
+    const _grp = _btVanParts.length
+      ? (_grpSrc.length ? _grpSrc : _btVanParts.slice(0,1)).map(p=>p.grpRow).join('') : '';
+    _btVanCard = `<div class="bt-c bt-vans${_anySel?' act':''}">
+      <div class="bt-ct">VANS<span class="bt-cnt">${_nVan} van${_nVan===1?'':'s'}${_one?'':' &middot; '+_btVanParts.length+' trips'}</span>
+        ${_btVanParts.length===1&&_btVanParts[0].btns?_btVanParts[0].btns:''}<span class="sp"></span></div>
+      <div class="bt-vgrid">${_body}</div>
+      <div class="bt-vgrp">${_grp}</div></div>`;
+  }
 
   const style = `<style id="bkv2-t2-style">
     .t2-shell{display:flex;align-items:flex-start}
@@ -83362,6 +83399,30 @@ function bkV2RenderTab2(){
     .bt-lkfoot .hint{margin-left:auto;font-size:9.5px;color:#a89a9a;white-space:nowrap}
     /* Notice */
     .bt-notice{border-left:4px solid #6D28D9}
+    /* ══ §btVanCard · การ์ดรถในโหมดจัดรถ ═══════════════════════════════════
+       กรอบทั้งใบเป็นสีเข้ม ไม่ใช่ขีดข้างเดียว · ตอนติ๊กแถวเปลี่ยนทั้งใบเป็นน้ำเงิน */
+    .bt-vans{flex:1 1 auto;display:flex;flex-direction:column;border:2px solid #0F6E56;
+      max-height:268px;min-height:0;overflow:hidden;
+      box-shadow:0 0 0 2px rgba(15,110,86,.14);transition:border-color .15s,box-shadow .15s}
+    .bt-vans>.bt-ct,.bt-vans>.bt-vgrp{flex:none}
+    .bt-vans>.bt-ct{color:#0C6B47;background:#F1FBF6;border-bottom:1px solid #DFF0E8}
+    .bt-vans.act{border-color:#185FA5;box-shadow:0 0 0 3px rgba(24,95,165,.28)}
+    .bt-vans.act>.bt-ct{color:#12518F;background:#EEF5FC;border-bottom-color:#D8E6F5}
+    .bt-vgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;
+      padding:7px 9px 8px;overflow-y:auto;overflow-x:hidden;min-height:0;height:0;
+      flex:1 1 auto;align-content:start;overscroll-behavior:contain}
+    .bt-vgrid::-webkit-scrollbar{width:8px}
+    .bt-vgrid::-webkit-scrollbar-thumb{background:#CFE3D8;border-radius:4px}
+    .bt-vgrid>*{min-width:0}
+    .bt-vtrip{grid-column:1/-1;display:flex;align-items:center;gap:7px;padding:3px 2px 1px}
+    .bt-vtrip i{width:8px;height:8px;border-radius:50%;flex:none}
+    .bt-vtrip b{font-size:10.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .bt-vtrip span{font-size:9px;color:#948f88;font-weight:600;white-space:nowrap}
+    .bt-vgrp{border-top:1px solid #E4EFE9}
+    /* แถบ Grouping เดิมสูง 44px ตายตัว · ในการ์ดให้ยืดตามเนื้อหาและตัดขอบซ้ายทิ้ง */
+    .bt-vgrp>div{height:auto !important;padding:6px 10px !important;border-top:0 !important;
+      overflow:visible !important;flex-wrap:wrap !important}
+    .bt-vgrp>div+div{border-top:1px dashed #E4EFE9 !important}
     /* §btTune · Notice เล็กลงทั้งบล็อก · เป็นของที่อ่านผ่าน ๆ ไม่ใช่ตัวเลขที่ต้องเพ่ง */
     .bt-ncb{display:flex;flex-direction:column;gap:4px;padding:2px 9px 8px;overflow:auto;min-height:0}
     .bt-nc{display:flex;gap:7px;border-radius:8px;padding:5px 8px;font-size:10.5px;line-height:1.4}
@@ -83394,7 +83455,8 @@ function bkV2RenderTab2(){
   void filterBar;
   /* §btGap · สีของหัวต้องคุมทั้งหน้า ไม่ใช่แค่แถบหัว · ตั้งตัวแปรที่กรอบนอกสุด
      แล้วทั้งหัวและพื้นหลังใต้ตารางใช้ค่าเดียวกัน เปลี่ยนโปรแกรมก็เปลี่ยนพร้อมกันทั้งหน้า */
-  return style + `<div class="t2-shell" style="--btband:${_btBand};--btbandb:${_btBandB}"><div class="t2-main">${header}${mainBody}</div></div>`;
+  const _hdr = vanMode ? header.replace('<!--BTVANCARD-->', _btVanCard) : header;
+  return style + `<div class="t2-shell" style="--btband:${_btBand};--btbandb:${_btBandB}"><div class="t2-main">${_hdr}${mainBody}</div></div>`;
 }
 
 // ── Tab 3 · All bookings (existing Linear list) ──
