@@ -94687,7 +94687,7 @@ function ppProgRows(g, pk){
     var more=A.n
       ? ('<button class="pp-more'+(open?' on':'')+(A.sp.length?' hot':'')+'" '
           +'onclick="ppToggle(\''+e(okey)+'\')">'
-          +(open?'ซ่อน':('รายชื่อผู้เดินทางเอง '+A.n))+'</button>')
+          +(open?'ซ่อน':('รายชื่อผู้เดินทาง '+A.n))+'</button>')
       : '';
     var tr='<tr class="d">'
       +'<td class="pp-day">'+e(ppDayLbl(C.date))+'</td>'
@@ -94940,7 +94940,7 @@ function ppBodyFriendly(P,pOrd,GT){
           +'</div>'
           +'<div class="fr-meal">'+ppChips(A)
             +(A.n?('<button class="fr-more'+(open?' on':'')+'" onclick="ppToggle(\''+e(okey)+'\')">'
-              +(open?'ซ่อนรายชื่อ':('ดูรายชื่อผู้เดินทางเอง '+A.n+' ใบ'))+'</button>'):'')
+              +(open?'ซ่อนรายชื่อ':('ดูรายชื่อผู้เดินทาง '+A.n+' ใบ'))+'</button>'):'')
           +'</div>'
           +(open?('<div class="fr-det">'+ppBookingList(A)+'</div>'):'')
         +'</article>';
@@ -94981,7 +94981,7 @@ function ppBodyBoard(P,pOrd,GT){
             +'<em>'+A.tot+' คน &middot; '+A.n+' ใบ</em></div>'
           +'<div class="bd-m">'+ppChips(A)+'</div>'
           +(A.n?('<button class="bd-more'+(open?' on':'')+'" onclick="ppToggle(\''+e(okey)+'\')">'
-            +(open?'ซ่อนรายชื่อ':('รายชื่อผู้เดินทางเอง '+A.n+' ใบ'))+'</button>'):'')
+            +(open?'ซ่อนรายชื่อ':('รายชื่อผู้เดินทาง '+A.n+' ใบ'))+'</button>'):'')
           +(open?('<div class="bd-det">'+ppBookingList(A)+'</div>'):'')
         +'</article>';
       });
