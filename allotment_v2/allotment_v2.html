@@ -94317,36 +94317,51 @@ function ppRows(){
       var ad=PT(px,'ad'), chd=PT(px,'chd'), inf=PT(px,'inf'), foc=PT(px,'foc');
       var sm=b.specialMeals||{};
       var veg=+sm.veg||0, vegan=+sm.vegan||0, halal=+sm.halal||0;
-      var alN=(typeof bkV2AllergyCount==='function')?(bkV2AllergyCount(sm)||0)
-             :(String(sm.allergies||'').trim()?1:0);
-      var alList=[];
+      /* แพ้อาหาร · แยก "จำนวนที่รู้" กับ "ยังไม่รู้จำนวน" ออกจากกัน
+         allergyList มีจำนวนติดมา → นับได้จริง
+         sm.allergies เป็นข้อความพิมพ์เอง ไม่มีจำนวน → ห้ามนับเป็น 1 เงียบ ๆ
+         (เช่น "All แพ้ซีฟู้ด" หมายถึงทั้งใบ ไม่ใช่คนเดียว · เดาต่ำไปคือร้านทำอาหารขาด)
+         ขึ้นเป็น ×? ให้คนไปถามเอเจนต์ ดีกว่าโชว์เลขที่กุขึ้นมาเอง */
+      var alN=0, alUnk=0, alList=[];
       if(Array.isArray(sm.allergyList)) sm.allergyList.forEach(function(x){
-        if(x&&x.name&&String(x.name).trim())
-          alList.push({name:String(x.name).trim(), qty:Math.max(1,Math.floor(+x.qty||1))}); });
-      if(!alList.length && String(sm.allergies||'').trim())
-        alList.push({name:String(sm.allergies).trim(), qty:1});
+        if(x&&x.name&&String(x.name).trim()){
+          var q=Math.max(1,Math.floor(+x.qty||1));
+          alList.push({name:String(x.name).trim(), qty:q, ft:false}); alN+=q; } });
+      if(!alList.length && String(sm.allergies||'').trim()){
+        alList.push({name:String(sm.allergies).trim(), qty:0, ft:true}); alUnk=1; }
       out.push({ b:b, t:t, date:d, routeId:rid, rt:rt,
         boatId:O.boatId||t.charterBoatId||'',
         ad:ad, chd:chd, inf:inf, foc:foc, tot:ad+chd+inf+foc, eat:ad+chd+foc,
-        veg:veg, vegan:vegan, halal:halal, allergy:alN, alList:alList,
+        veg:veg, vegan:vegan, halal:halal, allergy:alN, alUnk:alUnk, alList:alList,
         ovn:!!(t&&t.ovnLeg), chtr:(t.bookingMode==='charter'),
-        sp:(veg+vegan+halal+alN)>0 });
+        sp:(veg+vegan+halal+alN+alUnk)>0 });
     });
   });
   return out;
 }
-function ppBlank(){ return {n:0,ad:0,chd:0,inf:0,foc:0,tot:0,eat:0,veg:0,vegan:0,halal:0,allergy:0,al:{},sp:[],ovn:0,chtr:0}; }
+function ppBlank(){ return {n:0,ad:0,chd:0,inf:0,foc:0,tot:0,eat:0,veg:0,vegan:0,halal:0,
+  allergy:0,alUnk:0,al:{},sp:[],ovn:0,chtr:0}; }
 function ppAdd(A,r){
   A.n++; A.ad+=r.ad; A.chd+=r.chd; A.inf+=r.inf; A.foc+=r.foc; A.tot+=r.tot; A.eat+=r.eat;
-  A.veg+=r.veg; A.vegan+=r.vegan; A.halal+=r.halal; A.allergy+=r.allergy;
+  A.veg+=r.veg; A.vegan+=r.vegan; A.halal+=r.halal;
+  A.allergy+=r.allergy; A.alUnk+=(r.alUnk||0);
   if(r.ovn) A.ovn++; if(r.chtr) A.chtr++;
-  (r.alList||[]).forEach(function(x){ A.al[x.name]=(A.al[x.name]||0)+x.qty; });
+  (r.alList||[]).forEach(function(x){
+    var e=A.al[x.name]||(A.al[x.name]={q:0,ft:0});
+    if(x.ft) e.ft++; else e.q+=x.qty; });
   if(r.sp) A.sp.push(r);
   return A;
 }
-function ppAlText(al){
-  var k=Object.keys(al||{}); if(!k.length) return '';
-  return k.sort().map(function(n){ return n+((al[n]>1)?(' ×'+al[n]):''); }).join(' · ');
+/* คืนเป็น HTML (escape ชื่อเอง) เพราะต้องตัวหนาเฉพาะตัวเลข
+   ของที่รู้จำนวน → ชื่อ ×3 · ของที่ไม่รู้ → ชื่อ ×? พร้อม tooltip บอกว่าทำไม */
+function ppAlHtml(al){
+  var e=ckEsc, k=Object.keys(al||{}); if(!k.length) return '';
+  return k.sort().map(function(nm){
+    var v=al[nm]||{q:0,ft:0};
+    return e(nm)
+      +(v.q?(' <b>&times;'+v.q+'</b>'):'')
+      +(v.ft?(' <b title="ใบจองพิมพ์มาเป็นข้อความ ไม่ได้ระบุจำนวนคน — ต้องถามเอเจนต์ก่อนสั่งอาหาร">&times;?</b>'):'');
+  }).join(' · ');
 }
 function ppChips(A){
   var e=ckEsc, out=[];
@@ -94354,8 +94369,13 @@ function ppChips(A){
   if(A.veg)   out.push(c('มังสวิรัติ <b>'+A.veg+'</b>','#E7F4EF','#BEE0D2','#0F6E56'));
   if(A.vegan) out.push(c('วีแกน <b>'+A.vegan+'</b>','#E7F4EF','#BEE0D2','#0F6E56'));
   if(A.halal) out.push(c('ฮาลาล <b>'+A.halal+'</b>','#E9F1FB','#C3D9F0','#185FA5'));
-  var alt=ppAlText(A.al);
-  if(alt) out.push(c('&#9888; แพ้อาหาร '+e(alt),'#FEF2F2','#F5CFCF','#B91C1C'));
+  var alt=ppAlHtml(A.al);
+  if(alt||A.allergy||A.alUnk){
+    var lead='&#9888; แพ้อาหาร';
+    if(A.allergy) lead+=' <b>'+A.allergy+'</b>';
+    if(A.alUnk)   lead+=' <b title="ยังไม่รู้จำนวนอีก '+A.alUnk+' ใบจอง">+'+A.alUnk+' ใบ</b>';
+    out.push(c(lead+(alt?(' · '+alt):''),'#FEF2F2','#F5CFCF','#B91C1C'));
+  }
   return out.length?out.join(''):'<span class="pp-none">ไม่มี</span>';
 }
 /* รายชื่อใบที่ขออาหารพิเศษ · ครัวต้องรู้ว่า "ใคร" ไม่ใช่แค่ "กี่คน" */
@@ -94366,7 +94386,8 @@ function ppSpecialList(A){
     if(r.veg)   want.push('มังสวิรัติ ×'+r.veg);
     if(r.vegan) want.push('วีแกน ×'+r.vegan);
     if(r.halal) want.push('ฮาลาล ×'+r.halal);
-    (r.alList||[]).forEach(function(x){ want.push('⚠ แพ้ '+x.name+((x.qty>1)?(' ×'+x.qty):'')); });
+    (r.alList||[]).forEach(function(x){
+      want.push('⚠ แพ้ '+x.name+(x.ft?' ×? (ใบจองไม่ได้ระบุจำนวน)':(' ×'+x.qty))); });
     var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
     return '<div class="pp-sprow">'
       +'<div class="pp-spwho"><b>'+e(String(b.leadPax||'').trim()||'—')+'</b>'
@@ -94618,7 +94639,8 @@ function renderPrPo(){
         'ผู้ใหญ่ '+GT.ad+' &middot; เด็ก '+GT.chd+(GT.foc?(' &middot; FOC '+GT.foc):'')
         +(GT.inf?(' &middot; ทารก '+GT.inf+' ไม่นับ'):''))
     + K('','ใบที่ขออาหารพิเศษ', GT.sp.length, 'ใบ',
-        (GT.veg+GT.vegan+GT.halal)+' จาน + แพ้อาหาร '+GT.allergy+' คน')
+        (GT.veg+GT.vegan+GT.halal)+' จาน &middot; แพ้อาหาร '+GT.allergy+' คน'
+        +(GT.alUnk?(' + '+GT.alUnk+' ใบไม่ระบุจำนวน'):''))
     +'</div>';
 
   /* ── สรุปอาหารพิเศษทั้งช่วง · ตัวเลขที่ฝ่ายจัดซื้อเอาไปตั้งยอดสั่งได้เลย ── */
