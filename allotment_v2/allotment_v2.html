@@ -94321,6 +94321,43 @@ function ppInkOn(hex){
   var r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
   return ((r*299+g*587+b*114)/1000) > 150 ? '#15201a' : '#ffffff';
 }
+/* สีพื้นของแถบโปรแกรม · หรี่สีของโปรแกรมให้เข้มพอที่จะใช้ตัวหนังสือขาวได้ทุกแถบ
+   สีโปรแกรมบางตัวจางมาก (ชมพู ครีม ฟ้าอ่อน) ถ้าใช้สีดิบแล้วสลับไปใช้ตัวหนังสือดำ
+   แถบจะดูไม่เป็นชุดเดียวกัน · ลดเฉพาะความสว่าง (L) ไม่แตะเนื้อสี (H/S)
+   ชมพูจึงกลายเป็นโรสเข้ม ไม่ใช่เทาขุ่นแบบที่ได้จากการคูณ RGB ตรง ๆ */
+function ppBarColor(hex){
+  var h=String(hex||'').replace('#','');
+  if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  if(!/^[0-9a-fA-F]{6}$/.test(h)) return '#5B6B7C';
+  var r=parseInt(h.slice(0,2),16)/255, g=parseInt(h.slice(2,4),16)/255, b=parseInt(h.slice(4,6),16)/255;
+  var mx=Math.max(r,g,b), mn=Math.min(r,g,b), l=(mx+mn)/2, sa=0, hu=0;
+  if(mx!==mn){
+    var d=mx-mn;
+    sa = (l>0.5) ? d/(2-mx-mn) : d/(mx+mn);
+    hu = (mx===r) ? ((g-b)/d + (g<b?6:0)) : (mx===g) ? ((b-r)/d + 2) : ((r-g)/d + 4);
+    hu/=6;
+  }
+  if(sa>0) sa=Math.min(1, sa*1.05);
+  var f=function(p,q,t){ if(t<0)t+=1; if(t>1)t-=1;
+    if(t<1/6) return p+(q-p)*6*t;
+    if(t<1/2) return q;
+    if(t<2/3) return p+(q-p)*(2/3-t)*6;
+    return p; };
+  var toRGB=function(L){
+    var q=(L<0.5)?(L*(1+sa)):(L+sa-L*sa), p=2*L-q;
+    return [(sa===0)?L:f(p,q,hu+1/3), (sa===0)?L:f(p,q,hu), (sa===0)?L:f(p,q,hu-1/3)];
+  };
+  /* วัดด้วย relative luminance ของ WCAG ไม่ใช่ค่า L ของ HSL
+     สองอย่างนี้ไม่ตรงกัน · ที่ L เท่ากัน ฟ้าอมเขียวกับส้มสว่างกว่าน้ำเงินมาก
+     ถ้าตัดที่ L เฉย ๆ จะมีบางสี (เช่น #1a7fa0 · #BA7517) ที่ตัวหนังสือขาวยังอ่านยาก
+     ไล่หรี่ลงจนขาวบนพื้นได้อัตราส่วนอย่างน้อย 4.5:1 (เกณฑ์ AA) */
+  var chan=function(c){ return (c<=0.03928)?(c/12.92):Math.pow((c+0.055)/1.055,2.4); };
+  var lum=function(rgb){ return 0.2126*chan(rgb[0])+0.7152*chan(rgb[1])+0.0722*chan(rgb[2]); };
+  var L=Math.min(l,0.42), rgb=toRGB(L), guard=0;
+  while(guard++<40 && L>0.10 && (1.05/(lum(rgb)+0.05))<4.6){ L-=0.015; rgb=toRGB(L); }
+  var hx=function(v){ return ('0'+Math.round(Math.max(0,Math.min(1,v))*255).toString(16)).slice(-2); };
+  return '#'+hx(rgb[0])+hx(rgb[1])+hx(rgb[2]);
+}
 /* ท่าที่ไม่มีทัวร์ต้องขึ้นด้วย · เห็นแล้วรู้ว่า "วันนี้ท่านี้ไม่มีจริง ๆ"
    ไม่ใช่ "หน้ายังโหลดไม่ครบ" หรือ "ลืมกรอง" · สองอย่างนี้ต่างกันมากสำหรับคนสั่งของ */
 function ppNoTourMsg(){
@@ -94616,11 +94653,11 @@ function ppProgRows(g, pk){
   /* หัวโปรแกรมเป็นแค่แถบแบ่งกลุ่มเรือ · พื้นสีทึบสีของโปรแกรมนั้น กินเต็มความกว้าง
      ไม่มีช่องตัวเลขและไม่มีป้ายอาหารพิเศษ — ของพวกนั้นต้องอยู่แถวเรือ ที่คนลงมือทำงานจริง
      (เดิมป้ายแพ้อาหารขึ้นซ้ำทั้งแถวโปรแกรมและแถวเรือ อ่านแล้วนึกว่าเป็นคนละกอง) */
-  var ink=ppInkOn(col);
+  var bar=ppBarColor(col), ink=ppInkOn(bar);
   var meta=[((rt&&rt.times&&rt.times[0])?('ออก '+e(rt.times[0])):''),
       ((rt&&rt.islands)?e(rt.islands):''),
       (g.ck.length+' เที่ยวเรือ')].filter(Boolean).join(' · ');
-  var out='<tr class="g-prog"><td colspan="'+PP_COLS+'" style="background:'+e(col)+';color:'+ink+'">'
+  var out='<tr class="g-prog"><td colspan="'+PP_COLS+'" style="background:'+e(bar)+';color:'+ink+'">'
     +'<div class="lb">'
       +'<span class="nm">'+e((rt&&rt.name)||k||'ไม่ระบุโปรแกรม')+'</span>'
       +'<span class="mt">'+meta+'</span>'
@@ -94861,7 +94898,8 @@ function ppBodyFriendly(P,pOrd,GT){
     PB.gOrd.forEach(function(k){
       var g=PB.G[k], rt=g.rt||((typeof getRoute==='function')?getRoute(k):null);
       var rc=(rt&&rt.color)||'#94A3B8';
-      out+='<div class="fr-prog" style="background:'+e(rc)+';color:'+ppInkOn(rc)+'">'
+      var frBar=ppBarColor(rc);
+      out+='<div class="fr-prog" style="background:'+e(frBar)+';color:'+ppInkOn(frBar)+'">'
         +'<b>'+e((rt&&rt.name)||k||'ไม่ระบุโปรแกรม')+'</b>'
         +'<span class="mt">'+[((rt&&rt.times&&rt.times[0])?('ออก '+e(rt.times[0])):''),
             (g.ck.length+' เที่ยวเรือ'),(g.A.eat+' ที่')].filter(Boolean).join(' · ')+'</span></div>'
