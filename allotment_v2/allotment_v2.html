@@ -94248,7 +94248,9 @@ function _ppShift(ds,n){ var d=new Date(String(ds)+'T12:00:00'); d.setDate(d.get
 function _ppSpan(a,b){ var x=new Date(String(a)+'T12:00:00'), y=new Date(String(b)+'T12:00:00');
   if(isNaN(x.getTime())||isNaN(y.getTime())) return 1;
   return Math.max(1, Math.round((y-x)/86400000)+1); }
-var _ppFrom=_ppYMD(new Date()), _ppTo=_ppShift(_ppFrom,6);
+/* เปิดหน้ามาเห็นของวันนี้ก่อน · ยอดที่ต้องสั่งจริงวันนี้ ไม่ใช่ยอดรวมทั้งสัปดาห์
+   อยากดูยาวกว่านั้นกดปุ่มช่วง (7 วัน / 14 วัน / เดือนนี้) หรือเลือกวันที่เอาเองได้ */
+var _ppFrom=_ppYMD(new Date()), _ppTo=_ppFrom;
 var _ppRoute='', _ppPier='', _ppOnlySp=false, _ppOpen={};
 
 /* กลับมาที่เดิมหลังวาดใหม่ · แถวมันยาว ถ้าเด้งขึ้นหัวทุกครั้งที่กดกางจะหาที่เดิมไม่เจอ */
