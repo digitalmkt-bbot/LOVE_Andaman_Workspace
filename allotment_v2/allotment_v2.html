@@ -52442,6 +52442,15 @@ function pcCSS(scope){
   +scope+' .pc-btn{border:1.5px solid #D5DAE5;background:#fff;border-radius:8px;padding:6px 12px;'
     +'font:700 11.5px inherit;font-family:inherit;color:#44506A;cursor:pointer}'
   +scope+' .pc-btn:hover{border-color:#16265C;color:#16265C}'
+  /* §pcPrint · ปุ่มพิมพ์ · เน้นให้เห็น แต่ไม่แย่งสายตาจากตัวเลขในตาราง */
+  +scope+' .pc-btn.pri{background:#16265C;border-color:#16265C;color:#fff}'
+  +scope+' .pc-btn.pri:hover{background:#0F1B45;color:#fff}'
+  /* §pcPrint · โหมดกระดาษ · ช่องที่ปกติเป็น input กลายเป็นตัวเลขเฉย ๆ
+     คงพื้นสีเดิมไว้ จะได้ยังอ่านออกว่าช่องไหนคือฝั่งที่หน้าท่ากรอกเอง */
+  +scope+' .pc-t td.pr{text-align:center;font-weight:700;color:#16265C}'
+  +scope+' .pc-t td.cy.pr{background:#FFFDF5;color:#7A4A00}'
+  +scope+' .pc-t td.cb.pr{background:#F7FBFF;color:#1D5FA8}'
+  +scope+' .pc-t td.ctx.pr{text-align:left;font-weight:500;color:#44506A;white-space:normal}'
   +scope+' .pc-dt{border:1.5px solid #D5DAE5;border-radius:8px;padding:5px 9px;font:700 12px inherit;'
     +'font-family:inherit;color:#16265C}'
   +scope+' .pc-gw{overflow:auto;max-height:calc(100vh - 300px)}'
@@ -52621,7 +52630,11 @@ function pcSheetMain(pier){
      +'<input class="pc-dt" type="date" value="'+ds+'" onchange="pcPickDay(this.value)">'
      +'<button class="pc-btn" onclick="pcShift(-1)">‹ วันก่อน</button>'
      +'<button class="pc-btn" onclick="pcShift(1)">วันถัดไป ›</button>'
-     +'<span class="sp"></span><span class="n">'+rows.length+' รายการ</span></div>'
+     +'<span class="sp"></span><span class="n">'+rows.length+' รายการ</span>'
+     /* §pcPrint · ใบรับรองฯ เอาไปเบิก Petty Cash · สมุดเดินบัญชีเอาไว้นับเงินในลิ้นชัก */
+     +'<button class="pc-btn pri" onclick="pcPrintCert()" title="ดึงเฉพาะรายจ่ายของวันที่เลือก ลงในแบบฟอร์มใบรับรองแทนใบเสร็จรับเงิน">&#128424; ใบรับรองแทนใบเสร็จ</button>'
+     +'<button class="pc-btn" onclick="pcPrintLedger()" title="พิมพ์สมุดเดินบัญชีของวันที่เลือก · ยอดยกมา รับ จ่าย คงเหลือ">&#128424; สมุดวันนี้</button>'
+     +'<button class="pc-btn" onclick="pcCoEdit()" title="ชื่อบริษัทที่พิมพ์ลงหัวใบรับรองแทนใบเสร็จรับเงิน">แก้ชื่อบริษัท</button></div>'
    +'<div class="pc-gw"><table class="pc-t"><thead><tr>'
      +'<th class="rn">#</th><th class="c" style="width:64px">เวลา</th><th>รายการ</th>'
      +'<th style="width:96px">หมวด</th><th style="width:96px">ผู้บันทึก</th>'
@@ -52700,8 +52713,15 @@ function pcMonthTable(pier){
      +'ยังไม่นับเป็นเงินออกจนกว่าจะกด <b>⤓ ดึง</b> เข้าสมุด</div>';
 }
 /* ── ชีท 2 · เรือหางยาว ──────────────────────────────────────────────── */
-function pcSheetLT(pier){
-  var dates=pcDates(pier,_pcYM), body='', rn=0, gj=0,gc=0,guj=0,guc=0,gm=0, nb=0;
+/* §pcPrint · opt.only = เอาแค่วันเดียว · opt.print = โหมดกระดาษ (ช่องกรอกกลายเป็นตัวหนังสือ)
+   เรียกแบบไม่ส่ง opt คือของเดิมทุกประการ · แยกเป็นฟังก์ชันใหม่ไม่ได้ เดี๋ยวสองที่จะเพี้ยนกัน */
+function pcSheetLT(pier, opt){
+  opt=opt||{}; var PR=!!opt.print;
+  var dates=opt.only?[opt.only]:pcDates(pier,_pcYM), body='', rn=0, gj=0,gc=0,guj=0,guc=0,gm=0, nb=0;
+  /* โหมดกระดาษ · ช่องกรอกกลายเป็นค่าที่กรอกไว้ ไม่มีขีดเส้นใต้ ไม่มีกล่อง */
+  var box=function(cls,val,inner){ return PR
+    ? ('<td class="'+cls+' pr">'+pcE(val===''||val==null?'—':val)+'</td>')
+    : ('<td class="'+cls+'">'+inner+'</td>'); };
   dates.forEach(function(ds){
     var BS=pcBoats(ds,pier); if(!BS.length) return;
     var D=pcDay(pier,ds,false)||{lt:{}};
@@ -52724,16 +52744,20 @@ function pcSheetLT(pier){
             : '<span class="v z">0</span>')+'</td>'
         /* §pcLtSplit · ใช้จริงแยกสองช่อง · หน้างานจอยอาจยุบลำ เหมาอาจใช้น้อยกว่าที่จอง
            รวมกันเป็นเลขเดียวแล้วดูย้อนหลังไม่ออกว่าที่ต่างจากใบจองคือฝั่งไหน */
-        +'<td class="cb"><input value="'+(U.j!=null?U.j:'')+'" placeholder="—" inputmode="numeric" '
+        +box('cb', (U.j!=null?U.j:''),
+          '<input value="'+(U.j!=null?U.j:'')+'" placeholder="—" inputmode="numeric" '
           +'title="จำนวนลำที่ใช้จริงของฝั่งจอย" '
-          +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'nj\',this.value)"></td>'
-        +'<td class="cb"><input value="'+(U.c!=null?U.c:'')+'" placeholder="—" inputmode="numeric" '
+          +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'nj\',this.value)">')
+        +box('cb', (U.c!=null?U.c:''),
+          '<input value="'+(U.c!=null?U.c:'')+'" placeholder="—" inputmode="numeric" '
           +'title="จำนวนลำที่ใช้จริงของฝั่งเหมา" '
-          +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'nc\',this.value)"></td>'
-        +'<td class="cy"><input value="'+(C.amt?pcN(C.amt):'')+'" placeholder="—" inputmode="numeric" '
-          +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'amt\',this.value)"></td>'
-        +'<td class="ctx"><input value="'+pcE(C.note||'')+'" placeholder="—" '
-          +'onchange="pcSetLTNote(\''+ds+'\',\''+B.bid+'\',this.value)"></td></tr>';
+          +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'nc\',this.value)">')
+        +box('cy', (C.amt?pcN(C.amt):''),
+          '<input value="'+(C.amt?pcN(C.amt):'')+'" placeholder="—" inputmode="numeric" '
+          +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'amt\',this.value)">')
+        +box('ctx', (C.note||''),
+          '<input value="'+pcE(C.note||'')+'" placeholder="—" '
+          +'onchange="pcSetLTNote(\''+ds+'\',\''+B.bid+'\',this.value)">')+'</tr>';
     });
     gj+=dj; gc+=dc; guj+=duj; guc+=duc; gm+=dm;
     body+='<tr class="day'+(ds===pcNowDS()?' now':'')+'" id="pcd-'+pier+'-'+ds+'"><td colspan="9">'
@@ -52744,12 +52768,14 @@ function pcSheetLT(pier){
       +'<td class="v">'+(duj||'—')+'</td><td class="v">'+(duc||'—')+'</td>'
       +'<td class="r">'+(dm?pcN(dm):'—')+'</td><td></td></tr>';
   });
-  if(!body) body='<tr><td colspan="9" style="color:#B9BCC6;padding:20px 12px">ไม่มีเรือออกในเดือนนี้</td></tr>';
+  if(!body) body='<tr><td colspan="9" style="color:#B9BCC6;padding:20px 12px">'
+    +(opt.only?'ไม่มีเรือออกในวันนี้':'ไม่มีเรือออกในเดือนนี้')+'</td></tr>';
   return '<div class="pc-sheet">'
-   +'<div class="pc-tb"><b>🛶 สรุปเรือหางยาวรายวัน</b>'
+   +(PR?'':('<div class="pc-tb"><b>🛶 สรุปเรือหางยาวรายวัน</b>'
      +'<input class="pc-dt" type="month" value="'+_pcYM+'" onchange="pcMonth(this.value)">'
      +'<span class="n">'+dates.length+' วัน · '+nb+' ลำ</span>'
-     +'<span class="sp"></span><span class="n">รวม '+pcMoney(gm)+'</span></div>'
+     +'<span class="sp"></span><span class="n">รวม '+pcMoney(gm)+'</span>'
+     +'<button class="pc-btn pri" onclick="pcPrintLT()">&#128424; พิมพ์วันที่เลือก</button></div>'))
    +'<div class="pc-gw"><table class="pc-t"><thead><tr>'
      +'<th class="rn">#</th><th style="width:150px">เรือ</th><th>โปรแกรม</th>'
      +'<th class="c" style="width:74px">จอย</th><th class="c" style="width:74px">เหมา</th>'
@@ -52758,20 +52784,25 @@ function pcSheetLT(pier){
      +'<th class="r key" style="width:118px">จ่ายจริง</th>'
      +'<th style="width:170px">หมายเหตุ</th></tr></thead>'
      +'<tbody>'+body+'</tbody>'
-     +'<tfoot><tr class="grand"><td class="rn"></td><td colspan="2">รวมทั้งเดือน</td>'
+     +'<tfoot><tr class="grand"><td class="rn"></td><td colspan="2">'+(opt.only?'รวมทั้งวัน':'รวมทั้งเดือน')+'</td>'
        +'<td class="v">'+gj+'</td><td class="v">'+gc+'</td>'
        +'<td class="v">'+guj+'</td><td class="v">'+guc+'</td>'
        +'<td class="r">'+pcMoney(gm)+'</td><td></td></tr></tfoot></table></div>'
-   +'<div class="pc-note"><b>ช่องขาว = ระบบอ่านให้</b> จอยเป็นหัวที่ขึ้นเรือจริง (หักคนไม่มาแล้ว) · เหมาเป็นลำตามที่สั่งไว้ · '
+   +(PR?'':('<div class="pc-note"><b>ช่องขาว = ระบบอ่านให้</b> จอยเป็นหัวที่ขึ้นเรือจริง (หักคนไม่มาแล้ว) · เหมาเป็นลำตามที่สั่งไว้ · '
      +'<b>ช่องฟ้ากับช่องเหลือง = คนหน้าท่ากรอกเอง</b> เพราะหน้างานมักไม่ตรงกับที่จองมา — '
      +'จอย 3 คนอาจลงลำเดียว หรือเหมา 2 ลำแต่ใช้จริงลำเดียว · '
      +'<b>ใช้จริงแยกจอย/เหมา</b> เพื่อดูย้อนหลังได้ว่าที่ต่างจากใบจองคือฝั่งไหน · '
-     +'ยอดจ่ายจริงของแต่ละวันจะไปโผล่เป็นบรรทัดเดียวในชีทหน้าหลัก</div>'
+     +'ยอดจ่ายจริงของแต่ละวันจะไปโผล่เป็นบรรทัดเดียวในชีทหน้าหลัก</div>'))
    +'</div>';
 }
 /* ── ชีท 3 · ค่าอุทยาน ───────────────────────────────────────────────── */
-function pcSheetPK(pier){
-  var dates=pcDates(pier,_pcYM), body='', rn=0, nb=0;
+/* §pcPrint · opt เหมือน pcSheetLT · only = วันเดียว · print = โหมดกระดาษ */
+function pcSheetPK(pier, opt){
+  opt=opt||{}; var PR=!!opt.print;
+  var dates=opt.only?[opt.only]:pcDates(pier,_pcYM), body='', rn=0, nb=0;
+  var box=function(cls,val,inner){ return PR
+    ? ('<td class="'+cls+' pr">'+pcE(val===''||val==null?'—':val)+'</td>')
+    : ('<td class="'+cls+'">'+inner+'</td>'); };
   var Z=function(){ return PC_PK.map(function(){ return 0; }); };
   var GT=Z(), GK=Z(), gtot=0, gktot=0, gm=0, gex=0, gdk=0;
   dates.forEach(function(ds){
@@ -52797,23 +52828,26 @@ function pcSheetPK(pier){
       var keys=PC_PK.map(function(k,i){
         /* ขอบเข้ม = จำนวนที่คีย์ไม่ตรงกับยอดเดินทางจริง · ไม่ใช่ error แต่ต้องเห็น */
         var mm=(hasK && (+C[k]||0)!==(+X[k]||0))?' mm':'';
-        return '<td class="cy ct'+((i===0||i===HF)?' gs':'')+mm+'"><input value="'+(C[k]||'')+'" placeholder="—" '
-          +'inputmode="numeric" onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\''+k+'\',this.value)"></td>'; }).join('');
+        return box('cy ct'+((i===0||i===HF)?' gs':'')+mm, (C[k]||''),
+          '<input value="'+(C[k]||'')+'" placeholder="—" '
+          +'inputmode="numeric" onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\''+k+'\',this.value)">'); }).join('');
       var exc=(exp==null)
         ? '<td class="pc-ex na"><b>—</b><i>'+pcE((R.why||'ไม่มีราคา'))+'</i></td>'
         : '<td class="pc-ex"><b>'+pcN(exp)+'</b><i>'+(hasK?'ตามที่คีย์':'ตามหัวจริง')+'</i></td>';
       rows+='<tr><td class="rn">'+rn+'</td><td class="bn">'+pcE(B.name)+'</td>'
         +'<td class="rt">'+pcRouteName(B.rid,B.route)+'<br>'+pcRateChip(R)
-          +(hasK?'':'<button class="pc-fill" title="คัดลอกยอดเดินทางจริง (หักคนที่ไม่ได้ขึ้นเรือแล้ว) มาใส่ช่องคีย์ทั้ง 8 ช่อง แล้วค่อยแก้เฉพาะที่ต่าง" '
+          +((hasK||PR)?'':'<button class="pc-fill" title="คัดลอกยอดเดินทางจริง (หักคนที่ไม่ได้ขึ้นเรือแล้ว) มาใส่ช่องคีย์ทั้ง 8 ช่อง แล้วค่อยแก้เฉพาะที่ต่าง" '
             +'onclick="pcFillPK(\''+ds+'\',\''+B.bid+'\',\''+pier+'\')">⤓ เติมจากใบจอง</button>')
           +'</td>'+cells
         +'<td class="v">'+X.tot+'</td>'+keys
-        +'<td class="cy"><input value="'+(C.dock?pcN(C.dock):'')+'" placeholder="—" inputmode="numeric" '
-          +'onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'dock\',this.value)"></td>'
+        +box('cy', (C.dock?pcN(C.dock):''),
+          '<input value="'+(C.dock?pcN(C.dock):'')+'" placeholder="—" inputmode="numeric" '
+          +'onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'dock\',this.value)">')
         +'<td class="v gs"'+(hasK?' style="background:#FFFDF5;color:#7A4A00"':'')+'>'+(hasK?kt:'—')+'</td>'
         +exc
-        +'<td class="cy"><input value="'+(C.amt?pcN(C.amt):'')+'" placeholder="—" inputmode="numeric" '
-          +'onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'amt\',this.value)"></td>'
+        +box('cy', (C.amt?pcN(C.amt):''),
+          '<input value="'+(C.amt?pcN(C.amt):'')+'" placeholder="—" inputmode="numeric" '
+          +'onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'amt\',this.value)">')
         +pcDiffCell(+C.amt||0, exp)+'</tr>';
     });
     PC_PK.forEach(function(k,i){ GT[i]+=DT[i]; GK[i]+=DK[i]; });
@@ -52831,14 +52865,16 @@ function pcSheetPK(pier){
       +'<td class="r">'+(dm?pcN(dm):'—')+'</td>'
       +pcDiffCell(dm, anyx?dex:null)+'</tr>';
   });
-  if(!body) body='<tr><td colspan="25" style="color:#B9BCC6;padding:20px 12px">ไม่มีเรือออกในเดือนนี้</td></tr>';
+  if(!body) body='<tr><td colspan="25" style="color:#B9BCC6;padding:20px 12px">'
+    +(opt.only?'ไม่มีเรือออกในวันนี้':'ไม่มีเรือออกในเดือนนี้')+'</td></tr>';
   return '<div class="pc-sheet">'
-   +'<div class="pc-tb"><b>🏝️ สรุปค่าอุทยานรายวัน</b>'
+   +(PR?'':('<div class="pc-tb"><b>🏝️ สรุปค่าอุทยานรายวัน</b>'
      +'<input class="pc-dt" type="month" value="'+_pcYM+'" onchange="pcMonth(this.value)">'
      +'<span class="n">'+dates.length+' วัน · '+nb+' ลำ · '+gtot+' คน</span>'
      +'<span class="sp"></span><span class="n">คำนวณ '+pcMoney(gex)+'</span>'
      +'<span class="n">จ่ายจริง '+pcMoney(gm)+'</span>'
-     +'<span class="n">ค่าจอด '+pcMoney(gdk)+'</span></div>'
+     +'<span class="n">ค่าจอด '+pcMoney(gdk)+'</span>'
+     +'<button class="pc-btn pri" onclick="pcPrintPK()">&#128424; พิมพ์วันที่เลือก</button></div>'))
    +'<div class="pc-gw"><table class="pc-t"><thead>'
      +'<tr><th class="rn" rowspan="3">#</th>'
        +'<th rowspan="3" style="width:126px;vertical-align:bottom">เรือ</th>'
@@ -52863,7 +52899,7 @@ function pcSheetPK(pier){
        +'<th class="c key gs" style="width:46px">ผญ</th><th class="c key" style="width:46px">เด็ก</th>'
        +'<th class="c key" style="width:46px">INF</th><th class="c key" style="width:46px">FOC</th></tr>'
      +'</thead><tbody>'+body+'</tbody>'
-     +'<tfoot><tr class="grand"><td class="rn"></td><td colspan="2">รวมทั้งเดือน</td>'
+     +'<tfoot><tr class="grand"><td class="rn"></td><td colspan="2">'+(opt.only?'รวมทั้งวัน':'รวมทั้งเดือน')+'</td>'
        +GT.map(function(v,i){ return '<td class="v'+(i===PC_PK.length/2?' gs':'')+'">'+v+'</td>'; }).join('')
        +'<td class="v">'+gtot+'</td>'
        +GK.map(function(v,i){ return '<td class="v'+((i===0||i===PC_PK.length/2)?' gs':'')+'">'+v+'</td>'; }).join('')
@@ -52872,7 +52908,7 @@ function pcSheetPK(pier){
        +'<td class="pc-ex gs"><b>'+pcMoney(gex)+'</b></td>'
        +'<td class="r">'+pcMoney(gm)+'</td>'
        +pcDiffCell(gm, gex)+'</tr></tfoot></table></div>'
-   +'<div class="pc-note"><b>ฝั่งซ้ายเขียว = ตามใบจอง</b> ระบบอ่านให้ แก้ไม่ได้ · '
+   +(PR?'':('<div class="pc-note"><b>ฝั่งซ้ายเขียว = ตามใบจอง</b> ระบบอ่านให้ แก้ไม่ได้ · '
      +'<b>ฝั่งขวาเหลือง = จ่ายจริงที่ด่าน</b> คีย์จำนวนคนเองได้ครบทั้ง 8 ช่อง แล้วค่อยใส่ค่าจอดกับเงินที่จ่าย<br>'
      +'ที่ต้องคีย์เองเพราะหน้าด่านมักไม่ตรงกับใบจอง — เด็กต่ำกว่า 3 ขวบไม่เก็บ · บางคนไม่ขึ้นเกาะ · '
      +'บางเกาะคนละราคา · <b>เก็บไว้ทั้งสองฝั่งจะเทียบทีหลังได้ว่าต่างกันกี่คน เพราะอะไร</b><br>'
@@ -52887,7 +52923,7 @@ function pcSheetPK(pier){
      +'<b>⤓ เติมจากใบจอง</b> ดึงเลขจริงมาก่อน แล้วค่อยแก้เฉพาะช่องที่ต่าง<br>'
      +'<b>FOC คิดราคาผู้ใหญ่ตามสัญชาติ</b> เพราะด่านไม่สนใจว่าเราเก็บเงินลูกค้าหรือเปล่า<br>'
      +'<b>ค่าจอด</b> เป็นคนละก้อนกับค่าอุทยาน · ใส่เงินอย่างเดียว ไม่ต้องนับหัว · '
-     +'ยอดรวมของวันจะไปโผล่เป็นบรรทัด “ค่าจอดเรือ” ในชีทหน้าหลัก</div>'
+     +'ยอดรวมของวันจะไปโผล่เป็นบรรทัด “ค่าจอดเรือ” ในชีทหน้าหลัก</div>'))
    +'</div>';
 }
 /* ชื่อวัน · ยาวสำหรับหัวกลุ่ม สั้นสำหรับแถวรวม */
@@ -52943,6 +52979,288 @@ function renderPierCash(pier){
    +body;
   pcStickHead();
   if(_pcJump){ _pcJump=false; if(_pcTab===1||_pcTab===2) setTimeout(pcJumpToday,0); }
+}
+
+/* ══ §pcPrint · พิมพ์เงินสดย่อยตามวันที่เลือก ═══════════════════════════════
+   ทั้งสามชีทเดิมพิมพ์ไม่ได้เลย · เป็นหน้าเดียวในกลุ่มหน้าท่าที่ไม่มีปุ่มพิมพ์
+   บัญชีจึงต้องคีย์รายจ่ายซ้ำลงใบรับรองแทนใบเสร็จรับเงินเองทุกวัน
+   ทั้งที่ตัวเลขทุกตัวอยู่ในระบบแล้ว · คีย์ซ้ำเมื่อไรก็มีโอกาสพิมพ์ผิดเมื่อนั้น
+
+   ใช้แบบ "เปิดหน้าต่างใหม่แล้วเขียน HTML ลงไป" ตามใบงานเรือ (pjPrint)
+   ได้ปุ่มบันทึก PNG มาฟรีจาก pjShotScript() ซึ่งบังคับว่าต้องมี
+     id="sheet" ที่กล่องกระดาษ · <style id="sty"> · ปุ่ม id="bimg"
+   สไตล์ตารางยกจาก pcCSS('#sheet') มาทั้งก้อน ตารางบนกระดาษจะได้เหมือนบนจอ
+
+   ชื่อบริษัทเก็บที่ po_cash_co · ต้องเป็นสตริงเท่านั้น (ดู §pcFix ข้างบน)
+   ═════════════════════════════════════════════════════════════════════════ */
+function pcCoName(){
+  try{ var b=laBlob(); return (typeof b.po_cash_co==='string')?b.po_cash_co:''; }catch(_){ return ''; }
+}
+function pcCoNameSet(v){
+  v=String(v==null?'':v).trim();
+  try{
+    var b=laBlob();
+    if(v) b.po_cash_co=v; else delete b.po_cash_co;
+    laBlobSave();
+  }catch(e){ try{ console.warn('[pcPrint] company name save failed', e && e.message); }catch(_){} }
+}
+/* กล่องกรอกชื่อบริษัท · ใช้กล่องกลางตัวเดียวกับ pcRowAdd
+   next = ฟังก์ชันที่จะเรียกต่อหลังบันทึก (กดพิมพ์ครั้งแรกแล้วยังไม่มีชื่อ) */
+var _pcCoNext=null;
+function pcCoEdit(next){
+  if(!pcGuard()) return;
+  _pcCoNext=(typeof next==='function')?next:null;
+  var host=document.getElementById('ck-reason-host');
+  if(!host){ host=document.createElement('div'); host.id='ck-reason-host'; document.body.appendChild(host); }
+  host.innerHTML=''
+   +'<div id="ck-reason-ov" onclick="if(event.target===this)ckReasonClose()" class="ck-ovl"><div class="ck-dlg">'
+   +'  <div class="ck-dh"><div><div class="t1">ชื่อบริษัทในใบรับรองแทนใบเสร็จรับเงิน</div>'
+   +'    <div class="t2">พิมพ์ครั้งเดียว ระบบจำไว้ให้ · ใช้ทุกท่า</div></div>'
+   +'    <button class="x" onclick="ckReasonClose()">&times;</button></div>'
+   +'  <div class="ck-db">'
+   +'    <div class="lb">ชื่อบริษัท (บจ. / หจก.)</div>'
+   +'    <input id="pc-co-inp" class="ck-inp" type="text" value="'+pcE(pcCoName())+'" placeholder="เช่น บริษัท เลิฟ ไอแลนด์ จำกัด">'
+   +'    <div class="ck-fn">ชื่อนี้จะไปอยู่หัวฟอร์มตรงช่อง บจ./หจก. และในประโยครับรองท้ายฟอร์ม<br>'
+   +'      ช่องผู้เบิกจ่าย ตำแหน่ง และลายเซ็น เว้นว่างไว้ให้เขียนมือตามเดิม</div>'
+   +'  </div>'
+   +'  <div class="ck-df"><button class="c" onclick="ckReasonClose()">ยกเลิก</button>'
+   +'    <button class="k" onclick="pcCoSave()">บันทึก</button></div>'
+   +'</div></div>';
+}
+function pcCoSave(){
+  var el=document.getElementById('pc-co-inp');
+  pcCoNameSet(el?el.value:'');
+  if(typeof ckReasonClose==='function') ckReasonClose();
+  var n=_pcCoNext; _pcCoNext=null;
+  if(n && pcCoName()) setTimeout(n,0); else pcKeep();
+}
+
+/* ── ตัวเลขเป็นคำอ่านไทย · ช่องซ้ายของแถวรวมในใบรับรอง ────────────────────
+   ไม่มีตัวช่วยแบบนี้ในไฟล์มาก่อน · เขียนใหม่ · รับเฉพาะจำนวนเต็มบาท
+   กฎที่คนมักพลาด · หลักสิบ 1 = "สิบ" ไม่ใช่ "หนึ่งสิบ" · หลักสิบ 2 = "ยี่สิบ"
+   หลักหน่วยที่ท้ายกลุ่มและมีหลักอื่นนำหน้า 1 = "เอ็ด" */
+var PC_TH_D=['','หนึ่ง','สอง','สาม','สี่','ห้า','หก','เจ็ด','แปด','เก้า'];
+var PC_TH_P=['','สิบ','ร้อย','พัน','หมื่น','แสน'];
+function _pcThGroup(s){          /* s = ตัวเลขไม่เกิน 6 หลัก (หนึ่งกลุ่มล้าน) */
+  var out='', L=s.length, prev=false;   /* prev = มีหลักที่ไม่ใช่ศูนย์มาก่อนในกลุ่มนี้แล้ว */
+  for(var i=0;i<L;i++){
+    var d=+s[i], pos=L-1-i;
+    if(!d) continue;
+    if(pos===1 && d===1) out+='สิบ';
+    else if(pos===1 && d===2) out+='ยี่สิบ';
+    /* "เอ็ด" ใช้ได้ต่อเมื่อมีหลักอื่นนำหน้าอยู่ในกลุ่มเดียวกัน
+       1,000,001 = หนึ่งล้านหนึ่งบาท ไม่ใช่ หนึ่งล้านเอ็ดบาท · กลุ่มหลังมีเลข 1 ตัวเดียว */
+    else if(pos===0 && d===1 && prev) out+='เอ็ด';
+    else out+=PC_TH_D[d]+PC_TH_P[pos];
+    prev=true;
+  }
+  return out;
+}
+function pcBahtText(n){
+  n=Math.round(Math.abs(+n||0));
+  if(!n) return 'ศูนย์บาทถ้วน';
+  var s=String(n), out='';
+  /* เกินล้าน · ตัดเป็นกลุ่มละ 6 หลักจากขวา แล้วต่อคำว่า "ล้าน" คั่น */
+  var groups=[];
+  while(s.length>6){ groups.unshift(s.slice(-6)); s=s.slice(0,-6); }
+  groups.unshift(s);
+  groups.forEach(function(g,i){
+    var t=_pcThGroup(g);
+    if(t) out+=t;
+    if(i<groups.length-1) out+='ล้าน';
+  });
+  return out+'บาทถ้วน';
+}
+/* วันที่แบบไทย พ.ศ. · DD/MM/2569 · ใช้ในตารางใบรับรอง */
+function pcThDate(ds){
+  try{
+    var d=new Date(ds+'T12:00:00'); if(isNaN(d.getTime())) return ds;
+    var p=function(v){ return (v<10?'0':'')+v; };
+    return p(d.getDate())+'/'+p(d.getMonth()+1)+'/'+(d.getFullYear()+543);
+  }catch(_){ return ds; }
+}
+
+/* ── หน้าต่างพิมพ์ · ตัวกลางของทุกปุ่ม ────────────────────────────────────
+   css = สไตล์เพิ่มเติมเฉพาะใบนั้น · sheet = เนื้อกระดาษ (จะถูกห่อด้วย #sheet) */
+function pcPrintWin(title, fname, css, sheet, land){
+  var scr=(typeof pjShotScript==='function')?pjShotScript(fname):'function shot(){}';
+  var base=pcCSS('#sheet')
+    +'body{margin:0;background:#EDF0F5;font-family:Sarabun,-apple-system,sans-serif}'
+    +'#sheet{background:#fff;margin:14px auto;padding:14mm 12mm;box-sizing:border-box;'
+      +'width:'+(land?'292mm':'205mm')+';max-width:calc(100vw - 28px);box-shadow:0 4px 18px rgba(0,0,0,.14)}'
+    /* บนจอตารางเลื่อนได้ · บนกระดาษต้องกางออกทั้งหมด ไม่งั้นโดนตัด */
+    +'#sheet .pc-gw{overflow:visible;max-height:none}'
+    +'#sheet .pc-t th{position:static}'
+    +'#sheet .pc-sheet{border:none;border-radius:0}'
+    /* บนจอทุกช่องห้ามตัดบรรทัด เพราะเลื่อนดูได้ · บนกระดาษเลื่อนไม่ได้
+       ช่องที่เป็นตัวหนังสือยาว (ชื่อโปรแกรม · รายการ · หมายเหตุ) ต้องยอมขึ้นบรรทัดใหม่
+       ไม่งั้นตารางดันกว้างเกินหน้าแล้วโดนตัดขวา */
+    +'#sheet .pc-t td.rt,#sheet .pc-t td.ctx,#sheet .pc-t td.tx{white-space:normal}'
+    +'#sheet .pc-t{table-layout:auto}'
+    +'.tb{display:flex;gap:9px;align-items:center;padding:11px 16px;background:#16265C;color:#fff;'
+      +'font:600 12px Sarabun,sans-serif;flex-wrap:wrap;position:sticky;top:0;z-index:9}'
+    +'.tb button{border:none;border-radius:8px;padding:8px 15px;font:700 12px Sarabun,sans-serif;cursor:pointer}'
+    +'.tb .pri{background:#fff;color:#16265C}'
+    +'.tb .img{background:rgba(255,255,255,.18);color:#fff}'
+    +'.tb .hint{opacity:.72;font-weight:400;font-size:11px}'
+    +'@media print{.tb{display:none!important}body{background:#fff}'
+      +'#sheet{margin:0;padding:0;width:auto;max-width:none;box-shadow:none}'
+      +'@page{size:A4'+(land?' landscape':'')+';margin:12mm}}';
+  var html='<!doctype html><html lang="th"><head><meta charset="utf-8">'
+   +'<title>'+pcE(title)+'</title>'
+   +'<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">'
+   +'<style id="sty">'+base+(css||'')+'</style></head><body>'
+   +'<div class="tb">'
+     +'<button class="pri" onclick="window.print()">&#128424; พิมพ์ / บันทึก PDF</button>'
+     +'<button class="img" id="bimg" onclick="shot()">&#128247; บันทึกเป็นรูป PNG</button>'
+     +'<span class="hint">ปุ่มสองปุ่มนี้อยู่บนหน้าจอเท่านั้น · ไม่ติดไปกับกระดาษและไม่ติดในรูป</span>'
+   +'</div>'
+   +'<div id="sheet">'+sheet+'</div>'
+   +'<script>'+scr+'<\/script></body></html>';
+  var w=window.open('','_blank','width=1220,height=880');
+  if(!w){ alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ · อนุญาต pop-up ของหน้านี้ก่อน'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+  setTimeout(function(){ try{ w.focus(); }catch(_){} }, 300);
+}
+/* หัวกระดาษที่ทุกใบใช้ร่วมกัน */
+function pcPierName(){
+  try{ var P=(typeof PO_PIERS!=='undefined')?(PO_PIERS.filter(function(x){ return x.k===_pcPier; })[0]||{}):{};
+       return P.n||_pcPier; }catch(_){ return _pcPier; }
+}
+function pcPrintHead(t1,t2){
+  return '<div class="pcp-hd"><div><div class="h1">'+pcE(t1)+'</div>'
+    +'<div class="h2">'+pcE(t2)+'</div></div>'
+    +'<div class="h3">'+pcE(pcPierName())+'<br><span>'+pcE(pcDL(_pcDate))+'</span></div></div>';
+}
+var PC_PRINT_HEAD_CSS=''
+  +'#sheet .pcp-hd{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;'
+    +'border-bottom:2px solid #16265C;padding-bottom:9px;margin-bottom:13px}'
+  +'#sheet .pcp-hd .h1{font-size:17px;font-weight:800;color:#16265C}'
+  +'#sheet .pcp-hd .h2{font-size:11px;color:#7C8091;margin-top:2px}'
+  +'#sheet .pcp-hd .h3{text-align:right;font-size:12px;font-weight:700;color:#16265C;white-space:nowrap}'
+  +'#sheet .pcp-hd .h3 span{font-weight:500;font-size:10.5px;color:#7C8091}';
+
+/* ── 1 · ใบรับรองแทนใบเสร็จรับเงิน ─────────────────────────────────────────
+   เอาเฉพาะ "รายจ่าย" ของวันที่เลือก · รายรับไม่เกี่ยว ฟอร์มนี้ใช้เบิกคืนเงิน
+   เรียงตามเวลาแบบเดียวกับสมุด · ที่ไม่ใส่เวลาไปท้าย (ดู pcRk ใน pcSheetMain) */
+function pcPrintCert(){
+  if(!pcCoName()){ pcCoEdit(pcPrintCert); return; }
+  var ds=_pcDate, D=pcDay(_pcPier,ds,false)||{out:[]};
+  var rk=function(at){ var m=/^(\d{1,2}):(\d{2})$/.exec(String(at||'')); return m?(+m[1]*60 + +m[2]):90000; };
+  var rows=(D.out||[]).slice().sort(function(a,b){ return rk(a.at)-rk(b.at); });
+  var CAT={lt:'ค่าเรือหางยาว',pk:'ค่าอุทยาน',dock:'ค่าจอดเรือ'};
+  var tot=0, body='';
+  rows.forEach(function(x){
+    var amt=+x.amt||0; tot+=amt;
+    body+='<tr><td class="d">'+pcE(pcThDate(ds))+'</td>'
+      +'<td class="t">'+pcE(x.txt||CAT[x.src]||'—')+'</td>'
+      +'<td class="m">'+pcN(amt)+'</td><td class="n"></td></tr>';
+  });
+  /* เติมแถวเปล่าให้เต็มหน้าเหมือนกระดาษจริง · เขียนเพิ่มด้วยมือได้ */
+  for(var i=rows.length;i<14;i++) body+='<tr><td class="d">&nbsp;</td><td class="t"></td><td class="m"></td><td class="n"></td></tr>';
+
+  var css=PC_PRINT_HEAD_CSS
+    +'#sheet .cf-t{font-size:16px;font-weight:800;text-align:center;color:#16265C;margin:2px 0 16px}'
+    +'#sheet .cf-co{display:flex;align-items:flex-end;gap:8px;font-size:12.5px;margin-bottom:10px}'
+    +'#sheet .cf-co .fill{flex:1;border-bottom:1px dotted #6b7280;font-weight:700;text-align:center;padding-bottom:2px}'
+    +'#sheet .cf-tb{width:100%;border-collapse:collapse;font-size:12px}'
+    +'#sheet .cf-tb th,#sheet .cf-tb td{border:1px solid #16265C;padding:5px 8px}'
+    +'#sheet .cf-tb th{background:#EEF1F6;font-size:11px;font-weight:800;color:#16265C;text-align:center}'
+    +'#sheet .cf-tb td.d{width:92px;text-align:center;white-space:nowrap}'
+    +'#sheet .cf-tb td.m{width:96px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}'
+    +'#sheet .cf-tb td.n{width:104px}'
+    +'#sheet .cf-tb tr.sum td{background:#EEF1F6;font-weight:800}'
+    +'#sheet .cf-tb tr.sum .w{text-align:center;font-weight:700}'
+    +'#sheet .cf-ft{font-size:12px;line-height:2.3;margin-top:16px}'
+    +'#sheet .cf-ft .u{display:inline-block;border-bottom:1px dotted #6b7280;min-width:170px}'
+    +'#sheet .cf-ft .u.s{min-width:96px}'
+    +'#sheet .cf-sg{display:flex;justify-content:flex-end;gap:64px;margin-top:26px;text-align:center;font-size:12px}'
+    +'#sheet .cf-sg .l{border-bottom:1px dotted #6b7280;min-width:168px;margin-bottom:4px}';
+
+  var sheet=pcPrintHead('เงินสดย่อย · ใบเบิก Petty Cash','ดึงรายจ่ายของวันที่เลือกจากสมุดเดินบัญชี ไม่ได้คีย์ใหม่')
+   +'<div class="cf-t">ใบรับรองแทนใบเสร็จรับเงิน</div>'
+   +'<div class="cf-co"><span>บจ. / หจก.</span><span class="fill">'+pcE(pcCoName())+'</span>'
+     +'<span>(ผู้ซื้อ/ผู้รับเงิน)</span></div>'
+   +'<table class="cf-tb"><thead><tr><th>วัน เดือน ปี</th><th>รายละเอียดรายจ่าย</th>'
+     +'<th>จำนวนเงิน</th><th>หมายเหตุ</th></tr></thead><tbody>'+body+'</tbody>'
+   +'<tfoot><tr class="sum"><td class="w" colspan="2">'+pcE(pcBahtText(tot))+'</td>'
+     +'<td class="m">'+pcN(tot)+'</td><td>รวมทั้งสิ้น</td></tr></tfoot></table>'
+   +'<div class="cf-ft">ข้าพเจ้า <span class="u"></span> (ผู้เบิกจ่าย) &nbsp; ตำแหน่ง <span class="u s"></span><br>'
+     +'ขอรับรองว่า รายจ่ายข้างต้นนี้ไม่อาจเรียกใบเสร็จรับเงินจากผู้รับได้ '
+     +'และข้าพเจ้าได้จ่ายไปในงานของ '+pcE(pcCoName())+' โดยแท้<br>'
+     +'ตั้งแต่วันที่ <span class="u s">'+pcE(pcThDate(ds))+'</span> ถึงวันที่ <span class="u s">'+pcE(pcThDate(ds))+'</span></div>'
+   +'<div class="cf-sg"><div><div class="l"></div>(ผู้เบิกจ่าย)</div>'
+     +'<div><div class="l"></div>(ผู้อนุมัติ)</div></div>';
+
+  pcPrintWin('ใบรับรองแทนใบเสร็จรับเงิน · '+pcPierName()+' · '+ds,
+    ('pettycash_cert_'+_pcPier+'_'+ds).replace(/[^A-Za-z0-9_.-]+/g,'_'), css, sheet, false);
+}
+
+/* ── 2 · สมุดเดินบัญชีของวัน ─────────────────────────────────────────────── */
+function pcPrintLedger(){
+  var ds=_pcDate, D=pcDay(_pcPier,ds,false)||{in:[],out:[]};
+  var T=pcTotals(_pcPier,ds), op=pcOpening(_pcPier,ds), bal=op+T.net;
+  var rk=function(at){ var m=/^(\d{1,2}):(\d{2})$/.exec(String(at||'')); return m?(+m[1]*60 + +m[2]):90000; };
+  var rows=[];
+  (D.in||[]).forEach(function(x){ rows.push({t:rk(x.at),k:'in',x:x}); });
+  (D.out||[]).forEach(function(x){ rows.push({t:rk(x.at),k:'out',x:x}); });
+  rows.sort(function(a,b){ return a.t-b.t; });
+  var run=op, body='', i=0;
+  body+='<tr><td class="rn">—</td><td class="c">—</td><td><i>ยอดยกมาจากวันก่อนหน้า</i></td>'
+    +'<td class="rt">ยกมา</td><td class="rt">ระบบ</td><td></td><td></td>'
+    +'<td class="r v">'+pcN(op)+'</td></tr>';
+  rows.forEach(function(r){
+    i++;
+    var isIn=(r.k==='in'), amt=+r.x.amt||0;
+    var cat=isIn?'รับเงิน':(r.x.src?({lt:'หางยาว',pk:'อุทยาน',dock:'ค่าจอด'}[r.x.src]||'จ่ายอื่น'):'จ่ายอื่น');
+    run += isIn ? amt : -amt;
+    body+='<tr><td class="rn">'+i+'</td><td class="c">'+pcE(r.x.at||'—')+'</td>'
+      +'<td class="tx">'+pcE(r.x.txt||'—')+'</td><td class="rt">'+cat+'</td><td class="rt">'+pcE(r.x.by||'—')+'</td>'
+      +'<td class="r v">'+(isIn?pcN(amt):'')+'</td><td class="r v">'+(!isIn?pcN(amt):'')+'</td>'
+      +'<td class="r v">'+pcN(run)+'</td></tr>';
+  });
+  if(!rows.length) body+='<tr><td class="rn"></td><td colspan="7" style="color:#B9BCC6;padding:18px 12px">'
+    +'ไม่มีรายการของวันนี้</td></tr>';
+
+  var css=PC_PRINT_HEAD_CSS
+    +'#sheet .pcp-sg{display:flex;justify-content:flex-end;gap:64px;margin-top:30px;text-align:center;font-size:12px}'
+    +'#sheet .pcp-sg .l{border-bottom:1px dotted #6b7280;min-width:168px;margin-bottom:4px}';
+  var sheet=pcPrintHead('สมุดเดินบัญชีเงินสดย่อย','ยอดยกมา · รับ · จ่าย · คงเหลือ ของวันที่เลือก')
+   +'<div class="pc-sheet"><div class="pc-gw"><table class="pc-t"><thead><tr>'
+     +'<th class="rn">#</th><th class="c" style="width:64px">เวลา</th><th>รายการ</th>'
+     +'<th style="width:96px">หมวด</th><th style="width:96px">ผู้บันทึก</th>'
+     +'<th class="r" style="width:104px">รับ</th><th class="r" style="width:104px">จ่าย</th>'
+     +'<th class="r" style="width:116px">คงเหลือ</th></tr></thead>'
+     +'<tbody>'+body+'</tbody>'
+     +'<tfoot><tr class="grand"><td class="rn"></td><td colspan="4">รวมวันนี้</td>'
+       +'<td class="r">'+pcN(T.in)+'</td><td class="r">'+pcN(T.out)+'</td>'
+       +'<td class="r">'+pcN(bal)+'</td></tr></tfoot></table></div></div>'
+   +'<div class="pcp-sg"><div><div class="l"></div>(ผู้บันทึก)</div>'
+     +'<div><div class="l"></div>(ผู้ตรวจ)</div></div>';
+
+  pcPrintWin('สมุดเดินบัญชี · '+pcPierName()+' · '+ds,
+    ('pettycash_book_'+_pcPier+'_'+ds).replace(/[^A-Za-z0-9_.-]+/g,'_'), css, sheet, false);
+}
+
+/* ── 3 · หางยาว / อุทยาน · เฉพาะวันที่เลือก ───────────────────────────────
+   ชีทบนจอเป็นมุมมองทั้งเดือน · ส่ง opt.only เข้าไปให้เหลือวันเดียว
+   opt.print ทำให้ช่องกรอกกลายเป็นตัวหนังสือ กระดาษจะได้ไม่มีกล่องว่างเปล่า */
+function pcPrintLT(){
+  var ds=_pcDate;
+  var sheet=pcPrintHead('สรุปเรือหางยาว','จอย/เหมาอ่านจากใบจอง · ใช้จริงกับเงินเป็นตัวที่หน้าท่ากรอกเอง')
+    +pcSheetLT(_pcPier,{only:ds, print:true});
+  pcPrintWin('เรือหางยาว · '+pcPierName()+' · '+ds,
+    ('longtail_'+_pcPier+'_'+ds).replace(/[^A-Za-z0-9_.-]+/g,'_'), PC_PRINT_HEAD_CSS, sheet, false);
+}
+function pcPrintPK(){
+  var ds=_pcDate;
+  var sheet=pcPrintHead('สรุปค่าอุทยาน','ฝั่งซ้ายตามใบจอง · ฝั่งขวาจ่ายจริงที่ด่าน · ต่างกันเพราะอะไรดูได้จากสองฝั่ง')
+    +pcSheetPK(_pcPier,{only:ds, print:true});
+  /* 25 คอลัมน์ · A4 แนวนอนถึงจะพอ · ตัวหนังสือย่อลงอีกนิดให้ครบหน้า */
+  pcPrintWin('ค่าอุทยาน · '+pcPierName()+' · '+ds,
+    ('parkfee_'+_pcPier+'_'+ds).replace(/[^A-Za-z0-9_.-]+/g,'_'),
+    PC_PRINT_HEAD_CSS+'#sheet .pc-t{font-size:10.5px}#sheet .pc-t th,#sheet .pc-t td{padding:4px 5px}',
+    sheet, true);
 }
 
 /* ══ §vckFlow · สถานะรายแถวของหน้าเช็คอินรถ ════════════════════════════════
