@@ -94255,8 +94255,16 @@ function _ppSpan(a,b){ var x=new Date(String(a)+'T12:00:00'), y=new Date(String(
 var _ppFrom=_ppYMD(new Date()), _ppTo=_ppFrom;
 var _ppRoute='', _ppPier='', _ppOnlySp=false, _ppOpen={};
 
-/* กลับมาที่เดิมหลังวาดใหม่ · แถวมันยาว ถ้าเด้งขึ้นหัวทุกครั้งที่กดกางจะหาที่เดิมไม่เจอ */
-function ppAfter(){ var sy=window.scrollY||0; renderPrPo(); try{ window.scrollTo(0,sy); }catch(_){} }
+/* กลับมาที่เดิมหลังวาดใหม่ · แถวมันยาว ถ้าเด้งขึ้นหัวทุกครั้งที่กดกางจะหาที่เดิมไม่เจอ
+   ตอนนี้กล่องชีตเลื่อนในตัวเอง จึงต้องจำ scrollTop ของกล่องด้วย ไม่ใช่แค่ของหน้า */
+function _ppSheetEl(){ return document.querySelector('#prpo-host .pp-sheet'); }
+function ppAfter(){
+  var sy=window.scrollY||0, el=_ppSheetEl();
+  var st=el?el.scrollTop:0, sl=el?el.scrollLeft:0;
+  renderPrPo();
+  try{ window.scrollTo(0,sy); }catch(_){}
+  try{ var m=_ppSheetEl(); if(m){ m.scrollTop=st; m.scrollLeft=sl; } }catch(_){}
+}
 function ppSetFrom(v){ if(!v) return; _ppFrom=v; if(_ppTo<_ppFrom) _ppTo=_ppFrom; ppAfter(); }
 function ppSetTo(v){ if(!v) return; _ppTo=v; if(_ppTo<_ppFrom) _ppFrom=_ppTo; ppAfter(); }
 function ppQuick(n){ _ppFrom=_ppYMD(new Date()); _ppTo=_ppShift(_ppFrom,Math.max(1,+n||1)-1); ppAfter(); }
@@ -94483,11 +94491,15 @@ function ppCSS(){ var S='#prpo-host'; return ''
  /* ตัวเลขที่อ่านมาจากข้อความ "ทั้งใบ" ไม่ใช่ตัวเลขที่เอเจนต์กรอกมาเอง · ขีดประใต้ไว้ให้รู้ */
  +S+' .pp-chip b.alx{border-bottom:1px dotted currentColor;cursor:help}'
  +S+' .pp-none{font-size:11px;color:#c3c8cf}'
- +S+' .pp-sheet{border:1px solid var(--gl);background:#fff;overflow-x:auto}'
+ /* กล่องชีตต้องมีความสูงจำกัด หัวตารางถึงจะค้างจริง
+    เดิมใส่แต่ overflow-x:auto ซึ่งทำให้กล่องนี้กลายเป็นตัวเลื่อนไปด้วย (overflow-y เป็น auto ตาม)
+    หัว A-J เลยไปติดกับขอบบนของตาราง ไม่ใช่ขอบบนจอ · เลื่อนลงนิดเดียวก็หายไปเลย */
+ +S+' .pp-sheet{border:1px solid var(--gl);background:#fff;overflow:auto;'
+   +'max-height:calc(100vh - var(--topbar,0px) - 190px);min-height:340px}'
  +S+' table.pp-t{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;min-width:1080px}'
  +S+' .pp-t th{text-align:left;font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;'
    +'color:#475569;background:#EDF1F5;padding:7px 8px;border:1px solid var(--gl);white-space:nowrap;'
-   +'position:sticky;top:var(--topbar,0px);z-index:4}'
+   +'position:sticky;top:0;z-index:4}'
  +S+' .pp-t td{padding:5px 8px;border:1px solid var(--gl2);vertical-align:middle;overflow:hidden;text-overflow:ellipsis}'
  +S+' .pp-t tbody tr:nth-child(even)>td{background:#FBFCFD}'
  +S+' .pp-t tbody tr.d:hover>td{background:#EFF6FF}'
@@ -94533,7 +94545,7 @@ function ppCSS(){ var S='#prpo-host'; return ''
  +S+' .pp-empty{background:#fff;border:1px solid var(--gl);padding:46px 20px;text-align:center;color:#94A3B8;font-size:13px}'
  +'@media print{'+S+'{background:#fff;--gl:#B9C4CF;--gl2:#D5DCE4}'
    +S+' .pp-noprint{display:none!important}'
-   +S+' .pp-sheet{overflow:visible}'
+   +S+' .pp-sheet{overflow:visible;max-height:none;min-height:0}'
    +S+' table.pp-t{min-width:0;font-size:8.8px}'
    +S+' .pp-t td{padding:3px 5px}'+S+' .pp-t th{padding:4px 5px;position:static}'
    +S+' .pp-t tr{break-inside:avoid}'+S+' .pp-t thead{display:table-header-group}'
@@ -94552,8 +94564,7 @@ function ppCSS(){ var S='#prpo-host'; return ''
 
 /* ── ชิ้นส่วนของชีต · ทุกอย่างเป็น <tr> ในตารางเดียวกัน คอลัมน์จึงตรงกันทั้งหน้า ──
    PP_COLS ต้องตรงกับจำนวน <th> เสมอ · ใช้เป็น colspan ของแถวกางรายชื่อ */
-/* สกินตารางมีรางเลขแถวเพิ่มมาอีกหนึ่งช่อง · colspan ของแถวกางรายชื่อจึงเป็น 11 */
-var PP_COLS=11;
+var PP_COLS=10;
 function ppNumCells(A, cls){
   var c=cls?(' '+cls):'';
   var n=function(v, extra){ return '<td class="num'+c+(v?'':' z')+(extra?(' '+extra):'')+'">'+v+'</td>'; };
@@ -94574,7 +94585,7 @@ function ppProgRows(g, pk){
   });
   var GA=g.A;
   /* หัวโปรแกรม · ยอดรวมอยู่บนแถวเดียวกันเลย ไม่ต้องมีแถวรวมซ้ำอีกอันข้างล่าง */
-  var out='<tr class="g-prog">'+ppRN()+'<td colspan="2"><div class="lb">'
+  var out='<tr class="g-prog"><td colspan="2"><div class="lb">'
     +'<i style="background:'+e(col)+'"></i>'
     +'<span class="nm">'+e((rt&&rt.name)||k||'ไม่ระบุโปรแกรม')+'</span>'
     /* คั่นด้วย · เฉพาะช่องที่มีค่าจริง · เส้นทางที่ไม่ได้ตั้งเวลา/เกาะ จะได้ไม่ขึ้นจุดนำหน้าลอย ๆ */
@@ -94596,7 +94607,7 @@ function ppProgRows(g, pk){
       ? ('<button class="pp-more'+(open?' on':'')+'" onclick="ppToggle(\''+e(okey)+'\')">'
           +(open?'ซ่อน':('รายชื่อ '+A.sp.length))+'</button>')
       : '';
-    var tr='<tr class="d">'+ppRN()
+    var tr='<tr class="d">'
       +'<td class="pp-day">'+e(ppDayLbl(C.date))+'</td>'
       +'<td><div class="pp-bt'+(C.boatId?'':' na')+'">'
         +'<i style="background:'+e(ppBoatColor(C.boatId))+'"></i>'
@@ -94604,7 +94615,7 @@ function ppProgRows(g, pk){
       + ppNumCells(A)
       +'<td class="mealc">'+ppChips(A)+more+'</td>'
       +'</tr>';
-    if(open) tr+='<tr class="pp-det">'+ppRN()+'<td colspan="'+(PP_COLS-1)+'">'+ppSpecialList(A)+'</td></tr>';
+    if(open) tr+='<tr class="pp-det"><td colspan="'+PP_COLS+'">'+ppSpecialList(A)+'</td></tr>';
     return tr;
   }).join('');
   return out;
@@ -94753,16 +94764,15 @@ function ppBody(P,pOrd,GT){
 }
 
 /* ─── A · Google Sheets ────────────────────────────────────────────────────
-   สิ่งที่ทำให้อ่านแล้ว "เป็นชีต" จริง ๆ คือรางเลขแถวกับหัวคอลัมน์ A-J
-   ไม่ใช่แค่เส้นตาราง · เลยใส่มาให้ครบ (คอลัมน์รวมกลายเป็น 11 เฉพาะสกินนี้) */
-var _ppRN=0;
-function ppRN(){ return '<td class="rn">'+(++_ppRN)+'</td>'; }
+   เอาเลขแถวกับหัวคอลัมน์ A-J ออกแล้ว · ในชีตจริงมันคือที่อยู่ของเซลล์ไว้อ้างอิงตอนเขียนสูตร
+   หน้านี้อ่านอย่างเดียว ไม่มีสูตรให้อ้าง · เลขพวกนั้นเลยกินที่ซ้ายมือไปเปล่า ๆ
+   ที่เหลือไว้คือของที่ยังทำงาน: เส้นตาราง โทน Sheets และหัวตารางที่ค้างตอนเลื่อน */
 function ppBodySheet(P,pOrd,GT){
-  var e=ckEsc; _ppRN=0;
+  var e=ckEsc;
   var trs='';
   pOrd.forEach(function(pk){
     var PB=P[pk], M=ppPierMeta(pk), PA=PB.A, c=M.c||'#94A3B8';
-    trs+='<tr class="g-pier">'+ppRN()+'<td colspan="2"><div class="lb">'
+    trs+='<tr class="g-pier"><td colspan="2"><div class="lb">'
         +'<span class="ps" style="background:'+e(c)+'">'+e(M.s||'—')+'</span>'
         +'<span class="pn">'+e(M.n)+'</span>'
         +(M.t?('<span class="pt">'+e(M.t)+'</span>'):'')
@@ -94770,23 +94780,19 @@ function ppBodySheet(P,pOrd,GT){
       +'</div></td>'+ppNumCells(PA)+'<td class="mealc">'+ppChips(PA)+'</td></tr>';
     trs+=PB.gOrd.map(function(k){ return ppProgRows(PB.G[k], pk); }).join('');
   });
-  trs+='<tr class="g-tot">'+ppRN()+'<td colspan="2">รวมทั้งหมด &middot; '+e(ppRangeLbl())+'</td>'
+  trs+='<tr class="g-tot"><td colspan="2">รวมทั้งหมด &middot; '+e(ppRangeLbl())+'</td>'
     + ppNumCells(GT)+'<td class="mealc">'+ppChips(GT)+'</td></tr>';
-  var letters=['A','B','C','D','E','F','G','H','I','J'];
   return '<div class="pp-sheet"><table class="pp-t">'
-    +'<colgroup><col style="width:42px"><col style="width:96px"><col style="width:224px">'
+    +'<colgroup><col style="width:96px"><col style="width:232px">'
       +'<col style="width:60px"><col style="width:62px"><col style="width:54px">'
       +'<col style="width:54px"><col style="width:52px"><col style="width:58px">'
       +'<col style="width:74px"><col></colgroup>'
-    +'<thead>'
-      +'<tr class="cl"><th class="corner"></th>'
-        + letters.map(function(L){ return '<th>'+L+'</th>'; }).join('')+'</tr>'
-      +'<tr class="lbl"><th class="corner"></th>'
+    +'<thead><tr class="lbl">'
         +'<th>วันที่</th><th>เรือ</th><th class="r">ใบจอง</th>'
         +'<th class="r">ผู้ใหญ่</th><th class="r">เด็ก</th><th class="r">ทารก</th>'
         +'<th class="r">FOC</th><th class="r">รวม</th><th class="r">กินอาหาร</th>'
-        +'<th>อาหารพิเศษ</th></tr>'
-    +'</thead><tbody>'+trs+'</tbody></table></div>';
+        +'<th>อาหารพิเศษ</th></tr></thead>'
+    +'<tbody>'+trs+'</tbody></table></div>';
 }
 
 /* ─── B · การ์ด · อ่านง่าย ─────────────────────────────────────────────────
@@ -94909,32 +94915,21 @@ function ppCSSSheet(){ var S='#prpo-host'; return ppCSSSeg()
  +S+' .pp-sheet{border:1px solid #C0C0C0}'
  +S+' table.pp-t{font-family:Roboto,Arial,"DM Sans",sans-serif;font-size:12.5px}'
  +S+' .pp-t th{background:#F8F9FA;color:#5F6368;border:1px solid #C0C0C0;font-weight:600;letter-spacing:0}'
- +S+' .pp-t tr.cl th{text-align:center;font-size:10.5px;font-weight:500;color:#7C848D;padding:2px 4px;'
-   +'height:20px;top:var(--topbar,0px);z-index:6}'
- +S+' .pp-t tr.lbl th{font-size:11px;text-transform:none;padding:6px 8px;'
-   +'top:calc(var(--topbar,0px) + 20px);z-index:5}'
+ +S+' .pp-t tr.lbl th{font-size:11px;text-transform:none;padding:6px 8px;top:0;z-index:5}'
  +S+' .pp-t th.r{text-align:right}'
- +S+' .pp-t th.corner{background:#EDEEF0;width:42px;min-width:42px}'
  +S+' .pp-t td{border:1px solid #E1E3E1}'
- +S+' .pp-t td.rn{background:#F8F9FA;color:#7C848D;text-align:center;font-size:10.5px;'
-   +'font-family:Roboto,Arial,sans-serif;font-variant-numeric:tabular-nums;border-color:#C0C0C0;'
-   +'width:42px;padding:5px 2px;user-select:none}'
  +S+' .pp-t tbody tr:nth-child(even)>td{background:#fff}'
- +S+' .pp-t tbody tr:nth-child(even)>td.rn{background:#F8F9FA}'
  +S+' .pp-t tbody tr.d:hover>td{background:#F1F8FF}'
- +S+' .pp-t tbody tr.d:hover>td.rn{background:#E8EAED;color:#202124}'
  /* หัวท่าต้องแยกออกจากหัวโปรแกรมให้ชัด · เดิมเขียวอ่อนทั้งคู่ มองไม่ออกว่าขึ้นท่าใหม่ตรงไหน */
  +S+' .pp-t tr.g-pier>td{background:#188038;color:#fff;border-top:2px solid #0B5C25;'
    +'border-bottom:2px solid #0B5C25;border-left-color:#3E9A57;border-right-color:#3E9A57}'
- +S+' .pp-t tr.g-pier>td.rn{background:#0B5C25;color:#CFE8D6;border-color:#0B5C25}'
  +S+' .pp-t tr.g-pier .pt{color:#D6EDDC}'
  +S+' .pp-t tr.g-pier .ps{box-shadow:0 0 0 1px rgba(255,255,255,.5)}'
  +S+' .pp-t tr.g-prog>td{background:#EFF3F0;border-top:1px solid #C9D6CD}'
- +S+' .pp-t tr.g-prog>td.rn{background:#E5EBE7}'
  +S+' .pp-t tr.g-tot>td{background:#D9E7DE;border-top:2px solid #6F9C81;border-bottom:2px solid #6F9C81}'
  +S+' .pp-t .eat{background:#EAF6EF;color:#137333}'
  +S+' .pp-btn.pri{background:#137333;border-color:#137333}'
- +'@media print{'+S+' .pp-t td.rn,'+S+' .pp-t th.corner,'+S+' .pp-t tr.cl{display:none}}';
+   ;
 }
 /* ─── B · การ์ด · ตัวโต เว้นเยอะ แตะง่าย ────────────────────────────────── */
 function ppCSSFriendly(){ var S='#prpo-host'; return ppCSSSeg()
