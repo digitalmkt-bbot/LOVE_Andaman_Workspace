@@ -82632,6 +82632,12 @@ function bkV2RenderTab2(){
     .t2-side{width:226px;flex:none;background:var(--white);border-right:1px solid var(--border);padding:16px 14px;position:sticky;top:0;align-self:stretch;min-height:100%}
     .t2-main{flex:1;min-width:0;background:var(--btband,#EDE3E3)}
     .t2-shell{background:var(--btband,#EDE3E3)}
+    /* ══ §btTop · ไล่ที่ว่างด้านบนออก ═══════════════════════════════════════
+       วัดจริง: ขอบบนของแถบเมนูซ้ายอยู่ที่ 6px แต่เนื้อหาเริ่มที่ 22px
+       (main มี padding-top:22) · เยื้องกัน 16px เห็นชัดเวลาวางเทียบกัน
+       ดันแถบแท็บขึ้น 16 ให้ขอบบนตรงกัน แล้วบีบระยะที่เหลืออีกสองจุด
+       สไตล์ก้อนนี้อยู่ในผลลัพธ์ของหน้า By-trip เท่านั้น หน้าอื่นไม่โดน       */
+    .bkv2-topcard{margin-top:-16px !important;margin-bottom:4px !important}
     #view-booking .bkv2-bodycard{overflow:visible}
     .t2-hd{padding:9px 14px;background:var(--white);border-bottom:1px solid var(--border);box-shadow:0 2px 6px -3px rgba(15,23,42,.18);position:relative;z-index:45}
     .t2-hd-top{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
@@ -83085,8 +83091,8 @@ function bkV2RenderTab2(){
     /* §btStick · เดิม top:-22px คือให้หัวไถขึ้นไป 22px ก่อนค่อยหยุด · ทำให้ขอบบน
        ไม่ตรงกับขอบบนของแถบเมนูซ้าย · ชิดขอบเลย */
     .bt-pkh{position:sticky;top:0;z-index:60;background:var(--btband,#E9E7E3);
-      padding:10px 6px 12px;margin-bottom:0}
-    .bt-hdtop{position:relative;display:flex;align-items:center;gap:13px;padding:0 8px 10px}
+      padding:6px 6px 4px;margin-bottom:0}
+    .bt-hdtop{position:relative;display:flex;align-items:center;gap:13px;padding:0 8px 7px}
     .bt-arw{width:27px;height:27px;flex:none;border:1px solid rgba(0,0,0,.13);background:#fff;border-radius:9px;
       display:flex;align-items:center;justify-content:center;color:#7d7a74;font-size:14px;cursor:pointer;font-family:inherit;line-height:1}
     .bt-dnum{font-size:32px;font-weight:800;letter-spacing:-1px;line-height:1;font-family:'DM Mono',monospace}
