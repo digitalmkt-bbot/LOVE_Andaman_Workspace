@@ -94313,6 +94313,24 @@ function ppPierRank(p){
   return 999;
 }
 function ppPierLbl(p){ return ppPierMeta(p).n||(p||'ไม่ระบุท่า'); }
+/* สีโปรแกรมมีทั้งอ่อนและเข้ม · เลือกสีตัวหนังสือตามความสว่างของพื้น ไม่งั้นบางแถบอ่านไม่ออก */
+function ppInkOn(hex){
+  var h=String(hex||'').replace('#','');
+  if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  if(!/^[0-9a-fA-F]{6}$/.test(h)) return '#ffffff';
+  var r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16);
+  return ((r*299+g*587+b*114)/1000) > 150 ? '#15201a' : '#ffffff';
+}
+/* ท่าที่ไม่มีทัวร์ต้องขึ้นด้วย · เห็นแล้วรู้ว่า "วันนี้ท่านี้ไม่มีจริง ๆ"
+   ไม่ใช่ "หน้ายังโหลดไม่ครบ" หรือ "ลืมกรอง" · สองอย่างนี้ต่างกันมากสำหรับคนสั่งของ */
+function ppNoTourMsg(){
+  if(_ppRoute || _ppOnlySp) return 'ไม่มีทัวร์ตามตัวกรองที่เลือก';
+  if(_ppFrom===_ppTo){
+    return (_ppFrom===_ppYMD(new Date())) ? 'ไม่มีทัวร์ออกวันนี้'
+      : ('ไม่มีทัวร์ออกวัน'+ppDayLbl(_ppFrom));
+  }
+  return 'ไม่มีทัวร์ออกในช่วงนี้';
+}
 function ppBoatName(id){ if(!id) return 'ยังไม่จัดเรือ';
   return (typeof pckBoatName==='function')?pckBoatName(id):id; }
 function ppBoatColor(id){ if(!id) return '#94A3B8';
@@ -94516,11 +94534,18 @@ function ppCSS(){ var S='#prpo-host'; return ''
  +S+' .pp-t tr.g-pier .ps{font-size:9.5px;font-weight:800;letter-spacing:.05em;padding:2px 7px;color:#fff;flex:none}'
  +S+' .pp-t tr.g-pier .pn{font-size:13.5px;font-weight:800}'
  +S+' .pp-t tr.g-pier .pt{font-size:10.5px;font-weight:600;color:#64748B}'
- +S+' .pp-t tr.g-prog>td{background:#F3F6F9;border-top:1px solid #C7D2DD;font-weight:700}'
- +S+' .pp-t tr.g-prog .lb{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding-left:12px}'
- +S+' .pp-t tr.g-prog .lb i{width:9px;height:9px;flex:none}'
- +S+' .pp-t tr.g-prog .nm{font-size:12.5px;font-weight:800}'
- +S+' .pp-t tr.g-prog .mt{font-size:10.5px;font-weight:600;color:#8494A4}'
+ /* แถบโปรแกรม · พื้นสีทึบเต็มความกว้าง ใช้แบ่งกลุ่มเรืออย่างเดียว ไม่ใช่แถวข้อมูล
+    สีพื้นมาจากสีของโปรแกรมนั้น · สีตัวหนังสือคำนวณจากความสว่างของพื้น (ppInkOn) */
+ +S+' .pp-t tr.g-prog>td{padding:7px 11px;font-weight:700;'
+   +'border-top:1px solid rgba(0,0,0,.14);border-bottom:1px solid rgba(0,0,0,.14)}'
+ +S+' .pp-t tr.g-prog .lb{display:flex;align-items:baseline;gap:11px;flex-wrap:wrap}'
+ +S+' .pp-t tr.g-prog .nm{font-size:13px;font-weight:800;letter-spacing:-.005em}'
+ +S+' .pp-t tr.g-prog .mt{font-size:10.5px;font-weight:600;opacity:.82}'
+ +S+' .pp-t tr.g-prog .sm{margin-left:auto;font-size:11px;font-weight:700;opacity:.93;'
+   +'font-family:"DM Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;white-space:nowrap}'
+ /* ท่าที่ไม่มีทัวร์ · แถบท่ายังอยู่ แต่จางลงและบอกเหตุผลแทนตัวเลข */
+ +S+' .pp-t tr.g-pier.none>td{opacity:.72}'
+ +S+' .pp-t td.notour{font-size:11.5px;font-weight:600;font-style:italic}'
  +S+' .pp-t tr.g-tot>td{background:#DCE4EC;border-top:2px solid #7F93A6;border-bottom:2px solid #7F93A6;'
    +'font-weight:800;padding:8px}'
  +S+' .pp-t tr.d>td:first-child{padding-left:26px}'
@@ -94584,17 +94609,19 @@ function ppProgRows(g, pk){
     return String(ppBoatName(A.boatId)).localeCompare(String(ppBoatName(B.boatId)),'en',{numeric:true,sensitivity:'base'});
   });
   var GA=g.A;
-  /* หัวโปรแกรม · ยอดรวมอยู่บนแถวเดียวกันเลย ไม่ต้องมีแถวรวมซ้ำอีกอันข้างล่าง */
-  var out='<tr class="g-prog"><td colspan="2"><div class="lb">'
-    +'<i style="background:'+e(col)+'"></i>'
-    +'<span class="nm">'+e((rt&&rt.name)||k||'ไม่ระบุโปรแกรม')+'</span>'
-    /* คั่นด้วย · เฉพาะช่องที่มีค่าจริง · เส้นทางที่ไม่ได้ตั้งเวลา/เกาะ จะได้ไม่ขึ้นจุดนำหน้าลอย ๆ */
-    +'<span class="mt">'+[((rt&&rt.times&&rt.times[0])?('ออก '+e(rt.times[0])):''),
-        ((rt&&rt.islands)?e(rt.islands):''),
-        (g.ck.length+' เที่ยวเรือ')].filter(Boolean).join(' · ')+'</span>'
-    +'</div></td>'
-    + ppNumCells(GA)
-    + '<td class="mealc">'+ppChips(GA)+'</td></tr>';
+  /* หัวโปรแกรมเป็นแค่แถบแบ่งกลุ่มเรือ · พื้นสีทึบสีของโปรแกรมนั้น กินเต็มความกว้าง
+     ไม่มีช่องตัวเลขและไม่มีป้ายอาหารพิเศษ — ของพวกนั้นต้องอยู่แถวเรือ ที่คนลงมือทำงานจริง
+     (เดิมป้ายแพ้อาหารขึ้นซ้ำทั้งแถวโปรแกรมและแถวเรือ อ่านแล้วนึกว่าเป็นคนละกอง) */
+  var ink=ppInkOn(col);
+  var meta=[((rt&&rt.times&&rt.times[0])?('ออก '+e(rt.times[0])):''),
+      ((rt&&rt.islands)?e(rt.islands):''),
+      (g.ck.length+' เที่ยวเรือ')].filter(Boolean).join(' · ');
+  var out='<tr class="g-prog"><td colspan="'+PP_COLS+'" style="background:'+e(col)+';color:'+ink+'">'
+    +'<div class="lb">'
+      +'<span class="nm">'+e((rt&&rt.name)||k||'ไม่ระบุโปรแกรม')+'</span>'
+      +'<span class="mt">'+meta+'</span>'
+      +'<span class="sm">'+GA.n+' ใบจอง · '+GA.tot+' คน · เตรียมอาหาร '+GA.eat+' ที่</span>'
+    +'</div></td></tr>';
 
   out+=g.ck.map(function(ck){
     var C=g.cells[ck], A=C.A, okey=(pk||'')+'|'+k+'|'+ck, open=!!_ppOpen[okey];
@@ -94661,6 +94688,12 @@ function renderPrPo(){
     ppAdd(g.cells[ck].A, r);
     trips[pk+'|'+k+'|'+ck]=1; progs[pk+'|'+k]=1;
   });
+  var nPierActive=pOrd.length;   /* นับเฉพาะท่าที่มีทัวร์จริง ก่อนเติมท่าว่างเข้าไป */
+  /* เติมท่าที่ลงทะเบียนไว้แต่ไม่มีทัวร์ในช่วงนี้ · ถ้ากรองท่าอยู่ก็เติมเฉพาะท่านั้น */
+  ppPierList().forEach(function(p){
+    if(_ppPier && p.k!==_ppPier) return;
+    if(!P[p.k]){ P[p.k]={pier:p.k, A:ppBlank(), G:{}, gOrd:[], empty:true}; pOrd.push(p.k); }
+  });
   pOrd.sort(function(a,b){ return ppPierRank(a)-ppPierRank(b); });
   pOrd.forEach(function(pk){ P[pk].gOrd.sort(function(a,b){ return rank(a)-rank(b); }); });
   var nTrips=Object.keys(trips).length, nProgs=Object.keys(progs).length;
@@ -94691,7 +94724,7 @@ function renderPrPo(){
       +'<div class="kv">'+val+(unit?('<em>'+unit+'</em>'):'')+'</div>'
       +(note?('<div class="kn">'+note+'</div>'):'')+'</div>'; };
   var kpis='<div class="pp-kpis">'
-    + K('','โปรแกรมที่ออก', nProgs, 'โปรแกรม', pOrd.length+' ท่า &middot; '+nTrips+' เที่ยวเรือ')
+    + K('','โปรแกรมที่ออก', nProgs, 'โปรแกรม', nPierActive+' ท่า &middot; '+nTrips+' เที่ยวเรือ')
     + K('','ใบจอง', GT.n, 'ใบ', GT.tot+' คนที่จอง')
     + K('acc','หัวที่ต้องเตรียมอาหาร', GT.eat, 'คน',
         'ผู้ใหญ่ '+GT.ad+' &middot; เด็ก '+GT.chd+(GT.foc?(' &middot; FOC '+GT.foc):'')
@@ -94772,12 +94805,19 @@ function ppBodySheet(P,pOrd,GT){
   var trs='';
   pOrd.forEach(function(pk){
     var PB=P[pk], M=ppPierMeta(pk), PA=PB.A, c=M.c||'#94A3B8';
-    trs+='<tr class="g-pier"><td colspan="2"><div class="lb">'
+    var lb='<div class="lb">'
         +'<span class="ps" style="background:'+e(c)+'">'+e(M.s||'—')+'</span>'
         +'<span class="pn">'+e(M.n)+'</span>'
         +(M.t?('<span class="pt">'+e(M.t)+'</span>'):'')
-        +'<span class="pt">· '+PB.gOrd.length+' โปรแกรม</span>'
-      +'</div></td>'+ppNumCells(PA)+'<td class="mealc">'+ppChips(PA)+'</td></tr>';
+        +(PB.empty?'':('<span class="pt">· '+PB.gOrd.length+' โปรแกรม</span>'))
+      +'</div>';
+    if(PB.empty){
+      trs+='<tr class="g-pier none"><td colspan="2">'+lb+'</td>'
+        +'<td colspan="'+(PP_COLS-2)+'" class="notour">'+e(ppNoTourMsg())+'</td></tr>';
+      return;
+    }
+    trs+='<tr class="g-pier"><td colspan="2">'+lb+'</td>'
+      +ppNumCells(PA)+'<td class="mealc">'+ppChips(PA)+'</td></tr>';
     trs+=PB.gOrd.map(function(k){ return ppProgRows(PB.G[k], pk); }).join('');
   });
   trs+='<tr class="g-tot"><td colspan="2">รวมทั้งหมด &middot; '+e(ppRangeLbl())+'</td>'
@@ -94806,14 +94846,15 @@ function ppBodyFriendly(P,pOrd,GT){
       +'<header class="fr-ph" style="background:'+e(c)+'">'
         +'<div class="l"><span class="ic">&#9875;</span><div>'
           +'<h2>'+e(M.n)+'</h2>'+(M.t?('<p>'+e(M.t)+'</p>'):'')+'</div></div>'
-        +'<div class="r"><b>'+PA.eat+'</b><span>ที่ต้องเตรียมอาหาร</span></div>'
+        +(PB.empty?'':('<div class="r"><b>'+PA.eat+'</b><span>ที่ต้องเตรียมอาหาร</span></div>'))
       +'</header>';
+    if(PB.empty){ out+='<div class="fr-none">'+e(ppNoTourMsg())+'</div></section>'; return; }
     if(PA.veg||PA.vegan||PA.halal||PA.allergy||PA.alUnk)
       out+='<div class="fr-pmeal">'+ppChips(PA)+'</div>';
     PB.gOrd.forEach(function(k){
       var g=PB.G[k], rt=g.rt||((typeof getRoute==='function')?getRoute(k):null);
       var rc=(rt&&rt.color)||'#94A3B8';
-      out+='<div class="fr-prog"><span class="dot" style="background:'+e(rc)+'"></span>'
+      out+='<div class="fr-prog" style="background:'+e(rc)+';color:'+ppInkOn(rc)+'">'
         +'<b>'+e((rt&&rt.name)||k||'ไม่ระบุโปรแกรม')+'</b>'
         +'<span class="mt">'+[((rt&&rt.times&&rt.times[0])?('ออก '+e(rt.times[0])):''),
             (g.ck.length+' เที่ยวเรือ'),(g.A.eat+' ที่')].filter(Boolean).join(' · ')+'</span></div>'
@@ -94885,10 +94926,12 @@ function ppBodyBoard(P,pOrd,GT){
     out+='<section class="bd-p"><header style="border-color:'+e(c)+'">'
       +'<span class="sq" style="background:'+e(c)+'">'+e(M.s||'—')+'</span>'
       +'<b>'+e(M.n)+'</b>'+(M.t?('<i>'+e(M.t)+'</i>'):'')
-      +'<span class="sum"><b>'+PA.eat+'</b> ที่ &middot; '+PA.tot+' คน &middot; '
+      +(PB.empty?'':('<span class="sum"><b>'+PA.eat+'</b> ที่ &middot; '+PA.tot+' คน &middot; '
         +PB.gOrd.length+' โปรแกรม</span>'
-      +'<span class="ml">'+ppChips(PA)+'</span>'
-      +'</header><div class="bd-g">'+tiles+'</div></section>';
+        +'<span class="ml">'+ppChips(PA)+'</span>'))
+      +'</header><div class="bd-g">'
+      +(PB.empty?('<div class="bd-none">'+e(ppNoTourMsg())+'</div>'):tiles)
+      +'</div></section>';
   });
   out+='<div class="bd-tot"><span>รวมทั้งหมด &middot; '+e(ppRangeLbl())+'</span>'
     +'<b>'+GT.eat+'</b><small>ที่ต้องเตรียมอาหาร</small>'
@@ -94925,7 +94968,8 @@ function ppCSSSheet(){ var S='#prpo-host'; return ppCSSSeg()
    +'border-bottom:2px solid #0B5C25;border-left-color:#3E9A57;border-right-color:#3E9A57}'
  +S+' .pp-t tr.g-pier .pt{color:#D6EDDC}'
  +S+' .pp-t tr.g-pier .ps{box-shadow:0 0 0 1px rgba(255,255,255,.5)}'
- +S+' .pp-t tr.g-prog>td{background:#EFF3F0;border-top:1px solid #C9D6CD}'
+ +S+' .pp-t tr.g-pier.none>td{background:#5E8C6E;border-color:#4A7359}'
+ +S+' .pp-t td.notour{color:#EAF3ED}'
  +S+' .pp-t tr.g-tot>td{background:#D9E7DE;border-top:2px solid #6F9C81;border-bottom:2px solid #6F9C81}'
  +S+' .pp-t .eat{background:#EAF6EF;color:#137333}'
  +S+' .pp-btn.pri{background:#137333;border-color:#137333}'
@@ -94945,10 +94989,12 @@ function ppCSSFriendly(){ var S='#prpo-host'; return ppCSSSeg()
  +S+' .fr-ph .r b{display:block;font:800 32px "DM Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}'
  +S+' .fr-ph .r span{font-size:11.5px;opacity:.85}'
  +S+' .fr-pmeal{margin:11px 2px 0}'
- +S+' .fr-prog{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:20px 2px 10px}'
- +S+' .fr-prog .dot{width:12px;height:12px;border-radius:4px;flex:none}'
+ +S+' .fr-prog{display:flex;align-items:baseline;gap:11px;flex-wrap:wrap;margin:20px 0 11px;'
+   +'padding:9px 15px;border-radius:12px}'
  +S+' .fr-prog b{font-size:15.5px;font-weight:800}'
- +S+' .fr-prog .mt{font-size:12px;color:#94A3B8}'
+ +S+' .fr-prog .mt{font-size:12px;opacity:.85}'
+ +S+' .fr-none{background:#fff;border:1px dashed #D8DEE6;border-radius:16px;padding:22px;'
+   +'text-align:center;color:#94A3B8;font-size:13px;font-style:italic;margin-top:11px}'
  +S+' .fr-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:13px}'
  +S+' .fr-c{background:#fff;border:1px solid #E7EBF0;border-radius:18px;padding:15px 17px;'
    +'box-shadow:0 2px 10px rgba(15,23,42,.05);break-inside:avoid}'
@@ -95003,6 +95049,7 @@ function ppCSSBoard(){ var S='#prpo-host'; return ppCSSSeg()
  +S+' .bd-p>header .ml{flex:1 0 100%;line-height:1.9}'
  +S+' .bd-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(238px,1fr));gap:9px;'
    +'background:#EEF2F6;padding:10px;border-radius:0 0 12px 12px}'
+ +S+' .bd-none{grid-column:1/-1;text-align:center;color:#8494A4;font-size:12.5px;font-style:italic;padding:20px}'
  +S+' .bd-t{background:#fff;border:1px solid #DDE3EA;border-left:5px solid var(--rc);border-radius:9px;'
    +'padding:10px 12px;break-inside:avoid}'
  +S+' .bd-t.hot{border-color:#E7C9C9;border-left-color:var(--rc);background:#FFFBFB;'
