@@ -59287,6 +59287,13 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-tbl td{padding:8px 11px;border-bottom:1px solid var(--zn100);vertical-align:top}'
  +S+' .ts-tbl tbody tr:last-child td{border-bottom:none}'
  +S+' .ts-tbl tbody tr:hover td{background:var(--lm50)}'
+ /* §tsStrand · แถวที่เลื่อนวันออกไปแล้ว · จางลงแต่ยังอ่านครบ + ขีดม่วงหน้าแถว
+    ต้องแยกออกจากเคสที่ยังรอตัดสินให้ชัด ไม่งั้นคนปิดวันนึกว่ายังมีงานค้าง */
+ +S+' .ts-tbl tbody tr.ts-moved>td{background:#FBFAFD;color:var(--zn500)}'
+ +S+' .ts-tbl tbody tr.ts-moved:hover>td{background:#F6F3FB}'
+ +S+' .ts-tbl tbody tr.ts-moved td:first-child{box-shadow:inset 4px 0 0 #7C4DBE}'
+ +S+' .ts-tbl tbody tr.ts-moved .ts-lead{text-decoration:line-through;text-decoration-thickness:1.5px;color:var(--zn500)}'
+ +S+' .ts-tbl tbody tr.ts-moved .ts-ag{filter:grayscale(.8);opacity:.7}'
  +S+' .ts-tbl tr.need td{background:var(--am50)}'
  /* §tsCxlNoCount · ใบที่เก็บไม่ได้แล้ว · เห็นได้แต่ไม่ดึงสายตาไปจากใบที่ยังต้องตามเก็บจริง */
  +S+' .ts-tbl tr.ts-cxl td{background:#FAF9F6;color:var(--zn500)}'
@@ -62270,9 +62277,54 @@ function renderTravelSum(){
         : '<span class="ts-chip r">รอตัดสิน</span>')+'</td>'
       +'</tr>';
   });
+  /* ══ §tsStrand (2026-09-04) · กด "เลื่อนวัน" แล้วรายการหายจากใบปิดวันทันที
+     เพราะ tsRows() สร้างจาก ckTripOn(b,date) และ trip ย้ายไปวันใหม่แล้ว
+     ทั้งที่คนเพิ่งตัดสินไปเมื่อกี้ · ใบปิดวันต้องอ่านย้อนหลังได้ว่าวันนั้นตัดสินอะไรไปบ้าง
+     ปั้นแถวจากภาพที่ §strandMove ถ่ายไว้ตอนเลื่อน · ต่อท้ายตารางตัดสินอย่างเดียว
+     ไม่เข้า all จึงไม่แตะยอดคน ยอดเงิน หรือ manifest เต็มของวันนี้             */
+  var nMoved=0;
+  (function(){
+    var MV=(typeof ckStrandMovedRows==='function')?ckStrandMovedRows(date):[];
+    MV.forEach(function(r){
+      var b=r.b, id=b.id;
+      if(_tsRoute && (r.t.routeId||'')!==_tsRoute) return;
+      if(_tsVatF){ var _hv=tsHasVat(b); if(_tsVatF==='vat'?!_hv:_hv) return; }
+      nMoved++;
+      var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
+      var agName=ag?(ag.name||ag.code||'—'):(b.channel||'walk-in');
+      var agColor=(b.agentId&&typeof bkV2AgentColor==='function')?bkV2AgentColor(b.agentId):'#64748B';
+      var agInk=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(agColor):'#fff';
+      var pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(r.t.pax||{}):0;
+      var dec=tsGet(id,date);
+      var rt=(typeof getRoute==='function'?getRoute(r.t.routeId):null)||{};
+      abody+='<tr class="ts-moved">'
+        +'<td><span class="ts-vch">'+e(b.voucherRef||b.code||'—')+'</span></td>'
+        +'<td>'+(((typeof laAgencyMark==='function')&&laAgencyMark(b,16,{pad:'5px 7px',margin:false}))
+            ||('<span class="ts-ag" style="background:'+agColor+';color:'+agInk+'" title="'+e(agName)+'">'+e(agName)+'</span>'))+'</td>'
+        +'<td><div class="ts-lead">'+e(b.leadPax||'—')+'</div>'
+          +'<div class="ts-tel">'+e(b.leadPhone||b.phone||'')+'</div></td>'
+        +'<td><span class="ts-chip p">&#10007; เลื่อนวัน '+pax+'</span></td>'
+        +'<td style="max-width:230px;color:var(--zn700)">'+e(r.strandWhy||'')
+          +(rt.name?('<div class="ts-tel">'+e(rt.name)+'</div>'):'')+'</td>'
+        +'<td class="r ts-mono" style="font-weight:800">&mdash;'
+          +'<div class="ts-tel" style="font-weight:400;margin-top:3px">ยอดเงินไปอยู่กับวันใหม่แล้ว</div></td>'
+        +'<td class="ts-noprint"><button class="ts-db del" '
+          +'onclick="ckStrandClear(\''+id+'\',\''+date+'\');renderTravelSum()" '
+          +'title="เอารายการนี้ออกจากใบปิดวัน · ใบจองกับการจัดรถของวันใหม่ไม่ถูกแตะ">ล้างออกจากใบนี้</button></td>'
+        +'<td class="c"><span class="ts-chip p">เลื่อนวันแล้ว</span>'
+          +(dec&&dec.by?('<div class="ts-tel" style="margin-top:3px">'+e(dec.by)
+             +(dec.at?(' &middot; '+e(String(dec.at).slice(0,16).replace('T',' '))):'')+'</div>'):'')
+          +'</td></tr>';
+    });
+  })();
+
   var audit='<div class="ts-sec"><div class="ts-sech"><div>'
-    +'<div class="ts-sect"><span class="ts-sn">02</span>ตัดสินค่าปรับ &middot; ยกเลิก / เลื่อนวัน</div>'
-    +'<div class="ts-secd">เคสที่คนไม่ครบต้องตัดสินก่อนปิดวัน — เก็บเต็ม · เก็บบางส่วน · ไม่ชาร์จ · เลื่อนวัน · ผลจะถูกบันทึกพร้อมชื่อคนตัดสินและเวลา</div></div>'
+    +'<div class="ts-sect"><span class="ts-sn">02</span>ตัดสินค่าปรับ &middot; ยกเลิก / เลื่อนวัน'
+      +(nMoved>0?('<span class="ts-chip p" style="margin-left:9px;vertical-align:middle">เลื่อนวันไปแล้ว '+nMoved+'</span>'):'')
+      +'</div>'
+    +'<div class="ts-secd">เคสที่คนไม่ครบต้องตัดสินก่อนปิดวัน — เก็บเต็ม · เก็บบางส่วน · ไม่ชาร์จ · เลื่อนวัน · ผลจะถูกบันทึกพร้อมชื่อคนตัดสินและเวลา'
+      +(nMoved>0?' &middot; แถวจางท้ายตารางคือใบที่เลื่อนวันออกไปแล้ว ยอดคนและยอดเงินของวันนี้ไม่นับรวม':'')
+      +'</div></div>'
     +'<div class="ts-noprint"><button class="ts-btn'+(_tsOnlyIssue?' on':'')+'" onclick="tsToggleFilter()">'
       +(_tsOnlyIssue?'กำลังดูเฉพาะเคสมีปัญหา':'ดูเฉพาะเคสมีปัญหา')+'</button></div></div>'
     +'<div class="ts-card"><div class="ts-scroll"><table class="ts-tbl"><thead><tr>'
