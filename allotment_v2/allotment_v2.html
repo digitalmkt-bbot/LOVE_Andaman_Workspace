@@ -81843,6 +81843,25 @@ function bkV2RenderTab2(){
           + `<span class="zsub">${list.length} booking &middot; ${zpax} pax</span></div></td></tr>`;
       return _zband + body;
     }).join('');
+    /* ══ §btBand (2026-09-04) · ชื่อทริปกลายเป็นแถบคาดในตาราง ════════════════
+       ของเดิมเป็นการ์ดใหญ่คร่อมตาราง: หัวตระกูลโปรแกรม + หัวทริป + แถบเรือ +
+       บรรทัดรวมภาษา รวมสี่บล็อกก่อนจะเห็นแถวแรก · ทุกบล็อกพูดซ้ำกับหัวหน้าใหม่
+       ตอนนี้เหลือแถวเดียวในตาราง ชั้นบนสุดของลำดับ โปรแกรม → โซน → คันรถ    */
+    const _pbAl  = (typeof getAllotment==='function')?getAllotment(rid,date):null;
+    const _pbBk  = _pbAl?(_pbAl.seatsConsumed||0):0;
+    const _pbCap = _pbAl?(_pbAl.availableCapacity||0):0;
+    const _pbAv  = _pbAl?(_pbAl.seatsAvailable||0):0;
+    const _pbFr  = _pbCap>0?_pbAv/_pbCap:0;
+    const _pbCls = _pbAv<=0?'full':(_pbFr<0.20?'low':'ok');
+    const _pbCol = (bkV2RouteFamily(rid)||{}).color || '#8b909c';
+    const _pbPier= route?.pier ? (route.pier==='tublamu'?'Tub Lamu':route.pier==='panwa'?'Visit Panwa':route.pier==='ranong'?'Ranong':route.pier) : '';
+    const _pbNB  = ((typeof baBoatsForRoute==='function')?baBoatsForRoute(date,rid):[]).length;
+    const _pband = `<tr class="t2-pband" style="--pc:${_pbCol}"><td colspan="${COLN}"><div class="pw">`
+      + `<span class="pd"></span><span class="pn">${esc(route?.name || rid)}</span>`
+      + `<span class="pt">${esc(dep)}${_pbPier?(' &middot; '+esc(_pbPier)):''}</span>`
+      + (_pbNB?`<span class="pb">${_pbNB} ลำ</span>`:'')
+      + `<span class="ps">${_pbBk}/${_pbCap}<em class="${_pbCls}">${_pbAv<=0?'เต็ม':('ว่าง '+_pbAv)}</em></span>`
+      + `</div></td></tr>`;
     const zoneTable = zoneBlocks ? `
         <div class="t2-tblscroll">
           <table class="t2-mtbl">
@@ -81854,7 +81873,7 @@ function bkV2RenderTab2(){
               ${rcMode?`<th class="t2-c" style="color:#7A4A00;background:#FBF0DD;white-space:nowrap">&#9989; Re-confirm <button onclick="bkV2ReconfirmAll('${date}','${rid}','list')" title="ยืนยันทั้งหมด (list)" style="background:#7A4A00;color:#fff;border:none;border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:4px">all</button></th>`:''}
               ${wxClosed?'<th class="t2-c" style="color:#A32D2D;background:#FBE8E4;white-space:nowrap">&#9928; Manage</th>':''}
             </tr></thead>
-            <tbody>${zoneBlocks}</tbody>
+            <tbody>${_pband}${zoneBlocks}</tbody>
           </table>
         </div>` : '';
 
@@ -82103,12 +82122,16 @@ function bkV2RenderTab2(){
         ${tot-done>0?`<button onclick="bkV2ReconfirmAll('${date}','${rid}','list')" style="margin-left:auto;background:#7A4A00;color:#fff;border:none;border-radius:7px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">ยืนยันทั้งหมด (list)</button>`:''}
       </div>`;
     }
-    return _famHead + `
+    /* §btBand · หัวการ์ดตระกูลโปรแกรมถูกยกไปเป็นการ์ด "โปรแกรมวันนี้" บนหัวหน้าแล้ว
+       ตารางเรือรายลำที่อยู่ข้างในก็ซ้ำกับตัวกาง "ไกด์ · อาหารรายลำ" ของแต่ละทริป */
+    void _famHead;
+    return `
       <div class="t2-trip t2-trip-variant${(typeof bkV2IsWeatherClosed==='function'&&bkV2IsWeatherClosed(rid,date))?' t2-trip-wx':''}${_notRun?' t2-trip-closed':''}" style="--fam:${famColor}">
         ${_notRun?`<div class="t2-notrun"><span class="t2-notrun-ic">&#9888;</span><div style="flex:1;min-width:0"><div class="t2-notrun-t">ทริปนี้ไม่ออกวันนี้ · ${esc(_notRunWhy)}</div><div class="t2-notrun-s">${_notRunLive>0?`ยังมี <b>${_notRunLive}</b> booking ค้างอยู่บนวันนี้ — ต้องเลื่อนวันหรือยกเลิกให้เรียบร้อย`:'เหลือแต่รายการที่ยกเลิกแล้ว (เก็บไว้เป็นประวัติ)'}</div></div></div>`:''}
         ${(typeof bkV2IsWeatherClosed==='function'&&bkV2IsWeatherClosed(rid,date))?`<div style="background:#FCEBEB;border:1.5px solid #E89A92;border-radius:9px;padding:11px 14px;margin-bottom:10px;display:flex;align-items:center;gap:12px"><span style="font-size:20px">&#9928;</span><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:#A32D2D">This trip is cancelled due to weather</div><div style="font-size:11px;color:#8a3a30;margin-top:1px">${bkV2WeatherNote(rid,date)?esc(bkV2WeatherNote(rid,date)):'Cannot depart'} · resolve booking by booking</div></div><button onclick="event.stopPropagation();bkV2WeatherPanel('${rid}','${date}')" style="background:#A32D2D;color:#fff;border:none;font-family:inherit;font-size:11.5px;font-weight:600;padding:8px 14px;border-radius:8px;cursor:pointer;white-space:nowrap">Resolve by booking</button></div>`:''}
         <div class="t2-tripcard">
-        <div class="t2-triphead">
+        ${/* §btBand · ชื่อทริปย้ายลงไปเป็นแถบแรกของตารางแล้ว */''}
+        <div class="t2-triphead" hidden>
           <div class="t2-tt">
             <div class="t2-tnm">${esc(route?.name || rid)}</div>
             <div class="t2-tmeta">${esc(dep)} departure${route?.pier?` · ${route.pier==='tublamu'?'Tub Lamu':route.pier==='panwa'?'Visit Panwa':esc(route.pier)}`:''}</div>
@@ -82133,7 +82156,7 @@ function bkV2RenderTab2(){
           ${_addonInStrip?'':addonBar}
           ${chtrStrip}
           ${retAlertBar}
-          ${boatMode?'':boatStrip}
+          ${/* §btBand · ตัวกางไกด์/อาหารรายลำ ย้ายไปท้ายตาราง (ดูตอนต้องใช้ ไม่ใช่ทุกครั้ง) */''}
           ${(prepGroups.length && !_prepInStrip)?`<div class="t2-prepbar"><span class="t2-preplbl">Prep</span>${prepGroups.join('<span class="t2-prepdiv"></span>')}</div>`:''}
         </div>
         <div class="t2-listcard">
@@ -82146,6 +82169,7 @@ function bkV2RenderTab2(){
         ${(grp.length===0 && !_pendRows.length) ? '<div class="t2-nobk">No bookings yet · seats held by lock above</div>' : zoneTable}
         ${ghostBlock}
         ${cxlBlock}
+        ${boatMode?'':boatStrip}
         </div>
       </div>`;
   }).join('');
@@ -82219,6 +82243,8 @@ function bkV2RenderTab2(){
        เหลือไว้เป็นแถบคาดบาง ๆ ที่ทำหน้าที่บอกว่า "ตารางข้างล่างนี้คือทริปไหน"
        ยกเว้นวันที่ทริปถูกยกเลิกเพราะอากาศ · ตัวเลข original/rescheduled/cancelled
        ไม่มีที่อื่นบอก ต้องคงไว้                                                 */
+    /* §btBand · attribute hidden แพ้กฎ display:flex ข้างล่าง ต้องปิดให้ชัด */
+    .t2-triphead[hidden]{display:none !important}
     .t2-triphead{display:flex;align-items:center;gap:10px;padding:7px 14px;
       background:#FBFAF8;box-shadow:inset 5px 0 0 var(--fam,#8b909c);border-bottom:1px solid var(--border-2)}
     .t2-tt{min-width:0;flex:1;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
@@ -82420,6 +82446,24 @@ function bkV2RenderTab2(){
     .t2-prepdiv{display:inline-block;width:1px;height:15px;background:var(--border);margin:0 3px;vertical-align:middle}
     .t2-prep{font-size:10px;border-radius:5px;padding:2px 7px;font-weight:600}
     .t2-zhead{display:flex;align-items:center;gap:8px;padding:8px 16px;background:#f6f7f9;border-top:1px solid var(--border-2);border-bottom:1px solid var(--border-2)}
+    /* §btBand · แถบโปรแกรม · ชั้นบนสุดของตาราง เข้มกว่าแถบโซนอีกระดับ */
+    .t2-mtbl tr.t2-pband>td{background:#F7F4F1;border-top:3px solid var(--pc);
+      border-bottom:1px solid #E2DBD4;padding:8px 14px}
+    .t2-pband .pw{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .t2-pband .pd{width:11px;height:11px;border-radius:50%;background:var(--pc);flex:none}
+    .t2-pband .pn{font-size:14px;font-weight:800;color:var(--pc);letter-spacing:.01em}
+    .t2-pband .pt{font-size:11px;color:#7a746d;font-weight:600;font-family:'DM Mono',monospace}
+    .t2-pband .pb{font-size:10px;font-weight:800;color:#5b5b55;background:#fff;
+      border:1px solid #E2DBD4;border-radius:6px;padding:2px 8px}
+    .t2-pband .ps{margin-left:auto;font-family:'DM Mono',monospace;font-size:12px;font-weight:700;
+      color:#5b5b55;white-space:nowrap}
+    .t2-pband .ps em{font-style:normal;font-family:inherit;border-radius:6px;padding:2px 8px;
+      margin-left:7px;font-weight:800;font-size:11px}
+    .t2-pband .ps em.ok{background:#DCF4E8;color:#0C6B47}
+    .t2-pband .ps em.low{background:#FAEEDA;color:#854F0B}
+    .t2-pband .ps em.full{background:#FCEBEB;color:#A32D2D}
+    /* §btBand · ตัวกางไกด์/อาหาร ย้ายมาท้ายตาราง · ทำให้เบาลงให้รู้ว่าเป็นของเสริม */
+    .t2-listcard > .t2-boatbox{border-top:1px solid var(--border-2);background:#FCFBF9}
     /* §btTable · หัวโซนในตาราง · แถบเข้มกว่าแถบคันรถหนึ่งระดับ ให้ลำดับชั้นอ่านออก */
     .t2-mtbl tr.t2-zband>td{background:#EEF2F7;border-top:2px solid #C9D4E2;border-bottom:1px solid #D9E1EA;
       padding:7px 14px;box-shadow:inset 5px 0 0 var(--zc,#8b909c)}
