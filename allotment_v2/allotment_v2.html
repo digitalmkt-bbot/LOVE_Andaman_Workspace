@@ -94508,7 +94508,8 @@ function ppCSS(){ var S='#prpo-host'; return ''
 
 /* ── ชิ้นส่วนของชีต · ทุกอย่างเป็น <tr> ในตารางเดียวกัน คอลัมน์จึงตรงกันทั้งหน้า ──
    PP_COLS ต้องตรงกับจำนวน <th> เสมอ · ใช้เป็น colspan ของแถวกางรายชื่อ */
-var PP_COLS=10;
+/* สกินตารางมีรางเลขแถวเพิ่มมาอีกหนึ่งช่อง · colspan ของแถวกางรายชื่อจึงเป็น 11 */
+var PP_COLS=11;
 function ppNumCells(A, cls){
   var c=cls?(' '+cls):'';
   var n=function(v, extra){ return '<td class="num'+c+(v?'':' z')+(extra?(' '+extra):'')+'">'+v+'</td>'; };
@@ -94529,7 +94530,7 @@ function ppProgRows(g, pk){
   });
   var GA=g.A;
   /* หัวโปรแกรม · ยอดรวมอยู่บนแถวเดียวกันเลย ไม่ต้องมีแถวรวมซ้ำอีกอันข้างล่าง */
-  var out='<tr class="g-prog"><td colspan="2"><div class="lb">'
+  var out='<tr class="g-prog">'+ppRN()+'<td colspan="2"><div class="lb">'
     +'<i style="background:'+e(col)+'"></i>'
     +'<span class="nm">'+e((rt&&rt.name)||k||'ไม่ระบุโปรแกรม')+'</span>'
     /* คั่นด้วย · เฉพาะช่องที่มีค่าจริง · เส้นทางที่ไม่ได้ตั้งเวลา/เกาะ จะได้ไม่ขึ้นจุดนำหน้าลอย ๆ */
@@ -94551,7 +94552,7 @@ function ppProgRows(g, pk){
       ? ('<button class="pp-more'+(open?' on':'')+'" onclick="ppToggle(\''+e(okey)+'\')">'
           +(open?'ซ่อน':('รายชื่อ '+A.sp.length))+'</button>')
       : '';
-    var tr='<tr class="d">'
+    var tr='<tr class="d">'+ppRN()
       +'<td class="pp-day">'+e(ppDayLbl(C.date))+'</td>'
       +'<td><div class="pp-bt'+(C.boatId?'':' na')+'">'
         +'<i style="background:'+e(ppBoatColor(C.boatId))+'"></i>'
@@ -94559,7 +94560,7 @@ function ppProgRows(g, pk){
       + ppNumCells(A)
       +'<td class="mealc">'+ppChips(A)+more+'</td>'
       +'</tr>';
-    if(open) tr+='<tr class="pp-det"><td colspan="'+PP_COLS+'">'+ppSpecialList(A)+'</td></tr>';
+    if(open) tr+='<tr class="pp-det">'+ppRN()+'<td colspan="'+(PP_COLS-1)+'">'+ppSpecialList(A)+'</td></tr>';
     return tr;
   }).join('');
   return out;
@@ -94626,6 +94627,7 @@ function renderPrPo(){
       +'<button class="pp-btn" onclick="ppMonth(0)">เดือนนี้</button>'
       +'<button class="pp-btn" onclick="ppMonth(1)">เดือนหน้า</button>'
       +'<button class="pp-btn pri" onclick="ppPrint()">&#128424; พิมพ์ / PDF</button>'
+      + ppSkinSeg()
     +'</div></div>';
 
   var K=function(cls,lb,val,unit,note){
@@ -94665,45 +94667,13 @@ function renderPrPo(){
       +'&#127869; เฉพาะที่มีอาหารพิเศษ <b>'+nSpecialAll+'</b></button>'
     +'</div>';
 
-  /* ── เนื้อหา · ชีตเดียวทั้งหน้า · ท่าเป็นแถวคุม แล้วโปรแกรมของท่านั้นอยู่ใต้มัน ── */
-  var body='';
-  if(!pOrd.length){
-    body='<div class="pp-empty">ไม่มีใบจองในช่วงนี้'
-      +((_ppRoute||_ppPier||_ppOnlySp)?' ตามตัวกรองที่เลือกไว้':'')+'</div>';
-  }else{
-    var trs='';
-    pOrd.forEach(function(pk){
-      var PB=P[pk], M=ppPierMeta(pk), PA=PB.A, c=M.c||'#94A3B8';
-      /* แถวคุมของท่า · ยอดของท่านั้นกับอาหารพิเศษของท่านั้นอยู่บนบรรทัดเดียว
-         เอาไปตั้งใบสั่งของท่านั้นได้เลย ไม่ต้องไล่บวกจากโปรแกรมข้างล่าง */
-      trs+='<tr class="g-pier"><td colspan="2"><div class="lb">'
-          +'<span class="ps" style="background:'+e(c)+'">'+e(M.s||'—')+'</span>'
-          +'<span class="pn">'+e(M.n)+'</span>'
-          +(M.t?('<span class="pt">'+e(M.t)+'</span>'):'')
-          +'<span class="pt">· '+PB.gOrd.length+' โปรแกรม</span>'
-        +'</div></td>'
-        + ppNumCells(PA)
-        + '<td class="mealc">'+ppChips(PA)+'</td></tr>';
-      trs+=PB.gOrd.map(function(k){ return ppProgRows(PB.G[k], pk); }).join('');
-    });
-    /* แถวรวมท้ายชีต · ยอดของทั้งช่วงที่กรองอยู่ */
-    trs+='<tr class="g-tot"><td colspan="2">รวมทั้งหมด &middot; '+e(ppRangeLbl())+'</td>'
-      + ppNumCells(GT)
-      + '<td class="mealc">'+ppChips(GT)+'</td></tr>';
-    body='<div class="pp-sheet"><table class="pp-t">'
-      +'<colgroup><col style="width:96px"><col style="width:232px">'
-        +'<col style="width:60px"><col style="width:62px"><col style="width:54px">'
-        +'<col style="width:54px"><col style="width:52px"><col style="width:58px">'
-        +'<col style="width:74px"><col></colgroup>'
-      +'<thead><tr>'
-        +'<th>วันที่</th><th>เรือ</th><th style="text-align:right">ใบจอง</th>'
-        +'<th style="text-align:right">ผู้ใหญ่</th><th style="text-align:right">เด็ก</th>'
-        +'<th style="text-align:right">ทารก</th><th style="text-align:right">FOC</th>'
-        +'<th style="text-align:right">รวม</th><th style="text-align:right">กินอาหาร</th>'
-        +'<th>อาหารพิเศษ</th></tr></thead>'
-      +'<tbody>'+trs+'</tbody></table></div>';
-  }
-  host.innerHTML='<style id="pp-style">'+ppCSS()+'</style><div class="pp-wrap">'
+  /* ── เนื้อหา · เลือกหน้าตาได้ 3 แบบ · ข้อมูลชุดเดียวกันทั้งหมด ── */
+  var body = pOrd.length
+    ? ppBody(P, pOrd, GT)
+    : ('<div class="pp-empty">ไม่มีใบจองในช่วงนี้'
+        +((_ppRoute||_ppPier||_ppOnlySp)?' ตามตัวกรองที่เลือกไว้':'')+'</div>');
+  host.innerHTML='<style id="pp-style">'+ppCSS()+ppSkinCSS()+'</style>'
+    +'<div class="pp-wrap pp-skin-'+_ppSkin+'">'
     + head + kpis + sumBox + filt + body
     + '<div style="margin-top:14px;font-size:11px;color:#b9beb6;line-height:1.7">'
       +'ตัวเลขคือ "ที่จองไว้" ของช่วงวันที่เลือก &middot; ยกเลิกทุกแบบไม่ถูกนับ &middot; '
@@ -94712,6 +94682,315 @@ function renderPrPo(){
     +'</div></div>';
 }
 
+
+/* ═══ §prpoSkin (2026-09-04) · หน้าตา 3 แบบ · ข้อมูลชุดเดียวกัน ═════════════
+   sheet    · เหมือน Google Sheets · เลขแถว + หัวคอลัมน์ A-J · เส้นตารางทุกด้าน
+   friendly · การ์ดใหญ่ ตัวเลขใหญ่ อ่านง่ายบนแท็บเล็ต สำหรับคนที่ไม่ได้อยู่กับตารางทั้งวัน
+   board    · บอร์ดสรุป · เอายอด "ที่ต้องเตรียม" ขึ้นเป็นพระเอก สำหรับแปะจอ/พิมพ์แจกครัว
+   ทั้งสามอ่านจาก P / pOrd / GT ชุดเดียวกัน ไม่มีใครคำนวณเลขเองซ้ำ
+   ═══════════════════════════════════════════════════════════════════════════ */
+var PP_SKINS=[['sheet','ตาราง'],['friendly','การ์ด'],['board','บอร์ด']];
+var _ppSkin=(function(){ try{ var v=localStorage.getItem('pp_skin');
+  return (v==='friendly'||v==='board')?v:'sheet'; }catch(_){ return 'sheet'; } })();
+/* เก็บไว้คนละคีย์กับ LS_KEY · เป็นความชอบส่วนตัวของเครื่องนั้น ไม่ใช่ข้อมูลบริษัท
+   จึงต้องไม่ไปแตะก้อน loveandaman_v2 ที่ sync ขึ้นเซิร์ฟเวอร์ */
+function ppSetSkin(k){ _ppSkin=k; try{ localStorage.setItem('pp_skin',k); }catch(_){} ppAfter(); }
+function ppSkinSeg(){
+  var e=ckEsc;
+  return '<div class="pp-seg">'+PP_SKINS.map(function(s){
+    return '<button class="pp-sg'+(s[0]===_ppSkin?' on':'')+'" onclick="ppSetSkin(\''+s[0]+'\')">'
+      +e(s[1])+'</button>'; }).join('')+'</div>';
+}
+function ppBody(P,pOrd,GT){
+  if(_ppSkin==='friendly') return ppBodyFriendly(P,pOrd,GT);
+  if(_ppSkin==='board')    return ppBodyBoard(P,pOrd,GT);
+  return ppBodySheet(P,pOrd,GT);
+}
+
+/* ─── A · Google Sheets ────────────────────────────────────────────────────
+   สิ่งที่ทำให้อ่านแล้ว "เป็นชีต" จริง ๆ คือรางเลขแถวกับหัวคอลัมน์ A-J
+   ไม่ใช่แค่เส้นตาราง · เลยใส่มาให้ครบ (คอลัมน์รวมกลายเป็น 11 เฉพาะสกินนี้) */
+var _ppRN=0;
+function ppRN(){ return '<td class="rn">'+(++_ppRN)+'</td>'; }
+function ppBodySheet(P,pOrd,GT){
+  var e=ckEsc; _ppRN=0;
+  var trs='';
+  pOrd.forEach(function(pk){
+    var PB=P[pk], M=ppPierMeta(pk), PA=PB.A, c=M.c||'#94A3B8';
+    trs+='<tr class="g-pier">'+ppRN()+'<td colspan="2"><div class="lb">'
+        +'<span class="ps" style="background:'+e(c)+'">'+e(M.s||'—')+'</span>'
+        +'<span class="pn">'+e(M.n)+'</span>'
+        +(M.t?('<span class="pt">'+e(M.t)+'</span>'):'')
+        +'<span class="pt">· '+PB.gOrd.length+' โปรแกรม</span>'
+      +'</div></td>'+ppNumCells(PA)+'<td class="mealc">'+ppChips(PA)+'</td></tr>';
+    trs+=PB.gOrd.map(function(k){ return ppProgRows(PB.G[k], pk); }).join('');
+  });
+  trs+='<tr class="g-tot">'+ppRN()+'<td colspan="2">รวมทั้งหมด &middot; '+e(ppRangeLbl())+'</td>'
+    + ppNumCells(GT)+'<td class="mealc">'+ppChips(GT)+'</td></tr>';
+  var letters=['A','B','C','D','E','F','G','H','I','J'];
+  return '<div class="pp-sheet"><table class="pp-t">'
+    +'<colgroup><col style="width:42px"><col style="width:96px"><col style="width:224px">'
+      +'<col style="width:60px"><col style="width:62px"><col style="width:54px">'
+      +'<col style="width:54px"><col style="width:52px"><col style="width:58px">'
+      +'<col style="width:74px"><col></colgroup>'
+    +'<thead>'
+      +'<tr class="cl"><th class="corner"></th>'
+        + letters.map(function(L){ return '<th>'+L+'</th>'; }).join('')+'</tr>'
+      +'<tr class="lbl"><th class="corner"></th>'
+        +'<th>วันที่</th><th>เรือ</th><th class="r">ใบจอง</th>'
+        +'<th class="r">ผู้ใหญ่</th><th class="r">เด็ก</th><th class="r">ทารก</th>'
+        +'<th class="r">FOC</th><th class="r">รวม</th><th class="r">กินอาหาร</th>'
+        +'<th>อาหารพิเศษ</th></tr>'
+    +'</thead><tbody>'+trs+'</tbody></table></div>';
+}
+
+/* ─── B · การ์ด · อ่านง่าย ─────────────────────────────────────────────────
+   ทำมาสำหรับคนที่เปิดบนแท็บเล็ตหน้าครัว/หน้าท่า ไม่ได้นั่งไล่ตัวเลขทั้งวัน
+   หนึ่งการ์ด = หนึ่งลำในหนึ่งวัน · ตัวเลขที่ต้องใช้จริงตัวใหญ่ ที่เหลือตัวเล็ก */
+function ppBodyFriendly(P,pOrd,GT){
+  var e=ckEsc, out='';
+  pOrd.forEach(function(pk){
+    var PB=P[pk], M=ppPierMeta(pk), PA=PB.A, c=M.c||'#94A3B8';
+    out+='<section class="fr-pier">'
+      +'<header class="fr-ph" style="background:'+e(c)+'">'
+        +'<div class="l"><span class="ic">&#9875;</span><div>'
+          +'<h2>'+e(M.n)+'</h2>'+(M.t?('<p>'+e(M.t)+'</p>'):'')+'</div></div>'
+        +'<div class="r"><b>'+PA.eat+'</b><span>ที่ต้องเตรียมอาหาร</span></div>'
+      +'</header>';
+    if(PA.veg||PA.vegan||PA.halal||PA.allergy||PA.alUnk)
+      out+='<div class="fr-pmeal">'+ppChips(PA)+'</div>';
+    PB.gOrd.forEach(function(k){
+      var g=PB.G[k], rt=g.rt||((typeof getRoute==='function')?getRoute(k):null);
+      var rc=(rt&&rt.color)||'#94A3B8';
+      out+='<div class="fr-prog"><span class="dot" style="background:'+e(rc)+'"></span>'
+        +'<b>'+e((rt&&rt.name)||k||'ไม่ระบุโปรแกรม')+'</b>'
+        +'<span class="mt">'+[((rt&&rt.times&&rt.times[0])?('ออก '+e(rt.times[0])):''),
+            (g.ck.length+' เที่ยวเรือ'),(g.A.eat+' ที่')].filter(Boolean).join(' · ')+'</span></div>'
+        +'<div class="fr-cards">';
+      g.ck.forEach(function(ck){
+        var C=g.cells[ck], A=C.A, okey=pk+'|'+k+'|'+ck, open=!!_ppOpen[okey];
+        var bc=ppBoatColor(C.boatId);
+        out+='<article class="fr-c'+(C.boatId?'':' na')+'">'
+          +'<div class="fr-ct"><span class="bd" style="background:'+e(bc)+'"></span>'
+            +'<div class="nm"><b>'+e(ppBoatName(C.boatId))+'</b>'
+              +'<small>'+e(ppDayLbl(C.date))+' &middot; '+A.n+' ใบจอง</small></div>'
+            +(A.chtr?'<span class="fr-tag">เหมาลำ</span>':'')
+            +(A.ovn?'<span class="fr-tag">ค้างคืน</span>':'')
+          +'</div>'
+          +'<div class="fr-big"><div class="b1"><b>'+A.tot+'</b><span>คนทั้งหมด</span></div>'
+            +'<div class="b2"><b>'+A.eat+'</b><span>ต้องเตรียมอาหาร</span></div></div>'
+          +'<div class="fr-mini">'
+            +'<span>ผู้ใหญ่ <b>'+A.ad+'</b></span><span>เด็ก <b>'+A.chd+'</b></span>'
+            +'<span>ทารก <b>'+A.inf+'</b></span>'+(A.foc?('<span>FOC <b>'+A.foc+'</b></span>'):'')
+          +'</div>'
+          +'<div class="fr-meal">'+ppChips(A)
+            +(A.sp.length?('<button class="fr-more'+(open?' on':'')+'" onclick="ppToggle(\''+e(okey)+'\')">'
+              +(open?'ซ่อนรายชื่อ':('ดูรายชื่อ '+A.sp.length+' ใบ'))+'</button>'):'')
+          +'</div>'
+          +(open?('<div class="fr-det">'+ppSpecialList(A)+'</div>'):'')
+        +'</article>';
+      });
+      out+='</div>';
+    });
+    out+='</section>';
+  });
+  out+='<div class="fr-tot"><span>รวมทั้งหมด &middot; '+e(ppRangeLbl())+'</span>'
+    +'<div class="v"><b>'+GT.tot+'</b><small>คน</small></div>'
+    +'<div class="v acc"><b>'+GT.eat+'</b><small>ที่ต้องเตรียมอาหาร</small></div>'
+    +'<div class="m">'+ppChips(GT)+'</div></div>';
+  return '<div class="fr-wrap">'+out+'</div>';
+}
+
+/* ─── C · บอร์ด · ของเราเอง ────────────────────────────────────────────────
+   ตั้งใจให้แปะจอหน้าครัวหรือพิมพ์แจก · สิ่งที่ต้อง "ทำ" มาก่อนสิ่งที่ต้อง "รู้"
+   ยอดที่ต้องเตรียมเป็นตัวโต ๆ · ลำที่มีอาหารพิเศษถูกไฮไลต์ให้สะดุดตาก่อนเพื่อน */
+function ppBodyBoard(P,pOrd,GT){
+  var e=ckEsc, out='';
+  pOrd.forEach(function(pk){
+    var PB=P[pk], M=ppPierMeta(pk), PA=PB.A, c=M.c||'#94A3B8';
+    var tiles='';
+    PB.gOrd.forEach(function(k){
+      var g=PB.G[k], rt=g.rt||((typeof getRoute==='function')?getRoute(k):null);
+      var rc=(rt&&rt.color)||'#94A3B8';
+      g.ck.forEach(function(ck){
+        var C=g.cells[ck], A=C.A, okey=pk+'|'+k+'|'+ck, open=!!_ppOpen[okey];
+        var hot=(A.veg+A.vegan+A.halal+A.allergy+A.alUnk)>0;
+        tiles+='<article class="bd-t'+(hot?' hot':'')+'" style="--rc:'+e(rc)+'">'
+          +'<div class="bd-h"><span class="bd-d">'+e(ppDayLbl(C.date))+'</span>'
+            +(rt&&rt.times&&rt.times[0]?('<span class="bd-tm">'+e(rt.times[0])+'</span>'):'')
+            +(A.chtr?'<span class="bd-x">เหมาลำ</span>':'')
+            +(A.ovn?'<span class="bd-x">ค้างคืน</span>':'')+'</div>'
+          +'<div class="bd-b'+(C.boatId?'':' na')+'">'+e(ppBoatName(C.boatId))+'</div>'
+          +'<div class="bd-r">'+e((rt&&rt.name)||k||'—')+'</div>'
+          +'<div class="bd-n"><b>'+A.eat+'</b><span>ที่</span>'
+            +'<em>'+A.tot+' คน &middot; '+A.n+' ใบ</em></div>'
+          +'<div class="bd-m">'+ppChips(A)+'</div>'
+          +(A.sp.length?('<button class="bd-more'+(open?' on':'')+'" onclick="ppToggle(\''+e(okey)+'\')">'
+            +(open?'ซ่อนรายชื่อ':('รายชื่อ '+A.sp.length+' ใบ'))+'</button>'):'')
+          +(open?('<div class="bd-det">'+ppSpecialList(A)+'</div>'):'')
+        +'</article>';
+      });
+    });
+    out+='<section class="bd-p"><header style="border-color:'+e(c)+'">'
+      +'<span class="sq" style="background:'+e(c)+'">'+e(M.s||'—')+'</span>'
+      +'<b>'+e(M.n)+'</b>'+(M.t?('<i>'+e(M.t)+'</i>'):'')
+      +'<span class="sum"><b>'+PA.eat+'</b> ที่ &middot; '+PA.tot+' คน &middot; '
+        +PB.gOrd.length+' โปรแกรม</span>'
+      +'<span class="ml">'+ppChips(PA)+'</span>'
+      +'</header><div class="bd-g">'+tiles+'</div></section>';
+  });
+  out+='<div class="bd-tot"><span>รวมทั้งหมด &middot; '+e(ppRangeLbl())+'</span>'
+    +'<b>'+GT.eat+'</b><small>ที่ต้องเตรียมอาหาร</small>'
+    +'<span class="m">'+ppChips(GT)+'</span></div>';
+  return '<div class="bd-wrap">'+out+'</div>';
+}
+
+/* ═══ §prpoSkin · CSS ต่อสกิน · ต่อท้าย ppCSS() เสมอ ══════════════════════ */
+function ppSkinCSS(){
+  if(_ppSkin==='friendly') return ppCSSFriendly();
+  if(_ppSkin==='board')    return ppCSSBoard();
+  return ppCSSSheet();
+}
+/* ปุ่มสลับหน้าตา · ใช้ร่วมทุกสกิน */
+function ppCSSSeg(){ var S='#prpo-host'; return ''
+ +S+' .pp-seg{display:inline-flex;border:1px solid #D5DCE4;border-radius:4px;overflow:hidden;background:#fff}'
+ +S+' .pp-sg{border:0;border-right:1px solid #E8EDF2;background:#fff;color:#64748B;padding:6px 12px;'
+   +'font:700 11.5px inherit;font-family:inherit;cursor:pointer}'
+ +S+' .pp-sg:last-child{border-right:0}'
+ +S+' .pp-sg.on{background:#0F172A;color:#fff}';
+}
+/* ─── A · Google Sheets · รางเลขแถว + หัว A-J + ฟอนต์แบบ Sheets ─────────── */
+function ppCSSSheet(){ var S='#prpo-host'; return ppCSSSeg()
+ +S+' .pp-sheet{border:1px solid #C0C0C0}'
+ +S+' table.pp-t{font-family:Roboto,Arial,"DM Sans",sans-serif;font-size:12.5px}'
+ +S+' .pp-t th{background:#F8F9FA;color:#5F6368;border:1px solid #C0C0C0;font-weight:600;letter-spacing:0}'
+ +S+' .pp-t tr.cl th{text-align:center;font-size:10.5px;font-weight:500;color:#7C848D;padding:2px 4px;'
+   +'height:20px;top:var(--topbar,0px);z-index:6}'
+ +S+' .pp-t tr.lbl th{font-size:11px;text-transform:none;padding:6px 8px;'
+   +'top:calc(var(--topbar,0px) + 20px);z-index:5}'
+ +S+' .pp-t th.r{text-align:right}'
+ +S+' .pp-t th.corner{background:#EDEEF0;width:42px;min-width:42px}'
+ +S+' .pp-t td{border:1px solid #E1E3E1}'
+ +S+' .pp-t td.rn{background:#F8F9FA;color:#7C848D;text-align:center;font-size:10.5px;'
+   +'font-family:Roboto,Arial,sans-serif;font-variant-numeric:tabular-nums;border-color:#C0C0C0;'
+   +'width:42px;padding:5px 2px;user-select:none}'
+ +S+' .pp-t tbody tr:nth-child(even)>td{background:#fff}'
+ +S+' .pp-t tbody tr:nth-child(even)>td.rn{background:#F8F9FA}'
+ +S+' .pp-t tbody tr.d:hover>td{background:#F1F8FF}'
+ +S+' .pp-t tbody tr.d:hover>td.rn{background:#E8EAED;color:#202124}'
+ +S+' .pp-t tr.g-pier>td{background:#E6F0E9;border-top:1px solid #A8C6B4;border-bottom:1px solid #A8C6B4}'
+ +S+' .pp-t tr.g-pier>td.rn{background:#DCE8E0}'
+ +S+' .pp-t tr.g-prog>td{background:#F1F5F2}'
+ +S+' .pp-t tr.g-prog>td.rn{background:#EAEEEB}'
+ +S+' .pp-t tr.g-tot>td{background:#D9E7DE;border-top:2px solid #6F9C81;border-bottom:2px solid #6F9C81}'
+ +S+' .pp-t .eat{background:#EAF6EF;color:#137333}'
+ +S+' .pp-btn.pri{background:#137333;border-color:#137333}'
+ +'@media print{'+S+' .pp-t td.rn,'+S+' .pp-t th.corner,'+S+' .pp-t tr.cl{display:none}}';
+}
+/* ─── B · การ์ด · ตัวโต เว้นเยอะ แตะง่าย ────────────────────────────────── */
+function ppCSSFriendly(){ var S='#prpo-host'; return ppCSSSeg()
+ +S+' .fr-wrap{display:block}'
+ +S+' .fr-pier{margin:0 0 26px}'
+ +S+' .fr-ph{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;'
+   +'border-radius:18px;padding:16px 20px;color:#fff;box-shadow:0 6px 18px rgba(15,23,42,.13)}'
+ +S+' .fr-ph .l{display:flex;align-items:center;gap:13px}'
+ +S+' .fr-ph .ic{font-size:26px;opacity:.85}'
+ +S+' .fr-ph h2{margin:0;font-size:20px;font-weight:800;letter-spacing:-.01em}'
+ +S+' .fr-ph p{margin:2px 0 0;font-size:12.5px;opacity:.85}'
+ +S+' .fr-ph .r{text-align:right;line-height:1.15}'
+ +S+' .fr-ph .r b{display:block;font:800 32px "DM Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}'
+ +S+' .fr-ph .r span{font-size:11.5px;opacity:.85}'
+ +S+' .fr-pmeal{margin:11px 2px 0}'
+ +S+' .fr-prog{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:20px 2px 10px}'
+ +S+' .fr-prog .dot{width:12px;height:12px;border-radius:4px;flex:none}'
+ +S+' .fr-prog b{font-size:15.5px;font-weight:800}'
+ +S+' .fr-prog .mt{font-size:12px;color:#94A3B8}'
+ +S+' .fr-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:13px}'
+ +S+' .fr-c{background:#fff;border:1px solid #E7EBF0;border-radius:18px;padding:15px 17px;'
+   +'box-shadow:0 2px 10px rgba(15,23,42,.05);break-inside:avoid}'
+ +S+' .fr-c.na{border-style:dashed;border-color:#E0B37A;background:#FFFCF6}'
+ +S+' .fr-ct{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}'
+ +S+' .fr-ct .bd{width:6px;height:30px;border-radius:4px;flex:none}'
+ +S+' .fr-ct .nm b{display:block;font-size:15.5px;font-weight:800;line-height:1.2}'
+ +S+' .fr-ct .nm small{display:block;font-size:11.5px;color:#94A3B8;margin-top:1px}'
+ +S+' .fr-tag{font-size:10px;font-weight:800;background:#F5F0FF;color:#5B289A;border:1px solid #DDD0F5;'
+   +'border-radius:999px;padding:2px 9px;margin-left:auto}'
+ +S+' .fr-big{display:flex;gap:10px;margin-bottom:10px}'
+ +S+' .fr-big>div{flex:1;border-radius:14px;padding:11px 13px;line-height:1.1}'
+ +S+' .fr-big b{display:block;font:800 27px "DM Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}'
+ +S+' .fr-big span{font-size:11px;font-weight:600}'
+ +S+' .fr-big .b1{background:#F1F5F9;color:#334155}'
+ +S+' .fr-big .b2{background:#E7F4EF;color:#0F6E56}'
+ +S+' .fr-mini{display:flex;gap:13px;flex-wrap:wrap;font-size:12px;color:#64748B;margin-bottom:11px}'
+ +S+' .fr-mini b{font-family:"DM Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums;color:#15201a}'
+ +S+' .fr-meal{border-top:1px solid #F1F4F7;padding-top:10px;line-height:2}'
+ +S+' .fr-more{display:inline-block;margin-top:5px;border:1px solid #CBD5E1;background:#fff;color:#475569;'
+   +'border-radius:999px;padding:5px 15px;font:700 11.5px inherit;font-family:inherit;cursor:pointer}'
+ +S+' .fr-more.on{background:#0F172A;border-color:#0F172A;color:#fff}'
+ +S+' .fr-det{margin-top:9px;background:#FFFDF5;border:1px solid #F0E4C0;border-radius:12px;padding:6px 9px 9px}'
+ +S+' .fr-tot{display:flex;align-items:center;gap:18px;flex-wrap:wrap;background:#0F172A;color:#fff;'
+   +'border-radius:18px;padding:16px 20px;margin-top:8px}'
+ +S+' .fr-tot>span{font-size:12.5px;font-weight:700;opacity:.8}'
+ +S+' .fr-tot .v{line-height:1.1}'
+ +S+' .fr-tot .v b{display:block;font:800 26px "DM Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}'
+ +S+' .fr-tot .v.acc b{color:#7FE3B6}'
+ +S+' .fr-tot .v small{font-size:11px;opacity:.75}'
+ +S+' .fr-tot .m{margin-left:auto}'
+ +S+' .pp-chip{font-size:12px;padding:3px 11px;border-radius:999px;margin:2px 5px 2px 0}'
+ +S+' .pp-k{padding:13px 16px}'+S+' .pp-k .kv{font-size:25px}'
+ +S+' .pp-kpis{border-radius:16px;overflow:hidden}'
+ +S+' .pp-btn,'+S+' .pp-f,'+S+' .pp-date{border-radius:999px}'
+ +S+' .pp-seg{border-radius:999px}'
+ +'@media print{'+S+' .fr-c,'+S+' .fr-ph,'+S+' .fr-tot{box-shadow:none}'
+   +S+' .fr-cards{grid-template-columns:repeat(3,1fr)}}';
+}
+/* ─── C · บอร์ด · ยอดที่ต้องเตรียมเป็นพระเอก ────────────────────────────── */
+function ppCSSBoard(){ var S='#prpo-host'; return ppCSSSeg()
+ +S+' .bd-wrap{display:block}'
+ +S+' .bd-p{margin:0 0 22px}'
+ +S+' .bd-p>header{display:flex;align-items:center;gap:11px;flex-wrap:wrap;background:#0F172A;color:#fff;'
+   +'padding:11px 15px;border-radius:12px 12px 0 0;border-bottom:4px solid}'
+ +S+' .bd-p>header .sq{font:800 10.5px inherit;letter-spacing:.05em;padding:3px 9px;border-radius:5px;flex:none}'
+ +S+' .bd-p>header>b{font-size:16px;font-weight:800}'
+ +S+' .bd-p>header>i{font-style:normal;font-size:11.5px;opacity:.7}'
+ +S+' .bd-p>header .sum{font-size:12px;opacity:.9;margin-left:auto;white-space:nowrap}'
+ +S+' .bd-p>header .sum b{font:800 19px "DM Mono",ui-monospace,monospace;color:#7FE3B6;'
+   +'font-variant-numeric:tabular-nums}'
+ +S+' .bd-p>header .ml{flex:1 0 100%;line-height:1.9}'
+ +S+' .bd-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(238px,1fr));gap:9px;'
+   +'background:#EEF2F6;padding:10px;border-radius:0 0 12px 12px}'
+ +S+' .bd-t{background:#fff;border:1px solid #DDE3EA;border-left:5px solid var(--rc);border-radius:9px;'
+   +'padding:10px 12px;break-inside:avoid}'
+ +S+' .bd-t.hot{border-color:#E7C9C9;border-left-color:var(--rc);background:#FFFBFB;'
+   +'box-shadow:inset 0 0 0 1px #F6E3E3}'
+ +S+' .bd-h{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px}'
+ +S+' .bd-d{font:700 10.5px "DM Mono",ui-monospace,monospace;color:#64748B}'
+ +S+' .bd-tm{font:700 10.5px "DM Mono",ui-monospace,monospace;color:#94A3B8}'
+ +S+' .bd-x{font-size:9px;font-weight:800;background:#F5F0FF;color:#5B289A;border:1px solid #DDD0F5;'
+   +'border-radius:999px;padding:1px 7px}'
+ +S+' .bd-b{font-size:15px;font-weight:800;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+ +S+' .bd-b.na{color:#B4560A}'
+ +S+' .bd-r{font-size:11px;color:#94A3B8;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+ +S+' .bd-n{display:flex;align-items:baseline;gap:5px;flex-wrap:wrap;border-top:1px solid #EEF2F6;padding-top:7px}'
+ +S+' .bd-n b{font:800 30px "DM Mono",ui-monospace,monospace;color:#0F6E56;line-height:1;'
+   +'font-variant-numeric:tabular-nums}'
+ +S+' .bd-n span{font-size:11px;font-weight:700;color:#0F6E56}'
+ +S+' .bd-n em{font-style:normal;font-size:10.5px;color:#94A3B8;margin-left:auto;white-space:nowrap}'
+ +S+' .bd-m{margin-top:7px;line-height:1.95;min-height:4px}'
+ +S+' .bd-more{margin-top:5px;border:1px solid #D5DCE4;background:#fff;color:#64748B;border-radius:5px;'
+   +'padding:2px 9px;font:700 10.5px inherit;font-family:inherit;cursor:pointer}'
+ +S+' .bd-more.on{background:#0F172A;border-color:#0F172A;color:#fff}'
+ +S+' .bd-det{margin-top:7px;border-top:1px dashed #E2E8F0;padding-top:5px}'
+ +S+' .bd-tot{display:flex;align-items:center;gap:13px;flex-wrap:wrap;background:#0F172A;color:#fff;'
+   +'border-radius:12px;padding:14px 18px}'
+ +S+' .bd-tot>span{font-size:12.5px;font-weight:700;opacity:.8}'
+ +S+' .bd-tot>b{font:800 30px "DM Mono",ui-monospace,monospace;color:#7FE3B6;font-variant-numeric:tabular-nums}'
+ +S+' .bd-tot>small{font-size:11.5px;opacity:.75}'
+ +S+' .bd-tot .m{margin-left:auto;line-height:2}'
+ +S+' .pp-chip{font-size:11px;padding:2px 9px;border-radius:5px}'
+ +'@media print{'+S+' .bd-g{grid-template-columns:repeat(4,1fr);background:#fff;padding:0;gap:6px}'
+   +S+' .bd-p>header{break-after:avoid}}';
+}
 </script>
 </body>
 </html>
