@@ -82702,8 +82702,11 @@ function bkV2RenderTab2(){
       ? _btVanParts.map(p=>(_one?'':`<span class="bt-vtrip"><i style="background:${p.col}"></i><b style="color:${p.col}">${p.nm}</b><span>${p.dep}${p.n?(' &middot; '+p.n+' van'+(p.n===1?'':'s')):''}</span></span>`)+p.cards+p.extra).join('')
       : '<span class="bt-none2">No van assigned yet</span>';
     const _grpSrc = _btVanParts.filter(p=>p.sel);
-    const _grp = _btVanParts.length
-      ? (_grpSrc.length ? _grpSrc : _btVanParts.slice(0,1)).map(p=>p.grpRow).join('') : '';
+    const _grpUse = _grpSrc.length ? _grpSrc : _btVanParts.slice(0,1);
+    const _grpMulti = _grpUse.length>1;
+    const _grp = _btVanParts.length ? _grpUse.map(p=>(_grpMulti
+      ? `<span class="bt-vgrpt"><i style="background:${p.col}"></i><b style="color:${p.col}">${p.nm}</b><em>${p.dep}</em></span>`
+      : '')+p.grpRow).join('') : '';
     _btVanCard = `<div class="bt-c bt-vans${_anySel?' act':''}">
       <div class="bt-ct">VANS<span class="bt-cnt">${_nVan} van${_nVan===1?'':'s'}${_one?'':' &middot; '+_btVanParts.length+' trips'}</span>
         ${_btVanParts.length===1&&_btVanParts[0].btns?_btVanParts[0].btns:''}<span class="sp"></span></div>
@@ -83409,7 +83412,7 @@ function bkV2RenderTab2(){
     .bt-vans.act{border-color:#185FA5;box-shadow:0 0 0 3px rgba(24,95,165,.28)}
     .bt-vans.act>.bt-ct{color:#12518F;background:#EEF5FC;border-bottom-color:#D8E6F5}
     .bt-vgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;
-      padding:7px 9px 8px;overflow-y:auto;overflow-x:hidden;min-height:0;height:0;
+      padding:7px 9px 8px;overflow-y:auto;overflow-x:hidden;min-height:56px;max-height:196px;
       flex:1 1 auto;align-content:start;overscroll-behavior:contain}
     .bt-vgrid::-webkit-scrollbar{width:8px}
     .bt-vgrid::-webkit-scrollbar-thumb{background:#CFE3D8;border-radius:4px}
@@ -83420,9 +83423,16 @@ function bkV2RenderTab2(){
     .bt-vtrip span{font-size:9px;color:#948f88;font-weight:600;white-space:nowrap}
     .bt-vgrp{border-top:1px solid #E4EFE9}
     /* แถบ Grouping เดิมสูง 44px ตายตัว · ในการ์ดให้ยืดตามเนื้อหาและตัดขอบซ้ายทิ้ง */
-    .bt-vgrp>div{height:auto !important;padding:6px 10px !important;border-top:0 !important;
-      overflow:visible !important;flex-wrap:wrap !important}
+    .bt-vgrp>div{height:auto !important;min-height:46px;padding:6px 10px !important;
+      border-top:0 !important;flex-wrap:nowrap !important;overflow-x:auto !important;
+      overflow-y:hidden !important;overscroll-behavior:contain}
     .bt-vgrp>div+div{border-top:1px dashed #E4EFE9 !important}
+    /* ป้ายชื่อทริปเหนือแถบจับกลุ่ม · โผล่เฉพาะตอนติ๊กข้ามทริปจนมีหลายแถบ */
+    .bt-vgrpt{display:flex;align-items:center;gap:6px;padding:6px 11px 0;font-size:10px}
+    .bt-vgrpt i{width:7px;height:7px;border-radius:50%;flex:none}
+    .bt-vgrpt b{font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .bt-vgrpt em{font-style:normal;font-size:9px;color:#8d97a4;font-weight:600;flex:none}
+    .bt-vgrp>div+.bt-vgrpt{border-top:1px dashed #D8E6F5;margin-top:3px}
     /* §btTune · Notice เล็กลงทั้งบล็อก · เป็นของที่อ่านผ่าน ๆ ไม่ใช่ตัวเลขที่ต้องเพ่ง */
     .bt-ncb{display:flex;flex-direction:column;gap:4px;padding:2px 9px 8px;overflow:auto;min-height:0}
     .bt-nc{display:flex;gap:7px;border-radius:8px;padding:5px 8px;font-size:10.5px;line-height:1.4}
