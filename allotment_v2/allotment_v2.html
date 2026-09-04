@@ -80895,8 +80895,8 @@ function bkV2RenderTab2(){
   const _sortVal = r => { if(sortCol==='agency'){ const a=sbGetAgent(r.bk&&r.bk.agentId); return (a?(a.name||''):String((r.bk&&r.bk.agentId)||'')).toLowerCase(); } if(sortCol==='zone'){ return String((r.bk&&r.bk.pickupArea)||'').toLowerCase(); } return ''; };
   const _rowCmp = (a,b)=>{ const va=_sortVal(a), vb=_sortVal(b); if(va<vb) return sortDir==='desc'?1:-1; if(va>vb) return sortDir==='desc'?-1:1; return 0; };
   const _sortArrow = c => sortCol===c ? (sortDir==='asc'?' ▲':' ▼') : '';
-  const agencyTh = `<th onclick="bkV2Tab2SetSort('agency')" style="cursor:pointer;user-select:none" title="Sort by agency">Agency${_sortArrow('agency')}</th>`;
-  const zoneTh = `<th onclick="bkV2Tab2SetSort('zone')" style="cursor:pointer;user-select:none" title="Sort by pickup area">Zone${_sortArrow('zone')}</th>`;
+  const agencyTh = `<th class="t2-ag" onclick="bkV2Tab2SetSort('agency')" style="cursor:pointer;user-select:none" title="Sort by agency">Agency${_sortArrow('agency')}</th>`;
+  const zoneTh = `<th class="t2-zn" onclick="bkV2Tab2SetSort('zone')" style="cursor:pointer;user-select:none" title="Sort by pickup area">Zone${_sortArrow('zone')}</th>`;
 
   // Group by route
   // §pendSeat · แถว "รออนุมัติ" ถูกแยกออกตั้งแต่ตรงนี้ ไม่ใส่ลง groups
@@ -81706,8 +81706,8 @@ function bkV2RenderTab2(){
         return {g:a.g, boat:_rowBid||'', html:`
           <tr class="t2-row${r.cxl?' t2-cxl':''}${_ckNsCls}${_unassignedCls}${_novanCls}"${_rowStyle}>
             <td>${(bk.voucherRef && bk.voucherRef.trim().toLowerCase()!==String(lead||'').trim().toLowerCase())?(a.split?`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)} · แยกรับหลายจุด (บุคกิ้งเดียวกัน)" style="color:${_bkV2SplitColor(bk.id)};font-weight:800;border:1px solid ${_bkV2SplitColor(bk.id)}55;background:${_bkV2SplitColor(bk.id)}12;border-radius:5px;padding:1px 5px">&#128279; ${esc(bk.id.startsWith('b2c_')?bkV2DisplayCode(bk):bk.voucherRef)}</span>`:`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)}">${esc(bk.id.startsWith('b2c_')?bkV2DisplayCode(bk):bk.voucherRef)}</span>`):'<span class="t2-dim">—</span>'}${bk.id.startsWith('b2c_')?'<div style="margin-top:3px"><span style="background:#E6F7F9;color:#0E7D8A;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.03em">'+bkV2B2CMark(11)+'Love Andaman</span></div>':''}</td>
-            <td style="${bk.agentId?'padding:0':''}">${(bk.agentId && /^b2c_/.test(String(bk.id||'')))?`<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="Love Andaman &middot; ขายเอง (B2C)${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' &middot; ลูกค้าทักมาทาง '+_c.label):''; })()} &middot; คลิกเปลี่ยนสีประจำเอเยนต์ (ใช้ที่หน้าอื่น)" style="background:#fff;border:1px solid #E3E6EC;margin:2px 3px;padding:8px 10px;border-radius:8px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.08);max-width:180px;display:flex;align-items:center;justify-content:center">${bkV2B2CLogo(22)}</div>`:bk.agentId?(()=>{const _ac=bkV2AgentColor(bk.agentId);return `<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="${esc(norm.agentName)}${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' · ลูกค้าทักมาทาง '+_c.label):(/^b2c_/.test(String(bk.id||''))?' · ขายเอง (B2C)':''); })()} · คลิกเปลี่ยนสี · Alt+คลิก = สีอัตโนมัติ" style="background:${_ac};color:${bkV2ContrastInk(_ac)};margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;box-shadow:0 1px 2px rgba(0,0,0,.10)">${esc(norm.agentName)}</div>`;})():`<span class="t2-agency">${esc(norm.agentName)}</span>`}</td>
-            <td>
+            <td class="t2-ag" style="${bk.agentId?'padding:0':''}">${(bk.agentId && /^b2c_/.test(String(bk.id||'')))?`<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="Love Andaman &middot; ขายเอง (B2C)${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' &middot; ลูกค้าทักมาทาง '+_c.label):''; })()} &middot; คลิกเปลี่ยนสีประจำเอเยนต์ (ใช้ที่หน้าอื่น)" style="background:#fff;border:1px solid #E3E6EC;margin:2px 3px;padding:8px 10px;border-radius:8px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.08);max-width:180px;display:flex;align-items:center;justify-content:center">${bkV2B2CLogo(22)}</div>`:bk.agentId?(()=>{const _ac=bkV2AgentColor(bk.agentId);return `<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="${esc(norm.agentName)}${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' · ลูกค้าทักมาทาง '+_c.label):(/^b2c_/.test(String(bk.id||''))?' · ขายเอง (B2C)':''); })()} · คลิกเปลี่ยนสี · Alt+คลิก = สีอัตโนมัติ" style="background:${_ac};color:${bkV2ContrastInk(_ac)};margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;box-shadow:0 1px 2px rgba(0,0,0,.10)">${esc(norm.agentName)}</div>`;})():`<span class="t2-agency">${esc(norm.agentName)}</span>`}</td>
+            <td class="t2-cu">
               ${(function(){ var _rs=bk.ops&&bk.ops.reconfirm&&bk.ops.reconfirm.status; if(_rs){ var _c=(typeof rcStateColor==='function')?rcStateColor(_rs):'#F6E27A'; var _ik=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(_c):'#000'; var _sl=(typeof _rcStateOf==='function')?_rcStateOf(bk).l:''; return `<span class="t2-lead" style="background:${_c};color:${_ik};padding:1px 7px;border-radius:5px" title="Re-confirm: ${esc(_sl)}">${esc(lead)}</span>`; } return `<span class="t2-lead">${esc(lead)}</span>`; })()}${pcBadge}${(function(){var _el=(typeof bkV2EditLockActive==='function')&&bkV2EditLockActive(bk);return _el?`<span title="${esc(_el.by)} กำลังแก้ไขอยู่ (~${_el.mins} นาที)" style="background:#E7F0FC;color:#185FA5;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">&#9999; ${esc(_el.by)} แก้อยู่</span>`:'';})()}${bk.status==='pending_approval'?`<span title="เกิน capacity · รอผจก.อนุมัติ" style="background:#FCEBEB;color:#A32D2D;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">รออนุมัติ</span>`:''}${(bk.pickupSelf && r.zone!=='NoTransfer' && r.zone!=='NT')?`<span title="ติ๊ก self-arrive (ลูกค้ามาเอง) แต่โซนนี้เป็นโซนรับส่ง${(bk.ops&&(bk.ops.vanId||bk.ops.vanGroup))?' + จัดรถไว้แล้ว':''} — booking นี้จะไม่ขึ้นในใบงานรถขาไป · เช็คว่าติ๊กผิดหรือไม่" style="background:#F3E8FF;color:#5B289A;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:help">🚶 self-arrive?</span>`:''}${(function(){ if(r.cxl||!bk.agentId||typeof docCheckStatus!=='function') return ''; var _st=docCheckStatus(bk); var _nf=(bk.attachments||[]).length; var _m={verified:['#E6F5EA','#1B7F4B','✅','เอกสารตรวจแล้ว'],issue:['#FCEBEB','#B5271F','⚠','เอกสารมีปัญหา'],pending:['#FFF6E0','#8A5B00','📎','รอตรวจเอกสาร ('+_nf+' ไฟล์)']}[_st]; if(!_m) return ''; return `<span onclick="event.stopPropagation();tsGoDoc('${esc(bk.id)}','${esc(date)}')" title="${esc(_m[3])} · คลิกไปตรวจเอกสาร" style="background:${_m[0]};color:${_m[1]};font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:pointer">${_m[2]}${_st==='pending'?(' '+_nf):''}</span>`; })()}${(function(){ if(r.cxl||typeof bkV2FindDuplicateBookings!=='function')return''; const _dd=bkV2FindDuplicateBookings(bk,bk.id); if(!_dd.length)return''; const _vc=_dd.map(x=>x.bk.voucherRef||x.bk.code||x.bk.id).slice(0,3).join(', '); const _rs=[...new Set(_dd.reduce((a,x)=>a.concat(x.reasons),[]))].join(' · '); return `<span title="อาจเป็นการลงซ้ำกับ: ${esc(_vc)} (${esc(_rs)}) — ตรวจสอบ/ลบตัวซ้ำ" style="background:#FBE9D6;color:#9A5B00;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:help">&#9888; อาจซ้ำ</span>`; })()}${r.cxl?`<span class="t2-cxlbadge" title="${bk.cancellation?('Cancelled · '+(bk.cancellation.chargeType==='full'?'Full charge':bk.cancellation.chargeType==='partial'?'Partial charge':'No charge')+(bk.cancellation.reason?' · '+esc(bk.cancellation.reason):'')):'Cancelled'}">CXL</span>`:''}${(!r.cxl && typeof ckNoShowBadge==='function')?ckNoShowBadge(bk,date):''}
               ${others.length?`<button class="t2-more" onclick="event.stopPropagation();bkV2Tab2TogglePax('${rowId}')"><span id="${rowId}-ic" style="display:inline-block">▾</span> +${others.length}</button>`:'<span class="t2-dim t2-leadonly">lead only</span>'}
             </td>
@@ -81781,27 +81781,36 @@ function bkV2RenderTab2(){
           </div></td></tr>`;
       };
       { let _pg=null, _pb=null; _rowObjs.forEach(o=>{ if(_boatCluster){ if((o.boat||'')!==_pb){ body+=_boatHdrRow(o.boat); _pb=o.boat||''; } } else if(_grouped && o.g!==_pg){ if(o.g>0) body+=_grpHeaderRow(o.g); else if(vanMode || _hasGroups) body+=_unassignedHdr(); _pg=o.g; } body+=o.html; }); }
+      /* ══ §btTable (2026-09-04) · ทุกโซนของทริปนี้อยู่ในตารางเดียว ═══════════
+         ของเดิมแยกเป็นคนละ <table> ต่อโซน · ความกว้างคอลัมน์จึงคำนวณแยกกัน
+         Voucher ของ Phuket กว้าง 118px แต่ของเขาหลัก 96px ตาไล่ลงมาแล้วสะดุด
+         และหัวตารางซ้ำทุกโซน กินที่ฟรีโซนละ 29px
+         ยุบเป็นตารางเดียว หัวโซนกลายเป็นแถบคาดเต็มความกว้างเหมือนแถบคันรถ
+         แถวและปุ่มทุกตัวเป็นของเดิมไม่ถูกแตะ (o.html เดิมทั้งดุ้น)          */
       const _isChtr = z==='__CHARTER__';
-      const _zhead = _isChtr
-        ? `<div class="t2-zhead" style="background:linear-gradient(90deg,#EEEAFB,#F6F3FC);border-color:#DDD4F2"><span style="font-size:13px;font-weight:800;color:#5B289A;letter-spacing:.02em">&#128676; เหมาลำ · CHARTER</span><span class="t2-zc" style="color:#7A6FA8">· ${list.length} ${list.length>1?'bookings':'booking'} · ${zpax} pax · ทั้งลำ · ระบุเรือตอนจอง</span></div>`
-        : `<div class="t2-zhead"><span class="t2-zdot" style="background:${bkV2ZoneColor(z)}"></span><span class="t2-zn">${bkV2ZoneLabel(z)}</span><span class="t2-zc">· ${list.length} ${list.length>1?'bookings':'booking'} · ${zpax} pax</span></div>`;
-      return `<div${_isChtr?' style="border:1.5px solid #C9BEEC;border-radius:12px;overflow:hidden;margin-bottom:14px"':''}>
-        ${_zhead}
-        ${groupBar}
+      const _zband = _isChtr
+        ? `<tr class="t2-zband t2-zband-ch"><td colspan="${COLN}"><div class="zw">`
+          + `<span class="zkind">เหมาลำ</span><span class="znm">&#128676; CHARTER</span>`
+          + `<span class="zsub">${list.length} booking &middot; ${zpax} pax &middot; ทั้งลำ &middot; ระบุเรือตอนจอง</span></div></td></tr>`
+        : `<tr class="t2-zband"><td colspan="${COLN}" style="--zc:${bkV2ZoneColor(z)}"><div class="zw">`
+          + `<span class="zkind">โซน</span><span class="znm">${bkV2ZoneLabel(z)}</span>`
+          + `<span class="zsub">${list.length} booking &middot; ${zpax} pax</span></div></td></tr>`;
+      return _zband + body;
+    }).join('');
+    const zoneTable = zoneBlocks ? `
         <div class="t2-tblscroll">
           <table class="t2-mtbl">
             <thead><tr>
-              <th>Voucher</th>${agencyTh}<th>Customer (lead)</th>
+              <th class="t2-vc">Voucher</th>${agencyTh}<th class="t2-cu">Customer (lead)</th>
               <th class="t2-c">AD</th><th class="t2-c">CHD</th><th class="t2-c">INF</th><th class="t2-c">FOC</th>
               <th>Time</th>${vanMode?`<th class="t2-c" style="color:#0F6E56;background:#E1F5EE;white-space:nowrap" title="ติ๊กแถวที่จะไปด้วยกัน แล้วกดจับกลุ่ม">&#10003; กลุ่ม</th>`:''}<th class="t2-pk">Pickup</th><th class="t2-c">Room</th>${zoneTh}<th>Send back</th>${vanMode?'':'<th>Add-on</th>'}<th>Special request</th>${vanMode?'':'<th>Pay</th><th class="t2-r">Total</th><th class="t2-c"></th>'}
               <th class="t2-c"${boatMode?' style="color:#185FA5;background:#EAF3FB;white-space:nowrap"':''}>&#128676; Boat${boatMode?` <button onclick="baAutoAssign('${date}','${rid}')" style="background:#185FA5;color:#fff;border:none;border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:4px">auto</button>`:''}</th>
               ${rcMode?`<th class="t2-c" style="color:#7A4A00;background:#FBF0DD;white-space:nowrap">&#9989; Re-confirm <button onclick="bkV2ReconfirmAll('${date}','${rid}','list')" title="ยืนยันทั้งหมด (list)" style="background:#7A4A00;color:#fff;border:none;border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:4px">all</button></th>`:''}
               ${wxClosed?'<th class="t2-c" style="color:#A32D2D;background:#FBE8E4;white-space:nowrap">&#9928; Manage</th>':''}
             </tr></thead>
-            <tbody>${body}</tbody>
+            <tbody>${zoneBlocks}</tbody>
           </table>
-        </div></div>`;
-    }).join('');
+        </div>` : '';
 
     // ── Seat locks held on this trip (route+date · incl. month-range) · manage inline (create / sub-group / release) ──
     const trLocks = (typeof bkV2LocksFor==='function') ? bkV2LocksFor(rid, date) : [];
@@ -82087,7 +82096,7 @@ function bkV2RenderTab2(){
         ${rcStrip}
         ${lockBar}
         ${pendBlock}
-        ${(grp.length===0 && !_pendRows.length) ? '<div class="t2-nobk">No bookings yet · seats held by lock above</div>' : zoneBlocks}
+        ${(grp.length===0 && !_pendRows.length) ? '<div class="t2-nobk">No bookings yet · seats held by lock above</div>' : zoneTable}
         ${ghostBlock}
         ${cxlBlock}
         </div>
@@ -82345,6 +82354,17 @@ function bkV2RenderTab2(){
     .t2-prepdiv{display:inline-block;width:1px;height:15px;background:var(--border);margin:0 3px;vertical-align:middle}
     .t2-prep{font-size:10px;border-radius:5px;padding:2px 7px;font-weight:600}
     .t2-zhead{display:flex;align-items:center;gap:8px;padding:8px 16px;background:#f6f7f9;border-top:1px solid var(--border-2);border-bottom:1px solid var(--border-2)}
+    /* §btTable · หัวโซนในตาราง · แถบเข้มกว่าแถบคันรถหนึ่งระดับ ให้ลำดับชั้นอ่านออก */
+    .t2-mtbl tr.t2-zband>td{background:#EEF2F7;border-top:2px solid #C9D4E2;border-bottom:1px solid #D9E1EA;
+      padding:7px 14px;box-shadow:inset 5px 0 0 var(--zc,#8b909c)}
+    .t2-mtbl tr.t2-zband-ch>td{background:#F2EEFC;border-top-color:#D6CCF2;border-bottom-color:#DDD4F2;
+      box-shadow:inset 5px 0 0 #5B289A}
+    .t2-zband .zw{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .t2-zband .zkind{font-size:9px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#8a93a1}
+    .t2-zband .znm{font-size:13px;font-weight:800;color:#28344A;letter-spacing:.01em}
+    .t2-zband-ch .znm{color:#5B289A}
+    .t2-zband .zsub{font-size:11px;color:#6a7180;font-weight:600}
+    .t2-zband-ch .zsub{color:#7A6FA8}
     .t2-zdot{width:8px;height:8px;border-radius:50%}
     .t2-zn{font-size:12px;font-weight:700}
     .t2-zc{font-size:11px;color:var(--ink-soft);font-family:'DM Mono',monospace}
@@ -82375,26 +82395,40 @@ function bkV2RenderTab2(){
        ลองวัด 3 วันจริง: 240px เหลือตกบรรทัด 7/31 · 270px เหลือ 2/31 · 300px เหลือ 1/31
        เลือก 270 เพราะจาก 270→300 ได้เพิ่มแค่แถวเดียว แต่จ่ายความกว้างอีก 30px
        วันที่มี 31 แถว: สูง 3,100 → 2,624px (-15%) · กว้าง 1,585 → 1,743px */
-    .t2-mtbl th.t2-pk,.t2-mtbl td.t2-pk{min-width:270px}
-    .t2-pickcell{display:inline-block;max-width:320px;min-width:96px;white-space:normal;overflow-wrap:break-word;line-height:1.25;vertical-align:middle;font-weight:700;font-size:12.5px;color:#111A2B}
-    .t2-lead{font-weight:700;white-space:nowrap;display:inline-block;max-width:158px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
-    .t2-vch{display:inline-block;max-width:128px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+    /* §btCols · จุดรับตัดเป็น 2 บรรทัดได้อยู่แล้ว · 270 → 196 คืนที่ให้ตาราง 74px */
+    .t2-mtbl th.t2-pk,.t2-mtbl td.t2-pk{min-width:196px;max-width:196px}
+    .t2-pickcell{display:inline-block;max-width:190px;min-width:80px;white-space:normal;overflow-wrap:break-word;line-height:1.25;vertical-align:middle;font-weight:700;font-size:12.5px;color:#111A2B}
+    /* ══ §btCols · บีบคอลัมน์ให้ตารางแคบลง ═══════════════════════════════════
+       ตารางกว้าง 2,228px แต่จอ 1800px ให้พื้นที่จริงแค่ 1,438px จึงต้องเลื่อนซ้ายขวา
+       ตลอด และกล่องเลื่อนนั้นกลืน position:sticky (แกนหนึ่งไม่ใช่ visible อีกแกน
+       กลายเป็น auto ตาม) หัวตารางจึงตรึงกับหน้าไม่ได้
+       ตัวที่กินเกินจำเป็น: ช่องชื่อลูกค้า 377px (ป้ายทั้งหมดอยู่บรรทัดเดียวกับชื่อ)
+       จุดรับ 270px · โซน 212px · Agency 172px — บีบลงโดยให้ป้ายตกบรรทัดแทน  */
+    .t2-mtbl td.t2-cu,.t2-mtbl th.t2-cu{max-width:210px;width:210px}
+    .t2-mtbl td.t2-cu{white-space:normal;line-height:1.5}
+    .t2-mtbl td.t2-ag,.t2-mtbl th.t2-ag{max-width:142px;width:142px;overflow:hidden}
+    .t2-mtbl td.t2-zn,.t2-mtbl th.t2-zn{max-width:116px;width:116px}
+    .t2-mtbl th.t2-vc{width:104px}
+    .t2-lead{font-weight:700;white-space:nowrap;display:inline-block;max-width:190px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+    .t2-vch{display:inline-block;max-width:96px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+    .t2-zonetag{max-width:104px;overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:middle}
+    .t2-agf,.t2-mtbl td.t2-ag .agf{max-width:138px}
     .t2-leadonly{font-size:10px;margin-left:4px}
     .t2-more{font-size:10px;border:1px solid var(--border);background:var(--bg);color:var(--ink-soft);border-radius:6px;padding:1px 7px;cursor:pointer;margin-left:5px;font-family:inherit}
     .t2-more:hover{border-color:var(--coral);color:var(--coral)}
     .t2-zonetag{font-size:11px;font-weight:700;background:#DCE4EE;color:#28344A;border-radius:6px;padding:2px 9px;white-space:nowrap}
     /* §t2Hdr · เลขห้องเป็นชิป · ตาจับได้ว่าเป็นค่าที่มีจริง ไม่ใช่ตัวเลขลอย ๆ ปนกับเวลา */
     .t2-room{font-weight:700;color:#1B2A55;background:#EEF2F7;border-radius:5px;padding:2px 7px}
-    .t2-sb{color:var(--ink-soft);display:inline-block;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+    .t2-sb{color:var(--ink-soft);display:inline-block;max-width:118px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
     /* §pickW · Special request มีข้อความจริงแค่ 131 ใบจาก 3,205 (4%) แต่กินที่ 196px ทุกตาราง
        บีบเหลือ 150px แล้วยกที่ให้ชื่อจุดรับที่ต้องอ่านทุกแถว
        ชดเชยด้วยการเพิ่มจาก 2 เป็น 3 บรรทัด — แคบลงแต่ยังเห็นข้อความเท่าเดิม
        แถวที่มีโน้ตจะสูงขึ้นบ้าง แต่มีแค่ 4% ของแถวทั้งหมด */
-    .t2-req{max-width:150px;overflow:hidden}
-    .t2-rbwrap{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px;max-width:142px}
+    .t2-req{max-width:118px;overflow:hidden}
+    .t2-rbwrap{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px;max-width:112px}
     .t2-rb{font-size:10px;border-radius:5px;padding:2px 7px;font-weight:600;white-space:nowrap}
     /* Add-on cell: badges on top, action buttons (+ / upgrade) stacked below · smaller */
-    .t2-addoncell{display:flex;flex-direction:column;gap:4px;max-width:200px}
+    .t2-addoncell{display:flex;flex-direction:column;gap:4px;max-width:118px;flex-wrap:wrap}
     .t2-addoncell-badges{display:flex;gap:3px;flex-wrap:wrap}
     .t2-addoncell-badges:empty{display:none}
     .t2-addoncell-badges .t2-rb{font-size:9px;padding:1px 6px}
@@ -82412,7 +82446,7 @@ function bkV2RenderTab2(){
     .t2-mtbl tr.t2-novan-last td{border-bottom:2px solid #E05B5B}
     /* §SPECIAL REQUEST · เดิม nowrap + max-width 230px → โน้ตยาวๆ ("Extra Person NT1300 Paid 13.07.26")
        ดันคอลัมน์นี้กว้างจนคอลัมน์อื่นถูกบีบ · ตอนนี้ตัดเป็น 2 บรรทัดแล้วใส่ … (ตัวเต็มอยู่ใน tooltip) */
-    .t2-allerg,.t2-note{font-size:11px;line-height:1.35;max-width:142px;white-space:normal;overflow-wrap:break-word;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}   /* §pickW */
+    .t2-allerg,.t2-note{font-size:11px;line-height:1.35;max-width:112px;white-space:normal;overflow-wrap:break-word;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}   /* §pickW */
     .t2-allerg{color:#A32D2D}
     .t2-note{color:var(--ink-soft);margin-top:2px}
     .t2-pay{font-size:10px;background:#e7f0fb;color:#1d5fa5;border-radius:6px;padding:2px 8px;white-space:nowrap}
