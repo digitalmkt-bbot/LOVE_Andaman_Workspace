@@ -78641,7 +78641,7 @@ function bkV2Render(){
       /* §btHead · หัว By-trip ตรึงแล้ว (top:-22px) · ชั้นล่างต้องเกาะใต้ความสูงจริงของมัน
          ฮาร์ดโค้ดไม่ได้ เพราะการ์ดในหัวตกบรรทัดตามความกว้างจอ */
       const _bth=host.querySelector('.bt-pkh');
-      const h=_bth?Math.max(0,_bth.offsetHeight-22):0;
+      const h=_bth?_bth.offsetHeight:0;
       /* §btFreeze · ระยะซ้ายของคอลัมน์ที่ตรึง · ฮาร์ดโค้ดไม่ได้เพราะความกว้างจริง
          ขึ้นกับ padding/border ของธีม และเปลี่ยนตามโหมด (Van ซ่อน 4 คอลัมน์) */
       try{ const _hr=host.querySelector('table.t2-mtbl thead tr');
@@ -78657,6 +78657,10 @@ function bkV2Render(){
       const vs=host.querySelector('.bkv2-vanstrip'); const VANGROUP=(vanOn&&vs)?vs.offsetHeight:0;
       vb.style.setProperty('--t2-vangroup-top', (TOP+h)+'px');
       vb.style.setProperty('--t2-head-top', (TOP+h+VANGROUP)+'px');
+      /* §btStick · ความสูงกล่องตาราง = ความสูงจอ ลบหัวที่ตรึงไว้ ลบขอบล่างไว้หายใจ
+         ต้องอยู่หลัง TOP ถูกประกาศ ไม่งั้นชนกฎ let/const แล้วโยน ReferenceError เงียบ ๆ */
+      try{ if(_bth){ const _vh=window.innerHeight||900;
+        vb.style.setProperty('--bt-tblh', Math.max(260, _vh-(TOP+h)-26)+'px'); } }catch(_){}
     }catch(_){} });
   }catch(e){
     console.error('[bkV2Render] render failed:', e);
@@ -81633,9 +81637,11 @@ function bkV2RenderTab2(){
   const _dINF = rows.reduce((s,r)=>s+(r.cxl?0:P(r.pax,'inf')),0);
   const _dFOC = rows.reduce((s,r)=>s+(r.cxl?0:P(r.pax,'foc')),0);
   const _dPax = _dAD+_dCHD+_dINF+_dFOC;
+  /* §btFix · การ์ด "โปรแกรมวันนี้" เคยอ่านจาก rows (ทั้งวัน) ไม่ผ่านตัวกรองท่าเลย
+     กดชิป "ทับละมุ" แล้วโปรแกรมของภูเก็ตยังโผล่อยู่ · ต้องอ่านจาก rowsPier */
   const _famAgg = {};
-  rows.forEach(r => { if(r.cxl) return; const f=bkV2RouteFamily(r.routeId); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.pax += P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'); a.rids.add(r.routeId); });
-  (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(rr => { const lk=(typeof bkV2LockedTotal==='function')?bkV2LockedTotal(rr.id,date):0; if(lk<=0) return; const f=bkV2RouteFamily(rr.id); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.locked+=lk; a.rids.add(rr.id); });
+  rowsPier.forEach(r => { if(r.cxl) return; const f=bkV2RouteFamily(r.routeId); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.pax += P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'); a.rids.add(r.routeId); });
+  (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(rr => { if(pierF!=='all' && rr.pier!==pierF) return; const lk=(typeof bkV2LockedTotal==='function')?bkV2LockedTotal(rr.id,date):0; if(lk<=0) return; const f=bkV2RouteFamily(rr.id); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.locked+=lk; a.rids.add(rr.id); });
   const _famList = Object.values(_famAgg).sort((a,b)=> b.pax-a.pax || (b.locked-a.locked));
   const _dayLocked = (typeof bkV2DayLockedTotal==='function') ? bkV2DayLockedTotal(date) : 0;
   const _lockProgs = _famList.filter(a=>a.locked>0).length;
@@ -81755,33 +81761,35 @@ function bkV2RenderTab2(){
   const _btPierBtn = (v,l)=>`<button class="bt-seg-b${pierF===v?' on':''}" onclick="bkV2Tab2SetPier('${v}')">${l}</button>`;
   const _btProgBody = _famList.map(a=>{
     const on=(famF===a.fam.id), col=a.fam.color||'#8b909c';
-    const rids=[...a.rids].sort((x,y)=>String(_btDep(x)).localeCompare(String(_btDep(y))));
+    const rids=[...a.rids].filter(x=>{ if(pierF==='all') return true;
+        const rt=(typeof ROUTES!=='undefined'?ROUTES:[]).find(z=>z.id===x); return rt && rt.pier===pierF; })
+      .sort((x,y)=>String(_btDep(x)).localeCompare(String(_btDep(y))));
     const nRun=rids.filter(r=>(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(r,date)).length;
     const vars=rids.map(rid=>{
       const open=(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(rid,date);
       const ron=(routeF===rid);
       const nm=esc(_btSub(rid)), dep=_btDep(rid), pr=_btPier(rid);
-      if(!open) return `<div class="bt-pgv off"><span class="vn">${nm}</span><span>${esc(dep)}${pr?' · '+esc(pr):''} · ไม่ออกวันนี้</span><span class="sp"><span class="bt-free none">&mdash;</span></span></div>`;
+      if(!open) return `<div class="bt-pgv off"><span class="vn">${nm}</span><span>${esc(dep)}${pr?' · '+esc(pr):''} · not running</span><span class="sp"><span class="bt-free none">&mdash;</span></span></div>`;
       const al=(typeof getAllotment==='function')?getAllotment(rid,date):null;
       const bk=al?(al.seatsConsumed||0):0, cap=al?(al.availableCapacity||0):0, av=al?(al.seatsAvailable||0):0;
       const lk=(typeof bkV2LockedTotal==='function')?bkV2LockedTotal(rid,date):0;
       const fr=cap>0?av/cap:0;
       const fc = av<=0 ? 'full' : (fr<0.20 ? 'low' : 'ok');
-      return `<div class="bt-pgv${ron?' on':''}" onclick="bkV2Tab2SetRoute('${ron?'':rid}')" title="${esc(_btSub(rid))} · จอง ${bk}/${cap} · ว่าง ${av}">
+      return `<div class="bt-pgv${ron?' on':''}" onclick="bkV2Tab2SetRoute('${ron?'':rid}')" title="${esc(_btSub(rid))} · booked ${bk}/${cap} · ${av} free">
         <span class="vn">${nm}</span><span>${esc(dep)}${pr?' · '+esc(pr):''}</span>
-        <span class="sp">${lk>0?`<span class="bt-lk">&#128274; ${lk}</span>`:''}<span class="bt-seat"><b>${bk}</b>/${cap}</span><span class="bt-free ${fc}">${av<=0?'เต็ม':('ว่าง '+av)}</span></span></div>`;
+        <span class="sp">${lk>0?`<span class="bt-lk">&#128274; ${lk}</span>`:''}<span class="bt-seat"><b>${bk}</b>/${cap}</span><span class="bt-free ${fc}">${av<=0?'full':(av+' free')}</span></span></div>`;
     }).join('');
-    return `<div class="bt-pgf${on?' on':''}" style="--e:${col};--ink:${col};background:${(typeof pckTint==='function')?pckTint(col,0.90):'#F5F3F0'}" onclick="bkV2Tab2SetFamily('${on?'':a.fam.id}')" title="กรอง ${esc(a.fam.name)}">
+    return `<div class="bt-pgf${on?' on':''}" style="--e:${col};--ink:${col};background:${(typeof pckTint==='function')?pckTint(col,0.90):'#F5F3F0'}" onclick="bkV2Tab2SetFamily('${on?'':a.fam.id}')" title="Filter ${esc(a.fam.name)}">
       <span class="ar">&#9662;</span><span class="dot"></span>
       <span class="nm">${esc(a.fam.name)}</span><span class="n">${a.pax}</span>
       <span class="sp"><span class="bt-tag run">${nRun} running</span>${rids.length-nRun>0?`<span class="bt-tag no">${rids.length-nRun} not running</span>`:''}</span></div>${vars}`;
-  }).join('') || '<div class="bt-none">ไม่มีโปรแกรมในวันนี้</div>';
+  }).join('') || '<div class="bt-none">No programme on this day</div>';
 
-  const _btProg = `<div class="bt-c"><div class="bt-ct"><span class="big">โปรแกรมวันนี้</span>
-      <span class="bt-cnt">${_famList.length} เส้นทาง</span><span class="sp"></span>
+  const _btProg = `<div class="bt-c"><div class="bt-ct"><span class="big">Programmes</span>
+      <span class="bt-cnt">${_famList.length} route${_famList.length===1?'':'s'}</span><span class="sp"></span>
       <span class="bt-daytot"><b>${rows.filter(r=>!r.cxl).length}</b> booking &middot; <b>${_dPax}</b> pax<i>${_dAD}A&middot;${_dCHD}C&middot;${_dINF}I&middot;${_dFOC}F</i></span></div>
-    <div class="bt-pierrow"><span class="bt-seg">${_btPierBtn('all','ทุกท่า')}${_btPierBtn('panwa','พันวา')}${_btPierBtn('tublamu','ทับละมุ')}${_btPierBtn('ranong','ระนอง')}</span>
-      ${(pierF!=='all'||famF||routeF)?`<button class="bt-clear" onclick="bkV2Tab2ClearFilters()">ล้างตัวกรอง</button>`:''}</div>
+    <div class="bt-pierrow"><span class="bt-seg">${_btPierBtn('all','All piers')}${_btPierBtn('panwa','Panwa')}${_btPierBtn('tublamu','Tub Lamu')}${_btPierBtn('ranong','Ranong')}</span>
+      ${(pierF!=='all'||famF||routeF)?`<button class="bt-clear" onclick="bkV2Tab2ClearFilters()">Clear filters</button>`:''}</div>
     <div class="bt-pgbody">${_btProgBody}</div></div>`;
 
   /* ══ กรอบกลาง · เรือของทริปที่เลือก ══════════════════════════════════════ */
@@ -81794,15 +81802,15 @@ function bkV2RenderTab2(){
     const nOver=bl.filter(b=>b.over).length;
     const rnm=(((typeof getRoute==='function'&&getRoute(_btSelRid))||{}).name)||_btSelRid;
     _btBoatCard = `<div class="bt-c bt-boat" style="--c:${_btCol||'#B9B3AA'}">
-      <div class="bt-ct">เรือที่วิ่ง<span class="sp"></span><span class="bt-cnt">${bl.length} ลำ</span>
-        ${nOver?`<span class="bt-cnt over">&#9888; เกิน ${nOver}</span>`:''}</div>
+      <div class="bt-ct">Boats running<span class="sp"></span><span class="bt-cnt">${bl.length} boat${bl.length===1?'':'s'}</span>
+        ${nOver?`<span class="bt-cnt over">&#9888; ${nOver} over</span>`:''}</div>
       <div class="bt-bnm">${esc(rnm)}<span>${esc(_btDep(_btSelRid))}${_btPier(_btSelRid)?' · '+esc(_btPier(_btSelRid)):''}</span></div>
       <div class="bt-avrow">
-        <span class="bt-av"><span class="k">ที่นั่งว่าง</span><span class="v ${av<=0?'full':(cp&&av/cp<0.2?'low':'')}">${av}</span></span><span class="bt-avs"></span>
-        <span class="bt-av"><span class="k">ขายแล้ว</span><span class="v">${bkd}</span></span><span class="bt-avs"></span>
-        <span class="bt-av"><span class="k">ที่นั่งทั้งหมด</span><span class="v dim">${cp}</span></span><span class="bt-avs"></span>
-        <span class="bt-av"><span class="k">ล็อคไว้</span><span class="v lk">${lk}</span></span></div>
-      <div class="bt-blist">${bl.length?bl.map(b=>`<span class="bt-brow${b.over?' over':''}"><span class="d" style="background:${b.col}"></span><span class="nm">${esc(b.name)}</span><span class="ld">${b.pax}${b.cap?('/'+b.cap):''}${b.over?(' เกิน '+(b.pax-b.cap)):''}</span></span>`).join(''):'<span class="bt-none2">ยังไม่จัดเรือให้ทริปนี้</span>'}</div></div>`;
+        <span class="bt-av"><span class="k">Free</span><span class="v ${av<=0?'full':(cp&&av/cp<0.2?'low':'')}">${av}</span></span><span class="bt-avs"></span>
+        <span class="bt-av"><span class="k">Booked</span><span class="v">${bkd}</span></span><span class="bt-avs"></span>
+        <span class="bt-av"><span class="k">Capacity</span><span class="v dim">${cp}</span></span><span class="bt-avs"></span>
+        <span class="bt-av"><span class="k">Locked</span><span class="v lk">${lk}</span></span></div>
+      <div class="bt-blist">${bl.length?bl.map(b=>`<span class="bt-brow${b.over?' over':''}"><span class="d" style="background:${b.col}"></span><span class="nm">${esc(b.name)}</span><span class="ld">${b.pax}${b.cap?('/'+b.cap):''}${b.over?(' +'+(b.pax-b.cap)):''}</span></span>`).join(''):'<span class="bt-none2">No boat assigned to this trip</span>'}</div></div>`;
   } else {
     const _tg = routeIds.filter(rid=>(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(rid,date)).map(rid=>{
       const f=bkV2RouteFamily(rid)||{}, col=f.color||'#8b909c';
@@ -81810,19 +81818,19 @@ function bkV2RenderTab2(){
       const al=(typeof getAllotment==='function')?getAllotment(rid,date):null;
       const bkd=al?(al.seatsConsumed||0):0, cp=al?(al.availableCapacity||0):0, av=al?(al.seatsAvailable||0):0;
       const rnm=(((typeof getRoute==='function'&&getRoute(rid))||{}).name)||rid;
-      return `<div class="bt-tgp" style="--tc:${col}" onclick="bkV2Tab2SetRoute('${rid}')" title="กดเพื่อเลือกทริปนี้">
+      return `<div class="bt-tgp" style="--tc:${col}" onclick="bkV2Tab2SetRoute('${rid}')" title="Select this trip">
         <div class="bt-tgh"><i></i><span class="nm">${esc(rnm)}</span><span class="tm">${esc(_btDep(rid))}${_btPier(rid)?' · '+esc(_btPier(rid)):''}</span>
-          <span class="sm">${bkd}/${cp}<em class="${av<=0?'full':(cp&&av/cp<0.2?'low':'ok')}">${av<=0?'เต็ม':('ว่าง '+av)}</em></span></div>
-        <div class="bt-tgb">${bl.length?bl.map(b=>`<span class="bt-tbc${b.over?' over':''}"><i style="background:${b.col}"></i>${esc(b.name)}<s>${b.pax}${b.cap?('/'+b.cap):''}${b.over?(' เกิน '+(b.pax-b.cap)):''}</s></span>`).join(''):'<span class="bt-tbc none">ยังไม่จัดเรือ</span>'}</div></div>`;
+          <span class="sm">${bkd}/${cp}<em class="${av<=0?'full':(cp&&av/cp<0.2?'low':'ok')}">${av<=0?'full':(av+' free')}</em></span></div>
+        <div class="bt-tgb">${bl.length?bl.map(b=>`<span class="bt-tbc${b.over?' over':''}"><i style="background:${b.col}"></i>${esc(b.name)}<s>${b.pax}${b.cap?('/'+b.cap):''}${b.over?(' +'+(b.pax-b.cap)):''}</s></span>`).join(''):'<span class="bt-tbc none">no boat</span>'}</div></div>`;
     }).join('');
     const _nB=routeIds.reduce((n,rid)=>n+_btBoats(rid).length,0);
     const _nT=routeIds.filter(rid=>(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(rid,date)).length;
     const _nOv=routeIds.reduce((n,rid)=>n+_btBoats(rid).filter(b=>b.over).length,0);
     _btBoatCard = `<div class="bt-c bt-boat" style="--c:#B9B3AA">
-      <div class="bt-ct">เรือที่วิ่ง<span class="sp"></span><span class="bt-cnt">ทั้งวัน ${_nB} ลำ &middot; ${_nT} ทริป</span>
-        ${_nOv?`<span class="bt-cnt over">&#9888; เกิน ${_nOv}</span>`:''}</div>
-      <div class="bt-tgl">${_tg||'<div class="bt-none">ไม่มีทริปที่ออกวันนี้</div>'}</div>
-      <div class="bt-tgfoot">กดโปรแกรมทางซ้าย = เห็นที่นั่งว่างของทริปนั้น และเข้าโหมดจัดเรือได้</div></div>`;
+      <div class="bt-ct">Boats running<span class="sp"></span><span class="bt-cnt">${_nB} boat${_nB===1?'':'s'} &middot; ${_nT} trip${_nT===1?'':'s'}</span>
+        ${_nOv?`<span class="bt-cnt over">&#9888; ${_nOv} over</span>`:''}</div>
+      <div class="bt-tgl">${_tg||'<div class="bt-none">No trip running today</div>'}</div>
+      <div class="bt-tgfoot">Pick a programme on the left to see its free seats and assign boats</div></div>`;
   }
 
   /* ══ กรอบขวา · โหมด / ค้นหา / Seat Lock / Notice ═════════════════════════ */
@@ -81832,15 +81840,15 @@ function bkV2RenderTab2(){
        <span class="n">${num}</span>${on?'<span class="x">&times;</span>':''}</button>`;
   /* ปุ่มโหมดยังกดได้ทุกกรณีเหมือนเดิม · ของเดิมไม่เคยล็อกไว้ตามการเลือกโปรแกรม */
   const _btModes = `<div class="bt-c"><div class="bt-mrow">
-      ${_btMode('Van', _unVanN>0?'ยังไม่จัดรถ':'จัดครบแล้ว', _unVanN>0?_unVanN:'&#10003;', _unVanN>0?'warn':'ok','#0F6E56',vanMode,'bkV2ToggleVanMode()',false)}
-      ${_btMode('Boat',_unBoatN>0?'ยังไม่จัดเรือ':'จัดครบแล้ว', _unBoatN>0?_unBoatN:'&#10003;', _unBoatN>0?'warn':'ok','#185FA5',boatMode,'bkV2ToggleBoatMode()',false)}
-      ${_btMode('Re-confirm',_unRcN>0?'ยังไม่ยืนยัน':'ครบแล้ว', _unRcN>0?_unRcN:'&#10003;', _unRcN>0?'warn':'ok','#7A4A00',rcMode,'bkV2ToggleReconfirmMode()',false)}
+      ${_btMode('Van', _unVanN>0?'not assigned':'all assigned', _unVanN>0?_unVanN:'&#10003;', _unVanN>0?'warn':'ok','#0F6E56',vanMode,'bkV2ToggleVanMode()',false)}
+      ${_btMode('Boat',_unBoatN>0?'not assigned':'all assigned', _unBoatN>0?_unBoatN:'&#10003;', _unBoatN>0?'warn':'ok','#185FA5',boatMode,'bkV2ToggleBoatMode()',false)}
+      ${_btMode('Re-confirm',_unRcN>0?'not confirmed':'all confirmed', _unRcN>0?_unRcN:'&#10003;', _unRcN>0?'warn':'ok','#7A4A00',rcMode,'bkV2ToggleReconfirmMode()',false)}
     </div></div>`;
   const _btSearch = `<div class="bt-c"><div class="bt-srow">
       <span class="bt-sbox"><span class="ic">&#128269;</span>
-        <input id="bt-q" value="${esc(_bkV2T2Q)}" placeholder="ค้นหา · voucher · ชื่อ · เบอร์ · โรงแรม" oninput="bkV2Tab2SetQ(this.value)">
-        ${_btQ?`<button class="clr" onclick="bkV2Tab2SetQ('')" title="ล้างคำค้น">&times;</button>`:''}</span>
-      ${_btQ?`<span class="bt-shit">${rowsF.filter(r=>!r.cxl).length} แถว</span>`:''}</div></div>`;
+        <input id="bt-q" value="${esc(_bkV2T2Q)}" placeholder="Search · voucher · name · phone · hotel" oninput="bkV2Tab2SetQ(this.value)">
+        ${_btQ?`<button class="clr" onclick="bkV2Tab2SetQ('')" title="Clear search">&times;</button>`:''}</span>
+      ${_btQ?`<span class="bt-shit">${rowsF.filter(r=>!r.cxl).length} rows</span>`:''}</div></div>`;
 
   /* Seat Lock · 1 แถว = 1 เอเยนต์ (วันหนักจริงมี 15-24 รายการ แต่ยุบแล้วเหลือ 6-8 แถว)
      เจ้าที่ยังเหลือที่ลอยขึ้นบนสุดเสมอ · ข้อมูลจริงบอกว่ามีไม่เกิน 2 เจ้าต่อวัน */
@@ -81858,37 +81866,37 @@ function bkV2RenderTab2(){
   const _lkTot=_lkList.reduce((n,a)=>n+a.qty,0), _lkLeft=_lkList.reduce((n,a)=>n+a.left,0);
   const _lkN=routeIds.reduce((n,rid)=>n+((typeof bkV2LocksFor==='function')?bkV2LocksFor(rid,date):[]).length,0);
   const _btLock = `<div class="bt-c"><div class="bt-ct">Seat Lock<span class="sp"></span>
-      ${_btLkSel?`<span class="bt-lkhi">&#9679; ไฮไลต์ ${_btLkHitN} booking</span>`:''}
-      ${_lkLeft>0?`<span class="bt-lkbadge">เหลือ ${_lkLeft} ที่</span>`:'<span class="bt-cnt">ไม่มีที่เหลือ</span>'}
-      ${_btSelRid?`<button class="bt-lkbtn" onclick="bkV2LockFromCalendar('${_btSelRid}','${date}')" title="ล็อคที่นั่งทริปนี้">&#128274; ล็อคที่นั่ง</button>`:''}
-      <button class="bt-lkbtn gh" onclick="bkV2SwitchTab('locks')">ทั้งหมด &rarr;</button></div>
+      ${_btLkSel?`<span class="bt-lkhi">&#9679; ${_btLkHitN} highlighted</span>`:''}
+      ${_lkLeft>0?`<span class="bt-lkbadge">${_lkLeft} left</span>`:'<span class="bt-cnt">none left</span>'}
+      ${_btSelRid?`<button class="bt-lkbtn" onclick="bkV2LockFromCalendar('${_btSelRid}','${date}')" title="Lock seats on this trip">&#128274; Lock seats</button>`:''}
+      <button class="bt-lkbtn gh" onclick="bkV2SwitchTab('locks')">All &rarr;</button></div>
     <div class="bt-lkl">${_lkList.length?_lkList.map(a=>{
       const cls=(a.qty<=0)?'gone':(a.left<=0?'done':'');
-      const num=(a.qty<=0)?'<s>ปล่อยคืนแล้ว</s>':`<b>${a.left}</b><s>/ ${a.qty}</s>`;
+      const num=(a.qty<=0)?'<s>released</s>':`<b>${a.left}</b><s>/ ${a.qty}</s>`;
       const _on=(_btLkSel===a.nm);
-      return `<span class="bt-lkr ${cls}${_on?' on':''}" onclick="bkV2Tab2SetLk('${a.id}')" title="กดเพื่อไฮไลต์ booking ที่ดึงจากล็อคของ ${esc(a.nm)}"><i></i><span class="nm">${esc(a.nm)}</span><span class="q">${num}</span>${a.kids?`<span class="sub">${a.kids} ย่อย</span>`:''}<button class="mg" onclick="event.stopPropagation();bkV2LockManageOpen('${a.id}')" title="จัดการล็อค · เพิ่มกรุ๊ปย่อย / ปล่อยคืน">&#9881;</button></span>`;
-    }).join(''):'<span class="bt-none2">ยังไม่ล็อคที่นั่งในวันนี้</span>'}</div>
-    ${_lkList.length?`<div class="bt-lkfoot">รวม <b>${_lkTot}</b> ที่ &middot; ใช้ไป <b>${_lkTot-_lkLeft}</b> &middot; <b>${_lkList.length}</b> เจ้า &middot; <b>${_lkN}</b> รายการ${_lkList.length>3?`<span class="scr">&#9662; ไถดูอีก ${_lkList.length-3} เจ้า</span>`:''}<span class="hint">${_btLkSel?'กดแถวเดิมอีกครั้งเพื่อเลิกไฮไลต์':'กดแถว = ไฮไลต์ booking ที่ดึงจากล็อคนั้น &middot; &#9881; = จัดการ'}</span></div>`:''}</div>`;
+      return `<span class="bt-lkr ${cls}${_on?' on':''}" onclick="bkV2Tab2SetLk('${a.id}')" title="Highlight bookings drawn from ${esc(a.nm)}'s lock"><i></i><span class="nm">${esc(a.nm)}</span><span class="q">${num}</span>${a.kids?`<span class="sub">${a.kids} sub</span>`:''}<button class="mg" onclick="event.stopPropagation();bkV2LockManageOpen('${a.id}')" title="Manage lock · add sub-group / release">&#9881;</button></span>`;
+    }).join(''):'<span class="bt-none2">No seat lock on this day</span>'}</div>
+    ${_lkList.length?`<div class="bt-lkfoot"><b>${_lkTot}</b> held &middot; <b>${_lkTot-_lkLeft}</b> used &middot; <b>${_lkList.length}</b> holder${_lkList.length===1?'':'s'} &middot; <b>${_lkN}</b> lock${_lkN===1?'':'s'}${_lkList.length>3?`<span class="scr">&#9662; ${_lkList.length-3} more</span>`:''}<span class="hint">${_btLkSel?'Click again to clear highlight':'Click a row to highlight its bookings &middot; &#9881; to manage'}</span></div>`:''}</div>`;
 
   const _btPendN = Object.keys(pendGroups).reduce((n,k)=>n+pendGroups[k].length,0);
-  const _btNotice = `<div class="bt-c bt-notice"><div class="bt-ct">Notice<span class="sp"></span><span class="bt-cnt">ของวันนี้</span></div>
+  const _btNotice = `<div class="bt-c bt-notice"><div class="bt-ct">Notice<span class="sp"></span><span class="bt-cnt">today</span></div>
     <div class="bt-ncb">
       ${_unassignBar}
-      ${_btPendN>0?`<div class="bt-nc warn"><span class="i">&#9873;</span><span><b>รออนุมัติ</b> &middot; ${_btPendN} booking<i>ยังไม่นับในยอดทริป &middot; ยังไม่เข้าใบงานรถ/เรือ</i></span></div>`:''}
+      ${_btPendN>0?`<div class="bt-nc warn"><span class="i">&#9873;</span><span><b>Pending approval</b> &middot; ${_btPendN} booking<i>Not counted in trip totals &middot; not on van/boat job orders yet</i></span></div>`:''}
       ${_ckBar}
-      ${(!_unassignBar && !_btPendN && !_ckBar)?'<div class="bt-nc ok"><span class="i">&#10003;</span><span><b>ไม่มีอะไรค้าง</b><i>จัดรถ จัดเรือ และ Re-confirm ครบแล้ว</i></span></div>':''}
+      ${(!_unassignBar && !_btPendN && !_ckBar)?'<div class="bt-nc ok"><span class="i">&#10003;</span><span><b>Nothing pending</b><i>Vans, boats and re-confirm are all done</i></span></div>':''}
     </div></div>`;
 
   const header = `
     <div class="bt-pkh">
       <div class="bt-hdtop">
-        <button class="bt-arw" onclick="bkV2Tab2DateShift(-1)" title="วันก่อนหน้า">&lsaquo;</button>
+        <button class="bt-arw" onclick="bkV2Tab2DateShift(-1)" title="Previous day">&lsaquo;</button>
         <span class="bt-dnum">${esc(String(new Date(date+'T00:00').getDate()))}</span>
         <span><span class="bt-dwk">${esc(new Date(date+'T00:00').toLocaleDateString('en-GB',{weekday:'long'}))}</span>
           <label class="bt-dmo">${esc(new Date(date+'T00:00').toLocaleDateString('en-GB',{month:'long',year:'numeric'}))}
             <input type="date" value="${date}" onclick="event.stopPropagation();try{this.showPicker()}catch(e){}" onchange="if(this.value)bkV2Tab2PickDay(this.value)"></label></span>
-        ${_isToday?'<span class="bt-today">วันนี้</span>':`<button class="bt-today gh" onclick="bkV2Tab2Today()">ไปวันนี้</button>`}
-        <button class="bt-arw" onclick="bkV2Tab2DateShift(1)" title="วันถัดไป">&rsaquo;</button>
+        ${_isToday?'<span class="bt-today">TODAY</span>':`<button class="bt-today gh" onclick="bkV2Tab2Today()">Go to today</button>`}
+        <button class="bt-arw" onclick="bkV2Tab2DateShift(1)" title="Next day">&rsaquo;</button>
         <span class="bt-brand">${_btSelFam?esc(_btSelFam.name):'LOVE ANDAMAN'}</span>
       </div>
       <div class="bt-hgrid">
@@ -82459,8 +82467,8 @@ function bkV2RenderTab2(){
     const _pband = `<tr class="t2-pband" style="--pc:${_pbCol}"><td colspan="${COLN}"><div class="pw">`
       + `<span class="pd"></span><span class="pn">${esc(route?.name || rid)}</span>`
       + `<span class="pt">${esc(dep)}${_pbPier?(' &middot; '+esc(_pbPier)):''}</span>`
-      + (_pbNB?`<span class="pb">${_pbNB} ลำ</span>`:'')
-      + `<span class="ps">${_pbBk}/${_pbCap}<em class="${_pbCls}">${_pbAv<=0?'เต็ม':('ว่าง '+_pbAv)}</em></span>`
+      + (_pbNB?`<span class="pb">${_pbNB} boat${_pbNB===1?'':'s'}</span>`:'')
+      + `<span class="ps">${_pbBk}/${_pbCap}<em class="${_pbCls}">${_pbAv<=0?'full':(_pbAv+' free')}</em></span>`
       + `</div></td></tr>`;
     const zoneTable = zoneBlocks ? `
         <div class="t2-tblscroll">
@@ -82753,14 +82761,17 @@ function bkV2RenderTab2(){
             <div class="t2-boats">${headBoats}</div>
           </div>
         </div>
-          ${_addonInStrip?'':addonBar}
+          ${/* §btFix · แถบ Add-ons กับ Prep ย้ายไปอยู่ตัวกาง "ไกด์ · อาหารรายลำ"
+                ท้ายตารางแล้ว (ตัวเดียวกัน แยกรายลำด้วย) · ไม่ต้องมีสองที่ */''}
           ${chtrStrip}
           ${retAlertBar}
           ${/* §btBand · ตัวกางไกด์/อาหารรายลำ ย้ายไปท้ายตาราง (ดูตอนต้องใช้ ไม่ใช่ทุกครั้ง) */''}
-          ${(prepGroups.length && !_prepInStrip)?`<div class="t2-prepbar"><span class="t2-preplbl">Prep</span>${prepGroups.join('<span class="t2-prepdiv"></span>')}</div>`:''}
+          ${''}
         </div>
         <div class="t2-listcard">
-        ${boatMode?`<div class="t2-boatpin">${boatStrip}${boatSelStrip}</div>`:''}
+        ${/* §btFix · โหมดจัดเรือ · เรือทุกลำกับความจุอยู่ในกรอบแดง "เรือที่วิ่ง" บนหัวแล้ว
+              ตัวที่ใช้ทำงานจริงคือคอลัมน์ BOAT รายแถว + ปุ่ม auto บนหัวคอลัมน์ */''}
+        ${''+(boatSelStrip?'':'')}
         ${vanStrip}
         ${rcStrip}
         ${/* §btSlim · แถบล็อคที่นั่งรายทริปถูกยกไปอยู่การ์ด Seat Lock บนหัวหน้าแล้ว
@@ -83083,7 +83094,14 @@ function bkV2RenderTab2(){
     .t2-zdot{width:8px;height:8px;border-radius:50%}
     .t2-zn{font-size:12px;font-weight:700}
     .t2-zc{font-size:11px;color:var(--ink-soft);font-family:'DM Mono',monospace}
-    .t2-tblscroll{overflow-x:auto;overflow-y:visible;position:relative;z-index:0}
+    /* ══ §btStick · กล่องตารางมีตัวเลื่อนของตัวเองทั้งสองแกน ═══════════════════
+       หัวตารางกับคอลัมน์ที่แช่แข็งไว้จะตรึงกับกล่องนี้ · ตรึงกับหน้าไม่ได้เพราะ
+       ตารางกว้างกว่าจอ ต้องมีตัวเลื่อนแนวนอน แล้ว overflow กลืน sticky ไปหมด
+       ความสูงกล่อง = ความสูงจอ ลบหัวที่ตรึงไว้ · ตั้งจาก JS หลัง render
+       (วัดจริงเพราะหัวสูงไม่เท่ากันตามความกว้างจอและจำนวนทริป)                */
+    .t2-tblscroll{overflow:auto;position:relative;z-index:0;
+      max-height:var(--bt-tblh,68vh);overscroll-behavior:contain;
+      -webkit-overflow-scrolling:touch}
     table.t2-mtbl{border-collapse:collapse;width:100%;min-width:1180px;font-size:12px}
     /* §t2Hdr · หัวตารางเดิมเป็นเทาอ่อน 9px บนพื้นขาว · จางกว่าเนื้อตารางที่มันกำกับอยู่
        ตารางนี้กว้างกว่าจอต้องเลื่อนแนวนอน คนเลื่อนไปกลางตารางแล้วไม่รู้ว่าคอลัมน์ไหนคืออะไร
@@ -83214,7 +83232,9 @@ function bkV2RenderTab2(){
     /* ══ §btHead · หัวหน้า By-trip ══════════════════════════════════════════
        ตรึงทั้งก้อนเหมือนหน้าท่า · ค่า top ของชั้นล่าง ๆ ถูกตั้งจาก JS หลัง render
        (--bt-hd-h) เพราะความสูงจริงเปลี่ยนตามความกว้างจอ                        */
-    .bt-pkh{position:sticky;top:-22px;z-index:60;background:var(--btband,#E9E7E3);
+    /* §btStick · เดิม top:-22px คือให้หัวไถขึ้นไป 22px ก่อนค่อยหยุด · ทำให้ขอบบน
+       ไม่ตรงกับขอบบนของแถบเมนูซ้าย · ชิดขอบเลย */
+    .bt-pkh{position:sticky;top:0;z-index:60;background:var(--btband,#E9E7E3);
       padding:10px 6px 12px;margin-bottom:0}
     .bt-hdtop{position:relative;display:flex;align-items:center;gap:13px;padding:0 8px 10px}
     .bt-arw{width:27px;height:27px;flex:none;border:1px solid rgba(0,0,0,.13);background:#fff;border-radius:9px;
@@ -83268,7 +83288,12 @@ function bkV2RenderTab2(){
     .bt-seg-b.on{background:#22262e;color:#fff}
     .bt-clear{margin-left:auto;font-size:10.5px;font-weight:700;color:#A32D2D;background:#fff;
       border:1px solid #E6C9C3;border-radius:7px;padding:4px 9px;cursor:pointer;font-family:inherit}
-    .bt-pgbody{padding-bottom:8px;overflow:auto;min-height:0;max-height:none}
+    /* §btFix · ต่อไปทริปจะเยอะขึ้น · ถ้าปล่อยให้การ์ดยืดตามจำนวนทริป หัวจะสูงขึ้น
+       เรื่อย ๆ แล้วกินพื้นที่ตารางไปหมด (แถมชั้นที่ตรึงต้องคำนวณใหม่ทุกครั้ง)
+       ล็อกความสูงไว้ที่ราว 6 บรรทัด เกินนั้นไถในการ์ดเอง */
+    .bt-pgbody{padding-bottom:8px;overflow:auto;min-height:0;max-height:196px}
+    .bt-tgl{max-height:196px}
+    .bt-blist{max-height:196px;overflow:auto}
     .bt-pgf{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:9px;margin:0 8px 5px;
       box-shadow:inset 4px 0 0 var(--e);cursor:pointer}
     .bt-pgf.on{box-shadow:inset 4px 0 0 var(--e),0 0 0 1.5px var(--e)}
