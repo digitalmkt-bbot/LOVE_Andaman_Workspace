@@ -18,6 +18,10 @@
   function bust(url){ return url+(url.indexOf('?')<0?'?_=':'&_=')+Date.now(); }
   function sx(method,url,body,ct){ var x=new XMLHttpRequest(); try{ x.open(method,method==='GET'?bust(url):url,false); if(ct) x.setRequestHeader('Content-Type',ct); x.send(body!=null?body:null);}catch(e){return{status:0};} var j=null; try{j=JSON.parse(x.responseText);}catch(e){} return {status:x.status,json:j,text:x.responseText}; }
   function fmt(s){ try{ return new Date(s).toLocaleString('th-TH',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }catch(e){ return s||''; } }
+  /* §laStamp · เวลาที่ข้อมูลอัพเดตล่าสุดเคยอยู่แต่ใน LASTBY ซึ่งเป็นตัวแปรใน IIFE นี้
+     หน้าอื่นเลยเอาไปโชว์ไม่ได้ · ปล่อยค่าดิบขึ้น window ไว้ให้หน้าที่อยากบอกความสดของข้อมูล */
+  function _laStamp(o){ try{ if(o && o.updated_at){
+    window.LA_UPDATED_AT = o.updated_at; window.LA_UPDATED_BY = o.updated_by || ''; } }catch(e){} }
 
   // sync GET with quick retry — WebKit (Safari iPad/macOS) fails sync XHR where Chrome doesn't;
   // a transient 0/5xx must NOT silently disable cloud sync (that rendered an empty app with no hint)
@@ -115,7 +119,7 @@
         if(x.status!==200){ fail('status '+x.status); return; }
         var j=JSON.parse(x.responseText);
         if(typeof j.data!=='string' || j.data.length<2){ fail('empty'); return; }
-        VER=j.version||0; LASTBY=j.updated_by?(j.updated_by+' · '+fmt(j.updated_at)):'';
+        VER=j.version||0; LASTBY=j.updated_by?(j.updated_by+' · '+fmt(j.updated_at)):''; _laStamp(j);
         try{ BASE=JSON.parse(j.data); }catch(e){ BASE={}; }
         _orig(LS, j.data); _laMark(VER);
         _syncReady=true; _dirty=false; try{ clearTimeout(_t); }catch(e){}   // §syncGate · ข้อมูลจริงถึงแล้วค่อยเปิดเซฟ · ทิ้งงานค้างที่เกิดตอน state ยังว่าง
@@ -130,7 +134,7 @@
   }
   if(ld.status!==200 || !ld.json){ _laAsyncLoad(ld.status); }
   if(ld.status===200 && ld.json){
-    VER=ld.json.version||0; LASTBY = ld.json.updated_by? (ld.json.updated_by+' · '+fmt(ld.json.updated_at)) : '';
+    VER=ld.json.version||0; LASTBY = ld.json.updated_by? (ld.json.updated_by+' · '+fmt(ld.json.updated_at)) : ''; _laStamp(ld.json);
     var _srvStr=(typeof ld.json.data==='string' && ld.json.data.length>2)?ld.json.data:'';
     var _loc=localStorage.getItem(LS), _locObj=null, _srvObj=null;
     try{ if(_loc && _loc.length>2) _locObj=JSON.parse(_loc); }catch(e){}
@@ -311,7 +315,7 @@
       var ok = window._laReloadData ? window._laReloadData() : false;
       if(!ok){ _laReload(); return; }                             // in-place failed → fall back to full reload
       if(window._laRerender) window._laRerender();
-      LASTBY = j.updated_by ? (j.updated_by+' · '+fmt(j.updated_at)) : LASTBY;
+      LASTBY = j.updated_by ? (j.updated_by+' · '+fmt(j.updated_at)) : LASTBY; _laStamp(j);
       var bn=document.getElementById('la-refresh'); if(bn){ bn.remove(); _refreshShown=false; }
       try{ badgeTick(); }catch(e){}
       if(_b2cNew.length>0){ try{ _laB2CAlert(_b2cNew); }catch(e){} }
@@ -94313,6 +94317,18 @@ function ppPierRank(p){
   return 999;
 }
 function ppPierLbl(p){ return ppPierMeta(p).n||(p||'ไม่ระบุท่า'); }
+/* ความสดของข้อมูล · เวลาที่ก้อนข้อมูลอัพเดตล่าสุด (app_state.updated_at จาก /api/load)
+   ไม่ใช่เวลาที่เพิ่งวาดหน้า · สองอย่างนี้ต่างกัน และคนสั่งของต้องรู้ว่าเลขที่เห็นเก่าแค่ไหน
+   เปิดแบบไม่มีเซิร์ฟเวอร์จะไม่มีค่า · กรณีนั้นบอกตรง ๆ ว่าเป็นเวลาที่แสดงผล ไม่ใช่เวลาข้อมูล */
+function ppUpdatedAt(){
+  var f=function(d){ try{ return d.toLocaleString('th-TH',
+      {day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+    catch(_){ return String(d); } };
+  var iso=null, by='';
+  try{ iso=window.LA_UPDATED_AT||null; by=window.LA_UPDATED_BY||''; }catch(_){}
+  if(iso){ var d=new Date(iso); if(!isNaN(d.getTime())) return {when:f(d), by:by, live:true}; }
+  return {when:f(new Date()), by:'', live:false};
+}
 /* สีโปรแกรมมีทั้งอ่อนและเข้ม · เลือกสีตัวหนังสือตามความสว่างของพื้น ไม่งั้นบางแถบอ่านไม่ออก */
 function ppInkOn(hex){
   var h=String(hex||'').replace('#','');
@@ -94525,6 +94541,9 @@ function ppCSS(){ var S='#prpo-host'; return ''
  +S+' .pp-hd{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:13px}'
  +S+' .pp-hd h1{margin:0;font-size:21px;font-weight:800;letter-spacing:-.01em}'
  +S+' .pp-hd p{margin:4px 0 0;font-size:12px;color:#6b7280}'
+ +S+' .pp-stamp{margin:3px 0 0;font-size:11.5px;color:#94A3B8}'
+ +S+' .pp-stamp b{font-family:"DM Mono",ui-monospace,monospace;font-weight:700;color:#64748B}'
+ +S+' .pp-stamp .nolive{color:#B4560A;font-weight:600}'
  +S+' .pp-ctl{display:flex;gap:5px;align-items:center;flex-wrap:wrap}'
  +S+' .pp-btn{border:1px solid var(--gl);background:#fff;color:#334155;border-radius:3px;padding:6px 11px;'
    +'font:600 11.5px inherit;font-family:inherit;cursor:pointer;white-space:nowrap}'
@@ -94757,7 +94776,14 @@ function renderPrPo(){
   /* ── หัวเรื่อง + ตัวควบคุมช่วงวัน ── */
   var head='<div class="pp-hd"><div><h1>PR/PO Dashboard</h1>'
     +'<p>แยกตามท่า &rarr; โปรแกรม &rarr; เรือ &middot; จำนวนคน + รายการอาหารพิเศษ &middot; '+e(ppRangeLbl())
-    +' <span style="color:#b9beb6">('+days+' วัน)</span></p></div>'
+    +' <span style="color:#b9beb6">('+days+' วัน)</span></p>'
+    + (function(){ var U=ppUpdatedAt();
+        return '<p class="pp-stamp">'+(U.live?'ข้อมูลอัพเดตเวลา ':'แสดงผลเมื่อ ')
+          +'<b>'+e(U.when)+'</b>'
+          +(U.by?(' &middot; โดย '+e(U.by)):'')
+          +(U.live?'':' <span class="nolive">ยังไม่ได้ข้อมูลจากเซิร์ฟเวอร์</span>')
+          +'</p>'; })()
+    +'</div>'
     +'<div class="pp-ctl pp-noprint">'
       /* วันนี้ มาก่อนเพื่อน · หน้านี้เปิดมาเป็นวันนี้ ปุ่มแรกจึงควรเป็นตัวที่บอกค่าเริ่มต้น */
       +'<button class="pp-btn'+(ppRangeIs('d1')?' on':'')+'" onclick="ppQuick(1)">วันนี้</button>'
