@@ -59124,17 +59124,45 @@ function tsCotPersist(){
 function tsCotGet(bkId,date){ return TS_COT[_tsKey(bkId,date)]||null; }
 // ค่าที่ตั้งไว้ตอนเปิด booking · ใช้เป็นปุ่มแนะนำ ไม่ได้ตัดสินแทน
 function tsCotSugMode(M){ return (M && M.handling==='separate') ? 'none' : 'full'; }
+/* §cotNoCol (2026-09-04) · COT ของคนที่ไม่ได้เดินทาง
+   เดิมมีให้เลือกแค่ หักทั้งก้อน / บางส่วน / ไม่หัก / โอนออก — ทั้งสี่แบบแปลว่า
+   "เงินอยู่ในมือเราแล้ว" ทั้งนั้น · พอลูกค้าไม่มา เงินไม่เคยเข้ามา คนปิดวันจึงกด
+   อะไรไม่ได้เลย แล้วยอดค้างลอยข้ามวันไปเรื่อย ๆ โดยไม่มีที่บันทึกว่าทำไม
+   เพิ่มทางเลือก "เก็บไม่ได้" พร้อมช่องเหตุผล · เหตุผลเติมให้จากที่หน้างานกดไว้แล้ว
+   จะได้ไม่ต้องพิมพ์ซ้ำ และเหตุผลในระบบตรงกันทั้งใบปิดวันกับหน้าเช็คอิน       */
+function tsCotWhySug(r){
+  if(!r) return '';
+  var bits=[];
+  (r.events||[]).forEach(function(x){
+    if(!x || !(+x.pax||0)) return;
+    var lb=(typeof ckReasonLabel==='function')?ckReasonLabel(x.reasonCode):'';
+    var t=(x.type==='cxl')?'ยกเลิกหน้างาน':'ไม่มา (No-show)';
+    var one=t+' '+(+x.pax||0)+' คน'+(lb?(' · '+lb):'')
+      +((x.note&&String(x.note).trim())?(' · '+String(x.note).trim()):'');
+    if(bits.indexOf(one)<0) bits.push(one);
+  });
+  if(!bits.length && r.travelled<=0) bits.push('ลูกค้าไม่ได้เดินทาง');
+  return bits.join(' · ');
+}
+/* เหตุผลเก็บลงช่อง ref · ห้ามเพิ่มช่องใหม่ใน TS_COT
+   field_mapping ของ ts_cot มีแค่ mode/deduct/payout/ref/by/at — อะไรที่ไม่อยู่ในนั้น
+   หายเงียบตอนขึ้นเซิร์ฟเวอร์ · โหมด nocol ไม่มีเลขโอนให้อ้างอิงอยู่แล้ว ช่อง ref จึงว่าง */
 function _tsCotNum(v){ return Math.max(0, Math.round(parseFloat(String(v==null?'':v).replace(/[^0-9.]/g,''))||0)); }
 function _tsCotInp(id,w){ var el=document.getElementById('ts-cot'+w+'-'+id); return el?_tsCotNum(el.value):0; }
 function _tsCotRefVal(id){ var el=document.getElementById('ts-cotr-'+id); return el?String(el.value||''):''; }
-function tsCotPick(bkId,date,mode,cot){
+function tsCotPick(bkId,date,mode,cot,why){
   if(typeof laGuardEdit==='function' && !laGuardEdit('operations')) return;   // §tsCotSave
   var k=_tsKey(bkId,date), cur=TS_COT[k]||{}, d=0, p=0;
   cot=+cot||0;
   if(mode==='full'){ d=cot; }
   else if(mode==='payout'){ p=cot; }
   else if(mode==='part'){ d=(cur.mode==='part')?_tsCotInp(bkId,'d'):cot; p=(cur.mode==='part')?_tsCotInp(bkId,'p'):0; }
-  TS_COT[k]={ mode:mode, deduct:d, payout:p, ref:(_tsCotRefVal(bkId)||cur.ref||''), by:ckMe(), at:new Date().toISOString() };
+  /* §cotNoCol · เก็บไม่ได้ = ไม่มีเงินให้หักหรือโอน · เหลือแค่เหตุผล
+     เหตุผลเก็บลงช่อง ref ที่ map ไว้แล้ว (โหมดนี้ไม่มีเลขโอนให้อ้างอิง ช่องจึงว่าง)
+     เติมจากที่หน้างานกดไว้ให้เลย ถ้าคนกดยังไม่ได้พิมพ์อะไร จะได้ไม่ต้องพิมพ์ซ้ำ */
+  var rf=_tsCotRefVal(bkId)||cur.ref||'';
+  if(mode==='nocol' && !rf){ try{ rf=decodeURIComponent(why||''); }catch(_){ rf=String(why||''); } }
+  TS_COT[k]={ mode:mode, deduct:d, payout:p, ref:rf, by:ckMe(), at:new Date().toISOString() };
   tsCotPersist(); tsAfter();
 }
 function tsCotAmt(bkId,date){
@@ -59149,22 +59177,39 @@ function tsCotRefSave(bkId,date){ if(typeof laGuardEdit==='function' && !laGuard
 function tsCotClear(bkId,date){ if(typeof laGuardEdit==='function' && !laGuardEdit('operations')) return;   /* §tsCotSave */
   delete TS_COT[_tsKey(bkId,date)]; tsCotPersist(); tsAfter(); }
 // ช่อง "จัดการ" ของหนึ่งใบ · ใช้ในตารางเงินหน้างาน (ส่วนที่ 3)
-function tsCotCell(b, M, date, money, e){
+function tsCotCell(b, M, date, money, e, r){
   var cot=+((M&&M.cot)||0);
   if(!(cot>0)) return '<span style="color:var(--zn400)">&mdash;</span>';
-  var id=b.id, c=tsCotGet(id,date), sug=tsCotSugMode(M), mode=c?c.mode:'';
+  /* §cotNoCol · ใบที่ไม่มีใครเดินทางเลย เงินไม่เคยเข้ามา · แนะนำ "เก็บไม่ได้" ให้ตั้งแต่แรก */
+  var noGo=!!(r && (+r.travelled||0)<=0);
+  var sugWhy=(typeof tsCotWhySug==='function')?tsCotWhySug(r):'';
+  var id=b.id, c=tsCotGet(id,date), sug=(noGo?'nocol':tsCotSugMode(M)), mode=c?c.mode:'';
   var ded=c?(+c.deduct||0):0, pay=c?(+c.payout||0):0, over=(ded+pay)>cot, keep=cot-ded-pay;
-  var MODES=[['full','หักทั้งก้อน'],['part','บางส่วน'],['none','ไม่หัก'],['payout','โอนออก']];
+  var MODES=[['full','หักทั้งก้อน'],['part','บางส่วน'],['none','ไม่หัก'],['payout','โอนออก'],['nocol','เก็บไม่ได้']];
+  var _wq=encodeURIComponent(sugWhy||'');
   var h=MODES.map(function(mm){
     var on=(mode===mm[0]), isSug=(!mode && mm[0]===sug);
-    return '<button class="ts-db'+(on?' pick':'')+(isSug?' sug':'')+'"'
-      +' onclick="tsCotPick(\''+id+'\',\''+date+'\',\''+mm[0]+'\','+cot+')">'+mm[1]+'</button>';
+    return '<button class="ts-db'+(on?' pick':'')+(isSug?' sug':'')+(mm[0]==='nocol'?' nocol':'')+'"'
+      +' onclick="tsCotPick(\''+id+'\',\''+date+'\',\''+mm[0]+'\','+cot+',\''+_wq+'\')">'+mm[1]+'</button>';
   }).join('');
   if(mode==='part'){
     h+='<div class="ts-cotp"><span>หัก</span>'
       +'<input id="ts-cotd-'+id+'" class="ts-cotamt" value="'+ded+'" onchange="tsCotAmt(\''+id+'\',\''+date+'\')">'
       +'<span>โอนออก</span>'
       +'<input id="ts-cotp-'+id+'" class="ts-cotamt" value="'+pay+'" onchange="tsCotAmt(\''+id+'\',\''+date+'\')"></div>';
+  }
+  /* §cotNoCol · เก็บไม่ได้ · ไม่มีเงินให้อ้างอิงเลขโอน มีแต่เหตุผลที่ต้องบันทึก */
+  if(mode==='nocol'){
+    h+='<input id="ts-cotr-'+id+'" class="ts-note" type="text" value="'+e(c.ref||'')+'"'
+      +' placeholder="เก็บไม่ได้เพราะอะไร" onchange="tsCotRefSave(\''+id+'\',\''+date+'\')">';
+    h+='<div class="ts-cotsum"><b style="color:var(--rs700)">&#10007; เก็บไม่ได้ '+money(cot)+'</b>'
+      +(c.ref
+         ? (' <span style="color:var(--zn700)">&middot; '+e(c.ref)+'</span>')
+         : ' <span style="color:var(--am700);font-weight:700">&middot; ยังไม่ระบุเหตุผล</span>')
+      +' <span style="color:var(--zn400)">&middot; '+e(c.by||'')+(c.at?(' '+e(String(c.at).slice(5,10))):'')+'</span>'
+      +' <a onclick="tsCotClear(\''+id+'\',\''+date+'\')" style="color:var(--rs700);cursor:pointer;margin-left:5px">ล้าง</a>'
+      +'</div>';
+    return h;
   }
   if(mode){
     h+='<input id="ts-cotr-'+id+'" class="ts-note" type="text" value="'+e(c.ref||'')+'"'
@@ -59180,7 +59225,8 @@ function tsCotCell(b, M, date, money, e){
           +' <a onclick="tsCotClear(\''+id+'\',\''+date+'\')" style="color:var(--rs700);cursor:pointer;margin-left:5px">ล้าง</a>')
       +'</div>';
   } else {
-    h+='<div class="ts-cotsum" style="color:var(--am700);font-weight:700">&#9888; ยังไม่ตัดสิน</div>';
+    h+='<div class="ts-cotsum" style="color:var(--am700);font-weight:700">&#9888; '
+      +(noGo?'ลูกค้าไม่ได้เดินทาง · ต้องระบุว่าเก็บไม่ได้เพราะอะไร':'ยังไม่ตัดสิน')+'</div>';
   }
   return h;
 }
@@ -59287,6 +59333,9 @@ function tsCSS(){ var S='#travelsum-host'; return ''
  +S+' .ts-tbl td{padding:8px 11px;border-bottom:1px solid var(--zn100);vertical-align:top}'
  +S+' .ts-tbl tbody tr:last-child td{border-bottom:none}'
  +S+' .ts-tbl tbody tr:hover td{background:var(--lm50)}'
+ /* §cotNoCol · ปุ่ม "เก็บไม่ได้" เป็นการปิดยอดโดยไม่ได้เงิน · ต้องดูต่างจากปุ่มที่แปลว่าได้เงิน */
+ +S+' .ts-db.nocol{border-color:var(--rs200);color:var(--rs700)}'
+ +S+' .ts-db.nocol.pick{background:var(--rs700);border-color:var(--rs700);color:#fff}'
  /* §tsStrand · แถวที่เลื่อนวันออกไปแล้ว · จางลงแต่ยังอ่านครบ + ขีดม่วงหน้าแถว
     ต้องแยกออกจากเคสที่ยังรอตัดสินให้ชัด ไม่งั้นคนปิดวันนึกว่ายังมีงานค้าง */
  +S+' .ts-tbl tbody tr.ts-moved>td{background:#FBFAFD;color:var(--zn500)}'
@@ -62177,13 +62226,15 @@ function renderTravelSum(){
     sumSale+=m.S.tot; nSale+=m.S.n; sumSaleDue+=m.S.due; });
 
   // §tsCashNet · แยกเงินที่ต้องจ่ายออกตามคำตัดสิน COT ออกจากยอดที่รับเข้า
-  var sumPayout=0, sumDeduct=0, sumCotAll=0, nCotLeft=0;
+  var sumPayout=0, sumDeduct=0, sumCotAll=0, nCotLeft=0, sumCotNo=0, nCotNo=0;
   mRows.forEach(function(m){
-    if(m.cxl) return;                                  // §cot · ไม่เคยได้เงินมา ไม่มีอะไรให้ตัดสิน
     var v=+((m.M&&m.M.cot)||0); if(!(v>0)) return;
     sumCotAll+=v;
     var c=(typeof tsCotGet==='function')?tsCotGet(m.r.b.id,date):null;
+    /* §cotNoCol · ใบที่ไม่มีใครเดินทางเคยถูกข้ามไปเลย · ยอดจึงหายไปจากสรุป
+       ทั้งที่ในระบบยังค้างอยู่ · ตอนนี้เข้ายอดรวม แล้วแยกไปกอง "เก็บไม่ได้" */
     if(!c){ nCotLeft++; return; }
+    if(c.mode==='nocol'){ sumCotNo+=v; nCotNo++; return; }
     var d=+c.deduct||0, p=+c.payout||0;
     if(d+p>v){ nCotLeft++; return; }     // หัก+โอนออก เกินยอด · ยังถือว่าตัวเลขไม่นิ่ง
     sumDeduct+=d; sumPayout+=p;
@@ -62405,9 +62456,9 @@ function renderTravelSum(){
               ? ('<div class="ts-cotn">'+e(String(m.M.note).trim())+'</div>')
               : '<div class="ts-cotn empty">ไม่มีโน้ต</div>')
           : '<span style="color:var(--zn400)">—</span>')+'</td>'
-      +'<td class="ts-cotcol">'+(m.cxl
-          ? '<span style="color:var(--zn400);font-size:10.5px">ไม่ต้องตัดสิน &middot; เงินไม่ได้เข้ามา</span>'
-          : tsCotCell(b, m.M, date, money, e))+'</td>'
+      /* §cotNoCol · เดิมตัดจบให้เองว่า "ไม่ต้องตัดสิน" · แต่ยอด COT ยังค้างอยู่ในระบบ
+         และไม่มีที่บันทึกว่าเก็บไม่ได้เพราะอะไร · ให้กดปิดพร้อมเหตุผลได้ */
+      +'<td class="ts-cotcol">'+tsCotCell(b, m.M, date, money, e, m.r)+'</td>'
       +'<td class="c">'+(m.cxl
         ? ('<span class="ts-chip r">'+m.cxlKind+'</span><div class="ts-tel" style="margin-top:3px">ไม่นับเข้ายอดวันนี้</div>')
         : m.due>0
@@ -62434,6 +62485,7 @@ function renderTravelSum(){
           return '<span class="ts-chip n" style="font-size:11px;padding:5px 12px">COT '+money(sumCotAll)+'</span>'
             +(sumDeduct>0?('<span class="ts-chip b" style="font-size:11px;padding:5px 12px">หักบิล '+money(sumDeduct)+'</span>'):'')
             +(sumPayout>0?('<span class="ts-chip p" style="font-size:11px;padding:5px 12px">โอนออก '+money(sumPayout)+'</span>'):'')
+            +(nCotNo?('<span class="ts-chip r" style="font-size:11px;padding:5px 12px" title="ลูกค้าไม่ได้เดินทาง · เงินไม่เคยเข้ามา · ปิดพร้อมเหตุผลแล้ว">เก็บไม่ได้ '+money(sumCotNo)+' &middot; '+nCotNo+' ใบ</span>'):'')
             +(nCotLeft?('<span class="ts-chip a" style="font-size:11px;padding:5px 12px">COT ยังไม่ตัดสิน '+nCotLeft+' ใบ</span>')
                   :('<span class="ts-chip g" style="font-size:11px;padding:5px 12px">COT ตัดสินครบ</span>'));
         })()
