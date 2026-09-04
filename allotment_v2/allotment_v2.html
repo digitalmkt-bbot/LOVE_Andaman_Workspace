@@ -51903,8 +51903,15 @@ function pcE(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,
 /* หัวคนของลำนั้นวันนั้น · แยกไทย/ต่างชาติ และ ผญ/เด็ก/INF
    คนที่ไม่ระบุสัญชาติ นับเป็นต่างชาติไว้ก่อน · คิดสูงไว้ดีกว่าคิดต่ำแล้วเงินขาด
    ใบที่ยกเลิกทั้งใบหน้างาน (pckVoidInfo) ไม่นับ · ไม่ได้ขึ้นเกาะจริง */
+/* §pcReal (2026-09-04) · ค่าอุทยานจ่ายตาม "หัวที่ขึ้นเรือจริง" ไม่ใช่หัวที่จองมา
+   เดิมอ่าน t.pax ตรง ๆ ไม่เคยแตะเช็คอินเลย · ส่วน pxPax ของหน้า P&L ใช้
+   pckOnBoard ซึ่งเดินตามเช็คอิน · ระบบจึงมีสองคำตอบสำหรับคำถามเดียวกัน
+   และคนหน้าท่าต้องมาไล่ลบเองทุกครั้งที่มีคนไม่มา
+   ย้ายมาใช้ pckOnBoard ตัวเดียวกับ P&L · หัวรวมมาจากตัวนั้น แล้วกระจายลง
+   ช่องสัญชาติตามสัดส่วนที่จองมา เพราะไม่มีทางรู้ว่าคนที่หายไปสัญชาติไหน   */
 function pcPax(date,bid,pier){
   var o={ad_th:0,chd_th:0,inf_th:0,foc_th:0,ad_fr:0,chd_fr:0,inf_fr:0,foc_fr:0,tot:0};
+  var exact=0;
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=(typeof ckTripOn==='function')?ckTripOn(b,date):null; if(!t) return;
@@ -51914,14 +51921,25 @@ function pcPax(date,bid,pier){
     if((O.boatId||t.charterBoatId||'')!==bid) return;
     if(typeof pckVoidInfo==='function' && pckVoidInfo(b,date,t)) return;
     var px=t.pax||{};
+    var booked=(typeof ckBookedPax==='function')?ckBookedPax(t):0;
+    var real=(typeof pckOnBoard==='function')?pckOnBoard(b,date,booked):booked;
+    if(!real) return;                       /* ทั้งใบไม่ได้ไป · ไม่ต้องซื้อตั๋วให้ */
+    var ratio=booked?(real/booked):0;
+    exact+=real;
     /* §pcFix · FOC มีแยกสัญชาติเหมือน ad/chd/inf · ช่องเปล่า ๆ ที่ไม่ระบุสัญชาติ (px.ad, px.foc)
        เททิ้งไปฝั่งต่างชาติเหมือนเดิม · คิดสูงไว้ก่อนดีกว่าคิดต่ำแล้วเงินขาด */
     ['ad','chd','inf','foc'].forEach(function(k){
-      o[k+'_th'] += (+px[k+'_th']||0);
-      o[k+'_fr'] += (+px[k+'_fr']||0) + (+px[k]||0);
+      o[k+'_th'] += (+px[k+'_th']||0) * ratio;
+      o[k+'_fr'] += ((+px[k+'_fr']||0) + (+px[k]||0)) * ratio;
     });
   });
-  PC_PK.forEach(function(k){ o.tot+=o[k]; });
+  /* ปัดทีเดียวตอนท้าย · ปัดรายใบแล้วบวกกัน ยอดรวมจะเพี้ยนจากหัวจริง
+     เศษที่เหลือยกให้ฝั่งต่างชาติ · ตั๋วฝั่งนั้นแพงกว่า เตรียมเงินเผื่อดีกว่าไปขาดที่ด่าน */
+  var sum=0;
+  PC_PK.forEach(function(k){ o[k]=Math.round(o[k]); sum+=o[k]; });
+  var diff=Math.round(exact)-sum;
+  if(diff!==0){ o.ad_fr=Math.max(0,o.ad_fr+diff); sum=0; PC_PK.forEach(function(k){ sum+=o[k]; }); }
+  o.tot=sum;
   return o;
 }
 var PC_PK=['ad_th','chd_th','inf_th','foc_th','ad_fr','chd_fr','inf_fr','foc_fr'];
@@ -52548,7 +52566,7 @@ function pcSheetLT(pier){
        +'<td class="v">'+gj+'</td><td class="v">'+gc+'</td>'
        +'<td class="v">'+guj+'</td><td class="v">'+guc+'</td>'
        +'<td class="r">'+pcMoney(gm)+'</td><td></td></tr></tfoot></table></div>'
-   +'<div class="pc-note"><b>ช่องขาว = ระบบอ่านให้</b> จอย/เหมามาจากใบจอง · '
+   +'<div class="pc-note"><b>ช่องขาว = ระบบอ่านให้</b> จอยเป็นหัวที่ขึ้นเรือจริง (หักคนไม่มาแล้ว) · เหมาเป็นลำตามที่สั่งไว้ · '
      +'<b>ช่องฟ้ากับช่องเหลือง = คนหน้าท่ากรอกเอง</b> เพราะหน้างานมักไม่ตรงกับที่จองมา — '
      +'จอย 3 คนอาจลงลำเดียว หรือเหมา 2 ลำแต่ใช้จริงลำเดียว · '
      +'<b>ใช้จริงแยกจอย/เหมา</b> เพื่อดูย้อนหลังได้ว่าที่ต่างจากใบจองคือฝั่งไหน · '
@@ -52581,16 +52599,16 @@ function pcSheetPK(pier){
         var cls=(i<HF)?'th2':'fr2';
         return '<td class="v '+cls+(i===HF?' gs':'')+(X[k]?'':' z')+'">'+X[k]+'</td>'; }).join('');
       var keys=PC_PK.map(function(k,i){
-        /* ขอบเข้ม = จำนวนที่คีย์ไม่ตรงกับใบจอง · ไม่ใช่ error แต่ต้องเห็น */
+        /* ขอบเข้ม = จำนวนที่คีย์ไม่ตรงกับยอดเดินทางจริง · ไม่ใช่ error แต่ต้องเห็น */
         var mm=(hasK && (+C[k]||0)!==(+X[k]||0))?' mm':'';
         return '<td class="cy ct'+((i===0||i===HF)?' gs':'')+mm+'"><input value="'+(C[k]||'')+'" placeholder="—" '
           +'inputmode="numeric" onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\''+k+'\',this.value)"></td>'; }).join('');
       var exc=(exp==null)
         ? '<td class="pc-ex na"><b>—</b><i>'+pcE((R.why||'ไม่มีราคา'))+'</i></td>'
-        : '<td class="pc-ex"><b>'+pcN(exp)+'</b><i>'+(hasK?'ตามที่คีย์':'ตามใบจอง')+'</i></td>';
+        : '<td class="pc-ex"><b>'+pcN(exp)+'</b><i>'+(hasK?'ตามที่คีย์':'ตามหัวจริง')+'</i></td>';
       rows+='<tr><td class="rn">'+rn+'</td><td class="bn">'+pcE(B.name)+'</td>'
         +'<td class="rt">'+pcRouteName(B.rid,B.route)+'<br>'+pcRateChip(R)
-          +(hasK?'':'<button class="pc-fill" title="คัดลอกจำนวนจากใบจองมาใส่ช่องคีย์ทั้ง 6 ช่อง แล้วค่อยแก้เฉพาะที่ต่าง" '
+          +(hasK?'':'<button class="pc-fill" title="คัดลอกยอดเดินทางจริง (หักคนที่ไม่ได้ขึ้นเรือแล้ว) มาใส่ช่องคีย์ทั้ง 8 ช่อง แล้วค่อยแก้เฉพาะที่ต่าง" '
             +'onclick="pcFillPK(\''+ds+'\',\''+B.bid+'\',\''+pier+'\')">⤓ เติมจากใบจอง</button>')
           +'</td>'+cells
         +'<td class="v">'+X.tot+'</td>'+keys
@@ -52629,7 +52647,7 @@ function pcSheetPK(pier){
      +'<tr><th class="rn" rowspan="3">#</th>'
        +'<th rowspan="3" style="width:126px;vertical-align:bottom">เรือ</th>'
        +'<th rowspan="3" style="vertical-align:bottom">โปรแกรม</th>'
-       +'<th class="g" colspan="9" style="background:#EDF7F2;color:#0F6E56">ตามใบจอง · ระบบอ่านให้</th>'
+       +'<th class="g" colspan="9" style="background:#EDF7F2;color:#0F6E56">เดินทางจริง · ระบบอ่านให้</th>'
        +'<th class="g key gs" colspan="10">จ่ายจริงที่ด่าน · คีย์เอง</th>'
        +'<th class="g gs" colspan="3" style="background:#EEF4FF;color:#2C4F8A">เงิน</th></tr>'
      +'<tr><th class="g th2" colspan="4">คนไทย</th><th class="g fr2 gs" colspan="4">ต่างชาติ</th>'
@@ -63870,7 +63888,11 @@ function pxLongtail(date, bid){
       chtr += (+LT.boats||0);
       upg += (+LT.up||0); upgDue += (+LT.upDue||0);
     } else {
-      var pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
+      /* §pcReal · จอยคิดเป็นหัว · คนไม่มา = ไม่ได้ลงหางยาว ต้องหักออก
+         ใช้ pckOnBoard ตัวเดียวกับ pxPax / ค่าอุทยาน จะได้ไม่มีสองคำตอบในระบบ
+         ฝั่งเหมาไม่หัก · สั่งเป็นลำไปแล้วตั้งแต่ก่อนออก ต่อให้ขาดคนก็ยังต้องจ่ายทั้งลำ */
+      var _bk=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
+      var pax=(typeof pckOnBoard==='function')?pckOnBoard(b,date,_bk):_bk;
       join += (LT.joinBooked?pax:0) + (+LT.joinExtra||0);
     }
   });
