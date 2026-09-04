@@ -60343,15 +60343,22 @@ function tsTotalOf(r, date){
 }
 // ของที่ขายเพิ่มหน้างานของใบนี้ · extras (SB_EXTRAS) + upgrade
 //   คืนทั้งรายการและยอดแยกตามวิธีรับเงิน เพื่อเอาไปรวมกับการ์ดด้านบน
+/* §tsComm · ค่าคอมคนขายต้องเดินทางมาถึงหน้าปิดวันด้วย
+   commission กับ toCompany มีอยู่ในทั้ง SB_EXTRAS และ bk.upgrades มานานแล้ว
+   แต่ตัวนี้อ่านแล้วทิ้ง ป้ายในตารางจึงเห็นแต่ยอดขาย ไม่เห็นว่าเงินก้อนไหน
+   เป็นของคนขาย · บรรทัด "เหลือเข้าบริษัท" ก็หักแต่ค่าจ่ายออก เลขเลยสูงเกินจริง
+   นับค่าคอมเฉพาะรายการที่เก็บเงินแล้ว ให้เข้าชุดกับ got/fee
+   ที่ยังไม่เก็บ (cot) ยังไม่มีเงินเข้ามือใคร จะหักออกจากยอดรับไม่ได้ */
 function tsSaleList(b, date){
-  var out=[], by={cash:0,transfer:0,card:0}, fee=0, got=0, due=0, noSlip=0;
+  var out=[], by={cash:0,transfer:0,card:0}, fee=0, got=0, due=0, noSlip=0, comm=0;
   try{ ((typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(b.id):[]).forEach(function(x){
     if(date && x.tripDate && x.tripDate!==date) return;
     var amt=+x.total||0; if(!amt) return;
     var mth=x.method||'cash'; if(by[mth]==null) by[mth]=0;
     /* §exCot · ยังไม่ได้เก็บ = ไม่เข้ายอดแยกตามวิธีรับเงิน · ไปอยู่ฝั่ง "ต้องเก็บ" เหมือนอัปเกรด */
     var _g=(typeof bkxExGot==='function')?bkxExGot(x):true;
-    if(_g){ by[mth]+=amt; got+=amt; fee+=(+x.fee||0); } else due+=amt;
+    var _cm=+x.commission||0;
+    if(_g){ by[mth]+=amt; got+=amt; fee+=(+x.fee||0); comm+=_cm; } else due+=amt;
     var slipMissing=(_g && mth!=='cash' && !((x.slips||[]).length));
     if(slipMissing) noSlip++;
     out.push({ kind:'ex', id:x.id||'', t:String(x.service||'ขายเพิ่ม'), qty:(+x.qty||1), amt:amt,
@@ -60359,12 +60366,15 @@ function tsSaleList(b, date){
                fee:(+x.fee||0), nSlip:((x.slips||[]).length),
                // §slipView · ส่ง ref ของสลิปมาด้วย ของเดิมส่งแต่ตัวนับ กดดูไฟล์ไม่ได้
                slips:(x.slips||[]).slice(),
+               // §tsComm · เงินก้อนนี้แบ่งเป็นของบริษัทเท่าไร ของคนขายเท่าไร
+               comm:_cm, toCompany:(+x.toCompany||0),
                method:mth, who:x.seller||'', done:_g, noSlip:slipMissing });
   }); }catch(_){}
   try{ (Array.isArray(b.upgrades)?b.upgrades:[]).forEach(function(u){
     var amt=+u.sellPrice||0; if(!amt) return;
     var m2=u.method||'cash';
-    if(u.collected){ if(by[m2]==null) by[m2]=0; by[m2]+=amt; got+=amt; fee+=(+u.fee||0); }
+    if(u.collected){ if(by[m2]==null) by[m2]=0; by[m2]+=amt; got+=amt; fee+=(+u.fee||0);
+                     comm+=(+u.commission||0); }
     else due+=amt;
     // §upgPay · รูดบัตร/โอนแล้วยังไม่มีสลิป ต้องขึ้นเตือนเหมือน Extra
     var _uNo=(!!u.collected && m2!=='cash' && !((u.slips||[]).length));
@@ -60372,9 +60382,10 @@ function tsSaleList(b, date){
     out.push({ kind:'up', id:u.id||'', t:String(u.label||'upgrade'), qty:1, amt:amt,
                fee:(+u.fee||0), nSlip:((u.slips||[]).length),
                slips:(u.slips||[]).slice(),
+               comm:(+u.commission||0), toCompany:(+u.toCompany||0),
                method:m2, who:u.seller||'', done:!!u.collected, noSlip:_uNo });
   }); }catch(_){}
-  return { list:out, by:by, fee:fee, got:got, due:due, noSlip:noSlip, tot:got+due, n:out.length };
+  return { list:out, by:by, fee:fee, got:got, due:due, noSlip:noSlip, comm:comm, tot:got+due, n:out.length };
 }
 // ป้ายรายการขายเพิ่มสำหรับตารางส่วนที่ 3
 function tsSaleCell(S, money, e){
@@ -60384,11 +60395,15 @@ function tsSaleCell(S, money, e){
     var cls=x.kind==='up' ? 'ao-up' : 'ao-ex';
     // §tsSaleFee · บัตรมีค่าธรรมเนียมแยกจากยอดขายเสมอ · ต้องเห็นทั้งสองตัวถึงจะกระทบยอดได้
     var _fee=+x.fee||0;
+    /* §tsComm · ถ้อยคำเดียวกับที่ใช้ในกล่อง Extra กับ upgrade · หน้าท่าจะได้เห็นคำเดิม */
+    var _cm=+x.comm||0;
     var tip=(x.qty>1?('จำนวน '+x.qty+' · '):'')+(PM[x.method]||x.method)
+      +(_cm>0?(' · บริษัท '+money(x.toCompany)+' · คอม '+money(_cm)):'')
       +(_fee>0?(' · ค่าธรรมเนียมบัตร '+money(_fee)+' · รูดจริง '+money((+x.amt||0)+_fee)):'')
       +(x.who?(' · '+x.who):'')+(x.done?'':' · ยังไม่เก็บ')+(x.noSlip?' · ยังไม่มีสลิป':'');
     return '<span class="ts-ao '+cls+'" title="'+e(tip)+'">'+e(x.t)+(x.qty>1?(' ×'+x.qty):'')
       +' <b>'+money(x.amt)+'</b>'
+      +(_cm>0?(' <i style="font-style:normal;opacity:.78">· คอม '+money(_cm)+'</i>'):'')
       +(_fee>0?(' <i style="font-style:normal;opacity:.72">+fee '+money(_fee)+'</i>'):'')
       +(x.done?'':' <i style="font-style:normal;opacity:.75">รอเก็บ</i>')
       +(x.noSlip?' <i style="font-style:normal;color:#A32D2D">⚠</i>':'')+'</span>';
@@ -62447,14 +62462,15 @@ function renderTravelSum(){
     m.cxlKind = (m.r.cxl>0) ? 'ยกเลิกหน้างาน' : 'ไม่มา';
   });
   var nCollect=mRows.filter(function(m){ return !m.cxl; }).length;
-  var sumCash=0,sumTf=0,sumCard=0,sumDue=0,sumTarget=0,sumFee=0,sumSale=0,nSale=0,sumSaleDue=0,sumFeeSale=0;
+  var sumCash=0,sumTf=0,sumCard=0,sumDue=0,sumTarget=0,sumFee=0,sumSale=0,nSale=0,sumSaleDue=0,sumFeeSale=0,sumComm=0;
   mRows.forEach(function(m){
     sumCash+=(m.by.cash||0)+(m.S.by.cash||0);
     sumTf  +=(m.by.transfer||0)+(m.S.by.transfer||0);
     sumCard+=(m.by.card||0)+(m.S.by.card||0);
     if(!m.cxl){ sumDue+=m.due; sumTarget+=m.target; }   // §tsCxlNoCount · เงินที่เก็บไม่ได้ ไม่เข้ายอดต้องเก็บ
     sumFee+=(+m.M.pierFee||0)+(+m.S.fee||0); sumFeeSale+=(+m.S.fee||0);
-    sumSale+=m.S.tot; nSale+=m.S.n; sumSaleDue+=m.S.due; });
+    sumSale+=m.S.tot; nSale+=m.S.n; sumSaleDue+=m.S.due;
+    sumComm+=(+m.S.comm||0); });   // §tsComm · ค่าคอมของที่เก็บเงินแล้ว
 
   // §tsCashNet · แยกเงินที่ต้องจ่ายออกตามคำตัดสิน COT ออกจากยอดที่รับเข้า
   var sumPayout=0, sumDeduct=0, sumCotAll=0, nCotLeft=0, sumCotNo=0, nCotNo=0;
@@ -62471,7 +62487,9 @@ function renderTravelSum(){
     sumDeduct+=d; sumPayout+=p;
   });
   var sumIn=sumCash+sumTf+sumCard;
-  var sumNet=Math.max(0, sumIn-sumPayout);
+  /* §tsComm · ค่าคอมคือเงินที่คนขายเก็บไว้ ไม่เคยเข้าบริษัท ต้องหักออกเหมือนเงินจ่ายออก
+     ของเดิมหักแต่ sumPayout · "เหลือเข้าบริษัท" จึงสูงกว่าที่เข้าจริงเท่ากับยอดค่าคอม */
+  var sumNet=Math.max(0, sumIn-sumPayout-sumComm);
 
   var K=function(cls,lb,val,unit,note,noteCls){
     return '<div class="ts-k '+cls+'"><div class="kk">'+lb+'</div><div class="kv">'+val+(unit?('<em>'+unit+'</em>'):'')+'</div>'
@@ -62714,6 +62732,8 @@ function renderTravelSum(){
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'
       +'<span class="ts-chip e" style="font-size:11px;padding:5px 12px">ต้องเก็บวันนี้ '+money(sumTarget)+'</span>'
       +(nSale?('<span class="ts-chip b" style="font-size:11px;padding:5px 12px">ขายเพิ่ม '+money(sumSale)+' · '+nSale+' รายการ</span>'):'')
+      // §tsComm · ยอดค่าคอมของวัน · หน้าท่าจะได้รู้ว่าเงินในลิ้นชักก้อนไหนไม่ใช่ของบริษัท
+      +(sumComm>0?('<span class="ts-chip p" style="font-size:11px;padding:5px 12px" title="ค่าคอมมิชชั่นของคนขาย · หักออกจากเงินที่รับมาแล้วในบรรทัดกระทบยอด">คอมคนขาย '+money(sumComm)+'</span>'):'')
       +(function(){   // §tsCotSettle · สรุปการจัดการ COT ของวัน · ตัวเลขคำนวณไว้ข้างบนแล้ว (§tsCashNet)
           if(!(sumCotAll>0)) return '';
           return '<span class="ts-chip n" style="font-size:11px;padding:5px 12px">COT '+money(sumCotAll)+'</span>'
@@ -62741,6 +62761,8 @@ function renderTravelSum(){
     +'<div class="ts-read" style="margin-top:0;margin-bottom:13px">รับเข้าวันนี้ <b>'+money(sumIn)+'</b>'
       +' (สด '+money(sumCash)+' &middot; โอน '+money(sumTf)+' &middot; บัตร '+money(sumCard)+')'
       +(sumPayout>0?(' &minus; จ่ายออกตาม COT <b style="color:var(--rs700)">'+money(sumPayout)+'</b>'):'')
+      // §tsComm · ค่าคอมคนขายไม่เคยเข้าบริษัท · เขียนตัวหักให้เห็น จะได้ไม่งงว่าเลขหายไปไหน
+      +(sumComm>0?(' &minus; คอมคนขาย <b style="color:var(--rs700)">'+money(sumComm)+'</b>'):'')
       +' = เหลือเข้าบริษัท <b>'+money(sumNet)+'</b>'
       +(sumDeduct>0?(' &middot; อีก <b>'+money(sumDeduct)+'</b> หักจากบิลเอเจนต์ (ไม่ผ่านมือหน้าท่า)'):'')
       +(sumFee>0?(' &middot; ค่าธรรมเนียมบัตร <b>'+money(sumFee)+'</b> ธนาคารหัก ไม่ใช่รายได้'):'')
