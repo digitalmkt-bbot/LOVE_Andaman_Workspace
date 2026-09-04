@@ -94329,8 +94329,15 @@ function ppRows(){
         if(x&&x.name&&String(x.name).trim()){
           var q=Math.max(1,Math.floor(+x.qty||1));
           alList.push({name:String(x.name).trim(), qty:q, ft:false}); alN+=q; } });
-      if(!alList.length && String(sm.allergies||'').trim()){
-        alList.push({name:String(sm.allergies).trim(), qty:0, ft:true}); alUnk=1; }
+      var _alTxt=String(sm.allergies||'').trim();
+      if(!alList.length && _alTxt){
+        /* ใบที่เขียนว่า "All แพ้ซีฟู้ด" บอกขอบเขตมาแล้วว่าทั้งใบ · ไม่ใช่ใบที่ไม่รู้จำนวน
+           อ่านตามที่เขียน แล้วเอาหัวที่กินอาหารของใบนั้นมาเป็นจำนวน (ทารกไม่นับ ไม่ได้สั่ง)
+           ที่เหลือ — ข้อความที่ไม่ได้บอกขอบเขต เช่น "แพ้ถั่ว" — ยังถือว่าไม่รู้จำนวนเหมือนเดิม */
+        if(ppAllPax(_alTxt)){
+          var _q=Math.max(1, ad+chd+foc);
+          alList.push({name:_alTxt, qty:_q, ft:false, all:true}); alN=_q; }
+        else { alList.push({name:_alTxt, qty:0, ft:true}); alUnk=1; } }
       out.push({ b:b, t:t, date:d, routeId:rid, rt:rt,
         boatId:O.boatId||t.charterBoatId||'',
         ad:ad, chd:chd, inf:inf, foc:foc, tot:ad+chd+inf+foc, eat:ad+chd+foc,
@@ -94349,7 +94356,8 @@ function ppAdd(A,r){
   A.allergy+=r.allergy; A.alUnk+=(r.alUnk||0);
   if(r.ovn) A.ovn++; if(r.chtr) A.chtr++;
   (r.alList||[]).forEach(function(x){
-    var e=A.al[x.name]||(A.al[x.name]={q:0,ft:0});
+    var e=A.al[x.name]||(A.al[x.name]={q:0,ft:0,all:false});
+    if(x.all) e.all=true;
     if(x.ft) e.ft++; else e.q+=x.qty; });
   if(r.sp) A.sp.push(r);
   return A;
@@ -94357,11 +94365,22 @@ function ppAdd(A,r){
 /* คืนเป็น HTML (escape ชื่อเอง) เพราะต้องตัวหนาเฉพาะตัวเลข
    ของที่รู้จำนวน → "กุ้ง ×2" · ของที่ไม่รู้ → ขึ้นแต่ชื่อ
    เคยใช้สัญลักษณ์ ×? แล้วไม่มีใครรู้ว่าแปลว่าอะไร · ตอนนี้บอกเป็นคำที่หัวชิปแทน */
+/* ใบนี้บอกว่า "ทั้งใบ" หรือเปล่า · จับเฉพาะคำที่ระบุขอบเขตชัด ๆ เท่านั้น
+   ไม่ได้พยายามอ่านข้อความทั้งก้อน · ถ้าไม่เข้าเงื่อนไขก็ตกไปเป็น "ยังไม่รู้จำนวน" เหมือนเดิม
+   (เจอจากหน้าจอจริง · HOTELBEDS ส่ง "All แพ้ซีฟู้ด (ขอต้มยำไก่)" มาในใบ 5 ท่าน) */
+function ppAllPax(txt){
+  var t=String(txt||''); if(!t) return false;
+  var low=t.toLowerCase();
+  if(/(^|[^a-z])(all|everyone|every one|whole group)([^a-z]|$)/.test(low)) return true;
+  return ['ทั้งหมด','ทุกคน','ทั้งกรุ๊ป','ทั้งคณะ','ทั้งใบ','ยกคณะ']
+    .some(function(w){ return t.indexOf(w)>=0; });
+}
 function ppAlHtml(al){
   var e=ckEsc, k=Object.keys(al||{}); if(!k.length) return '';
   return k.sort().map(function(nm){
     var v=al[nm]||{q:0,ft:0};
-    return e(nm)+(v.q?(' <b>&times;'+v.q+'</b>'):'');
+    return e(nm)+(v.q?(' <b'+(v.all?' class="alx" title="ใบจองเขียนว่าทั้งใบ'
+      +' — นับจากหัวที่กินอาหารของใบนั้น (ทารกไม่นับ)"':'')+'>&times;'+v.q+'</b>'):'');
   }).join(' · ');
 }
 function ppChips(A){
@@ -94392,7 +94411,8 @@ function ppSpecialList(A){
     if(r.vegan) want.push('วีแกน ×'+r.vegan);
     if(r.halal) want.push('ฮาลาล ×'+r.halal);
     (r.alList||[]).forEach(function(x){
-      want.push('⚠ แพ้ '+x.name+(x.ft?' (ใบจองไม่ได้บอกว่ากี่คน)':(' ×'+x.qty))); });
+      want.push('⚠ แพ้ '+x.name+(x.ft?' (ใบจองไม่ได้บอกว่ากี่คน)'
+        :(' ×'+x.qty+(x.all?' · ทั้งใบ':'')))); });
     var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
     return '<div class="pp-sprow">'
       +'<div class="pp-spwho"><b>'+e(String(b.leadPax||'').trim()||'—')+'</b>'
@@ -94443,6 +94463,8 @@ function ppCSS(){ var S='#prpo-host'; return ''
  +S+' .pp-chip{display:inline-block;font-size:11px;font-weight:700;border-radius:2px;padding:1px 7px;'
    +'border:1px solid;margin:1px 4px 1px 0;white-space:nowrap}'
  +S+' .pp-chip b{font-family:"DM Mono",ui-monospace,monospace;font-variant-numeric:tabular-nums}'
+ /* ตัวเลขที่อ่านมาจากข้อความ "ทั้งใบ" ไม่ใช่ตัวเลขที่เอเจนต์กรอกมาเอง · ขีดประใต้ไว้ให้รู้ */
+ +S+' .pp-chip b.alx{border-bottom:1px dotted currentColor;cursor:help}'
  +S+' .pp-none{font-size:11px;color:#c3c8cf}'
  +S+' .pp-sheet{border:1px solid var(--gl);background:#fff;overflow-x:auto}'
  +S+' table.pp-t{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;min-width:1080px}'
