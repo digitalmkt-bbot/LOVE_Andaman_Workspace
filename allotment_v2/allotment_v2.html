@@ -81868,9 +81868,9 @@ function bkV2RenderTab2(){
             <thead><tr>
               <th class="t2-vc">Voucher</th>${agencyTh}<th class="t2-cu">Customer (lead)</th>
               <th class="t2-c">AD</th><th class="t2-c">CHD</th><th class="t2-c">INF</th><th class="t2-c">FOC</th>
-              <th>Time</th>${vanMode?`<th class="t2-c" style="color:#0F6E56;background:#E1F5EE;white-space:nowrap" title="ติ๊กแถวที่จะไปด้วยกัน แล้วกดจับกลุ่ม">&#10003; กลุ่ม</th>`:''}<th class="t2-pk">Pickup</th><th class="t2-c">Room</th>${zoneTh}<th>Send back</th>${vanMode?'':'<th>Add-on</th>'}<th>Special request</th>${vanMode?'':'<th>Pay</th><th class="t2-r">Total</th><th class="t2-c"></th>'}
-              <th class="t2-c"${boatMode?' style="color:#185FA5;background:#EAF3FB;white-space:nowrap"':''}>&#128676; Boat${boatMode?` <button onclick="baAutoAssign('${date}','${rid}')" style="background:#185FA5;color:#fff;border:none;border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:4px">auto</button>`:''}</th>
-              ${rcMode?`<th class="t2-c" style="color:#7A4A00;background:#FBF0DD;white-space:nowrap">&#9989; Re-confirm <button onclick="bkV2ReconfirmAll('${date}','${rid}','list')" title="ยืนยันทั้งหมด (list)" style="background:#7A4A00;color:#fff;border:none;border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:4px">all</button></th>`:''}
+              <th>Time</th>${vanMode?`<th class="t2-c" style="color:#0C6B47;background:#DCF0E7;white-space:nowrap" title="ติ๊กแถวที่จะไปด้วยกัน แล้วกดจับกลุ่ม">&#10003; กลุ่ม</th>`:''}<th class="t2-pk">Pickup</th><th class="t2-c">Room</th>${zoneTh}<th>Send back</th>${vanMode?'':'<th>Add-on</th>'}<th>Special request</th>${vanMode?'':'<th>Pay</th><th class="t2-r">Total</th><th class="t2-c"></th>'}
+              <th class="t2-c"${boatMode?' style="color:#12518F;background:#E2EEFA;white-space:nowrap"':''}>&#128676; Boat${boatMode?` <button onclick="baAutoAssign('${date}','${rid}')" style="background:#185FA5;color:#fff;border:none;border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:4px">auto</button>`:''}</th>
+              ${rcMode?`<th class="t2-c" style="color:#7A4A00;background:#FAEBD2;white-space:nowrap">&#9989; Re-confirm <button onclick="bkV2ReconfirmAll('${date}','${rid}','list')" title="ยืนยันทั้งหมด (list)" style="background:#7A4A00;color:#fff;border:none;border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:4px">all</button></th>`:''}
               ${wxClosed?'<th class="t2-c" style="color:#A32D2D;background:#FBE8E4;white-space:nowrap">&#9928; Manage</th>':''}
             </tr></thead>
             <tbody>${_pband}${zoneBlocks}</tbody>
@@ -82482,9 +82482,17 @@ function bkV2RenderTab2(){
     table.t2-mtbl{border-collapse:collapse;width:100%;min-width:1180px;font-size:12px}
     /* §t2Hdr · หัวตารางเดิมเป็นเทาอ่อน 9px บนพื้นขาว · จางกว่าเนื้อตารางที่มันกำกับอยู่
        ตารางนี้กว้างกว่าจอต้องเลื่อนแนวนอน คนเลื่อนไปกลางตารางแล้วไม่รู้ว่าคอลัมน์ไหนคืออะไร
-       ทำเป็นพื้นทึบตัวหนังสือขาว · sticky อยู่แล้ว พอเลื่อนลงหัวยังติดอยู่และอ่านออก */
-    table.t2-mtbl th{text-align:left;font-size:9.5px;font-weight:800;color:#F2F5F9;text-transform:uppercase;letter-spacing:.06em;padding:8px 10px;white-space:nowrap;position:sticky;top:0;z-index:35;background:#2C3A52;box-shadow:inset 0 -1px 0 #1B2536}
-    table.t2-mtbl td{padding:13px 8px;border-bottom:1px solid var(--border-2);vertical-align:middle;white-space:nowrap}
+       ทำเป็นพื้นทึบ · sticky อยู่แล้ว พอเลื่อนลงหัวยังติดอยู่และอ่านออก
+       §btHdr (2026-09-04) · เดิมเป็นน้ำเงินกรมท่า ซึ่งเป็นสีเดียวในหน้าที่ไม่เข้าชุด
+       หลังทำหัวหน้าใหม่เป็นโทนอุ่น (ทราย/ชมพูตามสีโปรแกรม) · เปลี่ยนเป็นทรายเข้ม
+       ยังทึบและอ่านออกเหมือนเดิม แต่ไม่ตัดกับหน้าเป็นแถบดำกลางจอ */
+    table.t2-mtbl th{text-align:left;font-size:9.5px;font-weight:800;color:#4A3C3C;text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;white-space:nowrap;position:sticky;top:0;z-index:35;background:#EDE6E6;box-shadow:inset 0 -2px 0 #C4B2B2}
+    /* §btHdr · เส้นแบ่งคอลัมน์ · ตารางกว้างมาก ไม่มีเส้นตั้งแล้วตาไล่ข้ามคอลัมน์หลุด */
+    /* §btCell · ของเดิมเว้นบน-ล่างช่องละ 13px · พอป้ายในช่องลูกค้าตกเป็นสองบรรทัด
+       แถวสูงเกือบ 60px เห็นได้ 8 แถวต่อจอ · ลดเหลือ 6px ตามที่วางไว้ใน mockup
+       ตัวหนังสือขยับขึ้นเป็น 12.5px ชดเชยความแน่น ไม่ให้อ่านยากลง */
+    table.t2-mtbl td{padding:6px 9px;border-bottom:1px solid #DCE1E8;border-right:1px solid #E8EBEF;vertical-align:middle;white-space:nowrap;font-size:12.5px}
+    table.t2-mtbl td:last-child{border-right:0}
     /* ══ §btFreeze (2026-09-04) · แช่แข็งสามคอลัมน์ซ้าย ═══════════════════════
        ตารางกว้าง 1,585-1,850px แต่จอให้พื้นที่จริง ~1,438px จึงต้องเลื่อนไปขวา
        เพื่อดู Pay / Total / Boat · พอเลื่อนแล้วไม่รู้ว่ากำลังดูแถวของใครอยู่
@@ -82511,6 +82519,8 @@ function bkV2RenderTab2(){
       width:-moz-max-content;width:max-content;max-width:100%}
     table.t2-mtbl tr.t2-row:hover td{background:#fcfcfd;cursor:pointer}
     .t2-mtbl .t2-c,.t2-mtbl th.t2-c{text-align:center}
+    /* §btCell · AD/CHD/INF/FOC เป็นฟอนต์ความกว้างเท่ากัน หลักจะได้ตรงกันทั้งคอลัมน์ */
+    .t2-mtbl td.t2-c{font-family:'DM Mono',ui-monospace,monospace}
     .t2-mtbl .t2-r,.t2-mtbl th.t2-r{text-align:right}
     .t2-mono{font-family:'DM Mono',monospace}
     .t2-dim{color:var(--ink-faint)}
@@ -82531,7 +82541,8 @@ function bkV2RenderTab2(){
        วันที่มี 31 แถว: สูง 3,100 → 2,624px (-15%) · กว้าง 1,585 → 1,743px */
     /* §btCols · จุดรับตัดเป็น 2 บรรทัดได้อยู่แล้ว · 270 → 196 คืนที่ให้ตาราง 74px */
     .t2-mtbl th.t2-pk,.t2-mtbl td.t2-pk{min-width:196px;max-width:196px}
-    .t2-pickcell{display:inline-block;max-width:190px;min-width:80px;white-space:normal;overflow-wrap:break-word;line-height:1.25;vertical-align:middle;font-weight:700;font-size:12.5px;color:#111A2B}
+    /* §btCell · จุดรับเป็นชิปพื้นอุ่นจาง ๆ ตาม mockup · ตาจับขอบของค่าได้ ไม่ลอยปนกับช่องข้าง ๆ */
+    .t2-pickcell{display:inline-block;max-width:190px;min-width:80px;white-space:normal;overflow-wrap:break-word;line-height:1.3;vertical-align:middle;font-weight:700;font-size:12.5px;color:#3C3B37;background:#F3F1EA;border-radius:6px;padding:3px 8px}
     /* ══ §btCols · บีบคอลัมน์ให้ตารางแคบลง ═══════════════════════════════════
        ตารางกว้าง 2,228px แต่จอ 1800px ให้พื้นที่จริงแค่ 1,438px จึงต้องเลื่อนซ้ายขวา
        ตลอด และกล่องเลื่อนนั้นกลืน position:sticky (แกนหนึ่งไม่ใช่ visible อีกแกน
@@ -82550,7 +82561,7 @@ function bkV2RenderTab2(){
     .t2-leadonly{font-size:10px;margin-left:4px}
     .t2-more{font-size:10px;border:1px solid var(--border);background:var(--bg);color:var(--ink-soft);border-radius:6px;padding:1px 7px;cursor:pointer;margin-left:5px;font-family:inherit}
     .t2-more:hover{border-color:var(--coral);color:var(--coral)}
-    .t2-zonetag{font-size:11px;font-weight:700;background:#DCE4EE;color:#28344A;border-radius:6px;padding:2px 9px;white-space:nowrap}
+    .t2-zonetag{font-size:11px;font-weight:700;background:#EAF0F7;color:#2F4E77;border-radius:6px;padding:2px 9px;white-space:nowrap}
     /* §t2Hdr · เลขห้องเป็นชิป · ตาจับได้ว่าเป็นค่าที่มีจริง ไม่ใช่ตัวเลขลอย ๆ ปนกับเวลา */
     .t2-room{font-weight:700;color:#1B2A55;background:#EEF2F7;border-radius:5px;padding:2px 7px}
     .t2-sb{color:var(--ink-soft);display:inline-block;max-width:118px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
