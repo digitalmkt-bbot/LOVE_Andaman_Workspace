@@ -63339,9 +63339,9 @@ function bkV2VanCellHTML(bk, zone, date, groupColor, routeId, allocKey, allocG, 
   const gc=g&&groupColor?groupColor[g]:null;
   const myVan = isSplit ? ((_O.vanSplits&&_O.vanSplits[ai]&&_O.vanSplits[ai].vanId)||'') : (_O.vanId||'');
   const vn = myVan ? ((vehGet(myVan)||{}).name||'') : '';
-  const chk=`<span onclick="event.stopPropagation();bkV2VanSelToggle('${key}')" title="เลือกเพื่อจับกลุ่ม" style="display:inline-flex;width:18px;height:18px;border-radius:5px;cursor:pointer;align-items:center;justify-content:center;font-size:12px;${sel?'background:#185FA5;color:#fff':'border:1.5px solid #C9CDD4;color:transparent'}">&#10003;</span>`;
+  const chk=`<span onclick="event.stopPropagation();bkV2VanSelToggle('${key}')" title="เลือกเพื่อจับกลุ่ม" style="display:inline-flex;width:16px;height:16px;border-radius:4px;cursor:pointer;align-items:center;justify-content:center;font-size:11px;flex:none;${sel?'background:#185FA5;color:#fff':'border:1.5px solid #C9CDD4;color:transparent'}">&#10003;</span>`;
   const gchip=g
-    ? `<span title="กรุ๊ป ${g}${vn?' · '+e(vn):''}" style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;background:${gc?gc[0]:'#E6F1FB'};color:${gc?gc[1]:'#185FA5'};white-space:nowrap;max-width:96px;overflow:hidden;text-overflow:ellipsis">${g}${vn?' · '+e(vn):''}</span>`
+    ? `<span title="กรุ๊ป ${g}${vn?' · '+e(vn):''}" style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;background:${gc?gc[0]:'#E6F1FB'};color:${gc?gc[1]:'#185FA5'};white-space:nowrap;max-width:88px;overflow:hidden;text-overflow:ellipsis">${g}${vn?' · '+e(vn):''}</span>`
     : '<span style="font-size:10px;color:#c4c2ba">—</span>';
   let retSel='';
   if(g){
@@ -63349,11 +63349,11 @@ function bkV2VanCellHTML(bk, zone, date, groupColor, routeId, allocKey, allocG, 
     const _zPool=(typeof vanVehiclesForZone==='function')?vanVehiclesForZone(zone, date):[];
     const pool=[..._rPool, ..._zPool.filter(v=>!_rPool.some(r=>r.id===v.id))];   // return van = broader pool (any zone van that day · กลับกับรถคันอื่นได้)
     const rvid= isSplit ? ((_O.vanSplits&&_O.vanSplits[ai]&&_O.vanSplits[ai].vanReturnId)||'') : ((_O.vanReturnId)||'');
-    let ropts='<option value="">&#8617; เดิม</option>';
+    let ropts='<option value="">&#8617;</option>';
     pool.forEach(v=>{ ropts+=`<option value="${v.id}" ${rvid===v.id?'selected':''}>&#8617; ${e(v.name||v.id)}</option>`; });
     if(rvid && !pool.some(v=>v.id===rvid)){ const vo=vehGet(rvid); ropts+=`<option value="${rvid}" selected>&#8617; ${e((vo&&vo.name)||rvid)}</option>`; }
     const retCall = isSplit ? `bkV2AssignVanReturnSplit('${bk.id}',${ai},this.value,'${date}')` : `bkV2AssignVanReturn('${bk.id}',this.value,'${date}')`;
-    retSel=`<select onchange="event.stopPropagation();${retCall}" onclick="event.stopPropagation()" title="รถขากลับ (ถ้าต่างจากกรุ๊ป)" style="border:1px solid ${rvid?'#C7B8E8':'#e3e0d9'};border-radius:6px;padding:1px 4px;font-size:9.5px;font-family:inherit;background:#fff;color:${rvid?'#534AB7':'#a8a59e'};max-width:84px">${ropts}</select>`;
+    retSel=`<select onchange="event.stopPropagation();${retCall}" onclick="event.stopPropagation()" title="รถขากลับ · ว่างไว้ = กลับคันเดิมของกรุ๊ป" style="border:1px solid ${rvid?'#C7B8E8':'#e3e0d9'};border-radius:6px;padding:1px 4px;font-size:9.5px;font-family:inherit;background:#fff;color:${rvid?'#534AB7':'#a8a59e'};max-width:46px;width:46px;padding:1px 0 1px 2px">${ropts}</select>`;
   }
   // split / un-split controls
   let splitBtn='';
@@ -63363,7 +63363,7 @@ function bkV2VanCellHTML(bk, zone, date, groupColor, routeId, allocKey, allocG, 
      แถวในตารางเลยสูงเกือบ 80px ทั้งที่ข้อมูลจริงมีบรรทัดเดียว · ตาไล่ลงมาแล้วเหนื่อย
      ยุบเป็นบรรทัดเดียว · คำยาว ๆ ย้ายไปอยู่ใน title (ชี้เมาส์ยังอ่านได้เหมือนเดิม)
      กว้างขึ้นราว 50px แต่แถวเตี้ยลงราว 50px ต่อแถว · วันละร้อยกว่าแถวคุ้มกว่ามาก */
-  return `<div style="display:flex;align-items:center;gap:5px;justify-content:center;flex-wrap:nowrap;white-space:nowrap">
+  return `<div style="display:flex;align-items:center;gap:4px;justify-content:center;flex-wrap:nowrap;white-space:nowrap">
     ${chk}${gchip}${retSel}${splitBtn}
   </div>`;
 }
@@ -82267,7 +82267,7 @@ function bkV2RenderTab2(){
                 })()}
             <td class="t2-mono">${(_ovTrip&&_ovTrip.ovnLeg)?'<span style="color:#8a5500;font-weight:600">&#8617; ไม่มีขารับ</span>':vanMode?`<input type="text" value="${esc((typeof bkOpsRead==='function'?bkOpsRead(bk,date).pickupTimeFinal:(bk.ops&&bk.ops.pickupTimeFinal))||r.pickupTime||bk.pickupTime||'')}" placeholder="${esc(r.pickupTime||bk.pickupTime||'เวลา')}" onclick="event.stopPropagation()" oninput="bkV2SetPickupFinal('${esc(bk.id)}',this.value,'${esc(date)}')" title="เวลารับของโรงแรมนี้" style="border:1px solid var(--border);border-radius:6px;padding:2px 5px;font-size:10px;font-family:'DM Mono',monospace;width:98px;box-sizing:border-box">`:(function(){const orig=r.pickupTime||bk.pickupTime||''; const fin=(typeof bkOpsRead==='function'?bkOpsRead(bk,date).pickupTimeFinal:(bk.ops&&bk.ops.pickupTimeFinal))||''; if(fin && fin!==orig){ /* §เวลารับที่แก้แล้ว · เดิมต่อท้ายบรรทัดเดียวกัน "06.30 (07:30-07:45)" อ่านแวบเดียวแยกไม่ออกว่าอันไหนคือเวลาจริง → เวลาใหม่บรรทัดบน เวลาเดิมบรรทัดล่าง ตัวเล็กจางๆ */
                  return `<div style="font-weight:700;color:#0F6E56;line-height:1.25">${esc(fin)}</div>${orig?`<div style="font-size:9px;color:#b0b0a8;line-height:1.25;text-decoration:line-through" title="เวลารับเดิมก่อนแก้">${esc(orig)}</div>`:''}`; } return esc(orig||'—'); })()}${_vanChipHtml}</td>
-            ${vanMode?`<td class="t2-c" style="background:#F3FBF7">${(typeof bkV2VanCellHTML==='function')?bkV2VanCellHTML(bk, r.zone, date, groupColor, rid, a.key, a.g, a.split, a.first):''}</td>`:''}
+            ${vanMode?`<td class="t2-c t2-gwrap" style="background:#F3FBF7">${(typeof bkV2VanCellHTML==='function')?bkV2VanCellHTML(bk, r.zone, date, groupColor, rid, a.key, a.g, a.split, a.first):''}</td>`:''}
             <td class="t2-pk">${(function(){ if(a.split && a.pick && !a.pick.main && (a.pick.hotel||a.pick.areaId)){ const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null; const _pl=a.pick.hotel||(_pa?_pa.name:'')||'—'; return `<span class="t2-pickcell" title="แยกรับ${a.pick.who?(' · '+esc(a.pick.who)):''} @ ${esc(_pl)}" style="color:#5B289A;font-weight:600">&#128652; ${esc(_pl)}</span>`; } if(_ovTrip && _ovTrip.ovnLeg) return '<span class="t2-pickcell" title="ขากลับ OVN · ลูกค้ากลับจากเกาะโดยเรือ · ไม่มีรถไปรับ" style="color:#8a5500;font-weight:600">&#8617; ไม่มีขารับ · มาจากเกาะ</span>';
               return (bk.hotelName||bk.pickup)?`<span class="t2-pickcell" title="${esc(bk.hotelName||bk.pickup)}">${esc(bk.hotelName||bk.pickup)}</span>`:'<span class="t2-needpickup" title="ยังไม่ได้ระบุจุดรับ · กดแก้ไขเพื่อเพิ่ม">&#9888; no pickup</span>'; })()}</td>
             <td class="t2-c">${esc(bk.roomNumber||'')?`<span class="t2-mono t2-room">${esc(bk.roomNumber)}</span>`:'<span class="t2-dim">—</span>'}</td>
@@ -82356,11 +82356,11 @@ function bkV2RenderTab2(){
       + `</div></td></tr>`;
     const zoneTable = zoneBlocks ? `
         <div class="t2-tblscroll">
-          <table class="t2-mtbl">
+          <table class="t2-mtbl${vanMode?' t2-van':''}">
             <thead><tr>
               <th class="t2-vc">Voucher</th>${agencyTh}<th class="t2-cu">Customer (lead)</th>
               <th class="t2-c">AD</th><th class="t2-c">CHD</th><th class="t2-c">INF</th><th class="t2-c">FOC</th>
-              <th>Time</th>${vanMode?`<th class="t2-c" style="color:#0C6B47;background:#DCF0E7;white-space:nowrap" title="ติ๊กแถวที่จะไปด้วยกัน แล้วกดจับกลุ่ม">&#10003; กลุ่ม</th>`:''}<th class="t2-pk">Pickup</th><th class="t2-c">Room</th>${zoneTh}<th>Send back</th>${vanMode?'':'<th>Add-on</th>'}<th>Special request</th>${vanMode?'':'<th>Pay</th><th class="t2-r">Total</th><th class="t2-c"></th>'}
+              <th>Time</th>${vanMode?`<th class="t2-c t2-gwrap" style="color:#0C6B47;background:#DCF0E7;white-space:nowrap" title="ติ๊กแถวที่จะไปด้วยกัน แล้วกดจับกลุ่ม">&#10003; กลุ่ม</th>`:''}<th class="t2-pk">Pickup</th><th class="t2-c">Room</th>${zoneTh}<th>Send back</th>${vanMode?'':'<th>Add-on</th>'}<th>Special request</th>${vanMode?'':'<th>Pay</th><th class="t2-r">Total</th><th class="t2-c"></th>'}
               <th class="t2-c"${boatMode?' style="color:#12518F;background:#E2EEFA;white-space:nowrap"':''}>&#128676; Boat${boatMode?` <button onclick="baAutoAssign('${date}','${rid}')" style="background:#185FA5;color:#fff;border:none;border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:4px">auto</button>`:''}</th>
               ${rcMode?`<th class="t2-c" style="color:#7A4A00;background:#FAEBD2;white-space:nowrap">&#9989; Re-confirm <button onclick="bkV2ReconfirmAll('${date}','${rid}','list')" title="ยืนยันทั้งหมด (list)" style="background:#7A4A00;color:#fff;border:none;border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:4px">all</button></th>`:''}
               ${wxClosed?'<th class="t2-c" style="color:#A32D2D;background:#FBE8E4;white-space:nowrap">&#9928; Manage</th>':''}
@@ -83116,6 +83116,12 @@ function bkV2RenderTab2(){
     .t2-mtbl tr.t2-novan td:first-child{border-left:2px solid #E05B5B}
     .t2-mtbl tr.t2-novan td:last-child{border-right:2px solid #E05B5B}
     .t2-mtbl tr.t2-novan-last td{border-bottom:2px solid #E05B5B}
+    /* ══ §btVCell2 · บีบช่องจัดการกลุ่มรถให้แคบที่สุดเท่าที่ยังกดได้ ═══════════
+       และในโหมดจัดรถไม่ต้องกางดูชื่อผู้โดยสารคนอื่น · คนจัดรถดูชื่อหัวใบกับ
+       จำนวนคนพอ · ตัดปุ่มกางออก ช่องชื่อเหลือบรรทัดเดียว แถวเตี้ยลงอีก        */
+    .t2-mtbl th.t2-gwrap,.t2-mtbl td.t2-gwrap{width:184px;max-width:184px}
+    .t2-mtbl.t2-van .t2-more,.t2-mtbl.t2-van .t2-leadonly{display:none}
+    .t2-mtbl.t2-van td.t2-cu{max-width:186px;width:186px}
     /* §btLkHit · แถวที่ดึงที่นั่งจากล็อคที่กำลังเลือก · ใช้ภาษาเดียวกับแถวที่ถูกติดธงอยู่แล้ว
        (กรอบรอบแถว ไม่ทาสีทับ) เพื่อไม่กลบสีเรือ/กรุ๊ปที่แถวมีอยู่ */
     .t2-mtbl tr.t2-lkhit>td{border-top:2px solid #C0392B;border-bottom:2px solid #C0392B}
