@@ -78042,6 +78042,15 @@ function bkV2Render(){
          ฮาร์ดโค้ดไม่ได้ เพราะการ์ดในหัวตกบรรทัดตามความกว้างจอ */
       const _bth=host.querySelector('.bt-pkh');
       const h=_bth?Math.max(0,_bth.offsetHeight-22):0;
+      /* §btFreeze · ระยะซ้ายของคอลัมน์ที่ตรึง · ฮาร์ดโค้ดไม่ได้เพราะความกว้างจริง
+         ขึ้นกับ padding/border ของธีม และเปลี่ยนตามโหมด (Van ซ่อน 4 คอลัมน์) */
+      try{ const _hr=host.querySelector('table.t2-mtbl thead tr');
+        if(_hr && _hr.children.length>2){
+          const w1=Math.round(_hr.children[0].getBoundingClientRect().width);
+          const w2=Math.round(_hr.children[1].getBoundingClientRect().width);
+          vb.style.setProperty('--t2-fz1', w1+'px');
+          vb.style.setProperty('--t2-fz2', (w1+w2)+'px');
+        } }catch(_){}
       const TOP=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--topbar'))||0;   // topbar height (0 after topbar removal · auto-reverts if bar restored)
       const vanOn=!!(typeof _bkV2!=='undefined'&&_bkV2&&_bkV2.vanAssignMode);
       // measure the actual van+grouping strip height (was hardcoded 96 → gap/overlap when real height differed)
@@ -80671,14 +80680,14 @@ function bkV2Tab2ActiveDate(){
 }
 // Format a Date as YYYY-MM-DD using LOCAL components (avoid UTC shift from toISOString in +07:00)
 function bkV2LocalYMD(dt){ return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`; }
-function bkV2Tab2DateShift(n){ _bkV2T2Q='';
+function bkV2Tab2DateShift(n){ _bkV2T2Q=''; _bkV2T2Lk='';
   const cur = bkV2Tab2ActiveDate();
   const dt = new Date(cur + 'T00:00'); dt.setDate(dt.getDate() + n);
   _bkV2.filterDate = bkV2LocalYMD(dt);
   _bkV2.filterRoute = null;
   bkV2Render();
 }
-function bkV2Tab2Today(){ _bkV2T2Q=''; _bkV2.filterDate = bkV2LocalYMD(new Date()); _bkV2.filterRoute = null; bkV2Render(); }
+function bkV2Tab2Today(){ _bkV2T2Q=''; _bkV2T2Lk=''; _bkV2.filterDate = bkV2LocalYMD(new Date()); _bkV2.filterRoute = null; bkV2Render(); }
 function bkV2Tab2TogglePax(rowId){
   const el = document.getElementById(rowId);
   if(!el) return;
@@ -80694,6 +80703,16 @@ let _bkV2T2Pier = 'all';   // 'all' | 'tublamu' | 'panwa'
 /* §btHead · ช่องค้นหาของ By-trip · เดิมหน้านี้ไม่มีเลย ต้องเปิด All bookings ไปหา
    แล้วเด้งกลับมา · กรองที่ rowsF จุดเดียว ตัวนับ/ใบงาน/โหมดทั้งหมดอ่านต่อจากตรงนั้น */
 var _bkV2T2Q = (typeof _bkV2T2Q!=='undefined') ? _bkV2T2Q : '';
+/* §btLkHit · เจ้าของล็อคที่กำลังไฮไลต์อยู่ · เก็บเป็น "ชื่อผู้ถือ" เพราะการ์ดยุบตามเอเยนต์
+   (เจ้าเดียวอาจมีหลายรายการล็อคในวันเดียวกัน) */
+var _bkV2T2Lk = (typeof _bkV2T2Lk!=='undefined') ? _bkV2T2Lk : '';
+function bkV2Tab2SetLk(lockId){
+  var L=(typeof SB_SEAT_LOCKS!=='undefined')?SB_SEAT_LOCKS:[];
+  var l=null; for(var i=0;i<L.length;i++){ if(L[i] && L[i].id===lockId){ l=L[i]; break; } }
+  var nm=l?((typeof bkV2LockHolderName==='function')?bkV2LockHolderName(l):String(l.holderId||'')):'';
+  _bkV2T2Lk = (_bkV2T2Lk===nm) ? '' : nm;
+  bkV2Render();
+}
 function bkV2Tab2SetQ(v){ _bkV2T2Q = String(v||''); bkV2Render();
   try{ var el=document.getElementById('bt-q'); if(el){ el.focus(); el.setSelectionRange(el.value.length,el.value.length); } }catch(_){}
 }
@@ -80704,7 +80723,7 @@ function bkV2Tab2SetFamily(fid){ _bkV2T2Family = fid || ''; _bkV2.filterRoute = 
 let _bkV2T2Sort = { col:'', dir:'asc' };   // manifest column sort (Agency / Zone) · '' = original order
 function bkV2Tab2SetSort(col){ if(_bkV2T2Sort.col===col){ _bkV2T2Sort.dir = _bkV2T2Sort.dir==='asc'?'desc':'asc'; } else { _bkV2T2Sort = {col, dir:'asc'}; } bkV2Render(); }
 function bkV2Tab2ClearFilters(){ _bkV2T2Pier = 'all'; _bkV2T2Family = ''; _bkV2T2Q=''; _bkV2.filterRoute = null; bkV2Render(); }
-function bkV2Tab2PickDay(ds){ _bkV2T2Q=''; _bkV2.filterDate = ds; _bkV2.filterRoute = null; _bkV2T2Cursor = ds.slice(0,7); bkV2Render(); }
+function bkV2Tab2PickDay(ds){ _bkV2T2Q=''; _bkV2T2Lk=''; _bkV2.filterDate = ds; _bkV2.filterRoute = null; _bkV2T2Cursor = ds.slice(0,7); bkV2Render(); }
 function bkV2Tab2MonthShift(n){
   const c = _bkV2T2Cursor || bkV2Tab2ActiveDate().slice(0,7);
   let [y,m] = c.split('-').map(Number); m += n;
@@ -80890,11 +80909,33 @@ function bkV2RenderTab2(){
     if(!_btHit(r)) return false;
     return true;
   });
+  /* ══ §btLkHit · booking ที่ดึงที่นั่งจากล็อคของเจ้าที่เลือกไว้ ═══════════════
+     ความสัมพันธ์ booking↔ล็อค ไม่ได้เก็บบนตัว booking · อยู่ใน lock.log[]
+     ({type:'draw', bookingId, qty}) ซึ่งมี bookingId ครบ 471 จาก 472 รายการดึง
+     จึงย้อนกลับได้โดยไม่ต้องแก้โครงสร้างข้อมูล                                  */
+  const _btLkSel = String(_bkV2T2Lk||'');
+  const _btLkIds = new Set();
+  if(_btLkSel){
+    (typeof SB_SEAT_LOCKS!=='undefined'?SB_SEAT_LOCKS:[]).forEach(l=>{
+      if(!l) return;
+      const nm=(typeof bkV2LockHolderName==='function')?bkV2LockHolderName(l):String(l.holderId||'');
+      if(nm!==_btLkSel) return;
+      /* เอาเฉพาะการดึงของ "วันนี้" · ล็อคแบบ bulk ใบเดียวถูกดึงข้ามหลายวัน
+         ถ้านับทั้งหมดจะได้ 202 booking ทั้งที่วันนี้มีจริงแค่ 3 */
+      (l.log||[]).forEach(e=>{ if(!e || e.type!=='draw' || !e.bookingId) return;
+        if(e.tripDate && e.tripDate!==date) return;
+        _btLkIds.add(String(e.bookingId)); });
+    });
+  }
+  const _btLkCls = id => (_btLkSel && _btLkIds.has(String(id))) ? ' t2-lkhit' : '';
+
   // ── Manifest column sort (click Agency / Zone header) ──
   const sortCol = _bkV2T2Sort.col, sortDir = _bkV2T2Sort.dir;
   const _sortVal = r => { if(sortCol==='agency'){ const a=sbGetAgent(r.bk&&r.bk.agentId); return (a?(a.name||''):String((r.bk&&r.bk.agentId)||'')).toLowerCase(); } if(sortCol==='zone'){ return String((r.bk&&r.bk.pickupArea)||'').toLowerCase(); } return ''; };
   const _rowCmp = (a,b)=>{ const va=_sortVal(a), vb=_sortVal(b); if(va<vb) return sortDir==='desc'?1:-1; if(va>vb) return sortDir==='desc'?-1:1; return 0; };
   const _sortArrow = c => sortCol===c ? (sortDir==='asc'?' ▲':' ▼') : '';
+  /* §btLkHit · นับเฉพาะแถวที่โผล่อยู่บนหน้านี้จริง ๆ · ป้ายบนการ์ดต้องตรงกับที่ตาเห็น */
+  const _btLkHitN = _btLkSel ? new Set(rowsF.filter(r=>r.bk && _btLkIds.has(String(r.bk.id))).map(r=>r.bk.id)).size : 0;
   const agencyTh = `<th class="t2-ag" onclick="bkV2Tab2SetSort('agency')" style="cursor:pointer;user-select:none" title="Sort by agency">Agency${_sortArrow('agency')}</th>`;
   const zoneTh = `<th class="t2-zn" onclick="bkV2Tab2SetSort('zone')" style="cursor:pointer;user-select:none" title="Sort by pickup area">Zone${_sortArrow('zone')}</th>`;
 
@@ -81214,15 +81255,17 @@ function bkV2RenderTab2(){
   const _lkTot=_lkList.reduce((n,a)=>n+a.qty,0), _lkLeft=_lkList.reduce((n,a)=>n+a.left,0);
   const _lkN=routeIds.reduce((n,rid)=>n+((typeof bkV2LocksFor==='function')?bkV2LocksFor(rid,date):[]).length,0);
   const _btLock = `<div class="bt-c"><div class="bt-ct">Seat Lock<span class="sp"></span>
+      ${_btLkSel?`<span class="bt-lkhi">&#9679; ไฮไลต์ ${_btLkHitN} booking</span>`:''}
       ${_lkLeft>0?`<span class="bt-lkbadge">เหลือ ${_lkLeft} ที่</span>`:'<span class="bt-cnt">ไม่มีที่เหลือ</span>'}
       ${_btSelRid?`<button class="bt-lkbtn" onclick="bkV2LockFromCalendar('${_btSelRid}','${date}')" title="ล็อคที่นั่งทริปนี้">&#128274; ล็อคที่นั่ง</button>`:''}
       <button class="bt-lkbtn gh" onclick="bkV2SwitchTab('locks')">ทั้งหมด &rarr;</button></div>
     <div class="bt-lkl">${_lkList.length?_lkList.map(a=>{
       const cls=(a.qty<=0)?'gone':(a.left<=0?'done':'');
       const num=(a.qty<=0)?'<s>ปล่อยคืนแล้ว</s>':`<b>${a.left}</b><s>/ ${a.qty}</s>`;
-      return `<span class="bt-lkr ${cls}" onclick="bkV2LockManageOpen('${a.id}')" title="จัดการล็อคของ ${esc(a.nm)}"><i></i><span class="nm">${esc(a.nm)}</span><span class="q">${num}</span>${a.kids?`<span class="sub">${a.kids} ย่อย &#9662;</span>`:''}</span>`;
+      const _on=(_btLkSel===a.nm);
+      return `<span class="bt-lkr ${cls}${_on?' on':''}" onclick="bkV2Tab2SetLk('${a.id}')" title="กดเพื่อไฮไลต์ booking ที่ดึงจากล็อคของ ${esc(a.nm)}"><i></i><span class="nm">${esc(a.nm)}</span><span class="q">${num}</span>${a.kids?`<span class="sub">${a.kids} ย่อย</span>`:''}<button class="mg" onclick="event.stopPropagation();bkV2LockManageOpen('${a.id}')" title="จัดการล็อค · เพิ่มกรุ๊ปย่อย / ปล่อยคืน">&#9881;</button></span>`;
     }).join(''):'<span class="bt-none2">ยังไม่ล็อคที่นั่งในวันนี้</span>'}</div>
-    ${_lkList.length?`<div class="bt-lkfoot">รวม <b>${_lkTot}</b> ที่ &middot; ใช้ไป <b>${_lkTot-_lkLeft}</b> &middot; <b>${_lkList.length}</b> เจ้า &middot; <b>${_lkN}</b> รายการ${_lkList.length>3?`<span class="scr">&#9662; ไถดูอีก ${_lkList.length-3} เจ้า</span>`:''}</div>`:''}</div>`;
+    ${_lkList.length?`<div class="bt-lkfoot">รวม <b>${_lkTot}</b> ที่ &middot; ใช้ไป <b>${_lkTot-_lkLeft}</b> &middot; <b>${_lkList.length}</b> เจ้า &middot; <b>${_lkN}</b> รายการ${_lkList.length>3?`<span class="scr">&#9662; ไถดูอีก ${_lkList.length-3} เจ้า</span>`:''}<span class="hint">${_btLkSel?'กดแถวเดิมอีกครั้งเพื่อเลิกไฮไลต์':'กดแถว = ไฮไลต์ booking ที่ดึงจากล็อคนั้น &middot; &#9881; = จัดการ'}</span></div>`:''}</div>`;
 
   const _btPendN = Object.keys(pendGroups).reduce((n,k)=>n+pendGroups[k].length,0);
   const _btNotice = `<div class="bt-c bt-notice"><div class="bt-ct">Notice<span class="sp"></span><span class="bt-cnt">ของวันนี้</span></div>
@@ -81704,7 +81747,7 @@ function bkV2RenderTab2(){
           : a.split ? `<div class="t2-altpick" title="แยกรับหลายจุด · บุคกิ้งเดียวกัน ${esc(bk.voucherRef||bk.id)}${a.pick&&!a.pick.main&&a.pick.who?(' · '+esc(a.pick.who)):''}">&#128652; ${a.pick&&a.pick.main?'จุดหลัก':'แยกรับ'} · เดียวกัน ${esc(bk.voucherRef||bk.id)}${a.pick&&!a.pick.main&&a.pick.who?(' · '+esc(a.pick.who)):''}</div>` : '';
         const _2nd = a.split && !a.first;   // a non-first split allocation row → hide booking-level cells (Pay/Total/Voucher/Add-on) to avoid duplicating them across the split rows
         return {g:a.g, boat:_rowBid||'', html:`
-          <tr class="t2-row${r.cxl?' t2-cxl':''}${_ckNsCls}${_unassignedCls}${_novanCls}"${_rowStyle}>
+          <tr class="t2-row${r.cxl?' t2-cxl':''}${_ckNsCls}${_unassignedCls}${_novanCls}${_btLkCls(bk.id)}"${_rowStyle}>
             <td>${(bk.voucherRef && bk.voucherRef.trim().toLowerCase()!==String(lead||'').trim().toLowerCase())?(a.split?`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)} · แยกรับหลายจุด (บุคกิ้งเดียวกัน)" style="color:${_bkV2SplitColor(bk.id)};font-weight:800;border:1px solid ${_bkV2SplitColor(bk.id)}55;background:${_bkV2SplitColor(bk.id)}12;border-radius:5px;padding:1px 5px">&#128279; ${esc(bk.id.startsWith('b2c_')?bkV2DisplayCode(bk):bk.voucherRef)}</span>`:`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)}">${esc(bk.id.startsWith('b2c_')?bkV2DisplayCode(bk):bk.voucherRef)}</span>`):'<span class="t2-dim">—</span>'}${bk.id.startsWith('b2c_')?'<div style="margin-top:3px"><span style="background:#E6F7F9;color:#0E7D8A;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.03em">'+bkV2B2CMark(11)+'Love Andaman</span></div>':''}</td>
             <td class="t2-ag" style="${bk.agentId?'padding:0':''}">${(bk.agentId && /^b2c_/.test(String(bk.id||'')))?`<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="Love Andaman &middot; ขายเอง (B2C)${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' &middot; ลูกค้าทักมาทาง '+_c.label):''; })()} &middot; คลิกเปลี่ยนสีประจำเอเยนต์ (ใช้ที่หน้าอื่น)" style="background:#fff;border:1px solid #E3E6EC;margin:2px 3px;padding:8px 10px;border-radius:8px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.08);max-width:180px;display:flex;align-items:center;justify-content:center">${bkV2B2CLogo(22)}</div>`:bk.agentId?(()=>{const _ac=bkV2AgentColor(bk.agentId);return `<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="${esc(norm.agentName)}${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' · ลูกค้าทักมาทาง '+_c.label):(/^b2c_/.test(String(bk.id||''))?' · ขายเอง (B2C)':''); })()} · คลิกเปลี่ยนสี · Alt+คลิก = สีอัตโนมัติ" style="background:${_ac};color:${bkV2ContrastInk(_ac)};margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;box-shadow:0 1px 2px rgba(0,0,0,.10)">${esc(norm.agentName)}</div>`;})():`<span class="t2-agency">${esc(norm.agentName)}</span>`}</td>
             <td class="t2-cu">
@@ -82375,6 +82418,30 @@ function bkV2RenderTab2(){
        ทำเป็นพื้นทึบตัวหนังสือขาว · sticky อยู่แล้ว พอเลื่อนลงหัวยังติดอยู่และอ่านออก */
     table.t2-mtbl th{text-align:left;font-size:9.5px;font-weight:800;color:#F2F5F9;text-transform:uppercase;letter-spacing:.06em;padding:8px 10px;white-space:nowrap;position:sticky;top:0;z-index:35;background:#2C3A52;box-shadow:inset 0 -1px 0 #1B2536}
     table.t2-mtbl td{padding:13px 8px;border-bottom:1px solid var(--border-2);vertical-align:middle;white-space:nowrap}
+    /* ══ §btFreeze (2026-09-04) · แช่แข็งสามคอลัมน์ซ้าย ═══════════════════════
+       ตารางกว้าง 1,585-1,850px แต่จอให้พื้นที่จริง ~1,438px จึงต้องเลื่อนไปขวา
+       เพื่อดู Pay / Total / Boat · พอเลื่อนแล้วไม่รู้ว่ากำลังดูแถวของใครอยู่
+       ตรึง Voucher · Agency · ลูกค้า ไว้กับที่ (วิธีเดียวกับเช็คอินรถ/หน้าท่าใช้อยู่)
+
+       ช่องที่ตรึงต้องมีพื้นทึบ ไม่งั้นแถวข้างหลังทะลุขึ้นมาตอนเลื่อน
+       แต่แถวมีสีของตัวเองอยู่แล้ว (เรือ / กรุ๊ป / ยกเลิก / No-show / ที่เลือกไว้)
+       จะทาขาวทับไม่ได้ · ให้ tr มีพื้นขาวเป็นค่าตั้งต้น แล้ว td รับสีของแถวมาแทน
+       ความจำเพาะต่ำกว่ากฎ hover เดิม (0,2,2 < 0,3,3) hover จึงยังทับได้เหมือนเดิม */
+    .t2-mtbl tr.t2-row{background:#fff}
+    .t2-mtbl tr.t2-row>td{background:inherit;background-clip:padding-box}
+    .t2-mtbl tr.t2-row>td:nth-child(-n+3),
+    .t2-mtbl thead th:nth-child(-n+3){position:sticky;z-index:12}
+    .t2-mtbl thead th:nth-child(-n+3){z-index:36}
+    .t2-mtbl tr.t2-row>td:nth-child(1),.t2-mtbl thead th:nth-child(1){left:0}
+    .t2-mtbl tr.t2-row>td:nth-child(2),.t2-mtbl thead th:nth-child(2){left:var(--t2-fz1,112px)}
+    .t2-mtbl tr.t2-row>td:nth-child(3),.t2-mtbl thead th:nth-child(3){left:var(--t2-fz2,254px)}
+    /* เส้นหนาบอกขอบของส่วนที่ตรึง · ไม่งั้นตาแยกไม่ออกว่าตรงไหนหยุดเลื่อน */
+    .t2-mtbl tr.t2-row>td:nth-child(3),.t2-mtbl thead th:nth-child(3){
+      border-right:2px solid #C3CCD8;box-shadow:3px 0 6px -3px rgba(15,23,42,.18)}
+    /* เนื้อในแถบคาด (โซน / คันรถ / กรุ๊ป / เรือ) เกาะซ้ายไว้ด้วย
+       เลื่อนไปขวาสุดก็ยังอ่านออกว่าแถวพวกนี้อยู่ใต้โซนไหน คันไหน */
+    .t2-mtbl tr>td[colspan]>div{position:sticky;left:0;
+      width:-moz-max-content;width:max-content;max-width:100%}
     table.t2-mtbl tr.t2-row:hover td{background:#fcfcfd;cursor:pointer}
     .t2-mtbl .t2-c,.t2-mtbl th.t2-c{text-align:center}
     .t2-mtbl .t2-r,.t2-mtbl th.t2-r{text-align:right}
@@ -82444,6 +82511,11 @@ function bkV2RenderTab2(){
     .t2-mtbl tr.t2-novan td:first-child{border-left:2px solid #E05B5B}
     .t2-mtbl tr.t2-novan td:last-child{border-right:2px solid #E05B5B}
     .t2-mtbl tr.t2-novan-last td{border-bottom:2px solid #E05B5B}
+    /* §btLkHit · แถวที่ดึงที่นั่งจากล็อคที่กำลังเลือก · ใช้ภาษาเดียวกับแถวที่ถูกติดธงอยู่แล้ว
+       (กรอบรอบแถว ไม่ทาสีทับ) เพื่อไม่กลบสีเรือ/กรุ๊ปที่แถวมีอยู่ */
+    .t2-mtbl tr.t2-lkhit>td{border-top:2px solid #C0392B;border-bottom:2px solid #C0392B}
+    .t2-mtbl tr.t2-lkhit>td:first-child{border-left:2px solid #C0392B}
+    .t2-mtbl tr.t2-lkhit>td:last-child{border-right:2px solid #C0392B}
     /* §SPECIAL REQUEST · เดิม nowrap + max-width 230px → โน้ตยาวๆ ("Extra Person NT1300 Paid 13.07.26")
        ดันคอลัมน์นี้กว้างจนคอลัมน์อื่นถูกบีบ · ตอนนี้ตัดเป็น 2 บรรทัดแล้วใส่ … (ตัวเต็มอยู่ใน tooltip) */
     .t2-allerg,.t2-note{font-size:11px;line-height:1.35;max-width:112px;white-space:normal;overflow-wrap:break-word;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}   /* §pickW */
@@ -82643,10 +82715,16 @@ function bkV2RenderTab2(){
     .bt-lkr.done .q b{color:#9b9088}
     .bt-lkr .q s{text-decoration:none;font-size:10px;color:#9b9088;font-weight:600}
     .bt-lkr .sub{flex:none;font-size:9.5px;font-weight:800;border-radius:5px;padding:1px 6px;background:#EEEDFE;color:#534AB7}
+    .bt-lkr .mg{flex:none;border:none;background:transparent;color:#a89a9a;font-size:12px;line-height:1;
+      padding:2px 3px;cursor:pointer;font-family:inherit;border-radius:5px}
+    .bt-lkr .mg:hover{background:#F2ECE8;color:#5b5b55}
+    .bt-lkr.on{border-color:#C0392B;background:#FDF1EF;box-shadow:0 0 0 1.5px #C0392B33}
+    .bt-lkhi{font-size:10px;font-weight:800;color:#fff;background:#C0392B;border-radius:6px;padding:2px 8px;letter-spacing:0}
     .bt-lkfoot{padding:5px 12px 8px;font-size:10px;color:#8a8078;border-top:1px solid #F2ECE8;
       display:flex;align-items:center;gap:6px;flex-wrap:wrap}
     .bt-lkfoot b{color:#3a3a36;font-family:'DM Mono',monospace}
     .bt-lkfoot .scr{font-size:9.5px;font-weight:800;color:#7A2B18;background:#FBEFEC;border-radius:5px;padding:1px 7px}
+    .bt-lkfoot .hint{margin-left:auto;font-size:9.5px;color:#a89a9a;white-space:nowrap}
     /* Notice */
     .bt-notice{border-left:4px solid #6D28D9}
     .bt-ncb{display:flex;flex-direction:column;gap:6px;padding:2px 10px 10px;overflow:auto;min-height:0}
