@@ -94353,14 +94353,13 @@ function ppAdd(A,r){
   return A;
 }
 /* คืนเป็น HTML (escape ชื่อเอง) เพราะต้องตัวหนาเฉพาะตัวเลข
-   ของที่รู้จำนวน → ชื่อ ×3 · ของที่ไม่รู้ → ชื่อ ×? พร้อม tooltip บอกว่าทำไม */
+   ของที่รู้จำนวน → "กุ้ง ×2" · ของที่ไม่รู้ → ขึ้นแต่ชื่อ
+   เคยใช้สัญลักษณ์ ×? แล้วไม่มีใครรู้ว่าแปลว่าอะไร · ตอนนี้บอกเป็นคำที่หัวชิปแทน */
 function ppAlHtml(al){
   var e=ckEsc, k=Object.keys(al||{}); if(!k.length) return '';
   return k.sort().map(function(nm){
     var v=al[nm]||{q:0,ft:0};
-    return e(nm)
-      +(v.q?(' <b>&times;'+v.q+'</b>'):'')
-      +(v.ft?(' <b title="ใบจองพิมพ์มาเป็นข้อความ ไม่ได้ระบุจำนวนคน — ต้องถามเอเจนต์ก่อนสั่งอาหาร">&times;?</b>'):'');
+    return e(nm)+(v.q?(' <b>&times;'+v.q+'</b>'):'');
   }).join(' · ');
 }
 function ppChips(A){
@@ -94372,8 +94371,12 @@ function ppChips(A){
   var alt=ppAlHtml(A.al);
   if(alt||A.allergy||A.alUnk){
     var lead='&#9888; แพ้อาหาร';
-    if(A.allergy) lead+=' <b>'+A.allergy+'</b>';
-    if(A.alUnk)   lead+=' <b title="ยังไม่รู้จำนวนอีก '+A.alUnk+' ใบจอง">+'+A.alUnk+' ใบ</b>';
+    if(A.allergy) lead+=' <b>'+A.allergy+'</b> คน';
+    /* ใบที่พิมพ์มาเป็นข้อความ ไม่มีตัวเลขให้นับ · บอกตรง ๆ ว่ายังไม่รู้กี่คน
+       ห้ามเงียบหรือเดาเป็น 1 เพราะ "All แพ้ซีฟู้ด" ในใบ 30 คน ไม่ได้แปลว่าคนเดียว */
+    if(A.alUnk)   lead+=(A.allergy?' + ':' ')
+      +'<b title="ใบจองพิมพ์มาเป็นข้อความ ไม่ได้บอกว่ากี่คน — ต้องถามเอเจนต์ก่อนสั่งอาหาร">'
+      +'ยังไม่รู้จำนวน '+A.alUnk+' ใบ</b>';
     out.push(c(lead+(alt?(' · '+alt):''),'#FEF2F2','#F5CFCF','#B91C1C'));
   }
   return out.length?out.join(''):'<span class="pp-none">ไม่มี</span>';
@@ -94387,7 +94390,7 @@ function ppSpecialList(A){
     if(r.vegan) want.push('วีแกน ×'+r.vegan);
     if(r.halal) want.push('ฮาลาล ×'+r.halal);
     (r.alList||[]).forEach(function(x){
-      want.push('⚠ แพ้ '+x.name+(x.ft?' ×? (ใบจองไม่ได้ระบุจำนวน)':(' ×'+x.qty))); });
+      want.push('⚠ แพ้ '+x.name+(x.ft?' (ใบจองไม่ได้บอกว่ากี่คน)':(' ×'+x.qty))); });
     var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
     return '<div class="pp-sprow">'
       +'<div class="pp-spwho"><b>'+e(String(b.leadPax||'').trim()||'—')+'</b>'
@@ -94642,7 +94645,7 @@ function renderPrPo(){
         +(GT.inf?(' &middot; ทารก '+GT.inf+' ไม่นับ'):''))
     + K('','ใบที่ขออาหารพิเศษ', GT.sp.length, 'ใบ',
         (GT.veg+GT.vegan+GT.halal)+' จาน &middot; แพ้อาหาร '+GT.allergy+' คน'
-        +(GT.alUnk?(' + '+GT.alUnk+' ใบไม่ระบุจำนวน'):''))
+        +(GT.alUnk?(' + ยังไม่รู้จำนวน '+GT.alUnk+' ใบ'):''))
     +'</div>';
 
   /* ── สรุปอาหารพิเศษทั้งช่วง · ตัวเลขที่ฝ่ายจัดซื้อเอาไปตั้งยอดสั่งได้เลย ── */
@@ -94878,10 +94881,14 @@ function ppCSSSheet(){ var S='#prpo-host'; return ppCSSSeg()
  +S+' .pp-t tbody tr:nth-child(even)>td.rn{background:#F8F9FA}'
  +S+' .pp-t tbody tr.d:hover>td{background:#F1F8FF}'
  +S+' .pp-t tbody tr.d:hover>td.rn{background:#E8EAED;color:#202124}'
- +S+' .pp-t tr.g-pier>td{background:#E6F0E9;border-top:1px solid #A8C6B4;border-bottom:1px solid #A8C6B4}'
- +S+' .pp-t tr.g-pier>td.rn{background:#DCE8E0}'
- +S+' .pp-t tr.g-prog>td{background:#F1F5F2}'
- +S+' .pp-t tr.g-prog>td.rn{background:#EAEEEB}'
+ /* หัวท่าต้องแยกออกจากหัวโปรแกรมให้ชัด · เดิมเขียวอ่อนทั้งคู่ มองไม่ออกว่าขึ้นท่าใหม่ตรงไหน */
+ +S+' .pp-t tr.g-pier>td{background:#188038;color:#fff;border-top:2px solid #0B5C25;'
+   +'border-bottom:2px solid #0B5C25;border-left-color:#3E9A57;border-right-color:#3E9A57}'
+ +S+' .pp-t tr.g-pier>td.rn{background:#0B5C25;color:#CFE8D6;border-color:#0B5C25}'
+ +S+' .pp-t tr.g-pier .pt{color:#D6EDDC}'
+ +S+' .pp-t tr.g-pier .ps{box-shadow:0 0 0 1px rgba(255,255,255,.5)}'
+ +S+' .pp-t tr.g-prog>td{background:#EFF3F0;border-top:1px solid #C9D6CD}'
+ +S+' .pp-t tr.g-prog>td.rn{background:#E5EBE7}'
  +S+' .pp-t tr.g-tot>td{background:#D9E7DE;border-top:2px solid #6F9C81;border-bottom:2px solid #6F9C81}'
  +S+' .pp-t .eat{background:#EAF6EF;color:#137333}'
  +S+' .pp-btn.pri{background:#137333;border-color:#137333}'
