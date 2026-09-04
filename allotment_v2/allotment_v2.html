@@ -82663,7 +82663,10 @@ function bkV2RenderTab2(){
         ${(grp.length===0 && !_pendRows.length) ? '<div class="t2-nobk">No bookings yet · seats held by lock above</div>' : zoneTable}
         ${ghostBlock}
         ${cxlBlock}
-        ${boatMode?'':boatStrip}
+        ${/* §btTune · แถบ "BOATS · ไกด์ · อาหารรายลำ" ท้ายตารางถูกตัดออก
+              แถว PREP ในการ์ด Boats running บนหัวหน้าบอกยอดรวมของทริปครบแล้ว
+              (ภาษาไกด์ / มื้ออาหาร / แพ้อาหาร / เรือหางยาว)
+              รายละเอียดแยกรายลำดูได้ที่ Boat Operation และใบงานไกด์ */''}
         </div>
       </div>`;
   }).join('');
