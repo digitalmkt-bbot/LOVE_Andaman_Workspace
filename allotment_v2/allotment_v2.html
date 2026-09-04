@@ -94426,7 +94426,7 @@ function ppRows(){
   return out;
 }
 function ppBlank(){ return {n:0,ad:0,chd:0,inf:0,foc:0,tot:0,eat:0,veg:0,vegan:0,halal:0,
-  allergy:0,alUnk:0,al:{},sp:[],ovn:0,chtr:0}; }
+  allergy:0,alUnk:0,al:{},sp:[],rows:[],ovn:0,chtr:0}; }
 function ppAdd(A,r){
   A.n++; A.ad+=r.ad; A.chd+=r.chd; A.inf+=r.inf; A.foc+=r.foc; A.tot+=r.tot; A.eat+=r.eat;
   A.veg+=r.veg; A.vegan+=r.vegan; A.halal+=r.halal;
@@ -94437,6 +94437,7 @@ function ppAdd(A,r){
     if(x.all) e.all=true;
     if(x.ft) e.ft++; else e.q+=x.qty; });
   if(r.sp) A.sp.push(r);
+  A.rows.push(r);   /* ทุกใบ ไม่ใช่เฉพาะใบที่มีอาหารพิเศษ · ใช้ตอนกางรายชื่อ */
   return A;
 }
 /* คืนเป็น HTML (escape ชื่อเอง) เพราะต้องตัวหนาเฉพาะตัวเลข
@@ -94479,10 +94480,17 @@ function ppChips(A){
   }
   return out.length?out.join(''):'<span class="pp-none">ไม่มี</span>';
 }
-/* รายชื่อใบที่ขออาหารพิเศษ · ครัวต้องรู้ว่า "ใคร" ไม่ใช่แค่ "กี่คน" */
-function ppSpecialList(A){
+/* รายชื่อใบจองของลำนั้นวันนั้น · เดิมกางได้เฉพาะลำที่มีอาหารพิเศษ
+   แต่คำถามหน้างานคือ "ลำนี้มีใครบ้าง" พอ ๆ กับ "ใครแพ้อะไร" · กางได้ทุกลำแล้ว
+   ใบที่มีของต้องเตรียมขึ้นก่อน เพราะเป็นงานที่ต้องทำ · ที่เหลือเรียงตามชื่อ */
+function ppBookingList(A){
   var e=ckEsc;
-  return (A.sp||[]).map(function(r){
+  var list=(A.rows||[]).slice().sort(function(x,y){
+    if(!!x.sp!==!!y.sp) return x.sp?-1:1;
+    return String((x.b&&x.b.leadPax)||'').localeCompare(
+           String((y.b&&y.b.leadPax)||''),'en',{numeric:true,sensitivity:'base'});
+  });
+  return list.map(function(r){
     var b=r.b, want=[];
     if(r.veg)   want.push('มังสวิรัติ ×'+r.veg);
     if(r.vegan) want.push('วีแกน ×'+r.vegan);
@@ -94491,13 +94499,17 @@ function ppSpecialList(A){
       want.push('⚠ แพ้ '+x.name+(x.ft?' (ใบจองไม่ได้บอกว่ากี่คน)'
         :(' ×'+x.qty+(x.all?' · ทั้งใบ':'')))); });
     var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
-    return '<div class="pp-sprow">'
+    var px=[]; if(r.ad) px.push(r.ad+' ผู้ใหญ่'); if(r.chd) px.push(r.chd+' เด็ก');
+    if(r.inf) px.push(r.inf+' ทารก'); if(r.foc) px.push(r.foc+' FOC');
+    return '<div class="pp-sprow'+(r.sp?' hot':'')+'">'
       +'<div class="pp-spwho"><b>'+e(String(b.leadPax||'').trim()||'—')+'</b>'
         +'<small>'+e(b.voucherRef||b.code||b.id||'')
         +(ag?(' · '+e(ag.name||ag.code||'')):(b.channel?(' · '+e(b.channel)):''))+'</small></div>'
-      +'<div class="pp-spn">'+r.tot+' ท่าน</div>'
-      +'<div class="pp-spwant">'+e(want.join(' · '))+'</div>'
-      +'</div>';
+      +'<div class="pp-spn">'+r.tot+' ท่าน'
+        +(px.length?('<em>'+e(px.join(' · '))+'</em>'):'')+'</div>'
+      +'<div class="pp-spwant">'
+        +(want.length?e(want.join(' · ')):'<span class="nil">ไม่มีอาหารพิเศษ</span>')
+      +'</div></div>';
   }).join('');
 }
 
@@ -94601,7 +94613,10 @@ function ppCSS(){ var S='#prpo-host'; return ''
  +S+' .pp-spwho{min-width:190px;flex:1}'
  +S+' .pp-spwho b{font-size:12px;font-weight:700}'
  +S+' .pp-spwho small{display:block;font-size:10px;color:#94A3B8;font-family:"DM Mono",ui-monospace,monospace}'
- +S+' .pp-spn{font:700 11.5px "DM Mono",ui-monospace,monospace;color:#475569;min-width:56px;text-align:right}'
+ +S+' .pp-spn{font:700 11.5px "DM Mono",ui-monospace,monospace;color:#475569;min-width:120px;text-align:right}'
+ +S+' .pp-spn em{display:block;font:600 10px inherit;font-style:normal;color:#94A3B8;margin-top:1px}'
+ +S+' .pp-sprow.hot{border-color:#F0D2D2;background:#FFFBFB}'
+ +S+' .pp-spwant .nil{color:#b9beb6;font-weight:500}'
  +S+' .pp-spwant{flex:2;min-width:210px;font-size:11px;font-weight:600;color:#B4560A}'
  +S+' .pp-empty{background:#fff;border:1px solid var(--gl);padding:46px 20px;text-align:center;color:#94A3B8;font-size:13px}'
  +'@media print{'+S+'{background:#fff;--gl:#B9C4CF;--gl2:#D5DCE4}'
@@ -94667,9 +94682,10 @@ function ppProgRows(g, pk){
     if(A.ovn)  tags+='<span class="pp-tag" style="background:#FBF9FF;border-color:#DDD0F5;color:#4A2E86">ค้างคืน</span>';
     if(typeof bkV2IsWeatherClosed==='function' && bkV2IsWeatherClosed(k, C.date))
       tags+='<span class="pp-tag" style="background:#FBE9E9;border-color:#F0C9C9;color:#A32D2D">ปิดจากอากาศ</span>';
-    var more=A.sp.length
-      ? ('<button class="pp-more'+(open?' on':'')+'" onclick="ppToggle(\''+e(okey)+'\')">'
-          +(open?'ซ่อน':('รายชื่อ '+A.sp.length))+'</button>')
+    var more=A.n
+      ? ('<button class="pp-more'+(open?' on':'')+(A.sp.length?' hot':'')+'" '
+          +'onclick="ppToggle(\''+e(okey)+'\')">'
+          +(open?'ซ่อน':('รายชื่อ '+A.n))+'</button>')
       : '';
     var tr='<tr class="d">'
       +'<td class="pp-day">'+e(ppDayLbl(C.date))+'</td>'
@@ -94679,7 +94695,7 @@ function ppProgRows(g, pk){
       + ppNumCells(A)
       +'<td class="mealc">'+ppChips(A)+more+'</td>'
       +'</tr>';
-    if(open) tr+='<tr class="pp-det"><td colspan="'+PP_COLS+'">'+ppSpecialList(A)+'</td></tr>';
+    if(open) tr+='<tr class="pp-det"><td colspan="'+PP_COLS+'">'+ppBookingList(A)+'</td></tr>';
     return tr;
   }).join('');
   return out;
@@ -94921,10 +94937,10 @@ function ppBodyFriendly(P,pOrd,GT){
             +'<span>ทารก <b>'+A.inf+'</b></span>'+(A.foc?('<span>FOC <b>'+A.foc+'</b></span>'):'')
           +'</div>'
           +'<div class="fr-meal">'+ppChips(A)
-            +(A.sp.length?('<button class="fr-more'+(open?' on':'')+'" onclick="ppToggle(\''+e(okey)+'\')">'
-              +(open?'ซ่อนรายชื่อ':('ดูรายชื่อ '+A.sp.length+' ใบ'))+'</button>'):'')
+            +(A.n?('<button class="fr-more'+(open?' on':'')+'" onclick="ppToggle(\''+e(okey)+'\')">'
+              +(open?'ซ่อนรายชื่อ':('ดูรายชื่อ '+A.n+' ใบ'))+'</button>'):'')
           +'</div>'
-          +(open?('<div class="fr-det">'+ppSpecialList(A)+'</div>'):'')
+          +(open?('<div class="fr-det">'+ppBookingList(A)+'</div>'):'')
         +'</article>';
       });
       out+='</div>';
@@ -94962,9 +94978,9 @@ function ppBodyBoard(P,pOrd,GT){
           +'<div class="bd-n"><b>'+A.eat+'</b><span>ที่</span>'
             +'<em>'+A.tot+' คน &middot; '+A.n+' ใบ</em></div>'
           +'<div class="bd-m">'+ppChips(A)+'</div>'
-          +(A.sp.length?('<button class="bd-more'+(open?' on':'')+'" onclick="ppToggle(\''+e(okey)+'\')">'
-            +(open?'ซ่อนรายชื่อ':('รายชื่อ '+A.sp.length+' ใบ'))+'</button>'):'')
-          +(open?('<div class="bd-det">'+ppSpecialList(A)+'</div>'):'')
+          +(A.n?('<button class="bd-more'+(open?' on':'')+'" onclick="ppToggle(\''+e(okey)+'\')">'
+            +(open?'ซ่อนรายชื่อ':('รายชื่อ '+A.n+' ใบ'))+'</button>'):'')
+          +(open?('<div class="bd-det">'+ppBookingList(A)+'</div>'):'')
         +'</article>';
       });
     });
