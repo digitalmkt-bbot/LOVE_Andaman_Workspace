@@ -28099,6 +28099,103 @@ function flProjLightbox(url, caption){
 function flProjChildMJs(projId){
   return (FL_MAINT||[]).filter(m=>m.parentProjectId===projId);
 }
+
+/* ══ §slipView · กดดูสลิปที่แนบไว้ ═══════════════════════════════════════
+   สลิปอัปโหลดได้มานานแล้ว (pckSlipUpload → POST /api/attach → ตาราง attachments)
+   และเซิร์ฟเวอร์ก็มี GET /api/attach/<id> ที่เสิร์ฟไฟล์แบบ inline อยู่แล้ว
+   แต่ทุกหน้าที่โชว์สลิปเรนเดอร์แค่ "ชื่อไฟล์" เป็นตัวหนังสือตาย กดไม่ได้
+   บัญชีจึงต้องไปสแกนซัมลงไดร์ฟเอง ทั้งที่ไฟล์อยู่ในระบบแล้ว
+
+   เก็บแต่ ref ในบุ๊กกิ้ง ({id,name,mime,size}) ไม่เคยเก็บ base64 ลง blob
+   ตัวนี้จึงอ่านจาก URL อย่างเดียว ไม่แตะข้อมูล ไม่เพิ่มขนาด blob
+
+   z-index ต้องสูงกว่า acctModal (9999) และ .la-modal (99999)
+   ไม่งั้นเปิดจากในกล่อง Extra วันเดินทางแล้วจะโดนกล่องบัง
+   ═════════════════════════════════════════════════════════════════════════ */
+var _LA_SLIP=null;
+function laSlipUrl(s){ return '/api/attach/'+encodeURIComponent((s&&s.id)||''); }
+function laSlipIsImg(s){ return /^image\//i.test(String((s&&s.mime)||'')); }
+/* list = [{id,name,mime}] · title = ป้ายบอกว่าสลิปของก้อนเงินไหน */
+function laSlipView(list, title, i){
+  var L=(Array.isArray(list)?list:[list]).filter(function(s){ return s && s.id; });
+  if(!L.length){ alert('ยังไม่มีสลิปแนบไว้ในรายการนี้'); return; }
+  _LA_SLIP={ list:L, title:String(title||''), i:Math.max(0, Math.min(L.length-1, +i||0)) };
+  var ov=document.getElementById('la-slipview');
+  if(!ov){
+    ov=document.createElement('div'); ov.id='la-slipview';
+    ov.style.cssText='position:fixed;inset:0;z-index:100060;background:rgba(0,0,0,.86);'
+      +'display:flex;align-items:center;justify-content:center;font-family:"DM Sans",sans-serif';
+    ov.onclick=function(e){ if(e.target===ov) laSlipClose(); };
+    document.body.appendChild(ov);
+    document.addEventListener('keydown', laSlipKey);
+  }
+  laSlipRender();
+}
+function laSlipKey(e){
+  if(!document.getElementById('la-slipview')) return;
+  if(e.key==='Escape'){ laSlipClose(); }
+  else if(e.key==='ArrowRight'){ laSlipStep(1); }
+  else if(e.key==='ArrowLeft'){ laSlipStep(-1); }
+}
+function laSlipStep(n){
+  if(!_LA_SLIP) return;
+  var L=_LA_SLIP.list.length;
+  _LA_SLIP.i=((_LA_SLIP.i+n)%L+L)%L;
+  laSlipRender();
+}
+function laSlipClose(){
+  var ov=document.getElementById('la-slipview'); if(ov) ov.remove();
+  document.removeEventListener('keydown', laSlipKey);
+  _LA_SLIP=null;
+}
+function laSlipRender(){
+  var ov=document.getElementById('la-slipview'), S=_LA_SLIP; if(!ov||!S) return;
+  var esc=function(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+  var s=S.list[S.i], url=laSlipUrl(s), many=(S.list.length>1);
+  var nav=function(d,ch){ return '<button onclick="laSlipStep('+d+')" title="'+(d>0?'ถัดไป':'ก่อนหน้า')+'" '
+    +'style="background:rgba(255,255,255,.14);border:none;color:#fff;width:38px;height:38px;border-radius:19px;'
+    +'font-size:19px;cursor:pointer;flex:0 0 auto">'+ch+'</button>'; };
+  /* รูปโชว์ในหน้าเดียวกันเลย · PDF กับไฟล์อื่นให้เปิดแท็บใหม่
+     iframe PDF ในโอเวอร์เลย์เล็ก ๆ อ่านไม่ออกอยู่ดี แท็บใหม่ได้ตัวอ่านเต็มของเบราว์เซอร์ */
+  var body = laSlipIsImg(s)
+    ? '<img src="'+esc(url)+'" alt="'+esc(s.name||'slip')+'" '
+      +'style="max-width:86vw;max-height:74vh;object-fit:contain;border-radius:10px;background:#fff;'
+      +'box-shadow:0 10px 40px rgba(0,0,0,.5)">'
+    : '<div style="background:#fff;border-radius:12px;padding:26px 30px;text-align:center;max-width:86vw">'
+      +'<div style="font-size:34px;line-height:1">&#128196;</div>'
+      +'<div style="font-size:13px;font-weight:700;margin:8px 0 3px;word-break:break-all">'+esc(s.name||'ไฟล์แนบ')+'</div>'
+      +'<div style="font-size:11px;color:#6b7280;margin-bottom:14px">'+esc(s.mime||'')+' &middot; ดูในแท็บใหม่ได้</div>'
+      +'<a href="'+esc(url)+'" target="_blank" rel="noopener" '
+      +'style="display:inline-block;background:#1683C7;color:#fff;text-decoration:none;border-radius:9px;'
+      +'padding:9px 18px;font-size:12.5px;font-weight:700">เปิดแท็บใหม่ &#8599;</a></div>';
+
+  ov.innerHTML='<div style="display:flex;align-items:center;gap:12px;max-width:96vw" onclick="event.stopPropagation()">'
+    +(many?nav(-1,'&#8249;'):'')
+    +'<div style="display:flex;flex-direction:column;align-items:center;gap:11px;min-width:0">'
+      +body
+      +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;'
+        +'background:rgba(0,0,0,.55);border-radius:16px;padding:7px 15px;color:#fff;font-size:12px">'
+        +(S.title?('<b style="font-weight:700">'+esc(S.title)+'</b>'):'')
+        +'<span style="opacity:.8">'+esc(s.name||'slip')+'</span>'
+        +(many?('<span style="opacity:.7;font-variant-numeric:tabular-nums">'+(S.i+1)+'/'+S.list.length+'</span>'):'')
+        +'<a href="'+esc(url)+'" target="_blank" rel="noopener" style="color:#8ED0F5">เปิดแท็บใหม่ &#8599;</a>'
+        +'<button onclick="laSlipClose()" style="background:rgba(255,255,255,.16);border:none;color:#fff;'
+          +'border-radius:12px;padding:4px 12px;font-size:11.5px;cursor:pointer;font-family:inherit">ปิด</button>'
+      +'</div>'
+    +'</div>'
+    +(many?nav(1,'&#8250;'):'')+'</div>';
+}
+/* ป้าย 📎 ที่กดดูได้ · ใช้ร่วมกันทุกหน้า เพื่อให้หน้าตากับพฤติกรรมตรงกัน
+   slips ถูกฝังเป็น JSON ใน onclick — ผ่าน encodeURIComponent กัน quote ในชื่อไฟล์พังแอตทริบิวต์ */
+function laSlipClickAttr(slips, title, i){
+  var j=JSON.stringify((Array.isArray(slips)?slips:[]).map(function(s){
+    return {id:s.id, name:s.name, mime:s.mime};
+  }));
+  return 'onclick="event.stopPropagation();laSlipView(JSON.parse(decodeURIComponent(\''
+    + encodeURIComponent(j) + '\')),decodeURIComponent(\'' + encodeURIComponent(String(title||'')) + '\'),'
+    + (+i||0) + ')"';
+}
 /* ══ §prjAwaitBill · เครื่องมือกลางของ "รอวางบิล" ══════════════════════ */
 /* ใบวางบิลตัวจริงในกองเอกสาร · ชื่อที่คนกรอกใช้มีทั้งไทยและอังกฤษ รับทั้งคู่ */
 function flProjBillDoc(p){
@@ -54127,7 +54224,10 @@ function pckPayRender(){
         +(needSlip?'<span style="color:#A32D2D;font-weight:800">*ต้องมี</span><span class="pckp-soft"> — แนบทีหลังได้</span>'
                   :'<span class="pckp-soft">— ไม่ต้องแนบสำหรับเงินสด</span>')+'</label>';
       form+=L.slips.map(function(sl,j){
-        return '<div class="pckp-slip"><span>&#128206;</span><span class="nm">'+e(sl.name||'slip')+'</span>'
+        /* §slipView · ชื่อไฟล์กดเปิดดูได้ · ปุ่มลบยังทำงานเหมือนเดิม */
+        return '<div class="pckp-slip"><span>&#128206;</span>'
+          +'<span class="nm" style="cursor:pointer;text-decoration:underline" '
+          +laSlipClickAttr(L.slips, 'สลิปที่กำลังจะบันทึก', j)+' title="กดเพื่อเปิดดูสลิป">'+e(sl.name||'slip')+'</span>'
           +'<button class="rm" onclick="pckPayRmSlip('+i+','+j+')">&#10005;</button></div>';
       }).join('');
       form+='<label class="pckp-drop'+((needSlip&&!L.slips.length)?' need':'')+'">'
@@ -54160,7 +54260,11 @@ function pckPayRender(){
         +'<span style="flex:1;min-width:0"><b style="font-family:\'DM Mono\',monospace">'+pckB(p.amount)+'</b>'
         +((+p.fee||0)?('<span style="color:#a5a49d"> + ค่าธรรมเนียม '+pckB(p.fee)+(p.feePct?(' ('+p.feePct+'%)'):'')+'</span>'):'')
         +(p.note?('<div class="pckp-hnote">'+e(p.note)+'</div>'):'')
-        +((p.slips&&p.slips.length)?('<div class="pckp-hslip">&#128206; '+p.slips.map(function(s){ return e(s.name||'slip'); }).join(' · ')+'</div>'):'')
+        /* §slipView · ชื่อไฟล์แต่ละใบกดเปิดดูได้ · เดิมเป็นตัวหนังสือตาย */
+        +((p.slips&&p.slips.length)?('<div class="pckp-hslip">&#128206; '
+           +p.slips.map(function(s,si){ return '<span style="cursor:pointer;text-decoration:underline" '
+             +laSlipClickAttr(p.slips, pckMLabel(p.method)+' '+pckB(p.amount), si)
+             +' title="กดเพื่อเปิดดูสลิป">'+e(s.name||'slip')+'</span>'; }).join(' · ')+'</div>'):'')
         +(noSlip?('<div style="margin-top:4px"><span class="pckp-wait">&#9888; รอสลิป</span>'
            +'<label class="pckp-late"><input type="file" accept="image/*,application/pdf" style="display:none" onchange="pckPayAddSlip(\''+p.id+'\',this)">แนบสลิป</label></div>'):'')
         +'</span>'
@@ -60253,6 +60357,8 @@ function tsSaleList(b, date){
     out.push({ kind:'ex', id:x.id||'', t:String(x.service||'ขายเพิ่ม'), qty:(+x.qty||1), amt:amt,
                // §tsSaleFee · fee ของรายการนี้ · รูดจริง = amt + fee (ตัวที่ตรงกับ statement)
                fee:(+x.fee||0), nSlip:((x.slips||[]).length),
+               // §slipView · ส่ง ref ของสลิปมาด้วย ของเดิมส่งแต่ตัวนับ กดดูไฟล์ไม่ได้
+               slips:(x.slips||[]).slice(),
                method:mth, who:x.seller||'', done:_g, noSlip:slipMissing });
   }); }catch(_){}
   try{ (Array.isArray(b.upgrades)?b.upgrades:[]).forEach(function(u){
@@ -60265,6 +60371,7 @@ function tsSaleList(b, date){
     if(_uNo) noSlip++;
     out.push({ kind:'up', id:u.id||'', t:String(u.label||'upgrade'), qty:1, amt:amt,
                fee:(+u.fee||0), nSlip:((u.slips||[]).length),
+               slips:(u.slips||[]).slice(),
                method:m2, who:u.seller||'', done:!!u.collected, noSlip:_uNo });
   }); }catch(_){}
   return { list:out, by:by, fee:fee, got:got, due:due, noSlip:noSlip, tot:got+due, n:out.length };
@@ -62541,8 +62648,10 @@ function renderTravelSum(){
     m.pays.forEach(function(p){
       if((p.method||'cash')==='cash') return;
       var n=((p.slips||[]).length), lb=(PM[p.method||'cash']||['อื่นๆ'])[0]+' '+money(p.amount);
+      /* §slipView · มีสลิปแล้ว = กดเปิดดูได้เลย ไม่ต้องไปสแกนซัมลงไดร์ฟ */
       _slipBits.push(n
-        ? ('<span class="ts-slipok" title="'+e(lb+' · มีสลิปแล้ว '+n+' ไฟล์')+'">&#128206; '+e(lb)+'</span>')
+        ? ('<span class="ts-slipok" style="cursor:pointer" '+laSlipClickAttr(p.slips, lb)
+           +' title="'+e(lb+' · มีสลิปแล้ว '+n+' ไฟล์ · กดเพื่อเปิดดู')+'">&#128206; '+e(lb)+'</span>')
         : ('<label class="ts-slipb" title="'+e('แนบสลิป · '+lb)+'">&#128206; แนบสลิป '+e(lb)
            +'<input type="file" accept="image/*,application/pdf" style="display:none"'
            +' onchange="tsSlipPick(\'p\',\''+b.id+'\',\''+(p.id||'')+'\',this)"></label>'));
@@ -62552,7 +62661,8 @@ function renderTravelSum(){
       if((x.method||'cash')==='cash') return;
       var lb=String(x.t||'ขายเพิ่ม')+' '+money(x.amt);
       _slipBits.push((+x.nSlip>0)
-        ? ('<span class="ts-slipok" title="'+e(lb+' · มีสลิปแล้ว')+'">&#128206; '+e(lb)+'</span>')
+        ? ('<span class="ts-slipok" style="cursor:pointer" '+laSlipClickAttr(x.slips, lb)
+           +' title="'+e(lb+' · มีสลิปแล้ว · กดเพื่อเปิดดู')+'">&#128206; '+e(lb)+'</span>')
         : ('<label class="ts-slipb" title="'+e('แนบสลิป · '+lb)+'">&#128206; แนบสลิป '+e(lb)
            +'<input type="file" accept="image/*,application/pdf" style="display:none"'
            +' onchange="tsSlipPick(\'x\',\''+b.id+'\',\''+x.id+'\',this)"></label>'));
@@ -68412,7 +68522,10 @@ function bkV2ExtraPayRender(){
     h+='<div style="margin:4px 0 4px">';
     P.slips.forEach(function(sp,i){
       h+='<div style="display:flex;align-items:center;gap:8px;font-size:11.5px;padding:4px 0;border-bottom:0.5px solid var(--fd-line-soft)">'
-        +'<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">&#128206; '+esc(sp.name||sp.url||'slip')+'</span>'
+        /* §slipView · กดชื่อไฟล์เปิดดูได้ · โอเวอร์เลย์ z-index สูงกว่ากล่องนี้ จึงไม่โดนบัง */
+        +'<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;text-decoration:underline" '
+          +laSlipClickAttr(P.slips, 'สลิปของรายการขายเพิ่ม', i)
+          +' title="กดเพื่อเปิดดูสลิป">&#128206; '+esc(sp.name||sp.url||'slip')+'</span>'
         +'<button type="button" onclick="bkV2ExtraRmSlip('+i+')" style="background:transparent;border:none;color:#A32D2D;cursor:pointer;font-size:12px">&#10005;</button></div>';
     });
     h+='<label style="display:block;border:1.5px dashed var(--fd-line);border-radius:9px;padding:10px;text-align:center;font-size:11.5px;color:var(--fd-ink-soft);cursor:pointer;margin-top:4px">'
