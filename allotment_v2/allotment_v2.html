@@ -94265,6 +94265,20 @@ function ppMonth(off){ var d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+(
   _ppFrom=_ppYMD(new Date(y,m,1)); _ppTo=_ppYMD(new Date(y,m+1,0)); ppAfter(); }
 function ppSlide(dir){ var n=_ppSpan(_ppFrom,_ppTo)*((dir<0)?-1:1);
   _ppFrom=_ppShift(_ppFrom,n); _ppTo=_ppShift(_ppTo,n); ppAfter(); }
+/* ช่วงที่เลือกอยู่ตรงกับปุ่มไหน · ใช้ทำไฮไลต์ให้รู้ว่า "ตอนนี้ยืนอยู่ตรงไหน"
+   เดิมไม่มีปุ่มไหนติดสีเลย เปิดมาเห็นวันนี้แต่ไม่มีอะไรบอกว่านี่คือค่าเริ่มต้น */
+function ppRangeIs(kind){
+  var t=_ppYMD(new Date());
+  if(kind==='d1')  return _ppFrom===t && _ppTo===t;
+  if(kind==='d7')  return _ppFrom===t && _ppTo===_ppShift(t,6);
+  if(kind==='d14') return _ppFrom===t && _ppTo===_ppShift(t,13);
+  if(kind==='m0' || kind==='m1'){
+    var d=new Date(); d.setDate(1); d.setMonth(d.getMonth()+(kind==='m1'?1:0));
+    var y=d.getFullYear(), m=d.getMonth();
+    return _ppFrom===_ppYMD(new Date(y,m,1)) && _ppTo===_ppYMD(new Date(y,m+1,0));
+  }
+  return false;
+}
 function ppPickRoute(id){ _ppRoute=(id===_ppRoute)?'':(id||''); ppAfter(); }
 function ppPickPier(p){ _ppPier=(p===_ppPier)?'':(p||''); ppAfter(); }
 function ppOnlySp(){ _ppOnlySp=!_ppOnlySp; ppAfter(); }
@@ -94439,6 +94453,9 @@ function ppCSS(){ var S='#prpo-host'; return ''
    +'font:600 11.5px inherit;font-family:inherit;cursor:pointer;white-space:nowrap}'
  +S+' .pp-btn:hover{background:#EFF3F7;border-color:#B8C4D0}'
  +S+' .pp-btn.pri{background:#0F172A;border-color:#0F172A;color:#fff}'
+ /* ปุ่มช่วงที่กำลังดูอยู่ · สีเดียวกับ accent ของแอป แยกจากปุ่มพิมพ์ที่เป็นสีเข้ม */
+ +S+' .pp-btn.on{background:#1683C7;border-color:#1683C7;color:#fff}'
+ +S+' .pp-btn.on:hover{background:#1276B4;border-color:#1276B4}'
  +S+' .pp-date{border:1px solid var(--gl);border-radius:3px;padding:5px 8px;font-weight:600;font-size:11.5px;'
    +'font-family:"DM Mono",ui-monospace,monospace;color:#334155;background:#fff}'
  +S+' .pp-kpis{display:flex;flex-wrap:wrap;border:1px solid var(--gl);background:#fff;margin-bottom:11px}'
@@ -94643,16 +94660,17 @@ function renderPrPo(){
     +'<p>แยกตามท่า &rarr; โปรแกรม &rarr; เรือ &middot; จำนวนคน + รายการอาหารพิเศษ &middot; '+e(ppRangeLbl())
     +' <span style="color:#b9beb6">('+days+' วัน)</span></p></div>'
     +'<div class="pp-ctl pp-noprint">'
+      /* วันนี้ มาก่อนเพื่อน · หน้านี้เปิดมาเป็นวันนี้ ปุ่มแรกจึงควรเป็นตัวที่บอกค่าเริ่มต้น */
+      +'<button class="pp-btn'+(ppRangeIs('d1')?' on':'')+'" onclick="ppQuick(1)">วันนี้</button>'
       +'<button class="pp-btn" onclick="ppSlide(-1)" title="เลื่อนถอยหลังหนึ่งช่วง">&#8249;</button>'
       +'<input type="date" class="pp-date" value="'+e(_ppFrom)+'" onchange="ppSetFrom(this.value)">'
       +'<span style="color:#94A3B8;font-size:12px">ถึง</span>'
       +'<input type="date" class="pp-date" value="'+e(_ppTo)+'" onchange="ppSetTo(this.value)">'
       +'<button class="pp-btn" onclick="ppSlide(1)" title="เลื่อนไปข้างหน้าหนึ่งช่วง">&#8250;</button>'
-      +'<button class="pp-btn" onclick="ppQuick(1)">วันนี้</button>'
-      +'<button class="pp-btn" onclick="ppQuick(7)">7 วัน</button>'
-      +'<button class="pp-btn" onclick="ppQuick(14)">14 วัน</button>'
-      +'<button class="pp-btn" onclick="ppMonth(0)">เดือนนี้</button>'
-      +'<button class="pp-btn" onclick="ppMonth(1)">เดือนหน้า</button>'
+      +'<button class="pp-btn'+(ppRangeIs('d7')?' on':'')+'" onclick="ppQuick(7)">7 วัน</button>'
+      +'<button class="pp-btn'+(ppRangeIs('d14')?' on':'')+'" onclick="ppQuick(14)">14 วัน</button>'
+      +'<button class="pp-btn'+(ppRangeIs('m0')?' on':'')+'" onclick="ppMonth(0)">เดือนนี้</button>'
+      +'<button class="pp-btn'+(ppRangeIs('m1')?' on':'')+'" onclick="ppMonth(1)">เดือนหน้า</button>'
       +'<button class="pp-btn pri" onclick="ppPrint()">&#128424; พิมพ์ / PDF</button>'
       + ppSkinSeg()
     +'</div></div>';
