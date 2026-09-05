@@ -3254,6 +3254,11 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
 #view-booking .bkv2-nb-field{display:flex;flex-direction:column;gap:4px}
 #view-booking .bkv2-nb-label{font-size:10px;font-weight:600;color:var(--ink-soft);letter-spacing:.06em;text-transform:uppercase}
 #view-booking .bkv2-nb-input{border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 11px;font-family:inherit;font-size:13px;color:var(--ink);background:var(--white);transition:border-color .15s}
+/* §altDropFix · เหตุผลเดียวกับ §pax boxes ข้างล่าง แต่เกิดกับคอลัมน์จุดรับ/จุดส่ง
+   ที่ห่อด้วย <div> · ตัว div เป็น grid item ที่ min-width:auto จึงกว้างตาม
+   select/input ข้างใน แล้วล้นไปทับปุ่มลบ · บังคับให้ทุกช่องในแถวนี้หดได้ */
+#view-booking .bkv2-alt-row>*{min-width:0}
+#view-booking .bkv2-alt-row .bkv2-nb-input{width:100%;box-sizing:border-box;max-width:100%}
 /* §pax boxes · a grid item defaults to min-width:auto, and <input type=number> has a wide intrinsic
    size (~170px), so four of them refused to shrink and spilled out over the pickup dropdown. */
 .bkv2-pax-box{min-width:0;width:100%;box-sizing:border-box;padding:8px 2px;text-align:center;-moz-appearance:textfield}
@@ -79370,7 +79375,7 @@ function bkV2RenderPickupSection(){
           ? `<div style="margin-top:3px"><span style="font-size:9px;font-weight:700;color:#5B289A;background:#EDE7FB;padding:1px 7px;border-radius:4px">โซน ${_zShort(_zone)} · auto</span></div>`
           : `<div style="margin-top:3px;font-size:9px;color:#b4b2a9;font-style:italic">เลือกจุดรับ → โซนมาอัตโนมัติ</div>`;
         return `
-        <div class="bkv2-nb-row" style="grid-template-columns:${_gcols};align-items:start;gap:7px;margin-top:6px">
+        <div class="bkv2-nb-row bkv2-alt-row" style="grid-template-columns:${_gcols};align-items:start;gap:7px;margin-top:6px">
           <input class="bkv2-nb-input" list="bkv2-altpick-names" type="text" placeholder="เลือก/พิมพ์ชื่อ" value="${escapeHTML(a.who||'')}" oninput="bkV2SetAltPickup(${i},'who',this.value)">
           <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px">${PAX_K.map(k=>{const _v=bkAltPax(a)[k]; const _bad=_altBd[k]>_bkBd[k]; return `<input class="bkv2-nb-input bkv2-pax-box" type="number" min="0" step="1" value="${_v}" onchange="bkV2SetAltPickupPax(${i},'${k}',this.value)" title="${PAX_LBL[k]} ที่จุดนี้ (กลุ่มนี้มีทั้งหมด ${_bkBd[k]})"${_bad?' style="border-color:#E0857E;background:#FDECEA"':(_v?'':' style="color:#c4c1b8"')}>`;}).join('')}</div>
           <div>
@@ -79410,7 +79415,7 @@ function bkV2RenderPickupSection(){
             <span style="font-size:11px;color:${alt.length?'#5B289A':'var(--ink)'};font-weight:600">&#128652; แยกคน · รับหรือส่งคนละที่${alt.length?` · ${alt.length} รายการ`:''}</span>
             <button onclick="bkV2AddAltPickup()" style="font-size:11px;font-weight:600;color:#5B289A;background:#EDE7FB;border:1px solid #C7B8E8;border-radius:6px;padding:4px 10px;cursor:pointer;font-family:inherit">+ เพิ่มจุดรับ</button>
           </div>
-          ${alt.length?`<div style="display:grid;grid-template-columns:${_gcols};gap:7px;margin-top:8px;font-size:8.5px;font-weight:700;letter-spacing:.05em;color:#8a7db0;text-transform:uppercase"><span>ชื่อ (จากรายชื่อด้านบน)</span><span style="text-align:center">AD · CHD · INF · FOC</span><span>จุดรับ · Pickup area</span><span>ชื่อโรงแรม / Location</span><span>จุดส่งขากลับ</span><span></span></div>`:''}
+          ${alt.length?`<div class="bkv2-alt-row" style="display:grid;grid-template-columns:${_gcols};gap:7px;margin-top:8px;font-size:8.5px;font-weight:700;letter-spacing:.05em;color:#8a7db0;text-transform:uppercase"><span>ชื่อ (จากรายชื่อด้านบน)</span><span style="text-align:center">AD · CHD · INF · FOC</span><span>จุดรับ · Pickup area</span><span>ชื่อโรงแรม / Location</span><span>จุดส่งขากลับ</span><span></span></div>`:''}
           ${rows}
           ${summary}
           ${alt.length?'<div style="font-size:9.5px;color:#8a7db0;margin-top:6px">จุดรับหลักด้านบน = คนส่วนใหญ่ (รวม Lead) · รายการนี้ = คนที่รับคนละที่ · โซนมาจากจุดรับที่เลือกอัตโนมัติ · จำนวน "จุดรับหลัก" คำนวณอัตโนมัติ = กลุ่มทั้งหมด − ที่แยกไป</div>':''}
@@ -87527,7 +87532,21 @@ function bkV2CommitBooking(status){
     dropoffAreaId: d.dropoffSame ? d.pickupAreaId : d.dropoffAreaId,
     dropoffArea: d.dropoffSame ? (pickupArea?.name || '') : (dropoffArea?.name || ''),
     dropoffHotelName: d.dropoffSame ? (d.hotelName || '') : (d.dropoffHotelName || ''),
-    altPickups: Array.isArray(d.altPickups) ? d.altPickups.map(a=>{ const _ar=(a.areaId&&typeof bkV2GetArea==='function')?bkV2GetArea(a.areaId):null; const _p=bkAltPax(a); return Object.assign({who:(a.who||'').trim(), qty:Math.max(1,bkPaxSum(_p)), areaId:a.areaId||'', area:_ar?_ar.name:'', zone:_ar?_ar.zone:((a.zone||'').trim()), place:(a.place||'').trim()}, _p); }).filter(a=>(a.who||a.place||a.areaId) && bkPaxSum(bkAltPax(a))>0) : [],   // §altPickups · บางคนรับคนละที่ · {who,qty,areaId,area,zone,place} · zone auto จาก area
+    /* §altDropFix · ฝั่งจุดส่งต้องถูกเก็บด้วย · เดิมประกอบใหม่จากรายชื่อช่องตายตัว
+       ซึ่งมีแต่ฝั่งรับ · ตั้งจุดส่งขากลับไว้แล้วกดบันทึก ค่าหายทุกครั้ง */
+    altPickups: Array.isArray(d.altPickups) ? d.altPickups.map(a=>{
+      const _ar=(a.areaId&&typeof bkV2GetArea==='function')?bkV2GetArea(a.areaId):null;
+      const _p=bkAltPax(a);
+      const _same=(a.dropSame!==false);
+      const _dar=(!_same && a.dropAreaId && typeof bkV2GetArea==='function')?bkV2GetArea(a.dropAreaId):null;
+      return Object.assign({who:(a.who||'').trim(), qty:Math.max(1,bkPaxSum(_p)), areaId:a.areaId||'',
+        area:_ar?_ar.name:'', zone:_ar?_ar.zone:((a.zone||'').trim()), place:(a.place||'').trim(),
+        dropSame:_same,
+        dropAreaId:_same?'':(a.dropAreaId||''),
+        dropArea:_dar?_dar.name:'',
+        dropZone:_same?'':(_dar?_dar.zone:((a.dropZone||'').trim())),
+        dropPlace:_same?'':((a.dropPlace||'').trim())}, _p);
+    }).filter(a=>(a.who||a.place||a.areaId) && bkPaxSum(bkAltPax(a))>0) : [],   // §altPickups · บางคนรับคนละที่ · zone auto จาก area
     guides: d.guides ? { english:!!d.guides.english, russian:!!d.guides.russian, chinese:!!d.guides.chinese, otherLang: d.guides.otherLang || '' } : { english:false, russian:false, chinese:false, otherLang:'' },
     notes: d.notes || '',
     paxType: d.paxType,
