@@ -61437,11 +61437,15 @@ function tsRefPackList(date){
   if(_tsVatF) rows=rows.filter(function(r){
     return _tsVatF==='vat' ? tsHasVat(r.b) : !tsHasVat(r.b);
   });
-  return rows.filter(function(r){
+  // §tsSlipWith · ติด ord (ลำดับในตารางวันนั้น) มาด้วย · ชุดสลิปจะได้แทรกเข้าที่เดิมได้ตรงใบ
+  var out=[];
+  rows.forEach(function(r,i){
     var b=r.b;
-    if(((b.attachments||[]).length)>0) return true;
-    return (typeof _docIsB2B==='function') ? _docIsB2B(b) : !!b.agentId;
-  }).map(function(r){ return { bk:r.b, trip:r.t }; });
+    var keep=(((b.attachments||[]).length)>0)
+      || ((typeof _docIsB2B==='function') ? _docIsB2B(b) : !!b.agentId);
+    if(keep) out.push({ bk:b, trip:r.t, ord:i });
+  });
+  return out;
 }
 /* ══ §tsSlipPack (2026-09-05) · ชุดสลิปการชำระเงินท้ายใบสรุป ══════════════
    เงินที่รับหน้าท่ามีสามทาง · pierPayments (COT/ยอดค้าง) · SB_EXTRAS (ขายเพิ่ม) · upgrades
@@ -61457,7 +61461,7 @@ function tsSlipPackList(date){
   var LAB={cash:'เงินสด', transfer:'โอนเงิน', card:'บัตรเครดิต'};
   var num=function(n){ return (typeof pckNum==='function')?pckNum(n):String(+n||0); };
   var out=[];
-  rows.forEach(function(r){
+  rows.forEach(function(r,_i){
     var b=r.b, imgs=[], miss=0, tot=0, who=[];
     var push=function(src, title, mth, amt, fee, byWho, note){
       var ss=Array.isArray(src)?src:[];
@@ -61480,12 +61484,12 @@ function tsSlipPackList(date){
       push(x.slips, (x.kind==='up'?'อัปเกรด · ':'ขายเพิ่ม · ')+x.t, x.method, x.amt, x.fee, x.who, '');
     });
     if(!imgs.length && !miss) return;   /* สดล้วน / ไม่มีเงินเข้าวันนี้ = ไม่ต้องมีหน้า */
-    out.push({ bk:b, trip:r.t, imgs:imgs, miss:miss, tot:tot, who:who.join(' · ') });
+    out.push({ bk:b, trip:r.t, ord:_i, imgs:imgs, miss:miss, tot:tot, who:who.join(' · ') });
   });
   return out;
 }
 /* หน้ากระดาษใช้ class ชุดเดียวกับ _docPackPage จึงได้ CSS · ขนาดกระดาษ · และตัววาด PDF ฟรี */
-function _tsSlipPage(r, i, total, date, kicker){
+function _tsSlipPage(r, i, total, seq, date, kicker){
   var e=_docPackEsc, b=r.bk, t=r.trip;
   var R=((typeof getRoute==='function'?getRoute(t.routeId):null)||{});
   var ag=((typeof sbGetAgent==='function'?sbGetAgent(b.agentId):null)||{});
@@ -61511,29 +61515,52 @@ function _tsSlipPage(r, i, total, date, kicker){
   return '<section class="pg">'
     + '<header><span>LOVE Andaman &middot; '+e(kicker||'สลิปการชำระเงิน')+' &middot; '+e(date)+'</span><span>หน้า '+(i+1)+' / '+total+'</span></header>'
     + '<div class="trip">ทริป &middot; '+e(R.name||t.routeId)+(R.pier?(' &middot; '+e(_DOCPACK_PIER[R.pier]||R.pier)):'')+'</div>'
-    + '<div class="bk"><div class="r1"><b>'+e(b.leadPax||'—')+'</b><span>รับเงินรวม &#3647;'+num(r.tot)+'</span></div>'
+    + '<div class="bk"><div class="r1"><b>'+(seq?('#'+seq+' &middot; '):'')+e(b.leadPax||'—')+'</b><span>รับเงินรวม &#3647;'+num(r.tot)+'</span></div>'
     +   '<div class="r2">'+e(ag.name||b.agentId||'')+(b.voucherRef?(' &middot; '+e(b.voucherRef)):'')
     +   (r.who?(' &middot; รับโดย '+e(r.who)):'')+'</div></div>'
     + '<div class="body">'+body+'</div>'
     + '<footer><span>&#9744; ยอดตรงกับ statement</span><span>ผู้ตรวจ ________________</span></footer>'
     + '</section>';
 }
-function _tsSlipPages(list, date, kicker){
-  var total=list.length;
-  return list.map(function(r,i){ return _tsSlipPage(r,i,total,date,kicker); }).join('');
+/* ══ §tsSlipWith (2026-09-05) · สลิปไปอยู่ติดกับเอกสารของใบนั้น ไม่แยกเป็นปึกท้ายเล่ม ══
+   เดิม §tsSlipPack ต่อชุดสลิปทั้งวันไว้หลังชุดเอกสารจบ · คนกระทบยอดต้องพลิกสองปึกไปมา
+   เพื่อจับสลิปให้ตรงใบ · ตอนนี้หน้าสลิปของใบไหน วางต่อจากหน้าเอกสารของใบนั้นเลย
+   ใบที่มีสลิปแต่ไม่มีในชุดเอกสาร (เช่น walk-in ไม่มีไฟล์แนบ) ยังพิมพ์อยู่ · ต่อท้ายตามลำดับเดิม
+   เลข # เดินตามเส้นทางเหมือนเดิม · หน้าสลิปใช้เลขเดียวกับหน้าเอกสารของใบนั้น = เป็นคู่กัน */
+function _tsPackPages(refList, slipList, date, kicker, slipKicker){
+  var items=[];
+  /* ทั้งสองลิสต์เป็นส่วนหนึ่งของแถวชุดเดียวกัน · เรียงด้วย ord แล้วเอกสารมาก่อนสลิปของใบเดียวกัน */
+  (refList||[]).forEach(function(r,i){ items.push({ k:'doc',  r:r, ord:(r.ord==null?i:+r.ord), sub:0 }); });
+  (slipList||[]).forEach(function(s,i){ items.push({ k:'slip', r:s, ord:(s.ord==null?i:+s.ord), sub:1 }); });
+  items.sort(function(a,b){ return (a.ord-b.ord) || (a.sub-b.sub); });
+  items.forEach(function(it,i){
+    var p=i?items[i-1]:null;
+    var id=String(((it.r||{}).bk||{}).id||'');
+    it.pair=!!(p && it.k==='slip' && p.k==='doc' && id && String(((p.r||{}).bk||{}).id||'')===id);
+  });
+  var total=items.length, lastRoute=null, seq=0, html='';
+  items.forEach(function(it,i){
+    var R=((typeof getRoute==='function'?getRoute(it.r.trip.routeId):null)||{});
+    if(!it.pair){                                  /* หน้าสลิปที่ต่อจากเอกสารใบเดียวกัน ไม่กินเลขใหม่ */
+      if(R.id!==lastRoute){ lastRoute=R.id; seq=0; }
+      seq++;
+    }
+    html += (it.k==='doc') ? _docPackPage(it.r, i, total, seq, date, kicker)
+                           : _tsSlipPage(it.r, i, total, seq, date, slipKicker);
+  });
+  return html;
 }
 function tsPrintSheet(){
   var host=document.getElementById('travelsum-host'); if(!host) return;
   var date=_tsDate;
   var list=(typeof tsRefPackList==='function')?tsRefPackList(date):[];
-  var pack=(list.length && typeof _docPackPages==='function')
-    ? _docPackPages(list, date, 'Reference · เอกสารประกอบ'
-        + (_tsVatF ? (_tsVatF==='vat' ? ' · เฉพาะมี VAT' : ' · เฉพาะไม่มี VAT') : '')
-        + (_tsRoute ? (' · '+tsRouteName(_tsRoute)) : '')) : '';
-  // §tsSlipPack · สลิปบัตร/โอนของเงินที่รับวันนี้ · ต่อท้ายชุดเอกสารอ้างอิง ในกระดาษชุดเดียวกัน
+  // §tsSlipWith · สลิปบัตร/โอนของเงินที่รับวันนี้ · แทรกอยู่หลังหน้าเอกสารของใบเดียวกัน
   var slipL=(typeof tsSlipPackList==='function')?tsSlipPackList(date):[];
-  var slipPack=(slipL.length && typeof _tsSlipPages==='function')
-    ? _tsSlipPages(slipL, date, 'Payment slips · สลิปการชำระเงิน') : '';
+  var _kick=(_tsVatF ? (_tsVatF==='vat' ? ' · เฉพาะมี VAT' : ' · เฉพาะไม่มี VAT') : '')
+          + (_tsRoute ? (' · '+tsRouteName(_tsRoute)) : '');
+  var pack=((list.length||slipL.length) && typeof _tsPackPages==='function')
+    ? _tsPackPages(list, slipL, date, 'Reference · เอกสารประกอบ'+_kick,
+                   'Payment slip · สลิปการชำระเงิน'+_kick) : '';
   var w=window.open('','_blank');
   if(!w){ alert('เบราว์เซอร์บล็อกป๊อปอัป · อนุญาต pop-up แล้วลองใหม่'); return; }
   // ฟอนต์ · ยกทุก <link rel=stylesheet> ที่ชี้ไปโรงฟอนต์จากหน้าหลักไปด้วย
@@ -61562,7 +61589,7 @@ function tsPrintSheet(){
   w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Travel Summary '+ckEsc(date)+'</title>'
     +fontLinks+'<style>'+css+'</style></head><body class="ts-printing">'
     +'<div id="travelsum-host">'+host.innerHTML+'</div>'
-    +((pack||slipPack)?('<div class="la-docpack">'+pack+slipPack+'</div>'):'')
+    +(pack?('<div class="la-docpack">'+pack+'</div>'):'')
     +'<style>'+pageCSS+'</style>'
     +boot+'</body></html>');
   w.document.close();
