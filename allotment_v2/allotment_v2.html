@@ -53592,6 +53592,14 @@ function pcCSS(scope){
   +scope+' .pc-t td.cy input::placeholder,'+scope+' .pc-t td.cb input::placeholder{color:#D9C9A4;font-weight:400}'
   +scope+' .pc-t td.cy input:focus,'+scope+' .pc-t td.cb input:focus{outline:none}'
   +scope+' .pc-t td.cy:focus-within,'+scope+' .pc-t td.cb:focus-within{box-shadow:inset 0 0 0 2px #16265C;background:#fff}'
+  /* §pcPrAlign · โหมดกระดาษ · ช่องกรอกกลายเป็นตัวหนังสือ แต่ td.cy/.cb ตั้ง padding:0
+     ไว้ให้ input กินเต็มช่อง · พอไม่มี input ตัวเลขเลยไปกองชิดซ้ายติดเส้น
+     คืน padding ให้ แล้วจัดตำแหน่งให้ตรงกับที่เห็นบนจอ (จำนวน = กลาง · เงิน = ขวา) */
+  +scope+' .pc-t td.pr{padding:7px 10px}'
+  +scope+' .pc-t td.cy.pr{text-align:right;color:#7A4A00;font-weight:700}'
+  +scope+' .pc-t td.cy.ct.pr{text-align:center;padding:7px 4px}'
+  +scope+' .pc-t td.cb.pr{text-align:center;color:#16265C;font-weight:700}'
+  +scope+' .pc-t td.ctx.pr{color:#5A6270;font-weight:600;white-space:normal}'
   +scope+' .pc-t td.ctx{padding:0}'
   +scope+' .pc-t td.ctx input{border:none;background:transparent;width:100%;font:600 12px inherit;'
     +'font-family:inherit;padding:7px 10px;color:#5A6270}'
@@ -53969,8 +53977,8 @@ function pcSheetPK(pier, opt){
           '<input value="'+(C[k]||'')+'" placeholder="—" '
           +'inputmode="numeric" onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\''+k+'\',this.value)">'); }).join('');
       var exc=(exp==null)
-        ? '<td class="pc-ex na"><b>—</b><i>'+pcE((R.why||'ไม่มีราคา'))+'</i></td>'
-        : '<td class="pc-ex"><b>'+pcN(exp)+'</b><i>'+(hasK?('ตามที่คีย์'+(C.src==='price'?' · เรทขาย':(C.src==='nat'?' · สัญชาติจริง':'')))
+        ? '<td class="pc-ex gs na"><b>—</b><i>'+pcE((R.why||'ไม่มีราคา'))+'</i></td>'
+        : '<td class="pc-ex gs"><b>'+pcN(exp)+'</b><i>'+(hasK?('ตามที่คีย์'+(C.src==='price'?' · เรทขาย':(C.src==='nat'?' · สัญชาติจริง':'')))
             :'ตามหัวจริง')+'</i></td>';
       /* §pkNat · สองชุดไม่ตรงกัน = มีใบที่ขายเรทหนึ่งแต่คนเดินทางอีกสัญชาติหนึ่ง
          บอกทั้งเลขเดิมและเงินที่ต่าง · ตัดสินใจได้โดยไม่ต้องเปิดใบจองไล่ดูทีละใบ */
@@ -53993,10 +54001,10 @@ function pcSheetPK(pier, opt){
             +'onclick="pcFillAsk(\''+ds+'\',\''+B.bid+'\',\''+pier+'\')">⤓ เติมจากใบจอง</button>')))
           +'</td>'+cells
         +'<td class="v">'+XN.tot+'</td>'+keys
-        +box('cy', (C.dock?pcN(C.dock):''),
+        +box('cy gs', (C.dock?pcN(C.dock):''),
           '<input value="'+(C.dock?pcN(C.dock):'')+'" placeholder="—" inputmode="numeric" '
           +'onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'dock\',this.value)">')
-        +'<td class="v gs"'+(hasK?' style="background:#FFFDF5;color:#7A4A00"':'')+'>'+(hasK?kt:'—')+'</td>'
+        +'<td class="v"'+(hasK?' style="background:#FFFDF5;color:#7A4A00"':'')+'>'+(hasK?kt:'—')+'</td>'
         +exc
         +box('cy', (C.amt?pcN(C.amt):''),
           '<input value="'+(C.amt?pcN(C.amt):'')+'" placeholder="—" inputmode="numeric" '
@@ -54012,9 +54020,9 @@ function pcSheetPK(pier, opt){
       +DT.map(function(v,i){ return '<td class="v'+(i===PC_PK.length/2?' gs':'')+'">'+v+'</td>'; }).join('')
       +'<td class="v">'+dtot+'</td>'
       +DK.map(function(v,i){ return '<td class="v'+((i===0||i===PC_PK.length/2)?' gs':'')+'">'+(anyk?v:'—')+'</td>'; }).join('')
-      +'<td class="r">'+(ddk?pcN(ddk):'—')+'</td>'
-      +'<td class="v gs">'+(anyk?dktot:'—')+'</td>'
-      +'<td class="pc-ex"><b>'+(anyx?pcN(dex):'—')+'</b></td>'
+      +'<td class="r gs">'+(ddk?pcN(ddk):'—')+'</td>'
+      +'<td class="v">'+(anyk?dktot:'—')+'</td>'
+      +'<td class="pc-ex gs"><b>'+(anyx?pcN(dex):'—')+'</b></td>'
       +'<td class="r">'+(dm?pcN(dm):'—')+'</td>'
       +pcDiffCell(dm, anyx?dex:null)+'</tr>';
   });
@@ -54057,8 +54065,8 @@ function pcSheetPK(pier, opt){
        +GT.map(function(v,i){ return '<td class="v'+(i===PC_PK.length/2?' gs':'')+'">'+v+'</td>'; }).join('')
        +'<td class="v">'+gtot+'</td>'
        +GK.map(function(v,i){ return '<td class="v'+((i===0||i===PC_PK.length/2)?' gs':'')+'">'+v+'</td>'; }).join('')
-       +'<td class="r">'+pcMoney(gdk)+'</td>'
-       +'<td class="v gs">'+gktot+'</td>'
+       +'<td class="r gs">'+pcMoney(gdk)+'</td>'
+       +'<td class="v">'+gktot+'</td>'
        +'<td class="pc-ex gs"><b>'+pcMoney(gex)+'</b></td>'
        +'<td class="r">'+pcMoney(gm)+'</td>'
        +pcDiffCell(gm, gex)+'</tr></tfoot></table></div>'
