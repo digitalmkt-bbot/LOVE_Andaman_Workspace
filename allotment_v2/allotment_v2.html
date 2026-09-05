@@ -57861,6 +57861,10 @@ function pckGuideJobCss(){ return '<style>'
   +'.jdep{display:inline-block;border:2px solid currentColor;border-radius:6px;padding:1px 8px;font-weight:700;font-size:12.5px;margin-left:6px}'
   +'.jdate{margin-left:auto;text-align:right;font-size:11px}'
   +'.jfill{border-bottom:1px dotted currentColor;opacity:.75;min-width:98px;display:inline-block;height:13px}'
+  +'.jfilled{font-weight:700;font-size:12px}'   /* §crewPaper · ชื่อไกด์จริงแทนเส้นประ */
+  +'.jcrew{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;margin-top:4px;padding:3px 11px;'
+    +'border:1px solid #d1d5db;border-radius:7px;flex:none}'
+  +'.jcrew .jcv{font-size:11.5px;font-weight:600}'
   // ── แถบสรุป ──
   +'.jsum{display:flex;border:1.5px solid #111827;border-radius:8px;margin-top:6px;overflow:hidden;flex:none}'
   +'.jsc{padding:5px 11px;border-right:1px solid #d1d5db;display:flex;align-items:baseline;gap:7px;flex-wrap:wrap}'
@@ -57956,6 +57960,21 @@ function pckGuideJobSheet(bid, date, rows, vd){
   if(S.ltJoin) lt.push('Join '+S.ltJoin+' คน');
   if(S.ltChtr) lt.push('Charter '+S.ltChtr+' ลำ');
   var vans={}; rows.forEach(function(r){ if(r.vanId) vans[r.vanId]=1; });
+  /* §crewPaper · ไกด์และทีมเรือของลำนี้วันนี้ · มาจากใบสั่งงานมัคคุเทศก์และใบงานเรือ
+     ของเดิมหัวใบเว้นเส้นประให้เขียนชื่อไกด์เอง ทั้งที่จ่ายไกด์ลงลำไว้ในระบบแล้ว
+     ยังไม่จ่าย/ยังไม่จัด = คงเส้นประไว้เหมือนเดิม ไม่ได้บังคับให้ต้องมีในระบบก่อนถึงพิมพ์ได้ */
+  var _gdN='', _islTxt='', _crewTxt='';
+  try{
+    /* §gdRole · เฉพาะไกด์/ไกด์ฝึกหัดขึ้นช่อง "ไกด์" · นักศึกษาฝึกงาน/สต๊าฟไปรวมกับ ผช.ไกด์
+       กติกาเดียวกับใบสั่งงานมัคคุเทศก์ · สองใบที่พิมพ์วันเดียวกันจะได้ไม่แบ่งคนคนละแบบ */
+    var _GF=(typeof pjGuidesFull==='function')?pjGuidesFull(date,bid):[];
+    var _C=(typeof pjCrewOf==='function')?pjCrewOf(date,bid):null;
+    _gdN=_GF.filter(function(x){ return x.guide; }).map(function(x){ return x.name; })
+            .filter(Boolean).join(' · ');
+    _islTxt=_GF.filter(function(x){ return !x.guide; }).map(function(x){ return x.name; })
+            .concat((_C&&_C.island)||[]).filter(Boolean).join(' · ');
+    _crewTxt=(typeof pjCrewLine==='function')?pjCrewLine(date,bid):'';
+  }catch(_){}
   // §svcLegend · คำอธิบายสัญลักษณ์ต้องมาจากใบนี้ ไม่ใช่พิมพ์ตายตัว
   //   ใบที่มีแต่ Longtail ไม่ได้ใช้ + / ⬆ / * เลย · อธิบายไปก็ทำให้คนไล่หาของที่ไม่มี
   var _svcN=0, _svcP=0, _svcU=0, _svcS=0;
@@ -58152,7 +58171,7 @@ function pckGuideJobSheet(bid, date, rows, vd){
     +'<div style="margin-left:22px"><div class="jbname">'+e(boat.name||bid)+'</div>'
       +'<div class="jbsub">'+e(rt.name||rid||'—')+(dep?('<span class="jdep">ออก '+e(dep)+'</span>'):'')+'</div></div>'
     +'<div class="jdate"><div>'+e(dTh)+'</div>'
-      +'<div style="margin-top:3px">ไกด์ <span class="jfill"></span></div></div></div>'
+      +'<div style="margin-top:3px">ไกด์ '+(_gdN?('<b class="jfilled">'+e(_gdN)+'</b>'):'<span class="jfill"></span>')+'</div></div></div>'
     +'<div class="jsum" style="border-color:'+_col+'">'
     +'<div class="jsc"><span class="jslab">รวม</span><span class="jsbig">'+t.all+'</span><span class="jsv" style="color:#6b7280">pax</span>'
       +'<span class="jsv">AD '+t.ad+J+'CHD '+t.chd+J+'INF '+t.inf+J+'FOC '+t.foc+'</span>'
@@ -58173,6 +58192,12 @@ function pckGuideJobSheet(bid, date, rows, vd){
     +'<div class="jsc"><span class="jslab">Longtail</span>'+(lt.length?('<span class="jsv">'+lt.join(J)+'</span>'):'<span class="jsnone">ไม่มี</span>')
       +'</div>'
     +'</div>'
+    /* §crewPaper · ใครลงเรือลำนี้วันนี้ · ไกด์ถือใบนี้อยู่บนเรือ ต้องรู้ว่าเรียกใครได้
+       ไม่มีใครจัดไว้เลย = ไม่ต้องขึ้นบรรทัดนี้ · กระดาษจะได้ไม่มีหัวข้อว่างเปล่า */
+    +((_crewTxt||_islTxt)?('<div class="jcrew"><span class="jslab">ทีมเรือ</span>'
+      +(_crewTxt?('<span class="jcv">'+e(_crewTxt)+'</span>'):'')
+      +(_islTxt?('<span class="jslab" style="margin-left:4px">ผช.ไกด์</span><span class="jcv">'+e(_islTxt)+'</span>'):'')
+      +'</div>'):'')
     +'</td></tr></thead><tbody><tr><td>'   /* §guideHead2 · เนื้อหาไหลต่อไปหน้า 2 ได้ */
     +'<div class="tw"><table>'+THEAD+'<tbody>'+body+'</tbody></table></div>'
     +'</td></tr></tbody></table>'
@@ -58580,6 +58605,32 @@ function goRouteOf(date,bid){
   var rid=use.length?(use[0].t.routeId||''):'';
   return (typeof getRoute==='function'?getRoute(rid):null)||{};
 }
+/* §crewPaper (2026-09-05) · ทีมเรือของลำนั้นวันนั้น · อ่านจากใบงานเรือที่เดียว
+   ใบงานไกด์ไม่เคยบอกว่าใครลงเรือลำนี้เลย · ใบสั่งงานมัคคุเทศก์บอกแต่ "จำนวน"
+   แก้คนในใบงานเรือแล้วกระดาษสองใบนี้ไม่ขยับตาม หน้าท่าจึงต้องเขียนชื่อทับเองทุกวัน
+   คืนเป็นชื่อแยกตำแหน่ง · ยังไม่จัดใครเลย = คืนค่าว่าง ใบจะได้เว้นที่ให้เขียนมือเหมือนเดิม
+   pjOf() คืนทีมประจำเรือให้เองเมื่อยังไม่เคยแตะใบของวันนั้น จึงไม่ว่างโดยไม่จำเป็น */
+function pjCrewOf(date,bid){
+  var out={cap:'',asst:'',crew:[],island:[],n:0};
+  var nm=(typeof pjStaffName==='function')?pjStaffName:function(x){ return x||''; };
+  var J=null; try{ J=(typeof pjOf==='function')?pjOf(date,bid):null; }catch(_){}
+  if(!J) return out;
+  out.cap  = J.cap  ? nm(J.cap)  : '';
+  out.asst = J.asst ? nm(J.asst) : '';
+  out.crew   = (J.crew  ||[]).filter(Boolean).map(nm);
+  out.island = (J.island||[]).filter(Boolean).map(nm);
+  out.n = (out.cap?1:0)+(out.asst?1:0)+out.crew.length;
+  return out;
+}
+/* บรรทัดเดียวพร้อมป้ายตำแหน่ง · ใช้ทั้งหัวใบงานไกด์และช่องหมายเหตุของใบสั่งงาน
+   ตำแหน่งใช้คำเดียวกับทะเบียนรายชื่อผู้เดินทาง (pckTravelCrew) สามใบจะได้เรียกเหมือนกัน */
+function pjCrewLine(date,bid){
+  var C=pjCrewOf(date,bid), p=[];
+  if(C.cap)  p.push('กัปตัน '+C.cap);
+  if(C.asst) p.push('ช่างเครื่อง '+C.asst);
+  C.crew.forEach(function(n){ p.push('เด็กเรือ '+n); });
+  return p.join(' · ');
+}
 /* §goCrewJob · "กัปตันและนายท้ายเรือ" นับจากคนที่จัดลงใบงานเรือของวันนั้น
    ไม่ใช่ช่อง "ลูกเรือ" ในทะเบียนเรือ · ทะเบียนเรือคือโครงมาตรฐานของลำ
    ใบงานเรือคือคนที่ลงเรือจริงวันนั้น (มีคนแทน มีคนขาด ก็เห็นตรงนั้น)
@@ -58627,7 +58678,13 @@ function goSheet(date,bid,issue){
   var tot=cnt.ad+cnt.chd+cnt.inf+gs.length+crew+othN;
   var sg=C.signers[A.sign]||C.signers[0]||{name:'',title:''};
   var dt=goThDate(date);
-  var row=function(lb,n){ return '<tr><td class="lb">'+lb+'</td><td class="n">'+n+'</td><td class="u">คน</td><td class="rm"></td></tr>'; };
+  /* §crewPaper · ช่องหมายเหตุเดิมว่างเปล่าทุกแถว · ใส่ชื่อคนที่จัดไว้ในใบงานเรือลงไป
+     เจ้าท่าถามว่า "กัปตันคือใคร" ตัวเลข 3 คนตอบไม่ได้ · ชื่ออยู่ในระบบแล้วตั้งแต่จัดใบงานเรือ
+     ยังไม่จัด = ช่องว่างไว้ให้เขียนมือเหมือนเดิม */
+  var row=function(lb,n,rm){ return '<tr><td class="lb">'+lb+'</td><td class="n">'+n+'</td><td class="u">คน</td><td class="rm">'+(rm||'')+'</td></tr>'; };
+  var CR=(typeof pjCrewOf==='function')?pjCrewOf(date,bid):{cap:'',asst:'',crew:[],island:[]};
+  var crewNm=(typeof pjCrewLine==='function')?pjCrewLine(date,bid):'';
+  var islNm=(CR.island||[]).join(' · ');
   return '<div class="gopg">'
     +'<h1>ใบสั่งงานมัคคุเทศก์</h1>'
     +'<div class="co"><div class="nm">'+e(H.en)+'</div><div class="sp"></div>'
@@ -58653,8 +58710,8 @@ function goSheet(date,bid,issue){
       +row('เด็กโต&nbsp; ( อายุ 4 - 12 ปี )', cnt.chd)
       +row('เด็กเล็ก (อายุไม่เกิน 3 ขวบ )', cnt.inf)
       +row('มัคคุเทศก์&nbsp; (ผู้ติดตาม)', gs.length)
-      +row('กัปตันและนายท้ายเรือ', crew)
-      +row('อื่นๆ .......นักศึกษาฝึกงาน./ สต๊าฟ........', othN)
+      +row('กัปตันและนายท้ายเรือ', crew, crewNm?('<span class="rmn">'+e(crewNm)+'</span>'):'')
+      +row('อื่นๆ .......นักศึกษาฝึกงาน./ สต๊าฟ........', othN, islNm?('<span class="rmn">ผช.ไกด์ '+e(islNm)+'</span>'):'')
       +'<tr class="sum"><td class="lb">รวมจำนวนผู้โดยสารบนเรือทั้งหมด</td><td class="n">'+tot+'</td><td class="u">คน</td><td class="blank"></td></tr>'
     +'</table>'
     +(gs.length>1?('<div class="gonote">มัคคุเทศก์ผู้ติดตาม: '+e(gs.slice(1).map(function(x){ return x.name+(x.license?(' ('+x.license+')'):''); }).join(' · '))+'</div>'):'')
@@ -58697,6 +58754,7 @@ function goCss(){ return '<style>'
   +'.pt th{font-weight:600;text-align:center}'
   +'.pt td.lb{text-align:left}.pt td.n{text-align:right;width:110px;font-weight:600}'
   +'.pt td.u{text-align:left;width:74px}.pt td.rm{width:250px}'
+  +'.pt td.rm .rmn{font-size:11px;font-weight:600;line-height:16px}'   /* §crewPaper */
   +'.pt tr.sum td.lb{text-align:center;font-weight:600;border-right:none}'
   +'.pt tr.sum td.n{text-align:center;font-weight:700}.pt tr.sum td.blank{border:none}'
   +'.gonote{margin-top:10px;font-size:12px}'
