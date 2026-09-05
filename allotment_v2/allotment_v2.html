@@ -49660,12 +49660,20 @@ function vjTplVars(vanId){
    ติดไปกับตอนพิมพ์และบันทึกรูปด้วย · แต่กดได้เฉพาะในแอป
    ล้างของเก่าทิ้งตอนบันทึก · เก็บย้อนหลังแค่ 45 วัน ไม่งั้นสะสมไปเรื่อย ๆ
    (เจอมาแล้วกับ Seat Lock ที่ค้างเป็นร้อย)                                 */
-var VJ_HL=[{k:'y',c:'#FFE9A8',n:'เหลือง'},{k:'o',c:'#FFD3A8',n:'ส้ม'},
-           {k:'b',c:'#CFE6FB',n:'ฟ้า'},   {k:'g',c:'#CFEEDD',n:'เขียว'},
-           {k:'r',c:'#FBD3CE',n:'แดง'}];
-function vjHlColor(k){ for(var i=0;i<VJ_HL.length;i++){ if(VJ_HL[i].k===k) return VJ_HL[i].c; } return ''; }
+/* §vjFix1 · เก็บเป็นรหัสสีตรงๆ แทนตัวอักษรย่อ · จะได้เลือกสีเองนอกจานได้
+   ของเก่าที่เก็บเป็น y/o/b/g/r ยังอ่านออก ไม่ต้องแปลงข้อมูล */
+var VJ_HL=['#FFE9A8','#FFD3A8','#FBD3CE','#F5B7C4','#E4D4F7',
+           '#CFE6FB','#CFF0F5','#CFEEDD','#E4F2BE','#E2E0DA',
+           '#F9D77E','#F5B48A','#F4948C','#C9A7EE','#9FC9F0',
+           '#8FD9C4','#B9DF7C','#FFF0A0','#D9CFC2','#BDBDB4'];
+var VJ_HL_OLD={y:'#FFE9A8',o:'#FFD3A8',b:'#CFE6FB',g:'#CFEEDD',r:'#FBD3CE'};
+function vjHlColor(v){
+  v=String(v||'');
+  if(/^#[0-9a-fA-F]{6}$/.test(v)) return v;
+  return VJ_HL_OLD[v]||'';
+}
 var _VJ_HL=null, _VJ_HL_SRC=null;
-var _VJ_HL_ON=false, _VJ_HL_C='y';
+var _VJ_HL_ON=false, _VJ_HL_C='#FFE9A8';
 function vjHlAll(){
   var raw='';
   try{ var b=laBlob(); raw=(typeof b.vanjob_rowhl==='string')?b.vanjob_rowhl:''; }catch(_){ raw=''; }
@@ -49698,7 +49706,16 @@ function vjHlToggle(){
   if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')){ alert('ดูอย่างเดียว · แก้ไม่ได้'); return; }
   _VJ_HL_ON=!_VJ_HL_ON; renderVanJobs();
 }
-function vjHlPick(k){ _VJ_HL_C=k; renderVanJobs(); }
+function vjHlPick(c){ if(!/^#[0-9a-fA-F]{6}$/.test(String(c||''))) return; _VJ_HL_C=c; renderVanJobs(); }
+/* เลือกสีเองระหว่างลาก · อัปเดตแค่กรอบที่เลือกไว้ ไม่วาดใหม่ (เหตุผลเดียวกับจานสีของ Template) */
+function vjHlLive(c){
+  if(!/^#[0-9a-fA-F]{6}$/.test(String(c||''))) return;
+  _VJ_HL_C=c;
+  var box=document.getElementById('vjhl-cst'); if(box) box.style.background=c;
+  var g=document.getElementById('vjhl-g');
+  if(g) [].forEach.call(g.querySelectorAll('button[data-c]'), function(b){
+    b.className=(String(b.getAttribute('data-c')).toLowerCase()===String(c).toLowerCase())?'on':''; });
+}
 function vjHlClick(key){
   if(!_VJ_HL_ON) return;
   var A=vjHlAll();
@@ -49719,9 +49736,11 @@ function vjHlBar(date,vanId,routeId){
   if(!_VJ_HL_ON) return '';
   return '<div class="vjhl-b"><b>&#128396; ไฮไลต์แถว</b>'
    +'<span class="s">เลือกสี แล้วคลิกที่แถวในใบ &middot; คลิกซ้ำสีเดิม = ล้างบรรทัดนั้น</span>'
-   +'<span class="g">'
-   +VJ_HL.map(function(x){ return '<button class="'+(_VJ_HL_C===x.k?'on':'')+'" style="background:'+x.c
-       +'" title="'+x.n+'" onclick="vjHlPick(\''+x.k+'\')"></button>'; }).join('')
+   +'<span class="g" id="vjhl-g">'
+   +VJ_HL.map(function(c){ return '<button data-c="'+c+'" class="'+(String(_VJ_HL_C).toLowerCase()===c.toLowerCase()?'on':'')
+       +'" style="background:'+c+'" title="'+c+'" onclick="vjHlPick(\''+c+'\')"></button>'; }).join('')
+   +'<label class="cst" id="vjhl-cst" title="เลือกสีเอง" style="background:'+_VJ_HL_C+'">'
+     +'<input type="color" value="'+_VJ_HL_C+'" oninput="vjHlLive(this.value)" onchange="vjHlPick(this.value)"></label>'
    +'<button class="x" title="ล้างไฮไลต์ทั้งใบนี้" onclick="vjHlClearSheet(\''+date+'\',\''+vanId+'\',\''+(routeId||'')+'\')">&times;</button>'
    +'</span>'
    +'<span class="n">ผูกกับใบนี้ใบเดียว (วันที่ &middot; รถ &middot; โปรแกรม) &middot; ติดไปกับตอนพิมพ์และบันทึกรูป</span>'
@@ -49733,12 +49752,16 @@ function vjHlCss(){
      +'border-radius:10px;padding:7px 12px;margin-bottom:10px;font-family:inherit}'
    +'.vjhl-b b{font-size:12.5px;color:#7A4A00;flex:none}'
    +'.vjhl-b .s{font-size:11px;color:#8a6a2a}'
-   +'.vjhl-b .g{display:flex;gap:6px;align-items:center;margin-left:auto;flex:none}'
-   +'.vjhl-b .g button{width:26px;height:26px;border-radius:7px;border:none;cursor:pointer;'
+   +'.vjhl-b .g{display:grid;grid-template-columns:repeat(11,22px);gap:5px;align-items:center;margin-left:auto;flex:none}'
+   +'.vjhl-b .g button{width:22px;height:22px;border-radius:6px;border:none;cursor:pointer;'
      +'box-shadow:inset 0 0 0 1px rgba(0,0,0,.13);font-family:inherit;padding:0}'
+   /* เลือกสีเอง · ช่องสุดท้ายของแถว · input ซ่อนไว้ใต้ป้ายสี */
+   +'.vjhl-b .g .cst{width:22px;height:22px;border-radius:6px;cursor:pointer;position:relative;overflow:hidden;'
+     +'box-shadow:inset 0 0 0 1px rgba(0,0,0,.13),inset 0 0 0 3px #fff}'
+   +'.vjhl-b .g .cst input{position:absolute;inset:-4px;width:34px;height:34px;opacity:0;cursor:pointer;border:none;padding:0}'
    +'.vjhl-b .g button.on{box-shadow:inset 0 0 0 1px rgba(0,0,0,.13),0 0 0 2.5px #7A4A00}'
    +'.vjhl-b .g button.x{background:#fff;border:1px solid #d7c9a8;color:#8a6a2a;font-size:15px;line-height:1}'
-   +'.vjhl-b .n{font-size:9.5px;color:#a89468;flex:none;max-width:220px;line-height:1.45}'
+   +'.vjhl-b .n{font-size:9.5px;color:#a89468;flex:none;max-width:180px;line-height:1.45}'
    /* ในโหมดไฮไลต์ · ทั้งแถวกดได้ ต้องบอกด้วยว่ากดได้ */
    +'.vjo.vjhl tbody tr{cursor:pointer}'
    +'.vjo.vjhl tbody tr:hover>td{outline:1.5px dashed #C99A2E;outline-offset:-2px}'
@@ -49787,11 +49810,31 @@ function _vjtStep(lbl,k,hot){
    +'<input value="'+T[k]+'" onchange="vjTplSet(\''+k+'\',this.value)">'
    +'<i onclick="vjTplBump(\''+k+'\',0.5)">+</i></span><span class="cu">px</span></div>';
 }
+/* §vjFix1 · ระหว่างลากสีในจานของเบราว์เซอร์ ห้ามวาดใหม่ทั้งหน้า
+   ไม่งั้น input ที่กำลังถืออยู่ถูกลบ จานสีปิดตัวเอง (เด้ง)
+   ทำแค่ยัดค่าลงตัวแปร CSS ของใบ · ใบเปลี่ยนสีตามทันทีโดยไม่ต้องวาดใหม่
+   ค่อยวาดใหม่ตอน change (ปิดจานสีแล้ว) เพื่อให้ส่วนที่ไม่ใช่ตัวแปรตามไปด้วย */
+function _vjtPrevVan(){
+  var k=String(_vanJobsPreview||''); if(!k) return null;
+  return k.split('|')[0].split('~')[0] || null;
+}
+function vjTplLiveVars(){
+  var pg=document.getElementById('vjo-page'); if(!pg) return;
+  vjTplVars(_vjtPrevVan()).split(';').forEach(function(d){
+    var i=d.indexOf(':'); if(i>0) pg.style.setProperty(d.slice(0,i).trim(), d.slice(i+1).trim());
+  });
+}
+function vjTplLive(k,v){
+  if(!_VJT_DRAFT) return;
+  _VJT_DRAFT[k]=v;
+  var lb=document.getElementById('vjtsw-'+k); if(lb) lb.textContent=String(v).toUpperCase();
+  vjTplLiveVars();
+}
 function _vjtSw(lbl,k,note){
   var T=_VJT_DRAFT||vjTpl(), c=T[k]||'#000000';
   return '<div class="ct"><span class="cl">'+lbl+'</span>'
-   +'<span class="cw"><input type="color" value="'+c+'" oninput="vjTplSet(\''+k+'\',this.value)">'
-   +'<code>'+String(c).toUpperCase()+'</code></span>'
+   +'<span class="cw"><input type="color" value="'+c+'" oninput="vjTplLive(\''+k+'\',this.value)" onchange="vjTplSet(\''+k+'\',this.value)">'
+   +'<code id="vjtsw-'+k+'">'+String(c).toUpperCase()+'</code></span>'
    +(note?'<span class="cn">'+note+'</span>':'')+'</div>';
 }
 function _vjtSeg(lbl,k,opts){
@@ -50173,7 +50216,8 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
     ? `<span style="font-size:15px;font-weight:700;color:#fff">ขาไป ${out.totPax||0} คน · ขากลับ ${ret.totPax||0} คน</span>`
     : 'ไม่มี booking';
   const body = (out.html||'') + (ret.html?((out.html?'<div style="height:16px"></div>':'')+ret.html):'') + ((!out.html&&!ret.html)?'<div style="text-align:center;padding:24px;color:#888">No bookings assigned to this van</div>':'');
-  return `<div class="hd" style="align-items:center;background:linear-gradient(100deg,${VC} 0%,${VC2} 100%);color:#fff;border:none;border-radius:12px;padding:15px 22px;margin-bottom:14px;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+  void VC; void VC2;   /* §vjFix1 · สีหัวใบย้ายไปอยู่ในตัวแปร CSS แล้ว จะได้เปลี่ยนสดๆ ได้ */
+  return `<div class="hd" style="align-items:center;background:linear-gradient(100deg,var(--vjt-main,#0F6E56) 0%,var(--vjt-main2,#0b5443) 100%);color:#fff;border:none;border-radius:12px;padding:15px 22px;margin-bottom:14px;-webkit-print-color-adjust:exact;print-color-adjust:exact">
       <div class="h1" style="flex:1;min-width:0;color:#fff">LOVE ANDAMAN · Van Job Order<small style="color:rgba(255,255,255,.72)">ใบงานรถรับ-ส่ง · ขาไป + ขากลับ ในใบเดียว</small></div>
       <div style="flex:0 0 auto;text-align:center;padding:0 18px">
         <div style="font-size:var(--vjt-van,32px);font-weight:800;color:#fff;line-height:1.05;letter-spacing:.01em">${e(v.name||v.plate||vanId)}${_drv.plate&&_drv.plate!=='-'?` <span style="font-size:19px;color:rgba(255,255,255,.80);font-weight:700;font-variant-numeric:tabular-nums">${e(_drv.plate)}${_drv.plateOverride?' <span style="font-size:11px;color:#FFE9A8">&#128204;</span>':''}</span>`:''}</div>
