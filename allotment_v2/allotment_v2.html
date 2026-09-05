@@ -49544,16 +49544,17 @@ function renderVanJobs(){
           <button onclick="vanJobsSetZoom('in')" title="ขยาย" style="background:#fff;border:none;padding:6px 10px;font-size:15px;cursor:pointer;color:#0F6E56;font-family:inherit;line-height:1">+</button>
           <button onclick="vanJobsSetZoom('fit')" title="พอดีจอ" style="background:#fff;border:none;border-left:1px solid #eef0ec;padding:6px 9px;font-size:12px;cursor:pointer;color:#0F6E56;font-family:inherit;line-height:1">พอดี</button>
         </div>
+        <button onclick="${_VJT_DRAFT?'vjTplCancel()':'vjTplOpen()'}" title="ตั้งขนาดตัวอักษร สี และระยะของใบงาน · ใช้กับทุกใบ" style="background:${_VJT_DRAFT?'#0F6E56':'#fff'};color:${_VJT_DRAFT?'#fff':'#0F6E56'};border:1.5px solid #0F6E56;border-radius:8px;padding:6.5px 13px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">&#9881; Template</button>
         <button onclick="vanJobsSaveImage('${date}','${_pvVid}','${_pvRoute}','${_pvLeg}')" title="บันทึกเป็นรูป PNG คมสูง (ส่ง LINE/WhatsApp)" style="background:#185FA5;color:#fff;border:none;border-radius:8px;padding:8px 15px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">&#128247; บันทึกรูป</button>
         <button onclick="bkV2VanJobOrder('${date}','${_pvVid}','${_pvRoute}','${_pvLeg}')" style="background:#0F6E56;color:#fff;border:none;border-radius:8px;padding:8px 15px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">&#128424; พิมพ์</button>
         <button onclick="vanJobsClosePreview()" title="ปิด" style="background:#fff;border:1px solid #d7dbe2;border-radius:8px;padding:7px 12px;font-size:14px;cursor:pointer;font-family:inherit;color:#666">&#10005;</button>
       </div>
     </div>
-    <div style="flex:1;overflow:auto;padding:14px;background:#EDEFF2">${vanJobsOrderCss(true)}<div class="vjo" id="vjo-page" style="width:100%;min-width:1060px;max-width:2000px;box-sizing:border-box;background:#fff;padding:20px 24px;border-radius:8px;box-shadow:0 3px 16px rgba(20,40,70,.12)">${vanJobsOrderInner(date,_pvVid,_pvRoute,_pvLeg)}</div></div>
+    <div style="flex:1;overflow:auto;padding:14px;background:#EDEFF2">${vanJobsOrderCss(true)}${vjTplCss()}${vjTplPanel()}<div class="vjo" id="vjo-page" style="${vjTplVars(_pvVid)};width:100%;min-width:1060px;max-width:2000px;box-sizing:border-box;background:#fff;padding:20px 24px;border-radius:8px;box-shadow:0 3px 16px rgba(20,40,70,.12)">${vanJobsOrderInner(date,_pvVid,_pvRoute,_pvLeg)}</div></div>
   </div>`:''}${_vanJobsFull?(function(){ const k=String(_vanJobsFull); const kk=k.split('|')[0]; const fvid=kk.split('~')[0]; const frt=kk.split('~')[1]||''; const fleg=k.indexOf('|ret')>=0?'ret':'out'; const fnm=(vehGet(fvid)||{}).name||fvid; const frtNm=frt?(((typeof getRoute==='function'?getRoute(frt):null)||{}).name||frt):''; return `
   <div style="position:fixed;inset:0;z-index:700;background:#fff">
     <button onclick="vanJobsCloseFull()" title="ปิด (Esc)" style="position:fixed;top:5px;right:6px;z-index:5;width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.92);border:1px solid #d7dbe2;color:#777;font-size:13px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;font-family:inherit">&#10005;</button>
-    <div style="position:absolute;inset:0;overflow:auto;background:#fff">${vanJobsOrderCss(true)}<div class="vjo" style="padding:12px 24px 22px">${vanJobsOrderInner(date,fvid,frt,fleg)}</div></div>
+    <div style="position:absolute;inset:0;overflow:auto;background:#fff">${vanJobsOrderCss(true)}<div class="vjo" style="${vjTplVars(fvid)};padding:12px 24px 22px">${vanJobsOrderInner(date,fvid,frt,fleg)}</div></div>
   </div>`; })():''}`;
   // open (or re-render) → fit the whole sheet to the drawer; a zoom the user set by hand is preserved
   if(_vanJobsPreview) requestAnimationFrame(function(){ if(_vanJobsZoom==null) vjFit(); else vjApplyZoom(); });
@@ -49573,25 +49574,245 @@ const VANJOB_AREA_TH={
   'Khaolak':'เขาหลัก','Khuk Khak':'คึกคัก','Bang Sak':'บางสัก','Num Khem':'น้ำเค็ม','Merlin':'เมอร์ลิน',
   'Tub Lamu Pier (self-arrive)':'ท่าเรือทับละมุ','Visit Panwa Pier (self-arrive)':'ท่าเรือวิสิทพันวา','Yamu':'ยามู'
 };
+/* ══ §vjTpl · Template ของใบงานรถ ═══════════════════════════════════════
+   ขนาดตัวอักษร สี ระยะ และสีของป้ายที่ใบงานขึ้นเองเมื่อเจอเคสพิเศษ
+   ตั้งครั้งเดียวใช้กับใบงานทุกใบทุกวันทุกคัน · เก็บทั้งบริษัทที่ vanjob_tpl
+   เก็บเฉพาะค่าที่ต่างจาก default · ของที่ยังไม่เคยแตะจะตามค่าเริ่มต้นตลอด
+   ทุกค่าลงเป็น CSS variable บนกล่องใบงาน · พรีวิว หน้าเต็ม พิมพ์ และบันทึกรูป
+   จึงใช้ชุดเดียวกันหมด ไม่ต้องแก้สามที่                                    */
+var VJT_DEF={
+  fVan:32, fRoute:24, fTh:12.5, fTd:15, fName:15.5, fTime:17, fLoc:14.5, fNote:12,
+  main:'#0F6E56', useVanColor:1, thBg:'#EAF3FB', thInk:'#185FA5',
+  hi:'#C0271C', line:'#E2E2DA',
+  rowH:'n', lineW:'n', showTh:1,
+  hlRet:'#B07A1F', hlWarn:'#C0392B', hlConf:'#7A1FA2',
+  hlUpd:'#FFE08A', hlCxl:'#B5271F', hlCall:'#9B1B12'
+};
+var VJT_NUM={fVan:[14,60],fRoute:[12,40],fTh:[8,20],fTd:[9,24],fName:[9,26],fTime:[9,30],fLoc:[9,26],fNote:[8,20]};
+var _VJT=null, _VJT_SRC=null;
+/* ระหว่างเปิดพาเนล ทุกที่ที่อ่าน vjTpl() จะได้ค่าที่กำลังแก้อยู่
+   ใบงานข้างล่างจึงเปลี่ยนตามทันทีโดยยังไม่บันทึกอะไรลงฐานข้อมูล */
+var _VJT_DRAFT=null;
+function vjTpl(){
+  if(_VJT_DRAFT) return _VJT_DRAFT;
+  var raw='';
+  try{ var b=laBlob(); raw=(typeof b.vanjob_tpl==='string')?b.vanjob_tpl:''; }catch(_){ raw=''; }
+  if(_VJT===null || _VJT_SRC!==raw){
+    var o={}; if(raw){ try{ o=JSON.parse(raw)||{}; }catch(_){ o={}; } }
+    var out={}; for(var k in VJT_DEF){ out[k]=(o[k]===undefined||o[k]===null||o[k]==='')?VJT_DEF[k]:o[k]; }
+    /* กันค่าพังจากการแก้มือ · ขนาดตัวอักษรต้องอยู่ในช่วงที่ยังพิมพ์ออกมาอ่านได้ */
+    for(var n in VJT_NUM){ var v=+out[n]; if(!isFinite(v)) v=VJT_DEF[n];
+      out[n]=Math.max(VJT_NUM[n][0], Math.min(VJT_NUM[n][1], v)); }
+    _VJT=out; _VJT_SRC=raw;
+  }
+  return _VJT;
+}
+function vjTplSave(T){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')){ alert('ดูอย่างเดียว · แก้ไม่ได้'); return false; }
+  try{
+    var keep={}; for(var k in VJT_DEF){ if(String(T[k])!==String(VJT_DEF[k])) keep[k]=T[k]; }
+    var b=laBlob();
+    if(Object.keys(keep).length){ var str=JSON.stringify(keep); b.vanjob_tpl=str; _VJT_SRC=str; }
+    else { delete b.vanjob_tpl; _VJT_SRC=''; }
+    _VJT=null; laBlobSave(); return true;
+  }catch(e){ try{ console.warn('[vjTpl] save failed', e&&e.message); }catch(_){} return false; }
+}
+/* ── ไล่เฉดจากสีเดียว · ใช้ตัวเดียวกับที่ใบงานใช้อยู่แล้ว ── */
+function vjtT(c,t){ return (typeof vjTint==='function')?vjTint(c,t):c; }
+function vjtD(c,p){ return (typeof vjShade==='function')?vjShade(c,p):c; }
+/* ── ตัวแปร CSS ของใบงาน · วางบนกล่องนอกสุด ── */
+function vjTplVars(vanId){
+  var T=vjTpl();
+  var VC=(T.useVanColor&&vanId&&typeof vehColor==='function')?vehColor(vanId):T.main;
+  var PAD={t:'7px 9px',n:'11px 11px',w:'15px 13px'}[T.rowH]||'11px 11px';
+  /* เบราว์เซอร์ปัดเส้นของตารางแบบ collapse เป็นพิกเซลเต็มเสมอ · 0.6px กับ 1.7px
+     จึงออกมาเท่ากับ 1px หมด · "จาง" ใช้เส้น 1px แต่ไล่สีให้อ่อนลงแทน */
+  var LW={t:'1px',n:'1px',w:'2px'}[T.lineW]||'1px';
+  var LN=(T.lineW==='t')?vjtT(T.line,0.52):T.line;
+  return '--vjt-van:'+T.fVan+'px;--vjt-route:'+T.fRoute+'px;--vjt-th:'+T.fTh+'px;'
+    +'--vjt-td:'+T.fTd+'px;--vjt-name:'+T.fName+'px;--vjt-time:'+T.fTime+'px;'
+    +'--vjt-loc:'+T.fLoc+'px;--vjt-locth:'+(Math.round(T.fLoc*1.24*10)/10)+'px;--vjt-note:'+T.fNote+'px;'
+    +'--vjt-main:'+VC+';--vjt-main2:'+vjtD(VC,-22)+';--vjt-thbg:'+T.thBg+';--vjt-think:'+T.thInk+';'
+    +'--vjt-hi:'+T.hi+';--vjt-line:'+LN+';--vjt-pad:'+PAD+';--vjt-lw:'+LW+';'
+    /* ชุดสีหัวตารางต้องคุมแถบโปรแกรมและแถวรวมด้วย ไม่งั้นเปลี่ยนเป็นขาวดำแล้วยังมีฟ้าค้าง */
+    +'--vjt-thbd:'+vjtT(T.thInk,0.74)+';--vjt-ink2:'+vjtD(T.thInk,-28)+';'
+    +'--vjt-hlret:'+T.hlRet+';--vjt-hlret-bg:'+vjtT(T.hlRet,0.80)+';--vjt-hlret-ink:'+vjtD(T.hlRet,-38)+';'
+    +'--vjt-hlwarn:'+T.hlWarn+';--vjt-hlwarn-bg:'+vjtT(T.hlWarn,0.88)+';--vjt-hlwarn-ink:'+vjtD(T.hlWarn,-32)+';'
+    +'--vjt-hlconf:'+T.hlConf+';--vjt-hlconf-bg:'+vjtT(T.hlConf,0.88)+';--vjt-hlconf-ink:'+vjtD(T.hlConf,-28)+';'
+    +'--vjt-hlupd:'+T.hlUpd+';--vjt-hlupd-ink:'+vjtD(T.hlUpd,-64)+';'
+    +'--vjt-hlcxl:'+T.hlCxl+';--vjt-hlcxl-bg:'+vjtT(T.hlCxl,0.86)+';'
+    +'--vjt-hlcall:'+T.hlCall+';--vjt-hlcall-bg:'+vjtT(T.hlCall,0.90)+';--vjt-hlcall-bd:'+vjtT(T.hlCall,0.58);
+}
+/* ══ §vjTpl · พาเนลตั้งค่า ═══════════════════════════════════════════════ */
+var VJT_PRESET={
+  std:{},
+  big:{fRoute:27, fTd:17, fName:18, fTime:21, fLoc:17, fNote:13, rowH:'w'},
+  /* ขาวดำล้วน · ป้ายที่ระบบขึ้นเองก็ต้องเป็นเทา ไม่งั้นยังเปลืองหมึกสี */
+  ink:{useVanColor:0, main:'#3A3A36', thBg:'#F2F2EE', thInk:'#3A3A36',
+       hi:'#1A1A18', line:'#C9C6BE', hlCall:'#3A3A36', hlUpd:'#E8E6DF',
+       hlRet:'#5A5A54', hlWarn:'#4A4A44', hlConf:'#4A4A44', hlCxl:'#4A4A44',
+       lineW:'t', rowH:'t'}
+};
+function vjTplPreset(k){
+  var T={}; for(var a in VJT_DEF) T[a]=VJT_DEF[a];
+  var P=VJT_PRESET[k]||{}; for(var b in P) T[b]=P[b];
+  _VJT_DRAFT=T; renderVanJobs();
+}
+function vjTplOpen(){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')){ alert('ดูอย่างเดียว · แก้ไม่ได้'); return; }
+  var T=vjTpl(), D={}; for(var k in VJT_DEF) D[k]=T[k];
+  _VJT_DRAFT=D; renderVanJobs();
+}
+function vjTplCancel(){ _VJT_DRAFT=null; renderVanJobs(); }
+function vjTplApply(){ var T=_VJT_DRAFT; if(!T) return; if(vjTplSave(T)) _VJT_DRAFT=null; renderVanJobs(); }
+function vjTplResetAsk(){
+  if(!confirm('คืนค่า Template ของใบงานรถกลับเป็นค่าเริ่มต้นทั้งหมด?')) return;
+  var T={}; for(var k in VJT_DEF) T[k]=VJT_DEF[k];
+  _VJT_DRAFT=T; renderVanJobs();
+}
+function vjTplSet(k,v){
+  if(!_VJT_DRAFT) return;
+  if(VJT_NUM[k]){ var n=+v; if(!isFinite(n)) return;
+    _VJT_DRAFT[k]=Math.max(VJT_NUM[k][0], Math.min(VJT_NUM[k][1], Math.round(n*10)/10)); }
+  else _VJT_DRAFT[k]=v;
+  renderVanJobs();
+}
+function vjTplBump(k,d){ if(!_VJT_DRAFT) return; vjTplSet(k, (+_VJT_DRAFT[k]||0)+d); }
+/* ── ชิ้นส่วนของพาเนล ── */
+function _vjtStep(lbl,k,hot){
+  var T=_VJT_DRAFT||vjTpl();
+  return '<div class="ct'+(hot?' hot':'')+'"><span class="cl">'+lbl+'</span>'
+   +'<span class="cs"><i onclick="vjTplBump(\''+k+'\',-0.5)">&minus;</i>'
+   +'<input value="'+T[k]+'" onchange="vjTplSet(\''+k+'\',this.value)">'
+   +'<i onclick="vjTplBump(\''+k+'\',0.5)">+</i></span><span class="cu">px</span></div>';
+}
+function _vjtSw(lbl,k,note){
+  var T=_VJT_DRAFT||vjTpl(), c=T[k]||'#000000';
+  return '<div class="ct"><span class="cl">'+lbl+'</span>'
+   +'<span class="cw"><input type="color" value="'+c+'" oninput="vjTplSet(\''+k+'\',this.value)">'
+   +'<code>'+String(c).toUpperCase()+'</code></span>'
+   +(note?'<span class="cn">'+note+'</span>':'')+'</div>';
+}
+function _vjtSeg(lbl,k,opts){
+  var T=_VJT_DRAFT||vjTpl(), cur=String(T[k]);
+  return '<div class="ct"><span class="cl">'+lbl+'</span><span class="cg">'
+   +opts.map(function(o){ return '<button class="'+(cur===String(o[0])?'on':'')
+      +'" onclick="vjTplSet(\''+k+'\',\''+o[0]+'\')">'+o[1]+'</button>'; }).join('')
+   +'</span></div>';
+}
+function vjTplPanel(){
+  if(!_VJT_DRAFT) return '';
+  var T=_VJT_DRAFT;
+  return '<div class="vjt-p"><div class="vjt-h"><b>&#9881; Template ใบงานรถ</b>'
+   +'<span class="s">ตั้งครั้งเดียว · ใช้กับใบงานรถทุกใบ ทุกวัน ทุกคัน</span>'
+   +'<span class="pre">พรีเซ็ต'
+     +'<button onclick="vjTplPreset(\'std\')">มาตรฐาน</button>'
+     +'<button onclick="vjTplPreset(\'big\')">ตัวใหญ่</button>'
+     +'<button onclick="vjTplPreset(\'ink\')">ประหยัดหมึก</button></span>'
+   +'<button class="x" onclick="vjTplCancel()" title="ปิดโดยไม่บันทึก">&times;</button></div>'
+   +'<div class="vjt-b">'
+     +'<div class="vjt-c"><div class="t">ขนาดตัวอักษร</div>'
+       +_vjtStep('ชื่อรถ (หัวใบ)','fVan')
+       +_vjtStep('ชื่อโปรแกรม','fRoute')
+       +_vjtStep('หัวตาราง','fTh')
+       +_vjtStep('เนื้อตาราง','fTd')
+       +_vjtStep('ชื่อลูกค้า','fName')
+       +_vjtStep('เวลารับ','fTime')
+       +_vjtStep('จุดรับ / จุดส่ง','fLoc')
+       +_vjtStep('หมายเหตุท้ายใบ','fNote')
+     +'</div>'
+     +'<div class="vjt-c"><div class="t">สีของใบ</div>'
+       +_vjtSw('สีหลักของใบ','main','หัวใบ + แถบโปรแกรม')
+       +'<div class="ct"><span class="cl"></span><label class="ck"><input type="checkbox"'
+         +(T.useVanColor?' checked':'')+' onchange="vjTplSet(\'useVanColor\',this.checked?1:0)"> ใช้สีประจำรถแทน</label></div>'
+       +_vjtSw('พื้นหัวตาราง','thBg')
+       +_vjtSw('ตัวอักษรหัวตาราง','thInk')
+       +_vjtSw('สีเน้น (เวลารับ)','hi')
+       +_vjtSw('เส้นตาราง','line')
+       +'<div class="t" style="margin-top:12px">ระยะและเส้น</div>'
+       +_vjtSeg('ความสูงแถว','rowH',[['t','แน่น'],['n','ปกติ'],['w','โปร่ง']])
+       +_vjtSeg('เส้นตาราง','lineW',[['t','จาง'],['n','ปกติ'],['w','หนา']])
+       +_vjtSeg('ชื่อไทยใต้จุดรับ','showTh',[[0,'ซ่อน'],[1,'แสดง']])
+     +'</div>'
+     +'<div class="vjt-c"><div class="t">สีไฮไลต์ที่ระบบขึ้นเอง</div>'
+       +'<div class="n">ป้ายและกล่องที่ใบงานขึ้นให้เองเมื่อเจอเคสพิเศษ</div>'
+       +_vjtSw('&#8617; ขากลับใช้รถคันอื่น','hlRet')
+       +_vjtSw('&#9888; ยังไม่ได้จัดรถ','hlWarn')
+       +_vjtSw('&#9888; รถปนกันในกรุ๊ป','hlConf')
+       +_vjtSw('&#128204; อัปเดตคนขับวันนี้','hlUpd')
+       +_vjtSw('&#9888; ยกเลิก / เลื่อนวัน','hlCxl')
+       +_vjtSw('&#9742; กล่องเตือนท้ายใบ','hlCall')
+     +'</div>'
+   +'</div>'
+   +'<div class="vjt-f"><button class="r" onclick="vjTplResetAsk()">&#8634; คืนค่าเริ่มต้น</button>'
+     +'<span style="flex:1"></span>'
+     +'<button class="c" onclick="vjTplCancel()">ยกเลิก</button>'
+     +'<button class="k" onclick="vjTplApply()">ใช้กับทุกใบ</button></div></div>';
+}
+function vjTplCss(){
+  return '<style id="vjt-css">'
+   +'.vjt-p{background:#fff;border:2px solid #0F6E56;border-radius:11px;margin-bottom:10px;'
+     +'box-shadow:0 3px 14px -6px rgba(15,110,86,.4);overflow:hidden;font-family:inherit}'
+   +'.vjt-h{display:flex;align-items:center;gap:12px;padding:8px 13px;background:#F1FBF6;border-bottom:1px solid #DFF0E8}'
+   +'.vjt-h b{font-size:13px;color:#0C6B47}.vjt-h .s{font-size:11px;color:#6b7280}'
+   +'.vjt-h .pre{margin-left:auto;font-size:10.5px;color:#8a8a82;display:flex;align-items:center;gap:5px}'
+   +'.vjt-h .pre button{border:1px solid #d7dbe2;background:#fff;border-radius:6px;padding:3px 9px;'
+     +'font:600 10.5px inherit;font-family:inherit;color:#5F5E5A;cursor:pointer}'
+   +'.vjt-h .pre button:hover{border-color:#0F6E56;color:#0F6E56}'
+   +'.vjt-h .x{background:transparent;border:none;font-size:17px;color:#9aa;cursor:pointer;font-family:inherit}'
+   +'.vjt-b{display:grid;grid-template-columns:1fr 1.05fr 1.1fr}'
+   +'.vjt-c{padding:10px 14px 12px;border-right:1px solid #EEF0EC;min-width:0}'
+   +'.vjt-c:last-child{border-right:0}'
+   +'.vjt-c .t{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:#94918a;font-weight:800;margin-bottom:7px}'
+   +'.vjt-c .n{font-size:10px;color:#a8a49c;line-height:1.5;margin:-3px 0 7px}'
+   +'.vjt-p .ct{display:flex;align-items:center;gap:8px;margin-bottom:5px;min-height:26px}'
+   +'.vjt-p .cl{font-size:11.5px;color:#4b5563;width:124px;flex:none}'
+   +'.vjt-p .cs{display:flex;align-items:center;border:1px solid #d7dbe2;border-radius:7px;overflow:hidden;background:#fff}'
+   +'.vjt-p .cs i{font-style:normal;padding:3px 8px;color:#0F6E56;font-size:13px;background:#F7F9F8;cursor:pointer;user-select:none}'
+   +'.vjt-p .cs i:hover{background:#E3F0EA}'
+   +'.vjt-p .cs input{width:52px;border:none;outline:none;text-align:center;font:500 11.5px \'DM Mono\',monospace;color:#1B2A55;padding:3px 0;background:#fff}'
+   +'.vjt-p .cu{font-size:10px;color:#a8a49c}'
+   +'.vjt-p .cw{display:flex;align-items:center;gap:6px;border:1px solid #d7dbe2;border-radius:7px;padding:2px 8px 2px 3px;background:#fff}'
+   +'.vjt-p .cw input[type=color]{width:23px;height:21px;border:none;background:none;padding:0;cursor:pointer}'
+   +'.vjt-p .cw code{font:500 10.5px \'DM Mono\',monospace;color:#5F5E5A}'
+   +'.vjt-p .cn{font-size:9.5px;color:#a8a49c}'
+   +'.vjt-p .ck{font-size:11px;color:#0C6B47;display:flex;align-items:center;gap:6px;cursor:pointer}'
+   +'.vjt-p .cg{display:flex;border:1px solid #d7dbe2;border-radius:7px;overflow:hidden}'
+   +'.vjt-p .cg button{border:none;background:#fff;font:600 10.5px inherit;font-family:inherit;color:#5F5E5A;'
+     +'padding:4px 11px;cursor:pointer;border-right:1px solid #eef0ec}'
+   +'.vjt-p .cg button:last-child{border-right:0}'
+   +'.vjt-p .cg button.on{background:#0F6E56;color:#fff;font-weight:700}'
+   +'.vjt-f{display:flex;align-items:center;gap:8px;padding:8px 13px;border-top:1px solid #EEF0EC;background:#FCFDFC}'
+   +'.vjt-f button{border-radius:8px;padding:7px 14px;font:600 12px inherit;font-family:inherit;cursor:pointer}'
+   +'.vjt-f .r{background:#fff;border:1px solid #d7dbe2;color:#8a8a82}'
+   +'.vjt-f .c{background:#fff;border:1px solid #d7dbe2;color:#5F5E5A}'
+   +'.vjt-f .k{background:#0F6E56;border:none;color:#fff}'
+   +'</style>';
+}
 function vanJobsOrderCss(scoped){ const p=scoped?'.vjo ':'';
   return '<style>'
     +(scoped?".vjo{font-family:'DM Sans',Arial,sans-serif;color:#1B2A55}":"*{box-sizing:border-box} body{font-family:'DM Sans',Arial,sans-serif;color:#1B2A55;margin:0;padding:22px}")
     +p+'.hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #185FA5;padding-bottom:10px;margin-bottom:14px}'
     +p+'.h1{font-size:20px;font-weight:800}'+p+'.h1 small{display:block;font-size:12px;font-weight:500;color:#666}'
+    /* §vjTpl · ค่าเริ่มต้นวางไว้ที่กล่องเอง · ถ้ามีตัวแปรจาก vjTplVars มาทับ (สีประจำรถ) ก็ใช้ของนั้น */
+    +(scoped?'.vjo{':'body{')+vjTplVars(null)+'}'
     +p+'.meta{text-align:right;font-size:13px;color:#444;line-height:1.5}'+p+'.meta b{font-size:16px;color:#185FA5}'
-    +p+'.bighd{background:#F4F8FC;border:1px solid #d8e6f3;border-radius:10px;padding:13px 20px;margin-bottom:14px}'
-    +p+'.bh-lbl{font-size:10px;color:#5b86a3;letter-spacing:.07em;text-transform:uppercase}'
+    +p+'.bighd{background:var(--vjt-thbg,#F4F8FC);border:1px solid var(--vjt-thbd,#d8e6f3);border-radius:10px;padding:13px 20px;margin-bottom:14px;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    +p+'.bh-lbl{font-size:10px;color:var(--vjt-think,#5b86a3);opacity:.75;letter-spacing:.07em;text-transform:uppercase}'
     +p+'.bh-line{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:4px 0 2px}'
-    +p+'.bh-route{font-size:24px;font-weight:800;color:#15396B;line-height:1.15}'
+    +p+'.bh-route{font-size:var(--vjt-route,24px);font-weight:800;color:var(--vjt-ink2,#15396B);line-height:1.15}'
     +p+'.bh-sep{font-size:20px;color:#9db6cc;font-weight:400}'
-    +p+'.bh-date{font-size:24px;font-weight:800;color:#185FA5;line-height:1.15;white-space:nowrap}'
-    +p+'table{width:100%;border-collapse:collapse;font-size:15px}'
-    +p+'th{background:#EAF3FB;color:#185FA5;text-align:left;padding:9px 10px;border:1px solid #cfe0ef;font-size:12.5px;text-transform:uppercase;letter-spacing:.03em}'
-    +p+'th small{display:block;font-weight:400;color:#5b86a3;text-transform:none;font-size:11px}'
-    +p+'td{padding:11px 11px;border:1px solid #e2e2da;vertical-align:top;font-size:15px;overflow-wrap:anywhere;word-break:break-word}'
+    +p+'.bh-date{font-size:var(--vjt-route,24px);font-weight:800;color:var(--vjt-think,#185FA5);line-height:1.15;white-space:nowrap}'
+    +p+'table{width:100%;border-collapse:collapse;font-size:var(--vjt-td,15px)}'
+    +p+'th{background:var(--vjt-thbg,#EAF3FB);color:var(--vjt-think,#185FA5);text-align:left;padding:9px 10px;border:var(--vjt-lw,1px) solid var(--vjt-thbd,#cfe0ef);font-size:var(--vjt-th,12.5px);text-transform:uppercase;letter-spacing:.03em;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    +p+'th small{display:block;font-weight:400;color:var(--vjt-think,#5b86a3);opacity:.78;text-transform:none;font-size:.86em}'
+    +p+'td{padding:var(--vjt-pad,11px 11px);border:var(--vjt-lw,1px) solid var(--vjt-line,#e2e2da);vertical-align:top;font-size:var(--vjt-td,15px);overflow-wrap:anywhere;word-break:break-word}'
     +p+'.ag{font-size:12px;color:#777;margin-top:2px}'
-    +p+'.note{margin-top:13px;font-size:12px;color:#555;line-height:1.6}'
-    +p+'.callnote{margin-top:10px;font-size:15px;font-weight:700;color:#9B1B12;background:#FBECEA;border:1.5px solid #E6A9A2;border-radius:8px;padding:11px 16px;-webkit-print-color-adjust:exact;print-color-adjust:exact;text-align:center;line-height:1.5}'
+    +p+'.note{margin-top:13px;font-size:var(--vjt-note,12px);color:#555;line-height:1.6}'
+    +p+'.callnote{margin-top:10px;font-size:calc(var(--vjt-note,12px) + 3px);font-weight:700;color:var(--vjt-hlcall,#9B1B12);background:var(--vjt-hlcall-bg,#FBECEA);border:1.5px solid var(--vjt-hlcall-bd,#E6A9A2);border-radius:8px;padding:11px 16px;-webkit-print-color-adjust:exact;print-color-adjust:exact;text-align:center;line-height:1.5}'
+    /* §vjTpl · ชื่อไทยใต้จุดรับ · ปิดได้จาก Template */
+    +p+'.pkth{font-size:var(--vjt-locth,18px)}'
+    +(vjTpl().showTh?'':(p+'.pkth{display:none}'))
     +(scoped?'':'@media print{@page{size:A4 landscape;margin:10mm}body{padding:0}}')
     +'</style>';
 }
@@ -49603,7 +49824,9 @@ function _ovnOutDate(b, leg){
   return out ? (out.date||'') : '';
 }
 function vanJobsOrderInner(date, vanId, routeId, legIgnored){
-  const VC=vehColor(vanId), VC2=vjShade(VC,-22);   /* §สีประจำรถ — the sheet header wears the van's colour */
+  /* §vjTpl · หัวใบใช้สีประจำรถหรือสีหลักของบริษัท แล้วแต่ที่ตั้งไว้ใน Template */
+  const _T=vjTpl();
+  const VC=(_T.useVanColor?vehColor(vanId):_T.main), VC2=vjShade(VC,-22);
   if(typeof bkV2HealAltSplits==='function') bkV2HealAltSplits(date);   // §altPickups · auto van-splits for รับหลายจุด before building the sheet
   if(typeof bkV2VanGroupHeal==='function') bkV2VanGroupHeal(date);   // ensure grouped bookings have their group's vanId before building the sheet (prevents ตกบุคกิ้งในใบงาน)
   const v=vehGet(vanId)||{};
@@ -49774,22 +49997,22 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
         : (_extra ? ' style="background:#FFF6E6;-webkit-print-color-adjust:exact;print-color-adjust:exact"' : '');
       const _sxMv = x.strand==='mv';
       const _sxTag = _sxR
-        ? `<div style="margin-top:3px"><span style="display:inline-block;background:${_sxMv?'#EDE3FB':'#FBE3E1'};color:${_sxMv?'#5B289A':'#B5271F'};font-weight:700;font-size:11px;border-radius:7px;padding:2px 8px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#10007; ${_sxMv?('เลื่อนวันแล้ว'+(x.strandWhy?(' · '+e(String(x.strandWhy).split(' · ')[0])):'')):'ยกเลิกแล้ว'} · ไม่ต้องไปรับ</span></div>`
+        ? `<div style="margin-top:3px"><span style="display:inline-block;background:${_sxMv?'#EDE3FB':'var(--vjt-hlcxl-bg,#FBE3E1)'};color:${_sxMv?'#5B289A':'var(--vjt-hlcxl,#B5271F)'};font-weight:700;font-size:11px;border-radius:7px;padding:2px 8px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#10007; ${_sxMv?('เลื่อนวันแล้ว'+(x.strandWhy?(' · '+e(String(x.strandWhy).split(' · ')[0])):'')):'ยกเลิกแล้ว'} · ไม่ต้องไปรับ</span></div>`
         : '';
       return `<tr${_rowBg}>
         <td style="text-align:center;${_sxR?'color:#B5271F;font-weight:700':''}">${_no}</td>
         <td style="font-size:12.5px;word-break:break-all;font-variant-numeric:tabular-nums;color:#444">${e(b.voucherRef||b.code||b.id)}</td>
-        <td style="font-size:15.5px;font-weight:700;color:${_sxR?'#8f8e88':'#1B2A55'}${_sxR?';text-decoration:line-through;text-decoration-thickness:1.5px':''}">${e(b.leadPax||'-')}${_sxTag}${_ckTag}${(_ovnRet||_ovnOut)?`<div style="margin-top:2px"><span style="display:inline-block;background:${_ovnOut?'#EDE7FB':'#FBE4C9'};color:${_ovnOut?'#4A2E86':'#8a5500'};font-weight:700;font-size:10px;border-radius:7px;padding:1px 7px;white-space:nowrap">${_ovnOut?'&#127765; OVN':'&#8617; OVN'}</span></div>`:''}${(function(){ const _lead=String(b.leadPax||'').trim(); const _ex=(b.passengers||[]).map(p=>String((p&&p.name)||'').trim()).filter(n=>n&&n!==_lead); if(_ex.length){ let h=_ex.slice(0,2).map(n=>`<div class="ag" style="font-weight:600;color:#3F4654">${e(n)}</div>`).join(''); if(_ex.length>2) h+=`<div class="ag">+${_ex.length-2} more</div>`; return h; } return (b.passengers&&b.passengers.length)?`<div class="ag">+${b.passengers.length} more</div>`:''; })()}${x.splitPax!=null?`<div class="ag" style="color:#5B289A">${x.sMain?('&#128652; จุดหลัก'):(((x.sHotel||'').trim()||x.sAreaId)?('&#128652; แยกรับ'):('&#9986; แยกส่ง'))+(x.sWho?(' · '+e(x.sWho)):'')} · เดียวกัน ${e(b.voucherRef||b.code||b.id)}</div>`:''}${(x._mgN>1)?`<div class="ag" style="color:#0C6B47">&#128652; รับจุดเดียวกัน ${x._mgN} กลุ่ม · ขากลับแยกส่ง</div>`:''}</td>
+        <td style="font-size:var(--vjt-name,15.5px);font-weight:700;color:${_sxR?'#8f8e88':'#1B2A55'}${_sxR?';text-decoration:line-through;text-decoration-thickness:1.5px':''}">${e(b.leadPax||'-')}${_sxTag}${_ckTag}${(_ovnRet||_ovnOut)?`<div style="margin-top:2px"><span style="display:inline-block;background:${_ovnOut?'#EDE7FB':'#FBE4C9'};color:${_ovnOut?'#4A2E86':'#8a5500'};font-weight:700;font-size:10px;border-radius:7px;padding:1px 7px;white-space:nowrap">${_ovnOut?'&#127765; OVN':'&#8617; OVN'}</span></div>`:''}${(function(){ const _lead=String(b.leadPax||'').trim(); const _ex=(b.passengers||[]).map(p=>String((p&&p.name)||'').trim()).filter(n=>n&&n!==_lead); if(_ex.length){ let h=_ex.slice(0,2).map(n=>`<div class="ag" style="font-weight:600;color:#3F4654">${e(n)}</div>`).join(''); if(_ex.length>2) h+=`<div class="ag">+${_ex.length-2} more</div>`; return h; } return (b.passengers&&b.passengers.length)?`<div class="ag">+${b.passengers.length} more</div>`:''; })()}${x.splitPax!=null?`<div class="ag" style="color:#5B289A">${x.sMain?('&#128652; จุดหลัก'):(((x.sHotel||'').trim()||x.sAreaId)?('&#128652; แยกรับ'):('&#9986; แยกส่ง'))+(x.sWho?(' · '+e(x.sWho)):'')} · เดียวกัน ${e(b.voucherRef||b.code||b.id)}</div>`:''}${(x._mgN>1)?`<div class="ag" style="color:#0C6B47">&#128652; รับจุดเดียวกัน ${x._mgN} กลุ่ม · ขากลับแยกส่ง</div>`:''}</td>
         ${paxCells}
-        <td style="text-align:center;font-variant-numeric:tabular-nums;font-weight:800;font-size:17px;color:#C0271C;white-space:nowrap">${isRet?'<span style="color:#aaa;font-weight:400;font-size:14px">—</span>':(e(_ptime(b,t))||'-')}</td>
-        <td style="font-size:14.5px;font-weight:600;color:#1B2A55">${e(pickup)||'<span style="color:#b00">— no pickup —</span>'}${_pkTh?`<div class="ag" style="color:#185FA5;font-size:18px;font-weight:600;line-height:1.3;margin-top:1px">${e(_pkTh)}</div>`:''}${(!isRet&&Array.isArray(b.altPickups)&&b.altPickups.some(a=>(a.who||'').trim()||(a.place||'').trim()))?b.altPickups.filter(a=>(a.who||'').trim()||(a.place||'').trim()||a.area||a.areaId).map(a=>`<div style="color:#5B289A;font-size:11.5px;margin-top:2px">&#128652; <b>${Math.max(1,parseInt(a.qty)||1)} คน</b>${(a.who||'').trim()?(' · '+e((a.who||'').trim())):''}${a.zone?(' ['+e(a.zone)+']'):''} @ ${e((a.place||'').trim()||a.area||'?')}</div>`).join(''):''}</td>
+        <td style="text-align:center;font-variant-numeric:tabular-nums;font-weight:800;font-size:var(--vjt-time,17px);color:var(--vjt-hi,#C0271C);white-space:nowrap">${isRet?'<span style="color:#aaa;font-weight:400;font-size:14px">—</span>':(e(_ptime(b,t))||'-')}</td>
+        <td style="font-size:var(--vjt-loc,14.5px);font-weight:600;color:#1B2A55">${e(pickup)||'<span style="color:#b00">— no pickup —</span>'}${_pkTh?`<div class="ag pkth" style="color:var(--vjt-think,#185FA5);font-weight:600;line-height:1.3;margin-top:1px">${e(_pkTh)}</div>`:''}${(!isRet&&Array.isArray(b.altPickups)&&b.altPickups.some(a=>(a.who||'').trim()||(a.place||'').trim()))?b.altPickups.filter(a=>(a.who||'').trim()||(a.place||'').trim()||a.area||a.areaId).map(a=>`<div style="color:#5B289A;font-size:11.5px;margin-top:2px">&#128652; <b>${Math.max(1,parseInt(a.qty)||1)} คน</b>${(a.who||'').trim()?(' · '+e((a.who||'').trim())):''}${a.zone?(' ['+e(a.zone)+']'):''} @ ${e((a.place||'').trim()||a.area||'?')}</div>`).join(''):''}</td>
         <td style="text-align:center">${e(b.roomNumber||'')||'-'}</td>
         <td>${zoneCell}</td>
-        <td>${dropCell}${retDiff?`<div style="margin-top:4px"><span style="display:inline-block;background:#FBE4C9;color:#8a5500;font-weight:700;font-size:12px;border-radius:7px;padding:3px 10px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#8617; ขากลับ โดย ${e(retName)}</span></div>`:''}</td>
+        <td style="font-size:var(--vjt-loc,14.5px)">${dropCell}${retDiff?`<div style="margin-top:4px"><span style="display:inline-block;background:var(--vjt-hlret-bg,#FBE4C9);color:var(--vjt-hlret-ink,#8a5500);font-weight:700;font-size:12px;border-radius:7px;padding:3px 10px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#8617; ขากลับ โดย ${e(retName)}</span></div>`:''}</td>
         <td style="text-align:center">${b.largeLuggage?('🧳 '+b.largeLuggage):'-'}</td>
         <td style="font-size:12.5px">${sreqCell}</td>
       </tr>`; }).join('');
-    const secHd=`<div style="display:flex;align-items:center;gap:9px;margin:0 0 7px"><span style="background:${isRet?'#B07A1F':'#0F6E56'};color:#fff;font-size:12.5px;font-weight:700;border-radius:7px;padding:4px 13px;-webkit-print-color-adjust:exact;print-color-adjust:exact">${isRet?'② ขากลับ · RETURN':'① ขาไป · OUTBOUND'}</span><span style="font-size:11.5px;color:#6b7280">${isRet?'รับจากท่าเรือ → ส่งจุดหมาย':'รับจากโรงแรม → ส่งท่าเรือ'}</span></div>`;
+    const secHd=`<div style="display:flex;align-items:center;gap:9px;margin:0 0 7px"><span style="background:${isRet?'var(--vjt-hlret,#B07A1F)':'var(--vjt-main,#0F6E56)'};color:#fff;font-size:12.5px;font-weight:700;border-radius:7px;padding:4px 13px;-webkit-print-color-adjust:exact;print-color-adjust:exact">${isRet?'② ขากลับ · RETURN':'① ขาไป · OUTBOUND'}</span><span style="font-size:11.5px;color:#6b7280">${isRet?'รับจากท่าเรือ → ส่งจุดหมาย':'รับจากโรงแรม → ส่งท่าเรือ'}</span></div>`;
     const table=`<table style="table-layout:fixed;width:100%">
       ${_colg}
       <thead>
@@ -49804,7 +50027,7 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
         <tr><th style="text-align:center">AD</th><th style="text-align:center">CHD</th><th style="text-align:center">INF</th><th style="text-align:center">FOC</th></tr>
       </thead>
       <tbody>${tr}</tbody>
-      <tfoot><tr style="font-weight:700;background:#F4F8FC;color:#15396B">
+      <tfoot><tr style="font-weight:700;background:var(--vjt-thbg,#F4F8FC);color:var(--vjt-ink2,#15396B);-webkit-print-color-adjust:exact;print-color-adjust:exact">
         <td colspan="3" style="text-align:right">รวม / Total</td>
         <td style="text-align:center">${totAd}</td><td style="text-align:center">${totChd}</td><td style="text-align:center">${totInf}</td><td style="text-align:center">${totFoc}</td>
         <td colspan="7">${totPax} pax · ${(function(){
@@ -49831,11 +50054,11 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
       else if(!o.vanId){ const hp=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; _unaPax+=hp; _unaBk++; _unaTrip[_nm]=(_unaTrip[_nm]||0)+hp; }
     }); }); }
   const _unaTxt=Object.keys(_unaTrip).map(k=>e(k)+' '+_unaTrip[k]+' คน').join(' · ');
-  const _unaBanner = _unaPax>0 ? `<div style="background:#FBE9E7;border:2px solid #C0392B;border-radius:9px;padding:10px 15px;margin:0 0 13px;-webkit-print-color-adjust:exact;print-color-adjust:exact"><div style="font-size:14px;font-weight:800;color:#9B1B12">&#9888; เส้นทางนี้ยังมี ${_unaBk} booking (${_unaPax} คน) ที่ยังไม่ได้จัดรถ — อาจตกจากใบงานนี้</div><div style="font-size:12px;color:#8A1C1C;margin-top:3px">${_unaTxt} · ไปจัดรถที่ By trip date &rarr; โหมด Van แล้วพิมพ์ใบงานใหม่</div></div>` : '';
+  const _unaBanner = _unaPax>0 ? `<div style="background:var(--vjt-hlwarn-bg,#FBE9E7);border:2px solid var(--vjt-hlwarn,#C0392B);border-radius:9px;padding:10px 15px;margin:0 0 13px;-webkit-print-color-adjust:exact;print-color-adjust:exact"><div style="font-size:14px;font-weight:800;color:var(--vjt-hlwarn-ink,#9B1B12)">&#9888; เส้นทางนี้ยังมี ${_unaBk} booking (${_unaPax} คน) ที่ยังไม่ได้จัดรถ — อาจตกจากใบงานนี้</div><div style="font-size:12px;color:var(--vjt-hlwarn-ink,#8A1C1C);opacity:.85;margin-top:3px">${_unaTxt} · ไปจัดรถที่ By trip date &rarr; โหมด Van แล้วพิมพ์ใบงานใหม่</div></div>` : '';
   // ⚠ van-group conflict touching THIS van → some of its members are routed to a different van → this sheet may be wrong
   const _conf=(typeof bkV2VanGroupConflicts==='function')?bkV2VanGroupConflicts(date).filter(c=>c.vans[vanId]):[];
   const _confTxt=_conf.map(c=>e(c.routeName)+' กรุ๊ป '+c.gid+': '+Object.keys(c.vans).map(x=>e((vehGet(x)||{}).name||x)+'×'+c.vans[x]).join(' / ')).join(' · ');
-  const _confBanner=_conf.length?`<div style="background:#F3E0F7;border:2px solid #7A1FA2;border-radius:9px;padding:10px 15px;margin:0 0 13px;-webkit-print-color-adjust:exact;print-color-adjust:exact"><div style="font-size:14px;font-weight:800;color:#5E1480">&#9888; รถปนกันในกรุ๊ป — บาง booking ถูกจัดไปคนละคัน ใบงานนี้อาจไม่ครบ/ผิดคัน</div><div style="font-size:12px;color:#6A1C8A;margin-top:3px">${_confTxt} · ไป By trip date &rarr; โหมด Van เลือกรถของกรุ๊ปให้เป็นคันเดียว แล้วพิมพ์ใหม่</div></div>`:'';
+  const _confBanner=_conf.length?`<div style="background:var(--vjt-hlconf-bg,#F3E0F7);border:2px solid var(--vjt-hlconf,#7A1FA2);border-radius:9px;padding:10px 15px;margin:0 0 13px;-webkit-print-color-adjust:exact;print-color-adjust:exact"><div style="font-size:14px;font-weight:800;color:var(--vjt-hlconf-ink,#5E1480)">&#9888; รถปนกันในกรุ๊ป — บาง booking ถูกจัดไปคนละคัน ใบงานนี้อาจไม่ครบ/ผิดคัน</div><div style="font-size:12px;color:var(--vjt-hlconf-ink,#6A1C8A);opacity:.85;margin-top:3px">${_confTxt} · ไป By trip date &rarr; โหมด Van เลือกรถของกรุ๊ปให้เป็นคันเดียว แล้วพิมพ์ใหม่</div></div>`:'';
   let dlabel=date; try{ dlabel=new Date(date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}); }catch(_){}
   const routesStr=Object.keys(_allRoutes).map(e).join(' · ')||'—';
   const metaCounts=(out.rows.length||ret.rows.length)
@@ -49845,8 +50068,8 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
   return `<div class="hd" style="align-items:center;background:linear-gradient(100deg,${VC} 0%,${VC2} 100%);color:#fff;border:none;border-radius:12px;padding:15px 22px;margin-bottom:14px;-webkit-print-color-adjust:exact;print-color-adjust:exact">
       <div class="h1" style="flex:1;min-width:0;color:#fff">LOVE ANDAMAN · Van Job Order<small style="color:rgba(255,255,255,.72)">ใบงานรถรับ-ส่ง · ขาไป + ขากลับ ในใบเดียว</small></div>
       <div style="flex:0 0 auto;text-align:center;padding:0 18px">
-        <div style="font-size:32px;font-weight:800;color:#fff;line-height:1.05;letter-spacing:.01em">${e(v.name||v.plate||vanId)}${_drv.plate&&_drv.plate!=='-'?` <span style="font-size:19px;color:rgba(255,255,255,.80);font-weight:700;font-variant-numeric:tabular-nums">${e(_drv.plate)}${_drv.plateOverride?' <span style="font-size:11px;color:#FFE9A8">&#128204;</span>':''}</span>`:''}</div>
-        <div style="font-size:16px;color:rgba(255,255,255,.92);margin-top:5px;font-weight:600">คนขับ <b style="color:#fff">${e(_drv.driver||'-')}</b>${_drv.phone?` · <b style="font-variant-numeric:tabular-nums;color:#fff">${e(_drv.phone)}</b>`:''}${_drv.override?` <span style="font-size:11px;font-weight:700;color:#5a3b00;background:#FFE08A;border-radius:6px;padding:2px 8px;margin-left:6px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#128204; อัปเดตวันนี้</span>`:''}</div>
+        <div style="font-size:var(--vjt-van,32px);font-weight:800;color:#fff;line-height:1.05;letter-spacing:.01em">${e(v.name||v.plate||vanId)}${_drv.plate&&_drv.plate!=='-'?` <span style="font-size:19px;color:rgba(255,255,255,.80);font-weight:700;font-variant-numeric:tabular-nums">${e(_drv.plate)}${_drv.plateOverride?' <span style="font-size:11px;color:#FFE9A8">&#128204;</span>':''}</span>`:''}</div>
+        <div style="font-size:16px;color:rgba(255,255,255,.92);margin-top:5px;font-weight:600">คนขับ <b style="color:#fff">${e(_drv.driver||'-')}</b>${_drv.phone?` · <b style="font-variant-numeric:tabular-nums;color:#fff">${e(_drv.phone)}</b>`:''}${_drv.override?` <span style="font-size:11px;font-weight:700;color:var(--vjt-hlupd-ink,#5a3b00);background:var(--vjt-hlupd,#FFE08A);border-radius:6px;padding:2px 8px;margin-left:6px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#128204; อัปเดตวันนี้</span>`:''}</div>
       </div>
       <div class="meta" style="flex:1;color:rgba(255,255,255,.92)">${e(v.ownership==='partner'?('รถร่วม '+(v.partnerName||'')):'รถบริษัท')} · ${e(v.zoneBase||'')}<br>${e(dlabel)}<br>${metaCounts}</div>
     </div>
@@ -63348,7 +63571,7 @@ function bkV2VanJobOrder(date, vanId, routeId, leg){
   const e=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const _rn=routeId?(((typeof getRoute==='function'?getRoute(routeId):null)||{}).name||routeId):'';
   const legTitle=(_rn?(' · '+_rn):'')+(leg==='ret'?' · ขากลับ':'');
-  const html='<!doctype html><html><head><meta charset="utf-8"><title>Van Job Order · '+e(v.name||vanId)+legTitle+' · '+e(date)+'</title>'+vanJobsOrderCss(false)+'</head><body>'+vanJobsOrderInner(date,vanId,routeId,leg)+'<script>setTimeout(function(){try{window.print()}catch(e){}},350)<\/script></body></html>';
+  const html='<!doctype html><html><head><meta charset="utf-8"><title>Van Job Order · '+e(v.name||vanId)+legTitle+' · '+e(date)+'</title>'+vanJobsOrderCss(false)+'</head><body style="'+vjTplVars(vanId)+'">'+vanJobsOrderInner(date,vanId,routeId,leg)+'<script>setTimeout(function(){try{window.print()}catch(e){}},350)<\/script></body></html>';
   const w=window.open('','_blank'); if(!w){ alert('Please allow pop-ups to print the van job order'); return; }
   w.document.write(html); w.document.close(); w.focus();
 }
@@ -63364,7 +63587,7 @@ function vanJobsSaveImage(date, vanId, routeId, leg){
     host.style.cssText='position:fixed;left:-99999px;top:0;width:'+_hw+'px;background:#fff;box-sizing:border-box;z-index:-1';
     host.innerHTML=vanJobsOrderCss(true)
       +'<div id="vj-shot" style="width:'+_hw+'px;background:#fff;padding:32px;box-sizing:border-box">'
-      +'<div class="vjo">'+vanJobsOrderInner(date,vanId,routeId,leg)+'</div></div>';
+      +'<div class="vjo" style="'+vjTplVars(vanId)+'">'+vanJobsOrderInner(date,vanId,routeId,leg)+'</div></div>';
     document.body.appendChild(host);
     var tgt=host.querySelector('#vj-shot')||host;   // capture the padded wrapper, not the sheet inside it
     window.html2canvas(tgt,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false,windowWidth:_hw+48}).then(function(canvas){
