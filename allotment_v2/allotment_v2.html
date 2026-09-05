@@ -23018,6 +23018,45 @@ function flExtraDel(ds,bid,id){
   if(L.length) A[k]=L; else delete A[k];
   flExtraSaveMap(A); flRenderDR();
 }
+/* §drExtra3 · เรือลำนี้ "วิ่ง" วันนั้นไหม
+   เดิมอยู่ในตัว flRenderDR แต่กล่องกรอกต้องใช้ตัวเดียวกันเพื่อทำรายชื่อเรือให้เลือก
+   ถ้าปล่อยให้มีสองชุด รายชื่อในกล่องกับแถวในตารางจะไม่ตรงกันเมื่อไหร่ก็ได้ */
+function flDRRan(ds,b){
+  if(!b) return false;
+  try{
+    var op=(typeof TRIPS!=='undefined'&&TRIPS[ds])?TRIPS[ds][b.id]:null;
+    if(op && (op.route||op.program)) return true;
+    var bi=(typeof flBoatBookingsFor==='function')?flBoatBookingsFor(b.id,ds):null;
+    if(bi && ((bi.pax||0)>0 || (bi.trips||0)>0)) return true;
+    var dd=(typeof FL_DAILY!=='undefined'&&FL_DAILY[ds])?FL_DAILY[ds][b.id]:null;
+    if(dd && (dd.fuel>0 || dd.paxActual!=null ||
+      (dd.trips && Object.keys(dd.trips).some(function(k){ var tp=dd.trips[k]; return tp&&tp.engines&&Object.keys(tp.engines).length; })))) return true;
+    if(Object.keys(flWaterGet(ds,b.id)||{}).length) return true;
+    if(flExtraGet(ds,b.id).length) return true;
+    var iss=flIssueAll()[flWaterKey(ds,b.id)];
+    if(iss && Object.keys(iss).length) return true;
+  }catch(_e){}
+  return false;
+}
+/* รายชื่อเรือที่เลือกได้ในกล่อง "อื่นๆ" ของท่านั้น
+   ต้องตรงกับแถวที่อยู่ในตารางเป๊ะ ๆ รวมลำที่ขึ้นว่า "ไม่ออก"
+   เพราะเรือที่จอดอยู่ก็เอาของลงได้ · นั่นคือเคสที่แบบคอลัมน์เดิมทำไม่ได้เลย */
+function flExtraBoats(ds,pierKey){
+  var out=[];
+  try{
+    (typeof BOATS!=='undefined'?BOATS:[]).forEach(function(b){
+      if(!b || b.retired) return;
+      var isCh=(b.ownership==='charter');
+      if(!isCh && !(typeof FL_ENGINES!=='undefined'?FL_ENGINES:[]).some(function(e){ return e.boatId===b.id; })) return;
+      if(isCh && !flDRRan(ds,b)) return;
+      var p=(typeof getBoatCurrentPier==='function')?getBoatCurrentPier(b,ds):(b.pier||'');
+      if(p==='shop') p=b.pier||'';
+      if(pierKey && p!==pierKey) return;
+      out.push(b);
+    });
+  }catch(_e){}
+  return out;
+}
 /* ชื่อที่เคยพิมพ์ + จำนวนครั้งที่ใช้ · เรียงจากที่ใช้บ่อยสุด */
 function flExtraNames(){
   var A=flExtraAll(), m={};
@@ -23128,20 +23167,25 @@ function flIssueManageOpen(pierKey){
    +'</div></div>';
 }
 /* ══ §drExtra · กล่องกรอกของจิปาถะของแถวนั้น ═════════════════════════ */
-var _FLX_EX={ds:'',bid:'',id:''};
-function flExtraOpen(ds,bid,id){
+var _FLX_EX={ds:'',pier:'',bid:'',id:''};
+function flExtraOpen(ds,pierKey,bid,id){
   if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('fleet') && !window.laCanEditArea('operations')){ alert('ดูอย่างเดียว · แก้ไม่ได้'); return; }
-  _FLX_EX={ds:ds,bid:bid,id:id||''};
+  _FLX_EX={ds:ds,pier:pierKey||'',bid:bid||'',id:id||''};
   var cur=null;
-  if(id) flExtraGet(ds,bid).forEach(function(x){ if(x.id===id) cur=x; });
-  var bt=(typeof BOATS!=='undefined')?BOATS.filter(function(b){return b.id===bid;})[0]:null;
-  var sug=flExtraNames().slice(0,8);
+  if(id && bid) flExtraGet(ds,bid).forEach(function(x){ if(x.id===id) cur=x; });
+  var BL=flExtraBoats(ds,pierKey);
+  if(!BL.length){ alert('ท่านี้ยังไม่มีเรือให้เลือกในวันนี้'); return; }
+  var pick=bid||BL[0].id;
+  var sug=flExtraNames().slice(0,6);
   _flxHost().innerHTML='<div class="flx-ovl" onclick="if(event.target===this)flxClose()"><div class="flx-dlg">'
-   +'<div class="flx-h">&#128736; '+(cur?'แก้รายการ':'เพิ่มรายการ')+' · '+_flEsc(bt?bt.name:'')
+   +'<div class="flx-h">&#128736; '+(cur?'แก้รายการอื่นๆ':'เพิ่มรายการอื่นๆ')+' · '+_flEsc(_flPierLbl(pierKey))
    +'<button class="x" onclick="flxClose()">&times;</button></div>'
-   +'<div class="flx-n" style="border:0;margin:-4px 0 10px;padding:0">เฉพาะลำนี้ วันนี้ ('+_flEsc(ds)+') เท่านั้น · ไม่สร้างคอลัมน์ให้ทั้งท่า</div>'
+   +'<label class="flx-l">เรือ<select id="flx-xb">'
+     +BL.map(function(b){ return '<option value="'+b.id+'"'+(b.id===pick?' selected':'')+'>'
+        +_flEsc(b.name)+(b.ownership==='charter'?' · เช่า':'')+'</option>'; }).join('')
+   +'</select></label>'
    +'<label class="flx-l">รายการ<input id="flx-xn" placeholder="เช่น ดิงกี้ · น้ำมัน" value="'+_flEsc(cur?cur.n:'')+'" autocomplete="off"></label>'
-   +(sug.length?('<div class="flx-sug" id="flx-xsug">'+sug.map(function(x,i){
+   +(sug.length?('<div class="flx-sug">'+sug.map(function(x,i){
        return '<button onclick="flExtraPick('+i+')">'+_flEsc(x.n)+' <em>'+_flEsc(x.u)+'</em><i>เคยใช้ '+x.c+' ครั้ง</i></button>'; }).join('')+'</div>'):'')
    +'<div style="display:flex;gap:8px">'
      +'<label class="flx-l" style="flex:1">จำนวน<input id="flx-xq" type="number" step="0.1" placeholder="0" value="'+(cur&&cur.q!=null?cur.q:'')+'" autocomplete="off"></label>'
@@ -23149,6 +23193,8 @@ function flExtraOpen(ds,bid,id){
    +'</div>'
    +'<button class="flx-ok" onclick="flExtraSaveBtn()">'+(cur?'บันทึก':'เพิ่มรายการ')+'</button>'
    +(cur?('<button class="flx-ok" style="background:#fff;color:#A32D2D;border:1px solid #E7C4C0;margin-top:7px" onclick="flExtraDelBtn()">ลบรายการนี้</button>'):'')
+   +'<div class="flx-n">เก็บเฉพาะวันที่ '+_flEsc(ds)+' ของลำที่เลือกเท่านั้น · ไม่สร้างคอลัมน์ให้ทั้งท่า<br>'
+     +'ของที่เบิกแทบทุกวันควรใช้ปุ่ม + อื่นๆ ที่หัวท่าแทน จะได้เป็นคอลัมน์กรอกเร็ว</div>'
    +'</div></div>';
   window._FLX_XSUG=sug;
   setTimeout(function(){ var e=document.getElementById('flx-xn'); if(e) e.focus(); },40);
@@ -23160,14 +23206,22 @@ function flExtraPick(i){
   if(q) q.focus();
 }
 function flExtraSaveBtn(){
+  var sel=document.getElementById('flx-xb');
   var n=document.getElementById('flx-xn'), q=document.getElementById('flx-xq'), u=document.getElementById('flx-xu');
   var nm=n?n.value.trim():'';
   if(!nm){ alert('ใส่ชื่อรายการก่อน'); if(n)n.focus(); return; }
-  flExtraSet(_FLX_EX.ds,_FLX_EX.bid,_FLX_EX.id,nm,q?q.value:'',u?u.value:'');
+  var nb=sel?sel.value:_FLX_EX.bid;
+  /* ย้ายลำ · ลบของเดิมก่อนแล้วค่อยเขียนใบใหม่ ไม่งั้นจะค้างสองที่ */
+  if(_FLX_EX.id && _FLX_EX.bid && nb!==_FLX_EX.bid){
+    flExtraDel(_FLX_EX.ds,_FLX_EX.bid,_FLX_EX.id);
+    flExtraSet(_FLX_EX.ds,nb,'',nm,q?q.value:'',u?u.value:'');
+  } else {
+    flExtraSet(_FLX_EX.ds,nb,_FLX_EX.id,nm,q?q.value:'',u?u.value:'');
+  }
   flxClose();
 }
 function flExtraDelBtn(){
-  if(!_FLX_EX.id) return;
+  if(!_FLX_EX.id || !_FLX_EX.bid) return;
   flExtraDel(_FLX_EX.ds,_FLX_EX.bid,_FLX_EX.id);
   flxClose();
 }
@@ -23205,22 +23259,7 @@ function flRenderDR(){
 
      "วิ่ง" = มีทริปในผังเรือ · หรือมีบุคกิ้งลงลำนี้ · หรือมีข้อมูลที่กรอกไว้แล้ว
      ข้อสุดท้ายสำคัญ — แถวที่กรอกไปแล้วต้องไม่หายไปเองถ้าบุคกิ้งถูกย้าย */
-  const _drRan=(b)=>{
-    try{
-      const op=(TRIPS[ds]||{})[b.id];
-      if(op && (op.route||op.program)) return true;
-      const bi=(typeof flBoatBookingsFor==='function')?flBoatBookingsFor(b.id,ds):null;
-      if(bi && ((bi.pax||0)>0 || (bi.trips||0)>0)) return true;
-      const dd=(FL_DAILY[ds]||{})[b.id];
-      if(dd && (dd.fuel>0 || dd.paxActual!=null ||
-        (dd.trips && Object.values(dd.trips).some(tp=>tp&&tp.engines&&Object.keys(tp.engines).length)))) return true;
-      if(Object.keys(flWaterGet(ds,b.id)||{}).length) return true;
-      if(flExtraGet(ds,b.id).length) return true;
-      const iss=flIssueAll()[flWaterKey(ds,b.id)];
-      if(iss && Object.keys(iss).length) return true;
-    }catch(_e){}
-    return false;
-  };
+  const _drRan=(b)=>flDRRan(ds,b);   /* §drExtra3 · ตัวกลาง · กล่องกรอกใช้ตัวเดียวกัน */
   const charterRan=BOATS.filter(b=>b && b.ownership==='charter' && !b.retired && _drRan(b));
   const drBoats=companyBoats.concat(charterRan);
   const tlBoats=drBoats.filter(b=>_drPier(b)==='tublamu');
@@ -23605,7 +23644,7 @@ function flRenderDR(){
 
     if(noEntry){
       /* ลำที่ไม่ออกวันนี้ · ยุบทั้งแถวเป็นช่องเดียว ไม่ให้กินที่และไม่ให้เผลอกรอก */
-      return `<tr>${_btCell}${_rtCell}<td class="fs-dim" colspan="${3+ENG_COLS.length+2+Math.max(1,ISS.length)+1}">${isNotAvail?'ไม่ต้องกรอก':'ไม่ออก'}</td></tr>`;
+      return `<tr>${_btCell}${_rtCell}<td class="fs-dim" colspan="${3+ENG_COLS.length+2+Math.max(1,ISS.length)}">${isNotAvail?'ไม่ต้องกรอก':'ไม่ออก'}</td></tr>`;
     }
     const IN='class="fs-in"';
     /* เครื่องเรียงตามตำแหน่งมาตรฐานของท่านั้น · ลำที่ไม่มีตำแหน่งนั้นเว้นว่าง คอลัมน์จึงตรงกันทุกแถว */
@@ -23627,18 +23666,12 @@ function flRenderDR(){
       const v=flIssueGet(ds,b.id,it.id);
       return `<td class="fs-n fs-i"><input ${IN} type="number" step="1" min="0" value="${v!=null?v:''}" ${_DIS} onchange="flIssueSet('${ds}','${b.id}','${it.id}',this.value)"></td>`;
     }).join('') : '<td class="fs-n fs-i fs-na"></td>';
-    /* §drExtra · ของจิปาถะของลำนี้ วันนี้ · ชิปละหนึ่งรายการ กดเพื่อแก้/ลบ */
-    const _xs=flExtraGet(ds,b.id);
-    const _xTd='<td class="fs-x"><div class="fs-xw">'
-      + _xs.map(x=>`<span class="fs-xc" title="แก้ / ลบ" onclick="flExtraOpen('${ds}','${b.id}','${x.id}')">${_e(x.n)}${x.q!=null?` <b>${x.q}</b>`:''}${x.u?` <i>${_e(x.u)}</i>`:''}</span>`).join('')
-      + (locked?'':`<button class="fs-xa" title="เพิ่มรายการเฉพาะลำนี้ วันนี้ · เช่น ดิงกี้ · น้ำมัน 20 ลิตร" onclick="flExtraOpen('${ds}','${b.id}','')">+</button>`)
-      + '</div></td>';
     const _fpOwn2=_fpOwn;
     return `<tr>${_btCell}${_rtCell}
       <td class="fs-n fs-ro" title="จำนวนลูกค้าจากยอดจอง · แก้ไม่ได้">${pax||0}</td>
       <td class="fs-n fs-f${isAnomaly?' fs-bad':''}"><input ${IN} type="number" step="1" value="${fuel!=null?fuel:''}" ${_DIS} onchange="flSaveFuel('${ds}','${b.id}',this.value)">${fuelLpp?`<em>${fuelLpp}/px</em>`:''}</td>
       <td class="fs-n fs-p${_fpNeed?' fs-need':''}"><input ${IN} type="number" step="0.01" min="0" value="${_fpOwn2!=null?_fpOwn2:''}" placeholder="0.00" ${_DIS} onchange="flSaveFuelPrice('${ds}','${b.id}',this.value)">${_fpCost!=null?`<em>฿${_fpCost.toLocaleString()}</em>`:''}</td>
-      ${_engTd}${_wTd}${_issTd}${_xTd}</tr>`;
+      ${_engTd}${_wTd}${_issTd}</tr>`;
   };
 
 
@@ -23688,7 +23721,8 @@ function flRenderDR(){
       return seen.length?seen:['EN'];
     })();
     const ISS=flIssueFor(pierKey);
-    const NCOL=2+3+ENG_COLS.length+2+ISS.length+1;   /* §drExtra · +1 = ช่องอื่นๆ */
+    /* §drExtra3 · จำนวนคอลัมน์จริงของตารางนี้ · ใช้ทำแถว "อื่นๆ" ที่กินเต็มความกว้าง */
+    const NCOL=7+ENG_COLS.length+Math.max(1,ISS.length);
 
     return`<div style="background:white;border-radius:14px;border:1px solid ${dim.line};margin-bottom:10px;overflow:hidden">
       <div style="display:flex;align-items:center;gap:6px;padding:9px 13px;border-bottom:1px solid rgba(0,0,0,.06);background:#FBFAF7;flex-wrap:wrap">
@@ -23711,7 +23745,7 @@ function flRenderDR(){
             <th class="fsg2" colspan="2">น้ำมัน</th>
             <th class="fsg4" colspan="${ENG_COLS.length}">&#9881; ชั่วโมงเครื่อง</th>
             <th class="fsg3" colspan="2">&#128167; มิเตอร์น้ำ</th>
-            <th class="fsg5" colspan="${Math.max(1,ISS.length)+1}">&#128230; เบิกของลงเรือ
+            <th class="fsg5" colspan="${Math.max(1,ISS.length)}">&#128230; เบิกของลงเรือ
               <span class="fs-addc" onclick="event.stopPropagation();flIssueQuickOpen('${pierKey}')" title="เพิ่มรายการอื่นๆ">+</span></th>
           </tr>
           <tr>
@@ -23722,15 +23756,34 @@ function flRenderDR(){
             <th class="fs-w">เปิด<em>มิเตอร์</em></th><th class="fs-w">ปิด<em>ใช้ไป</em></th>
             ${ISS.length?ISS.map(it=>`<th class="fs-i">${_e(it.name)}<em>${_e(it.unit||'')}${it.pier?(' · '+(it.pier==='tublamu'?'TL':it.pier==='panwa'?'VP':'RN')):''}</em></th>`).join('')
               :'<th class="fs-i fs-na"><em>ยังไม่มีรายการ · กด +</em></th>'}
-            <th class="fs-x">อื่นๆ<em>เฉพาะลำ · เฉพาะวัน</em></th>
           </tr>
         </thead>
-        <tbody>${boats.map(b=>buildBoatRow(b,maxEng,locked,ENG_COLS,ISS)).join('')}</tbody>
+        <tbody>${boats.map(b=>buildBoatRow(b,maxEng,locked,ENG_COLS,ISS)).join('')}${(function(){
+          /* §drExtra3 · ของจิปาถะ · ปุ่มเดียวล่างสุด เหมือนปุ่มเพิ่มแถว
+             ของเดิมทำเป็นคอลัมน์ขวาสุด + ปุ่มติดทุกแถว ซึ่งผิดสองอย่าง
+               1) ตารางกว้าง 14 คอลัมน์อยู่แล้ว ปุ่มขวาสุดต้องเลื่อนไปหาทุกครั้ง
+               2) แถวที่ขึ้น "ไม่ออก" ยุบเป็นช่องเดียว ไม่มีที่ให้ปุ่มอยู่
+                  ทั้งที่เรือจอดอยู่ก็เอาของลงได้ · เคสนั้นเลยทำไม่ได้เลย
+             ปุ่มเดียวล่างสุดแก้ทั้งสองข้อ · แลกกับต้องมีช่องเลือกเรือในกล่องกรอก */
+          let h='';
+          boats.forEach(b=>{
+            flExtraGet(ds,b.id).forEach(x=>{
+              h+=`<tr class="fs-xr"><td class="fs-xb"><span class="fs-xl">อื่นๆ</span><b>${_e(b.name)}</b></td>`
+               + `<td colspan="${NCOL-1}"><span class="fs-xt">${_e(x.n)}</span>`
+               + (x.q!=null?` <span class="fs-xq">${x.q}</span>`:'')
+               + (x.u?`<span class="fs-xu">${_e(x.u)}</span>`:'')
+               + (locked?'':`<button class="fs-xe" onclick="flExtraOpen('${ds}','${pierKey}','${b.id}','${x.id}')">แก้ / ลบ</button>`)
+               + `</td></tr>`;
+            });
+          });
+          if(!locked) h+=`<tr class="fs-xa"><td colspan="${NCOL}">`
+            + `<button class="fs-xab" onclick="flExtraOpen('${ds}','${pierKey}','','')"><span>+</span> เพิ่มรายการอื่นๆ</button>`
+            + `<span class="fs-xah">ของที่ไม่ได้เบิกทุกวัน · เลือกเรือแล้วพิมพ์เอง เช่น ดิงกี้ · น้ำมัน 20 ลิตร</span></td></tr>`;
+          return h; })()}</tbody>
         <tfoot>${(function(){
           /* แถวรวมท้ายตาราง · ของเดิมไม่มี ต้องเลื่อนไปบวกเองในหัว */
-          let tp=0,tf=0,tx=0; const tw={}, ti={};
+          let tp=0,tf=0; const tw={}, ti={};
           boats.forEach(b=>{
-            tx+=flExtraGet(ds,b.id).length;
             const bp2=boatPax[b.id]||{eff:0}; tp+=bp2.eff||0;
             const fl=(FL_DAILY[ds]||{})[b.id]?.fuel; if(fl) tf+=fl;
             const u=flWaterUsed(ds,b.id); if(u!=null) tw.v=(tw.v||0)+u;
@@ -23747,7 +23800,6 @@ function flRenderDR(){
             <td class="fs-n fs-w">${tw.v!=null?('<em>'+(tw.v>=0?'+':'')+(Math.round(tw.v*10)/10)+'</em>'):'—'}</td>
             ${ISS.length?ISS.map(it=>`<td class="fs-n fs-i">${ti[it.id]!=null?ti[it.id]:'—'}</td>`).join('')
               :'<td class="fs-n fs-i">—</td>'}
-            <td class="fs-x" style="text-align:right;font-size:10px;color:#0F6E56">${tx?tx+' รายการ':'—'}</td>
           </tr>`; })()}</tfoot>
       </table></div>
     </div>`;
@@ -23794,19 +23846,25 @@ function flRenderDR(){
 #fl-dr-body td.fs-w{background:#EEF8FC;color:#0C4A66;width:84px}
 #fl-dr-body td.fs-i{background:#F4FAF6;color:#0F6E56;width:72px}
 #fl-dr-body td.fs-na{background:#F7F6F3}
-/* §drExtra · ช่องของจิปาถะ · ชิปหนึ่งชิ้นคือหนึ่งรายการของลำนั้นวันนั้น */
-#fl-dr-body td.fs-x{background:#F4FAF6;min-width:150px;padding:3px 6px}
-#fl-dr-body th.fs-x{background:#EAF4EC;color:#0F6E56} #fl-dr-body th.fs-x em{color:#7FAE96}
-#fl-dr-body .fs-xw{display:flex;flex-wrap:wrap;gap:3px;align-items:center}
-#fl-dr-body .fs-xc{display:inline-flex;align-items:center;gap:4px;background:#fff;border:1px solid #BFD9C9;
-  border-radius:7px;padding:2px 7px;font-size:10.5px;color:#0B5C46;cursor:pointer;max-width:100%}
-#fl-dr-body .fs-xc:hover{border-color:#0F6E56;background:#F1FBF6}
-#fl-dr-body .fs-xc b{font-family:'DM Mono',monospace;font-size:11.5px;font-weight:700}
-#fl-dr-body .fs-xc i{font-style:normal;font-size:9px;color:#7FAE96}
-#fl-dr-body .fs-xa{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;
-  border-radius:6px;border:1px dashed #9FCBB4;background:#fff;color:#0B5C46;font-size:12px;font-weight:800;
-  cursor:pointer;font-family:inherit;line-height:1;padding:0}
-#fl-dr-body .fs-xa:hover{background:#0B5C46;color:#fff;border-style:solid}
+/* §drExtra3 · ของจิปาถะ · เป็นแถวต่อท้ายตาราง ไม่ใช่คอลัมน์
+   แถวรายการอ่านเหมือนบรรทัดในใบเบิก · ปุ่มเพิ่มอยู่ล่างสุดปุ่มเดียว */
+#fl-dr-body tr.fs-xr td{background:#FCFDFC;border-top:1px solid #EDEBE4;padding:6px 10px}
+#fl-dr-body td.fs-xb{width:200px;font-size:11.5px;color:#5F5E5A;white-space:nowrap}
+#fl-dr-body td.fs-xb b{font-weight:700;color:#1A1A1A}
+#fl-dr-body .fs-xl{display:inline-block;background:#EAF4EC;color:#0F6E56;border-radius:5px;padding:1px 6px;
+  font-size:8.5px;font-weight:800;letter-spacing:.05em;margin-right:8px;vertical-align:middle}
+#fl-dr-body .fs-xt{font-size:12px;color:#1A1A1A}
+#fl-dr-body .fs-xq{font-family:'DM Mono',monospace;font-weight:700;font-size:13px;color:#0B5C46}
+#fl-dr-body .fs-xu{font-size:10px;color:#7FAE96;margin-left:3px}
+#fl-dr-body .fs-xe{float:right;font-size:10px;color:#8a8a82;border:1px solid #E7E4DC;border-radius:6px;
+  padding:2px 8px;background:#fff;cursor:pointer;font-family:inherit}
+#fl-dr-body .fs-xe:hover{border-color:#0F6E56;color:#0B5C46}
+#fl-dr-body tr.fs-xa td{background:#F7FBF8;border-top:1px dashed #C7DED2;padding:7px 10px}
+#fl-dr-body .fs-xab{display:inline-flex;align-items:center;gap:7px;border:1.5px dashed #9FCBB4;background:#fff;
+  color:#0B5C46;border-radius:9px;padding:6px 14px;font:700 11px inherit;font-family:inherit;cursor:pointer}
+#fl-dr-body .fs-xab:hover{background:#0B5C46;color:#fff;border-style:solid}
+#fl-dr-body .fs-xab span{font-size:14px;line-height:1}
+#fl-dr-body .fs-xah{font-size:10px;color:#a3a29a;margin-left:10px}
 #fl-dr-body .fs-ch{background:#F3EFFA;color:#5B3FA5;border-radius:5px;padding:0 5px;font-size:8px;font-weight:800;margin-left:4px}
 #fl-dr-body th.fs-ro{background:#EAF2FA;color:#185FA5}
 #fl-dr-body th.fs-f,#fl-dr-body th.fs-p{background:#FAF3E6;color:#854F0B}
@@ -23838,7 +23896,7 @@ function flRenderDR(){
 .flx-h{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;color:#0B5C46;margin-bottom:11px}
 .flx-h .x{margin-left:auto;background:none;border:none;font-size:18px;color:#a3a29a;cursor:pointer;font-family:inherit}
 .flx-l{display:flex;flex-direction:column;gap:4px;font-size:10.5px;color:#5F5E5A;margin-bottom:9px}
-.flx-l input{border:1px solid #D7DBE2;border-radius:8px;padding:8px 10px;font:500 13px inherit;font-family:inherit}
+.flx-l input,.flx-l select{border:1px solid #D7DBE2;border-radius:8px;padding:8px 10px;font:500 13px inherit;font-family:inherit;background:#fff;color:#1A1A1A}
 .flx-sug{display:flex;flex-direction:column;gap:5px;margin:-3px 0 11px}
 .flx-sug button{display:flex;align-items:center;gap:7px;border:1px solid #E1DED6;background:#fff;border-radius:8px;
   padding:6px 10px;font:600 11.5px inherit;font-family:inherit;color:#3F4654;cursor:pointer;text-align:left}
