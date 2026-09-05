@@ -57042,6 +57042,12 @@ function pckCardCSS(scope){ return ''
   +scope+' .pck-ok.off .lb{font-family:inherit;font-size:11.5px}'
   +scope+' .pck-ok.off:hover{border-color:#0F6E56;color:#0F6E56}'
   +scope+' .pck-warncard{background:#FFFBF5;border:1.5px solid #EBD9BE;border-radius:16px;margin-bottom:18px;overflow:hidden}'
+  /* §pckWarnCap · กล่อง "ยังไม่จัดเรือ" ไม่มีเพดานความสูง
+     วันที่มีค้างหลายใบ (เจอจริง 8 ใบ) กล่องนี้สูง 541px บวกหัวที่ตรึงอีก 270px
+     ตารางจริงถูกดันลงไปเหลือโผล่แค่ 154px ท้ายจอ เลื่อนยังไงก็เหมือนค้างอยู่ที่ใบยกเลิก
+     ให้เพดาน 3 แถวแล้วเลื่อนในกล่องเอง · ตารางจริงโผล่เพิ่มเป็น 422px
+     ตัวเลขบนหัวกล่องยังบอกจำนวนเต็มเหมือนเดิม ไม่ได้ซ่อนอะไรหาย */
+  +scope+' .pck-warncard .pck-tw{max-height:232px;overflow-y:auto;overscroll-behavior:contain}'
   +scope+' .pck-warnhd{padding:10px 14px;font-size:12px;font-weight:800;color:#7a5622;display:flex;align-items:center;gap:10px;flex-wrap:wrap}'
   +scope+' .pck-btabs{display:flex;align-items:center;gap:7px;flex-wrap:wrap;background:#fff;border:1px solid #E7E4DC;border-radius:12px;padding:8px 12px;margin-bottom:12px;position:sticky;top:var(--ck-unit-top,0px);z-index:40;box-shadow:0 2px 6px -4px rgba(15,23,42,.30)}'
   +scope+' .pck-btab{padding:6px 13px;border-radius:999px;border:1.5px solid #E7E4DC;background:#FAF9F6;color:#3a3a36;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:7px;cursor:pointer;white-space:nowrap;font-family:inherit}'
@@ -61028,7 +61034,12 @@ function renderPierCheckin(){
   var warnHtml='';
   if(noBoat.length){
     var npx=noBoat.reduce(function(s,r){ return s+r.booked; },0);
+    /* §pckWarnCap · ใบที่ยกเลิกไปแล้วไม่ต้องจัดเรือ แต่ยังถูกนับรวมอยู่ในกล่องนี้
+       บอกจำนวนให้เห็นก่อน จะได้รู้ว่าที่ต้องลงมือจริงเหลือกี่ใบ */
+    var _nCxl=noBoat.filter(function(r){ return !!r.strand; }).length;
+    var _nAct=noBoat.length-_nCxl;
     warnHtml='<div class="pck-warncard"><div class="pck-warnhd">&#9888; ยังไม่จัดเรือ · '+noBoat.length+' booking · '+npx+' pax — จัดเรือก่อนถึงเช็คอินหน้าท่าได้'
+      +(_nCxl?('<span style="background:#F1EFE8;color:#6b6a63;border-radius:999px;padding:1px 9px;font-size:10.5px;font-weight:700;margin-left:8px">ยกเลิกแล้ว '+_nCxl+' ใบ · ต้องจัดจริง '+_nAct+'</span>'):'')
       +'<a onclick="nav(document.querySelector(\'[data-view=booking]\'))" style="margin-left:auto;color:#185FA5;cursor:pointer;text-decoration:none">&rarr; ไปจัดเรือ (By-trip)</a></div>'
       +'<div class="pck-tw"><table class="ck-tbl pck-tbl">'+PCK_THEAD+'<tbody>'
       +noBoat.map(function(r){ return pckRowHtml(r,date); }).join('')+'</tbody></table></div></div>';
