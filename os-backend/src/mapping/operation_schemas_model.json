@@ -4684,6 +4684,22 @@
         "type": "bigint"
       },
       {
+        "name": "nat_ad",
+        "type": "bigint"
+      },
+      {
+        "name": "nat_chd",
+        "type": "bigint"
+      },
+      {
+        "name": "nat_inf",
+        "type": "bigint"
+      },
+      {
+        "name": "nat_foc",
+        "type": "bigint"
+      },
+      {
         "name": "lockdrawsel",
         "type": "text"
       },

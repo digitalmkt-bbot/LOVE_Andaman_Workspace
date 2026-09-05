@@ -3254,6 +3254,11 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
 #view-booking .bkv2-nb-field{display:flex;flex-direction:column;gap:4px}
 #view-booking .bkv2-nb-label{font-size:10px;font-weight:600;color:var(--ink-soft);letter-spacing:.06em;text-transform:uppercase}
 #view-booking .bkv2-nb-input{border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 11px;font-family:inherit;font-size:13px;color:var(--ink);background:var(--white);transition:border-color .15s}
+/* §altDropFix · เหตุผลเดียวกับ §pax boxes ข้างล่าง แต่เกิดกับคอลัมน์จุดรับ/จุดส่ง
+   ที่ห่อด้วย <div> · ตัว div เป็น grid item ที่ min-width:auto จึงกว้างตาม
+   select/input ข้างใน แล้วล้นไปทับปุ่มลบ · บังคับให้ทุกช่องในแถวนี้หดได้ */
+#view-booking .bkv2-alt-row>*{min-width:0}
+#view-booking .bkv2-alt-row .bkv2-nb-input{width:100%;box-sizing:border-box;max-width:100%}
 /* §pax boxes · a grid item defaults to min-width:auto, and <input type=number> has a wide intrinsic
    size (~170px), so four of them refused to shrink and spilled out over the pickup dropdown. */
 .bkv2-pax-box{min-width:0;width:100%;box-sizing:border-box;padding:8px 2px;text-align:center;-moz-appearance:textfield}
@@ -28099,108 +28104,6 @@ function flProjLightbox(url, caption){
 function flProjChildMJs(projId){
   return (FL_MAINT||[]).filter(m=>m.parentProjectId===projId);
 }
-
-/* ══ §slipView · กดดูสลิปที่แนบไว้ ═══════════════════════════════════════
-   สลิปอัปโหลดได้มานานแล้ว (pckSlipUpload → POST /api/attach → ตาราง attachments)
-   และเซิร์ฟเวอร์ก็มี GET /api/attach/<id> ที่เสิร์ฟไฟล์แบบ inline อยู่แล้ว
-   แต่ทุกหน้าที่โชว์สลิปเรนเดอร์แค่ "ชื่อไฟล์" เป็นตัวหนังสือตาย กดไม่ได้
-   บัญชีจึงต้องไปสแกนซัมลงไดร์ฟเอง ทั้งที่ไฟล์อยู่ในระบบแล้ว
-
-   เก็บแต่ ref ในบุ๊กกิ้ง ({id,name,mime,size}) ไม่เคยเก็บ base64 ลง blob
-   ตัวนี้จึงอ่านจาก URL อย่างเดียว ไม่แตะข้อมูล ไม่เพิ่มขนาด blob
-
-   z-index ต้องสูงกว่า acctModal (9999) และ .la-modal (99999)
-   ไม่งั้นเปิดจากในกล่อง Extra วันเดินทางแล้วจะโดนกล่องบัง
-   ═════════════════════════════════════════════════════════════════════════ */
-var _LA_SLIP=null;
-function laSlipUrl(s){ return '/api/attach/'+encodeURIComponent((s&&s.id)||''); }
-function laSlipIsImg(s){ return /^image\//i.test(String((s&&s.mime)||'')); }
-/* list = [{id,name,mime}] · title = ป้ายบอกว่าสลิปของก้อนเงินไหน */
-function laSlipView(list, title, i){
-  var L=(Array.isArray(list)?list:[list]).filter(function(s){ return s && s.id; });
-  if(!L.length){ alert('ยังไม่มีสลิปแนบไว้ในรายการนี้'); return; }
-  _LA_SLIP={ list:L, title:String(title||''), i:Math.max(0, Math.min(L.length-1, +i||0)) };
-  var ov=document.getElementById('la-slipview');
-  if(!ov){
-    ov=document.createElement('div'); ov.id='la-slipview';
-    ov.style.cssText='position:fixed;inset:0;z-index:100060;background:rgba(0,0,0,.86);'
-      +'display:flex;align-items:center;justify-content:center;font-family:"DM Sans",sans-serif';
-    ov.onclick=function(e){ if(e.target===ov) laSlipClose(); };
-    document.body.appendChild(ov);
-    document.addEventListener('keydown', laSlipKey);
-  }
-  laSlipRender();
-}
-function laSlipKey(e){
-  if(!document.getElementById('la-slipview')) return;
-  if(e.key==='Escape'){ laSlipClose(); }
-  else if(e.key==='ArrowRight'){ laSlipStep(1); }
-  else if(e.key==='ArrowLeft'){ laSlipStep(-1); }
-}
-function laSlipStep(n){
-  if(!_LA_SLIP) return;
-  var L=_LA_SLIP.list.length;
-  _LA_SLIP.i=((_LA_SLIP.i+n)%L+L)%L;
-  laSlipRender();
-}
-function laSlipClose(){
-  var ov=document.getElementById('la-slipview'); if(ov) ov.remove();
-  document.removeEventListener('keydown', laSlipKey);
-  _LA_SLIP=null;
-}
-function laSlipRender(){
-  var ov=document.getElementById('la-slipview'), S=_LA_SLIP; if(!ov||!S) return;
-  var esc=function(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
-  var s=S.list[S.i], url=laSlipUrl(s), many=(S.list.length>1);
-  var nav=function(d,ch){ return '<button onclick="laSlipStep('+d+')" title="'+(d>0?'ถัดไป':'ก่อนหน้า')+'" '
-    +'style="background:rgba(255,255,255,.14);border:none;color:#fff;width:38px;height:38px;border-radius:19px;'
-    +'font-size:19px;cursor:pointer;flex:0 0 auto">'+ch+'</button>'; };
-  /* รูปโชว์ในหน้าเดียวกันเลย · PDF กับไฟล์อื่นให้เปิดแท็บใหม่
-     iframe PDF ในโอเวอร์เลย์เล็ก ๆ อ่านไม่ออกอยู่ดี แท็บใหม่ได้ตัวอ่านเต็มของเบราว์เซอร์ */
-  var body = laSlipIsImg(s)
-    ? '<img src="'+esc(url)+'" alt="'+esc(s.name||'slip')+'" '
-      +'style="max-width:86vw;max-height:74vh;object-fit:contain;border-radius:10px;background:#fff;'
-      +'box-shadow:0 10px 40px rgba(0,0,0,.5)">'
-    : '<div style="background:#fff;border-radius:12px;padding:26px 30px;text-align:center;max-width:86vw">'
-      +'<div style="font-size:34px;line-height:1">&#128196;</div>'
-      +'<div style="font-size:13px;font-weight:700;margin:8px 0 3px;word-break:break-all">'+esc(s.name||'ไฟล์แนบ')+'</div>'
-      +'<div style="font-size:11px;color:#6b7280;margin-bottom:14px">'+esc(s.mime||'')+' &middot; ดูในแท็บใหม่ได้</div>'
-      +'<a href="'+esc(url)+'" target="_blank" rel="noopener" '
-      +'style="display:inline-block;background:#1683C7;color:#fff;text-decoration:none;border-radius:9px;'
-      +'padding:9px 18px;font-size:12.5px;font-weight:700">เปิดแท็บใหม่ &#8599;</a></div>';
-
-  ov.innerHTML='<div style="display:flex;align-items:center;gap:12px;max-width:96vw" onclick="event.stopPropagation()">'
-    +(many?nav(-1,'&#8249;'):'')
-    +'<div style="display:flex;flex-direction:column;align-items:center;gap:11px;min-width:0">'
-      +body
-      +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;'
-        +'background:rgba(0,0,0,.55);border-radius:16px;padding:7px 15px;color:#fff;font-size:12px">'
-        +(S.title?('<b style="font-weight:700">'+esc(S.title)+'</b>'):'')
-        +'<span style="opacity:.8">'+esc(s.name||'slip')+'</span>'
-        +(many?('<span style="opacity:.7;font-variant-numeric:tabular-nums">'+(S.i+1)+'/'+S.list.length+'</span>'):'')
-        +'<a href="'+esc(url)+'" target="_blank" rel="noopener" style="color:#8ED0F5">เปิดแท็บใหม่ &#8599;</a>'
-        +'<button onclick="laSlipClose()" style="background:rgba(255,255,255,.16);border:none;color:#fff;'
-          +'border-radius:12px;padding:4px 12px;font-size:11.5px;cursor:pointer;font-family:inherit">ปิด</button>'
-      +'</div>'
-    +'</div>'
-    +(many?nav(1,'&#8250;'):'')+'</div>';
-}
-/* ป้าย 📎 ที่กดดูได้ · ใช้ร่วมกันทุกหน้า เพื่อให้หน้าตากับพฤติกรรมตรงกัน
-   slips ถูกฝังเป็น JSON ใน onclick — ผ่าน encodeURIComponent กัน quote ในชื่อไฟล์พังแอตทริบิวต์
-
-   ระวัง · encodeURIComponent ไม่แปลง ' ให้ (เหลือไว้ตามสเปก พร้อมกับ ! ~ * ( ) )
-   ชื่อไฟล์อย่าง "bob's slip.jpg" จึงหลุด ' ออกมาปิดสตริงจาวาสคริปต์กลางคัน
-   ต้องแปลงเองอีกชั้น · " ถูกแปลงเป็น %22 อยู่แล้ว แอตทริบิวต์ HTML จึงปลอดภัย */
-function _laSlipEnc(s){ return encodeURIComponent(String(s==null?'':s)).replace(/'/g,'%27'); }
-function laSlipClickAttr(slips, title, i){
-  var j=JSON.stringify((Array.isArray(slips)?slips:[]).map(function(s){
-    return {id:s.id, name:s.name, mime:s.mime};
-  }));
-  return 'onclick="event.stopPropagation();laSlipView(JSON.parse(decodeURIComponent(\''
-    + _laSlipEnc(j) + '\')),decodeURIComponent(\'' + _laSlipEnc(title) + '\'),'
-    + (+i||0) + ')"';
-}
 /* ══ §prjAwaitBill · เครื่องมือกลางของ "รอวางบิล" ══════════════════════ */
 /* ใบวางบิลตัวจริงในกองเอกสาร · ชื่อที่คนกรอกใช้มีทั้งไทยและอังกฤษ รับทั้งคู่ */
 function flProjBillDoc(p){
@@ -46688,7 +46591,7 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
     var ring=sent?(';box-shadow:0 0 0 2px '+_rcSentRing(_rcIsInvoiceAgent(d.ag)||d.paid)):'';
     return '<span style="display:inline-block;background:'+ac+';color:'+ink+';padding:'+(big?'4px 11px':'3px 9px')+';border-radius:7px;font-weight:600;font-size:'+(big?'13px':'11.5px')+';white-space:nowrap;max-width:210px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle'+ring+'">'+esc(d.agentName)+(sent?(' '+TI_CHECK):'')+'</span>'; }
   function fmtTime(iso){ try{ return new Date(iso).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
-  var COLDEFS=[{k:'prog',l:'Program',w:176},{k:'agent',l:'Agent',w:146},{k:'voucher',l:'Booking #',w:124},{k:'lead',l:'Customer',w:148},{k:'phone',l:'Phone',w:130},{k:'ad',l:'AD',w:32},{k:'chd',l:'CHD',w:38},{k:'inf',l:'INF',w:34},{k:'foc',l:'FOC',w:34},{k:'time',l:'Pick-up',w:124},{k:'hotel',l:'Hotel',w:180},{k:'room',l:'Room',w:64},{k:'zone',l:'Zone',w:108},{k:'addon',l:'Add-on',w:128},{k:'special',l:'Special request',w:164},{k:'payment',l:'Payment',w:150},{k:'status',l:'Re-confirm status',w:196}];
+  var COLDEFS=[{k:'prog',l:'Program',w:176},{k:'agent',l:'Agent',w:146},{k:'voucher',l:'Booking #',w:124},{k:'submitted',l:'Submitted by',w:118},{k:'lead',l:'Customer',w:148},{k:'phone',l:'Phone',w:130},{k:'ad',l:'AD',w:32},{k:'chd',l:'CHD',w:38},{k:'inf',l:'INF',w:34},{k:'foc',l:'FOC',w:34},{k:'time',l:'Pick-up',w:124},{k:'hotel',l:'Hotel',w:180},{k:'room',l:'Room',w:64},{k:'zone',l:'Zone',w:108},{k:'addon',l:'Add-on',w:128},{k:'special',l:'Special request',w:164},{k:'payment',l:'Payment',w:150},{k:'status',l:'Re-confirm status',w:196}];
   function _rcCols(withAgent){ return COLDEFS.filter(function(c){ return withAgent||c.k!=='agent'; }); }
   function _rcTableHead(cols){ var w=cols.reduce(function(s,c){return s+c.w;},0);
     return '<table style="table-layout:fixed;min-width:'+w+'px"><colgroup>'+cols.map(function(c){return '<col style="width:'+c.w+'px">';}).join('')+'</colgroup>'
@@ -46697,6 +46600,11 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
     case 'prog': return esc(d.prog);
     case 'agent': return agChip(d,false);
     case 'voucher': return '<span style="'+MONO+';color:#5F5E5A">'+esc(d.voucher)+'</span>';
+    /* §rcBy · ผู้บันทึก booking · เก็บที่ createdBy เหมือนที่หน้าเช็คอินรถอ่าน
+       คีย์มือ ไม่ได้เติมอัตโนมัติ · ใบเก่าจึงว่างได้ ไม่ถือว่าผิด */
+    case 'submitted': var _by=(d.bk&&d.bk.createdBy)||'';
+      return _by?'<span title="ผู้บันทึก booking · '+esc(_by)+'" style="font-size:11.5px;color:#5F5E5A;background:#F4F3EE;border-radius:6px;padding:2px 8px;white-space:nowrap">'+esc(_by)+'</span>'
+               :'<span style="color:#B4B2A9">—</span>';
     case 'lead': return esc(d.lead);
     case 'phone': return d.phone?'<a href="tel:'+esc(d.phone)+'" onclick="event.stopPropagation()" style="'+MONO+';color:#185FA5;text-decoration:none">'+esc(d.phone)+'</a>':'<span style="color:#B4B2A9">—</span>';
     case 'pax': return '<span style="'+MONO+'">'+d.pax+'</span>';
@@ -49646,16 +49554,18 @@ function renderVanJobs(){
           <button onclick="vanJobsSetZoom('in')" title="ขยาย" style="background:#fff;border:none;padding:6px 10px;font-size:15px;cursor:pointer;color:#0F6E56;font-family:inherit;line-height:1">+</button>
           <button onclick="vanJobsSetZoom('fit')" title="พอดีจอ" style="background:#fff;border:none;border-left:1px solid #eef0ec;padding:6px 9px;font-size:12px;cursor:pointer;color:#0F6E56;font-family:inherit;line-height:1">พอดี</button>
         </div>
+        <button onclick="${_VJT_DRAFT?'vjTplCancel()':'vjTplOpen()'}" title="ตั้งขนาดตัวอักษร สี และระยะของใบงาน · ใช้กับทุกใบ" style="background:${_VJT_DRAFT?'#0F6E56':'#fff'};color:${_VJT_DRAFT?'#fff':'#0F6E56'};border:1.5px solid #0F6E56;border-radius:8px;padding:6.5px 13px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">&#9881; Template</button>
+        <button onclick="vjHlToggle()" title="ไฮไลต์ทีละบรรทัด · เฉพาะใบนี้" style="background:${_VJ_HL_ON?'#8A5A00':'#fff'};color:${_VJ_HL_ON?'#fff':'#8A5A00'};border:1.5px solid #C99A2E;border-radius:8px;padding:6.5px 13px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">&#128396; ไฮไลต์แถว</button>
         <button onclick="vanJobsSaveImage('${date}','${_pvVid}','${_pvRoute}','${_pvLeg}')" title="บันทึกเป็นรูป PNG คมสูง (ส่ง LINE/WhatsApp)" style="background:#185FA5;color:#fff;border:none;border-radius:8px;padding:8px 15px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">&#128247; บันทึกรูป</button>
         <button onclick="bkV2VanJobOrder('${date}','${_pvVid}','${_pvRoute}','${_pvLeg}')" style="background:#0F6E56;color:#fff;border:none;border-radius:8px;padding:8px 15px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">&#128424; พิมพ์</button>
         <button onclick="vanJobsClosePreview()" title="ปิด" style="background:#fff;border:1px solid #d7dbe2;border-radius:8px;padding:7px 12px;font-size:14px;cursor:pointer;font-family:inherit;color:#666">&#10005;</button>
       </div>
     </div>
-    <div style="flex:1;overflow:auto;padding:14px;background:#EDEFF2">${vanJobsOrderCss(true)}<div class="vjo" id="vjo-page" style="width:100%;min-width:1060px;max-width:2000px;box-sizing:border-box;background:#fff;padding:20px 24px;border-radius:8px;box-shadow:0 3px 16px rgba(20,40,70,.12)">${vanJobsOrderInner(date,_pvVid,_pvRoute,_pvLeg)}</div></div>
+    <div style="flex:1;overflow:auto;padding:14px;background:#EDEFF2">${vanJobsOrderCss(true)}${vjTplCss()}${vjHlCss()}${vjTplPanel()}${vjHlBar(date,_pvVid,_pvRoute)}<div class="vjo${_VJ_HL_ON?' vjhl':''}" id="vjo-page" style="${vjTplVars(_pvVid)};width:100%;min-width:1060px;max-width:2000px;box-sizing:border-box;background:#fff;padding:20px 24px;border-radius:8px;box-shadow:0 3px 16px rgba(20,40,70,.12)">${vanJobsOrderInner(date,_pvVid,_pvRoute,_pvLeg)}</div></div>
   </div>`:''}${_vanJobsFull?(function(){ const k=String(_vanJobsFull); const kk=k.split('|')[0]; const fvid=kk.split('~')[0]; const frt=kk.split('~')[1]||''; const fleg=k.indexOf('|ret')>=0?'ret':'out'; const fnm=(vehGet(fvid)||{}).name||fvid; const frtNm=frt?(((typeof getRoute==='function'?getRoute(frt):null)||{}).name||frt):''; return `
   <div style="position:fixed;inset:0;z-index:700;background:#fff">
     <button onclick="vanJobsCloseFull()" title="ปิด (Esc)" style="position:fixed;top:5px;right:6px;z-index:5;width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.92);border:1px solid #d7dbe2;color:#777;font-size:13px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;font-family:inherit">&#10005;</button>
-    <div style="position:absolute;inset:0;overflow:auto;background:#fff">${vanJobsOrderCss(true)}<div class="vjo" style="padding:12px 24px 22px">${vanJobsOrderInner(date,fvid,frt,fleg)}</div></div>
+    <div style="position:absolute;inset:0;overflow:auto;background:#fff">${vanJobsOrderCss(true)}<div class="vjo" style="${vjTplVars(fvid)};padding:12px 24px 22px">${vanJobsOrderInner(date,fvid,frt,fleg)}</div></div>
   </div>`; })():''}`;
   // open (or re-render) → fit the whole sheet to the drawer; a zoom the user set by hand is preserved
   if(_vanJobsPreview) requestAnimationFrame(function(){ if(_vanJobsZoom==null) vjFit(); else vjApplyZoom(); });
@@ -49675,25 +49585,437 @@ const VANJOB_AREA_TH={
   'Khaolak':'เขาหลัก','Khuk Khak':'คึกคัก','Bang Sak':'บางสัก','Num Khem':'น้ำเค็ม','Merlin':'เมอร์ลิน',
   'Tub Lamu Pier (self-arrive)':'ท่าเรือทับละมุ','Visit Panwa Pier (self-arrive)':'ท่าเรือวิสิทพันวา','Yamu':'ยามู'
 };
+/* ══ §vjTpl · Template ของใบงานรถ ═══════════════════════════════════════
+   ขนาดตัวอักษร สี ระยะ และสีของป้ายที่ใบงานขึ้นเองเมื่อเจอเคสพิเศษ
+   ตั้งครั้งเดียวใช้กับใบงานทุกใบทุกวันทุกคัน · เก็บทั้งบริษัทที่ vanjob_tpl
+   เก็บเฉพาะค่าที่ต่างจาก default · ของที่ยังไม่เคยแตะจะตามค่าเริ่มต้นตลอด
+   ทุกค่าลงเป็น CSS variable บนกล่องใบงาน · พรีวิว หน้าเต็ม พิมพ์ และบันทึกรูป
+   จึงใช้ชุดเดียวกันหมด ไม่ต้องแก้สามที่                                    */
+var VJT_DEF={
+  fVan:32, fRoute:24, fTh:12.5, fTd:15, fName:15.5, fTime:17, fLoc:14.5, fNote:12,
+  main:'#0F6E56', useVanColor:1, thBg:'#EAF3FB', thInk:'#185FA5',
+  hi:'#C0271C', line:'#E2E2DA',
+  rowH:'n', lineW:'n', showTh:1,
+  hlRet:'#B07A1F', hlWarn:'#C0392B', hlConf:'#7A1FA2',
+  hlUpd:'#FFE08A', hlCxl:'#B5271F', hlCall:'#9B1B12',
+  /* หัวข้อสองท่อน · เดิมยืมสีหลักกับสีป้ายขากลับมาใช้ แยกออกมาให้ตั้งเองได้ */
+  secOut:'#0F6E56', secRet:'#B07A1F',
+  /* พื้นทั้งแถวที่ระบบระบายให้เอง เมื่อแถวนั้นเปลี่ยนรถหรือเปลี่ยนที่ส่ง */
+  hlExtra:'#FFF6E6'
+};
+var VJT_NUM={fVan:[14,60],fRoute:[12,40],fTh:[8,20],fTd:[9,24],fName:[9,26],fTime:[9,30],fLoc:[9,26],fNote:[8,20]};
+var _VJT=null, _VJT_SRC=null;
+/* ระหว่างเปิดพาเนล ทุกที่ที่อ่าน vjTpl() จะได้ค่าที่กำลังแก้อยู่
+   ใบงานข้างล่างจึงเปลี่ยนตามทันทีโดยยังไม่บันทึกอะไรลงฐานข้อมูล */
+var _VJT_DRAFT=null;
+function vjTpl(){
+  if(_VJT_DRAFT) return _VJT_DRAFT;
+  var raw='';
+  try{ var b=laBlob(); raw=(typeof b.vanjob_tpl==='string')?b.vanjob_tpl:''; }catch(_){ raw=''; }
+  if(_VJT===null || _VJT_SRC!==raw){
+    var o={}; if(raw){ try{ o=JSON.parse(raw)||{}; }catch(_){ o={}; } }
+    var out={}; for(var k in VJT_DEF){ out[k]=(o[k]===undefined||o[k]===null||o[k]==='')?VJT_DEF[k]:o[k]; }
+    /* กันค่าพังจากการแก้มือ · ขนาดตัวอักษรต้องอยู่ในช่วงที่ยังพิมพ์ออกมาอ่านได้ */
+    for(var n in VJT_NUM){ var v=+out[n]; if(!isFinite(v)) v=VJT_DEF[n];
+      out[n]=Math.max(VJT_NUM[n][0], Math.min(VJT_NUM[n][1], v)); }
+    _VJT=out; _VJT_SRC=raw;
+  }
+  return _VJT;
+}
+function vjTplSave(T){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')){ alert('ดูอย่างเดียว · แก้ไม่ได้'); return false; }
+  try{
+    var keep={}; for(var k in VJT_DEF){ if(String(T[k])!==String(VJT_DEF[k])) keep[k]=T[k]; }
+    var b=laBlob();
+    if(Object.keys(keep).length){ var str=JSON.stringify(keep); b.vanjob_tpl=str; _VJT_SRC=str; }
+    else { delete b.vanjob_tpl; _VJT_SRC=''; }
+    _VJT=null; laBlobSave(); return true;
+  }catch(e){ try{ console.warn('[vjTpl] save failed', e&&e.message); }catch(_){} return false; }
+}
+/* ── ไล่เฉดจากสีเดียว · ใช้ตัวเดียวกับที่ใบงานใช้อยู่แล้ว ── */
+function vjtT(c,t){ return (typeof vjTint==='function')?vjTint(c,t):c; }
+function vjtD(c,p){ return (typeof vjShade==='function')?vjShade(c,p):c; }
+/* ── ตัวแปร CSS ของใบงาน · วางบนกล่องนอกสุด ── */
+function vjTplVars(vanId){
+  var T=vjTpl();
+  var VC=(T.useVanColor&&vanId&&typeof vehColor==='function')?vehColor(vanId):T.main;
+  var PAD={t:'7px 9px',n:'11px 11px',w:'15px 13px'}[T.rowH]||'11px 11px';
+  /* เบราว์เซอร์ปัดเส้นของตารางแบบ collapse เป็นพิกเซลเต็มเสมอ · 0.6px กับ 1.7px
+     จึงออกมาเท่ากับ 1px หมด · "จาง" ใช้เส้น 1px แต่ไล่สีให้อ่อนลงแทน */
+  var LW={t:'1px',n:'1px',w:'2px'}[T.lineW]||'1px';
+  var LN=(T.lineW==='t')?vjtT(T.line,0.52):T.line;
+  return '--vjt-van:'+T.fVan+'px;--vjt-route:'+T.fRoute+'px;--vjt-th:'+T.fTh+'px;'
+    +'--vjt-td:'+T.fTd+'px;--vjt-name:'+T.fName+'px;--vjt-time:'+T.fTime+'px;'
+    +'--vjt-loc:'+T.fLoc+'px;--vjt-locth:'+(Math.round(T.fLoc*1.24*10)/10)+'px;--vjt-note:'+T.fNote+'px;'
+    +'--vjt-main:'+VC+';--vjt-main2:'+vjtD(VC,-22)+';--vjt-thbg:'+T.thBg+';--vjt-think:'+T.thInk+';'
+    +'--vjt-hi:'+T.hi+';--vjt-line:'+LN+';--vjt-pad:'+PAD+';--vjt-lw:'+LW+';'
+    /* ชุดสีหัวตารางต้องคุมแถบโปรแกรมและแถวรวมด้วย ไม่งั้นเปลี่ยนเป็นขาวดำแล้วยังมีฟ้าค้าง */
+    +'--vjt-thbd:'+vjtT(T.thInk,0.74)+';--vjt-ink2:'+vjtD(T.thInk,-28)+';'
+    +'--vjt-hlret:'+T.hlRet+';--vjt-hlret-bg:'+vjtT(T.hlRet,0.80)+';--vjt-hlret-ink:'+vjtD(T.hlRet,-38)+';'
+    +'--vjt-hlwarn:'+T.hlWarn+';--vjt-hlwarn-bg:'+vjtT(T.hlWarn,0.88)+';--vjt-hlwarn-ink:'+vjtD(T.hlWarn,-32)+';'
+    +'--vjt-hlconf:'+T.hlConf+';--vjt-hlconf-bg:'+vjtT(T.hlConf,0.88)+';--vjt-hlconf-ink:'+vjtD(T.hlConf,-28)+';'
+    +'--vjt-hlupd:'+T.hlUpd+';--vjt-hlupd-ink:'+vjtD(T.hlUpd,-64)+';'
+    +'--vjt-hlcxl:'+T.hlCxl+';--vjt-hlcxl-bg:'+vjtT(T.hlCxl,0.86)+';'
+    +'--vjt-hlcall:'+T.hlCall+';--vjt-hlcall-bg:'+vjtT(T.hlCall,0.90)+';--vjt-hlcall-bd:'+vjtT(T.hlCall,0.58)+';'
+    +'--vjt-secout:'+T.secOut+';--vjt-secret:'+T.secRet+';--vjt-hlextra:'+T.hlExtra+';';
+}
+/* ══ §vjRowHl · ไฮไลต์ทั้งบรรทัด · เคสบายเคส ════════════════════════════
+   ต่างจาก Template ตรงที่อันนี้ "ไม่ใช่ค่าบริษัท" · ผูกกับใบเดียว
+   คีย์ = วันที่ | รถ | โปรแกรม | ขาไป-ขากลับ | booking
+   ใบของรถคันอื่นหรือวันอื่นจึงไม่กระทบกันเลย แม้เป็น booking เดียวกัน
+
+   ใช้ตอนคนจัดรถอยากบอกคนขับว่า "บรรทัดนี้ระวัง" ในเคสที่ระบบไม่รู้เอง
+   เช่น ลูกค้าโทรมาบอกว่าจะสาย หรือกระเป๋าเยอะกว่าปกติ
+
+   ติดไปกับตอนพิมพ์และบันทึกรูปด้วย · แต่กดได้เฉพาะในแอป
+   ล้างของเก่าทิ้งตอนบันทึก · เก็บย้อนหลังแค่ 45 วัน ไม่งั้นสะสมไปเรื่อย ๆ
+   (เจอมาแล้วกับ Seat Lock ที่ค้างเป็นร้อย)                                 */
+/* §vjFix1 · เก็บเป็นรหัสสีตรงๆ แทนตัวอักษรย่อ · จะได้เลือกสีเองนอกจานได้
+   ของเก่าที่เก็บเป็น y/o/b/g/r ยังอ่านออก ไม่ต้องแปลงข้อมูล */
+var VJ_HL=[
+  '#FFF1A8','#FFE9A8','#FFDCA8','#FFD3A8','#FFC7A0','#F9D77E','#F5B48A',
+  '#FBD3CE','#F7B5AD','#F5B7C4','#F49BB0','#F4948C','#EFA3A3','#E88A8A',
+  '#E4D4F7','#D6C4F2','#C9A7EE','#CFE6FB','#B7D8F7','#9FC9F0','#A8C0EE',
+  '#CFF0F5','#B6E7EA','#CFEEDD','#A9E3C7','#E4F2BE','#E2E0DA','#C9C6BE'];
+var VJ_HL_OLD={y:'#FFE9A8',o:'#FFD3A8',b:'#CFE6FB',g:'#CFEEDD',r:'#FBD3CE'};
+function vjHlColor(v){
+  v=String(v||'');
+  if(/^#[0-9a-fA-F]{6}$/.test(v)) return v;
+  return VJ_HL_OLD[v]||'';
+}
+var _VJ_HL=null, _VJ_HL_SRC=null;
+var _VJ_HL_ON=false, _VJ_HL_C='#FFE9A8', _VJ_HL_POP=false;
+function vjHlAll(){
+  var raw='';
+  try{ var b=laBlob(); raw=(typeof b.vanjob_rowhl==='string')?b.vanjob_rowhl:''; }catch(_){ raw=''; }
+  if(_VJ_HL===null || _VJ_HL_SRC!==raw){
+    var o={}; if(raw){ try{ o=JSON.parse(raw)||{}; }catch(_){ o={}; } }
+    _VJ_HL=o; _VJ_HL_SRC=raw;
+  }
+  return _VJ_HL;
+}
+function vjHlKey(date,vanId,routeId,isRet,bkId){
+  return String(date||'')+'|'+String(vanId||'')+'|'+String(routeId||'')+'|'+(isRet?'r':'o')+'|'+String(bkId||'');
+}
+function vjHlOf(key){ return vjHlAll()[key]||''; }
+function vjHlPersist(justSet){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;
+  try{
+    var A=vjHlAll();
+    /* ตัดของเก่ากว่า 45 วันทิ้ง · ใบงานที่ผ่านไปแล้วไม่มีใครกลับไปพิมพ์
+       ยกเว้นบรรทัดที่เพิ่งกด · ไม่งั้นเปิดใบเก่ามาทาสีแล้วมันหายทันทีตรงหน้า */
+    var cut=new Date(); cut.setDate(cut.getDate()-45);
+    var cutS=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(cut):cut.toISOString().slice(0,10);
+    var keep={}; for(var k in A){ if(!A[k]) continue; if(k===justSet || String(k).slice(0,10)>=cutS) keep[k]=A[k]; }
+    var b=laBlob();
+    if(Object.keys(keep).length){ var str=JSON.stringify(keep); b.vanjob_rowhl=str; _VJ_HL=keep; _VJ_HL_SRC=str; }
+    else { delete b.vanjob_rowhl; _VJ_HL={}; _VJ_HL_SRC=''; }
+    laBlobSave();
+  }catch(e){ try{ console.warn('[vjRowHl] save failed', e&&e.message); }catch(_){} }
+}
+function vjHlToggle(){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')){ alert('ดูอย่างเดียว · แก้ไม่ได้'); return; }
+  _VJ_HL_ON=!_VJ_HL_ON; _VJ_HL_POP=false; renderVanJobs();
+}
+/* กดที่อื่นแล้วจานสีต้องปิด · ไม่งั้นค้างทับใบงานอยู่อย่างนั้น */
+if(!window._vjHlDocBound){ window._vjHlDocBound=true;
+  document.addEventListener('click', function(ev){
+    if(!_VJ_HL_POP) return;
+    if(ev.target && ev.target.closest && (ev.target.closest('.vjhl-pop')||ev.target.closest('.vjhl-b .pk'))) return;
+    _VJ_HL_POP=false; try{ renderVanJobs(); }catch(_){}
+  }, true);
+}
+function vjHlPick(c){ if(!/^#[0-9a-fA-F]{6}$/.test(String(c||''))) return; _VJ_HL_C=c; _VJ_HL_POP=false; renderVanJobs(); }
+function vjHlPopToggle(){ _VJ_HL_POP=!_VJ_HL_POP; renderVanJobs(); }
+/* เลือกสีเองระหว่างลาก · อัปเดตแค่กรอบที่เลือกไว้ ไม่วาดใหม่ (เหตุผลเดียวกับจานสีของ Template) */
+function vjHlLive(c){
+  if(!/^#[0-9a-fA-F]{6}$/.test(String(c||''))) return;
+  _VJ_HL_C=c;
+  var box=document.getElementById('vjhl-cst'); if(box) box.style.background=c;
+  var pk=document.querySelector('.vjhl-b .pk i'); if(pk) pk.style.background=c;
+  var g=document.getElementById('vjhl-g');
+  if(g) [].forEach.call(g.querySelectorAll('button[data-c]'), function(b){
+    b.className=(String(b.getAttribute('data-c')).toLowerCase()===String(c).toLowerCase())?'on':''; });
+}
+function vjHlClick(key){
+  if(!_VJ_HL_ON) return;
+  var A=vjHlAll();
+  /* กดสีเดิมซ้ำ = ล้างบรรทัดนั้น · ไม่ต้องมีปุ่มยางลบแยก */
+  var on=(A[key]!==_VJ_HL_C);
+  if(on) A[key]=_VJ_HL_C; else delete A[key];
+  vjHlPersist(on?key:null); renderVanJobs();
+}
+function vjHlClearSheet(date,vanId,routeId){
+  var A=vjHlAll(), pre=String(date)+'|'+String(vanId)+'|'+String(routeId||'')+'|', n=0;
+  for(var k in A){ if(k.indexOf(pre)===0) n++; }
+  if(!n){ alert('ใบนี้ยังไม่มีบรรทัดที่ไฮไลต์ไว้'); return; }
+  if(!confirm('ล้างไฮไลต์ทั้งใบนี้ '+n+' บรรทัด?')) return;
+  for(var k2 in A){ if(k2.indexOf(pre)===0) delete A[k2]; }
+  vjHlPersist(); renderVanJobs();
+}
+function vjHlBar(date,vanId,routeId){
+  if(!_VJ_HL_ON) return '';
+  var clr='vjHlClearSheet(\''+date+'\',\''+vanId+'\',\''+(routeId||'')+'\')';
+  /* จานสีเดิมกางเรียงยาว 20 ช่องคาแถบไว้ตลอด กินที่และหาสีที่ใช้อยู่ไม่เจอ
+     เปลี่ยนเป็นปุ่มสีเดียว กดแล้วค่อยกางจาน · แบบเดียวกับจานสีประจำรถ */
+  return '<div class="vjhl-b"><b>&#128396; ไฮไลต์แถว</b>'
+   +'<span class="s">เลือกสี แล้วคลิกที่แถวในใบ &middot; คลิกซ้ำสีเดิม = ล้างบรรทัดนั้น</span>'
+   +'<span class="act">'
+     +'<button class="pk'+(_VJ_HL_POP?' open':'')+'" onclick="vjHlPopToggle()" title="เลือกสีไฮไลต์">'
+       +'<i style="background:'+_VJ_HL_C+'"></i><span>สีที่ใช้</span><em>&#9662;</em></button>'
+     +'<button class="cl" onclick="'+clr+'" title="ล้างไฮไลต์ทั้งใบนี้">ล้างทั้งใบ</button>'
+   +'</span>'
+   +'<span class="n">ผูกกับใบนี้ใบเดียว (วันที่ &middot; รถ &middot; โปรแกรม) &middot; ติดไปกับตอนพิมพ์และบันทึกรูป</span>'
+   +(_VJ_HL_POP?vjHlPop(clr):'')
+   +'</div>';
+}
+function vjHlPop(clr){
+  return '<div class="vjhl-pop" onclick="event.stopPropagation()">'
+   +'<div class="ph">สีไฮไลต์แถว</div>'
+   +'<div class="pg" id="vjhl-g">'
+   +VJ_HL.map(function(c){ return '<button data-c="'+c+'" class="'+(String(_VJ_HL_C).toLowerCase()===c.toLowerCase()?'on':'')
+       +'" style="background:'+c+'" title="'+c+'" onclick="vjHlPick(\''+c+'\')"></button>'; }).join('')
+   +'</div>'
+   +'<div class="pc"><label id="vjhl-cst" style="background:'+_VJ_HL_C+'">'
+     +'<input type="color" value="'+_VJ_HL_C+'" oninput="vjHlLive(this.value)" onchange="vjHlPick(this.value)"></label>'
+     +'<span>เลือกสีเองได้ไม่จำกัด &rarr;</span></div>'
+   +'<button class="px" onclick="'+clr+'">ล้างไฮไลต์ทั้งใบนี้</button>'
+   +'</div>';
+}
+function vjHlCss(){
+  return '<style id="vjhl-css">'
+   +'.vjhl-b{display:flex;align-items:center;gap:11px;background:#FFFBF0;border:2px solid #C99A2E;'
+     +'border-radius:10px;padding:7px 12px;margin-bottom:10px;font-family:inherit}'
+   +'.vjhl-b b{font-size:12.5px;color:#7A4A00;flex:none}'
+   +'.vjhl-b .s{font-size:11px;color:#8a6a2a}'
+   +'.vjhl-b{position:relative}'
+   +'.vjhl-b .act{display:flex;gap:7px;align-items:center;margin-left:auto;flex:none}'
+   +'.vjhl-b .act .pk{display:inline-flex;align-items:center;gap:7px;border:1.5px solid #d7c9a8;background:#fff;'
+     +'border-radius:9px;padding:4px 10px 4px 5px;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:700;color:#7A4A00}'
+   +'.vjhl-b .act .pk.open{border-color:#7A4A00;background:#FFF4DC}'
+   +'.vjhl-b .act .pk i{width:22px;height:22px;border-radius:6px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}'
+   +'.vjhl-b .act .pk em{font-style:normal;font-size:9px;color:#a89468}'
+   +'.vjhl-b .act .cl{border:1px solid #d7c9a8;background:#fff;color:#8a6a2a;border-radius:9px;'
+     +'padding:5px 11px;cursor:pointer;font-family:inherit;font-size:11px;font-weight:700}'
+   +'.vjhl-b .act .cl:hover{border-color:#C0392B;color:#B5271F}'
+   /* จานสี · กางใต้ปุ่ม แบบเดียวกับจานสีประจำรถ */
+   +'.vjhl-pop{position:absolute;right:12px;top:calc(100% + 6px);z-index:40;background:#fff;'
+     +'border:1px solid #e3ddcd;border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.18);padding:12px;width:270px}'
+   +'.vjhl-pop .ph{font-size:11.5px;font-weight:800;color:#7A4A00;margin-bottom:9px}'
+   +'.vjhl-pop .pg{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}'
+   +'.vjhl-pop .pg button{width:100%;aspect-ratio:1;border-radius:8px;border:none;cursor:pointer;'
+     +'box-shadow:inset 0 0 0 1px rgba(0,0,0,.13);font-family:inherit;padding:0}'
+   +'.vjhl-pop .pg button.on{box-shadow:inset 0 0 0 1px rgba(0,0,0,.13),0 0 0 2.5px #7A4A00}'
+   +'.vjhl-pop .pc{display:flex;align-items:center;gap:9px;margin-top:11px;padding-top:10px;border-top:1px solid #f0ebdd}'
+   +'.vjhl-pop .pc label{width:34px;height:28px;border-radius:8px;cursor:pointer;position:relative;overflow:hidden;flex:none;'
+     +'box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}'
+   +'.vjhl-pop .pc label input{position:absolute;inset:-6px;width:52px;height:46px;opacity:0;cursor:pointer;border:none;padding:0}'
+   +'.vjhl-pop .pc span{font-size:10.5px;color:#8a8a82}'
+   +'.vjhl-pop .px{width:100%;margin-top:10px;border:1px solid #e3ddcd;background:#fff;color:#8a6a2a;'
+     +'border-radius:9px;padding:7px;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:700}'
+   +'.vjhl-pop .px:hover{border-color:#C0392B;color:#B5271F}'
+   +'.vjhl-b .g button.on{box-shadow:inset 0 0 0 1px rgba(0,0,0,.13),0 0 0 2.5px #7A4A00}'
+   +'.vjhl-b .g button.x{background:#fff;border:1px solid #d7c9a8;color:#8a6a2a;font-size:15px;line-height:1}'
+   +'.vjhl-b .n{font-size:9.5px;color:#a89468;flex:none;max-width:180px;line-height:1.45}'
+   /* ในโหมดไฮไลต์ · ทั้งแถวกดได้ ต้องบอกด้วยว่ากดได้ */
+   +'.vjo.vjhl tbody tr{cursor:pointer}'
+   +'.vjo.vjhl tbody tr:hover>td{outline:1.5px dashed #C99A2E;outline-offset:-2px}'
+   +'</style>';
+}
+/* ══ §vjTpl · พาเนลตั้งค่า ═══════════════════════════════════════════════ */
+var VJT_PRESET={
+  std:{},
+  big:{fRoute:27, fTd:17, fName:18, fTime:21, fLoc:17, fNote:13, rowH:'w'},
+  /* ขาวดำล้วน · ป้ายที่ระบบขึ้นเองก็ต้องเป็นเทา ไม่งั้นยังเปลืองหมึกสี */
+  ink:{useVanColor:0, main:'#3A3A36', thBg:'#F2F2EE', thInk:'#3A3A36',
+       hi:'#1A1A18', line:'#C9C6BE', hlCall:'#3A3A36', hlUpd:'#E8E6DF',
+       hlRet:'#5A5A54', hlWarn:'#4A4A44', hlConf:'#4A4A44', hlCxl:'#4A4A44',
+       secOut:'#3A3A36', secRet:'#6A6A62', hlExtra:'#F0EFEA',
+       lineW:'t', rowH:'t'}
+};
+function vjTplPreset(k){
+  var T={}; for(var a in VJT_DEF) T[a]=VJT_DEF[a];
+  var P=VJT_PRESET[k]||{}; for(var b in P) T[b]=P[b];
+  _VJT_DRAFT=T; renderVanJobs();
+}
+function vjTplOpen(){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')){ alert('ดูอย่างเดียว · แก้ไม่ได้'); return; }
+  var T=vjTpl(), D={}; for(var k in VJT_DEF) D[k]=T[k];
+  _VJT_DRAFT=D; renderVanJobs();
+}
+function vjTplCancel(){ _VJT_DRAFT=null; renderVanJobs(); }
+function vjTplApply(){ var T=_VJT_DRAFT; if(!T) return; if(vjTplSave(T)) _VJT_DRAFT=null; renderVanJobs(); }
+function vjTplResetAsk(){
+  if(!confirm('คืนค่า Template ของใบงานรถกลับเป็นค่าเริ่มต้นทั้งหมด?')) return;
+  var T={}; for(var k in VJT_DEF) T[k]=VJT_DEF[k];
+  _VJT_DRAFT=T; renderVanJobs();
+}
+function vjTplSet(k,v){
+  if(!_VJT_DRAFT) return;
+  if(VJT_NUM[k]){ var n=+v; if(!isFinite(n)) return;
+    _VJT_DRAFT[k]=Math.max(VJT_NUM[k][0], Math.min(VJT_NUM[k][1], Math.round(n*10)/10)); }
+  else _VJT_DRAFT[k]=v;
+  renderVanJobs();
+}
+function vjTplBump(k,d){ if(!_VJT_DRAFT) return; vjTplSet(k, (+_VJT_DRAFT[k]||0)+d); }
+/* ── ชิ้นส่วนของพาเนล ── */
+function _vjtStep(lbl,k,hot){
+  var T=_VJT_DRAFT||vjTpl();
+  return '<div class="ct'+(hot?' hot':'')+'"><span class="cl">'+lbl+'</span>'
+   +'<span class="cs"><i onclick="vjTplBump(\''+k+'\',-0.5)">&minus;</i>'
+   +'<input value="'+T[k]+'" onchange="vjTplSet(\''+k+'\',this.value)">'
+   +'<i onclick="vjTplBump(\''+k+'\',0.5)">+</i></span><span class="cu">px</span></div>';
+}
+/* §vjFix1 · ระหว่างลากสีในจานของเบราว์เซอร์ ห้ามวาดใหม่ทั้งหน้า
+   ไม่งั้น input ที่กำลังถืออยู่ถูกลบ จานสีปิดตัวเอง (เด้ง)
+   ทำแค่ยัดค่าลงตัวแปร CSS ของใบ · ใบเปลี่ยนสีตามทันทีโดยไม่ต้องวาดใหม่
+   ค่อยวาดใหม่ตอน change (ปิดจานสีแล้ว) เพื่อให้ส่วนที่ไม่ใช่ตัวแปรตามไปด้วย */
+function _vjtPrevVan(){
+  var k=String(_vanJobsPreview||''); if(!k) return null;
+  return k.split('|')[0].split('~')[0] || null;
+}
+function vjTplLiveVars(){
+  var pg=document.getElementById('vjo-page'); if(!pg) return;
+  vjTplVars(_vjtPrevVan()).split(';').forEach(function(d){
+    var i=d.indexOf(':'); if(i>0) pg.style.setProperty(d.slice(0,i).trim(), d.slice(i+1).trim());
+  });
+}
+function vjTplLive(k,v){
+  if(!_VJT_DRAFT) return;
+  _VJT_DRAFT[k]=v;
+  var lb=document.getElementById('vjtsw-'+k); if(lb) lb.textContent=String(v).toUpperCase();
+  vjTplLiveVars();
+}
+function _vjtSw(lbl,k,note){
+  var T=_VJT_DRAFT||vjTpl(), c=T[k]||'#000000';
+  return '<div class="ct"><span class="cl">'+lbl+'</span>'
+   +'<span class="cw"><input type="color" value="'+c+'" oninput="vjTplLive(\''+k+'\',this.value)" onchange="vjTplSet(\''+k+'\',this.value)">'
+   +'<code id="vjtsw-'+k+'">'+String(c).toUpperCase()+'</code></span>'
+   +(note?'<span class="cn">'+note+'</span>':'')+'</div>';
+}
+function _vjtSeg(lbl,k,opts){
+  var T=_VJT_DRAFT||vjTpl(), cur=String(T[k]);
+  return '<div class="ct"><span class="cl">'+lbl+'</span><span class="cg">'
+   +opts.map(function(o){ return '<button class="'+(cur===String(o[0])?'on':'')
+      +'" onclick="vjTplSet(\''+k+'\',\''+o[0]+'\')">'+o[1]+'</button>'; }).join('')
+   +'</span></div>';
+}
+function vjTplPanel(){
+  if(!_VJT_DRAFT) return '';
+  var T=_VJT_DRAFT;
+  return '<div class="vjt-p"><div class="vjt-h"><b>&#9881; Template ใบงานรถ</b>'
+   +'<span class="s">ตั้งครั้งเดียว · ใช้กับใบงานรถทุกใบ ทุกวัน ทุกคัน</span>'
+   +'<span class="pre">พรีเซ็ต'
+     +'<button onclick="vjTplPreset(\'std\')">มาตรฐาน</button>'
+     +'<button onclick="vjTplPreset(\'big\')">ตัวใหญ่</button>'
+     +'<button onclick="vjTplPreset(\'ink\')">ประหยัดหมึก</button></span>'
+   +'<button class="x" onclick="vjTplCancel()" title="ปิดโดยไม่บันทึก">&times;</button></div>'
+   +'<div class="vjt-b">'
+     +'<div class="vjt-c"><div class="t">ขนาดตัวอักษร</div>'
+       +_vjtStep('ชื่อรถ (หัวใบ)','fVan')
+       +_vjtStep('ชื่อโปรแกรม','fRoute')
+       +_vjtStep('หัวตาราง','fTh')
+       +_vjtStep('เนื้อตาราง','fTd')
+       +_vjtStep('ชื่อลูกค้า','fName')
+       +_vjtStep('เวลารับ','fTime')
+       +_vjtStep('จุดรับ / จุดส่ง','fLoc')
+       +_vjtStep('หมายเหตุท้ายใบ','fNote')
+     +'</div>'
+     +'<div class="vjt-c"><div class="t">สีของใบ</div>'
+       +_vjtSw('สีหลักของใบ','main','หัวใบ + แถบโปรแกรม')
+       +'<div class="ct"><span class="cl"></span><label class="ck"><input type="checkbox"'
+         +(T.useVanColor?' checked':'')+' onchange="vjTplSet(\'useVanColor\',this.checked?1:0)"> ใช้สีประจำรถแทน</label></div>'
+       +_vjtSw('พื้นหัวตาราง','thBg')
+       +_vjtSw('ตัวอักษรหัวตาราง','thInk')
+       +_vjtSw('สีเน้น (เวลารับ)','hi')
+       +_vjtSw('เส้นตาราง','line')
+       +'<div class="t" style="margin-top:12px">ระยะและเส้น</div>'
+       +_vjtSeg('ความสูงแถว','rowH',[['t','แน่น'],['n','ปกติ'],['w','โปร่ง']])
+       +_vjtSeg('เส้นตาราง','lineW',[['t','จาง'],['n','ปกติ'],['w','หนา']])
+       +_vjtSeg('ชื่อไทยใต้จุดรับ','showTh',[[0,'ซ่อน'],[1,'แสดง']])
+     +'</div>'
+     +'<div class="vjt-c"><div class="t">สีไฮไลต์ที่ระบบขึ้นเอง</div>'
+       +'<div class="n">ป้ายและกล่องที่ใบงานขึ้นให้เองเมื่อเจอเคสพิเศษ</div>'
+       +_vjtSw('&#9312; หัวข้อขาไป','secOut')
+       +_vjtSw('&#9313; หัวข้อขากลับ','secRet')
+       +_vjtSw('พื้นแถวเปลี่ยนรถ / ที่ส่ง','hlExtra','ทั้งแถว')
+       +_vjtSw('&#8617; ขากลับใช้รถคันอื่น','hlRet')
+       +_vjtSw('&#9888; ยังไม่ได้จัดรถ','hlWarn')
+       +_vjtSw('&#9888; รถปนกันในกรุ๊ป','hlConf')
+       +_vjtSw('&#128204; อัปเดตคนขับวันนี้','hlUpd')
+       +_vjtSw('&#9888; ยกเลิก / เลื่อนวัน','hlCxl')
+       +_vjtSw('&#9742; กล่องเตือนท้ายใบ','hlCall')
+     +'</div>'
+   +'</div>'
+   +'<div class="vjt-f"><button class="r" onclick="vjTplResetAsk()">&#8634; คืนค่าเริ่มต้น</button>'
+     +'<span style="flex:1"></span>'
+     +'<button class="c" onclick="vjTplCancel()">ยกเลิก</button>'
+     +'<button class="k" onclick="vjTplApply()">ใช้กับทุกใบ</button></div></div>';
+}
+function vjTplCss(){
+  return '<style id="vjt-css">'
+   +'.vjt-p{background:#fff;border:2px solid #0F6E56;border-radius:11px;margin-bottom:10px;'
+     +'box-shadow:0 3px 14px -6px rgba(15,110,86,.4);overflow:hidden;font-family:inherit}'
+   +'.vjt-h{display:flex;align-items:center;gap:12px;padding:8px 13px;background:#F1FBF6;border-bottom:1px solid #DFF0E8}'
+   +'.vjt-h b{font-size:13px;color:#0C6B47}.vjt-h .s{font-size:11px;color:#6b7280}'
+   +'.vjt-h .pre{margin-left:auto;font-size:10.5px;color:#8a8a82;display:flex;align-items:center;gap:5px}'
+   +'.vjt-h .pre button{border:1px solid #d7dbe2;background:#fff;border-radius:6px;padding:3px 9px;'
+     +'font:600 10.5px inherit;font-family:inherit;color:#5F5E5A;cursor:pointer}'
+   +'.vjt-h .pre button:hover{border-color:#0F6E56;color:#0F6E56}'
+   +'.vjt-h .x{background:transparent;border:none;font-size:17px;color:#9aa;cursor:pointer;font-family:inherit}'
+   +'.vjt-b{display:grid;grid-template-columns:1fr 1.05fr 1.1fr}'
+   +'.vjt-c{padding:10px 14px 12px;border-right:1px solid #EEF0EC;min-width:0}'
+   +'.vjt-c:last-child{border-right:0}'
+   +'.vjt-c .t{font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:#94918a;font-weight:800;margin-bottom:7px}'
+   +'.vjt-c .n{font-size:10px;color:#a8a49c;line-height:1.5;margin:-3px 0 7px}'
+   +'.vjt-p .ct{display:flex;align-items:center;gap:8px;margin-bottom:5px;min-height:26px}'
+   +'.vjt-p .cl{font-size:11.5px;color:#4b5563;width:124px;flex:none}'
+   +'.vjt-p .cs{display:flex;align-items:center;border:1px solid #d7dbe2;border-radius:7px;overflow:hidden;background:#fff}'
+   +'.vjt-p .cs i{font-style:normal;padding:3px 8px;color:#0F6E56;font-size:13px;background:#F7F9F8;cursor:pointer;user-select:none}'
+   +'.vjt-p .cs i:hover{background:#E3F0EA}'
+   +'.vjt-p .cs input{width:52px;border:none;outline:none;text-align:center;font:500 11.5px \'DM Mono\',monospace;color:#1B2A55;padding:3px 0;background:#fff}'
+   +'.vjt-p .cu{font-size:10px;color:#a8a49c}'
+   +'.vjt-p .cw{display:flex;align-items:center;gap:6px;border:1px solid #d7dbe2;border-radius:7px;padding:2px 8px 2px 3px;background:#fff}'
+   +'.vjt-p .cw input[type=color]{width:23px;height:21px;border:none;background:none;padding:0;cursor:pointer}'
+   +'.vjt-p .cw code{font:500 10.5px \'DM Mono\',monospace;color:#5F5E5A}'
+   +'.vjt-p .cn{font-size:9.5px;color:#a8a49c}'
+   +'.vjt-p .ck{font-size:11px;color:#0C6B47;display:flex;align-items:center;gap:6px;cursor:pointer}'
+   +'.vjt-p .cg{display:flex;border:1px solid #d7dbe2;border-radius:7px;overflow:hidden}'
+   +'.vjt-p .cg button{border:none;background:#fff;font:600 10.5px inherit;font-family:inherit;color:#5F5E5A;'
+     +'padding:4px 11px;cursor:pointer;border-right:1px solid #eef0ec}'
+   +'.vjt-p .cg button:last-child{border-right:0}'
+   +'.vjt-p .cg button.on{background:#0F6E56;color:#fff;font-weight:700}'
+   +'.vjt-f{display:flex;align-items:center;gap:8px;padding:8px 13px;border-top:1px solid #EEF0EC;background:#FCFDFC}'
+   +'.vjt-f button{border-radius:8px;padding:7px 14px;font:600 12px inherit;font-family:inherit;cursor:pointer}'
+   +'.vjt-f .r{background:#fff;border:1px solid #d7dbe2;color:#8a8a82}'
+   +'.vjt-f .c{background:#fff;border:1px solid #d7dbe2;color:#5F5E5A}'
+   +'.vjt-f .k{background:#0F6E56;border:none;color:#fff}'
+   +'</style>';
+}
 function vanJobsOrderCss(scoped){ const p=scoped?'.vjo ':'';
   return '<style>'
     +(scoped?".vjo{font-family:'DM Sans',Arial,sans-serif;color:#1B2A55}":"*{box-sizing:border-box} body{font-family:'DM Sans',Arial,sans-serif;color:#1B2A55;margin:0;padding:22px}")
     +p+'.hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #185FA5;padding-bottom:10px;margin-bottom:14px}'
     +p+'.h1{font-size:20px;font-weight:800}'+p+'.h1 small{display:block;font-size:12px;font-weight:500;color:#666}'
+    /* §vjTpl · ค่าเริ่มต้นวางไว้ที่กล่องเอง · ถ้ามีตัวแปรจาก vjTplVars มาทับ (สีประจำรถ) ก็ใช้ของนั้น */
+    +(scoped?'.vjo{':'body{')+vjTplVars(null)+'}'
     +p+'.meta{text-align:right;font-size:13px;color:#444;line-height:1.5}'+p+'.meta b{font-size:16px;color:#185FA5}'
-    +p+'.bighd{background:#F4F8FC;border:1px solid #d8e6f3;border-radius:10px;padding:13px 20px;margin-bottom:14px}'
-    +p+'.bh-lbl{font-size:10px;color:#5b86a3;letter-spacing:.07em;text-transform:uppercase}'
+    +p+'.bighd{background:var(--vjt-thbg,#F4F8FC);border:1px solid var(--vjt-thbd,#d8e6f3);border-radius:10px;padding:13px 20px;margin-bottom:14px;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    +p+'.bh-lbl{font-size:10px;color:var(--vjt-think,#5b86a3);opacity:.75;letter-spacing:.07em;text-transform:uppercase}'
     +p+'.bh-line{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:4px 0 2px}'
-    +p+'.bh-route{font-size:24px;font-weight:800;color:#15396B;line-height:1.15}'
+    +p+'.bh-route{font-size:var(--vjt-route,24px);font-weight:800;color:var(--vjt-ink2,#15396B);line-height:1.15}'
     +p+'.bh-sep{font-size:20px;color:#9db6cc;font-weight:400}'
-    +p+'.bh-date{font-size:24px;font-weight:800;color:#185FA5;line-height:1.15;white-space:nowrap}'
-    +p+'table{width:100%;border-collapse:collapse;font-size:15px}'
-    +p+'th{background:#EAF3FB;color:#185FA5;text-align:left;padding:9px 10px;border:1px solid #cfe0ef;font-size:12.5px;text-transform:uppercase;letter-spacing:.03em}'
-    +p+'th small{display:block;font-weight:400;color:#5b86a3;text-transform:none;font-size:11px}'
-    +p+'td{padding:11px 11px;border:1px solid #e2e2da;vertical-align:top;font-size:15px;overflow-wrap:anywhere;word-break:break-word}'
+    +p+'.bh-date{font-size:var(--vjt-route,24px);font-weight:800;color:var(--vjt-think,#185FA5);line-height:1.15;white-space:nowrap}'
+    +p+'table{width:100%;border-collapse:collapse;font-size:var(--vjt-td,15px)}'
+    +p+'th{background:var(--vjt-thbg,#EAF3FB);color:var(--vjt-think,#185FA5);text-align:left;padding:9px 10px;border:var(--vjt-lw,1px) solid var(--vjt-thbd,#cfe0ef);font-size:var(--vjt-th,12.5px);text-transform:uppercase;letter-spacing:.03em;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+    +p+'th small{display:block;font-weight:400;color:var(--vjt-think,#5b86a3);opacity:.78;text-transform:none;font-size:.86em}'
+    +p+'td{padding:var(--vjt-pad,11px 11px);border:var(--vjt-lw,1px) solid var(--vjt-line,#e2e2da);vertical-align:top;font-size:var(--vjt-td,15px);overflow-wrap:anywhere;word-break:break-word}'
     +p+'.ag{font-size:12px;color:#777;margin-top:2px}'
-    +p+'.note{margin-top:13px;font-size:12px;color:#555;line-height:1.6}'
-    +p+'.callnote{margin-top:10px;font-size:15px;font-weight:700;color:#9B1B12;background:#FBECEA;border:1.5px solid #E6A9A2;border-radius:8px;padding:11px 16px;-webkit-print-color-adjust:exact;print-color-adjust:exact;text-align:center;line-height:1.5}'
+    +p+'.note{margin-top:13px;font-size:var(--vjt-note,12px);color:#555;line-height:1.6}'
+    +p+'.callnote{margin-top:10px;font-size:calc(var(--vjt-note,12px) + 3px);font-weight:700;color:var(--vjt-hlcall,#9B1B12);background:var(--vjt-hlcall-bg,#FBECEA);border:1.5px solid var(--vjt-hlcall-bd,#E6A9A2);border-radius:8px;padding:11px 16px;-webkit-print-color-adjust:exact;print-color-adjust:exact;text-align:center;line-height:1.5}'
+    /* §vjTpl · ชื่อไทยใต้จุดรับ · ปิดได้จาก Template */
+    +p+'.pkth{font-size:var(--vjt-locth,18px)}'
+    +(vjTpl().showTh?'':(p+'.pkth{display:none}'))
     +(scoped?'':'@media print{@page{size:A4 landscape;margin:10mm}body{padding:0}}')
     +'</style>';
 }
@@ -49705,7 +50027,9 @@ function _ovnOutDate(b, leg){
   return out ? (out.date||'') : '';
 }
 function vanJobsOrderInner(date, vanId, routeId, legIgnored){
-  const VC=vehColor(vanId), VC2=vjShade(VC,-22);   /* §สีประจำรถ — the sheet header wears the van's colour */
+  /* §vjTpl · หัวใบใช้สีประจำรถหรือสีหลักของบริษัท แล้วแต่ที่ตั้งไว้ใน Template */
+  const _T=vjTpl();
+  const VC=(_T.useVanColor?vehColor(vanId):_T.main), VC2=vjShade(VC,-22);
   if(typeof bkV2HealAltSplits==='function') bkV2HealAltSplits(date);   // §altPickups · auto van-splits for รับหลายจุด before building the sheet
   if(typeof bkV2VanGroupHeal==='function') bkV2VanGroupHeal(date);   // ensure grouped bookings have their group's vanId before building the sheet (prevents ตกบุคกิ้งในใบงาน)
   const v=vehGet(vanId)||{};
@@ -49871,27 +50195,34 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
           }
         }catch(_e){}
       }
-      const _rowBg = _sxR
+      /* §vjRowHl · สีที่คนจัดรถทาเอง ชนะสีอัตโนมัติ · เขาเห็นของจริงตรงหน้าแล้วจึงทา */
+      const _hlKey = vjHlKey(date, vanId, routeId, isRet, b.id);
+      const _hlCol = vjHlColor(vjHlOf(_hlKey));
+      const _rowBg = _hlCol
+        ? ` style="background:${_hlCol};-webkit-print-color-adjust:exact;print-color-adjust:exact"`
+        : (_sxR
         ? ' style="background:#F5F3F0;color:#9b9a93;-webkit-print-color-adjust:exact;print-color-adjust:exact"'
-        : (_extra ? ' style="background:#FFF6E6;-webkit-print-color-adjust:exact;print-color-adjust:exact"' : '');
+        : (_extra ? ' style="background:var(--vjt-hlextra,#FFF6E6);-webkit-print-color-adjust:exact;print-color-adjust:exact"' : ''));
+      /* กดได้เฉพาะตอนเปิดโหมด · หน้าต่างพิมพ์ไม่มีฟังก์ชันพวกนี้ จึงต้องไม่ติดไปด้วย */
+      const _hlClick = _VJ_HL_ON ? ` onclick="vjHlClick('${_hlKey}')"` : '';
       const _sxMv = x.strand==='mv';
       const _sxTag = _sxR
-        ? `<div style="margin-top:3px"><span style="display:inline-block;background:${_sxMv?'#EDE3FB':'#FBE3E1'};color:${_sxMv?'#5B289A':'#B5271F'};font-weight:700;font-size:11px;border-radius:7px;padding:2px 8px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#10007; ${_sxMv?('เลื่อนวันแล้ว'+(x.strandWhy?(' · '+e(String(x.strandWhy).split(' · ')[0])):'')):'ยกเลิกแล้ว'} · ไม่ต้องไปรับ</span></div>`
+        ? `<div style="margin-top:3px"><span style="display:inline-block;background:${_sxMv?'#EDE3FB':'var(--vjt-hlcxl-bg,#FBE3E1)'};color:${_sxMv?'#5B289A':'var(--vjt-hlcxl,#B5271F)'};font-weight:700;font-size:11px;border-radius:7px;padding:2px 8px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#10007; ${_sxMv?('เลื่อนวันแล้ว'+(x.strandWhy?(' · '+e(String(x.strandWhy).split(' · ')[0])):'')):'ยกเลิกแล้ว'} · ไม่ต้องไปรับ</span></div>`
         : '';
-      return `<tr${_rowBg}>
+      return `<tr${_rowBg}${_hlClick}>
         <td style="text-align:center;${_sxR?'color:#B5271F;font-weight:700':''}">${_no}</td>
         <td style="font-size:12.5px;word-break:break-all;font-variant-numeric:tabular-nums;color:#444">${e(b.voucherRef||b.code||b.id)}</td>
-        <td style="font-size:15.5px;font-weight:700;color:${_sxR?'#8f8e88':'#1B2A55'}${_sxR?';text-decoration:line-through;text-decoration-thickness:1.5px':''}">${e(b.leadPax||'-')}${_sxTag}${_ckTag}${(_ovnRet||_ovnOut)?`<div style="margin-top:2px"><span style="display:inline-block;background:${_ovnOut?'#EDE7FB':'#FBE4C9'};color:${_ovnOut?'#4A2E86':'#8a5500'};font-weight:700;font-size:10px;border-radius:7px;padding:1px 7px;white-space:nowrap">${_ovnOut?'&#127765; OVN':'&#8617; OVN'}</span></div>`:''}${(function(){ const _lead=String(b.leadPax||'').trim(); const _ex=(b.passengers||[]).map(p=>String((p&&p.name)||'').trim()).filter(n=>n&&n!==_lead); if(_ex.length){ let h=_ex.slice(0,2).map(n=>`<div class="ag" style="font-weight:600;color:#3F4654">${e(n)}</div>`).join(''); if(_ex.length>2) h+=`<div class="ag">+${_ex.length-2} more</div>`; return h; } return (b.passengers&&b.passengers.length)?`<div class="ag">+${b.passengers.length} more</div>`:''; })()}${x.splitPax!=null?`<div class="ag" style="color:#5B289A">${x.sMain?('&#128652; จุดหลัก'):(((x.sHotel||'').trim()||x.sAreaId)?('&#128652; แยกรับ'):('&#9986; แยกส่ง'))+(x.sWho?(' · '+e(x.sWho)):'')} · เดียวกัน ${e(b.voucherRef||b.code||b.id)}</div>`:''}${(x._mgN>1)?`<div class="ag" style="color:#0C6B47">&#128652; รับจุดเดียวกัน ${x._mgN} กลุ่ม · ขากลับแยกส่ง</div>`:''}</td>
+        <td style="font-size:var(--vjt-name,15.5px);font-weight:700;color:${_sxR?'#8f8e88':'#1B2A55'}${_sxR?';text-decoration:line-through;text-decoration-thickness:1.5px':''}">${e(b.leadPax||'-')}${_sxTag}${_ckTag}${(_ovnRet||_ovnOut)?`<div style="margin-top:2px"><span style="display:inline-block;background:${_ovnOut?'#EDE7FB':'#FBE4C9'};color:${_ovnOut?'#4A2E86':'#8a5500'};font-weight:700;font-size:10px;border-radius:7px;padding:1px 7px;white-space:nowrap">${_ovnOut?'&#127765; OVN':'&#8617; OVN'}</span></div>`:''}${(function(){ const _lead=String(b.leadPax||'').trim(); const _ex=(b.passengers||[]).map(p=>String((p&&p.name)||'').trim()).filter(n=>n&&n!==_lead); if(_ex.length){ let h=_ex.slice(0,2).map(n=>`<div class="ag" style="font-weight:600;color:#3F4654">${e(n)}</div>`).join(''); if(_ex.length>2) h+=`<div class="ag">+${_ex.length-2} more</div>`; return h; } return (b.passengers&&b.passengers.length)?`<div class="ag">+${b.passengers.length} more</div>`:''; })()}${x.splitPax!=null?`<div class="ag" style="color:#5B289A">${x.sMain?('&#128652; จุดหลัก'):(((x.sHotel||'').trim()||x.sAreaId)?('&#128652; แยกรับ'):('&#9986; แยกส่ง'))+(x.sWho?(' · '+e(x.sWho)):'')} · เดียวกัน ${e(b.voucherRef||b.code||b.id)}</div>`:''}${(x._mgN>1)?`<div class="ag" style="color:#0C6B47">&#128652; รับจุดเดียวกัน ${x._mgN} กลุ่ม · ขากลับแยกส่ง</div>`:''}</td>
         ${paxCells}
-        <td style="text-align:center;font-variant-numeric:tabular-nums;font-weight:800;font-size:17px;color:#C0271C;white-space:nowrap">${isRet?'<span style="color:#aaa;font-weight:400;font-size:14px">—</span>':(e(_ptime(b,t))||'-')}</td>
-        <td style="font-size:14.5px;font-weight:600;color:#1B2A55">${e(pickup)||'<span style="color:#b00">— no pickup —</span>'}${_pkTh?`<div class="ag" style="color:#185FA5;font-size:18px;font-weight:600;line-height:1.3;margin-top:1px">${e(_pkTh)}</div>`:''}${(!isRet&&Array.isArray(b.altPickups)&&b.altPickups.some(a=>(a.who||'').trim()||(a.place||'').trim()))?b.altPickups.filter(a=>(a.who||'').trim()||(a.place||'').trim()||a.area||a.areaId).map(a=>`<div style="color:#5B289A;font-size:11.5px;margin-top:2px">&#128652; <b>${Math.max(1,parseInt(a.qty)||1)} คน</b>${(a.who||'').trim()?(' · '+e((a.who||'').trim())):''}${a.zone?(' ['+e(a.zone)+']'):''} @ ${e((a.place||'').trim()||a.area||'?')}</div>`).join(''):''}</td>
+        <td style="text-align:center;font-variant-numeric:tabular-nums;font-weight:800;font-size:var(--vjt-time,17px);color:var(--vjt-hi,#C0271C);white-space:nowrap">${isRet?'<span style="color:#aaa;font-weight:400;font-size:14px">—</span>':(e(_ptime(b,t))||'-')}</td>
+        <td style="font-size:var(--vjt-loc,14.5px);font-weight:600;color:#1B2A55">${e(pickup)||'<span style="color:#b00">— no pickup —</span>'}${_pkTh?`<div class="ag pkth" style="color:var(--vjt-think,#185FA5);font-weight:600;line-height:1.3;margin-top:1px">${e(_pkTh)}</div>`:''}${(!isRet&&Array.isArray(b.altPickups)&&b.altPickups.some(a=>(a.who||'').trim()||(a.place||'').trim()))?b.altPickups.filter(a=>(a.who||'').trim()||(a.place||'').trim()||a.area||a.areaId).map(a=>`<div style="color:#5B289A;font-size:11.5px;margin-top:2px">&#128652; <b>${Math.max(1,parseInt(a.qty)||1)} คน</b>${(a.who||'').trim()?(' · '+e((a.who||'').trim())):''}${a.zone?(' ['+e(a.zone)+']'):''} @ ${e((a.place||'').trim()||a.area||'?')}</div>`).join(''):''}</td>
         <td style="text-align:center">${e(b.roomNumber||'')||'-'}</td>
         <td>${zoneCell}</td>
-        <td>${dropCell}${retDiff?`<div style="margin-top:4px"><span style="display:inline-block;background:#FBE4C9;color:#8a5500;font-weight:700;font-size:12px;border-radius:7px;padding:3px 10px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#8617; ขากลับ โดย ${e(retName)}</span></div>`:''}</td>
+        <td style="font-size:var(--vjt-loc,14.5px)">${dropCell}${retDiff?`<div style="margin-top:4px"><span style="display:inline-block;background:var(--vjt-hlret-bg,#FBE4C9);color:var(--vjt-hlret-ink,#8a5500);font-weight:700;font-size:12px;border-radius:7px;padding:3px 10px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#8617; ขากลับ โดย ${e(retName)}</span></div>`:''}</td>
         <td style="text-align:center">${b.largeLuggage?('🧳 '+b.largeLuggage):'-'}</td>
         <td style="font-size:12.5px">${sreqCell}</td>
       </tr>`; }).join('');
-    const secHd=`<div style="display:flex;align-items:center;gap:9px;margin:0 0 7px"><span style="background:${isRet?'#B07A1F':'#0F6E56'};color:#fff;font-size:12.5px;font-weight:700;border-radius:7px;padding:4px 13px;-webkit-print-color-adjust:exact;print-color-adjust:exact">${isRet?'② ขากลับ · RETURN':'① ขาไป · OUTBOUND'}</span><span style="font-size:11.5px;color:#6b7280">${isRet?'รับจากท่าเรือ → ส่งจุดหมาย':'รับจากโรงแรม → ส่งท่าเรือ'}</span></div>`;
+    const secHd=`<div style="display:flex;align-items:center;gap:9px;margin:0 0 7px"><span style="background:${isRet?'var(--vjt-secret,#B07A1F)':'var(--vjt-secout,#0F6E56)'};color:#fff;font-size:12.5px;font-weight:700;border-radius:7px;padding:4px 13px;-webkit-print-color-adjust:exact;print-color-adjust:exact">${isRet?'② ขากลับ · RETURN':'① ขาไป · OUTBOUND'}</span><span style="font-size:11.5px;color:#6b7280">${isRet?'รับจากท่าเรือ → ส่งจุดหมาย':'รับจากโรงแรม → ส่งท่าเรือ'}</span></div>`;
     const table=`<table style="table-layout:fixed;width:100%">
       ${_colg}
       <thead>
@@ -49906,7 +50237,7 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
         <tr><th style="text-align:center">AD</th><th style="text-align:center">CHD</th><th style="text-align:center">INF</th><th style="text-align:center">FOC</th></tr>
       </thead>
       <tbody>${tr}</tbody>
-      <tfoot><tr style="font-weight:700;background:#F4F8FC;color:#15396B">
+      <tfoot><tr style="font-weight:700;background:var(--vjt-thbg,#F4F8FC);color:var(--vjt-ink2,#15396B);-webkit-print-color-adjust:exact;print-color-adjust:exact">
         <td colspan="3" style="text-align:right">รวม / Total</td>
         <td style="text-align:center">${totAd}</td><td style="text-align:center">${totChd}</td><td style="text-align:center">${totInf}</td><td style="text-align:center">${totFoc}</td>
         <td colspan="7">${totPax} pax · ${(function(){
@@ -49933,22 +50264,23 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
       else if(!o.vanId){ const hp=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; _unaPax+=hp; _unaBk++; _unaTrip[_nm]=(_unaTrip[_nm]||0)+hp; }
     }); }); }
   const _unaTxt=Object.keys(_unaTrip).map(k=>e(k)+' '+_unaTrip[k]+' คน').join(' · ');
-  const _unaBanner = _unaPax>0 ? `<div style="background:#FBE9E7;border:2px solid #C0392B;border-radius:9px;padding:10px 15px;margin:0 0 13px;-webkit-print-color-adjust:exact;print-color-adjust:exact"><div style="font-size:14px;font-weight:800;color:#9B1B12">&#9888; เส้นทางนี้ยังมี ${_unaBk} booking (${_unaPax} คน) ที่ยังไม่ได้จัดรถ — อาจตกจากใบงานนี้</div><div style="font-size:12px;color:#8A1C1C;margin-top:3px">${_unaTxt} · ไปจัดรถที่ By trip date &rarr; โหมด Van แล้วพิมพ์ใบงานใหม่</div></div>` : '';
+  const _unaBanner = _unaPax>0 ? `<div style="background:var(--vjt-hlwarn-bg,#FBE9E7);border:2px solid var(--vjt-hlwarn,#C0392B);border-radius:9px;padding:10px 15px;margin:0 0 13px;-webkit-print-color-adjust:exact;print-color-adjust:exact"><div style="font-size:14px;font-weight:800;color:var(--vjt-hlwarn-ink,#9B1B12)">&#9888; เส้นทางนี้ยังมี ${_unaBk} booking (${_unaPax} คน) ที่ยังไม่ได้จัดรถ — อาจตกจากใบงานนี้</div><div style="font-size:12px;color:var(--vjt-hlwarn-ink,#8A1C1C);opacity:.85;margin-top:3px">${_unaTxt} · ไปจัดรถที่ By trip date &rarr; โหมด Van แล้วพิมพ์ใบงานใหม่</div></div>` : '';
   // ⚠ van-group conflict touching THIS van → some of its members are routed to a different van → this sheet may be wrong
   const _conf=(typeof bkV2VanGroupConflicts==='function')?bkV2VanGroupConflicts(date).filter(c=>c.vans[vanId]):[];
   const _confTxt=_conf.map(c=>e(c.routeName)+' กรุ๊ป '+c.gid+': '+Object.keys(c.vans).map(x=>e((vehGet(x)||{}).name||x)+'×'+c.vans[x]).join(' / ')).join(' · ');
-  const _confBanner=_conf.length?`<div style="background:#F3E0F7;border:2px solid #7A1FA2;border-radius:9px;padding:10px 15px;margin:0 0 13px;-webkit-print-color-adjust:exact;print-color-adjust:exact"><div style="font-size:14px;font-weight:800;color:#5E1480">&#9888; รถปนกันในกรุ๊ป — บาง booking ถูกจัดไปคนละคัน ใบงานนี้อาจไม่ครบ/ผิดคัน</div><div style="font-size:12px;color:#6A1C8A;margin-top:3px">${_confTxt} · ไป By trip date &rarr; โหมด Van เลือกรถของกรุ๊ปให้เป็นคันเดียว แล้วพิมพ์ใหม่</div></div>`:'';
+  const _confBanner=_conf.length?`<div style="background:var(--vjt-hlconf-bg,#F3E0F7);border:2px solid var(--vjt-hlconf,#7A1FA2);border-radius:9px;padding:10px 15px;margin:0 0 13px;-webkit-print-color-adjust:exact;print-color-adjust:exact"><div style="font-size:14px;font-weight:800;color:var(--vjt-hlconf-ink,#5E1480)">&#9888; รถปนกันในกรุ๊ป — บาง booking ถูกจัดไปคนละคัน ใบงานนี้อาจไม่ครบ/ผิดคัน</div><div style="font-size:12px;color:var(--vjt-hlconf-ink,#6A1C8A);opacity:.85;margin-top:3px">${_confTxt} · ไป By trip date &rarr; โหมด Van เลือกรถของกรุ๊ปให้เป็นคันเดียว แล้วพิมพ์ใหม่</div></div>`:'';
   let dlabel=date; try{ dlabel=new Date(date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}); }catch(_){}
   const routesStr=Object.keys(_allRoutes).map(e).join(' · ')||'—';
   const metaCounts=(out.rows.length||ret.rows.length)
     ? `<span style="font-size:15px;font-weight:700;color:#fff">ขาไป ${out.totPax||0} คน · ขากลับ ${ret.totPax||0} คน</span>`
     : 'ไม่มี booking';
   const body = (out.html||'') + (ret.html?((out.html?'<div style="height:16px"></div>':'')+ret.html):'') + ((!out.html&&!ret.html)?'<div style="text-align:center;padding:24px;color:#888">No bookings assigned to this van</div>':'');
-  return `<div class="hd" style="align-items:center;background:linear-gradient(100deg,${VC} 0%,${VC2} 100%);color:#fff;border:none;border-radius:12px;padding:15px 22px;margin-bottom:14px;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+  void VC; void VC2;   /* §vjFix1 · สีหัวใบย้ายไปอยู่ในตัวแปร CSS แล้ว จะได้เปลี่ยนสดๆ ได้ */
+  return `<div class="hd" style="align-items:center;background:linear-gradient(100deg,var(--vjt-main,#0F6E56) 0%,var(--vjt-main2,#0b5443) 100%);color:#fff;border:none;border-radius:12px;padding:15px 22px;margin-bottom:14px;-webkit-print-color-adjust:exact;print-color-adjust:exact">
       <div class="h1" style="flex:1;min-width:0;color:#fff">LOVE ANDAMAN · Van Job Order<small style="color:rgba(255,255,255,.72)">ใบงานรถรับ-ส่ง · ขาไป + ขากลับ ในใบเดียว</small></div>
       <div style="flex:0 0 auto;text-align:center;padding:0 18px">
-        <div style="font-size:32px;font-weight:800;color:#fff;line-height:1.05;letter-spacing:.01em">${e(v.name||v.plate||vanId)}${_drv.plate&&_drv.plate!=='-'?` <span style="font-size:19px;color:rgba(255,255,255,.80);font-weight:700;font-variant-numeric:tabular-nums">${e(_drv.plate)}${_drv.plateOverride?' <span style="font-size:11px;color:#FFE9A8">&#128204;</span>':''}</span>`:''}</div>
-        <div style="font-size:16px;color:rgba(255,255,255,.92);margin-top:5px;font-weight:600">คนขับ <b style="color:#fff">${e(_drv.driver||'-')}</b>${_drv.phone?` · <b style="font-variant-numeric:tabular-nums;color:#fff">${e(_drv.phone)}</b>`:''}${_drv.override?` <span style="font-size:11px;font-weight:700;color:#5a3b00;background:#FFE08A;border-radius:6px;padding:2px 8px;margin-left:6px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#128204; อัปเดตวันนี้</span>`:''}</div>
+        <div style="font-size:var(--vjt-van,32px);font-weight:800;color:#fff;line-height:1.05;letter-spacing:.01em">${e(v.name||v.plate||vanId)}${_drv.plate&&_drv.plate!=='-'?` <span style="font-size:19px;color:rgba(255,255,255,.80);font-weight:700;font-variant-numeric:tabular-nums">${e(_drv.plate)}${_drv.plateOverride?' <span style="font-size:11px;color:#FFE9A8">&#128204;</span>':''}</span>`:''}</div>
+        <div style="font-size:16px;color:rgba(255,255,255,.92);margin-top:5px;font-weight:600">คนขับ <b style="color:#fff">${e(_drv.driver||'-')}</b>${_drv.phone?` · <b style="font-variant-numeric:tabular-nums;color:#fff">${e(_drv.phone)}</b>`:''}${_drv.override?` <span style="font-size:11px;font-weight:700;color:var(--vjt-hlupd-ink,#5a3b00);background:var(--vjt-hlupd,#FFE08A);border-radius:6px;padding:2px 8px;margin-left:6px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#128204; อัปเดตวันนี้</span>`:''}</div>
       </div>
       <div class="meta" style="flex:1;color:rgba(255,255,255,.92)">${e(v.ownership==='partner'?('รถร่วม '+(v.partnerName||'')):'รถบริษัท')} · ${e(v.zoneBase||'')}<br>${e(dlabel)}<br>${metaCounts}</div>
     </div>
@@ -51483,7 +51815,14 @@ function ckSharedCSS(scope){
   /* §vckFlow · ทั้งแถวเปลี่ยนสีตามสถานะ · ตัวแปรสีมาจาก inline บนแถว
      ต้อง !important เพราะคลาสเดิม (ck-done/ck-lost/ck-late) ทาพื้นไว้แล้ว */
   +scope+' table.ck-tbl tr.ck-row.vst>td{background:var(--vst-bg)!important}'
-  +scope+' table.ck-tbl tr.ck-row.vst:hover>td{background:var(--vst-chip)!important}'
+  +scope+' table.ck-tbl tr.ck-row.vst:hover>td{background:var(--vst-hov,var(--vst-chip))!important}'
+  /* §vckBar · แบบเข้ม · พื้นเข้มพอที่ตัวหนังสือสีเดิมจะอ่านไม่ออก ต้องไล่ให้เข้มตาม
+     ต้อง !important เพราะ ck-lost/ck-nsfull ทาสีตัวอักษรไว้แล้ว */
+  +scope+' table.ck-tbl tr.ck-row.vst.vkb-c>td{color:var(--vst-tx)!important}'
+  +scope+' table.ck-tbl tr.ck-row.vst.vkb-c>td .ck-dim,'
+  +scope+' table.ck-tbl tr.ck-row.vst.vkb-c>td .ck-by{color:var(--vst-tx)!important;opacity:.62}'
+  +scope+' table.ck-tbl tr.ck-row.vst.vkb-c>td:first-child{box-shadow:inset 5px 0 0 var(--vst-bar)!important}'
+  +scope+' tr.vstv.vkb-c .vck-sel{border-width:1.5px}'
   /* ต้องแรงกว่า ck-lost>td:first-child ที่ specificity สูงกว่า ไม่งั้นแถบซ้ายยังเป็นแดงของเดิม */
   +scope+' table.ck-tbl tr.ck-row.vst>td:first-child{box-shadow:inset 5px 0 0 var(--vst-bar)!important}'
   +scope+' tr.vstv .vck-sel{background:var(--vst-chip);border-color:var(--vst-bar);color:var(--vst-ink)}'
@@ -51511,7 +51850,15 @@ function ckSharedCSS(scope){
   +scope+' .vck-lgb:hover{border-color:#B9B5AA;background:#FBFAF7}'
   +scope+' .vck-lgb i{width:16px;height:16px;border-radius:6px;display:inline-block;border:2px solid}'
   +scope+' .vck-lgb small{font-size:9.5px;color:#a3a39b;font-weight:500}'
-  +scope+' .vck-rs{margin-left:auto;border:1px solid #E4E1D9;background:#fff;border-radius:8px;'
+  /* §vckBar · ตัวเลือกรูปแบบแถบ · อยู่ท้ายแถบสี ติดกับปุ่มคืนค่า */
+  +scope+' .vck-bs{margin-left:auto;display:inline-flex;align-items:center;gap:6px;flex:none}'
+  +scope+' .vck-bs>b{font-size:10px;font-weight:700;color:#a3a39b}'
+  +scope+' .vck-bs .g{display:inline-flex;border:1px solid #E4E1D9;border-radius:8px;overflow:hidden}'
+  +scope+' .vck-bs .g button{border:none;background:#fff;color:#5F5E5A;font:700 10.5px inherit;'
+    +'font-family:inherit;padding:4px 12px;cursor:pointer;border-right:1px solid #EEEBE4}'
+  +scope+' .vck-bs .g button:last-child{border-right:0}'
+  +scope+' .vck-bs .g button.on{background:#0F6E56;color:#fff}'
+  +scope+' .vck-rs{margin-left:8px;border:1px solid #E4E1D9;background:#fff;border-radius:8px;'
     +'padding:4px 11px;font:600 10.5px inherit;font-family:inherit;color:#8a8a82;cursor:pointer}'
   +scope+' .vck-rs:hover{color:#A32D2D;border-color:#E7C4C0}'
   +'.vck-cdlg{width:400px}'
@@ -51974,7 +52321,7 @@ function ckRowHtml(r, date, kind, extraHtml){
     _vst=vckRowSt(ck);
     /* ตัวแปรสีติดทุกแถว (ชิป Status ใช้) แต่ระบายพื้นเฉพาะแถวที่แขกคนนั้นมีผลจริงแล้ว
        รอ / Standby = ยังไม่ได้รับใครขึ้นรถ → ซีดไว้ ไม่งั้นแถวที่ยังไม่ได้ทำจะเด่นกว่าแถวที่ทำแล้ว */
-    cls+=' vstv'+((_vst==='wait'||_vst==='standby')?' vck-pale':' vst');
+    cls+=' vstv'+((_vst==='wait'||_vst==='standby')?' vck-pale':' vst')+' vkb-'+vckBarStyle();   /* §vckBar */
     _vsty=' style="'+vckStVars(_vst)+'"';
   }
   return '<tr class="'+cls+'"'+_vsty+'>'
@@ -52101,6 +52448,25 @@ function pcMoney(n){ return '฿'+Math.round(+n||0).toLocaleString('en-US'); }
 function pcN(n){ return Math.round(+n||0).toLocaleString('en-US'); }
 function pcE(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+/* §pkNat (2026-09-05) · สัญชาติจริงของ นทท. · คนละเรื่องกับช่องราคา
+   ช่อง ad_th/ad_fr ทำหน้าที่สองอย่างมาตลอด · เลือกเรทราคาที่นั่งตามสัญญา
+   และบอกสัญชาติให้ค่าอุทยานไปด้วยในตัวเดียวกัน
+   สองอย่างนี้ตรงกันเกือบตลอด เลยไม่มีใครเห็นว่ามันเป็นเลขก้อนเดียวกัน
+   จนกว่าจะเจอสัญญาที่ไม่มีราคาไทย (ตอนนี้มี 8 ฉบับที่ยัง active)
+   คนไทยที่จองผ่านสัญญาพวกนั้นต้องคีย์ลงช่อง ตปท. ไม่งั้นราคาที่นั่งผิด
+   แล้วหน้าค่าอุทยานก็พลอยไปซื้อตั๋วฝรั่งให้เขา 400 ทั้งที่ด่านเก็บ 40
+   t.nat = {ad,chd,inf,foc} เก็บ "จำนวนคนไทยจริง" อย่างเดียว ไม่แตะราคา
+   ไม่ได้กรอก = ทั้งก้อนไม่มี (os_repo ข้ามคอลัมน์ NULL) → ถอยไปใช้ช่องราคาเหมือนเดิม
+   กรอกเป็น 0 ทั้งสี่ = มีคนดูแล้วว่าไม่มีคนไทย · คนละความหมายกับไม่ได้กรอก */
+function bkNatHas(t){ var n=t&&t.nat; return !!(n && typeof n==='object'
+  && ['ad','chd','inf','foc'].some(function(k){ return n[k]!=null && n[k]!==''; })); }
+/* หัวคนไทยจริงของประเภทนั้น · ไม่เกินหัวทั้งหมดของประเภทนั้น (pax แก้ทีหลังได้ nat ต้องไม่ค้างเกิน) */
+function bkNatTH(t,k){
+  var px=(t&&t.pax)||{};
+  var all=(+px[k+'_th']||0)+(+px[k+'_fr']||0)+(+px[k]||0);
+  if(!bkNatHas(t)) return Math.min(+px[k+'_th']||0, all);
+  return Math.max(0, Math.min(+((t.nat||{})[k])||0, all));
+}
 /* หัวคนของลำนั้นวันนั้น · แยกไทย/ต่างชาติ และ ผญ/เด็ก/INF
    คนที่ไม่ระบุสัญชาติ นับเป็นต่างชาติไว้ก่อน · คิดสูงไว้ดีกว่าคิดต่ำแล้วเงินขาด
    ใบที่ยกเลิกทั้งใบหน้างาน (pckVoidInfo) ไม่นับ · ไม่ได้ขึ้นเกาะจริง */
@@ -52110,9 +52476,11 @@ function pcE(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,
    และคนหน้าท่าต้องมาไล่ลบเองทุกครั้งที่มีคนไม่มา
    ย้ายมาใช้ pckOnBoard ตัวเดียวกับ P&L · หัวรวมมาจากตัวนั้น แล้วกระจายลง
    ช่องสัญชาติตามสัดส่วนที่จองมา เพราะไม่มีทางรู้ว่าคนที่หายไปสัญชาติไหน   */
+/* §pkNat · คืนสองชุด · o = ตามช่องราคาที่ขาย (ของเดิม) · o.n = ตามสัญชาติจริง
+   ทั้งสองชุดผ่านการปัดเศษแบบเดียวกัน จะได้เทียบกันได้ตรง ๆ ว่าต่างกันกี่หัว/กี่บาท */
 function pcPax(date,bid,pier){
-  var o={ad_th:0,chd_th:0,inf_th:0,foc_th:0,ad_fr:0,chd_fr:0,inf_fr:0,foc_fr:0,tot:0};
-  var exact=0;
+  var Z=function(){ return {ad_th:0,chd_th:0,inf_th:0,foc_th:0,ad_fr:0,chd_fr:0,inf_fr:0,foc_fr:0,tot:0}; };
+  var o=Z(), n=Z(), exact=0, anyNat=false;
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=(typeof ckTripOn==='function')?ckTripOn(b,date):null; if(!t) return;
@@ -52127,20 +52495,31 @@ function pcPax(date,bid,pier){
     if(!real) return;                       /* ทั้งใบไม่ได้ไป · ไม่ต้องซื้อตั๋วให้ */
     var ratio=booked?(real/booked):0;
     exact+=real;
+    if(bkNatHas(t)) anyNat=true;
     /* §pcFix · FOC มีแยกสัญชาติเหมือน ad/chd/inf · ช่องเปล่า ๆ ที่ไม่ระบุสัญชาติ (px.ad, px.foc)
        เททิ้งไปฝั่งต่างชาติเหมือนเดิม · คิดสูงไว้ก่อนดีกว่าคิดต่ำแล้วเงินขาด */
     ['ad','chd','inf','foc'].forEach(function(k){
+      var all=(+px[k+'_th']||0)+(+px[k+'_fr']||0)+(+px[k]||0);
       o[k+'_th'] += (+px[k+'_th']||0) * ratio;
       o[k+'_fr'] += ((+px[k+'_fr']||0) + (+px[k]||0)) * ratio;
+      var th=bkNatTH(t,k);
+      n[k+'_th'] += th * ratio;
+      n[k+'_fr'] += Math.max(0, all-th) * ratio;
     });
   });
   /* ปัดทีเดียวตอนท้าย · ปัดรายใบแล้วบวกกัน ยอดรวมจะเพี้ยนจากหัวจริง
      เศษที่เหลือยกให้ฝั่งต่างชาติ · ตั๋วฝั่งนั้นแพงกว่า เตรียมเงินเผื่อดีกว่าไปขาดที่ด่าน */
-  var sum=0;
-  PC_PK.forEach(function(k){ o[k]=Math.round(o[k]); sum+=o[k]; });
-  var diff=Math.round(exact)-sum;
-  if(diff!==0){ o.ad_fr=Math.max(0,o.ad_fr+diff); sum=0; PC_PK.forEach(function(k){ sum+=o[k]; }); }
-  o.tot=sum;
+  var fin=function(x){
+    var sum=0;
+    PC_PK.forEach(function(k){ x[k]=Math.round(x[k]); sum+=x[k]; });
+    var diff=Math.round(exact)-sum;
+    if(diff!==0){ x.ad_fr=Math.max(0,x.ad_fr+diff); sum=0; PC_PK.forEach(function(k){ sum+=x[k]; }); }
+    x.tot=sum; return x;
+  };
+  fin(o); fin(n);
+  o.n=n;
+  o.hasNat=anyNat;                                          /* มีใบไหนระบุสัญชาติจริงไว้บ้างไหม */
+  o.natDiff=PC_PK.some(function(k){ return o[k]!==n[k]; }); /* สองชุดไม่ตรงกัน = มีเงินให้ประหยัด */
   return o;
 }
 var PC_PK=['ad_th','chd_th','inf_th','foc_th','ad_fr','chd_fr','inf_fr','foc_fr'];
@@ -52232,18 +52611,45 @@ function pcRateChip(R){
     +'อุทยาน · ตปท '+pcN(R.ad_fr)+'/'+pcN(R.chd_fr)
     +' · ไทย '+pcN(R.ad_th)+'/'+pcN(R.chd_th)+w+'</span>';
 }
-/* §pcCalc · เติมจำนวนจากใบจองลงช่องคีย์ทีเดียวทั้ง 6 ช่อง
-   กันกับดัก · พอคีย์ช่องเดียว อีก 5 ช่องกลายเป็น 0 แล้วยอดคำนวณตกโดยไม่ตั้งใจ
+/* §pcCalc · เติมจำนวนจากใบจองลงช่องคีย์ทีเดียวทั้ง 8 ช่อง
+   กันกับดัก · พอคีย์ช่องเดียว อีก 7 ช่องกลายเป็น 0 แล้วยอดคำนวณตกโดยไม่ตั้งใจ
    ให้เติมของจริงมาก่อนแล้วค่อยแก้เฉพาะช่องที่ต่าง */
-function pcFillPK(ds,bid,pier){
+/* §pkNat · ถามทุกครั้งว่าจะเติมชุดไหน · สัญชาติจริงของ นทท. หรือช่องราคาที่ขาย
+   ไม่ใช้ confirm() เพราะมันตอบได้แค่ 2 ทาง แต่ที่นี่ต้องมีทางถอยด้วย
+   แผงเลือกโผล่ในช่องนั้นเลย · เก็บว่ากำลังถามลำไหนไว้ที่ตัวแปรเดียว
+   วาดใหม่ทั้งชีทเหมือนทุกปุ่มในหน้านี้ (pcKeep คืนตำแหน่ง scroll ให้อยู่แล้ว) */
+var _pcFillAsk='';
+function pcFillAsk(ds,bid){ if(!pcGuard()) return; _pcFillAsk=ds+'::'+bid; pcKeep(); }
+function pcFillAskOff(){ _pcFillAsk=''; pcKeep(); }
+function pcFillPK(ds,bid,pier,src){
   if(!pcGuard()) return;
   var X=pcPax(ds,bid,pier||_pcPier);
+  var S=(src==='price')?X:X.n;              /* ไม่ระบุ = สัญชาติจริง (ซึ่งถอยไปเท่าช่องราคาเองถ้าไม่มีใครกรอก) */
   var D=pcDay(_pcPier,ds,true); D.pk[bid]=D.pk[bid]||{};
-  PC_PK.forEach(function(k){ D.pk[bid][k]=+X[k]||0; });
+  PC_PK.forEach(function(k){ D.pk[bid][k]=+S[k]||0; });
   D.pk[bid].by=pcWho(); D.pk[bid].ts=new Date().toISOString();
+  D.pk[bid].src=(src==='price')?'price':'nat';   /* เติมมาจากชุดไหน · ไล่ย้อนได้ตอนเลขไม่ตรง */
   var any=PC_PK.some(function(k){ return +D.pk[bid][k]>0; })||+D.pk[bid].amt>0||+D.pk[bid].dock>0;
   if(!any) delete D.pk[bid];
+  _pcFillAsk='';
   pcSave(); pcKeep();
+}
+/* แผงเลือกชุดตัวเลข · โชว์หัวคนกับยอดเงินของทั้งสองทางให้เห็นก่อนกด */
+function pcFillPanel(ds,bid,pier,X,R){
+  var mini=function(c){ return 'ไทย '+pcN(c.ad_th+c.chd_th+c.inf_th+c.foc_th)
+    +' · ตปท '+pcN(c.ad_fr+c.chd_fr+c.inf_fr+c.foc_fr); };
+  var money=function(c){ var a=pcParkAmt(R,c); return (a==null)?'':(' → '+pcMoney(a)); };
+  var save=null;
+  try{ var an=pcParkAmt(R,X.n), ap=pcParkAmt(R,X); if(an!=null&&ap!=null&&ap!==an) save=ap-an; }catch(_){}
+  return '<div class="pc-ask">'
+   +'<span class="q">เติมจากชุดไหน</span>'
+   +'<button class="nat" onclick="pcFillPK(\''+ds+'\',\''+bid+'\',\''+pier+'\',\'nat\')">'
+     +'🛂 สัญชาติจริง (นทท.)<br><b>'+mini(X.n)+money(X.n)+'</b></button>'
+   +'<button onclick="pcFillPK(\''+ds+'\',\''+bid+'\',\''+pier+'\',\'price\')">'
+     +'💵 ตามเรทที่ขาย<br><b>'+mini(X)+money(X)+'</b></button>'
+   +(save?('<span class="q" style="margin:3px 0 4px">ต่างกัน '+pcMoney(save)+' · ชุดบนถูกกว่า</span>'):'')
+   +'<button class="no" onclick="pcFillAskOff()">ยกเลิก</button>'
+   +'</div>';
 }
 /* ช่องส่วนต่าง · จ่ายจริง − ยอดคำนวณ */
 function pcDiffCell(paid,exp){
@@ -52539,15 +52945,6 @@ function pcCSS(scope){
   +scope+' .pc-btn{border:1.5px solid #D5DAE5;background:#fff;border-radius:8px;padding:6px 12px;'
     +'font:700 11.5px inherit;font-family:inherit;color:#44506A;cursor:pointer}'
   +scope+' .pc-btn:hover{border-color:#16265C;color:#16265C}'
-  /* §pcPrint · ปุ่มพิมพ์ · เน้นให้เห็น แต่ไม่แย่งสายตาจากตัวเลขในตาราง */
-  +scope+' .pc-btn.pri{background:#16265C;border-color:#16265C;color:#fff}'
-  +scope+' .pc-btn.pri:hover{background:#0F1B45;color:#fff}'
-  /* §pcPrint · โหมดกระดาษ · ช่องที่ปกติเป็น input กลายเป็นตัวเลขเฉย ๆ
-     คงพื้นสีเดิมไว้ จะได้ยังอ่านออกว่าช่องไหนคือฝั่งที่หน้าท่ากรอกเอง */
-  +scope+' .pc-t td.pr{text-align:center;font-weight:700;color:#16265C}'
-  +scope+' .pc-t td.cy.pr{background:#FFFDF5;color:#7A4A00}'
-  +scope+' .pc-t td.cb.pr{background:#F7FBFF;color:#1D5FA8}'
-  +scope+' .pc-t td.ctx.pr{text-align:left;font-weight:500;color:#44506A;white-space:normal}'
   +scope+' .pc-dt{border:1.5px solid #D5DAE5;border-radius:8px;padding:5px 9px;font:700 12px inherit;'
     +'font-family:inherit;color:#16265C}'
   +scope+' .pc-gw{overflow:auto;max-height:calc(100vh - 300px)}'
@@ -52670,6 +53067,20 @@ function pcCSS(scope){
   +scope+' .pc-fill{display:inline-block;margin:3px 0 0 5px;border:1px solid #CFDDF5;background:#fff;'
     +'color:#2C4F8A;border-radius:6px;padding:1px 8px;font:600 10.5px inherit;font-family:inherit;cursor:pointer}'
   +scope+' .pc-fill:hover{background:#EEF4FF;border-color:#9CBCE8}'
+  /* §pkNat · ป้ายเทียบสองชุด + แผงเลือกตอนเติมจากใบจอง */
+  +scope+' .pc-nat{display:inline-block;margin-top:3px;margin-left:5px;font-size:10.5px;font-weight:700;'
+    +'background:#EAF6F0;border:1px solid #B7E2D2;color:#0F6E56;border-radius:6px;padding:1px 7px;cursor:help}'
+  +scope+' .pc-ask{margin-top:5px;background:#FBFAF7;border:1px solid #E2DED4;border-radius:8px;padding:6px 8px}'
+  +scope+' .pc-ask .q{display:block;font-size:10px;font-weight:700;color:#5A6070;margin-bottom:4px}'
+  +scope+' .pc-ask button{display:block;width:100%;text-align:left;margin-bottom:3px;border-radius:6px;'
+    +'padding:3px 7px;font:600 10.5px inherit;font-family:inherit;cursor:pointer;'
+    +'border:1px solid #CFDDF5;background:#fff;color:#2C4F8A}'
+  +scope+' .pc-ask button.nat{border-color:#B7E2D2;color:#0F6E56}'
+  +scope+' .pc-ask button.nat:hover{background:#EAF6F0}'
+  +scope+' .pc-ask button:hover{background:#EEF4FF}'
+  +scope+' .pc-ask button.no{border-color:#E2DED4;color:#8A8F9B;margin-bottom:0}'
+  +scope+' .pc-ask button.no:hover{background:#F2F0EB}'
+  +scope+' .pc-ask b{font-family:"DM Mono",monospace}'
   /* §pcLtSplit · หัวคอลัมน์ "ใช้จริง" สองบรรทัด + ป้ายข้อมูลเดิมที่ยังไม่ได้แยกจอย/เหมา */
   +scope+' .pc-t th .sub{display:block;font-size:8.5px;font-weight:600;opacity:.78;margin-top:1px}'
   +scope+' .pc-oldn{display:inline-block;margin-left:7px;background:#FBF0DD;color:#7A4A00;'
@@ -52847,8 +53258,6 @@ function pcMonthTable(pier){
      +'ยังไม่นับเป็นเงินออกจนกว่าจะกด <b>⤓ ดึง</b> เข้าสมุด</div>';
 }
 /* ── ชีท 2 · เรือหางยาว ──────────────────────────────────────────────── */
-/* §pcPrint · opt.only = เอาแค่วันเดียว · opt.print = โหมดกระดาษ (ช่องกรอกกลายเป็นตัวหนังสือ)
-   เรียกแบบไม่ส่ง opt คือของเดิมทุกประการ · แยกเป็นฟังก์ชันใหม่ไม่ได้ เดี๋ยวสองที่จะเพี้ยนกัน */
 function pcSheetLT(pier, opt){
   opt=opt||{}; var PR=!!opt.print;
   var dates=opt.only?[opt.only]:pcDates(pier,_pcYM), body='', rn=0, gj=0,gc=0,guj=0,guc=0,gm=0, nb=0;
@@ -52930,7 +53339,6 @@ function pcSheetLT(pier, opt){
    +'</div>';
 }
 /* ── ชีท 3 · ค่าอุทยาน ───────────────────────────────────────────────── */
-/* §pcPrint · opt เหมือน pcSheetLT · only = วันเดียว · print = โหมดกระดาษ */
 function pcSheetPK(pier, opt){
   opt=opt||{}; var PR=!!opt.print;
   var dates=opt.only?[opt.only]:pcDates(pier,_pcYM), body='', rn=0, nb=0;
@@ -52946,34 +53354,53 @@ function pcSheetPK(pier, opt){
     BS.forEach(function(B){
       rn++; nb++;
       var X=pcPax(ds,B.bid,pier), C=(D.pk||{})[B.bid]||{};
+      /* §pkNat · ช่องนับ = สัญชาติจริงของ นทท. · ใบที่ไม่มีใครระบุ X.n จะเท่ากับ X เอง
+         ของเก่าทุกใบจึงได้เลขเดิมเป๊ะ · ชุดตามเรทที่ขาย (X) เก็บไว้เทียบให้เห็นว่าต่างกันกี่บาท */
+      var XN=X.n;
       var kt=0, hasK=false;
-      PC_PK.forEach(function(k,i){ DT[i]+=X[k]; if(+C[k]>0){ hasK=true; } kt+=(+C[k]||0); DK[i]+=(+C[k]||0); });
+      PC_PK.forEach(function(k,i){ DT[i]+=XN[k]; if(+C[k]>0){ hasK=true; } kt+=(+C[k]||0); DK[i]+=(+C[k]||0); });
       if(hasK||+C.amt>0) anyk=true;
-      dtot+=X.tot; dktot+=kt; dm+=(+C.amt||0); ddk+=(+C.dock||0);
+      dtot+=XN.tot; dktot+=kt; dm+=(+C.amt||0); ddk+=(+C.dock||0);
       /* §pcCalc · คีย์แล้วคิดตามที่คีย์ · ยังไม่คีย์คิดตามใบจองไปก่อน จะได้เห็นตัวเลขตั้งแต่ก่อนออกเรือ */
       var R=pcParkRate(B.rid);
-      var basis=hasK?C:X;
+      var basis=hasK?C:XN;
       var exp=pcParkAmt(R,basis);
       if(exp!=null){ dex+=exp; anyx=true; }
       var HF=PC_PK.length/2;   /* ครึ่งแรก = คนไทย ครึ่งหลัง = ต่างชาติ */
       var cells=PC_PK.map(function(k,i){
         var cls=(i<HF)?'th2':'fr2';
-        return '<td class="v '+cls+(i===HF?' gs':'')+(X[k]?'':' z')+'">'+X[k]+'</td>'; }).join('');
+        return '<td class="v '+cls+(i===HF?' gs':'')+(XN[k]?'':' z')+'">'+XN[k]+'</td>'; }).join('');
       var keys=PC_PK.map(function(k,i){
         /* ขอบเข้ม = จำนวนที่คีย์ไม่ตรงกับยอดเดินทางจริง · ไม่ใช่ error แต่ต้องเห็น */
-        var mm=(hasK && (+C[k]||0)!==(+X[k]||0))?' mm':'';
+        var mm=(hasK && (+C[k]||0)!==(+XN[k]||0))?' mm':'';
         return box('cy ct'+((i===0||i===HF)?' gs':'')+mm, (C[k]||''),
           '<input value="'+(C[k]||'')+'" placeholder="—" '
           +'inputmode="numeric" onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\''+k+'\',this.value)">'); }).join('');
       var exc=(exp==null)
         ? '<td class="pc-ex na"><b>—</b><i>'+pcE((R.why||'ไม่มีราคา'))+'</i></td>'
-        : '<td class="pc-ex"><b>'+pcN(exp)+'</b><i>'+(hasK?'ตามที่คีย์':'ตามหัวจริง')+'</i></td>';
+        : '<td class="pc-ex"><b>'+pcN(exp)+'</b><i>'+(hasK?('ตามที่คีย์'+(C.src==='price'?' · เรทขาย':(C.src==='nat'?' · สัญชาติจริง':'')))
+            :'ตามหัวจริง')+'</i></td>';
+      /* §pkNat · สองชุดไม่ตรงกัน = มีใบที่ขายเรทหนึ่งแต่คนเดินทางอีกสัญชาติหนึ่ง
+         บอกทั้งเลขเดิมและเงินที่ต่าง · ตัดสินใจได้โดยไม่ต้องเปิดใบจองไล่ดูทีละใบ */
+      var natChip='';
+      if(X.natDiff){
+        var an=pcParkAmt(R,XN), ap=pcParkAmt(R,X);
+        var gap=(an!=null&&ap!=null)?(ap-an):null;
+        var pn=function(c){ return 'ไทย '+pcN(c.ad_th+c.chd_th+c.inf_th+c.foc_th)
+          +'/ตปท '+pcN(c.ad_fr+c.chd_fr+c.inf_fr+c.foc_fr); };
+        natChip='<span class="pc-nat" title="ช่องนับใช้สัญชาติจริงของ นทท. ('+pn(XN)+')'
+          +' · ถ้าคิดตามช่องราคาที่ขายจะเป็น '+pn(X)
+          +(gap!=null?(' · ค่าอุทยานต่างกัน '+pcMoney(Math.abs(gap))):'')+'">'
+          +'🛂 '+pn(XN)+(gap>0?(' · ประหยัด '+pcMoney(gap)):(gap<0?(' · เพิ่ม '+pcMoney(-gap)):''))+'</span>';
+      }
       rows+='<tr><td class="rn">'+rn+'</td><td class="bn">'+pcE(B.name)+'</td>'
-        +'<td class="rt">'+pcRouteName(B.rid,B.route)+'<br>'+pcRateChip(R)
-          +((hasK||PR)?'':'<button class="pc-fill" title="คัดลอกยอดเดินทางจริง (หักคนที่ไม่ได้ขึ้นเรือแล้ว) มาใส่ช่องคีย์ทั้ง 8 ช่อง แล้วค่อยแก้เฉพาะที่ต่าง" '
-            +'onclick="pcFillPK(\''+ds+'\',\''+B.bid+'\',\''+pier+'\')">⤓ เติมจากใบจอง</button>')
+        +'<td class="rt">'+pcRouteName(B.rid,B.route)+'<br>'+pcRateChip(R)+natChip
+          +((hasK||PR)?'':(_pcFillAsk===(ds+'::'+B.bid)
+            ? pcFillPanel(ds,B.bid,pier,X,R)
+            : ('<button class="pc-fill" title="คัดลอกยอดเดินทางจริง (หักคนที่ไม่ได้ขึ้นเรือแล้ว) มาใส่ช่องคีย์ทั้ง 8 ช่อง แล้วค่อยแก้เฉพาะที่ต่าง" '
+            +'onclick="pcFillAsk(\''+ds+'\',\''+B.bid+'\',\''+pier+'\')">⤓ เติมจากใบจอง</button>')))
           +'</td>'+cells
-        +'<td class="v">'+X.tot+'</td>'+keys
+        +'<td class="v">'+XN.tot+'</td>'+keys
         +box('cy', (C.dock?pcN(C.dock):''),
           '<input value="'+(C.dock?pcN(C.dock):'')+'" placeholder="—" inputmode="numeric" '
           +'onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'dock\',this.value)">')
@@ -53450,6 +53877,26 @@ function vckColors(){
   }
   return _VCK_COL;
 }
+/* ══ §vckBar · รูปแบบการแสดงสี ═══════════════════════════════════════════
+   สีของแต่ละสถานะตั้งเองได้อยู่แล้ว · ที่เพิ่มคือ "เอาสีนั้นมาแสดงยังไง"
+     a = แถบซ้าย + พื้นจาง   (ของเดิม · มองรวมทั้งหน้าได้เร็ว)
+     c = แถบซ้าย + พื้นเข้ม   (แยกสถานะได้จากไกล · หน้างานกลางแดด จอสว่างจัด)
+   เก็บทั้งบริษัทที่ vck_bar_style เหมือน vck_status_colors · ตั้งครั้งเดียวใช้ทุกเครื่อง
+   แถวที่ยัง "รอ / Standby" ยังซีดเหมือนเดิมทั้งสองแบบ · แถวที่ยังไม่ได้ทำ
+   ต้องไม่เด่นกว่าแถวที่ทำแล้ว                                              */
+var VCK_BARS=[
+  {k:'a', lbl:'จาง',  full:'แถบซ้าย + พื้นจาง · ของเดิม'},
+  {k:'c', lbl:'เข้ม', full:'พื้นเต็มแถวเข้ม · แยกสถานะได้จากไกล'}
+];
+function vckBarStyle(){
+  try{ var v=laBlob().vck_bar_style; return (v==='c')?'c':'a'; }catch(_){ return 'a'; }
+}
+function vckBarStyleSet(v){
+  if(typeof ckGuard==='function' && !ckGuard()) return;
+  v=(v==='c')?'c':'a';
+  try{ var b=laBlob(); if(v==='a') delete b.vck_bar_style; else b.vck_bar_style=v; laBlobSave(); }catch(_){}
+  if(typeof renderVanCheckin==='function') renderVanCheckin();
+}
 function vckColorSet(k,hex){
   if(typeof ckGuard==='function' && !ckGuard()) return;
   if(!/^#[0-9a-fA-F]{6}$/.test(String(hex||''))) return;
@@ -53477,9 +53924,16 @@ function vckDark(c,f){ var a=vckRGB(c); return '#'+_vckHx(a[0]*f)+_vckHx(a[1]*f)
 /* ตัวแปรสีของสถานะหนึ่ง · เอาไปวางเป็น inline style บนแถว */
 function vckStVars(k){
   var c=vckColors()[k]||vckStDef(k).c;
+  /* §vckBar · แบบเข้ม · พื้นเข้มขึ้นมาก ป้ายสถานะจึงกลับด้านเป็นพื้นขาว
+     ไม่งั้นป้ายจะจมหายไปในพื้น · ตัวหนังสือทั้งแถวต้องเข้มตามเพื่อให้ยังอ่านออก */
+  if(vckBarStyle()==='c'){
+    return '--vst-bar:'+c+';--vst-bg:'+vckTint(c,0.40)+';--vst-hov:'+vckTint(c,0.28)
+      +';--vst-chip:#ffffff;--vst-ink:'+vckDark(c,0.45)+';--vst-tx:'+vckDark(c,0.30);
+  }
   /* §vckFix · เดิมจาง 90% แล้วแถว No-show/CXL ซีดกว่าของเดิม (#F6CFCB) จนดูเหมือนสีไม่เปลี่ยน
      0.82 ให้ความเข้มใกล้ของเดิม และยังอ่านตัวหนังสือดำบนพื้นได้สบาย */
-  return '--vst-bar:'+c+';--vst-bg:'+vckTint(c,0.82)+';--vst-chip:'+vckTint(c,0.72)+';--vst-ink:'+vckDark(c,0.58);
+  return '--vst-bar:'+c+';--vst-bg:'+vckTint(c,0.82)+';--vst-hov:'+vckTint(c,0.72)
+    +';--vst-chip:'+vckTint(c,0.72)+';--vst-ink:'+vckDark(c,0.58);
 }
 
 /* ── สถานะของแถว · อ่านจากของเดิมเป็นหลัก ไม่เก็บซ้ำ ── */
@@ -53592,10 +54046,13 @@ function vckColorSw(){
 function vckColorPv(){
   var el=document.getElementById('vck-pv'); if(!el||!_vckPick) return;
   var c=_vckPick.c, s=vckStDef(_vckPick.k);
-  el.innerHTML='<div class="prow" style="background:'+vckTint(c,0.90)+'">'
+  /* §vckBar · ตัวอย่างต้องเป็นแบบเดียวกับที่ใช้อยู่จริง ไม่งั้นเลือกสีเสร็จแล้วเจอคนละหน้า */
+  var _bs=vckBarStyle(), _pbg=(_bs==='c')?vckTint(c,0.40):vckTint(c,0.90);
+  var _pcb=(_bs==='c')?'#ffffff':vckTint(c,0.80), _pci=(_bs==='c')?vckDark(c,0.45):vckDark(c,0.60);
+  el.innerHTML='<div class="prow" style="background:'+_pbg+(_bs==='c'?(';color:'+vckDark(c,0.30)):'')+'">'
     +'<span class="pb" style="background:'+c+'"></span>'
-    +'<b>Marina Mosina</b><span class="ph2">GLOW Mira Karon Beach</span>'
-    +'<span class="pc" style="background:'+vckTint(c,0.80)+';border-color:'+c+';color:'+vckDark(c,0.60)+'">'
+    +'<b>Marina Mosina</b><span class="ph2"'+(_bs==='c'?(' style="color:'+vckDark(c,0.34)+'"'):'')+'>GLOW Mira Karon Beach</span>'
+    +'<span class="pc" style="background:'+_pcb+';border-color:'+c+';color:'+_pci+'">'
     +ckEsc(s.lbl)+'</span></div>';
 }
 function vckColorPick(v){
@@ -53657,13 +54114,17 @@ function vckLegendBtn(){
 }
 function vckLegend(){
   if(!_VCK_LG) return '';
-  var C=vckColors();
+  var C=vckColors(), _bs=vckBarStyle();
   return '<div class="vck-lgbar">'
    +VCK_STATES.map(function(s){
       var c=C[s.k]||s.c;
       return '<button class="vck-lgb" onclick="vckColorOpen(\''+s.k+'\')" title="กดเพื่อเปลี่ยนสีของสถานะนี้">'
         +'<i style="background:'+vckTint(c,0.86)+';border-color:'+c+'"></i>'
         +ckEsc(s.lbl)+' <small>'+ckEsc(s.full)+'</small></button>'; }).join('')
+   +'<span class="vck-bs"><b>แบบแถบ</b><span class="g">'
+   +VCK_BARS.map(function(x){ return '<button class="'+(_bs===x.k?'on':'')+'" title="'+ckEsc(x.full)
+        +'" onclick="vckBarStyleSet(\''+x.k+'\')">'+ckEsc(x.lbl)+'</button>'; }).join('')
+   +'</span></span>'
    +'<button class="vck-rs" onclick="vckColorsReset()" title="คืนค่าสีของทุกสถานะ">↺ คืนค่าสีเริ่มต้น</button></div>';
 }
 /* ══ §vckArr · คนขับถึงจุดรับแรกแล้ว ═══════════════════════════════════════
@@ -54689,10 +55150,7 @@ function pckPayRender(){
         +(needSlip?'<span style="color:#A32D2D;font-weight:800">*ต้องมี</span><span class="pckp-soft"> — แนบทีหลังได้</span>'
                   :'<span class="pckp-soft">— ไม่ต้องแนบสำหรับเงินสด</span>')+'</label>';
       form+=L.slips.map(function(sl,j){
-        /* §slipView · ชื่อไฟล์กดเปิดดูได้ · ปุ่มลบยังทำงานเหมือนเดิม */
-        return '<div class="pckp-slip"><span>&#128206;</span>'
-          +'<span class="nm" style="cursor:pointer;text-decoration:underline" '
-          +laSlipClickAttr(L.slips, 'สลิปที่กำลังจะบันทึก', j)+' title="กดเพื่อเปิดดูสลิป">'+e(sl.name||'slip')+'</span>'
+        return '<div class="pckp-slip"><span>&#128206;</span><span class="nm">'+e(sl.name||'slip')+'</span>'
           +'<button class="rm" onclick="pckPayRmSlip('+i+','+j+')">&#10005;</button></div>';
       }).join('');
       form+='<label class="pckp-drop'+((needSlip&&!L.slips.length)?' need':'')+'">'
@@ -54725,11 +55183,7 @@ function pckPayRender(){
         +'<span style="flex:1;min-width:0"><b style="font-family:\'DM Mono\',monospace">'+pckB(p.amount)+'</b>'
         +((+p.fee||0)?('<span style="color:#a5a49d"> + ค่าธรรมเนียม '+pckB(p.fee)+(p.feePct?(' ('+p.feePct+'%)'):'')+'</span>'):'')
         +(p.note?('<div class="pckp-hnote">'+e(p.note)+'</div>'):'')
-        /* §slipView · ชื่อไฟล์แต่ละใบกดเปิดดูได้ · เดิมเป็นตัวหนังสือตาย */
-        +((p.slips&&p.slips.length)?('<div class="pckp-hslip">&#128206; '
-           +p.slips.map(function(s,si){ return '<span style="cursor:pointer;text-decoration:underline" '
-             +laSlipClickAttr(p.slips, pckMLabel(p.method)+' '+pckB(p.amount), si)
-             +' title="กดเพื่อเปิดดูสลิป">'+e(s.name||'slip')+'</span>'; }).join(' · ')+'</div>'):'')
+        +((p.slips&&p.slips.length)?('<div class="pckp-hslip">&#128206; '+p.slips.map(function(s){ return e(s.name||'slip'); }).join(' · ')+'</div>'):'')
         +(noSlip?('<div style="margin-top:4px"><span class="pckp-wait">&#9888; รอสลิป</span>'
            +'<label class="pckp-late"><input type="file" accept="image/*,application/pdf" style="display:none" onchange="pckPayAddSlip(\''+p.id+'\',this)">แนบสลิป</label></div>'):'')
         +'</span>'
@@ -60916,49 +61370,35 @@ function tsTotalOf(r, date){
 }
 // ของที่ขายเพิ่มหน้างานของใบนี้ · extras (SB_EXTRAS) + upgrade
 //   คืนทั้งรายการและยอดแยกตามวิธีรับเงิน เพื่อเอาไปรวมกับการ์ดด้านบน
-/* §tsComm · ค่าคอมคนขายต้องเดินทางมาถึงหน้าปิดวันด้วย
-   commission กับ toCompany มีอยู่ในทั้ง SB_EXTRAS และ bk.upgrades มานานแล้ว
-   แต่ตัวนี้อ่านแล้วทิ้ง ป้ายในตารางจึงเห็นแต่ยอดขาย ไม่เห็นว่าเงินก้อนไหน
-   เป็นของคนขาย · บรรทัด "เหลือเข้าบริษัท" ก็หักแต่ค่าจ่ายออก เลขเลยสูงเกินจริง
-   นับค่าคอมเฉพาะรายการที่เก็บเงินแล้ว ให้เข้าชุดกับ got/fee
-   ที่ยังไม่เก็บ (cot) ยังไม่มีเงินเข้ามือใคร จะหักออกจากยอดรับไม่ได้ */
 function tsSaleList(b, date){
-  var out=[], by={cash:0,transfer:0,card:0}, fee=0, got=0, due=0, noSlip=0, comm=0;
+  var out=[], by={cash:0,transfer:0,card:0}, fee=0, got=0, due=0, noSlip=0;
   try{ ((typeof bkV2ExtrasFor==='function')?bkV2ExtrasFor(b.id):[]).forEach(function(x){
     if(date && x.tripDate && x.tripDate!==date) return;
     var amt=+x.total||0; if(!amt) return;
     var mth=x.method||'cash'; if(by[mth]==null) by[mth]=0;
     /* §exCot · ยังไม่ได้เก็บ = ไม่เข้ายอดแยกตามวิธีรับเงิน · ไปอยู่ฝั่ง "ต้องเก็บ" เหมือนอัปเกรด */
     var _g=(typeof bkxExGot==='function')?bkxExGot(x):true;
-    var _cm=+x.commission||0;
-    if(_g){ by[mth]+=amt; got+=amt; fee+=(+x.fee||0); comm+=_cm; } else due+=amt;
+    if(_g){ by[mth]+=amt; got+=amt; fee+=(+x.fee||0); } else due+=amt;
     var slipMissing=(_g && mth!=='cash' && !((x.slips||[]).length));
     if(slipMissing) noSlip++;
     out.push({ kind:'ex', id:x.id||'', t:String(x.service||'ขายเพิ่ม'), qty:(+x.qty||1), amt:amt,
                // §tsSaleFee · fee ของรายการนี้ · รูดจริง = amt + fee (ตัวที่ตรงกับ statement)
                fee:(+x.fee||0), nSlip:((x.slips||[]).length),
-               // §slipView · ส่ง ref ของสลิปมาด้วย ของเดิมส่งแต่ตัวนับ กดดูไฟล์ไม่ได้
-               slips:(x.slips||[]).slice(),
-               // §tsComm · เงินก้อนนี้แบ่งเป็นของบริษัทเท่าไร ของคนขายเท่าไร
-               comm:_cm, toCompany:(+x.toCompany||0),
                method:mth, who:x.seller||'', done:_g, noSlip:slipMissing });
   }); }catch(_){}
   try{ (Array.isArray(b.upgrades)?b.upgrades:[]).forEach(function(u){
     var amt=+u.sellPrice||0; if(!amt) return;
     var m2=u.method||'cash';
-    if(u.collected){ if(by[m2]==null) by[m2]=0; by[m2]+=amt; got+=amt; fee+=(+u.fee||0);
-                     comm+=(+u.commission||0); }
+    if(u.collected){ if(by[m2]==null) by[m2]=0; by[m2]+=amt; got+=amt; fee+=(+u.fee||0); }
     else due+=amt;
     // §upgPay · รูดบัตร/โอนแล้วยังไม่มีสลิป ต้องขึ้นเตือนเหมือน Extra
     var _uNo=(!!u.collected && m2!=='cash' && !((u.slips||[]).length));
     if(_uNo) noSlip++;
     out.push({ kind:'up', id:u.id||'', t:String(u.label||'upgrade'), qty:1, amt:amt,
                fee:(+u.fee||0), nSlip:((u.slips||[]).length),
-               slips:(u.slips||[]).slice(),
-               comm:(+u.commission||0), toCompany:(+u.toCompany||0),
                method:m2, who:u.seller||'', done:!!u.collected, noSlip:_uNo });
   }); }catch(_){}
-  return { list:out, by:by, fee:fee, got:got, due:due, noSlip:noSlip, comm:comm, tot:got+due, n:out.length };
+  return { list:out, by:by, fee:fee, got:got, due:due, noSlip:noSlip, tot:got+due, n:out.length };
 }
 // ป้ายรายการขายเพิ่มสำหรับตารางส่วนที่ 3
 function tsSaleCell(S, money, e){
@@ -60968,15 +61408,11 @@ function tsSaleCell(S, money, e){
     var cls=x.kind==='up' ? 'ao-up' : 'ao-ex';
     // §tsSaleFee · บัตรมีค่าธรรมเนียมแยกจากยอดขายเสมอ · ต้องเห็นทั้งสองตัวถึงจะกระทบยอดได้
     var _fee=+x.fee||0;
-    /* §tsComm · ถ้อยคำเดียวกับที่ใช้ในกล่อง Extra กับ upgrade · หน้าท่าจะได้เห็นคำเดิม */
-    var _cm=+x.comm||0;
     var tip=(x.qty>1?('จำนวน '+x.qty+' · '):'')+(PM[x.method]||x.method)
-      +(_cm>0?(' · บริษัท '+money(x.toCompany)+' · คอม '+money(_cm)):'')
       +(_fee>0?(' · ค่าธรรมเนียมบัตร '+money(_fee)+' · รูดจริง '+money((+x.amt||0)+_fee)):'')
       +(x.who?(' · '+x.who):'')+(x.done?'':' · ยังไม่เก็บ')+(x.noSlip?' · ยังไม่มีสลิป':'');
     return '<span class="ts-ao '+cls+'" title="'+e(tip)+'">'+e(x.t)+(x.qty>1?(' ×'+x.qty):'')
       +' <b>'+money(x.amt)+'</b>'
-      +(_cm>0?(' <i style="font-style:normal;opacity:.78">· คอม '+money(_cm)+'</i>'):'')
       +(_fee>0?(' <i style="font-style:normal;opacity:.72">+fee '+money(_fee)+'</i>'):'')
       +(x.done?'':' <i style="font-style:normal;opacity:.75">รอเก็บ</i>')
       +(x.noSlip?' <i style="font-style:normal;color:#A32D2D">⚠</i>':'')+'</span>';
@@ -63035,15 +63471,14 @@ function renderTravelSum(){
     m.cxlKind = (m.r.cxl>0) ? 'ยกเลิกหน้างาน' : 'ไม่มา';
   });
   var nCollect=mRows.filter(function(m){ return !m.cxl; }).length;
-  var sumCash=0,sumTf=0,sumCard=0,sumDue=0,sumTarget=0,sumFee=0,sumSale=0,nSale=0,sumSaleDue=0,sumFeeSale=0,sumComm=0;
+  var sumCash=0,sumTf=0,sumCard=0,sumDue=0,sumTarget=0,sumFee=0,sumSale=0,nSale=0,sumSaleDue=0,sumFeeSale=0;
   mRows.forEach(function(m){
     sumCash+=(m.by.cash||0)+(m.S.by.cash||0);
     sumTf  +=(m.by.transfer||0)+(m.S.by.transfer||0);
     sumCard+=(m.by.card||0)+(m.S.by.card||0);
     if(!m.cxl){ sumDue+=m.due; sumTarget+=m.target; }   // §tsCxlNoCount · เงินที่เก็บไม่ได้ ไม่เข้ายอดต้องเก็บ
     sumFee+=(+m.M.pierFee||0)+(+m.S.fee||0); sumFeeSale+=(+m.S.fee||0);
-    sumSale+=m.S.tot; nSale+=m.S.n; sumSaleDue+=m.S.due;
-    sumComm+=(+m.S.comm||0); });   // §tsComm · ค่าคอมของที่เก็บเงินแล้ว
+    sumSale+=m.S.tot; nSale+=m.S.n; sumSaleDue+=m.S.due; });
 
   // §tsCashNet · แยกเงินที่ต้องจ่ายออกตามคำตัดสิน COT ออกจากยอดที่รับเข้า
   var sumPayout=0, sumDeduct=0, sumCotAll=0, nCotLeft=0, sumCotNo=0, nCotNo=0;
@@ -63060,9 +63495,7 @@ function renderTravelSum(){
     sumDeduct+=d; sumPayout+=p;
   });
   var sumIn=sumCash+sumTf+sumCard;
-  /* §tsComm · ค่าคอมคือเงินที่คนขายเก็บไว้ ไม่เคยเข้าบริษัท ต้องหักออกเหมือนเงินจ่ายออก
-     ของเดิมหักแต่ sumPayout · "เหลือเข้าบริษัท" จึงสูงกว่าที่เข้าจริงเท่ากับยอดค่าคอม */
-  var sumNet=Math.max(0, sumIn-sumPayout-sumComm);
+  var sumNet=Math.max(0, sumIn-sumPayout);
 
   var K=function(cls,lb,val,unit,note,noteCls){
     return '<div class="ts-k '+cls+'"><div class="kk">'+lb+'</div><div class="kv">'+val+(unit?('<em>'+unit+'</em>'):'')+'</div>'
@@ -63239,10 +63672,8 @@ function renderTravelSum(){
     m.pays.forEach(function(p){
       if((p.method||'cash')==='cash') return;
       var n=((p.slips||[]).length), lb=(PM[p.method||'cash']||['อื่นๆ'])[0]+' '+money(p.amount);
-      /* §slipView · มีสลิปแล้ว = กดเปิดดูได้เลย ไม่ต้องไปสแกนซัมลงไดร์ฟ */
       _slipBits.push(n
-        ? ('<span class="ts-slipok" style="cursor:pointer" '+laSlipClickAttr(p.slips, lb)
-           +' title="'+e(lb+' · มีสลิปแล้ว '+n+' ไฟล์ · กดเพื่อเปิดดู')+'">&#128206; '+e(lb)+'</span>')
+        ? ('<span class="ts-slipok" title="'+e(lb+' · มีสลิปแล้ว '+n+' ไฟล์')+'">&#128206; '+e(lb)+'</span>')
         : ('<label class="ts-slipb" title="'+e('แนบสลิป · '+lb)+'">&#128206; แนบสลิป '+e(lb)
            +'<input type="file" accept="image/*,application/pdf" style="display:none"'
            +' onchange="tsSlipPick(\'p\',\''+b.id+'\',\''+(p.id||'')+'\',this)"></label>'));
@@ -63252,8 +63683,7 @@ function renderTravelSum(){
       if((x.method||'cash')==='cash') return;
       var lb=String(x.t||'ขายเพิ่ม')+' '+money(x.amt);
       _slipBits.push((+x.nSlip>0)
-        ? ('<span class="ts-slipok" style="cursor:pointer" '+laSlipClickAttr(x.slips, lb)
-           +' title="'+e(lb+' · มีสลิปแล้ว · กดเพื่อเปิดดู')+'">&#128206; '+e(lb)+'</span>')
+        ? ('<span class="ts-slipok" title="'+e(lb+' · มีสลิปแล้ว')+'">&#128206; '+e(lb)+'</span>')
         : ('<label class="ts-slipb" title="'+e('แนบสลิป · '+lb)+'">&#128206; แนบสลิป '+e(lb)
            +'<input type="file" accept="image/*,application/pdf" style="display:none"'
            +' onchange="tsSlipPick(\'x\',\''+b.id+'\',\''+x.id+'\',this)"></label>'));
@@ -63305,8 +63735,6 @@ function renderTravelSum(){
     +'<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'
       +'<span class="ts-chip e" style="font-size:11px;padding:5px 12px">ต้องเก็บวันนี้ '+money(sumTarget)+'</span>'
       +(nSale?('<span class="ts-chip b" style="font-size:11px;padding:5px 12px">ขายเพิ่ม '+money(sumSale)+' · '+nSale+' รายการ</span>'):'')
-      // §tsComm · ยอดค่าคอมของวัน · หน้าท่าจะได้รู้ว่าเงินในลิ้นชักก้อนไหนไม่ใช่ของบริษัท
-      +(sumComm>0?('<span class="ts-chip p" style="font-size:11px;padding:5px 12px" title="ค่าคอมมิชชั่นของคนขาย · หักออกจากเงินที่รับมาแล้วในบรรทัดกระทบยอด">คอมคนขาย '+money(sumComm)+'</span>'):'')
       +(function(){   // §tsCotSettle · สรุปการจัดการ COT ของวัน · ตัวเลขคำนวณไว้ข้างบนแล้ว (§tsCashNet)
           if(!(sumCotAll>0)) return '';
           return '<span class="ts-chip n" style="font-size:11px;padding:5px 12px">COT '+money(sumCotAll)+'</span>'
@@ -63334,8 +63762,6 @@ function renderTravelSum(){
     +'<div class="ts-read" style="margin-top:0;margin-bottom:13px">รับเข้าวันนี้ <b>'+money(sumIn)+'</b>'
       +' (สด '+money(sumCash)+' &middot; โอน '+money(sumTf)+' &middot; บัตร '+money(sumCard)+')'
       +(sumPayout>0?(' &minus; จ่ายออกตาม COT <b style="color:var(--rs700)">'+money(sumPayout)+'</b>'):'')
-      // §tsComm · ค่าคอมคนขายไม่เคยเข้าบริษัท · เขียนตัวหักให้เห็น จะได้ไม่งงว่าเลขหายไปไหน
-      +(sumComm>0?(' &minus; คอมคนขาย <b style="color:var(--rs700)">'+money(sumComm)+'</b>'):'')
       +' = เหลือเข้าบริษัท <b>'+money(sumNet)+'</b>'
       +(sumDeduct>0?(' &middot; อีก <b>'+money(sumDeduct)+'</b> หักจากบิลเอเจนต์ (ไม่ผ่านมือหน้าท่า)'):'')
       +(sumFee>0?(' &middot; ค่าธรรมเนียมบัตร <b>'+money(sumFee)+'</b> ธนาคารหัก ไม่ใช่รายได้'):'')
@@ -63580,7 +64006,10 @@ function bkV2VanJobOrder(date, vanId, routeId, leg){
   const e=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const _rn=routeId?(((typeof getRoute==='function'?getRoute(routeId):null)||{}).name||routeId):'';
   const legTitle=(_rn?(' · '+_rn):'')+(leg==='ret'?' · ขากลับ':'');
-  const html='<!doctype html><html><head><meta charset="utf-8"><title>Van Job Order · '+e(v.name||vanId)+legTitle+' · '+e(date)+'</title>'+vanJobsOrderCss(false)+'</head><body>'+vanJobsOrderInner(date,vanId,routeId,leg)+'<script>setTimeout(function(){try{window.print()}catch(e){}},350)<\/script></body></html>';
+  /* §vjRowHl · สีที่ทาไว้ต้องติดไปด้วย แต่ onclick ต้องไม่ติด · หน้าต่างพิมพ์ไม่มีฟังก์ชันพวกนี้ */
+  const _hlWas=_VJ_HL_ON; _VJ_HL_ON=false;
+  const html='<!doctype html><html><head><meta charset="utf-8"><title>Van Job Order · '+e(v.name||vanId)+legTitle+' · '+e(date)+'</title>'+vanJobsOrderCss(false)+'</head><body style="'+vjTplVars(vanId)+'">'+vanJobsOrderInner(date,vanId,routeId,leg)+'<script>setTimeout(function(){try{window.print()}catch(e){}},350)<\/script></body></html>';
+  _VJ_HL_ON=_hlWas;
   const w=window.open('','_blank'); if(!w){ alert('Please allow pop-ups to print the van job order'); return; }
   w.document.write(html); w.document.close(); w.focus();
 }
@@ -63594,10 +64023,11 @@ function vanJobsSaveImage(date, vanId, routeId, leg){
     var _hw=_sw+64;                                                          // + 32px margin each side
     var host=document.createElement('div'); host.id='vj-imghost';
     host.style.cssText='position:fixed;left:-99999px;top:0;width:'+_hw+'px;background:#fff;box-sizing:border-box;z-index:-1';
+    var _hlWas=_VJ_HL_ON; _VJ_HL_ON=false;   /* §vjRowHl · รูปเอาสีไปด้วย แต่ไม่เอา onclick */
     host.innerHTML=vanJobsOrderCss(true)
       +'<div id="vj-shot" style="width:'+_hw+'px;background:#fff;padding:32px;box-sizing:border-box">'
-      +'<div class="vjo">'+vanJobsOrderInner(date,vanId,routeId,leg)+'</div></div>';
-    document.body.appendChild(host);
+      +'<div class="vjo" style="'+vjTplVars(vanId)+'">'+vanJobsOrderInner(date,vanId,routeId,leg)+'</div></div>';
+    document.body.appendChild(host); _VJ_HL_ON=_hlWas;
     var tgt=host.querySelector('#vj-shot')||host;   // capture the padded wrapper, not the sheet inside it
     window.html2canvas(tgt,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false,windowWidth:_hw+48}).then(function(canvas){
       canvas.toBlob(function(blob){
@@ -63620,29 +64050,32 @@ function bkV2VanCellHTML(bk, zone, date, groupColor, routeId, allocKey, allocG, 
   const gc=g&&groupColor?groupColor[g]:null;
   const myVan = isSplit ? ((_O.vanSplits&&_O.vanSplits[ai]&&_O.vanSplits[ai].vanId)||'') : (_O.vanId||'');
   const vn = myVan ? ((vehGet(myVan)||{}).name||'') : '';
-  const chk=`<span onclick="event.stopPropagation();bkV2VanSelToggle('${key}')" title="เลือกเพื่อจับกลุ่ม" style="display:inline-flex;width:18px;height:18px;border-radius:5px;cursor:pointer;align-items:center;justify-content:center;font-size:12px;${sel?'background:#185FA5;color:#fff':'border:1.5px solid #C9CDD4;color:transparent'}">&#10003;</span>`;
+  const chk=`<span onclick="event.stopPropagation();bkV2VanSelToggle('${key}')" title="เลือกเพื่อจับกลุ่ม" style="display:inline-flex;width:16px;height:16px;border-radius:4px;cursor:pointer;align-items:center;justify-content:center;font-size:11px;flex:none;${sel?'background:#185FA5;color:#fff':'border:1.5px solid #C9CDD4;color:transparent'}">&#10003;</span>`;
   const gchip=g
-    ? `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:5px;background:${gc?gc[0]:'#E6F1FB'};color:${gc?gc[1]:'#185FA5'};white-space:nowrap">กรุ๊ป ${g}${vn?' · '+e(vn):''}</span>`
-    : '<span style="font-size:10px;color:#c4c2ba">ยังไม่จัด</span>';
+    ? `<span title="กรุ๊ป ${g}${vn?' · '+e(vn):''}" style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;background:${gc?gc[0]:'#E6F1FB'};color:${gc?gc[1]:'#185FA5'};white-space:nowrap;max-width:88px;overflow:hidden;text-overflow:ellipsis">${g}${vn?' · '+e(vn):''}</span>`
+    : '<span style="font-size:10px;color:#c4c2ba">—</span>';
   let retSel='';
   if(g){
     const _rPool=(typeof vanVehiclesForRoute==='function')?vanVehiclesForRoute(date, routeId, zone):[];
     const _zPool=(typeof vanVehiclesForZone==='function')?vanVehiclesForZone(zone, date):[];
     const pool=[..._rPool, ..._zPool.filter(v=>!_rPool.some(r=>r.id===v.id))];   // return van = broader pool (any zone van that day · กลับกับรถคันอื่นได้)
     const rvid= isSplit ? ((_O.vanSplits&&_O.vanSplits[ai]&&_O.vanSplits[ai].vanReturnId)||'') : ((_O.vanReturnId)||'');
-    let ropts='<option value="">&#8617; กลับเหมือนเดิม</option>';
+    let ropts='<option value="">&#8617;</option>';
     pool.forEach(v=>{ ropts+=`<option value="${v.id}" ${rvid===v.id?'selected':''}>&#8617; ${e(v.name||v.id)}</option>`; });
     if(rvid && !pool.some(v=>v.id===rvid)){ const vo=vehGet(rvid); ropts+=`<option value="${rvid}" selected>&#8617; ${e((vo&&vo.name)||rvid)}</option>`; }
     const retCall = isSplit ? `bkV2AssignVanReturnSplit('${bk.id}',${ai},this.value,'${date}')` : `bkV2AssignVanReturn('${bk.id}',this.value,'${date}')`;
-    retSel=`<select onchange="event.stopPropagation();${retCall}" onclick="event.stopPropagation()" title="รถขากลับ (ถ้าต่างจากกรุ๊ป)" style="border:1px solid ${rvid?'#C7B8E8':'#e3e0d9'};border-radius:6px;padding:1px 4px;font-size:9.5px;font-family:inherit;background:#fff;color:${rvid?'#534AB7':'#a8a59e'};max-width:124px">${ropts}</select>`;
+    retSel=`<select onchange="event.stopPropagation();${retCall}" onclick="event.stopPropagation()" title="รถขากลับ · ว่างไว้ = กลับคันเดิมของกรุ๊ป" style="border:1px solid ${rvid?'#C7B8E8':'#e3e0d9'};border-radius:6px;padding:1px 4px;font-size:9.5px;font-family:inherit;background:#fff;color:${rvid?'#534AB7':'#a8a59e'};max-width:46px;width:46px;padding:1px 0 1px 2px">${ropts}</select>`;
   }
   // split / un-split controls
   let splitBtn='';
-  if(!isSplit){ splitBtn=`<button onclick="event.stopPropagation();bkV2VanSplit('${bk.id}','${date}')" title="แยกคนขึ้นหลายคัน (เช่น 16 = 12 + 4)" style="font-size:9px;color:#5B289A;background:#F3EFFB;border:1px solid #D9CEF0;border-radius:5px;padding:1px 6px;cursor:pointer;font-family:inherit;white-space:nowrap">&#9986; แยกคน</button>`; }
+  if(!isSplit){ splitBtn=`<button onclick="event.stopPropagation();bkV2VanSplit('${bk.id}','${date}')" title="แยกคนขึ้นหลายคัน (เช่น 16 = 12 + 4)" style="font-size:9px;color:#5B289A;background:#F3EFFB;border:1px solid #D9CEF0;border-radius:5px;padding:1px 6px;cursor:pointer;font-family:inherit;white-space:nowrap">&#9986;</button>`; }
   else if(isFirst){ splitBtn=`<span style="display:inline-flex;gap:4px"><button onclick="event.stopPropagation();bkV2VanSplit('${bk.id}','${date}')" title="แยกเพิ่มอีกคัน" style="font-size:9px;color:#5B289A;background:#F3EFFB;border:1px solid #D9CEF0;border-radius:5px;padding:1px 6px;cursor:pointer;font-family:inherit">&#9986;+</button><button onclick="event.stopPropagation();bkV2VanUnsplit('${bk.id}','${date}')" title="รวมกลับเป็นก้อนเดียว" style="font-size:9px;color:#A32D2D;background:#fff;border:1px solid #E6C9C3;border-radius:5px;padding:1px 6px;cursor:pointer;font-family:inherit">รวม</button></span>`; }
-  return `<div style="display:flex;flex-direction:column;gap:3px;align-items:center">
-    <div style="display:flex;align-items:center;gap:6px;justify-content:center">${chk}${gchip}</div>
-    ${retSel}${splitBtn?`<div>${splitBtn}</div>`:''}
+  /* §btVCell · ของเดิมวางเป็นสามบรรทัดซ้อนกัน (ติ๊ก+ป้ายกรุ๊ป / รถขากลับ / แยกคน)
+     แถวในตารางเลยสูงเกือบ 80px ทั้งที่ข้อมูลจริงมีบรรทัดเดียว · ตาไล่ลงมาแล้วเหนื่อย
+     ยุบเป็นบรรทัดเดียว · คำยาว ๆ ย้ายไปอยู่ใน title (ชี้เมาส์ยังอ่านได้เหมือนเดิม)
+     กว้างขึ้นราว 50px แต่แถวเตี้ยลงราว 50px ต่อแถว · วันละร้อยกว่าแถวคุ้มกว่ามาก */
+  return `<div style="display:flex;align-items:center;gap:4px;justify-content:center;flex-wrap:nowrap;white-space:nowrap">
+    ${chk}${gchip}${retSel}${splitBtn}
   </div>`;
 }
 function baAutoAssign(date, routeId){
@@ -69117,10 +69550,7 @@ function bkV2ExtraPayRender(){
     h+='<div style="margin:4px 0 4px">';
     P.slips.forEach(function(sp,i){
       h+='<div style="display:flex;align-items:center;gap:8px;font-size:11.5px;padding:4px 0;border-bottom:0.5px solid var(--fd-line-soft)">'
-        /* §slipView · กดชื่อไฟล์เปิดดูได้ · โอเวอร์เลย์ z-index สูงกว่ากล่องนี้ จึงไม่โดนบัง */
-        +'<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;text-decoration:underline" '
-          +laSlipClickAttr(P.slips, 'สลิปของรายการขายเพิ่ม', i)
-          +' title="กดเพื่อเปิดดูสลิป">&#128206; '+esc(sp.name||sp.url||'slip')+'</span>'
+        +'<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">&#128206; '+esc(sp.name||sp.url||'slip')+'</span>'
         +'<button type="button" onclick="bkV2ExtraRmSlip('+i+')" style="background:transparent;border:none;color:#A32D2D;cursor:pointer;font-size:12px">&#10005;</button></div>';
     });
     h+='<label style="display:block;border:1.5px dashed var(--fd-line);border-radius:9px;padding:10px;text-align:center;font-size:11.5px;color:var(--fd-ink-soft);cursor:pointer;margin-top:4px">'
@@ -78763,12 +79193,30 @@ function bkV2Render(){
       const vanOn=!!(typeof _bkV2!=='undefined'&&_bkV2&&_bkV2.vanAssignMode);
       // measure the actual van+grouping strip height (was hardcoded 96 → gap/overlap when real height differed)
       const vs=host.querySelector('.bkv2-vanstrip'); const VANGROUP=(vanOn&&vs)?vs.offsetHeight:0;
-      vb.style.setProperty('--t2-vangroup-top', (TOP+h)+'px');
-      vb.style.setProperty('--t2-head-top', (TOP+h+VANGROUP)+'px');
-      /* §btStick · ความสูงกล่องตาราง = ความสูงจอ ลบหัวที่ตรึงไว้ ลบขอบล่างไว้หายใจ
+      /* §btScroll · ตัวเลื่อนย้ายมาอยู่ที่ .t2-wrap แล้ว · ชั้นที่ตรึงต้องวัดจาก
+         ขอบบนของกล่องนั้น ไม่ใช่จากขอบจอ · ไม่งั้นแถบ VANS ไปลอยกลางตาราง */
+      vb.style.setProperty('--t2-vangroup-top', '0px');
+      vb.style.setProperty('--t2-head-top', VANGROUP+'px');
+      /* §btScroll · ความสูงกล่องรายวัน = จอ ลบแถบแท็บ ลบหัวที่ตรึง ลบขอบล่างไว้หายใจ
          ต้องอยู่หลัง TOP ถูกประกาศ ไม่งั้นชนกฎ let/const แล้วโยน ReferenceError เงียบ ๆ */
-      try{ if(_bth){ const _vh=window.innerHeight||900;
-        vb.style.setProperty('--bt-tblh', Math.max(260, _vh-(TOP+h)-26)+'px'); } }catch(_){}
+      try{ const _wp=host.querySelector('.t2-wrap');
+        if(_wp){ const _vh=window.innerHeight||900;
+          /* วัดจากตำแหน่งจริงของกล่อง · บวกลบความสูงทีละชิ้นพลาดไป ~34px
+             (ขอบ/มาร์จินของการ์ดครอบที่ไม่ได้นับ) แล้วหน้าเลื่อนได้อีกนิดหน่อย
+             กลายเป็นสองตัวเลื่อนซ้อนกัน */
+          const _top=_wp.getBoundingClientRect().top + (window.scrollY||0);
+          let _hh=Math.max(280, _vh-_top-12);
+          vb.style.setProperty('--bt-wraph', _hh+'px');
+          /* ยังมีขอบล่างของ #view (64px) กับ main (22px) ที่ไม่ได้อยู่ในสายที่วัด
+             ดันให้หน้ายังเลื่อนได้อีกนิด กลายเป็นสองตัวเลื่อนซ้อนกัน
+             หดความสูงกล่องไม่ได้ เพราะจะเสียพื้นที่ตารางไป 86px เปล่า ๆ
+             ดึงขอบล่างนั้นกลับด้วย margin ติดลบแทน · กล่องได้ความสูงเต็ม หน้าไม่เลื่อน */
+          _wp.style.marginBottom='0px';
+          requestAnimationFrame(()=>{ try{
+            const _ov=document.documentElement.scrollHeight-(window.innerHeight||900);
+            if(_ov>1) _wp.style.marginBottom=(-_ov)+'px';
+          }catch(_){} });
+        } }catch(_){}
     }catch(_){} });
   }catch(e){
     console.error('[bkV2Render] render failed:', e);
@@ -79205,7 +79653,7 @@ function bkV2RenderPickupSection(){
           ? `<div style="margin-top:3px"><span style="font-size:9px;font-weight:700;color:#5B289A;background:#EDE7FB;padding:1px 7px;border-radius:4px">โซน ${_zShort(_zone)} · auto</span></div>`
           : `<div style="margin-top:3px;font-size:9px;color:#b4b2a9;font-style:italic">เลือกจุดรับ → โซนมาอัตโนมัติ</div>`;
         return `
-        <div class="bkv2-nb-row" style="grid-template-columns:${_gcols};align-items:start;gap:7px;margin-top:6px">
+        <div class="bkv2-nb-row bkv2-alt-row" style="grid-template-columns:${_gcols};align-items:start;gap:7px;margin-top:6px">
           <input class="bkv2-nb-input" list="bkv2-altpick-names" type="text" placeholder="เลือก/พิมพ์ชื่อ" value="${escapeHTML(a.who||'')}" oninput="bkV2SetAltPickup(${i},'who',this.value)">
           <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px">${PAX_K.map(k=>{const _v=bkAltPax(a)[k]; const _bad=_altBd[k]>_bkBd[k]; return `<input class="bkv2-nb-input bkv2-pax-box" type="number" min="0" step="1" value="${_v}" onchange="bkV2SetAltPickupPax(${i},'${k}',this.value)" title="${PAX_LBL[k]} ที่จุดนี้ (กลุ่มนี้มีทั้งหมด ${_bkBd[k]})"${_bad?' style="border-color:#E0857E;background:#FDECEA"':(_v?'':' style="color:#c4c1b8"')}>`;}).join('')}</div>
           <div>
@@ -79245,7 +79693,7 @@ function bkV2RenderPickupSection(){
             <span style="font-size:11px;color:${alt.length?'#5B289A':'var(--ink)'};font-weight:600">&#128652; แยกคน · รับหรือส่งคนละที่${alt.length?` · ${alt.length} รายการ`:''}</span>
             <button onclick="bkV2AddAltPickup()" style="font-size:11px;font-weight:600;color:#5B289A;background:#EDE7FB;border:1px solid #C7B8E8;border-radius:6px;padding:4px 10px;cursor:pointer;font-family:inherit">+ เพิ่มจุดรับ</button>
           </div>
-          ${alt.length?`<div style="display:grid;grid-template-columns:${_gcols};gap:7px;margin-top:8px;font-size:8.5px;font-weight:700;letter-spacing:.05em;color:#8a7db0;text-transform:uppercase"><span>ชื่อ (จากรายชื่อด้านบน)</span><span style="text-align:center">AD · CHD · INF · FOC</span><span>จุดรับ · Pickup area</span><span>ชื่อโรงแรม / Location</span><span>จุดส่งขากลับ</span><span></span></div>`:''}
+          ${alt.length?`<div class="bkv2-alt-row" style="display:grid;grid-template-columns:${_gcols};gap:7px;margin-top:8px;font-size:8.5px;font-weight:700;letter-spacing:.05em;color:#8a7db0;text-transform:uppercase"><span>ชื่อ (จากรายชื่อด้านบน)</span><span style="text-align:center">AD · CHD · INF · FOC</span><span>จุดรับ · Pickup area</span><span>ชื่อโรงแรม / Location</span><span>จุดส่งขากลับ</span><span></span></div>`:''}
           ${rows}
           ${summary}
           ${alt.length?'<div style="font-size:9.5px;color:#8a7db0;margin-top:6px">จุดรับหลักด้านบน = คนส่วนใหญ่ (รวม Lead) · รายการนี้ = คนที่รับคนละที่ · โซนมาจากจุดรับที่เลือกอัตโนมัติ · จำนวน "จุดรับหลัก" คำนวณอัตโนมัติ = กลุ่มทั้งหมด − ที่แยกไป</div>':''}
@@ -79282,6 +79730,22 @@ function bkV2RenderTripsSection(){
       <button onclick="bkV2BumpPax(${idx},'${key}',1)" style="width:18px;height:18px;border:none;background:transparent;color:var(--ink-soft);font-weight:700;cursor:pointer;font-family:inherit;font-size:12px;line-height:1;padding:0;border-radius:50%">+</button>
     </div>
   `;
+
+  /* §pkNat · ตัวนับหัวคนไทยจริง · หน้าตาเหมือน stepper ปกติแต่เป็นสีเขียวของ "ไม่เกี่ยวกับเงิน"
+     ค่าที่โชว์ตอนยังไม่มีใครแตะ = ช่อง TH ของแถวราคา · เท่ากับพฤติกรรมเดิมเป๊ะ
+     บวกเกินหัวทั้งหมดของประเภทนั้นไม่ได้ · ปุ่ม + จะจางลงเมื่อเต็มแล้ว */
+  const natStep = (idx, k, t) => {
+    const px = t.pax || {};
+    const all = (+px[k+'_th']||0) + (+px[k+'_fr']||0) + (+px[k]||0);
+    const val = bkNatTH(t, k);
+    const on  = bkNatHas(t);
+    return `
+    <div style="display:inline-flex;align-items:center;gap:1px;background:var(--white);border:1px solid ${on?'#B7E2D2':'var(--border)'};border-radius:999px;padding:1px 2px" title="ทั้งหมด ${all} คน${on?'':' · ยังไม่ได้ระบุ ถือตามช่อง TH ไปก่อน'}">
+      <button onclick="bkV2BumpNat(${idx},'${k}',-1)" style="width:18px;height:18px;border:none;background:transparent;color:${val>0?'#0F6E56':'#c7c5bb'};font-weight:700;cursor:pointer;font-family:inherit;font-size:12px;line-height:1;padding:0;border-radius:50%">&minus;</button>
+      <span style="min-width:17px;text-align:center;font-family:'DM Mono',monospace;font-weight:700;font-size:11px;font-variant-numeric:tabular-nums;color:${val>0?'#0F6E56':'#c7c5bb'}">${val}</span>
+      <button onclick="bkV2BumpNat(${idx},'${k}',1)" style="width:18px;height:18px;border:none;background:transparent;color:${val<all?'#0F6E56':'#d8d5cc'};font-weight:700;cursor:${val<all?'pointer':'default'};font-family:inherit;font-size:12px;line-height:1;padding:0;border-radius:50%">+</button>
+    </div>`;
+  };
 
   // Bundle helper · detect free/paid longtail bundle for a route
   const bundleInfo = (rId) => {
@@ -79565,12 +80029,23 @@ function bkV2RenderTripsSection(){
                 <td style="background:var(--white);padding:2px 0;text-align:center">${stepper(idx,'foc_th',t.pax.foc_th||0)}</td>
               </tr>` : ''}
               <tr style="background:var(--bk-navy-50)">
-                <td style="padding:3px 6px;font-size:8px;color:var(--ink-soft);font-weight:700;letter-spacing:.06em;border-radius:0 0 0 7px">SUB</td>
+                <td style="padding:3px 6px;font-size:8px;color:var(--ink-soft);font-weight:700;letter-spacing:.06em">SUB</td>
                 <td style="text-align:center;font-family:'DM Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;color:${totAd>0?'var(--bk-navy)':'#c7c5bb'};font-size:11px">${totAd}</td>
                 <td style="text-align:center;font-family:'DM Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;color:${totChd>0?'var(--bk-navy)':'#c7c5bb'};font-size:11px">${totChd}</td>
                 <td style="text-align:center;font-family:'DM Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;color:${totInf>0?'var(--bk-navy)':'#c7c5bb'};font-size:11px">${totInf}</td>
-                <td style="text-align:center;font-family:'DM Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;color:${totFoc?'#ba7517':'#c7c5bb'};font-size:11px;border-radius:0 0 7px 0">${totFoc}</td>
+                <td style="text-align:center;font-family:'DM Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;color:${totFoc?'#ba7517':'#c7c5bb'};font-size:11px">${totFoc}</td>
               </tr>
+              ${/* §pkNat · สัญชาติจริงของ นทท. · ไม่เกี่ยวกับราคาเลย ใช้ตอนซื้อตั๋วอุทยานอย่างเดียว
+                    สองแถวบนเลือกเรทตามสัญญา · บางสัญญาไม่มีราคาไทย คนไทยจึงต้องคีย์เป็น ตปท.
+                    แถวนี้บอกความจริงว่าใครเป็นคนไทย ค่าอุทยานจะได้ไม่จ่ายเรทฝรั่งให้คนไทย */''}
+              <tr style="background:#EAF6F0">
+                <td style="padding:3px 6px;font-weight:700;font-size:10px;color:#0F6E56;border-radius:0 0 0 7px" title="จำนวนคนไทยจริงบนทริปนี้ · ใช้คิดค่าอุทยานอย่างเดียว ไม่กระทบราคาที่นั่ง">&#128506; ไทยจริง</td>
+                <td style="padding:2px 0;text-align:center">${natStep(idx,'ad',t)}</td>
+                <td style="padding:2px 0;text-align:center">${natStep(idx,'chd',t)}</td>
+                <td style="padding:2px 0;text-align:center">${natStep(idx,'inf',t)}</td>
+                <td style="padding:2px 0;text-align:center;border-radius:0 0 7px 0">${natStep(idx,'foc',t)}</td>
+              </tr>
+              ${bkNatHas(t) && (bkNatTH(t,'ad')+bkNatTH(t,'chd')+bkNatTH(t,'inf')+bkNatTH(t,'foc')) !== ((t.pax.ad_th||0)+(t.pax.chd_th||0)+(t.pax.inf_th||0)+(t.pax.foc_th||0)) ? `<tr><td colspan="5" style="padding:4px 7px;font-size:9.5px;color:#0F6E56;background:#EAF6F0;line-height:1.35">&#8226; ค่าอุทยานจะคิดตามแถวนี้ ไม่ใช่แถว TH &middot; ราคาที่นั่งยังคิดตามสัญญาเหมือนเดิม</td></tr>` : ''}
             </tbody>
           </table>
         </div>
@@ -81893,12 +82368,49 @@ function bkV2RenderTab2(){
       <span class="sp"><span class="bt-tag run">${nRun} running</span>${rids.length-nRun>0?`<span class="bt-tag no">${rids.length-nRun} not running</span>`:''}</span></div>${vars}`;
   }).join('') || '<div class="bt-none">No programme on this day</div>';
 
-  const _btProg = `<div class="bt-c"><div class="bt-ct"><span class="big">Programmes</span>
-      <span class="bt-cnt">${_famList.length} route${_famList.length===1?'':'s'}</span><span class="sp"></span>
+  /* §btTune · ชิปท่าเคยกินแถวของตัวเองใต้หัวการ์ด · ย้ายขึ้นไปอยู่แถวเดียวกับชื่อ
+     การ์ด คืนที่ให้รายการโปรแกรมอีกหนึ่งบรรทัดเต็ม ๆ */
+  const _btProg = `<div class="bt-c bt-prog"><div class="bt-ct"><span class="big">Programmes</span>
+      <span class="bt-cnt">${_famList.length} route${_famList.length===1?'':'s'}</span>
+      <span class="bt-seg">${_btPierBtn('all','All')}${_btPierBtn('panwa','Panwa')}${_btPierBtn('tublamu','Tub Lamu')}${_btPierBtn('ranong','Ranong')}</span>
+      ${(pierF!=='all'||famF||routeF)?`<button class="bt-clear" onclick="bkV2Tab2ClearFilters()">Clear</button>`:''}
+      <span class="sp"></span>
       <span class="bt-daytot"><b>${rows.filter(r=>!r.cxl).length}</b> booking &middot; <b>${_dPax}</b> pax<i>${_dAD}A&middot;${_dCHD}C&middot;${_dINF}I&middot;${_dFOC}F</i></span></div>
-    <div class="bt-pierrow"><span class="bt-seg">${_btPierBtn('all','All piers')}${_btPierBtn('panwa','Panwa')}${_btPierBtn('tublamu','Tub Lamu')}${_btPierBtn('ranong','Ranong')}</span>
-      ${(pierF!=='all'||famF||routeF)?`<button class="bt-clear" onclick="bkV2Tab2ClearFilters()">Clear filters</button>`:''}</div>
     <div class="bt-pgbody">${_btProgBody}</div></div>`;
+
+  /* §btTune · ไกด์ / อาหาร / เรือหางยาว ของทริปหนึ่ง · เดิมมีแต่ในตัวกางท้ายตาราง
+     การ์ดเรือมีที่ว่างอยู่แล้ว และสามอย่างนี้คือของที่ต้องสั่งล่วงหน้า ควรเห็นตั้งแต่แรก */
+  const _btPrep = rid => {
+    const lang={}; let veg=0,vegan=0,halal=0,allerg=0,ltJoin=0,ltChtr=0;
+    (groups[rid]||[]).forEach(r=>{ if(r.cxl) return;
+      const t=P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc');
+      const gd=r.bk.guides||{}, mm=r.bk.specialMeals||{};
+      if(gd.english) lang['EN']=(lang['EN']||0)+t;
+      if(gd.russian) lang['RU']=(lang['RU']||0)+t;
+      if(gd.chinese) lang['CN']=(lang['CN']||0)+t;
+      const ol=(gd.otherLang||'').trim(); if(ol) lang[ol]=(lang[ol]||0)+t;
+      veg+=+mm.veg||0; vegan+=+mm.vegan||0; halal+=+mm.halal||0;
+      allerg+=(typeof bkV2AllergyCount==='function')?bkV2AllergyCount(mm):((mm.allergies||'').trim()?1:0);
+      const af=(typeof bkV2AddOnFlags==='function')?bkV2AddOnFlags(r.bk,rid):null;
+      if(af){ if(af.charter) ltChtr+=(af.charterQty||1); else if(af.join) ltJoin+=t; }
+      if(typeof bkV2LongtailExtraPax==='function') ltJoin+=(bkV2LongtailExtraPax(r.bk.id,date)||0);
+      if(typeof bkV2LongtailCharterExtraBoats==='function') ltChtr+=(bkV2LongtailCharterExtraBoats(r.bk.id,date)||0);
+    });
+    return {lang,veg,vegan,halal,allerg,ltJoin,ltChtr};
+  };
+  const _btPrepHtml = rid => {
+    const p=_btPrep(rid); const out=[];
+    Object.keys(p.lang).sort((a,b)=>p.lang[b]-p.lang[a]).forEach(k=>{
+      const c=(typeof bkV2LangColors==='function')?bkV2LangColors(k):['#EEF2F7','#3a4150'];
+      out.push(`<span class="bt-pc" style="background:${c[0]};color:${c[1]}">${esc(k)} &middot; ${p.lang[k]}</span>`); });
+    if(p.veg)   out.push(`<span class="bt-pc" style="background:#EAF6EE;color:#0F6E56">${p.veg} veg</span>`);
+    if(p.vegan) out.push(`<span class="bt-pc" style="background:#EAF6EE;color:#0F6E56">${p.vegan} vegan</span>`);
+    if(p.halal) out.push(`<span class="bt-pc" style="background:#EAF6EE;color:#0F6E56">${p.halal} halal</span>`);
+    if(p.allerg)out.push(`<span class="bt-pc" style="background:#FBEAE7;color:#A32D2D">&#9888; ${p.allerg} allergy</span>`);
+    if(p.ltJoin)out.push(`<span class="bt-pc" style="background:#F1EFE8;color:#3C3B37">Longtail join &middot; ${p.ltJoin}</span>`);
+    if(p.ltChtr)out.push(`<span class="bt-pc" style="background:#EFEAFB;color:#5B289A">Longtail charter &middot; ${p.ltChtr}</span>`);
+    return out.length?`<div class="bt-prep"><span class="l">Prep</span>${out.join('')}</div>`:'';
+  };
 
   /* ══ กรอบกลาง · เรือของทริปที่เลือก ══════════════════════════════════════ */
   let _btBoatCard;
@@ -81918,7 +82430,8 @@ function bkV2RenderTab2(){
         <span class="bt-av"><span class="k">Booked</span><span class="v">${bkd}</span></span><span class="bt-avs"></span>
         <span class="bt-av"><span class="k">Capacity</span><span class="v dim">${cp}</span></span><span class="bt-avs"></span>
         <span class="bt-av"><span class="k">Locked</span><span class="v lk">${lk}</span></span></div>
-      <div class="bt-blist">${bl.length?bl.map(b=>`<span class="bt-brow${b.over?' over':''}"><span class="d" style="background:${b.col}"></span><span class="nm">${esc(b.name)}</span><span class="ld">${b.pax}${b.cap?('/'+b.cap):''}${b.over?(' +'+(b.pax-b.cap)):''}</span></span>`).join(''):'<span class="bt-none2">No boat assigned to this trip</span>'}</div></div>`;
+      <div class="bt-blist">${bl.length?bl.map(b=>`<span class="bt-brow${b.over?' over':''}"><span class="d" style="background:${b.col}"></span><span class="nm">${esc(b.name)}</span><span class="ld">${b.pax}${b.cap?('/'+b.cap):''}${b.over?(' +'+(b.pax-b.cap)):''}</span></span>`).join(''):'<span class="bt-none2">No boat assigned to this trip</span>'}</div>
+      ${_btPrepHtml(_btSelRid)}</div>`;
   } else {
     const _tg = routeIds.filter(rid=>(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(rid,date)).map(rid=>{
       const f=bkV2RouteFamily(rid)||{}, col=f.color||'#8b909c';
@@ -81929,7 +82442,8 @@ function bkV2RenderTab2(){
       return `<div class="bt-tgp" style="--tc:${col}" onclick="bkV2Tab2SetRoute('${rid}')" title="Select this trip">
         <div class="bt-tgh"><i></i><span class="nm">${esc(rnm)}</span><span class="tm">${esc(_btDep(rid))}${_btPier(rid)?' · '+esc(_btPier(rid)):''}</span>
           <span class="sm">${bkd}/${cp}<em class="${av<=0?'full':(cp&&av/cp<0.2?'low':'ok')}">${av<=0?'full':(av+' free')}</em></span></div>
-        <div class="bt-tgb">${bl.length?bl.map(b=>`<span class="bt-tbc${b.over?' over':''}"><i style="background:${b.col}"></i>${esc(b.name)}<s>${b.pax}${b.cap?('/'+b.cap):''}${b.over?(' +'+(b.pax-b.cap)):''}</s></span>`).join(''):'<span class="bt-tbc none">no boat</span>'}</div></div>`;
+        <div class="bt-tgb">${bl.length?bl.map(b=>`<span class="bt-tbc${b.over?' over':''}"><i style="background:${b.col}"></i>${esc(b.name)}<s>${b.pax}${b.cap?('/'+b.cap):''}${b.over?(' +'+(b.pax-b.cap)):''}</s></span>`).join(''):'<span class="bt-tbc none">no boat</span>'}</div>
+        ${_btPrepHtml(rid)}</div>`;
     }).join('');
     const _nB=routeIds.reduce((n,rid)=>n+_btBoats(rid).length,0);
     const _nT=routeIds.filter(rid=>(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(rid,date)).length;
@@ -81973,7 +82487,7 @@ function bkV2RenderTab2(){
   const _lkList=Object.values(_lkBy).sort((a,b)=>(b.left-a.left)||(b.qty-a.qty));
   const _lkTot=_lkList.reduce((n,a)=>n+a.qty,0), _lkLeft=_lkList.reduce((n,a)=>n+a.left,0);
   const _lkN=routeIds.reduce((n,rid)=>n+((typeof bkV2LocksFor==='function')?bkV2LocksFor(rid,date):[]).length,0);
-  const _btLock = `<div class="bt-c"><div class="bt-ct">Seat Lock<span class="sp"></span>
+  const _btLock = `<div class="bt-c bt-lockc"><div class="bt-ct">Seat Lock<span class="sp"></span>
       ${_btLkSel?`<span class="bt-lkhi">&#9679; ${_btLkHitN} highlighted</span>`:''}
       ${_lkLeft>0?`<span class="bt-lkbadge">${_lkLeft} left</span>`:'<span class="bt-cnt">none left</span>'}
       ${_btSelRid?`<button class="bt-lkbtn" onclick="bkV2LockFromCalendar('${_btSelRid}','${date}')" title="Lock seats on this trip">&#128274; Lock seats</button>`:''}
@@ -82012,7 +82526,10 @@ function bkV2RenderTab2(){
         <div>${_btBoatCard}</div>
         <div class="bt-col3">
           <div class="bt-pair">${_btModes}${_btSearch}</div>
-          <div class="bt-pair2">${_btLock}${_btNotice}</div>
+          ${/* §btVanCard · โหมดจัดรถ · Seat Lock ไม่เกี่ยวกับการจัดรถเลย และบรรทัด
+                "ยังไม่จัดรถ" ของ Notice การ์ด VANS ก็มีอยู่แล้ว · สลับที่กันไปเลย
+                การ์ด VANS ต้องสร้างหลังวนทริปเสร็จ จึงเว้นที่ไว้แล้วค่อยแทนตอนท้าย */''}
+          ${vanMode ? '<!--BTVANCARD-->' : `<div class="bt-pair2">${_btLock}${_btNotice}</div>`}
         </div>
       </div>
     </div>`;
@@ -82020,6 +82537,7 @@ function bkV2RenderTab2(){
   const emptyMain = (routeIds.length === 0);
 
   let _prevFam = null;
+  const _btVanParts = [];   /* §btVanCard · ชิ้นส่วนแถบรถของแต่ละทริป · เอาไปประกอบเป็นการ์ดบนหัว */
   const trips = routeIds.map(rid=>{
     const grp = groups[rid] || [];
     // Per-boat color map for this route · shared by the row Boat chip + the summary cards (distinguish boats)
@@ -82491,7 +83009,7 @@ function bkV2RenderTab2(){
                 })()}
             <td class="t2-mono">${(_ovTrip&&_ovTrip.ovnLeg)?'<span style="color:#8a5500;font-weight:600">&#8617; ไม่มีขารับ</span>':vanMode?`<input type="text" value="${esc((typeof bkOpsRead==='function'?bkOpsRead(bk,date).pickupTimeFinal:(bk.ops&&bk.ops.pickupTimeFinal))||r.pickupTime||bk.pickupTime||'')}" placeholder="${esc(r.pickupTime||bk.pickupTime||'เวลา')}" onclick="event.stopPropagation()" oninput="bkV2SetPickupFinal('${esc(bk.id)}',this.value,'${esc(date)}')" title="เวลารับของโรงแรมนี้" style="border:1px solid var(--border);border-radius:6px;padding:2px 5px;font-size:10px;font-family:'DM Mono',monospace;width:98px;box-sizing:border-box">`:(function(){const orig=r.pickupTime||bk.pickupTime||''; const fin=(typeof bkOpsRead==='function'?bkOpsRead(bk,date).pickupTimeFinal:(bk.ops&&bk.ops.pickupTimeFinal))||''; if(fin && fin!==orig){ /* §เวลารับที่แก้แล้ว · เดิมต่อท้ายบรรทัดเดียวกัน "06.30 (07:30-07:45)" อ่านแวบเดียวแยกไม่ออกว่าอันไหนคือเวลาจริง → เวลาใหม่บรรทัดบน เวลาเดิมบรรทัดล่าง ตัวเล็กจางๆ */
                  return `<div style="font-weight:700;color:#0F6E56;line-height:1.25">${esc(fin)}</div>${orig?`<div style="font-size:9px;color:#b0b0a8;line-height:1.25;text-decoration:line-through" title="เวลารับเดิมก่อนแก้">${esc(orig)}</div>`:''}`; } return esc(orig||'—'); })()}${_vanChipHtml}</td>
-            ${vanMode?`<td class="t2-c" style="background:#F3FBF7">${(typeof bkV2VanCellHTML==='function')?bkV2VanCellHTML(bk, r.zone, date, groupColor, rid, a.key, a.g, a.split, a.first):''}</td>`:''}
+            ${vanMode?`<td class="t2-c t2-gwrap" style="background:#F3FBF7">${(typeof bkV2VanCellHTML==='function')?bkV2VanCellHTML(bk, r.zone, date, groupColor, rid, a.key, a.g, a.split, a.first):''}</td>`:''}
             <td class="t2-pk">${(function(){ if(a.split && a.pick && !a.pick.main && (a.pick.hotel||a.pick.areaId)){ const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null; const _pl=a.pick.hotel||(_pa?_pa.name:'')||'—'; return `<span class="t2-pickcell" title="แยกรับ${a.pick.who?(' · '+esc(a.pick.who)):''} @ ${esc(_pl)}" style="color:#5B289A;font-weight:600">&#128652; ${esc(_pl)}</span>`; } if(_ovTrip && _ovTrip.ovnLeg) return '<span class="t2-pickcell" title="ขากลับ OVN · ลูกค้ากลับจากเกาะโดยเรือ · ไม่มีรถไปรับ" style="color:#8a5500;font-weight:600">&#8617; ไม่มีขารับ · มาจากเกาะ</span>';
               return (bk.hotelName||bk.pickup)?`<span class="t2-pickcell" title="${esc(bk.hotelName||bk.pickup)}">${esc(bk.hotelName||bk.pickup)}</span>`:'<span class="t2-needpickup" title="ยังไม่ได้ระบุจุดรับ · กดแก้ไขเพื่อเพิ่ม">&#9888; no pickup</span>'; })()}</td>
             <td class="t2-c">${esc(bk.roomNumber||'')?`<span class="t2-mono t2-room">${esc(bk.roomNumber)}</span>`:'<span class="t2-dim">—</span>'}</td>
@@ -82580,11 +83098,11 @@ function bkV2RenderTab2(){
       + `</div></td></tr>`;
     const zoneTable = zoneBlocks ? `
         <div class="t2-tblscroll">
-          <table class="t2-mtbl">
+          <table class="t2-mtbl${vanMode?' t2-van':''}">
             <thead><tr>
               <th class="t2-vc">Voucher</th>${agencyTh}<th class="t2-cu">Customer (lead)</th>
               <th class="t2-c">AD</th><th class="t2-c">CHD</th><th class="t2-c">INF</th><th class="t2-c">FOC</th>
-              <th>Time</th>${vanMode?`<th class="t2-c" style="color:#0C6B47;background:#DCF0E7;white-space:nowrap" title="ติ๊กแถวที่จะไปด้วยกัน แล้วกดจับกลุ่ม">&#10003; กลุ่ม</th>`:''}<th class="t2-pk">Pickup</th><th class="t2-c">Room</th>${zoneTh}<th>Send back</th>${vanMode?'':'<th>Add-on</th>'}<th>Special request</th>${vanMode?'':'<th>Pay</th><th class="t2-r">Total</th><th class="t2-c"></th>'}
+              <th>Time</th>${vanMode?`<th class="t2-c t2-gwrap" style="color:#0C6B47;background:#DCF0E7;white-space:nowrap" title="ติ๊กแถวที่จะไปด้วยกัน แล้วกดจับกลุ่ม">&#10003; กลุ่ม</th>`:''}<th class="t2-pk">Pickup</th><th class="t2-c">Room</th>${zoneTh}<th>Send back</th>${vanMode?'':'<th>Add-on</th>'}<th>Special request</th>${vanMode?'':'<th>Pay</th><th class="t2-r">Total</th><th class="t2-c"></th>'}
               <th class="t2-c"${boatMode?' style="color:#12518F;background:#E2EEFA;white-space:nowrap"':''}>&#128676; Boat${boatMode?` <button onclick="baAutoAssign('${date}','${rid}')" style="background:#185FA5;color:#fff;border:none;border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:4px">auto</button>`:''}</th>
               ${rcMode?`<th class="t2-c" style="color:#7A4A00;background:#FAEBD2;white-space:nowrap">&#9989; Re-confirm <button onclick="bkV2ReconfirmAll('${date}','${rid}','list')" title="ยืนยันทั้งหมด (list)" style="background:#7A4A00;color:#fff;border:none;border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:4px">all</button></th>`:''}
               ${wxClosed?'<th class="t2-c" style="color:#A32D2D;background:#FBE8E4;white-space:nowrap">&#9928; Manage</th>':''}
@@ -82797,12 +83315,14 @@ function bkV2RenderTab2(){
       });
       const vcards=Object.keys(vagg).map(vid=>{ const v=vehGet(vid)||{}; const g=vagg[vid]; const cap=v.capacity||0; const over=g.pax>cap; const c=vanColor[vid]||['#E1F5EE','#0F6E56'];
         const _grps=Object.keys(g.grp||{}).map(Number).filter(x=>x>0).sort((a,b)=>a-b);
-        const _grpBadge=_grps.length?`<span style="background:${c[1]};color:#fff;font-size:9px;font-weight:700;border-radius:5px;padding:1px 6px;margin-right:6px;white-space:nowrap;flex:none">กรุ๊ป ${_grps.join('+')}</span>`:'';
+        const _grpBadge=_grps.length?`<span style="background:${c[1]};color:#fff;font-size:8.5px;font-weight:700;border-radius:4px;padding:0 5px;margin-right:5px;white-space:nowrap;flex:none">${_grps.join('+')}</span>`:'';
         const _areas=Object.keys(g.area||{}).filter(Boolean);
-        const _areaLine=_areas.length?`<div style="font-size:9px;color:#B07A1F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="รับที่: ${esc(_areas.join(' · '))}">&#128205; ${esc(_areas.join(' · '))}</div>`:'';
-        return `<div onclick="event.stopPropagation();bkV2ScrollToVan('${rid}','${vid}')" title="คลิกเพื่อเลื่อนไปที่แถวของ ${esc(v.name||vid)}" style="background:#fff;border:1px solid ${over?'#E6C9C3':'#e6e4dd'};border-radius:9px;padding:6px 10px;display:flex;align-items:center;gap:9px;min-width:220px;box-sizing:border-box;cursor:pointer">
-          <span style="width:9px;height:9px;border-radius:50%;background:${c[1]};flex:none"></span>
-          <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center">${_grpBadge}<span style="overflow:hidden;text-overflow:ellipsis">${esc(v.name||vid)}${v.plate&&v.plate!=='-'?` <span style="font-size:9.5px;color:#999;font-family:'DM Mono',monospace">${esc(v.plate)}</span>`:''}</span></div><div style="font-size:9.5px;color:#7a7a72">${g.bk} booking · <span style="font-weight:700;color:${over?'#A32D2D':'#0F6E56'}">${g.pax}${cap?'/'+cap:''} pax</span></div>${_areaLine}</div>
+        const _areaLine=_areas.length?`<div style="font-size:8.5px;color:#B07A1F;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px" title="รับที่: ${esc(_areas.join(' · '))}">&#128205; ${esc(_areas.join(' · '))}</div>`:'';
+        /* §btTune · ชิปรถตู้เดิมกว้างขั้นต่ำ 220px · สามคันก็เต็มแถบ ต้องไถหาคันที่สี่
+           ลดขนาดตัวหนังสือกับระยะขอบ แล้วปล่อยความกว้างให้พอดีเนื้อหา */
+        return `<div onclick="event.stopPropagation();bkV2ScrollToVan('${rid}','${vid}')" title="คลิกเพื่อเลื่อนไปที่แถวของ ${esc(v.name||vid)}" style="background:#fff;border:1px solid ${over?'#E6C9C3':'#e6e4dd'};border-radius:8px;padding:4px 8px;display:flex;align-items:center;gap:6px;min-width:0;box-sizing:border-box;cursor:pointer">
+          <span style="width:8px;height:8px;border-radius:50%;background:${c[1]};flex:none"></span>
+          <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center">${_grpBadge}<span style="overflow:hidden;text-overflow:ellipsis">${esc(v.name||vid)}${v.plate&&v.plate!=='-'?` <span style="font-size:9px;color:#999;font-family:'DM Mono',monospace">${esc(v.plate)}</span>`:''}</span></div><div style="font-size:9px;color:#7a7a72">${g.bk} booking · <span style="font-weight:700;color:${over?'#A32D2D':'#0F6E56'}">${g.pax}${cap?'/'+cap:''} pax</span></div>${_areaLine}</div>
         </div>`; }).join('');
       const extra=[]; if(unTot>0) extra.push(`<span style="font-size:11px;font-weight:700;color:#9A5B00;background:#FFF9F0;border:1px solid #E6B97A;border-radius:8px;padding:6px 10px">&#9888; ยังไม่จัดรถ ${unTot} pax</span>`);
       if(selfTot>0) extra.push(`<span style="font-size:11px;color:#5F5E5A;background:#F1EFE8;border-radius:8px;padding:6px 10px">self-arrive ${selfTot} pax</span>`);
@@ -82810,7 +83330,7 @@ function bkV2RenderTab2(){
       // Two stacked rows — Van summary + Grouping bar — both shown from the start of Van Assign mode, pinned together as one sticky unit (total 96px)
       const _selKeys=Object.keys(window._bkV2VanSel||{}).filter(k=>window._bkV2VanSel[k]);
       const _selTrip=[]; _selKeys.forEach(k=>{ const p=String(k).split('@'); const r=grp.find(rr=>!rr.cxl&&rr.bk.id===p[0]); if(!r)return; const _ro=(typeof bkOpsRead==='function')?bkOpsRead(r.bk,date):(r.bk.ops||{}); let head; if(p.length>1 && _ro&&Array.isArray(_ro.vanSplits)&&_ro.vanSplits[+p[1]]) head=+_ro.vanSplits[+p[1]].pax||0; else head=P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'); _selTrip.push({zone:((r.charter&&!r.cxl)?'__CHARTER__':r.zone), head}); });   /* §charter · ต้องใช้ pseudo-zone เดียวกับที่ _bkV2InZone รู้จัก */
-      const vanRow = `<div style="display:flex;align-items:center;gap:10px;height:52px;box-sizing:border-box;padding:0 16px 0 21px;background:#F3FBF7;overflow-x:auto;flex-wrap:nowrap"><span class="t2-boatstrip-lbl" style="color:#0F6E56;flex:none">&#128656; Vans</span>${vanBtns}<div class="t2-boats" style="flex-wrap:nowrap;gap:9px">${vcards||''}${extra.join('')||(!vcards?'<span style="font-size:11px;color:#8a8a82;white-space:nowrap">ยังไม่มีการจัดรถ</span>':'')}</div></div>`;
+      const vanRow = `<div style="display:flex;align-items:center;gap:7px;height:44px;box-sizing:border-box;padding:0 16px 0 21px;background:#F3FBF7;overflow-x:auto;flex-wrap:nowrap"><span class="t2-boatstrip-lbl" style="color:#0F6E56;flex:none">&#128656; Vans</span>${vanBtns}<div class="t2-boats" style="flex-wrap:nowrap;gap:9px">${vcards||''}${extra.join('')||(!vcards?'<span style="font-size:11px;color:#8a8a82;white-space:nowrap">ยังไม่มีการจัดรถ</span>':'')}</div></div>`;
       let groupRow;
       if(_selTrip.length){
         const _sz=_selTrip[0].zone;
@@ -82826,7 +83346,17 @@ function bkV2RenderTab2(){
       } else {
         groupRow=`<div style="display:flex;align-items:center;gap:8px;height:44px;box-sizing:border-box;padding:0 16px 0 21px;background:#F7FAFE;border-top:1px solid #E6EEF7;color:#8a8a82;font-size:12px"><span style="color:#185FA5;font-weight:700;flex:none">&#9745; Grouping</span> ติ๊กแถวที่จะไปด้วยกัน แล้วกดจับกลุ่ม</div>`;
       }
-      vanStrip = `<div class="bkv2-vanstrip" style="position:sticky;top:var(--t2-vangroup-top,52px);z-index:40;box-shadow:0 3px 8px rgba(0,0,0,.08)">${vanRow}${groupRow}</div>`;
+      /* §btVanCard · ไม่วางแถบเหนือตารางแล้ว · ส่งชิ้นส่วนขึ้นไปประกอบเป็นการ์ดบนหัว
+         คืนพื้นที่ให้ตาราง 88px และไม่ต้องมองสองที่ */
+      void vanRow;
+      _btVanParts.push({ rid,
+        nm: esc((route&&route.name)||rid),
+        dep: esc(dep||''),
+        col: (bkV2RouteFamily(rid)||{}).color || '#8b909c',
+        n: Object.keys(vagg).length,
+        cards: vcards, extra: extra.join(''), btns: vanBtns,
+        grpRow: groupRow, sel: _selTrip.length>0 });
+      vanStrip = '';
     }
     // ── Re-confirm roll-up strip ──
     let rcStrip='';
@@ -82888,16 +83418,51 @@ function bkV2RenderTab2(){
         ${(grp.length===0 && !_pendRows.length) ? '<div class="t2-nobk">No bookings yet · seats held by lock above</div>' : zoneTable}
         ${ghostBlock}
         ${cxlBlock}
-        ${boatMode?'':boatStrip}
+        ${/* §btTune · แถบ "BOATS · ไกด์ · อาหารรายลำ" ท้ายตารางถูกตัดออก
+              แถว PREP ในการ์ด Boats running บนหัวหน้าบอกยอดรวมของทริปครบแล้ว
+              (ภาษาไกด์ / มื้ออาหาร / แพ้อาหาร / เรือหางยาว)
+              รายละเอียดแยกรายลำดูได้ที่ Boat Operation และใบงานไกด์ */''}
         </div>
       </div>`;
   }).join('');
+
+  /* ══ §btVanCard · ประกอบการ์ด VANS ════════════════════════════════════════
+     เลือกโปรแกรมแล้ว = ทริปเดียว ชิปเรียงเป็นตาราง 3 คอลัมน์
+     ยังไม่เลือก = ไล่ทีละทริป มีหัวเล็ก ๆ คั่น (ข้อมูลจริง: รถต่อวันมัธยฐาน 8 มากสุด 17)
+     กรอบทั้งใบเป็นสีเข้ม · ตอนมีแถวถูกเลือกเปลี่ยนเป็นน้ำเงินทั้งใบ
+     แก้เรื่องปุ่มจับกลุ่มอยู่ไกลจากแถวที่เพิ่งติ๊ก ตาจะได้เด้งไปเจอเอง            */
+  let _btVanCard = '';
+  if(vanMode){
+    const _one = _btVanParts.length===1;
+    const _anySel = _btVanParts.some(p=>p.sel);
+    const _nVan = _btVanParts.reduce((n,p)=>n+p.n,0);
+    const _body = _btVanParts.length
+      ? _btVanParts.map(p=>(_one?'':`<span class="bt-vtrip"><i style="background:${p.col}"></i><b style="color:${p.col}">${p.nm}</b><span>${p.dep}${p.n?(' &middot; '+p.n+' van'+(p.n===1?'':'s')):''}</span></span>`)+p.cards+p.extra).join('')
+      : '<span class="bt-none2">No van assigned yet</span>';
+    const _grpSrc = _btVanParts.filter(p=>p.sel);
+    const _grpUse = _grpSrc.length ? _grpSrc : _btVanParts.slice(0,1);
+    const _grpMulti = _grpUse.length>1;
+    const _grp = _btVanParts.length ? _grpUse.map(p=>(_grpMulti
+      ? `<span class="bt-vgrpt"><i style="background:${p.col}"></i><b style="color:${p.col}">${p.nm}</b><em>${p.dep}</em></span>`
+      : '')+p.grpRow).join('') : '';
+    _btVanCard = `<div class="bt-c bt-vans${_anySel?' act':''}">
+      <div class="bt-ct">VANS<span class="bt-cnt">${_nVan} van${_nVan===1?'':'s'}${_one?'':' &middot; '+_btVanParts.length+' trips'}</span>
+        ${_btVanParts.length===1&&_btVanParts[0].btns?_btVanParts[0].btns:''}<span class="sp"></span></div>
+      <div class="bt-vgrid">${_body}</div>
+      <div class="bt-vgrp">${_grp}</div></div>`;
+  }
 
   const style = `<style id="bkv2-t2-style">
     .t2-shell{display:flex;align-items:flex-start}
     .t2-side{width:226px;flex:none;background:var(--white);border-right:1px solid var(--border);padding:16px 14px;position:sticky;top:0;align-self:stretch;min-height:100%}
     .t2-main{flex:1;min-width:0;background:var(--btband,#EDE3E3)}
     .t2-shell{background:var(--btband,#EDE3E3)}
+    /* ══ §btTop · ไล่ที่ว่างด้านบนออก ═══════════════════════════════════════
+       วัดจริง: ขอบบนของแถบเมนูซ้ายอยู่ที่ 6px แต่เนื้อหาเริ่มที่ 22px
+       (main มี padding-top:22) · เยื้องกัน 16px เห็นชัดเวลาวางเทียบกัน
+       ดันแถบแท็บขึ้น 16 ให้ขอบบนตรงกัน แล้วบีบระยะที่เหลืออีกสองจุด
+       สไตล์ก้อนนี้อยู่ในผลลัพธ์ของหน้า By-trip เท่านั้น หน้าอื่นไม่โดน       */
+    .bkv2-topcard{margin-top:-16px !important;margin-bottom:4px !important}
     #view-booking .bkv2-bodycard{overflow:visible}
     .t2-hd{padding:9px 14px;background:var(--white);border-bottom:1px solid var(--border);box-shadow:0 2px 6px -3px rgba(15,23,42,.18);position:relative;z-index:45}
     .t2-hd-top{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
@@ -82955,7 +83520,10 @@ function bkV2RenderTab2(){
     .t2-puempty{font-size:11px;color:var(--ink-faint);font-style:italic;padding:4px 2px}
     /* §btGap · เดิมเว้นบน 16 + ตัวแถบหัวเว้นล่าง 10 + การ์ดทริปเว้นล่าง 8 = ห่างกันเกินไป
        ตอนนี้หัวกับตารางเป็นพื้นสีเดียวกันแล้ว ระยะห่างที่ต้องมีคือขอบการ์ดอย่างเดียว */
-    .t2-wrap{padding:8px 8px 40px}
+    /* §btScroll · padding-top ต้องเป็น 0 · เนื้อที่ไถผ่านยังถูกวาดในเขต padding
+       เศษแถวจะโผล่เหนือหัวตารางที่ตรึงไว้ */
+    .t2-wrap{box-sizing:border-box;padding:0 8px 40px;overflow:auto;max-height:var(--bt-wraph,72vh);
+      overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
     .t2-trip{background:transparent;border:none;border-radius:0;margin-bottom:12px;overflow:visible}
     .t2-tripcard{background:var(--white);border:1px solid var(--border);border-left:5px solid var(--fam);border-radius:14px;overflow:hidden;margin-bottom:0}
     /* การ์ดหัวทริปว่างแล้ว (ชื่อทริปย้ายลงตาราง) · ไม่ต้องกินที่เป็นกล่องเปล่า */
@@ -83202,22 +83770,27 @@ function bkV2RenderTab2(){
     .t2-zdot{width:8px;height:8px;border-radius:50%}
     .t2-zn{font-size:12px;font-weight:700}
     .t2-zc{font-size:11px;color:var(--ink-soft);font-family:'DM Mono',monospace}
-    /* ══ §btStick · กล่องตารางมีตัวเลื่อนของตัวเองทั้งสองแกน ═══════════════════
-       หัวตารางกับคอลัมน์ที่แช่แข็งไว้จะตรึงกับกล่องนี้ · ตรึงกับหน้าไม่ได้เพราะ
-       ตารางกว้างกว่าจอ ต้องมีตัวเลื่อนแนวนอน แล้ว overflow กลืน sticky ไปหมด
-       ความสูงกล่อง = ความสูงจอ ลบหัวที่ตรึงไว้ · ตั้งจาก JS หลัง render
-       (วัดจริงเพราะหัวสูงไม่เท่ากันตามความกว้างจอและจำนวนทริป)                */
-    .t2-tblscroll{overflow:auto;position:relative;z-index:0;
-      max-height:var(--bt-tblh,68vh);overscroll-behavior:contain;
-      -webkit-overflow-scrolling:touch}
-    table.t2-mtbl{border-collapse:collapse;width:100%;min-width:1180px;font-size:12px}
+    /* ══ §btScroll · ตัวเลื่อนเดียวสำหรับทั้งวัน ═════════════════════════════
+       ก่อนหน้านี้ให้ตารางของ "แต่ละทริป" มีกล่องเลื่อนของตัวเอง · วันที่มีหลายทริป
+       เลยมีตัวเลื่อนหลายตัวซ้อนกับตัวเลื่อนของหน้า · พอไถหน้าลงมา กล่องของทริปที่ 2
+       เลื่อนตามหน้าไปทั้งกล่อง หัวตารางที่ตรึงกับกล่องจึงหลุดออกนอกจอ
+       เห็นตารางที่ไม่มีหัวคอลัมน์ · แถมพอไถในกล่องจนสุดแล้วหน้าไม่ไถต่อ (รู้สึกค้าง)
+
+       ของใหม่: ทั้งวันอยู่ในกล่องเดียว (.t2-wrap) · หน้าไม่เลื่อน กล่องเลื่อนแทน
+       หัวตารางของทุกทริปตรึงกับกล่องนี้ ไถผ่านทริปไหนหัวของทริปนั้นขึ้นมาแทนเอง
+       คอลัมน์ซ้ายที่แช่แข็งไว้ก็เกาะกล่องนี้ ทุกทริปเลื่อนแนวนอนพร้อมกัน           */
+    .t2-tblscroll{overflow:visible;position:relative;z-index:0}
+    /* §btScroll · border-collapse:collapse ทำให้ position:sticky บน th ไม่ทำงาน
+       (หัวตารางไถหายไปทั้งที่ตั้ง sticky ไว้) · ต้องเป็น separate + border-spacing:0
+       เหมือนที่ตารางเช็คอินรถ/หน้าท่าใช้อยู่ · เส้นขอบวาดที่ td/th อยู่แล้วจึงไม่ซ้อน */
+    table.t2-mtbl{border-collapse:separate;border-spacing:0;width:100%;min-width:1180px;font-size:12px}
     /* §t2Hdr · หัวตารางเดิมเป็นเทาอ่อน 9px บนพื้นขาว · จางกว่าเนื้อตารางที่มันกำกับอยู่
        ตารางนี้กว้างกว่าจอต้องเลื่อนแนวนอน คนเลื่อนไปกลางตารางแล้วไม่รู้ว่าคอลัมน์ไหนคืออะไร
        ทำเป็นพื้นทึบ · sticky อยู่แล้ว พอเลื่อนลงหัวยังติดอยู่และอ่านออก
        §btHdr (2026-09-04) · เดิมเป็นน้ำเงินกรมท่า ซึ่งเป็นสีเดียวในหน้าที่ไม่เข้าชุด
        หลังทำหัวหน้าใหม่เป็นโทนอุ่น (ทราย/ชมพูตามสีโปรแกรม) · เปลี่ยนเป็นทรายเข้ม
        ยังทึบและอ่านออกเหมือนเดิม แต่ไม่ตัดกับหน้าเป็นแถบดำกลางจอ */
-    table.t2-mtbl th{text-align:left;font-size:9.5px;font-weight:800;color:#4A3C3C;text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;white-space:nowrap;position:sticky;top:0;z-index:35;background:#EDE6E6;box-shadow:inset 0 -2px 0 #C4B2B2}
+    table.t2-mtbl th{text-align:left;font-size:9.5px;font-weight:800;color:#4A3C3C;text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;white-space:nowrap;position:sticky;top:var(--t2-head-top,0px);z-index:35;background:#EDE6E6;box-shadow:inset 0 -2px 0 #C4B2B2}
     /* §btHdr · เส้นแบ่งคอลัมน์ · ตารางกว้างมาก ไม่มีเส้นตั้งแล้วตาไล่ข้ามคอลัมน์หลุด */
     /* §btCell · ของเดิมเว้นบน-ล่างช่องละ 13px · พอป้ายในช่องลูกค้าตกเป็นสองบรรทัด
        แถวสูงเกือบ 60px เห็นได้ 8 แถวต่อจอ · ลดเหลือ 6px ตามที่วางไว้ใน mockup
@@ -83321,6 +83894,12 @@ function bkV2RenderTab2(){
     .t2-mtbl tr.t2-novan td:first-child{border-left:2px solid #E05B5B}
     .t2-mtbl tr.t2-novan td:last-child{border-right:2px solid #E05B5B}
     .t2-mtbl tr.t2-novan-last td{border-bottom:2px solid #E05B5B}
+    /* ══ §btVCell2 · บีบช่องจัดการกลุ่มรถให้แคบที่สุดเท่าที่ยังกดได้ ═══════════
+       และในโหมดจัดรถไม่ต้องกางดูชื่อผู้โดยสารคนอื่น · คนจัดรถดูชื่อหัวใบกับ
+       จำนวนคนพอ · ตัดปุ่มกางออก ช่องชื่อเหลือบรรทัดเดียว แถวเตี้ยลงอีก        */
+    .t2-mtbl th.t2-gwrap,.t2-mtbl td.t2-gwrap{width:184px;max-width:184px}
+    .t2-mtbl.t2-van .t2-more,.t2-mtbl.t2-van .t2-leadonly{display:none}
+    .t2-mtbl.t2-van td.t2-cu{max-width:186px;width:186px}
     /* §btLkHit · แถวที่ดึงที่นั่งจากล็อคที่กำลังเลือก · ใช้ภาษาเดียวกับแถวที่ถูกติดธงอยู่แล้ว
        (กรอบรอบแถว ไม่ทาสีทับ) เพื่อไม่กลบสีเรือ/กรุ๊ปที่แถวมีอยู่ */
     .t2-mtbl tr.t2-lkhit>td{border-top:2px solid #C0392B;border-bottom:2px solid #C0392B}
@@ -83343,8 +83922,8 @@ function bkV2RenderTab2(){
     /* §btStick · เดิม top:-22px คือให้หัวไถขึ้นไป 22px ก่อนค่อยหยุด · ทำให้ขอบบน
        ไม่ตรงกับขอบบนของแถบเมนูซ้าย · ชิดขอบเลย */
     .bt-pkh{position:sticky;top:0;z-index:60;background:var(--btband,#E9E7E3);
-      padding:10px 6px 12px;margin-bottom:0}
-    .bt-hdtop{position:relative;display:flex;align-items:center;gap:13px;padding:0 8px 10px}
+      padding:6px 6px 4px;margin-bottom:0}
+    .bt-hdtop{position:relative;display:flex;align-items:center;gap:13px;padding:0 8px 7px}
     .bt-arw{width:27px;height:27px;flex:none;border:1px solid rgba(0,0,0,.13);background:#fff;border-radius:9px;
       display:flex;align-items:center;justify-content:center;color:#7d7a74;font-size:14px;cursor:pointer;font-family:inherit;line-height:1}
     .bt-dnum{font-size:32px;font-weight:800;letter-spacing:-1px;line-height:1;font-family:'DM Mono',monospace}
@@ -83380,41 +83959,49 @@ function bkV2RenderTab2(){
       .bt-pair,.bt-pair2{grid-template-columns:minmax(0,1fr)}
     }
     .bt-c{background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:12px;overflow:hidden}
+    /* §btTune · หัวการ์ดเคยดำเหมือนกันหมดสี่ใบ ตาต้องอ่านคำถึงจะรู้ว่ากรอบไหนเรื่องอะไร
+       ให้สีประจำเรื่องไปเลย · ฟ้า=โปรแกรม แดง=เรือ ส้มแดง=ล็อคที่นั่ง ม่วง=Notice */
     .bt-ct{font-size:10px;font-weight:800;letter-spacing:.07em;color:#1F2124;text-transform:uppercase;
-      padding:8px 12px 5px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+      padding:7px 11px 5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+    .bt-prog>.bt-ct,.bt-prog>.bt-ct .big{color:#12518F}
+    .bt-boat>.bt-ct{color:#A32D2D}
+    .bt-lockc>.bt-ct{color:#9A3B21}
+    .bt-notice>.bt-ct{color:#5B289A}
     .bt-ct .big{font-size:13.5px;font-weight:800;letter-spacing:0;text-transform:none}
     .bt-ct .sp{margin-left:auto}
     .bt-cnt{background:#EFEBE7;color:#403833;border-radius:999px;padding:2px 9px;font-size:10.5px;font-weight:800;letter-spacing:0}
     .bt-cnt.over{background:#FBEAE7;color:#A32D2D}
-    .bt-daytot{font-size:11px;color:#6b6660;font-weight:600;letter-spacing:0;text-transform:none;text-align:right;line-height:1.25}
+    /* §btTune · พอชิปท่ามาอยู่แถวเดียวกัน ยอดรวมวันตกบรรทัด · .sp เดิมกินที่ว่าง
+       ไปแล้วบรรทัดล่างจึงชิดซ้าย · ให้ยอดรวมดันตัวเองไปขวาไม่ว่าจะอยู่บรรทัดไหน */
+    .bt-daytot{margin-left:auto;font-size:10.5px;color:#6b6660;font-weight:600;letter-spacing:0;text-transform:none;text-align:right;line-height:1.25}
     .bt-daytot b{font-family:'DM Mono',monospace;font-size:12.5px;font-weight:800;color:#3a3a36}
     .bt-daytot i{display:block;font-style:normal;font-family:'DM Mono',monospace;font-size:9.5px;color:#a3a099;font-weight:600}
     /* โปรแกรมวันนี้ */
-    .bt-pierrow{display:flex;align-items:center;gap:7px;padding:0 10px 7px}
     .bt-seg{display:inline-flex;border:1px solid #E0DBD5;border-radius:999px;overflow:hidden;background:#fff}
-    .bt-seg-b{font-size:11px;font-weight:700;padding:5px 11px;color:#5b6472;background:transparent;border:none;cursor:pointer;font-family:inherit}
+    .bt-seg-b{font-size:10px;font-weight:700;padding:3px 8px;color:#5b6472;background:transparent;border:none;cursor:pointer;font-family:inherit;letter-spacing:0;text-transform:none}
     .bt-seg-b.on{background:#22262e;color:#fff}
-    .bt-clear{margin-left:auto;font-size:10.5px;font-weight:700;color:#A32D2D;background:#fff;
-      border:1px solid #E6C9C3;border-radius:7px;padding:4px 9px;cursor:pointer;font-family:inherit}
+    .bt-clear{font-size:9.5px;font-weight:700;color:#A32D2D;background:#fff;letter-spacing:0;text-transform:none;
+      border:1px solid #E6C9C3;border-radius:6px;padding:3px 7px;cursor:pointer;font-family:inherit}
     /* §btFix · ต่อไปทริปจะเยอะขึ้น · ถ้าปล่อยให้การ์ดยืดตามจำนวนทริป หัวจะสูงขึ้น
        เรื่อย ๆ แล้วกินพื้นที่ตารางไปหมด (แถมชั้นที่ตรึงต้องคำนวณใหม่ทุกครั้ง)
        ล็อกความสูงไว้ที่ราว 6 บรรทัด เกินนั้นไถในการ์ดเอง */
-    .bt-pgbody{padding-bottom:8px;overflow:auto;min-height:0;max-height:196px}
+    /* §btTune · เว้นก้นกล่อง · ของเดิมแถวสุดท้ายชนขอบล่างพอดี ดูเหมือนโดนตัด */
+    .bt-pgbody{padding-bottom:10px;overflow:auto;min-height:0;max-height:214px;scroll-padding-bottom:12px}
     .bt-tgl{max-height:196px}
     .bt-blist{max-height:196px;overflow:auto}
-    .bt-pgf{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:9px;margin:0 8px 5px;
+    .bt-pgf{display:flex;align-items:center;gap:8px;padding:5px 10px;border-radius:8px;margin:0 8px 3px;
       box-shadow:inset 4px 0 0 var(--e);cursor:pointer}
     .bt-pgf.on{box-shadow:inset 4px 0 0 var(--e),0 0 0 1.5px var(--e)}
     .bt-pgf .ar{color:#a6a29b;font-size:10px}
     .bt-pgf .dot{width:9px;height:9px;border-radius:50%;background:var(--e);flex:none}
-    .bt-pgf .nm{min-width:0;font-size:14px;font-weight:800;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .bt-pgf .n{font-family:'DM Mono',monospace;font-size:14px;font-weight:700;color:#4a4a45}
+    .bt-pgf .nm{min-width:0;font-size:12.5px;font-weight:800;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .bt-pgf .n{font-family:'DM Mono',monospace;font-size:12.5px;font-weight:700;color:#4a4a45}
     .bt-pgf .sp{margin-left:auto;display:flex;gap:6px}
-    .bt-tag{border-radius:7px;padding:2px 9px;font-size:10.5px;font-weight:700;white-space:nowrap}
+    .bt-tag{border-radius:6px;padding:1px 7px;font-size:9.5px;font-weight:700;white-space:nowrap}
     .bt-tag.run{background:#E6F5EC;color:#0F6E56}
     .bt-tag.no{background:#FBEDEA;color:#A32D2D}
-    .bt-pgv{display:flex;align-items:center;gap:8px;padding:5px 11px 5px 26px;font-size:11.5px;color:#5b6472;
-      margin:0 8px;white-space:nowrap;cursor:pointer;border-radius:8px}
+    .bt-pgv{display:flex;align-items:center;gap:7px;padding:3px 10px 3px 24px;font-size:11px;color:#5b6472;
+      margin:0 8px;white-space:nowrap;cursor:pointer;border-radius:7px}
     .bt-pgv:hover{background:#FAF8F5}
     .bt-pgv.on{background:#EFEAFB;box-shadow:inset 3px 0 0 #5B289A}
     .bt-pgv.off{opacity:.6;cursor:default}
@@ -83423,7 +84010,7 @@ function bkV2RenderTab2(){
     .bt-seat{font-family:'DM Mono',monospace;font-size:11px;color:#8a8a82}
     .bt-seat b{color:#3a3a36;font-weight:800}
     .bt-lk{font-size:10px;font-weight:700;color:#8A5B00;background:#FBF0DA;border-radius:6px;padding:1px 6px}
-    .bt-free{font-size:10.5px;font-weight:800;border-radius:7px;padding:2px 9px;white-space:nowrap}
+    .bt-free{font-size:10px;font-weight:800;border-radius:6px;padding:1px 7px;white-space:nowrap}
     .bt-free.ok{background:#DCF4E8;color:#0C6B47}
     .bt-free.low{background:#FAEEDA;color:#854F0B}
     .bt-free.full{background:#FCEBEB;color:#A32D2D}
@@ -83473,7 +84060,12 @@ function bkV2RenderTab2(){
     .bt-tbc i{width:7px;height:7px;border-radius:50%;flex:none}
     .bt-tbc s{text-decoration:none;font-family:'DM Mono',monospace;font-size:10.5px;font-weight:700;color:#8a857e}
     .bt-tbc.over s{color:#A32D2D}
-    .bt-tgfoot{padding:7px 12px 9px;border-top:1px solid #F2EEE9;font-size:10px;color:#948f88;text-align:center}
+    .bt-tgfoot{padding:6px 12px 8px;border-top:1px solid #F2EEE9;font-size:10px;color:#948f88;text-align:center}
+    /* §btTune · ไกด์ / อาหาร / เรือหางยาว · ของที่ต้องสั่งล่วงหน้า ควรเห็นตั้งแต่เปิดหน้า */
+    .bt-prep{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:6px 10px 9px;
+      border-top:1px dashed #EAE5DE;margin-top:auto}
+    .bt-prep .l{font-size:8.5px;font-weight:800;letter-spacing:.08em;color:#a09a92;text-transform:uppercase;flex:none}
+    .bt-pc{font-size:9.5px;font-weight:700;border-radius:5px;padding:1px 7px;white-space:nowrap}
     /* โหมด + ค้นหา */
     .bt-col3{display:flex;flex-direction:column;gap:9px}
     .bt-pair{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:9px;align-items:stretch;flex:none}
@@ -83501,8 +84093,12 @@ function bkV2RenderTab2(){
     .bt-mc.on .s{color:rgba(255,255,255,.86)}
     .bt-mc.on .n{background:rgba(255,255,255,.2);color:#fff}
     .bt-mc.dis{opacity:.45;cursor:not-allowed}
-    .bt-mc .x{margin-left:7px;flex:none;width:19px;height:19px;border-radius:50%;background:rgba(255,255,255,.22);
-      color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center;font-weight:800}
+    .bt-mc .x{margin-left:5px;flex:none;width:16px;height:16px;border-radius:50%;background:rgba(255,255,255,.22);
+      color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;font-weight:800}
+    /* §btTune · การ์ดที่เปิดอยู่มีปุ่มกากบาทเพิ่มมา ชื่อโหมดเลยถูกบีบจนขาด ("V…")
+       สีทึบกับกากบาทบอกอยู่แล้วว่ากำลังใช้โหมดนี้ · ซ่อนคำบรรยายใต้ชื่อตอนเปิด */
+    .bt-mc.on .s{display:none}
+    .bt-mc.on .t{font-size:13px}
     .bt-srow{display:flex;gap:7px;padding:9px 10px 10px;align-items:stretch}
     .bt-sbox{flex:1;display:flex;align-items:center;gap:7px;border:1px solid #E4DCD5;border-radius:10px;
       padding:4px 10px;background:#fff;min-width:0}
@@ -83544,18 +84140,56 @@ function bkV2RenderTab2(){
     .bt-lkfoot .hint{margin-left:auto;font-size:9.5px;color:#a89a9a;white-space:nowrap}
     /* Notice */
     .bt-notice{border-left:4px solid #6D28D9}
-    .bt-ncb{display:flex;flex-direction:column;gap:6px;padding:2px 10px 10px;overflow:auto;min-height:0}
-    .bt-nc{display:flex;gap:8px;border-radius:9px;padding:7px 10px;font-size:11.5px;line-height:1.45}
+    /* ══ §btVanCard · การ์ดรถในโหมดจัดรถ ═══════════════════════════════════
+       กรอบทั้งใบเป็นสีเข้ม ไม่ใช่ขีดข้างเดียว · ตอนติ๊กแถวเปลี่ยนทั้งใบเป็นน้ำเงิน */
+    .bt-vans{flex:1 1 auto;display:flex;flex-direction:column;border:2px solid #0F6E56;
+      max-height:268px;min-height:0;overflow:hidden;
+      box-shadow:0 0 0 2px rgba(15,110,86,.14);transition:border-color .15s,box-shadow .15s}
+    .bt-vans>.bt-ct,.bt-vans>.bt-vgrp{flex:none}
+    .bt-vans>.bt-ct{color:#0C6B47;background:#F1FBF6;border-bottom:1px solid #DFF0E8}
+    .bt-vans.act{border-color:#185FA5;box-shadow:0 0 0 3px rgba(24,95,165,.28)}
+    .bt-vans.act>.bt-ct{color:#12518F;background:#EEF5FC;border-bottom-color:#D8E6F5}
+    .bt-vgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;
+      padding:7px 9px 8px;overflow-y:auto;overflow-x:hidden;min-height:56px;max-height:196px;
+      flex:1 1 auto;align-content:start;overscroll-behavior:contain}
+    .bt-vgrid::-webkit-scrollbar{width:8px}
+    .bt-vgrid::-webkit-scrollbar-thumb{background:#CFE3D8;border-radius:4px}
+    .bt-vgrid>*{min-width:0}
+    .bt-vtrip{grid-column:1/-1;display:flex;align-items:center;gap:7px;padding:3px 2px 1px}
+    .bt-vtrip i{width:8px;height:8px;border-radius:50%;flex:none}
+    .bt-vtrip b{font-size:10.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .bt-vtrip span{font-size:9px;color:#948f88;font-weight:600;white-space:nowrap}
+    .bt-vgrp{border-top:1px solid #E4EFE9}
+    /* แถบ Grouping เดิมสูง 44px ตายตัว · ในการ์ดให้ยืดตามเนื้อหาและตัดขอบซ้ายทิ้ง */
+    .bt-vgrp>div{height:auto !important;min-height:46px;padding:6px 10px !important;
+      border-top:0 !important;flex-wrap:nowrap !important;overflow-x:auto !important;
+      overflow-y:hidden !important;overscroll-behavior:contain}
+    .bt-vgrp>div+div{border-top:1px dashed #E4EFE9 !important}
+    /* ป้ายชื่อทริปเหนือแถบจับกลุ่ม · โผล่เฉพาะตอนติ๊กข้ามทริปจนมีหลายแถบ */
+    .bt-vgrpt{display:flex;align-items:center;gap:6px;padding:6px 11px 0;font-size:10px}
+    .bt-vgrpt i{width:7px;height:7px;border-radius:50%;flex:none}
+    .bt-vgrpt b{font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .bt-vgrpt em{font-style:normal;font-size:9px;color:#8d97a4;font-weight:600;flex:none}
+    .bt-vgrp>div+.bt-vgrpt{border-top:1px dashed #D8E6F5;margin-top:3px}
+    /* §btTune · Notice เล็กลงทั้งบล็อก · เป็นของที่อ่านผ่าน ๆ ไม่ใช่ตัวเลขที่ต้องเพ่ง */
+    .bt-ncb{display:flex;flex-direction:column;gap:4px;padding:2px 9px 8px;overflow:auto;min-height:0}
+    .bt-nc{display:flex;gap:7px;border-radius:8px;padding:5px 8px;font-size:10.5px;line-height:1.4}
     .bt-nc .i{flex:none;font-weight:800}
-    .bt-nc i{display:block;font-style:normal;font-size:10.5px;color:#7a8087;font-weight:400;margin-top:1px}
+    .bt-nc i{display:block;font-style:normal;font-size:9.5px;color:#7a8087;font-weight:400;margin-top:1px}
     .bt-nc.warn{background:#FDF6E9;color:#7A4A00}
     .bt-nc.ok{background:#F0F9F4;color:#0F6E56}
     /* แถบเตือนเดิมสองตัวถูกยกมาไว้ในการ์ด Notice · บีบให้พอดีกล่อง */
     /* §btUnit · แถบเตือนเดิมเป็นชมพูแดง · ในการ์ด Notice มันเป็นบล็อกสีเดียวที่หลุด
        จากโทนของการ์ด (เหลือง=ต้องทำ / เขียว=ทำแล้ว) · ปรับให้เข้าชุดกัน
        สีแดงสงวนไว้ให้เรื่องที่แก้ไม่ได้แล้ว เช่น เรือเกินความจุ */
-    .bt-ncb .t2-hd-warn{margin:0;padding:7px 10px;border-radius:9px;flex-wrap:wrap;
+    .bt-ncb .t2-hd-warn{margin:0;padding:5px 8px;border-radius:8px;flex-wrap:wrap;gap:5px;
       background:#FDF6E9;border-color:#EBD9B4}
+    .bt-ncb .t2-hd-warntxt{font-size:10px}
+    .bt-ncb .t2-hd-warnchip{font-size:9.5px;padding:2px 7px}
+    .bt-ncb .t2-hd-warnchip b{font-size:10px}
+    .bt-ncb > div[style*="F1F8F5"]{padding:4px 8px !important;gap:5px !important}
+    .bt-ncb > div[style*="F1F8F5"] span{font-size:10px !important}
+    .bt-ncb > div[style*="F1F8F5"] button{font-size:9.5px !important;padding:2px 7px !important}
     .bt-ncb .t2-hd-warnico{color:#B4560A}
     .bt-ncb .t2-hd-warntxt{color:#7A4A00}
     .bt-ncb > div[style*="F1F8F5"]{margin-top:0 !important}
@@ -83569,7 +84203,8 @@ function bkV2RenderTab2(){
   void filterBar;
   /* §btGap · สีของหัวต้องคุมทั้งหน้า ไม่ใช่แค่แถบหัว · ตั้งตัวแปรที่กรอบนอกสุด
      แล้วทั้งหัวและพื้นหลังใต้ตารางใช้ค่าเดียวกัน เปลี่ยนโปรแกรมก็เปลี่ยนพร้อมกันทั้งหน้า */
-  return style + `<div class="t2-shell" style="--btband:${_btBand};--btbandb:${_btBandB}"><div class="t2-main">${header}${mainBody}</div></div>`;
+  const _hdr = vanMode ? header.replace('<!--BTVANCARD-->', _btVanCard) : header;
+  return style + `<div class="t2-shell" style="--btband:${_btBand};--btbandb:${_btBandB}"><div class="t2-main">${_hdr}${mainBody}</div></div>`;
 }
 
 // ── Tab 3 · All bookings (existing Linear list) ──
@@ -85104,6 +85739,22 @@ function bkV2BumpPax(idx, paxKey, delta){
   bkV2SyncPassengers();
   bkV2Render();
 }
+/* §pkNat · ตั้งจำนวนคนไทยจริงของทริป · ไม่แตะ pax และไม่แตะราคาเลย
+   ครั้งแรกที่แตะ ต้องหล่อทั้งสี่ช่องจากแถว TH ก่อน แล้วค่อยบวก/ลบ
+   ถ้าปล่อยให้มีแค่ช่องเดียว อีกสามช่องจะกลายเป็น 0 ทันที (bkNatHas เป็นจริงแล้ว)
+   เด็กไทยที่คีย์ไว้ในแถว TH ก็จะหายไปเงียบ ๆ ทั้งที่คนกดไม่ได้ตั้งใจ */
+function bkV2BumpNat(idx, k, delta){
+  if(!_bkV2.newBooking) return;
+  const t = _bkV2.newBooking.trips[idx];
+  if(!t || !t.pax) return;
+  const px = t.pax;
+  if(!bkNatHas(t)){
+    t.nat = { ad:+px.ad_th||0, chd:+px.chd_th||0, inf:+px.inf_th||0, foc:+px.foc_th||0 };
+  }
+  const all = (+px[k+'_th']||0) + (+px[k+'_fr']||0) + (+px[k]||0);
+  t.nat[k] = Math.max(0, Math.min(all, (+t.nat[k]||0) + delta));
+  bkV2Render();
+}
 // ── Charter price · Rate (auto) vs Flexible (manual override) ──
 function bkV2SetTripCharterPriceMode(idx, mode){
   const t = _bkV2.newBooking && _bkV2.newBooking.trips[idx];
@@ -85783,6 +86434,21 @@ function _docPreCheckMatch(b, ocrText){
     if(score>=0.5) out.route={s:'match', ev:hit.join(' · ')};
     else if(score>0) out.route={s:'maybe', ev:hit.join(' · ')+' (บางส่วน)'};
     else out.route={s:'none'};
+  })();
+
+  /* §dcCot · เงินที่ต้องเก็บหน้างาน · ลืมแล้วเก็บไม่ได้อีกเลย
+     เทียบยอดในเอกสารกับยอดในระบบ · ฝั่งไหนมีแต่อีกฝั่งไม่มี ก็ต้องเตือน */
+  (function(){
+    var sys=(b.cashOnTour && +b.cashOnTour.amount>0) ? Math.round(+b.cashOnTour.amount) : 0;
+    var doc=null;
+    var mm=ocrN.match(/cash[\s\-]*on[\s\-]*(?:tour|board)\D{0,24}?([\d][\d,\.]*)/);
+    if(!mm) mm=ocrN.match(/([\d][\d,\.]*)\s*(?:thb|baht|บาท)\D{0,24}?cash[\s\-]*on[\s\-]*(?:tour|board)/);
+    if(mm){ var nRaw=String(mm[1]).replace(/,/g,'').replace(/\.00$/,''); var nv=parseFloat(nRaw); if(isFinite(nv)) doc=Math.round(nv); }
+    if(doc==null && !sys){ out.cot={s:'none'}; return; }
+    if(doc==null){ out.cot={s:'none', detail:'ระบบ '+sys.toLocaleString()+' · ไม่พบในเอกสาร'}; return; }
+    if(!sys){ out.cot={s:'mismatch', detail:'เอกสารมี '+doc.toLocaleString()+' แต่ระบบยังไม่ได้ใส่'}; return; }
+    if(doc!==sys){ out.cot={s:'mismatch', detail:'เอกสาร '+doc.toLocaleString()+' · ระบบ '+sys.toLocaleString()}; return; }
+    out.cot={s:'match', ev:doc.toLocaleString()};
   })();
 
   // payment terms
@@ -86480,6 +87146,27 @@ function _docCheckDrawer(bkId, e, rName){
   const _running=!!_docPre.running[bkId];
   const _hasImg=files.some(a=>/^image\//.test(a.mime||''));
   const _preChip=(s)=>{ const M={match:['✓ ตรง','#1B7F4B','#EAF7EF'],maybe:['~ อาจตรง','#8A6D00','#FCF3D6'],mismatch:['✕ ไม่ตรง','#B5271F','#FBE7E5'],none:['— ไม่พบในเอกสาร','#8a8a82','#F1F2EF']}; const c=M[s]||M.none; return `<span style="font-size:10px;font-weight:700;color:${c[1]};background:${c[2]};padding:1px 7px;border-radius:7px;white-space:nowrap">${c[0]}</span>`; };
+  /* §dcCot · เงินที่ต้องเก็บหน้างาน · ต้องเด่นกว่าช่องอื่นเพราะลืมแล้วเก็บไม่ได้
+     ยอดในระบบมาจากช่อง Cash on Tour ตอนสร้าง booking · ผลเทียบกับเอกสารติดมาด้วย */
+  const _cotFld = (function(){
+    const _c=b.cashOnTour||{}; const _amt=+_c.amount||0; const _r=_preRes.cot||null;
+    if(!_amt && !(_r && _r.s==='mismatch')) return '';
+    const _bad=!!(_r && _r.s==='mismatch');
+    const _txt=_amt
+      ? `<b style="font-size:14px;font-variant-numeric:tabular-nums">${(_c.currency||'THB')} ${_amt.toLocaleString()}</b>`
+        +(_c.handling==='deduct'?' <span style="font-size:10.5px;color:#8a5b00">&middot; หักจากยอดเอเยนต์</span>':'')
+        +(_c.note?`<div style="font-size:11px;color:#8a5b00;margin-top:2px">${e(_c.note)}</div>`:'')
+      : '<span style="font-size:12.5px">&mdash; ระบบยังไม่ได้ใส่ &mdash;</span>';
+    const _ev=_r ? (_r.s==='match'
+        ? '<div style="font-size:10.5px;color:#1B7F4B;margin-top:2px">&#10003; ตรงกับเอกสาร</div>'
+        : (_r.s==='mismatch'
+          ? `<div style="font-size:10.5px;color:#B5271F;font-weight:700;margin-top:2px">&#9888; ${e(_r.detail||'ไม่ตรงกับเอกสาร')}</div>`
+          : (_r.detail?`<div style="font-size:10.5px;color:#8a8a82;margin-top:2px">${e(_r.detail)}</div>`:''))) : '';
+    return `<div style="display:flex;gap:10px;padding:8px 9px;margin:6px -4px;border-radius:8px;align-items:flex-start;
+        background:${_bad?'#FDF1F0':'#FFF8E8'};border:1px solid ${_bad?'#E7B3AE':'#EAD9B0'}">
+      <div style="flex:0 0 92px;font-size:10.5px;font-weight:700;color:${_bad?'#B5271F':'#8A5B00'};text-transform:uppercase;letter-spacing:.04em;padding-top:2px">&#128176; Cash on tour</div>
+      <div style="flex:1;min-width:0;color:${_bad?'#B5271F':'#5a3b00'}">${_txt}${_ev}</div></div>`;
+  })();
   const chkHtml = DOCCHK_ITEMS.map(it=>{ const on=!!items[it.k]; const r=_preRes[it.k]; const bc=on?'#BFE3CC':(r&&r.s==='mismatch'?'#E7B3AE':(r&&r.s==='maybe'?'#E9D9A2':'#e3e6e1')); const bg=on?'#EAF7EF':(r&&r.s==='mismatch'?'#FDF1F0':'#fff');
     const evTxt=r?(r.ev?('“'+e(r.ev)+'”'):(r.detail?e(r.detail):'')):'';
     return `<label style="display:flex;align-items:flex-start;gap:9px;padding:7px 9px;border:1px solid ${bc};border-radius:9px;background:${bg};cursor:pointer;margin-bottom:6px"><span onclick="docCheckToggleItem('${e(bkId)}','${it.k}')" style="width:19px;height:19px;border-radius:5px;flex:none;margin-top:1px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;${on?'background:#1B7F4B;color:#fff':'border:1.5px solid #c3c8cf;color:transparent'}">✓</span><span style="flex:1"><span style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><span style="font-size:12.5px;color:#1B2A55;font-weight:600">${e(it.label)}</span>${r?_preChip(r.s):''}</span>${evTxt?`<div style="font-size:10.5px;color:#6b7280;margin-top:2px;line-height:1.35">${evTxt}</div>`:''}</span></label>`; }).join('');
@@ -86512,6 +87199,7 @@ function _docCheckDrawer(bkId, e, rName){
             ${_sbDiff?fld('Send back',sbTxt):''}
             ${fld('Add-on',addonStr)}
             ${fld('Payment',e(payLbl))}
+            ${_cotFld}
             ${fld('Meal',dietStr)}
             ${fld('Request',e(b.notes||'-'))}
           </div>
@@ -87202,7 +87890,21 @@ function bkV2CommitBooking(status){
     dropoffAreaId: d.dropoffSame ? d.pickupAreaId : d.dropoffAreaId,
     dropoffArea: d.dropoffSame ? (pickupArea?.name || '') : (dropoffArea?.name || ''),
     dropoffHotelName: d.dropoffSame ? (d.hotelName || '') : (d.dropoffHotelName || ''),
-    altPickups: Array.isArray(d.altPickups) ? d.altPickups.map(a=>{ const _ar=(a.areaId&&typeof bkV2GetArea==='function')?bkV2GetArea(a.areaId):null; const _p=bkAltPax(a); return Object.assign({who:(a.who||'').trim(), qty:Math.max(1,bkPaxSum(_p)), areaId:a.areaId||'', area:_ar?_ar.name:'', zone:_ar?_ar.zone:((a.zone||'').trim()), place:(a.place||'').trim()}, _p); }).filter(a=>(a.who||a.place||a.areaId) && bkPaxSum(bkAltPax(a))>0) : [],   // §altPickups · บางคนรับคนละที่ · {who,qty,areaId,area,zone,place} · zone auto จาก area
+    /* §altDropFix · ฝั่งจุดส่งต้องถูกเก็บด้วย · เดิมประกอบใหม่จากรายชื่อช่องตายตัว
+       ซึ่งมีแต่ฝั่งรับ · ตั้งจุดส่งขากลับไว้แล้วกดบันทึก ค่าหายทุกครั้ง */
+    altPickups: Array.isArray(d.altPickups) ? d.altPickups.map(a=>{
+      const _ar=(a.areaId&&typeof bkV2GetArea==='function')?bkV2GetArea(a.areaId):null;
+      const _p=bkAltPax(a);
+      const _same=(a.dropSame!==false);
+      const _dar=(!_same && a.dropAreaId && typeof bkV2GetArea==='function')?bkV2GetArea(a.dropAreaId):null;
+      return Object.assign({who:(a.who||'').trim(), qty:Math.max(1,bkPaxSum(_p)), areaId:a.areaId||'',
+        area:_ar?_ar.name:'', zone:_ar?_ar.zone:((a.zone||'').trim()), place:(a.place||'').trim(),
+        dropSame:_same,
+        dropAreaId:_same?'':(a.dropAreaId||''),
+        dropArea:_dar?_dar.name:'',
+        dropZone:_same?'':(_dar?_dar.zone:((a.dropZone||'').trim())),
+        dropPlace:_same?'':((a.dropPlace||'').trim())}, _p);
+    }).filter(a=>(a.who||a.place||a.areaId) && bkPaxSum(bkAltPax(a))>0) : [],   // §altPickups · บางคนรับคนละที่ · zone auto จาก area
     guides: d.guides ? { english:!!d.guides.english, russian:!!d.guides.russian, chinese:!!d.guides.chinese, otherLang: d.guides.otherLang || '' } : { english:false, russian:false, chinese:false, otherLang:'' },
     notes: d.notes || '',
     paxType: d.paxType,
@@ -87218,6 +87920,9 @@ function bkV2CommitBooking(status){
       // who was at that moment on a boat.
       zone: t.zone,   // §OVN · เดิมเขียนทับ ovnLeg เป็น 'NoTransfer' ทำให้จัดรถขาส่งไม่ได้
       pax: { ...t.pax },
+      /* §pkNat · สัญชาติจริงของ นทท. · ไม่ใส่คีย์เลยถ้าไม่มีใครระบุ
+         คอลัมน์ NULL ทั้งสี่ = os_repo ไม่สร้าง nat กลับมาตอนโหลด = ถอยไปใช้ช่องราคาเหมือนเดิม */
+      nat: bkNatHas(t) ? { ad:+t.nat.ad||0, chd:+t.nat.chd||0, inf:+t.nat.inf||0, foc:+t.nat.foc||0 } : undefined,
       pickupTime: t.pickupTime || bkV2GetPickupTime(t.routeId, d.pickupAreaId, t.date) || '',
       bookingMode: t.bookingMode || 'seat',
       charterBoatId: t.charterBoatId || null,
