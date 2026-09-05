@@ -60184,8 +60184,13 @@ function pckHeadCard(id, title, headHtml, bodyHtml){
 }
 function pckHeadHtml(o){
   var B={};
+  /* §pckProgBt · จัดจังหวะหัวการ์ดให้เหมือนการ์ด Programmes ของหน้า By trip
+     ชื่อ · จำนวนโปรแกรม · ชิปท่า · ปุ่มล้าง อยู่ในแถวเดียวกัน
+     ปุ่มเดิมทุกตัว ทำงานเหมือนเดิมทุกอย่าง แค่เรียงใหม่ให้สองหน้าอ่านด้วยสายตาชุดเดียวกัน */
+  var _pgN=0; try{ _pgN=(pckProgData(o.date)||[]).length; }catch(_e){}
   B.prog=pckHeadCard('prog','โปรแกรมวันนี้',
-    pckProgAllBtn()+'<span class="pkh-csp"></span>'+pckPierBar(o.date),
+    (_pgN?('<span class="pkh-cnt">'+_pgN+' โปรแกรม</span>'):'')
+      +pckPierBar(o.date)+pckProgAllBtn()+'<span class="pkh-csp"></span>',
     '<div class="pkh-plist" id="pkh-plist">'+pckProgList(o.date)+'</div>');
   B.boats=pckHeadCard('boats','เรือ',
     '<span class="pkh-selnm">'+ckEsc(pckSelName(o.date))+'</span>'
@@ -60263,7 +60268,12 @@ function pckHeadCSS(){
   +H+'{margin:-22px -22px -22px -14px;padding:22px 22px 0 14px;transition:background .18s}'
   /* §pckHead10 · หน้านี้ไม่ต้องเว้นก้นหน้า · ที่เว้นย้ายเข้าไปอยู่ในกล่องเลื่อนแทน */
   +'#view-piercheckin{padding-bottom:0 !important}'
-  +H+' .pkh{position:sticky;top:-22px;z-index:60;background:#E4E7EC;'
+  /* §pkhStick · เดิม top:-22px · พอหน้าเลื่อนได้ หัวที่ตรึงจะจมขึ้นไป 22px
+     กินขอบบน 11px + แถววันที่อีก 11px = "6 SEPTEMBER 2026" ถูกเฉือนครึ่งบรรทัด
+     ดูเหมือนหัวหลุดการตรึง ทั้งที่มันตรึงอยู่ แค่ตรึงไว้เหนือขอบจอ
+     -22 มีไว้ชดเชย margin ติดลบตอนยังไม่ตรึง ซึ่งไม่เกี่ยวกับตำแหน่งตอนตรึงเลย
+     ตรึงที่ 0 · ตอนยังไม่เลื่อนตำแหน่งเท่าเดิมทุกพิกเซล (วัดแล้ว pkhTop=0 เหมือนกัน) */
+  +H+' .pkh{position:sticky;top:0;z-index:60;background:#E4E7EC;'
     +'margin:-22px -22px 10px -14px;border-radius:0;border-bottom:1px solid #DCE0E6;'
     +'padding:11px 22px 11px 14px;'
     +'box-shadow:0 6px 14px -8px rgba(15,23,42,.16)}'
@@ -60354,6 +60364,32 @@ function pckHeadCSS(){
   +H+' .pkh-boats .pck-btab .rt{font-size:9px !important}'
   +H+' .pkh-boats .pck-btab .c{font-size:9.5px !important}'
   +H+' .pkh-boats .pck-joball{width:23px !important;height:23px !important;font-size:11px !important;margin:0 !important}'
+  /* ══ §pckProgBt · แผงโปรแกรมใช้จังหวะเดียวกับการ์ด Programmes ของ By trip ══
+     สองหน้านี้อ่านข้อมูลชุดเดียวกัน คนเดินไปมาระหว่างสองหน้าตลอดวัน
+     แต่เดิมหน้าตาคนละแบบ · ตาต้องปรับใหม่ทุกครั้งที่สลับหน้า
+     ปรับเฉพาะการมองเห็น · ปุ่มและตัวจัดการเหตุการณ์เดิมทั้งหมด ไม่แตะสักตัว */
+  +H+' [data-blk="prog"] .pkh-chd{padding:8px 11px;gap:8px;flex-wrap:wrap;background:#FBFAF7;'
+    +'border-bottom:1px solid rgba(0,0,0,.07)}'
+  +H+' [data-blk="prog"] .pkh-ct{font-size:13.5px;font-weight:800;color:#1F2124;letter-spacing:0}'
+  +H+' .pkh-cnt{background:#EFEBE7;color:#403833;border-radius:999px;padding:2px 9px;'
+    +'font-size:10.5px;font-weight:800;letter-spacing:0;flex:none}'
+  +H+' [data-blk="prog"] .pkh-allbtn{border-radius:6px;padding:3px 7px;font-size:9.5px;flex:none}'
+  +H+' [data-blk="prog"] .pkh-piers button{font-size:10px;padding:3px 8px}'
+  /* แถวโปรแกรม · เตี้ยลงและมีมุมโค้งเหมือนฝั่ง By trip */
+  +H+' [data-blk="prog"] .pgf{border-bottom:0}'
+  +H+' [data-blk="prog"] .pgf-h{padding:5px 10px;gap:8px}'
+  +H+' [data-blk="prog"] .pgf-nm{font-size:12.5px;letter-spacing:0}'
+  +H+' [data-blk="prog"] .pgf-px{font-size:12.5px;font-weight:700;'
+    +'font-family:\'DM Mono\',monospace;opacity:1;color:#4a4a45}'
+  +H+' [data-blk="prog"] .pgf-cv{width:14px;height:14px}'
+  +H+' [data-blk="prog"] .pgf-vn,'+H+' [data-blk="prog"] .pgf-due,'
+    +H+' [data-blk="prog"] .pgf-st{border-radius:6px;font-size:9.5px;padding:1px 7px}'
+  /* variant · เยื้องเข้าเท่ากับฝั่ง By trip และเลิกใช้เส้นซ้าย */
+  +H+' [data-blk="prog"] .pgf-vars{padding:1px 0 4px 0}'
+  +H+' [data-blk="prog"] .pgv{padding:3px 10px 3px 24px;gap:7px;border-left:0}'
+  +H+' [data-blk="prog"] .pgv-nm{font-size:11px;font-weight:700;color:#3a3a36}'
+  +H+' [data-blk="prog"] .pgv-tm{font-size:11px;color:#5b6472;background:none;padding:0}'
+  +H+' [data-blk="prog"] .pgv-px{font-size:11px}'
   ;
 }
 function pckSheetCSS(){
