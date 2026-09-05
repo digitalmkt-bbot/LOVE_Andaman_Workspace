@@ -60415,6 +60415,15 @@ function pckSheetCSS(){
   +S+' .pcs-sub{font-size:9.5px;color:#a5a49d;margin-top:2px}'
   /* ── บีบความสูง · ป้ายและปุ่มในตารางชีทเล็กกว่าในการ์ด ── */
   +S+' .ck-pick{max-width:220px;font-size:12px;font-weight:600;line-height:1.2}'
+  /* §pckDropFit · จุดส่งแยกโดนตัดหายไปครึ่งชื่อ
+     .pck-drop เกิดมาจาก CSS ของ "การ์ด" ซึ่งเป็น inline-block กว้างได้ถึง 230px
+     พอมาอยู่ในชีท ช่องจุดรับกว้าง 230px หักช่องไฟแล้วเหลือ 214px และป้ายนี้
+     ยังไหลต่อท้ายชื่อโรงแรมในบรรทัดเดียวกัน จึงล้นออกไป 138px แล้วถูกพื้นขาว
+     ของช่องถัดไปทับ = อ่านได้แค่ครึ่งชื่อ (วัดจริง 29 จาก 29 แถวล้นทั้งหมด)
+     ในชีทให้ลงบรรทัดของตัวเองและกว้างได้ไม่เกินช่อง ชื่อยาวแค่ไหนก็อ่านครบ */
+  +S+' td.pcs-pk{white-space:normal}'
+  +S+' .pck-drop{display:block;max-width:100%;white-space:normal;'
+    +'overflow-wrap:anywhere;word-break:break-word;margin-top:4px}'
   +S+' .ck-sreq{max-width:196px;font-size:10px;line-height:1.25;padding:1px 6px}'
   +S+' .ck-area{font-size:10px;padding:1px 7px}'
   +S+' .ck-tm{font-size:11px}'
