@@ -97465,9 +97465,12 @@ function ppBookingList(A){
     if(r.veg)   want.push('มังสวิรัติ ×'+r.veg);
     if(r.vegan) want.push('วีแกน ×'+r.vegan);
     if(r.halal) want.push('ฮาลาล ×'+r.halal);
+    /* ข้อความที่พิมพ์มาเอง ไม่มีจำนวน · ยกข้อความตามจริงมาให้คนอ่านเอง
+       เดิมขึ้นว่า "แพ้ X (ใบจองไม่ได้บอกว่ากี่คน)" เหมือน X เป็นชื่ออาหาร ทั้งที่จริงเป็นข้อความดิบ ๆ */
     (r.alList||[]).forEach(function(x){
-      want.push('⚠ แพ้ '+x.name+(x.ft?' (ใบจองไม่ได้บอกว่ากี่คน)'
-        :(' ×'+x.qty+(x.all?' · ทั้งใบ':'')))); });
+      want.push(x.ft
+        ? ('⚠ ช่องแพ้อาหารเช็คอินหน้าท่า ระบุว่า : '+x.name)
+        : ('⚠ แพ้ '+x.name+' ×'+x.qty+(x.all?' · ทั้งใบ':''))); });
     var ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
     var px=[]; if(r.ad) px.push(r.ad+' ผู้ใหญ่'); if(r.chd) px.push(r.chd+' เด็ก');
     if(r.inf) px.push(r.inf+' ทารก'); if(r.foc) px.push(r.foc+' FOC');
