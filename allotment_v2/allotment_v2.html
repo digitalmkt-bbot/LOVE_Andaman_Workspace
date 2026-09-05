@@ -96381,6 +96381,88 @@ function pjGuideRow(label, name, langs){
   return pjRow(label, '<div class="v">'+poE(name)+'</div>'
     +(chips?('<span class="pj-lgs">'+chips+'</span>'):''), null);
 }
+/* §gdSel (2026-09-05) · ช่องไกด์บนการ์ดเลือกได้เองเหมือนช่องลูกเรือที่อยู่เหนือมันขึ้นไป
+   ของเดิมอ่านอย่างเดียว · เปลี่ยนไกด์ทีต้องเปิดหน้าต่าง "จัดไกด์" ทั้งที่ช่องกัปตัน/เด็กเรือ
+   บนการ์ดใบเดียวกันแค่กดเลือกในบรรทัดนั้นเลย
+   เก็บที่เดิม (goAsn ของใบสั่งงานมัคคุเทศก์) ปุ่ม "จัดไกด์" ยังใช้ได้เหมือนเดิม
+   สองทางเขียนลงที่เดียวกัน แก้ทางไหนอีกทางก็เห็น */
+/* ไกด์คนไหนถูกจ่ายให้ลำอื่นไปแล้ววันเดียวกัน · id -> ชื่อลำ
+   ไม่ห้าม (บางวันคนเดียวคุมสองลำจริง) แต่ต้องเห็นก่อนกด
+   ไม่ใช่รู้ตอนกระดาษสองใบออกมาชื่อชนกัน */
+function pjGdBusy(date, notBid){
+  var out={};
+  try{
+    var m=(typeof ctRead==='function')?ctRead('go_asn'):null; m=m||{};
+    Object.keys(m).forEach(function(k){
+      var i=k.indexOf('|'); if(i<0 || k.slice(0,i)!==date) return;
+      var b=k.slice(i+1); if(b===notBid) return;
+      ((m[k]&&m[k].g)||[]).forEach(function(id){
+        if(!id || out[id]) return;
+        var nb=(typeof getBoat==='function')?getBoat(b):null;
+        out[id]=(nb&&nb.name)||b;
+      });
+    });
+  }catch(_){}
+  return out;
+}
+/* ตัวเลือกของช่องหนึ่ง · แยกตามบทบาทแบบเดียวกับที่ใบสั่งงานแยก (§gdRole)
+   ช่อง Guide เห็นเฉพาะไกด์/ไกด์ฝึกหัด · ช่อง Trainee เห็นนักศึกษาฝึกงาน/สตาฟ
+   ไม่งั้นเลือกเสร็จแถวเด้งไปอยู่อีกกลุ่มทันทีที่วาดใหม่ */
+function pjGdOpts(sel, wantGuide, taken, busy){
+  taken=taken||{}; busy=busy||{};
+  var out='<option value="">— ว่าง —</option>', found=false;
+  var G=goGuides().filter(function(g){ return g.active!==false && goIsGuide(g)===wantGuide; });
+  G.sort(function(a,b){ return String(a.name||'').localeCompare(String(b.name||''),'th'); });
+  G.forEach(function(g){
+    if(taken[g.id] && g.id!==sel) return;      /* ลงลำนี้ไปแล้วในช่องอื่น */
+    if(g.id===sel) found=true;
+    var nm=(g.name||g.id)+(g.nick?(' ('+g.nick+')'):'');
+    var L=goLangsOf(g); if(L.length) nm+=' · '+L.join('/');
+    if(!wantGuide) nm+=' · '+goRoleT(goRoleOf(g));
+    if(busy[g.id]) nm+=' · อยู่ '+busy[g.id];
+    out+='<option value="'+poE(g.id)+'"'+(g.id===sel?' selected':'')+'>'+poE(nm)+'</option>';
+  });
+  /* คนที่เลือกไว้แล้วแต่ไม่เข้ากลุ่มนี้ (เปลี่ยนบทบาท · ปิดใช้งาน · ถูกลบ) ต้องยังเห็นชื่อ
+     ไม่งั้น select เด้งไปช่องแรกแล้วบันทึกทับของเดิมโดยไม่มีใครสั่ง */
+  if(sel && !found){
+    var g0=goGuide(sel);
+    var nm0=g0 ? ((g0.name||sel)+(g0.nick?(' ('+g0.nick+')'):'')+' · '+goRoleT(goRoleOf(g0))
+                  +(g0.active===false?' · ปิดใช้งาน':''))
+               : (sel+' (ไม่อยู่ในทะเบียนแล้ว)');
+    out+='<option value="'+poE(sel)+'" selected>'+poE(nm0)+'</option>';
+  }
+  return out;
+}
+function pjGdRow(label, bid, kind, idx, val, langs, taken, busy){
+  var chips=(langs||[]).map(function(L){ return '<span class="pj-lg">'+poE(L)+'</span>'; }).join('');
+  var call=function(v){ return 'pjGdPick(\''+poE(bid)+'\',\''+kind+'\','+idx+','+v+')'; };
+  return '<div class="pj-rw"><div class="k">'+poE(label)+'</div>'
+    +'<select onchange="'+call('this.value')+'">'+pjGdOpts(val, kind==='gd', taken, busy)+'</select>'
+    +(val?('<button class="pj-rx" onclick="'+call('&#39;&#39;')+'" title="เอาคนออกจากช่องนี้">&#10005;</button>'):'')
+    +(chips?('<span class="pj-lgs">'+chips+'</span>'):'')
+  +'</div>';
+}
+/* เขียนกลับลง goAsn · A.g เป็นรายการเดียวปนกันทั้งไกด์และสตาฟ
+   จึงแก้ "ตามตำแหน่งจริงในรายการ" ของกลุ่มนั้น ลำดับของคนกลุ่มอื่นจะได้ไม่ขยับ
+   คนแรกของ A.g คือผู้รับผิดชอบใบสั่งงาน การเรียงจึงไม่ใช่แค่ความสวยงาม */
+function pjGdPick(bid, kind, idx, val){
+  if(typeof poGuard==='function' && !poGuard()) return;
+  var A=goAsn(_poDate,bid), ids=(A.g||[]).slice(), want=(kind==='gd');
+  var posOf=function(){ var a=[]; ids.forEach(function(id,i){
+    if(goIsGuide(goGuide(id))===want) a.push(i); }); return a; };
+  var pos=posOf();
+  val=String(val||'');
+  /* เขียนช่องที่กดก่อน · ช่องที่ยังไม่มีใครอยู่ก็ต่อท้ายรายการ */
+  var tgt=(idx<pos.length)?pos[idx]:-1;
+  if(tgt>=0){ if(val) ids[tgt]=val; else ids.splice(tgt,1); }
+  else if(val){ ids.push(val); tgt=ids.length-1; }
+  /* แล้วค่อยตัดตัวซ้ำ · คนเดียวลงได้ช่องเดียว เลือกคนที่อยู่ช่องอื่นแล้ว = ย้ายมาช่องนี้
+     ต้องตัดหลังเขียน ไม่ใช่ก่อน · ตัดก่อนแล้วตำแหน่งช่องที่กดจะเลื่อน
+     กลายเป็นสลับที่กันสองคนแทนที่จะย้ายคนเดียว */
+  if(val) ids=ids.filter(function(id,i){ return i===tgt || id!==val; });
+  goAsnSet(_poDate,bid,{g:ids, other:(+A.other||0), sign:(+A.sign||0)});
+  renderPierJob();
+}
 function pjPick(bid, slot, val){
   var J=pjOf(_poDate,bid);
   if(slot==='cap') J.cap=val;
@@ -96673,18 +96755,35 @@ function pjCard(B, pier, ro){
         + (function(){
             var gd=GF.filter(function(x){ return x.guide; });
             var tr=GF.filter(function(x){ return !x.guide; });
-            var need=Object.keys(pax.langs||{});
-            /* §pjG1 · เดิมใบที่ยังไม่ได้จัดไกด์ขึ้น Guide 1 สองแถวซ้อนกัน
+            /* §gdSel · แก้ไม่ได้ (ไม่มีสิทธิ์ หรือใบปิดไปแล้ว) = อ่านอย่างเดียวเหมือนเดิม
+               §pjG1 · เดิมใบที่ยังไม่ได้จัดไกด์ขึ้น Guide 1 สองแถวซ้อนกัน
                ช่องว่างมาจากตัวเติมอยู่แล้ว ไม่ต้องใส่ช่องแรกแยกอีก */
-            var out=gd.map(function(x,i){ return pjGuideRow('Guide '+(i+1), x.name, x.langs); }).join('');
-            for(var i=gd.length; i<3; i++) out+=pjGuideRow('Guide '+(i+1),'',[]);
-            var trTxt=tr.map(function(x){ return x.name; }).join(' · ');
-            var trN=tr.length+(+GF.other||0);
-            if(!trTxt && GF.other>0) trTxt=GF.other+' คน';
-            out+=pjRow('Trainee / Staff',
-              (trTxt?('<div class="v">'+poE(trTxt)+'</div>'):'<div class="v e">—</div>')
-              +(trN>1?('<span class="pj-lgs"><span class="pj-lg" style="background:#F1EFE8;color:#6B6B63">'
-                       +trN+' คน</span></span>'):''), null);
+            if(lro){
+              var o=gd.map(function(x,i){ return pjGuideRow('Guide '+(i+1), x.name, x.langs); }).join('');
+              for(var i=gd.length; i<3; i++) o+=pjGuideRow('Guide '+(i+1),'',[]);
+              var trTxt=tr.map(function(x){ return x.name; }).join(' · ');
+              var trN=tr.length+(+GF.other||0);
+              if(!trTxt && GF.other>0) trTxt=GF.other+' คน';
+              return o+pjRow('Trainee / Staff',
+                (trTxt?('<div class="v">'+poE(trTxt)+'</div>'):'<div class="v e">—</div>')
+                +(trN>1?('<span class="pj-lgs"><span class="pj-lg" style="background:#F1EFE8;color:#6B6B63">'
+                         +trN+' คน</span></span>'):''), null);
+            }
+            /* §gdSel · ช่องเลือกได้ · เหลือช่องว่างท้ายกลุ่มไว้หนึ่งช่องเสมอ จะได้เพิ่มคนต่อได้
+               ไกด์ยังขั้นต่ำ 3 ช่องเท่าเดิม การ์ดจะได้ไม่เตี้ยลงตอนยังไม่ได้จัดใคร */
+            var taken={}; GF.forEach(function(x){ if(x.id) taken[x.id]=1; });
+            var busy=pjGdBusy(_poDate,bid);
+            var out='', k;
+            for(k=0; k<Math.max(3, gd.length+1); k++)
+              out+=pjGdRow('Guide '+(k+1), bid, 'gd', k,
+                    (gd[k]||{}).id||'', (gd[k]||{}).langs||[], taken, busy);
+            for(k=0; k<Math.max(1, tr.length+1); k++)
+              out+=pjGdRow(k?('Trainee / Staff '+(k+1)):'Trainee / Staff', bid, 'tr', k,
+                    (tr[k]||{}).id||'', (tr[k]||{}).langs||[], taken, busy);
+            /* ช่อง "อื่นๆ ที่ไม่อยู่ในทะเบียน" ของใบสั่งงาน · เป็นจำนวน ไม่มีชื่อให้เลือก
+               ตั้งได้ที่หน้าต่างจัดไกด์ · โชว์ไว้ให้ยอดบนกระดาษกับบนการ์ดตรงกัน */
+            if(+GF.other>0) out+=pjRow('อื่นๆ (ไม่มีชื่อ)',
+              '<div class="v">'+(+GF.other)+' คน</div>', null);
             return out;   /* §pjKit · ภาษาย้ายออกไปเป็นหัวข้อของตัวเองข้างล่าง */
           })()
         /* §pjKit · ภาษาที่ลูกค้าขอ · เป็นของที่ไกด์กับหน้าท่าต้องเห็นก่อนออกเรือ
