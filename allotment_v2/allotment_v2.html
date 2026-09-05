@@ -60361,7 +60361,13 @@ function pckHeadCSS(){
   +H+' .pkh-brand{position:absolute;left:50%;transform:translateX(-50%);'
     +'pointer-events:none;font-size:20px;font-weight:800;letter-spacing:.46em;padding-left:.46em;'
     +'color:#1F2124;white-space:nowrap;max-width:32vw;overflow:hidden;text-overflow:ellipsis}'
-  +H+' .pkh-brand.on{letter-spacing:-.3px;padding-left:0;font-size:21px}'
+  /* §pkhBrand2 · ตอนกรองโปรแกรมอยู่ก็ใช้ตัวหนังสือชุดเดียวกัน
+     ของเดิมสลับเป็นตัวชิด 21px แถบเดียวกันจึงมีตัวหนังสือสองแบบ สลับไปมาแล้วเหมือนคนละหน้า
+     หน้า By trip ใช้ชุดเดียวทั้งสองสถานะอยู่แล้ว (.bt-brand ไม่มีสถานะแยก)
+     เหลือแค่สีที่เปลี่ยนตามโปรแกรม
+     .tight ใส่ให้เองตอนที่วัดแล้วที่ว่างไม่พอ · ดู §pkhBrandFit */
+  +H+' .pkh-brand.on{max-width:38vw}'
+  +H+' .pkh-brand.tight{letter-spacing:-.3px;padding-left:0}'
   /* จอแคบพื้นที่ตรงกลางไม่พอ ชนกับยอดรวมฝั่งขวา · ซ่อนไปเลยดีกว่าให้ทับกัน */
   +'@media(max-width:1360px){'+H+' .pkh-brand{display:none}}'
   +H+' .pkh-kpi{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}'
@@ -61065,6 +61071,29 @@ function renderPierCheckin(){
      พื้นหน้าจางกว่าหัวหนึ่งขั้น (tint .92 vs .86) เพื่อให้ยังแยกออกว่าตรงไหนคือหัว
      ทาที่ตัว host เอง ไม่ไปยุ่ง body/.main · ออกจากหน้านี้แล้วสีหายไปเองไม่ต้องล้าง
      ตรวจแล้วช่องในตารางทาสีพื้นทึบครบทุกช่อง (464/464) สีข้างนอกจึงทะลุเข้าไปไม่ได้ */
+  /* §pkhBrandFit · แถบนี้มียอดรวมอยู่ขวามือ ต่างจากหน้า By trip ที่ขวาว่าง
+     ชื่อยาว ๆ กางด้วยระยะห่าง .46em แล้วชนยอดรวมจริง
+     (วัดที่จอ 1900px · "Phi Phi Bamboo · by Speedboat" กว้าง 578px ที่ว่างข้างละ 150px)
+     จึงวัดหลังวาดว่าทับไหม · ไม่ทับก็ปล่อยตัวห่าง ทับค่อยหุบเป็นตัวชิด
+     ชื่อยาวยังอ่านครบ ไม่ต้องแลกกับจุดไข่ปลา และไม่มีทางทับยอดรวม */
+  (function(){
+    try{
+      var _br=host.querySelector('.pkh-brand'); if(!_br) return;
+      requestAnimationFrame(function(){
+        try{
+          _br.classList.remove('tight');
+          var _day=host.querySelector('.pkh-day'); if(!_day) return;
+          var _dr=_day.getBoundingClientRect(), _mid=(_dr.left+_dr.right)/2;
+          var _l=host.querySelector('.pkh-sp'), _r=host.querySelector('.pkh-kpi');
+          var _lx=_l?_l.getBoundingClientRect().left:_dr.left;
+          var _rx=_r?_r.getBoundingClientRect().left:_dr.right;
+          /* ทดสอบการทับตรง ๆ · ครึ่งความกว้างจากกึ่งกลางต้องไม่ล้ำของสองข้าง เว้นช่องไฟ 8px */
+          var _half=_br.scrollWidth/2;
+          if((_mid+_half > _rx-8) || (_mid-_half < _lx+8)) _br.classList.add('tight');
+        }catch(_e){}
+      });
+    }catch(_e){}
+  })();
   (function(){
     var _c=pckSelColor(), _b=_c?pckBandBase(_c):null;
     host.style.background=_b?pckTint(_b,.86):'#EAECF0';
