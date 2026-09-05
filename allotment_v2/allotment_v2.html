@@ -22981,6 +22981,56 @@ function flIssueSet(ds,bid,itemId,val){
   _FL_IS=A; try{ _FL_IS_SRC=laBlob().fl_issue||''; }catch(_){}
   flRenderDR();
 }
+/* ══ §drExtra · ของจิปาถะที่เบิกเฉพาะลำ เฉพาะวัน ═════════════════════════
+   ต่างจาก fl_issue (คอลัมน์ถาวรของท่า · ของที่เบิกแทบทุกวัน จึงคุ้มที่จะมีคอลัมน์)
+   ตัวนี้คือของที่นาน ๆ ครั้ง เช่น "ดิงกี้ · น้ำมัน 20 ลิตร" ตั้งคอลัมน์ไว้ก็ว่างทั้งท่า
+   เก็บเป็นรายการในแถวนั้นแทน · โครง { 'วันที่|เรือ': [{id,n,q,u}] }
+   ชื่อที่เคยพิมพ์จะถูกเสนอให้เลือกครั้งถัดไป จะได้ไม่พิมพ์คนละแบบทุกวัน */
+function flExtraAll(){ return _flJson('fl_extra')||{}; }
+function flExtraGet(ds,bid){
+  var a=flExtraAll()[flWaterKey(ds,bid)];
+  return Array.isArray(a)?a:[];
+}
+function flExtraSaveMap(A){
+  /* ตัดของเก่ากว่า 120 วันทิ้ง · เก็บยาวกว่าไฮไลต์ใบงานรถเพราะนี่คือของที่ใช้ทำบัญชี */
+  try{
+    var cut=new Date(); cut.setDate(cut.getDate()-120);
+    var cs=cut.getFullYear()+'-'+String(cut.getMonth()+1).padStart(2,'0')+'-'+String(cut.getDate()).padStart(2,'0');
+    Object.keys(A).forEach(function(k){ var d=String(k).split('|')[0]; if(d && d<cs) delete A[k]; });
+  }catch(_e){}
+  _flJsonSave('fl_extra',A,!Object.keys(A).length);
+}
+function flExtraSet(ds,bid,id,name,qty,unit){
+  var A=flExtraAll(), k=flWaterKey(ds,bid);
+  var L=Array.isArray(A[k])?A[k].slice():[];
+  var nm=String(name||'').trim();
+  var q=(qty===''||qty==null)?null:parseFloat(qty);
+  if(q!=null && !isFinite(q)) q=null;
+  if(!nm){ return false; }
+  var row={id:id||('x'+Date.now()+Math.floor(Math.random()*1000)), n:nm, q:q, u:String(unit||'').trim()};
+  var at=-1; L.forEach(function(x,i){ if(x&&x.id===row.id) at=i; });
+  if(at>=0) L[at]=row; else L.push(row);
+  A[k]=L; flExtraSaveMap(A); flRenderDR(); return true;
+}
+function flExtraDel(ds,bid,id){
+  var A=flExtraAll(), k=flWaterKey(ds,bid);
+  var L=(Array.isArray(A[k])?A[k]:[]).filter(function(x){ return x && x.id!==id; });
+  if(L.length) A[k]=L; else delete A[k];
+  flExtraSaveMap(A); flRenderDR();
+}
+/* ชื่อที่เคยพิมพ์ + จำนวนครั้งที่ใช้ · เรียงจากที่ใช้บ่อยสุด */
+function flExtraNames(){
+  var A=flExtraAll(), m={};
+  Object.keys(A).forEach(function(k){
+    (A[k]||[]).forEach(function(x){
+      if(!x||!x.n) return;
+      var key=x.n+'\u0001'+(x.u||'');
+      if(!m[key]) m[key]={n:x.n, u:x.u||'', c:0};
+      m[key].c++;
+    });
+  });
+  return Object.keys(m).map(function(k){ return m[k]; }).sort(function(a,b){ return b.c-a.c; });
+}
 /* ══ กล่องจัดการรายการเบิกของ ══════════════════════════════════════════ */
 function _flPierLbl(k){ return k==='tublamu'?'Tub Lamu':k==='panwa'?'Visit Panwa':k==='ranong'?'Ranong':'ทุกท่า'; }
 function _flPierAb(k){ return k==='tublamu'?'TL':k==='panwa'?'VP':k==='ranong'?'RN':'ทุกท่า'; }
@@ -23077,6 +23127,50 @@ function flIssueManageOpen(pierKey){
    +'ถ้าลบชื่อทิ้งจริง ตัวเลขเก่าจะกลายเป็นคีย์ที่ไม่มีชื่อ อ่านย้อนหลังไม่ออก</div>'
    +'</div></div>';
 }
+/* ══ §drExtra · กล่องกรอกของจิปาถะของแถวนั้น ═════════════════════════ */
+var _FLX_EX={ds:'',bid:'',id:''};
+function flExtraOpen(ds,bid,id){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('fleet') && !window.laCanEditArea('operations')){ alert('ดูอย่างเดียว · แก้ไม่ได้'); return; }
+  _FLX_EX={ds:ds,bid:bid,id:id||''};
+  var cur=null;
+  if(id) flExtraGet(ds,bid).forEach(function(x){ if(x.id===id) cur=x; });
+  var bt=(typeof BOATS!=='undefined')?BOATS.filter(function(b){return b.id===bid;})[0]:null;
+  var sug=flExtraNames().slice(0,8);
+  _flxHost().innerHTML='<div class="flx-ovl" onclick="if(event.target===this)flxClose()"><div class="flx-dlg">'
+   +'<div class="flx-h">&#128736; '+(cur?'แก้รายการ':'เพิ่มรายการ')+' · '+_flEsc(bt?bt.name:'')
+   +'<button class="x" onclick="flxClose()">&times;</button></div>'
+   +'<div class="flx-n" style="border:0;margin:-4px 0 10px;padding:0">เฉพาะลำนี้ วันนี้ ('+_flEsc(ds)+') เท่านั้น · ไม่สร้างคอลัมน์ให้ทั้งท่า</div>'
+   +'<label class="flx-l">รายการ<input id="flx-xn" placeholder="เช่น ดิงกี้ · น้ำมัน" value="'+_flEsc(cur?cur.n:'')+'" autocomplete="off"></label>'
+   +(sug.length?('<div class="flx-sug" id="flx-xsug">'+sug.map(function(x,i){
+       return '<button onclick="flExtraPick('+i+')">'+_flEsc(x.n)+' <em>'+_flEsc(x.u)+'</em><i>เคยใช้ '+x.c+' ครั้ง</i></button>'; }).join('')+'</div>'):'')
+   +'<div style="display:flex;gap:8px">'
+     +'<label class="flx-l" style="flex:1">จำนวน<input id="flx-xq" type="number" step="0.1" placeholder="0" value="'+(cur&&cur.q!=null?cur.q:'')+'" autocomplete="off"></label>'
+     +'<label class="flx-l" style="flex:1">หน่วย<input id="flx-xu" placeholder="เช่น ลิตร" value="'+_flEsc(cur?cur.u:'')+'" autocomplete="off"></label>'
+   +'</div>'
+   +'<button class="flx-ok" onclick="flExtraSaveBtn()">'+(cur?'บันทึก':'เพิ่มรายการ')+'</button>'
+   +(cur?('<button class="flx-ok" style="background:#fff;color:#A32D2D;border:1px solid #E7C4C0;margin-top:7px" onclick="flExtraDelBtn()">ลบรายการนี้</button>'):'')
+   +'</div></div>';
+  window._FLX_XSUG=sug;
+  setTimeout(function(){ var e=document.getElementById('flx-xn'); if(e) e.focus(); },40);
+}
+function flExtraPick(i){
+  var x=(window._FLX_XSUG||[])[i]; if(!x) return;
+  var n=document.getElementById('flx-xn'), u=document.getElementById('flx-xu'), q=document.getElementById('flx-xq');
+  if(n) n.value=x.n; if(u&&!u.value) u.value=x.u||'';
+  if(q) q.focus();
+}
+function flExtraSaveBtn(){
+  var n=document.getElementById('flx-xn'), q=document.getElementById('flx-xq'), u=document.getElementById('flx-xu');
+  var nm=n?n.value.trim():'';
+  if(!nm){ alert('ใส่ชื่อรายการก่อน'); if(n)n.focus(); return; }
+  flExtraSet(_FLX_EX.ds,_FLX_EX.bid,_FLX_EX.id,nm,q?q.value:'',u?u.value:'');
+  flxClose();
+}
+function flExtraDelBtn(){
+  if(!_FLX_EX.id) return;
+  flExtraDel(_FLX_EX.ds,_FLX_EX.bid,_FLX_EX.id);
+  flxClose();
+}
 /* ── ชิปกรองท่า · '' = ทุกท่า ── */
 var _FL_DR_PIER='';
 function flDRSetPier(k){ _FL_DR_PIER=(k===_FL_DR_PIER&&k!=='')?'':k; flRenderDR(); }
@@ -23104,14 +23198,39 @@ function flRenderDR(){
     const p=getBoatCurrentPier(b, ds);
     return (p==='shop') ? (b.pier||'tublamu') : p;
   };
-  const tlBoats=companyBoats.filter(b=>_drPier(b)==='tublamu');
-  const vpBoats=companyBoats.filter(b=>_drPier(b)==='panwa');
-  const rnBoats=companyBoats.filter(b=>_drPier(b)==='ranong');
+  /* ══ §drExtra · เรือเช่าที่วิ่งวันนั้น ต้องอยู่ใน Daily Log ด้วย ═══════════
+     ของเดิม companyBoats ตัดเรือเช่าทิ้งตั้งแต่บรรทัดแรก (และตัดลำที่ไม่มีเครื่องด้วย
+     ซึ่งเรือเช่าไม่มีเลยสักลำ) แต่เราเบิกของลงเรือเช่าเหมือนกัน พอไม่มีแถวก็ไม่มีที่ลง
+     ของที่เบิกไปเลยหายจากบัญชีของวันนั้นทั้งก้อน
+
+     "วิ่ง" = มีทริปในผังเรือ · หรือมีบุคกิ้งลงลำนี้ · หรือมีข้อมูลที่กรอกไว้แล้ว
+     ข้อสุดท้ายสำคัญ — แถวที่กรอกไปแล้วต้องไม่หายไปเองถ้าบุคกิ้งถูกย้าย */
+  const _drRan=(b)=>{
+    try{
+      const op=(TRIPS[ds]||{})[b.id];
+      if(op && (op.route||op.program)) return true;
+      const bi=(typeof flBoatBookingsFor==='function')?flBoatBookingsFor(b.id,ds):null;
+      if(bi && ((bi.pax||0)>0 || (bi.trips||0)>0)) return true;
+      const dd=(FL_DAILY[ds]||{})[b.id];
+      if(dd && (dd.fuel>0 || dd.paxActual!=null ||
+        (dd.trips && Object.values(dd.trips).some(tp=>tp&&tp.engines&&Object.keys(tp.engines).length)))) return true;
+      if(Object.keys(flWaterGet(ds,b.id)||{}).length) return true;
+      if(flExtraGet(ds,b.id).length) return true;
+      const iss=flIssueAll()[flWaterKey(ds,b.id)];
+      if(iss && Object.keys(iss).length) return true;
+    }catch(_e){}
+    return false;
+  };
+  const charterRan=BOATS.filter(b=>b && b.ownership==='charter' && !b.retired && _drRan(b));
+  const drBoats=companyBoats.concat(charterRan);
+  const tlBoats=drBoats.filter(b=>_drPier(b)==='tublamu');
+  const vpBoats=drBoats.filter(b=>_drPier(b)==='panwa');
+  const rnBoats=drBoats.filter(b=>_drPier(b)==='ranong');
 
   // ── Per-boat effective PAX (booked from sales · manual actual overrides) — single source for KPIs + rows ──
   // eff = boat not available → 0 · else actual (FL_DAILY.paxActual, if entered) → else booked-from-bookings
   const boatPax={};
-  companyBoats.forEach(b=>{
+  drBoats.forEach(b=>{
     const binfo=flBoatBookingsFor(b.id, ds);
     const dayDR=(FL_DAILY[ds]||{})[b.id];
     const actual=(dayDR && dayDR.paxActual!=null) ? dayDR.paxActual : null;
@@ -23123,7 +23242,10 @@ function flRenderDR(){
     // to this boat AND today is the FIRST day of the downtime (broke after the morning trip).
     const hasLog = !!(dayDR && (dayDR.fuel>0 || dayDR.paxActual!=null ||
       (dayDR.trips && Object.values(dayDR.trips).some(tp=>tp&&tp.engines&&Object.keys(tp.engines).length))));
-    const ranDespite = !avail && (hasLog || (binfo.pax>0 && cs.from===ds));
+    /* §drExtra · เรือเช่าอยู่นอกช่วงสัญญา getCurStatus จะตอบ unavailable เสมอ
+       แต่ถ้ามันวิ่งจริงวันนั้น ต้องนับว่าออก ไม่งั้นแถวจะยุบเป็น "ไม่ต้องกรอก" */
+    const ranDespite = !avail && (hasLog || (binfo.pax>0 && cs.from===ds)
+                       || (b.ownership==='charter' && _drRan(b)));
     const operated = avail || ranDespite;
     const eff = !operated ? 0 : (actual!=null ? actual : binfo.pax);
     boatPax[b.id]={ booked:binfo.pax, actual, eff, routes:binfo.routes, trips:binfo.trips, avail, ranDespite };
@@ -23424,7 +23546,10 @@ function flRenderDR(){
     }).join('')+ranChip:`<div style="font-size:10px;color:${dim.ink3};font-style:italic">— ไม่ออก</div>`+ranChip);
 
     // No data entry when the boat is unavailable/fixing (and did NOT run today) OR not running (0 booked)
-    const noEntry = (isNotAvail && !ran) || pax===0;
+    const _isCh = b.ownership==='charter';
+    /* §drExtra · เรือเช่าที่วิ่งวันนั้นต้องมีแถวให้กรอกเสมอ แม้ยอดลูกค้าจะยังเป็น 0
+       เพราะเหตุผลที่มันอยู่ในตารางคือ "เราเบิกของลงเรือลำนี้" ไม่ใช่ยอดขาย */
+    const noEntry = ((isNotAvail && !ran) || pax===0) && !(_isCh && _drRan(b));
 
     // ── Entry cards (Style A · fixed height · PAX/Fuel fixed-width so they line up across rows · engines fill the rest) ──
     const CARD='border-radius:9px;padding:0 13px;box-sizing:border-box;height:50px;display:flex;flex-direction:column;justify-content:center';   // shared box
@@ -23474,13 +23599,13 @@ function flRenderDR(){
     const flagBadge=isAnomaly?`<span style="background:#A32D2D;color:white;padding:1px 5px;border-radius:6px;font-size:8px;font-weight:600">⚠</span>`:'';
     const _btCell=`<td class="fs-bt"${isAnomaly?' style="background:#FCEBEB"':''}>
         <span class="fs-av" style="background:${c}">${init}</span>
-        <span class="fs-nm" onclick="flGoToAsset('boats','${b.id}')"><b style="color:${nameColor}">${b.name}</b>${flagBadge}
+        <span class="fs-nm" onclick="flGoToAsset('boats','${b.id}')"><b style="color:${nameColor}">${b.name}</b>${flagBadge}${_isCh?'<span class="fs-ch">เช่า</span>':''}
           <em style="color:${isAnomaly?'#A32D2D':dim.ink3}">${tShort} · ${b.cap||'?'} PAX · ${engs.length} EN</em></span></td>`;
     const _rtCell=`<td class="fs-rt"${isAnomaly?' style="background:#FCEBEB"':''}>${tripsHtml}${orphanWarn?`<div style="margin-top:3px"><span style="font-size:9px;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E89A92;border-radius:5px;padding:1px 6px;font-weight:600">&#9888; เรือถูกถอดจาก Boat Op · จัดใหม่</span></div>`:''}</td>`;
 
     if(noEntry){
       /* ลำที่ไม่ออกวันนี้ · ยุบทั้งแถวเป็นช่องเดียว ไม่ให้กินที่และไม่ให้เผลอกรอก */
-      return `<tr>${_btCell}${_rtCell}<td class="fs-dim" colspan="${3+ENG_COLS.length+2+Math.max(1,ISS.length)}">${isNotAvail?'ไม่ต้องกรอก':'ไม่ออก'}</td></tr>`;
+      return `<tr>${_btCell}${_rtCell}<td class="fs-dim" colspan="${3+ENG_COLS.length+2+Math.max(1,ISS.length)+1}">${isNotAvail?'ไม่ต้องกรอก':'ไม่ออก'}</td></tr>`;
     }
     const IN='class="fs-in"';
     /* เครื่องเรียงตามตำแหน่งมาตรฐานของท่านั้น · ลำที่ไม่มีตำแหน่งนั้นเว้นว่าง คอลัมน์จึงตรงกันทุกแถว */
@@ -23502,12 +23627,18 @@ function flRenderDR(){
       const v=flIssueGet(ds,b.id,it.id);
       return `<td class="fs-n fs-i"><input ${IN} type="number" step="1" min="0" value="${v!=null?v:''}" ${_DIS} onchange="flIssueSet('${ds}','${b.id}','${it.id}',this.value)"></td>`;
     }).join('') : '<td class="fs-n fs-i fs-na"></td>';
+    /* §drExtra · ของจิปาถะของลำนี้ วันนี้ · ชิปละหนึ่งรายการ กดเพื่อแก้/ลบ */
+    const _xs=flExtraGet(ds,b.id);
+    const _xTd='<td class="fs-x"><div class="fs-xw">'
+      + _xs.map(x=>`<span class="fs-xc" title="แก้ / ลบ" onclick="flExtraOpen('${ds}','${b.id}','${x.id}')">${_e(x.n)}${x.q!=null?` <b>${x.q}</b>`:''}${x.u?` <i>${_e(x.u)}</i>`:''}</span>`).join('')
+      + (locked?'':`<button class="fs-xa" title="เพิ่มรายการเฉพาะลำนี้ วันนี้ · เช่น ดิงกี้ · น้ำมัน 20 ลิตร" onclick="flExtraOpen('${ds}','${b.id}','')">+</button>`)
+      + '</div></td>';
     const _fpOwn2=_fpOwn;
     return `<tr>${_btCell}${_rtCell}
       <td class="fs-n fs-ro" title="จำนวนลูกค้าจากยอดจอง · แก้ไม่ได้">${pax||0}</td>
       <td class="fs-n fs-f${isAnomaly?' fs-bad':''}"><input ${IN} type="number" step="1" value="${fuel!=null?fuel:''}" ${_DIS} onchange="flSaveFuel('${ds}','${b.id}',this.value)">${fuelLpp?`<em>${fuelLpp}/px</em>`:''}</td>
       <td class="fs-n fs-p${_fpNeed?' fs-need':''}"><input ${IN} type="number" step="0.01" min="0" value="${_fpOwn2!=null?_fpOwn2:''}" placeholder="0.00" ${_DIS} onchange="flSaveFuelPrice('${ds}','${b.id}',this.value)">${_fpCost!=null?`<em>฿${_fpCost.toLocaleString()}</em>`:''}</td>
-      ${_engTd}${_wTd}${_issTd}</tr>`;
+      ${_engTd}${_wTd}${_issTd}${_xTd}</tr>`;
   };
 
 
@@ -23557,7 +23688,7 @@ function flRenderDR(){
       return seen.length?seen:['EN'];
     })();
     const ISS=flIssueFor(pierKey);
-    const NCOL=2+3+ENG_COLS.length+2+ISS.length;
+    const NCOL=2+3+ENG_COLS.length+2+ISS.length+1;   /* §drExtra · +1 = ช่องอื่นๆ */
 
     return`<div style="background:white;border-radius:14px;border:1px solid ${dim.line};margin-bottom:10px;overflow:hidden">
       <div style="display:flex;align-items:center;gap:6px;padding:9px 13px;border-bottom:1px solid rgba(0,0,0,.06);background:#FBFAF7;flex-wrap:wrap">
@@ -23580,7 +23711,7 @@ function flRenderDR(){
             <th class="fsg2" colspan="2">น้ำมัน</th>
             <th class="fsg4" colspan="${ENG_COLS.length}">&#9881; ชั่วโมงเครื่อง</th>
             <th class="fsg3" colspan="2">&#128167; มิเตอร์น้ำ</th>
-            <th class="fsg5" colspan="${Math.max(1,ISS.length)}">&#128230; เบิกของลงเรือ
+            <th class="fsg5" colspan="${Math.max(1,ISS.length)+1}">&#128230; เบิกของลงเรือ
               <span class="fs-addc" onclick="event.stopPropagation();flIssueQuickOpen('${pierKey}')" title="เพิ่มรายการอื่นๆ">+</span></th>
           </tr>
           <tr>
@@ -23591,13 +23722,15 @@ function flRenderDR(){
             <th class="fs-w">เปิด<em>มิเตอร์</em></th><th class="fs-w">ปิด<em>ใช้ไป</em></th>
             ${ISS.length?ISS.map(it=>`<th class="fs-i">${_e(it.name)}<em>${_e(it.unit||'')}${it.pier?(' · '+(it.pier==='tublamu'?'TL':it.pier==='panwa'?'VP':'RN')):''}</em></th>`).join('')
               :'<th class="fs-i fs-na"><em>ยังไม่มีรายการ · กด +</em></th>'}
+            <th class="fs-x">อื่นๆ<em>เฉพาะลำ · เฉพาะวัน</em></th>
           </tr>
         </thead>
         <tbody>${boats.map(b=>buildBoatRow(b,maxEng,locked,ENG_COLS,ISS)).join('')}</tbody>
         <tfoot>${(function(){
           /* แถวรวมท้ายตาราง · ของเดิมไม่มี ต้องเลื่อนไปบวกเองในหัว */
-          let tp=0,tf=0; const tw={}, ti={};
+          let tp=0,tf=0,tx=0; const tw={}, ti={};
           boats.forEach(b=>{
+            tx+=flExtraGet(ds,b.id).length;
             const bp2=boatPax[b.id]||{eff:0}; tp+=bp2.eff||0;
             const fl=(FL_DAILY[ds]||{})[b.id]?.fuel; if(fl) tf+=fl;
             const u=flWaterUsed(ds,b.id); if(u!=null) tw.v=(tw.v||0)+u;
@@ -23614,6 +23747,7 @@ function flRenderDR(){
             <td class="fs-n fs-w">${tw.v!=null?('<em>'+(tw.v>=0?'+':'')+(Math.round(tw.v*10)/10)+'</em>'):'—'}</td>
             ${ISS.length?ISS.map(it=>`<td class="fs-n fs-i">${ti[it.id]!=null?ti[it.id]:'—'}</td>`).join('')
               :'<td class="fs-n fs-i">—</td>'}
+            <td class="fs-x" style="text-align:right;font-size:10px;color:#0F6E56">${tx?tx+' รายการ':'—'}</td>
           </tr>`; })()}</tfoot>
       </table></div>
     </div>`;
@@ -23660,6 +23794,20 @@ function flRenderDR(){
 #fl-dr-body td.fs-w{background:#EEF8FC;color:#0C4A66;width:84px}
 #fl-dr-body td.fs-i{background:#F4FAF6;color:#0F6E56;width:72px}
 #fl-dr-body td.fs-na{background:#F7F6F3}
+/* §drExtra · ช่องของจิปาถะ · ชิปหนึ่งชิ้นคือหนึ่งรายการของลำนั้นวันนั้น */
+#fl-dr-body td.fs-x{background:#F4FAF6;min-width:150px;padding:3px 6px}
+#fl-dr-body th.fs-x{background:#EAF4EC;color:#0F6E56} #fl-dr-body th.fs-x em{color:#7FAE96}
+#fl-dr-body .fs-xw{display:flex;flex-wrap:wrap;gap:3px;align-items:center}
+#fl-dr-body .fs-xc{display:inline-flex;align-items:center;gap:4px;background:#fff;border:1px solid #BFD9C9;
+  border-radius:7px;padding:2px 7px;font-size:10.5px;color:#0B5C46;cursor:pointer;max-width:100%}
+#fl-dr-body .fs-xc:hover{border-color:#0F6E56;background:#F1FBF6}
+#fl-dr-body .fs-xc b{font-family:'DM Mono',monospace;font-size:11.5px;font-weight:700}
+#fl-dr-body .fs-xc i{font-style:normal;font-size:9px;color:#7FAE96}
+#fl-dr-body .fs-xa{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;
+  border-radius:6px;border:1px dashed #9FCBB4;background:#fff;color:#0B5C46;font-size:12px;font-weight:800;
+  cursor:pointer;font-family:inherit;line-height:1;padding:0}
+#fl-dr-body .fs-xa:hover{background:#0B5C46;color:#fff;border-style:solid}
+#fl-dr-body .fs-ch{background:#F3EFFA;color:#5B3FA5;border-radius:5px;padding:0 5px;font-size:8px;font-weight:800;margin-left:4px}
 #fl-dr-body th.fs-ro{background:#EAF2FA;color:#185FA5}
 #fl-dr-body th.fs-f,#fl-dr-body th.fs-p{background:#FAF3E6;color:#854F0B}
 #fl-dr-body th.fs-e{background:#F0F1EE}
