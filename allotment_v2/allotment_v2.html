@@ -22767,6 +22767,214 @@ function flShiftDRDay(n){
   flRenderDR();
 }
 
+/* ══ §flSheet · ของใหม่ในหน้า Daily Fleet Log ═══════════════════════════
+   มิเตอร์น้ำรายลำ · รายการเบิกของลงเรือ · ชิปกรองรายท่า
+
+   ที่เก็บ · ทั้งสามอย่างเก็บเป็น "สตริง JSON" ใน blob บริษัท
+   ไม่ใช่ object · คีย์ใหม่ที่ยังไม่มีตารางใน DB ถ้าเก็บเป็น object
+   จะโดนตัดทิ้งตอนเซฟ (เจอมาแล้วกับ po_cash ดู §pcFix
+   และกับ altPickups.drop* ดู §altDropFix)
+     fl_water        {'วันที่|เรือ': {o, c, by, at}}
+     fl_issue_items  [{id, name, unit, pier, off}]   pier '' = ทุกท่า
+     fl_issue        {'วันที่|เรือ': {รหัสรายการ: จำนวน}}
+
+   ลบรายการ = ทำเครื่องหมาย off ไม่ลบทิ้งจริง
+   ตัวเลขที่เคยกรอกยังอยู่ใน fl_issue และชื่อยังอยู่ใน fl_issue_items
+   ถ้าลบชื่อทิ้ง ตัวเลขเก่าจะกลายเป็นคีย์ไร้ชื่อ อ่านย้อนหลังไม่ออก
+   ═══════════════════════════════════════════════════════════════════════ */
+function _flJson(key){
+  try{ var raw=laBlob()[key]; if(typeof raw!=='string'||!raw) return null; return JSON.parse(raw); }
+  catch(_){ return null; }
+}
+function _flJsonSave(key,val,empty){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('fleet')
+     && typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return false;
+  try{
+    var b=laBlob();
+    if(empty) delete b[key]; else b[key]=JSON.stringify(val);
+    laBlobSave(); return true;
+  }catch(e){ try{ console.warn('[flSheet] save failed '+key, e&&e.message); }catch(_){} return false; }
+}
+/* ── มิเตอร์น้ำ · รายลำ รายวัน ── */
+var _FL_W=null, _FL_W_SRC=null;
+function flWaterAll(){
+  var raw=''; try{ raw=laBlob().fl_water||''; }catch(_){ raw=''; }
+  if(_FL_W===null || _FL_W_SRC!==raw){ _FL_W=_flJson('fl_water')||{}; _FL_W_SRC=raw; }
+  return _FL_W;
+}
+function flWaterKey(ds,bid){ return String(ds||'')+'|'+String(bid||''); }
+function flWaterGet(ds,bid){ return flWaterAll()[flWaterKey(ds,bid)]||{}; }
+function flWaterUsed(ds,bid){
+  var w=flWaterGet(ds,bid);
+  if(w.o==null||w.c==null) return null;
+  return Math.round((+w.c - +w.o)*10)/10;
+}
+function flWaterSet(ds,bid,which,val){
+  var A=flWaterAll(), k=flWaterKey(ds,bid);
+  var v=(val===''||val==null)?null:parseFloat(val);
+  if(v!=null && !isFinite(v)) return;
+  var o=A[k]||{}; o[which]=v;
+  o.by=((typeof ME!=='undefined'&&ME&&(ME.name||ME.username))||''); o.at=new Date().toISOString();
+  if(o.o==null && o.c==null) delete A[k]; else A[k]=o;
+  _flJsonSave('fl_water',A,!Object.keys(A).length);
+  _FL_W=A; try{ _FL_W_SRC=laBlob().fl_water||''; }catch(_){}
+  flRenderDR();
+}
+/* ── รายการเบิกของ · แคตตาล็อกทั้งบริษัท ── */
+var _FL_IT=null, _FL_IT_SRC=null;
+function flIssueItems(){
+  var raw=''; try{ raw=laBlob().fl_issue_items||''; }catch(_){ raw=''; }
+  if(_FL_IT===null || _FL_IT_SRC!==raw){
+    var a=_flJson('fl_issue_items'); _FL_IT=Array.isArray(a)?a:[]; _FL_IT_SRC=raw;
+  }
+  return _FL_IT;
+}
+/* รายการที่ใช้จริงของท่านั้น · ของทุกท่า + ของท่านั้น · ตัดที่เลิกใช้ออก */
+function flIssueFor(pierKey){
+  return flIssueItems().filter(function(x){
+    return x && !x.off && (!x.pier || x.pier===pierKey); });
+}
+function flIssueItemsSave(list){
+  _FL_IT=list; _flJsonSave('fl_issue_items',list,!list.length);
+  try{ _FL_IT_SRC=laBlob().fl_issue_items||''; }catch(_){}
+}
+function flIssueAddItem(name,unit,pierKey){
+  name=String(name||'').trim(); if(!name) return null;
+  unit=String(unit||'').trim();
+  var L=flIssueItems().slice();
+  /* ชื่อเดิมที่เคยเลิกใช้ → เปิดกลับ ไม่สร้างใหม่ · ตัวเลขเก่าจะได้กลับมาด้วย */
+  var hit=L.find(function(x){ return x && String(x.name).trim()===name; });
+  if(hit){ delete hit.off; if(unit) hit.unit=unit; hit.pier=pierKey||''; flIssueItemsSave(L); return hit.id; }
+  var id='it'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+  L.push({id:id, name:name, unit:unit, pier:pierKey||''});
+  flIssueItemsSave(L); return id;
+}
+function flIssueSetItem(id,field,val){
+  var L=flIssueItems().slice(), it=L.find(function(x){ return x&&x.id===id; }); if(!it) return;
+  if(field==='off'){ if(val) it.off=1; else delete it.off; }
+  else it[field]=String(val||'').trim();
+  flIssueItemsSave(L); flRenderDR();
+}
+/* ── จำนวนที่เบิกจริง ── */
+var _FL_IS=null, _FL_IS_SRC=null;
+function flIssueAll(){
+  var raw=''; try{ raw=laBlob().fl_issue||''; }catch(_){ raw=''; }
+  if(_FL_IS===null || _FL_IS_SRC!==raw){ _FL_IS=_flJson('fl_issue')||{}; _FL_IS_SRC=raw; }
+  return _FL_IS;
+}
+function flIssueGet(ds,bid,itemId){
+  var r=flIssueAll()[flWaterKey(ds,bid)]; return (r&&r[itemId]!=null)?r[itemId]:null;
+}
+function flIssueSet(ds,bid,itemId,val){
+  var A=flIssueAll(), k=flWaterKey(ds,bid);
+  var v=(val===''||val==null)?null:parseFloat(val);
+  if(v!=null && !isFinite(v)) return;
+  var r=A[k]||{};
+  if(v==null) delete r[itemId]; else r[itemId]=v;
+  if(!Object.keys(r).length) delete A[k]; else A[k]=r;
+  _flJsonSave('fl_issue',A,!Object.keys(A).length);
+  _FL_IS=A; try{ _FL_IS_SRC=laBlob().fl_issue||''; }catch(_){}
+  flRenderDR();
+}
+/* ══ กล่องจัดการรายการเบิกของ ══════════════════════════════════════════ */
+function _flPierLbl(k){ return k==='tublamu'?'Tub Lamu':k==='panwa'?'Visit Panwa':k==='ranong'?'Ranong':'ทุกท่า'; }
+function _flPierAb(k){ return k==='tublamu'?'TL':k==='panwa'?'VP':k==='ranong'?'RN':'ทุกท่า'; }
+function _flEsc(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function flxClose(){ var h=document.getElementById('flx-host'); if(h) h.innerHTML=''; }
+function _flxHost(){
+  var h=document.getElementById('flx-host');
+  if(!h){ h=document.createElement('div'); h.id='flx-host'; document.body.appendChild(h); }
+  return h;
+}
+/* จำนวนวันที่เคยกรอกรายการนั้น · ใช้บอกว่า "เคยใช้แล้ว" ตอนพิมพ์ชื่อ */
+function _flIssueUseDays(itemId){
+  var A=flIssueAll(), n=0;
+  for(var k in A){ if(A[k] && A[k][itemId]!=null) n++; }
+  return n;
+}
+var _FLX_PIER='', _FLX_SCOPE='pier';
+function flIssueQuickOpen(pierKey){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('fleet') && !window.laCanEditArea('operations')){ alert('ดูอย่างเดียว · แก้ไม่ได้'); return; }
+  _FLX_PIER=pierKey||''; _FLX_SCOPE='pier';
+  _flxHost().innerHTML='<div class="flx-ovl" onclick="if(event.target===this)flxClose()"><div class="flx-dlg">'
+   +'<div class="flx-h">&#128230; เพิ่มรายการ · '+_flEsc(_flPierLbl(pierKey))+'<button class="x" onclick="flxClose()">&times;</button></div>'
+   +'<label class="flx-l">ชื่อรายการ<input id="flx-nm" placeholder="เช่น น้ำแข็งหลอด" oninput="flIssueQuickSug(this.value)" autocomplete="off"></label>'
+   +'<div class="flx-sug" id="flx-sug"></div>'
+   +'<label class="flx-l">หน่วย<input id="flx-un" placeholder="เช่น ถุง" style="width:120px" autocomplete="off"></label>'
+   +'<div class="flx-sc" id="flx-sc"><span>ใช้กับ</span>'
+     +'<button class="on" onclick="flIssueQuickScope(\'pier\')">ท่านี้เท่านั้น</button>'
+     +'<button onclick="flIssueQuickScope(\'all\')">ทุกท่า</button></div>'
+   +'<button class="flx-ok" onclick="flIssueQuickAdd()">เพิ่มคอลัมน์</button>'
+   +'<div class="flx-n">ชื่อที่เคยใช้แล้วจะขึ้นมาให้เลือก · เลือกชื่อเดิมที่เคยเลิกใช้ = ได้คอลัมน์คืนพร้อมตัวเลขเก่าทั้งหมด</div>'
+   +'</div></div>';
+  flIssueQuickSug('');
+  setTimeout(function(){ var e=document.getElementById('flx-nm'); if(e) e.focus(); },40);
+}
+function flIssueQuickScope(v){
+  _FLX_SCOPE=v;
+  var bs=document.querySelectorAll('#flx-sc button');
+  if(bs[0]) bs[0].className=(v==='pier')?'on':'';
+  if(bs[1]) bs[1].className=(v==='all')?'on':'';
+}
+function flIssueQuickSug(q){
+  var el=document.getElementById('flx-sug'); if(!el) return;
+  q=String(q||'').trim().toLowerCase();
+  var L=flIssueItems().filter(function(x){
+    if(!x) return false;
+    if(q && String(x.name).toLowerCase().indexOf(q)<0) return false;
+    /* ที่โชว์อยู่ในท่านี้แล้ว ไม่ต้องเสนอซ้ำ */
+    if(!x.off && (!x.pier || x.pier===_FLX_PIER)) return false;
+    return true;
+  }).slice(0,6);
+  el.innerHTML=L.map(function(x){
+    var d=_flIssueUseDays(x.id);
+    return '<button class="'+(x.off?'off':'')+'" onclick="flIssueQuickPick(\''+x.id+'\')">'
+      +_flEsc(x.name)+' <em>'+_flEsc(x.unit||'')+'</em>'
+      +'<i>'+(x.off?'เคยเลิกใช้ · กดคืน':(d?('เคยใช้ '+d+' วัน'):'มีอยู่แล้ว'))+'</i></button>';
+  }).join('');
+}
+function flIssueQuickPick(id){
+  var it=flIssueItems().find(function(x){ return x&&x.id===id; }); if(!it) return;
+  var n=document.getElementById('flx-nm'), u=document.getElementById('flx-un');
+  if(n) n.value=it.name; if(u) u.value=it.unit||'';
+  flIssueQuickSug(it.name);
+}
+function flIssueQuickAdd(){
+  var n=document.getElementById('flx-nm'), u=document.getElementById('flx-un');
+  var name=n?n.value.trim():''; if(!name){ alert('ใส่ชื่อรายการก่อน'); if(n)n.focus(); return; }
+  flIssueAddItem(name, u?u.value:'', _FLX_SCOPE==='pier'?_FLX_PIER:'');
+  flxClose(); flRenderDR();
+}
+/* ── จัดการรายการทั้งหมด ── */
+function flIssueManageOpen(pierKey){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('fleet') && !window.laCanEditArea('operations')){ alert('ดูอย่างเดียว · แก้ไม่ได้'); return; }
+  _FLX_PIER=pierKey||'';
+  var L=flIssueItems();
+  var live=L.filter(function(x){ return x&&!x.off; }), gone=L.filter(function(x){ return x&&x.off; });
+  var opt=function(v){ return ['','tublamu','panwa','ranong'].map(function(k){
+      return '<option value="'+k+'"'+(String(v||'')===k?' selected':'')+'>'+_flPierAb(k)+'</option>'; }).join(''); };
+  var rowH=function(x){
+    return '<div class="flx-r"><input value="'+_flEsc(x.name)+'" onchange="flIssueSetItem(\''+x.id+'\',\'name\',this.value)">'
+      +'<input class="u" value="'+_flEsc(x.unit||'')+'" placeholder="หน่วย" onchange="flIssueSetItem(\''+x.id+'\',\'unit\',this.value)">'
+      +'<select onchange="flIssueSetItem(\''+x.id+'\',\'pier\',this.value)">'+opt(x.pier)+'</select>'
+      +'<button class="x" title="เลิกใช้ · ตัวเลขเก่ายังอยู่" onclick="flIssueSetItem(\''+x.id+'\',\'off\',1)">&times;</button></div>'; };
+  _flxHost().innerHTML='<div class="flx-ovl" onclick="if(event.target===this)flxClose()"><div class="flx-dlg">'
+   +'<div class="flx-h">&#9881; จัดการรายการเบิกของ<button class="x" onclick="flxClose()">&times;</button></div>'
+   +(live.length?live.map(rowH).join(''):'<div style="font-size:11px;color:#a3a29a;padding:6px 0 10px">ยังไม่มีรายการ · กด + อื่นๆ ที่หัวท่าเพื่อเพิ่ม</div>')
+   +(gone.length?('<div class="flx-hz">เคยใช้แล้วเลิกใช้ <b>'+gone.length+' รายการ</b></div>'
+       +gone.map(function(x){ var d=_flIssueUseDays(x.id);
+         return '<div class="flx-r gone"><input value="'+_flEsc(x.name)+'" disabled>'
+           +'<input class="u" value="'+_flEsc(x.unit||'')+'" disabled>'
+           +'<span style="font-size:9px;color:#a3a29a;flex:none">'+(d?d+' วัน':'')+'</span>'
+           +'<button class="rr" onclick="flIssueSetItem(\''+x.id+'\',\'off\',0)">คืน</button></div>'; }).join('')):'')
+   +'<div class="flx-n">ลบ = ทำเครื่องหมายว่าเลิกใช้ ไม่ได้ลบทิ้งจริง · คอลัมน์หายจากตาราง '
+   +'แต่ตัวเลขที่เคยกรอกยังอยู่ครบ กดคืนเมื่อไหร่ก็กลับมาพร้อมกัน<br>'
+   +'ถ้าลบชื่อทิ้งจริง ตัวเลขเก่าจะกลายเป็นคีย์ที่ไม่มีชื่อ อ่านย้อนหลังไม่ออก</div>'
+   +'</div></div>';
+}
+/* ── ชิปกรองท่า · '' = ทุกท่า ── */
+var _FL_DR_PIER='';
+function flDRSetPier(k){ _FL_DR_PIER=(k===_FL_DR_PIER&&k!=='')?'':k; flRenderDR(); }
 function flRenderDR(){
   const dateEl=document.getElementById('fl-dr-date');
   if(!dateEl.value)dateEl.value=TODAY_STR;
@@ -22927,27 +23135,36 @@ function flRenderDR(){
     </div>
   </div>`;
 
-  // Pill row
-  const pillRow=`<div style="display:flex;gap:6px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
-    <div style="flex:1;min-width:160px;background:white;border-radius:24px;padding:7px 14px;display:flex;align-items:center;gap:10px;border:1px solid ${dim.line}">
-      <div style="width:24px;height:24px;border-radius:50%;background:#185FA5;color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">HN</div>
-      <span style="font-size:12px;font-weight:600">Honda boats</span>
-      <span style="margin-left:auto;font-size:11px;font-weight:500">${hondaBoats}</span>
-      <span style="font-size:11px;color:${dim.ink3}">operating</span>
-    </div>
-    <div style="flex:1;min-width:160px;background:white;border-radius:24px;padding:7px 14px;display:flex;align-items:center;gap:10px;border:1px solid ${dim.line}">
-      <div style="width:24px;height:24px;border-radius:50%;background:#A32D2D;color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">SZ</div>
-      <span style="font-size:12px;font-weight:600">Suzuki boats</span>
-      <span style="margin-left:auto;font-size:11px;font-weight:500">${suzukiBoats}</span>
-      <span style="font-size:11px;color:${dim.ink3}">operating</span>
-    </div>
-    <div style="flex:1;min-width:160px;background:white;border-radius:24px;padding:7px 14px;display:flex;align-items:center;gap:10px;border:1px solid ${dim.line}">
-      <div style="width:24px;height:24px;border-radius:50%;background:#534AB7;color:white;display:flex;align-items:center;justify-content:center;font-size:11px">⚡</div>
-      <span style="font-size:12px;font-weight:600">Charter</span>
-      <span style="margin-left:auto;font-size:11px;font-weight:500">${charters.length}</span>
-      <span style="font-size:11px;color:${dim.ink3}">trips</span>
-    </div>
-    <div style="background:${dim.ink};color:white;border-radius:24px;padding:8px 22px;font-size:12px;font-weight:600;cursor:pointer">+ Report</div>
+  // Helper: Program-closed check per pier · ต้องประกาศก่อนแถวชิป (ชิปบอกสถานะปิดด้วย)
+  const _drPierClosed=(pierKey)=>{
+    const rts=ROUTES.filter(rt=>rt.pier===pierKey);
+    return rts.length>0 && rts.every(rt=>{
+      const _s=(typeof getDayStatus==='function')?getDayStatus(rt,ds):null;
+      return _s && _s.type==='closed';
+    });
+  };
+  /* §flSheet · ชิปบนสุดเปลี่ยนจากยี่ห้อเครื่อง (Honda / Suzuki) เป็นท่าเรือ
+     ยี่ห้อเครื่องไม่ใช่สิ่งที่คนกรอกใช้ตัดสินใจอะไรในหน้านี้เลย
+     ท่าเรือคือหน่วยที่คนกรอกทำงานจริง · กดแล้วเหลือเฉพาะท่านั้น */
+  void hondaBoats; void suzukiBoats;
+  const _pierMeta=[
+    {k:'',        lbl:'ทุกท่า',      ab:'ทุก', col:'#5F5E5A', boats:companyBoats},
+    {k:'tublamu', lbl:'Tub Lamu',    ab:'TL',  col:'#0F6E56', boats:tlBoats},
+    {k:'panwa',   lbl:'Visit Panwa', ab:'VP',  col:'#185FA5', boats:vpBoats},
+    {k:'ranong',  lbl:'Ranong',      ab:'RN',  col:'#BA7517', boats:rnBoats}
+  ];
+  const pillRow=`<div style="display:flex;gap:7px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
+    ${_pierMeta.map(p=>{
+      const on=_FL_DR_PIER===p.k;
+      const closed=p.k&&_drPierClosed(p.k);
+      const opr=p.boats.filter(b=>(TRIPS[ds]||{})[b.id]?.booked).length;
+      const sub=p.k? (closed?'ปิด':(opr+' ออก')) : (companyBoats.length+' ลำ');
+      return `<div onclick="flDRSetPier('${p.k}')" title="${p.k?('ดูเฉพาะ '+p.lbl):'ดูทุกท่า'}" style="display:flex;align-items:center;gap:9px;background:${on?dim.ink:'#fff'};color:${on?'#fff':dim.ink};border:1px solid ${on?dim.ink:dim.line};border-radius:24px;padding:6px 15px 6px 7px;cursor:pointer;user-select:none">
+        <div style="width:23px;height:23px;border-radius:50%;background:${p.col};color:#fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;flex:none">${p.ab}</div>
+        <span style="font-size:12px;font-weight:600">${p.lbl}</span>
+        <span style="font-size:11px;font-family:'DM Mono',monospace;opacity:${on?.85:.6}">${sub}</span>
+      </div>`; }).join('')}
+    <div style="margin-left:auto;background:${dim.ink};color:white;border-radius:24px;padding:8px 22px;font-size:12px;font-weight:600;cursor:pointer">+ Report</div>
   </div>`;
 
   // Week strip
@@ -23038,7 +23255,7 @@ function flRenderDR(){
   };
 
   // Build a boat row
-  const buildBoatRow=(b,maxEng,locked)=>{
+  const buildBoatRow=(b,maxEng,locked,ENG_COLS,ISS)=>{
     const _DIS = locked ? 'disabled' : '';   // read-only once the pier is saved
     const c=boatAvatarColor(b);
     const init=boatInitials(b.name);
@@ -23145,35 +23362,51 @@ function flRenderDR(){
       </div>`;
     }).join('');
 
-    // Combined entry area — fills the row; '—' note when the boat isn't logging today
-    const entryHtml = noEntry
-      ? `<div style="display:flex;align-items:center;justify-content:flex-end;color:${dim.ink3};font-size:12px;padding-right:4px">${isNotAvail?'ไม่ต้องกรอก':''}</div>`
-      : `<div style="display:flex;gap:9px;align-items:stretch">${paxCard}${fuelCard}${priceCard}<div style="width:1px;flex:none;background:${dim.line};margin:4px 0"></div><div style="flex:1;display:flex;gap:9px;align-items:stretch;min-width:0">${engCells}</div></div>`;
-
-    const rowBg=isAnomaly?'#FCEBEB':'transparent';
+    /* §flSheet2 · เลิกใช้การ์ดลอย · ทุกช่องเป็น <td> จริง คอลัมน์จึงตรงกันทุกแถว
+       อ่านลงคอลัมน์ได้เหมือน Excel และมีแถวรวมท้ายตารางได้ */
+    void CARD; void INP; void paxCard; void fuelCard; void priceCard; void engCells; void maxEng;
     const nameColor=isAnomaly?'#A32D2D':dim.ink;
     const flagBadge=isAnomaly?`<span style="background:#A32D2D;color:white;padding:1px 5px;border-radius:6px;font-size:8px;font-weight:600">⚠</span>`:'';
+    const _btCell=`<td class="fs-bt"${isAnomaly?' style="background:#FCEBEB"':''}>
+        <span class="fs-av" style="background:${c}">${init}</span>
+        <span class="fs-nm" onclick="flGoToAsset('boats','${b.id}')"><b style="color:${nameColor}">${b.name}</b>${flagBadge}
+          <em style="color:${isAnomaly?'#A32D2D':dim.ink3}">${tShort} · ${b.cap||'?'} PAX · ${engs.length} EN</em></span></td>`;
+    const _rtCell=`<td class="fs-rt"${isAnomaly?' style="background:#FCEBEB"':''}>${tripsHtml}${orphanWarn?`<div style="margin-top:3px"><span style="font-size:9px;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E89A92;border-radius:5px;padding:1px 6px;font-weight:600">&#9888; เรือถูกถอดจาก Boat Op · จัดใหม่</span></div>`:''}</td>`;
 
-    return`<div style="display:grid;grid-template-columns:32px 162px 232px 1fr;gap:14px;align-items:center;padding:10px 8px;border-top:0.5px solid ${dim.line};background:${rowBg}">
-      <div style="width:26px;height:26px;border-radius:50%;background:${c};color:white;font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:700">${init}</div>
-      <div onclick="flGoToAsset('boats','${b.id}')" style="cursor:pointer">
-        <div style="display:flex;align-items:center;gap:5px"><span style="font-size:13px;font-weight:600;color:${nameColor}">${b.name}</span>${flagBadge}</div>
-        <div style="font-size:10px;color:${isAnomaly?'#A32D2D':dim.ink3}">${tShort} · ${b.cap||'?'} PAX · ${engs.length} EN</div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:3px;min-width:0">${tripsHtml}${orphanWarn?`<span style="font-size:9px;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E89A92;border-radius:5px;padding:1px 6px;width:fit-content;font-weight:600">&#9888; เรือถูกถอดจาก Boat Op · จัดใหม่</span>`:''}</div>
-      ${entryHtml}
-    </div>`;
+    if(noEntry){
+      /* ลำที่ไม่ออกวันนี้ · ยุบทั้งแถวเป็นช่องเดียว ไม่ให้กินที่และไม่ให้เผลอกรอก */
+      return `<tr>${_btCell}${_rtCell}<td class="fs-dim" colspan="${3+ENG_COLS.length+2+Math.max(1,ISS.length)}">${isNotAvail?'ไม่ต้องกรอก':'ไม่ออก'}</td></tr>`;
+    }
+    const IN='class="fs-in"';
+    /* เครื่องเรียงตามตำแหน่งมาตรฐานของท่านั้น · ลำที่ไม่มีตำแหน่งนั้นเว้นว่าง คอลัมน์จึงตรงกันทุกแถว */
+    const _engTd=ENG_COLS.map(pos=>{
+      const eng=engs.find(e=>engPosLabel(e.pos)===pos);
+      if(!eng) return '<td class="fs-n fs-e fs-na"></td>';
+      const cur=dayDR?.trips?.normal?.engines?.[eng.id];
+      const prev=(typeof flPrevMeter==='function')?flPrevMeter(eng.id,ds):null;
+      const filled=cur!=null;
+      const delta=(filled&&prev!=null)?(Math.round((cur-prev)*10)/10):null;
+      return `<td class="fs-n fs-e"><input ${IN} type="number" step="0.1" value="${filled?cur:''}" placeholder="${prev!=null?prev:''}" ${_DIS} onchange="flSaveMeter('${ds}','${b.id}','normal','${eng.id}',this.value)">${delta!=null?`<em style="color:${delta<0?'#A32D2D':'#3B6D11'}">${delta>=0?'+':''}${delta}</em>`:''}</td>`;
+    }).join('');
+    const _w=flWaterGet(ds,b.id), _wu=flWaterUsed(ds,b.id);
+    const _wTd=`<td class="fs-n fs-w"><input ${IN} type="number" step="0.1" value="${_w.o!=null?_w.o:''}" placeholder="เปิด" ${_DIS} onchange="flWaterSet('${ds}','${b.id}','o',this.value)"></td>`
+      +`<td class="fs-n fs-w"><input ${IN} type="number" step="0.1" value="${_w.c!=null?_w.c:''}" placeholder="ปิด" ${_DIS} onchange="flWaterSet('${ds}','${b.id}','c',this.value)">${_wu!=null?`<em style="color:${_wu<0?'#A32D2D':'#3E93B8'}">${_wu>=0?'+':''}${_wu}</em>`:''}</td>`;
+    /* ยังไม่มีรายการเบิกเลย · หัวตารางมีช่องบอกให้กด + อยู่ ตัวแถวต้องมีช่องคู่กัน
+       ไม่งั้นจำนวนคอลัมน์ของ thead กับ tbody ไม่เท่ากัน ตารางเพี้ยนทั้งใบ */
+    const _issTd=ISS.length ? ISS.map(it=>{
+      const v=flIssueGet(ds,b.id,it.id);
+      return `<td class="fs-n fs-i"><input ${IN} type="number" step="1" min="0" value="${v!=null?v:''}" ${_DIS} onchange="flIssueSet('${ds}','${b.id}','${it.id}',this.value)"></td>`;
+    }).join('') : '<td class="fs-n fs-i fs-na"></td>';
+    const _fpOwn2=_fpOwn;
+    return `<tr>${_btCell}${_rtCell}
+      <td class="fs-n fs-ro" title="จำนวนลูกค้าจากยอดจอง · แก้ไม่ได้">${pax||0}</td>
+      <td class="fs-n fs-f${isAnomaly?' fs-bad':''}"><input ${IN} type="number" step="1" value="${fuel!=null?fuel:''}" ${_DIS} onchange="flSaveFuel('${ds}','${b.id}',this.value)">${fuelLpp?`<em>${fuelLpp}/px</em>`:''}</td>
+      <td class="fs-n fs-p${_fpNeed?' fs-need':''}"><input ${IN} type="number" step="0.01" min="0" value="${_fpOwn2!=null?_fpOwn2:''}" placeholder="0.00" ${_DIS} onchange="flSaveFuelPrice('${ds}','${b.id}',this.value)">${_fpCost!=null?`<em>฿${_fpCost.toLocaleString()}</em>`:''}</td>
+      ${_engTd}${_wTd}${_issTd}</tr>`;
   };
 
-  // Helper: Program-closed check per pier
-  const _drPierClosed=(pierKey)=>{
-    const rts=ROUTES.filter(rt=>rt.pier===pierKey);
-    return rts.length>0 && rts.every(rt=>{
-      const _s=(typeof getDayStatus==='function')?getDayStatus(rt,ds):null;
-      return _s && _s.type==='closed';
-    });
-  };
 
+  const _e=x=>String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   // Pier section card
   const sectionCard=(label,color,bg,boats,pierKey)=>{
     if(!boats.length)return'';
@@ -23207,33 +23440,175 @@ function flRenderDR(){
 
     // Find max engine count in this section (for column alignment)
     const maxEng=Math.max(...boats.map(b=>FL_ENGINES.filter(e=>e.boatId===b.id).length),1);
+    /* §flSheet3 · ชุดคอลัมน์ของท่านี้
+       เครื่อง · รวมทุกตำแหน่งที่มีจริงในท่านี้ แล้วเรียงตามลำดับมาตรฐาน
+       ลำที่ไม่มีตำแหน่งนั้นเว้นช่องว่างไว้ คอลัมน์จึงตรงกันทุกแถวจริง ๆ
+       (ของเดิมแต่ละแถวมีจำนวนกล่องไม่เท่ากัน กวาดตาลงคอลัมน์ไม่ได้) */
+    const ENG_COLS=(function(){
+      const seen=[];
+      boats.forEach(b=>FL_ENGINES.filter(e=>e.boatId===b.id)
+        .sort((x,y)=>(typeof flPosRank==='function'?flPosRank(x.pos)-flPosRank(y.pos):0))
+        .forEach(e=>{ const L=engPosLabel(e.pos); if(seen.indexOf(L)<0) seen.push(L); }));
+      return seen.length?seen:['EN'];
+    })();
+    const ISS=flIssueFor(pierKey);
+    const NCOL=2+3+ENG_COLS.length+2+ISS.length;
 
-    return`<div style="background:white;border-radius:14px;padding:13px 14px;border:1px solid ${dim.line};margin-bottom:10px">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(0,0,0,.06)">
+    return`<div style="background:white;border-radius:14px;border:1px solid ${dim.line};margin-bottom:10px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:6px;padding:9px 13px;border-bottom:1px solid rgba(0,0,0,.06);background:#FBFAF7;flex-wrap:wrap">
         <div style="width:18px;height:18px;border-radius:50%;background:${color};color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">${label.slice(0,2)}</div>
         <span style="font-size:11px;font-weight:600;color:${color}">${label}</span>
         <span style="background:${bg};color:${color};padding:1px 8px;border-radius:9px;font-size:10px;font-weight:600;font-family:'DM Mono',monospace">${operating} operating</span>
         <span style="margin-left:auto;font-size:10px;color:${dim.ink3}">${pPAX} PAX · ${pTrips} trips · ${pFuel} L${_fcost!=null?` · <b style="color:#854F0B">฿${_fcost.toLocaleString()}</b>`:''}${(pCostMissing&&pFuel>0)?` · <span style="color:#BA7517" title="บางลำยังไม่ได้ใส่ราคา ฿/L">&#9888; บางลำไม่มีราคา</span>`:''}</span>
+        <button onclick="event.stopPropagation();flIssueQuickOpen('${pierKey}')" title="เพิ่มรายการเบิกของ · พิมพ์ชื่อเอง ชื่อที่เคยใช้ขึ้นให้เลือก" style="margin-left:12px;border:1.5px solid #9FCBB4;background:#F1FBF6;color:#0B5C46;border-radius:8px;padding:5px 12px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">+ อื่นๆ</button>
+        <button onclick="event.stopPropagation();flIssueManageOpen('${pierKey}')" title="จัดการรายการเบิกของทั้งหมด" style="border:1px solid ${dim.line};background:#fff;color:${dim.ink2};border-radius:8px;padding:5px 11px;font-size:10.5px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">&#9881; จัดการรายการ</button>
         ${locked
-          ? `<span style="margin-left:12px;display:inline-flex;align-items:center;gap:4px;background:#E1F5EE;color:#0F6E56;border-radius:7px;padding:4px 10px;font-size:10.5px;font-weight:700;white-space:nowrap"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>บันทึกแล้ว</span>
+          ? `<span style="display:inline-flex;align-items:center;gap:4px;background:#E1F5EE;color:#0F6E56;border-radius:7px;padding:4px 10px;font-size:10.5px;font-weight:700;white-space:nowrap"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>บันทึกแล้ว</span>
              <button onclick="event.stopPropagation();flDREdit('${ds}','${pierKey}')" title="แก้ไข — ปลดล็อกช่องกรอก" style="margin-left:6px;display:inline-flex;align-items:center;gap:5px;background:#fff;color:#185FA5;border:1px solid #B5D4F4;border-radius:8px;padding:5px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>Edit</button>`
-          : `<button onclick="event.stopPropagation();flSaveDayLog(this,'${pierKey}','${ds}')" title="บันทึก Daily Fleet Log ของท่านี้ · กดแล้วจะล็อกแก้ไม่ได้ (ต้องกด Edit เพื่อแก้)" style="margin-left:12px;display:inline-flex;align-items:center;gap:5px;background:#0F6E56;color:#fff;border:1px solid #0F6E56;border-radius:8px;padding:5px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Save</button>`}
+          : `<button onclick="event.stopPropagation();flSaveDayLog(this,'${pierKey}','${ds}')" title="บันทึก Daily Fleet Log ของท่านี้ · กดแล้วจะล็อกแก้ไม่ได้ (ต้องกด Edit เพื่อแก้)" style="display:inline-flex;align-items:center;gap:5px;background:#0F6E56;color:#fff;border:1px solid #0F6E56;border-radius:8px;padding:5px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Save</button>`}
       </div>
-      <div style="display:grid;grid-template-columns:32px 162px 232px 1fr;gap:14px;align-items:center;padding:5px 8px 7px;font-size:9px;color:${dim.ink3};font-weight:600;text-transform:uppercase;letter-spacing:.05em">
-        <div></div>
-        <div>Boat</div>
-        <div>Route / Trips</div>
-        <div style="display:flex;gap:9px"><span style="width:104px;flex:none;text-align:center">PAX</span><span style="width:122px;flex:none;text-align:center">Fuel (L)</span><span style="flex:1;text-align:center;border-left:1px solid ${dim.line};padding-left:9px;margin-left:0">Engine hours</span></div>
-      </div>
-      ${boats.map(b=>buildBoatRow(b,maxEng,locked)).join('')}
+      <div class="fs-wrap"><table class="fs">
+        <thead>
+          <tr class="fs-grp">
+            <th class="fsg0" colspan="2">เรือ / ทริป</th>
+            <th class="fsg1">ลูกค้า</th>
+            <th class="fsg2" colspan="2">น้ำมัน</th>
+            <th class="fsg4" colspan="${ENG_COLS.length}">&#9881; ชั่วโมงเครื่อง</th>
+            <th class="fsg3" colspan="2">&#128167; มิเตอร์น้ำ</th>
+            <th class="fsg5" colspan="${Math.max(1,ISS.length)}">&#128230; เบิกของลงเรือ
+              <span class="fs-addc" onclick="event.stopPropagation();flIssueQuickOpen('${pierKey}')" title="เพิ่มรายการอื่นๆ">+</span></th>
+          </tr>
+          <tr>
+            <th class="fs-bt">Boat</th><th class="fs-rt">Route / Trips</th>
+            <th class="fs-ro">PAX<em>จอง</em></th>
+            <th class="fs-f">Fuel<em>L</em></th><th class="fs-p">฿/L</th>
+            ${ENG_COLS.map(p=>`<th class="fs-e">${p}</th>`).join('')}
+            <th class="fs-w">เปิด<em>มิเตอร์</em></th><th class="fs-w">ปิด<em>ใช้ไป</em></th>
+            ${ISS.length?ISS.map(it=>`<th class="fs-i">${_e(it.name)}<em>${_e(it.unit||'')}${it.pier?(' · '+(it.pier==='tublamu'?'TL':it.pier==='panwa'?'VP':'RN')):''}</em></th>`).join('')
+              :'<th class="fs-i fs-na"><em>ยังไม่มีรายการ · กด +</em></th>'}
+          </tr>
+        </thead>
+        <tbody>${boats.map(b=>buildBoatRow(b,maxEng,locked,ENG_COLS,ISS)).join('')}</tbody>
+        <tfoot>${(function(){
+          /* แถวรวมท้ายตาราง · ของเดิมไม่มี ต้องเลื่อนไปบวกเองในหัว */
+          let tp=0,tf=0; const tw={}, ti={};
+          boats.forEach(b=>{
+            const bp2=boatPax[b.id]||{eff:0}; tp+=bp2.eff||0;
+            const fl=(FL_DAILY[ds]||{})[b.id]?.fuel; if(fl) tf+=fl;
+            const u=flWaterUsed(ds,b.id); if(u!=null) tw.v=(tw.v||0)+u;
+            ISS.forEach(it=>{ const v=flIssueGet(ds,b.id,it.id); if(v!=null) ti[it.id]=(ti[it.id]||0)+v; });
+          });
+          const nOut=boats.filter(b=>(boatPax[b.id]||{eff:0}).eff>0).length;
+          return `<tr>
+            <td class="fs-bt">รวม</td><td class="fs-rt">${nOut} ลำออก</td>
+            <td class="fs-n fs-ro">${tp||'—'}</td>
+            <td class="fs-n fs-f">${tf?tf.toLocaleString():'—'}</td>
+            <td class="fs-n fs-p">${_fcost!=null?('฿'+_fcost.toLocaleString()):'—'}</td>
+            ${ENG_COLS.map(()=>'<td class="fs-n fs-e">—</td>').join('')}
+            <td class="fs-n fs-w">—</td>
+            <td class="fs-n fs-w">${tw.v!=null?('<em>'+(tw.v>=0?'+':'')+(Math.round(tw.v*10)/10)+'</em>'):'—'}</td>
+            ${ISS.length?ISS.map(it=>`<td class="fs-n fs-i">${ti[it.id]!=null?ti[it.id]:'—'}</td>`).join('')
+              :'<td class="fs-n fs-i">—</td>'}
+          </tr>`; })()}</tfoot>
+      </table></div>
     </div>`;
   };
 
-  const tlSection=sectionCard('Tub Lamu','#0F6E56','#E1F5EE',tlBoats,'tublamu');
-  const vpSection=sectionCard('Visit Panwa','#185FA5','#E6F1FB',vpBoats,'panwa');
-  const rnSection=sectionCard('Ranong','#BA7517','#FAEEDA',rnBoats,'ranong');
+  /* §flSheet · ชิปกรอง · '' = ทุกท่าเหมือนเดิม */
+  const _showP=k=>!_FL_DR_PIER||_FL_DR_PIER===k;
+  const tlSection=_showP('tublamu')?sectionCard('Tub Lamu','#0F6E56','#E1F5EE',tlBoats,'tublamu'):'';
+  const vpSection=_showP('panwa')?sectionCard('Visit Panwa','#185FA5','#E6F1FB',vpBoats,'panwa'):'';
+  const rnSection=_showP('ranong')?sectionCard('Ranong','#BA7517','#FAEEDA',rnBoats,'ranong'):'';
 
-  const html=`<style>#fl-dr-body .fldr-cell{transition:box-shadow .1s,border-color .1s}#fl-dr-body .fldr-cell:focus-within{box-shadow:0 0 0 3px var(--ring,#E1F5EE);border-color:var(--rb,#1D9E75)!important;border-style:solid!important}#fl-dr-body .fldr-in::placeholder{color:#c2c0b6}#fl-dr-body .flfp-need::placeholder{color:#BA7517;opacity:1;font-weight:600}@keyframes flfpPulse{0%,100%{box-shadow:0 0 0 0 rgba(239,159,39,.30)}50%{box-shadow:0 0 0 4px rgba(239,159,39,.12)}}#fl-dr-body .flfp-box-need{animation:flfpPulse 1.6s ease-in-out infinite}#fl-dr-body .flfp-box-need:focus-within{animation:none}</style><div style="background:${dim.bg};margin:14px -16px -16px;padding:18px 20px 22px">
+  const html=`<style>#fl-dr-body .fldr-cell{transition:box-shadow .1s,border-color .1s}#fl-dr-body .fldr-cell:focus-within{box-shadow:0 0 0 3px var(--ring,#E1F5EE);border-color:var(--rb,#1D9E75)!important;border-style:solid!important}#fl-dr-body .fldr-in::placeholder{color:#c2c0b6}#fl-dr-body .flfp-need::placeholder{color:#BA7517;opacity:1;font-weight:600}@keyframes flfpPulse{0%,100%{box-shadow:0 0 0 0 rgba(239,159,39,.30)}50%{box-shadow:0 0 0 4px rgba(239,159,39,.12)}}#fl-dr-body .flfp-box-need{animation:flfpPulse 1.6s ease-in-out infinite}#fl-dr-body .flfp-box-need:focus-within{animation:none}
+/* ══ §flSheet · ตารางแบบ Sheet ═══════════════════════════════════════════
+   เลิกใช้การ์ดลอย · ทุกช่องเป็น td จริง คอลัมน์จึงตรงกันทุกแถว
+   หัวสองชั้น · ชั้นบนคือหมวด ชั้นล่างคือชื่อคอลัมน์ · แต่ละหมวดมีสีพื้นของตัวเอง
+   ไล่ลงมาถึงช่องข้อมูล และมีเส้นคั่นหนาระหว่างหมวด กวาดตาแล้วแยกกลุ่มออกทันที */
+#fl-dr-body .fs-wrap{overflow-x:auto}
+#fl-dr-body table.fs{border-collapse:collapse;width:100%;font-size:12px;font-family:inherit}
+#fl-dr-body table.fs th{background:#F4F3EE;text-align:center;font-size:9px;font-weight:800;letter-spacing:.05em;
+  text-transform:uppercase;color:#8a8a82;padding:6px 8px;border:1px solid #E5E2D9;white-space:nowrap}
+#fl-dr-body table.fs th em{display:block;font-style:normal;font-size:8px;font-weight:500;color:#b3b0a6;text-transform:none;letter-spacing:0}
+#fl-dr-body table.fs th.fs-bt,#fl-dr-body table.fs th.fs-rt{text-align:left}
+#fl-dr-body table.fs td{border:1px solid #EDEBE4;padding:4px 8px;vertical-align:middle}
+#fl-dr-body table.fs tbody tr:hover td{background:#FBFAF6}
+#fl-dr-body td.fs-bt{width:200px;white-space:nowrap}
+#fl-dr-body .fs-av{display:inline-flex;width:22px;height:22px;border-radius:50%;color:#fff;font-size:9px;font-weight:800;
+  align-items:center;justify-content:center;vertical-align:middle;margin-right:7px}
+#fl-dr-body .fs-nm{display:inline-block;vertical-align:middle;line-height:1.2;cursor:pointer}
+#fl-dr-body .fs-nm b{font-size:12.5px;font-weight:600}
+#fl-dr-body .fs-nm em{display:block;font-style:normal;font-size:9.5px;font-weight:500}
+#fl-dr-body td.fs-rt{width:250px;font-size:11px}
+#fl-dr-body td.fs-n{text-align:right;width:88px;padding:2px 7px}
+#fl-dr-body td.fs-n .fs-in{width:100%;border:none;background:transparent;outline:none;text-align:right;
+  font-family:'DM Mono',monospace;font-size:13px;font-weight:600;color:inherit;padding:3px 1px 1px;min-width:0}
+#fl-dr-body td.fs-n .fs-in::placeholder{color:#c9c7bf;font-weight:500}
+#fl-dr-body td.fs-n em{display:block;font-style:normal;font-size:9.5px;font-weight:600;text-align:right;line-height:1.1;padding-bottom:2px}
+#fl-dr-body td.fs-n:focus-within{box-shadow:inset 0 0 0 2px #1D9E75}
+#fl-dr-body td.fs-ro{background:#F2F7FC;color:#0C447C;font-family:'DM Mono',monospace;font-size:13px;font-weight:700;width:64px}
+#fl-dr-body td.fs-f{background:#FCF7EC;color:#633806} #fl-dr-body td.fs-f em{color:#BA7517}
+#fl-dr-body td.fs-f.fs-bad{background:#FCEBEB;color:#A32D2D}
+#fl-dr-body td.fs-p{background:#FDF9F0;color:#854F0B} #fl-dr-body td.fs-p em{color:#BA7517}
+#fl-dr-body td.fs-p.fs-need{background:#FFF6E0;box-shadow:inset 0 0 0 1px #EF9F27}
+#fl-dr-body td.fs-e{background:#FAFAF9;color:#3F4654}
+#fl-dr-body td.fs-w{background:#EEF8FC;color:#0C4A66;width:84px}
+#fl-dr-body td.fs-i{background:#F4FAF6;color:#0F6E56;width:72px}
+#fl-dr-body td.fs-na{background:#F7F6F3}
+#fl-dr-body th.fs-ro{background:#EAF2FA;color:#185FA5}
+#fl-dr-body th.fs-f,#fl-dr-body th.fs-p{background:#FAF3E6;color:#854F0B}
+#fl-dr-body th.fs-e{background:#F0F1EE}
+#fl-dr-body th.fs-w{background:#E4F2F8;color:#0C6285} #fl-dr-body th.fs-w em{color:#7CB4CB}
+#fl-dr-body th.fs-i{background:#EAF4EC;color:#0F6E56} #fl-dr-body th.fs-i em{color:#7FAE96}
+#fl-dr-body td.fs-dim{color:#b3b0a6;font-size:11px;text-align:right;font-style:italic;background:#FCFCFA}
+#fl-dr-body table.fs tfoot td{background:#F4F3EE;font-weight:800;border-top:2px solid #DAD6CB;font-family:'DM Mono',monospace}
+#fl-dr-body table.fs tfoot td.fs-bt,#fl-dr-body table.fs tfoot td.fs-rt{font-size:11px;color:#5F5E5A;font-family:inherit;font-weight:700}
+/* หมวด */
+#fl-dr-body tr.fs-grp th{font-size:9.5px;letter-spacing:.06em;padding:5px 8px}
+#fl-dr-body tr.fs-grp th.fsg0{background:#EFEDE6;color:#7a786f}
+#fl-dr-body tr.fs-grp th.fsg1{background:#DCEAF8;color:#12508E}
+#fl-dr-body tr.fs-grp th.fsg2{background:#F7EBD5;color:#7A4A00}
+#fl-dr-body tr.fs-grp th.fsg3{background:#D9EEF7;color:#0C5877}
+#fl-dr-body tr.fs-grp th.fsg4{background:#E6E8E4;color:#4A5350}
+#fl-dr-body tr.fs-grp th.fsg5{background:#DEF0E4;color:#0B5C46}
+#fl-dr-body .fs-addc{display:inline-flex;width:15px;height:15px;border-radius:5px;background:#0B5C46;color:#fff;
+  align-items:center;justify-content:center;font-size:12px;font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle}
+#fl-dr-body tr.fs-grp th.fsg1,#fl-dr-body tr.fs-grp th.fsg2,#fl-dr-body tr.fs-grp th.fsg3,
+#fl-dr-body tr.fs-grp th.fsg4,#fl-dr-body tr.fs-grp th.fsg5,
+#fl-dr-body th.fs-ro,#fl-dr-body th.fs-f,#fl-dr-body th.fs-e:first-of-type,
+#fl-dr-body th.fs-w:first-of-type,#fl-dr-body th.fs-i:first-of-type,
+#fl-dr-body td.fs-ro,#fl-dr-body td.fs-f,#fl-dr-body td.fs-e:first-of-type,
+#fl-dr-body td.fs-w:first-of-type,#fl-dr-body td.fs-i:first-of-type{border-left:2px solid #CFCBBF}
+/* กล่องลอย */
+.flx-ovl{position:fixed;inset:0;background:rgba(20,24,20,.34);z-index:900;display:flex;align-items:center;justify-content:center}
+.flx-dlg{width:360px;max-height:84vh;overflow:auto;background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.3);padding:15px;font-family:'DM Sans','Noto Sans Thai',sans-serif}
+.flx-h{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;color:#0B5C46;margin-bottom:11px}
+.flx-h .x{margin-left:auto;background:none;border:none;font-size:18px;color:#a3a29a;cursor:pointer;font-family:inherit}
+.flx-l{display:flex;flex-direction:column;gap:4px;font-size:10.5px;color:#5F5E5A;margin-bottom:9px}
+.flx-l input{border:1px solid #D7DBE2;border-radius:8px;padding:8px 10px;font:500 13px inherit;font-family:inherit}
+.flx-sug{display:flex;flex-direction:column;gap:5px;margin:-3px 0 11px}
+.flx-sug button{display:flex;align-items:center;gap:7px;border:1px solid #E1DED6;background:#fff;border-radius:8px;
+  padding:6px 10px;font:600 11.5px inherit;font-family:inherit;color:#3F4654;cursor:pointer;text-align:left}
+.flx-sug button:hover{border-color:#0F6E56;background:#F1FBF6}
+.flx-sug button em{font-style:normal;font-size:9.5px;color:#8a8a82;font-weight:600}
+.flx-sug button i{margin-left:auto;font-style:normal;font-size:9px;color:#a3a29a}
+.flx-sug button.off i{color:#BA7517}
+.flx-sc{display:flex;align-items:center;gap:6px;margin-bottom:12px;font-size:10.5px;color:#5F5E5A}
+.flx-sc button{border:1px solid #D7DBE2;background:#fff;color:#5F5E5A;border-radius:8px;padding:5px 12px;
+  font:700 10.5px inherit;font-family:inherit;cursor:pointer}
+.flx-sc button.on{background:#0F6E56;border-color:#0F6E56;color:#fff}
+.flx-ok{width:100%;background:#0F6E56;color:#fff;border:none;border-radius:9px;padding:10px;
+  font:700 12.5px inherit;font-family:inherit;cursor:pointer}
+.flx-r{display:flex;gap:6px;margin-bottom:6px;align-items:center}
+.flx-r input{flex:1;min-width:0;border:1px solid #D7DBE2;border-radius:7px;padding:6px 9px;font:500 12px inherit;font-family:inherit}
+.flx-r input.u{flex:0 0 70px}
+.flx-r select{flex:0 0 78px;border:1px solid #D7DBE2;border-radius:7px;padding:6px 4px;font:600 10px inherit;font-family:inherit;background:#fff}
+.flx-r .x{border:1px solid #E7E4DC;background:#fff;color:#a3a29a;border-radius:7px;width:28px;height:28px;cursor:pointer;font-size:14px;flex:none;font-family:inherit}
+.flx-r .rr{border:1px solid #9FCBB4;background:#F1FBF6;color:#0B5C46;border-radius:7px;padding:5px 11px;font:700 10.5px inherit;font-family:inherit;cursor:pointer;flex:none}
+.flx-r.gone input{background:#F7F6F2;color:#a3a29a}
+.flx-hz{font-size:9.5px;color:#a3a29a;margin:11px 0 6px;border-top:1px solid #F0EEE8;padding-top:8px}
+.flx-n{font-size:9.5px;color:#a3a29a;line-height:1.6;margin-top:10px;border-top:1px solid #F0EEE8;padding-top:9px}
+</style><div style="background:${dim.bg};margin:14px -16px -16px;padding:18px 20px 22px">
     ${headerBar}
     ${kpiStrip}
     ${pillRow}

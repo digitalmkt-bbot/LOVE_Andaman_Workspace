@@ -240,7 +240,11 @@ const B2C_OWN_BK = new Set([
   'schemaver','voucherref','agentid','createdby',   // §b2cBy · ผู้บันทึกฝั่ง B2C · ops แก้เองได้ (b2coverride คุ้มให้)
   'leadpax','leadnationality','leadphone','leademail',
   'status','total','note','notes','bookingdate',   // §b2cSreq · notes = B2C special request + internal remark
-  'pickupself','pickuparea','pickupzone','hotelname','dropoffhotelname',
+  'pickupself','pickuparea','pickupzone','hotelname',
+  // §b2cDrop · dropoffsame joins dropoffhotelname as B2C-owned: B2C is the source of truth for
+  // "does this booking return somewhere else". dropoffareaid/dropoffarea are deliberately absent
+  // (same rule as pickupareaid) so the mapper seeds them once and ops keeps any hand correction.
+  'dropoffhotelname','dropoffsame',
   'paymentsnapshot_method','paymentsnapshot_netdays','paymentsnapshot_source',
   'paymentsnapshot_contractversion','paymentsnapshot_paid','paymentsnapshot_paidstatus',
   'paymentsnapshot_deposit','paymentsnapshot_balance',   // §deposit · mapper has always produced these; columns added by migration 013
@@ -322,7 +326,12 @@ const B2C_OWN_BK = new Set([
 //      blank. 44 items on file carry one. Migration 022 seeds b2coverride='["notes"]' on every b2c_
 //      booking whose notes ops had already typed by hand (3 rows), so this back-fill adds the field
 //      where it was empty and never overwrites an ops note.
-const B2C_MAP_VER = 23;
+// v24: §b2cDrop · carries dropoffSame + a best-effort dropoffAreaId/dropoffArea, not just the hotel
+//      text. dropoffsame was NULL on every B2C booking and ops tests it as `=== false`, so a separate
+//      drop-off was imported and then invisible on the booking card, the detail row, the return-van
+//      alert and the van job order. The flag is recomputed rather than copied — B2C sets it false on
+//      NoTransfer orders whose drop-off simply repeats the pickup pier.
+const B2C_MAP_VER = 24;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -615,7 +624,33 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
   // matched nothing showed a bare dash. Pass the name through either way: the ops area's own wording
   // when it matched, else B2C's raw text so staff at least see what the customer picked.
   const areaName = areaHit ? areaHit.name : pickupArea;
-  const dropoffLoc = (det.dropoffSame === false) ? String(det.dropoffHotel || det.dropoffLocation || '').trim() : '';
+  // Drop-off. Until §b2cDrop the mapper read det.dropoffSame only as a gate and returned nothing but
+  // dropoffHotelName, so sb_bookings.dropoffsame stayed NULL on all 215 B2C rows. Every ops consumer
+  // tests it strictly (bkV2RetInfo · bkDropOf · vanJobsOrderInner · the booking card and detail row all
+  // do `dropoffSame === false`), and NULL is not false — so a separate drop-off was stored and then
+  // hidden everywhere, and the return van grouped under the PICKUP area. LOV-5003086 (pickup Panwa,
+  // drop-off KIRI Restaurant Naithon Beach) is the case that surfaced it.
+  //
+  // B2C's own flag cannot be piped through verbatim: 24 of the 28 items carrying dropoffSame:false are
+  // NoTransfer self-arrive orders whose dropoffLocation just repeats the pickup pier ("Visit Panwa
+  // Pier" → "Visit Panwa Pier"). Trusting those would raise 24 false "returns elsewhere, no return van
+  // arranged" alerts. Require a genuinely different place before telling ops the return leg differs.
+  const _dnorm = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const dropoffRaw = String(det.dropoffHotel || det.dropoffLocation || '').trim();
+  const dropoffSep = det.dropoffSame === false && !noTransfer && !!dropoffRaw
+    && _dnorm(dropoffRaw) !== _dnorm(pickupLoc) && _dnorm(dropoffRaw) !== _dnorm(pickupArea);
+  const dropoffLoc = dropoffSep ? dropoffRaw : '';
+  // B2C has no dropoffArea field at all — only the one free-text dropoffLocation ("KIRI Restaurant,
+  // Naithon Beach"), unlike pickup where pickupLocation is already a clean area name. findArea's
+  // substring pass handles it (L.includes(N) → 'naithon'), and it returns null unless the hit is
+  // unique, so an ambiguous string leaves the area unassigned rather than guessing. Try the pickup
+  // zone first, then zone-free: a drop-off can legitimately be in another zone, and B2C sends none.
+  const dropAreaHit = (dropoffSep && typeof findArea === 'function')
+    ? (findArea(dropoffLoc, pickupZone) || findArea(dropoffLoc, '')) : null;
+  const dropAreaId = dropAreaHit ? dropAreaHit.id : null;
+  // Unlike pickupArea this does NOT fall back to the raw text: that text is a hotel, not an area, and
+  // it would print a hotel name in the ops Zone column. dropoffHotelName already carries it.
+  const dropAreaName = dropAreaHit ? dropAreaHit.name : '';
   const trip = {
     id: 'b2c_' + h.booking_id + '_' + h.line_no + '_t0',
     routeId: opsRouteId,
@@ -663,7 +698,14 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
     pickupSelf: noTransfer,
     pickupAreaId: areaId,
     pickupArea: areaName,
+    // §b2cDrop · dropoffSame is the gate every ops consumer reads; true = same as pickup, matching the
+    // in-app default (bkV2 seeds dropoffSame:true). dropoffAreaId/dropoffArea are best-effort and stay
+    // OUT of B2C_OWN_BK, exactly like pickupAreaId — ops fixes the match by hand and B2C must not
+    // stomp it (that hand-assigned 'Naithon' on LOV-5003086 is the reason the rule exists).
+    dropoffSame: !dropoffSep,
     dropoffHotelName: dropoffLoc,
+    dropoffAreaId: dropAreaId,
+    dropoffArea: dropAreaName,
     // §b2cSreq (2026-09-02): the two free-text boxes B2C sales fills in on the item — "Special request
     // (sent to ops team)" and "Internal remark". Neither used to cross over at all, so a private
     // charter booked with the boat name typed into the special request arrived here blank.
@@ -686,7 +728,11 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
            // Show ops the AREA that failed to match, not the hotel — the area is what they need to
            // pick by hand, and naming it makes a missing sb_pickup_areas entry obvious.
            (!areaId && !noTransfer && (pickupArea || pickupLoc))
-             ? `Pickup: ${pickupArea || pickupLoc}${pickupZone ? ' (' + pickupZone + ')' : ''} — area unassigned` : null].filter(Boolean).join(' · '),
+             ? `Pickup: ${pickupArea || pickupLoc}${pickupZone ? ' (' + pickupZone + ')' : ''} — area unassigned` : null,
+           // Same flag for the return leg: a separate drop-off whose free text matched no area needs a
+           // hand-assigned dropoffAreaId or vanJobsOrderInner groups the return van under the pickup area.
+           (dropoffSep && !dropAreaId)
+             ? `Drop-off: ${dropoffLoc} — area unassigned` : null].filter(Boolean).join(' · '),
     trips: [trip],
     passengers: isFirstLine ? b2cPassengerList(paxRows) : [],
     addOns: b2cMapAddOns(det, addOn, routeLookupId, addonCat),
