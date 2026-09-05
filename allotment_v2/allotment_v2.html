@@ -60398,6 +60398,85 @@ function tsRefPackList(date){
     return (typeof _docIsB2B==='function') ? _docIsB2B(b) : !!b.agentId;
   }).map(function(r){ return { bk:r.b, trip:r.t }; });
 }
+/* ══ §tsSlipPack (2026-09-05) · ชุดสลิปการชำระเงินท้ายใบสรุป ══════════════
+   เงินที่รับหน้าท่ามีสามทาง · pierPayments (COT/ยอดค้าง) · SB_EXTRAS (ขายเพิ่ม) · upgrades
+   ทั้งสามเก็บสลิปไว้ในตัวเอง (slips[]) คนละที่กับ bk.attachments · ชุดเอกสารเดิมจึงไม่เห็น
+   บัตรเครดิตต้องมีสลิปคู่กับยอดถึงจะกระทบยอดกับ statement ของ EDC ได้ · ใบปิดวันเลยต้องพิมพ์ติดไปด้วย
+   เดินตามชิปกรองเส้นทาง/VAT ชุดเดียวกับ tsRefPackList ไม่งั้นเอกสารของอีกชุดจะหลุดมา */
+function tsSlipPackList(date){
+  var rows=tsRows(date);
+  if(_tsRoute) rows=rows.filter(function(r){ return (r.routeId||'')===_tsRoute; });
+  if(_tsVatF) rows=rows.filter(function(r){
+    return _tsVatF==='vat' ? tsHasVat(r.b) : !tsHasVat(r.b);
+  });
+  var LAB={cash:'เงินสด', transfer:'โอนเงิน', card:'บัตรเครดิต'};
+  var num=function(n){ return (typeof pckNum==='function')?pckNum(n):String(+n||0); };
+  var out=[];
+  rows.forEach(function(r){
+    var b=r.b, imgs=[], miss=0, tot=0, who=[];
+    var push=function(src, title, mth, amt, fee, byWho, note){
+      var ss=Array.isArray(src)?src:[];
+      tot+=(+amt||0);
+      if(byWho && who.indexOf(byWho)<0) who.push(byWho);
+      /* สดไม่ต้องมีสลิป · รูด/โอนแล้วไม่มี = ของขาด ต้องขึ้นกระดาษให้เห็น */
+      if(!ss.length){ if((mth||'cash')!=='cash') miss++; return; }
+      ss.forEach(function(f){
+        imgs.push({ f:f, cap:(LAB[mth]||mth||'—')+' ฿'+num(amt)
+          +((+fee||0)>0?(' · ค่าธรรมเนียม ฿'+num(fee)):'')
+          +' · '+title+(byWho?(' · '+byWho):'')+(note?(' · '+note):'') });
+      });
+    };
+    ((typeof pckPaysFor==='function')?pckPaysFor(b,date):[]).forEach(function(p){
+      push(p.slips, 'เงินหน้าท่า', p.method, p.amount, p.fee, p.by, p.note);
+    });
+    var S=(typeof tsSaleList==='function')?tsSaleList(b,date):{list:[]};
+    (S.list||[]).forEach(function(x){
+      if(!x.done) return;   /* ยังไม่เก็บ = ยังไม่มีเงิน จึงยังไม่ต้องมีสลิป */
+      push(x.slips, (x.kind==='up'?'อัปเกรด · ':'ขายเพิ่ม · ')+x.t, x.method, x.amt, x.fee, x.who, '');
+    });
+    if(!imgs.length && !miss) return;   /* สดล้วน / ไม่มีเงินเข้าวันนี้ = ไม่ต้องมีหน้า */
+    out.push({ bk:b, trip:r.t, imgs:imgs, miss:miss, tot:tot, who:who.join(' · ') });
+  });
+  return out;
+}
+/* หน้ากระดาษใช้ class ชุดเดียวกับ _docPackPage จึงได้ CSS · ขนาดกระดาษ · และตัววาด PDF ฟรี */
+function _tsSlipPage(r, i, total, date, kicker){
+  var e=_docPackEsc, b=r.bk, t=r.trip;
+  var R=((typeof getRoute==='function'?getRoute(t.routeId):null)||{});
+  var ag=((typeof sbGetAgent==='function'?sbGetAgent(b.agentId):null)||{});
+  var num=function(n){ return (typeof pckNum==='function')?pckNum(n):String(+n||0); };
+  var n=r.imgs.length;
+  var grid=(n<=1)?'one':(n===2)?'two':(n<=4)?'four':'many';
+  var body;
+  if(!n){
+    body='<div class="miss"><div class="mi">&#9888;</div><b>รูด/โอนแล้วแต่ยังไม่มีสลิป</b><span>'+r.miss+' รายการ</span></div>';
+  } else {
+    body='<div class="grid '+grid+'">'+r.imgs.map(function(x,k){
+      var f=x.f||{}, url='/api/attach/'+encodeURIComponent(f.id);
+      var isImg=/^image\//.test(f.mime||'');
+      var isPdf=/pdf/i.test(f.mime||'') || /\.pdf$/i.test(f.name||'');
+      var box=isImg?('<img src="'+url+'" alt="">')
+             :isPdf?('<canvas class="pdfc" data-pdf="'+url+'"></canvas>'
+                    +'<div class="pdfw">&#128196; '+e(f.name||'file')+' &middot; กำลังเปิดไฟล์ PDF…</div>')
+                   :('<div class="nf"><div class="mi">&#128196;</div><span>'+e(f.name||'file')+'</span></div>');
+      return '<figure><div class="sc">'+box+'</div><figcaption>'+(k+1)+'/'+n+' &middot; '+e(x.cap)+'</figcaption></figure>';
+    }).join('')+'</div>';
+    if(r.miss>0) body+='<div class="short">&#9888; ยังมีรายการรูด/โอนที่ไม่มีสลิปอีก '+r.miss+' รายการ</div>';
+  }
+  return '<section class="pg">'
+    + '<header><span>LOVE Andaman &middot; '+e(kicker||'สลิปการชำระเงิน')+' &middot; '+e(date)+'</span><span>หน้า '+(i+1)+' / '+total+'</span></header>'
+    + '<div class="trip">ทริป &middot; '+e(R.name||t.routeId)+(R.pier?(' &middot; '+e(_DOCPACK_PIER[R.pier]||R.pier)):'')+'</div>'
+    + '<div class="bk"><div class="r1"><b>'+e(b.leadPax||'—')+'</b><span>รับเงินรวม &#3647;'+num(r.tot)+'</span></div>'
+    +   '<div class="r2">'+e(ag.name||b.agentId||'')+(b.voucherRef?(' &middot; '+e(b.voucherRef)):'')
+    +   (r.who?(' &middot; รับโดย '+e(r.who)):'')+'</div></div>'
+    + '<div class="body">'+body+'</div>'
+    + '<footer><span>&#9744; ยอดตรงกับ statement</span><span>ผู้ตรวจ ________________</span></footer>'
+    + '</section>';
+}
+function _tsSlipPages(list, date, kicker){
+  var total=list.length;
+  return list.map(function(r,i){ return _tsSlipPage(r,i,total,date,kicker); }).join('');
+}
 function tsPrintSheet(){
   var host=document.getElementById('travelsum-host'); if(!host) return;
   var date=_tsDate;
@@ -60406,6 +60485,10 @@ function tsPrintSheet(){
     ? _docPackPages(list, date, 'Reference · เอกสารประกอบ'
         + (_tsVatF ? (_tsVatF==='vat' ? ' · เฉพาะมี VAT' : ' · เฉพาะไม่มี VAT') : '')
         + (_tsRoute ? (' · '+tsRouteName(_tsRoute)) : '')) : '';
+  // §tsSlipPack · สลิปบัตร/โอนของเงินที่รับวันนี้ · ต่อท้ายชุดเอกสารอ้างอิง ในกระดาษชุดเดียวกัน
+  var slipL=(typeof tsSlipPackList==='function')?tsSlipPackList(date):[];
+  var slipPack=(slipL.length && typeof _tsSlipPages==='function')
+    ? _tsSlipPages(slipL, date, 'Payment slips · สลิปการชำระเงิน') : '';
   var w=window.open('','_blank');
   if(!w){ alert('เบราว์เซอร์บล็อกป๊อปอัป · อนุญาต pop-up แล้วลองใหม่'); return; }
   // ฟอนต์ · ยกทุก <link rel=stylesheet> ที่ชี้ไปโรงฟอนต์จากหน้าหลักไปด้วย
@@ -60434,7 +60517,7 @@ function tsPrintSheet(){
   w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Travel Summary '+ckEsc(date)+'</title>'
     +fontLinks+'<style>'+css+'</style></head><body class="ts-printing">'
     +'<div id="travelsum-host">'+host.innerHTML+'</div>'
-    +(pack?('<div class="la-docpack">'+pack+'</div>'):'')
+    +((pack||slipPack)?('<div class="la-docpack">'+pack+slipPack+'</div>'):'')
     +'<style>'+pageCSS+'</style>'
     +boot+'</body></html>');
   w.document.close();
@@ -60705,6 +60788,25 @@ function tsNoCollect(r, paid){
   if(+paid>0) return false;                          // §paid · เก็บไปแล้วค่อยยกเลิก = เรื่องคืนเงิน ไม่ใช่ไม่นับ
   return (r.travelled<=0) && ((+r.cxl>0)||(+r.ns>0)||(+r.noShow>0));
 }
+/* ══ §tsPaySlip · ชิปวิธีรับเงินในตารางหลัก กดเปิดดูสลิปได้ ══════════════════
+   ชิปตัวนี้เป็น "ยอดรวมต่อวิธีรับเงิน" ไม่ใช่เงินก้อนเดียว · ยอดหนึ่งชิปมาจาก
+   สองที่เก็บคนละแห่ง คือ pierPayments กับของที่ขายเพิ่ม (SB_EXTRAS + upgrades)
+   เดิมจึงมีแต่ตัวเลข ไม่มี slips[] ให้กด · ตัวนี้ไล่เก็บสลิปของทั้งสองที่
+   ที่ใช้วิธีรับเงินเดียวกัน มารวมเป็นชุดเดียว laSlipView เลื่อนดูทีละใบได้อยู่แล้ว
+   รายการที่ยังไม่เก็บเงิน (COT · รอเก็บ) ข้ามไป ยังไม่มีเงินก็ยังไม่มีสลิป */
+function tsSlipsForMethod(booking, date, method, saleList){
+  var slips=[];
+  ((typeof pckPaysFor==='function')?pckPaysFor(booking,date):[]).forEach(function(payment){
+    if((payment.method||'cash')!==method) return;
+    slips=slips.concat(Array.isArray(payment.slips)?payment.slips:[]);
+  });
+  ((saleList&&saleList.list)||[]).forEach(function(saleLine){
+    if(!saleLine.done) return;
+    if((saleLine.method||'cash')!==method) return;
+    slips=slips.concat(Array.isArray(saleLine.slips)?saleLine.slips:[]);
+  });
+  return slips;
+}
 function tsPayCell(r, date){
   var b=r.b, e=ckEsc, L=[];
   var m=function(n){ return '฿'+pckNum(n); };   // §pierDecimal · ยอดหน้าท่ามีสตางค์ได้ ต้องโชว์ให้ตรงกับกล่องเก็บเงิน
@@ -60786,7 +60888,13 @@ function tsPayCell(r, date){
   if(mk.length){
     L.push('<span class="ts-pyms">'+mk.map(function(k){
       var d=PMB[k]||[k,'n'];
-      return '<span class="ts-chip '+d[1]+' ts-pyx">'+d[0]+' '+m(byAll[k])+'</span>';
+      var label=d[0]+' '+m(byAll[k]);
+      /* §tsPaySlip · มีสลิปแล้วค่อยกดได้ · สดกับตัวที่ยังไม่แนบ คงเป็นตัวหนังสือเฉย ๆ */
+      var slips=(typeof tsSlipsForMethod==='function')?tsSlipsForMethod(b,date,k,S):[];
+      if(!slips.length) return '<span class="ts-chip '+d[1]+' ts-pyx">'+label+'</span>';
+      return '<span class="ts-chip '+d[1]+' ts-pyx" style="cursor:pointer" '
+        +laSlipClickAttr(slips, label)+' title="'+e(label+' · มีสลิปแล้ว '+slips.length+' ไฟล์ · กดเพื่อเปิดดู')+'">'
+        +'&#128206; '+label+'</span>';
     }).join('')+'</span>');
     if(who.length) L.push('<span class="ts-pyn2">'+e('รับโดย '+who.join(' · '))+'</span>');
   }
