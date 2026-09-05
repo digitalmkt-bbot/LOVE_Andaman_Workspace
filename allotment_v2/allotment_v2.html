@@ -96514,7 +96514,20 @@ function pjGdDefLb(kind, idx){
 /* extra = แถวนี้มีอยู่เพราะกด "เพิ่มคน" เปิดไว้ · ยังไม่มีคนก็ปิดทิ้งได้
    ของเดิมปุ่ม ✕ ขึ้นเฉพาะแถวที่มีคนแล้ว · แถวว่างที่กดเปิดมาจึงปิดไม่ได้เลย
    ต้องรีเฟรชหน้าถึงจะหาย (_pjGdAdd อยู่ในหน่วยความจำ) */
-function pjGdRow(label, bid, kind, idx, val, langs, taken, busy, extra){
+/* §gdLead · คนที่ขึ้นช่อง "มัคคุเทศก์" หัวใบสั่งงาน · คนแรกที่เป็นบทบาทไกด์ใน A.g
+   อ่านแบบเดียวกับ goSheet ทุกประการ รวมถึงการข้ามคนที่ถูกลบออกจากทะเบียนไปแล้ว
+   (goSheet กรองด้วย .filter(Boolean) หลัง goGuide · การ์ดต้องข้ามให้ตรงกัน
+    ไม่งั้นการ์ดชี้คนหนึ่ง กระดาษพิมพ์อีกคนหนึ่ง) */
+function pjGdLead(bid){
+  try{
+    var g=(goAsn(_poDate,bid).g)||[];
+    for(var i=0;i<g.length;i++){
+      var o=goGuide(g[i]); if(o && goIsGuide(o)) return g[i];
+    }
+  }catch(_){}
+  return '';
+}
+function pjGdRow(label, bid, kind, idx, val, langs, taken, busy, extra, lead){
   var chips=(langs||[]).map(function(L){ return '<span class="pj-lg">'+poE(L)+'</span>'; }).join('');
   var call=function(v){ return 'pjGdPick(\''+poE(bid)+'\',\''+kind+'\','+idx+','+v+')'; };
   var slot=pjGdSlot(kind,idx), def=pjGdDefLb(kind,idx), lb=pjSlotLb('gd',slot,def);
@@ -96530,6 +96543,11 @@ function pjGdRow(label, bid, kind, idx, val, langs, taken, busy, extra){
     +((val||extra)
        ? ('<button class="pj-rx" onclick="pjGdDrop(\''+poE(bid)+'\',\''+kind+'\','+idx+','+(val?1:0)+')"'
           +' title="'+(val?'เอาคนออกจากช่องนี้':'ปิดช่องว่างที่เปิดไว้')+'">&#10005;</button>')
+       : '')
+    +((lead&&val&&val===lead)
+       ? ('<span class="pj-tag" title="'+poE('ชื่อและเลขใบอนุญาตของคนนี้ขึ้นช่อง "มัคคุเทศก์" '
+           +'บนหัวใบสั่งงานมัคคุเทศก์ · ที่เหลือนับเป็นผู้ติดตาม '
+           +'· ต้องการเปลี่ยนหัวหน้า เลือกคนนั้นลงช่องแรก แล้วสองคนจะสลับที่กัน')+'">หัวหน้า</span>')
        : '')
     +(chips?('<span class="pj-lgs">'+chips+'</span>'):'')
   +'</div>';
@@ -96550,14 +96568,21 @@ function pjGdPick(bid, kind, idx, val){
      ไม่งั้นใส่คนแรกลงใบเปล่าจะไปกินช่องว่างที่กดเปิดไว้สำหรับคนที่สอง */
   var addBase=(kind==='gd')?Math.max(1,pos.length):pos.length;
   if(val && idx>=addBase){ var ak=pjGdAddKey(bid,kind); if(_pjGdAdd[ak]>0) _pjGdAdd[ak]--; }
-  /* เขียนช่องที่กดก่อน · ช่องที่ยังไม่มีใครอยู่ก็ต่อท้ายรายการ */
   var tgt=(idx<pos.length)?pos[idx]:-1;
-  if(tgt>=0){ if(val) ids[tgt]=val; else ids.splice(tgt,1); }
-  else if(val){ ids.push(val); tgt=ids.length-1; }
-  /* แล้วค่อยตัดตัวซ้ำ · คนเดียวลงได้ช่องเดียว เลือกคนที่อยู่ช่องอื่นแล้ว = ย้ายมาช่องนี้
-     ต้องตัดหลังเขียน ไม่ใช่ก่อน · ตัดก่อนแล้วตำแหน่งช่องที่กดจะเลื่อน
-     กลายเป็นสลับที่กันสองคนแทนที่จะย้ายคนเดียว */
-  if(val) ids=ids.filter(function(id,i){ return i===tgt || id!==val; });
+  if(!val){ if(tgt>=0) ids.splice(tgt,1); }
+  else {
+    /* §gdLead · คนเดียวลงได้ช่องเดียว · เลือกคนที่อยู่ช่องอื่นของกลุ่มเดียวกัน = สลับที่กัน
+       ไม่ใช่ลบคนเดิมทิ้ง · ช่องแรกคือมัคคุเทศก์ผู้รับผิดชอบใบสั่งงาน การ "ตั้งคนที่สอง
+       ขึ้นเป็นหัวหน้า" จึงต้องทำได้ด้วยการเลือกเขาลงช่อง Guide 1 ตรง ๆ
+       ของเดิมทำแบบนั้นแล้วหัวหน้าคนเก่าหายไปจากใบเลย */
+    var dup=ids.indexOf(val);
+    if(dup>=0 && dup!==tgt){
+      if(tgt>=0){ ids[dup]=ids[tgt]; ids[tgt]=val; }   /* สลับที่ */
+      else { ids.splice(dup,1); ids.push(val); }       /* ย้ายลงช่องที่เพิ่งเปิด */
+    }
+    else if(tgt>=0) ids[tgt]=val;
+    else ids.push(val);
+  }
   goAsnSet(_poDate,bid,{g:ids, other:(+A.other||0), sign:(+A.sign||0)});
   renderPierJob();
 }
@@ -96884,9 +96909,10 @@ function pjCard(B, pier, ro){
             /* §gdLb · แถวที่เกินจากช่องที่มีอยู่ = แถวที่กดเปิดไว้ · ปิดทิ้งได้
                ฐานของไกด์รวมช่องแรกที่โชว์เสมอ ช่อง Guide 1 จึงไม่มีปุ่มปิด */
             var baseG=Math.max(1, gd.length), baseT=tr.length;
+            var lead=pjGdLead(bid);   /* §gdLead */
             for(k=0; k<nG; k++)
               out+=pjGdRow(pjGdDefLb('gd',k), bid, 'gd', k,
-                    (gd[k]||{}).id||'', (gd[k]||{}).langs||[], taken, busy, k>=baseG);
+                    (gd[k]||{}).id||'', (gd[k]||{}).langs||[], taken, busy, k>=baseG, lead);
             for(k=0; k<nT; k++)
               out+=pjGdRow(pjGdDefLb('tr',k), bid, 'tr', k,
                     (tr[k]||{}).id||'', (tr[k]||{}).langs||[], taken, busy, k>=baseT);
@@ -96913,6 +96939,10 @@ function pjCard(B, pier, ro){
                   +poE(pjSlotLb('gd',pjGdSlot('gd',nG),pjGdDefLb('gd',nG)))+'</button>'
                 +'<button onclick="pjGdAddSlot(\''+poE(bid)+'\',\'tr\')">'
                   +poE(pjSlotLb('gd',pjGdSlot('tr',nT),pjGdDefLb('tr',nT)))+'</button>'
+                /* §gdLb · แถวที่เพิ่มมาเปลี่ยนชื่อตำแหน่งได้ · ต้องบอกตรงนี้
+                   ไม่งั้นไม่มีอะไรชวนให้ลองคลิกที่ชื่อช่อง */
+                +'<div class="pf">เพิ่มแล้วคลิกที่ชื่อช่องเพื่อตั้งชื่อตำแหน่งเองได้'
+                  +' · เลือกกลุ่มให้ถูกก่อน เพราะกลุ่มเป็นตัวกำหนดว่าจะเห็นใครในช่องเลือก</div>'
               +'</div></div>';
             /* จำนวนคนของกลุ่มนี้ · วางหัวกลุ่มแบบเดียวกับ "N คน" ของลูกเรือ */
             return '<div class="pj-slotn">'+(gd.length+tr.length+(+GF.other||0))+' คน</div>'
