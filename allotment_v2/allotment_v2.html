@@ -53756,6 +53756,11 @@ function pcCSS(scope){
   +scope+' .pc-t th,'+scope+' .pc-t td{border-right:1px solid #E4E8F0;border-bottom:1px solid #E4E8F0;'
     +'padding:7px 10px;white-space:nowrap}'
   +scope+' .pc-t tr>*:last-child{border-right:none}'
+  /* §pcEqCol · ทุกช่องกว้างเท่ากันหมด · table-layout:fixed + width:auto ทับ width ที่ติดมากับ th
+     ตารางเลยหารพื้นที่เท่า ๆ กันทุกคอลัมน์ ไม่มีช่องไหนกว้างกว่าช่องไหน
+     ข้อความยาวเกินช่องตัดด้วย ellipsis (ยัง nowrap เหมือนเดิม จะได้ไม่ดันแถวสูงขึ้น) */
+  +scope+' .pc-t{table-layout:fixed}'
+  +scope+' .pc-t th,'+scope+' .pc-t td{width:auto!important;overflow:hidden;text-overflow:ellipsis}'
   +scope+' .pc-t th{background:#F4F6FA;font-size:9.5px;font-weight:800;letter-spacing:.05em;color:#5A6B8C;'
     +'position:sticky;top:0;z-index:3;text-align:left;border-bottom:1.5px solid #C9D2E0}'
   +scope+' .pc-t th.g{text-align:center;border-bottom:1px solid #E4E8F0}'
