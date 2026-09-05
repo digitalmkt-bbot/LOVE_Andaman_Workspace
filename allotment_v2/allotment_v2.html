@@ -47993,10 +47993,31 @@ function bkV2AssignBoat(bkId, boatId, date){
   // re-render whichever surface is showing
   if(_bkV2 && _bkV2.boatAssignMode && typeof bkV2Render==='function') bkV2Render(); else renderBoatAssign();
 }
+/* ══ §btTickScroll (2026-09-05) · ติ๊กเลือกแถวแล้วตารางเด้งกลับหัว ═════════════
+   ติ๊กหนึ่งครั้ง = bkV2Render() วาดใหม่ทั้งหน้า · innerHTML ใหม่ทำให้ .t2-wrap
+   (กล่องเลื่อนของตาราง By-trip) เป็นคนละตัว scrollTop จึงกลับเป็น 0 ทุกครั้ง
+   ติ๊กหลายแถวที่อยู่ท้ายตารางแทบไม่ได้ ต้องเลื่อนลงมาใหม่ทุกครั้ง
+   เก็บตำแหน่งไว้ก่อนวาด แล้วคืนหลังวาดเสร็จ · ต้องคืนใน rAF ต่ออีกสองชั้น
+   เพราะ bkV2Render ตั้งความสูงกล่อง (--bt-wraph) และดึง margin ล่างใน rAF ของมันเอง
+   ถ้าคืนก่อนหน้านั้น กล่องยังเตี้ยอยู่ เบราว์เซอร์จะตัดค่าที่คืนทิ้ง */
+function bkV2KeepScroll(fn){
+  const _wrap=()=>{ const h=document.getElementById('bkv2-host'); return h?h.querySelector('.t2-wrap'):null; };
+  const w=_wrap();
+  const t=w?w.scrollTop:0, l=w?w.scrollLeft:0, y=window.scrollY||0;
+  fn();
+  const put=()=>{ try{
+    const w2=_wrap();
+    if(w2){ if(t) w2.scrollTop=t; if(l) w2.scrollLeft=l; }
+    if(y) window.scrollTo(0,y);
+  }catch(_){} };
+  put();
+  requestAnimationFrame(()=>{ put(); requestAnimationFrame(put); });
+}
+function bkV2RenderKeep(){ if(typeof bkV2Render==='function') bkV2KeepScroll(bkV2Render); }
 // ── Boat Assign · multi-select (tick) then assign all at once ──
 window._bkV2BoatSel = window._bkV2BoatSel || {};
-function bkV2BoatSelToggle(bkId){ const s=window._bkV2BoatSel; if(s[bkId]) delete s[bkId]; else s[bkId]=true; if(typeof bkV2Render==='function') bkV2Render(); }
-function bkV2BoatSelClear(){ window._bkV2BoatSel={}; if(typeof bkV2Render==='function') bkV2Render(); }
+function bkV2BoatSelToggle(bkId){ const s=window._bkV2BoatSel; if(s[bkId]) delete s[bkId]; else s[bkId]=true; bkV2RenderKeep(); }
+function bkV2BoatSelClear(){ window._bkV2BoatSel={}; bkV2RenderKeep(); }
 // Assign every ticked booking (that belongs to this trip) to one boat · respects the cap+TOL guard · skips + reports the ones that would overflow
 function bkV2BoatAssignSelected(date, routeId, boatId){
   if(!boatId) return;
@@ -48193,8 +48214,8 @@ function bkV2VanClearRoute(date, routeId){
   if(_bkV2&&_bkV2.vanAssignMode&&typeof bkV2Render==='function') bkV2Render();
 }
 // ── Manual van grouping · mark bookings that go together = 1 group · van assigned to the group later (optional) ──
-function bkV2VanSelToggle(bkId){ window._bkV2VanSel=window._bkV2VanSel||{}; if(window._bkV2VanSel[bkId]) delete window._bkV2VanSel[bkId]; else { window._bkV2VanSelN=(window._bkV2VanSelN||0)+1; window._bkV2VanSel[bkId]=window._bkV2VanSelN; } if(typeof bkV2Render==='function') bkV2Render(); }   // value = tick order (for pickup sequencing)
-function bkV2VanSelClear(){ window._bkV2VanSel={}; if(typeof bkV2Render==='function') bkV2Render(); }
+function bkV2VanSelToggle(bkId){ window._bkV2VanSel=window._bkV2VanSel||{}; if(window._bkV2VanSel[bkId]) delete window._bkV2VanSel[bkId]; else { window._bkV2VanSelN=(window._bkV2VanSelN||0)+1; window._bkV2VanSel[bkId]=window._bkV2VanSelN; } bkV2RenderKeep(); }   // value = tick order (for pickup sequencing) · §btTickScroll คงตำแหน่งเลื่อนไว้
+function bkV2VanSelClear(){ window._bkV2VanSel={}; bkV2RenderKeep(); }
 // ── Allocation-aware grouping · a booking can be split (bk.ops.vanSplits[]) across vans · selection key = bkId or bkId@splitIndex ──
 // Zone membership for van grouping. Charter (เหมาลำ) rows live in a dedicated '__CHARTER__' namespace so their
 // van groups don't collide with seat groups in the same pickup zone (charter is shown in its own card).
