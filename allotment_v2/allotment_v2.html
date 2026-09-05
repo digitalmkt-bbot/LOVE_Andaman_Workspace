@@ -52823,6 +52823,25 @@ function pcMoney(n){ return '฿'+Math.round(+n||0).toLocaleString('en-US'); }
 function pcN(n){ return Math.round(+n||0).toLocaleString('en-US'); }
 function pcE(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+/* §pkNat (2026-09-05) · สัญชาติจริงของ นทท. · คนละเรื่องกับช่องราคา
+   ช่อง ad_th/ad_fr ทำหน้าที่สองอย่างมาตลอด · เลือกเรทราคาที่นั่งตามสัญญา
+   และบอกสัญชาติให้ค่าอุทยานไปด้วยในตัวเดียวกัน
+   สองอย่างนี้ตรงกันเกือบตลอด เลยไม่มีใครเห็นว่ามันเป็นเลขก้อนเดียวกัน
+   จนกว่าจะเจอสัญญาที่ไม่มีราคาไทย (ตอนนี้มี 8 ฉบับที่ยัง active)
+   คนไทยที่จองผ่านสัญญาพวกนั้นต้องคีย์ลงช่อง ตปท. ไม่งั้นราคาที่นั่งผิด
+   แล้วหน้าค่าอุทยานก็พลอยไปซื้อตั๋วฝรั่งให้เขา 400 ทั้งที่ด่านเก็บ 40
+   t.nat = {ad,chd,inf,foc} เก็บ "จำนวนคนไทยจริง" อย่างเดียว ไม่แตะราคา
+   ไม่ได้กรอก = ทั้งก้อนไม่มี (os_repo ข้ามคอลัมน์ NULL) → ถอยไปใช้ช่องราคาเหมือนเดิม
+   กรอกเป็น 0 ทั้งสี่ = มีคนดูแล้วว่าไม่มีคนไทย · คนละความหมายกับไม่ได้กรอก */
+function bkNatHas(t){ var n=t&&t.nat; return !!(n && typeof n==='object'
+  && ['ad','chd','inf','foc'].some(function(k){ return n[k]!=null && n[k]!==''; })); }
+/* หัวคนไทยจริงของประเภทนั้น · ไม่เกินหัวทั้งหมดของประเภทนั้น (pax แก้ทีหลังได้ nat ต้องไม่ค้างเกิน) */
+function bkNatTH(t,k){
+  var px=(t&&t.pax)||{};
+  var all=(+px[k+'_th']||0)+(+px[k+'_fr']||0)+(+px[k]||0);
+  if(!bkNatHas(t)) return Math.min(+px[k+'_th']||0, all);
+  return Math.max(0, Math.min(+((t.nat||{})[k])||0, all));
+}
 /* หัวคนของลำนั้นวันนั้น · แยกไทย/ต่างชาติ และ ผญ/เด็ก/INF
    คนที่ไม่ระบุสัญชาติ นับเป็นต่างชาติไว้ก่อน · คิดสูงไว้ดีกว่าคิดต่ำแล้วเงินขาด
    ใบที่ยกเลิกทั้งใบหน้างาน (pckVoidInfo) ไม่นับ · ไม่ได้ขึ้นเกาะจริง */
@@ -52832,9 +52851,11 @@ function pcE(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,
    และคนหน้าท่าต้องมาไล่ลบเองทุกครั้งที่มีคนไม่มา
    ย้ายมาใช้ pckOnBoard ตัวเดียวกับ P&L · หัวรวมมาจากตัวนั้น แล้วกระจายลง
    ช่องสัญชาติตามสัดส่วนที่จองมา เพราะไม่มีทางรู้ว่าคนที่หายไปสัญชาติไหน   */
+/* §pkNat · คืนสองชุด · o = ตามช่องราคาที่ขาย (ของเดิม) · o.n = ตามสัญชาติจริง
+   ทั้งสองชุดผ่านการปัดเศษแบบเดียวกัน จะได้เทียบกันได้ตรง ๆ ว่าต่างกันกี่หัว/กี่บาท */
 function pcPax(date,bid,pier){
-  var o={ad_th:0,chd_th:0,inf_th:0,foc_th:0,ad_fr:0,chd_fr:0,inf_fr:0,foc_fr:0,tot:0};
-  var exact=0;
+  var Z=function(){ return {ad_th:0,chd_th:0,inf_th:0,foc_th:0,ad_fr:0,chd_fr:0,inf_fr:0,foc_fr:0,tot:0}; };
+  var o=Z(), n=Z(), exact=0, anyNat=false;
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     var t=(typeof ckTripOn==='function')?ckTripOn(b,date):null; if(!t) return;
@@ -52849,20 +52870,31 @@ function pcPax(date,bid,pier){
     if(!real) return;                       /* ทั้งใบไม่ได้ไป · ไม่ต้องซื้อตั๋วให้ */
     var ratio=booked?(real/booked):0;
     exact+=real;
+    if(bkNatHas(t)) anyNat=true;
     /* §pcFix · FOC มีแยกสัญชาติเหมือน ad/chd/inf · ช่องเปล่า ๆ ที่ไม่ระบุสัญชาติ (px.ad, px.foc)
        เททิ้งไปฝั่งต่างชาติเหมือนเดิม · คิดสูงไว้ก่อนดีกว่าคิดต่ำแล้วเงินขาด */
     ['ad','chd','inf','foc'].forEach(function(k){
+      var all=(+px[k+'_th']||0)+(+px[k+'_fr']||0)+(+px[k]||0);
       o[k+'_th'] += (+px[k+'_th']||0) * ratio;
       o[k+'_fr'] += ((+px[k+'_fr']||0) + (+px[k]||0)) * ratio;
+      var th=bkNatTH(t,k);
+      n[k+'_th'] += th * ratio;
+      n[k+'_fr'] += Math.max(0, all-th) * ratio;
     });
   });
   /* ปัดทีเดียวตอนท้าย · ปัดรายใบแล้วบวกกัน ยอดรวมจะเพี้ยนจากหัวจริง
      เศษที่เหลือยกให้ฝั่งต่างชาติ · ตั๋วฝั่งนั้นแพงกว่า เตรียมเงินเผื่อดีกว่าไปขาดที่ด่าน */
-  var sum=0;
-  PC_PK.forEach(function(k){ o[k]=Math.round(o[k]); sum+=o[k]; });
-  var diff=Math.round(exact)-sum;
-  if(diff!==0){ o.ad_fr=Math.max(0,o.ad_fr+diff); sum=0; PC_PK.forEach(function(k){ sum+=o[k]; }); }
-  o.tot=sum;
+  var fin=function(x){
+    var sum=0;
+    PC_PK.forEach(function(k){ x[k]=Math.round(x[k]); sum+=x[k]; });
+    var diff=Math.round(exact)-sum;
+    if(diff!==0){ x.ad_fr=Math.max(0,x.ad_fr+diff); sum=0; PC_PK.forEach(function(k){ sum+=x[k]; }); }
+    x.tot=sum; return x;
+  };
+  fin(o); fin(n);
+  o.n=n;
+  o.hasNat=anyNat;                                          /* มีใบไหนระบุสัญชาติจริงไว้บ้างไหม */
+  o.natDiff=PC_PK.some(function(k){ return o[k]!==n[k]; }); /* สองชุดไม่ตรงกัน = มีเงินให้ประหยัด */
   return o;
 }
 var PC_PK=['ad_th','chd_th','inf_th','foc_th','ad_fr','chd_fr','inf_fr','foc_fr'];
@@ -52954,18 +52986,45 @@ function pcRateChip(R){
     +'อุทยาน · ตปท '+pcN(R.ad_fr)+'/'+pcN(R.chd_fr)
     +' · ไทย '+pcN(R.ad_th)+'/'+pcN(R.chd_th)+w+'</span>';
 }
-/* §pcCalc · เติมจำนวนจากใบจองลงช่องคีย์ทีเดียวทั้ง 6 ช่อง
-   กันกับดัก · พอคีย์ช่องเดียว อีก 5 ช่องกลายเป็น 0 แล้วยอดคำนวณตกโดยไม่ตั้งใจ
+/* §pcCalc · เติมจำนวนจากใบจองลงช่องคีย์ทีเดียวทั้ง 8 ช่อง
+   กันกับดัก · พอคีย์ช่องเดียว อีก 7 ช่องกลายเป็น 0 แล้วยอดคำนวณตกโดยไม่ตั้งใจ
    ให้เติมของจริงมาก่อนแล้วค่อยแก้เฉพาะช่องที่ต่าง */
-function pcFillPK(ds,bid,pier){
+/* §pkNat · ถามทุกครั้งว่าจะเติมชุดไหน · สัญชาติจริงของ นทท. หรือช่องราคาที่ขาย
+   ไม่ใช้ confirm() เพราะมันตอบได้แค่ 2 ทาง แต่ที่นี่ต้องมีทางถอยด้วย
+   แผงเลือกโผล่ในช่องนั้นเลย · เก็บว่ากำลังถามลำไหนไว้ที่ตัวแปรเดียว
+   วาดใหม่ทั้งชีทเหมือนทุกปุ่มในหน้านี้ (pcKeep คืนตำแหน่ง scroll ให้อยู่แล้ว) */
+var _pcFillAsk='';
+function pcFillAsk(ds,bid){ if(!pcGuard()) return; _pcFillAsk=ds+'::'+bid; pcKeep(); }
+function pcFillAskOff(){ _pcFillAsk=''; pcKeep(); }
+function pcFillPK(ds,bid,pier,src){
   if(!pcGuard()) return;
   var X=pcPax(ds,bid,pier||_pcPier);
+  var S=(src==='price')?X:X.n;              /* ไม่ระบุ = สัญชาติจริง (ซึ่งถอยไปเท่าช่องราคาเองถ้าไม่มีใครกรอก) */
   var D=pcDay(_pcPier,ds,true); D.pk[bid]=D.pk[bid]||{};
-  PC_PK.forEach(function(k){ D.pk[bid][k]=+X[k]||0; });
+  PC_PK.forEach(function(k){ D.pk[bid][k]=+S[k]||0; });
   D.pk[bid].by=pcWho(); D.pk[bid].ts=new Date().toISOString();
+  D.pk[bid].src=(src==='price')?'price':'nat';   /* เติมมาจากชุดไหน · ไล่ย้อนได้ตอนเลขไม่ตรง */
   var any=PC_PK.some(function(k){ return +D.pk[bid][k]>0; })||+D.pk[bid].amt>0||+D.pk[bid].dock>0;
   if(!any) delete D.pk[bid];
+  _pcFillAsk='';
   pcSave(); pcKeep();
+}
+/* แผงเลือกชุดตัวเลข · โชว์หัวคนกับยอดเงินของทั้งสองทางให้เห็นก่อนกด */
+function pcFillPanel(ds,bid,pier,X,R){
+  var mini=function(c){ return 'ไทย '+pcN(c.ad_th+c.chd_th+c.inf_th+c.foc_th)
+    +' · ตปท '+pcN(c.ad_fr+c.chd_fr+c.inf_fr+c.foc_fr); };
+  var money=function(c){ var a=pcParkAmt(R,c); return (a==null)?'':(' → '+pcMoney(a)); };
+  var save=null;
+  try{ var an=pcParkAmt(R,X.n), ap=pcParkAmt(R,X); if(an!=null&&ap!=null&&ap!==an) save=ap-an; }catch(_){}
+  return '<div class="pc-ask">'
+   +'<span class="q">เติมจากชุดไหน</span>'
+   +'<button class="nat" onclick="pcFillPK(\''+ds+'\',\''+bid+'\',\''+pier+'\',\'nat\')">'
+     +'🛂 สัญชาติจริง (นทท.)<br><b>'+mini(X.n)+money(X.n)+'</b></button>'
+   +'<button onclick="pcFillPK(\''+ds+'\',\''+bid+'\',\''+pier+'\',\'price\')">'
+     +'💵 ตามเรทที่ขาย<br><b>'+mini(X)+money(X)+'</b></button>'
+   +(save?('<span class="q" style="margin:3px 0 4px">ต่างกัน '+pcMoney(save)+' · ชุดบนถูกกว่า</span>'):'')
+   +'<button class="no" onclick="pcFillAskOff()">ยกเลิก</button>'
+   +'</div>';
 }
 /* ช่องส่วนต่าง · จ่ายจริง − ยอดคำนวณ */
 function pcDiffCell(paid,exp){
@@ -53383,6 +53442,20 @@ function pcCSS(scope){
   +scope+' .pc-fill{display:inline-block;margin:3px 0 0 5px;border:1px solid #CFDDF5;background:#fff;'
     +'color:#2C4F8A;border-radius:6px;padding:1px 8px;font:600 10.5px inherit;font-family:inherit;cursor:pointer}'
   +scope+' .pc-fill:hover{background:#EEF4FF;border-color:#9CBCE8}'
+  /* §pkNat · ป้ายเทียบสองชุด + แผงเลือกตอนเติมจากใบจอง */
+  +scope+' .pc-nat{display:inline-block;margin-top:3px;margin-left:5px;font-size:10.5px;font-weight:700;'
+    +'background:#EAF6F0;border:1px solid #B7E2D2;color:#0F6E56;border-radius:6px;padding:1px 7px;cursor:help}'
+  +scope+' .pc-ask{margin-top:5px;background:#FBFAF7;border:1px solid #E2DED4;border-radius:8px;padding:6px 8px}'
+  +scope+' .pc-ask .q{display:block;font-size:10px;font-weight:700;color:#5A6070;margin-bottom:4px}'
+  +scope+' .pc-ask button{display:block;width:100%;text-align:left;margin-bottom:3px;border-radius:6px;'
+    +'padding:3px 7px;font:600 10.5px inherit;font-family:inherit;cursor:pointer;'
+    +'border:1px solid #CFDDF5;background:#fff;color:#2C4F8A}'
+  +scope+' .pc-ask button.nat{border-color:#B7E2D2;color:#0F6E56}'
+  +scope+' .pc-ask button.nat:hover{background:#EAF6F0}'
+  +scope+' .pc-ask button:hover{background:#EEF4FF}'
+  +scope+' .pc-ask button.no{border-color:#E2DED4;color:#8A8F9B;margin-bottom:0}'
+  +scope+' .pc-ask button.no:hover{background:#F2F0EB}'
+  +scope+' .pc-ask b{font-family:"DM Mono",monospace}'
   /* §pcLtSplit · หัวคอลัมน์ "ใช้จริง" สองบรรทัด + ป้ายข้อมูลเดิมที่ยังไม่ได้แยกจอย/เหมา */
   +scope+' .pc-t th .sub{display:block;font-size:8.5px;font-weight:600;opacity:.78;margin-top:1px}'
   +scope+' .pc-oldn{display:inline-block;margin-left:7px;background:#FBF0DD;color:#7A4A00;'
@@ -53467,7 +53540,11 @@ function pcSheetMain(pier){
      +'<input class="pc-dt" type="date" value="'+ds+'" onchange="pcPickDay(this.value)">'
      +'<button class="pc-btn" onclick="pcShift(-1)">‹ วันก่อน</button>'
      +'<button class="pc-btn" onclick="pcShift(1)">วันถัดไป ›</button>'
-     +'<span class="sp"></span><span class="n">'+rows.length+' รายการ</span></div>'
+     +'<span class="sp"></span><span class="n">'+rows.length+' รายการ</span>'
+     /* §pcPrint · ใบรับรองฯ เอาไปเบิก Petty Cash · สมุดเดินบัญชีเอาไว้นับเงินในลิ้นชัก */
+     +'<button class="pc-btn pri" onclick="pcPrintCert()" title="ดึงเฉพาะรายจ่ายของวันที่เลือก ลงในแบบฟอร์มใบรับรองแทนใบเสร็จรับเงิน">&#128424; ใบรับรองแทนใบเสร็จ</button>'
+     +'<button class="pc-btn" onclick="pcPrintLedger()" title="พิมพ์สมุดเดินบัญชีของวันที่เลือก · ยอดยกมา รับ จ่าย คงเหลือ">&#128424; สมุดวันนี้</button>'
+     +'<button class="pc-btn" onclick="pcCoEdit()" title="ชื่อบริษัทที่พิมพ์ลงหัวใบรับรองแทนใบเสร็จรับเงิน">แก้ชื่อบริษัท</button></div>'
    +'<div class="pc-gw"><table class="pc-t"><thead><tr>'
      /* §pcPick · ติ๊กหัวตาราง = เลือก/ล้างทั้งวัน */
      +'<th class="selc"><input type="checkbox" id="pc-selall" class="pc-cb" '
@@ -53556,8 +53633,13 @@ function pcMonthTable(pier){
      +'ยังไม่นับเป็นเงินออกจนกว่าจะกด <b>⤓ ดึง</b> เข้าสมุด</div>';
 }
 /* ── ชีท 2 · เรือหางยาว ──────────────────────────────────────────────── */
-function pcSheetLT(pier){
-  var dates=pcDates(pier,_pcYM), body='', rn=0, gj=0,gc=0,guj=0,guc=0,gm=0, nb=0;
+function pcSheetLT(pier, opt){
+  opt=opt||{}; var PR=!!opt.print;
+  var dates=opt.only?[opt.only]:pcDates(pier,_pcYM), body='', rn=0, gj=0,gc=0,guj=0,guc=0,gm=0, nb=0;
+  /* โหมดกระดาษ · ช่องกรอกกลายเป็นค่าที่กรอกไว้ ไม่มีขีดเส้นใต้ ไม่มีกล่อง */
+  var box=function(cls,val,inner){ return PR
+    ? ('<td class="'+cls+' pr">'+pcE(val===''||val==null?'—':val)+'</td>')
+    : ('<td class="'+cls+'">'+inner+'</td>'); };
   dates.forEach(function(ds){
     var BS=pcBoats(ds,pier); if(!BS.length) return;
     var D=pcDay(pier,ds,false)||{lt:{}};
@@ -53580,16 +53662,20 @@ function pcSheetLT(pier){
             : '<span class="v z">0</span>')+'</td>'
         /* §pcLtSplit · ใช้จริงแยกสองช่อง · หน้างานจอยอาจยุบลำ เหมาอาจใช้น้อยกว่าที่จอง
            รวมกันเป็นเลขเดียวแล้วดูย้อนหลังไม่ออกว่าที่ต่างจากใบจองคือฝั่งไหน */
-        +'<td class="cb"><input value="'+(U.j!=null?U.j:'')+'" placeholder="—" inputmode="numeric" '
+        +box('cb', (U.j!=null?U.j:''),
+          '<input value="'+(U.j!=null?U.j:'')+'" placeholder="—" inputmode="numeric" '
           +'title="จำนวนลำที่ใช้จริงของฝั่งจอย" '
-          +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'nj\',this.value)"></td>'
-        +'<td class="cb"><input value="'+(U.c!=null?U.c:'')+'" placeholder="—" inputmode="numeric" '
+          +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'nj\',this.value)">')
+        +box('cb', (U.c!=null?U.c:''),
+          '<input value="'+(U.c!=null?U.c:'')+'" placeholder="—" inputmode="numeric" '
           +'title="จำนวนลำที่ใช้จริงของฝั่งเหมา" '
-          +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'nc\',this.value)"></td>'
-        +'<td class="cy"><input value="'+(C.amt?pcN(C.amt):'')+'" placeholder="—" inputmode="numeric" '
-          +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'amt\',this.value)"></td>'
-        +'<td class="ctx"><input value="'+pcE(C.note||'')+'" placeholder="—" '
-          +'onchange="pcSetLTNote(\''+ds+'\',\''+B.bid+'\',this.value)"></td></tr>';
+          +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'nc\',this.value)">')
+        +box('cy', (C.amt?pcN(C.amt):''),
+          '<input value="'+(C.amt?pcN(C.amt):'')+'" placeholder="—" inputmode="numeric" '
+          +'onchange="pcSetLT(\''+ds+'\',\''+B.bid+'\',\'amt\',this.value)">')
+        +box('ctx', (C.note||''),
+          '<input value="'+pcE(C.note||'')+'" placeholder="—" '
+          +'onchange="pcSetLTNote(\''+ds+'\',\''+B.bid+'\',this.value)">')+'</tr>';
     });
     gj+=dj; gc+=dc; guj+=duj; guc+=duc; gm+=dm;
     body+='<tr class="day'+(ds===pcNowDS()?' now':'')+'" id="pcd-'+pier+'-'+ds+'"><td colspan="9">'
@@ -53600,12 +53686,14 @@ function pcSheetLT(pier){
       +'<td class="v">'+(duj||'—')+'</td><td class="v">'+(duc||'—')+'</td>'
       +'<td class="r">'+(dm?pcN(dm):'—')+'</td><td></td></tr>';
   });
-  if(!body) body='<tr><td colspan="9" style="color:#B9BCC6;padding:20px 12px">ไม่มีเรือออกในเดือนนี้</td></tr>';
+  if(!body) body='<tr><td colspan="9" style="color:#B9BCC6;padding:20px 12px">'
+    +(opt.only?'ไม่มีเรือออกในวันนี้':'ไม่มีเรือออกในเดือนนี้')+'</td></tr>';
   return '<div class="pc-sheet">'
-   +'<div class="pc-tb"><b>🛶 สรุปเรือหางยาวรายวัน</b>'
+   +(PR?'':('<div class="pc-tb"><b>🛶 สรุปเรือหางยาวรายวัน</b>'
      +'<input class="pc-dt" type="month" value="'+_pcYM+'" onchange="pcMonth(this.value)">'
      +'<span class="n">'+dates.length+' วัน · '+nb+' ลำ</span>'
-     +'<span class="sp"></span><span class="n">รวม '+pcMoney(gm)+'</span></div>'
+     +'<span class="sp"></span><span class="n">รวม '+pcMoney(gm)+'</span>'
+     +'<button class="pc-btn pri" onclick="pcPrintLT()">&#128424; พิมพ์วันที่เลือก</button></div>'))
    +'<div class="pc-gw"><table class="pc-t"><thead><tr>'
      +'<th class="rn">#</th><th style="width:150px">เรือ</th><th>โปรแกรม</th>'
      +'<th class="c" style="width:74px">จอย</th><th class="c" style="width:74px">เหมา</th>'
@@ -53614,20 +53702,24 @@ function pcSheetLT(pier){
      +'<th class="r key" style="width:118px">จ่ายจริง</th>'
      +'<th style="width:170px">หมายเหตุ</th></tr></thead>'
      +'<tbody>'+body+'</tbody>'
-     +'<tfoot><tr class="grand"><td class="rn"></td><td colspan="2">รวมทั้งเดือน</td>'
+     +'<tfoot><tr class="grand"><td class="rn"></td><td colspan="2">'+(opt.only?'รวมทั้งวัน':'รวมทั้งเดือน')+'</td>'
        +'<td class="v">'+gj+'</td><td class="v">'+gc+'</td>'
        +'<td class="v">'+guj+'</td><td class="v">'+guc+'</td>'
        +'<td class="r">'+pcMoney(gm)+'</td><td></td></tr></tfoot></table></div>'
-   +'<div class="pc-note"><b>ช่องขาว = ระบบอ่านให้</b> จอยเป็นหัวที่ขึ้นเรือจริง (หักคนไม่มาแล้ว) · เหมาเป็นลำตามที่สั่งไว้ · '
+   +(PR?'':('<div class="pc-note"><b>ช่องขาว = ระบบอ่านให้</b> จอยเป็นหัวที่ขึ้นเรือจริง (หักคนไม่มาแล้ว) · เหมาเป็นลำตามที่สั่งไว้ · '
      +'<b>ช่องฟ้ากับช่องเหลือง = คนหน้าท่ากรอกเอง</b> เพราะหน้างานมักไม่ตรงกับที่จองมา — '
      +'จอย 3 คนอาจลงลำเดียว หรือเหมา 2 ลำแต่ใช้จริงลำเดียว · '
      +'<b>ใช้จริงแยกจอย/เหมา</b> เพื่อดูย้อนหลังได้ว่าที่ต่างจากใบจองคือฝั่งไหน · '
-     +'ยอดจ่ายจริงของแต่ละวันจะไปโผล่เป็นบรรทัดเดียวในชีทหน้าหลัก</div>'
+     +'ยอดจ่ายจริงของแต่ละวันจะไปโผล่เป็นบรรทัดเดียวในชีทหน้าหลัก</div>'))
    +'</div>';
 }
 /* ── ชีท 3 · ค่าอุทยาน ───────────────────────────────────────────────── */
-function pcSheetPK(pier){
-  var dates=pcDates(pier,_pcYM), body='', rn=0, nb=0;
+function pcSheetPK(pier, opt){
+  opt=opt||{}; var PR=!!opt.print;
+  var dates=opt.only?[opt.only]:pcDates(pier,_pcYM), body='', rn=0, nb=0;
+  var box=function(cls,val,inner){ return PR
+    ? ('<td class="'+cls+' pr">'+pcE(val===''||val==null?'—':val)+'</td>')
+    : ('<td class="'+cls+'">'+inner+'</td>'); };
   var Z=function(){ return PC_PK.map(function(){ return 0; }); };
   var GT=Z(), GK=Z(), gtot=0, gktot=0, gm=0, gex=0, gdk=0;
   dates.forEach(function(ds){
@@ -53637,39 +53729,61 @@ function pcSheetPK(pier){
     BS.forEach(function(B){
       rn++; nb++;
       var X=pcPax(ds,B.bid,pier), C=(D.pk||{})[B.bid]||{};
+      /* §pkNat · ช่องนับ = สัญชาติจริงของ นทท. · ใบที่ไม่มีใครระบุ X.n จะเท่ากับ X เอง
+         ของเก่าทุกใบจึงได้เลขเดิมเป๊ะ · ชุดตามเรทที่ขาย (X) เก็บไว้เทียบให้เห็นว่าต่างกันกี่บาท */
+      var XN=X.n;
       var kt=0, hasK=false;
-      PC_PK.forEach(function(k,i){ DT[i]+=X[k]; if(+C[k]>0){ hasK=true; } kt+=(+C[k]||0); DK[i]+=(+C[k]||0); });
+      PC_PK.forEach(function(k,i){ DT[i]+=XN[k]; if(+C[k]>0){ hasK=true; } kt+=(+C[k]||0); DK[i]+=(+C[k]||0); });
       if(hasK||+C.amt>0) anyk=true;
-      dtot+=X.tot; dktot+=kt; dm+=(+C.amt||0); ddk+=(+C.dock||0);
+      dtot+=XN.tot; dktot+=kt; dm+=(+C.amt||0); ddk+=(+C.dock||0);
       /* §pcCalc · คีย์แล้วคิดตามที่คีย์ · ยังไม่คีย์คิดตามใบจองไปก่อน จะได้เห็นตัวเลขตั้งแต่ก่อนออกเรือ */
       var R=pcParkRate(B.rid);
-      var basis=hasK?C:X;
+      var basis=hasK?C:XN;
       var exp=pcParkAmt(R,basis);
       if(exp!=null){ dex+=exp; anyx=true; }
       var HF=PC_PK.length/2;   /* ครึ่งแรก = คนไทย ครึ่งหลัง = ต่างชาติ */
       var cells=PC_PK.map(function(k,i){
         var cls=(i<HF)?'th2':'fr2';
-        return '<td class="v '+cls+(i===HF?' gs':'')+(X[k]?'':' z')+'">'+X[k]+'</td>'; }).join('');
+        return '<td class="v '+cls+(i===HF?' gs':'')+(XN[k]?'':' z')+'">'+XN[k]+'</td>'; }).join('');
       var keys=PC_PK.map(function(k,i){
         /* ขอบเข้ม = จำนวนที่คีย์ไม่ตรงกับยอดเดินทางจริง · ไม่ใช่ error แต่ต้องเห็น */
-        var mm=(hasK && (+C[k]||0)!==(+X[k]||0))?' mm':'';
-        return '<td class="cy ct'+((i===0||i===HF)?' gs':'')+mm+'"><input value="'+(C[k]||'')+'" placeholder="—" '
-          +'inputmode="numeric" onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\''+k+'\',this.value)"></td>'; }).join('');
+        var mm=(hasK && (+C[k]||0)!==(+XN[k]||0))?' mm':'';
+        return box('cy ct'+((i===0||i===HF)?' gs':'')+mm, (C[k]||''),
+          '<input value="'+(C[k]||'')+'" placeholder="—" '
+          +'inputmode="numeric" onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\''+k+'\',this.value)">'); }).join('');
       var exc=(exp==null)
         ? '<td class="pc-ex na"><b>—</b><i>'+pcE((R.why||'ไม่มีราคา'))+'</i></td>'
-        : '<td class="pc-ex"><b>'+pcN(exp)+'</b><i>'+(hasK?'ตามที่คีย์':'ตามหัวจริง')+'</i></td>';
+        : '<td class="pc-ex"><b>'+pcN(exp)+'</b><i>'+(hasK?('ตามที่คีย์'+(C.src==='price'?' · เรทขาย':(C.src==='nat'?' · สัญชาติจริง':'')))
+            :'ตามหัวจริง')+'</i></td>';
+      /* §pkNat · สองชุดไม่ตรงกัน = มีใบที่ขายเรทหนึ่งแต่คนเดินทางอีกสัญชาติหนึ่ง
+         บอกทั้งเลขเดิมและเงินที่ต่าง · ตัดสินใจได้โดยไม่ต้องเปิดใบจองไล่ดูทีละใบ */
+      var natChip='';
+      if(X.natDiff){
+        var an=pcParkAmt(R,XN), ap=pcParkAmt(R,X);
+        var gap=(an!=null&&ap!=null)?(ap-an):null;
+        var pn=function(c){ return 'ไทย '+pcN(c.ad_th+c.chd_th+c.inf_th+c.foc_th)
+          +'/ตปท '+pcN(c.ad_fr+c.chd_fr+c.inf_fr+c.foc_fr); };
+        natChip='<span class="pc-nat" title="ช่องนับใช้สัญชาติจริงของ นทท. ('+pn(XN)+')'
+          +' · ถ้าคิดตามช่องราคาที่ขายจะเป็น '+pn(X)
+          +(gap!=null?(' · ค่าอุทยานต่างกัน '+pcMoney(Math.abs(gap))):'')+'">'
+          +'🛂 '+pn(XN)+(gap>0?(' · ประหยัด '+pcMoney(gap)):(gap<0?(' · เพิ่ม '+pcMoney(-gap)):''))+'</span>';
+      }
       rows+='<tr><td class="rn">'+rn+'</td><td class="bn">'+pcE(B.name)+'</td>'
-        +'<td class="rt">'+pcRouteName(B.rid,B.route)+'<br>'+pcRateChip(R)
-          +(hasK?'':'<button class="pc-fill" title="คัดลอกยอดเดินทางจริง (หักคนที่ไม่ได้ขึ้นเรือแล้ว) มาใส่ช่องคีย์ทั้ง 8 ช่อง แล้วค่อยแก้เฉพาะที่ต่าง" '
-            +'onclick="pcFillPK(\''+ds+'\',\''+B.bid+'\',\''+pier+'\')">⤓ เติมจากใบจอง</button>')
+        +'<td class="rt">'+pcRouteName(B.rid,B.route)+'<br>'+pcRateChip(R)+natChip
+          +((hasK||PR)?'':(_pcFillAsk===(ds+'::'+B.bid)
+            ? pcFillPanel(ds,B.bid,pier,X,R)
+            : ('<button class="pc-fill" title="คัดลอกยอดเดินทางจริง (หักคนที่ไม่ได้ขึ้นเรือแล้ว) มาใส่ช่องคีย์ทั้ง 8 ช่อง แล้วค่อยแก้เฉพาะที่ต่าง" '
+            +'onclick="pcFillAsk(\''+ds+'\',\''+B.bid+'\',\''+pier+'\')">⤓ เติมจากใบจอง</button>')))
           +'</td>'+cells
-        +'<td class="v">'+X.tot+'</td>'+keys
-        +'<td class="cy"><input value="'+(C.dock?pcN(C.dock):'')+'" placeholder="—" inputmode="numeric" '
-          +'onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'dock\',this.value)"></td>'
+        +'<td class="v">'+XN.tot+'</td>'+keys
+        +box('cy', (C.dock?pcN(C.dock):''),
+          '<input value="'+(C.dock?pcN(C.dock):'')+'" placeholder="—" inputmode="numeric" '
+          +'onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'dock\',this.value)">')
         +'<td class="v gs"'+(hasK?' style="background:#FFFDF5;color:#7A4A00"':'')+'>'+(hasK?kt:'—')+'</td>'
         +exc
-        +'<td class="cy"><input value="'+(C.amt?pcN(C.amt):'')+'" placeholder="—" inputmode="numeric" '
-          +'onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'amt\',this.value)"></td>'
+        +box('cy', (C.amt?pcN(C.amt):''),
+          '<input value="'+(C.amt?pcN(C.amt):'')+'" placeholder="—" inputmode="numeric" '
+          +'onchange="pcSetPK(\''+ds+'\',\''+B.bid+'\',\'amt\',this.value)">')
         +pcDiffCell(+C.amt||0, exp)+'</tr>';
     });
     PC_PK.forEach(function(k,i){ GT[i]+=DT[i]; GK[i]+=DK[i]; });
@@ -53687,14 +53801,16 @@ function pcSheetPK(pier){
       +'<td class="r">'+(dm?pcN(dm):'—')+'</td>'
       +pcDiffCell(dm, anyx?dex:null)+'</tr>';
   });
-  if(!body) body='<tr><td colspan="25" style="color:#B9BCC6;padding:20px 12px">ไม่มีเรือออกในเดือนนี้</td></tr>';
+  if(!body) body='<tr><td colspan="25" style="color:#B9BCC6;padding:20px 12px">'
+    +(opt.only?'ไม่มีเรือออกในวันนี้':'ไม่มีเรือออกในเดือนนี้')+'</td></tr>';
   return '<div class="pc-sheet">'
-   +'<div class="pc-tb"><b>🏝️ สรุปค่าอุทยานรายวัน</b>'
+   +(PR?'':('<div class="pc-tb"><b>🏝️ สรุปค่าอุทยานรายวัน</b>'
      +'<input class="pc-dt" type="month" value="'+_pcYM+'" onchange="pcMonth(this.value)">'
      +'<span class="n">'+dates.length+' วัน · '+nb+' ลำ · '+gtot+' คน</span>'
      +'<span class="sp"></span><span class="n">คำนวณ '+pcMoney(gex)+'</span>'
      +'<span class="n">จ่ายจริง '+pcMoney(gm)+'</span>'
-     +'<span class="n">ค่าจอด '+pcMoney(gdk)+'</span></div>'
+     +'<span class="n">ค่าจอด '+pcMoney(gdk)+'</span>'
+     +'<button class="pc-btn pri" onclick="pcPrintPK()">&#128424; พิมพ์วันที่เลือก</button></div>'))
    +'<div class="pc-gw"><table class="pc-t"><thead>'
      +'<tr><th class="rn" rowspan="3">#</th>'
        +'<th rowspan="3" style="width:126px;vertical-align:bottom">เรือ</th>'
@@ -53719,7 +53835,7 @@ function pcSheetPK(pier){
        +'<th class="c key gs" style="width:46px">ผญ</th><th class="c key" style="width:46px">เด็ก</th>'
        +'<th class="c key" style="width:46px">INF</th><th class="c key" style="width:46px">FOC</th></tr>'
      +'</thead><tbody>'+body+'</tbody>'
-     +'<tfoot><tr class="grand"><td class="rn"></td><td colspan="2">รวมทั้งเดือน</td>'
+     +'<tfoot><tr class="grand"><td class="rn"></td><td colspan="2">'+(opt.only?'รวมทั้งวัน':'รวมทั้งเดือน')+'</td>'
        +GT.map(function(v,i){ return '<td class="v'+(i===PC_PK.length/2?' gs':'')+'">'+v+'</td>'; }).join('')
        +'<td class="v">'+gtot+'</td>'
        +GK.map(function(v,i){ return '<td class="v'+((i===0||i===PC_PK.length/2)?' gs':'')+'">'+v+'</td>'; }).join('')
@@ -53728,7 +53844,7 @@ function pcSheetPK(pier){
        +'<td class="pc-ex gs"><b>'+pcMoney(gex)+'</b></td>'
        +'<td class="r">'+pcMoney(gm)+'</td>'
        +pcDiffCell(gm, gex)+'</tr></tfoot></table></div>'
-   +'<div class="pc-note"><b>ฝั่งซ้ายเขียว = ตามใบจอง</b> ระบบอ่านให้ แก้ไม่ได้ · '
+   +(PR?'':('<div class="pc-note"><b>ฝั่งซ้ายเขียว = ตามใบจอง</b> ระบบอ่านให้ แก้ไม่ได้ · '
      +'<b>ฝั่งขวาเหลือง = จ่ายจริงที่ด่าน</b> คีย์จำนวนคนเองได้ครบทั้ง 8 ช่อง แล้วค่อยใส่ค่าจอดกับเงินที่จ่าย<br>'
      +'ที่ต้องคีย์เองเพราะหน้าด่านมักไม่ตรงกับใบจอง — เด็กต่ำกว่า 3 ขวบไม่เก็บ · บางคนไม่ขึ้นเกาะ · '
      +'บางเกาะคนละราคา · <b>เก็บไว้ทั้งสองฝั่งจะเทียบทีหลังได้ว่าต่างกันกี่คน เพราะอะไร</b><br>'
@@ -53743,7 +53859,7 @@ function pcSheetPK(pier){
      +'<b>⤓ เติมจากใบจอง</b> ดึงเลขจริงมาก่อน แล้วค่อยแก้เฉพาะช่องที่ต่าง<br>'
      +'<b>FOC คิดราคาผู้ใหญ่ตามสัญชาติ</b> เพราะด่านไม่สนใจว่าเราเก็บเงินลูกค้าหรือเปล่า<br>'
      +'<b>ค่าจอด</b> เป็นคนละก้อนกับค่าอุทยาน · ใส่เงินอย่างเดียว ไม่ต้องนับหัว · '
-     +'ยอดรวมของวันจะไปโผล่เป็นบรรทัด “ค่าจอดเรือ” ในชีทหน้าหลัก</div>'
+     +'ยอดรวมของวันจะไปโผล่เป็นบรรทัด “ค่าจอดเรือ” ในชีทหน้าหลัก</div>'))
    +'</div>';
 }
 /* ชื่อวัน · ยาวสำหรับหัวกลุ่ม สั้นสำหรับแถวรวม */
@@ -61111,6 +61227,85 @@ function tsRefPackList(date){
     return (typeof _docIsB2B==='function') ? _docIsB2B(b) : !!b.agentId;
   }).map(function(r){ return { bk:r.b, trip:r.t }; });
 }
+/* ══ §tsSlipPack (2026-09-05) · ชุดสลิปการชำระเงินท้ายใบสรุป ══════════════
+   เงินที่รับหน้าท่ามีสามทาง · pierPayments (COT/ยอดค้าง) · SB_EXTRAS (ขายเพิ่ม) · upgrades
+   ทั้งสามเก็บสลิปไว้ในตัวเอง (slips[]) คนละที่กับ bk.attachments · ชุดเอกสารเดิมจึงไม่เห็น
+   บัตรเครดิตต้องมีสลิปคู่กับยอดถึงจะกระทบยอดกับ statement ของ EDC ได้ · ใบปิดวันเลยต้องพิมพ์ติดไปด้วย
+   เดินตามชิปกรองเส้นทาง/VAT ชุดเดียวกับ tsRefPackList ไม่งั้นเอกสารของอีกชุดจะหลุดมา */
+function tsSlipPackList(date){
+  var rows=tsRows(date);
+  if(_tsRoute) rows=rows.filter(function(r){ return (r.routeId||'')===_tsRoute; });
+  if(_tsVatF) rows=rows.filter(function(r){
+    return _tsVatF==='vat' ? tsHasVat(r.b) : !tsHasVat(r.b);
+  });
+  var LAB={cash:'เงินสด', transfer:'โอนเงิน', card:'บัตรเครดิต'};
+  var num=function(n){ return (typeof pckNum==='function')?pckNum(n):String(+n||0); };
+  var out=[];
+  rows.forEach(function(r){
+    var b=r.b, imgs=[], miss=0, tot=0, who=[];
+    var push=function(src, title, mth, amt, fee, byWho, note){
+      var ss=Array.isArray(src)?src:[];
+      tot+=(+amt||0);
+      if(byWho && who.indexOf(byWho)<0) who.push(byWho);
+      /* สดไม่ต้องมีสลิป · รูด/โอนแล้วไม่มี = ของขาด ต้องขึ้นกระดาษให้เห็น */
+      if(!ss.length){ if((mth||'cash')!=='cash') miss++; return; }
+      ss.forEach(function(f){
+        imgs.push({ f:f, cap:(LAB[mth]||mth||'—')+' ฿'+num(amt)
+          +((+fee||0)>0?(' · ค่าธรรมเนียม ฿'+num(fee)):'')
+          +' · '+title+(byWho?(' · '+byWho):'')+(note?(' · '+note):'') });
+      });
+    };
+    ((typeof pckPaysFor==='function')?pckPaysFor(b,date):[]).forEach(function(p){
+      push(p.slips, 'เงินหน้าท่า', p.method, p.amount, p.fee, p.by, p.note);
+    });
+    var S=(typeof tsSaleList==='function')?tsSaleList(b,date):{list:[]};
+    (S.list||[]).forEach(function(x){
+      if(!x.done) return;   /* ยังไม่เก็บ = ยังไม่มีเงิน จึงยังไม่ต้องมีสลิป */
+      push(x.slips, (x.kind==='up'?'อัปเกรด · ':'ขายเพิ่ม · ')+x.t, x.method, x.amt, x.fee, x.who, '');
+    });
+    if(!imgs.length && !miss) return;   /* สดล้วน / ไม่มีเงินเข้าวันนี้ = ไม่ต้องมีหน้า */
+    out.push({ bk:b, trip:r.t, imgs:imgs, miss:miss, tot:tot, who:who.join(' · ') });
+  });
+  return out;
+}
+/* หน้ากระดาษใช้ class ชุดเดียวกับ _docPackPage จึงได้ CSS · ขนาดกระดาษ · และตัววาด PDF ฟรี */
+function _tsSlipPage(r, i, total, date, kicker){
+  var e=_docPackEsc, b=r.bk, t=r.trip;
+  var R=((typeof getRoute==='function'?getRoute(t.routeId):null)||{});
+  var ag=((typeof sbGetAgent==='function'?sbGetAgent(b.agentId):null)||{});
+  var num=function(n){ return (typeof pckNum==='function')?pckNum(n):String(+n||0); };
+  var n=r.imgs.length;
+  var grid=(n<=1)?'one':(n===2)?'two':(n<=4)?'four':'many';
+  var body;
+  if(!n){
+    body='<div class="miss"><div class="mi">&#9888;</div><b>รูด/โอนแล้วแต่ยังไม่มีสลิป</b><span>'+r.miss+' รายการ</span></div>';
+  } else {
+    body='<div class="grid '+grid+'">'+r.imgs.map(function(x,k){
+      var f=x.f||{}, url='/api/attach/'+encodeURIComponent(f.id);
+      var isImg=/^image\//.test(f.mime||'');
+      var isPdf=/pdf/i.test(f.mime||'') || /\.pdf$/i.test(f.name||'');
+      var box=isImg?('<img src="'+url+'" alt="">')
+             :isPdf?('<canvas class="pdfc" data-pdf="'+url+'"></canvas>'
+                    +'<div class="pdfw">&#128196; '+e(f.name||'file')+' &middot; กำลังเปิดไฟล์ PDF…</div>')
+                   :('<div class="nf"><div class="mi">&#128196;</div><span>'+e(f.name||'file')+'</span></div>');
+      return '<figure><div class="sc">'+box+'</div><figcaption>'+(k+1)+'/'+n+' &middot; '+e(x.cap)+'</figcaption></figure>';
+    }).join('')+'</div>';
+    if(r.miss>0) body+='<div class="short">&#9888; ยังมีรายการรูด/โอนที่ไม่มีสลิปอีก '+r.miss+' รายการ</div>';
+  }
+  return '<section class="pg">'
+    + '<header><span>LOVE Andaman &middot; '+e(kicker||'สลิปการชำระเงิน')+' &middot; '+e(date)+'</span><span>หน้า '+(i+1)+' / '+total+'</span></header>'
+    + '<div class="trip">ทริป &middot; '+e(R.name||t.routeId)+(R.pier?(' &middot; '+e(_DOCPACK_PIER[R.pier]||R.pier)):'')+'</div>'
+    + '<div class="bk"><div class="r1"><b>'+e(b.leadPax||'—')+'</b><span>รับเงินรวม &#3647;'+num(r.tot)+'</span></div>'
+    +   '<div class="r2">'+e(ag.name||b.agentId||'')+(b.voucherRef?(' &middot; '+e(b.voucherRef)):'')
+    +   (r.who?(' &middot; รับโดย '+e(r.who)):'')+'</div></div>'
+    + '<div class="body">'+body+'</div>'
+    + '<footer><span>&#9744; ยอดตรงกับ statement</span><span>ผู้ตรวจ ________________</span></footer>'
+    + '</section>';
+}
+function _tsSlipPages(list, date, kicker){
+  var total=list.length;
+  return list.map(function(r,i){ return _tsSlipPage(r,i,total,date,kicker); }).join('');
+}
 function tsPrintSheet(){
   var host=document.getElementById('travelsum-host'); if(!host) return;
   var date=_tsDate;
@@ -61119,6 +61314,10 @@ function tsPrintSheet(){
     ? _docPackPages(list, date, 'Reference · เอกสารประกอบ'
         + (_tsVatF ? (_tsVatF==='vat' ? ' · เฉพาะมี VAT' : ' · เฉพาะไม่มี VAT') : '')
         + (_tsRoute ? (' · '+tsRouteName(_tsRoute)) : '')) : '';
+  // §tsSlipPack · สลิปบัตร/โอนของเงินที่รับวันนี้ · ต่อท้ายชุดเอกสารอ้างอิง ในกระดาษชุดเดียวกัน
+  var slipL=(typeof tsSlipPackList==='function')?tsSlipPackList(date):[];
+  var slipPack=(slipL.length && typeof _tsSlipPages==='function')
+    ? _tsSlipPages(slipL, date, 'Payment slips · สลิปการชำระเงิน') : '';
   var w=window.open('','_blank');
   if(!w){ alert('เบราว์เซอร์บล็อกป๊อปอัป · อนุญาต pop-up แล้วลองใหม่'); return; }
   // ฟอนต์ · ยกทุก <link rel=stylesheet> ที่ชี้ไปโรงฟอนต์จากหน้าหลักไปด้วย
@@ -61147,7 +61346,7 @@ function tsPrintSheet(){
   w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Travel Summary '+ckEsc(date)+'</title>'
     +fontLinks+'<style>'+css+'</style></head><body class="ts-printing">'
     +'<div id="travelsum-host">'+host.innerHTML+'</div>'
-    +(pack?('<div class="la-docpack">'+pack+'</div>'):'')
+    +((pack||slipPack)?('<div class="la-docpack">'+pack+slipPack+'</div>'):'')
     +'<style>'+pageCSS+'</style>'
     +boot+'</body></html>');
   w.document.close();
@@ -61418,6 +61617,25 @@ function tsNoCollect(r, paid){
   if(+paid>0) return false;                          // §paid · เก็บไปแล้วค่อยยกเลิก = เรื่องคืนเงิน ไม่ใช่ไม่นับ
   return (r.travelled<=0) && ((+r.cxl>0)||(+r.ns>0)||(+r.noShow>0));
 }
+/* ══ §tsPaySlip · ชิปวิธีรับเงินในตารางหลัก กดเปิดดูสลิปได้ ══════════════════
+   ชิปตัวนี้เป็น "ยอดรวมต่อวิธีรับเงิน" ไม่ใช่เงินก้อนเดียว · ยอดหนึ่งชิปมาจาก
+   สองที่เก็บคนละแห่ง คือ pierPayments กับของที่ขายเพิ่ม (SB_EXTRAS + upgrades)
+   เดิมจึงมีแต่ตัวเลข ไม่มี slips[] ให้กด · ตัวนี้ไล่เก็บสลิปของทั้งสองที่
+   ที่ใช้วิธีรับเงินเดียวกัน มารวมเป็นชุดเดียว laSlipView เลื่อนดูทีละใบได้อยู่แล้ว
+   รายการที่ยังไม่เก็บเงิน (COT · รอเก็บ) ข้ามไป ยังไม่มีเงินก็ยังไม่มีสลิป */
+function tsSlipsForMethod(booking, date, method, saleList){
+  var slips=[];
+  ((typeof pckPaysFor==='function')?pckPaysFor(booking,date):[]).forEach(function(payment){
+    if((payment.method||'cash')!==method) return;
+    slips=slips.concat(Array.isArray(payment.slips)?payment.slips:[]);
+  });
+  ((saleList&&saleList.list)||[]).forEach(function(saleLine){
+    if(!saleLine.done) return;
+    if((saleLine.method||'cash')!==method) return;
+    slips=slips.concat(Array.isArray(saleLine.slips)?saleLine.slips:[]);
+  });
+  return slips;
+}
 function tsPayCell(r, date){
   var b=r.b, e=ckEsc, L=[];
   var m=function(n){ return '฿'+pckNum(n); };   // §pierDecimal · ยอดหน้าท่ามีสตางค์ได้ ต้องโชว์ให้ตรงกับกล่องเก็บเงิน
@@ -61499,7 +61717,13 @@ function tsPayCell(r, date){
   if(mk.length){
     L.push('<span class="ts-pyms">'+mk.map(function(k){
       var d=PMB[k]||[k,'n'];
-      return '<span class="ts-chip '+d[1]+' ts-pyx">'+d[0]+' '+m(byAll[k])+'</span>';
+      var label=d[0]+' '+m(byAll[k]);
+      /* §tsPaySlip · มีสลิปแล้วค่อยกดได้ · สดกับตัวที่ยังไม่แนบ คงเป็นตัวหนังสือเฉย ๆ */
+      var slips=(typeof tsSlipsForMethod==='function')?tsSlipsForMethod(b,date,k,S):[];
+      if(!slips.length) return '<span class="ts-chip '+d[1]+' ts-pyx">'+label+'</span>';
+      return '<span class="ts-chip '+d[1]+' ts-pyx" style="cursor:pointer" '
+        +laSlipClickAttr(slips, label)+' title="'+e(label+' · มีสลิปแล้ว '+slips.length+' ไฟล์ · กดเพื่อเปิดดู')+'">'
+        +'&#128206; '+label+'</span>';
     }).join('')+'</span>');
     if(who.length) L.push('<span class="ts-pyn2">'+e('รับโดย '+who.join(' · '))+'</span>');
   }
@@ -79882,6 +80106,22 @@ function bkV2RenderTripsSection(){
     </div>
   `;
 
+  /* §pkNat · ตัวนับหัวคนไทยจริง · หน้าตาเหมือน stepper ปกติแต่เป็นสีเขียวของ "ไม่เกี่ยวกับเงิน"
+     ค่าที่โชว์ตอนยังไม่มีใครแตะ = ช่อง TH ของแถวราคา · เท่ากับพฤติกรรมเดิมเป๊ะ
+     บวกเกินหัวทั้งหมดของประเภทนั้นไม่ได้ · ปุ่ม + จะจางลงเมื่อเต็มแล้ว */
+  const natStep = (idx, k, t) => {
+    const px = t.pax || {};
+    const all = (+px[k+'_th']||0) + (+px[k+'_fr']||0) + (+px[k]||0);
+    const val = bkNatTH(t, k);
+    const on  = bkNatHas(t);
+    return `
+    <div style="display:inline-flex;align-items:center;gap:1px;background:var(--white);border:1px solid ${on?'#B7E2D2':'var(--border)'};border-radius:999px;padding:1px 2px" title="ทั้งหมด ${all} คน${on?'':' · ยังไม่ได้ระบุ ถือตามช่อง TH ไปก่อน'}">
+      <button onclick="bkV2BumpNat(${idx},'${k}',-1)" style="width:18px;height:18px;border:none;background:transparent;color:${val>0?'#0F6E56':'#c7c5bb'};font-weight:700;cursor:pointer;font-family:inherit;font-size:12px;line-height:1;padding:0;border-radius:50%">&minus;</button>
+      <span style="min-width:17px;text-align:center;font-family:'DM Mono',monospace;font-weight:700;font-size:11px;font-variant-numeric:tabular-nums;color:${val>0?'#0F6E56':'#c7c5bb'}">${val}</span>
+      <button onclick="bkV2BumpNat(${idx},'${k}',1)" style="width:18px;height:18px;border:none;background:transparent;color:${val<all?'#0F6E56':'#d8d5cc'};font-weight:700;cursor:${val<all?'pointer':'default'};font-family:inherit;font-size:12px;line-height:1;padding:0;border-radius:50%">+</button>
+    </div>`;
+  };
+
   // Bundle helper · detect free/paid longtail bundle for a route
   const bundleInfo = (rId) => {
     const b = rt.routeBundles?.[rId]?.longtail;
@@ -80164,12 +80404,23 @@ function bkV2RenderTripsSection(){
                 <td style="background:var(--white);padding:2px 0;text-align:center">${stepper(idx,'foc_th',t.pax.foc_th||0)}</td>
               </tr>` : ''}
               <tr style="background:var(--bk-navy-50)">
-                <td style="padding:3px 6px;font-size:8px;color:var(--ink-soft);font-weight:700;letter-spacing:.06em;border-radius:0 0 0 7px">SUB</td>
+                <td style="padding:3px 6px;font-size:8px;color:var(--ink-soft);font-weight:700;letter-spacing:.06em">SUB</td>
                 <td style="text-align:center;font-family:'DM Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;color:${totAd>0?'var(--bk-navy)':'#c7c5bb'};font-size:11px">${totAd}</td>
                 <td style="text-align:center;font-family:'DM Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;color:${totChd>0?'var(--bk-navy)':'#c7c5bb'};font-size:11px">${totChd}</td>
                 <td style="text-align:center;font-family:'DM Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;color:${totInf>0?'var(--bk-navy)':'#c7c5bb'};font-size:11px">${totInf}</td>
-                <td style="text-align:center;font-family:'DM Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;color:${totFoc?'#ba7517':'#c7c5bb'};font-size:11px;border-radius:0 0 7px 0">${totFoc}</td>
+                <td style="text-align:center;font-family:'DM Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;color:${totFoc?'#ba7517':'#c7c5bb'};font-size:11px">${totFoc}</td>
               </tr>
+              ${/* §pkNat · สัญชาติจริงของ นทท. · ไม่เกี่ยวกับราคาเลย ใช้ตอนซื้อตั๋วอุทยานอย่างเดียว
+                    สองแถวบนเลือกเรทตามสัญญา · บางสัญญาไม่มีราคาไทย คนไทยจึงต้องคีย์เป็น ตปท.
+                    แถวนี้บอกความจริงว่าใครเป็นคนไทย ค่าอุทยานจะได้ไม่จ่ายเรทฝรั่งให้คนไทย */''}
+              <tr style="background:#EAF6F0">
+                <td style="padding:3px 6px;font-weight:700;font-size:10px;color:#0F6E56;border-radius:0 0 0 7px" title="จำนวนคนไทยจริงบนทริปนี้ · ใช้คิดค่าอุทยานอย่างเดียว ไม่กระทบราคาที่นั่ง">&#128506; ไทยจริง</td>
+                <td style="padding:2px 0;text-align:center">${natStep(idx,'ad',t)}</td>
+                <td style="padding:2px 0;text-align:center">${natStep(idx,'chd',t)}</td>
+                <td style="padding:2px 0;text-align:center">${natStep(idx,'inf',t)}</td>
+                <td style="padding:2px 0;text-align:center;border-radius:0 0 7px 0">${natStep(idx,'foc',t)}</td>
+              </tr>
+              ${bkNatHas(t) && (bkNatTH(t,'ad')+bkNatTH(t,'chd')+bkNatTH(t,'inf')+bkNatTH(t,'foc')) !== ((t.pax.ad_th||0)+(t.pax.chd_th||0)+(t.pax.inf_th||0)+(t.pax.foc_th||0)) ? `<tr><td colspan="5" style="padding:4px 7px;font-size:9.5px;color:#0F6E56;background:#EAF6F0;line-height:1.35">&#8226; ค่าอุทยานจะคิดตามแถวนี้ ไม่ใช่แถว TH &middot; ราคาที่นั่งยังคิดตามสัญญาเหมือนเดิม</td></tr>` : ''}
             </tbody>
           </table>
         </div>
@@ -85863,6 +86114,22 @@ function bkV2BumpPax(idx, paxKey, delta){
   bkV2SyncPassengers();
   bkV2Render();
 }
+/* §pkNat · ตั้งจำนวนคนไทยจริงของทริป · ไม่แตะ pax และไม่แตะราคาเลย
+   ครั้งแรกที่แตะ ต้องหล่อทั้งสี่ช่องจากแถว TH ก่อน แล้วค่อยบวก/ลบ
+   ถ้าปล่อยให้มีแค่ช่องเดียว อีกสามช่องจะกลายเป็น 0 ทันที (bkNatHas เป็นจริงแล้ว)
+   เด็กไทยที่คีย์ไว้ในแถว TH ก็จะหายไปเงียบ ๆ ทั้งที่คนกดไม่ได้ตั้งใจ */
+function bkV2BumpNat(idx, k, delta){
+  if(!_bkV2.newBooking) return;
+  const t = _bkV2.newBooking.trips[idx];
+  if(!t || !t.pax) return;
+  const px = t.pax;
+  if(!bkNatHas(t)){
+    t.nat = { ad:+px.ad_th||0, chd:+px.chd_th||0, inf:+px.inf_th||0, foc:+px.foc_th||0 };
+  }
+  const all = (+px[k+'_th']||0) + (+px[k+'_fr']||0) + (+px[k]||0);
+  t.nat[k] = Math.max(0, Math.min(all, (+t.nat[k]||0) + delta));
+  bkV2Render();
+}
 // ── Charter price · Rate (auto) vs Flexible (manual override) ──
 function bkV2SetTripCharterPriceMode(idx, mode){
   const t = _bkV2.newBooking && _bkV2.newBooking.trips[idx];
@@ -88028,6 +88295,9 @@ function bkV2CommitBooking(status){
       // who was at that moment on a boat.
       zone: t.zone,   // §OVN · เดิมเขียนทับ ovnLeg เป็น 'NoTransfer' ทำให้จัดรถขาส่งไม่ได้
       pax: { ...t.pax },
+      /* §pkNat · สัญชาติจริงของ นทท. · ไม่ใส่คีย์เลยถ้าไม่มีใครระบุ
+         คอลัมน์ NULL ทั้งสี่ = os_repo ไม่สร้าง nat กลับมาตอนโหลด = ถอยไปใช้ช่องราคาเหมือนเดิม */
+      nat: bkNatHas(t) ? { ad:+t.nat.ad||0, chd:+t.nat.chd||0, inf:+t.nat.inf||0, foc:+t.nat.foc||0 } : undefined,
       pickupTime: t.pickupTime || bkV2GetPickupTime(t.routeId, d.pickupAreaId, t.date) || '',
       bookingMode: t.bookingMode || 'seat',
       charterBoatId: t.charterBoatId || null,
