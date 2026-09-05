@@ -6700,7 +6700,7 @@ function boatJobBlock(boatId, ds){
         if(t==='available') return;
         if((m.startDate||'')>ds) return;            // ใบที่ยังไม่ถึงวันเริ่ม ไม่กันวันนี้
         if(_boatRank(t)>_boatRank(out.s)) out.s=t;
-        out.jobs.push({no:m.no||'MJ', t:t, kind:'mj'});
+        out.jobs.push({no:m.no||'MJ', t:t, kind:'mj', r:m.boatStatusReason||''});
       });
     }
   }catch(_e){}
@@ -6714,10 +6714,15 @@ function boatJobBlock(boatId, ds){
         var from=p.actualFrom||p.planFrom||'';
         if(from && from>ds) return;
         if(_boatRank('unavailable')>_boatRank(out.s)) out.s='unavailable';
-        out.jobs.push({no:p.no||'PRJ', t:'unavailable', kind:'prj'});
+        var pr=(p.type==='drydock')?'dry_dock':(p.type==='overhaul')?'overhaul':'';
+        out.jobs.push({no:p.no||'PRJ', t:'unavailable', kind:'prj', r:pr});
       });
     }
   }catch(_e){}
+  /* เหตุผลของใบที่เป็นตัวกำหนดสถานะ · ใช้ตอนปิดงานแล้วต้อง carry สถานะต่อ */
+  var _pick=out.jobs.filter(function(j){ return j.t===out.s; })[0];
+  out.reason=_pick?(_pick.r||''):'';
+  out.nos=out.jobs.map(function(j){ return j.no; }).join(' · ');
   return out;
 }
 /* สถานะจริงของเรือ · getCurStatus + ชั้นงาน เอาอันที่เข้มกว่า
@@ -10666,7 +10671,23 @@ function saveStatus(){
   }
   // Combined display string for backward compat with `loc` field
   const loc=fmtLoc(province,locType,detail);
-  const note=document.getElementById('fm-st-note').value.trim();
+  let note=document.getElementById('fm-st-note').value.trim();
+  /* §boatEff2 · ตั้งเรือเป็นพร้อมใช้ทั้งที่ใบงานยังไม่ปิด
+     ตรงนี้คือช่องที่เคยหลุด · ของเดิมตรวจแค่รูปแบบวันที่กับเหตุผล ไม่เคยถามใบงานเลย
+     ไม่บล็อก — บางทีเรือกลับมาวิ่งจริงแต่เอกสารยังไม่ปิด แต่ต้องรู้ตัวและตามย้อนหลังได้
+     และต้องบอกด้วยว่าระบบจะยังกันเรือไว้อยู่ดี จะได้ไม่เข้าใจผิดว่ากดแล้วเรือกลับมาแล้ว */
+  if(selSt==='available' && typeof boatJobBlock==='function'){
+    const _blk=boatJobBlock(b.id, from);
+    if(_blk.jobs.length){
+      if(!confirm('เรือลำนี้ยังมีใบงานที่ไม่ถูกปิด\n\n    '+_blk.nos
+        +'\n\nถ้าเรือกลับมาวิ่งได้จริงแล้ว ควรไปปิดที่ใบงาน (Maintenance / Project)'
+        +'\nต้นทุนจะได้เข้าใบงานครบ และเรือจะกลับมาเองโดยไม่ต้องมาแก้ตรงนี้'
+        +'\n\nถ้าบันทึกต่อ ระบบจะยังกันเรือไว้ตามใบงานอยู่ดี จนกว่าใบงานจะถูกปิด'
+        +'\n\nยืนยันบันทึก?')) return;
+      const _mk='ตั้งเป็นพร้อมใช้ทั้งที่ยังมีงานค้าง · '+_blk.nos;
+      if(note.indexOf(_mk)<0) note=(note?note+' · ':'')+_mk;
+    }
+  }
   if(editingSlId){
     const e=b.log.find(x=>x.id===editingSlId);
     if(e) Object.assign(e,{s:selSt,from,to,loc,province,locType,detail,note,reason});
@@ -34388,12 +34409,13 @@ function flMaintClose(id,outcome,note,awaitInvoice){
     // Auto-close any open log entries (e.g. fixing from Start Job) before pushing new entry
     if(typeof autoClosePrevLog==='function') autoClosePrevLog(b,TODAY_STR);
     
-    // Check if there are OTHER active MJs for this boat (still inprogress)
-    const otherActiveMjs = FL_MAINT.filter(x => 
-      x.id !== m.id && 
-      x.boatId === b.id && 
-      x.status === 'inprogress'
-    );
+    /* §boatEff2 · งานที่ยังกันเรืออยู่หลังปิดใบนี้
+       ของเดิมกรอง FL_MAINT เองและมองแค่ MJ · โปรเจกต์ไม่อยู่ในสายตาเลย
+       เรือที่ถูกกันด้วย PRJ อย่างเดียวจึงถูกปล่อยกลับเป็น available ทั้งที่ยังเข้าอู่อยู่
+       ตอนนี้เรียก boatJobBlock ตัวเดียวกับที่หน้าจออ่าน · กติกาเดียวกันทั้งระบบ
+       (m.status ถูกตั้งเป็น 'done' ไปแล้วด้านบน ใบนี้จึงไม่ถูกนับซ้ำ) */
+    const _blk = (typeof boatJobBlock==='function')
+      ? boatJobBlock(b.id, TODAY_STR) : {s:'available', jobs:[], reason:'', nos:''};
     
     let finalBoatStatus = out.boatStatus;
     let finalNote = `ปิด Job ${m.no}${out.tag}`;
@@ -34412,21 +34434,11 @@ function flMaintClose(id,outcome,note,awaitInvoice){
         skipBoatLog = true;
       }
       finalNote = `ปิด Job ${m.no}${out.tag} · ไม่แตะสถานะเรือ (Job นี้ทำขนานกับการใช้งาน)`;
-    } else if(otherActiveMjs.length > 0){
-      // Pick the "strictest" status among remaining MJs
-      // unavailable > fixing > available
-      const others = otherActiveMjs.map(mj => ({
-        status: mj.boatStatus || (mj.setFixing===false ? 'available' : 'fixing'),
-        reason: mj.boatStatusReason || '',
-        no: mj.no, mj: mj
-      }));
-      // Priority: unavailable > fixing > available
-      const hasUnavail = others.find(o => o.status === 'unavailable');
-      const hasFixing = others.find(o => o.status === 'fixing');
-      const carryOver = hasUnavail || hasFixing || others[0];
-      finalBoatStatus = carryOver.status;
-      finalReason = carryOver.reason;
-      finalNote = `ปิด Job ${m.no}${out.tag} · ยังคงสถานะ ${finalBoatStatus==='fixing'?'Fixing':finalBoatStatus==='unavailable'?'Unavailable':'Available'} จาก Job ${carryOver.no}`;
+    } else if(_blk.jobs.length > 0){
+      finalBoatStatus = _blk.s;
+      finalReason = _blk.reason || '';
+      const _lbl = finalBoatStatus==='fixing'?'Fixing':finalBoatStatus==='unavailable'?'Unavailable':'Available';
+      finalNote = `ปิด Job ${m.no}${out.tag} · ยังคงสถานะ ${_lbl} จาก ${_blk.nos}`;
     }
     
     if(!skipBoatLog){
