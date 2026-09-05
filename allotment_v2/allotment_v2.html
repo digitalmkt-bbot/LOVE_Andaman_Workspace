@@ -46586,7 +46586,7 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
     var ring=sent?(';box-shadow:0 0 0 2px '+_rcSentRing(_rcIsInvoiceAgent(d.ag)||d.paid)):'';
     return '<span style="display:inline-block;background:'+ac+';color:'+ink+';padding:'+(big?'4px 11px':'3px 9px')+';border-radius:7px;font-weight:600;font-size:'+(big?'13px':'11.5px')+';white-space:nowrap;max-width:210px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle'+ring+'">'+esc(d.agentName)+(sent?(' '+TI_CHECK):'')+'</span>'; }
   function fmtTime(iso){ try{ return new Date(iso).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
-  var COLDEFS=[{k:'prog',l:'Program',w:176},{k:'agent',l:'Agent',w:146},{k:'voucher',l:'Booking #',w:124},{k:'lead',l:'Customer',w:148},{k:'phone',l:'Phone',w:130},{k:'ad',l:'AD',w:32},{k:'chd',l:'CHD',w:38},{k:'inf',l:'INF',w:34},{k:'foc',l:'FOC',w:34},{k:'time',l:'Pick-up',w:124},{k:'hotel',l:'Hotel',w:180},{k:'room',l:'Room',w:64},{k:'zone',l:'Zone',w:108},{k:'addon',l:'Add-on',w:128},{k:'special',l:'Special request',w:164},{k:'payment',l:'Payment',w:150},{k:'status',l:'Re-confirm status',w:196}];
+  var COLDEFS=[{k:'prog',l:'Program',w:176},{k:'agent',l:'Agent',w:146},{k:'voucher',l:'Booking #',w:124},{k:'submitted',l:'Submitted by',w:118},{k:'lead',l:'Customer',w:148},{k:'phone',l:'Phone',w:130},{k:'ad',l:'AD',w:32},{k:'chd',l:'CHD',w:38},{k:'inf',l:'INF',w:34},{k:'foc',l:'FOC',w:34},{k:'time',l:'Pick-up',w:124},{k:'hotel',l:'Hotel',w:180},{k:'room',l:'Room',w:64},{k:'zone',l:'Zone',w:108},{k:'addon',l:'Add-on',w:128},{k:'special',l:'Special request',w:164},{k:'payment',l:'Payment',w:150},{k:'status',l:'Re-confirm status',w:196}];
   function _rcCols(withAgent){ return COLDEFS.filter(function(c){ return withAgent||c.k!=='agent'; }); }
   function _rcTableHead(cols){ var w=cols.reduce(function(s,c){return s+c.w;},0);
     return '<table style="table-layout:fixed;min-width:'+w+'px"><colgroup>'+cols.map(function(c){return '<col style="width:'+c.w+'px">';}).join('')+'</colgroup>'
@@ -46595,6 +46595,11 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
     case 'prog': return esc(d.prog);
     case 'agent': return agChip(d,false);
     case 'voucher': return '<span style="'+MONO+';color:#5F5E5A">'+esc(d.voucher)+'</span>';
+    /* §rcBy · ผู้บันทึก booking · เก็บที่ createdBy เหมือนที่หน้าเช็คอินรถอ่าน
+       คีย์มือ ไม่ได้เติมอัตโนมัติ · ใบเก่าจึงว่างได้ ไม่ถือว่าผิด */
+    case 'submitted': var _by=(d.bk&&d.bk.createdBy)||'';
+      return _by?'<span title="ผู้บันทึก booking · '+esc(_by)+'" style="font-size:11.5px;color:#5F5E5A;background:#F4F3EE;border-radius:6px;padding:2px 8px;white-space:nowrap">'+esc(_by)+'</span>'
+               :'<span style="color:#B4B2A9">—</span>';
     case 'lead': return esc(d.lead);
     case 'phone': return d.phone?'<a href="tel:'+esc(d.phone)+'" onclick="event.stopPropagation()" style="'+MONO+';color:#185FA5;text-decoration:none">'+esc(d.phone)+'</a>':'<span style="color:#B4B2A9">—</span>';
     case 'pax': return '<span style="'+MONO+'">'+d.pax+'</span>';
