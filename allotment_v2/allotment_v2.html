@@ -51381,7 +51381,14 @@ function ckSharedCSS(scope){
   /* §vckFlow · ทั้งแถวเปลี่ยนสีตามสถานะ · ตัวแปรสีมาจาก inline บนแถว
      ต้อง !important เพราะคลาสเดิม (ck-done/ck-lost/ck-late) ทาพื้นไว้แล้ว */
   +scope+' table.ck-tbl tr.ck-row.vst>td{background:var(--vst-bg)!important}'
-  +scope+' table.ck-tbl tr.ck-row.vst:hover>td{background:var(--vst-chip)!important}'
+  +scope+' table.ck-tbl tr.ck-row.vst:hover>td{background:var(--vst-hov,var(--vst-chip))!important}'
+  /* §vckBar · แบบเข้ม · พื้นเข้มพอที่ตัวหนังสือสีเดิมจะอ่านไม่ออก ต้องไล่ให้เข้มตาม
+     ต้อง !important เพราะ ck-lost/ck-nsfull ทาสีตัวอักษรไว้แล้ว */
+  +scope+' table.ck-tbl tr.ck-row.vst.vkb-c>td{color:var(--vst-tx)!important}'
+  +scope+' table.ck-tbl tr.ck-row.vst.vkb-c>td .ck-dim,'
+  +scope+' table.ck-tbl tr.ck-row.vst.vkb-c>td .ck-by{color:var(--vst-tx)!important;opacity:.62}'
+  +scope+' table.ck-tbl tr.ck-row.vst.vkb-c>td:first-child{box-shadow:inset 5px 0 0 var(--vst-bar)!important}'
+  +scope+' tr.vstv.vkb-c .vck-sel{border-width:1.5px}'
   /* ต้องแรงกว่า ck-lost>td:first-child ที่ specificity สูงกว่า ไม่งั้นแถบซ้ายยังเป็นแดงของเดิม */
   +scope+' table.ck-tbl tr.ck-row.vst>td:first-child{box-shadow:inset 5px 0 0 var(--vst-bar)!important}'
   +scope+' tr.vstv .vck-sel{background:var(--vst-chip);border-color:var(--vst-bar);color:var(--vst-ink)}'
@@ -51409,7 +51416,15 @@ function ckSharedCSS(scope){
   +scope+' .vck-lgb:hover{border-color:#B9B5AA;background:#FBFAF7}'
   +scope+' .vck-lgb i{width:16px;height:16px;border-radius:6px;display:inline-block;border:2px solid}'
   +scope+' .vck-lgb small{font-size:9.5px;color:#a3a39b;font-weight:500}'
-  +scope+' .vck-rs{margin-left:auto;border:1px solid #E4E1D9;background:#fff;border-radius:8px;'
+  /* §vckBar · ตัวเลือกรูปแบบแถบ · อยู่ท้ายแถบสี ติดกับปุ่มคืนค่า */
+  +scope+' .vck-bs{margin-left:auto;display:inline-flex;align-items:center;gap:6px;flex:none}'
+  +scope+' .vck-bs>b{font-size:10px;font-weight:700;color:#a3a39b}'
+  +scope+' .vck-bs .g{display:inline-flex;border:1px solid #E4E1D9;border-radius:8px;overflow:hidden}'
+  +scope+' .vck-bs .g button{border:none;background:#fff;color:#5F5E5A;font:700 10.5px inherit;'
+    +'font-family:inherit;padding:4px 12px;cursor:pointer;border-right:1px solid #EEEBE4}'
+  +scope+' .vck-bs .g button:last-child{border-right:0}'
+  +scope+' .vck-bs .g button.on{background:#0F6E56;color:#fff}'
+  +scope+' .vck-rs{margin-left:8px;border:1px solid #E4E1D9;background:#fff;border-radius:8px;'
     +'padding:4px 11px;font:600 10.5px inherit;font-family:inherit;color:#8a8a82;cursor:pointer}'
   +scope+' .vck-rs:hover{color:#A32D2D;border-color:#E7C4C0}'
   +'.vck-cdlg{width:400px}'
@@ -51872,7 +51887,7 @@ function ckRowHtml(r, date, kind, extraHtml){
     _vst=vckRowSt(ck);
     /* ตัวแปรสีติดทุกแถว (ชิป Status ใช้) แต่ระบายพื้นเฉพาะแถวที่แขกคนนั้นมีผลจริงแล้ว
        รอ / Standby = ยังไม่ได้รับใครขึ้นรถ → ซีดไว้ ไม่งั้นแถวที่ยังไม่ได้ทำจะเด่นกว่าแถวที่ทำแล้ว */
-    cls+=' vstv'+((_vst==='wait'||_vst==='standby')?' vck-pale':' vst');
+    cls+=' vstv'+((_vst==='wait'||_vst==='standby')?' vck-pale':' vst')+' vkb-'+vckBarStyle();   /* §vckBar */
     _vsty=' style="'+vckStVars(_vst)+'"';
   }
   return '<tr class="'+cls+'"'+_vsty+'>'
@@ -53312,6 +53327,26 @@ function vckColors(){
   }
   return _VCK_COL;
 }
+/* ══ §vckBar · รูปแบบการแสดงสี ═══════════════════════════════════════════
+   สีของแต่ละสถานะตั้งเองได้อยู่แล้ว · ที่เพิ่มคือ "เอาสีนั้นมาแสดงยังไง"
+     a = แถบซ้าย + พื้นจาง   (ของเดิม · มองรวมทั้งหน้าได้เร็ว)
+     c = แถบซ้าย + พื้นเข้ม   (แยกสถานะได้จากไกล · หน้างานกลางแดด จอสว่างจัด)
+   เก็บทั้งบริษัทที่ vck_bar_style เหมือน vck_status_colors · ตั้งครั้งเดียวใช้ทุกเครื่อง
+   แถวที่ยัง "รอ / Standby" ยังซีดเหมือนเดิมทั้งสองแบบ · แถวที่ยังไม่ได้ทำ
+   ต้องไม่เด่นกว่าแถวที่ทำแล้ว                                              */
+var VCK_BARS=[
+  {k:'a', lbl:'จาง',  full:'แถบซ้าย + พื้นจาง · ของเดิม'},
+  {k:'c', lbl:'เข้ม', full:'พื้นเต็มแถวเข้ม · แยกสถานะได้จากไกล'}
+];
+function vckBarStyle(){
+  try{ var v=laBlob().vck_bar_style; return (v==='c')?'c':'a'; }catch(_){ return 'a'; }
+}
+function vckBarStyleSet(v){
+  if(typeof ckGuard==='function' && !ckGuard()) return;
+  v=(v==='c')?'c':'a';
+  try{ var b=laBlob(); if(v==='a') delete b.vck_bar_style; else b.vck_bar_style=v; laBlobSave(); }catch(_){}
+  if(typeof renderVanCheckin==='function') renderVanCheckin();
+}
 function vckColorSet(k,hex){
   if(typeof ckGuard==='function' && !ckGuard()) return;
   if(!/^#[0-9a-fA-F]{6}$/.test(String(hex||''))) return;
@@ -53339,9 +53374,16 @@ function vckDark(c,f){ var a=vckRGB(c); return '#'+_vckHx(a[0]*f)+_vckHx(a[1]*f)
 /* ตัวแปรสีของสถานะหนึ่ง · เอาไปวางเป็น inline style บนแถว */
 function vckStVars(k){
   var c=vckColors()[k]||vckStDef(k).c;
+  /* §vckBar · แบบเข้ม · พื้นเข้มขึ้นมาก ป้ายสถานะจึงกลับด้านเป็นพื้นขาว
+     ไม่งั้นป้ายจะจมหายไปในพื้น · ตัวหนังสือทั้งแถวต้องเข้มตามเพื่อให้ยังอ่านออก */
+  if(vckBarStyle()==='c'){
+    return '--vst-bar:'+c+';--vst-bg:'+vckTint(c,0.40)+';--vst-hov:'+vckTint(c,0.28)
+      +';--vst-chip:#ffffff;--vst-ink:'+vckDark(c,0.45)+';--vst-tx:'+vckDark(c,0.30);
+  }
   /* §vckFix · เดิมจาง 90% แล้วแถว No-show/CXL ซีดกว่าของเดิม (#F6CFCB) จนดูเหมือนสีไม่เปลี่ยน
      0.82 ให้ความเข้มใกล้ของเดิม และยังอ่านตัวหนังสือดำบนพื้นได้สบาย */
-  return '--vst-bar:'+c+';--vst-bg:'+vckTint(c,0.82)+';--vst-chip:'+vckTint(c,0.72)+';--vst-ink:'+vckDark(c,0.58);
+  return '--vst-bar:'+c+';--vst-bg:'+vckTint(c,0.82)+';--vst-hov:'+vckTint(c,0.72)
+    +';--vst-chip:'+vckTint(c,0.72)+';--vst-ink:'+vckDark(c,0.58);
 }
 
 /* ── สถานะของแถว · อ่านจากของเดิมเป็นหลัก ไม่เก็บซ้ำ ── */
@@ -53454,10 +53496,13 @@ function vckColorSw(){
 function vckColorPv(){
   var el=document.getElementById('vck-pv'); if(!el||!_vckPick) return;
   var c=_vckPick.c, s=vckStDef(_vckPick.k);
-  el.innerHTML='<div class="prow" style="background:'+vckTint(c,0.90)+'">'
+  /* §vckBar · ตัวอย่างต้องเป็นแบบเดียวกับที่ใช้อยู่จริง ไม่งั้นเลือกสีเสร็จแล้วเจอคนละหน้า */
+  var _bs=vckBarStyle(), _pbg=(_bs==='c')?vckTint(c,0.40):vckTint(c,0.90);
+  var _pcb=(_bs==='c')?'#ffffff':vckTint(c,0.80), _pci=(_bs==='c')?vckDark(c,0.45):vckDark(c,0.60);
+  el.innerHTML='<div class="prow" style="background:'+_pbg+(_bs==='c'?(';color:'+vckDark(c,0.30)):'')+'">'
     +'<span class="pb" style="background:'+c+'"></span>'
-    +'<b>Marina Mosina</b><span class="ph2">GLOW Mira Karon Beach</span>'
-    +'<span class="pc" style="background:'+vckTint(c,0.80)+';border-color:'+c+';color:'+vckDark(c,0.60)+'">'
+    +'<b>Marina Mosina</b><span class="ph2"'+(_bs==='c'?(' style="color:'+vckDark(c,0.34)+'"'):'')+'>GLOW Mira Karon Beach</span>'
+    +'<span class="pc" style="background:'+_pcb+';border-color:'+c+';color:'+_pci+'">'
     +ckEsc(s.lbl)+'</span></div>';
 }
 function vckColorPick(v){
@@ -53519,13 +53564,17 @@ function vckLegendBtn(){
 }
 function vckLegend(){
   if(!_VCK_LG) return '';
-  var C=vckColors();
+  var C=vckColors(), _bs=vckBarStyle();
   return '<div class="vck-lgbar">'
    +VCK_STATES.map(function(s){
       var c=C[s.k]||s.c;
       return '<button class="vck-lgb" onclick="vckColorOpen(\''+s.k+'\')" title="กดเพื่อเปลี่ยนสีของสถานะนี้">'
         +'<i style="background:'+vckTint(c,0.86)+';border-color:'+c+'"></i>'
         +ckEsc(s.lbl)+' <small>'+ckEsc(s.full)+'</small></button>'; }).join('')
+   +'<span class="vck-bs"><b>แบบแถบ</b><span class="g">'
+   +VCK_BARS.map(function(x){ return '<button class="'+(_bs===x.k?'on':'')+'" title="'+ckEsc(x.full)
+        +'" onclick="vckBarStyleSet(\''+x.k+'\')">'+ckEsc(x.lbl)+'</button>'; }).join('')
+   +'</span></span>'
    +'<button class="vck-rs" onclick="vckColorsReset()" title="คืนค่าสีของทุกสถานะ">↺ คืนค่าสีเริ่มต้น</button></div>';
 }
 /* ══ §vckArr · คนขับถึงจุดรับแรกแล้ว ═══════════════════════════════════════
