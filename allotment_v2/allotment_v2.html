@@ -60352,10 +60352,16 @@ function pckHeadCSS(){
   +H+' .pkh-sp{flex:1}'
   /* ชื่อกลางหัว · จัดกลางจริงด้วย absolute จะได้ไม่เลื่อนตามความกว้างของสองฝั่ง
      pointer-events:none เพื่อไม่ให้บังปุ่มที่อยู่ข้างใต้ · จอแคบซ่อนไปเลย */
-  +H+' .pkh-brand{position:absolute;left:50%;top:12px;transform:translateX(-50%);'
-    +'pointer-events:none;font-size:17px;font-weight:800;letter-spacing:.18em;'
-    +'color:#A9AFB8;white-space:nowrap;max-width:28vw;overflow:hidden;text-overflow:ellipsis}'
-  +H+' .pkh-brand.on{letter-spacing:-.3px;font-size:21px}'
+  /* §pkhBrand · จัดชื่อกลางหัวให้เหมือนหน้า By trip
+     ของเดิมตรึงไว้ที่ top:12px ตายตัว ตัวหนังสือจึงต่ำกว่าบล็อกวันที่ 9px
+     และตัวเล็ก/จางกว่าอีกหน้าหนึ่ง เดินสลับสองหน้าแล้วรู้สึกว่าคนละที่
+     เอา top ออก ปล่อยให้ align-items:center ของแถวจัดกลางแนวตั้งให้ (วิธีเดียวกับ .bt-brand)
+     วัดแล้วกลางตรงกับบล็อกวันที่และปุ่ม "วันนี้" พอดี 0px ทั้งคู่
+     ขนาดกับระยะห่างตัวอักษรยกมาจาก By trip ตรง ๆ · ตอนกรองโปรแกรมยังเป็นชื่อโปรแกรมสีนั้นเหมือนเดิม */
+  +H+' .pkh-brand{position:absolute;left:50%;transform:translateX(-50%);'
+    +'pointer-events:none;font-size:20px;font-weight:800;letter-spacing:.46em;padding-left:.46em;'
+    +'color:#1F2124;white-space:nowrap;max-width:32vw;overflow:hidden;text-overflow:ellipsis}'
+  +H+' .pkh-brand.on{letter-spacing:-.3px;padding-left:0;font-size:21px}'
   /* จอแคบพื้นที่ตรงกลางไม่พอ ชนกับยอดรวมฝั่งขวา · ซ่อนไปเลยดีกว่าให้ทับกัน */
   +'@media(max-width:1360px){'+H+' .pkh-brand{display:none}}'
   +H+' .pkh-kpi{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}'
