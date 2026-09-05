@@ -96433,12 +96433,31 @@ function pjGdOpts(sel, wantGuide, taken, busy){
   }
   return out;
 }
+/* §gdAdd (2026-09-05) · ช่องว่างที่กด "เพิ่มคน" เปิดไว้ · กติกาเดียวกับ _pjAdd ของกลุ่มลูกเรือ
+   อยู่ในหน่วยความจำอย่างเดียว ไม่เก็บลงข้อมูล เพราะมันคือสถานะของการกรอก
+   ไม่ใช่ข้อเท็จจริงของวันนั้น · ของเดิมโชว์ Guide 1-3 ตายตัว ใบที่จัดไกด์คนเดียว
+   จึงมี "— ว่าง —" ค้างอีกสองบรรทัด การ์ดสูงไม่เท่ากันเวลาเรียงกันหลายลำ
+   ต่างจากลูกเรือตรงที่ไกด์ไม่มีจำนวนช่องตายตัว · นับเป็นจำนวนช่องว่างที่เปิดค้าง
+   ไม่ใช่รายชื่อช่องที่เหลือ */
+var _pjGdAdd={};
+function pjGdAddKey(bid,kind){ return String(bid)+'::'+String(kind); }
+function pjGdAddN(bid,kind){ return +_pjGdAdd[pjGdAddKey(bid,kind)]||0; }
+function pjGdAddSlot(bid,kind){
+  var k=pjGdAddKey(bid,kind); _pjGdAdd[k]=pjGdAddN(bid,kind)+1;
+  try{ document.querySelectorAll('.pj-pop').forEach(function(x){ x.classList.remove('on'); }); }catch(_){}
+  renderPierJob();
+}
+/* เอาคนออก · ช่องนั้นต้องหายไปด้วย ไม่ใช่ค้างเป็นบรรทัดว่าง (เหมือน pjSlotDrop) */
+function pjGdDrop(bid,kind,idx){
+  var k=pjGdAddKey(bid,kind); if(_pjGdAdd[k]>0) _pjGdAdd[k]--;
+  pjGdPick(bid,kind,idx,'');      /* บันทึก + วาดใหม่ในตัว */
+}
 function pjGdRow(label, bid, kind, idx, val, langs, taken, busy){
   var chips=(langs||[]).map(function(L){ return '<span class="pj-lg">'+poE(L)+'</span>'; }).join('');
   var call=function(v){ return 'pjGdPick(\''+poE(bid)+'\',\''+kind+'\','+idx+','+v+')'; };
   return '<div class="pj-rw"><div class="k">'+poE(label)+'</div>'
     +'<select onchange="'+call('this.value')+'">'+pjGdOpts(val, kind==='gd', taken, busy)+'</select>'
-    +(val?('<button class="pj-rx" onclick="'+call('&#39;&#39;')+'" title="เอาคนออกจากช่องนี้">&#10005;</button>'):'')
+    +(val?('<button class="pj-rx" onclick="pjGdDrop(\''+poE(bid)+'\',\''+kind+'\','+idx+')" title="เอาคนออกจากช่องนี้">&#10005;</button>'):'')
     +(chips?('<span class="pj-lgs">'+chips+'</span>'):'')
   +'</div>';
 }
@@ -96452,6 +96471,12 @@ function pjGdPick(bid, kind, idx, val){
     if(goIsGuide(goGuide(id))===want) a.push(i); }); return a; };
   var pos=posOf();
   val=String(val||'');
+  /* §gdAdd · เลือกคนลงช่องว่างที่กดเปิดไว้ = ช่องนั้นมีคนแล้ว ไม่ต้องนับเป็นช่องที่เปิดค้าง
+     ไม่งั้นจะงอกบรรทัดว่างใหม่ทุกครั้งที่เลือกคน
+     ฐานคือ "ช่องที่มีอยู่แล้วโดยไม่ต้องกดเพิ่ม" · ช่อง Guide 1 โชว์เสมอจึงนับเป็นฐานด้วย
+     ไม่งั้นใส่คนแรกลงใบเปล่าจะไปกินช่องว่างที่กดเปิดไว้สำหรับคนที่สอง */
+  var addBase=(kind==='gd')?Math.max(1,pos.length):pos.length;
+  if(val && idx>=addBase){ var ak=pjGdAddKey(bid,kind); if(_pjGdAdd[ak]>0) _pjGdAdd[ak]--; }
   /* เขียนช่องที่กดก่อน · ช่องที่ยังไม่มีใครอยู่ก็ต่อท้ายรายการ */
   var tgt=(idx<pos.length)?pos[idx]:-1;
   if(tgt>=0){ if(val) ids[tgt]=val; else ids.splice(tgt,1); }
@@ -96769,22 +96794,46 @@ function pjCard(B, pier, ro){
                 +(trN>1?('<span class="pj-lgs"><span class="pj-lg" style="background:#F1EFE8;color:#6B6B63">'
                          +trN+' คน</span></span>'):''), null);
             }
-            /* §gdSel · ช่องเลือกได้ · เหลือช่องว่างท้ายกลุ่มไว้หนึ่งช่องเสมอ จะได้เพิ่มคนต่อได้
-               ไกด์ยังขั้นต่ำ 3 ช่องเท่าเดิม การ์ดจะได้ไม่เตี้ยลงตอนยังไม่ได้จัดใคร */
+            /* §gdSel · ช่องเลือกได้ · §gdAdd · โชว์เฉพาะช่องที่ใส่แล้ว ที่เหลืออยู่หลังปุ่ม
+               "เพิ่มคน" แบบเดียวกับกลุ่มลูกเรือ · ช่อง Guide 1 โชว์เสมอแม้ยังไม่ได้ใส่ใคร
+               ใบเปล่าจะได้มีที่ให้เริ่ม */
             var taken={}; GF.forEach(function(x){ if(x.id) taken[x.id]=1; });
             var busy=pjGdBusy(_poDate,bid);
+            /* ช่องที่กดเปิดบวกเพิ่มจากช่องที่มีอยู่ · ไม่ใช่ Math.max กับมัน
+               ไม่งั้นกดเพิ่มบนใบเปล่าแล้วหน้าจอไม่ขยับ (ช่อง Guide 1 กลืนไปเอง) */
+            var nG=Math.max(1, gd.length)+pjGdAddN(bid,'gd');
+            var nT=tr.length+pjGdAddN(bid,'tr');
             var out='', k;
-            for(k=0; k<Math.max(3, gd.length+1); k++)
+            for(k=0; k<nG; k++)
               out+=pjGdRow('Guide '+(k+1), bid, 'gd', k,
                     (gd[k]||{}).id||'', (gd[k]||{}).langs||[], taken, busy);
-            for(k=0; k<Math.max(1, tr.length+1); k++)
-              out+=pjGdRow(k?('Trainee / Staff '+(k+1)):'Trainee / Staff', bid, 'tr', k,
+            for(k=0; k<nT; k++)
+              out+=pjGdRow(nT>1?('Trainee / Staff '+(k+1)):'Trainee / Staff', bid, 'tr', k,
                     (tr[k]||{}).id||'', (tr[k]||{}).langs||[], taken, busy);
             /* ช่อง "อื่นๆ ที่ไม่อยู่ในทะเบียน" ของใบสั่งงาน · เป็นจำนวน ไม่มีชื่อให้เลือก
                ตั้งได้ที่หน้าต่างจัดไกด์ · โชว์ไว้ให้ยอดบนกระดาษกับบนการ์ดตรงกัน */
             if(+GF.other>0) out+=pjRow('อื่นๆ (ไม่มีชื่อ)',
               '<div class="v">'+(+GF.other)+' คน</div>', null);
-            return out;   /* §pjKit · ภาษาย้ายออกไปเป็นหัวข้อของตัวเองข้างล่าง */
+            /* §gdAdd · ปุ่มเพิ่มช่อง · ไกด์ไม่มีจำนวนช่องตายตัวเหมือนลูกเรือ
+               ตัวเลขข้างปุ่มจึงบอก "คนที่ยังว่างในทะเบียน" ซึ่งเป็นเพดานจริงของช่องนี้
+               หมดทะเบียนแล้ว = ปุ่มกดไม่ได้ พร้อมบอกว่าไปเพิ่มคนได้ที่ไหน */
+            var left=goGuides().filter(function(g){
+              return g.active!==false && !taken[g.id]; }).length;
+            var aid='pjga_'+String(bid).replace(/[^A-Za-z0-9_-]/g,'_');
+            out+='<div class="pj-addw">'
+              +'<button class="pj-addb" onclick="pjPopToggle(\''+aid+'\')"'+(left?'':' disabled')
+                +' title="'+(left?'เพิ่มช่องไกด์ หรือช่อง ผช.ไกด์ / สตาฟ'
+                              :'ทุกคนในทะเบียนไกด์ลงลำนี้หมดแล้ว — เพิ่มคนใหม่ได้ที่ปุ่ม จัดไกด์ › ทะเบียนไกด์')+'">'
+                +'&#65291; เพิ่มคน</button>'
+              +'<span class="pj-addn">'+(left?('เหลือ '+left+' คนในทะเบียน'):'ทะเบียนหมดแล้ว')+'</span>'
+              +'<div class="pj-pop pj-addp" id="'+aid+'"><div class="ph">เลือกช่องที่จะเพิ่ม</div>'
+                +'<button onclick="pjGdAddSlot(\''+poE(bid)+'\',\'gd\')">Guide '+(nG+1)+'</button>'
+                +'<button onclick="pjGdAddSlot(\''+poE(bid)+'\',\'tr\')">Trainee / Staff'
+                  +(nT?(' '+(nT+1)):'')+'</button>'
+              +'</div></div>';
+            /* จำนวนคนของกลุ่มนี้ · วางหัวกลุ่มแบบเดียวกับ "N คน" ของลูกเรือ */
+            return '<div class="pj-slotn">'+(gd.length+tr.length+(+GF.other||0))+' คน</div>'
+              +out;   /* §pjKit · ภาษาย้ายออกไปเป็นหัวข้อของตัวเองข้างล่าง */
           })()
         /* §pjKit · ภาษาที่ลูกค้าขอ · เป็นของที่ไกด์กับหน้าท่าต้องเห็นก่อนออกเรือ
            อยู่เป็นบรรทัดสุดท้ายของกลุ่มไกด์แล้วถูกมองข้ามตลอด */
