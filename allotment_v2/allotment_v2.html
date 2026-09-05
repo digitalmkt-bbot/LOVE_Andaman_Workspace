@@ -49597,7 +49597,11 @@ var VJT_DEF={
   hi:'#C0271C', line:'#E2E2DA',
   rowH:'n', lineW:'n', showTh:1,
   hlRet:'#B07A1F', hlWarn:'#C0392B', hlConf:'#7A1FA2',
-  hlUpd:'#FFE08A', hlCxl:'#B5271F', hlCall:'#9B1B12'
+  hlUpd:'#FFE08A', hlCxl:'#B5271F', hlCall:'#9B1B12',
+  /* หัวข้อสองท่อน · เดิมยืมสีหลักกับสีป้ายขากลับมาใช้ แยกออกมาให้ตั้งเองได้ */
+  secOut:'#0F6E56', secRet:'#B07A1F',
+  /* พื้นทั้งแถวที่ระบบระบายให้เอง เมื่อแถวนั้นเปลี่ยนรถหรือเปลี่ยนที่ส่ง */
+  hlExtra:'#FFF6E6'
 };
 var VJT_NUM={fVan:[14,60],fRoute:[12,40],fTh:[8,20],fTd:[9,24],fName:[9,26],fTime:[9,30],fLoc:[9,26],fNote:[8,20]};
 var _VJT=null, _VJT_SRC=null;
@@ -49652,7 +49656,8 @@ function vjTplVars(vanId){
     +'--vjt-hlconf:'+T.hlConf+';--vjt-hlconf-bg:'+vjtT(T.hlConf,0.88)+';--vjt-hlconf-ink:'+vjtD(T.hlConf,-28)+';'
     +'--vjt-hlupd:'+T.hlUpd+';--vjt-hlupd-ink:'+vjtD(T.hlUpd,-64)+';'
     +'--vjt-hlcxl:'+T.hlCxl+';--vjt-hlcxl-bg:'+vjtT(T.hlCxl,0.86)+';'
-    +'--vjt-hlcall:'+T.hlCall+';--vjt-hlcall-bg:'+vjtT(T.hlCall,0.90)+';--vjt-hlcall-bd:'+vjtT(T.hlCall,0.58);
+    +'--vjt-hlcall:'+T.hlCall+';--vjt-hlcall-bg:'+vjtT(T.hlCall,0.90)+';--vjt-hlcall-bd:'+vjtT(T.hlCall,0.58)+';'
+    +'--vjt-secout:'+T.secOut+';--vjt-secret:'+T.secRet+';--vjt-hlextra:'+T.hlExtra+';';
 }
 /* ══ §vjRowHl · ไฮไลต์ทั้งบรรทัด · เคสบายเคส ════════════════════════════
    ต่างจาก Template ตรงที่อันนี้ "ไม่ใช่ค่าบริษัท" · ผูกกับใบเดียว
@@ -49667,10 +49672,11 @@ function vjTplVars(vanId){
    (เจอมาแล้วกับ Seat Lock ที่ค้างเป็นร้อย)                                 */
 /* §vjFix1 · เก็บเป็นรหัสสีตรงๆ แทนตัวอักษรย่อ · จะได้เลือกสีเองนอกจานได้
    ของเก่าที่เก็บเป็น y/o/b/g/r ยังอ่านออก ไม่ต้องแปลงข้อมูล */
-var VJ_HL=['#FFE9A8','#FFD3A8','#FBD3CE','#F5B7C4','#E4D4F7',
-           '#CFE6FB','#CFF0F5','#CFEEDD','#E4F2BE','#E2E0DA',
-           '#F9D77E','#F5B48A','#F4948C','#C9A7EE','#9FC9F0',
-           '#8FD9C4','#B9DF7C','#FFF0A0','#D9CFC2','#BDBDB4'];
+var VJ_HL=[
+  '#FFF1A8','#FFE9A8','#FFDCA8','#FFD3A8','#FFC7A0','#F9D77E','#F5B48A',
+  '#FBD3CE','#F7B5AD','#F5B7C4','#F49BB0','#F4948C','#EFA3A3','#E88A8A',
+  '#E4D4F7','#D6C4F2','#C9A7EE','#CFE6FB','#B7D8F7','#9FC9F0','#A8C0EE',
+  '#CFF0F5','#B6E7EA','#CFEEDD','#A9E3C7','#E4F2BE','#E2E0DA','#C9C6BE'];
 var VJ_HL_OLD={y:'#FFE9A8',o:'#FFD3A8',b:'#CFE6FB',g:'#CFEEDD',r:'#FBD3CE'};
 function vjHlColor(v){
   v=String(v||'');
@@ -49678,7 +49684,7 @@ function vjHlColor(v){
   return VJ_HL_OLD[v]||'';
 }
 var _VJ_HL=null, _VJ_HL_SRC=null;
-var _VJ_HL_ON=false, _VJ_HL_C='#FFE9A8';
+var _VJ_HL_ON=false, _VJ_HL_C='#FFE9A8', _VJ_HL_POP=false;
 function vjHlAll(){
   var raw='';
   try{ var b=laBlob(); raw=(typeof b.vanjob_rowhl==='string')?b.vanjob_rowhl:''; }catch(_){ raw=''; }
@@ -49709,14 +49715,24 @@ function vjHlPersist(justSet){
 }
 function vjHlToggle(){
   if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')){ alert('ดูอย่างเดียว · แก้ไม่ได้'); return; }
-  _VJ_HL_ON=!_VJ_HL_ON; renderVanJobs();
+  _VJ_HL_ON=!_VJ_HL_ON; _VJ_HL_POP=false; renderVanJobs();
 }
-function vjHlPick(c){ if(!/^#[0-9a-fA-F]{6}$/.test(String(c||''))) return; _VJ_HL_C=c; renderVanJobs(); }
+/* กดที่อื่นแล้วจานสีต้องปิด · ไม่งั้นค้างทับใบงานอยู่อย่างนั้น */
+if(!window._vjHlDocBound){ window._vjHlDocBound=true;
+  document.addEventListener('click', function(ev){
+    if(!_VJ_HL_POP) return;
+    if(ev.target && ev.target.closest && (ev.target.closest('.vjhl-pop')||ev.target.closest('.vjhl-b .pk'))) return;
+    _VJ_HL_POP=false; try{ renderVanJobs(); }catch(_){}
+  }, true);
+}
+function vjHlPick(c){ if(!/^#[0-9a-fA-F]{6}$/.test(String(c||''))) return; _VJ_HL_C=c; _VJ_HL_POP=false; renderVanJobs(); }
+function vjHlPopToggle(){ _VJ_HL_POP=!_VJ_HL_POP; renderVanJobs(); }
 /* เลือกสีเองระหว่างลาก · อัปเดตแค่กรอบที่เลือกไว้ ไม่วาดใหม่ (เหตุผลเดียวกับจานสีของ Template) */
 function vjHlLive(c){
   if(!/^#[0-9a-fA-F]{6}$/.test(String(c||''))) return;
   _VJ_HL_C=c;
   var box=document.getElementById('vjhl-cst'); if(box) box.style.background=c;
+  var pk=document.querySelector('.vjhl-b .pk i'); if(pk) pk.style.background=c;
   var g=document.getElementById('vjhl-g');
   if(g) [].forEach.call(g.querySelectorAll('button[data-c]'), function(b){
     b.className=(String(b.getAttribute('data-c')).toLowerCase()===String(c).toLowerCase())?'on':''; });
@@ -49739,16 +49755,31 @@ function vjHlClearSheet(date,vanId,routeId){
 }
 function vjHlBar(date,vanId,routeId){
   if(!_VJ_HL_ON) return '';
+  var clr='vjHlClearSheet(\''+date+'\',\''+vanId+'\',\''+(routeId||'')+'\')';
+  /* จานสีเดิมกางเรียงยาว 20 ช่องคาแถบไว้ตลอด กินที่และหาสีที่ใช้อยู่ไม่เจอ
+     เปลี่ยนเป็นปุ่มสีเดียว กดแล้วค่อยกางจาน · แบบเดียวกับจานสีประจำรถ */
   return '<div class="vjhl-b"><b>&#128396; ไฮไลต์แถว</b>'
    +'<span class="s">เลือกสี แล้วคลิกที่แถวในใบ &middot; คลิกซ้ำสีเดิม = ล้างบรรทัดนั้น</span>'
-   +'<span class="g" id="vjhl-g">'
-   +VJ_HL.map(function(c){ return '<button data-c="'+c+'" class="'+(String(_VJ_HL_C).toLowerCase()===c.toLowerCase()?'on':'')
-       +'" style="background:'+c+'" title="'+c+'" onclick="vjHlPick(\''+c+'\')"></button>'; }).join('')
-   +'<label class="cst" id="vjhl-cst" title="เลือกสีเอง" style="background:'+_VJ_HL_C+'">'
-     +'<input type="color" value="'+_VJ_HL_C+'" oninput="vjHlLive(this.value)" onchange="vjHlPick(this.value)"></label>'
-   +'<button class="x" title="ล้างไฮไลต์ทั้งใบนี้" onclick="vjHlClearSheet(\''+date+'\',\''+vanId+'\',\''+(routeId||'')+'\')">&times;</button>'
+   +'<span class="act">'
+     +'<button class="pk'+(_VJ_HL_POP?' open':'')+'" onclick="vjHlPopToggle()" title="เลือกสีไฮไลต์">'
+       +'<i style="background:'+_VJ_HL_C+'"></i><span>สีที่ใช้</span><em>&#9662;</em></button>'
+     +'<button class="cl" onclick="'+clr+'" title="ล้างไฮไลต์ทั้งใบนี้">ล้างทั้งใบ</button>'
    +'</span>'
    +'<span class="n">ผูกกับใบนี้ใบเดียว (วันที่ &middot; รถ &middot; โปรแกรม) &middot; ติดไปกับตอนพิมพ์และบันทึกรูป</span>'
+   +(_VJ_HL_POP?vjHlPop(clr):'')
+   +'</div>';
+}
+function vjHlPop(clr){
+  return '<div class="vjhl-pop" onclick="event.stopPropagation()">'
+   +'<div class="ph">สีไฮไลต์แถว</div>'
+   +'<div class="pg" id="vjhl-g">'
+   +VJ_HL.map(function(c){ return '<button data-c="'+c+'" class="'+(String(_VJ_HL_C).toLowerCase()===c.toLowerCase()?'on':'')
+       +'" style="background:'+c+'" title="'+c+'" onclick="vjHlPick(\''+c+'\')"></button>'; }).join('')
+   +'</div>'
+   +'<div class="pc"><label id="vjhl-cst" style="background:'+_VJ_HL_C+'">'
+     +'<input type="color" value="'+_VJ_HL_C+'" oninput="vjHlLive(this.value)" onchange="vjHlPick(this.value)"></label>'
+     +'<span>เลือกสีเองได้ไม่จำกัด &rarr;</span></div>'
+   +'<button class="px" onclick="'+clr+'">ล้างไฮไลต์ทั้งใบนี้</button>'
    +'</div>';
 }
 function vjHlCss(){
@@ -49757,13 +49788,32 @@ function vjHlCss(){
      +'border-radius:10px;padding:7px 12px;margin-bottom:10px;font-family:inherit}'
    +'.vjhl-b b{font-size:12.5px;color:#7A4A00;flex:none}'
    +'.vjhl-b .s{font-size:11px;color:#8a6a2a}'
-   +'.vjhl-b .g{display:grid;grid-template-columns:repeat(11,22px);gap:5px;align-items:center;margin-left:auto;flex:none}'
-   +'.vjhl-b .g button{width:22px;height:22px;border-radius:6px;border:none;cursor:pointer;'
+   +'.vjhl-b{position:relative}'
+   +'.vjhl-b .act{display:flex;gap:7px;align-items:center;margin-left:auto;flex:none}'
+   +'.vjhl-b .act .pk{display:inline-flex;align-items:center;gap:7px;border:1.5px solid #d7c9a8;background:#fff;'
+     +'border-radius:9px;padding:4px 10px 4px 5px;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:700;color:#7A4A00}'
+   +'.vjhl-b .act .pk.open{border-color:#7A4A00;background:#FFF4DC}'
+   +'.vjhl-b .act .pk i{width:22px;height:22px;border-radius:6px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}'
+   +'.vjhl-b .act .pk em{font-style:normal;font-size:9px;color:#a89468}'
+   +'.vjhl-b .act .cl{border:1px solid #d7c9a8;background:#fff;color:#8a6a2a;border-radius:9px;'
+     +'padding:5px 11px;cursor:pointer;font-family:inherit;font-size:11px;font-weight:700}'
+   +'.vjhl-b .act .cl:hover{border-color:#C0392B;color:#B5271F}'
+   /* จานสี · กางใต้ปุ่ม แบบเดียวกับจานสีประจำรถ */
+   +'.vjhl-pop{position:absolute;right:12px;top:calc(100% + 6px);z-index:40;background:#fff;'
+     +'border:1px solid #e3ddcd;border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.18);padding:12px;width:270px}'
+   +'.vjhl-pop .ph{font-size:11.5px;font-weight:800;color:#7A4A00;margin-bottom:9px}'
+   +'.vjhl-pop .pg{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}'
+   +'.vjhl-pop .pg button{width:100%;aspect-ratio:1;border-radius:8px;border:none;cursor:pointer;'
      +'box-shadow:inset 0 0 0 1px rgba(0,0,0,.13);font-family:inherit;padding:0}'
-   /* เลือกสีเอง · ช่องสุดท้ายของแถว · input ซ่อนไว้ใต้ป้ายสี */
-   +'.vjhl-b .g .cst{width:22px;height:22px;border-radius:6px;cursor:pointer;position:relative;overflow:hidden;'
-     +'box-shadow:inset 0 0 0 1px rgba(0,0,0,.13),inset 0 0 0 3px #fff}'
-   +'.vjhl-b .g .cst input{position:absolute;inset:-4px;width:34px;height:34px;opacity:0;cursor:pointer;border:none;padding:0}'
+   +'.vjhl-pop .pg button.on{box-shadow:inset 0 0 0 1px rgba(0,0,0,.13),0 0 0 2.5px #7A4A00}'
+   +'.vjhl-pop .pc{display:flex;align-items:center;gap:9px;margin-top:11px;padding-top:10px;border-top:1px solid #f0ebdd}'
+   +'.vjhl-pop .pc label{width:34px;height:28px;border-radius:8px;cursor:pointer;position:relative;overflow:hidden;flex:none;'
+     +'box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}'
+   +'.vjhl-pop .pc label input{position:absolute;inset:-6px;width:52px;height:46px;opacity:0;cursor:pointer;border:none;padding:0}'
+   +'.vjhl-pop .pc span{font-size:10.5px;color:#8a8a82}'
+   +'.vjhl-pop .px{width:100%;margin-top:10px;border:1px solid #e3ddcd;background:#fff;color:#8a6a2a;'
+     +'border-radius:9px;padding:7px;cursor:pointer;font-family:inherit;font-size:11.5px;font-weight:700}'
+   +'.vjhl-pop .px:hover{border-color:#C0392B;color:#B5271F}'
    +'.vjhl-b .g button.on{box-shadow:inset 0 0 0 1px rgba(0,0,0,.13),0 0 0 2.5px #7A4A00}'
    +'.vjhl-b .g button.x{background:#fff;border:1px solid #d7c9a8;color:#8a6a2a;font-size:15px;line-height:1}'
    +'.vjhl-b .n{font-size:9.5px;color:#a89468;flex:none;max-width:180px;line-height:1.45}'
@@ -49780,6 +49830,7 @@ var VJT_PRESET={
   ink:{useVanColor:0, main:'#3A3A36', thBg:'#F2F2EE', thInk:'#3A3A36',
        hi:'#1A1A18', line:'#C9C6BE', hlCall:'#3A3A36', hlUpd:'#E8E6DF',
        hlRet:'#5A5A54', hlWarn:'#4A4A44', hlConf:'#4A4A44', hlCxl:'#4A4A44',
+       secOut:'#3A3A36', secRet:'#6A6A62', hlExtra:'#F0EFEA',
        lineW:'t', rowH:'t'}
 };
 function vjTplPreset(k){
@@ -49885,6 +49936,9 @@ function vjTplPanel(){
      +'</div>'
      +'<div class="vjt-c"><div class="t">สีไฮไลต์ที่ระบบขึ้นเอง</div>'
        +'<div class="n">ป้ายและกล่องที่ใบงานขึ้นให้เองเมื่อเจอเคสพิเศษ</div>'
+       +_vjtSw('&#9312; หัวข้อขาไป','secOut')
+       +_vjtSw('&#9313; หัวข้อขากลับ','secRet')
+       +_vjtSw('พื้นแถวเปลี่ยนรถ / ที่ส่ง','hlExtra','ทั้งแถว')
        +_vjtSw('&#8617; ขากลับใช้รถคันอื่น','hlRet')
        +_vjtSw('&#9888; ยังไม่ได้จัดรถ','hlWarn')
        +_vjtSw('&#9888; รถปนกันในกรุ๊ป','hlConf')
@@ -50148,7 +50202,7 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
         ? ` style="background:${_hlCol};-webkit-print-color-adjust:exact;print-color-adjust:exact"`
         : (_sxR
         ? ' style="background:#F5F3F0;color:#9b9a93;-webkit-print-color-adjust:exact;print-color-adjust:exact"'
-        : (_extra ? ' style="background:#FFF6E6;-webkit-print-color-adjust:exact;print-color-adjust:exact"' : ''));
+        : (_extra ? ' style="background:var(--vjt-hlextra,#FFF6E6);-webkit-print-color-adjust:exact;print-color-adjust:exact"' : ''));
       /* กดได้เฉพาะตอนเปิดโหมด · หน้าต่างพิมพ์ไม่มีฟังก์ชันพวกนี้ จึงต้องไม่ติดไปด้วย */
       const _hlClick = _VJ_HL_ON ? ` onclick="vjHlClick('${_hlKey}')"` : '';
       const _sxMv = x.strand==='mv';
@@ -50168,7 +50222,7 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
         <td style="text-align:center">${b.largeLuggage?('🧳 '+b.largeLuggage):'-'}</td>
         <td style="font-size:12.5px">${sreqCell}</td>
       </tr>`; }).join('');
-    const secHd=`<div style="display:flex;align-items:center;gap:9px;margin:0 0 7px"><span style="background:${isRet?'var(--vjt-hlret,#B07A1F)':'var(--vjt-main,#0F6E56)'};color:#fff;font-size:12.5px;font-weight:700;border-radius:7px;padding:4px 13px;-webkit-print-color-adjust:exact;print-color-adjust:exact">${isRet?'② ขากลับ · RETURN':'① ขาไป · OUTBOUND'}</span><span style="font-size:11.5px;color:#6b7280">${isRet?'รับจากท่าเรือ → ส่งจุดหมาย':'รับจากโรงแรม → ส่งท่าเรือ'}</span></div>`;
+    const secHd=`<div style="display:flex;align-items:center;gap:9px;margin:0 0 7px"><span style="background:${isRet?'var(--vjt-secret,#B07A1F)':'var(--vjt-secout,#0F6E56)'};color:#fff;font-size:12.5px;font-weight:700;border-radius:7px;padding:4px 13px;-webkit-print-color-adjust:exact;print-color-adjust:exact">${isRet?'② ขากลับ · RETURN':'① ขาไป · OUTBOUND'}</span><span style="font-size:11.5px;color:#6b7280">${isRet?'รับจากท่าเรือ → ส่งจุดหมาย':'รับจากโรงแรม → ส่งท่าเรือ'}</span></div>`;
     const table=`<table style="table-layout:fixed;width:100%">
       ${_colg}
       <thead>
