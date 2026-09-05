@@ -96482,17 +96482,44 @@ function pjGdAddSlot(bid,kind){
   try{ document.querySelectorAll('.pj-pop').forEach(function(x){ x.classList.remove('on'); }); }catch(_){}
   renderPierJob();
 }
-/* เอาคนออก · ช่องนั้นต้องหายไปด้วย ไม่ใช่ค้างเป็นบรรทัดว่าง (เหมือน pjSlotDrop) */
-function pjGdDrop(bid,kind,idx){
+/* เอาคนออก · ช่องนั้นต้องหายไปด้วย ไม่ใช่ค้างเป็นบรรทัดว่าง (เหมือน pjSlotDrop)
+   hasVal=0 คือแถวว่างที่กดเปิดไว้ · แค่ปิดแถว ไม่มีอะไรต้องบันทึก
+   อย่าให้ลงไปถึง goAsnSet เพราะนั่นคือเขียนทับข้อมูลทั้งก้อนโดยไม่ได้เปลี่ยนอะไร */
+function pjGdDrop(bid,kind,idx,hasVal){
   var k=pjGdAddKey(bid,kind); if(_pjGdAdd[k]>0) _pjGdAdd[k]--;
-  pjGdPick(bid,kind,idx,'');      /* บันทึก + วาดใหม่ในตัว */
+  if(hasVal) pjGdPick(bid,kind,idx,'');   /* บันทึก + วาดใหม่ในตัว */
+  else renderPierJob();
 }
-function pjGdRow(label, bid, kind, idx, val, langs, taken, busy){
+/* §gdLb (2026-09-05) · ชื่อช่องพิมพ์ทับได้เหมือนช่องลูกเรือ · ใช้ที่เก็บเดียวกัน
+   (PIER_CFG.slotLb) คนละชุดกับ go/wk · ตั้งชื่อทับได้ ลบจนว่าง = กลับชื่อตั้งต้น
+   ชื่อตั้งต้นของช่องต้องคงที่ ไม่ผูกกับจำนวนแถวที่วาดอยู่ตอนนั้น
+   ไม่งั้นแถวแรกของ Trainee จะสลับชื่อตั้งต้นไปมาเวลามีแถวที่สอง
+   แล้ว "ลบจนว่าง = กลับชื่อตั้งต้น" จะเทียบกับคนละค่า */
+function pjGdSlot(kind, idx){ return (kind==='gd'?'g':'t')+idx; }
+function pjGdDefLb(kind, idx){
+  return (kind==='gd') ? ('Guide '+(idx+1))
+                       : (idx ? ('Trainee / Staff '+(idx+1)) : 'Trainee / Staff');
+}
+/* extra = แถวนี้มีอยู่เพราะกด "เพิ่มคน" เปิดไว้ · ยังไม่มีคนก็ปิดทิ้งได้
+   ของเดิมปุ่ม ✕ ขึ้นเฉพาะแถวที่มีคนแล้ว · แถวว่างที่กดเปิดมาจึงปิดไม่ได้เลย
+   ต้องรีเฟรชหน้าถึงจะหาย (_pjGdAdd อยู่ในหน่วยความจำ) */
+function pjGdRow(label, bid, kind, idx, val, langs, taken, busy, extra){
   var chips=(langs||[]).map(function(L){ return '<span class="pj-lg">'+poE(L)+'</span>'; }).join('');
   var call=function(v){ return 'pjGdPick(\''+poE(bid)+'\',\''+kind+'\','+idx+','+v+')'; };
-  return '<div class="pj-rw"><div class="k">'+poE(label)+'</div>'
+  var slot=pjGdSlot(kind,idx), def=pjGdDefLb(kind,idx), lb=pjSlotLb('gd',slot,def);
+  var kHtml='<span class="pj-kx" contenteditable="true" spellcheck="false"'
+    +' title="แก้ชื่อช่องนี้ได้ · มีผลทุกท่าทุกลำ · ลบจนว่าง = กลับเป็น '+poE(def)+'"'
+    +' onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}'
+      +'if(event.key===\'Escape\'){this.textContent=this.dataset.o;this.blur();}"'
+    +' data-o="'+poE(lb)+'"'
+    +' onblur="pjSlotLbSet(\'gd\',\''+slot+'\',this.textContent,\''+poE(def)+'\')">'
+    +poE(lb)+'</span>';
+  return '<div class="pj-rw"><div class="k">'+kHtml+'</div>'
     +'<select onchange="'+call('this.value')+'">'+pjGdOpts(val, kind==='gd', taken, busy)+'</select>'
-    +(val?('<button class="pj-rx" onclick="pjGdDrop(\''+poE(bid)+'\',\''+kind+'\','+idx+')" title="เอาคนออกจากช่องนี้">&#10005;</button>'):'')
+    +((val||extra)
+       ? ('<button class="pj-rx" onclick="pjGdDrop(\''+poE(bid)+'\',\''+kind+'\','+idx+','+(val?1:0)+')"'
+          +' title="'+(val?'เอาคนออกจากช่องนี้':'ปิดช่องว่างที่เปิดไว้')+'">&#10005;</button>')
+       : '')
     +(chips?('<span class="pj-lgs">'+chips+'</span>'):'')
   +'</div>';
 }
@@ -96819,12 +96846,16 @@ function pjCard(B, pier, ro){
                §pjG1 · เดิมใบที่ยังไม่ได้จัดไกด์ขึ้น Guide 1 สองแถวซ้อนกัน
                ช่องว่างมาจากตัวเติมอยู่แล้ว ไม่ต้องใส่ช่องแรกแยกอีก */
             if(lro){
-              var o=gd.map(function(x,i){ return pjGuideRow('Guide '+(i+1), x.name, x.langs); }).join('');
-              for(var i=gd.length; i<3; i++) o+=pjGuideRow('Guide '+(i+1),'',[]);
+              /* §gdLb · ชื่อช่องที่ตั้งทับไว้ต้องขึ้นตรงกันทั้งสองโหมด
+                 ไม่งั้นคนที่ดูอย่างเดียวเห็นคนละชื่อกับคนที่แก้ได้ */
+              var o=gd.map(function(x,i){
+                return pjGuideRow(pjSlotLb('gd',pjGdSlot('gd',i),pjGdDefLb('gd',i)), x.name, x.langs); }).join('');
+              for(var i=gd.length; i<3; i++)
+                o+=pjGuideRow(pjSlotLb('gd',pjGdSlot('gd',i),pjGdDefLb('gd',i)),'',[]);
               var trTxt=tr.map(function(x){ return x.name; }).join(' · ');
               var trN=tr.length+(+GF.other||0);
               if(!trTxt && GF.other>0) trTxt=GF.other+' คน';
-              return o+pjRow('Trainee / Staff',
+              return o+pjRow(poE(pjSlotLb('gd',pjGdSlot('tr',0),pjGdDefLb('tr',0))),
                 (trTxt?('<div class="v">'+poE(trTxt)+'</div>'):'<div class="v e">—</div>')
                 +(trN>1?('<span class="pj-lgs"><span class="pj-lg" style="background:#F1EFE8;color:#6B6B63">'
                          +trN+' คน</span></span>'):''), null);
@@ -96839,12 +96870,15 @@ function pjCard(B, pier, ro){
             var nG=Math.max(1, gd.length)+pjGdAddN(bid,'gd');
             var nT=tr.length+pjGdAddN(bid,'tr');
             var out='', k;
+            /* §gdLb · แถวที่เกินจากช่องที่มีอยู่ = แถวที่กดเปิดไว้ · ปิดทิ้งได้
+               ฐานของไกด์รวมช่องแรกที่โชว์เสมอ ช่อง Guide 1 จึงไม่มีปุ่มปิด */
+            var baseG=Math.max(1, gd.length), baseT=tr.length;
             for(k=0; k<nG; k++)
-              out+=pjGdRow('Guide '+(k+1), bid, 'gd', k,
-                    (gd[k]||{}).id||'', (gd[k]||{}).langs||[], taken, busy);
+              out+=pjGdRow(pjGdDefLb('gd',k), bid, 'gd', k,
+                    (gd[k]||{}).id||'', (gd[k]||{}).langs||[], taken, busy, k>=baseG);
             for(k=0; k<nT; k++)
-              out+=pjGdRow(nT>1?('Trainee / Staff '+(k+1)):'Trainee / Staff', bid, 'tr', k,
-                    (tr[k]||{}).id||'', (tr[k]||{}).langs||[], taken, busy);
+              out+=pjGdRow(pjGdDefLb('tr',k), bid, 'tr', k,
+                    (tr[k]||{}).id||'', (tr[k]||{}).langs||[], taken, busy, k>=baseT);
             /* ช่อง "อื่นๆ ที่ไม่อยู่ในทะเบียน" ของใบสั่งงาน · เป็นจำนวน ไม่มีชื่อให้เลือก
                ตั้งได้ที่หน้าต่างจัดไกด์ · โชว์ไว้ให้ยอดบนกระดาษกับบนการ์ดตรงกัน */
             if(+GF.other>0) out+=pjRow('อื่นๆ (ไม่มีชื่อ)',
@@ -96862,9 +96896,12 @@ function pjCard(B, pier, ro){
                 +'&#65291; เพิ่มคน</button>'
               +'<span class="pj-addn">'+(left?('เหลือ '+left+' คนในทะเบียน'):'ทะเบียนหมดแล้ว')+'</span>'
               +'<div class="pj-pop pj-addp" id="'+aid+'"><div class="ph">เลือกช่องที่จะเพิ่ม</div>'
-                +'<button onclick="pjGdAddSlot(\''+poE(bid)+'\',\'gd\')">Guide '+(nG+1)+'</button>'
-                +'<button onclick="pjGdAddSlot(\''+poE(bid)+'\',\'tr\')">Trainee / Staff'
-                  +(nT?(' '+(nT+1)):'')+'</button>'
+                /* §gdLb · ชื่อในเมนูต้องเป็นชื่อที่ตั้งทับไว้ ไม่ใช่ชื่อตั้งต้น
+                   ไม่งั้นเมนูเรียกช่องคนละชื่อกับที่เห็นบนการ์ด */
+                +'<button onclick="pjGdAddSlot(\''+poE(bid)+'\',\'gd\')">'
+                  +poE(pjSlotLb('gd',pjGdSlot('gd',nG),pjGdDefLb('gd',nG)))+'</button>'
+                +'<button onclick="pjGdAddSlot(\''+poE(bid)+'\',\'tr\')">'
+                  +poE(pjSlotLb('gd',pjGdSlot('tr',nT),pjGdDefLb('tr',nT)))+'</button>'
               +'</div></div>';
             /* จำนวนคนของกลุ่มนี้ · วางหัวกลุ่มแบบเดียวกับ "N คน" ของลูกเรือ */
             return '<div class="pj-slotn">'+(gd.length+tr.length+(+GF.other||0))+' คน</div>'
