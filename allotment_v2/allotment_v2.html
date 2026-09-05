@@ -49550,12 +49550,13 @@ function renderVanJobs(){
           <button onclick="vanJobsSetZoom('fit')" title="พอดีจอ" style="background:#fff;border:none;border-left:1px solid #eef0ec;padding:6px 9px;font-size:12px;cursor:pointer;color:#0F6E56;font-family:inherit;line-height:1">พอดี</button>
         </div>
         <button onclick="${_VJT_DRAFT?'vjTplCancel()':'vjTplOpen()'}" title="ตั้งขนาดตัวอักษร สี และระยะของใบงาน · ใช้กับทุกใบ" style="background:${_VJT_DRAFT?'#0F6E56':'#fff'};color:${_VJT_DRAFT?'#fff':'#0F6E56'};border:1.5px solid #0F6E56;border-radius:8px;padding:6.5px 13px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">&#9881; Template</button>
+        <button onclick="vjHlToggle()" title="ไฮไลต์ทีละบรรทัด · เฉพาะใบนี้" style="background:${_VJ_HL_ON?'#8A5A00':'#fff'};color:${_VJ_HL_ON?'#fff':'#8A5A00'};border:1.5px solid #C99A2E;border-radius:8px;padding:6.5px 13px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">&#128396; ไฮไลต์แถว</button>
         <button onclick="vanJobsSaveImage('${date}','${_pvVid}','${_pvRoute}','${_pvLeg}')" title="บันทึกเป็นรูป PNG คมสูง (ส่ง LINE/WhatsApp)" style="background:#185FA5;color:#fff;border:none;border-radius:8px;padding:8px 15px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">&#128247; บันทึกรูป</button>
         <button onclick="bkV2VanJobOrder('${date}','${_pvVid}','${_pvRoute}','${_pvLeg}')" style="background:#0F6E56;color:#fff;border:none;border-radius:8px;padding:8px 15px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit">&#128424; พิมพ์</button>
         <button onclick="vanJobsClosePreview()" title="ปิด" style="background:#fff;border:1px solid #d7dbe2;border-radius:8px;padding:7px 12px;font-size:14px;cursor:pointer;font-family:inherit;color:#666">&#10005;</button>
       </div>
     </div>
-    <div style="flex:1;overflow:auto;padding:14px;background:#EDEFF2">${vanJobsOrderCss(true)}${vjTplCss()}${vjTplPanel()}<div class="vjo" id="vjo-page" style="${vjTplVars(_pvVid)};width:100%;min-width:1060px;max-width:2000px;box-sizing:border-box;background:#fff;padding:20px 24px;border-radius:8px;box-shadow:0 3px 16px rgba(20,40,70,.12)">${vanJobsOrderInner(date,_pvVid,_pvRoute,_pvLeg)}</div></div>
+    <div style="flex:1;overflow:auto;padding:14px;background:#EDEFF2">${vanJobsOrderCss(true)}${vjTplCss()}${vjHlCss()}${vjTplPanel()}${vjHlBar(date,_pvVid,_pvRoute)}<div class="vjo${_VJ_HL_ON?' vjhl':''}" id="vjo-page" style="${vjTplVars(_pvVid)};width:100%;min-width:1060px;max-width:2000px;box-sizing:border-box;background:#fff;padding:20px 24px;border-radius:8px;box-shadow:0 3px 16px rgba(20,40,70,.12)">${vanJobsOrderInner(date,_pvVid,_pvRoute,_pvLeg)}</div></div>
   </div>`:''}${_vanJobsFull?(function(){ const k=String(_vanJobsFull); const kk=k.split('|')[0]; const fvid=kk.split('~')[0]; const frt=kk.split('~')[1]||''; const fleg=k.indexOf('|ret')>=0?'ret':'out'; const fnm=(vehGet(fvid)||{}).name||fvid; const frtNm=frt?(((typeof getRoute==='function'?getRoute(frt):null)||{}).name||frt):''; return `
   <div style="position:fixed;inset:0;z-index:700;background:#fff">
     <button onclick="vanJobsCloseFull()" title="ปิด (Esc)" style="position:fixed;top:5px;right:6px;z-index:5;width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.92);border:1px solid #d7dbe2;color:#777;font-size:13px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;font-family:inherit">&#10005;</button>
@@ -49647,6 +49648,101 @@ function vjTplVars(vanId){
     +'--vjt-hlupd:'+T.hlUpd+';--vjt-hlupd-ink:'+vjtD(T.hlUpd,-64)+';'
     +'--vjt-hlcxl:'+T.hlCxl+';--vjt-hlcxl-bg:'+vjtT(T.hlCxl,0.86)+';'
     +'--vjt-hlcall:'+T.hlCall+';--vjt-hlcall-bg:'+vjtT(T.hlCall,0.90)+';--vjt-hlcall-bd:'+vjtT(T.hlCall,0.58);
+}
+/* ══ §vjRowHl · ไฮไลต์ทั้งบรรทัด · เคสบายเคส ════════════════════════════
+   ต่างจาก Template ตรงที่อันนี้ "ไม่ใช่ค่าบริษัท" · ผูกกับใบเดียว
+   คีย์ = วันที่ | รถ | โปรแกรม | ขาไป-ขากลับ | booking
+   ใบของรถคันอื่นหรือวันอื่นจึงไม่กระทบกันเลย แม้เป็น booking เดียวกัน
+
+   ใช้ตอนคนจัดรถอยากบอกคนขับว่า "บรรทัดนี้ระวัง" ในเคสที่ระบบไม่รู้เอง
+   เช่น ลูกค้าโทรมาบอกว่าจะสาย หรือกระเป๋าเยอะกว่าปกติ
+
+   ติดไปกับตอนพิมพ์และบันทึกรูปด้วย · แต่กดได้เฉพาะในแอป
+   ล้างของเก่าทิ้งตอนบันทึก · เก็บย้อนหลังแค่ 45 วัน ไม่งั้นสะสมไปเรื่อย ๆ
+   (เจอมาแล้วกับ Seat Lock ที่ค้างเป็นร้อย)                                 */
+var VJ_HL=[{k:'y',c:'#FFE9A8',n:'เหลือง'},{k:'o',c:'#FFD3A8',n:'ส้ม'},
+           {k:'b',c:'#CFE6FB',n:'ฟ้า'},   {k:'g',c:'#CFEEDD',n:'เขียว'},
+           {k:'r',c:'#FBD3CE',n:'แดง'}];
+function vjHlColor(k){ for(var i=0;i<VJ_HL.length;i++){ if(VJ_HL[i].k===k) return VJ_HL[i].c; } return ''; }
+var _VJ_HL=null, _VJ_HL_SRC=null;
+var _VJ_HL_ON=false, _VJ_HL_C='y';
+function vjHlAll(){
+  var raw='';
+  try{ var b=laBlob(); raw=(typeof b.vanjob_rowhl==='string')?b.vanjob_rowhl:''; }catch(_){ raw=''; }
+  if(_VJ_HL===null || _VJ_HL_SRC!==raw){
+    var o={}; if(raw){ try{ o=JSON.parse(raw)||{}; }catch(_){ o={}; } }
+    _VJ_HL=o; _VJ_HL_SRC=raw;
+  }
+  return _VJ_HL;
+}
+function vjHlKey(date,vanId,routeId,isRet,bkId){
+  return String(date||'')+'|'+String(vanId||'')+'|'+String(routeId||'')+'|'+(isRet?'r':'o')+'|'+String(bkId||'');
+}
+function vjHlOf(key){ return vjHlAll()[key]||''; }
+function vjHlPersist(justSet){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;
+  try{
+    var A=vjHlAll();
+    /* ตัดของเก่ากว่า 45 วันทิ้ง · ใบงานที่ผ่านไปแล้วไม่มีใครกลับไปพิมพ์
+       ยกเว้นบรรทัดที่เพิ่งกด · ไม่งั้นเปิดใบเก่ามาทาสีแล้วมันหายทันทีตรงหน้า */
+    var cut=new Date(); cut.setDate(cut.getDate()-45);
+    var cutS=(typeof bkV2LocalYMD==='function')?bkV2LocalYMD(cut):cut.toISOString().slice(0,10);
+    var keep={}; for(var k in A){ if(!A[k]) continue; if(k===justSet || String(k).slice(0,10)>=cutS) keep[k]=A[k]; }
+    var b=laBlob();
+    if(Object.keys(keep).length){ var str=JSON.stringify(keep); b.vanjob_rowhl=str; _VJ_HL=keep; _VJ_HL_SRC=str; }
+    else { delete b.vanjob_rowhl; _VJ_HL={}; _VJ_HL_SRC=''; }
+    laBlobSave();
+  }catch(e){ try{ console.warn('[vjRowHl] save failed', e&&e.message); }catch(_){} }
+}
+function vjHlToggle(){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')){ alert('ดูอย่างเดียว · แก้ไม่ได้'); return; }
+  _VJ_HL_ON=!_VJ_HL_ON; renderVanJobs();
+}
+function vjHlPick(k){ _VJ_HL_C=k; renderVanJobs(); }
+function vjHlClick(key){
+  if(!_VJ_HL_ON) return;
+  var A=vjHlAll();
+  /* กดสีเดิมซ้ำ = ล้างบรรทัดนั้น · ไม่ต้องมีปุ่มยางลบแยก */
+  var on=(A[key]!==_VJ_HL_C);
+  if(on) A[key]=_VJ_HL_C; else delete A[key];
+  vjHlPersist(on?key:null); renderVanJobs();
+}
+function vjHlClearSheet(date,vanId,routeId){
+  var A=vjHlAll(), pre=String(date)+'|'+String(vanId)+'|'+String(routeId||'')+'|', n=0;
+  for(var k in A){ if(k.indexOf(pre)===0) n++; }
+  if(!n){ alert('ใบนี้ยังไม่มีบรรทัดที่ไฮไลต์ไว้'); return; }
+  if(!confirm('ล้างไฮไลต์ทั้งใบนี้ '+n+' บรรทัด?')) return;
+  for(var k2 in A){ if(k2.indexOf(pre)===0) delete A[k2]; }
+  vjHlPersist(); renderVanJobs();
+}
+function vjHlBar(date,vanId,routeId){
+  if(!_VJ_HL_ON) return '';
+  return '<div class="vjhl-b"><b>&#128396; ไฮไลต์แถว</b>'
+   +'<span class="s">เลือกสี แล้วคลิกที่แถวในใบ &middot; คลิกซ้ำสีเดิม = ล้างบรรทัดนั้น</span>'
+   +'<span class="g">'
+   +VJ_HL.map(function(x){ return '<button class="'+(_VJ_HL_C===x.k?'on':'')+'" style="background:'+x.c
+       +'" title="'+x.n+'" onclick="vjHlPick(\''+x.k+'\')"></button>'; }).join('')
+   +'<button class="x" title="ล้างไฮไลต์ทั้งใบนี้" onclick="vjHlClearSheet(\''+date+'\',\''+vanId+'\',\''+(routeId||'')+'\')">&times;</button>'
+   +'</span>'
+   +'<span class="n">ผูกกับใบนี้ใบเดียว (วันที่ &middot; รถ &middot; โปรแกรม) &middot; ติดไปกับตอนพิมพ์และบันทึกรูป</span>'
+   +'</div>';
+}
+function vjHlCss(){
+  return '<style id="vjhl-css">'
+   +'.vjhl-b{display:flex;align-items:center;gap:11px;background:#FFFBF0;border:2px solid #C99A2E;'
+     +'border-radius:10px;padding:7px 12px;margin-bottom:10px;font-family:inherit}'
+   +'.vjhl-b b{font-size:12.5px;color:#7A4A00;flex:none}'
+   +'.vjhl-b .s{font-size:11px;color:#8a6a2a}'
+   +'.vjhl-b .g{display:flex;gap:6px;align-items:center;margin-left:auto;flex:none}'
+   +'.vjhl-b .g button{width:26px;height:26px;border-radius:7px;border:none;cursor:pointer;'
+     +'box-shadow:inset 0 0 0 1px rgba(0,0,0,.13);font-family:inherit;padding:0}'
+   +'.vjhl-b .g button.on{box-shadow:inset 0 0 0 1px rgba(0,0,0,.13),0 0 0 2.5px #7A4A00}'
+   +'.vjhl-b .g button.x{background:#fff;border:1px solid #d7c9a8;color:#8a6a2a;font-size:15px;line-height:1}'
+   +'.vjhl-b .n{font-size:9.5px;color:#a89468;flex:none;max-width:220px;line-height:1.45}'
+   /* ในโหมดไฮไลต์ · ทั้งแถวกดได้ ต้องบอกด้วยว่ากดได้ */
+   +'.vjo.vjhl tbody tr{cursor:pointer}'
+   +'.vjo.vjhl tbody tr:hover>td{outline:1.5px dashed #C99A2E;outline-offset:-2px}'
+   +'</style>';
 }
 /* ══ §vjTpl · พาเนลตั้งค่า ═══════════════════════════════════════════════ */
 var VJT_PRESET={
@@ -49997,14 +50093,21 @@ function vanJobsOrderInner(date, vanId, routeId, legIgnored){
           }
         }catch(_e){}
       }
-      const _rowBg = _sxR
+      /* §vjRowHl · สีที่คนจัดรถทาเอง ชนะสีอัตโนมัติ · เขาเห็นของจริงตรงหน้าแล้วจึงทา */
+      const _hlKey = vjHlKey(date, vanId, routeId, isRet, b.id);
+      const _hlCol = vjHlColor(vjHlOf(_hlKey));
+      const _rowBg = _hlCol
+        ? ` style="background:${_hlCol};-webkit-print-color-adjust:exact;print-color-adjust:exact"`
+        : (_sxR
         ? ' style="background:#F5F3F0;color:#9b9a93;-webkit-print-color-adjust:exact;print-color-adjust:exact"'
-        : (_extra ? ' style="background:#FFF6E6;-webkit-print-color-adjust:exact;print-color-adjust:exact"' : '');
+        : (_extra ? ' style="background:#FFF6E6;-webkit-print-color-adjust:exact;print-color-adjust:exact"' : ''));
+      /* กดได้เฉพาะตอนเปิดโหมด · หน้าต่างพิมพ์ไม่มีฟังก์ชันพวกนี้ จึงต้องไม่ติดไปด้วย */
+      const _hlClick = _VJ_HL_ON ? ` onclick="vjHlClick('${_hlKey}')"` : '';
       const _sxMv = x.strand==='mv';
       const _sxTag = _sxR
         ? `<div style="margin-top:3px"><span style="display:inline-block;background:${_sxMv?'#EDE3FB':'var(--vjt-hlcxl-bg,#FBE3E1)'};color:${_sxMv?'#5B289A':'var(--vjt-hlcxl,#B5271F)'};font-weight:700;font-size:11px;border-radius:7px;padding:2px 8px;-webkit-print-color-adjust:exact;print-color-adjust:exact">&#10007; ${_sxMv?('เลื่อนวันแล้ว'+(x.strandWhy?(' · '+e(String(x.strandWhy).split(' · ')[0])):'')):'ยกเลิกแล้ว'} · ไม่ต้องไปรับ</span></div>`
         : '';
-      return `<tr${_rowBg}>
+      return `<tr${_rowBg}${_hlClick}>
         <td style="text-align:center;${_sxR?'color:#B5271F;font-weight:700':''}">${_no}</td>
         <td style="font-size:12.5px;word-break:break-all;font-variant-numeric:tabular-nums;color:#444">${e(b.voucherRef||b.code||b.id)}</td>
         <td style="font-size:var(--vjt-name,15.5px);font-weight:700;color:${_sxR?'#8f8e88':'#1B2A55'}${_sxR?';text-decoration:line-through;text-decoration-thickness:1.5px':''}">${e(b.leadPax||'-')}${_sxTag}${_ckTag}${(_ovnRet||_ovnOut)?`<div style="margin-top:2px"><span style="display:inline-block;background:${_ovnOut?'#EDE7FB':'#FBE4C9'};color:${_ovnOut?'#4A2E86':'#8a5500'};font-weight:700;font-size:10px;border-radius:7px;padding:1px 7px;white-space:nowrap">${_ovnOut?'&#127765; OVN':'&#8617; OVN'}</span></div>`:''}${(function(){ const _lead=String(b.leadPax||'').trim(); const _ex=(b.passengers||[]).map(p=>String((p&&p.name)||'').trim()).filter(n=>n&&n!==_lead); if(_ex.length){ let h=_ex.slice(0,2).map(n=>`<div class="ag" style="font-weight:600;color:#3F4654">${e(n)}</div>`).join(''); if(_ex.length>2) h+=`<div class="ag">+${_ex.length-2} more</div>`; return h; } return (b.passengers&&b.passengers.length)?`<div class="ag">+${b.passengers.length} more</div>`:''; })()}${x.splitPax!=null?`<div class="ag" style="color:#5B289A">${x.sMain?('&#128652; จุดหลัก'):(((x.sHotel||'').trim()||x.sAreaId)?('&#128652; แยกรับ'):('&#9986; แยกส่ง'))+(x.sWho?(' · '+e(x.sWho)):'')} · เดียวกัน ${e(b.voucherRef||b.code||b.id)}</div>`:''}${(x._mgN>1)?`<div class="ag" style="color:#0C6B47">&#128652; รับจุดเดียวกัน ${x._mgN} กลุ่ม · ขากลับแยกส่ง</div>`:''}</td>
@@ -63576,7 +63679,10 @@ function bkV2VanJobOrder(date, vanId, routeId, leg){
   const e=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const _rn=routeId?(((typeof getRoute==='function'?getRoute(routeId):null)||{}).name||routeId):'';
   const legTitle=(_rn?(' · '+_rn):'')+(leg==='ret'?' · ขากลับ':'');
+  /* §vjRowHl · สีที่ทาไว้ต้องติดไปด้วย แต่ onclick ต้องไม่ติด · หน้าต่างพิมพ์ไม่มีฟังก์ชันพวกนี้ */
+  const _hlWas=_VJ_HL_ON; _VJ_HL_ON=false;
   const html='<!doctype html><html><head><meta charset="utf-8"><title>Van Job Order · '+e(v.name||vanId)+legTitle+' · '+e(date)+'</title>'+vanJobsOrderCss(false)+'</head><body style="'+vjTplVars(vanId)+'">'+vanJobsOrderInner(date,vanId,routeId,leg)+'<script>setTimeout(function(){try{window.print()}catch(e){}},350)<\/script></body></html>';
+  _VJ_HL_ON=_hlWas;
   const w=window.open('','_blank'); if(!w){ alert('Please allow pop-ups to print the van job order'); return; }
   w.document.write(html); w.document.close(); w.focus();
 }
@@ -63590,10 +63696,11 @@ function vanJobsSaveImage(date, vanId, routeId, leg){
     var _hw=_sw+64;                                                          // + 32px margin each side
     var host=document.createElement('div'); host.id='vj-imghost';
     host.style.cssText='position:fixed;left:-99999px;top:0;width:'+_hw+'px;background:#fff;box-sizing:border-box;z-index:-1';
+    var _hlWas=_VJ_HL_ON; _VJ_HL_ON=false;   /* §vjRowHl · รูปเอาสีไปด้วย แต่ไม่เอา onclick */
     host.innerHTML=vanJobsOrderCss(true)
       +'<div id="vj-shot" style="width:'+_hw+'px;background:#fff;padding:32px;box-sizing:border-box">'
       +'<div class="vjo" style="'+vjTplVars(vanId)+'">'+vanJobsOrderInner(date,vanId,routeId,leg)+'</div></div>';
-    document.body.appendChild(host);
+    document.body.appendChild(host); _VJ_HL_ON=_hlWas;
     var tgt=host.querySelector('#vj-shot')||host;   // capture the padded wrapper, not the sheet inside it
     window.html2canvas(tgt,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false,windowWidth:_hw+48}).then(function(canvas){
       canvas.toBlob(function(blob){
