@@ -48000,10 +48000,31 @@ function bkV2AssignBoat(bkId, boatId, date){
   // re-render whichever surface is showing
   if(_bkV2 && _bkV2.boatAssignMode && typeof bkV2Render==='function') bkV2Render(); else renderBoatAssign();
 }
+/* ══ §btTickScroll (2026-09-05) · ติ๊กเลือกแถวแล้วตารางเด้งกลับหัว ═════════════
+   ติ๊กหนึ่งครั้ง = bkV2Render() วาดใหม่ทั้งหน้า · innerHTML ใหม่ทำให้ .t2-wrap
+   (กล่องเลื่อนของตาราง By-trip) เป็นคนละตัว scrollTop จึงกลับเป็น 0 ทุกครั้ง
+   ติ๊กหลายแถวที่อยู่ท้ายตารางแทบไม่ได้ ต้องเลื่อนลงมาใหม่ทุกครั้ง
+   เก็บตำแหน่งไว้ก่อนวาด แล้วคืนหลังวาดเสร็จ · ต้องคืนใน rAF ต่ออีกสองชั้น
+   เพราะ bkV2Render ตั้งความสูงกล่อง (--bt-wraph) และดึง margin ล่างใน rAF ของมันเอง
+   ถ้าคืนก่อนหน้านั้น กล่องยังเตี้ยอยู่ เบราว์เซอร์จะตัดค่าที่คืนทิ้ง */
+function bkV2KeepScroll(fn){
+  const _wrap=()=>{ const h=document.getElementById('bkv2-host'); return h?h.querySelector('.t2-wrap'):null; };
+  const w=_wrap();
+  const t=w?w.scrollTop:0, l=w?w.scrollLeft:0, y=window.scrollY||0;
+  fn();
+  const put=()=>{ try{
+    const w2=_wrap();
+    if(w2){ if(t) w2.scrollTop=t; if(l) w2.scrollLeft=l; }
+    if(y) window.scrollTo(0,y);
+  }catch(_){} };
+  put();
+  requestAnimationFrame(()=>{ put(); requestAnimationFrame(put); });
+}
+function bkV2RenderKeep(){ if(typeof bkV2Render==='function') bkV2KeepScroll(bkV2Render); }
 // ── Boat Assign · multi-select (tick) then assign all at once ──
 window._bkV2BoatSel = window._bkV2BoatSel || {};
-function bkV2BoatSelToggle(bkId){ const s=window._bkV2BoatSel; if(s[bkId]) delete s[bkId]; else s[bkId]=true; if(typeof bkV2Render==='function') bkV2Render(); }
-function bkV2BoatSelClear(){ window._bkV2BoatSel={}; if(typeof bkV2Render==='function') bkV2Render(); }
+function bkV2BoatSelToggle(bkId){ const s=window._bkV2BoatSel; if(s[bkId]) delete s[bkId]; else s[bkId]=true; bkV2RenderKeep(); }
+function bkV2BoatSelClear(){ window._bkV2BoatSel={}; bkV2RenderKeep(); }
 // Assign every ticked booking (that belongs to this trip) to one boat · respects the cap+TOL guard · skips + reports the ones that would overflow
 function bkV2BoatAssignSelected(date, routeId, boatId){
   if(!boatId) return;
@@ -48200,8 +48221,8 @@ function bkV2VanClearRoute(date, routeId){
   if(_bkV2&&_bkV2.vanAssignMode&&typeof bkV2Render==='function') bkV2Render();
 }
 // ── Manual van grouping · mark bookings that go together = 1 group · van assigned to the group later (optional) ──
-function bkV2VanSelToggle(bkId){ window._bkV2VanSel=window._bkV2VanSel||{}; if(window._bkV2VanSel[bkId]) delete window._bkV2VanSel[bkId]; else { window._bkV2VanSelN=(window._bkV2VanSelN||0)+1; window._bkV2VanSel[bkId]=window._bkV2VanSelN; } if(typeof bkV2Render==='function') bkV2Render(); }   // value = tick order (for pickup sequencing)
-function bkV2VanSelClear(){ window._bkV2VanSel={}; if(typeof bkV2Render==='function') bkV2Render(); }
+function bkV2VanSelToggle(bkId){ window._bkV2VanSel=window._bkV2VanSel||{}; if(window._bkV2VanSel[bkId]) delete window._bkV2VanSel[bkId]; else { window._bkV2VanSelN=(window._bkV2VanSelN||0)+1; window._bkV2VanSel[bkId]=window._bkV2VanSelN; } bkV2RenderKeep(); }   // value = tick order (for pickup sequencing) · §btTickScroll คงตำแหน่งเลื่อนไว้
+function bkV2VanSelClear(){ window._bkV2VanSel={}; bkV2RenderKeep(); }
 // ── Allocation-aware grouping · a booking can be split (bk.ops.vanSplits[]) across vans · selection key = bkId or bkId@splitIndex ──
 // Zone membership for van grouping. Charter (เหมาลำ) rows live in a dedicated '__CHARTER__' namespace so their
 // van groups don't collide with seat groups in the same pickup zone (charter is shown in its own card).
@@ -53895,7 +53916,8 @@ function pcSheetLT(pier, opt){
      +'<input class="pc-dt" type="month" value="'+_pcYM+'" onchange="pcMonth(this.value)">'
      +'<span class="n">'+dates.length+' วัน · '+nb+' ลำ</span>'
      +'<span class="sp"></span><span class="n">รวม '+pcMoney(gm)+'</span>'
-     +'<button class="pc-btn pri" onclick="pcPrintLT()">&#128424; พิมพ์วันที่เลือก</button></div>'))
+     +pcDayPick()
+     +'<button class="pc-btn pri" onclick="pcPrintLT()">&#128424; พิมพ์ '+pcE(pcDS(_pcDate))+'</button></div>'))
    +'<div class="pc-gw"><table class="pc-t"><thead><tr>'
      +'<th class="rn">#</th><th style="width:150px">เรือ</th><th>โปรแกรม</th>'
      +'<th class="c" style="width:74px">จอย</th><th class="c" style="width:74px">เหมา</th>'
@@ -54012,7 +54034,8 @@ function pcSheetPK(pier, opt){
      +'<span class="sp"></span><span class="n">คำนวณ '+pcMoney(gex)+'</span>'
      +'<span class="n">จ่ายจริง '+pcMoney(gm)+'</span>'
      +'<span class="n">ค่าจอด '+pcMoney(gdk)+'</span>'
-     +'<button class="pc-btn pri" onclick="pcPrintPK()">&#128424; พิมพ์วันที่เลือก</button></div>'))
+     +pcDayPick()
+     +'<button class="pc-btn pri" onclick="pcPrintPK()">&#128424; พิมพ์ '+pcE(pcDS(_pcDate))+'</button></div>'))
    +'<div class="pc-gw"><table class="pc-t"><thead>'
      +'<tr><th class="rn" rowspan="3">#</th>'
        +'<th rowspan="3" style="width:126px;vertical-align:bottom">เรือ</th>'
@@ -54067,6 +54090,18 @@ function pcSheetPK(pier, opt){
 /* ชื่อวัน · ยาวสำหรับหัวกลุ่ม สั้นสำหรับแถวรวม */
 function pcDL(ds){ try{ var d=new Date(ds+'T12:00:00'); if(isNaN(d.getTime())) return ds;
   return d.toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }catch(_){ return ds; } }
+/* ══ §pcDayTab · เลือกวันได้จากแท็บหางยาว/อุทยาน ═══════════════════════════
+   ปุ่มพิมพ์ของสองแท็บนี้พิมพ์ตาม _pcDate มาตลอด · แต่ตัวเลือกวันมีอยู่แท็บเดียว
+   คือหน้าหลัก · สองแท็บนี้มีแต่ตัวเลือกเดือน (_pcYM) คนพิมพ์จึงต้องเด้งกลับไป
+   หน้าหลักเพื่อเปลี่ยนวัน แล้วค่อยกลับมากดพิมพ์ · ชุดนี้ยกตัวควบคุมวันชุดเดียวกัน
+   กับสมุดเดินบัญชี (pcPickDay / pcShift) มาไว้บนแท็บด้วย ไม่มี state ใหม่ */
+function pcDayPick(){
+  return '<span class="n">พิมพ์วันที่</span>'
+   + '<input class="pc-dt" type="date" value="'+pcE(_pcDate)+'" '
+   +   'title="วันที่จะพิมพ์ · ชีทบนจอยังเป็นทั้งเดือน" onchange="pcPickDay(this.value)">'
+   + '<button class="pc-btn" onclick="pcShift(-1)">‹</button>'
+   + '<button class="pc-btn" onclick="pcShift(1)">›</button>';
+}
 function pcDS(ds){ try{ var d=new Date(ds+'T12:00:00'); if(isNaN(d.getTime())) return ds;
   return d.toLocaleDateString('th-TH',{day:'numeric',month:'short'}); }catch(_){ return ds; } }
 /* หัวตารางมีสามชั้น · ถ้าปล่อย top:0 เท่ากันหมด เวลาเลื่อนมันจะทับกันจนอ่านไม่ออก
@@ -61430,11 +61465,15 @@ function tsRefPackList(date){
   if(_tsVatF) rows=rows.filter(function(r){
     return _tsVatF==='vat' ? tsHasVat(r.b) : !tsHasVat(r.b);
   });
-  return rows.filter(function(r){
+  // §tsSlipWith · ติด ord (ลำดับในตารางวันนั้น) มาด้วย · ชุดสลิปจะได้แทรกเข้าที่เดิมได้ตรงใบ
+  var out=[];
+  rows.forEach(function(r,i){
     var b=r.b;
-    if(((b.attachments||[]).length)>0) return true;
-    return (typeof _docIsB2B==='function') ? _docIsB2B(b) : !!b.agentId;
-  }).map(function(r){ return { bk:r.b, trip:r.t }; });
+    var keep=(((b.attachments||[]).length)>0)
+      || ((typeof _docIsB2B==='function') ? _docIsB2B(b) : !!b.agentId);
+    if(keep) out.push({ bk:b, trip:r.t, ord:i });
+  });
+  return out;
 }
 /* ══ §tsSlipPack (2026-09-05) · ชุดสลิปการชำระเงินท้ายใบสรุป ══════════════
    เงินที่รับหน้าท่ามีสามทาง · pierPayments (COT/ยอดค้าง) · SB_EXTRAS (ขายเพิ่ม) · upgrades
@@ -61450,7 +61489,7 @@ function tsSlipPackList(date){
   var LAB={cash:'เงินสด', transfer:'โอนเงิน', card:'บัตรเครดิต'};
   var num=function(n){ return (typeof pckNum==='function')?pckNum(n):String(+n||0); };
   var out=[];
-  rows.forEach(function(r){
+  rows.forEach(function(r,_i){
     var b=r.b, imgs=[], miss=0, tot=0, who=[];
     var push=function(src, title, mth, amt, fee, byWho, note){
       var ss=Array.isArray(src)?src:[];
@@ -61473,12 +61512,12 @@ function tsSlipPackList(date){
       push(x.slips, (x.kind==='up'?'อัปเกรด · ':'ขายเพิ่ม · ')+x.t, x.method, x.amt, x.fee, x.who, '');
     });
     if(!imgs.length && !miss) return;   /* สดล้วน / ไม่มีเงินเข้าวันนี้ = ไม่ต้องมีหน้า */
-    out.push({ bk:b, trip:r.t, imgs:imgs, miss:miss, tot:tot, who:who.join(' · ') });
+    out.push({ bk:b, trip:r.t, ord:_i, imgs:imgs, miss:miss, tot:tot, who:who.join(' · ') });
   });
   return out;
 }
 /* หน้ากระดาษใช้ class ชุดเดียวกับ _docPackPage จึงได้ CSS · ขนาดกระดาษ · และตัววาด PDF ฟรี */
-function _tsSlipPage(r, i, total, date, kicker){
+function _tsSlipPage(r, i, total, seq, date, kicker){
   var e=_docPackEsc, b=r.bk, t=r.trip;
   var R=((typeof getRoute==='function'?getRoute(t.routeId):null)||{});
   var ag=((typeof sbGetAgent==='function'?sbGetAgent(b.agentId):null)||{});
@@ -61504,29 +61543,52 @@ function _tsSlipPage(r, i, total, date, kicker){
   return '<section class="pg">'
     + '<header><span>LOVE Andaman &middot; '+e(kicker||'สลิปการชำระเงิน')+' &middot; '+e(date)+'</span><span>หน้า '+(i+1)+' / '+total+'</span></header>'
     + '<div class="trip">ทริป &middot; '+e(R.name||t.routeId)+(R.pier?(' &middot; '+e(_DOCPACK_PIER[R.pier]||R.pier)):'')+'</div>'
-    + '<div class="bk"><div class="r1"><b>'+e(b.leadPax||'—')+'</b><span>รับเงินรวม &#3647;'+num(r.tot)+'</span></div>'
+    + '<div class="bk"><div class="r1"><b>'+(seq?('#'+seq+' &middot; '):'')+e(b.leadPax||'—')+'</b><span>รับเงินรวม &#3647;'+num(r.tot)+'</span></div>'
     +   '<div class="r2">'+e(ag.name||b.agentId||'')+(b.voucherRef?(' &middot; '+e(b.voucherRef)):'')
     +   (r.who?(' &middot; รับโดย '+e(r.who)):'')+'</div></div>'
     + '<div class="body">'+body+'</div>'
     + '<footer><span>&#9744; ยอดตรงกับ statement</span><span>ผู้ตรวจ ________________</span></footer>'
     + '</section>';
 }
-function _tsSlipPages(list, date, kicker){
-  var total=list.length;
-  return list.map(function(r,i){ return _tsSlipPage(r,i,total,date,kicker); }).join('');
+/* ══ §tsSlipWith (2026-09-05) · สลิปไปอยู่ติดกับเอกสารของใบนั้น ไม่แยกเป็นปึกท้ายเล่ม ══
+   เดิม §tsSlipPack ต่อชุดสลิปทั้งวันไว้หลังชุดเอกสารจบ · คนกระทบยอดต้องพลิกสองปึกไปมา
+   เพื่อจับสลิปให้ตรงใบ · ตอนนี้หน้าสลิปของใบไหน วางต่อจากหน้าเอกสารของใบนั้นเลย
+   ใบที่มีสลิปแต่ไม่มีในชุดเอกสาร (เช่น walk-in ไม่มีไฟล์แนบ) ยังพิมพ์อยู่ · ต่อท้ายตามลำดับเดิม
+   เลข # เดินตามเส้นทางเหมือนเดิม · หน้าสลิปใช้เลขเดียวกับหน้าเอกสารของใบนั้น = เป็นคู่กัน */
+function _tsPackPages(refList, slipList, date, kicker, slipKicker){
+  var items=[];
+  /* ทั้งสองลิสต์เป็นส่วนหนึ่งของแถวชุดเดียวกัน · เรียงด้วย ord แล้วเอกสารมาก่อนสลิปของใบเดียวกัน */
+  (refList||[]).forEach(function(r,i){ items.push({ k:'doc',  r:r, ord:(r.ord==null?i:+r.ord), sub:0 }); });
+  (slipList||[]).forEach(function(s,i){ items.push({ k:'slip', r:s, ord:(s.ord==null?i:+s.ord), sub:1 }); });
+  items.sort(function(a,b){ return (a.ord-b.ord) || (a.sub-b.sub); });
+  items.forEach(function(it,i){
+    var p=i?items[i-1]:null;
+    var id=String(((it.r||{}).bk||{}).id||'');
+    it.pair=!!(p && it.k==='slip' && p.k==='doc' && id && String(((p.r||{}).bk||{}).id||'')===id);
+  });
+  var total=items.length, lastRoute=null, seq=0, html='';
+  items.forEach(function(it,i){
+    var R=((typeof getRoute==='function'?getRoute(it.r.trip.routeId):null)||{});
+    if(!it.pair){                                  /* หน้าสลิปที่ต่อจากเอกสารใบเดียวกัน ไม่กินเลขใหม่ */
+      if(R.id!==lastRoute){ lastRoute=R.id; seq=0; }
+      seq++;
+    }
+    html += (it.k==='doc') ? _docPackPage(it.r, i, total, seq, date, kicker)
+                           : _tsSlipPage(it.r, i, total, seq, date, slipKicker);
+  });
+  return html;
 }
 function tsPrintSheet(){
   var host=document.getElementById('travelsum-host'); if(!host) return;
   var date=_tsDate;
   var list=(typeof tsRefPackList==='function')?tsRefPackList(date):[];
-  var pack=(list.length && typeof _docPackPages==='function')
-    ? _docPackPages(list, date, 'Reference · เอกสารประกอบ'
-        + (_tsVatF ? (_tsVatF==='vat' ? ' · เฉพาะมี VAT' : ' · เฉพาะไม่มี VAT') : '')
-        + (_tsRoute ? (' · '+tsRouteName(_tsRoute)) : '')) : '';
-  // §tsSlipPack · สลิปบัตร/โอนของเงินที่รับวันนี้ · ต่อท้ายชุดเอกสารอ้างอิง ในกระดาษชุดเดียวกัน
+  // §tsSlipWith · สลิปบัตร/โอนของเงินที่รับวันนี้ · แทรกอยู่หลังหน้าเอกสารของใบเดียวกัน
   var slipL=(typeof tsSlipPackList==='function')?tsSlipPackList(date):[];
-  var slipPack=(slipL.length && typeof _tsSlipPages==='function')
-    ? _tsSlipPages(slipL, date, 'Payment slips · สลิปการชำระเงิน') : '';
+  var _kick=(_tsVatF ? (_tsVatF==='vat' ? ' · เฉพาะมี VAT' : ' · เฉพาะไม่มี VAT') : '')
+          + (_tsRoute ? (' · '+tsRouteName(_tsRoute)) : '');
+  var pack=((list.length||slipL.length) && typeof _tsPackPages==='function')
+    ? _tsPackPages(list, slipL, date, 'Reference · เอกสารประกอบ'+_kick,
+                   'Payment slip · สลิปการชำระเงิน'+_kick) : '';
   var w=window.open('','_blank');
   if(!w){ alert('เบราว์เซอร์บล็อกป๊อปอัป · อนุญาต pop-up แล้วลองใหม่'); return; }
   // ฟอนต์ · ยกทุก <link rel=stylesheet> ที่ชี้ไปโรงฟอนต์จากหน้าหลักไปด้วย
@@ -61555,7 +61617,7 @@ function tsPrintSheet(){
   w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Travel Summary '+ckEsc(date)+'</title>'
     +fontLinks+'<style>'+css+'</style></head><body class="ts-printing">'
     +'<div id="travelsum-host">'+host.innerHTML+'</div>'
-    +((pack||slipPack)?('<div class="la-docpack">'+pack+slipPack+'</div>'):'')
+    +(pack?('<div class="la-docpack">'+pack+'</div>'):'')
     +'<style>'+pageCSS+'</style>'
     +boot+'</body></html>');
   w.document.close();
