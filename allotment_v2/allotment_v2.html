@@ -6640,7 +6640,7 @@ seed();
 // ══════════════════════════════════════
 // HELPERS
 // ══════════════════════════════════════
-function getCurStatus(boat,ds){
+function getStoredStatus(boat,ds){
   // §flBoatPersist · วันที่มีผลเท่ากัน ให้ entry ที่บันทึกทีหลังชนะ (ถือเป็นการแก้ไขล่าสุด)
   //   เดิมเรียงด้วย from อย่างเดียว · เสมอกันแล้ว sort คงลำดับเดิม → ของเก่าชนะ
   //   เคสจริง: เริ่มซ่อมวันนี้ แล้วเปลี่ยนเป็น Available วันเดียวกัน จะยังขึ้น Fixing
@@ -6728,8 +6728,15 @@ function boatJobBlock(boatId, ds){
 /* สถานะจริงของเรือ · getCurStatus + ชั้นงาน เอาอันที่เข้มกว่า
    ไม่มีงานค้าง = คืนของเดิมทั้งดุ้น (พฤติกรรมเท่าเดิมเป๊ะ)
    งานเข้มกว่า  = คืนสำเนาที่แก้ .s แล้ว + ติด jobBlock บอกว่าเพราะใบไหน */
+/* §boatEff3 · ทั้งแอปอ่านสถานะเรือจากที่เดียว
+   เฟส 1–2 สลับทีละจุด แต่ getCurStatus ถูกเรียก 60 กว่าจุดทั่วแอป
+   ไล่แก้ทีละจุดแปลว่า พลาดจุดเดียวก็กลับไปเป็นบั๊กเดิม
+   และจุดที่เขียนเพิ่มในอนาคตจะผิดโดยปริยาย จึงกลับด้านให้ของถูกเป็นค่าตั้งต้น
+     getStoredStatus · ค่าดิบที่เก็บในตาราง ใช้เฉพาะตอนแก้/เทียบก่อนเขียนแถวใหม่
+     getCurStatus    · คิดสดจากใบงานด้วย · ทุกจุดที่ถามว่า "เรือวิ่งได้ไหม" ใช้ตัวนี้ */
+function getCurStatus(boat, ds){ return boatEffStatus(boat, ds); }
 function boatEffStatus(boat, ds){
-  var base=getCurStatus(boat, ds);
+  var base=getStoredStatus(boat, ds);
   if(!boat || boat.retired) return base;
   var blk=boatJobBlock(boat.id, ds||TODAY_STR);
   if(!blk.jobs.length) return base;
@@ -9843,7 +9850,7 @@ function bsDebugLog(bid){
     const d=new Date(today);
     d.setDate(today.getDate()+i);
     const ds=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    const cs=getCurStatus(b,ds);
+    const cs=getStoredStatus(b,ds);   /* §boatEff3 · debug ต้องเห็นค่าดิบ */
     testLines.push(`${ds}: ${cs.s}${cs.loc&&cs.loc!=='-'?' @ '+cs.loc:''}`);
   }
   const summary=`Boat: ${b.name} (${bid})\n\nLog entries (${log.length}):\n${lines.join('\n')||'(empty)'}\n\nNext 30 days getCurStatus:\n${testLines.join('\n')}`;
@@ -10043,7 +10050,7 @@ function renderBoatDetailPink(){
     const dayN=i-startWd+1;
     const d=new Date(yr,mo,dayN);
     const ds=`${yr}-${String(mo+1).padStart(2,'0')}-${String(dayN).padStart(2,'0')}`;
-    const st=getCurStatus(b,ds);
+    const st=getStoredStatus(b,ds);   /* §boatEff3 · ช่องนี้คลิกแล้วแก้แถวนั้น ต้องตรงกับตาราง */
     const isToday=ds===TODAY_STR;
     const isFuture=ds>TODAY_STR;
     // Find log entry covering this day (for edit on click)
@@ -10889,7 +10896,7 @@ function saveBoat(){
     const bid=window._editBoatId; window._editBoatId=null;
     const b=getBoat(bid); if(!b)return;
     Object.assign(b,fields);
-    const curSt=getCurStatus(b,TODAY_STR);
+    const curSt=getStoredStatus(b,TODAY_STR);   /* §boatEff3 · เทียบกับค่าในตาราง ไม่งั้นจะเขียนแถวซ้ำทุกครั้ง */
     const newSt=stMap[fmBoatSt];
     if(curSt.s!==newSt){
       if(!b.log)b.log=[];
@@ -19682,7 +19689,7 @@ function flLoad(){
             const hasFixLog = b.log.some(e=>e.s==='fixing' && e.from===INC_DATE && e.note && e.note.includes(mj.no));
             if(!hasFixLog){
               if(typeof autoClosePrevLog==='function') autoClosePrevLog(b, INC_DATE);
-              const cur = typeof getCurStatus==='function' ? getCurStatus(b, INC_DATE) : {loc:''};
+              const cur = typeof getStoredStatus==='function' ? getStoredStatus(b, INC_DATE) : {loc:''};
               b.log.push({id:'sl'+Date.now()+'_'+jid, s:'fixing', from:INC_DATE, to:null, loc:mj.location||cur.loc||'พันวา', note:`Maintenance Job ${mj.no}`});
             }
           }
@@ -34295,7 +34302,7 @@ function _flMaintStartProceed(id){
   const targetReason = m.boatStatusReason || '';
   // Only push boat log if status is NOT available
   if(b && targetStatus !== 'available'){
-    const cur=getCurStatus(b,TODAY_STR);
+    const cur=getStoredStatus(b,TODAY_STR);   /* §boatEff3 · กำลังจะเขียนแถว ต้องอ่านค่าดิบ */
     // ⚠ If the boat already ran a trip today (e.g. ran in the morning, reported a fault in the evening),
     //   start the "not available" period TOMORROW so today still counts as operated. Editable afterwards.
     const _ranToday = _flBoatRanOn(b.id, TODAY_STR);
@@ -34405,7 +34412,7 @@ function flMaintClose(id,outcome,note,awaitInvoice){
 
   // restore boat status + log repair to boat history
   if(b){
-    const cur=getCurStatus(b,TODAY_STR);
+    const cur=getStoredStatus(b,TODAY_STR);   /* §boatEff3 · สาขา setFixing:false คงค่าเดิม ต้องเป็นค่าดิบ */
     // Auto-close any open log entries (e.g. fixing from Start Job) before pushing new entry
     if(typeof autoClosePrevLog==='function') autoClosePrevLog(b,TODAY_STR);
     
@@ -38491,7 +38498,7 @@ function flOpenEditBoatModal(bid){
     );
   });
   // status
-  const st=getCurStatus(b,TODAY_STR);
+  const st=getStoredStatus(b,TODAY_STR);   /* §boatEff3 · ตัวเลือกต้องตั้งต้นจากค่าในตาราง */
   fmBoatSt={available:0,fixing:1,unavailable:2}[st.s]||0;
   fmBoatOwn=(b.ownership==='charter')?1:0; fmRenderBoatOwn(fmBoatOwn);
   fmRenderBoatSt(fmBoatSt);
