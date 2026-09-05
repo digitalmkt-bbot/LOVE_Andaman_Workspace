@@ -53794,7 +53794,8 @@ function pcSheetLT(pier, opt){
      +'<input class="pc-dt" type="month" value="'+_pcYM+'" onchange="pcMonth(this.value)">'
      +'<span class="n">'+dates.length+' วัน · '+nb+' ลำ</span>'
      +'<span class="sp"></span><span class="n">รวม '+pcMoney(gm)+'</span>'
-     +'<button class="pc-btn pri" onclick="pcPrintLT()">&#128424; พิมพ์วันที่เลือก</button></div>'))
+     +pcDayPick()
+     +'<button class="pc-btn pri" onclick="pcPrintLT()">&#128424; พิมพ์ '+pcE(pcDS(_pcDate))+'</button></div>'))
    +'<div class="pc-gw"><table class="pc-t"><thead><tr>'
      +'<th class="rn">#</th><th style="width:150px">เรือ</th><th>โปรแกรม</th>'
      +'<th class="c" style="width:74px">จอย</th><th class="c" style="width:74px">เหมา</th>'
@@ -53911,7 +53912,8 @@ function pcSheetPK(pier, opt){
      +'<span class="sp"></span><span class="n">คำนวณ '+pcMoney(gex)+'</span>'
      +'<span class="n">จ่ายจริง '+pcMoney(gm)+'</span>'
      +'<span class="n">ค่าจอด '+pcMoney(gdk)+'</span>'
-     +'<button class="pc-btn pri" onclick="pcPrintPK()">&#128424; พิมพ์วันที่เลือก</button></div>'))
+     +pcDayPick()
+     +'<button class="pc-btn pri" onclick="pcPrintPK()">&#128424; พิมพ์ '+pcE(pcDS(_pcDate))+'</button></div>'))
    +'<div class="pc-gw"><table class="pc-t"><thead>'
      +'<tr><th class="rn" rowspan="3">#</th>'
        +'<th rowspan="3" style="width:126px;vertical-align:bottom">เรือ</th>'
@@ -53966,6 +53968,18 @@ function pcSheetPK(pier, opt){
 /* ชื่อวัน · ยาวสำหรับหัวกลุ่ม สั้นสำหรับแถวรวม */
 function pcDL(ds){ try{ var d=new Date(ds+'T12:00:00'); if(isNaN(d.getTime())) return ds;
   return d.toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }catch(_){ return ds; } }
+/* ══ §pcDayTab · เลือกวันได้จากแท็บหางยาว/อุทยาน ═══════════════════════════
+   ปุ่มพิมพ์ของสองแท็บนี้พิมพ์ตาม _pcDate มาตลอด · แต่ตัวเลือกวันมีอยู่แท็บเดียว
+   คือหน้าหลัก · สองแท็บนี้มีแต่ตัวเลือกเดือน (_pcYM) คนพิมพ์จึงต้องเด้งกลับไป
+   หน้าหลักเพื่อเปลี่ยนวัน แล้วค่อยกลับมากดพิมพ์ · ชุดนี้ยกตัวควบคุมวันชุดเดียวกัน
+   กับสมุดเดินบัญชี (pcPickDay / pcShift) มาไว้บนแท็บด้วย ไม่มี state ใหม่ */
+function pcDayPick(){
+  return '<span class="n">พิมพ์วันที่</span>'
+   + '<input class="pc-dt" type="date" value="'+pcE(_pcDate)+'" '
+   +   'title="วันที่จะพิมพ์ · ชีทบนจอยังเป็นทั้งเดือน" onchange="pcPickDay(this.value)">'
+   + '<button class="pc-btn" onclick="pcShift(-1)">‹</button>'
+   + '<button class="pc-btn" onclick="pcShift(1)">›</button>';
+}
 function pcDS(ds){ try{ var d=new Date(ds+'T12:00:00'); if(isNaN(d.getTime())) return ds;
   return d.toLocaleDateString('th-TH',{day:'numeric',month:'short'}); }catch(_){ return ds; } }
 /* หัวตารางมีสามชั้น · ถ้าปล่อย top:0 เท่ากันหมด เวลาเลื่อนมันจะทับกันจนอ่านไม่ออก
