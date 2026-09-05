@@ -6667,6 +6667,81 @@ function getCurStatus(boat,ds){
 }
 function getBoat(id){return BOATS.find(b=>b.id===id);}
 
+/* ══ §boatEff · สถานะเรือ = อ่านสด ไม่ใช่ค่าที่เขียนค้างไว้ ═══════════════════
+   ของเดิม สถานะเรือกับใบงานซ่อมเป็นข้อมูลคนละชุดที่ไม่ผูกกันเลย
+   ตารางสถานะ (boat.log) เป็นตัวตัดสินคนเดียว ใครไปตั้งเป็น available ทั้งที่งานยังค้าง
+   ระบบก็เชื่อทันที เรือที่ยังอยู่ในอู่จึงโผล่กลับเข้าตารางวิ่งได้แบบเงียบ ๆ
+   เคสจริง · Okeanos ถูกตั้ง available 3 ก.ย. ทั้งที่ MJ-058 + PRJ-015 ยัง inprogress
+
+   ตรรกะ "ปิดงานนี้แล้วยังมีงานอื่นค้าง ให้คงสถานะไว้" มีอยู่แล้วใน flMaintClose
+   แต่มันทำงานแค่วินาทีที่กดปิด แล้วเขียนผลเป็นแถวนิ่ง ๆ · หลังจากนั้นไม่มีใครคิดใหม่
+   ของใหม่จึงไม่เขียนทับ แต่คิดสดทุกครั้งที่อ่าน จาก 2 ชั้นแล้วเอาอันที่เข้มกว่า
+
+     ชั้นคน  · boat.log ตามเดิม — พักตามฤดูกาล · เรือเช่า · ปลดระวาง · ท่า
+               (ของพวกนี้ใบงานไม่รู้เรื่อง ต้องให้คนตั้งอยู่ดี)
+     ชั้นงาน · คำนวณสดจาก MJ + PRJ ที่ยังเปิด และตัวใบงานเองระบุว่าเรือวิ่งไม่ได้
+
+   ไม่แตะ getCurStatus เดิม (ถูกเรียก 69 จุดทั่วแอป) — ตัวนี้ห่อไว้อีกชั้น สลับทีละจุดได้ */
+var _BOAT_RANK={available:0, fixing:1, unavailable:2, retired:3};
+function _boatRank(x){ var v=_BOAT_RANK[x]; return (v==null)?0:v; }
+/* งานที่ยังกันเรืออยู่ ณ วันที่ถาม · คืนสถานะที่เข้มที่สุด + รายการใบงาน */
+function boatJobBlock(boatId, ds){
+  ds = ds || TODAY_STR;
+  var out={s:'available', jobs:[]};
+  if(!boatId) return out;
+  /* ใบซ่อม · เฉพาะใบที่ยังทำอยู่ และใบนั้นระบุเองว่าเรือวิ่งไม่ได้
+     setFixing:false / boatStatus:'available' = งานที่ทำขนานกับการวิ่ง (เช่นสลับเครื่อง) ไม่กันเรือ */
+  try{
+    if(typeof FL_MAINT!=='undefined' && Array.isArray(FL_MAINT)){
+      FL_MAINT.forEach(function(m){
+        if(!m || m.boatId!==boatId || m.status!=='inprogress') return;
+        if(m.setFixing===false) return;
+        var t=m.boatStatus||'fixing';
+        if(t==='available') return;
+        if((m.startDate||'')>ds) return;            // ใบที่ยังไม่ถึงวันเริ่ม ไม่กันวันนี้
+        if(_boatRank(t)>_boatRank(out.s)) out.s=t;
+        out.jobs.push({no:m.no||'MJ', t:t, kind:'mj'});
+      });
+    }
+  }catch(_e){}
+  /* โปรเจกต์ · ของเดิมมองไม่เห็นเลยสักจุด ทั้งที่ Drydock/Overhaul คือตัวที่กันเรือจริง
+     awaiting_bill ไม่นับ — งานจบหน้างานแล้ว เหลือแต่บิล เรือกลับไปวิ่งได้ */
+  try{
+    if(typeof FL_PROJECTS!=='undefined' && Array.isArray(FL_PROJECTS)){
+      FL_PROJECTS.forEach(function(p){
+        if(!p || p.boatId!==boatId) return;
+        if(p.status!=='inprogress' && p.status!=='on_hold') return;
+        var from=p.actualFrom||p.planFrom||'';
+        if(from && from>ds) return;
+        if(_boatRank('unavailable')>_boatRank(out.s)) out.s='unavailable';
+        out.jobs.push({no:p.no||'PRJ', t:'unavailable', kind:'prj'});
+      });
+    }
+  }catch(_e){}
+  return out;
+}
+/* สถานะจริงของเรือ · getCurStatus + ชั้นงาน เอาอันที่เข้มกว่า
+   ไม่มีงานค้าง = คืนของเดิมทั้งดุ้น (พฤติกรรมเท่าเดิมเป๊ะ)
+   งานเข้มกว่า  = คืนสำเนาที่แก้ .s แล้ว + ติด jobBlock บอกว่าเพราะใบไหน */
+function boatEffStatus(boat, ds){
+  var base=getCurStatus(boat, ds);
+  if(!boat || boat.retired) return base;
+  var blk=boatJobBlock(boat.id, ds||TODAY_STR);
+  if(!blk.jobs.length) return base;
+  var bs=(base&&base.s)||'available';
+  /* ชั้นงานตัดสินแค่ "ว่าง / ไม่ว่าง" เท่านั้น · ไม่ไปจัดอันดับทับคำอธิบายของคน
+     ถ้าตารางระบุ fixing อยู่แล้ว ก็ให้เป็น fixing ต่อ ไม่ต้องดันขึ้นเป็น unavailable
+     ทั้งคู่แปลว่าเรือออกไม่ได้เหมือนกัน แต่ fixing บอกละเอียดกว่าว่าติดอะไรอยู่
+     (ถ้าไม่กันตรงนี้ เรือ 8 ลำที่สถานะถูกต้องอยู่แล้วจะโดนเปลี่ยนป้ายทิ้งโดยไม่จำเป็น) */
+  if(_boatRank(bs)>0) return base;                   // ชั้นคนกันเรือไว้แล้ว ไม่ต้องแทรก
+  if(_boatRank(blk.s)<=0) return base;
+  /* สำเนา · base คือ object จริงใน boat.log ห้ามแก้ทับ */
+  var r={}; for(var k in base) r[k]=base[k];
+  r.s=blk.s; r.baseS=bs; r.jobBlock=blk.jobs;
+  r.jobBlockNos=blk.jobs.map(function(j){ return j.no; }).join(' · ');
+  return r;
+}
+
 // ── Boat color palette ── consistent visual identity across views
 // 16 distinct, accessible colors (good contrast on white + light backgrounds)
 const BOAT_COLORS = {
@@ -11479,7 +11554,9 @@ function bop2FleetStatus(dateStr){
   BOATS.forEach(b => {
     if(b.retired) return;
     if(_bop2.pier !== 'all' && getBoatCurrentPier(b, dateStr) !== _bop2.pier) return;   // §boatPierDate
-    const _cs = getCurStatus(b, dateStr);
+    /* §boatEff · อ่านสด · เรือที่ยังมีใบงานค้างจะไม่หลุดเข้ามาให้เลือก
+       แม้ตารางสถานะจะถูกตั้งเป็น available ไว้ก็ตาม */
+    const _cs = boatEffStatus(b, dateStr);
     const st = _cs.s;
     if(st !== 'available'){
       // Enrich reason with active project info if any
@@ -24865,7 +24942,7 @@ function flRenderBoatDetailPink(){
     return b.name.slice(0,2).toUpperCase();
   })();
 
-  const cur=getCurStatus(b,TODAY_STR);
+  const cur=boatEffStatus(b,TODAY_STR);   // §boatEff · อ่านสด
   const STATUS_STYLE={
     available:{bg:'#1D9E75',color:'white',label:'AVAILABLE'},
     fixing:{bg:'#FAEEDA',color:'#854F0B',label:'FIXING'},
@@ -24914,6 +24991,11 @@ function flRenderBoatDetailPink(){
       </div>
     </div>
     ${b.retired&&b.retiredReason?`<div style="margin-top:10px;padding:8px 12px;background:rgba(255,255,255,.6);border-radius:8px;font-size:11px;color:${dim.ink2};border-left:3px solid #1A1A1A"><span style="font-weight:600;color:${dim.ink}">Retired reason: </span>${b.retiredReason}</div>`:''}
+    ${(!b.retired && cur.jobBlock && cur.jobBlock.length)?`<div style="margin-top:10px;padding:8px 12px;background:rgba(255,255,255,.72);border-radius:8px;font-size:11px;color:#7A3E0B;border-left:3px solid #E08A2B;line-height:1.65">
+      <span style="font-weight:700">&#9888; สถานะนี้มาจากใบงานที่ยังไม่ปิด · ${cur.jobBlockNos}</span><br>
+      ตารางสถานะเรือถูกตั้งไว้เป็น <b>${(STATUS_STYLE[cur.baseS]||STATUS_STYLE.available).label}</b> แต่ระบบยังกันเรือไว้ตามใบงาน เพราะใบงานยังไม่ถูกปิด<br>
+      ถ้าเรือกลับมาวิ่งได้จริงแล้ว ให้ปิดที่ใบงาน (Maintenance / Project) ไม่ใช่แก้ที่ตารางสถานะ — ต้นทุนจะได้เข้าใบงานครบ
+    </div>`:''}
   </div>`;
 
   // 4 stat cards
