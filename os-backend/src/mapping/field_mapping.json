@@ -5162,6 +5162,26 @@
       "kind": "scalar",
       "db_type": "bigint"
     },
+    "nat_ad": {
+      "source": "trips[].nat.ad",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "nat_chd": {
+      "source": "trips[].nat.chd",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "nat_inf": {
+      "source": "trips[].nat.inf",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
+    "nat_foc": {
+      "source": "trips[].nat.foc",
+      "kind": "scalar",
+      "db_type": "bigint"
+    },
     "lockdrawsel": {
       "source": "trips[].lockDrawSel",
       "kind": "json_text",
