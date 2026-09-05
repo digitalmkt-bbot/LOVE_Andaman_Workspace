@@ -96110,6 +96110,17 @@ function pjCSS(){
   +H+' .bc .foot button{border:1px solid #D9DDE4;background:#fff;border-radius:7px;padding:4px 10px;font:700 11px inherit;color:#5A6270;cursor:pointer}'
   +H+' .bc .foot button:hover{border-color:#16265C;color:#16265C}'
   +H+' .bc .foot button.gh{background:#F0F6F3;border-color:#BFE0CD;color:#0F6E56}'
+  /* §gjCard · แถวปุ่มใบงานไกด์ · ท้ายสุดของการ์ด เต็มความกว้าง */
+  +H+' .bc .gjrow{border-top:1px solid #EFF1F5;padding:8px 15px 10px}'
+  +H+' .bc .gjrow button{width:100%;display:flex;align-items:center;justify-content:center;gap:7px;'
+     +'border:1px solid #D9DDE4;background:#FAFBFC;border-radius:8px;padding:7px 10px;'
+     +'font:700 11.5px inherit;color:#16265C;cursor:pointer}'
+  +H+' .bc .gjrow button:hover{background:#16265C;border-color:#16265C;color:#fff}'
+  +H+' .bc .gjrow button .n{font:700 10px inherit;background:#E8EDF6;color:#16265C;'
+     +'border-radius:999px;padding:1px 7px}'
+  +H+' .bc .gjrow button:hover .n{background:rgba(255,255,255,.22);color:#fff}'
+  +H+' .bc .gjrow button:disabled{background:#F7F8FA;border-color:#EDEFF3;color:#B9BFC9;cursor:not-allowed}'
+  +H+' .bc .gjrow button:disabled:hover{background:#F7F8FA;border-color:#EDEFF3;color:#B9BFC9}'
   +H+' .pj-idle{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px;background:#fff;border:1px solid #E1E4EA;border-radius:12px;padding:13px 15px}'
   +H+' .pj-ib{border:1px solid #E7EAEF;background:#FAFBFC;border-radius:9px;padding:6px 12px}'
   +H+' .pj-ib .n{font-size:11.5px;font-weight:800;color:#5A6270}'
@@ -96430,6 +96441,36 @@ function pjCopyYday(pier){
 }
 /* จัดไกด์ · ใช้หน้าเดิม แล้วรีเฟรชกลับมาที่ใบงาน */
 function pjGuideOpen(bid){ try{ _pckDate=_poDate; goSetupOpen(bid); }catch(_){} }
+/* §gjCard (2026-09-05) · พิมพ์ใบงานไกด์ของลำนี้ได้จากท้ายการ์ด ไม่ต้องข้ามไปหน้าเช็คอิน
+   คนที่จัดคนลงเรืออยู่ที่หน้านี้ · พิมพ์ตรงที่จัดเสร็จคือจังหวะที่ใบถูกต้องที่สุด
+   ปุ่มบนหน้าเช็คอินหน้าท่ายังอยู่เหมือนเดิม อันนี้เพิ่มมา ไม่ได้ย้าย
+   pckGuideJobOrder อ่านวันจาก _pckDate ของหน้าเช็คอิน · หน้านี้เดินวันด้วย _poDate
+   ไม่สลับให้ = ได้ใบของวันที่หน้าเช็คอินค้างไว้ ไม่ใช่วันที่เห็นอยู่ตรงหน้า
+   คืนค่าเดิมทุกครั้ง หน้าเช็คอินจะได้ไม่ถูกเลื่อนวันตามไปเงียบ ๆ */
+function pjGuideJob(bid){
+  var keep=_pckDate;
+  try{ _pckDate=_poDate; pckGuideJobOrder(bid); }
+  finally{ _pckDate=keep; }
+}
+/* ลำไหนมีใบจองที่จัดเรือแล้วบ้างในวันนั้น · กติกาเดียวกับ pckGuideJobOrder ทุกข้อ
+   (ข้ามใบยกเลิก · ข้ามใบที่ยกเลิกหน้างาน · กางใบที่แบ่งลง 2 ลำ · ไม่กรองท่า)
+   ปุ่มกับใบจะได้ตรงกันเสมอ — ปุ่มกดได้แล้วขึ้น "ยังไม่มี booking" คือปุ่มโกหก
+   ทำครั้งเดียวต่อการวาดหนึ่งรอบ ไม่ใช่ไล่ SB_BOOKINGS ใหม่ทีละการ์ด */
+var _pjGjMap=null;
+function pjGuideJobMap(date){
+  var m={};
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    var t=(typeof ckTripOn==='function')?ckTripOn(b,date):null; if(!t) return;
+    var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
+    var base=O.boatId||t.charterBoatId||''; if(!base) return;
+    try{ if((typeof pckVoidInfo==='function') && pckVoidInfo(b,date,t)) return; }catch(_){}
+    var sp=null; try{ sp=(typeof bkBoatSplits==='function')?bkBoatSplits(b,date):null; }catch(_){}
+    if(sp && sp.length>1) sp.forEach(function(x){ if(x.boatId) m[x.boatId]=(m[x.boatId]||0)+1; });
+    else m[base]=(m[base]||0)+1;
+  });
+  return m;
+}
 (function(){ try{
   if(typeof goSetupSave==='function' && !window.__pjWrapGo){
     var _o=window.goSetupSave;
@@ -96698,7 +96739,17 @@ function pjCard(B, pier, ro){
      +'<button onclick="pjTeamSave(\''+bid+'\')"'+(lro?' disabled':'')+'>ตั้งเป็นทีมประจำ</button>'
      +'<span style="flex:1"></span>'
      +'<button onclick="pjGuideOpen(\''+bid+'\')">จัดไกด์</button>'
-   +'</div></div>';
+   +'</div>'
+   /* §gjCard · ท้ายสุดของการ์ด · เต็มความกว้าง จะได้ไม่โดนแถวปุ่มด้านบนบีบตกขอบ
+      ตัวเลขบนปุ่มคือจำนวน booking ที่จะลงใบ · ไม่มีเลย = ปุ่มกดไม่ได้ พร้อมบอกว่าทำไม */
+   +(function(){
+      var gj=(_pjGjMap||{})[bid]||0;
+      return '<div class="gjrow"><button onclick="pjGuideJob(\''+bid+'\')"'+(gj?'':' disabled')
+       +' title="'+(gj? poE('พิมพ์ใบงานไกด์ของ '+(B.boat.name||bid)+' · '+_poDate+' · '+gj+' booking · A4 แนวนอน')
+                     : poE('ลำนี้ยังไม่มีใบจองที่จัดเรือแล้วในวันนี้ — จัดเรือก่อนถึงพิมพ์ใบงานไกด์ได้'))+'">'
+       +'&#128196; ใบงานไกด์'+(gj?('<span class="n">'+gj+'</span>'):'')+'</button></div>';
+    })()
+   +'</div>';
   return h;
 }
 
@@ -96721,6 +96772,8 @@ function renderPierJob(pier){
     try{ licBad+=plBoatBad(B.bid,[J.cap,J.asst].concat(J.crew||[]))?1:0; }catch(_){}
   });
   var boats=(_pjF==='all')?all:all.filter(function(B){ return pjGrp(B._st.k)===_pjF; });
+  /* §gjCard · ทำใหม่ทุกรอบที่วาด · จัดเรือที่หน้าอื่นแล้วกลับมา ปุ่มต้องเปลี่ยนตาม */
+  _pjGjMap=pjGuideJobMap(_poDate);
   var chip=function(k,lb,n,dot){
     return '<button class="'+(_pjF===k?'on':'')+'" onclick="pjFilter(\''+k+'\')">'
       +(dot?('<i style="background:'+dot+'"></i>'):'')+lb+'<span class="n">'+n+'</span></button>';
