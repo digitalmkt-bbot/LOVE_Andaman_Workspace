@@ -85054,13 +85054,19 @@ function bkV2RenderTab2(){
     .bt-vans>.bt-ct{color:#0C6B47;background:#F1FBF6;border-bottom:1px solid #DFF0E8}
     .bt-vans.act{border-color:#185FA5;box-shadow:0 0 0 3px rgba(24,95,165,.28)}
     .bt-vans.act>.bt-ct{color:#12518F;background:#EEF5FC;border-bottom-color:#D8E6F5}
-    .bt-vgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;
+    /* §btVanFit · ชิปรถกว้างพอดีเนื้อหา ไม่ใช่ยืดเต็มช่อง
+       ของเดิมบังคับตาราง 3 คอลัมน์ ชิปจึงถูกยืดเป็น 1/3 ของการ์ดทุกใบ
+       ทั้งที่เนื้อหากว้างราว 130px แต่ช่องกว้าง 443px = เหลือที่ว่างใบละ ~310px
+       และพอรถไม่พอดี 3 ช่อง ก็ต้องขึ้นแถวใหม่ทั้งที่ยังมีที่เหลือเต็มไปหมด
+       เปลี่ยนเป็นเรียงต่อกันแล้วตกบรรทัดเอง · คันที่รับหลายโซนกว้างขึ้นได้ตามจริง
+       วัดวันที่ 21 ก.ค. (16 คัน 3 ทริป) แถวชิป 7 แถว -> 3 แถว */
+    .bt-vgrid{display:flex;flex-wrap:wrap;gap:5px;
       padding:7px 9px 8px;overflow-y:auto;overflow-x:hidden;min-height:56px;max-height:196px;
-      flex:1 1 auto;align-content:start;overscroll-behavior:contain}
+      flex:1 1 auto;align-content:flex-start;overscroll-behavior:contain}
     .bt-vgrid::-webkit-scrollbar{width:8px}
     .bt-vgrid::-webkit-scrollbar-thumb{background:#CFE3D8;border-radius:4px}
-    .bt-vgrid>*{min-width:0}
-    .bt-vtrip{grid-column:1/-1;display:flex;align-items:center;gap:7px;padding:3px 2px 1px}
+    .bt-vgrid>*{min-width:0;max-width:100%}
+    .bt-vtrip{flex:1 0 100%;display:flex;align-items:center;gap:7px;padding:3px 2px 1px}
     .bt-vtrip i{width:8px;height:8px;border-radius:50%;flex:none}
     .bt-vtrip b{font-size:10.5px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .bt-vtrip span{font-size:9px;color:#948f88;font-weight:600;white-space:nowrap}
