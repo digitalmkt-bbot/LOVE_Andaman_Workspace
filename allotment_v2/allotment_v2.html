@@ -23713,11 +23713,23 @@ function flRenderDR(){
        เครื่อง · รวมทุกตำแหน่งที่มีจริงในท่านี้ แล้วเรียงตามลำดับมาตรฐาน
        ลำที่ไม่มีตำแหน่งนั้นเว้นช่องว่างไว้ คอลัมน์จึงตรงกันทุกแถวจริง ๆ
        (ของเดิมแต่ละแถวมีจำนวนกล่องไม่เท่ากัน กวาดตาลงคอลัมน์ไม่ได้) */
+    /* ══ §engOrder · ลำดับคอลัมน์ชั่วโมงเครื่อง ต้องเป็น PORT · C.P · CTR · C.ST · STD ══
+       ของเดิมเรียงถูกแล้ว "ภายในเรือแต่ละลำ" แต่หัวตารางเป็นการรวมของทุกลำ
+       แล้วไล่เก็บตามลำดับที่เจอเรือ · ไม่ได้เรียงตอนรวม
+       เรือ 4 เครื่อง (Port · C.Port · C.Std · Std) มาก่อน เลยจองสี่ช่องแรกไว้
+       พอเจอเรือที่มี Center ทีหลัง CTR ก็ไปต่อท้ายสุด ทั้งที่ตำแหน่งจริงอยู่กลางลำ
+       (วัดของจริงได้ PORT · C.P · C.ST · STD · CTR — ผิดตำแหน่งเดียวคือ CTR)
+       แก้ด้วยการเรียงตอนรวมอีกครั้ง ใช้อันดับชุดเดิม FL_POS_RANK ไม่ได้ตั้งเลขใหม่
+       ตำแหน่งใหม่ที่ยังไม่รู้จัก (rank 98) ไปท้ายสุดตามเดิม */
     const ENG_COLS=(function(){
-      const seen=[];
+      const seen=[], rk={};
       boats.forEach(b=>FL_ENGINES.filter(e=>e.boatId===b.id)
         .sort((x,y)=>(typeof flPosRank==='function'?flPosRank(x.pos)-flPosRank(y.pos):0))
-        .forEach(e=>{ const L=engPosLabel(e.pos); if(seen.indexOf(L)<0) seen.push(L); }));
+        .forEach(e=>{ const L=engPosLabel(e.pos);
+          if(seen.indexOf(L)<0){ seen.push(L);
+            rk[L]=(typeof flPosRank==='function')?flPosRank(e.pos):98; } }));
+      seen.sort((a,b)=>((rk[a]==null?98:rk[a])-(rk[b]==null?98:rk[b]))
+        || String(a).localeCompare(String(b)));
       return seen.length?seen:['EN'];
     })();
     const ISS=flIssueFor(pierKey);
@@ -92486,6 +92498,30 @@ function poReadyShown(it, b){
 }
 
 /* ── เรือที่ออกวันนี้ที่ท่านี้ · ดึงจาก TRIPS + ROUTES.pier ของเดิม ── */
+/* ══ §poOrder · ใบเบิก–คืน (บนจอ) กับ ใบเซ็น (ที่พิมพ์) ต้องเรียงแถวชุดเดียวกัน ══
+   สองใบนี้ถูกกรอกคู่กันหน้าท่า — กระดาษอยู่บนโต๊ะ จออยู่ข้าง ๆ ลอกกันไปมา
+   ของเดิมใบพิมพ์เรียงตามรถ+ชื่อ แต่ป๊อปอัปบนจอไม่ได้เรียงเลย ใช้ลำดับดิบที่วนเจอ
+   วัดของจริง 17 ส.ค. เรือ b2 · 30 แถว ตำแหน่งไม่ตรงกันทั้ง 30 แถว
+   เรียงตามรถก่อน เพราะหน้าท่าเดินไล่ทีละคัน ไม่ได้ไล่ทีละ voucher
+   ตัวรองใช้ชื่อคนแรกที่พิมพ์อยู่บนกระดาษ · ไม่ใช้ voucher เพราะมันไม่มีบนใบแล้ว */
+function poRowCmp(a,b){
+  return String((a&&a.car)||'zzz').localeCompare(String((b&&b.car)||'zzz'))
+      || String((((a&&a.names)||[])[0])||'').localeCompare(String((((b&&b.names)||[])[0])||''));
+}
+/* ══ §poPaxReal · จำนวนคนที่ "ไปจริง" ของใบจองหนึ่ง ══════════════════════════
+   ยังไม่มีใครกด No-show / CXL → คืนยอดจองเต็มตามเดิม (พิมพ์ใบตอนเช้ายังได้ครบ)
+   กดแล้ว → หักออกให้ · ตัวเดียวกับที่ใบงานเรือ (pjPax §pjPaxReal) ทะเบียนผู้เดินทาง
+   และ Travel Summary ใช้อยู่แล้ว · สามใบจึงพูดเลขเดียวกัน */
+function poPaxLeft(b, date, t){
+  var P=(typeof ckPaxBreak==='function')?ckPaxBreak(t&&t.pax):null;
+  if(!P) return {ad:0,chd:0,inf:0,foc:0,tot:0};
+  if(typeof ckPaxLeft!=='function') return {ad:P.ad,chd:P.chd,inf:P.inf,foc:P.foc,
+    tot:P.ad+P.chd+P.inf+P.foc};
+  var o={ ad:ckPaxLeft(b,date,'ad',P.ad),   chd:ckPaxLeft(b,date,'chd',P.chd),
+          inf:ckPaxLeft(b,date,'inf',P.inf), foc:ckPaxLeft(b,date,'foc',P.foc) };
+  o.tot=o.ad+o.chd+o.inf+o.foc;
+  return o;
+}
 function poBoats(date, pier){
   var out=[], seen={};
   var day=(typeof TRIPS!=='undefined' && TRIPS[date])?TRIPS[date]:{};
@@ -92496,7 +92532,7 @@ function poBoats(date, pier){
     var boat=(typeof getBoat==='function')?getBoat(bid):null;
     seen[bid]=1;
     out.push({bid:bid, boat:boat||{id:bid,name:bid}, rid:op.route, route:rt,
-              dep:(rt.times&&rt.times[0])||'', pax:0, bks:[]});
+              dep:(rt.times&&rt.times[0])||'', pax:0, paxReal:0, bks:[]});
   });
   /* จำนวน ลค · นับจาก booking ที่ผูกลำไว้แล้ว (ops.boatId) แบบเดียวกับเช็คอินหน้าท่า */
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
@@ -92506,16 +92542,18 @@ function poBoats(date, pier){
     var O=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
     var bid=O.boatId||t.charterBoatId||'';
     var pax=(typeof ckBookedPax==='function')?ckBookedPax(t):0;
+    var real=poPaxLeft(b,date,t).tot;   /* §poPaxReal */
     var row=null;
     for(var i=0;i<out.length;i++){ if(out[i].bid===bid){ row=out[i]; break; } }
     if(!row){
       if(bid && !seen[bid]){
         var boat=(typeof getBoat==='function')?getBoat(bid):null;
-        row={bid:bid, boat:boat||{id:bid,name:bid}, rid:t.routeId, route:rt, dep:(rt.times&&rt.times[0])||'', pax:0, bks:[]};
+        row={bid:bid, boat:boat||{id:bid,name:bid}, rid:t.routeId, route:rt, dep:(rt.times&&rt.times[0])||'', pax:0, paxReal:0, bks:[]};
         seen[bid]=1; out.push(row);
       } else return;   /* ยังไม่ผูกลำ · ไปโผล่ในกล่อง "ยังไม่ระบุเรือ" */
     }
-    row.pax+=pax; row.bks.push({b:b,t:t,pax:pax});
+    row.pax+=pax; row.paxReal=(row.paxReal||0)+real;
+    row.bks.push({b:b,t:t,pax:pax,paxReal:real});
   });
   out.sort(function(a,b){ return String(a.dep||'99').localeCompare(String(b.dep||'99')) || String(a.boat.name||'').localeCompare(String(b.boat.name||'')); });
   return out;
@@ -93184,12 +93222,15 @@ function poIsBuild(bid){
     (b.passengers||[]).forEach(function(p){ if(p&&p.name) nm.push(String(p.name)); });
     if(!nm.length && b.leadPax) nm.push(String(b.leadPax));
     var van=(O&&O.vanId&&typeof vehGet==='function')?vehGet(O.vanId):null;
+    var _PL=poPaxLeft(b,_poDate,t);   /* §poPaxReal · คนที่ไปจริง ไม่ใช่ยอดจอง */
     var R={ id:'bk_'+(b.id||''), bkId:b.id||'', extra:false,
+            car:van?(van.name||van.id||''):'',   /* §poOrder · ไว้เรียงให้ตรงกับใบที่พิมพ์ */
+            booked:PT(px,'ad')+PT(px,'chd')+PT(px,'inf')+PT(px,'foc'),
             agN:(ag&&ag.name)||(b.agentId?b.agentId:'Love Andaman'),
             agC:poSignColor(b.agentId)||((ag&&ag.color)||''),
             names:nm.length?nm:[String(b.leadPax||'-')],
             sub:[(b.hotelName||b.pickup||''), (van?(van.name||van.id):'')].filter(Boolean).join(' · '),
-            ad:PT(px,'ad'), chd:PT(px,'chd'), inf:PT(px,'inf'), foc:PT(px,'foc'),
+            ad:_PL.ad, chd:_PL.chd, inf:_PL.inf, foc:_PL.foc,
             iss:{}, ret:{}, dep:0, back:0, cut:0, note:'' };
     var O2=old[R.bkId];
     KS.forEach(function(k){
@@ -93201,6 +93242,8 @@ function poIsBuild(bid){
     if(O2){ R.dep=+O2.dep||0; R.back=+O2.back||0; R.cut=+O2.cut||0; R.note=O2.note||''; }
     return R;
   });
+  /* §poOrder · เรียงเฉพาะแถวใบจอง · แถว "ยกมา"/แถวที่หน้าท่าเพิ่มเอง ต่อท้ายทีหลังอยู่แล้ว */
+  rows.sort(poRowCmp);
   /* §poFix3 · ยังไม่เคยบันทึกใบนี้ แต่ในบัญชีมียอดของลำนี้อยู่แล้ว (ของเดิม / เบิกจากที่อื่น)
      ยกขึ้นตารางเป็นแถว "ยกมา" ให้ยอดตรงกันตั้งแต่เปิด · ไม่งั้นกดบันทึกครั้งเดียวยอดหายทั้งวัน
      ผู้ใช้ย้ายตัวเลขจากแถวนี้ไปใส่แถวใบจองทีหลังได้ ยอดรวมไม่ขยับ จึงไม่เกิด move ใหม่ */
@@ -93583,7 +93626,15 @@ function poIssueOpen(bid){
   var PD=poSheetPending(_poDate,bid);
   var head='<div style="font-size:11.5px;color:#7C8091;margin:-4px 0 10px">'
     +poE((B.route&&B.route.name)||'')+(B.dep?(' · ออก '+poE(B.dep)):'')+' · '+poE(_poDate)
-    +' · <b style="color:#16265C">ลูกค้า '+B.pax+' ท่าน · '+B.bks.length+' ใบจอง</b>'
+    /* §poPaxReal · โชว์ยอดที่ไปจริง · ต่างจากยอดจองเมื่อไหร่ ค่อยบอกทั้งสองเลข
+       ไม่งั้นคนอ่านไม่รู้ว่าเลขที่เห็นคือ "จองไว้" หรือ "ไปจริง" */
+    +' · <b style="color:#16265C">ลูกค้า '+(B.paxReal!=null?B.paxReal:B.pax)+' ท่าน · '+B.bks.length+' ใบจอง</b>'
+    +((B.paxReal!=null && B.paxReal!==B.pax)
+        ? ('<span style="margin-left:8px;background:#FCEBEB;border:1px solid #E6C9C3;color:#A32D2D;'
+          +'border-radius:999px;padding:2px 10px;font-size:10.5px;font-weight:800" '
+          +'title="ยอดจอง '+B.pax+' คน · ไม่ได้ไป '+(B.pax-B.paxReal)+' คน (No-show / ยกเลิกหน้างาน) '
+          +'· ตัวเลขในตารางเป็นคนที่ไปจริง">จอง '+B.pax+' · ไม่ได้ไป '+(B.pax-B.paxReal)+'</span>')
+        : '')
     +(PD?('<span style="margin-left:9px;background:#FEF6E7;border:1px solid #EFD9AE;color:#8A5A00;'
         +'border-radius:999px;padding:2px 10px;font-size:10.5px;font-weight:800">ร่าง · ยังไม่ตัดสต็อก</span>'):'')
     +'</div>';
@@ -97907,23 +97958,24 @@ function poSignPrint(bid, kinds){
     var tel=String(b.leadPhone||b.phone||'').trim();
     if(tel) names.splice(1,0,tel);   /* เบอร์อยู่ใต้ชื่อคนแรก เหมือนที่เขาเขียนกันในไฟล์ */
     var px=(t&&t.pax)||{}, PT=(typeof bkV2PaxTot==='function')?bkV2PaxTot:function(){return 0;};
+    var _PL=poPaxLeft(b,_poDate,t);   /* §poPaxReal · คนที่ไปจริง */
+    var _bk=PT(px,'ad')+PT(px,'chd')+PT(px,'inf')+PT(px,'foc');
     return {
       bkId: b.id||'',   /* §poSheet · ไว้จับคู่กับใบเบิก–คืน */
+      booked:_bk, gone:(_bk>0 && _PL.tot===0),   /* ทั้งใบไม่ได้ไป */
       agN: ag?(ag.name||''):'',
       /* §poSign2 · สีของใบเซ็นเอง · ไม่ตั้งก็ปล่อยขาว ไม่ไปหยิบสีของหน้าจองมาใส่แทน */
       agC: poSignColor(b.agentId),
       /* งานของ Love Andaman เอง · ขึ้นโลโก้ชุดเดียวกับหน้าอื่นทั้งระบบ */
       agLa: (typeof laAgencyMark==='function')?laAgencyMark(b,14,{inline:true,margin:false,pad:'2px 7px',radius:'6px'}):'',
       names: names.length?names:[''],
-      ad:PT(px,'ad'), chd:PT(px,'chd'), inf:PT(px,'inf'), foc:PT(px,'foc'),
+      ad:_PL.ad, chd:_PL.chd, inf:_PL.inf, foc:_PL.foc,
       car: van?(van.name||van.id||''):'',
       pu:  b.hotelName||b.pickup||'' };
   });
-  /* เรียงตามรถ · คนหน้าท่าเดินไล่ทีละคัน ไม่ได้ไล่ทีละ voucher */
-  /* §poSign4 · ตัวรองเดิมเป็น voucher ซึ่งไม่มีบนใบแล้ว · เรียงด้วยชื่อที่เห็นบนกระดาษแทน
-     ไม่งั้นลำดับบนใบจะดูสุ่มไปเลยเพราะเรียงด้วยของที่มองไม่เห็น */
-  rows.sort(function(a,b){ return String(a.car||'zzz').localeCompare(String(b.car||'zzz'))
-    || String(a.names[0]||'').localeCompare(String(b.names[0]||'')); });
+  /* §poOrder · ตัวเรียงย้ายไปอยู่ที่เดียวกับใบเบิก–คืน (poRowCmp)
+     เดิมเขียนแยกกันสองที่ · ที่หนึ่งเรียง อีกที่ไม่เรียง แล้วไม่มีใครรู้จนกระดาษไม่ตรงจอ */
+  rows.sort(poRowCmp);
 
   /* ── ความกว้างคอลัมน์ · คิดเป็นน้ำหนักแล้วหารเป็น % ทีเดียว
         จะได้ไม่ล้นกระดาษไม่ว่าติ๊กของมากี่ประเภท ── */
@@ -97989,7 +98041,12 @@ function poSignPrint(bid, kinds){
      +'font-weight:800;font-size:'+(fs-0.3)+'px;line-height:1.2;text-align:center;padding:2px 3px}'
    +'td.ag .la{display:flex;align-items:center;justify-content:center;padding:2px}'
    +'.sg{display:flex;gap:16px;margin-top:10px}'
-   +'.sg div{flex:1;border-top:1px solid #94A3B8;padding-top:4px;text-align:center;font-size:9px;color:#64748B}';
+   +'.sg div{flex:1;border-top:1px solid #94A3B8;padding-top:4px;text-align:center;font-size:9px;color:#64748B}'
+   /* §poPaxReal · ใบที่คนไม่มาทั้งใบ · ยังพิมพ์ไว้ให้เห็น แต่ขีดฆ่าและไม่นับยอด
+      ลบทิ้งไม่ได้ · ใบที่พิมพ์รอบเช้ากับรอบสายต้องเทียบกันได้บรรทัดต่อบรรทัด */
+   +'tr.gone td{background:#F6F4F1;color:#A0A0A0}'
+   +'tr.gone td.nm span{text-decoration:line-through}'
+   +'tr.gone td.ag .chip{filter:grayscale(1);opacity:.5}';
 
   var th=function(t,cls,span,rs){ return '<th'+(cls?' class="'+cls+'"':'')
     +(span?' colspan="'+span+'"':'')+(rs?' rowspan="'+rs+'"':'')+'>'+t+'</th>'; };
@@ -98031,11 +98088,12 @@ function poSignPrint(bid, kinds){
   var bn=e(B.boat.name||bid);
   var body=rows.map(function(r){
     var ink=(r.agC&&typeof bkV2ContrastInk==='function')?bkV2ContrastInk(r.agC):'#2c2c2a';
-    return '<tr>'
+    return '<tr'+(r.gone?' class="gone"':'')+'>'
       +'<td class="ag">'+(r.agLa ? '<span class="la">'+r.agLa+'</span>'
           : r.agN ? '<span class="chip" style="background:'+e(r.agC||'#fff')+';color:'+(r.agC?ink:'#2c2c2a')+'">'+e(r.agN)+'</span>'
           : '')+'</td>'
-      +'<td class="nm">'+r.names.map(function(x){ return '<span>'+e(x)+'</span>'; }).join('')+'</td>'
+      +'<td class="nm">'+r.names.map(function(x){ return '<span>'+e(x)+'</span>'; }).join('')
+        +(r.gone?'<span style="text-decoration:none;font-weight:800;color:#A32D2D">&#10007; ไม่ได้ไป</span>':'')+'</td>'
       +'<td class="c">'+(r.ad||'')+'</td><td class="c">'+(r.chd||'')+'</td>'
       +'<td class="c">'+(r.inf||'')+'</td><td class="c">'+(r.foc||'')+'</td>'
       +'<td class="c">'+e(r.car)+'</td>'
