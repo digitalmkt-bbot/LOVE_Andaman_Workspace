@@ -7401,8 +7401,15 @@ const DV_CSS=`<style>
     background:rgba(255,255,255,.10);border-radius:9px;display:flex;align-items:center;
     justify-content:center;color:#C9D6EC;font-size:14px;cursor:pointer;font-family:inherit;line-height:1}
   .dv-arw:hover{background:rgba(255,255,255,.20)}
+  /* §dashNav · ปุ่ม ‹ › ต้องอยู่กับที่ตลอด · คนกดรัว ๆ เพื่อไล่ดูวัน
+     ถ้าปุ่มขยับตามความยาวข้อความ กดครั้งที่สองจะพลาดเป้า
+     วัดมาแล้ว: เลขวัน 17px (1 หลัก) ถึง 34px (2 หลัก) · ตรึงไว้ที่กว้างสุด */
   .dv-dnum{font-size:30px;font-weight:800;letter-spacing:-1px;line-height:1;color:#fff;
-    font-family:'DM Mono',ui-monospace,monospace}
+    font-family:'DM Mono',ui-monospace,monospace;
+    display:inline-block;min-width:34px;text-align:center}
+  /* ชื่อวัน/เดือน · MAY 59px ถึง SEPTEMBER 105px · Friday 49px ถึง Wednesday 90px
+     ตรึงที่ 108px ครอบคลุมทุกกรณี · จัดชิดซ้ายไว้เหมือนเดิม */
+  .dv-dgrp{display:inline-block;min-width:108px}
   .dv-dwk{display:block;font-size:14px;font-weight:800;line-height:1.05;color:#fff}
   .dv-dmo{position:relative;display:block;font-size:9px;font-weight:800;letter-spacing:.13em;
     color:#A8BAD8;text-transform:uppercase;cursor:pointer}
@@ -8400,11 +8407,11 @@ function _dvHead(ds, dt, k){
   return `<div class="dv-hd"><div class="dv-hdtop">
     <button class="dv-arw" onclick="dashDateShift(-1)" title="วันก่อนหน้า">&lsaquo;</button>
     <span class="dv-dnum">${dt.getDate()}</span>
-    <span><span class="dv-dwk">${WD_L[dt.getDay()]}</span>
+    <span class="dv-dgrp"><span class="dv-dwk">${WD_L[dt.getDay()]}</span>
       <span class="dv-dmo">${MO_L[dt.getMonth()]} ${dt.getFullYear()}
         <input type="date" value="${ds}" onchange="setDashDate(this.value)"></span></span>
-    ${isTdy?'':`<button class="dv-today" onclick="resetDashDate()">TODAY</button>`}
     <button class="dv-arw" onclick="dashDateShift(1)" title="วันถัดไป">&rsaquo;</button>
+    ${isTdy?'':`<button class="dv-today" onclick="resetDashDate()">TODAY</button>`}
     <span class="dv-brand">LOVE ANDAMAN</span>
     <span class="dv-kpi">
       <span class="dv-chip">${isTdy?'ออกวันนี้':'ออก '+dt.getDate()+' '+TH_MON_H[dt.getMonth()]} <b>${k.pax}</b> pax</span>
