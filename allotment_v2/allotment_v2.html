@@ -21,6 +21,12 @@
 </head>
 <body>
 
+<!-- §localDemo · corner ribbon, shown ONLY when the page is served from a local/LAN host.
+     Hidden by default in CSS and revealed by js/03-topbar-nav.js adding .la-local to <html>,
+     so a deploy to rsvn.loveandaman.com never shows it. pointer-events:none — it overlaps the
+     top-right of the topbar and must not swallow clicks. -->
+<div id="la-demo-banner" aria-hidden="true"><span>Local Demo</span></div>
+
 <!-- TOPBAR -->
 <header class="topbar">
   <div class="topbar-brand">

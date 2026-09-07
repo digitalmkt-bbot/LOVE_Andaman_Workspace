@@ -25,3 +25,24 @@ function laUbPlace(){
 })();
 document.addEventListener('keydown',function(e){ if(e.key==='Escape') laNavClose(); });
 window.addEventListener('resize',function(){ if(window.innerWidth>820) laNavClose(); });
+/* §localDemo · reveal the "Local Demo" corner ribbon on local/LAN hosts only.
+   The class goes on <html>, not on the ribbon itself, because this file is loaded from <head> —
+   document.body does not exist yet, but documentElement always does, so there is nothing to wait
+   for and the ribbon is painted with the first frame rather than flashing in later.
+   Deliberately a hostname allowlist, not a "not production" check: anything unrecognised is
+   treated as production and shows nothing. Getting it wrong in that direction is harmless; the
+   other direction puts "Local Demo" across the top of rsvn.loveandaman.com. */
+(function(){
+  try{
+    var h=String(location.hostname||'').toLowerCase();
+    /* The private-range test matches a WHOLE IPv4 address, not a prefix. A bare /^192\.168\./
+       also matches "192.168.1.50.evil.com", which is a hostname anyone can point at anything. */
+    var m=/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h), priv=false;
+    if(m){
+      var a=+m[1], b=+m[2];
+      priv = a===10 || a===127 || (a===192&&b===168) || (a===172&&b>=16&&b<=31) || (a===0&&b===0);
+    }
+    if(priv || h==='localhost' || h==='::1' || h==='' || /\.local$/.test(h))
+      document.documentElement.classList.add('la-local');
+  }catch(_){}
+})();
