@@ -4670,7 +4670,9 @@ body.la-nav-open .la-burger{background:#1683C7;color:#fff;box-shadow:inset 2px 2
   .la-xscroll{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
   .main [style*="overflow-x:auto"],.main [style*="overflow:auto"]{-webkit-overflow-scrolling:touch}
 
-  /* ── กริดหลายคอลัมน์ที่เขียนไว้ใน style ตรง ๆ · บีบเหลือ 1–2 คอลัมน์ ──
+  /* ── กริดหลายคอลัมน์ที่เขียนไว้ใน style ตรง ๆ · บีบเหลือคอลัมน์เดียว ──
+     §oneCol · เดิมเหลือ 2 คอลัมน์ในช่วง 521–820px · บนมือถือ 2 คอลัมน์แปลว่า
+     ช่องละ ~190px ซึ่งไม่พอกับตัวเลข+ป้ายของหน้านี้ · เรียงลงมาคอลัมน์เดียวทั้งแถบ
      ต้องใช้ !important เพราะเป็น inline style · ปฏิทิน 7 ช่องไม่โดน (ไล่ทีละแบบ) */
   .main [style*="grid-template-columns:repeat(2"],
   .main [style*="grid-template-columns:repeat(3"],
@@ -4678,7 +4680,7 @@ body.la-nav-open .la-burger{background:#1683C7;color:#fff;box-shadow:inset 2px 2
   .main [style*="grid-template-columns:repeat(5"],
   .main [style*="grid-template-columns:repeat(6"],
   .main [style*="grid-template-columns:1fr 1fr"],
-  .main [style*="grid-template-columns:repeat(auto-fit"]{grid-template-columns:repeat(2,minmax(0,1fr)) !important}
+  .main [style*="grid-template-columns:repeat(auto-fit"]{grid-template-columns:minmax(0,1fr) !important}
   .main [style*="grid-template-columns:1fr 310px"],
   .main [style*="grid-template-columns:2fr 1fr"],
   .main [style*="grid-template-columns:1fr 1fr 1fr 1.4fr"]{grid-template-columns:minmax(0,1fr) !important}
@@ -4745,16 +4747,13 @@ body.la-nav-open .la-burger{background:#1683C7;color:#fff;box-shadow:inset 2px 2
   img,svg,video,canvas{max-width:100%}
 }
 
-/* จอเล็กมาก · ยุบกริดเหลือคอลัมน์เดียว */
-@media (max-width:520px){
-  .main [style*="grid-template-columns:repeat(2"],
-  .main [style*="grid-template-columns:repeat(3"],
-  .main [style*="grid-template-columns:repeat(4"],
-  .main [style*="grid-template-columns:repeat(5"],
-  .main [style*="grid-template-columns:repeat(6"],
-  .main [style*="grid-template-columns:1fr 1fr"],
-  .main [style*="grid-template-columns:repeat(auto-fit"]{grid-template-columns:minmax(0,1fr) !important}
-  .main{padding:10px 8px !important}
+/* §oneCol · ทุกอย่างเรียงลงมาคอลัมน์เดียว · ทั้งแถบมือถือ ไม่ใช่แค่จอจิ๋ว
+   บล็อกนี้เคยเป็น max-width:520px · ผลคือช่วง 521–820px (มือถือแนวนอน · แท็บเล็ตเล็ก)
+   กริดที่ประกาศเป็นคลาส 48 ตัว (.g2/.g3/.g4 · bkv2-stats · ct-trio · ts-kpis ...)
+   ไม่ยุบเลยสักตัว และตารางกว้างก็ยังดันหน้าแทนที่จะเลื่อนในกล่องตัวเอง
+   → ยกทั้งชั้นขึ้นมาที่ 820px ให้ตรงกับเส้นเดียวกับลิ้นชักเมนู
+   (รายการกริดแบบ inline style ย้ายไปรวมกับบล็อก 820px ข้างบนแล้ว ไม่ต้องเขียนซ้ำ) */
+@media (max-width:820px){
   .page-hd{flex-direction:column;align-items:stretch;gap:8px}
   /* §mobile · แถวแนวนอนที่เขียน display:flex ไว้ใน style ตรง ๆ ให้ตัดขึ้นบรรทัดใหม่
      (หัวหน้า · แถบปุ่ม · การ์ดคู่) ของเดิมเป็น nowrap หมด พอจอแคบเลยบีบกันจนอ่านไม่ออก
@@ -4822,7 +4821,22 @@ body.la-nav-open .la-burger{background:#1683C7;color:#fff;box-shadow:inset 2px 2
   #view-rate-types .sb-wrap.three-col,.bk-form-grid,.bk-pax-grid,.boats-layout,.cal-detail-body,.cards,
   .da-layout,.dr-duo,.dr-kpis,.dr-main,.dr-rts,.fl-bc-body,.fl-split,.form-2,.form-3,.g2,.g3,.g4,.grid.four,
   .grid.many,.head-fields,.header,.loc-grid,.sb-kpi-row,.sb-meta-grid,.sb-wrap,.sc,.settings-layout,.sgrid,
-  .sig-grid,.st-picker,.t2-bgrid,.t2-famvgrid,.ts-kpis,.ts-mbar,.ts-pay,.ts-pay5,.ts-sign{grid-template-columns:minmax(0,1fr) !important}
+  .sig-grid,.st-picker,.t2-bgrid,.t2-famvgrid,.ts-kpis,.ts-mbar,.ts-pay,.ts-pay5,.ts-sign,
+  .dv-grid{grid-template-columns:minmax(0,1fr) !important}
+
+  /* §oneCol · Dashboard · .dv-grid ไล่ 3 → 2 คอลัมน์ที่ 1500px แล้วหยุด · ไม่เคยเหลือ 1 เลย
+     คอลัมน์ที่ 3 ยังถูกสั่งเป็น flex แถวนอนจากกฎ 1500px ด้วย · ต้องคลายทั้งคู่
+     และปลดความสูงตายตัว (100vh − 118px) ที่ทำให้ทุกการ์ดโดนบีบอยู่ในจอเดียว */
+  .dv-grid{height:auto !important}
+  .dv-col:nth-child(3){flex-direction:column !important}
+  .dv-col:nth-child(3)>*{flex:0 0 auto !important}
+  .dv-lvlist{max-height:70vh}
+}
+
+/* จอจิ๋ว · บีบขอบเข้ามาอีกนิด · เขียนเฉพาะซ้าย-ขวา
+   (ถ้าใช้ padding ย่อจะทับ padding-top ของบล็อก 820px ที่เผื่อ safe-area บนไว้) */
+@media (max-width:520px){
+  .main{padding-left:8px !important;padding-right:8px !important}
 }
 
 /* iOS · 100vh นับรวมแถบ URL ทำให้ท้ายจอโดนบัง · ใช้ dvh ถ้ารองรับ */
