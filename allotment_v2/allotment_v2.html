@@ -4709,6 +4709,11 @@ body.la-nav-open .la-burger{background:#1683C7;color:#fff;box-shadow:inset 2px 2
      · .topbar ตั้ง pointer-events:none) → ปุ่มเมนูไปอยู่ในกลุ่มปุ่มลอยชุดเดียวกัน */
   .la-burger{display:inline-flex}
   .topbar{padding:calc(9px + env(safe-area-inset-top)) 12px 9px !important;gap:8px}
+  /* §mobHead · ปุ่มลอยมุมขวาบน (เมนู + เครื่องมือ) กว้างราว 98px สูง 54px
+     หัวหน้าที่ขึ้นไปชิดขอบบนจะถูกมันทับ · เว้นที่ให้เท่าที่วัดมาจริง
+     ทำเฉพาะหัวที่วัดแล้วโดนทับ · ไม่ไปดันหน้าที่ปกติดีอยู่แล้ว */
+  .main .view .bkv2-utabs{padding-right:96px}
+  .po-host .po-h .po-hl{padding-right:92px}
   .topbar-date{display:none}
   /* เครื่องมือชุดใหญ่กางเป็นแผงลอยใต้ปุ่ม ⋯ · ของเดิมเรียงแถวเดียวจนล้นจอ */
   .topbar.tools-open .topbar-right{display:flex !important;position:absolute;top:100%;right:12px;left:auto;
@@ -7651,6 +7656,42 @@ const DV_CSS=`<style>
     .dv-col:nth-child(3){grid-column:1/-1;flex-direction:row;flex-wrap:wrap}
     .dv-col:nth-child(3)>*{flex:1 1 380px}
     .dv-lvlist{max-height:520px}
+  }
+  /* ══ §mobDash · โทรศัพท์ ════════════════════════════════════════════════
+     หน้านี้ทำตอนจอใหญ่อย่างเดียว · บนมือถือแทบทุกอย่างพัง วัดมาแล้วดังนี้ */
+  @media (max-width:820px){
+    /* แบรนด์วางกลางแบบ absolute · จอแคบมันไปนั่งทับตัวเลขวันที่ อ่านไม่ออกทั้งคู่
+       และหางไข่ปลาจาก text-overflow ไปโผล่บนปุ่ม › จนดูเหมือนปุ่มเสีย
+       ที่ว่างตรงกลางไม่มีแล้ว · ซ่อนไปเลยดีกว่าให้ทับกัน (แบบเดียวกับ .pkh-brand) */
+    .dv-brand{display:none}
+    /* หัวการ์ด · แถวบนคือวันที่ แถวล่างคือตัวเลข · ไม่ปนกัน */
+    .dv-hd{padding:8px 92px 10px 10px;border-radius:16px}
+    .dv-hdtop{flex-wrap:wrap;gap:9px}
+    .dv-dnum{font-size:26px}
+    .dv-arw{width:38px;height:38px;font-size:16px}
+    .dv-today{min-height:36px}
+    /* ชิปตัวเลข · เต็มบรรทัดแล้วปัดดูแนวนอน · เรียงลงมา 5 แถวกินครึ่งจอ */
+    .dv-kpi{margin-left:0;width:100%;flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;
+      -webkit-overflow-scrolling:touch;padding-bottom:2px;margin-right:-92px}
+    .dv-kpi::-webkit-scrollbar{display:none}
+    .dv-chip{flex:none}
+    .dv-pop{left:8px;right:8px;width:auto;max-width:none}
+
+    /* คอลัมน์เดียว · ของเดิมกฎ 1500px ทำให้คอลัมน์ 3 เป็นแถวนอน ต้องรีเซ็ตด้วย */
+    .dv-grid{grid-template-columns:minmax(0,1fr);gap:10px}
+    .dv-col:nth-child(3){flex-direction:column;flex-wrap:nowrap}
+    .dv-col:nth-child(3)>*{flex:0 0 auto}
+    .dv-col>*:last-child{flex:0 0 auto}
+    .dv-lvlist{max-height:420px}
+    /* ปฏิทินที่นั่ง · เลื่อนในการ์ดตัวเอง ไม่ดันการ์ดจนล้น */
+    .dv-cal .cal2-box,.dv-cal .dv-calgrid{overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .dv-plot{padding:14px 6px 6px}
+    /* ยอดเงิน/ชื่อเรือ · ของเดิมโดนบีบจนตัดเป็น "Vis..." กับ "฿4 ,"
+       พอเหลือคอลัมน์เดียวที่ว่างพอแล้ว ปลดการตัดทิ้งได้ */
+    .dv-pr2 .nm,.dv-avrow .dv-av .k{white-space:normal;overflow:visible;text-overflow:clip}
+    .dv-bd,.dv-c{padding-left:12px;padding-right:12px}
+    /* นิ้วต้องกดโดน */
+    .dv-bdseg b,.dv-ovseg button{min-height:34px;display:inline-flex;align-items:center}
   }
 </style>`;
 function renderDash(){
@@ -60974,6 +61015,36 @@ function pckHeadCSS(){
   +H+' [data-blk="prog"] .pgv-nm{font-size:11px;font-weight:700;color:#3a3a36}'
   +H+' [data-blk="prog"] .pgv-tm{font-size:11px;color:#5b6472;background:none;padding:0}'
   +H+' [data-blk="prog"] .pgv-px{font-size:11px}'
+
+  /* ══ §mobPier · โทรศัพท์ ═══════════════════════════════════════════════
+     หน้านี้ถูกใช้ยืนถือโทรศัพท์ที่ท่าเรือจริง · ของเดิมสองคอลัมน์ตายตัว
+     300px + 400px ในจอ 390px → ครึ่งขวาหลุดออกนอกจอ ต้องรู้เองว่าต้องปัด
+     ทำเป็นซ้อนกันลงมา · เรียงตามลำดับที่ใช้จริง: หาคน → กรอง → โปรแกรม */
+  +'@media(max-width:820px){'
+    +H+' .pkh-grid{grid-template-columns:minmax(0,1fr);gap:10px}'
+    +H+' .pkh-col{min-width:0;width:auto}'
+    /* ค้นหา/กรอง/เลือกเรือ ขึ้นก่อน · ที่ท่าเขาเปิดมาเพื่อ "หาคนนี้" ไม่ใช่มาอ่านโปรแกรม */
+    +H+' .pkh-col:nth-child(2){order:-1}'
+    +H+' .pkh-col:first-child>.pkh-card{flex:none}'
+    /* ยอดรวมหัวหน้า · ชิดซ้ายให้อ่านไล่จากซ้ายเหมือนบรรทัดปกติ */
+    /* ตัวแม่เป็น nowrap · ยอดรวมจึงตกบรรทัดใหม่ไม่ได้ ต้องยืนค้างในแถวเดียวแล้วล้นออกไป */
+    +H+' .pkh-day{flex-wrap:wrap;row-gap:6px}'
+    +H+' .pkh-kpi{justify-content:flex-start;width:100%;margin-top:2px}'
+    /* ช่องค้น voucher · เต็มบรรทัด แตะแล้วพิมพ์ได้เลย ไม่ต้องเล็ง */
+    +H+' .pck-fsearch{flex-wrap:wrap}'
+    /* สองช่องนี้ถูกสร้างพร้อม style= ติดแท็ก · inline ชนะสไตล์ชีตเสมอ ต้องทับด้วย !important
+       ต่ำกว่า 16px เมื่อไร iOS ซูมจอเข้าเองตอนแตะ แล้วไม่ซูมกลับ */
+    +H+' #pck-q{flex:1 1 100% !important;min-width:0 !important;height:auto !important;'
+      +'min-height:44px !important;font-size:16px !important}'
+    +H+' #pck-van{flex:1 1 100% !important;min-height:44px !important;font-size:16px !important;'
+      +'height:auto !important}'
+    /* ต่ำกว่า 16px เมื่อไร iOS ซูมจอเข้าเองตอนแตะ แล้วไม่ซูมกลับ */
+    +H+' select,'+H+' input[type=text],'+H+' input[type=search]{font-size:16px}'
+    /* ปุ่มกรอง · ให้ตกบรรทัดแทนที่จะไหลออกนอกจอ และสูงพอให้นิ้วกดโดน */
+    +H+' .pkh-fwrap{flex-wrap:wrap;gap:6px}'
+    +H+' .pkh-fwrap button{min-height:38px}'
+    +H+' .pkh-boats{overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap}'
+  +'}'
   ;
 }
 function pckSheetCSS(){
@@ -93452,7 +93523,90 @@ function poCSS(){
   +H+' .po-empty{padding:26px 14px;text-align:center;color:#94A3B8;font-size:12.5px}'
   +H+' table.po-t th{background:#F8FAFC;border-bottom:1px solid #F1F5F9;color:#94A3B8}'
   +H+' table.po-t td{border-bottom:1px solid #F8FAFC}'
-  +H+' .po-lg{color:#64748B}';
+  +H+' .po-lg{color:#64748B}'
+
+  /* ══════ §mobPark · โทรศัพท์ ════════════════════════════════════════════
+     คนใช้หน้านี้ยืนอยู่หน้าด่านอุทยาน ถือโทรศัพท์ข้างเดียว
+     สิ่งที่ต้องทำได้โดยไม่ปัดจอ: อ่านว่าต้องซื้อรหัสไหนกี่ใบ · กรอกชื่อที่ขาด
+     ของเดิมทั้งสองอย่างซ่อนอยู่หลังการเลื่อนแนวนอน */
+  +'@media(max-width:820px){'
+    /* ── แถบหัว ── ของเดิมพันกันจนปุ่มย้อนวันกับปุ่มถัดไปอยู่คนละแถว */
+    +H+' .po-h{margin-bottom:14px;gap:10px}'
+    +H+' .po-h h1{font-size:19px;line-height:1.3}'
+    /* คำอธิบายยาว 4 บรรทัดบนจอแคบ · ดันของที่ต้องใช้จริงตกจอไปหมด
+       ตัดเหลือ 2 บรรทัด · แตะที่ข้อความเพื่อกางอ่านเต็มได้ */
+    +H+' .po-h p{font-size:11px;line-height:1.55;display:-webkit-box;-webkit-line-clamp:2;'
+      +'-webkit-box-orient:vertical;overflow:hidden}'
+    +H+' .po-h p:active{-webkit-line-clamp:unset}'
+    +H+' .po-bar{flex-wrap:wrap;gap:6px;width:100%}'
+    /* ปุ่มสลับหน้า (ตั๋วอุทยาน · เบิก-คืน · เงินสดย่อย) เลื่อนเป็นแถบเดียว
+       ไม่ตัดบรรทัด · กินที่แนวตั้งน้อยกว่าและคุ้นมือกว่าบนมือถือ */
+    +H+' .po-bar>button:not(.pri):not(.nav):not(.now){flex:none;font-size:12.5px;padding:8px 12px}'
+    +H+' .po-bar .sep{flex:1 0 100%;height:0;margin:0;border:0;background:none;display:block}'
+    /* ‹ [วันที่] › วันนี้  ต้องอยู่แถวเดียวกันเสมอ · เป็นชุดเดียวกันในหัว */
+    +H+' .po-bar input[type=date]{flex:1 1 90px;min-width:0;min-height:42px;font-size:15px}'
+    /* ปุ่มบันทึกทั้งวันอยู่แถวสุดท้ายของตัวเอง · เต็มบรรทัดไปเลย จะได้กดไม่พลาด
+       ระวัง: .pri คือ "ปุ่มหน้าที่เปิดอยู่" ไม่ใช่ปุ่มบันทึก · เอามาใช้ตรงนี้ไม่ได้ */
+    +H+' .po-bar>button:last-child{flex:1 1 100%;width:100%;min-height:44px;background:#0F172A;'
+      +'color:#fff;border-color:#0F172A;font-weight:700}'
+    +H+' .po-bar .nav{min-width:42px;min-height:42px;flex:none}'
+    +H+' .po-bar .now{min-height:42px;flex:none}'
+    +H+' .po-bar button{min-height:40px}'
+
+    /* ── หัวทริป/แท็บเรือ ── */
+    +H+' .pk-th2 .rn{font-size:15px}'
+    +H+' .pk-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;padding-bottom:3px}'
+    +H+' .pk-tab{flex:none;min-height:42px}'
+    /* ปุ่มบันทึก Excel เต็มบรรทัด · เป็นปุ่มปลายทางของหน้า ต้องกดง่ายที่สุด */
+    +H+' .pk-bhd{flex-wrap:wrap;padding:9px 11px}'
+    +H+' .pk-bhd .sp{display:none}'
+    +H+' .pk-bhd .pk-xls{flex:1 1 100%;min-height:44px;font-size:13px;order:9}'
+    +H+' .pk-bhd .pk-fill,'+H+' .pk-bhd .pk-clr{flex:1 1 calc(50% - 5px);min-height:40px}'
+
+    /* ══ ตารางกระทบยอด → การ์ดรายประเภท ══════════════════════════════
+       8 คอลัมน์ไม่มีทางพอใน 390px · ของเดิมเห็นแค่ 3 คอลัมน์แรก
+       ซึ่งไม่มีคอลัมน์ "ในชีทนี้" อยู่ด้วยเลย = เห็นทุกอย่างยกเว้นเลขที่ต้องใช้
+       ทำเป็นการ์ดต่อประเภท · เลขที่ต้องจ่ายเป็นตัวใหญ่สุด ที่เหลือเป็นบรรทัดรอง */
+    +H+' .pk-rw table,'+H+' .pk-rw thead,'+H+' .pk-rw tbody,'+H+' .pk-rw tfoot,'
+      +H+' .pk-rw tr,'+H+' .pk-rw td{display:block;width:auto;min-width:0}'
+    +H+' .pk-rw{overflow:visible}'
+    +H+' .pk-rw thead{display:none}'
+    +H+' .pk-rw tbody tr,'+H+' .pk-rw tfoot tr{border:1px solid #EEF1F5;border-radius:11px;'
+      +'padding:8px 10px;margin-bottom:7px;'
+      +'display:flex;flex-wrap:wrap;align-items:center;column-gap:9px;row-gap:3px}'
+    +H+' .pk-rw tbody tr.mv{border-color:#F0D9B8;background:#FFFDF7}'
+    +H+' .pk-rw td{border:0;padding:0;text-align:left !important}'
+    +H+' .pk-rw td.ty{order:1;flex:1 1 auto;font-size:12.5px}'
+    +H+' .pk-rw td.cd{order:2;flex:0 0 auto}'
+    /* เลขที่ต้องเอาไปจ่าย · ตัวใหญ่สุดในการ์ด อ่านได้จากระยะแขน ตอนยืนต่อคิวที่ด่าน */
+    +H+' .pk-rw td.n.big{order:3;flex:0 0 auto;margin-left:auto;font-size:26px;line-height:1}'
+    /* บรรทัดรอง · ไหลต่อกันในบรรทัดเดียว ติดป้ายกำกับเองเพราะหัวตารางถูกซ่อนไปแล้ว */
+    +H+' .pk-rw td.n:not(.big){order:4;flex:0 0 auto;font-size:11px}'
+    +H+' .pk-rw td.n:not(.big):before{font-weight:600;color:#94A3B8;margin-right:2px}'
+    +H+' .pk-rw td:nth-of-type(3):before{content:"จากใบจอง "}'
+    +H+' .pk-rw td:nth-of-type(5):before{content:"ต่าง "}'
+    +H+' .pk-rw td:nth-of-type(6):before{content:"มีชื่อ "}'
+    +H+' .pk-rw td:nth-of-type(7):before{content:"รอชื่อ "}'
+    +H+' .pk-rw td:nth-of-type(8):before{content:"เงินสดย่อย "}'
+    +H+' .pk-rw tfoot tr{background:#F8FAFC;border:1.5px solid #CBD5E1;margin-bottom:0}'
+    +H+' .pk-rw tfoot td.cd{display:none}'
+    +H+' .pk-rw tfoot td.ty{font-size:12.5px;font-weight:800}'
+    /* เส้นบนของแถวรวมย้ายไปอยู่ที่กรอบการ์ดแล้ว · ถ้าปล่อยไว้ที่ td จะขาดเป็นท่อน ๆ */
+    +H+' .pk-rw tfoot td{border-top:0;background:none}'
+    +H+' .pk-rec{padding:0 10px 10px}'
+    +H+' .pk-vd .v{font-size:11px;line-height:1.55}'
+    +H+' .pk-ovb{flex:1 1 100%;min-height:40px}'
+
+    /* ══ ชีทรายชื่อ ══════════════════════════════════════════════════
+       ยังเป็นตารางเลื่อนได้เหมือนเดิม (ด่านอ่านเรียงคอลัมน์) แต่ช่องพิมพ์ชื่อ
+       ต้องกว้างพอและตัวหนังสือ 16px ไม่งั้น iOS จะซูมเข้าเองทุกครั้งที่แตะ */
+    +H+' .pk-sheet{max-height:none}'
+    +H+' .pk-sheet .nmin{min-height:40px;font-size:16px}'
+    +H+' .pk-sheet td.cd select{min-height:38px;font-size:15px}'
+    +H+' .pk-day{gap:6px;margin:12px 0 10px}'
+    +H+' .pk-day .s{font-size:11px;padding:5px 12px}'
+    +H+' .po-kpis{grid-template-columns:minmax(0,1fr);gap:10px;margin:14px 0}'
+  +'}';
 }
 
 
