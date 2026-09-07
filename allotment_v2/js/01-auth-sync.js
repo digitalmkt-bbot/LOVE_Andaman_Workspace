@@ -95,37 +95,91 @@
       var ids={}; sv.forEach(function(x){ if(x&&x.id!=null) ids[String(x.id)]=1; });
       lv.forEach(function(x){ if(x&&x.id!=null && !ids[String(x.id)]){ sv.push(x); g++; } }); } });
     return g; }
+  var _ldT0=Date.now();
   var ld=sx('GET','/api/load');
-  try{ console.log('[boot] me=200 load='+ld.status+' bytes='+(ld.text?ld.text.length:0)); }catch(e){}
+  /* §bootDiag · จดเวลาและขนาดไว้เสมอ · ปัญหา "ช้าเฉพาะบางช่วงเวลา" ต้องมีตัวเลขถึงจะตามได้
+     ข้อมูลทั้งก้อนตอนนี้ ~16 MB (sb_bookings อย่างเดียว ~11 MB) โหลดใหม่ทุกครั้งที่เปิดหน้า */
+  try{
+    var _ldMs=Date.now()-_ldT0, _ldB=(ld.text?ld.text.length:0);
+    console.log('[boot] '+new Date().toISOString()+' load='+ld.status
+      +' bytes='+_ldB+' ('+(_ldB/1048576).toFixed(1)+' MB) in '+_ldMs+'ms'
+      +(_ldMs>0?(' = '+(_ldB/1048576/(_ldMs/1000)).toFixed(1)+' MB/s'):''));
+    window.__laBoot={at:new Date().toISOString(), status:ld.status, bytes:_ldB, ms:_ldMs};
+  }catch(e){}
   // Sync load failed (WebKit aborts long-blocking sync XHR on slow links — Chrome doesn't) →
   // switch to ASYNC retry behind a blocking overlay. Overlay stays up until data lands so nobody
   // edits an empty state; on arrival the data is applied in place via the soft-refresh path.
+  /* §bootDiag · จอโหลดต้องบอกได้ว่า "ช้า" หรือ "ค้าง"
+     ของเดิมขึ้นข้อความเดียวค้างไว้ · คนใช้เห็นแค่นาฬิกาทราย ไม่รู้ว่าเน็ตกำลังไหลอยู่ไหม
+     และเราก็ตามไม่ได้ว่าเซิร์ฟเวอร์ตอบอะไร ตอนไหน โหลดไปได้เท่าไร
+     ตอนนี้: โชว์ไบต์ที่ได้ · เวลาที่ใช้ · ความเร็ว · รหัสสถานะ พร้อมปุ่มคัดลอกให้ส่งต่อได้
+     และใส่ timeout 90 วิ — ของเดิมถ้าคำขอค้างไม่ตอบเลย จะไม่มีอะไรมาปลุกให้ลองใหม่ */
   function _laAsyncLoad(st){
-    try{ console.warn('[boot] sync /api/load failed (status '+st+') → async retry'); }catch(e){}
-    onReady(function(){ if(document.getElementById('la-bootload')) return;
+    try{ console.warn('[boot] sync /api/load failed (status '+st+') → async retry @'+new Date().toISOString()); }catch(e){}
+    var T0=Date.now(), tries=0, log=['sync /api/load = '+st+' @'+new Date().toISOString()];
+    var MB=function(b){ return (b/1048576).toFixed(1); };
+    var el=function(id){ return document.getElementById(id); };
+    var say=function(html){ var d=el('la-bootload-st'); if(d) d.innerHTML=html; };
+    window._laBootCopy=function(){
+      var t=log.join('\n')+'\nUA: '+navigator.userAgent;
+      try{ if(navigator.clipboard) navigator.clipboard.writeText(t); else { var a=document.createElement('textarea');
+        a.value=t; document.body.appendChild(a); a.select(); document.execCommand('copy'); document.body.removeChild(a); } }catch(e){}
+      var b=el('la-bootcopy'); if(b){ b.textContent='คัดลอกแล้ว'; setTimeout(function(){ b.textContent='คัดลอกรายละเอียด'; },1500); }
+    };
+    onReady(function(){ if(el('la-bootload')) return;
       var ov=document.createElement('div'); ov.id='la-bootload';
       ov.style.cssText='position:fixed;inset:0;z-index:100050;background:rgba(14,34,53,.93);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;font:15px/1.5 "DM Sans",sans-serif;text-align:center;padding:20px';
-      ov.innerHTML='<div style="font-size:34px">⏳</div><div><b>กำลังโหลดข้อมูลจากเซิร์ฟเวอร์…</b><br><span id="la-bootload-st" style="opacity:.75;font-size:13px">เครือข่ายช้าหรือหลุด · กำลังลองใหม่อัตโนมัติ</span></div>';
+      ov.innerHTML='<div style="font-size:34px">&#8987;</div>'
+        +'<div><b>กำลังโหลดข้อมูลจากเซิร์ฟเวอร์…</b><br>'
+        +'<span id="la-bootload-st" style="opacity:.8;font-size:13px">กำลังเริ่ม…</span></div>'
+        +'<button id="la-bootcopy" onclick="_laBootCopy()" style="margin-top:6px;background:rgba(255,255,255,.14);'
+        +'color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:9px;padding:5px 13px;font:600 12px inherit;cursor:pointer">'
+        +'คัดลอกรายละเอียด</button>';
       document.body.appendChild(ov); });
-    var tries=0;
     (function go(){ tries++;
-      function fail(why){ var s=document.getElementById('la-bootload-st'); if(s) s.textContent='ครั้งที่ '+tries+' ไม่สำเร็จ ('+why+') · ลองใหม่ใน 4 วิ'; setTimeout(go,4000); }
+      var t1=Date.now(), got=0, total=0, tick=null;
+      function stop(){ try{ clearInterval(tick); }catch(e){} }
+      function fail(why){
+        stop();
+        var secs=((Date.now()-t1)/1000).toFixed(0);
+        log.push('ครั้งที่ '+tries+' ล้ม: '+why+' · ได้ '+MB(got)+' MB ใน '+secs+' วิ');
+        try{ console.warn('[boot] load try '+tries+' failed: '+why+' after '+secs+'s, got '+got+' bytes'); }catch(e){}
+        say('<b>ครั้งที่ '+tries+' ไม่สำเร็จ</b> · '+why
+          +'<br>ได้ข้อมูลมา '+MB(got)+' MB ใน '+secs+' วินาที · รวมแล้ว '+((Date.now()-T0)/1000).toFixed(0)+' วิ'
+          +'<br>ลองใหม่ใน 4 วิ…');
+        setTimeout(go,4000);
+      }
       var x=new XMLHttpRequest(); x.open('GET',bust('/api/load'),true);
+      x.timeout=90000;                                    /* ค้างเกินนาทีครึ่ง = ตัดแล้วลองใหม่ ดีกว่าค้างตลอดกาล */
+      x.ontimeout=function(){ fail('หมดเวลา 90 วินาที'); };
+      if(x.onprogress!==undefined){
+        x.onprogress=function(e){ got=e.loaded||0; total=e.total||0; };
+      }
+      /* เดินนาฬิกาเองทุกครึ่งวิ · จะได้เห็นว่ากำลังไหลอยู่จริงหรือหยุดนิ่ง */
+      tick=setInterval(function(){
+        var secs=(Date.now()-t1)/1000;
+        var sp=secs>0?(got/1048576/secs):0;
+        say('ครั้งที่ '+tries+' · ได้ '+MB(got)+(total?(' / '+MB(total)):'')+' MB'
+          +' · '+secs.toFixed(0)+' วินาที'+(sp>0.01?(' · '+sp.toFixed(1)+' MB/วิ'):'')
+          +(got===0&&secs>8?'<br><span style="color:#FFC9C3">ยังไม่มีข้อมูลเข้ามาเลย — เซิร์ฟเวอร์ยังไม่ตอบ</span>':''));
+      },500);
       x.onload=function(){ try{
-        if(x.status!==200){ fail('status '+x.status); return; }
+        stop();
+        var secs=((Date.now()-t1)/1000).toFixed(1);
+        if(x.status!==200){ fail('เซิร์ฟเวอร์ตอบ '+x.status); return; }
         var j=JSON.parse(x.responseText);
-        if(typeof j.data!=='string' || j.data.length<2){ fail('empty'); return; }
+        if(typeof j.data!=='string' || j.data.length<2){ fail('ข้อมูลว่าง'); return; }
         VER=j.version||0; LASTBY=j.updated_by?(j.updated_by+' · '+fmt(j.updated_at)):''; _laStamp(j);
         try{ BASE=JSON.parse(j.data); }catch(e){ BASE={}; }
         _orig(LS, j.data); _laMark(VER);
         _syncReady=true; _dirty=false; try{ clearTimeout(_t); }catch(e){}   // §syncGate · ข้อมูลจริงถึงแล้วค่อยเปิดเซฟ · ทิ้งงานค้างที่เกิดตอน state ยังว่าง
-        var el=document.getElementById('la-bootload'); if(el) el.remove();
+        var ov=el('la-bootload'); if(ov) ov.remove();
         // app already initialized (rendered empty) → re-apply in place; not yet → it reads the fresh blob itself
         if(window._laReloadData){ if(window._laReloadData()){ if(window._laRerender) window._laRerender(); } else { _laReload(); return; } }
-        try{ console.log('[boot] async /api/load ok on try '+tries+' ('+j.data.length+' bytes)'); }catch(e){}
+        try{ console.log('[boot] async /api/load ok on try '+tries+' ('+j.data.length+' bytes in '+secs+'s)'); }catch(e){}
       }catch(e){ fail(String(e&&e.message||e)); } };
-      x.onerror=function(){ fail('network'); };
-      try{ x.send(); }catch(e){ fail('send'); }
+      x.onerror=function(){ fail('เชื่อมต่อไม่ได้'); };
+      try{ x.send(); }catch(e){ fail('ส่งคำขอไม่ได้'); }
     })();
   }
   if(ld.status!==200 || !ld.json){ _laAsyncLoad(ld.status); }
@@ -187,7 +241,31 @@
   function seedFull(loc){ var cur; try{cur=JSON.parse(loc);}catch(e){return;} var x=new XMLHttpRequest(); x.open('POST','/api/save',true); x.setRequestHeader('Content-Type','application/json'); x.onload=function(){ if(x.status===200){ try{VER=JSON.parse(x.responseText).version;}catch(e){} BASE=cur; _laMark(VER); } }; try{ x.send(JSON.stringify({baseVersion:0,full:loc})); }catch(e){} }
   var _laSaveErrShown=false;
   function _laSaveErr(msg,color){ _laSaveErrShown=true; onReady(function(){ var d=document.getElementById('la-saveerr'); if(!d){ d=document.createElement('div'); d.id='la-saveerr'; d.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:100001;color:#fff;border-radius:22px;padding:9px 18px;font:13px/1.35 "DM Sans",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.3);max-width:82vw;text-align:center'; document.body.appendChild(d);} d.style.background=color||'#A32D2D'; d.innerHTML='⚠ '+msg; }); }
-  function _laSaveErrClear(){ if(!_laSaveErrShown) return; _laSaveErrShown=false; var d=document.getElementById('la-saveerr'); if(d) d.remove(); }
+  function _laSaveErrClear(){ if(!_laSaveErrShown) return; _laSaveErrShown=false; var d=document.getElementById('la-saveerr'); if(d) d.remove(); _laRetryN=0; }
+  /* §pkTk7 · ลองเซฟใหม่แบบถอยเวลา แล้วหยุดเมื่อถึงเวลา
+     ของเดิมลองทุก 5 วินาทีไม่มีที่สิ้นสุด · เซิร์ฟเวอร์ที่ล่มจริงจะโดนยิงทั้งวัน
+     และข้อความไม่บอกรหัสสถานะ คนใช้เห็นแถบค้างโดยไม่รู้สาเหตุ ตามต่อไม่ได้
+     ตอนนี้: 5 · 10 · 20 · 40 · 60 · 60 วินาที แล้วหยุด พร้อมปุ่มลองเองและบอกรหัส */
+  var _laRetryN=0, _laRetryT=null;
+  function _laRetryNow(){ try{ clearTimeout(_laRetryT); }catch(e){}
+    var nv=localStorage.getItem(LS); if(nv) save(nv); }
+  window.laRetrySaveNow=function(){ _laRetryN=0; _laRetryNow(); };
+  function _laRetry(why){
+    _laRetryN++;
+    if(_laRetryN>6){
+      _laSaveErr('บันทึกขึ้นระบบไม่สำเร็จ · '+why+' — ลองแล้ว '+(_laRetryN-1)+' ครั้ง '
+        +'<b>ข้อมูลยังอยู่ในเครื่องครบ</b> อย่าเพิ่งปิดหน้า'
+        +'<br><button onclick="laRetrySaveNow()" style="margin-top:7px;background:#fff;color:#7A4A00;'
+        +'border:0;border-radius:9px;padding:5px 13px;font-weight:700;cursor:pointer;font-family:inherit">'
+        +'ลองบันทึกอีกครั้ง</button>','#7A4A00');
+      return;
+    }
+    var wait=[5000,10000,20000,40000,60000,60000][_laRetryN-1]||60000;
+    _laSaveErr('กำลังลองบันทึกขึ้นระบบใหม่ ('+_laRetryN+'/6) · '+why
+      +' — ข้อมูลยังอยู่ในเครื่อง อย่าเพิ่งปิดหน้า','#7A4A00');
+    try{ clearTimeout(_laRetryT); }catch(e){}
+    _laRetryT=setTimeout(_laRetryNow, wait);
+  }
   // save-safety guard (feat/validation-deprecate-blob): the server refused a save that would delete/shrink
   // existing data (stale whole-blob overwrite). Show a persistent blocking banner + Reload; do NOT retry,
   // do NOT advance BASE — the correct data is on the server, reloading discards the bad local overwrite.
@@ -218,8 +296,8 @@
       else if(x.status===403){ _laSaveErr('บันทึกขึ้นระบบไม่ได้ · บัญชีนี้ไม่มีสิทธิ์แก้ไข (การเปลี่ยนแปลงยังไม่ถูกบันทึก) — กรุณา login ใหม่ หรือติดต่อ admin'); }   // will never succeed → stop retrying, tell the user
       else if(x.status===401){ _laSaveErr('เซสชันหมดอายุ · ข้อมูลยังอยู่ในเครื่อง — กรุณาเข้าสู่ระบบใหม่ แล้วระบบจะเซฟให้อัตโนมัติ','#7A4A00'); }
       else if(x.status===409){ var _r9={}; try{_r9=JSON.parse(x.responseText);}catch(e){} _laShrinkBlocked(_r9&&_r9.detail); }   // save-safety: server refused a wipe/shrink of existing data — do NOT retry, keep local, tell user to reload
-      else { _laSaveErr('กำลังลองบันทึกขึ้นระบบใหม่… (ข้อมูลยังอยู่ในเครื่อง อย่าเพิ่งปิดหน้า)','#7A4A00'); setTimeout(function(){ var nv=localStorage.getItem(LS); if(nv) save(nv); }, 5000); } };   // transient (5xx/0) → retry + warn
-    x.onerror=function(){ _laSaveErr('เชื่อมต่อระบบไม่ได้ · กำลังลองเซฟใหม่… (ข้อมูลยังอยู่ในเครื่อง อย่าเพิ่งปิดหน้า)','#7A4A00'); setTimeout(function(){ var nv=localStorage.getItem(LS); if(nv) save(nv); }, 5000); };
+      else { _laRetry('เซิร์ฟเวอร์ตอบ '+x.status+(x.status===0?' (เชื่อมต่อไม่ได้)':'')); } };   // transient (5xx/0) → retry + warn
+    x.onerror=function(){ _laRetry('เชื่อมต่อระบบไม่ได้'); };
     try{ x.send(JSON.stringify(ops ? {baseVersion:VER, ops:ops} : {baseVersion:VER, diff:{sets:d.sets,cols:d.cols,objs:d.objs}})); }catch(e){} }
   // FLUSH pending change before the page unloads (refresh/close) so a fast refresh never loses the last edit
   function _laFlush(){ if(!_dirty) return; try{ var cur=JSON.parse(localStorage.getItem(LS)||'{}');
@@ -406,7 +484,9 @@
   // ── Per-user area access (role-based nav gating) ──
   var LA_AREAS=[{k:'overview',t:'ภาพรวม · Dashboard/Calendar'},{k:'operations',t:'ปฏิบัติการ · Booking/Boat Op/รถ'},{k:'sales',t:'ขาย · Agents/Rate/Demand'},{k:'accounting',t:'บัญชี · Accounting/PFM'},{k:'fleet',t:'เรือ/ช่าง · Fleet/Maintenance'},{k:'pier',t:'ท่าเรือ · Office ท่าเรือ'},{k:'config',t:'ตั้งค่า · Programs/Team'}];
   var LA_PRESETS={Sales:['overview','sales'],Operations:['overview','operations'],Fleet:['fleet'],Accounting:['overview','accounting'],Pier:['pier']};
-  var LA_VIEW_AREA={'sales-board':'sales','b2b-dash':'sales','contract-tmpl':'sales',dashboard:'overview',calendar:'overview',daily:'overview',booking:'operations',operation:'operations',vehicles:'operations',vanjobs:'operations',vancheckin:'operations',piercheckin:'operations',travelsum:'operations',dailyreport:'operations','pickup-setup':'operations',boatassign:'operations',agents:'sales','rate-types':'sales',b2c:'sales',staff:'sales',marketdata:'sales',pickupmap:'sales',accounting:'accounting',costing:'accounting',trippl:'accounting',dailypfm:'accounting',prpo:'accounting','fl-dashboard':'fleet','fl-boatstatus':'fleet','fl-dailyreport':'fleet','fl-incident':'fleet','fl-projects':'fleet','fl-maintenance':'fleet','fl-inventory':'fleet','fl-consumables':'fleet','fl-cost':'fleet','fl-insights':'fleet','fl-fuel':'fleet','fl-asset':'fleet','po-panwa':'pier','po-tublamu':'pier','po-ranong':'pier','poj-panwa':'pier','poj-tublamu':'pier','poj-ranong':'pier','pol-panwa':'pier','pol-tublamu':'pier','pol-ranong':'pier','poa-panwa':'pier','poa-tublamu':'pier','poa-ranong':'pier','pop-panwa':'pier','pop-tublamu':'pier','pop-ranong':'pier','pok-panwa':'pier','pok-tublamu':'pier','pok-ranong':'pier',settings:'config',teammkt:'config',addonsvc:'config'};
+  var LA_VIEW_AREA={'sales-board':'sales','b2b-dash':'sales','contract-tmpl':'sales',dashboard:'overview',calendar:'overview',daily:'overview',booking:'operations',operation:'operations',vehicles:'operations',vanjobs:'operations',vancheckin:'operations',piercheckin:'operations',travelsum:'operations',dailyreport:'operations','pickup-setup':'operations',boatassign:'operations',agents:'sales','rate-types':'sales',b2c:'sales',staff:'sales',marketdata:'sales',pickupmap:'sales',accounting:'accounting',costing:'accounting',trippl:'accounting',dailypfm:'accounting',prpo:'accounting','fl-dashboard':'fleet','fl-boatstatus':'fleet','fl-dailyreport':'fleet','fl-incident':'fleet','fl-projects':'fleet','fl-maintenance':'fleet','fl-inventory':'fleet','fl-consumables':'fleet','fl-cost':'fleet','fl-insights':'fleet','fl-fuel':'fleet','fl-asset':'fleet','po-panwa':'pier','po-tublamu':'pier','po-ranong':'pier','poj-panwa':'pier','poj-tublamu':'pier','poj-ranong':'pier','pol-panwa':'pier','pol-tublamu':'pier','pol-ranong':'pier','poa-panwa':'pier','poa-tublamu':'pier','poa-ranong':'pier','pop-panwa':'pier','pop-tublamu':'pier','pop-ranong':'pier','pok-panwa':'pier','pok-tublamu':'pier','pok-ranong':'pier',
+    'rep-ops':'operations','rep-fleet':'fleet',
+    settings:'config',teammkt:'config',addonsvc:'config'};
   // Per-MENU registry (finer than the 6 groups) · {v:view, t:label, a:area}
   var LA_NAV=[
     {v:'dashboard',t:'Dashboard',a:'overview'},{v:'calendar',t:'Calendar',a:'overview'},{v:'daily',t:'Daily Availability',a:'overview'},
@@ -420,11 +500,26 @@
     {v:'poj-panwa',t:'Phuket · ใบงานเรือ',a:'pier'},{v:'po-panwa',t:'Phuket · เบิก-คืนอุปกรณ์',a:'pier'},{v:'poa-panwa',t:'Phuket · ตารางการทำงาน',a:'pier'},{v:'pol-panwa',t:'Phuket · ใบอนุญาต',a:'pier'},{v:'pop-panwa',t:'Phuket · เงินสดย่อย',a:'pier'},{v:'pok-panwa',t:'Phuket · ตั๋วอุทยาน',a:'pier'},
     {v:'poj-tublamu',t:'Tub Lamu · ใบงานเรือ',a:'pier'},{v:'po-tublamu',t:'Tub Lamu · เบิก-คืนอุปกรณ์',a:'pier'},{v:'poa-tublamu',t:'Tub Lamu · ตารางการทำงาน',a:'pier'},{v:'pol-tublamu',t:'Tub Lamu · ใบอนุญาต',a:'pier'},{v:'pop-tublamu',t:'Tub Lamu · เงินสดย่อย',a:'pier'},{v:'pok-tublamu',t:'Tub Lamu · ตั๋วอุทยาน',a:'pier'},
     {v:'poj-ranong',t:'Ranong · ใบงานเรือ',a:'pier'},{v:'po-ranong',t:'Ranong · เบิก-คืนอุปกรณ์',a:'pier'},{v:'poa-ranong',t:'Ranong · ตารางการทำงาน',a:'pier'},{v:'pol-ranong',t:'Ranong · ใบอนุญาต',a:'pier'},{v:'pop-ranong',t:'Ranong · เงินสดย่อย',a:'pier'},{v:'pok-ranong',t:'Ranong · ตั๋วอุทยาน',a:'pier'},
+    {v:'rep-ops',t:'รายงานปฏิบัติการ',a:'operations'},{v:'rep-fleet',t:'รายงานฝ่ายเรือ',a:'fleet'},
     {v:'settings',t:'Programs',a:'config'},{v:'teammkt',t:'Team & Markets',a:'config'},{v:'addonsvc',t:'Add-on Services',a:'config'}
   ];
+  /* §permExplicit · หมุดบอกว่า "รายการนี้ admin ระบุมาครบแล้ว"
+     ตัวยกสิทธิ์ทั้งหมดข้างล่างมีไว้กู้ข้อมูลเก่าที่เก็บเป็นชื่อกลุ่ม
+     ถ้ายังวิ่งกับรายการที่ admin เพิ่งติ๊กมาเอง จะกลายเป็นเติมสิทธิ์ที่เขาตั้งใจตัดออก
+     หมุดนี้ถูกเติมตอนบันทึกจากหน้าจัดการผู้ใช้เท่านั้น · ข้อมูลเก่าไม่มีหมุด = เหมือนเดิม */
+  var LA_PERM_EXPLICIT='*explicit';
+  function laPermIsExplicit(perms){ return Array.isArray(perms) && perms.indexOf(LA_PERM_EXPLICIT)>=0; }
+  /* ปิดหมุดเข้ารายการที่จะบันทึก · ตัดของเดิมออกก่อนกันซ้ำ */
+  function laPermSeal(list){
+    var out=(list||[]).filter(function(v){ return v!==LA_PERM_EXPLICIT; });
+    out.push(LA_PERM_EXPLICIT); return out;
+  }
+  window.laPermSeal=laPermSeal;
   // Expand a stored perms array → Set of allowed view keys. Group keys (the 6 areas) expand to every menu in that group (back-compat with old data). View keys pass through.
   function laExpandPerms(perms){ if(!Array.isArray(perms)) return null; var set={}, areaKeys=LA_AREAS.map(function(a){return a.k;});
     perms.forEach(function(p){ if(areaKeys.indexOf(p)>=0){ LA_NAV.forEach(function(n){ if(n.a===p) set[n.v]=1; }); } else set[p]=1; });
+    /* ระบุมาครบแล้ว = ใช้ตามนั้นตรง ๆ ไม่ต้องยกสิทธิ์เพิ่มให้อีก */
+    if(set[LA_PERM_EXPLICIT]) return set;
     laBackfillPier(set);
     if(!set['contract-tmpl'] && (set['rate-types']||set['agents'])) set['contract-tmpl']=1;   // §contract-tmpl เพิ่มใหม่ 2026-07-14 · back-fill สิทธิ์ให้คนที่ถือ rate-types/agents อยู่แล้ว (perms แบบ view-list เก่าไม่มี key นี้ → เข้าหน้าไม่ได้)
     if(!set['b2b-dash'] && (set['sales-board']||set['marketdata'])) set['b2b-dash']=1;   // §b2b-dash
@@ -453,6 +548,10 @@
     return set;
   }
   function laPermViewList(perms){ var set=laExpandPerms(perms); if(!set) return LA_NAV.map(function(n){return n.v;}); return LA_NAV.filter(function(n){return set[n.v];}).map(function(n){return n.v;}); }
+  /* §permExplicit · อ่านอย่างเดียว · ไว้ตอบคำถาม "ทำไมคนนี้เห็นหน้านี้"
+     laPermViewList(perms) = รายชื่อหน้าที่เปิดได้จริงจากค่าที่เก็บไว้ */
+  window.laPermViewList=laPermViewList;
+  window.laPermExpand=laExpandPerms;
   // §adminTools · ป้าย data-adminonly = admin เท่านั้น · ไม่เกี่ยวกับสิทธิ์เมนู
   //   laApplyPerms() ซ่อนให้เฉพาะคนที่ถูกจำกัดเมนู · ตัวนี้ยึด role อย่างเดียว
   //   ME ว่าง (เปิดไฟล์ export ตรง ๆ ไม่มีระบบ login) → ไม่ซ่อน เหมือนพฤติกรรมเดิม
@@ -903,6 +1002,9 @@
     else { LAU.err=''; LAU.rows=(r.json.users||[]).map(function(u){
       return {id:u.id,username:u.username,name:u.name||'',role:u.role||'staff',
               dept:laDeptOf(u),salesId:u.salesId||'',
+              /* §permExplicit · raw = ค่าที่เก็บไว้จริง ๆ · perms = ที่คลี่เป็นรายเมนูแล้ว
+                 หมุด '*explicit' ไม่ใช่ชื่อเมนู จึงหายไปตอนคลี่ ต้องเก็บต้นฉบับไว้ดูเอง */
+              raw:(Array.isArray(u.perms)?u.perms.slice():null),
               perms:lauPerms(u),edit:lauEditOf(u)}; }); }
     __laRender();
   };
@@ -1083,7 +1185,7 @@
       var u=(LAU.rows||[]).filter(function(x){return String(x.id)===String(id);})[0]; if(!u) return;
       var D=LAU.dirty[id];
       var r=sx('POST','/api/users/perms',JSON.stringify({id:u.id,role:u.role,dept:u.dept,
-        perms:D.perms,editAreas:D.edit,salesId:u.salesId}),'application/json');
+        perms:laPermSeal(D.perms),editAreas:D.edit,salesId:u.salesId}),'application/json');
       if(r.status===200) ok++; else bad.push(u.username);
     });
     LAU.dirty={};
@@ -1215,6 +1317,14 @@
         +'<div style="font-size:11.5px;color:#94A3B8;line-height:1.75;margin:-2px 0 11px">'
           +'ปุ่ม <b style="color:#185FA5">ดู</b> / <b style="color:#0F6E56">แก้ไข</b> = ทำอะไรได้ &nbsp;·&nbsp; '
           +'ตัวเลข <b style="color:#8A5A00">n/N</b> = เข้าได้กี่หน้าจากทั้งหมด (กด “เมนู” เพื่อเลือกทีละหน้า)</div>'
+        /* §permExplicit · บัญชีเก่าที่เก็บสิทธิ์เป็นชื่อกลุ่ม จะถูกกางเป็นรายหน้าให้ดู
+           ต้องบอกไว้ ไม่งั้น admin เห็น "ท่าเรือ 18/18" แล้วนึกว่าตัวเองเคยติ๊กไว้เอง */
+        +(laPermIsExplicit(u.raw)?'':'<div style="background:#FDF8F0;border:1px solid #F0E1C2;'
+          +'border-radius:11px;padding:9px 12px;font-size:11.5px;color:#8A5A00;line-height:1.7;'
+          +'margin:-2px 0 11px">บัญชีนี้ยังเก็บสิทธิ์แบบเก่า (เป็นชื่อกลุ่ม) · '
+          +'ตัวเลขที่เห็นคือหน้าที่เขาเข้าได้จริงตอนนี้ ซึ่งระบบกางออกมาให้<br>'
+          +'<b>กดบันทึกครั้งนี้แล้วจะกลายเป็นรายหน้าตามที่ติ๊กไว้ทันที</b> — ติ๊กออกแล้วจะติ๊กออกจริง '
+          +'ไม่ถูกเติมกลับอีก</div>')
         +'<div id="la-pset">'+lauPsetHTML('p')+'</div>'
         +'<div id="la-pbody"></div>'
       +'</div>'
@@ -1244,6 +1354,7 @@
     if(role==='admin'){ perms=LA_NAV.map(function(n){return n.v;}); editAreas=LA_AREAS.map(function(a){return a.k;}); }
     else { perms=LAU.draft.perms.slice(); editAreas=LAU.draft.edit.slice(); }
     if(role!=='admin' && !perms.length && !confirm('ยังไม่ได้เลือกสิทธิ์เลย · ผู้ใช้คนนี้จะล็อกอินได้แต่เปิดหน้าไหนไม่ได้ ยืนยันไหม')) return;
+    perms=laPermSeal(perms);   /* §permExplicit · ติ๊กมาเท่าไรได้เท่านั้น ไม่ให้ตัวยกสิทธิ์เก่าเติมกลับ */
     var r=sx('POST','/api/users/perms',JSON.stringify({id:id,role:role,dept:dept,perms:perms,
       editAreas:editAreas,salesId:salesId}),'application/json');
     if(r.status!==200){ lauToast((r.json&&r.json.error)||'บันทึกไม่สำเร็จ',1); return; }
@@ -1303,7 +1414,8 @@
     var perms,editAreas;
     if(D.role==='admin'){ perms=LA_NAV.map(function(x){return x.v;}); editAreas=LA_AREAS.map(function(a){return a.k;}); }
     else { perms=D.perms.slice(); editAreas=D.edit.slice();
-      if(!perms.length && !confirm('ยังไม่ได้เลือกสิทธิ์เลย · บัญชีนี้จะล็อกอินได้แต่เปิดหน้าไหนไม่ได้ ยืนยันไหม')) return; }
+      if(!perms.length && !confirm('ยังไม่ได้เลือกสิทธิ์เลย · บัญชีนี้จะล็อกอินได้แต่เปิดหน้าไหนไม่ได้ ยืนยันไหม')) return;
+      perms=laPermSeal(perms); }   /* §permExplicit · บัญชีใหม่ระบุครบตั้งแต่ต้น */
     var r=sx('POST','/api/users',JSON.stringify({username:u,name:n,password:p,role:D.role||'staff',
       dept:D.dept,perms:perms,editAreas:editAreas,salesId:D.salesId||''}),'application/json');
     if(r.status!==200){ lauToast((r.json&&r.json.error)||'เพิ่มผู้ใช้ไม่สำเร็จ',1); return; }

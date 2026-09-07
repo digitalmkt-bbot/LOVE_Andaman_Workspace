@@ -635,6 +635,8 @@ function nav(el){
     else if(view==='vanjobs') renderVanJobs();
     else if(view==='vancheckin') renderVanCheckin();
     else if(view==='piercheckin') renderPierCheckin();
+    else if(view==='rep-ops') renderReport('ops');       /* §report */
+    else if(view==='rep-fleet') renderReport('fleet');
     else if(view.indexOf('poa-')===0){ try{ if(el.dataset.pogrp) poNavGroupOpen(el.dataset.pogrp); }catch(_){} renderPierAtt(view.slice(4)); }
     else if(view.indexOf('pol-')===0){ try{ if(el.dataset.pogrp) poNavGroupOpen(el.dataset.pogrp); }catch(_){} renderPierLic(view.slice(4)); }
     else if(view.indexOf('poj-')===0){ try{ if(el.dataset.pogrp) poNavGroupOpen(el.dataset.pogrp); }catch(_){} renderPierJob(view.slice(4)); }
@@ -755,7 +757,9 @@ function _dashSeatCalHtml(dx,F){
       +'<span><i style="background:#FBE1C6"></i>ขายได้น้อย</span>'
       +'<span><i style="background:#FBE9E9"></i>ว่างเยอะ</span>'
     +'</div>'
-    +'<div class="dv-calg">'+wk+cells+'</div>'
+    /* §mobCal · กล่องเลื่อนของตารางวันโดยเฉพาะ · หัวเดือนกับปุ่มกรองอยู่กับที่
+       บนจอกว้างกล่องนี้ไม่ทำอะไรเลย (ตารางพอดีอยู่แล้ว) */
+    +'<div class="dv-calsc"><div class="dv-calg">'+wk+cells+'</div></div>'
     +'<div class="dv-calft">'
       +'<span class="t">วันนี้'+(t.has?' &middot; <span style="color:#1B6AA6;background:#E4EFFA;border-radius:5px;padding:1px 7px;font-family:\'DM Mono\',ui-monospace,monospace">'+t.booked+' pax</span>':'')+'</span>'
       +'<span class="r"><b>'+t.free+'</b> / '+t.cap+' ที่นั่งว่าง</span>'
@@ -868,13 +872,19 @@ function _dvInk(hex){
 }
 function _dashLiveB2BHtml(dx,F){ return _dashLiveFeedHtml(dx,F,'b2b'); }
 function _dashLiveB2CHtml(dx,F){ return _dashLiveFeedHtml(dx,F,'b2c'); }
+/* §b2cOne · "ใบนี้ขายเองหรือมาจากเอเยนต์" ต้องมีคำตอบเดียวทั้งระบบ
+   เดิมกฎนี้เขียนซ่อนอยู่ใน _dashLiveFeedHtml ที่เดียว · พอหน้ารายงานต้องใช้
+   แล้วเขียนใหม่เอง ตัวเลขสองหน้าจะเริ่มไม่ตรงกันโดยไม่มีใครรู้
+   ยกออกมาไว้ตรงนี้ · ใครจะแยก B2B/B2C ต้องเรียกตัวนี้เท่านั้น */
+function laIsB2C(b){
+  if(!b) return false;
+  if(String(b.id||'').indexOf('b2c_')===0) return true;
+  if(!b.agentId) return true;
+  return !((typeof sbGetAgent==='function') && sbGetAgent(b.agentId));
+}
 function _dashLiveFeedHtml(dx,F,side){
   var BK=(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]); var CXL=['cancelled','rejected','cancelled_weather'];
-  var _isB2C=function(b){
-    if(String(b.id||'').indexOf('b2c_')===0) return true;
-    if(!b.agentId) return true;
-    return !((typeof sbGetAgent==='function') && sbGetAgent(b.agentId));
-  };
+  var _isB2C=laIsB2C;
   var arr=BK.filter(function(b){
     if(!(b.schemaVer===2 && b.status!=='rejected')) return false;
     if(side==='b2b') return !_isB2C(b);
@@ -1003,8 +1013,15 @@ const DV_CSS=`<style>
     background:rgba(255,255,255,.10);border-radius:9px;display:flex;align-items:center;
     justify-content:center;color:#C9D6EC;font-size:14px;cursor:pointer;font-family:inherit;line-height:1}
   .dv-arw:hover{background:rgba(255,255,255,.20)}
+  /* §dashNav · ปุ่ม ‹ › ต้องอยู่กับที่ตลอด · คนกดรัว ๆ เพื่อไล่ดูวัน
+     ถ้าปุ่มขยับตามความยาวข้อความ กดครั้งที่สองจะพลาดเป้า
+     วัดมาแล้ว: เลขวัน 17px (1 หลัก) ถึง 34px (2 หลัก) · ตรึงไว้ที่กว้างสุด */
   .dv-dnum{font-size:30px;font-weight:800;letter-spacing:-1px;line-height:1;color:#fff;
-    font-family:'DM Mono',ui-monospace,monospace}
+    font-family:'DM Mono',ui-monospace,monospace;
+    display:inline-block;min-width:34px;text-align:center}
+  /* ชื่อวัน/เดือน · MAY 59px ถึง SEPTEMBER 105px · Friday 49px ถึง Wednesday 90px
+     ตรึงที่ 108px ครอบคลุมทุกกรณี · จัดชิดซ้ายไว้เหมือนเดิม */
+  .dv-dgrp{display:inline-block;min-width:108px}
   .dv-dwk{display:block;font-size:14px;font-weight:800;line-height:1.05;color:#fff}
   .dv-dmo{position:relative;display:block;font-size:9px;font-weight:800;letter-spacing:.13em;
     color:#A8BAD8;text-transform:uppercase;cursor:pointer}
@@ -1110,6 +1127,15 @@ const DV_CSS=`<style>
   .dv-bdtd{position:absolute;top:-7px;left:50%;transform:translateX(-50%);font-size:7px;
     font-weight:800;letter-spacing:.08em;border-radius:999px;padding:1px 6px;white-space:nowrap;
     background:#15382B;color:#fff}
+  /* §dashTdy · ป้ายของ "วันที่เลือกอยู่" ต้องเบากว่าป้าย TODAY จะได้ไม่แย่งสายตา */
+  .dv-bdtd.sel{background:#9b9088}
+  /* ช่องริมสุด · ป้ายที่จัดกลางจะยื่นพ้นการ์ดแล้วโดน overflow:hidden ตัดครึ่ง
+     ดันเข้ามาชิดขอบในของช่องแทน */
+  .dv-bdcol:last-child .dv-bdtd{left:auto;right:0;transform:none}
+  .dv-bdcol:first-child .dv-bdtd{left:0;transform:none}
+  /* วันนี้ที่ไม่ใช่ช่องที่เลือก · แค่ตีกรอบไว้ ไม่ต้องเป็นแผ่นทึบแข่งกับช่องที่เลือก */
+  .dv-bdcol.tdy{box-shadow:inset 0 0 0 1px #DCEBE3}
+  .dv-bdcol.tdy .dv-bdv{color:#15382B}
   .dv-bdfoot{display:flex;align-items:stretch;margin-top:10px;padding-top:9px;
     border-top:1px solid #EFEBE5}
   .dv-bdfoot .s{flex:1;text-align:center;min-width:0}
@@ -1273,27 +1299,50 @@ const DV_CSS=`<style>
     .dv-col:nth-child(3)>*{flex:1 1 380px}
     .dv-lvlist{max-height:520px}
   }
-  /* §dashNarrow · phone / narrow window. 820px is the breakpoint the rest of the app already uses
-     for "small" (la-nav, laUbPlace), so the dashboard switches at the same width rather than
-     inventing a second one.
-     Two columns of ~200px is not a layout — the cards were shredded — so go to a single column and
-     stack the third group as well; the max-width:1500px rule above turns it into a wrap-row, which
-     at this width would put two half-width cards back side by side. */
+  /* ══ §mobDash · โทรศัพท์ ════════════════════════════════════════════════
+     หน้านี้ทำตอนจอใหญ่อย่างเดียว · บนมือถือแทบทุกอย่างพัง วัดมาแล้วดังนี้ */
   @media (max-width:820px){
-    .dv-grid{grid-template-columns:minmax(0,1fr)}
+    /* แบรนด์วางกลางแบบ absolute · จอแคบมันไปนั่งทับตัวเลขวันที่ อ่านไม่ออกทั้งคู่
+       และหางไข่ปลาจาก text-overflow ไปโผล่บนปุ่ม › จนดูเหมือนปุ่มเสีย
+       ที่ว่างตรงกลางไม่มีแล้ว · ซ่อนไปเลยดีกว่าให้ทับกัน (แบบเดียวกับ .pkh-brand) */
+    .dv-brand{display:none}
+    /* หัวการ์ด · แถวบนคือวันที่ แถวล่างคือตัวเลข · ไม่ปนกัน */
+    .dv-hd{padding:8px 92px 10px 10px;border-radius:16px}
+    .dv-hdtop{flex-wrap:wrap;gap:9px}
+    .dv-dnum{font-size:26px}
+    .dv-arw{width:38px;height:38px;font-size:16px}
+    .dv-today{min-height:36px}
+    /* ชิปตัวเลข · เต็มบรรทัดแล้วปัดดูแนวนอน · เรียงลงมา 5 แถวกินครึ่งจอ */
+    .dv-kpi{margin-left:0;width:100%;flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;
+      -webkit-overflow-scrolling:touch;padding-bottom:2px;margin-right:-92px}
+    .dv-kpi::-webkit-scrollbar{display:none}
+    .dv-chip{flex:none}
+    .dv-pop{left:8px;right:8px;width:auto;max-width:none}
+
+    /* คอลัมน์เดียว · ของเดิมกฎ 1500px ทำให้คอลัมน์ 3 เป็นแถวนอน ต้องรีเซ็ตด้วย */
+    .dv-grid{grid-template-columns:minmax(0,1fr);gap:10px}
     .dv-col:nth-child(3){flex-direction:column;flex-wrap:nowrap}
     .dv-col:nth-child(3)>*{flex:0 0 auto}
-    /* The KPI chips are margin-left:auto in a nowrap row, so as the header narrows they pile up in
-       a column against the right edge and collide with the absolutely-centred brand. Give them a
-       row of their own under the date: flex-basis:100% breaks the line, and the brand — decorative,
-       and the one thing they were overlapping — goes. Right padding drops from 96px because that
-       gap only exists to clear the floating ⋯ toggle, which sits over the first row. */
-    .dv-hd{padding:6px 48px 9px 8px}
-    .dv-hdtop{flex-wrap:wrap;gap:7px 10px}
-    .dv-brand{display:none}
-    .dv-kpi{flex-basis:100%;margin-left:0;justify-content:flex-start;gap:5px}
-    .dv-chip{font-size:10px;padding:3px 8px}
-    .dv-chip b{font-size:11.5px}
+    .dv-col>*:last-child{flex:0 0 auto}
+    .dv-lvlist{max-height:420px}
+    /* ══ ปฏิทินที่นั่ง ══════════════════════════════════════════════════
+       repeat(7,1fr) ไม่ช่วยอะไร เพราะ 1fr ไม่ยอมเล็กกว่า min-content
+       เซลล์มี "20 /103 free" กับ "83 pax" อยู่ข้างใน ขั้นต่ำจึงราว 75px
+       7 คอลัมน์ = ~530px ในการ์ด 376px → ล้นออกไป 180px แล้วโดนตัดหาย
+       (วัดได้ scrollWidth 557 · clientWidth 376 · overflow-x เป็น visible)
+       ให้การ์ดเป็นตัวเลื่อนเอง แบบเดียวกับปฏิทินหน้าอื่นที่ §mobile ทำไว้แล้ว
+       ไม่บีบเซลล์ให้เล็กลง เพราะตัวเลขในเซลล์คือของที่ต้องอ่านจริง */
+    .dv-calsc{overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;
+      margin:0 -2px;padding:0 2px}
+    .dv-calsc .dv-calg{min-width:500px}
+    .dv-cal .cal2-box,.dv-cal .dv-calgrid{overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .dv-plot{padding:14px 6px 6px}
+    /* ยอดเงิน/ชื่อเรือ · ของเดิมโดนบีบจนตัดเป็น "Vis..." กับ "฿4 ,"
+       พอเหลือคอลัมน์เดียวที่ว่างพอแล้ว ปลดการตัดทิ้งได้ */
+    .dv-pr2 .nm,.dv-avrow .dv-av .k{white-space:normal;overflow:visible;text-overflow:clip}
+    .dv-bd,.dv-c{padding-left:12px;padding-right:12px}
+    /* นิ้วต้องกดโดน */
+    .dv-bdseg b,.dv-ovseg button{min-height:34px;display:inline-flex;align-items:center}
   }
 </style>`;
 function renderDash(){
@@ -1482,11 +1531,14 @@ function renderDash(){
   // Active mode — 'day' (today · bar per route) | 'month' (30 days · stacked) | 'year' (12 months · stacked)
   const _bkMode = ['day','month','year'].includes(window._dashBkMode) ? window._dashBkMode : 'day';
   const _todayDS = _dsAt(0);
-  const bkBuckets=[];   // {dt, booked, capacity, routeBooked, isToday}
+  /* §dashTdy · isSel = ปลายช่วง คือ "วันที่เลือกอยู่" (ตัวที่ต้องติดป้ายตัวเลข)
+     isToday = วันนี้จริงตามนาฬิกา (ตัวที่ควรได้ป้าย TODAY เท่านั้น)
+     ของเดิมใช้ธงเดียวทำสองหน้าที่ · พอเลื่อนไปพรุ่งนี้ พรุ่งนี้เลยกลายเป็นวันนี้ */
+  const bkBuckets=[];   // {dt, booked, capacity, routeBooked, isSel, isToday}
   if(_bkMode==='day'){
-    const a=_bkDay(_todayDS); bkBuckets.push({...a, dt:new Date(_todayDS), isToday:true});
+    const a=_bkDay(_todayDS); bkBuckets.push({...a, dt:new Date(_todayDS), isSel:true, isToday:_todayDS===TODAY_STR});
   } else if(_bkMode==='month'){
-    for(let d=-29;d<=0;d++){ const a=_bkDay(_dsAt(d)); bkBuckets.push({...a, dt:new Date(a.ds), isToday:d===0}); }
+    for(let d=-29;d<=0;d++){ const a=_bkDay(_dsAt(d)); bkBuckets.push({...a, dt:new Date(a.ds), isSel:d===0, isToday:a.ds===TODAY_STR}); }
   } else { // year — last 12 calendar months (sum of days, per route)
     const anchor=new Date(_ds);
     for(let mOff=-11;mOff<=0;mOff++){
@@ -1500,7 +1552,8 @@ function renderDash(){
         const a=_bkDay(ds); booked+=a.booked; capacity+=a.capacity; charter+=a.charter; wx+=a.wx;
         Object.entries(a.routeBooked).forEach(([rid,v])=>routeBooked[rid]=(routeBooked[rid]||0)+v);
       }
-      bkBuckets.push({dt:md, booked, capacity, routeBooked, charter, wx, isToday:mOff===0});
+      bkBuckets.push({dt:md, booked, capacity, routeBooked, charter, wx, isSel:mOff===0,
+                      isToday:(y+'-'+String(mo+1).padStart(2,'0'))===TODAY_STR.slice(0,7)});
     }
   }
   // total pax per bucket = seat booked + charter
@@ -1629,6 +1682,12 @@ function renderDash(){
   const WD_EN_LONG=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
   const TH_MON=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  /* §dashTdy2 · ทั้งหน้าเดินตามวันที่ที่เลือก · คำเรียกจึงต้องเดินตามด้วย
+     "วันนี้" ใช้ได้เฉพาะตอนที่วันที่เลือกเป็นวันนี้จริง ๆ · ที่เหลือเขียนวันไปตรง ๆ
+     ตัวเลขถูกมาตลอด ผิดแค่คำเรียก ซึ่งอ่านแล้วเข้าใจผิดว่าเป็นของวันนี้ */
+  const _dsTdy=(_ds===TODAY_STR);
+  const _dsDay=(new Date(_ds).getDate()+' '+TH_MON[new Date(_ds).getMonth()]);
+  const _dsLbl=_dsTdy?'วันนี้':_dsDay;
   const fmtTodoDate=(ds)=>{const d=new Date(ds);return `${d.getDate()} ${TH_MON[d.getMonth()]}`;};
 
   // Boat Operating stats card (replaces To do list)
@@ -1661,13 +1720,13 @@ function renderDash(){
       <span class="sp"></span>
       <span class="dv-cnt ${operatingCount>0?'go':''}">${operatingCount} / ${availTotal} พร้อม</span></div>
     <div class="dv-avrow">
-      <div class="dv-av"><span class="v">${operatingCount}</span><span class="k">ออกวันนี้</span><span class="u">จาก ${availTotal} ลำ</span></div>
+      <div class="dv-av"><span class="v">${operatingCount}</span><span class="k">${_dsTdy?'ออกวันนี้':'ออก '+_dsDay}</span><span class="u">จาก ${availTotal} ลำ</span></div>
       <div class="dv-avs"></div>
       <div class="dv-av"><span class="v" style="color:#0C6B47">${fillPct}<span style="font-size:12px">%</span></span><span class="k">fill</span><span class="u">${totBooked}/${totAllot}</span></div>
       <div class="dv-avs"></div>
       <div class="dv-av"><span class="v" style="color:${totFree>0?'#B4560A':'#3a3a36'}">${totFree}</span><span class="k">ที่นั่งว่าง</span><span class="u">ทั้งวัน</span></div>
     </div>
-    ${pierRows?`<div class="dv-sec">ท่าเรือ</div>${pierRows}`:`<div class="dv-empty">ไม่มีเรือออกวันนี้</div>`}
+    ${pierRows?`<div class="dv-sec">ท่าเรือ</div>${pierRows}`:`<div class="dv-empty">ไม่มีเรือออก${_dsTdy?'วันนี้':_dsDay}</div>`}
     <!--§dashLeft:boatlist-->
   </div>`;
 
@@ -1688,7 +1747,7 @@ function renderDash(){
      (การ์ดบน + การ์ดนี้ + Today's headline) ยุบมาเป็นท้ายการ์ดเดิมแทน
      หัวเรือ/ท่า/ที่ว่าง ยังอยู่ครบ แค่ไม่ต้องมีกรอบของตัวเอง */
   const boatListSlot = opBoatRows
-    ? `<div class="dv-sec">เรือที่ออกวันนี้</div>`+opBoatRows
+    ? `<div class="dv-sec">${_dsTdy?'เรือที่ออกวันนี้':'เรือที่ออก '+_dsDay}</div>`+opBoatRows
       +(moreOps>0?`<div class="dv-more" onclick="nav(document.querySelector('[data-view=op]'))"><b>+${moreOps}</b> ลำที่เหลือ · เปิด Boat Operation &rsaquo;</div>`:'')
     : '';
 
@@ -1708,7 +1767,9 @@ function renderDash(){
     .replace('Surin Islands by Speedboat','Surin Spd')
     .replace('Early Krabi + Phang Nga','Krabi+PgNga')
     .replace('Whale Shark Phi Phi Maiton Sunset','Whale Shark');
-  const _bkLabel=(d)=> _bkMode==='year' ? TH_MON[d.dt.getMonth()] : (_bkMode==='month' ? String(d.dt.getDate()) : 'Today');
+  const _bkLabel=(d)=> _bkMode==='year' ? TH_MON[d.dt.getMonth()]
+      : (_bkMode==='month' ? String(d.dt.getDate())
+      : (d.ds===TODAY_STR ? 'Today' : (d.dt.getDate()+' '+TH_MON[d.dt.getMonth()])));
   // liquid-glass bar fill — diagonal light streak over the solid colour
   const _glassBar=(c)=>`linear-gradient(118deg,rgba(255,255,255,.34) 0%,rgba(255,255,255,.12) 20%,rgba(255,255,255,0) 44%,rgba(0,0,0,.10) 100%),${c}`;
   // today's per-route rows (for day mode + its stats)
@@ -1735,13 +1796,14 @@ function renderDash(){
         </div>
         <div style="text-align:center;margin-top:9px;font-size:10px;color:#6b675f;font-weight:700;line-height:1.25;word-break:break-word">${e.label}</div>
       </div>`;
-    }).join('') : `<div style="grid-column:1/-1;text-align:center;color:#9b9088;font-size:12px;padding:54px 0">ยังไม่มี booking วันนี้</div>`;
+    }).join('') : `<div style="grid-column:1/-1;text-align:center;color:#9b9088;font-size:12px;padding:54px 0">ยังไม่มี booking วันที่เลือก</div>`;
   } else {
     // MONTH (30 days) / YEAR (12 months) — stacked route bars + capacity outline
     plotCols='repeat('+bkBuckets.length+',1fr)';
     plotGap=_bkMode==='month'?'3px':'6px';
     plotHtml=bkBuckets.map((d,i)=>{
-      const isTdy=d.isToday;
+      const isTdy=d.isSel;          /* ปลายช่วง = วันที่กำลังดูอยู่ · ตัวที่ต้องอ่านตัวเลขได้ */
+      const isRealTdy=d.isToday;   /* วันนี้จริง · อาจไม่ใช่ตัวเดียวกัน */
       const tot=d.tot||0;
       const capH=(d.capacity/trendMax)*100;
       const totH=(tot/trendMax)*100;
@@ -1757,7 +1819,7 @@ function renderDash(){
       const barW=_bkMode==='month'?'86%':'70%';
       const barMax=_bkMode==='month'?'13px':'34px';
       const _wx=(d.wx||0)>0;
-      const showLbl=_bkMode==='year' || isTdy || _wx || (i%5===0);
+      const showLbl=_bkMode==='year' || isTdy || isRealTdy || _wx || (i%5===0);
       // weather-cancelled column → red tinted band + red ⛈ badge on top (clearly visible)
       const wxWrap=_wx?`background:#FCEBEB;box-shadow:inset 0 0 0 1px #F0CFCF;border-radius:7px;padding-top:16px`:'';
       const wxBadge=_wx?`<div title="${d.wx} เส้นทางถูกยกเลิกเพราะสภาพอากาศ" style="position:absolute;left:50%;transform:translateX(-50%);top:-1px;font-size:13px;line-height:1;text-shadow:0 0 6px rgba(232,74,63,.9);z-index:2">⛈</div>`:'';
@@ -1768,6 +1830,7 @@ function renderDash(){
             <div style="position:absolute;left:0;right:0;bottom:0;height:${noBoat?totH:capH}%;border:1.5px dashed ${noBoat?'#9DC7E6':(_wx?'#D98A84':(isTdy?'#8a857d':'#DAD5CC'))};border-radius:4px;pointer-events:none"></div>
             <div style="position:absolute;left:0;right:0;bottom:0;height:${totH}%;display:flex;flex-direction:column-reverse;border-radius:3px;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.34)">${segDivs}</div>
             ${isTdy?`<div style="position:absolute;left:50%;transform:translateX(-50%);top:-20px;background:#15382B;color:#fff;font-size:8.5px;font-weight:800;padding:2px 5px;border-radius:6px;font-family:'DM Mono',ui-monospace,monospace;white-space:nowrap">${tot}</div>`:''}
+            ${(isRealTdy&&!isTdy)?`<div title="วันนี้" style="position:absolute;left:50%;transform:translateX(-50%);top:-18px;width:5px;height:5px;border-radius:50%;background:#15382B"></div>`:''}
           </div>
         </div>
         <div style="text-align:center;margin-top:7px;font-family:'DM Mono',ui-monospace,monospace;font-size:${_bkMode==='month'?'8px':'9.5px'};color:${_wx?'#A32D2D':(isTdy?'#15382B':'#a8a29a')};font-weight:${(isTdy||_wx)?'800':'600'};height:12px;white-space:nowrap">${showLbl?_bkLabel(d):''}</div>
@@ -1784,9 +1847,11 @@ function renderDash(){
   // ── period toggle (วัน / เดือน / ปี) ──
   const _bkSeg=(m,lbl)=>`<button class="${_bkMode===m?'on':''}" onclick="dashBkSetMode('${m}')">${lbl}</button>`;
   const bkToggle=`<span class="dv-ovseg">${_bkSeg('day','วัน')}${_bkSeg('month','เดือน')}${_bkSeg('year','ปี')}</span>`;
-  const bkTitle=_bkMode==='day'?'Bookings overview · วันนี้':_bkMode==='month'?'Bookings overview · 30 วัน':'Bookings overview · 12 เดือน';
-  const _periodLbl=_bkMode==='day'?'วันนี้':_bkMode==='month'?'30 วัน':'12 เดือน';
-  const bkSub=`รวม <b>${fmtN(totalBookedWeek)}</b> ที่นั่ง${totalCapWeek>0?' / <b>'+fmtN(totalCapWeek)+'</b> ความจุ · <b style="color:#0C6B47">'+fillWeekPct+'%</b> fill':''} · ${_periodLbl} · วันนี้ ${deltaSign?'+':''}${deltaSeats} เทียบเมื่อวาน`;
+  /* §dashTdy · โหมด "วัน" แสดงวันที่เลือกอยู่ · ใช้คำเรียกชุดเดียวกับทั้งหน้า */
+  const _dsIsTdy=_dsTdy, _dayLbl=_dsLbl;
+  const bkTitle=_bkMode==='day'?('Bookings overview · '+_dayLbl):_bkMode==='month'?'Bookings overview · 30 วัน':'Bookings overview · 12 เดือน';
+  const _periodLbl=_bkMode==='day'?_dayLbl:_bkMode==='month'?'30 วัน':'12 เดือน';
+  const bkSub=`รวม <b>${fmtN(totalBookedWeek)}</b> ที่นั่ง${totalCapWeek>0?' / <b>'+fmtN(totalCapWeek)+'</b> ความจุ · <b style="color:#0C6B47">'+fillWeekPct+'%</b> fill':''} · ${_periodLbl} · ${deltaSign?'+':''}${deltaSeats} เทียบเมื่อวาน`;
   // ── stats footer (mode-aware) ──
   const _fmtDt=(dt)=> _bkMode==='year' ? TH_MON[dt.getMonth()] : dt.getDate()+' '+TH_MON[dt.getMonth()];
   // liquid-glass surfaces (inner cards + plot) — gradient sheen + inset highlight + depth shadow
@@ -1794,7 +1859,7 @@ function renderDash(){
   let statsHtml;
   if(_bkMode==='day'){
     statsHtml =
-      _statCard('ที่นั่งวันนี้', fmtN(totalBookedWeek), '#3a3a36', 'seats booked')
+      _statCard(_dsTdy?'ที่นั่งวันนี้':('ที่นั่ง '+_dsDay), fmtN(totalBookedWeek), '#3a3a36', 'seats booked')
     + '<div class="dv-avs"></div>'
     + _statCard('fill', fillWeekPct+'%', '#0C6B47', totalBookedWeek+' / '+(totalCapWeek||'-'))
     + '<div class="dv-avs"></div>'
@@ -1878,17 +1943,24 @@ function renderDash(){
   const _dvPath=_dvCurve(_dvDays.map(d=>d.pax), _dvMax);
   const _dvWD=['SUN','MON','TUE','WED','THU','FRI','SAT'];
   const _dvSlim=_dvRange>7;
+  /* §dashTdy · แยก "ช่องสุดท้าย" ออกจาก "วันนี้" ให้ขาดกัน
+     ช่วงของกราฟจบที่วันที่เลือกอยู่ (ทั้งหน้า Dashboard เดินตามวันที่เลือก)
+     ของเดิมติดป้าย TODAY ให้ช่องสุดท้ายเสมอ · พอกดไปพรุ่งนี้ พรุ่งนี้ก็ขึ้น TODAY
+     ตอนนี้: แผ่นมิ้นต์ = วันที่เลือก · ป้าย TODAY = วันนี้จริงเท่านั้น
+     เลือกวันอื่นแล้ววันนี้ยังอยู่ในช่วง จะเห็นทั้งสองอันแยกกันชัด */
   const _dvCols=_dvDays.map((d,i)=>{
-    const now=(i===_dvDays.length-1);
+    const sel=(i===_dvDays.length-1);        // วันที่เลือกอยู่ · ปลายช่วงเสมอ
+    const tdy=(d.ds===TODAY_STR);            // วันนี้จริง ๆ ตามนาฬิกาเครื่อง
     const h=(d.pax/_dvMax*100);
-    const lbl=_dvSlim ? (now || i%5===0) : true;
-    return `<div class="dv-bdcol${now?' now':''}">`
-      +`<span class="dv-bdv">${_dvSlim&&!now?'':d.pax}</span>`
+    const lbl=_dvSlim ? (sel || tdy || i%5===0) : true;
+    return `<div class="dv-bdcol${sel?' now':''}${(tdy&&!sel)?' tdy':''}">`
+      +`<span class="dv-bdv">${_dvSlim&&!sel&&!tdy?'':d.pax}</span>`
       +`<span class="dv-bdbar"><i style="height:${h.toFixed(1)}%"></i></span>`
       +`<span class="dv-bddw">${lbl?_dvWD[d.dt.getDay()]:'&nbsp;'}</span>`
       +`<span class="dv-bddd">${lbl?d.dt.getDate():'&nbsp;'}</span>`
       +`<span class="dv-bdbk">${_dvSlim?'&nbsp;':(d.bk+' bk')}</span>`
-      +(now?'<span class="dv-bdtd">TODAY</span>':'')
+      +(tdy?'<span class="dv-bdtd">TODAY</span>'
+           :(sel?'<span class="dv-bdtd sel">เลือกอยู่</span>':''))
       +`</div>`;
   }).join('');
   const _dvSeg=(n,lbl)=>`<b class="${_dvRange===n?'on':''}" onclick="dashBkDaySetRange(${n})">${lbl}</b>`;
@@ -1905,7 +1977,7 @@ function renderDash(){
     </div>
     <div class="dv-bdfoot">
       <div class="s"><b>${_dvAvg}</b><i>เฉลี่ย ${_dvRange} วัน</i><u>pax / วัน</u></div><div class="sep"></div>
-      <div class="s"><b>${_dvTdy.pax}</b><i>วันนี้</i><u>${_dvTdy.bk} bk</u></div><div class="sep"></div>
+      <div class="s"><b>${_dvTdy.pax}</b><i>${_dsLbl}</i><u>${_dvTdy.bk} bk</u></div><div class="sep"></div>
       <div class="s"><b class="dim">${_dvPrevAvg}</b><i>${_dvRange} วันก่อนหน้า</i><u>vs prev</u></div>
     </div>
   </div>`;
@@ -1942,6 +2014,8 @@ function renderDash(){
    ตัวเลขบนแถบนี้เป็นคนละเรื่องกัน จึงเขียนป้ายให้ชัดว่าตัวไหนคืออะไร
    "ออกวันนี้" = ที่นั่งที่เดินทางวันนี้ · "จองเข้า" = ใบที่เปิดวันนี้ */
 function _dvHead(ds, dt, k){
+  /* §dashTdy2 · ฟังก์ชันนี้อยู่นอก renderDash · ใช้ตัวช่วยข้างในไม่ได้ ประกาศเอง */
+  const TH_MON_H=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
   const WD_L=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const MO_L=['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
   const isTdy = ds===TODAY_STR;
@@ -1962,19 +2036,19 @@ function _dvHead(ds, dt, k){
   return `<div class="dv-hd"><div class="dv-hdtop">
     <button class="dv-arw" onclick="dashDateShift(-1)" title="วันก่อนหน้า">&lsaquo;</button>
     <span class="dv-dnum">${dt.getDate()}</span>
-    <span><span class="dv-dwk">${WD_L[dt.getDay()]}</span>
+    <span class="dv-dgrp"><span class="dv-dwk">${WD_L[dt.getDay()]}</span>
       <span class="dv-dmo">${MO_L[dt.getMonth()]} ${dt.getFullYear()}
         <input type="date" value="${ds}" onchange="setDashDate(this.value)"></span></span>
-    ${isTdy?'':`<button class="dv-today" onclick="resetDashDate()">TODAY</button>`}
     <button class="dv-arw" onclick="dashDateShift(1)" title="วันถัดไป">&rsaquo;</button>
+    ${isTdy?'':`<button class="dv-today" onclick="resetDashDate()">TODAY</button>`}
     <span class="dv-brand">LOVE ANDAMAN</span>
     <span class="dv-kpi">
-      <span class="dv-chip">ออกวันนี้ <b>${k.pax}</b> pax</span>
+      <span class="dv-chip">${isTdy?'ออกวันนี้':'ออก '+dt.getDate()+' '+TH_MON_H[dt.getMonth()]} <b>${k.pax}</b> pax</span>
       <span class="dv-chip ok">fill <b>${k.fill}%</b></span>
       <span class="dv-chip">ว่าง <b>${k.free}</b></span>
       <span class="dv-chip">จองเข้า <b>${k.bk}</b> ใบ</span>
       ${todo>0?`<span class="dv-chip warn" onclick="dashTodoToggle()">&#9888; ต้องจัดการ <b>${todo}</b> &rsaquo;</span>`
-              :`<span class="dv-chip ok">&#10003; วันนี้เคลียร์</span>`}
+              :`<span class="dv-chip ok">&#10003; ${isTdy?'วันนี้เคลียร์':'เคลียร์แล้ว'}</span>`}
     </span>
     ${todo>0?pop:''}
   </div></div>`;

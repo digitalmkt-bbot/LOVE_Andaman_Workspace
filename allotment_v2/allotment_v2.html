@@ -376,6 +376,18 @@
       Company Asset
     </div>
     <div style="height:1px;background:rgba(255,255,255,.07);margin:8px 6px 2px"></div>
+    <div style="height:1px;background:rgba(255,255,255,.08);margin:8px 4px"></div>
+    <!-- §report · สรุปการดำเนินงานตามช่วงวัน · แยกสองชุดตามฝ่าย -->
+    <div class="nav-section" style="color:rgba(255,205,140,.55)">Report</div>
+    <div class="nav-item" data-view="rep-ops" onclick="nav(this)" style="border-left:2px solid rgba(255,205,140,.28);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M7 21h10M12 17v4"/><path d="M7 12l3-3 2.5 2.5L17 7"/></svg>
+      รายงานปฏิบัติการ
+    </div>
+    <div class="nav-item" data-view="rep-fleet" onclick="nav(this)" style="border-left:2px solid rgba(255,205,140,.28);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M7 21h10M12 17v4"/><path d="M3 14l4-4 3 2 4-5 4 3"/></svg>
+      รายงานฝ่ายเรือ
+    </div>
+    <div style="height:1px;background:rgba(255,255,255,.08);margin:8px 4px"></div>
     <div class="nav-section" style="color:rgba(200,180,255,.5)">Config</div>
     <div class="nav-item" data-view="settings" onclick="nav(this)" style="border-left:2px solid rgba(200,180,255,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
@@ -1004,6 +1016,9 @@
     <div id="view-travelsum" class="view"><div id="travelsum-host"></div></div>
     <div id="view-dailyreport" class="view"><div id="dailyreport-host"></div></div>
     <div id="view-prpo" class="view"><div id="prpo-host"></div></div>
+    <!-- §report -->
+    <div id="view-rep-ops" class="view"><div id="rep-host-ops" class="rep-host"></div></div>
+    <div id="view-rep-fleet" class="view"><div id="rep-host-fleet" class="rep-host"></div></div>
     <div id="view-doccheck" class="view"><style>@keyframes docspin{to{transform:rotate(360deg)}}</style><div id="doccheck-host"></div></div>
     <div id="view-accounting" class="view">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px;padding:6px 4px 14px">

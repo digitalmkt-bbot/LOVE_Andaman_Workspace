@@ -333,7 +333,15 @@ const B2C_OWN_BK = new Set([
 //      drop-off was imported and then invisible on the booking card, the detail row, the return-van
 //      alert and the van job order. The flag is recomputed rather than copied — B2C sets it false on
 //      NoTransfer orders whose drop-off simply repeats the pickup pier.
-const B2C_MAP_VER = 24;
+// v25: §b2cDiscShare · the order-level discount / surcharge is split across the order's lines by value
+//      instead of being handed whole to the first line. It only ever worked because every discounted
+//      order so far was single-line or all-tour; LOV-3488828 (a 15,800 HOTEL line + a 5,398 boat line,
+//      17,796 credit carried over from VC.22903) put the entire 17,796 on the boat line — the hotel line
+//      is filtered out by `type IN ('day_trip','private_own')` and never reaches ops — and imported the
+//      trip as a ฿0 sale. 8 orders re-price on this bump; the 3 all-tour ones keep their exact order
+//      total and only redistribute it per line. Every pricebreakdown_* column is in B2C_OWN_BK, so this
+//      corrective re-upsert reaches the rows already on file.
+const B2C_MAP_VER = 25;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -435,6 +443,51 @@ function b2cLineMoney(item) {
 // Seat alone — same value the old b2cLineSeat returned, kept for any caller that wants just the seat.
 function b2cLineSeat(item) { return b2cLineMoney(item).seat; }
 
+// §b2cDiscShare (2026-09-07) · The order-level discount / surcharge belongs to the WHOLE order, so it
+// has to be split across the order's lines by value — not handed whole to the first line.
+//
+// The old rule (all of it on line 0) survived only because every order carrying a discount so far was
+// single-line or all-tour. LOV-3488828 broke it: a 21,198 order = a 15,800 HOTEL line + a 5,398 boat
+// line, with a 17,796 discount (credit carried over from voucher VC.22903). This sync imports tour
+// lines only (B2C_ITEM_JOIN's `type IN ('day_trip','private_own')`), so the hotel line never arrives —
+// and the whole 17,796 landed on the 5,398 boat line: 3,598 + 1,800 − 17,796 = −12,398, which
+// Math.max(0, …) then flattened into a ฿0 booking that looked deliberate.
+//
+// Denominator = the ORDER subtotal (bk_subtotal — every line, INCLUDING the ones filtered out), which
+// is what the discount was actually given against. Numerator = each synced line's own subtotal. When a
+// non-tour line was filtered out, Σ(imported lines) is deliberately LESS than the order total: the rest
+// of the discount belongs to the line that isn't in ops. When every line came through, the rounding
+// remainder goes to the last line so Σ lines still equals the order total exactly.
+//
+// seat + addOn === round(item.subtotal) for every line (see b2cLineMoney), so pro-rating on subtotal is
+// the same basis the ops-side money is built from.
+function _shareLabel(label, share, orderAmt) {
+  const full = Math.max(0, Math.round(Number(orderAmt) || 0));
+  return (full && share !== full)
+    ? String(label) + ' · เฉพาะส่วนของรายการนี้ (ทั้งบิล ' + full.toLocaleString('en-US') + ')'
+    : String(label);
+}
+
+function b2cAllocAdjust(items) {
+  const h0 = items[0] || {};
+  const lineSum  = items.reduce((s, it) => s + Math.round(Number(it.subtotal) || 0), 0);
+  const orderSum = Math.round(Number(h0.bk_subtotal) || 0);
+  // Trust whichever basis is larger: a missing/stale bk_subtotal must never let the shares add up to
+  // more than 100% of the discount.
+  const denom = Math.max(orderSum, lineSum);
+  const whole = denom > 0 && denom === lineSum;   // nothing was filtered out → the shares must sum exactly
+  const split = (amt) => {
+    if (!amt) return items.map(() => 0);
+    if (denom <= 0) return items.map((_, i) => (i === 0 ? amt : 0));   // no basis to split on → old behaviour
+    const out = items.map(it => Math.round(amt * (Math.round(Number(it.subtotal) || 0) / denom)));
+    if (whole) out[out.length - 1] += amt - out.reduce((s, x) => s + x, 0);
+    return out;
+  };
+  const disc  = split(Math.max(0, Math.round(Number(h0.bk_discount)  || 0)));
+  const extra = split(Math.max(0, Math.round(Number(h0.bk_surcharge) || 0)));
+  return items.map((_, i) => ({ disc: disc[i], extra: extra[i] }));
+}
+
 // details.addonsSelected → ops addOns[{type,label,amount,qty,note}].
 // Ops identifies an add-on by the literal `type` string — bkV2AddOnFlags matches 'longtail-join',
 // 'longtail-charter' and a 'transfer-' prefix, and ops has no id registry of its own to look
@@ -496,7 +549,8 @@ function b2cMapAddOns(det, addOnTotal, programId, addonCat) {
 // new B2C ids already carry their own LOV- prefix); each carries a single trip.
 // isFirstLine: order-level payment (deposit/balance) attaches only to the first line of the order,
 // so a multi-item order's payment isn't multiplied across its item-bookings.
-function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progCat) {
+// adjust: this line's {disc, extra} share of the order-level discount / surcharge — see b2cAllocAdjust.
+function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progCat, adjust) {
   const h = item;
   // pg returns date columns as JS Date objects — String(d).slice(0,10) gives "Sat Jul 18",
   // not YYYY-MM-DD, which the frontend cannot parse. Format in local time explicitly.
@@ -532,12 +586,24 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
   // Until this was read, the line seat price WAS the whole total: LOV-9930593 imported at 55,984
   // (16 × 3,499) against a real total of 54,400 after a 1,584 discount — every revenue aggregate
   // over-reported the sale, while paidStatus (which compares bk_total) still said fully paid.
-  const discAmt  = isFirstLine ? Math.max(0, Math.round(Number(h.bk_discount)  || 0)) : 0;
-  const extraAmt = isFirstLine ? Math.max(0, Math.round(Number(h.bk_surcharge) || 0)) : 0;
+  // §b2cDiscShare · this line's PRO-RATA share, not the whole order-level figure. `adjust` is absent
+  // only if a caller was missed; fall back to the pre-2026-09-07 all-on-line-0 rule rather than dropping
+  // the discount entirely, which would over-report the sale.
+  const discAmt  = adjust ? Math.max(0, Math.round(Number(adjust.disc)  || 0))
+                          : (isFirstLine ? Math.max(0, Math.round(Number(h.bk_discount)  || 0)) : 0);
+  const extraAmt = adjust ? Math.max(0, Math.round(Number(adjust.extra) || 0))
+                          : (isFirstLine ? Math.max(0, Math.round(Number(h.bk_surcharge) || 0)) : 0);
   // Σ lines = the order total. The add-on has to be in here: it is inside bi.subtotal and inside
   // bookings.total, so leaving it out made an add-on line import 1,000 short of what the guest paid
   // (LOV-4190737: total 7,000 against paid 8,000) and read as overpaid in accounting.
   const lineTotal = Math.max(0, seat + addOn - discAmt + extraAmt);
+  // A share still bigger than the line it sits on means the split has no honest basis (a discount that
+  // exceeds the order subtotal, or a bk_subtotal that does not match its own lines). The clamp keeps the
+  // booking importable, but it is silently wrong money — say so, or it reads as a deliberate ฿0 sale.
+  if (discAmt > seat + addOn + extraAmt) {
+    console.warn('[b2c] discount share exceeds line value · ' + h.booking_id + ' line ' + h.line_no
+      + ' · seat ' + seat + ' + addOn ' + addOn + ' - disc ' + discAmt + ' -> clamped to 0');
+  }
   const adTh = Number(h.pax_thai) || 0;
   const adFrRaw = Number(h.pax_foreign) || 0;
   const adFr = adFrRaw > 0 ? adFrRaw : Math.max(0, (Number(h.pax_adult) || 0) - adTh);
@@ -741,9 +807,12 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
     // Display rows for the Total panel. bkV2 stores adjustments as positive values with a kind, and
     // acctBookingTotal never re-applies them (the total already accounts for them) — so these are
     // presentational only and cannot double-count.
+    // §b2cDiscShare · when this line carries only PART of an order-level discount, say so on the row.
+    // The B2C label is written about the whole bill ("ยกยอดทั้งหมดมาจาก VC.22903 จำนวน 17,596 บาท"), so
+    // printing it beside a smaller pro-rata number reads as an error unless the split is spelled out.
     adjustments: [
-      ...(discAmt  ? [{ kind: 'discount', mode: 'amount', value: discAmt,  label: String(h.bk_discount_label  || 'Discount'),  note: '' }] : []),
-      ...(extraAmt ? [{ kind: 'extra',    mode: 'amount', value: extraAmt, label: String(h.bk_surcharge_label || 'Surcharge'), note: '' }] : []),
+      ...(discAmt  ? [{ kind: 'discount', mode: 'amount', value: discAmt,  label: _shareLabel(h.bk_discount_label  || 'Discount',  discAmt,  h.bk_discount),  note: '' }] : []),
+      ...(extraAmt ? [{ kind: 'extra',    mode: 'amount', value: extraAmt, label: _shareLabel(h.bk_surcharge_label || 'Surcharge', extraAmt, h.bk_surcharge), note: '' }] : []),
     ],
     total: lineTotal,
     priceBreakdown: {
@@ -1244,14 +1313,16 @@ async function relSyncB2C(singleExtId = null) {
       return hit.length === 1 ? hit[0] : null;
     };
 
-    // Flatten: one allotment booking per line item. Group only to flag the first line of each
-    // B2C order (order-level payment attaches to that line — see mapB2CItemBooking).
+    // Flatten: one allotment booking per line item. Group to flag the first line of each B2C order
+    // (order-level payment attaches to that line) and to split the order-level discount / surcharge
+    // across the lines by value — see mapB2CItemBooking and b2cAllocAdjust.
     const byId = {};
     for (const item of itemRows) { (byId[item.booking_id] = byId[item.booking_id] || []).push(item); }
     const b2cBks = [];
     for (const items of Object.values(byId)) {
       items.sort((a, b) => Number(a.line_no) - Number(b.line_no));
-      items.forEach((it, i) => b2cBks.push(mapB2CItemBooking(it, i === 0, findArea, paxByBooking.get(String(it.booking_id)), addonCat, progCat)));
+      const adj = b2cAllocAdjust(items);   // §b2cDiscShare · order-level discount/surcharge split by line value
+      items.forEach((it, i) => b2cBks.push(mapB2CItemBooking(it, i === 0, findArea, paxByBooking.get(String(it.booking_id)), addonCat, progCat, adj[i])));
     }
     const tables  = osRepo.decomposeBlob({ sb_bookings: b2cBks });
     const b2cIds  = b2cBks.map(b => b.id);
@@ -2529,7 +2600,8 @@ const server = http.createServer((req, res) => {
       }
       out.passengers = paxMap.get(String(id)) || [];     // normalised rows, before mapping
       const dbgProgCat = await b2cProgramRouteCatalog();   // else the inspector reports routeId null
-      out.mapped = j.rows.map((r, i) => mapB2CItemBooking(r, i === 0, null, paxMap.get(String(id)), null, dbgProgCat));
+      const dbgAdj = b2cAllocAdjust(j.rows);
+      out.mapped = j.rows.map((r, i) => mapB2CItemBooking(r, i === 0, null, paxMap.get(String(id)), null, dbgProgCat, dbgAdj[i]));
       J(res,200,out);
     })().catch(e => J(res,500,{error:e.message}));
     return;

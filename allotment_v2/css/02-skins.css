@@ -580,6 +580,11 @@ body.la-nav-open .la-burger{background:#1683C7;color:#fff;box-shadow:inset 2px 2
      · .topbar ตั้ง pointer-events:none) → ปุ่มเมนูไปอยู่ในกลุ่มปุ่มลอยชุดเดียวกัน */
   .la-burger{display:inline-flex}
   .topbar{padding:calc(9px + env(safe-area-inset-top)) 12px 9px !important;gap:8px}
+  /* §mobHead · ปุ่มลอยมุมขวาบน (เมนู + เครื่องมือ) กว้างราว 98px สูง 54px
+     หัวหน้าที่ขึ้นไปชิดขอบบนจะถูกมันทับ · เว้นที่ให้เท่าที่วัดมาจริง
+     ทำเฉพาะหัวที่วัดแล้วโดนทับ · ไม่ไปดันหน้าที่ปกติดีอยู่แล้ว */
+  .main .view .bkv2-utabs{padding-right:96px}
+  .po-host .po-h .po-hl{padding-right:92px}
   .topbar-date{display:none}
   /* เครื่องมือชุดใหญ่กางเป็นแผงลอยใต้ปุ่ม ⋯ · ของเดิมเรียงแถวเดียวจนล้นจอ */
   .topbar.tools-open .topbar-right{display:flex !important;position:absolute;top:100%;right:12px;left:auto;
