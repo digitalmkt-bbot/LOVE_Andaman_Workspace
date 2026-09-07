@@ -7117,6 +7117,17 @@ function _dashMoneyShort(v){
   v=+v||0; if(v>=1e6) return '฿'+(v/1e6).toFixed(v>=1e8?0:1)+'M';
   if(v>=1e4) return '฿'+Math.round(v/1e3)+'K'; return '฿'+Math.round(v).toLocaleString();
 }
+/* §dashV3 · สีเส้นทางจริงบางสีอ่อนมาก (Phi Phi Bamboo #ff9999) เอามาเป็นสีตัวหนังสือ
+   บนพื้นขาวแล้วจาง · หรี่ลงจนความสว่างพอให้อ่านออก แต่ยังรู้ว่าเป็นสีอะไร */
+function _dvInk(hex){
+  var m=String(hex||'').replace('#','');
+  if(m.length===3) m=m[0]+m[0]+m[1]+m[1]+m[2]+m[2];
+  if(m.length<6) return '#2c2c2a';
+  var r=parseInt(m.slice(0,2),16), g=parseInt(m.slice(2,4),16), b=parseInt(m.slice(4,6),16);
+  for(var i=0;i<8 && (0.299*r+0.587*g+0.114*b)>146;i++){ r=r*0.86|0; g=g*0.86|0; b=b*0.86|0; }
+  var h=function(v){ return ('0'+Math.max(0,Math.min(255,v)).toString(16)).slice(-2); };
+  return '#'+h(r)+h(g)+h(b);
+}
 function _dashLiveB2BHtml(dx,F){ return _dashLiveFeedHtml(dx,F,'b2b'); }
 function _dashLiveB2CHtml(dx,F){ return _dashLiveFeedHtml(dx,F,'b2c'); }
 function _dashLiveFeedHtml(dx,F,side){
@@ -7136,7 +7147,11 @@ function _dashLiveFeedHtml(dx,F,side){
   var AV=['#E6F1FB|#185FA5','#EEEDFE|#534AB7','#FCEBEB|#A32D2D','#E7F5EC|#0A6B3F','#FAEEDA|#854F0B','#FBEAF0|#993556'];
   var rows='';
   arr.forEach(function(o,i){ var b=o.b; var a=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null; var nm=a?(a.name||a.code||'Agent'):(b.b2cChannel||'B2C / Walk-in');
-    var t0=(b.trips||[])[0]||{}; var fam=(typeof bkV2RouteFamily==='function'&&t0.routeId)?bkV2RouteFamily(t0.routeId):null; var rn=fam?fam.name:(((typeof getRoute==='function'&&t0.routeId)?getRoute(t0.routeId):null)||{}).name||'—';
+    /* §dashV3 · เดิมโชว์ชื่อ "กลุ่มเส้นทาง" (Phi Phi Bamboo) ซึ่งเป็นชื่อย่อของหลาย variant
+       ในฟีดสดต้องรู้ว่าใบนี้เป็นรอบไหนจริง ๆ (by Speedboat / - FS / Early OTA) จึงใช้ชื่อเต็ม */
+    var t0=(b.trips||[])[0]||{};
+    var _r0=(typeof getRoute==='function'&&t0.routeId)?getRoute(t0.routeId):null;
+    var rn=(_r0&&_r0.name)||(function(){ var f=(typeof bkV2RouteFamily==='function'&&t0.routeId)?bkV2RouteFamily(t0.routeId):null; return f?f.name:'—'; })();
     var pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t0.pax||{}):0; var val=(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0);
     var ini=(nm||'?').replace(/[^A-Za-z0-9ก-๙ ]/g,'').trim().split(/\s+/).map(function(w){return w[0];}).join('').slice(0,2).toUpperCase()||'?';
     var pair=AV[i%AV.length].split('|'); var isNew=o.ts>0 && (Date.now()-o.ts)<600000; var cx=CXL.indexOf(b.status)>=0;
@@ -7146,33 +7161,40 @@ function _dashLiveFeedHtml(dx,F,side){
        และมี 420 ใบที่ไม่มี voucherRef เลย ตัวนั้นจะตกไปใช้ id ซึ่งเป็นเลขที่ค้นได้เหมือนกัน */
     var vcRaw=String(b.voucherRef||b.code||b.id||'');
     var vc=vcRaw.length>18?(vcRaw.slice(0,17)+'\u2026'):vcRaw;
-    /* §dashV3 · เอเย่นต์ใช้สีที่ User ตั้งเองในหน้าใบเซ็นไกด์ (poSignColor)
-       ถ้ายังไม่ได้ตั้ง ใช้สีสำรองที่คงที่ต่อ id เดิม จะได้ไม่สลับสีทุกครั้งที่ re-render
-       ส่วน B2C ใช้กล่องโลโก้ LOVE andaman ชุดเดียวกับที่ใบงาน/ใบเซ็นใช้ */
-    var rcol=(((typeof getRoute==='function'&&t0.routeId)?getRoute(t0.routeId):null)||{}).color||'#7d7a74';
-    var setC=(typeof poSignColor==='function')?poSignColor(b.agentId):'';
+    /* §dashV3 · สีเอเย่นต์ = สีที่ User ตั้งเองในหน้า By trip (a.color ผ่าน bkV2AgentColor)
+       ไม่ใช่ poSignColor ซึ่งเป็นสีคนละชุดของใบเซ็นไกด์ · เจ้าไหนยังไม่ได้ตั้ง
+       bkV2AgentColor จะคืนสีจากจานมาตรฐานแบบคงที่ต่อ id (ไม่สลับสีทุก render)
+       ชิปขึ้น "ชื่อเอเย่นต์" ทุกใบ · ตัวย่อสองตัวอ่านไม่ออกว่าเจ้าไหน */
+    var _rc=(_r0&&_r0.color)||'#7d7a74';
+    var rcol=_dvInk(_rc);
     var mark;
     if(_isB2C(b)){
       mark=(typeof laAgencyMark==='function' && /^b2c_/.test(String(b.id||'')))
-        ? laAgencyMark(b,13,{inline:true,margin:false,pad:'4px 6px',radius:'7px'})
-        : '<span class="dv-lvmk" style="background:#FDE6EE;color:#8C2D52">'+ini+'</span>';
-    } else if(setC){
-      mark='<span class="dv-lvmk" style="background:'+setC+';color:'
-        +((typeof bkV2ContrastInk==='function')?bkV2ContrastInk(setC):'#fff')+'">'+nm.slice(0,10)+'</span>';
+        ? laAgencyMark(b,13,{inline:true,margin:false,pad:'3px 6px',radius:'7px'})
+        : '<span class="dv-lvmk" style="background:#FDE6EE;color:#8C2D52">'+(nm||'B2C')+'</span>';
     } else {
-      mark='<span class="dv-lvmk" style="background:'+pair[0]+';color:'+pair[1]+'">'+ini+'</span>';
+      /* เอาเฉพาะสีที่ User ตั้งเองจริง ๆ (a.color จากหน้า By trip)
+         bkV2AgentColor จะเดาสีจากจานมาตรฐานให้ถ้าไม่ได้ตั้ง — ในฟีดนี้ไม่เอา
+         เพราะสีเดา ๆ เต็มชิปบนการ์ดขาวจะกลบทุกอย่างในแถว และไม่ได้แปลว่าอะไรเลย
+         เจ้าที่ยังไม่ได้ตั้งสี ใช้ชิปสีกลาง — พอ User ไปตั้งสีในหน้า By trip ก็ขึ้นเอง */
+      var _ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
+      var agc=(_ag&&_ag.color)||'';
+      mark='<span class="dv-lvmk" style="background:'+(agc||'#F2EFEA')+';color:'
+        +((agc&&typeof bkV2ContrastInk==='function')?bkV2ContrastInk(agc):'#5f5c56')+'" title="'
+        +String(nm||'').replace(/"/g,'&quot;')+'">'+(nm||'—')+'</span>';
     }
     var dtxt=(typeof _dashDateShort==='function')?_dashDateShort(t0.date):(t0.date||'');
+    /* สองบรรทัด · บรรทัดบน = ทริป + เงิน · บรรทัดล่าง = วันเดินทาง · จำนวน · เลข voucher
+       ใครจองอยู่ในชิปสีทางซ้ายแล้ว ไม่ต้องเขียนซ้ำอีกบรรทัด */
     rows+='<div class="dv-lv'+(cx?' cx':'')+'" onclick="dashOpenBooking(\''+b.id+'\')">'
       +'<span class="dv-lvm">'+mark+'</span>'
       +'<span class="dv-lvtx">'
-        +'<span class="rt"><i style="background:'+rcol+'"></i>'+rn+(cx?' <em>· cancelled</em>':'')+'</span>'
-        +'<span class="dt">'+dtxt+' &middot; '+pax+' pax</span>'
-        +'<span class="nm">'+nm+(vc?(' &middot; <b title="'+vcRaw.replace(/"/g,'&quot;')+'">'+vc+'</b>'):'')+'</span>'
+        +'<span class="rt" style="color:'+rcol+'">'+rn+(cx?' <em>· ยกเลิก</em>':'')+'</span>'
+        +'<span class="dt">'+dtxt+' &middot; '+pax+' pax'
+          +(vc?(' &middot; <b title="'+vcRaw.replace(/"/g,'&quot;')+'">'+vc+'</b>'):'')+'</span>'
       +'</span>'
       +'<span class="dv-lvrt"><span class="m">&#3647;'+Math.round(val).toLocaleString()+'</span>'
-        +(isNew?'<span class="nw">NEW</span>':'')
-        +'<span class="t">'+_dashAgo(o.ts)+'</span></span>'
+        +'<span class="t">'+(isNew?'<b>NEW</b> ':'')+_dashAgo(o.ts)+'</span></span>'
     +'</div>';
   });
   if(!rows) rows='<div style="font-size:12px;color:#9a958c;text-align:center;padding:14px 0">ยังไม่มี booking</div>';
@@ -7194,7 +7216,7 @@ function _dashLiveFeedHtml(dx,F,side){
       +'<span class="s"><b>'+_sN+'</b><i>ใบวันนี้</i></span><span class="sep"></span>'
       +'<span class="s"><b>'+_sP+'</b><i>pax</i></span><span class="sep"></span>'
       +'<span class="s"><b>'+_mShort(_sM)+'</b><i>ยอดวันนี้</i></span><span class="sep"></span>'
-      +'<span class="s"><b>'+(side==='b2c'?_sN:Object.keys(_sA).length)+'</b><i>'+(side==='b2c'?'รายการ':'เอเย่นต์')+'</i></span>'
+      +'<span class="s"><b>'+(side==='b2c'?_mShort(_sN?_sM/_sN:0):Object.keys(_sA).length)+'</b><i>'+(side==='b2c'?'เฉลี่ย / ใบ':'เอเย่นต์')+'</i></span>'
     +'</div>';
   return '<div class="dv-c" style="'+F+'padding:0 12px 12px">'
     +'<div class="dv-ct"><span class="big" style="color:'+(side==='b2c'?'#8C2D52':'#12518F')+'">Live bookings</span>'
@@ -7372,30 +7394,32 @@ const DV_CSS=`<style>
     font-weight:800;line-height:1.1;color:#3a3a36}
   .dv-lvhd .s i{display:block;font-style:normal;font-size:9.5px;font-weight:600;color:#9b9088;margin-top:1px}
   .dv-lvhd .sep{width:1px;margin:2px 0;background:#EFEBE5}
-  .dv-lvlist{display:flex;flex-direction:column;gap:5px;margin-top:6px}
-  .dv-lv{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:10px;
-    border:1px solid #EFEBE5;cursor:pointer;background:#fff}
+  /* แถวละ 2 บรรทัด · บน = ชื่อทริปสีเส้นทาง + เงิน · ล่าง = วันเดินทาง · จำนวน · voucher
+     ใครจองอ่านจากชิปสีทางซ้าย ไม่ต้องมีบรรทัดที่สาม */
+  .dv-lvlist{display:flex;flex-direction:column;gap:3px;margin-top:5px}
+  .dv-lv{display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:8px;
+    border:1px solid #F1EEE9;cursor:pointer;background:#fff}
   .dv-lv:hover{background:#FAFAF8;border-color:#E2DED6}
   .dv-lv.cx{opacity:.5}
-  .dv-lvm{flex:none;display:flex;align-items:center}
-  .dv-lvmk{display:inline-flex;align-items:center;justify-content:center;min-width:34px;
-    max-width:74px;height:24px;padding:0 7px;border-radius:7px;font-size:9.5px;font-weight:800;
+  .dv-lvm{flex:none;width:74px;display:flex;align-items:center}
+  /* inline-flex ไม่ยอมตัดท้ายด้วย … · ต้องเป็น block ถึงจะ ellipsis ได้
+     ชิปแคบ 74px · คืนที่ให้ชื่อทริปเต็ม ๆ ในคอลัมน์แคบ */
+  .dv-lvmk{display:block;max-width:74px;height:21px;line-height:21px;padding:0 6px;
+    border-radius:6px;font-size:9px;font-weight:800;letter-spacing:.01em;text-align:center;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .dv-lvtx{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
-  .dv-lvtx .rt{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:800;
-    color:#2c2c2a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .dv-lvtx .rt i{width:7px;height:7px;border-radius:50%;flex:none}
+  .dv-lvtx{flex:1;min-width:0;display:flex;flex-direction:column;gap:0}
+  .dv-lvtx .rt{font-size:11.5px;font-weight:800;line-height:1.35;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .dv-lvtx .rt em{font-style:normal;color:#A32D2D;font-weight:700}
-  .dv-lvtx .dt{font-family:'DM Mono',ui-monospace,monospace;font-size:10.5px;font-weight:700;
-    color:#5f5c56;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .dv-lvtx .nm{font-size:10px;font-weight:600;color:#9a958c;white-space:nowrap;
-    overflow:hidden;text-overflow:ellipsis}
-  .dv-lvtx .nm b{font-family:'DM Mono',ui-monospace,monospace;font-weight:600;color:#6b675f}
-  .dv-lvrt{flex:none;text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:1px}
-  .dv-lvrt .m{font-family:'DM Mono',ui-monospace,monospace;font-size:12px;font-weight:800;color:#2c2c2a}
-  .dv-lvrt .nw{font-size:8.5px;font-weight:800;color:#1C7A43;background:#DFF3C4;
-    border-radius:5px;padding:1px 6px}
-  .dv-lvrt .t{font-size:9.5px;color:#b0aaa0;font-weight:600}
+  .dv-lvtx .dt{font-family:'DM Mono',ui-monospace,monospace;font-size:10px;font-weight:600;
+    line-height:1.35;color:#8a857d;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dv-lvtx .dt b{font-weight:600;color:#b0aaa0}
+  .dv-lvrt{flex:none;text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:0}
+  .dv-lvrt .m{font-family:'DM Mono',ui-monospace,monospace;font-size:11.5px;font-weight:800;
+    color:#2c2c2a;line-height:1.35}
+  .dv-lvrt .t{font-size:9px;color:#b0aaa0;font-weight:600;line-height:1.35;white-space:nowrap}
+  .dv-lvrt .t b{color:#1C7A43;background:#DFF3C4;border-radius:4px;padding:0 4px;
+    font-size:8.5px;font-weight:800}
 
   /* ══ §dashV3 · ชิ้นส่วนกลางของการ์ด · ยืมภาษาจาก By trip มาทั้งชุด ═════
      หัวการ์ดตัวเล็กพิมพ์ใหญ่ + ชื่อตัวใหญ่ · แถวสถิติตัวเลข DM Mono
