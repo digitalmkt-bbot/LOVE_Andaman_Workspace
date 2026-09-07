@@ -97527,7 +97527,13 @@ function pjPrint(){
     var ids=[R.cap||'', R.asst||''];
     for(var c=0;c<3;c++) ids.push((R.crew||[])[c]||'');
     for(var c=0;c<2;c++) ids.push((R.island||[])[c]||'');
-    if(ids.filter(Boolean).length) WK[B.bid]={ids:ids, note:R.note||''};
+    /* §wkPack · ลำที่จอด · ชื่อคนต้องเรียงชิดบนสุดของช่วงคน ไม่เว้นรูตามช่องบนจอ
+       ช่องบนการ์ดเว้นได้ตามใจคนจ่ายงาน (จ่ายช่อง "ช่าง 2" ทั้งที่ "ช่าง 1" ว่าง)
+       แต่บนกระดาษรูตรงกลางอ่านเหมือนลืมเขียน · ชื่อตำแหน่งจริงติดท้ายชื่อคนอยู่แล้ว
+       จึงย้ายขึ้นได้โดยไม่เสียความหมาย */
+    var pk=[];
+    ids.forEach(function(id,i){ if(id) pk.push({id:id, role:WROLE[i]}); });
+    if(pk.length) WK[B.bid]={ids:ids, p:pk, note:R.note||''};
   });
   var isWk=function(B){ return !!WK[B.bid]; };
   var WKL=Object.keys(WK).map(function(k){ return WK[k]; });
@@ -97545,11 +97551,14 @@ function pjPrint(){
   Object.keys(WKG).forEach(function(k){
     if(WK[k]) return;
     var R=null; try{ R=(typeof pjRaw==='function')?pjRaw(_poDate,k):null; }catch(_){}
-    WK[k]={ids:['','','','','','',''], note:(R&&R.note)||''};
+    WK[k]={ids:['','','','','','',''], p:[], note:(R&&R.note)||''};
   });
 
-  /* ลำที่จอดก็กินช่องเด็กเรือ/ประจำเกาะเหมือนกัน · ไม่นับด้วยแถวจะขาด ชื่อช่างหาย */
-  var CJ=J.concat(WKL.map(function(w){ return {crew:[w.ids[2],w.ids[3],w.ids[4]], island:[w.ids[5],w.ids[6]]}; }));
+  /* ลำที่จอดก็กินช่องเด็กเรือ/ประจำเกาะเหมือนกัน · ไม่นับด้วยแถวจะขาด ชื่อช่างหาย
+     §wkPack · นับจากคิวที่ชิดบนแล้ว ไม่ใช่ช่องดิบ · คน 3 คนที่กระจายอยู่ช่อง 1/3/5
+     ต้องการแค่แถว "เด็กเรือ 1" แถวเดียว ไม่ใช่ลากยาวไปถึงประจำเกาะ */
+  var CJ=J.concat(WKL.map(function(w){ var P=(w.p||[]).map(function(x){ return x.id; });
+    return {crew:[P[2]||'',P[3]||'',P[4]||''], island:[P[5]||'',P[6]||'']}; }));
   var nCrew=Math.max(2, Math.min(4, mx(CJ.map(function(j){ return (j.crew||[]).filter(Boolean).length; }))));
   var nIsl =Math.max(1, Math.min(2, mx(CJ.map(function(j){ return (j.island||[]).filter(Boolean).length; }))));
   /* §gdRole · เดิมล็อก 3 · ลำที่จ่ายไกด์ 5 คนจะหายไป 2 คนเงียบ ๆ · ปล่อยตามจริง กัน 8 ไว้กันตารางบาน */
@@ -97675,10 +97684,13 @@ function pjPrint(){
   var gi=function(B){ var k=-1; GO.forEach(function(x,i){ if(x===B) k=i; }); return k; };
 
   /* §pjWork2 · ชื่อช่าง + ป้ายตำแหน่งจริง · ป้ายซ้ายมือยังเป็นชื่อช่องของลูกเรือ */
+  /* §wkPack · pos = ลำดับของแถวในช่วงคน ไม่ใช่หมายเลขช่องที่จ่ายไว้
+     ตำแหน่งจริงมาจากคิว (p) จึงยังถูกต้องแม้ชื่อจะเลื่อนขึ้นมาคนละแถวกับบนจอ */
   var wkWho=function(B,pos){
     var w=WK[B.bid]; if(!w) return '';
-    var nm=who(w.ids[pos],0);
-    return nm?(nm+' <span class="rl">· '+WROLE[pos]+'</span>'):'';
+    var x=(w.p||[])[pos]; if(!x) return '';
+    var nm=who(x.id,0);
+    return nm?(nm+' <span class="rl">· '+x.role+'</span>'):'';
   };
   /* แถบสถานะของลำที่จอด · แทนช่องโปรแกรม · สีเดียวกับป้ายสถานะบนหน้าจอ */
   var wkHead=function(B){
