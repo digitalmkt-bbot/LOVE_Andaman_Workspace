@@ -191,7 +191,31 @@
   function seedFull(loc){ var cur; try{cur=JSON.parse(loc);}catch(e){return;} var x=new XMLHttpRequest(); x.open('POST','/api/save',true); x.setRequestHeader('Content-Type','application/json'); x.onload=function(){ if(x.status===200){ try{VER=JSON.parse(x.responseText).version;}catch(e){} BASE=cur; _laMark(VER); } }; try{ x.send(JSON.stringify({baseVersion:0,full:loc})); }catch(e){} }
   var _laSaveErrShown=false;
   function _laSaveErr(msg,color){ _laSaveErrShown=true; onReady(function(){ var d=document.getElementById('la-saveerr'); if(!d){ d=document.createElement('div'); d.id='la-saveerr'; d.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:100001;color:#fff;border-radius:22px;padding:9px 18px;font:13px/1.35 "DM Sans",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.3);max-width:82vw;text-align:center'; document.body.appendChild(d);} d.style.background=color||'#A32D2D'; d.innerHTML='⚠ '+msg; }); }
-  function _laSaveErrClear(){ if(!_laSaveErrShown) return; _laSaveErrShown=false; var d=document.getElementById('la-saveerr'); if(d) d.remove(); }
+  function _laSaveErrClear(){ if(!_laSaveErrShown) return; _laSaveErrShown=false; var d=document.getElementById('la-saveerr'); if(d) d.remove(); _laRetryN=0; }
+  /* §pkTk7 · ลองเซฟใหม่แบบถอยเวลา แล้วหยุดเมื่อถึงเวลา
+     ของเดิมลองทุก 5 วินาทีไม่มีที่สิ้นสุด · เซิร์ฟเวอร์ที่ล่มจริงจะโดนยิงทั้งวัน
+     และข้อความไม่บอกรหัสสถานะ คนใช้เห็นแถบค้างโดยไม่รู้สาเหตุ ตามต่อไม่ได้
+     ตอนนี้: 5 · 10 · 20 · 40 · 60 · 60 วินาที แล้วหยุด พร้อมปุ่มลองเองและบอกรหัส */
+  var _laRetryN=0, _laRetryT=null;
+  function _laRetryNow(){ try{ clearTimeout(_laRetryT); }catch(e){}
+    var nv=localStorage.getItem(LS); if(nv) save(nv); }
+  window.laRetrySaveNow=function(){ _laRetryN=0; _laRetryNow(); };
+  function _laRetry(why){
+    _laRetryN++;
+    if(_laRetryN>6){
+      _laSaveErr('บันทึกขึ้นระบบไม่สำเร็จ · '+why+' — ลองแล้ว '+(_laRetryN-1)+' ครั้ง '
+        +'<b>ข้อมูลยังอยู่ในเครื่องครบ</b> อย่าเพิ่งปิดหน้า'
+        +'<br><button onclick="laRetrySaveNow()" style="margin-top:7px;background:#fff;color:#7A4A00;'
+        +'border:0;border-radius:9px;padding:5px 13px;font-weight:700;cursor:pointer;font-family:inherit">'
+        +'ลองบันทึกอีกครั้ง</button>','#7A4A00');
+      return;
+    }
+    var wait=[5000,10000,20000,40000,60000,60000][_laRetryN-1]||60000;
+    _laSaveErr('กำลังลองบันทึกขึ้นระบบใหม่ ('+_laRetryN+'/6) · '+why
+      +' — ข้อมูลยังอยู่ในเครื่อง อย่าเพิ่งปิดหน้า','#7A4A00');
+    try{ clearTimeout(_laRetryT); }catch(e){}
+    _laRetryT=setTimeout(_laRetryNow, wait);
+  }
   // save-safety guard (feat/validation-deprecate-blob): the server refused a save that would delete/shrink
   // existing data (stale whole-blob overwrite). Show a persistent blocking banner + Reload; do NOT retry,
   // do NOT advance BASE — the correct data is on the server, reloading discards the bad local overwrite.
@@ -222,8 +246,8 @@
       else if(x.status===403){ _laSaveErr('บันทึกขึ้นระบบไม่ได้ · บัญชีนี้ไม่มีสิทธิ์แก้ไข (การเปลี่ยนแปลงยังไม่ถูกบันทึก) — กรุณา login ใหม่ หรือติดต่อ admin'); }   // will never succeed → stop retrying, tell the user
       else if(x.status===401){ _laSaveErr('เซสชันหมดอายุ · ข้อมูลยังอยู่ในเครื่อง — กรุณาเข้าสู่ระบบใหม่ แล้วระบบจะเซฟให้อัตโนมัติ','#7A4A00'); }
       else if(x.status===409){ var _r9={}; try{_r9=JSON.parse(x.responseText);}catch(e){} _laShrinkBlocked(_r9&&_r9.detail); }   // save-safety: server refused a wipe/shrink of existing data — do NOT retry, keep local, tell user to reload
-      else { _laSaveErr('กำลังลองบันทึกขึ้นระบบใหม่… (ข้อมูลยังอยู่ในเครื่อง อย่าเพิ่งปิดหน้า)','#7A4A00'); setTimeout(function(){ var nv=localStorage.getItem(LS); if(nv) save(nv); }, 5000); } };   // transient (5xx/0) → retry + warn
-    x.onerror=function(){ _laSaveErr('เชื่อมต่อระบบไม่ได้ · กำลังลองเซฟใหม่… (ข้อมูลยังอยู่ในเครื่อง อย่าเพิ่งปิดหน้า)','#7A4A00'); setTimeout(function(){ var nv=localStorage.getItem(LS); if(nv) save(nv); }, 5000); };
+      else { _laRetry('เซิร์ฟเวอร์ตอบ '+x.status+(x.status===0?' (เชื่อมต่อไม่ได้)':'')); } };   // transient (5xx/0) → retry + warn
+    x.onerror=function(){ _laRetry('เชื่อมต่อระบบไม่ได้'); };
     try{ x.send(JSON.stringify(ops ? {baseVersion:VER, ops:ops} : {baseVersion:VER, diff:{sets:d.sets,cols:d.cols,objs:d.objs}})); }catch(e){} }
   // FLUSH pending change before the page unloads (refresh/close) so a fast refresh never loses the last edit
   function _laFlush(){ if(!_dirty) return; try{ var cur=JSON.parse(localStorage.getItem(LS)||'{}');
@@ -92982,7 +93006,7 @@ function poCSS(){
      บัตร/พาส · ผู้ใหญ่ · เด็ก · เด็กเล็ก · หมายเหตุ · Code)
      เส้นตารางครบ หัวตรึง แถบคั่นรายลำตรึงชั้นสอง · เลขที่เริ่มใหม่ทุกลำ
      เพราะแบบฟอร์มของด่านเป็นใบต่อลำ                                      */
-  +H+' .pk-sheet{overflow:auto;max-height:calc(100vh - 330px)}'
+  +H+' .pk-sheet{overflow:auto;max-height:calc(100vh - 260px)}'
   +H+' .pk-sheet::-webkit-scrollbar{width:10px;height:10px}'
   +H+' .pk-sheet::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:6px}'
   /* ล็อกความกว้างทุกคอลัมน์ · ของเดิมปล่อยให้ auto ช่องชื่อเลยกินที่ไปเกือบครึ่งจอ
@@ -93038,6 +93062,11 @@ function poCSS(){
   +H+' .pk-sheet td.nt .nnb{color:#A32D2D;background:#FDECEC}'
   +H+' .pk-sheet td.nt .msb{color:#7A5CC4;background:#F1EDFC}'
   +H+' .pk-sheet td.nt .ovb{color:#A32D2D;background:#FDECEC}'
+  /* ชื่อซ้ำ · ต้องเด้งเข้าตา ด่านออกตั๋วตามรายชื่อ ซ้ำแล้วกลายเป็นคนเดียวได้สองใบ */
+  +H+' .pk-sheet td.nt .dpb{color:#fff;background:#A32D2D}'
+  +H+' .pk-sheet tr.pk-dup td{background:#FDECEC !important}'
+  +H+' .pk-sheet tr.pk-dup td:first-child{box-shadow:inset 3px 0 0 #A32D2D}'
+  +H+' .pk-sheet .nmin.dup{border-color:#E09B9B;border-style:solid;background:#FFF6F6}'
   +H+' .pk-sheet td.nt span+span{margin-left:4px}'
   +H+' .pk-sheet td.nn{color:#B4560A;font-weight:600;font-style:italic}'
   +H+' .pk-sheet tr.pk-nn td{background:#FFFCF5}'
@@ -93063,30 +93092,58 @@ function poCSS(){
   +H+' .pk-sheet td.cd:hover .cv{color:#12518F}'
   +H+' .pk-sheet td.cd:hover .cv:after{content:" ▾";color:#64748B;font-size:9px}'
   +H+" .pk-sheet td.cd .ro{display:block;font:800 11px 'DM Mono',monospace;color:#475569;padding:3px 8px}"
-  /* แถบคั่นรายลำ */
-  +H+' .pk-sheet tr.pk-grp td{background:#E2E8F0 !important;padding:0;'
-     +'border-bottom:1px solid #CBD5E1;position:sticky;top:36px;z-index:2}'
-  +H+' .pk-sheet tr.pk-grp .in{display:flex;align-items:center;gap:9px;flex-wrap:wrap;'
-     +'padding:8px 10px 8px 12px;box-shadow:inset 4px 0 0 var(--rc)}'
-  +H+' .pk-sheet tr.pk-grp .rn{font-size:12.5px;font-weight:800;color:#0F172A}'
-  +H+' .pk-sheet tr.pk-grp .bn{font-size:12px;font-weight:700;color:#334155;'
-     +'background:#fff;border-radius:7px;padding:2px 9px}'
-  +H+" .pk-sheet tr.pk-grp .tm{font:700 11px 'DM Mono',monospace;color:#475569}"
-  +H+' .pk-sheet tr.pk-grp .cc{display:flex;gap:4px;flex-wrap:wrap}'
-  +H+' .pk-sheet tr.pk-grp .sp{margin-left:auto}'
-  +H+" .pk-sheet tr.pk-grp .tt{font:800 12.5px 'DM Mono',monospace;color:#0F172A}"
-  +H+" .pk-sheet tr.pk-grp .dl{font:600 10px 'DM Mono',monospace;color:#B4560A}"
+  /* ══ แถบสรุปทั้งวัน · แทนการ์ด KPI 5 ใบที่กินที่ไปครึ่งจอ ════════════
+     ตัวเลขพวกนี้เป็นของ "ทั้งวัน" ซึ่งดูแค่ผ่านตา ไม่ได้เอาไปกรอกอะไร
+     จึงไม่คุ้มกับพื้นที่ 5 การ์ด · ยอดรายประเภทที่ต้องใช้จริงอยู่บนหัวลำแล้ว */
+  +H+' .pk-day{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 12px}'
+  +H+' .pk-day .s{background:#fff;border:1px solid #F1F5F9;border-radius:999px;'
+     +'padding:6px 15px;font-size:11.5px;font-weight:600;color:#475569;'
+     +'box-shadow:0 4px 14px -4px rgba(0,0,0,.05)}'
+  +H+" .pk-day .s b{font-family:'DM Mono',monospace;font-size:14px;font-weight:800;"
+     +'color:#0F172A;margin-right:4px}'
+  +H+" .pk-day .s i{font-style:normal;font-family:'DM Mono',monospace;font-size:10.5px;color:#94A3B8}"
+  +H+' .pk-day .s.warn{background:#FFFBEB;border-color:#F3E4C0;color:#8A5A0B}'
+  +H+' .pk-day .s.warn b{color:#B4560A}'
+  +H+' .pk-day .s.ok{background:#F0FAF4;border-color:#CFE9DC;color:#0C6B47}'
+  +H+' .pk-day .s.ok b{color:#0C6B47}'
+  +H+' .pk-day .s.bad{background:#FDECEC;border-color:#F3C9C9;color:#A32D2D}'
+  +H+' .pk-day .s.bad b{color:#A32D2D}'
+  /* ══ หัวทริป + แท็บชื่อเรือ ═══════════════════════════════════════════ */
+  +H+' .pk-trip{margin:0 0 22px}'
+  +H+' .pk-th2{display:flex;align-items:center;gap:11px;flex-wrap:wrap;'
+     +'padding-left:11px;box-shadow:inset 4px 0 0 var(--rc);margin-bottom:10px}'
+  +H+' .pk-th2 .rn{font-size:17px;font-weight:800;color:#0F172A;letter-spacing:-.01em}'
+  +H+' .pk-th2 .mt{font-size:11.5px;color:#64748B;font-weight:600}'
+  +H+' .pk-th2 .wn{font-size:10.5px;font-weight:700;color:#B4560A;background:#FFFBEB;'
+     +'border-radius:999px;padding:2px 10px}'
+  +H+' .pk-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}'
+  +H+' .pk-tab{border:1px solid #E2E8F0;background:#fff;border-radius:12px;padding:7px 13px;'
+     +'font:700 12.5px inherit;color:#475569;cursor:pointer;display:inline-flex;align-items:center;gap:7px}'
+  +H+' .pk-tab:hover{background:#F8FAFC;border-color:#CBD5E1}'
+  +H+" .pk-tab i{font-style:normal;font-family:'DM Mono',monospace;font-size:10.5px;color:#94A3B8}"
+  +H+" .pk-tab b{font-family:'DM Mono',monospace;font-size:12px;font-weight:800;color:#0F172A;"
+     +'background:#F1F5F9;border-radius:6px;padding:1px 7px}'
+  +H+" .pk-tab u{text-decoration:none;font-family:'DM Mono',monospace;font-size:10.5px;"
+     +'font-weight:800;color:#B4560A;background:#FFFBEB;border-radius:6px;padding:1px 6px}'
+  +H+' .pk-tab.on{background:#0F172A;border-color:#0F172A;color:#fff}'
+  +H+' .pk-tab.on i{color:#94A3B8}'
+  +H+' .pk-tab.on b{background:rgba(255,255,255,.16);color:#fff}'
+  +H+' .pk-tab.on u{background:rgba(255,190,120,.22);color:#FFCE8A}'
+  /* หัวของลำที่เลือกอยู่ · อยู่นอกตาราง จะได้ไม่ต้องตรึงซ้อนกันสองชั้น */
+  +H+' .pk-bhd{display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:#F1F5F9;'
+     +'border:1px solid #E2E8F0;border-bottom:none;border-radius:14px 14px 0 0;padding:9px 14px}'
+  +H+' .pk-bhd .bn{font-size:13px;font-weight:800;color:#0F172A}'
+  +H+" .pk-bhd .tm{font:700 11px 'DM Mono',monospace;color:#475569;background:#fff;"
+     +'border-radius:7px;padding:2px 9px}'
+  +H+' .pk-bhd .cc{display:flex;gap:4px;flex-wrap:wrap}'
+  +H+' .pk-bhd .sp{margin-left:auto}'
+  +H+" .pk-bhd .tt{font:800 13px 'DM Mono',monospace;color:#0F172A}"
+  +H+" .pk-bhd .dl{font:600 10px 'DM Mono',monospace;color:#B4560A}"
+  +H+' .pk-trip .po-card{border-radius:0 0 14px 14px}'
   +H+' .pk-c{font-size:9.5px;font-weight:700;border-radius:6px;padding:2px 7px;white-space:nowrap}'
   +H+" .pk-c b{font-family:'DM Mono',monospace;font-size:10.5px;font-weight:800}"
-  /* การ์ดยอด */
-  +H+' .po-kpis.pk-k5{grid-template-columns:repeat(auto-fit,minmax(168px,1fr))}'
-  +H+' .po-kpis.pk-k5 .po-kpi{padding:14px}'
-  +H+' .po-kpis.pk-k5 .po-kpi .k{font-size:10.5px;line-height:1.3}'
-  +H+' .po-kpis.pk-k5 .ic{width:38px;height:38px;border-radius:13px}'
-  +H+" .po-kpis.pk-k5 .v .dif{font-style:normal;font-size:11px;font-weight:700;color:#B4560A;"
-     +"margin-left:5px;font-family:'DM Mono',monospace}"
-  +H+" .po-kpis.pk-k5 .s .cd{font:700 10.5px 'DM Mono',monospace;color:#475569;"
-     +'background:#F1F5F9;border-radius:5px;padding:1px 7px}'
+  +H+" .pk-c i{font-style:normal;font-family:'DM Mono',monospace;font-size:9px;opacity:.75;"
+     +'margin-left:4px;padding-left:4px;border-left:1px solid currentColor}'
   /* กล่องตั้งค่าประเภทตั๋ว */
   +H+' .pk-tyb{background:#fff;border:1px solid #F1F5F9;border-radius:18px;padding:12px 15px;margin:0 0 6px;'
      +'box-shadow:0 10px 30px -5px rgba(0,0,0,.04)}'
@@ -93341,7 +93398,10 @@ function pkFixKey(date,bkId,idx){ return date+'|'+bkId+'|'+idx; }
 function pkNmGet(date,bkId,cat,seq){
   var M=PIER_CFG.parkName; return (M&&M[date+'|'+bkId+'|'+cat+'|'+seq])||'';
 }
-function pkNmSet(date,bkId,cat,seq,v){
+/* §pkTk7 · quiet=true คือ "แก้ในหน่วยความจำก่อน ยังไม่ต้องเซฟ"
+   ใช้ตอนเติมชื่อทั้งลำ · ของเดิมเซฟทุกคน แม้ตัวยิงขึ้นเซิร์ฟเวอร์จะดีบาวซ์ 1 วิ
+   แต่ JSON.stringify ทั้งก้อน (หลักสิบ MB) 19 รอบติดกัน หน้าค้างไปหลายวินาที */
+function pkNmSet(date,bkId,cat,seq,v,quiet){
   if(!PIER_CFG.parkName || typeof PIER_CFG.parkName!=='object') PIER_CFG.parkName={};
   var M=PIER_CFG.parkName, key=date+'|'+bkId+'|'+cat+'|'+seq;
   v=String(v==null?'':v).trim();
@@ -93351,10 +93411,57 @@ function pkNmSet(date,bkId,cat,seq,v){
     var lim=c.toISOString().slice(0,10);
     Object.keys(M).forEach(function(x){ if(String(x).slice(0,10)<lim) delete M[x]; });
   }catch(_){}
-  try{ poPersist(); }catch(_){}
+  if(!quiet){ try{ poPersist(); }catch(_){} }
+}
+/* ── ชื่อห้ามซ้ำกันเด็ดขาด ────────────────────────────────────────────────
+   ด่านออกตั๋วตามรายชื่อ · ชื่อซ้ำสองแถวคือคนเดียวได้ตั๋วสองใบในสายตาเขา
+   เทียบแบบไม่สนตัวพิมพ์ใหญ่เล็ก ช่องว่างซ้ำ และคำนำหน้า (Mr./Mrs./คุณ)
+   เพราะ "MR.SOMCHAI  DEE" กับ "Somchai Dee" คือคนเดียวกันในสายตาคนอ่าน */
+function pkNmNorm(v){
+  var t=String(v==null?'':v).trim().toLowerCase();
+  t=t.replace(/^(mr|mrs|ms|miss|mstr|master|dr|prof|mx|khun)\b\.?\s*/,'');
+  t=t.replace(/^(คุณ|นาย|นาง|นางสาว|น\.ส\.|ด\.ช\.|ด\.ญ\.)\s*/,'');
+  return t.replace(/\s+/g,' ').trim();
+}
+/* นับชื่อทั้งวันของท่านี้ · คืน map ชื่อที่ทำให้เป็นมาตรฐานแล้ว → จำนวนครั้ง */
+function pkNmUsed(D){
+  var m={};
+  (D||[]).forEach(function(g){ (g.boats||[]).forEach(function(B){
+    (B.people||[]).forEach(function(p){
+      var k=pkNmNorm(p.full); if(!k) return; m[k]=(m[k]||0)+1;
+    });
+  }); });
+  return m;
+}
+/* หาเลขต่อท้ายที่ยังไม่ชนกับใครในวันนั้น */
+function pkNmUniq(base, used){
+  var b=String(base||'').trim(); if(!b) return '';
+  if(!used[pkNmNorm(b)]){ used[pkNmNorm(b)]=1; return b; }
+  for(var i=2;i<=200;i++){
+    var t=b+' ('+i+')';
+    if(!used[pkNmNorm(t)]){ used[pkNmNorm(t)]=1; return t; }
+  }
+  return b+' ('+Date.now().toString(36).slice(-4)+')';
 }
 function pkNmEdit(el,date,bkId,cat,seq){
-  pkNmSet(date,bkId,cat,seq,el.value);
+  var v=String(el.value||'').trim();
+  if(v){
+    /* เช็คชนกับชื่ออื่นทั้งวัน (ไม่นับช่องตัวเอง) · ซ้ำแล้วไม่บันทึก บอกให้แก้ก่อน */
+    var D=pkTkData(date,_poPier), me=date+'|'+bkId+'|'+cat+'|'+seq, hit=null;
+    (D||[]).forEach(function(g){ (g.boats||[]).forEach(function(B){
+      (B.people||[]).forEach(function(p){
+        if(p.ph && p.bkId===bkId && p.cat===cat && p.seq===seq) return;   /* ช่องตัวเอง */
+        if(pkNmNorm(p.full)===pkNmNorm(v)) hit=p;
+      });
+    }); });
+    if(hit){
+      alert('ชื่อนี้ซ้ำกับรายชื่อที่มีอยู่แล้วในวันนี้\n\n  '+hit.full
+        +'\n  ('+(hit.ph?'ช่องที่กรอกเอง':'ชื่อจากใบจอง')+' · ใบ '+(hit.vc||'-')+')\n\n'
+        +'ด่านออกตั๋วตามรายชื่อ ชื่อซ้ำจะกลายเป็นคนเดียวได้สองใบ — แก้ให้ต่างกันก่อน');
+      el.value=pkNmGet(date,bkId,cat,seq); el.focus(); return;
+    }
+  }
+  pkNmSet(date,bkId,cat,seq,v);
   if(typeof renderPierPark==='function') renderPierPark();
 }
 /* เติมชื่อจากหัวกรุ๊ป · "<ชื่อหัวกรุ๊ป> (2)" (3) ... ไล่ตามลำดับของใบนั้น
@@ -93362,16 +93469,18 @@ function pkNmEdit(el,date,bkId,cat,seq){
    ซึ่งเป็นสิ่งที่ตรวจสอบย้อนได้จริงจากใบจอง */
 function pkNmFillLead(date,bid,pier){
   var D=pkTkData(date,pier), n=0;
+  /* กันชื่อซ้ำทั้งวัน ไม่ใช่แค่ในลำ · ด่านรับรายชื่อรวมทั้งวัน คนละลำก็ซ้ำไม่ได้ */
+  var used=pkNmUsed(D);
   D.forEach(function(g){ g.boats.forEach(function(B){
     if(B.bid!==bid) return;
-    var seen={};
     (B.people||[]).forEach(function(p){
       if(!p.ph || p.typed) return;
       var lead=String(p.lead||'').trim(); if(!lead) return;
-      seen[p.bkId]=(seen[p.bkId]||1)+1;
-      pkNmSet(date,p.bkId,p.cat,p.seq, lead+' ('+seen[p.bkId]+')'); n++;
+      var nm=pkNmUniq(lead, used); if(!nm) return;
+      pkNmSet(date,p.bkId,p.cat,p.seq, nm, true); n++;
     });
   }); });
+  if(n){ try{ poPersist(); }catch(_){} }      /* เซฟทีเดียวตอนจบ */
   if(typeof renderPierPark==='function') renderPierPark();
   if(!n) alert('ลำนี้ไม่มีหัวที่ต้องเติมชื่อ หรือใบจองไม่มีชื่อหัวกรุ๊ปให้ใช้');
 }
@@ -93380,8 +93489,9 @@ function pkNmClearBoat(date,bid,pier){
   var D=pkTkData(date,pier);
   D.forEach(function(g){ g.boats.forEach(function(B){
     if(B.bid!==bid) return;
-    (B.people||[]).forEach(function(p){ if(p.ph && p.typed) pkNmSet(date,p.bkId,p.cat,p.seq,''); });
+    (B.people||[]).forEach(function(p){ if(p.ph && p.typed) pkNmSet(date,p.bkId,p.cat,p.seq,'',true); });
   }); });
+  try{ poPersist(); }catch(_){}
   if(typeof renderPierPark==='function') renderPierPark();
 }
 /* หัวคนของ "ใบเดียว" แยก 5 ประเภท · ใช้ตัวเดียวกับที่หน้าเบิก-คืนใช้ (poPaxLeft)
@@ -93583,115 +93693,126 @@ function renderPierPark(pier){
   var D=pkTkData(_poDate,_poPier);
   var TY=pkTypes(), TYM={}; TY.forEach(function(T){ TYM[T.k]=T; });
 
-  /* หัวคน · นับสองชุด · ตามใบจอง กับ ตามที่แก้ที่ด่าน · ต่างกันเมื่อไรต้องเห็น */
-  var G={}, GX={}, gTot=0, gMiss=0, gBook=0, nBoat=0, nFix=0, nTyped=0;
+  /* ชื่อที่ซ้ำกันทั้งวัน · ด่านออกตั๋วตามรายชื่อ ซ้ำแล้วกลายเป็นคนเดียวได้สองใบ */
+  var used=pkNmUsed(D), dup={};
+  Object.keys(used).forEach(function(k){ if(used[k]>1) dup[k]=used[k]; });
+  var nDup=0; Object.keys(dup).forEach(function(k){ nDup+=dup[k]; });
+
+  var gTot=0, gMiss=0, gBook=0, nBoat=0, nFix=0, nTyped=0;
   D.forEach(function(g){ g.boats.forEach(function(b){
-    PK_CATS.forEach(function(C){ G[C.k]=(G[C.k]||0)+(b.cnt[C.k]||0); });
-    (b.people||[]).forEach(function(p){ GX[p.cat]=(GX[p.cat]||0)+1;
-      if(p.fixed) nFix++; if(p.ph&&p.typed) nTyped++; });
+    (b.people||[]).forEach(function(p){ if(p.fixed) nFix++; if(p.ph&&p.typed) nTyped++; });
     gTot+=b.tot; gMiss+=b.missTot; gBook+=(b.booked||0); nBoat++; }); });
 
-  /* ── การ์ดยอด · ตัวเลขที่จะไปซื้อจริงคือชุดที่แก้แล้ว ── */
-  var kpis='<div class="po-kpis pk-k5">'
-    +TY.filter(function(T){ return T.base || (GX[T.k]||0)>0; }).map(function(T){
-        var n=GX[T.k]||0, base=G[T.k];
-        return '<div class="po-kpi"><div><span class="k">'+poE(T.n)+'</span>'
-          +'<div class="v" style="color:'+T.c+'">'+n+'<em>คน</em>'
-            +((base!=null&&base!==n)?('<i class="dif" title="ตามใบจอง '+base+' · แก้ที่ด่านแล้ว">('+(n>base?'+':'')+(n-base)+')</i>'):'')
-          +'</div>'
-          +'<div class="s"><span class="cd">'+poE(T.code||'—')+'</span></div></div>'
-          +'<div class="ic" style="background:'+T.c+'14;color:'+T.c+'">'
-            +poIco(T.grp==='ad'?'user':'users')+'</div></div>';
-      }).join('')
-    +'</div>';
-
-  /* ── ตัวเลือกประเภท (dropdown ของแต่ละคน) ── */
   var optsFor=function(cur){
     return TY.map(function(T){
       return '<option value="'+T.k+'"'+(T.k===cur?' selected':'')+'>'+poE(T.n)+' · '+poE(T.code||'—')+'</option>';
     }).join('');
   };
 
-  /* ── ชีท · คอลัมน์ตามแบบฟอร์มของด่าน · Code อยู่ท้ายสุด ── */
+  /* ── ตารางของลำเดียว ── */
   var HEAD=['ที่','ชื่อ - นามสกุล','สัญชาติ','บัตรประชาชน / พาส','ผู้ใหญ่','เด็ก','เด็กเล็ก','หมายเหตุ','Code'];
   var NCOL=HEAD.length;
-  var rows='';
-  D.forEach(function(g){
-    var rn=(g.route&&g.route.name)||g.rid;
-    var rc=(g.route&&g.route.color)||'#94A3B8';
-    g.boats.forEach(function(B){
-      var chips=TY.map(function(T){
-          var n=(B.people||[]).filter(function(p){ return p.cat===T.k; }).length;
-          return n?('<span class="pk-c" style="background:'+T.c+'14;color:'+T.c+'">'+poE(T.s||T.n)+' <b>'+n+'</b></span>'):'';
-        }).join('');
-      rows+='<tr class="pk-grp"><td colspan="'+NCOL+'"><div class="in" style="--rc:'+rc+'">'
-        +'<span class="rn">'+poE(rn)+'</span>'
-        +'<span class="bn">'+poE(B.boat.name||B.bid)+'</span>'
-        +(B.dep?('<span class="tm">'+poE(B.dep)+'</span>'):'')
-        +'<span class="cc">'+chips+'</span>'
-        +'<span class="sp"></span>'
-        +'<span class="tt">'+B.tot+' คน</span>'
-        +((B.booked>B.tot)?('<span class="dl">จอง '+B.booked+' · ไม่ได้ไป '+(B.booked-B.tot)+'</span>'):'')
-        +(B.pcDiff?('<span class="dl" title="หน้าเงินสดย่อยปัดเศษคนละจังหวะ · ต่างกัน '
-            +Math.abs(B.totPc-B.tot)+' หัว">เงินสดย่อย '+B.totPc+'</span>'):'')
-        +(ro?'':((B.missTot>0)
-            ?('<button class="pk-fill" onclick="pkNmFillLead(\''+_poDate+'\',\''+B.bid+'\',\''+_poPier+'\')" '
-              +'title="เติมชื่อหัวกรุ๊ป + ลำดับ ให้หัวที่ยังว่าง '+B.missTot+' คน">เติมชื่อจากหัวกรุ๊ป '+B.missTot+'</button>')
-            :''))
-        +(ro?'':((B.people||[]).some(function(p){ return p.ph && p.typed; })
-            ?('<button class="pk-clr" onclick="pkNmClearBoat(\''+_poDate+'\',\''+B.bid+'\',\''+_poPier+'\')" '
-              +'title="ล้างชื่อที่กรอกเองของลำนี้">ล้างชื่อที่กรอกเอง</button>'):''))
-        +'</div></td></tr>';
-      var no=0;   /* เลขที่เริ่มใหม่ทุกลำ · แบบฟอร์มด่านเป็นใบต่อลำ */
-      B.people.forEach(function(p){
-        var T=TYM[p.cat]||TY[0]; no++;
-        var th=(String(p.nat2||'').toUpperCase()==='TH');
-        var cls=[]; if(th) cls.push('pk-th'); if(p.fixed) cls.push('pk-fx');
-        if(p.ph) cls.push(p.typed?'pk-tp':'pk-nn');
-        /* ช่องชื่อ · หัวที่ยังไม่มีชื่อพิมพ์ลงไปได้เลย · ที่มาจากใบจองแก้ไม่ได้
-           (ถ้าชื่อในใบจองผิด ต้องไปแก้ที่ใบจอง ไม่ใช่มาแก้ทับตรงนี้) */
-        var nmCell = p.ph
-          ? (ro ? ('<span class="'+(p.typed?'tp':'nn')+'">'+poE(p.full||'ยังไม่มีรายชื่อ')+'</span>')
-                : ('<input class="nmin'+(p.typed?' has':'')+'" value="'+poE(p.full)+'" '
-                   +'placeholder="พิมพ์ชื่อ-นามสกุล" spellcheck="false" '
-                   +'onchange="pkNmEdit(this,\''+_poDate+'\',\''+p.bkId+'\',\''+p.cat+'\','+p.seq+')">'))
-          : ('<span class="fx">'+poE(p.full)+'</span>');
-        rows+='<tr'+(cls.length?(' class="'+cls.join(' ')+'"'):'')+'>'
-          +'<td class="n">'+no+'</td>'
-          +'<td class="nmc">'+nmCell+'</td>'
-          +'<td class="m ctr nat'+(th?' th':'')+(p.natFromLead?' inh':'')+'" title="'
-            +poE(p.natFromLead?('ยืมสัญชาติจากหัวกรุ๊ป · '+(p.natName||p.nat2||'')):(p.natName||p.nat2||''))+'">'
-            +poE(p.nat3||p.nat2||'')+'</td>'
-          +'<td class="id"></td>'
-          +'<td class="g'+(T.grp==='ad'?' on':'')+'">'+(T.grp==='ad'?'1':'0')+'</td>'
-          +'<td class="g'+(T.grp==='chd'?' on':'')+'">'+(T.grp==='chd'?'1':'0')+'</td>'
-          +'<td class="g'+(T.grp==='inf'?' on':'')+'">'+(T.grp==='inf'?'1':'0')+'</td>'
-          +'<td class="nt">'
-            +(p.fixed?('<span class="fxb" title="ตามใบจองคือ '+poE((TYM[p.auto]||{}).n||p.auto)+'">แก้ประเภท</span>'):'')
-            +(p.ph&&p.typed?'<span class="tpb" title="ชื่อนี้กรอกที่หน้าท่า ไม่ได้มาจากใบจอง">กรอกเอง</span>':'')
-            +(p.ph&&!p.typed?('<span class="nnb" title="ใบ '+poE(p.vc)+(p.lead?(' · หัวกรุ๊ป '+poE(p.lead)):'')+'">รอชื่อ</span>'):'')
-            +(p.mism?('<span class="msb" title="สัญชาติในชื่อไม่ตรงกับที่คีย์ไว้ในใบ '+poE(p.vc)+' · ใส่ให้ตามหัวที่จ่ายจริง">สัญชาติไม่ตรง</span>'):'')
-            +(p.over?('<span class="ovb" title="ใบ '+poE(p.vc)+' มีรายชื่อมากกว่าหัวที่จ่าย · ต้องไปแก้ที่ใบจอง">เกินหัวที่จ่าย</span>'):'')
-          +'</td>'
-          +'<td class="cd">'
-            +(ro?('<span class="ro">'+poE(T.code||'—')+'</span>')
-                :('<select onchange="pkFixSet(\''+_poDate+'\',\''+p.bkId+'\',\''
-                  +(p.ph?('ph|'+p.cat+'|'+p.seq):p.ix)+'\',this.value===\''+p.auto+'\'?\'\':this.value)">'
-                  +optsFor(p.cat)+'</select><span class="cv">'+poE(T.code||'—')+'</span>'))
-          +'</td>'
-        +'</tr>';
-      });
-    });
-  });
-
   var COLS='<colgroup><col class="c-no"><col class="c-nm"><col class="c-na"><col class="c-id">'
     +'<col class="c-g"><col class="c-g"><col class="c-g"><col class="c-nt"><col class="c-cd"></colgroup>';
-  var sheet='<div class="pk-sheet"><table>'+COLS+'<thead><tr>'
-    +HEAD.map(function(h,i){ return '<th'+(i===0?' class="n"':(i>=4&&i<=6?' class="g"':''))+'>'+h+'</th>'; }).join('')
-    +'</tr></thead><tbody>'+(rows||'<tr><td colspan="'+NCOL+'" class="pk-e">วันนี้ยังไม่มีเรือออกจากท่านี้</td></tr>')
-    +'</tbody></table></div>';
+  var sheetOf=function(B){
+    var rows='', no=0;
+    B.people.forEach(function(p){
+      var T=TYM[p.cat]||TY[0]; no++;
+      var th=(String(p.nat2||'').toUpperCase()==='TH');
+      var isDup=!!(p.full && dup[pkNmNorm(p.full)]);
+      var cls=[]; if(th) cls.push('pk-th'); if(p.fixed) cls.push('pk-fx');
+      if(p.ph) cls.push(p.typed?'pk-tp':'pk-nn');
+      if(isDup) cls.push('pk-dup');
+      var nmCell = p.ph
+        ? (ro ? ('<span class="'+(p.typed?'tp':'nn')+'">'+poE(p.full||'ยังไม่มีรายชื่อ')+'</span>')
+              : ('<input class="nmin'+(p.typed?' has':'')+(isDup?' dup':'')+'" value="'+poE(p.full)+'" '
+                 +'placeholder="พิมพ์ชื่อ-นามสกุล" spellcheck="false" '
+                 +'onchange="pkNmEdit(this,\''+_poDate+'\',\''+p.bkId+'\',\''+p.cat+'\','+p.seq+')">'))
+        : ('<span class="fx">'+poE(p.full)+'</span>');
+      rows+='<tr'+(cls.length?(' class="'+cls.join(' ')+'"'):'')+'>'
+        +'<td class="n">'+no+'</td>'
+        +'<td class="nmc">'+nmCell+'</td>'
+        +'<td class="m ctr nat'+(th?' th':'')+(p.natFromLead?' inh':'')+'" title="'
+          +poE(p.natFromLead?('ยืมสัญชาติจากหัวกรุ๊ป · '+(p.natName||p.nat2||'')):(p.natName||p.nat2||''))+'">'
+          +poE(p.nat3||p.nat2||'')+'</td>'
+        +'<td class="id"></td>'
+        +'<td class="g'+(T.grp==='ad'?' on':'')+'">'+(T.grp==='ad'?'1':'0')+'</td>'
+        +'<td class="g'+(T.grp==='chd'?' on':'')+'">'+(T.grp==='chd'?'1':'0')+'</td>'
+        +'<td class="g'+(T.grp==='inf'?' on':'')+'">'+(T.grp==='inf'?'1':'0')+'</td>'
+        +'<td class="nt">'
+          +(isDup?'<span class="dpb" title="ชื่อนี้ซ้ำกับอีกแถวในวันนี้ · ด่านจะเห็นเป็นคนเดียว">ชื่อซ้ำ</span>':'')
+          +(p.fixed?('<span class="fxb" title="ตามใบจองคือ '+poE((TYM[p.auto]||{}).n||p.auto)+'">แก้ประเภท</span>'):'')
+          +(p.ph&&p.typed?'<span class="tpb" title="ชื่อนี้กรอกที่หน้าท่า ไม่ได้มาจากใบจอง">กรอกเอง</span>':'')
+          +(p.ph&&!p.typed?('<span class="nnb" title="ใบ '+poE(p.vc)+(p.lead?(' · หัวกรุ๊ป '+poE(p.lead)):'')+'">รอชื่อ</span>'):'')
+          +(p.mism?('<span class="msb" title="สัญชาติในชื่อไม่ตรงกับที่คีย์ไว้ในใบ '+poE(p.vc)+'">สัญชาติไม่ตรง</span>'):'')
+          +(p.over?('<span class="ovb" title="ใบ '+poE(p.vc)+' มีรายชื่อมากกว่าหัวที่จ่าย">เกินหัวที่จ่าย</span>'):'')
+        +'</td>'
+        +'<td class="cd">'
+          +(ro?('<span class="ro">'+poE(T.code||'—')+'</span>')
+              :('<select onchange="pkFixSet(\''+_poDate+'\',\''+p.bkId+'\',\''
+                +(p.ph?('ph|'+p.cat+'|'+p.seq):p.ix)+'\',this.value===\''+p.auto+'\'?\'\':this.value)">'
+                +optsFor(p.cat)+'</select><span class="cv">'+poE(T.code||'—')+'</span>'))
+        +'</td>'
+      +'</tr>';
+    });
+    return '<div class="pk-sheet"><table>'+COLS+'<thead><tr>'
+      +HEAD.map(function(h,i){ return '<th'+(i===0?' class="n"':(i>=4&&i<=6?' class="g"':''))+'>'+h+'</th>'; }).join('')
+      +'</tr></thead><tbody>'+(rows||'<tr><td colspan="'+NCOL+'" class="pk-e">ลำนี้ยังไม่มีคน</td></tr>')
+      +'</tbody></table></div>';
+  };
 
-  /* ── กล่องตั้งค่าประเภทตั๋ว · แก้ชื่อ/โค้ด/ช่อง และเพิ่มประเภทได้ ── */
+  /* ── หัวทริป + แท็บชื่อเรือ · ทีละทริป ทีละลำ ──────────────────────────
+     ของเดิมกางทุกลำต่อกันเป็นตารางเดียว เลื่อนหาลำที่ต้องการยาก
+     และแบบฟอร์มของด่านเป็น "ใบต่อลำ" อยู่แล้ว · จอเลยควรเป็นทีละลำเหมือนกัน */
+  if(!window._pkTab || typeof window._pkTab!=='object') window._pkTab={};
+  var body=D.map(function(g){
+    var rn=(g.route&&g.route.name)||g.rid;
+    var rc=(g.route&&g.route.color)||'#94A3B8';
+    var pick=window._pkTab[g.rid];
+    if(!g.boats.some(function(B){ return B.bid===pick; })) pick=(g.boats[0]||{}).bid;
+    var cur=g.boats.filter(function(B){ return B.bid===pick; })[0]||g.boats[0];
+    var gT=0,gM=0,gB=0; g.boats.forEach(function(B){ gT+=B.tot; gM+=B.missTot; gB+=(B.booked||0); });
+    var cc=TY.map(function(T){
+      var n=(cur&&cur.people||[]).filter(function(p){ return p.cat===T.k; }).length;
+      return n?('<span class="pk-c" style="background:'+T.c+'14;color:'+T.c+'">'+poE(T.s||T.n)
+        +' <b>'+n+'</b>'+(T.code?('<i>'+poE(T.code)+'</i>'):'')+'</span>'):'';
+    }).join('');
+    var tabs=g.boats.map(function(B){
+      var on=(B.bid===pick);
+      return '<button class="pk-tab'+(on?' on':'')+'" onclick="pkTab(\''+g.rid+'\',\''+B.bid+'\')">'
+        +poE(B.boat.name||B.bid)
+        +(B.dep?('<i>'+poE(B.dep)+'</i>'):'')
+        +'<b>'+B.tot+'</b>'
+        +(B.missTot>0?('<u title="ยังไม่มีรายชื่อ '+B.missTot+' คน">'+B.missTot+'</u>'):'')
+        +'</button>';
+    }).join('');
+    return '<div class="pk-trip" style="--rc:'+rc+'">'
+      +'<div class="pk-th2"><span class="rn">'+poE(rn)+'</span>'
+        +'<span class="mt">'+g.boats.length+' ลำ · '+gT+' คน'
+          +((gB>gT)?(' · จอง '+gB):'')+'</span>'
+        +(gM>0?('<span class="wn">ยังไม่มีรายชื่อ '+gM+'</span>'):'')
+      +'</div>'
+      +'<div class="pk-tabs">'+tabs+'</div>'
+      +(cur?('<div class="pk-bhd">'
+          +'<span class="bn">'+poE(cur.boat.name||cur.bid)+'</span>'
+          +(cur.dep?('<span class="tm">ออก '+poE(cur.dep)+'</span>'):'')
+          +'<span class="cc">'+cc+'</span>'
+          +'<span class="sp"></span>'
+          +'<span class="tt">'+cur.tot+' คน</span>'
+          +((cur.booked>cur.tot)?('<span class="dl">จอง '+cur.booked+' · ไม่ได้ไป '+(cur.booked-cur.tot)+'</span>'):'')
+          +(cur.pcDiff?('<span class="dl" title="หน้าเงินสดย่อยปัดเศษคนละจังหวะ">เงินสดย่อย '+cur.totPc+'</span>'):'')
+          +(ro?'':((cur.missTot>0)
+              ?('<button class="pk-fill" onclick="pkNmFillLead(\''+_poDate+'\',\''+cur.bid+'\',\''+_poPier+'\')">'
+                +'เติมชื่อจากหัวกรุ๊ป '+cur.missTot+'</button>'):''))
+          +(ro?'':((cur.people||[]).some(function(p){ return p.ph && p.typed; })
+              ?('<button class="pk-clr" onclick="pkNmClearBoat(\''+_poDate+'\',\''+cur.bid+'\',\''+_poPier+'\')">'
+                +'ล้างชื่อที่กรอกเอง</button>'):''))
+        +'</div>'
+        +'<div class="po-card">'+sheetOf(cur)+'</div>'):'')
+    +'</div>';
+  }).join('');
+
+  /* ── กล่องตั้งค่าประเภทตั๋ว ── */
   var tyRows=TY.map(function(T){
     var gsel=['ad','chd','inf'].map(function(x){
       return '<option value="'+x+'"'+(T.grp===x?' selected':'')+'>'+(x==='ad'?'ผู้ใหญ่':x==='chd'?'เด็ก':'เด็กเล็ก')+'</option>';
@@ -93714,7 +93835,7 @@ function renderPierPark(pier){
     +'<div class="po-h">'
       +'<div class="po-hl"><div class="po-badge">'+poE(P.s||String(P.n||'').slice(0,2).toUpperCase())+'</div><div>'
         +'<h1>'+poE(P.n||P.t)+' · ตั๋วอุทยาน</h1>'
-        +'<p>รายชื่อสำหรับไปซื้อตั๋วที่ด่าน · คอลัมน์เรียงตามแบบฟอร์มของด่าน<br>'
+        +'<p>รายชื่อสำหรับไปซื้อตั๋วที่ด่าน · คอลัมน์เรียงตามแบบฟอร์มของด่าน · ดูทีละลำ<br>'
         +'หัวคนชุดนี้เป็นชุดเดียวกับหน้า เงินสดย่อย · ค่าอุทยาน — เป็นคนที่ไปจริง หักคนไม่มาแล้ว</p></div></div>'
       +'<div class="po-bar">'
         +'<button class="pri">ตั๋วอุทยาน</button>'
@@ -93729,32 +93850,34 @@ function renderPierPark(pier){
         +'<button class="pri" onclick="pkTkExcel()">บันทึกเป็น Excel</button>'
       +'</div>'
     +'</div>'
-    +kpis
-    +tyBox
-    +'<div class="po-sec"><span class="n">1</span> รายชื่อทั้งวัน'
-      +'<span class="chip">'+nBoat+' ลำ · '+gTot+' คน'
-        +((gBook>gTot)?(' · จอง '+gBook):'')+'</span>'
-      +((gMiss>0)?('<span class="chip warn">ยังไม่มีรายชื่อ '+gMiss+' คน</span>'):'')
-      +((nTyped>0)?('<span class="chip ok">กรอกชื่อเองแล้ว '+nTyped+' คน</span>'):'')
-      +((nFix>0)?('<span class="chip warn">แก้ประเภทแล้ว '+nFix+' คน · ต่างจากใบจอง</span>'):'')
+    +'<div class="pk-day">'
+      +'<span class="s"><b>'+nBoat+'</b> ลำ</span>'
+      +'<span class="s"><b>'+gTot+'</b> ตั๋วทั้งวัน'+((gBook>gTot)?(' <i>จอง '+gBook+'</i>'):'')+'</span>'
+      +(gMiss>0?('<span class="s warn"><b>'+gMiss+'</b> ยังไม่มีรายชื่อ</span>'):'')
+      +(nTyped>0?('<span class="s ok"><b>'+nTyped+'</b> กรอกชื่อเอง</span>'):'')
+      +(nFix>0?('<span class="s warn"><b>'+nFix+'</b> แก้ประเภท</span>'):'')
+      +(nDup>0?('<span class="s bad"><b>'+nDup+'</b> ชื่อซ้ำ · ต้องแก้ก่อนยื่นด่าน</span>'):'')
     +'</div>'
-    +'<div class="po-card">'+sheet+'</div>'
+    +tyBox
+    +(body||'<div class="po-card"><div class="pk-e">วันนี้ยังไม่มีเรือออกจากท่านี้</div></div>')
     +'<div class="pk-iso">หน้านี้อ่านอย่างเดียว · ทุกอย่างที่แก้ตรงนี้ '
       +'(ชื่อที่กรอกเอง · ประเภทที่เปลี่ยน · รหัสของด่าน) เก็บไว้เฉพาะหน้านี้ '
       +'<b>ไม่ไปกระทบใบจอง ยอดขาย เงินสดย่อย หรือหน้าอื่นเลย</b> — '
       +'ถ้าต้องการให้ถึงฝ่ายขายจริง ต้องไปแก้ที่ใบจอง</div>'
     +'<div class="pk-foot">'
-      +'<b>หัวที่ยังไม่มีชื่อ</b> — พิมพ์ชื่อลงช่องได้เลย เก็บไว้ให้ ไม่ไปแก้ใบจองของฝ่ายขาย '
-      +'(ชื่อที่ได้หน้าท่าจากพาสปอร์ต กับชื่อในใบจอง คนละแหล่งกัน) · ที่กรอกเองจะติดป้าย '
-      +'<b>กรอกเอง</b> ไว้ตลอด · ปุ่ม <b>เติมชื่อจากหัวกรุ๊ป</b> จะใส่ “ชื่อหัวกรุ๊ป (2)(3)…” '
-      +'ให้ทั้งลำในคลิกเดียว — ไม่ใช่การแต่งชื่อคนขึ้นมา แต่บอกว่าคนเหล่านี้อยู่ในกรุ๊ปของหัวคนนั้น '
-      +'ซึ่งย้อนกลับไปดูใบจองได้จริง<br>'
-      +'<b>แถบเขียว</b> = คนไทย (ด่านคิดคนละราคา) · สัญชาติของหัวที่ยังไม่มีชื่อยืมมาจากหัวกรุ๊ป '
-      +'จึงขึ้นเป็นตัวจาง — ถ้าไม่ตรงให้เปลี่ยน Code ของคนนั้นเอง<br>'
-      +'คอลัมน์ <b>Code</b> เปลี่ยนได้ทีละคน (เช่น เด็ก → เด็กเล็ก) ที่แก้แล้วขึ้นป้าย <b>แก้ประเภท</b> '
-      +'และการ์ดข้างบนจะบอกส่วนต่างจากใบจอง · ช่อง <b>บัตรประชาชน/พาส</b> เว้นไว้กรอกที่ด่าน '
-      +'ระบบยังไม่ได้เก็บเลขพาสปอร์ต<br>'
+      +'<b>ชื่อห้ามซ้ำ</b> — ด่านออกตั๋วตามรายชื่อ ชื่อซ้ำจะกลายเป็นคนเดียวได้สองใบ '
+      +'พิมพ์ชื่อที่ชนกับแถวอื่นระบบจะไม่รับและบอกว่าไปชนกับใคร · ปุ่มเติมชื่อเลี่ยงเลขที่ชนให้เอง '
+      +'(เทียบแบบไม่สนตัวพิมพ์ใหญ่เล็กและคำนำหน้า)<br>'
+      +'<b>หัวที่ยังไม่มีชื่อ</b> — พิมพ์ลงช่องได้เลย ติดป้าย <b>กรอกเอง</b> ไว้ตลอด · '
+      +'ปุ่ม <b>เติมชื่อจากหัวกรุ๊ป</b> ใส่ “ชื่อหัวกรุ๊ป (2)(3)…” ทั้งลำในคลิกเดียว — '
+      +'ไม่ใช่การแต่งชื่อคนขึ้นมา แต่บอกว่าอยู่ในกรุ๊ปของหัวคนนั้น ย้อนดูใบจองได้จริง<br>'
+      +'<b>แถบเขียว</b> = คนไทย · สัญชาติของหัวที่ยังไม่มีชื่อยืมจากหัวกรุ๊ป จึงขึ้นเป็นตัวจาง<br>'
       +'กด <b>บันทึกเป็น Excel</b> ได้ไฟล์ 3 คอลัมน์ แยกชีทต่อลำ พร้อมวางในแบบฟอร์มของด่าน</div>';
+}
+function pkTab(rid,bid){
+  if(!window._pkTab || typeof window._pkTab!=='object') window._pkTab={};
+  window._pkTab[rid]=bid;
+  renderPierPark();
 }
 
 function pkSetDate(v){ if(v) _poDate=v; renderPierPark(); }
