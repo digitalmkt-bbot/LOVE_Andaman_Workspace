@@ -97192,6 +97192,87 @@ function pjCard(B, pier, ro){
   var wbc=J.wbc||'', wbt=J.wb||'';
   var pid='pjpop-'+bid.replace(/[^A-Za-z0-9_-]/g,'_');
   var wid='pjwb-'+bid.replace(/[^A-Za-z0-9_-]/g,'_');
+  /* §gdIdle (2026-09-07) · ปุ่ม "จัดไกด์" อยู่ทุกใบ ลำที่ไม่ได้ออกก็จ่ายไกด์ได้
+     แต่ช่องนี้เคยผูกกับ going · จ่ายเสร็จแล้วไม่มีที่ให้โผล่ ทั้งบนจอและบนกระดาษ
+     แยกเป็นก้อนเดียวแล้วเรียกสองที่ · ออกเรือ = โชว์เสมอ
+     ไม่ได้ออก = โชว์เมื่อมีคนอยู่จริง ใบที่ยังไม่จ่ายจะได้ไม่รก */
+  var gdHas=(GF.length>0 || (+GF.other||0)>0);
+  var gdSec=function(){ return pjSecHd('Guides &amp; Trainee','guide')
+        /* §gdRole · เดิมมี 3 ช่องตายตัว · จ่ายไกด์ 5 คนแล้วคนที่ 4-5 หายเงียบ
+           ตอนนี้แสดงทุกคนที่จ่ายไว้จริง พร้อมป้ายภาษา แล้วแยกแถวฝึกงาน/สตาฟ */
+        + (function(){
+            var gd=GF.filter(function(x){ return x.guide; });
+            var tr=GF.filter(function(x){ return !x.guide; });
+            /* §gdSel · แก้ไม่ได้ (ไม่มีสิทธิ์ หรือใบปิดไปแล้ว) = อ่านอย่างเดียวเหมือนเดิม
+               §pjG1 · เดิมใบที่ยังไม่ได้จัดไกด์ขึ้น Guide 1 สองแถวซ้อนกัน
+               ช่องว่างมาจากตัวเติมอยู่แล้ว ไม่ต้องใส่ช่องแรกแยกอีก */
+            if(lro){
+              /* §gdLb · ชื่อช่องที่ตั้งทับไว้ต้องขึ้นตรงกันทั้งสองโหมด
+                 ไม่งั้นคนที่ดูอย่างเดียวเห็นคนละชื่อกับคนที่แก้ได้ */
+              var o=gd.map(function(x,i){
+                return pjGuideRow(pjSlotLb('gd',pjGdSlot('gd',i),pjGdDefLb('gd',i)), x.name, x.langs); }).join('');
+              for(var i=gd.length; i<3; i++)
+                o+=pjGuideRow(pjSlotLb('gd',pjGdSlot('gd',i),pjGdDefLb('gd',i)),'',[]);
+              var trTxt=tr.map(function(x){ return x.name; }).join(' · ');
+              var trN=tr.length+(+GF.other||0);
+              if(!trTxt && GF.other>0) trTxt=GF.other+' คน';
+              return o+pjRow(poE(pjSlotLb('gd',pjGdSlot('tr',0),pjGdDefLb('tr',0))),
+                (trTxt?('<div class="v">'+poE(trTxt)+'</div>'):'<div class="v e">—</div>')
+                +(trN>1?('<span class="pj-lgs"><span class="pj-lg" style="background:#F1EFE8;color:#6B6B63">'
+                         +trN+' คน</span></span>'):''), null);
+            }
+            /* §gdSel · ช่องเลือกได้ · §gdAdd · โชว์เฉพาะช่องที่ใส่แล้ว ที่เหลืออยู่หลังปุ่ม
+               "เพิ่มคน" แบบเดียวกับกลุ่มลูกเรือ · ช่อง Guide 1 โชว์เสมอแม้ยังไม่ได้ใส่ใคร
+               ใบเปล่าจะได้มีที่ให้เริ่ม */
+            var taken={}; GF.forEach(function(x){ if(x.id) taken[x.id]=1; });
+            var busy=pjGdBusy(_poDate,bid);
+            /* ช่องที่กดเปิดบวกเพิ่มจากช่องที่มีอยู่ · ไม่ใช่ Math.max กับมัน
+               ไม่งั้นกดเพิ่มบนใบเปล่าแล้วหน้าจอไม่ขยับ (ช่อง Guide 1 กลืนไปเอง) */
+            var nG=Math.max(1, gd.length)+pjGdAddN(bid,'gd');
+            var nT=tr.length+pjGdAddN(bid,'tr');
+            var out='', k;
+            /* §gdLb · แถวที่เกินจากช่องที่มีอยู่ = แถวที่กดเปิดไว้ · ปิดทิ้งได้
+               ฐานของไกด์รวมช่องแรกที่โชว์เสมอ ช่อง Guide 1 จึงไม่มีปุ่มปิด */
+            var baseG=Math.max(1, gd.length), baseT=tr.length;
+            var lead=pjGdLead(bid);   /* §gdLead */
+            for(k=0; k<nG; k++)
+              out+=pjGdRow(pjGdDefLb('gd',k), bid, 'gd', k,
+                    (gd[k]||{}).id||'', (gd[k]||{}).langs||[], taken, busy, k>=baseG, lead);
+            for(k=0; k<nT; k++)
+              out+=pjGdRow(pjGdDefLb('tr',k), bid, 'tr', k,
+                    (tr[k]||{}).id||'', (tr[k]||{}).langs||[], taken, busy, k>=baseT);
+            /* ช่อง "อื่นๆ ที่ไม่อยู่ในทะเบียน" ของใบสั่งงาน · เป็นจำนวน ไม่มีชื่อให้เลือก
+               ตั้งได้ที่หน้าต่างจัดไกด์ · โชว์ไว้ให้ยอดบนกระดาษกับบนการ์ดตรงกัน */
+            if(+GF.other>0) out+=pjRow('อื่นๆ (ไม่มีชื่อ)',
+              '<div class="v">'+(+GF.other)+' คน</div>', null);
+            /* §gdAdd · ปุ่มเพิ่มช่อง · ไกด์ไม่มีจำนวนช่องตายตัวเหมือนลูกเรือ
+               ตัวเลขข้างปุ่มจึงบอก "คนที่ยังว่างในทะเบียน" ซึ่งเป็นเพดานจริงของช่องนี้
+               หมดทะเบียนแล้ว = ปุ่มกดไม่ได้ พร้อมบอกว่าไปเพิ่มคนได้ที่ไหน */
+            var left=goGuides().filter(function(g){
+              return g.active!==false && !taken[g.id]; }).length;
+            var aid='pjga_'+String(bid).replace(/[^A-Za-z0-9_-]/g,'_');
+            out+='<div class="pj-addw">'
+              +'<button class="pj-addb" onclick="pjPopToggle(\''+aid+'\')"'+(left?'':' disabled')
+                +' title="'+(left?'เพิ่มช่องไกด์ หรือช่อง ผช.ไกด์ / สตาฟ'
+                              :'ทุกคนในทะเบียนไกด์ลงลำนี้หมดแล้ว — เพิ่มคนใหม่ได้ที่ปุ่ม จัดไกด์ › ทะเบียนไกด์')+'">'
+                +'&#65291; เพิ่มคน</button>'
+              +'<span class="pj-addn">'+(left?('เหลือ '+left+' คนในทะเบียน'):'ทะเบียนหมดแล้ว')+'</span>'
+              +'<div class="pj-pop pj-addp" id="'+aid+'"><div class="ph">เลือกช่องที่จะเพิ่ม</div>'
+                /* §gdLb · ชื่อในเมนูต้องเป็นชื่อที่ตั้งทับไว้ ไม่ใช่ชื่อตั้งต้น
+                   ไม่งั้นเมนูเรียกช่องคนละชื่อกับที่เห็นบนการ์ด */
+                +'<button onclick="pjGdAddSlot(\''+poE(bid)+'\',\'gd\')">'
+                  +poE(pjSlotLb('gd',pjGdSlot('gd',nG),pjGdDefLb('gd',nG)))+'</button>'
+                +'<button onclick="pjGdAddSlot(\''+poE(bid)+'\',\'tr\')">'
+                  +poE(pjSlotLb('gd',pjGdSlot('tr',nT),pjGdDefLb('tr',nT)))+'</button>'
+                /* §gdLb · แถวที่เพิ่มมาเปลี่ยนชื่อตำแหน่งได้ · ต้องบอกตรงนี้
+                   ไม่งั้นไม่มีอะไรชวนให้ลองคลิกที่ชื่อช่อง */
+                +'<div class="pf">เพิ่มแล้วคลิกที่ชื่อช่องเพื่อตั้งชื่อตำแหน่งเองได้'
+                  +' · เลือกกลุ่มให้ถูกก่อน เพราะกลุ่มเป็นตัวกำหนดว่าจะเห็นใครในช่องเลือก</div>'
+              +'</div></div>';
+            /* จำนวนคนของกลุ่มนี้ · วางหัวกลุ่มแบบเดียวกับ "N คน" ของลูกเรือ */
+            return '<div class="pj-slotn">'+(gd.length+tr.length+(+GF.other||0))+' คน</div>'
+              +out;   /* §pjKit · ภาษาย้ายออกไปเป็นหัวข้อของตัวเองข้างล่าง */
+          })(); };
   var h='<div class="bc'+(going?'':' dim')+(ST.stale?' stale':'')+(lk?' lk':'')+'" data-st="'+ST.k+'">'
    +'<div class="top" style="background:'+col+'">'
      +'<div class="trow"><div class="l"><div class="bn">'+poE(B.boat.name||bid)+'</div>'
@@ -97320,82 +97401,7 @@ function pjCard(B, pier, ro){
        }).join('');
      }catch(_){ return ''; } })()+'</div>'
    + (going
-      ? ( pjSecHd('Guides &amp; Trainee','guide')
-        /* §gdRole · เดิมมี 3 ช่องตายตัว · จ่ายไกด์ 5 คนแล้วคนที่ 4-5 หายเงียบ
-           ตอนนี้แสดงทุกคนที่จ่ายไว้จริง พร้อมป้ายภาษา แล้วแยกแถวฝึกงาน/สตาฟ */
-        + (function(){
-            var gd=GF.filter(function(x){ return x.guide; });
-            var tr=GF.filter(function(x){ return !x.guide; });
-            /* §gdSel · แก้ไม่ได้ (ไม่มีสิทธิ์ หรือใบปิดไปแล้ว) = อ่านอย่างเดียวเหมือนเดิม
-               §pjG1 · เดิมใบที่ยังไม่ได้จัดไกด์ขึ้น Guide 1 สองแถวซ้อนกัน
-               ช่องว่างมาจากตัวเติมอยู่แล้ว ไม่ต้องใส่ช่องแรกแยกอีก */
-            if(lro){
-              /* §gdLb · ชื่อช่องที่ตั้งทับไว้ต้องขึ้นตรงกันทั้งสองโหมด
-                 ไม่งั้นคนที่ดูอย่างเดียวเห็นคนละชื่อกับคนที่แก้ได้ */
-              var o=gd.map(function(x,i){
-                return pjGuideRow(pjSlotLb('gd',pjGdSlot('gd',i),pjGdDefLb('gd',i)), x.name, x.langs); }).join('');
-              for(var i=gd.length; i<3; i++)
-                o+=pjGuideRow(pjSlotLb('gd',pjGdSlot('gd',i),pjGdDefLb('gd',i)),'',[]);
-              var trTxt=tr.map(function(x){ return x.name; }).join(' · ');
-              var trN=tr.length+(+GF.other||0);
-              if(!trTxt && GF.other>0) trTxt=GF.other+' คน';
-              return o+pjRow(poE(pjSlotLb('gd',pjGdSlot('tr',0),pjGdDefLb('tr',0))),
-                (trTxt?('<div class="v">'+poE(trTxt)+'</div>'):'<div class="v e">—</div>')
-                +(trN>1?('<span class="pj-lgs"><span class="pj-lg" style="background:#F1EFE8;color:#6B6B63">'
-                         +trN+' คน</span></span>'):''), null);
-            }
-            /* §gdSel · ช่องเลือกได้ · §gdAdd · โชว์เฉพาะช่องที่ใส่แล้ว ที่เหลืออยู่หลังปุ่ม
-               "เพิ่มคน" แบบเดียวกับกลุ่มลูกเรือ · ช่อง Guide 1 โชว์เสมอแม้ยังไม่ได้ใส่ใคร
-               ใบเปล่าจะได้มีที่ให้เริ่ม */
-            var taken={}; GF.forEach(function(x){ if(x.id) taken[x.id]=1; });
-            var busy=pjGdBusy(_poDate,bid);
-            /* ช่องที่กดเปิดบวกเพิ่มจากช่องที่มีอยู่ · ไม่ใช่ Math.max กับมัน
-               ไม่งั้นกดเพิ่มบนใบเปล่าแล้วหน้าจอไม่ขยับ (ช่อง Guide 1 กลืนไปเอง) */
-            var nG=Math.max(1, gd.length)+pjGdAddN(bid,'gd');
-            var nT=tr.length+pjGdAddN(bid,'tr');
-            var out='', k;
-            /* §gdLb · แถวที่เกินจากช่องที่มีอยู่ = แถวที่กดเปิดไว้ · ปิดทิ้งได้
-               ฐานของไกด์รวมช่องแรกที่โชว์เสมอ ช่อง Guide 1 จึงไม่มีปุ่มปิด */
-            var baseG=Math.max(1, gd.length), baseT=tr.length;
-            var lead=pjGdLead(bid);   /* §gdLead */
-            for(k=0; k<nG; k++)
-              out+=pjGdRow(pjGdDefLb('gd',k), bid, 'gd', k,
-                    (gd[k]||{}).id||'', (gd[k]||{}).langs||[], taken, busy, k>=baseG, lead);
-            for(k=0; k<nT; k++)
-              out+=pjGdRow(pjGdDefLb('tr',k), bid, 'tr', k,
-                    (tr[k]||{}).id||'', (tr[k]||{}).langs||[], taken, busy, k>=baseT);
-            /* ช่อง "อื่นๆ ที่ไม่อยู่ในทะเบียน" ของใบสั่งงาน · เป็นจำนวน ไม่มีชื่อให้เลือก
-               ตั้งได้ที่หน้าต่างจัดไกด์ · โชว์ไว้ให้ยอดบนกระดาษกับบนการ์ดตรงกัน */
-            if(+GF.other>0) out+=pjRow('อื่นๆ (ไม่มีชื่อ)',
-              '<div class="v">'+(+GF.other)+' คน</div>', null);
-            /* §gdAdd · ปุ่มเพิ่มช่อง · ไกด์ไม่มีจำนวนช่องตายตัวเหมือนลูกเรือ
-               ตัวเลขข้างปุ่มจึงบอก "คนที่ยังว่างในทะเบียน" ซึ่งเป็นเพดานจริงของช่องนี้
-               หมดทะเบียนแล้ว = ปุ่มกดไม่ได้ พร้อมบอกว่าไปเพิ่มคนได้ที่ไหน */
-            var left=goGuides().filter(function(g){
-              return g.active!==false && !taken[g.id]; }).length;
-            var aid='pjga_'+String(bid).replace(/[^A-Za-z0-9_-]/g,'_');
-            out+='<div class="pj-addw">'
-              +'<button class="pj-addb" onclick="pjPopToggle(\''+aid+'\')"'+(left?'':' disabled')
-                +' title="'+(left?'เพิ่มช่องไกด์ หรือช่อง ผช.ไกด์ / สตาฟ'
-                              :'ทุกคนในทะเบียนไกด์ลงลำนี้หมดแล้ว — เพิ่มคนใหม่ได้ที่ปุ่ม จัดไกด์ › ทะเบียนไกด์')+'">'
-                +'&#65291; เพิ่มคน</button>'
-              +'<span class="pj-addn">'+(left?('เหลือ '+left+' คนในทะเบียน'):'ทะเบียนหมดแล้ว')+'</span>'
-              +'<div class="pj-pop pj-addp" id="'+aid+'"><div class="ph">เลือกช่องที่จะเพิ่ม</div>'
-                /* §gdLb · ชื่อในเมนูต้องเป็นชื่อที่ตั้งทับไว้ ไม่ใช่ชื่อตั้งต้น
-                   ไม่งั้นเมนูเรียกช่องคนละชื่อกับที่เห็นบนการ์ด */
-                +'<button onclick="pjGdAddSlot(\''+poE(bid)+'\',\'gd\')">'
-                  +poE(pjSlotLb('gd',pjGdSlot('gd',nG),pjGdDefLb('gd',nG)))+'</button>'
-                +'<button onclick="pjGdAddSlot(\''+poE(bid)+'\',\'tr\')">'
-                  +poE(pjSlotLb('gd',pjGdSlot('tr',nT),pjGdDefLb('tr',nT)))+'</button>'
-                /* §gdLb · แถวที่เพิ่มมาเปลี่ยนชื่อตำแหน่งได้ · ต้องบอกตรงนี้
-                   ไม่งั้นไม่มีอะไรชวนให้ลองคลิกที่ชื่อช่อง */
-                +'<div class="pf">เพิ่มแล้วคลิกที่ชื่อช่องเพื่อตั้งชื่อตำแหน่งเองได้'
-                  +' · เลือกกลุ่มให้ถูกก่อน เพราะกลุ่มเป็นตัวกำหนดว่าจะเห็นใครในช่องเลือก</div>'
-              +'</div></div>';
-            /* จำนวนคนของกลุ่มนี้ · วางหัวกลุ่มแบบเดียวกับ "N คน" ของลูกเรือ */
-            return '<div class="pj-slotn">'+(gd.length+tr.length+(+GF.other||0))+' คน</div>'
-              +out;   /* §pjKit · ภาษาย้ายออกไปเป็นหัวข้อของตัวเองข้างล่าง */
-          })()
+      ? ( gdSec()
         /* §pjKit · ภาษาที่ลูกค้าขอ · เป็นของที่ไกด์กับหน้าท่าต้องเห็นก่อนออกเรือ
            อยู่เป็นบรรทัดสุดท้ายของกลุ่มไกด์แล้วถูกมองข้ามตลอด */
         + pjSecHd('ภาษาที่ลูกค้าขอ','lang')
@@ -97451,7 +97457,9 @@ function pjCard(B, pier, ro){
                   +(M.startDate?(' · เริ่ม '+pjDocDate(M.startDate)):'')
                   +(M.location?(' · '+M.location):'')):'—')
               + pjTxtRow('คืบหน้า', last||'—');
-          })() ))
+          })()
+        /* §gdIdle · ลำที่ไม่ได้ออกแต่มีไกด์จ่ายไว้ · ต้องเห็นบนใบ ไม่งั้นจ่ายแล้วหาย */
+        + (gdHas?gdSec():'') ))
    + (going ? ( pjSecHd('Customer','cust')
    +'<div class="pj-wbrow"><span class="k">Wristband</span>'
      +'<span class="pj-wb" onclick="'+(lro?'':'pjPopToggle(\''+wid+'\')')+'" style="position:relative">'
@@ -97691,18 +97699,43 @@ function pjPrint(){
     var ids=[R.cap||'', R.asst||''];
     for(var c=0;c<3;c++) ids.push((R.crew||[])[c]||'');
     for(var c=0;c<2;c++) ids.push((R.island||[])[c]||'');
-    if(ids.filter(Boolean).length) WK[B.bid]={ids:ids, note:R.note||''};
+    /* §wkPack · ลำที่จอด · ชื่อคนต้องเรียงชิดบนสุดของช่วงคน ไม่เว้นรูตามช่องบนจอ
+       ช่องบนการ์ดเว้นได้ตามใจคนจ่ายงาน (จ่ายช่อง "ช่าง 2" ทั้งที่ "ช่าง 1" ว่าง)
+       แต่บนกระดาษรูตรงกลางอ่านเหมือนลืมเขียน · ชื่อตำแหน่งจริงติดท้ายชื่อคนอยู่แล้ว
+       จึงย้ายขึ้นได้โดยไม่เสียความหมาย */
+    var pk=[];
+    ids.forEach(function(id,i){ if(id) pk.push({id:id, role:WROLE[i]}); });
+    if(pk.length) WK[B.bid]={ids:ids, p:pk, note:R.note||''};
   });
   var isWk=function(B){ return !!WK[B.bid]; };
   var WKL=Object.keys(WK).map(function(k){ return WK[k]; });
   var nWk=WKL.length;
+  /* §gdIdle · ลำที่ไม่ได้ออกแต่จ่ายไกด์ไว้ · เดิมช่วงไกด์ของคอลัมน์นี้เป็นช่องรวมช่องเดียว
+     ชื่อไกด์เลยไม่มีที่ลง · ทำให้คอลัมน์นี้พิมพ์แถวไกด์จริง แล้วเลื่อนช่องรวมงานซ่อม
+     ไปเริ่มที่แถว "ร้านอาหาร" แทน · ลำที่ไม่มีไกด์ยังรวมยาวเหมือนเดิม */
+  var WKG={};
+  boats.forEach(function(B){
+    if(isGo(B)) return;
+    var g=[]; try{ g=(pjGuides(_poDate,B.bid)||[]).filter(Boolean); }catch(_){}
+    if(g.length) WKG[B.bid]=g;
+  });
+  /* ลำที่มีแต่ไกด์ ไม่มีทีมช่าง · ต้องมีที่นั่งใน WK ด้วย ไม่งั้นทั้งคอลัมน์ถูกรวมตั้งแต่แถวแรก */
+  Object.keys(WKG).forEach(function(k){
+    if(WK[k]) return;
+    var R=null; try{ R=(typeof pjRaw==='function')?pjRaw(_poDate,k):null; }catch(_){}
+    WK[k]={ids:['','','','','','',''], p:[], note:(R&&R.note)||''};
+  });
 
-  /* ลำที่จอดก็กินช่องเด็กเรือ/ประจำเกาะเหมือนกัน · ไม่นับด้วยแถวจะขาด ชื่อช่างหาย */
-  var CJ=J.concat(WKL.map(function(w){ return {crew:[w.ids[2],w.ids[3],w.ids[4]], island:[w.ids[5],w.ids[6]]}; }));
+  /* ลำที่จอดก็กินช่องเด็กเรือ/ประจำเกาะเหมือนกัน · ไม่นับด้วยแถวจะขาด ชื่อช่างหาย
+     §wkPack · นับจากคิวที่ชิดบนแล้ว ไม่ใช่ช่องดิบ · คน 3 คนที่กระจายอยู่ช่อง 1/3/5
+     ต้องการแค่แถว "เด็กเรือ 1" แถวเดียว ไม่ใช่ลากยาวไปถึงประจำเกาะ */
+  var CJ=J.concat(WKL.map(function(w){ var P=(w.p||[]).map(function(x){ return x.id; });
+    return {crew:[P[2]||'',P[3]||'',P[4]||''], island:[P[5]||'',P[6]||'']}; }));
   var nCrew=Math.max(2, Math.min(4, mx(CJ.map(function(j){ return (j.crew||[]).filter(Boolean).length; }))));
   var nIsl =Math.max(1, Math.min(2, mx(CJ.map(function(j){ return (j.island||[]).filter(Boolean).length; }))));
   /* §gdRole · เดิมล็อก 3 · ลำที่จ่ายไกด์ 5 คนจะหายไป 2 คนเงียบ ๆ · ปล่อยตามจริง กัน 8 ไว้กันตารางบาน */
-  var nGd  =Math.max(1, Math.min(8, mx(Gs.map(function(g){ return g.filter(Boolean).length; }))));
+  var GsAll=Gs.concat(Object.keys(WKG).map(function(k){ return WKG[k]; }));   /* §gdIdle */
+  var nGd  =Math.max(1, Math.min(8, mx(GsAll.map(function(g){ return g.filter(Boolean).length; }))));
   /* จำนวนแถวในตัวตาราง · ช่องของลำที่ไม่ออกต้องคลุมให้ครบพอดี ไม่งั้นตารางเบี้ยว */
   var SPAN = 1 /*โปรแกรม*/ + 1 /*หัวกลุ่มคน*/ + 2 + nCrew + nIsl
            + 1 /*หัวไกด์*/ + nGd + 1 /*ร้านอาหาร*/ + 1 /*หัวลูกค้า*/ + 2 + 1 /*ลค*/ + 1 /*หัวหมายเหตุ*/ + 1;
@@ -97823,10 +97856,13 @@ function pjPrint(){
   var gi=function(B){ var k=-1; GO.forEach(function(x,i){ if(x===B) k=i; }); return k; };
 
   /* §pjWork2 · ชื่อช่าง + ป้ายตำแหน่งจริง · ป้ายซ้ายมือยังเป็นชื่อช่องของลูกเรือ */
+  /* §wkPack · pos = ลำดับของแถวในช่วงคน ไม่ใช่หมายเลขช่องที่จ่ายไว้
+     ตำแหน่งจริงมาจากคิว (p) จึงยังถูกต้องแม้ชื่อจะเลื่อนขึ้นมาคนละแถวกับบนจอ */
   var wkWho=function(B,pos){
     var w=WK[B.bid]; if(!w) return '';
-    var nm=who(w.ids[pos],0);
-    return nm?(nm+' <span class="rl">· '+WROLE[pos]+'</span>'):'';
+    var x=(w.p||[])[pos]; if(!x) return '';
+    var nm=who(x.id,0);
+    return nm?(nm+' <span class="rl">· '+x.role+'</span>'):'';
   };
   /* แถบสถานะของลำที่จอด · แทนช่องโปรแกรม · สีเดียวกับป้ายสถานะบนหน้าจอ */
   var wkHead=function(B){
@@ -97852,11 +97888,22 @@ function pjPrint(){
     if(mj.length>1) L.push('งานเปิด '+mj.length+' ใบ');
     return L;
   };
+  /* §gdIdle · ช่องรวมของลำที่จอด · เริ่มแถวไหน คลุมกี่แถว แล้วแต่ว่ามีไกด์หรือไม่ */
+  var wkiCell=function(B,span){
+    var L=wkInfo(B);
+    return '<td class="off wki" rowspan="'+span+'">'
+      + L.map(function(x,i){ return '<span class="sm"'+(i?'':' style="margin-top:0"')+'>'+e(x)+'</span>'; }).join('')
+      +'</td>';
+  };
   var row=function(k,fn,first,wfn){
     return '<tr><th class="k">'+k+'</th>'
       + boats.map(function(B){
           if(isGo(B)){ var v=fn(B, gi(B)); return v?('<td class="v">'+v+'</td>'):'<td class="mut">—</td>'; }
-          if(isWk(B)){ if(!wfn) return ''; var w=wfn(B); return w?('<td class="v">'+w+'</td>'):'<td class="mut">—</td>'; }
+          if(isWk(B)){ if(!wfn) return ''; var w=wfn(B);
+            /* §gdIdle · false = ช่องรวมคลุมแถวนี้อยู่แล้ว · '<td…' = ช่องดิบ (ตัวช่องรวมเอง) */
+            if(w===false) return '';
+            if(String(w).slice(0,3)==='<td') return w;
+            return w?('<td class="v">'+w+'</td>'):'<td class="mut">—</td>'; }
           return first?offCell(B):'';
         }).join('') + '</tr>'; };
   var gh=function(t,cls,wcell){
@@ -97890,7 +97937,9 @@ function pjPrint(){
           }
           return isWk(B) ? wkHead(B) : offCell(B); }).join('')
     +'</tr>'
-    + gh(nWk?'Crew · ช่าง':'Crew','crew')
+    /* §gdIdle · แถบหัวกลุ่ม Crew เคยขาดช่องของลำที่มีทีมช่าง · แถบสีเลยสั้นกว่าตาราง
+       (หัว Customer/Note ไม่ต้องเติม · ช่องรวมงานซ่อมคลุมอยู่แล้ว) */
+    + gh(nWk?'Crew · ช่าง':'Crew','crew',function(){ return '<td></td>'; })
     + row('กัปตัน',function(B,i){ return who(J[i].cap,0); },0,function(B){ return wkWho(B,0); })
     + row('ผู้ช่วยกัปตัน',function(B,i){ return who(J[i].asst,0); },0,function(B){ return wkWho(B,1); })
     + (function(){ var o=''; for(var c=0;c<nCrew;c++){ (function(c){
@@ -97900,19 +97949,21 @@ function pjPrint(){
         o+=row('ประจำเกาะ'+(nIsl>1?(' '+(c+1)):''),function(B,i){ return who((J[i].island||[])[c],0); },0,
                (c<2)?function(B){ return wkWho(B,5+c); }:null); })(c); } return o; })()
     + gh('Guides','guide',function(B){
-        var L=wkInfo(B);
-        return '<td class="off wki" rowspan="'+WKSPAN+'">'
-          + L.map(function(x,i){ return '<span class="sm"'+(i?'':' style="margin-top:0"')+'>'+e(x)+'</span>'; }).join('')
-          +'</td>'; })
+        /* §gdIdle · มีไกด์ = ปล่อยแถวไกด์ให้พิมพ์ตามปกติ · ช่องรวมไปเริ่มที่ "ร้านอาหาร" */
+        return WKG[B.bid] ? '<td></td>' : wkiCell(B, WKSPAN); })
     + (function(){ var o=''; for(var c=0;c<nGd;c++){ (function(c){
-        o+=row('ไกด์ '+(c+1),function(B,i){ return e(Gs[i][c]||''); }); })(c); } return o; })()
+        o+=row('ไกด์ '+(c+1),function(B,i){ return e(Gs[i][c]||''); },0,
+               /* §gdIdle · ลำที่จอดที่จ่ายไกด์ไว้ · ลำที่ไม่มีไกด์ยังโดนช่องรวมคลุม */
+               function(B){ return WKG[B.bid] ? e(WKG[B.bid][c]||'') : false; }); })(c); } return o; })()
     /* §pjSheet4 · ร้านอาหารของลำนี้วันนี้ · ตั้งรายลำมาก่อนร้านประจำเส้นทางเสมอ */
     + row('ร้านอาหาร',function(B,i){
         var raw=''; try{ raw=mvTripRaw(_poDate,B.bid); }catch(_){}
         if(raw==='-') return '<span class="rl">ไม่มีอาหารวันนี้</span>';
         var V=null; try{ V=mvForTrip(_poDate,B.bid,B.rid); }catch(_){}
         return V?e(V.name||''):'';
-      })
+      },0,
+      /* §gdIdle · ช่องรวมของลำที่มีไกด์เริ่มที่นี่ · คลุม ร้านอาหาร→หัวหมายเหตุ */
+      function(B){ return WKG[B.bid] ? wkiCell(B, WKSPAN-nGd-1) : false; })
     + gh('Customer','cust')
     /* §pjSheet4 · แถบสีจริงของสายรัดข้อมือ · คนที่ท่าเทียบสีกับข้อมือแขก ไม่ได้อ่านชื่อสี */
     + row('สายรัดข้อมือ',function(B,i){
