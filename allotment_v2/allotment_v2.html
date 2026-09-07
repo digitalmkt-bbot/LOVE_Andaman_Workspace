@@ -92977,71 +92977,98 @@ function poCSS(){
      +'font:600 11.5px inherit;color:#1E293B;cursor:pointer;outline:none}'
   +H+' .po-bar .sep{width:1px;height:22px;background:#E2E8F0;margin:0 3px}'
   /* KPI · ป้ายไอคอนสีอยู่ขวา */
-  /* ══ §pkTk2 · หน้าตั๋วอุทยาน · ชีทตารางแบบ Excel ══════════════════════
-     คนใช้เอาชีทนี้ไปยื่นที่ด่าน จึงทำให้หน้าตาเหมือนสิ่งที่เขาถืออยู่จริง —
-     เส้นตารางครบ หัวตรึง แถวสลับสี ตัวเลข/รหัสเป็นฟอนต์ mono
-     คลุมทั้งตารางแล้ว copy ไปวางใน Excel ได้ตรง ๆ                          */
-  +H+' .pk-sheet{overflow:auto;max-height:calc(100vh - 300px);border-radius:0}'
+  /* ══ §pkTk4 · หน้าตั๋วอุทยาน · ชีทตามแบบฟอร์มของด่าน ═════════════════
+     คอลัมน์เรียงเหมือนใบที่เขายื่นจริง (ที่ · ชื่อ-นามสกุล · สัญชาติ ·
+     บัตร/พาส · ผู้ใหญ่ · เด็ก · เด็กเล็ก · หมายเหตุ · Code)
+     เส้นตารางครบ หัวตรึง แถบคั่นรายลำตรึงชั้นสอง · เลขที่เริ่มใหม่ทุกลำ
+     เพราะแบบฟอร์มของด่านเป็นใบต่อลำ                                      */
+  +H+' .pk-sheet{overflow:auto;max-height:calc(100vh - 330px)}'
   +H+' .pk-sheet::-webkit-scrollbar{width:10px;height:10px}'
   +H+' .pk-sheet::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:6px}'
-  +H+' .pk-sheet table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px}'
-  +H+' .pk-sheet thead th{position:sticky;top:0;z-index:3;background:#F8FAFC;color:#475569;'
-     +'font-size:10.5px;font-weight:800;text-align:left;padding:9px 10px;white-space:nowrap;'
-     +'border-bottom:1px solid #E2E8F0;box-shadow:inset 0 -1px 0 #E2E8F0}'
-  +H+' .pk-sheet thead th.n{width:44px;text-align:right}'
-  +H+' .pk-sheet tbody td{padding:6px 10px;border-bottom:1px solid #F1F5F9;color:#334155;'
-     +'white-space:nowrap;max-width:280px;overflow:hidden;text-overflow:ellipsis}'
-  +H+' .pk-sheet tbody tr:nth-child(even) td{background:#FCFDFE}'
-  +H+' .pk-sheet tbody tr:hover td{background:#F1F5F9}'
-  +H+" .pk-sheet td.n{text-align:right;font:600 10.5px 'DM Mono',monospace;color:#94A3B8;width:44px}"
-  +H+" .pk-sheet td.m{font-family:'DM Mono',monospace;font-size:11px}"
+  +H+' .pk-sheet table{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px}'
+  +H+' .pk-sheet thead th{position:sticky;top:0;z-index:3;background:#F1F5F9;color:#334155;'
+     +'font-size:11px;font-weight:800;text-align:left;padding:9px 10px;white-space:nowrap;'
+     +'border-bottom:1px solid #CBD5E1;border-right:1px solid #E2E8F0;'
+     +'box-shadow:inset 0 -1px 0 #CBD5E1}'
+  +H+' .pk-sheet thead th.n{width:48px;text-align:center}'
+  +H+' .pk-sheet thead th.g{width:66px;text-align:center}'
+  +H+' .pk-sheet tbody td{padding:6px 10px;border-bottom:1px solid #E8EDF3;'
+     +'border-right:1px solid #F1F5F9;color:#1E293B;white-space:nowrap;'
+     +'max-width:340px;overflow:hidden;text-overflow:ellipsis}'
+  +H+' .pk-sheet tbody tr:hover td{background:#F8FAFC}'
+  +H+" .pk-sheet td.n{text-align:center;font:600 11px 'DM Mono',monospace;color:#64748B;width:48px}"
+  +H+' .pk-sheet td.b{font-weight:600;color:#0F172A}'
+  +H+" .pk-sheet td.m{font-family:'DM Mono',monospace;font-size:11.5px}"
   +H+' .pk-sheet td.ctr{text-align:center}'
-  +H+' .pk-sheet td.b{font-weight:700;color:#0F172A}'
-  +H+' .pk-sheet td.dim{color:#94A3B8}'
+  +H+' .pk-sheet td.id{width:96px;background:#FCFDFE}'
+  +H+" .pk-sheet td.g{width:66px;text-align:center;font:700 12px 'DM Mono',monospace;color:#94A3B8}"
+  +H+' .pk-sheet td.nt{width:132px;font-size:10.5px;color:#94A3B8}'
+  +H+' .pk-sheet td.nt .fx{color:#B4560A;font-weight:700;background:#FFFBEB;'
+     +'border-radius:5px;padding:1px 6px;font-size:9.5px}'
   +H+' .pk-sheet td.nn{color:#B4560A;font-weight:600;font-style:italic}'
-  /* ช่องที่เอาไปวางในระบบด่าน · คลิกแล้วคัดลอก */
-  +H+" .pk-sheet td.nc{font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:#0F172A;"
-     +'background:#F8FAFC;cursor:copy;position:relative}'
-  +H+' .pk-sheet tbody tr:hover td.nc{background:#E2E8F0}'
-  +H+' .pk-sheet td.nc.ok{background:#DCFCE7 !important;color:#166534}'
-  +H+' .pk-sheet td.nc.ok:after{content:"คัดลอกแล้ว";position:absolute;right:8px;top:50%;'
-     +'transform:translateY(-50%);font-size:9px;font-weight:700;font-family:inherit;color:#166534}'
-  /* 5 ประเภท · การ์ดแคบลงหน่อยให้อยู่แถวเดียว */
-  +H+' .po-kpis.pk-k5{grid-template-columns:repeat(auto-fit,minmax(168px,1fr))}'
-  +H+' .po-kpis.pk-k5 .po-kpi{padding:14px 14px}'
-  +H+' .po-kpis.pk-k5 .po-kpi .k{font-size:10.5px;line-height:1.3}'
-  +H+' .po-kpis.pk-k5 .ic{width:38px;height:38px;border-radius:13px}'
   +H+' .pk-sheet tr.pk-nn td{background:#FFFCF5}'
   +H+' .pk-sheet tr.pk-nn:hover td{background:#FEF6E7}'
-  /* แถบคั่นของแต่ละลำ · เป็นแถวในตารางเดียวกัน จะได้ copy ติดไปด้วย */
-  +H+' .pk-sheet tr.pk-grp td{background:#F1F5F9 !important;padding:0;border-bottom:1px solid #E2E8F0;'
-     +'position:sticky;top:34px;z-index:2}'
+  +H+' .pk-sheet tr.pk-fx td{background:#FFFDF7}'
+  /* ช่อง Code · เป็น dropdown เปลี่ยนประเภทของคนนั้นได้เลย */
+  +H+' .pk-sheet td.cd{width:186px;position:relative;padding:3px 6px}'
+  +H+" .pk-sheet td.cd .cv{display:block;font:800 11px 'DM Mono',monospace;color:#0F172A;"
+     +'pointer-events:none;padding:3px 8px}'
+  +H+' .pk-sheet td.cd select{position:absolute;inset:2px;width:calc(100% - 4px);height:calc(100% - 4px);'
+     +'opacity:0;cursor:pointer;font-family:inherit}'
+  +H+' .pk-sheet td.cd:hover{background:#EFF6FF}'
+  +H+' .pk-sheet td.cd:hover .cv{color:#12518F}'
+  +H+' .pk-sheet td.cd:hover .cv:after{content:" ▾";color:#64748B;font-size:9px}'
+  +H+" .pk-sheet td.cd .ro{display:block;font:800 11px 'DM Mono',monospace;color:#475569;padding:3px 8px}"
+  /* แถบคั่นรายลำ */
+  +H+' .pk-sheet tr.pk-grp td{background:#E2E8F0 !important;padding:0;'
+     +'border-bottom:1px solid #CBD5E1;position:sticky;top:36px;z-index:2}'
   +H+' .pk-sheet tr.pk-grp .in{display:flex;align-items:center;gap:9px;flex-wrap:wrap;'
      +'padding:8px 10px 8px 12px;box-shadow:inset 4px 0 0 var(--rc)}'
-  +H+' .pk-sheet tr.pk-grp .rn{font-size:12px;font-weight:800;color:#0F172A}'
-  +H+' .pk-sheet tr.pk-grp .bn{font-size:11.5px;font-weight:700;color:#475569;'
+  +H+' .pk-sheet tr.pk-grp .rn{font-size:12.5px;font-weight:800;color:#0F172A}'
+  +H+' .pk-sheet tr.pk-grp .bn{font-size:12px;font-weight:700;color:#334155;'
      +'background:#fff;border-radius:7px;padding:2px 9px}'
-  +H+" .pk-sheet tr.pk-grp .tm{font:700 10.5px 'DM Mono',monospace;color:#64748B}"
+  +H+" .pk-sheet tr.pk-grp .tm{font:700 11px 'DM Mono',monospace;color:#475569}"
   +H+' .pk-sheet tr.pk-grp .cc{display:flex;gap:4px;flex-wrap:wrap}'
   +H+' .pk-sheet tr.pk-grp .sp{margin-left:auto}'
-  +H+" .pk-sheet tr.pk-grp .tt{font:800 12px 'DM Mono',monospace;color:#0F172A}"
+  +H+" .pk-sheet tr.pk-grp .tt{font:800 12.5px 'DM Mono',monospace;color:#0F172A}"
   +H+" .pk-sheet tr.pk-grp .dl{font:600 10px 'DM Mono',monospace;color:#B4560A}"
   +H+' .pk-c{font-size:9.5px;font-weight:700;border-radius:6px;padding:2px 7px;white-space:nowrap}'
   +H+" .pk-c b{font-family:'DM Mono',monospace;font-size:10.5px;font-weight:800}"
-  /* ช่อง Code ของโปรแกรม · อยู่ในแถบคั่น แก้ตรงที่เห็น ไม่ต้องเปิดหน้าตั้งค่า */
-  +H+' .pk-sheet tr.pk-grp .cds{display:flex;gap:5px;flex-wrap:wrap;width:100%;'
-     +'border-top:1px dashed #CBD5E1;padding-top:7px;margin-top:1px}'
-  +H+' .pk-icd{display:inline-flex;align-items:center;gap:5px}'
-  +H+' .pk-icd span{font-size:9px;font-weight:800;white-space:nowrap}'
-  +H+" .pk-icd input{width:74px;border:1px solid #E2E8F0;background:#fff;border-radius:6px;"
-     +"padding:2px 6px;font:700 10.5px 'DM Mono',monospace;color:#0F172A;text-align:center;outline:none}"
-  +H+' .pk-icd input:focus{border-color:#94A3B8}'
-  +H+' .pk-icd input::placeholder{color:#CBD5E1;font-weight:600}'
-  /* ช่อง Code ค่าเริ่มต้น · อยู่ในการ์ด KPI ด้านบน */
-  +H+" .pk-kcd{width:78px;border:1px solid #E2E8F0;background:#fff;border-radius:6px;margin-left:4px;"
-     +"padding:1px 5px;font:700 10.5px 'DM Mono',monospace;color:#0F172A;text-align:center;outline:none}"
-  +H+' .pk-kcd:focus{border-color:#94A3B8}'
-  +H+' .pk-kcd::placeholder{color:#CBD5E1}'
+  /* การ์ดยอด */
+  +H+' .po-kpis.pk-k5{grid-template-columns:repeat(auto-fit,minmax(168px,1fr))}'
+  +H+' .po-kpis.pk-k5 .po-kpi{padding:14px}'
+  +H+' .po-kpis.pk-k5 .po-kpi .k{font-size:10.5px;line-height:1.3}'
+  +H+' .po-kpis.pk-k5 .ic{width:38px;height:38px;border-radius:13px}'
+  +H+" .po-kpis.pk-k5 .v .dif{font-style:normal;font-size:11px;font-weight:700;color:#B4560A;"
+     +"margin-left:5px;font-family:'DM Mono',monospace}"
+  +H+" .po-kpis.pk-k5 .s .cd{font:700 10.5px 'DM Mono',monospace;color:#475569;"
+     +'background:#F1F5F9;border-radius:5px;padding:1px 7px}'
+  /* กล่องตั้งค่าประเภทตั๋ว */
+  +H+' .pk-tyb{background:#fff;border:1px solid #F1F5F9;border-radius:18px;padding:12px 15px;margin:0 0 6px;'
+     +'box-shadow:0 10px 30px -5px rgba(0,0,0,.04)}'
+  +H+' .pk-tyb>summary{font-size:12px;font-weight:700;color:#475569;cursor:pointer;list-style:none}'
+  +H+' .pk-tyb>summary::-webkit-details-marker{display:none}'
+  +H+' .pk-tyb>summary:before{content:"▸ ";color:#94A3B8}'
+  +H+' .pk-tyb[open]>summary:before{content:"▾ "}'
+  +H+' .pk-tyb[open]>summary{margin-bottom:10px}'
+  +H+' .pk-tyl{display:flex;flex-direction:column;gap:6px}'
+  +H+' .pk-ty{display:flex;align-items:center;gap:8px}'
+  +H+' .pk-ty .dot{width:9px;height:9px;border-radius:3px;flex:none}'
+  +H+' .pk-ty input,.pk-ty select{border:1px solid #E2E8F0;border-radius:8px;padding:4px 9px;'
+     +'font:600 11.5px inherit;color:#0F172A;outline:none;background:#fff}'
+  +H+' .pk-ty input:focus,.pk-ty select:focus{border-color:#94A3B8}'
+  +H+' .pk-ty .nm{flex:1;min-width:0}'
+  +H+' .pk-ty .gp{width:104px;flex:none}'
+  +H+" .pk-ty .cd{width:132px;flex:none;font-family:'DM Mono',monospace;font-weight:700;text-align:center}"
+  +H+' .pk-ty .bs{font-size:9.5px;font-weight:700;color:#94A3B8;width:64px;text-align:right;flex:none}'
+  +H+' .pk-ty .del{width:64px;flex:none;border:none;background:#FEF2F2;color:#A32D2D;border-radius:8px;'
+     +'padding:4px 0;font:800 13px inherit;cursor:pointer}'
+  +H+' .pk-ty .del:hover{background:#FEE2E2}'
+  +H+' .pk-add{margin-top:9px;border:1px dashed #CBD5E1;background:#F8FAFC;color:#475569;'
+     +'border-radius:9px;padding:6px 14px;font:700 11.5px inherit;cursor:pointer}'
+  +H+' .pk-add:hover{background:#F1F5F9}'
+  +H+' .pk-tyn{font-size:10px;line-height:1.8;color:#94A3B8;margin-top:9px}'
+  +H+' .pk-tyn b{color:#475569}'
   +H+' .pk-e{text-align:center;color:#94A3B8;padding:40px 0 !important}'
   +H+' .po-sec .chip.warn{background:#FFFBEB;color:#B4560A}'
   +H+' .pk-foot{font-size:10.5px;line-height:1.9;color:#94A3B8;margin:14px 2px 0}'
@@ -93181,40 +93208,86 @@ function poCSS(){
    (แม้ pcParkRate จะคิดเงิน 0 — คนละเรื่องกัน อันนั้นคือเงิน อันนี้คือตัวตั๋ว)
    ค่า def คือโค้ดที่ด่านใช้อยู่จริง · เป็นแค่ "ค่าตั้งต้น" ไม่ได้เขียนลง config
    ด่านไหนใช้โค้ดอื่นก็พิมพ์ทับได้ทั้งระดับค่าเริ่มต้นและระดับโปรแกรม */
-var PK_CATS=[
-  {k:'adTH', n:'ผู้ใหญ่ชาวไทย',              s:'ผญ ไทย',   ch:['ad_th','foc_th'], c:'#0F6E56', def:'YTRGRVMY'},
-  {k:'chTH', n:'เด็กไทย (อายุ 3-14 ปี)',      s:'ดญ ไทย',   ch:['chd_th'],         c:'#3B6D11', def:'BRUAWXAX'},
-  {k:'adFR', n:'ผู้ใหญ่ชาวต่างชาติ',          s:'ผญ ตปท',   ch:['ad_fr','foc_fr'], c:'#12518F', def:'JGRPPCYF'},
-  {k:'chFR', n:'เด็กชาวต่างชาติ (อายุ 3-14 ปี)',s:'ดญ ตปท',  ch:['chd_fr'],         c:'#5B289A', def:'EUMJVBAU'},
-  {k:'inf',  n:'เด็กอายุต่ำกว่า 3 ปี',         s:'ต่ำกว่า 3', ch:['inf_th','inf_fr'],c:'#8a857d', def:'CCTBTNPB'}
+/* ประเภทตั๋วชุดตั้งต้น · ตรงกับที่ด่านใช้อยู่
+   grp บอกว่าคนนี้ไปลงช่องไหนในแบบฟอร์มของด่าน (ผู้ใหญ่ / เด็ก / เด็กเล็ก)
+   ch  คือช่องหัวคนในระบบที่แม็พมาเป็นประเภทนี้อัตโนมัติ · ประเภทที่ User เพิ่มเอง
+       จะไม่มี ch เพราะแม็พอัตโนมัติไม่ได้ ต้องเลือกให้ทีละคน */
+var PK_BASE=[
+  {k:'adTH', n:'ผู้ใหญ่ชาวไทย',                 s:'ผญ ไทย',   grp:'ad',  code:'YTRGRVMY', c:'#0F6E56', ch:['ad_th','foc_th']},
+  {k:'chTH', n:'เด็กไทย (อายุ 3-14 ปี)',         s:'ดญ ไทย',   grp:'chd', code:'BRUAWXAX', c:'#3B6D11', ch:['chd_th']},
+  {k:'adFR', n:'ผู้ใหญ่ชาวต่างชาติ',             s:'ผญ ตปท',   grp:'ad',  code:'JGRPPCYF', c:'#12518F', ch:['ad_fr','foc_fr']},
+  {k:'chFR', n:'เด็กชาวต่างชาติ (อายุ 3-14 ปี)', s:'ดญ ตปท',   grp:'chd', code:'EUMJVBAU', c:'#5B289A', ch:['chd_fr']},
+  {k:'inf',  n:'เด็กอายุต่ำกว่า 3 ปี',            s:'ต่ำกว่า 3', grp:'inf', code:'CCTBTNPB', c:'#8a857d', ch:['inf_th','inf_fr']}
 ];
-function pkTkCat(k){ for(var i=0;i<PK_CATS.length;i++) if(PK_CATS[i].k===k) return PK_CATS[i]; return PK_CATS[0]; }
-
-/* ── Code ของด่าน · User เป็นคนระบุเอง ────────────────────────────────────
-   แต่ละอุทยานมีรหัสตั๋วคนละชุด (สิมิลัน ≠ สุรินทร์ ≠ พีพี) จึงเก็บ "รายโปรแกรม"
-   และมีชุด default ไว้ให้โปรแกรมที่ยังไม่ได้ตั้ง
-   เก็บใน PIER_CFG ซึ่ง poPersist ส่งขึ้นฐานข้อมูลอยู่แล้ว ตั้งที่เครื่องไหนก็เห็นทุกเครื่อง */
-function pkTkCodes(){
-  if(!PIER_CFG.parkCode || typeof PIER_CFG.parkCode!=='object') PIER_CFG.parkCode={};
-  return PIER_CFG.parkCode;
+var PK_ADDC=['#B4560A','#A32D2D','#534AB7','#0891B2','#BE185D','#4D7C0F'];
+/* ชุดที่ใช้จริง = ชุดตั้งต้น (ชื่อ/โค้ดถูกทับได้) + ประเภทที่ User เพิ่มเอง
+   เก็บใน PIER_CFG ซึ่ง poPersist ส่งขึ้นฐานข้อมูลอยู่แล้ว ตั้งเครื่องไหนก็เห็นทุกเครื่อง */
+function pkTypes(){
+  var cfg=(PIER_CFG.parkTypes && typeof PIER_CFG.parkTypes==='object')?PIER_CFG.parkTypes:{};
+  var ov=cfg.ov||{}, add=Array.isArray(cfg.add)?cfg.add:[];
+  var out=PK_BASE.map(function(B,i){
+    var o=ov[B.k]||{};
+    return {k:B.k, n:(o.n||B.n), s:B.s, grp:(o.grp||B.grp), code:(o.code!=null?o.code:B.code),
+            c:B.c, ch:B.ch, base:true};
+  });
+  add.forEach(function(A,i){
+    if(!A||!A.k) return;
+    out.push({k:A.k, n:A.n||A.k, s:A.n||A.k, grp:A.grp||'ad', code:A.code||'',
+              c:PK_ADDC[i%PK_ADDC.length], ch:[], base:false});
+  });
+  return out;
 }
-/* ลำดับ: โค้ดของโปรแกรมนั้น → โค้ดค่าเริ่มต้นที่ User ตั้ง → โค้ดที่ด่านใช้อยู่จริง */
-function pkTkCode(rid,cat){
-  var M=pkTkCodes();
-  var r=(rid && M[rid]) ? (M[rid][cat]||'') : '';
-  return r || ((M._def&&M._def[cat])||'') || (pkTkCat(cat).def||'');
-}
-function pkTkCodeDef(cat){ var M=pkTkCodes(); return (M._def&&M._def[cat])||''; }
-function pkTkCodeOwn(rid,cat){ var M=pkTkCodes(); return (rid&&M[rid]&&M[rid][cat])||''; }
-function pkTkHasDef(){ var d=pkTkCodes()._def; return !!(d && Object.keys(d).length); }
-function pkTkCodeSet(rid,cat,v){
-  var M=pkTkCodes(); var key=rid||'_def';
-  if(!M[key]) M[key]={};
+var PK_CATS=PK_BASE;   /* ชุดที่แม็พอัตโนมัติได้ · ใช้ตอนนับหัว */
+function pkTkCat(k){ var L=pkTypes(); for(var i=0;i<L.length;i++) if(L[i].k===k) return L[i]; return L[0]; }
+function pkTypeSet(k,f,v){
+  if(!PIER_CFG.parkTypes || typeof PIER_CFG.parkTypes!=='object') PIER_CFG.parkTypes={};
+  var C=PIER_CFG.parkTypes;
+  var isBase=PK_BASE.some(function(B){ return B.k===k; });
   v=String(v==null?'':v).trim();
-  if(v) M[key][cat]=v; else delete M[key][cat];
-  if(!Object.keys(M[key]).length) delete M[key];
+  if(isBase){ C.ov=C.ov||{}; C.ov[k]=C.ov[k]||{}; if(v) C.ov[k][f]=v; else delete C.ov[k][f];
+              if(!Object.keys(C.ov[k]).length) delete C.ov[k]; }
+  else { C.add=C.add||[]; for(var i=0;i<C.add.length;i++) if(C.add[i].k===k){ C.add[i][f]=v; break; } }
   try{ poPersist(); }catch(_){}
 }
+function pkTypeAdd(){
+  if(!PIER_CFG.parkTypes || typeof PIER_CFG.parkTypes!=='object') PIER_CFG.parkTypes={};
+  PIER_CFG.parkTypes.add=PIER_CFG.parkTypes.add||[];
+  PIER_CFG.parkTypes.add.push({k:'x'+Date.now().toString(36), n:'ประเภทใหม่', code:'', grp:'ad'});
+  try{ poPersist(); }catch(_){}
+  if(typeof renderPierPark==='function') renderPierPark();
+}
+function pkTypeDel(k){
+  var C=PIER_CFG.parkTypes; if(!C||!Array.isArray(C.add)) return;
+  C.add=C.add.filter(function(x){ return x.k!==k; });
+  try{ poPersist(); }catch(_){}
+  if(typeof renderPierPark==='function') renderPierPark();
+}
+/* ── เปลี่ยนประเภทของคนคนหนึ่ง ────────────────────────────────────────────
+   เช่นในใบจองคีย์เป็นเด็ก แต่ตัวจริงต่ำกว่า 3 ขวบ ที่ด่านต้องซื้อตั๋วเด็กเล็ก
+   เก็บแยกจากใบจอง ไม่ไปแก้ยอดที่ขาย · แต่พอต่างจากใบจองจะขึ้นเตือนให้เห็น
+   ไม่งั้นหน้านี้กับหน้าเงินสดย่อยจะเงียบ ๆ ไม่ตรงกัน */
+function pkFixKey(date,bkId,idx){ return date+'|'+bkId+'|'+idx; }
+function pkFixGet(date,bkId,idx){
+  var M=PIER_CFG.parkFix; return (M&&M[pkFixKey(date,bkId,idx)])||'';
+}
+function pkFixSet(date,bkId,idx,v){
+  if(!PIER_CFG.parkFix || typeof PIER_CFG.parkFix!=='object') PIER_CFG.parkFix={};
+  var M=PIER_CFG.parkFix, key=pkFixKey(date,bkId,idx);
+  if(v) M[key]=v; else delete M[key];
+  /* ตัดของเก่าทิ้ง · ไม่งั้นโตไปเรื่อย ๆ ไม่มีวันหยุด */
+  try{
+    var cut=new Date(); cut.setDate(cut.getDate()-120);
+    var lim=cut.toISOString().slice(0,10);
+    Object.keys(M).forEach(function(x){ if(String(x).slice(0,10)<lim) delete M[x]; });
+  }catch(_){}
+  try{ poPersist(); }catch(_){}
+  if(typeof renderPierPark==='function') renderPierPark();
+}
+
+/* Code ของแต่ละประเภทอยู่ที่ชุดประเภทตั๋วที่เดียว (pkTypes) แก้ได้ในหน้านั้นเลย
+   ของเดิมเคยเก็บโค้ดรายโปรแกรมอีกชั้น · เอาออกแล้ว เพราะ "เพิ่มประเภทเอง +
+   เปลี่ยนประเภทรายคน" ครอบเคสเดียวกันได้หมด โดยไม่ต้องมีสองที่ให้ค่าไม่ตรงกัน */
+function pkTkCode(cat){ return pkTkCat(cat).code||''; }
 
 /* ชื่อ / นามสกุล · ใช้ตัวแยกเดียวกับหน้าประกัน (ตัดคำนำหน้าออกก่อน)
    ⚠ ชื่อในระบบมาจากเอเย่นต์หลายเจ้า รูปแบบไม่เหมือนกัน — บางเจ้าส่ง "นามสกุล ชื่อ"
@@ -93270,19 +93343,25 @@ function pkTkData(date, pier){
     (B.bks||[]).forEach(function(x){
       var b=x.b;
       if(typeof pckVoidInfo==='function' && pckVoidInfo(b,date,x.t)) return;
-      var ps=((b.passengers||[]).filter(function(p){ return p && p.name; }));
-      if(!ps.length && b.leadPax) ps=[{name:b.leadPax, nationality:b.leadNationality, type:'AD'}];
-      ps.forEach(function(p){
+      /* เก็บ index เดิมของ passengers[] ไว้ด้วย · ใช้ผูกกับประเภทที่ User เปลี่ยนเอง
+         ใบที่ไม่มีรายชื่อเลยใช้ชื่อหัวกรุ๊ป · index เป็น 'L' */
+      var ps=[];
+      (b.passengers||[]).forEach(function(p,ix){ if(p && p.name) ps.push({p:p, ix:ix}); });
+      if(!ps.length && b.leadPax) ps=[{p:{name:b.leadPax, nationality:b.leadNationality, type:'AD'}, ix:'L'}];
+      ps.forEach(function(w){
+        var p=w.p;
         var nat=String(p.nationality||b.leadNationality||'').trim().toUpperCase();
-        var cat=pkTkCatOf({type:p.type, nationality:nat});
+        var auto=pkTkCatOf({type:p.type, nationality:nat});
+        var fix=pkFixGet(date,b.id,w.ix);
+        var cat=fix||auto;
         var nm=pkTkName(p.name);
-        namedCnt[cat]=(namedCnt[cat]||0)+1;
+        namedCnt[auto]=(namedCnt[auto]||0)+1;   /* นับหัวยังยึดตามใบจอง ไม่ใช่ตามที่แก้ */
         /* §pkTk3 · ด่านให้ "ใส่โค้ดต่อท้ายชื่อ" · เตรียมช่องที่ก๊อปไปวางได้เลยไว้ให้
            ใช้ชื่อที่ตัดคำนำหน้าแล้ว (f + l) ไม่ใช่ชื่อดิบ เพราะคำนำหน้าไม่ใช่ชื่อ */
         people.push({ f:nm.f, l:nm.l, full:String(p.name||'').trim(),
                       nc:((nm.f+' '+nm.l).trim()),
                       nat2:nat, nat3:(typeof pckNat3==='function'?pckNat3(nat):nat),
-                      natName:pkTkNatName(nat), cat:cat,
+                      natName:pkTkNatName(nat), cat:cat, auto:auto, fixed:!!fix, ix:w.ix,
                       vc:String(b.voucherRef||b.code||b.id||''), bkId:b.id });
       });
     });
@@ -93293,8 +93372,9 @@ function pkTkData(date, pier){
       var d=Math.max(0,(cnt[C.k]||0)-(namedCnt[C.k]||0));
       miss[C.k]=d; missTot+=d;
     });
+    /* เรียงตามประเภทที่ใช้จริง (หลังแก้แล้ว) เพราะแบบฟอร์มด่านอ่านทีละกอง */
     people.sort(function(a,b){
-      var ia=0,ib=0, L=PK_CATS;
+      var ia=99,ib=99, L=pkTypes();
       for(var i=0;i<L.length;i++){ if(L[i].k===a.cat) ia=i; if(L[i].k===b.cat) ib=i; }
       return ia-ib || String(a.l||a.f).localeCompare(String(b.l||b.f));
     });
@@ -93316,46 +93396,52 @@ function renderPierPark(pier){
   var host=document.getElementById('pk-host-'+P.k); if(!host) return;
   var ro=(typeof poCanEdit==='function')?!poCanEdit():false;
   var D=pkTkData(_poDate,_poPier);
-  var ALL=PK_CATS;
-  var CAT={}; ALL.forEach(function(C){ CAT[C.k]=C; });
+  var TY=pkTypes(), TYM={}; TY.forEach(function(T){ TYM[T.k]=T; });
 
-  var G={}, gTot=0, gMiss=0, gBook=0, nBoat=0;
+  /* หัวคน · นับสองชุด · ตามใบจอง กับ ตามที่แก้ที่ด่าน · ต่างกันเมื่อไรต้องเห็น */
+  var G={}, GX={}, gTot=0, gMiss=0, gBook=0, nBoat=0, nFix=0;
   D.forEach(function(g){ g.boats.forEach(function(b){
-    ALL.forEach(function(C){ G[C.k]=(G[C.k]||0)+(b.cnt[C.k]||0); });
+    PK_CATS.forEach(function(C){ G[C.k]=(G[C.k]||0)+(b.cnt[C.k]||0); });
+    (b.people||[]).forEach(function(p){ GX[p.cat]=(GX[p.cat]||0)+1; if(p.fixed) nFix++; });
+    PK_CATS.forEach(function(C){ GX[C.k]=(GX[C.k]||0)+(b.miss[C.k]||0); });
     gTot+=b.tot; gMiss+=b.missTot; gBook+=(b.booked||0); nBoat++; }); });
 
-  /* ── แถบสรุป 4 ช่อง + ช่องตั้ง Code ค่าเริ่มต้น ── */
+  /* ── การ์ดยอด · ตัวเลขที่จะไปซื้อจริงคือชุดที่แก้แล้ว ── */
   var kpis='<div class="po-kpis pk-k5">'
-    +PK_CATS.map(function(C){
-        var cd=pkTkCodeDef(C.k);
-        return '<div class="po-kpi"><div><span class="k">'+C.n+'</span>'
-          +'<div class="v" style="color:'+C.c+'">'+(G[C.k]||0)+'<em>คน</em></div>'
-          +'<div class="s">Code '
-            +'<input class="pk-kcd" value="'+poE(cd)+'" placeholder="'+poE(C.def||'—')+'" '+(ro?'disabled ':'')
-            +'onchange="pkTkCodeSet(\'\',\''+C.k+'\',this.value);renderPierPark()"></div></div>'
-          +'<div class="ic" style="background:'+C.c+'14;color:'+C.c+'">'+poIco(C.k==='adTH'||C.k==='adFR'?'user':'users')+'</div></div>';
+    +TY.filter(function(T){ return T.base || (GX[T.k]||0)>0; }).map(function(T){
+        var n=GX[T.k]||0, base=G[T.k];
+        return '<div class="po-kpi"><div><span class="k">'+poE(T.n)+'</span>'
+          +'<div class="v" style="color:'+T.c+'">'+n+'<em>คน</em>'
+            +((base!=null&&base!==n)?('<i class="dif" title="ตามใบจอง '+base+' · แก้ที่ด่านแล้ว">('+(n>base?'+':'')+(n-base)+')</i>'):'')
+          +'</div>'
+          +'<div class="s"><span class="cd">'+poE(T.code||'—')+'</span></div></div>'
+          +'<div class="ic" style="background:'+T.c+'14;color:'+T.c+'">'
+            +poIco(T.grp==='ad'?'user':'users')+'</div></div>';
       }).join('')
     +'</div>';
 
-  /* ── ชีท ── */
-  var HEAD=['#','โปรแกรม','เรือ','เวลา','ชื่อ','นามสกุล','สัญชาติ','ประเภท','Code',
-            'ชื่อ + Code (ก๊อปไปวางได้เลย)','ชื่อเต็มตามที่คีย์','Voucher'];
+  /* ── ตัวเลือกประเภท (dropdown ของแต่ละคน) ── */
+  var optsFor=function(cur){
+    return TY.map(function(T){
+      return '<option value="'+T.k+'"'+(T.k===cur?' selected':'')+'>'+poE(T.n)+' · '+poE(T.code||'—')+'</option>';
+    }).join('');
+  };
+
+  /* ── ชีท · คอลัมน์ตามแบบฟอร์มของด่าน · Code อยู่ท้ายสุด ── */
+  var HEAD=['ที่','ชื่อ - นามสกุล','สัญชาติ','บัตรประชาชน / พาส','ผู้ใหญ่','เด็ก','เด็กเล็ก','หมายเหตุ','Code'];
   var NCOL=HEAD.length;
-  var rows='', no=0;
+  var rows='';
   D.forEach(function(g){
     var rn=(g.route&&g.route.name)||g.rid;
     var rc=(g.route&&g.route.color)||'#94A3B8';
     g.boats.forEach(function(B){
-      /* แถบคั่นของลำ · ยอด + ช่อง Code ของโปรแกรมนี้ */
-      var chips=ALL.filter(function(C){ return (B.cnt[C.k]||0)>0; }).map(function(C){
-        return '<span class="pk-c" style="background:'+C.c+'14;color:'+C.c+'">'+C.s+' <b>'+B.cnt[C.k]+'</b></span>';
-      }).join('');
-      var codes=PK_CATS.map(function(C){
-        var own=pkTkCodeOwn(g.rid,C.k), eff=pkTkCode(g.rid,C.k);
-        return '<label class="pk-icd"><span style="color:'+C.c+'">'+C.s+'</span>'
-          +'<input value="'+poE(own)+'" placeholder="'+(eff?poE(eff):'code')+'" '+(ro?'disabled ':'')
-          +'onchange="pkTkCodeSet(\''+g.rid+'\',\''+C.k+'\',this.value);renderPierPark()"></label>';
-      }).join('');
+      var chips=TY.filter(function(T){
+          var n=(B.people||[]).filter(function(p){ return p.cat===T.k; }).length+(B.miss[T.k]||0);
+          return n>0;
+        }).map(function(T){
+          var n=(B.people||[]).filter(function(p){ return p.cat===T.k; }).length+(B.miss[T.k]||0);
+          return '<span class="pk-c" style="background:'+T.c+'14;color:'+T.c+'">'+poE(T.s||T.n)+' <b>'+n+'</b></span>';
+        }).join('');
       rows+='<tr class="pk-grp"><td colspan="'+NCOL+'"><div class="in" style="--rc:'+rc+'">'
         +'<span class="rn">'+poE(rn)+'</span>'
         +'<span class="bn">'+poE(B.boat.name||B.bid)+'</span>'
@@ -93364,43 +93450,40 @@ function renderPierPark(pier){
         +'<span class="sp"></span>'
         +'<span class="tt">'+B.tot+' คน</span>'
         +((B.booked>B.tot)?('<span class="dl">จอง '+B.booked+' · ไม่ได้ไป '+(B.booked-B.tot)+'</span>'):'')
-        +'<span class="cds">'+codes+'</span>'
         +'</div></td></tr>';
+      var no=0;   /* เลขที่เริ่มใหม่ทุกลำ · แบบฟอร์มด่านเป็นใบต่อลำ */
       B.people.forEach(function(p){
-        var C=CAT[p.cat]||PK_CATS[0]; no++;
-        var cd=pkTkCode(g.rid,p.cat);
-        rows+='<tr>'
+        var T=TYM[p.cat]||TY[0]; no++;
+        rows+='<tr'+(p.fixed?' class="pk-fx"':'')+'>'
           +'<td class="n">'+no+'</td>'
-          +'<td class="dim">'+poE(rn)+'</td>'
-          +'<td>'+poE(B.boat.name||B.bid)+'</td>'
-          +'<td class="m">'+poE(B.dep||'')+'</td>'
-          +'<td class="b">'+poE(p.f)+'</td>'
-          +'<td>'+poE(p.l)+'</td>'
+          +'<td class="b">'+poE(p.full)+'</td>'
           +'<td class="m ctr">'+poE(p.nat3||p.nat2||'')+'</td>'
-          +'<td style="color:'+C.c+';font-weight:700">'+C.n+'</td>'
-          +'<td class="m ctr b">'+poE(cd)+'</td>'
-          +'<td class="nc" title="คลิกเพื่อคัดลอก" onclick="pkCopyCell(this)">'
-            +poE((p.nc+' '+cd).trim())+'</td>'
-          +'<td class="dim">'+poE(p.full)+'</td>'
-          +'<td class="m dim">'+poE(p.vc)+'</td>'
+          +'<td class="id"></td>'
+          +'<td class="g">'+(T.grp==='ad'?'1':'0')+'</td>'
+          +'<td class="g">'+(T.grp==='chd'?'1':'0')+'</td>'
+          +'<td class="g">'+(T.grp==='inf'?'1':'0')+'</td>'
+          +'<td class="nt">'+(p.fixed?('<span class="fx" title="ตามใบจองคือ '+poE((TYM[p.auto]||{}).n||p.auto)+'">แก้ประเภทแล้ว</span>'):'')+'</td>'
+          +'<td class="cd">'
+            +(ro?('<span class="ro">'+poE(T.code||'—')+'</span>')
+                :('<select onchange="pkFixSet(\''+_poDate+'\',\''+p.bkId+'\',\''+p.ix+'\',this.value===\''+p.auto+'\'?\'\':this.value)">'
+                  +optsFor(p.cat)+'</select><span class="cv">'+poE(T.code||'—')+'</span>'))
+          +'</td>'
         +'</tr>';
       });
-      /* หัวที่ยังไม่มีรายชื่อ · เป็นแถวจริงในชีท ยอดจะได้เท่าจำนวนตั๋วที่ต้องซื้อ */
-      ALL.forEach(function(C){
+      /* หัวที่ยังไม่มีรายชื่อ · ยังต้องอยู่ในใบ ไม่งั้นยอดไม่เท่ากับตั๋วที่ต้องซื้อ */
+      PK_CATS.forEach(function(C){
+        var T=TYM[C.k]||C;
         for(var i=0;i<(B.miss[C.k]||0);i++){
           no++;
-          var cd=pkTkCode(g.rid,C.k);
           rows+='<tr class="pk-nn">'
             +'<td class="n">'+no+'</td>'
-            +'<td class="dim">'+poE(rn)+'</td>'
-            +'<td>'+poE(B.boat.name||B.bid)+'</td>'
-            +'<td class="m">'+poE(B.dep||'')+'</td>'
-            +'<td colspan="2" class="nn">ยังไม่มีรายชื่อ</td>'
-            +'<td></td>'
-            +'<td style="color:'+C.c+';font-weight:700">'+C.n+'</td>'
-            +'<td class="m ctr b">'+poE(cd)+'</td>'
-            +'<td class="m dim">— '+poE(cd)+'</td>'
-            +'<td></td><td></td>'
+            +'<td class="nn">ยังไม่มีรายชื่อ</td>'
+            +'<td></td><td class="id"></td>'
+            +'<td class="g">'+(T.grp==='ad'?'1':'0')+'</td>'
+            +'<td class="g">'+(T.grp==='chd'?'1':'0')+'</td>'
+            +'<td class="g">'+(T.grp==='inf'?'1':'0')+'</td>'
+            +'<td class="nt"></td>'
+            +'<td class="cd"><span class="ro">'+poE(T.code||'—')+'</span></td>'
           +'</tr>';
         }
       });
@@ -93408,15 +93491,34 @@ function renderPierPark(pier){
   });
 
   var sheet='<div class="pk-sheet"><table><thead><tr>'
-    +HEAD.map(function(h,i){ return '<th'+(i===0?' class="n"':'')+'>'+h+'</th>'; }).join('')
+    +HEAD.map(function(h,i){ return '<th'+(i===0?' class="n"':(i>=4&&i<=6?' class="g"':''))+'>'+h+'</th>'; }).join('')
     +'</tr></thead><tbody>'+(rows||'<tr><td colspan="'+NCOL+'" class="pk-e">วันนี้ยังไม่มีเรือออกจากท่านี้</td></tr>')
     +'</tbody></table></div>';
+
+  /* ── กล่องตั้งค่าประเภทตั๋ว · แก้ชื่อ/โค้ด/ช่อง และเพิ่มประเภทได้ ── */
+  var tyRows=TY.map(function(T){
+    var gsel=['ad','chd','inf'].map(function(x){
+      return '<option value="'+x+'"'+(T.grp===x?' selected':'')+'>'+(x==='ad'?'ผู้ใหญ่':x==='chd'?'เด็ก':'เด็กเล็ก')+'</option>';
+    }).join('');
+    return '<div class="pk-ty"><span class="dot" style="background:'+T.c+'"></span>'
+      +'<input class="nm" value="'+poE(T.n)+'" '+(ro?'disabled ':'')+'onchange="pkTypeSet(\''+T.k+'\',\'n\',this.value);renderPierPark()">'
+      +'<select class="gp" '+(ro?'disabled ':'')+'onchange="pkTypeSet(\''+T.k+'\',\'grp\',this.value);renderPierPark()">'+gsel+'</select>'
+      +'<input class="cd" value="'+poE(T.code)+'" placeholder="code" '+(ro?'disabled ':'')+'onchange="pkTypeSet(\''+T.k+'\',\'code\',this.value);renderPierPark()">'
+      +(T.base?'<span class="bs">ชุดตั้งต้น</span>'
+             :('<button class="del" '+(ro?'disabled ':'')+'onclick="pkTypeDel(\''+T.k+'\')" title="ลบประเภทนี้">&times;</button>'))
+      +'</div>';
+  }).join('');
+  var tyBox='<details class="pk-tyb"><summary>ประเภทตั๋วและรหัส · '+TY.length+' ประเภท</summary>'
+    +'<div class="pk-tyl">'+tyRows+'</div>'
+    +(ro?'':'<button class="pk-add" onclick="pkTypeAdd()">+ เพิ่มประเภท</button>')
+    +'<div class="pk-tyn">ชุดตั้งต้น 5 ประเภทแม็พจากใบจองให้อัตโนมัติ · ประเภทที่เพิ่มเองต้องเลือกให้ทีละคนในคอลัมน์ Code<br>'
+    +'ช่อง <b>ผู้ใหญ่ / เด็ก / เด็กเล็ก</b> ในตารางเดินตามช่องที่เลือกไว้ตรงนี้</div></details>';
 
   host.innerHTML='<style id="po-style">'+poCSS()+'</style>'
     +'<div class="po-h">'
       +'<div class="po-hl"><div class="po-badge">'+poE(P.s||String(P.n||'').slice(0,2).toUpperCase())+'</div><div>'
         +'<h1>'+poE(P.n||P.t)+' · ตั๋วอุทยาน</h1>'
-        +'<p>รายชื่อสำหรับไปซื้อตั๋วที่ด่าน · แยกโปรแกรม แยกลำ แยกไทย/ต่างชาติ ผู้ใหญ่/เด็ก<br>'
+        +'<p>รายชื่อสำหรับไปซื้อตั๋วที่ด่าน · คอลัมน์เรียงตามแบบฟอร์มของด่าน<br>'
         +'หัวคนชุดนี้เป็นชุดเดียวกับหน้า เงินสดย่อย · ค่าอุทยาน — เป็นคนที่ไปจริง หักคนไม่มาแล้ว</p></div></div>'
       +'<div class="po-bar">'
         +'<button class="pri">ตั๋วอุทยาน</button>'
@@ -93432,35 +93534,21 @@ function renderPierPark(pier){
       +'</div>'
     +'</div>'
     +kpis
+    +tyBox
     +'<div class="po-sec"><span class="n">1</span> รายชื่อทั้งวัน'
       +'<span class="chip">'+nBoat+' ลำ · '+gTot+' คน'
         +((gBook>gTot)?(' · จอง '+gBook):'')+'</span>'
       +((gMiss>0)?('<span class="chip warn">ยังไม่มีรายชื่อ '+gMiss+' คน</span>'):'')
-      +((G.inf||0)>0?('<span class="chip">ต่ำกว่า 3 ปี '+(G.inf||0)+' คน</span>'):'')
+      +((nFix>0)?('<span class="chip warn">แก้ประเภทแล้ว '+nFix+' คน · ต่างจากใบจอง</span>'):'')
     +'</div>'
     +'<div class="po-card">'+sheet+'</div>'
-    +'<div class="pk-foot">คอลัมน์ <b>ชื่อ + Code</b> คือสิ่งที่เอาไปวางในระบบด่านได้เลย '
-      +'(คลิกที่ช่องเพื่อคัดลอกทีละคน) · คลุมทั้งตารางแล้ว copy ไปวางใน Excel ก็ได้ · หรือกด '
-      +'<b>บันทึกเป็น Excel</b> เพื่อได้ไฟล์ .xlsx ที่มี filter และชีทสรุปต่อลำมาให้ด้วย<br>'
-      +'ช่อง <b>Code</b> ในแถบคั่นของแต่ละลำคือรหัสของโปรแกรมนั้น · ปล่อยว่างจะใช้ Code ด้านบน '
-      +'ซึ่งถ้าไม่ได้ตั้งอีกก็จะใช้รหัสที่ด่านใช้อยู่จริงเป็นค่าตั้งต้น<br>'
-      +'ชื่อ/นามสกุลแยกด้วยเครื่องจากชื่อที่เอเย่นต์ส่งมา บางเจ้าส่งนามสกุลขึ้นก่อน '
-      +'คอลัมน์ <b>ชื่อเต็มตามที่คีย์</b> คือของเดิมไว้ตรวจ</div>';
+    +'<div class="pk-foot">กด <b>บันทึกเป็น Excel</b> จะได้ไฟล์ 3 คอลัมน์ (ชื่อ-นามสกุล · สัญชาติ · Code) '
+      +'แยกชีทต่อลำ พร้อมวางในแบบฟอร์มของด่านได้เลย<br>'
+      +'คอลัมน์ <b>Code</b> เปลี่ยนได้ทีละคน — เช่นในใบจองคีย์เป็นเด็ก แต่ตัวจริงต่ำกว่า 3 ขวบ '
+      +'ที่แก้ไว้จะขึ้นป้าย “แก้ประเภทแล้ว” และยอดบนการ์ดจะบอกส่วนต่างจากใบจองให้เห็น<br>'
+      +'ช่อง <b>บัตรประชาชน / พาส</b> กับ <b>หมายเหตุ</b> เว้นว่างไว้ให้กรอกที่ด่าน · ระบบยังไม่ได้เก็บเลขพาสปอร์ต</div>';
 }
-/* §pkTk3 · คลิกช่อง "ชื่อ + Code" แล้วคัดลอกเลย · คนกรอกทีละคนในระบบด่าน
-   ไม่ต้องลากคลุมให้พลาดไปโดนช่องข้าง ๆ */
-function pkCopyCell(el){
-  var t=(el&&el.textContent||'').trim(); if(!t) return;
-  var done=function(){ el.classList.add('ok'); setTimeout(function(){ el.classList.remove('ok'); },900); };
-  try{
-    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(done,function(){}); return; }
-  }catch(_){}
-  try{
-    var ta=document.createElement('textarea'); ta.value=t;
-    ta.style.cssText='position:fixed;opacity:0'; document.body.appendChild(ta);
-    ta.select(); document.execCommand('copy'); document.body.removeChild(ta); done();
-  }catch(_){}
-}
+
 function pkSetDate(v){ if(v) _poDate=v; renderPierPark(); }
 function pkShift(n){ var d=new Date(_poDate+'T12:00:00'); d.setDate(d.getDate()+n); _poDate=poYMD(d); renderPierPark(); }
 function pkToday(){ _poDate=poYMD(new Date()); renderPierPark(); }
@@ -93479,47 +93567,56 @@ function pkTkExcel(){
   var P=(typeof PO_PIERS!=='undefined')?PO_PIERS.filter(function(x){return x.k===pier;})[0]:null;
   var pierName=(P&&(P.n||P.t))||pier;
   var D=pkTkData(date,pier);
-  var CAT={}; PK_CATS.forEach(function(C){ CAT[C.k]=C; });
+  var TY=pkTypes(), TYM={}; TY.forEach(function(T){ TYM[T.k]=T; });
+  var wb=XLSX.utils.book_new();
 
-  var rows=[['วันที่','ท่าเรือ','โปรแกรม','เรือ','เวลาออก','ชื่อ','นามสกุล','สัญชาติ','ประเภท','Code',
-             'ชื่อ + Code','ชื่อเต็มตามที่คีย์','Voucher']];
+  /* ชีทหลัก 3 คอลัมน์ · ไม่มีหัวตาราง · วางลงแบบฟอร์มของด่านได้เลย */
+  var all=[], perBoat=[], used={};
+  D.forEach(function(g){
+    g.boats.forEach(function(B){
+      var rows=[];
+      B.people.forEach(function(p){
+        var T=TYM[p.cat]||TY[0];
+        rows.push([p.full, (p.nat3||p.nat2||''), (T.code||'')]);
+      });
+      PK_CATS.forEach(function(C){
+        var T=TYM[C.k]||C;
+        for(var i=0;i<(B.miss[C.k]||0);i++) rows.push(['', '', (T.code||'')]);
+      });
+      all=all.concat(rows);
+      /* ชื่อชีท · Excel ห้ามเกิน 31 ตัว และห้ามอักขระ []:*?/\ */
+      var nm=String((B.boat.name||B.bid)+' '+(B.dep||'')).replace(/[\[\]:*?\/\\]/g,' ').trim().slice(0,28);
+      var t=nm||'boat'; var i2=2; while(used[t]){ t=nm.slice(0,26)+' '+(i2++); } used[t]=1;
+      perBoat.push({name:t, rows:rows});
+    });
+  });
+
+  var mk=function(rows){
+    var ws=XLSX.utils.aoa_to_sheet(rows.length?rows:[['','','']]);
+    ws['!cols']=[{wch:34},{wch:10},{wch:13}];
+    return ws;
+  };
+  XLSX.utils.book_append_sheet(wb, mk(all), 'รวมทั้งวัน');
+  perBoat.forEach(function(b){ XLSX.utils.book_append_sheet(wb, mk(b.rows), b.name); });
+
+  /* ชีทสรุป · ไว้กระทบยอดกับเงินที่จ่ายจริง */
   var sum=[['วันที่','ท่าเรือ','โปรแกรม','เรือ','เวลาออก','ประเภท','Code','จำนวน','มีรายชื่อ','ยังไม่มีรายชื่อ']];
   D.forEach(function(g){
     var rn=(g.route&&g.route.name)||g.rid;
     g.boats.forEach(function(B){
       var bn=B.boat.name||B.bid;
-      B.people.forEach(function(p){
-        var C=CAT[p.cat]||PK_CATS[0];
-        var cd=pkTkCode(g.rid,p.cat);
-        rows.push([date,pierName,rn,bn,B.dep||'',p.f,p.l,(p.nat3||p.nat2||''),C.n,
-                   cd, (p.nc+' '+cd).trim(), p.full, p.vc]);
-      });
-      /* หัวที่ยังไม่มีรายชื่อ · ใส่เป็นแถวเปล่าไว้ให้เห็น ยอดจะได้ตรงกับที่ต้องจ่ายจริง */
-      PK_CATS.forEach(function(C){
-        for(var i=0;i<(B.miss[C.k]||0);i++){
-          var cdm=pkTkCode(g.rid,C.k);
-          rows.push([date,pierName,rn,bn,B.dep||'','','','',C.n,
-                     cdm, cdm, '(ยังไม่มีรายชื่อ)','']);
-        }
-      });
-      PK_CATS.forEach(function(C){
-        if(!(B.cnt[C.k]||0)) return;
-        sum.push([date,pierName,rn,bn,B.dep||'',C.n,pkTkCode(g.rid,C.k),
-                  B.cnt[C.k], (B.cnt[C.k]-(B.miss[C.k]||0)), (B.miss[C.k]||0)]);
+      TY.forEach(function(T){
+        var named=(B.people||[]).filter(function(p){ return p.cat===T.k; }).length;
+        var miss=(B.miss[T.k]||0);
+        if(!(named+miss)) return;
+        sum.push([date,pierName,rn,bn,B.dep||'',T.n,(T.code||''),named+miss,named,miss]);
       });
     });
   });
-
-  var ws1=XLSX.utils.aoa_to_sheet(rows);
-  ws1['!cols']=[{wch:11},{wch:14},{wch:26},{wch:16},{wch:9},{wch:16},{wch:22},{wch:8},
-                {wch:24},{wch:11},{wch:34},{wch:30},{wch:18}];
-  ws1['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:Math.max(1,rows.length-1),c:12}})};
-  ws1['!freeze']={xSplit:0,ySplit:1};
   var ws2=XLSX.utils.aoa_to_sheet(sum);
-  ws2['!cols']=[{wch:11},{wch:14},{wch:26},{wch:16},{wch:9},{wch:24},{wch:11},{wch:8},{wch:10},{wch:14}];
-  var wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws1, 'รายชื่อ');
+  ws2['!cols']=[{wch:11},{wch:14},{wch:26},{wch:16},{wch:9},{wch:26},{wch:12},{wch:8},{wch:10},{wch:14}];
   XLSX.utils.book_append_sheet(wb, ws2, 'สรุปต่อลำ');
+
   XLSX.writeFile(wb, 'ตั๋วอุทยาน_'+String(pierName).replace(/[^\w฀-๿]+/g,'')+'_'+date+'.xlsx');
 }
 
