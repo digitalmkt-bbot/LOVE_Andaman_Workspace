@@ -23,10 +23,14 @@
 // no-op; a file that fails is reported rather than quietly baselined, because "recorded as applied
 // but never run" is the failure this whole script exists to avoid.
 //
-//   node tools/dev-db.mjs up      start + provision (idempotent — safe to re-run)
-//   node tools/dev-db.mjs reset   destroy the volume and provision from scratch
-//   node tools/dev-db.mjs down    stop the container, keep the volume
-//   node tools/dev-db.mjs psql    open a shell on it
+//   npm run db:up      (up)     start + provision the database (idempotent — safe to re-run)
+//   npm run dev:local  (run)    start the app against it, in the foreground
+//   npm run db:reset   (reset)  destroy the volume and provision from scratch
+//   npm run db:down    (down)   stop the container, keep the volume
+//   npm run db:psql    (psql)   open a psql shell on it
+//
+// Day to day that is two commands — `npm run db:up` once (again after a Docker restart), then
+// `npm run dev:local` — and http://localhost:8791/allotment_v2/allotment_v2.html, admin / admin123.
 //
 // Verify a provisioned database with the existing smoke test, which boots the real server.js
 // against it and fails on any map/db drift or failed/pending migration:
@@ -43,6 +47,7 @@ const SERVICE = 'db';
 const DB = 'la_dev';
 const USER = 'postgres';
 const URL = `postgres://postgres:devpass@127.0.0.1:55432/${DB}`;
+const APP_PORT = Number(process.env.PORT || 8791);   // the app's own port, not the database's
 
 // The four schemas the 2026-08-20 production dump captured. public goes first: its dump opens with
 // a bare `CREATE SCHEMA public`, which collides with the one initdb already made, so the schema is
@@ -245,20 +250,38 @@ function provision() {
                           GROUP BY table_schema) t ORDER BY s`).split('\n').join(' · ');
   log('schemas: ' + tables);
   console.log(`
-  Ready. Point server.js at it:
+  Ready. Start the app against it:
 
-    DATABASE_URL=${URL}
-    DATA_BACKEND=relational
-    B2C_SCHEMA=love_kingdom
-    ADMIN_USER=admin
-    ADMIN_PASS=admin123
-    SESSION_SECRET=dev-only-not-a-secret
+    npm run dev:local          → http://localhost:${APP_PORT}/allotment_v2/allotment_v2.html
+                                 sign in as admin / admin123
 
   ADMIN_USER/ADMIN_PASS only seed while the users table is empty — on a database that already has
   users they do nothing, and the password has to be reset through POST /api/users/password.
 
   Verify:  DATABASE_URL=${URL} DATA_BACKEND=relational node tools/ci-boot-smoke.mjs
 `);
+}
+
+// `run` · start server.js in the foreground with the dev environment already set.
+//
+// A wrapper rather than a .env file, for two reasons: npm's "dev" script reads .env, which on this
+// machine already holds a PGURL pointing at PRODUCTION — putting a local DATABASE_URL beside it
+// invites running one while thinking you are on the other. And an inline `FOO=bar node server.js`
+// in package.json does not work on Windows, where npm runs scripts through cmd.exe.
+// Ctrl-C stops it. The database keeps running; `npm run db:down` stops that.
+function run() {
+  // Without this the server still starts and still serves the page — it just answers 401 on every
+  // /api call, which reads as a login bug rather than "the database is not running".
+  if (compose(['ps', '--format', '{{.State}}', SERVICE]).stdout.trim() !== 'running')
+    die('the dev database is not running — start it with `npm run db:up` first');
+  const url = `http://localhost:${APP_PORT}/allotment_v2/allotment_v2.html`;
+  log(`starting server.js on ${APP_PORT} against the dev database`);
+  log(`open ${url}  ·  admin / admin123  ·  Ctrl-C to stop`);
+  const proc = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
+    cwd: ROOT, stdio: 'inherit', env: { ...process.env, ...DEV_ENV, PORT: String(APP_PORT) },
+  });
+  proc.on('exit', code => process.exit(code ?? 0));
+  for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => proc.kill(sig));
 }
 
 const cmd = process.argv[2] || 'up';
@@ -271,6 +294,8 @@ if (cmd === 'down') {
 } else if (cmd === 'psql') {
   spawnSync('docker', ['compose', '-f', COMPOSE, 'exec', SERVICE, 'psql', '-U', USER, '-d', DB],
             { cwd: ROOT, stdio: 'inherit' });
+} else if (cmd === 'run') {
+  run();
 } else if (cmd === 'up' || cmd === 'reset') {
   if (cmd === 'reset') { log('destroying the volume'); compose(['down', '-v'], { stdio: 'inherit' }); }
   const r = compose(['up', '-d'], { stdio: 'inherit' });
@@ -278,5 +303,5 @@ if (cmd === 'down') {
   waitHealthy();
   provision();
 } else {
-  die(`unknown command "${cmd}" — expected up | reset | down | psql`);
+  die(`unknown command "${cmd}" — expected up | reset | run | down | psql`);
 }
