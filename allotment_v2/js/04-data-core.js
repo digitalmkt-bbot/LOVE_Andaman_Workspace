@@ -1247,6 +1247,23 @@ const DV_CSS=`<style>
     background:transparent;color:#7a736c;font-family:inherit}
   .dv-ovseg button.on{background:#22262e;color:#fff}
   .dv-plot{background:#FBFAF8;border:1px solid #F1EEE9;border-radius:10px;padding:16px 10px 8px}
+  /* §ovFit · the bar area was an inline height:150px in both plot modes (day and month/year).
+     The middle column is calendar (content height) + this card, inside a grid pinned to
+     100vh-118px, so the two share a fixed budget. The calendar is the bigger half and is sized by
+     its own content, which left 150px of bars taller than the card had room for: the stats row
+     underneath was pushed out of the card and off the bottom of the page.
+     The height lives here so it can step down with the viewport. It MUST stay a definite length —
+     the bars inside are percentage-height (the day bar computes one, the month/year wrapper is
+     height:100%), and a percentage does not resolve against a parent whose height is auto, so
+     flex-sizing this box instead collapsed every bar to 0px. */
+  .dv-barbox{position:relative;width:100%;height:150px;
+    display:flex;align-items:flex-end;justify-content:center}
+  @media (max-height:1000px){ .dv-barbox{height:64px} }
+  @media (max-height:880px){  .dv-barbox{height:56px} }
+  /* Guard: a month with six calendar rows, or more routes than today has, can still exceed the
+     budget. Then the card scrolls inside its own frame — the rule this dashboard already states for
+     long content — instead of spilling its stats row off the bottom of the page. */
+  .dv-col:nth-child(2)>.dv-ov{overflow-y:auto}
   .dv-ovlg{display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;font-size:10px;font-weight:600;color:#8a857d}
   .dv-ovlg b{color:#2c2c2a;font-weight:700}
   .dv-ovlg i{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:4px;vertical-align:-1px}
@@ -1255,6 +1272,28 @@ const DV_CSS=`<style>
     .dv-col:nth-child(3){grid-column:1/-1;flex-direction:row;flex-wrap:wrap}
     .dv-col:nth-child(3)>*{flex:1 1 380px}
     .dv-lvlist{max-height:520px}
+  }
+  /* §dashNarrow · phone / narrow window. 820px is the breakpoint the rest of the app already uses
+     for "small" (la-nav, laUbPlace), so the dashboard switches at the same width rather than
+     inventing a second one.
+     Two columns of ~200px is not a layout — the cards were shredded — so go to a single column and
+     stack the third group as well; the max-width:1500px rule above turns it into a wrap-row, which
+     at this width would put two half-width cards back side by side. */
+  @media (max-width:820px){
+    .dv-grid{grid-template-columns:minmax(0,1fr)}
+    .dv-col:nth-child(3){flex-direction:column;flex-wrap:nowrap}
+    .dv-col:nth-child(3)>*{flex:0 0 auto}
+    /* The KPI chips are margin-left:auto in a nowrap row, so as the header narrows they pile up in
+       a column against the right edge and collide with the absolutely-centred brand. Give them a
+       row of their own under the date: flex-basis:100% breaks the line, and the brand — decorative,
+       and the one thing they were overlapping — goes. Right padding drops from 96px because that
+       gap only exists to clear the floating ⋯ toggle, which sits over the first row. */
+    .dv-hd{padding:6px 48px 9px 8px}
+    .dv-hdtop{flex-wrap:wrap;gap:7px 10px}
+    .dv-brand{display:none}
+    .dv-kpi{flex-basis:100%;margin-left:0;justify-content:flex-start;gap:5px}
+    .dv-chip{font-size:10px;padding:3px 8px}
+    .dv-chip b{font-size:11.5px}
   }
 </style>`;
 function renderDash(){
@@ -1689,7 +1728,7 @@ function renderDash(){
     plotHtml = dayEntries.length ? dayEntries.map(e=>{
       const h=Math.max((e.val/dayMax)*100,3);
       return `<div style="display:flex;flex-direction:column;align-items:center;min-width:0">
-        <div style="width:100%;height:150px;display:flex;align-items:flex-end;justify-content:center">
+        <div class="dv-barbox">
           <div style="position:relative;width:62%;max-width:48px;height:${h}%;background:${e.color};border-radius:7px 7px 3px 3px;box-shadow:inset 0 1px 0 rgba(255,255,255,.42)">
             <div style="position:absolute;left:50%;transform:translateX(-50%);top:-19px;font-family:'DM Mono',ui-monospace,monospace;font-size:13px;font-weight:800;color:#2c2c2a">${e.val}</div>
           </div>
@@ -1724,7 +1763,7 @@ function renderDash(){
       const wxBadge=_wx?`<div title="${d.wx} เส้นทางถูกยกเลิกเพราะสภาพอากาศ" style="position:absolute;left:50%;transform:translateX(-50%);top:-1px;font-size:13px;line-height:1;text-shadow:0 0 6px rgba(232,74,63,.9);z-index:2">⛈</div>`:'';
       return `<div style="position:relative;display:flex;flex-direction:column;align-items:center;min-width:0;${wxWrap}">
         ${wxBadge}
-        <div style="position:relative;width:100%;height:150px;display:flex;align-items:flex-end;justify-content:center">
+        <div class="dv-barbox">
           <div style="position:relative;width:${barW};max-width:${barMax};height:100%">
             <div style="position:absolute;left:0;right:0;bottom:0;height:${noBoat?totH:capH}%;border:1.5px dashed ${noBoat?'#9DC7E6':(_wx?'#D98A84':(isTdy?'#8a857d':'#DAD5CC'))};border-radius:4px;pointer-events:none"></div>
             <div style="position:absolute;left:0;right:0;bottom:0;height:${totH}%;display:flex;flex-direction:column-reverse;border-radius:3px;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.34)">${segDivs}</div>
