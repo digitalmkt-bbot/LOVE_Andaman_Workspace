@@ -93254,44 +93254,49 @@ function poCSS(){
   +H+' .pk-bhd .pk-xls{background:#0F172A;color:#fff;border:0;border-radius:10px;'
      +'padding:6px 13px;font:700 11.5px inherit;cursor:pointer;white-space:nowrap}'
   +H+' .pk-bhd .pk-xls:hover{background:#1E293B}'
-  /* ══ ตารางกระทบยอดรายลำ ═══════════════════════════════════════════════ */
-  +H+' .pk-rec{background:#fff;border:1px solid #E2E8F0;border-top:0;padding:0 14px}'
-  +H+' .pk-rec>summary{list-style:none;cursor:pointer;padding:9px 0;font-size:12px;'
-     +'font-weight:700;color:#334155;display:flex;align-items:center;gap:9px}'
-  +H+' .pk-rec>summary::-webkit-details-marker{display:none}'
-  +H+" .pk-rec>summary:before{content:'▸';color:#94A3B8;font-size:10px}"
-  +H+" .pk-rec[open]>summary:before{content:'▾'}"
-  +H+' .pk-rec>summary .fl{margin-left:auto;font-size:10px;font-weight:800;border-radius:999px;'
+  /* ══ ตารางกระทบยอดรายลำ · กระชับ ไม่ซ่อน ═══════════════════════════════
+     ตัวเลขชุดนี้ต้องอ่านทุกวันก่อนไปด่าน จึงไม่ควรต้องกดเปิด
+     แต่ก็ห้ามกินที่จนดันตารางรายชื่อตกจอ — บีบแถวและตัวหนังสือลงแทน
+     คำอธิบายคอลัมน์ย้ายไปอยู่ใน title ของหัวตาราง (ชี้ค้างแล้วขึ้น) */
+  +H+' .pk-rec{background:#fff;border:1px solid #E2E8F0;border-top:0;padding:0 13px 9px}'
+  +H+' .pk-rch{display:flex;align-items:center;gap:8px;padding:7px 0 5px}'
+  +H+' .pk-rch .t{font-size:11.5px;font-weight:700;color:#334155}'
+  +H+" .pk-rch .m{font-family:'DM Mono',monospace;font-size:10.5px;color:#94A3B8}"
+  +H+' .pk-rch .fl{margin-left:auto;font-size:9.5px;font-weight:800;border-radius:999px;'
      +'padding:2px 9px;background:#FFFBEB;color:#B4560A}'
-  +H+' .pk-rec>summary .fl.ok{background:#F0FAF4;color:#0C6B47}'
-  +H+' .pk-rw{overflow:auto;padding-bottom:2px}'
-  +H+' .pk-rw table{border-collapse:collapse;width:100%;min-width:620px}'
-  +H+' .pk-rw th{font-size:10px;font-weight:700;color:#94A3B8;text-align:right;'
-     +'padding:5px 9px;border-bottom:1px solid #E2E8F0;white-space:nowrap}'
+  +H+' .pk-rch .fl.ok{background:#F0FAF4;color:#0C6B47}'
+  +H+' .pk-rch .fl.bad{background:#FDECEC;color:#A32D2D}'
+  +H+' .pk-rw{overflow:auto}'
+  +H+' .pk-rw table{border-collapse:collapse;width:100%;min-width:600px}'
+  +H+' .pk-rw th{font-size:9.5px;font-weight:700;color:#94A3B8;text-align:right;'
+     +'padding:2px 8px 4px;border-bottom:1px solid #E2E8F0;white-space:nowrap}'
   +H+' .pk-rw th.ty,.pk-rw th.cd{text-align:left}'
-  +H+' .pk-rw td{padding:6px 9px;border-bottom:1px solid #F1F5F9;font-size:12px;color:#334155}'
+  +H+' .pk-rw th[title]{cursor:help;text-decoration:underline dotted #CBD5E1;text-underline-offset:3px}'
+  +H+' .pk-rw td{padding:3px 8px;border-bottom:1px solid #F5F7FA;font-size:11.5px;color:#334155}'
   +H+' .pk-rw td.ty{white-space:nowrap;font-weight:600}'
-  +H+' .pk-rw td.ty .dot{display:inline-block;width:7px;height:7px;border-radius:50%;'
-     +'margin-right:7px;vertical-align:middle}'
-  +H+" .pk-rw td.cd b{font-family:'DM Mono',monospace;font-size:11px;font-weight:800;"
-     +'color:#0F172A;background:#F1F5F9;border-radius:6px;padding:2px 8px}'
-  +H+' .pk-rw td.cd .no{font-size:10.5px;font-weight:700;color:#A32D2D;'
-     +'background:#FDECEC;border-radius:6px;padding:2px 8px}'
+  +H+' .pk-rw td.ty .dot{display:inline-block;width:6px;height:6px;border-radius:50%;'
+     +'margin-right:6px;vertical-align:middle}'
+  +H+" .pk-rw td.cd b{font-family:'DM Mono',monospace;font-size:10px;font-weight:800;"
+     +'color:#0F172A;background:#F1F5F9;border-radius:5px;padding:1px 7px}'
+  +H+' .pk-rw td.cd .no{font-size:10px;font-weight:700;color:#A32D2D;'
+     +'background:#FDECEC;border-radius:5px;padding:1px 7px}'
   +H+" .pk-rw td.n{text-align:right;font-family:'DM Mono',monospace;font-weight:700;color:#475569}"
-  +H+' .pk-rw td.n.big{font-size:14px;font-weight:800;color:#0F172A}'
-  +H+' .pk-rw td.n.d{color:#94A3B8;font-size:11px}'
+  +H+' .pk-rw td.n.big{font-size:13px;font-weight:800;color:#0F172A}'
+  +H+' .pk-rw td.n.d{color:#94A3B8;font-size:10.5px}'
   +H+' .pk-rw td.n.w{color:#B4560A;background:#FFFBEB}'
   +H+' .pk-rw tr.mv td.n.d{color:#B4560A}'
-  +H+' .pk-rw tfoot td{border-bottom:0;border-top:2px solid #E2E8F0;font-weight:800;'
-     +'color:#0F172A;background:#F8FAFC}'
-  +H+' .pk-vd{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0 0}'
-  +H+' .pk-vd .v{font-size:11px;font-weight:600;border-radius:9px;padding:5px 11px;line-height:1.5}'
+  +H+' .pk-rw tfoot td{border-bottom:0;border-top:1.5px solid #E2E8F0;font-weight:800;'
+     +'color:#0F172A;background:#F8FAFC;padding-top:4px;padding-bottom:4px}'
+  +H+' .pk-vd{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:7px 0 0}'
+  +H+' .pk-vd .v{font-size:10.5px;font-weight:600;border-radius:8px;padding:3px 9px;line-height:1.45}'
   +H+' .pk-vd .v.ok{background:#F0FAF4;color:#0C6B47}'
   +H+' .pk-vd .v.warn{background:#FFFBEB;color:#8A5A0B}'
   +H+' .pk-vd .v.bad{background:#FDECEC;color:#A32D2D}'
   +H+' .pk-vd .v.note{background:#F1F5F9;color:#475569}'
-  +H+' .pk-rn{font-size:11px;color:#94A3B8;line-height:1.75;margin:9px 0 12px}'
-  +H+' .pk-rn b{color:#475569}'
+  /* §pkTk9 · ปุ่มล้างชื่อที่เกิน · อยู่ติดกับคำเตือนที่บอกว่ามีกี่ชื่อ */
+  +H+' .pk-ovb{background:#A32D2D;color:#fff;border:0;border-radius:8px;padding:3px 11px;'
+     +'font:700 10.5px inherit;cursor:pointer;white-space:nowrap}'
+  +H+' .pk-ovb:hover{background:#8A2424}'
   /* หัวลำต่อกับกล่องกระทบยอด แล้วค่อยเป็นตาราง · มุมโค้งจึงอยู่ที่หัวกับท้ายเท่านั้น */
   +H+' .pk-trip .po-card{border-radius:0 0 14px 14px}'
   +H+' .pk-c{font-size:9.5px;font-weight:700;border-radius:6px;padding:2px 7px;white-space:nowrap}'
@@ -93744,6 +93749,10 @@ function pkTkData(date, pier){
     var cnt={adTH:0,chTH:0,adFR:0,chFR:0,inf:0}, tot=0;
     /* รายชื่อ · เอาจาก passengers[] ของแต่ละใบ · ใบไหนไม่มีรายชื่อใช้ชื่อหัวกรุ๊ป */
     var people=[];
+    /* §pkTk9 · ชื่อที่กรอกไว้แล้วตอนนี้เกินหัวที่ต้องซื้อ (ยกเลิก/ไม่มาหลังเติมชื่อ)
+       ไม่เอาลง people เพราะกติกาของชีทคือ "หนึ่งแถว = หนึ่งตั๋วที่ต้องซื้อ"
+       แต่ต้องโผล่ให้เห็นในตารางกระทบยอด ไม่ใช่หายเงียบแบบเดิม */
+    var orphan=[];
     (B.bks||[]).forEach(function(x){
       var b=x.b;
       if(typeof pckVoidInfo==='function' && pckVoidInfo(b,date,x.t)) return;
@@ -93808,6 +93817,13 @@ function pkTkData(date, pier){
                         natName:pkTkNatName(leadNat), natFromLead:true,
                         vc:vcs, bkId:b.id, lead:leadNm });
         }
+        /* §pkTk9 · เลยหัวที่เหลือไปแล้วแต่ยังมีชื่อค้างอยู่ = ชื่อของคนที่ยกเลิก/ไม่มา
+           กวาดเผื่อถึงยอดจองเดิม เพราะหัวอาจหายไปหลายคนในวันเดียว */
+        var lim=(slot[C.k]||0), scanTo=Math.max(lim,(+x.pax||0))+2;
+        for(var z=lim+1;z<=scanTo;z++){
+          var late=pkNmGet(date,b.id,C.k,z); if(!late) continue;
+          orphan.push({ full:late, cat:C.k, seq:z, bkId:b.id, vc:vcs, lead:leadNm });
+        }
       });
     });
     var miss={}, missTot=0;
@@ -93830,6 +93846,7 @@ function pkTkData(date, pier){
                    cntPc:cntPc, totPc:totPc, pcDiff:(totPc!==tot),
                    booked:(+B.pax||0),
                    people:people, miss:miss, missTot:missTot,
+                   orphan:orphan,          /* §pkTk9 · ชื่อที่เกินหัวหลังยกเลิก */
                    byNat:!!(P&&P.hasNat) });
   });
   return order;
@@ -93925,9 +93942,13 @@ function renderPierPark(pier){
   var recOf=function(B){
     if(!B) return '';
     var rows=[], sumAuto=0, sumNow=0, sumNamed=0, sumWait=0, nNoCode=0;
+    var OV=(B.orphan||[]);      /* §pkTk9 · ชื่อที่กรอกไว้แล้วเกินหัว หลังมีคนยกเลิก */
+    var nOverRow=(B.people||[]).filter(function(p){ return p.over; }).length;
     TY.forEach(function(T){
       var auto=(B.cnt&&+B.cnt[T.k])||0;
-      var mine=(B.people||[]).filter(function(p){ return p.cat===T.k; });
+      /* §pkTk9 · แถว over = ชื่อที่ไม่มีหัวรองรับแล้ว ไม่ใช่ตั๋วที่ต้องซื้อ
+         นับเข้ามาไม่ได้ ไม่งั้นคอลัมน์นี้จะพาไปจ่ายเกินจำนวนคนที่ไปจริง */
+      var mine=(B.people||[]).filter(function(p){ return p.cat===T.k && !p.over; });
       var now=mine.length;
       if(!auto && !now) return;
       var wait=mine.filter(function(p){ return p.ph && !p.typed; }).length;
@@ -93951,24 +93972,41 @@ function renderPierPark(pier){
     if(!rows.length) return '';
     /* คำตัดสิน · เรียงจากเรื่องที่ทำให้ซื้อตั๋วไม่ได้ ไปหาเรื่องที่แค่ต้องรู้ไว้ */
     var vs=[];
+    /* §pkTk9 · เคสที่เจอตอนวันเดินทาง · เติมชื่อครบไว้แล้ว แล้วมีคนยกเลิก
+       ชื่อที่เหลือเกินหัวต้องขึ้นให้เห็น ของเดิมหายจากชีทเงียบ ๆ แล้วยังบอกว่า "ตรงกัน" */
+    if(OV.length) vs.push(['bad','รายชื่อเกินหัวที่ต้องซื้อ '+OV.length+' ชื่อ (มีคนยกเลิก/ไม่มาหลังเติมชื่อ) — '
+      +OV.slice(0,4).map(function(o){ return o.full; }).join(' · ')
+      +(OV.length>4?(' และอีก '+(OV.length-4)):'')]);
+    if(nOverRow) vs.push(['bad', nOverRow+' รายชื่อในใบจองมากกว่าหัวที่จ่าย (ดูแถวป้ายแดงในตาราง) — '
+      +'ระบบไม่รู้ว่าคนไหนคือคนที่ไม่ไป จะไม่ใส่ลง Excel ให้ ต้องเลือกเองว่าจะตัดใคร']);
     if(nNoCode) vs.push(['bad', nNoCode+' ประเภทยังไม่ได้ใส่รหัส — ใส่ก่อนไปด่าน']);
     if(sumWait) vs.push(['warn', 'ยังไม่มีรายชื่อ '+sumWait+' คน — ด่านออกตั๋วตามรายชื่อ']);
     if(sumNow!==sumAuto) vs.push(['warn','เปลี่ยนประเภทเองไป '+Math.abs(sumNow-sumAuto)
       +' คน — ยอดรวมเท่าเดิม แต่สลับกองกัน']);
     if(B.pcDiff) vs.push(['warn','หน้าเงินสดย่อยนับได้ '+B.totPc+' — ต่างจากชีทนี้ '
-      +Math.abs(B.totPc-B.tot)+' คน (ปัดเศษคนละจังหวะ)']);
+      +Math.abs(B.totPc-B.tot)+' คน (ปัดเศษ หรือยกเลิกคนละจังหวะ)']);
     if((B.booked||0)>B.tot) vs.push(['note','จองไว้ '+B.booked+' ไม่ได้ไป '+(B.booked-B.tot)
       +' — ไม่ต้องซื้อตั๋วให้']);
+    var bad=(nNoCode||OV.length||nOverRow);
     if(!vs.length) vs.push(['ok','ครบทุกอย่าง · รายชื่อเต็ม รหัสครบ ยอดตรงกันทุกชุด']);
-    return '<details class="pk-rec"'+((nNoCode||sumWait)?' open':'')+'>'
-      +'<summary>ตั๋วของลำนี้ · '+sumNow+' ใบ '+(TY.filter(function(T){
-          return (B.people||[]).some(function(p){ return p.cat===T.k; }); }).length)+' ประเภท'
-        +((nNoCode||sumWait)?'<span class="fl">ต้องแก้ก่อน</span>':'<span class="fl ok">ตรงกัน</span>')
-      +'</summary>'
+    /* §pkTk9 · เลิกซ่อนใน <details> · ตัวเลขชุดนี้คือของที่ต้องอ่านทุกวันก่อนไปด่าน
+       บีบความสูงลงแทน · หัวคอลัมน์อธิบายตัวเองผ่าน title ไม่ต้องมีย่อหน้าอธิบายใต้ตาราง */
+    return '<div class="pk-rec">'
+      +'<div class="pk-rch"><span class="t">ตั๋วของลำนี้</span>'
+        +'<span class="m">'+sumNow+' ใบ · '+(TY.filter(function(T){
+            return (B.people||[]).some(function(p){ return p.cat===T.k && !p.over; }); }).length)+' ประเภท'
+          +(nOverRow?(' · มีรายชื่อเกินอีก '+nOverRow):'')+'</span>'
+        +(bad?'<span class="fl bad">ต้องแก้ก่อน</span>'
+             :(sumWait?'<span class="fl">รอชื่อ '+sumWait+'</span>'
+                      :'<span class="fl ok">ตรงกัน</span>'))
+      +'</div>'
       +'<div class="pk-rw"><table>'
-        +'<thead><tr><th class="ty">ประเภท</th><th class="cd">Code ที่จะใช้</th>'
-        +'<th class="n">จากใบจอง</th><th class="n">ในชีทนี้</th><th class="n">ต่าง</th>'
-        +'<th class="n">มีชื่อ</th><th class="n">รอชื่อ</th><th class="n">เงินสดย่อย</th></tr></thead>'
+        +'<thead><tr><th class="ty">ประเภท</th><th class="cd">Code</th>'
+        +'<th class="n" title="หัวคนที่ระบบแยกประเภทให้เองจากใบจอง ก่อนใครไปแก้">จากใบจอง</th>'
+        +'<th class="n" title="หลังเปลี่ยนประเภทรายคนแล้ว — เลขที่ต้องเอาไปจ่ายที่ด่านคือคอลัมน์นี้">ในชีทนี้</th>'
+        +'<th class="n" title="ยอดรวมสองคอลัมน์ต้องเท่ากันเสมอ · เปลี่ยนประเภทคือย้ายกอง ไม่ใช่เพิ่มหัว">ต่าง</th>'
+        +'<th class="n">มีชื่อ</th><th class="n">รอชื่อ</th>'
+        +'<th class="n" title="ชุดที่หน้าเงินสดย่อยใช้ · ต่างกันได้ถ้านับคนละจังหวะ">เงินสดย่อย</th></tr></thead>'
         +'<tbody>'+rows.join('')+'</tbody>'
         +'<tfoot><tr><td class="ty">รวม</td><td class="cd"></td>'
           +'<td class="n">'+sumAuto+'</td><td class="n big">'+sumNow+'</td>'
@@ -93977,11 +94015,11 @@ function renderPierPark(pier){
           +'<td class="n'+(B.pcDiff?' w':'')+'">'+B.totPc+'</td></tr></tfoot>'
       +'</table></div>'
       +'<div class="pk-vd">'+vs.map(function(v){
-          return '<span class="v '+v[0]+'">'+poE(v[1])+'</span>'; }).join('')+'</div>'
-      +'<div class="pk-rn">“จากใบจอง” คือหัวคนที่ระบบแยกประเภทให้เอง · '
-        +'“ในชีทนี้” คือหลังเปลี่ยนประเภทรายคนแล้ว — <b>เลขที่ต้องเอาไปจ่ายที่ด่านคือคอลัมน์นี้</b><br>'
-        +'ยอดรวมสองคอลัมน์ต้องเท่ากันเสมอ · เปลี่ยนประเภทคือย้ายกอง ไม่ใช่เพิ่มหัว</div>'
-    +'</details>';
+          return '<span class="v '+v[0]+'">'+poE(v[1])+'</span>'; }).join('')
+        +(OV.length&&!ro?('<button class="pk-ovb" onclick="pkNmDropOver(\''+_poDate+'\',\''
+            +B.bid+'\',\''+_poPier+'\')">ลบชื่อที่เกิน '+OV.length+'</button>'):'')
+      +'</div>'
+    +'</div>';
   };
 
   /* ── หัวทริป + แท็บชื่อเรือ · ทีละทริป ทีละลำ ──────────────────────────
@@ -93996,7 +94034,8 @@ function renderPierPark(pier){
     var cur=g.boats.filter(function(B){ return B.bid===pick; })[0]||g.boats[0];
     var gT=0,gM=0,gB=0; g.boats.forEach(function(B){ gT+=B.tot; gM+=B.missTot; gB+=(B.booked||0); });
     var cc=TY.map(function(T){
-      var n=(cur&&cur.people||[]).filter(function(p){ return p.cat===T.k; }).length;
+      /* §pkTk9 · ไม่นับแถวที่เกินหัว · ชิปนี้คือ "ต้องซื้อกี่ใบต่อรหัส" ต้องตรงกับตารางกระทบยอด */
+      var n=(cur&&cur.people||[]).filter(function(p){ return p.cat===T.k && !p.over; }).length;
       return n?('<span class="pk-c" style="background:'+T.c+'14;color:'+T.c+'">'+poE(T.s||T.n)
         +' <b>'+n+'</b>'+(T.code?('<i>'+poE(T.code)+'</i>'):'')+'</span>'):'';
     }).join('');
@@ -94107,6 +94146,21 @@ function renderPierPark(pier){
       +'<b>แถบเขียว</b> = คนไทย · สัญชาติของหัวที่ยังไม่มีชื่อยืมจากหัวกรุ๊ป จึงขึ้นเป็นตัวจาง<br>'
       +'กด <b>บันทึกเป็น Excel</b> ได้ไฟล์ 3 คอลัมน์ แยกชีทต่อลำ พร้อมวางในแบบฟอร์มของด่าน</div>';
 }
+/* §pkTk9 · ลบเฉพาะชื่อที่เกินหัวของลำนี้ · ชื่อที่ยังมีหัวรองรับอยู่ไม่ถูกแตะ */
+function pkNmDropOver(date,bid,pier){
+  var D=pkTkData(date,pier), list=[];
+  D.forEach(function(g){ g.boats.forEach(function(B){
+    if(B.bid===bid) list=list.concat(B.orphan||[]);
+  }); });
+  if(!list.length) return;
+  if(!confirm('ลบชื่อที่เกินหัวที่ต้องซื้อ '+list.length+' ชื่อ\n\n  '
+      +list.map(function(o){ return o.full; }).join('\n  ')
+      +'\n\nเป็นชื่อของคนที่ยกเลิก/ไม่มา ตอนนี้ไม่มีตั๋วรองรับแล้ว\n'
+      +'ถ้าคนกลับมาเดินทางได้ ต้องพิมพ์ชื่อใหม่')) return;
+  list.forEach(function(o){ pkNmSet(date,o.bkId,o.cat,o.seq,'',true); });
+  try{ poPersist(); }catch(_){}
+  if(typeof renderPierPark==='function') renderPierPark();
+}
 function pkTab(rid,bid){
   if(!window._pkTab || typeof window._pkTab!=='object') window._pkTab={};
   window._pkTab[rid]=bid;
@@ -94144,13 +94198,17 @@ function pkTkExcel(onlyBid){
   var wb=XLSX.utils.book_new();
 
   /* ชีทหลัก 3 คอลัมน์ · ไม่มีหัวตาราง · วางลงแบบฟอร์มของด่านได้เลย */
-  var all=[], perBoat=[], used={};
+  var all=[], perBoat=[], used={}, dropped=[];   /* §pkTk9 · ชื่อที่เกินหัว ไม่ลงไฟล์ */
   D.forEach(function(g){
     g.boats.forEach(function(B){
       var rows=[];
       /* §pkTk5 · หัวที่ยังไม่มีชื่ออยู่ใน people แล้ว (เป็นแถวของใบจองนั้น ๆ)
          ชื่อที่กรอกเองหน้าท่าออกไปด้วย · ที่ยังว่างจริงก็ยังต้องมีแถว ยอดจะได้ครบ */
+      /* §pkTk9 · แถวที่เกินหัวไม่ลงไฟล์ · ด่านออกตั๋วตามจำนวนที่จ่าย
+         ชื่อเกินไปด้วยจะกลายเป็นเอกสารที่จำนวนคนไม่ตรงกับเงิน · เก็บชื่อไว้เตือนข้างล่าง */
       B.people.forEach(function(p){
+        if(p.over){ dropped.push((p.full||'(ไม่มีชื่อ)')+' · ใบ '+(p.vc||'-')
+                                 +' · '+(B.boat.name||B.bid)); return; }
         var T=TYM[p.cat]||TY[0];
         rows.push([p.full||'', (p.nat3||p.nat2||''), (T.code||'')]);
       });
@@ -94162,6 +94220,16 @@ function pkTkExcel(onlyBid){
     });
   });
 
+  /* §pkTk9 · มีชื่อที่ไม่มีตั๋วรองรับ ต้องบอกก่อนเซฟ ไม่ใช่ตัดทิ้งเงียบ ๆ
+     ระบบไม่รู้ว่าคนไหนคือคนที่ยกเลิกจริง คนหน้าท่าต้องเป็นคนตัดสิน */
+  if(dropped.length){
+    if(!confirm('มีรายชื่อ '+dropped.length+' ชื่อ ที่มากกว่าหัวที่จ่ายเงินไป\n\n  '
+        +dropped.slice(0,8).join('\n  ')+(dropped.length>8?('\n  … และอีก '+(dropped.length-8)):'')
+        +'\n\nเกิดจากมีคนยกเลิก/ไม่มา แต่รายชื่อในใบจองยังอยู่ครบ\n'
+        +'ระบบไม่รู้ว่าคนไหนคือคนที่ไม่ไป จึงจะไม่ใส่ชื่อพวกนี้ลงไฟล์\n'
+        +'(จำนวนในไฟล์จะตรงกับเงินที่จ่าย)\n\n'
+        +'ถ้าคนที่ตัดออกไม่ใช่คนที่ไม่ไปจริง ให้ไปแก้ที่หน้าเช็คอินก่อน\n\nเซฟต่อเลยไหม')) return;
+  }
   var mk=function(rows){
     var ws=XLSX.utils.aoa_to_sheet(rows.length?rows:[['','','']]);
     ws['!cols']=[{wch:34},{wch:10},{wch:13}];
@@ -94178,7 +94246,7 @@ function pkTkExcel(onlyBid){
     g.boats.forEach(function(B){
       var bn=B.boat.name||B.bid;
       TY.forEach(function(T){
-        var all=(B.people||[]).filter(function(p){ return p.cat===T.k; });
+        var all=(B.people||[]).filter(function(p){ return p.cat===T.k && !p.over; });
         if(!all.length) return;
         var miss=all.filter(function(p){ return p.ph && !p.typed; }).length;
         sum.push([date,pierName,rn,bn,B.dep||'',T.n,(T.code||''),all.length,all.length-miss,miss]);
