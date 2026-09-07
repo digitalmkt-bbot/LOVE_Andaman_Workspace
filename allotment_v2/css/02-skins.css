@@ -98,6 +98,69 @@
 /* Matrix · selected data/empty cell = filled (not just outline) */
 #view-booking .bkv2-mx td.cell.sel{outline:none;box-shadow:inset 0 0 0 2px #3A6FF7;background:#3A6FF7;color:#fff}
 #view-booking .bkv2-mx td.cell.empty.sel{background:#3A6FF7;color:#fff}
+/* ===== §mxRead · Matrix อ่านง่ายขึ้น ===== */
+/* คอลัมน์รวมเดือน */
+#view-booking .bkv2-mx col.sumcol{width:86px}
+#view-booking .bkv2-mx th.rowh.sumh{text-align:right;padding-right:9px}
+#view-booking .bkv2-mx td.sum{background:#F1F2F5;text-align:right;padding:4px 9px;border-radius:4px;white-space:nowrap;font-family:'DM Mono',monospace}
+#view-booking .bkv2-mx td.sum b{font-size:12px;font-weight:800;font-variant-numeric:tabular-nums}
+#view-booking .bkv2-mx td.sum i{font-style:normal;font-size:9px;color:#98A2AD;display:block;margin-top:1px}
+/* §mxBrk2 · คอลัมน์ AD / CHD / INF / FOC */
+#view-booking .bkv2-mx col.pxcol{width:40px}
+#view-booking .bkv2-mx th.pxh{background:#EFF1F5;color:#6B7280;font-size:9px;font-weight:700;text-align:right;padding:5px 7px 5px 0;border-bottom:1px solid #E7E4DC;white-space:nowrap}
+#view-booking .bkv2-mx td.px{background:#F7F8FA;text-align:right;padding:4px 7px;font-family:'DM Mono',monospace;font-size:10px;font-weight:700;color:#5B6670;font-variant-numeric:tabular-nums}
+#view-booking .bkv2-mx td.px.z{color:#C8CDD4;font-weight:500}
+#view-booking .bkv2-mx tr.tot td.px{background:#161E31;color:#DCE4F0;font-size:10.5px}
+#view-booking .bkv2-mx tr.tot td.px.z{color:#5A6880}
+/* §mxBrk2 · แผงขวาพับแล้ว · เหลือแถบบางให้กดกางกลับ */
+#view-booking .bkv2-split.nopanel{grid-template-columns:1fr 30px}
+#view-booking .bkv2-selrail{background:var(--white);border-left:1px solid var(--border);border-radius:0 var(--r-sm) var(--r-sm) 0;
+  min-height:280px;align-self:stretch;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+  gap:10px;padding:12px 0;cursor:pointer;color:#8B96A0}
+#view-booking .bkv2-selrail:hover{background:#F7FAFE;color:#2952C8}
+#view-booking .bkv2-selrail .ar{font-size:15px;font-weight:800;line-height:1}
+#view-booking .bkv2-selrail .tx{font-family:'DM Sans',sans-serif;font-size:10.5px;font-weight:700;letter-spacing:.05em;
+  writing-mode:vertical-rl;text-orientation:mixed;white-space:nowrap}
+#view-booking .bkv2-selday-lab{display:flex;align-items:center;justify-content:space-between;gap:8px}
+#view-booking .bkv2-selhide{border:none;background:transparent;color:#98A2AD;font-family:inherit;font-size:13px;
+  font-weight:800;cursor:pointer;padding:0 2px;line-height:1}
+#view-booking .bkv2-selhide:hover{color:#2952C8}
+/* เสาร์-อาทิตย์ · แรเงาทั้งคอลัมน์ให้เห็นรอบสัปดาห์ */
+#view-booking .bkv2-mx td.cell.wk{box-shadow:inset 0 0 0 99px rgba(31,42,68,.035)}
+#view-booking .bkv2-mx th.dh.weekend{background:#F5F6F8;border-radius:3px}
+/* ตัวเลขในช่อง · หนาขึ้นและเป็นตัวเลขความกว้างเท่ากัน */
+#view-booking .bkv2-mx td.cell{font-weight:700;font-size:11px;font-variant-numeric:tabular-nums}
+#view-booking .bkv2-mx tr.sub td.cell{font-weight:600;font-size:10.5px;color:inherit}
+/* แถวย่อยเดิมโดนสั่งให้พื้นหลังโปร่ง · กางออกมาสีหายเกลี้ยง */
+#view-booking .bkv2-mx tr.sub td.cell.lo,#view-booking .bkv2-mx tr.sub td.cell.mid,
+#view-booking .bkv2-mx tr.sub td.cell.hi,#view-booking .bkv2-mx tr.sub td.cell.peak{background:inherit}
+/* กางกลุ่มออก · แถวแม่ปล่อยว่าง ไม่ให้อ่านเลขซ้ำกับแถวลูก */
+#view-booking .bkv2-mx td.cell.blank{background:#F1F4F9;cursor:default}
+#view-booking .bkv2-mx tr.fam.expanded td.rowh{background:#F1F4F9}
+/* variant ที่ไม่มีคนทั้งเดือน */
+#view-booking .bkv2-mx td.rowh.mxmore{font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;color:#5B6670;background:#FAFBFC;padding:6px 9px 6px 28px;cursor:pointer;border-left:2px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:none}
+#view-booking .bkv2-mx td.rowh.mxmore u{text-decoration:none;color:#2952C8;font-weight:700}
+#view-booking .bkv2-mx td.rowh.mxmore .mxmore-n{color:#A6AEB6;font-size:10px;margin-left:6px}
+/* แถวรวมทั้งวัน · เดิมเทาบนเทา ทั้งที่ต้องอ่านที่สุด */
+#view-booking .bkv2-mx tr.tot td{background:#1F2A44;color:#fff;text-align:center;padding:5px 0 7px;vertical-align:top;border-radius:0}
+#view-booking .bkv2-mx tr.tot td.rowh{text-align:left;font-family:'DM Sans',sans-serif;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#B9C4D4;padding:7px 8px;border-left:0}
+#view-booking .bkv2-mx tr.tot .tn{font-family:'DM Mono',monospace;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1}
+#view-booking .bkv2-mx tr.tot .ttrack{height:4px;border-radius:2px;background:rgba(255,255,255,.16);margin:4px 4px 0}
+#view-booking .bkv2-mx tr.tot .tbar{height:4px;border-radius:2px;background:#7FA6E8}
+#view-booking .bkv2-mx tr.tot td.today .tbar{background:#fff}
+#view-booking .bkv2-mx tr.tot td.today{background:#2952C8;color:#fff}
+#view-booking .bkv2-mx tr.tot td.sum{background:#0F1626;text-align:right;padding:6px 9px}
+#view-booking .bkv2-mx tr.tot td.sum b{font-size:13px;color:#fff}
+#view-booking .bkv2-mx tr.tot td.sum i{color:#8494AC}
+/* ป้ายสีท้ายตาราง */
+#view-booking .bkv2-foot-hints .sw.mxlo{background:#F2D9D5}
+#view-booking .bkv2-foot-hints .sw.mxhi{background:#C0392B}
+#view-booking .bkv2-foot-hints .sw.mxempty{background:#E9F7EF}
+#view-booking .bkv2-foot-hints .sw.mxclosed{background:repeating-linear-gradient(45deg,#f0ebe0,#f0ebe0 3px,transparent 3px,transparent 6px)}
+/* การ์ดสถิติ · ใบที่ยังไม่ยืนยัน */
+#view-booking .bkv2-stat.alert{background:#FFF6F5;border-color:#F2D2CC}
+#view-booking .bkv2-stat.alert .s-val{color:#A32D2D}
+#view-booking .bkv2-stat.alert .s-foot b{color:#A32D2D;font-weight:800}
 /* Calendar · day cell · Today = ring on white · Selected = filled */
 #view-booking .bkv2-cal-cell.today{background:#fff;border:2px solid #9DBFF6}
 #view-booking .bkv2-cal-cell.weekend.today{background:#fff}
@@ -212,56 +275,6 @@
 /* Calendar · liquid-card skin (Option A · material only · colors untouched · reversible: delete this block) */
 #view-calendar .cal-card{ border-radius:22px !important; border:1px solid rgba(255,255,255,.65) !important; box-shadow:0 14px 34px rgba(20,40,25,.16), 0 3px 8px rgba(20,40,25,.08), inset 0 1px 0 rgba(255,255,255,.85), inset 0 0 0 1px rgba(255,255,255,.25) !important; transition:box-shadow .18s ease, transform .18s ease; }
 #view-calendar .cal-card:hover{ transform:translateY(-2px); box-shadow:0 20px 44px rgba(20,40,25,.2), 0 4px 10px rgba(20,40,25,.1), inset 0 1px 0 rgba(255,255,255,.9) !important; }
-/* ==== dash-glass-skin ==== */
-
-/* Dashboard · white liquid-glass skin (Option A · reversible: delete this block + revert the vivid dx tokens) */
-#dash-wrap{
-  background:
-    radial-gradient(460px 340px at 36% -10%, rgba(110,222,158,.42), transparent 68%),
-    radial-gradient(420px 320px at 99% 10%, rgba(140,202,238,.36), transparent 70%),
-    radial-gradient(440px 360px at 2% 56%, rgba(248,200,140,.34), transparent 70%),
-    radial-gradient(380px 320px at 78% 96%, rgba(170,232,140,.34), transparent 72%),
-    #FAFCF7 !important;
-}
-/* every white dx.card → frosted glass · ไม่แตะ logic */
-#dash-wrap [style*="background:#FFFFFF"]{
-  background:rgba(255,255,255,.56) !important;
-  backdrop-filter:blur(17px) saturate(1.08);
-  -webkit-backdrop-filter:blur(17px) saturate(1.08);
-  border:1px solid rgba(255,255,255,.78) !important;
-  box-shadow:0 7px 28px rgba(18,60,42,.09), inset 0 1px 0 rgba(255,255,255,.7) !important;
-}
-/* Bookings overview (green panel) · stacked glass layers for depth */
-#dash-wrap .dgx-bookings{
-  background:linear-gradient(158deg,#0F7C47 0%,#0A5F3A 52%,#08502F 100%) !important;
-  box-shadow:0 16px 44px rgba(8,55,32,.34), inset 0 1px 0 rgba(255,255,255,.14) !important;
-}
-/* chart well → recessed frosted layer */
-#dash-wrap .dgx-bookings [style*="rgba(255,255,255,.04)"]{
-  background:rgba(255,255,255,.07) !important;
-  backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);
-  border:1px solid rgba(255,255,255,.12) !important;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.15), inset 0 -14px 28px rgba(0,0,0,.12) !important;
-}
-/* 4 mini stat cards → raised glass layer (light top → dark bottom) */
-#dash-wrap .dgx-bookings [style*="rgba(255,255,255,.06)"]{
-  background:linear-gradient(180deg,rgba(255,255,255,.15),rgba(255,255,255,.05)) !important;
-  border:1px solid rgba(255,255,255,.18) !important;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.24), 0 4px 12px rgba(0,0,0,.16) !important;
-}
-/* Fleet Score (dark card) · frosted dark glass + raised day-cell layers */
-#dash-wrap .dgx-fleet{
-  background:linear-gradient(160deg,rgba(48,40,33,.86),rgba(26,20,15,.9)) !important;
-  backdrop-filter:blur(16px) saturate(1.1);-webkit-backdrop-filter:blur(16px) saturate(1.1);
-  border:1px solid rgba(255,255,255,.10) !important;
-  box-shadow:0 16px 44px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.10) !important;
-}
-/* day cells → raised liquid glass · gradient sheen over state tint + depth */
-#dash-wrap .dgx-fcell{
-  background-image:linear-gradient(160deg,rgba(255,255,255,.11),rgba(255,255,255,.02)) !important;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.20), 0 2px 5px rgba(0,0,0,.30), 0 9px 18px rgba(0,0,0,.22) !important;
-  backdrop-filter:blur(5px) saturate(1.15);-webkit-backdrop-filter:blur(5px) saturate(1.15);
-}
 /* ==== bop-glass-skin ==== */
 
 /* Boat Operation · liquid-glass cards (keeps existing colors) · remove this block to revert */
@@ -503,8 +516,13 @@ body.sb-collapsed .sidebar.sb-collapsed ~ #la-userbadge, body.sb-collapsed .la-u
 
 /* ป้ายช่อง + ค่า · ตัวป้ายเล็กลงและจางลง ให้ค่าที่อ่านจริงเด่นขึ้น */
 /* §vcDoc · หัวเอกสาร · กระดาษขาวเต็มความกว้าง อ่านเหมือนใบ voucher จริง */
-#view-booking .bkv2-vcdoc{background:#fff;border:1px solid rgba(20,25,45,.08);border-radius:26px;
-  max-width:760px;padding:16px 18px 18px;margin-bottom:14px;box-shadow:0 3px 16px rgba(20,25,45,.09)}
+/* §vcSkin · Sarabun ทั้งใบ · Manrope ไม่มีตัวไทย ตัวไทยจึงตกไปใช้ฟอนต์ของเครื่อง
+   ซึ่งแต่ละเครื่องไม่เหมือนกัน · Sarabun โหลดอยู่ใน <head> อยู่แล้ว (300-800)
+   ตัวเลขยังเป็น DM Mono เพราะเลขราคาหลายบรรทัดต้องเรียงหลักตรงกัน
+   ขอบใบหนา 2px สีกรมท่า · ของเดิมเป็นเส้นจางจนแทบไม่เห็นว่าใบจบตรงไหน */
+#view-booking .bkv2-vcdoc{background:#fff;border:2px solid #16265C;border-radius:26px;
+  font-family:Sarabun,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  max-width:760px;padding:16px 18px 18px;margin-bottom:14px;box-shadow:0 8px 26px rgba(20,25,45,.11)}
 #view-booking .bkv2-vc .bkv2-dt-lab{font-size:9.5px;font-weight:700;color:var(--df);
   letter-spacing:.07em;margin-bottom:5px}
 #view-booking .bkv2-vc .bkv2-dt-val{font-size:13.5px;font-weight:700;color:var(--di);line-height:1.4}

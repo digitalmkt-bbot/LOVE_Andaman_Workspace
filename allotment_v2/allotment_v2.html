@@ -12,6 +12,10 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=Noto+Sans+Thai:wght@300;400;500;600;700;800&family=Quicksand:wght@500;600;700&family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/01-base.css">
 <link rel="stylesheet" href="css/02-skins.css">
+<!-- §dashV3 · สกิน liquid-glass ของ Dashboard เดิมถูกลบทั้งบล็อก
+     มันทาทับดีไซน์เก่าที่ไม่มีอยู่แล้ว (พื้นครีมไล่สี · การ์ดขาวฝ้า ·
+     แผ่นเขียว Bookings overview · แผ่นน้ำตาล Bookings/day)
+     ทุกกฎในนั้นเป็น !important จึงไปทับของใหม่จนอ่านไม่ออก -->
 <script src="js/02-sidebar.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -144,6 +148,14 @@
       <span class="po-dot"></span>
       ใบอนุญาต
     </div>
+    <div class="nav-item po-sub" data-pogrp="panwa" data-view="pop-panwa" onclick="nav(this)">
+      <span class="po-dot"></span>
+      เงินสดย่อย
+    </div>
+    <div class="nav-item po-sub" data-pogrp="panwa" data-view="pok-panwa" onclick="nav(this)">
+      <span class="po-dot"></span>
+      ตั๋วอุทยาน
+    </div>
     <div class="nav-item po-grp" data-pogrp="tublamu" onclick="poNavGroup(this)" style="border-left:2px solid rgba(150,205,235,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><path d="M9 21v-5h6v5"/><path d="M9 11h2M13 11h2"/></svg>
       Tub Lamu
@@ -165,6 +177,14 @@
       <span class="po-dot"></span>
       ใบอนุญาต
     </div>
+    <div class="nav-item po-sub" data-pogrp="tublamu" data-view="pop-tublamu" onclick="nav(this)">
+      <span class="po-dot"></span>
+      เงินสดย่อย
+    </div>
+    <div class="nav-item po-sub" data-pogrp="tublamu" data-view="pok-tublamu" onclick="nav(this)">
+      <span class="po-dot"></span>
+      ตั๋วอุทยาน
+    </div>
     <div class="nav-item po-grp" data-pogrp="ranong" onclick="poNavGroup(this)" style="border-left:2px solid rgba(150,205,235,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><path d="M9 21v-5h6v5"/><path d="M9 11h2M13 11h2"/></svg>
       Ranong
@@ -185,6 +205,14 @@
     <div class="nav-item po-sub" data-pogrp="ranong" data-view="pol-ranong" onclick="nav(this)">
       <span class="po-dot"></span>
       ใบอนุญาต
+    </div>
+    <div class="nav-item po-sub" data-pogrp="ranong" data-view="pop-ranong" onclick="nav(this)">
+      <span class="po-dot"></span>
+      เงินสดย่อย
+    </div>
+    <div class="nav-item po-sub" data-pogrp="ranong" data-view="pok-ranong" onclick="nav(this)">
+      <span class="po-dot"></span>
+      ตั๋วอุทยาน
     </div>
     <div style="height:1px;background:rgba(255,255,255,.07);margin:8px 6px 2px"></div>
     <div class="nav-section" style="color:rgba(255,170,200,.5)">Sales</div>
@@ -245,6 +273,14 @@
     <div class="nav-item" data-view="dailypfm" onclick="nav(this)" style="border-left:2px solid rgba(120,200,230,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
       Daily PFM
+    </div>
+    <div class="nav-item" data-view="vanbill" onclick="nav(this)" style="border-left:2px solid rgba(120,200,230,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h11v9H3z"/><path d="M14 10h3.5l2.5 3v3h-6z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/></svg>
+      วางบิลรถร่วม
+    </div>
+    <div class="nav-item" data-view="prpo" onclick="nav(this)" style="border-left:2px solid rgba(120,200,230,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3h6l1 3H8l1-3z"/><path d="M5 6h14v15H5z"/><path d="M9 11h6"/><path d="M9 15h6"/></svg>
+      PR/PO Dashboard
     </div>
     <div style="height:1px;background:rgba(255,255,255,.08);margin:8px 4px" data-adminonly="1"></div>
     <div class="nav-section" style="color:rgba(150,160,170,.55)" data-adminonly="1">Admin</div>
@@ -354,7 +390,7 @@
 
     <!-- ══════════ DASHBOARD ══════════ -->
     <div id="view-dashboard" class="view active">
-      <div id="dash-wrap" style="background:#E8E3DA;margin:-22px;padding:20px 22px 26px;min-height:calc(100vh - 44px);color:#1A1A1A"></div>
+      <div id="dash-wrap" style="background:#16265C;margin:-22px;padding:0;min-height:calc(100vh - 44px);color:#1A1A1A"></div>
     </div>
 
     <!-- ══════════ CALENDAR (redesigned · Fleet Insights style) ══════════ -->
@@ -931,6 +967,7 @@
 
     <!-- ══════════ SETTINGS ══════════ -->
     <div id="view-dailypfm" class="view"><div id="dailypfm-host"></div></div>
+    <div id="view-vanbill" class="view"><div id="vanbill-host"></div></div>
     <div id="view-boatassign" class="view"><div id="boatassign-host"></div></div>
     <div id="view-vehicles" class="view"><div id="vehicles-host"></div></div>
     <div id="view-insurance" class="view"><div id="insurance-host"></div></div>
@@ -944,14 +981,23 @@
     <div id="view-pol-panwa" class="view"><div id="pl-host-panwa" class="pj-host"></div></div>
     <div id="view-pol-tublamu" class="view"><div id="pl-host-tublamu" class="pj-host"></div></div>
     <div id="view-pol-ranong" class="view"><div id="pl-host-ranong" class="pj-host"></div></div>
+    <!-- §poCash · เงินสดย่อยหน้าท่า -->
+    <div id="view-pop-panwa" class="view"><div id="pc-host-panwa" class="pj-host"></div></div>
+    <div id="view-pop-tublamu" class="view"><div id="pc-host-tublamu" class="pj-host"></div></div>
+    <div id="view-pop-ranong" class="view"><div id="pc-host-ranong" class="pj-host"></div></div>
     <div id="view-poj-panwa" class="view"><div id="pj-host-panwa" class="pj-host"></div></div>
     <div id="view-poj-tublamu" class="view"><div id="pj-host-tublamu" class="pj-host"></div></div>
     <div id="view-poj-ranong" class="view"><div id="pj-host-ranong" class="pj-host"></div></div>
+    <!-- §pkTk2 · ตั๋วอุทยาน · ชีทรายชื่อสำหรับไปซื้อตั๋วที่ด่าน -->
+    <div id="view-pok-panwa" class="view"><div id="pk-host-panwa" class="po-host"></div></div>
+    <div id="view-pok-tublamu" class="view"><div id="pk-host-tublamu" class="po-host"></div></div>
+    <div id="view-pok-ranong" class="view"><div id="pk-host-ranong" class="po-host"></div></div>
     <div id="view-po-panwa" class="view"><div id="po-host-panwa" class="po-host"></div></div>
     <div id="view-po-tublamu" class="view"><div id="po-host-tublamu" class="po-host"></div></div>
     <div id="view-po-ranong" class="view"><div id="po-host-ranong" class="po-host"></div></div>
     <div id="view-travelsum" class="view"><div id="travelsum-host"></div></div>
     <div id="view-dailyreport" class="view"><div id="dailyreport-host"></div></div>
+    <div id="view-prpo" class="view"><div id="prpo-host"></div></div>
     <div id="view-doccheck" class="view"><style>@keyframes docspin{to{transform:rotate(360deg)}}</style><div id="doccheck-host"></div></div>
     <div id="view-accounting" class="view">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px;padding:6px 4px 14px">

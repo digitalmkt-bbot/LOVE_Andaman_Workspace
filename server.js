@@ -193,14 +193,19 @@ async function relLoad() {                                           // operatio
 const B2C_SCHEMA = (process.env.B2C_SCHEMA || 'public').replace(/[^a-zA-Z0-9_]/g, '');
 const b2cT = t => `"${B2C_SCHEMA}"."${t}"`;
 //
-// Fill in null entries when the allotment route for each B2C product is decided:
+// ── Program → ops route (2026-08-31) ───────────────────────────────────────────────────────────
+// DAY TRIPS no longer live here. B2C owns the answer already — programs_own.ops_route_id, filled
+// for every program — and this table was a second copy of it that could only ever fall behind.
+// It did: B2C added POW-006 (Nyaung Oo Phee) and POW-007 (Phang-nga bay + Hong Krabi Early bird),
+// both correctly mapped on the B2C side, while this constant still stopped at POW-005. Four
+// bookings imported with routeId null and rendered a bare "—" where the route name goes.
+// Day trips now resolve through b2cProgramRouteCatalog() — see there for the fallback order.
+//
+// PRIVATE ROUTES stay, because there is nothing to read: private_routes has (id, name, duration,
+// description) and no ops_route_id column, and private_own items carry no details.opsRouteId
+// either — verified on prod, all 8 rows null. PR-* → route is only known here. Retiring these four
+// means adding ops_route_id to private_routes on the B2C side first; until then, this is the map.
 const B2C_ROUTE_MAP = {
-  // Day trip programs (matched via product_id)
-  'POW-001': 'r5',   // Day Trip - Similan Island → Similan Islands by Speedboat
-  'POW-002': 'r6',   // Day Trip - Surin Island → Surin Islands by Speedboat
-  'POW-003': 'r10',  // Day Trip - Phi Phi Island → Phi Phi Bamboo by Speedboat
-  'POW-004': 'r12',  // Day Trip - Phi Phi - Maiton → Whale Shark Phi Phi Maiton Sunset
-  'POW-005': 'r1784542898734',  // Day Trip - Se La Va (Ranong) → r1784542898734
   // Private routes (matched via route_id on private_own items)
   'PR-001':  'r5',   // Private Similan → Similan Islands by Speedboat
   'PR-002':  'r6',   // Private Surin → Surin Islands by Speedboat
@@ -234,10 +239,14 @@ const B2C_PAY_TYPES = new Set(['proforma', 'invoice', 'bt', 'cot']);
 // ฟิลด์ใหม่ = ถูกคุ้มครองโดยอัตโนมัติ · ถ้าลืมใส่ลิสต์ ผลคือค่าไม่อัปเดต (ไม่ใช่ข้อมูลหาย) ซึ่งปลอดภัยกว่ามาก
 // ไม่มี pickupareaid ในลิสต์ตั้งใจ — ฝั่ง ops แก้การจับคู่โซนเอง B2C ต้องไม่ทับ (เหมือนกติกาเดิม)
 const B2C_OWN_BK = new Set([
-  'schemaver','voucherref','agentid',
+  'schemaver','voucherref','agentid','createdby',   // §b2cBy · ผู้บันทึกฝั่ง B2C · ops แก้เองได้ (b2coverride คุ้มให้)
   'leadpax','leadnationality','leadphone','leademail',
-  'status','total','note','bookingdate',
-  'pickupself','pickuparea','pickupzone','hotelname','dropoffhotelname',
+  'status','total','note','notes','bookingdate',   // §b2cSreq · notes = B2C special request + internal remark
+  'pickupself','pickuparea','pickupzone','hotelname',
+  // §b2cDrop · dropoffsame joins dropoffhotelname as B2C-owned: B2C is the source of truth for
+  // "does this booking return somewhere else". dropoffareaid/dropoffarea are deliberately absent
+  // (same rule as pickupareaid) so the mapper seeds them once and ops keeps any hand correction.
+  'dropoffhotelname','dropoffsame',
   'paymentsnapshot_method','paymentsnapshot_netdays','paymentsnapshot_source',
   'paymentsnapshot_contractversion','paymentsnapshot_paid','paymentsnapshot_paidstatus',
   'paymentsnapshot_deposit','paymentsnapshot_balance',   // §deposit · mapper has always produced these; columns added by migration 013
@@ -301,7 +310,30 @@ const B2C_OWN_BK = new Set([
 //      the B2C_OWN_BK whitelist. The mapper has produced both all along and decomposeBlob dropped
 //      them for want of a column, so no source row changed and the hash would never re-fire — this
 //      bump is what back-fills the 92 orders carrying a deposit and the 9 with a balance owed.
-const B2C_MAP_VER = 20;
+// v21: day-trip routes resolve from B2C's own catalog (programs_own.ops_route_id), then
+//      details.opsRouteId, instead of a hardcoded copy that stopped at POW-005. POW-006
+//      (Nyaung Oo Phee → r1784882390130) and POW-007 (Phang-nga bay + Hong Krabi Early bird → r11)
+//      were importing with routeId null and showing "—" where the route name goes. The 4 affected
+//      bookings (LOV-7581478, LOV-8756036, LOV-0542142, LOV-7358225) can't heal on their own — the
+//      change detector hashes the B2C source rows, which never moved — so this bump is what
+//      backfills them. B2C_ROUTE_MAP is now private charters only.
+// v22: createdBy carries the B2C staff who keyed the order (bookings.booked_by_name) instead of the
+//      literal 'b2c_sync'. Every ops screen that shows "ผู้บันทึก / Submitted by / by" reads
+//      createdBy, so this is the field, not a new one; 'createdby' joins B2C_OWN_BK so rows already
+//      carrying 'b2c_sync' get the name on the corrective re-upsert this bump forces (only within the
+//      sync window — older orders keep 'b2c_sync', which the voucher hides).
+// v23: imports booking_items.special_request + .remark into `notes`, so the Special request typed on
+//      the B2C item finally reaches the van job order and the boat job sheet — until now neither box
+//      crossed over and a private charter booked with "เรือสบายดีทัวร์" in the special request arrived
+//      blank. 44 items on file carry one. Migration 022 seeds b2coverride='["notes"]' on every b2c_
+//      booking whose notes ops had already typed by hand (3 rows), so this back-fill adds the field
+//      where it was empty and never overwrites an ops note.
+// v24: §b2cDrop · carries dropoffSame + a best-effort dropoffAreaId/dropoffArea, not just the hotel
+//      text. dropoffsame was NULL on every B2C booking and ops tests it as `=== false`, so a separate
+//      drop-off was imported and then invisible on the booking card, the detail row, the return-van
+//      alert and the van job order. The flag is recomputed rather than copied — B2C sets it false on
+//      NoTransfer orders whose drop-off simply repeats the pickup pier.
+const B2C_MAP_VER = 24;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -464,7 +496,7 @@ function b2cMapAddOns(det, addOnTotal, programId, addonCat) {
 // new B2C ids already carry their own LOV- prefix); each carries a single trip.
 // isFirstLine: order-level payment (deposit/balance) attaches only to the first line of the order,
 // so a multi-item order's payment isn't multiplied across its item-bookings.
-function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat) {
+function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progCat) {
   const h = item;
   // pg returns date columns as JS Date objects — String(d).slice(0,10) gives "Sat Jul 18",
   // not YYYY-MM-DD, which the frontend cannot parse. Format in local time explicitly.
@@ -521,6 +553,13 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat) {
     if (Array.isArray(ps) && ps[0] && ps[0].name) leadFromPax = String(ps[0].name).trim();
   } catch (_) {}
   const leadName = String(h.bk_customer_name || h.customer_name || h.booked_by_name || leadFromPax || '').trim();
+  // §b2cBy · คนที่คีย์ใบนี้ฝั่ง B2C. bookings.booked_by_name/_email เป็นพนักงาน LOVE Andaman
+  // (bd@ / rung@ / noon@ …) ไม่ใช่ลูกค้า — 157/157 ใบมีค่าเสมอ. ลงช่อง createdBy เพราะทุกจอฝั่ง ops
+  // ("ผู้บันทึก" ในใบเช็คอิน · "Submitted by" ในหน้ารายละเอียด · voucher) อ่านช่องนี้อยู่แล้ว
+  // ค่าเดิมคือสตริงตายตัว 'b2c_sync' ซึ่งไม่บอกอะไรกับสตาฟฟ์เลย.
+  const bookedBy = String(h.booked_by_name || '').trim()
+                || String(h.booked_by_email || '').trim().split('@')[0]
+                || '';
   const leadNat  = b2cNatCode(h.bk_customer_nat || h.crm_nationality);
   // Nationality split: B2C carries pax_thai / pax_foreign per item, but leaves BOTH 0 when the split
   // was never captured — and the fallback then charged the whole line to foreigners. A Thai group
@@ -560,6 +599,20 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat) {
   const routeLookupId = isCharter
     ? (isPrivateId(h.product_id) ? h.product_id : (isPrivateId(h.route_id) ? h.route_id : detailProgramId))
     : (isPowId(h.product_id) ? h.product_id : (isPowId(h.route_id) ? h.route_id : detailProgramId));
+  // routeLookupId stays the B2C PROGRAM id — b2cMapAddOns keys the add-on catalog on it, and that
+  // key must never become an ops route id. The ops route is resolved separately, below.
+  //
+  // Order matters, and it is not "newest field first":
+  //   1. programs_own.ops_route_id — B2C's catalog. Covers every row ever imported, including the
+  //      60 older day trips written before details.opsRouteId existed (added ~2026-08).
+  //   2. details.opsRouteId — what the order itself was booked against. Second, not first, so a
+  //      program later re-pointed at a different ops route re-syncs to the new one; also the only
+  //      source if the catalog read failed or the program was deleted from it.
+  //   3. B2C_ROUTE_MAP — private charters only now; day trips can no longer reach it.
+  const opsRouteId = (progCat && progCat.get(String(routeLookupId || '').trim().toUpperCase()))
+    || String(det.opsRouteId || '').trim()
+    || B2C_ROUTE_MAP[routeLookupId]
+    || null;
   const pickupArea  = String(det.pickupLocation || '').trim();   // area name  → matches sb_pickup_areas
   const pickupHotel = String(det.pickupHotel || '').trim();      // hotel      → hotelName
   // Rows predating the pickupHotel field carry only pickupLocation, so fall back to it rather than
@@ -573,10 +626,36 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat) {
   // matched nothing showed a bare dash. Pass the name through either way: the ops area's own wording
   // when it matched, else B2C's raw text so staff at least see what the customer picked.
   const areaName = areaHit ? areaHit.name : pickupArea;
-  const dropoffLoc = (det.dropoffSame === false) ? String(det.dropoffHotel || det.dropoffLocation || '').trim() : '';
+  // Drop-off. Until §b2cDrop the mapper read det.dropoffSame only as a gate and returned nothing but
+  // dropoffHotelName, so sb_bookings.dropoffsame stayed NULL on all 215 B2C rows. Every ops consumer
+  // tests it strictly (bkV2RetInfo · bkDropOf · vanJobsOrderInner · the booking card and detail row all
+  // do `dropoffSame === false`), and NULL is not false — so a separate drop-off was stored and then
+  // hidden everywhere, and the return van grouped under the PICKUP area. LOV-5003086 (pickup Panwa,
+  // drop-off KIRI Restaurant Naithon Beach) is the case that surfaced it.
+  //
+  // B2C's own flag cannot be piped through verbatim: 24 of the 28 items carrying dropoffSame:false are
+  // NoTransfer self-arrive orders whose dropoffLocation just repeats the pickup pier ("Visit Panwa
+  // Pier" → "Visit Panwa Pier"). Trusting those would raise 24 false "returns elsewhere, no return van
+  // arranged" alerts. Require a genuinely different place before telling ops the return leg differs.
+  const _dnorm = s => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const dropoffRaw = String(det.dropoffHotel || det.dropoffLocation || '').trim();
+  const dropoffSep = det.dropoffSame === false && !noTransfer && !!dropoffRaw
+    && _dnorm(dropoffRaw) !== _dnorm(pickupLoc) && _dnorm(dropoffRaw) !== _dnorm(pickupArea);
+  const dropoffLoc = dropoffSep ? dropoffRaw : '';
+  // B2C has no dropoffArea field at all — only the one free-text dropoffLocation ("KIRI Restaurant,
+  // Naithon Beach"), unlike pickup where pickupLocation is already a clean area name. findArea's
+  // substring pass handles it (L.includes(N) → 'naithon'), and it returns null unless the hit is
+  // unique, so an ambiguous string leaves the area unassigned rather than guessing. Try the pickup
+  // zone first, then zone-free: a drop-off can legitimately be in another zone, and B2C sends none.
+  const dropAreaHit = (dropoffSep && typeof findArea === 'function')
+    ? (findArea(dropoffLoc, pickupZone) || findArea(dropoffLoc, '')) : null;
+  const dropAreaId = dropAreaHit ? dropAreaHit.id : null;
+  // Unlike pickupArea this does NOT fall back to the raw text: that text is a hotel, not an area, and
+  // it would print a hotel name in the ops Zone column. dropoffHotelName already carries it.
+  const dropAreaName = dropAreaHit ? dropAreaHit.name : '';
   const trip = {
     id: 'b2c_' + h.booking_id + '_' + h.line_no + '_t0',
-    routeId: B2C_ROUTE_MAP[routeLookupId] || null,
+    routeId: opsRouteId,
     date: date,
     bookingMode: isCharter ? 'charter' : 'seat',
     pax: {
@@ -607,7 +686,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat) {
     id: 'b2c_' + h.booking_id + '_' + h.line_no,
     schemaVer: 2,
     createdAt: h.bk_created_at ? new Date(h.bk_created_at).toISOString() : new Date().toISOString(),
-    createdBy: 'b2c_sync',
+    createdBy: bookedBy || 'b2c_sync',   // §b2cBy
     voucherRef: String(h.booking_id),
     agentId: 'a_b2c',
     leadPax: leadName,
@@ -621,12 +700,41 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat) {
     pickupSelf: noTransfer,
     pickupAreaId: areaId,
     pickupArea: areaName,
+    // §b2cDrop · dropoffSame is the gate every ops consumer reads; true = same as pickup, matching the
+    // in-app default (bkV2 seeds dropoffSame:true). dropoffAreaId/dropoffArea are best-effort and stay
+    // OUT of B2C_OWN_BK, exactly like pickupAreaId — ops fixes the match by hand and B2C must not
+    // stomp it (that hand-assigned 'Naithon' on LOV-5003086 is the reason the rule exists).
+    dropoffSame: !dropoffSep,
     dropoffHotelName: dropoffLoc,
+    dropoffAreaId: dropAreaId,
+    dropoffArea: dropAreaName,
+    // §b2cSreq (2026-09-02): the two free-text boxes B2C sales fills in on the item — "Special request
+    // (sent to ops team)" and "Internal remark". Neither used to cross over at all, so a private
+    // charter booked with the boat name typed into the special request arrived here blank.
+    //
+    // They land in `notes`, NOT in `note` below: `notes` is the field ops actually reads — it prints as
+    // the Special request on van job orders (vanJobsSreqAuto), as Request on the boat job sheet, and as
+    // "Notes / special request" on the booking detail. `note` is the B2C breadcrumb line and shows only
+    // inside the booking card. One field for both, because ops has nowhere else to put the remark; the
+    // "Remark:" prefix keeps the two readable apart.
+    //
+    // B2C sales very often paste the same text into both boxes (14 of the 14 remarks on file at the
+    // time of writing repeat their special request verbatim). Appending blindly printed it twice on
+    // the boat job sheet, so an identical remark is dropped rather than echoed.
+    notes: (() => {
+      const sreq = String(h.special_request || '').trim();
+      const rem  = String(h.remark || '').trim();
+      return [sreq, (rem && rem !== sreq) ? 'Remark: ' + rem : ''].filter(Boolean).join('\n');
+    })(),
     note: ['B2C', h.channel_name, String(h.booking_id), B2C_PRODUCT_NAME[h.product_id] || B2C_PRODUCT_NAME[h.route_id] || h.product_id,
            // Show ops the AREA that failed to match, not the hotel — the area is what they need to
            // pick by hand, and naming it makes a missing sb_pickup_areas entry obvious.
            (!areaId && !noTransfer && (pickupArea || pickupLoc))
-             ? `Pickup: ${pickupArea || pickupLoc}${pickupZone ? ' (' + pickupZone + ')' : ''} — area unassigned` : null].filter(Boolean).join(' · '),
+             ? `Pickup: ${pickupArea || pickupLoc}${pickupZone ? ' (' + pickupZone + ')' : ''} — area unassigned` : null,
+           // Same flag for the return leg: a separate drop-off whose free text matched no area needs a
+           // hand-assigned dropoffAreaId or vanJobsOrderInner groups the return van under the pickup area.
+           (dropoffSep && !dropAreaId)
+             ? `Drop-off: ${dropoffLoc} — area unassigned` : null].filter(Boolean).join(' · '),
     trips: [trip],
     passengers: isFirstLine ? b2cPassengerList(paxRows) : [],
     addOns: b2cMapAddOns(det, addOn, routeLookupId, addonCat),
@@ -677,6 +785,10 @@ const B2C_ITEM_SOURCE = `(
          COALESCE(bi.pax_thai,0)::numeric AS pax_thai,
          COALESCE(bi.pax_foreign,0)::numeric AS pax_foreign,
          COALESCE(bi.subtotal,0)::numeric AS subtotal,
+         -- Read through to_jsonb so an older B2C schema without these columns degrades to NULL
+         -- instead of erroring the whole item source out (same guard the bookings enrichment uses).
+         to_jsonb(bi)->>'special_request' AS special_request,
+         to_jsonb(bi)->>'remark'          AS remark,
          to_jsonb(bi.details) AS details,
          'booking_items'::text AS _sync_source
   FROM ${b2cT('booking_items')} bi
@@ -693,6 +805,8 @@ const B2C_ITEM_SOURCE = `(
          CASE WHEN COALESCE(it.obj->>'paxThai','0')   ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (it.obj->>'paxThai')::numeric   ELSE 0 END AS pax_thai,
          CASE WHEN COALESCE(it.obj->>'paxForeign','0')~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (it.obj->>'paxForeign')::numeric ELSE 0 END AS pax_foreign,
          CASE WHEN COALESCE(it.obj->>'subtotal','0')  ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (it.obj->>'subtotal')::numeric  ELSE 0 END AS subtotal,
+         COALESCE(it.obj->>'specialRequest', it.obj->>'special_request') AS special_request,
+         it.obj->>'remark' AS remark,
          it.obj AS details,
          'bookings.items'::text AS _sync_source
   FROM ${b2cT('bookings')} b
@@ -942,6 +1056,47 @@ async function b2cAddonCatalog() {
   return map;
 }
 
+// B2C day-trip program catalog · "POW-007" → "r11".
+//
+// programs_own.ops_route_id is B2C's own statement of which allotment route a program runs, kept
+// current there because B2C needs it too. Reading it is what makes a NEW program (POW-008…) import
+// with its route on day one instead of waiting for someone to notice a "—" and edit a constant
+// here. Verified on prod 2026-08-31: 7/7 programs mapped, no nulls, and every value agrees with
+// both the old hardcoded map and the per-item details.opsRouteId — this is strictly more coverage,
+// not a different answer.
+//
+// Keyed on the program id (product_id), uppercased, same normalisation as the add-on catalog.
+// Loaded once per sync — seven rows — and a failed read degrades to the per-item opsRouteId rather
+// than killing the sync, same contract as the add-on catalog and the traveller view.
+const B2C_PROGRAM_TABLE = 'programs_own';
+let _b2cProgTblMissingAt = 0;
+const B2C_PROG_TBL_RETRY_MS = 10 * 60 * 1000;   // re-probe, so adding the column needs no restart
+
+async function b2cProgramRouteCatalog() {
+  const map = new Map();
+  if (!b2cPool) return map;
+  if (_b2cProgTblMissingAt && Date.now() - _b2cProgTblMissingAt < B2C_PROG_TBL_RETRY_MS) return map;
+  try {
+    const { rows } = await b2cPool.query(
+      `SELECT id, ops_route_id FROM ${b2cT(B2C_PROGRAM_TABLE)}`);
+    _b2cProgTblMissingAt = 0;
+    for (const r of rows) {
+      const rid = String(r.ops_route_id || '').trim();
+      if (!rid) continue;                        // program not mapped on the B2C side yet
+      map.set(String(r.id || '').trim().toUpperCase(), rid);
+    }
+  } catch (e) {
+    // 42P01 undefined_table · 42703 undefined_column — either way the catalog is simply unavailable
+    if (e && (e.code === '42P01' || e.code === '42703')) {
+      _b2cProgTblMissingAt = Date.now();
+      console.warn(`[b2c-sync] ${B2C_SCHEMA}.${B2C_PROGRAM_TABLE}.ops_route_id not readable — day-trip routes fall back to details.opsRouteId`);
+    } else {
+      console.warn('[b2c-sync] program route catalog read failed — details.opsRouteId this run:', e.message);
+    }
+  }
+  return map;
+}
+
 // Fallback for bookings the view did not supply — because it does not exist yet, or because the
 // read failed. bookings.passengers is already selected by the JOIN as bk_passengers, so the same
 // travellers can be had without any DDL; this mirrors the view's own normalisation (btrim, blanks
@@ -1054,11 +1209,16 @@ async function relSyncB2C(singleExtId = null) {
     // unrelated edit moved a booking.
     const addonCat = await b2cAddonCatalog();
 
+    // Same reasoning as the add-on catalog: re-pointing a program at a different ops route changes
+    // what ops should show while every booking row stays byte-identical, so the catalog has to feed
+    // the change hash or the remap would sit unsynced until an unrelated edit moved a booking.
+    const progCat = await b2cProgramRouteCatalog();
+
     let srcHash = null;
     if (!singleExtId) {
       srcHash = crypto.createHash('sha1')
         .update('v' + B2C_MAP_VER + '|' + JSON.stringify(itemRows) + '|' + JSON.stringify([...paxByBooking])
-                + '|' + JSON.stringify([...addonCat]))
+                + '|' + JSON.stringify([...addonCat]) + '|' + JSON.stringify([...progCat]))
         .digest('hex');
       try {
         const hr = await pool.query('SELECT data FROM app_state WHERE id=$1', ['b2c_sync_hash']);
@@ -1091,7 +1251,7 @@ async function relSyncB2C(singleExtId = null) {
     const b2cBks = [];
     for (const items of Object.values(byId)) {
       items.sort((a, b) => Number(a.line_no) - Number(b.line_no));
-      items.forEach((it, i) => b2cBks.push(mapB2CItemBooking(it, i === 0, findArea, paxByBooking.get(String(it.booking_id)), addonCat)));
+      items.forEach((it, i) => b2cBks.push(mapB2CItemBooking(it, i === 0, findArea, paxByBooking.get(String(it.booking_id)), addonCat, progCat)));
     }
     const tables  = osRepo.decomposeBlob({ sb_bookings: b2cBks });
     const b2cIds  = b2cBks.map(b => b.id);
@@ -1654,6 +1814,10 @@ async function initDb(){
       await sq('travel_sum table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."travel_sum" (id text PRIMARY KEY, key text, decision text, amount bigint, note text, "by" text, at text)`);
       // §tsCot · คำตัดสินเงิน COT · เดิมไม่มีตาราง → decompose ทิ้งทุกครั้ง คนอื่นจึงไม่เคยเห็นว่ามีการตัดสินแล้ว
       await sq('ts_cot table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."ts_cot" (id text PRIMARY KEY, key text, mode text, deduct bigint, payout bigint, ref text, "by" text, at text)`);
+      // §vanBill · ใบวางบิลรถร่วม · VAN_BILL['ผู้ให้บริการ|รถ|YYYY-MM|งวด'] = {perPax,rate,rows,extra,by,at}
+      // ค่าเป็น object ซ้อน map + array → เก็บทั้งก้อนเป็น JSON text แบบ vanjob_sent
+      // เพิ่มช่องในใบวางบิลภายหลังไม่ต้องแตะ DB อีก
+      await sq('van_bill table', `CREATE TABLE IF NOT EXISTS ${OS_SCHEMA}."van_bill" (id text PRIMARY KEY, key text, value text)`);
       // §trips: ตารางนี้ map แบบระบุชื่อเรือตายตัว (b1_route, b2_route, …) และตกหล่น b8/b14/b15 ไปตั้งแต่ต้น
       // → ถ้าจัด Tadeo / Juliet / Rolanda ลงเส้นทาง การจัดนั้นจะหายตอน sync. เติมคอลัมน์ให้ครบ.
       // ⚠ โครงนี้ยังเปราะ — เรือลำใหม่หลังจากนี้ก็ต้องมาเติมมืออีก (ดู BACKLOG)
@@ -2364,7 +2528,8 @@ const server = http.createServer((req, res) => {
         for (const [k, v] of b2cPassengersFromJson(j.rows)) if (!paxMap.has(k)) paxMap.set(k, v);
       }
       out.passengers = paxMap.get(String(id)) || [];     // normalised rows, before mapping
-      out.mapped = j.rows.map((r, i) => mapB2CItemBooking(r, i === 0, null, paxMap.get(String(id))));
+      const dbgProgCat = await b2cProgramRouteCatalog();   // else the inspector reports routeId null
+      out.mapped = j.rows.map((r, i) => mapB2CItemBooking(r, i === 0, null, paxMap.get(String(id)), null, dbgProgCat));
       J(res,200,out);
     })().catch(e => J(res,500,{error:e.message}));
     return;

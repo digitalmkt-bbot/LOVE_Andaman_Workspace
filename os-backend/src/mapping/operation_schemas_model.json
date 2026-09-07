@@ -4684,6 +4684,22 @@
         "type": "bigint"
       },
       {
+        "name": "nat_ad",
+        "type": "bigint"
+      },
+      {
+        "name": "nat_chd",
+        "type": "bigint"
+      },
+      {
+        "name": "nat_inf",
+        "type": "bigint"
+      },
+      {
+        "name": "nat_foc",
+        "type": "bigint"
+      },
+      {
         "name": "lockdrawsel",
         "type": "text"
       },
@@ -6854,6 +6870,25 @@
       {
         "name": "ord",
         "type": "bigint"
+      }
+    ],
+    "primary_key": "id",
+    "foreign_keys": [],
+    "rows": 0
+  },
+  "van_bill": {
+    "columns": [
+      {
+        "name": "id",
+        "type": "text"
+      },
+      {
+        "name": "key",
+        "type": "text"
+      },
+      {
+        "name": "value",
+        "type": "text"
       }
     ],
     "primary_key": "id",

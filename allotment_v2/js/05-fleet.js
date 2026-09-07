@@ -4678,7 +4678,16 @@ function flLoad(){
     localStorage.setItem(LS_KEY,JSON.stringify(d));
   }
   
-  // Hook: Boat status sync v3 — FORCE reopen + dedupe + fix overlap (runs every load)
+  /* Hook: Boat status sync v3 — FORCE reopen + dedupe + fix overlap (runs every load)
+     §bsFuture · ตัวนี้เคยลบสถานะที่คนตั้งไว้ล่วงหน้าทิ้งทุกครั้งที่โหลดหน้า
+       ใบซ่อมที่ยังเปิดอยู่มี to:null คือ "ยังไม่รู้ว่าจบเมื่อไร" ไม่ใช่ "ซ่อมตลอดกาล"
+       แต่โค้ดเดิมถือว่าทุกวันหลัง startDate อยู่ในช่วงซ่อม แล้ว _remove ทิ้ง
+       Aluminous2 · MJ-095 เริ่ม 1 ก.ย. ยังเปิดอยู่ · ตั้ง available 8 ก.ย. ไว้
+       รีเฟรชทีเดียวหาย เพราะ 09-08 >= 09-01 · ซ้ำร้าย FORCE reopen เปิดช่วงซ่อมคืนด้วย
+       ตั้งใหม่กี่รอบก็โดนล้างทุกรอบ
+     ทางที่ถูก · available ที่เริ่มหลังวันเริ่มซ่อม = คนบอกว่าเรือกลับมาใช้ได้วันนั้น
+       ให้ปิดช่วงซ่อมที่วันก่อนหน้าแทน · ห้ามลบของที่คนกรอกไว้เอง
+       ใบซ่อมยังเปิดค้างได้ตามจริง (รออะไหล่ / รอเอกสาร) โดยที่เรือกลับมาวิ่งแล้ว */
   if(d.fleet_maintenance && d.boats){
     let anyChanged = false;
     d.fleet_maintenance.forEach(mj=>{
@@ -4687,6 +4696,11 @@ function flLoad(){
       const boat = d.boats.find(b=>b.id===mj.boatId);
       if(!boat || !boat.log) return;
       const startDate = mj.startDate || TODAY_STR;
+      /* §bsFuture · มีใครตั้งไว้ไหมว่าเรือกลับมาใช้ได้วันไหน (หลังวันเริ่มซ่อม)
+         เอาอันที่เร็วที่สุด · อันนั้นคือวันปิดช่วงซ่อม */
+      const nextAvail = boat.log
+        .filter(e => e && e.s === 'available' && e.from && e.from > startDate)
+        .sort((a,z) => String(a.from).localeCompare(String(z.from)))[0] || null;
       
       // 1. Find ALL fixing logs that reference this MJ (in note)
       const allFixingForMj = boat.log.filter(e => 
@@ -4703,8 +4717,14 @@ function flLoad(){
       } else {
         // Keep the FIRST one (typically most descriptive), reopen it
         const keep = allFixingForMj[0];
-        // REOPEN if to !== null (including to===from "closed single-day" case)
-        if(keep.to !== null){
+        /* §bsFuture · เปิดค้างไว้ได้เฉพาะตอนที่ยังไม่มีใครบอกว่าเรือกลับมาวันไหน
+           ถ้ามีวันกลับมาแล้ว ต้องปิดที่วันก่อนหน้า ไม่ใช่ดันเปิดคืนทุกรอบ */
+        if(nextAvail){
+          const _p=String(nextAvail.from).split('-').map(Number);
+          const _d=new Date(_p[0], _p[1]-1, _p[2]); _d.setDate(_d.getDate()-1);
+          const _want=`${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;
+          if(keep.to !== _want && _want >= (keep.from||startDate)){ keep.to = _want; anyChanged = true; }
+        } else if(keep.to !== null){
           keep.to = null;
           anyChanged = true;
         }
@@ -4737,16 +4757,12 @@ function flLoad(){
               anyChanged = true;
             }
           }
-          // Case 2: available is entirely within fixing range — mark for removal
-          else if(e.from >= startDate){
-            e._remove = true;
-            anyChanged = true;
-          }
+          /* §bsFuture · Case 2 เดิมลบทิ้งเลย · เอาออก
+             available ที่เริ่มหลังวันเริ่มซ่อมคือ "เรือกลับมาใช้ได้วันนี้"
+             ช่วงซ่อมถูกปิดให้แล้วข้างบน ไม่มีอะไรทับกันอีก
+             เท่ากับตอนนี้ไม่มีทางที่ตัวซิงก์จะลบของที่คนกรอกไว้เอง */
         }
       });
-      
-      // Remove marked
-      boat.log = boat.log.filter(e => !e._remove);
     });
     if(anyChanged){
       localStorage.setItem(LS_KEY,JSON.stringify(d));
@@ -4845,7 +4861,7 @@ function flLoad(){
             const hasFixLog = b.log.some(e=>e.s==='fixing' && e.from===INC_DATE && e.note && e.note.includes(mj.no));
             if(!hasFixLog){
               if(typeof autoClosePrevLog==='function') autoClosePrevLog(b, INC_DATE);
-              const cur = typeof getCurStatus==='function' ? getCurStatus(b, INC_DATE) : {loc:''};
+              const cur = typeof getStoredStatus==='function' ? getStoredStatus(b, INC_DATE) : {loc:''};
               b.log.push({id:'sl'+Date.now()+'_'+jid, s:'fixing', from:INC_DATE, to:null, loc:mj.location||cur.loc||'พันวา', note:`Maintenance Job ${mj.no}`});
             }
           }
@@ -8028,6 +8044,362 @@ function flShiftDRDay(n){
   flRenderDR();
 }
 
+/* ══ §flSheet · ของใหม่ในหน้า Daily Fleet Log ═══════════════════════════
+   มิเตอร์น้ำรายลำ · รายการเบิกของลงเรือ · ชิปกรองรายท่า
+
+   ที่เก็บ · ทั้งสามอย่างเก็บเป็น "สตริง JSON" ใน blob บริษัท
+   ไม่ใช่ object · คีย์ใหม่ที่ยังไม่มีตารางใน DB ถ้าเก็บเป็น object
+   จะโดนตัดทิ้งตอนเซฟ (เจอมาแล้วกับ po_cash ดู §pcFix
+   และกับ altPickups.drop* ดู §altDropFix)
+     fl_water        {'วันที่|เรือ': {o, c, by, at}}
+     fl_issue_items  [{id, name, unit, pier, off}]   pier '' = ทุกท่า
+     fl_issue        {'วันที่|เรือ': {รหัสรายการ: จำนวน}}
+
+   ลบรายการ = ทำเครื่องหมาย off ไม่ลบทิ้งจริง
+   ตัวเลขที่เคยกรอกยังอยู่ใน fl_issue และชื่อยังอยู่ใน fl_issue_items
+   ถ้าลบชื่อทิ้ง ตัวเลขเก่าจะกลายเป็นคีย์ไร้ชื่อ อ่านย้อนหลังไม่ออก
+   ═══════════════════════════════════════════════════════════════════════ */
+function _flJson(key){
+  try{ var raw=laBlob()[key]; if(typeof raw!=='string'||!raw) return null; return JSON.parse(raw); }
+  catch(_){ return null; }
+}
+function _flJsonSave(key,val,empty){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('fleet')
+     && typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return false;
+  try{
+    var b=laBlob();
+    if(empty) delete b[key]; else b[key]=JSON.stringify(val);
+    laBlobSave(); return true;
+  }catch(e){ try{ console.warn('[flSheet] save failed '+key, e&&e.message); }catch(_){} return false; }
+}
+/* ── มิเตอร์น้ำ · รายลำ รายวัน ── */
+var _FL_W=null, _FL_W_SRC=null;
+function flWaterAll(){
+  var raw=''; try{ raw=laBlob().fl_water||''; }catch(_){ raw=''; }
+  if(_FL_W===null || _FL_W_SRC!==raw){ _FL_W=_flJson('fl_water')||{}; _FL_W_SRC=raw; }
+  return _FL_W;
+}
+function flWaterKey(ds,bid){ return String(ds||'')+'|'+String(bid||''); }
+function flWaterGet(ds,bid){ return flWaterAll()[flWaterKey(ds,bid)]||{}; }
+function flWaterUsed(ds,bid){
+  var w=flWaterGet(ds,bid);
+  if(w.o==null||w.c==null) return null;
+  return Math.round((+w.c - +w.o)*10)/10;
+}
+function flWaterSet(ds,bid,which,val){
+  var A=flWaterAll(), k=flWaterKey(ds,bid);
+  var v=(val===''||val==null)?null:parseFloat(val);
+  if(v!=null && !isFinite(v)) return;
+  var o=A[k]||{}; o[which]=v;
+  o.by=((typeof ME!=='undefined'&&ME&&(ME.name||ME.username))||''); o.at=new Date().toISOString();
+  if(o.o==null && o.c==null) delete A[k]; else A[k]=o;
+  _flJsonSave('fl_water',A,!Object.keys(A).length);
+  _FL_W=A; try{ _FL_W_SRC=laBlob().fl_water||''; }catch(_){}
+  flRenderDR();
+}
+/* ── รายการเบิกของ · แคตตาล็อกทั้งบริษัท ── */
+var _FL_IT=null, _FL_IT_SRC=null;
+function flIssueItems(){
+  var raw=''; try{ raw=laBlob().fl_issue_items||''; }catch(_){ raw=''; }
+  if(_FL_IT===null || _FL_IT_SRC!==raw){
+    var a=_flJson('fl_issue_items'); _FL_IT=Array.isArray(a)?a:[]; _FL_IT_SRC=raw;
+  }
+  return _FL_IT;
+}
+/* รายการที่ใช้จริงของท่านั้น · ของทุกท่า + ของท่านั้น · ตัดที่เลิกใช้ออก */
+function flIssueFor(pierKey){
+  return flIssueItems().filter(function(x){
+    return x && !x.off && (!x.pier || x.pier===pierKey); });
+}
+function flIssueItemsSave(list){
+  _FL_IT=list; _flJsonSave('fl_issue_items',list,!list.length);
+  try{ _FL_IT_SRC=laBlob().fl_issue_items||''; }catch(_){}
+}
+function flIssueAddItem(name,unit,pierKey){
+  name=String(name||'').trim(); if(!name) return null;
+  unit=String(unit||'').trim();
+  var L=flIssueItems().slice();
+  /* ชื่อเดิมที่เคยเลิกใช้ → เปิดกลับ ไม่สร้างใหม่ · ตัวเลขเก่าจะได้กลับมาด้วย */
+  var hit=L.find(function(x){ return x && String(x.name).trim()===name; });
+  if(hit){ delete hit.off; if(unit) hit.unit=unit; hit.pier=pierKey||''; flIssueItemsSave(L); return hit.id; }
+  var id='it'+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+  L.push({id:id, name:name, unit:unit, pier:pierKey||''});
+  flIssueItemsSave(L); return id;
+}
+function flIssueSetItem(id,field,val){
+  var L=flIssueItems().slice(), it=L.find(function(x){ return x&&x.id===id; }); if(!it) return;
+  if(field==='off'){ if(val) it.off=1; else delete it.off; }
+  else it[field]=String(val||'').trim();
+  flIssueItemsSave(L); flRenderDR();
+}
+/* ── จำนวนที่เบิกจริง ── */
+var _FL_IS=null, _FL_IS_SRC=null;
+function flIssueAll(){
+  var raw=''; try{ raw=laBlob().fl_issue||''; }catch(_){ raw=''; }
+  if(_FL_IS===null || _FL_IS_SRC!==raw){ _FL_IS=_flJson('fl_issue')||{}; _FL_IS_SRC=raw; }
+  return _FL_IS;
+}
+function flIssueGet(ds,bid,itemId){
+  var r=flIssueAll()[flWaterKey(ds,bid)]; return (r&&r[itemId]!=null)?r[itemId]:null;
+}
+function flIssueSet(ds,bid,itemId,val){
+  var A=flIssueAll(), k=flWaterKey(ds,bid);
+  var v=(val===''||val==null)?null:parseFloat(val);
+  if(v!=null && !isFinite(v)) return;
+  var r=A[k]||{};
+  if(v==null) delete r[itemId]; else r[itemId]=v;
+  if(!Object.keys(r).length) delete A[k]; else A[k]=r;
+  _flJsonSave('fl_issue',A,!Object.keys(A).length);
+  _FL_IS=A; try{ _FL_IS_SRC=laBlob().fl_issue||''; }catch(_){}
+  flRenderDR();
+}
+/* ══ §drExtra · ของจิปาถะที่เบิกเฉพาะลำ เฉพาะวัน ═════════════════════════
+   ต่างจาก fl_issue (คอลัมน์ถาวรของท่า · ของที่เบิกแทบทุกวัน จึงคุ้มที่จะมีคอลัมน์)
+   ตัวนี้คือของที่นาน ๆ ครั้ง เช่น "ดิงกี้ · น้ำมัน 20 ลิตร" ตั้งคอลัมน์ไว้ก็ว่างทั้งท่า
+   เก็บเป็นรายการในแถวนั้นแทน · โครง { 'วันที่|เรือ': [{id,n,q,u}] }
+   ชื่อที่เคยพิมพ์จะถูกเสนอให้เลือกครั้งถัดไป จะได้ไม่พิมพ์คนละแบบทุกวัน */
+function flExtraAll(){ return _flJson('fl_extra')||{}; }
+function flExtraGet(ds,bid){
+  var a=flExtraAll()[flWaterKey(ds,bid)];
+  return Array.isArray(a)?a:[];
+}
+function flExtraSaveMap(A){
+  /* ตัดของเก่ากว่า 120 วันทิ้ง · เก็บยาวกว่าไฮไลต์ใบงานรถเพราะนี่คือของที่ใช้ทำบัญชี */
+  try{
+    var cut=new Date(); cut.setDate(cut.getDate()-120);
+    var cs=cut.getFullYear()+'-'+String(cut.getMonth()+1).padStart(2,'0')+'-'+String(cut.getDate()).padStart(2,'0');
+    Object.keys(A).forEach(function(k){ var d=String(k).split('|')[0]; if(d && d<cs) delete A[k]; });
+  }catch(_e){}
+  _flJsonSave('fl_extra',A,!Object.keys(A).length);
+}
+function flExtraSet(ds,bid,id,name,qty,unit){
+  var A=flExtraAll(), k=flWaterKey(ds,bid);
+  var L=Array.isArray(A[k])?A[k].slice():[];
+  var nm=String(name||'').trim();
+  var q=(qty===''||qty==null)?null:parseFloat(qty);
+  if(q!=null && !isFinite(q)) q=null;
+  if(!nm){ return false; }
+  var row={id:id||('x'+Date.now()+Math.floor(Math.random()*1000)), n:nm, q:q, u:String(unit||'').trim()};
+  var at=-1; L.forEach(function(x,i){ if(x&&x.id===row.id) at=i; });
+  if(at>=0) L[at]=row; else L.push(row);
+  A[k]=L; flExtraSaveMap(A); flRenderDR(); return true;
+}
+function flExtraDel(ds,bid,id){
+  var A=flExtraAll(), k=flWaterKey(ds,bid);
+  var L=(Array.isArray(A[k])?A[k]:[]).filter(function(x){ return x && x.id!==id; });
+  if(L.length) A[k]=L; else delete A[k];
+  flExtraSaveMap(A); flRenderDR();
+}
+/* §drExtra3 · เรือลำนี้ "วิ่ง" วันนั้นไหม
+   เดิมอยู่ในตัว flRenderDR แต่กล่องกรอกต้องใช้ตัวเดียวกันเพื่อทำรายชื่อเรือให้เลือก
+   ถ้าปล่อยให้มีสองชุด รายชื่อในกล่องกับแถวในตารางจะไม่ตรงกันเมื่อไหร่ก็ได้ */
+function flDRRan(ds,b){
+  if(!b) return false;
+  try{
+    var op=(typeof TRIPS!=='undefined'&&TRIPS[ds])?TRIPS[ds][b.id]:null;
+    if(op && (op.route||op.program)) return true;
+    var bi=(typeof flBoatBookingsFor==='function')?flBoatBookingsFor(b.id,ds):null;
+    if(bi && ((bi.pax||0)>0 || (bi.trips||0)>0)) return true;
+    var dd=(typeof FL_DAILY!=='undefined'&&FL_DAILY[ds])?FL_DAILY[ds][b.id]:null;
+    if(dd && (dd.fuel>0 || dd.paxActual!=null ||
+      (dd.trips && Object.keys(dd.trips).some(function(k){ var tp=dd.trips[k]; return tp&&tp.engines&&Object.keys(tp.engines).length; })))) return true;
+    if(Object.keys(flWaterGet(ds,b.id)||{}).length) return true;
+    if(flExtraGet(ds,b.id).length) return true;
+    var iss=flIssueAll()[flWaterKey(ds,b.id)];
+    if(iss && Object.keys(iss).length) return true;
+  }catch(_e){}
+  return false;
+}
+/* รายชื่อเรือที่เลือกได้ในกล่อง "อื่นๆ" ของท่านั้น
+   ต้องตรงกับแถวที่อยู่ในตารางเป๊ะ ๆ รวมลำที่ขึ้นว่า "ไม่ออก"
+   เพราะเรือที่จอดอยู่ก็เอาของลงได้ · นั่นคือเคสที่แบบคอลัมน์เดิมทำไม่ได้เลย */
+function flExtraBoats(ds,pierKey){
+  var out=[];
+  try{
+    (typeof BOATS!=='undefined'?BOATS:[]).forEach(function(b){
+      if(!b || b.retired) return;
+      var isCh=(b.ownership==='charter');
+      if(!isCh && !(typeof FL_ENGINES!=='undefined'?FL_ENGINES:[]).some(function(e){ return e.boatId===b.id; })) return;
+      if(isCh && !flDRRan(ds,b)) return;
+      var p=(typeof getBoatCurrentPier==='function')?getBoatCurrentPier(b,ds):(b.pier||'');
+      if(p==='shop') p=b.pier||'';
+      if(pierKey && p!==pierKey) return;
+      out.push(b);
+    });
+  }catch(_e){}
+  return out;
+}
+/* ชื่อที่เคยพิมพ์ + จำนวนครั้งที่ใช้ · เรียงจากที่ใช้บ่อยสุด */
+function flExtraNames(){
+  var A=flExtraAll(), m={};
+  Object.keys(A).forEach(function(k){
+    (A[k]||[]).forEach(function(x){
+      if(!x||!x.n) return;
+      var key=x.n+'\u0001'+(x.u||'');
+      if(!m[key]) m[key]={n:x.n, u:x.u||'', c:0};
+      m[key].c++;
+    });
+  });
+  return Object.keys(m).map(function(k){ return m[k]; }).sort(function(a,b){ return b.c-a.c; });
+}
+/* ══ กล่องจัดการรายการเบิกของ ══════════════════════════════════════════ */
+function _flPierLbl(k){ return k==='tublamu'?'Tub Lamu':k==='panwa'?'Visit Panwa':k==='ranong'?'Ranong':'ทุกท่า'; }
+function _flPierAb(k){ return k==='tublamu'?'TL':k==='panwa'?'VP':k==='ranong'?'RN':'ทุกท่า'; }
+function _flEsc(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function flxClose(){ var h=document.getElementById('flx-host'); if(h) h.innerHTML=''; }
+function _flxHost(){
+  var h=document.getElementById('flx-host');
+  if(!h){ h=document.createElement('div'); h.id='flx-host'; document.body.appendChild(h); }
+  return h;
+}
+/* จำนวนวันที่เคยกรอกรายการนั้น · ใช้บอกว่า "เคยใช้แล้ว" ตอนพิมพ์ชื่อ */
+function _flIssueUseDays(itemId){
+  var A=flIssueAll(), n=0;
+  for(var k in A){ if(A[k] && A[k][itemId]!=null) n++; }
+  return n;
+}
+var _FLX_PIER='', _FLX_SCOPE='pier';
+function flIssueQuickOpen(pierKey){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('fleet') && !window.laCanEditArea('operations')){ alert('ดูอย่างเดียว · แก้ไม่ได้'); return; }
+  _FLX_PIER=pierKey||''; _FLX_SCOPE='pier';
+  _flxHost().innerHTML='<div class="flx-ovl" onclick="if(event.target===this)flxClose()"><div class="flx-dlg">'
+   +'<div class="flx-h">&#128230; เพิ่มรายการ · '+_flEsc(_flPierLbl(pierKey))+'<button class="x" onclick="flxClose()">&times;</button></div>'
+   +'<label class="flx-l">ชื่อรายการ<input id="flx-nm" placeholder="เช่น น้ำแข็งหลอด" oninput="flIssueQuickSug(this.value)" autocomplete="off"></label>'
+   +'<div class="flx-sug" id="flx-sug"></div>'
+   +'<label class="flx-l">หน่วย<input id="flx-un" placeholder="เช่น ถุง" style="width:120px" autocomplete="off"></label>'
+   +'<div class="flx-sc" id="flx-sc"><span>ใช้กับ</span>'
+     +'<button class="on" onclick="flIssueQuickScope(\'pier\')">ท่านี้เท่านั้น</button>'
+     +'<button onclick="flIssueQuickScope(\'all\')">ทุกท่า</button></div>'
+   +'<button class="flx-ok" onclick="flIssueQuickAdd()">เพิ่มคอลัมน์</button>'
+   +'<div class="flx-n">ชื่อที่เคยใช้แล้วจะขึ้นมาให้เลือก · เลือกชื่อเดิมที่เคยเลิกใช้ = ได้คอลัมน์คืนพร้อมตัวเลขเก่าทั้งหมด</div>'
+   +'</div></div>';
+  flIssueQuickSug('');
+  setTimeout(function(){ var e=document.getElementById('flx-nm'); if(e) e.focus(); },40);
+}
+function flIssueQuickScope(v){
+  _FLX_SCOPE=v;
+  var bs=document.querySelectorAll('#flx-sc button');
+  if(bs[0]) bs[0].className=(v==='pier')?'on':'';
+  if(bs[1]) bs[1].className=(v==='all')?'on':'';
+}
+function flIssueQuickSug(q){
+  var el=document.getElementById('flx-sug'); if(!el) return;
+  q=String(q||'').trim().toLowerCase();
+  var L=flIssueItems().filter(function(x){
+    if(!x) return false;
+    if(q && String(x.name).toLowerCase().indexOf(q)<0) return false;
+    /* ที่โชว์อยู่ในท่านี้แล้ว ไม่ต้องเสนอซ้ำ */
+    if(!x.off && (!x.pier || x.pier===_FLX_PIER)) return false;
+    return true;
+  }).slice(0,6);
+  el.innerHTML=L.map(function(x){
+    var d=_flIssueUseDays(x.id);
+    return '<button class="'+(x.off?'off':'')+'" onclick="flIssueQuickPick(\''+x.id+'\')">'
+      +_flEsc(x.name)+' <em>'+_flEsc(x.unit||'')+'</em>'
+      +'<i>'+(x.off?'เคยเลิกใช้ · กดคืน':(d?('เคยใช้ '+d+' วัน'):'มีอยู่แล้ว'))+'</i></button>';
+  }).join('');
+}
+function flIssueQuickPick(id){
+  var it=flIssueItems().find(function(x){ return x&&x.id===id; }); if(!it) return;
+  var n=document.getElementById('flx-nm'), u=document.getElementById('flx-un');
+  if(n) n.value=it.name; if(u) u.value=it.unit||'';
+  flIssueQuickSug(it.name);
+}
+function flIssueQuickAdd(){
+  var n=document.getElementById('flx-nm'), u=document.getElementById('flx-un');
+  var name=n?n.value.trim():''; if(!name){ alert('ใส่ชื่อรายการก่อน'); if(n)n.focus(); return; }
+  flIssueAddItem(name, u?u.value:'', _FLX_SCOPE==='pier'?_FLX_PIER:'');
+  flxClose(); flRenderDR();
+}
+/* ── จัดการรายการทั้งหมด ── */
+function flIssueManageOpen(pierKey){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('fleet') && !window.laCanEditArea('operations')){ alert('ดูอย่างเดียว · แก้ไม่ได้'); return; }
+  _FLX_PIER=pierKey||'';
+  var L=flIssueItems();
+  var live=L.filter(function(x){ return x&&!x.off; }), gone=L.filter(function(x){ return x&&x.off; });
+  var opt=function(v){ return ['','tublamu','panwa','ranong'].map(function(k){
+      return '<option value="'+k+'"'+(String(v||'')===k?' selected':'')+'>'+_flPierAb(k)+'</option>'; }).join(''); };
+  var rowH=function(x){
+    return '<div class="flx-r"><input value="'+_flEsc(x.name)+'" onchange="flIssueSetItem(\''+x.id+'\',\'name\',this.value)">'
+      +'<input class="u" value="'+_flEsc(x.unit||'')+'" placeholder="หน่วย" onchange="flIssueSetItem(\''+x.id+'\',\'unit\',this.value)">'
+      +'<select onchange="flIssueSetItem(\''+x.id+'\',\'pier\',this.value)">'+opt(x.pier)+'</select>'
+      +'<button class="x" title="เลิกใช้ · ตัวเลขเก่ายังอยู่" onclick="flIssueSetItem(\''+x.id+'\',\'off\',1)">&times;</button></div>'; };
+  _flxHost().innerHTML='<div class="flx-ovl" onclick="if(event.target===this)flxClose()"><div class="flx-dlg">'
+   +'<div class="flx-h">&#9881; จัดการรายการเบิกของ<button class="x" onclick="flxClose()">&times;</button></div>'
+   +(live.length?live.map(rowH).join(''):'<div style="font-size:11px;color:#a3a29a;padding:6px 0 10px">ยังไม่มีรายการ · กด + อื่นๆ ที่หัวท่าเพื่อเพิ่ม</div>')
+   +(gone.length?('<div class="flx-hz">เคยใช้แล้วเลิกใช้ <b>'+gone.length+' รายการ</b></div>'
+       +gone.map(function(x){ var d=_flIssueUseDays(x.id);
+         return '<div class="flx-r gone"><input value="'+_flEsc(x.name)+'" disabled>'
+           +'<input class="u" value="'+_flEsc(x.unit||'')+'" disabled>'
+           +'<span style="font-size:9px;color:#a3a29a;flex:none">'+(d?d+' วัน':'')+'</span>'
+           +'<button class="rr" onclick="flIssueSetItem(\''+x.id+'\',\'off\',0)">คืน</button></div>'; }).join('')):'')
+   +'<div class="flx-n">ลบ = ทำเครื่องหมายว่าเลิกใช้ ไม่ได้ลบทิ้งจริง · คอลัมน์หายจากตาราง '
+   +'แต่ตัวเลขที่เคยกรอกยังอยู่ครบ กดคืนเมื่อไหร่ก็กลับมาพร้อมกัน<br>'
+   +'ถ้าลบชื่อทิ้งจริง ตัวเลขเก่าจะกลายเป็นคีย์ที่ไม่มีชื่อ อ่านย้อนหลังไม่ออก</div>'
+   +'</div></div>';
+}
+/* ══ §drExtra · กล่องกรอกของจิปาถะของแถวนั้น ═════════════════════════ */
+var _FLX_EX={ds:'',pier:'',bid:'',id:''};
+function flExtraOpen(ds,pierKey,bid,id){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('fleet') && !window.laCanEditArea('operations')){ alert('ดูอย่างเดียว · แก้ไม่ได้'); return; }
+  _FLX_EX={ds:ds,pier:pierKey||'',bid:bid||'',id:id||''};
+  var cur=null;
+  if(id && bid) flExtraGet(ds,bid).forEach(function(x){ if(x.id===id) cur=x; });
+  var BL=flExtraBoats(ds,pierKey);
+  if(!BL.length){ alert('ท่านี้ยังไม่มีเรือให้เลือกในวันนี้'); return; }
+  var pick=bid||BL[0].id;
+  var sug=flExtraNames().slice(0,6);
+  _flxHost().innerHTML='<div class="flx-ovl" onclick="if(event.target===this)flxClose()"><div class="flx-dlg">'
+   +'<div class="flx-h">&#128736; '+(cur?'แก้รายการอื่นๆ':'เพิ่มรายการอื่นๆ')+' · '+_flEsc(_flPierLbl(pierKey))
+   +'<button class="x" onclick="flxClose()">&times;</button></div>'
+   +'<label class="flx-l">เรือ<select id="flx-xb">'
+     +BL.map(function(b){ return '<option value="'+b.id+'"'+(b.id===pick?' selected':'')+'>'
+        +_flEsc(b.name)+(b.ownership==='charter'?' · เช่า':'')+'</option>'; }).join('')
+   +'</select></label>'
+   +'<label class="flx-l">รายการ<input id="flx-xn" placeholder="เช่น ดิงกี้ · น้ำมัน" value="'+_flEsc(cur?cur.n:'')+'" autocomplete="off"></label>'
+   +(sug.length?('<div class="flx-sug">'+sug.map(function(x,i){
+       return '<button onclick="flExtraPick('+i+')">'+_flEsc(x.n)+' <em>'+_flEsc(x.u)+'</em><i>เคยใช้ '+x.c+' ครั้ง</i></button>'; }).join('')+'</div>'):'')
+   +'<div style="display:flex;gap:8px">'
+     +'<label class="flx-l" style="flex:1">จำนวน<input id="flx-xq" type="number" step="0.1" placeholder="0" value="'+(cur&&cur.q!=null?cur.q:'')+'" autocomplete="off"></label>'
+     +'<label class="flx-l" style="flex:1">หน่วย<input id="flx-xu" placeholder="เช่น ลิตร" value="'+_flEsc(cur?cur.u:'')+'" autocomplete="off"></label>'
+   +'</div>'
+   +'<button class="flx-ok" onclick="flExtraSaveBtn()">'+(cur?'บันทึก':'เพิ่มรายการ')+'</button>'
+   +(cur?('<button class="flx-ok" style="background:#fff;color:#A32D2D;border:1px solid #E7C4C0;margin-top:7px" onclick="flExtraDelBtn()">ลบรายการนี้</button>'):'')
+   +'<div class="flx-n">เก็บเฉพาะวันที่ '+_flEsc(ds)+' ของลำที่เลือกเท่านั้น · ไม่สร้างคอลัมน์ให้ทั้งท่า<br>'
+     +'ของที่เบิกแทบทุกวันควรใช้ปุ่ม + อื่นๆ ที่หัวท่าแทน จะได้เป็นคอลัมน์กรอกเร็ว</div>'
+   +'</div></div>';
+  window._FLX_XSUG=sug;
+  setTimeout(function(){ var e=document.getElementById('flx-xn'); if(e) e.focus(); },40);
+}
+function flExtraPick(i){
+  var x=(window._FLX_XSUG||[])[i]; if(!x) return;
+  var n=document.getElementById('flx-xn'), u=document.getElementById('flx-xu'), q=document.getElementById('flx-xq');
+  if(n) n.value=x.n; if(u&&!u.value) u.value=x.u||'';
+  if(q) q.focus();
+}
+function flExtraSaveBtn(){
+  var sel=document.getElementById('flx-xb');
+  var n=document.getElementById('flx-xn'), q=document.getElementById('flx-xq'), u=document.getElementById('flx-xu');
+  var nm=n?n.value.trim():'';
+  if(!nm){ alert('ใส่ชื่อรายการก่อน'); if(n)n.focus(); return; }
+  var nb=sel?sel.value:_FLX_EX.bid;
+  /* ย้ายลำ · ลบของเดิมก่อนแล้วค่อยเขียนใบใหม่ ไม่งั้นจะค้างสองที่ */
+  if(_FLX_EX.id && _FLX_EX.bid && nb!==_FLX_EX.bid){
+    flExtraDel(_FLX_EX.ds,_FLX_EX.bid,_FLX_EX.id);
+    flExtraSet(_FLX_EX.ds,nb,'',nm,q?q.value:'',u?u.value:'');
+  } else {
+    flExtraSet(_FLX_EX.ds,nb,_FLX_EX.id,nm,q?q.value:'',u?u.value:'');
+  }
+  flxClose();
+}
+function flExtraDelBtn(){
+  if(!_FLX_EX.id || !_FLX_EX.bid) return;
+  flExtraDel(_FLX_EX.ds,_FLX_EX.bid,_FLX_EX.id);
+  flxClose();
+}
+/* ── ชิปกรองท่า · '' = ทุกท่า ── */
+var _FL_DR_PIER='';
+function flDRSetPier(k){ _FL_DR_PIER=(k===_FL_DR_PIER&&k!=='')?'':k; flRenderDR(); }
 function flRenderDR(){
   const dateEl=document.getElementById('fl-dr-date');
   if(!dateEl.value)dateEl.value=TODAY_STR;
@@ -8036,14 +8408,40 @@ function flRenderDR(){
 
   // Computed metrics for the day
   const companyBoats=BOATS.filter(b=>b.ownership!=='charter'&&!b.retired&&FL_ENGINES.some(e=>e.boatId===b.id));
-  const tlBoats=companyBoats.filter(b=>(typeof getBoatCurrentPier==='function'?getBoatCurrentPier(b):b.pier)==='tublamu');
-  const vpBoats=companyBoats.filter(b=>(typeof getBoatCurrentPier==='function'?getBoatCurrentPier(b):b.pier)==='panwa');
-  const rnBoats=companyBoats.filter(b=>(typeof getBoatCurrentPier==='function'?getBoatCurrentPier(b):b.pier)==='ranong');
+  /* ══ §drDate · สองบั๊กซ้อนกันในสามบรรทัดนี้ ═══════════════════════════════════
+     1) เรียก getBoatCurrentPier(b) โดยไม่ส่งวันที่ · ในฟังก์ชันมี ds = ds || TODAY_STR
+        หน้านี้เลยเอา "ตัวเลขของวันที่เลือก" มาใส่ใน "ผังเรือของวันนี้" เสมอ
+        เปิดดูย้อนหลังจะเห็นเรือไปอยู่ท่าที่มันเพิ่งย้ายไปเมื่อวาน ไม่ใช่ท่าของวันนั้น
+     2) getBoatCurrentPier คืนค่าได้ 4 แบบ — tublamu / panwa / ranong / 'shop'
+        แต่ที่นี่แบ่งแค่ 3 ตะกร้า · ลำที่คืน 'shop' ไม่เข้าตะกร้าไหนเลย → หายจากหน้าไปทั้งลำ
+        ไม่ได้ขึ้นว่า "ไม่ออก" ด้วยซ้ำ คือไม่ถูกวาดตั้งแต่แรก
+        (เคสจริง: Aluminous2 พอถูกเอาขึ้นอู่ก็หายไปจากทุกวัน รวมวันที่ยังวิ่งอยู่)
+
+     'shop' ไม่ใช่ท่า แต่เป็น "เรือไม่ได้อยู่ที่ท่า" · ท่าประจำยังเป็นคนรับผิดชอบอยู่
+     จึงถอยไปจัดกลุ่มตามท่าประจำ แถวของลำนั้นขึ้นสถานะ Fixing/Unavailable อยู่แล้ว */
+  const _drPier=b=>{
+    if(typeof getBoatCurrentPier!=='function') return b.pier||'tublamu';
+    const p=getBoatCurrentPier(b, ds);
+    return (p==='shop') ? (b.pier||'tublamu') : p;
+  };
+  /* ══ §drExtra · เรือเช่าที่วิ่งวันนั้น ต้องอยู่ใน Daily Log ด้วย ═══════════
+     ของเดิม companyBoats ตัดเรือเช่าทิ้งตั้งแต่บรรทัดแรก (และตัดลำที่ไม่มีเครื่องด้วย
+     ซึ่งเรือเช่าไม่มีเลยสักลำ) แต่เราเบิกของลงเรือเช่าเหมือนกัน พอไม่มีแถวก็ไม่มีที่ลง
+     ของที่เบิกไปเลยหายจากบัญชีของวันนั้นทั้งก้อน
+
+     "วิ่ง" = มีทริปในผังเรือ · หรือมีบุคกิ้งลงลำนี้ · หรือมีข้อมูลที่กรอกไว้แล้ว
+     ข้อสุดท้ายสำคัญ — แถวที่กรอกไปแล้วต้องไม่หายไปเองถ้าบุคกิ้งถูกย้าย */
+  const _drRan=(b)=>flDRRan(ds,b);   /* §drExtra3 · ตัวกลาง · กล่องกรอกใช้ตัวเดียวกัน */
+  const charterRan=BOATS.filter(b=>b && b.ownership==='charter' && !b.retired && _drRan(b));
+  const drBoats=companyBoats.concat(charterRan);
+  const tlBoats=drBoats.filter(b=>_drPier(b)==='tublamu');
+  const vpBoats=drBoats.filter(b=>_drPier(b)==='panwa');
+  const rnBoats=drBoats.filter(b=>_drPier(b)==='ranong');
 
   // ── Per-boat effective PAX (booked from sales · manual actual overrides) — single source for KPIs + rows ──
   // eff = boat not available → 0 · else actual (FL_DAILY.paxActual, if entered) → else booked-from-bookings
   const boatPax={};
-  companyBoats.forEach(b=>{
+  drBoats.forEach(b=>{
     const binfo=flBoatBookingsFor(b.id, ds);
     const dayDR=(FL_DAILY[ds]||{})[b.id];
     const actual=(dayDR && dayDR.paxActual!=null) ? dayDR.paxActual : null;
@@ -8055,7 +8453,10 @@ function flRenderDR(){
     // to this boat AND today is the FIRST day of the downtime (broke after the morning trip).
     const hasLog = !!(dayDR && (dayDR.fuel>0 || dayDR.paxActual!=null ||
       (dayDR.trips && Object.values(dayDR.trips).some(tp=>tp&&tp.engines&&Object.keys(tp.engines).length))));
-    const ranDespite = !avail && (hasLog || (binfo.pax>0 && cs.from===ds));
+    /* §drExtra · เรือเช่าอยู่นอกช่วงสัญญา getCurStatus จะตอบ unavailable เสมอ
+       แต่ถ้ามันวิ่งจริงวันนั้น ต้องนับว่าออก ไม่งั้นแถวจะยุบเป็น "ไม่ต้องกรอก" */
+    const ranDespite = !avail && (hasLog || (binfo.pax>0 && cs.from===ds)
+                       || (b.ownership==='charter' && _drRan(b)));
     const operated = avail || ranDespite;
     const eff = !operated ? 0 : (actual!=null ? actual : binfo.pax);
     boatPax[b.id]={ booked:binfo.pax, actual, eff, routes:binfo.routes, trips:binfo.trips, avail, ranDespite };
@@ -8172,27 +8573,36 @@ function flRenderDR(){
     </div>
   </div>`;
 
-  // Pill row
-  const pillRow=`<div style="display:flex;gap:6px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
-    <div style="flex:1;min-width:160px;background:white;border-radius:24px;padding:7px 14px;display:flex;align-items:center;gap:10px;border:1px solid ${dim.line}">
-      <div style="width:24px;height:24px;border-radius:50%;background:#185FA5;color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">HN</div>
-      <span style="font-size:12px;font-weight:600">Honda boats</span>
-      <span style="margin-left:auto;font-size:11px;font-weight:500">${hondaBoats}</span>
-      <span style="font-size:11px;color:${dim.ink3}">operating</span>
-    </div>
-    <div style="flex:1;min-width:160px;background:white;border-radius:24px;padding:7px 14px;display:flex;align-items:center;gap:10px;border:1px solid ${dim.line}">
-      <div style="width:24px;height:24px;border-radius:50%;background:#A32D2D;color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">SZ</div>
-      <span style="font-size:12px;font-weight:600">Suzuki boats</span>
-      <span style="margin-left:auto;font-size:11px;font-weight:500">${suzukiBoats}</span>
-      <span style="font-size:11px;color:${dim.ink3}">operating</span>
-    </div>
-    <div style="flex:1;min-width:160px;background:white;border-radius:24px;padding:7px 14px;display:flex;align-items:center;gap:10px;border:1px solid ${dim.line}">
-      <div style="width:24px;height:24px;border-radius:50%;background:#534AB7;color:white;display:flex;align-items:center;justify-content:center;font-size:11px">⚡</div>
-      <span style="font-size:12px;font-weight:600">Charter</span>
-      <span style="margin-left:auto;font-size:11px;font-weight:500">${charters.length}</span>
-      <span style="font-size:11px;color:${dim.ink3}">trips</span>
-    </div>
-    <div style="background:${dim.ink};color:white;border-radius:24px;padding:8px 22px;font-size:12px;font-weight:600;cursor:pointer">+ Report</div>
+  // Helper: Program-closed check per pier · ต้องประกาศก่อนแถวชิป (ชิปบอกสถานะปิดด้วย)
+  const _drPierClosed=(pierKey)=>{
+    const rts=ROUTES.filter(rt=>rt.pier===pierKey);
+    return rts.length>0 && rts.every(rt=>{
+      const _s=(typeof getDayStatus==='function')?getDayStatus(rt,ds):null;
+      return _s && _s.type==='closed';
+    });
+  };
+  /* §flSheet · ชิปบนสุดเปลี่ยนจากยี่ห้อเครื่อง (Honda / Suzuki) เป็นท่าเรือ
+     ยี่ห้อเครื่องไม่ใช่สิ่งที่คนกรอกใช้ตัดสินใจอะไรในหน้านี้เลย
+     ท่าเรือคือหน่วยที่คนกรอกทำงานจริง · กดแล้วเหลือเฉพาะท่านั้น */
+  void hondaBoats; void suzukiBoats;
+  const _pierMeta=[
+    {k:'',        lbl:'ทุกท่า',      ab:'ทุก', col:'#5F5E5A', boats:companyBoats},
+    {k:'tublamu', lbl:'Tub Lamu',    ab:'TL',  col:'#0F6E56', boats:tlBoats},
+    {k:'panwa',   lbl:'Visit Panwa', ab:'VP',  col:'#185FA5', boats:vpBoats},
+    {k:'ranong',  lbl:'Ranong',      ab:'RN',  col:'#BA7517', boats:rnBoats}
+  ];
+  const pillRow=`<div style="display:flex;gap:7px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
+    ${_pierMeta.map(p=>{
+      const on=_FL_DR_PIER===p.k;
+      const closed=p.k&&_drPierClosed(p.k);
+      const opr=p.boats.filter(b=>(TRIPS[ds]||{})[b.id]?.booked).length;
+      const sub=p.k? (closed?'ปิด':(opr+' ออก')) : (companyBoats.length+' ลำ');
+      return `<div onclick="flDRSetPier('${p.k}')" title="${p.k?('ดูเฉพาะ '+p.lbl):'ดูทุกท่า'}" style="display:flex;align-items:center;gap:9px;background:${on?dim.ink:'#fff'};color:${on?'#fff':dim.ink};border:1px solid ${on?dim.ink:dim.line};border-radius:24px;padding:6px 15px 6px 7px;cursor:pointer;user-select:none">
+        <div style="width:23px;height:23px;border-radius:50%;background:${p.col};color:#fff;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;flex:none">${p.ab}</div>
+        <span style="font-size:12px;font-weight:600">${p.lbl}</span>
+        <span style="font-size:11px;font-family:'DM Mono',monospace;opacity:${on?.85:.6}">${sub}</span>
+      </div>`; }).join('')}
+    <div style="margin-left:auto;background:${dim.ink};color:white;border-radius:24px;padding:8px 22px;font-size:12px;font-weight:600;cursor:pointer">+ Report</div>
   </div>`;
 
   // Week strip
@@ -8283,7 +8693,7 @@ function flRenderDR(){
   };
 
   // Build a boat row
-  const buildBoatRow=(b,maxEng,locked)=>{
+  const buildBoatRow=(b,maxEng,locked,ENG_COLS,ISS)=>{
     const _DIS = locked ? 'disabled' : '';   // read-only once the pier is saved
     const c=boatAvatarColor(b);
     const init=boatInitials(b.name);
@@ -8327,8 +8737,18 @@ function flRenderDR(){
     const ranChip = (isNotAvail && ran)
       ?`<div style="display:inline-flex;align-items:center;gap:5px;padding:2px 8px;background:${boatStat==='fixing'?'#FAEEDA':'#FCEBEB'};border-radius:6px;width:fit-content;margin-top:3px"><span style="width:5px;height:12px;background:${boatStat==='fixing'?'#854F0B':'#A32D2D'};border-radius:2px"></span><span style="font-size:9px;color:${boatStat==='fixing'?'#854F0B':'#A32D2D'};font-weight:700">ออกแล้ว · ${boatStat==='fixing'?'เข้าซ่อมเย็น':'หยุดเย็น'}</span></div>`
       :'';
+    /* §drDate · ลำที่ไม่ได้อยู่ที่ท่า · บอกว่าไปอยู่อู่ไหน
+       เดิมลำแบบนี้หายจากหน้าไปเลย พอเอากลับมาแล้วต้องบอกด้วยว่าทำไมยอดเป็น 0 */
+    const _shopAt=(isNotAvail && typeof getBoatCurrentPier==='function'
+        && getBoatCurrentPier(b, ds)==='shop'
+        && typeof getBoatShopLocation==='function')
+      ? String(getBoatShopLocation(b)||'อู่').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      : '';   /* esc() ไม่อยู่ใน scope ของ buildBoatRow · escape เองตรงนี้ */
+    const shopChip=_shopAt
+      ? `<div style="display:inline-flex;align-items:center;gap:5px;padding:2px 8px;background:#EEF0F3;border-radius:6px;width:fit-content;margin-top:3px"><span style="font-size:10px;color:#5A6270;font-weight:700">&#9875; อยู่อู่ ${_shopAt}</span></div>`
+      : '';
     const tripsHtml=(isNotAvail && !ran)
-      ?`<div style="display:flex;align-items:center;gap:6px;padding:3px 8px;background:${boatStat==='fixing'?'#FAEEDA':'#FCEBEB'};border-radius:6px;width:fit-content"><span style="width:5px;height:14px;background:${boatStat==='fixing'?'#854F0B':'#A32D2D'};border-radius:2px"></span><span style="font-size:10px;color:${boatStat==='fixing'?'#854F0B':'#A32D2D'};font-weight:700;text-transform:uppercase;letter-spacing:.04em">${boatStat==='fixing'?'Fixing':'Unavailable'}</span></div>`
+      ?`<div style="display:flex;align-items:center;gap:6px;padding:3px 8px;background:${boatStat==='fixing'?'#FAEEDA':'#FCEBEB'};border-radius:6px;width:fit-content"><span style="width:5px;height:14px;background:${boatStat==='fixing'?'#854F0B':'#A32D2D'};border-radius:2px"></span><span style="font-size:10px;color:${boatStat==='fixing'?'#854F0B':'#A32D2D'};font-weight:700;text-transform:uppercase;letter-spacing:.04em">${boatStat==='fixing'?'Fixing':'Unavailable'}</span></div>`+shopChip
       :(tripEntries.length?tripEntries.map(t=>{
       const ri=getRouteInfo(t.route);
       const bg=ri.isCharter?'#534AB7':`${ri.color}1A`;
@@ -8337,7 +8757,10 @@ function flRenderDR(){
     }).join('')+ranChip:`<div style="font-size:10px;color:${dim.ink3};font-style:italic">— ไม่ออก</div>`+ranChip);
 
     // No data entry when the boat is unavailable/fixing (and did NOT run today) OR not running (0 booked)
-    const noEntry = (isNotAvail && !ran) || pax===0;
+    const _isCh = b.ownership==='charter';
+    /* §drExtra · เรือเช่าที่วิ่งวันนั้นต้องมีแถวให้กรอกเสมอ แม้ยอดลูกค้าจะยังเป็น 0
+       เพราะเหตุผลที่มันอยู่ในตารางคือ "เราเบิกของลงเรือลำนี้" ไม่ใช่ยอดขาย */
+    const noEntry = ((isNotAvail && !ran) || pax===0) && !(_isCh && _drRan(b));
 
     // ── Entry cards (Style A · fixed height · PAX/Fuel fixed-width so they line up across rows · engines fill the rest) ──
     const CARD='border-radius:9px;padding:0 13px;box-sizing:border-box;height:50px;display:flex;flex-direction:column;justify-content:center';   // shared box
@@ -8380,35 +8803,51 @@ function flRenderDR(){
       </div>`;
     }).join('');
 
-    // Combined entry area — fills the row; '—' note when the boat isn't logging today
-    const entryHtml = noEntry
-      ? `<div style="display:flex;align-items:center;justify-content:flex-end;color:${dim.ink3};font-size:12px;padding-right:4px">${isNotAvail?'ไม่ต้องกรอก':''}</div>`
-      : `<div style="display:flex;gap:9px;align-items:stretch">${paxCard}${fuelCard}${priceCard}<div style="width:1px;flex:none;background:${dim.line};margin:4px 0"></div><div style="flex:1;display:flex;gap:9px;align-items:stretch;min-width:0">${engCells}</div></div>`;
-
-    const rowBg=isAnomaly?'#FCEBEB':'transparent';
+    /* §flSheet2 · เลิกใช้การ์ดลอย · ทุกช่องเป็น <td> จริง คอลัมน์จึงตรงกันทุกแถว
+       อ่านลงคอลัมน์ได้เหมือน Excel และมีแถวรวมท้ายตารางได้ */
+    void CARD; void INP; void paxCard; void fuelCard; void priceCard; void engCells; void maxEng;
     const nameColor=isAnomaly?'#A32D2D':dim.ink;
     const flagBadge=isAnomaly?`<span style="background:#A32D2D;color:white;padding:1px 5px;border-radius:6px;font-size:8px;font-weight:600">⚠</span>`:'';
+    const _btCell=`<td class="fs-bt"${isAnomaly?' style="background:#FCEBEB"':''}>
+        <span class="fs-av" style="background:${c}">${init}</span>
+        <span class="fs-nm" onclick="flGoToAsset('boats','${b.id}')"><b style="color:${nameColor}">${b.name}</b>${flagBadge}${_isCh?'<span class="fs-ch">เช่า</span>':''}
+          <em style="color:${isAnomaly?'#A32D2D':dim.ink3}">${tShort} · ${b.cap||'?'} PAX · ${engs.length} EN</em></span></td>`;
+    const _rtCell=`<td class="fs-rt"${isAnomaly?' style="background:#FCEBEB"':''}>${tripsHtml}${orphanWarn?`<div style="margin-top:3px"><span style="font-size:9px;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E89A92;border-radius:5px;padding:1px 6px;font-weight:600">&#9888; เรือถูกถอดจาก Boat Op · จัดใหม่</span></div>`:''}</td>`;
 
-    return`<div style="display:grid;grid-template-columns:32px 162px 232px 1fr;gap:14px;align-items:center;padding:10px 8px;border-top:0.5px solid ${dim.line};background:${rowBg}">
-      <div style="width:26px;height:26px;border-radius:50%;background:${c};color:white;font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:700">${init}</div>
-      <div onclick="flGoToAsset('boats','${b.id}')" style="cursor:pointer">
-        <div style="display:flex;align-items:center;gap:5px"><span style="font-size:13px;font-weight:600;color:${nameColor}">${b.name}</span>${flagBadge}</div>
-        <div style="font-size:10px;color:${isAnomaly?'#A32D2D':dim.ink3}">${tShort} · ${b.cap||'?'} PAX · ${engs.length} EN</div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:3px;min-width:0">${tripsHtml}${orphanWarn?`<span style="font-size:9px;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E89A92;border-radius:5px;padding:1px 6px;width:fit-content;font-weight:600">&#9888; เรือถูกถอดจาก Boat Op · จัดใหม่</span>`:''}</div>
-      ${entryHtml}
-    </div>`;
+    if(noEntry){
+      /* ลำที่ไม่ออกวันนี้ · ยุบทั้งแถวเป็นช่องเดียว ไม่ให้กินที่และไม่ให้เผลอกรอก */
+      return `<tr>${_btCell}${_rtCell}<td class="fs-dim" colspan="${3+ENG_COLS.length+2+Math.max(1,ISS.length)}">${isNotAvail?'ไม่ต้องกรอก':'ไม่ออก'}</td></tr>`;
+    }
+    const IN='class="fs-in"';
+    /* เครื่องเรียงตามตำแหน่งมาตรฐานของท่านั้น · ลำที่ไม่มีตำแหน่งนั้นเว้นว่าง คอลัมน์จึงตรงกันทุกแถว */
+    const _engTd=ENG_COLS.map(pos=>{
+      const eng=engs.find(e=>engPosLabel(e.pos)===pos);
+      if(!eng) return '<td class="fs-n fs-e fs-na"></td>';
+      const cur=dayDR?.trips?.normal?.engines?.[eng.id];
+      const prev=(typeof flPrevMeter==='function')?flPrevMeter(eng.id,ds):null;
+      const filled=cur!=null;
+      const delta=(filled&&prev!=null)?(Math.round((cur-prev)*10)/10):null;
+      return `<td class="fs-n fs-e"><input ${IN} type="number" step="0.1" value="${filled?cur:''}" placeholder="${prev!=null?prev:''}" ${_DIS} onchange="flSaveMeter('${ds}','${b.id}','normal','${eng.id}',this.value)">${delta!=null?`<em style="color:${delta<0?'#A32D2D':'#3B6D11'}">${delta>=0?'+':''}${delta}</em>`:''}</td>`;
+    }).join('');
+    const _w=flWaterGet(ds,b.id), _wu=flWaterUsed(ds,b.id);
+    const _wTd=`<td class="fs-n fs-w"><input ${IN} type="number" step="0.1" value="${_w.o!=null?_w.o:''}" placeholder="เปิด" ${_DIS} onchange="flWaterSet('${ds}','${b.id}','o',this.value)"></td>`
+      +`<td class="fs-n fs-w"><input ${IN} type="number" step="0.1" value="${_w.c!=null?_w.c:''}" placeholder="ปิด" ${_DIS} onchange="flWaterSet('${ds}','${b.id}','c',this.value)">${_wu!=null?`<em style="color:${_wu<0?'#A32D2D':'#3E93B8'}">${_wu>=0?'+':''}${_wu}</em>`:''}</td>`;
+    /* ยังไม่มีรายการเบิกเลย · หัวตารางมีช่องบอกให้กด + อยู่ ตัวแถวต้องมีช่องคู่กัน
+       ไม่งั้นจำนวนคอลัมน์ของ thead กับ tbody ไม่เท่ากัน ตารางเพี้ยนทั้งใบ */
+    const _issTd=ISS.length ? ISS.map(it=>{
+      const v=flIssueGet(ds,b.id,it.id);
+      return `<td class="fs-n fs-i"><input ${IN} type="number" step="1" min="0" value="${v!=null?v:''}" ${_DIS} onchange="flIssueSet('${ds}','${b.id}','${it.id}',this.value)"></td>`;
+    }).join('') : '<td class="fs-n fs-i fs-na"></td>';
+    const _fpOwn2=_fpOwn;
+    return `<tr>${_btCell}${_rtCell}
+      <td class="fs-n fs-ro" title="จำนวนลูกค้าจากยอดจอง · แก้ไม่ได้">${pax||0}</td>
+      <td class="fs-n fs-f${isAnomaly?' fs-bad':''}"><input ${IN} type="number" step="1" value="${fuel!=null?fuel:''}" ${_DIS} onchange="flSaveFuel('${ds}','${b.id}',this.value)">${fuelLpp?`<em>${fuelLpp}/px</em>`:''}</td>
+      <td class="fs-n fs-p${_fpNeed?' fs-need':''}"><input ${IN} type="number" step="0.01" min="0" value="${_fpOwn2!=null?_fpOwn2:''}" placeholder="0.00" ${_DIS} onchange="flSaveFuelPrice('${ds}','${b.id}',this.value)">${_fpCost!=null?`<em>฿${_fpCost.toLocaleString()}</em>`:''}</td>
+      ${_engTd}${_wTd}${_issTd}</tr>`;
   };
 
-  // Helper: Program-closed check per pier
-  const _drPierClosed=(pierKey)=>{
-    const rts=ROUTES.filter(rt=>rt.pier===pierKey);
-    return rts.length>0 && rts.every(rt=>{
-      const _s=(typeof getDayStatus==='function')?getDayStatus(rt,ds):null;
-      return _s && _s.type==='closed';
-    });
-  };
 
+  const _e=x=>String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   // Pier section card
   const sectionCard=(label,color,bg,boats,pierKey)=>{
     if(!boats.length)return'';
@@ -8442,33 +8881,229 @@ function flRenderDR(){
 
     // Find max engine count in this section (for column alignment)
     const maxEng=Math.max(...boats.map(b=>FL_ENGINES.filter(e=>e.boatId===b.id).length),1);
+    /* §flSheet3 · ชุดคอลัมน์ของท่านี้
+       เครื่อง · รวมทุกตำแหน่งที่มีจริงในท่านี้ แล้วเรียงตามลำดับมาตรฐาน
+       ลำที่ไม่มีตำแหน่งนั้นเว้นช่องว่างไว้ คอลัมน์จึงตรงกันทุกแถวจริง ๆ
+       (ของเดิมแต่ละแถวมีจำนวนกล่องไม่เท่ากัน กวาดตาลงคอลัมน์ไม่ได้) */
+    /* ══ §engOrder · ลำดับคอลัมน์ชั่วโมงเครื่อง ต้องเป็น PORT · C.P · CTR · C.ST · STD ══
+       ของเดิมเรียงถูกแล้ว "ภายในเรือแต่ละลำ" แต่หัวตารางเป็นการรวมของทุกลำ
+       แล้วไล่เก็บตามลำดับที่เจอเรือ · ไม่ได้เรียงตอนรวม
+       เรือ 4 เครื่อง (Port · C.Port · C.Std · Std) มาก่อน เลยจองสี่ช่องแรกไว้
+       พอเจอเรือที่มี Center ทีหลัง CTR ก็ไปต่อท้ายสุด ทั้งที่ตำแหน่งจริงอยู่กลางลำ
+       (วัดของจริงได้ PORT · C.P · C.ST · STD · CTR — ผิดตำแหน่งเดียวคือ CTR)
+       แก้ด้วยการเรียงตอนรวมอีกครั้ง ใช้อันดับชุดเดิม FL_POS_RANK ไม่ได้ตั้งเลขใหม่
+       ตำแหน่งใหม่ที่ยังไม่รู้จัก (rank 98) ไปท้ายสุดตามเดิม */
+    const ENG_COLS=(function(){
+      const seen=[], rk={};
+      boats.forEach(b=>FL_ENGINES.filter(e=>e.boatId===b.id)
+        .sort((x,y)=>(typeof flPosRank==='function'?flPosRank(x.pos)-flPosRank(y.pos):0))
+        .forEach(e=>{ const L=engPosLabel(e.pos);
+          if(seen.indexOf(L)<0){ seen.push(L);
+            rk[L]=(typeof flPosRank==='function')?flPosRank(e.pos):98; } }));
+      seen.sort((a,b)=>((rk[a]==null?98:rk[a])-(rk[b]==null?98:rk[b]))
+        || String(a).localeCompare(String(b)));
+      return seen.length?seen:['EN'];
+    })();
+    const ISS=flIssueFor(pierKey);
+    /* §drExtra3 · จำนวนคอลัมน์จริงของตารางนี้ · ใช้ทำแถว "อื่นๆ" ที่กินเต็มความกว้าง */
+    const NCOL=7+ENG_COLS.length+Math.max(1,ISS.length);
 
-    return`<div style="background:white;border-radius:14px;padding:13px 14px;border:1px solid ${dim.line};margin-bottom:10px">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid rgba(0,0,0,.06)">
+    return`<div style="background:white;border-radius:14px;border:1px solid ${dim.line};margin-bottom:10px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:6px;padding:9px 13px;border-bottom:1px solid rgba(0,0,0,.06);background:#FBFAF7;flex-wrap:wrap">
         <div style="width:18px;height:18px;border-radius:50%;background:${color};color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">${label.slice(0,2)}</div>
         <span style="font-size:11px;font-weight:600;color:${color}">${label}</span>
         <span style="background:${bg};color:${color};padding:1px 8px;border-radius:9px;font-size:10px;font-weight:600;font-family:'DM Mono',monospace">${operating} operating</span>
         <span style="margin-left:auto;font-size:10px;color:${dim.ink3}">${pPAX} PAX · ${pTrips} trips · ${pFuel} L${_fcost!=null?` · <b style="color:#854F0B">฿${_fcost.toLocaleString()}</b>`:''}${(pCostMissing&&pFuel>0)?` · <span style="color:#BA7517" title="บางลำยังไม่ได้ใส่ราคา ฿/L">&#9888; บางลำไม่มีราคา</span>`:''}</span>
+        <button onclick="event.stopPropagation();flIssueQuickOpen('${pierKey}')" title="เพิ่มรายการเบิกของ · พิมพ์ชื่อเอง ชื่อที่เคยใช้ขึ้นให้เลือก" style="margin-left:12px;border:1.5px solid #9FCBB4;background:#F1FBF6;color:#0B5C46;border-radius:8px;padding:5px 12px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">+ อื่นๆ</button>
+        <button onclick="event.stopPropagation();flIssueManageOpen('${pierKey}')" title="จัดการรายการเบิกของทั้งหมด" style="border:1px solid ${dim.line};background:#fff;color:${dim.ink2};border-radius:8px;padding:5px 11px;font-size:10.5px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">&#9881; จัดการรายการ</button>
         ${locked
-          ? `<span style="margin-left:12px;display:inline-flex;align-items:center;gap:4px;background:#E1F5EE;color:#0F6E56;border-radius:7px;padding:4px 10px;font-size:10.5px;font-weight:700;white-space:nowrap"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>บันทึกแล้ว</span>
+          ? `<span style="display:inline-flex;align-items:center;gap:4px;background:#E1F5EE;color:#0F6E56;border-radius:7px;padding:4px 10px;font-size:10.5px;font-weight:700;white-space:nowrap"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>บันทึกแล้ว</span>
              <button onclick="event.stopPropagation();flDREdit('${ds}','${pierKey}')" title="แก้ไข — ปลดล็อกช่องกรอก" style="margin-left:6px;display:inline-flex;align-items:center;gap:5px;background:#fff;color:#185FA5;border:1px solid #B5D4F4;border-radius:8px;padding:5px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>Edit</button>`
-          : `<button onclick="event.stopPropagation();flSaveDayLog(this,'${pierKey}','${ds}')" title="บันทึก Daily Fleet Log ของท่านี้ · กดแล้วจะล็อกแก้ไม่ได้ (ต้องกด Edit เพื่อแก้)" style="margin-left:12px;display:inline-flex;align-items:center;gap:5px;background:#0F6E56;color:#fff;border:1px solid #0F6E56;border-radius:8px;padding:5px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Save</button>`}
+          : `<button onclick="event.stopPropagation();flSaveDayLog(this,'${pierKey}','${ds}')" title="บันทึก Daily Fleet Log ของท่านี้ · กดแล้วจะล็อกแก้ไม่ได้ (ต้องกด Edit เพื่อแก้)" style="display:inline-flex;align-items:center;gap:5px;background:#0F6E56;color:#fff;border:1px solid #0F6E56;border-radius:8px;padding:5px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Save</button>`}
       </div>
-      <div style="display:grid;grid-template-columns:32px 162px 232px 1fr;gap:14px;align-items:center;padding:5px 8px 7px;font-size:9px;color:${dim.ink3};font-weight:600;text-transform:uppercase;letter-spacing:.05em">
-        <div></div>
-        <div>Boat</div>
-        <div>Route / Trips</div>
-        <div style="display:flex;gap:9px"><span style="width:104px;flex:none;text-align:center">PAX</span><span style="width:122px;flex:none;text-align:center">Fuel (L)</span><span style="flex:1;text-align:center;border-left:1px solid ${dim.line};padding-left:9px;margin-left:0">Engine hours</span></div>
-      </div>
-      ${boats.map(b=>buildBoatRow(b,maxEng,locked)).join('')}
+      <div class="fs-wrap"><table class="fs">
+        <thead>
+          <tr class="fs-grp">
+            <th class="fsg0" colspan="2">เรือ / ทริป</th>
+            <th class="fsg1">ลูกค้า</th>
+            <th class="fsg2" colspan="2">น้ำมัน</th>
+            <th class="fsg4" colspan="${ENG_COLS.length}">&#9881; ชั่วโมงเครื่อง</th>
+            <th class="fsg3" colspan="2">&#128167; มิเตอร์น้ำ</th>
+            <th class="fsg5" colspan="${Math.max(1,ISS.length)}">&#128230; เบิกของลงเรือ
+              <span class="fs-addc" onclick="event.stopPropagation();flIssueQuickOpen('${pierKey}')" title="เพิ่มรายการอื่นๆ">+</span></th>
+          </tr>
+          <tr>
+            <th class="fs-bt">Boat</th><th class="fs-rt">Route / Trips</th>
+            <th class="fs-ro">PAX<em>จอง</em></th>
+            <th class="fs-f">Fuel<em>L</em></th><th class="fs-p">฿/L</th>
+            ${ENG_COLS.map(p=>`<th class="fs-e">${p}</th>`).join('')}
+            <th class="fs-w">เปิด<em>มิเตอร์</em></th><th class="fs-w">ปิด<em>ใช้ไป</em></th>
+            ${ISS.length?ISS.map(it=>`<th class="fs-i">${_e(it.name)}<em>${_e(it.unit||'')}${it.pier?(' · '+(it.pier==='tublamu'?'TL':it.pier==='panwa'?'VP':'RN')):''}</em></th>`).join('')
+              :'<th class="fs-i fs-na"><em>ยังไม่มีรายการ · กด +</em></th>'}
+          </tr>
+        </thead>
+        <tbody>${boats.map(b=>buildBoatRow(b,maxEng,locked,ENG_COLS,ISS)).join('')}${(function(){
+          /* §drExtra3 · ของจิปาถะ · ปุ่มเดียวล่างสุด เหมือนปุ่มเพิ่มแถว
+             ของเดิมทำเป็นคอลัมน์ขวาสุด + ปุ่มติดทุกแถว ซึ่งผิดสองอย่าง
+               1) ตารางกว้าง 14 คอลัมน์อยู่แล้ว ปุ่มขวาสุดต้องเลื่อนไปหาทุกครั้ง
+               2) แถวที่ขึ้น "ไม่ออก" ยุบเป็นช่องเดียว ไม่มีที่ให้ปุ่มอยู่
+                  ทั้งที่เรือจอดอยู่ก็เอาของลงได้ · เคสนั้นเลยทำไม่ได้เลย
+             ปุ่มเดียวล่างสุดแก้ทั้งสองข้อ · แลกกับต้องมีช่องเลือกเรือในกล่องกรอก */
+          let h='';
+          boats.forEach(b=>{
+            flExtraGet(ds,b.id).forEach(x=>{
+              h+=`<tr class="fs-xr"><td class="fs-xb"><span class="fs-xl">อื่นๆ</span><b>${_e(b.name)}</b></td>`
+               + `<td colspan="${NCOL-1}"><span class="fs-xt">${_e(x.n)}</span>`
+               + (x.q!=null?` <span class="fs-xq">${x.q}</span>`:'')
+               + (x.u?`<span class="fs-xu">${_e(x.u)}</span>`:'')
+               + (locked?'':`<button class="fs-xe" onclick="flExtraOpen('${ds}','${pierKey}','${b.id}','${x.id}')">แก้ / ลบ</button>`)
+               + `</td></tr>`;
+            });
+          });
+          if(!locked) h+=`<tr class="fs-xa"><td colspan="${NCOL}">`
+            + `<button class="fs-xab" onclick="flExtraOpen('${ds}','${pierKey}','','')"><span>+</span> เพิ่มรายการอื่นๆ</button>`
+            + `<span class="fs-xah">ของที่ไม่ได้เบิกทุกวัน · เลือกเรือแล้วพิมพ์เอง เช่น ดิงกี้ · น้ำมัน 20 ลิตร</span></td></tr>`;
+          return h; })()}</tbody>
+        <tfoot>${(function(){
+          /* แถวรวมท้ายตาราง · ของเดิมไม่มี ต้องเลื่อนไปบวกเองในหัว */
+          let tp=0,tf=0; const tw={}, ti={};
+          boats.forEach(b=>{
+            const bp2=boatPax[b.id]||{eff:0}; tp+=bp2.eff||0;
+            const fl=(FL_DAILY[ds]||{})[b.id]?.fuel; if(fl) tf+=fl;
+            const u=flWaterUsed(ds,b.id); if(u!=null) tw.v=(tw.v||0)+u;
+            ISS.forEach(it=>{ const v=flIssueGet(ds,b.id,it.id); if(v!=null) ti[it.id]=(ti[it.id]||0)+v; });
+          });
+          const nOut=boats.filter(b=>(boatPax[b.id]||{eff:0}).eff>0).length;
+          return `<tr>
+            <td class="fs-bt">รวม</td><td class="fs-rt">${nOut} ลำออก</td>
+            <td class="fs-n fs-ro">${tp||'—'}</td>
+            <td class="fs-n fs-f">${tf?tf.toLocaleString():'—'}</td>
+            <td class="fs-n fs-p">${_fcost!=null?('฿'+_fcost.toLocaleString()):'—'}</td>
+            ${ENG_COLS.map(()=>'<td class="fs-n fs-e">—</td>').join('')}
+            <td class="fs-n fs-w">—</td>
+            <td class="fs-n fs-w">${tw.v!=null?('<em>'+(tw.v>=0?'+':'')+(Math.round(tw.v*10)/10)+'</em>'):'—'}</td>
+            ${ISS.length?ISS.map(it=>`<td class="fs-n fs-i">${ti[it.id]!=null?ti[it.id]:'—'}</td>`).join('')
+              :'<td class="fs-n fs-i">—</td>'}
+          </tr>`; })()}</tfoot>
+      </table></div>
     </div>`;
   };
 
-  const tlSection=sectionCard('Tub Lamu','#0F6E56','#E1F5EE',tlBoats,'tublamu');
-  const vpSection=sectionCard('Visit Panwa','#185FA5','#E6F1FB',vpBoats,'panwa');
-  const rnSection=sectionCard('Ranong','#BA7517','#FAEEDA',rnBoats,'ranong');
+  /* §flSheet · ชิปกรอง · '' = ทุกท่าเหมือนเดิม */
+  const _showP=k=>!_FL_DR_PIER||_FL_DR_PIER===k;
+  const tlSection=_showP('tublamu')?sectionCard('Tub Lamu','#0F6E56','#E1F5EE',tlBoats,'tublamu'):'';
+  const vpSection=_showP('panwa')?sectionCard('Visit Panwa','#185FA5','#E6F1FB',vpBoats,'panwa'):'';
+  const rnSection=_showP('ranong')?sectionCard('Ranong','#BA7517','#FAEEDA',rnBoats,'ranong'):'';
 
-  const html=`<style>#fl-dr-body .fldr-cell{transition:box-shadow .1s,border-color .1s}#fl-dr-body .fldr-cell:focus-within{box-shadow:0 0 0 3px var(--ring,#E1F5EE);border-color:var(--rb,#1D9E75)!important;border-style:solid!important}#fl-dr-body .fldr-in::placeholder{color:#c2c0b6}#fl-dr-body .flfp-need::placeholder{color:#BA7517;opacity:1;font-weight:600}@keyframes flfpPulse{0%,100%{box-shadow:0 0 0 0 rgba(239,159,39,.30)}50%{box-shadow:0 0 0 4px rgba(239,159,39,.12)}}#fl-dr-body .flfp-box-need{animation:flfpPulse 1.6s ease-in-out infinite}#fl-dr-body .flfp-box-need:focus-within{animation:none}</style><div style="background:${dim.bg};margin:14px -16px -16px;padding:18px 20px 22px">
+  const html=`<style>#fl-dr-body .fldr-cell{transition:box-shadow .1s,border-color .1s}#fl-dr-body .fldr-cell:focus-within{box-shadow:0 0 0 3px var(--ring,#E1F5EE);border-color:var(--rb,#1D9E75)!important;border-style:solid!important}#fl-dr-body .fldr-in::placeholder{color:#c2c0b6}#fl-dr-body .flfp-need::placeholder{color:#BA7517;opacity:1;font-weight:600}@keyframes flfpPulse{0%,100%{box-shadow:0 0 0 0 rgba(239,159,39,.30)}50%{box-shadow:0 0 0 4px rgba(239,159,39,.12)}}#fl-dr-body .flfp-box-need{animation:flfpPulse 1.6s ease-in-out infinite}#fl-dr-body .flfp-box-need:focus-within{animation:none}
+/* ══ §flSheet · ตารางแบบ Sheet ═══════════════════════════════════════════
+   เลิกใช้การ์ดลอย · ทุกช่องเป็น td จริง คอลัมน์จึงตรงกันทุกแถว
+   หัวสองชั้น · ชั้นบนคือหมวด ชั้นล่างคือชื่อคอลัมน์ · แต่ละหมวดมีสีพื้นของตัวเอง
+   ไล่ลงมาถึงช่องข้อมูล และมีเส้นคั่นหนาระหว่างหมวด กวาดตาแล้วแยกกลุ่มออกทันที */
+#fl-dr-body .fs-wrap{overflow-x:auto}
+#fl-dr-body table.fs{border-collapse:collapse;width:100%;font-size:12px;font-family:inherit}
+#fl-dr-body table.fs th{background:#F4F3EE;text-align:center;font-size:9px;font-weight:800;letter-spacing:.05em;
+  text-transform:uppercase;color:#8a8a82;padding:6px 8px;border:1px solid #E5E2D9;white-space:nowrap}
+#fl-dr-body table.fs th em{display:block;font-style:normal;font-size:8px;font-weight:500;color:#b3b0a6;text-transform:none;letter-spacing:0}
+#fl-dr-body table.fs th.fs-bt,#fl-dr-body table.fs th.fs-rt{text-align:left}
+#fl-dr-body table.fs td{border:1px solid #EDEBE4;padding:4px 8px;vertical-align:middle}
+#fl-dr-body table.fs tbody tr:hover td{background:#FBFAF6}
+#fl-dr-body td.fs-bt{width:200px;white-space:nowrap}
+#fl-dr-body .fs-av{display:inline-flex;width:22px;height:22px;border-radius:50%;color:#fff;font-size:9px;font-weight:800;
+  align-items:center;justify-content:center;vertical-align:middle;margin-right:7px}
+#fl-dr-body .fs-nm{display:inline-block;vertical-align:middle;line-height:1.2;cursor:pointer}
+#fl-dr-body .fs-nm b{font-size:12.5px;font-weight:600}
+#fl-dr-body .fs-nm em{display:block;font-style:normal;font-size:9.5px;font-weight:500}
+#fl-dr-body td.fs-rt{width:250px;font-size:11px}
+#fl-dr-body td.fs-n{text-align:right;width:88px;padding:2px 7px}
+#fl-dr-body td.fs-n .fs-in{width:100%;border:none;background:transparent;outline:none;text-align:right;
+  font-family:'DM Mono',monospace;font-size:13px;font-weight:600;color:inherit;padding:3px 1px 1px;min-width:0}
+#fl-dr-body td.fs-n .fs-in::placeholder{color:#c9c7bf;font-weight:500}
+#fl-dr-body td.fs-n em{display:block;font-style:normal;font-size:9.5px;font-weight:600;text-align:right;line-height:1.1;padding-bottom:2px}
+#fl-dr-body td.fs-n:focus-within{box-shadow:inset 0 0 0 2px #1D9E75}
+#fl-dr-body td.fs-ro{background:#F2F7FC;color:#0C447C;font-family:'DM Mono',monospace;font-size:13px;font-weight:700;width:64px}
+#fl-dr-body td.fs-f{background:#FCF7EC;color:#633806} #fl-dr-body td.fs-f em{color:#BA7517}
+#fl-dr-body td.fs-f.fs-bad{background:#FCEBEB;color:#A32D2D}
+#fl-dr-body td.fs-p{background:#FDF9F0;color:#854F0B} #fl-dr-body td.fs-p em{color:#BA7517}
+#fl-dr-body td.fs-p.fs-need{background:#FFF6E0;box-shadow:inset 0 0 0 1px #EF9F27}
+#fl-dr-body td.fs-e{background:#FAFAF9;color:#3F4654}
+#fl-dr-body td.fs-w{background:#EEF8FC;color:#0C4A66;width:84px}
+#fl-dr-body td.fs-i{background:#F4FAF6;color:#0F6E56;width:72px}
+#fl-dr-body td.fs-na{background:#F7F6F3}
+/* §drExtra3 · ของจิปาถะ · เป็นแถวต่อท้ายตาราง ไม่ใช่คอลัมน์
+   แถวรายการอ่านเหมือนบรรทัดในใบเบิก · ปุ่มเพิ่มอยู่ล่างสุดปุ่มเดียว */
+#fl-dr-body tr.fs-xr td{background:#FCFDFC;border-top:1px solid #EDEBE4;padding:6px 10px}
+#fl-dr-body td.fs-xb{width:200px;font-size:11.5px;color:#5F5E5A;white-space:nowrap}
+#fl-dr-body td.fs-xb b{font-weight:700;color:#1A1A1A}
+#fl-dr-body .fs-xl{display:inline-block;background:#EAF4EC;color:#0F6E56;border-radius:5px;padding:1px 6px;
+  font-size:8.5px;font-weight:800;letter-spacing:.05em;margin-right:8px;vertical-align:middle}
+#fl-dr-body .fs-xt{font-size:12px;color:#1A1A1A}
+#fl-dr-body .fs-xq{font-family:'DM Mono',monospace;font-weight:700;font-size:13px;color:#0B5C46}
+#fl-dr-body .fs-xu{font-size:10px;color:#7FAE96;margin-left:3px}
+#fl-dr-body .fs-xe{float:right;font-size:10px;color:#8a8a82;border:1px solid #E7E4DC;border-radius:6px;
+  padding:2px 8px;background:#fff;cursor:pointer;font-family:inherit}
+#fl-dr-body .fs-xe:hover{border-color:#0F6E56;color:#0B5C46}
+#fl-dr-body tr.fs-xa td{background:#F7FBF8;border-top:1px dashed #C7DED2;padding:7px 10px}
+#fl-dr-body .fs-xab{display:inline-flex;align-items:center;gap:7px;border:1.5px dashed #9FCBB4;background:#fff;
+  color:#0B5C46;border-radius:9px;padding:6px 14px;font:700 11px inherit;font-family:inherit;cursor:pointer}
+#fl-dr-body .fs-xab:hover{background:#0B5C46;color:#fff;border-style:solid}
+#fl-dr-body .fs-xab span{font-size:14px;line-height:1}
+#fl-dr-body .fs-xah{font-size:10px;color:#a3a29a;margin-left:10px}
+#fl-dr-body .fs-ch{background:#F3EFFA;color:#5B3FA5;border-radius:5px;padding:0 5px;font-size:8px;font-weight:800;margin-left:4px}
+#fl-dr-body th.fs-ro{background:#EAF2FA;color:#185FA5}
+#fl-dr-body th.fs-f,#fl-dr-body th.fs-p{background:#FAF3E6;color:#854F0B}
+#fl-dr-body th.fs-e{background:#F0F1EE}
+#fl-dr-body th.fs-w{background:#E4F2F8;color:#0C6285} #fl-dr-body th.fs-w em{color:#7CB4CB}
+#fl-dr-body th.fs-i{background:#EAF4EC;color:#0F6E56} #fl-dr-body th.fs-i em{color:#7FAE96}
+#fl-dr-body td.fs-dim{color:#b3b0a6;font-size:11px;text-align:right;font-style:italic;background:#FCFCFA}
+#fl-dr-body table.fs tfoot td{background:#F4F3EE;font-weight:800;border-top:2px solid #DAD6CB;font-family:'DM Mono',monospace}
+#fl-dr-body table.fs tfoot td.fs-bt,#fl-dr-body table.fs tfoot td.fs-rt{font-size:11px;color:#5F5E5A;font-family:inherit;font-weight:700}
+/* หมวด */
+#fl-dr-body tr.fs-grp th{font-size:9.5px;letter-spacing:.06em;padding:5px 8px}
+#fl-dr-body tr.fs-grp th.fsg0{background:#EFEDE6;color:#7a786f}
+#fl-dr-body tr.fs-grp th.fsg1{background:#DCEAF8;color:#12508E}
+#fl-dr-body tr.fs-grp th.fsg2{background:#F7EBD5;color:#7A4A00}
+#fl-dr-body tr.fs-grp th.fsg3{background:#D9EEF7;color:#0C5877}
+#fl-dr-body tr.fs-grp th.fsg4{background:#E6E8E4;color:#4A5350}
+#fl-dr-body tr.fs-grp th.fsg5{background:#DEF0E4;color:#0B5C46}
+#fl-dr-body .fs-addc{display:inline-flex;width:15px;height:15px;border-radius:5px;background:#0B5C46;color:#fff;
+  align-items:center;justify-content:center;font-size:12px;font-weight:800;cursor:pointer;margin-left:5px;vertical-align:middle}
+#fl-dr-body tr.fs-grp th.fsg1,#fl-dr-body tr.fs-grp th.fsg2,#fl-dr-body tr.fs-grp th.fsg3,
+#fl-dr-body tr.fs-grp th.fsg4,#fl-dr-body tr.fs-grp th.fsg5,
+#fl-dr-body th.fs-ro,#fl-dr-body th.fs-f,#fl-dr-body th.fs-e:first-of-type,
+#fl-dr-body th.fs-w:first-of-type,#fl-dr-body th.fs-i:first-of-type,
+#fl-dr-body td.fs-ro,#fl-dr-body td.fs-f,#fl-dr-body td.fs-e:first-of-type,
+#fl-dr-body td.fs-w:first-of-type,#fl-dr-body td.fs-i:first-of-type{border-left:2px solid #CFCBBF}
+/* กล่องลอย */
+.flx-ovl{position:fixed;inset:0;background:rgba(20,24,20,.34);z-index:900;display:flex;align-items:center;justify-content:center}
+.flx-dlg{width:360px;max-height:84vh;overflow:auto;background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(0,0,0,.3);padding:15px;font-family:'DM Sans','Noto Sans Thai',sans-serif}
+.flx-h{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;color:#0B5C46;margin-bottom:11px}
+.flx-h .x{margin-left:auto;background:none;border:none;font-size:18px;color:#a3a29a;cursor:pointer;font-family:inherit}
+.flx-l{display:flex;flex-direction:column;gap:4px;font-size:10.5px;color:#5F5E5A;margin-bottom:9px}
+.flx-l input,.flx-l select{border:1px solid #D7DBE2;border-radius:8px;padding:8px 10px;font:500 13px inherit;font-family:inherit;background:#fff;color:#1A1A1A}
+.flx-sug{display:flex;flex-direction:column;gap:5px;margin:-3px 0 11px}
+.flx-sug button{display:flex;align-items:center;gap:7px;border:1px solid #E1DED6;background:#fff;border-radius:8px;
+  padding:6px 10px;font:600 11.5px inherit;font-family:inherit;color:#3F4654;cursor:pointer;text-align:left}
+.flx-sug button:hover{border-color:#0F6E56;background:#F1FBF6}
+.flx-sug button em{font-style:normal;font-size:9.5px;color:#8a8a82;font-weight:600}
+.flx-sug button i{margin-left:auto;font-style:normal;font-size:9px;color:#a3a29a}
+.flx-sug button.off i{color:#BA7517}
+.flx-sc{display:flex;align-items:center;gap:6px;margin-bottom:12px;font-size:10.5px;color:#5F5E5A}
+.flx-sc button{border:1px solid #D7DBE2;background:#fff;color:#5F5E5A;border-radius:8px;padding:5px 12px;
+  font:700 10.5px inherit;font-family:inherit;cursor:pointer}
+.flx-sc button.on{background:#0F6E56;border-color:#0F6E56;color:#fff}
+.flx-ok{width:100%;background:#0F6E56;color:#fff;border:none;border-radius:9px;padding:10px;
+  font:700 12.5px inherit;font-family:inherit;cursor:pointer}
+.flx-r{display:flex;gap:6px;margin-bottom:6px;align-items:center}
+.flx-r input{flex:1;min-width:0;border:1px solid #D7DBE2;border-radius:7px;padding:6px 9px;font:500 12px inherit;font-family:inherit}
+.flx-r input.u{flex:0 0 70px}
+.flx-r select{flex:0 0 78px;border:1px solid #D7DBE2;border-radius:7px;padding:6px 4px;font:600 10px inherit;font-family:inherit;background:#fff}
+.flx-r .x{border:1px solid #E7E4DC;background:#fff;color:#a3a29a;border-radius:7px;width:28px;height:28px;cursor:pointer;font-size:14px;flex:none;font-family:inherit}
+.flx-r .rr{border:1px solid #9FCBB4;background:#F1FBF6;color:#0B5C46;border-radius:7px;padding:5px 11px;font:700 10.5px inherit;font-family:inherit;cursor:pointer;flex:none}
+.flx-r.gone input{background:#F7F6F2;color:#a3a29a}
+.flx-hz{font-size:9.5px;color:#a3a29a;margin:11px 0 6px;border-top:1px solid #F0EEE8;padding-top:8px}
+.flx-n{font-size:9.5px;color:#a3a29a;line-height:1.6;margin-top:10px;border-top:1px solid #F0EEE8;padding-top:9px}
+</style><div style="background:${dim.bg};margin:14px -16px -16px;padding:18px 20px 22px">
     ${headerBar}
     ${kpiStrip}
     ${pillRow}
@@ -8858,9 +9493,12 @@ function flRenderOverview(){
       if(!types.includes(t))types.push(t);
       ecs.add(ec); mats.add(mat);
       const k=`${t}|${ec}|${mat}`;
-      if(!cellMap[k])cellMap[k]={count:0,engs:0};
+      /* §flBoatNm · เก็บชื่อไว้ด้วย ไม่ใช่แค่นับ · "6 ลำ" ตอบได้แค่ว่ามีเท่าไหร่
+         แต่คำถามที่คนถามต่อทุกครั้งคือ "ลำไหนบ้าง" แล้วต้องไปเปิดหน้าอื่นหา */
+      if(!cellMap[k])cellMap[k]={count:0,engs:0,names:[]};
       cellMap[k].count++;
       cellMap[k].engs+=ec;
+      cellMap[k].names.push(b.name||b.id||'—');
     });
     // Type sort: Speedboat first
     types.sort((a,b)=>a==='Speedboat'?-1:b==='Speedboat'?1:a.localeCompare(b));
@@ -8893,7 +9531,13 @@ function flRenderOverview(){
         const cells=ecList.map(ec=>{
           const c=cellMap[`${t}|${ec}|${mat}`];
           if(!c)return`<td style="text-align:center;padding:0;color:var(--ink-soft);font-size:11px">—</td>`;
-          return`<td style="padding:1px"><div style="background:${sty.bg};color:${sty.color};border-radius:4px;padding:3px 4px;text-align:center;font-family:'DM Mono',monospace;font-size:10px;font-weight:600">${c.count}</div></td>`;
+          /* §flBoatNm · ชื่อเรียงตามลำดับใน BOATS (ลำดับที่ทีมจัดไว้เอง) ไม่ใช่ ก-ฮ
+             คั่นด้วย · ให้ตัดบรรทัดเองตามความกว้างช่อง จะได้ไม่ต้องเดาว่ากี่ชื่อต่อแถว
+             ตัวเลขยังเป็นพระเอก ชื่อเป็นตัวรอง — สายตากวาดหาจำนวนก่อนเสมอ */
+          const _nm=(c.names||[]).map(x=>String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;')).join(' \u00b7 ');
+          return`<td style="padding:1px;vertical-align:top"><div style="background:${sty.bg};color:${sty.color};border-radius:4px;padding:3px 4px;text-align:center;font-family:'DM Mono',monospace;font-size:10px;font-weight:600">${c.count}`
+            +(_nm?`<div style="font-family:'DM Sans',sans-serif;font-size:8.5px;font-weight:500;line-height:1.35;letter-spacing:-.1px;color:#6E6A62;margin-top:2px;overflow-wrap:anywhere" title="${_nm}">${_nm}</div>`:'')
+            +`</div></td>`;
         }).join('');
         return`<tr>
           <td style="font-size:9px;color:var(--ink-soft);padding-left:14px;padding-right:4px;font-family:'DM Sans',sans-serif">${mat}</td>
@@ -9716,7 +10360,7 @@ function flRenderBoatDetailPink(){
     return b.name.slice(0,2).toUpperCase();
   })();
 
-  const cur=getCurStatus(b,TODAY_STR);
+  const cur=boatEffStatus(b,TODAY_STR);   // §boatEff · อ่านสด
   const STATUS_STYLE={
     available:{bg:'#1D9E75',color:'white',label:'AVAILABLE'},
     fixing:{bg:'#FAEEDA',color:'#854F0B',label:'FIXING'},
@@ -9765,6 +10409,11 @@ function flRenderBoatDetailPink(){
       </div>
     </div>
     ${b.retired&&b.retiredReason?`<div style="margin-top:10px;padding:8px 12px;background:rgba(255,255,255,.6);border-radius:8px;font-size:11px;color:${dim.ink2};border-left:3px solid #1A1A1A"><span style="font-weight:600;color:${dim.ink}">Retired reason: </span>${b.retiredReason}</div>`:''}
+    ${(!b.retired && cur.jobBlock && cur.jobBlock.length)?`<div style="margin-top:10px;padding:8px 12px;background:rgba(255,255,255,.72);border-radius:8px;font-size:11px;color:#7A3E0B;border-left:3px solid #E08A2B;line-height:1.65">
+      <span style="font-weight:700">&#9888; สถานะนี้มาจากใบงานที่ยังไม่ปิด · ${cur.jobBlockNos}</span><br>
+      ตารางสถานะเรือถูกตั้งไว้เป็น <b>${(STATUS_STYLE[cur.baseS]||STATUS_STYLE.available).label}</b> แต่ระบบยังกันเรือไว้ตามใบงาน เพราะใบงานยังไม่ถูกปิด<br>
+      ถ้าเรือกลับมาวิ่งได้จริงแล้ว ให้ปิดที่ใบงาน (Maintenance / Project) ไม่ใช่แก้ที่ตารางสถานะ — ต้นทุนจะได้เข้าใบงานครบ
+    </div>`:''}
   </div>`;
 
   // 4 stat cards
@@ -11541,7 +12190,18 @@ function memoAddItem(){
     });
   } else {
     // ไม่ได้เลือกจาก dropdown · ตรวจหาก match ชื่อตรงๆ ใน inventory ก่อน
-    const existing = (FL_INVENTORY||[]).find(x => x.name === name);
+    /* §invKeyPartNo · ชื่อเดียวกันมีได้หลายเบอร์ · คว้าตัวแรกคือเดาเบอร์อะไหล่
+       ชี้ชัดไม่ได้ให้ผู้ใช้เลือกจากรายการเอง จะได้เห็นเบอร์ก่อนตัดสินใจ */
+    const _cands = _invSameNameList(name, null);
+    if(_cands.length>1){
+      alert('ชื่อ "'+name+'" มีในคลัง '+_cands.length+' รายการ คนละ Part Number\n\n'
+        +_cands.slice(0,6).map(function(x){ return '  \u00b7 '+_invPnLabel(x)
+          +' · คงเหลือ '+(x.totalQty!=null?x.totalQty:x.qty||0)+' '+(x.unit||'ชิ้น'); }).join('\n')
+        +(_cands.length>6?('\n  \u00b7 ... อีก '+(_cands.length-6)):'')
+        +'\n\nกรุณาเลือกจากรายการที่เด้งขึ้นตอนพิมพ์ เพื่อระบุเบอร์ให้ถูก');
+      return;
+    }
+    const existing = _invPickByName(name, '');
     if(existing){
       // มีอยู่แล้ว → ลิ้งโดยอัตโนมัติ
       _memoItems.push({
@@ -12455,12 +13115,15 @@ function flSaveMemo(){
   };
 
   // ════ Phase 3: Auto-register inventory items ════
+  /* §invIdSafe · id ของคลังต้องไม่ซ้ำกับของที่มีอยู่ · เช็คจริงก่อนใช้
+     ของเดิมสุ่มแค่ 1000 ค่าใน ms เดียวกัน · สั่งของทีละ 20 รายการชนได้จริง */
   // สำหรับ items ที่มี autoRegister:true → สร้าง inventory item ใหม่ + ผูก invId เข้า memo
   let autoCreatedCount = 0;
   memo.items.forEach(it => {
     if(it.autoRegister && !it.invId){
       // Double-check: หากระหว่างที่กรอก memo มีคนสร้าง inv ชื่อเดียวกันไปก่อน → ลิ้งของเดิม
-      const existing = (FL_INVENTORY||[]).find(x => x.name === it.name);
+      /* §invKeyPartNo · ชี้ชัดไม่ได้ก็ไม่ลิ้ง · ปล่อยให้สร้างรายการใหม่ที่เห็นได้ */
+      const existing = _invPickByName(it.name, it.partNo);
       if(existing){
         it.invId = existing.id;
         it.fromInventory = true;
@@ -12468,7 +13131,7 @@ function flSaveMemo(){
         return;
       }
       // สร้าง inventory item ใหม่
-      const newId = 'i_auto_'+Date.now()+'_'+Math.floor(Math.random()*1000);
+      const newId = _invNewId('i_auto_');
       const newInv = {
         id: newId,
         name: it.name,
@@ -13316,6 +13979,180 @@ function flProjLightbox(url, caption){
 function flProjChildMJs(projId){
   return (FL_MAINT||[]).filter(m=>m.parentProjectId===projId);
 }
+/* ══ §slipView · กดดูสลิปที่แนบไว้ ═══════════════════════════════════════
+   สลิปอัปโหลดได้มานานแล้ว (pckSlipUpload → POST /api/attach → ตาราง attachments)
+   และเซิร์ฟเวอร์ก็มี GET /api/attach/<id> ที่เสิร์ฟไฟล์แบบ inline อยู่แล้ว
+   แต่ทุกหน้าที่โชว์สลิปเรนเดอร์แค่ "ชื่อไฟล์" เป็นตัวหนังสือตาย กดไม่ได้
+   บัญชีจึงต้องไปสแกนซัมลงไดร์ฟเอง ทั้งที่ไฟล์อยู่ในระบบแล้ว
+
+   เก็บแต่ ref ในบุ๊กกิ้ง ({id,name,mime,size}) ไม่เคยเก็บ base64 ลง blob
+   ตัวนี้จึงอ่านจาก URL อย่างเดียว ไม่แตะข้อมูล ไม่เพิ่มขนาด blob
+
+   z-index ต้องสูงกว่า acctModal (9999) และ .la-modal (99999)
+   ไม่งั้นเปิดจากในกล่อง Extra วันเดินทางแล้วจะโดนกล่องบัง
+   ═════════════════════════════════════════════════════════════════════════ */
+var _LA_SLIP=null;
+function laSlipUrl(s){ return '/api/attach/'+encodeURIComponent((s&&s.id)||''); }
+function laSlipIsImg(s){ return /^image\//i.test(String((s&&s.mime)||'')); }
+/* list = [{id,name,mime}] · title = ป้ายบอกว่าสลิปของก้อนเงินไหน */
+function laSlipView(list, title, i){
+  var L=(Array.isArray(list)?list:[list]).filter(function(s){ return s && s.id; });
+  if(!L.length){ alert('ยังไม่มีสลิปแนบไว้ในรายการนี้'); return; }
+  _LA_SLIP={ list:L, title:String(title||''), i:Math.max(0, Math.min(L.length-1, +i||0)) };
+  var ov=document.getElementById('la-slipview');
+  if(!ov){
+    ov=document.createElement('div'); ov.id='la-slipview';
+    ov.style.cssText='position:fixed;inset:0;z-index:100060;background:rgba(0,0,0,.86);'
+      +'display:flex;align-items:center;justify-content:center;font-family:"DM Sans",sans-serif';
+    ov.onclick=function(e){ if(e.target===ov) laSlipClose(); };
+    document.body.appendChild(ov);
+    document.addEventListener('keydown', laSlipKey);
+  }
+  laSlipRender();
+}
+function laSlipKey(e){
+  if(!document.getElementById('la-slipview')) return;
+  if(e.key==='Escape'){ laSlipClose(); }
+  else if(e.key==='ArrowRight'){ laSlipStep(1); }
+  else if(e.key==='ArrowLeft'){ laSlipStep(-1); }
+}
+function laSlipStep(n){
+  if(!_LA_SLIP) return;
+  var L=_LA_SLIP.list.length;
+  _LA_SLIP.i=((_LA_SLIP.i+n)%L+L)%L;
+  laSlipRender();
+}
+function laSlipClose(){
+  var ov=document.getElementById('la-slipview'); if(ov) ov.remove();
+  document.removeEventListener('keydown', laSlipKey);
+  _LA_SLIP=null;
+}
+function laSlipRender(){
+  var ov=document.getElementById('la-slipview'), S=_LA_SLIP; if(!ov||!S) return;
+  var esc=function(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+  var s=S.list[S.i], url=laSlipUrl(s), many=(S.list.length>1);
+  var nav=function(d,ch){ return '<button onclick="laSlipStep('+d+')" title="'+(d>0?'ถัดไป':'ก่อนหน้า')+'" '
+    +'style="background:rgba(255,255,255,.14);border:none;color:#fff;width:38px;height:38px;border-radius:19px;'
+    +'font-size:19px;cursor:pointer;flex:0 0 auto">'+ch+'</button>'; };
+  /* รูปโชว์ในหน้าเดียวกันเลย · PDF กับไฟล์อื่นให้เปิดแท็บใหม่
+     iframe PDF ในโอเวอร์เลย์เล็ก ๆ อ่านไม่ออกอยู่ดี แท็บใหม่ได้ตัวอ่านเต็มของเบราว์เซอร์ */
+  var body = laSlipIsImg(s)
+    ? '<img src="'+esc(url)+'" alt="'+esc(s.name||'slip')+'" '
+      +'style="max-width:86vw;max-height:74vh;object-fit:contain;border-radius:10px;background:#fff;'
+      +'box-shadow:0 10px 40px rgba(0,0,0,.5)">'
+    : '<div style="background:#fff;border-radius:12px;padding:26px 30px;text-align:center;max-width:86vw">'
+      +'<div style="font-size:34px;line-height:1">&#128196;</div>'
+      +'<div style="font-size:13px;font-weight:700;margin:8px 0 3px;word-break:break-all">'+esc(s.name||'ไฟล์แนบ')+'</div>'
+      +'<div style="font-size:11px;color:#6b7280;margin-bottom:14px">'+esc(s.mime||'')+' &middot; ดูในแท็บใหม่ได้</div>'
+      +'<a href="'+esc(url)+'" target="_blank" rel="noopener" '
+      +'style="display:inline-block;background:#1683C7;color:#fff;text-decoration:none;border-radius:9px;'
+      +'padding:9px 18px;font-size:12.5px;font-weight:700">เปิดแท็บใหม่ &#8599;</a></div>';
+
+  ov.innerHTML='<div style="display:flex;align-items:center;gap:12px;max-width:96vw" onclick="event.stopPropagation()">'
+    +(many?nav(-1,'&#8249;'):'')
+    +'<div style="display:flex;flex-direction:column;align-items:center;gap:11px;min-width:0">'
+      +body
+      +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;'
+        +'background:rgba(0,0,0,.55);border-radius:16px;padding:7px 15px;color:#fff;font-size:12px">'
+        +(S.title?('<b style="font-weight:700">'+esc(S.title)+'</b>'):'')
+        +'<span style="opacity:.8">'+esc(s.name||'slip')+'</span>'
+        +(many?('<span style="opacity:.7;font-variant-numeric:tabular-nums">'+(S.i+1)+'/'+S.list.length+'</span>'):'')
+        +'<a href="'+esc(url)+'" target="_blank" rel="noopener" style="color:#8ED0F5">เปิดแท็บใหม่ &#8599;</a>'
+        +'<button onclick="laSlipClose()" style="background:rgba(255,255,255,.16);border:none;color:#fff;'
+          +'border-radius:12px;padding:4px 12px;font-size:11.5px;cursor:pointer;font-family:inherit">ปิด</button>'
+      +'</div>'
+    +'</div>'
+    +(many?nav(1,'&#8250;'):'')+'</div>';
+}
+/* ป้าย 📎 ที่กดดูได้ · ใช้ร่วมกันทุกหน้า เพื่อให้หน้าตากับพฤติกรรมตรงกัน
+   slips ถูกฝังเป็น JSON ใน onclick — ผ่าน encodeURIComponent กัน quote ในชื่อไฟล์พังแอตทริบิวต์
+
+   ระวัง · encodeURIComponent ไม่แปลง ' ให้ (เหลือไว้ตามสเปก พร้อมกับ ! ~ * ( ) )
+   ชื่อไฟล์อย่าง "bob's slip.jpg" จึงหลุด ' ออกมาปิดสตริงจาวาสคริปต์กลางคัน
+   ต้องแปลงเองอีกชั้น · " ถูกแปลงเป็น %22 อยู่แล้ว แอตทริบิวต์ HTML จึงปลอดภัย */
+function _laSlipEnc(s){ return encodeURIComponent(String(s==null?'':s)).replace(/'/g,'%27'); }
+function laSlipClickAttr(slips, title, i){
+  var j=JSON.stringify((Array.isArray(slips)?slips:[]).map(function(s){
+    return {id:s.id, name:s.name, mime:s.mime};
+  }));
+  return 'onclick="event.stopPropagation();laSlipView(JSON.parse(decodeURIComponent(\''
+    + _laSlipEnc(j) + '\')),decodeURIComponent(\'' + _laSlipEnc(title) + '\'),'
+    + (+i||0) + ')"';
+}
+/* ══ §prjAwaitBill · เครื่องมือกลางของ "รอวางบิล" ══════════════════════ */
+/* ใบวางบิลตัวจริงในกองเอกสาร · ชื่อที่คนกรอกใช้มีทั้งไทยและอังกฤษ รับทั้งคู่ */
+function flProjBillDoc(p){
+  return ((p&&p.docs)||[]).filter(function(d){
+    if(!d || d.type==='photo') return false;
+    var n=String(d.name||'').toLowerCase();
+    return n.indexOf('final invoice')>=0 || n.indexOf('ใบวางบิล')>=0
+        || n.indexOf('invoice')>=0 || n.indexOf('ใบแจ้งหนี้')>=0;
+  })[0]||null;
+}
+/* รอบิลมากี่วันแล้ว · นับจากวันที่งานเสร็จ ไม่ใช่วันเริ่มโปรเจค */
+function flProjBillDays(p){
+  var d=(p&&(p.workDoneOn||p.actualTo))||''; if(!d) return 0;
+  try{ return Math.max(0, Math.round((new Date(TODAY_STR)-new Date(d))/86400000)); }catch(_){ return 0; }
+}
+/* ปิดโปรเจคได้หรือยัง · ต้องมีทั้งใบวางบิลและยอด ไม่งั้นปิดไปก็เป็นตัวเลขปลอม */
+function flProjBillGate(p){
+  var miss=[];
+  if(p && p.noCost) return {ok:true, miss:[], cost:0};
+  var cost=flProjCalcCost(p.id);
+  if(!flProjBillDoc(p)) miss.push('ยังไม่ได้แนบ Final Invoice ในเอกสาร');
+  if(!(cost>0))         miss.push('ต้นทุนที่ลงไว้ยังเป็น ฿0 · ลงยอดที่ MJ ลูก หรือ Project Memo');
+  return {ok:!miss.length, miss:miss, cost:cost};
+}
+/* §invIdSafe · id ใหม่ของรายการคลัง · กันชนกับของที่มีอยู่จริงเสมอ
+   ของเดิมสุ่ม 3 หลักต่อท้าย Date.now() · ลงทะเบียน 20 รายการในลูปเดียว
+   เวลาเท่ากันหมด โอกาสได้เลขซ้ำราว 19% · พอซ้ำแล้วของสองชิ้นกลายเป็นชิ้นเดียว */
+function _invNewId(prefix){
+  var inv=(typeof FL_INVENTORY!=='undefined' && Array.isArray(FL_INVENTORY))?FL_INVENTORY:[];
+  var used={}; inv.forEach(function(x){ if(x && x.id) used[x.id]=1; });
+  for(var i=0;i<50;i++){
+    var id=(prefix||'i_')+Date.now().toString(36)+'_'
+          +Math.random().toString(36).slice(2,8)+(i?('_'+i):'');
+    if(!used[id]) return id;
+  }
+  return (prefix||'i_')+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,12);
+}
+/* §invIdSafe · เทียบชื่อแบบไม่ถือสาตัวพิมพ์เล็กใหญ่กับช่องว่างหัวท้าย */
+function _invSameName(a,b){
+  return String(a==null?'':a).trim().toLowerCase()===String(b==null?'':b).trim().toLowerCase();
+}
+/* §invIdSafe2 · หาของจากชื่อ · คืนค่าเฉพาะตอนที่ชี้ได้ตัวเดียวจริง ๆ
+   ชื่ออย่าง "Anode, Protection" หรือ "โอริง" มีหลายเบอร์ในคลัง
+   คว้าตัวแรกคือการเดาเบอร์อะไหล่ · คืน null ให้ไปสร้างใหม่ดีกว่า จะได้เห็นแล้วตามแก้ */
+/* §invKeyPartNo · กุญแจของรายการคลัง = ชื่อ + Part No. */
+function _invKeyOf(name, partNo){
+  return String(name==null?'':name).trim().toLowerCase()
+       + '\u0000' + String(partNo==null?'':partNo).trim().toLowerCase();
+}
+function _invAll(){ return (typeof FL_INVENTORY!=='undefined' && Array.isArray(FL_INVENTORY))?FL_INVENTORY:[]; }
+/* ของชิ้นเดียวกันเป๊ะ (ชื่อ+เบอร์ตรงกัน) ที่มีอยู่แล้ว */
+function _invFindDup(name, partNo, skipId){
+  var k=_invKeyOf(name,partNo);
+  return _invAll().find(function(x){ return x.id!==skipId && _invKeyOf(x.name,x.partNo)===k; })||null;
+}
+/* ของที่ชื่อเดียวกันแต่คนละเบอร์ · ใช้เตือนตอนจะสร้างของใหม่โดยไม่ใส่เบอร์ */
+function _invSameNameList(name, skipId){
+  return _invAll().filter(function(x){ return x.id!==skipId && _invSameName(x.name,name); });
+}
+function _invPnLabel(x){ return (x.partNo&&String(x.partNo).trim())?String(x.partNo).trim():'(ไม่มีเบอร์)'; }
+function _invPickByName(name, partNo){
+  var inv=(typeof FL_INVENTORY!=='undefined' && Array.isArray(FL_INVENTORY))?FL_INVENTORY:[];
+  var c=inv.filter(function(x){ return _invSameName(x.name, name); });
+  if(c.length===1) return c[0];
+  if(c.length>1){
+    var pn=String(partNo==null?'':partNo).trim();
+    if(pn){
+      var m=c.filter(function(x){ return String(x.partNo==null?'':x.partNo).trim()===pn; });
+      if(m.length===1) return m[0];
+    }
+  }
+  return null;
+}
 function flProjCalcCost(projId){
   const kids = flProjChildMJs(projId);
   return kids.reduce((s,m)=>s+(typeof flMaintCalcCost==='function'?flMaintCalcCost(m.id):(m.cost||0)),0);
@@ -13419,6 +14256,7 @@ function flProjRenderList(){
     planned:   all.filter(p=>p.status==='planned'),
     inprogress:all.filter(p=>p.status==='inprogress'),
     on_hold:   all.filter(p=>p.status==='on_hold'),
+    awaiting_bill: all.filter(p=>p.status==='awaiting_bill'),   /* §prjAwaitBill */
     completed: all.filter(p=>p.status==='completed'),
     cancelled: all.filter(p=>p.status==='cancelled')
   };
@@ -13513,8 +14351,9 @@ function flProjRenderList(){
       ${kpiTile('coin',        '#F3E8FF',  P.purple,  'YTD Spend',       '฿'+(ytdSpend>=1000?(ytdSpend/1000).toFixed(0)+'K':ytdSpend), 'across all projects', P.ink3)}
     </div>`;
 
-  const tabs = ['planned','inprogress','on_hold','completed','cancelled'];
-  const tabLabel = {planned:'Scheduled', inprogress:'In Progress', on_hold:'On Hold', completed:'Completed', cancelled:'Cancelled'};
+  const tabs = ['planned','inprogress','on_hold','awaiting_bill','completed','cancelled'];
+  const tabLabel = {planned:'Scheduled', inprogress:'In Progress', on_hold:'On Hold',
+                    awaiting_bill:'รอวางบิล', completed:'Completed', cancelled:'Cancelled'};
   const tabStrip = `
     <div style="display:flex;gap:6px;margin-bottom:12px;border-bottom:1px solid ${P.line};padding-bottom:0">
       ${tabs.map(t=>{
@@ -13522,6 +14361,17 @@ function flProjRenderList(){
         return `<button onclick="_projTab='${t}';flRenderProjects()" style="background:none;border:none;padding:8px 14px 10px;font-size:12px;font-weight:600;color:${on?P.navy:P.ink3};border-bottom:2px solid ${on?P.navy:'transparent'};cursor:pointer">${tabLabel[t]} <span style="color:${P.ink4};font-weight:500">· ${byStatus[t].length}</span></button>`;
       }).join('')}
     </div>`;
+
+  /* §prjAwaitBill · ใบที่รอบิลไม่ควรต้องกดเข้าไปดูถึงจะรู้ว่ามี · บิลยิ่งค้างนานยิ่งตามยาก */
+  const _wb = byStatus.awaiting_bill||[];
+  const _wbOld = _wb.map(p=>flProjBillDays(p)).sort((a,b)=>b-a)[0]||0;
+  const billStrip = _wb.length ? `
+    <div onclick="_projTab='awaiting_bill';flRenderProjects()" style="display:flex;align-items:center;gap:11px;background:#FAF5FF;border:1px solid #E9D5FF;border-radius:12px;padding:10px 15px;margin-bottom:12px;cursor:pointer">
+      <span style="background:#A855F7;color:white;width:26px;height:26px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0">&#3647;</span>
+      <div style="flex:1;font-size:12.5px;color:#6B21A8;line-height:1.6"><b>งานเสร็จแล้ว รอใบวางบิล ${_wb.length} ใบ</b>${_wbOld?` · เก่าสุดรอมา ${_wbOld} วัน`:''}
+        <span style="color:#9333EA"> · ต้นทุนก้อนนี้ยังไม่เข้า YTD Spend</span></div>
+      <span style="font-size:11.5px;font-weight:700;color:#7E22CE">ดูรายการ &rsaquo;</span>
+    </div>` : '';
 
   const list = visible.length ? `
     <div style="display:flex;flex-direction:column;gap:10px">
@@ -13532,7 +14382,7 @@ function flProjRenderList(){
     </div>`;
 
   // Hub Dashboard panels (At Risk · Upcoming · Activity · Spend trend) shown above list only
-  const hubPanels = _projViewMode==='list' ? flProjRenderHubPanels(all) : '';
+  const hubPanels = _projViewMode==='list' ? (billStrip + flProjRenderHubPanels(all)) : '';
   // Dispatch by view mode
   let mainBody;
   if(_projViewMode==='timeline')      mainBody = flProjRenderTimeline(all);
@@ -14129,6 +14979,7 @@ function flProjStatusPillStyle(status, P){
   if(status==='completed') return {bg:P.mintSoft, color:P.mintInk, label:'COMPLETED'};
   if(status==='inprogress') return {bg:P.amberSoft, color:P.amber, label:'IN PROGRESS'};
   if(status==='on_hold') return {bg:'#FFF4E1', color:'#996A14', label:'ON HOLD'};
+  if(status==='awaiting_bill') return {bg:'#F3E8FF', color:'#7E22CE', label:'รอวางบิล'};   /* §prjAwaitBill */
   if(status==='cancelled') return {bg:P.redSoft, color:P.red, label:'CANCELLED'};
   return {bg:P.blueSoft, color:P.blue, label:'SCHEDULED'};
 }
@@ -14142,7 +14993,11 @@ function flProjRowCard(p){
   const sp = flProjStatusPillStyle(p.status, P);
   const statusPill = `<span style="background:${sp.bg};color:${sp.color};padding:3px 10px;border-radius:12px;font-size:10px;font-weight:700">${sp.label}</span>`;
   const health = flProjHealth(p);
-  const healthPill = `<span style="background:${health.bg};color:${health.color};padding:3px 8px;border-radius:10px;font-size:9px;font-weight:700" title="Health ${health.score}/100">${health.label}</span>`;
+  const healthPill = p.status==='awaiting_bill'
+    /* §prjAwaitBill · งานจบแล้ว คะแนนสุขภาพงานไม่มีความหมาย · สิ่งที่ต้องรู้คือรอบิลมากี่วัน */
+    ? (function(){ const d=flProjBillDays(p), hot=d>=14;
+        return `<span style="background:${hot?'#FEE7E7':'#F3E8FF'};color:${hot?'#B91C1C':'#7E22CE'};padding:3px 8px;border-radius:10px;font-size:9px;font-weight:700" title="นับจากวันที่งานเสร็จ">รอบิล ${d} วัน</span>`; })()
+    : `<span style="background:${health.bg};color:${health.color};padding:3px 8px;border-radius:10px;font-size:9px;font-weight:700" title="Health ${health.score}/100">${health.label}</span>`;
   const budget = p.plannedBudget||0;
   const variance = cost - budget;
   const varianceColor = budget ? (cost>budget?P.red:P.mintInk) : P.ink3;
@@ -14235,15 +15090,31 @@ function flProjRenderDetail(id){
   const reopenBtn = `<button onclick="flProjReopen('${p.id}')" style="background:${P.blue};color:white;border:none;${btnBase};box-shadow:0 2px 6px rgba(58,111,247,.3)">${flProjIcon('refresh',13,'white')} Reopen</button>`;
   const startBtn  = `<button onclick="flProjStart('${p.id}')" style="background:${P.amber};color:white;border:none;${btnBase};box-shadow:0 2px 6px rgba(245,158,11,.3)">${flProjIcon('play',13,'white')} Start Project</button>`;
   const completeBtn = `<button onclick="flProjMarkComplete('${p.id}')" style="background:${P.mintInk};color:white;border:none;${btnBase};box-shadow:0 2px 6px rgba(16,185,129,.3)">${flProjIcon('check',13,'white')} Mark Complete${openKids.length?` (closes ${openKids.length} MJ)`:''}</button>`;
+  /* §prjAwaitBill · งานจบแล้ว เหลือแค่เงิน · ปุ่มจึงเป็นคนละชุดกับตอนงานยังเดินอยู่ */
+  const billCloseBtn = `<button onclick="flProjBillClose('${p.id}')" style="background:#7E22CE;color:white;border:none;${btnBase};box-shadow:0 2px 6px rgba(126,34,206,.28)">${flProjIcon('check',13,'white')} ปิดบิล &middot; ปิดโปรเจค</button>`;
+  const billBackBtn  = `<button onclick="flProjBillBack('${p.id}')" style="background:white;border:1px solid #FDE68A;color:${P.amberInk};${btnBase};box-shadow:${P.shadow}">${flProjIcon('refresh',13,P.amberInk)} กลับไปแก้งาน</button>`;
   const actionBtns = (function(){
     if(p.status==='completed')  return editBtn;
     if(p.status==='cancelled')  return `${editBtn}${reopenBtn}`;
     if(p.status==='on_hold')    return `${editBtn}${cancelBtn}${resumeBtn}`;
     if(p.status==='planned')    return `${editBtn}${cancelBtn}${startBtn}`;
+    if(p.status==='awaiting_bill') return `${editBtn}${billBackBtn}${billCloseBtn}`;
     return `${editBtn}${cancelBtn}${holdBtn}${completeBtn}`;
   })();
   // Hold/Cancel reason banner
   const reasonBanner = (function(){
+    /* §prjAwaitBill · บอกให้ชัดว่าค้างอะไรอยู่ และขาดอะไรถึงจะปิดได้ */
+    if(p.status==='awaiting_bill'){
+      const g = flProjBillGate(p), dz = flProjBillDays(p);
+      return `<div style="background:#FAF5FF;border:1px solid #E9D5FF;border-radius:12px;padding:13px 17px;margin-top:14px;display:flex;align-items:center;gap:13px">
+        <span style="background:#A855F7;color:white;width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px;font-weight:800">&#3647;</span>
+        <div style="flex:1">
+          <div style="font-size:10px;color:#7E22CE;font-weight:700;letter-spacing:.6px;text-transform:uppercase">รอใบวางบิล${p.vendor?` จาก ${p.vendor}`:''}${dz?` &middot; ${dz} วัน`:''}</div>
+          <div style="font-size:12px;color:#6B21A8;margin-top:3px;line-height:1.65">งานเสร็จแล้ว${p.workDoneOn?` เมื่อ ${p.workDoneOn}`:''} &middot; เรือกลับไปวิ่งแล้ว &middot; MJ ลูกปิดครบ${p.billNote?` &middot; ${p.billNote}`:''}
+          ${g.ok?'<b> &middot; ครบแล้ว กดปิดบิลได้เลย</b>':`<br><b>ยังปิดไม่ได้:</b> ${g.miss.join(' &middot; ')}`}</div>
+        </div>
+      </div>`;
+    }
     if(p.status==='on_hold' && p.holdReason)
       return `<div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:12px;padding:12px 16px;margin-top:14px;display:flex;align-items:center;gap:12px">
         <span style="background:${P.amber};color:white;width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${flProjIcon('pause',16,'white')}</span>
@@ -14980,6 +15851,9 @@ function flProjMarkComplete(id){
   const p = flProjGetById(id);
   if(!p) return;
   if(p.status==='completed'){ flShowToast('Already completed'); return; }
+  /* §prjAwaitBill · ไม่มีบิลหรือยังไม่มียอด = ยังไม่ใช่งานที่ปิดจบได้ · ถามก่อน
+     ปิดเงียบ ๆ ที่ ฿0 คือจุดที่ต้นทุนหายไปจากระบบแบบที่ไม่มีใครรู้ตัว */
+  if(!flProjBillGate(p).ok){ flProjBillAsk(id); return; }
   const kids = flProjChildMJs(p.id);
   const openKids = kids.filter(m=>m.status!=='done');
   const msg = openKids.length
@@ -15017,6 +15891,135 @@ function flProjMarkComplete(id){
   flSave(); save();
   flRenderProjects();
   flShowToast(`Project ${p.no} completed · ${openKids.length} MJ auto-closed · boat returned`);
+}
+
+/* ══ §prjAwaitBill · ปิดงานเมื่อบิลยังไม่มา ════════════════════════════ */
+/* งานที่จบหน้างานแล้วแต่บิลยังไม่มา · ทำทุกอย่างเหมือนปิดโปรเจค ยกเว้นไม่ปิด
+   ปล่อยเรือ ปิด MJ ลูก แล้วพักไว้ที่ awaiting_bill รอเงินอย่างเดียว */
+function flProjWorkDone(id, note){
+  const p = flProjGetById(id); if(!p) return;
+  const kids = flProjChildMJs(p.id);
+  const openKids = kids.filter(m=>m.status!=='done');
+  openKids.forEach(m=>{
+    m.status='done';
+    m.endDate = m.endDate || TODAY_STR;
+    if(!m.progressLog) m.progressLog=[];
+    m.progressLog.push({date:TODAY_STR, text:`✓ ปิดตามโปรเจค ${p.no} · งานเสร็จ (รอใบวางบิล)`, by:'cascade'});
+  });
+  p.status='awaiting_bill';
+  p.workDoneOn = p.workDoneOn || TODAY_STR;
+  p.actualTo = p.actualTo || TODAY_STR;
+  p.billNote = String(note||'').trim();
+  if(!p.log) p.log=[];
+  p.log.push({date:TODAY_STR, text:`✓ งานเสร็จ · ปิด MJ ${openKids.length} ใบ · เรือกลับไปวิ่ง · รอใบวางบิล`, by:'user'});
+  /* เรือกลับไปวิ่งได้จริงตั้งแต่วันนี้ · ไม่ต้องรอบิล */
+  const boat = BOATS.find(b=>b.id===p.boatId);
+  if(boat && boat.log){
+    boat.log.forEach(e=>{ if(e.projectId===p.id && !e.to) e.to = TODAY_STR; });
+    boat.log.push({ id:'sl_'+Date.now(), s:'available', from:TODAY_STR, to:null,
+                    note:`Returned from Project ${p.no} · รอใบวางบิล` });
+  }
+  flSave(); save();
+  flRenderProjects();
+  flShowToast(`${p.no} · งานเสร็จ · เรือกลับแล้ว · รอใบวางบิล`);
+}
+/* งานยังไม่จบจริง · ดึงกลับมาทำต่อ · เรือต้องถูกกันออกจากตารางวิ่งอีกครั้ง */
+function flProjBillBack(id){
+  const p = flProjGetById(id); if(!p) return;
+  if(p.status!=='awaiting_bill'){ flShowToast('ใบนี้ไม่ได้อยู่ในสถานะรอวางบิล'); return; }
+  if(!confirm(`ดึง ${p.no} กลับมาทำต่อ?\n\nเรือจะถูกกันออกจากตารางวิ่งอีกครั้ง\nMJ ที่ปิดไปแล้วไม่ถูกเปิดคืนให้เอง`)) return;
+  p.status='inprogress';
+  p.workDoneOn=null; p.actualTo=null;
+  if(!p.log) p.log=[];
+  p.log.push({date:TODAY_STR, text:'▶ ดึงกลับมาทำต่อ · งานยังไม่จบ', by:'user'});
+  const boat = BOATS.find(b=>b.id===p.boatId);
+  if(boat){
+    if(!boat.log) boat.log=[];
+    boat.log.forEach(e=>{ if(e.s==='available' && !e.to) e.to = TODAY_STR; });
+    boat.log.push({ id:'sl_'+Date.now(), s:'unavailable', from:TODAY_STR, to:null,
+                    loc:p.vendor||'', note:`Project ${p.no} · ${p.name}`,
+                    reason:(p.type==='drydock'?'dry_dock':'overhaul'), projectId:p.id });
+  }
+  flSave(); save();
+  flRenderProjects();
+  flShowToast('ดึงกลับมาทำต่อแล้ว · เรือถูกกันออกจากตารางวิ่ง');
+}
+/* ปิดบิล = ปิดโปรเจคจริง · ผ่านด่านเดียวกับ Mark Complete ทุกประการ */
+function flProjBillClose(id){
+  const p = flProjGetById(id); if(!p) return;
+  const g = flProjBillGate(p);
+  if(!g.ok){ flProjBillAsk(id); return; }
+  if(!confirm(`ปิดโปรเจค ${p.no}?\n\nต้นทุนที่จะบันทึก ฿${(g.cost||0).toLocaleString()}\nใบนี้จะเข้า YTD Spend และย้ายไปคลังงานที่ปิดแล้ว`)) return;
+  p.status='completed';
+  p.actualTo = p.actualTo || TODAY_STR;
+  p.billClosedOn = TODAY_STR;
+  if(!p.log) p.log=[];
+  p.log.push({date:TODAY_STR, text:`✓ ปิดบิล · ปิดโปรเจค · ต้นทุน ฿${(g.cost||0).toLocaleString()}`, by:'user'});
+  flSave(); save();
+  flRenderProjects();
+  flShowToast(`${p.no} ปิดแล้ว · ฿${(g.cost||0).toLocaleString()}`);
+}
+/* หน้าต่างเลือกทาง · โผล่ตอนกดปิดทั้งที่บิลยังไม่ครบ */
+var _prjBillId=null;
+function flProjBillAsk(id){
+  const p = flProjGetById(id); if(!p) return;
+  _prjBillId=id;
+  const g = flProjBillGate(p);
+  const kids = flProjChildMJs(p.id).filter(m=>m.status!=='done').length;
+  const esc = (typeof ckEsc==='function')?ckEsc:function(x){ return String(x==null?'':x); };
+  const already = (p.status==='awaiting_bill');
+  const opt = (k,h,d,on)=>`<div onclick="flProjBillPick('${k}')" data-bo="${k}" style="border:1px solid ${on?'#A855F7':'#E5E7EB'};background:${on?'#FAF5FF':'#fff'};border-radius:12px;padding:13px 15px;margin-bottom:9px;cursor:pointer">
+      <div style="font-size:13px;font-weight:800;color:#1F2A44">${h}</div>
+      <div style="font-size:11.5px;color:#475569;margin-top:4px;line-height:1.65">${d}</div></div>`;
+  let host=document.getElementById('prj-bill-host');
+  if(!host){ host=document.createElement('div'); host.id='prj-bill-host'; document.body.appendChild(host); }
+  host.innerHTML=`
+   <div id="prj-bill-ov" onclick="if(event.target===this)flProjBillClose_()" style="position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:9200;display:flex;align-items:center;justify-content:center;padding:18px;font-family:'DM Sans','Noto Sans Thai',sans-serif">
+    <div style="background:#fff;border-radius:16px;width:min(540px,96vw);max-height:90vh;overflow:auto;box-shadow:0 22px 60px rgba(15,23,42,.3)">
+     <div style="padding:18px 22px 4px">
+      <div style="font-size:16px;font-weight:800;color:#1F2A44">ปิดโปรเจค ${esc(p.no)}</div>
+      <div style="font-size:12.5px;color:#475569;margin-top:6px;line-height:1.75">
+        ${g.miss.map(m=>'&bull; '+esc(m)).join('<br>')}<br>เลือกว่าจะปิดแบบไหน</div>
+     </div>
+     <div style="padding:14px 22px 4px">
+      ${already?'':opt('wait','&#9678;&nbsp; งานเสร็จ &middot; รอวางบิล',
+         `ปล่อยเรือกลับไปวิ่ง${kids?` &middot; ปิด MJ ลูก ${kids} ใบ`:''} &middot; โปรเจคยังอยู่บนบอร์ดในแท็บ <b>รอวางบิล</b><br>พอบิลมาค่อยแนบแล้วกดปิดจริง — ต้นทุนไม่หาย`, true)}
+      ${opt('nocost','&#9675;&nbsp; ปิดจบเลย &middot; ไม่มีค่าใช้จ่าย',
+         'งานในประกัน / ทำเอง / ไม่มีบิลจริง ๆ &middot; ปิดที่ ฿0 แล้วเข้าคลัง <b>ต้องเขียนเหตุผล</b>', already)}
+      <div style="font-size:10px;font-weight:700;color:#94A3B8;letter-spacing:.05em;text-transform:uppercase;margin:14px 0 6px">หมายเหตุ</div>
+      <input id="prj-bill-note" type="text" value="${esc(p.billNote||'')}" placeholder="เช่น อู่แจ้งว่าจะส่งบิลต้นเดือน &middot; ติดต่อคุณเอ 08x" style="width:100%;border:1px solid #E5E7EB;border-radius:10px;padding:9px 12px;font-size:13px;font-family:inherit">
+     </div>
+     <div style="padding:16px 22px;display:flex;justify-content:flex-end;gap:8px">
+      <button onclick="flProjBillClose_()" style="border:1px solid #E5E7EB;background:#fff;color:#475569;border-radius:12px;padding:9px 16px;font:600 12.5px inherit;cursor:pointer;font-family:inherit">ยังไม่ปิด</button>
+      <button id="prj-bill-go" onclick="flProjBillGo()" style="border:none;background:#7E22CE;color:#fff;border-radius:12px;padding:9px 18px;font:700 12.5px inherit;cursor:pointer;font-family:inherit">ยืนยัน</button>
+     </div>
+    </div></div>`;
+  _prjBillPick = already?'nocost':'wait';
+}
+var _prjBillPick='wait';
+function flProjBillPick(k){
+  _prjBillPick=k;
+  document.querySelectorAll('#prj-bill-ov [data-bo]').forEach(function(el){
+    var on=(el.getAttribute('data-bo')===k);
+    el.style.borderColor=on?'#A855F7':'#E5E7EB';
+    el.style.background=on?'#FAF5FF':'#fff';
+  });
+}
+function flProjBillClose_(){ var h=document.getElementById('prj-bill-host'); if(h) h.innerHTML=''; _prjBillId=null; }
+function flProjBillGo(){
+  const id=_prjBillId, p=flProjGetById(id); if(!p) return flProjBillClose_();
+  const note=(document.getElementById('prj-bill-note')||{}).value||'';
+  if(_prjBillPick==='wait'){ flProjBillClose_(); flProjWorkDone(id, note); return; }
+  /* ปิดที่ ฿0 · ต้องมีเหตุผลเสมอ · ไม่งั้นอีกหกเดือนไม่มีใครตอบได้ว่าทำไมงานอู่ถึงไม่มีต้นทุน */
+  if(!String(note).trim()){
+    alert('ปิดแบบไม่มีค่าใช้จ่าย ต้องเขียนเหตุผลไว้ในหมายเหตุ\n\nเช่น "งานในประกัน" · "ช่างบริษัททำเอง" · "อู่ไม่คิดเงิน"');
+    return;
+  }
+  p.noCost = {reason:String(note).trim(), by:'user', at:TODAY_STR};
+  p.billNote = String(note).trim();
+  flProjBillClose_();
+  if(p.status==='awaiting_bill') flProjBillClose(id);
+  else flProjMarkComplete(id);
 }
 
 // ── Create MJ from project · prefills boat + scheduled type + dates + location ──
@@ -18689,7 +19692,7 @@ function _flMaintStartProceed(id){
   const targetReason = m.boatStatusReason || '';
   // Only push boat log if status is NOT available
   if(b && targetStatus !== 'available'){
-    const cur=getCurStatus(b,TODAY_STR);
+    const cur=getStoredStatus(b,TODAY_STR);   /* §boatEff3 · กำลังจะเขียนแถว ต้องอ่านค่าดิบ */
     // ⚠ If the boat already ran a trip today (e.g. ran in the morning, reported a fault in the evening),
     //   start the "not available" period TOMORROW so today still counts as operated. Editable afterwards.
     const _ranToday = _flBoatRanOn(b.id, TODAY_STR);
@@ -18799,16 +19802,17 @@ function flMaintClose(id,outcome,note,awaitInvoice){
 
   // restore boat status + log repair to boat history
   if(b){
-    const cur=getCurStatus(b,TODAY_STR);
+    const cur=getStoredStatus(b,TODAY_STR);   /* §boatEff3 · สาขา setFixing:false คงค่าเดิม ต้องเป็นค่าดิบ */
     // Auto-close any open log entries (e.g. fixing from Start Job) before pushing new entry
     if(typeof autoClosePrevLog==='function') autoClosePrevLog(b,TODAY_STR);
     
-    // Check if there are OTHER active MJs for this boat (still inprogress)
-    const otherActiveMjs = FL_MAINT.filter(x => 
-      x.id !== m.id && 
-      x.boatId === b.id && 
-      x.status === 'inprogress'
-    );
+    /* §boatEff2 · งานที่ยังกันเรืออยู่หลังปิดใบนี้
+       ของเดิมกรอง FL_MAINT เองและมองแค่ MJ · โปรเจกต์ไม่อยู่ในสายตาเลย
+       เรือที่ถูกกันด้วย PRJ อย่างเดียวจึงถูกปล่อยกลับเป็น available ทั้งที่ยังเข้าอู่อยู่
+       ตอนนี้เรียก boatJobBlock ตัวเดียวกับที่หน้าจออ่าน · กติกาเดียวกันทั้งระบบ
+       (m.status ถูกตั้งเป็น 'done' ไปแล้วด้านบน ใบนี้จึงไม่ถูกนับซ้ำ) */
+    const _blk = (typeof boatJobBlock==='function')
+      ? boatJobBlock(b.id, TODAY_STR) : {s:'available', jobs:[], reason:'', nos:''};
     
     let finalBoatStatus = out.boatStatus;
     let finalNote = `ปิด Job ${m.no}${out.tag}`;
@@ -18827,21 +19831,11 @@ function flMaintClose(id,outcome,note,awaitInvoice){
         skipBoatLog = true;
       }
       finalNote = `ปิด Job ${m.no}${out.tag} · ไม่แตะสถานะเรือ (Job นี้ทำขนานกับการใช้งาน)`;
-    } else if(otherActiveMjs.length > 0){
-      // Pick the "strictest" status among remaining MJs
-      // unavailable > fixing > available
-      const others = otherActiveMjs.map(mj => ({
-        status: mj.boatStatus || (mj.setFixing===false ? 'available' : 'fixing'),
-        reason: mj.boatStatusReason || '',
-        no: mj.no, mj: mj
-      }));
-      // Priority: unavailable > fixing > available
-      const hasUnavail = others.find(o => o.status === 'unavailable');
-      const hasFixing = others.find(o => o.status === 'fixing');
-      const carryOver = hasUnavail || hasFixing || others[0];
-      finalBoatStatus = carryOver.status;
-      finalReason = carryOver.reason;
-      finalNote = `ปิด Job ${m.no}${out.tag} · ยังคงสถานะ ${finalBoatStatus==='fixing'?'Fixing':finalBoatStatus==='unavailable'?'Unavailable':'Available'} จาก Job ${carryOver.no}`;
+    } else if(_blk.jobs.length > 0){
+      finalBoatStatus = _blk.s;
+      finalReason = _blk.reason || '';
+      const _lbl = finalBoatStatus==='fixing'?'Fixing':finalBoatStatus==='unavailable'?'Unavailable':'Available';
+      finalNote = `ปิด Job ${m.no}${out.tag} · ยังคงสถานะ ${_lbl} จาก ${_blk.nos}`;
     }
     
     if(!skipBoatLog){
@@ -20884,7 +21878,7 @@ function flRenderInventory(){
   const CAT_LBL={engine:'Engine',gearbox:'Gearbox',propeller:'Propeller',hull:'Hull',general:'General'};
   const catPills=topCats.map(function(x){var cat=x[0],c=x[1];return '<div style="display:flex;align-items:center;gap:6px;background:white;border:1px solid '+dim.line+';border-radius:20px;padding:3px 12px 3px 3px"><div style="width:24px;height:24px;border-radius:50%;background:'+(CAT_COLOR[cat]||'#666')+';color:white;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700">'+(CAT_ABBR[cat]||cat.slice(0,2).toUpperCase())+'</div><span style="font-size:12px;font-weight:500">'+(CAT_LBL[cat]||cat)+' \u00b7 '+c+'</span></div>'}).join('');
 
-  const headerBar='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px"><div style="display:flex;align-items:center;gap:6px">'+catPills+'<div style="width:32px;height:32px;border-radius:50%;background:'+dim.ink+';color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">I</div></div><div style="display:flex;gap:6px"><button onclick="flOpenReceiveStock()" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:500;cursor:pointer">+ Receive</button><button onclick="flOpenAddStockModal()" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:500;cursor:pointer">+ Add item</button><button onclick="flOpenMemoFromInventory()" style="background:'+dim.ink+';color:white;border:none;border-radius:20px;padding:7px 16px;font-size:11px;font-weight:600;cursor:pointer">+ Create Memo</button></div></div>';
+  const headerBar='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px"><div style="display:flex;align-items:center;gap:6px">'+catPills+'<div style="width:32px;height:32px;border-radius:50%;background:'+dim.ink+';color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">I</div></div><div style="display:flex;gap:6px"><button onclick="flOpenReceiveStock()" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:500;cursor:pointer">+ Receive</button><button onclick="flOpenAddStockModal()" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:500;cursor:pointer">+ Add item</button><button onclick="invDupOpen()" title="ตรวจรายการที่ชื่อซ้ำกัน · ของชิ้นเดียวกันแตกเป็นหลายรายการทำให้ยอดคงเหลือกระจาย" style="background:white;border:1px solid rgba(0,0,0,.08);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:500;cursor:pointer">&#9888; ตรวจคลัง</button><button onclick="flOpenMemoFromInventory()" style="background:'+dim.ink+';color:white;border:none;border-radius:20px;padding:7px 16px;font-size:11px;font-weight:600;cursor:pointer">+ Create Memo</button></div></div>';
 
   const kpiStrip='<div style="display:grid;grid-template-columns:1.6fr 0.85fr 0.85fr 0.85fr 1fr;gap:8px;margin-bottom:14px;align-items:stretch"><div style="grid-column:1;align-self:end;padding-bottom:6px"><div style="font-size:13px;font-weight:500;color:'+dim.ink4+';margin-bottom:2px">Inventory & Memos</div><div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap"><span style="font-size:42px;font-weight:700;letter-spacing:-1.5px;line-height:1">'+totalItems+'</span><span style="font-size:18px;color:'+dim.ink3+';font-weight:500">items</span><span style="display:inline-flex;align-items:center;background:'+SVG_PINK.accent+';color:white;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">\u25b4 \u0e3f'+totalValue.toLocaleString()+' value</span>'+(cntLow?'<span style="display:inline-flex;align-items:center;background:#FCEBEB;color:#A32D2D;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">'+cntLow+' low stock</span>':'')+'</div><div style="font-size:11px;color:'+dim.ink3+'">2 warehouses \u00b7 Tub Lamu ('+tubCount+') \u00b7 Visit Panwa ('+panwaCount+')</div></div><div style="grid-column:2;background:white;border-radius:14px;padding:11px 13px;border:2px solid '+(cntLow?'#A32D2D':dim.line)+'"><div style="font-size:10px;color:'+dim.ink3+'">Low stock</div><div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span style="background:#A32D2D;color:white;padding:2px 9px;border-radius:14px;font-size:14px;font-weight:700">'+cntLow+'</span><span style="font-size:11px;color:'+dim.ink3+';margin-left:2px">items</span></div><div style="font-size:11px;color:#A32D2D;margin-top:7px;font-weight:600">need restock</div></div><div style="grid-column:3;background:white;border-radius:14px;padding:11px 13px;border:2px solid '+(cntPendingMemo?'#BA7517':dim.line)+'"><div style="font-size:10px;color:'+dim.ink3+'">Pending memos</div><div style="display:flex;align-items:baseline;gap:4px;margin-top:2px"><span style="background:#BA7517;color:white;padding:2px 9px;border-radius:14px;font-size:14px;font-weight:700">'+cntPendingMemo+'</span><span style="font-size:11px;color:'+dim.ink3+';margin-left:2px">memos</span></div><div style="font-size:11px;color:#854F0B;margin-top:7px;font-weight:600">\u0e3f'+pendingAmount.toLocaleString()+' awaiting</div></div><div style="grid-column:4;background:white;border-radius:14px;padding:11px 13px;border:1px solid '+dim.line+'"><div style="font-size:10px;color:'+dim.ink3+'">Paid this month</div><div style="display:flex;align-items:baseline;gap:3px;margin-top:2px"><span style="font-size:18px;font-weight:700;line-height:1.2;color:#1D9E75">'+paidThisMonth.length+'</span><span style="font-size:11px;color:'+dim.ink3+';font-weight:500">memos</span></div><div style="font-size:11px;color:#0F6E56;margin-top:6px;font-weight:600">\u0e3f'+paidAmount.toLocaleString()+' spent</div></div><div style="grid-column:5;background:'+dim.ink+';color:white;border-radius:14px;padding:11px 13px"><div style="font-size:10px;color:#aaa">By status</div><div style="display:flex;flex-direction:column;gap:3px;margin-top:4px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Pending</span><span style="font-size:11px;font-weight:600;color:'+(cntPendingMemo?'#FF8FA8':'white')+'">'+cntPendingMemo+'</span></div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Approved</span><span style="font-size:11px;font-weight:600;color:white">'+cntApprovedMemo+'</span></div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Received</span><span style="font-size:11px;font-weight:600;color:white">'+cntReceivedMemo+'</span></div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:10px;color:#aaa">Paid</span><span style="font-size:11px;font-weight:600;color:#9BE6BC">'+cntPaidMemo+'</span></div></div></div></div>';
 
@@ -21487,10 +22481,24 @@ function flSaveReceive(){
         const cat=it.category||mo.memoType||'parts';
         if(cat==='labor') return;
         // match by invId first, then by exact name
+        /* §invIdSafe2 · ของเดิมมี it.name.includes(x.name) ด้วย · ชื่อกว้าง ๆ อย่าง "โอริง"
+           จะดูดบรรทัด "โอริงฝาครอบ 20mm" เข้าไปรวมทั้งที่เป็นคนละเบอร์ · ตัดออก */
         let inv=it.invId
           ?FL_INVENTORY.find(x=>x.id===it.invId)
-          :FL_INVENTORY.find(x=>x.name===it.name||it.name.includes(x.name));
+          :_invPickByName(it.name, it.partNo);
+        /* §invIdSafe · invId ชี้ไปที่ของคนละชื่อ = id ชนกันตอนลงทะเบียน
+           เชื่อต่อไปของจะไปเข้าผิดชิ้น และชิ้นที่ถูกจะหายจากคลังทั้งที่รับมาแล้ว
+           หาใหม่จากชื่อ ไม่เจอก็ปล่อยให้ไปสร้างใหม่ แล้วซ่อม invId ใน memo ให้ด้วย */
+        if(inv && !_invSameName(inv.name, it.name)){
+          /* §invIdSafe2 · ชื่อเดียวกันมีได้หลายเบอร์ · ชี้ชัดไม่ได้ห้ามเดา ให้สร้างใหม่ */
+          const pick=_invPickByName(it.name, it.partNo);
+          console.warn('[invIdSafe] '+mo.no+' · "'+it.name+'" ผูกอยู่กับ id '+it.invId
+            +' ซึ่งเป็นของ "'+inv.name+'" · '+(pick?'ย้ายไปที่ '+pick.id:'ชี้ชัดไม่ได้ · สร้างรายการใหม่ให้'));
+          inv = pick;
+          it.invId = pick ? pick.id : '';
+        }
         if(inv){
+          if(it.invId!==inv.id) it.invId=inv.id;
           // Ensure stocks[] exists, then add at chosen location
           invSyncLegacy(inv);
           invAddAt(inv, memoLocation, qty);
@@ -21500,9 +22508,9 @@ function flSaveReceive(){
         } else {
           // Auto-create new inventory item from memo line — with multi-warehouse stocks
           const newInv={
-            id:'i'+Date.now()+Math.floor(Math.random()*1000),
+            id:_invNewId('i'),                       /* §invIdSafe */
             name:it.name,
-            partNo:'',
+            partNo:it.partNo||'',                    /* §invKeyPartNo · ไม่งั้นของใหม่ไม่มีกุญแจ */
             category:'อื่นๆ',
             supplier:mo.supplier||'',
             location:memoLocation,
@@ -21948,13 +22956,34 @@ function flOpenAddStockModal(){
 function flSaveAddStock(){
   const name=document.getElementById('add-inv-name').value.trim();
   if(!name){alert('กรุณากรอกชื่อรายการ');return;}
+  /* §invKeyPartNo · ชื่อ+เบอร์ตรงกัน = ของชิ้นเดียวกัน ห้ามสร้างซ้ำ
+     ชื่อชนของเดิมแต่ยังไม่ใส่เบอร์ = แยกกันไม่ออก ระบบจะจับคู่ผิดตอนรับของ */
+  const _pn=(document.getElementById('add-inv-partno').value||'').trim();
+  const _dup=_invFindDup(name,_pn,null);
+  if(_dup){
+    alert('มีรายการนี้อยู่แล้วในคลัง\n\n'+_dup.name+' · '+_invPnLabel(_dup)
+      +'\nคงเหลือ '+(_dup.totalQty!=null?_dup.totalQty:_dup.qty||0)+' '+(_dup.unit||'ชิ้น')
+      +'\n\nถ้าเป็นของชิ้นเดียวกัน ให้รับเข้าที่รายการเดิม\nถ้าคนละเบอร์ ให้กรอก Part Number ให้ต่างกัน');
+    return;
+  }
+  if(!_pn){
+    const _same=_invSameNameList(name,null);
+    if(_same.length){
+      alert('ชื่อนี้มีอยู่แล้ว '+_same.length+' รายการ · ต้องกรอก Part Number เพื่อแยกให้ออก\n\n'
+        +_same.slice(0,6).map(function(x){ return '  \u00b7 '+_invPnLabel(x)
+          +' · คงเหลือ '+(x.totalQty!=null?x.totalQty:x.qty||0); }).join('\n')
+        +(_same.length>6?('\n  \u00b7 ... อีก '+(_same.length-6)):'')
+        +'\n\nถ้าเป็นของชิ้นเดียวกับข้างบน ไม่ต้องสร้างใหม่');
+      return;
+    }
+  }
   // Build note: engine model first (for group detection), then extra note
   const engineModel=document.getElementById('add-inv-engine')?.value||'';
   const extraNote=document.getElementById('add-inv-note-extra')?.value.trim()||'';
   const combinedNote=[engineModel, extraNote].filter(Boolean).join(' · ');
   FL_INVENTORY.push({
-    id:LA_UID('i'),name,
-    partNo:document.getElementById('add-inv-partno').value.trim(),
+    id:_invNewId('i'),name,                      /* §invIdSafe */
+    partNo:_pn,
     category:document.getElementById('add-inv-cat').value,
     supplier:document.getElementById('add-inv-supplier').value.trim(),
     location:document.getElementById('add-inv-location').value.trim(),
@@ -21966,6 +22995,227 @@ function flSaveAddStock(){
     history:[]
   });
   flSave();closeModal('fl-modal-add-inv');flRenderInventory();
+}
+/* ══ §invDupFix · ตรวจรายการซ้ำในคลัง ═══════════════════════════════ */
+function invDupScan(){
+  var g={}, out={dup:[], needPn:[], ok:[]};
+  _invAll().forEach(function(x){
+    var k=String(x.name==null?'':x.name).trim().toLowerCase();
+    if(!k) return; (g[k]=g[k]||[]).push(x);
+  });
+  Object.keys(g).forEach(function(k){
+    var L=g[k]; if(L.length<2) return;
+    /* ซ้ำจริง = ชื่อ+เบอร์ตรงกัน */
+    var byKey={};
+    L.forEach(function(x){ var kk=_invKeyOf(x.name,x.partNo); (byKey[kk]=byKey[kk]||[]).push(x); });
+    var merged=false;
+    Object.keys(byKey).forEach(function(kk){
+      if(byKey[kk].length>1){ out.dup.push({key:kk, name:byKey[kk][0].name, pn:byKey[kk][0].partNo||'', list:byKey[kk]}); merged=true; }
+    });
+    if(merged) return;
+    var noPn=L.filter(function(x){ return !String(x.partNo||'').trim(); });
+    if(noPn.length) out.needPn.push({name:L[0].name, list:L, noPn:noPn.length});
+    else out.ok.push({name:L[0].name, list:L});
+  });
+  return out;
+}
+/* §invLostLine · บรรทัดที่รับของแล้วแต่ไม่มีรายการในคลังเลย */
+function invLostScan(){
+  var out=[], DONE={received:1, paid:1};
+  (typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).forEach(function(m){
+    if(!DONE[m.status]) return;
+    (m.items||[]).forEach(function(it, idx){
+      if((it.category||m.memoType||'parts')==='labor') return;
+      var t=it.invId?_invAll().find(function(x){ return x.id===it.invId; }):null;
+      if(t && _invSameName(t.name, it.name)) return;          /* ผูกถูกอยู่แล้ว */
+      if(_invSameNameList(it.name, null).length) return;      /* มีของชื่อนี้อยู่ · แค่ยังไม่ผูก ไม่ใช่ของหาย */
+      out.push({m:m, idx:idx, it:it, wrong:t||null});
+    });
+  });
+  return out;
+}
+/* ของที่ถูกบวกผิดชิ้น · เกินมากี่หน่วยจากใบนี้ */
+function _invSurplus(wrong, m){
+  if(!wrong) return {rows:[], sum:0, own:0, over:0};
+  var rows=(wrong.history||[]).filter(function(h){
+    return h.type==='receive' && (h.memoId===m.id || String(h.note||'').indexOf(m.no)>=0); });
+  var sum=rows.reduce(function(a,h){ return a+(+h.qty||0); },0);
+  var own=(m.items||[]).filter(function(x){ return x.invId===wrong.id && _invSameName(x.name, wrong.name); })
+            .reduce(function(a,x){ return a+(+x.qty||0); },0);
+  return {rows:rows, sum:sum, own:own, over:sum-own};
+}
+function invLostFix(memoId, idx){
+  var m=(typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).find(function(x){ return x.id===memoId; });
+  if(!m) return;
+  var it=(m.items||[])[idx]; if(!it) return;
+  var wrong=it.invId?_invAll().find(function(x){ return x.id===it.invId; }):null;
+  var qty=Math.max(0,+it.qty||0);
+  var S=_invSurplus(wrong, m);
+  /* คลังปลายทาง · เอาตามแถวที่บวกผิดไว้ ถ้าไม่มีค่อยดูที่ใบ */
+  var loc=(S.rows[0]&&S.rows[0].location) || m.receivedLocation || 'คลัง Tub Lamu';
+  var canPull = !!(wrong && S.over>=qty && qty>0);
+  var msg='ซ่อมรายการ "'+it.name+'" ของ '+m.no+'\n\n'
+    +'1. สร้างรายการในคลัง · '+qty+' '+(it.unit||'ชิ้น')+' @ '+loc+'\n';
+  msg += canPull
+    ? ('2. ถอน '+qty+' '+(it.unit||'ชิ้น')+' ออกจาก "'+wrong.name+'" ที่ถูกบวกเกินไว้\n   (ตอนนี้ '
+       +(wrong.totalQty!=null?wrong.totalQty:wrong.qty||0)+' → '+((wrong.totalQty!=null?wrong.totalQty:wrong.qty||0)-qty)+')\n\nยอดรวมทั้งระบบเท่าเดิม')
+    : ('2. ไม่แตะยอดของชิ้นอื่น'+(wrong?(' · คำนวณส่วนเกินของ "'+wrong.name+'" ไม่ลงตัว ต้องไปตรวจเอง'):''));
+  if(!confirm(msg)) return;
+
+  var nv={ id:_invNewId('i'), name:it.name, partNo:it.partNo||'', category:'general',
+    supplier:m.supplier||'', location:loc, unit:it.unit||'ชิ้น', minQty:0, cost:it.price||0,
+    stocks:[], qty:0, totalQty:0, primaryLocation:loc,
+    note:'ซ่อมจาก '+m.no+' · รับเข้าแล้วแต่ไม่มีรายการในคลัง',
+    createdFrom:m.no, createdDate:(typeof TODAY_STR!=='undefined'?TODAY_STR:''),
+    history:[{date:(typeof TODAY_STR!=='undefined'?TODAY_STR:''), type:'register', qty:0,
+      note:'สร้างย้อนหลัง · บรรทัดใน '+m.no+' รับของแล้วแต่ไม่มีรายการในคลัง (id ชนกัน)',
+      by:(typeof laBy==='function')?laBy():''}] };
+  FL_INVENTORY.push(nv);
+  invAddAt(nv, loc, qty);
+  nv.history.push({ date:(m.receivedDate||m.createdDate||(typeof TODAY_STR!=='undefined'?TODAY_STR:'')),
+    type:'receive', qty:qty, location:loc, memoId:m.id,
+    note:'จาก '+m.no+' · ลงย้อนหลังตอนซ่อมรายการ · @ '+loc,
+    by:(typeof laBy==='function')?laBy():'' });
+
+  if(canPull){
+    /* ถอนแถวที่เกินออก · เลือกแถวที่จำนวนตรงกันก่อน ไม่งั้นตัดจากแถวท้ายสุด */
+    var row=S.rows.filter(function(h){ return (+h.qty||0)===qty; }).pop() || S.rows[S.rows.length-1];
+    if(row){
+      var hi=wrong.history.indexOf(row);
+      if((+row.qty||0)===qty){ if(hi>=0) wrong.history.splice(hi,1); }
+      else row.qty=(+row.qty||0)-qty;
+    }
+    invAddAt(wrong, loc, -qty);
+    wrong.history.push({ date:(typeof TODAY_STR!=='undefined'?TODAY_STR:''), type:'adjust_out', qty:qty,
+      location:loc, note:'ถอนของที่บวกผิดชิ้นจาก '+m.no+' · ย้ายไปที่ "'+it.name+'"',
+      by:(typeof laBy==='function')?laBy():'' });
+  }
+  it.invId=nv.id;
+  if(typeof flSave==='function') flSave();
+  if(typeof flShowToast==='function') flShowToast('ซ่อมแล้ว · '+it.name+' คงเหลือ '+qty+' '+(it.unit||'ชิ้น')+' @ '+loc);
+  if(typeof flRenderInventory==='function') flRenderInventory();
+  invDupOpen();
+}
+function invDupOpen(){
+  var R=invDupScan(), e=(typeof ckEsc==='function')?ckEsc:function(x){ return String(x==null?'':x); };
+  var LOST=invLostScan();
+  var qty=function(x){ return (x.totalQty!=null?x.totalQty:(x.qty||0)); };
+  var row=function(x){
+    return '<div style="display:flex;gap:10px;align-items:center;padding:5px 0;font-size:11.5px;border-top:1px solid #F3F1EC">'
+      +'<span style="flex:1;color:#3F4654">'+e(_invPnLabel(x))+'</span>'
+      +'<span style="color:#8B96A0">'+e(x.supplier||'—')+'</span>'
+      +'<b style="width:56px;text-align:right;font-family:\'DM Mono\',monospace">'+qty(x)+' '+e(x.unit||'')+'</b></div>';
+  };
+  var secDup = !R.dup.length ? '' :
+    '<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:800;color:#A32D2D;letter-spacing:.05em;text-transform:uppercase;margin-bottom:7px">'
+    +'ซ้ำจริง &middot; '+R.dup.length+' กลุ่ม &middot; ต้องรวม</div>'
+    +'<div style="font-size:11.5px;color:#7A4A00;background:#FFF8EC;border:1px solid #F0DFB8;border-radius:9px;padding:8px 11px;margin-bottom:9px;line-height:1.7">'
+    +'ชื่อและ Part Number ตรงกัน = ของชิ้นเดียวกันแตกเป็นหลายรายการ &middot; ยอดคงเหลือกระจาย เบิกจากตัวที่เหลือ 0 ไม่ได้ทั้งที่ของมีอยู่</div>'
+    +R.dup.map(function(gr){
+      return '<div style="border:1px solid #F0D5CE;background:#FFFAF8;border-radius:11px;padding:10px 13px;margin-bottom:8px">'
+        +'<div style="display:flex;align-items:center;gap:10px"><b style="flex:1;font-size:12.5px">'+e(gr.name)+'</b>'
+        +'<span style="font-size:11px;color:#A32D2D;font-weight:700">'+gr.list.length+' รายการ &middot; รวม '+gr.list.reduce(function(a,b){return a+qty(b);},0)+'</span>'
+        +'<button onclick="invDupMerge(\''+encodeURIComponent(gr.key)+'\')" style="border:none;background:#A32D2D;color:#fff;border-radius:8px;padding:6px 13px;font:700 11.5px inherit;cursor:pointer;font-family:inherit">รวมเป็นรายการเดียว</button></div>'
+        +gr.list.map(row).join('')+'</div>';
+    }).join('')+'</div>';
+  var secPn = !R.needPn.length ? '' :
+    '<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:800;color:#B4560A;letter-spacing:.05em;text-transform:uppercase;margin-bottom:7px">'
+    +'ต้องเติม Part Number &middot; '+R.needPn.length+' ชื่อ</div>'
+    +'<div style="font-size:11.5px;color:#7A4A00;background:#FFF8EC;border:1px solid #F0DFB8;border-radius:9px;padding:8px 11px;margin-bottom:9px;line-height:1.7">'
+    +'ชื่อชนกันแต่ยังมีตัวที่ไม่มีเบอร์ &middot; ระบบแยกไม่ออกว่าเป็นอะไหล่ตัวไหน ครั้งหน้าที่รับของอาจเข้าผิดตัว &middot; กรอกเบอร์ให้ครบทุกตัว</div>'
+    +R.needPn.map(function(gr){
+      return '<div style="border:1px solid #F0DFB8;background:#FFFDF7;border-radius:11px;padding:10px 13px;margin-bottom:8px">'
+        +'<div style="display:flex;align-items:center;gap:10px"><b style="flex:1;font-size:12.5px">'+e(gr.name)+'</b>'
+        +'<span style="font-size:11px;color:#B4560A;font-weight:700">'+gr.list.length+' รายการ &middot; ไม่มีเบอร์ '+gr.noPn+'</span></div>'
+        +gr.list.map(row).join('')+'</div>';
+    }).join('')+'</div>';
+  var secOk = !R.ok.length ? '' :
+    '<div><div style="font-size:11px;font-weight:800;color:#0F6E56;letter-spacing:.05em;text-transform:uppercase;margin-bottom:7px">'
+    +'ปกติ &middot; '+R.ok.length+' ชื่อ &middot; คนละอะไหล่</div>'
+    +'<div style="font-size:11.5px;color:#5B6670;background:#F3FAF7;border:1px solid #CFE9DF;border-radius:9px;padding:8px 11px;line-height:1.7">'
+    +'ชื่อเหมือนกันแต่เบอร์ครบทุกตัว = คนละอะไหล่ที่แคตตาล็อกตั้งชื่อซ้ำ ปล่อยไว้ได้<br>'
+    +R.ok.slice(0,10).map(function(gr){ return '&middot; '+e(gr.name)+' <span style="color:#98A2AD">('+gr.list.length+' เบอร์)</span>'; }).join('<br>')
+    +(R.ok.length>10?('<br>&middot; ... อีก '+(R.ok.length-10)+' ชื่อ'):'')+'</div></div>';
+
+  /* §invLostLine · ของหายทั้งรายการ · ร้ายแรงกว่าซ้ำ เอาขึ้นก่อน */
+  var secLost = !LOST.length ? '' :
+    '<div style="margin-bottom:16px"><div style="font-size:11px;font-weight:800;color:#A32D2D;letter-spacing:.05em;text-transform:uppercase;margin-bottom:7px">'
+    +'รับของแล้วแต่ไม่มีในคลัง &middot; '+LOST.length+' รายการ</div>'
+    +'<div style="font-size:11.5px;color:#7A4A00;background:#FFF8EC;border:1px solid #F0DFB8;border-radius:9px;padding:8px 11px;margin-bottom:9px;line-height:1.7">'
+    +'บรรทัดใน memo รับของแล้ว แต่ไม่มีรายการในคลังเลย &middot; เกิดจาก id ชนกันตอนลงทะเบียน ของไปบวกเข้าชิ้นอื่นแทน<br>'
+    +'ปุ่มซ่อมจะสร้างรายการให้ ลงรับเข้าตามใบ และถอนส่วนที่เกินออกจากชิ้นที่ถูกบวกผิด &middot; <b>ยอดรวมทั้งระบบเท่าเดิม</b></div>'
+    +LOST.map(function(L){
+      var S=_invSurplus(L.wrong, L.m), q=Math.max(0,+L.it.qty||0);
+      var can=!!(L.wrong && S.over>=q && q>0);
+      return '<div style="border:1px solid #F0D5CE;background:#FFFAF8;border-radius:11px;padding:10px 13px;margin-bottom:8px">'
+        +'<div style="display:flex;align-items:center;gap:10px"><b style="flex:1;font-size:12.5px">'+e(L.it.name)+'</b>'
+        +'<span style="font-size:11px;color:#A32D2D;font-weight:700">'+e(L.m.no)+' &middot; '+q+' '+e(L.it.unit||'ชิ้น')+'</span>'
+        +'<button onclick="invLostFix(\''+e(L.m.id)+'\','+L.idx+')" style="border:none;background:#A32D2D;color:#fff;border-radius:8px;padding:6px 13px;font:700 11.5px inherit;cursor:pointer;font-family:inherit">ซ่อมรายการนี้</button></div>'
+        +'<div style="font-size:11.5px;color:#7A848E;padding-top:5px;border-top:1px solid #F3F1EC;margin-top:6px;line-height:1.7">'
+        +(L.wrong
+           ? ('ของไปบวกเข้า <b style="color:#3F4654">'+e(L.wrong.name)+'</b> (คงเหลือ '+(L.wrong.totalQty!=null?L.wrong.totalQty:L.wrong.qty||0)+')'
+              +(can?(' &middot; <span style="color:#0F6E56;font-weight:700">เกินมา '+S.over+' &middot; ถอนคืนได้</span>')
+                   :' &middot; <span style="color:#B4560A;font-weight:700">คำนวณส่วนเกินไม่ลงตัว &middot; จะสร้างรายการให้อย่างเดียว</span>'))
+           : 'ไม่ได้ผูกกับรายการไหนเลย &middot; จะสร้างรายการใหม่ให้')
+        +'</div></div>';
+    }).join('')+'</div>';
+
+  var body = (LOST.length||R.dup.length||R.needPn.length||R.ok.length)
+    ? (secLost+secDup+secPn+secOk)
+    : '<div style="padding:26px 0;text-align:center;color:#0F6E56;font-size:13px;font-weight:700">&#10003; คลังสะอาด &middot; ไม่มีของหายและไม่มีรายการซ้ำ</div>';
+
+  var host=document.getElementById('inv-dup-host');
+  if(!host){ host=document.createElement('div'); host.id='inv-dup-host'; document.body.appendChild(host); }
+  host.innerHTML='<div id="inv-dup-ov" onclick="if(event.target===this)invDupClose()" style="position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:99970;display:flex;align-items:center;justify-content:center;padding:20px;font-family:\'DM Sans\',\'Noto Sans Thai\',sans-serif">'
+   +'<div style="background:#fff;border-radius:16px;width:min(720px,96vw);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 22px 60px rgba(15,23,42,.3)">'
+   +'<div style="padding:17px 22px;border-bottom:1px solid #EFECE4;display:flex;align-items:center;justify-content:space-between">'
+   +'<div><div style="font-size:15.5px;font-weight:800;color:#1F2A44">ตรวจคลัง &middot; ของหาย และรายการซ้ำ</div>'
+   +'<div style="font-size:11.5px;color:#7A848E;margin-top:2px">กุญแจของรายการคลังคือ <b>ชื่อ + Part Number</b></div></div>'
+   +'<button onclick="invDupClose()" style="border:none;background:#F0F0EC;border-radius:8px;width:28px;height:28px;font-size:16px;color:#5F5E5A;cursor:pointer">&times;</button></div>'
+   +'<div style="padding:16px 22px;overflow:auto;flex:1">'+body+'</div></div></div>';
+}
+function invDupClose(){ var h=document.getElementById('inv-dup-host'); if(h) h.innerHTML=''; }
+/* รวมรายการที่ชื่อ+เบอร์ตรงกันให้เหลือตัวเดียว · ของทุกคลัง ประวัติ และการอ้างอิงย้ายตามไปหมด */
+function invDupMerge(keyEnc){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('fleet')){ /* ไม่มีสิทธิ์แก้ก็หยุด */ }
+  var key=decodeURIComponent(keyEnc||'');
+  var L=_invAll().filter(function(x){ return _invKeyOf(x.name,x.partNo)===key; });
+  if(L.length<2){ invDupOpen(); return; }
+  /* เก็บตัวที่มีประวัติมากสุดไว้ · ถ้าเท่ากันเอาตัวที่ของเหลือเยอะกว่า */
+  L=L.slice().sort(function(a,b){
+    return ((b.history||[]).length-(a.history||[]).length)
+        || (((b.totalQty!=null?b.totalQty:b.qty||0))-((a.totalQty!=null?a.totalQty:a.qty||0)));
+  });
+  var keep=L[0], drop=L.slice(1);
+  var totQ=L.reduce(function(a,x){ return a+(x.totalQty!=null?x.totalQty:(x.qty||0)); },0);
+  if(!confirm('รวม "'+keep.name+' · '+_invPnLabel(keep)+'" '+L.length+' รายการเป็นรายการเดียว?\n\n'
+    +'ยอดรวมหลังรวม '+totQ+' '+(keep.unit||'ชิ้น')+' (เท่าเดิม ไม่มีของหาย)\n'
+    +'ประวัติและการอ้างอิงจาก memo / ใบซ่อม จะย้ายมาที่รายการที่เก็บไว้')) return;
+  if(typeof invSyncLegacy==='function') invSyncLegacy(keep);
+  drop.forEach(function(d){
+    if(typeof invSyncLegacy==='function') invSyncLegacy(d);
+    (d.stocks||[]).forEach(function(st){
+      var q=+st.qty||0; if(q && typeof invAddAt==='function') invAddAt(keep, st.location, q);
+    });
+    keep.history=(keep.history||[]).concat((d.history||[]).map(function(h){
+      return Object.assign({}, h, {note:(h.note||'')+' · รวมจากรายการซ้ำ'}); }));
+    if(!String(keep.partNo||'').trim() && d.partNo) keep.partNo=d.partNo;
+    if(!keep.cost && d.cost) keep.cost=d.cost;
+    if(!keep.supplier && d.supplier) keep.supplier=d.supplier;
+    /* การอ้างอิงต้องย้ายตาม ไม่งั้นใบเก่าชี้ไปที่ของที่ถูกลบ */
+    (typeof FL_MEMOS!=='undefined'?FL_MEMOS:[]).forEach(function(m){
+      (m.items||[]).forEach(function(it){ if(it.invId===d.id) it.invId=keep.id; }); });
+    (typeof FL_MAINT!=='undefined'?FL_MAINT:[]).forEach(function(m){
+      (m.parts||[]).forEach(function(p){ if(p.invId===d.id) p.invId=keep.id; }); });
+  });
+  keep.history=(keep.history||[]).concat([{date:(typeof TODAY_STR!=='undefined'?TODAY_STR:''),
+    type:'merge', qty:0, note:'รวมรายการซ้ำ '+drop.length+' รายการเข้าด้วยกัน',
+    by:(typeof laBy==='function')?laBy():''}]);
+  drop.forEach(function(d){ var i=FL_INVENTORY.indexOf(d); if(i>=0) FL_INVENTORY.splice(i,1); });
+  if(typeof flSave==='function') flSave();
+  if(typeof flShowToast==='function') flShowToast('รวมแล้ว · '+keep.name+' คงเหลือ '+(keep.totalQty!=null?keep.totalQty:keep.qty||0));
+  if(typeof flRenderInventory==='function') flRenderInventory();
+  invDupOpen();
 }
 function flOpenMemoFromInventory(){
   _memoMaintId=null;

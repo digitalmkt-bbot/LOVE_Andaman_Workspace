@@ -153,7 +153,7 @@ function flOpenEditBoatModal(bid){
     );
   });
   // status
-  const st=getCurStatus(b,TODAY_STR);
+  const st=getStoredStatus(b,TODAY_STR);   /* §boatEff3 · ตัวเลือกต้องตั้งต้นจากค่าในตาราง */
   fmBoatSt={available:0,fixing:1,unavailable:2}[st.s]||0;
   fmBoatOwn=(b.ownership==='charter')?1:0; fmRenderBoatOwn(fmBoatOwn);
   fmRenderBoatSt(fmBoatSt);

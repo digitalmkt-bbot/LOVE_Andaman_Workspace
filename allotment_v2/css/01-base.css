@@ -1716,7 +1716,7 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
 /* Matrix view (Tab 1 Matrix) */
 #view-booking .bkv2-mx{padding:12px 12px 4px;background:var(--white);overflow-x:auto}
 #view-booking .bkv2-mx table{width:100%;border-collapse:separate;border-spacing:1px;font-family:'DM Mono',monospace;table-layout:fixed}
-#view-booking .bkv2-mx col.label{width:230px}
+#view-booking .bkv2-mx col.label{width:150px}   /* §mxBrk2 · 230 ก็ตัดคำอยู่ดี · ยกที่ให้คอลัมน์ตัวเลข */
 #view-booking .bkv2-mx col.day{width:auto}
 #view-booking .bkv2-mx th.rowh{font-family:'DM Sans',sans-serif;text-align:left;padding:5px 8px;color:var(--ink-soft);font-weight:500;font-size:9px;letter-spacing:.04em;width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #view-booking .bkv2-mx td.rowh{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:230px}
@@ -1872,6 +1872,11 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
 #view-booking .bkv2-nb-field{display:flex;flex-direction:column;gap:4px}
 #view-booking .bkv2-nb-label{font-size:10px;font-weight:600;color:var(--ink-soft);letter-spacing:.06em;text-transform:uppercase}
 #view-booking .bkv2-nb-input{border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 11px;font-family:inherit;font-size:13px;color:var(--ink);background:var(--white);transition:border-color .15s}
+/* §altDropFix · เหตุผลเดียวกับ §pax boxes ข้างล่าง แต่เกิดกับคอลัมน์จุดรับ/จุดส่ง
+   ที่ห่อด้วย <div> · ตัว div เป็น grid item ที่ min-width:auto จึงกว้างตาม
+   select/input ข้างใน แล้วล้นไปทับปุ่มลบ · บังคับให้ทุกช่องในแถวนี้หดได้ */
+#view-booking .bkv2-alt-row>*{min-width:0}
+#view-booking .bkv2-alt-row .bkv2-nb-input{width:100%;box-sizing:border-box;max-width:100%}
 /* §pax boxes · a grid item defaults to min-width:auto, and <input type=number> has a wide intrinsic
    size (~170px), so four of them refused to shrink and spilled out over the pickup dropdown. */
 .bkv2-pax-box{min-width:0;width:100%;box-sizing:border-box;padding:8px 2px;text-align:center;-moz-appearance:textfield}
