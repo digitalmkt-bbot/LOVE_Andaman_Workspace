@@ -99,37 +99,91 @@
       var ids={}; sv.forEach(function(x){ if(x&&x.id!=null) ids[String(x.id)]=1; });
       lv.forEach(function(x){ if(x&&x.id!=null && !ids[String(x.id)]){ sv.push(x); g++; } }); } });
     return g; }
+  var _ldT0=Date.now();
   var ld=sx('GET','/api/load');
-  try{ console.log('[boot] me=200 load='+ld.status+' bytes='+(ld.text?ld.text.length:0)); }catch(e){}
+  /* §bootDiag · จดเวลาและขนาดไว้เสมอ · ปัญหา "ช้าเฉพาะบางช่วงเวลา" ต้องมีตัวเลขถึงจะตามได้
+     ข้อมูลทั้งก้อนตอนนี้ ~16 MB (sb_bookings อย่างเดียว ~11 MB) โหลดใหม่ทุกครั้งที่เปิดหน้า */
+  try{
+    var _ldMs=Date.now()-_ldT0, _ldB=(ld.text?ld.text.length:0);
+    console.log('[boot] '+new Date().toISOString()+' load='+ld.status
+      +' bytes='+_ldB+' ('+(_ldB/1048576).toFixed(1)+' MB) in '+_ldMs+'ms'
+      +(_ldMs>0?(' = '+(_ldB/1048576/(_ldMs/1000)).toFixed(1)+' MB/s'):''));
+    window.__laBoot={at:new Date().toISOString(), status:ld.status, bytes:_ldB, ms:_ldMs};
+  }catch(e){}
   // Sync load failed (WebKit aborts long-blocking sync XHR on slow links — Chrome doesn't) →
   // switch to ASYNC retry behind a blocking overlay. Overlay stays up until data lands so nobody
   // edits an empty state; on arrival the data is applied in place via the soft-refresh path.
+  /* §bootDiag · จอโหลดต้องบอกได้ว่า "ช้า" หรือ "ค้าง"
+     ของเดิมขึ้นข้อความเดียวค้างไว้ · คนใช้เห็นแค่นาฬิกาทราย ไม่รู้ว่าเน็ตกำลังไหลอยู่ไหม
+     และเราก็ตามไม่ได้ว่าเซิร์ฟเวอร์ตอบอะไร ตอนไหน โหลดไปได้เท่าไร
+     ตอนนี้: โชว์ไบต์ที่ได้ · เวลาที่ใช้ · ความเร็ว · รหัสสถานะ พร้อมปุ่มคัดลอกให้ส่งต่อได้
+     และใส่ timeout 90 วิ — ของเดิมถ้าคำขอค้างไม่ตอบเลย จะไม่มีอะไรมาปลุกให้ลองใหม่ */
   function _laAsyncLoad(st){
-    try{ console.warn('[boot] sync /api/load failed (status '+st+') → async retry'); }catch(e){}
-    onReady(function(){ if(document.getElementById('la-bootload')) return;
+    try{ console.warn('[boot] sync /api/load failed (status '+st+') → async retry @'+new Date().toISOString()); }catch(e){}
+    var T0=Date.now(), tries=0, log=['sync /api/load = '+st+' @'+new Date().toISOString()];
+    var MB=function(b){ return (b/1048576).toFixed(1); };
+    var el=function(id){ return document.getElementById(id); };
+    var say=function(html){ var d=el('la-bootload-st'); if(d) d.innerHTML=html; };
+    window._laBootCopy=function(){
+      var t=log.join('\n')+'\nUA: '+navigator.userAgent;
+      try{ if(navigator.clipboard) navigator.clipboard.writeText(t); else { var a=document.createElement('textarea');
+        a.value=t; document.body.appendChild(a); a.select(); document.execCommand('copy'); document.body.removeChild(a); } }catch(e){}
+      var b=el('la-bootcopy'); if(b){ b.textContent='คัดลอกแล้ว'; setTimeout(function(){ b.textContent='คัดลอกรายละเอียด'; },1500); }
+    };
+    onReady(function(){ if(el('la-bootload')) return;
       var ov=document.createElement('div'); ov.id='la-bootload';
       ov.style.cssText='position:fixed;inset:0;z-index:100050;background:rgba(14,34,53,.93);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;font:15px/1.5 "DM Sans",sans-serif;text-align:center;padding:20px';
-      ov.innerHTML='<div style="font-size:34px">⏳</div><div><b>กำลังโหลดข้อมูลจากเซิร์ฟเวอร์…</b><br><span id="la-bootload-st" style="opacity:.75;font-size:13px">เครือข่ายช้าหรือหลุด · กำลังลองใหม่อัตโนมัติ</span></div>';
+      ov.innerHTML='<div style="font-size:34px">&#8987;</div>'
+        +'<div><b>กำลังโหลดข้อมูลจากเซิร์ฟเวอร์…</b><br>'
+        +'<span id="la-bootload-st" style="opacity:.8;font-size:13px">กำลังเริ่ม…</span></div>'
+        +'<button id="la-bootcopy" onclick="_laBootCopy()" style="margin-top:6px;background:rgba(255,255,255,.14);'
+        +'color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:9px;padding:5px 13px;font:600 12px inherit;cursor:pointer">'
+        +'คัดลอกรายละเอียด</button>';
       document.body.appendChild(ov); });
-    var tries=0;
     (function go(){ tries++;
-      function fail(why){ var s=document.getElementById('la-bootload-st'); if(s) s.textContent='ครั้งที่ '+tries+' ไม่สำเร็จ ('+why+') · ลองใหม่ใน 4 วิ'; setTimeout(go,4000); }
+      var t1=Date.now(), got=0, total=0, tick=null;
+      function stop(){ try{ clearInterval(tick); }catch(e){} }
+      function fail(why){
+        stop();
+        var secs=((Date.now()-t1)/1000).toFixed(0);
+        log.push('ครั้งที่ '+tries+' ล้ม: '+why+' · ได้ '+MB(got)+' MB ใน '+secs+' วิ');
+        try{ console.warn('[boot] load try '+tries+' failed: '+why+' after '+secs+'s, got '+got+' bytes'); }catch(e){}
+        say('<b>ครั้งที่ '+tries+' ไม่สำเร็จ</b> · '+why
+          +'<br>ได้ข้อมูลมา '+MB(got)+' MB ใน '+secs+' วินาที · รวมแล้ว '+((Date.now()-T0)/1000).toFixed(0)+' วิ'
+          +'<br>ลองใหม่ใน 4 วิ…');
+        setTimeout(go,4000);
+      }
       var x=new XMLHttpRequest(); x.open('GET',bust('/api/load'),true);
+      x.timeout=90000;                                    /* ค้างเกินนาทีครึ่ง = ตัดแล้วลองใหม่ ดีกว่าค้างตลอดกาล */
+      x.ontimeout=function(){ fail('หมดเวลา 90 วินาที'); };
+      if(x.onprogress!==undefined){
+        x.onprogress=function(e){ got=e.loaded||0; total=e.total||0; };
+      }
+      /* เดินนาฬิกาเองทุกครึ่งวิ · จะได้เห็นว่ากำลังไหลอยู่จริงหรือหยุดนิ่ง */
+      tick=setInterval(function(){
+        var secs=(Date.now()-t1)/1000;
+        var sp=secs>0?(got/1048576/secs):0;
+        say('ครั้งที่ '+tries+' · ได้ '+MB(got)+(total?(' / '+MB(total)):'')+' MB'
+          +' · '+secs.toFixed(0)+' วินาที'+(sp>0.01?(' · '+sp.toFixed(1)+' MB/วิ'):'')
+          +(got===0&&secs>8?'<br><span style="color:#FFC9C3">ยังไม่มีข้อมูลเข้ามาเลย — เซิร์ฟเวอร์ยังไม่ตอบ</span>':''));
+      },500);
       x.onload=function(){ try{
-        if(x.status!==200){ fail('status '+x.status); return; }
+        stop();
+        var secs=((Date.now()-t1)/1000).toFixed(1);
+        if(x.status!==200){ fail('เซิร์ฟเวอร์ตอบ '+x.status); return; }
         var j=JSON.parse(x.responseText);
-        if(typeof j.data!=='string' || j.data.length<2){ fail('empty'); return; }
+        if(typeof j.data!=='string' || j.data.length<2){ fail('ข้อมูลว่าง'); return; }
         VER=j.version||0; LASTBY=j.updated_by?(j.updated_by+' · '+fmt(j.updated_at)):''; _laStamp(j);
         try{ BASE=JSON.parse(j.data); }catch(e){ BASE={}; }
         _orig(LS, j.data); _laMark(VER);
         _syncReady=true; _dirty=false; try{ clearTimeout(_t); }catch(e){}   // §syncGate · ข้อมูลจริงถึงแล้วค่อยเปิดเซฟ · ทิ้งงานค้างที่เกิดตอน state ยังว่าง
-        var el=document.getElementById('la-bootload'); if(el) el.remove();
+        var ov=el('la-bootload'); if(ov) ov.remove();
         // app already initialized (rendered empty) → re-apply in place; not yet → it reads the fresh blob itself
         if(window._laReloadData){ if(window._laReloadData()){ if(window._laRerender) window._laRerender(); } else { _laReload(); return; } }
-        try{ console.log('[boot] async /api/load ok on try '+tries+' ('+j.data.length+' bytes)'); }catch(e){}
+        try{ console.log('[boot] async /api/load ok on try '+tries+' ('+j.data.length+' bytes in '+secs+'s)'); }catch(e){}
       }catch(e){ fail(String(e&&e.message||e)); } };
-      x.onerror=function(){ fail('network'); };
-      try{ x.send(); }catch(e){ fail('send'); }
+      x.onerror=function(){ fail('เชื่อมต่อไม่ได้'); };
+      try{ x.send(); }catch(e){ fail('ส่งคำขอไม่ได้'); }
     })();
   }
   if(ld.status!==200 || !ld.json){ _laAsyncLoad(ld.status); }
