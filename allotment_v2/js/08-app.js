@@ -51899,27 +51899,57 @@ function repOpsGather(from,to){
 }
 
 
-/* ── ชิ้นส่วนที่ทุกสไลด์ใช้ร่วมกัน ─────────────────────────────────────── */
-/* lv:'exec' = โผล่ในโหมดสรุปสั้นด้วย · 'full' = เฉพาะโหมดเต็ม */
+/* ── ชิ้นส่วนสไลด์ · ยกโครงมาจากการ์ดในหน้า Dashboard ───────────────────
+   การ์ดหนึ่งใบ = หัวการ์ด → แถวตัวเลข → หัวข้อย่อย → รายการ
+   สไลด์หนึ่งแผ่น = พื้น navy + กริดการ์ด · ไม่ใช่แผ่นขาวใบเดียวแบบเดิม      */
 function repSl(o){
   return '<section class="rep-sl'+(o.cover?' cover':'')+'" data-lv="'+(o.lv||'full')+'">'
-    +(o.cover?'':'<div class="rep-hd"><span class="n">'+repE(o.kicker||'')+'</span>'
-        +'<h2>'+repE(o.title||'')+'</h2>'
+    +(o.cover?'':'<div class="rep-shd"><div><span class="n">'+repE(o.kicker||'')+'</span>'
+        +'<h2>'+repE(o.title||'')+'</h2></div>'
         +(o.sub?'<span class="s">'+o.sub+'</span>':'')+'</div>')
     +'<div class="rep-bd">'+(o.body||'')+'</div>'
-    +(o.note?'<div class="rep-note">'+o.note+'</div>':'')
     +'</section>';
 }
-/* ตัวเลขเด่น + ลูกศรเทียบช่วงก่อน · ใจกลางของทุกสไลด์สรุป */
-function repBig(v,label,dl,sub){
-  var a='';
-  if(dl) a='<span class="dl '+dl.good+'">'+(dl.dir==='up'?'&#9650;':(dl.dir==='dn'?'&#9660;':'&#9679;'))
-    +' '+dl.txt+'</span>';
-  return '<div class="rep-big"><span class="v">'+v+'</span>'
-    +'<span class="k">'+repE(label)+'</span>'+a
-    +(sub?'<span class="u">'+sub+'</span>':'')+'</div>';
+/* การ์ด · โครงเดียวกับ .dv-c + .dv-ct ในหน้า Dashboard */
+function repCard(o){
+  o=o||{};
+  return '<div class="rep-c'+(o.cls?(' '+o.cls):'')+'">'
+    +(o.t?('<div class="rep-cth"><span class="big">'+repE(o.t)+'</span>'
+        +(o.sub?'<span class="sm">'+repE(o.sub)+'</span>':'')
+        +'<span class="sp"></span>'
+        +(o.pill?('<span class="rep-pill'+(o.pillCls?(' '+o.pillCls):'')+'">'+o.pill+'</span>'):'')
+      +'</div>'):'')
+    +'<div class="rep-cbd">'+(o.body||'')+'</div>'
+    +(o.foot?('<div class="rep-cfoot '+(o.footCls||'')+'">'+o.foot+'</div>'):'')
+  +'</div>';
 }
-/* แถวแท่งเทียบกัน · ใช้กับทุกอันที่เป็น "อะไรมากสุด" */
+function repGrid(cls, cards){ return '<div class="rep-grid '+(cls||'')+'">'+cards.join('')+'</div>'; }
+/* แถวตัวเลข · เส้นคั่นบาง ๆ ระหว่างช่อง แบบ .dv-avrow + .dv-avs */
+function repStats(rows){
+  return '<div class="rep-avrow">'+rows.map(function(r,i){
+    return (i?'<span class="rep-avs"></span>':'')
+      +'<div class="rep-av"><span class="v"'+(r.c?(' style="color:'+r.c+'"'):'')+'>'+r.v+'</span>'
+      +'<span class="k">'+repE(r.k)+'</span>'
+      +(r.u?'<span class="u">'+repE(r.u)+'</span>':'')
+      +(r.dl?('<span class="dl '+r.dl.good+'">'+(r.dl.dir==='up'?'&#9650;':(r.dl.dir==='dn'?'&#9660;':'&#9679;'))
+              +' '+r.dl.txt+'</span>'):'')
+      +'</div>';
+  }).join('')+'</div>';
+}
+/* รายการย่อย · แบบ .dv-pr2 · ป้ายสี + ชื่อ/คำอธิบาย + ตัวเลขขวา */
+function repRows(rows){
+  return '<div class="rep-rows">'+rows.map(function(r){
+    return '<div class="rep-row">'
+      +'<span class="pm" style="background:'+(r.c||'#94A3B8')+'">'+repE(r.b||'')+'</span>'
+      +'<span class="tx"><span class="n">'+repE(r.n)+'</span>'
+        +(r.s?'<span class="s">'+repE(r.s)+'</span>':'')+'</span>'
+      +'<span class="rt"><b>'+(r.v==null?'':r.v)+'</b>'
+        +(r.u?'<i>'+repE(r.u)+'</i>':'')+'</span>'
+    +'</div>';
+  }).join('')+'</div>';
+}
+function repSec(t){ return '<div class="rep-csec">'+repE(t)+'</div>'; }
+/* แท่งเทียบ · อยู่ในการ์ด จึงบางลงกว่าเดิม */
 function repBars(rows, opt){
   opt=opt||{};
   var max=Math.max.apply(null,rows.map(function(r){return +r.v||0;}).concat([1]));
@@ -51933,7 +51963,6 @@ function repBars(rows, opt){
     +'</div>';
   }).join('')+'</div>';
 }
-/* กราฟเส้น/แท่งรายวัน · แกนเดียว ไม่ต้องมีเส้นตาราง อ่านทรงพอ */
 function repTrend(days, key, color){
   var max=Math.max.apply(null,days.map(function(d){return d[key]||0;}).concat([1]));
   var n=days.length, w=1600, h=300, cw=w/n;
@@ -51945,12 +51974,9 @@ function repTrend(days, key, color){
   var lbl=days.map(function(d,i){
     var dt=repParse(d.ds); var show=(n<=14)||(dt.getDate()===1)||(dt.getDate()%5===0);
     return show?('<text x="'+(i*cw+cw/2).toFixed(1)+'" y="'+(h+26)+'" text-anchor="middle" '
-      +'font-size="15" fill="#8a857d" font-family="DM Mono,monospace">'+dt.getDate()+'</text>'):'';
+      +'font-size="16" fill="#b0aaa0" font-family="DM Mono,monospace">'+dt.getDate()+'</text>'):'';
   }).join('');
-  var peak=days.reduce(function(a,d){ return (d[key]||0)>(a[key]||0)?d:a; }, days[0]||{});
-  return '<div class="rep-trend"><svg viewBox="0 0 '+w+' '+(h+40)+'" preserveAspectRatio="none">'
-    +bars+lbl+'</svg>'
-    +'<div class="rep-tmax">สูงสุด '+repN(peak[key]||0)+' · '+repDateTH(peak.ds||'')+'</div></div>';
+  return '<div class="rep-trend"><svg viewBox="0 0 '+w+' '+(h+40)+'" preserveAspectRatio="none">'+bars+lbl+'</svg></div>';
 }
 function repTable(head, rows){
   return '<table class="rep-tb"><thead><tr>'
@@ -51959,8 +51985,8 @@ function repTable(head, rows){
       return '<tr>'+r.map(function(c,i){ return '<td'+(i?' class="n"':'')+'>'+c+'</td>'; }).join('')+'</tr>';
     }).join('')+'</tbody></table>';
 }
-/* ประโยคสรุปท้ายสไลด์ · สิ่งที่ทำให้เป็น Present ไม่ใช่ Dashboard ปริ้นท์ */
 function repSay(kind, txt){ return '<div class="rep-say '+(kind||'')+'">'+txt+'</div>'; }
+function repNote(t){ return '<div class="rep-cnote">'+t+'</div>'; }
 
 /* ══ สไลด์ฝั่งปฏิบัติการ ═══════════════════════════════════════════════ */
 function repOpsSlides(st){
@@ -51968,151 +51994,235 @@ function repOpsSlides(st){
   var pv=repPrevRange(st.from, st.to);
   var P=repOpsGather(pv.from, pv.to);
   var nDay=repDayCount(st.from, st.to);
-  var S=[], rn=function(id){ var r=(typeof getRoute==='function')?getRoute(id):null;
-    return (r&&r.name)||id; };
-  var rc=function(id){ var r=(typeof getRoute==='function')?getRoute(id):null;
-    return (r&&r.color)||'#94A3B8'; };
+  var S=[];
+  var rn=function(id){ var r=(typeof getRoute==='function')?getRoute(id):null; return (r&&r.name)||id; };
+  var rc=function(id){ var r=(typeof getRoute==='function')?getRoute(id):null; return (r&&r.color)||'#94A3B8'; };
+  var ini=function(t){ return String(t||'').trim().slice(0,2).toUpperCase(); };
 
-  /* 1 · ปก */
+  /* ── 1 · ปก ── */
   S.push(repSl({lv:'exec', cover:true, body:
      '<div class="rep-cv"><span class="br">LOVE ANDAMAN</span>'
     +'<h1>รายงานปฏิบัติการ</h1>'
     +'<span class="rg">'+repE(repRangeTH(st.from,st.to))+'</span>'
     +'<span class="mt">'+nDay+' วัน · เทียบกับ '+repE(repRangeTH(pv.from,pv.to))+'</span></div>'}));
 
-  /* 2 · สรุปหน้าเดียว */
+  /* ── 2 · สรุปหน้าเดียว ── */
   var dPax=repDelta(D.pax,P.pax), dTrip=repDelta(D.tripRuns,P.tripRuns),
       dFill=repDelta(D.fill,P.fill), dRev=repDelta(D.revenue,P.revenue);
-  S.push(repSl({lv:'exec', kicker:'ภาพรวม', title:'สรุปช่วง '+repRangeTH(st.from,st.to),
-    sub:'เทียบกับ '+repE(repRangeTH(pv.from,pv.to))+' ('+nDay+' วันเท่ากัน)',
-    body:'<div class="rep-bigrow">'
-      +repBig(repN(D.pax),'ผู้โดยสารที่เดินทางจริง',dPax,'จองไว้ '+repN(D.paxBooked))
-      +repBig(repN(D.tripRuns),'เที่ยวเรือที่ออก',dTrip, D.capDays+' วันที่มีโปรแกรม')
-      +repBig(D.fill+'%','อัตราการเติมที่นั่ง',dFill,'จากความจุ '+repN(D.cap))
-      +repBig(repMoney(D.revenue),'ยอดขาย',dRev,repN(D.bookings)+' ใบจอง')
-      +'</div>'
-      +repSay(dPax.good, _repOpsHeadline(D,P,dPax,dFill))}));
-
-  /* 3 · แนวโน้มรายวัน */
   var days=repDays(st.from,st.to).map(function(ds){
     var e=D.byDate[ds]||{pax:0,boats:{}};
     return {ds:ds, pax:e.pax, boats:Object.keys(e.boats||{}).length}; });
-  var busiest=days.slice().sort(function(a,b){return b.pax-a.pax;})[0]||{};
-  var quiet=days.filter(function(d){return d.pax>0;}).sort(function(a,b){return a.pax-b.pax;})[0]||{};
-  S.push(repSl({lv:'exec', kicker:'จังหวะงาน', title:'ผู้โดยสารรายวัน',
-    sub:'เฉลี่ย '+repN(D.pax/Math.max(1,nDay))+' คน/วัน',
-    body: repTrend(days,'pax','#2E9B72')
-      +repSay('', 'วันที่แน่นที่สุดคือ <b>'+repDateTH(busiest.ds||'')+'</b> ('+repN(busiest.pax||0)+' คน) '
-        +'เบาที่สุดที่มีเรือออกคือ <b>'+repDateTH(quiet.ds||'')+'</b> ('+repN(quiet.pax||0)+' คน) '
-        +'ห่างกัน '+repN((busiest.pax||0)-(quiet.pax||0))+' คน')}));
-
-  /* 4 · สัดส่วนโปรแกรม */
   var rows=Object.keys(D.byRoute).map(function(id){
     var r=D.byRoute[id], pr=P.byRoute[id]||{pax:0};
     return {id:id, n:rn(id), v:r.pax, c:rc(id), cap:r.cap||0, prev:pr.pax,
+      rev:(+r.rev||0),      /* §repLayout5 · ไม่หยิบมา สไลด์รายได้ต่อโปรแกรมเลยขึ้น 0 ทั้งคอลัมน์ */
       x:(r.cap?Math.round(r.pax/r.cap*100)+'%':'—')};
   }).sort(function(a,b){return b.v-a.v;});
+  S.push(repSl({lv:'exec', kicker:'ภาพรวม', title:'สรุปช่วง '+repRangeTH(st.from,st.to),
+    sub:'เทียบกับ '+repE(repRangeTH(pv.from,pv.to))+' · '+nDay+' วันเท่ากัน',
+    body: repGrid('g1', [ repCard({ t:'ตัวเลขหลัก', pill:nDay+' วัน',
+        body: repStats([
+          {v:repN(D.pax), k:'ผู้โดยสารที่เดินทางจริง', u:'จองไว้ '+repN(D.paxBooked), dl:dPax},
+          {v:repN(D.tripRuns), k:'เที่ยวเรือที่ออก', u:D.capDays+' วันที่มีโปรแกรม', dl:dTrip},
+          {v:D.fill+'%', k:'อัตราการเติมที่นั่ง', u:'จากความจุ '+repN(D.cap), dl:dFill, c:'#0C6B47'},
+          {v:repMoney(D.revenue), k:'ยอดขาย', u:repN(D.bookings)+' ใบจอง', dl:dRev}]),
+        foot:_repOpsHeadline(D,P,dPax,dFill), footCls:dPax.good }) ])
+      +repGrid('g2', [
+        repCard({ t:'ผู้โดยสารรายวัน', pill:'เฉลี่ย '+repN(D.pax/Math.max(1,nDay))+' คน/วัน',
+                  body: repTrend(days,'pax','#2E9B72') }),
+        repCard({ t:'โปรแกรมที่ขายได้มากที่สุด', pill:rows.length+' โปรแกรม',
+                  body: repRows(rows.slice(0,4).map(function(r){
+                    return {b:ini(r.n), c:r.c, n:r.n, s:'เติมที่นั่ง '+r.x, v:repN(r.v), u:'คน'}; })) })
+      ])}));
+
+  /* ── 3 · แนวโน้มรายวัน ── */
+  var busiest=days.slice().sort(function(a,b){return b.pax-a.pax;})[0]||{};
+  var quiet=days.filter(function(d){return d.pax>0;}).sort(function(a,b){return a.pax-b.pax;})[0]||{};
+  var run=days.filter(function(d){return d.pax>0;}).length;
+  S.push(repSl({lv:'exec', kicker:'จังหวะงาน', title:'ผู้โดยสารรายวัน',
+    sub:'ตลอด '+nDay+' วัน · มีเรือออก '+run+' วัน',
+    body: repGrid('g21', [
+      repCard({ t:'จำนวนคนต่อวัน', pill:'สูงสุด '+repN(busiest.pax||0), pillCls:'ok',
+                body: repTrend(days,'pax','#2E9B72'),
+                foot:'วันที่แน่นที่สุดคือ <b>'+repDateTH(busiest.ds||'')+'</b> ('+repN(busiest.pax||0)+' คน) '
+                    +'เบาที่สุดที่ยังมีเรือออกคือ <b>'+repDateTH(quiet.ds||'')+'</b> ('+repN(quiet.pax||0)+' คน) '
+                    +'ห่างกัน '+repN((busiest.pax||0)-(quiet.pax||0))+' คน' }),
+      repCard({ t:'ตัวเลขของช่วงนี้',
+                body: repStats([{v:repN(D.pax/Math.max(1,nDay)), k:'เฉลี่ยต่อวัน', u:'คน'}])
+                  +repSec('วันที่แน่นที่สุด')
+                  +repRows(days.slice().sort(function(a,b){return b.pax-a.pax;}).slice(0,5).map(function(d){
+                     return {b:String(repParse(d.ds).getDate()), c:'#2E9B72', n:repDateTH(d.ds),
+                             s:d.boats+' ลำ', v:repN(d.pax), u:'คน'}; })) })
+    ])}));
+
+  /* ── 4 · สัดส่วนโปรแกรม ── */
   var grew=rows.slice().sort(function(a,b){return (b.v-b.prev)-(a.v-a.prev);})[0]||{};
   var fell=rows.slice().sort(function(a,b){return (a.v-a.prev)-(b.v-b.prev);})[0]||{};
   S.push(repSl({lv:'exec', kicker:'สินค้า', title:'ผู้โดยสารแยกตามโปรแกรม',
-    sub:rows.length+' โปรแกรมที่ออกจริงในช่วงนี้ · ตัวเลขขวาสุดคืออัตราเติมที่นั่ง',
-    body: repBars(rows.slice(0,9))
-      +repSay('', (grew.n?('<b>'+repE(grew.n)+'</b> โตขึ้นมากที่สุด '+repN(grew.v-grew.prev)+' คน'):'')
-        +(fell.n&&fell!==grew?(' · <b>'+repE(fell.n)+'</b> ลดลงมากที่สุด '+repN(Math.abs(fell.v-fell.prev))+' คน'):''))}));
+    sub:rows.length+' โปรแกรมที่ออกจริงในช่วงนี้',
+    body: repGrid('g21', [
+      repCard({ t:'จำนวนคนต่อโปรแกรม', sub:'ตัวเลขจาง ๆ ขวาสุดคืออัตราเติมที่นั่ง',
+                body: repBars(rows.slice(0,8)) }),
+      repCard({ t:'เปลี่ยนแปลงจากช่วงก่อน',
+                body: repRows(rows.slice().sort(function(a,b){
+                    return Math.abs(b.v-b.prev)-Math.abs(a.v-a.prev); }).slice(0,6).map(function(r){
+                  var d=r.v-r.prev;
+                  return {b:ini(r.n), c:r.c, n:r.n, s:'ช่วงก่อน '+repN(r.prev)+' คน',
+                          v:(d>0?'+':(d<0?'−':''))+repN(Math.abs(d)), u:'คน'}; })),
+                foot:(grew.n?('<b>'+repE(grew.n)+'</b> โตมากที่สุด '+repN(grew.v-grew.prev)+' คน'):'')
+                    +(fell.n&&fell!==grew?('<br><b>'+repE(fell.n)+'</b> ลดมากที่สุด '+repN(Math.abs(fell.v-fell.prev))+' คน'):'') })
+    ])}));
 
-  /* 5 · การใช้เรือรายลำ */
+  /* ── 5 · การใช้เรือรายลำ ── */
   var bt=Object.keys(D.byBoat).map(function(id){
     var b=D.byBoat[id], nd=Object.keys(b.days).length;
     var bo=(typeof getBoat==='function')?getBoat(id):null;
     var cap=(bo&&bo.cap)||0;
-    return [repE((bo&&bo.name)||id), repN(nd), repN(b.pax), repN(Math.round(b.pax/Math.max(1,nd))),
-            cap?(Math.round(b.pax/Math.max(1,nd*cap)*100)+'%'):'—'];
-  }).sort(function(a,b){ return (+String(b[2]).replace(/,/g,''))-(+String(a[2]).replace(/,/g,'')); });
+    return {nm:(bo&&bo.name)||id, nd:nd, pax:b.pax, avg:Math.round(b.pax/Math.max(1,nd)),
+            fill:cap?Math.round(b.pax/Math.max(1,nd*cap)*100):0};
+  }).sort(function(a,b){return b.pax-a.pax;});
   S.push(repSl({kicker:'ทรัพยากร', title:'การใช้เรือรายลำ',
     sub:'นับเฉพาะวันที่ลำนั้นออกจริง',
-    body: repTable(['เรือ','วันที่ออก','ผู้โดยสารรวม','เฉลี่ย/เที่ยว','เติมที่นั่ง'], bt.slice(0,12))}));
+    body: repGrid('g1', [
+      repCard({ t:'ภาพรวมการใช้เรือ',
+                body: repStats([
+                  {v:repN(bt.length), k:'ลำที่ออกงาน', u:'ในช่วงนี้'},
+                  {v:repN(bt.reduce(function(a,b){return a+b.nd;},0)), k:'วัน-ลำ ที่ออกงานรวม',
+                   u:'นับทุกลำรวมกัน'},
+                  {v:repN(bt.length?Math.round(bt.reduce(function(a,b){return a+b.avg;},0)/bt.length):0),
+                   k:'เฉลี่ยต่อเที่ยว', u:'คน', c:'#0C6B47'},
+                  {v:'<span class="txt">'+(bt[0]?repE(bt[0].nm):'—')+'</span>', k:'ลำที่ทำงานหนักที่สุด',
+                   u:(bt[0]?(repN(bt[0].pax)+' คน · '+bt[0].nd+' วัน'):'')}]) }) ])
+      +repGrid('g1', [
+      repCard({ t:'รายละเอียดต่อลำ', pill:bt.length+' ลำ',
+                body: repTable(['เรือ','วันที่ออก','ผู้โดยสาร','เฉลี่ย/เที่ยว','เติมที่นั่ง'],
+                  bt.slice(0,10).map(function(b){ return [repE(b.nm), repN(b.nd), repN(b.pax),
+                    repN(b.avg), b.fill?(b.fill+'%'):'—']; })) }) ])}));
 
-  /* 6 · แยกท่าเรือ */
+  /* ── 6 · แยกท่าเรือ ── */
   var PN={panwa:'ภูเก็ต · Panwa', tublamu:'ท้ายเหมือง · Tub Lamu', ranong:'ระนอง · Ranong'};
   var pr=Object.keys(D.byPier).map(function(k){
     var p=D.byPier[k], pp=P.byPier[k]||{pax:0};
-    return {n:PN[k]||k, v:p.pax, c:'#3E7FB0',
-      x:Object.keys(p.boats).length+' เที่ยว', prev:pp.pax}; })
-    .sort(function(a,b){return b.v-a.v;});
+    return {k:k, n:PN[k]||k, v:p.pax, c:'#3E7FB0',
+      trips:Object.keys(p.boats).length, prev:pp.pax}; }).sort(function(a,b){return b.v-a.v;});
+  /* §repLayout5 · ท่าเดียว = แท่งเดียวเต็ม 100% ไม่ได้เทียบกับอะไร ข้ามไปเลย
+     ตัวเลขท่านั้นไปโผล่ที่สไลด์สรุปช่วงอยู่แล้ว */
+  if(pr.length>1)
   S.push(repSl({kicker:'พื้นที่', title:'ผู้โดยสารแยกตามท่าเรือ',
-    body: repBars(pr)
-      +repSay('', pr.map(function(p){ var d=repDelta(p.v,p.prev);
-        return repE(p.n)+' '+(d.dir==='flat'?'เท่าเดิม':(d.dir==='up'?'เพิ่ม ':'ลด ')+repN(Math.abs(d.d))+' คน'); }).join(' · '))}));
+    body: repGrid('g1', [
+      repCard({ t:'เทียบรายท่า', pill:pr.length+' ท่า',
+                body: repStats(pr.map(function(p){
+                  return {v:repN(p.v), k:p.n, u:p.trips+' เที่ยว', dl:repDelta(p.v,p.prev)}; })) })
+    ])
+    +repGrid('g1', [ repCard({ t:'สัดส่วน', body: repBars(pr) }) ])}));
 
-  /* 7 · ช่องทางขาย */
+  /* ── 7 · ช่องทางขาย ── */
   var ags=Object.keys(D.byAgent).map(function(id){
     var a=D.byAgent[id], g=(typeof sbGetAgent==='function')?sbGetAgent(id):null;
-    return {n:(g&&(g.name||g.code))||id, v:a.pax, c:(g&&g.color)||'#7A5BC4',
-      x:repMoney(a.rev)}; }).sort(function(a,b){return b.v-a.v;});
-  var dB2B=repDelta(D.b2b.pax,P.b2b.pax), dB2C=repDelta(D.b2c.pax,P.b2c.pax);
-  S.push(repSl({lv:'exec', kicker:'ช่องทาง', title:'มาจากไหนบ้าง',
-    sub:'B2B '+repN(D.b2b.pax)+' คน · B2C '+repN(D.b2c.pax)+' คน',
-    body:'<div class="rep-bigrow sm">'
-      +repBig(repN(D.b2b.pax),'ผ่านเอเยนต์',dB2B,repN(D.b2b.bk)+' ใบ · '+repMoney(D.b2b.rev))
-      +repBig(repN(D.b2c.pax),'ขายเอง',dB2C,repN(D.b2c.bk)+' ใบ · '+repMoney(D.b2c.rev))
-      +repBig(repN(ags.length),'เอเยนต์ที่ส่งงาน',repDelta(ags.length,Object.keys(P.byAgent).length),'ในช่วงนี้')
-      +'</div><div class="rep-sec">10 เอเยนต์ที่ส่งคนมากที่สุด</div>'
-      +repBars(ags.slice(0,10))}));
+    return {n:(g&&(g.name||g.code))||id, v:a.pax, bk:a.bk, rev:a.rev,
+            c:(g&&g.color)||'#7A5BC4'}; }).sort(function(a,b){return b.v-a.v;});
+  S.push(repSl({lv:'exec', kicker:'ช่องทาง', title:'ผู้โดยสารมาจากไหน',
+    sub:'เอเยนต์ที่ส่งงานในช่วงนี้ '+repN(ags.length)+' เจ้า',
+    body: repGrid('g1', [
+      repCard({ t:'B2B เทียบ B2C',
+                body: repStats([
+                  {v:repN(D.b2b.pax), k:'ผ่านเอเยนต์', u:repN(D.b2b.bk)+' ใบ · '+repMoney(D.b2b.rev),
+                   dl:repDelta(D.b2b.pax,P.b2b.pax)},
+                  {v:repN(D.b2c.pax), k:'ขายเอง', u:repN(D.b2c.bk)+' ใบ · '+repMoney(D.b2c.rev),
+                   dl:repDelta(D.b2c.pax,P.b2c.pax)},
+                  {v:repN(ags.length), k:'เอเยนต์ที่ส่งงาน', u:'ในช่วงนี้',
+                   dl:repDelta(ags.length,Object.keys(P.byAgent).length)}]) }) ])
+      +repGrid('g2', [
+        /* แท่งใช้สีเดียว · สีประจำตัวเอเยนต์อยู่ที่ป้ายในการ์ดข้าง ๆ แล้ว
+           สิบสีในกราฟเดียวอ่านยากและไม่ได้บอกอะไรเพิ่ม */
+        repCard({ t:'10 เอเยนต์ที่ส่งคนมากที่สุด',
+                  body: repBars(ags.slice(0,10).map(function(a){
+                    return {n:a.n, v:a.v, c:'#2E9B72', x:repMoney(a.rev)}; })) }),
+        repCard({ t:'5 อันดับแรก · รายละเอียด',
+                  body: repRows(ags.slice(0,5).map(function(a){
+                    return {b:ini(a.n), c:a.c, n:a.n, s:repN(a.bk)+' ใบจอง',
+                            v:repN(a.v), u:repMoney(a.rev)}; })) })
+      ])}));
 
-  /* 8 · สัญชาติ */
+  /* ── 8 · สัญชาติ ── */
   var NA=(typeof BKV2_NATIONALITIES!=='undefined')?BKV2_NATIONALITIES:[];
   var natName=function(c){ var f=NA.filter(function(x){return x.code===c;})[0]; return f?f.name:(c||'—'); };
   var nats=Object.keys(D.byNat).map(function(c){
-    return {n:natName(c)+' ('+c+')', v:D.byNat[c], c:'#C86A3E'}; })
-    .sort(function(a,b){return b.v-a.v;});
+    return {code:c, n:natName(c), v:D.byNat[c], c:'#C86A3E'}; }).sort(function(a,b){return b.v-a.v;});
   var thPct=D.pax>0?Math.round(D.natTH/D.pax*100):0;
   S.push(repSl({kicker:'ลูกค้า', title:'สัญชาติผู้โดยสาร',
-    sub:'ไทย '+repN(D.natTH)+' คน ('+thPct+'%) · ต่างชาติ '+repN(D.natFR)+' คน',
-    body: repBars(nats.slice(0,10)),
-    note:'ยอดไทย/ต่างชาติมาจากช่องที่คีย์ไว้ในใบจอง · รายประเทศยืมสัญชาติของหัวกรุ๊ปมาแทนทั้งใบ '
-        +'ใบที่คนในกรุ๊ปคนละสัญชาติจึงถูกนับรวมไว้ที่หัวกรุ๊ป'}));
+    body: repGrid('g1', [
+      repCard({ t:'ไทย เทียบ ต่างชาติ',
+                body: repStats([
+                  {v:repN(D.natTH), k:'คนไทย', u:thPct+'% ของทั้งหมด', c:'#0C6B47'},
+                  {v:repN(D.natFR), k:'ชาวต่างชาติ', u:(100-thPct)+'% ของทั้งหมด'},
+                  {v:repN(nats.length), k:'สัญชาติที่พบ', u:'ในช่วงนี้'}]) }) ])
+      +repGrid('g2', [
+        repCard({ t:'10 สัญชาติที่มามากที่สุด',
+                  body: repBars(nats.slice(0,10).map(function(x){
+                    return {n:x.n+' ('+x.code+')', v:x.v, c:'#C86A3E'}; })) }),
+        repCard({ t:'5 อันดับแรก',
+                  body: repRows(nats.slice(0,5).map(function(x){
+                    return {b:x.code, c:'#C86A3E', n:x.n,
+                            s:(D.pax?Math.round(x.v/D.pax*100):0)+'% ของผู้โดยสารทั้งหมด',
+                            v:repN(x.v), u:'คน'}; })),
+                  foot:'ยอดไทย/ต่างชาติมาจากช่องที่คีย์ไว้ในใบจอง · '
+                      +'รายประเทศยืมสัญชาติของหัวกรุ๊ปมาแทนทั้งใบ' })
+      ])}));
 
-  /* 9 · จองไว้ vs ไปจริง */
+  /* ── 9 · จองไว้ vs ไปจริง ── */
   var lostPct=D.paxBooked>0?Math.round(D.lost/D.paxBooked*100):0;
   var dLost=repDelta(D.lost,P.lost,true);
   S.push(repSl({lv:'exec', kicker:'คุณภาพงาน', title:'จองไว้ เทียบกับ ไปจริง',
-    body:'<div class="rep-bigrow sm">'
-      +repBig(repN(D.paxBooked),'จองเข้ามา',null,'ที่นั่งที่ขายได้')
-      +repBig(repN(D.pax),'เดินทางจริง',repDelta(D.pax,P.pax),'หลังหักคนไม่มา')
-      +repBig(repN(D.lost),'หายไประหว่างทาง',dLost,lostPct+'% ของที่จอง')
-      +'</div>'
-      +repSay(lostPct>8?'bad':(lostPct>4?'warn':'good'),
-        'ทุก 100 ที่นั่งที่ขายได้ มีคนไม่ได้ไปจริง <b>'+lostPct+' ที่</b> '
-        +(dLost.dir==='flat'?'เท่ากับช่วงก่อน':(dLost.dir==='up'?'แย่ลงกว่าช่วงก่อน ':'ดีขึ้นกว่าช่วงก่อน ')+repN(Math.abs(dLost.d))+' คน')),
-    note:'นับจากคนที่ถูกบันทึกว่าไม่มา/ยกเลิกหน้างานที่หน้าเช็คอิน · ใบที่ยกเลิกทั้งใบก่อนวันเดินทางไม่นับรวมตรงนี้'}));
+    body: repGrid('g1', [
+      repCard({ t:'ที่นั่งที่ขายได้ กับ ที่ใช้จริง',
+                body: repStats([
+                  {v:repN(D.paxBooked), k:'จองเข้ามา', u:'ที่นั่งที่ขายได้'},
+                  {v:repN(D.pax), k:'เดินทางจริง', u:'หลังหักคนไม่มา', dl:repDelta(D.pax,P.pax), c:'#0C6B47'},
+                  {v:repN(D.lost), k:'หายไประหว่างทาง', u:lostPct+'% ของที่จอง', dl:dLost,
+                   c:(lostPct>8?'#A32D2D':'#3a3a36')}]),
+                foot:'ทุก 100 ที่นั่งที่ขายได้ มีคนไม่ได้ไปจริง <b>'+lostPct+' ที่</b> '
+                    +(dLost.dir==='flat'?'เท่ากับช่วงก่อน':
+                      (dLost.dir==='up'?'แย่ลงกว่าช่วงก่อน ':'ดีขึ้นกว่าช่วงก่อน ')+repN(Math.abs(dLost.d))+' คน'),
+                footCls:(lostPct>8?'bad':(lostPct>4?'warn':'good')) }) ])
+      +repGrid('g1', [
+        repCard({ t:'ใบจองที่ไม่ได้เดินทาง', sub:'ยกเลิกก่อนวันเดินทาง',
+                  body: repStats([
+                    {v:repN(D.cxlBk), k:'ยกเลิกทั่วไป', u:repN(D.cxlPax)+' ที่นั่ง', dl:repDelta(D.cxlBk,P.cxlBk,true)},
+                    {v:repN(D.wxBk), k:'ยกเลิกเพราะอากาศ', u:repN(D.wxPax)+' ที่นั่ง', dl:repDelta(D.wxBk,P.wxBk,true)},
+                    {v:repN(D.cxlPax+D.wxPax), k:'ที่นั่งที่หายไปรวม',
+                     u:(D.paxBooked>0?Math.round((D.cxlPax+D.wxPax)/(D.paxBooked+D.cxlPax+D.wxPax)*100):0)+'% ของที่เคยจอง'}]),
+                  foot:'นับจากคนที่ถูกบันทึกว่าไม่มา/ยกเลิกหน้างานที่หน้าเช็คอิน · '
+                      +'ใบที่ยกเลิกทั้งใบก่อนวันเดินทางแยกไว้ในการ์ดนี้' }) ])}));
 
-  /* 10 · ยกเลิก */
-  S.push(repSl({kicker:'ที่เสียไป', title:'ใบจองที่ไม่ได้เดินทาง',
-    body:'<div class="rep-bigrow sm">'
-      +repBig(repN(D.cxlBk),'ยกเลิกทั่วไป',repDelta(D.cxlBk,P.cxlBk,true),repN(D.cxlPax)+' ที่นั่ง')
-      +repBig(repN(D.wxBk),'ยกเลิกเพราะอากาศ',repDelta(D.wxBk,P.wxBk,true),repN(D.wxPax)+' ที่นั่ง')
-      +repBig(repN(D.cxlPax+D.wxPax),'ที่นั่งที่หายไปรวม',null,
-        (D.paxBooked>0?Math.round((D.cxlPax+D.wxPax)/(D.paxBooked+D.cxlPax+D.wxPax)*100):0)+'% ของที่เคยจอง')
-      +'</div>'}));
-
-  /* 11 · การเงินฝั่งขาย */
+  /* ── 10 · การเงิน ── */
   var INV=(typeof SB_INVOICES!=='undefined')?SB_INVOICES:[];
   var inv=INV.filter(function(v){ var d=String(v.issuedAt||'').slice(0,10); return d>=st.from&&d<=st.to; });
   var invTot=inv.reduce(function(a,v){return a+(+v.total||0);},0);
   var unpaid=inv.filter(function(v){ return v.status!=='paid'; });
   var unpaidTot=unpaid.reduce(function(a,v){return a+(+v.total||0);},0);
   S.push(repSl({lv:'exec', kicker:'การเงิน', title:'ยอดขายและการวางบิล',
-    body:'<div class="rep-bigrow sm">'
-      +repBig(repMoney(D.revenue),'ยอดขายในช่วงนี้',repDelta(D.revenue,P.revenue),repN(D.bookings)+' ใบจอง')
-      +repBig(repMoney(invTot),'ออกบิลแล้ว',null,repN(inv.length)+' ใบวางบิล')
-      +repBig(repMoney(unpaidTot),'ยังไม่ได้รับชำระ',null,repN(unpaid.length)+' ใบ')
-      +'</div>'
-      +repSay(unpaidTot>0?'warn':'good',
-        'รายได้เฉลี่ยต่อหัว <b>'+repN(D.pax>0?D.revenue/D.pax:0)+' บาท</b> '
-        +'· ต่อใบจอง <b>'+repN(D.bookings>0?D.revenue/D.bookings:0)+' บาท</b>'),
-    note:'ยอดขายนับจากช่องยอดรวมของใบจองที่มีเที่ยวเดินทางอยู่ในช่วงนี้'}));
+    body: repGrid('g1', [
+      repCard({ t:'ยอดขายในช่วงนี้',
+                body: repStats([
+                  {v:repMoney(D.revenue), k:'ยอดขาย', u:repN(D.bookings)+' ใบจอง', dl:repDelta(D.revenue,P.revenue)},
+                  {v:repMoney(invTot), k:'ออกบิลแล้ว', u:repN(inv.length)+' ใบวางบิล'},
+                  {v:repMoney(unpaidTot), k:'ยังไม่ได้รับชำระ', u:repN(unpaid.length)+' ใบ',
+                   c:(unpaidTot>0?'#B4560A':'#3a3a36')}]),
+                foot:'รายได้เฉลี่ยต่อหัว <b>'+repN(D.pax>0?D.revenue/D.pax:0)+' บาท</b> '
+                    +'· ต่อใบจอง <b>'+repN(D.bookings>0?D.revenue/D.bookings:0)+' บาท</b>',
+                footCls:(unpaidTot>0?'warn':'good') }) ])
+      +repGrid('g2', [
+        repCard({ t:'รายได้ต่อโปรแกรม',
+                  body: repBars(rows.slice(0,6).map(function(r){
+                    return {n:r.n, v:Math.round(r.rev||0), c:r.c, disp:repMoney(r.rev||0)}; })) }),
+        repCard({ t:'รายได้เฉลี่ยต่อหัว · รายโปรแกรม',
+                  body: repRows(rows.slice(0,5).map(function(r){
+                    return {b:ini(r.n), c:r.c, n:r.n, s:repN(r.v)+' คน',
+                            v:repN(r.v>0?(r.rev||0)/r.v:0), u:'บาท/คน'}; })) })
+      ])}));
 
-  /* 12 · สิ่งที่ต้องตัดสินใจ */
+  /* ── 11 · สิ่งที่ต้องตัดสินใจ ── */
   var todo=[];
   if(lostPct>5) todo.push(['bad','คนไม่มาสูงถึง '+lostPct+'% ของที่ขายได้',
     'คิดเป็น '+repN(D.lost)+' ที่นั่งที่ขายไปแล้วแต่ไม่ได้ใช้ · ควรไล่ดูว่ากระจุกที่เอเยนต์เจ้าไหนหรือโปรแกรมไหน']);
@@ -52124,13 +52234,24 @@ function repOpsSlides(st){
   if(D.wxBk>0) todo.push(['note','ยกเลิกเพราะอากาศ '+repN(D.wxBk)+' ใบ ('+repN(D.wxPax)+' ที่นั่ง)',
     'ตรวจว่าคืนเงิน/เลื่อนวันครบทุกใบแล้วหรือยัง']);
   if(!todo.length) todo.push(['good','ไม่มีเรื่องที่ต้องตัดสินใจเร่งด่วนในช่วงนี้','ตัวเลขทุกตัวอยู่ในเกณฑ์']);
+  /* §repLayout5 · บอกด้วยว่าตรวจอะไรไปบ้างแล้วผ่าน · ไม่งั้นคนอ่านไม่รู้ว่า
+     "มีแค่สองเรื่อง" แปลว่าตรวจครบแล้วเหลือสองเรื่อง หรือตรวจแค่สองเรื่อง */
+  var okl=[];
+  if(lostPct<=5) okl.push(['คนไม่มา '+lostPct+'% ของที่ขายได้', 'อยู่ในเกณฑ์ (เกิน 5% ถึงจะถือว่าต้องดู)']);
+  if(namedPct>=80) okl.push(['ใบจองมีรายชื่อผู้โดยสาร '+namedPct+'%', 'ด่านอุทยานออกตั๋วได้ตามรายชื่อที่มีอยู่แล้ว']);
+  if(D.fill>=70) okl.push(['อัตราเติมที่นั่ง '+D.fill+'%', 'ที่นั่งที่ปล่อยออกไปถูกใช้จริงตามเป้า']);
+  if(!D.wxBk) okl.push(['ไม่มีการยกเลิกเพราะอากาศ', 'ทั้งช่วงไม่มีใบจองที่ต้องคืนเงินหรือเลื่อนวันด้วยเหตุอากาศ']);
   S.push(repSl({lv:'exec', kicker:'ก้าวต่อไป', title:'สิ่งที่ต้องตัดสินใจ',
+    sub:repN(todo.length)+' เรื่องที่ต้องดู'+(okl.length?(' · '+okl.length+' เรื่องที่ตรวจแล้วผ่าน'):''),
     body:'<div class="rep-todo">'+todo.map(function(t){
-      return '<div class="rep-td '+t[0]+'"><b>'+t[1]+'</b><span>'+t[2]+'</span></div>'; }).join('')+'</div>'}));
+      return '<div class="rep-td '+t[0]+'"><b>'+t[1]+'</b><span>'+t[2]+'</span></div>'; }).join('')
+      +(okl.length?('<div class="rep-todosec">ตรวจแล้วอยู่ในเกณฑ์</div>'
+        +okl.map(function(t){
+          return '<div class="rep-td ok"><b>'+t[0]+'</b><span>'+t[1]+'</span></div>'; }).join('')):'')
+      +'</div>'}));
 
   return S;
 }
-/* ประโยคหัวของสไลด์สรุป · เลือกเล่าเรื่องที่ "อธิบายกันเอง" ไม่ใช่อ่านตัวเลขซ้ำ */
 function _repOpsHeadline(D,P,dPax,dFill){
   if(dPax.dir==='flat') return 'ผู้โดยสารเท่ากับช่วงก่อนหน้า';
   var up=dPax.dir==='up';
@@ -52141,7 +52262,6 @@ function _repOpsHeadline(D,P,dPax,dFill){
   else if(dFill.dir==='dn') t+=' และเติมที่นั่งได้แย่ลง <b>'+dFill.pct+'%</b>';
   return t;
 }
-
 
 /* ── แถบควบคุม + วาดหน้า ─────────────────────────────────────────────── */
 function repPreset(kind,k){
@@ -52168,6 +52288,18 @@ function repPrint(kind){
       if(host) host.classList.remove('rep-print-src'); },400);
   },120);
 }
+/* เลื่อนทีละแผ่น · หาแผ่นที่อยู่กลางจอตอนนี้ก่อน แล้วขยับจากตรงนั้น */
+function repStep(kind,d){
+  var host=document.getElementById('rep-host-'+kind); if(!host) return;
+  var sl=[].slice.call(host.querySelectorAll('.rep-sl')).filter(function(e){ return e.style.display!=='none'; });
+  if(!sl.length) return;
+  var mid=(window.innerHeight||900)/2, cur=0, best=1e9;
+  sl.forEach(function(e,i){ var r=e.getBoundingClientRect();
+    var dd=Math.abs((r.top+r.height/2)-mid); if(dd<best){ best=dd; cur=i; } });
+  var n=Math.max(0,Math.min(sl.length-1,cur+d));
+  sl[n].scrollIntoView({behavior:'smooth',block:'center'});
+}
+window.repStep=repStep;
 function repGo(kind,i){
   var host=document.getElementById('rep-host-'+kind); if(!host) return;
   var sl=host.querySelectorAll('.rep-sl'); if(!sl.length) return;
@@ -52182,8 +52314,13 @@ function repFit(kind){
   var host=document.getElementById('rep-host-'+kind); if(!host) return;
   var wrap=host.querySelector('.rep-stage'); if(!wrap) return;
   var w=wrap.clientWidth||1;
-  var k=Math.min(1,(w-8)/1920);
+  /* พื้นที่แนวตั้งที่เหลือจริง = ความสูงหน้าต่าง ลบทุกอย่างที่อยู่เหนือเวที
+     ย่อให้พอดีทั้งสองด้าน (contain) เอาค่าที่เล็กกว่า · เห็นสไลด์เต็มใบในจอเดียว */
+  var top=wrap.getBoundingClientRect().top;
+  var h=Math.max(260,(window.innerHeight||900)-top-26);
+  var k=Math.min(1,(w-8)/1920, h/1080);
   wrap.style.setProperty('--repk',k.toFixed(4));
+  wrap.style.setProperty('--reph',(1080*k).toFixed(1)+'px');
 }
 function renderReport(kind){
   var host=document.getElementById('rep-host-'+kind); if(!host) return;
@@ -52195,9 +52332,9 @@ function renderReport(kind){
   if(kind==='ops'){ try{ slides=repOpsSlides(st); }catch(e){
     slides=['<section class="rep-sl"><div class="rep-bd"><div class="rep-err">'
       +'สร้างสไลด์ไม่สำเร็จ<br><span>'+repE(String(e&&e.message||e))+'</span></div></div></section>']; } }
-  else { slides=['<section class="rep-sl"><div class="rep-bd"><div class="rep-err">'
-      +'รายงานฝ่ายเรือยังไม่เปิดใช้<br><span>กำลังทำอยู่ · ชุดสไลด์ใช้ตัววาดเดียวกับรายงานปฏิบัติการ</span>'
-      +'</div></div></section>']; }
+  else { try{ slides=repFleetSlides(st); }catch(e){
+    slides=['<section class="rep-sl"><div class="rep-bd"><div class="rep-err">'
+      +'สร้างสไลด์ไม่สำเร็จ<br><span>'+repE(String(e&&e.message||e))+'</span></div></div></section>']; } }
   var pv=repPrevRange(st.from,st.to);
   var pb=function(k,t){ return '<button class="rep-ps" onclick="repPreset(\''+kind+'\',\''+k+'\')">'+t+'</button>'; };
   var mb=function(m,t,s2){ return '<button class="rep-md'+(st.mode===m?' on':'')+'" '
@@ -52220,6 +52357,10 @@ function renderReport(kind){
       +'<span class="rep-meta">'+repDayCount(st.from,st.to)+' วัน · เทียบกับ '+repRangeTH(pv.from,pv.to)+'</span>'
       +'<span class="sp"></span>'
       +'<span class="rep-cnt" id="rep-cnt-'+kind+'"></span>'
+      +'<span class="rep-nav">'
+        +'<button class="rep-nb" onclick="repStep(\''+kind+'\',-1)" title="สไลด์ก่อนหน้า">&lsaquo;</button>'
+        +'<button class="rep-nb" onclick="repStep(\''+kind+'\',1)" title="สไลด์ถัดไป">&rsaquo;</button>'
+      +'</span>'
       +'<button class="rep-pr" onclick="repPrint(\''+kind+'\')">&#8681; บันทึกเป็น PDF</button>'
     +'</div>'
     +'<div class="rep-stage">'+slides.join('')+'</div>';
@@ -52242,140 +52383,624 @@ window.renderReport=renderReport;
 
 function repCSS(){
   var H='.rep-host';
-  return H+'{background:#EDEAE3;margin:-22px;padding:22px;min-height:calc(100vh - 44px);'
-     +"font-family:Manrope,-apple-system,system-ui,sans-serif;color:#1A1A1A}"
-  +'@media(max-width:820px){'+H+'{margin:-12px -10px;padding:12px 10px}}'
-  /* ── แถบหัว ── */
-  +H+' .rep-top{display:flex;align-items:flex-start;gap:20px;flex-wrap:wrap;margin-bottom:14px}'
-  +H+' .rep-tl h1{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:0}'
-  +H+' .rep-tl p{font-size:12.5px;color:#6b675f;margin:4px 0 0}'
-  +H+' .rep-tr{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:8px}'
-  +H+' .rep-dates{display:flex;align-items:center;gap:8px;background:#fff;border-radius:14px;'
-     +'padding:6px 12px;box-shadow:0 4px 14px -6px rgba(0,0,0,.1)}'
-  +H+' .rep-dates input{border:0;background:none;font:600 13px inherit;color:#1A1A1A;outline:none}'
-  +H+' .rep-dates span{font-size:11.5px;color:#9b9088}'
-  +H+' .rep-psets{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}'
-  +H+' .rep-ps{background:#fff;border:1px solid #E2DED5;border-radius:999px;padding:5px 12px;'
-     +'font:600 11.5px inherit;color:#4a463f;cursor:pointer}'
-  +H+' .rep-ps:hover{background:#F6F4EF;border-color:#CFC9BC}'
-  /* ── แถบโหมด ── */
-  +H+' .rep-bar2{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}'
-  +H+' .rep-modes{display:flex;gap:6px;background:#fff;border-radius:14px;padding:4px;'
-     +'box-shadow:0 4px 14px -6px rgba(0,0,0,.1)}'
-  +H+' .rep-md{background:none;border:0;border-radius:11px;padding:6px 15px;cursor:pointer;'
-     +'display:flex;flex-direction:column;align-items:flex-start;font-family:inherit;line-height:1.25}'
-  +H+' .rep-md b{font-size:13px;font-weight:700;color:#4a463f}'
-  +H+' .rep-md i{font-style:normal;font-size:10px;color:#9b9088}'
-  +H+' .rep-md.on{background:#15382B}'
-  +H+' .rep-md.on b{color:#fff}'+H+' .rep-md.on i{color:#9DC7B4}'
-  +H+' .rep-meta{font-size:11.5px;color:#6b675f}'
+  /* ค่าทุกตัวยกมาจาก DV_CSS ของหน้า Dashboard ไม่ได้ตั้งใหม่
+     การ์ด · หัวการ์ด · แถวตัวเลข · รายการย่อย ใช้โครงเดียวกันหมด */
+  var BLOB='radial-gradient(58% 44% at 12% 8%, rgba(255,153,153,.42), transparent 62%),'
+          +'radial-gradient(46% 40% at 88% 4%, rgba(186,117,23,.34), transparent 62%),'
+          +'radial-gradient(52% 46% at 78% 92%, rgba(15,110,86,.38), transparent 64%),'
+          +'radial-gradient(50% 42% at 24% 96%, rgba(24,95,165,.42), transparent 62%)';
+  return H+'{position:relative;isolation:isolate;background:#16265C;margin:-22px;padding:10px 10px 14px;'
+     +"min-height:calc(100vh - 44px);font-family:'DM Sans',Manrope,-apple-system,system-ui,sans-serif}"
+  +H+"::before{content:'';position:absolute;inset:0;z-index:0;pointer-events:none;background:"+BLOB+';'
+     +'filter:blur(20px) saturate(120%)}'
+  +H+'>*{position:relative;z-index:1}'
+  +'@media(max-width:820px){'+H+'{margin:-12px -10px;padding:8px}}'
+
+  /* ── แถบหัวหน้า · แก้วแบบ .dv-hd ── */
+  +H+' .rep-top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;border-radius:14px;'
+     +'padding:9px 12px;margin-bottom:8px;'
+     +'background:linear-gradient(160deg, rgba(22,38,92,.82), rgba(12,24,62,.74));'
+     +'-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);'
+     +'box-shadow:0 8px 26px rgba(2,10,30,.34), inset 0 1px 0 rgba(255,255,255,.18)}'
+  +H+' .rep-tl h1{font-size:17px;font-weight:800;letter-spacing:-.01em;margin:0;color:#fff}'
+  +H+' .rep-tl p{font-size:10.5px;color:#A8BAD8;margin:2px 0 0}'
+  +H+' .rep-tr{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}'
+  +H+' .rep-dates{display:flex;align-items:center;gap:7px;border-radius:10px;padding:5px 10px;'
+     +'background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.22)}'
+  +H+" .rep-dates input{border:0;background:none;font:700 12px 'DM Mono',monospace;color:#fff;outline:none;"
+     +'color-scheme:dark}'
+  +H+' .rep-dates span{font-size:10.5px;color:#A8BAD8}'
+  +H+' .rep-psets{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}'
+  +H+' .rep-ps{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.22);border-radius:999px;'
+     +'padding:5px 11px;font:700 10.5px inherit;color:#D6E2F5;cursor:pointer}'
+  +H+' .rep-ps:hover{background:rgba(255,255,255,.22);color:#fff}'
+  +H+' .rep-bar2{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:9px;padding:0 2px}'
+  +H+' .rep-modes{display:flex;border-radius:999px;overflow:hidden;'
+     +'border:1px solid rgba(255,255,255,.20);background:rgba(255,255,255,.08)}'
+  +H+' .rep-md{background:none;border:0;padding:5px 14px;cursor:pointer;font-family:inherit;'
+     +'display:flex;align-items:baseline;gap:6px;line-height:1.2}'
+  +H+' .rep-md b{font-size:11.5px;font-weight:700;color:#C9D6EC}'
+  +H+' .rep-md i{font-style:normal;font-size:9px;color:#7F93B8}'
+  +H+' .rep-md.on{background:#fff}'
+  +H+' .rep-md.on b{color:#16265C}'+H+' .rep-md.on i{color:#5A6E96}'
+  +H+' .rep-meta{font-size:10.5px;color:#A8BAD8}'
   +H+' .rep-bar2 .sp{flex:1}'
-  +H+' .rep-cnt{font:700 11.5px "DM Mono",monospace;color:#6b675f}'
-  +H+' .rep-pr{background:#15382B;color:#fff;border:0;border-radius:12px;padding:9px 17px;'
-     +'font:700 12.5px inherit;cursor:pointer}'
-  +H+' .rep-pr:hover{background:#0C2A1F}'
-  /* ══ เวทีสไลด์ · 1920x1080 คงที่ แล้วย่อด้วย scale ══════════════════════
-     ทำแบบนี้เพื่อให้สิ่งที่เห็นบนจอกับสิ่งที่ออกกระดาษเป็นอันเดียวกันเป๊ะ
-     ถ้าปล่อยให้ layout ยืดตามจอ ตัวหนังสือจะขยับตำแหน่งตอนพิมพ์            */
-  +H+' .rep-stage{--repk:1;display:flex;flex-direction:column;align-items:center;gap:20px}'
-  +H+' .rep-sl{width:1920px;height:1080px;flex:none;background:#fff;border-radius:22px;'
-     +'padding:76px 88px;box-sizing:border-box;position:relative;overflow:hidden;'
-     +'display:flex;flex-direction:column;'
+  +H+" .rep-cnt{font:800 10.5px 'DM Mono',monospace;color:#C9D6EC;background:rgba(255,255,255,.10);"
+     +'border-radius:999px;padding:3px 10px}'
+  +H+' .rep-nav{display:flex;gap:5px}'
+  +H+' .rep-nb{width:28px;height:28px;border:1px solid rgba(255,255,255,.26);background:rgba(255,255,255,.10);'
+     +'border-radius:9px;color:#C9D6EC;font-size:14px;cursor:pointer;font-family:inherit;line-height:1;'
+     +'display:flex;align-items:center;justify-content:center}'
+  +H+' .rep-nb:hover{background:rgba(255,255,255,.22);color:#fff}'
+  +H+' .rep-pr{background:#fff;color:#16265C;border:0;border-radius:999px;padding:7px 15px;'
+     +'font:800 11.5px inherit;cursor:pointer;box-shadow:0 2px 10px rgba(2,10,30,.30)}'
+
+  /* ══ สไลด์ = พื้น navy + กริดการ์ด · โครงเดียวกับหน้า Dashboard ═══════ */
+  +H+' .rep-stage{--repk:1;display:flex;flex-direction:column;align-items:center;gap:14px;'
+     +'scroll-snap-type:y mandatory}'
+  +H+' .rep-sl{width:1920px;height:1080px;flex:none;padding:46px 52px 52px;box-sizing:border-box;'
+     +'position:relative;overflow:hidden;display:flex;flex-direction:column;scroll-snap-align:center;'
+     +'border-radius:16px;background:#16265C;box-shadow:0 18px 44px rgba(2,10,30,.42);'
      +'transform:scale(var(--repk));transform-origin:top center;'
-     +'margin-bottom:calc((var(--repk) - 1) * 1080px);'
-     +'box-shadow:0 18px 50px -18px rgba(30,25,15,.28)}'
-  +H+' .rep-sl.cover{background:linear-gradient(150deg,#12352A,#081C16 70%);color:#fff}'
-  +H+' .rep-hd{border-bottom:2px solid #EFEBE3;padding-bottom:22px;margin-bottom:34px}'
-  +H+' .rep-hd .n{display:block;font:800 15px "DM Mono",monospace;letter-spacing:.22em;'
-     +'text-transform:uppercase;color:#B08A3C;margin-bottom:10px}'
-  +H+' .rep-hd h2{font-size:52px;font-weight:800;letter-spacing:-.025em;margin:0;line-height:1.08}'
-  +H+' .rep-hd .s{display:block;font-size:20px;color:#6b675f;margin-top:12px}'
-  +H+' .rep-bd{position:relative;flex:1;display:flex;flex-direction:column;min-height:0}'
-  /* มีหมายเหตุท้ายสไลด์ (วางแบบ absolute) ต้องกันที่ให้ ไม่ให้เนื้อหาทับ */
-  +H+' .rep-sl:has(.rep-note) .rep-bd{padding-bottom:104px}'
-  +H+' .rep-note{position:absolute;left:88px;right:88px;bottom:52px;font-size:15px;line-height:1.6;'
-     +'color:#9b9088;border-top:1px solid #F2EEE7;padding-top:14px}'
-  +H+' .rep-pg{position:absolute;right:44px;bottom:34px;font:700 16px "DM Mono",monospace;color:#CFC9BC}'
-  +H+' .rep-sl.cover .rep-pg{display:none}'
-  /* ปก */
-  +H+' .rep-cv{height:100%;display:flex;flex-direction:column;justify-content:center;gap:16px}'
-  +H+' .rep-cv .br{font:800 22px "DM Mono",monospace;letter-spacing:.42em;color:#8FE05F}'
-  +H+' .rep-cv h1{font-size:112px;font-weight:800;letter-spacing:-.035em;margin:12px 0 0;line-height:1}'
-  +H+' .rep-cv .rg{font-size:44px;font-weight:700;color:#A9E5C9;margin-top:6px}'
-  +H+' .rep-cv .mt{font-size:21px;color:#7FA394;margin-top:20px}'
-  /* ตัวเลขเด่น */
-  +H+' .rep-bigrow{display:flex;gap:22px;align-items:stretch;flex:1;max-height:430px}'
-  +H+' .rep-big{flex:1;min-width:0;background:#FBFAF7;border:1px solid #F1EDE5;border-radius:20px;'
-     +'padding:38px 32px;display:flex;flex-direction:column;justify-content:center;gap:7px}'
-  +H+' .rep-big .v{font:800 76px/1 "DM Mono",ui-monospace,monospace;letter-spacing:-.03em;color:#15382B}'
-  +H+' .rep-bigrow.sm .rep-big .v{font-size:64px}'
-  +H+' .rep-big .k{font-size:20px;font-weight:700;color:#3a3a36;margin-top:6px}'
-  +H+' .rep-big .u{font-size:16px;color:#9b9088}'
-  +H+' .rep-big .dl{align-self:flex-start;font:700 16px "DM Mono",monospace;border-radius:999px;'
-     +'padding:4px 13px;margin-top:4px}'
-  +H+' .rep-big .dl.good{background:#E3F5E9;color:#0C6B47}'
-  +H+' .rep-big .dl.bad{background:#FBE7E4;color:#A32D2D}'
-  +H+' .rep-big .dl.flat{background:#F1EDE5;color:#8a857d}'
-  /* แท่งเทียบ */
-  +H+' .rep-sec{font:800 16px inherit;color:#8a857d;letter-spacing:.06em;text-transform:uppercase;'
-     +'margin:34px 0 16px}'
-  /* 3 แถวกับ 10 แถวต้องเต็มสไลด์เหมือนกัน · space-around กระจายที่ว่างให้เท่า ๆ กัน
-     ไม่ใช่กองไว้ข้างบนแล้วเหลือครึ่งล่างว่าง ซึ่งดูเหมือนสไลด์ยังทำไม่เสร็จ */
-  +H+' .rep-bars{display:flex;flex-direction:column;gap:13px;flex:1;min-height:0;justify-content:space-around}'
-  +H+' .rep-bar{display:flex;align-items:center;gap:18px;flex:1;min-height:38px;max-height:124px}'
-  +H+' .rep-bar .tr{align-self:stretch;display:flex;align-items:center}'
-  +H+' .rep-bar .nm{width:420px;flex:none;font-size:21px;font-weight:600;color:#2c2c2a;'
+     +'margin-bottom:calc((var(--repk) - 1) * 1080px)}'
+  +H+" .rep-sl::before{content:'';position:absolute;inset:0;z-index:0;pointer-events:none;background:"+BLOB+';'
+     +'filter:blur(26px) saturate(120%)}'
+  +H+' .rep-sl>*{position:relative;z-index:1}'
+  +H+' .rep-sl.cover{background:linear-gradient(150deg,#1B2E6B,#0C1840 70%)}'
+
+  /* ── หัวสไลด์ · อยู่บนพื้น navy เหมือนแถบหัวของ Dashboard ── */
+  +H+' .rep-shd{display:flex;align-items:flex-end;gap:22px;flex-wrap:wrap;'
+     +'padding:0 6px 20px;margin-bottom:18px;flex:none;'
+     +'border-bottom:1px solid rgba(255,255,255,.14)}'
+  +H+' .rep-shd .n{display:block;font-size:15px;font-weight:800;letter-spacing:.2em;'
+     +'text-transform:uppercase;color:#8FA6D0;margin-bottom:9px}'
+  +H+' .rep-shd h2{font-size:44px;font-weight:800;letter-spacing:-.025em;margin:0;line-height:1.06;color:#fff}'
+  +H+' .rep-shd .s{margin-left:auto;font-size:19px;color:#A8BAD8;font-weight:600;padding-bottom:5px}'
+  +H+' .rep-bd{position:relative;flex:1;display:flex;flex-direction:column;gap:16px;min-height:0}'
+
+  /* ── กริดการ์ด ── */
+  +H+' .rep-grid{display:grid;gap:16px;flex:1;min-height:0}'
+  +H+' .rep-grid.g1{grid-template-columns:minmax(0,1fr)}'
+  +H+' .rep-grid.g2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}'
+  +H+' .rep-grid.g21{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}'
+  /* แถวตัวเลขไม่ต้องยืดเต็ม · ให้กริดที่มีเนื้อหาจริงกินที่ว่างแทน */
+  +H+' .rep-bd>.rep-grid.g1:first-child:not(:only-child){flex:0 0 auto}'
+
+  /* ── การ์ด · .dv-c ── */
+  +H+' .rep-c{background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:12px;'
+     +'box-shadow:0 6px 22px rgba(2,10,30,.10);display:flex;flex-direction:column;min-height:0;overflow:hidden}'
+  /* หัวการ์ด · .dv-ct */
+  +H+' .rep-cth{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:20px 24px 14px;flex:none}'
+  +H+' .rep-cth .big{font-size:25px;font-weight:800;letter-spacing:-.01em;color:#12518F}'
+  +H+' .rep-cth .sm{font-size:16px;color:#b0aaa0;font-weight:600}'
+  +H+' .rep-cth .sp{margin-left:auto}'
+  +H+' .rep-pill{background:#EFEBE7;color:#403833;border-radius:999px;padding:5px 14px;'
+     +"font:800 16px 'DM Mono',monospace;white-space:nowrap}"
+  +H+' .rep-pill.ok{background:#E6F5EC;color:#0F6E56}'
+  +H+' .rep-pill.warn{background:#FDF6E9;color:#B4560A}'
+  +H+' .rep-cbd{flex:1;min-height:0;display:flex;flex-direction:column;padding:0 24px 8px}'
+  +H+' .rep-cfoot{flex:none;margin:0;padding:16px 24px;font-size:20px;line-height:1.5;font-weight:600;'
+     +'color:#4a463f;background:#FAF9F7;border-top:1px solid #F1EEE9}'
+  +H+' .rep-cfoot b{color:#0C6B47;font-weight:800}'
+  +H+' .rep-cfoot.good{background:#E6F5EC;color:#12604A}'
+  +H+' .rep-cfoot.bad{background:#FCEBEB;color:#8C2626}'+H+' .rep-cfoot.bad b{color:#A32D2D}'
+  +H+' .rep-cfoot.warn{background:#FDF6E9;color:#7A4A00}'+H+' .rep-cfoot.warn b{color:#8A5A0B}'
+  +H+' .rep-cnote{font-size:15px;color:#b0aaa0;line-height:1.55;font-weight:600;padding:10px 0 4px}'
+
+  /* ── แถวตัวเลข · .dv-avrow + .dv-avs ── */
+  +H+' .rep-avrow{display:flex;align-items:stretch;padding:10px 0 16px;flex:none}'
+  +H+' .rep-av{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;'
+     +'padding:0 14px;text-align:center}'
+  +H+" .rep-av .v{font-family:'DM Mono',ui-monospace,monospace;font-size:58px;font-weight:800;"
+     +'line-height:1.02;letter-spacing:-.03em;color:#3a3a36;max-width:100%;'
+     +'overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+  /* ช่องที่ค่าเป็นข้อความ (เช่นชื่อเรือ) ต้องเล็กลง ไม่งั้นล้นช่อง */
+  +H+' .rep-av .v.txt{font-size:34px;font-family:inherit;letter-spacing:-.01em}'
+  +H+' .rep-av .k{font-size:18px;color:#6b675f;font-weight:700;margin-top:4px}'
+  +H+' .rep-av .u{font-size:15px;color:#b6b1a8;font-weight:600}'
+  +H+" .rep-av .dl{font:800 14px 'DM Mono',monospace;border-radius:999px;padding:3px 11px;margin-top:5px}"
+  +H+' .rep-av .dl.good{background:#E6F5EC;color:#0F6E56;border:1px solid #BFE6D2}'
+  +H+' .rep-av .dl.bad{background:#FCEBEB;color:#A32D2D;border:1px solid #F0CFCF}'
+  +H+' .rep-av .dl.flat{background:#EFEBE7;color:#7a736c;border:1px solid #E4DFD8}'
+  +H+' .rep-avs{width:1px;background:#EFEBE5;margin:6px 0}'
+
+  /* ── หัวข้อย่อยในการ์ด · .dv-sec ── */
+  +H+' .rep-csec{font-size:14px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;'
+     +'color:#b0aaa0;border-top:1px solid #F1EEE9;padding:14px 0 8px;margin-top:2px;flex:none}'
+
+  /* ── รายการย่อย · .dv-pr2 ── */
+  +H+' .rep-rows{display:flex;flex-direction:column;flex:1;min-height:0;justify-content:space-evenly}'
+  +H+' .rep-row{display:flex;align-items:center;gap:14px;padding:9px 0}'
+  +H+' .rep-row .pm{width:42px;height:42px;border-radius:11px;color:#fff;display:flex;'
+     +"align-items:center;justify-content:center;font:800 15px 'DM Mono',monospace;flex:none}"
+  +H+' .rep-row .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}'
+  +H+' .rep-row .tx .n{font-size:21px;font-weight:800;color:#2c2c2a;white-space:nowrap;'
+     +'overflow:hidden;text-overflow:ellipsis}'
+  +H+' .rep-row .tx .s{font-size:15px;color:#9b9088;font-weight:600;white-space:nowrap;'
+     +'overflow:hidden;text-overflow:ellipsis}'
+  +H+' .rep-row .rt{flex:none;text-align:right}'
+  +H+" .rep-row .rt b{display:block;font-family:'DM Mono',monospace;font-size:26px;font-weight:800;"
+     +'line-height:1.1;color:#0C6B47}'
+  +H+' .rep-row .rt i{display:block;font-style:normal;font-size:14px;color:#b6b1a8;font-weight:600}'
+
+  /* ── แท่งเทียบ ── */
+  +H+' .rep-bars{display:flex;flex-direction:column;gap:9px;flex:1;min-height:0;justify-content:space-evenly;'
+     +'padding:4px 0 8px}'
+  +H+' .rep-bar{display:flex;align-items:center;gap:14px;flex:0 1 auto;min-height:32px}'
+  +H+' .rep-bar .nm{width:34%;flex:none;font-size:18px;font-weight:700;color:#2c2c2a;'
      +'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
-  +H+' .rep-bar .tr{flex:1;min-height:30px;max-height:56px;background:#F4F2ED;border-radius:9px;overflow:hidden}'
-  +H+' .rep-bar .tr i{display:block;height:100%;border-radius:9px}'
-  +H+' .rep-bar .vv{width:132px;flex:none;text-align:right;font:800 25px "DM Mono",monospace;color:#15382B}'
-  +H+' .rep-bar .xx{width:96px;flex:none;text-align:right;font:600 18px "DM Mono",monospace;color:#9b9088}'
-  /* กราฟรายวัน */
-  +H+' .rep-trend{margin:6px 0 0;flex:1;display:flex;flex-direction:column;min-height:0}'
-  +H+' .rep-trend svg{width:100%;flex:1;min-height:260px;display:block}'
-  +H+' .rep-tmax{font-size:17px;color:#9b9088;margin-top:6px}'
-  /* ตาราง */
-  +H+' .rep-tb{width:100%;border-collapse:collapse;font-size:22px;flex:1;align-self:stretch}'
-  +H+' .rep-tb tbody tr{height:1px}'
-  +H+' .rep-tb th{text-align:left;font-size:15px;font-weight:800;color:#9b9088;letter-spacing:.06em;'
-     +'text-transform:uppercase;padding:0 16px 14px;border-bottom:2px solid #EFEBE3}'
+  +H+' .rep-bar .tr{flex:1;height:26px;background:#F4F2ED;border-radius:8px;overflow:hidden}'
+  +H+' .rep-bar .tr i{display:block;height:100%;border-radius:8px}'
+  +H+" .rep-bar .vv{width:104px;flex:none;text-align:right;font:800 21px 'DM Mono',monospace;color:#3a3a36}"
+  +H+" .rep-bar .xx{width:76px;flex:none;text-align:right;font:700 15px 'DM Mono',monospace;color:#b6b1a8}"
+
+  /* ── กราฟรายวัน ── */
+  +H+' .rep-trend{flex:1;display:flex;flex-direction:column;min-height:0;padding:6px 0 10px}'
+  +H+' .rep-trend svg{width:100%;flex:1;min-height:180px;display:block}'
+
+  /* ── ตาราง ── */
+  +H+' .rep-tb{width:100%;border-collapse:collapse;font-size:19px;flex:none;align-self:stretch}'
+  +H+' .rep-tb th{text-align:left;font-size:13px;font-weight:800;color:#b0aaa0;letter-spacing:.06em;'
+     +'text-transform:uppercase;padding:6px 12px 11px;border-bottom:1px solid #F1EEE9}'
   +H+' .rep-tb th.n,'+H+' .rep-tb td.n{text-align:right}'
-  +H+' .rep-tb td{padding:15px 16px;border-bottom:1px solid #F5F2EC;font-weight:600;color:#2c2c2a}'
-  +H+" .rep-tb td.n{font-family:'DM Mono',monospace;font-weight:700;color:#15382B}"
-  /* ประโยคสรุป */
-  +H+' .rep-say{margin-top:32px;flex:none;background:#F4F7F4;border-left:6px solid #2E9B72;border-radius:0 14px 14px 0;'
-     +'padding:22px 26px;font-size:25px;line-height:1.55;color:#2c2c2a}'
-  +H+' .rep-say b{color:#0C6B47}'
-  +H+' .rep-say.bad{background:#FDF1EF;border-left-color:#C0392B}'+H+' .rep-say.bad b{color:#A32D2D}'
-  +H+' .rep-say.warn{background:#FDF7EA;border-left-color:#D89C2B}'+H+' .rep-say.warn b{color:#8A5A0B}'
-  +H+' .rep-say.good{background:#F0FAF4;border-left-color:#2E9B72}'
-  /* สิ่งที่ต้องตัดสินใจ */
-  +H+' .rep-todo{display:flex;flex-direction:column;gap:18px;flex:1;justify-content:flex-start}'
-  /* ยืดได้ แต่ไม่เกิน 240 · เรื่องเดียวไม่ควรกลายเป็นแผ่นป้ายเต็มสไลด์ */
-  +H+' .rep-td{flex:0 1 auto;min-height:132px;max-height:240px;'
-     +'display:flex;flex-direction:column;justify-content:center}'
-  +H+' .rep-td{border-left:7px solid #CFC9BC;border-radius:0 16px 16px 0;background:#FBFAF7;padding:24px 30px}'
-  +H+' .rep-td b{display:block;font-size:31px;font-weight:800;color:#1A1A1A;letter-spacing:-.02em}'
-  +H+' .rep-td span{display:block;font-size:20px;color:#6b675f;margin-top:9px;line-height:1.5}'
-  +H+' .rep-td.bad{border-left-color:#C0392B;background:#FDF1EF}'
-  +H+' .rep-td.warn{border-left-color:#D89C2B;background:#FDF7EA}'
-  +H+' .rep-td.good{border-left-color:#2E9B72;background:#F0FAF4}'
-  +H+' .rep-err{padding:120px 0;text-align:center;font-size:34px;font-weight:800;color:#A32D2D}'
-  +H+' .rep-err span{display:block;font-size:19px;font-weight:600;color:#9b9088;margin-top:14px}'
-  /* ══ พิมพ์ · หนึ่งสไลด์ต่อหนึ่งหน้ากระดาษแนวนอน ═══════════════════════
-     กระดาษ A4 แนวนอนที่ 96dpi กว้าง 1122px · ย่อ 1920 ลงเหลือ 0.5843
-     ได้สัดส่วน 16:9 พอดี ไม่มีขอบขาวเกิน ไม่ต้องใช้ไลบรารีนอกเลย        */
+  +H+' .rep-tb td{padding:11px 12px;border-bottom:1px solid #F7F5F2;font-weight:700;color:#2c2c2a}'
+  +H+" .rep-tb td.n{font-family:'DM Mono',monospace;font-weight:800;color:#3a3a36}"
+  +H+' .rep-cbd:has(>.rep-tb){justify-content:flex-start}'
+
+  /* ── ปก ── */
+  +H+' .rep-cv{height:100%;display:flex;flex-direction:column;justify-content:center;gap:14px;padding:0 30px}'
+  +H+" .rep-cv .br{font:800 20px 'DM Mono',monospace;letter-spacing:.42em;color:#A6EB7E}"
+  +H+' .rep-cv h1{font-size:104px;font-weight:800;letter-spacing:-.035em;margin:10px 0 0;line-height:1;color:#fff}'
+  +H+' .rep-cv .rg{font-size:40px;font-weight:700;color:#9DC7F7;margin-top:6px}'
+  +H+' .rep-cv .mt{font-size:19px;color:#8FA6D0;margin-top:18px}'
+
+  /* ── สิ่งที่ต้องตัดสินใจ · การ์ดเรียงกัน ── */
+  +H+' .rep-todo{display:flex;flex-direction:column;gap:14px;flex:1;justify-content:flex-start}'
+  +H+' .rep-td{flex:0 1 auto;min-height:112px;max-height:210px;display:flex;flex-direction:column;'
+     +'justify-content:center;background:#fff;border:1px solid rgba(0,0,0,.09);border-left:6px solid #d6d1c8;'
+     +'border-radius:12px;padding:22px 28px;box-shadow:0 6px 22px rgba(2,10,30,.10)}'
+  +H+' .rep-td b{display:block;font-size:28px;font-weight:800;color:#2c2c2a;letter-spacing:-.02em}'
+  +H+' .rep-td span{display:block;font-size:18px;color:#8a857d;margin-top:8px;line-height:1.5;font-weight:600}'
+  +H+' .rep-td.bad{border-left-color:#A32D2D}'
+  +H+' .rep-td.warn{border-left-color:#B4560A}'
+  +H+' .rep-td.good{border-left-color:#0F6E56}'
+  /* §repLayout5 · แถวที่ตรวจแล้วผ่าน · จางกว่าเรื่องที่ต้องดู จะได้ไม่แย่งสายตา */
+  +H+" .rep-todosec{font:800 14px/1 'DM Sans',sans-serif;letter-spacing:.16em;"
+     +'text-transform:uppercase;color:rgba(255,255,255,.5);margin:6px 0 -2px}'
+  +H+' .rep-td.ok{min-height:0;border-left-color:#B9CFC4;background:rgba(255,255,255,.93);'
+     +'box-shadow:0 3px 12px rgba(2,10,30,.07);padding:16px 28px}'
+  +H+' .rep-td.ok b{font-size:22px;font-weight:700;color:#3f5f4e}'
+  +H+' .rep-td.ok span{font-size:16px;margin-top:5px;color:#9a968e}'
+  +H+' .rep-say{background:#F5F8F6;border:1px solid #E4EEE8;border-left:5px solid #0F6E56;'
+     +'border-radius:12px;padding:18px 22px;font-size:20px;line-height:1.5;color:#2c2c2a;font-weight:600}'
+  +H+' .rep-say b{color:#0C6B47;font-weight:800}'
+  +H+' .rep-err{padding:120px 0;text-align:center;font-size:30px;font-weight:800;color:#fff}'
+  +H+' .rep-err span{display:block;font-size:17px;font-weight:600;color:#A8BAD8;margin-top:12px}'
+  +H+" .rep-pg{position:absolute;right:34px;bottom:22px;font:800 15px 'DM Mono',monospace;"
+     +'color:rgba(255,255,255,.42);z-index:2}'
+  +H+' .rep-sl.cover .rep-pg{display:none}'
+
+  /* ══ พิมพ์ ══ */
   +'@media print{'
     +'@page{size:A4 landscape;margin:0}'
     +'body.rep-printing .sidebar,body.rep-printing .topbar,body.rep-printing #la-userbadge,'
     +'body.rep-printing #la-viewonly,body.rep-printing .rep-top,body.rep-printing .rep-bar2{display:none !important}'
     +'body.rep-printing .main{margin:0 !important;padding:0 !important}'
     +'body.rep-printing '+H+'{margin:0;padding:0;background:#fff;min-height:0}'
-    +'body.rep-printing '+H+' .rep-stage{gap:0;--repk:0.5843}'
+    +'body.rep-printing '+H+'::before{display:none}'
+    +'body.rep-printing '+H+' .rep-stage{gap:0;--repk:0.5843;scroll-snap-type:none}'
     +'body.rep-printing '+H+' .rep-sl{transform-origin:top left;border-radius:0;box-shadow:none;'
       +'margin:0;page-break-after:always;break-after:page}'
     +'body.rep-printing '+H+' .rep-sl:last-child{page-break-after:auto;break-after:auto}'
   +'}';
+}
+
+
+/* ── เก็บตัวเลขฝั่งเรือ ────────────────────────────────────────────────────
+   ตรวจความครบของข้อมูลไปด้วยในรอบเดียว · รายงานฝ่ายเรือมีรูโหว่หลายจุด
+   ถ้าไม่บอกว่าตัวเลขคิดจากกี่รายการ คนอ่านจะเข้าใจว่าเป็นยอดทั้งหมด          */
+function repFleetGather(from,to){
+  var MT=(typeof FL_MAINT!=='undefined')?FL_MAINT:[];
+  var IN=(typeof FL_INCIDENTS!=='undefined')?FL_INCIDENTS:[];
+  var PJ=(typeof FL_PROJECTS!=='undefined')?FL_PROJECTS:[];
+  var MO=(typeof FL_MEMOS!=='undefined')?FL_MEMOS:[];
+  var SF=(typeof FL_SAFETY!=='undefined')?FL_SAFETY:[];
+  var IV=(typeof FL_INVENTORY!=='undefined')?FL_INVENTORY:[];
+  var EN=(typeof FL_ENGINES!=='undefined')?FL_ENGINES:[];
+  var DL=(typeof FL_DAILY!=='undefined')?FL_DAILY:{};
+  var BO=(typeof BOATS!=='undefined')?BOATS:[];
+  var days=repDays(from,to), nD=days.length, inR=function(d){ return d&&d>=from&&d<=to; };
+  var O={ nDays:nD, boats:BO.length,
+          inc:0, incBy:{}, incSev:{}, incOpen:0,
+          mjOpen:0, mjDone:0, mjCost:0, mjCostN:0, mjDays:[], mjOpenList:[], downBy:{}, downTot:0,
+          pjActive:0, pjDone:0, pjLate:0, pjList:[],
+          memoN:0, memoAmt:0, memoPend:0, memoPendAmt:0, memoBySup:{}, memoByType:{},
+          engHrs:{}, engTot:0,
+          invZero:0, invLow:0, invHave:0, invVal:0,
+          gaps:[] };
+
+  /* เหตุการณ์ */
+  IN.forEach(function(x){
+    if(!inR(String(x.date||'').slice(0,10))) return;
+    O.inc++;
+    var sv=String(x.severity||'—');
+    O.incSev[sv]=(O.incSev[sv]||0)+1;
+    var bid=x.boatId||'—'; O.incBy[bid]=(O.incBy[bid]||0)+1;
+    if(['open','inprogress'].indexOf(String(x.status))>=0) O.incOpen++;
+  });
+
+  /* งานซ่อม · วันจอดคิดจากช่วงที่ทับกับช่วงรายงานเท่านั้น
+     งานที่เริ่มก่อนช่วงและยังไม่จบ ต้องนับเฉพาะวันที่อยู่ในช่วง ไม่ใช่ทั้งงาน */
+  MT.forEach(function(m){
+    var a=String(m.startDate||'').slice(0,10), b=String(m.endDate||'').slice(0,10)||to;
+    if(!a) return;
+    if(a>to || b<from) return;
+    if(inR(a)){ if(String(m.status)==='done') O.mjDone++; else O.mjOpen++; }
+    /* §repLayout6 · เก็บใบที่ยังไม่ปิดไว้ทั้งหมด (ไม่ใช่เฉพาะที่เปิดในช่วง)
+       เพราะใบที่เปิดค้างมาก่อนช่วงคือใบที่ค้างนานที่สุด ซึ่งเป็นใบที่ต้องรู้ */
+    if(String(m.status)!=='done'){
+      var _ag=Math.round((repParse(to)-repParse(a))/86400000)+1;
+      var _bo=(typeof getBoat==='function')?getBoat(m.boatId):null;
+      O.mjOpenList.push({ nm:String(m.title||m.no||m.type||'งานซ่อม'),
+        bt:(_bo&&_bo.name)||m.boatId||'', age:_ag, st:a, so:String(m.status||'') });
+    }
+    if((+m.cost||0)>0 && inR(a)){ O.mjCost+=(+m.cost||0); O.mjCostN++; }
+    if(m.startDate && m.endDate){
+      var dd=Math.round((repParse(b)-repParse(a))/86400000)+1;
+      if(inR(a)) O.mjDays.push(dd);
+    }
+  });
+  /* ── วันที่เรือออกงานไม่ได้ ───────────────────────────────────────────
+     ห้ามนับจากช่วงวันของใบงานซ่อม · ใบส่วนใหญ่ไม่เคยถูกปิด (21 จาก 24 ไม่มีวันจบ
+     มีใบเปิดค้างตั้งแต่ปลายปีก่อน) และใบซ้ำของลำเดียวกันจะถูกนับทับกันอีกชั้น
+     ใช้ getCurStatus(เรือ, วัน) ตัวเดียวกับที่ Dashboard ใช้ตัดสิน "พร้อม/ไม่พร้อม"
+     ไล่ทีละลำทีละวัน · นับซ้ำไม่ได้โดยธรรมชาติ และตอบตรงกับหน้าอื่นเสมอ */
+  var _act=BO.filter(function(b){ return b && !b.retired; });
+  O.boatsAll=_act.length;
+  /* ลำที่ "ไม่ว่างเลยสักวัน" ทั้งช่วง = จอดทิ้ง/เลิกใช้ แต่ยังไม่ถูกทำเครื่องหมายปลดระวาง
+     ถ้าเอามาหารรวมด้วย อัตราพร้อมใช้จะเพี้ยนไปทั้งกอง (วัดได้ 25% ทั้งที่ลำที่ใช้จริง ~95%)
+     จึงคิดเฉพาะลำที่ยังมีวันพร้อมใช้อยู่บ้าง · ลำที่เหลือยกไปเป็นข้อสังเกตเรื่องข้อมูล */
+  var _av={}, _idle=[];
+  _act.forEach(function(bt){
+    var n=0;
+    days.forEach(function(ds){
+      var stt=null;
+      try{ stt=(typeof getCurStatus==='function')?getCurStatus(bt,ds):null; }catch(_){}
+      if(String((stt&&stt.s)||'available')==='available') n++;
+    });
+    _av[bt.id]=n;
+    if(n===0) _idle.push(bt);
+  });
+  O.idleBoats=_idle.length;
+  O.idleNames=_idle.map(function(b){ return b.name||b.id; });
+  var _use=_act.filter(function(b){ return _av[b.id]>0; });
+  O.boats=_use.length;
+  _use.forEach(function(bt){
+    var dn=nD-_av[bt.id];
+    if(dn>0){ O.downBy[bt.id]=dn; O.downTot+=dn; }
+  });
+  O.mjAvgDays = O.mjDays.length ? Math.round(O.mjDays.reduce(function(a,b){return a+b;},0)/O.mjDays.length) : 0;
+  O.avail = (O.boats*nD>0) ? Math.max(0,Math.round((1-O.downTot/(O.boats*nD))*100)) : 0;
+
+  /* โครงการ · ไม่มีงบตั้งไว้เลยสักโครงการ จึงดูที่ "ตรงแผนไหม" แทน */
+  PJ.forEach(function(p){
+    var a=String(p.actualFrom||p.planFrom||'').slice(0,10);
+    var e=String(p.planTo||'').slice(0,10);
+    if(!a) return;
+    if(a>to) return;
+    if(e && e<from && String(p.status)==='completed') return;
+    var late=0;
+    if(e && String(p.status)!=='completed' && e<to) late=Math.round((repParse(to)-repParse(e))/86400000);
+    if(String(p.status)==='completed') O.pjDone++; else O.pjActive++;
+    if(late>0) O.pjLate++;
+    O.pjList.push({name:p.name||p.no||'-', boatId:p.boatId, type:p.type||'-',
+                   status:p.status, planTo:e, late:late});
+  });
+
+  /* จัดซื้อ */
+  MO.forEach(function(m){
+    var d=String(m.createdDate||'').slice(0,10); if(!inR(d)) return;
+    if(String(m.status)==='cancelled') return;
+    var amt=+(m.afterDiscount||m.amount||0)||0;
+    O.memoN++; O.memoAmt+=amt;
+    if(String(m.status)==='pending_approval'){ O.memoPend++; O.memoPendAmt+=amt; }
+    var sup=String(m.supplier||'—'); O.memoBySup[sup]=(O.memoBySup[sup]||0)+amt;
+    var ty=String(m.memoType||'—'); O.memoByType[ty]=(O.memoByType[ty]||0)+amt;
+  });
+
+  /* ── ชั่วโมงเดินเครื่อง ────────────────────────────────────────────────
+     ค่าใน FL_DAILY เป็น "เลขไมล์ชั่วโมง" ที่อ่านจากหน้าปัด (2,231 → 5,907)
+     ไม่ใช่ชั่วโมงที่เดินในวันนั้น · เอามาบวกกันทุกวันจะได้เลขหลักล้าน
+     ชั่วโมงที่เดินจริงในช่วง = ค่าอ่านครั้งสุดท้าย ลบ ค่าอ่านครั้งแรก ของเครื่องนั้น */
+  var _rd={};
+  days.forEach(function(ds){
+    var day=DL[ds]; if(!day) return;
+    Object.keys(day).forEach(function(bid){
+      var tr=(day[bid]||{}).trips||{};
+      Object.keys(tr).forEach(function(mode){
+        var eg=(tr[mode]||{}).engines||{};
+        Object.keys(eg).forEach(function(eid){
+          var h=+eg[eid]||0; if(!h) return;
+          var k=bid+'|'+eid, r=_rd[k];
+          if(!r) _rd[k]={bid:bid, lo:h, hi:h, n:1};
+          else { if(h<r.lo) r.lo=h; if(h>r.hi) r.hi=h; r.n++; }
+        });
+      });
+    });
+  });
+  O.engReads=0;
+  Object.keys(_rd).forEach(function(k){
+    var r=_rd[k]; O.engReads+=r.n;
+    var run=Math.max(0, r.hi-r.lo);      /* อ่านครั้งเดียวในช่วง = บอกไม่ได้ว่าเดินเท่าไร = 0 */
+    if(run>0){ O.engHrs[r.bid]=(O.engHrs[r.bid]||0)+run; O.engTot+=run; }
+  });
+
+  /* อะไหล่ · ค่าขั้นต่ำถูกตั้งไว้ 5 เท่ากันหมด ไม่ใช่จุดสั่งซื้อจริงรายชิ้น
+     ตัวเลขที่มีความหมายจริงคือ "เหลือศูนย์" ไม่ใช่ "ต่ำกว่าขั้นต่ำ" */
+  var minSet={};
+  IV.forEach(function(i){
+    var q=+(i.totalQty!=null?i.totalQty:i.qty)||0, mn=+i.minQty||0;
+    if(q<=0) O.invZero++;
+    if(mn>0){ O.invHave++; minSet[mn]=(minSet[mn]||0)+1; if(q<mn) O.invLow++; }
+    O.invVal+=q*(+i.cost||0);
+  });
+  O.invMinUniform = (Object.keys(minSet).length===1) ? Object.keys(minSet)[0] : '';
+  O.invN=IV.length;
+
+  /* ความครบของข้อมูล · เอาไปทำสไลด์ตรง ๆ ไม่ซ่อน */
+  var mjInR=MT.filter(function(m){ return inR(String(m.startDate||'').slice(0,10)); }).length;
+  if(mjInR>0 && O.mjCostN<mjInR)
+    O.gaps.push(['warn','ค่าใช้จ่ายงานซ่อม บันทึกไว้ '+O.mjCostN+' จาก '+mjInR+' งาน',
+      'ยอดค่าซ่อมในสไลด์ก่อนหน้าจึงเป็นของเท่าที่บันทึกไว้ ไม่ใช่ยอดจริงทั้งหมด']);
+  if(PJ.length && !PJ.some(function(p){ return (+p.plannedBudget||0)>0; }))
+    O.gaps.push(['warn','ไม่มีโครงการไหนตั้งงบไว้เลย ('+PJ.length+' โครงการ)',
+      'เทียบ "งบ vs ใช้จริง" ไม่ได้ · รายงานจึงดูได้แค่ว่าตรงแผนเวลาไหม']);
+  var pmDef=SF.filter(function(x){ return String(x.nextPM||'')==='2026-01-01'; }).length;
+  if(pmDef>0)
+    O.gaps.push(['warn','อุปกรณ์ความปลอดภัย '+pmDef+' จาก '+SF.length+' ชิ้น ยังใช้วันตรวจตั้งต้น 1 ม.ค.',
+      'ยังไม่ได้ตั้งรอบตรวจจริงรายชิ้น · ทำให้บอกไม่ได้ว่าอันไหนถึงรอบแล้ว']);
+  var cl=(typeof FL_CONSUMABLE_LOGS!=='undefined')?FL_CONSUMABLE_LOGS.length:0;
+  if(cl<10)
+    O.gaps.push(['bad','การเบิกน้ำมัน/ของใช้ บันทึกไว้แค่ '+cl+' รายการ',
+      'คิดค่าน้ำมันต่อเที่ยวหรือต่อที่นั่งไม่ได้เลย · เป็นตัวเลขที่ควรมีที่สุดตัวหนึ่ง']);
+  if(O.idleBoats>0)
+    O.gaps.push(['bad','เรือ '+O.idleBoats+' จาก '+O.boatsAll+' ลำ ไม่พร้อมใช้เลยสักวันตลอดช่วง',
+      'น่าจะเป็นลำที่เลิกใช้หรือจอดทิ้งแล้ว แต่ยังไม่ถูกทำเครื่องหมายปลดระวาง · '
+      +'รายงานนี้จึงตัดออกจากการคิดอัตราพร้อมใช้ ไม่งั้นตัวเลขจะเพี้ยนทั้งกอง ('
+      +O.idleNames.slice(0,5).join(' · ')+(O.idleNames.length>5?(' และอีก '+(O.idleNames.length-5)):'')+')']);
+  if(O.invMinUniform)
+    O.gaps.push(['note','ค่าขั้นต่ำอะไหล่ตั้งไว้ '+O.invMinUniform+' เท่ากันหมดทุกชิ้น',
+      'เป็นค่าตั้งต้น ไม่ใช่จุดสั่งซื้อจริง · อย่าอ่านตัวเลข "ต่ำกว่าขั้นต่ำ" เป็นของขาดจริง']);
+  return O;
+}
+
+
+/* ══ สไลด์ฝ่ายเรือ · ใช้ชิ้นส่วนและโครงการ์ดชุดเดียวกับฝั่งปฏิบัติการ ══ */
+function repFleetSlides(st){
+  var D=repFleetGather(st.from, st.to);
+  var pv=repPrevRange(st.from, st.to);
+  var P=repFleetGather(pv.from, pv.to);
+  var nDay=repDayCount(st.from, st.to);
+  var S=[];
+  var bn=function(id){ var b=(typeof getBoat==='function')?getBoat(id):null; return (b&&b.name)||id||'—'; };
+  var ini=function(t){ return String(t||'').trim().slice(0,2).toUpperCase(); };
+  var SEV={critical:'รุนแรงมาก', major:'รุนแรง', high:'สูง', medium:'ปานกลาง', low:'เล็กน้อย'};
+  var SEVC={critical:'#C0392B', major:'#D9701F', high:'#D89C2B', medium:'#3E7FB0', low:'#8a857d'};
+
+  /* ── 1 · ปก ── */
+  S.push(repSl({lv:'exec', cover:true, body:
+     '<div class="rep-cv"><span class="br">LOVE ANDAMAN</span>'
+    +'<h1>รายงานฝ่ายเรือ</h1>'
+    +'<span class="rg">'+repE(repRangeTH(st.from,st.to))+'</span>'
+    +'<span class="mt">'+nDay+' วัน · เทียบกับ '+repE(repRangeTH(pv.from,pv.to))+'</span></div>'}));
+
+  /* ── 2 · สรุปหน้าเดียว ── */
+  var dw=Object.keys(D.downBy).map(function(id){
+    return {id:id, n:bn(id), v:D.downBy[id], c:'#C0392B',
+      x:Math.round((1-D.downBy[id]/nDay)*100)+'%'}; }).sort(function(a,b){return b.v-a.v;});
+  var sv=Object.keys(D.incSev).map(function(k){
+    return {k:k, n:SEV[k]||k, v:D.incSev[k], c:SEVC[k]||'#8a857d'}; }).sort(function(a,b){return b.v-a.v;});
+  S.push(repSl({lv:'exec', kicker:'ภาพรวม', title:'สรุปช่วง '+repRangeTH(st.from,st.to),
+    sub:'เทียบกับ '+repE(repRangeTH(pv.from,pv.to))+' · '+nDay+' วันเท่ากัน',
+    body: repGrid('g1', [
+      repCard({ t:'ตัวเลขหลัก', pill:D.boats+' ลำที่ใช้งานอยู่',
+        body: repStats([
+          {v:D.avail+'%', k:'เรือพร้อมใช้เฉลี่ย', u:'จาก '+D.boats+' ลำ × '+nDay+' วัน',
+           dl:repDelta(D.avail,P.avail), c:(D.avail>=90?'#0C6B47':(D.avail>=80?'#B4560A':'#A32D2D'))},
+          {v:repN(D.downTot), k:'วัน-ลำ ที่จอดซ่อม',
+           u:(D.mjAvgDays?('งานหนึ่งใช้เฉลี่ย '+D.mjAvgDays+' วัน'):''), dl:repDelta(D.downTot,P.downTot,true)},
+          {v:repN(D.inc), k:'เหตุการณ์',
+           u:(D.incOpen?('ยังไม่ปิด '+D.incOpen+' เรื่อง'):'ปิดครบทุกเรื่อง'), dl:repDelta(D.inc,P.inc,true)},
+          {v:repMoney(D.mjCost+D.memoAmt), k:'ค่าใช้จ่ายรวม',
+           u:'ซ่อม '+repMoney(D.mjCost)+' · จัดซื้อ '+repMoney(D.memoAmt),
+           dl:repDelta(D.mjCost+D.memoAmt,P.mjCost+P.memoAmt,true)}]),
+        foot:'เรือพร้อมออกงานเฉลี่ย <b>'+D.avail+'%</b> ของเวลาทั้งหมด · '
+            +(D.downTot>0?('เสียเวลาไปกับการซ่อม <b>'+repN(D.downTot)+' วัน-ลำ</b>'):'ไม่มีวันจอดซ่อมเลยในช่วงนี้'),
+        footCls:(D.avail>=90?'good':(D.avail>=80?'warn':'bad')) }) ])
+      +repGrid('g2', [
+        repCard({ t:'วันที่เรือจอดซ่อม', pill:(dw.length?dw.length+' ลำ':'ไม่มี'), pillCls:(dw.length?'warn':'ok'),
+                  body: dw.length?repBars(dw):'<div class="rep-say">ไม่มีลำไหนจอดซ่อมในช่วงนี้</div>' }),
+        repCard({ t:'เหตุการณ์แยกตามความรุนแรง', pill:repN(D.inc)+' เรื่อง',
+                  body: sv.length?repBars(sv):'<div class="rep-say">ไม่มีเหตุการณ์ในช่วงนี้</div>' })
+      ])}));
+
+  /* ── 3 · ความพร้อมของเรือ ── */
+  S.push(repSl({lv:'exec', kicker:'ความพร้อม', title:'เรือลำไหนออกงานได้บ้าง',
+    sub:'จากเรือที่ใช้งานอยู่ '+D.boats+' ลำ',
+    body: repGrid('g21', [
+      repCard({ t:'วันที่จอดซ่อม แยกรายลำ', sub:'ตัวเลขจาง ๆ ขวาสุดคือสัดส่วนวันที่พร้อมใช้',
+                body: dw.length?repBars(dw):'<div class="rep-say good">ไม่มีลำไหนจอดซ่อมเลยตลอดช่วงนี้</div>',
+                foot:'ไล่นับทีละลำทีละวันจากสถานะเรือชุดเดียวกับที่หน้า Dashboard ใช้ '
+                    +'· ไม่ได้นับจากช่วงวันของใบงานซ่อม เพราะใบส่วนใหญ่ยังไม่เคยถูกปิด' }),
+      repCard({ t:'สรุป',
+                body: repStats([{v:D.avail+'%', k:'พร้อมใช้เฉลี่ย', u:'ทั้งช่วง',
+                                 c:(D.avail>=90?'#0C6B47':'#B4560A')}])
+                  +repSec('ลำที่จอดนานที่สุด')
+                  +(dw.length?repRows(dw.slice(0,5).map(function(x){
+                      return {b:ini(x.n), c:'#C0392B', n:x.n, s:'พร้อมใช้ '+x.x, v:repN(x.v), u:'วัน'}; }))
+                    :'<div class="rep-cnote">ไม่มีลำไหนจอดซ่อมในช่วงนี้</div>'),
+                foot:(D.idleBoats?('ไม่รวมเรือ <b>'+D.idleBoats+' ลำ</b> ที่ไม่พร้อมใช้เลยตลอดช่วง '
+                     +'ดูสไลด์ “ข้อมูลที่ยังไม่ครบ”'):''), footCls:'warn' })
+    ])}));
+
+  /* ── 4 · เหตุการณ์ ── */
+  var ib=Object.keys(D.incBy).map(function(id){ return {n:bn(id), v:D.incBy[id], c:'#D9701F'}; })
+    .sort(function(a,b){return b.v-a.v;});
+  var dInc=repDelta(D.inc,P.inc,true);
+  S.push(repSl({lv:'exec', kicker:'ความเสี่ยง', title:'เหตุการณ์ที่เกิดขึ้น',
+    body: repGrid('g1', [
+      repCard({ t:'ภาพรวมเหตุการณ์',
+                body: repStats([
+                  {v:repN(D.inc), k:'เหตุการณ์ทั้งหมด', u:'ในช่วงนี้', dl:dInc},
+                  {v:repN(D.incOpen), k:'ยังไม่ปิด', u:'ค้างอยู่',
+                   c:(D.incOpen?'#A32D2D':'#0C6B47')},
+                  {v:repN((D.incSev.critical||0)+(D.incSev.major||0)), k:'ระดับรุนแรงขึ้นไป',
+                   u:'จากทั้งหมด '+repN(D.inc)+' เรื่อง'}]),
+                foot:'เหตุการณ์'+(dInc.dir==='flat'?'เท่ากับช่วงก่อน':
+                  ((dInc.dir==='up'?'เพิ่มขึ้น ':'ลดลง ')+'<b>'+repN(Math.abs(dInc.d))+' เรื่อง</b> เทียบช่วงก่อน')),
+                footCls:dInc.good }) ])
+      +repGrid('g2', [
+        repCard({ t:'แยกตามความรุนแรง',
+                  body: sv.length?repBars(sv):'<div class="rep-say good">ไม่มีเหตุการณ์ในช่วงนี้</div>' }),
+        repCard({ t:'แยกตามลำ', pill:ib.length+' ลำ',
+                  body: ib.length?repRows(ib.slice(0,5).map(function(x){
+                    return {b:ini(x.n), c:'#D9701F', n:x.n, s:'เหตุการณ์ในช่วงนี้', v:repN(x.v), u:'เรื่อง'}; }))
+                    :'<div class="rep-cnote">ไม่มีเหตุการณ์ในช่วงนี้</div>' })
+      ])}));
+
+  /* ── 5 · งานซ่อม ── */
+  var _mjO=(D.mjOpenList||[]).slice().sort(function(a,b){ return b.age-a.age; });
+  S.push(repSl({kicker:'งานซ่อม', title:'เปิดกี่งาน ปิดได้กี่งาน',
+    body: repGrid('g1', [
+      repCard({ t:'งานซ่อมในช่วงนี้',
+                body: repStats([
+                  {v:repN(D.mjDone), k:'ปิดงานได้', u:'ในช่วงนี้', dl:repDelta(D.mjDone,P.mjDone), c:'#0C6B47'},
+                  {v:repN(D.mjOpen), k:'ยังไม่ปิด', u:'ค้างอยู่', dl:repDelta(D.mjOpen,P.mjOpen,true)},
+                  {v:(D.mjAvgDays?(D.mjAvgDays+' วัน'):'—'), k:'เวลาเฉลี่ยต่องาน', u:'นับจากวันเริ่มถึงวันปิด'},
+                  {v:repMoney(D.mjCost), k:'ค่าซ่อมที่บันทึกไว้', u:'จาก '+D.mjCostN+' งานที่กรอกค่าใช้จ่าย',
+                   dl:repDelta(D.mjCost,P.mjCost,true)}]),
+                foot:'ยอดค่าซ่อมคิดจาก <b>'+D.mjCostN+' งาน</b>ที่มีการกรอกค่าใช้จ่ายไว้เท่านั้น '
+                    +'· งานที่ยังไม่กรอกไม่ได้ถูกนับ ตัวเลขจริงจึงสูงกว่านี้', footCls:'warn' }) ])
+      /* §repLayout6 · "ยังไม่ปิด 14 ใบ" ไม่พอ · ต้องเห็นว่าใบไหนค้างมานานแค่ไหน */
+      +repGrid('g1', [
+        repCard({ t:'งานที่เปิดค้างนานที่สุด', pill:repN(_mjO.length)+' ใบที่ยังเปิดอยู่',
+          body: _mjO.length
+            ? repTable(['งาน','เรือ','เปิดเมื่อ','ค้างมาแล้ว'],
+                _mjO.slice(0,8).map(function(j){
+                  return [repE(j.nm), repE(j.bt||'—'), repDateTH(j.st),
+                          repN(j.age)+' วัน']; }))
+            : '<div class="rep-say">ไม่มีใบงานซ่อมที่เปิดค้างอยู่</div>',
+          foot:(_mjO.length
+            ? ('ใบที่ค้างนานที่สุดคือ <b>'+repE(_mjO[0].nm)+'</b> ค้างมา <b>'+repN(_mjO[0].age)
+               +' วัน</b> · ถ้างานเสร็จแล้วแต่ยังไม่ได้ปิดใบ ตัวเลขวันจอดซ่อมจะเพี้ยนตามไปด้วย'
+               +'<br>เลข “ยังไม่ปิด '+repN(D.mjOpen)+'” ข้างบนคือใบที่เพิ่งเปิดในช่วงนี้ '
+               +'· ตารางนี้รวมใบที่เปิดค้างมาก่อนหน้าช่วงด้วย จึงมากกว่า')
+            : ''),
+          footCls:(_mjO.length&&_mjO[0].age>120?'warn':'') }) ])}));
+
+  /* ── 6 · ชั่วโมงเครื่องยนต์ ── */
+  var eh=Object.keys(D.engHrs).map(function(id){
+    return {n:bn(id), v:Math.round(D.engHrs[id]), c:'#3E7FB0',
+      x:(nDay?(Math.round(D.engHrs[id]/nDay*10)/10)+' ชม./วัน':'')}; }).sort(function(a,b){return b.v-a.v;});
+  S.push(repSl({kicker:'การใช้งาน', title:'ชั่วโมงเดินเครื่อง',
+    sub:'รวม '+repN(D.engTot)+' ชั่วโมงในช่วงนี้',
+    body: repGrid('g21', [
+      repCard({ t:'แยกรายลำ', pill:eh.length+' ลำ',
+                body: eh.length?repBars(eh):'<div class="rep-say warn">ยังไม่มีการบันทึกชั่วโมงเดินเครื่องในช่วงนี้</div>',
+                foot:'คิดจากเลขไมล์ชั่วโมงหน้าปัดที่บันทึกในใบประจำวัน · เอาค่าอ่านครั้งสุดท้ายลบครั้งแรกของช่วง '
+                    +'เครื่องที่ถูกอ่านแค่ครั้งเดียวจึงยังบอกไม่ได้ว่าเดินไปเท่าไร' }),
+      repCard({ t:'สรุป',
+                body: repStats([{v:repN(D.engTot), k:'ชั่วโมงรวม', u:'ทุกลำรวมกัน'}])
+                  +repSec('ลำที่เดินเครื่องมากที่สุด')
+                  +(eh.length?repRows(eh.slice(0,5).map(function(x){
+                     return {b:ini(x.n), c:'#3E7FB0', n:x.n, s:x.x, v:repN(x.v), u:'ชม.'}; }))
+                    :'<div class="rep-cnote">ยังไม่มีข้อมูลในช่วงนี้</div>') })
+    ])}));
+
+  /* ── 7 · โครงการ ── */
+  var pj=D.pjList.slice().sort(function(a,b){ return b.late-a.late; });
+  S.push(repSl({lv:'exec', kicker:'งานใหญ่', title:'โครงการที่ดำเนินอยู่',
+    body: repGrid('g1', [
+      repCard({ t:'สถานะโครงการ',
+                body: repStats([
+                  {v:repN(D.pjActive), k:'กำลังทำอยู่', u:'ในช่วงนี้'},
+                  {v:repN(D.pjDone), k:'เสร็จแล้ว', u:'ในช่วงนี้', c:'#0C6B47'},
+                  {v:repN(D.pjLate), k:'เลยแผน', u:'ยังไม่เสร็จตามกำหนด',
+                   c:(D.pjLate?'#A32D2D':'#3a3a36')}]) }) ])
+      +repGrid('g1', [
+      repCard({ t:'รายละเอียด', pill:pj.length+' โครงการ',
+                body: pj.length?repTable(['โครงการ','เรือ','ประเภท','สถานะ','เลยแผน'],
+                  pj.slice(0,8).map(function(p){ return [repE(p.name), repE(bn(p.boatId)), repE(p.type),
+                    (p.status==='completed'?'เสร็จแล้ว':'กำลังทำ'),
+                    (p.late>0?('<b style="color:#A32D2D">'+p.late+' วัน</b>'):'ตรงแผน')]; }))
+                  :'<div class="rep-say">ไม่มีโครงการที่คร่อมช่วงนี้</div>',
+                foot:'ยังไม่มีโครงการไหนตั้งงบประมาณไว้ในระบบ · เทียบ “งบ vs ใช้จริง” ไม่ได้ '
+                    +'ดูได้เฉพาะว่าตรงแผนเวลาหรือไม่', footCls:'warn' }) ])}));
+
+  /* ── 8 · อะไหล่ ── */
+  S.push(repSl({kicker:'คลังอะไหล่', title:'ของที่หมดสต็อก',
+    body: repGrid('g1', [
+      repCard({ t:'สถานะคลัง', pill:repN(D.invN)+' รายการ',
+                body: repStats([
+                  {v:repN(D.invZero), k:'รายการที่เหลือ 0', u:'จากทั้งหมด '+repN(D.invN)+' รายการ',
+                   c:(D.invZero>D.invN*0.3?'#A32D2D':'#3a3a36')},
+                  {v:repN(D.invN-D.invZero), k:'ยังมีของ',
+                   u:(D.invN?Math.round((D.invN-D.invZero)/D.invN*100)+'% ของรายการทั้งหมด':''), c:'#0C6B47'},
+                  {v:repMoney(D.invVal), k:'มูลค่าของที่มีอยู่', u:'ตามราคาทุนที่บันทึกไว้'}]),
+                foot:(D.invMinUniform?('ค่าขั้นต่ำในระบบตั้งไว้ '+D.invMinUniform+' เท่ากันหมดทุกชิ้น '
+                  +'ซึ่งเป็นค่าตั้งต้น ไม่ใช่จุดสั่งซื้อจริงรายชิ้น · '
+                  +'สไลด์นี้จึงนับ <b>“เหลือศูนย์”</b> แทน “ต่ำกว่าขั้นต่ำ”'):''), footCls:'warn' }) ])}));
+
+  /* ── 9 · จัดซื้อ ── */
+  var sup=Object.keys(D.memoBySup).map(function(k){ return {n:k, v:D.memoBySup[k], c:'#7A5BC4',
+      disp:repMoney(D.memoBySup[k])}; }).sort(function(a,b){return b.v-a.v;});
+  var TY={parts:'อะไหล่', labor:'ค่าแรง/ค่าจ้าง'};
+  var tys=Object.keys(D.memoByType).map(function(k){ return {n:TY[k]||k, v:D.memoByType[k], c:'#0891B2',
+      disp:repMoney(D.memoByType[k])}; }).sort(function(a,b){return b.v-a.v;});
+  S.push(repSl({lv:'exec', kicker:'ค่าใช้จ่าย', title:'การจัดซื้อ',
+    body: repGrid('g1', [
+      repCard({ t:'ใบขอซื้อในช่วงนี้',
+                body: repStats([
+                  {v:repN(D.memoN), k:'ใบขอซื้อ', u:'ในช่วงนี้', dl:repDelta(D.memoN,P.memoN,true)},
+                  {v:repMoney(D.memoAmt), k:'ยอดรวม', u:'บาท', dl:repDelta(D.memoAmt,P.memoAmt,true)},
+                  {v:repN(D.memoPend), k:'ค้างอนุมัติ', u:repMoney(D.memoPendAmt)+' บาท',
+                   c:(D.memoPend?'#B4560A':'#0C6B47')}]) }) ])
+      +repGrid('g2', [
+        repCard({ t:'แยกตามประเภท',
+                  body: tys.length?repBars(tys):'<div class="rep-cnote">ไม่มีใบขอซื้อในช่วงนี้</div>' }),
+        repCard({ t:'ผู้ขาย 5 อันดับแรก',
+                  body: sup.length?repRows(sup.slice(0,5).map(function(x){
+                    return {b:ini(x.n), c:'#7A5BC4', n:x.n, s:'ยอดสะสมในช่วงนี้',
+                            v:repMoney(x.v), u:'บาท'}; }))
+                    :'<div class="rep-cnote">ไม่มีใบขอซื้อในช่วงนี้</div>' })
+      ])}));
+
+  /* ── 10 · ความครบของข้อมูล ── */
+  S.push(repSl({kicker:'คุณภาพข้อมูล', title:'ข้อมูลที่ยังไม่ครบ',
+    sub:'รายงานนี้แม่นได้เท่าที่ข้อมูลถูกบันทึก',
+    body: D.gaps.length?('<div class="rep-todo">'+D.gaps.map(function(g){
+        return '<div class="rep-td '+g[0]+'"><b>'+repE(g[1])+'</b><span>'+repE(g[2])+'</span></div>'; }).join('')+'</div>')
+      :repGrid('g1',[repCard({t:'ครบแล้ว', body:'<div class="rep-say good">ข้อมูลครบทุกช่องที่รายงานนี้ต้องใช้</div>'})])}));
+
+  /* ── 11 · สิ่งที่ต้องตัดสินใจ ── */
+  var todo=[];
+  if(D.incOpen>0) todo.push(['bad','เหตุการณ์ที่ยังไม่ปิด '+D.incOpen+' เรื่อง',
+    'ควรไล่ดูว่าติดที่อะไหล่ ที่ช่าง หรือรออนุมัติ']);
+  if(D.idleBoats>0) todo.push(['bad','เรือ '+D.idleBoats+' ลำค้างสถานะ “ไม่พร้อมใช้” ทั้งช่วง',
+    'ถ้าเลิกใช้แล้วควรทำเครื่องหมายปลดระวาง · ถ้ายังจะใช้ ต้องรู้ว่าติดอะไรอยู่ ตอนนี้มันทำให้ตัวเลขทั้งกองเพี้ยน']);
+  if(D.pjLate>0) todo.push(['warn','โครงการเลยแผน '+D.pjLate+' โครงการ',
+    'เรือที่ติดโครงการอยู่ออกงานไม่ได้ · กระทบตารางเดินเรือโดยตรง']);
+  if(D.avail<90) todo.push(['warn','เรือพร้อมใช้เฉลี่ยแค่ '+D.avail+'%',
+    'เสียไป '+repN(D.downTot)+' วัน-ลำ · ดูว่าเป็นการซ่อมตามแผนหรือซ่อมฉุกเฉิน']);
+  if(D.memoPend>0) todo.push(['note','ใบขอซื้อค้างอนุมัติ '+D.memoPend+' ใบ ('+repMoney(D.memoPendAmt)+' บาท)',
+    'ของที่รออนุมัติอาจเป็นตัวที่ทำให้งานซ่อมค้าง']);
+  if(!todo.length) todo.push(['good','ไม่มีเรื่องที่ต้องตัดสินใจเร่งด่วน','ทุกตัวเลขอยู่ในเกณฑ์']);
+  S.push(repSl({lv:'exec', kicker:'ก้าวต่อไป', title:'สิ่งที่ต้องตัดสินใจ',
+    sub:repN(todo.length)+' เรื่อง',
+    body:'<div class="rep-todo">'+todo.map(function(t){
+      return '<div class="rep-td '+t[0]+'"><b>'+t[1]+'</b><span>'+t[2]+'</span></div>'; }).join('')+'</div>'}));
+
+  return S;
 }
 
 /* ══════════ §pkTk · ตั๋วอุทยาน ═══════════════════════════════════════════
