@@ -910,7 +910,13 @@ function _dashLiveFeedHtml(dx,F,side){
     var t0=(b.trips||[])[0]||{};
     var _r0=(typeof getRoute==='function'&&t0.routeId)?getRoute(t0.routeId):null;
     var rn=(_r0&&_r0.name)||(function(){ var f=(typeof bkV2RouteFamily==='function'&&t0.routeId)?bkV2RouteFamily(t0.routeId):null; return f?f.name:'—'; })();
-    var pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t0.pax||{}):0; var val=(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0);
+    /* §livePax · ใบจองหนึ่งใบมีได้หลายทริป (แพ็กสองวัน · ทริปต่อเนื่อง)
+       ของเดิมนับ pax จากทริปแรกใบเดียว คนของทริปที่เหลือหายไปเงียบ ๆ
+       เงินไม่พลาดเพราะ acctBookingTotal คิดทั้งใบอยู่แล้ว · ที่พลาดคือหัวคน */
+    var _trs=(b.trips||[]);
+    var pax=0;
+    if(typeof bkV2PaxAllTot==='function') _trs.forEach(function(t){ pax+=bkV2PaxAllTot(t.pax||{}); });
+    var val=(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0);
     var ini=(nm||'?').replace(/[^A-Za-z0-9ก-๙ ]/g,'').trim().split(/\s+/).map(function(w){return w[0];}).join('').slice(0,2).toUpperCase()||'?';
     var pair=AV[i%AV.length].split('|'); var isNew=o.ts>0 && (Date.now()-o.ts)<600000; var cx=CXL.indexOf(b.status)>=0;
     /* §liveVc · เลข voucher คือสิ่งที่คนใช้คุยกับเอเจนต์และใช้ค้นในระบบ
@@ -950,7 +956,7 @@ function _dashLiveFeedHtml(dx,F,side){
       +'<span class="dv-lvm">'+mark+'</span>'
       +'<span class="dv-lvtx">'
         +'<span class="rt" style="color:'+rcol+'">'+rn+(cx?' <em>· ยกเลิก</em>':'')+'</span>'
-        +'<span class="dt">'+dtxt+' &middot; '+pax+' pax'
+        +'<span class="dt">'+dtxt+(_trs.length>1?(' +'+(_trs.length-1)):'')+' &middot; '+pax+' pax'
           +(vc?(' &middot; <b title="'+vcRaw.replace(/"/g,'&quot;')+'">'+vc+'</b>'):'')+'</span>'
       +'</span>'
       +'<span class="dv-lvrt"><span class="m">&#3647;'+Math.round(val).toLocaleString()+'</span>'
@@ -965,8 +971,10 @@ function _dashLiveFeedHtml(dx,F,side){
     if(side==='b2b' && _isB2C(b)) return;
     if(side==='b2c' && !_isB2C(b)) return;
     if(String(b.bookingDate||b.createdAt||'').slice(0,10)!==_sd) return;
-    var t=(b.trips||[])[0]||{};
-    _sN++; _sP+=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
+    /* §livePax · เหมือนกับในแถว · รวมหัวคนทุกทริปของใบนั้น */
+    (b.trips||[]).forEach(function(t){
+      _sP+=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; });
+    _sN++;
     _sM+=(typeof acctBookingTotal==='function')?(+acctBookingTotal(b)||0):(+b.total||0);
     if(b.agentId) _sA[b.agentId]=1;
   });
@@ -975,7 +983,8 @@ function _dashLiveFeedHtml(dx,F,side){
     +'<div class="dv-lvhd">'
       +'<span class="s"><b>'+_sN+'</b><i>ใบวันนี้</i></span><span class="sep"></span>'
       +'<span class="s"><b>'+_sP+'</b><i>pax</i></span><span class="sep"></span>'
-      +'<span class="s"><b>'+_mShort(_sM)+'</b><i>ยอดวันนี้</i></span><span class="sep"></span>'
+      +'<span class="s" title="'+Math.round(_sM).toLocaleString()+' \u0e1a\u0e32\u0e17"><b>'
+        +_mShort(_sM)+'</b><i>\u0e22\u0e2d\u0e14\u0e27\u0e31\u0e19\u0e19\u0e35\u0e49</i></span><span class="sep"></span>'
       +'<span class="s"><b>'+(side==='b2c'?_mShort(_sN?_sM/_sN:0):Object.keys(_sA).length)+'</b><i>'+(side==='b2c'?'เฉลี่ย / ใบ':'เอเย่นต์')+'</i></span>'
     +'</div>';
   return '<div class="dv-c" style="'+F+'padding:0 12px 12px">'
