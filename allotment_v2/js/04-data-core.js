@@ -965,7 +965,7 @@ function _dashLiveFeedHtml(dx,F,side){
   });
   if(!rows) rows='<div style="font-size:12px;color:#9a958c;text-align:center;padding:14px 0">ยังไม่มี booking</div>';
   /* แถบสรุปหัวฟีด · จำนวนใบ / pax / ยอดเงิน ของ "วันที่เลือกอยู่" ไม่ใช่ทั้งกอง */
-  var _sd=(window._dashDate||TODAY_STR), _sN=0,_sP=0,_sM=0,_sA={};
+  var _sd=(window._dashDate||TODAY_STR), _sN=0,_sP=0,_sM=0,_sA={}, _sL=[];
   BK.forEach(function(b){
     if(!(b.schemaVer===2 && CXL.indexOf(b.status)<0)) return;
     if(side==='b2b' && _isB2C(b)) return;
@@ -975,16 +975,26 @@ function _dashLiveFeedHtml(dx,F,side){
     (b.trips||[]).forEach(function(t){
       _sP+=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; });
     _sN++;
-    _sM+=(typeof acctBookingTotal==='function')?(+acctBookingTotal(b)||0):(+b.total||0);
+    var _bv=(typeof acctBookingTotal==='function')?(+acctBookingTotal(b)||0):(+b.total||0);
+    _sM+=_bv;
     if(b.agentId) _sA[b.agentId]=1;
+    /* §liveAudit · รายการข้างล่างเป็น "12 ใบล่าสุด" ไม่ได้กรองวัน และรวมใบที่ยกเลิกด้วย
+       ส่วนแถวสรุปนับเฉพาะใบของวันที่เลือกและไม่เอาใบยกเลิก · สองชุดนี้จึงบวกไม่ตรงกัน
+       เก็บว่ายอดนี้มาจากใบไหนบ้าง แล้วเอาไปใส่ไว้ในคำบรรยายของตัวเลข
+       จะได้ตรวจได้จากหน้าจอจริงโดยไม่ต้องเปิดฐานข้อมูล */
+    _sL.push(String(b.voucherRef||b.code||b.id||'?')+' '+Math.round(_bv).toLocaleString());
   });
   var _mShort=function(v){ v=+v||0; return v>=1000000?('฿'+(v/1000000).toFixed(1)+'M'):(v>=1000?('฿'+Math.round(v/1000)+'k'):('฿'+Math.round(v))); };
   var head=''
     +'<div class="dv-lvhd">'
-      +'<span class="s"><b>'+_sN+'</b><i>ใบวันนี้</i></span><span class="sep"></span>'
+      +'<span class="s" title="'+(_sL.length
+          ? (_sL.join(' \u00b7 ')+' \u0e1a\u0e32\u0e17').replace(/"/g,'&quot;')
+          : '\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e43\u0e1a\u0e08\u0e2d\u0e07\u0e02\u0e2d\u0e07\u0e27\u0e31\u0e19\u0e19\u0e35\u0e49')
+        +'"><b>'+_sN+'</b><i>\u0e43\u0e1a\u0e27\u0e31\u0e19\u0e19\u0e35\u0e49</i></span><span class="sep"></span>'
       +'<span class="s"><b>'+_sP+'</b><i>pax</i></span><span class="sep"></span>'
-      +'<span class="s" title="'+Math.round(_sM).toLocaleString()+' \u0e1a\u0e32\u0e17"><b>'
-        +_mShort(_sM)+'</b><i>\u0e22\u0e2d\u0e14\u0e27\u0e31\u0e19\u0e19\u0e35\u0e49</i></span><span class="sep"></span>'
+      +'<span class="s" title="'+Math.round(_sM).toLocaleString()+' \u0e1a\u0e32\u0e17'
+        +(_sL.length?(' = '+_sL.join(' + ')):'')
+        +'"><b>'+_mShort(_sM)+'</b><i>\u0e22\u0e2d\u0e14\u0e27\u0e31\u0e19\u0e19\u0e35\u0e49</i></span><span class="sep"></span>'
       +'<span class="s"><b>'+(side==='b2c'?_mShort(_sN?_sM/_sN:0):Object.keys(_sA).length)+'</b><i>'+(side==='b2c'?'เฉลี่ย / ใบ':'เอเย่นต์')+'</i></span>'
     +'</div>';
   return '<div class="dv-c" style="'+F+'padding:0 12px 12px">'
