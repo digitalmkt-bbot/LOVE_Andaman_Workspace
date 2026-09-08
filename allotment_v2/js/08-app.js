@@ -51849,7 +51849,9 @@ function repOpsGather(from,to){
       var dd=O.byDate[d]||(O.byDate[d]={pax:0,booked:0,boats:{}}); dd.pax+=real; dd.booked+=booked;
       /* เส้นทาง */
       var rid=t.routeId||'-';
-      var rr=O.byRoute[rid]||(O.byRoute[rid]={pax:0,booked:0,bk:0,rev:0}); rr.pax+=real; rr.booked+=booked; rr.bk++;
+      var rr=O.byRoute[rid]||(O.byRoute[rid]={pax:0,booked:0,bk:0,rev:0,days:{},runs:{},bo:{}});
+      rr.pax+=real; rr.booked+=booked; rr.bk++;
+      rr.days[d]=1;                        /* §repSched · วันที่โปรแกรมนี้ออกจริง */
       rr.rev+=(+b.total||0)/Math.max(1,(b.trips||[]).length);
       /* เรือ + ท่า */
       var op=(typeof bkOpsRead==='function')?bkOpsRead(b,d):(b.ops||{});
@@ -51857,6 +51859,9 @@ function repOpsGather(from,to){
       if(bid){
         var bb=O.byBoat[bid]||(O.byBoat[bid]={pax:0,days:{},bk:0}); bb.pax+=real; bb.bk++; bb.days[d]=1;
         dd.boats[bid]=1;
+        /* §repSched · หนึ่งเที่ยว = หนึ่งลำในหนึ่งวันของโปรแกรมนั้น
+           นับเป็นเซ็ตเพื่อไม่ให้หลายใบจองบนเรือลำเดียวกันกลายเป็นหลายเที่ยว */
+        if(rr){ rr.runs[d+'|'+bid]=1; rr.bo[bid]=1; }
       }
       var rt=(typeof getRoute==='function')?getRoute(rid):null;
       var pier=(rt&&rt.pier)||'-';
@@ -52010,6 +52015,17 @@ function repOrbit(o){
   return '<div class="rep-ob">'+cell(0,'l',1)+cell(1,'r',1)
     +'<div class="rep-obc"><b>'+o.cv+'</b><span>'+repE(o.ck||'')+'</span></div>'
     +cell(2,'l',2)+cell(3,'r',2)+'</div>';
+}
+/* แท่งตั้งเจ็ดคอลัมน์ · ใช้กับจังหวะรายวันในสัปดาห์ ที่ต้องอ่านซ้ายไปขวา */
+function repWeekBars(rows){
+  var max=Math.max.apply(null,rows.map(function(r){return +r.v||0;}).concat([1]));
+  return '<div class="rep-wk">'+rows.map(function(r){
+    var h=Math.max(6,(+r.v||0)/max*100);
+    return '<div class="rep-wkc"><span class="v">'+(r.disp||repN(r.v))+'</span>'
+      +'<span class="b" style="height:'+h.toFixed(1)+'%"></span>'
+      +'<span class="n">'+repE(r.n)+'</span>'
+      +(r.x?('<span class="s">'+repE(r.x)+'</span>'):'')+'</div>';
+  }).join('')+'</div>';
 }
 function repSl(o){
   return '<section class="rep-sl'+(o.cover?' cover':'')+(o.bare?' bare':'')
@@ -52224,6 +52240,61 @@ function repOpsSlides(st){
                     +(fell.n&&fell!==grew?('<br><b>'+repE(fell.n)+'</b> fell the most, −'+repN(Math.abs(fell.v-fell.prev))+' passengers'):'') })
     ])}));
 
+  /* ── 6b · ตารางเดินเรือรายโปรแกรม ──
+     ตารางจริง ๆ ที่ใช้เทียบได้ทีละคอลัมน์ · ยุบเป็นรายโปรแกรมเพราะช่วงรายงาน
+     มักยาวหลายสิบวัน การลงทุกเที่ยวจะกลายเป็นหลายร้อยแถวที่ไม่มีใครอ่าน */
+  var PIERN={panwa:'Panwa', tublamu:'Tab Lamu', ranong:'Ranong'};
+  var sched=Object.keys(D.byRoute).map(function(id){
+    var r=D.byRoute[id];
+    var rt=(typeof getRoute==='function')?getRoute(id):null;
+    var nd=Object.keys(r.days||{}).length;
+    var nr=Object.keys(r.runs||{}).length;
+    var nb=Object.keys(r.bo||{}).length;
+    return { n:rn(id), c:rc(id),
+      pier:(rt&&PIERN[rt.pier])||(rt&&rt.pier)||'—',
+      tm:((rt&&rt.times&&rt.times.length)?rt.times.join(' · '):'—'),
+      nd:nd, nr:nr, nb:nb, pax:r.pax,
+      avg:(nr?Math.round(r.pax/nr):0),
+      fill:(r.cap?pc(r.pax,r.cap):0) };
+  }).sort(function(a,b){return b.pax-a.pax;});
+  var runTot=sched.reduce(function(a,x){return a+x.nr;},0);
+  /* จังหวะรายวันในสัปดาห์ · นับจากจำนวนลำที่ออกในแต่ละวัน แล้วรวมตามวันในสัปดาห์
+     เริ่มวันจันทร์ เพราะตารางเดินเรืออ่านเป็นสัปดาห์ทำงาน ไม่ได้อ่านเป็นปฏิทิน */
+  var DOW=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  var dw7=DOW.map(function(n){ return {n:n, v:0, d:0, pax:0}; });
+  days.forEach(function(x){
+    var k=(repParse(x.ds).getDay()+6)%7;      /* อาทิตย์=0 → ท้ายแถว */
+    dw7[k].v+=x.boats; dw7[k].pax+=x.pax; if(x.boats>0) dw7[k].d++;
+  });
+  var dwBest=dw7.slice().sort(function(a,b){return b.v-a.v;})[0]||{};
+  var dwWorst=dw7.filter(function(x){return x.d>0;}).sort(function(a,b){return a.v-b.v;})[0]||{};
+  S.push(repSl({lv:'exec', kicker:'Schedule', title:'Sailing schedule by programme',
+    sub:sched.length+' programmes ran over '+nDay+' days',
+    body: repGrid('g1', [
+      repCard({ t:'Across the period',
+        body: repStats([
+          {v:repN(runTot), k:'Sailings run', u:'one boat, one day, one programme'},
+          {v:repN(D.capDays), k:'Operating days', u:'days with at least one programme open'},
+          {v:repN(Object.keys(D.byBoat).length), k:'Boats used', u:'across all programmes'},
+          {v:repN(runTot?D.pax/runTot:0), k:'Average per sailing', u:'passengers'}]) }) ])
+      +repGrid('g1', [
+      repCard({ t:'Programme by programme', pill:sched.length+' programmes',
+        body: (sched.length
+          ? repTable(['Programme','Pier','Departs','Days run','Sailings','Boats','Passengers','Avg / sailing','Seat fill'],
+              sched.slice(0,9).map(function(x){
+                return [repE(x.n), repE(x.pier), repE(x.tm), repN(x.nd), repN(x.nr), repN(x.nb),
+                        repN(x.pax), repN(x.avg), (x.fill?(x.fill+'%'):'—')]; }))
+          : '<div class="rep-say">No programme ran in this period</div>')
+          +repSec('Sailings by day of week')
+          +repWeekBars(dw7.map(function(x){
+              return {n:x.n, v:x.v, disp:repN(x.v),
+                      x:(x.d?repN(x.pax/Math.max(1,x.d))+' pax':'—')}; })),
+        foot:'Departure times are the scheduled ones, not what each boat actually cast off at · '
+            +'one sailing = one boat, one day, one programme'
+            +(sched.length>9?(' · showing 9 of '+sched.length+' programmes'):'')
+            +(dwBest.n?('<br>Busiest day of the week is <b>'+dwBest.n+'</b> with '+repN(dwBest.v)+' sailings'
+              +(dwWorst.n&&dwWorst.n!==dwBest.n?(', lightest is <b>'+dwWorst.n+'</b> with '+repN(dwWorst.v)):'')):'') }) ])}));
+
   /* ── 7 · เรือรายลำ · ตาราง (ต้องอ่านหลายคอลัมน์พร้อมกัน) ── */
   var bt=Object.keys(D.byBoat).map(function(id){
     var b=D.byBoat[id], nd=Object.keys(b.days).length;
@@ -52426,7 +52497,7 @@ function repOpsSlides(st){
       items:[
         ['The period at a glance','Passengers, sailings, fill rate, sales'],
         ['Pace and daily volume','How the months and days ran'],
-        ['Programme mix','What sold and what moved'],
+        ['Programme mix','What sold, what moved, and the sailing schedule'],
         ['Fleet usage','How hard each boat worked'],
         ['Channels and markets','Agents, direct sales, nationalities'],
         ['Quality and money','Booked vs travelled, sales and invoicing'] ] }),
@@ -52839,7 +52910,7 @@ function repCSS(){
 
   /* ── หัวข้อย่อยในการ์ด ── */
   +H+' .rep-csec{font-size:13px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;'
-     +'color:'+FNT+';padding:16px 0 10px;margin-top:2px;flex:none;'
+     +'color:'+FNT+';padding:14px 0 8px;margin-top:2px;flex:none;'
      +'border-top:1.5px solid rgba(255,255,255,.9)}'
 
   /* ── รายการย่อย ── */
@@ -52873,6 +52944,18 @@ function repCSS(){
   +H+' .rep-bar .vv{width:110px;flex:none;text-align:right;font:800 21px inherit;'
      +'letter-spacing:-.02em;color:'+INK+'}'
   +H+' .rep-bar .xx{width:76px;flex:none;text-align:right;font:700 14px inherit;color:'+FNT+'}'
+
+  /* ── จังหวะรายวันในสัปดาห์ · แท่งตั้ง ── */
+  +H+' .rep-wk{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:16px;flex:none;'
+     +'height:138px;padding:0 0 4px}'
+  +H+' .rep-wkc{display:grid;grid-template-rows:auto 1fr auto auto;align-items:end;'
+     +'justify-items:center;gap:7px;min-width:0}'
+  +H+' .rep-wkc{gap:5px}'
+  +H+' .rep-wkc .v{font-size:18px;font-weight:800;letter-spacing:-.02em;color:'+INK+'}'
+  +H+' .rep-wkc .b{width:100%;align-self:end;border-radius:10px 10px 5px 5px;background:'+PBTN+';'
+     +'box-shadow:0 7px 16px rgba(91,55,216,.24)}'
+  +H+' .rep-wkc .n{font-size:15px;font-weight:800;color:'+MUT+'}'
+  +H+' .rep-wkc .s{font-size:12px;font-weight:600;color:'+FNT+';margin-top:-3px}'
 
   /* ── กราฟรายวัน ── */
   +H+' .rep-trend{flex:1;display:flex;flex-direction:column;min-height:0;padding:8px 0 12px}'
