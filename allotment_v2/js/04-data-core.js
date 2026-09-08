@@ -398,29 +398,21 @@ function boatJobBlock(boatId, ds){
      awaiting_bill ไม่นับ — งานจบหน้างานแล้ว เหลือแต่บิล เรือกลับไปวิ่งได้ */
   try{
     if(typeof FL_PROJECTS!=='undefined' && Array.isArray(FL_PROJECTS)){
-      /* §boatLogWins · โปรเจกต์พวกนี้ไม่ได้มาจากเซิร์ฟเวอร์
-         /api/load ส่ง fleet_projects มา 0 ใบ · ของในหน้าถูก generate สดจาก boat.log
-         planTo จึงเป็นค่าที่ระบบเดาให้ ไม่ใช่ของที่คนกรอก
-         ของที่ถอดมาจาก log ต้องไม่ย้อนกลับไปคัดค้าน log ต้นฉบับของตัวเอง */
-      var _logAvail=false;
-      try{
-        var _b0=(typeof BOATS!=='undefined'&&Array.isArray(BOATS))
-                ? BOATS.filter(function(x){ return x && x.id===boatId; })[0] : null;
-        var _st0=(_b0 && typeof getStoredStatus==='function') ? getStoredStatus(_b0, ds) : null;
-        _logAvail=!!(_st0 && (_st0.s||'available')==='available');
-      }catch(_e3){}
+      /* §boatJobRule · ใบงานที่ยังเปิดอยู่ กันเรือเสมอ
+         ไม่ว่าตารางสถานะเรือจะถูกตั้งไว้ว่าอะไร · สองชั้นนี้ทำงานแยกกัน
+           ตารางสถานะ · ตั้งล่วงหน้าไว้วางแผน/เปิดที่นั่ง
+           ใบงาน      · งานจริงที่ยังทำอยู่ · ปิดหมดเมื่อไหร่เรือถึงกลับมา
+         เคยลองให้ตารางสถานะชนะ (§boatLogWins) แล้วผิด · ถอนออกแล้ว
+         เคสที่ฟ้อง · Okeanos ปิด MJ-058 "Annual Drydog" ไป log เขียน available ให้
+         แต่ PRJ-015 ใบแม่ของงานเดียวกันยังเปิดค้าง · ถ้าปล่อยตาม log
+         เรือจะกลับมารับแขกทั้งที่ใบเข้าอู่ยังไม่ปิด
+         ทางออกที่ถูกคือไปปิดใบงาน · ปิดแล้ว flMaintClose คืนสถานะให้เอง
+         และยังเช็คต่อว่ามีใบอื่นค้างอีกไหม ถ้ามีก็คงไม่พร้อมไว้จนกว่าจะปิดหมด */
       FL_PROJECTS.forEach(function(p){
         if(!p || p.boatId!==boatId) return;
         if(p.status!=='inprogress' && p.status!=='on_hold') return;
         var from=p.actualFrom||p.planFrom||'';
         if(from && from>ds) return;                 // ยังไม่ถึงวันเริ่ม · ไม่กันวันนี้
-        /* ของเดิมมีแค่บรรทัดบน · ไม่เคยเช็ควันจบเลย ใบที่จบแล้วจึงกันเรือตลอดกาล
-           วัดของจริง · ใบ planTo 2026-02-01 ยังกันเรือวันที่ 2027-06-01 */
-        var to=p.actualTo||p.planTo||'';
-        if(to && to<ds) return;                     // จบไปแล้ว
-        /* log บอกว่าวันนั้นเรือพร้อม = คนไปดูเรือมาแล้วบอกเอง · ให้ log ชนะ
-           ใบซ่อม (MJ) ที่คนเปิดเองยังกันเหมือนเดิม ไม่ได้ผ่อนตรงนั้น */
-        if(_logAvail) return;
         if(_boatRank('unavailable')>_boatRank(out.s)) out.s='unavailable';
         var pr=(p.type==='drydock')?'dry_dock':(p.type==='overhaul')?'overhaul':'';
         out.jobs.push({no:p.no||'PRJ', t:'unavailable', kind:'prj', r:pr});
