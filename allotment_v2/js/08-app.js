@@ -130,6 +130,19 @@ const SB_TRANSFER_ZONES = ['PK','KL','NoTransfer'];
      ไล่หาโซนอื่นที่มีเรตแทน (ดูลำดับใน §tsNetRate) ซึ่งไม่พังแต่ก็ยังไม่ใช่เรตระนองจริง
      ถ้าจะขายระนองผ่านเอเจนต์ ต้องเพิ่มคอลัมน์ RN ในสัญญาอีกงานหนึ่ง */
 var LA_PICKUP_ZONES = ['PK','KL','RN','NoTransfer'];
+/* §rnZone2 · โซนราคาของ "เส้นทางหนึ่ง" · ตามท่าที่เรือออก
+   ระนองออกจากท่าระนอง จะให้เลือกจุดรับภูเก็ต/เขาหลักไม่ได้อยู่แล้ว
+   ส่วนเส้นภูเก็ต/เขาหลักก็ไม่ควรมีแถว RN ว่างโผล่มาทุกใบ
+   existing = ก้อนเรตที่มีอยู่จริงของเส้นนั้น · โซนไหนมีข้อมูลแล้วต้องไม่หายไป
+   แม้จะไม่ตรงกับท่า (เช่นสัญญาเก่าที่เคยคีย์ PK ไว้บนเส้นระนอง) */
+function rtZonesForRoute(rId, existing){
+  var r=(typeof getRoute==='function')?getRoute(rId):null;
+  var pier=(r&&r.pier)||'';
+  var out=(pier==='ranong') ? ['RN','NoTransfer'] : ['PK','KL','NoTransfer'];
+  if(existing) Object.keys(existing).forEach(function(z){ if(out.indexOf(z)<0) out.push(z); });
+  return out;
+}
+window.rtZonesForRoute=rtZonesForRoute;
 function laZoneLabel(z){
   return ({PK:'PK \u00b7 Phuket', KL:'KL \u00b7 Khao Lak', RN:'RN \u00b7 Ranong',
            NoTransfer:'No Transfer', NT:'No Transfer'})[z] || (z||'No Transfer');
@@ -32144,12 +32157,12 @@ function rtDraftToggleRoute(rId){
   } else {
     _rtDraft.routes.push(rId);
     // Seed empty seat rates for new route if missing
+    /* §rnZone2 · หว่านโซนตั้งต้นตามท่าของเส้นนั้น · เส้นระนองได้ RN ไม่ใช่ PK/KL */
     if(!_rtDraft.seatRates[rId]){
-      _rtDraft.seatRates[rId] = {
-        PK: {'adult-thai':0,'child-thai':0,'adult-fr':0,'child-fr':0,'infant-thai':0,'infant-fr':0},
-        KL: {'adult-thai':0,'child-thai':0,'adult-fr':0,'child-fr':0,'infant-thai':0,'infant-fr':0},
-        NoTransfer: {'adult-thai':0,'child-thai':0,'adult-fr':0,'child-fr':0,'infant-thai':0,'infant-fr':0}
-      };
+      const _blank = () => ({'adult-thai':0,'child-thai':0,'adult-fr':0,'child-fr':0,'infant-thai':0,'infant-fr':0});
+      const _seed = {};
+      rtZonesForRoute(rId).forEach(z => { _seed[z] = _blank(); });
+      _rtDraft.seatRates[rId] = _seed;
     }
   }
   rtModalRender();
@@ -32368,8 +32381,9 @@ function rtModalRender(){
   if(!host || !_rtDraft) return;
   const d = _rtDraft;
   const ROUTES_ARR = (typeof ROUTES !== 'undefined' && ROUTES) || [];
-  const ZONES = ['PK','KL','NoTransfer'];
-  const TRANSFER_ZONES = ['PK','KL'];
+  /* §rnZone2 · รายชื่อโซนย้ายไปคิดรายเส้นทางแล้ว (rtZonesForRoute)
+     ของเดิมฝังไว้ตรงนี้ตายตัว เส้นระนองเลยได้คอลัมน์ภูเก็ต/เขาหลักมาแทน
+     TRANSFER_ZONES ที่เคยประกาศไว้ตรงนี้ไม่มีใครเรียกเลย จึงเอาออก */
   const _rtScope = d.nationalityScope || 'both';   // §per-rate-type nationality · both | thai | fr
   const PAX = (typeof rtNatPax==='function') ? rtNatPax(_rtScope) : ['adult-thai','child-thai','adult-fr','child-fr'];
   const PAX_LBL = {'adult-thai':'Adult TH','child-thai':'Child TH','adult-fr':'Adult FR','child-fr':'Child FR'};
@@ -32403,6 +32417,7 @@ function rtModalRender(){
       const r = ROUTES_ARR.find(x=>x.id===rId);
       const rName = r ? r.name : rId;
       const rr = d.seatRates[rId] || {};
+      const ZONES = rtZonesForRoute(rId, rr);      /* §rnZone2 · โซนตามท่าของเส้นนี้ */
       const rv = (d.routeValidity && d.routeValidity[rId]) || {};
       const bundle = (d.routeBundles && d.routeBundles[rId] && d.routeBundles[rId].longtail) || null;
       const bundleOn = !!bundle;
@@ -32413,7 +32428,7 @@ function rtModalRender(){
         <div style="padding:9px 12px;background:${bundleOn?'#FFF7E8':'#fafaf8'};border-bottom:1px solid var(--fd-line);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
           <div style="flex:1;min-width:180px">
             <div style="font-size:12px;font-weight:600;color:var(--fd-ink)">${rName}</div>
-            <div style="font-size:9.5px;color:var(--fd-ink-soft);font-variant-numeric:tabular-nums;margin-top:1px">${rId} · 3 zones × ${PAX.length} pax types</div>
+            <div style="font-size:9.5px;color:var(--fd-ink-soft);font-variant-numeric:tabular-nums;margin-top:1px">${rId} · ${ZONES.length} zones × ${PAX.length} pax types</div>
           </div>
           <div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--fd-line);border-radius:8px;padding:4px 10px">
             <span style="font-size:9px;font-weight:700;color:var(--fd-ink-soft);letter-spacing:.06em;text-transform:uppercase">Active</span>
@@ -34888,7 +34903,7 @@ function ctRenewRender(){
   } else if(step === 2){
     const carryItems = [
       { key:'programs', name:'Programs in Contract', meta:`${(a.programPeriods||[]).length} routes`, count:`${(a.programPeriods||[]).length} programs` },
-      { key:'prices', name:'Pricing Matrix', meta:`${(a.programs||[]).length} routes × ${SB_TRANSFER_ZONES.length} zones × 6 pax types`, count:'ราคาเดิม' },
+      { key:'prices', name:'Pricing Matrix', meta:`${(a.programs||[]).length} routes × zone × 6 pax types`, count:'ราคาเดิม' },
       { key:'addons', name:'Additional Services', meta:`${(a.addonServices||[]).length} services`, count:`${(a.addonServices||[]).reduce((s,x)=>s+(x.variants||[]).length,0)} variants` },
       { key:'booking', name:'Booking Channel + Cutoff Policy', meta:`${a.bookingChannel?.method||'—'} · ${a.bookingChannel?.cutoff||'—'}`, count:'unchanged' },
       { key:'signatory', name:'Agent Signatory', meta:`${a.agentSignatory?.name||'—'} · signed ${ctFmtDate(a.agentSignatory?.signedDate)}`, count:'re-sign needed', recommend:'off' },
@@ -35159,12 +35174,15 @@ function ctRenderArchivedBody(agent, archive){
           <tbody>
             ${priceRoutes.map(r=>{
               const routePrices = prices[r.id]||{};
-              return SB_TRANSFER_ZONES.map((zone,zi)=>{
+              /* §rnZone2 · จำนวนโซนไม่เท่ากันทุกเส้นแล้ว · rowspan ต้องนับตามจริง
+                 ของเดิมฝัง rowspan="3" ไว้ เส้นระนองสองแถวจะทำให้ตารางเหลื่อม */
+              const _zs = rtZonesForRoute(r.id, routePrices);
+              return _zs.map((zone,zi)=>{
                 const pz = routePrices[zone]||{};
                 const zoneLabel = zone==='NoTransfer'?'No':zone;
-                const zoneColor = zone==='PK'?'#1a7fa0':zone==='KL'?'#0F6E56':'#7a8fa3';
+                const zoneColor = zone==='PK'?'#1a7fa0':zone==='KL'?'#0F6E56':zone==='RN'?'#8A4FBF':'#7a8fa3';
                 return `<tr ${zi===0?'class="prog-row"':''}>
-                  ${zi===0?`<td rowspan="3" style="vertical-align:top;background:#fff !important;font-size:11px">
+                  ${zi===0?`<td rowspan="${_zs.length}" style="vertical-align:top;background:#fff !important;font-size:11px">
                     <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${r.color||'#999'};margin-right:5px"></span><strong>${r.name}</strong>
                   </td>`:''}
                   <td><span class="sb-chip" style="background:${zoneColor}15;color:${zoneColor};font-size:9px;padding:1px 6px">${zoneLabel}</span></td>
@@ -35249,7 +35267,7 @@ function ctRenderArchivedBody(agent, archive){
 
     <div class="ct-arch-sect">
       <div class="ct-arch-sect-hd">
-        <div class="ct-arch-sect-ttl">Pricing Matrix <span class="ct-arch-sect-cnt">${priceRoutes.length} routes × 3 zones</span></div>
+        <div class="ct-arch-sect-ttl">Pricing Matrix <span class="ct-arch-sect-cnt">${priceRoutes.length} routes</span></div>
       </div>
       ${pricesHtml}
     </div>
