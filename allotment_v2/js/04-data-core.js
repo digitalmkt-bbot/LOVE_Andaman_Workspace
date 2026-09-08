@@ -879,8 +879,18 @@ function _dashLiveB2CHtml(dx,F){ return _dashLiveFeedHtml(dx,F,'b2c'); }
 function laIsB2C(b){
   if(!b) return false;
   if(String(b.id||'').indexOf('b2c_')===0) return true;
+  /* §b2cHouse · ใบที่ซิงก์มาจากเว็บ B2C ถูกแขวนไว้ใต้ "เอเยนต์บ้าน" a_b2c
+     ซึ่งชื่อในระบบคือ "Love Andaman" · ไม่ใช่เอเยนต์จริง เป็นบัญชีของเราเอง
+     (note ในเรคอร์ดเขียนไว้ว่า House account · B2C online bookings)
+     ถ้านับเป็น B2B ฟีดขายเองจะขึ้นศูนย์ทั้งที่ขายได้จริง 130 ใบ
+     หน้า B2B channel ก็ตัดใบพวกนี้ออกด้วยเกณฑ์เดียวกันอยู่แล้ว */
+  if(b.channelType==='b2c' || b.b2cChannel || b.agentId==='a_b2c') return true;
   if(!b.agentId) return true;
-  return !((typeof sbGetAgent==='function') && sbGetAgent(b.agentId));
+  var _a=(typeof sbGetAgent==='function') ? sbGetAgent(b.agentId) : null;
+  /* เผื่อบัญชีบ้านถูกสร้างด้วย id อื่น · ในข้อมูลจริงมีรายการเดียวที่เข้าเงื่อนไขนี้ */
+  if(_a && (String(_a.code||'').toUpperCase()==='B2C'
+            || String(_a.market||'').toLowerCase()==='b2c')) return true;
+  return !_a;
 }
 function _dashLiveFeedHtml(dx,F,side){
   var BK=(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]); var CXL=['cancelled','rejected','cancelled_weather'];
@@ -917,9 +927,12 @@ function _dashLiveFeedHtml(dx,F,side){
     var rcol=_dvInk(_rc);
     var mark;
     if(_isB2C(b)){
-      mark=(typeof laAgencyMark==='function' && /^b2c_/.test(String(b.id||'')))
-        ? laAgencyMark(b,13,{inline:true,margin:false,pad:'3px 6px',radius:'7px'})
-        : '<span class="dv-lvmk" style="background:#FDE6EE;color:#8C2D52">'+(nm||'B2C')+'</span>';
+      /* §b2cHouse · ให้ laAgencyMark ตัดสินเองว่าใบนี้ขึ้นโลโก้ได้ไหม (มันรู้จักทั้ง
+         ใบที่ซิงก์มาจากเว็บและใบใต้บัญชีบ้าน) · ถ้าคืนค่าว่าง ค่อยตกมาเป็นชิปตัวหนังสือ
+         แบบเดียวกับที่หน้าอื่น ๆ ใช้ ไม่ปล่อยให้ช่องป้ายว่างเปล่า */
+      mark=((typeof laAgencyMark==='function')
+            ? laAgencyMark(b,13,{inline:true,margin:false,pad:'3px 6px',radius:'7px'}) : '')
+        || '<span class="dv-lvmk" style="background:#FDE6EE;color:#8C2D52">'+(nm||'B2C')+'</span>';
     } else {
       /* เอาเฉพาะสีที่ User ตั้งเองจริง ๆ (a.color จากหน้า By trip)
          bkV2AgentColor จะเดาสีจากจานมาตรฐานให้ถ้าไม่ได้ตั้ง — ในฟีดนี้ไม่เอา
