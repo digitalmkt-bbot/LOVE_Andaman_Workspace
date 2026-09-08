@@ -398,11 +398,29 @@ function boatJobBlock(boatId, ds){
      awaiting_bill ไม่นับ — งานจบหน้างานแล้ว เหลือแต่บิล เรือกลับไปวิ่งได้ */
   try{
     if(typeof FL_PROJECTS!=='undefined' && Array.isArray(FL_PROJECTS)){
+      /* §boatLogWins · โปรเจกต์พวกนี้ไม่ได้มาจากเซิร์ฟเวอร์
+         /api/load ส่ง fleet_projects มา 0 ใบ · ของในหน้าถูก generate สดจาก boat.log
+         planTo จึงเป็นค่าที่ระบบเดาให้ ไม่ใช่ของที่คนกรอก
+         ของที่ถอดมาจาก log ต้องไม่ย้อนกลับไปคัดค้าน log ต้นฉบับของตัวเอง */
+      var _logAvail=false;
+      try{
+        var _b0=(typeof BOATS!=='undefined'&&Array.isArray(BOATS))
+                ? BOATS.filter(function(x){ return x && x.id===boatId; })[0] : null;
+        var _st0=(_b0 && typeof getStoredStatus==='function') ? getStoredStatus(_b0, ds) : null;
+        _logAvail=!!(_st0 && (_st0.s||'available')==='available');
+      }catch(_e3){}
       FL_PROJECTS.forEach(function(p){
         if(!p || p.boatId!==boatId) return;
         if(p.status!=='inprogress' && p.status!=='on_hold') return;
         var from=p.actualFrom||p.planFrom||'';
-        if(from && from>ds) return;
+        if(from && from>ds) return;                 // ยังไม่ถึงวันเริ่ม · ไม่กันวันนี้
+        /* ของเดิมมีแค่บรรทัดบน · ไม่เคยเช็ควันจบเลย ใบที่จบแล้วจึงกันเรือตลอดกาล
+           วัดของจริง · ใบ planTo 2026-02-01 ยังกันเรือวันที่ 2027-06-01 */
+        var to=p.actualTo||p.planTo||'';
+        if(to && to<ds) return;                     // จบไปแล้ว
+        /* log บอกว่าวันนั้นเรือพร้อม = คนไปดูเรือมาแล้วบอกเอง · ให้ log ชนะ
+           ใบซ่อม (MJ) ที่คนเปิดเองยังกันเหมือนเดิม ไม่ได้ผ่อนตรงนั้น */
+        if(_logAvail) return;
         if(_boatRank('unavailable')>_boatRank(out.s)) out.s='unavailable';
         var pr=(p.type==='drydock')?'dry_dock':(p.type==='overhaul')?'overhaul':'';
         out.jobs.push({no:p.no||'PRJ', t:'unavailable', kind:'prj', r:pr});
@@ -5690,8 +5708,11 @@ function bop2FleetStatus(dateStr){
       const _blk = (typeof boatJobBlock === 'function') ? boatJobBlock(b.id, dateStr) : { jobs: [] };
       const _mjNos = (_blk.jobs || []).filter(j => j && j.kind === 'mj').map(j => j.no).filter(Boolean);
       let _overdue = false;
-      if(typeof FL_PROJECTS!=='undefined' && FL_PROJECTS){
-        const proj = FL_PROJECTS.find(p=>p.boatId===b.id && (p.status==='inprogress'||p.status==='on_hold'));
+      /* §boatLogWins · ของเดิมหยิบโปรเจกต์ใบไหนก็ได้ที่ยังเปิดอยู่มาขึ้นเป็นเหตุผล
+         ทั้งที่ใบนั้นอาจไม่ใช่ตัวที่กันเรืออยู่จริง · ให้ตรงกับชั้นที่กันจริงเท่านั้น */
+      const _prjNos = (_blk.jobs || []).filter(j => j && j.kind === 'prj').map(j => j.no).filter(Boolean);
+      if(_prjNos.length && typeof FL_PROJECTS!=='undefined' && FL_PROJECTS){
+        const proj = FL_PROJECTS.find(p=>p.boatId===b.id && _prjNos.indexOf(p.no)>=0);
         if(proj){
           const tag = proj.status==='on_hold' ? '[HOLD]' : '[PROJ]';
           const kind = proj.type==='drydock'?'Drydock':proj.type==='overhaul'?'Overhaul':'Project';
