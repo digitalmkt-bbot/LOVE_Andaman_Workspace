@@ -3074,12 +3074,25 @@ const server = http.createServer((req, res) => {
     }
     res.writeHead(200,head(null)); res.end(data); });
 });
-// Pre-warm the app HTML's brotli buffer at startup. q11 takes ~7s on the 4.9MB file — cheap once per
-// deploy, but only if nobody is waiting on it, so pay it here rather than on the first user's request.
+// Pre-warm the static compression cache at startup, so no user's request pays for a cold buffer —
+// cheap once per deploy, but only if nobody is waiting on it.
 // Same fp/etag derivation as the static handler above, or the cache would not be hit.
 // §jsSplit (2026-08-27): the JS is no longer inline in the HTML, so pre-warming the HTML alone left
-// the heavy files (js/08-app.js ~4MB, js/05-fleet.js ~1.6MB) to pay q11 on the first user's request.
+// the heavy files (js/08-app.js ~5MB, js/05-fleet.js ~1.7MB) to pay q11 on the first user's request.
 // Warm each one in sequence — sequential, not parallel, so the boot doesn't peg every core at once.
+// §prewarmGzip (2026-09-08): warm GZIP first, brotli second. Measured through Cloudflare on prod:
+// .js/.css sit on CF's default cacheable-extension list, so CF terminates the encoding negotiation
+// itself and — with Brotli not enabled on the zone — asks the origin for gzip and serves gzip
+// (`Accept-Encoding: br, gzip` -> gzip; only a br-ONLY request comes back br). The app HTML is
+// CF-Cache-Status DYNAMIC, i.e. never cached, so its brotli passes straight through to the browser.
+// Net: gzip is the hot path for every JS/CSS byte staff actually download, and it was the one encoding
+// this function never built — the first request after each deploy paid it on demand, queued behind
+// ~13s of q11 brotli for those same files that CF then never asked for. gzip -6 over the whole set
+// costs ~0.2s. Brotli is still warmed afterwards: it is what the HTML is served as today, and what
+// every file would be served as the moment a CF Compression Rule lists Brotli ahead of Gzip.
+// (Quality stays at q11 here. Measured on js/08-app.js: q9 1040KB/288ms vs q11 938KB/7232ms — the
+// cliff is between q9 and q10. q11 is worth it for a once-per-deploy cost now that it is not in
+// front of the gzip warm; drop BR_STATIC to 9 if boot CPU on the container ever becomes the problem.)
 function prewarmStatic(){
   const rel = ['/allotment_v2/allotment_v2.html'];
   for(const [dir, ext] of [['css','.css'], ['js','.js']]){       // css first — it is render-blocking
@@ -3088,17 +3101,30 @@ function prewarmStatic(){
         rel.push('/allotment_v2/'+dir+'/'+f);
     }catch(_){}
   }
-  let i = 0;
+  // Whole gzip pass before the first brotli file — a per-file [gzip,br] interleave would put 8s of
+  // q11 on js/08-app.js ahead of the gzip buffer for every file after it. Each file is read once per
+  // pass; that re-read is served from the OS page cache and is noise next to the compression itself.
+  const jobs = [];
+  for(const enc of ['gzip','br']) for(const r of rel) jobs.push([enc, r]);
+  let i = 0, tAll = Date.now(), tPass = Date.now(), pass = 'gzip';
   (function next(){
-    if(i >= rel.length) return;
-    const fp = path.normalize(path.join(ROOT, rel[i++]));
+    if(i >= jobs.length)
+      return console.log('[prewarm] all encodings warm in '+((Date.now()-tAll)/1000).toFixed(1)+'s');
+    const [enc, r] = jobs[i++];
+    if(enc !== pass){   // pass boundary: gzip done, brotli starting
+      console.log('[prewarm] gzip pass done in '+((Date.now()-tPass)/1000).toFixed(1)+'s — serving; brotli pass starting');
+      pass = enc; tPass = Date.now();
+    }
+    const fp = path.normalize(path.join(ROOT, r));
     fs.readFile(fp,(err,data)=>{ if(err||!data) return next();
       const etag='"'+crypto.createHash('sha1').update(data).digest('hex').slice(0,20)+'"';
       const t0=Date.now();
-      compress('br', data, BR_STATIC, (cErr,buf)=>{ if(cErr) return next();
+      compress(enc, data, BR_STATIC, (cErr,buf)=>{ if(cErr) return next();
+        // Reuse the slot the gzip pass created for this etag — one buffer per encoding, same key, so
+        // the brotli pass must not evict the gzip buffer (or vice versa on a mid-boot file change).
         const hit=_gzCache.get(fp), slot=(hit&&hit.etag===etag)?hit:{etag};
-        slot.br=buf; _gzCache.set(fp,slot);
-        console.log('[prewarm] '+path.basename(fp)+' br: '+(data.length/1048576).toFixed(2)+'MB -> '
+        slot[enc]=buf; _gzCache.set(fp,slot);
+        console.log('[prewarm] '+path.basename(fp)+' '+enc+': '+(data.length/1048576).toFixed(2)+'MB -> '
           +(buf.length/1048576).toFixed(2)+'MB in '+(Date.now()-t0)+'ms');
         next(); });
     });
