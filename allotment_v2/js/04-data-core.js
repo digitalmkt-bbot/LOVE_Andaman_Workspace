@@ -375,7 +375,11 @@ function getBoat(id){return BOATS.find(b=>b.id===id);}
 var _BOAT_RANK={available:0, fixing:1, unavailable:2, retired:3};
 function _boatRank(x){ var v=_BOAT_RANK[x]; return (v==null)?0:v; }
 /* งานที่ยังกันเรืออยู่ ณ วันที่ถาม · คืนสถานะที่เข้มที่สุด + รายการใบงาน */
-function boatJobBlock(boatId, ds){
+/* raw = อ่านใบงานดิบ ไม่สนการวางล่วงหน้าที่เคยกดยืนยันไว้
+   ใช้ตอนจะถามคนว่า "ยังมีใบค้างอยู่นะ จะวางล่วงหน้าไหม" เท่านั้น
+   ถ้าจุดนั้นอ่านแบบปกติ มันจะเห็นการวางล่วงหน้าของตัวเองแล้วนึกว่าไม่มีใบค้าง
+   dialog ไม่เด้ง แล้วการวางล่วงหน้าจะถูกล้างทิ้งตอนบันทึกซ้ำ (§boatPlanAhead2) */
+function boatJobBlock(boatId, ds, raw){
   ds = ds || TODAY_STR;
   var out={s:'available', jobs:[]};
   if(!boatId) return out;
@@ -386,7 +390,7 @@ function boatJobBlock(boatId, ds){
      วันนั้นเรือกลับมาแล้ว · ให้การยืนยันนั้นมีผลกับใบที่ระบุไว้ ในช่วงวันของแถวนั้น
      ใบที่เปิดทีหลัง ไม่อยู่ในรายการ จึงยังกันเต็มตามเดิม */
   var _ovr=null;
-  try{
+  if(!raw) try{
     var _bo=(typeof BOATS!=='undefined'&&Array.isArray(BOATS))
             ? BOATS.filter(function(x){ return x && x.id===boatId; })[0] : null;
     var _row=(_bo && typeof getStoredStatus==='function') ? getStoredStatus(_bo, ds) : null;
@@ -4799,7 +4803,9 @@ function saveStatus(){
      และต้องบอกด้วยว่าระบบจะยังกันเรือไว้อยู่ดี จะได้ไม่เข้าใจผิดว่ากดแล้วเรือกลับมาแล้ว */
   var _ovrJobs=null;   /* §boatPlanAhead · ใบที่คนยืนยันว่ารู้แล้วตอนวางล่วงหน้า */
   if(selSt==='available' && typeof boatJobBlock==='function'){
-    const _blk=boatJobBlock(b.id, from);
+    /* §boatPlanAhead2 · raw · ต้องเห็นใบจริงทั้งหมด ไม่ใช่ที่ตัวเองเคยยกเว้นไว้
+       ไม่งั้นบันทึกซ้ำครั้งที่สอง dialog จะไม่เด้ง แล้วลบการวางล่วงหน้าทิ้ง */
+    const _blk=boatJobBlock(b.id, from, true);
     if(_blk.jobs.length){
       /* §boatPlanAhead · ของเดิมเตือนแล้วบอกว่า "จะยังกันเรือไว้อยู่ดี"
          แปลว่ากดยืนยันไปก็ไม่เกิดอะไรขึ้น · การกดจึงไม่มีความหมาย
