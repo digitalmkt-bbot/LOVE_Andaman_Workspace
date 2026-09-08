@@ -375,6 +375,22 @@ function getBoat(id){return BOATS.find(b=>b.id===id);}
 var _BOAT_RANK={available:0, fixing:1, unavailable:2, retired:3};
 function _boatRank(x){ var v=_BOAT_RANK[x]; return (v==null)?0:v; }
 /* งานที่ยังกันเรืออยู่ ณ วันที่ถาม · คืนสถานะที่เข้มที่สุด + รายการใบงาน */
+/* §boatPlanAhead3 · ป้ายที่ใช้ทำเครื่องหมายว่าแถวนี้คือการวางเรือล่วงหน้า
+   เก็บไว้ใน note เพราะฟิลด์ใหม่ไม่รอดชั้น sync (ดูหัวไฟล์แพตช์)
+   note รอดแน่ · ของจริงบนเซิร์ฟเวอร์มีข้อความนี้พร้อมเลขใบครบอยู่แล้ว */
+var LA_PLAN_MARK='วางล่วงหน้าทั้งที่ยังมีงานค้าง · ';
+function laRowPlanJobs(row){
+  if(!row) return null;
+  if(Array.isArray(row.ovrJobs) && row.ovrJobs.length) return row.ovrJobs;   // ทางลัด ถ้าฟิลด์รอด
+  var n=String(row.note||''); var i=n.indexOf(LA_PLAN_MARK);
+  if(i<0) return null;
+  var out=[];
+  n.slice(i+LA_PLAN_MARK.length).split(' · ').forEach(function(t){
+    t=String(t||'').trim();
+    if(/^[A-Za-z]{2,6}-\d+$/.test(t)) out.push(t);   // MJ-038 · PRJ-014 · หยุดเมื่อเจอข้อความอื่น
+  });
+  return out.length?out:null;
+}
 /* raw = อ่านใบงานดิบ ไม่สนการวางล่วงหน้าที่เคยกดยืนยันไว้
    ใช้ตอนจะถามคนว่า "ยังมีใบค้างอยู่นะ จะวางล่วงหน้าไหม" เท่านั้น
    ถ้าจุดนั้นอ่านแบบปกติ มันจะเห็นการวางล่วงหน้าของตัวเองแล้วนึกว่าไม่มีใบค้าง
@@ -394,8 +410,7 @@ function boatJobBlock(boatId, ds, raw){
     var _bo=(typeof BOATS!=='undefined'&&Array.isArray(BOATS))
             ? BOATS.filter(function(x){ return x && x.id===boatId; })[0] : null;
     var _row=(_bo && typeof getStoredStatus==='function') ? getStoredStatus(_bo, ds) : null;
-    if(_row && (_row.s||'available')==='available' && Array.isArray(_row.ovrJobs) && _row.ovrJobs.length)
-      _ovr=_row.ovrJobs;
+    if(_row && (_row.s||'available')==='available') _ovr=laRowPlanJobs(_row);   // §boatPlanAhead3
   }catch(_e0){}
   var _skip=function(no){ return !!(_ovr && no && _ovr.indexOf(no)>=0); };
   /* ใบซ่อม · เฉพาะใบที่ยังทำอยู่ และใบนั้นระบุเองว่าเรือวิ่งไม่ได้
