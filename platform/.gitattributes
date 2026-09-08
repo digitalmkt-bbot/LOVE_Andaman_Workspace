@@ -1,0 +1,4 @@
+# Prettier checks with endOfLine:"lf". Without this, a Windows checkout with
+# core.autocrlf=true gets CRLF working files and `pnpm format:check` fails on
+# every file, while Linux CI passes. Keep the platform tree LF everywhere.
+* text=auto eol=lf

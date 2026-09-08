@@ -6,7 +6,13 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --env-file=.env server.js",
-    "safari": "node tools/safari-smoke.js"
+    "safari": "node tools/safari-smoke.js",
+    "ci:boot-smoke": "node tools/ci-boot-smoke.mjs",
+    "dev:local": "node tools/dev-db.mjs run",
+    "db:up": "node tools/dev-db.mjs up",
+    "db:reset": "node tools/dev-db.mjs reset",
+    "db:down": "node tools/dev-db.mjs down",
+    "db:psql": "node tools/dev-db.mjs psql"
   },
   "dependencies": {
     "pg": "^8.13.1"

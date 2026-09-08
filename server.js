@@ -32,6 +32,8 @@ const OS_SCHEMA = 'operation_schemas';
 const USERS_T = DATA_BACKEND === 'relational' ? OS_SCHEMA + '.users' : 'users';
 // os_repo mapping engine + schema model — used by the relational save path AND the per-entity REST API.
 const osRepo  = require('./os-backend/src/mapping/os_repo.js');
+const apiProxy= require('./api-proxy.js');   // backend switch · inert unless API_PROXY_URL is set
+const oidc    = require('./auth/oidc.js');   // Authentik SSO · inert unless AUTH_OIDC_* is configured
 const osModel = require('./os-backend/src/mapping/operation_schemas_model.json');
 const OS_TABLES = Object.keys(osModel);
 const OS_COLS = {};
@@ -2082,7 +2084,11 @@ function cleanAreas(a){
 //   อ่านครั้งเดียวตอนเริ่ม ไม่แตะ request path จึงไม่มีผลกับความเร็ว
 function laSyncPermKeys(){
   try{
-    const fp = path.join(ROOT, 'allotment_v2', 'allotment_v2.html');
+    // §jsSplit (2026-08-27): LA_NAV ย้ายออกจาก allotment_v2.html ไปอยู่ js/01-auth-sync.js แล้ว
+    //   (ทุก inline <script> ถูกแยกออกเป็นไฟล์ .js) · เผื่อ rollback ไฟล์เดียว ยังอ่าน HTML เป็นตัวสำรอง
+    const cands = [ path.join(ROOT, 'allotment_v2', 'js', '01-auth-sync.js'),
+                    path.join(ROOT, 'allotment_v2', 'allotment_v2.html') ];
+    const fp = cands.find(f => { try { return fs.statSync(f).isFile(); } catch(_) { return false; } }) || cands[0];
     const head = fs.readFileSync(fp, 'utf8').slice(0, 400000);   // LA_NAV/LA_AREAS อยู่ต้นไฟล์
     // เอาเฉพาะรูปทรงของ LA_NAV เท่านั้น · {v:'view',t:'...',a:'area'}
     //   ชื่อ area เอาจากช่อง a: ของ LA_NAV ไม่ใช่จาก LA_AREAS เพราะรูปทรง {k:'..',t:'..'}
@@ -2091,11 +2097,11 @@ function laSyncPermKeys(){
     const addP=[], addA=[];
     navs.forEach(m=>{ if(!PERM_KEYS.has(m[1])){ PERM_KEYS.add(m[1]); addP.push(m[1]); }
                       if(!AREA_KEYS.has(m[2])){ AREA_KEYS.add(m[2]); addA.push(m[2]); } });
-    if(!navs.length) console.warn('[perms] LA_NAV not found in allotment_v2.html — using the built-in key list only');
+    if(!navs.length) console.warn('[perms] LA_NAV not found in '+path.basename(fp)+' — using the built-in key list only');
     else console.log('[perms] synced from LA_NAV: '+navs.length+' views, '+AREA_KEYS.size+' areas'
       +(addP.length?(' · added views: '+addP.join(',')):'')
       +(addA.length?(' · added areas: '+[...new Set(addA)].join(',')):''));
-  }catch(e){ console.warn('[perms] could not read LA_NAV from allotment_v2.html: '+e.message+' — using the built-in key list only'); }
+  }catch(e){ console.warn('[perms] could not read LA_NAV from js/01-auth-sync.js: '+e.message+' — using the built-in key list only'); }
 }
 laSyncPermKeys();
 // A user's editable-areas + "can edit anything" flag · editAreas null → falls back to legacy can_edit
@@ -2138,6 +2144,47 @@ async function loadLogoutEpochs(){
   }catch(e){ console.error('[auth] logout_after load failed:', e.message); }   // column missing = migration not applied yet; fall back to old behaviour rather than locking everyone out
 }
 function cookies(req){ const h = req.headers.cookie||''; const o={}; h.split(';').forEach(s=>{ const i=s.indexOf('='); if(i>0) o[s.slice(0,i).trim()] = decodeURIComponent(s.slice(i+1).trim()); }); return o; }
+// ── Authentik claims → a row in USERS_T (2026-08-27) ───────────────────────────────────────────
+// The users row is what carries perms / edit_areas / sales_id, and every screen in the app is gated
+// on them, so an Authentik identity is not by itself an authorisation to do anything here.
+//
+// Matching is on username: this table has no email column, so preferred_username is tried first and
+// then the local part of the email, both case-insensitively.
+//
+// AUTH_OIDC_AUTOCREATE=full provisions a missing user as a FULL-ACCESS ADMIN — perms NULL and
+// edit_areas NULL both mean "no restriction" (parsePerms/editInfo above), and role 'admin' opens
+// user management and the System Log. That means anyone Authentik will admit becomes an ops admin
+// on first sign-in. It is off by default for that reason; turn it on deliberately, for testing, on
+// a deployment where you control who Authentik lets in.
+async function oidcResolveUser(claims){
+  const preferred = String(claims.preferred_username || '').trim();
+  const email     = String(claims.email || '').trim();
+  const candidates = [preferred, email, email.split('@')[0]].map(s => s.trim()).filter(Boolean);
+  if(!candidates.length) throw new Error('Authentik returned no username or email to match on.');
+
+  for(const c of candidates){
+    const r = await pool.query(`SELECT * FROM ${USERS_T} WHERE lower(username)=lower($1)`, [c]);
+    if(r.rows[0]) return r.rows[0];
+  }
+
+  if(oidc.autocreateMode() !== 'full')
+    throw new Error('Signed in to Authentik as "' + (candidates[0]) + '", but there is no matching user in '
+      + 'this app. Ask an admin to create one — or set AUTH_OIDC_AUTOCREATE=full to provision Authentik '
+      + 'users automatically as full-access admins.');
+
+  const username = candidates[0];
+  const name = String(claims.name || claims.given_name || username).trim();
+  // Password login must be impossible for a provisioned account: store a real scrypt hash of a
+  // random secret nobody holds, rather than a sentinel that verifyPw might treat leniently.
+  const unusable = hashPw(crypto.randomBytes(32).toString('hex'));
+  const ins = await pool.query(
+    `INSERT INTO ${USERS_T}(username,pass_hash,name,role,perms,can_edit,edit_areas)
+     VALUES($1,$2,$3,'admin',NULL,true,NULL)
+     ON CONFLICT (username) DO UPDATE SET name=EXCLUDED.name
+     RETURNING *`, [username, unusable, name]);
+  console.warn('[oidc] AUTOCREATE=full provisioned "' + username + '" as a full-access admin');
+  return ins.rows[0];
+}
 function session(req){ return verify(cookies(req).sess||''); }
 // Daily session reset (2026-07-08): sessions expire at the next 03:00 ICT so every user re-logs in each morning → fresh data on login.
 const ICT_OFFSET_MS = 7*3600e3, DAILY_RESET_HOUR = 3;
@@ -2178,6 +2225,10 @@ function compress(enc, data, quality, cb){
 let _loadCache = null;   // { version, str, br?, gzip? }  (compressed buffers filled in lazily per encoding)
 function readBody(req, cb){ let ch=[], n=0; req.on('data',c=>{ n+=c.length; if(n>20*1024*1024){req.destroy();return;} ch.push(c); }); req.on('end',()=>cb(Buffer.concat(ch).toString('utf8'))); }
 function J(res, code, obj, extra){ const h=Object.assign({'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}, extra||{}); res.writeHead(code,h); res.end(JSON.stringify(obj)); }
+// Plain-text reply + HTML escaping — the OIDC routes answer a browser navigation, not fetch(), so a
+// JSON body would be shown to a human as raw JSON.
+function T(res, code, text, extra){ const h=Object.assign({'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}, extra||{}); res.writeHead(code,h); res.end(String(text)); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 // JSON headers · Vary matters as soon as more than one encoding is on offer: without it a proxy can
 // hand a brotli body to a client that only asked for gzip.
 function _jsonHead(enc){ const h={'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','Vary':'Accept-Encoding'};
@@ -2366,6 +2417,60 @@ const server = http.createServer((req, res) => {
   const u = (req.url||'/').split('?')[0];
   const q = (req.url||'').split('?')[1]||'';
 
+  // ───── BACKEND SWITCH · route-level /api proxy (2026-08-28) ─────
+  // First thing in the handler, so a proxied route never reaches a local one. Inert unless
+  // API_PROXY_URL is set, and matches() can only ever be true for an /api path — the app HTML,
+  // the js/css files and /auth/* are structurally unreachable from here. See api-proxy.js.
+  if(apiProxy.enabled() && apiProxy.matches(u)) return apiProxy.forward(req, res, u, q);
+
+  // ───── AUTH · Authentik SSO (2026-08-27) ─────
+  // Both routes are no-ops unless AUTH_OIDC_ISSUER + AUTH_OIDC_CLIENT_ID are set; password login
+  // via /api/login is untouched either way. The whole point of doing the exchange here rather than
+  // in the ops-web SPA is that the session cookie has to be minted on THIS origin — see auth/oidc.js.
+  if(u === '/auth/login' && req.method === 'GET'){
+    if(!oidc.enabled()) return T(res,404,'Authentik sign-in is not configured on this deployment.');
+    return oidc.buildAuthorize(req, SECRET, new URLSearchParams(q).get('next'))
+      .then(({url, cookie}) => { res.writeHead(302,{Location:url,'Set-Cookie':cookie,'Cache-Control':'no-store'}); res.end(); })
+      .catch(e => { console.error('[oidc] authorize failed:', e.message); T(res,502,'Could not start the Authentik sign-in: '+e.message); });
+  }
+  if(u === oidc.CALLBACK_PATH && req.method === 'GET'){
+    if(!oidc.enabled()) return T(res,404,'Authentik sign-in is not configured on this deployment.');
+    if(!pool) return T(res,503,'No database — the session cannot be created.');
+    return oidc.completeCallback(req, SECRET, q, cookies(req)[oidc.TX_COOKIE])
+      .then(({claims, next}) => oidcResolveUser(claims).then(usr => {
+        const perms = parsePerms(usr.perms), ei = editInfo(usr);
+        const EXP = Date.now() + SESS_DAYS*864e5;      // same lifetime as a password login
+        const tok = sign({uid:usr.id, username:usr.username, name:usr.name, role:usr.role, perms:perms,
+                          edit:ei.canEditAny, editAreas:ei.editAreas, salesId:usr.sales_id||null,
+                          iat:Date.now(), exp:EXP});
+        console.log('[oidc] signed in '+usr.username+' via Authentik -> '+next);
+        res.writeHead(302, {Location: next, 'Cache-Control':'no-store', 'Set-Cookie': [
+          `sess=${tok}; HttpOnly; Path=/; SameSite=Lax; Secure; Max-Age=${Math.max(60,Math.floor((EXP-Date.now())/1000))}`,
+          oidc.clearTxCookie(),
+        ]});
+        res.end();
+      }))
+      .catch(e => { console.warn('[oidc] callback rejected:', e.message);
+        res.writeHead(403,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','Set-Cookie':oidc.clearTxCookie()});
+        res.end('<!doctype html><meta charset="utf-8"><title>Sign-in failed</title>'
+          +'<div style="font:15px/1.6 system-ui;max-width:34rem;margin:14vh auto;padding:0 1.5rem">'
+          +'<h1 style="font-size:1.25rem">Sign-in failed</h1><p>'+esc(e.message)+'</p>'
+          +'<p><a href="/auth/login">Try again</a> · <a href="'+esc(oidc.DEFAULT_NEXT)+'">Sign in with a password</a></p></div>');
+      });
+  }
+
+  // Ends the Authentik session too, then comes back to the app. The client calls this instead of
+  // reloading after /api/logout when the server told it SSO is on — see /api/logout below.
+  if(u === '/auth/logout' && req.method === 'GET'){
+    const s = session(req); if(s && s.username) revokeSessions(s.username);
+    const clear = 'sess=; HttpOnly; Path=/; SameSite=Lax; Secure; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0';
+    const back  = '/allotment_v2/allotment_v2.html?' + oidc.PASSWORD_ESCAPE + '=password';
+    if(!oidc.enabled()){ res.writeHead(302,{Location:back,'Set-Cookie':clear,'Cache-Control':'no-store'}); return res.end(); }
+    return oidc.buildLogout(req, back)
+      .then(url => { res.writeHead(302,{Location:url||back,'Set-Cookie':clear,'Cache-Control':'no-store'}); res.end(); })
+      .catch(() => { res.writeHead(302,{Location:back,'Set-Cookie':clear,'Cache-Control':'no-store'}); res.end(); });
+  }
+
   // ───── AUTH ─────
   if(u === '/api/login' && req.method === 'POST'){
     if(!pool) return J(res,503,{error:'no database'});
@@ -2398,7 +2503,11 @@ const server = http.createServer((req, res) => {
     // Safari was ignoring — so the session must already be dead by the time we answer, not conditional
     // on the browser cooperating.
     const s = session(req); if(s && s.username) revokeSessions(s.username);
-    J(res,200,{ok:true},{'Set-Cookie':'sess=; HttpOnly; Path=/; SameSite=Lax; Secure; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0'});
+    // ssoLogout tells the client to finish at Authentik instead of just reloading. Reloading would
+    // hit the SSO redirect below, Authentik would still hold its own session, and the user would be
+    // signed straight back in — a sign-out button that visibly does nothing.
+    J(res,200,{ok:true, ssoLogout: oidc.enabled() ? '/auth/logout' : null},
+      {'Set-Cookie':'sess=; HttpOnly; Path=/; SameSite=Lax; Secure; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0'});
     return;
   }
   if(u === '/api/me'){ const s=session(req); return s ? J(res,200,{username:s.username,name:s.name,role:s.role,perms:(s.perms!==undefined?s.perms:null),canEdit:(s.edit!==false),editAreas:(s.editAreas!==undefined?s.editAreas:null),salesId:(s.salesId!==undefined?s.salesId:null)}) : J(res,401,{error:'not logged in'}); }
@@ -2915,7 +3024,33 @@ const server = http.createServer((req, res) => {
   }
 
   // ───── static files ─────
-  let p = decodeURIComponent(u); if(p==='/'||p==='') p='/allotment_v2/allotment_v2.html';
+  // §rootRedirect (2026-08-27): "/" used to SERVE the app file while leaving the browser's document
+  // URL at "/", so every relative reference in the page resolved one directory too high. That was
+  // already quietly breaking the app's own relative assets — `assets/hero/<routeId>.jpg` and
+  // `assets/logo.png` (js/08-app.js) resolve against the document, so at "/" they asked for
+  // /assets/... and 404'd — and once the CSS and JS moved out of the HTML it broke the whole page:
+  // href="css/01-base.css" became /css/01-base.css, src="js/08-app.js" became /js/08-app.js.
+  // Redirecting instead of rewriting means the document URL is always the real path, so relative
+  // references resolve correctly here AND under allotment_v2/start_server.command (whose web root is
+  // allotment_v2/ itself). 302, not 301: a permanent redirect is cached hard and painful to undo.
+  if(u==='/'||u===''){ res.writeHead(302,{Location:'/allotment_v2/allotment_v2.html'+(q?('?'+q):''),'Cache-Control':'no-store'}); return res.end(); }
+
+  // §ssoGate (2026-08-27): with Authentik configured, IT is the login page. Without this the app
+  // still loads its own username/password modal (js/01-auth-sync.js showLogin(), reached when
+  // /api/me answers 401) and the Authentik routes just sit there unused. Redirecting server-side
+  // rather than from the client means no flash of the built-in form on the way through.
+  //   · only a top-level browser navigation for the app page — never a fetch/XHR, never an asset
+  //   · never when a session already exists
+  //   · ?login=password always wins, so a broken Authentik cannot lock everyone out (PASSWORD_ESCAPE)
+  if(u === '/allotment_v2/allotment_v2.html' && req.method === 'GET' && oidc.enabled() && !session(req)
+     && String(req.headers.accept||'').includes('text/html')
+     && new URLSearchParams(q).get(oidc.PASSWORD_ESCAPE) !== 'password'){
+    const next = u + (q ? ('?' + q) : '');
+    res.writeHead(302, {Location:'/auth/login?next=' + encodeURIComponent(next), 'Cache-Control':'no-store'});
+    return res.end();
+  }
+
+  let p = decodeURIComponent(u);
   const fp = path.normalize(path.join(ROOT,p));
   if(!fp.startsWith(ROOT)){ res.writeHead(403); return res.end('Forbidden'); }
   fs.readFile(fp,(err,data)=>{ if(err){ res.writeHead(404,{'Content-Type':'text/plain; charset=utf-8'}); return res.end('Not found'); }
@@ -2942,19 +3077,36 @@ const server = http.createServer((req, res) => {
 // Pre-warm the app HTML's brotli buffer at startup. q11 takes ~7s on the 4.9MB file — cheap once per
 // deploy, but only if nobody is waiting on it, so pay it here rather than on the first user's request.
 // Same fp/etag derivation as the static handler above, or the cache would not be hit.
+// §jsSplit (2026-08-27): the JS is no longer inline in the HTML, so pre-warming the HTML alone left
+// the heavy files (js/08-app.js ~4MB, js/05-fleet.js ~1.6MB) to pay q11 on the first user's request.
+// Warm each one in sequence — sequential, not parallel, so the boot doesn't peg every core at once.
 function prewarmStatic(){
-  const fp = path.normalize(path.join(ROOT,'/allotment_v2/allotment_v2.html'));
-  fs.readFile(fp,(err,data)=>{ if(err||!data) return;
-    const etag='"'+crypto.createHash('sha1').update(data).digest('hex').slice(0,20)+'"';
-    const t0=Date.now();
-    compress('br', data, BR_STATIC, (cErr,buf)=>{ if(cErr) return;
-      const hit=_gzCache.get(fp), slot=(hit&&hit.etag===etag)?hit:{etag};
-      slot.br=buf; _gzCache.set(fp,slot);
-      console.log('[prewarm] app html br: '+(data.length/1048576).toFixed(2)+'MB -> '
-        +(buf.length/1048576).toFixed(2)+'MB in '+(Date.now()-t0)+'ms'); });
-  });
+  const rel = ['/allotment_v2/allotment_v2.html'];
+  for(const [dir, ext] of [['css','.css'], ['js','.js']]){       // css first — it is render-blocking
+    try{
+      for(const f of fs.readdirSync(path.join(ROOT,'allotment_v2',dir)).filter(f=>f.endsWith(ext)).sort())
+        rel.push('/allotment_v2/'+dir+'/'+f);
+    }catch(_){}
+  }
+  let i = 0;
+  (function next(){
+    if(i >= rel.length) return;
+    const fp = path.normalize(path.join(ROOT, rel[i++]));
+    fs.readFile(fp,(err,data)=>{ if(err||!data) return next();
+      const etag='"'+crypto.createHash('sha1').update(data).digest('hex').slice(0,20)+'"';
+      const t0=Date.now();
+      compress('br', data, BR_STATIC, (cErr,buf)=>{ if(cErr) return next();
+        const hit=_gzCache.get(fp), slot=(hit&&hit.etag===etag)?hit:{etag};
+        slot.br=buf; _gzCache.set(fp,slot);
+        console.log('[prewarm] '+path.basename(fp)+' br: '+(data.length/1048576).toFixed(2)+'MB -> '
+          +(buf.length/1048576).toFixed(2)+'MB in '+(Date.now()-t0)+'ms');
+        next(); });
+    });
+  })();
 }
-server.listen(PORT, ()=>{ console.log('LOVE Andaman on '+PORT+(pool?' · db on':' · db off')); prewarmStatic(); });
+server.listen(PORT, ()=>{ console.log('LOVE Andaman on '+PORT+(pool?' · db on':' · db off'));
+  const px = apiProxy.describe(); if(px) console.log(px);
+  prewarmStatic(); });
 
 // §B2C background poller (2026-07-24): relSyncB2C only ran on /api/load, so a new B2C booking sat in
 // the source pool until someone manually refreshed. Poll it on a timer so new bookings are pulled in,

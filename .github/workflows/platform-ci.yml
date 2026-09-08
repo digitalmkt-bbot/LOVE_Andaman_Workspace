@@ -1,0 +1,116 @@
+name: platform CI
+
+# Scoped to platform/ on purpose. The monolith has its own workflows
+# (ci-boot-smoke.yml, tests.yml) and a change to allotment_v2.html must not
+# trigger a pnpm install here, nor the reverse.
+on:
+  push:
+    branches: ['**']
+    paths:
+      - 'platform/**'
+      - 'db/baseline/**'
+      - '.github/workflows/platform-ci.yml'
+  pull_request:
+    paths:
+      - 'platform/**'
+      - 'db/baseline/**'
+      - '.github/workflows/platform-ci.yml'
+
+defaults:
+  run:
+    working-directory: platform
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: platform/pnpm-lock.yaml
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Test
+        run: pnpm -r test
+
+      - name: Build
+        run: pnpm build
+
+  # Empty Postgres -> P0-01 baseline -> migrations -> the suite runs against it.
+  # The database-backed tests skip themselves when DATABASE_URL is absent, so
+  # they only really execute here.
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: la_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/la_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: platform/pnpm-lock.yaml
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build:packages
+
+      - name: Apply the P0-01 baseline
+        run: pnpm --filter @la/db run migrate baseline
+        env:
+          ALLOW_BASELINE: '1'
+
+      - name: Migrate
+        run: pnpm --filter @la/db run migrate up
+
+      # Fails on a drifted checksum or a deleted applied migration.
+      - name: Migration status is clean
+        run: pnpm --filter @la/db run migrate status
+
+      - name: Test against the migrated database
+        run: pnpm -r test

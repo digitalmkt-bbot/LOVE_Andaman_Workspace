@@ -1,11 +1,11 @@
 # LOVE Andaman — allotment_v2
 
 > Cowork context file, loaded every session. Focus: the `allotment_v2` module.
-> Per-feature history lives in **CHANGELOG.md** (not auto-loaded) — grep it when a task needs the detail behind a specific change.
+> Per-domain history and design live in `allotment_v2/docs/workflows/` (not auto-loaded — see **ARCHITECTURE.md** for the map) — grep the relevant doc when a task needs the detail behind a specific change. There is no `CHANGELOG.md`; it is not tracked in git (`git log --all -- CHANGELOG.md` returns nothing).
 
 ## 0. START HERE (new-chat orientation)
 
-**What this is:** one giant single-file web app `allotment_v2/allotment_v2.html` (~4MB / ~46k lines) for LOVE Andaman (Phuket marine tours). Runs on Railway, served to staff at `rsvn.loveandaman.com` (behind Cloudflare — **Rocket Loader must stay off**, it kills every inline `onclick` and looks exactly like a permissions bug). Verify any data claim against live data before asserting it: a logged-in prod Chrome tab is usually open (Claude-in-Chrome tools), but the extension is often not connected — when it isn't, query the prod Postgres directly (credentials under *Verifying what is actually live* below) instead of reasoning from the source alone.
+**What this is:** one giant web app for LOVE Andaman (Phuket marine tours) — `allotment_v2/allotment_v2.html` (~2.9k lines, markup only) plus **`allotment_v2/js/01..08-*.js` (~80k lines, ~6.2MB)** where essentially all the code lives, and `allotment_v2/css/01-base.css` + `02-skins.css` (~295KB). It was a single 86k-line file until 2026-08-27; the JS was lifted out verbatim into 8 classic `<script src>` files in load order. **This is a file split, not modularization** — still one global scope, ~3,100 top-level functions, ~2,500 inline `onclick=` handlers in the HTML calling them by name. Read `allotment_v2/js/README.md` before touching the script tags: adding `defer`, `async`, or `type="module"`, or reordering them, breaks every inline handler in the app. Runs on Railway, served to staff at `rsvn.loveandaman.com` (behind Cloudflare — **Rocket Loader must stay off**, it defers scripts and kills every inline `onclick`, and looks exactly like a permissions bug). Verify any data claim against live data before asserting it: a logged-in prod Chrome tab is usually open (Claude-in-Chrome tools), but the extension is often not connected — when it isn't, query the prod Postgres directly (credentials under *Verifying what is actually live* below) instead of reasoning from the source alone.
 
 **Starting a new chat:**
 1. Do NOT dump the changelog back at the user or re-read the whole file.
@@ -13,7 +13,7 @@
 2. On a task: `grep` for the relevant function → read a small window → targeted `Edit` → verify.
 
 **Deploy workflow (verified 2026-08-17):**
-- Edit → extract the main `<script>` and run `node --check` → back up to `BACKUP/`.
+- Edit → `node --check allotment_v2/js/<file>.js` on each file you touched → back up to `BACKUP/`. (The old "extract the main `<script>` out of the HTML first" ritual is gone — since 2026-08-27 the JS is real `.js` files.)
 - **`lk-inbox` IS production.** Railway auto-deploys it (~1–2 min), so **`git push origin lk-inbox` is a production release** — staff see the change minutes later, and its migrations run against the live database on the way. Treat every push as shipping, not as saving work. (This changed on 2026-08-12; older notes saying "pushing to lk-inbox doesn't touch prod" are obsolete.)
 - Plain git from the sandbox works — auth is configured. GitHub Desktop / computer-use is NOT needed.
 - Verify: `git ls-remote origin refs/heads/lk-inbox` must equal `git rev-parse lk-inbox`.
@@ -26,7 +26,7 @@
 
 **Pending (not done):** move the Booking top-tab bar onto the same row as the date stepper — user wants 3 mockups (A merge tabs+date · B tabs in day-header · C keep 2 rows, tighten). Awaiting their pick.
 
-**Companion docs in the workspace:** `SYSTEM_MAP.md` (AI-readable architecture map — keep in sync when adding modules), `BACKLOG.md` (pending items), `OPERATIONS_PIPELINE_DESIGN.md` (van-assign/grouping spec), `CHANGELOG.md` (full §-history).
+**Companion docs in the workspace:** `ARCHITECTURE.md` (points at `allotment_v2/docs/workflows/`, the real per-domain design/behavior docs), `SYSTEM_MAP.md` (AI-readable architecture map — keep in sync when adding modules), `BACKLOG.md` (pending items), `OPERATIONS_PIPELINE_DESIGN.md` (van-assign/grouping spec).
 
 ---
 
@@ -38,10 +38,13 @@
 
 ```
 LOVE_Andaman_Workspace/
-├── CLAUDE.md · SYSTEM_MAP.md · BACKLOG.md · CHANGELOG.md
+├── CLAUDE.md · ARCHITECTURE.md · SYSTEM_MAP.md · BACKLOG.md
 └── allotment_v2/
-    ├── allotment_v2.html      ← main file
-    ├── start_server.command   ← local server (§4)
+    ├── allotment_v2.html      ← markup + the <link>/<script src> tags (~2.9k lines)
+    ├── js/01..08-*.js         ← ALL the app code (~80k lines) · see js/README.md
+    ├── css/01-base.css        ← base sheet · css/02-skins.css = the 14 re-skin layers
+    ├── start_server.command   ← static local server, no /api (§4)
+    ├── docs/workflows/        ← per-domain workflow docs (see ARCHITECTURE.md)
     ├── BACKUP/                ← timestamped pre-edit copies
     └── data_exports/          ← localStorage JSON exports
 ```
@@ -50,7 +53,7 @@ LOVE_Andaman_Workspace/
 
 ## 2. Data storage model (read carefully)
 
-**Backend = Postgres via `server.js` (`DATA_BACKEND=relational`, ~103 tables).** The single-file client keeps a working copy in **localStorage `loveandaman_v2` (`LS_KEY`)** — seeded from HTML default constants on first run, refreshed from the cloud blob on login — and syncs every change to Postgres through a REST API. localStorage is the in-browser working store; Postgres is the durable source of truth.
+**Backend = Postgres via `server.js` (`DATA_BACKEND=relational`, ~103 tables).** The browser client keeps a working copy in **localStorage `loveandaman_v2` (`LS_KEY`)** — seeded from the `DEFAULT_*` / `FL_DEFAULT_*` constants in `js/04-data-core.js` and `js/05-fleet.js` on first run, refreshed from the cloud blob on login — and syncs every change to Postgres through a REST API. localStorage is the in-browser working store; Postgres is the durable source of truth.
 
 
 Key default constants (grep for line): `DEFAULT_ROUTES`, `DEFAULT_BOATS`, `FL_DEFAULT_ENGINES`, `FL_DEFAULT_GEARBOXES`, `FL_DEFAULT_PROPELLERS`, `FL_DEFAULT_MAINTENANCE`, `FL_DEFAULT_INCIDENTS`, `FL_DEFAULT_INVENTORY`, `FL_DEFAULT_MEMOS`.
@@ -92,7 +95,7 @@ Reusable price packages bound to agents via `agent.rateTypeId`. Shape: `{id, cod
 - **Persist** with `rtPersist()` (read-modify-write). Shared detail renderer `rtBuildDetailBody(rt)` feeds both the Rate Type page and the Agent Pricing Matrix tab.
 
 ### 3.3 Zone/region expansion
-Piers, rate-type zones, pickup zones, and pickup-setup areas are 4 overlapping "where" concepts stored separately; adding a real new zone touches ~5–6 places. Decision (2026-06-01, Option A): don't refactor to a central `SB_ZONES` until 2+ zones land at once or non-technical staff need UI zone CRUD. Until then follow the manual checklist — see CHANGELOG §12 / `SYSTEM_MAP.md`. (Pickup Setup UI adds **Areas** only, not zones; zones are hardcoded `['PK','KL','NoTransfer']`.)
+Piers, rate-type zones, pickup zones, and pickup-setup areas are 4 overlapping "where" concepts stored separately; adding a real new zone touches ~5–6 places. Decision (2026-06-01, Option A): don't refactor to a central `SB_ZONES` until 2+ zones land at once or non-technical staff need UI zone CRUD. Until then follow the manual checklist — see `allotment_v2/docs/workflows/04-transfer-vans-pickup.md` (the four "where" concepts) / `SYSTEM_MAP.md`. (Pickup Setup UI adds **Areas** only, not zones; zones are hardcoded `['PK','KL','NoTransfer']`.)
 
 ### 3.4 Booking (`SB_BOOKINGS`)
 Key fields: `id`, `schemaVer`, `agentId`, `channel`, `leadPax`, `leadNationality`, `leadPhone`, `leadEmail`, `hotelName`, `pickupAreaId`, `status` (`confirmed`/`pending_approval`/`cancelled`/`cancelled_weather`/`rejected`), `bookingDate`, `voucherRef`, `trips[]`, `passengers[]`, `addOns[]`, `adjustments[]`, `priceBreakdown{seat,addOn,focDiscount,discount,extra,total}`, `paymentSnapshot`, `marketSnapshot`, `history[]`, `ops{boatId,vanId,vanGroup,vanSeq,vanReturnId,vanSplits[],pfm{}}`.
@@ -113,21 +116,22 @@ Key fields: `id`, `name`, `code`, `companyInfo{legalName,taxId,address}`, `conta
 - **Verify enum values** before assigning unknown strings (see pier example above).
 - **Keep data fixes user-triggered.** Don't add new auto-mutations to `flLoad` that could wrongly rewrite legitimate data (an over-eager spare-detach / dedupe self-heal was removed for this reason). The existing self-heals (engine status, boat stuck-fixing, charter-boat mirror, van-group `vanId`) are deliberately idempotent and targeted — match that bar or don't add one.
 - **Preserve runtime safety systems:** `flLoad()` auto-snapshot + `flListSnapshots()`/`flRestoreSnapshot(N)`, defensive field-level merge, version whitelist.
-- **Browser must run via localhost, not `file://`.** Double-click `start_server.command` → open `http://localhost:8765/allotment_v2.html`, ONE tab only. `file://` breaks localStorage persistence and local `fetch()`. Never test in the Claude artifact preview (isolated storage).
+- **Browser must run via localhost, not `file://`.** Double-click `allotment_v2/start_server.command` → open `http://localhost:8765/allotment_v2.html`, ONE tab only. `file://` breaks localStorage persistence and local `fetch()`. This is a **static file server only** (no `/api`) — it can't log in or sync to Postgres; use it for pure front-end/UI edits and prefer `node server.js` (with a real `DATABASE_URL`) when you need the backend. Never test in the Claude artifact preview (isolated storage).
 
 ---
 
 ## 5. Working with the file, look & feel, comms
 
-- File is huge — never read it whole. `grep -n` to locate → read a 30–50 line window → targeted `str_replace` with unique surrounding context → re-read only the changed section. Verify with `node --check` on the extracted `<script>`.
-- **Visual system:** DM Sans body / DM Mono for numbers; brand accent recolored coral→**Ocean blue `#1683C7`** via the reversible `<style id="softui-ocean-skin">` block. Most re-skins are single reversible `<style id="...-skin">` blocks before `</head>` — delete the block to revert. **No Tabler webfont in the app** — icons are inline SVG.
+- The files are huge (`js/08-app.js` alone is ~47k lines) — never read one whole. `grep -rn` over `allotment_v2/js/` to locate → read a 30–50 line window → targeted `str_replace` with unique surrounding context → re-read only the changed section. Verify with `node --check <that file>`.
+- **Line citations written before 2026-08-27** (`bkV2InferZone:69054`, `pjOf:82102`, …, all over this file and `docs/workflows/`) point into the pre-split HTML. Translate with `node tools/js-split-linemap.mjs 69054`, or ignore the number and grep the function name — every citation carries one.
+- **Visual system:** DM Sans body / DM Mono for numbers; brand accent recolored coral→**Ocean blue `#1683C7`** via the reversible `softui-ocean-skin` layer. The CSS lives in `allotment_v2/css/`: `01-base.css` is the base sheet, `02-skins.css` holds the 14 re-skin layers in cascade order, each behind a `/* ==== <id> ==== */` marker — **delete the marked section to revert a skin** (they were `<style id="...-skin">` blocks in the HTML before 2026-08-27; same layers, same order). Two tiny `<style>` blocks remain inline in `<body>` on purpose. **No Tabler webfont in the app** — icons are inline SVG.
 - **Comms:** concise, show snippets, ask before big refactors, remind about backups before core-data edits, state the diff after edits (e.g. "added 3 entries to `FL_DEFAULT_ENGINES` at line 3045").
 
 ---
 
-## 6. Gotchas & recurring patterns (distilled from the §-history)
+## 6. Gotchas & recurring patterns
 
-These bite repeatedly. Read the relevant one before touching that area; full context is in CHANGELOG.md.
+These bite repeatedly. Read the relevant one before touching that area; full context is in `allotment_v2/docs/workflows/` (see **ARCHITECTURE.md** for which doc covers which domain).
 
 **JS / render**
 - **`esc` / `escapeHTML` is NOT global** — it's declared locally per function. Any new top-level render fn that builds HTML with `esc(...)` must declare its own `const esc=...` or it throws silently on click.
@@ -169,4 +173,4 @@ Fleet: Boat Operation (`renderOp`), Transfer Fleet (`renderVehicles`), Van Job O
 
 Sidebar groups: OPERATIONS (Booking · Boat Operation · Transfer Fleet · Van Jobs · Pickup time setup) · SALES (Agent List · Rate Types · B2C · Staff & Welfare · Demand · FOC Detail · Insurance · Booking Flow · Pickup Map) · ACCOUNTING & FINANCE (Accounting · Daily PFM) · Fleet Management · Overview · Config.
 
-*Full per-feature history (§13–§87) is in **CHANGELOG.md** — grep it for the reasoning behind any specific behavior.*
+*Full per-domain design and behavior detail is in `allotment_v2/docs/workflows/` — see **ARCHITECTURE.md** for the map, then grep the relevant doc for the reasoning behind any specific behavior.*
