@@ -2195,6 +2195,35 @@ const MIME = { '.html':'text/html; charset=utf-8','.js':'text/javascript; charse
 // raw on every load / after each deploy. gzip cuts it ~5x. Buffer cached per (path,etag) so it compresses once,
 // not on every request. Images/fonts (.png/.woff2/…) are already compressed → skipped.
 const GZIP_EXT = new Set(['.html','.js','.css','.json','.svg','.csv','.txt']);
+/* §assetVer · Cloudflare เขียนทับ Cache-Control ของเราเป็น max-age=14400
+   เบราว์เซอร์จึงถือ js ตัวเก่าไว้สี่ชั่วโมง · deploy แล้วมองไม่เห็นผล
+   วัดจริงแล้ว script tag โหลดด้วย transferSize 0 คือไม่ยิงเน็ตเลย
+   ทางแก้ที่ไม่ต้องพึ่งการตั้งค่าฝั่ง CDN คือทำให้ URL เปลี่ยนเมื่อไฟล์เปลี่ยน */
+let _laVerCache = { v:'', at:0 };
+function _laAssetVer(){
+  const now = Date.now();
+  if(_laVerCache.v && (now - _laVerCache.at) < 10000) return _laVerCache.v;   // กัน stat ทุก request
+  let mx = 0;
+  for(const d of ['js','css']){
+    try{
+      const dir = path.join(ROOT,'allotment_v2',d);
+      for(const f of fs.readdirSync(dir)){
+        const st = fs.statSync(path.join(dir,f));
+        if(st.mtimeMs > mx) mx = st.mtimeMs;
+      }
+    }catch(_){}
+  }
+  _laVerCache = { v: String(Math.floor(mx/1000) || Math.floor(now/1000)), at: now };
+  return _laVerCache.v;
+}
+/* เติม ?v= ให้เฉพาะ js/ กับ css/ ที่เป็น path สัมพัทธ์ของเราเอง
+   ไม่แตะ CDN ภายนอก และไม่แตะตัวที่มี query string อยู่แล้ว */
+function _laStampAssets(buf){
+  const v = _laAssetVer();
+  return Buffer.from(String(buf)
+    .replace(/(<script\s+src=")(js\/[^"?]+\.js)(")/g, '$1$2?v='+v+'$3')
+    .replace(/(<link\s+rel="stylesheet"\s+href=")(css\/[^"?]+\.css)(")/g, '$1$2?v='+v+'$3'), 'utf8');
+}
 const _gzCache = new Map();   // fp -> { etag, br?, gzip? }  (one buffer per encoding)
 // §brotli (2026-07-27): measured on the 4.89MB app HTML —
 //   gzip -6 1.18MB (87ms) · gzip -9 1.17MB (124ms) · brotli q5 0.98MB (97ms) · brotli q11 0.83MB (7153ms)
@@ -3054,6 +3083,11 @@ const server = http.createServer((req, res) => {
   const fp = path.normalize(path.join(ROOT,p));
   if(!fp.startsWith(ROOT)){ res.writeHead(403); return res.end('Forbidden'); }
   fs.readFile(fp,(err,data)=>{ if(err){ res.writeHead(404,{'Content-Type':'text/plain; charset=utf-8'}); return res.end('Not found'); }
+    /* §assetVer · ติดหมายเลขรุ่นก่อนคิด etag · etag จึงขยับตามรุ่นไปด้วย
+       และ _gzCache ที่ผูกกับ etag ก็จะไม่คืนของเก่าให้ */
+    if(/allotment_v2[\\/]allotment_v2\.html$/.test(fp)){
+      try{ data = _laStampAssets(data); }catch(_){}
+    }
     const etag = '"'+crypto.createHash('sha1').update(data).digest('hex').slice(0,20)+'"';
     if((req.headers['if-none-match']||'') === etag){ res.writeHead(304,{'ETag':etag,'Cache-Control':'no-cache'}); return res.end(); }
     const ext = path.extname(fp).toLowerCase();
