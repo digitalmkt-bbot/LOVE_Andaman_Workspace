@@ -51,3 +51,8 @@ skills-lock.json
 
 # real prod data pulled for dev seeding — never commit
 os-backend/data_snapshots/
+
+# ── ที่พักของที่รอลบ · ไฟล์ล็อกของ git กับสคริปต์แพตช์ชั่วคราว ──
+# git ในสภาพแวดล้อมนี้ลบไฟล์เองไม่ได้ ต้อง mv มาพักไว้ที่นี่แทน
+# ของในนี้ไม่ใช่โค้ดของโปรเจกต์ · ลบทิ้งได้ตลอด ไม่ต้องเข้า repo
+_to_delete/
