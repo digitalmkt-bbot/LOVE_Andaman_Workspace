@@ -57513,10 +57513,17 @@ function pjGuidesFull(date, boatId){
 function pjGuides(date, boatId){
   return pjGuidesFull(date, boatId).map(function(x){ return x.name; });
 }
-/* สายรัดข้อมือ · ชุดสีมาตรฐาน */
+/* สายรัดข้อมือ · ชุดสีมาตรฐาน
+   §pjWb2 · สิบตัวแรกคือของเดิม ชื่อและรหัสสีห้ามเปลี่ยน ใบงานเก่าอ้างอิงอยู่
+   ที่เพิ่มมาเลือกให้ห่างจากของเดิมพอสมควร · คนที่ท่าเทียบ "สี" กับข้อมือแขก
+   ไม่ได้อ่านชื่อสี ถ้าใส่สีที่ใกล้กันเกินไปจะยิ่งทักผิดง่ายกว่าเดิม */
 var PJ_WB=[{t:'ดำ',c:'#1A1A1A'},{t:'ม่วง',c:'#8E2FD6'},{t:'ฟ้า TQ',c:'#2BC8DE'},{t:'แดง',c:'#C0271C'},
            {t:'เขียว',c:'#1C9B62'},{t:'ส้ม',c:'#F08A24'},{t:'ชมพู',c:'#E75480'},{t:'เหลือง',c:'#F5C518'},
-           {t:'น้ำเงิน',c:'#185FA5'},{t:'ขาว',c:'#FFFFFF'}];
+           {t:'น้ำเงิน',c:'#185FA5'},{t:'ขาว',c:'#FFFFFF'},
+           /* §pjWb2 · เพิ่มใหม่ */
+           {t:'เทา',c:'#8A929E'},{t:'น้ำตาล',c:'#7A4B26'},{t:'มะนาว',c:'#A8C81E'},{t:'ครีม',c:'#EFE0B0'},
+           {t:'เขียวเข้ม',c:'#0B5C3E'},{t:'เลือดหมู',c:'#7A1F2B'},{t:'ม่วงอ่อน',c:'#C0A6F0'},
+           {t:'กรมท่า',c:'#1F2A44'},{t:'ชมพูอ่อน',c:'#F7B6C2'},{t:'ทอง',c:'#C9A227'}];
 /* §pjPal · 24 สี เรียงตามวงล้อสี แดง → ส้ม → เหลือง → เขียว → ฟ้า → คราม → ม่วง → กลาง
    ทุกสีเข้มพอให้ตัวหนังสือขาวอ่านออก · ไม่ใส่สีอ่อนเพราะแถบนี้พิมพ์ชื่อสีขาวทับ */
 var PJ_PAL=['#7A1F1A','#C0271C','#B4560A','#D9761F','#B8860B','#A8791F',
@@ -57904,6 +57911,17 @@ function pjCSS(){
   +H+' .pj-cus{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px;padding:6px 8px;font-size:10.5px;font-weight:700;color:#4A5D7A;background:#F7F9FB;border:1px solid #E9ECF1;border-radius:8px;cursor:pointer}'
   +H+' .pj-cus input{width:44px;height:24px;padding:0;border:1px solid #E1E4EA;border-radius:6px;background:none;cursor:pointer}'
   +H+' .pj-sw.on{box-shadow:0 0 0 2px #16265C}'
+  /* §pjWb2 · แถวเลือกสีเอง / ล้างสี ใต้ตารางสี */
+  +H+' .pj-wbx{display:flex;align-items:center;gap:8px;margin-top:9px;padding-top:9px;'
+     +'border-top:1px solid #EDEFF3}'
+  +H+' .pj-wbc{display:inline-flex;align-items:center;gap:7px;cursor:pointer;font-size:11px;'
+     +'font-weight:600;color:#5A6270}'
+  +H+' .pj-wbc input{width:26px;height:22px;padding:0;border:1px solid #E1E4EA;border-radius:6px;'
+     +'background:#fff;cursor:pointer}'
+  +H+' .pj-wbclr{margin-left:auto;background:#fff;border:1px solid #E1E4EA;border-radius:6px;'
+     +'padding:4px 10px;font-size:10.5px;font-weight:700;color:#A32D2D;cursor:pointer;'
+     +'font-family:inherit}'
+  +H+' .pj-wbclr:hover{background:#FCEBEB;border-color:#F0CFCF}'
   +H+' .pj-pop .pf{font-size:10.5px;color:#6E7684;line-height:1.6;margin-top:9px;border-top:1px solid #F0F2F6;padding-top:8px}'
   +H+' .pj-rst{display:block;width:100%;margin-top:8px;padding:5px 0;font-size:10.5px;font-weight:700;color:#4A5D7A;background:#F4F6F9;border:1px solid #E1E4EA;border-radius:7px;cursor:pointer}'
   +H+' .pj-rst:hover{background:#E9EDF3}'
@@ -58811,10 +58829,21 @@ function pjCard(B, pier, ro){
    +'<div class="pj-wbrow"><span class="k">Wristband</span>'
      +'<span class="pj-wb" onclick="'+(lro?'':'pjPopToggle(\''+wid+'\')')+'" style="position:relative">'
        +'<i style="background:'+(wbc||'#F0F0EC')+'"></i>'+(wbt?poE(wbt):'<span style="color:#C9CFD8;font-weight:500">ยังไม่ระบุ</span>')
-       +'<div class="pj-pop" id="'+wid+'" style="top:30px;left:0;right:auto;width:210px"><div class="ph">สีสายรัดข้อมือวันนี้</div>'
-       +'<div class="pj-sws" style="grid-template-columns:repeat(5,1fr)">'
+       +'<div class="pj-pop" id="'+wid+'" style="top:30px;left:0;right:auto;width:252px"><div class="ph">สีสายรัดข้อมือวันนี้</div>'
+       +'<div class="pj-sws">'
        +PJ_WB.map(function(w){ return '<div class="pj-sw'+(w.c===wbc?' on':'')+'" title="'+w.t+'" style="background:'+w.c+'" onclick="pjWbSet(\''+bid+'\',\''+w.t+'\',\''+w.c+'\')"></div>'; }).join('')
-       +'</div><div class="pf">เก็บแยกรายวันรายลำ</div></div></span>'
+       +'</div>'
+       /* §pjWb2 · สายรัดเป็นของที่ซื้อมาเป็นล็อต · ล็อตไหนได้สีแปลกมาก็คีย์เองได้
+          ไม่ต้องรอเพิ่มในโค้ด · และต้องล้างกลับเป็น "ยังไม่ระบุ" ได้ด้วย
+          ของเดิมพอตั้งผิดแล้วเอาออกไม่ได้เลย */
+       +'<div class="pj-wbx">'
+         +'<label class="pj-wbc" title="เลือกสีเอง · ใช้กับล็อตที่สีไม่มีในชุดมาตรฐาน">'
+           +'<input type="color" value="'+(wbc||'#888888')+'" '
+           +'onchange="pjWbSet(\''+bid+'\',\'สีเอง\',this.value)">'
+           +'<span>เลือกสีเอง</span></label>'
+         +(wbt?('<button type="button" class="pj-wbclr" onclick="pjWbSet(\''+bid+'\',\'\',\'\')">ล้างสี</button>'):'')
+       +'</div>'
+       +'<div class="pf">เก็บแยกรายวันรายลำ</div></div></span>'
      +'<span style="flex:1"></span><span class="k">Group</span>'
      +(langs.length?langs.map(function(L){ return '<span class="pj-lang">'+poE(L)+'</span>'; }).join(''):'<span style="font-size:11px;color:#C9CFD8">—</span>')
    +'</div>'
