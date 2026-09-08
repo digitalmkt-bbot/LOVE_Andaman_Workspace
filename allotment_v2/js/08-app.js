@@ -39059,13 +39059,19 @@ function bkV2RenderNewBooking(){
   const isHouse  = isWalkin || isStaff;   // house accounts → Sold-by/Staff picker + manual price option
   let rtPreview = '';
   if(rt){
-    const routesCnt = (rt.routes||[]).length;
+    /* §bkRouteSrc · เลขตรงนี้เคยนับจาก Rate Type อย่างเดียว ทั้งที่ตัวที่คุม
+       dropdown จริง ๆ คือโปรแกรมในสัญญาของเอเยนต์ · เลขสองตัวไม่ตรงกัน
+       แล้วไม่มีอะไรบอก คนใช้จึงคิดว่าเพิ่มเส้นทางแล้วระบบไม่ขึ้น */
+    const _bk = bkV2BookableRoutes();
+    const _n = _bk.ids.length, _rtN = _bk.rtIds.length;
     const validFrom = rt.validFrom || '—';
     const validTo = rt.validTo || '—';
+    const _short = (_bk.src === 'contract' && _rtN > _n);
     rtPreview = `
       <div class="bkv2-nb-rt-preview">
         <div><strong>${escapeHTML(rt.code)} &middot; ${escapeHTML(rt.name)}</strong></div>
-        <div class="meta">${routesCnt} route${routesCnt===1?'':'s'} covered &middot; valid ${validFrom} &rarr; ${validTo}</div>
+        <div class="meta">${_n} route${_n===1?'':'s'} bookable${_rtN&&_rtN!==_n?(' &middot; '+_rtN+' in rate type'):''} &middot; valid ${validFrom} &rarr; ${validTo}</div>
+        ${_short?`<div class="meta" style="color:#8A5A0B;margin-top:3px">&#9888; \u0e40\u0e2a\u0e49\u0e19\u0e17\u0e32\u0e07\u0e17\u0e35\u0e48\u0e08\u0e2d\u0e07\u0e44\u0e14\u0e49\u0e22\u0e36\u0e14\u0e15\u0e32\u0e21\u0e42\u0e1b\u0e23\u0e41\u0e01\u0e23\u0e21\u0e43\u0e19\u0e2a\u0e31\u0e0d\u0e0d\u0e32\u0e02\u0e2d\u0e07\u0e40\u0e2d\u0e40\u0e22\u0e19\u0e15\u0e4c &middot; \u0e40\u0e1e\u0e34\u0e48\u0e21\u0e43\u0e19 Rate Type \u0e2d\u0e22\u0e48\u0e32\u0e07\u0e40\u0e14\u0e35\u0e22\u0e27\u0e22\u0e31\u0e07\u0e08\u0e2d\u0e07\u0e44\u0e21\u0e48\u0e44\u0e14\u0e49 \u0e15\u0e49\u0e2d\u0e07\u0e40\u0e1e\u0e34\u0e48\u0e21\u0e17\u0e35\u0e48\u0e2b\u0e19\u0e49\u0e32 Agent \u0e14\u0e49\u0e27\u0e22</div>`:''}
       </div>
     `;
   } else if(typeof bkV2IsB2CBk==='function' && bkV2IsB2CBk(d)){
@@ -45174,25 +45180,34 @@ function bkV2NatDDPick(key, code){
 // ─── Generic typeable Route dropdown · per trip index ───
 let _bkV2RouteDDIdx = null;
 let _bkV2RouteDDActive = -1;
-function bkV2RouteDDOpts(){
-  // Programs in current Agent's contract · falls back to Rate Type routes if no contract programs
-  if(typeof ROUTES === 'undefined') return [];
-  const d = _bkV2?.newBooking;
-  const agent = (d?.agentId && typeof sbGetAgent === 'function') ? sbGetAgent(d.agentId) : null;
+/* §bkRouteSrc · "ใบนี้จองเส้นทางไหนได้" มีสองแหล่ง และไม่เท่ากันเสมอ
+     1) โปรแกรมในสัญญาของเอเยนต์ (programPeriods) — ถ้ามี ตัวนี้คุม
+     2) เส้นทางใน Rate Type — ใช้เมื่อเอเยนต์ยังไม่มีสัญญา
+   ของเดิมกฎนี้ซ่อนอยู่ใน dropdown ที่เดียว ส่วนป้ายน้ำเงินไปนับจาก Rate Type
+   เพิ่มเส้นทางใน Rate Type แล้ว dropdown ไม่ขึ้น จึงดูเหมือนระบบพัง
+   ทั้งที่เป็นคนละแหล่ง · ยกออกมาไว้ตรงนี้ให้ทั้งสองที่ใช้ร่วมกัน */
+function bkV2BookableRoutes(){
+  const d = (typeof _bkV2!=='undefined' && _bkV2) ? _bkV2.newBooking : null;
+  const agent = (d && d.agentId && typeof sbGetAgent === 'function') ? sbGetAgent(d.agentId) : null;
   const rt = (typeof bkV2GetRT === 'function') ? bkV2GetRT() : null;
-  let allowedIds = [];
-  if(agent?.programPeriods?.length){
-    // Use contract programs as the source of truth (only routes the agent has signed for)
-    allowedIds = agent.programPeriods.map(p => p.routeId).filter(Boolean);
-    // De-duplicate
-    allowedIds = [...new Set(allowedIds)];
-  } else if(rt){
-    // Fallback: Rate Type covered routes
-    allowedIds = rt.routes || [];
+  const rtIds = (rt && Array.isArray(rt.routes)) ? rt.routes.slice() : [];
+  if(agent && agent.programPeriods && agent.programPeriods.length){
+    const ids = [...new Set(agent.programPeriods.map(p => p && p.routeId).filter(Boolean))];
+    return { ids: ids, src: 'contract', rtIds: rtIds };
   }
-  return allowedIds.map(rid => ROUTES.find(r => r.id === rid)).filter(Boolean).map(r => ({
-    id: r.id, label: r.name, pier: (r.pier === 'tublamu' ? 'TL' : 'VP')
-  }));
+  return { ids: rtIds, src: 'ratetype', rtIds: rtIds };
+}
+/* ป้ายท่าเรือหน้ารายการ · ของเดิมเขียนว่า "ไม่ใช่ท้ายเหมือง = VP"
+   เส้นระนองจึงติดป้าย VP (Visit Panwa) ทั้งที่ออกจากท่าระนอง */
+function bkV2PierTag(pier){
+  return ({ tublamu:'TL', panwa:'VP', ranong:'RN' })[pier]
+      || (pier ? String(pier).slice(0,2).toUpperCase() : '\u2014');
+}
+function bkV2RouteDDOpts(){
+  if(typeof ROUTES === 'undefined') return [];
+  return bkV2BookableRoutes().ids
+    .map(rid => ROUTES.find(r => r.id === rid)).filter(Boolean)
+    .map(r => ({ id: r.id, label: r.name, pier: bkV2PierTag(r.pier) }));
 }
 function bkV2RouteDDRender(idx, val){
   const dd = document.getElementById('bkv2-route-dd-' + idx);
