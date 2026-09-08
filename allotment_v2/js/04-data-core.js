@@ -776,6 +776,15 @@ window.dashBkSetMode=function(m){ window._dashBkMode=(['day','month','year'].inc
 (function(){ if(document.getElementById('dash-live-anim'))return; try{ var s=document.createElement('style'); s.id='dash-live-anim'; s.textContent='@keyframes dashlvpulse{0%{opacity:.35}50%{opacity:1}100%{opacity:.35}}'; (document.head||document.documentElement).appendChild(s); }catch(e){} })();
 function _dashAgo(ts){ if(!ts) return ''; var d=Date.now()-ts; if(d<0)d=0; var s=Math.floor(d/1000); if(s<60)return s+'s'; var m=Math.floor(s/60); if(m<60)return m+'m'; var h=Math.floor(m/60); if(h<24)return h+'h'; return Math.floor(h/24)+'d'; }
 function _dashBkTs(bk){ var h=(bk.history||[]).find(function(e){return e.tag==='Created'||e.kind==='created';}); var iso=(h&&h.at)||bk.createdAt||(bk.bookingDate?bk.bookingDate+'T12:00:00':''); var t=iso?Date.parse(iso):0; return isNaN(t)?0:t; }
+/* §liveDay · วันที่ที่ถือว่า "ใบนี้เข้าระบบ" · ใช้ _dashBkTs ตัวเดียวกับที่รายการใช้เรียง
+   หัวการ์ดกับรายการจะได้พูดถึงชุดเดียวกัน · ของเดิมหัวการ์ดใช้ bookingDate (วันที่บนใบ)
+   ใบที่คีย์ย้อนหลังจึงโผล่บนสุดของรายการว่าเพิ่งเข้ามา แต่ไม่ถูกนับในยอดวันนี้ */
+function _dashBkDay(bk){
+  var t=_dashBkTs(bk);
+  if(t){ var d=new Date(t);
+    return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+  return String(bk.bookingDate||bk.createdAt||'').slice(0,10);
+}
 function _dashDateShort(ds){ try{ return new Date(ds+'T00:00:00').toLocaleDateString('en-GB',{month:'short',day:'numeric'}); }catch(e){ return ds||''; } }
 function _dashBoardData(){
   var today=TODAY_STR; var BK=(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]); var CXL=['cancelled','rejected','cancelled_weather'];
@@ -970,7 +979,7 @@ function _dashLiveFeedHtml(dx,F,side){
     if(!(b.schemaVer===2 && CXL.indexOf(b.status)<0)) return;
     if(side==='b2b' && _isB2C(b)) return;
     if(side==='b2c' && !_isB2C(b)) return;
-    if(String(b.bookingDate||b.createdAt||'').slice(0,10)!==_sd) return;
+    if(_dashBkDay(b)!==_sd) return;      /* §liveDay · วันที่เข้าระบบ ไม่ใช่วันที่บนใบ */
     /* §livePax · เหมือนกับในแถว · รวมหัวคนทุกทริปของใบนั้น */
     (b.trips||[]).forEach(function(t){
       _sP+=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; });
@@ -987,9 +996,9 @@ function _dashLiveFeedHtml(dx,F,side){
   var _mShort=function(v){ v=+v||0; return v>=1000000?('฿'+(v/1000000).toFixed(1)+'M'):(v>=1000?('฿'+Math.round(v/1000)+'k'):('฿'+Math.round(v))); };
   var head=''
     +'<div class="dv-lvhd">'
-      +'<span class="s" title="'+(_sL.length
-          ? (_sL.join(' \u00b7 ')+' \u0e1a\u0e32\u0e17').replace(/"/g,'&quot;')
-          : '\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e43\u0e1a\u0e08\u0e2d\u0e07\u0e02\u0e2d\u0e07\u0e27\u0e31\u0e19\u0e19\u0e35\u0e49')
+      +'<span class="s" title="'+('\u0e19\u0e31\u0e1a\u0e15\u0e32\u0e21\u0e40\u0e27\u0e25\u0e32\u0e17\u0e35\u0e48\u0e43\u0e1a\u0e40\u0e02\u0e49\u0e32\u0e23\u0e30\u0e1a\u0e1a \u00b7 '+(_sL.length
+          ? (_sL.join(' \u00b7 ')+' \u0e1a\u0e32\u0e17')
+          : '\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e43\u0e1a\u0e40\u0e02\u0e49\u0e32\u0e21\u0e32')).replace(/"/g,'&quot;')
         +'"><b>'+_sN+'</b><i>\u0e43\u0e1a\u0e27\u0e31\u0e19\u0e19\u0e35\u0e49</i></span><span class="sep"></span>'
       +'<span class="s"><b>'+_sP+'</b><i>pax</i></span><span class="sep"></span>'
       +'<span class="s" title="'+Math.round(_sM).toLocaleString()+' \u0e1a\u0e32\u0e17'
