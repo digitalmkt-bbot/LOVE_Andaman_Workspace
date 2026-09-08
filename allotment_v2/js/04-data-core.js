@@ -379,6 +379,21 @@ function boatJobBlock(boatId, ds){
   ds = ds || TODAY_STR;
   var out={s:'available', jobs:[]};
   if(!boatId) return out;
+  /* §boatPlanAhead · "วางเรือล่วงหน้าให้รับงานได้"
+     ใบที่เปิดอยู่วันนี้ ไม่ได้บอกอะไรเกี่ยวกับวันที่อีกห้าสัปดาห์ข้างหน้า
+     แต่ใบที่ไม่มีวันจบ กันไปทุกวันในอนาคตแบบไม่มีที่สิ้นสุด
+     ถ้าคนกดยืนยันผ่าน dialog เตือนไปแล้วว่ารู้ว่ามีใบค้าง และวางแผนไว้ว่า
+     วันนั้นเรือกลับมาแล้ว · ให้การยืนยันนั้นมีผลกับใบที่ระบุไว้ ในช่วงวันของแถวนั้น
+     ใบที่เปิดทีหลัง ไม่อยู่ในรายการ จึงยังกันเต็มตามเดิม */
+  var _ovr=null;
+  try{
+    var _bo=(typeof BOATS!=='undefined'&&Array.isArray(BOATS))
+            ? BOATS.filter(function(x){ return x && x.id===boatId; })[0] : null;
+    var _row=(_bo && typeof getStoredStatus==='function') ? getStoredStatus(_bo, ds) : null;
+    if(_row && (_row.s||'available')==='available' && Array.isArray(_row.ovrJobs) && _row.ovrJobs.length)
+      _ovr=_row.ovrJobs;
+  }catch(_e0){}
+  var _skip=function(no){ return !!(_ovr && no && _ovr.indexOf(no)>=0); };
   /* ใบซ่อม · เฉพาะใบที่ยังทำอยู่ และใบนั้นระบุเองว่าเรือวิ่งไม่ได้
      setFixing:false / boatStatus:'available' = งานที่ทำขนานกับการวิ่ง (เช่นสลับเครื่อง) ไม่กันเรือ */
   try{
@@ -389,6 +404,7 @@ function boatJobBlock(boatId, ds){
         var t=m.boatStatus||'fixing';
         if(t==='available') return;
         if((m.startDate||'')>ds) return;            // ใบที่ยังไม่ถึงวันเริ่ม ไม่กันวันนี้
+        if(_skip(m.no)) return;                     // §boatPlanAhead · วางแผนล่วงหน้าไว้แล้ว
         if(_boatRank(t)>_boatRank(out.s)) out.s=t;
         out.jobs.push({no:m.no||'MJ', t:t, kind:'mj', r:m.boatStatusReason||''});
       });
@@ -413,6 +429,7 @@ function boatJobBlock(boatId, ds){
         if(p.status!=='inprogress' && p.status!=='on_hold') return;
         var from=p.actualFrom||p.planFrom||'';
         if(from && from>ds) return;                 // ยังไม่ถึงวันเริ่ม · ไม่กันวันนี้
+        if(_skip(p.no)) return;                     // §boatPlanAhead · วางแผนล่วงหน้าไว้แล้ว
         if(_boatRank('unavailable')>_boatRank(out.s)) out.s='unavailable';
         var pr=(p.type==='drydock')?'dry_dock':(p.type==='overhaul')?'overhaul':'';
         out.jobs.push({no:p.no||'PRJ', t:'unavailable', kind:'prj', r:pr});
@@ -4780,24 +4797,37 @@ function saveStatus(){
      ตรงนี้คือช่องที่เคยหลุด · ของเดิมตรวจแค่รูปแบบวันที่กับเหตุผล ไม่เคยถามใบงานเลย
      ไม่บล็อก — บางทีเรือกลับมาวิ่งจริงแต่เอกสารยังไม่ปิด แต่ต้องรู้ตัวและตามย้อนหลังได้
      และต้องบอกด้วยว่าระบบจะยังกันเรือไว้อยู่ดี จะได้ไม่เข้าใจผิดว่ากดแล้วเรือกลับมาแล้ว */
+  var _ovrJobs=null;   /* §boatPlanAhead · ใบที่คนยืนยันว่ารู้แล้วตอนวางล่วงหน้า */
   if(selSt==='available' && typeof boatJobBlock==='function'){
     const _blk=boatJobBlock(b.id, from);
     if(_blk.jobs.length){
+      /* §boatPlanAhead · ของเดิมเตือนแล้วบอกว่า "จะยังกันเรือไว้อยู่ดี"
+         แปลว่ากดยืนยันไปก็ไม่เกิดอะไรขึ้น · การกดจึงไม่มีความหมาย
+         ตอนนี้การยืนยันมีผลจริง · ใช้วางเรือล่วงหน้าให้รับงานได้
+         แต่ยกเว้นเฉพาะใบที่เปิดอยู่ ณ ตอนนี้ และเฉพาะช่วงวันของแถวนี้ */
       if(!confirm('เรือลำนี้ยังมีใบงานที่ไม่ถูกปิด\n\n    '+_blk.nos
         +'\n\nถ้าเรือกลับมาวิ่งได้จริงแล้ว ควรไปปิดที่ใบงาน (Maintenance / Project)'
         +'\nต้นทุนจะได้เข้าใบงานครบ และเรือจะกลับมาเองโดยไม่ต้องมาแก้ตรงนี้'
-        +'\n\nถ้าบันทึกต่อ ระบบจะยังกันเรือไว้ตามใบงานอยู่ดี จนกว่าใบงานจะถูกปิด'
+        +'\n\nถ้าบันทึกต่อ = วางเรือล่วงหน้า · ช่วง '+from+' ถึง '+(to||'ไม่กำหนด')
+        +'\nเรือจะรับงานได้ในช่วงนี้ โดยไม่ต้องรอปิดใบข้างบน'
+        +'\nใบที่เปิดใหม่หลังจากนี้ ยังกันเรือตามปกติ'
         +'\n\nยืนยันบันทึก?')) return;
-      const _mk='ตั้งเป็นพร้อมใช้ทั้งที่ยังมีงานค้าง · '+_blk.nos;
+      _ovrJobs=_blk.jobs.map(function(j){ return j.no; }).filter(Boolean);
+      const _mk='วางล่วงหน้าทั้งที่ยังมีงานค้าง · '+_blk.nos;
       if(note.indexOf(_mk)<0) note=(note?note+' · ':'')+_mk;
     }
   }
+  /* §boatPlanAhead · ovrJobs ติดไปกับแถว · null = ไม่ได้วางล่วงหน้า พฤติกรรมเดิมทุกอย่าง
+     แก้แถวเดิมแล้วไม่ได้ผ่าน dialog (เช่นเปลี่ยนเป็น fixing) ต้องล้างทิ้ง ไม่ให้ค้าง */
   if(editingSlId){
     const e=b.log.find(x=>x.id===editingSlId);
-    if(e) Object.assign(e,{s:selSt,from,to,loc,province,locType,detail,note,reason});
+    if(e){ Object.assign(e,{s:selSt,from,to,loc,province,locType,detail,note,reason});
+           if(_ovrJobs) e.ovrJobs=_ovrJobs; else delete e.ovrJobs; }
   } else {
     autoClosePrevLog(b,from,to);
-    b.log.push({id:'sl'+Date.now(),s:selSt,from,to,loc,province,locType,detail,note,reason});
+    const _row={id:'sl'+Date.now(),s:selSt,from,to,loc,province,locType,detail,note,reason};
+    if(_ovrJobs) _row.ovrJobs=_ovrJobs;
+    b.log.push(_row);
   }
   closeModal('status-modal');renderTimeline(b);renderBoats();save('config');
 }
