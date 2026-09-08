@@ -5303,7 +5303,12 @@ function bop2OpenCellPopover(routeId, dateStr, anchorEl){
   if(!routeClosed && unavailList.length > 0){
     unavailHTML = '<div style="padding:7px 12px;border-top:1px solid var(--border)">'
       + '<div style="font-size:9px;color:var(--ink-soft);font-weight:700;letter-spacing:.06em;margin-bottom:4px">UNAVAILABLE · '+unavailList.length+'</div>'
-      + unavailList.map(a => '<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:10px;color:var(--ink-soft);opacity:.75"><span>'+esc(a.boat.name)+'</span><span>'+esc(a.reason)+'</span></div>').join('')
+      /* §boatWhy · เหตุผลยาวขึ้นเพราะใส่เลขใบงานแล้ว · ของเดิมบีบชื่อเรือจนหาย
+         ให้ชื่ออยู่ซ้ายไม่ยุบ เหตุผลตัดบรรทัดชิดขวา · ใบที่เลยกำหนดขึ้นสีแดง */
+      + unavailList.map(a => '<div style="display:flex;justify-content:space-between;gap:9px;padding:3px 0;font-size:10px;color:var(--ink-soft)">'
+          + '<span style="flex-shrink:0;font-weight:600">'+esc(a.boat.name)+'</span>'
+          + '<span style="text-align:right;line-height:1.45'+(a.overdue?';color:#A32D2D;font-weight:600':'')+'">'+esc(a.reason)+'</span>'
+        + '</div>').join('')
       + '</div>';
   }
 
@@ -5679,14 +5684,36 @@ function bop2FleetStatus(dateStr){
          ไม่ใช่ "unavailable" เฉย ๆ ซึ่งอ่านเหมือนเรือเสีย */
       let reason = _cs.noCharter ? 'ไม่ได้เช่าวันนี้' : (st === 'fixing' ? 'Fixing' : st);
       if(_cs.noCharter){ out.unavailable.push({ boat:b, reason }); return; }
+      /* §boatWhy · ต้องอ่านออกว่า "ต้องไปปิดใบไหน เรือถึงจะกลับมา"
+         ของเดิมใบซ่อมไม่โชว์เลขเลย · เรือลำหนึ่งมีใบค้าง 10 ใบ ขึ้นแค่ "Fixing"
+         คนเลยไปแก้ตารางสถานะแทน ซึ่งเป็นชั้นที่ใบงานทับอยู่ · วนไม่จบ */
+      const _blk = (typeof boatJobBlock === 'function') ? boatJobBlock(b.id, dateStr) : { jobs: [] };
+      const _mjNos = (_blk.jobs || []).filter(j => j && j.kind === 'mj').map(j => j.no).filter(Boolean);
+      let _overdue = false;
       if(typeof FL_PROJECTS!=='undefined' && FL_PROJECTS){
         const proj = FL_PROJECTS.find(p=>p.boatId===b.id && (p.status==='inprogress'||p.status==='on_hold'));
         if(proj){
           const tag = proj.status==='on_hold' ? '[HOLD]' : '[PROJ]';
-          reason = `${tag} ${proj.no} · ${proj.type==='drydock'?'Drydock':proj.type==='overhaul'?'Overhaul':'Project'}${proj.planTo?` → ${proj.planTo}`:' · Open'}`;
+          const kind = proj.type==='drydock'?'Drydock':proj.type==='overhaul'?'Overhaul':'Project';
+          /* actualTo ก่อน planTo · ถ้ามีวันจบจริงแล้วให้ใช้ตัวนั้น */
+          const _end = proj.actualTo || proj.planTo || '';
+          let _tail = _end ? (' → ' + _end) : ' · Open';
+          if(_end && _end < dateStr){
+            /* §boatWhy · ใบเลยกำหนดแล้วแต่ยังไม่ถูกปิด · ยังกันเรือไว้เหมือนเดิม
+               ปล่อยเองเพราะวันในแผนผ่านไป = เสี่ยงส่งแขกลงเรือที่ยังอยู่ในอู่
+               แต่ต้องบอกว่าเลยมากี่วัน คนจะได้รู้ว่าทางแก้คือไปปิดใบ */
+            const _n = Math.round((new Date(dateStr) - new Date(_end)) / 86400000);
+            _tail += ' · เลยกำหนด ' + _n + ' วัน · ใบยังไม่ปิด';
+            _overdue = true;
+          }
+          reason = tag + ' ' + proj.no + ' · ' + kind + _tail;
         }
       }
-      out.unavailable.push({ boat:b, reason });
+      if(_mjNos.length){
+        reason += ' · ซ่อม ' + _mjNos.slice(0,3).join(', ')
+                + (_mjNos.length > 3 ? (' +อีก ' + (_mjNos.length - 3) + ' ใบ') : '');
+      }
+      out.unavailable.push({ boat:b, reason, overdue:_overdue, jobNos:_mjNos });
       return;
     }
     const op = TRIPS[dateStr]?.[b.id];
