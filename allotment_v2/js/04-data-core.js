@@ -6482,14 +6482,28 @@ function bop2RenderShell(){
   return `
     <style>
       /* ─── Mint dashboard palette ─────────────────────────────── */
-      #view-operation{padding:20px;background:#fff;font-family:'DM Sans',sans-serif;color:#1A2A33;min-height:100%}
+      /* §bopSkin · เปลือกน้ำเงิน + การ์ดขาวลอย · ค่าเดียวกับ .dv-fr ในหน้า Dashboard */
+      #view-operation{padding:18px;background:#16265C;font-family:'DM Sans',sans-serif;color:#1A2A33;min-height:100%}
       #view-operation .bop2-hd{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:14px;gap:12px;flex-wrap:wrap}
-      #view-operation .bop2-hd h1{font-size:24px;font-weight:700;color:#1A2A33;margin:0 0 2px;letter-spacing:-.01em}
-      #view-operation .bop2-hd p{font-size:12px;color:#6B7785;margin:0}
+      #view-operation .bop2-hd h1{font-size:22px;font-weight:800;color:#fff;margin:0 0 2px;letter-spacing:-.015em}
+      #view-operation .bop2-hd p{font-size:11.5px;color:#9aa8cf;margin:0;font-weight:500}
       /* Stat tiles */
-      #view-operation .bo-tile{background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:16px;padding:14px 16px;min-height:88px;display:flex;flex-direction:column;justify-content:space-between}
-      #view-operation .bo-tile-lbl{font-size:10px;color:#6B7785;font-weight:600;letter-spacing:.02em}
-      #view-operation .bo-tile-num{font-family:'Manrope','DM Mono',monospace;font-size:28px;font-weight:700;line-height:1;color:#1A2A33;letter-spacing:-.01em}
+      /* §bopSkin · การ์ดขาวเหมือนกันหมด · ใส่สีที่ตัวเลขอย่างเดียว ตามหน้า Dashboard
+         ค่ามุม/ขอบ/เงา ถอดจาก .dv-c ตรง ๆ · สีพื้นที่เขียนไว้ใน inline style ถูกทับด้วย !important */
+      #view-operation .bo-tile{background:#fff !important;color:#1A2A33 !important;
+        border:1px solid rgba(0,0,0,.09);border-radius:12px;box-shadow:0 6px 22px rgba(2,10,30,.10);
+        padding:13px 15px;min-height:84px;display:flex;flex-direction:column;justify-content:space-between}
+      #view-operation .bo-tile-lbl{font-size:9.5px;color:#b0aaa0 !important;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+      #view-operation .bo-tile-num{font-family:'Manrope','DM Mono',monospace;font-size:24px;font-weight:800;line-height:1;color:#3a3a36 !important;letter-spacing:-.02em}
+      #view-operation .bo-tile > div:last-child{font-size:9px !important;color:#b6b1a8 !important;font-weight:600}
+      /* ใบที่สองกับสาม · ให้สีเฉพาะตัวเลข */
+      #view-operation .bo-tile:nth-child(2) .bo-tile-num{color:#0c6b47 !important}
+      #view-operation .bo-tile:nth-child(3) .bo-tile-num{color:#12518f !important}
+      /* ใบแจ้งเตือน · เก็บพื้นชมพูจาง ๆ ให้ยังสะดุดตา แต่ไม่ตะโกนทั้งใบ */
+      #view-operation .bo-tile:nth-child(4){background:linear-gradient(100deg,#fdf4f3,#fff 62%) !important}
+      #view-operation .bo-tile:nth-child(4) *{color:#c43a2e !important}
+      #view-operation .bo-tile:nth-child(4) > div:last-child{color:#d08a80 !important}
+      #view-operation .bo-tile:nth-child(4) div[style*="border-radius:50%"]{background:rgba(196,58,46,.07) !important}
       /* Buttons · pill style */
       #view-operation .bo-btn{padding:7px 14px;font-size:11px;font-weight:600;background:#fff;border:1px solid rgba(15,110,86,.18);border-radius:22px;cursor:pointer;font-family:inherit;color:#0F6E56;transition:all .15s}
       #view-operation .bo-btn:hover{background:#DDF0E5;border-color:#0F6E56}
@@ -6505,7 +6519,8 @@ function bop2RenderShell(){
       #view-operation .bo-pier-pill:hover{border-color:#0F6E56;color:#0F6E56}
       #view-operation .bo-pier-pill.on{background:#0F6E56;color:#fff;border-color:#0F6E56}
       /* Card · main container */
-      #view-operation .bo-card{background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:16px;padding:14px 16px}
+      #view-operation .bo-card{background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:12px;
+        box-shadow:0 6px 22px rgba(2,10,30,.10);padding:13px 15px}
       /* Heatmap · soft pastel rounded */
       #view-operation .bop2-grid{display:grid;gap:5px;background:transparent;border:0;border-radius:0;overflow:visible;margin:0}
       #view-operation .bop2-cell{background:transparent;padding:5px 6px;font-size:11px;line-height:1.3;min-height:36px;display:flex;align-items:center;justify-content:center;border-radius:0;border:0}
@@ -6513,25 +6528,31 @@ function bop2RenderShell(){
       #view-operation .bop2-cell-route{justify-content:flex-start;font-weight:600;font-size:11px;cursor:default;background:transparent;padding:6px 8px;color:#1A2A33}
       #view-operation .bop2-cell-day{cursor:pointer;font-family:'Manrope','DM Mono',monospace;font-weight:700;font-size:13px;font-variant-numeric:tabular-nums;letter-spacing:-.01em;transition:transform .12s}
       #view-operation .bop2-cell-day:hover{transform:scale(1.04);z-index:1}
-      #view-operation .bop2-cell-day.sel{box-shadow:0 0 0 2px #0F6E56;font-weight:700}
+      #view-operation .bop2-cell-day{border-radius:8px !important}
+      #view-operation .bop2-cell-day.sel{box-shadow:0 0 0 2px #173a2c;font-weight:700}
       #view-operation .bop2-cell-pier{background:transparent;font-size:9px;color:#6B7785;font-weight:700;letter-spacing:.08em;padding:10px 4px 4px}
       /* Day header circular pill */
       #view-operation .bo-day-h{display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 2px;cursor:default}
       #view-operation .bo-day-h .wd{font-size:9px;color:#6B7785;font-weight:500}
-      #view-operation .bo-day-h .num{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Manrope','DM Mono',monospace;font-size:11px;font-weight:600;color:#1A2A33;background:transparent;transition:all .12s}
+      #view-operation .bo-day-h .num{width:25px;height:25px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Manrope','DM Mono',monospace;font-size:10.5px;font-weight:700;color:#8a837a;background:#f1eee9;transition:all .12s}
       #view-operation .bo-day-h.today .wd{color:#0F6E56;font-weight:700}
-      #view-operation .bo-day-h.today .num{background:#0F6E56;color:#fff;font-weight:700}
-      #view-operation .bo-day-h.sel .wd{color:#8A6914;font-weight:700}
-      #view-operation .bo-day-h.sel .num{background:#FFD93D;color:#2F2410;font-weight:700;box-shadow:0 2px 6px rgba(255,217,61,.4)}
+      #view-operation .bo-day-h.today .num{background:#0F6E56;color:#fff;font-weight:800}
+      #view-operation .bo-day-h.sel .wd{color:#0c6b47;font-weight:700}
+      /* §bopSkin · วันที่เลือก เดิมเป็นเหลืองสด · เปลี่ยนเป็นเขียวเข้มให้เข้าชุดกับปุ่มหลัก */
+      #view-operation .bo-day-h.sel .num{background:#173a2c;color:#fff;font-weight:800;box-shadow:0 0 0 3px #d8f4e8}
       #view-operation .bo-day-h.alert .wd{color:#C44A36;font-weight:700}
-      #view-operation .bo-day-h.alert .num{background:#FF7560;color:#fff;font-weight:700}
+      /* §bopSkin · เดิมเป็นวงส้มทึบ · ทั้งเดือนที่ยังไม่ได้จัดเรือเลยดูเหมือนไฟไหม้
+         เปลี่ยนเป็นพื้นชมพูอ่อนตัวอักษรแดง · ยังเห็นชัดแต่ไม่กลบวันอื่น */
+      #view-operation .bo-day-h.alert .num{background:#fbe0dd;color:#c43a2e;font-weight:800}
       /* Bulk dropdown */
       #view-operation #bo-bulk-menu{position:absolute;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:6px;min-width:240px;z-index:500;font-family:inherit}
       #view-operation #bo-bulk-menu button{display:flex;align-items:center;gap:9px;width:100%;padding:8px 12px;background:transparent;border:0;border-radius:8px;font-size:11px;font-weight:600;color:#1A2A33;cursor:pointer;text-align:left;font-family:inherit}
       #view-operation #bo-bulk-menu button:hover{background:#F1F5F1}
       #view-operation #bo-bulk-menu .sep{height:1px;background:#E5EDE7;margin:4px 8px}
       /* Legend */
-      #view-operation .bo-legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:10px;color:#6B7785}
+      #view-operation .bo-legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:10px;color:#9b9088}
+      /* §bopSkin · ตัวหนังสือที่ลอยอยู่บนพื้นน้ำเงิน ต้องอ่านออก */
+      #view-operation > .bop2-hd p, #view-operation > div > .bo-pier-pill{color:inherit}
       #view-operation .bo-legend-chip{display:inline-flex;align-items:center;gap:5px;color:#1A2A33;font-weight:500}
       #view-operation .bo-legend-chip span.box{width:11px;height:11px;border-radius:3px}
       /* ─── §bopMob · จอแคบ ─────────────────────────────────────
@@ -6614,7 +6635,7 @@ function bop2RenderShell(){
       <span class="bo-pier-pill ${_bop2.pier==='tublamu'?'on':''}" onclick="bop2SetPier('tublamu')">Tub Lamu</span>
       <span class="bo-pier-pill ${_bop2.pier==='panwa'?'on':''}" onclick="bop2SetPier('panwa')">Visit Panwa</span>
       ${hasRanongRoutes || _bop2.pier==='ranong' ? `<span class="bo-pier-pill ${_bop2.pier==='ranong'?'on':''}" onclick="bop2SetPier('ranong')">Ranong</span>` : ''}
-      <span style="margin-left:auto;font-size:10px;color:#6B7785">Selected: <b style="color:#1A2A33;font-family:Manrope,sans-serif">${_bop2.selDate || '—'}</b></span>
+      <span class="bo-selnote" style="margin-left:auto;font-size:10px;color:#6B7785">Selected: <b style="color:#1A2A33;font-family:Manrope,sans-serif">${_bop2.selDate || '—'}</b></span>
     </div>
 
     <!-- Main 2-col layout -->
@@ -6809,12 +6830,18 @@ function bop2RenderHeatmapRow(route, dates){
     }
 
     // ─── NORMAL HEATMAP STATES · soft pastel mint dashboard palette ───
-    let bg = isWeekend ? '#F5F8F6' : '#F1F5F1', color = '#A8B5AC';
+    /* §bopSkin · สเกลเดียวกับปฏิทิน Seats available ในหน้า Dashboard
+       ของเดิมกลับด้านกัน · เต็ม 90% ขึ้นไปเป็นแดง 70% เป็นเหลือง ต่ำกว่านั้นเขียว
+       แปลว่ายิ่งขายดียิ่งแดง · คนที่ดูหน้าแรกมาก่อนจะอ่านกลับหัวทันที
+       ตอนนี้ ขายดี = เขียว · ว่างเยอะ = ชมพู เหมือนกันทั้งสองหน้า */
+    let bg = isWeekend ? '#F5F3EF' : '#F1EEE9', color = '#c0bab0';
     if(al.hasAllotment){
-      if(hasCharter && al.availableCapacity === 0){ bg = '#F0E8FB'; color = '#6B289A'; }
-      else if(pct >= 90 || al.isFull){ bg = '#FFE2DC'; color = '#C44A36'; }
-      else if(pct >= 70){ bg = '#FFF3C4'; color = '#8A6914'; }
-      else { bg = '#DDF0E5'; color = '#0F6E56'; }
+      if(hasCharter && al.availableCapacity === 0){ bg = '#EFE9FA'; color = '#5B3FA5'; }
+      else if(pct >= 85 || al.isFull){ bg = '#CFE9AC'; color = '#3d5c17'; }   /* เต็ม */
+      else if(pct >= 55){ bg = '#E8F5D8'; color = '#4a7020'; }                /* ขายดี */
+      else if(pct >= 30){ bg = '#FAF0C8'; color = '#8a6b12'; }                /* กลาง ๆ */
+      else if(pct >= 10){ bg = '#FBE1C6'; color = '#9c5a1c'; }                /* ขายได้น้อย */
+      else { bg = '#FBE9E9'; color = '#a8483f'; }                             /* ว่างเยอะ */
     }
 
     let cellInner = '';

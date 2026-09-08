@@ -275,37 +275,48 @@
 /* Calendar · liquid-card skin (Option A · material only · colors untouched · reversible: delete this block) */
 #view-calendar .cal-card{ border-radius:22px !important; border:1px solid rgba(255,255,255,.65) !important; box-shadow:0 14px 34px rgba(20,40,25,.16), 0 3px 8px rgba(20,40,25,.08), inset 0 1px 0 rgba(255,255,255,.85), inset 0 0 0 1px rgba(255,255,255,.25) !important; transition:box-shadow .18s ease, transform .18s ease; }
 #view-calendar .cal-card:hover{ transform:translateY(-2px); box-shadow:0 20px 44px rgba(20,40,25,.2), 0 4px 10px rgba(20,40,25,.1), inset 0 1px 0 rgba(255,255,255,.9) !important; }
-/* ==== bop-glass-skin ==== */
+/* ==== bop-dashboard-skin ==== */
 
-/* Boat Operation · liquid-glass cards (keeps existing colors) · remove this block to revert */
+/* Boat Operation · ใช้ภาษาการออกแบบชุดเดียวกับหน้า Dashboard
+   เดิมบล็อกนี้เป็น liquid-glass ไล่เฉดเขียว-ส้ม-ฟ้า-ชมพู · เปลี่ยนเป็นพื้นน้ำเงิน
+   การ์ดขาวทึบ ค่าเดียวกับ .dv-c ทุกใบ · revert = ลบทั้งบล็อก */
 #view-operation{
   background:
-    radial-gradient(640px 420px at 10% -10%, rgba(120,222,180,.34), transparent 60%),
-    radial-gradient(580px 380px at 102% 4%, rgba(255,178,140,.26), transparent 60%),
-    radial-gradient(680px 480px at 56% 116%, rgba(140,184,252,.24), transparent 60%),
-    radial-gradient(420px 320px at 80% 60%, rgba(245,170,205,.18), transparent 60%),
-    linear-gradient(135deg,#FBFFFE,#EFF8F4 52%,#FAFCFF) !important;
+    radial-gradient(1100px 460px at 16% -10%, rgba(52,72,150,.55), transparent 62%),
+    radial-gradient(880px 400px at 92% 0%, rgba(38,56,124,.5), transparent 58%),
+    #16265C !important;
 }
-#view-operation .bo-card{
-  background:linear-gradient(135deg,rgba(255,255,255,.46),rgba(255,255,255,.30)) !important;
-  backdrop-filter:blur(26px) saturate(1.5);
-  -webkit-backdrop-filter:blur(26px) saturate(1.5);
-  border:1px solid rgba(255,255,255,.85) !important;
-  box-shadow:0 10px 34px rgba(20,60,55,.12), inset 0 1px 0 rgba(255,255,255,.95), inset 0 -1px 0 rgba(255,255,255,.35);
-}
+/* หัวเรื่องอยู่บนพื้นเข้ม */
+#view-operation .bop2-hd h1{ color:#fff !important; }
+#view-operation .bop2-hd p{ color:#9aa8cf !important; }
+/* ป้ายเดือน · เขียนสีไว้ใน inline style ต้องใช้ !important ถึงจะทับได้ */
+#view-operation .bop2-hd span{ color:#fff !important; }
+/* ปุ่มกรองท่า · เฉพาะตัวที่ยังไม่ถูกเลือก · ตัวที่เลือกอยู่ต้องคงพื้นเขียว */
+#view-operation .bo-pier-pill:not(.on){ background:#fff !important; }
+/* ข้อความ Selected: ที่ลอยบนพื้นน้ำเงิน */
+#view-operation .bo-selnote{ color:#9aa8cf !important; }
+#view-operation .bo-selnote b{ color:#fff !important; }
+
+/* การ์ดทึบ · ไม่มี backdrop-filter · ค่าเท่ากับ .dv-c ในหน้า Dashboard
+   หมายเหตุ · backdrop-filter บนการ์ดใหญ่สร้าง stacking context
+   ในไฟล์นี้เคยเจอปัญหานั้นมาแล้วที่ฟอร์มจอง (ขัง dropdown ไว้ข้างใน) */
+#view-operation .bo-card,
 #view-operation .bo-tile{
-  position:relative;
-  backdrop-filter:blur(16px) saturate(1.4);
-  -webkit-backdrop-filter:blur(16px) saturate(1.4);
-  border:1px solid rgba(255,255,255,.7) !important;
-  box-shadow:0 8px 26px rgba(20,60,55,.10), inset 0 1px 0 rgba(255,255,255,.85);
-  overflow:hidden;
+  background:#fff !important;
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+  border:1px solid rgba(0,0,0,.09) !important;
+  border-radius:12px !important;
+  box-shadow:0 6px 22px rgba(2,10,30,.10) !important;
 }
-#view-operation .bo-tile::before{
-  content:'';position:absolute;top:0;left:0;right:0;height:42%;
-  background:linear-gradient(180deg,rgba(255,255,255,.45),rgba(255,255,255,0));
-  pointer-events:none;border-radius:16px 16px 40px 40px;
+/* แสงสะท้อนหัวการ์ดของสกินเดิม · มุมฟิกซ์ 16px จะโผล่เกินขอบการ์ด 12px */
+#view-operation .bo-tile::before{ content:none !important; }
+
+/* การ์ดแจ้งเตือน · เก็บพื้นชมพูจาง ๆ ให้ยังสะดุดตา แต่ไม่ตะโกนทั้งใบ */
+#view-operation .bo-tile:nth-child(4){
+  background:linear-gradient(100deg,#fdf4f3,#fff 62%) !important;
 }
+
 /* ==== topbar-float-skin ==== */
 
 /* Remove the top bar · content fills to top · right-side controls float top-right · revert = delete this block */
