@@ -6705,7 +6705,7 @@ function bop2RenderShell(){
         ${legendBoats.length > 0 ? `<span style="margin-left:auto;font-size:10px;color:#6B7785;font-weight:600">${legendBoats.length} boat${legendBoats.length===1?'':'s'} in view</span>` : ''}
       </div>
       <div style="overflow-x:auto">
-      <div class="bop2-grid ${isMonth?'is-month':'is-week'}" style="--bop2-label:${labelCol}px;--bop2-day:${dayColMin}px;grid-template-columns:var(--bop2-label) repeat(${dates.length}, minmax(var(--bop2-day), 1fr));min-width:calc(var(--bop2-label) + ${dates.length} * (var(--bop2-day) + 5px))">
+      <div class="bop2-grid ${isMonth?'is-month':'is-week'}" style="position:relative;--bop2-label:${labelCol}px;--bop2-day:${dayColMin}px;grid-template-columns:var(--bop2-label) repeat(${dates.length}, minmax(var(--bop2-day), 1fr));min-width:calc(var(--bop2-label) + ${dates.length} * (var(--bop2-day) + 5px))">
         <div class="bop2-cell bop2-cell-h">Route</div>
         ${dates.map(d => {
           const dt = new Date(d);
@@ -6722,6 +6722,27 @@ function bop2RenderShell(){
         ${panwaRoutes.map(r => bop2RenderHeatmapRow(r, dates)).join('')}
         ${ranongRoutes.length ? `<div class="bop2-cell bop2-cell-pier" style="grid-column:1/-1"><span>RANONG · ${ranongRoutes.length} route${ranongRoutes.length===1?'':'s'}</span></div>` : ''}
         ${ranongRoutes.map(r => bop2RenderHeatmapRow(r, dates)).join('')}
+        ${(() => {
+          /* §bopColMark · กรอบครอบทั้งคอลัมน์ ตั้งแต่หัววันที่ถึงแถวสุดท้าย
+             ของเดิมทำเครื่องหมายไว้ที่หัวคอลัมน์อย่างเดียว · ไล่สายตาลงมาสองสามแถว
+             ก็ไม่รู้แล้วว่าอยู่คอลัมน์ไหน · โหมดเดือน 31 วันหลงง่ายมาก
+
+             ทำเป็น overlay absolute ในตัวตาราง · top:0;bottom:0
+             กินความสูงจริงของตารางเองโดยไม่ต้องรู้ว่ามีกี่แถว
+             (ใช้ grid-row:1/-1 ไม่ได้ ตารางนี้ไม่ได้ประกาศ grid-template-rows
+              แถวเป็น implicit หมด · -1 เลยชี้กลับมาที่เส้น 1 คือสูงแถวเดียว)
+             ตำแหน่งแนวนอนคำนวณจากสูตร track ตรง ๆ · ทุกคอลัมน์วันกว้างเท่ากัน */
+          const _n = dates.length;
+          if(!_n) return '';
+          const _w    = `((100% - var(--bop2-label) - ${_n} * 5px) / ${_n})`;
+          const _left = i => `calc(var(--bop2-label) + 5px + ${i} * (${_w} + 5px) - 2px)`;
+          const _iToday = dates.indexOf(TODAY_STR);
+          const _iSel   = dates.indexOf(_bop2.selDate);
+          const mk = (i, style) => (i < 0) ? '' :
+            `<div style="position:absolute;top:0;bottom:0;left:${_left(i)};width:calc(${_w} + 4px);pointer-events:none;z-index:3;border-radius:9px;${style}"></div>`;
+          return (_iToday !== _iSel ? mk(_iToday, 'border:1.5px dashed rgba(15,110,86,.45)') : '')
+               + mk(_iSel, 'border:2px solid #173A2C;box-shadow:0 0 0 3px rgba(23,58,44,.06)');
+        })()}
       </div>
       </div>
 
