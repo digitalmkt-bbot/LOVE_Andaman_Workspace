@@ -6486,6 +6486,19 @@ function bop2RenderShell(){
       /* §bopSkin · เปลือกน้ำเงิน + การ์ดขาวลอย · ค่าเดียวกับ .dv-fr ในหน้า Dashboard */
       #view-operation{padding:18px;background:#16265C;font-family:'DM Sans',sans-serif;color:#1A2A33;min-height:100%}
       #view-operation .bop2-hd{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:14px;gap:12px;flex-wrap:wrap}
+      /* §bopHdr · แถบบนตาม mockup */
+      #view-operation .bop2-top{display:flex;align-items:center;gap:9px;margin:-4px 0 13px;flex-wrap:wrap}
+      #view-operation .bop2-top-d{font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1;color:#fff;font-variant-numeric:tabular-nums}
+      #view-operation .bop2-top-w{line-height:1.15;display:inline-block}
+      #view-operation .bop2-top-w b{display:block;font-size:13px;font-weight:700;color:#fff}
+      #view-operation .bop2-top-w i{display:block;font-size:8.5px;font-weight:700;letter-spacing:.14em;color:#9AA2C8;text-transform:uppercase;font-style:normal}
+      #view-operation .bop2-top-brand{flex:1;text-align:center;font-size:15px;font-weight:700;letter-spacing:.42em;color:#fff;white-space:nowrap;min-width:120px}
+      #view-operation .bop2-chip{height:26px;padding:0 12px;border-radius:13px;display:inline-flex;align-items:center;
+        font-size:11px;font-weight:700;background:rgba(255,255,255,.10);color:#E8EBF7;border:1px solid rgba(255,255,255,.10)}
+      #view-operation .bop2-chip b{font-weight:800;margin-left:5px}
+      #view-operation .bop2-chip.g{background:#D8F4E8;color:#0C6B47;border-color:transparent}
+      #view-operation .bop2-chip.r{background:#FBE0DD;color:#A8362B;border-color:transparent}
+      @media (max-width:1100px){ #view-operation .bop2-top-brand{display:none} }
       #view-operation .bop2-hd h1{font-size:22px;font-weight:800;color:#fff;margin:0 0 2px;letter-spacing:-.015em}
       #view-operation .bop2-hd p{font-size:11.5px;color:#9aa8cf;margin:0;font-weight:500}
       /* Stat tiles */
@@ -6571,22 +6584,25 @@ function bop2RenderShell(){
         #view-operation .bop2-cell-pier > span{position:sticky;left:0;background:#fff;padding:3px 8px 3px 2px;border-radius:6px}
       }
     </style>
-    <div class="bop2-hd">
-      <div>
-        <h1>Boat Operation</h1>
-        <p>Click a heatmap cell to assign boats · bulk actions for repeating patterns</p>
-      </div>
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <button class="bo-btn icon" onclick="bop2ShiftWeek(-7)" title="${isMonth?'Previous month':'Previous week'}">‹</button>
-        <button class="bo-btn primary" onclick="bop2GoToday()">Today</button>
-        <button class="bo-btn icon" onclick="bop2ShiftWeek(7)" title="${isMonth?'Next month':'Next week'}">›</button>
-        <span style="font-size:13px;font-weight:700;color:#1A2A33;margin:0 4px;min-width:130px;text-align:center;font-family:Manrope,sans-serif">${escapeHTML(periodLbl)}</span>
-        <div class="bo-seg">
-          <button class="${!isMonth?'on':''}" onclick="bop2SetViewMode('week')">Week</button>
-          <button class="${isMonth?'on':''}" onclick="bop2SetViewMode('month')">Month</button>
-        </div>
-        <button class="bo-btn primary" onclick="bop2ShowBulkMenu(event)" style="margin-left:4px">+ Bulk actions</button>
-      </div>
+    <!-- §bopHdr · แถบบนตาม mockup · วันที่ซ้าย wordmark กลาง ชิปสรุปขวา -->
+    <div class="bop2-top">
+      <button class="bo-btn icon" onclick="bop2ShiftWeek(-7)" title="${isMonth?'เดือนก่อนหน้า':'สัปดาห์ก่อนหน้า'}">&lsaquo;</button>
+      <span class="bop2-top-d">${(new Date(_selDate)).getDate()}</span>
+      <span class="bop2-top-w">
+        <b>${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][(new Date(_selDate)).getDay()]}</b>
+        <i>${escapeHTML(periodLbl)}</i>
+      </span>
+      <button class="bo-btn icon" onclick="bop2ShiftWeek(7)" title="${isMonth?'เดือนถัดไป':'สัปดาห์ถัดไป'}">&rsaquo;</button>
+      <button class="bo-btn primary" onclick="bop2GoToday()" style="margin-left:2px">Today</button>
+
+      <span class="bop2-top-brand">LOVE ANDAMAN</span>
+
+      <span class="bop2-chip">${isMonth?'ทริปเดือนนี้':'ทริปสัปดาห์นี้'}<b>${totalSlots}</b></span>
+      <span class="bop2-chip g">เรือออกงาน<b>${deployedBoats.size}/${BOATS.filter(b=>!b.retired).length}</b></span>
+      <span class="bop2-chip">pax<b>${totalPax}</b></span>
+      ${needsBoats.length
+        ? `<span class="bop2-chip r" onclick="bop2ShowNeedsList()" style="cursor:pointer">&#9888; ยังไม่มีเรือ<b>${needsBoats.length}</b> &rsaquo;</span>`
+        : `<span class="bop2-chip g">&#10003; มีเรือครบ</span>`}
     </div>
 
     <!-- §bop3col · Main 3-col layout · ซ้ายสถิติ กลางตาราง ขวากองเรือ -->
@@ -6670,6 +6686,10 @@ function bop2RenderShell(){
         <span class="bo-pier-pill ${_bop2.pier==='tublamu'?'on':''}" onclick="bop2SetPier('tublamu')">Tub Lamu</span>
         <span class="bo-pier-pill ${_bop2.pier==='panwa'?'on':''}" onclick="bop2SetPier('panwa')">Visit Panwa</span>
         ${hasRanongRoutes || _bop2.pier==='ranong' ? `<span class="bo-pier-pill ${_bop2.pier==='ranong'?'on':''}" onclick="bop2SetPier('ranong')">Ranong</span>` : ''}
+        <!-- §bopHdr · ปุ่มคุมตารางย้ายมาอยู่ใกล้ตารางตาม mockup -->
+        <span class="bo-pier-pill ${!isMonth?'on':''}" onclick="bop2SetViewMode('week')" style="margin-left:6px">Week</span>
+        <span class="bo-pier-pill ${isMonth?'on':''}" onclick="bop2SetViewMode('month')">Month</span>
+        <span class="bo-pier-pill" onclick="bop2ShowBulkMenu(event)">+ Bulk actions</span>
       </div>
       <div class="bo-legend" style="margin:0 0 10px;padding-bottom:9px;border-bottom:1px solid rgba(0,0,0,.05)">
         <!-- §bop3col · legend ชุดเดียวกับปฏิทิน Seats available ในหน้า Dashboard -->
@@ -6842,9 +6862,11 @@ function bop2RenderHeatmapRow(route, dates){
   const pillBg = _bop2Lighten(route.color, 0.5);   // softened 50%
   const txtColor = contrastText(pillBg);            // dark text on the pale pill
   // Route name as colored card · full name with wrap (max 2 lines)
-  let row = `<div class="bop2-cell bop2-cell-route" title="${escapeHTML(route.name)}" style="padding:3px 2px;background:transparent">
-    <div style="background:${pillBg};border-left:3px solid ${route.color};border-radius:10px;padding:7px 10px;width:100%;display:flex;align-items:center;min-height:38px;line-height:1.2;box-shadow:0 1px 2px rgba(0,0,0,.05)">
-      <span style="font-size:${isMonth?'9.5':'10.5'}px;font-weight:700;color:${txtColor};display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;word-break:break-word;letter-spacing:-.005em">${escapeHTML(route.name)}</span>
+  /* §bopHdr · ของเดิมเป็นชิปสีทึบเต็มก้อน แย่งสายตากับตัวเลขในตารางซึ่งเป็นพระเอก
+     mockup ใช้แถบสีบาง 3px แล้วตามด้วยตัวหนังสือธรรมดา · สีประจำเส้นทางยังอยู่ครบ */
+  let row = `<div class="bop2-cell bop2-cell-route" title="${escapeHTML(route.name)}" style="padding:2px 8px 2px 0;background:transparent">
+    <div style="border-left:3px solid ${route.color};border-radius:2px;padding:2px 0 2px 9px;width:100%;display:flex;align-items:center;min-height:26px;line-height:1.25">
+      <span style="font-size:${isMonth?'11':'11.5'}px;font-weight:600;color:#2C2C2A;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;word-break:break-word;letter-spacing:-.005em">${escapeHTML(route.name)}</span>
     </div>
   </div>`;
   dates.forEach(d => {
