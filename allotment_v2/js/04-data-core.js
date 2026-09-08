@@ -6435,8 +6435,9 @@ function bop2RenderShell(){
     ? `${f.getDate()} ${MON[f.getMonth()]} – ${l.getDate()} ${MON[l.getMonth()]} ${f.getFullYear()}`
     : `${MON[f.getMonth()]} ${f.getFullYear()}`;
   const isMonth = _bop2.viewMode === 'month';
-  const labelCol = isMonth ? 170 : 200;
-  const dayColMin = isMonth ? 26 : 50;
+  /* §bop3col · ตารางอยู่คอลัมน์กลางที่แคบลงกว่าเดิม · บีบให้ 31 วันพอดีจอ */
+  const labelCol = isMonth ? 146 : 200;
+  const dayColMin = isMonth ? 22 : 50;
   // Routes filtered by pier
   const allRoutes = ROUTES.filter(r => r.active !== false);
   const routes = _bop2.pier === 'all' ? allRoutes : allRoutes.filter(r => r.pier === _bop2.pier);
@@ -6588,8 +6589,11 @@ function bop2RenderShell(){
       </div>
     </div>
 
-    <!-- Stat tiles · mosaic -->
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1.4fr;gap:10px;margin-bottom:14px">
+    <!-- §bop3col · Main 3-col layout · ซ้ายสถิติ กลางตาราง ขวากองเรือ -->
+    <div class="bop2-3col" style="display:grid;grid-template-columns:272px minmax(0,1fr) 306px;gap:13px;align-items:start">
+
+    <!-- Col 1 · การ์ดสถิติเรียงลงมา + เรือที่ออกวันนี้ -->
+    <div style="display:flex;flex-direction:column;gap:13px">
       <div class="bo-tile">
         <div>
           <div class="bo-tile-lbl">${isMonth?'This month':'This week'}</div>
@@ -6627,22 +6631,37 @@ function bop2RenderShell(){
         </div>
         <div style="font-size:9px;color:#0F6E56;opacity:0.75;font-weight:500">every booking has a boat</div>
       </div>`}
+
+      <!-- §bop3col · เรือที่ออกวันนี้ · สร้างจาก _fleet.assigned ที่คำนวณไว้แล้ว
+           ของเดิมข้อมูลนี้ซ่อนอยู่ในแผงขวาที่ต้องเลื่อนลงไปดู -->
+      <div class="bo-card" style="padding:0">
+        <div style="display:flex;align-items:center;gap:8px;padding:11px 13px 9px">
+          <span style="font-size:13.5px;font-weight:800;color:#12518F;letter-spacing:-.01em">เรือที่ออกวันนี้</span>
+          <span style="flex:1"></span>
+          <span style="font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:8px;background:#F2EFEA;color:#9B9088">${_fleet.assigned.length} ลำ</span>
+        </div>
+        ${_fleet.assigned.length ? _fleet.assigned.map(a => `
+        <div style="display:flex;align-items:center;gap:9px;padding:7px 13px;border-top:1px solid rgba(0,0,0,.05)">
+          <span style="width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font:800 9px/1 'DM Sans';color:#fff;flex-shrink:0;background:${a.isCharter?'#6B289A':bop2BoatColor(a.boat.id)}">${escapeHTML(String(a.boat.name||'').replace(/[^A-Za-z0-9]/g,'').slice(0,2).toUpperCase()||'--')}</span>
+          <span style="flex:1;min-width:0">
+            <span style="font-size:12px;font-weight:800;color:#2C2C2A;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.isCharter?'⚓ ':''}${escapeHTML(a.boat.name||'')}</span>
+            <span style="font-size:9.5px;font-weight:600;color:#9B9088;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHTML((a.route&&a.route.name)||'—')}</span>
+          </span>
+          <span style="font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;color:${a.seats>0?'#0C6B47':'#B6B1A8'};flex-shrink:0;text-align:right">${a.seats}<small style="font-size:8.5px;font-weight:600;color:#B6B1A8;display:block">/${a.capacity}</small></span>
+        </div>`).join('') : `<div style="padding:11px 13px 14px;font-size:11px;color:#9B9088;font-style:italic;border-top:1px solid rgba(0,0,0,.05)">ยังไม่มีเรือออกวันนี้</div>`}
+      </div>
     </div>
 
-    <!-- Pier filter -->
-    <div style="display:flex;align-items:center;gap:7px;margin-bottom:12px">
-      <span class="bo-pier-pill ${_bop2.pier==='all'?'on':''}" onclick="bop2SetPier('all')">All piers</span>
-      <span class="bo-pier-pill ${_bop2.pier==='tublamu'?'on':''}" onclick="bop2SetPier('tublamu')">Tub Lamu</span>
-      <span class="bo-pier-pill ${_bop2.pier==='panwa'?'on':''}" onclick="bop2SetPier('panwa')">Visit Panwa</span>
-      ${hasRanongRoutes || _bop2.pier==='ranong' ? `<span class="bo-pier-pill ${_bop2.pier==='ranong'?'on':''}" onclick="bop2SetPier('ranong')">Ranong</span>` : ''}
-      <span class="bo-selnote" style="margin-left:auto;font-size:10px;color:#6B7785">Selected: <b style="color:#1A2A33;font-family:Manrope,sans-serif">${_bop2.selDate || '—'}</b></span>
-    </div>
-
-    <!-- Main 2-col layout -->
-    <div style="display:grid;grid-template-columns:1fr 310px;gap:14px;align-items:start">
-
-    <!-- Left: heatmap card -->
+    <!-- Col 2 · ตาราง · ปุ่มกรองท่าย้ายเข้ามาอยู่ในการ์ดเดียวกัน
+         เพราะมันกรองเฉพาะตาราง ของเดิมลอยอยู่นอกการ์ดเลยอ่านเหมือนกรองทั้งหน้า -->
     <div class="bo-card" style="padding:14px 14px 10px">
+      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:11px">
+        <span class="bo-pier-pill ${_bop2.pier==='all'?'on':''}" onclick="bop2SetPier('all')">All piers</span>
+        <span class="bo-pier-pill ${_bop2.pier==='tublamu'?'on':''}" onclick="bop2SetPier('tublamu')">Tub Lamu</span>
+        <span class="bo-pier-pill ${_bop2.pier==='panwa'?'on':''}" onclick="bop2SetPier('panwa')">Visit Panwa</span>
+        ${hasRanongRoutes || _bop2.pier==='ranong' ? `<span class="bo-pier-pill ${_bop2.pier==='ranong'?'on':''}" onclick="bop2SetPier('ranong')">Ranong</span>` : ''}
+        <span style="margin-left:auto;font-size:10px;color:#9B9088;font-weight:600">Selected: <b style="color:#2C2C2A;font-family:Manrope,sans-serif">${_bop2.selDate || '—'}</b></span>
+      </div>
       <div style="overflow-x:auto">
       <div class="bop2-grid ${isMonth?'is-month':'is-week'}" style="--bop2-label:${labelCol}px;--bop2-day:${dayColMin}px;grid-template-columns:var(--bop2-label) repeat(${dates.length}, minmax(var(--bop2-day), 1fr));min-width:calc(var(--bop2-label) + ${dates.length} * (var(--bop2-day) + 5px))">
         <div class="bop2-cell bop2-cell-h">Route</div>
@@ -6665,10 +6684,13 @@ function bop2RenderShell(){
       </div>
 
       <div class="bo-legend" style="margin-top:12px;padding-top:10px;border-top:1px solid #E5EDE7">
-        <span class="bo-legend-chip"><span class="box" style="background:#DDF0E5"></span>Open</span>
-        <span class="bo-legend-chip"><span class="box" style="background:#FFF3C4"></span>Tight</span>
-        <span class="bo-legend-chip"><span class="box" style="background:#FFE2DC"></span>Full</span>
-        <span class="bo-legend-chip"><span class="box" style="background:#F0E8FB"></span>⚓ Charter</span>
+        <!-- §bop3col · legend ชุดเดียวกับปฏิทิน Seats available ในหน้า Dashboard -->
+        <span class="bo-legend-chip"><span class="box" style="background:#CFE9AC"></span>เต็ม</span>
+        <span class="bo-legend-chip"><span class="box" style="background:#E8F5D8"></span>ขายดี</span>
+        <span class="bo-legend-chip"><span class="box" style="background:#FAF0C8"></span>กลาง ๆ</span>
+        <span class="bo-legend-chip"><span class="box" style="background:#FBE1C6"></span>ขายได้น้อย</span>
+        <span class="bo-legend-chip"><span class="box" style="background:#FBE9E9"></span>ว่างเยอะ</span>
+        <span class="bo-legend-chip"><span class="box" style="background:#EFE9FA"></span>⚓ เหมาลำ</span>
         <span class="bo-legend-chip"><span class="box" style="background:#FBE4E0;color:#C44A36;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:9px;line-height:1">—</span>Closed</span>
         <span class="bo-legend-chip"><span class="box" style="background:repeating-linear-gradient(45deg,#FFE2DC,#FFE2DC 3px,#fff 3px,#fff 6px);border:1px dashed #C44A36"></span>No boat ⚠</span>
         <span class="bo-legend-chip"><span class="box" style="background:repeating-linear-gradient(45deg,#FBE3BE,#FBE3BE 3px,#fff 3px,#fff 6px);border:1px dashed #BA7517"></span>&#128295; เปลี่ยนเรือ</span>

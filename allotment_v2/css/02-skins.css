@@ -312,10 +312,38 @@
 /* แสงสะท้อนหัวการ์ดของสกินเดิม · มุมฟิกซ์ 16px จะโผล่เกินขอบการ์ด 12px */
 #view-operation .bo-tile::before{ content:none !important; }
 
+/* §bop3col · จอแคบลง ยุบทีละคอลัมน์ · ตารางต้องได้ที่กว้างที่สุดเสมอ */
+@media (max-width:1500px){
+  #view-operation .bop2-3col{ grid-template-columns:250px minmax(0,1fr) !important; }
+  #view-operation .bop2-3col > *:last-child{ grid-column:1/-1; }
+}
+@media (max-width:1000px){
+  #view-operation .bop2-3col{ grid-template-columns:minmax(0,1fr) !important; }
+  #view-operation .bop2-3col > *{ grid-column:auto !important; }
+}
 /* การ์ดแจ้งเตือน · เก็บพื้นชมพูจาง ๆ ให้ยังสะดุดตา แต่ไม่ตะโกนทั้งใบ */
 #view-operation .bo-tile:nth-child(4){
   background:linear-gradient(100deg,#fdf4f3,#fff 62%) !important;
 }
+/* §bop3col · การ์ดเตือน · ในคอลัมน์แคบข้อความเดิมตัดคำเป็นสามบรรทัด
+   วางป้ายบนสุด ตัวเลขใหญ่ แล้วรายละเอียดล่างสุด แทนการวางเรียงแนวนอน */
+#view-operation .bop2-3col > div:first-child > .bo-tile:nth-child(4){
+  flex-direction:column !important; align-items:flex-start !important; gap:2px;
+}
+#view-operation .bop2-3col > div:first-child > .bo-tile:nth-child(4) > div:first-child > div:nth-child(2){
+  font-size:13px !important; line-height:1.3 !important; margin-top:3px !important;
+}
+#view-operation .bop2-3col > div:first-child > .bo-tile:nth-child(4) > div:last-child{
+  text-align:left !important; font-size:9px !important;
+}
+/* §bop3col · การ์ดสถิติอยู่ในคอลัมน์แคบแล้ว · วางป้ายกับตัวเลขเรียงแนวนอนให้เตี้ยลง */
+#view-operation .bop2-3col > div:first-child > .bo-tile{
+  min-height:0 !important; padding:11px 14px !important;
+  flex-direction:row !important; align-items:center !important; gap:10px;
+}
+#view-operation .bop2-3col > div:first-child > .bo-tile > div:first-child{ flex:1; min-width:0; }
+#view-operation .bop2-3col > div:first-child > .bo-tile .bo-tile-num{ margin-top:3px !important; }
+#view-operation .bop2-3col > div:first-child > .bo-tile > div:last-child{ text-align:right; flex-shrink:0; }
 
 /* ==== topbar-float-skin ==== */
 
