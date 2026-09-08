@@ -6740,8 +6740,8 @@ function bop2RenderShell(){
           const _iSel   = dates.indexOf(_bop2.selDate);
           const mk = (i, style) => (i < 0) ? '' :
             `<div style="position:absolute;top:0;bottom:0;left:${_left(i)};width:calc(${_w} + 4px);pointer-events:none;z-index:3;border-radius:9px;${style}"></div>`;
-          return (_iToday !== _iSel ? mk(_iToday, 'border:1.5px dashed rgba(15,110,86,.45)') : '')
-               + mk(_iSel, 'border:2px solid #173A2C;box-shadow:0 0 0 3px rgba(23,58,44,.06)');
+          return (_iToday !== _iSel ? mk(_iToday, 'border:1.5px dashed rgba(214,178,0,.75)') : '')
+               + mk(_iSel, 'border:2px solid #E3C400;box-shadow:0 0 0 3px rgba(227,196,0,.20)');
         })()}
       </div>
       </div>
