@@ -1,0 +1,44 @@
+# Local development Postgres for server.js (DATA_BACKEND=relational).
+#
+# Not used by Railway — production's database is a managed Railway Postgres and this file has no
+# bearing on it. This exists so `node server.js` can be run locally with `db on`: logins, /api/load
+# and the whole sync path, against a throwaway database instead of production.
+#
+# Pinned to 18 because that is what production runs (18.4 as of the db/baseline dump). A local
+# major-version skew would let a migration pass here and fail on deploy.
+#
+# Port 55432, not 5432, so this never collides with a Postgres already installed on the host.
+#
+#   node tools/dev-db.mjs up      start it and load the schema
+#   node tools/dev-db.mjs reset   throw the data away and reload
+#   node tools/dev-db.mjs down    stop it (the volume survives)
+#
+# The volume is named, so `down` keeps the data. `reset` is the one that destroys it.
+
+services:
+  db:
+    image: postgres:18
+    container_name: la-dev-db
+    environment:
+      POSTGRES_PASSWORD: devpass
+      POSTGRES_USER: postgres
+      POSTGRES_DB: la_dev
+    ports:
+      - "55432:5432"
+    volumes:
+      # /var/lib/postgresql, NOT /var/lib/postgresql/data. From 18 the image puts the cluster in a
+      # subdirectory of that path so `pg_upgrade --link` does not have to cross a mount boundary,
+      # and mounting the old 17-and-earlier location makes the container exit 1 on first boot with
+      # "This is usually the result of upgrading the Docker image without upgrading the underlying
+      # database". See docker-library/postgres#37.
+      - la-dev-pgdata:/var/lib/postgresql
+    healthcheck:
+      # -d matters: without it pg_isready checks the "postgres" database, which is ready before
+      # POSTGRES_DB has been created, so dependents start against a database that does not exist yet.
+      test: ["CMD-SHELL", "pg_isready -U postgres -d la_dev"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  la-dev-pgdata:

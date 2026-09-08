@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "task": "LAM-23",
+  "title": "Point ARCHITECTURE.md and CLAUDE.md/README.md at the real workflow docs, drop the CHANGELOG.md fiction, fix env var names and the start_server.command path",
+  "status": "completed",
+  "agent": {
+    "sessionId": "",
+    "model": "claude-sonnet-5"
+  },
+  "git": {
+    "base": "refactor/booking-v2-migration",
+    "branch": "agent/LAM-23-architecture-docs",
+    "worktree": "D:/projects/wt-sprint1/LAM-23-architecture-docs",
+    "commit": "14822b150f3da80a9837624044e5a858a230e410",
+    "pr": {
+      "number": 6,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/6",
+      "state": "open"
+    }
+  },
+  "input": {
+    "requestedOutcome": "Fix documented drift in CLAUDE.md and README.md against the actual repo state, and add ARCHITECTURE.md pointing at allotment_v2/docs/workflows/.",
+    "acceptanceCriteria": [
+      "Every CLAUDE.md reference to CHANGELOG.md (6 occurrences) is replaced with a working pointer, since CHANGELOG.md does not exist and was never tracked in git",
+      "README.md no longer claims all runtime data lives in localStorage; it states Postgres via server.js is the durable source of truth and localStorage/in-memory is the working copy",
+      "README.md documents ADMIN_USER/ADMIN_PASS (matching server.js lines 19-20), not APP_USER/APP_PASS",
+      "CLAUDE.md's start_server.command reference uses the real path (allotment_v2/start_server.command, not repo root) and states explicitly it serves no /api",
+      "A new ARCHITECTURE.md exists and points at allotment_v2/docs/workflows/ as the source of architecture/design detail",
+      "Every claim written is verified against the actual tree, not assumed from the ticket description"
+    ],
+    "allowedScope": [
+      "ARCHITECTURE.md",
+      "CLAUDE.md",
+      "README.md",
+      "docs/development/tasks/LAM-23.md",
+      ".agent-reports/LAM-23.json"
+    ],
+    "constraints": [
+      "Must not edit allotment_v2/allotment_v2.html, package.json, test/**, or .github/**",
+      "Must not touch persistence/schema/SQL/API behavior",
+      "Must not touch files owned by other Sprint 1/2 tasks",
+      "Stage only owned paths explicitly (git add -- <path>), never git add -A/.",
+      "Do not assert any claim that was not independently checked against this worktree"
+    ],
+    "assumptions": [
+      "None — every factual claim below was checked directly against this worktree's files, git history, and server.js source rather than assumed from the Jira description"
+    ]
+  },
+  "output": {
+    "summary": "Verified against the actual tree that CHANGELOG.md has never been tracked in git (git log --all -- CHANGELOG.md returns nothing, matching the drift table in allotment_v2/docs/workflows/07-data-persistence-api.md §10), that server.js:19-20 reads ADMIN_USER/ADMIN_PASS (not APP_USER/APP_PASS), and that start_server.command lives at allotment_v2/start_server.command and serves no /api (confirmed by reading the file's role in the workflow doc). Updated all 6 CHANGELOG.md references in CLAUDE.md to point at allotment_v2/docs/workflows/ (via the new ARCHITECTURE.md), fixed the start_server.command path/description in CLAUDE.md §4 and the file tree diagram, fixed README.md's localStorage-is-the-store claim and its APP_USER/APP_PASS env var names, and created ARCHITECTURE.md as a pointer document summarizing the three-layer data model and linking to allotment_v2/docs/workflows/.",
+    "filesChanged": [
+      {
+        "path": "ARCHITECTURE.md",
+        "change": "added",
+        "purpose": "New pointer doc: summarizes the Postgres/RAM/localStorage architecture in one paragraph, explains the two local-run modes (full stack vs. static-only start_server.command with no /api), links to allotment_v2/docs/workflows/ for full detail, and notes CHANGELOG.md does not exist."
+      },
+      {
+        "path": "CLAUDE.md",
+        "change": "modified",
+        "purpose": "Replaced all 6 CHANGELOG.md references with pointers to allotment_v2/docs/workflows/ and the new ARCHITECTURE.md; fixed the start_server.command path (was implied repo-root, is actually allotment_v2/start_server.command) and added that it serves no /api; added ARCHITECTURE.md to the companion-docs line and file tree."
+      },
+      {
+        "path": "README.md",
+        "change": "modified",
+        "purpose": "Replaced the 'all runtime data lives in localStorage' claim with the correct model (Postgres via server.js is the durable store, localStorage/in-memory is a working copy); replaced APP_USER/APP_PASS with the actual ADMIN_USER/ADMIN_PASS env vars server.js reads."
+      },
+      {
+        "path": "docs/development/tasks/LAM-23.md",
+        "change": "added",
+        "purpose": "Agent-change-pr durable task report (this task's I/O contract and verification record)."
+      },
+      {
+        "path": ".agent-reports/LAM-23.json",
+        "change": "added",
+        "purpose": "Agent-change-pr machine-readable manifest for the coordinator rollup."
+      }
+    ],
+    "behaviorChanges": [
+      {
+        "area": "Documentation only — no runtime/persistence/API behavior changed",
+        "before": "CLAUDE.md pointed 6 times at a CHANGELOG.md that does not exist in the repo or its git history; README.md claimed all runtime data lives in localStorage and that Railway auth is gated by APP_USER/APP_PASS; CLAUDE.md's start_server.command instruction omitted the allotment_v2/ path and did not mention it serves no /api; there was no ARCHITECTURE.md.",
+        "after": "CLAUDE.md points at allotment_v2/docs/workflows/ (via ARCHITECTURE.md) wherever it previously cited CHANGELOG.md, and states the start_server.command's real path and its no-/api limitation; README.md correctly states Postgres is the durable store and documents ADMIN_USER/ADMIN_PASS; ARCHITECTURE.md exists and summarizes the architecture with links into allotment_v2/docs/workflows/."
+      }
+    ],
+    "interfaces": {
+      "added": [],
+      "changed": [],
+      "removed": []
+    },
+    "dataPersistence": {
+      "impact": "none",
+      "details": [
+        "No code, schema, mapper, or API files were touched. Only Markdown documentation (CLAUDE.md, README.md, ARCHITECTURE.md) and this task's own report/manifest were changed."
+      ],
+      "migrationRequired": false
+    }
+  },
+  "verification": [
+    {
+      "command": "git log --all --oneline -- CHANGELOG.md   (and: git log --all --diff-filter=A --name-only --pretty=format: | grep -i changelog)",
+      "status": "passed",
+      "evidence": "Both commands returned zero output — CHANGELOG.md has never existed at any point in this repo's tracked history, on any branch."
+    },
+    {
+      "command": "grep -na \"ADMIN_USER\\|ADMIN_PASS\" server.js",
+      "status": "passed",
+      "evidence": "server.js:19: const ADMIN_USER = (process.env.ADMIN_USER || '').trim();  server.js:20: const ADMIN_PASS = process.env.ADMIN_PASS || '';  -- confirms the env var names the ticket asked to correct README.md to."
+    },
+    {
+      "command": "find . -iname start_server.command -not -path '*/node_modules/*'",
+      "status": "passed",
+      "evidence": "Only match: ./allotment_v2/start_server.command -- confirms the file is not at repo root, matching the fix applied to CLAUDE.md."
+    },
+    {
+      "command": "grep -n \"^### 2.1\\|allotment_v2/start_server.command\" allotment_v2/docs/workflows/07-data-persistence-api.md",
+      "status": "passed",
+      "evidence": "Line 140: '### 2.1 Degraded mode (localhost without /api)'; line 569: 'allotment_v2/start_server.command serves static files only on :8765 ... No /api => the degraded path of S2.1' -- confirms start_server.command serves no /api, as now stated in CLAUDE.md and ARCHITECTURE.md."
+    },
+    {
+      "command": "grep -n CHANGELOG CLAUDE.md",
+      "status": "passed",
+      "evidence": "Only one remaining hit, in the new intro line explaining CHANGELOG.md does not exist and is not tracked in git; the other 5 prior references were replaced with pointers to allotment_v2/docs/workflows/."
+    },
+    {
+      "command": "node -e \"require('./server.js')\"",
+      "status": "passed",
+      "evidence": "os-backend/src/mapping/os_repo.js and operation_schemas_model.json load successfully (prints '[map] field_mapping.json covers every table and column...'); confirms server.js's require of os-backend (referenced indirectly while researching the persistence model for ARCHITECTURE.md) is intact on this branch after commit 1c10d84. No DATABASE_URL/live Postgres was available in this sandbox, so login/sync and any deeper backend behavior were not exercised beyond module load -- stated plainly rather than faked."
+    },
+    {
+      "command": "git diff --cached --name-status  (after staging only the owned paths with git add -- <path>)",
+      "status": "passed",
+      "evidence": "Staged set was exactly: A .agent-reports/LAM-23.json, A ARCHITECTURE.md, M CLAUDE.md, M README.md, A docs/development/tasks/LAM-23.md -- matches the owned-files list exactly, nothing extra. `git diff --cached --check` reported no whitespace conflicts."
+    }
+  ],
+  "decisions": [
+    "Kept the README.md 'npm start ... opens the app' and '(If unset, the app is open to anyone with the URL.)' lines untouched: neither was named in the Jira scope, and the second one is not simply a var-name typo -- server.js's ADMIN_USER/ADMIN_PASS only seed an initial admin row when the users table is empty, while every API route separately requires a session (401 'login required'), so its precise behavior needed its own verification pass outside this ticket's stated scope. Left as pre-existing text rather than rewritten on an unverified guess.",
+    "Did not add a new claim that SYSTEM_MAP.md's storage-model sections are stale, even though the source drift table asserts this: I did not independently re-read SYSTEM_MAP.md's current content against that specific claim, and it was not named in this ticket's scope, so left SYSTEM_MAP.md and its CLAUDE.md reference untouched.",
+    "ARCHITECTURE.md does not repeat the workflow README's now-resolved 'HEAD is broken' warning about os-backend/ being deleted (07-data-persistence-api.md S0): verified with `node -e \"require('./server.js')\"` that os-backend/src/mapping/* is present and loads cleanly on this branch (restored by commit 1c10d84), so that specific claim from the doc's history no longer holds and was not carried into a fresh document.",
+    "ARCHITECTURE.md does note that db/migrations/ is still absent (verified: `ls db/migrations` -> No such file or directory; tools/apply-migration.js's header still points at a path under it), since that piece of the drift is still true on this tree."
+  ],
+  "risks": [
+    "None to runtime behavior -- this task only touched Markdown documentation. The main residual risk is documentation, not code: if a future commit restores CHANGELOG.md or moves start_server.command, these docs would need a follow-up update."
+  ],
+  "blockers": [],
+  "dependencies": [],
+  "followUps": [
+    "SYSTEM_MAP.md's storage-model sections (S0/S6) are flagged as possibly stale by allotment_v2/docs/workflows/07-data-persistence-api.md S10's drift table but were not verified or touched here -- worth a dedicated pass.",
+    "README.md's 'npm start ... opens the app' claim and the exact behavior of '(If unset, the app is open to anyone with the URL.)' were left unverified/unchanged as out of this ticket's scope; both are called out in the same drift table and may warrant their own ticket.",
+    "db/migrations/ is still absent from the repo while tools/apply-migration.js's header comment still references a path under it -- out of scope for this doc-only ticket but noted in ARCHITECTURE.md's 'Known drift' section."
+  ],
+  "rollback": "Revert the single commit on this branch (or `git checkout <prev-commit> -- ARCHITECTURE.md CLAUDE.md README.md` and remove the newly-added ARCHITECTURE.md) -- all changes are Markdown-only with no code, schema, or data effects, so rollback is a plain file revert with no migration or data cleanup required."
+}

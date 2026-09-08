@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "task": "LAM-21",
+  "title": "S1-07 Spike - catalogue every unpersisted write",
+  "status": "completed",
+  "agent": {
+    "sessionId": "",
+    "model": "claude-sonnet-5"
+  },
+  "git": {
+    "base": "refactor/booking-v2-migration",
+    "branch": "agent/LAM-21-unpersisted-write-catalogue",
+    "worktree": "D:/projects/wt-sprint1/LAM-21-unpersisted-write-catalogue",
+    "commit": "e8f0e86803ae02e59afaaa0f50e1b636546ad0ed",
+    "pr": {
+      "number": 7,
+      "url": "https://github.com/digitalmkt-bbot/LOVE_Andaman_Workspace/pull/7",
+      "state": "open"
+    }
+  },
+  "input": {
+    "requestedOutcome": "Produce a ranked catalogue (mutation site / store / persisted? / lost on reload?) of every place in allotment_v2.html that mutates a data store but never reaches a persistence call, going beyond the four documented instances named in the ticket (aosSaveModal/SB_ADDON_SVCS, ctRenewActivate, flSaveAssignment/flCancelAssignment/flAutoUpdateAssignments, fuelSetBudget).",
+    "acceptanceCriteria": [
+      "Deliverable is a document only; allotment_v2/allotment_v2.html and every other source file are read-only for this task",
+      "All four named sites (SB_ADDON_SVCS/aosSaveModal, ctRenewActivate, flSaveAssignment/flCancelAssignment/flAutoUpdateAssignments, fuelSetBudget) are verified directly against source and included",
+      "At least one additional unpersisted-write instance beyond the four named sites is found via systematic search and verified",
+      "Output is a ranked table (mutation site / store / persisted? / lost on reload?) ordered by blast radius",
+      "Every claim in the catalogue is backed by a specific line reference read from the actual function body, not inferred from ticket text alone"
+    ],
+    "allowedScope": [
+      "docs/development/unpersisted-writes.md",
+      "docs/development/tasks/LAM-21.md",
+      ".agent-reports/LAM-21.json"
+    ],
+    "constraints": [
+      "Must not modify allotment_v2/allotment_v2.html or any other source file — read-only spike",
+      "Must not touch files owned by other in-flight tasks",
+      "Must not change persistence/schema/SQL/API behavior",
+      "Stage only the three owned paths explicitly; never git add -A / git add ."
+    ],
+    "assumptions": [
+      "No Postgres instance or prod service is reachable from this sandbox, so DB-round-trip claims (row 4, fleet_fuelbudget) are verified statically via field_mapping.json/operation_schemas_model.json/server.js logic, not by a live reproduction",
+      "The line numbers in allotment_v2.html cited throughout are current as of commit fa60a96 on this branch and will drift; the catalogue itself says to grep the function name instead"
+    ]
+  },
+  "output": {
+    "summary": "Delivered docs/development/unpersisted-writes.md: a 7-row ranked catalogue of mutation sites in allotment_v2.html that never reach (or only conditionally reach) a persistence call. Verified all four Jira-named sites directly against current source, corrected two ticket assumptions after reading the code (flSaveAssignment/flCancelAssignment/flAutoUpdateAssignments and fuelSetBudget DO call localStorage.setItem directly — the real defects are a missing laCanEditArea('fleet') permission guard and, for fuelSetBudget, a completely unregistered blob key on the relational backend), found one previously-undocumented sibling bug (aosDeleteService also mutates SB_AGENTS[].addonServices without sbAgentsPersist()), and surfaced three more instances (accounting/booking edit-area guard mismatch, an OCR-failure branch that never persists, and SB_AGENT_PRICES's boot-only regeneration) by systematically grepping all eight allotment_v2/docs/workflows/*.md files for prior persistence-gap language and re-verifying each against current source rather than trusting the doc text. No source file was modified.",
+    "filesChanged": [
+      { "path": "docs/development/unpersisted-writes.md", "change": "added", "purpose": "The ranked unpersisted-write catalogue deliverable for LAM-21" },
+      { "path": "docs/development/tasks/LAM-21.md", "change": "added", "purpose": "Agent-change-pr I/O development record for this task" },
+      { "path": ".agent-reports/LAM-21.json", "change": "added", "purpose": "Coordinator-readable manifest for this task" }
+    ],
+    "behaviorChanges": [
+      { "area": "No runtime behavior touched (spike/document only)", "before": "N/A", "after": "N/A — docs/development/unpersisted-writes.md is a new reference document; no code path changed" }
+    ],
+    "interfaces": {
+      "added": [],
+      "changed": [],
+      "removed": []
+    },
+    "dataPersistence": {
+      "impact": "read-only",
+      "details": [
+        "This task only reads allotment_v2.html, server.js, and os-backend/src/mapping/*.json to document existing unpersisted-write defects; it introduces none and fixes none.",
+        "The catalogue documents 7 real, currently-existing unpersisted/under-persisted mutation sites (see docs/development/unpersisted-writes.md) as input for a future fix task."
+      ],
+      "migrationRequired": false
+    }
+  },
+  "verification": [
+    { "command": "git status --short --branch (run before any change)", "status": "passed", "evidence": "Worktree was clean at start: '## agent/LAM-21-unpersisted-write-catalogue...origin/refactor/booking-v2-migration' with no other lines." },
+    { "command": "git status --short --branch / git diff --stat (run after writing artifacts)", "status": "passed", "evidence": "Only '?? .agent-reports/' and '?? docs/' untracked; git diff --stat against tracked files is empty — confirms allotment_v2/allotment_v2.html and every other tracked source file are untouched." },
+    { "command": "grep -n \"function aosSaveModal|function ctRenewActivate|function flSaveAssignment|function flCancelAssignment|function flAutoUpdateAssignments|function fuelSetBudget\" allotment_v2/allotment_v2.html", "status": "passed", "evidence": "All six named functions located and their full bodies read (30-140 line windows) to confirm mutation targets and presence/absence of a persist call." },
+    { "command": "grep -in \"never persist|not persist|RAM only|in-memory only|lost on reload|stays in RAM|silently\" across allotment_v2/docs/workflows/*.md", "status": "passed", "evidence": "Surfaced additional candidate rows (accounting/booking edit-area mismatch, OCR-failure branch, SB_AGENT_PRICES); each was then independently re-verified against current source line numbers rather than trusted as-is." },
+    { "command": "grep -in \"fuelbudget\" os-backend/src/mapping/field_mapping.json os-backend/src/mapping/operation_schemas_model.json", "status": "passed", "evidence": "Zero matches in both files, confirming fleet_fuelbudget has no relational-backend registration, contrasted against the sibling key fleet_fuelprice which IS registered (field_mapping.json:6228)." },
+    { "command": "node --check on an extracted <script> or on server.js", "status": "not_run", "evidence": "Not applicable — no JavaScript in allotment_v2.html or server.js was modified by this task (spike constraint: read-only). node --check is required by CLAUDE.md only for JS edits inside the HTML, and none were made." },
+    { "command": "Live reproduction of the fleet_fuelbudget round-trip loss against Postgres/prod", "status": "blocked", "evidence": "No Postgres instance and no network-reachable prod service is available from this sandbox. The row-4 finding is verified statically (field_mapping.json/operation_schemas_model.json absence + server.js's own §mapDrift comment describing exactly this failure mode) but not reproduced end-to-end against a live database." },
+    { "command": "node /c/Users/ta-za/.pi/agent/git/github.com/TheTaTha5/my-own-skills/skills/agent-change-pr/scripts/change-report.mjs --validate .agent-reports/LAM-21.json --report docs/development/tasks/LAM-21.md", "status": "passed", "evidence": "Ran after filling both artifacts; see task report file for the exact console output." }
+  ],
+  "decisions": [
+    "Classified the raw ~170 hits of a blind `grep localStorage.setItem` as mostly NOT bugs: this codebase's actual persistence pattern is direct read-modify-write of the LS_KEY blob (verified via the Storage.prototype.setItem override at allotment_v2.html:64-82, which auto-syncs any write to that key to /api/save), not a mandatory single save() call. Only mutation sites with zero or conditional reach to that write were catalogued.",
+    "Corrected two of the ticket's four named sites after reading the code: flSaveAssignment/flCancelAssignment/flAutoUpdateAssignments and fuelSetBudget DO call localStorage.setItem(LS_KEY,...) directly, contrary to a literal 'never persist' reading — the real, verified defects are a missing laCanEditArea('fleet') guard on all four, an `if(ls.boats)` conditional on the first three, and (new finding) fuelSetBudget's fleet_fuelbudget key having zero server-side relational mapping.",
+    "Used the existing docs/workflows/*.md corpus as a search accelerator (grep for prior 'not persisted' language) rather than scanning all ~600 top-level functions in the 83k-line file by hand, given the spike's effort budget — every candidate surfaced this way was independently re-verified against current source before inclusion, not copied from the docs as-is."
+  ],
+  "risks": [
+    "Row 4 (fleet_fuelbudget) is verified statically only; without a reachable Postgres/prod instance this task cannot prove the round-trip loss happens at runtime, only that the code path for it to happen is present and unguarded.",
+    "Line numbers throughout the catalogue will drift as the file is edited by other in-flight tasks; the document tells readers to grep the function name, but a stale-line complaint should not be read as the catalogue being wrong.",
+    "The catalogue is not exhaustive — it covers the four named sites plus every additional instance found via the doc-grep sweep and direct reading of the immediately adjacent code; a full line-by-line audit of all ~600 top-level functions in the 83k-line file was out of scope for a spike-level effort budget."
+  ],
+  "blockers": [],
+  "dependencies": [],
+  "followUps": [
+    "A future fix task should: add sbAgentsPersist() to ctRenewActivate; load/persist SB_ADDON_SVCS like every other SB_* list and add sbAgentsPersist() to aosDeleteService's SB_AGENTS side-effect; add the missing laCanEditArea('fleet') guard to flSaveAssignment/flCancelAssignment/flAutoUpdateAssignments/fuelSetBudget; register fleet_fuelbudget in field_mapping.json + operation_schemas_model.json; align the acctPersistBookings/sbInvoicesPersist edit-area guards; add a persist call to the OCR failure branch. (Listed in docs/development/unpersisted-writes.md §4.)",
+    "Consider a follow-up spike or lint rule that flags any top-level function mutating a global SB_*/FL_* array without a same-function call to a *Persist()/save()/flSave() helper, to catch future instances of this bug class automatically."
+  ],
+  "rollback": "Revert this commit (or delete docs/development/unpersisted-writes.md, docs/development/tasks/LAM-21.md, and .agent-reports/LAM-21.json) — the task added only new documentation files and touched no runtime code, so rollback has zero effect on application behavior or data."
+}

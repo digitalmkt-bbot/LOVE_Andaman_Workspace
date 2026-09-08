@@ -1,0 +1,69 @@
+name: CI Boot Smoke Test
+
+# LAM-16 (S1-02): nothing in the repo would have caught S1-01 — server.js:34-35 requires
+# ./os-backend/src/mapping/os_repo.js unconditionally at module top level, so a deleted mapping
+# file (or any change that breaks boot) crashed `require('./server.js')` in every DATA_BACKEND
+# mode, and it shipped straight to prod. This job requires('./server.js') for real — by spawning
+# it against a scratch Postgres — and makes one authenticated /api/version request, failing the
+# check if map.*/db.* drift counters are non-zero or mig.failed/mig.pending is above zero.
+# See allotment_v2/docs/workflows/07-data-persistence-api.md §0 and §10 (invariants 5, 7, 18).
+#
+# This workflow file only defines the check; making it REQUIRED to merge is a branch-protection
+# setting on the refactor/booking-v2-migration branch, configured separately in repo settings.
+
+on:
+  pull_request:
+    branches:
+      - refactor/booking-v2-migration
+      - main
+  push:
+    branches:
+      - refactor/booking-v2-migration
+
+concurrency:
+  group: ci-boot-smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  boot-smoke:
+    name: server.js boots + /api/version drift check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci_smoke
+          POSTGRES_PASSWORD: ci_smoke
+          POSTGRES_DB: ci_smoke
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://ci_smoke:ci_smoke@localhost:5432/ci_smoke
+      DATA_BACKEND: relational
+      ADMIN_USER: ci_smoke_admin
+      ADMIN_PASS: ci-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+      SESSION_SECRET: ci-boot-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Boot server.js against the scratch DB and check /api/version
+        run: node tools/ci-boot-smoke.mjs

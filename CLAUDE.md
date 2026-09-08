@@ -1,11 +1,18 @@
 # LOVE Andaman — allotment_v2
 
 > Cowork context file, loaded every session. Focus: the `allotment_v2` module.
-> Per-feature history lives in **CHANGELOG.md** (not auto-loaded) — grep it when a task needs the detail behind a specific change.
+> Per-domain history and design live in `allotment_v2/docs/workflows/` (not auto-loaded — see **ARCHITECTURE.md** for the map) — grep the relevant doc when a task needs the detail behind a specific change. There is no `CHANGELOG.md`; it is not tracked in git (`git log --all -- CHANGELOG.md` returns nothing).
 
 ## 0. START HERE (new-chat orientation)
 
-**What this is:** one giant single-file web app `allotment_v2/allotment_v2.html` (~4MB / ~46k lines) for LOVE Andaman (Phuket marine tours). Runs on Railway, served to staff at `rsvn.loveandaman.com` (behind Cloudflare — **Rocket Loader must stay off**, it kills every inline `onclick` and looks exactly like a permissions bug). Verify any data claim against live data before asserting it: a logged-in prod Chrome tab is usually open (Claude-in-Chrome tools), but the extension is often not connected — when it isn't, query the prod Postgres directly (credentials under *Verifying what is actually live* below) instead of reasoning from the source alone.
+**What this is:** one giant web app for LOVE Andaman (Phuket marine tours) — `allotment_v2/allotment_v2.html` (~2.9k lines, markup only) plus **`allotment_v2/js/01..08-*.js` (~80k lines, ~6.2MB)** where essentially all the code lives, and `allotment_v2/css/01-base.css` + `02-skins.css` (~295KB). It was a single 86k-line file until 2026-08-27; the JS was lifted out verbatim into 8 classic `<script src>` files in load order. **This is a file split, not modularization** — still one global scope, ~3,100 top-level functions, ~2,500 inline `onclick=` handlers in the HTML calling them by name. Read `allotment_v2/js/README.md` before touching the script tags: adding `defer`, `async`, or `type="module"`, or reordering them, breaks every inline handler in the app. Runs on Railway, served to staff at `rsvn.loveandaman.com` (behind Cloudflare — **Rocket Loader must stay off**, it defers scripts and kills every inline `onclick`, and looks exactly like a permissions bug). Verify any data claim against live data before asserting it: a logged-in prod Chrome tab is usually open (Claude-in-Chrome tools), but the extension is often not connected — when it isn't, query the prod Postgres directly (credentials under *Verifying what is actually live* below) instead of reasoning from the source alone.
+
+**Two stacks in one repo (since 2026-09-08, when `refactor/frontend` merged into `lk-inbox`).** Everything above is the **monolith** — `server.js` at the repo root serving `allotment_v2/` — and it is still what staff use. Alongside it now sits **`platform/`**, a separate pnpm workspace (Fastify API + Vite/React `ops-web`) that is meant to replace the monolith by strangler migration, one route at a time. The two are joined by exactly two seams, both off by default:
+
+- **`api-proxy.js`** — set `API_PROXY_URL` + `API_PROXY_ROUTES` (comma-separated path prefixes, or `*`) and those `/api` prefixes are forwarded to the new backend; everything else is still served by `server.js`. Unset = the module does nothing. It is server-side deliberately: `allotment_v2` hardcodes same-origin absolute paths (`/api/load`, `/api/save`, `/api/v1/_batch`, mostly in `js/01-auth-sync.js`), so there is no base URL to repoint, and proxying keeps the `SameSite=Lax` `sess` cookie working.
+- **`auth/oidc.js`** — Authentik OIDC (auth-code + PKCE) redeemed **server-side on the app's own origin**, then turned into the same HMAC-signed `sess` cookie `/api/login` mints. With `AUTH_OIDC_ISSUER` or `AUTH_OIDC_CLIENT_ID` unset the routes are never registered and password login is untouched.
+
+**Do not treat `platform/` as live.** Nothing at the repo root is built from it — Railway still builds the root with Nixpacks and runs `npm start` → `node server.js`. `platform/` has its own `package.json`, `pnpm-workspace.yaml` and `nixpacks.toml` for its own services. A task about what staff see today is a monolith task; grep `allotment_v2/js/`, not `platform/`.
 
 **Starting a new chat:**
 1. Do NOT dump the changelog back at the user or re-read the whole file.
@@ -13,20 +20,21 @@
 2. On a task: `grep` for the relevant function → read a small window → targeted `Edit` → verify.
 
 **Deploy workflow (verified 2026-08-17):**
-- Edit → extract the main `<script>` and run `node --check` → back up to `BACKUP/`.
+- Edit → `node --check allotment_v2/js/<file>.js` on each file you touched → back up to `BACKUP/`. (The old "extract the main `<script>` out of the HTML first" ritual is gone — since 2026-08-27 the JS is real `.js` files.)
 - **`lk-inbox` IS production.** Railway auto-deploys it (~1–2 min), so **`git push origin lk-inbox` is a production release** — staff see the change minutes later, and its migrations run against the live database on the way. Treat every push as shipping, not as saving work. (This changed on 2026-08-12; older notes saying "pushing to lk-inbox doesn't touch prod" are obsolete.)
 - Plain git from the sandbox works — auth is configured. GitHub Desktop / computer-use is NOT needed.
 - Verify: `git ls-remote origin refs/heads/lk-inbox` must equal `git rev-parse lk-inbox`.
 - **Always `git fetch` + fast-forward before working.** Other sessions push to `lk-inbox` constantly, and a rejected push usually means someone already shipped the thing you were about to. Read their commit before re-doing the work — on 2026-08-17 an entire pier-check-in permission fix was written twice this way, and the upstream one was the better fix.
+- **Branch layout (2026-09-08).** `refactor/frontend` — the HTML→`js/`+`css/` split, Authentik SSO, `api-proxy.js`, the `platform/` scaffold — was merged into `lk-inbox` and shipped. It is no longer a long-lived side branch; new work branches from `lk-inbox`. Per-ticket work happens in a git worktree under `D:/projects/wt-*`, branched from `origin/lk-inbox`, never in the main checkout.
 - **Do NOT merge `lk-inbox` → `main`.** `main` is a stale snapshot (last merged 2026-08-12, ~100 commits behind) that nothing deploys from; merging would ship a hundred commits to prod in one shot. It carries one commit of its own (`7e7782e`, the 27 Jul B2C-availability COALESCE hotfix) whose fix already exists on `lk-inbox` — divergent history, not a missing fix.
 - `backend-db-implementation` is **dead** (last touched 2026-07-10, ~680 commits behind). Ignore it and `HANDOFF_2026-07-04.md`'s branch instructions.
-- **Migrations run automatically at deploy** (boot runner, since 2026-08-12) — `db/migrations/*.sql` applies on prod the moment the push lands. A `field_mapping.json` entry whose migration file is missing takes `/api/load` down entirely, so ship the mapping and the migration in the same push.
+- **Migrations run automatically at deploy** (boot runner in `server.js`, since 2026-08-12) — `db/migrations/*.sql` applies on prod the moment the push lands. `001`–`018` were **pruned** on 2026-09-08: they are already applied on prod and are snapshotted in `db/baseline/` (2026-08-20), so the directory now starts at `019`. That is safe because the runner's baseline shortcut is guarded by `if (!done.size)` and `allotment.schema_migrations` already holds those rows — pruning applied files is a no-op, but never prune one that has not shipped. A `field_mapping.json` entry whose migration file is missing takes `/api/load` down entirely, so ship the mapping and the migration in the same push.
 
 **Verifying what is actually live:** don't guess from branch names — check the prod DB. Its `OPS_DATABASE_URL` is in the B2C repo's `.env` (`D:/projects/Loveandaman-Kingdom/.env`); the URL in `db/rt.cjs` is dead. App tables are in schema `operation_schemas`; **`schema_migrations` is in schema `allotment`** (the boot runner creates it unqualified, so it lands in the connection's default schema). `SELECT name, applied_at FROM allotment.schema_migrations ORDER BY applied_at` is the fastest honest answer to "what code is prod actually running" — each row is a deploy that happened. That query is how the `lk-inbox`-is-prod fact above was established on 2026-08-17 (005→018 applied 13–15 Aug, all from `lk-inbox`-only commits, while `main` had not moved since 12 Aug).
 
 **Pending (not done):** move the Booking top-tab bar onto the same row as the date stepper — user wants 3 mockups (A merge tabs+date · B tabs in day-header · C keep 2 rows, tighten). Awaiting their pick.
 
-**Companion docs in the workspace:** `SYSTEM_MAP.md` (AI-readable architecture map — keep in sync when adding modules), `BACKLOG.md` (pending items), `OPERATIONS_PIPELINE_DESIGN.md` (van-assign/grouping spec), `CHANGELOG.md` (full §-history).
+**Companion docs in the workspace:** `ARCHITECTURE.md` (points at `allotment_v2/docs/workflows/`, the real per-domain design/behavior docs), `SYSTEM_MAP.md` (AI-readable architecture map — keep in sync when adding modules), `BACKLOG.md` (pending items), `OPERATIONS_PIPELINE_DESIGN.md` (van-assign/grouping spec).
 
 ---
 
@@ -37,20 +45,47 @@
 **Language:** Thai + English UI is fine, but use **English/ASCII in `alert()`, `console.log()`, and any new hooks** (Thai encoding breaks in some contexts).
 
 ```
-LOVE_Andaman_Workspace/
-├── CLAUDE.md · SYSTEM_MAP.md · BACKLOG.md · CHANGELOG.md
-└── allotment_v2/
-    ├── allotment_v2.html      ← main file
-    ├── start_server.command   ← local server (§4)
-    ├── BACKUP/                ← timestamped pre-edit copies
-    └── data_exports/          ← localStorage JSON exports
+LOVE_Andaman_Workspace/        ← repo root · Railway builds THIS (Nixpacks) and runs `npm start`
+├── CLAUDE.md · ARCHITECTURE.md · SYSTEM_MAP.md · BACKLOG.md · OPERATIONS_PIPELINE_DESIGN.md
+│
+├── server.js                  ← the monolith backend (~103 tables) · also the migration boot runner
+├── api-proxy.js               ← strangler seam · API_PROXY_ROUTES forwards chosen /api prefixes
+├── auth/oidc.js               ← Authentik OIDC (code + PKCE) → mints the ordinary `sess` cookie
+├── railway.json · package.json
+│
+├── allotment_v2/              ← THE STAFF APP · this is what "the app" means in this file
+│   ├── allotment_v2.html      ← markup + the <link>/<script src> tags (~2.9k lines)
+│   ├── js/01..08-*.js         ← ALL the app code (~80k lines) · see js/README.md
+│   ├── css/01-base.css        ← base sheet · css/02-skins.css = the 14 re-skin layers
+│   ├── start_server.command   ← static local server, no /api (§4)
+│   ├── docs/workflows/        ← per-domain workflow docs (see ARCHITECTURE.md)
+│   ├── assets/                ← hero images, per-route voucher overrides, favicons, logo
+│   ├── BACKUP/                ← timestamped pre-edit copies
+│   └── data_exports/          ← localStorage JSON exports (created on demand, gitignored)
+│
+├── db/
+│   ├── migrations/            ← 019+ only · auto-applied at boot (§0) · 001–018 pruned
+│   └── baseline/              ← 2026-08-20 schema snapshot that 001–018 collapse into
+│
+├── platform/                  ← THE NEW STACK · own pnpm workspace, own Railway services, NOT live
+│   ├── apps/api               ← Fastify · the only thing that opens a DB connection
+│   ├── apps/ops-web           ← Vite + React SPA
+│   └── packages/              ← contracts (zod, bottom of the dep graph) · db · pricing
+│
+├── os-backend/src/mapping/    ← field_mapping.json + os_repo.js — STILL LIVE, server.js reads these
+│                                (the rest of os-backend/ was deleted; these four files were not)
+├── tools/                     ← dev-db · js-split-linemap · ci-boot-smoke · check-persist-gates …
+├── test/                      ← node:test · unit/ + e2e/ · `node --test`
+└── docs/development/tasks/    ← LAM-* task reports
 ```
+
+**Local dev:** `npm run dev:local` (`tools/dev-db.mjs`) brings up a throwaway Postgres via `docker-compose.yml` and runs `server.js` against it — that is the way to exercise `/api` without touching prod. `allotment_v2/start_server.command` is still the static-only fallback (§4).
 
 ---
 
 ## 2. Data storage model (read carefully)
 
-**Backend = Postgres via `server.js` (`DATA_BACKEND=relational`, ~103 tables).** The single-file client keeps a working copy in **localStorage `loveandaman_v2` (`LS_KEY`)** — seeded from HTML default constants on first run, refreshed from the cloud blob on login — and syncs every change to Postgres through a REST API. localStorage is the in-browser working store; Postgres is the durable source of truth.
+**Backend = Postgres via `server.js` (`DATA_BACKEND=relational`, ~103 tables).** The browser client keeps a working copy in **localStorage `loveandaman_v2` (`LS_KEY`)** — seeded from the `DEFAULT_*` / `FL_DEFAULT_*` constants in `js/04-data-core.js` and `js/05-fleet.js` on first run, refreshed from the cloud blob on login — and syncs every change to Postgres through a REST API. localStorage is the in-browser working store; Postgres is the durable source of truth.
 
 
 Key default constants (grep for line): `DEFAULT_ROUTES`, `DEFAULT_BOATS`, `FL_DEFAULT_ENGINES`, `FL_DEFAULT_GEARBOXES`, `FL_DEFAULT_PROPELLERS`, `FL_DEFAULT_MAINTENANCE`, `FL_DEFAULT_INCIDENTS`, `FL_DEFAULT_INVENTORY`, `FL_DEFAULT_MEMOS`.
@@ -92,7 +127,7 @@ Reusable price packages bound to agents via `agent.rateTypeId`. Shape: `{id, cod
 - **Persist** with `rtPersist()` (read-modify-write). Shared detail renderer `rtBuildDetailBody(rt)` feeds both the Rate Type page and the Agent Pricing Matrix tab.
 
 ### 3.3 Zone/region expansion
-Piers, rate-type zones, pickup zones, and pickup-setup areas are 4 overlapping "where" concepts stored separately; adding a real new zone touches ~5–6 places. Decision (2026-06-01, Option A): don't refactor to a central `SB_ZONES` until 2+ zones land at once or non-technical staff need UI zone CRUD. Until then follow the manual checklist — see CHANGELOG §12 / `SYSTEM_MAP.md`. (Pickup Setup UI adds **Areas** only, not zones; zones are hardcoded `['PK','KL','NoTransfer']`.)
+Piers, rate-type zones, pickup zones, and pickup-setup areas are 4 overlapping "where" concepts stored separately; adding a real new zone touches ~5–6 places. Decision (2026-06-01, Option A): don't refactor to a central `SB_ZONES` until 2+ zones land at once or non-technical staff need UI zone CRUD. Until then follow the manual checklist — see `allotment_v2/docs/workflows/04-transfer-vans-pickup.md` (the four "where" concepts) / `SYSTEM_MAP.md`. (Pickup Setup UI adds **Areas** only, not zones; zones are hardcoded `['PK','KL','NoTransfer']`.)
 
 ### 3.4 Booking (`SB_BOOKINGS`)
 Key fields: `id`, `schemaVer`, `agentId`, `channel`, `leadPax`, `leadNationality`, `leadPhone`, `leadEmail`, `hotelName`, `pickupAreaId`, `status` (`confirmed`/`pending_approval`/`cancelled`/`cancelled_weather`/`rejected`), `bookingDate`, `voucherRef`, `trips[]`, `passengers[]`, `addOns[]`, `adjustments[]`, `priceBreakdown{seat,addOn,focDiscount,discount,extra,total}`, `paymentSnapshot`, `marketSnapshot`, `history[]`, `ops{boatId,vanId,vanGroup,vanSeq,vanReturnId,vanSplits[],pfm{}}`.
@@ -113,21 +148,22 @@ Key fields: `id`, `name`, `code`, `companyInfo{legalName,taxId,address}`, `conta
 - **Verify enum values** before assigning unknown strings (see pier example above).
 - **Keep data fixes user-triggered.** Don't add new auto-mutations to `flLoad` that could wrongly rewrite legitimate data (an over-eager spare-detach / dedupe self-heal was removed for this reason). The existing self-heals (engine status, boat stuck-fixing, charter-boat mirror, van-group `vanId`) are deliberately idempotent and targeted — match that bar or don't add one.
 - **Preserve runtime safety systems:** `flLoad()` auto-snapshot + `flListSnapshots()`/`flRestoreSnapshot(N)`, defensive field-level merge, version whitelist.
-- **Browser must run via localhost, not `file://`.** Double-click `start_server.command` → open `http://localhost:8765/allotment_v2.html`, ONE tab only. `file://` breaks localStorage persistence and local `fetch()`. Never test in the Claude artifact preview (isolated storage).
+- **Browser must run via localhost, not `file://`.** Double-click `allotment_v2/start_server.command` → open `http://localhost:8765/allotment_v2.html`, ONE tab only. `file://` breaks localStorage persistence and local `fetch()`. This is a **static file server only** (no `/api`) — it can't log in or sync to Postgres; use it for pure front-end/UI edits and prefer `node server.js` (with a real `DATABASE_URL`) when you need the backend. Never test in the Claude artifact preview (isolated storage).
 
 ---
 
 ## 5. Working with the file, look & feel, comms
 
-- File is huge — never read it whole. `grep -n` to locate → read a 30–50 line window → targeted `str_replace` with unique surrounding context → re-read only the changed section. Verify with `node --check` on the extracted `<script>`.
-- **Visual system:** DM Sans body / DM Mono for numbers; brand accent recolored coral→**Ocean blue `#1683C7`** via the reversible `<style id="softui-ocean-skin">` block. Most re-skins are single reversible `<style id="...-skin">` blocks before `</head>` — delete the block to revert. **No Tabler webfont in the app** — icons are inline SVG.
+- The files are huge (`js/08-app.js` alone is ~47k lines) — never read one whole. `grep -rn` over `allotment_v2/js/` to locate → read a 30–50 line window → targeted `str_replace` with unique surrounding context → re-read only the changed section. Verify with `node --check <that file>`.
+- **Line citations written before 2026-08-27** (`bkV2InferZone:69054`, `pjOf:82102`, …, all over this file and `docs/workflows/`) point into the pre-split HTML. Translate with `node tools/js-split-linemap.mjs 69054`, or ignore the number and grep the function name — every citation carries one.
+- **Visual system:** DM Sans body / DM Mono for numbers; brand accent recolored coral→**Ocean blue `#1683C7`** via the reversible `softui-ocean-skin` layer. The CSS lives in `allotment_v2/css/`: `01-base.css` is the base sheet, `02-skins.css` holds the 14 re-skin layers in cascade order, each behind a `/* ==== <id> ==== */` marker — **delete the marked section to revert a skin** (they were `<style id="...-skin">` blocks in the HTML before 2026-08-27; same layers, same order). Two tiny `<style>` blocks remain inline in `<body>` on purpose. **No Tabler webfont in the app** — icons are inline SVG.
 - **Comms:** concise, show snippets, ask before big refactors, remind about backups before core-data edits, state the diff after edits (e.g. "added 3 entries to `FL_DEFAULT_ENGINES` at line 3045").
 
 ---
 
-## 6. Gotchas & recurring patterns (distilled from the §-history)
+## 6. Gotchas & recurring patterns
 
-These bite repeatedly. Read the relevant one before touching that area; full context is in CHANGELOG.md.
+These bite repeatedly. Read the relevant one before touching that area; full context is in `allotment_v2/docs/workflows/` (see **ARCHITECTURE.md** for which doc covers which domain).
 
 **JS / render**
 - **`esc` / `escapeHTML` is NOT global** — it's declared locally per function. Any new top-level render fn that builds HTML with `esc(...)` must declare its own `const esc=...` or it throws silently on click.
@@ -169,4 +205,4 @@ Fleet: Boat Operation (`renderOp`), Transfer Fleet (`renderVehicles`), Van Job O
 
 Sidebar groups: OPERATIONS (Booking · Boat Operation · Transfer Fleet · Van Jobs · Pickup time setup) · SALES (Agent List · Rate Types · B2C · Staff & Welfare · Demand · FOC Detail · Insurance · Booking Flow · Pickup Map) · ACCOUNTING & FINANCE (Accounting · Daily PFM) · Fleet Management · Overview · Config.
 
-*Full per-feature history (§13–§87) is in **CHANGELOG.md** — grep it for the reasoning behind any specific behavior.*
+*Full per-domain design and behavior detail is in `allotment_v2/docs/workflows/` — see **ARCHITECTURE.md** for the map, then grep the relevant doc for the reasoning behind any specific behavior.*
