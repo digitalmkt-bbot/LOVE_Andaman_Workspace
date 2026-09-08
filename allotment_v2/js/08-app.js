@@ -34034,7 +34034,23 @@ function ctContractsPanelHTML(agentId){
       </div>`:''}
     </div>
     <div style="display:flex;flex-direction:column;gap:7px">${cons.length?cons.map(row).join(''):`<div style="font-size:11px;color:#aaa;text-align:center;padding:10px">ยังไม่มีสัญญา</div>`}</div>
-    <div style="font-size:10px;color:#aaa;margin-top:9px">Promo จะทับราคา Main เฉพาะ route + ช่วงวันเดินทางที่ระบุ · พ้นช่วงกลับไปใช้ Main อัตโนมัติ</div>
+    <div style="margin-top:11px;padding-top:10px;border-top:1px solid var(--border,#eee)">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#8A929E;margin-bottom:7px">\u0e25\u0e33\u0e14\u0e31\u0e1a\u0e01\u0e32\u0e23\u0e43\u0e0a\u0e49\u0e23\u0e32\u0e04\u0e32 \u00b7 \u0e23\u0e30\u0e1a\u0e1a\u0e44\u0e25\u0e48\u0e08\u0e32\u0e01\u0e1a\u0e19\u0e25\u0e07\u0e25\u0e48\u0e32\u0e07</div>
+      <div style="display:flex;gap:9px;align-items:flex-start;font-size:11px;line-height:1.6;color:#4A5464">
+        <span style="background:#FCE9D6;color:#9A5410;font-size:9px;font-weight:700;padding:2px 7px;border-radius:7px;margin-top:1px;white-space:nowrap">1 PROMO</span>
+        <div style="flex:1">\u0e17\u0e31\u0e1a\u0e01\u0e48\u0e2d\u0e19\u0e40\u0e2a\u0e21\u0e2d \u0e40\u0e09\u0e1e\u0e32\u0e30 route \u0e17\u0e35\u0e48\u0e40\u0e25\u0e37\u0e2d\u0e01\u0e44\u0e27\u0e49 + \u0e2d\u0e22\u0e39\u0e48\u0e43\u0e19\u0e0a\u0e48\u0e27\u0e07<b>\u0e27\u0e31\u0e19\u0e40\u0e14\u0e34\u0e19\u0e17\u0e32\u0e07</b>\u0e17\u0e35\u0e48\u0e23\u0e30\u0e1a\u0e38 (\u0e44\u0e21\u0e48\u0e43\u0e0a\u0e48\u0e27\u0e31\u0e19\u0e08\u0e2d\u0e07)
+          <div style="color:#8A929E;font-size:10.5px">\u0e0b\u0e49\u0e2d\u0e19\u0e01\u0e31\u0e19\u0e2b\u0e25\u0e32\u0e22\u0e43\u0e1a \u2192 priority \u0e2a\u0e39\u0e07\u0e01\u0e27\u0e48\u0e32\u0e0a\u0e19\u0e30 \u00b7 \u0e40\u0e17\u0e48\u0e32\u0e01\u0e31\u0e19 \u2192 \u0e43\u0e1a\u0e17\u0e35\u0e48\u0e40\u0e23\u0e34\u0e48\u0e21\u0e17\u0e35\u0e2b\u0e25\u0e31\u0e07\u0e0a\u0e19\u0e30</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:9px;align-items:flex-start;font-size:11px;line-height:1.6;color:#4A5464;margin-top:5px">
+        <span style="background:#F1EFE8;color:#5F5E5A;font-size:9px;font-weight:700;padding:2px 7px;border-radius:7px;margin-top:1px;white-space:nowrap">2 \u0e02\u0e49\u0e32\u0e21</span>
+        <div style="flex:1">\u0e16\u0e49\u0e32 PROMO \u0e19\u0e31\u0e49\u0e19\u0e44\u0e21\u0e48\u0e21\u0e35\u0e23\u0e32\u0e04\u0e32\u0e02\u0e2d\u0e07 route \u0e19\u0e31\u0e49\u0e19 \u0e2b\u0e23\u0e37\u0e2d\u0e16\u0e39\u0e01\u0e22\u0e01\u0e40\u0e25\u0e34\u0e01\u0e44\u0e1b\u0e41\u0e25\u0e49\u0e27 \u2192 \u0e02\u0e49\u0e32\u0e21 \u0e44\u0e21\u0e48\u0e04\u0e34\u0e14\u0e40\u0e1b\u0e47\u0e19 0</div>
+      </div>
+      <div style="display:flex;gap:9px;align-items:flex-start;font-size:11px;line-height:1.6;color:#4A5464;margin-top:5px">
+        <span style="background:#E6EEF6;color:#1F5C8F;font-size:9px;font-weight:700;padding:2px 7px;border-radius:7px;margin-top:1px;white-space:nowrap">3 MAIN</span>
+        <div style="flex:1">\u0e23\u0e32\u0e04\u0e32\u0e21\u0e32\u0e15\u0e23\u0e10\u0e32\u0e19 \u00b7 \u0e43\u0e0a\u0e49\u0e17\u0e38\u0e01\u0e27\u0e31\u0e19\u0e17\u0e35\u0e48\u0e44\u0e21\u0e48\u0e21\u0e35\u0e42\u0e1b\u0e23\u0e17\u0e31\u0e1a \u00b7 \u0e19\u0e35\u0e48\u0e04\u0e37\u0e2d\u0e15\u0e32\u0e23\u0e32\u0e07\u0e02\u0e49\u0e32\u0e07\u0e25\u0e48\u0e32\u0e07</div>
+      </div>
+    </div>
   </div>`;
 }
 function ctDocForContract(contractId, agentId){
@@ -34050,7 +34066,7 @@ function ctVoidContract(contractId, agentId){
   if(!confirm('ยกเลิก Promotion นี้? ราคาจะกลับไปใช้ Main')) return;
   c.status='void'; c.voidedBy=(typeof laBy==='function'?laBy():'user'); c.voidedDate=new Date().toISOString();
   if(typeof sbContractsPersist==='function') sbContractsPersist();
-  if(typeof agSwitchTab==='function') agSwitchTab('contracts', agentId);
+  if(typeof agSwitchTab==='function') agSwitchTab('prices', agentId);   /* §promoMx */
   else if(typeof agRenderDetail==='function') agRenderDetail(agentId);
 }
 function ctOpenAddPromo(agentId){
@@ -34121,7 +34137,8 @@ function ctSaveAddPromo(agentId){
   if(typeof sbContractsPersist==='function') sbContractsPersist();
   ctCloseAddPromo();
   if(typeof flShowToast==='function') flShowToast('เพิ่ม Promotion แล้ว');
-  if(typeof agSwitchTab==='function') agSwitchTab('contracts', agentId);
+  /* §promoMx · กล่องสัญญาอยู่หน้าราคาแล้ว · เด้งกลับไปที่เดิมที่กดมา */
+  if(typeof agSwitchTab==='function') agSwitchTab('prices', agentId);
   else if(typeof agRenderDetail==='function') agRenderDetail(agentId);
 }
 
@@ -34493,6 +34510,11 @@ function agTabInfo(a){
 function agTabPrices(a){
   let html = '';
 
+  /* §promoMx · สัญญา + Promotion อยู่บนสุดของหน้าราคา
+     ตารางข้างล่างคือราคาของ "เรตมาตรฐาน" ใบเดียว · ถ้ามีโปรทับอยู่
+     ราคาที่ระบบคิดจริงในช่วงนั้นจะไม่ใช่ตัวเลขในตาราง — ต้องเห็นพร้อมกัน */
+  html += (typeof ctContractsPanelHTML==='function') ? ctContractsPanelHTML(a.id) : '';
+
   // Resolve rate type — Rate Type is the source of truth for prices
   const rt = a.rateTypeId && typeof getRateType==='function' ? getRateType(a.rateTypeId) : null;
 
@@ -34536,6 +34558,16 @@ function agTabPrices(a){
       <span style="font-size:10px;color:${isInactive?'#854F0B':rt.color};opacity:.7;font-variant-numeric:tabular-nums">${validHint}</span>
     </div>
     <button onclick="agEditOpen('ratetype','${a.id}')" style="background:#fff;color:${rt.color};border:1px solid ${rt.color}55;font-family:inherit;font-size:10.5px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer">เปลี่ยน Rate Type</button>
+  </div>`;
+
+  /* §promoMx · ACTIVE PERIOD ในตารางดูเหมือนประตูกั้นราคา แต่วัดแล้วไม่ใช่
+     จองนอกช่วงก็ยังคิดราคาเดิม · และตามที่ตกลงกันไว้ก็ควรเป็นแบบนั้น
+     ราคามาตรฐานคือตัวสำรองที่ต้องมีเสมอ ตัวที่สลับราคาตามวันคือ Promotion
+     อยู่เหนือตาราง เพราะต้องอ่านก่อนเห็นตัวเลข ไม่ใช่หลังอ่านจบไปสามหน้าจอ */
+  html += `<div style="margin:0 0 12px;background:#F7F8FA;border:1px solid #E7EAEF;border-radius:8px;padding:9px 13px;font-size:11px;color:#5A6270;line-height:1.6">
+    <b style="color:#3C4553">\u0e04\u0e2d\u0e25\u0e31\u0e21\u0e19\u0e4c ACTIVE PERIOD</b> \u0e04\u0e37\u0e2d\u0e24\u0e14\u0e39\u0e01\u0e32\u0e25\u0e17\u0e35\u0e48\u0e15\u0e01\u0e25\u0e07\u0e23\u0e32\u0e04\u0e32\u0e01\u0e31\u0e19\u0e44\u0e27\u0e49 \u00b7 \u0e43\u0e0a\u0e49\u0e2d\u0e49\u0e32\u0e07\u0e2d\u0e34\u0e07\u0e41\u0e25\u0e30\u0e1e\u0e34\u0e21\u0e1e\u0e4c\u0e25\u0e07\u0e2a\u0e31\u0e0d\u0e0d\u0e32
+    <span style="color:#8A929E">\u2014 \u0e44\u0e21\u0e48\u0e44\u0e14\u0e49\u0e1b\u0e34\u0e14\u0e01\u0e31\u0e49\u0e19\u0e01\u0e32\u0e23\u0e04\u0e34\u0e14\u0e40\u0e07\u0e34\u0e19 \u0e08\u0e2d\u0e07\u0e19\u0e2d\u0e01\u0e0a\u0e48\u0e27\u0e07\u0e01\u0e47\u0e22\u0e31\u0e07\u0e44\u0e14\u0e49\u0e23\u0e32\u0e04\u0e32\u0e19\u0e35\u0e49</span><br>
+    \u0e15\u0e31\u0e27\u0e17\u0e35\u0e48\u0e2a\u0e25\u0e31\u0e1a\u0e23\u0e32\u0e04\u0e32\u0e15\u0e32\u0e21\u0e27\u0e31\u0e19\u0e08\u0e23\u0e34\u0e07 \u0e04\u0e37\u0e2d <b style="color:#9A5410">Promotion</b> \u0e14\u0e49\u0e32\u0e19\u0e1a\u0e19 \u00b7 \u0e2d\u0e22\u0e32\u0e01\u0e43\u0e2b\u0e49\u0e0a\u0e48\u0e27\u0e07\u0e44\u0e2b\u0e19\u0e04\u0e34\u0e14\u0e2d\u0e35\u0e01\u0e23\u0e32\u0e04\u0e32 \u0e43\u0e2b\u0e49\u0e40\u0e1e\u0e34\u0e48\u0e21 Promotion \u0e04\u0e23\u0e2d\u0e1a\u0e0a\u0e48\u0e27\u0e07\u0e19\u0e31\u0e49\u0e19
   </div>`;
 
   // Intersection of agent.programs and rt.routes (used for mismatch warnings below)
@@ -35326,8 +35358,10 @@ function agTabContracts(a){
     const MM = String(d.getMinutes()).padStart(2,'0');
     return `${String(d.getDate()).padStart(2,'0')} ${M[d.getMonth()]} ${String(d.getFullYear()).slice(2)} · ${HH}:${MM}`;
   };
+  /* §promoMx · กล่องสัญญา + Promotion ย้ายไปอยู่แท็บ Pricing Matrix แล้ว
+     Promotion คือของที่เปลี่ยนราคา · ที่ของมันคือหน้าราคา ไม่ใช่หน้าเก็บ PDF
+     แท็บนี้เหลือแค่เอกสารที่ generate ไปแล้ว ตรงตามชื่อแท็บ */
   return `
-    ${(typeof ctContractsPanelHTML==='function')?ctContractsPanelHTML(a.id):''}
     <div class="agi-sect" style="margin:0">
       <div class="agi-sect-hd">
         <div>
