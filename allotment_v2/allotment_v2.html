@@ -2104,7 +2104,7 @@
         <div id="receive-item-fixed" style="display:none;font-size:12px;font-weight:500;padding:7px 10px;background:var(--sand);border-radius:var(--r-sm)"></div>
       </div>
       <div class="form-2">
-        <div class="form-row"><label class="form-label">จำนวนที่รับ *</label><input type="number" id="receive-qty" value="1" min="1" style="width:100%"></div>
+        <div class="form-row" id="receive-qty-row"><label class="form-label">จำนวนที่รับ *</label><input type="number" id="receive-qty" value="1" min="1" style="width:100%"></div>
         <div class="form-row"><label class="form-label">วันที่รับ</label><input type="date" id="receive-date" style="width:100%"></div>
       </div>
       <div class="form-row"><label class="form-label">📍 รับเข้าคลัง *</label>
@@ -2117,7 +2117,7 @@
       </div>
       <div class="form-row"><label class="form-label">หมายเหตุ / ผู้ส่ง</label><input type="text" id="receive-note" placeholder="เช่น Honda Thailand Invoice 12345" style="width:100%"></div>
     </div>
-    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('fl-modal-receive')">ยกเลิก</button><button class="btn btn-primary" onclick="flSaveReceive()">บันทึกรับของ</button></div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('fl-modal-receive')">ยกเลิก</button><button id="recv-shortclose" class="btn btn-ghost" style="display:none;color:#A32D2D;border-color:#E9C9C4" onclick="flReceiveShortClose()">ปิดใบ · ไม่รอของที่เหลือ</button><button class="btn btn-primary" onclick="flSaveReceive()">บันทึกรับของ</button></div>
   </div>
 </div>
 

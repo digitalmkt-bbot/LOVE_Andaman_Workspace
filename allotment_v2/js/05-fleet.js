@@ -22214,6 +22214,22 @@ function flRenderInventory(){
       let _stCell='<span style="background:'+ss.bg+';color:'+ss.color+';padding:2px 9px;border-radius:10px;font-size:9.5px;font-weight:700;letter-spacing:.04em;white-space:nowrap;display:inline-flex">'+ss.label+'</span>';
       if(m.approvedBy) _stCell+='<div title="'+String(m.approveNote||m.approvedNote||'').replace(/"/g,'&quot;')+'" style="font-size:9px;color:#0F6E56;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">&#10003; '+m.approvedBy+(m.approvedDate?(' · '+String(m.approvedDate).slice(5)):'')+'</div>';
       else if(currentIdx>=2) _stCell+='<div style="font-size:9px;color:#c9c5bd;margin-top:3px;white-space:nowrap">&mdash; ไม่มีชื่อผู้อนุมัติ</div>';
+      /* §memoPart · ใบที่รับมาแล้วบางส่วนกับใบที่ยังไม่แตะเลย ขึ้น "สั่งซื้อ" เหมือนกัน
+         ถ้าไม่บอกตรงนี้ ต้องเปิดเข้าไปดูทีละใบว่าค้างอะไรอยู่ */
+      try{
+        var _rs=memoRecvState(m);
+        /* ใบที่ปิดไปแล้วทั้งที่ของไม่ครบ ยังเข้าเงื่อนไข any && !full อยู่
+           ต้องเช็ค shortClosed ก่อน ไม่งั้นจะขึ้นว่า "ยังขาด" ทั้งที่ปิดใบไปแล้ว */
+        if(m.shortClosed){
+          _stCell+='<div title="ปิดใบทั้งที่ของไม่ครบ · ลดยอด '+Math.round(m.shortClosed.cut||0).toLocaleString()+' บาท" '
+            +'style="font-size:9px;color:#A32D2D;background:#FCEBEB;border-radius:6px;padding:1px 6px;margin-top:3px;'
+            +'white-space:nowrap;display:inline-block;font-weight:700">ปิดใบ &middot; ของไม่ครบ '+(m.shortClosed.missing||[]).length+' รายการ</div>';
+        } else if(_rs.any && !_rs.full){
+          _stCell+='<div title="รับมาแล้ว '+((m.receipts||[]).length)+' รอบ" style="font-size:9px;color:#854F0B;'
+            +'background:#FBF0DD;border-radius:6px;padding:1px 6px;margin-top:3px;white-space:nowrap;'
+            +'display:inline-block;font-weight:700">รับบางส่วน '+_rs.done+'/'+_rs.n+' &middot; ขาด '+_rs.left+'</div>';
+        }
+      }catch(_){}
       if(!compact) _stCell+='<div style="display:flex;align-items:center;gap:5px;margin-top:4px"><span style="width:52px;height:3px;background:#E9E5DE;border-radius:2px;overflow:hidden;display:inline-block"><span style="display:block;height:100%;width:'+_pctDone+'%;background:'+_barColor+'"></span></span><i style="font-style:normal;font-size:8.5px;color:'+dim.ink3+';font-family:\'DM Mono\',monospace">'+(currentIdx+1)+'/'+_totalSteps+'</i></div>';
 
       const _tools='<div style="display:flex;gap:4px;justify-content:flex-end">'
@@ -22290,6 +22306,10 @@ function flOpenReceiveStock(){
   document.getElementById('receive-item-fixed').style.display='none';
   document.getElementById('receive-item-sel').innerHTML='<option value="">— เลือกรายการ —</option>'+FL_INVENTORY.map(x=>`<option value="${x.id}">${x.name} (คงเหลือ ${x.qty} ${x.unit})</option>`).join('');
   document.getElementById('receive-qty').value='1';
+  /* §memoPart · โมดัลตัวเดียวกันใช้สองโหมด · โหมด memo ซ่อนแถวนี้ไว้
+     ถ้าไม่คืนค่าตรงนี้ เปิดโหมดรับรายตัวต่อจากโหมด memo จะไม่มีช่องกรอกจำนวนให้ */
+  document.getElementById('receive-qty').style.display='';
+  var _qr0=document.getElementById('receive-qty-row'); if(_qr0)_qr0.style.display='';
   document.getElementById('receive-note').value='';
   document.getElementById('receive-date').value=TODAY_STR;
   // Default location empty (user picks after selecting item)
@@ -22330,6 +22350,10 @@ function flOpenReceiveOne(id){
   const fixed=document.getElementById('receive-item-fixed');
   fixed.style.display='block';fixed.textContent=`${item.name} (คงเหลือ ${item.qty} ${item.unit})`;
   document.getElementById('receive-qty').value='1';
+  /* §memoPart · โมดัลตัวเดียวกันใช้สองโหมด · โหมด memo ซ่อนแถวนี้ไว้
+     ถ้าไม่คืนค่าตรงนี้ เปิดโหมดรับรายตัวต่อจากโหมด memo จะไม่มีช่องกรอกจำนวนให้ */
+  document.getElementById('receive-qty').style.display='';
+  var _qr0=document.getElementById('receive-qty-row'); if(_qr0)_qr0.style.display='';
   document.getElementById('receive-note').value='';
   document.getElementById('receive-date').value=TODAY_STR;
   // Default location = item's current location
@@ -22473,10 +22497,19 @@ function flSaveReceive(){
       const note=document.getElementById('receive-note').value;
       const memoLocation = document.getElementById('receive-location')?.value || 'คลัง Tub Lamu';
       let updatedCount=0, createdCount=0;
-      (mo.items||[]).forEach((it,i)=>{
+      /* §memoPart · โมดัลวาดเฉพาะบรรทัด parts · index ของ input จึงนับตาม
+         allItems ไม่ใช่ตาม mo.items · ของเดิมวนด้วย mo.items แล้วอ่าน recv-qty-i
+         ใบไหนมีบรรทัดค่าแรงคั่นอยู่ จำนวนจะเลื่อนไปผิดบรรทัด */
+      const _parts=(mo.items||[]).filter(it=>_memoIsPart(it,mo));
+      const _round={ id:(typeof LA_UID==='function'?LA_UID('rc'):'rc'+Date.now()),
+                     date:date, by:(typeof laBy==='function')?laBy():'',
+                     location:memoLocation, note:note, lines:[] };
+      _parts.forEach((it,i)=>{
         const qtyEl=document.getElementById('recv-qty-'+i);
-        const qty=parseFloat(qtyEl?.value)||0;
+        const qty=Math.max(0, parseFloat(qtyEl?.value)||0);
         if(qty<=0) return;
+        _round.lines.push({ name:it.name, qty:qty, unit:it.unit||'ชิ้น' });
+        it.recvQty=_memoRecvd(it)+qty;
         // Skip labor items — they don't go into stock
         const cat=it.category||mo.memoType||'parts';
         if(cat==='labor') return;
@@ -22529,17 +22562,33 @@ function flSaveReceive(){
           createdCount++;
         }
       });
-      mo.currentStep=4;mo.status='received';
-      let toastMsg=`รับของ ${mo.no} เรียบร้อย · @ ${memoLocation}`;
-      if(updatedCount&&createdCount) toastMsg+=` · อัพเดท ${updatedCount} · สร้างใหม่ ${createdCount} items`;
-      else if(updatedCount) toastMsg+=` · อัพเดท ${updatedCount} items`;
-      else if(createdCount) toastMsg+=` · สร้างใหม่ ${createdCount} items`;
+      /* §memoPart · เก็บว่ารอบนี้รับอะไรมาบ้าง · ใครรับ วันไหน เข้าคลังไหน
+         ไม่งั้นรับสองรอบแล้วย้อนดูไม่ได้ว่ารอบไหนได้อะไร */
+      if(_round.lines.length){ if(!mo.receipts) mo.receipts=[]; mo.receipts.push(_round); }
+      mo.receivedLocation=memoLocation;
+      const _after=memoRecvState(mo);
+      if(_after.full){
+        mo.currentStep=4; mo.status='received';
+        mo.receivedDate=date; mo.receivedBy=(typeof laBy==='function')?laBy():'';
+      } else {
+        /* ยังไม่ครบ · ใบค้างที่ขั้น "สั่งซื้อ" ปุ่มรับของยังกดได้อีก
+           ตั้งใจไม่เพิ่มสถานะใหม่ · stepper อ่าน STEPS.findIndex(s=>s.key===m.status)
+           ใส่คำที่ไม่มีใน STEPS จะได้ -1 แล้วแถบขั้นตอนเด้งกลับช่องแรก */
+        mo.currentStep=3; mo.status='ordered';
+      }
+      let toastMsg=`รับของ ${mo.no} · @ ${memoLocation}`;
+      if(_after.full) toastMsg+=' · ครบแล้ว';
+      else toastMsg+=` · ครบ ${_after.done}/${_after.n} รายการ · ยังขาด ${_after.left}`;
+      if(updatedCount&&createdCount) toastMsg+=` · อัพเดท ${updatedCount} · สร้างใหม่ ${createdCount}`;
+      else if(updatedCount) toastMsg+=` · อัพเดท ${updatedCount}`;
+      else if(createdCount) toastMsg+=` · สร้างใหม่ ${createdCount}`;
       flShowToast(toastMsg);
     }
     _receiveMemoId=null;
     document.getElementById('receive-item-sel').style.display='block';
     document.getElementById('receive-item-fixed').style.display='none';
     const qtyRow=document.getElementById('receive-qty');if(qtyRow)qtyRow.style.display='';
+    var _qr2=document.getElementById('receive-qty-row'); if(_qr2)_qr2.style.display='';
     flSave();closeModal('fl-modal-receive');flRenderInventory();
     return;
   }
@@ -23385,6 +23434,82 @@ function flMemoWarehouse(mo){
   }catch(_){}
   return { wh:'คลัง Tub Lamu', why:(mo&&mo.boatId)?'ใบนี้ไม่ได้ระบุท่าของเรือ':'ใบนี้ไม่ได้ผูกกับเรือ' };
 }
+/* §memoPart · ตัวช่วยเรื่องรับของบางส่วน ─────────────────────────────
+   recvQty = จำนวนที่รับเข้ามาแล้วสะสมของบรรทัดนั้น · ไม่มี = ยังไม่เคยรับ */
+function _memoIsPart(it, m){ return ((it&&it.category)||(m&&m.memoType)||'parts')!=='labor'; }
+function _memoRecvd(it){ var v=+(it&&it.recvQty)||0; return v>0?v:0; }
+function _memoLeft(it){ return Math.max(0, (+(it&&it.qty)||0) - _memoRecvd(it)); }
+/* สรุปสถานะรับของของทั้งใบ */
+function memoRecvState(m){
+  var parts=((m&&m.items)||[]).filter(function(it){ return _memoIsPart(it,m); });
+  var done=0, any=false;
+  parts.forEach(function(it){
+    if(_memoLeft(it)<=0) done++;
+    if(_memoRecvd(it)>0) any=true;
+  });
+  return { n:parts.length, done:done, left:parts.length-done, any:any,
+           full:(parts.length>0 && done===parts.length) };
+}
+/* คิดยอดใหม่ · สูตรเดียวกับ memoCalcTotal ตอนสร้างใบ แต่รับจำนวนจากข้างนอก
+   ไม่ได้อ่านจาก DOM เพราะฟอร์มสร้าง memo ไม่ได้เปิดอยู่ */
+function _memoTotals(m, qtyOf){
+  var sub=0, lineDisc=0;
+  ((m&&m.items)||[]).forEach(function(it){
+    var q=qtyOf?(+qtyOf(it)||0):(+it.qty||0);
+    var gross=q*(+it.price||0);
+    sub+=gross;
+    lineDisc+=gross*((+it.discountPct||0)/100);
+  });
+  var afterLine=sub-lineDisc;
+  var memoDisc=Math.round(afterLine*(+m.discountPct||0)/100)+(+m.discountAmt||0);
+  var discTotal=lineDisc+memoDisc;
+  var afterDisc=Math.max(0, sub-discTotal);
+  var rate=(m.vatEnabled!==false)?(+m.vatRate||0):0;
+  var vat=Math.round(afterDisc*rate/100*100)/100;
+  return { subtotal:sub, discount:discTotal, afterDiscount:afterDisc, vat:vat, amount:afterDisc+vat };
+}
+/* ปิดใบทั้งที่ของยังไม่ครบ · ของที่เหลือไม่มาแล้ว
+   ลดยอดตามของที่ได้จริง · ยอดเดิมเก็บไว้ที่ orderedAmount ไม่ทับทิ้ง */
+function memoShortClose(moId){
+  var m=FL_MEMOS.find(function(x){ return x.id===moId; }); if(!m) return;
+  var st=memoRecvState(m);
+  if(st.full){ flShowToast('ใบนี้ของครบแล้ว ไม่ต้องปิดแบบไม่รอ'); return; }
+  var miss=((m.items)||[]).filter(function(it){ return _memoIsPart(it,m) && _memoLeft(it)>0; });
+  var T=_memoTotals(m, function(it){ return _memoIsPart(it,m)?_memoRecvd(it):(+it.qty||0); });
+  var old=+m.amount||0;
+  var lines=miss.slice(0,8).map(function(it){
+    return '  · '+it.name+' ขาด '+_memoLeft(it)+' '+(it.unit||'ชิ้น'); }).join('\n')
+    + (miss.length>8?('\n  · และอีก '+(miss.length-8)+' รายการ'):'');
+  if(!confirm('ปิดใบ '+m.no+' ทั้งที่ของยังไม่ครบ\n\nที่ยังไม่ได้รับ '+miss.length+' รายการ\n'
+    +lines+'\n\nยอดใบจะลดจาก '+old.toLocaleString()+' เหลือ '+Math.round(T.amount).toLocaleString()+' บาท'
+    +'\n(คิดจากของที่ได้จริง ด้วยสูตรเดียวกับตอนสร้างใบ)\n\nยืนยันหรือไม่')) return;
+  if(m.orderedAmount==null) m.orderedAmount=old;
+  m.subtotal=T.subtotal; m.discount=T.discount; m.afterDiscount=T.afterDiscount;
+  m.vat=T.vat; m.amount=T.amount;
+  m.shortClosed={ date:(typeof TODAY_STR!=='undefined'?TODAY_STR:''),
+                  by:(typeof laBy==='function')?laBy():'',
+                  missing:miss.map(function(it){ return {name:it.name, left:_memoLeft(it), unit:it.unit||'ชิ้น'}; }),
+                  cut:Math.round((old-T.amount)*100)/100 };
+  m.currentStep=4; m.status='received';
+  m.receivedDate=m.receivedDate||(typeof TODAY_STR!=='undefined'?TODAY_STR:'');
+  flSave(); flRenderInventory();
+  flShowToast('ปิดใบ '+m.no+' แล้ว · ลดยอด '+Math.round(old-T.amount).toLocaleString()+' บาท จากของที่ไม่ได้รับ');
+}
+/* §memoPart · ปุ่มในโมดัล · ปิดใบแล้วต้องปิดโมดัลด้วย */
+function flReceiveShortClose(){
+  var id=_receiveMemoId; if(!id) return;
+  var before=(FL_MEMOS.find(function(x){return x.id===id;})||{}).status;
+  memoShortClose(id);
+  var after=(FL_MEMOS.find(function(x){return x.id===id;})||{}).status;
+  if(after!==before){
+    _receiveMemoId=null;
+    var sel=document.getElementById('receive-item-sel'); if(sel) sel.style.display='block';
+    var fx=document.getElementById('receive-item-fixed'); if(fx) fx.style.display='none';
+    var qr=document.getElementById('receive-qty'); if(qr) qr.style.display='';
+    var qrow=document.getElementById('receive-qty-row'); if(qrow) qrow.style.display='';
+    closeModal('fl-modal-receive');
+  }
+}
 function flOpenReceiveMemo(moId){
   const mo=FL_MEMOS.find(x=>x.id===moId);if(!mo)return;
   _receiveMemoId=moId;
@@ -23415,8 +23540,14 @@ function flOpenReceiveMemo(moId){
   const fixed=document.getElementById('receive-item-fixed');
   sel.style.display='none';
   fixed.style.display='block';
+  /* §memoPart · จำนวนแก้ได้ · ตั้งต้นเป็น "ที่ยังขาด" ไม่ใช่ "ที่สั่ง"
+     ของเดิมเป็น hidden input ค่าคงที่ = ที่สั่ง จึงรับบางส่วนไม่ได้เลย */
+  const _st=memoRecvState(mo);
+  const _rounds=((mo.receipts||[]).length);
   fixed.innerHTML=`<div style="font-size:11px;font-weight:500;color:var(--ink);margin-bottom:4px">${mo.no} · ${mo.title}</div>
-    <div style="font-size:10px;color:var(--ink-soft);margin-bottom:6px">รายการ Parts ที่จะรับเข้าสต็อค <span style="color:#999">(จำนวนตาม Memo ที่อนุมัติแล้ว · แก้ไขไม่ได้)</span>:</div>
+    <div style="font-size:10px;color:var(--ink-soft);margin-bottom:6px">รายการ Parts ที่จะรับเข้าสต็อค <span style="color:#999">(แก้จำนวนได้ · ของมาไม่ครบก็รับเท่าที่มาก่อนได้)</span>:</div>
+    ${_st.any?`<div style="font-size:10px;color:#185FA5;background:#E6F1FB;border-radius:6px;padding:5px 8px;margin-bottom:6px">
+      รับมาแล้ว ${_rounds} รอบ · ครบแล้ว ${_st.done}/${_st.n} รายการ · ยังขาด ${_st.left} รายการ</div>`:''}
     ${allItems.map((it,i)=>{
       // Check if exists in inventory
       const inv=it.invId
@@ -23424,20 +23555,30 @@ function flOpenReceiveMemo(moId){
         :FL_INVENTORY.find(x=>x.name===it.name||it.name.includes(x.name));
       const isNew=!inv;
       const newBadge=isNew?`<span style="font-size:8px;background:#FAEEDA;color:#854F0B;padding:1px 6px;border-radius:5px;margin-left:2px;font-weight:600">+ ใหม่</span>`:`<span style="font-size:9px;color:var(--ink-soft);margin-left:2px">มีในสต็อก ${inv.qty||0}</span>`;
-      const qtyVal=it.qty||1;
-      return `<div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:11px;padding:5px 8px;background:${isNew?'#FFF9F0':'transparent'};border-radius:6px;${isNew?'border:1px dashed #E5C9A0':''}">
-        <span style="flex:1">${it.name} <span style="font-size:9px;background:#E6F1FB;color:#185FA5;padding:1px 6px;border-radius:5px;margin-left:2px;display:inline-flex;align-items:center;gap:3px"><span style="width:5px;height:5px;border-radius:50%;background:#185FA5"></span>Parts</span>${newBadge}</span>
-        <span style="width:52px;font-size:12px;font-weight:600;color:var(--ink);text-align:center;font-family:'DM Mono',monospace;background:#F4F2EE;padding:3px 5px;border-radius:4px;border:1px solid rgba(0,0,0,.06)">${qtyVal}</span>
-        <input type="hidden" id="recv-qty-${i}" value="${qtyVal}">
+      const ord=+it.qty||0, got=_memoRecvd(it), left=_memoLeft(it);
+      const doneLine=left<=0;
+      return `<div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:11px;padding:5px 8px;background:${doneLine?'#F2FAF6':(isNew?'#FFF9F0':'transparent')};border-radius:6px;${doneLine?'border:1px solid #CFEBDD':(isNew?'border:1px dashed #E5C9A0':'')}">
+        <span style="flex:1;min-width:0">${it.name} <span style="font-size:9px;background:#E6F1FB;color:#185FA5;padding:1px 6px;border-radius:5px;margin-left:2px;display:inline-flex;align-items:center;gap:3px"><span style="width:5px;height:5px;border-radius:50%;background:#185FA5"></span>Parts</span>${newBadge}
+          <span style="display:block;font-size:9px;color:var(--ink-soft);margin-top:1px;font-family:'DM Mono',monospace">
+            สั่ง ${ord}${got?(' · รับแล้ว '+got):''}${doneLine?' · <b style="color:#0F6E56">ครบแล้ว</b>':(' · <b style="color:#A32D2D">ยังขาด '+left+'</b>')}</span></span>
+        <input type="number" id="recv-qty-${i}" value="${left}" min="0" step="any"
+          style="width:56px;font-size:12px;font-weight:600;color:var(--ink);text-align:center;font-family:'DM Mono',monospace;background:${doneLine?'#F7F6F3':'#fff'};padding:4px 5px;border-radius:5px;border:1px solid rgba(0,0,0,.14)">
         <span style="color:var(--ink-soft);font-size:10px;min-width:24px">${it.unit||'ชิ้น'}</span>
       </div>`;
     }).join('')}
     <div style="font-size:9px;color:var(--ink-soft);margin-top:8px;padding:6px 8px;background:#FBFAF7;border-radius:6px">
-      <span style="font-weight:600">หมายเหตุ:</span> รายการ <span style="background:#FAEEDA;color:#854F0B;padding:0 4px;border-radius:3px;font-weight:600">+ ใหม่</span> จะถูกสร้างเป็น inventory item อัตโนมัติ (category: อื่นๆ — แก้ภายหลังได้)
+      <span style="font-weight:600">หมายเหตุ:</span> ใส่ 0 ในบรรทัดที่ของยังไม่มา · ใบจะยังไม่ปิด กดรับของอีกครั้งได้ตอนของมาเพิ่ม
+      · รายการ <span style="background:#FAEEDA;color:#854F0B;padding:0 4px;border-radius:3px;font-weight:600">+ ใหม่</span> จะถูกสร้างเป็น inventory item อัตโนมัติ (category: อื่นๆ — แก้ภายหลังได้)
     </div>`;
   document.getElementById('receive-qty').style.display='none';
+  /* §memoPart · ซ่อนทั้งแถว · ไม่งั้นป้าย "จำนวนที่รับ *" ค้างอยู่ลอยๆ เหนือช่องว่าง */
+  var _qrow=document.getElementById('receive-qty-row'); if(_qrow)_qrow.style.display='none';
   document.getElementById('receive-date').value=TODAY_STR;
   document.getElementById('receive-note').value='';
+  /* §memoPart · ปุ่มปิดใบทั้งที่ของไม่ครบ · ขึ้นเฉพาะใบที่รับมาแล้วบางส่วน
+     ใบที่ยังไม่เคยรับอะไรเลยไม่ควรมีปุ่มนี้ให้กดพลาด */
+  const _sc=document.getElementById('recv-shortclose');
+  if(_sc) _sc.style.display=(_st.any && !_st.full && !mo.shortClosed)?'':'none';
   document.getElementById('fl-modal-receive').querySelector('.modal-title'||'.mhd-title').textContent=`รับของ - ${mo.no}`;
   openModal('fl-modal-receive');
 }
