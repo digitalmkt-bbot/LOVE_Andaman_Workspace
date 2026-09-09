@@ -53705,12 +53705,16 @@ function pkTypeAdd(){
   PIER_CFG.parkTypes.add.push({k:'x'+Date.now().toString(36), n:'ประเภทใหม่', code:'', grp:'ad'});
   try{ poPersist(); }catch(_){}
   if(typeof renderPierPark==='function') renderPierPark();
+  /* §pkTkTyPop · renderPierPark เขียนทับเฉพาะ host · popup อยู่บน body จึงไม่หาย
+     แต่เนื้อในค้างเป็นชุดเก่า ไม่เห็นแถวที่เพิ่งเพิ่ม จึงสั่งเปิดใหม่ */
+  if(document.getElementById('po-modal')) pkTyModal();
 }
 function pkTypeDel(k){
   var C=PIER_CFG.parkTypes; if(!C||!Array.isArray(C.add)) return;
   C.add=C.add.filter(function(x){ return x.k!==k; });
   try{ poPersist(); }catch(_){}
   if(typeof renderPierPark==='function') renderPierPark();
+  if(document.getElementById('po-modal')) pkTyModal();   /* §pkTkTyPop */
 }
 /* ── เปลี่ยนประเภทของคนคนหนึ่ง ────────────────────────────────────────────
    เช่นในใบจองคีย์เป็นเด็ก แต่ตัวจริงต่ำกว่า 3 ขวบ ที่ด่านต้องซื้อตั๋วเด็กเล็ก
@@ -54302,24 +54306,7 @@ function renderPierPark(pier){
     +'</div>';
   }).join('');
 
-  /* ── กล่องตั้งค่าประเภทตั๋ว ── */
-  var tyRows=TY.map(function(T){
-    var gsel=['ad','chd','inf'].map(function(x){
-      return '<option value="'+x+'"'+(T.grp===x?' selected':'')+'>'+(x==='ad'?'ผู้ใหญ่':x==='chd'?'เด็ก':'เด็กเล็ก')+'</option>';
-    }).join('');
-    return '<div class="pk-ty"><span class="dot" style="background:'+T.c+'"></span>'
-      +'<input class="nm" value="'+poE(T.n)+'" '+(ro?'disabled ':'')+'onchange="pkTypeSet(\''+T.k+'\',\'n\',this.value);renderPierPark()">'
-      +'<select class="gp" '+(ro?'disabled ':'')+'onchange="pkTypeSet(\''+T.k+'\',\'grp\',this.value);renderPierPark()">'+gsel+'</select>'
-      +'<input class="cd" value="'+poE(T.code)+'" placeholder="code" '+(ro?'disabled ':'')+'onchange="pkTypeSet(\''+T.k+'\',\'code\',this.value);renderPierPark()">'
-      +(T.base?'<span class="bs">ชุดตั้งต้น</span>'
-             :('<button class="del" '+(ro?'disabled ':'')+'onclick="pkTypeDel(\''+T.k+'\')" title="ลบประเภทนี้">&times;</button>'))
-      +'</div>';
-  }).join('');
-  var tyBox='<details class="pk-tyb"><summary>ประเภทตั๋วและรหัส · '+TY.length+' ประเภท</summary>'
-    +'<div class="pk-tyl">'+tyRows+'</div>'
-    +(ro?'':'<button class="pk-add" onclick="pkTypeAdd()">+ เพิ่มประเภท</button>')
-    +'<div class="pk-tyn">ชุดตั้งต้น 5 ประเภทแม็พจากใบจองให้อัตโนมัติ · ประเภทที่เพิ่มเองต้องเลือกให้ทีละคนในคอลัมน์ Code<br>'
-    +'ช่อง <b>ผู้ใหญ่ / เด็ก / เด็กเล็ก</b> ในตารางเดินตามช่องที่เลือกไว้ตรงนี้</div></details>';
+  /* §pkTkTyPop · กล่องประเภทตั๋วย้ายไปอยู่ใน popup · ดู pkTyBody() ท้ายไฟล์นี้ */
 
   host.innerHTML='<style id="po-style">'+poCSS()+'</style>'
     +'<div class="po-h">'
@@ -54339,6 +54326,15 @@ function renderPierPark(pier){
         +'<span class="sep"></span>'
         +'<button onclick="pkTkExcel()" title="ทุกลำของท่านี้ในวันเดียวกัน '
           +'· แยกชีทต่อลำ">Excel ทั้งวัน</button>'
+        /* §pkTkTyPop · เคยเป็นกล่องพับใต้ตารางที่ยาว 44 แถวต่อลำ
+           ตั้งครั้งเดียวก็จริง แต่ตอนจะแก้รหัสด่านต้องเลื่อนผ่านทั้งลำถึงจะเจอ */
+        +'<button onclick="pkTyModal()" title="ชื่อประเภทและรหัสที่ด่านใช้">'
+          +'ประเภทตั๋ว &middot; '+TY.length+'</button>'
+        /* §pkTkHelp · วิธีใช้เคยเป็นตัวหนังสือเทาใต้ตารางที่ยาว 44 แถว
+           คนใช้ครั้งแรกไม่รู้ว่าต้องเลื่อนไปหา · คนใช้คล่องแล้วต้องเลื่อนผ่านทุกครั้ง
+           ย้ายขึ้นมาเป็นปุ่มบนแถบที่อยู่ในสายตาตลอด */
+        +'<button onclick="pkHelp()" title="อ่านก่อนใช้ครั้งแรก" '
+          +'style="border-color:#C9A227;color:#8A7000">? วิธีใช้</button>'
       +'</div>'
     +'</div>'
     +'<div class="pk-day">'
@@ -54348,24 +54344,92 @@ function renderPierPark(pier){
       +(nTyped>0?('<span class="s ok"><b>'+nTyped+'</b> กรอกชื่อเอง</span>'):'')
       +(nFix>0?('<span class="s warn"><b>'+nFix+'</b> แก้ประเภท</span>'):'')
       +(nDup>0?('<span class="s bad"><b>'+nDup+'</b> ชื่อซ้ำ · ต้องแก้ก่อนยื่นด่าน</span>'):'')
+      /* §pkTkHelp · อันนี้ไม่ย้ายลง popup · เป็นคำรับประกัน ไม่ใช่วิธีใช้
+         คนที่กำลังแก้ประเภทตั๋วอยู่ต้องเห็นตอนนั้นเลยว่าแก้แล้วไม่กระทบที่อื่น */
+      +'<span class="s" style="cursor:pointer" onclick="pkHelp()" '
+        +'title="กดดูรายละเอียด">อ่านอย่างเดียว · ไม่กระทบใบจอง</span>'
     +'</div>'
     /* §pkTk8 · กล่องประเภทตั๋วเป็นของ "ตั้งครั้งเดียวแล้วไม่แตะอีก"
        เคยอยู่บนสุดคั่นระหว่างแถบสรุปกับตารางที่ต้องใช้จริง · ย้ายลงท้ายหน้า */
-    +(body||'<div class="po-card"><div class="pk-e">วันนี้ยังไม่มีเรือออกจากท่านี้</div></div>')
-    +tyBox
-    +'<div class="pk-iso">หน้านี้อ่านอย่างเดียว · ทุกอย่างที่แก้ตรงนี้ '
-      +'(ชื่อที่กรอกเอง · ประเภทที่เปลี่ยน · รหัสของด่าน) เก็บไว้เฉพาะหน้านี้ '
-      +'<b>ไม่ไปกระทบใบจอง ยอดขาย เงินสดย่อย หรือหน้าอื่นเลย</b> — '
-      +'ถ้าต้องการให้ถึงฝ่ายขายจริง ต้องไปแก้ที่ใบจอง</div>'
-    +'<div class="pk-foot">'
-      +'<b>ชื่อห้ามซ้ำ</b> — ด่านออกตั๋วตามรายชื่อ ชื่อซ้ำจะกลายเป็นคนเดียวได้สองใบ '
-      +'พิมพ์ชื่อที่ชนกับแถวอื่นระบบจะไม่รับและบอกว่าไปชนกับใคร · ปุ่มเติมชื่อเลี่ยงเลขที่ชนให้เอง '
-      +'(เทียบแบบไม่สนตัวพิมพ์ใหญ่เล็กและคำนำหน้า)<br>'
-      +'<b>หัวที่ยังไม่มีชื่อ</b> — พิมพ์ลงช่องได้เลย ติดป้าย <b>กรอกเอง</b> ไว้ตลอด · '
-      +'ปุ่ม <b>เติมชื่อจากหัวกรุ๊ป</b> ใส่ “ชื่อหัวกรุ๊ป (2)(3)…” ทั้งลำในคลิกเดียว — '
-      +'ไม่ใช่การแต่งชื่อคนขึ้นมา แต่บอกว่าอยู่ในกรุ๊ปของหัวคนนั้น ย้อนดูใบจองได้จริง<br>'
-      +'<b>แถบเขียว</b> = คนไทย · สัญชาติของหัวที่ยังไม่มีชื่อยืมจากหัวกรุ๊ป จึงขึ้นเป็นตัวจาง<br>'
-      +'กด <b>บันทึกเป็น Excel</b> ได้ไฟล์ 3 คอลัมน์ แยกชีทต่อลำ พร้อมวางในแบบฟอร์มของด่าน</div>';
+    +(body||'<div class="po-card"><div class="pk-e">วันนี้ยังไม่มีเรือออกจากท่านี้</div></div>');
+    /* §pkTkHelp  · คำอธิบายที่เคยต่อท้ายตรงนี้ ย้ายไปปุ่ม "วิธีใช้" บนแถบบน
+       §pkTkTyPop · กล่องประเภทตั๋วที่เคยต่อท้ายตรงนี้ ย้ายไปปุ่ม "ประเภทตั๋ว" */
+}
+/* §pkTkTyPop · เนื้อในกล่องประเภทตั๋ว · ใช้ทั้งใน popup และตอนเปิดใหม่หลัง add/del */
+function pkTyBody(){
+  var ro=(typeof poCanEdit==='function')?!poCanEdit():false;
+  var TY=pkTypes();
+  var rows=TY.map(function(T){
+    var gsel=['ad','chd','inf'].map(function(x){
+      return '<option value="'+x+'"'+(T.grp===x?' selected':'')+'>'
+        +(x==='ad'?'ผู้ใหญ่':x==='chd'?'เด็ก':'เด็กเล็ก')+'</option>';
+    }).join('');
+    return '<div class="pk-ty"><span class="dot" style="background:'+T.c+'"></span>'
+      +'<input class="nm" value="'+poE(T.n)+'" '+(ro?'disabled ':'')
+        +'onchange="pkTypeSet(\''+T.k+'\',\'n\',this.value);renderPierPark()">'
+      +'<select class="gp" '+(ro?'disabled ':'')
+        +'onchange="pkTypeSet(\''+T.k+'\',\'grp\',this.value);renderPierPark()">'+gsel+'</select>'
+      +'<input class="cd" value="'+poE(T.code)+'" placeholder="code" '+(ro?'disabled ':'')
+        +'onchange="pkTypeSet(\''+T.k+'\',\'code\',this.value);renderPierPark()">'
+      +(T.base?'<span class="bs">ชุดตั้งต้น</span>'
+             :('<button class="del" '+(ro?'disabled ':'')+'onclick="pkTypeDel(\''+T.k+'\')" '
+               +'title="ลบประเภทนี้">&times;</button>'))
+      +'</div>';
+  }).join('');
+  /* poCSS ผูกกับ .po-host · ใน popup ต้องเปลี่ยนขอบเขตเป็น #po-modal
+     เป็นวิธีเดียวกับที่ modal อื่นในไฟล์นี้ใช้อยู่แล้ว */
+  return '<style>'+poCSS().replace(/\.po-host/g,'#po-modal')+'</style>'
+    +'<div class="pk-tyl">'+rows+'</div>'
+    +(ro?'':'<button class="pk-add" onclick="pkTypeAdd()">+ เพิ่มประเภท</button>')
+    +'<div class="pk-tyn">ชุดตั้งต้น 5 ประเภทแม็พจากใบจองให้อัตโนมัติ · '
+    +'ประเภทที่เพิ่มเองต้องเลือกให้ทีละคนในคอลัมน์ Code<br>'
+    +'ช่อง <b>ผู้ใหญ่ / เด็ก / เด็กเล็ก</b> ในตารางเดินตามช่องที่เลือกไว้ตรงนี้<br>'
+    +'<b>รหัส</b> คือโค้ดที่ด่านใช้ออกตั๋ว · ด่านไหนใช้โค้ดอื่นพิมพ์ทับได้เลย</div>';
+}
+function pkTyModal(){
+  poModal('ประเภทตั๋วและรหัสของด่าน', pkTyBody(), poBtn('ปิด','poModalClose()',1), 720);
+}
+/* §pkTkHelp · วิธีใช้หน้าตั๋วอุทยาน · เนื้อหาเดิมที่เคยเป็นตัวหนังสือเทาท้ายหน้า
+   ใช้ poModal ตัวเดียวกับที่หน้าอื่นฝั่ง Pier Office ใช้อยู่ ไม่ได้ทำ popup ใหม่ */
+function pkHelp(){
+  var W='style="font-size:12.5px;line-height:1.62;color:#4b463f"';
+  var T='style="font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;'
+       +'color:#9A8300;margin:16px 0 5px"';
+  var box='style="background:#FFFBEA;border:1px solid #F2E3A8;border-radius:11px;padding:11px 13px;'
+         +'font-size:12.5px;line-height:1.6;color:#4b463f"';
+  poModal('วิธีใช้ · หน้าตั๋วอุทยาน',
+     '<div '+box+'><b style="color:#8A7000">หน้านี้อ่านอย่างเดียว</b><br>'
+    +'ทุกอย่างที่แก้ตรงนี้ (ชื่อที่กรอกเอง · ประเภทที่เปลี่ยน · รหัสของด่าน) เก็บไว้เฉพาะหน้านี้ '
+    +'<b>ไม่ไปกระทบใบจอง ยอดขาย เงินสดย่อย หรือหน้าอื่นเลย</b><br>'
+    +'ถ้าต้องการให้ถึงฝ่ายขายจริง ต้องไปแก้ที่ใบจอง</div>'
+
+    +'<div '+T+'>ชื่อห้ามซ้ำ</div>'
+    +'<div '+W+'>ด่านออกตั๋วตามรายชื่อ ชื่อซ้ำสองแถวคือคนเดียวได้ตั๋วสองใบในสายตาเขา<br>'
+    +'พิมพ์ชื่อที่ชนกับแถวอื่นระบบจะไม่รับ และบอกว่าไปชนกับใคร ใบไหน · '
+    +'ปุ่มเติมชื่อเลี่ยงเลขที่ชนให้เอง<br>'
+    +'<span style="color:#8a8279">เทียบแบบไม่สนตัวพิมพ์ใหญ่เล็ก ช่องว่างซ้ำ และคำนำหน้า — '
+    +'“MR.SOMCHAI  DEE” กับ “Somchai Dee” นับเป็นคนเดียวกัน</span></div>'
+
+    +'<div '+T+'>ชื่อมาจากไหน</div>'
+    +'<div '+W+'>รายชื่อดึงจากใบจอง — ทั้งผู้ร่วมเดินทางใน passengers และ<b>ชื่อหัวกรุ๊ปเอง</b> '
+    +'ซึ่งก็เป็นคนหนึ่งที่ต้องซื้อตั๋ว<br>'
+    +'<span style="color:#8a8279">ก่อนหน้านี้ชื่อหัวกรุ๊ปไม่ขึ้นถ้าใบนั้นมีรายชื่อคนอื่นอยู่แล้ว '
+    +'ทำให้ขาดไปหนึ่งชื่อทุกใบ · แก้แล้ว</span></div>'
+
+    +'<div '+T+'>หัวที่ยังไม่มีชื่อ</div>'
+    +'<div '+W+'>พิมพ์ลงช่องได้เลย ติดป้าย <b>กรอกเอง</b> ไว้ตลอด จะได้แยกออกว่าอันไหนมาจากใบจอง<br>'
+    +'ปุ่ม <b>เติมชื่อจากหัวกรุ๊ป</b> ใส่ “ชื่อหัวกรุ๊ป (2)(3)…” ทั้งลำในคลิกเดียว — '
+    +'ไม่ใช่การแต่งชื่อคนขึ้นมา แต่บอกว่าคนเหล่านี้อยู่ในกรุ๊ปของหัวคนนั้น ย้อนดูใบจองได้จริง</div>'
+
+    +'<div '+T+'>สีและป้าย</div>'
+    +'<div '+W+'><b style="color:#0F6E56">แถบเขียว</b> = คนไทย<br>'
+    +'สัญชาติของหัวที่ยังไม่มีชื่อยืมมาจากหัวกรุ๊ป จึงขึ้นเป็นตัวจาง — ยังไม่ยืนยัน<br>'
+    +'ป้าย <b>แก้ประเภท</b> ขึ้นเมื่อประเภทตรงนี้ต่างจากที่คีย์ไว้ในใบจอง · ต่างได้ แต่ต้องไม่เงียบ</div>'
+
+    +'<div '+T+'>ส่งให้ด่าน</div>'
+    +'<div '+W+'>กด <b>บันทึกเป็น Excel</b> ได้ไฟล์ 3 คอลัมน์ แยกชีทต่อลำ พร้อมวางในแบบฟอร์มของด่าน<br>'
+    +'ปุ่มบนแถบบนคือทั้งวันทุกลำ · ปุ่มบนแถบหัวลำคือเฉพาะลำที่กำลังดู</div>',
+    poBtn('เข้าใจแล้ว','poModalClose()',1), 640);
 }
 /* §pkTk9 · ลบเฉพาะชื่อที่เกินหัวของลำนี้ · ชื่อที่ยังมีหัวรองรับอยู่ไม่ถูกแตะ */
 function pkNmDropOver(date,bid,pier){
