@@ -6487,12 +6487,18 @@ function bop2RenderShell(){
       #view-operation{padding:18px;background:#16265C;font-family:'DM Sans',sans-serif;color:#1A2A33;min-height:100%}
       #view-operation .bop2-hd{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:14px;gap:12px;flex-wrap:wrap}
       /* §bopHdr · แถบบนตาม mockup */
-      #view-operation .bop2-top{display:flex;align-items:center;gap:9px;margin:-4px 0 13px;flex-wrap:wrap}
+      #view-operation .bop2-top{position:relative;display:flex;align-items:center;gap:9px;margin:-4px 0 13px;flex-wrap:wrap}
       #view-operation .bop2-top-d{font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1;color:#fff;font-variant-numeric:tabular-nums}
       #view-operation .bop2-top-w{line-height:1.15;display:inline-block}
       #view-operation .bop2-top-w b{display:block;font-size:13px;font-weight:700;color:#fff}
       #view-operation .bop2-top-w i{display:block;font-size:8.5px;font-weight:700;letter-spacing:.14em;color:#9AA2C8;text-transform:uppercase;font-style:normal}
-      #view-operation .bop2-top-brand{flex:1;text-align:center;min-width:150px}
+      /* §rcHd2 · ตรงกลางจริง · flex:1 เดิมคือกลางของช่องที่เหลือ
+         ก้อนซ้ายกับก้อนขวาไม่เท่ากันมันจึงเบ้ · บังคับให้เท่ากันด้วย flex:1 1 0
+         ไม่ใช้ absolute เพราะวัดแล้วชิปจะทับ wordmark ตั้งแต่ราว 1330px ลงมา */
+      #view-operation .bop2-dbar{flex:1 1 0;display:flex;align-items:center;gap:9px}
+      #view-operation .bop2-chips{flex:1 1 0;display:flex;align-items:center;gap:9px;
+        flex-wrap:wrap;justify-content:flex-end}
+      #view-operation .bop2-top-brand{flex:none;text-align:center;white-space:nowrap}
       #view-operation .bop2-top-brand i{display:block;font-size:9px;font-weight:700;letter-spacing:.34em;
         color:#8E97C4;font-style:normal;margin-bottom:2px;white-space:nowrap}
       #view-operation .bop2-top-brand b{display:block;font-size:16px;font-weight:800;letter-spacing:.30em;
@@ -6590,6 +6596,7 @@ function bop2RenderShell(){
     </style>
     <!-- §bopHdr · แถบบนตาม mockup · วันที่ซ้าย wordmark กลาง ชิปสรุปขวา -->
     <div class="bop2-top">
+      <span class="bop2-dbar">
       <button class="bo-btn icon" onclick="bop2ShiftWeek(-7)" title="${isMonth?'เดือนก่อนหน้า':'สัปดาห์ก่อนหน้า'}">&lsaquo;</button>
       <span class="bop2-top-d">${(new Date(_selDate)).getDate()}</span>
       <span class="bop2-top-w">
@@ -6598,17 +6605,20 @@ function bop2RenderShell(){
       </span>
       <button class="bo-btn icon" onclick="bop2ShiftWeek(7)" title="${isMonth?'เดือนถัดไป':'สัปดาห์ถัดไป'}">&rsaquo;</button>
       <button class="bo-btn primary" onclick="bop2GoToday()" style="margin-left:2px">Today</button>
+      </span>
 
       <!-- §rcSkin · ช่องกลาง = "คุณอยู่หน้าไหน" · แบรนด์เป็นตัวเล็กคร่อมบน
            ต้องเปลี่ยนพร้อมหน้า Re-confirm ไม่งั้นสองหน้าใช้กติกาคนละอย่าง -->
       <span class="bop2-top-brand"><i>LOVE ANDAMAN</i><b>BOAT OPERATION</b></span>
 
+      <span class="bop2-chips">
       <span class="bop2-chip">${isMonth?'ทริปเดือนนี้':'ทริปสัปดาห์นี้'}<b>${totalSlots}</b></span>
       <span class="bop2-chip g">เรือออกงาน<b>${deployedBoats.size}/${BOATS.filter(b=>!b.retired).length}</b></span>
       <span class="bop2-chip">pax<b>${totalPax}</b></span>
       ${needsBoats.length
         ? `<span class="bop2-chip r" onclick="bop2ShowNeedsList()" style="cursor:pointer">&#9888; ยังไม่มีเรือ<b>${needsBoats.length}</b> &rsaquo;</span>`
         : `<span class="bop2-chip g">&#10003; มีเรือครบ</span>`}
+      </span>
     </div>
 
     <!-- §bop3col · Main 3-col layout · ซ้ายสถิติ กลางตาราง ขวากองเรือ -->

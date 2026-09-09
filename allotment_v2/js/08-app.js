@@ -6111,8 +6111,40 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
     /* แถบบน + แถบคำอธิบาย · ตรึงใต้ topbar ของแอป */
     +'#reconfirm-host .rc-chrome{position:sticky;top:var(--rc-top,52px);z-index:40;'
       +'background:#16265C;padding:10px 0 2px;margin:-10px 0 0}'
-    +'#reconfirm-host .rc-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:11px}'
-    +'#reconfirm-host .rc-mid{flex:1;text-align:center;min-width:150px}'
+    /* §rcHd2 · แผ่นลอยแบบ .dv-hd ของ Dashboard · ไล่เฉด เงา เส้นไฮไลต์บน
+       ใส่ที่ .rc-top ไม่ใช่ .rc-chrome · .rc-chrome ต้องทึบไว้กันแถวขาวไหลทะลุ */
+    +'#reconfirm-host .rc-top{position:relative;display:flex;align-items:center;gap:11px;'
+      +'flex-wrap:wrap;margin-bottom:11px;padding:7px 13px;border-radius:14px;'
+      +'background:linear-gradient(160deg, rgba(255,255,255,.10), rgba(255,255,255,.035));'
+      +'box-shadow:0 8px 26px rgba(2,10,30,.30), inset 0 1px 0 rgba(255,255,255,.18)}'
+    /* §rcHd2 · แถบวันที่แบบเดียวกับ Dashboard/Boat Operation
+       ปุ่ม ‹ › ตรึงขนาด · เลขวันตรึง 34px กันปุ่มขยับตอนเปลี่ยนจาก 9 เป็น 10
+       ชื่อวัน/เดือนตรึง 108px · SEPTEMBER ยาวสุดที่ 105px */
+    +'#reconfirm-host .rc-arw{width:27px;height:27px;flex:none;border:1px solid rgba(255,255,255,.26);'
+      +'background:rgba(255,255,255,.10);border-radius:9px;display:flex;align-items:center;'
+      +'justify-content:center;color:#C9D6EC;font-size:14px;line-height:1}'
+    +'#reconfirm-host .rc-arw:hover{background:rgba(255,255,255,.20)}'
+    +'#reconfirm-host .rc-dnum{font-size:30px;font-weight:800;letter-spacing:-1px;line-height:1;'
+      +'color:#fff;font-variant-numeric:tabular-nums;display:inline-block;min-width:34px;text-align:center}'
+    +'#reconfirm-host .rc-dgrp{display:inline-block;min-width:108px}'
+    +'#reconfirm-host .rc-dwk{display:block;font-size:14px;font-weight:800;line-height:1.05;color:#fff}'
+    /* ปฏิทินยังอยู่ · input ใสทับคำว่าเดือน · กดที่ SEPTEMBER 2026 ก็เลือกวันได้ */
+    +'#reconfirm-host .rc-dmo{position:relative;display:block;font-size:9px;font-weight:800;'
+      +'letter-spacing:.13em;color:#A8BAD8;text-transform:uppercase;cursor:pointer}'
+    +'#reconfirm-host .rc-dmo input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}'
+    +'#reconfirm-host .rc-today{background:#fff;color:#16265C;border:none;border-radius:999px;'
+      +'padding:5px 13px;font-size:11px;font-weight:700;flex:none;'
+      +'box-shadow:0 2px 10px rgba(2,10,30,.30)}'
+    /* §rcHd2 · ตรงกลางจริง · ของเดิม .rc-mid{flex:1;text-align:center}
+       คือกลางของช่องที่เหลือ · ก้อนซ้าย 290px ก้อนขวา 430px เบ้ซ้าย ~70px
+       บังคับสองข้างให้กว้างเท่ากันด้วย flex:1 1 0 กลางจึงตรงเอง
+       ไม่ใส่ min-width:0 · สองข้างจะได้หดต่ำกว่าเนื้อหาตัวเองไม่ได้
+       จอแคบมากชื่อหน้าเบ้ได้ แต่ไม่มีวันทับชิป */
+    +'#reconfirm-host .rc-dbar{flex:1 1 0;display:flex;align-items:center;gap:11px}'
+    +'#reconfirm-host .rc-mid{flex:none;text-align:center;white-space:nowrap}'
+    +'#reconfirm-host .rc-chips{flex:1 1 0;display:flex;align-items:center;gap:7px;'
+      +'flex-wrap:wrap;justify-content:flex-end}'
+    +'@media (max-width:1000px){#reconfirm-host .rc-mid{display:none}}'
     +'#reconfirm-host .rc-brand{display:block;font-size:9px;font-weight:700;letter-spacing:.34em;'
       +'color:#8E97C4;margin-bottom:2px;white-space:nowrap}'
     +'#reconfirm-host .rc-page{display:block;font-size:16px;font-weight:800;letter-spacing:.30em;'
@@ -6143,17 +6175,35 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
      laDateBar ไม่แตะ เป็นเม็ดขาวที่วางบนพื้นน้ำเงินได้อยู่แล้ว
      และเป็นตัวกลางที่อีกหลายหน้าใช้ ถ้าแก้จะกระทบทั้งหมด */
   var _nSent=sentAgents, _nAg=agentKeys.length, _nLeft=_nAg-_nSent;
+  /* §rcHd2 · แถบวันที่ของหน้านี้เอง · laDateBar ไม่แตะ เป็นตัวกลางที่หน้าอื่นใช้อยู่
+     ชื่อวัน/เดือนอ่านจาก toLocaleDateString ไม่พึ่งตารางชื่อของหน้า Dashboard */
+  var _dObj; try{ _dObj=new Date(date+'T12:00:00'); if(isNaN(_dObj)) _dObj=new Date(); }
+             catch(_e){ _dObj=new Date(); }
+  var _tdyS=(typeof TODAY_STR!=='undefined')?TODAY_STR:(new Date().toISOString().slice(0,10));
+  var _isTdy=(date===_tdyS);
+  var _dWk=_dObj.toLocaleDateString('en-GB',{weekday:'long'});
+  var _dMo=_dObj.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
   out+='<div class="rc-chrome">'
     +'<div class="rc-top">'
-      +laDateBar(date,'rcDateShift','rcToday','','rcSetDate')
+      +'<span class="rc-dbar">'
+      +'<button class="rc-arw" onclick="rcDateShift(-1)" title="วันก่อนหน้า">&lsaquo;</button>'
+      +'<span class="rc-dnum">'+_dObj.getDate()+'</span>'
+      +'<span class="rc-dgrp"><span class="rc-dwk">'+_dWk+'</span>'
+        +'<span class="rc-dmo" title="เลือกวันจากปฏิทิน">'+_dMo
+          +'<input type="date" value="'+date+'" onchange="rcSetDate(this.value)"></span></span>'
+      +'<button class="rc-arw" onclick="rcDateShift(1)" title="วันถัดไป">&rsaquo;</button>'
+      +(_isTdy?'':'<button class="rc-today" onclick="rcToday()">TODAY</button>')
+      +'</span>'
       +'<span class="rc-mid"><span class="rc-brand">LOVE ANDAMAN</span>'
         +'<span class="rc-page">RE-CONFIRM</span></span>'
+      +'<span class="rc-chips">'
       +'<span class="rc-chip">เอเย่นต์<b>'+_nAg+'</b></span>'
       +'<span class="rc-chip">ทริป<b>'+Object.keys(byRoute).length+'</b></span>'
       +'<span class="rc-chip">pax<b>'+totPax+'</b></span>'
       +(_nAg?('<span class="rc-chip g">'+TI_CHECK+' ส่งแล้ว<b>'+_nSent+'/'+_nAg+'</b></span>'):'')
       /* ตัวที่ต้องลงมือทำจริงคือตัวที่ยังไม่ได้ส่ง ไม่ใช่ตัวที่ส่งไปแล้ว */
       +(_nLeft>0?('<span class="rc-chip r">&#9888; ยังไม่ส่ง<b>'+_nLeft+'</b></span>'):'')
+      +'</span>'
     +'</div>'
     +'<div class="rc-sub">'
       +'<span>ชื่อเอเย่นต์ = สีประจำเจ้า · เมื่อส่งแล้ว:</span>'
