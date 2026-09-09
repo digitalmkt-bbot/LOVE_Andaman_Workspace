@@ -6434,6 +6434,14 @@ function bop2RenderShell(){
   const periodLbl = _bop2.viewMode === 'week'
     ? `${f.getDate()} ${MON[f.getMonth()]} – ${l.getDate()} ${MON[l.getMonth()]} ${f.getFullYear()}`
     : `${MON[f.getMonth()]} ${f.getFullYear()}`;
+  /* §bopMid · ป้ายช่วงเวลาของตัวตาราง · แถบบนสุดอยู่ห่างจากตาราง 300px
+     แคปเฉพาะตารางส่งให้คนอื่นแล้วเดือนไม่ติดไปด้วย
+     โหมดเดือนใช้ชื่อเดือนเต็ม อ่านทีเดียวจบ ไม่ต้องแปล Sep เอง */
+  const MONFULL = ['January','February','March','April','May','June',
+                   'July','August','September','October','November','December'];
+  const gridPeriodLbl = _bop2.viewMode === 'week'
+    ? periodLbl
+    : `${MONFULL[f.getMonth()]} ${f.getFullYear()}`;
   const isMonth = _bop2.viewMode === 'month';
   /* §bop3col · ตารางอยู่คอลัมน์กลางที่แคบลงกว่าเดิม · บีบให้ 31 วันพอดีจอ */
   const labelCol = isMonth ? 146 : 200;
@@ -6492,7 +6500,14 @@ function bop2RenderShell(){
       #view-operation .bop2-top-w{line-height:1.15;display:inline-block}
       #view-operation .bop2-top-w b{display:block;font-size:13px;font-weight:700;color:#fff}
       #view-operation .bop2-top-w i{display:block;font-size:8.5px;font-weight:700;letter-spacing:.14em;color:#9AA2C8;text-transform:uppercase;font-style:normal}
-      #view-operation .bop2-top-brand{flex:1;text-align:center;min-width:150px}
+      /* §bopMid · กลางของแถบจริง · flex:1 เดิมคือกลางของช่องที่เหลือ
+         ก้อนซ้าย ~350px ก้อนขวา ~470px จึงเบ้ซ้าย ~60px
+         ครอบสองข้างแล้วให้กว้างเท่ากัน กลางจึงตรงเอง ไม่ต้องใช้ absolute
+         (absolute วัดแล้วชิปทับ wordmark ตั้งแต่ราว 1330px ลงมา) */
+      #view-operation .bop2-dbar{flex:1 1 0;display:flex;align-items:center;gap:9px}
+      #view-operation .bop2-chips{flex:1 1 0;display:flex;align-items:center;gap:9px;
+        flex-wrap:wrap;justify-content:flex-end}
+      #view-operation .bop2-top-brand{flex:none;text-align:center;white-space:nowrap}
       #view-operation .bop2-top-brand i{display:block;font-size:9px;font-weight:700;letter-spacing:.34em;
         color:#8E97C4;font-style:normal;margin-bottom:2px;white-space:nowrap}
       #view-operation .bop2-top-brand b{display:block;font-size:16px;font-weight:800;letter-spacing:.30em;
@@ -6590,6 +6605,7 @@ function bop2RenderShell(){
     </style>
     <!-- §bopHdr · แถบบนตาม mockup · วันที่ซ้าย wordmark กลาง ชิปสรุปขวา -->
     <div class="bop2-top">
+      <span class="bop2-dbar">
       <button class="bo-btn icon" onclick="bop2ShiftWeek(-7)" title="${isMonth?'เดือนก่อนหน้า':'สัปดาห์ก่อนหน้า'}">&lsaquo;</button>
       <span class="bop2-top-d">${(new Date(_selDate)).getDate()}</span>
       <span class="bop2-top-w">
@@ -6598,17 +6614,20 @@ function bop2RenderShell(){
       </span>
       <button class="bo-btn icon" onclick="bop2ShiftWeek(7)" title="${isMonth?'เดือนถัดไป':'สัปดาห์ถัดไป'}">&rsaquo;</button>
       <button class="bo-btn primary" onclick="bop2GoToday()" style="margin-left:2px">Today</button>
+      </span>
 
       <!-- §rcSkin · ช่องกลาง = "คุณอยู่หน้าไหน" · แบรนด์เป็นตัวเล็กคร่อมบน
            ต้องเปลี่ยนพร้อมหน้า Re-confirm ไม่งั้นสองหน้าใช้กติกาคนละอย่าง -->
       <span class="bop2-top-brand"><i>LOVE ANDAMAN</i><b>BOAT OPERATION</b></span>
 
+      <span class="bop2-chips">
       <span class="bop2-chip">${isMonth?'ทริปเดือนนี้':'ทริปสัปดาห์นี้'}<b>${totalSlots}</b></span>
       <span class="bop2-chip g">เรือออกงาน<b>${deployedBoats.size}/${BOATS.filter(b=>!b.retired).length}</b></span>
       <span class="bop2-chip">pax<b>${totalPax}</b></span>
       ${needsBoats.length
         ? `<span class="bop2-chip r" onclick="bop2ShowNeedsList()" style="cursor:pointer">&#9888; ยังไม่มีเรือ<b>${needsBoats.length}</b> &rsaquo;</span>`
         : `<span class="bop2-chip g">&#10003; มีเรือครบ</span>`}
+      </span>
     </div>
 
     <!-- §bop3col · Main 3-col layout · ซ้ายสถิติ กลางตาราง ขวากองเรือ -->
@@ -6684,6 +6703,11 @@ function bop2RenderShell(){
       <!-- §bopMock · หัวการ์ด เหมือนทุกการ์ดในหน้า Dashboard -->
       <div style="display:flex;align-items:center;gap:8px;padding:11px 0 9px">
         <span style="font-size:13.5px;font-weight:800;color:#12518F;letter-spacing:-.01em">ตารางจัดเรือ</span>
+        <!-- §bopMid · ช่วงเวลาที่ตารางนี้แสดงอยู่ · ของเดิมไม่มีเลย
+             คอลัมน์เป็น T W T F กับเลข 1-30 ไม่มีชื่อเดือนสักตัว -->
+        <span style="font-size:12px;font-weight:800;color:#0F6E56;letter-spacing:.06em;
+          background:#E4F2EB;padding:3px 10px;border-radius:8px;text-transform:uppercase;white-space:nowrap"
+          >${escapeHTML(gridPeriodLbl)}</span>
         <span style="flex:1"></span>
         <span style="font-size:9.5px;font-weight:800;padding:3px 9px;border-radius:8px;background:#F2EFEA;color:#9B9088">pax ที่จองแล้ว · สีตาม % ที่ขายได้</span>
       </div>

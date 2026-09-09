@@ -5801,6 +5801,14 @@ function laDateBar(ds, shiftFn, todayFn, dateClickFn, setFn){
     +'</div>';
 }
 function rcSetView(v){ _rcView=v; renderReconfirm(); }
+/* §rcBop · จำว่าพับแถบคำอธิบายไว้หรือเปล่า
+   คีย์แยกแบบเดียวกับ sb_collapsed / la_pogrp · ไม่ได้อยู่ใน loveandaman_v2
+   จึงไม่ไปยุ่งกับตัว sync · เป็นค่าของเครื่องนี้เครื่องเดียว */
+function _rcLegendOn(){ try{ return localStorage.getItem('la_rclegend')!=='0'; }catch(e){ return true; } }
+function rcLegendToggle(){
+  try{ localStorage.setItem('la_rclegend', _rcLegendOn()?'0':'1'); }catch(e){}
+  renderReconfirm();
+}
 function _rcAgentKey(bk){ return bk.agentId || ('b2c:'+(bk.b2cChannel||'direct')); }
 /* §rcSplit · "ส่งใบให้เอเย่นต์" กับ "ผลติดต่อลูกค้ารายคน" คนละเรื่องกัน
    เดิมใช้ status==='done' ตัวเดียวแทนทั้งสองอย่าง หัวการ์ดจึงนับผิดเรื่อง
@@ -6097,10 +6105,11 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
   /* §rcSkin · พื้นน้ำเงินกับการ์ดขาว ค่าเดียวกับหน้า Dashboard
      ตารางข้างในไม่แตะ · เปลี่ยนแค่เปลือกกับการตรึง */
   var out='<style id="rc-skin">'
-    +'#view-reconfirm{background:'
-      +'radial-gradient(1100px 460px at 16% -10%, rgba(52,72,150,.55), transparent 62%),'
-      +'radial-gradient(880px 400px at 92% 0%, rgba(38,56,124,.5), transparent 58%),'
-      +'#16265C !important}'
+    /* §rcBop · พื้นหลังและขอบชุดเดียวกับ #view-operation
+       ของเดิมไล่เฉดสองก้อน และไม่มีขอบด้านข้าง การ์ดจึงชนขอบจอ */
+    +'#view-reconfirm{background:#16265C !important;padding:18px;'
+      +'font-family:\'DM Sans\',sans-serif;color:#1A2A33;min-height:100%}'
+    +'@media (max-width:820px){#view-reconfirm{padding:12px 10px}}'
     /* .rc-card เดิม overflow:hidden ซึ่งทำให้เป็น scroll container
        sticky ข้างในจะไม่ทำงานเลย · เก็บมุมโค้งที่ลูกแทน */
     +'#reconfirm-host .rc-card{background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:12px;'
@@ -6109,63 +6118,64 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
     +'#reconfirm-host table{border-collapse:collapse;width:100%}'
     +'#reconfirm-host button{font-family:inherit;cursor:pointer}'
     /* แถบบน + แถบคำอธิบาย · ตรึงใต้ topbar ของแอป */
+    /* พื้นทึบต้องคลุมขอบบน 18px ของหน้าด้วย
+       ไม่งั้นตอนเลื่อน แถวขาวโผล่ในช่องว่างเหนือแถบที่ตรึงไว้ */
     +'#reconfirm-host .rc-chrome{position:sticky;top:var(--rc-top,52px);z-index:40;'
-      +'background:#16265C;padding:10px 0 2px;margin:-10px 0 0}'
-    /* §rcHd2 · แผ่นลอยแบบ .dv-hd ของ Dashboard · ไล่เฉด เงา เส้นไฮไลต์บน
-       ใส่ที่ .rc-top ไม่ใช่ .rc-chrome · .rc-chrome ต้องทึบไว้กันแถวขาวไหลทะลุ */
-    +'#reconfirm-host .rc-top{position:relative;display:flex;align-items:center;gap:11px;'
-      +'flex-wrap:wrap;margin-bottom:11px;padding:7px 13px;border-radius:14px;'
-      +'background:linear-gradient(160deg, rgba(255,255,255,.10), rgba(255,255,255,.035));'
-      +'box-shadow:0 8px 26px rgba(2,10,30,.30), inset 0 1px 0 rgba(255,255,255,.18)}'
-    /* §rcHd2 · แถบวันที่แบบเดียวกับ Dashboard/Boat Operation
-       ปุ่ม ‹ › ตรึงขนาด · เลขวันตรึง 34px กันปุ่มขยับตอนเปลี่ยนจาก 9 เป็น 10
-       ชื่อวัน/เดือนตรึง 108px · SEPTEMBER ยาวสุดที่ 105px */
-    +'#reconfirm-host .rc-arw{width:27px;height:27px;flex:none;border:1px solid rgba(255,255,255,.26);'
-      +'background:rgba(255,255,255,.10);border-radius:9px;display:flex;align-items:center;'
-      +'justify-content:center;color:#C9D6EC;font-size:14px;line-height:1}'
-    +'#reconfirm-host .rc-arw:hover{background:rgba(255,255,255,.20)}'
-    /* §hdTok · DM Mono เหมือน .dv-dnum · ก่อนหน้านี้ตกไป เลขจึงคนละหน้า */
-    +'#reconfirm-host .rc-dnum{font-size:30px;font-weight:800;letter-spacing:-1px;line-height:1;'
-      +'color:#fff;font-family:\'DM Mono\',ui-monospace,monospace;'
-      +'display:inline-block;min-width:34px;text-align:center}'
-    +'#reconfirm-host .rc-dgrp{display:inline-block;min-width:108px}'
-    +'#reconfirm-host .rc-dwk{display:block;font-size:14px;font-weight:800;line-height:1.05;color:#fff}'
-    /* ปฏิทินยังอยู่ · input ใสทับคำว่าเดือน · กดที่ SEPTEMBER 2026 ก็เลือกวันได้ */
-    +'#reconfirm-host .rc-dmo{position:relative;display:block;font-size:9px;font-weight:800;'
-      +'letter-spacing:.13em;color:#A8BAD8;text-transform:uppercase;cursor:pointer}'
+      +'background:#16265C;padding:18px 0 2px;margin:-18px 0 0}'
+    /* §rcBop · แบนเหมือน .bop2-top · ถอดแผ่นแก้วของ Dashboard ออก */
+    +'#reconfirm-host .rc-top{display:flex;align-items:center;gap:9px;'
+      +'flex-wrap:wrap;margin:-4px 0 13px}'
+    /* §rcBop · ปุ่ม ‹ › และ Today ถอดค่าจาก .bo-btn ของ Boat Operation
+       วงกลม 32px พื้นขาว ตัวอักษรเขียว · Today เม็ดเขียวทึบ */
+    +'#reconfirm-host .rc-arw{width:32px;height:32px;flex:none;padding:0;'
+      +'border:1px solid rgba(15,110,86,.18);background:#fff;border-radius:22px;'
+      +'display:inline-flex;align-items:center;justify-content:center;'
+      +'color:#0F6E56;font-size:13px;font-weight:600;line-height:1;transition:all .15s}'
+    +'#reconfirm-host .rc-arw:hover{background:#DDF0E5;border-color:#0F6E56}'
+    +'#reconfirm-host .rc-today{padding:7px 14px;font-size:11px;font-weight:600;'
+      +'background:#0F6E56;color:#fff;border:1px solid #0F6E56;border-radius:22px;'
+      +'flex:none;margin-left:2px;transition:all .15s}'
+    +'#reconfirm-host .rc-today:hover{background:#0B5946}'
+    /* §rcBop · เลขวัน/ชื่อวัน/เดือน ค่าเดียวกับ .bop2-top-d / -w */
+    +'#reconfirm-host .rc-dnum{font-size:24px;font-weight:800;letter-spacing:-.02em;'
+      +'line-height:1;color:#fff;font-variant-numeric:tabular-nums}'
+    +'#reconfirm-host .rc-dgrp{line-height:1.15;display:inline-block}'
+    +'#reconfirm-host .rc-dwk{display:block;font-size:13px;font-weight:700;color:#fff}'
+    /* ปฏิทินยังอยู่ · input ใสทับคำว่าเดือน · กดที่ SEP 2026 ก็เลือกวันได้ */
+    +'#reconfirm-host .rc-dmo{position:relative;display:block;font-size:8.5px;font-weight:700;'
+      +'letter-spacing:.14em;color:#9AA2C8;text-transform:uppercase;cursor:pointer}'
     +'#reconfirm-host .rc-dmo input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}'
-    +'#reconfirm-host .rc-today{background:#fff;color:#16265C;border:none;border-radius:999px;'
-      +'padding:5px 13px;font-size:11px;font-weight:700;flex:none;'
-      +'box-shadow:0 2px 10px rgba(2,10,30,.30)}'
     /* §rcHd2 · ตรงกลางจริง · ของเดิม .rc-mid{flex:1;text-align:center}
        คือกลางของช่องที่เหลือ · ก้อนซ้าย 290px ก้อนขวา 430px เบ้ซ้าย ~70px
        บังคับสองข้างให้กว้างเท่ากันด้วย flex:1 1 0 กลางจึงตรงเอง
        ไม่ใส่ min-width:0 · สองข้างจะได้หดต่ำกว่าเนื้อหาตัวเองไม่ได้
        จอแคบมากชื่อหน้าเบ้ได้ แต่ไม่มีวันทับชิป */
-    +'#reconfirm-host .rc-dbar{flex:1 1 0;display:flex;align-items:center;gap:11px}'
+    +'#reconfirm-host .rc-dbar{flex:1 1 0;display:flex;align-items:center;gap:9px}'
     +'#reconfirm-host .rc-mid{flex:none;text-align:center;white-space:nowrap}'
-    +'#reconfirm-host .rc-chips{flex:1 1 0;display:flex;align-items:center;gap:7px;'
+    +'#reconfirm-host .rc-chips{flex:1 1 0;display:flex;align-items:center;gap:9px;'
       +'flex-wrap:wrap;justify-content:flex-end}'
     +'@media (max-width:1000px){#reconfirm-host .rc-mid{display:none}}'
     +'#reconfirm-host .rc-brand{display:block;font-size:9px;font-weight:700;letter-spacing:.34em;'
       +'color:#8E97C4;margin-bottom:2px;white-space:nowrap}'
     +'#reconfirm-host .rc-page{display:block;font-size:16px;font-weight:800;letter-spacing:.30em;'
       +'color:#fff;white-space:nowrap}'
-    /* §hdTok · ค่าเดียวกับ .dv-chip ของ Dashboard ทุกตัว
-       มุม 999px · น้ำหนัก 600 · สี #D6E2F5 · ขอบ .20 · padding 4/11 */
-    +'#reconfirm-host .rc-chip{padding:4px 11px;border-radius:999px;display:inline-flex;'
-      +'align-items:center;gap:5px;font-size:11px;font-weight:600;background:rgba(255,255,255,.10);'
-      +'color:#D6E2F5;border:1px solid rgba(255,255,255,.20);white-space:nowrap}'
-    +'#reconfirm-host .rc-chip b{font-family:\'DM Mono\',ui-monospace,monospace;'
-      +'font-weight:800;color:#fff;font-size:12.5px}'
+    /* §rcBop · ค่าเดียวกับ .bop2-chip ของ Boat Operation ทุกตัว */
+    +'#reconfirm-host .rc-chip{height:26px;padding:0 12px;border-radius:13px;display:inline-flex;'
+      +'align-items:center;gap:5px;font-size:11px;font-weight:700;background:rgba(255,255,255,.10);'
+      +'color:#E8EBF7;border:1px solid rgba(255,255,255,.10);white-space:nowrap}'
+    +'#reconfirm-host .rc-chip b{font-weight:800}'
     +'#reconfirm-host .rc-chip.g{background:#D8F4E8;color:#0C6B47;border-color:transparent}'
     +'#reconfirm-host .rc-chip.r{background:#FBE0DD;color:#A8362B;border-color:transparent}'
-    /* เลขในชิปของ Dashboard เป็นสีขาว · บนพื้นเขียว/ชมพูอ่อนจะอ่านไม่ออก
-       ชิปสองตัวนี้จึงให้เลขใช้สีของชิปตัวเอง */
-    +'#reconfirm-host .rc-chip.g b,#reconfirm-host .rc-chip.r b{color:inherit}'
     +'#reconfirm-host .rc-sub{display:flex;gap:12px;flex-wrap:wrap;align-items:center;'
       +'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.09);border-radius:12px;'
       +'padding:8px 13px;margin-bottom:13px;font-size:11.5px;color:#B9C0DC}'
+    /* §rcBop · แถวปุ่มตอนพับแถบคำอธิบายแล้ว · By agent / By trip ใช้บ่อย
+       ซ่อนไปด้วยไม่ได้ ย้ายขึ้นมาอยู่แถวนี้แทน */
+    +'#reconfirm-host .rc-subx{display:flex;gap:8px;align-items:center;justify-content:flex-end;'
+      +'margin-bottom:13px}'
+    +'#reconfirm-host .rc-eye{font-size:11px;padding:5px 11px;border-radius:9px;font-weight:700;'
+      +'border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:#9AA2C8}'
+    +'#reconfirm-host .rc-eye:hover{background:rgba(255,255,255,.13);color:#D8DCEE}'
     +'#reconfirm-host .rc-tab{font-size:12px;padding:6px 14px;border-radius:9px;font-weight:700;'
       +'border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.08);color:#D8DCEE}'
     +'#reconfirm-host .rc-tab.on{background:#fff;color:#16265C;border-color:transparent}'
@@ -6190,7 +6200,8 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
   var _tdyS=(typeof TODAY_STR!=='undefined')?TODAY_STR:(new Date().toISOString().slice(0,10));
   var _isTdy=(date===_tdyS);
   var _dWk=_dObj.toLocaleDateString('en-GB',{weekday:'long'});
-  var _dMo=_dObj.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+  /* §rcBop · ย่อชื่อเดือนแบบ Boat Operation · SEP 2026 ไม่ใช่ SEPTEMBER 2026 */
+  var _dMo=_dObj.toLocaleDateString('en-GB',{month:'short',year:'numeric'});
   out+='<div class="rc-chrome">'
     +'<div class="rc-top">'
       +'<span class="rc-dbar">'
@@ -6200,7 +6211,8 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
         +'<span class="rc-dmo" title="เลือกวันจากปฏิทิน">'+_dMo
           +'<input type="date" value="'+date+'" onchange="rcSetDate(this.value)"></span></span>'
       +'<button class="rc-arw" onclick="rcDateShift(1)" title="วันถัดไป">&rsaquo;</button>'
-      +(_isTdy?'':'<button class="rc-today" onclick="rcToday()">TODAY</button>')
+      /* §rcBop · Boat Operation โชว์ปุ่มนี้ตลอด ไม่หายตอนอยู่วันนี้ · ทำตาม */
+      +'<button class="rc-today" onclick="rcToday()">Today</button>'
       +'</span>'
       +'<span class="rc-mid"><span class="rc-brand">LOVE ANDAMAN</span>'
         +'<span class="rc-page">RE-CONFIRM</span></span>'
@@ -6213,16 +6225,24 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
       +(_nLeft>0?('<span class="rc-chip r">&#9888; ยังไม่ส่ง<b>'+_nLeft+'</b></span>'):'')
       +'</span>'
     +'</div>'
-    +'<div class="rc-sub">'
+    +(_rcLegendOn()?('<div class="rc-sub">'
       +'<span>ชื่อเอเย่นต์ = สีประจำเจ้า · เมื่อส่งแล้ว:</span>'
       +'<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:18px;height:14px;border-radius:4px;background:#fff;box-shadow:0 0 0 2px #9A6A00;display:inline-block"></span> invoice / paid</span>'
       +'<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:18px;height:14px;border-radius:4px;background:#fff;box-shadow:0 0 0 2px #5B4FC4;display:inline-block"></span> unpaid</span>'
       +'<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:18px;height:14px;border-radius:4px;background:#C9CBD4;display:inline-block"></span> not sent</span>'
       +'<span style="margin-left:auto;display:inline-flex;gap:8px">'
+        +'<button class="rc-eye" onclick="rcLegendToggle()" title="ซ่อนแถบคำอธิบาย">&#9650; ซ่อน</button>'
         +'<button class="rc-cbtn" onclick="rcColorPanel(event)" title="ตั้งสีของแต่ละสถานะ re-confirm">&#127912; สีสถานะ</button>'
         +'<button class="rc-tab'+(_rcView==='agent'?' on':'')+'" onclick="rcSetView(\'agent\')">By agent</button>'
         +'<button class="rc-tab'+(_rcView==='trip'?' on':'')+'" onclick="rcSetView(\'trip\')">By trip</button></span>'
-    +'</div>'
+    +'</div>')
+    /* พับแล้วเหลือแถวปุ่ม · ปุ่มมุมมองกับสีสถานะยังต้องกดถึงได้ */
+    :('<div class="rc-subx">'
+      +'<button class="rc-eye" onclick="rcLegendToggle()" title="แสดงคำอธิบายสี">&#9660; คำอธิบายสี</button>'
+      +'<button class="rc-cbtn" onclick="rcColorPanel(event)" title="ตั้งสีของแต่ละสถานะ re-confirm">&#127912; สีสถานะ</button>'
+      +'<button class="rc-tab'+(_rcView==='agent'?' on':'')+'" onclick="rcSetView(\'agent\')">By agent</button>'
+      +'<button class="rc-tab'+(_rcView==='trip'?' on':'')+'" onclick="rcSetView(\'trip\')">By trip</button>'
+    +'</div>'))
   +'</div>';
   if(!rows.length){ out+='<div class="rc-empty">No bookings on this day</div></div>';
     host.innerHTML=out; rcSyncSticky(host); return; }
