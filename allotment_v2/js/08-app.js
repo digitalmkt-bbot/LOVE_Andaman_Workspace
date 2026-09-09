@@ -6094,22 +6094,80 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
         +'style="width:15px;height:15px;cursor:pointer;accent-color:#1683C7"></td>';
     }
     var ex=(c.k==='special'||c.k==='addon')?';white-space:normal':(c.k==='status'?'':';overflow:hidden;text-overflow:ellipsis'); if(c.k==='ad'||c.k==='chd'||c.k==='inf'||c.k==='foc'||c.k==='room') ex+=';text-align:center'; return '<td style="'+TD+ex+'">'+_rcCellVal(c.k,d)+'</td>'; }).join('')+'</tr>'; }
-  var out='<style id="rc-skin">#reconfirm-host .rc-card{background:#fff;border:1px solid #E8E6DF;border-radius:12px;margin-bottom:12px;overflow:hidden}#reconfirm-host table{border-collapse:collapse;width:100%}#reconfirm-host .rc-scroll{overflow-x:auto}#reconfirm-host button{font-family:inherit;cursor:pointer}#reconfirm-host .rc-tab{font-size:12.5px;padding:6px 14px;border-radius:8px;border:1px solid #E1DED6;background:#fff;color:#5F5E5A;cursor:pointer;font-weight:600}#reconfirm-host .rc-tab.on{background:#1683C7;color:#fff;border-color:#1683C7}</style>';
+  /* §rcSkin · พื้นน้ำเงินกับการ์ดขาว ค่าเดียวกับหน้า Dashboard
+     ตารางข้างในไม่แตะ · เปลี่ยนแค่เปลือกกับการตรึง */
+  var out='<style id="rc-skin">'
+    +'#view-reconfirm{background:'
+      +'radial-gradient(1100px 460px at 16% -10%, rgba(52,72,150,.55), transparent 62%),'
+      +'radial-gradient(880px 400px at 92% 0%, rgba(38,56,124,.5), transparent 58%),'
+      +'#16265C !important}'
+    /* .rc-card เดิม overflow:hidden ซึ่งทำให้เป็น scroll container
+       sticky ข้างในจะไม่ทำงานเลย · เก็บมุมโค้งที่ลูกแทน */
+    +'#reconfirm-host .rc-card{background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:12px;'
+      +'margin-bottom:12px;overflow:visible;box-shadow:0 6px 22px rgba(2,10,30,.10)}'
+    +'#reconfirm-host .rc-scroll{overflow-x:auto;border-radius:0 0 12px 12px}'
+    +'#reconfirm-host table{border-collapse:collapse;width:100%}'
+    +'#reconfirm-host button{font-family:inherit;cursor:pointer}'
+    /* แถบบน + แถบคำอธิบาย · ตรึงใต้ topbar ของแอป */
+    +'#reconfirm-host .rc-chrome{position:sticky;top:var(--rc-top,52px);z-index:40;'
+      +'background:#16265C;padding:10px 0 2px;margin:-10px 0 0}'
+    +'#reconfirm-host .rc-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:11px}'
+    +'#reconfirm-host .rc-mid{flex:1;text-align:center;min-width:150px}'
+    +'#reconfirm-host .rc-brand{display:block;font-size:9px;font-weight:700;letter-spacing:.34em;'
+      +'color:#8E97C4;margin-bottom:2px;white-space:nowrap}'
+    +'#reconfirm-host .rc-page{display:block;font-size:16px;font-weight:800;letter-spacing:.30em;'
+      +'color:#fff;white-space:nowrap}'
+    +'#reconfirm-host .rc-chip{height:26px;padding:0 12px;border-radius:13px;display:inline-flex;'
+      +'align-items:center;gap:5px;font-size:11px;font-weight:700;background:rgba(255,255,255,.10);'
+      +'color:#E8EBF7;border:1px solid rgba(255,255,255,.10)}'
+    +'#reconfirm-host .rc-chip b{font-weight:800}'
+    +'#reconfirm-host .rc-chip.g{background:#D8F4E8;color:#0C6B47;border-color:transparent}'
+    +'#reconfirm-host .rc-chip.r{background:#FBE0DD;color:#A8362B;border-color:transparent}'
+    +'#reconfirm-host .rc-sub{display:flex;gap:12px;flex-wrap:wrap;align-items:center;'
+      +'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.09);border-radius:12px;'
+      +'padding:8px 13px;margin-bottom:13px;font-size:11.5px;color:#B9C0DC}'
+    +'#reconfirm-host .rc-tab{font-size:12px;padding:6px 14px;border-radius:9px;font-weight:700;'
+      +'border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.08);color:#D8DCEE}'
+    +'#reconfirm-host .rc-tab.on{background:#fff;color:#16265C;border-color:transparent}'
+    +'#reconfirm-host .rc-cbtn{font-size:12px;padding:6px 12px;border-radius:9px;font-weight:700;'
+      +'border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.08);color:#D8DCEE}'
+    /* หัวการ์ดเอเย่นต์ · ตรึงใต้แถบบนอีกชั้น
+       ชื่อเจ้า ยอด และปุ่ม Sheet/Send อยู่ในจอตลอดที่ยังอ่านเจ้านั้นอยู่ */
+    +'#reconfirm-host .rc-agh{position:sticky;top:var(--rc-hd,140px);z-index:20;'
+      +'background:#fff;border-radius:12px 12px 0 0}'
+    +'#reconfirm-host .rc-empty{background:#fff;border-radius:12px;padding:48px;text-align:center;'
+      +'color:#8A8880;font-size:13px;box-shadow:0 6px 22px rgba(2,10,30,.10)}'
+    +'</style>';
   out+='<div style="max-width:100%;margin:0;font-family:\'DM Sans\',sans-serif">';
-  out+='<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:2px 2px 12px">'
-    +'<span style="font-size:22px;font-weight:700;color:#1A1A1A">Re-confirm</span>'
-    +laDateBar(date,'rcDateShift','rcToday','','rcSetDate')
-    +'<span style="font-size:12.5px;color:#5F5E5A">'+agentKeys.length+' agents · '+Object.keys(byRoute).length+' trips · <b>'+totPax+' pax</b></span>'
-    +'<span style="margin-left:auto;font-size:12.5px;color:'+(sentAgents===agentKeys.length&&agentKeys.length?'#0F6E56':'#5F5E5A')+'">Sent '+sentAgents+' / '+agentKeys.length+' agents</span>'
-    +'</div>';
-  out+='<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;background:#F7F6F2;border-radius:9px;padding:8px 12px;margin-bottom:14px;font-size:12px;color:#5F5E5A">'
-    +'<span>Agent name = agency colour · when sent:</span>'
-    +'<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:18px;height:14px;border-radius:4px;background:#D9D6CE;box-shadow:0 0 0 2px #9A6A00;display:inline-block"></span> invoice / paid</span>'
-    +'<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:18px;height:14px;border-radius:4px;background:#D9D6CE;box-shadow:0 0 0 2px #5B4FC4;display:inline-block"></span> unpaid</span>'
-    +'<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:18px;height:14px;border-radius:4px;background:#D9D6CE;display:inline-block"></span> not sent</span>'
-    +'<span style="margin-left:auto;display:inline-flex;gap:8px"><button onclick="rcColorPanel(event)" title="ตั้งสีของแต่ละสถานะ re-confirm" style="font-size:12.5px;padding:6px 12px;border-radius:8px;border:1px solid #E1DED6;background:#fff;color:#5F5E5A;cursor:pointer;font-weight:600;font-family:inherit">&#127912; สีสถานะ</button><button class="rc-tab'+(_rcView==='agent'?' on':'')+'" onclick="rcSetView(\'agent\')">By agent</button><button class="rc-tab'+(_rcView==='trip'?' on':'')+'" onclick="rcSetView(\'trip\')">By trip</button></span>'
-    +'</div>';
-  if(!rows.length){ out+='<div style="padding:48px;text-align:center;color:#8A8880;font-size:13px">No bookings on this day</div></div>'; host.innerHTML=out; return; }
+  /* §rcSkin · แถบบนแบบ B · ตรงกลางเป็นแบรนด์ตัวเล็กคร่อมชื่อหน้าตัวใหญ่
+     laDateBar ไม่แตะ เป็นเม็ดขาวที่วางบนพื้นน้ำเงินได้อยู่แล้ว
+     และเป็นตัวกลางที่อีกหลายหน้าใช้ ถ้าแก้จะกระทบทั้งหมด */
+  var _nSent=sentAgents, _nAg=agentKeys.length, _nLeft=_nAg-_nSent;
+  out+='<div class="rc-chrome">'
+    +'<div class="rc-top">'
+      +laDateBar(date,'rcDateShift','rcToday','','rcSetDate')
+      +'<span class="rc-mid"><span class="rc-brand">LOVE ANDAMAN</span>'
+        +'<span class="rc-page">RE-CONFIRM</span></span>'
+      +'<span class="rc-chip">เอเย่นต์<b>'+_nAg+'</b></span>'
+      +'<span class="rc-chip">ทริป<b>'+Object.keys(byRoute).length+'</b></span>'
+      +'<span class="rc-chip">pax<b>'+totPax+'</b></span>'
+      +(_nAg?('<span class="rc-chip g">'+TI_CHECK+' ส่งแล้ว<b>'+_nSent+'/'+_nAg+'</b></span>'):'')
+      /* ตัวที่ต้องลงมือทำจริงคือตัวที่ยังไม่ได้ส่ง ไม่ใช่ตัวที่ส่งไปแล้ว */
+      +(_nLeft>0?('<span class="rc-chip r">&#9888; ยังไม่ส่ง<b>'+_nLeft+'</b></span>'):'')
+    +'</div>'
+    +'<div class="rc-sub">'
+      +'<span>ชื่อเอเย่นต์ = สีประจำเจ้า · เมื่อส่งแล้ว:</span>'
+      +'<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:18px;height:14px;border-radius:4px;background:#fff;box-shadow:0 0 0 2px #9A6A00;display:inline-block"></span> invoice / paid</span>'
+      +'<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:18px;height:14px;border-radius:4px;background:#fff;box-shadow:0 0 0 2px #5B4FC4;display:inline-block"></span> unpaid</span>'
+      +'<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:18px;height:14px;border-radius:4px;background:#C9CBD4;display:inline-block"></span> not sent</span>'
+      +'<span style="margin-left:auto;display:inline-flex;gap:8px">'
+        +'<button class="rc-cbtn" onclick="rcColorPanel(event)" title="ตั้งสีของแต่ละสถานะ re-confirm">&#127912; สีสถานะ</button>'
+        +'<button class="rc-tab'+(_rcView==='agent'?' on':'')+'" onclick="rcSetView(\'agent\')">By agent</button>'
+        +'<button class="rc-tab'+(_rcView==='trip'?' on':'')+'" onclick="rcSetView(\'trip\')">By trip</button></span>'
+    +'</div>'
+  +'</div>';
+  if(!rows.length){ out+='<div class="rc-empty">No bookings on this day</div></div>';
+    host.innerHTML=out; rcSyncSticky(host); return; }
   if(_rcView==='trip'){
     var colsT=_rcCols(true);
     Object.keys(byRoute).forEach(function(rid){ var grp=byRoute[rid].slice();
@@ -6145,7 +6203,8 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
       var btn=allSent?('<button onclick="rcSendAgent(\''+key+'\')" style="border:1px solid #E1DED6;background:#fff;border-radius:8px;padding:5px 12px;font-size:12px;color:#5F5E5A">Resend</button>'
               +' <button onclick="rcUnsendAgent(\''+key+'\')" title="Undo sent status" style="border:1px solid #E9C9C9;background:#fff;border-radius:8px;padding:5px 10px;font-size:12px;color:#A32D2D">Undo</button>')
         :('<button onclick="rcSendAgent(\''+key+'\')" style="border:none;background:#1683C7;color:#fff;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600">Send re-confirm</button>');
-      out+='<div class="rc-card"><div style="padding:11px 13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid #F2F0EA">'
+      /* §rcSkin · rc-agh = หัวการ์ดที่ตรึงไว้ · ปุ่มของเจ้านี้จะอยู่ในจอตลอด */
+      out+='<div class="rc-card"><div class="rc-agh" style="padding:11px 13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid #F2F0EA">'
         +nameChip
         +'<span style="font-size:11px;color:'+payColor+';background:#F7F6F2;padding:2px 8px;border-radius:10px">'+esc(payChip)+'</span>'
         +'<span style="font-size:11.5px;color:#5F5E5A">'+trips+' trips · '+grp.length+' bookings · '+pax+' pax</span>'
@@ -6164,7 +6223,28 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
         +'</tbody></table></div></div>';
     });
   }
-  out+='</div>'; host.innerHTML=out;
+  out+='</div>'; host.innerHTML=out; rcSyncSticky(host);
+}
+/* §rcSkin · ตรึงสองชั้น · ค่า top วัดจากของจริงหลังวาด ไม่ฮาร์ดโค้ด
+   วิธีเดียวกับ ckSyncSticky ของหน้าเช็คอินหน้าท่าที่ใช้อยู่แล้ว
+   ต้องวัดซ้ำ เพราะความสูงแถบบนเปลี่ยนได้หลังฟอนต์โหลดเสร็จหรือตอนย่อจอแล้วชิปตัดบรรทัด */
+function rcSyncSticky(host){
+  if(!host || typeof requestAnimationFrame!=='function') return;
+  var apply=function(){
+    var tb=52;
+    try{ var v=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--topbar'),10);
+         if(!isNaN(v)&&v>=0) tb=v; }catch(_){}
+    var ch=host.querySelector('.rc-chrome');
+    var cH=ch?Math.round(ch.getBoundingClientRect().height):0;
+    /* กันค่าเพี้ยน · แถบบนสูงเกินครึ่งจอแปลว่าวัดผิด ดีกว่าดันการ์ดหล่นหายไปทั้งหน้า */
+    if(cH > Math.max(200,(window.innerHeight||800)*0.45)) cH=0;
+    host.style.setProperty('--rc-top', tb+'px');
+    host.style.setProperty('--rc-hd',  (tb+cH)+'px');
+  };
+  requestAnimationFrame(apply);
+  setTimeout(apply,300); setTimeout(apply,1200);
+  try{ if(document.fonts && document.fonts.ready && document.fonts.ready.then) document.fonts.ready.then(apply); }catch(_){}
+  try{ if(!host._rcRz){ host._rcRz=1; window.addEventListener('resize', function(){ apply(); }); } }catch(_){}
 }
 function renderPickupMap(){ const wrap=document.getElementById('pickupmap-wrap'); if(!wrap)return;
   if(!_pmapAnchor){ _pmapAnchor=_pmYmd(new Date()); }   // default = today (current month) — was max trip date, which jumped to whatever far-future booking existed

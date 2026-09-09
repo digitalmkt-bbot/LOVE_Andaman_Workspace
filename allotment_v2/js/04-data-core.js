@@ -6492,7 +6492,11 @@ function bop2RenderShell(){
       #view-operation .bop2-top-w{line-height:1.15;display:inline-block}
       #view-operation .bop2-top-w b{display:block;font-size:13px;font-weight:700;color:#fff}
       #view-operation .bop2-top-w i{display:block;font-size:8.5px;font-weight:700;letter-spacing:.14em;color:#9AA2C8;text-transform:uppercase;font-style:normal}
-      #view-operation .bop2-top-brand{flex:1;text-align:center;font-size:15px;font-weight:700;letter-spacing:.42em;color:#fff;white-space:nowrap;min-width:120px}
+      #view-operation .bop2-top-brand{flex:1;text-align:center;min-width:150px}
+      #view-operation .bop2-top-brand i{display:block;font-size:9px;font-weight:700;letter-spacing:.34em;
+        color:#8E97C4;font-style:normal;margin-bottom:2px;white-space:nowrap}
+      #view-operation .bop2-top-brand b{display:block;font-size:16px;font-weight:800;letter-spacing:.30em;
+        color:#fff;white-space:nowrap}
       #view-operation .bop2-chip{height:26px;padding:0 12px;border-radius:13px;display:inline-flex;align-items:center;
         font-size:11px;font-weight:700;background:rgba(255,255,255,.10);color:#E8EBF7;border:1px solid rgba(255,255,255,.10)}
       #view-operation .bop2-chip b{font-weight:800;margin-left:5px}
@@ -6595,7 +6599,9 @@ function bop2RenderShell(){
       <button class="bo-btn icon" onclick="bop2ShiftWeek(7)" title="${isMonth?'เดือนถัดไป':'สัปดาห์ถัดไป'}">&rsaquo;</button>
       <button class="bo-btn primary" onclick="bop2GoToday()" style="margin-left:2px">Today</button>
 
-      <span class="bop2-top-brand">LOVE ANDAMAN</span>
+      <!-- §rcSkin · ช่องกลาง = "คุณอยู่หน้าไหน" · แบรนด์เป็นตัวเล็กคร่อมบน
+           ต้องเปลี่ยนพร้อมหน้า Re-confirm ไม่งั้นสองหน้าใช้กติกาคนละอย่าง -->
+      <span class="bop2-top-brand"><i>LOVE ANDAMAN</i><b>BOAT OPERATION</b></span>
 
       <span class="bop2-chip">${isMonth?'ทริปเดือนนี้':'ทริปสัปดาห์นี้'}<b>${totalSlots}</b></span>
       <span class="bop2-chip g">เรือออกงาน<b>${deployedBoats.size}/${BOATS.filter(b=>!b.retired).length}</b></span>
