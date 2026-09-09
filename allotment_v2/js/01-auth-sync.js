@@ -446,11 +446,13 @@
      รอบแรกที่เห็นข้อมูล จำเฉย ๆ ไม่เด้ง
      ไม่งั้นเปิดแอปครั้งแรกจะเด้งว่ามีของใหม่เท่าจำนวนใบ b2c ทั้งกอง */
   var _laB2CSeen=null;
+  var _B2C_PIER={tublamu:'Tub Lamu', panwa:'Visit Panwa', ranong:'Ranong'};
   function _laB2CScan(obj){
     var out=[], arr=obj&&obj.sb_bookings;
     if(!Array.isArray(arr)) return out;
     var first=(_laB2CSeen===null), seen={}, rm={};
-    if(!first && Array.isArray(obj.routes)) obj.routes.forEach(function(r){ if(r&&r.id) rm[r.id]=r.name||r.id; });
+    if(!first && Array.isArray(obj.routes)) obj.routes.forEach(function(r){
+      if(r&&r.id) rm[r.id]={n:(r.name||r.id), p:(_B2C_PIER[r.pier]||r.pier||'')}; });
     for(var i=0;i<arr.length;i++){
       var b=arr[i]; if(!b||!b.id) continue;
       if(String(b.id).indexOf('b2c_')!==0) continue;
@@ -460,14 +462,36 @@
       var t=(b.trips&&b.trips[0])||{}, pax=0;
       (b.trips||[]).forEach(function(tp){ var p=tp.pax||{};
         for(var k in p){ if(/^(ad|chd|inf|foc)(_fr|_th)?$/.test(k)) pax+=(+p[k]||0); } });
-      out.push({ id:b.id, route:(rm[t.routeId]||t.routeId||'-'), date:(t.date||''),
-                 pax:pax, total:(b.priceBreakdown&&b.priceBreakdown.total)||0,
+      var r=rm[t.routeId]||{}, ps=b.paymentSnapshot||{};
+      out.push({ id:b.id, ref:_laB2CRef(b), route:(r.n||t.routeId||'-'), port:(r.p||''),
+                 date:(t.date||''), pax:pax,
+                 total:(b.priceBreakdown&&b.priceBreakdown.total)||0,
+                 lead:(b.leadPax||''), paid:(ps.paidStatus||''),
                  trips:(b.trips||[]).length });
     }
     _laB2CSeen=seen;
     return first?[]:out;
   }
-  function _laB2CRef(id){ return String(id||'').replace(/^b2c_/,''); }
+  /* เลขที่ที่ลูกค้าถือมาคือ voucherRef · id จริงเป็น b2c_BK-001_1
+     ตัดทั้งหัว b2c_ และหาง _1 ที่เป็นลำดับทริป ไม่ใช่ส่วนหนึ่งของเลขที่ */
+  function _laB2CRef(b){
+    if(b&&b.voucherRef) return String(b.voucherRef);
+    return String((b&&b.id)||'').replace(/^b2c_/,'').replace(/_\d+$/,'');
+  }
+  /* ชื่อย่อ · "NALINRAT KUNPHIPHIT" → "Nalinrat K." · แถบท้ายมีที่จำกัด */
+  function _laB2CWho(nm){
+    var p=String(nm||'').trim().split(/\s+/).filter(Boolean);
+    if(!p.length) return '';
+    var f=p[0].charAt(0).toUpperCase()+p[0].slice(1).toLowerCase();
+    return p.length>1 ? (f+' '+p[1].charAt(0).toUpperCase()+'.') : f;
+  }
+  /* สถานะชำระเงิน · ค่าจริงในข้อมูล paid 86 / deposit 16 / unpaid 4 จาก 107 ใบ */
+  function _laB2CPaid(v){
+    if(v==='paid')    return {t:'\u2713 PAID', c:'#409060'};
+    if(v==='deposit') return {t:'มัดจำแล้ว',    c:'#B07500'};
+    if(v==='unpaid')  return {t:'ยังไม่ชำระ',   c:'#BA1824'};
+    return null;
+  }
   function _laFmtDate(s){ if(!s) return '-'; var p=String(s).split('-'); if(p.length<3) return s; var M=['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']; return (+p[2])+' '+(M[+p[1]]||p[1])+' '+p[0]; }
   // Jump to Booking → By-Trip tab for the alerted booking's date
   function _laB2CGoTo(date){ try{ var nav=document.querySelector('.nav-item[data-view="booking"]'); if(nav) nav.click(); if(window._bkV2){ _bkV2.tab='bytrip'; if(date){ _bkV2.filterDate=date; _bkV2.filterRoute=null; window._bkV2T2Cursor=String(date).slice(0,7); } } if(typeof bkV2Render==='function') bkV2Render(); }catch(e){} }
@@ -481,12 +505,82 @@
   function _laB2CStack(){
     var w=document.getElementById('la-savetoast-wrap');
     if(!w){ w=document.createElement('div'); w.id='la-savetoast-wrap';
-      w.style.cssText='position:fixed;top:16px;right:16px;z-index:100001;display:flex;flex-direction:column;gap:10px;pointer-events:none';
+      w.style.cssText='position:fixed;z-index:100001;display:flex;flex-direction:column;gap:10px;pointer-events:none';
       document.body.appendChild(w); }
+    /* §b2cCard · ตำแหน่ง 5 · ขวาบนสุด · ตั้งทุกครั้ง ไม่ใช่แค่ตอนสร้าง
+       เพราะกล่องนี้ใช้ร่วมกับ save toast ใครถึงก่อนก็เป็นคนสร้าง
+       วัดจากหน้าจริง · การ์ดสูง 156px กินช่วง 8-164px
+       แถบหัว Re-confirm อยู่ 22-155px · ทับแค่แถบหัว เลยเข้าการ์ดใบแรก 9px
+       ซึ่งเป็นมุมโค้ง ไม่มีตัวอักษร */
+    w.style.top='8px'; w.style.right='12px'; w.style.left='auto'; w.style.bottom='auto';
     return w;
   }
+  /* สไตล์ของการ์ด · ใส่ครั้งเดียว */
+  function _laB2CCSS(){
+    if(document.getElementById('la-b2c-css')) return;
+    var st=document.createElement('style'); st.id='la-b2c-css';
+    st.textContent=
+     '.la-b2c-alert{pointer-events:auto;width:384px;max-width:calc(100vw - 24px);background:#fff;'
+      +'border-radius:12px;overflow:hidden;box-shadow:0 18px 42px rgba(10,20,40,.32);'
+      +'font-family:"DM Sans",-apple-system,sans-serif}'
+     /* หัวจดหมาย · ค่าทุกตัวถอดจากใบ Booking Confirmation จริง */
+     +'.la-b2c-alert .lh{position:relative;display:flex;align-items:stretch;gap:11px;'
+      +'padding:0 24px 0 0;border-bottom:1.5px solid #EFEBE2}'
+     +'.la-b2c-alert .lh img{height:54px;width:auto;display:block;flex:none}'
+     +'.la-b2c-alert .bn{align-self:center;min-width:0;flex:1}'
+     +'.la-b2c-alert .bn b{display:block;font-size:13px;font-weight:800;color:#020E48;line-height:1.15}'
+     +'.la-b2c-alert .bn i{display:block;font-size:9px;color:#797979;font-style:italic;margin-top:1px}'
+     +'.la-b2c-alert .rt{align-self:center;text-align:right;flex:none}'
+     +'.la-b2c-alert .rt i{display:block;font-style:normal;font-size:8px;font-weight:800;'
+      +'letter-spacing:.11em;color:#111;text-transform:uppercase}'
+     +'.la-b2c-alert .rt b{display:block;font-size:15px;font-weight:800;font-style:italic;'
+      +'color:#BA1824;margin-top:1px;white-space:nowrap}'
+     +'.la-b2c-alert .rt em{display:block;font-size:8.5px;font-style:italic;color:#9A958B;margin-top:1px}'
+     +'.la-b2c-alert .xx{position:absolute;top:6px;right:5px;width:17px;height:17px;display:flex;'
+      +'align-items:center;justify-content:center;color:#C6C0B4;font-size:14px;line-height:1;cursor:pointer}'
+     +'.la-b2c-alert .xx:hover{color:#8A8378}'
+     /* ทริปใบเดียว */
+     +'.la-b2c-alert .tp{padding:10px 14px 0;cursor:pointer}'
+     +'.la-b2c-alert .t1{display:flex;align-items:baseline;gap:9px}'
+     +'.la-b2c-alert .t1 s{text-decoration:none;flex:1;min-width:0;font-size:13px;font-weight:800;'
+      +'color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+     +'.la-b2c-alert .t1 u{text-decoration:none;font-size:12.5px;font-weight:800;color:#2D4479;'
+      +'font-family:"DM Mono",ui-monospace,monospace;white-space:nowrap}'
+     +'.la-b2c-alert .t2{font-size:11px;color:#797979;margin-top:2px;'
+      +'font-family:"DM Mono",ui-monospace,monospace}'
+     +'.la-b2c-alert .t2 b{color:#111;font-weight:500}'
+     /* หลายใบ */
+     +'.la-b2c-alert .rows{padding:2px 14px 0}'
+     +'.la-b2c-alert .rw{display:flex;align-items:baseline;gap:9px;padding:7px 6px;margin:0 -6px;'
+      +'border-top:1px solid #F3EFE6;border-radius:7px;cursor:pointer}'
+     +'.la-b2c-alert .rw:first-child{border-top:0}'
+     +'.la-b2c-alert .rw:hover{background:#F5F8FC}'
+     +'.la-b2c-alert .rw s{text-decoration:none;flex:1;min-width:0;font-size:12.5px;font-weight:700;'
+      +'color:#111;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+     +'.la-b2c-alert .rw em{font-style:normal;font-size:10.5px;color:#8A8378;'
+      +'font-family:"DM Mono",ui-monospace,monospace;white-space:nowrap}'
+     +'.la-b2c-alert .rw u{text-decoration:none;font-size:11.5px;font-weight:500;color:#2D4479;'
+      +'font-family:"DM Mono",ui-monospace,monospace;white-space:nowrap;min-width:56px;text-align:right}'
+     +'.la-b2c-alert .rw n{font-size:8.5px;font-style:italic;font-weight:800;color:#BA1824;'
+      +'white-space:nowrap;min-width:60px;text-align:right;overflow:hidden;text-overflow:ellipsis}'
+     +'.la-b2c-alert .more{padding:7px 0 8px;border-top:1px solid #F3EFE6;font-size:10.5px;'
+      +'color:#A09A8E;font-weight:600}'
+     /* แถบท้าย */
+     +'.la-b2c-alert .ft{display:flex;align-items:center;gap:9px;margin-top:10px;'
+      +'padding:9px 14px 11px;border-top:1px solid #EFEBE2;background:#F1F4F9}'
+     +'.la-b2c-alert .ft i{font-style:normal;font-size:8px;font-weight:800;letter-spacing:.14em;'
+      +'color:#8E9CBB;text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+     +'.la-b2c-alert .ft b{font-size:14px;font-weight:800;color:#2D4479;'
+      +'font-family:"DM Mono",ui-monospace,monospace;white-space:nowrap}'
+     +'.la-b2c-alert .ft .pd{font-size:10.5px;font-weight:800;white-space:nowrap}'
+     +'.la-b2c-alert .ft a{margin-left:auto;font-size:11.5px;font-weight:700;color:#fff;'
+      +'text-decoration:none;background:#02104D;border-radius:7px;padding:6px 12px;'
+      +'white-space:nowrap;cursor:pointer}'
+     +'.la-b2c-alert .ft a:hover{background:#04197A}';
+    document.head.appendChild(st);
+  }
   function _laB2CAlert(list){ if(!list||!list.length) return;
-    var n=list.length, show=list.slice(0,3), rest=n-show.length;
+    var n=list.length, show=list.slice(0,3), rest=n-show.length, one=list[0];
     var tPax=0, tAmt=0, dates=[];
     list.forEach(function(x){ tPax+=(+x.pax||0); tAmt+=(+x.total||0); if(x.date) dates.push(x.date); });
     dates.sort();
@@ -494,57 +588,56 @@
     var _2=function(v){ return (v<10?'0':'')+v; };
     var nw=new Date(), hhmm=_2(nw.getHours())+':'+_2(nw.getMinutes());
     var B=function(v){ return Number(v||0).toLocaleString(); };
-    var SHIP='<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1a2.4 2.4 0 0 1 2 -1a2.4 2.4 0 0 1 2 1a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1a2.4 2.4 0 0 1 2 -1a2.4 2.4 0 0 1 2 1a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1"/><path d="M4 18l-1 -5h18l-2 4"/><path d="M5 13v-6h8l4 6"/><path d="M7 7v-4h-1"/></svg>';
     onReady(function(){
+      _laB2CCSS();
       var wrap=_laB2CStack();
       var d=document.createElement('div'); d.className='la-b2c-alert';
-      /* รูปทรงเดียวกับ save toast · ต่างที่สีขอบซ้าย · อยู่คิวเดียวกันแล้วต้องเป็นภาษาเดียวกัน */
-      d.style.cssText='pointer-events:auto;position:relative;width:352px;max-width:calc(100vw - 32px);'
-        +'background:#fff;border:1px solid rgba(0,0,0,.06);border-left:5px solid #1683C7;border-radius:14px;'
-        +'box-shadow:0 14px 34px rgba(16,40,32,.18);padding:11px 13px 11px;font-family:"DM Sans",sans-serif';
-      /* แจงเป็นบรรทัด · ของเดิมโชว์ใบแรกใบเดียว ที่เหลือยุบเป็นตัวเลข
-         ใบที่คนละวันคนละเส้นทางจึงไม่มีทางรู้ · กดบรรทัดไหนไปวันของใบนั้น */
-      var rows=show.map(function(x,i){
-        return '<div class="la-b2c-row" data-d="'+esc(x.date)+'" title="ไปที่ '+esc(_laFmtDate(x.date))+'"'
-          +' style="cursor:pointer;padding:7px 6px;margin:0 -6px;border-radius:8px'
-          +(i?';border-top:1px solid #F0EEE9':'')+'">'
-          +'<div style="font-size:12.5px;font-weight:700;color:#12241c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.route)+'</div>'
-          +'<div style="display:flex;align-items:baseline;gap:8px;margin-top:2px">'
-            +'<span style="font-size:11.5px;color:#41514b;font-family:\'DM Mono\',ui-monospace,monospace;white-space:nowrap">'
-              +esc(_laFmtDate(x.date))+' &middot; '+(x.pax||0)+' pax &middot; &#3647;'+B(x.total)+'</span>'
-            +'<span style="margin-left:auto;font-size:10px;color:#9a988f;font-family:\'DM Mono\',ui-monospace,monospace;'
-              +'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:112px">'+esc(_laB2CRef(x.id))+'</span>'
-          +'</div></div>';
-      }).join('');
-      var restRow = rest>0
-        ? '<div class="la-b2c-row" data-d="'+esc(goDate)+'" style="cursor:pointer;padding:7px 6px;margin:0 -6px;'
-          +'border-top:1px solid #F0EEE9;border-radius:8px;font-size:11.5px;color:#6a7580;font-weight:600">'
-          +'และอีก '+rest+' ใบ &rsaquo;</div>'
-        : '';
-      var totRow = n>1
-        ? '<div style="display:flex;align-items:baseline;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid #F0EEE9">'
-          +'<span style="font-size:11px;color:#6a7580;font-weight:600">รวม</span>'
-          +'<span style="font-size:11.5px;color:#12241c;font-weight:700;font-family:\'DM Mono\',ui-monospace,monospace">'
-            +n+' ใบ &middot; '+tPax+' pax &middot; &#3647;'+B(tAmt)+'</span></div>'
-        : '';
-      d.innerHTML=
-        '<div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">'
-          +'<span style="flex:none;width:26px;height:26px;border-radius:8px;background:#1683C7;display:flex;align-items:center;justify-content:center">'+SHIP+'</span>'
-          +'<span style="font-size:13.5px;font-weight:800;color:#12241c">Booking ใหม่'+(n>1?(' '+n+' ใบ'):'')+'</span>'
-          +'<span style="font-size:10px;font-weight:700;color:#0a5a7a;background:#DCEEFA;border-radius:20px;padding:1px 7px">B2C</span>'
-          /* เวลาจริง · ของเดิมเขียน now ฝังตายไว้ ยุ่งอยู่ 10 นาทีค่อยเห็นก็ยังอ่านว่า now */
-          +'<span style="margin-left:auto;font-size:11px;color:#8A8880;font-family:\'DM Mono\',ui-monospace,monospace">'+hhmm+'</span>'
-          +'<span class="la-b2c-x" title="ปิด" style="flex:none;width:20px;height:20px;border-radius:6px;'
-            +'display:flex;align-items:center;justify-content:center;color:#9a988f;font-size:15px;line-height:1;cursor:pointer">&times;</span>'
-        +'</div>'
-        +rows+restRow+totRow;
+
+      /* หัวจดหมาย · ช่องแดงเป็นเลขที่ใบจองถ้ามาใบเดียว ถ้าหลายใบเป็นจำนวนใบ */
+      var head='<div class="lh">'
+        +'<img src="assets/la-tab.png" alt="" onerror="this.style.display=\'none\'">'
+        +'<span class="bn"><b>LOVE ANDAMAN</b><i>Your experience, Our Passion</i></span>'
+        +'<span class="rt"><i>Booking ใหม่</i>'
+          +'<b>'+esc(n>1?(n+' ใบ'):(one.ref||'-'))+'</b>'
+          +'<em>'+hhmm+' &middot; B2C</em></span>'
+        +'<span class="xx" title="ปิด">&times;</span>'
+      +'</div>';
+
+      var body, foot;
+      if(n===1){
+        /* ใบเดียว · เจอบ่อยที่สุด · ข้อมูลจริง 107 ใบไม่มีใบไหนเกิน 1 ทริป */
+        var sub=[_laFmtDate(one.date)];
+        if(one.port) sub.push(one.port);
+        sub.push((one.pax||0)+' pax');
+        body='<div class="tp" data-d="'+esc(one.date)+'">'
+            +'<div class="t1"><s>'+esc(one.route)+'</s><u>THB '+B(one.total)+'</u></div>'
+            +'<div class="t2"><b>'+esc(sub[0])+'</b> &middot; '+esc(sub.slice(1).join(' \u00b7 '))+'</div>'
+          +'</div>';
+        var pd=_laB2CPaid(one.paid), who=_laB2CWho(one.lead);
+        foot='<div class="ft"><i>'+esc(who||'\u2014')+'</i>'
+            +(pd?('<span class="pd" style="color:'+pd.c+'">'+pd.t+'</span>'):'')
+            +'<a data-d="'+esc(one.date)+'">เปิดใบจอง &rsaquo;</a></div>';
+      } else {
+        /* หลายใบ · กดบรรทัดไหนไปวันของใบนั้น ไม่ใช่วันของใบแรก */
+        body='<div class="rows">'
+          + show.map(function(x){
+              return '<div class="rw" data-d="'+esc(x.date)+'" title="ไปที่ '+esc(_laFmtDate(x.date))+'">'
+                +'<s>'+esc(x.route)+'</s>'
+                +'<em>'+esc(_laFmtDate(x.date))+' &middot; '+(x.pax||0)+' pax</em>'
+                +'<u>'+B(x.total)+'</u><n>'+esc(x.ref||'')+'</n></div>'; }).join('')
+          + (rest>0?('<div class="more">และอีก '+rest+' ใบ</div>'):'')
+        +'</div>';
+        foot='<div class="ft"><i>รวม '+n+' ใบ &middot; '+tPax+' pax</i>'
+            +'<b>THB '+B(tAmt)+'</b>'
+            +'<a data-d="'+esc(goDate)+'">ดูทั้งหมด &rsaquo;</a></div>';
+      }
+      d.innerHTML=head+body+foot;
+
       var go=function(dt){ try{ _laB2CGoTo(dt||goDate); }catch(e){} try{ d.remove(); }catch(e){} };
-      Array.prototype.forEach.call(d.querySelectorAll('.la-b2c-row'), function(r){
-        r.onmouseenter=function(){ r.style.background='#F3F7FB'; };
-        r.onmouseleave=function(){ r.style.background=''; };
+      Array.prototype.forEach.call(d.querySelectorAll('[data-d]'), function(r){
         r.onclick=function(e){ if(e&&e.stopPropagation)e.stopPropagation(); go(r.getAttribute('data-d')); };
       });
-      var xb=d.querySelector('.la-b2c-x');
+      var xb=d.querySelector('.xx');
       if(xb) xb.onclick=function(e){ if(e&&e.stopPropagation)e.stopPropagation(); try{d.remove();}catch(_){} };
       wrap.appendChild(d);
       /* หลายใบให้เวลานานขึ้นตามจำนวน · และชี้ค้างไว้แล้วรอ
