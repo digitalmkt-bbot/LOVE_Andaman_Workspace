@@ -53811,6 +53811,38 @@ function pkNmFillLead(date,bid,pier){
   if(typeof renderPierPark==='function') renderPierPark();
   if(!n) alert('ลำนี้ไม่มีหัวที่ต้องเติมชื่อ หรือใบจองไม่มีชื่อหัวกรุ๊ปให้ใช้');
 }
+/* §pkTkLead · ชื่อที่พิมพ์เองซ้ำกับหัวกรุ๊ป
+   ก่อนแก้ ชื่อหัวกรุ๊ปไม่ขึ้นในชีท คนหน้าท่าจึงพิมพ์เองลงช่องว่าง
+   พอชื่อขึ้นเองแล้ว ตัวที่พิมพ์ไว้กลายเป็นชื่อซ้ำ ซึ่งหน้านี้ห้ามเด็ดขาด
+   ด่านออกตั๋วตามรายชื่อ ชื่อซ้ำสองแถวคือคนเดียวได้ตั๋วสองใบในสายตาเขา
+
+   กวาดเฉพาะตัวที่ตรงกับชื่อหัวกรุ๊ปของ "ใบเดียวกัน" และมีแถวจากใบจอง
+   ชื่อเดียวกันอยู่จริงแล้วเท่านั้น · ตัวที่ pkNmFillLead เติมไว้เป็น
+   "<หัวกรุ๊ป> (2)" (3) ไม่โดน เพราะเป็นคนละชื่อกัน */
+function pkNmLeadDup(B){
+  var out=[];
+  ((B && B.people) || []).forEach(function(p){
+    if(!p.ph || !p.typed || !p.lead) return;
+    var k=pkNmNorm(p.full); if(!k || k!==pkNmNorm(p.lead)) return;
+    if((B.people||[]).some(function(q){
+        return !q.ph && q.bkId===p.bkId && pkNmNorm(q.full)===k; })) out.push(p);
+  });
+  return out;
+}
+function pkNmDropLeadDup(date,bid,pier){
+  var D=pkTkData(date,pier), hit=[];
+  (D||[]).forEach(function(g){ (g.boats||[]).forEach(function(B){
+    if(B.bid===bid) hit=hit.concat(pkNmLeadDup(B));
+  }); });
+  if(!hit.length){ alert('ลำนี้ไม่มีชื่อที่พิมพ์เองซ้ำกับหัวกรุ๊ป'); return; }
+  if(!confirm('พบชื่อที่พิมพ์เองซ้ำกับชื่อหัวกรุ๊ปของใบเดียวกัน '+hit.length+' ชื่อ\n\n'
+      +hit.slice(0,8).map(function(p){ return '  · '+p.full+'   (ใบ '+(p.vc||'-')+')'; }).join('\n')
+      +(hit.length>8?('\n  · … อีก '+(hit.length-8)+' ชื่อ'):'')
+      +'\n\nชื่อจากใบจองยังอยู่ครบ · ลบเฉพาะตัวที่พิมพ์เองซ้ำ')) return;
+  hit.forEach(function(p){ pkNmSet(date,p.bkId,p.cat,p.seq,'',true); });
+  try{ poPersist(); }catch(_){}
+  if(typeof renderPierPark==='function') renderPierPark();
+}
 function pkNmClearBoat(date,bid,pier){
   if(!confirm('ล้างชื่อที่กรอกเองของลำนี้ทั้งหมด?')) return;
   var D=pkTkData(date,pier);
@@ -53948,6 +53980,22 @@ function pkTkData(date, pier){
       var leadNm=String(b.leadPax||'').trim();
       var leadNat=String(b.leadNationality||'').trim().toUpperCase();
       var vcs=String(b.voucherRef||b.code||b.id||'');
+
+      /* §pkTkLead · หัวกรุ๊ปก็เดินทางด้วย และถูกนับเป็นหัวหนึ่งคน
+         แต่ passengers[] เก็บเฉพาะ "คนที่ไปด้วย" ไม่ได้เก็บตัวหัวกรุ๊ป
+         บรรทัดข้างบนใช้ leadPax เป็นตัวสำรองเฉพาะตอน passengers[] ว่างเปล่า
+         ใบที่มีทั้งหัวกรุ๊ปและรายชื่อผู้ร่วมเดินทาง ชื่อหัวกรุ๊ปจึงหายไปเฉย ๆ
+         กลายเป็นช่องว่างให้พิมพ์เองหน้าท่า ทั้งที่ชื่ออยู่ในใบจองอยู่แล้ว
+         (วัดจากข้อมูลจริง · ช่องว่าง 4,442 หัว เป็นชื่อหัวกรุ๊ป 1,503 หัว)
+
+         เติมต่อเมื่อ "ยังมีช่องเหลือ" เท่านั้น · ใบที่คนจองไม่ได้ไปด้วย
+         จำนวนชื่อจะเท่ากับหัวพอดีอยู่แล้ว จะได้ไม่มีแถวเกินโผล่มาโดยไม่จำเป็น
+         เทียบชื่อด้วย pkNmNorm ตัวเดียวกับกฎห้ามชื่อซ้ำ ตัดคำนำหน้าก่อนเทียบ */
+      if(leadNm && ps.length < slotTot){
+        var _lk=pkNmNorm(leadNm);
+        if(_lk && !ps.some(function(w){ return pkNmNorm(w.p && w.p.name)===_lk; }))
+          ps.unshift({ p:{name:leadNm, nationality:leadNat, type:'AD'}, ix:'L' });
+      }
 
       var mk=function(w,cat,mism,over){
         var p=w.p;
@@ -54234,6 +54282,11 @@ function renderPierPark(pier){
           +(ro?'':((cur.missTot>0)
               ?('<button class="pk-fill" onclick="pkNmFillLead(\''+_poDate+'\',\''+cur.bid+'\',\''+_poPier+'\')">'
                 +'เติมชื่อจากหัวกรุ๊ป '+cur.missTot+'</button>'):''))
+          /* §pkTkLead · โผล่เฉพาะตอนมีชื่อที่พิมพ์เองซ้ำกับหัวกรุ๊ปจริง ๆ */
+          +(ro?'':(function(){ var _n=pkNmLeadDup(cur).length; return _n
+              ?('<button class="pk-clr" onclick="pkNmDropLeadDup(\''+_poDate+'\',\''+cur.bid+'\',\''+_poPier+'\')" '
+                +'title="ชื่อหัวกรุ๊ปขึ้นเองจากใบจองแล้ว ตัวที่พิมพ์เองไว้ซ้ำ">'
+                +'ลบชื่อซ้ำหัวกรุ๊ป '+_n+'</button>'):''; })())
           +(ro?'':((cur.people||[]).some(function(p){ return p.ph && p.typed; })
               ?('<button class="pk-clr" onclick="pkNmClearBoat(\''+_poDate+'\',\''+cur.bid+'\',\''+_poPier+'\')">'
                 +'ล้างชื่อที่กรอกเอง</button>'):''))
