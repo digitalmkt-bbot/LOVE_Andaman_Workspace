@@ -5936,7 +5936,11 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
     +'<div class="bar"><button onclick="window.print()" class="pr">Print / Save PDF</button><button onclick="window.close()">Close</button></div>'
     +'<div class="pg">'
     +'<div class="hd"><div><div class="brand">LOVE ANDAMAN</div><div class="sub">Booking re-confirmation</div></div><div class="meta"><b>'+esc(dLabel)+'</b><div>Ref '+esc(refCode)+'</div></div></div>'
-    +'<div class="agb"><div><div class="agl">Agent</div><div class="agn">'+esc(agName)
+    /* §rcAgbFix · ปิด .agn แล้วปิดกล่องซ้ายให้ครบก่อนขึ้น .kpis
+       ตอนใส่ป้ายใบบางส่วนใน §rcPick ผมทำ </div> หายไปหนึ่งตัว
+       .kpis เลยกลายเป็นลูกของกล่องซ้าย แถบชื่อเอเย่นต์ที่เคยกางเต็มความกว้าง
+       ยุบไปกองซ้ายมือ แล้วตารางทั้งใบถูกดันไปอยู่ข้าง ๆ */
+    +'<div class="agb"><div><div class="agl">Agent</div><div class="agn">'+esc(agName)+'</div>'
       /* §rcPick · ใบบางส่วนต้องบอกบนหน้ากระดาษ · ไม่งั้นเอเย่นต์นับใบแล้วคิดว่าเราตกรายการ */
       +(_partial?('<div style="margin-top:5px;display:inline-block;background:#FDF3E3;color:#8A5A00;'
         +'border:1px solid #F0DFBD;border-radius:7px;padding:3px 10px;font-size:11.5px;font-weight:700">'
