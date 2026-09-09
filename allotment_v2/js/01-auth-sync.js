@@ -488,11 +488,13 @@
   /* สถานะชำระเงิน · ค่าจริงในข้อมูล paid 86 / deposit 16 / unpaid 4 จาก 107 ใบ */
   function _laB2CPaid(v){
     if(v==='paid')    return {t:'\u2713 PAID', c:'#409060'};
-    if(v==='deposit') return {t:'มัดจำแล้ว',    c:'#B07500'};
-    if(v==='unpaid')  return {t:'ยังไม่ชำระ',   c:'#BA1824'};
+    if(v==='deposit') return {t:'DEPOSIT',     c:'#B07500'};
+    if(v==='unpaid')  return {t:'UNPAID',      c:'#BA1824'};
     return null;
   }
-  function _laFmtDate(s){ if(!s) return '-'; var p=String(s).split('-'); if(p.length<3) return s; var M=['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']; return (+p[2])+' '+(M[+p[1]]||p[1])+' '+p[0]; }
+  /* §b2cEn · การ์ดนี้เป็นภาษาอังกฤษทั้งใบ · วันที่จึงใช้เดือนอังกฤษด้วย
+     ใช้ที่การ์ด B2C ที่เดียว ไม่กระทบวันที่ในหน้าอื่น */
+  function _laFmtDate(s){ if(!s) return '-'; var p=String(s).split('-'); if(p.length<3) return s; var M=['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return (+p[2])+' '+(M[+p[1]]||p[1])+' '+p[0]; }
   // Jump to Booking → By-Trip tab for the alerted booking's date
   function _laB2CGoTo(date){ try{ var nav=document.querySelector('.nav-item[data-view="booking"]'); if(nav) nav.click(); if(window._bkV2){ _bkV2.tab='bytrip'; if(date){ _bkV2.filterDate=date; _bkV2.filterRoute=null; window._bkV2T2Cursor=String(date).slice(0,7); } } if(typeof bkV2Render==='function') bkV2Render(); }catch(e){} }
   function _laBeep(){ try{ var AC=window.AudioContext||window.webkitAudioContext; if(!AC) return; var ctx=window.__laAC||(window.__laAC=new AC()); function tone(freq,at,dur){ var o=ctx.createOscillator(),g=ctx.createGain(); o.type='sine'; o.frequency.value=freq; o.connect(g); g.connect(ctx.destination); var t=ctx.currentTime+at; g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.35,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+dur); o.start(t); o.stop(t+dur+0.02); } function play(){ try{ tone(880,0,0.16); tone(1174,0.16,0.22); }catch(e){} } if(ctx.state==='suspended'){ try{ var p=ctx.resume(); if(p&&p.then) p.then(play).catch(play); else play(); }catch(e){ play(); } } else { play(); } }catch(e){} }
@@ -597,10 +599,10 @@
       var head='<div class="lh">'
         +'<img src="assets/la-tab.png" alt="" onerror="this.style.display=\'none\'">'
         +'<span class="bn"><b>LOVE ANDAMAN</b><i>Your experience, Our Passion</i></span>'
-        +'<span class="rt"><i>Booking ใหม่</i>'
-          +'<b>'+esc(n>1?(n+' ใบ'):(one.ref||'-'))+'</b>'
+        +'<span class="rt"><i>'+(n>1?'New bookings':'New booking')+'</i>'
+          +'<b>'+esc(n>1?(n+' bookings'):(one.ref||'-'))+'</b>'
           +'<em>'+hhmm+' &middot; B2C</em></span>'
-        +'<span class="xx" title="ปิด">&times;</span>'
+        +'<span class="xx" title="Close">&times;</span>'
       +'</div>';
 
       var body, foot;
@@ -616,20 +618,20 @@
         var pd=_laB2CPaid(one.paid), who=_laB2CWho(one.lead);
         foot='<div class="ft"><i>'+esc(who||'\u2014')+'</i>'
             +(pd?('<span class="pd" style="color:'+pd.c+'">'+pd.t+'</span>'):'')
-            +'<a data-d="'+esc(one.date)+'">เปิดใบจอง &rsaquo;</a></div>';
+            +'<a data-d="'+esc(one.date)+'">Open booking &rsaquo;</a></div>';
       } else {
         /* หลายใบ · กดบรรทัดไหนไปวันของใบนั้น ไม่ใช่วันของใบแรก */
         body='<div class="rows">'
           + show.map(function(x){
-              return '<div class="rw" data-d="'+esc(x.date)+'" title="ไปที่ '+esc(_laFmtDate(x.date))+'">'
+              return '<div class="rw" data-d="'+esc(x.date)+'" title="Go to '+esc(_laFmtDate(x.date))+'">'
                 +'<s>'+esc(x.route)+'</s>'
                 +'<em>'+esc(_laFmtDate(x.date))+' &middot; '+(x.pax||0)+' pax</em>'
                 +'<u>'+B(x.total)+'</u><n>'+esc(x.ref||'')+'</n></div>'; }).join('')
-          + (rest>0?('<div class="more">และอีก '+rest+' ใบ</div>'):'')
+          + (rest>0?('<div class="more">+'+rest+' more</div>'):'')
         +'</div>';
-        foot='<div class="ft"><i>รวม '+n+' ใบ &middot; '+tPax+' pax</i>'
+        foot='<div class="ft"><i>'+n+' bookings &middot; '+tPax+' pax</i>'
             +'<b>THB '+B(tAmt)+'</b>'
-            +'<a data-d="'+esc(goDate)+'">ดูทั้งหมด &rsaquo;</a></div>';
+            +'<a data-d="'+esc(goDate)+'">View all &rsaquo;</a></div>';
       }
       d.innerHTML=head+body+foot;
 
