@@ -5834,6 +5834,39 @@ function rcToggleBooking(bkId){ var bk=SB_BOOKINGS.find(function(x){return x.id=
   if(_rcSent(bk)){ bk.ops.reconfirm=null; }
   else { bk.ops.reconfirm={status:'done',via:'reconfirm',at:new Date().toISOString(),by:(typeof laBy==='function')?laBy():''}; if(typeof bkV2AddHistory==='function') bkV2AddHistory(bk,'notify','Re-confirmed (reconfirm page)','Notify'); }
   if(typeof acctPersistBookings==='function') acctPersistBookings(); renderReconfirm(); }
+/* §rcColor · แยกสีเส้นทางหนึ่งสี ออกเป็นสามค่าที่ใช้ด้วยกันได้
+   สีเส้นทางบางเส้นอ่อนมาก (#6aaee0) เอามาเป็นตัวหนังสือบนพื้นอ่อนจะอ่านไม่ออก
+   ขีดซ้ายใช้สีเต็ม · พื้นผสมขาว · ตัวหนังสือหรี่ลงตามความสว่างจริงจนอ่านได้ */
+function _rcRGB(h){ h=String(h||'').replace('#','').trim();
+  if(h.length===3) h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  if(!/^[0-9a-fA-F]{6}$/.test(h)) return null;
+  return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)]; }
+function _rcHexOf(c){ return '#'+c.map(function(v){
+  v=Math.max(0,Math.min(255,Math.round(v))); return (v<16?'0':'')+v.toString(16); }).join(''); }
+/* คอนทราสต์ตามสูตร WCAG · ใช้ตัดสินว่าต้องหรี่ตัวหนังสือลงอีกไหม */
+function _rcRelLum(c){
+  var f=function(v){ v=v/255; return (v<=0.03928)? v/12.92 : Math.pow((v+0.055)/1.055,2.4); };
+  return 0.2126*f(c[0])+0.7152*f(c[1])+0.0722*f(c[2]); }
+function _rcRatio(a,b){ var L1=_rcRelLum(a), L2=_rcRelLum(b);
+  var hi=Math.max(L1,L2), lo=Math.min(L1,L2); return (hi+0.05)/(lo+0.05); }
+function _rcSecTint(hex){
+  var c=_rcRGB(hex);
+  /* เส้นทางที่ยังไม่ได้ตั้งสี ตกกลับไปเป็นเขียวชุดเดิม ไม่ใช่สีดำ */
+  if(!c) return {bar:'#0F6E56', bg:'#DFF3EA', ink:'#0F6E56', dim:'#4E7365'};
+  var bg=c.map(function(v){ return v+(255-v)*0.87; });
+  /* หรี่ตัวหนังสือลงทีละขั้นจนคอนทราสต์ถึง 4.5:1 ตามเกณฑ์ WCAG AA
+     ไม่ได้หรี่ตายตัว · สีที่เข้มพออยู่แล้วจะไม่โดนแตะเลยแม้แต่ขั้นเดียว
+     ที่ต้องวัดจริงเพราะสีเส้นทางชุดนี้กระจายมาก ตั้งแต่ #185fa5 ถึง #ff9999 */
+  var ink=c.slice(), k=1;
+  for(var i=0;i<26 && _rcRatio(ink,bg)<4.5; i++){
+    k=Math.max(0.10,k-0.05);
+    ink=[c[0]*k,c[1]*k,c[2]*k];
+  }
+  return { bar:hex,
+           bg:_rcHexOf(bg),
+           ink:_rcHexOf(ink),
+           dim:_rcHexOf(ink.map(function(v){ return v+(255-v)*0.30; })) };
+}
 function rcSheet(key){   // printable per-agent re-confirmation sheet
   var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
   var date=_rcDate||_rcYMD(new Date());
@@ -5874,7 +5907,10 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
         +'<td>'+(d.cot?'<span class="cot">'+esc(d.cot)+'</span>':'<span class="mut">—</span>')+'</td>'
         +'</tr>';
     }).join('');
-    body+='<div class="sec">'+esc(nm)+' <span class="secpax">&middot; '+grp.length+' bookings &middot; '+tpax+' pax</span></div>'
+    /* §rcColor · สีของเส้นทางนี้จริง ๆ ไม่ใช่เขียวฟิกซ์เหมือนกันทุกแถบ */
+    var _T=_rcSecTint(route&&route.color);
+    body+='<div class="sec" style="background:'+_T.bg+';color:'+_T.ink+';border-left-color:'+_T.bar+'">'
+      +esc(nm)+' <span class="secpax" style="color:'+_T.dim+'">&middot; '+grp.length+' bookings &middot; '+tpax+' pax</span></div>'
       +'<table class="gt"><thead><tr><th class="num">#</th><th>Booking #</th><th>Customer</th><th>Phone</th><th class="ctr">AD</th><th class="ctr">CHD</th><th class="ctr">INF</th><th class="ctr">FOC</th><th>Pick-up</th><th>Hotel</th><th class="ctr">Room</th><th>Zone</th><th>Add-on</th><th>Special request</th><th>Payment</th></tr></thead><tbody>'+rws+'</tbody></table>';
   });
   var html='<!doctype html><html><head><meta charset="utf-8"><title>Re-confirm &middot; '+esc(agName)+' &middot; '+esc(dLabel)+'</title>'
@@ -6008,7 +6044,9 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
       grp.sort(function(a,b){ return (a.d.agentName||'').localeCompare(b.d.agentName||'')||String(a.d.time).localeCompare(String(b.d.time)); });
       var route=(typeof ROUTES!=='undefined')?ROUTES.find(function(x){return x.id===rid;}):null; var nm=(route&&route.name)||rid;
       var gpax=grp.reduce(function(s,r){return s+r.d.pax;},0);
-      out+='<div class="rc-card"><div style="background:#E1F5EE;padding:8px 12px;font-size:12.5px;font-weight:600;color:#0F6E56;display:flex;justify-content:space-between"><span>'+esc(nm)+'</span><span style="'+MONO+'">'+grp.length+' bookings · '+gpax+' pax</span></div>'
+      /* §rcColor · หัวกลุ่มเส้นทางใช้สีของเส้นทางเอง เหมือนหน้าอื่นทั้งระบบ */
+      var _T=_rcSecTint(route&&route.color);
+      out+='<div class="rc-card"><div style="background:'+_T.bg+';border-left:5px solid '+_T.bar+';padding:8px 12px;font-size:12.5px;font-weight:700;color:'+_T.ink+';display:flex;justify-content:space-between"><span>'+esc(nm)+'</span><span style="'+MONO+';color:'+_T.dim+'">'+grp.length+' bookings · '+gpax+' pax</span></div>'
         +'<div class="rc-scroll">'+_rcTableHead(colsT)+'<tbody>'
         +grp.map(function(r){ return rowFor(r.d,colsT); }).join('')
         +'</tbody></table></div></div>';
