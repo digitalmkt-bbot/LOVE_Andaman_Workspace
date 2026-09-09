@@ -5883,6 +5883,10 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
   var _hdBg=(rows[0].bk.agentId&&typeof bkV2AgentColor==='function')?bkV2AgentColor(rows[0].bk.agentId):'#1683C7';   // sheet header = agent's own colour (same as By-trip-date)
   var _hdInk=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(_hdBg):'#fff';
   var pax=rows.reduce(function(s,r){return s+r.d.pax;},0);
+  /* §rcKpi · บวกจากแถวที่อยู่ในใบนี้จริง ๆ · ใบบางส่วนจึงได้ยอดของเฉพาะที่เลือก */
+  var tAD=0,tCH=0,tIN=0,tFO=0;
+  rows.forEach(function(r){ tAD+=(+r.d.ad||0); tCH+=(+r.d.chd||0);
+                            tIN+=(+r.d.inf||0); tFO+=(+r.d.foc||0); });
   var byRoute={}; rows.forEach(function(r){ (byRoute[r.routeId]=byRoute[r.routeId]||[]).push(r); });
   var trips=Object.keys(byRoute).length;
   var dObj=new Date(date+'T00:00:00'), dLabel=dObj.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
@@ -5921,7 +5925,15 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
     +'.meta{text-align:right;font-size:12px;line-height:1.5}.meta b{font-size:13px}'
     +'.agb{padding:14px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #EEECE6;flex-wrap:wrap;gap:8px}'
     +'.agl{font-size:11px;color:#9a988f;text-transform:uppercase;letter-spacing:.05em}.agn{font-size:16px;font-weight:700}'
-    +'.kpis{display:flex;gap:22px;text-align:center}.kpis .n{font-size:19px;font-weight:700}.kpis .k{font-size:11px;color:#9a988f}'
+    /* §rcKpi · ยอดสรุปบรรทัดเดียว · ป้ายเล็กนำหน้า เลขใหญ่ตาม อ่านซ้ายไปขวารวดเดียว */
+    +'.kpis{display:flex;align-items:baseline;gap:13px;flex-wrap:wrap;justify-content:flex-end}'
+    +'.kpis .kv{display:inline-flex;align-items:baseline;gap:5px;white-space:nowrap}'
+    +'.kpis .kv i{font-style:normal;font-size:10.5px;font-weight:600;color:#9a988f;'
+      +'letter-spacing:.04em;text-transform:uppercase}'
+    +'.kpis .kv b{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}'
+    +'.kpis .kv.z b{color:#c6c4bc}.kpis .kv.foc b{color:#993C1D}'
+    +'.kpis .kv.tt b{font-size:19px}'
+    +'.kpis .kd{color:#d6d4cc;font-size:13px}'
     +'.bd{padding:6px 24px 18px}'
     +'.sec{font-size:16px;color:#0F6E56;font-weight:800;margin:18px 0 8px;background:#DFF3EA;padding:9px 14px;border-radius:8px;border-left:6px solid #0F6E56;-webkit-print-color-adjust:exact;print-color-adjust:exact}.secpax{color:#4E7365;font-weight:600;font-size:13px}'
     +'.card{border:1px solid #EAE8E2;border-radius:10px;padding:11px 14px;margin-bottom:8px}'
@@ -5945,7 +5957,20 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet
       +(_partial?('<div style="margin-top:5px;display:inline-block;background:#FDF3E3;color:#8A5A00;'
         +'border:1px solid #F0DFBD;border-radius:7px;padding:3px 10px;font-size:11.5px;font-weight:700">'
         +'Selected bookings only &middot; '+rows.length+' of '+_nAll+'</div>'):'')
-      +'</div><div class="kpis"><div><div class="n">'+rows.length+'</div><div class="k">bookings</div></div><div><div class="n">'+pax+'</div><div class="k">pax</div></div><div><div class="n">'+trips+'</div><div class="k">trips</div></div></div></div>'
+      /* §rcKpi · บรรทัดเดียว แยกหัวคนตามประเภท · ของเดิม pax เป็นก้อนเดียว
+         เอเย่นต์ต้องไล่บวกคอลัมน์ข้างล่างเองเพื่อเช็คกับใบจองของตัวเอง
+         ศูนย์ทำให้จางแต่ยังโชว์ · ต้องเห็นว่าเราคิด 0 ไม่ใช่ลืมกรอก */
+      +'</div><div class="kpis">'
+        +'<span class="kv"><i>Booking</i><b>'+rows.length+'</b></span>'
+        +'<span class="kd">&middot;</span>'
+        +'<span class="kv'+(tAD?'':' z')+'"><i>AD</i><b>'+tAD+'</b></span>'
+        +'<span class="kv'+(tCH?'':' z')+'"><i>CHD</i><b>'+tCH+'</b></span>'
+        +'<span class="kv'+(tIN?'':' z')+'"><i>INF</i><b>'+tIN+'</b></span>'
+        +'<span class="kv'+(tFO?' foc':' z')+'"><i>FOC</i><b>'+tFO+'</b></span>'
+        +'<span class="kd">&middot;</span>'
+        +'<span class="kv tt"><i>Total pax</i><b>'+pax+'</b></span>'
+        +'<span class="kv"><i>Trips</i><b>'+trips+'</b></span>'
+      +'</div></div>'
     +'<div class="bd">'+body+'</div>'
     +'<div class="ft">Please review and confirm all pick-up times with your guests. Contact LOVE Andaman for any change.</div>'
     +'</div></body></html>';
