@@ -54599,12 +54599,148 @@ function renderPierOffice(pier){
     /* §pkTk2 · ตั๋วอุทยานย้ายไปเป็นหน้าของตัวเองในเมนูแล้ว (pok-*)
        ของที่ต้องกางเป็นตารางกว้าง ๆ อยู่ในคอลัมน์แคบข้างหน้าอื่นไม่ไหว */
     +'<div class="po-sec"><span class="n">1</span> เบิก – คืน รายลำ'
-      +'<span class="chip">'+(boats.length?(boats.length+' ลำ'):'รอบวันนี้')+'</span></div>'
+      +'<span class="chip">'+(boats.length?(boats.length+' ลำ'):'รอบวันนี้')+'</span>'
+      /* §poPrintAll · ของเดิมพิมพ์ได้แต่ใบเซ็นซึ่งเป็นใบต่อลำ
+         วันที่เรือออกหลายลำต้องถือกระดาษหลายใบแล้วบวกเอง */
+      +'<span style="flex:1"></span>'
+      +(boats.length?('<button class="po-btn" onclick="poPrintAll()" '
+        +'title="ใบเดียวจบทั้งวัน · ยอดเบิก-คืนของทุกลำในตารางเดียว พร้อมช่องเซ็น">'
+        +'&#128424; พิมพ์สรุปรวมทุกลำ</button>'):'')
+      +'</div>'
     +'<div class="po-card">'+poBoatTable(boats,items,ro)+'</div>'
     +'<div class="po-sec"><span class="n">2</span> สต็อกคงเหลือ · แยกตามถัง</div>'
     +'<div class="po-card">'+poStockTable(items,ro)+'</div>'
     +'<div class="po-sec"><span class="n">3</span> วงจรผ้าเช็ดตัว</div>'
     +poLaundryBlock(ro);
+}
+/* §poPrintAll · ใบสรุปเบิก-คืนรวมทุกลำของวันนั้น · A4 แนวนอน
+   ตัวเลขทุกตัวอ่านจาก poBoatSum ตัวเดียวกับที่ตารางบนจอใช้ ไม่ได้นับเองใหม่ */
+function poPrintAll(){
+  var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
+  var date=_poDate, pier=_poPier, e=poE;
+  var boats=poBoats(date,pier);
+  if(!boats.length){ alert('วันที่เลือกไม่มีเรือออกจากท่านี้ · ยังไม่มีอะไรให้พิมพ์'); return; }
+
+  var S={}; boats.forEach(function(b){ S[b.bid]=poBoatSum(date,b.bid,pier); });
+  var zero={iss:0,ret:0,rep:0,wo:0,lost:0,ob:0};
+  var cell=function(bid,iid){ return (S[bid]&&S[bid][iid])||zero; };
+  /* ทะเบียนของท่าหนึ่งมีเป็นร้อยรายการ · เอาเฉพาะที่ขยับจริงวันนั้น
+     ไม่งั้นได้กระดาษเปล่าสิบหน้า */
+  var items=poItemsAll(pier).filter(function(it){
+    return boats.some(function(b){ var o=cell(b.bid,it.id);
+      return o.iss||o.ret||o.rep||o.wo||o.lost||o.ob; });
+  });
+
+  var css='@page{size:A4 landscape;margin:8mm}'
+   +'*{box-sizing:border-box}body{margin:0;font-family:"Sarabun","DM Sans",sans-serif;color:#242730;font-size:10px}'
+   +'.hd{display:flex;justify-content:space-between;align-items:flex-end;'
+     +'border-bottom:2px solid #16265C;padding-bottom:6px;margin-bottom:9px}'
+   +'.t1{font-size:16px;font-weight:800;color:#16265C}'
+   +'.t2{font-size:10.5px;color:#5A6270;margin-top:2px}'
+   +'.t3{font-size:9.5px;color:#5A6270;text-align:right;line-height:1.5}'
+   +'h2{font-size:11px;font-weight:800;color:#16265C;margin:11px 0 5px;'
+     +'letter-spacing:.04em;text-transform:uppercase}'
+   +'table{border-collapse:collapse;width:100%;margin-bottom:2px}'
+   +'th,td{border:1px solid #C7CCD4;padding:3px 5px;font-size:9px;text-align:center}'
+   +'th{background:#EEF1F6;font-weight:800;color:#2A3444}'
+   +'th.gp{background:#DCE3EE}'
+   +'td.l,th.l{text-align:left}'
+   +'tr.kd td{background:#E8EDF5;text-align:left;font-weight:800;letter-spacing:.05em;font-size:8.5px}'
+   +'tr.tt td{background:#F2F6F3;font-weight:800}'
+   +'td.z{color:#C3C7CE}'
+   +'td.bad{color:#C0271C;font-weight:800;background:#FDF1EF}'
+   +'td.ok{color:#0F6E56;font-weight:700}'
+   +'.sg{display:flex;gap:26px;margin-top:16px}'
+   +'.sg div{flex:1;border-top:1px solid #8B93A1;padding-top:5px;text-align:center;'
+     +'font-size:9.5px;color:#5A6270}'
+   +'.nt{font-size:8.5px;color:#6E7684;margin-top:7px;line-height:1.6}';
+
+  /* ── ตารางเรือ ── */
+  var bHead='<tr><th class="l">เรือ</th><th class="l">เส้นทาง</th><th>ออก</th><th>ลค</th>'
+    +'<th class="l">พนักงานลงเรือ</th><th>สถานะ</th><th>เบิก</th><th>คืน</th><th>ยังไม่คืน</th></tr>';
+  var bBody=boats.map(function(b){
+    var o=S[b.bid], i=0,r=0,x=0;
+    Object.keys(o).forEach(function(id){ var v=o[id];
+      i+=v.iss; r+=v.ret; x+=(v.iss-v.ret-v.rep-v.wo-v.lost-v.ob); });
+    var st=poBoatStage(date,b.bid,pier);
+    var duty=poDuty(date,b.bid).map(function(id){ return poStaffName(id); }).join(', ');
+    return '<tr><td class="l"><b>'+e(b.boat.name||b.bid)+'</b></td>'
+      +'<td class="l">'+e((b.route&&b.route.name)||b.rid)+'</td>'
+      +'<td>'+e(b.dep||'—')+'</td><td>'+(+b.pax||0)+'</td>'
+      +'<td class="l">'+(duty?e(duty):'—')+'</td>'
+      +'<td>'+e(st.t)+'</td><td>'+(i||'—')+'</td><td>'+(r||'—')+'</td>'
+      +'<td'+(x>0?' class="bad"':(i?' class="ok"':''))+'>'+(x>0?x:(i?'ครบ':'—'))+'</td></tr>';
+  }).join('');
+
+  /* ── ตารางของ · แถวคือของ คอลัมน์คือเรือ ── */
+  var iHead='';
+  if(items.length){
+    iHead='<tr><th class="l" rowspan="2" style="width:190px">รายการ</th>'
+      + boats.map(function(b){ return '<th class="gp" colspan="2">'+e(b.boat.name||b.bid)+'</th>'; }).join('')
+      + '<th class="gp" colspan="2">รวมทั้งวัน</th>'
+      + '<th rowspan="2">ค้าง<br>บนเรือ</th><th rowspan="2">ซ่อม/หาย<br>ตัดจำหน่าย</th>'
+      + '<th rowspan="2">ยังไม่คืน</th></tr>'
+      + '<tr>'+boats.map(function(){ return '<th>เบิก</th><th>คืน</th>'; }).join('')
+      + '<th>เบิก</th><th>คืน</th></tr>';
+  }
+  var kSeen='', iBody='', gI=0,gR=0,gO=0,gM=0,gX=0;
+  items.forEach(function(it){
+    if(it.kind!==kSeen){ kSeen=it.kind;
+      var kt=(PO_KIND[it.kind]&&PO_KIND[it.kind].t)||it.kind;
+      iBody+='<tr class="kd"><td colspan="'+(boats.length*2+6)+'">'+e(kt)+'</td></tr>';
+    }
+    var ti=0,tr=0,to=0,tm=0;
+    var tds=boats.map(function(b){ var o=cell(b.bid,it.id);
+      ti+=o.iss; tr+=o.ret; to+=o.ob; tm+=(o.rep+o.wo+o.lost);
+      return '<td'+(o.iss?'':' class="z"')+'>'+(o.iss||'·')+'</td>'
+           + '<td'+(o.ret?'':' class="z"')+'>'+(o.ret||'·')+'</td>'; }).join('');
+    var left=ti-tr-to-tm;
+    gI+=ti; gR+=tr; gO+=to; gM+=tm; gX+=left;
+    iBody+='<tr><td class="l">'+e(it.label||it.id)+'</td>'+tds
+      +'<td><b>'+(ti||'·')+'</b></td><td><b>'+(tr||'·')+'</b></td>'
+      +'<td'+(to?'':' class="z"')+'>'+(to||'·')+'</td>'
+      +'<td'+(tm?' class="bad"':' class="z"')+'>'+(tm||'·')+'</td>'
+      +'<td'+(left>0?' class="bad"':(ti?' class="ok"':' class="z"'))+'>'
+        +(left>0?left:(ti?'ครบ':'·'))+'</td></tr>';
+  });
+  if(items.length){
+    iBody+='<tr class="tt"><td class="l">รวมทุกรายการ</td>'
+      + boats.map(function(b){ var o=S[b.bid], i=0,r=0;
+          Object.keys(o).forEach(function(id){ i+=o[id].iss; r+=o[id].ret; });
+          return '<td>'+(i||'·')+'</td><td>'+(r||'·')+'</td>'; }).join('')
+      + '<td>'+gI+'</td><td>'+gR+'</td><td>'+(gO||'·')+'</td>'
+      + '<td'+(gM?' class="bad"':'')+'>'+(gM||'·')+'</td>'
+      + '<td'+(gX>0?' class="bad"':' class="ok"')+'>'+(gX>0?gX:'ครบ')+'</td></tr>';
+  }
+
+  var html='<!doctype html><html lang="th"><head><meta charset="utf-8">'
+   +'<title>สรุปเบิก-คืนอุปกรณ์ · '+e(P.n||P.t)+' · '+e(date)+'</title>'
+   +'<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">'
+   +'<style>'+css+'</style></head><body>'
+   +'<div class="hd"><div><div class="t1">สรุปเบิก – คืนอุปกรณ์ · รวมทุกลำ</div>'
+     +'<div class="t2">'+e(P.n||P.t)+' · '+e(P.t||'')+' &nbsp;·&nbsp; วันที่ '+e(date)+'</div></div>'
+   +'<div class="t3">เรือ '+boats.length+' ลำ · รายการที่เคลื่อนไหว '+items.length+' ชนิด<br>'
+     +'พิมพ์เมื่อ '+e(new Date().toLocaleString('th-TH'))+'</div></div>'
+   +'<h2>เรือที่ออกวันนี้</h2>'
+   +'<table><thead>'+bHead+'</thead><tbody>'+bBody+'</tbody></table>'
+   +(items.length
+      ? ('<h2>รายการอุปกรณ์ · เบิก / คืน แยกตามลำ</h2>'
+         +'<table><thead>'+iHead+'</thead><tbody>'+iBody+'</tbody></table>')
+      : '<h2>รายการอุปกรณ์</h2><table><tbody><tr><td class="l">'
+        +'วันนี้ยังไม่มีการเบิก-คืนของลำไหนเลย</td></tr></tbody></table>')
+   +'<div class="nt">'
+     +'<b>ยังไม่คืน</b> = เบิก − คืน − ค้างบนเรือ − ซ่อม/หาย/ตัดจำหน่าย · เป็นตัวที่ต้องตามเก็บ<br>'
+     +'<b>ค้างบนเรือ</b> คือของที่ยังอยู่จริงและยกไปวันถัดไป ไม่ใช่ของหาย · '
+     +'<b>ซ่อม/หาย/ตัดจำหน่าย</b> คือของที่ต้องตัดออกจากยอดคลัง<br>'
+     +'ตัวเลขทุกตัวมาจากใบเบิก-คืนที่บันทึกไว้ในระบบของวันนี้ · ยอดที่ยังไม่กดยืนยันจะยังไม่ปรากฏในใบนี้'
+   +'</div>'
+   +'<div class="sg"><div>ผู้เบิก</div><div>ผู้รับคืน</div><div>ผู้ตรวจ / หัวหน้าท่า</div></div>'
+   +'</body></html>';
+
+  var w=window.open('','_blank','width=1200,height=800');
+  if(!w){ alert('เบราว์เซอร์บล็อกหน้าต่างใหม่ · อนุญาต pop-up ของหน้านี้ก่อน'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+  setTimeout(function(){ try{ w.focus(); w.print(); }catch(_){} }, 600);
 }
 function poPierName(){ var p=PO_PIERS.filter(function(x){return x.k===_poPier;})[0]; return p?(p.n+' · '+p.t):_poPier; }
 function poSetDate(v){ if(v) _poDate=v; renderPierOffice(); }
