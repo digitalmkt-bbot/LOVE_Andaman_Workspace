@@ -5648,9 +5648,15 @@ var RC_STATES=[
   {v:'done',    l:'Confirmed',                c:'#0F6E56', bg:'#C7EBAF'}
 ];
 function _rcStateOf(bk){ var s=(bk.ops&&bk.ops.reconfirm&&bk.ops.reconfirm.status)||''; for(var i=0;i<RC_STATES.length;i++){ if(RC_STATES[i].v===s) return RC_STATES[i]; } return RC_STATES[0]; }
+/* §rcSplit · ช่องนี้เป็น "ผลติดต่อลูกค้า" อย่างเดียว · ไม่แตะสถานะส่งใบ
+   ล้างสถานะติดต่อแล้วถ้ายังส่งใบไปแล้ว ต้องเก็บ sent ไว้ ไม่ใช่ล้างทั้งก้อน */
 function rcSetStatus(bkId, v){ var bk=SB_BOOKINGS.find(function(x){return x.id===bkId;}); if(!bk)return; bk.ops=bk.ops||{};
-  if(!v){ bk.ops.reconfirm=null; }
-  else { var st=_rcStateOf({ops:{reconfirm:{status:v}}}); bk.ops.reconfirm={status:v,via:'reconfirm',at:new Date().toISOString(),by:(typeof laBy==='function')?laBy():''};
+  var wasSent=_rcSent(bk), r=_rcRec(bk)||{};
+  if(!v && !wasSent){ bk.ops.reconfirm=null; }
+  else if(!v){ bk.ops.reconfirm=_rcKeepSent(bk,{status:'',via:'reconfirm',at:'',by:''}); }
+  else { var st=_rcStateOf({ops:{reconfirm:{status:v}}});
+    bk.ops.reconfirm=_rcKeepSent(bk,{status:v,via:'reconfirm',
+      at:new Date().toISOString(),by:(typeof laBy==='function')?laBy():''});
     if(typeof bkV2AddHistory==='function') bkV2AddHistory(bk,'notify','Re-confirm: '+st.l,'Notify'); }
   if(typeof acctPersistBookings==='function') acctPersistBookings(); renderReconfirm(); }
 // System-wide, user-editable colour per re-confirm status (stored as a JSON string top-level key → syncs via app_meta, no migration). Falls back to RC_STATES defaults.
@@ -5796,8 +5802,30 @@ function laDateBar(ds, shiftFn, todayFn, dateClickFn, setFn){
 }
 function rcSetView(v){ _rcView=v; renderReconfirm(); }
 function _rcAgentKey(bk){ return bk.agentId || ('b2c:'+(bk.b2cChannel||'direct')); }
-function _rcSent(bk){ return !!(bk.ops&&bk.ops.reconfirm&&bk.ops.reconfirm.status==='done'); }
-function _rcSentAt(bk){ return (bk.ops&&bk.ops.reconfirm&&bk.ops.reconfirm.at)||''; }
+/* §rcSplit · "ส่งใบให้เอเย่นต์" กับ "ผลติดต่อลูกค้ารายคน" คนละเรื่องกัน
+   เดิมใช้ status==='done' ตัวเดียวแทนทั้งสองอย่าง หัวการ์ดจึงนับผิดเรื่อง
+   ตอนนี้ sent เป็นฟิลด์ของตัวเอง · status เหลือหน้าที่เดียวคือผลติดต่อลูกค้า */
+function _rcRec(bk){ return (bk&&bk.ops&&bk.ops.reconfirm)||null; }
+function _rcSent(bk){
+  var r=_rcRec(bk); if(!r) return false;
+  if('sent' in r) return !!r.sent;
+  /* ใบเก่าที่บันทึกก่อนแยกฟิลด์ · ไม่มีทางรู้ว่า done มาจากปุ่ม Send หรือกดเอง
+     ตกลงกันว่าถือเป็น "ส่งแล้ว" · และไม่เขียนทับ ปล่อยให้ชัดเจนเองตอนมีคนไปแตะ */
+  return r.status==='done';
+}
+function _rcSentAt(bk){
+  var r=_rcRec(bk); if(!r) return '';
+  if(r.sentAt) return r.sentAt;
+  if(!('sent' in r) && r.status==='done') return r.at||'';   /* ใบเก่า */
+  return '';
+}
+/* ปั๊มค่า sent ที่มีอยู่ลงบนก้อนใหม่ · ทุกครั้งที่เขียนต้องพกสามตัวนี้ไปด้วย
+   ไม่งั้นการแก้ status จะไปล้างสถานะส่งใบทิ้ง ซึ่งคือบั๊กเดิมกลับด้าน */
+function _rcKeepSent(bk, o){
+  var r=_rcRec(bk)||{};
+  o.sent=_rcSent(bk); o.sentAt=_rcSentAt(bk); o.sentBy=r.sentBy||(o.sent?(r.by||''):'');
+  return o;
+}
 function _rcIsInvoiceAgent(ag){ return !!(ag&&(ag.payType==='invoice'||ag.payType==='credit')); }
 function _rcPaid(bk){ return (typeof acctBookingPaid==='function')&&acctBookingPaid(bk); }
 function _rcDayMatch(bk,date){ return (bk.schemaVer===2)?(bk.trips||[]).some(function(t){return t.date===date;}):(bk.travelDate===date); }
@@ -5822,17 +5850,32 @@ function _rcRowData(r){ var bk=r.bk,t=r.t; var route=(typeof ROUTES!=='undefined
     voucher:bk.voucherRef||bk.code||bk.id||'—', lead:bk.leadPax||bk.customerName||'—', phone:bk.leadPhone||'', pax:pax, ad:_pxt('ad'), chd:_pxt('chd'), inf:_pxt('inf'), foc:_pxt('foc'),
     time:(bk.ops&&bk.ops.pickupTimeFinal)||(t&&t.pickupTime)||bk.pickupTime||'—', hotel:bk.hotelName||bk.pickup||'', room:bk.roomNumber||'',
     zone:bkV2ZoneLabel((t&&t.zone)||bk.pickupZone||'NoTransfer'), special:req.join(' · '), cot:cot, paid:_rcPaid(bk), payType:ag&&ag.payType }; }
+/* §rcSplit · ปุ่มนี้แปลว่า "ส่งใบให้เอเย่นต์แล้ว" อย่างเดียว
+   ของเดิมทับ status เป็น done ทุกใบ · "โทรแล้วไม่รับ" ที่พนักงานเพิ่งบันทึกหายเกลี้ยง
+   ตอนนี้แตะเฉพาะ sent · ผลติดต่อลูกค้ารายคนอยู่ครบเหมือนเดิมทุกใบ */
 function rcSendAgent(key){ var date=_rcDate, now=new Date().toISOString(), by=(typeof laBy==='function')?laBy():'', n=0;
   SB_BOOKINGS.forEach(function(bk){ if(_RC_CXL.includes(bk.status))return; if(_rcAgentKey(bk)!==key)return; if(!_rcDayMatch(bk,date))return;
-    bk.ops=bk.ops||{}; bk.ops.reconfirm={status:'done',via:'reconfirm',at:now,by:by}; n++;
+    bk.ops=bk.ops||{}; var r=_rcRec(bk)||{};
+    bk.ops.reconfirm={ status:r.status||'', via:r.via||'reconfirm', at:r.at||'', by:r.by||'',
+                       sent:true, sentAt:now, sentBy:by }; n++;
     if(typeof bkV2AddHistory==='function') bkV2AddHistory(bk,'notify','Re-confirm sent to agent','Notify'); });
   if(n&&typeof acctPersistBookings==='function') acctPersistBookings(); renderReconfirm(); }
+/* Undo = ยกเลิกเฉพาะ "ส่งใบแล้ว" · ไม่ใช่ล้างงานที่พนักงานบันทึกไว้
+   เหลือทั้งสองช่องว่างจริง ๆ ค่อยลบก้อนทิ้ง จะได้ไม่มีก้อนเปล่าค้าง */
 function rcUnsendAgent(key){ var date=_rcDate;
-  SB_BOOKINGS.forEach(function(bk){ if(_rcAgentKey(bk)!==key||!bk.ops)return; if(!_rcDayMatch(bk,date))return; bk.ops.reconfirm=null; });
+  SB_BOOKINGS.forEach(function(bk){ if(_rcAgentKey(bk)!==key||!bk.ops)return; if(!_rcDayMatch(bk,date))return;
+    var r=_rcRec(bk); if(!r) return;
+    if(!r.status){ bk.ops.reconfirm=null; return; }
+    bk.ops.reconfirm={ status:r.status, via:r.via||'reconfirm', at:r.at||'', by:r.by||'',
+                       sent:false, sentAt:'', sentBy:'' }; });
   if(typeof acctPersistBookings==='function') acctPersistBookings(); renderReconfirm(); }
 function rcToggleBooking(bkId){ var bk=SB_BOOKINGS.find(function(x){return x.id===bkId;}); if(!bk)return; bk.ops=bk.ops||{};
-  if(_rcSent(bk)){ bk.ops.reconfirm=null; }
-  else { bk.ops.reconfirm={status:'done',via:'reconfirm',at:new Date().toISOString(),by:(typeof laBy==='function')?laBy():''}; if(typeof bkV2AddHistory==='function') bkV2AddHistory(bk,'notify','Re-confirmed (reconfirm page)','Notify'); }
+  var r=_rcRec(bk)||{}, was=_rcSent(bk);
+  if(was && !r.status){ bk.ops.reconfirm=null; }
+  else { bk.ops.reconfirm={ status:r.status||'', via:r.via||'reconfirm', at:r.at||'', by:r.by||'',
+      sent:!was, sentAt:was?'':new Date().toISOString(),
+      sentBy:was?'':((typeof laBy==='function')?laBy():'') };
+    if(!was && typeof bkV2AddHistory==='function') bkV2AddHistory(bk,'notify','Re-confirmed (reconfirm page)','Notify'); }
   if(typeof acctPersistBookings==='function') acctPersistBookings(); renderReconfirm(); }
 /* §rcColor · แยกสีเส้นทางหนึ่งสี ออกเป็นสามค่าที่ใช้ด้วยกันได้
    สีเส้นทางบางเส้นอ่อนมาก (#6aaee0) เอามาเป็นตัวหนังสือบนพื้นอ่อนจะอ่านไม่ออก
