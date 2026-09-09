@@ -56757,11 +56757,24 @@ function paEnsureMtCode(){
     if(typeof poCanEdit==='function' && poCanEdit()) poPersist();
   }catch(_){}
 }
+/* §plMerge · แท็บที่กำลังดูอยู่ในหน้าตารางการทำงาน · roster | lic */
+var _paTab='roster';
 function renderPierAtt(pier){
   paEnsureMtCode(); paEnsureNightCode(); paSkinApply();
   if(pier) _poPier=pier;
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
   var host=document.getElementById('pa-host-'+P.k); if(!host) return;
+  /* §plMerge · เดิมใบอนุญาตเป็นเมนูแยกที่ปิดสิทธิ์ได้ต่างหาก
+     ยุบมารวมแล้วต้องไม่ทำให้คนที่ไม่มีสิทธิ์ pol-<ท่า> เห็นของที่ไม่ควรเห็น */
+  var _licOK=true;
+  try{ if(typeof laAllowed==='function') _licOK=!!laAllowed('pol-'+P.k); }catch(_){}
+  var _isLic=(_paTab==='lic' && _licOK);
+  /* จำนวนใบที่หมดอายุแล้ว · ติดไว้บนแท็บ จะได้เห็นโดยไม่ต้องกดเข้าไปดู */
+  var _licBad=0;
+  if(_licOK) try{
+    (PIER_STAFF||[]).filter(function(s){ return s.pier===P.k && s.active!==false; })
+      .forEach(function(s){ plOf(s.id).forEach(function(l){ if(plState(l)==='bad') _licBad++; }); });
+  }catch(_){}
   var ro=!poCanEdit(), CY=paCycle(_paDate), groups=paGroups(P.k), today=poYMD(new Date());
   var ed=(!ro && _paEdit);   // §paEditLock · ช่องพิมพ์ทับเปิดเฉพาะตอนกด "แก้ไข" ค้างไว้
   var WD=['SUN','MON','TUE','WED','THU','FRI','SAT'];   // §paSheet · หัวข้อเป็นอังกฤษตามที่ตกลง
@@ -56877,10 +56890,22 @@ function renderPierAtt(pier){
 
   host.innerHTML='<style id="pa-style">'+pjCSS()+plCSS()+paCSS()+poCSS()+'</style>'
     +'<div class="pj-h"><div><div class="lab">Pier Office</div>'
-      +'<h1>'+poE(P.n||P.t)+' · ตารางการทำงาน</h1>'
-      +'<p>ขึ้นเองจากใบงานเรือ · แก้ทับรายช่องได้ · '
-        +'รอบนี้มีใบงานแล้ว <b style="color:#16265C">'+nJob+'</b> วัน จาก '+CY.days.length+' วัน'
-        +(ed?' · <b style="color:#8A5A00">กำลังแก้ไขรายชื่ออยู่</b>':'')+'</p></div></div>'
+      +'<h1>'+poE(P.n||P.t)+' · '+(_isLic?'ใบอนุญาต':'ตารางการทำงาน')+'</h1>'
+      +'<p>'+(_isLic
+        ? 'ใบกัปตันและใบช่างเครื่องของพนักงานที่<b>ประจำท่านี้</b> (คนที่มาช่วยจากท่าอื่นดูได้ที่ท่าประจำของเขา) · '
+          +'ใบงานเรือจะตรวจให้อัตโนมัติทุกลำ ว่ามีคนถือใบครบไหม ชั้นครอบคลุมเรือลำนั้นไหม และใบยังไม่หมดอายุไหม'
+        : ('ขึ้นเองจากใบงานเรือ · แก้ทับรายช่องได้ · '
+          +'รอบนี้มีใบงานแล้ว <b style="color:#16265C">'+nJob+'</b> วัน จาก '+CY.days.length+' วัน'
+          +(ed?' · <b style="color:#8A5A00">กำลังแก้ไขรายชื่ออยู่</b>':'')))+'</p></div></div>'
+    /* §plMerge · สองหน้านี้อ่าน PIER_STAFF ชุดเดียวกัน และปุ่ม "ทะเบียนประเภทใบ"
+       ก็อยู่บนแถบนี้อยู่แล้ว · ของมันคู่กันตั้งแต่แรก แค่ถูกแยกเป็นสองบรรทัดในเมนู */
+    +(_licOK?('<div class="pj-bar" style="margin-bottom:9px">'
+      +'<button class="'+(_isLic?'':'pri')+'" onclick="paTab(\'roster\')">ตารางการทำงาน</button>'
+      +'<button class="'+(_isLic?'pri':'')+'" onclick="paTab(\'lic\')">ใบอนุญาต'
+        +(_licBad?('<span style="margin-left:6px;background:#FBE9E4;color:#C0271C;border-radius:999px;'
+          +'padding:1px 7px;font-size:10.5px;font-weight:800">'+_licBad+'</span>'):'')+'</button>'
+      +'</div>'):'')
+    +(_isLic ? plBody(P, ro) : ''
     +'<div class="pj-bar">'
       +'<button onclick="paShift(-1)">&#8249; รอบก่อน</button>'
       +'<span style="font-size:13px;font-weight:800;color:#16265C;font-variant-numeric:tabular-nums">'+poE(CY.from)+' – '+poE(CY.to)+'</span>'
@@ -56908,8 +56933,10 @@ function renderPierAtt(pier){
     +(groups.length
       ? ('<div class="pl-card" style="margin-bottom:0"><div class="pa-wrap"><table class="pa'+(ed?' ed':'')+'"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'
          +'<div class="pa-lg">'+lg+'</div></div>')
-      : '<div class="pj-empty">ยังไม่มีพนักงานของท่านี้ · กดปุ่ม "ทะเบียนพนักงาน" ที่แถบด้านบนเพื่อเพิ่ม</div>');
+      : '<div class="pj-empty">ยังไม่มีพนักงานของท่านี้ · กดปุ่ม "ทะเบียนพนักงาน" ที่แถบด้านบนเพื่อเพิ่ม</div>'));
 }
+/* §plMerge · สลับแท็บ · จำไว้ระหว่างที่ยังอยู่ในหน้านี้ ไม่ได้เก็บลงข้อมูล */
+function paTab(t){ _paTab=(t==='lic')?'lic':'roster'; renderPierAtt(); }
 function paShift(n){
   var CY=paCycle(_paDate), d=new Date(CY.from+'T12:00:00');
   d.setMonth(d.getMonth()+n); _paDate=poYMD(d); renderPierAtt();
@@ -57573,9 +57600,12 @@ function plCSS(){
 
 function renderPierLic(pier){
   if(pier) _poPier=pier;
+  /* §plMerge · ใบอนุญาตย้ายไปเป็นแท็บในหน้าตารางการทำงานแล้ว
+     view นี้ยังอยู่เผื่อใครเปิดค้างไว้หรือมีลิงก์เก่า · พาไปที่แท็บให้เลย */
+  if(typeof _paTab!=='undefined'){ _paTab='lic'; try{ pjGo('poa'); return; }catch(_){} }
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
   var host=document.getElementById('pl-host-'+P.k); if(!host) return;
-  var ro=!poCanEdit(), W=plWarnDays();
+  var ro=!poCanEdit();
   var staff=(PIER_STAFF||[]).filter(function(s){ return s.pier===P.k && s.active!==false; });
   var bad=0, soon=0, ok=0, none=0, next=null;
   staff.forEach(function(s){
@@ -57611,6 +57641,41 @@ function renderPierLic(pier){
       +'<h1>'+poE(P.n||P.t)+' · ใบอนุญาต</h1>'
       +'<p>ใบกัปตันและใบช่างเครื่องของพนักงานที่<b>ประจำท่านี้</b> (คนที่มาช่วยจากท่าอื่นดูได้ที่ท่าประจำของเขา) · ใบงานเรือจะตรวจให้อัตโนมัติทุกลำ '
         +'ว่ามีคนถือใบครบไหม ชั้นครอบคลุมเรือลำนั้นไหม และใบยังไม่หมดอายุไหม</p></div></div>'
+    +plBody(P, ro);
+}
+/* §plMerge · เนื้อในหน้าใบอนุญาต · ใช้ทั้งหน้าเดิมและแท็บในหน้าตารางการทำงาน
+   แยกออกมาเฉย ๆ ไม่ได้แตะตรรกะข้างใน ตัวเลขทุกช่องยังคำนวณเหมือนเดิมทุกตัว */
+function plBody(P, ro){
+  var W=plWarnDays();
+  var staff=(PIER_STAFF||[]).filter(function(s){ return s.pier===P.k && s.active!==false; });
+  var bad=0, soon=0, ok=0, none=0, next=null;
+  staff.forEach(function(s){
+    var L=plOf(s.id);
+    if(!L.length){ none++; return; }
+    L.forEach(function(l){ var st=plState(l), d=plDaysTo(l.exp);
+      if(st==='bad') bad++;
+      else if(st==='soon'){ soon++; if(!next||d<next.d) next={d:d,s:s,l:l}; }
+      else ok++; });
+  });
+  var kpi=function(k,v,sub,c){ return '<div><div class="k">'+k+'</div><div class="v" style="color:'+c+'">'+v+'</div><div class="s">'+sub+'</div></div>'; };
+  var rows=staff.map(function(s){
+    var L=plOf(s.id);
+    return '<tr><td><b>'+poE(s.name||s.nick||s.id)+'</b> <span class="pl-mut">('+poE(s.nick||'')+')</span></td>'
+      +'<td class="pl-mut">'+poE(s.role||'')+'</td><td>'
+      +(L.length? L.map(function(l){
+          var st=plState(l), d=plDaysTo(l.exp);
+          var col=(st==='bad')?'#C0271C':(st==='soon'?'#B4560A':(st==='noexp'?'#8B93A1':'#0F6E56'));
+          var txt=(st==='bad')?('หมดอายุแล้ว '+(-d)+' วัน'):(st==='soon'?('เหลือ '+d+' วัน'):(st==='noexp'?'ไม่ระบุวันหมดอายุ':('ถึง '+l.exp)));
+          return '<div class="pl-row">'+plChip(l,null)
+            +'<span style="font-weight:600">'+poE(plLabel(l))+'</span>'
+            +(l.no?('<span class="pl-mut" style="font-variant-numeric:tabular-nums">'+poE(l.no)+'</span>'):'')
+            +'<span style="font-size:11px;font-weight:700;color:'+col+'">'+txt+'</span>'
+            +(ro?'':'<button class="po-btn" onclick="plEdit(\''+l.id+'\')">แก้</button>')
+            +'</div>'; }).join('')
+        :'<span class="pl-mut">— ยังไม่ได้กรอกใบอนุญาต —</span>')
+      +'</td><td style="text-align:right">'+(ro?'':'<button class="po-btn" onclick="plAdd(\''+s.id+'\')">+ เพิ่มใบ</button>')+'</td></tr>';
+  }).join('');
+  return ''
     +'<div class="pl-kpi">'
       +kpi('หมดอายุแล้ว',bad,'ยังจ่ายงานได้ แต่ขึ้นเตือนแดงทุกครั้ง','#C0271C')
       +kpi('ใกล้หมดอายุ',soon,'ภายใน '+W+' วัน'+(next?(' · ใกล้สุด '+poE(next.s.nick||next.s.name)+' อีก '+next.d+' วัน'):''),'#B4560A')
@@ -57624,7 +57689,7 @@ function renderPierLic(pier){
       +'<span style="font-size:11.5px;color:#6E7684">วัน</span>'
       +'</div>'
       +(staff.length?('<table class="pl-t"><thead><tr><th style="width:230px">พนักงาน</th><th style="width:120px">ตำแหน่ง</th><th>ใบที่ถือ</th><th style="width:110px"></th></tr></thead><tbody>'+rows+'</tbody></table>')
-        :'<div class="po-empty" style="padding:26px;text-align:center;color:#9BA3B0;font-size:12.5px">ยังไม่มีพนักงานของท่านี้ · เพิ่มได้ที่หน้า ตารางการทำงาน › ทะเบียนพนักงาน</div>')
+        :'<div class="po-empty" style="padding:26px;text-align:center;color:#9BA3B0;font-size:12.5px">ยังไม่มีพนักงานของท่านี้ · กดปุ่ม "ทะเบียนพนักงาน" ที่แถบด้านบนเพื่อเพิ่ม</div>')
     +'</div>';
 }
 function plSetWarn(v){ var n=parseInt(v,10); if(!(n>0)) return; PIER_CFG.licWarnDays=n; poPersist(); renderPierLic(); }

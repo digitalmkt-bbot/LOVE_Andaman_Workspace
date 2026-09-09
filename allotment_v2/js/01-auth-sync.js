@@ -569,6 +569,9 @@
   window.laGuardEdit=function(area){ if(laCanEditArea(area)) return true; _laToast('👁 ส่วนนี้คุณมีสิทธิ์ดูอย่างเดียว · แก้ไขไม่ได้ (ติดต่อ admin)'); return false; };
   function laFullAccess(){ return !ME || ME.role==='admin' || !Array.isArray(ME.perms); }
   function laAllowed(view){ if(laFullAccess()) return true; var set=laExpandPerms(ME.perms); if(!set) return true; if(set[view]) return true; var managed=false; for(var i=0;i<LA_NAV.length;i++){ if(LA_NAV[i].v===view){managed=true;break;} } return managed?false:true; }
+  /* §plMerge · หน้าที่ยุบเมนูมารวมกันต้องเช็คสิทธิ์ของเมนูที่ถูกยุบเองได้
+     ไม่งั้นคนที่มีสิทธิ์หน้าหนึ่งจะเห็นอีกหน้าที่ admin ไม่ได้ให้สิทธิ์ไว้ */
+  window.laAllowed=laAllowed;
   function laApplyPerms(){ if(laFullAccess()) return;
     var items=document.querySelectorAll('.nav-item[data-view]');
     items.forEach(function(it){ it.style.display = laAllowed(it.dataset.view) ? '' : 'none'; });
