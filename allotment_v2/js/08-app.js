@@ -5857,7 +5857,23 @@ function _rcRowData(r){ var bk=r.bk,t=r.t; var route=(typeof ROUTES!=='undefined
   return { bk:bk, ag:ag, prog:(route&&route.name)||r.routeId, agentName:agentName, key:_rcAgentKey(bk), addon:addon.join(' · '), payLabel:payLabel,
     voucher:bk.voucherRef||bk.code||bk.id||'—', lead:bk.leadPax||bk.customerName||'—', phone:bk.leadPhone||'', pax:pax, ad:_pxt('ad'), chd:_pxt('chd'), inf:_pxt('inf'), foc:_pxt('foc'),
     time:(bk.ops&&bk.ops.pickupTimeFinal)||(t&&t.pickupTime)||bk.pickupTime||'—', hotel:bk.hotelName||bk.pickup||'', room:bk.roomNumber||'',
-    zone:bkV2ZoneLabel((t&&t.zone)||bk.pickupZone||'NoTransfer'), special:req.join(' · '), cot:cot, paid:_rcPaid(bk), payType:ag&&ag.payType }; }
+    /* §rcArea · ย่านรับจริง เช่น Patong / Kalim / Karon
+       ของเดิมใช้โซนใหญ่ PK/KL ซึ่งแปลได้แค่ "Phuket" ทั้งคอลัมน์
+       ไม่มีย่านค่อยถอยไปใช้โซนใหญ่ ดีกว่าเว้นว่าง */
+    zone:_rcArea(bk,t), special:req.join(' · '), cot:cot, paid:_rcPaid(bk), payType:ag&&ag.payType }; }
+function _rcArea(bk,t){
+  try{
+    if(bk.pickupAreaId && typeof bkV2GetArea==='function'){
+      var a=bkV2GetArea(bk.pickupAreaId);
+      if(a && a.name) return a.name;
+    }
+  }catch(_){}
+  var raw=String(bk.pickupArea||'').trim();
+  if(raw) return raw;
+  return (typeof bkV2ZoneLabel==='function')
+    ? bkV2ZoneLabel((t&&t.zone)||bk.pickupZone||'NoTransfer')
+    : ((t&&t.zone)||bk.pickupZone||'—');
+}
 /* §rcSplit · ปุ่มนี้แปลว่า "ส่งใบให้เอเย่นต์แล้ว" อย่างเดียว
    ของเดิมทับ status เป็น done ทุกใบ · "โทรแล้วไม่รับ" ที่พนักงานเพิ่งบันทึกหายเกลี้ยง
    ตอนนี้แตะเฉพาะ sent · ผลติดต่อลูกค้ารายคนอยู่ครบเหมือนเดิมทุกใบ */
@@ -6061,7 +6077,7 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
     var ring=sent?(';box-shadow:0 0 0 2px '+_rcSentRing(_rcIsInvoiceAgent(d.ag)||d.paid)):'';
     return '<span style="display:inline-block;background:'+ac+';color:'+ink+';padding:'+(big?'4px 11px':'3px 9px')+';border-radius:7px;font-weight:600;font-size:'+(big?'13px':'11.5px')+';white-space:nowrap;max-width:210px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle'+ring+'">'+esc(d.agentName)+(sent?(' '+TI_CHECK):'')+'</span>'; }
   function fmtTime(iso){ try{ return new Date(iso).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
-  var COLDEFS=[{k:'prog',l:'Program',w:176},{k:'agent',l:'Agent',w:146},{k:'voucher',l:'Booking #',w:124},{k:'submitted',l:'Submitted by',w:118},{k:'lead',l:'Customer',w:148},{k:'phone',l:'Phone',w:130},{k:'ad',l:'AD',w:32},{k:'chd',l:'CHD',w:38},{k:'inf',l:'INF',w:34},{k:'foc',l:'FOC',w:34},{k:'time',l:'Pick-up',w:124},{k:'hotel',l:'Hotel',w:180},{k:'room',l:'Room',w:64},{k:'zone',l:'Zone',w:108},{k:'addon',l:'Add-on',w:128},{k:'special',l:'Special request',w:164},{k:'payment',l:'Payment',w:150},{k:'status',l:'Re-confirm status',w:196}];
+  var COLDEFS=[{k:'prog',l:'Program',w:176},{k:'agent',l:'Agent',w:146},{k:'voucher',l:'Booking #',w:124},{k:'submitted',l:'Submitted by',w:118},{k:'lead',l:'Customer',w:148},{k:'phone',l:'Phone',w:130},{k:'ad',l:'AD',w:32},{k:'chd',l:'CHD',w:38},{k:'inf',l:'INF',w:34},{k:'foc',l:'FOC',w:34},{k:'time',l:'Pick-up',w:124},{k:'hotel',l:'Hotel',w:180},{k:'room',l:'Room',w:64},{k:'zone',l:'Pickup area',w:108},{k:'addon',l:'Add-on',w:128},{k:'special',l:'Special request',w:164},{k:'payment',l:'Payment',w:150},{k:'status',l:'Re-confirm status',w:196}];
   function _rcCols(withAgent){ return COLDEFS.filter(function(c){ return withAgent||c.k!=='agent'; }); }
   function _rcTableHead(cols){ var w=cols.reduce(function(s,c){return s+c.w;},0);
     return '<table style="table-layout:fixed;min-width:'+w+'px"><colgroup>'+cols.map(function(c){return '<col style="width:'+c.w+'px">';}).join('')+'</colgroup>'
@@ -6118,10 +6134,13 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
     +'#reconfirm-host table{border-collapse:collapse;width:100%}'
     +'#reconfirm-host button{font-family:inherit;cursor:pointer}'
     /* แถบบน + แถบคำอธิบาย · ตรึงใต้ topbar ของแอป */
-    /* พื้นทึบต้องคลุมขอบบน 18px ของหน้าด้วย
-       ไม่งั้นตอนเลื่อน แถวขาวโผล่ในช่องว่างเหนือแถบที่ตรึงไว้ */
-    +'#reconfirm-host .rc-chrome{position:sticky;top:var(--rc-top,52px);z-index:40;'
-      +'background:#16265C;padding:18px 0 2px;margin:-18px 0 0}'
+    /* §rcStick · ดึงกล่องขึ้นเท่ากับระยะที่มันไหลตามปกติ
+       กล่องจึงนอนอยู่ที่ --rc-top พอดีตั้งแต่ยังไม่เลื่อน ระยะไถลเหลือ 0
+       padding เท่ากับระยะที่ดึงขึ้น พื้นทึบจึงยังคลุมถึงขอบบนสุด
+       ค่า --rc-pull วัดจากของจริงใน rcSyncSticky ไม่ได้ hardcode */
+    +'#reconfirm-host .rc-chrome{position:sticky;top:var(--rc-top,0px);z-index:40;'
+      +'background:#16265C;padding:var(--rc-pull,18px) 0 2px;'
+      +'margin:calc(var(--rc-pull,18px) * -1) 0 0}'
     /* §rcBop · แบนเหมือน .bop2-top · ถอดแผ่นแก้วของ Dashboard ออก */
     +'#reconfirm-host .rc-top{display:flex;align-items:center;gap:9px;'
       +'flex-wrap:wrap;margin:-4px 0 13px}'
@@ -6309,13 +6328,32 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
 function rcSyncSticky(host){
   if(!host || typeof requestAnimationFrame!=='function') return;
   var apply=function(){
-    var tb=52;
+    var tb=0;
     try{ var v=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--topbar'),10);
          if(!isNaN(v)&&v>=0) tb=v; }catch(_){}
     var ch=host.querySelector('.rc-chrome');
-    var cH=ch?Math.round(ch.getBoundingClientRect().height):0;
+    if(!ch) return;
+    /* §rcStick · ระยะที่แถบไหลตามปกติถ้าไม่ดึงอะไรเลย
+       = ขอบบนของหน้า (พิกัดเอกสาร) + padding-top ของหน้า
+       ดึงขึ้นเท่านี้ กล่องจะนอนอยู่ที่ --rc-top พอดี ระยะไถลเหลือ 0
+       วัดจาก #view-reconfirm ไม่ใช่จากตัว .rc-chrome เอง
+       เพราะ .rc-chrome เป็น sticky · getBoundingClientRect คืนตำแหน่งที่วาด
+       ไม่ใช่ตำแหน่งใน flow · วัดตัวเองจะได้ค่าที่วนกลับมาหาตัวเอง */
+    var pull=18;
+    try{
+      var vw=ch.closest?ch.closest('.view'):null;
+      if(vw){
+        var sy=(window.pageYOffset||window.scrollY||0);
+        var flow=vw.getBoundingClientRect().top+sy+(parseFloat(getComputedStyle(vw).paddingTop)||0);
+        var p=Math.round(flow-tb);
+        /* กันค่าเพี้ยน · หน้าถูกซ่อนอยู่ตอนวัด หรือ layout ยังไม่นิ่ง */
+        if(p>=0 && p<=400) pull=p;
+      }
+    }catch(_){}
+    var cH=Math.round(ch.getBoundingClientRect().height);
     /* กันค่าเพี้ยน · แถบบนสูงเกินครึ่งจอแปลว่าวัดผิด ดีกว่าดันการ์ดหล่นหายไปทั้งหน้า */
     if(cH > Math.max(200,(window.innerHeight||800)*0.45)) cH=0;
+    host.style.setProperty('--rc-pull', pull+'px');
     host.style.setProperty('--rc-top', tb+'px');
     host.style.setProperty('--rc-hd',  (tb+cH)+'px');
   };
@@ -55056,46 +55094,74 @@ function poPrintAll(){
       + '<td'+(gX>0?' class="bad"':' class="ok"')+'>'+(gX>0?gX:'ครบ')+'</td></tr>';
   }
 
-  /* §poMoney · สรุปเงินของท่าในวันเดียวกัน · อ่านจาก pcTotals/pcOpening
-     ตัวเดียวกับที่หน้าเงินสดย่อยใช้ ไม่ได้คำนวณใหม่
-     ถ้าโมดูลเงินสดย่อยไม่ได้โหลด ก็ข้ามบล็อกนี้ไปเงียบ ๆ ใบยังพิมพ์ได้ */
+  /* §poDep · สรุปมัดจำของท่า · แทนที่สรุปเงินสดย่อยของเดิม
+     ใบนี้ชื่อ "สรุปเบิก-คืนอุปกรณ์" · มัดจำคือเงินที่ผูกกับการเบิก-คืนตรง ๆ
+     ส่วนเงินสดย่อย (ค่าเรือหางยาว ค่าอุทยาน ค่าจอดเรือ) เป็นคนละเรื่อง
+     และมีใบของมันเองอยู่แล้ว · เอามาแปะตรงนี้คนอ่านต้องแยกเองว่าอันไหนเรื่องอะไร
+
+     อ่านจาก poIsSaved ตัวเดียวกับที่หน้าจอใช้ ไม่ได้คำนวณใหม่
+     แถวที่ยังไม่ปิดนับด้วย poIsRowState ตัวเดิม เลขจึงตรงกับการ์ดบนหน้าจอ */
   var _money='';
   try{
-    if(typeof pcTotals==='function'){
-      var T=pcTotals(pier,date)||{};
-      var op=(typeof pcOpening==='function')?pcOpening(pier,date):0;
+    if(typeof poIsSaved==='function'){
       var B=function(n){ n=+n||0; return n.toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2}); };
-      var left=op+(+T.net||0);
-      var notPulled=(+T.ref||0)-(+T.pulled||0);
-      _money=''
-       +'<h2>สรุปเงินสดย่อยของท่า · วันเดียวกัน</h2>'
-       +'<table><thead><tr>'
-         +'<th class="l" style="width:200px">สมุดเดินบัญชี · เงินจริงในลิ้นชัก</th>'
-         +'<th style="width:120px">ยอดยกมา</th><th style="width:120px">เงินเข้าวันนี้</th>'
-         +'<th style="width:120px">จ่ายออกวันนี้</th><th style="width:130px">คงเหลือปลายวัน</th>'
-         +'<th class="l">หมายเหตุ</th></tr></thead><tbody>'
-       +'<tr><td class="l">ยอดตามสมุด</td>'
-         +'<td>'+B(op)+'</td><td class="ok">'+B(T.in)+'</td><td>'+B(T.out)+'</td>'
-         +'<td'+(left<0?' class="bad"':' class="ok"')+'><b>'+B(left)+'</b></td>'
-         +'<td class="l">นับเฉพาะรายการที่คนหน้าท่าบันทึกเอง จึงตรงกับเงินในลิ้นชักจริง</td></tr>'
-       +'</tbody></table>'
-       +'<table style="margin-top:6px"><thead><tr>'
-         +'<th class="l" style="width:200px">ยอดอ้างอิงจากอีกสองชีท</th>'
-         +'<th style="width:120px">ค่าเรือหางยาว</th><th style="width:120px">ค่าอุทยาน</th>'
-         +'<th style="width:120px">ค่าจอดเรือ</th><th style="width:130px">รวม</th>'
-         +'<th class="l">หมายเหตุ</th></tr></thead><tbody>'
-       +'<tr><td class="l">ยอดที่คำนวณได้</td>'
-         +'<td>'+B(T.lt)+'</td><td>'+B(T.pk)+'</td><td>'+B(T.dock)+'</td>'
-         +'<td><b>'+B(T.ref)+'</b></td>'
-         +'<td class="l">ดึงเข้าสมุดแล้ว '+B(T.pulled)+''
-           +(notPulled>0.004?(' · <b style="color:#C0271C">ยังไม่ได้ดึง '+B(notPulled)+'</b>'):' · ดึงครบแล้ว')
-         +'</td></tr>'
-       +'</tbody></table>'
-       +'<div class="nt" style="margin-top:5px">'
-         +'<b>อย่าบวกสองตารางนี้เข้าด้วยกัน</b> · ค่าเรือหางยาว ค่าอุทยาน และค่าจอดเรือ '
-         +'ไม่เข้าสมุดเองจนกว่าจะกดปุ่ม “ดึงเข้าสมุด” ที่หน้าเงินสดย่อย · '
-         +'ส่วนที่ดึงไปแล้วนับอยู่ในช่อง “จ่ายออกวันนี้” ของตารางบนเรียบร้อยแล้ว'
-       +'</div>';
+      var _KS=(typeof PO_KORDER!=='undefined')?PO_KORDER:[];
+      var _RS=(typeof poIsRowState==='function')?poIsRowState:null;
+      var per=boats.map(function(b){
+        var o={bid:b.bid, name:(b.boat&&b.boat.name)||b.bid, dep:0, back:0, cut:0, nDep:0, nBack:0, wait:0, rows:0};
+        var SV=poIsSaved(date, b.bid);
+        if(SV && Array.isArray(SV.rows)) SV.rows.forEach(function(r){
+          if(!r) return;
+          var d=+r.dep||0, k=+r.back||0, c=+r.cut||0;
+          o.dep+=d; o.back+=k; o.cut+=c; o.rows++;
+          if(d>0) o.nDep++;
+          if(k>0) o.nBack++;
+          if(_RS){ var st=_RS({iss:r.iss||{}, ret:r.ret||{}}, _KS);
+                   if(st.c==='b'||st.c==='a') o.wait++; }
+        });
+        return o;
+      });
+      var G={dep:0,back:0,cut:0,nDep:0,nBack:0,wait:0,rows:0};
+      per.forEach(function(o){ G.dep+=o.dep; G.back+=o.back; G.cut+=o.cut;
+        G.nDep+=o.nDep; G.nBack+=o.nBack; G.wait+=o.wait; G.rows+=o.rows; });
+      /* ไม่มีใบไหนบันทึกมัดจำไว้เลย ก็ไม่ต้องพิมพ์ตารางเปล่า */
+      if(G.rows){
+        var owe=G.dep-G.back-G.cut;
+        var cell=function(v, cls){ return '<td'+(v?(cls?(' class="'+cls+'"'):''):' class="z"')+'>'
+          +(v?B(v):'·')+'</td>'; };
+        _money=''
+         +'<h2>สรุปมัดจำของท่า · วันเดียวกัน</h2>'
+         +'<table><thead><tr>'
+           +'<th class="l" style="width:190px">รายการ</th>'
+           + per.map(function(o){ return '<th style="width:120px">'+e(o.name)+'</th>'; }).join('')
+           +'<th style="width:130px">รวมทั้งวัน</th>'
+           +'<th class="l">หมายเหตุ</th></tr></thead><tbody>'
+         +'<tr><td class="l">รับมัดจำวันนี้</td>'
+           + per.map(function(o){ return cell(o.dep); }).join('')
+           +'<td><b>'+B(G.dep)+'</b></td>'
+           +'<td class="l">'+G.nDep+' แถวที่มีการวางมัดจำ</td></tr>'
+         +'<tr><td class="l">คืนมัดจำแล้ว</td>'
+           + per.map(function(o){ return cell(o.back,'ok'); }).join('')
+           +'<td class="ok"><b>'+B(G.back)+'</b></td>'
+           +'<td class="l">'+G.nBack+' แถวที่คืนเงินไปแล้ว</td></tr>'
+         +'<tr><td class="l">หักไว้ (ของหาย / เสีย)</td>'
+           + per.map(function(o){ return cell(o.cut,'bad'); }).join('')
+           +'<td'+(G.cut?' class="bad"':'')+'><b>'+B(G.cut)+'</b></td>'
+           +'<td class="l">'+(G.cut?'หักจากมัดจำ ไม่ต้องคืนส่วนนี้':'ยังไม่มีการหัก')+'</td></tr>'
+         +'<tr class="tt"><td class="l">ค้างคืนลูกค้า</td>'
+           + per.map(function(o){ var v=o.dep-o.back-o.cut;
+               return '<td'+(v>0.004?' class="bad"':' class="z"')+'>'+(v>0.004?B(v):'·')+'</td>'; }).join('')
+           +'<td'+(owe>0.004?' class="bad"':' class="ok"')+'><b>'+B(owe)+'</b></td>'
+           +'<td class="l">'+G.wait+' แถวยังไม่ปิด · รับ − คืน − หัก</td></tr>'
+         +'</tbody></table>'
+         +'<div class="nt" style="margin-top:5px">'
+           +'เงินมัดจำในตารางนี้เป็น<b>บันทึกของหน้าท่า</b> ไว้ให้รู้ว่าใครวางเท่าไหร่ '
+           +'ได้คืนไปแล้วหรือยัง · <b>ไม่ได้ไหลเข้าระบบบัญชี</b> · '
+           +'“ค้างคืนลูกค้า” คือเงินที่ยังต้องคืน = รับ − คืน − หัก · '
+           +'“ยังไม่ปิด” นับจากของที่ยังคืนไม่ครบ ไม่ใช่จากตัวเงิน แถวที่ของครบแล้ว'
+           +'แต่ยังไม่ได้คืนเงินจึงไม่ถูกนับตรงนี้'
+         +'</div>';
+      }
     }
   }catch(_){ _money=''; }
 
