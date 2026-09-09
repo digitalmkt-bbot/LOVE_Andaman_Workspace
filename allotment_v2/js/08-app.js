@@ -54880,55 +54880,35 @@ function poStockTable(items, ro){
   order.sort(function(a,b){ var ia=PO_KORDER.indexOf(a), ib=PO_KORDER.indexOf(b);
     return (ia<0?999:ia)-(ib<0?999:ib); });
   var cards=order.map(function(k){
+    /* §poStockRev · กลับมาเป็นการ์ดต่อประเภทเหมือนเดิม
+       เคยลองกางเป็นตารางคอลัมน์คงที่แล้วแย่กว่า · การ์ดกินแนวนอนสามคอลัมน์
+       ท่าที่มีของ 18 รายการ 6 ประเภทจบในหน้าจอเดียว ไม่ต้องเลื่อนหาหัวข้อ */
     var K=PO_KIND[k]||{t:k,u:'ชิ้น',c:'#9A9A93'}, list=by[k];
-    var tot=0, rd=0, sum={};
-    PO_BUCKET.forEach(function(x){ sum[x.k]=0; });
-    list.forEach(function(it){ var b=poBal(it.id);
-      tot+=poNum(it.total); rd+=poReadyShown(it);
-      PO_BUCKET.forEach(function(x){ sum[x.k]+=(+b[x.k]||0); }); });
-    /* หัวกลุ่มเป็นแถวคาดทั้งตาราง · ของทุกชนิดอยู่ในตารางเดียวกัน เทียบแนวตั้งได้ */
-    var band='<tr><td colspan="'+(PO_BUCKET.length+4)+'" style="background:#F1F5F9;padding:7px 12px">'
-      +'<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+K.c+';margin-right:7px"></span>'
-      +'<b style="font-size:12.5px;color:#0F172A">'+poE(K.t)+'</b>'
-      +'<span style="font-size:11px;color:#64748B;margin-left:9px">'+list.length+' รายการ · '
-      +'พร้อมใช้ <b style="color:#1C7A4E">'+rd+'</b> / '+tot+' '+poE(K.u)+'</span></td></tr>';
-    return band + list.map(function(it){
-      var b=poBal(it.id);
-      var tip=it.label+' · ทะเบียน '+poNum(it.total)+' '+K.u+(b.gone?(' · ตัดออกสะสม '+b.gone):'');
-      /* §poNoNeg · พร้อมใช้เกินทะเบียนแปลว่ามีของคืนกลับมามากกว่าที่เบิกออกไป · ไม่ใช่ของที่มีจริง */
-      var vOver=(b.ready>poNum(it.total));
-      if(vOver) tip+=' · บัญชีขึ้น '+b.ready+' ซึ่งเกินทะเบียน '+(b.ready-poNum(it.total))
-        +' — ยอดคืนมากกว่ายอดเบิก · ตัวเลขนี้ตัดไว้ที่ทะเบียนแล้ว';
-      var num=function(v,c){
-        /* §poNoNeg · ติดลบเป็นไปไม่ได้ · ต้องสะดุดตา ไม่ใช่กลมกลืนกับยอดปกติ */
-        if(v<0) return '<td style="text-align:center;color:#C0271C;font-weight:800;background:#FDF1EF">'+v+'</td>';
-        if(!v)  return '<td style="text-align:center;color:#CBD2DA">·</td>';
-        return '<td style="text-align:center;font-weight:700'+(c?(';color:'+c):'')+'">'+v+'</td>';
-      };
-      return '<tr>'
-        +'<td><b title="'+poE(tip)+'" style="font-weight:700">'+poE(it.label)+'</b></td>'
-        +'<td style="width:120px">'+poStockBar(b,'po-mb')+'</td>'
-        +'<td style="text-align:right;white-space:nowrap;width:96px">'
-          +'<b style="font-size:14px'+(vOver?';color:#C0271C':'')+'"'
-          +(vOver?(' title="'+poE(tip)+'"'):'')+'>'+poReadyShown(it,b)+'</b>'
-          +'<span style="color:#9BA3B0;font-size:11px"> /'+poNum(it.total)+'</span></td>'
-        + PO_BUCKET.filter(function(x){ return x.k!=='ready'; })
-            .map(function(x){ return num(b[x.k], x.c); }).join('')
-        +'<td style="text-align:right;white-space:nowrap;width:150px">'
-          +(b.repair>0?'<button class="po-btn" onclick="poFixOpen(\''+it.id+'\')" title="ซ่อมเสร็จ"'+(ro?' disabled':'')+'>ซ่อม&#10003;</button>':'')
-          +'<button class="po-btn" onclick="poAdjOpen(\''+it.id+'\')" title="ปรับยอด"'+(ro?' disabled':'')+'>ปรับยอด</button>'
-        +'</td></tr>';
-    }).join('');
+    var tot=0, rd=0;
+    list.forEach(function(it){ tot+=poNum(it.total); rd+=poReadyShown(it); });
+    return '<div class="po-kc"><div class="po-kh"><span class="dot" style="background:'+K.c+'"></span>'
+      +'<b>'+poE(K.t)+'</b><span class="sum">พร้อมใช้ <em>'+rd+'</em> / '+tot+' '+poE(K.u)+'</span></div>'
+      + list.map(function(it){
+          var b=poBal(it.id);
+          var tip=it.label+' · ทะเบียน '+poNum(it.total)+' '+K.u+(b.gone?(' · ตัดออกสะสม '+b.gone):'');
+          /* §poNoNeg · พร้อมใช้เกินทะเบียนแปลว่ามีของคืนกลับมามากกว่าที่เบิกออกไป · ไม่ใช่ของที่มีจริง */
+          var vOver=(b.ready>poNum(it.total));
+          if(vOver) tip+=' · บัญชีขึ้น '+b.ready+' ซึ่งเกินทะเบียน '+(b.ready-poNum(it.total))
+            +' — ยอดคืนมากกว่ายอดเบิก · ตัวเลขนี้ตัดไว้ที่ทะเบียนแล้ว';
+          return '<div class="po-ir">'
+            +'<span class="lw"><b class="l" title="'+poE(tip)+'">'+poE(it.label)+'</b>'
+              +'<span class="po-chs">'+poStockChips(b)+'</span></span>'
+            +'<span class="rw">'
+            +poStockBar(b,'po-mb')
+            +'<span class="v"'+(vOver?' style="color:#C0271C" title="'+poE(tip)+'"':'')+'>'+poReadyShown(it,b)+'</span>'
+            +'<span class="u">/'+poNum(it.total)+' '+poE(K.u)+'</span>'
+            +'<span class="ac">'
+              +(b.repair>0?'<button class="po-go" onclick="poFixOpen(\''+it.id+'\')" title="ซ่อมเสร็จ"'+(ro?' disabled':'')+'>ซ่อม&#10003;</button>':'')
+              +'<button class="po-go" onclick="poAdjOpen(\''+it.id+'\')" title="ปรับยอด"'+(ro?' disabled':'')+'>ปรับยอด</button>'
+            +'</span></span></div>'; }).join('')
+      +'</div>';
   }).join('');
-  /* §poMoney · ของเดิมเป็นการ์ดสามคอลัมน์ · ของชิ้นเดียวกันอยู่คนละการ์ด เทียบกันไม่ได้
-     และถังที่เป็นศูนย์จะไม่โผล่เป็นชิปเลย คือไม่เห็นด้วยซ้ำว่าช่องนั้นมีอยู่
-     ตารางคอลัมน์คงที่เทียบแนวตั้งได้ทันที และช่องว่างก็ยังเห็นว่าเป็นช่องอะไร */
-  var hd='<tr><th>รายการ</th><th style="width:120px">สัดส่วน</th>'
-    +'<th style="width:96px;text-align:right">พร้อมใช้ / ทะเบียน</th>'
-    + PO_BUCKET.filter(function(x){ return x.k!=='ready'; }).map(function(x){
-        return '<th style="width:76px;text-align:center">'+poE(x.t)+'</th>'; }).join('')
-    +'<th style="width:150px"></th></tr>';
-  return tools+'<table class="po-t"><thead>'+hd+'</thead><tbody>'+cards+'</tbody></table>';
+  return tools+'<div class="po-kg">'+cards+'</div>';
 }
 
 function poLaundryBlock(ro){
