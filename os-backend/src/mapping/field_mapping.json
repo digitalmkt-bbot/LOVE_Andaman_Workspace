@@ -6788,6 +6788,11 @@
       "kind": "scalar",
       "db_type": "text"
     },
+    "slips": {
+      "source": "ts_cot[key].slips",
+      "kind": "json_text",
+      "db_type": "text"
+    },
     "by": {
       "source": "ts_cot[key].by",
       "kind": "scalar",

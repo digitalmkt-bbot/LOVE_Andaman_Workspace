@@ -20363,7 +20363,10 @@ function tsCotPick(bkId,date,mode,cot,why){
      เติมจากที่หน้างานกดไว้ให้เลย ถ้าคนกดยังไม่ได้พิมพ์อะไร จะได้ไม่ต้องพิมพ์ซ้ำ */
   var rf=_tsCotRefVal(bkId)||cur.ref||'';
   if(mode==='nocol' && !rf){ try{ rf=decodeURIComponent(why||''); }catch(_){ rf=String(why||''); } }
-  TS_COT[k]={ mode:mode, deduct:d, payout:p, ref:rf, by:ckMe(), at:new Date().toISOString() };
+  /* §cotSlip · เปลี่ยนใจกดปุ่มอื่นได้ แต่สลิปที่แนบไว้แล้วต้องไม่หายไปด้วย
+     (บรรทัดนี้สร้าง object ใหม่ทั้งก้อน · อะไรที่ไม่ยกมาคือหายถาวร) */
+  TS_COT[k]={ mode:mode, deduct:d, payout:p, ref:rf, slips:tsCotSlips(cur),
+              by:ckMe(), at:new Date().toISOString() };
   tsCotPersist(); tsAfter();
 }
 function tsCotAmt(bkId,date){
@@ -20377,6 +20380,52 @@ function tsCotRefSave(bkId,date){ if(typeof laGuardEdit==='function' && !laGuard
   var c=TS_COT[_tsKey(bkId,date)]; if(!c) return; c.ref=_tsCotRefVal(bkId); tsCotPersist(); }
 function tsCotClear(bkId,date){ if(typeof laGuardEdit==='function' && !laGuardEdit('operations')) return;   /* §tsCotSave */
   delete TS_COT[_tsKey(bkId,date)]; tsCotPersist(); tsAfter(); }
+/* §cotSlip (2026-09-09) · หลักฐานของเงิน COT
+   ช่องนี้ตัดสินได้แล้วว่าหัก / โอนออก / เก็บไม่ได้ และพิมพ์เลขอ้างอิงได้ แต่ "รูปสลิป"
+   ยังไม่มีที่อยู่ · คนปิดวันถ่ายไว้ในไลน์ แล้วบัญชีตามหาย้อนหลังเอง
+   ใช้ท่อเดียวกับสลิปเงินหน้างานในตารางเดียวกันนี้ (pckSlipUpload → /api/attach) ไฟล์จึงไป
+   อยู่กับ booking เหมือนกัน · TS_COT เก็บแค่ ref ของไฟล์ ไม่ได้เก็บตัวรูป
+   คอลัมน์ slips ของ ts_cot อยู่ในแมปแล้ว (db/migrations/024) — ถ้าไม่มี ข้อมูลนี้จะหาย
+   เงียบตอนขึ้นเซิร์ฟเวอร์เหมือนช่องอื่นที่ไม่ได้ map */
+function tsCotSlips(c){ return (c && Array.isArray(c.slips)) ? c.slips : []; }
+function tsCotSlipPick(bkId,date,inp){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('operations')){ if(inp) inp.value=''; return; }
+  var f=(inp&&inp.files&&inp.files[0])||null; if(inp) inp.value='';
+  if(!f) return;
+  var c=TS_COT[_tsKey(bkId,date)];
+  if(!c){ alert('Pick how this COT is handled first, then attach the slip.'); return; }
+  if(typeof pckSlipUpload!=='function'){ alert('แนบสลิปไม่ได้ในหน้านี้'); return; }
+  pckSlipUpload(f, bkId, function(meta){
+    var cc=TS_COT[_tsKey(bkId,date)]; if(!cc) return;   // กดล้างระหว่างอัปโหลด
+    cc.slips=tsCotSlips(cc).concat([{ id:meta.id, name:meta.name, mime:meta.mime, size:meta.size,
+                                      at:new Date().toISOString(), by:ckMe() }]);
+    cc.by=ckMe(); cc.at=new Date().toISOString();
+    tsCotPersist(); tsAfter();
+  });
+}
+/* ปลดสลิปออกจากคำตัดสิน · ไม่ลบไฟล์จริงทิ้ง — pckSlipUpload ลงทะเบียนไฟล์ใบเดียวกันไว้ที่
+   b.paymentSlips ด้วย ลบจากเซิร์ฟเวอร์จะทำให้หน้าดูสลิปของ booking เหลือรูปเสีย */
+function tsCotSlipDrop(bkId,date){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('operations')) return;
+  var c=TS_COT[_tsKey(bkId,date)]; if(!c) return;
+  var n=tsCotSlips(c).length; if(!n) return;
+  if(!confirm('ปลดสลิป '+n+' ใบออกจากรายการนี้? (ไฟล์ยังอยู่ในเอกสารของ booking)')) return;
+  c.slips=[]; c.by=ckMe(); c.at=new Date().toISOString();
+  tsCotPersist(); tsAfter();
+}
+function tsCotSlipRow(bkId,date,c,e){
+  var ss=tsCotSlips(c), lb='สลิป COT';
+  var add='<label class="ts-slipb" title="'+e('แนบสลิป · '+lb)+'">&#128206; '+(ss.length?'เพิ่มสลิป':'แนบสลิป')
+    +'<input type="file" accept="image/*,application/pdf" style="display:none"'
+    +' onchange="tsCotSlipPick(\''+bkId+'\',\''+date+'\',this)"></label>';
+  var seen=ss.length
+    ? ('<span class="ts-slipok" style="cursor:pointer" '+laSlipClickAttr(ss, lb)
+       +' title="'+e('มีสลิปแล้ว '+ss.length+' ใบ · กดเพื่อเปิดดู')+'">&#128206; สลิป '+ss.length+' ใบ</span>'
+       +'<a class="ts-slipx" onclick="tsCotSlipDrop(\''+bkId+'\',\''+date+'\')" title="ปลดสลิปออก"'
+       +' style="color:var(--rs700);cursor:pointer;font-size:11px;font-weight:800;align-self:center">&times;</a>')
+    : '';
+  return '<div class="ts-slips">'+seen+add+'</div>';
+}
 // ช่อง "จัดการ" ของหนึ่งใบ · ใช้ในตารางเงินหน้างาน (ส่วนที่ 3)
 function tsCotCell(b, M, date, money, e, r){
   var cot=+((M&&M.cot)||0);
@@ -20410,6 +20459,7 @@ function tsCotCell(b, M, date, money, e, r){
       +' <span style="color:var(--zn400)">&middot; '+e(c.by||'')+(c.at?(' '+e(String(c.at).slice(5,10))):'')+'</span>'
       +' <a onclick="tsCotClear(\''+id+'\',\''+date+'\')" style="color:var(--rs700);cursor:pointer;margin-left:5px">ล้าง</a>'
       +'</div>';
+    h+=tsCotSlipRow(id,date,c,e);   // §cotSlip · เก็บไม่ได้ก็ยังแนบหลักฐานได้ (รูปหน้างาน / แชทลูกค้า)
     return h;
   }
   if(mode){
@@ -20425,6 +20475,7 @@ function tsCotCell(b, M, date, money, e, r){
           +' <span style="color:var(--zn400)">&middot; '+e(c.by||'')+(c.at?(' '+e(String(c.at).slice(5,10))):'')+'</span>'
           +' <a onclick="tsCotClear(\''+id+'\',\''+date+'\')" style="color:var(--rs700);cursor:pointer;margin-left:5px">ล้าง</a>')
       +'</div>';
+    h+=tsCotSlipRow(id,date,c,e);   // §cotSlip · สลิปโอน / หลักฐานการหักบิล
   } else {
     h+='<div class="ts-cotsum" style="color:var(--am700);font-weight:700">&#9888; '
       +(noGo?'ลูกค้าไม่ได้เดินทาง · ต้องระบุว่าเก็บไม่ได้เพราะอะไร':'ยังไม่ตัดสิน')+'</div>';
@@ -20900,6 +20951,9 @@ function tsCSS(){ var S='#travelsum-host'; return ''
    +S+' .ts-sg b{font-size:10px}'+S+' .ts-sg span{font-size:8.5px}'
    +S+' .ts-sec:last-child{padding-bottom:2px}'
    +S+' .ts-rt{display:none}'
+   /* §cotSlip · ปุ่ม "แนบสลิป" เป็นช่องอัปโหลด กดบนกระดาษไม่ได้ · ตัดออกตอนพิมพ์
+      ป้ายเขียว "มีสลิปแล้ว" เก็บไว้ — คนกระทบยอดใช้ชี้ว่าหน้าสลิปท้ายเล่มมีของใบนี้ */
+   +S+' .ts-slipb,'+S+' .ts-slipx{display:none!important}'
    // §tsPrint · ตอนสั่งพิมพ์ · ซ่อนเมนู + view อื่น แล้วปล่อยใบงานกินกระดาษเต็มใบ
    +S+' .ts-kpis{grid-template-columns:repeat(6,1fr)}'      // A4 นอน · 6 การ์ดพอดีแถวเดียว
    +S+' .ts-sign{break-inside:avoid;break-before:avoid}'    // ช่องเซ็นชื่อห้ามหลุดไปอยู่หน้าเปล่า
@@ -20971,6 +21025,23 @@ function tsSlipPackList(date){
       if(!x.done) return;   /* ยังไม่เก็บ = ยังไม่มีเงิน จึงยังไม่ต้องมีสลิป */
       push(x.slips, (x.kind==='up'?'อัปเกรด · ':'ขายเพิ่ม · ')+x.t, x.method, x.amt, x.fee, x.who, '');
     });
+    /* §cotSlip · หลักฐานของเงิน COT · อยู่ที่คำตัดสิน (TS_COT) คนละที่กับสามทางข้างบน
+       ไม่ push ผ่าน push() เพราะสองข้อ —
+         ไม่บวกเข้า tot · ยอด COT นับอยู่ในเงินหน้าท่าแล้ว บวกซ้ำใบจะโชว์เกินจริง
+         ไม่นับเป็น "ของขาด" · คำตัดสินอย่าง ไม่หัก / หักบิล / เก็บไม่ได้ ไม่มีสลิปให้แนบตั้งแต่ต้น
+                                จะขึ้นเตือนว่าสลิปหายไม่ได้ */
+    (function(){
+      var c=(typeof tsCotGet==='function')?tsCotGet(b.id,date):null;
+      var ss=(typeof tsCotSlips==='function')?tsCotSlips(c):[];
+      if(!ss.length) return;
+      var CM={full:'หักทั้งก้อน', part:'หักบางส่วน', none:'ไม่หัก', payout:'โอนออก', nocol:'เก็บไม่ได้'};
+      var M=(typeof pckMoney==='function')?pckMoney(b,date):{cot:0};
+      var cap='COT ฿'+num(M.cot||0)+' · '+(CM[c.mode]||c.mode||'')
+        +((+c.deduct||0)>0?(' · หักบิล ฿'+num(c.deduct)):'')
+        +((+c.payout||0)>0?(' · โอนออก ฿'+num(c.payout)):'')
+        +(c.ref?(' · '+c.ref):'')+(c.by?(' · '+c.by):'');
+      ss.forEach(function(f){ imgs.push({ f:f, cap:cap }); });
+    })();
     if(!imgs.length && !miss) return;   /* สดล้วน / ไม่มีเงินเข้าวันนี้ = ไม่ต้องมีหน้า */
     out.push({ bk:b, trip:r.t, ord:_i, imgs:imgs, miss:miss, tot:tot, who:who.join(' · ') });
   });
