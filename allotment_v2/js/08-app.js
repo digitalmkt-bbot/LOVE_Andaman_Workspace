@@ -5592,6 +5592,50 @@ function renderDevLog(){ var host=document.getElementById('devlog-host'); if(!ho
    (same status the By-trip-date "Re-Confirm" mode sets) so both stay in sync.
    Name-cell color (after sent): YELLOW = invoice agent OR paid · PURPLE = other unpaid. */
 var _rcDate=null, _rcView='agent';
+/* §rcPick · แถวที่ติ๊กไว้ · คีย์คือ bookingId|routeId
+   ใบเดียวอาจมีสองทริปในวันเดียวกัน ใช้ bookingId เฉย ๆ จะติดไปทั้งสองแถว
+   เป็นสถานะบนจอชั่วคราว ไม่ได้เก็บลงข้อมูล */
+var _rcPick={};
+function _rcRowKey(r){ return String(r.bk.id)+'|'+String(r.routeId||''); }
+function _rcPickedOf(agKey){
+  var out={}, n=0;
+  try{
+    [].slice.call(document.querySelectorAll('#reconfirm-host input.rc-pk')).forEach(function(el){
+      if(el.dataset.ag!==agKey) return;
+      if(el.checked){ out[el.dataset.k]=1; n++; }
+    });
+  }catch(_){}
+  return n?out:null;
+}
+/* ติ๊กแล้วไม่วาดหน้าใหม่ · หน้านี้มี 13 เอเย่นต์ วาดใหม่ทุกครั้งคือกระตุกและเด้งขึ้นบนสุด
+   ขยับแค่ป้ายบนปุ่ม Sheet กับติ๊กรวมของการ์ดนั้น */
+function _rcPickSync(agKey){
+  var all=[], on=0;
+  [].slice.call(document.querySelectorAll('#reconfirm-host input.rc-pk')).forEach(function(el){
+    if(el.dataset.ag!==agKey) return;
+    all.push(el); _rcPick[el.dataset.k]=el.checked; if(el.checked) on++;
+  });
+  [].slice.call(document.querySelectorAll('#reconfirm-host input.rc-pkall')).forEach(function(el){
+    if(el.dataset.ag!==agKey) return;
+    el.checked=(on>0 && on===all.length);
+    el.indeterminate=(on>0 && on<all.length);
+  });
+  [].slice.call(document.querySelectorAll('#reconfirm-host button.rc-shb')).forEach(function(b){
+    if(b.dataset.ag!==agKey) return;
+    b.textContent=on?('Sheet · '+on):'Sheet';
+    b.title=on?('ออกใบเฉพาะ '+on+' รายการที่ติ๊กไว้'):'ออกใบทุกรายการของเอเย่นต์นี้ · ติ๊กช่องหน้าแถวเพื่อเลือกเฉพาะบางรายการ';
+    b.style.borderColor=on?'#1683C7':'#E1DED6';
+    b.style.background=on?'#EAF5FC':'#fff';
+  });
+}
+function rcPick(el){ _rcPickSync(el.dataset.ag); }
+function rcPickAll(el){
+  var ag=el.dataset.ag, v=el.checked;
+  [].slice.call(document.querySelectorAll('#reconfirm-host input.rc-pk')).forEach(function(x){
+    if(x.dataset.ag===ag) x.checked=v;
+  });
+  _rcPickSync(ag);
+}
 var _RC_CXL=['cancelled','rejected','cancelled_weather'];
 // Per-booking re-confirm status — a multi-step process, not just a checkbox.
 // Only 'done' counts as fully confirmed (By-trip-date yellow name + agent "Sent" use status==='done').
@@ -5652,9 +5696,10 @@ function rcColorPanel(ev){ if(ev&&ev.stopPropagation) ev.stopPropagation(); rcSt
   document.body.appendChild(pop);
 }
 function _rcYMD(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-function rcDateShift(n){ if(!_rcDate)_rcDate=_rcYMD(new Date()); var d=new Date(_rcDate+'T00:00:00'); d.setDate(d.getDate()+n); _rcDate=_rcYMD(d); renderReconfirm(); }
-function rcToday(){ _rcDate=_rcYMD(new Date()); renderReconfirm(); }
-function rcSetDate(ds){ if(!ds) return; _rcDate=ds; renderReconfirm(); }     /* §laDatePick */
+/* §rcPick · เปลี่ยนวันแล้วล้างที่ติ๊กไว้ · ของเมื่อวานไม่ควรตามมาวันนี้ */
+function rcDateShift(n){ if(!_rcDate)_rcDate=_rcYMD(new Date()); var d=new Date(_rcDate+'T00:00:00'); d.setDate(d.getDate()+n); _rcDate=_rcYMD(d); _rcPick={}; renderReconfirm(); }
+function rcToday(){ _rcDate=_rcYMD(new Date()); _rcPick={}; renderReconfirm(); }
+function rcSetDate(ds){ if(!ds) return; _rcDate=ds; _rcPick={}; renderReconfirm(); }     /* §laDatePick */
 /* ══ §laDatePick · ปฏิทินเลือกวันของแถบวันที่ · ใช้ร่วมกันทุกหน้า ══════ */
 var _laDP={set:'',ds:'',month:'',x:0,y:0};
 function laDatePopClose(){
@@ -5789,11 +5834,17 @@ function rcToggleBooking(bkId){ var bk=SB_BOOKINGS.find(function(x){return x.id=
   if(_rcSent(bk)){ bk.ops.reconfirm=null; }
   else { bk.ops.reconfirm={status:'done',via:'reconfirm',at:new Date().toISOString(),by:(typeof laBy==='function')?laBy():''}; if(typeof bkV2AddHistory==='function') bkV2AddHistory(bk,'notify','Re-confirmed (reconfirm page)','Notify'); }
   if(typeof acctPersistBookings==='function') acctPersistBookings(); renderReconfirm(); }
-function rcSheet(key){   // printable per-agent re-confirmation sheet (all their bookings that day)
+function rcSheet(key){   // printable per-agent re-confirmation sheet
   var esc=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
   var date=_rcDate||_rcYMD(new Date());
   var rows=_rcActiveRows(date).filter(function(r){ return _rcAgentKey(r.bk)===key; });
   if(!rows.length){ alert('No bookings for this agent on this day'); return; }
+  /* §rcPick · ติ๊กไว้กี่รายการก็ออกเฉพาะเท่านั้น · ไม่ติ๊กเลย = ทั้งเอเย่นต์เหมือนเดิม */
+  var _sel=_rcPickedOf(key), _nAll=rows.length, _partial=false;
+  if(_sel){
+    var _f=rows.filter(function(r){ return _sel[_rcRowKey(r)]; });
+    if(_f.length){ _partial=(_f.length<_nAll); rows=_f; }
+  }
   rows.forEach(function(r){ r.d=_rcRowData(r); });
   var ag=rows[0].bk.agentId?sbGetAgent(rows[0].bk.agentId):null, agName=rows[0].d.agentName;
   var _hdBg=(rows[0].bk.agentId&&typeof bkV2AgentColor==='function')?bkV2AgentColor(rows[0].bk.agentId):'#1683C7';   // sheet header = agent's own colour (same as By-trip-date)
@@ -5849,7 +5900,12 @@ function rcSheet(key){   // printable per-agent re-confirmation sheet (all their
     +'<div class="bar"><button onclick="window.print()" class="pr">Print / Save PDF</button><button onclick="window.close()">Close</button></div>'
     +'<div class="pg">'
     +'<div class="hd"><div><div class="brand">LOVE ANDAMAN</div><div class="sub">Booking re-confirmation</div></div><div class="meta"><b>'+esc(dLabel)+'</b><div>Ref '+esc(refCode)+'</div></div></div>'
-    +'<div class="agb"><div><div class="agl">Agent</div><div class="agn">'+esc(agName)+'</div></div><div class="kpis"><div><div class="n">'+rows.length+'</div><div class="k">bookings</div></div><div><div class="n">'+pax+'</div><div class="k">pax</div></div><div><div class="n">'+trips+'</div><div class="k">trips</div></div></div></div>'
+    +'<div class="agb"><div><div class="agl">Agent</div><div class="agn">'+esc(agName)
+      /* §rcPick · ใบบางส่วนต้องบอกบนหน้ากระดาษ · ไม่งั้นเอเย่นต์นับใบแล้วคิดว่าเราตกรายการ */
+      +(_partial?('<div style="margin-top:5px;display:inline-block;background:#FDF3E3;color:#8A5A00;'
+        +'border:1px solid #F0DFBD;border-radius:7px;padding:3px 10px;font-size:11.5px;font-weight:700">'
+        +'Selected bookings only &middot; '+rows.length+' of '+_nAll+'</div>'):'')
+      +'</div><div class="kpis"><div><div class="n">'+rows.length+'</div><div class="k">bookings</div></div><div><div class="n">'+pax+'</div><div class="k">pax</div></div><div><div class="n">'+trips+'</div><div class="k">trips</div></div></div></div>'
     +'<div class="bd">'+body+'</div>'
     +'<div class="ft">Please review and confirm all pick-up times with your guests. Contact LOVE Andaman for any change.</div>'
     +'</div></body></html>';
@@ -5919,7 +5975,17 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
     case 'payment': return d.cot?'<span style="color:#993C1D;'+MONO+'">'+esc(d.cot)+'</span>':'<span style="color:#B4B2A9">—</span>';
     case 'status': var st=_rcStateOf(d.bk); if(!st.v){ return '<button onclick="rcStatusPop(\''+d.bk.id+'\',event)" style="border:1px dashed #cbd3ce;background:#fff;color:#8a8880;border-radius:16px;padding:4px 11px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">+ set status</button>'; } var _sc=rcStateColor(st.v), _si=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(_sc):'#fff'; return '<button onclick="rcStatusPop(\''+d.bk.id+'\',event)" style="border:none;background:'+_sc+';color:'+_si+';border-radius:16px;padding:4px 11px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;max-width:184px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(st.l)+'">'+esc(st.l)+' &#9662;</button>'; }
     return ''; }
-  function rowFor(d,cols){ return '<tr>'+cols.map(function(c){ var ex=(c.k==='special'||c.k==='addon')?';white-space:normal':(c.k==='status'?'':';overflow:hidden;text-overflow:ellipsis'); if(c.k==='ad'||c.k==='chd'||c.k==='inf'||c.k==='foc'||c.k==='room') ex+=';text-align:center'; return '<td style="'+TD+ex+'">'+_rcCellVal(c.k,d)+'</td>'; }).join('')+'</tr>'; }
+  function rowFor(d,cols,r,agKey){ return '<tr>'+cols.map(function(c){
+    /* §rcPick · ช่องติ๊กรู้จักแถวจาก bookingId|routeId ที่ส่งเข้ามา */
+    if(c.k==='pick'){
+      if(!r) return '<td style="'+TD+'"></td>';
+      var _k=_rcRowKey(r);
+      return '<td style="'+TD+';text-align:center;overflow:visible">'
+        +'<input type="checkbox" class="rc-pk" data-ag="'+esc(agKey||'')+'" data-k="'+esc(_k)+'"'
+        +(_rcPick[_k]?' checked':'')+' onchange="rcPick(this)" '
+        +'style="width:15px;height:15px;cursor:pointer;accent-color:#1683C7"></td>';
+    }
+    var ex=(c.k==='special'||c.k==='addon')?';white-space:normal':(c.k==='status'?'':';overflow:hidden;text-overflow:ellipsis'); if(c.k==='ad'||c.k==='chd'||c.k==='inf'||c.k==='foc'||c.k==='room') ex+=';text-align:center'; return '<td style="'+TD+ex+'">'+_rcCellVal(c.k,d)+'</td>'; }).join('')+'</tr>'; }
   var out='<style id="rc-skin">#reconfirm-host .rc-card{background:#fff;border:1px solid #E8E6DF;border-radius:12px;margin-bottom:12px;overflow:hidden}#reconfirm-host table{border-collapse:collapse;width:100%}#reconfirm-host .rc-scroll{overflow-x:auto}#reconfirm-host button{font-family:inherit;cursor:pointer}#reconfirm-host .rc-tab{font-size:12.5px;padding:6px 14px;border-radius:8px;border:1px solid #E1DED6;background:#fff;color:#5F5E5A;cursor:pointer;font-weight:600}#reconfirm-host .rc-tab.on{background:#1683C7;color:#fff;border-color:#1683C7}</style>';
   out+='<div style="max-width:100%;margin:0;font-family:\'DM Sans\',sans-serif">';
   out+='<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:2px 2px 12px">'
@@ -5948,7 +6014,8 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
         +'</tbody></table></div></div>';
     });
   } else {
-    var colsA=_rcCols(false);
+    /* §rcPick · ช่องติ๊กเป็นคอลัมน์แรก · เฉพาะมุมมอง By agent ซึ่งเป็นที่ที่ปุ่ม Sheet อยู่ */
+    var colsA=[{k:'pick',l:'',w:34}].concat(_rcCols(false));
     agentKeys.sort(function(a,b){ return (byAgent[a][0].d.agentName||'').localeCompare(byAgent[b][0].d.agentName||''); });
     agentKeys.forEach(function(key){ var grp=byAgent[key].slice();
       grp.sort(function(a,b){ return String(a.d.time).localeCompare(String(b.d.time)); });
@@ -5972,10 +6039,18 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
         +nameChip
         +'<span style="font-size:11px;color:'+payColor+';background:#F7F6F2;padding:2px 8px;border-radius:10px">'+esc(payChip)+'</span>'
         +'<span style="font-size:11.5px;color:#5F5E5A">'+trips+' trips · '+grp.length+' bookings · '+pax+' pax</span>'
-        +'<span style="margin-left:auto;display:inline-flex;align-items:center;gap:8px">'+statusHtml+'<button onclick="rcSheet(\''+key+'\')" title="Open printable confirmation sheet" style="border:1px solid #E1DED6;background:#fff;border-radius:8px;padding:5px 12px;font-size:12px;color:#1683C7;font-weight:600">Sheet</button>'+btn+'</span>'
+        /* §rcPick · ติ๊กรวมของเอเย่นต์นี้ · สามสถานะ ไม่เลือก · บางส่วน · ทั้งหมด */
+        +'<label title="เลือกทั้งหมด / ไม่เลือกเลย" style="display:inline-flex;align-items:center;gap:5px;'
+          +'font-size:11.5px;color:#8A8880;cursor:pointer;user-select:none">'
+          +'<input type="checkbox" class="rc-pkall" data-ag="'+esc(key)+'" onchange="rcPickAll(this)" '
+          +'style="width:15px;height:15px;cursor:pointer;accent-color:#1683C7">เลือก</label>'
+        +'<span style="margin-left:auto;display:inline-flex;align-items:center;gap:8px">'+statusHtml
+        +'<button class="rc-shb" data-ag="'+esc(key)+'" onclick="rcSheet(\''+key+'\')" '
+          +'title="ออกใบทุกรายการของเอเย่นต์นี้ · ติ๊กช่องหน้าแถวเพื่อเลือกเฉพาะบางรายการ" '
+          +'style="border:1px solid #E1DED6;background:#fff;border-radius:8px;padding:5px 12px;font-size:12px;color:#1683C7;font-weight:600">Sheet</button>'+btn+'</span>'
         +'</div>'
         +'<div class="rc-scroll">'+_rcTableHead(colsA)+'<tbody>'
-        +grp.map(function(r){ return rowFor(r.d,colsA); }).join('')
+        +grp.map(function(r){ return rowFor(r.d,colsA,r,key); }).join('')
         +'</tbody></table></div></div>';
     });
   }
