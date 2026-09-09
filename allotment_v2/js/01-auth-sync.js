@@ -380,11 +380,12 @@
       var j=JSON.parse(x.responseText);
       if(typeof j.data!=='string' || j.data.length<2){ _laPending=null; return; }
       if(_laBusy()) return;                                        // user resumed during fetch → defer
-      // §B2C alert: when this refresh came from a B2C sync, count genuinely NEW b2c bookings (vs the
-      //   blob we're about to overwrite) so we can notify the user instead of the booking arriving silently.
-      var _b2cNew=[]; if(j.updated_by==='B2C'){ try{ _b2cNew=_laB2CNew(localStorage.getItem(LS), j.data); }catch(e){} }
       _orig(LS, j.data);                                           // write WITHOUT triggering a save
       VER=j.version||VER; try{BASE=JSON.parse(j.data);}catch(e){BASE={};} _laMark(VER);
+      /* §b2cPop · เทียบจาก BASE ที่เพิ่ง parse ไปแล้ว · ไม่ parse เพิ่มสักรอบ
+         และไม่เช็ค updated_by อีกแล้ว · ของเดิมเช็คแล้วใบจองหลุดเงียบ
+         เวลามีคนอื่นกดบันทึกคั่นระหว่างที่ผู้ใช้ยุ่งอยู่ */
+      var _b2cNew=[]; try{ _b2cNew=_laB2CScan(BASE); }catch(e){}
       _laPending=null;
       var ok = window._laReloadData ? window._laReloadData() : false;
       if(!ok){ _laReload(); return; }                             // in-place failed → fall back to full reload
@@ -436,35 +437,125 @@
   function showRefresh(info){ if(_refreshShown) return; _refreshShown=true; onReady(function(){ var d=document.createElement('div'); d.id='la-refresh'; d.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:99999;background:#185FA5;color:#fff;border-radius:24px;padding:8px 8px 8px 16px;font:13px/1.3 "DM Sans",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25);display:flex;align-items:center;gap:10px'; d.innerHTML='🔄 มีข้อมูลใหม่จากคนอื่น'+((info&&info.updated_by)?(' (โดย '+esc(info.updated_by)+')'):'')+' · จะรีเฟรชอัตโนมัติเมื่อว่าง <button onclick="_laSoftRefresh()" style="background:#fff;color:#185FA5;border:none;border-radius:16px;padding:6px 14px;font-weight:700;cursor:pointer;font-family:inherit">โหลดเลย</button>'; document.body.appendChild(d); }); }
   // §B2C new-booking alert helpers (2026-07-24)
   var _B2C_CXL=['cancelled','rejected','cancelled_weather'];
-  function _laB2CIds(raw){ var s={}; if(!raw) return s; try{ var o=JSON.parse(raw); var arr=o&&o.sb_bookings; if(Array.isArray(arr)){ for(var i=0;i<arr.length;i++){ var b=arr[i]; if(!b||!b.id) continue; if(String(b.id).indexOf('b2c_')!==0) continue; if(b.status&&_B2C_CXL.indexOf(b.status)>=0) continue; s[b.id]=1; } } }catch(e){} return s; }
-  function _laB2CDiff(oldRaw,newRaw){ var o=_laB2CIds(oldRaw), n=_laB2CIds(newRaw), c=0; for(var id in n){ if(!o[id]) c++; } return c; }
-  // Return detail objects for genuinely NEW (non-cancelled) b2c bookings — route/date/pax/total for the alert card.
-  function _laB2CNew(oldRaw,newRaw){ var out=[]; try{ var oldS=_laB2CIds(oldRaw); var o=JSON.parse(newRaw); var arr=o&&o.sb_bookings; if(!Array.isArray(arr)) return out; var rm={}; if(Array.isArray(o.routes)){ o.routes.forEach(function(r){ if(r&&r.id) rm[r.id]=r.name||r.id; }); } for(var i=0;i<arr.length;i++){ var b=arr[i]; if(!b||!b.id) continue; if(String(b.id).indexOf('b2c_')!==0) continue; if(b.status&&_B2C_CXL.indexOf(b.status)>=0) continue; if(oldS[b.id]) continue; var t=(b.trips&&b.trips[0])||{}; var pax=0; (b.trips||[]).forEach(function(tp){ var p=tp.pax||{}; for(var k in p){ if(/^(ad|chd|inf|foc)(_fr|_th)?$/.test(k)) pax+=(+p[k]||0); } }); out.push({ id:b.id, route:(rm[t.routeId]||t.routeId||'-'), date:(t.date||''), pax:pax, total:(b.priceBreakdown&&b.priceBreakdown.total)||0 }); } }catch(e){} return out; }
+  /* §b2cPop · จำ id ของใบ b2c ที่รู้จักแล้วไว้ในหน่วยความจำ
+     ของเดิมเทียบด้วยการ JSON.parse สตริงบล็อบทั้งเก่าและใหม่
+     วัดของจริงบล็อบ 15.2 MB · เท่ากับ parse 15 MB สองรอบทุกครั้งที่มีของเข้า
+     ตอนนี้รับ object ที่ _laSoftRefresh parse ไว้แล้ว (BASE) · parse เพิ่ม 0 รอบ
+     จึงเทียบได้ทุกรอบโดยไม่ต้องเดาจาก updated_by
+
+     รอบแรกที่เห็นข้อมูล จำเฉย ๆ ไม่เด้ง
+     ไม่งั้นเปิดแอปครั้งแรกจะเด้งว่ามีของใหม่เท่าจำนวนใบ b2c ทั้งกอง */
+  var _laB2CSeen=null;
+  function _laB2CScan(obj){
+    var out=[], arr=obj&&obj.sb_bookings;
+    if(!Array.isArray(arr)) return out;
+    var first=(_laB2CSeen===null), seen={}, rm={};
+    if(!first && Array.isArray(obj.routes)) obj.routes.forEach(function(r){ if(r&&r.id) rm[r.id]=r.name||r.id; });
+    for(var i=0;i<arr.length;i++){
+      var b=arr[i]; if(!b||!b.id) continue;
+      if(String(b.id).indexOf('b2c_')!==0) continue;
+      if(b.status&&_B2C_CXL.indexOf(b.status)>=0) continue;   /* ยกเลิกแล้วไม่นับ */
+      seen[b.id]=1;
+      if(first || _laB2CSeen[b.id]) continue;
+      var t=(b.trips&&b.trips[0])||{}, pax=0;
+      (b.trips||[]).forEach(function(tp){ var p=tp.pax||{};
+        for(var k in p){ if(/^(ad|chd|inf|foc)(_fr|_th)?$/.test(k)) pax+=(+p[k]||0); } });
+      out.push({ id:b.id, route:(rm[t.routeId]||t.routeId||'-'), date:(t.date||''),
+                 pax:pax, total:(b.priceBreakdown&&b.priceBreakdown.total)||0,
+                 trips:(b.trips||[]).length });
+    }
+    _laB2CSeen=seen;
+    return first?[]:out;
+  }
+  function _laB2CRef(id){ return String(id||'').replace(/^b2c_/,''); }
   function _laFmtDate(s){ if(!s) return '-'; var p=String(s).split('-'); if(p.length<3) return s; var M=['','ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']; return (+p[2])+' '+(M[+p[1]]||p[1])+' '+p[0]; }
   // Jump to Booking → By-Trip tab for the alerted booking's date
   function _laB2CGoTo(date){ try{ var nav=document.querySelector('.nav-item[data-view="booking"]'); if(nav) nav.click(); if(window._bkV2){ _bkV2.tab='bytrip'; if(date){ _bkV2.filterDate=date; _bkV2.filterRoute=null; window._bkV2T2Cursor=String(date).slice(0,7); } } if(typeof bkV2Render==='function') bkV2Render(); }catch(e){} }
   function _laBeep(){ try{ var AC=window.AudioContext||window.webkitAudioContext; if(!AC) return; var ctx=window.__laAC||(window.__laAC=new AC()); function tone(freq,at,dur){ var o=ctx.createOscillator(),g=ctx.createGain(); o.type='sine'; o.frequency.value=freq; o.connect(g); g.connect(ctx.destination); var t=ctx.currentTime+at; g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.35,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+dur); o.start(t); o.stop(t+dur+0.02); } function play(){ try{ tone(880,0,0.16); tone(1174,0.16,0.22); }catch(e){} } if(ctx.state==='suspended'){ try{ var p=ctx.resume(); if(p&&p.then) p.then(play).catch(play); else play(); }catch(e){ play(); } } else { play(); } }catch(e){} }
-  function _laB2CAlert(list){ if(!list||!list.length) return; var n=list.length, b=list[0];
-    var SHIP='<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1a2.4 2.4 0 0 1 2 -1a2.4 2.4 0 0 1 2 1a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1a2.4 2.4 0 0 1 2 -1a2.4 2.4 0 0 1 2 1a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1"/><path d="M4 18l-1 -5h18l-2 4"/><path d="M5 13v-6h8l4 6"/><path d="M7 7v-4h-1"/></svg>';
-    onReady(function(){ var d=document.createElement('div'); d.className='la-b2c-alert';
-      d.style.cssText='position:fixed;top:16px;right:16px;z-index:100000;width:372px;max-width:calc(100vw - 32px);font-family:"DM Sans",sans-serif;cursor:pointer';
-      var more = n>1 ? '<div style="font-size:11px;color:#6a7580;margin-top:3px">+ อีก '+(n-1)+' รายการ</div>' : '';
-      d.innerHTML='<div style="position:relative;background:rgba(255,255,255,.62);-webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);border-radius:20px;box-shadow:0 12px 34px rgba(0,0,0,.20);border:0.5px solid rgba(255,255,255,.65);padding:13px 15px;display:flex;align-items:center;gap:12px">'
-        +'<div class="la-b2c-x" style="position:absolute;top:-8px;left:-8px;width:24px;height:24px;border-radius:50%;background:rgba(240,240,242,.92);border:0.5px solid rgba(0,0,0,.08);display:flex;align-items:center;justify-content:center;color:#555;font-size:15px;line-height:1">×</div>'
-        +'<div style="width:44px;height:44px;border-radius:11px;background:#1683C7;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+SHIP+'</div>'
-        +'<div style="flex:1;min-width:0">'
-          +'<div style="display:flex;align-items:center;gap:7px"><span style="font-size:14px;font-weight:700;color:#0f1720">New Booking</span><span style="font-size:10px;font-weight:700;color:#0a5a7a;background:rgba(220,238,250,.85);border-radius:20px;padding:1px 7px">B2C</span><span style="margin-left:auto;font-size:11px;color:#4a5560">now</span></div>'
-          +'<div style="font-size:13px;color:#26313a;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(b.route)+'</div>'
-          +'<div style="font-size:12px;color:#4a5560;margin-top:2px;font-family:\'DM Mono\',monospace">'+esc(_laFmtDate(b.date))+' · '+(b.pax||0)+' pax · ฿'+Number(b.total||0).toLocaleString()+'</div>'
-          +more
+  /* §b2cPop · คิวเดียวกับ save toast · มุมขวาบนมีเจ้าของคนเดียว
+     ของเดิมสองเจ้าลงพิกัดเดียวกัน (top:16 right:16) แล้ว save toast z-index สูงกว่า
+     กดบันทึกอยู่แล้วมี booking เข้า = การ์ดโดนทับสนิท 4 วินาที
+     และ .la-b2c-alert เองก็ไม่มีกล่องเรียง append กี่ใบก็ทับกันเอง
+     กล่องนี้เป็น flex column อยู่แล้ว เรียงลงมาทั้งสองเจ้า ไม่มีทางทับอีก
+     สไตล์ต้องตรงกับที่ 08-app.js สร้าง เพราะใครถึงก่อนก็เป็นคนสร้าง */
+  function _laB2CStack(){
+    var w=document.getElementById('la-savetoast-wrap');
+    if(!w){ w=document.createElement('div'); w.id='la-savetoast-wrap';
+      w.style.cssText='position:fixed;top:16px;right:16px;z-index:100001;display:flex;flex-direction:column;gap:10px;pointer-events:none';
+      document.body.appendChild(w); }
+    return w;
+  }
+  function _laB2CAlert(list){ if(!list||!list.length) return;
+    var n=list.length, show=list.slice(0,3), rest=n-show.length;
+    var tPax=0, tAmt=0, dates=[];
+    list.forEach(function(x){ tPax+=(+x.pax||0); tAmt+=(+x.total||0); if(x.date) dates.push(x.date); });
+    dates.sort();
+    var goDate=dates[0]||'';
+    var _2=function(v){ return (v<10?'0':'')+v; };
+    var nw=new Date(), hhmm=_2(nw.getHours())+':'+_2(nw.getMinutes());
+    var B=function(v){ return Number(v||0).toLocaleString(); };
+    var SHIP='<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1a2.4 2.4 0 0 1 2 -1a2.4 2.4 0 0 1 2 1a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1a2.4 2.4 0 0 1 2 -1a2.4 2.4 0 0 1 2 1a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1"/><path d="M4 18l-1 -5h18l-2 4"/><path d="M5 13v-6h8l4 6"/><path d="M7 7v-4h-1"/></svg>';
+    onReady(function(){
+      var wrap=_laB2CStack();
+      var d=document.createElement('div'); d.className='la-b2c-alert';
+      /* รูปทรงเดียวกับ save toast · ต่างที่สีขอบซ้าย · อยู่คิวเดียวกันแล้วต้องเป็นภาษาเดียวกัน */
+      d.style.cssText='pointer-events:auto;position:relative;width:352px;max-width:calc(100vw - 32px);'
+        +'background:#fff;border:1px solid rgba(0,0,0,.06);border-left:5px solid #1683C7;border-radius:14px;'
+        +'box-shadow:0 14px 34px rgba(16,40,32,.18);padding:11px 13px 11px;font-family:"DM Sans",sans-serif';
+      /* แจงเป็นบรรทัด · ของเดิมโชว์ใบแรกใบเดียว ที่เหลือยุบเป็นตัวเลข
+         ใบที่คนละวันคนละเส้นทางจึงไม่มีทางรู้ · กดบรรทัดไหนไปวันของใบนั้น */
+      var rows=show.map(function(x,i){
+        return '<div class="la-b2c-row" data-d="'+esc(x.date)+'" title="ไปที่ '+esc(_laFmtDate(x.date))+'"'
+          +' style="cursor:pointer;padding:7px 6px;margin:0 -6px;border-radius:8px'
+          +(i?';border-top:1px solid #F0EEE9':'')+'">'
+          +'<div style="font-size:12.5px;font-weight:700;color:#12241c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.route)+'</div>'
+          +'<div style="display:flex;align-items:baseline;gap:8px;margin-top:2px">'
+            +'<span style="font-size:11.5px;color:#41514b;font-family:\'DM Mono\',ui-monospace,monospace;white-space:nowrap">'
+              +esc(_laFmtDate(x.date))+' &middot; '+(x.pax||0)+' pax &middot; &#3647;'+B(x.total)+'</span>'
+            +'<span style="margin-left:auto;font-size:10px;color:#9a988f;font-family:\'DM Mono\',ui-monospace,monospace;'
+              +'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:112px">'+esc(_laB2CRef(x.id))+'</span>'
+          +'</div></div>';
+      }).join('');
+      var restRow = rest>0
+        ? '<div class="la-b2c-row" data-d="'+esc(goDate)+'" style="cursor:pointer;padding:7px 6px;margin:0 -6px;'
+          +'border-top:1px solid #F0EEE9;border-radius:8px;font-size:11.5px;color:#6a7580;font-weight:600">'
+          +'และอีก '+rest+' ใบ &rsaquo;</div>'
+        : '';
+      var totRow = n>1
+        ? '<div style="display:flex;align-items:baseline;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid #F0EEE9">'
+          +'<span style="font-size:11px;color:#6a7580;font-weight:600">รวม</span>'
+          +'<span style="font-size:11.5px;color:#12241c;font-weight:700;font-family:\'DM Mono\',ui-monospace,monospace">'
+            +n+' ใบ &middot; '+tPax+' pax &middot; &#3647;'+B(tAmt)+'</span></div>'
+        : '';
+      d.innerHTML=
+        '<div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">'
+          +'<span style="flex:none;width:26px;height:26px;border-radius:8px;background:#1683C7;display:flex;align-items:center;justify-content:center">'+SHIP+'</span>'
+          +'<span style="font-size:13.5px;font-weight:800;color:#12241c">Booking ใหม่'+(n>1?(' '+n+' ใบ'):'')+'</span>'
+          +'<span style="font-size:10px;font-weight:700;color:#0a5a7a;background:#DCEEFA;border-radius:20px;padding:1px 7px">B2C</span>'
+          /* เวลาจริง · ของเดิมเขียน now ฝังตายไว้ ยุ่งอยู่ 10 นาทีค่อยเห็นก็ยังอ่านว่า now */
+          +'<span style="margin-left:auto;font-size:11px;color:#8A8880;font-family:\'DM Mono\',ui-monospace,monospace">'+hhmm+'</span>'
+          +'<span class="la-b2c-x" title="ปิด" style="flex:none;width:20px;height:20px;border-radius:6px;'
+            +'display:flex;align-items:center;justify-content:center;color:#9a988f;font-size:15px;line-height:1;cursor:pointer">&times;</span>'
         +'</div>'
-        +'<div style="align-self:stretch;display:flex;align-items:center;padding-left:12px;border-left:0.5px solid rgba(0,0,0,.10)"><span style="font-size:13px;font-weight:700;color:#0d6ea8;white-space:nowrap">ดู booking</span></div>'
-      +'</div>';
-      d.title='คลิกเพื่อดู booking';
-      d.onclick=function(){ try{ _laB2CGoTo(b.date); }catch(e){} try{ d.remove(); }catch(e){} };
-      var xb=d.querySelector('.la-b2c-x'); if(xb){ xb.onclick=function(e){ if(e&&e.stopPropagation)e.stopPropagation(); try{d.remove();}catch(_){} }; }
-      document.body.appendChild(d);
-      setTimeout(function(){ try{ d.style.transition='opacity .4s'; d.style.opacity='0'; setTimeout(function(){ try{d.remove();}catch(e){} },400); }catch(e){} }, 8000);
+        +rows+restRow+totRow;
+      var go=function(dt){ try{ _laB2CGoTo(dt||goDate); }catch(e){} try{ d.remove(); }catch(e){} };
+      Array.prototype.forEach.call(d.querySelectorAll('.la-b2c-row'), function(r){
+        r.onmouseenter=function(){ r.style.background='#F3F7FB'; };
+        r.onmouseleave=function(){ r.style.background=''; };
+        r.onclick=function(e){ if(e&&e.stopPropagation)e.stopPropagation(); go(r.getAttribute('data-d')); };
+      });
+      var xb=d.querySelector('.la-b2c-x');
+      if(xb) xb.onclick=function(e){ if(e&&e.stopPropagation)e.stopPropagation(); try{d.remove();}catch(_){} };
+      wrap.appendChild(d);
+      /* หลายใบให้เวลานานขึ้นตามจำนวน · และชี้ค้างไว้แล้วรอ
+         ของเดิม 8 วินาทีตายตัว อ่านไม่ทันก็คือไม่ทัน */
+      var dur=Math.min(20000, 8000+2500*(n-1)), tm=null;
+      var close=function(){ try{ d.style.transition='opacity .4s'; d.style.opacity='0';
+        setTimeout(function(){ try{d.remove();}catch(e){} },400); }catch(e){} };
+      var arm=function(){ tm=setTimeout(close, dur); };
+      d.onmouseenter=function(){ if(tm){ clearTimeout(tm); tm=null; } };
+      d.onmouseleave=function(){ if(!tm) arm(); };
+      arm();
     }); _laBeep(); }
   // Prime/resume the AudioContext on the first user gesture so the alert beep can actually play
   // (browsers keep a freshly-created AudioContext 'suspended' until a gesture unlocks audio).
