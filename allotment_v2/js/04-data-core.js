@@ -6487,27 +6487,56 @@ function bop2RenderShell(){
       #view-operation{padding:18px;background:#16265C;font-family:'DM Sans',sans-serif;color:#1A2A33;min-height:100%}
       #view-operation .bop2-hd{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:14px;gap:12px;flex-wrap:wrap}
       /* §bopHdr · แถบบนตาม mockup */
-      #view-operation .bop2-top{position:relative;display:flex;align-items:center;gap:9px;margin:-4px 0 13px;flex-wrap:wrap}
-      #view-operation .bop2-top-d{font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1;color:#fff;font-variant-numeric:tabular-nums}
-      #view-operation .bop2-top-w{line-height:1.15;display:inline-block}
-      #view-operation .bop2-top-w b{display:block;font-size:13px;font-weight:700;color:#fff}
-      #view-operation .bop2-top-w i{display:block;font-size:8.5px;font-weight:700;letter-spacing:.14em;color:#9AA2C8;text-transform:uppercase;font-style:normal}
+      /* §hdTok · แผ่นลอยชุดเดียวกับ .rc-top และ .dv-hd
+         ก่อนหน้านี้แถบนี้แบน สูง 39.5px · ของ Re-confirm 53.5px
+         วางคู่กันแล้วสูงไม่เท่า เห็นได้ทันทีตอนสลับหน้า */
+      #view-operation .bop2-top{position:relative;display:flex;align-items:center;gap:11px;
+        margin:-4px 0 13px;flex-wrap:wrap;padding:7px 13px;border-radius:14px;
+        background:linear-gradient(160deg, rgba(255,255,255,.10), rgba(255,255,255,.035));
+        box-shadow:0 8px 26px rgba(2,10,30,.30), inset 0 1px 0 rgba(255,255,255,.18)}
+      /* §hdTok · ถอดค่าจาก .dv-dnum ของ Dashboard ตรง ๆ
+         ตรึง 34px ด้วย · ของเดิมวัดได้ 12.9px เลข 9 กับ 10 กว้างไม่เท่ากัน
+         ปุ่ม ‹ › ขยับตามทุกครั้งที่เปลี่ยนวัน กดรัว ๆ แล้วพลาดเป้า */
+      #view-operation .bop2-top-d{font-size:30px;font-weight:800;letter-spacing:-1px;line-height:1;
+        color:#fff;font-family:'DM Mono',ui-monospace,monospace;
+        display:inline-block;min-width:34px;text-align:center}
+      /* ตรึง 108px แบบ .dv-dgrp · Wednesday กับ Friday ยาวไม่เท่ากัน */
+      /* §hdTok · line-height:1.15 เดิมตกไปที่บรรทัดเดือนด้วย สูง 10.3px
+         ของ Dashboard 13.5px · ย้าย line-height ไปไว้ที่ b ตัวเดียวแบบ .dv-dwk */
+      #view-operation .bop2-top-w{display:inline-block;min-width:108px}
+      #view-operation .bop2-top-w b{display:block;font-size:14px;font-weight:800;line-height:1.05;color:#fff}
+      #view-operation .bop2-top-w i{display:block;font-size:9px;font-weight:800;letter-spacing:.13em;color:#A8BAD8;text-transform:uppercase;font-style:normal}
+      /* §hdTok · ปุ่มบนแถบน้ำเงินใช้ชุดของ Dashboard · .bo-btn ตัวอื่นในหน้านี้
+         อยู่บนการ์ดขาว ใช้ชุดสีเขียวของหน้าถูกแล้ว จึงไม่แตะ */
+      #view-operation .bop2-top .bo-btn.icon{width:27px;height:27px;flex:none;
+        border:1px solid rgba(255,255,255,.26);background:rgba(255,255,255,.10);
+        border-radius:9px;color:#C9D6EC;font-size:14px;font-weight:400;line-height:1;transition:none}
+      #view-operation .bop2-top .bo-btn.icon:hover{background:rgba(255,255,255,.20);border-color:rgba(255,255,255,.26)}
+      #view-operation .bop2-top .bo-btn.primary{background:#fff;color:#16265C;border:none;
+        border-radius:999px;padding:5px 13px;font-size:11px;font-weight:700;flex:none;
+        box-shadow:0 2px 10px rgba(2,10,30,.30);transition:none}
+      #view-operation .bop2-top .bo-btn.primary:hover{background:#EDF1FA}
       /* §rcHd2 · ตรงกลางจริง · flex:1 เดิมคือกลางของช่องที่เหลือ
          ก้อนซ้ายกับก้อนขวาไม่เท่ากันมันจึงเบ้ · บังคับให้เท่ากันด้วย flex:1 1 0
          ไม่ใช้ absolute เพราะวัดแล้วชิปจะทับ wordmark ตั้งแต่ราว 1330px ลงมา */
-      #view-operation .bop2-dbar{flex:1 1 0;display:flex;align-items:center;gap:9px}
-      #view-operation .bop2-chips{flex:1 1 0;display:flex;align-items:center;gap:9px;
+      #view-operation .bop2-dbar{flex:1 1 0;display:flex;align-items:center;gap:11px}
+      #view-operation .bop2-chips{flex:1 1 0;display:flex;align-items:center;gap:7px;
         flex-wrap:wrap;justify-content:flex-end}
       #view-operation .bop2-top-brand{flex:none;text-align:center;white-space:nowrap}
       #view-operation .bop2-top-brand i{display:block;font-size:9px;font-weight:700;letter-spacing:.34em;
         color:#8E97C4;font-style:normal;margin-bottom:2px;white-space:nowrap}
       #view-operation .bop2-top-brand b{display:block;font-size:16px;font-weight:800;letter-spacing:.30em;
         color:#fff;white-space:nowrap}
-      #view-operation .bop2-chip{height:26px;padding:0 12px;border-radius:13px;display:inline-flex;align-items:center;
-        font-size:11px;font-weight:700;background:rgba(255,255,255,.10);color:#E8EBF7;border:1px solid rgba(255,255,255,.10)}
-      #view-operation .bop2-chip b{font-weight:800;margin-left:5px}
+      /* §hdTok · ค่าเดียวกับ .dv-chip ของ Dashboard ทุกตัว */
+      #view-operation .bop2-chip{padding:4px 11px;border-radius:999px;display:inline-flex;align-items:center;
+        font-size:11px;font-weight:600;background:rgba(255,255,255,.10);color:#D6E2F5;
+        border:1px solid rgba(255,255,255,.20);white-space:nowrap}
+      #view-operation .bop2-chip b{font-family:'DM Mono',ui-monospace,monospace;
+        font-weight:800;color:#fff;font-size:12.5px;margin-left:5px}
       #view-operation .bop2-chip.g{background:#D8F4E8;color:#0C6B47;border-color:transparent}
       #view-operation .bop2-chip.r{background:#FBE0DD;color:#A8362B;border-color:transparent}
+      /* เลขในชิปของ Dashboard เป็นสีขาว · บนพื้นเขียว/ชมพูอ่อนจะอ่านไม่ออก */
+      #view-operation .bop2-chip.g b,#view-operation .bop2-chip.r b{color:inherit}
       @media (max-width:1100px){ #view-operation .bop2-top-brand{display:none} }
       #view-operation .bop2-hd h1{font-size:22px;font-weight:800;color:#fff;margin:0 0 2px;letter-spacing:-.015em}
       #view-operation .bop2-hd p{font-size:11.5px;color:#9aa8cf;margin:0;font-weight:500}
@@ -6604,7 +6633,7 @@ function bop2RenderShell(){
         <i>${escapeHTML(periodLbl)}</i>
       </span>
       <button class="bo-btn icon" onclick="bop2ShiftWeek(7)" title="${isMonth?'เดือนถัดไป':'สัปดาห์ถัดไป'}">&rsaquo;</button>
-      <button class="bo-btn primary" onclick="bop2GoToday()" style="margin-left:2px">Today</button>
+      <button class="bo-btn primary" onclick="bop2GoToday()" style="margin-left:2px">TODAY</button>
       </span>
 
       <!-- §rcSkin · ช่องกลาง = "คุณอยู่หน้าไหน" · แบรนด์เป็นตัวเล็กคร่อมบน

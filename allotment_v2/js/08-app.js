@@ -6124,8 +6124,10 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
       +'background:rgba(255,255,255,.10);border-radius:9px;display:flex;align-items:center;'
       +'justify-content:center;color:#C9D6EC;font-size:14px;line-height:1}'
     +'#reconfirm-host .rc-arw:hover{background:rgba(255,255,255,.20)}'
+    /* §hdTok · DM Mono เหมือน .dv-dnum · ก่อนหน้านี้ตกไป เลขจึงคนละหน้า */
     +'#reconfirm-host .rc-dnum{font-size:30px;font-weight:800;letter-spacing:-1px;line-height:1;'
-      +'color:#fff;font-variant-numeric:tabular-nums;display:inline-block;min-width:34px;text-align:center}'
+      +'color:#fff;font-family:\'DM Mono\',ui-monospace,monospace;'
+      +'display:inline-block;min-width:34px;text-align:center}'
     +'#reconfirm-host .rc-dgrp{display:inline-block;min-width:108px}'
     +'#reconfirm-host .rc-dwk{display:block;font-size:14px;font-weight:800;line-height:1.05;color:#fff}'
     /* ปฏิทินยังอยู่ · input ใสทับคำว่าเดือน · กดที่ SEPTEMBER 2026 ก็เลือกวันได้ */
@@ -6149,12 +6151,18 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
       +'color:#8E97C4;margin-bottom:2px;white-space:nowrap}'
     +'#reconfirm-host .rc-page{display:block;font-size:16px;font-weight:800;letter-spacing:.30em;'
       +'color:#fff;white-space:nowrap}'
-    +'#reconfirm-host .rc-chip{height:26px;padding:0 12px;border-radius:13px;display:inline-flex;'
-      +'align-items:center;gap:5px;font-size:11px;font-weight:700;background:rgba(255,255,255,.10);'
-      +'color:#E8EBF7;border:1px solid rgba(255,255,255,.10)}'
-    +'#reconfirm-host .rc-chip b{font-weight:800}'
+    /* §hdTok · ค่าเดียวกับ .dv-chip ของ Dashboard ทุกตัว
+       มุม 999px · น้ำหนัก 600 · สี #D6E2F5 · ขอบ .20 · padding 4/11 */
+    +'#reconfirm-host .rc-chip{padding:4px 11px;border-radius:999px;display:inline-flex;'
+      +'align-items:center;gap:5px;font-size:11px;font-weight:600;background:rgba(255,255,255,.10);'
+      +'color:#D6E2F5;border:1px solid rgba(255,255,255,.20);white-space:nowrap}'
+    +'#reconfirm-host .rc-chip b{font-family:\'DM Mono\',ui-monospace,monospace;'
+      +'font-weight:800;color:#fff;font-size:12.5px}'
     +'#reconfirm-host .rc-chip.g{background:#D8F4E8;color:#0C6B47;border-color:transparent}'
     +'#reconfirm-host .rc-chip.r{background:#FBE0DD;color:#A8362B;border-color:transparent}'
+    /* เลขในชิปของ Dashboard เป็นสีขาว · บนพื้นเขียว/ชมพูอ่อนจะอ่านไม่ออก
+       ชิปสองตัวนี้จึงให้เลขใช้สีของชิปตัวเอง */
+    +'#reconfirm-host .rc-chip.g b,#reconfirm-host .rc-chip.r b{color:inherit}'
     +'#reconfirm-host .rc-sub{display:flex;gap:12px;flex-wrap:wrap;align-items:center;'
       +'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.09);border-radius:12px;'
       +'padding:8px 13px;margin-bottom:13px;font-size:11.5px;color:#B9C0DC}'
