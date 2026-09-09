@@ -6134,13 +6134,19 @@ function renderReconfirm(){ var host=document.getElementById('reconfirm-host'); 
     +'#reconfirm-host table{border-collapse:collapse;width:100%}'
     +'#reconfirm-host button{font-family:inherit;cursor:pointer}'
     /* แถบบน + แถบคำอธิบาย · ตรึงใต้ topbar ของแอป */
-    /* §rcStick · ดึงกล่องขึ้นเท่ากับระยะที่มันไหลตามปกติ
-       กล่องจึงนอนอยู่ที่ --rc-top พอดีตั้งแต่ยังไม่เลื่อน ระยะไถลเหลือ 0
-       padding เท่ากับระยะที่ดึงขึ้น พื้นทึบจึงยังคลุมถึงขอบบนสุด
-       ค่า --rc-pull วัดจากของจริงใน rcSyncSticky ไม่ได้ hardcode */
-    +'#reconfirm-host .rc-chrome{position:sticky;top:var(--rc-top,0px);z-index:40;'
-      +'background:#16265C;padding:var(--rc-pull,18px) 0 2px;'
-      +'margin:calc(var(--rc-pull,18px) * -1) 0 0}'
+    /* §rcEdge · ยึดที่ "ขอบบนของหน้า" ไม่ใช่ขอบจอ · ขอบตรงกับ Boat Operation
+       ดึงขึ้นแค่ padding-top ของหน้า กล่องจึงนอนอยู่ที่ --rc-top พอดี
+       ระยะไถลยังเป็น 0 เหมือนที่แก้ไว้รอบก่อน
+       ยืดพื้นทึบออกข้างละ 18px ด้วย · ไม่งั้นตอนเลื่อนแถวขาวโผล่ข้างแถบ
+       ค่า --rc-pull / --rc-side วัดจากของจริงใน rcSyncSticky ไม่ได้ hardcode */
+    +'#reconfirm-host .rc-chrome{position:sticky;top:var(--rc-top,22px);z-index:40;'
+      +'background:#16265C;'
+      +'padding:var(--rc-pull,18px) var(--rc-side,18px) 2px;'
+      +'margin:calc(var(--rc-pull,18px) * -1) calc(var(--rc-side,18px) * -1) 0}'
+    /* ช่องว่างเหนือขอบหน้า · ตอนเลื่อน แถวจะไหลผ่านตรงนั้น
+       ทาสีพื้นแอปทับไว้ · ตอนยังไม่เลื่อนสีเดียวกันอยู่แล้ว มองไม่เห็น */
+    +'#reconfirm-host .rc-chrome::before{content:"";position:absolute;left:0;right:0;'
+      +'bottom:100%;height:var(--rc-top,22px);background:var(--rc-gap,#F5F2ED);pointer-events:none}'
     /* §rcBop · แบนเหมือน .bop2-top · ถอดแผ่นแก้วของ Dashboard ออก */
     +'#reconfirm-host .rc-top{display:flex;align-items:center;gap:9px;'
       +'flex-wrap:wrap;margin:-4px 0 13px}'
@@ -6333,29 +6339,41 @@ function rcSyncSticky(host){
          if(!isNaN(v)&&v>=0) tb=v; }catch(_){}
     var ch=host.querySelector('.rc-chrome');
     if(!ch) return;
-    /* §rcStick · ระยะที่แถบไหลตามปกติถ้าไม่ดึงอะไรเลย
-       = ขอบบนของหน้า (พิกัดเอกสาร) + padding-top ของหน้า
-       ดึงขึ้นเท่านี้ กล่องจะนอนอยู่ที่ --rc-top พอดี ระยะไถลเหลือ 0
+    /* §rcEdge · ยึดที่ขอบบนของหน้า ไม่ใช่ขอบจอ · ขอบตรงกับ Boat Operation
+       top     = ขอบบนของ #view-reconfirm ในพิกัดเอกสาร (22px)
+       pull    = padding-top ของหน้า (18px) · ดึงขึ้นเท่านี้กล่องนอนอยู่ที่ top พอดี
+       side    = padding ซ้าย/ขวา · ยืดพื้นทึบออกไปคลุมช่องว่างสองข้าง
        วัดจาก #view-reconfirm ไม่ใช่จากตัว .rc-chrome เอง
        เพราะ .rc-chrome เป็น sticky · getBoundingClientRect คืนตำแหน่งที่วาด
        ไม่ใช่ตำแหน่งใน flow · วัดตัวเองจะได้ค่าที่วนกลับมาหาตัวเอง */
-    var pull=18;
+    var pull=18, side=18, vtop=tb;
     try{
       var vw=ch.closest?ch.closest('.view'):null;
       if(vw){
+        var cs=getComputedStyle(vw);
         var sy=(window.pageYOffset||window.scrollY||0);
-        var flow=vw.getBoundingClientRect().top+sy+(parseFloat(getComputedStyle(vw).paddingTop)||0);
-        var p=Math.round(flow-tb);
+        var t=Math.round(vw.getBoundingClientRect().top+sy);
+        var p=Math.round(parseFloat(cs.paddingTop)||0);
+        var l=Math.round(parseFloat(cs.paddingLeft)||0);
         /* กันค่าเพี้ยน · หน้าถูกซ่อนอยู่ตอนวัด หรือ layout ยังไม่นิ่ง */
-        if(p>=0 && p<=400) pull=p;
+        if(t>=0 && t<=400) vtop=Math.max(tb,t);
+        if(p>=0 && p<=80)  pull=p;
+        if(l>=0 && l<=80)  side=l;
       }
+    }catch(_){}
+    /* สีที่ทาช่องว่างเหนือแถบ · อ่านจาก body ตอนรัน ไม่ฝังเลขไว้ */
+    try{
+      var bg=getComputedStyle(document.body).backgroundColor;
+      if(bg && bg!=='rgba(0, 0, 0, 0)' && bg!=='transparent')
+        host.style.setProperty('--rc-gap', bg);
     }catch(_){}
     var cH=Math.round(ch.getBoundingClientRect().height);
     /* กันค่าเพี้ยน · แถบบนสูงเกินครึ่งจอแปลว่าวัดผิด ดีกว่าดันการ์ดหล่นหายไปทั้งหน้า */
     if(cH > Math.max(200,(window.innerHeight||800)*0.45)) cH=0;
     host.style.setProperty('--rc-pull', pull+'px');
-    host.style.setProperty('--rc-top', tb+'px');
-    host.style.setProperty('--rc-hd',  (tb+cH)+'px');
+    host.style.setProperty('--rc-side', side+'px');
+    host.style.setProperty('--rc-top', vtop+'px');
+    host.style.setProperty('--rc-hd',  (vtop+cH)+'px');
   };
   requestAnimationFrame(apply);
   setTimeout(apply,300); setTimeout(apply,1200);
