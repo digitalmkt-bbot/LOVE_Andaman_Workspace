@@ -43,6 +43,12 @@
       "kind": "scalar",
       "db_type": "text"
     },
+    "familyid": {
+      "source": "familyId",
+      "kind": "scalar",
+      "db_type": "text",
+      "note": "§famField · กลุ่มโปรแกรมที่เส้นทางนี้สังกัด · เดิมเดาจากชื่อเส้นทางตอน render · null = ยังไม่เคยตั้ง (ถอยไปใช้การเดา) · empty string = ตั้งใจไม่ผูกกลุ่ม"
+    },
     "sort": {
       "source": "sort",
       "kind": "scalar",

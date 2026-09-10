@@ -8511,6 +8511,22 @@ function delSeason(rid,sid){
 
 let selProgramStatus='active';
 function pickProgramStatus(v){selProgramStatus=v;}
+/* §famField · ตัวเลือกกลุ่มโปรแกรมในหน้าต่างแก้ไขเส้นทาง
+   ค่าที่ยังไม่เคยตั้ง (familyId == null) จะโชว์ผลเดาจากชื่อไว้ให้ก่อน · กดบันทึกคือยืนยันค่านั้น
+   ต่างจาก "— ไม่มีกลุ่ม —" ซึ่งแปลว่าตั้งใจไม่ผูกกลุ่ม (เก็บเป็น '') และจะไม่ถูกเดาทับอีก */
+function _famFillRouteSelect(r){
+  const sel=document.getElementById('fm-route-family');
+  if(!sel) return;
+  const FAMS=(typeof _BKV2_FAMILIES!=='undefined')?_BKV2_FAMILIES:[];
+  let cur='';
+  if(r){
+    if(r.familyId!=null) cur=r.familyId;
+    else { const g=(typeof bkV2RouteFamilyGuess==='function')?bkV2RouteFamilyGuess(r):null; cur=g?g.id:''; }
+  }
+  const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  sel.innerHTML='<option value="">— ไม่มีกลุ่ม —</option>'
+    +FAMS.map(f=>'<option value="'+esc(f.id)+'"'+(f.id===cur?' selected':'')+'>'+esc(f.name)+'</option>').join('');
+}
 function openRouteModal(id){
   editRouteId=id||null;
   const r=id?ROUTES.find(x=>x.id===id):null;
@@ -8519,6 +8535,7 @@ function openRouteModal(id){
   document.getElementById('fm-route-islands').value=r?r.islands:'';
   timeRows=r?[...r.times]:['08:00'];
   pickLoc(r?r.pier:'tublamu');
+  _famFillRouteSelect(r);   // §famField
   renderTimeRows();
   openModal('route-modal');
   setTimeout(()=>document.getElementById('fm-route-name').focus(),50);
@@ -8542,11 +8559,12 @@ function saveRoute(){
   const name=document.getElementById('fm-route-name').value.trim();if(!name)return;
   const islands=document.getElementById('fm-route-islands').value.trim();
   const times=timeRows.filter(t=>t);
+  const famId=(document.getElementById('fm-route-family')||{}).value||'';   // §famField · '' = ตั้งใจไม่ผูกกลุ่ม
   if(editRouteId){
     const r=ROUTES.find(x=>x.id===editRouteId);
-    if(r){r.name=name;r.islands=islands;r.times=times;r.pier=selLoc;}
+    if(r){r.name=name;r.islands=islands;r.times=times;r.pier=selLoc;r.familyId=famId;}
   } else {
-    ROUTES.push({id:'r'+Date.now(),name,islands,times,color:ROUTE_COLORS[ROUTES.length%ROUTE_COLORS.length],pier:selLoc,seasons:[]});
+    ROUTES.push({id:'r'+Date.now(),name,islands,times,color:ROUTE_COLORS[ROUTES.length%ROUTE_COLORS.length],pier:selLoc,familyId:famId,seasons:[]});
   }
   closeModal('route-modal');renderSettings();save('config');
 }

@@ -2421,6 +2421,7 @@ window._laReloadData=function(){
     if(d.trips) TRIPS=d.trips;
     if(Array.isArray(d.boats)) BOATS=d.boats;
     if(Array.isArray(d.routes)) ROUTES=laApplySort(d.routes);
+    if(typeof bkV2BackfillRouteFamilies==='function') bkV2BackfillRouteFamilies();   // §famField · in-memory only · persists on the next config save
     if(Array.isArray(d.fleet_engines)) FL_ENGINES=d.fleet_engines;
     if(Array.isArray(d.fleet_gearboxes)) FL_GEARBOXES=d.fleet_gearboxes;
     if(Array.isArray(d.fleet_propellers)) FL_PROPELLERS=d.fleet_propellers;
@@ -28359,7 +28360,7 @@ function vanCostSet(vid, v){
    ══════════════════════════════════════════════════════════════════ */
 /* คำที่บอกว่าแผนชื่อนี้น่าจะเป็นกลุ่มไหน · Whale ต้องมาก่อน Phi Phi เสมอ เพราะชื่อเต็มมีคำว่า Phi Phi อยู่ด้วย */
 var CT_FAMKEY = [
-  ['whaleshark', ['whale','maiton','\u0e21าิตอน','ฉลามวาฬ']],
+  ['whaleshark', ['whale','maiton','ไม้ตอน','ฉลามวาฬ']],   // §famField · เดิมเป็นสระลอย ไม่เคยแมตช์อะไรเลย
   ['nyaung',     ['nyaung','oo phee','พยาม']],
   ['selava',     ['se la va','selava','เซลาว้า']],
   ['similan',    ['similan','สิมิลัน']],
@@ -39100,12 +39101,17 @@ const _BKV2_FAMILIES = [
   { id:'selava',     name:'Day Trip - Se La Va',        color:'#BA7517' },
   { id:'nyaung',     name:'Day Trip - Nyaung Oo Phee Island', color:'#0F6E56' }
 ];
-// Map a route to its family by name pattern (Whale check first to avoid Phi Phi conflict)
-function bkV2RouteFamily(routeId){
-  if(typeof ROUTES === 'undefined') return null;
-  const r = ROUTES.find(rr => rr.id === routeId);
-  if(!r) return null;
-  const n = r.name || '';
+// Map a route to its family · §famField (2026-09-10)
+//   route.familyId is the source of truth. The name-pattern guess below is the FALLBACK, kept only
+//   for routes saved before this field existed, and for the one-time backfill that fills them in.
+//   Order matters in the guess (Whale before Phi Phi — "Whale Shark Phi Phi Maiton" contains both).
+//   familyId === '' means "deliberately no family" and is respected · undefined/null = never set.
+function bkV2FamilyById(fid){
+  if(!fid) return null;
+  return _BKV2_FAMILIES.find(f => f.id === fid) || null;
+}
+function bkV2RouteFamilyGuess(r){
+  const n = (r && r.name) || '';
   if(n.includes('Nyaung') || n.includes('Oo Phee')) return _BKV2_FAMILIES[6];
   if(n.includes('Se La Va') || n.includes('SeLaVa')) return _BKV2_FAMILIES[5];
   if(n.includes('Whale')) return _BKV2_FAMILIES[4];
@@ -39114,6 +39120,29 @@ function bkV2RouteFamily(routeId){
   if(n.includes('Phi Phi')) return _BKV2_FAMILIES[2];
   if(n.includes('Krabi') || n.includes('Phang Nga')) return _BKV2_FAMILIES[3];
   return null;
+}
+function bkV2RouteFamily(routeId){
+  if(typeof ROUTES === 'undefined') return null;
+  const r = ROUTES.find(rr => rr.id === routeId);
+  if(!r) return null;
+  if(r.familyId != null) return bkV2FamilyById(r.familyId);   // '' → null · set on purpose, don't guess over it
+  return bkV2RouteFamilyGuess(r);
+}
+// §famField · one-time backfill · writes the guess into routes that have never carried the field.
+//   Idempotent and targeted by design: it only touches routes where familyId is undefined/null, and
+//   only ever writes the value bkV2RouteFamily already returns at runtime — so it materialises
+//   today's behaviour and changes nothing on screen. A route the user deliberately cleared ('') is
+//   left alone. Returns how many were filled so the caller can decide whether to persist.
+function bkV2BackfillRouteFamilies(){
+  if(typeof ROUTES === 'undefined' || !Array.isArray(ROUTES)) return 0;
+  let n = 0;
+  ROUTES.forEach(r => {
+    if(!r || r.familyId != null) return;
+    const f = bkV2RouteFamilyGuess(r);
+    r.familyId = f ? f.id : '';
+    n++;
+  });
+  return n;
 }
 // All families that have ≥1 active route in the visible month
 // Looks at ALL ROUTES (not just rate-type ones) · so ops sees every variant
@@ -61993,3 +62022,12 @@ function ppCSSBoard(){ var S='#prpo-host'; return ''
  +'@media print{'+S+' .bd-g{grid-template-columns:repeat(4,1fr);background:#fff;padding:0;gap:6px}'
    +S+' .bd-p>header{break-after:avoid}}';
 }
+
+// §famField · boot backfill · runs once for the localStorage-seeded ROUTES (the cloud path calls
+//   this again after /api/load overwrites them). In-memory only — no write here; the value reaches
+//   Postgres on the next ordinary config save.
+(function(){
+  function _famBoot(){ try{ if(typeof bkV2BackfillRouteFamilies==="function") bkV2BackfillRouteFamilies(); }catch(_){} }
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", _famBoot);
+  else _famBoot();
+})();
