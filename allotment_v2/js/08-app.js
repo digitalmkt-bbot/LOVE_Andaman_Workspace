@@ -9227,7 +9227,6 @@ function renderVanJobs(){
   const eAttr=s=>e(s).replace(/"/g,'&quot;');
   const date=_vanJobsDate;
   if(typeof bkV2HealOvnLegs==='function') bkV2HealOvnLegs();           // §OVN · strip the inherited pickup off any return leg
-  if(typeof bkOvnHealSpans==='function') bkOvnHealSpans();             // §ovnSpan · จองเรือให้ครบช่วงของใบค้างเกาะที่บันทึกไว้ก่อนหน้า
   if(typeof bkV2HealAltSplits==='function') bkV2HealAltSplits(date);   // §altPickups · ensure auto van-splits exist for bookings with รับหลายจุด
   if(typeof bkV2VanGroupHeal==='function') bkV2VanGroupHeal(date);   // reconcile any grouped booking missing its group's van (prevents ตกบุคกิ้ง)
   // group by van · then collect zones/programs for context
@@ -42652,6 +42651,9 @@ function bkV2OtherToggleAll(){
 
 function bkV2RenderTab2(){
   if(typeof bkV2HealOvnLegs==='function') bkV2HealOvnLegs();   // §OVN · a return leg must never carry a pickup
+  /* §ovnSpan · ตัวซ่อมเดิมผมไปแขวนไว้ใน renderVanJobs ซึ่งทำงานต่อเมื่อเปิดหน้าใบงานรถ
+     ใบค้างเกาะเป็นเรื่องของเรือ คนที่ต้องเห็นคือคนจ่ายเรือ · ย้ายมาที่หน้า By trip */
+  if(typeof bkOvnHealSpans==='function') bkOvnHealSpans();     // §ovnSpan · จองเรือให้ครบช่วงของใบค้างเกาะ
   const esc = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
   const P = (pax,k)=> bkV2PaxTot(pax||{}, k);
   const boatMode = !!_bkV2.boatAssignMode;   // Boat Assign mode → extra Boat column + auto-assign
