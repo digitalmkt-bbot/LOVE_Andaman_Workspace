@@ -5821,6 +5821,14 @@ function bop2FleetStatus(dateStr){
       const isCharter = !!op.charterBookingId || op.type === 'charter';
       out.assigned.push({ boat:b, route, type: op.type, charterBookingId: op.charterBookingId, seats, capacity: b.cap, isCharter });
     } else {
+      /* §ovnHold · เรือที่ถูกเหมาไปค้างเกาะและยังไม่กลับ · วันระหว่างทางไม่มี trip
+         ถ้าไม่กันตรงนี้ ลำนั้นขึ้นในรายการ "ว่าง" ให้จ่ายงานอื่นทับได้
+         ทั้งที่เรือยังจอดอยู่ที่เกาะ · ตัวช่วยอยู่ใน 08-app.js (grep §ovnHold) */
+      const _ovH = (typeof bkOvnHoldOn === 'function') ? bkOvnHoldOn(b.id, dateStr) : null;
+      if(_ovH){
+        out.unavailable.push({ boat:b, reason:'เหมาลำค้างเกาะ · กลับ ' + _ovH.to, ovnHold:_ovH });
+        return;
+      }
       out.available.push({ boat:b });
     }
   });
@@ -7477,6 +7485,9 @@ function getSeatsConsumed(routeId, dateStr, excludeBkId){
       bk.trips.forEach(t => {
         if(t.routeId !== routeId || t.date !== dateStr) return;
         if(t.bookingMode === 'charter') return;  // charter consumes whole boat, not seats
+        /* §ovnHold · ขากลับของใบเหมาลำ · แขกกลับมากับเรือที่เหมาไป ไม่ได้นั่งเรือ seat
+           ของวันนั้น · ของเดิมนับเป็นที่นั่ง ทำให้เรือ seat ลำอื่นเสียที่ไปฟรี ๆ */
+        if(typeof bkOvnLegOnCharter === 'function' && bkOvnLegOnCharter(bk, t)) return;
         // §check-in · คนที่ No-show / CXL หน้างานไม่ได้ใช้ที่นั่งจริง → หักออกจากที่นั่งที่ถูกใช้
         let _seat = getTripPaxTotal(t);
         if(typeof ckLostByType === 'function'){ const _L = ckLostByType(bk, dateStr); if(_L && _L.total > 0) _seat = Math.max(0, _seat - _L.total); }
