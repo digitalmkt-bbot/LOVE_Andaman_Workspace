@@ -6939,16 +6939,6 @@ function bkOvnHoldOn(boatId,date){
   if(!boatId||!date) return null;
   return bkOvnHoldMapMemo(date).get(boatId)||null;
 }
-/* §ovnHold · ขากลับของใบที่ขาไปเป็นเหมาลำ · แขกกลับมากับเรือที่ตัวเองเหมาไป
-   ไม่ได้นั่งเรือ seat ที่จ่ายให้เส้นทางเดียวกันวันนั้น จึงไม่กินที่นั่งของลำนั้น
-   ใบที่บันทึกไว้ก่อนแก้ ขากลับยังเป็น bookingMode:'seat' · ตัวนี้จับให้ด้วย */
-function bkOvnLegOnCharter(bk,t){
-  if(!bk || !t || !t.ovnLeg) return false;
-  if(t.bookingMode==='charter') return true;
-  return (bk.trips||[]).some(function(x){
-    return x && x!==t && x.bookingMode==='charter' && x.ovn==='return'
-        && (x.ovnReturnDate||'')===(t.date||'') && (x.routeId||'')===(t.routeId||''); });
-}
 function baCharterBoatMap(date){
   const m=new Map();
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
@@ -45554,12 +45544,12 @@ function bkV2CreateOvnReturnLeg(idx){
   // ทันที ช่องติ๊ก/กรุ๊ป/เลือกรถหายหมด · เก็บโซนจริงไว้ ใบงานจัดการเรื่องจุดรับเอง (bkIsOvnReturn)
   leg.zone = t.zone || '';         // โซนปลายทางที่ต้องไปส่ง (ไม่มีรถไปรับ (รถกลับ pier→โรงแรม จัดในแมนิเฟสต์)
   leg.pax = { ...t.pax };          // กันที่นั่งจำนวนเดียวกับขาไป
-  /* §ovnHold · ของเดิมตั้ง 'seat' ตายตัวไม่ดูขาไป · ใบเหมาลำจึงไม่ถือเรือในวันกลับ
-     และแขกทั้งใบไปกินที่นั่งของเรือ seat ลำอื่นที่จ่ายให้เส้นทางเดียวกันวันนั้น
-     ราคายังเป็น 0 เหมือนเดิม · ทุกจุดที่คิดเงินเช็ค ovnLeg ก่อน bookingMode */
-  const _ovIsCharter = (t.bookingMode === 'charter');
-  leg.bookingMode = _ovIsCharter ? 'charter' : 'seat';
-  if(_ovIsCharter) leg.charterBoatId = t.charterBoatId || null;
+  /* §ovnHold · ขากลับเป็น 'seat' เสมอ · "เหมาไป จอยกลับ" คือรูปแบบที่ใช้จริง
+     (เคส 16-19 · เหมาออกวันที่ 16 · จอยกลับวันที่ 19) แขกกลับกับเรือรอบปกติ
+     และกินที่นั่งของลำนั้นจริง จึงต้องนับเป็นที่นั่งตามเดิม
+     รอบก่อนผมเดาว่า "ขาไปเหมา = ขากลับเหมา" ซึ่งผิดกับรูปแบบที่ใช้อยู่
+     ถ้าต้องรองรับ "เหมากลับ" ด้วย ต้องทำเป็นตัวเลือกให้คนกรอกเลือก ไม่ใช่เดา */
+  leg.bookingMode = 'seat';
   leg.ovnLeg = true;               // ขากลับค้างคืน · ราคา 0
   leg.ovnOf = idx;
   d.trips.push(leg);
