@@ -6295,6 +6295,10 @@
       {
         "name": "at",
         "type": "text"
+      },
+      {
+        "name": "slips",
+        "type": "text"
       }
     ],
     "primary_key": "id",

@@ -42394,6 +42394,98 @@ function bkV2AgentColorEdit(agentId, ev){
   setTimeout(()=>{ const close=(e)=>{ if(!pop.contains(e.target)){ pop.remove(); document.removeEventListener('mousedown',close); } }; document.addEventListener('mousedown',close); },0);
 }
 function bkV2AgentColorSet(agentId,c){ const a=(typeof sbGetAgent==='function')?sbGetAgent(agentId):null; if(!a) return; a.color=c||null; if(typeof sbAgentsPersist==='function') sbAgentsPersist(); const p=document.getElementById('bkv2-agcol-pop'); if(p) p.remove(); if(typeof bkV2Render==='function') bkV2Render(); }
+/* ══ §btOther · แถบล่างของหน้า By trip · date · โปรแกรมที่ไม่ใช้เรือ ═══════════════
+   โปรแกรมกลุ่ม Other (City Tour / Dedicated Transfer / …) ไม่มีเรือให้จัด จึงไม่ควรอยู่ใน
+   การ์ดเรือด้านบนซึ่งเป็นกระดานจ่ายงานเรือล้วน ๆ · ดึงลงมาไว้ตรงนี้แทน
+
+   ตั้งใจโชว์ใบที่มาจากเว็บ B2C เป็นหลัก (id ขึ้นต้น b2c_) ตามที่ผู้ใช้เลือก
+   แต่ "ไม่โชว์" ต้องไม่แปลว่า "หายไป": ใบที่ไม่ได้มาจากเว็บ (walk-in หน้าเคาน์เตอร์, เอเยนต์)
+   ถูกยุบไว้พร้อมจำนวนที่มองเห็น กดเปิดดูได้ · ถ้ากรองทิ้งเงียบ ๆ ใบ walk-in จะหายจากหน้านี้
+   ทั้งหน้า เพราะข้างบนก็ไม่แสดงแล้ว — ยอด pax ของวันจะโกหก
+
+   §esc · ประกาศ esc ของตัวเองเสมอ · ตัวข้างนอกเป็น local ของฟังก์ชันอื่น */
+function _btOtherSection(date, rows, rids){
+  if(!Array.isArray(rids) || !rids.length) return '';
+  const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+  const isB2C = b => (typeof laIsB2C==='function') ? laIsB2C(b) : /^b2c_/.test(String((b&&b.id)||''));
+  const paxOf = r => (typeof bkV2PaxAllTot==='function') ? bkV2PaxAllTot(r.pax||{}) : 0;
+  const CXL = ['cancelled','rejected','cancelled_weather'];
+  const live = (rows||[]).filter(r => rids.includes(r.routeId) && !CXL.includes((r.bk||{}).status));
+  if(!live.length) return '';
+
+  const showAll = !!window._btOtherShowAll;
+  let totB2C = 0, totOther = 0, nOther = 0;
+  live.forEach(r => { const p = paxOf(r); if(isB2C(r.bk)) totB2C += p; else { totOther += p; nOther++; } });
+
+  const byRoute = {};
+  live.forEach(r => { (byRoute[r.routeId] = byRoute[r.routeId] || []).push(r); });
+  const ridsSorted = Object.keys(byRoute).sort((a,b) => {
+    const ta = (ROUTES.find(x=>x.id===a)?.times||[])[0] || '99:99';
+    const tb = (ROUTES.find(x=>x.id===b)?.times||[])[0] || '99:99';
+    return ta.localeCompare(tb) || String(a).localeCompare(String(b));
+  });
+
+  const rowHTML = r => {
+    const b = r.bk || {};
+    const p = paxOf(r);
+    const b2c = isB2C(b);
+    const nm = b.leadPax || b.customerName || '—';
+    const vRef = b.voucherRef ? `<span style="font-family:'DM Mono',monospace;font-size:9.5px;color:#8a8f98">${esc(b.voucherRef)}</span>` : '';
+    const ag = b.agentId && typeof sbGetAgent==='function' ? (sbGetAgent(b.agentId)?.name || '') : '';
+    const pt = (typeof bkV2GetPickupTime==='function' && b.pickupAreaId)
+      ? (bkV2GetPickupTime(r.routeId, b.pickupAreaId, date) || '') : '';
+    const pend = b.status === 'pending_approval'
+      ? `<span style="background:#FFF6E5;color:#A05A1A;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px">รออนุมัติ</span>` : '';
+    return `<div class="bto-row" onclick="bkV2OpenDetail('${esc(b.id)}')">
+      <span class="bto-src">${b2c ? '<b>B2C</b>' : `<i>${esc(ag||'walk-in')}</i>`}</span>
+      <span class="bto-nm">${esc(nm)} ${vRef} ${pend}</span>
+      <span class="bto-hotel">${esc(b.hotelName||'')}</span>
+      <span class="bto-time">${esc(pt)}</span>
+      <span class="bto-pax">${p}</span>
+    </div>`;
+  };
+
+  const blocks = ridsSorted.map(rid => {
+    const rt = ROUTES.find(x=>x.id===rid);
+    const list = byRoute[rid];
+    const b2cRows = list.filter(r => isB2C(r.bk));
+    const othRows = list.filter(r => !isB2C(r.bk));
+    const shown = showAll ? list : b2cRows;
+    const pax = list.reduce((a,r)=>a+paxOf(r), 0);
+    const al = (typeof getAllotment==='function') ? getAllotment(rid, date) : null;
+    const capTxt = (al && al.hasAllotment)
+      ? `<span class="bto-cap">${al.seatsConsumed}/${al.availableCapacity}</span>`
+      : `<span class="bto-cap bto-cap-nolim">ไม่จำกัด</span>`;
+    if(!shown.length && !othRows.length) return '';
+    return `<div class="bto-blk">
+      <div class="bto-blkhd">
+        <span class="bto-dot" style="background:${esc(rt?.color||'#5B289A')}"></span>
+        <span class="bto-rt">${esc(rt?.name || rid)}</span>
+        <span class="bto-tm">${esc((rt?.times||[])[0]||'')}</span>
+        ${capTxt}
+        <span class="bto-px">${pax} pax</span>
+      </div>
+      ${shown.map(rowHTML).join('')}
+      ${(!showAll && othRows.length) ? `<div class="bto-hid">+ ${othRows.length} ใบที่ไม่ได้มาจากเว็บ (${totOther ? othRows.reduce((a,r)=>a+paxOf(r),0) : 0} pax) · ซ่อนอยู่</div>` : ''}
+    </div>`;
+  }).join('');
+
+  return `<div class="bto-wrap">
+    <div class="bto-hd">
+      <span class="bto-ttl">OTHER · ไม่ใช้เรือ</span>
+      <span class="bto-sub">${ridsSorted.length} โปรแกรม · <b>${totB2C}</b> pax จากเว็บ${nOther?` · ${totOther} pax ทางอื่น`:''}</span>
+      ${nOther ? `<button class="bto-tg" onclick="bkV2OtherToggleAll()">${showAll?'แสดงเฉพาะ B2C':`แสดงทั้งหมด (+${nOther})`}</button>` : ''}
+    </div>
+    ${blocks}
+  </div>`;
+}
+/* สลับระหว่าง "เฉพาะใบจากเว็บ" กับ "ทุกใบ" · เก็บบน window ไม่ใช่ _bkV2
+   เพราะเป็นสถานะการมองอย่างเดียว ไม่ต้องติดไปกับตัวกรองอื่นของแท็บ */
+function bkV2OtherToggleAll(){
+  window._btOtherShowAll = !window._btOtherShowAll;
+  if(typeof bkV2Render==='function') bkV2Render();
+}
+
 function bkV2RenderTab2(){
   if(typeof bkV2HealOvnLegs==='function') bkV2HealOvnLegs();   // §OVN · a return leg must never carry a pickup
   const esc = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
@@ -42509,7 +42601,12 @@ function bkV2RenderTab2(){
   // Group by program family (main trip), order families by earliest departure · variants kept adjacent
   const _famOf = rid => (bkV2RouteFamily(rid)?.id) || 'zzz';
   const _timeOf = rid => ROUTES.find(x=>x.id===rid)?.times?.[0] || '99:99';
-  const _allRids = [...new Set([...Object.keys(groups), ...Object.keys(pendGroups), ...lockRouteIds, ...reschedFromRouteIds])];
+  /* §btOther · ตารางข้างบนคือกระดานจัดเรือ · โปรแกรมที่ไม่ใช้เรือไม่มีช่องให้กรอก
+     จึงดึงออกมาไว้ส่วนล่าง (_btOtherSection) แทนการดันเข้าการ์ดเรือที่เติมไม่ได้ */
+  const _isLandRid = rid => (typeof laIsLandRoute==='function') && laIsLandRoute(rid);
+  const _allRidsAll = [...new Set([...Object.keys(groups), ...Object.keys(pendGroups), ...lockRouteIds, ...reschedFromRouteIds])];
+  const _otherRids = _allRidsAll.filter(_isLandRid);
+  const _allRids = _allRidsAll.filter(rid => !_isLandRid(rid));
   const _famMinTime = {};
   _allRids.forEach(rid => { const fid=_famOf(rid), t=_timeOf(rid); if(!(fid in _famMinTime) || t < _famMinTime[fid]) _famMinTime[fid]=t; });
   const routeIds = _allRids.sort((a,b)=>{
@@ -42962,7 +43059,7 @@ function bkV2RenderTab2(){
       const _closedCards = _closedV.map(rr=>{ const _cd=rr.times?.[0]||''; const _cp=rr.pier?(' · '+(rr.pier==='tublamu'?'Tub Lamu':rr.pier==='panwa'?'Visit Panwa':esc(rr.pier))):'';
         return `<div class="t2-vcard t2-vcard-closed"><div class="t2-vcard-hd" style="border-top-color:#D98C82;background:#FCEBEB"><div class="t2-vcard-nm" style="color:#A32D2D">${esc(rr.name)}</div><div class="t2-vcard-sub"><span>${esc(_cd)}${_cp}</span><span class="t2-vcard-px" style="color:#A32D2D">not running</span></div></div><div class="t2-vcard-body"><div class="t2-vclosed-note">ไม่ออกวันนี้</div></div></div>`; }).join('');
       _famHead = `<details class="t2-famcard" style="border-left-color:${fam?.color||'#8b909c'}">`
-        + `<summary class="t2-famcard-hd"><span class="t2-famnm">${esc(fam?.name||route?.name||'Other')}</span><span class="t2-fampill t2-fampill-run">${_runCount} running</span>${(_closedV.length+_famShut.length)?`<span class="t2-fampill t2-fampill-closed">${_closedV.length+_famShut.length} not running</span>`:''}<span class="t2-fam-tot">รวม <b>${_famPax}</b> pax · ${_famBoatN} เรือ</span><span class="t2-famcaret">&#9662;</span></summary>`
+        + `<summary class="t2-famcard-hd"><span class="t2-famnm">${esc(fam?.name||route?.name||'ไม่ทราบโปรแกรม')}</span><span class="t2-fampill t2-fampill-run">${_runCount} running</span>${(_closedV.length+_famShut.length)?`<span class="t2-fampill t2-fampill-closed">${_closedV.length+_famShut.length} not running</span>`:''}<span class="t2-fam-tot">รวม <b>${_famPax}</b> pax · ${_famBoatN} เรือ</span><span class="t2-famcaret">&#9662;</span></summary>`
         + `<div class="t2-fambody"><div class="t2-famvgrid">${_variantSections}${_closedCards}</div>${_famSum.length?`<div class="t2-boatsum"><span class="t2-boatsum-lbl">รวมทั้ง family</span>${_famSum.join('')}</div>`:''}</div>`
         + `</details>`;
     }
@@ -44583,8 +44680,10 @@ function bkV2RenderTab2(){
     .bt-ncb > div[style*="F1F8F5"]{margin-top:0 !important}
   </style>`;
 
+  /* §btOther · คำนวณก่อน mainBody · ข้อความ "ไม่มีทริป" ต้องรู้ว่าข้างล่างมีใบหรือไม่ */
+  const _btOther = _btOtherSection(date, rowsF, _otherRids);
   const mainBody = emptyMain
-    ? `<div class="bkv2-empty"><div class="ttl">No trips${(pierF!=='all'||routeF)?' match this filter':` on ${bkV2FmtDate(date)}`}</div><div class="sub">${(pierF!=='all'||routeF)?'Clear the filter or':'Pick another day in the calendar or use the arrows'}${(pierF!=='all'||routeF)?' pick another day':''}</div></div>`
+    ? `<div class="bkv2-empty"><div class="ttl">${(_btOther?'No boat trips':'No trips')}${(pierF!=='all'||routeF)?' match this filter':` on ${bkV2FmtDate(date)}`}</div><div class="sub">${(pierF!=='all'||routeF)?'Clear the filter or':'Pick another day in the calendar or use the arrows'}${(pierF!=='all'||routeF)?' pick another day':''}</div></div>`
     : `<div class="t2-wrap">${trips}</div>`;
   void sidebar;
   /* §btHead · ตัวกรองท่า/โปรแกรมย้ายไปอยู่ในการ์ด "โปรแกรมวันนี้" แล้ว · แถบเดิมจึงไม่ถูกใช้ */
@@ -44592,7 +44691,7 @@ function bkV2RenderTab2(){
   /* §btGap · สีของหัวต้องคุมทั้งหน้า ไม่ใช่แค่แถบหัว · ตั้งตัวแปรที่กรอบนอกสุด
      แล้วทั้งหัวและพื้นหลังใต้ตารางใช้ค่าเดียวกัน เปลี่ยนโปรแกรมก็เปลี่ยนพร้อมกันทั้งหน้า */
   const _hdr = vanMode ? header.replace('<!--BTVANCARD-->', _btVanCard) : header;
-  return style + `<div class="t2-shell" style="--btband:${_btBand};--btbandb:${_btBandB}"><div class="t2-main">${_hdr}${mainBody}</div></div>`;
+  return style + `<div class="t2-shell" style="--btband:${_btBand};--btbandb:${_btBandB}"><div class="t2-main">${_hdr}${mainBody}${_btOther}</div></div>`;
 }
 
 // ── Tab 3 · All bookings (existing Linear list) ──
