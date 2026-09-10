@@ -59,6 +59,10 @@
       {
         "name": "kind",
         "type": "text"
+      },
+      {
+        "name": "extid",
+        "type": "text"
       }
     ],
     "primary_key": "id",

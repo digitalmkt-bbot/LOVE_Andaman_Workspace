@@ -34,6 +34,7 @@ const USERS_T = DATA_BACKEND === 'relational' ? OS_SCHEMA + '.users' : 'users';
 const osRepo  = require('./os-backend/src/mapping/os_repo.js');
 const apiProxy= require('./api-proxy.js');   // backend switch · inert unless API_PROXY_URL is set
 const oidc    = require('./auth/oidc.js');   // Authentik SSO · inert unless AUTH_OIDC_* is configured
+const b2cCat  = require('./b2c-catalog.js'); // B2C → ops programme catalog · inert unless B2C_API_KEY is set
 const osModel = require('./os-backend/src/mapping/operation_schemas_model.json');
 const OS_TABLES = Object.keys(osModel);
 const OS_COLS = {};
@@ -3050,6 +3051,19 @@ const server = http.createServer((req, res) => {
       J(res, 200, { route: routeId, dateFrom, dateTo, dates, pricing });
     }).catch(e => J(res, 500, { error: e.message }));
     return;
+  }
+
+  // ───── B2C catalog API (no session — same X-Api-Key as availability above) ─────
+  // POST /api/b2c/routes   create the ops programme for a B2C product (or one of its variants) and
+  //                        return its ops route id, which B2C stores in programs_own.ops_route_id.
+  // GET  /api/b2c/routes   list what ops already has (+ ?externalId= to resolve one mapping)
+  // GET  /api/b2c/rate-types   the rate types a price can be attached to
+  // Narrow on purpose: the generic /api/v1 REST surface can delete bookings, so a webshop key must
+  // never reach it. See b2c-catalog.js for the variant/family/pricing model.
+  if (b2cCat.matches(u)) {
+    return b2cCat.handle(req, res, u, q, {
+      pool, fqt, qic, J, readBody, restTxn, sseBroadcast, dataBackend: DATA_BACKEND,
+    });
   }
 
   // ───── static files ─────
