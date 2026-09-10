@@ -47,6 +47,18 @@
       {
         "name": "code",
         "type": "text"
+      },
+      {
+        "name": "familyid",
+        "type": "text"
+      },
+      {
+        "name": "dailycap",
+        "type": "bigint"
+      },
+      {
+        "name": "kind",
+        "type": "text"
       }
     ],
     "primary_key": "id",

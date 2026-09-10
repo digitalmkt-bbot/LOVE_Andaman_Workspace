@@ -43,6 +43,12 @@
       "kind": "scalar",
       "db_type": "text"
     },
+    "kind": {
+      "source": "kind",
+      "kind": "scalar",
+      "db_type": "text",
+      "note": "§routeKind · ชนิดของโปรแกรม · marine = ทริปเรือ · land = ไม่ใช้เรือ (City Tour / Transfer) · null = ยังไม่เคยตั้ง ถอยไปดู pier='other' แบบเดิม"
+    },
     "dailycap": {
       "source": "dailyCap",
       "kind": "scalar",
