@@ -8572,7 +8572,7 @@ function _famFillRouteSelect(r){
     else { const g=(typeof bkV2RouteFamilyGuess==='function')?bkV2RouteFamilyGuess(r):null; cur=g?g.id:''; }
   }
   const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  sel.innerHTML='<option value="">— ไม่มีกลุ่ม —</option>'
+  sel.innerHTML='<option value="">— ไม่มีกลุ่ม · จะไม่ขึ้นปฏิทิน Booking —</option>'
     +FAMS.map(f=>'<option value="'+esc(f.id)+'"'+(f.id===cur?' selected':'')+'>'+esc(f.name)+'</option>').join('');
 }
 function openRouteModal(id){
