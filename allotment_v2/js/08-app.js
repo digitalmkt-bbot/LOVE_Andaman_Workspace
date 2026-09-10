@@ -42485,13 +42485,25 @@ function _btOtherSection(date, rows, rids){
     const noteLines = String(b.notes||'').split('\n').map(s=>s.trim()).filter(Boolean);
     const vehLine = noteLines.length && /\u00d7\s*\d/.test(noteLines[0]) ? noteLines[0] : '';
     const sreq = (vehLine ? noteLines.slice(1) : noteLines).join(' · ');
+    /* §btOtherTbl · ใช้การ์ดเอเยนต์ชุดเดียวกับตารางฝั่งเรือ · ใบจากเว็บแขวนไว้ใต้เอเยนต์บ้าน
+       ชื่อ 'Love Andaman' จึงขึ้นเป็นโลโก้แทนตัวหนังสือ เหมือนกัน · เอเยนต์อื่นใช้ชิปสีประจำเอเยนต์
+       คลิกเปลี่ยนสีได้เหมือนกัน จึงต้อง stopPropagation ไม่งั้นจะเปิดใบแทน */
+    const _acol = (typeof bkV2AgentColor==='function' && b.agentId) ? bkV2AgentColor(b.agentId) : '';
+    const _ink  = (_acol && typeof bkV2ContrastInk==='function') ? bkV2ContrastInk(_acol) : '#141821';
+    const _card = 'margin:2px 3px;padding:8px 10px;border-radius:8px;max-width:180px;box-shadow:0 1px 2px rgba(0,0,0,.10);white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+    const _clk  = b.agentId ? ` onclick="event.stopPropagation();bkV2AgentColorEdit('${esc(b.agentId)}',event)" style="cursor:pointer;` : ' style="';
+    const agCell = b2c
+      ? `<div${_clk}background:#fff;border:1px solid #E3E6EC;${_card};display:flex;align-items:center;justify-content:center" title="Love Andaman &middot; ขายเอง (B2C)">${(typeof bkV2B2CLogo==='function')?bkV2B2CLogo(20):'Love Andaman'}</div>`
+      : b.agentId
+        ? `<div${_clk}background:${_acol};color:${_ink};${_card};font-weight:600" title="${esc(agName)}">${esc(agName)}</div>`
+        : `<span class="t2-agency">${esc(agName)}</span>`;
     const pend = b.status === 'pending_approval'
       ? `<span style="background:#FFF6E5;color:#A05A1A;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px">รออนุมัติ</span>` : '';
     const pay = (typeof bkV2PayLabel==='function' && b.paymentStatus) ? bkV2PayLabel(b.paymentStatus) : (b.paymentStatus||'');
     const tot = Number(r.subtotal || b.total || 0);
     return `<tr class="t2-row" onclick="bkV2OpenDetail('${esc(b.id)}')">
       <td><span class="t2-mono t2-vch">${esc(b.voucherRef||b.id)}</span></td>
-      <td class="t2-ag">${b2c?'<span class="bto-b2c">B2C</span>':esc(agName)}</td>
+      <td class="t2-ag" style="padding:0">${agCell}</td>
       <td class="t2-cu">${esc(b.leadPax||b.customerName||'—')} ${pend}</td>
       ${cell(r,'ad')}${cell(r,'chd')}${cell(r,'inf')}${cell(r,'foc')}
       <td class="t2-mono">${esc(pt)}</td>
