@@ -58399,6 +58399,21 @@ function pjPax(date, boatId, pier){
      2) คนมาครบยัง — จองไว้เท่าไหร่ เช็คอินแล้วเท่าไหร่ ขาดใคร
      3) รถคันสุดท้ายถึงกี่โมง — เทียบกับเวลาออก จะได้รู้ว่าจะทันไหม
    ตัวกรอง booking ชุดเดียวกับ pjPax เป๊ะ ๆ ตัวเลขสองที่จึงตรงกันเสมอ */
+/* §pjNoteTH · แถวหมายเหตุอ่านโดยคนหน้าท่า ไม่ใช่คนทำระบบ
+   "EN 44" ต้องแปลในหัวก่อนถึงจะรู้ว่าคือแขกอังกฤษ 44 คน · เขียนเป็นคำไทยไปเลย
+   ค่าที่ไม่รู้จัก (otherLang พิมพ์เอง) คืนคำเดิม ไม่ทิ้งข้อมูล */
+var PJ_LANG_TH={EN:'\u0e2d\u0e31\u0e07\u0e01\u0e24\u0e29',RU:'\u0e23\u0e31\u0e2a\u0e40\u0e0b\u0e35\u0e22',
+  CN:'\u0e08\u0e35\u0e19',CHN:'\u0e08\u0e35\u0e19',TH:'\u0e44\u0e17\u0e22',THAI:'\u0e44\u0e17\u0e22',
+  DE:'\u0e40\u0e22\u0e2d\u0e23\u0e21\u0e31\u0e19',FR:'\u0e1d\u0e23\u0e31\u0e48\u0e07\u0e40\u0e28\u0e2a',
+  ES:'\u0e2a\u0e40\u0e1b\u0e19',IT:'\u0e2d\u0e34\u0e15\u0e32\u0e25\u0e35',
+  JP:'\u0e0d\u0e35\u0e48\u0e1b\u0e38\u0e48\u0e19',KR:'\u0e40\u0e01\u0e32\u0e2b\u0e25\u0e35',
+  VN:'\u0e40\u0e27\u0e35\u0e22\u0e14\u0e19\u0e32\u0e21',ID:'\u0e2d\u0e34\u0e19\u0e42\u0e14\u0e19\u0e35\u0e40\u0e0b\u0e35\u0e22',
+  MY:'\u0e21\u0e32\u0e40\u0e25\u0e40\u0e0b\u0e35\u0e22',IN:'\u0e2d\u0e34\u0e19\u0e40\u0e14\u0e35\u0e22',
+  AR:'\u0e2d\u0e32\u0e2b\u0e23\u0e31\u0e1a'};
+function pjLangTH(code){
+  var k=String(code||'').trim(); if(!k) return '';
+  return PJ_LANG_TH[k.toUpperCase()] || k;
+}
 function pjPrep(date, boatId, pier){
   var out={ lang:{}, halal:0, veg:0, vegan:0, allerg:0, lt:0,
             booked:0, arrived:0, noShow:0, ckAny:false, lastPick:'', firstPick:'' };
@@ -60126,11 +60141,10 @@ function pjPrint(){
      §pjRead · ของเดิมนับ nGd กับ "ลค 1 แถว" · ตอนนี้ช่องไกด์นับจาก GD_USE
      และผู้โดยสารเป็นหลายแถว ต้องนับจากตัวจริง ไม่งั้นช่องลำที่จอดสั้นกว่าตาราง */
   /* §pjRead · ประเภทผู้โดยสารที่วันนั้นมีคนจริง · ใช้ทั้งตอนคิดขนาดตัวอักษรและตอนวาดแถว */
-  var PXKIND=[{k:'ad',t:'AD / Pax'},{k:'chd',t:'CHD / Pax'},
-              {k:'inf',t:'Inf / Pax'},{k:'foc',t:'FOC / Pax'}]
-    .filter(function(x){ if(x.k==='ad') return true;
-      var m=0; PX.forEach(function(p){ var v=+p[x.k]||0; if(v>m) m=v; }); return m>0; });
-  var PXROW=PXKIND.length+1;   /* +1 = แถวรวม */
+  /* §pjPaxRow · ทั้งสี่ประเภทอยู่บรรทัดเดียว จึงไม่ต้องคัดประเภทที่ไม่มีคนออกอีก
+     เลข 0 ยังต้องเห็น เพราะ "ไม่มีเด็ก" กับ "ยังไม่ได้กรอก" ไม่เหมือนกัน */
+  var PXKIND=[{k:'ad'},{k:'chd'},{k:'inf'},{k:'foc'}];
+  var PXROW=2;   /* แถวเรียง + แถวรวม */
 
   var GDSUM=GD_USE.reduce(function(a,b){ return a+b; },0);
   /* §pjSect · นับจากแถวสถานะลงไปจนจบตาราง
@@ -60149,7 +60163,8 @@ function pjPrint(){
   /* §pjFlat · ไฟล์ต้นแบบเป็นตารางเส้นต่อเนื่อง ไม่ใช่การ์ดแยกคอลัมน์ */
   var GAP=0, SHEETW=1760;
   var gapPct=(boats.length+2)*GAP/SHEETW*100, avail=100-gapPct;
-  var LW=7.6*avail/100, WT=boats.map(function(B){ return isGo(B)?2:(isWk(B)?1.5:1); });
+  /* §pjLbl · ป้ายแถวมีคำกำกับไทยต่อท้ายแล้ว · 7.6% = 143px ตัด "WRISTBAND \u0e2a\u0e32\u0e22\u0e23\u0e31\u0e14\u0e02\u0e49\u0e2d\u0e21\u0e37\u0e2d" หายครึ่งคำ */
+  var LW=11.4*avail/100, WT=boats.map(function(B){ return isGo(B)?2:(isWk(B)?1.5:1); });
   var SUM=0; WT.forEach(function(w){ SUM+=w; });
   var cols='<colgroup><col style="width:'+LW+'%">'
     + WT.map(function(w){ return '<col style="width:'+((avail-LW)*w/SUM).toFixed(3)+'%">'; }).join('')
@@ -60179,25 +60194,39 @@ function pjPrint(){
    +'@media print{body{background:#fff;padding:0}.tb{display:none}'
      +'.sheet{max-width:none;border:0;border-radius:0;box-shadow:none;padding:0;margin:0}}'
    /* §pjTop · หัวใบ · โครงเดียวกับหน้า Booking แต่พื้นขาว */
-   +'.shead{display:flex;align-items:center;gap:16px;background:#fff;'
-     +'border-bottom:2px solid #16265C;padding:2px 2px 9px;margin-bottom:10px}'
-   +'.sh-l{flex:1 1 0;min-width:0;display:flex;align-items:center;gap:11px}'
-   +".dnum{font:800 "+(fs+21)+"px 'DM Mono',ui-monospace,monospace;letter-spacing:-1px;line-height:1;"
-     +'color:#111;min-width:'+(fs+22)+'px;text-align:center;display:inline-block}'
-   +'.dgrp{display:inline-block;min-width:118px}'
-   +'.dgrp b{display:block;font-size:'+(fs+1)+'px;font-weight:800;line-height:1.05;color:#111}'
-   +'.dgrp i{display:block;font-style:normal;font-size:'+(fs-4)+'px;font-weight:800;letter-spacing:.13em;'
-     +'color:#8994A6;margin-top:2px}'
-   +'.sh-c{flex:none;text-align:center}'
-   +'.sh-c{font-size:'+(fs+6)+'px;font-weight:800;letter-spacing:.42em;padding-left:.42em;'
-     +'color:#16265C;white-space:nowrap;line-height:1.1}'
-   +'.sh-c em{display:block;font-style:normal;font-size:'+(fs-3)+'px;font-weight:600;letter-spacing:.1em;'
-     +'color:#8994A6;margin-top:4px;padding-left:0}'
-   +'.sh-r{flex:1 1 0;min-width:0;text-align:right}'
+   /* §pjDate3 · หัวใบเป็นแถบ navy เต็มความกว้าง · แถบวันที่เป็นพื้นขาว
+      สีทึบมีที่เดียวคือชื่อใบ · วันที่เด่นด้วยขนาด ไม่ใช่ด้วยสี */
+   +'.shead{display:flex;align-items:center;justify-content:center;border-radius:8px;'
+     +'padding:9px 20px 11px;background:linear-gradient(100deg,#16265C 0%,#27386F 52%,#16265C 100%)}'
+   /* §pjDate · วันที่เคยแชร์บรรทัดกับชื่อท่า · ตัวเลข 38px ข้าง ๆ ชื่อท่า 26px
+      อ่านแล้วเป็น "หัวใบที่มีวันที่อยู่ด้วย" ไม่ใช่ "ใบของวันนี้"
+      ใบเรือหน้าตาเหมือนกันทุกวัน · ส่งใบเมื่อวานเข้าไลน์แล้วไม่มีใครทักได้จริง
+      วันที่จึงได้แถบของตัวเองเต็มความกว้าง ไม่ต้องแข่งกับอะไรในบรรทัดเดียวกัน */
+   +'.dstrip{background:#fff;border-bottom:2px solid #16265C;margin:2px 0 12px;'
+     +'padding:8px 24px 11px;display:flex;align-items:baseline;justify-content:center;gap:17px}'
+   +'.dstrip b{font-size:'+(fs+5)+'px;font-weight:700;letter-spacing:.27em;'
+     +'color:#8994A6;text-transform:uppercase}'
+   +'.dstrip u{text-decoration:none;font-size:'+(fs+36)+'px;font-weight:800;line-height:.92;color:#111}'
+   +'.dstrip i{font-style:normal;font-size:'+(fs+5)+'px;font-weight:700;letter-spacing:.25em;color:#16265C}'
+   /* §pjTop2 · หัวใบเป็นป้ายชื่องานก้อนเดียว · พื้น navy ตัวขาว
+      ของเดิมเป็นตัวหนังสือสี navy บนพื้นขาว อ่านแล้วเป็นแค่บรรทัดหนึ่งในหัวใบ
+      ไม่ใช่ "ชื่อใบ" · ใบนี้ถูกแคปส่งไลน์ ป้ายทึบทำให้รู้ทันทีว่าใบอะไร */
+   /* §pjDate · ชื่อบริษัท/ท่าถอยลงเป็นป้ายกำกับ · วันที่เป็นตัวเอกแทน */
+   /* §pjDate2 · ป้ายชื่อคาดพื้น navy · วันที่เป็นกรอบ navy พื้นขาว
+      สองชิ้นใช้สีเดียวกันแต่กลับขั้วกัน อ่านเป็นชุดเดียวกันโดยไม่แย่งกันเอง
+      และแถบใหญ่ที่สุดของใบเป็นพื้นขาว ปริ้นแล้วไม่กินหมึกทั้งแถบ */
+   +'.sh-c{flex:none;text-align:center;white-space:nowrap;padding:0}'
+   +'.sh-c b{display:block;font-size:'+(fs-6.5)+'px;font-weight:700;letter-spacing:.30em;'
+     +'padding-left:.30em;color:#9FABCE;line-height:1.1}'
+   /* §pjTop3 · บรรทัดใหญ่คือ "ท่าไหน" ไม่ใช่ชื่อบริษัท · ใบนี้ออกทีละท่า
+      คนที่รับใบต้องรู้ก่อนอื่นว่าเป็นใบของท่าตัวเอง · ชื่อบริษัทซ้ำทุกใบอยู่แล้ว */
+   +'.sh-c span{display:block;font-size:'+(fs+1.5)+'px;font-weight:800;letter-spacing:.20em;'
+     +'padding-left:.20em;color:#fff;line-height:1.2;margin-top:1px;text-transform:uppercase}'
+
    +'.pills{display:flex;gap:6px;justify-content:flex-end;margin-bottom:5px;flex-wrap:wrap}'
    +'.pill{border:1px solid #DCE2EC;background:#F5F7FA;border-radius:999px;padding:4px 12px;'
      +'font-size:'+(fs-3)+'px;font-weight:600;color:#5C6B85;white-space:nowrap}'
-   +".pill b{font-family:'DM Mono',monospace;font-weight:700;color:#111;margin-left:5px;font-size:"+(fs-1)+"px}"
+   +".pill b{font-family:'Sarabun',sans-serif;font-weight:700;color:#111;margin-left:5px;font-size:"+(fs-1)+"px}"
    +'.pill.go{background:#ECFDF5;border-color:#BFE0CD;color:#047857}.pill.go b{color:#047857}'
    +'.pill.px{background:#EFF6FF;border-color:#C7DBF5;color:#1D4ED8}.pill.px b{color:#1D4ED8}'
    +'.stamp{font-size:'+(fs-4.5)+'px;color:#A0A9B8;line-height:1.5}'
@@ -60218,27 +60247,35 @@ function pjPrint(){
      +'letter-spacing:.05em;text-transform:uppercase}'
    +'.bh.go .bn{color:#111}'
    /* §pjSect · แถบหมวด · เลขกำกับ + ไทย + อังกฤษ แบบไฟล์ต้นแบบ */
-   +'tr.bd th{color:#fff;text-align:left;font-size:'+(fs-1)+'px;font-weight:800;letter-spacing:.04em;'
-     +'padding:7px 10px;border-color:transparent;border-radius:7px 0 0 7px;white-space:nowrap;'
+   +'tr.bd th{text-align:left;font-size:'+(fs-2)+'px;font-weight:800;letter-spacing:.13em;'
+     +'text-transform:uppercase;padding:7px 10px;border-color:transparent;white-space:nowrap;'
      +'overflow:visible;position:relative;z-index:2}'
    /* แถวแถบไม่ต้องมีช่องไฟระหว่างคอลัมน์ · จะได้เป็นแบนเนอร์ยาวเส้นเดียว */
    +'tr.bd{box-shadow:none}'
    +'tr.bd td{box-shadow:-7px 0 0 0 var(--bdc,transparent)}'
-   +'tr.bd th .no{display:inline-block;min-width:'+(fs+4)+'px;text-align:center;background:rgba(255,255,255,.22);'
-     +'border-radius:5px;margin-right:5px;font-family:\'DM Mono\',monospace}'
-   +'tr.bd th i{font-style:normal;font-weight:700;font-size:'+(fs-3)+'px;opacity:.72;letter-spacing:.12em;margin-left:6px}'
+   +'tr.bd th .no{font-weight:800;letter-spacing:.05em}'
+   +'tr.bd th .no:after{content:\'\\00a0\\00b7\\00a0\';font-weight:600;opacity:.55}'
+   +'tr.bd th i{font-style:normal;font-weight:600;font-size:'+(fs-3.5)+'px;opacity:.70;'
+     +'letter-spacing:0;text-transform:none;margin-left:8px}'
    +'tr.bd td{border-color:transparent;padding:0}'
    /* ป้ายแถวสองภาษา · ไทยบรรทัดบน อังกฤษบรรทัดล่างตัวเล็ก */
-   +'th.k i{display:block;font-style:normal;font-weight:500;font-size:'+(fs-5)+'px;color:#94A3B8;'
-     +'letter-spacing:.03em;margin-top:1px;line-height:1.2}'
+   /* §pjLbl · ไทยต่อท้ายบรรทัดเดียวกัน ไม่ตกบรรทัดใหม่
+      ป้ายแถวเป็นตัวใหญ่เว้นระยะ แนวเดียวกับป้ายหมวดและหัวคอลัมน์บนบอร์ด */
+   +'th.k i{display:inline;font-style:normal;font-weight:500;font-size:'+(fs-4)+'px;color:#94A3B8;'
+     +'letter-spacing:0;text-transform:none;margin-left:6px}'
    /* ช่องกลาง · แถวข้อมูลเรือในหมวด 1 */
    +'td.ctr{text-align:center}'
    +'td.e3{background:#ECFDF3;color:#0F6E56;font-weight:700}'
    +'td.e4{background:#FDF0F4;color:#9B3055;font-weight:700}'
    /* §pjVivid · แถวนี้เคยสูง 86px ขณะที่แถวอื่น 41px · ชื่อทริปตกสองบรรทัด
       ส่วนช่องลำที่จอดยาวสามบรรทัด · บีบระยะบรรทัดและย่อรายละเอียดลง */
-   +'td.trip{font-weight:800;line-height:1.2;padding:5px 8px;font-size:'+(fs-0.5)+'px}'
-   +".tmc{font:800 "+(fs+7)+"px 'DM Mono',ui-monospace,monospace !important;color:#111;background:#F6F8FB}"
+   /* §pjTrip2 · แถวทริปสูงตามช่องลำที่จอด (สถานะ + เลข MJ = 2 บรรทัด)
+      ทั้งแถวตั้ง vertical-align:top ชื่อทริปบรรทัดเดียวจึงลอยอยู่ขอบบน
+      ไม่ตรงกับป้าย TRIP ที่อยู่กลางช่อง
+      ต้องเขียนเป็น tr.rt td.trip · ของเดิมเป็น td.trip เฉย ๆ (0,1,1)
+      แพ้ tr.rt td (0,1,2) ที่ตั้ง vertical-align:top ไว้ · กฎเลยไม่เคยมีผลเลย */
+   +'tr.rt td.trip{vertical-align:middle;padding:8px 10px;letter-spacing:.01em}'
+   +".tmc{font:800 "+(fs+7)+"px 'Sarabun',sans-serif !important;color:#111;background:#F6F8FB}"
    +'td.rt2{color:#41506A;font-weight:600}'
    +'td.mut2{color:#C3CAD6;text-align:center}'
    /* §pjFlat · ช่องของลำที่ไม่ได้ออก · ขีดกลางจาง ๆ เหมือนไฟล์ต้นแบบ
@@ -60259,13 +60296,13 @@ function pjPrint(){
    +'tr.rt td .sub{font-weight:500;opacity:.9;font-size:'+(fs-1.4)+'px;display:block;margin-top:1px}'
    /* §pjType · บรรทัดไทยคือป้ายหลัก · ของเดิมโดน uppercase + letter-spacing ที่ตกทอดมาจาก
    หัวตาราง ทำให้ตัวไทยห่างผิดปกติและเล็กกว่าบรรทัดอังกฤษข้างล่าง */
-   +'th.k{background:#F4F6F9;text-align:left;font-size:'+(fs-2)+'px;font-weight:600;letter-spacing:0;'
-     +'text-transform:none;color:#2C3A52;padding:5px 10px;line-height:1.25}'
+   +'th.k{background:#fff;text-align:left;font-size:'+(fs-2.5)+'px;font-weight:800;letter-spacing:.09em;'
+     +'text-transform:uppercase;color:#1E2430;padding:6px 10px;line-height:1.25}'
    /* §pjHead3 · การ์ดหัวเรือเป็นพื้นอ่อนตัวดำแล้ว · ช่องหัวข้อต้องเป็นชุดเดียวกัน
       ไม่งั้นมุมซ้ายบนเป็นก้อนเข้มโดดอยู่ก้อนเดียวทั้งแถว */
-   +'thead th.k{background:#EDF0F5;color:#111;vertical-align:middle;padding:6px 10px;'
+   +'thead th.k{background:#fff;color:#111;vertical-align:middle;padding:6px 10px;'
      +'border-bottom:4px solid #64748B;'
-     +'font-size:'+(fs+2)+'px;font-weight:800;letter-spacing:.05em;text-transform:none;line-height:1.15}'
+     +'font-size:'+(fs+1)+'px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;line-height:1.15}'
    +'thead th.k i{display:block;font-style:normal;font-weight:500;font-size:'+(fs-5)+'px;'
      +'color:#8994A6;letter-spacing:.03em;margin-top:1px;line-height:1.2;text-transform:none}'
    /* §pjWork2 · ช่องสถานะของลำที่จอด · อยู่แถวเดียวกับโปรแกรม แต่เป็นสีอ่อนของสถานะ */
@@ -60288,8 +60325,13 @@ function pjPrint(){
    +'tr.gh.note th,tr.gh.note td:not(.off){background:#8A5A00}'
    /* §pjSheet4 · สายรัดข้อมือเป็นสีจริง ไม่ใช่ชื่อสี */
    +'.wbsw{display:block;height:15px;border-radius:5px;border:1px solid rgba(15,23,42,.20)}'
-   /* §pjType · ชื่อคนคือเนื้อหาปกติ ไม่ใช่หัวข้อ · ของเดิมหนา 800 เท่าหัวเรือ ทั้งใบเลยหนาเท่ากันหมด */
-   +'td.v{font-size:'+fs+'px;font-weight:400;color:#1E2430;line-height:1.3}'
+   /* §pjCk · ภาษาภาพเดียวกับหน้าเช็คอินรถ · ช่องข้อมูลพื้นเหลืองอ่อน เส้นบาง
+      พื้นสีทำให้แถวที่มีคนจริงแยกออกจากช่องว่างทันที โดยไม่ต้องใช้เส้นหนา */
+   /* §pjCtr · ชื่อคนอยู่กลางช่อง · แถวที่ว่างเป็นขีดกลางอยู่แล้ว
+      ชื่อชิดซ้ายบ้างขีดกลางบ้าง ทำให้คอลัมน์ดูเหมือนเอียง */
+   +'td.v{font-size:'+fs+'px;font-weight:400;color:#1E2430;line-height:1.35;background:#FCFCEA;text-align:center}'
+   +'tr.pxr td.pxn{background:#FCFCEA}'
+   +'td.nt{background:#FCFCEA}'
    +'td.v .rl{color:#94A3B8;font-size:'+(fs-1.5)+'px;font-weight:600}'
    +'td.mut{color:#CBD5E1;text-align:center;font-size:'+(fs+0.5)+'px}'
    /* ลำที่ไม่ได้ออกวันนั้น · ช่องเดียวยาวลงมา ไม่พิมพ์สถานะซ้ำทุกบรรทัด */
@@ -60299,13 +60341,23 @@ function pjPrint(){
    +'td.off .sm{display:block;font-size:'+(fs-2)+'px;color:#94A3B8;margin-top:5px;line-height:1.4}'
    +'td.off.wki{vertical-align:top;padding-top:9px}'
    +'td.px{padding:3px 5px;text-align:center;background:#FAFBFC}'
-   +"td.px .a{font:700 "+(fs-0.5)+"px 'DM Mono',monospace;color:#64748B;letter-spacing:-.02em}"
-   +"td.px .t{font:800 "+(fs+5)+"px 'DM Mono',monospace;color:#0F6E56;line-height:1.15}"
-   +'td.nt{font-size:'+(fs-0.5)+'px;color:#8A5A00;height:20px;line-height:1.25;vertical-align:top}'
+   +"td.px .a{font:700 "+(fs-0.5)+"px 'Sarabun',sans-serif;color:#64748B;letter-spacing:-.02em}"
+   +"td.px .t{font:800 "+(fs+5)+"px 'Sarabun',sans-serif;color:#0F6E56;line-height:1.15}"
+   +'td.nt{font-size:'+(fs-2)+'px;color:#8A5A00;line-height:1.3;vertical-align:middle;padding:5px 8px}'
+   +'.ntc{display:flex;flex-wrap:wrap;gap:4px;justify-content:center}'
+   +'.ntt{display:block;margin-top:4px;color:#8A5A00;font-weight:600;text-align:center}'
    /* §pjRead · แถวผู้โดยสารแยกประเภท · เลขตัวเดียวกลางช่อง กวาดตาข้ามลำได้ */
-   +"td.pxn{text-align:center;background:#FAFBFC;font:500 "+(fs+2)+"px 'DM Mono',monospace;color:#2D4479;padding:0 5px;line-height:1.45}"
+   +"td.pxn{text-align:center;background:#FAFBFC;font:500 "+(fs+2)+"px 'Sarabun',sans-serif;color:#2D4479;padding:0 5px;line-height:1.45}"
    +'td.pxn.z{color:#CBD5E1;font-weight:500}'
-   +'tr.pxr th.k{padding:2px 8px}'
+   +'tr.pxr th.k{padding:4px 10px}'
+   /* §pjPaxRow · สี่ประเภทเรียงในช่องเดียว · ป้ายเล็กบน ตัวเลขใหญ่ล่าง */
+   +'td.pxg{background:#FCFCEA;padding:5px 8px;text-align:center}'
+   +'td.pxg span{display:inline-flex;flex-direction:column;align-items:center;min-width:'+(fs+22)+'px;'
+     +'margin:0 2px}'
+   +'td.pxg span i{font-style:normal;font-size:'+(fs-6)+'px;font-weight:700;letter-spacing:.1em;color:#9AA5B8}'
+   +".td-x,td.pxg span b{font-family:'Sarabun',sans-serif;font-size:"+(fs+3)+"px;"
+     +'font-weight:700;color:#2D4479;line-height:1.15}'
+   +'td.pxg span.z b{color:#C9D0DB;font-weight:500}'
    +'tr.pxt td.tot{background:#CFF2F7;color:#0B3B45;font-size:'+(fs+7)+'px;font-weight:800;'
      +'border-color:#8FD9E4}'
    +'tr.pxt th.k{background:#A9E6EF;color:#0B3B45;font-weight:800}'
@@ -60314,15 +60366,15 @@ function pjPrint(){
       แนวเดียวกับการ์ดสรุปบนหน้า Booking · อ่านจบในบรรทัดเดียวไม่ต้องกวาดทั้งคอลัมน์ */
    +'.fleet{display:flex;gap:9px;margin:0;flex-wrap:wrap;align-items:flex-start}'
    +'.fb.pg{flex:2.4 1 470px}'
-   +'.fb.ok{flex:.8 1 165px}'
-   +'.fb.dn{flex:1.5 1 330px}'
+   +'.fb.ok{flex:.7 1 150px}'
+   +'.fb.dn{flex:1.9 1 400px}'
    +'.fb{flex:1 1 320px;min-width:0;background:#fff;border:1px solid #E4E8EE;border-radius:6px;padding:8px 11px 9px}'
    +'.fb.ok{border-left:4px solid #1C9B62}'
    +'.fb.dn{border-left:4px solid #A3550B}'
    +'.fb-h{display:flex;align-items:baseline;gap:7px;margin-bottom:6px;'
      +'font-size:'+(fs-1)+'px;font-weight:800;color:#2C3A52}'
    +'.fb-h em{font-style:normal;font-size:'+(fs-5)+'px;font-weight:600;letter-spacing:.12em;color:#94A3B8}'
-   +".fb-h b{margin-left:auto;font-family:'DM Mono',ui-monospace,monospace;font-size:"+(fs+3)+"px;color:#111}"
+   +".fb-h b{margin-left:auto;font-family:'Sarabun',sans-serif;font-size:"+(fs+3)+"px;color:#111}"
    +'.fb-l{display:flex;flex-wrap:wrap;gap:5px}'
    +'.fbi{display:inline-flex;align-items:baseline;gap:6px;border:1px solid;border-radius:5px;'
      +'padding:2px 8px;white-space:nowrap;max-width:100%;overflow:hidden}'
@@ -60330,47 +60382,68 @@ function pjPrint(){
    +'.fbi i{font-style:normal;font-size:'+(fs-3.5)+'px;font-weight:500;opacity:.85;'
      +'overflow:hidden;text-overflow:ellipsis}'
    /* §pjBrd4 · พื้นขาวเหมือนการ์ดอื่น · ทุกอย่างอยู่แถวเดียว ไม่มีบรรทัดรอง */
-   +'.fb.pg{flex:3.6 1 660px;border-left:4px solid #16265C}'
-   +'.brd{width:100%;border-collapse:collapse;table-layout:fixed}'
+   +'.fb.pg{flex:1.85 1 520px;border-left:4px solid #16265C}'
+   +'.brd{width:100%;border-collapse:collapse;table-layout:fixed;border-spacing:0}'
+   /* §pjBrd5 · บอร์ดนี้ใช้ <table> เหมือนกัน จึงกินกฎของตารางใบงานไปด้วย
+      ตัวที่กัดคือ thead th{height:54px} (ตรึงความสูงการ์ดหัวเรือ) — บนบอร์ดกลายเป็น
+      ช่องว่างใต้หัวคอลัมน์ 54px ทั้งที่ตัวอักษรสูง 12px · และเส้นซ้าย/ขวาของ tbody
+      ที่ลากกรอบการ์ดใบงาน ก็โผล่มาขีดคั่นทุกช่องบนบอร์ด */
+   +'.brd thead th{height:auto;vertical-align:bottom}'
+   +'.brd tbody td{border-left:0;border-right:0;border-radius:0}'
+   +'.brd tbody tr:last-child td{border-radius:0}'
    +'.brd th{text-align:left;font-size:'+(fs-4.5)+'px;font-weight:700;letter-spacing:.13em;'
-     +'text-transform:uppercase;color:#9AA5B8;padding:0 8px 5px;border-bottom:1px solid #E4E8EE}'
-   +'.brd td{padding:6px 8px;vertical-align:middle;border-bottom:1px solid #F0F2F6}'
+     +'text-transform:uppercase;color:#9AA5B8;padding:0 8px 6px;border-bottom:1px solid #E4E8EE}'
+   /* §pjBrd5 · ช่องไฟใต้หัวตารางห่างกว่าระยะระหว่างแถวเกือบสองเท่า
+      อ่านแล้วเหมือนหัวตารางหลุดออกจากก้อนข้อมูล · จัดให้ระยะเท่ากันทั้งใบ */
+   +'.brd td{padding:8px;vertical-align:middle;border-bottom:1px solid #F0F2F6;line-height:1.25}'
    +'.brd tbody tr:last-child td{border-bottom:0}'
-   +".brd .c-t{font-family:'DM Mono',ui-monospace,monospace;font-size:"+(fs+4)+"px;font-weight:800;"
+   /* §pjBrd5 · ชื่อโปรแกรมคือสิ่งที่คนหาก่อนอื่นบนบอร์ด · ใหญ่กว่าช่องอื่นและอยู่กลาง */
+   +'.brd th.h-p,.brd td.c-p{text-align:center}'
+   +".brd .c-t{font-family:'Sarabun',sans-serif;font-size:"+(fs+4)+"px;font-weight:800;"
      +'color:#111;letter-spacing:-.03em;line-height:1;white-space:nowrap}'
-   +'.brd .c-b{font-size:'+(fs-1)+'px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:#111;'
+   /* §pjCk · ชื่อเรือเป็นป้ายสีทึบ แบบป้าย agency ในหน้าเช็คอิน */
+   +'.brd .c-b{white-space:nowrap;overflow:hidden}'
+   +'.brd .c-b .bpill{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;'
+     +'border-radius:4px;padding:3px 9px;color:#fff;font-size:'+(fs-2)+'px;font-weight:800;'
+     +'letter-spacing:.03em;text-transform:uppercase;vertical-align:middle}'
+   +'.brd .c-p{font-size:'+(fs+1.5)+'px;font-weight:800;color:#16265C;letter-spacing:.005em;'
      +'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
-   +'.brd .c-b .bdot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}'
-   +'.brd .c-p{font-size:'+(fs-2)+'px;font-weight:600;color:#2C3A52;'
-     +'white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
-   +".brd .c-x{font-family:'DM Mono',ui-monospace,monospace;white-space:nowrap}"
+   +".brd .c-x{font-family:'Sarabun',sans-serif;white-space:nowrap}"
    +'.brd .c-x b{font-size:'+(fs+1)+'px;font-weight:700;color:#2D4479}'
    +'.brd .c-x s{text-decoration:none;font-size:'+(fs-2)+'px;color:#8994A6}'
    +'.brd .c-x.over b{color:#A32D2D}'
    +".brd .c-x.over em{display:block;font-style:normal;font-family:'Sarabun',sans-serif;"
      +'font-size:'+(fs-5)+'px;font-weight:800;color:#A32D2D}'
    +'.pcnone{color:#CFD5DE;font-weight:500}'
+   +'.bandc{display:inline-flex;align-items:center;gap:6px;font-size:'+(fs-2)+'px;font-weight:700;color:#2C3A52}'
+   +'.bandc i{width:14px;height:14px;border-radius:4px;border:1px solid rgba(15,23,42,.22);display:inline-block;flex:none}'
    +'.brd .c-r{display:flex;flex-wrap:wrap;gap:4px;align-items:center}'
-   +'.pc{display:inline-flex;align-items:center;gap:4px;border-radius:4px;padding:1px 7px;'
-     +'font-size:'+(fs-4.5)+'px;font-weight:600;white-space:nowrap}'
-   +".pc b{font-family:'DM Mono',ui-monospace,monospace;font-size:"+(fs-3)+"px;font-weight:700}"
+   /* §pjChip · ป้ายหมายเหตุเคยเป็นพื้นทึบทั้งก้อน · หลายป้ายเรียงกันกลายเป็นแถบสีพาด
+      เปลี่ยนเป็นขีดสีด้านซ้าย พื้นจาง · สีบอกประเภทได้เหมือนเดิมแต่ไม่แย่งสายตา */
+   +'.pc{display:inline-flex;align-items:center;gap:4px;border-radius:0 4px 4px 0;padding:2px 8px;'
+     +'border-left:3px solid currentColor;font-size:'+(fs-4.5)+'px;font-weight:600;white-space:nowrap}'
+   +".pc b{font-family:'Sarabun',sans-serif;font-size:"+(fs-3)+"px;font-weight:700}"
    +'.pc.lang{background:#EAF0F9;color:#1B4A87}'
    +'.pc.meal{background:#F0F7EC;color:#2F6B2A}'
    +'.pc.alg{background:#FCEBEB;color:#A32D2D}'
    +'.pc.lt{background:#F3EEFA;color:#5B3B96}'
    +'.pc.wb{background:#F5F7FA;color:#2C3A52}'
    +'.pc.wb i{width:11px;height:11px;border-radius:3px;border:1px solid rgba(15,23,42,.2);display:inline-block}'
-   +'.secbar{display:flex;align-items:baseline;gap:9px;margin:16px 0 9px;padding-top:11px;'
-     +'border-top:2px solid #16265C}'
-   +'.secbar span{font-size:'+(fs+2)+'px;font-weight:800;color:#16265C;letter-spacing:.02em}'
-   +'.secbar em{font-style:normal;font-size:'+(fs-4)+'px;font-weight:700;letter-spacing:.14em;color:#9AA5B8}'
+   /* §pjSecbar · ป้ายหมวดของใบ · ตัวใหญ่เว้นระยะ ภาษาเดียวกับป้ายแถวในตาราง
+      เส้นคั่นอยู่ "ใต้" ป้าย ไม่ใช่เหนือ · ป้ายจึงเกาะอยู่กับของที่มันกำกับ */
+   +'.secbar{display:flex;align-items:baseline;gap:11px;margin:17px 0 8px;padding:0 2px 6px;'
+     +'border-bottom:1px solid #D8DEE8}'
+   +'.secbar:first-child{margin-top:0}'
+   +'.secbar span{font-size:'+(fs-1.5)+'px;font-weight:800;color:#111;letter-spacing:.15em;'
+     +'text-transform:uppercase}'
+   +'.secbar em{font-style:normal;font-size:'+(fs-3.5)+'px;font-weight:600;letter-spacing:0;color:#8994A6}'
    +'.sg{display:flex;gap:16px;margin-top:11px}'
    +'.sg div{flex:1;border-top:1px solid #94A3B8;padding-top:4px;text-align:center;font-size:9.5px;color:#64748B}';
 
   /* §pjSect · สีพื้นจาง ๆ จากสีเส้นทาง · ผสมกับขาว 86% แล้วยังบอกได้ว่าเป็นเส้นทางไหน
      ตัวหนังสือใช้สีเดิมหมองลง จะได้ contrast พอบนพื้นจาง */
   var pjTint=function(hex){ var c=String(hex||'').replace('#',''); if(c.length!==6) return '#F4F6F9';
-    var r=parseInt(c.slice(0,2),16),g=parseInt(c.slice(2,4),16),b=parseInt(c.slice(4,6),16), k=0.74;
+    var r=parseInt(c.slice(0,2),16),g=parseInt(c.slice(2,4),16),b=parseInt(c.slice(4,6),16), k=0.60;
     var m=function(v){ return Math.round(v+(255-v)*k); };
     return 'rgb('+m(r)+','+m(g)+','+m(b)+')'; };
   /* §pjVivid · ผสมขาวตามระดับที่ส่งเข้ามา
@@ -60464,23 +60537,35 @@ function pjPrint(){
   /* §pjFlat · ของเดิมยุบลำที่ไม่ได้ออกเป็นช่องเดียวพาดลงมาทั้งคอลัมน์
      ทำให้ตารางไม่เหลือเส้นตาราง กวาดตาข้ามลำไม่ได้ และแถบหมวดขาดตอน
      ไฟล์ต้นแบบให้ทุกลำมีช่องครบทุกแถว ช่องที่ไม่มีข้อมูลเป็นขีดกลางจาง ๆ */
+  /* §pjLbl · ป้ายแถวเป็น "ENGLISH \u0e44\u0e17\u0e22" บรรทัดเดียวกัน
+     อังกฤษคือป้ายหลัก (ไกด์ต่างชาติอ่านได้) · ไทยเป็นคำกำกับตัวเล็กสำหรับทีมหน้าท่า
+     ของเดิมไทยอยู่คนละบรรทัด กินความสูงแถวโดยไม่ได้เพิ่มความเข้าใจ
+     เขียนเป็น 'CAPTAIN|\u0e01\u0e31\u0e1b\u0e15\u0e31\u0e19' · ไม่ใส่ | ก็ได้ = ไม่มีคำกำกับ */
+  var lbl=function(k){
+    var a=String(k).split('|');
+    return a[0]+(a[1]?('<i>'+a[1]+'</i>'):''); };
   var row=function(k,fn,first,wfn){
-    return '<tr><th class="k">'+k+'</th>'
+    return '<tr><th class="k">'+lbl(k)+'</th>'
       + boats.map(function(B){
-          if(isGo(B)){ var v=fn(B, gi(B)); return v?('<td class="v">'+v+'</td>'):'<td class="mut">-</td>'; }
+          if(isGo(B)){ var v=fn(B, gi(B)); return v?('<td class="v">'+v+'</td>'):'<td class="mut">\u2014</td>'; }
           if(isWk(B) && wfn){ var w=wfn(B);
             if(w && w!==false && String(w).slice(0,3)!=='<td') return '<td class="v">'+w+'</td>'; }
-          return '<td class="mut off2">-</td>';
+          return '<td class="mut off2">\u2014</td>';
         }).join('') + '</tr>'; };
   /* §pjSect · แถบหมวด · มีเลขกำกับและชื่อสองภาษาแบบไฟล์ที่ส่งมา */
   /* §pjSect · แถบหมวด · จำนวนช่องต้องตรงกับที่ยังไม่ถูก rowspan คลุม ไม่งั้นตารางเลื่อนทั้งใบ
      first = แถบแรกสุด ยังไม่มีช่องรวมของใคร ทุกลำต้องมีช่อง
      wkOff = ช่วงที่ลำซ่อมถูกช่องรวมคลุมแล้ว (ตั้งแต่แถบ 4) */
-  var band=function(no,th,en,col){
-    return '<tr class="bd"><th style="background:'+col+'">'
-      +'<span class="no">'+no+'</span> '+en+'</th>'
+  /* §pjBandLite · แถบหมวดจากพื้นทึบเข้ม เป็นพื้นอ่อนตัวหนังสือเข้ม
+     ของเดิมสามแถบเข้มพาดกลางใบ ดึงสายตาแรงกว่าเนื้อหาที่มันคั่นอยู่ */
+  /* §pjBand2 · เลขหมวดเคยเป็นกล่องทึบ · บนใบที่ทุกอย่างเป็นตัวหนังสือ
+     กล่องเล็ก ๆ สามกล่องกลางใบดึงสายตาแรงกว่าชื่อหมวดที่มันกำกับอยู่
+     เขียนเป็น "1 \u00b7 NAUTICAL CREW" แนวเดียวกับป้ายหมวดด้านบนใบ */
+  var band=function(no,en,bg,ink,th){
+    return '<tr class="bd"><th style="background:'+bg+';color:'+ink+'">'
+      +'<span class="no">'+no+'</span>'+en+(th?('<i>'+th+'</i>'):'')+'</th>'
       + boats.map(function(){
-          return '<td style="background:'+col+';--bdc:'+col+'"></td>'; }).join('')+'</tr>'; };
+          return '<td style="background:'+bg+';--bdc:'+bg+'"></td>'; }).join('')+'</tr>'; };
   var gh=function(t,cls,wcell){
     return '<tr class="gh '+cls+'"><th>'+t+'</th>'
       + boats.map(function(B){
@@ -60489,7 +60574,7 @@ function pjPrint(){
           return '';
         }).join('')+'</tr>'; };
 
-  var head='<thead><tr><th class="k kh">Boat</th>'
+  var head='<thead><tr><th class="k kh">VESSEL</th>'
     + boats.map(function(B){
         var go=isGo(B);
         /* §pjHead2 · ของเดิมหนึ่งคอลัมน์มีสองก้อนสีคนละสี · ก้อนบนสีเรือ (ชื่อ+เวลา)
@@ -60506,7 +60591,9 @@ function pjPrint(){
            เปลี่ยนเป็นพื้นสีอ่อนของสีเรือ ตัวหนังสือดำ · สีเรือยังอ่านออกจากขีดหนาใต้ชื่อ */
         return '<th style="padding:0"><div class="bh'+(go?' go':'')+'" style="background:'+pjTint2(col,go?0.68:0.90)
           +';border-bottom:'+(go?'5px':'3px')+' solid '+col+'">'
-          +'<span class="bn">'+e(B.boat.name||B.bid)+'</span>'
+          /* §pjHead4 · ชื่อเรือใช้สีของเรือเอง · ขีดหนาใต้ชื่อบอกสีเดียวกัน
+             อ่านชื่อกับอ่านสีเป็นการกวาดตาครั้งเดียว ไม่ใช่สองครั้ง */
+          +'<span class="bn" style="color:'+col+'">'+e(B.boat.name||B.bid)+'</span>'
           +'</div></th>'; }).join('')
     +'</tr></thead>';
 
@@ -60514,7 +60601,7 @@ function pjPrint(){
   /* §pjTrip · แถวเดียวตอบว่า "วันนี้ลำนี้ทำอะไร" · ออกทริปก็ชื่อทริป
      ไม่ออกก็เหตุผล (ขึ้นคาน/ซ่อม/จอด) · ไม่ต้องมีแถวสถานะแยกอีกแถว */
   var tripRow=function(){
-    return '<tr class="rt"><th class="k">Trip</th>'
+    return '<tr class="rt"><th class="k">TRIP<i>\u0e07\u0e32\u0e19</i></th>'
       + boats.map(function(B){
           if(!isGo(B)) return offLbl(B);
           var rt=B.route||{};
@@ -60522,43 +60609,45 @@ function pjPrint(){
             +';color:'+pjInk(rt.color||'#64748B')+'">'+e(rt.name||'\u2014')+'</td>'; }).join('')
       +'</tr>'; };
   var timeRow=function(){
-    return '<tr><th class="k">Time</th>'
+    return '<tr><th class="k">TIME<i>\u0e40\u0e27\u0e25\u0e32\u0e2d\u0e2d\u0e01</i></th>'
       + boats.map(function(B){
-          if(!isGo(B)) return '<td class="mut off2">-</td>';
+          if(!isGo(B)) return '<td class="mut off2">\u2014</td>';
           return '<td class="v ctr tmc">'+e(B.dep||'--:--')+'</td>'; }).join('')
       +'</tr>'; };
 
   var body='<tbody>'
     + tripRow() + timeRow()
-    + band('1','กัปตันและลูกเรือ','NAUTICAL CREW','#065F46')
-    + row('Captain',function(B,i){ return who(J[i].cap,0); },0,function(B){ return wkWho(B,0); })
-    + row('Asst. Captain',function(B,i){ return who(J[i].asst,0); },0,function(B){ return wkWho(B,1); })
+    + band('1','NAUTICAL CREW','#E7F1EC','#0F6E56','\u0e1d\u0e48\u0e32\u0e22\u0e40\u0e14\u0e34\u0e19\u0e40\u0e23\u0e37\u0e2d')
+    + row('CAPTAIN|\u0e01\u0e31\u0e1b\u0e15\u0e31\u0e19',function(B,i){ return who(J[i].cap,0); },0,function(B){ return wkWho(B,0); })
+    + row('ASST. CAPTAIN|\u0e1c\u0e39\u0e49\u0e0a\u0e48\u0e27\u0e22',function(B,i){ return who(J[i].asst,0); },0,function(B){ return wkWho(B,1); })
     + (function(){ var o=''; for(var c=0;c<nCrew;c++){ (function(c){
-        o+=row('Crew '+(c+1),function(B,i){ return who((J[i].crew||[])[c],0); },0,
+        o+=row('CREW '+(c+1)+(c?'':'|\u0e25\u0e39\u0e01\u0e40\u0e23\u0e37\u0e2d'),function(B,i){ return who((J[i].crew||[])[c],0); },0,
                (c<3)?function(B){ return wkWho(B,2+c); }:null); })(c); } return o; })()
     + (function(){ var o=''; for(var c=0;c<nIsl;c++){ (function(c){
-        o+=row('Island Staff'+(nIsl>1?(' '+(c+1)):''),
+        /* §pjLbl · "ISLAND STAFF 1 \u0e1b\u0e23\u0e30\u0e08\u0e33\u0e40\u0e01\u0e32\u0e30" ยาวเกินคอลัมน์ป้าย ตกสองบรรทัด
+           ดันแถวจาก 36px เป็น 51px · ป้ายอังกฤษตรงตัวอยู่แล้ว ไม่ต้องมีคำกำกับ */
+        o+=row('ISLAND STAFF'+(nIsl>1?(' '+(c+1)):''),
                function(B,i){ return who((J[i].island||[])[c],0); },0,
                (c<2)?function(B){ return wkWho(B,5+c); }:null); })(c); } return o; })()
     /* §pjHead1 · ช่องรวมงานซ่อมเคยเริ่มที่แถวแถบ GUIDES · เนื้อในสูงกว่าแถวที่คลุมรวมกัน
        เบราว์เซอร์เลยยัดส่วนเกินลงแถวแรก ทำให้แถบสีหนาเป็นบล็อก · เลื่อนไปเริ่มแถวไกด์แถวแรก */
-    + band('2','มัคคุเทศก์ &amp; เจ้าหน้าที่','GUIDES &amp; STAFF','#312E81')
+    + band('2','GUIDES &amp; STAFF','#ECEAF7','#453B95','\u0e1d\u0e48\u0e32\u0e22\u0e21\u0e31\u0e04\u0e04\u0e38\u0e40\u0e17\u0e28\u0e01\u0e4c\u0e41\u0e25\u0e30\u0e1a\u0e23\u0e34\u0e01\u0e32\u0e23')
     /* §pjRead · ของเดิม "ไกด์ 1..4" · ลำดับไม่ได้บอกอะไร ต้องอ่านชื่อแล้วเดาเองว่าใครพูดภาษาไหน
        เปลี่ยนเป็นช่องตามภาษา/บทบาทจริงแบบใบ Excel · ช่องที่ว่างทั้งใบไม่พิมพ์ */
     + (function(){ var o='', seq=0;
         GD_ROWS.forEach(function(t,ri){
           for(var c=0;c<GD_USE[ri];c++){ (function(t,c,ri,sq){
-            var EN={'ไกด์ · EN':'Guide EN','ไกด์ · RU':'Guide RUS','ไกด์ · CN':'Guide CN',
-                    'ไกด์':'Guide','นักศึกษาฝึกงาน':'Student / Trainee','สตาฟ':'Staff'};
+            var EN={'ไกด์ · EN':'GUIDE EN','ไกด์ · RU':'GUIDE RUS','ไกด์ · CN':'GUIDE CN',
+                    'ไกด์':'GUIDE','นักศึกษาฝึกงาน':'STUDENT / TRAINEE','สตาฟ':'STAFF'};
             var nn=(GD_USE[ri]>1)?(' '+(c+1)):'';
-            var lbl=(EN[t]||t)+nn;
-            o+=row(lbl,function(B,i){ return gdCell(i,t,c); },0,
+            var lb=(EN[t]||t)+nn+((sq===0)?'|\u0e21\u0e31\u0e04\u0e04\u0e38\u0e40\u0e17\u0e28\u0e01\u0e4c':'');
+            o+=row(lb,function(B,i){ return gdCell(i,t,c); },0,
                    function(B){ return WKG[B.bid] ? e(WKG[B.bid][sq]||'') : ''; });
           })(t,c,ri,seq++); }
         });
         return o; })()
     /* §pjSheet4 · ร้านอาหารของลำนี้วันนี้ · ตั้งรายลำมาก่อนร้านประจำเส้นทางเสมอ */
-    + row('Restaurant',function(B,i){
+    + row('RESTAURANT|\u0e23\u0e49\u0e32\u0e19\u0e2d\u0e32\u0e2b\u0e32\u0e23',function(B,i){
         var raw=''; try{ raw=mvTripRaw(_poDate,B.bid); }catch(_){}
         if(raw==='-') return '<span class="rl">ไม่มีอาหารวันนี้</span>';
         var V=null; try{ V=mvForTrip(_poDate,B.bid,B.rid); }catch(_){}
@@ -60566,15 +60655,10 @@ function pjPrint(){
       },0,
       /* §gdIdle · ช่องรวมของลำที่มีไกด์เริ่มที่นี่ · คลุม ร้านอาหาร→หัวหมายเหตุ */
       function(){ return ''; })
-    + band('3','หมายเหตุ, สายรัดข้อมือ &amp; สรุปยอดผู้โดยสาร','PASSENGER HEADCOUNT','#134E4A')
-    +'<tr><th class="k">Note</th>'
-      + boats.map(function(B){
-          if(isGo(B)) return '<td class="nt">'+e(J[gi(B)].note||'')+'</td>';
-          if(isWk(B)) return '<td class="nt">'+e(WK[B.bid].note||'')+'</td>';
-          return '<td class="mut off2">-</td>'; }).join('')
-    +'</tr>'
+    + band('3','PASSENGER HEADCOUNT','#E5F0F0','#12554F','\u0e22\u0e2d\u0e14\u0e1c\u0e39\u0e49\u0e42\u0e14\u0e22\u0e2a\u0e32\u0e23')
+
     /* §pjSheet4 · แถบสีจริงของสายรัดข้อมือ · คนที่ท่าเทียบสีกับข้อมือแขก ไม่ได้อ่านชื่อสี */
-    + row('Wristband',function(B,i){
+    + row('WRISTBAND|\u0e2a\u0e32\u0e22\u0e23\u0e31\u0e14\u0e02\u0e49\u0e2d\u0e21\u0e37\u0e2d',function(B,i){
         var c=String(J[i].wbc||'').trim();
         if(/^#[0-9a-fA-F]{3,8}$/.test(c)) return '<span class="wbsw" style="background:'+c+'"></span>';
         return e(J[i].wb||'');
@@ -60583,21 +60667,47 @@ function pjPrint(){
        ต้องนับตำแหน่งเอาเองว่าเลขไหนคืออะไร และกวาดตาข้ามลำไม่ได้
        ใบ Excel ที่ทีมใช้แยกเป็นแถวละประเภท · ทำแบบนั้น
        แต่ประเภทที่วันนั้นไม่มีใครเลยทั้งใบ ไม่ต้องพิมพ์แถวทิ้งไว้ */
+    /* §pjPaxRow · ของเดิมแยกเป็นแถวละประเภท 4 แถว · กินที่และกวาดตาลงคอลัมน์ไม่ได้อยู่ดี
+       เพราะใบนี้มีไม่กี่คอลัมน์ · รวมเป็นบรรทัดเดียวเรียง AD CHD INF FOC แล้วแยก Total ออกมา */
     + (function(){
-        var o='';
-        PXKIND.forEach(function(x){
-          o+='<tr class="pxr"><th class="k">'+x.t+'</th>'
-            + boats.map(function(B){ if(!isGo(B)) return '<td class="mut off2">-</td>';
-                var v=+PX[gi(B)][x.k]||0;
-                return '<td class="pxn'+(v?'':' z')+'">'+v+'</td>'; }).join('')
-            +'</tr>';
-        });
-        o+='<tr class="pxt pxr"><th class="k">TOTAL / Pax</th>'
-          + boats.map(function(B){ if(!isGo(B)) return '<td class="pxn tot z2">-</td>';
+        var o='<tr class="pxr"><th class="k">AD / CHD / INF / FOC</th>'
+          + boats.map(function(B){ if(!isGo(B)) return '<td class="mut off2">\u2014</td>';
+              var P=PX[gi(B)];
+              return '<td class="pxg">'+PXKIND.map(function(x){
+                var v=+P[x.k]||0;
+                return '<span'+(v?'':' class="z"')+'><i>'+x.k.toUpperCase()+'</i><b>'+v+'</b></span>'; }).join('')
+              +'</td>'; }).join('')
+          +'</tr>';
+        o+='<tr class="pxt pxr"><th class="k">TOTAL PAX<i>\u0e22\u0e2d\u0e14\u0e23\u0e27\u0e21</i></th>'
+          + boats.map(function(B){ if(!isGo(B)) return '<td class="pxn tot z2">\u2014</td>';
               return '<td class="pxn tot">'+PX[gi(B)].all+'</td>'; }).join('')
           +'</tr>';
         return o; })()
-    + row('Customer Group',function(B,i){ return e(Object.keys(PX[i].langs||{}).join(' · ')); })
+    + row('CUSTOMER GROUP',function(B,i){ return e(Object.keys(PX[i].langs||{}).join(' · ')); })
+    /* §pjNote · หมายเหตุอยู่ล่างสุด · เป็นของที่เขียนเพิ่มทีหลัง ไม่ใช่ข้อมูลตั้งต้น */
+    +'<tr><th class="k">NOTE<i>\u0e2b\u0e21\u0e32\u0e22\u0e40\u0e2b\u0e15\u0e38</i></th>'
+      + boats.map(function(B){
+          if(!isGo(B) && !isWk(B)) return '<td class="mut off2">\u2014</td>';
+          /* §pjCk · ของที่ต้องเตรียมของลำนี้ ย้ายมาจากบอร์ดขาออก
+             อยู่ตรงนี้ตรงกว่า เพราะเป็นเรื่องของลำเดียว ไม่ใช่ภาพรวมของวัน */
+          var chips='';
+          if(isGo(B)){ var P=null;
+            try{ P=pjPrep(_poDate,B.bid,_poPier); }catch(_){}
+            P=P||{lang:{},halal:0,veg:0,vegan:0,allerg:0,lt:0};
+            /* §pjNoteTH · \u0e2d\u0e48\u0e32\u0e19\u0e08\u0e1a\u0e40\u0e1b\u0e47\u0e19\u0e1b\u0e23\u0e30\u0e42\u0e22\u0e04\u0e44\u0e17\u0e22 \u0e44\u0e21\u0e48\u0e15\u0e49\u0e2d\u0e07\u0e16\u0e2d\u0e14\u0e23\u0e2b\u0e31\u0e2a */
+            var _cn='\u0e04\u0e19';
+            Object.keys(P.lang).sort(function(a,b){ return P.lang[b]-P.lang[a]; })
+              .forEach(function(L){ chips+='<span class="pc lang">\u0e41\u0e02\u0e01'+e(pjLangTH(L))+' <b>'+P.lang[L]+'</b>'+_cn+'</span>'; });
+            if(P.halal)  chips+='<span class="pc meal">\u0e2d\u0e32\u0e2b\u0e32\u0e23\u0e2e\u0e32\u0e25\u0e32\u0e25 <b>'+P.halal+'</b>'+_cn+'</span>';
+            if(P.veg)    chips+='<span class="pc meal">\u0e21\u0e31\u0e07\u0e2a\u0e27\u0e34\u0e23\u0e31\u0e15\u0e34 <b>'+P.veg+'</b>'+_cn+'</span>';
+            if(P.vegan)  chips+='<span class="pc meal">\u0e27\u0e35\u0e41\u0e01\u0e19 <b>'+P.vegan+'</b>'+_cn+'</span>';
+            if(P.allerg) chips+='<span class="pc alg">&#9888; \u0e41\u0e1e\u0e49\u0e2d\u0e32\u0e2b\u0e32\u0e23 <b>'+P.allerg+'</b>'+_cn+'</span>';
+            if(P.lt)     chips+='<span class="pc lt">\u0e40\u0e23\u0e37\u0e2d\u0e2b\u0e32\u0e07\u0e22\u0e32\u0e27 <b>'+P.lt+'</b>'+_cn+'</span>';
+          }
+          var txt=isGo(B) ? (J[gi(B)].note||'') : (WK[B.bid].note||'');
+          return '<td class="nt">'+(chips?('<span class="ntc">'+chips+'</span>'):'')
+            +(txt?('<span class="ntt">'+e(txt)+'</span>'):(chips?'':'<span class="mut">\u2014</span>'))+'</td>'; }).join('')
+    +'</tr>'
     +'</tbody>';
 
   /* §pjSplit · กล่องสรุปเหนือตาราง · แยกลำพร้อมใช้ ออกจากลำที่ซ่อม/ไม่พร้อม */
@@ -60616,12 +60726,12 @@ function pjPrint(){
         +'<b>'+e(x.n)+'</b>'
         +(showWhy?('<i>'+e(x.t)+(x.why?(' \u00b7 '+x.why):'')+'</i>'):'')
         +'</span>'; };
-    var box=function(th,en,list,showWhy,cls){
+    var box=function(th,list,showWhy,cls){
       if(!list.length) return '';
-      return '<div class="fb '+cls+'"><div class="fb-h">'+th+' <em>'+en+'</em><b>'+list.length+'</b></div>'
+      return '<div class="fb '+cls+'"><div class="fb-h">'+th+'<b>'+list.length+'</b></div>'
         +'<div class="fb-l">'+list.map(function(x){ return cell(x,showWhy); }).join('')+'</div></div>'; };
-    return box('เรือพร้อมใช้','READY',ready,0,'ok')
-         + box('ซ่อม &middot; ไม่พร้อม','NOT AVAILABLE',down,1,'dn');
+    return box('Ready',ready,0,'ok')
+         + box('Not available',down,1,'dn');
   };
 
   /* §pjBrd · บอร์ดเรือออก · โครงเดียวกับตารางขาออกสนามบิน
@@ -60641,37 +60751,31 @@ function pjPrint(){
       /* §pjOver · ยอดเกินความจุ = จ่ายงานผิด ต้องรู้ตั้งแต่ก่อนออกเรือ
          ของเดิมพิมพ์ "120/65" ด้วยสีเดียวกับทุกช่อง อ่านผ่านได้ง่ายมาก */
       var over=(cap>0 && pax>cap) ? (pax-cap) : 0;
+      var wbc=(J[i]&&J[i].wbc)||'', wbn=(J[i]&&J[i].wb)||'';
 
       /* ของที่ต้องเตรียมล่วงหน้า · รู้ได้ตั้งแต่ตอนออกใบ */
-      var chips='';
-      Object.keys(P.lang||{}).sort(function(a,b){ return P.lang[b]-P.lang[a]; })
-        .forEach(function(L){ chips+='<span class="pc lang">'+e(L)+'<b>'+P.lang[L]+'</b></span>'; });
-      if(P.halal)  chips+='<span class="pc meal">ฮาลาล<b>'+P.halal+'</b></span>';
-      if(P.veg)    chips+='<span class="pc meal">มังสวิรัติ<b>'+P.veg+'</b></span>';
-      if(P.vegan)  chips+='<span class="pc meal">วีแกน<b>'+P.vegan+'</b></span>';
-      if(P.allerg) chips+='<span class="pc alg">&#9888; แพ้อาหาร<b>'+P.allerg+'</b></span>';
-      if(P.lt)     chips+='<span class="pc lt">หางยาว<b>'+P.lt+'</b></span>';
-      var wbc=(J[i]&&J[i].wbc)||'', wbn=(J[i]&&J[i].wb)||'';
-      if(wbn) chips+='<span class="pc wb"><i style="background:'+e(wbc||'#CBD5E1')+'"></i>'+e(wbn)+'</span>';
-
       return { dep:(dep||'~'), html:
         '<tr class="br">'
         +'<td class="c-t">'+e(dep||'--:--')+'</td>'
-        +'<td class="c-b"><span class="bdot" style="background:'
-          +((typeof pckBoatColor==='function')?pckBoatColor(B.bid):'#185FA5')+'"></span>'
-          +e(B.boat.name||B.bid)+'</td>'
+        +'<td class="c-b"><span class="bpill" style="background:'
+          +((typeof pckBoatColor==='function')?pckBoatColor(B.bid):'#185FA5')+'">'
+          +e(B.boat.name||B.bid)+'</span></td>'
         +'<td class="c-p">'+e(rt.name||'\u2014')+'</td>'
         +'<td class="c-x'+(over?' over':'')+'"><b>'+pax+'</b><s>/'+cap+'</s>'
           +(over?('<em>เกิน '+over+'</em>'):'')+'</td>'
-        +'<td class="c-r">'+(chips||'<span class="pcnone">-</span>')+'</td>'
+        /* §pjBand · สีสายรัดข้อมือ · ของที่ต้องหยิบมาเตรียมก่อนแขกมาถึง
+           คนที่ท่าเทียบ "สี" กับข้อมือแขก จึงต้องเห็นสีจริง ไม่ใช่อ่านชื่อสี */
+        +'<td class="c-w">'+(wbn
+            ? ('<span class="bandc"><i style="background:'+e(wbc||'#CBD5E1')+'"></i>'+e(wbn)+'</span>')
+            : '<span class="pcnone">-</span>')+'</td>'
         +'</tr>' }; });
     rows.sort(function(a,b){ return a.dep<b.dep?-1:(a.dep>b.dep?1:0); });
 
-    return '<div class="fb pg"><div class="fb-h">บอร์ดเรือออก <em>DEPARTURES</em><b>'+GO.length+'</b></div>'
+    return '<div class="fb pg"><div class="fb-h">Departures<b>'+GO.length+'</b></div>'
       +'<table class="brd">'
-      +'<colgroup><col style="width:82px"><col style="width:174px"><col>'
-        +'<col style="width:78px"><col style="width:266px"></colgroup>'
-      +'<thead><tr><th>Time</th><th>Boat</th><th>Programme</th><th>Pax</th><th>Prep</th></tr></thead>'
+      +'<colgroup><col style="width:78px"><col style="width:158px"><col>'
+        +'<col style="width:82px"><col style="width:118px"></colgroup>'
+      +'<thead><tr><th>Time</th><th>Boat</th><th class="h-p">Programme</th><th>Pax</th><th>Band</th></tr></thead>'
       +'<tbody>'+rows.map(function(r){ return r.html; }).join('')+'</tbody></table></div>';
   };
 
@@ -60686,22 +60790,21 @@ function pjPrint(){
     /* §pjTop · โครงเดียวกับหัวหน้า Booking · เลขวันตัวใหญ่ซ้าย แบรนด์กลาง ชิปขวา
        ต่างที่พื้นเป็นสีขาว ไม่ใช่ navy เพราะใบนี้ถูกแคปเป็นรูปส่งไลน์และปริ้นด้วย */
     +'<div class="shead">'
-      +'<div class="sh-l">'
-        +'<span class="dnum">'+_pjDay+'</span>'
-        +'<span class="dgrp"><b>'+_pjWd+'</b><i>'+_pjMo+'</i></span>'
-      +'</div>'
-      +'<div class="sh-c">LOVE ANDAMAN<em>ใบงานเรือ &middot; '+e(P.t||P.n)+' &middot; '+e(FLT[_pjF]||'')+'</em></div>'
-      +'<div class="sh-r"><div class="pills">'
-        +'<span class="pill">เรือในใบนี้<b>'+n+'</b></span>'
-        +'<span class="pill go">ออกจริง<b>'+nGo+'</b></span>'
-        +'<span class="pill px">ผู้โดยสาร<b>'+totPax+'</b></span>'
-      +'</div><div class="stamp">'+e(DW.big)+' &nbsp;&middot;&nbsp; พิมพ์ '+e(new Date().toLocaleString('th-TH'))
-      +' &nbsp;&middot;&nbsp; ผู้จ่ายงาน '+e((typeof poWho==='function'?poWho():'')||'—')+'</div></div>'
+      /* §pjTop3 · t เป็น "Visit Panwa \u00b7 \u0e20\u0e39\u0e40\u0e01\u0e47\u0e15" · เอาเฉพาะชื่อท่าหน้าจุดคั่น */
+      +'<div class="sh-c"><b>LOVE ANDAMAN</b><span>'
+        +e(String(P.t||P.n||'').split('\u00b7')[0].trim()||(P.n||''))+'</span></div>'
     +'</div>'
+    /* §pjDate · แถบวันที่ · ของชิ้นเดียวที่กินเต็มความกว้างของใบ */
+    +'<div class="dstrip"><b>'+e(_pjWd)+'</b><u>'+_pjDay+'</u><i>'+e(_pjMo)+'</i></div>'
+    /* §pjSecbar · ใบนี้มีสองส่วนจริง ๆ · ภาพรวมของวัน กับ ใบจ่ายงานรายคน
+       ตั้งชื่อทั้งคู่ จะได้รู้ว่าอ่านถึงไหนแล้ว ไม่ใช่ตั้งชื่อแค่ส่วนล่าง */
+    +'<div class="secbar"><span>Section A \u00b7 Departures &amp; fleet status</span>'
+      +'<em>\u0e20\u0e32\u0e1e\u0e23\u0e27\u0e21\u0e02\u0e2d\u0e07\u0e27\u0e31\u0e19</em></div>'
     + '<div class="fleet">'+progBox()+fleetBox()+'</div>'
     /* §pjSplit2 · หัวใบกับตารางจ่ายงานเป็นคนละเรื่องกัน · หัวใบคือภาพรวมของวัน
        ตารางคือใบจ่ายงานรายคน · คั่นด้วยแถบชื่อให้เห็นว่าเปลี่ยนเรื่องแล้ว */
-    +'<div class="secbar"><span>ใบจ่ายงาน</span><em>CREW ASSIGNMENT</em></div>'
+    +'<div class="secbar"><span>Section B \u00b7 Crew assignment</span>'
+      +'<em>\u0e01\u0e32\u0e23\u0e08\u0e31\u0e14\u0e01\u0e33\u0e25\u0e31\u0e07\u0e1e\u0e25\u0e1b\u0e23\u0e30\u0e08\u0e33\u0e40\u0e23\u0e37\u0e2d</em></div>'
     +'<table>'+cols+head+body+'</table>'
     +'<div class="sg"><div>เจ้าหน้าที่จ่ายงาน</div><div>หัวหน้าท่าเรือ</div><div>ผู้รับใบงาน</div></div>'
     +'</div>';
