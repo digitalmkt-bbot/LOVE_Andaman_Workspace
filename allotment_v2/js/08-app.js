@@ -42448,7 +42448,8 @@ function _btOtherSection(date, rows, rids){
   if(!Array.isArray(rids) || !rids.length) return '';
   const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
   const isB2C = b => (typeof laIsB2C==='function') ? laIsB2C(b) : /^b2c_/.test(String((b&&b.id)||''));
-  const paxOf = r => (typeof bkV2PaxAllTot==='function') ? bkV2PaxAllTot(r.pax||{}) : 0;
+  const P = (pax,k) => (typeof bkV2PaxTot==='function') ? bkV2PaxTot(pax||{}, k) : 0;
+  const paxOf = r => P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc');
   const CXL = ['cancelled','rejected','cancelled_weather'];
   const live = (rows||[]).filter(r => rids.includes(r.routeId) && !CXL.includes((r.bk||{}).status));
   if(!live.length) return '';
@@ -42465,24 +42466,41 @@ function _btOtherSection(date, rows, rids){
     return ta.localeCompare(tb) || String(a).localeCompare(String(b));
   });
 
+  /* §btOtherTbl · คอลัมน์ชุดเดียวกับตารางฝั่งเรือ (class t2-mtbl/t2-row/t2-c ทั้งหมด)
+     เพื่อให้อ่านด้วยสายตาชุดเดียวกัน · ตัดเฉพาะช่องที่เป็นเรื่องเรือล้วน ๆ ออก
+     (Room / Send back / Add-on / Boat) แล้วใส่ "รถ" แทน Boat */
+  const cell = (r,k) => { const n = P(r.pax,k);
+    return `<td class="t2-c t2-mono">${n ? (k==='foc'?`<span style="color:#A32D2D">${n}</span>`:n) : '<span class="t2-dim">0</span>'}</td>`; };
+
   const rowHTML = r => {
     const b = r.bk || {};
-    const p = paxOf(r);
     const b2c = isB2C(b);
-    const nm = b.leadPax || b.customerName || '—';
-    const vRef = b.voucherRef ? `<span style="font-family:'DM Mono',monospace;font-size:9.5px;color:#8a8f98">${esc(b.voucherRef)}</span>` : '';
-    const ag = b.agentId && typeof sbGetAgent==='function' ? (sbGetAgent(b.agentId)?.name || '') : '';
+    const ag = b.agentId && typeof sbGetAgent==='function' ? (sbGetAgent(b.agentId)||{}) : {};
+    const agName = b2c ? 'B2C' : (ag.name || ag.code || '—');
     const pt = (typeof bkV2GetPickupTime==='function' && b.pickupAreaId)
       ? (bkV2GetPickupTime(r.routeId, b.pickupAreaId, date) || '') : '';
+    const zone = b.pickupArea || b.pickupZone || '';
+    /* §btOtherTbl · notes คือที่ที่บรรทัด "รถ" ของ §b2cTransfer ไปอยู่ · บรรทัดแรกคือคันรถ
+       ที่เหลือคือคำขอของลูกค้า · แยกให้คนละช่อง ไม่งั้นคำสั่งงานปนกับคำขอ */
+    const noteLines = String(b.notes||'').split('\n').map(s=>s.trim()).filter(Boolean);
+    const vehLine = noteLines.length && /\u00d7\s*\d/.test(noteLines[0]) ? noteLines[0] : '';
+    const sreq = (vehLine ? noteLines.slice(1) : noteLines).join(' · ');
     const pend = b.status === 'pending_approval'
       ? `<span style="background:#FFF6E5;color:#A05A1A;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px">รออนุมัติ</span>` : '';
-    return `<div class="bto-row" onclick="bkV2OpenDetail('${esc(b.id)}')">
-      <span class="bto-src">${b2c ? '<b>B2C</b>' : `<i>${esc(ag||'walk-in')}</i>`}</span>
-      <span class="bto-nm">${esc(nm)} ${vRef} ${pend}</span>
-      <span class="bto-hotel">${esc(b.hotelName||'')}</span>
-      <span class="bto-time">${esc(pt)}</span>
-      <span class="bto-pax">${p}</span>
-    </div>`;
+    const pay = (typeof bkV2PayLabel==='function' && b.paymentStatus) ? bkV2PayLabel(b.paymentStatus) : (b.paymentStatus||'');
+    const tot = Number(r.subtotal || b.total || 0);
+    return `<tr class="t2-row" onclick="bkV2OpenDetail('${esc(b.id)}')">
+      <td><span class="t2-mono t2-vch">${esc(b.voucherRef||b.id)}</span></td>
+      <td class="t2-ag">${b2c?'<span class="bto-b2c">B2C</span>':esc(agName)}</td>
+      <td class="t2-cu">${esc(b.leadPax||b.customerName||'—')} ${pend}</td>
+      ${cell(r,'ad')}${cell(r,'chd')}${cell(r,'inf')}${cell(r,'foc')}
+      <td class="t2-mono">${esc(pt)}</td>
+      <td>${esc(b.hotelName||'')}</td>
+      <td>${esc(zone)}</td>
+      <td>${vehLine?`<span class="bto-veh">${esc(vehLine)}</span>`:''}${sreq?`<div class="bto-sreq">${esc(sreq)}</div>`:''}</td>
+      <td class="t2-c">${esc(pay)}</td>
+      <td class="t2-c t2-mono">${tot?('&#3647;'+tot.toLocaleString()):''}</td>
+    </tr>`;
   };
 
   const blocks = ridsSorted.map(rid => {
@@ -42505,8 +42523,16 @@ function _btOtherSection(date, rows, rids){
         ${capTxt}
         <span class="bto-px">${pax} pax</span>
       </div>
-      ${shown.map(rowHTML).join('')}
-      ${(!showAll && othRows.length) ? `<div class="bto-hid">+ ${othRows.length} ใบที่ไม่ได้มาจากเว็บ (${totOther ? othRows.reduce((a,r)=>a+paxOf(r),0) : 0} pax) · ซ่อนอยู่</div>` : ''}
+      <div class="t2-tblscroll"><table class="t2-mtbl bto-tbl">
+        <thead><tr>
+          <th class="t2-vc">Voucher</th><th>Agency</th><th class="t2-cu">Customer (lead)</th>
+          <th class="t2-c">AD</th><th class="t2-c">CHD</th><th class="t2-c">INF</th><th class="t2-c">FOC</th>
+          <th>Time</th><th>Pickup</th><th>Zone</th><th>รถ &middot; special request</th>
+          <th class="t2-c">Pay</th><th class="t2-c">Total</th>
+        </tr></thead>
+        <tbody>${shown.map(rowHTML).join('')}</tbody>
+      </table></div>
+      ${(!showAll && othRows.length) ? `<div class="bto-hid">+ ${othRows.length} ใบที่ไม่ได้มาจากเว็บ (${othRows.reduce((a,r)=>a+paxOf(r),0)} pax) · ซ่อนอยู่</div>` : ''}
     </div>`;
   }).join('');
 
@@ -42514,7 +42540,7 @@ function _btOtherSection(date, rows, rids){
     <div class="bto-hd">
       <span class="bto-ttl">OTHER · ไม่ใช้เรือ</span>
       <span class="bto-sub">${ridsSorted.length} โปรแกรม · <b>${totB2C}</b> pax จากเว็บ${nOther?` · ${totOther} pax ทางอื่น`:''}</span>
-      ${nOther ? `<button class="bto-tg" onclick="bkV2OtherToggleAll()">${showAll?'แสดงเฉพาะ B2C':`แสดงทั้งหมด (+${nOther})`}</button>` : ''}
+      ${nOther ? `<button class="bto-tg" onclick="event.stopPropagation();bkV2OtherToggleAll()">${showAll?'แสดงเฉพาะ B2C':`แสดงทั้งหมด (+${nOther})`}</button>` : ''}
     </div>
     ${blocks}
   </div>`;
@@ -44733,14 +44759,18 @@ function bkV2RenderTab2(){
   const _btOther = _btOtherSection(date, rowsF, _otherRids);
   const mainBody = emptyMain
     ? `<div class="bkv2-empty"><div class="ttl">${(_btOther?'No boat trips':'No trips')}${(pierF!=='all'||routeF)?' match this filter':` on ${bkV2FmtDate(date)}`}</div><div class="sub">${(pierF!=='all'||routeF)?'Clear the filter or':'Pick another day in the calendar or use the arrows'}${(pierF!=='all'||routeF)?' pick another day':''}</div></div>`
-    : `<div class="t2-wrap">${trips}</div>`;
+    /* §btOther · อยู่ ข้างใน .t2-wrap ไม่ใช่ต่อท้าย · §btScroll ทำให้กล่องนี้เป็นตัวเลื่อนเดียวของหน้า
+       แล้วดึงส่วนที่เกินจอกลับด้วย margin-bottom ติดลบเท่ากับส่วนที่เกิน
+       ต่อท้ายกล่อง = เพิ่มความสูงหน้า → margin ติดลบโตขึ้นตาม → ดึงตัวเองขึ้นไปทับตาราง
+       (กรณีไม่มีทริปเลย ไม่มี .t2-wrap · โค้ด §btScroll ข้ามไป ต่อท้ายจึงปลอดภัย) */
+    : `<div class="t2-wrap">${trips}${_btOther}</div>`;
   void sidebar;
   /* §btHead · ตัวกรองท่า/โปรแกรมย้ายไปอยู่ในการ์ด "โปรแกรมวันนี้" แล้ว · แถบเดิมจึงไม่ถูกใช้ */
   void filterBar;
   /* §btGap · สีของหัวต้องคุมทั้งหน้า ไม่ใช่แค่แถบหัว · ตั้งตัวแปรที่กรอบนอกสุด
      แล้วทั้งหัวและพื้นหลังใต้ตารางใช้ค่าเดียวกัน เปลี่ยนโปรแกรมก็เปลี่ยนพร้อมกันทั้งหน้า */
   const _hdr = vanMode ? header.replace('<!--BTVANCARD-->', _btVanCard) : header;
-  return style + `<div class="t2-shell" style="--btband:${_btBand};--btbandb:${_btBandB}"><div class="t2-main">${_hdr}${mainBody}${_btOther}</div></div>`;
+  return style + `<div class="t2-shell" style="--btband:${_btBand};--btbandb:${_btBandB}"><div class="t2-main">${_hdr}${mainBody}${(emptyMain?_btOther:'')}</div></div>`;
 }
 
 // ── Tab 3 · All bookings (existing Linear list) ──
