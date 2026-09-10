@@ -60472,7 +60472,11 @@ function pjPrint(){
    +'tr.gh.cust th,tr.gh.cust td:not(.off){background:#14603E}'
    +'tr.gh.note th,tr.gh.note td:not(.off){background:#8A5A00}'
    /* §pjSheet4 · สายรัดข้อมือเป็นสีจริง ไม่ใช่ชื่อสี */
-   +'.wbsw{display:block;height:15px;border-radius:5px;border:1px solid rgba(15,23,42,.20)}'
+   /* §pjWbName · แถบสี + ชื่อสี อยู่ในช่องเดียว · แถบยาวพอให้เทียบกับข้อมือจริงได้ */
+   +'.wbc{display:inline-flex;align-items:center;gap:8px}'
+   +'.wbc i{width:'+(fs+13)+'px;height:'+(fs-2)+'px;border-radius:4px;flex:none;'
+     +'border:1px solid rgba(15,23,42,.22)}'
+   +'.wbc b{font-size:'+fs+'px;font-weight:700;color:#1E2430}'
    /* §pjCk · ภาษาภาพเดียวกับหน้าเช็คอินรถ · ช่องข้อมูลพื้นเหลืองอ่อน เส้นบาง
       พื้นสีทำให้แถวที่มีคนจริงแยกออกจากช่องว่างทันที โดยไม่ต้องใช้เส้นหนา */
    /* §pjCtr · ชื่อคนอยู่กลางช่อง · แถวที่ว่างเป็นขีดกลางอยู่แล้ว
@@ -60804,11 +60808,16 @@ function pjPrint(){
       function(){ return ''; })
     + band('3','PASSENGER HEADCOUNT','#E5F0F0','#12554F','\u0e22\u0e2d\u0e14\u0e1c\u0e39\u0e49\u0e42\u0e14\u0e22\u0e2a\u0e32\u0e23')
 
-    /* §pjSheet4 · แถบสีจริงของสายรัดข้อมือ · คนที่ท่าเทียบสีกับข้อมือแขก ไม่ได้อ่านชื่อสี */
+    /* §pjSheet4 · แถบสีจริงของสายรัดข้อมือ · คนที่ท่าเทียบสีกับข้อมือแขก ไม่ได้อ่านชื่อสี
+       §pjWbName · แต่ชื่อสีก็ต้องมีด้วย · ใบนี้ถูกปริ้นขาวดำและถูกแคปส่งไลน์
+       สีล้วน ๆ แยก "ฟ้า TQ" กับ "น้ำเงิน" ไม่ออกบนจอที่ปรับสีเอง
+       และคนสั่งของทางไลน์ต้องพิมพ์ชื่อสีได้ · โชว์ทั้งแถบสีและชื่อ */
     + row('WRISTBAND|\u0e2a\u0e32\u0e22\u0e23\u0e31\u0e14\u0e02\u0e49\u0e2d\u0e21\u0e37\u0e2d',function(B,i){
-        var c=String(J[i].wbc||'').trim();
-        if(/^#[0-9a-fA-F]{3,8}$/.test(c)) return '<span class="wbsw" style="background:'+c+'"></span>';
-        return e(J[i].wb||'');
+        var c=String(J[i].wbc||'').trim(), nm=String(J[i].wb||'').trim();
+        if(/^#[0-9a-fA-F]{3,8}$/.test(c))
+          return '<span class="wbc"><i style="background:'+c+'"></i>'
+               + (nm?('<b>'+e(nm)+'</b>'):'') + '</span>';
+        return e(nm);
       })
     /* §pjRead · ของเดิมอัด AD/CHD/INF/FOC ไว้บรรทัดเดียว "28 / 3 / 0 / 0"
        ต้องนับตำแหน่งเอาเองว่าเลขไหนคืออะไร และกวาดตาข้ามลำไม่ได้
