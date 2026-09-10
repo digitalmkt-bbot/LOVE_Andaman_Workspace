@@ -43002,7 +43002,7 @@ function bkV2RenderTab2(){
       <div class="bt-hdtop">
         <button class="bt-arw" onclick="bkV2Tab2DateShift(-1)" title="Previous day">&lsaquo;</button>
         <span class="bt-dnum">${esc(String(new Date(date+'T00:00').getDate()))}</span>
-        <span><span class="bt-dwk">${esc(new Date(date+'T00:00').toLocaleDateString('en-GB',{weekday:'long'}))}</span>
+        <span class="bt-dgrp"><span class="bt-dwk">${esc(new Date(date+'T00:00').toLocaleDateString('en-GB',{weekday:'long'}))}</span>
           <label class="bt-dmo">${esc(new Date(date+'T00:00').toLocaleDateString('en-GB',{month:'long',year:'numeric'}))}
             <input type="date" value="${date}" onclick="event.stopPropagation();try{this.showPicker()}catch(e){}" onchange="if(this.value)bkV2Tab2PickDay(this.value)"></label></span>
         ${_isToday?'<span class="bt-today">TODAY</span>':`<button class="bt-today gh" onclick="bkV2Tab2Today()">Go to today</button>`}
@@ -44445,13 +44445,22 @@ function bkV2RenderTab2(){
     .bt-hdtop{position:relative;display:flex;align-items:center;gap:13px;padding:0 8px 7px}
     .bt-arw{width:27px;height:27px;flex:none;border:1px solid rgba(0,0,0,.13);background:#fff;border-radius:9px;
       display:flex;align-items:center;justify-content:center;color:#7d7a74;font-size:14px;cursor:pointer;font-family:inherit;line-height:1}
-    .bt-dnum{font-size:32px;font-weight:800;letter-spacing:-1px;line-height:1;font-family:'DM Mono',monospace}
+    /* §btNav · แถวหัวเป็น flex · ทุกชิ้นที่กว้างไม่คงที่ ดันปุ่ม › ให้ขยับตาม
+       วัดแล้วปุ่ม › แกว่งได้ถึง 33px ระหว่างวัน · กดเลื่อนวันรัว ๆ แล้วปุ่มหนีมือ
+       ต้นเหตุมีสามชิ้น ตรึงความกว้างทั้งสาม:
+         เลขวัน   1 หลัก 21px / 2 หลัก 43px
+         ชื่อวัน+เดือน  Wednesday/SEPTEMBER 2026 ยาวกว่า Thursday/DECEMBER 2026 อยู่ 6px
+         ปุ่ม today  TODAY 67px / Go to today 100px */
+    .bt-dnum{font-size:32px;font-weight:800;letter-spacing:-1px;line-height:1;font-family:'DM Mono',monospace;
+      display:inline-block;min-width:43px;text-align:center;flex:none}
+    .bt-dgrp{display:inline-block;min-width:118px;flex:none}
     .bt-dwk{display:block;font-size:15px;font-weight:800;line-height:1.05}
     .bt-dmo{position:relative;display:block;font-size:9px;font-weight:800;letter-spacing:.13em;
       color:#8d8880;text-transform:uppercase;cursor:pointer}
     .bt-dmo input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
     .bt-today{background:#15201a;color:#fff;border:none;border-radius:999px;padding:5px 13px;
-      font-size:11px;font-weight:700;font-family:inherit;flex:none}
+      font-size:11px;font-weight:700;font-family:inherit;flex:none;
+      min-width:100px;text-align:center;box-sizing:border-box}
     .bt-today.gh{background:#fff;color:#5b5b55;border:1px solid rgba(0,0,0,.13);cursor:pointer}
     /* กลางจริง · margin:auto จะกลางแค่ "ที่ว่างที่เหลือ" ฝั่งซ้ายยาวกว่าเลยเบี้ยวไปขวา ~110px */
     .bt-brand{position:absolute;left:50%;transform:translateX(-50%);font-size:20px;font-weight:800;
