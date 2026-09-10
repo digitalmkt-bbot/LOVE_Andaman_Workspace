@@ -119,6 +119,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18h18"/><path d="M5 18l2-7h10l2 7"/><path d="M12 11V4"/><path d="M9 6h6"/></svg>
       เช็คอินหน้าท่า
     </div>
+    <div class="nav-item" data-view="landcheckin" onclick="nav(this)" style="border-left:2px solid rgba(130,210,170,.25);padding-left:9px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="7" width="14" height="9" rx="2"/><circle cx="7" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/><path d="M17 10h3l1 3v3h-4"/></svg>
+      เช็คอินทัวร์/รถรับส่ง
+    </div>
     <div class="nav-item" data-view="travelsum" onclick="nav(this)" style="border-left:2px solid rgba(130,210,170,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M8 9h8"/><path d="M8 13h5"/><path d="M8 17h3"/></svg>
       Travel Summary
@@ -980,7 +984,9 @@
     <div id="view-bookingflow" class="view"><div id="bookingflow-host"></div></div>
     <div id="view-vanjobs" class="view"><div id="vanjobs-host"></div></div>
     <div id="view-vancheckin" class="view"><div id="vancheckin-host"></div></div>
-    <div id="view-piercheckin" class="view"><div id="piercheckin-host"></div></div>
+    <div id="view-piercheckin" class="view"><div id="piercheckin-host" class="pck-host"></div></div>
+    <!-- §landCk · เช็คอินทัวร์/รถรับส่ง · renderer ตัวเดียวกับหน้าท่า คนละโหมด -->
+    <div id="view-landcheckin" class="view"><div id="landcheckin-host" class="pck-host"></div></div>
     <div id="view-poa-panwa" class="view"><div id="pa-host-panwa" class="pj-host"></div></div>
     <div id="view-poa-tublamu" class="view"><div id="pa-host-tublamu" class="pj-host"></div></div>
     <div id="view-poa-ranong" class="view"><div id="pa-host-ranong" class="pj-host"></div></div>

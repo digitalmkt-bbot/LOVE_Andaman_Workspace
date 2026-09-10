@@ -7827,7 +7827,7 @@ function bkV2BoatSplitApply(){
   bkV2BoatSplitClose();
   if(typeof acctPersistBookings==='function') acctPersistBookings();
   if(typeof bkV2Render==='function') bkV2Render();
-  if(typeof renderPierCheckin==='function' && document.getElementById('piercheckin-host')) renderPierCheckin();
+  if(typeof renderCheckinAll==='function') renderCheckinAll();   // §landCk · สองหน้า
   const msg=parts.map(p=>((typeof pckBoatName==='function')?pckBoatName(p.boatId):p.boatId)+' '+bkPaxSum(p)).join(' · ');
   if(typeof laSaveToast==='function') laSaveToast({kind:'success', title:(parts.length>1?'แยกลงเรือแล้ว':'จัดลงลำเดียว'), msg:msg});
 }
@@ -7843,7 +7843,7 @@ function bkV2BoatUnsplit(bkId, date){
   delete o.boatSplits;
   if(typeof acctPersistBookings==='function') acctPersistBookings();
   if(typeof bkV2Render==='function') bkV2Render();
-  if(typeof renderPierCheckin==='function' && document.getElementById('piercheckin-host')) renderPierCheckin();
+  if(typeof renderCheckinAll==='function') renderCheckinAll();   // §landCk · สองหน้า
 }
 function bkV2BoatSplitRender(){
   const m=_bkBoatM; if(!m) return;
@@ -10693,10 +10693,11 @@ function ckStrandClear(bkId, date){
     ckStrandMvDrop(_mk);
     if(typeof laSaveToast==='function') laSaveToast({kind:'neutral', title:'ล้างรายการค้างแล้ว', id:bkId,
       status:'CLEARED', sub:nm+' · '+date});
-    ['vancheckin-host','piercheckin-host','vanjobs-host'].forEach(function(h){
+    ['vancheckin-host','piercheckin-host','landcheckin-host','vanjobs-host'].forEach(function(h){
       var el=document.getElementById(h); if(!el || !el.offsetParent) return;
       if(h==='vancheckin-host' && typeof renderVanCheckin==='function') renderVanCheckin();
       if(h==='piercheckin-host' && typeof renderPierCheckin==='function') renderPierCheckin();
+      if(h==='landcheckin-host' && typeof renderLandCheckin==='function') renderLandCheckin();   // §landCk
       if(h==='vanjobs-host'    && typeof renderVanJobs==='function')    renderVanJobs();
     });
     return;
@@ -10710,10 +10711,11 @@ function ckStrandClear(bkId, date){
   if(typeof acctPersistBookings==='function') acctPersistBookings();
   if(typeof laSaveToast==='function') laSaveToast({kind:'neutral', title:'ล้างการจัดรถ/เรือแล้ว', id:bkId,
     status:'CLEARED', sub:nm+' · '+date});
-  ['vancheckin-host','piercheckin-host','vanjobs-host'].forEach(function(h){
+  ['vancheckin-host','piercheckin-host','landcheckin-host','vanjobs-host'].forEach(function(h){
     var el=document.getElementById(h); if(!el || !el.offsetParent) return;
     if(h==='vancheckin-host' && typeof renderVanCheckin==='function') renderVanCheckin();
     if(h==='piercheckin-host' && typeof renderPierCheckin==='function') renderPierCheckin();
+    if(h==='landcheckin-host' && typeof renderLandCheckin==='function') renderLandCheckin();   // §landCk
     if(h==='vanjobs-host'    && typeof renderVanJobs==='function')    renderVanJobs();
   });
 }
@@ -11656,26 +11658,26 @@ function pckExtraCSS(){ return ''
   +'.ck-fsep{width:1px;height:18px;background:#E7E4DC;margin:0 3px}'
   +'tr.ck-unassigned>td{background:#FFFBF5}'
   +'tr.ck-unassigned>td:first-child{box-shadow:inset 4px 0 0 #E0A33A}'
-  +'#piercheckin-host .ck-ao{display:inline-block;font-size:10px;font-weight:700;border-radius:6px;padding:2px 7px;margin:0 3px 3px 0;white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}'
-  +'#piercheckin-host .ck-aoact{display:flex;gap:4px;margin-top:2px}'
-  +'#piercheckin-host .ck-aoact button{border:1px dashed #D8D4CA;background:#fff;color:#a5a49d;border-radius:6px;padding:2px 7px;font-size:9.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}'
-  +'#piercheckin-host .ck-aoact button:hover{border-style:solid;border-color:#1C4A30;color:#1C4A30}'
+  +'.pck-host .ck-ao{display:inline-block;font-size:10px;font-weight:700;border-radius:6px;padding:2px 7px;margin:0 3px 3px 0;white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}'
+  +'.pck-host .ck-aoact{display:flex;gap:4px;margin-top:2px}'
+  +'.pck-host .ck-aoact button{border:1px dashed #D8D4CA;background:#fff;color:#a5a49d;border-radius:6px;padding:2px 7px;font-size:9.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}'
+  +'.pck-host .ck-aoact button:hover{border-style:solid;border-color:#1C4A30;color:#1C4A30}'
   // กรอบล้อมทั้งกลุ่มรถ · สีจาก --vc ที่ตั้งไว้บน tbody ของกลุ่มนั้น (สีประจำรถ เดียวกับ By-trip)
-  +'#piercheckin-host tbody.pck-vgrp>tr>td:first-child{border-left:2px solid var(--vc)}'
-  +'#piercheckin-host tbody.pck-vgrp>tr>td:last-child{border-right:2px solid var(--vc)}'
-  +'#piercheckin-host tbody.pck-vgrp>tr.pck-vhd>td{border-top:2px solid var(--vc);border-left:2px solid var(--vc);border-right:2px solid var(--vc)}'
-  +'#piercheckin-host tbody.pck-vgrp>tr:last-child>td{border-bottom:2px solid var(--vc)}'
-  +'#piercheckin-host tbody.pck-vgrp{box-shadow:0 1px 5px -3px rgba(15,23,42,.35)}'
+  +'.pck-host tbody.pck-vgrp>tr>td:first-child{border-left:2px solid var(--vc)}'
+  +'.pck-host tbody.pck-vgrp>tr>td:last-child{border-right:2px solid var(--vc)}'
+  +'.pck-host tbody.pck-vgrp>tr.pck-vhd>td{border-top:2px solid var(--vc);border-left:2px solid var(--vc);border-right:2px solid var(--vc)}'
+  +'.pck-host tbody.pck-vgrp>tr:last-child>td{border-bottom:2px solid var(--vc)}'
+  +'.pck-host tbody.pck-vgrp{box-shadow:0 1px 5px -3px rgba(15,23,42,.35)}'
   +'.pck-bytog{border:1px solid #E0DCD3;background:#fff;color:#a5a49d;border-radius:5px;width:15px;height:15px;line-height:1;padding:0;margin-right:5px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;vertical-align:middle}'
   +'.pck-bytog:hover{border-color:#185FA5;color:#185FA5;background:#F2F8FE}'
-  +'#piercheckin-host tr.ck-row.ck-arr>td{background:#F3F8FD}'
-  +'#piercheckin-host tr.ck-row.ck-arr>td:first-child{box-shadow:inset 4px 0 0 #7EAED8}'
-  +'#piercheckin-host tr.ck-row.ck-clr>td{background:#FDF8EE}'
-  +'#piercheckin-host tr.ck-row.ck-clr>td:first-child{box-shadow:inset 4px 0 0 #D9A441}'
+  +'.pck-host tr.ck-row.ck-arr>td{background:#F3F8FD}'
+  +'.pck-host tr.ck-row.ck-arr>td:first-child{box-shadow:inset 4px 0 0 #7EAED8}'
+  +'.pck-host tr.ck-row.ck-clr>td{background:#FDF8EE}'
+  +'.pck-host tr.ck-row.ck-clr>td:first-child{box-shadow:inset 4px 0 0 #D9A441}'
   // เคลียร์แล้ว = ตรวจ ลค + เก็บเงินครบ → คืนสี agency กับชื่อ ลค ให้อ่านง่าย (ยังไม่เขียวเพราะยังไม่ขึ้นเรือ)
-  +'#piercheckin-host tr.ck-row.ck-clr .ck-agblk{filter:none;opacity:1}'
-  +'#piercheckin-host tr.ck-row.ck-clr .ck-lead{background:#F6E27A !important;color:#3a2e00}'
-  +'#piercheckin-host tr.ck-row.ck-clr .ck-vch,#piercheckin-host tr.ck-row.ck-clr .ck-by{color:#5F5E5A}'
+  +'.pck-host tr.ck-row.ck-clr .ck-agblk{filter:none;opacity:1}'
+  +'.pck-host tr.ck-row.ck-clr .ck-lead{background:#F6E27A !important;color:#3a2e00}'
+  +'.pck-host tr.ck-row.ck-clr .ck-vch,.pck-host tr.ck-row.ck-clr .ck-by{color:#5F5E5A}'
   +'#pck-drawer{position:fixed;inset:0;z-index:100003;font-family:"DM Sans",sans-serif}'
   +'#pck-drawer .pd-scrim{position:absolute;inset:0;background:rgba(0,0,0,.42)}'
   +'#pck-drawer .pd-panel{position:absolute;right:0;top:0;bottom:0;width:430px;max-width:96vw;background:#fff;display:flex;flex-direction:column;box-shadow:-8px 0 28px rgba(0,0,0,.18)}'
@@ -15442,6 +15444,20 @@ function pckAddonCell(r, date){
    กรองที่นี่ตัดทั้งรายการโปรแกรมและแถวในตาราง จะได้ไม่ขัดกันเอง */
 var PCK_PIER_LBL={panwa:'พันวา', tublamu:'ทับละมุ', ranong:'ระนอง'};
 var _pckPier=null;
+/* §landCk · หน้าเช็คอินมีสองหน้า ใช้ renderer ตัวเดียวกัน
+     หน้าท่า (piercheckin-host) = เฉพาะทริปเรือ · หน้ารถ (landcheckin-host) = เฉพาะ City Tour / Transfer
+     คัดลอกกันสนิท ไม่มีใบไหนอยู่สองหน้า · คนหน้าท่าจะไม่เห็นทัวร์ในเมืองมากวนอีกต่อไป
+     ทำเป็นโหมดแทนที่จะ copy ฟังก์ชัน 381 บรรทัด ไปอีกชุด — สองหน้าจึงทำงานเหมือนกันเสมอ
+     โดยโครงสร้าง ไม่ใช่เพราะมีคนคอยแก้ให้เหมือนกัน */
+var _pckLand=false;
+function pckHostEl(){ return document.getElementById(_pckLand?'landcheckin-host':'piercheckin-host'); }
+function renderLandCheckin(){ _pckLand=true; try{ renderPierCheckin(); } finally { _pckLand=false; } }
+/* วาดทั้งสองหน้าเมื่อข้อมูลเปลี่ยน · หน้าไหนไม่ได้เปิดอยู่ ก็ไม่มี host ให้วาด ข้ามไปเอง */
+function renderCheckinAll(){
+  if(typeof renderPierCheckin!=='function') return;
+  if(document.getElementById('piercheckin-host')) renderPierCheckin();
+  if(document.getElementById('landcheckin-host')) renderLandCheckin();
+}
 function pckSetPier(p){
   _pckPier=(_pckPier===p)?null:p;
   _pckFam=null; _pckRoute=null;            /* ท่าเปลี่ยน โปรแกรมที่เลือกไว้อาจไม่อยู่ท่านี้แล้ว */
@@ -15861,7 +15877,7 @@ var _pckOpenNames={};
    = แถวที่เพิ่งกดกระโดดหนีตา (เจอกับใบท้ายกลุ่ม เช่น EXC31416)
    → จับระยะจากขอบบนกล่องถึงแถวนั้นไว้ แล้วเลื่อนชดเชยให้เท่าเดิมหลังวาดใหม่ */
 function _pckRowTop(id){
-  var w=document.querySelector('#piercheckin-host .pcs-tw');
+  var w=document.querySelector('.pck-host .pcs-tw');
   var el=w&&w.querySelector('td.pcs-nm[data-bk="'+id+'"]');
   if(!w||!el) return null;
   return {w:w, off:el.getBoundingClientRect().top-w.getBoundingClientRect().top};
@@ -19285,7 +19301,7 @@ function pckFitPane(){
   if(_pckFitRaf) return;
   _pckFitRaf=requestAnimationFrame(function(){
     _pckFitRaf=0;
-    var w=document.querySelector('#piercheckin-host .pcs-tw'); if(!w) return;
+    var w=document.querySelector('.pck-host .pcs-tw'); if(!w) return;
     var h=Math.max(320,(window.innerHeight||800)-w.getBoundingClientRect().top-8);
     w.style.maxHeight=h+'px';
     /* §pckHead9 · ก่อนหน้านี้หน้าเว็บล้นออกนอกจอ 73px (มาจาก padding ใต้ view)
@@ -19378,7 +19394,7 @@ function pckHeadHtml(o){
 }
 
 function pckHeadCSS(){
-  var H='#piercheckin-host';
+  var H='.pck-host';
   return ''
   +H+' .pgh-empty{padding:10px;font-size:11.5px;color:#a5a49d;text-align:center}'
   +H+' .pgf-all{display:block;width:100%;border:0;border-bottom:1px solid #EFECE4;background:#fff;'
@@ -19600,21 +19616,21 @@ function pckHeadCSS(){
   ;
 }
 function pckSheetCSS(){
-  var S='#piercheckin-host table.ck-tbl.pck-sheet';
+  var S='.pck-host table.ck-tbl.pck-sheet';
   return ''
-  +'#piercheckin-host .pcs-bar{display:flex;align-items:center;gap:7px;margin:0 0 10px}'
-  +'#piercheckin-host .pcs-bar .k{font-size:11px;font-weight:700;color:#5F5E5A}'
-  +'#piercheckin-host .pcs-segs{display:inline-flex;border:1.5px solid #D8D4CA;border-radius:999px;'
+  +'.pck-host .pcs-bar{display:flex;align-items:center;gap:7px;margin:0 0 10px}'
+  +'.pck-host .pcs-bar .k{font-size:11px;font-weight:700;color:#5F5E5A}'
+  +'.pck-host .pcs-segs{display:inline-flex;border:1.5px solid #D8D4CA;border-radius:999px;'
     +'overflow:hidden;background:#fff}'
-  +'#piercheckin-host .pcs-seg{border:none;background:none;font:700 11.5px inherit;font-family:inherit;'
+  +'.pck-host .pcs-seg{border:none;background:none;font:700 11.5px inherit;font-family:inherit;'
     +'padding:4px 14px;cursor:pointer;color:#6b6a64}'
-  +'#piercheckin-host .pcs-seg.on{background:#15201a;color:#fff}'
+  +'.pck-host .pcs-seg.on{background:#15201a;color:#fff}'
   /* กล่องเลื่อนของตัวเอง · การตรึงคอลัมน์ซ้ายต้องมีตัวเลื่อนของตัวเอง */
-  +'#piercheckin-host .pcs-tw{overflow:auto;max-height:calc(100vh - 250px);min-height:340px;'
+  +'.pck-host .pcs-tw{overflow:auto;max-height:calc(100vh - 250px);min-height:340px;'
     +'border-radius:13px;contain:paint;overscroll-behavior:contain;'
     /* เว้นไว้ในตัวกล่อง · เลื่อนสุดแล้วแถวสุดท้ายยังพ้นป้ายมุมซ้ายล่าง (250x65 ห่างก้นจอ 10) */
     +'padding-bottom:78px}'
-  +'#piercheckin-host .ck-card.pcs-card{overflow:hidden;padding:0;'
+  +'.pck-host .ck-card.pcs-card{overflow:hidden;padding:0;'
     +'background:var(--pck-band,#EDEFF2) !important;'
     +'border:1px solid var(--pck-bandb,#DCE0E6) !important;transition:background .18s}'
   /* width:max-content · ไม่งั้นตารางยืดเต็มความกว้างจอ แล้วเอาที่ว่างไปแจกให้คอลัมน์
@@ -19817,30 +19833,30 @@ function pckSheetCSS(){
   /* ช่องหัวกลุ่มกว้างเท่าตารางทั้งใบ ตรึงตัว td เองไม่ได้ ต้องตรึงกล่องข้างใน */
   +S+' tr.pcs-g1>td>div,'+S+' tr.pcs-g2>td>div{display:flex;align-items:center;gap:10px;'
     +'position:sticky;left:0;width:-moz-fit-content;width:fit-content;max-width:100%}'
-  +'#piercheckin-host .pcs-kind{font-size:9px;font-weight:800;letter-spacing:.06em;'
+  +'.pck-host .pcs-kind{font-size:9px;font-weight:800;letter-spacing:.06em;'
     +'text-transform:uppercase;opacity:.6}'
-  +'#piercheckin-host .pcs-pill{border-radius:99px;padding:3px 14px;font-size:12.5px;font-weight:800;white-space:nowrap}'
-  +'#piercheckin-host tr.pcs-g2 .pcs-pill{padding:1px 11px;font-size:11px}'
-  +'#piercheckin-host .pcs-sm{font-size:10.5px;opacity:.9;white-space:nowrap}'
-  +'#piercheckin-host .pcs-sm b{font-size:13px;font-weight:800}'
-  +'#piercheckin-host .pcs-due{background:#FBF0DD;color:#7A4A00;border-radius:7px;padding:1px 9px;'
+  +'.pck-host .pcs-pill{border-radius:99px;padding:3px 14px;font-size:12.5px;font-weight:800;white-space:nowrap}'
+  +'.pck-host tr.pcs-g2 .pcs-pill{padding:1px 11px;font-size:11px}'
+  +'.pck-host .pcs-sm{font-size:10.5px;opacity:.9;white-space:nowrap}'
+  +'.pck-host .pcs-sm b{font-size:13px;font-weight:800}'
+  +'.pck-host .pcs-due{background:#FBF0DD;color:#7A4A00;border-radius:7px;padding:1px 9px;'
     +'font-size:10.5px;font-weight:800;white-space:nowrap}'
-  +'#piercheckin-host .pcs-ok{background:#E1F5EE;color:#0F6E56;border-radius:7px;padding:1px 9px;'
+  +'.pck-host .pcs-ok{background:#E1F5EE;color:#0F6E56;border-radius:7px;padding:1px 9px;'
     +'font-size:10px;font-weight:700;white-space:nowrap}'
-  +'#piercheckin-host .pcs-wb{display:inline-flex;align-items:center;gap:6px;background:#fff;'
+  +'.pck-host .pcs-wb{display:inline-flex;align-items:center;gap:6px;background:#fff;'
     +'border:1px solid #D8DCE3;border-radius:7px;padding:1px 9px;font-size:10.5px;font-weight:700;'
     +'color:#3a3a36;white-space:nowrap}'
-  +'#piercheckin-host .pcs-wb i{width:13px;height:13px;border-radius:4px;display:inline-block;'
+  +'.pck-host .pcs-wb i{width:13px;height:13px;border-radius:4px;display:inline-block;'
     +'border:1px solid rgba(0,0,0,.18)}'
-  +'#piercheckin-host .pcs-wb.none{background:#FBF3E6;border-color:#EBDCC2;color:#8A5B00}'
-  +'#piercheckin-host .pcs-inf{font-size:10px;color:#8a8a82;display:inline-flex;align-items:center;'
+  +'.pck-host .pcs-wb.none{background:#FBF3E6;border-color:#EBDCC2;color:#8A5B00}'
+  +'.pck-host .pcs-inf{font-size:10px;color:#8a8a82;display:inline-flex;align-items:center;'
     +'gap:8px;white-space:nowrap}'
-  +'#piercheckin-host .pcs-inf b{font-size:8.5px;text-transform:uppercase;color:#a3a39b}'
-  +'#piercheckin-host .pcs-inf s{width:1px;height:10px;background:#dcdad3;display:inline-block;'
+  +'.pck-host .pcs-inf b{font-size:8.5px;text-transform:uppercase;color:#a3a39b}'
+  +'.pck-host .pcs-inf s{width:1px;height:10px;background:#dcdad3;display:inline-block;'
     +'text-decoration:none}'
-  +'#piercheckin-host .pcs-ckv{font-size:9.5px;font-weight:700;color:#a5a49d;background:#F1EFE8;'
+  +'.pck-host .pcs-ckv{font-size:9.5px;font-weight:700;color:#a5a49d;background:#F1EFE8;'
     +'border-radius:6px;padding:1px 7px;white-space:nowrap}'
-  +'#piercheckin-host .pcs-ckv.full{color:#0F6E56;background:#E1F5EE}';
+  +'.pck-host .pcs-ckv.full{color:#0F6E56;background:#E1F5EE}';
 }
 /* ══ §pckNoStage · บั๊ก "กดแล้วเด้ง" ═════════════════════════════════════════
    ทุกการกดในหน้านี้ (กางชื่อ · ปลดล็อก · เช็คอิน) เรียก renderPierCheckin ใหม่ทั้งหน้า
@@ -19858,7 +19874,7 @@ function pckScrollRestore(host){
   var m=_pckScr; _pckScr=null;
   if(!m) return;
   var apply=function(){
-    var w=document.querySelector('#piercheckin-host .pcs-tw');
+    var w=document.querySelector('.pck-host .pcs-tw');
     if(w){ if(m.l && w.scrollLeft!==m.l) w.scrollLeft=m.l;
            if(m.t && w.scrollTop!==m.t) w.scrollTop=m.t; }
     if(m.y && (window.pageYOffset||document.documentElement.scrollTop||0)!==m.y) window.scrollTo(0,m.y);
@@ -19868,7 +19884,7 @@ function pckScrollRestore(host){
   if(window.requestAnimationFrame) requestAnimationFrame(apply);
 }
 function renderPierCheckin(){
-  var host=document.getElementById('piercheckin-host'); if(!host) return;
+  var host=pckHostEl(); if(!host) return;   /* §landCk */
   var e=ckEsc, date=_pckDate;
   if(typeof bkV2CharterBoatHeal==='function'){ try{ bkV2CharterBoatHeal(date); }catch(_){} }
   /* §vckSplit · หน้านี้ก็ไม่เคยเรียก · บุคกิ้งรับหลายจุดที่ยังไม่มี vanSplits
@@ -19888,6 +19904,10 @@ function renderPierCheckin(){
     }
     var t=ckTripOn(b,date); if(!t) return;
     var _ovnBack=(typeof bkIsOvnReturn==='function') && bkIsOvnReturn(t);
+    /* §landCk · เส้นทางบกกับเส้นทางเรืออยู่คนละหน้า · ตัดกันตรงนี้จุดเดียว
+       หน้าท่าเห็นเฉพาะทริปเรือ · หน้ารถเห็นเฉพาะ City Tour / Transfer
+       คนหน้าท่าไม่มีหน้าที่กับทัวร์ในเมือง และทัวร์ในเมืองก็ไม่มีเรือให้ขึ้น */
+    if(typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId) !== _pckLand) return;
     if(_pckPier && pckPierOf(t.routeId)!==_pckPier) return;   /* §pckHead3 · กรองตามท่า */
     if(_pckRoute){ if(t.routeId!==_pckRoute) return; }
     else if(_pckFam){ var f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(t.routeId):null; if(!f||f.id!==_pckFam) return; }
@@ -20198,7 +20218,7 @@ function renderPierCheckin(){
   pckScrollSave(host);
   /* §pckHead · หัวข้อหน้ากับคำอธิบายถูกตัดออก · เมนูซ้ายบอกอยู่แล้วว่าอยู่หน้าไหน
      ที่ประหยัดได้เอาไปให้ตาราง ซึ่งเป็นของที่ต้องอ่านจริงทุกเช้า */
-  host.innerHTML='<style id="pck-style">'+ckStrandCSS('#piercheckin-host')+ckSharedCSS('#piercheckin-host')+pckExtraCSS()+pckCardCSS('#piercheckin-host')+pckPayCSS()+pckHeadCSS()+pckSheetCSS()+'</style>'
+  host.innerHTML='<style id="pck-style">'+ckStrandCSS('.pck-host')+ckSharedCSS('.pck-host')+pckExtraCSS()+pckCardCSS('.pck-host')+pckPayCSS()+pckHeadCSS()+pckSheetCSS()+'</style>'
     +pckHeadHtml({date:date,
         dayHtml:pckDayBar(date, kpi, pills.total,
           (pills.lost>0?('เดินทางจริง · จอง '+pills.booked+' หาย '+pills.lost)
@@ -29967,7 +29987,7 @@ function bkV2ExtraCollect(id, bkId){
   }
   sbExtrasPersist();
   try{ bkV2Render(); }catch(_){}
-  try{ if(typeof renderPierCheckin==='function' && document.getElementById('piercheckin-host')) renderPierCheckin(); }catch(_){}
+  try{ if(typeof renderCheckinAll==='function') renderCheckinAll(); }catch(_){}   // §landCk
   bkV2ExtraRender();
 }
 function bkV2ExtraDelete(id,bkId){ SB_EXTRAS=SB_EXTRAS.filter(e=>e.id!==id); sbExtrasPersist(); bkV2Render(); bkV2ExtraRender(); }
