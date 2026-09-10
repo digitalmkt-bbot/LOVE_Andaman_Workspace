@@ -7887,8 +7887,12 @@ function renderSettings(){
   const noData=totalProg-openToday-closedToday;
 
   // Pier groups (needed for kpiStrip + list)
-  const groups={tublamu:[],panwa:[],ranong:[]};
-  ROUTES.forEach(r=>{ if(groups[r.pier]) groups[r.pier].push(r); });
+  /* §otherPier · เดิม if(groups[r.pier]) — ท่าที่ไม่มีในลิสต์ถูกทิ้งเงียบ ๆ
+     เคยเกิดกับระนองมาแล้วรอบหนึ่ง และกับ other อีกรอบ · คราวนี้สร้าถังให้ตามค่าที่เจอจริง
+     ค่าแปลกที่ไม่รู้จักก็ยังโผล่ แก้ได้ ดีกว่าหายไปโดยไม่บอก */
+  const PIER_ORDER=['tublamu','panwa','ranong',LAND_PIER];
+  const groups={}; PIER_ORDER.forEach(p=>{ groups[p]=[]; });
+  ROUTES.forEach(r=>{ const _p=r.pier||LAND_PIER; (groups[_p]=groups[_p]||[]).push(r); });
   const tlCount=(groups.tublamu||[]).length;
   const vpCount=(groups.panwa||[]).length;
 
@@ -7914,7 +7918,7 @@ function renderSettings(){
         <span style="font-size:18px;color:${dim.ink3};font-weight:500">routes</span>
         <span style="display:inline-flex;align-items:center;background:${SVG_PINK.accent};color:white;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">▴ ${openToday} เปิดวันนี้</span>
       </div>
-      <div style="font-size:11px;color:${dim.ink3}">${tlCount} Tub Lamu · ${vpCount} Visit Panwa${(groups.ranong||[]).length?` · ${(groups.ranong||[]).length} Ranong`:''}</div>
+      <div style="font-size:11px;color:${dim.ink3}">${tlCount} Tub Lamu · ${vpCount} Visit Panwa${(groups.ranong||[]).length?` · ${(groups.ranong||[]).length} Ranong`:''}${(groups[LAND_PIER]||[]).length?` · ${(groups[LAND_PIER]||[]).length} Other`:''}</div>
     </div>
     <div style="grid-column:2;background:white;border-radius:14px;padding:11px 13px;border:1px solid ${dim.line}">
       <div style="font-size:10px;color:${dim.ink3}">Open Today</div>
@@ -7936,14 +7940,17 @@ function renderSettings(){
   const PIER_INFO={
     tublamu:{label:'Tub Lamu Pier',accent:'#0F6E56',bg:'#E1F5EE',color:'#0F6E56'},
     panwa:{label:'Visit Panwa',accent:'#185FA5',bg:'#E6F1FB',color:'#185FA5'},
-    ranong:{label:'Ranong Pier',accent:'#BA7517',bg:'#FAEEDA',color:'#854F0B'}
+    ranong:{label:'Ranong Pier',accent:'#BA7517',bg:'#FAEEDA',color:'#854F0B'},
+    other:{label:'Other · ไม่ใช้ท่าเรือ',accent:'#5B289A',bg:'#F3EAFB',color:'#5B289A'}   // §otherPier
   };
 
   // Build list panel · §แสดง Ranong ด้วยถ้ามี route (เดิม loop hardcode แค่ tublamu/panwa → route ระนองไม่โผล่)
   let listHtml='';
-  ['tublamu','panwa'].concat((groups.ranong||[]).length?['ranong']:[]).forEach(pier=>{
+  PIER_ORDER.filter(pk => pk==='tublamu' || pk==='panwa' || (groups[pk]||[]).length)
+    .concat(Object.keys(groups).filter(pk => !PIER_ORDER.includes(pk) && (groups[pk]||[]).length))
+    .forEach(pier=>{
     const rows=groups[pier]||[];
-    const pi=PIER_INFO[pier];
+    const pi=PIER_INFO[pier] || {label:pier,accent:'#5A5A52',bg:'#F1F0EC',color:'#5A5A52'};   // §otherPier · ค่าที่ไม่รู้จักก็ยังมีหัวข้อ
     listHtml+=`<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;margin-top:${listHtml?'10px':'0'}">
       <div style="width:28px;height:28px;border-radius:50%;background:${pi.bg};color:${pi.color};display:flex;align-items:center;justify-content:center">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 21c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1 .6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/><path d="M19.38 20A11.6 11.6 0 0 0 21 14l-9-4-9 4c0 2.9.94 5.34 2.81 7.76"/><path d="M19 13V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6"/><path d="M12 10v4"/><path d="M12 2v3"/></svg>
