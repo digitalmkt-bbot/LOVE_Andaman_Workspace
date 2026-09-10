@@ -6904,6 +6904,51 @@ function baSetDate(delta){ const d=new Date(_baDate+'T12:00:00'); d.setDate(d.ge
 // §boatSplit · เรือลำไหนถูกเหมาในวันนั้น → บุคกิ้งไหน · เหมา 1 ใบกินได้หลายลำ (ops.boatSplits)
 //   ต้นทางความจริงคือ "บุคกิ้ง" ไม่ใช่ TRIPS — TRIPS ถูกเขียนตอนจอง ซึ่งรู้จักแค่ charterBoatId ลำเดียว
 //   ลำที่ 2+ ของใบที่แยกลำ จึงไม่เคยถูกธงใน Boat Operation และถูกนับเป็นที่นั่งว่างขายต่อ
+/* §ovnHold · เหมาลำค้างเกาะ · เรือติดไปทั้งช่วง ไม่ใช่แค่วันออกกับวันกลับ
+   ระบบนี้คิดเป็นรายวันทั้งดุ้น และใบ OVN สร้าง trip แค่ 2 ใบ (ขาไป · ขากลับ)
+   วันที่อยู่ระหว่างกลางจึงไม่มี trip เลย ทุกจุดที่ถือลำจับคู่ด้วย t.date===date
+   เรือเลยอ่านว่า "ว่าง" ทั้งที่ยังจอดอยู่ที่เกาะ · จ่ายงานอื่นทับได้เงียบ ๆ
+   ช่วงวันอ่านออกจาก trip ขาไปอยู่แล้ว (t.date → t.ovnReturnDate)
+   จึงไม่ต้องเพิ่มคอลัมน์ ไม่ต้อง migration และใบที่บันทึกไว้แล้วได้ผลทันที */
+function bkOvnHoldMap(date){
+  const m=new Map();
+  if(!date) return m;
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
+    if(['cancelled','rejected','cancelled_weather'].includes(b.status))return;
+    (b.trips||[]).forEach(t=>{
+      if(!t || t.bookingMode!=='charter' || t.ovn!=='return')return;
+      const from=t.date||'', to=t.ovnReturnDate||'';
+      if(!from || !to || to<=from)return;          /* ไป-กลับวันเดียวกัน = ไม่มีวันค้าง */
+      if(date<from || date>to)return;
+      let ids=(typeof bkBoatIdsOn==='function')?bkBoatIdsOn(b,from):[];
+      if(!ids.length && t.charterBoatId) ids=[t.charterBoatId];
+      ids.forEach(id=>{ if(id && !m.has(id)) m.set(id,{bkId:b.id,from:from,to:to,routeId:t.routeId||''}); });
+    });
+  });
+  return m;
+}
+/* memo อายุ 1 render · แบบเดียวกับ baCharterBoatMapMemo · bop2FleetStatus เรียกทีละลำ */
+let _bkOvnHoldMemo=null;
+function bkOvnHoldMemoClear(){ _bkOvnHoldMemo=null; }
+function bkOvnHoldMapMemo(date){
+  if(!_bkOvnHoldMemo){ _bkOvnHoldMemo={}; Promise.resolve().then(()=>{ _bkOvnHoldMemo=null; }); }
+  if(!(date in _bkOvnHoldMemo)) _bkOvnHoldMemo[date]=bkOvnHoldMap(date);
+  return _bkOvnHoldMemo[date];
+}
+function bkOvnHoldOn(boatId,date){
+  if(!boatId||!date) return null;
+  return bkOvnHoldMapMemo(date).get(boatId)||null;
+}
+/* §ovnHold · ขากลับของใบที่ขาไปเป็นเหมาลำ · แขกกลับมากับเรือที่ตัวเองเหมาไป
+   ไม่ได้นั่งเรือ seat ที่จ่ายให้เส้นทางเดียวกันวันนั้น จึงไม่กินที่นั่งของลำนั้น
+   ใบที่บันทึกไว้ก่อนแก้ ขากลับยังเป็น bookingMode:'seat' · ตัวนี้จับให้ด้วย */
+function bkOvnLegOnCharter(bk,t){
+  if(!bk || !t || !t.ovnLeg) return false;
+  if(t.bookingMode==='charter') return true;
+  return (bk.trips||[]).some(function(x){
+    return x && x!==t && x.bookingMode==='charter' && x.ovn==='return'
+        && (x.ovnReturnDate||'')===(t.date||'') && (x.routeId||'')===(t.routeId||''); });
+}
 function baCharterBoatMap(date){
   const m=new Map();
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
@@ -6915,11 +6960,14 @@ function baCharterBoatMap(date){
       ids.forEach(id=>{ if(id && !m.has(id)) m.set(id,b.id); });
     });
   });
+  /* §ovnHold · วันที่ค้างเกาะ (รวมวันกลับของใบเก่าที่ขากลับยังเป็น seat)
+     ถือเป็นเรือเหมาเหมือนกัน · ไม่งั้น getAllotment นับความจุลำนั้นเป็นที่นั่งขายได้ */
+  bkOvnHoldMap(date).forEach((h,id)=>{ if(!m.has(id)) m.set(id,h.bkId); });
   return m;
 }
 // memo อายุ 1 render · render เป็น synchronous ทั้งก้อน แคชจึงหมดอายุก่อนข้อมูลจะเปลี่ยนได้เสมอ
 let _baChMemo=null;
-function baChMemoClear(){ _baChMemo=null; }   // เรียกทุกครั้งที่บุคกิ้งถูกบันทึก · กัน memo ค้างข้ามการแก้ข้อมูล
+function baChMemoClear(){ _baChMemo=null; _bkOvnHoldMemo=null; }   // เรียกทุกครั้งที่บุคกิ้งถูกบันทึก · กัน memo ค้างข้ามการแก้ข้อมูล
 function baCharterBoatMapMemo(date){
   if(!_baChMemo){ _baChMemo={}; Promise.resolve().then(()=>{ _baChMemo=null; }); }
   if(!(date in _baChMemo)) _baChMemo[date]=baCharterBoatMap(date);
@@ -45504,7 +45552,12 @@ function bkV2CreateOvnReturnLeg(idx){
   // ทันที ช่องติ๊ก/กรุ๊ป/เลือกรถหายหมด · เก็บโซนจริงไว้ ใบงานจัดการเรื่องจุดรับเอง (bkIsOvnReturn)
   leg.zone = t.zone || '';         // โซนปลายทางที่ต้องไปส่ง (ไม่มีรถไปรับ (รถกลับ pier→โรงแรม จัดในแมนิเฟสต์)
   leg.pax = { ...t.pax };          // กันที่นั่งจำนวนเดียวกับขาไป
-  leg.bookingMode = 'seat';
+  /* §ovnHold · ของเดิมตั้ง 'seat' ตายตัวไม่ดูขาไป · ใบเหมาลำจึงไม่ถือเรือในวันกลับ
+     และแขกทั้งใบไปกินที่นั่งของเรือ seat ลำอื่นที่จ่ายให้เส้นทางเดียวกันวันนั้น
+     ราคายังเป็น 0 เหมือนเดิม · ทุกจุดที่คิดเงินเช็ค ovnLeg ก่อน bookingMode */
+  const _ovIsCharter = (t.bookingMode === 'charter');
+  leg.bookingMode = _ovIsCharter ? 'charter' : 'seat';
+  if(_ovIsCharter) leg.charterBoatId = t.charterBoatId || null;
   leg.ovnLeg = true;               // ขากลับค้างคืน · ราคา 0
   leg.ovnOf = idx;
   d.trips.push(leg);
