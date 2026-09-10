@@ -60768,6 +60768,16 @@ function pjPrint(){
 
   var body='<tbody>'
     + tripRow() + timeRow()
+    /* §pjSheet4 · ร้านอาหารของลำนี้วันนี้ · ตั้งรายลำมาก่อนร้านประจำเส้นทางเสมอ
+       §pjRest · ย้ายขึ้นมาต่อจากเวลาออก · เดิมอยู่ท้ายหมวดไกด์ ซึ่งเป็นหมวด "คน"
+       แต่ร้านอาหารไม่ใช่คนที่ถูกจ่ายงาน · เป็นของที่ผูกกับทริปเหมือนโปรแกรมและเวลา
+       สามแถวบนสุดจึงตอบครบว่า วันนี้ลำนี้ไปไหน ออกกี่โมง กินที่ไหน */
+    + row('RESTAURANT|\u0e23\u0e49\u0e32\u0e19\u0e2d\u0e32\u0e2b\u0e32\u0e23',function(B,i){
+        var raw=''; try{ raw=mvTripRaw(_poDate,B.bid); }catch(_){}
+        if(raw==='-') return '<span class="rl">ไม่มีอาหารวันนี้</span>';
+        var V=null; try{ V=mvForTrip(_poDate,B.bid,B.rid); }catch(_){}
+        return V?e(V.name||''):'';
+      },0,function(){ return ''; })
     + band('1','NAUTICAL CREW','#E7F1EC','#0F6E56','\u0e1d\u0e48\u0e32\u0e22\u0e40\u0e14\u0e34\u0e19\u0e40\u0e23\u0e37\u0e2d')
     + row('CAPTAIN|\u0e01\u0e31\u0e1b\u0e15\u0e31\u0e19',function(B,i){ return who(J[i].cap,0); },0,function(B){ return wkWho(B,0); })
     + row('ASST. CAPTAIN|\u0e1c\u0e39\u0e49\u0e0a\u0e48\u0e27\u0e22',function(B,i){ return who(J[i].asst,0); },0,function(B){ return wkWho(B,1); })
@@ -60782,7 +60792,9 @@ function pjPrint(){
                (c<2)?function(B){ return wkWho(B,5+c); }:null); })(c); } return o; })()
     /* §pjHead1 · ช่องรวมงานซ่อมเคยเริ่มที่แถวแถบ GUIDES · เนื้อในสูงกว่าแถวที่คลุมรวมกัน
        เบราว์เซอร์เลยยัดส่วนเกินลงแถวแรก ทำให้แถบสีหนาเป็นบล็อก · เลื่อนไปเริ่มแถวไกด์แถวแรก */
-    + band('2','GUIDES &amp; STAFF','#ECEAF7','#453B95','\u0e1d\u0e48\u0e32\u0e22\u0e21\u0e31\u0e04\u0e04\u0e38\u0e40\u0e17\u0e28\u0e01\u0e4c\u0e41\u0e25\u0e30\u0e1a\u0e23\u0e34\u0e01\u0e32\u0e23')
+    /* §pjRest · ร้านอาหารย้ายขึ้นไปอยู่บนสุดแล้ว · หมวดนี้จึงเหลือแต่ไกด์
+       วันที่ยังไม่ได้จ่ายไกด์เลย แถบหมวดจะพาดอยู่โดยไม่มีแถวอยู่ข้างใต้ · ไม่ต้องพิมพ์ */
+    + (GDSUM ? band('2','GUIDES &amp; STAFF','#ECEAF7','#453B95','\u0e1d\u0e48\u0e32\u0e22\u0e21\u0e31\u0e04\u0e04\u0e38\u0e40\u0e17\u0e28\u0e01\u0e4c\u0e41\u0e25\u0e30\u0e1a\u0e23\u0e34\u0e01\u0e32\u0e23') : '')
     /* §pjRead · ของเดิม "ไกด์ 1..4" · ลำดับไม่ได้บอกอะไร ต้องอ่านชื่อแล้วเดาเองว่าใครพูดภาษาไหน
        เปลี่ยนเป็นช่องตามภาษา/บทบาทจริงแบบใบ Excel · ช่องที่ว่างทั้งใบไม่พิมพ์ */
     + (function(){ var o='', seq=0;
@@ -60797,15 +60809,6 @@ function pjPrint(){
           })(t,c,ri,seq++); }
         });
         return o; })()
-    /* §pjSheet4 · ร้านอาหารของลำนี้วันนี้ · ตั้งรายลำมาก่อนร้านประจำเส้นทางเสมอ */
-    + row('RESTAURANT|\u0e23\u0e49\u0e32\u0e19\u0e2d\u0e32\u0e2b\u0e32\u0e23',function(B,i){
-        var raw=''; try{ raw=mvTripRaw(_poDate,B.bid); }catch(_){}
-        if(raw==='-') return '<span class="rl">ไม่มีอาหารวันนี้</span>';
-        var V=null; try{ V=mvForTrip(_poDate,B.bid,B.rid); }catch(_){}
-        return V?e(V.name||''):'';
-      },0,
-      /* §gdIdle · ช่องรวมของลำที่มีไกด์เริ่มที่นี่ · คลุม ร้านอาหาร→หัวหมายเหตุ */
-      function(){ return ''; })
     + band('3','PASSENGER HEADCOUNT','#E5F0F0','#12554F','\u0e22\u0e2d\u0e14\u0e1c\u0e39\u0e49\u0e42\u0e14\u0e22\u0e2a\u0e32\u0e23')
 
     /* §pjSheet4 · แถบสีจริงของสายรัดข้อมือ · คนที่ท่าเทียบสีกับข้อมือแขก ไม่ได้อ่านชื่อสี
