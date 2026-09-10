@@ -356,7 +356,12 @@ const B2C_OWN_BK = new Set([
 //      prints — the one thing dispatch must not have to guess, and no schema change to carry it.
 //      7 transfer items on file, 2 of them resolving today; the rest predate product_id being
 //      persisted on the B2C side and arrive with a null route for ops to assign by hand.
-const B2C_MAP_VER = 27;
+// v28: §b2cVariant · variant_id is read, and routes.extid may be keyed 'TR-003:V2' to give a single
+//      B2C variant its own ops route — which is what a route already is here (r7–r10 are four
+//      variants of one Phi Phi trip). Needed because transfer_services.ops_route_id is per service
+//      and cannot say that the 6-hour and the 8-hour city tour are different programmes. The
+//      per-variant key is tried first; with no such route nothing changes.
+const B2C_MAP_VER = 28;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -710,8 +715,27 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
   //   5. §b2cTransfer · routes.extid — our own record of which B2C product a route was made for.
   //      Last of the id-based sources on purpose: B2C's catalog states current intent, this states
   //      origin, and a product re-pointed at another route must follow the catalog.
-  const extKey = isTransfer ? transferKey : String(routeLookupId || h.product_id || '').trim().toUpperCase();
-  const opsRouteId = (isTransfer ? (trfCat && trfCat.get(transferKey)) : null)
+  /* §b2cVariant · a B2C product with variants maps to ONE OPS ROUTE PER VARIANT — that is what a
+     route already is here (r7/r8/r9/r10 are four variants of the same Phi Phi trip, each with its
+     own departure and its own seat prices). TR-003 sells a 6-hour and an 8-hour city tour at
+     different rates, and ops needs to read which one it is off the voucher and the job sheet.
+
+     transfer_services.ops_route_id is per SERVICE and cannot carry two answers, so the per-variant
+     mapping lives on OUR side instead: routes.extid = 'TR-003:v2'. Nothing changes on the B2C
+     side. Falls back to the product-level key, so a service with no per-variant routes keeps
+     resolving exactly as before. */
+  const variantId = String(h.variant_id || det.variantId || '').trim();
+  const extKeyBase = isTransfer ? transferKey : String(routeLookupId || h.product_id || '').trim().toUpperCase();
+  const extKeyVar = (extKeyBase && variantId) ? (extKeyBase + ':' + variantId.toUpperCase()) : '';
+  const extKey = extKeyBase;
+  /* §b2cVariant · the per-variant route comes FIRST, ahead of every product-level source.
+     It is strictly the more specific answer: TR-003 resolves one route for the whole city-tour
+     service, TR-003:V2 resolves the 8-hour one. If somebody has gone to the trouble of creating a
+     route for a single variant, that is the intent, and letting the service-level mapping answer
+     first would mean it could never win. Absent a per-variant route this term is simply empty and
+     the order below is unchanged. */
+  const opsRouteId = (extCat && extKeyVar && extCat.get(extKeyVar))
+    || (isTransfer ? (trfCat && trfCat.get(transferKey)) : null)
     || (progCat && progCat.get(String(routeLookupId || '').trim().toUpperCase()))
     || String(det.opsRouteId || '').trim()
     || (extCat && extKey && extCat.get(extKey))
@@ -913,6 +937,7 @@ const B2C_ITEM_SOURCE = `(
          -- §b2cTransfer · qty is VEHICLES on a transfer line (subtotal = rate(vehicleType) × qty,
          -- never multiplied by pax). NULL on the rows written before the transfer save path
          -- persisted it — the mapper reads those as 1.
+         bi.variant_id::text            AS variant_id,
          to_jsonb(bi)->>'qty'          AS qty,
          to_jsonb(bi)->>'is_open_date' AS is_open_date,
          -- Read through to_jsonb so an older B2C schema without these columns degrades to NULL
@@ -935,6 +960,7 @@ const B2C_ITEM_SOURCE = `(
          CASE WHEN COALESCE(it.obj->>'paxThai','0')   ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (it.obj->>'paxThai')::numeric   ELSE 0 END AS pax_thai,
          CASE WHEN COALESCE(it.obj->>'paxForeign','0')~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (it.obj->>'paxForeign')::numeric ELSE 0 END AS pax_foreign,
          CASE WHEN COALESCE(it.obj->>'subtotal','0')  ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (it.obj->>'subtotal')::numeric  ELSE 0 END AS subtotal,
+         it.obj->>'variantId'  AS variant_id,
          it.obj->>'qty'        AS qty,
          it.obj->>'isOpenDate' AS is_open_date,
          COALESCE(it.obj->>'specialRequest', it.obj->>'special_request') AS special_request,
