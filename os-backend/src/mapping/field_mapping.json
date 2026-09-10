@@ -43,6 +43,18 @@
       "kind": "scalar",
       "db_type": "text"
     },
+    "dailycap": {
+      "source": "dailyCap",
+      "kind": "scalar",
+      "db_type": "bigint",
+      "note": "§otherPier · โควตาที่นั่งต่อวันของโปรแกรมบก (ไม่มีเรือให้นับ) · null = ไม่จำกัด · เส้นทางเรือไม่ใช้ค่านี้"
+    },
+    "familyid": {
+      "source": "familyId",
+      "kind": "scalar",
+      "db_type": "text",
+      "note": "§famField · กลุ่มโปรแกรมที่เส้นทางนี้สังกัด · เดิมเดาจากชื่อเส้นทางตอน render · null = ยังไม่เคยตั้ง (ถอยไปใช้การเดา) · empty string = ตั้งใจไม่ผูกกลุ่ม"
+    },
     "sort": {
       "source": "sort",
       "kind": "scalar",
