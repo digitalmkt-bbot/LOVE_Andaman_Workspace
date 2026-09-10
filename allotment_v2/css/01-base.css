@@ -2633,3 +2633,35 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
   #la-demo-banner{width:140px;height:140px}
   #la-demo-banner span{width:210px;right:-52px;top:34px;padding:8px 0;font-size:12px}
 }
+
+/* ══ §btOther · แถบโปรแกรมที่ไม่ใช้เรือ ท้ายหน้า By trip · date ══ */
+#view-booking .bto-wrap{margin:18px 0 8px;border:1px solid #E3D7F2;border-radius:12px;background:#fff;overflow:hidden}
+#view-booking .bto-hd{display:flex;align-items:center;gap:10px;padding:9px 13px;background:#F6F0FC;border-bottom:1px solid #E3D7F2;flex-wrap:wrap}
+#view-booking .bto-ttl{font-size:11px;font-weight:800;letter-spacing:.06em;color:#5B289A}
+#view-booking .bto-sub{font-size:10.5px;color:#6B5B7E;font-variant-numeric:tabular-nums}
+#view-booking .bto-sub b{font-family:'DM Mono',ui-monospace,monospace;color:#5B289A}
+#view-booking .bto-tg{margin-left:auto;border:1px solid #D7B5F0;background:#fff;color:#5B289A;border-radius:6px;padding:3px 10px;font:700 10px inherit;font-family:inherit;cursor:pointer}
+#view-booking .bto-tg:hover{background:#F3EAFB}
+#view-booking .bto-blk{border-top:1px solid #F0EAF7}
+#view-booking .bto-blk:first-of-type{border-top:0}
+#view-booking .bto-blkhd{display:flex;align-items:center;gap:8px;padding:7px 13px;background:#FCFAFE}
+#view-booking .bto-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+#view-booking .bto-rt{font-size:11.5px;font-weight:700;color:var(--ink)}
+#view-booking .bto-tm{font-family:'DM Mono',ui-monospace,monospace;font-size:10px;color:#8a8f98}
+#view-booking .bto-cap{margin-left:auto;font-family:'DM Mono',ui-monospace,monospace;font-size:10px;color:#5A5A52}
+#view-booking .bto-cap-nolim{color:#5B289A}
+#view-booking .bto-px{font-family:'DM Mono',ui-monospace,monospace;font-size:11px;font-weight:700;color:var(--ink);min-width:52px;text-align:right}
+#view-booking .bto-row{display:flex;align-items:center;gap:9px;padding:6px 13px;border-top:1px solid #F5F2F9;cursor:pointer;font-size:11px}
+#view-booking .bto-row:hover{background:#FAF7FD}
+#view-booking .bto-src{flex-shrink:0;min-width:74px;font-size:9px}
+#view-booking .bto-src b{background:#F3EAFB;color:#5B289A;padding:2px 6px;border-radius:3px;font-weight:800;letter-spacing:.04em}
+#view-booking .bto-src i{color:#8a8f98;font-style:normal}
+#view-booking .bto-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink);font-weight:600}
+#view-booking .bto-hotel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#8a8f98;font-size:10px}
+#view-booking .bto-time{font-family:'DM Mono',ui-monospace,monospace;font-size:10px;color:#5A5A52;min-width:44px;text-align:right}
+#view-booking .bto-pax{font-family:'DM Mono',ui-monospace,monospace;font-size:11px;font-weight:700;min-width:52px;text-align:right;color:var(--ink)}
+#view-booking .bto-hid{padding:5px 13px;font-size:10px;color:#8a8f98;font-style:italic;background:#FCFCFD;border-top:1px dashed #EFEAF5}
+@media (max-width:760px){
+  #view-booking .bto-hotel{display:none}
+  #view-booking .bto-src{min-width:58px}
+}
