@@ -42947,10 +42947,21 @@ function bkV2RenderTab2(){
         acc[bid]={boat:bo,pax:0}; order.push(bid); }
       acc[bid].pax += P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc');
     });
+    /* §ovnSpan · ลำที่ติดใบเหมาค้างเกาะ · วันระหว่างทางไม่มี trip ในใบเลย
+       จึงไม่เข้าทั้งทาง baBoatsForRoute (ตัดเรือเหมาออกโดยตั้งใจ) และทางบุคกิ้ง
+       ผลคือกระดานวันที่ 17-18 ว่างเปล่า ทั้งที่เรือติดงานอยู่ · เติมเข้ามาเอง
+       ไม่ใส่จำนวนคน เพราะวันนั้นไม่มีใครขึ้นเรือ · ป้าย "ค้างเกาะ" บอกแทน */
+    if(typeof bkOvnHoldMap==='function'){
+      try{ bkOvnHoldMap(date).forEach((h,bid)=>{
+        if(h.routeId!==rid || acc[bid]) return;
+        const bo=((typeof BOATS!=='undefined'?BOATS:[]).find(b=>b.id===bid))||{};
+        acc[bid]={boat:bo,pax:0,ovn:h}; order.push(bid);
+      }); }catch(_){}
+    }
     return order.map(bid=>{ const a=acc[bid], bo=a.boat||{};
       const cap=+(bo.capacity||bo.cap||bo.licensePax||0)||0;
       let c='#5b6472'; if(typeof getBoatColor==='function'){ const _c=getBoatColor(bid); if(_c&&_c.text) c=_c.text; }
-      return {id:bid,name:bo.name||bid,col:c,pax:a.pax,cap:cap,over:cap>0&&a.pax>cap};
+      return {id:bid,name:bo.name||bid,col:c,pax:a.pax,cap:cap,over:cap>0&&a.pax>cap,ovn:a.ovn||null};
     });
   };
 
@@ -43044,7 +43055,7 @@ function bkV2RenderTab2(){
         <span class="bt-av"><span class="k">Booked</span><span class="v">${bkd}</span></span><span class="bt-avs"></span>
         <span class="bt-av"><span class="k">Capacity</span><span class="v dim">${cp}</span></span><span class="bt-avs"></span>
         <span class="bt-av"><span class="k">Locked</span><span class="v lk">${lk}</span></span></div>
-      <div class="bt-blist">${bl.length?bl.map(b=>`<span class="bt-brow${b.over?' over':''}"><span class="d" style="background:${b.col}"></span><span class="nm">${esc(b.name)}</span><span class="ld">${b.pax}${b.cap?('/'+b.cap):''}${b.over?(' +'+(b.pax-b.cap)):''}</span></span>`).join(''):'<span class="bt-none2">No boat assigned to this trip</span>'}</div>
+      <div class="bt-blist">${bl.length?bl.map(b=>`<span class="bt-brow${b.over?' over':''}"><span class="d" style="background:${b.col}"></span><span class="nm">${esc(b.name)}</span><span class="ld${b.ovn?' ovn':''}">${b.ovn?('\u0e04\u0e49\u0e32\u0e07\u0e40\u0e01\u0e32\u0e30 \u00b7 \u0e01\u0e25\u0e31\u0e1a '+ovnDayTh(b.ovn.to)):(b.pax+(b.cap?('/'+b.cap):'')+(b.over?(' +'+(b.pax-b.cap)):''))}</span></span>`).join(''):'<span class="bt-none2">No boat assigned to this trip</span>'}</div>
       ${_btPrepHtml(_btSelRid)}</div>`;
   } else {
     const _tg = routeIds.filter(rid=>(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(rid,date)).map(rid=>{
@@ -43056,7 +43067,7 @@ function bkV2RenderTab2(){
       return `<div class="bt-tgp" style="--tc:${col}" onclick="bkV2Tab2SetRoute('${rid}')" title="Select this trip">
         <div class="bt-tgh"><i></i><span class="nm">${esc(rnm)}</span><span class="tm">${esc(_btDep(rid))}${_btPier(rid)?' · '+esc(_btPier(rid)):''}</span>
           <span class="sm">${bkd}/${cp}<em class="${av<=0?'full':(cp&&av/cp<0.2?'low':'ok')}">${av<=0?'full':(av+' free')}</em></span></div>
-        <div class="bt-tgb">${bl.length?bl.map(b=>`<span class="bt-tbc${b.over?' over':''}"><i style="background:${b.col}"></i>${esc(b.name)}<s>${b.pax}${b.cap?('/'+b.cap):''}${b.over?(' +'+(b.pax-b.cap)):''}</s></span>`).join(''):'<span class="bt-tbc none">no boat</span>'}</div>
+        <div class="bt-tgb">${bl.length?bl.map(b=>`<span class="bt-tbc${b.over?' over':''}"><i style="background:${b.col}"></i>${esc(b.name)}<s${b.ovn?' class="ovn"':''}>${b.ovn?('\u0e04\u0e49\u0e32\u0e07\u0e40\u0e01\u0e32\u0e30 \u00b7 \u0e01\u0e25\u0e31\u0e1a '+ovnDayTh(b.ovn.to)):(b.pax+(b.cap?('/'+b.cap):'')+(b.over?(' +'+(b.pax-b.cap)):''))}</s></span>`).join(''):'<span class="bt-tbc none">no boat</span>'}</div>
         ${_btPrepHtml(rid)}</div>`;
     }).join('');
     const _nB=routeIds.reduce((n,rid)=>n+_btBoats(rid).length,0);
@@ -44714,6 +44725,9 @@ function bkV2RenderTab2(){
     .bt-tbc i{width:7px;height:7px;border-radius:50%;flex:none}
     .bt-tbc s{text-decoration:none;font-family:'DM Mono',monospace;font-size:10.5px;font-weight:700;color:#8a857e}
     .bt-tbc.over s{color:#A32D2D}
+    /* §ovnSpan · ลำที่ติดใบเหมาค้างเกาะ · ม่วง เหมือนสถานะในใบงานเรือ */
+    .bt-brow .ld.ovn,.bt-tbc s.ovn{background:#F2EBFA;color:#5B3B96;font-weight:700;
+      border-radius:6px;padding:1px 7px;font-family:inherit;letter-spacing:0}
     .bt-tgfoot{padding:6px 12px 8px;border-top:1px solid #F2EEE9;font-size:10px;color:#948f88;text-align:center}
     /* §btTune · ไกด์ / อาหาร / เรือหางยาว · ของที่ต้องสั่งล่วงหน้า ควรเห็นตั้งแต่เปิดหน้า */
     .bt-prep{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:6px 10px 9px;
