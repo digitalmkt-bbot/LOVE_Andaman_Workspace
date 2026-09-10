@@ -6935,6 +6935,18 @@ function bkOvnHoldMapMemo(date){
   if(!(date in _bkOvnHoldMemo)) _bkOvnHoldMemo[date]=bkOvnHoldMap(date);
   return _bkOvnHoldMemo[date];
 }
+/* §ovnSpan · เลือกเรือ + ช่วงวัน = เรือถูกหยิบไปใช้ทั้งช่วง
+   trip เหมาลำที่ตั้ง "วันกลับ (OVN)" ไว้ กินเรือตั้งแต่วันออกถึงวันกลับ
+   คืนรายการวันทั้งหมดของช่วง · trip ธรรมดาคืนวันเดียวเหมือนเดิม
+   เพดาน 60 วัน · กันวันกลับที่พิมพ์ผิด (เช่น 2027) สร้างช่องเป็นพันช่อง */
+function bkOvnSpanDates(t){
+  if(!t || !t.date) return [];
+  var from=t.date, to=(t.bookingMode==='charter' && t.ovn==='return') ? (t.ovnReturnDate||'') : '';
+  if(!to || to<=from) return [from];
+  var out=[], d=new Date(from+'T12:00:00'), e=new Date(to+'T12:00:00'), n=0;
+  while(d<=e && n<60){ out.push(bkV2LocalYMD? bkV2LocalYMD(d) : d.toISOString().slice(0,10)); d.setDate(d.getDate()+1); n++; }
+  return out;
+}
 function bkOvnHoldOn(boatId,date){
   if(!boatId||!date) return null;
   return bkOvnHoldMapMemo(date).get(boatId)||null;
@@ -6987,6 +6999,45 @@ function baCharterBoatIds(date){ return new Set(baCharterBoatMapMemo(date).keys(
 // so the by-trip row and the van sheet keep sending a driver to a hotel the customer already left.
 // The rule is not a preference, it is a fact about the day: on the return leg there is no pickup.
 // Runs on load, writes only if something actually changed (so it doesn't dirty the sync for nothing).
+/* §ovnSpan · ซ่อมใบที่บันทึกไว้ก่อนมีตัวจองทั้งช่วง
+   ใบเหมาค้างเกาะเดิมจองเรือไว้แค่วันแรก · วันที่เหลือของช่วงอาจว่าง
+   หรือแย่กว่านั้น ถูกจ่ายงานรอบปกติทับไว้ (เคส Zeus 17-19 ก.ย.)
+   ทำงานซ้ำกี่รอบก็ได้ผลเดิม · ไม่แตะช่องที่เป็นของใบเหมาอื่น
+   คืนรายการที่แก้ ไว้ให้คนตรวจว่าไปทับอะไรเข้าบ้าง */
+function bkOvnHealSpans(){
+  if(typeof SB_BOOKINGS==='undefined' || !Array.isArray(SB_BOOKINGS)) return {fixed:[],blocked:[]};
+  if(typeof TRIPS==='undefined') return {fixed:[],blocked:[]};
+  var fixed=[], blocked=[];
+  SB_BOOKINGS.forEach(function(b){
+    if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
+    (b.trips||[]).forEach(function(t){
+      if(!t || t.bookingMode!=='charter' || !t.charterBoatId) return;
+      var days=bkOvnSpanDates(t);
+      if(days.length<2) return;                       /* ไม่ใช่ใบค้างเกาะ ไม่ต้องยุ่ง */
+      days.forEach(function(ds){
+        TRIPS[ds]=TRIPS[ds]||{};
+        var op=TRIPS[ds][t.charterBoatId];
+        if(op && op.charterBookingId===b.id) return;  /* ถูกต้องอยู่แล้ว */
+        if(op && op.charterBookingId){ blocked.push({date:ds,boat:t.charterBoatId,mine:b.id,theirs:op.charterBookingId}); return; }
+        var was=op?(op.route||'')+'/'+(op.type||''):'ว่าง';
+        if(!op) TRIPS[ds][t.charterBoatId]={route:t.routeId,type:'charter',booked:0};
+        TRIPS[ds][t.charterBoatId].type='charter';
+        TRIPS[ds][t.charterBoatId].charterBookingId=b.id;
+        TRIPS[ds][t.charterBoatId].route=t.routeId;
+        fixed.push({date:ds,boat:t.charterBoatId,bk:b.id,was:was});
+      });
+    });
+  });
+  if(fixed.length){ try{ baChMemoClear(); }catch(_){}
+    try{ var k=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2');
+         var o=JSON.parse(localStorage.getItem(k)||'{}'); o.trips=TRIPS;
+         localStorage.setItem(k,JSON.stringify(o)); }catch(_){}
+    try{ if(typeof save==='function') save('operations'); }catch(_){}
+    console.log('[ovnSpan] จองเรือย้อนหลังให้ครบช่วง '+fixed.length+' ช่อง', fixed);
+  }
+  if(blocked.length) console.warn('[ovnSpan] ช่องที่เป็นของใบเหมาอื่นอยู่แล้ว ไม่แตะ', blocked);
+  return {fixed:fixed, blocked:blocked};
+}
 function bkV2HealOvnLegs(){
   if(typeof SB_BOOKINGS==='undefined' || !Array.isArray(SB_BOOKINGS)) return 0;
   let fixed=0;
@@ -9176,6 +9227,7 @@ function renderVanJobs(){
   const eAttr=s=>e(s).replace(/"/g,'&quot;');
   const date=_vanJobsDate;
   if(typeof bkV2HealOvnLegs==='function') bkV2HealOvnLegs();           // §OVN · strip the inherited pickup off any return leg
+  if(typeof bkOvnHealSpans==='function') bkOvnHealSpans();             // §ovnSpan · จองเรือให้ครบช่วงของใบค้างเกาะที่บันทึกไว้ก่อนหน้า
   if(typeof bkV2HealAltSplits==='function') bkV2HealAltSplits(date);   // §altPickups · ensure auto van-splits exist for bookings with รับหลายจุด
   if(typeof bkV2VanGroupHeal==='function') bkV2VanGroupHeal(date);   // reconcile any grouped booking missing its group's van (prevents ตกบุคกิ้ง)
   // group by van · then collect zones/programs for context
@@ -48481,11 +48533,15 @@ function bkV2CommitBooking(status){
   if(editing && typeof TRIPS !== 'undefined' && Array.isArray(editing.trips)){
     editing.trips.forEach(t => {
       if(t.bookingMode !== 'charter' || !t.charterBoatId) return;
-      const op = TRIPS[t.date]?.[t.charterBoatId];
-      if(op && op.charterBookingId === editing.id){
-        delete op.charterBookingId;
-        op.type = 'normal';
-      }
+      /* §ovnSpan · ต้องคืนทั้งช่วงเดิม ไม่ใช่แค่วันแรก · ไม่งั้นแก้วันกลับให้สั้นลง
+         แล้ววันที่หลุดออกจากช่วงยังถูกจองค้างไว้ตลอดไป */
+      bkOvnSpanDates(t).forEach(ds => {
+        const op = TRIPS[ds]?.[t.charterBoatId];
+        if(op && op.charterBookingId === editing.id){
+          delete op.charterBookingId;
+          op.type = 'normal';
+        }
+      });
     });
   }
 
@@ -48783,18 +48839,24 @@ function bkV2CommitBooking(status){
   });
 
   // ── Wire charter → TRIPS · lock boats for chartered trips ──
-  let tripsModified = false;
+  /* §ovnSpan · ของเดิมจองเรือให้ "วันของ trip" วันเดียว · ใบค้างเกาะ 16→19
+     จึงจองแค่วันที่ 16 · วันที่ 17-18 เรือว่างให้จ่ายงานอื่นทับได้ทั้งที่อยู่ที่เกาะ
+     เลือกเรือ + ช่วงวัน = เรือถูกหยิบไปใช้ทั้งช่วง · จองให้ครบทุกวัน
+     วันไหนมีใบเหมาอื่นจองไว้แล้ว ไม่แย่ง · นับไว้เตือนตอนบันทึก */
+  let tripsModified = false, spanBlocked = [];
   if(typeof TRIPS !== 'undefined' && status !== 'quote'){
     newBk.trips.forEach(t => {
       if(t.bookingMode !== 'charter' || !t.charterBoatId) return;
-      if(!TRIPS[t.date]) TRIPS[t.date] = {};
-      if(!TRIPS[t.date][t.charterBoatId]){
-        TRIPS[t.date][t.charterBoatId] = { route: t.routeId, type: 'charter', booked: 0 };
-      }
-      TRIPS[t.date][t.charterBoatId].type = 'charter';
-      TRIPS[t.date][t.charterBoatId].charterBookingId = newBk.id;
-      TRIPS[t.date][t.charterBoatId].route = t.routeId;
-      tripsModified = true;
+      bkOvnSpanDates(t).forEach(ds => {
+        if(!TRIPS[ds]) TRIPS[ds] = {};
+        const cur = TRIPS[ds][t.charterBoatId];
+        if(cur && cur.charterBookingId && cur.charterBookingId !== newBk.id){ spanBlocked.push(ds); return; }
+        if(!cur) TRIPS[ds][t.charterBoatId] = { route: t.routeId, type: 'charter', booked: 0 };
+        TRIPS[ds][t.charterBoatId].type = 'charter';
+        TRIPS[ds][t.charterBoatId].charterBookingId = newBk.id;
+        TRIPS[ds][t.charterBoatId].route = t.routeId;
+        tripsModified = true;
+      });
     });
   }
 
@@ -58823,6 +58885,8 @@ var PJ_ST={
   idle :{t:'ว่าง · เรือพร้อม',          bg:'#EEF2F7', fg:'#4A5D7A', bd:'#D6DFEA', ord:3, grp:'ready'},
   broke:{t:'เสีย · ซ่อมแก้ไข',          bg:'#FCEFEE', fg:'#A0342A', bd:'#F0CFCB', ord:4, grp:'work',  work:1, band:'#A0342A'},
   maint:{t:'ซ่อมบำรุงตามแผน',           bg:'#FBF0DD', fg:'#8A5A00', bd:'#EFDCB4', ord:5, grp:'work',  work:1, band:'#8A5A00'},
+  /* §ovnSpan · เรือถูกเหมาไปค้างเกาะ ยังไม่กลับ · ไม่ใช่เรือเสีย แต่ท่านี้ใช้ไม่ได้ */
+  ovn  :{t:'\u0e40\u0e2b\u0e21\u0e32\u0e25\u0e33\u0e04\u0e49\u0e32\u0e07\u0e40\u0e01\u0e32\u0e30',        bg:'#F2EBFA', fg:'#5B3B96', bd:'#DDCFF0', ord:2.5, grp:'go',   band:'#5B3B96'},
   dd   :{t:'ขึ้นคาน',                  bg:'#F2EBFA', fg:'#5B3B96', bd:'#E2D6F3', ord:6, grp:'work',  work:1, band:'#5B3B96'},
   donor:{t:'จอด · ให้เครื่องลำอื่น',     bg:'#EEEFF1', fg:'#5A6270', bd:'#DDE0E5', ord:7, grp:'down'},
   off  :{t:'ไม่พร้อมใช้งาน',            bg:'#EEEFF1', fg:'#5A6270', bd:'#DDE0E5', ord:8, grp:'down'}
@@ -58856,6 +58920,9 @@ function pjBoatSt(date, boat, op){
   var _noCh=false;
   if(!st && String((boat&&boat.ownership)||'')==='charter'){ s='unavailable'; _noCh=true; }
   var mj=pjOpenJobs(boat&&boat.id);
+  /* §ovnSpan · ลำนี้ติดใบเหมาค้างเกาะอยู่ในวันนี้หรือเปล่า · และวันนี้เป็นวันออกไหม */
+  var _ovnH=null; try{ _ovnH=(typeof bkOvnHoldOn==='function')?bkOvnHoldOn(boat&&boat.id,date):null; }catch(_){}
+  var _ovnAny=!!_ovnH, _ovnMid=!!(_ovnH && _ovnH.from!==date);
   var rsn=String((st&&st.reason)||'').toLowerCase();
   // เหตุผลอาจอยู่ที่ log หรือที่ MJ ที่สั่งให้เรือหยุด · ดูทั้งสองที่
   if(!rsn) mj.forEach(function(m){ if(!rsn && m.boatStatusReason) rsn=String(m.boatStatusReason).toLowerCase(); });
@@ -58869,7 +58936,11 @@ function pjBoatSt(date, boat, op){
     else k = (s==='fixing') ? 'broke' : 'off';
   }
   else if(s && s!=='available') k='off';   // สถานะอื่นที่ไม่รู้จัก · ถือว่าใช้ไม่ได้ ปลอดภัยกว่าเดา
+  /* §ovnSpan · วันที่อยู่ระหว่างกลางของใบเหมาค้างเกาะ · เรือไม่ได้ออกจากท่าวันนี้
+     มันอยู่ที่เกาะมาตั้งแต่วันก่อน · ป้าย "ออกทริปวันนี้" ทำให้คนหน้าท่ารอเรือที่ไม่มา */
+  else if(_ovnMid) k='ovn';
   else if(op) k='run';
+  else if(_ovnAny) k='ovn';
   else k='idle';
   /* มีโปรแกรมบนกระดาน แต่ลำนี้ไม่ได้อยู่ในสถานะที่ออกได้ = แผนค้าง ยังไม่มีใครเอาออก */
   var stale=!!(op && k!=='run');
