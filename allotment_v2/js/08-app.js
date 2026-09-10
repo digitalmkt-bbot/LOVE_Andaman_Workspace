@@ -39148,10 +39148,12 @@ const _BKV2_FAMILIES = [
   { id:'whaleshark', name:'Whale Shark Phi Phi Maiton', color:'#BA7517' },
   { id:'selava',     name:'Day Trip - Se La Va',        color:'#BA7517' },
   { id:'nyaung',     name:'Day Trip - Nyaung Oo Phee Island', color:'#0F6E56' },
-  /* §otherPier · ทุกโปรแกรมที่ไม่ใช้เรือ (City Tour / Dedicated Transfer / …) อยู่กลุ่มเดียวกัน
-     id ไม่ใช้ 'other' เพราะคำนั้นถูกใช้เป็นค่าแทน "ไม่มีกลุ่ม" ในรายงาน FOC อยู่ก่อนแล้ว
-     (มีสีของตัวเอง + ต่อท้าย FAM_ORDER) · ชนกันแล้วเส้นที่ไม่มีกลุ่มจะปนกับกลุ่มนี้เงียบ — ชื่อที่แสดงยังเป็น Other */
-  { id:'nonmarine',  name:'Other',                      color:'#5B289A' }
+  /* §routeKind · โปรแกรมบก · แยกสองกลุ่มตามฝั่ง B2C: transfer_services กลุ่มหนึ่ง · City Tour อีกกลุ่ม
+     รถรับส่งกับทัวร์คนละเรื่อง · หมวดย่อยของรถรับส่ง (airport/pier/free) เป็นคนละ route ใต้ Transfer
+     ไม่แตกเป็น family ต่อหมวด เพราะ family ยัง hardcode — หมวดใหม่จะกลายเป็นต้อง deploy ทุกครั้ง
+     id ไม่ใช้ 'other' — คำนั้นเป็นค่าแทน "ไม่มีกลุ่ม" ในรายงาน FOC อยู่ก่อนแล้ว */
+  { id:'transfer',   name:'Transfer',                   color:'#5B289A' },
+  { id:'citytour',   name:'City Tour',                  color:'#7B4BB7' }
 ];
 // Map a route to its family · §famField (2026-09-10)
 //   route.familyId is the source of truth. The name-pattern guess below is the FALLBACK, kept only

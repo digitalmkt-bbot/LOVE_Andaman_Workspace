@@ -43,6 +43,12 @@
       "kind": "scalar",
       "db_type": "text"
     },
+    "kind": {
+      "source": "kind",
+      "kind": "scalar",
+      "db_type": "text",
+      "note": "§routeKind · ชนิดของโปรแกรม · marine = ทริปเรือ · land = ไม่ใช้เรือ (City Tour / Transfer) · null = ยังไม่เคยตั้ง ถอยไปดู pier='other' แบบเดิม"
+    },
     "dailycap": {
       "source": "dailyCap",
       "kind": "scalar",
@@ -65,6 +71,12 @@
       "kind": "scalar",
       "db_type": "text",
       "note": "รหัสสั้นที่ผู้ใช้ตั้งเอง · ใช้แสดงในช่องวันของตารางการทำงาน · ไม่ตั้งก็เดาจากชื่อเส้นทาง"
+    },
+    "extid": {
+      "source": "extId",
+      "kind": "scalar",
+      "db_type": "text",
+      "note": "§b2cCatalog · id ของสินค้า/ตัวย่อยฝั่ง B2C ที่เส้นทางนี้ถูกสร้างขึ้นมาให้ (POW-008) · null = สร้างเองในหน้า Config ไม่ได้มาจาก B2C · เป็นกุญแจกันสร้างซ้ำของ POST /api/b2c/routes"
     }
   },
   "routes__times": {

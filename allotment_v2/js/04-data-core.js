@@ -37,25 +37,33 @@ const DEFAULT_ROUTES = [
     seasons:[{id:'ss24',type:'open',from:'2025-10-15',to:'2026-05-15'},{id:'ss25',type:'closed',from:'2026-05-16',to:'2026-10-14'},{id:'ss26',type:'open',from:'2026-10-15',to:'2027-05-15'}]},
 ];
 
-/* ══ §otherPier · TEMPORARY ═══════════════════════════════════════════════════════
-   โปรแกรมที่ไม่ใช้เรือ (City Tour, Dedicated Transfer และที่จะมาอีก) ถูกยัดเข้ามาเป็น "ท่า" ชื่อ other
-   เพราะ route ยังไม่มีช่องบอกชนิดของตัวเอง · นี่คือทางลัดชั่วคราว ไม่ใช่ดีไซน์ที่ตั้งใจ
+/* ══ §routeKind · ชนิดของโปรแกรม ═══════════════════════════════════════════════════
+   route.kind = 'marine' (ทริปเรือ) | 'land' (City Tour, Transfer, และที่จะตามมา)
+   โปรแกรมบกไม่ต้องมีท่า · ช่อง pier จึงว่างได้ และเหลือไว้ใช้ตามความหมายจริง
+   เช่น Private Transfer to Pier ที่วันหนึ่งจะอยากบอกว่าไปส่งท่าไหน
 
-   ทางที่ถูกคือเพิ่ม route.kind = 'marine' | 'land' แล้วให้ pier ว่างได้
-   เมื่อถึงตอนนั้น: แก้แค่ laIsLandRoute() ให้อ่าน kind แทน แล้วลบ LAND_PIER ทิ้ง
-   ทุกจุดที่เหลือเรียกผ่านฟังก์ชันนี้อยู่แล้ว จึงไม่ต้องตามแก้ทีละที่ · grep §otherPier
+   เดิมใช้ pier='other' เป็นตัวบอกชนิด (§otherPier) ซึ่งเป็นทางลัด · migration 027
+   แปลงให้แล้ว แต่ laIsLandRoute ยังถอยไปอ่าน pier ได้อยู่ เผื่อแถวที่ยังไม่ถูกแปลง
+   หรือ client เก่าที่ยังไม่ได้รีเฟรช · ลบ fallback ได้เมื่อ prod ไม่มี pier='other' เหลือแล้ว
 
-   จงใจไม่เพิ่มค่านี้เข้าหน้าจอฝั่งเรือ (Boat Operation, Boat Status, Pier Office,
-   Fleet, Engine) · ทัวร์ในเมืองไม่มีเรือ ไม่มีลูกเรือ ไม่มีของให้เบิกหน้าท่า
-   ถ้ามันไปโผล่เป็นแท็บว่าง ๆ ในหน้าพวกนั้น = บั๊ก ไม่ใช่ฟีเจอร์ */
-const LAND_PIER = 'other';
+   จงใจไม่ให้โปรแกรมบกเข้าหน้าจอฝั่งเรือ (Boat Operation, Boat Status, Pier Office,
+   Fleet, Engine) · ทัวร์บกไม่มีเรือ ไม่มีลูกเรือ ไม่มีของเบิกหน้าท่า
+   ถ้าไปโผล่เป็นแท็บว่าง = บั๊ก ไม่ใช่ฟีเจอร์ · ทุกจุดถามผ่าน laIsLandRoute() จุดเดียว */
+const KIND_LAND = 'land', KIND_MARINE = 'marine';
+const LAND_PIER = 'other';                      /* §otherPier · ค่าเดิม · เหลือไว้เพื่อ fallback */
 function laIsLandPier(p){ return p === LAND_PIER; }
-function laIsLandRoute(r){
-  const rt = (typeof r === 'string')
+function _laRouteOf(r){
+  return (typeof r === 'string')
     ? ((typeof ROUTES !== 'undefined' && Array.isArray(ROUTES)) ? ROUTES.find(x => x && x.id === r) : null)
     : r;
-  return !!(rt && laIsLandPier(rt.pier));
 }
+function laRouteKind(r){
+  const rt = _laRouteOf(r);
+  if(!rt) return KIND_MARINE;
+  if(rt.kind) return rt.kind === KIND_LAND ? KIND_LAND : KIND_MARINE;
+  return laIsLandPier(rt.pier) ? KIND_LAND : KIND_MARINE;   /* แถวเก่าที่ยังไม่มี kind */
+}
+function laIsLandRoute(r){ return laRouteKind(r) === KIND_LAND; }
 /* เส้นทางฝั่งเรือเท่านั้น · ใช้กรองหน้าจอที่พูดเรื่องเรือล้วน ๆ */
 function laMarineRoutes(list){
   const src = list || ((typeof ROUTES !== 'undefined' && Array.isArray(ROUTES)) ? ROUTES : []);
@@ -7903,7 +7911,8 @@ function renderSettings(){
      ค่าแปลกที่ไม่รู้จักก็ยังโผล่ แก้ได้ ดีกว่าหายไปโดยไม่บอก */
   const PIER_ORDER=['tublamu','panwa','ranong',LAND_PIER];
   const groups={}; PIER_ORDER.forEach(p=>{ groups[p]=[]; });
-  ROUTES.forEach(r=>{ const _p=r.pier||LAND_PIER; (groups[_p]=groups[_p]||[]).push(r); });
+  /* §routeKind · โปรแกรมบกเข้าถัง land ตาม kind ไม่ใช่ตาม pier · pier ของมันว่างแล้ว */
+  ROUTES.forEach(r=>{ const _p = laIsLandRoute(r) ? LAND_PIER : (r.pier||LAND_PIER); (groups[_p]=groups[_p]||[]).push(r); });
   const tlCount=(groups.tublamu||[]).length;
   const vpCount=(groups.panwa||[]).length;
 
@@ -8601,28 +8610,33 @@ function openRouteModal(id){
   document.getElementById('fm-route-islands').value=r?r.islands:'';
   timeRows=r?[...r.times]:['08:00'];
   _famFillRouteSelect(r);   // §famField · ต้องมาก่อน pickLoc · ตั้งค่าให้ select ที่ยังไม่มี option ไม่มีผล
-  pickLoc(r?r.pier:'tublamu');
+  pickLoc(r ? (laIsLandRoute(r) ? KIND_LAND : (r.pier||'tublamu')) : 'tublamu');   /* §routeKind */
   var _capEl=document.getElementById('fm-route-cap');   // §otherPier
   if(_capEl) _capEl.value=(r && r.dailyCap!=null && r.dailyCap!=='') ? r.dailyCap : '';
   renderTimeRows();
   openModal('route-modal');
   setTimeout(()=>document.getElementById('fm-route-name').focus(),50);
 }
+/* §routeKind · สี่ปุ่มเดิม แต่ปุ่มที่ 4 ไม่ใช่ท่า — มันตั้ง kind='land' แล้วปล่อย pier ว่าง
+   selLoc เก็บท่าจริง · selKind เก็บชนิด · โปรแกรมบกจึงมี pier='' ไม่ใช่ 'other' อีกต่อไป */
+var selKind = 'marine';
 function pickLoc(v){
-  selLoc=v;
-  document.getElementById('loc-tublamu').className='loc-opt'+(v==='tublamu'?' sel-tl':'');
-  document.getElementById('loc-panwa').className='loc-opt'+(v==='panwa'?' sel-pn':'');
-  document.getElementById('loc-ranong').className='loc-opt'+(v==='ranong'?' sel-rn':'');
-  var _ct=document.getElementById('loc-other');   // §otherPier
-  if(_ct) _ct.className='loc-opt'+(v===LAND_PIER?' sel-ot':'');
+  var isLand = (v === KIND_LAND || v === LAND_PIER);   /* รับ 'other' เดิมได้ด้วย · onclick เก่าใน HTML ที่ cache ไว้ */
+  selKind = isLand ? KIND_LAND : KIND_MARINE;
+  selLoc  = isLand ? '' : v;
+  document.getElementById('loc-tublamu').className='loc-opt'+(selLoc==='tublamu'?' sel-tl':'');
+  document.getElementById('loc-panwa').className='loc-opt'+(selLoc==='panwa'?' sel-pn':'');
+  document.getElementById('loc-ranong').className='loc-opt'+(selLoc==='ranong'?' sel-rn':'');
+  var _ct=document.getElementById('loc-other');
+  if(_ct) _ct.className='loc-opt'+(isLand?' sel-ot':'');
   var _cr=document.getElementById('fm-route-cap-row');
-  if(_cr) _cr.style.display=(v===LAND_PIER)?'':'none';   // โควตาใช้กับโปรแกรมบกเท่านั้น
-  /* §famDefault · เลือกท่า Other แล้วยังไม่ได้เลือกกลุ่ม → ตั้งให้เป็นกลุ่ม Other ให้
-     ค่าตั้งต้นเดิมคือ "ไม่มีกลุ่ม" ซึ่งแปลว่าเส้นทางจะไม่โผล่ในปฏิทินเลย
-     เส้นทาง City tour เส้นแรกโดนบั้นมาแล้ว · ไม่ทับค่าที่เลือกไว้แล้ว */
+  if(_cr) _cr.style.display=isLand?'':'none';   /* โควตาใช้กับโปรแกรมบกเท่านั้น */
+  /* §famDefault · เลือกโปรแกรมบกแล้วยังไม่ได้เลือกกลุ่ม → ตั้ง Transfer ให้
+     ค่าตั้งต้นเดิมคือ "ไม่มีกลุ่ม" ซึ่งแปลว่าเส้นทางจะไม่โผล่ในปฏิทิน · เคยเกิดมาแล้ว
+     ไม่ทับค่าที่เลือกไว้แล้ว · City Tour ต้องเลือกเอง เพราะเดาแทนไม่ได้ว่าจะเอาอันไหน */
   var _fs=document.getElementById('fm-route-family');
-  if(_fs && v===LAND_PIER && !_fs.value){
-    var _lf=(typeof _BKV2_FAMILIES!=='undefined')?_BKV2_FAMILIES.filter(function(f){return f.id==='nonmarine';})[0]:null;
+  if(_fs && isLand && !_fs.value){
+    var _lf=(typeof _BKV2_FAMILIES!=='undefined')?_BKV2_FAMILIES.filter(function(f){return f.id==='transfer';})[0]:null;
     if(_lf) _fs.value=_lf.id;
   }
 }
@@ -8642,12 +8656,12 @@ function saveRoute(){
   const famId=(document.getElementById('fm-route-family')||{}).value||'';   // §famField · '' = ตั้งใจไม่ผูกกลุ่ม
   /* §otherPier · โควตาเก็บเฉพาะโปรแกรมบก · ว่าง/ศูนย์ = null (ไม่จำกัด) ไม่ใช่ 0 */
   const _capRaw=(document.getElementById('fm-route-cap')||{}).value;
-  const dailyCap=(selLoc===LAND_PIER && String(_capRaw==null?'':_capRaw).trim()!=='' && Number(_capRaw)>0) ? Math.round(Number(_capRaw)) : null;
+  const dailyCap=(selKind===KIND_LAND && String(_capRaw==null?'':_capRaw).trim()!=='' && Number(_capRaw)>0) ? Math.round(Number(_capRaw)) : null;
   if(editRouteId){
     const r=ROUTES.find(x=>x.id===editRouteId);
-    if(r){r.name=name;r.islands=islands;r.times=times;r.pier=selLoc;r.familyId=famId;r.dailyCap=dailyCap;}
+    if(r){r.name=name;r.islands=islands;r.times=times;r.pier=selLoc;r.kind=selKind;r.familyId=famId;r.dailyCap=dailyCap;}   /* §routeKind */
   } else {
-    ROUTES.push({id:'r'+Date.now(),name,islands,times,color:ROUTE_COLORS[ROUTES.length%ROUTE_COLORS.length],pier:selLoc,familyId:famId,dailyCap:dailyCap,seasons:[]});
+    ROUTES.push({id:'r'+Date.now(),name,islands,times,color:ROUTE_COLORS[ROUTES.length%ROUTE_COLORS.length],pier:selLoc,kind:selKind,familyId:famId,dailyCap:dailyCap,seasons:[]});
   }
   closeModal('route-modal');renderSettings();save('config');
 }
