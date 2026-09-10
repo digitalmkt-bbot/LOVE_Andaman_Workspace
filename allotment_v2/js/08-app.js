@@ -11949,6 +11949,9 @@ function ckRoutePills(date, famSel, routeSel, famFn, routeFn, kind){
   (SB_BOOKINGS||[]).forEach(function(b){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     (b.trips||[]).forEach(function(t){ if((t.date||'')!==date) return;
+      /* §landCk · ชิปโปรแกรมกับยอดหัวหน้าต้องตรงกับหน้าที่เปิดอยู่ · เฉพาะหน้าเช็คอินท่า/City tour
+         หน้าเช็คอินรถ (kind='van') ไม่แตะ — รถรับส่งมีทั้งสองฝั่ง ทั้งหน้านั้นจึงต้องเห็นครบ */
+      if(kind==='pier' && typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId) !== _pckLand) return;
       var p=t.pax||{};
       // §check-in · ทุกตัวเลขบนการ์ด = "เดินทางจริง" · หักคนที่ No-show / CXL ออกรายประเภท
       var L=(typeof ckLostByType==='function')?ckLostByType(b,date):null;
@@ -15502,6 +15505,9 @@ function pckProgData(date){
     if(['cancelled','rejected','cancelled_weather'].indexOf(b.status)>=0) return;
     (b.trips||[]).forEach(function(t){
       if((t.date||'')!==date) return;
+      /* §landCk · การ์ด "โปรแกรมวันนี้" ต้องตรงกับหน้าที่เปิดอยู่ · ไม่งั้นหน้าเช็คอิน City tour
+         ขึ้นรายการทริปเรือที่กดดูไม่ได้ · ตัวนี้เป็นแหล่งเดียวของการ์ด จำนวนโปรแกรม ชิปท่า และปุ่มล้าง */
+      if(typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId) !== _pckLand) return;
       var f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(t.routeId):null;
       if(!f) return;
       var p=t.pax||{};
