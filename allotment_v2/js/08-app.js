@@ -7014,6 +7014,15 @@ function bkOvnHealSpans(){
       if(!t || t.bookingMode!=='charter' || !t.charterBoatId) return;
       var days=bkOvnSpanDates(t);
       if(days.length<2) return;                       /* ไม่ใช่ใบค้างเกาะ ไม่ต้องยุ่ง */
+      /* §ovnRet · ใบเก่า · ขากลับยังเป็น seat อยู่ · ทำให้ใบเหมาแตกเป็นสองสถานะ
+         ขาไปอยู่กลุ่มเหมา ขากลับไปโผล่ในกลุ่มที่นั่งของเรือรอบปกติ · ปรับให้ตรงกัน */
+      (b.trips||[]).forEach(function(L){
+        if(!L || !L.ovnLeg) return;
+        if((L.date||'')!==t.ovnReturnDate || (L.routeId||'')!==(t.routeId||'')) return;
+        if(L.bookingMode==='charter' && L.charterBoatId) return;
+        L.bookingMode='charter'; L.charterBoatId=t.charterBoatId;
+        fixed.push({date:L.date,boat:t.charterBoatId,bk:b.id,was:'ขากลับ seat → เหมาลำ'});
+      });
       days.forEach(function(ds){
         TRIPS[ds]=TRIPS[ds]||{};
         var op=TRIPS[ds][t.charterBoatId];
@@ -42671,6 +42680,24 @@ function bkV2RenderTab2(){
   const rows = [];
   SB_BOOKINGS.forEach(bk=>{
     if(bk.schemaVer===2){
+      /* §ovnRow · วันระหว่างทางของใบเหมาค้างเกาะ · ใบไม่มี trip ในวันนั้น
+         แต่เรือกับใบยังผูกกันอยู่ · ตารางเลยว่างเปล่าทั้งที่เรือติดงาน
+         ทำแถวจำลองจาก trip ขาไป ให้ใบคาอยู่บนตารางทุกวันจนกว่าเรือจะกลับ
+         pax เป็นศูนย์ตั้งใจ · วันนั้นไม่มีใครขึ้นเรือ ถ้าใส่ 12 ยอดคนของวันจะเกินจริง
+         จำนวนคนที่อยู่บนเกาะไปอยู่บนป้ายของแถวแทน */
+      (bk.trips||[]).forEach(t=>{
+        if(!t || t.bookingMode!=='charter' || t.ovn!=='return') return;
+        if(t.date===date || !t.ovnReturnDate || t.ovnReturnDate<=t.date) return;
+        if(date<=t.date || date>=t.ovnReturnDate) return;
+        if((bk.trips||[]).some(x=>x && x.date===date)) return;   /* วันนั้นมี trip จริงอยู่แล้ว */
+        var _all=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
+        var _d1=Math.round((new Date(date+'T12:00:00')-new Date(t.date+'T12:00:00'))/864e5)+1;
+        var _dn=Math.round((new Date(t.ovnReturnDate+'T12:00:00')-new Date(t.date+'T12:00:00'))/864e5)+1;
+        rows.push({bk, t, routeId:t.routeId, zone:'__CHARTER__', pax:{}, charter:true,
+          charterBoatId:t.charterBoatId||null, pickupTime:'', subtotal:0,
+          cxl:['cancelled','rejected','cancelled_weather'].includes(bk.status),
+          ovnHoldRow:{from:t.date, to:t.ovnReturnDate, day:_d1, days:_dn, pax:_all}});
+      });
       (bk.trips||[]).forEach(t=>{ if(t.date===date) rows.push({bk, t, routeId:t.routeId, zone:(typeof bkV2EffZone==='function'?bkV2EffZone(bk,t):(t.zone||bk.pickupZone))||'NoTransfer', pax:t.pax||{}, charter:t.bookingMode==='charter', charterBoatId:t.charterBoatId||null, pickupTime:t.pickupTime||'', subtotal:((bk.trips||[]).length<=1 ? (typeof bk.total==='number'?bk.total:(t.subtotal||0)) : (t.subtotal||bk.total||0)), cxl:['cancelled','rejected','cancelled_weather'].includes(bk.status)}); });
     } else if(bk.travelDate===date){
       rows.push({bk, t:null, routeId:bk.programId, zone:bk.transfer||'NoTransfer', pax:{ad:bk.pax?.adult||0, chd:bk.pax?.child||0, inf:bk.pax?.infant||0, foc:0}, charter:false, charterBoatId:null, pickupTime:'', subtotal:bk.total||0, cxl:['cancelled','rejected','cancelled_weather'].includes(bk.status)});
@@ -42953,7 +42980,10 @@ function bkV2RenderTab2(){
        ไม่ใส่จำนวนคน เพราะวันนั้นไม่มีใครขึ้นเรือ · ป้าย "ค้างเกาะ" บอกแทน */
     if(typeof bkOvnHoldMap==='function'){
       try{ bkOvnHoldMap(date).forEach((h,bid)=>{
-        if(h.routeId!==rid || acc[bid]) return;
+        if(h.routeId!==rid) return;
+        /* §ovnRow · แถวจำลองของวันระหว่างทางใส่เรือเข้ามาแล้ว (pax 0)
+           ติดป้ายค้างเกาะทับให้ · วันที่มีคนเดินทางจริง (ขาไป/ขากลับ) ไม่แตะ */
+        if(acc[bid]){ if(!acc[bid].pax) acc[bid].ovn=h; return; }
         const bo=((typeof BOATS!=='undefined'?BOATS:[]).find(b=>b.id===bid))||{};
         acc[bid]={boat:bo,pax:0,ovn:h}; order.push(bid);
       }); }catch(_){}
@@ -43653,7 +43683,7 @@ function bkV2RenderTab2(){
                     return `<td class="t2-c t2-mono" title="จองมา ${bkd} · เดินทางจริง ${left}"><span style="color:${left?'#A32D2D':'#c8c6be'};font-weight:700">${left}</span><div style="font-size:9px;color:#c2c0b7;line-height:1.1;margin-top:1px;text-decoration:line-through">${bkd}</div></td>`; };
                   return _cell('ad')+_cell('chd')+_cell('inf')+_cell('foc');
                 })()}
-            <td class="t2-mono">${(_ovTrip&&_ovTrip.ovnLeg)?'<span style="color:#8a5500;font-weight:600">&#8617; ไม่มีขารับ</span>':vanMode?`<input type="text" value="${esc((typeof bkOpsRead==='function'?bkOpsRead(bk,date).pickupTimeFinal:(bk.ops&&bk.ops.pickupTimeFinal))||r.pickupTime||bk.pickupTime||'')}" placeholder="${esc(r.pickupTime||bk.pickupTime||'เวลา')}" onclick="event.stopPropagation()" oninput="bkV2SetPickupFinal('${esc(bk.id)}',this.value,'${esc(date)}')" title="เวลารับของโรงแรมนี้" style="border:1px solid var(--border);border-radius:6px;padding:2px 5px;font-size:10px;font-family:'DM Mono',monospace;width:98px;box-sizing:border-box">`:(function(){const orig=r.pickupTime||bk.pickupTime||''; const fin=(typeof bkOpsRead==='function'?bkOpsRead(bk,date).pickupTimeFinal:(bk.ops&&bk.ops.pickupTimeFinal))||''; if(fin && fin!==orig){ /* §เวลารับที่แก้แล้ว · เดิมต่อท้ายบรรทัดเดียวกัน "06.30 (07:30-07:45)" อ่านแวบเดียวแยกไม่ออกว่าอันไหนคือเวลาจริง → เวลาใหม่บรรทัดบน เวลาเดิมบรรทัดล่าง ตัวเล็กจางๆ */
+            <td class="t2-mono">${r.ovnHoldRow?`<span class="t2-ovnh">&#127765; \u0e04\u0e49\u0e32\u0e07\u0e40\u0e01\u0e32\u0e30 \u00b7 \u0e27\u0e31\u0e19\u0e17\u0e35\u0e48 ${r.ovnHoldRow.day}/${r.ovnHoldRow.days}</span><span class="t2-ovnh2">${r.ovnHoldRow.pax} \u0e04\u0e19\u0e2d\u0e22\u0e39\u0e48\u0e1a\u0e19\u0e40\u0e01\u0e32\u0e30</span>`:(_ovTrip&&_ovTrip.ovnLeg)?'<span style="color:#8a5500;font-weight:600">&#8617; ไม่มีขารับ</span>':vanMode?`<input type="text" value="${esc((typeof bkOpsRead==='function'?bkOpsRead(bk,date).pickupTimeFinal:(bk.ops&&bk.ops.pickupTimeFinal))||r.pickupTime||bk.pickupTime||'')}" placeholder="${esc(r.pickupTime||bk.pickupTime||'เวลา')}" onclick="event.stopPropagation()" oninput="bkV2SetPickupFinal('${esc(bk.id)}',this.value,'${esc(date)}')" title="เวลารับของโรงแรมนี้" style="border:1px solid var(--border);border-radius:6px;padding:2px 5px;font-size:10px;font-family:'DM Mono',monospace;width:98px;box-sizing:border-box">`:(function(){const orig=r.pickupTime||bk.pickupTime||''; const fin=(typeof bkOpsRead==='function'?bkOpsRead(bk,date).pickupTimeFinal:(bk.ops&&bk.ops.pickupTimeFinal))||''; if(fin && fin!==orig){ /* §เวลารับที่แก้แล้ว · เดิมต่อท้ายบรรทัดเดียวกัน "06.30 (07:30-07:45)" อ่านแวบเดียวแยกไม่ออกว่าอันไหนคือเวลาจริง → เวลาใหม่บรรทัดบน เวลาเดิมบรรทัดล่าง ตัวเล็กจางๆ */
                  return `<div style="font-weight:700;color:#0F6E56;line-height:1.25">${esc(fin)}</div>${orig?`<div style="font-size:9px;color:#b0b0a8;line-height:1.25;text-decoration:line-through" title="เวลารับเดิมก่อนแก้">${esc(orig)}</div>`:''}`; } return esc(orig||'—'); })()}${_vanChipHtml}</td>
             ${vanMode?`<td class="t2-c t2-gwrap" style="background:#F3FBF7">${(typeof bkV2VanCellHTML==='function')?bkV2VanCellHTML(bk, r.zone, date, groupColor, rid, a.key, a.g, a.split, a.first):''}</td>`:''}
             <td class="t2-pk">${(function(){ if(a.split && a.pick && !a.pick.main && (a.pick.hotel||a.pick.areaId)){ const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null; const _pl=a.pick.hotel||(_pa?_pa.name:'')||'—'; return `<span class="t2-pickcell" title="แยกรับ${a.pick.who?(' · '+esc(a.pick.who)):''} @ ${esc(_pl)}" style="color:#5B289A;font-weight:600">&#128652; ${esc(_pl)}</span>`; } if(_ovTrip && _ovTrip.ovnLeg) return '<span class="t2-pickcell" title="ขากลับ OVN · ลูกค้ากลับจากเกาะโดยเรือ · ไม่มีรถไปรับ" style="color:#8a5500;font-weight:600">&#8617; ไม่มีขารับ · มาจากเกาะ</span>';
@@ -44728,6 +44758,11 @@ function bkV2RenderTab2(){
     /* §ovnSpan · ลำที่ติดใบเหมาค้างเกาะ · ม่วง เหมือนสถานะในใบงานเรือ */
     .bt-brow .ld.ovn,.bt-tbc s.ovn{background:#F2EBFA;color:#5B3B96;font-weight:700;
       border-radius:6px;padding:1px 7px;font-family:inherit;letter-spacing:0}
+    /* §ovnRow · แถวใบเหมาที่คาอยู่ระหว่างทาง · ไม่มีใครขึ้นเรือวันนี้ */
+    .t2-ovnh{display:inline-block;background:#F2EBFA;color:#5B3B96;font-weight:800;font-size:11px;
+      border-radius:7px;padding:2px 8px;font-family:inherit;white-space:nowrap}
+    .t2-ovnh2{display:block;margin-top:3px;font-size:10px;color:#8b86a8;font-family:inherit;
+      font-weight:600;white-space:nowrap}
     .bt-tgfoot{padding:6px 12px 8px;border-top:1px solid #F2EEE9;font-size:10px;color:#948f88;text-align:center}
     /* §btTune · ไกด์ / อาหาร / เรือหางยาว · ของที่ต้องสั่งล่วงหน้า ควรเห็นตั้งแต่เปิดหน้า */
     .bt-prep{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:6px 10px 9px;
@@ -45697,12 +45732,13 @@ function bkV2CreateOvnReturnLeg(idx){
   // ทันที ช่องติ๊ก/กรุ๊ป/เลือกรถหายหมด · เก็บโซนจริงไว้ ใบงานจัดการเรื่องจุดรับเอง (bkIsOvnReturn)
   leg.zone = t.zone || '';         // โซนปลายทางที่ต้องไปส่ง (ไม่มีรถไปรับ (รถกลับ pier→โรงแรม จัดในแมนิเฟสต์)
   leg.pax = { ...t.pax };          // กันที่นั่งจำนวนเดียวกับขาไป
-  /* §ovnHold · ขากลับเป็น 'seat' เสมอ · "เหมาไป จอยกลับ" คือรูปแบบที่ใช้จริง
-     (เคส 16-19 · เหมาออกวันที่ 16 · จอยกลับวันที่ 19) แขกกลับกับเรือรอบปกติ
-     และกินที่นั่งของลำนั้นจริง จึงต้องนับเป็นที่นั่งตามเดิม
-     รอบก่อนผมเดาว่า "ขาไปเหมา = ขากลับเหมา" ซึ่งผิดกับรูปแบบที่ใช้อยู่
-     ถ้าต้องรองรับ "เหมากลับ" ด้วย ต้องทำเป็นตัวเลือกให้คนกรอกเลือก ไม่ใช่เดา */
-  leg.bookingMode = 'seat';
+  /* §ovnRet · ใบเหมาลำ · ขากลับคือเรือลำเดิมของใบนั้น ไม่ใช่การจอยเรือรอบปกติ
+     "เหมาลำ คนละเคสกับจอย" · ของเดิมตั้ง 'seat' ตายตัวไม่ดูขาไป ใบเหมาจึงแตกเป็น
+     สองสถานะในใบเดียว — ขาไปเป็นเหมา ขากลับไปโผล่ในกลุ่มที่นั่งของเรือรอบปกติ
+     ราคายังเป็น 0 เหมือนเดิม · ทุกจุดที่คิดเงินเช็ค ovnLeg ก่อน bookingMode */
+  const _ovIsCharter = (t.bookingMode === 'charter');
+  leg.bookingMode = _ovIsCharter ? 'charter' : 'seat';
+  if(_ovIsCharter) leg.charterBoatId = t.charterBoatId || null;
   leg.ovnLeg = true;               // ขากลับค้างคืน · ราคา 0
   leg.ovnOf = idx;
   d.trips.push(leg);
