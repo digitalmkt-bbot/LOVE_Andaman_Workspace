@@ -342,6 +342,11 @@ const B2C_OWN_BK = new Set([
 //      trip as a ฿0 sale. 8 orders re-price on this bump; the 3 all-tour ones keep their exact order
 //      total and only redistribute it per line. Every pricebreakdown_* column is in B2C_OWN_BK, so this
 //      corrective re-upsert reaches the rows already on file.
+// v27: §b2cTransfer · routes.extid joins the resolution chain, last of the id-based sources.
+//      TR-OTHER (quote-per-case) is a client-side constant in the B2C app on purpose and has no
+//      transfer_services row to carry an ops_route_id — adding one would render it twice in their
+//      admin list. Stamping extid on our route resolves it with no change on the B2C side.
+//      LOV-1592241 L4 (฿850, ป่าตอง → Blu Monkey Bangtao) resolves on this bump.
 // v26: §b2cTransfer · 'transfer' lines import. A transfer is a whole VEHICLE, not seats: subtotal is
 //      rate(vehicleType) × qty and the pax columns ride along informationally, so nothing multiplies
 //      by them. The shared version of a transfer is not this type at all — it is a day-trip add-on
@@ -351,7 +356,7 @@ const B2C_OWN_BK = new Set([
 //      prints — the one thing dispatch must not have to guess, and no schema change to carry it.
 //      7 transfer items on file, 2 of them resolving today; the rest predate product_id being
 //      persisted on the B2C side and arrive with a null route for ops to assign by hand.
-const B2C_MAP_VER = 26;
+const B2C_MAP_VER = 27;
 
 // ── B2C sync health (2026-07-31) ─────────────────────────────────────────────────────────────────
 // A failed sync used to be a single console line and nothing else: no alert, no flag in the app, no
@@ -560,7 +565,7 @@ function b2cMapAddOns(det, addOnTotal, programId, addonCat) {
 // isFirstLine: order-level payment (deposit/balance) attaches only to the first line of the order,
 // so a multi-item order's payment isn't multiplied across its item-bookings.
 // adjust: this line's {disc, extra} share of the order-level discount / surcharge — see b2cAllocAdjust.
-function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progCat, adjust, trfCat) {
+function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progCat, adjust, trfCat, extCat) {
   const h = item;
   // pg returns date columns as JS Date objects — String(d).slice(0,10) gives "Sat Jul 18",
   // not YYYY-MM-DD, which the frontend cannot parse. Format in local time explicitly.
@@ -702,9 +707,14 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
   const transferKey = isTransfer
     ? String(h.product_id || det.transferId || det.transferld || '').trim().toUpperCase()
     : '';
+  //   5. §b2cTransfer · routes.extid — our own record of which B2C product a route was made for.
+  //      Last of the id-based sources on purpose: B2C's catalog states current intent, this states
+  //      origin, and a product re-pointed at another route must follow the catalog.
+  const extKey = isTransfer ? transferKey : String(routeLookupId || h.product_id || '').trim().toUpperCase();
   const opsRouteId = (isTransfer ? (trfCat && trfCat.get(transferKey)) : null)
     || (progCat && progCat.get(String(routeLookupId || '').trim().toUpperCase()))
     || String(det.opsRouteId || '').trim()
+    || (extCat && extKey && extCat.get(extKey))
     || B2C_ROUTE_MAP[routeLookupId]
     || null;
   // §b2cTransfer · what dispatch actually needs off a transfer line. qty is VEHICLES — confirmed
@@ -1261,6 +1271,38 @@ async function b2cTransferRouteCatalog() {
   return map;
 }
 
+// §b2cTransfer · ops-side reverse map · routes.extid → routes.id, e.g. "TR-OTHER" → "r1789036422820".
+//
+// The two catalogs above ask B2C which ops route a product runs. This asks the opposite question of
+// our own table: which route was created FOR this B2C product. Migration 027 added the column and a
+// partial unique index over it, so the answer is single-valued by construction.
+//
+// It earns its place on products B2C cannot map from its side. TR-OTHER, the quote-per-case
+// transfer, is a client-side constant in the B2C app on purpose — "it must never be edited into
+// something else, and it has to be there for every user without anyone provisioning it" — so it has
+// no transfer_services row to carry an ops_route_id, and adding one would render it twice in their
+// admin list (the rows come from the catalog unfiltered, then the constant is appended). Stamping
+// extid on our route resolves it without asking B2C to provision anything.
+//
+// Deliberately LAST of the id-based sources: B2C's own catalog is its current statement of intent,
+// and this is our record of where a route came from. If a product is re-pointed at a different ops
+// route, the catalog must win or the remap would never take effect.
+async function opsRouteExtIdCatalog() {
+  const map = new Map();
+  if (!pool) return map;
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, ${qic('extid')} AS extid FROM ${fqt('routes')}
+        WHERE ${qic('extid')} IS NOT NULL AND ${qic('extid')} <> ''`);
+    for (const r of rows) map.set(String(r.extid || '').trim().toUpperCase(), String(r.id));
+  } catch (e) {
+    // 42703 undefined_column — migration 027 has not run on this database yet. The other sources
+    // still answer, so the sync degrades rather than stopping.
+    if (!(e && e.code === '42703')) console.warn('[b2c-sync] routes.extid catalog read failed:', e.message);
+  }
+  return map;
+}
+
 // Fallback for bookings the view did not supply — because it does not exist yet, or because the
 // read failed. bookings.passengers is already selected by the JOIN as bk_passengers, so the same
 // travellers can be had without any DDL; this mirrors the view's own normalisation (btrim, blanks
@@ -1378,13 +1420,15 @@ async function relSyncB2C(singleExtId = null) {
     // the change hash or the remap would sit unsynced until an unrelated edit moved a booking.
     const progCat = await b2cProgramRouteCatalog();
     const trfCat  = await b2cTransferRouteCatalog();   // §b2cTransfer
+    const extCat  = await opsRouteExtIdCatalog();      // §b2cTransfer · routes.extid → route id
 
     let srcHash = null;
     if (!singleExtId) {
       srcHash = crypto.createHash('sha1')
         .update('v' + B2C_MAP_VER + '|' + JSON.stringify(itemRows) + '|' + JSON.stringify([...paxByBooking])
                 + '|' + JSON.stringify([...addonCat]) + '|' + JSON.stringify([...progCat])
-                + '|' + JSON.stringify([...trfCat]))   // §b2cTransfer · remap must re-sync
+                + '|' + JSON.stringify([...trfCat])
+                + '|' + JSON.stringify([...extCat]))   // §b2cTransfer · remap must re-sync
         .digest('hex');
       try {
         const hr = await pool.query('SELECT data FROM app_state WHERE id=$1', ['b2c_sync_hash']);
@@ -1422,7 +1466,7 @@ async function relSyncB2C(singleExtId = null) {
       // §b2cTransfer · the mapper returns null for a line ops cannot act on (an open-date transfer).
       // Filtered here rather than before mapping so adj[i] keeps its index alignment with items.
       items.forEach((it, i) => {
-        const rec = mapB2CItemBooking(it, i === 0, findArea, paxByBooking.get(String(it.booking_id)), addonCat, progCat, adj[i], trfCat);
+        const rec = mapB2CItemBooking(it, i === 0, findArea, paxByBooking.get(String(it.booking_id)), addonCat, progCat, adj[i], trfCat, extCat);
         if (rec) b2cBks.push(rec);
       });
     }
