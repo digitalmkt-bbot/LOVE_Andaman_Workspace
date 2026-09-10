@@ -715,6 +715,7 @@ function nav(el){
     else if(view==='vanjobs') renderVanJobs();
     else if(view==='vancheckin') renderVanCheckin();
     else if(view==='piercheckin') renderPierCheckin();
+    else if(view==='landcheckin') renderLandCheckin();   /* §landCk */
     else if(view==='rep-ops') renderReport('ops');       /* §report */
     else if(view==='rep-fleet') renderReport('fleet');
     else if(view.indexOf('poa-')===0){ try{ if(el.dataset.pogrp) poNavGroupOpen(el.dataset.pogrp); }catch(_){} renderPierAtt(view.slice(4)); }
