@@ -7485,9 +7485,6 @@ function getSeatsConsumed(routeId, dateStr, excludeBkId){
       bk.trips.forEach(t => {
         if(t.routeId !== routeId || t.date !== dateStr) return;
         if(t.bookingMode === 'charter') return;  // charter consumes whole boat, not seats
-        /* §ovnHold · ขากลับของใบเหมาลำ · แขกกลับมากับเรือที่เหมาไป ไม่ได้นั่งเรือ seat
-           ของวันนั้น · ของเดิมนับเป็นที่นั่ง ทำให้เรือ seat ลำอื่นเสียที่ไปฟรี ๆ */
-        if(typeof bkOvnLegOnCharter === 'function' && bkOvnLegOnCharter(bk, t)) return;
         // §check-in · คนที่ No-show / CXL หน้างานไม่ได้ใช้ที่นั่งจริง → หักออกจากที่นั่งที่ถูกใช้
         let _seat = getTripPaxTotal(t);
         if(typeof ckLostByType === 'function'){ const _L = ckLostByType(bk, dateStr); if(_L && _L.total > 0) _seat = Math.max(0, _seat - _L.total); }
