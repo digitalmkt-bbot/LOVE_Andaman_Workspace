@@ -42548,9 +42548,17 @@ function _btOtherSection(date, rows, rids){
     </div>`;
   }).join('');
 
+  /* §btOtherTtl · หัวแถบบอกว่าข้างในมีอะไร ไม่ใช่คำว่า "อื่น ๆ" · อ่านจากกลุ่มจริงของเส้นที่มีใบ
+     มีแต่ทัวร์ = CITY TOUR · มีแต่รถรับส่ง = TRANSFER · มีทั้งคู่ = CITY TOUR / TRANSFER
+     กลุ่มใหม่ที่เพิ่มทีหลังจึงขึ้นเอง ไม่ต้องมาแก้ตรงนี้ */
+  const _famNames = [...new Set(ridsSorted.map(rid => {
+    const f = (typeof bkV2RouteFamily==='function') ? bkV2RouteFamily(rid) : null;
+    return (f && f.name) || '';
+  }).filter(Boolean))];
+  const ttl = _famNames.length ? esc(_famNames.join(' / ').toUpperCase()) : 'OTHER';
   return `<div class="bto-wrap">
     <div class="bto-hd">
-      <span class="bto-ttl">OTHER · ไม่ใช้เรือ</span>
+      <span class="bto-ttl">${ttl}</span>
       <span class="bto-sub">${ridsSorted.length} โปรแกรม · <b>${totB2C}</b> pax จากเว็บ${nOther?` · ${totOther} pax ทางอื่น`:''}</span>
       ${nOther ? `<button class="bto-tg" onclick="event.stopPropagation();bkV2OtherToggleAll()">${showAll?'แสดงเฉพาะ B2C':`แสดงทั้งหมด (+${nOther})`}</button>` : ''}
     </div>
