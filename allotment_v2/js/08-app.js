@@ -44734,14 +44734,18 @@ function bkV2RenderTab2(){
   const _btOther = _btOtherSection(date, rowsF, _otherRids);
   const mainBody = emptyMain
     ? `<div class="bkv2-empty"><div class="ttl">${(_btOther?'No boat trips':'No trips')}${(pierF!=='all'||routeF)?' match this filter':` on ${bkV2FmtDate(date)}`}</div><div class="sub">${(pierF!=='all'||routeF)?'Clear the filter or':'Pick another day in the calendar or use the arrows'}${(pierF!=='all'||routeF)?' pick another day':''}</div></div>`
-    : `<div class="t2-wrap">${trips}</div>`;
+    /* §btOther · อยู่ ข้างใน .t2-wrap ไม่ใช่ต่อท้าย · §btScroll ทำให้กล่องนี้เป็นตัวเลื่อนเดียวของหน้า
+       แล้วดึงส่วนที่เกินจอกลับด้วย margin-bottom ติดลบเท่ากับส่วนที่เกิน
+       ต่อท้ายกล่อง = เพิ่มความสูงหน้า → margin ติดลบโตขึ้นตาม → ดึงตัวเองขึ้นไปทับตาราง
+       (กรณีไม่มีทริปเลย ไม่มี .t2-wrap · โค้ด §btScroll ข้ามไป ต่อท้ายจึงปลอดภัย) */
+    : `<div class="t2-wrap">${trips}${_btOther}</div>`;
   void sidebar;
   /* §btHead · ตัวกรองท่า/โปรแกรมย้ายไปอยู่ในการ์ด "โปรแกรมวันนี้" แล้ว · แถบเดิมจึงไม่ถูกใช้ */
   void filterBar;
   /* §btGap · สีของหัวต้องคุมทั้งหน้า ไม่ใช่แค่แถบหัว · ตั้งตัวแปรที่กรอบนอกสุด
      แล้วทั้งหัวและพื้นหลังใต้ตารางใช้ค่าเดียวกัน เปลี่ยนโปรแกรมก็เปลี่ยนพร้อมกันทั้งหน้า */
   const _hdr = vanMode ? header.replace('<!--BTVANCARD-->', _btVanCard) : header;
-  return style + `<div class="t2-shell" style="--btband:${_btBand};--btbandb:${_btBandB}"><div class="t2-main">${_hdr}${mainBody}${_btOther}</div></div>`;
+  return style + `<div class="t2-shell" style="--btband:${_btBand};--btbandb:${_btBandB}"><div class="t2-main">${_hdr}${mainBody}${(emptyMain?_btOther:'')}</div></div>`;
 }
 
 // ── Tab 3 · All bookings (existing Linear list) ──
