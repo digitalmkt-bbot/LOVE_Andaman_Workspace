@@ -8582,8 +8582,8 @@ function openRouteModal(id){
   document.getElementById('fm-route-name').value=r?r.name:'';
   document.getElementById('fm-route-islands').value=r?r.islands:'';
   timeRows=r?[...r.times]:['08:00'];
+  _famFillRouteSelect(r);   // §famField · ต้องมาก่อน pickLoc · ตั้งค่าให้ select ที่ยังไม่มี option ไม่มีผล
   pickLoc(r?r.pier:'tublamu');
-  _famFillRouteSelect(r);   // §famField
   var _capEl=document.getElementById('fm-route-cap');   // §otherPier
   if(_capEl) _capEl.value=(r && r.dailyCap!=null && r.dailyCap!=='') ? r.dailyCap : '';
   renderTimeRows();
@@ -8599,6 +8599,14 @@ function pickLoc(v){
   if(_ct) _ct.className='loc-opt'+(v===LAND_PIER?' sel-ot':'');
   var _cr=document.getElementById('fm-route-cap-row');
   if(_cr) _cr.style.display=(v===LAND_PIER)?'':'none';   // โควตาใช้กับโปรแกรมบกเท่านั้น
+  /* §famDefault · เลือกท่า Other แล้วยังไม่ได้เลือกกลุ่ม → ตั้งให้เป็นกลุ่ม Other ให้
+     ค่าตั้งต้นเดิมคือ "ไม่มีกลุ่ม" ซึ่งแปลว่าเส้นทางจะไม่โผล่ในปฏิทินเลย
+     เส้นทาง City tour เส้นแรกโดนบั้นมาแล้ว · ไม่ทับค่าที่เลือกไว้แล้ว */
+  var _fs=document.getElementById('fm-route-family');
+  if(_fs && v===LAND_PIER && !_fs.value){
+    var _lf=(typeof _BKV2_FAMILIES!=='undefined')?_BKV2_FAMILIES.filter(function(f){return f.id==='nonmarine';})[0]:null;
+    if(_lf) _fs.value=_lf.id;
+  }
 }
 function renderTimeRows(){
   document.getElementById('fm-times-wrap').innerHTML=timeRows.map((t,i)=>`
