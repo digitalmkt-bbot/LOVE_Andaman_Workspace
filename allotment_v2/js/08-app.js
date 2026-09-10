@@ -60486,8 +60486,7 @@ function pjPrint(){
    +'.secbar span{font-size:'+(fs-1.5)+'px;font-weight:800;color:#111;letter-spacing:.15em;'
      +'text-transform:uppercase}'
    +'.secbar em{font-style:normal;font-size:'+(fs-3.5)+'px;font-weight:600;letter-spacing:0;color:#8994A6}'
-   +'.sg{display:flex;gap:16px;margin-top:11px}'
-   +'.sg div{flex:1;border-top:1px solid #94A3B8;padding-top:4px;text-align:center;font-size:9.5px;color:#64748B}';
+   ;
 
   /* §pjSect · สีพื้นจาง ๆ จากสีเส้นทาง · ผสมกับขาว 86% แล้วยังบอกได้ว่าเป็นเส้นทางไหน
      ตัวหนังสือใช้สีเดิมหมองลง จะได้ contrast พอบนพื้นจาง */
@@ -60855,7 +60854,6 @@ function pjPrint(){
     +'<div class="secbar"><span>Section B \u00b7 Crew assignment</span>'
       +'<em>\u0e01\u0e32\u0e23\u0e08\u0e31\u0e14\u0e01\u0e33\u0e25\u0e31\u0e07\u0e1e\u0e25\u0e1b\u0e23\u0e30\u0e08\u0e33\u0e40\u0e23\u0e37\u0e2d</em></div>'
     +'<table>'+cols+head+body+'</table>'
-    +'<div class="sg"><div>เจ้าหน้าที่จ่ายงาน</div><div>หัวหน้าท่าเรือ</div><div>ผู้รับใบงาน</div></div>'
     +'</div>';
 
   /* §pjShot · โค้ดฝั่งหน้าต่างที่เด้งขึ้นมา · ไม่แตะแอปหลัก */
