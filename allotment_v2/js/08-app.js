@@ -39100,7 +39100,10 @@ const _BKV2_FAMILIES = [
   { id:'whaleshark', name:'Whale Shark Phi Phi Maiton', color:'#BA7517' },
   { id:'selava',     name:'Day Trip - Se La Va',        color:'#BA7517' },
   { id:'nyaung',     name:'Day Trip - Nyaung Oo Phee Island', color:'#0F6E56' },
-  { id:'citytour',   name:'City tour',                  color:'#5B289A' }   // §cityTourPier · โปรแกรมบก · ไม่มีเรือ
+  /* §otherPier · ทุกโปรแกรมที่ไม่ใช้เรือ (City Tour / Dedicated Transfer / …) อยู่กลุ่มเดียวกัน
+     id ไม่ใช้ 'other' เพราะคำนั้นถูกใช้เป็นค่าแทน "ไม่มีกลุ่ม" ในรายงาน FOC อยู่ก่อนแล้ว
+     (มีสีของตัวเอง + ต่อท้าย FAM_ORDER) · ชนกันแล้วเส้นที่ไม่มีกลุ่มจะปนกับกลุ่มนี้เงียบ — ชื่อที่แสดงยังเป็น Other */
+  { id:'nonmarine',  name:'Other',                      color:'#5B289A' }
 ];
 // Map a route to its family · §famField (2026-09-10)
 //   route.familyId is the source of truth. The name-pattern guess below is the FALLBACK, kept only
@@ -40112,18 +40115,18 @@ function bkV2RenderTripsSection(){
         'full':          { bg:'#FDE7E7', border:'#F5B7B7', color:'#a32d2d', tag:'FULL'  },
         'all-chartered': { bg:'#F4E8FB', border:'#D7B5F0', color:'#6B289A', tag:'CHARTERED' },
         'no-allotment':  { bg:'#fafafa', border:'#d3d1c7', color:'#5A5A52', tag:'PROVISIONAL', dashed:true },
-        'no-limit':      { bg:'#F3EAFB', border:'#D7B5F0', color:'#5B289A', tag:'NO LIMIT', dashed:true }   // §cityTourPier
+        'no-limit':      { bg:'#F3EAFB', border:'#D7B5F0', color:'#5B289A', tag:'NO LIMIT', dashed:true }   // §otherPier
       };
-      /* §cityTourPier · โปรแกรมบกที่ยังไม่ตั้งโควตา ไม่ใช่ ยังไม่มีเรือ · มันขายได้ไม่จำกัด */
+      /* §otherPier · โปรแกรมบกที่ยังไม่ตั้งโควตา ไม่ใช่ ยังไม่มีเรือ · มันขายได้ไม่จำกัด */
       const _isLandNoCap = (typeof laIsLandRoute==='function') && laIsLandRoute(t.routeId) && !al.hasAllotment;
       const s = _isLandNoCap ? styles['no-limit'] : (styles[al.state] || styles['no-allotment']);
       let msg = '';
       if(al.state === 'open' || al.state === 'tight'){
-        msg = al.isLand   // §cityTourPier · ไม่มีเรือให้นับ
+        msg = al.isLand   // §otherPier · ไม่มีเรือให้นับ
           ? `<strong style="font-family:Manrope,sans-serif;font-variant-numeric:tabular-nums">${al.seatsAvailable}</strong> seat${al.seatsAvailable===1?'':'s'} left of the ${al.availableCapacity}/day quota (${al.seatsConsumed} booked)`
           : `<strong style="font-family:Manrope,sans-serif;font-variant-numeric:tabular-nums">${al.seatsAvailable}</strong> seat${al.seatsAvailable===1?'':'s'} available · ${al.assignedBoats.length} boat${al.assignedBoats.length===1?'':'s'} (${al.seatsConsumed}/${al.availableCapacity} booked${al.charteredBoats.length?` · ${al.charteredBoats.length} chartered`:''})`;
       } else if(al.state === 'full'){
-        msg = al.isLand   // §cityTourPier
+        msg = al.isLand   // §otherPier
           ? `Daily quota full · all ${al.availableCapacity} seats booked. Raise the quota in Config &rarr; Programme, or rent another vehicle.`
           : `Sold out · all ${al.availableCapacity} seats booked. Ask dispatcher to add more boats in Boat Operation.`;
       } else if(al.state === 'all-chartered'){
@@ -40633,7 +40636,7 @@ function bkV2RenderReviewPanel(){
       const al = getAllotment(t.routeId, t.date, _bkV2.editingId || null);   // exclude own seats when editing
       const isOver = al.hasAllotment && tp > al.seatsAvailable && tp > 0;
       if(!al.hasAllotment){
-        allotChip = ((typeof laIsLandRoute==='function') && laIsLandRoute(t.routeId))   // §cityTourPier
+        allotChip = ((typeof laIsLandRoute==='function') && laIsLandRoute(t.routeId))   // §otherPier
           ? `<span style="background:#F3EAFB;border:1px dashed #D7B5F0;color:#5B289A;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:600">NO LIMIT</span>`
           : `<span style="background:#fafafa;border:1px dashed #d3d1c7;color:#5A5A52;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:600">PROVISIONAL</span>`;
       } else if(isOver){
@@ -41272,7 +41275,7 @@ function bkV2ApprovalImpact(b){
     var r=(typeof ROUTES!=='undefined')?ROUTES.find(function(x){return x.id===t.routeId;}):null;
     out.push({ name:(r&&r.name)||t.routeId, date:t.date, need:need,
       sellable:(al.seatsAvailable||0), overCap:Math.max(0, need-physFree),
-      overLic:al.isLand ? 0 : Math.max(0, need-licFree) });   // §cityTourPier · โปรแกรมบกไม่มีทะเบียนที่นั่ง
+      overLic:al.isLand ? 0 : Math.max(0, need-licFree) });   // §otherPier · โปรแกรมบกไม่มีทะเบียนที่นั่ง
   });
   return out;
 }
@@ -41798,7 +41801,7 @@ function bkV2RenderSelDay(){
             </div>
           `;
         } else {
-          capBarHtml = ((typeof laIsLandRoute==='function') && laIsLandRoute(s.rd.id))   // §cityTourPier
+          capBarHtml = ((typeof laIsLandRoute==='function') && laIsLandRoute(s.rd.id))   // §otherPier
             ? `<div style="padding:2px 12px 5px 22px;font-size:9px;color:#5B289A;font-style:italic">• no daily quota · not limited</div>`
             : `<div style="padding:2px 12px 5px 22px;font-size:9px;color:#A05A1A;font-style:italic">⚠ no boat assigned</div>`;
         }
@@ -48200,7 +48203,7 @@ function bkV2CommitBooking(status){
         lockViolation.push(`${nm} ${t.date}: needs ${need} seats but only ${al.seatsAvailable} sellable · ${al.lockedSeats} are LOCKED`);
       } else {
         const licFree = (al.licenseAvailable!=null) ? al.licenseAvailable : physicalFree;
-        /* §cityTourPier · โปรแกรมบกไม่มีเพดานตามทะเบียนเหมือนเรือ · เกินโควตาคือเข้าคิวอนุมัติ
+        /* §otherPier · โปรแกรมบกไม่มีเพดานตามทะเบียนเหมือนเรือ · เกินโควตาคือเข้าคิวอนุมัติ
            ห้ามบล็อกตาย เพราะรถเช่าเพิ่มคันได้เสมอ ไม่เหมือนที่นั่งตามใบอนุญาตใช้เรือ */
         if(al.isLand || need <= licFree){
           overCapApproval.push({routeId:t.routeId, date:t.date, name:nm, need, capFree:physicalFree, overBy:(need-physicalFree), licFree});

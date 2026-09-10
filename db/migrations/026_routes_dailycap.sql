@@ -1,4 +1,4 @@
--- 026_routes_dailycap.sql  (2026-09-10)   [§cityTourPier]
+-- 026_routes_dailycap.sql  (2026-09-10)   [§otherPier]
 --
 -- A per-day seat quota for programmes that are not boat trips.
 --

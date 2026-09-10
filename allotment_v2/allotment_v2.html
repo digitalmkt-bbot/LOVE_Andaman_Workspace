@@ -1450,10 +1450,10 @@
             <div class="loc-dot-big" style="background:var(--amber)"></div>
             <div><div class="loc-opt-name">Ranong</div><div class="loc-opt-sub">Pier</div></div>
           </div>
-          <!-- §cityTourPier · TEMPORARY · โปรแกรมบก ไม่ใช่ท่าจริง -->
-          <div class="loc-opt" id="loc-citytour" onclick="pickLoc('citytour')">
+          <!-- §otherPier · TEMPORARY · โปรแกรมที่ไม่ใช้เรือ · ไม่ใช้ท่าจริง -->
+          <div class="loc-opt" id="loc-other" onclick="pickLoc('other')">
             <div class="loc-dot-big" style="background:#5B289A"></div>
-            <div><div class="loc-opt-name">City tour</div><div class="loc-opt-sub">No pier</div></div>
+            <div><div class="loc-opt-name">Other</div><div class="loc-opt-sub">ไม่ใช้ท่าเรือ</div></div>
           </div>
         </div>
       </div>
@@ -1461,7 +1461,7 @@
       <div class="form-row"><label class="form-label">เกาะ / จุดหมาย</label><input type="text" id="fm-route-islands" style="width:100%" placeholder="เช่น เกาะ 5, 6, 7, 8, 9"></div>
       <!-- §famField · กลุ่มโปรแกรม · เดิมเดาจากชื่อโปรแกรม ตอนนี้เก็บเป็นค่าจริง -->
       <div class="form-row"><label class="form-label">กลุ่มโปรแกรม (Family)</label><select id="fm-route-family" style="width:100%"></select></div>
-      <!-- §cityTourPier · โควตาที่นั่งต่อวัน · ใช้เฉพาะโปรแกรมบก (เรือนับจากการจัดเรือใน Boat Operation) -->
+      <!-- §otherPier · โควตาที่นั่งต่อวัน · ใช้เฉพาะโปรแกรมบก (เรือนับจากการจัดเรือใน Boat Operation) -->
       <div class="form-row" id="fm-route-cap-row" style="display:none">
         <label class="form-label">โควตาที่นั่งต่อวัน</label>
         <input type="number" id="fm-route-cap" min="0" step="1" style="width:100%" placeholder="เช่น 50 · ว่าง = ไม่จำกัด">

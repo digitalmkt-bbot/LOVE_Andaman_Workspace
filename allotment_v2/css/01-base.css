@@ -831,7 +831,7 @@ select:focus,input:focus{border-color:var(--ocean-mid);box-shadow:0 0 0 3px rgba
 .loc-opt.sel-tl{background:var(--ocean-50);border-color:var(--ocean-mid)}
 .loc-opt.sel-pn{background:var(--green-light);border-color:var(--green)}
 .loc-opt.sel-rn{background:var(--amber-light);border-color:var(--amber)}
-.loc-opt.sel-ct{background:#F3EAFB;border-color:#5B289A}   /* §cityTourPier */
+.loc-opt.sel-ot{background:#F3EAFB;border-color:#5B289A}   /* §otherPier */
 .loc-opt.sel-pn{background:var(--green-light);border-color:var(--green)}
 .loc-dot-big{width:9px;height:9px;border-radius:50%;flex-shrink:0}
 .loc-opt-name{font-size:11px;font-weight:500;color:var(--ink)}

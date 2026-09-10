@@ -37,18 +37,18 @@ const DEFAULT_ROUTES = [
     seasons:[{id:'ss24',type:'open',from:'2025-10-15',to:'2026-05-15'},{id:'ss25',type:'closed',from:'2026-05-16',to:'2026-10-14'},{id:'ss26',type:'open',from:'2026-10-15',to:'2027-05-15'}]},
 ];
 
-/* ══ §cityTourPier · TEMPORARY ═══════════════════════════════════════════════════════
-   โปรแกรมที่ไม่ใช่ทริปเรือ (City tour / รถรับส่ง) ถูกยัดเข้ามาเป็น "ท่า" อีกค่าหนึ่ง
+/* ══ §otherPier · TEMPORARY ═══════════════════════════════════════════════════════
+   โปรแกรมที่ไม่ใช้เรือ (City Tour, Dedicated Transfer และที่จะมาอีก) ถูกยัดเข้ามาเป็น "ท่า" ชื่อ other
    เพราะ route ยังไม่มีช่องบอกชนิดของตัวเอง · นี่คือทางลัดชั่วคราว ไม่ใช่ดีไซน์ที่ตั้งใจ
 
    ทางที่ถูกคือเพิ่ม route.kind = 'marine' | 'land' แล้วให้ pier ว่างได้
    เมื่อถึงตอนนั้น: แก้แค่ laIsLandRoute() ให้อ่าน kind แทน แล้วลบ LAND_PIER ทิ้ง
-   ทุกจุดที่เหลือเรียกผ่านฟังก์ชันนี้อยู่แล้ว จึงไม่ต้องตามแก้ทีละที่ · grep §cityTourPier
+   ทุกจุดที่เหลือเรียกผ่านฟังก์ชันนี้อยู่แล้ว จึงไม่ต้องตามแก้ทีละที่ · grep §otherPier
 
    จงใจไม่เพิ่มค่านี้เข้าหน้าจอฝั่งเรือ (Boat Operation, Boat Status, Pier Office,
    Fleet, Engine) · ทัวร์ในเมืองไม่มีเรือ ไม่มีลูกเรือ ไม่มีของให้เบิกหน้าท่า
    ถ้ามันไปโผล่เป็นแท็บว่าง ๆ ในหน้าพวกนั้น = บั๊ก ไม่ใช่ฟีเจอร์ */
-const LAND_PIER = 'citytour';
+const LAND_PIER = 'other';
 function laIsLandPier(p){ return p === LAND_PIER; }
 function laIsLandRoute(r){
   const rt = (typeof r === 'string')
@@ -1849,7 +1849,7 @@ function renderDash(){
     return `<div class="dv-pr2 bt" onclick="nav(document.querySelector('[data-view=op]'))">
       <span class="pm" style="background:${ob.r.color||'#7d7a74'}">${ob.b.name.slice(0,2).toUpperCase()}</span>
       <span class="tx"><span class="n">${ob.b.name}</span>
-        <span class="s">${({panwa:'VP',tublamu:'TL',ranong:'RN',citytour:'CT'})[ob.r.pier]||''} · ${ob.r.name}</span></span>
+        <span class="s">${({panwa:'VP',tublamu:'TL',ranong:'RN',other:'OT'})[ob.r.pier]||''} · ${ob.r.name}</span></span>
       <span class="rt"><b style="color:${fillColor}">${ob.free}</b><i>ว่าง / ${ob.cap}</i></span>
     </div>`;
   }).join('');
@@ -2473,10 +2473,10 @@ function renderCal(){
 
   // ── Theme ──
   const FOREST='#1F4D2C', LIME='#C8F47C', LIME_SOFT='#E8F5D8', LIME_DARK='#3B6D11';
-  const PIER_COL={tublamu:'#185FA5', panwa:'#0F6E56', ranong:'#BA7517', citytour:'#5B289A'};   // §cityTourPier
-  const PIER_LBL={tublamu:'TL', panwa:'VP', ranong:'RN', citytour:'CT'};   // §cityTourPier
-  const PIER_NAME={tublamu:'Tub Lamu', panwa:'Visit Panwa', ranong:'Ranong', citytour:'City tour'};   // §cityTourPier
-  const CAL_PIERS=['tublamu','panwa','ranong','citytour'];   // §cityTourPier
+  const PIER_COL={tublamu:'#185FA5', panwa:'#0F6E56', ranong:'#BA7517', other:'#5B289A'};   // §otherPier
+  const PIER_LBL={tublamu:'TL', panwa:'VP', ranong:'RN', other:'OT'};   // §otherPier
+  const PIER_NAME={tublamu:'Tub Lamu', panwa:'Visit Panwa', ranong:'Ranong', other:'Other'};   // §otherPier
+  const CAL_PIERS=['tublamu','panwa','ranong','other'];   // §otherPier
   const ink={1:'#1A1A1A',2:'#666',3:'#999',4:'#bbb',line:'rgba(0,0,0,.09)',line2:'rgba(0,0,0,.07)'};
   // INVERTED + 5-TIER (2026-07-08): pct = % full (sold). Higher occupancy = greener (selling well); many free = red (aware).
   // Bands: >=80 deep green · >=60 green · >=40 yellow · >=20 orange · <20 red.
@@ -2643,10 +2643,10 @@ function renderCal(){
   const routeStat={};  // rid -> {r, trips, free, days:Set}
   const dayStat={};    // ds -> {trips, free, closed{tublamu, panwa, ranong}}
   const routeDay={};   // rid -> { ds -> {free, cap, booked, hasTrip, routeClosed} }
-  const closedDaysPier={tublamu:0, panwa:0, ranong:0, citytour:0};   // §cityTourPier · ต้องมีทุกคีย์ใน CAL_PIERS ไม่งั้น ++ ได้ NaN
+  const closedDaysPier={tublamu:0, panwa:0, ranong:0, other:0};   // §otherPier · ต้องมีทุกคีย์ใน CAL_PIERS ไม่งั้น ++ ได้ NaN
   for(let d=1;d<=daysInMonth;d++){
     const ds=`${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-    dayStat[ds]={trips:0,free:0,closed:{tublamu:false,panwa:false,ranong:false,citytour:false}};   // §cityTourPier
+    dayStat[ds]={trips:0,free:0,closed:{tublamu:false,panwa:false,ranong:false,other:false}};   // §otherPier
     CAL_PIERS.forEach(pier=>{
       if(_calPierClosed(pier,ds)){ closedDaysPier[pier]++; dayStat[ds].closed[pier]=true; }
     });
@@ -3203,7 +3203,7 @@ function renderCal(){
     const hiddenCnt = tripsAll.length - trips.length;
     const validTrips=trips.filter(t=>!t.routeClosed);
     const closedTrips=trips.filter(t=>t.routeClosed);
-    const headerHTML=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><div style="width:20px;height:20px;border-radius:50%;background:${isPanwa?FOREST:PIER_COL[pier]};color:${isPanwa?LIME:'white'};display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700">${PIER_LBL[pier]}</div><span style="font-size:12px;font-weight:600;color:${isPanwa?FOREST:ink[1]}">${PIER_NAME[pier]||pier}${laIsLandPier(pier)?'':' Pier'}</span>`;   // §cityTourPier
+    const headerHTML=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><div style="width:20px;height:20px;border-radius:50%;background:${isPanwa?FOREST:PIER_COL[pier]};color:${isPanwa?LIME:'white'};display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700">${PIER_LBL[pier]}</div><span style="font-size:12px;font-weight:600;color:${isPanwa?FOREST:ink[1]}">${PIER_NAME[pier]||pier}${laIsLandPier(pier)?'':' Pier'}</span>`;   // §otherPier
     // Empty + closed pier → show "ปิดทั้งท่า" message
     if(isClosed && trips.length===0){
       return `<div style="margin-top:14px;padding-bottom:12px;border-bottom:1px solid ${ink.line2}">
@@ -6473,7 +6473,7 @@ function bop2RenderShell(){
   const labelCol = isMonth ? 146 : 200;
   const dayColMin = isMonth ? 22 : 50;
   // Routes filtered by pier
-  const allRoutes = ROUTES.filter(r => r.active !== false && !laIsLandRoute(r));   // §cityTourPier · ทัวร์บกไม่มีเรือให้จัด
+  const allRoutes = ROUTES.filter(r => r.active !== false && !laIsLandRoute(r));   // §otherPier · ทัวร์บกไม่มีเรือให้จัด
   const routes = _bop2.pier === 'all' ? allRoutes : allRoutes.filter(r => r.pier === _bop2.pier);
   // Group by pier for display
   const tublamuRoutes = routes.filter(r => r.pier === 'tublamu');
@@ -7565,7 +7565,7 @@ function getAllotment(routeId, dateStr, excludeBkId){
     fillPct: 0, isFull: false, state: 'no-allotment'
   };
   if(!routeId || !dateStr) return result;
-  /* §cityTourPier · โปรแกรมบก ไม่มีเรือ จึงนับที่นั่งจากเรือไม่ได้ · ใช้ route.dailyCap แทน
+  /* §otherPier · โปรแกรมบก ไม่มีเรือ จึงนับที่นั่งจากเรือไม่ได้ · ใช้ route.dailyCap แทน
      หมายเหตุ: การใส่ตัวเลขทำให้ด่านกันที่เคยปิดอยู่กลับมาทำงานอีกครั้ง · เกินโควตา = เข้าคิวอนุมัติ
      ไม่มีเพดานตามทะเบียนแบบเรือ (licensePax) · รถเช่าเพิ่มคันได้ จึงตั้ง license = cap */
   if(typeof laIsLandRoute === 'function' && laIsLandRoute(routeId)){
@@ -8584,7 +8584,7 @@ function openRouteModal(id){
   timeRows=r?[...r.times]:['08:00'];
   pickLoc(r?r.pier:'tublamu');
   _famFillRouteSelect(r);   // §famField
-  var _capEl=document.getElementById('fm-route-cap');   // §cityTourPier
+  var _capEl=document.getElementById('fm-route-cap');   // §otherPier
   if(_capEl) _capEl.value=(r && r.dailyCap!=null && r.dailyCap!=='') ? r.dailyCap : '';
   renderTimeRows();
   openModal('route-modal');
@@ -8595,8 +8595,8 @@ function pickLoc(v){
   document.getElementById('loc-tublamu').className='loc-opt'+(v==='tublamu'?' sel-tl':'');
   document.getElementById('loc-panwa').className='loc-opt'+(v==='panwa'?' sel-pn':'');
   document.getElementById('loc-ranong').className='loc-opt'+(v==='ranong'?' sel-rn':'');
-  var _ct=document.getElementById('loc-citytour');   // §cityTourPier
-  if(_ct) _ct.className='loc-opt'+(v===LAND_PIER?' sel-ct':'');
+  var _ct=document.getElementById('loc-other');   // §otherPier
+  if(_ct) _ct.className='loc-opt'+(v===LAND_PIER?' sel-ot':'');
   var _cr=document.getElementById('fm-route-cap-row');
   if(_cr) _cr.style.display=(v===LAND_PIER)?'':'none';   // โควตาใช้กับโปรแกรมบกเท่านั้น
 }
@@ -8614,7 +8614,7 @@ function saveRoute(){
   const islands=document.getElementById('fm-route-islands').value.trim();
   const times=timeRows.filter(t=>t);
   const famId=(document.getElementById('fm-route-family')||{}).value||'';   // §famField · '' = ตั้งใจไม่ผูกกลุ่ม
-  /* §cityTourPier · โควตาเก็บเฉพาะโปรแกรมบก · ว่าง/ศูนย์ = null (ไม่จำกัด) ไม่ใช่ 0 */
+  /* §otherPier · โควตาเก็บเฉพาะโปรแกรมบก · ว่าง/ศูนย์ = null (ไม่จำกัด) ไม่ใช่ 0 */
   const _capRaw=(document.getElementById('fm-route-cap')||{}).value;
   const dailyCap=(selLoc===LAND_PIER && String(_capRaw==null?'':_capRaw).trim()!=='' && Number(_capRaw)>0) ? Math.round(Number(_capRaw)) : null;
   if(editRouteId){
