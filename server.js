@@ -1042,8 +1042,11 @@ const B2C_ITEM_JOIN = `
   -- A transfer line is a whole vehicle, not seats: subtotal = rate(vehicleType) × qty and the pax
   -- columns are informational. The SHARED version of a transfer is not this type at all — it is an
   -- add-on on the day trip (AD-001, variant V-PAX) and already arrives through that path.
-  -- 'hotel', 'third_party' and 'private_partner' stay out: ops dispatches none of them.
-  WHERE bi.type IN ('day_trip','private_own','transfer')`;
+  -- §b2cActivity (2026-09-11) · 'third_party' joins too (Carnival Magic, Andamanda, …) — a partner
+  -- activity with a per-variant ops route, same extid-based resolution as TR-003:v2. Resolves via
+  -- product_id + variant_id → routes.extid ('PTP-001:VT-001'), no B2C schema change needed.
+  -- 'hotel' and 'private_partner' still stay out: ops dispatches neither.
+  WHERE bi.type IN ('day_trip','private_own','transfer','third_party')`;
 
 // ── B2C traveller list ──────────────────────────────────────────────────────────────────────────
 // bookings.passengers is a BOOKING-level jsonb array, one object per traveller:
