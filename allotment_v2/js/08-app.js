@@ -43330,10 +43330,7 @@ function bkV2RenderTab2(){
       if(sp) sp.forEach((x,i)=>push(x.boatId||'', bkPaxSum(bkSplitPax(x)), (i+1)+'/'+sp.length));
       else push(r.charterBoatId||bkOpsRead(bk,date).boatId||'', (typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(r.pax||{}):0, '');
     });
-    const chtrStrip = _chtrItems.length ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 16px 8px 21px;background:#FAF8FF;border-top:1px solid #ECE4F8">
-        <span style="font-size:10px;font-weight:700;color:#5B289A;text-transform:uppercase;letter-spacing:.05em;flex:none">&#128676; เหมาลำ</span>
-        ${_chtrItems.map(it=>`<span style="display:inline-flex;align-items:center;gap:7px;background:#F4EFFC;border:1px solid #DDD0F2;border-radius:9px;padding:4px 11px;font-size:11.5px;white-space:nowrap"><b style="color:#5B289A">&#128676; ${esc(it.bn||'ยังไม่ระบุเรือ')}</b>${it.nOf?`<span style="background:#EBE2FA;color:#5B289A;border-radius:4px;padding:0 5px;font-size:9px;font-weight:800">ลำ ${it.nOf}</span>`:''}${it.cap?`<span style="color:#7A6FA8;font-family:'DM Mono',monospace">${it.px}/${it.cap}</span>`:`<span style="color:#7A6FA8;font-family:'DM Mono',monospace">${it.px} pax</span>`}${it.ag?`<span style="color:#6a6a64">· ${esc(it.ag)}</span>`:''}${it.lead?`<span style="color:#9a9a92">· ${esc(it.lead)}</span>`:''}</span>`).join('')}
-      </div>` : '';
+    /* §btChBand · แถบเรือลอยเหนือตารางถูกยุบเข้าแถบ CHARTER ในตารางแล้ว · ดู _zband */
     const _al=(typeof getAllotment==='function')?getAllotment(rid,date):null;
     // Availability = seats on the OPEN boats that are NOT taken by a charter − SEAT bookings − locks.
     //   · charter pax are NOT counted (a chartered boat is removed whole from the pool, via the booking's charterBoatId — no need to wait for Boat-Op flagging)
@@ -43747,7 +43744,15 @@ function bkV2RenderTab2(){
       const _zband = _isChtr
         ? `<tr class="t2-zband t2-zband-ch"><td colspan="${COLN}"><div class="zw">`
           + `<span class="zkind">เหมาลำ</span><span class="znm">&#128676; CHARTER</span>`
-          + `<span class="zsub">${list.length} booking &middot; ${zpax} pax &middot; ทั้งลำ &middot; ระบุเรือตอนจอง</span></div></td></tr>`
+          + `<span class="zsub">${list.length} booking &middot; ${zpax} pax &middot; ทั้งลำ</span>`
+          /* §btChBand · ชื่อเรือเคยอยู่บนแถบลอยเหนือตาราง (chtrStrip) ซึ่งเป็นซากของ
+             ดีไซน์การ์ดทริปเดิม · พอทริปยุบเป็นแถบในตารางแล้ว (§btBand) มันเหลือลอยอยู่
+             คนเดียวและพูดซ้ำกับแถบนี้ · ยุบมารวมเป็นแถบเดียว */
+          + (_chtrItems.length ? `<span class="zboats">${_chtrItems.map(it=>
+              `<span class="zb"><b>&#128676; ${esc(it.bn||'ยังไม่ระบุเรือ')}</b>`
+              + (it.nOf?`<i>ลำ ${it.nOf}</i>`:'')
+              + `<s>${it.cap?(it.px+'/'+it.cap):(it.px+' pax')}</s></span>`).join('')}</span>` : '')
+          + `</div></td></tr>`
         : `<tr class="t2-zband"><td colspan="${COLN}" style="--zc:${bkV2ZoneColor(z)}"><div class="zw">`
           + `<span class="zkind">โซน</span><span class="znm">${bkV2ZoneLabel(z)}</span>`
           + `<span class="zsub">${list.length} booking &middot; ${zpax} pax</span></div></td></tr>`;
@@ -44090,7 +44095,6 @@ function bkV2RenderTab2(){
         </div>
           ${/* §btFix · แถบ Add-ons กับ Prep ย้ายไปอยู่ตัวกาง "ไกด์ · อาหารรายลำ"
                 ท้ายตารางแล้ว (ตัวเดียวกัน แยกรายลำด้วย) · ไม่ต้องมีสองที่ */''}
-          ${chtrStrip}
           ${retAlertBar}
           ${/* §btBand · ตัวกางไกด์/อาหารรายลำ ย้ายไปท้ายตาราง (ดูตอนต้องใช้ ไม่ใช่ทุกครั้ง) */''}
           ${''}
@@ -44768,6 +44772,14 @@ function bkV2RenderTab2(){
       font-weight:600;white-space:nowrap}
     /* §btGap · ช่องว่างคั่นกลุ่มเหมาลำออกจากกลุ่มลูกค้าจอย */
     .t2-zgap td{height:26px;padding:0;border:0;background:transparent}
+    /* §btChBand · ชิปเรือบนแถบเหมาลำ */
+    .t2-zband-ch .zboats{display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap;margin-left:10px}
+    .t2-zband-ch .zb{display:inline-flex;align-items:center;gap:7px;background:#F4EFFC;
+      border:1px solid #DDD0F2;border-radius:9px;padding:3px 10px;font-size:11.5px;white-space:nowrap}
+    .t2-zband-ch .zb b{color:#5B289A;font-weight:800}
+    .t2-zband-ch .zb i{font-style:normal;background:#EBE2FA;color:#5B289A;border-radius:4px;
+      padding:0 5px;font-size:9px;font-weight:800}
+    .t2-zband-ch .zb s{text-decoration:none;color:#7A6FA8;font-family:'DM Mono',monospace}
     .bt-tgfoot{padding:6px 12px 8px;border-top:1px solid #F2EEE9;font-size:10px;color:#948f88;text-align:center}
     /* §btTune · ไกด์ / อาหาร / เรือหางยาว · ของที่ต้องสั่งล่วงหน้า ควรเห็นตั้งแต่เปิดหน้า */
     .bt-prep{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:6px 10px 9px;
