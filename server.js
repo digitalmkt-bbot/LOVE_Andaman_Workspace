@@ -178,10 +178,22 @@ const OS_ORDER = (() => {
 const ordSql = t => OS_ORDER[t] ? ` ${OS_ORDER[t]}` : '';
 
 async function relLoad() {                                           // operation_schemas -> blob (parallel)
-  const results = await Promise.all(OS_TABLES.map(t => pool.query(`SELECT * FROM ${fqt(t)}${ordSql(t)}`)));
+  // §loopLagProbe · จับเวลาต่อตาราง เพื่อรู้ว่า 133 query ไปหมดเวลากับตารางไหน (วัดอย่างเดียว)
+  const tmr = [];
+  const results = await Promise.all(OS_TABLES.map(async t => {
+    const t0 = Date.now();
+    const r = await pool.query(`SELECT * FROM ${fqt(t)}${ordSql(t)}`);
+    tmr.push([t, Date.now() - t0, r.rows.length]);
+    return r;
+  }));
   const data = {};
   OS_TABLES.forEach((t, i) => { data[t] = results[i].rows; });
-  return osRepo.assembleBlob(data);
+  const tA = Date.now();
+  const blob = osRepo.assembleBlob(data);
+  const asm = Date.now() - tA;
+  tmr.sort((a, b) => b[1] - a[1]);
+  console.log(`[load-query] assemble=${asm}ms slowest: ` + tmr.slice(0, 6).map(x => `${x[0]}=${x[1]}ms/${x[2]}r`).join(" "));
+  return blob;
 }
 
 // ── B2C external database sync ──────────────────────────────────────────────────────────────────
@@ -2448,13 +2460,46 @@ let _loadCache = null;   // { version, str, br?, gzip? }  (compressed buffers fi
 //   → รอเกิน connectionTimeoutMillis (10 วิ) → throw → /api/load ตอบ 500 (เห็น 10–24 วิ ใน HTTP log)
 // เวอร์ชันเดียวกัน สร้าง cache รอบเดียว · คำขอที่มาระหว่างนั้นเกาะ promise เดิม ไม่เปิด relLoad ใหม่
 //   (คนละเรื่องกับ §b2cLoadGuard — อันนั้นกัน b2c sync ซ้อน อันนี้กันตัว relLoad เอง)
+// §loopLagProbe · วัดอย่างเดียว ไม่เปลี่ยนพฤติกรรมอะไรทั้งสิ้น
+//   11 ก.ย. 2026: Railway edge ต่อ TCP เข้า container ไม่ได้ 15 วิ (dial timeout x3 ครั้งละ 5 วิ)
+//   ทั้งที่ deployment เป็น SUCCESS ไม่ได้กำลังสลับ container · โดนทั้ง /api/load /api/version /api/events
+//   สมมุติฐาน: event loop ถูกบล็อก → Node ไม่ accept TCP ใหม่ → edge มองว่าต่อไม่ติด
+//   สาเหตุที่น่าสงสัย: ทุก save bump version → rebuild ทั้งก้อน → SELECT * 133 ตาราง = 91 MB
+//   → assembleBlob + JSON.stringify ซ้อนสองชั้น ล้วนเป็นงาน sync + GC บน heap ที่พีคถึง 9.5 GB
+//   แต่ยังไม่มีหลักฐานตรง ๆ · (ช่องว่างใน log ที่เคยดูเหมือนหยุดนิ่ง จริง ๆ คือจังหวะ poller 45 วิ เฉย ๆ)
+// ตัวนี้จึงมีไว้ให้เลิกเดา: จับ lag ของ event loop + เวลาแต่ละขั้นของ rebuild + memory
+let _lagMax = 0;
+(function loopLagProbe(){
+  let last = Date.now();
+  const iv = setInterval(() => {
+    const now = Date.now(), lag = now - last - 500;
+    last = now;
+    if (lag > _lagMax) _lagMax = lag;
+    // เฉพาะตอนบล็อกจริงจัง · ไม่งั้น log ท่วม
+    if (lag > 1000) {
+      const m = process.memoryUsage();
+      console.warn('[loop-lag] blocked ' + (lag/1000).toFixed(1) + 's · rss=' + (m.rss/1048576).toFixed(0)
+        + 'MB heapUsed=' + (m.heapUsed/1048576).toFixed(0) + 'MB');
+    }
+  }, 500);
+  if (iv.unref) iv.unref();
+})();
+
 let _loadBuild = null;   // { version, promise }
 function buildLoadCache(version, m){
   if(_loadBuild && _loadBuild.version === version) return _loadBuild.promise;
+  const t0 = Date.now(); _lagMax = 0;
   const promise = relLoad().then(blob => {
-    const str = JSON.stringify({data:JSON.stringify(blob), version,
+    const tQ = Date.now();
+    const inner = JSON.stringify(blob);
+    const tS1 = Date.now();
+    const str = JSON.stringify({data:inner, version,
       updated_by:m.updated_by, updated_at:m.updated_at});
+    const tS2 = Date.now();
     _loadCache = { version, str };
+    const mu = process.memoryUsage();
+    console.log(`[load-build] v${version} total=${tS2-t0}ms query=${tQ-t0}ms stringify1=${tS1-tQ}ms stringify2=${tS2-tS1}ms `
+      + `out=${(str.length/1048576).toFixed(1)}MB rss=${(mu.rss/1048576).toFixed(0)}MB heap=${(mu.heapUsed/1048576).toFixed(0)}MB maxLag=${_lagMax}ms`);
     return _loadCache;
   });
   _loadBuild = { version, promise };
