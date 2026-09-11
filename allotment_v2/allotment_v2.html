@@ -73,6 +73,11 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
       Daily Availability
     </div>
+    <!-- §saAlert -->
+    <div class="nav-item" data-view="salesalert" onclick="nav(this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+      Sales Alert
+    </div>
     <div style="height:1px;background:rgba(255,255,255,.07);margin:8px 6px 2px"></div>
     <div class="nav-section" style="color:rgba(130,210,170,.5)">Operations</div>
     <div class="nav-item" data-view="booking" onclick="nav(this)" style="border-left:2px solid rgba(130,210,170,.25);padding-left:9px">
@@ -402,6 +407,9 @@
     <div id="view-dashboard" class="view active">
       <div id="dash-wrap" style="background:#16265C;margin:-22px;padding:0;min-height:calc(100dvh - var(--topbar, 44px));color:#1A1A1A"></div>
     </div>
+
+    <!-- ══════════ SALES ALERT (§saAlert) ══════════ -->
+    <div id="view-salesalert" class="view"><div id="sa-wrap" style="background:#16265C;margin:-22px;padding:0;min-height:calc(100dvh - var(--topbar, 44px));color:#1A1A1A"></div></div>
 
     <!-- ══════════ CALENDAR (redesigned · Fleet Insights style) ══════════ -->
     <div id="view-calendar" class="view">
@@ -2995,5 +3003,6 @@
 </div>
 
 <script src="js/08-app.js"></script>
+<script src="js/09-sales-alert.js"></script>
 </body>
 </html>
