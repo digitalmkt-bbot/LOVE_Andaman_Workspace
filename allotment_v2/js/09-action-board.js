@@ -101,6 +101,9 @@ const _AB_AG_ETC = '#A8A29A';
      charter = เหมาทั้งลำ ไม่มีที่นั่งขาย — ไม่ใช่ "ไม่มีทริป" และไม่ใช่ที่ว่าง
      wx      = ยกเลิกเพราะอากาศ
      (ไม่มี) = ไม่ได้ลงเรือ หรือปิดฤดูกาล */
+/* §abTop20 · กี่รายต่อการ์ด · เดิม 10 · "จำนวน Agent ขึ้นเป็น 20 เจ้าเลย ให้ Scroll เอา"
+   .ab-list เลื่อนในตัวเองอยู่แล้ว จึงไม่กระทบความสูงการ์ด */
+const _AB_AG_TOP   = 20;
 const _AB_SCAN_DAYS = 14;
 function _abScan(){
   var dates=[], cell={}, seen={}, order=[];
@@ -376,10 +379,17 @@ const AB_CSS=`<style>
   .ab-mc.off:hover{outline:0}
   .ab-mc.chtr{background:#F2EAFB;border-color:#E0D2F2;color:#5B289A}
   .ab-mc.wx{background:#F7E7E7;border-color:#EFD6D6;color:#A32D2D}
-  /* โหมด 14 วัน · ช่องแคบ เหลือแค่ตัวเลขที่ว่าง */
-  .ab-mg.d14 .ab-mc{height:29px;align-items:center;font-size:11px}
-  .ab-mg.d14 .ab-mc .sub,.ab-mg.d14 .ab-mc .mbar{display:none}
+/* §abBar14 · โหมด 14 วัน · เดิมซ่อนแท่งสีทิ้ง (.mbar{display:none}) เหลือแต่ตัวเลข
+     ผลคือกด "14 days" แล้วเหมือนไม่มีอะไรเปลี่ยน และสีประจำเอเย่นต์หายไปทั้งแถบ
+     ช่องกว้าง 63px (1440) / 97px (1920) · ใส่แท่ง 3px ได้สบาย
+     ตัดเฉพาะ .sub (ข้อความ "sold N · held N") ที่ยัดไม่ลงจริง ๆ */
+  .ab-mg.d14 .ab-mc{height:36px;font-size:11px;padding:3px 4px;gap:3px;
+    justify-content:center;text-align:center}
+  .ab-mg.d14 .ab-mc .sub{display:none}
   .ab-mg.d14 .ab-mc .v em{display:none}
+  .ab-mg.d14 .ab-mc .mbar{height:3px;border-radius:2px;background:rgba(0,0,0,.08);
+    overflow:hidden;display:flex}
+  .ab-mg.d14 .ab-mc .mbar i{display:block;height:100%}
   /* โหมด 7 วัน · ช่องกว้างเท่าตัว ใส่ของที่ตัดสินใจได้จริงลงไป
      ว่าง/ความจุ · แถบ fill · ขายไปแล้วกี่ที่ · ล็อกค้างอยู่กี่ที่
      "ล็อก" คือที่ที่เอเย่นต์กันไว้แต่ยังไม่ออกบุคกิ้ง — ไม่ใช่ที่ขายได้
@@ -504,6 +514,8 @@ const AB_CSS=`<style>
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .ab-ab .mt{flex:0 1 auto;min-width:0;display:flex;align-items:center;gap:5px;
     font-size:9.5px;font-weight:600;color:#9b9088;white-space:nowrap;overflow:hidden}
+  /* ชื่อเจ้าของยาว ๆ ("Staff / Welfare (internal)") ล้นได้แม้จอกว้าง · ให้จบด้วย … ไม่ใช่หายเฉย ๆ */
+  .ab-ab .mt>span{min-width:0;overflow:hidden;text-overflow:ellipsis}
   /* วัดแล้วความสูงแถวถูกกำหนดโดยก้อนตัวเลขขวา (ค่า 16px + เดลต้า 9.5px = 34px)
      ไม่ใช่ตัวหนังสือซ้าย · พอคอลัมน์กว้าง 1035px แล้วยังบังคับให้ซ้อนกันสองชั้น
      แถวจะสูง 49px เห็นได้แค่ 3 ราย · ให้อยู่บรรทัดเดียวกันเมื่อมีที่ (แถวเหลือ ~32px
@@ -653,9 +665,19 @@ function abRender(){
   var uRank=Object.keys(uTot).sort(function(a,b){ return uTot[b]-uTot[a]; });
   var uCol={};
   if(BY==='sales'){
-    uRank.forEach(function(k,i){
+    var taken={};
+    uRank.forEach(function(k){
       var s=_abSalesList().find(function(x){ return x.id===k; });
-      uCol[k]=(s&&s.color)||_AB_AG_PAL[i%_AB_AG_PAL.length];
+      if(s&&s.color){ uCol[k]=s.color; taken[String(s.color).toLowerCase()]=1; }
+    });
+    /* §abSalesCol · เซลส์ที่ถูกลบไม่มีสีประจำตัว · เดิมหยิบจานสีตามอันดับ จึงไปชนสีเซลส์จริง
+       (วัดที่โหมด 14 วัน: s904791 ได้สีเดียวกับ Khun Tee ทั้งในแท่งและคำอธิบายสี)
+       เปลี่ยนเป็นหยิบสีที่ยังไม่มีใครใช้ · ชนได้ก็ต่อเมื่อจานสีหมดจริง ๆ */
+    var pi=0;
+    uRank.forEach(function(k){
+      if(k==='_' || uCol[k]) return;
+      while(pi<_AB_AG_PAL.length && taken[_AB_AG_PAL[pi].toLowerCase()]) pi++;
+      uCol[k]=_AB_AG_PAL[pi%_AB_AG_PAL.length]; taken[uCol[k].toLowerCase()]=1; pi++;
     });
     uCol['_']=_AB_AG_ETC;
   } else {
@@ -759,10 +781,10 @@ function abRender(){
   var gFill=gCap>0?Math.round((gSold+gLock)/gCap*100):0;
   fRow+='<div class="ab-mfoot"><b>'+gFree+'</b></div>';
 
-  /* คำอธิบายสีเอเย่นต์ · มีเฉพาะโหมด 7 วัน เพราะ 14 วันช่องแคบเกินจะซอยแท่ง
-     เรียงตามยอดรวม ซึ่งเป็นลำดับเดียวกับที่ใช้แจกสี จึงอ่านคู่กับแท่งได้ตรง ๆ */
+  /* คำอธิบายสีเอเย่นต์ · เรียงตามยอดรวม ซึ่งเป็นลำดับเดียวกับที่ใช้แจกสี
+     จึงอ่านคู่กับแท่งได้ตรง ๆ · §abBar14 ทำให้ 14 วันมีแท่งแล้ว จึงต้องมีคำอธิบายด้วย */
   var agLegend='';
-  if(N===7 && uRank.length){
+  if(uRank.length){
     var shown=uRank.filter(function(k){ return uShown[k]; });
     var etc=uRank.filter(function(k){ return !uShown[k]; })
                  .reduce(function(x,k){ return x+uTot[k]; },0);
@@ -809,7 +831,9 @@ function abRender(){
   +'</div>';
 
   /* ── การ์ดเตือนเรื่องที่นั่ง ── */
-  var risk=OPEN.filter(function(c){ return c.d<=3 && c.fill<40; })
+  /* §abRisk5 · "At risk ต้องน้อยกว่า 5 วันเลย" · เดิม d<=3 (วันนี้ + อีก 3 วัน)
+     เปลี่ยนเป็น d<5 = วันนี้ถึงอีก 4 วัน · ครอบสุดสัปดาห์ถัดไปพอดี มีเวลาโทรตามจริง */
+  var risk=OPEN.filter(function(c){ return c.d<5 && c.fill<40; })
                .sort(function(a,b){ return a.d-b.d || a.fill-b.fill; });
   var near=OPEN.filter(function(c){ return c.free>0 && c.free<=5; })
                .sort(function(a,b){ return a.free-b.free || a.d-b.d; });
@@ -831,7 +855,7 @@ function abRender(){
     +'</div>';
   }
 
-  var cRisk=_abCard('risk','At risk', risk.length, 'Departs in \u2264 3 days \u00b7 fill &lt; 40%',
+  var cRisk=_abCard('risk','At risk', risk.length, 'Departs in &lt; 5 days \u00b7 fill &lt; 40%',
       risk.length? risk.map(tripRow).join('') : _abEmpty('No trip at risk in the next 3 days'));
   var cNear=_abCard('near','Almost full', near.length, '\u2264 5 seats left',
       near.length? near.map(tripRow).join('') : _abEmpty('No trip close to full yet'));
@@ -848,7 +872,7 @@ function abRender(){
   }
 
   var top=A.filter(function(r){ return r.inCur>0; })
-           .sort(function(a,b){ return b.inCur-a.inCur; }).slice(0,10);
+           .sort(function(a,b){ return b.inCur-a.inCur; }).slice(0,_AB_AG_TOP);
   var cTop=_abCard('','Top senders this month', top.length,
     'Booked in 1\u2013'+S.dayN+' '+_abMonLbl(S.cur)+' \u00b7 vs same days in '+_abMonLbl(S.prev),
     top.length? top.map(function(r,i){
@@ -867,7 +891,7 @@ function abRender(){
       return r;
     })
     .filter(function(r){ return r._base>=10 && r.inCur===0 && r._gone>=21; })
-    .sort(function(a,b){ return b._base-a._base; }).slice(0,10);
+    .sort(function(a,b){ return b._base-a._base; }).slice(0,_AB_AG_TOP);
   var cLost=_abCard('lost','Was big \u00b7 now gone', lost.length,
     'Nothing booked this month \u00b7 quiet \u2265 21 days',
     lost.length? lost.map(function(r,i){
@@ -885,7 +909,7 @@ function abRender(){
       return r;
     })
     .filter(function(r){ return r._all && r.inCur>0 && r._mean>=8 && r._cv<=45; })
-    .sort(function(a,b){ return b._mean-a._mean; }).slice(0,10);
+    .sort(function(a,b){ return b._mean-a._mean; }).slice(0,_AB_AG_TOP);
   var cSteady=_abCard('','Steady senders', steady.length,
     'Every month '+_abMonLbl(S.back3[0])+'\u2013'+_abMonLbl(S.back3[2])+' and still sending',
     steady.length? steady.map(function(r,i){
@@ -900,7 +924,7 @@ function abRender(){
       return r;
     })
     .filter(function(r){ return r.bkCur>=5 && r.cxCur>=2 && r._rc>=0.20 && (r._rc-r._rp)>=0.08; })
-    .sort(function(a,b){ return (b._rc-b._rp)-(a._rc-a._rp); }).slice(0,8);
+    .sort(function(a,b){ return (b._rc-b._rp)-(a._rc-a._rp); }).slice(0,_AB_AG_TOP);
   var cCxl=_abCard('cxl','Cancellation spike', cxl.length,
     '\u2265 5 bkgs this month \u00b7 \u2265 2 cancelled \u00b7 \u2265 8 pts above last month',
     cxl.length? cxl.map(function(r,i){
