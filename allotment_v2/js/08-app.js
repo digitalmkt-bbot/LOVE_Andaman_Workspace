@@ -43116,13 +43116,23 @@ function bkV2RenderTab2(){
       const nm=esc(_btSub(rid)), dep=_btDep(rid), pr=_btPier(rid);
       if(!open) return `<div class="bt-pgv off"><span class="vn">${nm}</span><span>${esc(dep)}${pr?' · '+esc(pr):''} · not running</span><span class="sp"><span class="bt-free none">&mdash;</span></span></div>`;
       const al=(typeof getAllotment==='function')?getAllotment(rid,date):null;
-      const bk=al?(al.seatsConsumed||0):0, cap=al?(al.availableCapacity||0):0, av=al?(al.seatsAvailable||0):0;
+      /* §noCapSeat · โปรแกรมบกที่ยังไม่ตั้ง dailyCap · getAllotment ตั้งใจ return ศูนย์ทั้งก้อน
+         (04-data-core.js · "ยังไม่ตั้งโควตา = ปล่อยขายเหมือนเดิม") แต่การ์ดนี้เคยอ่าน seatsAvailable<=0
+         แล้วปั๊ม full สีแดง → "ขายได้ไม่อั้น" กลายเป็น "เต็มแล้ว" กลับหัวกันพอดี
+         เคสนี้โชว์แค่ยอดที่จองแล้ว ไม่มีตัวหาร ไม่มีป้ายเต็ม · ต้องเรียก getSeatsConsumed เอง
+         เพราะ getAllotment return ก่อนถึงบรรทัดที่คำนวณมัน */
+      const _noCap = !al || !al.hasAllotment;
+      const bk=_noCap?((typeof getSeatsConsumed==='function')?getSeatsConsumed(rid,date):0):(al.seatsConsumed||0);
+      const cap=al?(al.availableCapacity||0):0, av=al?(al.seatsAvailable||0):0;
       const lk=(typeof bkV2LockedTotal==='function')?bkV2LockedTotal(rid,date):0;
       const fr=cap>0?av/cap:0;
       const fc = av<=0 ? 'full' : (fr<0.20 ? 'low' : 'ok');
-      return `<div class="bt-pgv${ron?' on':''}" onclick="bkV2Tab2SetRoute('${ron?'':rid}')" title="${esc(_btSub(rid))} · booked ${bk}/${cap} · ${av} free">
+      const _seatHtml = _noCap ? `<span class="bt-seat"><b>${bk}</b> booked</span><span class="bt-free none">ไม่จำกัด</span>`
+                               : `<span class="bt-seat"><b>${bk}</b>/${cap}</span><span class="bt-free ${fc}">${av<=0?'full':(av+' free')}</span>`;
+      const _seatTip = _noCap ? `booked ${bk} · ไม่ได้ตั้งโควตา (ขายได้ไม่จำกัด)` : `booked ${bk}/${cap} · ${av} free`;
+      return `<div class="bt-pgv${ron?' on':''}" onclick="bkV2Tab2SetRoute('${ron?'':rid}')" title="${esc(_btSub(rid))} · ${_seatTip}">
         <span class="vn">${nm}</span><span>${esc(dep)}${pr?' · '+esc(pr):''}</span>
-        <span class="sp">${lk>0?`<span class="bt-lk">&#128274; ${lk}</span>`:''}<span class="bt-seat"><b>${bk}</b>/${cap}</span><span class="bt-free ${fc}">${av<=0?'full':(av+' free')}</span></span></div>`;
+        <span class="sp">${lk>0?`<span class="bt-lk">&#128274; ${lk}</span>`:''}${_seatHtml}</span></div>`;
     }).join('');
     return `<div class="bt-pgf${on?' on':''}" style="--e:${col};--ink:${col};background:${(typeof pckTint==='function')?pckTint(col,0.90):'#F5F3F0'}" onclick="bkV2Tab2SetFamily('${on?'':a.fam.id}')" title="Filter ${esc(a.fam.name)}">
       <span class="ar">&#9662;</span><span class="dot"></span>
