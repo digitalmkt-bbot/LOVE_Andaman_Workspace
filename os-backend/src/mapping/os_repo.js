@@ -208,11 +208,38 @@ function buildElement(p, row) {
 }
 function safeParse(s) { try { return JSON.parse(s); } catch (_) { return s; } }
 
+// §fkIndex · attachChildren เดิมหา row ลูกด้วย .filter() ทั้งตาราง "ต่อ parent หนึ่งตัว"
+//   → O(parents x children) และแปลง String() สองครั้งต่อการเทียบหนึ่งครั้ง
+//   sb_bookings อย่างเดียว: 3,766 parent x ~25,000 row ลูก ~= 94 ล้านรอบต่อการ rebuild หนึ่งครั้ง
+//   วัดบนเครื่อง 11 ก.ย. 2026: assembleBlob = 3,168ms (บน prod 1,344ms) และบล็อก event loop ทั้งก้อน
+//   ระหว่างนั้น Node ไม่ accept TCP ใหม่ → Railway edge ได้ "connection dial timeout" → 502
+//   ที่แย่กว่าคือมันโตแบบกำลังสอง · sb_bookings__history เป็น audit trail ที่มีแต่เพิ่ม
+//   ทุกวันที่ผ่านไป rebuild ก็ช้าลงเรื่อย ๆ โดยไม่มีใครแตะโค้ดเลย
+// ทำ index ของตารางลูกตาม fk ครั้งเดียวต่อ tablesData แล้วค่อย lookup แบบ O(1)
+//   เก็บใน WeakMap คีย์ด้วยตัว tablesData เอง → ไม่ต้องแก้ signature ของใคร ไม่มี state ค้างข้ามรอบ
+//   เรียงในถังทีเดียวตอนสร้าง index แทนที่จะเรียงใหม่ทุก parent (ผลลัพธ์เท่าเดิม)
+const FK_IDX = new WeakMap();   // tablesData -> Map<childTable, Map<fkString, rows[]>>
+function childRowsByFk(tablesData, childT, cp, parentPkVal) {
+  let per = FK_IDX.get(tablesData);
+  if (!per) { per = new Map(); FK_IDX.set(tablesData, per); }
+  let idx = per.get(childT);
+  if (!idx) {
+    idx = new Map();
+    for (const r of (tablesData[childT] || [])) {
+      const k = String(r[cp.fkCol]);
+      let a = idx.get(k);
+      if (!a) { a = []; idx.set(k, a); }
+      a.push(r);
+    }
+    for (const a of idx.values()) a.sort((x, y) => (x[cp.idxCol] ?? 0) - (y[cp.idxCol] ?? 0));
+    per.set(childT, idx);
+  }
+  return idx.get(String(parentPkVal)) || [];
+}
 function attachChildren(table, parentEl, parentPkVal, tablesData, pkIndex) {
   for (const childT of (CHILDREN[table] || [])) {
     const cp = PLAN[childT];
-    const rows = (tablesData[childT] || []).filter(r => String(r[cp.fkCol]) === String(parentPkVal));
-    rows.sort((a, b) => (a[cp.idxCol] ?? 0) - (b[cp.idxCol] ?? 0));
+    const rows = childRowsByFk(tablesData, childT, cp, parentPkVal);   // §fkIndex · เดิม .filter ทั้งตารางต่อ parent หนึ่งตัว
     if (!rows.length) continue;                       // no rows -> don't fabricate an empty nested field
     if (cp.container === 'map') {
       const mapObj = {};
