@@ -22,15 +22,20 @@ window._abDays  = 7;     // ตารางกลาง · 7 หรือ 14 ว
 function _abEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
 
-const _AB_TH_MON = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-const _AB_TH_DOW = ['อา','จ','อ','พ','พฤ','ศ','ส'];
+/* §abEN · หน้านี้ใช้ภาษาอังกฤษทั้งหน้า (คนละอย่างกับหน้าอื่นในแอปที่เป็นไทย)
+   วันที่/เดือนจึงต้องเป็นอังกฤษด้วย ไม่งั้นจะปนกันครึ่ง ๆ */
+const _AB_MON  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const _AB_MONL = ['January','February','March','April','May','June',
+                  'July','August','September','October','November','December'];
+const _AB_DOW  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 function _abDate(ds){ return new Date(ds+'T12:00:00'); }
-function _abDow(ds){ return _AB_TH_DOW[_abDate(ds).getDay()]; }
-function _abDayLbl(ds){ var d=_abDate(ds); return d.getDate()+' '+_AB_TH_MON[d.getMonth()]; }
+function _abDow(ds){ return _AB_DOW[_abDate(ds).getDay()]; }
+function _abDayLbl(ds){ var d=_abDate(ds); return d.getDate()+' '+_AB_MON[d.getMonth()]; }
+function _abMonFull(ym){ return _AB_MONL[(+ym.slice(5,7))-1]+' '+ym.slice(0,4); }
 function _abMonShift(ym,k){ var y=+ym.slice(0,4), m=+ym.slice(5,7);
   var d=new Date(y,m-1+k,1); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
-function _abMonLbl(ym){ return _AB_TH_MON[(+ym.slice(5,7))-1]; }
+function _abMonLbl(ym){ return _AB_MON[(+ym.slice(5,7))-1]; }
 function _abDaysBetween(a,b){ return Math.round((_abDate(b)-_abDate(a))/86400000); }
 function _abMoney(n){
   n=Math.round(+n||0);
@@ -71,7 +76,7 @@ function _abRouteCol(rid){ var r=_abRoute(rid); return (r&&r.color)||'#b6b1a8'; 
 const _AB_PIERS = ['tublamu','panwa','ranong','other'];
 function _abPierOf(rid){ var r=_abRoute(rid); return (r && r.pier) ? r.pier : 'other'; }
 function _abPierLbl(k){
-  if(k==='other') return 'อื่น ๆ';
+  if(k==='other') return 'Other';
   return (typeof PIER_LABELS!=='undefined' && PIER_LABELS[k]) ? PIER_LABELS[k] : k;
 }
 
@@ -240,7 +245,7 @@ function _abBar(pct,col){
   return '<span class="ab-bar"><i style="width:'+p+'%;background:'+col+'"></i></span>';
 }
 function _abDelta(now,before){
-  if(!before){ return now>0 ? '<b class="ab-up">ใหม่</b>' : '<b class="ab-flat">—</b>'; }
+  if(!before){ return now>0 ? '<b class="ab-up">new</b>' : '<b class="ab-flat">—</b>'; }
   var d=Math.round((now-before)/before*100);
   if(d>=5)  return '<b class="ab-up">▲ '+d+'%</b>';
   if(d<=-5) return '<b class="ab-dn">▼ '+Math.abs(d)+'%</b>';
@@ -352,6 +357,9 @@ const AB_CSS=`<style>
   .ab-mg{display:grid;gap:3px;min-width:0;align-items:stretch}
   .ab-mh{text-align:center;font-size:8.5px;font-weight:800;color:#a8a29a;line-height:1.15;
     padding-bottom:3px;align-self:end}
+  .ab-mmon{font-size:9px;font-weight:800;letter-spacing:.10em;text-transform:uppercase;
+    color:#8a857d;background:#F7F5F2;border-radius:6px;padding:3px 8px;text-align:center;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
   .ab-mh u{display:block;text-decoration:none;font-size:8px}
   .ab-mh b{font-family:'DM Mono',ui-monospace,monospace;font-size:11px;color:#7a736c}
   .ab-mh.now u,.ab-mh.now b{color:#15382B}
@@ -517,7 +525,13 @@ const AB_CSS=`<style>
        แถวสูงขึ้นเห็นน้อยลง แต่ชื่อเอเย่นต์คือตัวที่ต้องอ่านออก ไม่ใช่จำนวนแถว */
     .ab-ab .nm{flex:1 1 100%;white-space:normal;line-height:1.25;
       display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-    .ab-ab .mt{flex:1 1 100%}
+    /* §abMeta · ข้อความอังกฤษยาวกว่าไทยที่เคยใช้ ("NK last sent 29 Jul · quiet 44 days" = 34 ตัวอักษร)
+       nowrap+hidden จึงตัดหายกลางคำโดยไม่มี … บอก · ให้ห่อลงบรรทัดที่สองแทน */
+    .ab-ab .mt{flex:1 1 100%;flex-wrap:wrap;white-space:normal;overflow:visible}
+    .ab-ab .mt>span{min-width:0;line-height:1.3}
+    /* ชื่อเอเย่นต์บางรายเป็นคำเดียวยาว ๆ (HOTELBEDS · A.V.E.Travel) ห่อบรรทัดไม่ได้
+       วัดที่ 1366 ขาดอีก 5px → ยอมให้ตัดกลางคำดีกว่าโดนซ่อนท้ายคำ */
+    .ab-ab .nm{overflow-wrap:anywhere}
     /* ก้อนขวาเป็น flex:none · ข้อความยาวอย่าง "ผันผวน ±10% · เดือนนี้ 121"
        จึงยืดตัวเองไป ~140px แล้วบีบชื่อเหลือ 84px (การ์ด "ส่งสม่ำเสมอ" โดนหนักสุด)
        จำกัดไม่ให้กินเกินครึ่งแถว แล้วให้ข้อความห้อยขึ้นบรรทัดใหม่แทนการดันความกว้าง */
@@ -611,10 +625,10 @@ function abRender(){
      โชว์ id ดิบจะยาวและอ่านไม่รู้เรื่อง · ย่อเป็น ?? ในชิป แต่เก็บ id ไว้ในชื่อเต็ม
      จะได้ตามแก้ข้อมูลได้ ไม่ใช่กลบหายไปเฉย ๆ */
   function _unitName(k){
-    if(k==='_') return (BY==='agent')?'ไม่ระบุเอเย่นต์':'ไม่มีเซลส์เจ้าของ';
+    if(k==='_') return (BY==='agent')?'No agent':'No sales owner';
     if(BY==='agent'){ var g=AM0[k]; return (g&&(g.name||g.code))||k; }
     var s=_abSalesList().find(function(x){ return x.id===k; });
-    return (s&&(s.name||s.code))||('เซลส์ที่ถูกลบ · '+k);
+    return (s&&(s.name||s.code))||('Deleted sales \u00b7 '+k);
   }
   function _unitCode(k){
     if(k==='_') return '—';
@@ -645,27 +659,47 @@ function abRender(){
     });
     uCol['_']=_AB_AG_ETC;
   } else {
-    uRank.slice(0,_AB_AG_PAL.length).forEach(function(k,i){ uCol[k]=_AB_AG_PAL[i]; });
+    /* §abAgCol · ใช้สีประจำเอเย่นต์ตัวเดียวกับหน้า By trip date (bkV2AgentColor)
+       ซึ่งอ่าน agent.color ที่ตั้งเองไว้ก่อน ถ้าไม่มีค่อย hash เป็นสีคงที่
+       เดิมผมแจกสีตามอันดับยอด ทำให้เอเย่นต์เดียวกันคนละสีกับหน้าอื่น */
+    uRank.slice(0,_AB_AG_PAL.length).forEach(function(k,i){
+      uCol[k]=(k!=='_' && typeof bkV2AgentColor==='function') ? bkV2AgentColor(k) : _AB_AG_PAL[i];
+    });
+    uCol['_']=_AB_AG_ETC;
   }
   var uShown={}; (BY==='sales'?uRank:uRank.slice(0,_AB_AG_PAL.length)).forEach(function(k){ uShown[k]=1; });
 
   var gcols=(N===7?176:152)+'px repeat('+N+',minmax(0,1fr)) 44px';
 
-  var mHead='<div class="ab-mlbl">เส้นทาง</div>';
+  /* §abMonth · แถบเดือนพาดบนหัววัน · ยาวเท่ากับจำนวนวันของเดือนนั้นในช่วงที่ดู
+     หัววันมีแต่เลข (11 12 13…) พอช่วง 7/14 วันคร่อมสิ้นเดือนจะอ่านไม่ออกว่า
+     "1" คือวันที่ 1 ของเดือนถัดไป หรือย้อนกลับ · แถบนี้ตอบตรงนั้น */
+  var mMon='<div class="ab-mlbl"></div>', _mg=[];
+  DATES.forEach(function(ds){
+    var k=ds.slice(0,7);
+    if(_mg.length && _mg[_mg.length-1].k===k) _mg[_mg.length-1].n++;
+    else _mg.push({k:k,n:1});
+  });
+  _mg.forEach(function(g){
+    mMon+='<div class="ab-mmon" style="grid-column:span '+g.n+'">'+_abEsc(_abMonFull(g.k))+'</div>';
+  });
+  mMon+='<div class="ab-mmon"></div>';
+
+  var mHead='<div class="ab-mlbl">Route</div>';
   DATES.forEach(function(ds){
     var wd=_abDate(ds).getDay(), wknd=(wd===0||wd===6);
     mHead+='<div class="ab-mh'+(ds===TODAY_STR?' now':(wknd?' wknd':''))+'">'
       +'<u>'+_abDow(ds)+'</u><b>'+_abDate(ds).getDate()+'</b></div>';
   });
-  mHead+='<div class="ab-mh"><u>&nbsp;</u><b>รวม</b></div>';
+  mHead+='<div class="ab-mh"><u>&nbsp;</u><b>Total</b></div>';
 
   function mCell(rid,ds){
     var c=SC.cell[rid+'|'+ds];
     var go=' onclick="abGoTrip(\''+rid+'\',\''+ds+'\')"';
     if(!c) return '<div class="ab-mc off"></div>';
-    if(c.state==='charter') return '<div class="ab-mc chtr" title="'+_abDayLbl(ds)+' · เหมาลำทั้งลำ"'+go+'>'
-      +(N===7?'<span class="sub" style="text-align:center">เหมาลำ</span>':'เหมา')+'</div>';
-    if(c.state==='wx') return '<div class="ab-mc wx" title="'+_abDayLbl(ds)+' · ยกเลิกเพราะอากาศ"'+go+'>&#9928;</div>';
+    if(c.state==='charter') return '<div class="ab-mc chtr" title="'+_abDayLbl(ds)+' \u00b7 whole-boat charter"'+go+'>'
+      +(N===7?'<span class="sub" style="text-align:center">Charter</span>':'CHTR')+'</div>';
+    if(c.state==='wx') return '<div class="ab-mc wx" title="'+_abDayLbl(ds)+' \u00b7 cancelled (weather)"'+go+'>&#9928;</div>';
     var col=_abFillCol(c.fill);
     /* แท่ง · ยาวเท่า fill% เหมือนเดิม แต่ซอยเป็นรายเอเย่นต์
        ที่ล็อกไม่มีเจ้าของบุคกิ้ง (ยังไม่ออกใบ) จึงเป็นก้อนลายทางท้ายแท่ง
@@ -683,13 +717,13 @@ function abRender(){
       tipAg=mk.slice(0,8).map(function(a){ return _unitName(a)+' '+mp[a]; }).join(' · ');
     }
     if(!segs) segs='<i style="width:'+Math.max(2,c.fill)+'%;background:'+col[1]+'"></i>';
-    var tip=_abDayLbl(ds)+' · ขาย '+c.sold+(c.lock?(' · ล็อก '+c.lock):'')
-      +' · ว่าง '+c.free+' / '+c.cap+' ('+c.fill+'%)'+(tipAg?('\n'+tipAg):'');
+    var tip=_abDayLbl(ds)+' \u00b7 sold '+c.sold+(c.lock?(' \u00b7 held '+c.lock):'')
+      +' \u00b7 free '+c.free+' / '+c.cap+' ('+c.fill+'%)'+(tipAg?('\n'+tipAg):'');
     return '<div class="ab-mc" style="background:'+col[0]+';color:'+col[1]+'" title="'+_abEsc(tip)+'"'+go+'>'
       +'<span class="v">'+c.free+'<em>/'+c.cap+'</em></span>'
       +'<span class="mbar">'+segs+'</span>'
-      +'<span class="sub">ขาย '+c.sold+(c.lock?(' · <span class="lk">ล็อก '+c.lock+'</span>'):'')
-        +' · '+c.fill+'%</span>'
+      +'<span class="sub">sold '+c.sold+(c.lock?(' \u00b7 <span class="lk">held '+c.lock+'</span>'):'')
+        +' \u00b7 '+c.fill+'%</span>'
     +'</div>';
   }
 
@@ -705,7 +739,7 @@ function abRender(){
   /* §abBy · แถวรวม/วัน ต้องตอบด้วยว่า "วันนั้นเป็นลูกค้าของเซลส์คนไหน กี่คน"
      ใส่เป็นตัวเลขจริงไม่ใช่ tooltip เพราะเป็นของที่ต้องกวาดตาเทียบข้ามวัน
      ถ้าอยู่ใน tooltip ต้องชี้ทีละช่องซึ่งเทียบไม่ได้ */
-  var fRow='<div class="ab-mlbl">รวม/วัน<u>'+(BY==='sales'?'แยกตามเซลส์':'แยกตามเอเย่นต์')+'</u></div>';
+  var fRow='<div class="ab-mlbl">Daily total<u>'+(BY==='sales'?'by sales':'by agent')+'</u></div>';
   DATES.forEach(function(ds){
     var t=dayTot[ds], p=t.cap>0?Math.round((t.sold+t.lock)/t.cap*100):-1;
     var dm=uDay[ds]||{};
@@ -735,41 +769,41 @@ function abRender(){
     agLegend='<div class="ab-aglg">'
       +shown.map(function(k){ return '<span><i style="background:'+uCol[k]+'"></i>'
         +'<b>'+_abEsc(_unitName(k))+'</b><em>'+uTot[k]+'</em></span>'; }).join('')
-      +(etc>0?('<span><i style="background:'+_AB_AG_ETC+'"></i>อื่น ๆ<em>'+etc+'</em></span>'):'')
-      +(gLock>0?('<span><i style="background:repeating-linear-gradient(45deg,#9FB8D8,#9FB8D8 2px,#D7E3F2 2px,#D7E3F2 4px)"></i>ล็อกค้าง<em>'+gLock+'</em></span>'):'')
+      +(etc>0?('<span><i style="background:'+_AB_AG_ETC+'"></i>Other<em>'+etc+'</em></span>'):'')
+      +(gLock>0?('<span><i style="background:repeating-linear-gradient(45deg,#9FB8D8,#9FB8D8 2px,#D7E3F2 2px,#D7E3F2 4px)"></i>Held<em>'+gLock+'</em></span>'):'')
       +'</div>';
   }
 
 
-  var pierChips='<b class="'+(!PIER?'on':'')+'" onclick="abSetPier(\'\')">ทุกท่า</b>';
+  var pierChips='<b class="'+(!PIER?'on':'')+'" onclick="abSetPier(\'\')">All piers</b>';
   _AB_PIERS.forEach(function(k){
     if(!pierN[k]) return;
     pierChips+='<b class="'+(PIER===k?'on':'')+'" onclick="abSetPier(\''+k+'\')">'
       +_abEsc(_abPierLbl(k))+'<i>'+pierN[k]+'</i></b>';
   });
   var mtx='<div class="ab-c ab-mtx">'
-    +'<div class="ab-ct"><span class="big">ที่ว่าง · เส้นทาง × '+N+' วัน</span>'
+    +'<div class="ab-ct"><span class="big">Seats free · route \u00d7 '+N+' days</span>'
       +'<span class="cnt">fill '+gFill+'%</span>'
       +'<span class="ab-tg">'
-        +'<b class="'+(N===7?'on':'')+'" onclick="abSetDays(7)">7 วัน</b>'
-        +'<b class="'+(N===14?'on':'')+'" onclick="abSetDays(14)">14 วัน</b></span>'
+        +'<b class="'+(N===7?'on':'')+'" onclick="abSetDays(7)">7 days</b>'
+        +'<b class="'+(N===14?'on':'')+'" onclick="abSetDays(14)">14 days</b></span>'
       +'<span class="ab-tg">'
-        +'<b class="'+(BY==='sales'?'on':'')+'" onclick="abSetBy(\'sales\')">ตามเซลส์</b>'
-        +'<b class="'+(BY==='agent'?'on':'')+'" onclick="abSetBy(\'agent\')">ตามเอเย่นต์</b></span>'
+        +'<b class="'+(BY==='sales'?'on':'')+'" onclick="abSetBy(\'sales\')">By sales</b>'
+        +'<b class="'+(BY==='agent'?'on':'')+'" onclick="abSetBy(\'agent\')">By agent</b></span>'
       +'<span class="ab-pier">'+pierChips+'</span>'
     +'</div>'
     +'<div class="ab-mwrap"><div class="ab-mg d'+N+'" style="grid-template-columns:'+gcols+'">'
-      +mHead+mRows+fRow+'</div></div>'
+      +mMon+mHead+mRows+fRow+'</div></div>'
     +'<div class="ab-mlg">'
-      +'<b class="ab-msum">ขายแล้ว '+gSold+(gLock?(' · ล็อกค้าง '+gLock):'')
-        +' · ว่าง '+gFree+' / '+gCap+' ที่</b>'
-      +'<span><i style="background:#CFE9AC"></i>ขายดี</span>'
-      +'<span><i style="background:#FAF0C8"></i>กลาง ๆ</span>'
-      +'<span><i style="background:#FBE9E9"></i>ว่างเยอะ</span>'
-      +'<span><i style="background:#F2EAFB"></i>เหมาลำ</span>'
-      +'<span><i style="background:#F7E7E7"></i>ยกเลิก (อากาศ)</span>'
-      +'<span><i style="background:#FAFAF8"></i>ไม่มีทริป</span>'
-      +'<span style="margin-left:auto">ตัวเลขใหญ่ = ที่นั่งว่าง · กดช่องเพื่อเปิด By trip date</span>'
+      +'<b class="ab-msum">Sold '+gSold+(gLock?(' \u00b7 Held '+gLock):'')
+        +' \u00b7 Free '+gFree+' / '+gCap+' seats</b>'
+      +'<span><i style="background:#CFE9AC"></i>Selling well</span>'
+      +'<span><i style="background:#FAF0C8"></i>Moderate</span>'
+      +'<span><i style="background:#FBE9E9"></i>Many free</span>'
+      +'<span><i style="background:#F2EAFB"></i>Charter</span>'
+      +'<span><i style="background:#F7E7E7"></i>Cancelled (weather)</span>'
+      +'<span><i style="background:#FAFAF8"></i>No trip</span>'
+      +'<span style="margin-left:auto">Big number = seats free \u00b7 click a cell to open By trip date</span>'
     +'</div>'
     +agLegend
   +'</div>';
@@ -788,19 +822,19 @@ function abRender(){
       +'<span class="ab-day"><u>'+_abDow(t.ds)+'</u><b>'+_abDate(t.ds).getDate()+'</b></span>'
       +'<span class="ab-tb"><span class="rt">'
         +'<i class="ab-rdot" style="background:'+_abRouteCol(t.rid)+'"></i>'+_abEsc(_abRouteName(t.rid))+'</span>'
-        +'<span class="bt">'+_abEsc(t.boats.join(' · '))
-          +(t.d===0?' · วันนี้':(t.d===1?' · พรุ่งนี้':' · อีก '+t.d+' วัน'))+'</span>'
+        +'<span class="bt">'+_abEsc(t.boats.join(' \u00b7 '))
+          +(t.d===0?' \u00b7 today':(t.d===1?' \u00b7 tomorrow':' \u00b7 in '+t.d+' days'))+'</span>'
         +_abBar(t.fill,c[1])+'</span>'
       +'<span class="ab-tn"><b style="color:'+c[1]+'">'+t.fill+'%</b>'
         +'<i><span class="ab-gap" style="background:'+gapBg+';color:'+gapFg+'">'
-        +(t.free<=5?('ขาด '+t.free):('ว่าง '+t.free))+'</span> / '+t.cap+'</i></span>'
+        +(t.free<=5?('short '+t.free):('free '+t.free))+'</span> / '+t.cap+'</i></span>'
     +'</div>';
   }
 
-  var cRisk=_abCard('risk','วันเสี่ยง', risk.length, 'ออกใน 3 วัน · fill &lt; 40%',
-      risk.length? risk.map(tripRow).join('') : _abEmpty('ไม่มีทริปที่เสี่ยงใน 3 วันนี้'));
-  var cNear=_abCard('near','ขาดอีกนิดเดียวเต็ม', near.length, 'เหลือ ≤ 5 ที่',
-      near.length? near.map(tripRow).join('') : _abEmpty('ยังไม่มีทริปที่ใกล้เต็ม'));
+  var cRisk=_abCard('risk','At risk', risk.length, 'Departs in \u2264 3 days \u00b7 fill &lt; 40%',
+      risk.length? risk.map(tripRow).join('') : _abEmpty('No trip at risk in the next 3 days'));
+  var cNear=_abCard('near','Almost full', near.length, '\u2264 5 seats left',
+      near.length? near.map(tripRow).join('') : _abEmpty('No trip close to full yet'));
 
   /* ── เอเย่นต์ ── */
   function agRow(r,rank,val,valCol,sub,right){
@@ -815,13 +849,13 @@ function abRender(){
 
   var top=A.filter(function(r){ return r.inCur>0; })
            .sort(function(a,b){ return b.inCur-a.inCur; }).slice(0,10);
-  var cTop=_abCard('','Top ส่งเยอะเดือนนี้', top.length,
-    'จองเข้า 1–'+S.dayN+' '+_abMonLbl(S.cur)+' · เทียบ '+_abMonLbl(S.prev)+' ช่วงเดียวกัน',
+  var cTop=_abCard('','Top senders this month', top.length,
+    'Booked in 1\u2013'+S.dayN+' '+_abMonLbl(S.cur)+' \u00b7 vs same days in '+_abMonLbl(S.prev),
     top.length? top.map(function(r,i){
       return agRow(r,i+1,r.inCur,null,
-        r.bkCur+' ใบ · '+_abMoney(r.revCur)+' · เดินทาง '+r.tvCur,
+        r.bkCur+' bkgs \u00b7 '+_abMoney(r.revCur)+' \u00b7 '+r.tvCur+' trav',
         _abDelta(r.inCur,r.inPrev)+' <span class="ab-flat">('+r.inPrev+')</span>');
-    }).join('') : _abEmpty('เดือนนี้ยังไม่มี booking เข้า'));
+    }).join('') : _abEmpty('No bookings created this month yet'));
 
   /* ฐานคือเดือนที่ดีที่สุดใน 3 เดือนหลัง ไม่ใช่แค่เดือนที่แล้ว
      เพราะบางเจ้าหายไปตั้งแต่ 2 เดือนก่อน เทียบเดือนเดียวจะมองไม่เห็น */
@@ -834,13 +868,13 @@ function abRender(){
     })
     .filter(function(r){ return r._base>=10 && r.inCur===0 && r._gone>=21; })
     .sort(function(a,b){ return b._base-a._base; }).slice(0,10);
-  var cLost=_abCard('lost','เคยส่งเยอะ · ตอนนี้หาย', lost.length,
-    'ไม่มี booking เข้าเลยเดือนนี้ · หยุดไป ≥ 21 วัน',
+  var cLost=_abCard('lost','Was big \u00b7 now gone', lost.length,
+    'Nothing booked this month \u00b7 quiet \u2265 21 days',
     lost.length? lost.map(function(r,i){
       return agRow(r,i+1,'−'+r._base,'#A32D2D',
-        'ส่งล่าสุด '+_abDayLbl(r.lastIn)+' · หยุดไป '+r._gone+' วัน',
-        '<span class="ab-dn">เคยได้ '+r._base+'</span> <span class="ab-flat">('+_abMonLbl(r._baseM)+')</span>');
-    }).join('') : _abEmpty('ยังไม่มีเอเย่นต์ที่หายไป'));
+        'last '+_abDayLbl(r.lastIn)+' \u00b7 quiet '+r._gone+'d',
+        '<span class="ab-dn">peak '+r._base+'</span> <span class="ab-flat">('+_abMonLbl(r._baseM)+')</span>');
+    }).join('') : _abEmpty('No agent has gone quiet'));
 
   var steady=A.map(function(r){
       var v=S.back3.map(function(m){ return r.byMon[m]||0; });
@@ -852,13 +886,13 @@ function abRender(){
     })
     .filter(function(r){ return r._all && r.inCur>0 && r._mean>=8 && r._cv<=45; })
     .sort(function(a,b){ return b._mean-a._mean; }).slice(0,10);
-  var cSteady=_abCard('','ส่งสม่ำเสมอ', steady.length,
-    'มีทุกเดือน '+_abMonLbl(S.back3[0])+'–'+_abMonLbl(S.back3[2])+' และเดือนนี้ยังส่ง',
+  var cSteady=_abCard('','Steady senders', steady.length,
+    'Every month '+_abMonLbl(S.back3[0])+'\u2013'+_abMonLbl(S.back3[2])+' and still sending',
     steady.length? steady.map(function(r,i){
       return agRow(r,i+1,Math.round(r._mean),'#0F6E56',
-        S.back3.map(function(m){ return (r.byMon[m]||0); }).join(' · ')+' pax',
-        '<span class="ab-flat">ผันผวน ±'+r._cv+'%</span> · เดือนนี้ '+r.inCur);
-    }).join('') : _abEmpty('ยังไม่มีเอเย่นต์ที่เข้าเกณฑ์'));
+        S.back3.map(function(m){ return (r.byMon[m]||0); }).join(' \u00b7 ')+' pax',
+        '<span class="ab-flat">var \u00b1'+r._cv+'%</span> \u00b7 this month '+r.inCur);
+    }).join('') : _abEmpty('No agent meets the criteria'));
 
   var cxl=A.map(function(r){
       r._rc=r.bkCur>0?(r.cxCur/r.bkCur):0;
@@ -867,27 +901,28 @@ function abRender(){
     })
     .filter(function(r){ return r.bkCur>=5 && r.cxCur>=2 && r._rc>=0.20 && (r._rc-r._rp)>=0.08; })
     .sort(function(a,b){ return (b._rc-b._rp)-(a._rc-a._rp); }).slice(0,8);
-  var cCxl=_abCard('cxl','ยกเลิกพุ่ง', cxl.length, 'เดือนนี้ ≥ 5 ใบ · ยกเลิก ≥ 2 · สูงกว่าเดือนที่แล้ว ≥ 8 จุด',
+  var cCxl=_abCard('cxl','Cancellation spike', cxl.length,
+    '\u2265 5 bkgs this month \u00b7 \u2265 2 cancelled \u00b7 \u2265 8 pts above last month',
     cxl.length? cxl.map(function(r,i){
       return agRow(r,i+1,Math.round(r._rc*100)+'%','#8A4A00',
-        'ยกเลิก '+r.cxCur+' จาก '+r.bkCur+' ใบ',
+        r.cxCur+' of '+r.bkCur+' cancelled',
         '<span class="ab-flat">'+_abMonLbl(S.prev)+' '+Math.round(r._rp*100)+'%</span>');
-    }).join('') : _abEmpty('ไม่มีเอเย่นต์ที่ยกเลิกผิดปกติ'));
+    }).join('') : _abEmpty('No abnormal cancellation rate'));
 
   /* ── หัว ── */
-  var segs='<b class="'+(!window._abSales?'on':'')+'" onclick="abSetSales(\'\')">ทุกเซลส์</b>';
+  var segs='<b class="'+(!window._abSales?'on':'')+'" onclick="abSetSales(\'\')">All sales</b>';
   _abSalesList().forEach(function(s){
     segs+='<b class="'+(window._abSales===s.id?'on':'')+'" onclick="abSetSales(\''+s.id+'\')">'
       +'<i class="ab-sdot" style="background:'+(s.color||'#8a857d')+'"></i>'+_abEsc(s.name||s.code||s.id)+'</b>';
   });
 
   var kpi=''
-    +'<span class="ab-chip'+(gFill>=70?' ok':'')+'">fill '+N+' วัน <b>'+gFill+'%</b></span>'
-    +'<span class="ab-chip">ว่าง 14 วัน <b>'+free14+'</b></span>'
-    +(gLock?('<span class="ab-chip">ล็อกค้าง <b>'+gLock+'</b></span>'):'')
-    +'<span class="ab-chip'+(near.length?' ok':'')+'">ใกล้เต็ม <b>'+near.length+'</b></span>'
-    +'<span class="ab-chip'+(risk.length?' warn':'')+'">วันเสี่ยง <b>'+risk.length+'</b></span>'
-    +'<span class="ab-chip'+(lost.length?' warn':'')+'">เอเย่นต์หาย <b>'+lost.length+'</b></span>';
+    +'<span class="ab-chip'+(gFill>=70?' ok':'')+'">Fill '+N+'d <b>'+gFill+'%</b></span>'
+    +'<span class="ab-chip">Free 14d <b>'+free14+'</b></span>'
+    +(gLock?('<span class="ab-chip">Held <b>'+gLock+'</b></span>'):'')
+    +'<span class="ab-chip'+(near.length?' ok':'')+'">Almost full <b>'+near.length+'</b></span>'
+    +'<span class="ab-chip'+(risk.length?' warn':'')+'">At risk <b>'+risk.length+'</b></span>'
+    +'<span class="ab-chip'+(lost.length?' warn':'')+'">Agents gone <b>'+lost.length+'</b></span>';
 
   wrap.innerHTML=AB_CSS
     +'<div class="ab-fr">'
@@ -896,8 +931,8 @@ function abRender(){
         +'<span class="ab-seg">'+segs+'</span>'
         +'<span class="ab-kpi">'+kpi+'</span>'
       +'</div>'
-      +'<div class="ab-sub" style="margin-top:5px">ที่นั่ง = วันนี้ถึงอีก 14 วัน (ตัวกรองเซลส์ไม่มีผล) · '
-        +'เอเย่นต์ = จองเข้า 1–'+S.dayN+' '+_abMonLbl(S.cur)+' เทียบ '+_abMonLbl(S.prev)+' ช่วงวันเดียวกัน</div>'
+      +'<div class="ab-sub" style="margin-top:5px">Seats = today \u2192 next 14 days (sales filter does not apply) \u00b7 '
+        +'Agents = booked 1\u2013'+S.dayN+' '+_abMonLbl(S.cur)+' vs '+_abMonLbl(S.prev)+' same days</div>'
       +'</div>'
       +mtx
       +'<div class="ab-grid">'
