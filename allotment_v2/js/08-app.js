@@ -41648,6 +41648,13 @@ function bkV2RenderStats(){
     x.bookings.forEach(id => mBkSet.add(id));
   });
   SB_BOOKINGS.forEach(bk => {
+    // §cityTourView · marine page (flag off) excludes land bookings · land page (flag on) excludes marine
+    if(typeof laIsLandRoute==='function'){
+      const _isLandBk = bk.schemaVer===2
+        ? ((bk.trips&&bk.trips.length) ? bk.trips.some(t=>laIsLandRoute(t&&t.routeId)) : false)
+        : laIsLandRoute(bk.programId);
+      if(_isLandBk !== _bkV2CityTourOnly) return;
+    }
     const norm = bkV2Norm(bk);
     const t = norm.travelDate || '';
     if(!t.startsWith(ym)) return;
