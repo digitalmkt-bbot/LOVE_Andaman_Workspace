@@ -12,6 +12,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 window._abSales = '';    // '' = ทุกเซลส์
+window._abPier  = '';    // '' = ทุกท่า · ตัวกรองของตารางที่นั่ง
 window._abDays  = 7;     // ตารางกลาง · 7 หรือ 14 วัน
 
 function _abEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){
@@ -61,6 +62,22 @@ function _abRoute(rid){
 }
 function _abRouteName(rid){ var r=_abRoute(rid); return (r&&r.name)||rid; }
 function _abRouteCol(rid){ var r=_abRoute(rid); return (r&&r.color)||'#b6b1a8'; }
+/* §abPier · เส้นทางที่ไม่ได้ตั้งท่า (โปรแกรมบก/รถรับส่ง) ตกถัง 'other'
+   ใช้ถังเดียวกับที่หน้า Calendar ใช้อยู่ (CAL_PIERS) จะได้ไม่มีสองมาตรฐาน */
+const _AB_PIERS = ['tublamu','panwa','ranong','other'];
+function _abPierOf(rid){ var r=_abRoute(rid); return (r && r.pier) ? r.pier : 'other'; }
+function _abPierLbl(k){
+  if(k==='other') return 'อื่น ๆ';
+  return (typeof PIER_LABELS!=='undefined' && PIER_LABELS[k]) ? PIER_LABELS[k] : k;
+}
+
+/* §abAgent · สีประจำเอเย่นต์สำหรับแท่งในช่อง
+   ไม่มีฟิลด์สีในข้อมูลเอเย่นต์ · จะสุ่มจาก id ก็ได้ แต่สีจะกระโดดไปมาทุกครั้ง
+   ที่มีเอเย่นต์ใหม่เข้ามา → ไล่สีตามอันดับยอดรวมในช่วงที่ดูอยู่แทน
+   เจ้าใหญ่สุดได้สีเด่นสุดเสมอ และคงที่ตลอดทั้งตาราง
+   เกินอันดับ 8 ยุบเป็นเทาก้อนเดียว · ตาคนแยกสีในแท่ง 120px ได้ราว 8 สีเป็นอย่างมาก */
+const _AB_AG_PAL = ['#185FA5','#1D9E75','#E08A00','#A32D2D','#6C5CE7','#00708A','#B5651D','#D6336C'];
+const _AB_AG_ETC = '#A8A29A';
 
 /* ══ ฝั่งที่นั่ง ═══════════════════════════════════════════════════════════
    สแกนครั้งเดียว 14 วัน แล้วใช้ผลร่วมกันทั้งตารางบนและการ์ดเตือนล่าง
@@ -114,7 +131,40 @@ function _abScan(){
   var all=(typeof ROUTES!=='undefined'&&Array.isArray(ROUTES))?ROUTES.map(function(r){return r.id;}):[];
   order.sort(function(a,b){ var ia=all.indexOf(a), ib=all.indexOf(b);
     return (ia<0?999:ia)-(ib<0?999:ib); });
-  return { dates:dates, cell:cell, rids:order };
+  return { dates:dates, cell:cell, rids:order, split:_abAgentSplit(dates) };
+}
+/* แยกยอดขายในแต่ละช่องออกเป็นรายเอเย่นต์
+   ต้องเดินตามกติกาเดียวกับ getSeatsConsumed เป๊ะ ๆ (สถานะ · pendHold · charter ·
+   หัก no-show) ไม่งั้นผลรวมของแท่งจะไม่เท่ากับเลข "ขาย N" ที่อยู่ในช่องเดียวกัน
+   ซึ่งเป็นบั๊กแบบที่คนใช้จับได้ทันทีและเลิกเชื่อทั้งตาราง */
+function _abAgentSplit(dates){
+  var want={}; dates.forEach(function(d){ want[d]=1; });
+  var out={};
+  function add(rid,ds,aid,p){
+    if(p<=0) return; var k=rid+'|'+ds;
+    var m=out[k]||(out[k]={}); m[aid]=(m[aid]||0)+p;
+  }
+  ((typeof SB_BOOKINGS!=='undefined'&&Array.isArray(SB_BOOKINGS))?SB_BOOKINGS:[]).forEach(function(bk){
+    var st=bk.status||'';
+    if(st==='cancelled'||st==='rejected'||st==='cancelled_weather') return;
+    if(typeof bkPendHoldsSeat==='function' && !bkPendHoldsSeat(bk)) return;
+    var aid=bk.agentId||'_';
+    if(bk.schemaVer===2 && Array.isArray(bk.trips)){
+      bk.trips.forEach(function(t){
+        if(!t || !want[t.date]) return;
+        if(t.bookingMode==='charter') return;
+        var p=(typeof getTripPaxTotal==='function')?getTripPaxTotal(t):0;
+        if(typeof ckLostByType==='function'){
+          var L=ckLostByType(bk,t.date); if(L && L.total>0) p=Math.max(0,p-L.total);
+        }
+        add(t.routeId,t.date,aid,p);
+      });
+    } else if(bk.programId && want[bk.travelDate]){
+      var q=bk.pax||{};
+      add(bk.programId,bk.travelDate,aid,(q.adult||0)+(q.child||0)+(q.infant||0));
+    }
+  });
+  return out;
 }
 function _abOpenCells(SC){
   var out=[];
@@ -230,8 +280,15 @@ const AB_CSS=`<style>
   .ab-hd{flex:none;padding:7px 96px 9px 10px;border-radius:14px;
     background:linear-gradient(160deg, var(--ci-navy,#000F4C), #00093A);
     box-shadow:0 10px 28px rgba(0,15,76,.34), inset 0 1px 0 rgba(255,255,255,.16)}
-  .ab-hdtop{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-  .ab-ttl{font-size:15px;font-weight:800;letter-spacing:.20em;color:#fff;white-space:nowrap}
+  .ab-hdtop{position:relative;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  /* §abTitle · ชื่อหน้าอยู่กึ่งกลางแบบเดียวกับ .dv-brand ของ Dashboard
+     absolute จึงไม่กินที่ในแถว · ชิปซ้าย/ขวายังจัดตัวเองได้เหมือนเดิม
+     แต่ absolute ก็ไม่รู้ว่าชิปยาวถึงไหน (ปัญหาเดียวกับที่ .dv-brand เคยทับชิป)
+     จึงมีจุดตัดด้านล่าง: จอที่แคบเกินไปให้กลับไปอยู่ซ้ายในแถวตามเดิม */
+  .ab-ttl{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    font-size:15px;font-weight:800;letter-spacing:.20em;color:#fff;white-space:nowrap;
+    pointer-events:none;z-index:2}
+  .ab-seg{margin-right:auto}
   .ab-sub{font-size:10px;font-weight:600;color:#A8BAD8;letter-spacing:.02em}
   .ab-seg{display:flex;gap:5px;flex-wrap:wrap}
   .ab-seg b{font-size:10.5px;font-weight:700;color:#C9D6EC;background:rgba(255,255,255,.09);
@@ -240,7 +297,7 @@ const AB_CSS=`<style>
   .ab-seg b:hover{background:rgba(255,255,255,.18)}
   .ab-seg b.on{background:#fff;color:#16265C;border-color:#fff}
   .ab-sdot{width:7px;height:7px;border-radius:50%;display:inline-block;flex:none}
-  .ab-kpi{margin-left:auto;display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+  .ab-kpi{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}
   .ab-chip{font-size:11px;font-weight:600;color:#D6E2F5;background:rgba(255,255,255,.10);
     border:1px solid rgba(255,255,255,.20);border-radius:999px;padding:4px 11px;white-space:nowrap}
   .ab-chip b{font-family:'DM Mono',ui-monospace,monospace;font-weight:800;
@@ -338,6 +395,29 @@ const AB_CSS=`<style>
   .ab-tg{display:flex;border-radius:999px;overflow:hidden;border:1px solid rgba(0,0,0,.10);background:#F7F5F2}
   .ab-tg b{font-size:10px;font-weight:700;padding:4px 11px;color:#7a736c;cursor:pointer}
   .ab-tg b.on{background:var(--ci-navy,#000F4C);color:#fff}
+  /* ชิปท่าเรือ · วางไว้ในหัวการ์ดตาราง ไม่ใช่หัวหน้า เพราะกรองเฉพาะฝั่งที่นั่ง
+     (ตัวกรองเซลส์บนหัวหน้ากรองเฉพาะฝั่งเอเย่นต์ · แยกที่อยู่กันไว้จะได้ไม่สับสนว่าอะไรกรองอะไร) */
+  .ab-pier{display:flex;gap:5px;flex-wrap:wrap}
+  .ab-pier b{font-size:10px;font-weight:700;padding:3px 10px;border-radius:999px;cursor:pointer;
+    border:1px solid #E4E0D8;color:#6b675f;background:#fff;white-space:nowrap}
+  .ab-pier b:hover{background:#F4F2EE}
+  .ab-pier b.on{background:var(--ci-navy,#000F4C);color:#fff;border-color:var(--ci-navy,#000F4C)}
+  .ab-pier b i{font-family:'DM Mono',ui-monospace,monospace;font-style:normal;opacity:.62;margin-left:4px}
+
+  /* §abAgentBar · แท่งในช่องแยกเป็นรายเอเย่นต์
+     ความยาวทั้งแท่ง = fill% เหมือนเดิม · ข้างในซอยตามสัดส่วน pax ของแต่ละเจ้า
+     ได้สองคำตอบในที่เดียว: เต็มแค่ไหน และใครเป็นคนเติม */
+  .ab-mg.d7 .ab-mc .mbar{height:6px;border-radius:3px;background:rgba(0,0,0,.08);overflow:hidden;
+    display:flex;gap:0}
+  .ab-mg.d7 .ab-mc .mbar i{display:block;height:100%;border-radius:0}
+  .ab-mg.d7 .ab-mc .mbar i:first-child{border-radius:3px 0 0 3px}
+  .ab-mg.d7 .ab-mc .mbar i:last-child{border-radius:0 3px 3px 0}
+  .ab-aglg{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-top:6px;
+    padding-top:7px;border-top:1px solid #F5F2ED;font-size:9px;font-weight:600;color:#8a857d}
+  .ab-aglg span{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+  .ab-aglg i{width:9px;height:9px;border-radius:2px;display:inline-block;flex:none}
+  .ab-aglg b{color:#3a3a36;font-weight:700}
+  .ab-aglg em{font-style:normal;font-family:'DM Mono',ui-monospace,monospace;color:#b6b1a8}
 
   /* ── 3 คอลัมน์ล่าง ── */
   .ab-grid{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr) minmax(0,1fr);
@@ -396,6 +476,16 @@ const AB_CSS=`<style>
   .ab-up{color:#0F6E56} .ab-dn{color:#A32D2D} .ab-flat{color:#a8a29a}
 
   /* ── จอเล็ก ── */
+  /* §abTitle · วัดระยะทับจริงตอนชื่ออยู่กึ่งกลาง (ชิปซ้ายจบที่ x=828 คงที่ทุกความกว้าง):
+       1366 ทับซ้าย 137px · 1440 ทับ 100 · 1512 ทับ 64 · 1680 พ้น 20 · 1920 พ้น 140
+     1680 พ้นแบบเฉียดฉิว จึงตัดที่ 1760 ให้มีระยะหายใจ ~60px
+     แคบกว่านั้นชื่อกลับไปอยู่ซ้ายในแถว — ดีกว่าปล่อยให้ทับชิปจนอ่านไม่ออกทั้งคู่
+     (ต่างจาก .dv-brand ของ Dashboard ที่ซ่อนไปเลย · ที่นี่ชื่อคือชื่อหน้า ซ่อนไม่ได้) */
+  @media (max-width:1759px){
+    .ab-ttl{position:static;transform:none;pointer-events:auto}
+    .ab-seg{margin-right:0}
+    .ab-kpi{margin-left:auto}
+  }
   @media (max-width:1365px){
     .ab-fr{height:auto;min-height:calc(100dvh - var(--topbar, 44px));overflow:visible;display:block}
     .ab-fr>*{margin-bottom:9px}
@@ -423,6 +513,7 @@ const AB_CSS=`<style>
 /* ── ตัวกรอง ─────────────────────────────────────────────────────────────── */
 window.abSetSales=function(id){ window._abSales=(window._abSales===id)?'':(id||''); abRender(); };
 window.abSetDays =function(n){ window._abDays=(+n===14?14:7); abRender(); };
+window.abSetPier =function(k){ window._abPier=(window._abPier===k)?'':(k||''); abRender(); };
 window.abGoTrip  =function(rid,ds){ if(typeof bkV2OpenFiltered==='function') bkV2OpenFiltered(rid||'',ds); };
 window.abGoAgents=function(){ var el=document.querySelector('[data-view=agents]');
   if(el && typeof nav==='function') nav(el); };
@@ -447,9 +538,26 @@ function abRender(){
     dayTot[ds].cap+=c.cap; dayTot[ds].sold+=c.sold; dayTot[ds].lock+=c.lock; dayTot[ds].free+=c.free;
     rowTot[rid].cap+=c.cap; rowTot[rid].sold+=c.sold; rowTot[rid].free+=c.free;
   }); });
-  // แถวที่ไม่มีอะไรเลยในช่วงที่เลือก ไม่ต้องกินที่
-  var RIDS=SC.rids.filter(function(rid){
+  // แถวที่ไม่มีอะไรเลยในช่วงที่เลือก ไม่ต้องกินที่ · แล้วค่อยกรองท่า
+  var RIDS_ALL=SC.rids.filter(function(rid){
     return DATES.some(function(ds){ return !!SC.cell[rid+'|'+ds]; }); });
+  var PIER=window._abPier||'';
+  var RIDS=PIER? RIDS_ALL.filter(function(rid){ return _abPierOf(rid)===PIER; }) : RIDS_ALL;
+  // จำนวนเส้นทางต่อท่า · เอาไปโชว์บนชิป จะได้รู้ว่ากดแล้วจะเหลืออะไร ก่อนกด
+  var pierN={}; RIDS_ALL.forEach(function(rid){ var k=_abPierOf(rid); pierN[k]=(pierN[k]||0)+1; });
+
+  /* สีเอเย่นต์ · จัดอันดับจากยอดรวมทั้งตาราง (เฉพาะแถว/วันที่แสดงอยู่)
+     สีจึงคงที่ทุกช่องในตารางเดียวกัน และเปลี่ยนตามตัวกรองอย่างมีเหตุผล */
+  var agTot={};
+  RIDS.forEach(function(rid){ DATES.forEach(function(ds){
+    var m=SC.split[rid+'|'+ds]; if(!m) return;
+    Object.keys(m).forEach(function(a){ agTot[a]=(agTot[a]||0)+m[a]; });
+  }); });
+  var AM0=_abAgentMap();
+  var agRank=Object.keys(agTot).sort(function(a,b){ return agTot[b]-agTot[a]; });
+  var agCol={};
+  agRank.slice(0,_AB_AG_PAL.length).forEach(function(a,i){ agCol[a]=_AB_AG_PAL[i]; });
+  function _agName(a){ var g=AM0[a]; return (g&&(g.name||g.code))||'ไม่ระบุเอเย่นต์'; }
 
   var gcols=(N===7?176:152)+'px repeat('+N+',minmax(0,1fr)) 44px';
 
@@ -469,11 +577,27 @@ function abRender(){
       +(N===7?'<span class="sub" style="text-align:center">เหมาลำ</span>':'เหมา')+'</div>';
     if(c.state==='wx') return '<div class="ab-mc wx" title="'+_abDayLbl(ds)+' · ยกเลิกเพราะอากาศ"'+go+'>&#9928;</div>';
     var col=_abFillCol(c.fill);
+    /* แท่ง · ยาวเท่า fill% เหมือนเดิม แต่ซอยเป็นรายเอเย่นต์
+       ที่ล็อกไม่มีเจ้าของบุคกิ้ง (ยังไม่ออกใบ) จึงเป็นก้อนลายทางท้ายแท่ง
+       ไม่ยัดรวมกับใครสักคน ไม่งั้นจะอ่านว่าเจ้านั้นขายได้ทั้งที่ยังไม่ได้ขาย */
+    var mp=SC.split[rid+'|'+ds]||{};
+    var mk=Object.keys(mp).sort(function(a,b){ return mp[b]-mp[a]; });
+    var segs='', tipAg='';
+    if(c.cap>0){
+      mk.forEach(function(a){
+        var w=mp[a]/c.cap*100; if(w<=0) return;
+        segs+='<i style="width:'+w+'%;background:'+(agCol[a]||_AB_AG_ETC)+'"></i>';
+      });
+      if(c.lock>0) segs+='<i style="width:'+(c.lock/c.cap*100)+'%;background:repeating-linear-gradient('
+        +'45deg,#9FB8D8,#9FB8D8 2px,#D7E3F2 2px,#D7E3F2 4px)"></i>';
+      tipAg=mk.slice(0,6).map(function(a){ return _agName(a)+' '+mp[a]; }).join(' · ');
+    }
+    if(!segs) segs='<i style="width:'+Math.max(2,c.fill)+'%;background:'+col[1]+'"></i>';
     var tip=_abDayLbl(ds)+' · ขาย '+c.sold+(c.lock?(' · ล็อก '+c.lock):'')
-      +' · ว่าง '+c.free+' / '+c.cap+' ('+c.fill+'%)';
-    return '<div class="ab-mc" style="background:'+col[0]+';color:'+col[1]+'" title="'+tip+'"'+go+'>'
+      +' · ว่าง '+c.free+' / '+c.cap+' ('+c.fill+'%)'+(tipAg?('\n'+tipAg):'');
+    return '<div class="ab-mc" style="background:'+col[0]+';color:'+col[1]+'" title="'+_abEsc(tip)+'"'+go+'>'
       +'<span class="v">'+c.free+'<em>/'+c.cap+'</em></span>'
-      +'<span class="mbar"><i style="width:'+Math.max(2,c.fill)+'%;background:'+col[1]+'"></i></span>'
+      +'<span class="mbar">'+segs+'</span>'
       +'<span class="sub">ขาย '+c.sold+(c.lock?(' · <span class="lk">ล็อก '+c.lock+'</span>'):'')
         +' · '+c.fill+'%</span>'
     +'</div>';
@@ -499,12 +623,34 @@ function abRender(){
   var gFill=gCap>0?Math.round((gSold+gLock)/gCap*100):0;
   fRow+='<div class="ab-mfoot"><b>'+gFree+'</b></div>';
 
+  /* คำอธิบายสีเอเย่นต์ · มีเฉพาะโหมด 7 วัน เพราะ 14 วันช่องแคบเกินจะซอยแท่ง
+     เรียงตามยอดรวม ซึ่งเป็นลำดับเดียวกับที่ใช้แจกสี จึงอ่านคู่กับแท่งได้ตรง ๆ */
+  var agLegend='';
+  if(N===7 && agRank.length){
+    var shown=agRank.slice(0,_AB_AG_PAL.length);
+    var etc=agRank.slice(_AB_AG_PAL.length).reduce(function(x,a){ return x+agTot[a]; },0);
+    agLegend='<div class="ab-aglg">'
+      +shown.map(function(a){ return '<span><i style="background:'+agCol[a]+'"></i>'
+        +'<b>'+_abEsc(_agName(a))+'</b><em>'+agTot[a]+'</em></span>'; }).join('')
+      +(etc>0?('<span><i style="background:'+_AB_AG_ETC+'"></i>อื่น ๆ<em>'+etc+'</em></span>'):'')
+      +(gLock>0?('<span><i style="background:repeating-linear-gradient(45deg,#9FB8D8,#9FB8D8 2px,#D7E3F2 2px,#D7E3F2 4px)"></i>ล็อกค้าง<em>'+gLock+'</em></span>'):'')
+      +'</div>';
+  }
+
+
+  var pierChips='<b class="'+(!PIER?'on':'')+'" onclick="abSetPier(\'\')">ทุกท่า</b>';
+  _AB_PIERS.forEach(function(k){
+    if(!pierN[k]) return;
+    pierChips+='<b class="'+(PIER===k?'on':'')+'" onclick="abSetPier(\''+k+'\')">'
+      +_abEsc(_abPierLbl(k))+'<i>'+pierN[k]+'</i></b>';
+  });
   var mtx='<div class="ab-c ab-mtx">'
     +'<div class="ab-ct"><span class="big">ที่ว่าง · เส้นทาง × '+N+' วัน</span>'
       +'<span class="cnt">fill '+gFill+'%</span>'
       +'<span class="ab-tg">'
         +'<b class="'+(N===7?'on':'')+'" onclick="abSetDays(7)">7 วัน</b>'
         +'<b class="'+(N===14?'on':'')+'" onclick="abSetDays(14)">14 วัน</b></span>'
+      +'<span class="ab-pier">'+pierChips+'</span>'
     +'</div>'
     +'<div class="ab-mwrap"><div class="ab-mg d'+N+'" style="grid-template-columns:'+gcols+'">'
       +mHead+mRows+fRow+'</div></div>'
@@ -519,6 +665,7 @@ function abRender(){
       +'<span><i style="background:#FAFAF8"></i>ไม่มีทริป</span>'
       +'<span style="margin-left:auto">ตัวเลขใหญ่ = ที่นั่งว่าง · กดช่องเพื่อเปิด By trip date</span>'
     +'</div>'
+    +agLegend
   +'</div>';
 
   /* ── การ์ดเตือนเรื่องที่นั่ง ── */
