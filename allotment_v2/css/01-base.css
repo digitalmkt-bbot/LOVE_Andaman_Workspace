@@ -534,7 +534,7 @@ body.ts-printing .view{padding-bottom:0}
    ที่มา = .view padding-bottom 64 ข้างบนนี้ (− margin -22 ของ wrap − padding 22 ของ main = +20)
    หน้า dashboard ไม่ต้องเว้นที่ให้ป้ายก้นจอ เพราะป้าย la-refresh ย้ายขึ้นบนแล้ว
    (ป้าย la-viewonly ยังอยู่ก้นขวา แต่หน้านี้ไม่มีแถวล่างสุดให้บัง) */
-#view-dashboard,#view-salesalert{padding-bottom:0}   /* §saAlert ใช้กติกาเดียวกัน */
+#view-dashboard,#view-actionboard{padding-bottom:0}   /* §abBoard ใช้กติกาเดียวกัน */
 
 /* §laRefresh (2026-09-11) · ป้าย "มีข้อมูลใหม่" ของเดิมลอยกลางก้นจอ
    ทับบรรทัดล่างสุดของทุกหน้า จนต้องเว้น 64px ให้ทั้งแอป (§laBadgeGap ข้างบน)

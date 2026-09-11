@@ -689,7 +689,7 @@ function nav(el){
     else if(flView==='fuel') renderFuelIntel();
   } else {
     if(view==='dashboard') renderDash();
-    else if(view==='salesalert'){ if(typeof saRender==='function') saRender(); }   /* §saAlert */
+    else if(view==='actionboard'){ if(typeof abRender==='function') abRender(); }   /* §abBoard */
     else if(view==='calendar') renderCal();
     else if(view==='daily') renderDA();
     else if(view==='boats') renderBoats();
