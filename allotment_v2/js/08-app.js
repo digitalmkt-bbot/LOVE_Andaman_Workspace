@@ -43751,7 +43751,10 @@ function bkV2RenderTab2(){
         : `<tr class="t2-zband"><td colspan="${COLN}" style="--zc:${bkV2ZoneColor(z)}"><div class="zw">`
           + `<span class="zkind">โซน</span><span class="znm">${bkV2ZoneLabel(z)}</span>`
           + `<span class="zsub">${list.length} booking &middot; ${zpax} pax</span></div></td></tr>`;
-      return _zband + body;
+      /* §btGap · เหมาลำกับลูกค้าจอยเป็นคนละเรื่องกัน · ติดกันแล้วอ่านเหมือนกลุ่มเดียว
+         เว้นช่องว่างสองบรรทัดคั่นไว้ · ใส่เป็นแถวเปล่า เพราะทั้งหมดอยู่ในตารางเดียว
+         margin บน <tr> ไม่มีผล */
+      return _zband + body + (_isChtr ? `<tr class="t2-zgap"><td colspan="${COLN}"></td></tr>` : '');
     }).join('');
     /* ══ §btBand (2026-09-04) · ชื่อทริปกลายเป็นแถบคาดในตาราง ════════════════
        ของเดิมเป็นการ์ดใหญ่คร่อมตาราง: หัวตระกูลโปรแกรม + หัวทริป + แถบเรือ +
@@ -44763,6 +44766,8 @@ function bkV2RenderTab2(){
       border-radius:7px;padding:2px 8px;font-family:inherit;white-space:nowrap}
     .t2-ovnh2{display:block;margin-top:3px;font-size:10px;color:#8b86a8;font-family:inherit;
       font-weight:600;white-space:nowrap}
+    /* §btGap · ช่องว่างคั่นกลุ่มเหมาลำออกจากกลุ่มลูกค้าจอย */
+    .t2-zgap td{height:26px;padding:0;border:0;background:transparent}
     .bt-tgfoot{padding:6px 12px 8px;border-top:1px solid #F2EEE9;font-size:10px;color:#948f88;text-align:center}
     /* §btTune · ไกด์ / อาหาร / เรือหางยาว · ของที่ต้องสั่งล่วงหน้า ควรเห็นตั้งแต่เปิดหน้า */
     .bt-prep{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:6px 10px 9px;
