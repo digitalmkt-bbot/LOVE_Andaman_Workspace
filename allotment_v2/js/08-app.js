@@ -7043,10 +7043,18 @@ function bkOvnHealSpans(){
     });
   });
   if(fixed.length){ try{ baChMemoClear(); }catch(_){}
+    /* §ovnRet · ของเดิมเซฟแต่ TRIPS · การแปลงขากลับ seat → เหมาลำ ที่ทำไว้ข้างบน
+       เป็นการแก้ SB_BOOKINGS ซึ่งไม่เคยถูกเขียนกลับเลย · รีเฟรชทีก็หายทุกที
+       (save() เขียนแค่ routes/boats/trips) → ต้องเซฟ sb_bookings ด้วย
+       ตัวเลขที่นั่งไม่ได้พึ่งบรรทัดนี้แล้ว (ดู §ovnRead ใน getSeatsConsumed)
+       แต่ข้อมูลที่เก็บไว้ต้องตรงกับความจริง ไม่งั้น export/รายงานฝั่งเซิร์ฟเวอร์ยังผิดอยู่ */
+    var _legFix=fixed.some(function(f){ return f.was==='ขากลับ seat → เหมาลำ'; });
     try{ var k=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2');
          var o=JSON.parse(localStorage.getItem(k)||'{}'); o.trips=TRIPS;
+         if(_legFix && typeof SB_BOOKINGS!=='undefined') o.sb_bookings=SB_BOOKINGS;
          localStorage.setItem(k,JSON.stringify(o)); }catch(_){}
     try{ if(typeof save==='function') save('operations'); }catch(_){}
+    if(_legFix){ try{ if(typeof acctPersistBookings==='function') acctPersistBookings(); }catch(_){} }
     console.log('[ovnSpan] จองเรือย้อนหลังให้ครบช่วง '+fixed.length+' ช่อง', fixed);
   }
   if(blocked.length) console.warn('[ovnSpan] ช่องที่เป็นของใบเหมาอื่นอยู่แล้ว ไม่แตะ', blocked);

@@ -7536,6 +7536,28 @@ function bkPendHoldsSeat(bk){
   var overCap = (Array.isArray(ap.over) && ap.over.length>0) || (+ap.totOver>0);
   return !overCap;
 }
+/* §ovnRead · ขากลับของใบ "เหมาลำค้างเกาะ" ต้องไม่กินที่นั่งของกองรวม
+   คน 12 คนนั้นกลับด้วยเรือที่เหมาไว้ ไม่ได้ไปนั่งเรือรอบปกติ
+
+   เดิมพึ่ง bkOvnHealSpans() แปลง bookingMode ของขากลับจาก seat → charter
+   แต่ตัวซ่อมนั้นทำงานเฉพาะตอนเปิดหน้า By trip date และ "ไม่ได้เซฟ sb_bookings"
+   (มันเซฟแค่ TRIPS) · ผลคือทุกหน้าที่เปิดก่อน By trip date เห็นที่นั่งหายไปดื้อ ๆ
+   วัดกับใบ BK-26090351-ENOG (Zeus 16–19 ก.ย. r10) ได้:
+     ก่อนซ่อม 19 ก.ย. ขายแล้ว 22 / ว่าง 43   ← 12 ที่นี้ไม่มีอยู่จริง
+     หลังซ่อม 19 ก.ย. ขายแล้ว 10 / ว่าง 55
+   จึงย้ายมาตัดที่ "ตอนอ่าน" แทน · ไม่ต้องรอให้ใครเปิดหน้าไหนก่อน
+   และไม่ต้องแก้ข้อมูลเพื่อให้ตัวเลขถูก
+
+   เงื่อนไขแคบมากโดยตั้งใจ: ต้องมีขาไปในใบเดียวกันที่เป็นเหมาลำจริง มีเรือจริง
+   เส้นทางเดียวกัน และ ovnReturnDate ตรงกับวันของขากลับ
+   ถ้าเป็นการค้างเกาะแบบซื้อที่นั่ง (ขาไปเป็น seat) จะไม่เข้าเงื่อนไข = ยังกินที่นั่งตามเดิม */
+function bkIsCharterOvnLeg(bk, t){
+  if(!bk || !t || !t.ovnLeg) return false;
+  return (bk.trips||[]).some(function(o){
+    return o && o!==t && o.bookingMode==='charter' && o.charterBoatId
+        && (o.routeId||'')===(t.routeId||'') && (o.ovnReturnDate||'')===(t.date||'');
+  });
+}
 function getSeatsConsumed(routeId, dateStr, excludeBkId){
   if(!routeId || !dateStr) return 0;
   if(typeof SB_BOOKINGS === 'undefined' || !Array.isArray(SB_BOOKINGS)) return 0;
@@ -7549,6 +7571,7 @@ function getSeatsConsumed(routeId, dateStr, excludeBkId){
       bk.trips.forEach(t => {
         if(t.routeId !== routeId || t.date !== dateStr) return;
         if(t.bookingMode === 'charter') return;  // charter consumes whole boat, not seats
+        if(bkIsCharterOvnLeg(bk, t)) return;     // §ovnRead · ขากลับของใบเหมา · อยู่บนเรือที่เหมาไว้แล้ว
         // §check-in · คนที่ No-show / CXL หน้างานไม่ได้ใช้ที่นั่งจริง → หักออกจากที่นั่งที่ถูกใช้
         let _seat = getTripPaxTotal(t);
         if(typeof ckLostByType === 'function'){ const _L = ckLostByType(bk, dateStr); if(_L && _L.total > 0) _seat = Math.max(0, _seat - _L.total); }
