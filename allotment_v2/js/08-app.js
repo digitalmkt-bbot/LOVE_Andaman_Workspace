@@ -15514,12 +15514,14 @@ var _pckPier=null;
      โดยโครงสร้าง ไม่ใช่เพราะมีคนคอยแก้ให้เหมือนกัน */
 var _pckLand=false;
 function pckHostEl(){ return document.getElementById(_pckLand?'landcheckin-host':'piercheckin-host'); }
+/* §landCk · เมนู "เช็คอิน City tour" ถอดออก 2026-09-11 · renderer คอมเมนต์ไว้ (ยังไม่ลบ เผื่อกลับมาใช้)
 function renderLandCheckin(){ _pckLand=true; try{ renderPierCheckin(); } finally { _pckLand=false; } }
+*/
 /* วาดทั้งสองหน้าเมื่อข้อมูลเปลี่ยน · หน้าไหนไม่ได้เปิดอยู่ ก็ไม่มี host ให้วาด ข้ามไปเอง */
 function renderCheckinAll(){
   if(typeof renderPierCheckin!=='function') return;
   if(document.getElementById('piercheckin-host')) renderPierCheckin();
-  if(document.getElementById('landcheckin-host')) renderLandCheckin();
+  // §landCk · if(document.getElementById('landcheckin-host')) renderLandCheckin();
 }
 function pckSetPier(p){
   _pckPier=(_pckPier===p)?null:p;
@@ -39192,6 +39194,7 @@ function bkRenderRecent(){
 // BOOKING v2 — Linear list page (Phase 1)
 // ═══════════════════════════════════════════════════════════════
 // State (P1 rework · 3-tab + P2 New Booking form)
+var _bkV2CityTourOnly = false;   // §cityTourView · false = "Booking" (marine-only) · true = "Booking – Transfer / City Tour" (land-only, laIsLandRoute) — symmetric split, not just an added filter
 const _bkV2 = {
   tab: 'cal',           // 'cal' | 'bytrip' | 'all'
   view: 'cal',          // 'cal' | 'mx' (only when tab === 'cal')
@@ -39464,6 +39467,7 @@ function bkV2Aggregate(){
       const focPending = bk.focApproval?.status === 'pending';
       bk.trips.forEach(trip => {
         if(!trip.date) return;
+        { const _isLand = typeof laIsLandRoute==='function' && laIsLandRoute(trip.routeId); if(_isLand !== _bkV2CityTourOnly) return; }   // §cityTourView · marine page (flag off) excludes land · land page (flag on) excludes marine
         const day = ensureDay(trip.date);
         const rt = ensureRoute(day, trip.routeId);
         const p = trip.pax || {};
@@ -39475,6 +39479,7 @@ function bkV2Aggregate(){
         if(!day.bookings.includes(bk.id)) day.bookings.push(bk.id);
       });
     } else if(bk.schemaVer !== 2 && bk.travelDate){
+      { const _isLand = typeof laIsLandRoute==='function' && laIsLandRoute(bk.programId); if(_isLand !== _bkV2CityTourOnly) return; }   // §cityTourView · marine page (flag off) excludes land · land page (flag on) excludes marine
       // Legacy v1 — adapt pax shape
       const day = ensureDay(bk.travelDate);
       const rt = ensureRoute(day, bk.programId);
@@ -41321,8 +41326,10 @@ function bkV2RenderTabBody(){
 // ── Over-capacity Pending-approval queue (manager) ──
 function bkV2RenderApprovals(){
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  const pend=(SB_BOOKINGS||[]).filter(b=>b.status==='pending_approval');
-  const recent=(SB_BOOKINGS||[]).filter(b=>b.approval && b.approval.status && b.approval.status!=='pending').sort((a,b)=>String(b.approval.approvedAt||'').localeCompare(String(a.approval.approvedAt||''))).slice(0,15);
+  // §cityTourView · a booking that mixes trip types is shown on BOTH pages (marine page: any trip is marine · land page: any trip is land) — intentional simplification, not a bug. No trips at all → treated as marine (matches this booking's behavior before this filter existed).
+  const _ctLandBk=b=>(typeof laIsLandRoute!=='function') ? true : ((b.trips&&b.trips.length) ? b.trips.some(t=>laIsLandRoute(t&&t.routeId)===_bkV2CityTourOnly) : !_bkV2CityTourOnly);
+  const pend=(SB_BOOKINGS||[]).filter(b=>b.status==='pending_approval').filter(_ctLandBk);
+  const recent=(SB_BOOKINGS||[]).filter(b=>b.approval && b.approval.status && b.approval.status!=='pending').filter(_ctLandBk).sort((a,b)=>String(b.approval.approvedAt||'').localeCompare(String(a.approval.approvedAt||''))).slice(0,15);
   const card=(b)=>{
     const a=sbGetAgent(b.agentId); const ap=b.approval||{};
     const hasCap=(ap.over&&ap.over.length)||ap.totOver>0;
@@ -41451,7 +41458,9 @@ function bkV2RejectBooking(id){
 function bkV2RenderCancelReport(){
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const fmt=n=>'฿'+Math.round(n||0).toLocaleString();
-  const all=SB_BOOKINGS||[];
+  // §cityTourView · a booking that mixes trip types is shown on BOTH pages (marine page: any trip is marine · land page: any trip is land) — intentional simplification, not a bug. No trips at all → treated as marine (matches this booking's behavior before this filter existed).
+  const _ctLandBk=b=>(typeof laIsLandRoute!=='function') ? true : ((b.trips&&b.trips.length) ? b.trips.some(t=>laIsLandRoute(t&&t.routeId)===_bkV2CityTourOnly) : !_bkV2CityTourOnly);
+  const all=(SB_BOOKINGS||[]).filter(_ctLandBk);
   const cancelled=all.filter(b=>b.status==='cancelled'||b.status==='cancelled_weather');
   const partials=[]; all.forEach(b=>(b.partialCancels||[]).forEach(pc=>partials.push({b,pc})));  // partial-cancel events
   const denom=all.filter(b=>b.status!=='rejected' && b.status!=='draft').length || 1;  // confirmed+completed+cancelled
@@ -42687,6 +42696,7 @@ function bkV2RenderTab2(){
          จำนวนคนที่อยู่บนเกาะไปอยู่บนป้ายของแถวแทน */
       (bk.trips||[]).forEach(t=>{
         if(!t || t.bookingMode!=='charter' || t.ovn!=='return') return;
+        { const _isLand = typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId); if(_isLand !== _bkV2CityTourOnly) return; }   // §cityTourView · marine page (flag off) excludes land · land page (flag on) excludes marine
         if(t.date===date || !t.ovnReturnDate || t.ovnReturnDate<=t.date) return;
         if(date<=t.date || date>=t.ovnReturnDate) return;
         if((bk.trips||[]).some(x=>x && x.date===date)) return;   /* วันนั้นมี trip จริงอยู่แล้ว */
@@ -42698,8 +42708,9 @@ function bkV2RenderTab2(){
           cxl:['cancelled','rejected','cancelled_weather'].includes(bk.status),
           ovnHoldRow:{from:t.date, to:t.ovnReturnDate, day:_d1, days:_dn, pax:_all}});
       });
-      (bk.trips||[]).forEach(t=>{ if(t.date===date) rows.push({bk, t, routeId:t.routeId, zone:(typeof bkV2EffZone==='function'?bkV2EffZone(bk,t):(t.zone||bk.pickupZone))||'NoTransfer', pax:t.pax||{}, charter:t.bookingMode==='charter', charterBoatId:t.charterBoatId||null, pickupTime:t.pickupTime||'', subtotal:((bk.trips||[]).length<=1 ? (typeof bk.total==='number'?bk.total:(t.subtotal||0)) : (t.subtotal||bk.total||0)), cxl:['cancelled','rejected','cancelled_weather'].includes(bk.status)}); });
+      (bk.trips||[]).forEach(t=>{ if(t.date!==date) return; const _isLand=typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId); if(_isLand!==_bkV2CityTourOnly) return; rows.push({bk, t, routeId:t.routeId, zone:(typeof bkV2EffZone==='function'?bkV2EffZone(bk,t):(t.zone||bk.pickupZone))||'NoTransfer', pax:t.pax||{}, charter:t.bookingMode==='charter', charterBoatId:t.charterBoatId||null, pickupTime:t.pickupTime||'', subtotal:((bk.trips||[]).length<=1 ? (typeof bk.total==='number'?bk.total:(t.subtotal||0)) : (t.subtotal||bk.total||0)), cxl:['cancelled','rejected','cancelled_weather'].includes(bk.status)}); });
     } else if(bk.travelDate===date){
+      { const _isLand = typeof laIsLandRoute==='function' && laIsLandRoute(bk.programId); if(_isLand !== _bkV2CityTourOnly) return; }   // §cityTourView · marine page (flag off) excludes land · land page (flag on) excludes marine
       rows.push({bk, t:null, routeId:bk.programId, zone:bk.transfer||'NoTransfer', pax:{ad:bk.pax?.adult||0, chd:bk.pax?.child||0, inf:bk.pax?.infant||0, foc:0}, charter:false, charterBoatId:null, pickupTime:'', subtotal:bk.total||0, cxl:['cancelled','rejected','cancelled_weather'].includes(bk.status)});
     }
   });
@@ -44942,7 +44953,9 @@ function bkV2RenderTab2(){
 // ── Tab 3 · All bookings (existing Linear list) ──
 function bkV2RenderTab3(){
   const escapeHTML = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
-  const all = SB_BOOKINGS.map(bkV2Norm).sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||'') || String(b.id||'').localeCompare(String(a.id||'')));   // newest first · tiebreak by BK number (running counter) so same-day bookings show latest on top
+  // §cityTourView · a booking that mixes trip types is shown on BOTH pages (marine page: any trip is marine · land page: any trip is land) — intentional simplification, not a bug. No trips at all → treated as marine (matches this booking's behavior before this filter existed).
+  const _srcBookings = (typeof laIsLandRoute!=='function') ? SB_BOOKINGS : SB_BOOKINGS.filter(bk => (bk.schemaVer===2 ? ((bk.trips&&bk.trips.length) ? bk.trips.some(t=>laIsLandRoute(t&&t.routeId)===_bkV2CityTourOnly) : !_bkV2CityTourOnly) : (laIsLandRoute(bk.programId)===_bkV2CityTourOnly)));
+  const all = _srcBookings.map(bkV2Norm).sort((a,b) => (b.createdAt||'').localeCompare(a.createdAt||'') || String(b.id||'').localeCompare(String(a.id||'')));   // newest first · tiebreak by BK number (running counter) so same-day bookings show latest on top
   const kCount = all.length;
   const kConfirmed = all.filter(b=>b.status==='confirmed').length;
   // Pending FOC = any OPEN booking (quote/pending) that has FOC seats and isn't FOC-approved yet · "awaiting approval"
@@ -46108,6 +46121,7 @@ function bkV2RouteDDOpts(){
   if(typeof ROUTES === 'undefined') return [];
   return bkV2BookableRoutes().ids
     .map(rid => ROUTES.find(r => r.id === rid)).filter(Boolean)
+    .filter(r => (typeof laIsLandRoute!=='function') || (laIsLandRoute(r.id)===_bkV2CityTourOnly))   // §cityTourView · marine page offers marine routes only · land page offers land routes only
     .map(r => ({ id: r.id, label: r.name, pier: bkV2PierTag(r.pier) }));
 }
 function bkV2RouteDDRender(idx, val){

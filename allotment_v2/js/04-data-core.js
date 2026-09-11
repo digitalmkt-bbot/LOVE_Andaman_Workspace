@@ -703,7 +703,7 @@ function nav(el){
     else if(view==='b2b-dash') renderB2BDash();
     else if(view==='contract-tmpl') renderContractTemplates();
     else if(view==='b2c') renderB2C();
-    else if(view==='booking') renderBooking();
+    else if(view==='booking'){ _bkV2CityTourOnly = (el.dataset.citytour==='1'); renderBooking(); }   // §cityTourView · keyed off which nav item was clicked, not left sticky from a prior view
     else if(view==='doccheck') renderDocCheck();
     else if(view==='pickup-setup') renderPickupSetup();
     else if(view==='staff') renderStaff();
