@@ -42786,6 +42786,8 @@ function bkV2RenderTab2(){
   const lockRouteIds = (typeof bkV2LocksFor==='function')
     ? [...new Set((typeof ROUTES!=='undefined'?ROUTES:[]).map(r=>r.id).filter(rid => bkV2LocksFor(rid, date).length>0))]
         .filter(rid => {
+          // §cityTourView · marine page (flag off) excludes land locks · land page (flag on) excludes marine locks
+          if((typeof laIsLandRoute==='function' && laIsLandRoute(rid)) !== _bkV2CityTourOnly) return false;
           if(famF && (bkV2RouteFamily(rid)?.id)!==famF) return false;
           if(routeF && rid!==routeF) return false;
           if(pierF!=='all'){ const rt=ROUTES.find(x=>x.id===rid); if(rt?.pier!==pierF) return false; }
@@ -42797,6 +42799,8 @@ function bkV2RenderTab2(){
       .filter(b=> b.reschedule && b.reschedule.fromDate===date)
       .flatMap(b=> (b.trips||[]).map(t=>t.routeId)).filter(Boolean))]
     .filter(rid => {
+      // §cityTourView · marine page (flag off) excludes land reschedules · land page (flag on) excludes marine
+      if((typeof laIsLandRoute==='function' && laIsLandRoute(rid)) !== _bkV2CityTourOnly) return false;
       if(famF && (bkV2RouteFamily(rid)?.id)!==famF) return false;
       if(routeF && rid!==routeF) return false;
       if(pierF!=='all'){ const rt=ROUTES.find(x=>x.id===rid); if(rt?.pier!==pierF) return false; }
@@ -42834,7 +42838,8 @@ function bkV2RenderTab2(){
     </div>`;
 
   // ── Left sidebar · mini calendar + previous/upcoming ──
-  const allTrips = bkV2Tab2AllTrips();
+  // §cityTourView · marine page (flag off) excludes land trips · land page (flag on) excludes marine trips
+  const allTrips = bkV2Tab2AllTrips().filter(t=>(typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId))===_bkV2CityTourOnly);
   const tripDates = new Set(allTrips.map(t=>t.date));
   const pad2 = n => String(n).padStart(2,'0');
   const curYM = _bkV2T2Cursor || date.slice(0,7);
@@ -42876,7 +42881,7 @@ function bkV2RenderTab2(){
      กดชิป "ทับละมุ" แล้วโปรแกรมของภูเก็ตยังโผล่อยู่ · ต้องอ่านจาก rowsPier */
   const _famAgg = {};
   rowsPier.forEach(r => { if(r.cxl) return; const f=bkV2RouteFamily(r.routeId); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.pax += P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'); a.rids.add(r.routeId); });
-  (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(rr => { if(pierF!=='all' && rr.pier!==pierF) return; const lk=(typeof bkV2LockedTotal==='function')?bkV2LockedTotal(rr.id,date):0; if(lk<=0) return; const f=bkV2RouteFamily(rr.id); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.locked+=lk; a.rids.add(rr.id); });
+  (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(rr => { if((typeof laIsLandRoute==='function' && laIsLandRoute(rr.id))!==_bkV2CityTourOnly) return; if(pierF!=='all' && rr.pier!==pierF) return; const lk=(typeof bkV2LockedTotal==='function')?bkV2LockedTotal(rr.id,date):0; if(lk<=0) return; const f=bkV2RouteFamily(rr.id); if(!f) return; const a=_famAgg[f.id]=_famAgg[f.id]||{fam:f,pax:0,rids:new Set(),locked:0}; a.locked+=lk; a.rids.add(rr.id); });
   const _famList = Object.values(_famAgg).sort((a,b)=> b.pax-a.pax || (b.locked-a.locked));
   const _dayLocked = (typeof bkV2DayLockedTotal==='function') ? bkV2DayLockedTotal(date) : 0;
   const _lockProgs = _famList.filter(a=>a.locked>0).length;
@@ -42889,7 +42894,8 @@ function bkV2RenderTab2(){
   let _unBoatN=0,_unBoatPax=0,_unVanN=0,_unVanPax=0,_unRetN=0,_unRetPax=0,_unRcN=0,_unRcPax=0; const _unBoatR={}, _unVanR={}, _unRetR={}, _unRcR={};
   (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
     if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
-    const dts=(b.trips||[]).filter(t=>(t.date||'')===date); if(!dts.length) return;
+    // §cityTourView · marine page (flag off) excludes land trips · land page (flag on) excludes marine trips
+    const dts=(b.trips||[]).filter(t=>(t.date||'')===date && (typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId))===_bkV2CityTourOnly); if(!dts.length) return;
     const pax=dts.reduce((s,t)=>s+((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0),0);
     const _lbl=_unRn(dts[0].routeId);
     const hasBoat=bkOpsRead(b,date).boatId||dts.some(t=>t.charterBoatId);
@@ -42927,6 +42933,9 @@ function bkV2RenderTab2(){
     let vD=0,vT=0,vN=0,pD=0,pT=0,pN=0;
     (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(b=>{
       if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
+      // §cityTourView · marine page (flag off) excludes land trips · land page (flag on) excludes marine trips
+      const _dts=(b.trips||[]).filter(t=>(t.date||'')===date); if(!_dts.length) return;
+      if(!_dts.some(t=>(typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId))===_bkV2CityTourOnly)) return;
       const s=ckSummary(b,date); if(!s) return;
       const _o=(typeof bkOpsRead==='function')?bkOpsRead(b,date):(b.ops||{});
       if(_o.vanId){ vT++; if(s.van&&s.van.at){ vD++; vN+=s.vanNoShow; } }
