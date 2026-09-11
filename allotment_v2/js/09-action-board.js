@@ -60,6 +60,17 @@ function _abAgentMap(){
   return m;
 }
 function _abSalesOf(ag){ return (ag && ag.sales) || ''; }
+/* §abAgPill · "สีเอเย่นต์คาดชื่อเอเย่นต์เลย เป็นเหมือนในหน้า By trip date"
+   หน้า By trip date วาดชื่อเอเย่นต์เป็นบล็อกสีทึบ + ตัวหนังสือสีตัดกัน (.ck-agblk)
+   ทำแบบเดียวกันที่นี่ · ใช้ bkV2AgentColor + bkV2ContrastInk ตัวเดียวกันเป๊ะ
+   จุดกลม (.ab-adot) เดิมเล็กเกินไป และสีอ่อน ๆ อย่าง #fff838 แทบมองไม่เห็นบนพื้นขาว */
+function _abAgPill(aid,name){
+  var t=_abEsc(name||'');
+  if(!aid) return '<b class="ab-apill none">'+t+'</b>';
+  var c=(typeof bkV2AgentColor==='function')?bkV2AgentColor(aid):'#8a857d';
+  var ink=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(c):'#fff';
+  return '<b class="ab-apill" style="background:'+c+';color:'+ink+'" title="'+t+'">'+t+'</b>';
+}
 function _abSalesChip(sid){
   var s=_abSalesList().find(function(x){return x.id===sid;});
   if(!s) return '';
@@ -309,6 +320,14 @@ const AB_CSS=`<style>
   .ab-seg b:hover{background:rgba(255,255,255,.18)}
   .ab-seg b.on{background:#fff;color:#16265C;border-color:#fff}
   .ab-sdot{width:7px;height:7px;border-radius:50%;display:inline-block;flex:none}
+  /* วัดที่ 1440 · ก้อนตัวเลขขวากิน 50% เหลือชื่อ ~120px · ถ้าบล็อกเป็น inline-block
+     + nowrap จะโดนตัด 32 จาก 37 ชื่อ · ใช้ display:inline แทน แถบสีจึงคาดตามบรรทัด
+     ที่ข้อความห่อไป (box-decoration-break:clone ทำให้มุมมนทั้งสองชิ้น) */
+  .ab-apill{display:inline;padding:1px 7px;border-radius:6px;
+    font-weight:700;font-size:11.5px;
+    -webkit-box-decoration-break:clone;box-decoration-break:clone;
+    box-shadow:0 1px 2px rgba(0,0,0,.10)}
+  .ab-apill.none{background:#EDEBE4;color:#5A5A52;box-shadow:none}
   .ab-kpi{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}
   .ab-chip{font-size:11px;font-weight:600;color:#D6E2F5;background:rgba(255,255,255,.10);
     border:1px solid rgba(255,255,255,.20);border-radius:999px;padding:4px 11px;white-space:nowrap}
@@ -334,10 +353,18 @@ const AB_CSS=`<style>
   .ab-c.near .ab-ct .big{color:#0F6E56} .ab-c.near .ab-ct .cnt{background:#E6F5EC;color:#0F6E56}
   .ab-c.lost .ab-ct .big{color:#A32D2D} .ab-c.lost .ab-ct .cnt{background:#FCEBEB;color:#A32D2D}
   .ab-c.cxl  .ab-ct .big{color:#8A4A00} .ab-c.cxl  .ab-ct .cnt{background:#FBEEDC;color:#8A4A00}
+/* §abSB · "ตัว scroll ใหญ่มาก ต้องทำให้เล็กที่สุด"
+   กฎเหมารวมทั้งหน้า · อะไรที่เลื่อนได้แล้วยังไม่ได้ตั้งสกอลล์บาร์ไว้จะได้ไม่หลุด
+   เป็นสกอลล์บาร์ระบบ (macOS โหมด "แสดงตลอด" กว้าง ~15px) */
+  #view-actionboard *{scrollbar-width:thin;scrollbar-color:#DAD5CC transparent}
+  #view-actionboard *::-webkit-scrollbar{width:4px;height:4px}
+  #view-actionboard *::-webkit-scrollbar-thumb{background:#DAD5CC;border-radius:3px}
+  #view-actionboard *::-webkit-scrollbar-track{background:transparent}
+  #view-actionboard *::-webkit-scrollbar-corner{background:transparent}
   .ab-list{overflow-y:auto;min-height:0;flex:1 1 auto;
     scrollbar-width:thin;scrollbar-color:#DAD5CC transparent}
-  .ab-list::-webkit-scrollbar{width:7px}
-  .ab-list::-webkit-scrollbar-thumb{background:#DAD5CC;border-radius:4px}
+  .ab-list::-webkit-scrollbar{width:4px}
+  .ab-list::-webkit-scrollbar-thumb{background:#DAD5CC;border-radius:3px}
   .ab-list::-webkit-scrollbar-track{background:transparent}
   /* แถวที่โดนตัดครึ่งจะดูเหมือนข้อมูลขาด · จางที่ขอบล่างให้รู้ว่าเลื่อนดูต่อได้ */
   .ab-lw{position:relative;min-height:0;flex:1 1 auto;display:flex;flex-direction:column}
@@ -354,8 +381,8 @@ const AB_CSS=`<style>
   .ab-mtx{flex:0 0 auto;max-height:46%}
   .ab-mwrap{overflow:auto;min-height:0;flex:1 1 auto;
     scrollbar-width:thin;scrollbar-color:#DAD5CC transparent}
-  .ab-mwrap::-webkit-scrollbar{width:7px;height:7px}
-  .ab-mwrap::-webkit-scrollbar-thumb{background:#DAD5CC;border-radius:4px}
+  .ab-mwrap::-webkit-scrollbar{width:4px;height:4px}
+  .ab-mwrap::-webkit-scrollbar-thumb{background:#DAD5CC;border-radius:3px}
   .ab-mwrap::-webkit-scrollbar-track{background:transparent}
   .ab-mg{display:grid;gap:3px;min-width:0;align-items:stretch}
   .ab-mh{text-align:center;font-size:8.5px;font-weight:800;color:#a8a29a;line-height:1.15;
@@ -461,8 +488,8 @@ const AB_CSS=`<style>
   .ab-col{display:flex;flex-direction:column;gap:11px;min-width:0;min-height:0;
     overflow-y:auto;overscroll-behavior:contain;
     scrollbar-width:thin;scrollbar-color:rgba(0,15,76,.34) transparent}
-  .ab-col::-webkit-scrollbar{width:6px}
-  .ab-col::-webkit-scrollbar-thumb{background:rgba(0,15,76,.30);border-radius:4px}
+  .ab-col::-webkit-scrollbar{width:4px}
+  .ab-col::-webkit-scrollbar-thumb{background:rgba(0,15,76,.30);border-radius:3px}
   .ab-col::-webkit-scrollbar-track{background:transparent}
   .ab-col>*{flex:1 1 0;min-height:112px}
   /* ใบทางซ้ายสูงตามเนื้อ · ปล่อยให้ "วันเสี่ยง" (แถวเยอะสุด) กินที่ที่เหลือ
@@ -510,8 +537,7 @@ const AB_CSS=`<style>
      ให้ wrap ตัดสินเอง: กว้างพอก็อยู่บรรทัดเดียว (เห็น 5–6 ราย) แคบก็ตกลงมาเอง
      ไม่ต้องมี breakpoint เพราะความกว้างคอลัมน์เปลี่ยนตามตัวกรองได้ด้วย */
   .ab-ab{flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:1px 9px}
-  .ab-ab .nm{flex:0 1 auto;min-width:0;font-size:11.5px;font-weight:700;color:#2c2c2a;line-height:1.35;
-    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ab-ab .nm{flex:0 1 auto;min-width:0;line-height:1.75;display:block;overflow-wrap:anywhere}
   .ab-ab .mt{flex:0 1 auto;min-width:0;display:flex;align-items:center;gap:5px;
     font-size:9.5px;font-weight:600;color:#9b9088;white-space:nowrap;overflow:hidden}
   /* ชื่อเจ้าของยาว ๆ ("Staff / Welfare (internal)") ล้นได้แม้จอกว้าง · ให้จบด้วย … ไม่ใช่หายเฉย ๆ */
@@ -532,24 +558,22 @@ const AB_CSS=`<style>
      แคบกว่า 1700 จึงให้ชื่อกินบรรทัดเต็ม แล้วเมตาตกลงมาบรรทัดล่างตามเดิม
      กว้างกว่านั้นค่อยปล่อยให้อยู่บรรทัดเดียว (เห็นได้ครบ 10 ราย) */
   @media (max-width:1699px){
-    /* ให้ชื่อกินบรรทัดเต็มยังไม่พอ · 267 − อันดับ 17 − ก้อนตัวเลข ~90 เหลือชื่อ 134px
-       ซึ่งยังตัด "Club Wyndham" อยู่ดี → ยอมให้ขึ้นบรรทัดที่ 2
-       แถวสูงขึ้นเห็นน้อยลง แต่ชื่อเอเย่นต์คือตัวที่ต้องอ่านออก ไม่ใช่จำนวนแถว */
-    .ab-ab .nm{flex:1 1 100%;white-space:normal;line-height:1.25;
-      display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-    /* §abMeta · ข้อความอังกฤษยาวกว่าไทยที่เคยใช้ ("NK last sent 29 Jul · quiet 44 days" = 34 ตัวอักษร)
-       nowrap+hidden จึงตัดหายกลางคำโดยไม่มี … บอก · ให้ห่อลงบรรทัดที่สองแทน */
+    /* §abRowNarrow · วัดจริงที่ 1440 · แถวกว้าง 239px · อันดับ 17 + ก้อนตัวเลข 102 + ช่องไฟ 18
+       เหลือชื่อ 94px แต่ชื่อที่ยาวที่สุดต้องการ 145px ("Staff / Welfare (internal)")
+       แถบสีจึงหักเป็นสองบรรทัด แถวสูง 85px เห็นได้แค่ 3 ราย
+       แก้: ให้ชื่อ+เมตากินความกว้างแถวทั้งแถว (ได้ 196px > 145px พอทุกชื่อ)
+            แล้วดันก้อนตัวเลขลงบรรทัดล่าง ชิดขวา เรียงในบรรทัดเดียว */
+    .ab-ar{flex-wrap:wrap;row-gap:1px}
+    .ab-ab{flex:1 1 calc(100% - 26px)}
+    .ab-ab .nm{flex:1 1 100%;line-height:1.7}
+    /* §abMeta · ข้อความอังกฤษยาวกว่าไทยที่เคยใช้ ("NK last sent 29 Jul · quiet 44 days")
+       nowrap+hidden จึงตัดหายกลางคำโดยไม่มี … บอก · ให้ห่อลงบรรทัดถัดไปแทน */
     .ab-ab .mt{flex:1 1 100%;flex-wrap:wrap;white-space:normal;overflow:visible}
     .ab-ab .mt>span{min-width:0;line-height:1.3}
-    /* ชื่อเอเย่นต์บางรายเป็นคำเดียวยาว ๆ (HOTELBEDS · A.V.E.Travel) ห่อบรรทัดไม่ได้
-       วัดที่ 1366 ขาดอีก 5px → ยอมให้ตัดกลางคำดีกว่าโดนซ่อนท้ายคำ */
-    .ab-ab .nm{overflow-wrap:anywhere}
-    /* ก้อนขวาเป็น flex:none · ข้อความยาวอย่าง "ผันผวน ±10% · เดือนนี้ 121"
-       จึงยืดตัวเองไป ~140px แล้วบีบชื่อเหลือ 84px (การ์ด "ส่งสม่ำเสมอ" โดนหนักสุด)
-       จำกัดไม่ให้กินเกินครึ่งแถว แล้วให้ข้อความห้อยขึ้นบรรทัดใหม่แทนการดันความกว้าง */
-    .ab-an{flex:0 1 auto;flex-wrap:wrap;max-width:50%}
-    .ab-an .v{flex:1 1 100%;text-align:right}
-    .ab-an .d{flex:1 1 100%;white-space:normal;line-height:1.3}
+    .ab-an{flex:1 1 100%;max-width:none;flex-wrap:nowrap;justify-content:flex-end;
+      align-items:baseline;gap:8px}
+    .ab-an .v{flex:none;font-size:14px}
+    .ab-an .d{flex:none;white-space:nowrap}
   }
 
   /* ── จอเล็ก ── */
@@ -864,7 +888,11 @@ function abRender(){
   function agRow(r,rank,val,valCol,sub,right){
     return '<div class="ab-ar" onclick="abGoAgents()">'
       +(rank!=null?'<span class="ab-rk">'+rank+'</span>':'')
-      +'<span class="ab-ab"><span class="nm">'+_abEsc(r.name)+'</span>'
+      /* §abAgDot · "สีประจำ Agent ไม่ขึ้น" · เดิมสีประจำเอเย่นต์โผล่เฉพาะแท่งในตาราง
+         และต้องกด "By agent" ก่อน · ในการ์ดอันดับมีแต่จุดสีของ "เซลส์ผู้ดูแล" (.ab-sdot)
+         ซึ่งอ่านผิดได้ว่าเป็นสีเอเย่นต์ · ใส่จุดสีเอเย่นต์ไว้หน้าชื่อทุกใบ
+         ใช้ bkV2AgentColor ตัวเดียวกับหน้า By trip date จึงตรงกันทุกหน้า */
+      +'<span class="ab-ab"><span class="nm">'+_abAgPill(r.id,r.name)+'</span>'
         +'<span class="mt">'+(r.sales?_abSalesChip(r.sales):'')+(sub?('<span>'+sub+'</span>'):'')+'</span></span>'
       +'<span class="ab-an"><span class="v"'+(valCol?(' style="color:'+valCol+'"'):'')+'>'+val+'</span>'
         +'<span class="d">'+(right||'')+'</span></span>'
