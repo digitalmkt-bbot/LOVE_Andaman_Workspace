@@ -73,20 +73,16 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
       Daily Availability
     </div>
-    <!-- §saAlert -->
-    <div class="nav-item" data-view="salesalert" onclick="nav(this)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
-      Sales Alert
+    <!-- §abBoard -->
+    <div class="nav-item" data-view="actionboard" onclick="nav(this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v14H3z"/><path d="M7 21h10"/><path d="M7 12l3-3 3 3 4-5"/></svg>
+      Action Board
     </div>
     <div style="height:1px;background:rgba(255,255,255,.07);margin:8px 6px 2px"></div>
     <div class="nav-section" style="color:rgba(130,210,170,.5)">Operations</div>
     <div class="nav-item" data-view="booking" onclick="nav(this)" style="border-left:2px solid rgba(130,210,170,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2z"/><path d="M9 11l2 2 4-4"/></svg>
       Booking
-    </div>
-    <div class="nav-item" data-view="booking" data-citytour="1" onclick="nav(this)" style="border-left:2px solid rgba(130,210,170,.25);padding-left:9px">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 21h20"/><rect x="3" y="10" width="5" height="11"/><rect x="9" y="4" width="6" height="17"/><rect x="16" y="13" width="5" height="8"/><path d="M11 8h2M11 12h2M11 16h2"/></svg>
-      Booking &ndash; Transfer / City Tour
     </div>
     <div class="nav-item" data-view="reconfirm" onclick="nav(this)" style="border-left:2px solid rgba(130,210,170,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
@@ -128,12 +124,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 18h18"/><path d="M5 18l2-7h10l2 7"/><path d="M12 11V4"/><path d="M9 6h6"/></svg>
       เช็คอินหน้าท่า
     </div>
-    <!-- §landCk · เมนู "เช็คอิน City tour" ถอดออกจากไซด์บาร์ 2026-09-11 · โค้ด renderer ยังอยู่ใน 08-app.js (คอมเมนต์ไว้)
     <div class="nav-item" data-view="landcheckin" onclick="nav(this)" style="border-left:2px solid rgba(130,210,170,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="7" width="14" height="9" rx="2"/><circle cx="7" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/><path d="M17 10h3l1 3v3h-4"/></svg>
       เช็คอิน City tour
     </div>
-    -->
     <div class="nav-item" data-view="travelsum" onclick="nav(this)" style="border-left:2px solid rgba(130,210,170,.25);padding-left:9px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M8 9h8"/><path d="M8 13h5"/><path d="M8 17h3"/></svg>
       Travel Summary
@@ -414,8 +408,8 @@
       <div id="dash-wrap" style="background:#16265C;margin:-22px;padding:0;min-height:calc(100dvh - var(--topbar, 44px));color:#1A1A1A"></div>
     </div>
 
-    <!-- ══════════ SALES ALERT (§saAlert) ══════════ -->
-    <div id="view-salesalert" class="view"><div id="sa-wrap" style="background:#16265C;margin:-22px;padding:0;min-height:calc(100dvh - var(--topbar, 44px));color:#1A1A1A"></div></div>
+    <!-- ══════════ ACTION BOARD (§abBoard) ══════════ -->
+    <div id="view-actionboard" class="view"><div id="ab-wrap" style="background:#00BCDF;margin:-22px;padding:0;min-height:calc(100dvh - var(--topbar, 44px));color:#1A1A1A"></div></div>
 
     <!-- ══════════ CALENDAR (redesigned · Fleet Insights style) ══════════ -->
     <div id="view-calendar" class="view">
@@ -999,9 +993,8 @@
     <div id="view-vanjobs" class="view"><div id="vanjobs-host"></div></div>
     <div id="view-vancheckin" class="view"><div id="vancheckin-host"></div></div>
     <div id="view-piercheckin" class="view"><div id="piercheckin-host" class="pck-host"></div></div>
-    <!-- §landCk · เช็คอิน City tour ถอดออก 2026-09-11 · view container คอมเมนต์ไว้คู่กับเมนู
+    <!-- §landCk · เช็คอินทัวร์/รถรับส่ง · renderer ตัวเดียวกับหน้าท่า คนละโหมด -->
     <div id="view-landcheckin" class="view"><div id="landcheckin-host" class="pck-host"></div></div>
-    -->
     <div id="view-poa-panwa" class="view"><div id="pa-host-panwa" class="pj-host"></div></div>
     <div id="view-poa-tublamu" class="view"><div id="pa-host-tublamu" class="pj-host"></div></div>
     <div id="view-poa-ranong" class="view"><div id="pa-host-ranong" class="pj-host"></div></div>
@@ -3010,6 +3003,6 @@
 </div>
 
 <script src="js/08-app.js"></script>
-<script src="js/09-sales-alert.js"></script>
+<script src="js/09-action-board.js"></script>
 </body>
 </html>
