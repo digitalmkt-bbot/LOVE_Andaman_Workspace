@@ -13,6 +13,10 @@
 
 window._abSales = '';    // '' = ทุกเซลส์
 window._abPier  = '';    // '' = ทุกท่า · ตัวกรองของตารางที่นั่ง
+/* §abBy · แท่งในช่องนับเป็นของใคร · 'sales' = เซลส์ผู้ดูแล · 'agent' = เอเย่นต์
+   ตั้งต้นเป็นเซลส์ เพราะคำถามประจำวันคือ "ลูกค้าของเซลส์คนไหน"
+   ส่วนรายเอเย่นต์เป็นการเจาะลงอีกชั้น กดสลับได้ */
+window._abBy    = 'sales';
 window._abDays  = 7;     // ตารางกลาง · 7 หรือ 14 วัน
 
 function _abEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){
@@ -382,10 +386,20 @@ const AB_CSS=`<style>
   .ab-mg.d7 .ab-mc .lk{color:var(--ci-cyan-ink,#00708A);font-weight:800;opacity:1}
   .ab-mtot{text-align:right;font-family:'DM Mono',ui-monospace,monospace;font-size:11.5px;
     font-weight:800;color:#5A5A52;align-self:center;padding-left:2px}
-  .ab-mfoot{font-size:8.5px;font-weight:700;color:#8a857d;text-align:center;align-self:center;
-    line-height:1.2;padding-top:3px}
+  .ab-mfoot{font-size:8.5px;font-weight:700;color:#8a857d;text-align:center;align-self:start;
+    line-height:1.2;padding-top:5px}
   .ab-mfoot b{display:block;font-family:'DM Mono',ui-monospace,monospace;font-size:11.5px;color:#3a3a36}
-  .ab-mlbl{font-size:9px;font-weight:800;color:#a8a29a;letter-spacing:.04em;align-self:center}
+  /* §abBy · ยอดแยกตามเซลส์ของวันนั้น · ชิปเล็กเรียงต่อกัน ไม่ใช้ tooltip
+     เพราะเป็นของที่ต้องกวาดตาเทียบข้ามวัน · tooltip ต้องชี้ทีละช่องซึ่งเทียบไม่ได้ */
+  .ab-usp{display:flex;flex-wrap:wrap;gap:2px 5px;justify-content:center;margin-top:4px}
+  .ab-usp em{font-style:normal;font-size:8.5px;font-weight:700;color:#5A5A52;
+    display:inline-flex;align-items:center;gap:3px;white-space:nowrap;
+    font-family:'DM Mono',ui-monospace,monospace}
+  .ab-usp i{width:6px;height:6px;border-radius:2px;display:inline-block;flex:none}
+  .ab-mlbl{font-size:9px;font-weight:800;color:#a8a29a;letter-spacing:.04em;align-self:start;
+    padding-top:5px;line-height:1.3}
+  .ab-mlbl u{display:block;text-decoration:none;font-size:8px;font-weight:700;color:#c4bfb6;
+    letter-spacing:0;margin-top:2px}
   .ab-mlg{display:flex;gap:11px;flex-wrap:wrap;align-items:center;margin-top:8px;
     font-size:9px;font-weight:600;color:#8a857d}
   .ab-mlg i{width:9px;height:9px;border-radius:2px;display:inline-block;margin-right:4px;
@@ -514,6 +528,7 @@ const AB_CSS=`<style>
 window.abSetSales=function(id){ window._abSales=(window._abSales===id)?'':(id||''); abRender(); };
 window.abSetDays =function(n){ window._abDays=(+n===14?14:7); abRender(); };
 window.abSetPier =function(k){ window._abPier=(window._abPier===k)?'':(k||''); abRender(); };
+window.abSetBy   =function(k){ window._abBy=(k==='agent'?'agent':'sales'); abRender(); };
 window.abGoTrip  =function(rid,ds){ if(typeof bkV2OpenFiltered==='function') bkV2OpenFiltered(rid||'',ds); };
 window.abGoAgents=function(){ var el=document.querySelector('[data-view=agents]');
   if(el && typeof nav==='function') nav(el); };
@@ -546,18 +561,55 @@ function abRender(){
   // จำนวนเส้นทางต่อท่า · เอาไปโชว์บนชิป จะได้รู้ว่ากดแล้วจะเหลืออะไร ก่อนกด
   var pierN={}; RIDS_ALL.forEach(function(rid){ var k=_abPierOf(rid); pierN[k]=(pierN[k]||0)+1; });
 
-  /* สีเอเย่นต์ · จัดอันดับจากยอดรวมทั้งตาราง (เฉพาะแถว/วันที่แสดงอยู่)
-     สีจึงคงที่ทุกช่องในตารางเดียวกัน และเปลี่ยนตามตัวกรองอย่างมีเหตุผล */
-  var agTot={};
+  /* §abBy · ยุบยอดรายเอเย่นต์ขึ้นเป็น "หน่วย" ที่กำลังดูอยู่ (เซลส์ หรือ เอเย่นต์)
+     ใช้ชุดเดียวกันทั้งแท่งในช่อง · แถวรวม/วัน · และคำอธิบายสี จะได้ไม่มีทางขัดกันเอง */
+  var BY=(window._abBy==='agent')?'agent':'sales';
+  var AM0=_abAgentMap();
+  function _unitOf(aid){
+    if(BY==='agent') return aid;
+    var g=AM0[aid]; return (g && g.sales) ? g.sales : '_';
+  }
+  /* เอเย่นต์บางรายผูกกับ sales id ที่ไม่มีอยู่ในทีมแล้ว (เซลส์ลาออก/ถูกลบ)
+     โชว์ id ดิบจะยาวและอ่านไม่รู้เรื่อง · ย่อเป็น ?? ในชิป แต่เก็บ id ไว้ในชื่อเต็ม
+     จะได้ตามแก้ข้อมูลได้ ไม่ใช่กลบหายไปเฉย ๆ */
+  function _unitName(k){
+    if(k==='_') return (BY==='agent')?'ไม่ระบุเอเย่นต์':'ไม่มีเซลส์เจ้าของ';
+    if(BY==='agent'){ var g=AM0[k]; return (g&&(g.name||g.code))||k; }
+    var s=_abSalesList().find(function(x){ return x.id===k; });
+    return (s&&(s.name||s.code))||('เซลส์ที่ถูกลบ · '+k);
+  }
+  function _unitCode(k){
+    if(k==='_') return '—';
+    if(BY==='agent'){ var g=AM0[k]; return (g&&(g.code||g.name))||k; }
+    var s=_abSalesList().find(function(x){ return x.id===k; });
+    return (s&&(s.code||s.name))||'??';
+  }
+  /* ยุบ split รายเอเย่นต์ → รายหน่วย · ทำครั้งเดียวแล้วใช้ซ้ำ */
+  var unit={}, uTot={}, uDay={};
+  DATES.forEach(function(ds){ uDay[ds]={}; });
   RIDS.forEach(function(rid){ DATES.forEach(function(ds){
     var m=SC.split[rid+'|'+ds]; if(!m) return;
-    Object.keys(m).forEach(function(a){ agTot[a]=(agTot[a]||0)+m[a]; });
+    var o=unit[rid+'|'+ds]={};
+    Object.keys(m).forEach(function(a){
+      var k=_unitOf(a);
+      o[k]=(o[k]||0)+m[a]; uTot[k]=(uTot[k]||0)+m[a]; uDay[ds][k]=(uDay[ds][k]||0)+m[a];
+    });
   }); });
-  var AM0=_abAgentMap();
-  var agRank=Object.keys(agTot).sort(function(a,b){ return agTot[b]-agTot[a]; });
-  var agCol={};
-  agRank.slice(0,_AB_AG_PAL.length).forEach(function(a,i){ agCol[a]=_AB_AG_PAL[i]; });
-  function _agName(a){ var g=AM0[a]; return (g&&(g.name||g.code))||'ไม่ระบุเอเย่นต์'; }
+  /* สีไล่ตามอันดับยอดรวมในช่วงที่ดูอยู่ · เจ้าใหญ่สุดได้สีเด่นสุดเสมอ
+     โหมดเซลส์ใช้สีประจำตัวจาก SB_SALES ไปเลย เพราะชิปกรองบนหัวหน้าใช้สีชุดนี้อยู่แล้ว
+     สลับไปมาสองที่แล้วสีตรงกัน ไม่ต้องจำใหม่ */
+  var uRank=Object.keys(uTot).sort(function(a,b){ return uTot[b]-uTot[a]; });
+  var uCol={};
+  if(BY==='sales'){
+    uRank.forEach(function(k,i){
+      var s=_abSalesList().find(function(x){ return x.id===k; });
+      uCol[k]=(s&&s.color)||_AB_AG_PAL[i%_AB_AG_PAL.length];
+    });
+    uCol['_']=_AB_AG_ETC;
+  } else {
+    uRank.slice(0,_AB_AG_PAL.length).forEach(function(k,i){ uCol[k]=_AB_AG_PAL[i]; });
+  }
+  var uShown={}; (BY==='sales'?uRank:uRank.slice(0,_AB_AG_PAL.length)).forEach(function(k){ uShown[k]=1; });
 
   var gcols=(N===7?176:152)+'px repeat('+N+',minmax(0,1fr)) 44px';
 
@@ -580,17 +632,17 @@ function abRender(){
     /* แท่ง · ยาวเท่า fill% เหมือนเดิม แต่ซอยเป็นรายเอเย่นต์
        ที่ล็อกไม่มีเจ้าของบุคกิ้ง (ยังไม่ออกใบ) จึงเป็นก้อนลายทางท้ายแท่ง
        ไม่ยัดรวมกับใครสักคน ไม่งั้นจะอ่านว่าเจ้านั้นขายได้ทั้งที่ยังไม่ได้ขาย */
-    var mp=SC.split[rid+'|'+ds]||{};
+    var mp=unit[rid+'|'+ds]||{};
     var mk=Object.keys(mp).sort(function(a,b){ return mp[b]-mp[a]; });
     var segs='', tipAg='';
     if(c.cap>0){
       mk.forEach(function(a){
         var w=mp[a]/c.cap*100; if(w<=0) return;
-        segs+='<i style="width:'+w+'%;background:'+(agCol[a]||_AB_AG_ETC)+'"></i>';
+        segs+='<i style="width:'+w+'%;background:'+(uShown[a]?uCol[a]:_AB_AG_ETC)+'"></i>';
       });
       if(c.lock>0) segs+='<i style="width:'+(c.lock/c.cap*100)+'%;background:repeating-linear-gradient('
         +'45deg,#9FB8D8,#9FB8D8 2px,#D7E3F2 2px,#D7E3F2 4px)"></i>';
-      tipAg=mk.slice(0,6).map(function(a){ return _agName(a)+' '+mp[a]; }).join(' · ');
+      tipAg=mk.slice(0,8).map(function(a){ return _unitName(a)+' '+mp[a]; }).join(' · ');
     }
     if(!segs) segs='<i style="width:'+Math.max(2,c.fill)+'%;background:'+col[1]+'"></i>';
     var tip=_abDayLbl(ds)+' · ขาย '+c.sold+(c.lock?(' · ล็อก '+c.lock):'')
@@ -612,10 +664,22 @@ function abRender(){
   });
   /* แถวล่าง · รวมรายวัน · ตอบ "วันไหนแย่ที่สุดทั้งวัน" โดยไม่ต้องบวกเอง
      เส้นทางเดียวว่าง 40 อาจไม่เท่าไหร่ แต่ถ้าทั้งวันว่าง 150 คือคนละเรื่อง */
-  var fRow='<div class="ab-mlbl">รวม/วัน</div>';
+  /* §abBy · แถวรวม/วัน ต้องตอบด้วยว่า "วันนั้นเป็นลูกค้าของเซลส์คนไหน กี่คน"
+     ใส่เป็นตัวเลขจริงไม่ใช่ tooltip เพราะเป็นของที่ต้องกวาดตาเทียบข้ามวัน
+     ถ้าอยู่ใน tooltip ต้องชี้ทีละช่องซึ่งเทียบไม่ได้ */
+  var fRow='<div class="ab-mlbl">รวม/วัน<u>'+(BY==='sales'?'แยกตามเซลส์':'แยกตามเอเย่นต์')+'</u></div>';
   DATES.forEach(function(ds){
     var t=dayTot[ds], p=t.cap>0?Math.round((t.sold+t.lock)/t.cap*100):-1;
-    fRow+='<div class="ab-mfoot">'+(p<0?'<b>—</b>':('<b>'+t.free+'</b>'+p+'%'))+'</div>';
+    var dm=uDay[ds]||{};
+    var dk=Object.keys(dm).sort(function(a,b){ return dm[b]-dm[a]; });
+    var split='';
+    if(N===7 && dk.length){
+      split='<span class="ab-usp">'+dk.slice(0,6).map(function(k){
+        return '<em title="'+_abEsc(_unitName(k))+'"><i style="background:'
+          +(uShown[k]?uCol[k]:_AB_AG_ETC)+'"></i>'+_abEsc(_unitCode(k))+' '+dm[k]+'</em>';
+      }).join('')+'</span>';
+    }
+    fRow+='<div class="ab-mfoot">'+(p<0?'<b>—</b>':('<b>'+t.free+'</b>'+p+'%'+split))+'</div>';
   });
   var gCap=0,gSold=0,gLock=0,gFree=0;
   DATES.forEach(function(ds){ gCap+=dayTot[ds].cap; gSold+=dayTot[ds].sold;
@@ -626,12 +690,13 @@ function abRender(){
   /* คำอธิบายสีเอเย่นต์ · มีเฉพาะโหมด 7 วัน เพราะ 14 วันช่องแคบเกินจะซอยแท่ง
      เรียงตามยอดรวม ซึ่งเป็นลำดับเดียวกับที่ใช้แจกสี จึงอ่านคู่กับแท่งได้ตรง ๆ */
   var agLegend='';
-  if(N===7 && agRank.length){
-    var shown=agRank.slice(0,_AB_AG_PAL.length);
-    var etc=agRank.slice(_AB_AG_PAL.length).reduce(function(x,a){ return x+agTot[a]; },0);
+  if(N===7 && uRank.length){
+    var shown=uRank.filter(function(k){ return uShown[k]; });
+    var etc=uRank.filter(function(k){ return !uShown[k]; })
+                 .reduce(function(x,k){ return x+uTot[k]; },0);
     agLegend='<div class="ab-aglg">'
-      +shown.map(function(a){ return '<span><i style="background:'+agCol[a]+'"></i>'
-        +'<b>'+_abEsc(_agName(a))+'</b><em>'+agTot[a]+'</em></span>'; }).join('')
+      +shown.map(function(k){ return '<span><i style="background:'+uCol[k]+'"></i>'
+        +'<b>'+_abEsc(_unitName(k))+'</b><em>'+uTot[k]+'</em></span>'; }).join('')
       +(etc>0?('<span><i style="background:'+_AB_AG_ETC+'"></i>อื่น ๆ<em>'+etc+'</em></span>'):'')
       +(gLock>0?('<span><i style="background:repeating-linear-gradient(45deg,#9FB8D8,#9FB8D8 2px,#D7E3F2 2px,#D7E3F2 4px)"></i>ล็อกค้าง<em>'+gLock+'</em></span>'):'')
       +'</div>';
@@ -650,6 +715,9 @@ function abRender(){
       +'<span class="ab-tg">'
         +'<b class="'+(N===7?'on':'')+'" onclick="abSetDays(7)">7 วัน</b>'
         +'<b class="'+(N===14?'on':'')+'" onclick="abSetDays(14)">14 วัน</b></span>'
+      +'<span class="ab-tg">'
+        +'<b class="'+(BY==='sales'?'on':'')+'" onclick="abSetBy(\'sales\')">ตามเซลส์</b>'
+        +'<b class="'+(BY==='agent'?'on':'')+'" onclick="abSetBy(\'agent\')">ตามเอเย่นต์</b></span>'
       +'<span class="ab-pier">'+pierChips+'</span>'
     +'</div>'
     +'<div class="ab-mwrap"><div class="ab-mg d'+N+'" style="grid-template-columns:'+gcols+'">'
