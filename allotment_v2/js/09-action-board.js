@@ -361,15 +361,29 @@ const AB_CSS=`<style>
 /* §abSB · "ตัว scroll ใหญ่มาก ต้องทำให้เล็กที่สุด"
    กฎเหมารวมทั้งหน้า · อะไรที่เลื่อนได้แล้วยังไม่ได้ตั้งสกอลล์บาร์ไว้จะได้ไม่หลุด
    เป็นสกอลล์บาร์ระบบ (macOS โหมด "แสดงตลอด" กว้าง ~15px) */
-  #view-actionboard *{scrollbar-width:thin;scrollbar-color:#DAD5CC transparent}
-  #view-actionboard *::-webkit-scrollbar{width:4px;height:4px}
-  #view-actionboard *::-webkit-scrollbar-thumb{background:#DAD5CC;border-radius:3px}
-  #view-actionboard *::-webkit-scrollbar-track{background:transparent}
+/* §abSB3 · ต้นเหตุจริงที่สกอลล์บาร์ยังใหญ่อยู่ · Chrome/Safari: ถ้าประกาศ
+   scrollbar-width (มาตรฐาน) ไว้ เบราว์เซอร์จะ "ไม่สนใจ ::-webkit-scrollbar ทั้งชุด"
+   แล้ววาดแบบ thin ของตัวเอง (~8–11px บน macOS) · ที่ตั้ง width:3px ไว้จึงไม่เคยมีผล
+   → เอา scrollbar-width ออกจากกฎปกติ ให้ ::-webkit-scrollbar ทำงาน
+     แล้วคืน scrollbar-width ให้เฉพาะ Firefox ซึ่งไม่รู้จัก ::-webkit-scrollbar */
+  @supports (-moz-appearance:none){
+    #view-actionboard *{scrollbar-width:thin;scrollbar-color:rgba(0,0,0,.16) transparent}
+  }
+  #view-actionboard *::-webkit-scrollbar{width:3px;height:3px;background:transparent}
+  /* §abSB2 · macOS โหมด "แสดงแถบเลื่อนตลอดเวลา" ใช้สกอลล์บาร์แบบเก่า
+     ซึ่งมีปุ่มลูกศรหัว-ท้ายและช่องว่างรอบราง · รวมแล้วกว้างกว่าที่ตั้งไว้มาก
+     ต้องปิด -button และ -track-piece ด้วย ไม่ใช่ตั้งแค่ width */
+  #view-actionboard *::-webkit-scrollbar-button{display:none;width:0;height:0}
+  #view-actionboard *::-webkit-scrollbar-thumb{background:rgba(0,0,0,.16);
+    border-radius:3px;border:0;min-height:28px}
+  #view-actionboard *:hover::-webkit-scrollbar-thumb{background:rgba(0,0,0,.26)}
+  #view-actionboard *::-webkit-scrollbar-track,
+  #view-actionboard *::-webkit-scrollbar-track-piece{background:transparent;border:0}
   #view-actionboard *::-webkit-scrollbar-corner{background:transparent}
-  .ab-list{overflow-y:auto;min-height:0;flex:1 1 auto;
-    scrollbar-width:thin;scrollbar-color:#DAD5CC transparent}
-  .ab-list::-webkit-scrollbar{width:4px}
-  .ab-list::-webkit-scrollbar-thumb{background:#DAD5CC;border-radius:3px}
+  .ab-list{overflow-y:auto;min-height:0;flex:1 1 auto;}
+  .ab-list::-webkit-scrollbar{width:3px}
+  .ab-list::-webkit-scrollbar-thumb{background:rgba(0,0,0,.16);border-radius:3px}
+  .ab-list:hover::-webkit-scrollbar-thumb{background:rgba(0,0,0,.26)}
   .ab-list::-webkit-scrollbar-track{background:transparent}
   /* แถวที่โดนตัดครึ่งจะดูเหมือนข้อมูลขาด · จางที่ขอบล่างให้รู้ว่าเลื่อนดูต่อได้ */
   .ab-lw{position:relative;min-height:0;flex:1 1 auto;display:flex;flex-direction:column}
@@ -388,10 +402,10 @@ const AB_CSS=`<style>
      สูงตามเนื้อแต่ไม่เกิน 46% ของจอ · เกินแล้วเลื่อนในตัวเอง
      (ตอนนี้กันยายนเดิน 3 เส้นทาง · ไฮซีซันเดิน 10 เส้นทาง แถวจะเยอะกว่านี้มาก) */
   .ab-mtx{flex:0 0 auto;max-height:46%}
-  .ab-mwrap{overflow:auto;min-height:0;flex:1 1 auto;
-    scrollbar-width:thin;scrollbar-color:#DAD5CC transparent}
-  .ab-mwrap::-webkit-scrollbar{width:4px;height:4px}
-  .ab-mwrap::-webkit-scrollbar-thumb{background:#DAD5CC;border-radius:3px}
+  .ab-mwrap{overflow:auto;min-height:0;flex:1 1 auto;}
+  .ab-mwrap::-webkit-scrollbar{width:3px;height:3px}
+  .ab-mwrap::-webkit-scrollbar-thumb{background:rgba(0,0,0,.16);border-radius:3px}
+  .ab-mwrap:hover::-webkit-scrollbar-thumb{background:rgba(0,0,0,.26)}
   .ab-mwrap::-webkit-scrollbar-track{background:transparent}
   .ab-mg{display:grid;gap:3px;min-width:0;align-items:stretch}
   .ab-mh{text-align:center;font-size:8.5px;font-weight:800;color:#a8a29a;line-height:1.15;
@@ -499,10 +513,10 @@ const AB_CSS=`<style>
     grid-template-columns:minmax(0,0.86fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);
     gap:11px;align-items:stretch;flex:1 1 auto;min-height:0;overflow:hidden}
   .ab-col{display:flex;flex-direction:column;gap:11px;min-width:0;min-height:0;
-    overflow-y:auto;overscroll-behavior:contain;
-    scrollbar-width:thin;scrollbar-color:rgba(0,15,76,.34) transparent}
-  .ab-col::-webkit-scrollbar{width:4px}
-  .ab-col::-webkit-scrollbar-thumb{background:rgba(0,15,76,.30);border-radius:3px}
+    overflow-y:auto;overscroll-behavior:contain;}
+  .ab-col::-webkit-scrollbar{width:3px}
+  .ab-col::-webkit-scrollbar-thumb{background:rgba(0,15,76,.22);border-radius:3px}
+  .ab-col:hover::-webkit-scrollbar-thumb{background:rgba(0,15,76,.34)}
   .ab-col::-webkit-scrollbar-track{background:transparent}
   .ab-col>*{flex:1 1 0;min-height:112px}
   /* ใบทางซ้ายสูงตามเนื้อ · ปล่อยให้ "วันเสี่ยง" (แถวเยอะสุด) กินที่ที่เหลือ
