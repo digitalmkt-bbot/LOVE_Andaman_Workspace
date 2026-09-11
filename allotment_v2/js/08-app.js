@@ -39245,7 +39245,11 @@ const _BKV2_FAMILIES = [
      ไม่แตกเป็น family ต่อหมวด เพราะ family ยัง hardcode — หมวดใหม่จะกลายเป็นต้อง deploy ทุกครั้ง
      id ไม่ใช้ 'other' — คำนั้นเป็นค่าแทน "ไม่มีกลุ่ม" ในรายงาน FOC อยู่ก่อนแล้ว */
   { id:'transfer',   name:'Transfer',                   color:'#5B289A' },
-  { id:'citytour',   name:'City Tour',                  color:'#7B4BB7' }
+  { id:'citytour',   name:'City Tour',                  color:'#7B4BB7' },
+  /* §famActivity (2026-09-11) · โปรแกรมบกกลุ่มที่ 3 · สวนสนุก/แหล่งท่องเที่ยวที่ไม่ใช่ city tour
+     หรือรถรับส่ง (Carnival Magic, Andamanda ฯลฯ) · มาจาก B2C เหมือนกัน แสดงในหน้า
+     "Booking – Transfer / City Tour" เหมือนกัน (laIsLandRoute ครอบทุก family บก) */
+  { id:'activity',   name:'Activities',                 color:'#C77D1E' }
 ];
 // Map a route to its family · §famField (2026-09-10)
 //   route.familyId is the source of truth. The name-pattern guess below is the FALLBACK, kept only
