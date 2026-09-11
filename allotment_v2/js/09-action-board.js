@@ -209,24 +209,27 @@ const AB_CSS=`<style>
   #ab-wrap *{box-sizing:border-box}
   /* หน้าเดียวจบเหมือน Dashboard แต่ไม่ฮาร์ดโค้ดความสูงหัว
      (หัวที่นี่ 2 บรรทัด และสูงขึ้นอีกถ้าชิปเซลส์ขึ้นบรรทัดใหม่) → ให้ flex แบ่งเอง */
-  .ab-fr{position:relative;isolation:isolate;background:#16265C;
+  /* §ciColour · พื้นหน้านี้เป็น --ci-cyan · หน้าเดียวในแอปที่ใช้สีแบรนด์เต็มผืน
+     กติกาที่ตามมาจากคอนทราสต์ที่วัดได้ (ขาวบน cyan = 2.27:1 อ่านไม่ออก):
+       ตัวหนังสือใด ๆ ที่วางบนพื้น cyan ตรง ๆ ต้องเป็น ci-navy (7.9:1)
+       ของที่เคยเป็นขาว/ฟ้าอ่อนบนพื้น navy จึงต้องย้ายไปอยู่ในแถบ navy แทน */
+  .ab-fr{position:relative;isolation:isolate;background:var(--ci-cyan,#00BCDF);
     height:calc(100dvh - var(--topbar, 44px));overflow:hidden;
-    display:flex;flex-direction:column;gap:9px;
-    padding:8px 8px 12px;font-family:'DM Sans',Manrope,-apple-system,system-ui,sans-serif}
+    display:flex;flex-direction:column;gap:11px;
+    padding:13px 13px 15px;font-family:'DM Sans',Manrope,-apple-system,system-ui,sans-serif}
   .ab-fr::before{content:'';position:absolute;inset:0;z-index:0;pointer-events:none;
     background:
-      radial-gradient(56% 42% at 10% 6%,  rgba(232,74,63,.34),  transparent 62%),
-      radial-gradient(46% 40% at 90% 6%,  rgba(186,117,23,.30), transparent 62%),
-      radial-gradient(52% 46% at 80% 94%, rgba(15,110,86,.34),  transparent 64%),
-      radial-gradient(50% 42% at 20% 96%, rgba(24,95,165,.40),  transparent 62%);
-    filter:blur(20px) saturate(120%)}
+      radial-gradient(62% 48% at 8% 2%,   rgba(255,255,255,.42), transparent 64%),
+      radial-gradient(54% 44% at 96% 8%,  rgba(255,255,255,.26), transparent 62%),
+      radial-gradient(58% 50% at 82% 98%, rgba(0,15,76,.26),     transparent 66%),
+      radial-gradient(52% 44% at 14% 96%, rgba(0,15,76,.18),     transparent 64%);
+    filter:blur(22px)}
   .ab-fr>*{position:relative;z-index:1}
 
   /* ── แถบหัว · padding ขวา 96px = ที่ของปุ่ม ⋯ ที่สกินลอยไว้มุมขวาบน ── */
   .ab-hd{flex:none;padding:7px 96px 9px 10px;border-radius:14px;
-    background:linear-gradient(160deg, rgba(22,38,92,.82), rgba(12,24,62,.74));
-    -webkit-backdrop-filter:blur(22px) saturate(180%);backdrop-filter:blur(22px) saturate(180%);
-    box-shadow:0 8px 26px rgba(2,10,30,.34), inset 0 1px 0 rgba(255,255,255,.18)}
+    background:linear-gradient(160deg, var(--ci-navy,#000F4C), #00093A);
+    box-shadow:0 10px 28px rgba(0,15,76,.34), inset 0 1px 0 rgba(255,255,255,.16)}
   .ab-hdtop{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
   .ab-ttl{font-size:15px;font-weight:800;letter-spacing:.20em;color:#fff;white-space:nowrap}
   .ab-sub{font-size:10px;font-weight:600;color:#A8BAD8;letter-spacing:.02em}
@@ -240,19 +243,20 @@ const AB_CSS=`<style>
   .ab-kpi{margin-left:auto;display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}
   .ab-chip{font-size:11px;font-weight:600;color:#D6E2F5;background:rgba(255,255,255,.10);
     border:1px solid rgba(255,255,255,.20);border-radius:999px;padding:4px 11px;white-space:nowrap}
-  .ab-chip b{font-family:'DM Mono',ui-monospace,monospace;font-weight:800;color:#fff;font-size:12.5px}
+  .ab-chip b{font-family:'DM Mono',ui-monospace,monospace;font-weight:800;
+    color:var(--ci-cyan,#00BCDF);font-size:12.5px}
   .ab-chip.warn{background:rgba(232,74,63,.24);border-color:rgba(255,150,140,.42);color:#FFC9C3}
   .ab-chip.warn b{color:#FFD9D4}
   .ab-chip.ok{background:rgba(29,158,117,.24);border-color:rgba(123,227,184,.36);color:#9DF0CB}
   .ab-chip.ok b{color:#CFFBE6}
 
   /* ── การ์ดมาตรฐาน ── */
-  .ab-c{background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:12px;
-    box-shadow:0 6px 22px rgba(2,10,30,.10);padding:12px 13px 11px;
+  .ab-c{background:#fff;border:1px solid rgba(0,15,76,.10);border-radius:12px;
+    box-shadow:0 8px 24px rgba(0,15,76,.20);padding:12px 13px 11px;
     display:flex;flex-direction:column;min-height:0}
   .ab-ct{display:flex;align-items:center;gap:8px;padding-bottom:9px;margin-bottom:6px;
     border-bottom:1px solid #EFEBE5;flex-wrap:wrap}
-  .ab-ct .big{font-size:13px;font-weight:800;color:#12518F}
+  .ab-ct .big{font-size:13px;font-weight:800;color:var(--ci-navy,#000F4C)}
   .ab-ct .cnt{font-family:'DM Mono',ui-monospace,monospace;font-size:11px;font-weight:800;
     background:#F2F0EC;color:#5A5A52;border-radius:999px;padding:2px 8px}
   .ab-ct .nt{margin-left:auto;font-size:9.5px;font-weight:600;color:#a8a29a;text-align:right;
@@ -318,7 +322,7 @@ const AB_CSS=`<style>
   .ab-mg.d7 .ab-mc .mbar i{display:block;height:100%;border-radius:2px}
   .ab-mg.d7 .ab-mc .sub{font-family:'DM Sans',sans-serif;font-size:8.5px;font-weight:700;
     opacity:.80;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .ab-mg.d7 .ab-mc .lk{color:#1B6AA6;font-weight:800;opacity:1}
+  .ab-mg.d7 .ab-mc .lk{color:var(--ci-cyan-ink,#00708A);font-weight:800;opacity:1}
   .ab-mtot{text-align:right;font-family:'DM Mono',ui-monospace,monospace;font-size:11.5px;
     font-weight:800;color:#5A5A52;align-self:center;padding-left:2px}
   .ab-mfoot{font-size:8.5px;font-weight:700;color:#8a857d;text-align:center;align-self:center;
@@ -333,16 +337,16 @@ const AB_CSS=`<style>
     border-right:1px solid #EFEBE5;margin-right:2px}
   .ab-tg{display:flex;border-radius:999px;overflow:hidden;border:1px solid rgba(0,0,0,.10);background:#F7F5F2}
   .ab-tg b{font-size:10px;font-weight:700;padding:4px 11px;color:#7a736c;cursor:pointer}
-  .ab-tg b.on{background:#22262e;color:#fff}
+  .ab-tg b.on{background:var(--ci-navy,#000F4C);color:#fff}
 
   /* ── 3 คอลัมน์ล่าง ── */
   .ab-grid{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr) minmax(0,1fr);
-    gap:9px;align-items:stretch;flex:1 1 auto;min-height:0;overflow:hidden}
-  .ab-col{display:flex;flex-direction:column;gap:9px;min-width:0;min-height:0;
+    gap:11px;align-items:stretch;flex:1 1 auto;min-height:0;overflow:hidden}
+  .ab-col{display:flex;flex-direction:column;gap:11px;min-width:0;min-height:0;
     overflow-y:auto;overscroll-behavior:contain;
-    scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.34) transparent}
+    scrollbar-width:thin;scrollbar-color:rgba(0,15,76,.34) transparent}
   .ab-col::-webkit-scrollbar{width:6px}
-  .ab-col::-webkit-scrollbar-thumb{background:rgba(255,255,255,.30);border-radius:4px}
+  .ab-col::-webkit-scrollbar-thumb{background:rgba(0,15,76,.30);border-radius:4px}
   .ab-col::-webkit-scrollbar-track{background:transparent}
   .ab-col>*{flex:1 1 0;min-height:118px}
 
