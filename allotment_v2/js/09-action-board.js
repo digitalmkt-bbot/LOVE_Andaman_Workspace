@@ -342,13 +342,18 @@ const AB_CSS=`<style>
   .ab-c{background:#fff;border:1px solid rgba(0,15,76,.10);border-radius:12px;
     box-shadow:0 8px 24px rgba(0,15,76,.20);padding:12px 13px 11px;
     display:flex;flex-direction:column;min-height:0}
+  /* §abHdrH · หัวการ์ดสูงไม่เท่ากัน · โน้ตขวาของบางใบยาวกว่าจนห่อสองบรรทัด
+     ("Booked in 1–11 Sep · vs same days in Aug" ห่อ แต่ "Every month Jun–Aug…" ไม่ห่อ)
+     รายการจึงเริ่มคนละ y · วัดที่ 1920 ต่างกัน 22px ตั้งแต่แถวแรก
+     ตรึงความสูงหัวไว้ · โน้ตที่ยาวเกินห่อได้ 2 บรรทัดภายในความสูงนั้น */
   .ab-ct{display:flex;align-items:center;gap:8px;padding-bottom:9px;margin-bottom:6px;
-    border-bottom:1px solid #EFEBE5;flex-wrap:wrap}
+    border-bottom:1px solid #EFEBE5;flex-wrap:wrap;min-height:43px;box-sizing:border-box}
   .ab-ct .big{font-size:13px;font-weight:800;color:var(--ci-navy,#000F4C)}
   .ab-ct .cnt{font-family:'DM Mono',ui-monospace,monospace;font-size:11px;font-weight:800;
     background:#F2F0EC;color:#5A5A52;border-radius:999px;padding:2px 8px}
   .ab-ct .nt{margin-left:auto;font-size:9.5px;font-weight:600;color:#a8a29a;text-align:right;
-    min-width:0;flex:0 1 auto;overflow:hidden}
+    min-width:0;flex:0 1 auto;overflow:hidden;line-height:1.3;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
   .ab-c.risk .ab-ct .big{color:#A32D2D} .ab-c.risk .ab-ct .cnt{background:#FCEBEB;color:#A32D2D}
   .ab-c.near .ab-ct .big{color:#0F6E56} .ab-c.near .ab-ct .cnt{background:#E6F5EC;color:#0F6E56}
   .ab-c.lost .ab-ct .big{color:#A32D2D} .ab-c.lost .ab-ct .cnt{background:#FCEBEB;color:#A32D2D}
@@ -370,7 +375,11 @@ const AB_CSS=`<style>
   .ab-lw{position:relative;min-height:0;flex:1 1 auto;display:flex;flex-direction:column}
   .ab-lw::after{content:'';position:absolute;left:0;right:0;bottom:0;height:22px;pointer-events:none;
     background:linear-gradient(180deg, rgba(255,255,255,0), #fff)}
-  .ab-empty{padding:16px 4px;text-align:center;font-size:11px;color:#b6b1a8;font-weight:600}
+  .ab-empty{padding:9px 4px;text-align:center;font-size:11px;color:#b6b1a8;font-weight:600}
+  /* §abLeftMin · ที่ 1440 คอลัมน์ซ้ายสูง 365px · สองใบล่างกินคงที่ 246px
+     "วันเสี่ยง" จึงเหลือรายการสูง 43px = ครึ่งแถว · เห็นเป็นแถวโดนตัดคาไว้
+     ตั้งขั้นต่ำไว้ 2 แถว แล้วปล่อยให้คอลัมน์ซ้ายเลื่อนเอง (มี overflow-y อยู่แล้ว) */
+  .ab-c.near .ab-list{min-height:54px}
 
   /* ══ ตารางบน · เส้นทาง × วัน ══════════════════════════════════════════
      การ์ดนี้เป็นพระเอกของหน้า จึงกินความกว้างเต็ม ไม่ยัดลงคอลัมน์
@@ -483,7 +492,11 @@ const AB_CSS=`<style>
      ขวา = อันดับเอเย่นต์ · แต่ละใบมี 10 ราย ถ้าซ้อนกันจะเหลือใบละ 3 แถว
            ตั้งเป็นคอลัมน์ยาวแทน ได้ความสูงเต็มพื้นที่ เห็นได้ใบละ 7–9 ราย */
   .ab-grid{display:grid;
-    grid-template-columns:minmax(0,1.18fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);
+    /* §abGrid2 · "อนุญาตให้บีบไซส์การ์ดฝั่งซ้ายได้ เพื่อกระจายพื้นที่ให้สามคอลัมน์นั้น"
+       เดิม 1.18fr ให้ซ้าย 450px · เอเย่นต์คอลัมน์ละ 382px (ที่ 1920)
+       0.86fr → ซ้าย 355px · เอเย่นต์คอลัมน์ละ 413px (+31px ต่อคอลัมน์)
+       ซ้ายเป็นแถวทริป (ชื่อเส้นทาง + ชื่อเรือ) ซึ่งสั้นกว่าแถวเอเย่นต์อยู่แล้ว */
+    grid-template-columns:minmax(0,0.86fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);
     gap:11px;align-items:stretch;flex:1 1 auto;min-height:0;overflow:hidden}
   .ab-col{display:flex;flex-direction:column;gap:11px;min-width:0;min-height:0;
     overflow-y:auto;overscroll-behavior:contain;
@@ -494,11 +507,18 @@ const AB_CSS=`<style>
   .ab-col>*{flex:1 1 0;min-height:112px}
   /* ใบทางซ้ายสูงตามเนื้อ · ปล่อยให้ "วันเสี่ยง" (แถวเยอะสุด) กินที่ที่เหลือ
      ถ้าแบ่งเท่ากันหมด ใบที่ว่าง (ยกเลิกพุ่ง 0 ราย) จะกินที่ไปหนึ่งในสามเปล่า ๆ */
+  /* flex-shrink ต้องเป็น 0 · ไม่งั้นใบซ้ายจะถูกบีบให้เตี้ยกว่าเนื้อของตัวเอง
+     (วัดที่ 1440: ใบ "วันเสี่ยง" สูง 117px แต่รายการข้างในสูง 140px → โดนตัดคา)
+     ให้คงความสูงตามเนื้อ แล้วปล่อยให้ทั้งคอลัมน์เลื่อนแทน */
   .ab-col:first-child>*{flex:0 1 auto}
-  .ab-col:first-child>.risk{flex:1 1 auto}
+  /* "วันเสี่ยง" กินที่ที่เหลือ แต่ห้ามเตี้ยกว่า 2 แถว
+     (วัดที่ 1440: สองใบล่างกินคงที่ 273px เหลือให้ใบนี้ 92px = ครึ่งแถว โดนตัดคา)
+     เกินจากนี้ให้ทั้งคอลัมน์เลื่อนเอา ดีกว่าโชว์แถวที่ถูกตัดครึ่ง */
+  .ab-col:first-child>.risk{flex:1 1 auto;min-height:196px}
 
   /* ── แถวเตือนเรื่องที่นั่ง ── */
-  .ab-tr{display:flex;align-items:center;gap:9px;padding:7px 4px;border-bottom:1px solid #F5F2ED;cursor:pointer}
+  .ab-tr{display:flex;align-items:center;gap:9px;padding:7px 4px;border-bottom:1px solid #F5F2ED;
+    cursor:pointer;height:54px;overflow:hidden}
   .ab-tr:last-child{border-bottom:0}
   .ab-tr:hover{background:#FBFAF8}
   .ab-day{flex:none;width:42px;text-align:center;border-radius:8px;padding:4px 2px;
@@ -510,7 +530,12 @@ const AB_CSS=`<style>
   .ab-tr.now .ab-day{background:#15382B;border-color:#15382B}
   .ab-tr.now .ab-day u{color:#9DC4B2} .ab-tr.now .ab-day b{color:#fff}
   .ab-tb{flex:1;min-width:0}
-  .ab-tb .rt{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  /* §abGrid2 · คอลัมน์ซ้ายแคบลงเหลือ 355px · ชื่อเส้นทางยาว ("Whale Shark Phi Phi
+     Maiton Sunset") เคยห่อสองบรรทัดทำให้แถวพอง 54→69px เห็นน้อยลงหนึ่งแถว
+     ชื่อเส้นทางมีไม่กี่ชื่อและขึ้นต้นต่างกันชัด · ตัดท้ายด้วย … อ่านออกอยู่ */
+  /* display ต้องไม่ใช่ inline · ไม่งั้น overflow:hidden/text-overflow ไม่ทำงาน
+     (วัดที่ 1440: ข้อความยาว 241px ทะลุกล่อง 73px ไปทับก้อนตัวเลขขวา) */
+  .ab-tb .rt{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
     font-size:11.5px;font-weight:700;color:#2c2c2a;line-height:1.28}
   .ab-rdot{width:7px;height:7px;border-radius:2px;display:inline-block;margin-right:5px;
     vertical-align:1px;flex:none}
@@ -527,18 +552,24 @@ const AB_CSS=`<style>
     padding:1px 6px;font-size:10.5px}
 
   /* ── แถวเอเย่นต์ ── */
-  .ab-ar{display:flex;align-items:center;gap:9px;padding:7px 4px;border-bottom:1px solid #F5F2ED;cursor:pointer}
+  /* §abRowH · "ทำยังไงให้ข้อมูลตรงกัน"
+     เดิมแถวสูงตามเนื้อ · ส่วนใหญ่ 53px แต่แถวที่ชื่อยาวจนแถบสีห่อสองบรรทัดจะเป็น 71px
+     สามคอลัมน์จึงเลื่อนหนีกันสะสมลงไปเรื่อย ๆ (วัดที่แถว 12: ห่างกัน 56px)
+     ตรึงความสูงคงที่ อันดับที่ N ของทุกคอลัมน์จึงอยู่บรรทัดเดียวกันเสมอ
+     ตัวที่เกินให้ซ่อน — แต่ §abGrid2 กว้างขึ้นแล้วจึงแทบไม่มีแถวไหนเกิน */
+  .ab-ar{display:flex;align-items:center;gap:9px;padding:7px 4px;border-bottom:1px solid #F5F2ED;
+    cursor:pointer;height:54px;overflow:hidden}
   .ab-ar:last-child{border-bottom:0}
   .ab-ar:hover{background:#FBFAF8}
   .ab-rk{flex:none;width:17px;text-align:center;font-family:'DM Mono',ui-monospace,monospace;
     font-size:11px;font-weight:800;color:#c4bfb6}
-  /* คอลัมน์ขวากว้าง ~1060px ที่ 1920 · ถ้าบังคับชื่อกับเมตาเป็นคนละบรรทัดเสมอ
-     จะได้แถวสูง 2 บรรทัดที่มีที่ว่างกลางแถวเปล่า ๆ ครึ่งแถว และเห็นได้แค่ 3 ราย
-     ให้ wrap ตัดสินเอง: กว้างพอก็อยู่บรรทัดเดียว (เห็น 5–6 ราย) แคบก็ตกลงมาเอง
-     ไม่ต้องมี breakpoint เพราะความกว้างคอลัมน์เปลี่ยนตามตัวกรองได้ด้วย */
-  .ab-ab{flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:1px 9px}
-  .ab-ab .nm{flex:0 1 auto;min-width:0;line-height:1.75;display:block;overflow-wrap:anywhere}
-  .ab-ab .mt{flex:0 1 auto;min-width:0;display:flex;align-items:center;gap:5px;
+  /* §abRowH · เดิมปล่อยให้ wrap ตัดสินเอง · ชื่อสั้นอย่าง "SAYAMA" เมตาจึงอยู่บรรทัด
+     เดียวกับชื่อ ส่วนชื่อยาวเมตาตกลงบรรทัดล่าง · แถวหน้าตาไม่เหมือนกันสักแถว
+     บังคับให้ทุกแถวเป็นโครงเดียว: บรรทัดบน = แถบสีชื่อ · บรรทัดล่าง = เมตา
+     อ่านกวาดตาลงคอลัมน์ได้ และเทียบข้ามสามคอลัมน์ได้เพราะอยู่ระนาบเดียวกัน */
+  .ab-ab{flex:1;min-width:0;display:flex;flex-wrap:wrap;align-content:center;gap:1px 9px}
+  .ab-ab .nm{flex:1 1 100%;min-width:0;line-height:1.6;display:block;overflow-wrap:anywhere}
+  .ab-ab .mt{flex:1 1 100%;min-width:0;display:flex;align-items:center;gap:5px;
     font-size:9.5px;font-weight:600;color:#9b9088;white-space:nowrap;overflow:hidden}
   /* ชื่อเจ้าของยาว ๆ ("Staff / Welfare (internal)") ล้นได้แม้จอกว้าง · ให้จบด้วย … ไม่ใช่หายเฉย ๆ */
   .ab-ab .mt>span{min-width:0;overflow:hidden;text-overflow:ellipsis}
@@ -563,17 +594,31 @@ const AB_CSS=`<style>
        แถบสีจึงหักเป็นสองบรรทัด แถวสูง 85px เห็นได้แค่ 3 ราย
        แก้: ให้ชื่อ+เมตากินความกว้างแถวทั้งแถว (ได้ 196px > 145px พอทุกชื่อ)
             แล้วดันก้อนตัวเลขลงบรรทัดล่าง ชิดขวา เรียงในบรรทัดเดียว */
-    .ab-ar{flex-wrap:wrap;row-gap:1px}
+    /* §abRowH · ที่ 1440 คอลัมน์ 289px · ในแถวเหลือ 226px หลังหักอันดับ+ช่องไฟ
+       ถ้าเอาก้อนตัวเลขไว้บรรทัดเดียวกับชื่อ (44%) ชื่อจะเหลือ 127px < 145px ที่ต้องใช้
+       แถบสีจึงหักสองบรรทัดแล้วล้นกรอบ · ที่จอแคบต้องเป็น 3 ชั้นเท่านั้น
+       ชั้น 1 แถบสีชื่อ (ได้ 196px) · ชั้น 2 เมตา · ชั้น 3 ตัวเลขชิดขวา */
+    .ab-ar{flex-wrap:wrap;row-gap:0;height:70px}
+    .ab-col:first-child>.risk{min-height:226px}
+    .ab-c.near .ab-list{min-height:70px}
+    /* แถวทริปก็ต้องเป็น 3 ชั้นเหมือนแถวเอเย่นต์ · ที่ 1440 คอลัมน์ซ้าย 248px
+       ถ้าเอาก้อน %/ที่ว่าง ไว้บรรทัดเดียวกัน ชื่อเส้นทางจะเหลือ 73px → "Whale …"
+       ดันลงบรรทัดล่าง ชื่อได้ 169px อ่านออกเกือบเต็มชื่อ */
+    .ab-tr{height:70px;flex-wrap:wrap;row-gap:0}
+    .ab-tb{flex:1 1 calc(100% - 51px)}
+    .ab-tn{flex:1 1 100%;min-width:0;display:flex;justify-content:flex-end;
+      align-items:baseline;gap:7px}
+    .ab-tn b{display:inline;font-size:13px}
+    .ab-tn i{display:inline;margin-top:0}
     .ab-ab{flex:1 1 calc(100% - 26px)}
-    .ab-ab .nm{flex:1 1 100%;line-height:1.7}
+    .ab-ab .nm{line-height:1.55}
     /* §abMeta · ข้อความอังกฤษยาวกว่าไทยที่เคยใช้ ("NK last sent 29 Jul · quiet 44 days")
        nowrap+hidden จึงตัดหายกลางคำโดยไม่มี … บอก · ให้ห่อลงบรรทัดถัดไปแทน */
-    .ab-ab .mt{flex:1 1 100%;flex-wrap:wrap;white-space:normal;overflow:visible}
-    .ab-ab .mt>span{min-width:0;line-height:1.3}
+    .ab-ab .mt{white-space:nowrap;overflow:hidden}
     .ab-an{flex:1 1 100%;max-width:none;flex-wrap:nowrap;justify-content:flex-end;
-      align-items:baseline;gap:8px}
+      align-items:baseline;gap:8px;min-width:0}
     .ab-an .v{flex:none;font-size:14px}
-    .ab-an .d{flex:none;white-space:nowrap}
+    .ab-an .d{flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   }
 
   /* ── จอเล็ก ── */
