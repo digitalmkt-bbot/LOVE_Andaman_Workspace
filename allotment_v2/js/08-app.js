@@ -43116,13 +43116,23 @@ function bkV2RenderTab2(){
       const nm=esc(_btSub(rid)), dep=_btDep(rid), pr=_btPier(rid);
       if(!open) return `<div class="bt-pgv off"><span class="vn">${nm}</span><span>${esc(dep)}${pr?' · '+esc(pr):''} · not running</span><span class="sp"><span class="bt-free none">&mdash;</span></span></div>`;
       const al=(typeof getAllotment==='function')?getAllotment(rid,date):null;
-      const bk=al?(al.seatsConsumed||0):0, cap=al?(al.availableCapacity||0):0, av=al?(al.seatsAvailable||0):0;
+      /* §noCapSeat · โปรแกรมบกที่ยังไม่ตั้ง dailyCap · getAllotment ตั้งใจ return ศูนย์ทั้งก้อน
+         (04-data-core.js · "ยังไม่ตั้งโควตา = ปล่อยขายเหมือนเดิม") แต่การ์ดนี้เคยอ่าน seatsAvailable<=0
+         แล้วปั๊ม full สีแดง → "ขายได้ไม่อั้น" กลายเป็น "เต็มแล้ว" กลับหัวกันพอดี
+         เคสนี้โชว์แค่ยอดที่จองแล้ว ไม่มีตัวหาร ไม่มีป้ายเต็ม · ต้องเรียก getSeatsConsumed เอง
+         เพราะ getAllotment return ก่อนถึงบรรทัดที่คำนวณมัน */
+      const _noCap = !al || !al.hasAllotment;
+      const bk=_noCap?((typeof getSeatsConsumed==='function')?getSeatsConsumed(rid,date):0):(al.seatsConsumed||0);
+      const cap=al?(al.availableCapacity||0):0, av=al?(al.seatsAvailable||0):0;
       const lk=(typeof bkV2LockedTotal==='function')?bkV2LockedTotal(rid,date):0;
       const fr=cap>0?av/cap:0;
       const fc = av<=0 ? 'full' : (fr<0.20 ? 'low' : 'ok');
-      return `<div class="bt-pgv${ron?' on':''}" onclick="bkV2Tab2SetRoute('${ron?'':rid}')" title="${esc(_btSub(rid))} · booked ${bk}/${cap} · ${av} free">
+      const _seatHtml = _noCap ? `<span class="bt-seat"><b>${bk}</b> booked</span><span class="bt-free none">ไม่จำกัด</span>`
+                               : `<span class="bt-seat"><b>${bk}</b>/${cap}</span><span class="bt-free ${fc}">${av<=0?'full':(av+' free')}</span>`;
+      const _seatTip = _noCap ? `booked ${bk} · ไม่ได้ตั้งโควตา (ขายได้ไม่จำกัด)` : `booked ${bk}/${cap} · ${av} free`;
+      return `<div class="bt-pgv${ron?' on':''}" onclick="bkV2Tab2SetRoute('${ron?'':rid}')" title="${esc(_btSub(rid))} · ${_seatTip}">
         <span class="vn">${nm}</span><span>${esc(dep)}${pr?' · '+esc(pr):''}</span>
-        <span class="sp">${lk>0?`<span class="bt-lk">&#128274; ${lk}</span>`:''}<span class="bt-seat"><b>${bk}</b>/${cap}</span><span class="bt-free ${fc}">${av<=0?'full':(av+' free')}</span></span></div>`;
+        <span class="sp">${lk>0?`<span class="bt-lk">&#128274; ${lk}</span>`:''}${_seatHtml}</span></div>`;
     }).join('');
     return `<div class="bt-pgf${on?' on':''}" style="--e:${col};--ink:${col};background:${(typeof pckTint==='function')?pckTint(col,0.90):'#F5F3F0'}" onclick="bkV2Tab2SetFamily('${on?'':a.fam.id}')" title="Filter ${esc(a.fam.name)}">
       <span class="ar">&#9662;</span><span class="dot"></span>
@@ -50547,6 +50557,25 @@ function bkV2RenderBookingDetail(){
                 const route = ROUTES.find(r => r.id === t.routeId);
                 const px = t.pax || {};
                 const ad = bkV2PaxTot(px,'ad'), chd = bkV2PaxTot(px,'chd'), inf = bkV2PaxTot(px,'inf'), focN = bkV2PaxTot(px,'foc');
+                /* §trOtherVeh (2026-09-11) · "Other transfer" (TR-OTHER) is quoted per vehicle, not per
+                   pax — the B2C mapper already writes "Sedan × 2 · (round trip) · A → B" as the first
+                   line of bk.notes (server.js §b2cTransfer), so read the vehicle count back out of it
+                   rather than adding a vehQty/vehType column to sb_bookings__trips for one route.
+                   Falls back to the normal pax grid if the note doesn't match (e.g. a booking made by
+                   hand in ops, with no such note). */
+                const _vehM = (route?.extId==='TR-OTHER') ? String(bk.notes||'').split('\n')[0].match(/^(.+?)\s*[×x]\s*(\d+)/i) : null;
+                const vehGrid = _vehM ? `
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-family:'DM Mono',monospace">
+                      <div><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Vehicle</div><div style="font-size:16px;font-weight:700">${escapeHTML(_vehM[1].trim())} &times; ${escapeHTML(_vehM[2])}</div></div>
+                      <div style="text-align:right"><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Subtotal</div><div style="font-size:15px;font-weight:700">฿${bkV2FmtTHB(t.subtotal||0)}</div></div>
+                    </div>` : `
+                    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;font-family:'DM Mono',monospace">
+                      <div><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Adult</div><div style="font-size:18px;font-weight:700">${ad}</div></div>
+                      <div><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Child</div><div style="font-size:18px;font-weight:700">${chd}</div></div>
+                      <div><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Infant</div><div style="font-size:18px;font-weight:700">${inf}</div></div>
+                      <div><div style="font-size:10px;color:#92400E;text-transform:uppercase;letter-spacing:0.5px">FOC</div><div style="font-size:18px;font-weight:700;color:${focN?'#92400E':'inherit'}">${focN}</div></div>
+                      <div style="text-align:right"><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Subtotal</div><div style="font-size:15px;font-weight:700">฿${bkV2FmtTHB(t.subtotal||0)}</div></div>
+                    </div>`;
                 return `
                   <div style="border:1px solid rgba(26,35,50,0.08);border-radius:10px;padding:12px 14px;background:white">
                     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
@@ -50558,13 +50587,7 @@ function bkV2RenderBookingDetail(){
                       ${t.charter?`<span style="background:#3A6FF7;color:white;font-size:10px;padding:3px 8px;border-radius:6px;font-weight:700">CHARTER</span>`:''}
                       ${t.bundle?`<span style="background:#10B981;color:white;font-size:10px;padding:3px 8px;border-radius:6px;font-weight:700">${escapeHTML(t.bundle.type||'BUNDLE')} ${t.bundle.mode==='paid'?'paid':'free'}</span>`:''}
                     </div>
-                    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;font-family:'DM Mono',monospace">
-                      <div><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Adult</div><div style="font-size:18px;font-weight:700">${ad}</div></div>
-                      <div><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Child</div><div style="font-size:18px;font-weight:700">${chd}</div></div>
-                      <div><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Infant</div><div style="font-size:18px;font-weight:700">${inf}</div></div>
-                      <div><div style="font-size:10px;color:#92400E;text-transform:uppercase;letter-spacing:0.5px">FOC</div><div style="font-size:18px;font-weight:700;color:${focN?'#92400E':'inherit'}">${focN}</div></div>
-                      <div style="text-align:right"><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Subtotal</div><div style="font-size:15px;font-weight:700">฿${bkV2FmtTHB(t.subtotal||0)}</div></div>
-                    </div>
+                    ${vehGrid}
                   </div>
                 `;
               }).join('')}
