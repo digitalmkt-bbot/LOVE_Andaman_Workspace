@@ -1769,6 +1769,22 @@ async function relSyncB2C(singleExtId = null) {
     // Non-fatal: relLoad proceeds even if sync fails — but the app is now told, via /api/version.
   }
 }
+
+// §b2cLoadGuard · relSyncB2C() วิ่งบนทุก /api/load โดยไม่มีตัวกันซ้อน — ตัวกัน (_b2cPolling) มีแต่ฝั่ง poller
+//   11 ก.ย. 2026 06:01Z: วัดได้ 152 รอบ/นาที มาจาก /api/load ล้วน ๆ (poller ยิงแค่ 45 วิครั้ง)
+//   แต่ละรอบจองคอนเนกชันของตัวเอง → pool (max 20) เต็ม → "timeout exceeded when trying to connect"
+//   → /api/load ตอบ 500 · แล้วไคลเอนต์รีทรายทุก 4 วิ อัดกลับเข้าไปอีก
+//   ที่ทำให้มันไม่ยอมคลาย: pool ตันแล้ว opsRouteExtIdCatalog() กลืน error คืน Map ว่าง → srcHash เปลี่ยน
+//   → ไม่เข้าทางลัด ทำ upsert เต็มก้อน → bump version + SSE → ทุกแท็บเรียก /api/load พร้อมกัน → วนข้อแรก
+// รอบเต็มมีได้ทีละรอบเดียว · คนมาทีหลังเกาะรอบที่วิ่งอยู่ แทนที่จะเปิดรอบใหม่
+//   เฉพาะรอบเต็มเท่านั้น — relSyncB2C(extId) ของ webhook ยังยิงตรง และ /api/b2c/reset ต้องได้รอบจริงของตัวเอง
+//   (เกาะรอบเดิมที่อาจออกทางลัดไปแล้ว = ของที่เพิ่งลบทิ้งไม่ถูกดึงกลับ)
+let _b2cFullRun = null;
+function relSyncB2CShared() {
+  if (_b2cFullRun) return _b2cFullRun;
+  _b2cFullRun = relSyncB2C().finally(() => { _b2cFullRun = null; });
+  return _b2cFullRun;
+}
 // read-modify-write the whole schema in ONE transaction, serialized by an advisory lock (no lost saves).
 // ponytail: full DELETE+INSERT of all tables per save; fine at this data size, switch to targeted upserts if slow.
 async function relApplyAndSave(payload, username, base) {
@@ -2718,7 +2734,7 @@ const server = http.createServer((req, res) => {
     const s=session(req); if(!s) return J(res,401,{error:'login required'});
     if(!pool) return J(res,503,{error:'no database'});
     if(DATA_BACKEND==='relational'){
-      relSyncB2C()
+      relSyncB2CShared()
         .then(() => pool.query('SELECT version,updated_by,updated_at FROM app_state WHERE id=$1',[STATE_KEY]))
         .then(async r => {
           const m = r.rows[0]||{}; const version = m.version||0;
@@ -3363,7 +3379,7 @@ if (pool && b2cPool) {
   setInterval(async () => {
     if (_b2cPolling) return;
     _b2cPolling = true;
-    try { await relSyncB2C(); }
+    try { await relSyncB2CShared(); }
     catch (e) { try { console.warn('[b2c-poll] sync failed:', e.message); } catch(_){} }
     finally { _b2cPolling = false; }
   }, B2C_POLL_MS);
