@@ -1841,7 +1841,8 @@ if (Pool && DB_URL) {
   pool = new Pool({
     connectionString: DB_URL,
     ssl: (DB_URL.includes('rlwy')||DB_URL.includes('railway')||process.env.PGSSL) ? { rejectUnauthorized:false } : false,
-    max: 20,                            // เดิมไม่ได้ตั้ง = default 10 · น้อยไปสำหรับ fan-out 132 query
+    max: 40,                             // เดิมไม่ได้ตั้ง = default 10 · น้อยไปสำหรับ fan-out 132 query
+                                          // เพิ่มจาก 20→40 (11 ก.ย. 2026) · Postgres max_connections=500, ใช้จริงแค่ ~13 ตอนตรวจ · เหลือพื้นที่มาก
     idleTimeoutMillis: 30_000,          // คืน connection ก่อน proxy จะตัดเอง
     keepAlive: true,                    // ให้ OS ตรวจว่าปลายทางตายหรือยัง แทนที่จะเชื่อว่า socket ยังดี
     keepAliveInitialDelayMillis: 10_000,
@@ -2440,6 +2441,28 @@ function compress(enc, data, quality, cb){
 // Cache the built payload (plain string + gzipped buffer) keyed by app_state.version. A cheap version query gates
 // each request; any write bumps version → next load rebuilds. Cache hit = serve the prebuilt buffer instantly.
 let _loadCache = null;   // { version, str, br?, gzip? }  (compressed buffers filled in lazily per encoding)
+// §loadSingleFlight · relLoad() ยิง 132 query พร้อมกัน (Promise.all ทุกตารางใน OS_TABLES) ใส่ pool ที่มี
+//   max 20 · /api/load หนึ่งคำขอที่ไม่โดน _loadCache = จอง 132 คิวรวดเดียว
+//   11 ก.ย. 2026 08:09Z: สตาฟกด save รัว ๆ · ทุก save bump app_state.version → _loadCache ใช้ไม่ได้
+//   + SSE broadcast → ทุกแท็บโหลดพร้อมกัน → N × 132 query บน pool 20 เส้น
+//   → รอเกิน connectionTimeoutMillis (10 วิ) → throw → /api/load ตอบ 500 (เห็น 10–24 วิ ใน HTTP log)
+// เวอร์ชันเดียวกัน สร้าง cache รอบเดียว · คำขอที่มาระหว่างนั้นเกาะ promise เดิม ไม่เปิด relLoad ใหม่
+//   (คนละเรื่องกับ §b2cLoadGuard — อันนั้นกัน b2c sync ซ้อน อันนี้กันตัว relLoad เอง)
+let _loadBuild = null;   // { version, promise }
+function buildLoadCache(version, m){
+  if(_loadBuild && _loadBuild.version === version) return _loadBuild.promise;
+  const promise = relLoad().then(blob => {
+    const str = JSON.stringify({data:JSON.stringify(blob), version,
+      updated_by:m.updated_by, updated_at:m.updated_at});
+    _loadCache = { version, str };
+    return _loadCache;
+  });
+  _loadBuild = { version, promise };
+  // เคลียร์ช่องเมื่อจบ ไม่ว่าสำเร็จหรือพัง · .catch ตรงนี้กัน unhandled rejection ของสายภายใน
+  //   ตัวคนเรียกยังได้ reject ตามปกติจาก promise ที่คืนไป
+  promise.catch(()=>{}).then(()=>{ if(_loadBuild && _loadBuild.promise === promise) _loadBuild = null; });
+  return promise;
+}
 function readBody(req, cb){ let ch=[], n=0; req.on('data',c=>{ n+=c.length; if(n>20*1024*1024){req.destroy();return;} ch.push(c); }); req.on('end',()=>cb(Buffer.concat(ch).toString('utf8'))); }
 function J(res, code, obj, extra){ const h=Object.assign({'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'}, extra||{}); res.writeHead(code,h); res.end(JSON.stringify(obj)); }
 // Plain-text reply + HTML escaping — the OIDC routes answer a browser navigation, not fetch(), so a
@@ -2739,12 +2762,9 @@ const server = http.createServer((req, res) => {
         .then(async r => {
           const m = r.rows[0]||{}; const version = m.version||0;
           if(_loadCache && _loadCache.version === version){ return sendLoadPayload(req,res,_loadCache); }
-          const blob = await relLoad();
-          const str = JSON.stringify({data:JSON.stringify(blob),version,updated_by:m.updated_by,updated_at:m.updated_at});
-          _loadCache = { version, str };
-          return sendLoadPayload(req,res,_loadCache);
+          return sendLoadPayload(req, res, await buildLoadCache(version, m));
         })
-        .catch(e=>J(res,500,{error:e.message}));
+        .catch(e=>{ console.error('[api/load] 500 —', e.message); J(res,500,{error:e.message}); });
       return;
     }
     pool.query('SELECT data,version,updated_by,updated_at FROM app_state WHERE id=$1',[STATE_KEY])
