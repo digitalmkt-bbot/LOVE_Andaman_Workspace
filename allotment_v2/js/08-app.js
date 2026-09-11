@@ -50472,6 +50472,25 @@ function bkV2RenderBookingDetail(){
                 const route = ROUTES.find(r => r.id === t.routeId);
                 const px = t.pax || {};
                 const ad = bkV2PaxTot(px,'ad'), chd = bkV2PaxTot(px,'chd'), inf = bkV2PaxTot(px,'inf'), focN = bkV2PaxTot(px,'foc');
+                /* §trOtherVeh (2026-09-11) · "Other transfer" (TR-OTHER) is quoted per vehicle, not per
+                   pax — the B2C mapper already writes "Sedan × 2 · (round trip) · A → B" as the first
+                   line of bk.notes (server.js §b2cTransfer), so read the vehicle count back out of it
+                   rather than adding a vehQty/vehType column to sb_bookings__trips for one route.
+                   Falls back to the normal pax grid if the note doesn't match (e.g. a booking made by
+                   hand in ops, with no such note). */
+                const _vehM = (route?.extId==='TR-OTHER') ? String(bk.notes||'').split('\n')[0].match(/^(.+?)\s*[×x]\s*(\d+)/i) : null;
+                const vehGrid = _vehM ? `
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-family:'DM Mono',monospace">
+                      <div><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Vehicle</div><div style="font-size:16px;font-weight:700">${escapeHTML(_vehM[1].trim())} &times; ${escapeHTML(_vehM[2])}</div></div>
+                      <div style="text-align:right"><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Subtotal</div><div style="font-size:15px;font-weight:700">฿${bkV2FmtTHB(t.subtotal||0)}</div></div>
+                    </div>` : `
+                    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;font-family:'DM Mono',monospace">
+                      <div><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Adult</div><div style="font-size:18px;font-weight:700">${ad}</div></div>
+                      <div><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Child</div><div style="font-size:18px;font-weight:700">${chd}</div></div>
+                      <div><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Infant</div><div style="font-size:18px;font-weight:700">${inf}</div></div>
+                      <div><div style="font-size:10px;color:#92400E;text-transform:uppercase;letter-spacing:0.5px">FOC</div><div style="font-size:18px;font-weight:700;color:${focN?'#92400E':'inherit'}">${focN}</div></div>
+                      <div style="text-align:right"><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Subtotal</div><div style="font-size:15px;font-weight:700">฿${bkV2FmtTHB(t.subtotal||0)}</div></div>
+                    </div>`;
                 return `
                   <div style="border:1px solid rgba(26,35,50,0.08);border-radius:10px;padding:12px 14px;background:white">
                     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
@@ -50483,13 +50502,7 @@ function bkV2RenderBookingDetail(){
                       ${t.charter?`<span style="background:#3A6FF7;color:white;font-size:10px;padding:3px 8px;border-radius:6px;font-weight:700">CHARTER</span>`:''}
                       ${t.bundle?`<span style="background:#10B981;color:white;font-size:10px;padding:3px 8px;border-radius:6px;font-weight:700">${escapeHTML(t.bundle.type||'BUNDLE')} ${t.bundle.mode==='paid'?'paid':'free'}</span>`:''}
                     </div>
-                    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;font-family:'DM Mono',monospace">
-                      <div><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Adult</div><div style="font-size:18px;font-weight:700">${ad}</div></div>
-                      <div><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Child</div><div style="font-size:18px;font-weight:700">${chd}</div></div>
-                      <div><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Infant</div><div style="font-size:18px;font-weight:700">${inf}</div></div>
-                      <div><div style="font-size:10px;color:#92400E;text-transform:uppercase;letter-spacing:0.5px">FOC</div><div style="font-size:18px;font-weight:700;color:${focN?'#92400E':'inherit'}">${focN}</div></div>
-                      <div style="text-align:right"><div style="font-size:10px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:0.5px">Subtotal</div><div style="font-size:15px;font-weight:700">฿${bkV2FmtTHB(t.subtotal||0)}</div></div>
-                    </div>
+                    ${vehGrid}
                   </div>
                 `;
               }).join('')}
