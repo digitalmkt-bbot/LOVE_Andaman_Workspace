@@ -41546,7 +41546,13 @@ function bkV2RenderCalendar(){
   };
 
   // Active families for the visible month (consults Programs · seasons)
-  const activeFams = bkV2Families();
+  // §cityTourView · Transfer/City Tour are real families (§routeKind) · marine page (flag off)
+  //   excludes them · land page (flag on) shows only them
+  const activeFams = bkV2Families().filter(fam => {
+    if(typeof laIsLandRoute!=='function') return true;
+    const _famIsLand = (bkV2FamilyRoutes(fam.id)||[]).some(rd => laIsLandRoute(rd.id));
+    return _famIsLand === _bkV2CityTourOnly;
+  });
   // Program filter (multi-select) · empty/none = show ALL
   const calSelArr = Array.isArray(_bkV2.calFams) ? _bkV2.calFams : [];
   const calSel = calSelArr.length ? new Set(calSelArr) : null;
@@ -41766,7 +41772,13 @@ function bkV2RenderRouteAvgs(){
   };
 
   // Aggregate by family · sum sub-routes
-  const cards = bkV2Families().map(fam => {
+  // §cityTourView · Transfer/City Tour are real families (§routeKind) · marine page (flag off)
+  //   excludes them · land page (flag on) shows only them
+  const cards = bkV2Families().filter(fam => {
+    if(typeof laIsLandRoute!=='function') return true;
+    const _famIsLand = (bkV2FamilyRoutes(fam.id)||[]).some(rd => laIsLandRoute(rd.id));
+    return _famIsLand === _bkV2CityTourOnly;
+  }).map(fam => {
     const subRoutes = bkV2FamilyRoutes(fam.id);
     let pax = 0, daysRan = 0, bookings = 0;
     const dayRanSet = new Set();
@@ -41897,7 +41909,10 @@ function bkV2RenderSelDay(){
 
   // Build family cards · each card = 1 program family with sub-route breakdown
   // Sorted by family pax desc · only families with data this day
+  // §cityTourView · Transfer/City Tour are real families (§routeKind) · marine page (flag off)
+  //   excludes them · land page (flag on) shows only them
   const famsWithData = bkV2Families()
+    .filter(fam => (typeof laIsLandRoute!=='function') || (bkV2FamilyRoutes(fam.id)||[]).some(rd => laIsLandRoute(rd.id)) === _bkV2CityTourOnly)
     .map(fam => ({ fam, agg: bkV2FamilyAggregate(fam.id, sel.date, agg) }))
     .filter(o => o.agg.total > 0 || ((typeof bkV2IsWeatherClosed==='function') && bkV2FamilyRoutes(o.fam.id).some(rd => bkV2IsWeatherClosed(rd.id, sel.date))))
     .sort((a, b) => b.agg.total - a.agg.total);
@@ -42068,7 +42083,13 @@ function bkV2RenderMatrix(){
   const _dk = d => `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
 
   // Family-grouped rows · parent rows shown by default · click to expand sub-routes
-  const fams = bkV2Families();
+  // §cityTourView · Transfer/City Tour are real families (§routeKind) · marine page (flag off)
+  //   excludes them · land page (flag on) shows only them
+  const fams = bkV2Families().filter(fam => {
+    if(typeof laIsLandRoute!=='function') return true;
+    const _famIsLand = (bkV2FamilyRoutes(fam.id)||[]).some(rd => laIsLandRoute(rd.id));
+    return _famIsLand === _bkV2CityTourOnly;
+  });
   /* §mxBrk · ผลรวมต้องบอกด้วยว่าเป็นผู้ใหญ่/เด็ก/ทารก/FOC กี่คน
      เลขรวมอย่างเดียวใช้วางแผนที่นั่งกับคิดเงินไม่ได้ — เด็กกับทารกคิดคนละราคา
      ประเภทที่เป็นศูนย์ไม่ต้องขึ้น · เดือนที่ไม่มีทารกเลยจะได้ไม่มี "INF 0" มารกทุกแถว */

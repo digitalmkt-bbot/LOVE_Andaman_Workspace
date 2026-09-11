@@ -1841,7 +1841,8 @@ if (Pool && DB_URL) {
   pool = new Pool({
     connectionString: DB_URL,
     ssl: (DB_URL.includes('rlwy')||DB_URL.includes('railway')||process.env.PGSSL) ? { rejectUnauthorized:false } : false,
-    max: 20,                            // เดิมไม่ได้ตั้ง = default 10 · น้อยไปสำหรับ fan-out 132 query
+    max: 40,                             // เดิมไม่ได้ตั้ง = default 10 · น้อยไปสำหรับ fan-out 132 query
+                                          // เพิ่มจาก 20→40 (11 ก.ย. 2026) · Postgres max_connections=500, ใช้จริงแค่ ~13 ตอนตรวจ · เหลือพื้นที่มาก
     idleTimeoutMillis: 30_000,          // คืน connection ก่อน proxy จะตัดเอง
     keepAlive: true,                    // ให้ OS ตรวจว่าปลายทางตายหรือยัง แทนที่จะเชื่อว่า socket ยังดี
     keepAliveInitialDelayMillis: 10_000,
