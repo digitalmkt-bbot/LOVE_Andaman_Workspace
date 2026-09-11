@@ -3199,14 +3199,18 @@ function bkV2RenderLocks(){
   const routeName = rid => (routeOf(rid)?.name || rid);
   const routeColor = rid => (routeOf(rid)?.color || '#9C9C95');
   const DOWL=['อา','จ','อ','พ','พฤ','ศ','ส'];
+  // §cityTourView · Seat Locks tab is per-page: marine page (flag off) excludes land-route locks ·
+  //   land page (flag on) shows only land-route locks. Filtered here (display only) — does not
+  //   touch bkV2LocksOnDate/bkV2LockPoolHold etc., which stay global for Boat Op/availability.
+  const _lkOk = rid => (typeof laIsLandRoute!=='function') || (laIsLandRoute(rid)===_bkV2CityTourOnly);
 
   // ── ยอดรวม ──
-  const all = SB_SEAT_LOCKS.filter(l=>!l.parentId);
+  const all = SB_SEAT_LOCKS.filter(l=>!l.parentId && _lkOk(l.routeId));
   const act = all.filter(l=>l.status==='active');
   const nDay = act.filter(l=>!bkV2LockSpansDays(l)).length, nBulk = act.filter(l=>bkV2LockSpansDays(l)).length;
-  const usedQty = SB_SEAT_LOCKS.reduce((s,l)=>s+(l.used||0),0);
+  const usedQty = SB_SEAT_LOCKS.filter(l=>_lkOk(l.routeId)).reduce((s,l)=>s+(l.used||0),0);
   // ความจุที่เสนอออกไปแล้ว · รายวัน = qty · bulk = qty × รอบที่ผ่านไปแล้ว
-  const capOffered = SB_SEAT_LOCKS.reduce((s,l)=>{
+  const capOffered = SB_SEAT_LOCKS.filter(l=>_lkOk(l.routeId)).reduce((s,l)=>{
     if(l.parentId) return s;
     if(!bkV2LockSpansDays(l)) return s + (l.qty||0);
     return s + (l.qty||0) * (bkV2LockRounds(l).past||0);
@@ -3222,7 +3226,7 @@ function bkV2RenderLocks(){
     const d=new Date(_today+'T00:00:00'); d.setDate(d.getDate()+i);
     const ds=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
     let held=0;
-    bkV2LocksOnDate(ds).forEach(l=>{
+    bkV2LocksOnDate(ds).filter(l=>_lkOk(l.routeId)).forEach(l=>{
       const cut=bkV2LockReleaseCutoff(l, ds);
       const released = cut ? (_now >= cut.getTime()) : false;
       const h = bkV2LockPoolHold(l, ds);
@@ -3235,7 +3239,7 @@ function bkV2RenderLocks(){
   // §lkTomorrow · การ์ดนี้ดูของพรุ่งนี้ · ของวันนี้ถูกจัดการไปหมดแล้วตั้งแต่เมื่อวาน
   const _tmr=(function(){ const d=new Date(_today+'T00:00:00'); d.setDate(d.getDate()+1);
     return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); })();
-  const todLocks=bkV2LocksOnDate(_tmr);
+  const todLocks=bkV2LocksOnDate(_tmr).filter(l=>_lkOk(l.routeId));
   const todHeld=todLocks.reduce((a,l)=>a + (bkV2LockReleasedForDate(l,_tmr)?0:bkV2LockPoolHold(l,_tmr)), 0);
   const todRoutes=new Set(todLocks.map(l=>l.routeId)).size;
   const card=(cls,lab,val,unit,foot)=>`<div style="background:${cls.bg};border:1px solid ${cls.bd};border-radius:12px;padding:11px 14px;overflow:hidden">
@@ -3257,7 +3261,7 @@ function bkV2RenderLocks(){
   const _dObj=new Date(_dayStr+'T00:00:00');
   const _dLbl=_dObj.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
   const _dTag=(_dayStr===_today)?'วันนี้':((_bkV2LockUI.dayOff===1)?'พรุ่งนี้':'');
-  const dayLocks=bkV2LocksOnDate(_dayStr).sort((a,b)=>
+  const dayLocks=bkV2LocksOnDate(_dayStr).filter(l=>_lkOk(l.routeId)).sort((a,b)=>
     bkV2LockHolderName(a).localeCompare(bkV2LockHolderName(b)) || routeName(a.routeId).localeCompare(routeName(b.routeId)));
   const dQty=dayLocks.reduce((a,l)=>a+(l.qty||0),0);
   const dUsed=dayLocks.reduce((a,l)=>a+bkV2LockUsedTotal(l,_dayStr),0);
@@ -3315,8 +3319,8 @@ function bkV2RenderLocks(){
     </div>`;
 
   // ── แถบกรอง ──
-  const rOpts = (typeof ROUTES!=='undefined'?ROUTES:[]).map(r=>`<option value="${r.id}" ${U.route===r.id?'selected':''}>${esc(r.name)}</option>`).join('');
-  const holderNames = [...new Set(SB_SEAT_LOCKS.filter(l=>!l.parentId).map(bkV2LockHolderName))].sort();
+  const rOpts = (typeof ROUTES!=='undefined'?ROUTES:[]).filter(r=>_lkOk(r.id)).map(r=>`<option value="${r.id}" ${U.route===r.id?'selected':''}>${esc(r.name)}</option>`).join('');
+  const holderNames = [...new Set(SB_SEAT_LOCKS.filter(l=>!l.parentId && _lkOk(l.routeId)).map(bkV2LockHolderName))].sort();
   const hOpts = holderNames.map(h=>`<option ${U.holder===h?'selected':''}>${esc(h)}</option>`).join('');
   const seg = (field, opts) => `<span style="display:inline-flex;background:#F3F1EC;border-radius:9px;padding:2px;gap:2px">`
     + opts.map(([v,l])=>`<button onclick="bkV2LockUISet('${field}','${v}')" style="border:none;background:${U[field]===v?'#fff':'transparent'};box-shadow:${U[field]===v?'0 1px 2px rgba(0,0,0,.08)':'none'};border-radius:7px;padding:4px 11px;font-family:inherit;font-size:11.5px;font-weight:600;color:${U[field]===v?'var(--ink)':'var(--ink-soft)'};cursor:pointer">${l}</button>`).join('')
@@ -3326,6 +3330,7 @@ function bkV2RenderLocks(){
   // ── กรอง ──
   let rows = SB_SEAT_LOCKS.filter(l=>{
     if(l.parentId) return false;
+    if(!_lkOk(l.routeId)) return false;
     if(U.st==='active' && l.status!=='active') return false;
     if(U.route && l.routeId!==U.route) return false;
     if(U.holder && bkV2LockHolderName(l)!==U.holder) return false;
@@ -42702,7 +42707,8 @@ function bkV2RenderTab2(){
   if(typeof bkOvnHealSpans==='function') bkOvnHealSpans();     // §ovnSpan · จองเรือให้ครบช่วงของใบค้างเกาะ
   const esc = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
   const P = (pax,k)=> bkV2PaxTot(pax||{}, k);
-  const boatMode = !!_bkV2.boatAssignMode;   // Boat Assign mode → extra Boat column + auto-assign
+  // §cityTourView · land trips never need a boat · force off regardless of a stale toggle from the marine page
+  const boatMode = !_bkV2CityTourOnly && !!_bkV2.boatAssignMode;   // Boat Assign mode → extra Boat column + auto-assign
   const vanMode = !!_bkV2.vanAssignMode;     // Van Assign mode → extra Van column + pickup time + job order
   const rcMode = !!_bkV2.reconfirmMode;      // Re-Confirm mode → extra Re-confirm column
   const date = bkV2Tab2ActiveDate();
@@ -42926,7 +42932,8 @@ function bkV2RenderTab2(){
     const dts=(b.trips||[]).filter(t=>(t.date||'')===date && (typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId))===_bkV2CityTourOnly); if(!dts.length) return;
     const pax=dts.reduce((s,t)=>s+((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0),0);
     const _lbl=_unRn(dts[0].routeId);
-    const hasBoat=bkOpsRead(b,date).boatId||dts.some(t=>t.charterBoatId);
+    // §cityTourView · land trips never need a boat · skip the check entirely on the City Tour page
+    const hasBoat=_bkV2CityTourOnly || bkOpsRead(b,date).boatId||dts.some(t=>t.charterBoatId);
     if(!hasBoat){ _unBoatN++; _unBoatPax+=pax; _unBoatR[_lbl]=(_unBoatR[_lbl]||0)+pax; }
     const zone=(dts[0].zone||b.pickupZone||'NoTransfer');
     if(!b.pickupSelf && zone!=='NoTransfer' && zone!=='NT'){
@@ -43164,9 +43171,10 @@ function bkV2RenderTab2(){
        <span class="tx"><span class="t">${nm}</span><span class="s">${sub}</span></span>
        <span class="n">${num}</span>${on?'<span class="x">&times;</span>':''}</button>`;
   /* ปุ่มโหมดยังกดได้ทุกกรณีเหมือนเดิม · ของเดิมไม่เคยล็อกไว้ตามการเลือกโปรแกรม */
+  // §cityTourView · land trips never need a boat · hide the Boat pill on the City Tour page
   const _btModes = `<div class="bt-c"><div class="bt-mrow">
       ${_btMode('Van', _unVanN>0?'not assigned':'all assigned', _unVanN>0?_unVanN:'&#10003;', _unVanN>0?'warn':'ok','#0F6E56',vanMode,'bkV2ToggleVanMode()',false)}
-      ${_btMode('Boat',_unBoatN>0?'not assigned':'all assigned', _unBoatN>0?_unBoatN:'&#10003;', _unBoatN>0?'warn':'ok','#185FA5',boatMode,'bkV2ToggleBoatMode()',false)}
+      ${_bkV2CityTourOnly ? '' : _btMode('Boat',_unBoatN>0?'not assigned':'all assigned', _unBoatN>0?_unBoatN:'&#10003;', _unBoatN>0?'warn':'ok','#185FA5',boatMode,'bkV2ToggleBoatMode()',false)}
       ${_btMode('Re-confirm',_unRcN>0?'not confirmed':'all confirmed', _unRcN>0?_unRcN:'&#10003;', _unRcN>0?'warn':'ok','#7A4A00',rcMode,'bkV2ToggleReconfirmMode()',false)}
     </div></div>`;
   const _btSearch = `<div class="bt-c"><div class="bt-srow">
@@ -43224,7 +43232,7 @@ function bkV2RenderTab2(){
         <button class="bt-arw" onclick="bkV2Tab2DateShift(1)" title="Next day">&rsaquo;</button>
         <span class="bt-brand">${_btSelFam?esc(_btSelFam.name):'LOVE ANDAMAN'}</span>
       </div>
-      <div class="bt-hgrid">
+      <div class="bt-hgrid${_bkV2CityTourOnly?' bt-hgrid-noboat':''}">
         <div>${_btProg}</div>
         <div>${_btBoatCard}</div>
         <div class="bt-col3">
@@ -44690,6 +44698,10 @@ function bkV2RenderTab2(){
       max-width:44%;overflow:hidden;text-overflow:ellipsis}
     .bt-hgrid{display:grid;grid-template-columns:minmax(0,1.28fr) minmax(0,0.92fr) minmax(0,1.9fr);
       gap:9px;padding:0 8px;align-items:stretch}
+    /* §cityTourView · Transfer/City Tour never has a boat to assign · drop the middle column
+       instead of leaving an empty "no trip running" box */
+    .bt-hgrid.bt-hgrid-noboat{grid-template-columns:minmax(0,1.28fr) minmax(0,1.9fr)}
+    .bt-hgrid.bt-hgrid-noboat>div:nth-child(2){display:none}
     .bt-hgrid>div{display:flex;flex-direction:column;gap:9px;min-width:0}
     .bt-hgrid>div>.bt-c{flex:1 1 auto;display:flex;flex-direction:column}
     .bt-hgrid>div>.bt-c>.bt-pgbody,.bt-hgrid>div>.bt-c>.bt-blist,.bt-hgrid>div>.bt-c>.bt-tgl{flex:1 1 auto}
