@@ -343,7 +343,7 @@ const AB_CSS=`<style>
       เต็มความกว้าง 1147px ได้ช่องละ 67px ที่ 14 วัน · 134px ที่ 7 วัน)
      สูงตามเนื้อแต่ไม่เกิน 46% ของจอ · เกินแล้วเลื่อนในตัวเอง
      (ตอนนี้กันยายนเดิน 3 เส้นทาง · ไฮซีซันเดิน 10 เส้นทาง แถวจะเยอะกว่านี้มาก) */
-  .ab-mtx{flex:0 1 auto;max-height:46%}
+  .ab-mtx{flex:0 0 auto;max-height:46%}
   .ab-mwrap{overflow:auto;min-height:0;flex:1 1 auto;
     scrollbar-width:thin;scrollbar-color:#DAD5CC transparent}
   .ab-mwrap::-webkit-scrollbar{width:7px;height:7px}
@@ -433,8 +433,12 @@ const AB_CSS=`<style>
   .ab-aglg b{color:#3a3a36;font-weight:700}
   .ab-aglg em{font-style:normal;font-family:'DM Mono',ui-monospace,monospace;color:#b6b1a8}
 
-  /* ── 3 คอลัมน์ล่าง ── */
-  .ab-grid{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,1fr) minmax(0,1fr);
+  /* ── กริดล่าง · ซ้าย 1 คอลัมน์ซ้อน 3 ใบ · ขวา 3 คอลัมน์ตั้ง ใบละคอลัมน์ ──
+     ซ้าย = เรื่องที่ต้องรีบ · สามใบนี้ปกติมีไม่กี่แถว ซ้อนกันลงมาได้
+     ขวา = อันดับเอเย่นต์ · แต่ละใบมี 10 ราย ถ้าซ้อนกันจะเหลือใบละ 3 แถว
+           ตั้งเป็นคอลัมน์ยาวแทน ได้ความสูงเต็มพื้นที่ เห็นได้ใบละ 7–9 ราย */
+  .ab-grid{display:grid;
+    grid-template-columns:minmax(0,1.18fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr);
     gap:11px;align-items:stretch;flex:1 1 auto;min-height:0;overflow:hidden}
   .ab-col{display:flex;flex-direction:column;gap:11px;min-width:0;min-height:0;
     overflow-y:auto;overscroll-behavior:contain;
@@ -442,7 +446,11 @@ const AB_CSS=`<style>
   .ab-col::-webkit-scrollbar{width:6px}
   .ab-col::-webkit-scrollbar-thumb{background:rgba(0,15,76,.30);border-radius:4px}
   .ab-col::-webkit-scrollbar-track{background:transparent}
-  .ab-col>*{flex:1 1 0;min-height:118px}
+  .ab-col>*{flex:1 1 0;min-height:112px}
+  /* ใบทางซ้ายสูงตามเนื้อ · ปล่อยให้ "วันเสี่ยง" (แถวเยอะสุด) กินที่ที่เหลือ
+     ถ้าแบ่งเท่ากันหมด ใบที่ว่าง (ยกเลิกพุ่ง 0 ราย) จะกินที่ไปหนึ่งในสามเปล่า ๆ */
+  .ab-col:first-child>*{flex:0 1 auto}
+  .ab-col:first-child>.risk{flex:1 1 auto}
 
   /* ── แถวเตือนเรื่องที่นั่ง ── */
   .ab-tr{display:flex;align-items:center;gap:9px;padding:7px 4px;border-bottom:1px solid #F5F2ED;cursor:pointer}
@@ -479,15 +487,44 @@ const AB_CSS=`<style>
   .ab-ar:hover{background:#FBFAF8}
   .ab-rk{flex:none;width:17px;text-align:center;font-family:'DM Mono',ui-monospace,monospace;
     font-size:11px;font-weight:800;color:#c4bfb6}
-  .ab-ab{flex:1;min-width:0}
-  .ab-ab .nm{display:block;font-size:11.5px;font-weight:700;color:#2c2c2a;line-height:1.3;
+  /* คอลัมน์ขวากว้าง ~1060px ที่ 1920 · ถ้าบังคับชื่อกับเมตาเป็นคนละบรรทัดเสมอ
+     จะได้แถวสูง 2 บรรทัดที่มีที่ว่างกลางแถวเปล่า ๆ ครึ่งแถว และเห็นได้แค่ 3 ราย
+     ให้ wrap ตัดสินเอง: กว้างพอก็อยู่บรรทัดเดียว (เห็น 5–6 ราย) แคบก็ตกลงมาเอง
+     ไม่ต้องมี breakpoint เพราะความกว้างคอลัมน์เปลี่ยนตามตัวกรองได้ด้วย */
+  .ab-ab{flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:1px 9px}
+  .ab-ab .nm{flex:0 1 auto;min-width:0;font-size:11.5px;font-weight:700;color:#2c2c2a;line-height:1.35;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .ab-ab .mt{display:flex;align-items:center;gap:5px;font-size:9.5px;font-weight:600;color:#9b9088;margin-top:2px}
-  .ab-an{flex:none;text-align:right;min-width:74px}
-  .ab-an .v{display:block;font-family:'DM Mono',ui-monospace,monospace;font-size:16px;
-    font-weight:800;color:#3a3a36;line-height:1.1}
-  .ab-an .d{display:block;font-size:9.5px;font-weight:700;margin-top:2px;white-space:nowrap}
+  .ab-ab .mt{flex:0 1 auto;min-width:0;display:flex;align-items:center;gap:5px;
+    font-size:9.5px;font-weight:600;color:#9b9088;white-space:nowrap;overflow:hidden}
+  /* วัดแล้วความสูงแถวถูกกำหนดโดยก้อนตัวเลขขวา (ค่า 16px + เดลต้า 9.5px = 34px)
+     ไม่ใช่ตัวหนังสือซ้าย · พอคอลัมน์กว้าง 1035px แล้วยังบังคับให้ซ้อนกันสองชั้น
+     แถวจะสูง 49px เห็นได้แค่ 3 ราย · ให้อยู่บรรทัดเดียวกันเมื่อมีที่ (แถวเหลือ ~32px
+     เห็น 5 ราย) และ wrap กลับไปซ้อนกันเองเมื่อคอลัมน์แคบ */
+  .ab-an{flex:none;text-align:right;min-width:74px;
+    display:flex;flex-wrap:wrap;align-items:baseline;justify-content:flex-end;gap:1px 8px}
+  .ab-an .v{font-family:'DM Mono',ui-monospace,monospace;font-size:16px;
+    font-weight:800;color:#3a3a36;line-height:1.15}
+  .ab-an .d{font-size:9.5px;font-weight:700;white-space:nowrap}
   .ab-up{color:#0F6E56} .ab-dn{color:#A32D2D} .ab-flat{color:#a8a29a}
+
+  /* §abRow · วัดที่ 1440 · 4 คอลัมน์ได้คอลัมน์ละ 267px
+     หักอันดับ 17 + ตัวเลข/เดลต้า ~120 เหลือชื่อ 122px → ตัดเป็น "Clu…" "Aqu…"
+     แคบกว่า 1700 จึงให้ชื่อกินบรรทัดเต็ม แล้วเมตาตกลงมาบรรทัดล่างตามเดิม
+     กว้างกว่านั้นค่อยปล่อยให้อยู่บรรทัดเดียว (เห็นได้ครบ 10 ราย) */
+  @media (max-width:1699px){
+    /* ให้ชื่อกินบรรทัดเต็มยังไม่พอ · 267 − อันดับ 17 − ก้อนตัวเลข ~90 เหลือชื่อ 134px
+       ซึ่งยังตัด "Club Wyndham" อยู่ดี → ยอมให้ขึ้นบรรทัดที่ 2
+       แถวสูงขึ้นเห็นน้อยลง แต่ชื่อเอเย่นต์คือตัวที่ต้องอ่านออก ไม่ใช่จำนวนแถว */
+    .ab-ab .nm{flex:1 1 100%;white-space:normal;line-height:1.25;
+      display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    .ab-ab .mt{flex:1 1 100%}
+    /* ก้อนขวาเป็น flex:none · ข้อความยาวอย่าง "ผันผวน ±10% · เดือนนี้ 121"
+       จึงยืดตัวเองไป ~140px แล้วบีบชื่อเหลือ 84px (การ์ด "ส่งสม่ำเสมอ" โดนหนักสุด)
+       จำกัดไม่ให้กินเกินครึ่งแถว แล้วให้ข้อความห้อยขึ้นบรรทัดใหม่แทนการดันความกว้าง */
+    .ab-an{flex:0 1 auto;flex-wrap:wrap;max-width:50%}
+    .ab-an .v{flex:1 1 100%;text-align:right}
+    .ab-an .d{flex:1 1 100%;white-space:normal;line-height:1.3}
+  }
 
   /* ── จอเล็ก ── */
   /* §abTitle · วัดระยะทับจริงตอนชื่ออยู่กึ่งกลาง (ชิปซ้ายจบที่ x=828 คงที่ทุกความกว้าง):
@@ -505,6 +542,7 @@ const AB_CSS=`<style>
     .ab-fr>*{margin-bottom:9px}
     .ab-mtx{max-height:none}
     .ab-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr);height:auto;overflow:visible}
+    .ab-col:first-child>*{flex:0 0 auto}
     .ab-col{overflow-y:visible}
     .ab-col>*{flex:0 0 auto}
     .ab-list{max-height:400px}
@@ -863,9 +901,10 @@ function abRender(){
       +'</div>'
       +mtx
       +'<div class="ab-grid">'
-        +'<div class="ab-col">'+cRisk+cNear+'</div>'
-        +'<div class="ab-col">'+cTop+cLost+'</div>'
-        +'<div class="ab-col">'+cSteady+cCxl+'</div>'
+        +'<div class="ab-col">'+cRisk+cNear+cCxl+'</div>'
+        +'<div class="ab-col">'+cTop+'</div>'
+        +'<div class="ab-col">'+cSteady+'</div>'
+        +'<div class="ab-col">'+cLost+'</div>'
       +'</div>'
     +'</div>';
 }

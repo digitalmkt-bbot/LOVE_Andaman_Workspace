@@ -7021,12 +7021,45 @@ function bkOvnHealSpans(){
       if(days.length<2) return;                       /* ไม่ใช่ใบค้างเกาะ ไม่ต้องยุ่ง */
       /* §ovnRet · ใบเก่า · ขากลับยังเป็น seat อยู่ · ทำให้ใบเหมาแตกเป็นสองสถานะ
          ขาไปอยู่กลุ่มเหมา ขากลับไปโผล่ในกลุ่มที่นั่งของเรือรอบปกติ · ปรับให้ตรงกัน */
+      /* §ovnSync · ขากลับที่ค้างอยู่คนละวันกับ "วันกลับ" ของขาไป
+         เกิดจากใบที่ถูกย่น/ยืดก่อนมีตัวเช็คตอนบันทึก (เช่น 16–19 → 16–18
+         แต่ขากลับยังอยู่วันที่ 19) · ผลคือหน้า By trip ยังขึ้นแถวลูกค้าวันเก่า
+         และเรือถูกจับค้างวันนั้นตามไปด้วย
+         วันกลับบนขาไปเป็นตัวตั้ง เพราะนั่นคือช่องที่คนกรอก ส่วนขากลับเป็นของที่ระบบสร้าง
+         ย้ายอย่างเดียว ไม่ลบ · ใบที่เลิกเป็น OVN แล้วปล่อยให้ตอนบันทึกเป็นคนเก็บ */
+      (b.trips||[]).forEach(function(L){
+        if(!L || !L.ovnLeg || (L.routeId||'')!==(t.routeId||'')) return;
+        if((L.date||'') && (L.date||'')!==t.ovnReturnDate){
+          var _was=L.date;
+          if((b.trips||[]).some(function(x){ return x!==L && x.ovnLeg && x.routeId===L.routeId && x.date===t.ovnReturnDate; })) return;
+          L.date=t.ovnReturnDate;
+          fixed.push({date:t.ovnReturnDate,boat:t.charterBoatId,bk:b.id,was:'ย้ายขากลับ '+_was+' → '+t.ovnReturnDate});
+          try{ bkV2AddHistory(b,'edit','ย้ายขากลับค้างคืน '+_was+' → '+t.ovnReturnDate+' · ให้ตรงกับวันกลับของขาไป','Edited'); }catch(_){}
+        }
+      });
       (b.trips||[]).forEach(function(L){
         if(!L || !L.ovnLeg) return;
         if((L.date||'')!==t.ovnReturnDate || (L.routeId||'')!==(t.routeId||'')) return;
         if(L.bookingMode==='charter' && L.charterBoatId) return;
         L.bookingMode='charter'; L.charterBoatId=t.charterBoatId;
         fixed.push({date:L.date,boat:t.charterBoatId,bk:b.id,was:'ขากลับ seat → เหมาลำ'});
+      });
+      /* §ovnFree · ของเดิม "จอง" เรือให้ครบช่วงอย่างเดียว ไม่เคยคืน
+         พอย่นใบจาก 16–19 เหลือ 16–18 เรือยังถูกจับวันที่ 19 ค้างอยู่
+         (ตรงกับที่ถามมาว่า "เป็นเพราะเรือถูกจับ ระบบเลยไม่ล้างหรือเปล่า" — ใช่)
+         คืนเฉพาะช่องที่เป็นของ "ใบนี้" เท่านั้น และไม่ลบเรือออกจากตาราง
+         แค่เปลี่ยนกลับเป็นรอบปกติ · การลบทิ้งทำให้ที่นั่งของวันนั้นหายไปทั้งลำ
+         ซึ่งเคยคุยกันแล้วว่าไม่เอา */
+      var _want={}; days.forEach(function(ds){ _want[ds]=1; });
+      Object.keys(TRIPS).forEach(function(ds){
+        if(_want[ds]) return;
+        var op0=TRIPS[ds] && TRIPS[ds][t.charterBoatId];
+        if(!op0 || op0.charterBookingId!==b.id) return;
+        /* ยังมี trip ของใบนี้อยู่วันนั้นจริงไหม · ถ้ามี แปลว่าเป็นวันที่ตั้งใจ ไม่ใช่เศษ */
+        if((b.trips||[]).some(function(x){ return x && x.date===ds && x.charterBoatId===t.charterBoatId; })) return;
+        delete op0.charterBookingId;
+        op0.type='normal';
+        fixed.push({date:ds,boat:t.charterBoatId,bk:b.id,was:'คืนเรือ · หลุดออกจากช่วงแล้ว'});
       });
       days.forEach(function(ds){
         TRIPS[ds]=TRIPS[ds]||{};
@@ -7048,7 +7081,8 @@ function bkOvnHealSpans(){
        (save() เขียนแค่ routes/boats/trips) → ต้องเซฟ sb_bookings ด้วย
        ตัวเลขที่นั่งไม่ได้พึ่งบรรทัดนี้แล้ว (ดู §ovnRead ใน getSeatsConsumed)
        แต่ข้อมูลที่เก็บไว้ต้องตรงกับความจริง ไม่งั้น export/รายงานฝั่งเซิร์ฟเวอร์ยังผิดอยู่ */
-    var _legFix=fixed.some(function(f){ return f.was==='ขากลับ seat → เหมาลำ'; });
+    var _legFix=fixed.some(function(f){ return f.was==='ขากลับ seat → เหมาลำ'
+      || String(f.was||'').indexOf('ย้ายขากลับ')===0; });
     try{ var k=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2');
          var o=JSON.parse(localStorage.getItem(k)||'{}'); o.trips=TRIPS;
          if(_legFix && typeof SB_BOOKINGS!=='undefined') o.sb_bookings=SB_BOOKINGS;
@@ -42754,7 +42788,13 @@ function bkV2RenderTab2(){
           cxl:['cancelled','rejected','cancelled_weather'].includes(bk.status),
           ovnHoldRow:{from:t.date, to:t.ovnReturnDate, day:_d1, days:_dn, pax:_all}});
       });
-      (bk.trips||[]).forEach(t=>{ if(t.date!==date) return; const _isLand=typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId); if(_isLand!==_bkV2CityTourOnly) return; rows.push({bk, t, routeId:t.routeId, zone:(typeof bkV2EffZone==='function'?bkV2EffZone(bk,t):(t.zone||bk.pickupZone))||'NoTransfer', pax:t.pax||{}, charter:t.bookingMode==='charter', charterBoatId:t.charterBoatId||null, pickupTime:t.pickupTime||'', subtotal:((bk.trips||[]).length<=1 ? (typeof bk.total==='number'?bk.total:(t.subtotal||0)) : (t.subtotal||bk.total||0)), cxl:['cancelled','rejected','cancelled_weather'].includes(bk.status)}); });
+      (bk.trips||[]).forEach(t=>{ if(t.date!==date) return; const _isLand=typeof laIsLandRoute==='function' && laIsLandRoute(t.routeId); if(_isLand!==_bkV2CityTourOnly) return; rows.push({bk, t, routeId:t.routeId, zone:(typeof bkV2EffZone==='function'?bkV2EffZone(bk,t):(t.zone||bk.pickupZone))||'NoTransfer', pax:t.pax||{}, charter:t.bookingMode==='charter', charterBoatId:t.charterBoatId||null, pickupTime:t.pickupTime||'', subtotal:(typeof tsTripAmount==='function' ? tsTripAmount(bk,t)
+   /* §btAmt · ของเดิมเขียน (t.subtotal || bk.total || 0) · "||" ทำให้ขาที่ราคา 0
+      (ขากลับค้างคืน · วันที่เพิ่มเข้ามาแล้วยังไม่มีเรต) ตกไปหยิบยอดเต็มของทั้งใบมาแสดง
+      ใบ 12 คน 3 วันจึงขึ้น ฿121,800 ทุกแถว = นับซ้ำ 3 รอบในยอดรวมหัวตาราง
+      tsTripAmount เป็นตัวเดียวกับที่ Travel Summary ใช้ และกัน ovnLeg ไว้แล้ว
+      ที่นี่จึงเรียกใช้ ไม่เขียนกติกาที่สองขึ้นมาอีก */
+   : ((bk.trips||[]).length<=1 ? (typeof bk.total==='number'?bk.total:(t.subtotal||0)) : (t.subtotal||0))), cxl:['cancelled','rejected','cancelled_weather'].includes(bk.status)}); });
     } else if(bk.travelDate===date){
       { const _isLand = typeof laIsLandRoute==='function' && laIsLandRoute(bk.programId); if(_isLand !== _bkV2CityTourOnly) return; }   // §cityTourView · marine page (flag off) excludes land · land page (flag on) excludes marine
       rows.push({bk, t:null, routeId:bk.programId, zone:bk.transfer||'NoTransfer', pax:{ad:bk.pax?.adult||0, chd:bk.pax?.child||0, inf:bk.pax?.infant||0, foc:0}, charter:false, charterBoatId:null, pickupTime:'', subtotal:bk.total||0, cxl:['cancelled','rejected','cancelled_weather'].includes(bk.status)});
@@ -48813,6 +48853,41 @@ function bkV2CommitBooking(status){
     staffPurpose: d.staffPurpose || null,
     note: d.note || ''
   };
+
+  /* §ovnSync · ขากลับค้างคืนต้องผูกกับ "วันกลับ" ของขาไปเสมอ
+     ของเดิม commit เขียน trips ตามที่ฟอร์มส่งมาดิบ ๆ ไม่มีใครเช็คว่าสองอย่างนี้ตรงกัน
+     พอแก้ใบจาก 16–19 เป็น 16–18 ขากลับวัน 19 ยังค้างอยู่ในใบ → หน้า By trip
+     ยังขึ้นแถวลูกค้าวันที่ 19 พร้อมยอดเงิน ทั้งที่ทริปนั้นไม่มีแล้ว
+     กติกา: ขาไปที่ยังเป็น ovn==='return' และมีวันกลับ → ย้ายขากลับของมันมาที่วันนั้น
+             ขาไปที่เลิกเป็น OVN แล้ว (หรือไม่มีวันกลับ) → ขากลับของมันถูกตัดทิ้ง
+             ขากลับที่ไม่มีขาไปเป็นเจ้าของ → ตัดทิ้ง (เศษจากการแก้ครั้งก่อน) */
+  (function(){
+    var T=newBk.trips||[]; if(!T.length) return;
+    var outs=T.filter(function(x){ return x && !x.ovnLeg && x.ovn==='return' && x.ovnReturnDate && x.ovnReturnDate>x.date; });
+    var keep=[], moved=[], dropped=[];
+    T.forEach(function(x){
+      if(!x || !x.ovnLeg){ keep.push(x); return; }
+      var own=outs.find(function(o){ return (o.routeId||'')===(x.routeId||''); });
+      if(!own){ dropped.push(x.date||'?'); return; }
+      if((x.date||'')!==own.ovnReturnDate){ moved.push((x.date||'?')+'→'+own.ovnReturnDate); x.date=own.ovnReturnDate; }
+      keep.push(x);
+    });
+    /* กันขากลับซ้ำวันเดียวกัน/เส้นทางเดียวกัน หลังย้ายวันแล้ว */
+    var seen={};
+    keep=keep.filter(function(x){
+      if(!x || !x.ovnLeg) return true;
+      var k=(x.routeId||'')+'|'+(x.date||'');
+      if(seen[k]){ dropped.push(x.date||'?'); return false; }
+      seen[k]=1; return true;
+    });
+    if(moved.length || dropped.length){
+      newBk.trips=keep;
+      var msg='ปรับขากลับค้างคืนให้ตรงกับวันกลับ'
+        +(moved.length?(' · ย้าย '+moved.join(', ')):'')
+        +(dropped.length?(' · ตัดขากลับที่ไม่มีขาไป '+dropped.join(', ')):'');
+      try{ bkV2AddHistory(newBk,'edit',msg,'Edited'); }catch(_){}
+    }
+  })();
 
   newBk.incomplete = _bkV2._missSoft || [];   // soft-missing fields (e.g. pickup) · ⚠ in manifest
   _bkV2._b2cClosedWarn = null;   // §eat · ผู้ใช้ตัดสินใจแล้วและกำลังบันทึกจริง · ล้างได้ตรงนี้
