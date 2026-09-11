@@ -434,7 +434,14 @@
   _laStartSSE();
   // keep the saved screen fresh · once new data is pending, seamlessly refresh the moment the user goes idle
   setInterval(function(){ _laSaveView(); if(_laPending && !_laBusy()) _laSoftRefresh(); }, 3000);
-  function showRefresh(info){ if(_refreshShown) return; _refreshShown=true; onReady(function(){ var d=document.createElement('div'); d.id='la-refresh'; d.style.cssText='position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:99999;background:#185FA5;color:#fff;border-radius:24px;padding:8px 8px 8px 16px;font:13px/1.3 "DM Sans",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.25);display:flex;align-items:center;gap:10px'; d.innerHTML='🔄 มีข้อมูลใหม่จากคนอื่น'+((info&&info.updated_by)?(' (โดย '+esc(info.updated_by)+')'):'')+' · จะรีเฟรชอัตโนมัติเมื่อว่าง <button onclick="_laSoftRefresh()" style="background:#fff;color:#185FA5;border:none;border-radius:16px;padding:6px 14px;font-weight:700;cursor:pointer;font-family:inherit">โหลดเลย</button>'; document.body.appendChild(d); }); }
+  function showRefresh(info){ if(_refreshShown) return; _refreshShown=true; onReady(function(){ var d=document.createElement('div'); d.id='la-refresh'; /* §laRefresh (2026-09-11) · หน้าตา/ตำแหน่งย้ายไปอยู่ css/01-base.css แล้ว
+       ของเดิมเป็น inline style ลอยกลางก้นจอ · ที่นี่เหลือแค่เนื้อความ
+       บรรทัดบน = เกิดอะไรขึ้น · บรรทัดล่าง = ใครทำ + ระบบจะทำอะไรต่อ */
+    var _by=(info&&info.updated_by)?('โดย '+esc(info.updated_by)+' · '):'';
+    d.innerHTML='<span class="la-rf-dot"></span>'
+      +'<span class="la-rf-tx"><b>มีข้อมูลใหม่จากคนอื่น</b>'
+      +'<i>'+_by+'จะรีเฟรชอัตโนมัติเมื่อว่าง</i></span>'
+      +'<button onclick="_laSoftRefresh()">โหลดเลย</button>'; document.body.appendChild(d); }); }
   // §B2C new-booking alert helpers (2026-07-24)
   var _B2C_CXL=['cancelled','rejected','cancelled_weather'];
   /* §b2cPop · จำ id ของใบ b2c ที่รู้จักแล้วไว้ในหน่วยความจำ

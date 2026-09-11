@@ -697,7 +697,10 @@ body.la-nav-open .la-burger{background:#1683C7;color:#fff;box-shadow:inset 2px 2
   .modal-body,.tm-modal-body,.aos-modal-body{-webkit-overflow-scrolling:touch}
 
   /* ป้ายมุมจอ · ยกให้พ้น home indicator */
-  #la-viewonly,#la-refresh{bottom:calc(8px + env(safe-area-inset-bottom)) !important;font-size:10px !important}
+  #la-viewonly{bottom:calc(8px + env(safe-area-inset-bottom)) !important;font-size:10px !important}
+  /* §laRefresh · บนจอเล็กเอาไว้ก้นจอเหมือนเดิม (นิ้วถึง) แต่เต็มความกว้าง ไม่ลอยทับมุมใดมุมหนึ่ง */
+  #la-refresh{top:auto !important;left:12px !important;right:12px !important;max-width:none !important;
+    bottom:calc(8px + env(safe-area-inset-bottom)) !important}
   /* §mobUser · ป้ายผู้ใช้ย้ายเข้าไปอยู่ท้ายลิ้นชักแล้ว · เลิกลอย เลิกทับเนื้อหา
      และพ้นแถบเครื่องมือของเบราว์เซอร์ที่คาอยู่ก้นจอ ซึ่งเป็นเหตุที่กดปุ่มออกไม่โดน */
   #la-userbadge.la-ub-inside{

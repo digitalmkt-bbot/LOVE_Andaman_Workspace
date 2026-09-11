@@ -1111,7 +1111,10 @@ const DV_CSS=`<style>
      ตัวใหญ่พิมพ์ใหญ่ · ตัวเลข DM Mono · ต่างกันแค่หน้านี้วางบนพื้น navy
      เพราะเป็นหน้าที่เปิดค้างไว้ทั้งวัน ไม่ได้จ้องอ่านทีละบรรทัดเหมือน By trip */
   #dash-wrap *{box-sizing:border-box}
-  .dv-fr{position:relative;isolation:isolate;background:#16265C;min-height:calc(100vh - 44px);
+  /* §dashFit · 44px เป็นความสูง topbar ที่ฮาร์ดโค้ดไว้ · แต่สกินที่ใช้จริง
+     (topbar-float-skin) ตั้ง --topbar:0px แล้วเปลี่ยนแถบบนเป็นปุ่มลอยมุมขวา
+     หน้านี้จึงเหลือแถบว่าง 44px ที่ก้นจอเปล่า ๆ มาตลอด · ผูกกับตัวแปรจริงแทน */
+  .dv-fr{position:relative;isolation:isolate;background:#16265C;min-height:calc(100dvh - var(--topbar, 44px));
     padding:8px 8px 12px;font-family:'DM Sans',Manrope,-apple-system,system-ui,sans-serif}
   /* แก้วต้องมีอะไรให้หักเห · พื้น navy เรียบเบลอแล้วไม่เห็นอะไร
      จึงวางไอสีของเส้นทางจริงไว้ข้างหลัง เบลอใหญ่จนอ่านไม่ออกว่าสีอะไร */
@@ -1154,6 +1157,11 @@ const DV_CSS=`<style>
     letter-spacing:.46em;padding-left:.46em;color:#fff;white-space:nowrap;pointer-events:none;
     max-width:40%;overflow:hidden;text-overflow:ellipsis}
   .dv-kpi{margin-left:auto;display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+  /* §dashFit · แบรนด์กลางหัวเป็น absolute จึงไม่รู้ว่าชิปตัวเลขมาถึงไหน
+     วัดระยะทับจริง: 1366 ทับ 107px · 1440 ทับ 70 · 1512 ทับ 34 · 1680 ขึ้นไปไม่ทับ
+     (ของเดิมทับอยู่แล้วตั้งแต่ 1512 · อ่านไม่ออกทั้งชื่อแบรนด์และตัวเลข)
+     ตัวเลขคือของที่ต้องอ่าน แบรนด์เป็นของประดับ · จอแคบกว่า 1600 ซ่อนแบรนด์ */
+  @media (max-width:1599px){ .dv-brand{display:none} }
   .dv-chip{font-size:11px;font-weight:600;color:#D6E2F5;background:rgba(255,255,255,.10);
     border:1px solid rgba(255,255,255,.20);border-radius:999px;padding:4px 11px;white-space:nowrap}
   .dv-chip b{font-family:'DM Mono',ui-monospace,monospace;font-weight:800;color:#fff;font-size:12.5px}
@@ -1183,8 +1191,16 @@ const DV_CSS=`<style>
   /* §dashV3 · ทั้งหน้าอยู่ในหนึ่งจอ · ของยาว ๆ (ฟีด booking) เลื่อนในกรอบตัวเอง
      ไม่ให้หน้าเลื่อน เพราะหน้านี้เปิดค้างไว้ทั้งวัน ต้องกวาดตาเห็นทุกใบพร้อมกัน */
   .dv-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.95fr) minmax(0,1.18fr);
-    gap:9px;align-items:stretch;height:calc(100vh - 44px - 74px)}
-  .dv-col{display:flex;flex-direction:column;gap:9px;min-width:0;min-height:0}
+    gap:9px;align-items:stretch;height:calc(100dvh - var(--topbar, 44px) - 74px);overflow:hidden}
+  /* §dashFit · height อย่างเดียวไม่พอ · grid track จะโตเกินค่าที่ตั้งไว้ถ้าลูกไม่ยอมหด
+     (วัดที่ 1440x900 ได้ grid 1575 ทั้งที่สั่ง 782) → ปิด overflow ที่กริด
+     แล้วให้แต่ละคอลัมน์เลื่อนในกรอบตัวเอง เป็นกฎที่หน้านี้ประกาศไว้เองอยู่แล้ว */
+  .dv-col{display:flex;flex-direction:column;gap:9px;min-width:0;min-height:0;
+    overflow-y:auto;overscroll-behavior:contain;
+    scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.34) transparent}
+  .dv-col::-webkit-scrollbar{width:6px}
+  .dv-col::-webkit-scrollbar-thumb{background:rgba(255,255,255,.30);border-radius:4px}
+  .dv-col::-webkit-scrollbar-track{background:transparent}
   /* การ์ดใบสุดท้ายของคอลัมน์คือใบที่ยืดได้ · ที่เหลือสูงตามเนื้อและห้ามหด
      (ไม่งั้น flex จะบีบการ์ด Bookings/day จนแถวสถิติข้างล่างโดนตัด) */
   .dv-col>*{flex:0 0 auto;min-height:0}
@@ -1199,7 +1215,10 @@ const DV_CSS=`<style>
   .dv-col:nth-child(2)>.dv-cal{flex:0 0 auto}
   .dv-col:nth-child(2)>.dv-ov{flex:1 1 auto;display:flex;flex-direction:column;min-height:0}
   .dv-col:nth-child(2)>.dv-ov .dv-plot{flex:1 1 auto;display:flex;flex-direction:column;justify-content:flex-end}
-  @media (max-height:900px){ .dv-cell{min-height:54px} }
+  /* §dashFit · กฎบีบเซลล์ย้ายไปอยู่ "หลัง" นิยาม .dv-cell แล้ว (ดูท้ายบล็อกปฏิทิน)
+     ของเดิมเขียน @media (max-height:900px){.dv-cell{min-height:54px}} ไว้ตรงนี้
+     ซึ่งอยู่ก่อนนิยาม .dv-cell{min-height:64px} 168 บรรทัด · media ไม่เพิ่ม specificity
+     กฎจึงไม่เคยทำงานเลย (วัดที่จอสูง 900 ได้เซลล์ 79px ไม่ใช่ 54px) */
 
   /* ══ §dashV3 · การ์ดขาวมาตรฐานของหน้านี้ · token เดียวกับ By trip ══════ */
   .dv-c{background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:12px;
@@ -1375,6 +1394,35 @@ const DV_CSS=`<style>
   .dv-cell .big .s{font-size:9px;opacity:.72;font-weight:600}
   .dv-cell .p{margin-top:3px;font-size:8.5px;font-weight:800;color:#1B6AA6;background:#E4EFFA;
     border-radius:5px;padding:1px 5px;align-self:flex-start;font-family:'DM Mono',ui-monospace,monospace}
+  /* §dashFit · ปฏิทิน 7 ช่องต้องครบเสมอ · วัดแล้วช่องหนึ่งขั้นต่ำ 73.6px
+     กว้าง 1512 ได้ 546/546 พอดีเป๊ะ · 1440 ได้ 512 ขาด 33 · 1366 ได้ 477 ขาด 68
+     (ของเดิมไม่เห็นปัญหาเพราะ <1500 ตกไปโหมด 2 คอลัมน์ที่คอลัมน์กลางกว้างกว่า)
+     บีบช่องไฟ+ขอบในแทนการซ่อนวันอาทิตย์ · ตัวเลขคงขนาดเดิม เพราะเป็นของที่ต้องอ่าน */
+  @media (min-width:1366px) and (max-width:1519px){
+    .dv-calg{gap:3px}
+    .dv-cell{padding:5px 4px}
+    .dv-cell .big{gap:2px}
+    .dv-cell .big .s{font-size:8.5px}
+    .dv-cell .p{font-size:8px;padding-left:4px;padding-right:4px}
+  }
+  @media (max-height:960px){ .dv-cell{min-height:52px} }
+  @media (max-height:880px){ .dv-cell{min-height:44px} }
+  /* §dashFit · จอสูง ≤940 · วัดที่ 1440x900 คอลัมน์กลางยังล้น 72px
+     ไล่เก็บทีละจุดตามที่วัดได้ · ชิปกรองเส้นทาง 3 บรรทัด → 1 บรรทัดปัดข้าง (−54)
+     ตัวเลขในเซลล์ 19→17 (−10) · ช่องไฟ legend/footer (−11) = 75px พอดี
+     ไม่แตะจำนวนวันหรือจำนวนเส้นทาง เพราะนั่นคือเนื้อหาจริงที่ต้องเห็นครบ */
+  /* min-width:821px · จอโทรศัพท์ก็เตี้ยกว่า 940 เหมือนกัน แต่หน้ามือถือเลื่อนได้อยู่แล้ว
+     ไม่ต้องบีบอะไร · กันไม่ให้กฎชุดนี้ไปเปลี่ยนหน้าที่ §mobDash จัดไว้ดีแล้ว */
+  @media (max-height:940px) and (min-width:821px){
+    .dv-chips{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;
+      -webkit-overflow-scrolling:touch;scrollbar-width:none}
+    .dv-chips::-webkit-scrollbar{display:none}
+    .dv-chips span{flex:none}
+    .dv-chips{padding-bottom:6px}
+    .dv-cell .big .n{font-size:17px}
+    .dv-lg{margin-bottom:4px}
+    .dv-calft{margin-top:7px;padding-top:7px}
+  }
   .dv-calft{display:flex;align-items:center;gap:9px;margin-top:11px;padding-top:10px;
     border-top:1px solid #F1EEE9}
   .dv-calft .t{font-size:11.5px;color:#6b675f;font-weight:700}
@@ -1411,11 +1459,25 @@ const DV_CSS=`<style>
      budget. Then the card scrolls inside its own frame — the rule this dashboard already states for
      long content — instead of spilling its stats row off the bottom of the page. */
   .dv-col:nth-child(2)>.dv-ov{overflow-y:auto}
+  /* §dashFit · จอสูง ≤940 (MacBook Air 1440x900 / 1366x768)
+     ปฏิทินเดือนกินไป ~633px เหลือให้การ์ด overview แค่ ~140px
+     บีบการ์ดลงเท่านั้นแล้วกราฟโดนตัดครึ่ง อ่านไม่ได้ทั้งคู่
+     → ให้การ์ดสูงตามเนื้อจริง แล้วปล่อยให้ "คอลัมน์" เป็นตัวเลื่อนแทน
+     หน้ายังไม่เลื่อน (เงื่อนไขที่ขอ) แต่การ์ดไม่โดนตัด */
+  @media (max-height:940px) and (min-width:821px){
+    .dv-col:nth-child(2)>.dv-ov{flex:0 0 auto;overflow-y:visible}
+  }
   .dv-ovlg{display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;font-size:10px;font-weight:600;color:#8a857d}
   .dv-ovlg b{color:#2c2c2a;font-weight:700}
   .dv-ovlg i{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:4px;vertical-align:-1px}
-  @media (max-width:1500px){
-    .dv-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);height:auto}
+  /* §dashFit · เดิมตัดที่ 1500px · MacBook Air 1440 กับ MacBook Pro 14" 1512
+     ตกลงมาโหมด 2 คอลัมน์ height:auto ทั้งคู่ → หน้าเลื่อนยาว 1713px บนจอ 900px
+     ย้ายมาตัดที่ 1365 · โน้ตบุ๊กจริงทุกรุ่นที่ใช้อยู่ (1366/1440/1470/1512/1728)
+     ได้ 3 คอลัมน์เต็มจอหมด · ต่ำกว่านั้นคอลัมน์จะแคบจนตัวหนังสือโดนตัด
+     (วัดที่ 1280: ช่องชื่อทริปเหลือ 131px จากที่ต้องการ 186px) จึงยังเป็น 2 คอลัมน์หน้ายาวเหมือนเดิม */
+  @media (max-width:1365px){
+    .dv-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);height:auto;overflow:visible}
+    .dv-col{overflow-y:visible}
     .dv-col:nth-child(3){grid-column:1/-1;flex-direction:row;flex-wrap:wrap}
     .dv-col:nth-child(3)>*{flex:1 1 380px}
     .dv-lvlist{max-height:520px}
