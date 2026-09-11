@@ -1045,8 +1045,11 @@ const B2C_ITEM_JOIN = `
   -- §b2cActivity (2026-09-11) · 'third_party' joins too (Carnival Magic, Andamanda, …) — a partner
   -- activity with a per-variant ops route, same extid-based resolution as TR-003:v2. Resolves via
   -- product_id + variant_id → routes.extid ('PTP-001:VT-001'), no B2C schema change needed.
+  -- PTP-009 ("Vin motorsy") is test data, confirmed by BD — no ops route was created for it on
+  -- purpose, and it is excluded here too so its 5 test bookings don't sync in as null-route rows.
   -- 'hotel' and 'private_partner' still stay out: ops dispatches neither.
-  WHERE bi.type IN ('day_trip','private_own','transfer','third_party')`;
+  WHERE bi.type IN ('day_trip','private_own','transfer','third_party')
+    AND NOT (bi.type = 'third_party' AND bi.product_id = 'PTP-009')`;
 
 // ── B2C traveller list ──────────────────────────────────────────────────────────────────────────
 // bookings.passengers is a BOOKING-level jsonb array, one object per traveller:
