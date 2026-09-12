@@ -35235,55 +35235,6 @@ function agTabPrices(a){
     <button onclick="agEditOpen('ratetype','${a.id}')" style="background:#fff;color:${rt.color};border:1px solid ${rt.color}55;font-family:inherit;font-size:10.5px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer">เปลี่ยน Rate Type</button>
   </div>`;
 
-  /* §rtCover (2026-09-12) · "เช็คตัว Rate Type ที่ระบุ อันนี้บั๊คหรือไม่"
-     เคสที่แจ้ง · Trip.com สัญญา v2025-1 = 1 ต.ค. 25 → 30 ก.ย. 26
-     แต่ Rate Type ที่ผูกไว้ (OTATRI) valid 12 ก.ย. 26 → 31 พ.ค. 27
-     ทับกันแค่ 19 วันจาก 365 วันของสัญญา · หน้าจอโชว์ทั้งสองค่าโดยไม่พูดอะไรเลย
-
-     วัดแล้วว่าราคาที่คิดจริง "ไม่ได้ผิด" เพราะเครื่องคิดราคาไม่เคยอ่าน validFrom/validTo
-     ทดสอบด้วย RT-HOTEL-PK (valid 1 พ.ย. 25 → 30 เม.ย. 26) · ทริป r5 · ผู้ใหญ่ 2 คน
-       2025-12-15 (ในช่วง)  = 9,000
-       2026-05-01 (นอกช่วง) = 9,000
-       2027-06-01 (นอกช่วง) = 9,000
-       2024-01-01 (นอกช่วง) = 9,000
-     ตรงกับกติกาข้อ 3 ของหน้านี้เอง — MAIN คือราคามาตรฐาน ใช้ทุกวันที่ไม่มีโปรทับ
-
-     ปัญหาจึงไม่ใช่ "คิดเงินผิด" แต่เป็น "หน้าจอทำให้เข้าใจผิด":
-     โชว์ช่วงวันที่เหมือนเป็นประตูกั้น ทั้งที่ไม่กั้นอะไร และไม่เตือนเลยเมื่อ
-     Rate Type ที่ผูกไว้เป็นคนละฤดูกับสัญญา (เคสนี้คือชุดราคา 26-27 ไปอยู่บนสัญญา 25-26)
-     → เพิ่มคำเตือนที่วัดได้จริงว่าทับกันกี่วันจากกี่วัน · ยังไม่ไปแตะการคิดเงิน
-       (ถ้าจะให้วันที่กั้นราคาจริง ต้องตัดสินใจเรื่องนโยบายก่อน ไม่ใช่แก้เงียบ ๆ) */
-  (function(){
-    var _CT=((typeof SB_CONTRACTS!=='undefined'&&Array.isArray(SB_CONTRACTS))?SB_CONTRACTS:[])
-      .filter(function(c){ return c && c.agentId===a.id && c.kind==='main' && c.status!=='expired'; })
-      .sort(function(x,y){ return String(y.activeFrom||'').localeCompare(String(x.activeFrom||'')); })[0];
-    if(!_CT || !_CT.activeFrom || !_CT.activeTo) return;
-    if(!rt.validFrom && !rt.validTo) return;                 // always valid · ไม่มีอะไรให้เตือน
-    var vf=rt.validFrom||'0001-01-01', vt=rt.validTo||'9999-12-31';
-    var cf=_CT.activeFrom, ctt=_CT.activeTo;
-    var D=function(x){ return new Date(x+'T00:00:00').getTime(); };
-    var oF=(vf>cf?vf:cf), oT=(vt<ctt?vt:ctt);
-    var days=(oF<=oT)?(Math.round((D(oT)-D(oF))/86400000)+1):0;
-    var total=Math.round((D(ctt)-D(cf))/86400000)+1;
-    if(!(total>0) || days>=total) return;                    // ครอบคลุมเต็มสัญญา · ไม่ต้องเตือน
-    var fd=function(x){ return (typeof _rtFmtDate==='function')?(_rtFmtDate(x)||x):x; };
-    var none=(days<=0);
-    var C=none?{bg:'#FCEBEB',bd:'rgba(163,45,45,.25)',ink:'#A32D2D'}
-              :{bg:'#FBF3E6',bd:'#EBDCC2',ink:'#854F0B'};
-    html += '<div style="background:'+C.bg+';border:1px solid '+C.bd+';border-radius:9px;padding:10px 13px;margin:0 0 12px;font-size:11.5px;color:'+C.ink+';line-height:1.6">'
-      + '<b>&#9888; ช่วงของ Rate Type ไม่ตรงกับสัญญา</b><br>'
-      + 'สัญญา <b>'+_ctEsc(_CT.version||'')+'</b> '+fd(cf)+' &rarr; '+fd(ctt)+' ('+total+' วัน)'
-      + ' &middot; Rate Type <b>'+_ctEsc(rt.code||'')+'</b> '+fd(rt.validFrom)+' &rarr; '+fd(rt.validTo)
-      + '<br>' + (none
-          ? 'ทั้งสองช่วง <b>ไม่ทับกันเลยสักวัน</b>'
-          : 'ทับกันแค่ <b>'+days+' วัน</b> จาก '+total+' วันของสัญญา ('+fd(oF)+' &rarr; '+fd(oT)+')')
-      + '<div style="margin-top:5px;font-size:10.5px;opacity:.9">'
-      + 'ราคาที่ระบบคิดยัง<b>ไม่ผิด</b> &mdash; ราคามาตรฐาน (MAIN) ใช้ทุกวันตามกติกาข้อ 3 ข้างบน '
-      + 'วันที่บน Rate Type เป็นข้อมูลอ้างอิงอย่างเดียว ไม่ได้กั้นการคิดเงิน<br>'
-      + 'แต่ปกติแปลว่ามีอย่างใดอย่างหนึ่ง: <b>ผูก Rate Type ผิดฤดู</b> หรือ <b>ถึงเวลาต่อสัญญา</b> แล้ว'
-      + '</div></div>';
-  })();
-
   /* §promoMx · ACTIVE PERIOD ในตารางดูเหมือนประตูกั้นราคา แต่วัดแล้วไม่ใช่
      จองนอกช่วงก็ยังคิดราคาเดิม · และตามที่ตกลงกันไว้ก็ควรเป็นแบบนั้น
      ราคามาตรฐานคือตัวสำรองที่ต้องมีเสมอ ตัวที่สลับราคาตามวันคือ Promotion
@@ -35300,6 +35251,64 @@ function agTabPrices(a){
   const inBoth = agentProgRouteIds.filter(rId => rtRouteIds.includes(rId)).map(rId => ROUTES.find(x => x.id === rId)).filter(Boolean);
   const inAgentNotRT = agentProgRouteIds.filter(rId => !rtRouteIds.includes(rId)).map(rId => ROUTES.find(x => x.id === rId)).filter(Boolean);
   const inRTNotAgent = rtRouteIds.filter(rId => !agentProgRouteIds.includes(rId)).map(rId => ROUTES.find(x => x.id === rId)).filter(Boolean);
+
+  /* §agPromoCov (2026-09-12) · "Rate type ที่เลือกไว้จะเป็น Rate มาตรฐาน · หลังจากนั้น
+     เพิ่ม Promotion ระบุวันที่แอคทีฟ · ราคาอันไหนมีสำหรับโปรโมชั่นใช้อันนั้น
+     อันไหนไม่มี เตือนว่าไม่มีโปรโมชั่น ใช้เรทมาตรฐาน"
+
+     ตรวจแล้วเครื่องคิดราคาทำตามนี้อยู่แล้วทุกข้อ (bkV2ResolveRateType + bkV2GetRTForTrip)
+     ที่ขาดคือ "การเตือน" — หน้าจอไม่เคยบอกว่า route ไหนมีโปรทับ route ไหนตกไปเรทมาตรฐาน
+     ต้องไล่เปิดใบโปรทีละใบเทียบเอง
+
+     สองอย่างที่ต้องแยกให้ออก และเคยพลาดกันได้ง่าย:
+       ก) route ไม่มีใบโปรคลุมเลย            → ใช้เรทมาตรฐาน (ปกติ)
+       ข) มีใบโปรคลุม แต่ Rate Type ของใบนั้นไม่มีราคาของ route นี้
+          → ตัวคิดราคา "ข้าม" กลับไปใช้เรทมาตรฐาน (กติกาข้อ 2 · ไม่คิดเป็น 0)
+          อันนี้อันตรายกว่า เพราะคนตั้งคิดว่าโปรทำงานอยู่ แต่จริง ๆ ไม่ได้ทับ */
+  (function(){
+    var _PR=((typeof SB_CONTRACTS!=='undefined'&&Array.isArray(SB_CONTRACTS))?SB_CONTRACTS:[])
+      .filter(function(c){ return c && c.agentId===a.id && c.kind==='promo'
+        && c.status!=='void' && c.status!=='cancelled' && c.status!=='expired'; });
+    var routes=(inBoth||[]);
+    if(!routes.length) return;
+    var fd=function(x){ return x?((typeof _rtFmtDate==='function')?(_rtFmtDate(x)||x):x):'…'; };
+    var rows='', nCov=0, nSkip=0;
+    routes.forEach(function(R){
+      var hits=[];
+      _PR.forEach(function(c){
+        (c.programPeriods||[]).forEach(function(p){
+          if(p.routeId!==R.id) return;
+          var prt=(SB_RATE_TYPES||[]).find(function(x){ return x.id===c.rateTypeId; });
+          /* กติกาข้อ 2 · โปรที่ไม่มีราคาของ route นี้ = ข้าม ไม่ใช่คิดเป็น 0 */
+          var has=!!(prt && ((prt.seatRates&&prt.seatRates[R.id]) || (prt.charterRates&&prt.charterRates[R.id])));
+          hits.push({ ver:c.version||c.id||'promo', rtCode:prt?(prt.code||''):'(ไม่พบ Rate Type)',
+                      from:p.travelFrom||c.activeFrom||'', to:p.travelTo||c.activeTo||'', has:has });
+        });
+      });
+      var live=hits.filter(function(h){ return h.has; });
+      var dead=hits.filter(function(h){ return !h.has; });
+      if(live.length) nCov++; if(dead.length) nSkip++;
+      var tag = live.length
+        ? live.map(function(h){ return '<span style="background:#FBF0DD;color:#7A4A00;border:1px solid #EAD9B0;border-radius:6px;padding:2px 7px;font-size:9.5px;font-weight:700;white-space:nowrap">PROMO '+_ctEsc(h.ver)+' &middot; '+fd(h.from)+' &rarr; '+fd(h.to)+'</span>'; }).join(' ')
+        : '<span style="color:#8A929E;font-size:10.5px">ไม่มีโปรโมชั่น &middot; ใช้เรทมาตรฐาน</span>';
+      var warn = dead.length
+        ? '<div style="margin-top:3px;font-size:10px;color:#A32D2D">&#9888; '+dead.length+' ใบคลุม route นี้ไว้ แต่ Rate Type ของใบนั้น ('+_ctEsc(dead[0].rtCode)+') ไม่มีราคาของ route นี้ &rarr; ระบบข้าม ใช้เรทมาตรฐานแทน</div>'
+        : '';
+      rows += '<div style="display:flex;align-items:flex-start;gap:10px;padding:6px 0;border-top:1px solid #EFECE6">'
+        + '<div style="flex:1;min-width:0;font-size:11.5px;font-weight:600;color:#3C4553">'+_ctEsc(R.name||R.id)+warn+'</div>'
+        + '<div style="flex:none;display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;max-width:58%">'+tag+'</div>'
+        + '</div>';
+    });
+    html += '<div style="margin:0 0 12px;background:#FBFAF8;border:1px solid #EFECE6;border-radius:9px;padding:10px 13px">'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px;color:#3C4553;font-weight:600">'
+      + 'โปรโมชั่นที่ทับเรทมาตรฐาน'
+      + '<span style="background:#F1EFE8;color:#5F5E5A;border-radius:999px;padding:2px 9px;font-size:10px;font-weight:700">'+_PR.length+' ใบ</span>'
+      + '<span style="font-weight:500;color:#8A929E;font-size:10.5px">'
+      + nCov+' จาก '+routes.length+' route มีโปรทับบางช่วง &middot; ที่เหลือใช้เรทมาตรฐานทั้งปี'
+      + (nSkip?(' &middot; <b style="color:#A32D2D">'+nSkip+' route โปรไม่มีราคา &rarr; ถูกข้าม</b>'):'')
+      + '</span></div>'
+      + rows + '</div>';
+  })();
 
   // Full Rate Type detail form — seat rates (with Active period + Not-Offered),
   // charter, and add-ons. Same renderer as the Rate Type page (single source of truth).
