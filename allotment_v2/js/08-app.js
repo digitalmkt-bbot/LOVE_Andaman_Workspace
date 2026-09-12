@@ -59575,6 +59575,14 @@ function pjCSS(){
   +H+' .pj-chips button.on{background:#16265C;color:#fff}'
   +H+' .pj-chips button i{width:7px;height:7px;border-radius:50%;display:inline-block;font-style:normal;flex:none}'
   +H+' .pj-chips button .n{font-variant-numeric:tabular-nums;font-size:11px;opacity:.72}'
+  /* §pjHideIdle · ปุ่มสลับซ่อนลำที่ยังไม่วาง · อยู่คนละแกนกับชิปกลุ่ม
+     จึงต้องหน้าตาไม่เหมือนกัน ไม่งั้นจะอ่านว่าเป็นตัวกรองกลุ่มอีกอัน */
+  +H+' .pj-idlebtn{border:1px solid #E1E4EA;background:#fff;border-radius:10px;padding:7px 12px;'
+     +'font:700 11.5px inherit;color:#6E7684;cursor:pointer;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}'
+  +H+' .pj-idlebtn:hover{border-color:#C7CCD6}'
+  +H+' .pj-idlebtn.on{background:#EEF1F6;border-color:#C7CCD6;color:#3C4553}'
+  +H+' .pj-idlebtn .n{font-variant-numeric:tabular-nums;background:#16265C;color:#fff;'
+     +'border-radius:999px;padding:1px 7px;font-size:10.5px}'
   +H+' .bc{display:flex;flex-direction:column;border:1px solid #E1E4EA;border-radius:13px;background:#fff;position:relative;overflow:hidden;box-shadow:0 1px 2px rgba(20,30,50,.04)}'
   +H+' .bc .top{padding:11px 15px 10px;color:#fff;display:block}'
   +H+' .bc .trow{display:flex;align-items:flex-start;gap:12px}'
@@ -60633,7 +60641,10 @@ function renderPierJob(pier){
     subN+=pjSubN(_poDate,B.bid); if(!J.cap) noCap++;
     try{ licBad+=plBoatBad(B.bid,[J.cap,J.asst].concat(J.crew||[]))?1:0; }catch(_){}
   });
-  var boats=(_pjF==='all')?all:all.filter(function(B){ return pjGrp(B._st.k)===_pjF; });
+  var _grp=(_pjF==='all')?all:all.filter(function(B){ return pjGrp(B._st.k)===_pjF; });
+  /* §pjHideIdle · นับจากชุดที่ผ่านตัวกรองกลุ่มแล้ว · ตัวเลขบนปุ่มจะได้ตรงกับที่ซ่อนจริง */
+  var _idleN=_grp.filter(function(B){ return pjIsIdle(B,_poDate); }).length;
+  var boats=pjApplyIdle(_grp, _poDate);
   /* §gjCard · ทำใหม่ทุกรอบที่วาด · จัดเรือที่หน้าอื่นแล้วกลับมา ปุ่มต้องเปลี่ยนตาม */
   _pjGjMap=pjGuideJobMap(_poDate);
   var chip=function(k,lb,n,dot){
@@ -60675,6 +60686,16 @@ function renderPierJob(pier){
         + chip('work','ซ่อมบำรุง · ใช้คน',cnt.work,'#8A5A00')
         + chip('down','ไม่พร้อม',cnt.down,'#8B93A1')
       +'</div>'
+      /* §pjHideIdle · ปุ่มสลับ · โชว์จำนวนที่ซ่อนอยู่เสมอ ไม่ให้หายเงียบ
+         ไม่มีลำไหนเข้าข่ายก็ไม่ต้องมีปุ่ม · ปุ่มที่กดแล้วไม่เกิดอะไรคือขยะบนจอ */
+      +((_idleN||!_pjHideIdle)
+        ? ('<button class="pj-idlebtn'+(_pjHideIdle?' on':'')+'" onclick="pjToggleIdle()"'
+           +' title="'+poE('ลำที่ยังไม่ได้ใส่อะไรลงไปเลยในวันนี้ — ไม่มีทริป ไม่มีคน ไม่มีหมายเหตุ'
+             +' · ลำที่จอดแต่จ่ายช่างไว้แล้วไม่นับ ยังเห็นตามปกติ'
+             +' · มีผลกับใบที่พิมพ์ด้วย')+'">'
+           +(_pjHideIdle?'&#128065; ซ่อนลำที่ยังไม่วาง':'&#128065; แสดงทุกลำอยู่')
+           +(_idleN?('<span class="n">'+_idleN+'</span>'):'')+'</button>')
+        : '')
       +(cnt.stale?('<span class="pj-warnc red" title="'+poE(staleL.join(' \u00b7 ')
           +' — เรือไม่พร้อมแล้ว แต่แถวโปรแกรมยังอยู่ใน Boat Operation '
           +'· กด "เอาออก" บนการ์ดของลำนั้นเพื่อลบแถวทิ้ง')+'">'
@@ -60763,6 +60784,45 @@ function pjWide(n){ _pjW=n; try{ localStorage.setItem('la_pjw',String(n)); }catc
 /* §pjAll · ตัวกรองสถานะ · จำไว้ให้ ไม่ต้องกดใหม่ทุกวัน */
 var _pjF=(function(){ try{ var v=localStorage.getItem('la_pjf'); return ['all','go','ready','work','down'].indexOf(v)>=0?v:'all'; }catch(_){ return 'all'; } })();
 function pjFilter(k){ _pjF=k; try{ localStorage.setItem('la_pjf',k); }catch(_){} renderPierJob(); }
+/* §pjHideIdle (2026-09-12) · "ขอเพิ่มการซ่อนเรือที่ไม่วาง ตั้งเป็น Default ว่าซ่อน
+   User อยากเปิดค่อยเปิด"
+
+   "ไม่วาง" = ยังไม่ได้ใส่อะไรลงไปเลยในวันนั้น · ไม่ใช่ "เรือไม่พร้อม"
+   ลำที่จอดแต่จ่ายช่างลงไปแล้วถือว่าวางแล้ว ต้องเห็น (ใบงานของช่างอยู่บนการ์ดนั้น)
+   ลำที่มีใบซ่อมเปิดอยู่แต่ยังไม่ได้จ่ายใคร ยังนับว่าไม่วาง — ใบซ่อมไม่ใช่การจ่ายคน
+
+   ค่าเริ่มต้น = ซ่อน · เก็บใน localStorage รายเครื่อง ไม่ใช่ PIER_CFG
+   เพราะเป็นมุมมองของคนใช้ ไม่ใช่ข้อเท็จจริงของวันนั้น · คนอื่นไม่ควรโดนเปลี่ยนตาม
+   จำนวนที่ซ่อนต้องขึ้นบนปุ่มเสมอ · ซ่อนได้แต่ห้ามหายเงียบ */
+var _pjHideIdle=(function(){ try{ var v=localStorage.getItem('la_pjhide'); return (v==='0')?0:1; }catch(_){ return 1; } })();
+function pjToggleIdle(){ _pjHideIdle=_pjHideIdle?0:1;
+  try{ localStorage.setItem('la_pjhide', _pjHideIdle?'1':'0'); }catch(_){}
+  renderPierJob(); }
+function pjIsIdle(B, date){
+  try{
+    if(!B || !B.bid) return false;
+    if(B._st && typeof pjGrp==='function' && pjGrp(B._st.k)==='go') return false;   /* ออกทริป = วางแล้ว */
+    if(B.route && B.route.id) return false;
+    var J=(typeof pjOf==='function')?pjOf(date, B.bid):null;
+    if(J){
+      if(J.cap || J.asst) return false;
+      if((J.crew||[]).some(Boolean)) return false;
+      if((J.island||[]).some(Boolean)) return false;
+      if(String(J.wc||'').trim()) return false;
+      if(String(J.note||'').trim()) return false;
+      if(String(J.wb||'').trim() || String(J.mv||'').trim()) return false;
+      if(J.lock) return false;                                  /* กด "จัดเสร็จแล้ว" = ตั้งใจว่าง */
+      if(J.lb && Object.keys(J.lb).length) return false;
+    }
+    var A=(typeof goAsn==='function')?goAsn(date, B.bid):null;
+    if(A && (((A.g||[]).length>0) || (+A.other||0)>0)) return false;
+    return true;
+  }catch(_){ return false; }
+}
+function pjApplyIdle(list, date){
+  if(!_pjHideIdle) return list;
+  return list.filter(function(B){ return !pjIsIdle(B, date); });
+}
 function pjDate(v){ if(v) _poDate=v; renderPierJob(); }
 function pjShift(n){ var d=new Date(_poDate+'T12:00:00'); d.setDate(d.getDate()+n); _poDate=poYMD(d); renderPierJob(); }
 function pjToday(){ _poDate=poYMD(new Date()); renderPierJob(); }
@@ -60780,6 +60840,10 @@ function pjPrint(){
   var e=poE;
   /* §pjSheet2 · ใช้ชุดเดียวกับที่หน้าจอโชว์ · เลือกทั้งหมดบนจอ = ปริ้นออกทุกลำ */
   var all=pjAllBoats(_poDate,_poPier);
+  /* §pjHideIdle · ไม่ต้องกรองซ้ำตรงนี้ · ใบพิมพ์มีกติกาของตัวเองอยู่แล้ว (§pjSplit ด้านล่าง)
+     ซึ่งเข้มกว่า: เก็บเฉพาะลำที่ออกทริป หรือลำที่ซ่อมแล้วมีช่างถูกจ่ายงาน
+     ลำที่ยังไม่วางอะไรไปสรุปเป็นกล่องด้านบนของใบแทนอยู่แล้ว ไม่ได้กินคอลัมน์
+     ใส่ตัวกรองทับอีกชั้นจะกลายเป็นสองกติกาที่ต้องตามให้ตรงกันตลอดไปโดยไม่ได้อะไรเพิ่ม */
   var boats=(_pjF==='all')?all:all.filter(function(B){ return pjGrp(B._st.k)===_pjF; });
   if(!boats.length){ alert('ไม่มีเรือที่ตรงตัวกรองนี้ในวันที่เลือก'); return; }
   var FLT={all:'ทุกลำของท่านี้',go:'เฉพาะเรือที่วิ่ง',ready:'เฉพาะเรือที่พร้อม',
