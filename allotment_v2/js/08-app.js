@@ -35229,10 +35229,60 @@ function agTabPrices(a){
       <span style="background:#fff;color:${rt.color};font-size:9.5px;font-weight:700;padding:2px 8px;border-radius:6px;font-variant-numeric:tabular-nums;letter-spacing:.02em">${rt.code}</span>
       <span style="font-weight:600">${rt.name}</span>
       ${isInactive?'<span style="background:#F1EFE8;color:#5F5E5A;font-size:9px;font-weight:700;padding:2px 7px;border-radius:5px;text-transform:uppercase;letter-spacing:.04em">Inactive</span>':''}
-      <span style="font-size:10px;color:${isInactive?'#854F0B':rt.color};opacity:.7;font-variant-numeric:tabular-nums">${validHint}</span>
+      <span style="font-size:10px;color:${isInactive?'#854F0B':rt.color};opacity:.7;font-variant-numeric:tabular-nums" title="ช่วงที่ตกลงราคากันไว้ · ไม่ได้กั้นการคิดเงิน — จองนอกช่วงก็ยังคิดราคาชุดนี้">${validHint}</span>
+      <span style="font-size:9.5px;color:#8A929E;font-weight:500">(ช่วงที่ตกลงราคา &middot; ไม่ได้กั้นการคิดเงิน)</span>
     </div>
     <button onclick="agEditOpen('ratetype','${a.id}')" style="background:#fff;color:${rt.color};border:1px solid ${rt.color}55;font-family:inherit;font-size:10.5px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer">เปลี่ยน Rate Type</button>
   </div>`;
+
+  /* §rtCover (2026-09-12) · "เช็คตัว Rate Type ที่ระบุ อันนี้บั๊คหรือไม่"
+     เคสที่แจ้ง · Trip.com สัญญา v2025-1 = 1 ต.ค. 25 → 30 ก.ย. 26
+     แต่ Rate Type ที่ผูกไว้ (OTATRI) valid 12 ก.ย. 26 → 31 พ.ค. 27
+     ทับกันแค่ 19 วันจาก 365 วันของสัญญา · หน้าจอโชว์ทั้งสองค่าโดยไม่พูดอะไรเลย
+
+     วัดแล้วว่าราคาที่คิดจริง "ไม่ได้ผิด" เพราะเครื่องคิดราคาไม่เคยอ่าน validFrom/validTo
+     ทดสอบด้วย RT-HOTEL-PK (valid 1 พ.ย. 25 → 30 เม.ย. 26) · ทริป r5 · ผู้ใหญ่ 2 คน
+       2025-12-15 (ในช่วง)  = 9,000
+       2026-05-01 (นอกช่วง) = 9,000
+       2027-06-01 (นอกช่วง) = 9,000
+       2024-01-01 (นอกช่วง) = 9,000
+     ตรงกับกติกาข้อ 3 ของหน้านี้เอง — MAIN คือราคามาตรฐาน ใช้ทุกวันที่ไม่มีโปรทับ
+
+     ปัญหาจึงไม่ใช่ "คิดเงินผิด" แต่เป็น "หน้าจอทำให้เข้าใจผิด":
+     โชว์ช่วงวันที่เหมือนเป็นประตูกั้น ทั้งที่ไม่กั้นอะไร และไม่เตือนเลยเมื่อ
+     Rate Type ที่ผูกไว้เป็นคนละฤดูกับสัญญา (เคสนี้คือชุดราคา 26-27 ไปอยู่บนสัญญา 25-26)
+     → เพิ่มคำเตือนที่วัดได้จริงว่าทับกันกี่วันจากกี่วัน · ยังไม่ไปแตะการคิดเงิน
+       (ถ้าจะให้วันที่กั้นราคาจริง ต้องตัดสินใจเรื่องนโยบายก่อน ไม่ใช่แก้เงียบ ๆ) */
+  (function(){
+    var _CT=((typeof SB_CONTRACTS!=='undefined'&&Array.isArray(SB_CONTRACTS))?SB_CONTRACTS:[])
+      .filter(function(c){ return c && c.agentId===a.id && c.kind==='main' && c.status!=='expired'; })
+      .sort(function(x,y){ return String(y.activeFrom||'').localeCompare(String(x.activeFrom||'')); })[0];
+    if(!_CT || !_CT.activeFrom || !_CT.activeTo) return;
+    if(!rt.validFrom && !rt.validTo) return;                 // always valid · ไม่มีอะไรให้เตือน
+    var vf=rt.validFrom||'0001-01-01', vt=rt.validTo||'9999-12-31';
+    var cf=_CT.activeFrom, ctt=_CT.activeTo;
+    var D=function(x){ return new Date(x+'T00:00:00').getTime(); };
+    var oF=(vf>cf?vf:cf), oT=(vt<ctt?vt:ctt);
+    var days=(oF<=oT)?(Math.round((D(oT)-D(oF))/86400000)+1):0;
+    var total=Math.round((D(ctt)-D(cf))/86400000)+1;
+    if(!(total>0) || days>=total) return;                    // ครอบคลุมเต็มสัญญา · ไม่ต้องเตือน
+    var fd=function(x){ return (typeof _rtFmtDate==='function')?(_rtFmtDate(x)||x):x; };
+    var none=(days<=0);
+    var C=none?{bg:'#FCEBEB',bd:'rgba(163,45,45,.25)',ink:'#A32D2D'}
+              :{bg:'#FBF3E6',bd:'#EBDCC2',ink:'#854F0B'};
+    html += '<div style="background:'+C.bg+';border:1px solid '+C.bd+';border-radius:9px;padding:10px 13px;margin:0 0 12px;font-size:11.5px;color:'+C.ink+';line-height:1.6">'
+      + '<b>&#9888; ช่วงของ Rate Type ไม่ตรงกับสัญญา</b><br>'
+      + 'สัญญา <b>'+_ctEsc(_CT.version||'')+'</b> '+fd(cf)+' &rarr; '+fd(ctt)+' ('+total+' วัน)'
+      + ' &middot; Rate Type <b>'+_ctEsc(rt.code||'')+'</b> '+fd(rt.validFrom)+' &rarr; '+fd(rt.validTo)
+      + '<br>' + (none
+          ? 'ทั้งสองช่วง <b>ไม่ทับกันเลยสักวัน</b>'
+          : 'ทับกันแค่ <b>'+days+' วัน</b> จาก '+total+' วันของสัญญา ('+fd(oF)+' &rarr; '+fd(oT)+')')
+      + '<div style="margin-top:5px;font-size:10.5px;opacity:.9">'
+      + 'ราคาที่ระบบคิดยัง<b>ไม่ผิด</b> &mdash; ราคามาตรฐาน (MAIN) ใช้ทุกวันตามกติกาข้อ 3 ข้างบน '
+      + 'วันที่บน Rate Type เป็นข้อมูลอ้างอิงอย่างเดียว ไม่ได้กั้นการคิดเงิน<br>'
+      + 'แต่ปกติแปลว่ามีอย่างใดอย่างหนึ่ง: <b>ผูก Rate Type ผิดฤดู</b> หรือ <b>ถึงเวลาต่อสัญญา</b> แล้ว'
+      + '</div></div>';
+  })();
 
   /* §promoMx · ACTIVE PERIOD ในตารางดูเหมือนประตูกั้นราคา แต่วัดแล้วไม่ใช่
      จองนอกช่วงก็ยังคิดราคาเดิม · และตามที่ตกลงกันไว้ก็ควรเป็นแบบนั้น
