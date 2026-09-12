@@ -60692,7 +60692,7 @@ function renderPierJob(pier){
         ? ('<button class="pj-idlebtn'+(_pjHideIdle?' on':'')+'" onclick="pjToggleIdle()"'
            +' title="'+poE('ลำที่ยังไม่ได้ใส่อะไรลงไปเลยในวันนี้ — ไม่มีทริป ไม่มีคน ไม่มีหมายเหตุ'
              +' · ลำที่จอดแต่จ่ายช่างไว้แล้วไม่นับ ยังเห็นตามปกติ'
-             +' · มีผลกับใบที่พิมพ์ด้วย')+'">'
+             +' · บนใบที่พิมพ์ ปุ่มนี้ย่อกล่อง "Not available" ให้เหลือแค่จำนวน')+'">'
            +(_pjHideIdle?'&#128065; ซ่อนลำที่ยังไม่วาง':'&#128065; แสดงทุกลำอยู่')
            +(_idleN?('<span class="n">'+_idleN+'</span>'):'')+'</button>')
         : '')
@@ -61178,6 +61178,10 @@ function pjPrint(){
    +'.fb{flex:1 1 320px;min-width:0;background:#fff;border:1px solid #E4E8EE;border-radius:6px;padding:8px 11px 9px}'
    +'.fb.ok{border-left:4px solid #1C9B62}'
    +'.fb.dn{border-left:4px solid #A3550B}'
+   /* §pjHideIdle · กล่อง Not available แบบย่อ · เหลือหัวกล่องอย่างเดียว ไม่มีรายชื่อ
+      ไม่ยืดเต็มแถว ปล่อยที่ที่เหลือให้กล่องอื่น */
+   +'.fb.dn.slim{flex:0 0 auto;min-width:0}'
+   +'.fb.dn.slim .fb-h{margin-bottom:0}'
    +'.fb-h{display:flex;align-items:baseline;gap:7px;margin-bottom:6px;'
      +'font-size:'+(fs-1)+'px;font-weight:800;color:#2C3A52}'
    +'.fb-h em{font-style:normal;font-size:'+(fs-5)+'px;font-weight:600;letter-spacing:.12em;color:#94A3B8}'
@@ -61575,8 +61579,20 @@ function pjPrint(){
       if(!list.length) return '';
       return '<div class="fb '+cls+'"><div class="fb-h">'+th+'<b>'+list.length+'</b></div>'
         +'<div class="fb-l">'+list.map(function(x){ return cell(x,showWhy); }).join('')+'</div></div>'; };
-    return box('Ready',ready,0,'ok')
-         + box('Not available',down,1,'dn');
+    /* §pjHideIdle · "ตัวใบงานนี้ด้วย สามารถซ่อน Not Available"
+       กล่องนี้กินที่เยอะที่สุดใน Section A เพราะแต่ละลำห้อยเหตุผลยาว
+       (ขึ้นคาน · อู่ไหน · เลขใบซ่อม) ทั้งที่คนอ่านใบนี้คือคนจ่ายงานให้ลำที่ออก
+       ผูกกับปุ่มเดียวกับที่ซ่อนการ์ดบนจอ · จะได้มีสวิตช์เดียว ไม่ใช่สองที่ต้องจำ
+
+       ซ่อนแล้วไม่ทิ้งจำนวน · เหลือบรรทัดเดียวบอกว่ามีกี่ลำ
+       ใบนี้ถูกแคปส่งไลน์และใช้เถียงกันย้อนหลัง · "ไม่มีกล่อง" กับ "วันนั้นเรือพร้อมหมด"
+       ต้องแยกออกจากกันได้ · กดปุ่มเปิดเมื่อไหร่ก็เห็นรายชื่อครบเหมือนเดิม */
+    var dnBox = down.length
+      ? (_pjHideIdle
+          ? ('<div class="fb dn slim"><div class="fb-h">Not available<b>'+down.length+'</b></div></div>')
+          : box('Not available',down,1,'dn'))
+      : '';
+    return box('Ready',ready,0,'ok') + dnBox;
   };
 
   /* §pjBrd · บอร์ดเรือออก · โครงเดียวกับตารางขาออกสนามบิน
