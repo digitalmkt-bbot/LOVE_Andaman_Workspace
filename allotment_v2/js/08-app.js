@@ -34498,6 +34498,9 @@ function agEditSave(){
   else if(sec==='ratetype'){
     a.rateTypeId = d.rateTypeId || null;
     if(_b.rateTypeId!==a.rateTypeId) agLog(a.id,'rate','Rate type: '+_rtNm(_b.rateTypeId)+' → '+_rtNm(a.rateTypeId));
+    /* §ctRateSync · การ์ดสัญญาด้านบนอ่านจาก SB_CONTRACTS ไม่ใช่ a.rateTypeId
+       ถ้าไม่ตามไปด้วย จะเปลี่ยนแล้วข้างบนไม่เปลี่ยน · และเอกสารสัญญาจะออกด้วยชุดเก่า */
+    if(_b.rateTypeId!==a.rateTypeId) _ctSyncMainRate(a.id, a.rateTypeId, 'เปลี่ยน Rate Type');
     if(typeof rtPersist === 'function') rtPersist();
     // Re-render rate type cards too (in case usage count changed)
     if(typeof rtRenderCards === 'function') rtRenderCards();
@@ -34678,6 +34681,39 @@ function _ctContractStatus(c){
   if(c.activeTo && today>c.activeTo)   return {key:'expired', label:'หมดอายุ', bg:'#F1EFE8', color:'#777'};
   if(c.activeFrom && today<c.activeFrom) return {key:'scheduled', label:'รอเริ่ม', bg:'#EEEDF8', color:'#534AB7'};
   return {key:'active', label:'ใช้งาน', bg:'#E7F5EE', color:'#0F6E56'};
+}
+/* §ctRateSync (2026-09-12) · "ดึงเรทมาเปลี่ยนแล้ว ทำไมข้างบนไม่เปลี่ยน"
+
+   Rate Type ของ agent ถูกเก็บไว้ "สองที่" แต่ปุ่มเปลี่ยนอัปเดตแค่ที่เดียว
+     a.rateTypeId                  ← ปุ่ม "เปลี่ยน Rate Type" เขียนตัวนี้
+                                     และเป็นตัวที่เครื่องคิดราคาอ่านจริง (tsNetOf)
+     SB_CONTRACTS[].rateTypeId     ← การ์ดสัญญาด้านบนอ่านตัวนี้ (_ctRateName)
+                                     ไม่มีใครอัปเดตให้เลย → ค้างเป็นชุดเก่าตลอด
+
+   ที่เห็นบนจอ: Source บอก OTATRI [OTA]-Trip.com (ใหม่)
+               แต่การ์ดสัญญายังบอก RT - Main 26-27 TH-WW (เก่า)
+
+   ไม่ใช่แค่เรื่องหน้าตา · ctDocForContract() ออกเอกสารสัญญาด้วย c.rateTypeId
+   สัญญาที่พิมพ์ออกไปให้ agent จึงเป็นราคาชุดเก่า ทั้งที่ระบบคิดเงินด้วยชุดใหม่
+   และ ctOpenAddPromo() ก็ตั้งค่าเริ่มต้นของใบโปรใหม่จากชุดเก่าด้วย
+
+   แก้ที่ต้นทาง · เปลี่ยนที่เดียวแล้วให้ตามไปทั้งคู่
+   เฉพาะสัญญา MAIN ที่ยังไม่หมดอายุ/ไม่ถูกยกเลิก — ใบเก่าต้องเก็บชุดราคาเดิมไว้
+   ไม่งั้นประวัติจะถูกเขียนทับ และเอกสารที่ออกไปแล้วจะอ้างอิงไม่ตรงกับของจริง */
+function _ctSyncMainRate(agentId, rtId, why){
+  try{
+    if(typeof SB_CONTRACTS==='undefined' || !Array.isArray(SB_CONTRACTS)) return 0;
+    var n=0;
+    SB_CONTRACTS.forEach(function(c){
+      if(!c || c.agentId!==agentId || c.kind!=='main') return;
+      if(c.status==='expired' || c.status==='void' || c.status==='cancelled') return;   // ใบเก่า · เก็บของเดิมไว้
+      if((c.rateTypeId||null)===(rtId||null)) return;
+      c.rateTypeId = rtId || null; n++;
+    });
+    if(n>0 && typeof sbContractsPersist==='function') sbContractsPersist();
+    if(n>0 && typeof agLog==='function') agLog(agentId,'contract','สัญญา MAIN '+n+' ใบ · Rate Type ตามไปด้วย'+(why?(' ('+why+')'):''));
+    return n;
+  }catch(e){ try{ console.warn('ctRateSync failed', e); }catch(_){} return 0; }
 }
 function ctContractsPanelHTML(agentId){
   const a=(typeof sbGetAgent==='function')?sbGetAgent(agentId):null; if(!a) return '';
@@ -35806,7 +35842,9 @@ function ctRenewActivate(){
   a.contractStatus = 'active';
 
   // §Rate Type can change at renewal (e.g. new season's rate card) — apply the chosen one
-  if(d.newRateTypeId){ a.rateTypeId = d.newRateTypeId; }
+  if(d.newRateTypeId){ a.rateTypeId = d.newRateTypeId;
+    /* §ctRateSync · ต่อสัญญาแล้วเลือกชุดราคาฤดูใหม่ · การ์ดสัญญาต้องขึ้นชุดใหม่ด้วย */
+    if(typeof _ctSyncMainRate==='function') _ctSyncMainRate(a.id, a.rateTypeId, 'ต่อสัญญา'); }
 
   // Apply carry-over choices (keep what's checked; clear what's not)
   if(!d.carry.programs){ a.programPeriods = []; a.programs = []; }
