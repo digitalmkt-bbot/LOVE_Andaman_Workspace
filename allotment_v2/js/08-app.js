@@ -60794,36 +60794,30 @@ function pjPrint(){
      ของเดิมทิ้งไปตอน map เอาแต่ชื่อ */
   var GsF=GO.map(function(B){ try{ return pjGuidesFull(_poDate,B.bid)||[]; }catch(_){ return []; } });
   var Gs=GsF.map(function(a){ return a.map(function(x){ return x.name; }); });
-  /* ช่องไกด์ · เรียงตามภาษาที่ใช้จริงในข้อมูล (EN 24 · RU 6 · CHN 3 จาก 30 คน)
-     คนหนึ่งเข้าช่องเดียว ช่องแรกที่ตรง · ภาษาที่เหลือห้อยท้ายเป็นตัวเล็ก */
-  var GD_SLOT=[{k:'EN',t:'ไกด์ · EN'},{k:'RU',t:'ไกด์ · RU'},{k:'CHN',t:'ไกด์ · CN'}];
-  var GD_ROLE=[{r:'intern',t:'นักศึกษาฝึกงาน'},{r:'staff',t:'สตาฟ'}];
-  var gdBuckets=function(list){
-    var used={}, out={};
-    GD_SLOT.forEach(function(S){ out[S.t]=[]; });
-    out['ไกด์']=[]; GD_ROLE.forEach(function(R){ out[R.t]=[]; });
-    (list||[]).forEach(function(g,ix){
-      var role=g.role||'guide';
-      var R=GD_ROLE.filter(function(x){ return x.r===role; })[0];
-      if(R){ out[R.t].push(g); used[ix]=1; return; }
-    });
-    (list||[]).forEach(function(g,ix){
-      if(used[ix]) return;
-      var L=g.langs||[], hit=null;
-      for(var i=0;i<GD_SLOT.length;i++){ if(L.indexOf(GD_SLOT[i].k)>=0){ hit=GD_SLOT[i].t; break; } }
-      out[hit||'ไกด์'].push(g); used[ix]=1;
-    });
-    return out;
-  };
-  var GB=GsF.map(gdBuckets);
-  var GD_ROWS=[]; GD_SLOT.forEach(function(S){ GD_ROWS.push(S.t); });
-  GD_ROWS.push('ไกด์'); GD_ROLE.forEach(function(R){ GD_ROWS.push(R.t); });
-  /* ช่องไหนไม่มีใครเลยทั้งใบ ไม่ต้องพิมพ์แถวนั้น */
-  /* mx ยังไม่ถูกประกาศตรงนี้ · นับเองในที่ */
-  var GD_USE=GD_ROWS.map(function(t){ var m=0;
-    GB.forEach(function(b){ var v=(b[t]||[]).length; if(v>m) m=v; }); return m; });
-  var gdCell=function(i,t,c){ var g=(GB[i][t]||[])[c]; if(!g) return '';
-    var L=(g.langs||[]).filter(function(x){ var s=t.slice(-2); return t.indexOf(x)<0 && !(x==='CHN'&&s==='CN'); });
+  /* §pjGdOrder (2026-09-12) · "ให้เรียง"
+     ของเดิมจัดแถวไกด์บนใบพิมพ์ตามภาษา/บทบาท (ไกด์·EN / ·RU / ·CN / นักศึกษาฝึกงาน / สตาฟ)
+     ซึ่งเป็นคนละโครงกับการ์ดบนจอที่เป็น Guide 1..N / Trainee-Staff 1..M
+     ผลคือสองอย่าง: ชื่อช่องที่ตั้งเองบนการ์ดไปไม่ถึงกระดาษ · และลำดับคนบนกระดาษ
+     ไม่ตรงกับลำดับที่จัดไว้บนจอ คนถือใบต้องไล่หาชื่อเอง
+
+     เปลี่ยนเป็นเรียงตามช่องจริงของการ์ด · กลุ่มไกด์ก่อน แล้วต่อด้วย Trainee/Staff
+     ลำดับภายในกลุ่มคือลำดับใน A.g เหมือนที่การ์ดใช้ (pjGdPick นับตำแหน่งแบบเดียวกัน)
+     คนแรกของกลุ่มไกด์ยังเป็นผู้รับผิดชอบใบสั่งงานเหมือนเดิม (§gdLead)
+     ภาษาที่พูดได้ย้ายไปห้อยท้ายชื่อทั้งหมด · เดิมตัดภาษาที่ตรงกับหัวแถวออก
+     ตอนนี้หัวแถวไม่ได้บอกภาษาแล้ว จึงต้องโชว์ให้ครบ */
+  var GB=GsF.map(function(list){
+    var g=[], t=[];
+    (list||[]).forEach(function(x){ (x.guide?g:t).push(x); });
+    return {g:g, t:t};
+  });
+  var _nGdR=0, _nTrR=0;
+  GB.forEach(function(b){ if(b.g.length>_nGdR) _nGdR=b.g.length; if(b.t.length>_nTrR) _nTrR=b.t.length; });
+  var GD_ROWS=[];
+  for(var _gi=0;_gi<_nGdR;_gi++) GD_ROWS.push({kind:'gd', idx:_gi});
+  for(var _ti=0;_ti<_nTrR;_ti++) GD_ROWS.push({kind:'tr', idx:_ti});
+  var gdCell=function(i,R){
+    var g=(GB[i][R.kind==='gd'?'g':'t']||[])[R.idx]; if(!g) return '';
+    var L=(g.langs||[]);
     return e(g.name||'')+(L.length?(' <span class="rl">'+e(L.join('/'))+'</span>'):''); };
   var PX=GO.map(function(B){ var p=pjPax(_poDate,B.bid,_poPier); p.all=p.ad+p.chd+p.inf+p.foc; return p; });
   var totPax=0; PX.forEach(function(p){ totPax+=p.all; });
@@ -60883,7 +60877,7 @@ function pjPrint(){
   var GsAll=Gs.concat(Object.keys(WKG).map(function(k){ return WKG[k]; }));   /* §gdIdle */
   var nGd  =Math.max(1, Math.min(8, mx(GsAll.map(function(g){ return g.filter(Boolean).length; }))));
   /* จำนวนแถวในตัวตาราง · ช่องของลำที่ไม่ออกต้องคลุมให้ครบพอดี ไม่งั้นตารางเบี้ยว
-     §pjRead · ของเดิมนับ nGd กับ "ลค 1 แถว" · ตอนนี้ช่องไกด์นับจาก GD_USE
+     §pjRead · ของเดิมนับ nGd กับ "ลค 1 แถว" · ตอนนี้ช่องไกด์นับจาก GD_ROWS (§pjGdOrder)
      และผู้โดยสารเป็นหลายแถว ต้องนับจากตัวจริง ไม่งั้นช่องลำที่จอดสั้นกว่าตาราง */
   /* §pjRead · ประเภทผู้โดยสารที่วันนั้นมีคนจริง · ใช้ทั้งตอนคิดขนาดตัวอักษรและตอนวาดแถว */
   /* §pjPaxRow · ทั้งสี่ประเภทอยู่บรรทัดเดียว จึงไม่ต้องคัดประเภทที่ไม่มีคนออกอีก
@@ -60891,7 +60885,7 @@ function pjPrint(){
   var PXKIND=[{k:'ad'},{k:'chd'},{k:'inf'},{k:'foc'}];
   var PXROW=2;   /* แถวเรียง + แถวรวม */
 
-  var GDSUM=GD_USE.reduce(function(a,b){ return a+b; },0);
+  var GDSUM=GD_ROWS.length;   /* §pjGdOrder · หนึ่งช่อง = หนึ่งแถว ไม่ต้องบวกทีละถัง */
   /* §pjSect · นับจากแถวสถานะลงไปจนจบตาราง
      ทริป/เวลา/เส้นทาง 3 + แถบ2 1 + กัปตัน/ผู้ช่วย 2 + เด็กเรือ + ประจำเกาะ
      + แถบ3 1 + ช่องไกด์ + ร้านอาหาร 1 + แถบ4 1 + สายรัด/ภาษา 2 + ผู้โดยสาร + หมายเหตุ 1 */
@@ -61424,16 +61418,17 @@ function pjPrint(){
     + (GDSUM ? band('2','GUIDES &amp; STAFF','#ECEAF7','#453B95','\u0e1d\u0e48\u0e32\u0e22\u0e21\u0e31\u0e04\u0e04\u0e38\u0e40\u0e17\u0e28\u0e01\u0e4c\u0e41\u0e25\u0e30\u0e1a\u0e23\u0e34\u0e01\u0e32\u0e23') : '')
     /* §pjRead · ของเดิม "ไกด์ 1..4" · ลำดับไม่ได้บอกอะไร ต้องอ่านชื่อแล้วเดาเองว่าใครพูดภาษาไหน
        เปลี่ยนเป็นช่องตามภาษา/บทบาทจริงแบบใบ Excel · ช่องที่ว่างทั้งใบไม่พิมพ์ */
-    + (function(){ var o='', seq=0;
-        GD_ROWS.forEach(function(t,ri){
-          for(var c=0;c<GD_USE[ri];c++){ (function(t,c,ri,sq){
-            var EN={'ไกด์ · EN':'GUIDE EN','ไกด์ · RU':'GUIDE RUS','ไกด์ · CN':'GUIDE CN',
-                    'ไกด์':'GUIDE','นักศึกษาฝึกงาน':'STUDENT / TRAINEE','สตาฟ':'STAFF'};
-            var nn=(GD_USE[ri]>1)?(' '+(c+1)):'';
-            var lb=(EN[t]||t)+nn+((sq===0)?'|\u0e21\u0e31\u0e04\u0e04\u0e38\u0e40\u0e17\u0e28\u0e01\u0e4c':'');
-            o+=row(lb,function(B,i){ return gdCell(i,t,c); },0,
+    /* §pjGdOrder · หัวแถวคือชื่อช่องบนการ์ด · ผ่านกติกาเดียวกับแถวลูกเรือ (§pjLbSheet)
+       ทุกลำตั้งตรงกัน → ใช้ชื่อนั้น · ตั้งไม่ตรงกัน → คงชื่อมาตรฐาน แล้วติดชื่อในช่องของลำนั้น */
+    + (function(){ var o='';
+        GD_ROWS.forEach(function(R,sq){
+          var slot=pjGdSlot(R.kind,R.idx), def=pjGdDefLb(R.kind,R.idx);
+          var en=(R.kind==='gd') ? ('GUIDE '+(R.idx+1))
+                                 : ('STUDENT / TRAINEE'+(R.idx?(' '+(R.idx+1)):''));
+          var k=en+((sq===0)?'|\u0e21\u0e31\u0e04\u0e04\u0e38\u0e40\u0e17\u0e28\u0e01\u0e4c':'');
+          o+=lbRow('gd',slot,def,k,
+                   function(B,i){ return gdCell(i,R); },0,
                    function(B){ return WKG[B.bid] ? e(WKG[B.bid][sq]||'') : ''; });
-          })(t,c,ri,seq++); }
         });
         return o; })()
     + band('3','PASSENGER HEADCOUNT','#E5F0F0','#12554F','\u0e22\u0e2d\u0e14\u0e1c\u0e39\u0e49\u0e42\u0e14\u0e22\u0e2a\u0e32\u0e23')
