@@ -340,16 +340,52 @@
   // poll for others' changes → offer refresh (no silent stale, no forced reload mid-edit)
   // ── AUTO-REFRESH when others save · seamless when idle · never interrupts typing/editing ──
   var _laPending=null, _laLastInput=Date.now();
-  ['mousedown','keydown','input','touchstart','wheel'].forEach(function(ev){ try{ document.addEventListener(ev, function(){ _laLastInput=Date.now(); }, true); }catch(e){} });
+  /* §ckLive · 'wheel' = เลื่อนจออ่าน ไม่ใช่การแก้ข้อมูล · ในหน้าเช็คอินที่รายการยาว
+     มันรีเซ็ตนาฬิกา "ยุ่งอยู่" ต่อเนื่องจนไม่เคยว่างพอจะ refresh
+     หน้าอื่นยังนับเหมือนเดิม (เลื่อนอ่านรายงานยาว ๆ แล้วโดนวาดใหม่กลางคันก็กวนเหมือนกัน) */
+  ['mousedown','keydown','input','touchstart','wheel'].forEach(function(ev){
+    try{ document.addEventListener(ev, function(){
+      if(ev==='wheel' && _laLiveView()) return;
+      _laLastInput=Date.now();
+    }, true); }catch(e){} });
+  /* §ckLive (2026-09-12) · "Pier Check-in สองคนใช้พร้อมกัน · คนนึงเช็คอิน
+     แต่หน้าจออีกคนยังไม่อัพเดท ต้อง Refresh ถึงจะเห็น"
+
+     กลไก push มีอยู่แล้วและทำงานถูก (SSE /api/events + poll /api/version ทุก 10 วิ)
+     ตัวที่บล็อกคือ _laBusy() ซึ่งมีสองเงื่อนไขที่หน้าเช็คอินติดค้างแทบตลอดเวลา:
+
+     1. โฟกัสค้างในช่องค้นหา · คนหน้าท่าคลิกช่อง "ค้นหา voucher/ชื่อ/เบอร์" ครั้งเดียว
+        แล้วไปกดปุ่มเช็คอินต่อ · ปุ่มเป็น <button> โฟกัสไม่ย้าย document.activeElement
+        จึงค้างเป็น <input> ทั้งกะ → _laBusy() คืน true ตลอด ไม่เคย refresh เลยสักครั้ง
+     2. หน้าต่าง "แตะจอภายใน 2 วิ" · รายการหน้าท่ายาว คนเลื่อนจอตลอด
+        และ 'wheel' ถูกนับเป็นการแตะด้วย → นาฬิกาถูกรีเซ็ตต่อเนื่อง
+
+     สองหน้านี้ไม่มีฟอร์มที่กรอกค้างไว้ (มีแค่ช่องค้นหากับตำแหน่ง scroll ซึ่ง
+     _laRerender คืนให้อยู่แล้ว) จึงผ่อนสองข้อนี้เฉพาะสองหน้านี้
+     เงื่อนไขที่กันของจริง (_dirty · ฟอร์มจอง · modal เปิดอยู่) ยังกันเหมือนเดิมทุกหน้า */
+  function _laLiveView(){
+    try{
+      var act=document.querySelector('.nav-item.active');
+      var v=(act&&act.dataset)?act.dataset.view:'';
+      return v==='piercheckin' || v==='vancheckin';
+    }catch(e){ return false; }
+  }
   function _laBusy(){
     if(_dirty) return true;                                                             // local changes not yet synced → never overwrite
     if(window._bkV2 && (_bkV2.newBooking || _bkV2.editingId)) return true;              // a booking form is open
+    var _live=_laLiveView();
     var ae=document.activeElement;
-    if(ae && (ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT'||ae.isContentEditable)) return true;  // typing in a field
+    if(ae && (ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT'||ae.isContentEditable)){
+      /* ช่องค้นหาของหน้าเช็คอินไม่ใช่ "งานที่ทำค้างไว้" · ข้อความอยู่ในตัวแปร (_pckQ/_vckQ)
+         และ _laRerender คืนโฟกัส+ตำแหน่ง cursor ให้หลังวาดใหม่ */
+      if(!(_live && (ae.id==='pck-q' || ae.id==='vck-q'))) return true;
+    }
     if(document.querySelector('.la-modal')||document.getElementById('la-umodal')||document.getElementById('la-pmodal')) return true;  // a dialog is open
     if(document.getElementById('dc-panel-docs')) return true;                           // Document-Check drawer open (reading details) → don't interrupt
     try{ if(typeof _agSelected!=='undefined' && _agSelected) return true; }catch(e){}   // Agent detail open (reading/editing) → don't yank back to the list
-    if(Date.now()-_laLastInput < 2000) return true;                                     // interacted within last 2s (snappy · SSE pushes instantly)
+    /* หน้าเช็คอิน · 700ms พอให้ไม่วาดทับจังหวะที่นิ้วยังอยู่บนปุ่ม แต่ไม่ค้างทั้งกะ
+       หน้าอื่นคงไว้ 2 วิเหมือนเดิม */
+    if(Date.now()-_laLastInput < (_live?700:2000)) return true;
     return false;
   }
   // remember the current screen (per-tab · NOT synced) so an auto-refresh returns here instead of Dashboard

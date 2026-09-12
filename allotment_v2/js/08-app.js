@@ -2507,9 +2507,20 @@ window._laRerender=function(){
   try{
     var mn=document.querySelector('main'); var sc=mn?mn.scrollTop:0; var scw=window.scrollY||0;
     var inner=_laScrollSnap();
+    /* §ckLive (2026-09-12) · คืนโฟกัส + ตำแหน่ง cursor ของช่องที่กำลังพิมพ์อยู่
+       หน้าเช็คอินต้องวาดใหม่ได้แม้โฟกัสอยู่ในช่องค้นหา (คนอื่นเช็คอินเข้ามาแล้วต้องเห็นทันที)
+       ถ้าไม่คืนโฟกัส คนที่กำลังพิมพ์ชื่อลูกค้าจะโดนเด้งออกจากช่องกลางคัน */
+    var _fid='', _fsel=null;
+    try{ var _ae=document.activeElement;
+      if(_ae && _ae.id && (_ae.tagName==='INPUT'||_ae.tagName==='TEXTAREA')){
+        _fid=_ae.id;
+        if(_ae.setSelectionRange) _fsel=[_ae.selectionStart, _ae.selectionEnd];
+      } }catch(e){}
     var act=document.querySelector('.nav-item.active'); var v=act&&act.dataset?act.dataset.view:'';
     if(v==='booking' && typeof bkV2Render==='function') bkV2Render();
     else if(act && typeof nav==='function') nav(act);
+    if(_fid){ try{ var _fe=document.getElementById(_fid);
+      if(_fe && _fe.focus){ _fe.focus(); if(_fsel && _fe.setSelectionRange) _fe.setSelectionRange(_fsel[0], _fsel[1]); } }catch(e){} }
     _laScrollBack(inner);
     setTimeout(function(){ try{ var m2=document.querySelector('main'); if(m2&&sc) m2.scrollTop=sc; if(scw) window.scrollTo(0,scw);
       _laScrollBack(inner); }catch(e){} }, 60);
@@ -15382,13 +15393,25 @@ function pckOnBoard(b, date, booked){
   var exp=(typeof pckExpected==='function')?pckExpected(b,date,booked):booked;
   return Math.max(0, (exp!=null?exp:booked)||0);
 }
+/* §pckExpPier (2026-09-12) · "ทริป 12/9 ยอดจริง 60 แต่ระบบขึ้น 61"
+   ของเดิมอ่านเฉพาะบันทึก "ฝั่งรถ" (ckRead 'van') · No-show ที่บันทึกหน้าท่า
+   จึงไม่เคยถูกหักออกจาก expect เลยสักครั้ง
+   ผลคือชิปบนหัวเรือ (ถึงท่า · เคลียร์ · ขึ้นเรือ · ที่นั่ง) ซึ่งบวกจาก expect
+   นับคนที่หน้าท่ากด No-show ไปแล้วรวมอยู่ด้วย — เกินจริงเท่าจำนวนนั้น
+   ขณะที่บรรทัด "เดินทางจริง" บนการ์ดใบเดียวกันหักให้ถูกแล้ว (ใช้ ckPaxLeft)
+   เลขสองตัวบนการ์ดเดียวกันจึงไม่ตรงกัน
+
+   ของเดิมยังอ่าน v.noShow (ตัวเลขก้อนเดียว) + v.reasonCode (เหตุผลเดียว)
+   ทั้งที่ของจริงเป็น events หลายรายการ · มีทั้งการถอนคืน (§ckBack)
+   การยืนยันหน้าท่า (§ckPierFix) และ "ตามมาเองที่ท่า" (§ckSelfLost)
+   ckLostByType() ตีความครบทุกกติกาอยู่แล้ว และเป็นตัวที่บรรทัด "เดินทางจริง" ใช้
+   → ให้ใช้ตัวเดียวกัน เลขทุกช่องบนการ์ดจะมาจากแหล่งเดียว
+
+   เพดานการกดขึ้นเรือไม่กระทบ · ckCeil() ใช้ booked เต็มเสมอ (คนตามมาเองที่ท่าได้) */
 function pckExpected(b, date, booked){
-  var v=ckRead(b,date,'van');
-  if(!v || !v.at) return booked;
-  var ns=Math.max(0, v.noShow||0);
-  if(ns<=0) return booked;
-  if(ckExpectAtPier(v.reasonCode)) return booked;   // ไปเองที่ท่า → ยังรอรับอยู่
-  return Math.max(0, booked-ns);
+  var L=(typeof ckLostByType==='function')?ckLostByType(b,date):null;
+  if(!L || L.total<=0) return booked;
+  return Math.max(0, booked - L.total);
 }
 // ปุ่มขั้นตอนหน้าท่า · ถึงท่า / เคลียร์ · ขั้น "ขึ้นเรือ" ยังใช้ปุ่ม ✓ เดิม (มันนับ pax + ถามเหตุผลให้ด้วย)
 // จะได้ไม่มีปุ่มสองที่ทำเรื่องเดียวกัน
@@ -17025,6 +17048,13 @@ function pckTripStats(rows, date){
   //   ผลคือยกเลิก 2 คนแล้วเลขคนลดลง แต่ Longtail จอย / ภาษาไกด์ ยังเท่าเดิม
   //   → ของแถมรายหัวใช้ realTot · ของแถมรายลำหักเมื่อยกเลิกทั้งใบเท่านั้น (ลำยังต้องออก ถ้ายังมีคนไป)
   (rows||[]).forEach(function(r){
+    /* §pckStatsSkip (2026-09-12) · pckAgg() ข้ามแถว strand (ยกเลิกแล้วแต่ยังจัดเรือค้างไว้)
+       และแถว _vd (ปิดรายการหน้างาน) มาตลอด · แต่ตัวนี้ไม่เคยข้าม
+       แถว strand ถูกล้าง booked/expect เป็น 0 ก็จริง แต่ตัวนี้อ่าน t.pax ดิบ ๆ
+       คนที่ออฟฟิศยกเลิกไปแล้วจึงยังถูกนับเป็น "เดินทางจริง" เต็มจำนวน
+       วัดจริงบนข้อมูล 24 ก.ค. เรือ Artemis · ที่นั่ง 58 แต่เดินทางจริง 66
+       ต่างกัน 8 คน = แถวค้างจัดการ 4 ใบ · เลขสองตัวอยู่บนแถบสีเดียวกัน */
+    if(r.strand || r._vd) return;
     var b=r.b, t=r.t, pb=ckPaxBreak(t.pax), tot=0, realTot=0;
     ['ad','chd','inf','foc'].forEach(function(k){
       var bk=pb[k]||0; book+=bk; tot+=bk;
