@@ -60889,6 +60889,16 @@ function pjPrint(){
 
   /* §pjWork2 · ทีมช่างของลำที่ไม่ได้ออก · ตำแหน่งเรียงตรงกับช่องลูกเรือพอดี */
   var WROLE=['หัวหน้าช่าง','ช่าง 1','ช่าง 2','ช่วยงาน 1','ช่วยงาน 2','ช่วยงาน 3','ช่วยงาน 4'];
+  /* §pjWkLb (2026-09-12) · "อันนี้แก้ แต่ใบทีปริ้นออกไม่ได้แก้ตาม"
+     ชื่อช่องของลำที่ "ไม่ได้ออก" เก็บอยู่คนละชุดกับลำที่ออก · การ์ดบันทึกด้วย kind='wk'
+     (หัวหน้าช่าง · ช่าง 1 · ช่วยงาน 1 ...) แต่ใบพิมพ์อ่านจาก WROLE ที่ฝังไว้ตายตัว
+     §pjLbSheet รอบก่อนต่อสายให้เฉพาะ kind='go' · ฝั่ง 'wk' จึงยังไม่ตามมา
+
+     ที่นี่ไม่มีปัญหา "หัวแถวมีได้ค่าเดียว" แบบฝั่ง go เพราะป้ายตำแหน่งของลำที่จอด
+     พิมพ์ติดท้ายชื่อคนในช่องของลำนั้นเอง · แต่ละลำจึงถือชื่อช่องของตัวเองได้ตรง ๆ */
+  var WSLOT=['cap','asst','crew0','crew1','crew2','island0','island1'];
+  var wrole=function(bid,i){
+    try{ return pjSlotLb('wk', WSLOT[i], WROLE[i], bid, _poDate); }catch(_){ return WROLE[i]; } };
   var WK={};
   boats.forEach(function(B){
     if(isGo(B)) return;
@@ -60901,7 +60911,7 @@ function pjPrint(){
        แต่บนกระดาษรูตรงกลางอ่านเหมือนลืมเขียน · ชื่อตำแหน่งจริงติดท้ายชื่อคนอยู่แล้ว
        จึงย้ายขึ้นได้โดยไม่เสียความหมาย */
     var pk=[];
-    ids.forEach(function(id,i){ if(id) pk.push({id:id, role:WROLE[i]}); });
+    ids.forEach(function(id,i){ if(id) pk.push({id:id, role:wrole(B.bid,i)}); });
     if(pk.length) WK[B.bid]={ids:ids, p:pk, note:R.note||''};
   });
   var isWk=function(B){ return !!WK[B.bid]; };
