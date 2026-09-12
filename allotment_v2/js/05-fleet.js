@@ -21085,7 +21085,22 @@ function flOpenSwapModal(incId,assetType,assetId){
   // Find compatible spares
   // - Schema: spare ถูกระบุด้วย spareLocation (truthy) — ไม่ใช่ status='spare' (legacy)
   // - ตัด shop:* ออก (อยู่ร้านซ่อม = ไม่พร้อมใช้)
-  // - Business rule (แบบ A · เข้ม): ผูก spare กับ pier ของเรือเท่านั้น · cross-pier ไม่ให้เห็น
+  /* §swapPierNow (2026-09-12) · "เรือท่าเดิมคือทับละมุ มีย้ายมาภูเก็ตชั่วคราว
+     แต่พอจะเลือกเกียร์มาสลับ ไม่ขึ้นของฝั่งภูเก็ต"
+
+     ของเดิมอ่าน getBoat(boatId).pier ซึ่งเป็น "ท่าประจำในทะเบียน" — ค่าคงที่
+     เรือย้ายท่าชั่วคราวแล้วค่านี้ไม่เปลี่ยน · Artemis จึงยังอ่านได้ tublamu
+     ทั้งที่ตัวเรืออยู่ภูเก็ต → เห็นแต่คลังทับละมุ ซึ่งอยู่คนละจังหวัดกับเรือ
+
+     ระบบมี getBoatCurrentPier(b, ds) อยู่แล้ว (§boatPierDate) ซึ่งอ่านใบย้ายท่า
+     (b.assignments ที่ครอบวันนั้น) · สถานะเข้าอู่ · แล้วค่อย fallback ไปท่าประจำ
+     หน้าอื่นในระบบใช้ตัวนี้กันหมด — ที่นี่เป็นที่เดียวที่ยังอ่าน b.pier ดิบ ๆ
+
+     และกติกาเดิม "cross-pier ไม่ให้เห็น" ทำให้ของที่มีอยู่จริงหายไปจากจอทั้งหมด
+     โดยไม่บอกว่ามีอยู่ที่ไหน · เปลี่ยนเป็นยังแยกกลุ่มชัดเหมือนเดิม แต่ไม่ซ่อน:
+       1 บนเรือลำนี้            2 คลังท่าที่เรืออยู่ตอนนี้
+       3 คลังท่าประจำ (ถ้าต่างกัน · ต้องขนมา)   4 ท่าอื่น (ต้องขนมา)
+     คนตัดสินใจยังเห็นระยะทางครบ แต่ไม่ต้องเดาว่าของหายไปไหน */
   const arr=assetType==='gearbox'?FL_GEARBOXES:FL_PROPELLERS;
   const allSpares=arr.filter(s=>s.spareLocation && !String(s.spareLocation).startsWith('shop:'));
   // Compatibility — relaxed: match brand only (warn if model differs)
@@ -21094,12 +21109,23 @@ function flOpenSwapModal(incId,assetType,assetId){
     if(assetType==='gearbox') return s.brand===damaged.brand;
     return s.size===damaged.size;
   });
-  // Group by location · ภายใต้ pier ของเรือเท่านั้น
-  const boatPier=boatId?(getBoat(boatId)?.pier||''):'';
+  // Group by location · ท่าที่เรืออยู่ "ตอนนี้" ก่อน แล้วค่อยท่าประจำ แล้วค่อยท่าอื่น
+  const _boatObj=boatId?getBoat(boatId):null;
+  const homePier=(_boatObj&&_boatObj.pier)||'';
+  const nowPier=(_boatObj && typeof getBoatCurrentPier==='function')
+      ? (getBoatCurrentPier(_boatObj, inc.date||undefined)||homePier)
+      : homePier;
+  /* เรืออยู่ในอู่ · 'shop' ไม่ใช่คลังอะไหล่ → ใช้ท่าประจำเป็นตัวตั้งแทน */
+  const curPier=(nowPier==='shop')?homePier:nowPier;
+  const pierLbl=p=>((typeof PIER_LABELS!=='undefined' && PIER_LABELS[p])||p||'—');
   const onBoat=compat.filter(s=>s.spareLocation===`boat:${boatId}`);
-  const samePier=compat.filter(s=>boatPier && s.spareLocation===`pier:${boatPier}`);
-  // ❌ ไม่มี otherSpares (cross-pier) — แบบ A ล็อกเฉพาะ pier ของเรือ
-  const otherSpares=[];
+  const samePier=compat.filter(s=>curPier && s.spareLocation===`pier:${curPier}`);
+  const homeSpares=(homePier && homePier!==curPier)
+      ? compat.filter(s=>s.spareLocation===`pier:${homePier}`) : [];
+  const _seen={};
+  [onBoat,samePier,homeSpares].forEach(g=>g.forEach(s=>{ _seen[s.id]=1; }));
+  const otherSpares=compat.filter(s=>!_seen[s.id] && String(s.spareLocation||'').startsWith('pier:'));
+  const movedAway=!!(homePier && curPier && homePier!==curPier);
 
   const renderSp=(sp,group)=>sp.map(s=>{
     const info=flParseSpareLoc(s.spareLocation);
@@ -21134,18 +21160,26 @@ function flOpenSwapModal(incId,assetType,assetId){
     <div style="font-size:10px;font-weight:600;color:#1c4e7e;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">🚢 บนเรือลำนี้ (เร็วที่สุด)</div>
     <div style="display:flex;flex-direction:column;gap:4px">${renderSp(onBoat,'boat')}</div>
   </div>`:''}
+  ${movedAway?`<div style="margin-bottom:10px;background:#EAF3FA;border:1px solid #BFD9F2;border-radius:8px;padding:7px 10px;font-size:10.5px;color:#0C447C;line-height:1.5">
+    &#9875; เรือลำนี้<b> ย้ายมาอยู่ ${pierLbl(curPier)}</b> ชั่วคราว (ท่าประจำคือ ${pierLbl(homePier)})
+    &middot; คลังของท่าที่เรืออยู่ตอนนี้ขึ้นก่อน
+  </div>`:''}
   ${samePier.length?`<div style="margin-bottom:12px">
-    <div style="font-size:10px;font-weight:600;color:#0e6b87;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">🏪 คลังท่าเดียวกัน</div>
+    <div style="font-size:10px;font-weight:600;color:#0e6b87;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">🏪 คลังท่าที่เรืออยู่ตอนนี้ &middot; ${pierLbl(curPier)}</div>
     <div style="display:flex;flex-direction:column;gap:4px">${renderSp(samePier,'pier')}</div>
   </div>`:''}
+  ${homeSpares.length?`<div style="margin-bottom:12px">
+    <div style="font-size:10px;font-weight:600;color:#854F0B;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">&#128666; คลังท่าประจำ &middot; ${pierLbl(homePier)} <span style="text-transform:none;font-weight:500;opacity:.85">(ต้องขนมาก่อนใช้)</span></div>
+    <div style="display:flex;flex-direction:column;gap:4px">${renderSp(homeSpares,'home')}</div>
+  </div>`:''}
   ${otherSpares.length?`<div style="margin-bottom:12px">
-    <div style="font-size:10px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">📦 สแปร์อื่นๆ</div>
+    <div style="font-size:10px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">📦 ท่าอื่น <span style="text-transform:none;font-weight:500;opacity:.85">(ต้องขนมาก่อนใช้)</span></div>
     <div style="display:flex;flex-direction:column;gap:4px">${renderSp(otherSpares,'other')}</div>
   </div>`:''}
-  ${!onBoat.length && !samePier.length?`<div style="text-align:center;padding:20px;font-size:12px;color:var(--ink-soft);line-height:1.6">
+  ${!onBoat.length && !samePier.length && !homeSpares.length && !otherSpares.length?`<div style="text-align:center;padding:20px;font-size:12px;color:var(--ink-soft);line-height:1.6">
     <div style="font-size:24px;opacity:.3;margin-bottom:8px">📭</div>
-    <div style="font-weight:600;color:var(--ink-mid);margin-bottom:3px">ไม่มีสแปร์ ${damaged.brand} ที่ท่านี้</div>
-    <div style="font-size:11px">ไม่พบ ${assetType==='gearbox'?'เกียร์':'ใบจักร'} ${damaged.brand} ในคลังท่า ${boatPier==='tublamu'?'Tub Lamu':boatPier==='panwa'?'Visit Panwa':boatPier||'—'} หรือบนเรือลำนี้<br/><span style="color:var(--ink-soft)">ลองขนสแปร์จากท่าอื่นมาก่อนใช้ · หรือเพิ่ม spare ใหม่</span></div>
+    <div style="font-weight:600;color:var(--ink-mid);margin-bottom:3px">ไม่มีสแปร์ ${damaged.brand} ในคลังไหนเลย</div>
+    <div style="font-size:11px">ไม่พบ ${assetType==='gearbox'?'เกียร์':'ใบจักร'} ${damaged.brand} ทั้งบนเรือลำนี้และในคลังทุกท่า<br/><span style="color:var(--ink-soft)">เพิ่ม spare ใหม่ หรือเช็คว่ามีตัวที่อยู่ร้านซ่อม (shop) รอรับกลับอยู่ไหม</span></div>
   </div>`:''}`;
 
   document.getElementById('fl-swap-body').innerHTML=html;
