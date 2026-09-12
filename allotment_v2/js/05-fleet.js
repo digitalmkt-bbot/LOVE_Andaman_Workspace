@@ -8392,6 +8392,30 @@ function flExtraSaveBtn(){
   }
   flxClose();
 }
+/* §drIssMerge · ย้ายแถว "อื่นๆ" หนึ่งบรรทัด เข้าไปบวกในคอลัมน์ชื่อเดียวกัน
+   บวกทับของเดิม ไม่ใช่เขียนทับ · ลำหนึ่งอาจเบิกสองรอบในวันเดียว
+   ถามก่อนทุกครั้งและบอกเลขก่อน/หลัง · ของหายไปเงียบ ๆ แย่กว่าของที่อยู่ผิดที่ */
+function flExtraToCol(ds,pierKey,bid,xid){
+  if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('fleet') && !window.laCanEditArea('operations')){ alert('ดูอย่างเดียว · แก้ไม่ได้'); return; }
+  var row=null; flExtraGet(ds,bid).forEach(function(x){ if(x && x.id===xid) row=x; });
+  if(!row) return;
+  var nm=String(row.n||'').trim();
+  var it=flIssueFor(pierKey).filter(function(y){ return String(y.name||'').trim()===nm; })[0];
+  if(!it){ alert('ท่านี้ยังไม่มีคอลัมน์ชื่อ "'+nm+'"'); return; }
+  var add=(row.q==null)?0:row.q;
+  if(!isFinite(add)){ alert('จำนวนในแถวนี้ไม่ใช่ตัวเลข · แก้ที่ปุ่ม "แก้ / ลบ" ก่อน'); return; }
+  var cur=flIssueGet(ds,bid,it.id); if(cur==null) cur=0;
+  var ru=String(row.u||'').trim(), iu=String(it.unit||'').trim();
+  var warn=(ru && iu && ru!==iu)
+    ? ('\n\n\u26a0 หน่วยไม่ตรงกัน · แถวนี้เป็น "'+ru+'" แต่คอลัมน์เป็น "'+iu+'"\nถ้าไม่ใช่ของอย่างเดียวกัน ให้กดยกเลิกแล้วแก้ชื่อแทน')
+    : '';
+  var bn=bid; try{ var _b=(BOATS||[]).filter(function(z){ return z.id===bid; })[0]; if(_b) bn=_b.name; }catch(_){}
+  if(!confirm('ย้ายเข้าคอลัมน์ "'+nm+'"\n'+bn+' · '+ds+'\n\n'
+    +'ในคอลัมน์ตอนนี้ '+cur+'  +  '+add+'  =  '+(cur+add)+(iu?(' '+iu):'')+'\n'
+    +'แล้วลบบรรทัดนี้ออกจากรายการอื่นๆ'+warn)) return;
+  flIssueSet(ds,bid,it.id,cur+add);
+  flExtraDel(ds,bid,xid);
+}
 function flExtraDelBtn(){
   if(!_FLX_EX.id || !_FLX_EX.bid) return;
   flExtraDel(_FLX_EX.ds,_FLX_EX.bid,_FLX_EX.id);
@@ -8814,11 +8838,25 @@ function flRenderDR(){
           <em style="color:${isAnomaly?'#A32D2D':dim.ink3}">${tShort} · ${b.cap||'?'} PAX · ${engs.length} EN</em></span></td>`;
     const _rtCell=`<td class="fs-rt"${isAnomaly?' style="background:#FCEBEB"':''}>${tripsHtml}${orphanWarn?`<div style="margin-top:3px"><span style="font-size:9px;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E89A92;border-radius:5px;padding:1px 6px;font-weight:600">&#9888; เรือถูกถอดจาก Boat Op · จัดใหม่</span></div>`:''}</td>`;
 
-    if(noEntry){
-      /* ลำที่ไม่ออกวันนี้ · ยุบทั้งแถวเป็นช่องเดียว ไม่ให้กินที่และไม่ให้เผลอกรอก */
-      return `<tr>${_btCell}${_rtCell}<td class="fs-dim" colspan="${3+ENG_COLS.length+2+Math.max(1,ISS.length)}">${isNotAvail?'ไม่ต้องกรอก':'ไม่ออก'}</td></tr>`;
-    }
     const IN='class="fs-in"';
+    /* §drIssIdle (2026-09-12) · "แอดเพิ่ม เป็นชื่อเรือ กลายเป็นว่า
+       ช่องถัดๆไป สามารถคีย์ได้ ไม่ใช่การสร้างซ้อนแบบนี้"
+
+       ของที่เบิกลงเรือ ไม่ได้ผูกกับการออกทริป · เรือจอดอยู่ที่ท่าก็เอาน้ำเอาน้ำอัดลงได้
+       แต่แถวของลำที่ไม่ออก ถูกยุบเป็นช่องเดียวยาวตลอดแถว คนจึงไม่มีช่องให้คีย์
+       ทางเดียวที่เหลือคือไปสร้างแถว "อื่นๆ" ต่อท้ายตาราง ซึ่งไม่ถูกนับเข้ายอดรวมของคอลัมน์
+
+       ยุบเฉพาะช่วง PAX→มิเตอร์น้ำ ซึ่งเป็นเรื่องของการออกจริง · ช่องเบิกของเปิดไว้ทุกแถว
+       จำนวนคอลัมน์เท่าเดิม (colspan หดลงเท่าจำนวนช่องที่แยกออกมา) ตารางจึงไม่เลื่อน */
+    const _issTd=ISS.length ? ISS.map(it=>{
+      const v=flIssueGet(ds,b.id,it.id);
+      return `<td class="fs-n fs-i${noEntry?' fs-iq':''}"><input ${IN} type="number" step="1" min="0" value="${v!=null?v:''}" ${_DIS} onchange="flIssueSet('${ds}','${b.id}','${it.id}',this.value)"></td>`;
+    }).join('') : '<td class="fs-n fs-i fs-na"></td>';
+
+    if(noEntry){
+      /* ลำที่ไม่ออกวันนี้ · ยุบช่วงการเดินเรือ แต่คงช่องเบิกของไว้ */
+      return `<tr>${_btCell}${_rtCell}<td class="fs-dim" colspan="${3+ENG_COLS.length+2}">${isNotAvail?'ไม่ต้องกรอก':'ไม่ออก'}</td>${_issTd}</tr>`;
+    }
     /* เครื่องเรียงตามตำแหน่งมาตรฐานของท่านั้น · ลำที่ไม่มีตำแหน่งนั้นเว้นว่าง คอลัมน์จึงตรงกันทุกแถว */
     const _engTd=ENG_COLS.map(pos=>{
       const eng=engs.find(e=>engPosLabel(e.pos)===pos);
@@ -8832,12 +8870,6 @@ function flRenderDR(){
     const _w=flWaterGet(ds,b.id), _wu=flWaterUsed(ds,b.id);
     const _wTd=`<td class="fs-n fs-w"><input ${IN} type="number" step="0.1" value="${_w.o!=null?_w.o:''}" placeholder="เปิด" ${_DIS} onchange="flWaterSet('${ds}','${b.id}','o',this.value)"></td>`
       +`<td class="fs-n fs-w"><input ${IN} type="number" step="0.1" value="${_w.c!=null?_w.c:''}" placeholder="ปิด" ${_DIS} onchange="flWaterSet('${ds}','${b.id}','c',this.value)">${_wu!=null?`<em style="color:${_wu<0?'#A32D2D':'#3E93B8'}">${_wu>=0?'+':''}${_wu}</em>`:''}</td>`;
-    /* ยังไม่มีรายการเบิกเลย · หัวตารางมีช่องบอกให้กด + อยู่ ตัวแถวต้องมีช่องคู่กัน
-       ไม่งั้นจำนวนคอลัมน์ของ thead กับ tbody ไม่เท่ากัน ตารางเพี้ยนทั้งใบ */
-    const _issTd=ISS.length ? ISS.map(it=>{
-      const v=flIssueGet(ds,b.id,it.id);
-      return `<td class="fs-n fs-i"><input ${IN} type="number" step="1" min="0" value="${v!=null?v:''}" ${_DIS} onchange="flIssueSet('${ds}','${b.id}','${it.id}',this.value)"></td>`;
-    }).join('') : '<td class="fs-n fs-i fs-na"></td>';
     const _fpOwn2=_fpOwn;
     return `<tr>${_btCell}${_rtCell}
       <td class="fs-n fs-ro" title="จำนวนลูกค้าจากยอดจอง · แก้ไม่ได้">${pax||0}</td>
@@ -8952,11 +8984,18 @@ function flRenderDR(){
           let h='';
           boats.forEach(b=>{
             flExtraGet(ds,b.id).forEach(x=>{
-              h+=`<tr class="fs-xr"><td class="fs-xb"><span class="fs-xl">อื่นๆ</span><b>${_e(b.name)}</b></td>`
+              /* §drIssMerge · แถวอื่นๆ ที่พิมพ์ชื่อตรงกับคอลัมน์ที่มีอยู่แล้ว
+                 ของพวกนี้ไม่ถูกนับในแถวรวมท้ายตาราง ยอดวันนั้นจึงขาดไปเงียบ ๆ
+                 ไม่ย้ายให้เอง · ขึ้นปุ่มให้กดย้าย คนคุมสต็อกเป็นคนตัดสินใจ */
+              const _mt=flIssueFor(pierKey).filter(y=>String(y.name||'').trim()===String(x.n||'').trim())[0];
+              const _mBtn=(locked||!_mt)?'':`<button class="fs-xm" onclick="flExtraToCol('${ds}','${pierKey}','${b.id}','${x.id}')" title="ชื่อนี้มีคอลัมน์อยู่แล้ว · อยู่ตรงนี้จะไม่ถูกนับในแถวรวม · กดเพื่อย้ายเข้าคอลัมน์">&#8594; เข้าคอลัมน์</button>`;
+              h+=`<tr class="fs-xr${_mt?' fs-xdup':''}"><td class="fs-xb"><span class="fs-xl">อื่นๆ</span><b>${_e(b.name)}</b></td>`
                + `<td colspan="${NCOL-1}"><span class="fs-xt">${_e(x.n)}</span>`
                + (x.q!=null?` <span class="fs-xq">${x.q}</span>`:'')
                + (x.u?`<span class="fs-xu">${_e(x.u)}</span>`:'')
+               + (_mt?`<span class="fs-xw">&#9888; ไม่ถูกนับในแถวรวม</span>`:'')
                + (locked?'':`<button class="fs-xe" onclick="flExtraOpen('${ds}','${pierKey}','${b.id}','${x.id}')">แก้ / ลบ</button>`)
+               + _mBtn
                + `</td></tr>`;
             });
           });
@@ -9029,6 +9068,11 @@ function flRenderDR(){
 #fl-dr-body td.fs-e{background:#FAFAF9;color:#3F4654}
 #fl-dr-body td.fs-w{background:#EEF8FC;color:#0C4A66;width:84px}
 #fl-dr-body td.fs-i{background:#F4FAF6;color:#0F6E56;width:72px}
+/* §drIssIdle · ช่องเบิกของของลำที่ไม่ออก · คีย์ได้ แต่ต้องไม่ดังเท่าลำที่ออก
+   แถวพวกนี้ส่วนใหญ่ว่าง · ถ้าเขียวเต็มเหมือนกันหมด สายตาจะหาแถวที่ออกจริงไม่เจอ */
+#fl-dr-body td.fs-i.fs-iq{background:#FBFCFA}
+#fl-dr-body td.fs-i.fs-iq .fs-in{color:#7A8A80}
+#fl-dr-body td.fs-i.fs-iq:focus-within{background:#F4FAF6}
 #fl-dr-body td.fs-na{background:#F7F6F3}
 /* §drExtra3 · ของจิปาถะ · เป็นแถวต่อท้ายตาราง ไม่ใช่คอลัมน์
    แถวรายการอ่านเหมือนบรรทัดในใบเบิก · ปุ่มเพิ่มอยู่ล่างสุดปุ่มเดียว */
@@ -9043,6 +9087,13 @@ function flRenderDR(){
 #fl-dr-body .fs-xe{float:right;font-size:10px;color:#8a8a82;border:1px solid #E7E4DC;border-radius:6px;
   padding:2px 8px;background:#fff;cursor:pointer;font-family:inherit}
 #fl-dr-body .fs-xe:hover{border-color:#0F6E56;color:#0B5C46}
+/* §drIssMerge · แถวที่ชื่อซ้ำกับคอลัมน์ · ต้องมองออกว่าอันนี้ยอดหาย */
+#fl-dr-body tr.fs-xdup td{background:#FFFBF2}
+#fl-dr-body .fs-xw{font-size:9.5px;color:#9A6410;background:#FDF1DC;border-radius:5px;
+  padding:1px 7px;margin-left:9px;font-weight:700;vertical-align:middle}
+#fl-dr-body .fs-xm{float:right;font-size:10px;color:#0B5C46;border:1px solid #9FCBB4;border-radius:6px;
+  padding:2px 8px;background:#F1FBF6;cursor:pointer;font-family:inherit;font-weight:700;margin-right:7px}
+#fl-dr-body .fs-xm:hover{background:#0B5C46;color:#fff;border-color:#0B5C46}
 #fl-dr-body tr.fs-xa td{background:#F7FBF8;border-top:1px dashed #C7DED2;padding:7px 10px}
 #fl-dr-body .fs-xab{display:inline-flex;align-items:center;gap:7px;border:1.5px dashed #9FCBB4;background:#fff;
   color:#0B5C46;border-radius:9px;padding:6px 14px;font:700 11px inherit;font-family:inherit;cursor:pointer}
