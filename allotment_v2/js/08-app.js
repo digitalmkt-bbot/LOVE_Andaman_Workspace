@@ -59055,10 +59055,13 @@ function pjOf(d,b){
   /* §mealTrip · mv (ร้านอาหารของลำนี้วันนี้) ต้องอยู่ในรายการนี้ด้วย ด้วยเหตุผลเดียวกับ lock */
   /* §pjWorkCode · wc = รหัสที่จะไปโผล่ในตารางการทำงานของทุกคนบนใบนี้
      ต้องอยู่ในรายการช่องที่รู้จัก ด้วยเหตุผลเดียวกับ lock/mv ไม่งั้นหลุดทุกครั้งที่บันทึกช่องอื่น */
-  if(!o) return {cap:T.cap||'', asst:T.asst||'', crew:(T.crew||[]).slice(), island:[], note:'', wb:'', wbc:'', lock:0, mv:'', wc:'', _std:true};
+  /* §pjLbScope · lb (ชื่อช่องที่ตั้งเองของลำนี้วันนี้) ต้องอยู่ในรายการนี้ด้วย
+     ด้วยเหตุผลเดียวกับ lock/mv/wc — ตกหล่นเมื่อไหร่ ชื่อที่ตั้งไว้หลุดทุกครั้งที่บันทึกช่องอื่น */
+  if(!o) return {cap:T.cap||'', asst:T.asst||'', crew:(T.crew||[]).slice(), island:[], note:'', wb:'', wbc:'', lock:0, mv:'', wc:'', lb:{}, _std:true};
   return {cap:o.cap||'', asst:o.asst||'', crew:Array.isArray(o.crew)?o.crew.slice():[],
           island:Array.isArray(o.island)?o.island.slice():[], note:o.note||'', wb:o.wb||'', wbc:o.wbc||'',
-          lock:(o.lock?1:0), mv:(o.mv||''), wc:(o.wc||''), _std:false};
+          lock:(o.lock?1:0), mv:(o.mv||''), wc:(o.wc||''),
+          lb:(o.lb&&typeof o.lb==='object')?Object.assign({},o.lb):{}, _std:false};
 }
 function pjSet(d,b,patch){
   if(!poGuard()) return;
@@ -59863,22 +59866,42 @@ function pjRow(label, html, subOld){
   return '<div class="pj-rw'+(subOld?' sw2':'')+'"><div class="k">'+label+'</div>'+html
     +(subOld?('<span class="pj-tag">SUB</span><span class="pj-was" title="ปกติคือ '+poE(pjStaffName(subOld))+'">ปกติ '+poE(pjStaffName(subOld))+'</span>'):'')+'</div>';
 }
-/* §pjSlots · ชื่อช่องเก็บไว้ที่เดียวทั้งระบบ (PIER_CFG.slotLb) แยกสองชุด
-     go = ใบที่ออกเรือ · wk = ใบที่ไม่ได้ออก (ช่าง/ช่วยงาน)
-   ตั้งชื่อทับได้ · ลบข้อความจนว่าง = กลับไปใช้ชื่อตั้งต้น ไม่ต้องมีปุ่มรีเซ็ตแยก */
-function pjSlotLb(kind, slot, def){
+/* §pjLbScope (2026-09-12) · "พอแก้ 1 หน้า กระทบทุกหน้า ไม่ควร ควรหน้าไหนหน้านั้น"
+
+   ของเดิมเก็บชื่อช่องไว้ที่เดียวทั้งระบบ (PIER_CFG.slotLb[kind][slot])
+   แก้ที่การ์ด Artemis แล้วการ์ดทุกลำทุกท่าเปลี่ยนตาม — ตรงกับที่ tooltip เขียนไว้เองว่า
+   "มีผลทุกท่าทุกลำ" · แต่ของจริงแต่ละลำเรียกช่องไม่เหมือนกัน
+   ย้ายมาเก็บใน PIER_JOB[วัน|ลำ].lb ซึ่งเป็นก้อนของ "ลำนี้ วันนี้" อยู่แล้ว
+   (ที่เดียวกับ cap/crew/note/wb) → แก้การ์ดไหนมีผลเฉพาะการ์ดนั้นวันนั้น
+   ใบงานเก่าที่พิมพ์ไปแล้วจึงคงชื่อเดิมไว้ ไม่ถูกเขียนทับย้อนหลัง
+
+   ค่าเดิมที่เคยตั้งไว้แบบทั้งระบบยังอ่านอยู่ · ใช้เป็น "ชื่อตั้งต้นของการ์ด" แทนค่า default
+   ของที่ตั้งไว้แล้วจะได้ไม่หายไปเฉย ๆ · และพิมพ์ทับรายลำได้ตามปกติ
+   (อยากกลับไปเป็นชื่อ default จริง ๆ ก็พิมพ์ชื่อนั้นลงไปตรง ๆ ได้) */
+function pjSlotLbBase(kind, slot, def){
   try{ var S=(PIER_CFG.slotLb||{})[kind]||{}; var v=String(S[slot]||'').trim(); return v||def; }
   catch(_){ return def; }
 }
-function pjSlotLbSet(kind, slot, txt, def){
+function pjSlotLb(kind, slot, def, bid, date){
+  var base=pjSlotLbBase(kind, slot, def);
+  try{
+    if(!bid) return base;
+    var J=pjOf(date||_poDate, bid);
+    var v=String(((J&&J.lb)||{})[kind+':'+slot]||'').trim();
+    return v||base;
+  }catch(_){ return base; }
+}
+function pjSlotLbSet(kind, slot, txt, def, bid){
   if(!poGuard()) return;
-  var o=PIER_CFG.slotLb||(PIER_CFG.slotLb={});
-  var S=o[kind]||(o[kind]={});
+  if(!bid) return;
+  var base=pjSlotLbBase(kind, slot, def);
+  var J=pjOf(_poDate, bid), L=Object.assign({}, (J&&J.lb)||{});
   /* textContent ไม่ใช่ innerText · .k มี text-transform:uppercase อยู่
      ถ้าอ่าน innerText จะได้ตัวใหญ่ทั้งหมดแล้วบันทึกตัวใหญ่ติดไปด้วย */
   var v=String(txt==null?'':txt).replace(/\s+/g,' ').trim().slice(0,24);
-  if(!v || v===def) delete S[slot]; else S[slot]=v;
-  poPersist(); renderPierJob();
+  if(!v || v===base) delete L[kind+':'+slot]; else L[kind+':'+slot]=v;
+  pjSet(_poDate, bid, {lb:L});
+  renderPierJob();
 }
 /* ช่องว่างที่กด "เพิ่มคน" เปิดไว้ · อยู่ในหน่วยความจำอย่างเดียว
    ไม่เก็บลงข้อมูล เพราะมันคือสถานะของการกรอก ไม่ใช่ข้อเท็จจริงของวันนั้น */
@@ -59902,14 +59925,14 @@ function pjSlotVal(J, slot){
 }
 /* แถวหนึ่งช่อง · เหมือน pjSelRow แต่ชื่อช่องพิมพ์ทับได้ และมีปุ่มเอาคนออก */
 function pjSlotRow(pier,bid,kind,slot,defLb,val,subOld,roles,ro,boat){
-  var lb=pjSlotLb(kind,slot,defLb);
+  var lb=pjSlotLb(kind,slot,defLb,bid);
   var kHtml = ro ? poE(lb)
     : ('<span class="pj-kx" contenteditable="true" spellcheck="false"'
-      +' title="แก้ชื่อช่องนี้ได้ · มีผลทุกท่าทุกลำ · ลบจนว่าง = กลับเป็น '+poE(defLb)+'"'
+      +' title="แก้ชื่อช่องนี้ได้ · มีผลเฉพาะลำนี้ วันนี้ · ลบจนว่าง = กลับเป็น '+poE(pjSlotLbBase(kind,slot,defLb))+'"'
       +' onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}'
         +'if(event.key===\'Escape\'){this.textContent=this.dataset.o;this.blur();}"'
       +' data-o="'+poE(lb)+'"'
-      +' onblur="pjSlotLbSet(\''+kind+'\',\''+slot+'\',this.textContent,\''+poE(defLb)+'\')">'
+      +' onblur="pjSlotLbSet(\''+kind+'\',\''+slot+'\',this.textContent,\''+poE(defLb)+'\',\''+poE(bid)+'\')">'
       +poE(lb)+'</span>');
   var badge='';
   var hp=val?pjHomePier(val):'';
@@ -59970,8 +59993,12 @@ function pjGdBusy(date, notBid){
 function pjGdOpts(sel, wantGuide, taken, busy){
   taken=taken||{}; busy=busy||{};
   var out='<option value="">— ว่าง —</option>', found=false;
+  /* §gdOptOrder (2026-09-12) · "ตอนนี้เรียงตาม A-Z แต่จริง ๆ ไม่ควรเรียง ควรเรียงตามที่ User Add"
+     เดิม sort ตามชื่อไทย · ทีมจำลำดับในทะเบียนได้ แต่จำลำดับ ก-ฮ ของชื่อเต็มไม่ได้
+     คนที่เพิ่งเพิ่มเข้าไปจะไปโผล่กลางรายการ หาไม่เจอ
+     ช่องลูกเรือ (pjOpts) ใช้ลำดับทะเบียนอยู่แล้ว · สองช่องนี้เคยเรียงคนละแบบ
+     → เอา sort ออก ใช้ลำดับเดียวกับทะเบียนทั้งคู่ */
   var G=goGuides().filter(function(g){ return g.active!==false && goIsGuide(g)===wantGuide; });
-  G.sort(function(a,b){ return String(a.name||'').localeCompare(String(b.name||''),'th'); });
   G.forEach(function(g){
     if(taken[g.id] && g.id!==sel) return;      /* ลงลำนี้ไปแล้วในช่องอื่น */
     if(g.id===sel) found=true;
@@ -60043,13 +60070,13 @@ function pjGdLead(bid){
 function pjGdRow(label, bid, kind, idx, val, langs, taken, busy, extra, lead){
   var chips=(langs||[]).map(function(L){ return '<span class="pj-lg">'+poE(L)+'</span>'; }).join('');
   var call=function(v){ return 'pjGdPick(\''+poE(bid)+'\',\''+kind+'\','+idx+','+v+')'; };
-  var slot=pjGdSlot(kind,idx), def=pjGdDefLb(kind,idx), lb=pjSlotLb('gd',slot,def);
+  var slot=pjGdSlot(kind,idx), def=pjGdDefLb(kind,idx), lb=pjSlotLb('gd',slot,def,bid);
   var kHtml='<span class="pj-kx" contenteditable="true" spellcheck="false"'
-    +' title="แก้ชื่อช่องนี้ได้ · มีผลทุกท่าทุกลำ · ลบจนว่าง = กลับเป็น '+poE(def)+'"'
+    +' title="แก้ชื่อช่องนี้ได้ · มีผลเฉพาะลำนี้ วันนี้ · ลบจนว่าง = กลับเป็น '+poE(pjSlotLbBase('gd',slot,def))+'"'
     +' onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur();}'
       +'if(event.key===\'Escape\'){this.textContent=this.dataset.o;this.blur();}"'
     +' data-o="'+poE(lb)+'"'
-    +' onblur="pjSlotLbSet(\'gd\',\''+slot+'\',this.textContent,\''+poE(def)+'\')">'
+    +' onblur="pjSlotLbSet(\'gd\',\''+slot+'\',this.textContent,\''+poE(def)+'\',\''+poE(bid)+'\')">'
     +poE(lb)+'</span>';
   return '<div class="pj-rw"><div class="k">'+kHtml+'</div>'
     +'<select onchange="'+call('this.value')+'">'+pjGdOpts(val, kind==='gd', taken, busy)+'</select>'
@@ -60275,13 +60302,13 @@ function pjCard(B, pier, ro){
               /* §gdLb · ชื่อช่องที่ตั้งทับไว้ต้องขึ้นตรงกันทั้งสองโหมด
                  ไม่งั้นคนที่ดูอย่างเดียวเห็นคนละชื่อกับคนที่แก้ได้ */
               var o=gd.map(function(x,i){
-                return pjGuideRow(pjSlotLb('gd',pjGdSlot('gd',i),pjGdDefLb('gd',i)), x.name, x.langs); }).join('');
+                return pjGuideRow(pjSlotLb('gd',pjGdSlot('gd',i),pjGdDefLb('gd',i),bid), x.name, x.langs); }).join('');
               for(var i=gd.length; i<3; i++)
-                o+=pjGuideRow(pjSlotLb('gd',pjGdSlot('gd',i),pjGdDefLb('gd',i)),'',[]);
+                o+=pjGuideRow(pjSlotLb('gd',pjGdSlot('gd',i),pjGdDefLb('gd',i),bid),'',[]);
               var trTxt=tr.map(function(x){ return x.name; }).join(' · ');
               var trN=tr.length+(+GF.other||0);
               if(!trTxt && GF.other>0) trTxt=GF.other+' คน';
-              return o+pjRow(poE(pjSlotLb('gd',pjGdSlot('tr',0),pjGdDefLb('tr',0))),
+              return o+pjRow(poE(pjSlotLb('gd',pjGdSlot('tr',0),pjGdDefLb('tr',0),bid)),
                 (trTxt?('<div class="v">'+poE(trTxt)+'</div>'):'<div class="v e">—</div>')
                 +(trN>1?('<span class="pj-lgs"><span class="pj-lg" style="background:#F1EFE8;color:#6B6B63">'
                          +trN+' คน</span></span>'):''), null);
@@ -60326,9 +60353,9 @@ function pjCard(B, pier, ro){
                 /* §gdLb · ชื่อในเมนูต้องเป็นชื่อที่ตั้งทับไว้ ไม่ใช่ชื่อตั้งต้น
                    ไม่งั้นเมนูเรียกช่องคนละชื่อกับที่เห็นบนการ์ด */
                 +'<button onclick="pjGdAddSlot(\''+poE(bid)+'\',\'gd\')">'
-                  +poE(pjSlotLb('gd',pjGdSlot('gd',nG),pjGdDefLb('gd',nG)))+'</button>'
+                  +poE(pjSlotLb('gd',pjGdSlot('gd',nG),pjGdDefLb('gd',nG),bid))+'</button>'
                 +'<button onclick="pjGdAddSlot(\''+poE(bid)+'\',\'tr\')">'
-                  +poE(pjSlotLb('gd',pjGdSlot('tr',nT),pjGdDefLb('tr',nT)))+'</button>'
+                  +poE(pjSlotLb('gd',pjGdSlot('tr',nT),pjGdDefLb('tr',nT),bid))+'</button>'
                 /* §gdLb · แถวที่เพิ่มมาเปลี่ยนชื่อตำแหน่งได้ · ต้องบอกตรงนี้
                    ไม่งั้นไม่มีอะไรชวนให้ลองคลิกที่ชื่อช่อง */
                 +'<div class="pf">เพิ่มแล้วคลิกที่ชื่อช่องเพื่อตั้งชื่อตำแหน่งเองได้'
@@ -60449,7 +60476,7 @@ function pjCard(B, pier, ro){
            +'<div class="pj-pop pj-addp" id="'+aid+'"><div class="ph">เลือกช่องที่จะเพิ่ม</div>'
            + rest.map(function(x){
                return '<button onclick="pjSlotAdd(\''+bid+'\',\''+x[0]+'\')">'
-                 +poE(pjSlotLb(KIND,x[0],x[1]))+'</button>'; }).join('')
+                 +poE(pjSlotLb(KIND,x[0],x[1],bid))+'</button>'; }).join('')
            +'</div></div>';
        }
        return '<div class="pj-slotn">'+nMan+' คน</div>'+out;
@@ -61265,6 +61292,36 @@ function pjPrint(){
   var lbl=function(k){
     var a=String(k).split('|');
     return a[0]+(a[1]?('<i>'+a[1]+'</i>'):''); };
+  /* §pjLbSheet (2026-09-12) · "แก้แล้วควรลิ้งกับใบงาน"
+     ชื่อช่องที่ตั้งเองบนการ์ด (§pjLbScope) ต้องขึ้นบนใบที่พิมพ์ด้วย ไม่ใช่แค่บนจอ
+
+     ข้อจำกัดของใบนี้ · เป็นตารางเดียว ลำเป็นคอลัมน์ หัวแถวจึงมีได้ค่าเดียว
+     แต่ชื่อช่องตอนนี้เป็นของ "ลำนี้ วันนี้" ซึ่งแต่ละลำตั้งไม่เหมือนกันได้
+     กติกาที่ใช้:
+       ทุกลำที่พิมพ์ตั้งชื่อช่องนี้ตรงกัน → ใช้ชื่อนั้นเป็นหัวแถวเลย
+       ตั้งไม่ตรงกัน → หัวแถวคงชื่อมาตรฐานไว้ แล้วติดชื่อของลำนั้นไว้ในช่องของลำนั้น
+     ถ้าเปลี่ยนหัวแถวตามลำใดลำหนึ่ง อีกลำจะอ่านใบผิดทันที · จึงไม่ทำแบบนั้น */
+  var slotLbOf=function(B,kind,slot,def){
+    try{ return pjSlotLb(kind,slot,def,B.bid,_poDate); }catch(_){ return def; } };
+  var lbRow=function(kind,slot,def,k,fn,first,wfn){
+    var gos=boats.filter(isGo);
+    var vals=gos.map(function(B){ return slotLbOf(B,kind,slot,def); });
+    var uniq=vals.filter(function(v,i){ return vals.indexOf(v)===i; });
+    var kk=k, custom=null;
+    if(uniq.length===1 && uniq[0]!==def){
+      /* ตรงกันทุกลำ · แทนที่ชื่ออังกฤษ เก็บคำกำกับไทยเดิมไว้ */
+      var th=String(k).split('|')[1]||'';
+      kk=uniq[0]+(th?('|'+th):'');
+    } else if(uniq.length>1){ custom=1; }
+    var fn2=custom ? function(B,i){
+        var v=fn(B,i); if(!v) return v;
+        var lb=slotLbOf(B,kind,slot,def);
+        return (lb===def) ? v
+          : ('<span style="display:block;font-size:8.5px;font-weight:700;letter-spacing:.03em;opacity:.7">'
+             +poE(lb)+'</span>'+v);
+      } : fn;
+    return row(kk,fn2,first,wfn);
+  };
   var row=function(k,fn,first,wfn){
     return '<tr><th class="k">'+lbl(k)+'</th>'
       + boats.map(function(B){
@@ -61349,15 +61406,15 @@ function pjPrint(){
         return V?e(V.name||''):'';
       },0,function(){ return ''; })
     + band('1','NAUTICAL CREW','#E7F1EC','#0F6E56','\u0e1d\u0e48\u0e32\u0e22\u0e40\u0e14\u0e34\u0e19\u0e40\u0e23\u0e37\u0e2d')
-    + row('CAPTAIN|\u0e01\u0e31\u0e1b\u0e15\u0e31\u0e19',function(B,i){ return who(J[i].cap,0); },0,function(B){ return wkWho(B,0); })
-    + row('ASST. CAPTAIN|\u0e1c\u0e39\u0e49\u0e0a\u0e48\u0e27\u0e22',function(B,i){ return who(J[i].asst,0); },0,function(B){ return wkWho(B,1); })
+    + lbRow('go','cap','Captain','CAPTAIN|\u0e01\u0e31\u0e1b\u0e15\u0e31\u0e19',function(B,i){ return who(J[i].cap,0); },0,function(B){ return wkWho(B,0); })
+    + lbRow('go','asst','Asst. Captain','ASST. CAPTAIN|\u0e1c\u0e39\u0e49\u0e0a\u0e48\u0e27\u0e22',function(B,i){ return who(J[i].asst,0); },0,function(B){ return wkWho(B,1); })
     + (function(){ var o=''; for(var c=0;c<nCrew;c++){ (function(c){
-        o+=row('CREW '+(c+1)+(c?'':'|\u0e25\u0e39\u0e01\u0e40\u0e23\u0e37\u0e2d'),function(B,i){ return who((J[i].crew||[])[c],0); },0,
+        o+=lbRow('go','crew'+c,'Crew '+(c+1),'CREW '+(c+1)+(c?'':'|\u0e25\u0e39\u0e01\u0e40\u0e23\u0e37\u0e2d'),function(B,i){ return who((J[i].crew||[])[c],0); },0,
                (c<3)?function(B){ return wkWho(B,2+c); }:null); })(c); } return o; })()
     + (function(){ var o=''; for(var c=0;c<nIsl;c++){ (function(c){
         /* §pjLbl · "ISLAND STAFF 1 \u0e1b\u0e23\u0e30\u0e08\u0e33\u0e40\u0e01\u0e32\u0e30" ยาวเกินคอลัมน์ป้าย ตกสองบรรทัด
            ดันแถวจาก 36px เป็น 51px · ป้ายอังกฤษตรงตัวอยู่แล้ว ไม่ต้องมีคำกำกับ */
-        o+=row('ISLAND STAFF'+(nIsl>1?(' '+(c+1)):''),
+        o+=lbRow('go','island'+c,'Island Staff '+(c+1),'ISLAND STAFF'+(nIsl>1?(' '+(c+1)):''),
                function(B,i){ return who((J[i].island||[])[c],0); },0,
                (c<2)?function(B){ return wkWho(B,5+c); }:null); })(c); } return o; })()
     /* §pjHead1 · ช่องรวมงานซ่อมเคยเริ่มที่แถวแถบ GUIDES · เนื้อในสูงกว่าแถวที่คลุมรวมกัน
