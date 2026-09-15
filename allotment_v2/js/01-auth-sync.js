@@ -893,7 +893,7 @@
     document.body.appendChild(ov);
     function go(){ var u=document.getElementById('la-u').value.trim(), p=document.getElementById('la-p').value; var e=document.getElementById('la-err'); e.textContent='กำลังเข้าสู่ระบบ...';
       // §opsAuth: login is against operation-backend now, not server.js's /api/login.
-      var r=sx('POST', OPS_BACKEND+'/auth/login', JSON.stringify({username:u,password:p}), 'application/json');
+      var r=sx('POST', OPS_BACKEND+'/v1/login', JSON.stringify({username:u,password:p}), 'application/json');
       if(r.status===200 && r.json && r.json.access_token){ opsSetToken(r.json.access_token); location.reload(); }
       else { e.textContent=(r.json&&r.json.message)||'เข้าสู่ระบบไม่สำเร็จ'; } }
     document.getElementById('la-go').onclick=go;
