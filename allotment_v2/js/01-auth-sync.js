@@ -42,15 +42,37 @@
     d.innerHTML='<div style="font-size:34px">📡</div><div><b>เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ</b><br><span style="opacity:.75;font-size:13px">'+stage+' · status '+status+'</span></div><button onclick="location.reload()" style="background:#fff;color:#15396B;border:0;border-radius:10px;padding:10px 22px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit">ลองใหม่</button>';
     document.body.appendChild(d); }); }
 
-  // 1) AUTH (sync, before app init)
-  var me=sxr('/api/me');
-  if(me.status===401){ onReady(showLogin); return; }            // not logged in → login screen, do not load/sync
-  if(me.status!==200){                                           // backend unreachable
-    if(_laLocalHost()) return;                                   // local dev without backend → plain localStorage (intentional)
-    try{ console.error('[boot] /api/me failed · status '+me.status+' (retried)'); }catch(e){}
-    // §bootRetry · 404 ที่ยังไม่หายหลังลองครบ = ไม่ใช่ช่วง deploy แล้ว · บอกให้ตรงว่าน่าจะเป็นอะไร
-    bootFail(me.status===404?'auth /api/me · เซิร์ฟเวอร์อาจกำลังอัปเดต':'auth /api/me', me.status); return; }
-  ME=me.json||{}; window.LA_ME=ME;                               // expose current user (edit-lock / audit)
+  // §opsAuth (2026-09-15): auth moved off server.js's sess cookie onto operation-backend's
+  // Bearer tokens — this branch is deprecating server.js, and operation-backend has no cookie
+  // session to check. /api/me is no longer called at all. The token is a self-issued or Authentik
+  // JWT; its payload (sub/groups) is decoded client-side (NOT verified — the token is only ever
+  // sent back to operation-backend, which verifies it server-side on every request) just to know
+  // who's logged in for the sidebar. A 401 from any operation-backend call clears it and reloads
+  // to the login screen (see laOpsFetch below).
+  var OPS_BACKEND = 'https://operationbackend-production.up.railway.app';
+  var OPS_TOKEN_KEY = 'la_ops_token';
+  function opsToken(){ try{ return sessionStorage.getItem(OPS_TOKEN_KEY)||''; }catch(e){ return ''; } }
+  function opsSetToken(tok){ try{ sessionStorage.setItem(OPS_TOKEN_KEY, tok); }catch(e){} }
+  function opsClearToken(){ try{ sessionStorage.removeItem(OPS_TOKEN_KEY); }catch(e){} }
+  function opsPayload(tok){ try{ var p=String(tok).split('.')[1]; return JSON.parse(decodeURIComponent(escape(atob(p.replace(/-/g,'+').replace(/_/g,'/'))))); }catch(e){ return {}; } }
+  window.LA_OPS_BACKEND = OPS_BACKEND;
+  // Shared fetch wrapper for every operation-backend call (routes/boats/bookings/deployments/locks) —
+  // adds the Bearer header and bounces to login on a 401 so a dead/expired token never sits silently.
+  window.laOpsFetch = function(path, opts){
+    opts = opts || {}; opts.headers = opts.headers || {};
+    var tok = opsToken(); if(tok) opts.headers['Authorization'] = 'Bearer '+tok;
+    return fetch(OPS_BACKEND+path, opts).then(function(r){
+      if(r.status===401){ opsClearToken(); location.reload(); }
+      return r;
+    });
+  };
+
+  // 1) AUTH (before app init) — presence of an operation-backend token, nothing server.js-side.
+  var _opsTok = opsToken();
+  if(!_opsTok){ onReady(showLogin); return; }                    // not logged in → login screen, do not load/sync
+  var _opsPayload = opsPayload(_opsTok);
+  ME = { username: _opsPayload.sub||'', role: ((_opsPayload.groups||[]).indexOf('admin')>=0?'admin':'user'), groups: _opsPayload.groups||[] };
+  window.LA_ME=ME;                                                // expose current user (edit-lock / audit)
   // §per-user sidebar (accent colour + collapsible groups) · retry until the footer is mounted
   //  (laSbInit ran once but the sidebar footer wasn't stable yet → picker dropped)
   onReady(function(){ var _t=0; (function _go(){ try{ if(typeof laSbInit==='function') laSbInit(); }catch(e){}
@@ -182,7 +204,14 @@
       try{ x.send(); }catch(e){ fail('ส่งคำขอไม่ได้'); }
     })();
   }
-  if(ld.status!==200 || !ld.json){ _laAsyncLoad(ld.status); }
+  // §opsAuth: a 401 here is expected now — we no longer log into server.js, so its sess-cookie-gated
+  // /api/load has nothing to authenticate. That's not a transient failure to retry forever behind a
+  // blocking overlay; it means "server.js's legacy data (agents/rate types/accounting/fleet/vans/
+  // pickup/...) is unavailable in this session, only operation-backend-covered features work." Log
+  // it once and continue booting with an empty legacy state instead of hanging on the load screen.
+  if(ld.status===401){ window.LA_LEGACY_UNAVAILABLE=true;
+    try{ console.warn('[boot] /api/load 401 — server.js legacy data unavailable (expected: this branch no longer authenticates to server.js). Only operation-backend features will work.'); }catch(e){} }
+  else if(ld.status!==200 || !ld.json){ _laAsyncLoad(ld.status); }
   if(ld.status===200 && ld.json){
     VER=ld.json.version||0; LASTBY = ld.json.updated_by? (ld.json.updated_by+' · '+fmt(ld.json.updated_at)) : ''; _laStamp(ld.json);
     var _srvStr=(typeof ld.json.data==='string' && ld.json.data.length>2)?ld.json.data:'';
@@ -848,31 +877,10 @@
     no.onclick=close;
     ov.onclick=function(e){ if(e.target===ov) close(); };
     yes.onclick=function(){
-      yes.disabled=true; no.disabled=true;
-      yes.textContent='กำลังออก…'; yes.style.background='#8C9099';
-      msg.textContent='กำลังแจ้งเซิร์ฟเวอร์…'; msg.style.color='#7C8091';
-      var done=function(){ try{ location.replace(location.pathname+'?t='+Date.now()); }catch(_){ location.reload(); } };
-      var fail=function(why){
-        msg.innerHTML='<b style="color:#A32D2D">ออกจากระบบไม่สำเร็จ</b><br>'+(why||'เน็ตอาจหลุด')
-          +'<br>ลองใหม่อีกครั้ง ถ้ายังไม่ได้ให้ปิดแท็บแล้วเปิดใหม่';
-        yes.disabled=false; no.disabled=false; yes.textContent='ลองใหม่'; yes.style.background='#A32D2D';
-      };
-      try{
-        // §ssoLogout (2026-08-27): when Authentik SSO is on, the server answers /api/logout with
-        // {ssoLogout:'/auth/logout'}. Reloading the page instead would bounce through the SSO gate,
-        // Authentik would still be holding its own session, and the user would land back inside the
-        // app — a sign-out button that appears to do nothing. Go end that session too.
-        var sso=null;
-        fetch('/api/logout',{credentials:'same-origin',cache:'no-store'})
-          .then(function(r){ return r.ok?r.json():null; })
-          .then(function(j){ if(j && j.ssoLogout) sso=j.ssoLogout;
-                             return fetch('/api/me',{credentials:'same-origin',cache:'no-store'}); })
-          .then(function(r){ return r.ok?r.json():null; })
-          .then(function(j){ if(j && (j.username||j.name)) fail('เซิร์ฟเวอร์ยังจำ session นี้อยู่');
-                             else if(sso) location.replace(sso);
-                             else done(); })
-          .catch(function(e){ fail(String((e&&e.message)||e)); });
-      }catch(e){ fail(String((e&&e.message)||e)); }
+      // §opsAuth: no server.js session to end — the token is purely client-held (sessionStorage),
+      // so "logout" is just discarding it. Nothing to fail on, nothing to await.
+      opsClearToken();
+      try{ location.replace(location.pathname+'?t='+Date.now()); }catch(_){ location.reload(); }
     };
   };
 
@@ -884,8 +892,10 @@
     ov.innerHTML='<div class="la-card" style="width:380px;padding:26px 26px 22px;text-align:center"><div style="font-size:34px">🌊</div><div style="font-size:18px;font-weight:800;color:#15396B;margin:6px 0 2px">LOVE Andaman</div><div style="font-size:12px;color:#888;margin-bottom:18px">เข้าสู่ระบบเพื่อใช้งาน</div><input id="la-u" placeholder="Username" style="width:100%;box-sizing:border-box;border:1px solid #d7d3ca;border-radius:9px;padding:10px 12px;font-size:14px;margin-bottom:9px;font-family:inherit"><input id="la-p" type="password" placeholder="Password" style="width:100%;box-sizing:border-box;border:1px solid #d7d3ca;border-radius:9px;padding:10px 12px;font-size:14px;font-family:inherit"><div id="la-err" style="color:#C0392B;font-size:12px;min-height:16px;margin:8px 0"></div><button id="la-go" style="width:100%;background:#1C4A30;color:#fff;border:none;border-radius:9px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">เข้าสู่ระบบ</button></div>';
     document.body.appendChild(ov);
     function go(){ var u=document.getElementById('la-u').value.trim(), p=document.getElementById('la-p').value; var e=document.getElementById('la-err'); e.textContent='กำลังเข้าสู่ระบบ...';
-      var r=sx('POST','/api/login',JSON.stringify({username:u,password:p}),'application/json');
-      if(r.status===200){ location.reload(); } else { e.textContent=(r.json&&r.json.error)||'เข้าสู่ระบบไม่สำเร็จ'; } }
+      // §opsAuth: login is against operation-backend now, not server.js's /api/login.
+      var r=sx('POST', OPS_BACKEND+'/auth/login', JSON.stringify({username:u,password:p}), 'application/json');
+      if(r.status===200 && r.json && r.json.access_token){ opsSetToken(r.json.access_token); location.reload(); }
+      else { e.textContent=(r.json&&r.json.message)||'เข้าสู่ระบบไม่สำเร็จ'; } }
     document.getElementById('la-go').onclick=go;
     document.getElementById('la-p').addEventListener('keydown',function(ev){ if(ev.key==='Enter') go(); });
     document.getElementById('la-u').focus();
