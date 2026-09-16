@@ -779,13 +779,13 @@ function _dashSeatCalHtml(dx,F){
   var famFilter=window._dashCalFam||'';
   var month=window._dashCalMonth||(window._dashDate||TODAY_STR).slice(0,7);
   var allRoutes=(typeof ROUTES!=='undefined'?ROUTES:[]);
-  var routes=allRoutes.filter(function(r){ return !famFilter || (((typeof bkV2RouteFamily==='function'&&bkV2RouteFamily(r.id))||{}).id===famFilter); });
-  var fams={}; allRoutes.forEach(function(r){ var f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(r.id):null; if(f&&!fams[f.id]) fams[f.id]=f.name; });
+  var routes=allRoutes.filter(function(r){ return !famFilter || (((typeof bookingV2RouteFamily==='function'&&bookingV2RouteFamily(r.id))||{}).id===famFilter); });
+  var fams={}; allRoutes.forEach(function(r){ var f=(typeof bookingV2RouteFamily==='function')?bookingV2RouteFamily(r.id):null; if(f&&!fams[f.id]) fams[f.id]=f.name; });
   function dayAgg(ds){ var cap=0,free=0,booked=0,has=false,wxN=0; routes.forEach(function(r){
     // respect the program's open/closed schedule (seasons + per-day overrides) — a route marked closed that day is not running
-    if(typeof bkV2IsRouteOpenOn==='function' && !bkV2IsRouteOpenOn(r.id,ds)) return;
+    if(typeof bookingV2IsRouteOpenOn==='function' && !bookingV2IsRouteOpenOn(r.id,ds)) return;
     // trip cancelled in Boat Operation (weather) — not running, don't count its seats
-    if(typeof bkV2IsWeatherClosed==='function' && bkV2IsWeatherClosed(r.id,ds)){ wxN++; return; }
+    if(typeof bookingV2IsWeatherClosed==='function' && bookingV2IsWeatherClosed(r.id,ds)){ wxN++; return; }
     var al=(typeof getAllotment==='function')?getAllotment(r.id,ds):null; if(al&&al.hasAllotment){ has=true; cap+=al.availableCapacity||0; free+=Math.max(0,al.seatsAvailable||0); booked+=(al.seatsConsumed||0); }
   }); return {cap:cap,free:free,booked:booked,has:has,wxN:wxN}; }
   var yy=parseInt(month.slice(0,4),10), mm=parseInt(month.slice(5,7),10);
@@ -810,7 +810,7 @@ function _dashSeatCalHtml(dx,F){
     var extraLine='';
     if(!closedLike){ extraLine='<span class="p">'+a.booked+' pax'
         +(a.wxN>0?' &middot; &#9928;'+a.wxN:'')+'</span>'; }
-    var click=closedLike?'':(' onclick="bkV2OpenFiltered(\'\',\''+ds+'\')"');
+    var click=closedLike?'':(' onclick="bookingV2OpenFiltered(\'\',\''+ds+'\')"');
     cells+='<div class="dv-cell"'+click+' style="'+ring+'background:'+col[0]+';'+(closedLike?'':'cursor:pointer')+'">'
       +'<span class="d" style="color:'+col[1]+'">'+day+(today?' &middot; วันนี้':'')+'</span>'
       +'<span class="big"><span class="n" style="color:'+col[1]+'">'+num+'</span>'
@@ -845,7 +845,7 @@ function _dashSeatCalHtml(dx,F){
     +'<div class="dv-calft">'
       +'<span class="t">วันนี้'+(t.has?' &middot; <span style="color:#1B6AA6;background:#E4EFFA;border-radius:5px;padding:1px 7px;font-family:\'DM Mono\',ui-monospace,monospace">'+t.booked+' pax</span>':'')+'</span>'
       +'<span class="r"><b>'+t.free+'</b> / '+t.cap+' ที่นั่งว่าง</span>'
-      +'<button onclick="bkV2OpenFiltered(\'\',\''+TODAY_STR+'\')">เปิดวันนี้</button>'
+      +'<button onclick="bookingV2OpenFiltered(\'\',\''+TODAY_STR+'\')">เปิดวันนี้</button>'
     +'</div>'
   +'</div>';
 }
@@ -1000,13 +1000,13 @@ function _dashLiveFeedHtml(dx,F,side){
        ในฟีดสดต้องรู้ว่าใบนี้เป็นรอบไหนจริง ๆ (by Speedboat / - FS / Early OTA) จึงใช้ชื่อเต็ม */
     var t0=(b.trips||[])[0]||{};
     var _r0=(typeof getRoute==='function'&&t0.routeId)?getRoute(t0.routeId):null;
-    var rn=(_r0&&_r0.name)||(function(){ var f=(typeof bkV2RouteFamily==='function'&&t0.routeId)?bkV2RouteFamily(t0.routeId):null; return f?f.name:'—'; })();
+    var rn=(_r0&&_r0.name)||(function(){ var f=(typeof bookingV2RouteFamily==='function'&&t0.routeId)?bookingV2RouteFamily(t0.routeId):null; return f?f.name:'—'; })();
     /* §livePax · ใบจองหนึ่งใบมีได้หลายทริป (แพ็กสองวัน · ทริปต่อเนื่อง)
        ของเดิมนับ pax จากทริปแรกใบเดียว คนของทริปที่เหลือหายไปเงียบ ๆ
        เงินไม่พลาดเพราะ acctBookingTotal คิดทั้งใบอยู่แล้ว · ที่พลาดคือหัวคน */
     var _trs=(b.trips||[]);
     var pax=0;
-    if(typeof bkV2PaxAllTot==='function') _trs.forEach(function(t){ pax+=bkV2PaxAllTot(t.pax||{}); });
+    if(typeof bookingV2PaxAllTot==='function') _trs.forEach(function(t){ pax+=bookingV2PaxAllTot(t.pax||{}); });
     var val=(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0);
     var ini=(nm||'?').replace(/[^A-Za-z0-9ก-๙ ]/g,'').trim().split(/\s+/).map(function(w){return w[0];}).join('').slice(0,2).toUpperCase()||'?';
     var pair=AV[i%AV.length].split('|'); var isNew=o.ts>0 && (Date.now()-o.ts)<600000; var cx=CXL.indexOf(b.status)>=0;
@@ -1016,9 +1016,9 @@ function _dashLiveFeedHtml(dx,F,side){
        และมี 420 ใบที่ไม่มี voucherRef เลย ตัวนั้นจะตกไปใช้ id ซึ่งเป็นเลขที่ค้นได้เหมือนกัน */
     var vcRaw=String(b.voucherRef||b.code||b.id||'');
     var vc=vcRaw.length>18?(vcRaw.slice(0,17)+'\u2026'):vcRaw;
-    /* §dashV3 · สีเอเย่นต์ = สีที่ User ตั้งเองในหน้า By trip (a.color ผ่าน bkV2AgentColor)
+    /* §dashV3 · สีเอเย่นต์ = สีที่ User ตั้งเองในหน้า By trip (a.color ผ่าน bookingV2AgentColor)
        ไม่ใช่ poSignColor ซึ่งเป็นสีคนละชุดของใบเซ็นไกด์ · เจ้าไหนยังไม่ได้ตั้ง
-       bkV2AgentColor จะคืนสีจากจานมาตรฐานแบบคงที่ต่อ id (ไม่สลับสีทุก render)
+       bookingV2AgentColor จะคืนสีจากจานมาตรฐานแบบคงที่ต่อ id (ไม่สลับสีทุก render)
        ชิปขึ้น "ชื่อเอเย่นต์" ทุกใบ · ตัวย่อสองตัวอ่านไม่ออกว่าเจ้าไหน */
     var _rc=(_r0&&_r0.color)||'#7d7a74';
     var rcol=_dvInk(_rc);
@@ -1031,13 +1031,13 @@ function _dashLiveFeedHtml(dx,F,side){
         : '<span class="dv-lvmk" style="background:#FDE6EE;color:#8C2D52">'+(nm||'B2C')+'</span>';
     } else {
       /* เอาเฉพาะสีที่ User ตั้งเองจริง ๆ (a.color จากหน้า By trip)
-         bkV2AgentColor จะเดาสีจากจานมาตรฐานให้ถ้าไม่ได้ตั้ง — ในฟีดนี้ไม่เอา
+         bookingV2AgentColor จะเดาสีจากจานมาตรฐานให้ถ้าไม่ได้ตั้ง — ในฟีดนี้ไม่เอา
          เพราะสีเดา ๆ เต็มชิปบนการ์ดขาวจะกลบทุกอย่างในแถว และไม่ได้แปลว่าอะไรเลย
          เจ้าที่ยังไม่ได้ตั้งสี ใช้ชิปสีกลาง — พอ User ไปตั้งสีในหน้า By trip ก็ขึ้นเอง */
       var _ag=(typeof sbGetAgent==='function')?sbGetAgent(b.agentId):null;
       var agc=(_ag&&_ag.color)||'';
       mark='<span class="dv-lvmk" style="background:'+(agc||'#F2EFEA')+';color:'
-        +((agc&&typeof bkV2ContrastInk==='function')?bkV2ContrastInk(agc):'#5f5c56')+'" title="'
+        +((agc&&typeof bookingV2ContrastInk==='function')?bookingV2ContrastInk(agc):'#5f5c56')+'" title="'
         +String(nm||'').replace(/"/g,'&quot;')+'">'+(nm||'—')+'</span>';
     }
     var dtxt=(typeof _dashDateShort==='function')?_dashDateShort(t0.date):(t0.date||'');
@@ -1064,7 +1064,7 @@ function _dashLiveFeedHtml(dx,F,side){
     if(_dashBkDay(b)!==_sd) return;      /* §liveDay · วันที่เข้าระบบ ไม่ใช่วันที่บนใบ */
     /* §livePax · เหมือนกับในแถว · รวมหัวคนทุกทริปของใบนั้น */
     (b.trips||[]).forEach(function(t){
-      _sP+=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; });
+      _sP+=(typeof bookingV2PaxAllTot==='function')?bookingV2PaxAllTot(t.pax||{}):0; });
     _sN++;
     var _bv=(typeof acctBookingTotal==='function')?(+acctBookingTotal(b)||0):(+b.total||0);
     _sM+=_bv;
@@ -1099,12 +1099,12 @@ function _dashLiveFeedHtml(dx,F,side){
     +'<div class="dv-lvlist">'+rows+'</div>'
     +'<div class="dv-sync">'+DASH_ICO.sync+'อัปเดตเองไม่ต้องรีเฟรช</div></div>';
 }
-window.dashGoApprovals=function(){ var el=document.querySelector('[data-view=booking]'); if(el&&typeof nav==='function')nav(el); if(typeof bkV2SwitchTab==='function')bkV2SwitchTab('approvals'); };
-window.dashGoBytrip=function(ds){ if(typeof bkV2OpenFiltered==='function')bkV2OpenFiltered('',ds||TODAY_STR); };
+window.dashGoApprovals=function(){ var el=document.querySelector('[data-view=booking]'); if(el&&typeof nav==='function')nav(el); if(typeof bookingV2SwitchTab==='function')bookingV2SwitchTab('approvals'); };
+window.dashGoBytrip=function(ds){ if(typeof bookingV2OpenFiltered==='function')bookingV2OpenFiltered('',ds||TODAY_STR); };
 window.dashGoAccounting=function(){ var el=document.querySelector('[data-view=accounting]'); if(el&&typeof nav==='function')nav(el); };
 window.dashGoAgents=function(){ var el=document.querySelector('[data-view=agents]'); if(el&&typeof nav==='function')nav(el); };   /* §dashLeft */
-window.dashGoCancels=function(){ var el=document.querySelector('[data-view=booking]'); if(el&&typeof nav==='function')nav(el); if(typeof bkV2SwitchTab==='function')bkV2SwitchTab('all'); };
-window.dashOpenBooking=function(id){ var el=document.querySelector('[data-view=booking]'); if(el&&typeof nav==='function')nav(el); if(typeof bkV2OpenDetail==='function')bkV2OpenDetail(id); };
+window.dashGoCancels=function(){ var el=document.querySelector('[data-view=booking]'); if(el&&typeof nav==='function')nav(el); if(typeof bookingV2SwitchTab==='function')bookingV2SwitchTab('all'); };
+window.dashOpenBooking=function(id){ var el=document.querySelector('[data-view=booking]'); if(el&&typeof nav==='function')nav(el); if(typeof bookingV2OpenDetail==='function')bookingV2OpenDetail(id); };
 
 const DV_CSS=`<style>
   /* ══════════ §dashV3 · หน้า Dashboard โฉมใหม่ ══════════════════════════
@@ -1677,7 +1677,7 @@ function renderDash(){
     });
     // Weather-cancelled routes this day (Boat-Op weather closures) → surfaced as a marker, not counted
     let wx=0;
-    (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(r=>{ if(typeof bkV2IsWeatherClosed==='function' && bkV2IsWeatherClosed(r.id,ds)) wx++; });
+    (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(r=>{ if(typeof bookingV2IsWeatherClosed==='function' && bookingV2IsWeatherClosed(r.id,ds)) wx++; });
     // Bookings on this day → seat demand + charter pax + capacity of the boat each booking actually rides
     (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(bk=>{
       if(['cancelled','rejected','cancelled_weather'].includes(bk.status)) return;
@@ -1688,7 +1688,7 @@ function renderDash(){
         const r=getRoute(rid); if(!r) return;
         if(t.bookingMode==='charter'){
           // charter pax always from the sales booking (source of truth) — counts even if seat-season closed
-          charter+=(typeof bkV2PaxAllTot==='function'?bkV2PaxAllTot(t.pax||{}):0);
+          charter+=(typeof bookingV2PaxAllTot==='function'?bookingV2PaxAllTot(t.pax||{}):0);
           // §boatSplit · เหมา 1 ใบอาจกินหลายลำ · เดิมนับความจุแค่ลำแรก
           let _cbids=(typeof bkBoatIdsOn==='function')?bkBoatIdsOn(bk,ds):[];
           if(!_cbids.length){ const _one=t.charterBoatId||(bk.ops&&bk.ops.boatId); if(_one) _cbids=[_one]; }
@@ -2089,7 +2089,7 @@ function renderDash(){
       if(['cancelled','rejected','cancelled_weather'].includes(b.status)) return;
       const cd=String(b.bookingDate||b.createdAt||'').slice(0,10); if(!cd) return;
       const t0=(b.trips||[])[0];
-      const px=(t0 && typeof bkV2PaxAllTot==='function') ? bkV2PaxAllTot(t0.pax||{}) : 0;
+      const px=(t0 && typeof bookingV2PaxAllTot==='function') ? bookingV2PaxAllTot(t0.pax||{}) : 0;
       const e=m[cd]||(m[cd]={pax:0,bk:0}); e.bk++; e.pax+=px;
     });
     return m; })();
@@ -2398,7 +2398,7 @@ function _calTripsFor(ds, pier){
     let booked, free;
     if(isCharter){ booked = (_chtrBoat[_ck]!==undefined) ? _chtrBoat[_ck] : (op.booked||0); free = 0; }   // whole boat chartered → 0 sellable seats
     else { const take=Math.min(cap, Math.max(0, remain[x.r.id]||0)); remain[x.r.id]=(remain[x.r.id]||0)-take; booked=take; free=Math.max(0, cap-booked); }
-    const weatherClosed=(typeof bkV2IsWeatherClosed==='function' && bkV2IsWeatherClosed(x.r.id, ds));
+    const weatherClosed=(typeof bookingV2IsWeatherClosed==='function' && bookingV2IsWeatherClosed(x.r.id, ds));
     out.push({r:x.r,b:x.b,op,free,cap,booked,locked:0,isCharter,routeClosed:false,weatherClosed,
               boatDown:!!x.down, boatDownSt:x.downSt||'', boatName:x.b.name||x.b.id});   /* §calDown */
   });
@@ -2406,9 +2406,9 @@ function _calTripsFor(ds, pier){
   //   หักเฉพาะส่วนที่ยังกันอยู่ · ส่วนที่ถูกดึงไปขายแล้วอยู่ใน seatsConsumed แล้ว
   //   เกลี่ยลงเรือของเส้นทางนั้นทีละลำ (เรือเหมาลำไม่มีที่ขายอยู่แล้ว ข้ามไป)
   try{
-    if(typeof bkV2LockedTotal==='function'){
+    if(typeof bookingV2LockedTotal==='function'){
       const _lkNeed={};
-      out.forEach(o=>{ if(!o.isCharter && _lkNeed[o.r.id]===undefined) _lkNeed[o.r.id]=bkV2LockedTotal(o.r.id, ds); });
+      out.forEach(o=>{ if(!o.isCharter && _lkNeed[o.r.id]===undefined) _lkNeed[o.r.id]=bookingV2LockedTotal(o.r.id, ds); });
       out.forEach(o=>{
         if(o.isCharter) return;
         const need=_lkNeed[o.r.id]||0; if(need<=0) return;
@@ -2418,19 +2418,6 @@ function _calTripsFor(ds, pier){
     }
   }catch(e){ console.warn('[cal] lock deduction failed', e); }
   return out;
-}
-// Weather-resolution pax tally for a route+date (cancelled / rescheduled / pending) · used by Calendar
-function bkV2WeatherCountsFor(routeId, date){
-  const key=routeId+'|'+date; let cancelled=0, rescheduled=0, pending=0;
-  (SB_BOOKINGS||[]).forEach(b=>{
-    if(!b.weatherResolve || b.weatherResolve.event!==key) return;
-    const wr=b.weatherResolve;
-    const t=(b.trips||[]).find(tt=>tt.routeId===routeId) || {};
-    const p=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
-    if(wr.status==='resolved'){ if(wr.outcome==='reschedule') rescheduled+=p; else cancelled+=p; }
-    else pending+=p;
-  });
-  return {cancelled, rescheduled, pending, total:cancelled+rescheduled+pending};
 }
 function showCalDay(ds){ window._calSel=ds; renderCal(); }
 
@@ -3308,7 +3295,7 @@ function renderCal(){
       const items=g.items;
       // Weather-cancelled route → show cancellation summary instead of free seats
       if(!isClosedGroup && items.some(t=>t.weatherClosed)){
-        const wc=(typeof bkV2WeatherCountsFor==='function')?bkV2WeatherCountsFor(r.id,_sel):{cancelled:0,rescheduled:0,pending:0,total:0};
+        const wc=(typeof bookingV2WeatherCountsFor==='function')?bookingV2WeatherCountsFor(r.id,_sel):{cancelled:0,rescheduled:0,pending:0,total:0};
         const boatNames=items.map(t=>t.b.name).join(', ');
         return `<div style="padding:10px;border-radius:8px;border:1px solid #E89A92;background:#FDEEEC;margin-bottom:6px">
           <div style="display:flex;align-items:center;gap:10px">
@@ -3485,7 +3472,7 @@ function renderCal(){
         let cellHtml = '';
         // Soft selected: subtle bg tint on empty/closed cells; colored cells keep their tier color (don't over-tint)
         const selectedTint = isSel ? '#FFF6F0' : '';
-        const wxClosedCell = (typeof bkV2IsWeatherClosed==='function' && bkV2IsWeatherClosed(rt.id, ds));
+        const wxClosedCell = (typeof bookingV2IsWeatherClosed==='function' && bookingV2IsWeatherClosed(rt.id, ds));
         if(wxClosedCell){
           // Weather-cancelled → red closed cell (overrides free-seat display)
           const bg = isSel ? '#FBE0DB' : '#FCEBEB';
@@ -3497,7 +3484,7 @@ function renderCal(){
         } else if(!rd){
           // No trip · still surface seat-locks held in advance
           const bg = isSel ? selectedTint : (isWknd ? '#FCEBEB11' : '#fff');
-          const lkN = (typeof bkV2LockedTotal==='function') ? bkV2LockedTotal(rt.id, ds) : 0;
+          const lkN = (typeof bookingV2LockedTotal==='function') ? bookingV2LockedTotal(rt.id, ds) : 0;
           const lkMark = lkN>0 ? `<span style="display:block;font-size:8px;color:#C0392B;font-weight:700;line-height:1;margin-top:1px">&#128274;${lkN}</span>` : '';
           cellHtml = `<td title="No trips · ${rt.name} · ${ds}${lkN>0?` · ${lkN} locked by sales`:''}" onclick="showCalDay('${ds}')" style="text-align:center;background:${bg};color:#ddd;font-size:11px;font-family:'DM Mono',monospace;border:0.5px solid ${ink.line2};cursor:pointer;padding:4px 2px">${lkN>0?'<span style="color:#ddd">—</span>':'—'}${lkMark}</td>`;
         } else {
@@ -3511,7 +3498,7 @@ function renderCal(){
           const extraBorder = rd.routeClosed ? 'border:1px dashed #E5A847;' : `border:0.5px solid ${ink.line2};`;
           const display = isFull ? '✕' : free;
           const warn = rd.routeClosed ? '⚠' : '';
-          const lk = (typeof bkV2LockedTotal==='function') ? bkV2LockedTotal(rt.id, ds) : 0;
+          const lk = (typeof bookingV2LockedTotal==='function') ? bookingV2LockedTotal(rt.id, ds) : 0;
           const lkMark = lk>0 ? `<span style="display:block;font-size:8px;color:#C0392B;font-weight:700;line-height:1;margin-top:1px">&#128274;${lk}</span>` : '';
           // For colored cells, selection is hinted only by a subtle inset shadow on top/bottom edges (column markers)
           const selHint = isSel ? 'box-shadow:inset 0 1.5px 0 #C75A33aa, inset 0 -1.5px 0 #C75A33aa;' : '';
@@ -3675,7 +3662,7 @@ function buildDAGroups(ds){
   Object.keys(groups).forEach(pier=>{ Object.keys(groups[pier]||{}).forEach(key=>{ const g=groups[pier][key];
     // §route ไม่ออกวันนั้น (ไม่อยู่ในโปรแกรม / ปิด override / weather) → เอาออกจากลิสต์ที่นั่งว่าง
     // แม้จะมีเรือค้างจัดไว้ใน TRIPS ก็ตาม (ให้ตรงกับเที่ยวอื่นที่ไม่ออก = ไม่โชว์)
-    if(typeof bkV2IsRouteOpenOn==='function' && !bkV2IsRouteOpenOn(g.r.id, ds)){ delete groups[pier][key]; return; }
+    if(typeof bookingV2IsRouteOpenOn==='function' && !bookingV2IsRouteOpenOn(g.r.id, ds)){ delete groups[pier][key]; return; }
     if(typeof getAllotment==='function' && g.r){ const al=getAllotment(g.r.id, ds); if(al){
       // §lkAvail · ที่นั่งที่ล็อกไว้ให้เอเจ้นยังขายไม่ได้ · นับรวมกับที่ขายไปแล้ว
       //   ไม่งั้นข้อความที่ส่งเอเจ้นเจ้าอื่นจะบอกว่าว่าง ทั้งที่กันไว้ให้อีกเจ้าแล้ว
@@ -5493,9 +5480,9 @@ function bop2OpenCellPopover(routeId, dateStr, anchorEl){
     + '</div>'
     + unavailHTML
     + (_bopPast ? '' : '<div style="padding:9px 12px;border-top:1px solid var(--border)">'   /* §bopPastLock */
-    + ((typeof bkV2IsWeatherClosed==='function' && bkV2IsWeatherClosed(routeId,dateStr))
-        ? '<button onclick="bop2CloseCellPopover();bkV2WeatherMark(\'' + routeId + '\',\'' + dateStr + '\')" style="width:100%;background:#FBF0DD;color:#7A4A00;border:1px solid #EAD9B0;border-radius:6px;font-family:inherit;font-size:11.5px;font-weight:600;padding:8px;cursor:pointer">&#9928; ยกเลิกแล้ว · แก้หมายเหตุ</button>'
-        : '<button onclick="bop2CloseCellPopover();bkV2WeatherMark(\'' + routeId + '\',\'' + dateStr + '\')" style="width:100%;background:#FCEBEB;color:#A32D2D;border:1px solid #F2C0C0;border-radius:6px;font-family:inherit;font-size:11.5px;font-weight:600;padding:8px;cursor:pointer">&#9928; Cancel trip (weather)</button>')
+    + ((typeof bookingV2IsWeatherClosed==='function' && bookingV2IsWeatherClosed(routeId,dateStr))
+        ? '<button onclick="bop2CloseCellPopover();bookingV2WeatherMark(\'' + routeId + '\',\'' + dateStr + '\')" style="width:100%;background:#FBF0DD;color:#7A4A00;border:1px solid #EAD9B0;border-radius:6px;font-family:inherit;font-size:11.5px;font-weight:600;padding:8px;cursor:pointer">&#9928; ยกเลิกแล้ว · แก้หมายเหตุ</button>'
+        : '<button onclick="bop2CloseCellPopover();bookingV2WeatherMark(\'' + routeId + '\',\'' + dateStr + '\')" style="width:100%;background:#FCEBEB;color:#A32D2D;border:1px solid #F2C0C0;border-radius:6px;font-family:inherit;font-size:11.5px;font-weight:600;padding:8px;cursor:pointer">&#9928; Cancel trip (weather)</button>')
     + '</div>');
 
   // Compute position
@@ -5645,11 +5632,11 @@ function fcDay(ds){
   });
   out.routes.sort(function(a,b){ return String(a.t).localeCompare(String(b.t)); });   // เรียงตามเวลาออกเรือ
   // เส้นทางที่ยกเลิกเพราะอากาศ · เรือของเส้นทางนั้นเด้งกลับเป็นลำพร้อมเอง (ไม่มีใน TRIPS แล้ว)
-  if(typeof bkV2IsWeatherClosed==='function'){
+  if(typeof bookingV2IsWeatherClosed==='function'){
     RTS.forEach(function(r){
       if(r.active===false) return;
       if(_fc.pier!=='all' && r.pier!==_fc.pier) return;
-      try{ if(bkV2IsWeatherClosed(r.id, ds)) out.wx.push(r); }catch(_){}
+      try{ if(bookingV2IsWeatherClosed(r.id, ds)) out.wx.push(r); }catch(_){}
     });
   }
   return out;
@@ -7106,7 +7093,7 @@ function bop2RenderHeatmapRow(route, dates){
       cellInner = `<div style="font-family:Manrope,sans-serif;font-size:13px;color:${color};font-weight:700;line-height:1">${paxStr}</div><div style="margin-top:3px;width:100%">${names}${more}</div>`;
     }
 
-    const _wxClosed=(typeof bkV2IsWeatherClosed==='function')&&bkV2IsWeatherClosed(route.id,d);
+    const _wxClosed=(typeof bookingV2IsWeatherClosed==='function')&&bookingV2IsWeatherClosed(route.id,d);
     if(_wxClosed){ cellInner = '<div style="font-size:13px;line-height:1">&#9928;</div><div style="font-size:7px;color:#A32D2D;font-weight:700;line-height:1;margin-top:1px">CANCEL</div>'; }
     const minH = isMonth ? '32px' : '52px';
     const padding = isMonth ? '3px' : '5px 4px';
@@ -7682,7 +7669,7 @@ function getAllotment(routeId, dateStr, excludeBkId){
     result.availableCapacity = _cap;
     result.licenseCapacity = _cap;
     result.seatsConsumed = getSeatsConsumed(routeId, dateStr, excludeBkId);
-    result.lockedSeats = (typeof bkV2LockedTotal === 'function') ? bkV2LockedTotal(routeId, dateStr) : 0;
+    result.lockedSeats = (typeof bookingV2LockedTotal === 'function') ? bookingV2LockedTotal(routeId, dateStr) : 0;
     result.seatsAvailable = Math.max(0, _cap - result.seatsConsumed - result.lockedSeats);
     result.licenseAvailable = Math.max(0, _cap - result.seatsConsumed);
     result.fillPct = Math.round((result.seatsConsumed + result.lockedSeats) / _cap * 100);
@@ -7709,7 +7696,7 @@ function getAllotment(routeId, dateStr, excludeBkId){
   result.licenseCapacity  = result.licenseTotal - result.charterLicense;      // real seats · seat pool
   result.seatsConsumed = getSeatsConsumed(routeId, dateStr, excludeBkId);
   // Seat locks reserve seats out of the sellable pool (hard) · drawing a lock moves it from locked→booked so no double-count
-  result.lockedSeats = (typeof bkV2LockedTotal==='function') ? bkV2LockedTotal(routeId, dateStr) : 0;
+  result.lockedSeats = (typeof bookingV2LockedTotal==='function') ? bookingV2LockedTotal(routeId, dateStr) : 0;
   result.seatsAvailable = Math.max(0, result.availableCapacity - result.seatsConsumed - result.lockedSeats);
   result.licenseAvailable = Math.max(0, result.licenseCapacity - result.seatsConsumed);   // physical headroom (license − consumed)
   result.fillPct = result.availableCapacity > 0
@@ -8680,7 +8667,7 @@ function _famFillRouteSelect(r){
   let cur='';
   if(r){
     if(r.familyId!=null) cur=r.familyId;
-    else { const g=(typeof bkV2RouteFamilyGuess==='function')?bkV2RouteFamilyGuess(r):null; cur=g?g.id:''; }
+    else { const g=(typeof bookingV2RouteFamilyGuess==='function')?bookingV2RouteFamilyGuess(r):null; cur=g?g.id:''; }
   }
   const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   sel.innerHTML='<option value="">— ไม่มีกลุ่ม · จะไม่ขึ้นปฏิทิน Booking —</option>'

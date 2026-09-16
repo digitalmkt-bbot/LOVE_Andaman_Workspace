@@ -90,8 +90,8 @@ does not (03 §9.8). (06 §10.1)
 
 ### S1-04 · Weather reschedule must clear `bk.ops` — 3 pts · E2, E12
 
-`bkV2WeatherResolveOne:60032` moves `trip.date` without clearing `bk.ops` boat/van/check-in.
-`bkV2RescheduleBooking:77572` and the edit-path date change `:76886` both clear it. A
+`bookingV2WeatherResolveOne:60032` moves `trip.date` without clearing `bk.ops` boat/van/check-in.
+`bookingV2RescheduleBooking:77572` and the edit-path date change `:76886` both clear it. A
 weather-rescheduled booking silently keeps the previous day's boat and van. (01 §7)
 
 - [ ] Reuse the existing clear from `:76886` rather than writing a third variant
@@ -99,7 +99,7 @@ weather-rescheduled booking silently keeps the previous day's boat and van. (01 
 
 ### S1-05 · Partial cancel must return seat-lock draws — 5 pts · E2
 
-`bkV2PartialCancel:77728` reduces pax and money but never returns the corresponding
+`bookingV2PartialCancel:77728` reduces pax and money but never returns the corresponding
 `trips[].lockDraws`, and never touches the invoice. `lockDraws` — not the `used` counter — is the
 source of truth for lock usage (01 §7.6), so seats stay consumed against `getAllotment` forever.
 
@@ -167,7 +167,7 @@ write paths.
 
 ### S2-01 · Regression suite for the edit-preserve block — 8 pts · E3, E2
 
-`bkV2CommitBooking` rebuilds `newBk` from the form; anything not copied in the `if(editing){…}`
+`bookingV2CommitBooking` rebuilds `newBk` from the form; anything not copied in the `if(editing){…}`
 block at `:76855` is destroyed. Required carry-overs: `history`, `weatherResolve`, `rebook`,
 `invoiceId`, `paymentStatus`, `ops`, `b2cOverride`, `upgrades`, `feeItems`, `reschedule`,
 `partialCancels`, `cancellation`, `cancelCategory`, resolved `approval`, decided `focApproval`.
@@ -180,7 +180,7 @@ Losing `ops` once already wiped every boat/van assignment (fixed 2026-06-14). (0
 ### S2-02 · Seat-lock and allotment invariant tests — 8 pts · E3
 
 The rules are precise and interlocking: children contribute 0 to the pool
-(`bkV2LockPoolHold:41783`); month locks use rolling per-trip release, not a global expiry (`:41696`);
+(`bookingV2LockPoolHold:41783`); month locks use rolling per-trip release, not a global expiry (`:41696`);
 `lockDraws` is truth, not `used`; over-capacity pendings hold no seats (`bkPendHoldsSeat:12040`);
 charter never consumes seats. (01 §7.2–7.7, §7.12)
 
@@ -296,8 +296,8 @@ becomes agent credit nowhere. (06 §10.3, §10.5, §10.6)
 
 ### S3-05 · Pricing layer inconsistencies — 8 pts · E5
 
-Add-ons are priced from the base rate (`bkV2AddOnInfo:77190` → `bkV2GetRT()`) while seats and FOC use
-`bkV2GetRTForTrip()`, so a promo changing longtail prices silently does not apply — currently
+Add-ons are priced from the base rate (`bookingV2AddOnInfo:77190` → `bookingV2GetRT()`) while seats and FOC use
+`bookingV2GetRTForTrip()`, so a promo changing longtail prices silently does not apply — currently
 harmless only because no promos exist (02 §9.3). Rate validity dates never gate a price: an expired
 rate still prices a booking, and only `active===false` removes it from pickers (02 §9.2). A `paid`
 bundle suppresses `longtail-join` for the whole booking rather than per trip, so a two-route booking
@@ -309,8 +309,8 @@ drops the join charge on the route that did not bundle (02 §9.8).
 
 ### S3-06 · Timezone sweep — 3 pts · E7
 
-`bkV2LocalYMD` is the rule; several paths still use `toISOString().slice(0,10)` and land on the
-previous day before 07:00 ICT: `bkV2CommitBooking`'s `createdAt`/`bookingDate` (`:76704`, `:76844`,
+`bookingV2LocalYMD` is the rule; several paths still use `toISOString().slice(0,10)` and land on the
+previous day before 07:00 ICT: `bookingV2CommitBooking`'s `createdAt`/`bookingDate` (`:76704`, `:76844`,
 01 §7.8), `drDateShift:52758` (03 §9.13), `psuResolveProfile:40327` and `psuOpenCloneProfile:40763`
 (04 §9).
 
@@ -320,7 +320,7 @@ previous day before 07:00 ICT: `bkV2CommitBooking`'s `createdAt`/`bookingDate` (
 
 ### S3-07 · Missing status labels — 3 pts · E7
 
-`bkV2StatusLabel:69213` has no entry for `pending_approval` or `cancelled_weather`; both render as
+`bookingV2StatusLabel:69213` has no entry for `pending_approval` or `cancelled_weather`; both render as
 the raw status string. (01 §7)
 
 ---
@@ -333,7 +333,7 @@ Everything below is real and cited, but does not need scheduling yet.
 
 | ID | Story | Epic | Est |
 |---|---|---|---|
-| B-01 | `bkV2InferZone:69054` reads `bk.pickup`, a v1 field the v2 form never writes — calendar zone splits are effectively all `PK` | E7 | 3 |
+| B-01 | `bookingV2InferZone:69054` reads `bk.pickup`, a v1 field the v2 form never writes — calendar zone splits are effectively all `PK` | E7 | 3 |
 | B-02 | `ckWrite` rebuilds the whole check-in object; anything not in `CK_STAGE_KEYS:47238` is lost on the next ± press | E2 | 5 |
 | B-03 | `pjOf` field whitelist (`:82102-82104`) silently drops any new per-day job-sheet field on the next `pjSet` | E2 | 3 |
 | B-04 | Audit every screen reading `bk.ops` directly instead of `bkOpsRead`/`bkOpsFor` with an explicit date — every OVN bug traces here | E12 | 8 |

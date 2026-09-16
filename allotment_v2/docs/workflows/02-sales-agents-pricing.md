@@ -284,11 +284,11 @@ flowchart TD
 
 1. Pick a rate type, an active window, per-route travel windows, and a `priority`.
 2. Save → `ctSaveAddPromo(agentId)` (:64400) validates (rate required, both dates, `to >= from`, ≥1 route) and pushes to `SB_CONTRACTS`.
-3. At booking time `bkV2ResolveRateType(agentId, routeId, travelDate)` (:77099) picks the highest-priority active promo whose `programPeriods` covers *(route, travel date)*; ties break on later `activeFrom`.
+3. At booking time `bookingV2ResolveRateType(agentId, routeId, travelDate)` (:77099) picks the highest-priority active promo whose `programPeriods` covers *(route, travel date)*; ties break on later `activeFrom`.
 
 **Data written** — `SB_CONTRACTS[]`: `{id, agentId, kind:'promo', rateTypeId, activeFrom, activeTo, priority, version:'promo-<from>', status:'active', createdDate, createdBy, note, docId:null, programPeriods:[{routeId,bookFrom,bookTo,travelFrom,travelTo,note}]}`. Blob key `sb_contracts` (`sbContractsPersist` :39800). Void → `ctVoidContract` (:64348) sets `status`, which drops it out of the resolver.
 
-**Validation/guards** — `bkV2GetRTForTrip` (:77112) is **defensive**: it only adopts the promo rate if that rate actually prices the route (`seatRates[routeId]` or `charterRates[routeId]`), otherwise it silently keeps the base rate.
+**Validation/guards** — `bookingV2GetRTForTrip` (:77112) is **defensive**: it only adopts the promo rate if that rate actually prices the route (`seatRates[routeId]` or `charterRates[routeId]`), otherwise it silently keeps the base rate.
 
 **Failure modes** — the resolver keys on **travel date**, never booking date; `programPeriods.bookFrom/bookTo` are written but never enforced.
 
@@ -298,7 +298,7 @@ flowchart TD
 
 **Trigger** — sidebar "FOC Detail" → `renderFocDetail()` (:43926).
 
-FOC is not created here — it is a pax bucket (`trip.pax.foc` / `foc_fr` / `foc_th`) set in the booking form, with `bk.focApproval = {count, reason, status, requestedAt, requestedBy}` written by `bkV2CommitBooking` (:76795). This page aggregates: per agent → per date → per route family, split Agent vs Staff (`a.code==='STAFF'`), with `≈ value` = `focPax × (paidRevenue / paidPax)` per family (:43981). Money forgone at quote time is `quote.focDiscount` (:77239-77247) = `Σ foc_fr × adult-fr + foc_th × adult-thai` at the trip's own (possibly promo) rate.
+FOC is not created here — it is a pax bucket (`trip.pax.foc` / `foc_fr` / `foc_th`) set in the booking form, with `bk.focApproval = {count, reason, status, requestedAt, requestedBy}` written by `bookingV2CommitBooking` (:76795). This page aggregates: per agent → per date → per route family, split Agent vs Staff (`a.code==='STAFF'`), with `≈ value` = `focPax × (paidRevenue / paidPax)` per family (:43981). Money forgone at quote time is `quote.focDiscount` (:77239-77247) = `Σ foc_fr × adult-fr + foc_th × adult-thai` at the trip's own (possibly promo) rate.
 
 **Data written** — none; read-only view over `SB_BOOKINGS` + `SB_AGENTS` + `SB_SALES`.
 
@@ -352,13 +352,13 @@ FOC is not created here — it is a pax bucket (`trip.pax.foc` / `foc_fr` / `foc
 | `active` | bool | `rtToggleActive` :61095 | pickers, `/api/b2c/availability` | inactive is unassignable but still prices existing bookings |
 | `validFrom` / `validTo` | ISO date | modal | display only (`_rtValidityStatus` :61080) | **not enforced at pricing** |
 | `routes[]` | routeIds | `rtDraftToggleRoute` :62456 | every renderer | |
-| `seatRates{r}{zone}{paxType}` | number \| `null` | seat grid (`net` tier) | **`bkV2TripSubtotal` :77160** | `null` = No Offer, `undefined` = Not Set |
+| `seatRates{r}{zone}{paxType}` | number \| `null` | seat grid (`net` tier) | **`bookingV2TripSubtotal` :77160** | `null` = No Offer, `undefined` = Not Set |
 | `priceTiers{r}{z}{p}.sell/.minSell` | number | seat grid (`sell`/`minSell` tiers) | contract only (`ctRtHasTiers` :68168) | never used for money |
 | `routeValidity{r}{from,to}` | ISO dates | seat-rate row | display / program picker / contract | **not enforced at pricing** |
-| `routeBundles{r}.longtail` | `{mode:'free'\|'paid', adult, child, applyTo}` | `rtToggleBundleLongtail` :62425 | `bkV2TripSubtotal` bundle term, `bkV2AddOnFlags` :71846 | `applyTo` gate: `_rtBundleAppliesTo` :62454 |
-| `charterRates{r}{boatType}` | `{starterPrice, starterIncludes, extraPerPax}` | `rtAddCharterRow` :62475 | charter branch of `bkV2TripSubtotal` :77132 | `boatType` = lowercased `boat.type` |
-| `addOns.longtail` | `{applies[], byRoute{r:{join{adult,child},charter{price,capacity}}}}` | `_rtAddonEdit_longtail` :61445 | `bkV2AddOnInfo` :77199 | old flat shape migrated by `_rtNormalizeLongtail` :62608 |
-| `addOns.privateTransfer` | `{unit, r:{zone:{sedan,van}}}` | `_rtAddonEdit_privateTransfer` :61517 | `bkV2AddOnInfo` :77216 | old `{PK:{…}}` shape migrated in `_rtRestore` :63082 |
+| `routeBundles{r}.longtail` | `{mode:'free'\|'paid', adult, child, applyTo}` | `rtToggleBundleLongtail` :62425 | `bookingV2TripSubtotal` bundle term, `bookingV2AddOnFlags` :71846 | `applyTo` gate: `_rtBundleAppliesTo` :62454 |
+| `charterRates{r}{boatType}` | `{starterPrice, starterIncludes, extraPerPax}` | `rtAddCharterRow` :62475 | charter branch of `bookingV2TripSubtotal` :77132 | `boatType` = lowercased `boat.type` |
+| `addOns.longtail` | `{applies[], byRoute{r:{join{adult,child},charter{price,capacity}}}}` | `_rtAddonEdit_longtail` :61445 | `bookingV2AddOnInfo` :77199 | old flat shape migrated by `_rtNormalizeLongtail` :62608 |
+| `addOns.privateTransfer` | `{unit, r:{zone:{sedan,van}}}` | `_rtAddonEdit_privateTransfer` :61517 | `bookingV2AddOnInfo` :77216 | old `{PK:{…}}` shape migrated in `_rtRestore` :63082 |
 | `addOns.<customKey>` | `{applies[], price}` or `{applies[], adult, child}` | `_rtAddonEdit_generic` :61706 | contract + detail only | **no booking consumer** |
 | `nationalityScope` | `both\|thai\|fr` | modal | `rtNatPax` :62680 | column visibility only |
 
@@ -384,13 +384,13 @@ Given a booking draft `_bkV2.newBooking` with `agentId`, and per trip `{routeId,
 
 ### Step 1 — base rate type
 
-`d.rateTypeRef` is set when the agent is chosen: `bkV2SetField('agentId')` (:76273) and the typeahead pick (:74467) both do `d.rateTypeRef = agent.rateTypeId || null`. `bkV2GetRT()` (:77091) resolves it to the object.
+`d.rateTypeRef` is set when the agent is chosen: `bookingV2SetField('agentId')` (:76273) and the typeahead pick (:74467) both do `d.rateTypeRef = agent.rateTypeId || null`. `bookingV2GetRT()` (:77091) resolves it to the object.
 
 ### Step 2 — per-trip promo overlay
 
-`bkV2GetRTForTrip(trip)` (:77112):
+`bookingV2GetRTForTrip(trip)` (:77112):
 ```
-rtId = bkV2ResolveRateType(d.agentId, trip.routeId, trip.date)   // :77099
+rtId = bookingV2ResolveRateType(d.agentId, trip.routeId, trip.date)   // :77099
    → active, non-void promo contracts for this agent
    → whose activeFrom..activeTo covers trip.date
    → and whose programPeriods has this routeId with travelFrom..travelTo covering trip.date
@@ -402,9 +402,9 @@ No promo contracts exist in prod today, so this is currently a pass-through.
 
 ### Step 3 — zone
 
-`trip.zone` is set by `bkV2SetPickupArea(areaId)` (:74925) from `SB_PICKUP_AREAS[areaId].zone` (`PK` / `KL` / `NoTransfer`), **except** when the trip carries a private-van add-on (`bkV2TripPrivateVan`) — then the seat stays No-Transfer so the van is not charged twice (:74938-74942). Conversely `bkV2ToggleAddOn('transfer-…')` (:74899) forces the matching trip's `zone` to `NoTransfer`.
+`trip.zone` is set by `bookingV2SetPickupArea(areaId)` (:74925) from `SB_PICKUP_AREAS[areaId].zone` (`PK` / `KL` / `NoTransfer`), **except** when the trip carries a private-van add-on (`bookingV2TripPrivateVan`) — then the seat stays No-Transfer so the van is not charged twice (:74938-74942). Conversely `bookingV2ToggleAddOn('transfer-…')` (:74899) forces the matching trip's `zone` to `NoTransfer`.
 
-### Step 4 — per-trip subtotal · `bkV2TripSubtotal(trip)` :77122
+### Step 4 — per-trip subtotal · `bookingV2TripSubtotal(trip)` :77122
 
 **Guards first:** no rate or no `routeId` → all-zero. `trip.ovnLeg` (overnight return leg) → all-zero, `ovnLeg:true` — the seat is held but not charged twice.
 
@@ -412,7 +412,7 @@ No promo contracts exist in prod today, so this is currently a pass-through.
 ```
 boatType = BOATS[charterBoatId].type.toLowerCase()
 cr       = rt.charterRates[routeId][boatType]        // missing → {total:0, error:'no charter rate'}
-totPax   = bkV2PaxAllTot(pax)                        // ad + chd + inf + foc, all nationalities
+totPax   = bookingV2PaxAllTot(pax)                        // ad + chd + inf + foc, all nationalities
 extras   = max(0, totPax − cr.starterIncludes)
 rateTotal= cr.starterPrice + extras × cr.extraPerPax + cBundle
 cBundle  = bundle.mode==='paid' && _rtBundleAppliesTo(bundle,true)
@@ -435,14 +435,14 @@ seatTh = sr['adult-thai'] × pax.ad_th
        + sr['child-thai'] × pax.chd_th
 bundle = rt.routeBundles[routeId].longtail
          && mode==='paid' && _rtBundleAppliesTo(bundle,false)
-         ? bundle.adult × bkV2PaxTot(pax,'ad') + bundle.child × bkV2PaxTot(pax,'chd') : 0
+         ? bundle.adult × bookingV2PaxTot(pax,'ad') + bundle.child × bookingV2PaxTot(pax,'chd') : 0
 total  = seatFr + seatTh + bundle
 ```
-Infants and FOC contribute **zero** to the seat total (they are counted in `bkV2PaxAllTot` for capacity only). `bkV2PaxTot(pax,kind)` (:73497) = `pax[kind] + pax[kind+'_fr'] + pax[kind+'_th']`.
+Infants and FOC contribute **zero** to the seat total (they are counted in `bookingV2PaxAllTot` for capacity only). `bookingV2PaxTot(pax,kind)` (:73497) = `pax[kind] + pax[kind+'_fr'] + pax[kind+'_th']`.
 
-### Step 5 — add-on layer · `bkV2AddOnInfo(type)` :77189
+### Step 5 — add-on layer · `bookingV2AddOnInfo(type)` :77189
 
-Uses `bkV2GetRT()` (**base rate, not the per-trip promo** — see §9) and sums across every trip in the booking:
+Uses `bookingV2GetRT()` (**base rate, not the per-trip promo** — see §9) and sums across every trip in the booking:
 
 | `type` | resolution |
 |---|---|
@@ -453,7 +453,7 @@ Uses `bkV2GetRT()` (**base rate, not the per-trip promo** — see §9) and sums 
 
 `_rtNormalizeLongtail(lt)` (:62608) is the compatibility shim: it accepts `{byRoute}` (current), `{join,charter}` (flat), and `{adult,child}` (oldest), always returns `{applies, byRoute, join, charter}` where `join`/`charter` are the first route's prices. Old flat data with `applies` is spread across every applied route (:62626). `_rtLongtailForRoute(rt, routeId)` (:62630) is the single-route accessor.
 
-### Step 6 — booking total · `bkV2CalcQuote()` :77221
+### Step 6 — booking total · `bookingV2CalcQuote()` :77221
 
 ```
 if d.priceMode === 'manual':                                  // walk-in / B2C
@@ -464,11 +464,11 @@ if d.priceMode === 'manual':                                  // walk-in / B2C
     else: totalSeat = grandTotal, totalAddOn = 0
     → return (nothing below runs)
 
-totalSeat   = Σ bkV2TripSubtotal(t).total
+totalSeat   = Σ bookingV2TripSubtotal(t).total
 focDiscount = Σ over trips: adFrRate × (pax.foc_fr||pax.foc) + adThRate × pax.foc_th
-              (uses bkV2GetRTForTrip — promo-aware)
+              (uses bookingV2GetRTForTrip — promo-aware)
 anyBundled  = any trip route has an applicable routeBundles longtail
-totalAddOn  = Σ over d.addOns: bkV2AddOnInfo(a.type).total × (a.qty||1)
+totalAddOn  = Σ over d.addOns: bookingV2AddOnInfo(a.type).total × (a.qty||1)
               skipping type==='longtail-join' when anyBundled     // bundle already paid for it
 base        = totalSeat + totalAddOn
 totalDiscount = Σ adjustments kind==='discount'  (mode 'percent' → round(base × v/100), else round(v))
@@ -478,8 +478,8 @@ grandTotal  = max(0, base − totalDiscount + totalExtra)
 
 ### Step 7 — what is stored on the booking
 
-`bkV2CommitBooking` (:76469) writes (:76786-76815):
-- `trips[i].subtotal = bkV2TripSubtotal(t).total`
+`bookingV2CommitBooking` (:76469) writes (:76786-76815):
+- `trips[i].subtotal = bookingV2TripSubtotal(t).total`
 - `addOns[] = {type, label, amount: info.total × qty, qty, note}` — **the amount is frozen at save time**
 - `priceBreakdown = {seat: totalSeat, addOn: totalAddOn, focDiscount: −focDiscount, discount: −totalDiscount, extra: totalExtra, total: grandTotal}`
 - `total = grandTotal`, `rateTypeRef = d.rateTypeRef`
@@ -504,7 +504,7 @@ grandTotal  = max(0, base − totalDiscount + totalExtra)
 - Rate-type card preview — `_rtAddonPreview` (:61597) calls `def.summary(rt)`
 - Enable/disable checkbox — `rtToggleAddOn(key, true)` (:62636) calls `def.init(_rtDraft)`
 
-**No-code path (non-technical staff):** Rate Types → "จัดการชนิด Add-on" → create. You get a generic `perPax` (adult/child) or `flat` (single price) type with per-route `applies[]`. It appears in every rate type, prints in the contract, and shows on both detail pages. **It will not price a booking** — `bkV2AddOnInfo` (:77189) has no branch for it.
+**No-code path (non-technical staff):** Rate Types → "จัดการชนิด Add-on" → create. You get a generic `perPax` (adult/child) or `flat` (single price) type with per-route `applies[]`. It appears in every rate type, prints in the contract, and shows on both detail pages. **It will not price a booking** — `bookingV2AddOnInfo` (:77189) has no branch for it.
 
 **Code-level path (new built-in):**
 
@@ -520,9 +520,9 @@ grandTotal  = max(0, base − totalDiscount + totalExtra)
 2. Write the five functions as `_rtAddon{Detail,Contract,Edit,Summary,Init}_<key>` next to the longtail/privateTransfer pair (:61251-61596) and reference them from the def object. Follow the existing signature exactly.
 3. If routes matter, include `applies:[]` in `init` and render route chips wired to `rtToggleAddOnRoute('<key>', rId)` (:62647).
 4. **To make it price a booking** (this is the part the data-driven registry does *not* cover):
-   - add a branch in `bkV2AddOnInfo(type)` (:77189) returning `{label, total}`;
-   - add the picker UI in the booking review that calls `bkV2ToggleAddOn('<key>…')` (:74890);
-   - if it affects operations (boat/van counts), teach `bkV2AddOnFlags(bk, routeId)` (:71835) about it — today it only recognises `longtail-charter`, `longtail-join`, `transfer-*`, and a `/longtail|หางยาว/i` text fallback.
+   - add a branch in `bookingV2AddOnInfo(type)` (:77189) returning `{label, total}`;
+   - add the picker UI in the booking review that calls `bookingV2ToggleAddOn('<key>…')` (:74890);
+   - if it affects operations (boat/van counts), teach `bookingV2AddOnFlags(bk, routeId)` (:71835) about it — today it only recognises `longtail-charter`, `longtail-join`, `transfer-*`, and a `/longtail|หางยาว/i` text fallback.
 5. If the shape is new, add a normaliser (the `_rtNormalizeLongtail` pattern, :62608) and call it from every reader — never read `rt.addOns.<key>` raw.
 6. Persistence: `rt.addOns` is one JSON column, so no mapper change is needed for a new key inside it. A new **top-level** rate-type field would need a REST-index/mapper entry (see `server.js:1645-1650` for how `pricetiers`, `nationalityscope`, `owner` were added).
 7. Backup first — this touches `RT_ADDON_BUILTIN` and the rate-type render path.
@@ -568,7 +568,7 @@ All are read-modify-write on the parsed blob — they never replace the whole ob
 | **Booking (hard gate)** | Rate Type is a **required field** unless `priceMode==='manual'` or the booking is B2C | :76523 |
 | **Accounting** | `agent.vatMode` (invoice VAT), `payType` (credit vs prepaid), `creditLimit`/`creditDays` | :42900, :42921 |
 | **Travel Summary** | recomputes net from the rate type per trip, promo-aware | `tsNetOf` :52266 |
-| **Ops / trip prep** | `bkV2AddOnFlags(bk, routeId)` decides the Longtail Join / เหมา chips and the boat count; it also honours a Rate-Type **bundle** that was never materialised as a booking add-on | :71835-71853 |
+| **Ops / trip prep** | `bookingV2AddOnFlags(bk, routeId)` decides the Longtail Join / เหมา chips and the boat count; it also honours a Rate-Type **bundle** that was never materialised as a booking add-on | :71835-71853 |
 | **Contract PDF** | agent identity + `programPeriods` ∩ `rt.routes`; `rt.seatRates`, `priceTiers`, `charterRates`, `addOns` via `RT_ADDON_DEFS[].contract` | :68119-68310 |
 | **Sales Board** | `SB_SALES.targets{YYYY-MM}` vs `salesPaxAgg(ym)` (pax attributed via `agent.sales`) | :11955-12016 |
 | **B2B Dashboard** | trip-lines over `SB_BOOKINGS × SB_AGENTS × SB_SALES × SB_MARKETS` | :79312 |
@@ -582,11 +582,11 @@ All are read-modify-write on the parsed blob — they never replace the whole ob
 
 **Pricing**
 1. **`seatRates` is the only money layer.** `priceTiers.sell` / `.minSell` are contract print-outs; nothing computes from them (`ctRtHasTiers` :68168 is the only reader).
-2. **Validity dates never gate a price.** `rt.validFrom/validTo` and `rt.routeValidity` drive chips, the program picker, and the contract — `bkV2TripSubtotal` never looks at them. An expired rate still prices a booking. Only `active===false` removes a rate from *pickers* (and from the public availability API), not from existing bindings.
-3. **Add-ons are priced from the base rate, not the promo rate.** `bkV2AddOnInfo` (:77190) calls `bkV2GetRT()`, while seats and FOC use `bkV2GetRTForTrip()`. A promo that changes longtail prices will not take effect. (Currently harmless — no promos exist.)
+2. **Validity dates never gate a price.** `rt.validFrom/validTo` and `rt.routeValidity` drive chips, the program picker, and the contract — `bookingV2TripSubtotal` never looks at them. An expired rate still prices a booking. Only `active===false` removes a rate from *pickers* (and from the public availability API), not from existing bindings.
+3. **Add-ons are priced from the base rate, not the promo rate.** `bookingV2AddOnInfo` (:77190) calls `bookingV2GetRT()`, while seats and FOC use `bookingV2GetRTForTrip()`. A promo that changes longtail prices will not take effect. (Currently harmless — no promos exist.)
 4. **`noRate` has two causes**: the zone cell is `null`/missing, or both adult rates are 0 (:77163-77173). `null` is a deliberate "No Offer" marker written by `rtToggleZoneNotOffered` (:62410).
 5. **Legacy flat pax falls to foreigner rates.** `pax.ad` with no `ad_fr`/`ad_th` is priced at `adult-fr` (:77177).
-6. **Infants and FOC are always ฿0 in the seat total** but count toward capacity via `bkV2PaxAllTot` — including charter `extras` over `starterIncludes` (:77134).
+6. **Infants and FOC are always ฿0 in the seat total** but count toward capacity via `bookingV2PaxAllTot` — including charter `extras` over `starterIncludes` (:77134).
 7. **Charter `extraPerPax` is per pax over `starterIncludes`, not per pax overall.**
 8. **A `paid` bundle suppresses the `longtail-join` add-on** for the whole booking (`anyBundled`, :77253) — not per trip. A two-route booking where only one route bundles will drop the join charge on the other route too.
 9. **`applyTo` defaults to `'seat'`** (`_rtBundleAppliesTo` :62454) — a bundle created before that field existed does not apply to charter trips.
@@ -721,17 +721,17 @@ All are read-modify-write on the parsed blob — they never replace the whole ob
 | `ctDocRenderPricing(a, rt, lang, fmt)` | 68176 | contract §04 seat + charter tables |
 | `ctDocRenderAddOns(a, rt, lang, fmt)` | 68302 | contract add-on tables via `RT_ADDON_DEFS[].contract` |
 | `renderB2C()` | 68504 | direct-channel & campaign cards |
-| `bkV2AddOnFlags(bk, routeId)` | 71835 | join / charter / transfer flags for ops (bundle-aware) |
-| `bkV2PaxTot(pax, kind)` / `bkV2PaxAllTot(pax)` | 73497 / 73502 | pax roll-ups across nationality suffixes |
-| `bkV2ToggleAddOn(type)` | 74890 | add/remove a booking add-on (+ zone side-effects) |
-| `bkV2SetPickupArea(areaId)` | 74925 | sets `trip.zone` from the pickup area |
-| `bkV2CommitBooking(status)` | 76469 | validates, freezes the quote, writes the booking |
-| `bkV2GetRT()` | 77091 | booking's base rate type |
-| `bkV2ResolveRateType(agentId, routeId, travelDate)` | 77099 | promo-contract overlay resolver |
-| `bkV2GetRTForTrip(trip)` | 77112 | promo-or-base rate for one trip (defensive) |
-| `bkV2TripSubtotal(trip)` | 77122 | **the seat/charter price engine** |
-| `bkV2AddOnInfo(type)` | 77189 | add-on label + amount (longtail/transfer only) |
-| `bkV2CalcQuote()` | 77221 | whole-booking totals, FOC, adjustments |
+| `bookingV2AddOnFlags(bk, routeId)` | 71835 | join / charter / transfer flags for ops (bundle-aware) |
+| `bookingV2PaxTot(pax, kind)` / `bookingV2PaxAllTot(pax)` | 73497 / 73502 | pax roll-ups across nationality suffixes |
+| `bookingV2ToggleAddOn(type)` | 74890 | add/remove a booking add-on (+ zone side-effects) |
+| `bookingV2SetPickupArea(areaId)` | 74925 | sets `trip.zone` from the pickup area |
+| `bookingV2CommitBooking(status)` | 76469 | validates, freezes the quote, writes the booking |
+| `bookingV2GetRT()` | 77091 | booking's base rate type |
+| `bookingV2ResolveRateType(agentId, routeId, travelDate)` | 77099 | promo-contract overlay resolver |
+| `bookingV2GetRTForTrip(trip)` | 77112 | promo-or-base rate for one trip (defensive) |
+| `bookingV2TripSubtotal(trip)` | 77122 | **the seat/charter price engine** |
+| `bookingV2AddOnInfo(type)` | 77189 | add-on label + amount (longtail/transfer only) |
+| `bookingV2CalcQuote()` | 77221 | whole-booking totals, FOC, adjustments |
 | `SB_ADDON_SVCS` / `renderAddonSvc()` | 78802 / 78841 | add-on services master list (⚠ not persisted) |
 | `aosSaveModal()` | 79018 | commit a service/variant edit (RAM only) |
 | `renderB2BDash()` | 79312 | B2B sales dashboard over trip-lines |

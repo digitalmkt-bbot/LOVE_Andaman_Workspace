@@ -33,7 +33,7 @@
  * that is only ever sold on the webshop needs no ops price to bill correctly.
  *
  * What an ops price buys you is two things, both real:
- *   1. Visibility. bkV2Routes() (js/08-app.js) builds the Booking calendar from routes referenced
+ *   1. Visibility. bookingV2Routes() (js/08-app.js) builds the Booking calendar from routes referenced
  *      by an ACTIVE RATE TYPE or by an existing booking — nothing else. A brand-new route in no
  *      rate type is invisible on that screen until its first order arrives. Boat Operation is
  *      unaffected (it reads ROUTES directly), so boats can still be assigned.
@@ -79,7 +79,7 @@ const FAMILIES = [
 ];
 const FAMILY_IDS = new Set(FAMILIES.map(f => f.id));
 
-// Same keyword ladder as bkV2RouteFamilyGuess, same ORDER — "Whale Shark Phi Phi Maiton" contains
+// Same keyword ladder as bookingV2RouteFamilyGuess, same ORDER — "Whale Shark Phi Phi Maiton" contains
 // both 'Whale' and 'Phi Phi', and the first match wins. Only a convenience: familyId in the request
 // always beats it, and when neither answers the request is refused rather than guessed at.
 function guessFamily(name) {
@@ -179,7 +179,7 @@ function normalizeRoutePayload(body) {
   if (badTime) return { error: 'times: "' + badTime + '" is not a 24h HH:MM time' };
 
   // Seasons. Absent = the route runs every day: getDayStatus returns null with no seasons and
-  // bkV2IsRouteOpenOn treats that as open. A route with ONLY closed seasons still reads as open
+  // bookingV2IsRouteOpenOn treats that as open. A route with ONLY closed seasons still reads as open
   // outside them, so a seasonal product needs its open windows listed, not its closed ones.
   const seasonsIn = body.seasons === undefined ? [] : body.seasons;
   if (!Array.isArray(seasonsIn)) return { error: 'seasons must be an array of {type,from,to}' };
@@ -234,7 +234,7 @@ function normalizeRoutePayload(body) {
   if (pr.error) return { error: pr.error };
   if (pr.warnings) warnings.push(...pr.warnings);
   if (!pr.pricing) {
-    warnings.push('no pricing attached — the route will not appear on the ops Booking calendar until it is added to an active rate type or receives its first booking (bkV2Routes). Boat Operation shows it either way.');
+    warnings.push('no pricing attached — the route will not appear on the ops Booking calendar until it is added to an active rate type or receives its first booking (bookingV2Routes). Boat Operation shows it either way.');
   }
 
   return { record, pricing: pr.pricing, warnings };
@@ -362,7 +362,7 @@ async function listRoutes(res, query, ctx) {
     pool.query(`SELECT routes_id, ${qic('value')} AS v FROM ${fqt('routes__times')} ORDER BY routes_id, idx`),
     pool.query(`SELECT routes_id, ${qic('type')} AS ty, ${qic('from')} AS f, ${qic('to')} AS t
                 FROM ${fqt('routes__seasons')} ORDER BY routes_id, idx`),
-    // Which rate types carry the route — the same condition bkV2Routes() uses to decide whether the
+    // Which rate types carry the route — the same condition bookingV2Routes() uses to decide whether the
     // Booking calendar shows it at all, so a caller can see "created but invisible" without guessing.
     pool.query(`SELECT r.${qic('value')} AS route_id, rt.id, rt.code, rt.active
                 FROM ${fqt('sb_rate_types__routes')} r JOIN ${fqt('sb_rate_types')} rt ON rt.id = r.sb_rate_types_id`),
@@ -440,7 +440,7 @@ async function createRoute(res, body, ctx) {
   if (pricing) {
     const rt = await pool.query(`SELECT id, code, active FROM ${fqt('sb_rate_types')} WHERE id = $1`, [pricing.rateTypeId]);
     if (!rt.rows.length) return J(res, 400, { error: 'unknown rateTypeId "' + pricing.rateTypeId + '" — GET /api/b2c/rate-types lists valid ids' });
-    if (rt.rows[0].active !== true) warnings.push('rate type "' + rt.rows[0].code + '" is inactive — bkV2Routes ignores inactive rate types, so this route still will not show on the Booking calendar');
+    if (rt.rows[0].active !== true) warnings.push('rate type "' + rt.rows[0].code + '" is inactive — bookingV2Routes ignores inactive rate types, so this route still will not show on the Booking calendar');
     const cur = await pool.query(
       `SELECT ${qic('value')} AS v FROM ${fqt('sb_rate_types__routes')} WHERE sb_rate_types_id = $1 ORDER BY idx`, [pricing.rateTypeId]);
     const routeList = cur.rows.map(r => r.v).filter(Boolean);

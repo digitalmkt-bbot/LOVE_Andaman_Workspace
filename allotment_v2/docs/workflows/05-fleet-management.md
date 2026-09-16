@@ -126,7 +126,7 @@ erDiagram
 **Trigger** — supervisor opens `Daily Fleet Log`, picks a date, types into the Fuel / ฿-L / engine-hour cells for a boat.
 
 **Steps**
-1. `nav()` → `flRenderDR()` (`:21792`). It first calls `bkV2CharterBoatHeal(ds)` so charter bookings' boats appear in the day (`:21796`).
+1. `nav()` → `flRenderDR()` (`:21792`). It first calls `bookingV2CharterBoatHeal(ds)` so charter bookings' boats appear in the day (`:21796`).
 2. Boat set = company boats that have at least one engine: `b.ownership!=='charter' && !b.retired && FL_ENGINES.some(e=>e.boatId===b.id)` (`:21799`). Grouped into Tub Lamu / Visit Panwa / Ranong sections by `getBoatCurrentPier(b)` (`:21800-21802`, sections built at `:22228-22230`).
 3. PAX per boat is **read-only**, pulled from bookings via `flBoatBookingsFor(boatId, ds)`:12075 (`:21808`, rendered read-only at `:22125-22128`). `flSavePaxActual`:22349 still exists and still writes `FL_DAILY[ds][bid].paxActual`, but no input calls it any more **(dead-ish path)**.
 4. Fuel litres → `onchange="flSaveFuel(ds,bid,val)"` (`:22112` → `:22258`).
@@ -522,7 +522,7 @@ Written by this module:
 | `fleet_fuelbudget` | `fuelSetBudget`:29873 — **direct localStorage, not via `flSave`** |
 | `_fl_proj_migrated_v1`, `_app_hooks.*` | migration bookkeeping written by `flProjMigrate` / `flLoad` |
 
-Read but not written: `SB_BOOKINGS` (PAX per boat-day, charter detection), `TRIPS` (Boat-Op operating flags), `ROUTES`/`getRoute`, `bkV2RouteFamily`, `acctBookingTotal`.
+Read but not written: `SB_BOOKINGS` (PAX per boat-day, charter detection), `TRIPS` (Boat-Op operating flags), `ROUTES`/`getRoute`, `bookingV2RouteFamily`, `acctBookingTotal`.
 
 ---
 
@@ -555,9 +555,9 @@ Snapshots (`LS_KEY + '_snap_*'`) are the *only* fleet writes that go to real loc
 **What Fleet reads from other modules**
 
 - `SB_BOOKINGS` → `flBoatBookingsFor(boatId,date)`:12075 for PAX/routes/trips per boat-day (Daily Log, Fuel Intelligence). Cancelled statuses `['cancelled','rejected','cancelled_weather']` are excluded everywhere (`:21844`, `:29902`, `:32439`).
-- `bkV2CharterBoatHeal(ds)` is invoked by `flRenderDR` (`:21796`) so charter bookings mirror `trip.charterBoatId → ops.boatId` before the day is summed.
+- `bookingV2CharterBoatHeal(ds)` is invoked by `flRenderDR` (`:21796`) so charter bookings mirror `trip.charterBoatId → ops.boatId` before the day is summed.
 - `TRIPS[ds][boatId]` for "did this boat run" (`_flBoatRanOn`:32436, operating counts at `:22198`).
-- `bkV2RouteFamily`, `getRoute`, `acctBookingTotal` for the fuel-vs-revenue table.
+- `bookingV2RouteFamily`, `getRoute`, `acctBookingTotal` for the fuel-vs-revenue table.
 
 ---
 

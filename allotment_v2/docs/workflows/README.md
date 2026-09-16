@@ -60,23 +60,23 @@ These were found by reading the code, not by testing. Nothing here has been fixe
 - **Permission-gate mismatch.** `sbInvoicesPersist:42846` gates on `laCanEditArea('accounting')`
   but calls `acctPersistBookings:42877`, which gates on `'operations'`. An accounting-only user's
   invoice saves; the booking-side write silently returns. (06 §10)
-- **Weather reschedule keeps stale ops.** `bkV2WeatherResolveOne:60032` changes the trip date
+- **Weather reschedule keeps stale ops.** `bookingV2WeatherResolveOne:60032` changes the trip date
   without clearing `bk.ops` boat/van/check-in. Every other date-change path
-  (`bkV2RescheduleBooking:77572`, edit path `:76886`) clears it. The booking keeps the *old* day's
+  (`bookingV2RescheduleBooking:77572`, edit path `:76886`) clears it. The booking keeps the *old* day's
   boat and van. (01 §7)
-- **Partial cancel leaks seat locks.** `bkV2PartialCancel:77728` reduces pax and total but never
+- **Partial cancel leaks seat locks.** `bookingV2PartialCancel:77728` reduces pax and total but never
   returns the seat-lock draws and never touches the invoice. (01 §7)
 - **Not persisted at all:** `SB_ADDON_SVCS` (add-on services master list) and
   `ctRenewActivate:65317` (contract renewal activation). Both are RAM-only — lost on reload. (02)
 
 ### Wrong numbers
 
-- **Calendar zone split is meaningless for v2 bookings.** `bkV2InferZone:69054` reads `bk.pickup`,
+- **Calendar zone split is meaningless for v2 bookings.** `bookingV2InferZone:69054` reads `bk.pickup`,
   a v1-only field the v2 form never writes, so everything falls through to `PK`. (01 §7)
 - **`inv.whtAmount`** is rendered on the printed invoice but never written anywhere — always ฿0. (06)
 - **Voiding an invoice** does not reverse its `SB_PAYMENTS` rows. (06)
 - **`toISOString().slice(0,10)`** still used for `createdAt`/`bookingDate` (`:76704`, `:76844`)
-  despite the project's `bkV2LocalYMD` rule — off-by-one day before 07:00 local. (01)
+  despite the project's `bookingV2LocalYMD` rule — off-by-one day before 07:00 local. (01)
 
 ### Fragile by design (know before you touch)
 

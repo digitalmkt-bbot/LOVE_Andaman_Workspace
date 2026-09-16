@@ -170,7 +170,7 @@ sequenceDiagram
   participant PG as Postgres
 
   U->>G: edit a record
-  G->>P: bkV2CommitBooking / flSave / rtPersist …
+  G->>P: bookingV2CommitBooking / flSave / rtPersist …
   P->>P: d = JSON.parse(getItem(LS)||'{}')  ← reads _mem
   P->>P: d.<key> = <global>   (read-modify-write)
   P->>S: setItem(LS, JSON.stringify(d))
@@ -306,7 +306,7 @@ Booking gained "what the customer said at the pier" = `{t, at, by}`. Third time 
 | client field | `bk.ops.pierNote = {t,at,by}` on the booking record |
 | persist | already covered — booking's helper writes `d.sb_bookings` wholesale |
 | load | already covered — `_laReloadData` :41538 reloads `sb_bookings` wholesale |
-| **edit-preserve** | `bkV2CommitBooking`'s `if(editing)` block must carry `ops` over — it rebuilds a fresh object (CLAUDE.md §3.4) |
+| **edit-preserve** | `bookingV2CommitBooking`'s `if(editing)` block must carry `ops` over — it rebuilds a fresh object (CLAUDE.md §3.4) |
 | mapper | `ops.pierNote` → `ops_piernote`, kind `json_text` (whole blob in one column, so later fields inside the note need no backend change) |
 | model | `ops_piernote text` on `sb_bookings` **and** `sb_bookings__trips` |
 | DDL | `server.js:1627-1629` — `ALTER TABLE … ADD COLUMN IF NOT EXISTS "ops_piernote" text`, for both tables |
@@ -603,7 +603,7 @@ Per `HANDOFF_2026-07-04.md` §"The two environments" — **verify before trustin
 
 ### 9.5 Edit wipes sibling data on a booking
 **Symptom:** editing a booking clears its boat/van assignment, upgrades, fees, cancellation history…
-**Cause:** `bkV2CommitBooking` rebuilds a fresh object; the `if(editing)` block must carry over `ops`, `upgrades`, `feeItems`, `reschedule`, `partialCancels`, `cancellation`, `cancelCategory`, `history`, `weatherResolve`, `rebook`, `invoiceId`, `paymentStatus`. Missing one wipes it on **every** edit. (CLAUDE.md §3.4 / §6.)
+**Cause:** `bookingV2CommitBooking` rebuilds a fresh object; the `if(editing)` block must carry over `ops`, `upgrades`, `feeItems`, `reschedule`, `partialCancels`, `cancellation`, `cancelCategory`, `history`, `weatherResolve`, `rebook`, `invoiceId`, `paymentStatus`. Missing one wipes it on **every** edit. (CLAUDE.md §3.4 / §6.)
 **Recovery:** none once saved.
 
 ### 9.6 Clobbered sibling keys

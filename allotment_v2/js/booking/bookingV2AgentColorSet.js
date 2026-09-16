@@ -1,0 +1,1 @@
+function bookingV2AgentColorSet(agentId,c){ const a=(typeof sbGetAgent==='function')?sbGetAgent(agentId):null; if(!a) return; a.color=c||null; if(typeof sbAgentsPersist==='function') sbAgentsPersist(); const p=document.getElementById('bkv2-agcol-pop'); if(p) p.remove(); if(typeof bookingV2Render==='function') bookingV2Render(); }

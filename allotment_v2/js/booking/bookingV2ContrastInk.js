@@ -1,0 +1,1 @@
+function bookingV2ContrastInk(hex){ const m=String(hex||'').replace('#',''); if(m.length<6) return '#fff'; const r=parseInt(m.slice(0,2),16),g=parseInt(m.slice(2,4),16),b=parseInt(m.slice(4,6),16); return (0.299*r+0.587*g+0.114*b)>150?'#2c2c2a':'#fff'; }

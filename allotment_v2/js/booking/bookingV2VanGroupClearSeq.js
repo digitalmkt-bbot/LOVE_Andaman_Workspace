@@ -1,0 +1,1 @@
+function bookingV2VanGroupClearSeq(date, routeId, zone, gid){ _bkV2GrpApply(date,routeId,zone,gid,(b,s,o)=>{ if(s){ delete s.vanSeq; } else { delete o.vanSeq; } }); acctPersistBookings(); if(typeof bookingV2Render==='function') bookingV2Render(); }

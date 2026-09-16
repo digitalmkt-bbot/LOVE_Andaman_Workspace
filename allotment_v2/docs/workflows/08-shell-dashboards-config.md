@@ -1,7 +1,7 @@
 # 08 · App Shell, Dashboards & Config
 
 > Scope: the single-file app's structural skeleton (head/style/body/script anatomy, boot order, sidebar router, modal/toast/skin conventions) plus the four view-groups that hang off it — Dashboards & Reports, Market/Demand Intelligence, Staff & Team, Config/Dev tools. Code: `allotment_v2.html` unless noted. Line numbers are as of **`094dde1`** and drift; grep the symbol name instead.
-> Persistence, boot/load sequencing, and the write path are owned by [07-data-persistence-api.md](./07-data-persistence-api.md) — this doc only describes what the shell does *after* a value is in RAM. Booking-specific rendering is owned by [01-booking-lifecycle.md](./01-booking-lifecycle.md); this doc borrows a few shared utilities from it (`bkV2LocalYMD`, `bkV2ConfirmModal`, the `bkV2Render` sticky-offset rAF) because every other module depends on them.
+> Persistence, boot/load sequencing, and the write path are owned by [07-data-persistence-api.md](./07-data-persistence-api.md) — this doc only describes what the shell does *after* a value is in RAM. Booking-specific rendering is owned by [01-booking-lifecycle.md](./01-booking-lifecycle.md); this doc borrows a few shared utilities from it (`bookingV2LocalYMD`, `bookingV2ConfirmModal`, the `bookingV2Render` sticky-offset rAF) because every other module depends on them.
 
 ---
 
@@ -25,7 +25,7 @@ The file is not modular in any build-tool sense — it's one `<head>` + one `<bo
 | **4187–4492** | `<nav class="sidebar">` — every `.nav-item[data-view]` in the app, grouped into `.nav-section`s (§3/§4) |
 | **4493–5546** | The view containers — one `<div id="view-*" class="view">` per module, empty or with a `<div id="*-host">` mount point, in sidebar order. See the table in §6–§9 for which id belongs to which renderer. |
 | **5547–13339** | `<script>` — the core render engine: `nav()` (the router), `renderDash`, `renderCal`, `renderDA`, `renderBoats`, sidebar personalization (`laSb*`), `openModal`/`closeModal`, `renderSettings`/`renderSettingsLegacy`, ending in the legacy boot tail (`updateDate();seed();save();initOpListeners();` + deferred `renderDash()` on `DOMContentLoaded`) |
-| 13762–36196 | `<script>` — the largest single business-logic block: Agents, Rate Types, most of Booking v2 (`bkV2*`), the start of Fleet (`fl*`), ending in `flLoad()` (fleet store init) |
+| 13762–36196 | `<script>` — the largest single business-logic block: Agents, Rate Types, most of Booking v2 (`bookingV2*`), the start of Fleet (`fl*`), ending in `flLoad()` (fleet store init) |
 | 36198–38097 | Fleet modal markup interleaved with a `<script>` of fleet modal logic (engine assign, etc.) |
 | **39186–83627** | `<script>` — the remaining ~44k lines: Staff & Welfare (`staff*`), Team & Markets (`tm*`), Market/Demand Intelligence (`md*`), System Log (`devlog*`), Re-confirm, Pier Office, Accounting, and the tail of Booking v2. This is where most of §6–§9 of this doc lives. |
 | 83627 | final `</script>` |
@@ -143,15 +143,15 @@ function myNewRenderFn(){
 ```
 There are 25+ independent `const esc=...` / `function esc(...)` declarations scattered through the file (`grep -n "const esc="` to see them all) — this is intentional repetition, not an oversight to "fix" by hoisting one global.
 
-### 5.2 Date/timezone — `bkV2LocalYMD`
+### 5.2 Date/timezone — `bookingV2LocalYMD`
 
 ```js
-function bkV2LocalYMD(dt){ return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`; }   // allotment_v2.html:71746
+function bookingV2LocalYMD(dt){ return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`; }   // allotment_v2.html:71746
 ```
 
 **Wrong way:** `dt.toISOString().slice(0,10)` — this converts to UTC first. At UTC+7 (Thailand), any local time before 07:00 rolls back to the *previous* calendar day once converted to UTC, silently shifting bookings/dashboards by one day.
 
-**Right way:** `bkV2LocalYMD(dt)` everywhere a `YYYY-MM-DD` string is derived from a `Date` object — it reads `getFullYear/getMonth/getDate`, which are local-timezone accessors. Dashboards use it for date math (`pfmSetDate`, `pfmPeriodRange`) and Market Intelligence uses it via `mdToday()` (`:43100`), which falls back to the UTC-slice form only if `bkV2LocalYMD` isn't loaded yet — a defensive fallback, not a recommended pattern.
+**Right way:** `bookingV2LocalYMD(dt)` everywhere a `YYYY-MM-DD` string is derived from a `Date` object — it reads `getFullYear/getMonth/getDate`, which are local-timezone accessors. Dashboards use it for date math (`pfmSetDate`, `pfmPeriodRange`) and Market Intelligence uses it via `mdToday()` (`:43100`), which falls back to the UTC-slice form only if `bookingV2LocalYMD` isn't loaded yet — a defensive fallback, not a recommended pattern.
 
 ### 5.3 Scroll-jump on re-render → surgical update
 
@@ -200,7 +200,7 @@ Contract templates (`:67765`) capture-and-restore a preview box's own scroll bef
 Never hardcode `52` (the topbar's nominal height) for a sticky element's `top`. Two CSS custom properties carry the real, current value:
 
 - `--topbar` — defined on `:root` at `1213` (`52px`), overridden to `0px` by the `topbar-float-skin` block (`:3634`) which removed the visible top bar and floats its controls instead. Any code that assumes `52` breaks the moment that skin is toggled.
-- `--t2-vangroup-top` / `--t2-head-top` — computed **at runtime**, not in CSS, inside the `bkV2Render()` rAF (`allotment_v2.html:69240-69250`, Booking v2's tab-2 view):
+- `--t2-vangroup-top` / `--t2-head-top` — computed **at runtime**, not in CSS, inside the `bookingV2Render()` rAF (`allotment_v2.html:69240-69250`, Booking v2's tab-2 view):
   ```js
   requestAnimationFrame(() => {
     const TOP = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--topbar')) || 0;
@@ -223,7 +223,7 @@ Two coexisting patterns, both still active:
    document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', e => { if(e.target===m) m.classList.remove('open'); }));  // click-outside-closes, wired once at boot
    ```
    Used everywhere from Boat Status (`status-modal`, `boat-modal`) to every Fleet modal (`fl-modal-*`).
-2. **Dynamically created overlay** — newer code (booking v2, dev-log, most confirm dialogs) builds a `.la-modal`/`.la-card` (or a bespoke `<div style="position:fixed;inset:0...">`) with `document.createElement`, appends it to `body`, and removes it on close. The reusable instance of this pattern is `bkV2ConfirmModal(opts)` (`allotment_v2.html:75032`) — despite the `bkV2` prefix it's used app-wide (e.g. `devlogDelete` at `:44457`) as the de-facto standard confirm/cancel dialog: `{title, message, okText, cancelText, danger, onConfirm, onCancel}`, Escape/Enter keyboard support, click-outside-cancels.
+2. **Dynamically created overlay** — newer code (booking v2, dev-log, most confirm dialogs) builds a `.la-modal`/`.la-card` (or a bespoke `<div style="position:fixed;inset:0...">`) with `document.createElement`, appends it to `body`, and removes it on close. The reusable instance of this pattern is `bookingV2ConfirmModal(opts)` (`allotment_v2.html:75032`) — despite the `bookingV2` prefix it's used app-wide (e.g. `devlogDelete` at `:44457`) as the de-facto standard confirm/cancel dialog: `{title, message, okText, cancelText, danger, onConfirm, onCancel}`, Escape/Enter keyboard support, click-outside-cancels.
 
 `_laBusy()` (doc 07 §2.2) checks for `document.querySelector('.la-modal')` when deciding whether an auto soft-refresh may proceed — so a `.la-modal` dialog left open blocks background refreshes, but a `.modal-overlay` classic modal does **not** (only checked implicitly through the "focus in an input" / "interacted in last 2s" heuristics). Keep that asymmetry in mind if you add a long-lived dialog.
 
@@ -242,7 +242,7 @@ Aggregation for the selected date (`:6294-6330`):
 - Iterates `TRIPS[_ds]` (per-boat trip assignments for that date) to sum capacity (`totAllot`) per available, non-weather-closed boat, splitting **charter** trips (counted directly from `op.booked`) from **seat** trips (routes collected into a `Set`, counted afterward).
 - Separately walks `SB_BOOKINGS` for schema-v2 bookings on that date to catch boats/routes assigned purely through a booking (not present in `TRIPS`), adding their capacity too so the card total matches what the seat chart below it shows.
 - For every seat-mode route touched, calls `getSeatsConsumed(routeId, date)` (`:12046`) exactly once to get real booked pax — avoids double-counting a route with multiple boats.
-- The center card renders a month calendar (`_dashSeatCalHtml`, `:6117`) color-tiered by sell-through percentage using `getAllotment(routeId, date)` (`:12145`) per day, skipping days a route's season/override marks closed (`bkV2IsRouteOpenOn`) and flagging weather-cancelled trips (`bkV2IsWeatherClosed`) separately from "no data".
+- The center card renders a month calendar (`_dashSeatCalHtml`, `:6117`) color-tiered by sell-through percentage using `getAllotment(routeId, date)` (`:12145`) per day, skipping days a route's season/override marks closed (`bookingV2IsRouteOpenOn`) and flagging weather-cancelled trips (`bookingV2IsWeatherClosed`) separately from "no data".
 
 ### 6.2 Calendar — `#view-calendar` / `renderCal()` (`:7330`)
 A full-month, per-pier grid (`CAL_PIERS = ['tublamu','panwa','ranong']`), 5-tier color scale identical in spirit to the Dashboard's (`colorFor`/`bgFor`, `:7343-7344`) — INVERTED so **high sell-through = green**, many free seats = amber/red ("aware"). Injects its own scoped `<style>` block (`CAL2CSS`, `:7347`) once per render into the mount, containing a two-pane layout: a fixed left "today" side panel and a scrollable route/day grid.
@@ -314,7 +314,7 @@ function renderSettings(){
 Since `#prog-pink-wrap` is always present in the current markup, `renderSettingsLegacy()` is **effectively dead code** under normal operation — it only fires if that specific `<div>` were ever removed from the body markup (e.g. a partial revert of the redesign). It's kept as a safety fallback, not an alternate UI a user can reach. Both call `renderProgDetail()` at the end to paint the selected route's season editor into `#prog-detail-content`/its pink-wrap equivalent. `openRouteModal()` opens the shared add/edit-route dialog (classic `.modal-overlay` pattern, §5.6).
 
 ### 9.2 Dev tools — `#view-devlog` / `renderDevLog()` (`:44459`)
-"System Log" — an admin-only running to-do/bug/idea list, gated by `devlogIsAdmin()` (`:44449`, `role==='admin'` **or** no `LA_ME` at all — i.e. also open on the degraded localhost path where there's no login). Data is `admin_devlog`, a **JSON-string-in-a-string** top-level scalar in the blob (`devlogLoad`/`devlogSave`, `:44447-44448` — note the double `JSON.stringify`/`JSON.parse`, not a plain array field), so on the write path (doc 07 §3.1) it lands in the `sets` bucket → `app_meta`, not a proper collection table. Entries: `{id, text, tag ('task'|'bug'|'idea'), by, at, done, doneAt, doneBy}`. `devlogAdd`/`devlogToggle`/`devlogDelete` (the last routed through `bkV2ConfirmModal`, §5.6) all read-modify-write the whole array through `devlogSave`. The sidebar nav item (`data-view="devlog"`, `:4388`) carries `data-adminonly="1"`, hidden for non-admins by `laApplyAdminOnly()` independently of the `devlogIsAdmin()` check inside the renderer itself — belt and suspenders.
+"System Log" — an admin-only running to-do/bug/idea list, gated by `devlogIsAdmin()` (`:44449`, `role==='admin'` **or** no `LA_ME` at all — i.e. also open on the degraded localhost path where there's no login). Data is `admin_devlog`, a **JSON-string-in-a-string** top-level scalar in the blob (`devlogLoad`/`devlogSave`, `:44447-44448` — note the double `JSON.stringify`/`JSON.parse`, not a plain array field), so on the write path (doc 07 §3.1) it lands in the `sets` bucket → `app_meta`, not a proper collection table. Entries: `{id, text, tag ('task'|'bug'|'idea'), by, at, done, doneAt, doneBy}`. `devlogAdd`/`devlogToggle`/`devlogDelete` (the last routed through `bookingV2ConfirmModal`, §5.6) all read-modify-write the whole array through `devlogSave`. The sidebar nav item (`data-view="devlog"`, `:4388`) carries `data-adminonly="1"`, hidden for non-admins by `laApplyAdminOnly()` independently of the `devlogIsAdmin()` check inside the renderer itself — belt and suspenders.
 
 ---
 
@@ -352,7 +352,7 @@ Since `#prog-pink-wrap` is always present in the current markup, `renderSettings
 
 - **`nav()` dispatch is a hardcoded if/else chain, not a lookup table.** A new view needs a nav-item + `#view-<key>` container + a new branch in `nav()` (or the `fl-` sub-chain) — nothing auto-wires from the `data-view` attribute.
 - **`esc` is local, always.** Any new top-level HTML-building function needs its own `const esc=...` at the top or it throws on first click, silently, into the console. See §5.1.
-- **Never `toISOString().slice(0,10)`** for a date derived from a `Date` object — use `bkV2LocalYMD`. UTC+7 makes this a silent one-day-off bug for anything before 07:00 local. See §5.2.
+- **Never `toISOString().slice(0,10)`** for a date derived from a `Date` object — use `bookingV2LocalYMD`. UTC+7 makes this a silent one-day-off bug for anything before 07:00 local. See §5.2.
 - **`backdrop-filter` on a card containing a typeahead dropdown traps the dropdown behind other content.** Check what's inside before adding it. See §5.4.
 - **Sticky offsets must read `--topbar`/`--t2-vangroup-top`, never a literal `52`.** The `topbar-float-skin` re-skin already zeroes `--topbar`, and `--t2-vangroup-top` is measured at runtime, not authored. See §5.5.
 - **`renderSettingsLegacy()` is dead code under normal operation** — it only runs if `#prog-pink-wrap` is missing from the markup. Don't "fix" bugs by editing it; edit `renderSettings()`.
@@ -395,9 +395,9 @@ Since `#prog-pink-wrap` is always present in the current markup, `renderSettings
 | `poNavGroup(el)` / `poNavGroupOpen(g)` / `poNavGroupInit()` | 5990/5999/6005 | Pier-Office sidebar sub-group collapse, open, and boot-time restore |
 | `laSbInit()` | 6016 | Attaches accordion + pier-group + color-picker behavior; re-run defensively from `nav()` |
 | `openModal(id)` / `closeModal(id)` | 13166/13167 | Classic `.modal-overlay` show/hide via `.open` class |
-| `bkV2ConfirmModal(opts)` | 75032 | App-wide dynamic confirm/cancel dialog (despite the `bkV2` prefix) |
+| `bookingV2ConfirmModal(opts)` | 75032 | App-wide dynamic confirm/cancel dialog (despite the `bookingV2` prefix) |
 | `_laToast(msg)` | 456 | Bottom-right amber toast, 2.6s auto-dismiss |
-| `bkV2LocalYMD(dt)` | 71746 | Local-timezone `YYYY-MM-DD` — the timezone-safe date formatter |
+| `bookingV2LocalYMD(dt)` | 71746 | Local-timezone `YYYY-MM-DD` — the timezone-safe date formatter |
 | `updateDate()` | 6100 | Paints the topbar date label |
 | `refreshData()` | 6097 | `seed(); renderDash();` — manual "↻ Refresh" topbar button |
 | `renderDash()` | 6271 | Dashboard renderer |

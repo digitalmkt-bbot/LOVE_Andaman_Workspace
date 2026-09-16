@@ -1,0 +1,4 @@
+function bookingV2AttachCapture(){
+  if(!(navigator.mediaDevices&&navigator.mediaDevices.getDisplayMedia)){ alert('เบราว์เซอร์นี้ไม่รองรับ Capture · ใช้ อัปโหลด หรือ วางรูป ('+(_bkV2IsMac()?'Cmd+V':'Ctrl+V')+') แทน'); return; }
+  navigator.mediaDevices.getDisplayMedia({video:{width:{ideal:3840},height:{ideal:2160}}}).then(stream=>{ const v=document.createElement('video'); v.srcObject=stream; v.muted=true; v.play(); setTimeout(()=>{ try{ const c=document.createElement('canvas'); c.width=v.videoWidth||1280; c.height=v.videoHeight||720; const _cx=c.getContext('2d'); try{_cx.imageSmoothingEnabled=true;_cx.imageSmoothingQuality='high';}catch(_){} _cx.drawImage(v,0,0,c.width,c.height); stream.getTracks().forEach(t=>t.stop()); c.toBlob(b=>{ if(b) bookingV2AttachUpload(new File([b],'capture-'+Date.now()+'.jpg',{type:'image/jpeg'}),'capture'); },'image/jpeg',0.95); }catch(e){ try{stream.getTracks().forEach(t=>t.stop());}catch(_){} } },350); }).catch(e=>{});
+}

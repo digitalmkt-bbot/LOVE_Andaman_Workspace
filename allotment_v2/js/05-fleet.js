@@ -8428,7 +8428,7 @@ function flRenderDR(){
   const dateEl=document.getElementById('fl-dr-date');
   if(!dateEl.value)dateEl.value=TODAY_STR;
   const ds=dateEl.value;
-  if(typeof bkV2CharterBoatHeal==='function') bkV2CharterBoatHeal(ds);   // charter booking → ops.boatId so Daily log counts it
+  if(typeof bookingV2CharterBoatHeal==='function') bookingV2CharterBoatHeal(ds);   // charter booking → ops.boatId so Daily log counts it
 
   // Computed metrics for the day
   const companyBoats=BOATS.filter(b=>b.ownership!=='charter'&&!b.retired&&FL_ENGINES.some(e=>e.boatId===b.id));
@@ -8732,12 +8732,12 @@ function flRenderDR(){
     const ran=!!bp.ranDespite;   // marked fixing/unavailable but actually ran that day ("ออกแล้วเสียเย็น")
     const pax=bp.eff;
     // ⚠ orphan: a booking points to this boat but the boat was pulled from Boat Operation for this date
-    //    (removed · now chartered · or now serving a different route). Today + future only · uses shared bkV2BoatPulled.
-    const orphanWarn = (!isNotAvail && (typeof bkV2BoatPulled==='function') && (SB_BOOKINGS||[]).some(_ob=>{
+    //    (removed · now chartered · or now serving a different route). Today + future only · uses shared bookingV2BoatPulled.
+    const orphanWarn = (!isNotAvail && (typeof bookingV2BoatPulled==='function') && (SB_BOOKINGS||[]).some(_ob=>{
       if(['cancelled','rejected','cancelled_weather'].includes(_ob.status)) return false;
       if(!(_ob.ops && _ob.ops.boatId===b.id)) return false;
       if(!(_ob.trips||[]).some(_t=>(_t.date||'')===ds)) return false;
-      return bkV2BoatPulled(_ob, ds);
+      return bookingV2BoatPulled(_ob, ds);
     }));
     const fuel=dayDR?.fuel;
     const isAnomaly=anomalies.find(a=>a.bid===b.id);
@@ -17183,7 +17183,7 @@ function _fuelAgg(month){
       bb.fuel+=fuel; bb.cost+=cost; bb.pax+=info.pax; bb.runH+=runH; bb.days++;
       if(fuel>0) bb.fdays.push(fuel); else { bb.missing++; out.missing.push({name:b.name,ds,route:((getRoute(Object.keys(info.routes||{})[0])||{}).name)||''}); }
       const rk=Object.keys(info.routes||{}); const nr=rk.length||1;
-      rk.forEach(rid=>{ const fam=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(rid):null; const fid=(fam&&fam.id)||rid; const fnm=(fam&&fam.name)||((getRoute(rid)||{}).name)||rid; const ff=out.byFam[fid]=out.byFam[fid]||{name:fnm,fuel:0,cost:0,pax:0,rev:0}; const share=info.pax>0?(info.routes[rid]/info.pax):(1/nr); ff.fuel+=fuel*share; ff.cost+=cost*share; ff.pax+=info.routes[rid];
+      rk.forEach(rid=>{ const fam=(typeof bookingV2RouteFamily==='function')?bookingV2RouteFamily(rid):null; const fid=(fam&&fam.id)||rid; const fnm=(fam&&fam.name)||((getRoute(rid)||{}).name)||rid; const ff=out.byFam[fid]=out.byFam[fid]||{name:fnm,fuel:0,cost:0,pax:0,rev:0}; const share=info.pax>0?(info.routes[rid]/info.pax):(1/nr); ff.fuel+=fuel*share; ff.cost+=cost*share; ff.pax+=info.routes[rid];
         const rnm=((getRoute(rid)||{}).name)||rid; const brk=bb.routes[rid]=bb.routes[rid]||{name:rnm,fuel:0,cost:0,pax:0,days:0}; brk.fuel+=fuel*share; brk.cost+=cost*share; brk.pax+=info.routes[rid]; brk.days++; });
       if(fuel>0 && rk.length===0){ const brk=bb.routes._none=bb.routes._none||{name:'ไม่ระบุเส้นทาง',fuel:0,cost:0,pax:0,days:0}; brk.fuel+=fuel; brk.cost+=cost; brk.days++; }
       out.fuel+=fuel; out.cost+=cost; out.pax+=info.pax;
@@ -17193,7 +17193,7 @@ function _fuelAgg(month){
   Object.values(out.byBoat).forEach(bb=>{ if(bb.fdays.length>=3){ const avg=bb.fdays.reduce((s,x)=>s+x,0)/bb.fdays.length; } });
   Object.keys(out.byBoat).forEach(bid=>{ const bb=out.byBoat[bid]; if(bb.fdays.length>=3){ const avg=bb.fdays.reduce((s,x)=>s+x,0)/bb.fdays.length; Object.keys(FL_DAILY).filter(ds=>ds.slice(0,7)===month&&FL_DAILY[ds][bid]&&+FL_DAILY[ds][bid].fuel>avg*1.3).forEach(ds=>{ const f=+FL_DAILY[ds][bid].fuel; out.anomalies.push({name:bb.name,ds,fuel:Math.round(f),avg:Math.round(avg),pct:Math.round((f/avg-1)*100)}); }); } });
   out.anomalies.sort((a,b)=>b.pct-a.pct);
-  (SB_BOOKINGS||[]).forEach(bk=>{ if(['cancelled','rejected','cancelled_weather'].includes(bk.status))return; const trs=(bk.trips||[]).filter(t=>(t.date||'').slice(0,7)===month); if(!trs.length)return; const tot=(typeof acctBookingTotal==='function')?acctBookingTotal(bk):(bk.total||0); trs.forEach(t=>{ const fam=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(t.routeId):null; const fid=(fam&&fam.id)||t.routeId; const fnm=(fam&&fam.name)||((getRoute(t.routeId)||{}).name)||t.routeId; const ff=out.byFam[fid]=out.byFam[fid]||{name:fnm,fuel:0,cost:0,pax:0,rev:0}; ff.rev+=(t.subtotal>0?t.subtotal:(tot/trs.length)); }); });
+  (SB_BOOKINGS||[]).forEach(bk=>{ if(['cancelled','rejected','cancelled_weather'].includes(bk.status))return; const trs=(bk.trips||[]).filter(t=>(t.date||'').slice(0,7)===month); if(!trs.length)return; const tot=(typeof acctBookingTotal==='function')?acctBookingTotal(bk):(bk.total||0); trs.forEach(t=>{ const fam=(typeof bookingV2RouteFamily==='function')?bookingV2RouteFamily(t.routeId):null; const fid=(fam&&fam.id)||t.routeId; const fnm=(fam&&fam.name)||((getRoute(t.routeId)||{}).name)||t.routeId; const ff=out.byFam[fid]=out.byFam[fid]||{name:fnm,fuel:0,cost:0,pax:0,rev:0}; ff.rev+=(t.subtotal>0?t.subtotal:(tot/trs.length)); }); });
   return out;
 }
 // §fuelWk · ยอดรายลำ แยกรายสัปดาห์ · ตรรกะต่อวันเหมือน _fuelAgg เป๊ะ (ราคา · ชั่วโมงเครื่อง · เงื่อนไข "ออกจริง")
@@ -17262,7 +17262,7 @@ function renderFuelIntel(){
   const ci=(i)=>PAL[i%PAL.length];
   const fuelMax=Math.max(1,...boats.map(b=>b.fuel));
   const av=name=>{ const w=String(name).split(/\s+/); if(w.length>=2)return (w[0][0]+w[1][0]).toUpperCase(); if(/\d/.test(name))return ((String(name).match(/[A-Z]/)||[String(name)[0]])[0]+String(name).slice(-1)).toUpperCase(); return String(name).slice(0,2).toUpperCase(); };
-  const avc=bid=>(typeof bkV2BoatAvatarColor==='function')?bkV2BoatAvatarColor(bid):'#185FA5';
+  const avc=bid=>(typeof bookingV2BoatAvatarColor==='function')?bookingV2BoatAvatarColor(bid):'#185FA5';
   if(a.tripDays===0){ wrap.innerHTML=`<div style="text-align:center;color:${ink3};padding:60px 20px;font-size:13px"><div style="font-size:15px;font-weight:600;color:#666;margin-bottom:4px">ยังไม่มีข้อมูลน้ำมันเดือน ${THM} ${yy+543}</div>กรอกน้ำมันใน Daily Fleet Log ก่อน <button onclick="fuelMonthShift(-1)" style="margin-left:8px;background:#fff;border:1px solid #ddd;border-radius:8px;padding:4px 10px;cursor:pointer">‹ เดือนก่อน</button></div>`; return; }
   const grandMiss=boats.reduce((s,b)=>s+(b.missing||0),0);
   const boatRows=boats.map((b,i)=>{ const c=avc(b.id), bar=Math.round(b.fuel/fuelMax*100); const M="font-family:'DM Mono',monospace;text-align:right";

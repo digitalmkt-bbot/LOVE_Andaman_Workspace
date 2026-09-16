@@ -37,8 +37,8 @@ The three groups are linked by one shared idea — a **trip = Route × Date × B
 ### 2.1 Program / Routes  `(catalog · the spine)`
 - **Store:** `ROUTES` (seed `DEFAULT_ROUTES`, ~line 3328) · persisted in `loveandaman_v2`.
 - **Key fields:** `id` (`r1`…`r12`), `name`, `islands`, `times[]` (departure times), `color`, `pier` (`tublamu`|`panwa`), `seasons[]` = `{id, type:'open'|'closed', from, to}`.
-- **Program family:** routes are grouped into 5 **programs** via `bkV2RouteFamily()` (name-pattern match): `_BKV2_FAMILIES` = Similan Islands · Surin Islands · Phi Phi Bamboo · Krabi + Phang Nga · Whale Shark Phi Phi Maiton.
-- **Open/closed on a date:** `bkV2IsRouteOpenOn(routeId, date)` / `getDayStatus(route, date)` read `seasons[]` → off-season routes render hatched/closed.
+- **Program family:** routes are grouped into 5 **programs** via `bookingV2RouteFamily()` (name-pattern match): `_BKV2_FAMILIES` = Similan Islands · Surin Islands · Phi Phi Bamboo · Krabi + Phang Nga · Whale Shark Phi Phi Maiton.
+- **Open/closed on a date:** `bookingV2IsRouteOpenOn(routeId, date)` / `getDayStatus(route, date)` read `seasons[]` → off-season routes render hatched/closed.
 - **Role:** the master list of what can be sold and run. Everything references a `routeId`.
 
 ### 2.2 Boat Status  `(fleet readiness)`
@@ -77,10 +77,10 @@ The three groups are linked by one shared idea — a **trip = Route × Date × B
 
 ### 2.8 Booking  `(what's sold · central hub)`
 - **Store:** `SB_BOOKINGS` · key `sb_bookings`.
-- **View:** `#view-booking` → `bkV2Render()`. Tabs (`_bkV2.tab`): `cal` (Calendar/Matrix) · `bytrip` (By-trip-date manifest) · `all` (linear list) · `locks` (Seat Locks).
+- **View:** `#view-booking` → `bookingV2Render()`. Tabs (`_bkV2.tab`): `cal` (Calendar/Matrix) · `bytrip` (By-trip-date manifest) · `all` (linear list) · `locks` (Seat Locks).
 - **Key fields:** `id`, `agentId` | `b2cChannel`, `rateTypeRef`, `leadPax`/`passengers[]`, `pickupAreaId`/`pickupZone`, `trips[]` = `{routeId, date, zone, pax{ad,chd,inf,foc}, bookingMode:'seat'|'charter', charterBoatId, pickupTime, subtotal, seatSource, lockDraws}`, `addOns[]`, `adjustments[]` (discount/extra), `priceBreakdown`, `status`, `weatherResolve` (§5.3), `rebook`, `history[]` (audit timeline), `incomplete[]` (soft-missing fields).
 - **Forecasting record (2026-06-04):** each booking is self-contained for demand/market trend analysis — `bookingDate` (date booked · editable later), `bookedAt` (exact ISO timestamp), `marketSnapshot` `{market, sub, agentId, at}` (frozen at create time so trends stay correct even if the agent later changes market). Pair with `trips[].date` (travel date) to compute **lead time** = travelDate − bookingDate. Query: group by `marketSnapshot.market` × `bookingDate` (booking curve) or × `trips.date` (travel demand).
-- **Quote:** `bkV2CalcQuote()` builds price from the bound **Rate Type** (seat + charter + add-ons + bundles) − discounts + extras.
+- **Quote:** `bookingV2CalcQuote()` builds price from the bound **Rate Type** (seat + charter + add-ons + bundles) − discounts + extras.
 - **Role:** converges Agent + Rate Type + Pickup + Program + Boat Operation capacity into a sellable, priced, manifested trip; emits invoices/payments to Accounting; draws Seat Locks.
 
 ### 2.9 Seat Locks  `(held inventory)`
@@ -170,7 +170,7 @@ flowchart LR
 `getAllotment(route, date)` → `seatsAvailable = availableCapacity − seatsConsumed − lockedSeats`.
 - `availableCapacity` = Σ cap of **seat** boats assigned in Boat Operation (Boat Status must be `available`).
 - `seatsConsumed` = Σ pax of confirmed seat bookings (`getSeatsConsumed`, excludes `cancelled` / `rejected` / `cancelled_weather`).
-- `lockedSeats` = `bkV2LockedTotal(route,date)` from Seat Locks.
+- `lockedSeats` = `bookingV2LockedTotal(route,date)` from Seat Locks.
 Booking commit hard-blocks any booking that would consume locked seats it didn't draw.
 
 ### 5.2 Agent credit

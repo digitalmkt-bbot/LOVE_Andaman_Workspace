@@ -2,7 +2,7 @@
 
 > Audience: the B2C / webshop team — but **most of the remaining work is ours.**
 > Ops side: `server.js` `mapB2CItemBooking` (line 278), `b2cLineSeat` (line 262) · app side:
-> `allotment_v2.html` `bkV2AddOnFlags` (line 64132)
+> `allotment_v2.html` `bookingV2AddOnFlags` (line 64132)
 > Status: **B2C sends add-ons and sends enough to price them. Ops discards them.**
 > One open question for B2C (§4 Q1). Everything else is an ops-side build.
 
@@ -43,7 +43,7 @@ ops thinks is worth ฿7,000.
 
 Consequence: **a B2C guest who bought an add-on is invisible to ops.** For longtail specifically
 they do not appear in the trip-prep count that tells staff how many boats to arrange
-(`bkV2AddOnFlags` returns `join:false`, so `ltJoinPax += _rp` at `allotment_v2.html:64572` never
+(`bookingV2AddOnFlags` returns `join:false`, so `ltJoinPax += _rp` at `allotment_v2.html:64572` never
 runs), they are absent from the manifest add-on column, and the money is not attributed as add-on
 revenue.
 
@@ -84,7 +84,7 @@ Ops has two longtail products, and they behave differently:
 | Price | adult / child differ (rt003: ฿400 / ฿300) | flat per boat (rt003 r10: ฿1,500 / 6 pax) |
 
 They are **mutually exclusive per booking** — if a booking carries a charter, ops ignores any join
-on it (`bkV2AddOnFlags`, `allotment_v2.html:64132`).
+on it (`bookingV2AddOnFlags`, `allotment_v2.html:64132`).
 
 A working B2B record, for reference — this is the shape the importer must produce:
 
@@ -212,7 +212,7 @@ No action needed from B2C. This is now unblocked except for the AD-001/AD-002 la
    for any booking flagged as join (`allotment_v2.html:64572`), which is right for B2B but would
    over-count a B2C partial selection.
 5. Manifest / pier check-in pick it up automatically once `addOns[]` is populated, since both read
-   through the shared `bkV2AddOnFlags` resolver.
+   through the shared `bookingV2AddOnFlags` resolver.
 6. Backfill the 16 existing orders whose add-ons were dropped — the money is derivable for all of
    them (§3.2), so this is a re-import rather than a data-entry exercise.
 

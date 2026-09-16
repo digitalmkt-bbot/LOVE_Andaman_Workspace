@@ -38,7 +38,7 @@ else if(view==='accounting') renderAccounting();
 ```
 No modal/overlay in this domain has its own top-level view — invoice/payment/deposit/statement all run inside `acctModal()` (`:59046`) or `acctOpenDoc()` (`:59335`) over the current page.
 
-Booking-side entry points that reach into this domain: `bkV2PayChip(bk)` `:59481` (the Pay-status chip on the Tab-2 manifest row) and `bkV2RowPayAction(bkId)` `:59564` (click that chip → the same invoice/payment modal, without leaving Booking).
+Booking-side entry points that reach into this domain: `bookingV2PayChip(bk)` `:59481` (the Pay-status chip on the Tab-2 manifest row) and `bookingV2RowPayAction(bkId)` `:59564` (click that chip → the same invoice/payment modal, without leaving Booking).
 
 ---
 
@@ -46,15 +46,15 @@ Booking-side entry points that reach into this domain: `bkV2PayChip(bk)` `:59481
 
 ```mermaid
 flowchart LR
-  A["Booking committed<br/>bkV2CommitBooking :76469<br/>(01-booking-lifecycle.md)"] --> B["bk.total / bk.priceBreakdown<br/>frozen at save time"]
+  A["Booking committed<br/>bookingV2CommitBooking :76469<br/>(01-booking-lifecycle.md)"] --> B["bk.total / bk.priceBreakdown<br/>frozen at save time"]
   B --> C{"How is it billed?"}
   C -->|"payType=invoice, staff issues"| D["acctCreateInvoice :42921<br/>(Accounting page)"]
   C -->|"payType=proforma, cutoff-driven"| E["acctCreateInvoice(...,0) :42921<br/>via pfmIssueInvoice :44926 (Daily PFM)"]
-  C -->|"booking row 'ออก...'"| F["bkV2PayDoCreate :59595<br/>(Booking Tab-2 chip)"]
+  C -->|"booking row 'ออก...'"| F["bookingV2PayDoCreate :59595<br/>(Booking Tab-2 chip)"]
   D --> G[SB_INVOICES record]
   E --> G
   F --> G
-  G --> H["acctRecordPayment :42944<br/>/ pfmRecSubmit :44966<br/>/ bkV2PayDoRecord :59601"]
+  G --> H["acctRecordPayment :42944<br/>/ pfmRecSubmit :44966<br/>/ bookingV2PayDoRecord :59601"]
   H --> I[SB_PAYMENTS record]
   I --> J{Balance <= 0?}
   J -->|yes| K["inv.status='paid'<br/>bk.paymentStatus='paid'"]
@@ -68,7 +68,7 @@ flowchart LR
   B --> Q["tsTripAmount :51566<br/>(Travel Summary / Trip P&L revenue —<br/>independent of invoice status)"]
   Q --> R["pxTrip :56478 → ctCalc :56194<br/>(Costing template + plan)"]
   R --> S["profit = revNet − cost<br/>pxClose :56610 freezes it"]
-  T["Cancel / void<br/>acctVoidInvoice :42961<br/>bkV2CancelBooking → acctCreateFeeInvoice :76346"] -.-> G
+  T["Cancel / void<br/>acctVoidInvoice :42961<br/>bookingV2CancelBooking → acctCreateFeeInvoice :76346"] -.-> G
 ```
 
 Key point: **the P&L side (Q→S) never reads `SB_INVOICES`.** Trip revenue comes straight from `bk.total`/`trip.subtotal` via `tsTripAmount()`, so a trip's profit is known the moment pax actually travel (from check-in), regardless of whether accounting has invoiced or collected the money yet. Invoicing/payment (D→L) and P&L (Q→S) are two independent consumers of the same frozen `priceBreakdown`.
@@ -86,7 +86,7 @@ Key point: **the P&L side (Q→S) never reads `SB_INVOICES`.** Trip revenue come
 2. Picking an agent (`_acctNewInvAgent`) re-renders the checklist of that agent's un-invoiced bookings, each pre-checked, amount = `acctBookingTotal(b)` `:42883`.
 3. `acctNewInvoiceSum()` `:59091` live-totals the ticked checkboxes (no full re-render — keeps checkbox state).
 4. Submit → `acctNewInvoiceCreate()` `:59096`: due days = `agent.creditDays || (payType==='invoice' ? 30 : 0)`, calls `acctCreateInvoice(agentId, ids, dueDays)` `:42921`.
-5. `acctCreateInvoice` sums `acctBookingTotal(b)` over the picked ids, applies the agent's `vatMode` (see §5), builds the `SB_INVOICES` record, `sbInvoicesPersist()`, then stamps every booking with `invoiceId`/`paymentStatus:'invoiced'`, a history line (`bkV2AddHistory`), and `acctPersistBookings()`.
+5. `acctCreateInvoice` sums `acctBookingTotal(b)` over the picked ids, applies the agent's `vatMode` (see §5), builds the `SB_INVOICES` record, `sbInvoicesPersist()`, then stamps every booking with `invoiceId`/`paymentStatus:'invoiced'`, a history line (`bookingV2AddHistory`), and `acctPersistBookings()`.
 
 **Data written** — `SB_INVOICES[]` new record: `{id, number, agentId, bookingIds[], lineItems:[], subtotal, netAmount, vatMode, vatRate, vatAmount, depositApplied:0, total, issuedAt, dueAt, status:'issued', createdBy}`. Each booking: `invoiceId`, `paymentStatus:'invoiced'`, `history[]` entry.
 
@@ -111,12 +111,12 @@ Key point: **the P&L side (Q→S) never reads `SB_INVOICES`.** Trip revenue come
 
 Three UI entry points, one function: `acctRecordPayment(invoiceId, amount, method, opt)` `:42944`.
 
-**Trigger** — "บันทึกรับเงิน" button in the Accounting invoice-row modal (`acctPayOpen` `:59105` → `acctPaySubmit` `:59129`), the Daily PFM Record modal (`pfmRecordPayment` `:44934` → `pfmRecSubmit` `:44966`), or the Booking Tab-2 Pay chip (`bkV2RowPayAction` `:59564` → `bkV2PayDoRecord` `:59601`).
+**Trigger** — "บันทึกรับเงิน" button in the Accounting invoice-row modal (`acctPayOpen` `:59105` → `acctPaySubmit` `:59129`), the Daily PFM Record modal (`pfmRecordPayment` `:44934` → `pfmRecSubmit` `:44966`), or the Booking Tab-2 Pay chip (`bookingV2RowPayAction` `:59564` → `bookingV2PayDoRecord` `:59601`).
 
 **Steps**
 1. Amount defaults to the invoice's current balance (`acctInvoiceBalance(inv)` `:42889`), method is `transfer`/`cash`/`card`.
 2. The Daily PFM path additionally supports a **payment-slip attachment**: upload / screen-capture (`getDisplayMedia`) / clipboard-paste, all funnelled through `pfmSlipUpload(file,kind)` `:44954` → `POST /api/attach` (max 6 MB, downsized to 1600px if an image), producing `{id, name, mime, size, kind, at}` refs held on `_pfmRec.slips[]` until submit.
-3. `acctRecordPayment` pushes a `SB_PAYMENTS` row `{id, invoiceId, agentId, amount, method, date, type:'payment', ref?, slips?}`, `sbPaymentsPersist()`, recomputes `inv.status` (`paid` if balance ≤ 0 else `partial`), `sbInvoicesPersist()`, stamps every linked booking's `paymentStatus`, `bkV2AddHistory`, `acctPersistBookings()`.
+3. `acctRecordPayment` pushes a `SB_PAYMENTS` row `{id, invoiceId, agentId, amount, method, date, type:'payment', ref?, slips?}`, `sbPaymentsPersist()`, recomputes `inv.status` (`paid` if balance ≤ 0 else `partial`), `sbInvoicesPersist()`, stamps every linked booking's `paymentStatus`, `bookingV2AddHistory`, `acctPersistBookings()`.
 4. The Daily PFM submit path (`pfmRecSubmit` `:44966`) additionally copies the slip refs onto `b.paymentSlips[]` (with `amount`/`at`/`by`) so they can be reviewed later independent of the payment record, via `acctPersistBookings()`.
 
 **Data written** — `SB_PAYMENTS[]` new row; `inv.status`; `bk.paymentStatus`; (PFM path) `bk.paymentSlips[]`.
@@ -155,7 +155,7 @@ There is no separate "credit note" object — voiding is the correction mechanis
 
 **Guards/failure modes** — voiding does **not** reverse any `SB_PAYMENTS` rows already recorded against it — `acctInvoiceBalance` special-cases `status==='void'` to always return 0 (`:42889`), so a voided-but-partially-paid invoice simply stops showing a balance; the payment rows (and the money) are not touched or refunded automatically. `acctInvoicePaid(inv)` still sums them if anyone reads it directly.
 
-This function is also the accounting half of **booking cancellation** (`docs/workflows/01-booking-lifecycle.md` §3.3): `bkV2CancelBooking` `:76325` calls `acctVoidInvoice` on the booking's existing invoice, then — if a cancellation charge was set — `acctCreateFeeInvoice(agentId, bookingId, amount, note, 'cancellation')` `:42937` raises a **standalone, VAT-free** invoice for just that charge (`lineItems:[{label, amount}]`, no `bookingIds` price roll-up). Weather cancellation resolves the same way (`docs/workflows/01-booking-lifecycle.md` §3.7): refund outcome pushes a negative `SB_PAYMENTS` row (`type:'refund'`, subtracted in `acctInvoicePaid` `:42886`) and voids the invoice; credit outcome calls `acctCreateDeposit` instead.
+This function is also the accounting half of **booking cancellation** (`docs/workflows/01-booking-lifecycle.md` §3.3): `bookingV2CancelBooking` `:76325` calls `acctVoidInvoice` on the booking's existing invoice, then — if a cancellation charge was set — `acctCreateFeeInvoice(agentId, bookingId, amount, note, 'cancellation')` `:42937` raises a **standalone, VAT-free** invoice for just that charge (`lineItems:[{label, amount}]`, no `bookingIds` price roll-up). Weather cancellation resolves the same way (`docs/workflows/01-booking-lifecycle.md` §3.7): refund outcome pushes a negative `SB_PAYMENTS` row (`type:'refund'`, subtracted in `acctInvoicePaid` `:42886`) and voids the invoice; credit outcome calls `acctCreateDeposit` instead.
 
 ### 4.6 Print/view an invoice or receipt
 
@@ -191,7 +191,7 @@ This function is also the accounting half of **booking cancellation** (`docs/wor
 2. `pxTrip` builds a full per-boat-per-day P&L:
    - **Pax** — `pxPax(date, bid)` `:56339` sums *actual* travelling pax (booked minus pier-checked-in no-shows, `O.pierCheckin.noShow`), pro-rated by nationality when some pax didn't show, **not** the booked count. Revenue accumulator here (`o.rev`) is `Σ tsTripAmount(b,t)` — the same function Travel Summary uses (`allotment_v2.html:51566`, `docs/workflows/01-booking-lifecycle.md` doesn't cover it — it's the booking-domain shared revenue-per-trip helper: `t.ovnLeg` → 0; a multi-trip booking with a positive `t.subtotal` → that subtotal; else the booking's whole `priceBreakdown.total`/`total`).
    - **Cost** — `plan = pxPlanFor(routeId)` `:56325` resolves the Costing plan bound to this route/family (route-level binding wins over the older family-level one), then `ctCalc(plan, ctx, template)` `:56194` (§4.11) produces the line-item cost estimate. `ctx` pax/engine/fuel context comes from real numbers: `PX.tot/th/fr/chd`, the boat's real `engineCount` (`>=4` → `'4EN'` line variant), and an effective fuel price `flFuelPriceEff(date, boat)` (fleet domain) falling back to the plan's own `planFuel`.
-   - **Real numbers override the formula per cost line**, in priority order: (1) `FL_DAILY[date][bid].fuel` litres × the resolved fuel price, if logged; (2) a closed meal-venue actual (`taGet(date,bid).meal`); (3) real van cost `pxVanCost(date,bid,routeId)` `:56448` (drivers actually assigned that day, cost split by pax share when one van serves two boats); (4) real longtail join/charter quantity from `bkV2AddOnFlags` (never the formula's per-head estimate — a documented incident, §10). Anything without a real number stays the formula estimate, tagged `src:'f'` (formula) vs `'r'` (real) vs `'p'` (plan-overridden) vs `'w'` (waiting — a meal venue is set but no actual submitted yet).
+   - **Real numbers override the formula per cost line**, in priority order: (1) `FL_DAILY[date][bid].fuel` litres × the resolved fuel price, if logged; (2) a closed meal-venue actual (`taGet(date,bid).meal`); (3) real van cost `pxVanCost(date,bid,routeId)` `:56448` (drivers actually assigned that day, cost split by pax share when one van serves two boats); (4) real longtail join/charter quantity from `bookingV2AddOnFlags` (never the formula's per-head estimate — a documented incident, §10). Anything without a real number stays the formula estimate, tagged `src:'f'` (formula) vs `'r'` (real) vs `'p'` (plan-overridden) vs `'w'` (waiting — a meal venue is set but no actual submitted yet).
    - **Upsell** — `pxUpsell(date,bid)` `:56391` adds day-of `upgrades[]` (from the booking) and `SB_EXTRAS` rows for that trip date, at the **company-net** amount only (commission already excluded, so no separate commission cost line is needed).
    - **Freeze** — if `taGet(date,bid).closed` exists (§4.10), every row is overwritten from the frozen snapshot instead of recomputed — pax stay live (a fact of the day), money does not (a decision made once).
 3. **Monthly** (`pxMonth(e)` `:57323`) and **Analysis** (`pxAnalysis(e)` `:57493`) aggregate the same `pxTrip` output over a date range, using `pxDayAgg`/`_pxAgg` memoization (`:57256-57293`) to avoid recomputing per-boat P&L for every day in a month view.
@@ -240,7 +240,7 @@ This function is also the accounting half of **booking cancellation** (`docs/wor
 | `exclude` | `subtotal` | `round(net × 0.07)` | `net + vat` |
 | `include` | `round(subtotal / 1.07)` | `subtotal − net` | `subtotal` |
 
-`subtotal = Σ acctBookingTotal(booking)` over the invoiced booking ids, where `acctBookingTotal(bk) = acctBookingBase(bk) + Σ bk.feeItems[].amount` and `acctBookingBase(bk) = bk.total || bk.priceBreakdown.total` (`:42882-42883`). **This is already net of FOC and discounts** — see §6. A booking's `total` was itself computed under the agent's rate type in `bkV2CalcQuote` (`docs/workflows/02-sales-agents-pricing.md` §5) — VAT here is a second, independent layer applied only at invoicing time, never baked into the booking price.
+`subtotal = Σ acctBookingTotal(booking)` over the invoiced booking ids, where `acctBookingTotal(bk) = acctBookingBase(bk) + Σ bk.feeItems[].amount` and `acctBookingBase(bk) = bk.total || bk.priceBreakdown.total` (`:42882-42883`). **This is already net of FOC and discounts** — see §6. A booking's `total` was itself computed under the agent's rate type in `bookingV2CalcQuote` (`docs/workflows/02-sales-agents-pricing.md` §5) — VAT here is a second, independent layer applied only at invoicing time, never baked into the booking price.
 
 Costing's VAT (`ctVatR(t)` `:56037`) is a **separate 7% concept** — it computes the **input-VAT-recoverable** net cost per cost line (`net = amt − amt×VATrate` when `line.vat===true`), used only inside Trip P&L / break-even cost math. It has no relationship to the invoice VAT above; they happen to share the same 7% rate by convention, not by code sharing.
 
@@ -249,7 +249,7 @@ Costing's VAT (`ctVatR(t)` `:56037`) is a **separate 7% concept** — it compute
 - **Due date** — `invoice`: `agent.creditDays` (default 30 if unset); `proforma` via Daily PFM: **0 days** (due on issue).
 - **Credit exposure** — only `payType==='invoice'` participates in `agCreditState` (§6).
 - **Daily PFM eligibility** — only `payType==='proforma'` bookings appear in `pfmBookingsFor`/`pfmBookingsForPeriod` at all (`:44879`, `:44885`, `:44903`).
-- **Pay-chip color/label on the booking manifest** (`bkV2PayChip` `:59481`) — `invoice`/`credit` → blue; `proforma`/`prepaid` → amber; `cot` (Cash On Tour) → cyan; `bt` → neutral grey. For B2C bookings (`agentId==='a_b2c'`), the **billing-term chip and the money-received status are deliberately separate** — `bk.paymentSnapshot.paidStatus` (`paid`/`deposit`/`unpaid`, synced from the webshop) drives a second chip so a COT order that's actually fully paid shows **Paid**, not "collect cash on tour" (`:59525-59541`).
+- **Pay-chip color/label on the booking manifest** (`bookingV2PayChip` `:59481`) — `invoice`/`credit` → blue; `proforma`/`prepaid` → amber; `cot` (Cash On Tour) → cyan; `bt` → neutral grey. For B2C bookings (`agentId==='a_b2c'`), the **billing-term chip and the money-received status are deliberately separate** — `bk.paymentSnapshot.paidStatus` (`paid`/`deposit`/`unpaid`, synced from the webshop) drives a second chip so a COT order that's actually fully paid shows **Paid**, not "collect cash on tour" (`:59525-59541`).
 - `paymentSnapshot.method` on the booking (`docs/workflows/02-sales-agents-pricing.md` §5 Step 7) records `credit` vs `prepaid` at save time as a point-in-time snapshot — it does not update itself if the agent's `payType` changes later; only re-saving the booking refreshes it.
 
 ---
@@ -315,7 +315,7 @@ function sbInvoicesPersist(){ if(!laCanEditArea('accounting')) return;
 
 **Accounting ← Booking** (`docs/workflows/01-booking-lifecycle.md`)
 - Reads `bk.total`/`bk.priceBreakdown.total` (`acctBookingBase`), `bk.feeItems[]` (`acctBookingTotal`), `bk.status` (exclusion filter everywhere).
-- Writes back `bk.invoiceId`, `bk.paymentStatus`, `bk.paymentSlips[]`, `bk.ops.pfm`, `bk.history[]` (via `bkV2AddHistory`).
+- Writes back `bk.invoiceId`, `bk.paymentStatus`, `bk.paymentSlips[]`, `bk.ops.pfm`, `bk.history[]` (via `bookingV2AddHistory`).
 - Booking's cancel/reschedule/weather flows call **into** this domain: `acctVoidInvoice`, `acctCreateFeeInvoice`, `acctCreateDeposit` (see §4.5 and `docs/workflows/01-booking-lifecycle.md` §3.3/§3.6/§3.7).
 
 **Accounting ← Sales/Agents** (`docs/workflows/02-sales-agents-pricing.md`)
@@ -330,7 +330,7 @@ function sbInvoicesPersist(){ if(!laCanEditArea('accounting')) return;
 - `pxPax`/`pxAgents` read `ckTripOn`, `ckBookedPax`, `pckExpected`, `O.pierCheckin.noShow`, `pckVoidInfo` — the actual-attendance layer, not the booked pax. This is the same layer `getSeatsConsumed` subtracts no-shows from (`docs/workflows/01-booking-lifecycle.md` §6, "Booking → Check-in / Travel Summary").
 - Both P&L and Travel Summary call the same `tsTripAmount(b,t)` `:51566` for per-trip revenue — a change to that function affects both pages identically.
 
-**Daily PFM → Booking manifest** — `bkV2PayChip` (`:59497`) reads `bk.ops.pfm` directly so a decision made on the Daily PFM page (Extend/Hold) is visible on the Booking Tab-2 row without any extra sync step; both read/write the same `bk.ops.pfm` object.
+**Daily PFM → Booking manifest** — `bookingV2PayChip` (`:59497`) reads `bk.ops.pfm` directly so a decision made on the Daily PFM page (Extend/Hold) is visible on the Booking Tab-2 row without any extra sync step; both read/write the same `bk.ops.pfm` object.
 
 ---
 
@@ -391,10 +391,10 @@ function sbInvoicesPersist(){ if(!laCanEditArea('accounting')) return;
 | `acctDepositOpen/Render/Submit` | 59388–59416 | deposit-entry modal |
 | `acctStatementOpen` | 59418 | per-agent statement modal |
 | `acctDashboardHtml` | 59456 | aging / collection / top-outstanding cards |
-| `bkV2PayChip` | 59481 | Pay-status chip on the booking manifest row |
-| `bkV2CotChip` | 59548 | Cash-on-tour chip parser |
-| `bkV2RowPayAction` | 59564 | booking-row → invoice/payment modal |
-| `bkV2PayDoCreate/Record` | 59595 / 59601 | booking-row invoice/payment actions |
+| `bookingV2PayChip` | 59481 | Pay-status chip on the booking manifest row |
+| `bookingV2CotChip` | 59548 | Cash-on-tour chip parser |
+| `bookingV2RowPayAction` | 59564 | booking-row → invoice/payment modal |
+| `bookingV2PayDoCreate/Record` | 59595 / 59601 | booking-row invoice/payment actions |
 | `sbExtrasPersist` | 59612 | persist `SB_EXTRAS` |
 | `renderDailyPFM` | 45062 | Daily PFM page |
 | `pfmBookingsFor/ForPeriod` | 44882 / 44898 | proforma bookings scoped to a day/period |

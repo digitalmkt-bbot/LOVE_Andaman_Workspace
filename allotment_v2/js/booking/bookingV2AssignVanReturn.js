@@ -1,0 +1,1 @@
+function bookingV2AssignVanReturn(bkId, vanId, date){ const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return; const _o=bkOpsFor(b, bkOpsDate(b,date)); _o.vanReturnId=vanId||null; if(vanId) _o.returnSameVan=false; acctPersistBookings(); if(_bkV2&&_bkV2.vanAssignMode&&typeof bookingV2Render==='function') bookingV2Render(); }

@@ -239,7 +239,7 @@ const B2C_PRODUCT_NAME = {
 // pickupareaid rides along here: matched best-effort from the B2C free-text location on first sync,
 // then owned by ops (staff re-assignment must survive resyncs) — excluded from conflict-update.
 // B2C bookings.payment_type — mirrors SB_PAYMENT_TYPES ids in the app. Whitelisted so an unexpected
-// value can't leak into the Pay column (bkV2PayLabel falls through to the raw string).
+// value can't leak into the Pay column (bookingV2PayLabel falls through to the raw string).
 const B2C_PAY_TYPES = new Set(['proforma', 'invoice', 'bt', 'cot']);
 // ── B2C re-sync · ฟิลด์ไหน B2C ทับได้ (2026-08-02) ──────────────────────────────────────────────
 // เดิมเป็น "บัญชีดำ": ทับทุกคอลัมน์ ยกเว้นชุด ops ที่ระบุไว้ — ซึ่งกลับด้านผิด เพราะทุกครั้งที่มี
@@ -521,7 +521,7 @@ function b2cAllocAdjust(items) {
 }
 
 // details.addonsSelected → ops addOns[{type,label,amount,qty,note}].
-// Ops identifies an add-on by the literal `type` string — bkV2AddOnFlags matches 'longtail-join',
+// Ops identifies an add-on by the literal `type` string — bookingV2AddOnFlags matches 'longtail-join',
 // 'longtail-charter' and a 'transfer-' prefix, and ops has no id registry of its own to look
 // anything up in (sb_addon_types is empty). B2C's `code` uses the same slugs, so it maps 1:1.
 // NB 'join-transfer-phuket' is the shared van to the pier, NOT a private transfer — it does not
@@ -775,7 +775,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
   const areaName = areaHit ? areaHit.name : pickupArea;
   // Drop-off. Until §b2cDrop the mapper read det.dropoffSame only as a gate and returned nothing but
   // dropoffHotelName, so sb_bookings.dropoffsame stayed NULL on all 215 B2C rows. Every ops consumer
-  // tests it strictly (bkV2RetInfo · bkDropOf · vanJobsOrderInner · the booking card and detail row all
+  // tests it strictly (bookingV2RetInfo · bkDropOf · vanJobsOrderInner · the booking card and detail row all
   // do `dropoffSame === false`), and NULL is not false — so a separate drop-off was stored and then
   // hidden everywhere, and the return van grouped under the PICKUP area. LOV-5003086 (pickup Panwa,
   // drop-off KIRI Restaurant Naithon Beach) is the case that surfaced it.
@@ -850,7 +850,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
     pickupAreaId: areaId,
     pickupArea: areaName,
     // §b2cDrop · dropoffSame is the gate every ops consumer reads; true = same as pickup, matching the
-    // in-app default (bkV2 seeds dropoffSame:true). dropoffAreaId/dropoffArea are best-effort and stay
+    // in-app default (bookingV2 seeds dropoffSame:true). dropoffAreaId/dropoffArea are best-effort and stay
     // OUT of B2C_OWN_BK, exactly like pickupAreaId — ops fixes the match by hand and B2C must not
     // stomp it (that hand-assigned 'Naithon' on LOV-5003086 is the reason the rule exists).
     dropoffSame: !dropoffSep,
@@ -899,7 +899,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
     trips: [trip],
     passengers: isFirstLine ? b2cPassengerList(paxRows) : [],
     addOns: b2cMapAddOns(det, addOn, routeLookupId, addonCat),
-    // Display rows for the Total panel. bkV2 stores adjustments as positive values with a kind, and
+    // Display rows for the Total panel. bookingV2 stores adjustments as positive values with a kind, and
     // acctBookingTotal never re-applies them (the total already accounts for them) — so these are
     // presentational only and cannot double-count.
     // §b2cDiscShare · when this line carries only PART of an order-level discount, say so on the row.
@@ -914,7 +914,7 @@ function mapB2CItemBooking(item, isFirstLine, findArea, paxRows, addonCat, progC
       seat: seat,
       addOn: addOn,
       focDiscount: 0,
-      discount: -discAmt,      // negative, matching bkV2CommitBooking's own priceBreakdown
+      discount: -discAmt,      // negative, matching bookingV2CommitBooking's own priceBreakdown
       extra: extraAmt,
       total: lineTotal,
     },
@@ -1648,7 +1648,7 @@ async function relSyncB2C(singleExtId = null) {
       );
 
       // 5. Oversell safety net. B2C bypasses the ops capacity guard (relSyncB2C writes rows directly, never
-      //    through bkV2CommitBooking), so a sale past the deployed seat capacity can land here. For each
+      //    through bookingV2CommitBooking), so a sale past the deployed seat capacity can land here. For each
       //    route/date touched in this run that HAS boats deployed, flag the OVERFLOW B2C bookings
       //    (oldest kept confirmed, newest pushed to pending_approval) so ops must add a boat / fix capacity.
       //    Idempotent: re-applied every sync until capacity covers demand; dates with no deployment
@@ -1709,7 +1709,7 @@ async function relSyncB2C(singleExtId = null) {
           console.log(`[b2c-sync] oversell — flagged ${fr.rowCount} B2C booking(s) pending_approval across ${affPairs.length} route/date(s)`);
         }
         // 5b. §closedDay safety net (2026-07-29). The "route does not run that day" guard lives ONLY in the
-        //     client wizard (bkV2CommitBooking → missHard). B2C writes straight to Postgres and never sees it,
+        //     client wizard (bookingV2CommitBooking → missHard). B2C writes straight to Postgres and never sees it,
         //     so a Similan seat was sold for 30 Jul 2026 — inside the 16 May–14 Oct monsoon closure — and
         //     surfaced in By-trip as a normal open trip. /api/b2c/availability cannot help either: it reports
         //     capacity only, and capacity is 0 on nearly every future date because boats are deployed a few
@@ -3142,7 +3142,7 @@ const server = http.createServer((req, res) => {
   //
   // What this endpoint deliberately does NOT expose: the two higher tiers the in-app booking engine
   // can reach — drawing an agent's locked seats, and over-cap-but-within-license sales that a manager
-  // approves (bkV2CommitBooking · allotment_v2.html). Those are staff actions with a human in the
+  // approves (bookingV2CommitBooking · allotment_v2.html). Those are staff actions with a human in the
   // loop; a webshop must not reach them, which is why seatsAvailable stops at the sellable tier.
   if (u === '/api/b2c/availability' && req.method === 'GET') {
     const B2C_API_KEY = process.env.B2C_API_KEY || '';
@@ -3188,8 +3188,8 @@ const server = http.createServer((req, res) => {
       // touch the parent's qty or used. Summing every active row flat therefore charged a parent and
       // its children twice, and a drawn-down child a third time through `booked`; r10/2026-08-13 read
       // 34 locked against 15 real and the seat gate refused live bookings. Only parents and
-      // standalone blocks contribute; a child contributes 0. Mirrors bkV2LockPoolHold /
-      // bkV2LockHeldRemaining (allotment_v2.html:41177-41185) and operation_schemas.v_seat_availability
+      // standalone blocks contribute; a child contributes 0. Mirrors bookingV2LockPoolHold /
+      // bookingV2LockHeldRemaining (allotment_v2.html:41177-41185) and operation_schemas.v_seat_availability
       // (db/migrations/004). Children's USED is subtracted, not their qty: an unused seat on a
       // released sub-hold has not left the parent's block and must stay held.
       // `used` is COALESCE'd for the same reason every pax term above is — one NULL makes the row's
@@ -3248,7 +3248,7 @@ const server = http.createServer((req, res) => {
       for (const r of capOvrRes.rows) { if (r.cap != null && !isNaN(Number(r.cap))) capOvr[r.k] = Number(r.cap); }
       // Mirrors the client boatCapInfo() (allotment_v2.html · §Boat capacity override) 1:1, INCLUDING the
       // clamp to registered seats (licensePax, falling back to cap when unset). Without the clamp this API
-      // could advertise a seat bkV2CommitBooking then hard-blocks — a sale the customer completes on the
+      // could advertise a seat bookingV2CommitBooking then hard-blocks — a sale the customer completes on the
       // webshop and ops cannot honour.
       const capFor = (bid, dk) => {
         const base = boatCap[bid] || 0;

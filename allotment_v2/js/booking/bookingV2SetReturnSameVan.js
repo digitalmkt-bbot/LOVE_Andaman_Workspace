@@ -1,0 +1,2 @@
+// "↩ กลับคันเดิม" — confirm the OUTBOUND van brings them back (to the different drop-off) · clears the "ยังไม่จัดรถกลับ" alert · mutually exclusive with a different return van
+function bookingV2SetReturnSameVan(bkId, val, date){ const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return; const _o=bkOpsFor(b, bkOpsDate(b,date)); _o.returnSameVan=!!val; if(val) _o.vanReturnId=null; acctPersistBookings(); if(typeof bookingV2Render==='function') bookingV2Render(); }

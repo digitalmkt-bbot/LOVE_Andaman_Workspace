@@ -195,69 +195,69 @@ Intensity scale (heatmap):
 
 | Function | Line | Purpose |
 |---|---|---|
-| `renderBooking()` | ~32430 | Sidebar nav entry · calls `bkV2Render()` |
-| `bkV2Render()` | ~32987 | Renders shell + delegates to active tab |
-| `bkV2RenderList()` | ~32993 | Backward-compat alias |
-| `bkV2RenderTopbar()` | ~32995 | Tabs · view toggle · month nav · new button |
-| `bkV2RenderTabBody()` | ~33046 | Routes to renderer based on `_bkV2.tab` |
+| `renderBooking()` | ~32430 | Sidebar nav entry · calls `bookingV2Render()` |
+| `bookingV2Render()` | ~32987 | Renders shell + delegates to active tab |
+| `bookingV2RenderList()` | ~32993 | Backward-compat alias |
+| `bookingV2RenderTopbar()` | ~32995 | Tabs · view toggle · month nav · new button |
+| `bookingV2RenderTabBody()` | ~33046 | Routes to renderer based on `_bkV2.tab` |
 
 ### 5.2 Tab 1 · Calendar
 
 | Function | Line | Purpose |
 |---|---|---|
-| `bkV2RenderCalendar()` | ~33057 | 7×5 grid · color intensity · top-routes mini |
-| `bkV2DayIntensity(total)` | ~32899 | Calendar cell intensity bucket |
+| `bookingV2RenderCalendar()` | ~33057 | 7×5 grid · color intensity · top-routes mini |
+| `bookingV2DayIntensity(total)` | ~32899 | Calendar cell intensity bucket |
 
 ### 5.3 Tab 1 · Matrix
 
 | Function | Line | Purpose |
 |---|---|---|
-| `bkV2RenderMatrix()` | ~33112 | routes × 30 days heatmap |
-| `bkV2CellIntensity(total)` | ~32892 | Matrix cell intensity bucket |
+| `bookingV2RenderMatrix()` | ~33112 | routes × 30 days heatmap |
+| `bookingV2CellIntensity(total)` | ~32892 | Matrix cell intensity bucket |
 
 ### 5.4 Tab 1 · Detail panel (shared)
 
 | Function | Line | Purpose |
 |---|---|---|
-| `bkV2RenderDetailPanel()` | ~33172 | Bottom strip · adapts to selection (whole-day or single cell) |
-| `bkV2RenderFooterHints(mode)` | ~33249 | Legend + keyboard hints |
+| `bookingV2RenderDetailPanel()` | ~33172 | Bottom strip · adapts to selection (whole-day or single cell) |
+| `bookingV2RenderFooterHints(mode)` | ~33249 | Legend + keyboard hints |
 
 ### 5.5 Tab 2 · By trip+date
 
 | Function | Line | Purpose |
 |---|---|---|
-| `bkV2RenderTab2()` | ~33263 | Filtered list from Tab 1 drill-down · clearable chips |
+| `bookingV2RenderTab2()` | ~33263 | Filtered list from Tab 1 drill-down · clearable chips |
 
 ### 5.6 Tab 3 · All bookings
 
 | Function | Line | Purpose |
 |---|---|---|
-| `bkV2RenderTab3()` | ~33317 | KPI · filter pills · search · Linear-style table |
+| `bookingV2RenderTab3()` | ~33317 | KPI · filter pills · search · Linear-style table |
 
 ### 5.7 Helpers
 
 | Function | Line | Purpose |
 |---|---|---|
-| `bkV2Norm(bk)` | ~32919 | Normalize v1/v2 to common shape for list rendering |
-| `bkV2Aggregate()` | ~32837 | Aggregate all bookings into `byDate[YYYY-MM-DD]` with pax/zone/route breakdown |
-| `bkV2Routes()` | (in section) | Live list of routes from SB_RATE_TYPES + bookings → ROUTES lookup |
-| `bkV2Route(id)` / `bkV2RouteShort(id)` | (in section) | Lookup |
-| `bkV2ShortenRouteName(name)` | (in section) | Auto-shorten verbose route names |
-| `bkV2InferZone(bk)` | ~32829 | Pickup string → PK / KL / NT |
-| `bkV2DateKey(d)` | ~33388 | Date → `YYYY-MM-DD` |
-| `bkV2FmtTHB(n)` / `bkV2FmtDate(d)` / `bkV2StatusLabel(st)` | ~32979-32985 | Formatters |
+| `bookingV2Norm(bk)` | ~32919 | Normalize v1/v2 to common shape for list rendering |
+| `bookingV2Aggregate()` | ~32837 | Aggregate all bookings into `byDate[YYYY-MM-DD]` with pax/zone/route breakdown |
+| `bookingV2Routes()` | (in section) | Live list of routes from SB_RATE_TYPES + bookings → ROUTES lookup |
+| `bookingV2Route(id)` / `bookingV2RouteShort(id)` | (in section) | Lookup |
+| `bookingV2ShortenRouteName(name)` | (in section) | Auto-shorten verbose route names |
+| `bookingV2InferZone(bk)` | ~32829 | Pickup string → PK / KL / NT |
+| `bookingV2DateKey(d)` | ~33388 | Date → `YYYY-MM-DD` |
+| `bookingV2FmtTHB(n)` / `bookingV2FmtDate(d)` / `bookingV2StatusLabel(st)` | ~32979-32985 | Formatters |
 
 ### 5.8 Event handlers
 
 | Function | Line | Purpose |
 |---|---|---|
-| `bkV2SwitchTab(t)` / `bkV2SwitchView(v)` | ~33393-33394 | Tab/view change |
-| `bkV2NavMonth(delta)` / `bkV2Today()` | ~33395-33400 | Month navigation |
-| `bkV2SelectDay(date)` / `bkV2SelectCell(date, routeId)` | ~33401-33402 | Cell selection (calendar/matrix) |
-| `bkV2OpenFiltered(routeId, date)` | ~33403 | Drill from Tab 1 → Tab 2 with filter |
-| `bkV2ClearFilter(which)` | ~33409 | Clear filter chips on Tab 2 |
-| `bkV2SetFilter(k)` / `bkV2SetSearch(v)` | ~33414-33415 | Tab 3 controls |
-| `bkV2NewBooking()` / `bkV2OpenDetail(id)` | ~33421-33422 | **Placeholders · Phase 2/3 will replace** |
+| `bookingV2SwitchTab(t)` / `bookingV2SwitchView(v)` | ~33393-33394 | Tab/view change |
+| `bookingV2NavMonth(delta)` / `bookingV2Today()` | ~33395-33400 | Month navigation |
+| `bookingV2SelectDay(date)` / `bookingV2SelectCell(date, routeId)` | ~33401-33402 | Cell selection (calendar/matrix) |
+| `bookingV2OpenFiltered(routeId, date)` | ~33403 | Drill from Tab 1 → Tab 2 with filter |
+| `bookingV2ClearFilter(which)` | ~33409 | Clear filter chips on Tab 2 |
+| `bookingV2SetFilter(k)` / `bookingV2SetSearch(v)` | ~33414-33415 | Tab 3 controls |
+| `bookingV2NewBooking()` / `bookingV2OpenDetail(id)` | ~33421-33422 | **Placeholders · Phase 2/3 will replace** |
 
 ---
 
@@ -318,7 +318,7 @@ Booking Detail (Phase 3)
 
 ## 9. Aggregation logic (Tab 1)
 
-`bkV2Aggregate()` returns:
+`bookingV2Aggregate()` returns:
 
 ```javascript
 {
@@ -351,8 +351,8 @@ Booking Detail (Phase 3)
 | Issue | Workaround |
 |---|---|
 | v1 + v2 schemas mix in same array | Always check `bk.schemaVer === 2` before reading new fields |
-| `bkV2Norm()` flattens v2 multi-trip into one summary row | Open Detail for full trip breakdown |
-| `bkV2Routes()` recomputes from live SB_RATE_TYPES every call | If many bookings · cache on render (currently fast enough) |
+| `bookingV2Norm()` flattens v2 multi-trip into one summary row | Open Detail for full trip breakdown |
+| `bookingV2Routes()` recomputes from live SB_RATE_TYPES every call | If many bookings · cache on render (currently fast enough) |
 | Selecting whole-day cell vs cell-in-matrix produces different detail | Calendar = per-route rows · Matrix = single cell breakdown |
 | Routes list driven by Rate Types · new route won't appear until added to a rate type or used in a booking | This is intentional · keeps matrix relevant |
 | Phase 2 not built → `+ New booking` shows alert | Coming soon |

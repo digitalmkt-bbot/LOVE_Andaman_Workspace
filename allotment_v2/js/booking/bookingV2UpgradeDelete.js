@@ -1,0 +1,1 @@
+function bookingV2UpgradeDelete(id,bkId){ const bk=(SB_BOOKINGS||[]).find(x=>x.id===bkId); if(!bk||!Array.isArray(bk.upgrades)) return; bk.upgrades=bk.upgrades.filter(u=>u.id!==id); if(typeof acctPersistBookings==='function') acctPersistBookings(); bookingV2Render(); bookingV2UpgradeRender(); }

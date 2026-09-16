@@ -1,0 +1,2 @@
+// Van cell · vehicle dropdown (zone-aware) + editable final pickup time
+function bookingV2AssignVanReturnSplit(bkId, ai, vanId, date){ const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b)return; const o=bkOpsFor(b, bkOpsDate(b,date)); if(!Array.isArray(o.vanSplits)||!o.vanSplits[ai])return; o.vanSplits[ai].vanReturnId=vanId||null; acctPersistBookings(); if(typeof bookingV2Render==='function') bookingV2Render(); }

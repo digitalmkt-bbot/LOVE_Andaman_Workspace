@@ -138,7 +138,7 @@ Key fields: `id`, `schemaVer`, `agentId`, `channel`, `leadPax`, `leadNationality
 
 - Cancelled statuses excluded from every aggregate: `['cancelled','cancelled_weather','rejected']`.
 - `trip` shape: `{routeId, date, bookingMode:'seat'|'charter', pax:{ad_fr,ad_th,chd_fr,chd_th,inf_fr,inf_th,foc}, charterBoatId?, charterPriceMode?, lockDrawSel{}, seatSource{locked,general}}`.
-- Edit preserve: `bkV2CommitBooking` rebuilds a fresh object — the `if(editing)` block MUST carry over `ops`, `upgrades`, `feeItems`, `reschedule`, `partialCancels`, `cancellation`, `cancelCategory`, `history`, `weatherResolve`, `rebook`, `invoiceId`, `paymentStatus`. Miss one = that data wiped on every edit.
+- Edit preserve: `bookingV2CommitBooking` rebuilds a fresh object — the `if(editing)` block MUST carry over `ops`, `upgrades`, `feeItems`, `reschedule`, `partialCancels`, `cancellation`, `cancelCategory`, `history`, `weatherResolve`, `rebook`, `invoiceId`, `paymentStatus`. Miss one = that data wiped on every edit.
 
 ### 3.5 Agent (`SB_AGENTS`)
 Key fields: `id`, `name`, `code`, `companyInfo{legalName,taxId,address}`, `contact{name,phone,email}`, `rateTypeId`, `market`, `sales` (links to `SB_SALES` id), `payType` (`invoice`/`proforma`/`cash`), `vatMode` (`none`/`exclude`/`include`), `creditLimit`, `contractVersion`. Persisted by `sbAgentsPersist()`. Load condition `Array.isArray(d.sb_agents)` — an empty array keeps the list cleared (does NOT revert to seed).
@@ -159,7 +159,7 @@ Key fields: `id`, `name`, `code`, `companyInfo{legalName,taxId,address}`, `conta
 ## 5. Working with the file, look & feel, comms
 
 - The files are huge (`js/08-app.js` alone is ~47k lines) — never read one whole. `grep -rn` over `allotment_v2/js/` to locate → read a 30–50 line window → targeted `str_replace` with unique surrounding context → re-read only the changed section. Verify with `node --check <that file>`.
-- **Line citations written before 2026-08-27** (`bkV2InferZone:69054`, `pjOf:82102`, …, all over this file and `docs/workflows/`) point into the pre-split HTML. Translate with `node tools/js-split-linemap.mjs 69054`, or ignore the number and grep the function name — every citation carries one.
+- **Line citations written before 2026-08-27** (`bookingV2InferZone:69054`, `pjOf:82102`, …, all over this file and `docs/workflows/`) point into the pre-split HTML. Translate with `node tools/js-split-linemap.mjs 69054`, or ignore the number and grep the function name — every citation carries one.
 - **Visual system:** DM Sans body / DM Mono for numbers; brand accent recolored coral→**Ocean blue `#1683C7`** via the reversible `softui-ocean-skin` layer. The CSS lives in `allotment_v2/css/`: `01-base.css` is the base sheet, `02-skins.css` holds the 14 re-skin layers in cascade order, each behind a `/* ==== <id> ==== */` marker — **delete the marked section to revert a skin** (they were `<style id="...-skin">` blocks in the HTML before 2026-08-27; same layers, same order). Two tiny `<style>` blocks remain inline in `<body>` on purpose. **No Tabler webfont in the app** — icons are inline SVG.
 - **Comms:** concise, show snippets, ask before big refactors, remind about backups before core-data edits, state the diff after edits (e.g. "added 3 entries to `FL_DEFAULT_ENGINES` at line 3045").
 
@@ -171,24 +171,24 @@ These bite repeatedly. Read the relevant one before touching that area; full con
 
 **JS / render**
 - **`esc` / `escapeHTML` is NOT global** — it's declared locally per function. Any new top-level render fn that builds HTML with `esc(...)` must declare its own `const esc=...` or it throws silently on click.
-- **Timezone:** build `YYYY-MM-DD` with `bkV2LocalYMD(dt)`, never `toISOString().slice(0,10)` (UTC shift breaks +07:00 date stepping).
+- **Timezone:** build `YYYY-MM-DD` with `bookingV2LocalYMD(dt)`, never `toISOString().slice(0,10)` (UTC shift breaks +07:00 date stepping).
 - **Scroll-jump on re-render:** replacing a mount's `innerHTML` while the focused element (a button/input) lives inside it makes the browser scroll to top. Fix = **surgical update** of just the changed sub-region (extract an inner-render fn, update only `#...-list`/`#...-body`/count badge), or capture+restore `scrollTop`/`window.scrollY` and blur first. Hit in withdraw parts, fleet asset lists, doc-check.
 - **`backdrop-filter` creates a stacking context** that traps typeahead dropdowns ("ซ้อนกัน"). Keep it off form-body cards that contain dropdowns; use a translucent bg only there.
-- **Sticky-header offsets** read CSS vars `--topbar` / `--t2-vangroup-top` (auto-computed in the `bkV2Render` rAF) — never hardcode `52`.
+- **Sticky-header offsets** read CSS vars `--topbar` / `--t2-vangroup-top` (auto-computed in the `bookingV2Render` rAF) — never hardcode `52`.
 
 **Booking / edit**
-- **Edit-preserve block in `bkV2CommitBooking`:** editing rebuilds a fresh `newBk`, so the `if(editing){...}` block must carry over `ops` (boat/van assignment!), `upgrades`, `feeItems`, `reschedule`, `partialCancels`, `cancellation`, `cancelCategory` — plus `history`/`weatherResolve`/`rebook`/`invoiceId`/`paymentStatus`. Miss one and that data is wiped on every edit. (`SB_EXTRAS` is a separate store, unaffected.)
+- **Edit-preserve block in `bookingV2CommitBooking`:** editing rebuilds a fresh `newBk`, so the `if(editing){...}` block must carry over `ops` (boat/van assignment!), `upgrades`, `feeItems`, `reschedule`, `partialCancels`, `cancellation`, `cancelCategory` — plus `history`/`weatherResolve`/`rebook`/`invoiceId`/`paymentStatus`. Miss one and that data is wiped on every edit. (`SB_EXTRAS` is a separate store, unaffected.)
 - **Cancelled statuses** are excluded from every pax/revenue/count aggregate: `['cancelled','cancelled_weather','rejected']`.
 - **Capacity model:** `boat.cap` = booking cap; `boat.licensePax` = real seats. Over cap → `status:'pending_approval'` (approval queue); over license → hard block. Boat-assign tolerance = `cap+2` (`BA_CAP_TOL`).
 
 **Seat locks**
-- Locks reduce the sellable pool (`getAllotment` subtracts `lockedSeats`). Anti-overbook guard in `bkV2CommitBooking`: would-eat-locked-seats → **hard block**; true physical oversell → soft confirm. A booking can never silently consume locked seats.
-- Parent/sub-group locks: `bkV2LockPoolHold` counts the hold at parent/standalone level only (child → 0) to avoid double-counting. Month locks use a rolling per-trip release (`releaseDaysBefore`/`releaseTime`), not a single global expiry — don't let a stale `expiry` carry onto a month lock.
+- Locks reduce the sellable pool (`getAllotment` subtracts `lockedSeats`). Anti-overbook guard in `bookingV2CommitBooking`: would-eat-locked-seats → **hard block**; true physical oversell → soft confirm. A booking can never silently consume locked seats.
+- Parent/sub-group locks: `bookingV2LockPoolHold` counts the hold at parent/standalone level only (child → 0) to avoid double-counting. Month locks use a rolling per-trip release (`releaseDaysBefore`/`releaseTime`), not a single global expiry — don't let a stale `expiry` carry onto a month lock.
 
 **Vans / boats**
-- **Van group = one outbound van by design; return van is per-booking.** Disband must null both `vanId` and `vanReturnId`; `bkV2VanGroupHeal` reconciles `vanId` only and must NOT spread `vanReturnId` across a group. Never auto-pick a van (`ห้ามเดา`) — detect and surface "รถปนกัน" conflicts instead.
-- **Charter boats are excluded from the seat pool.** `baCharterBoatIds(date)` / `baDayBoats(date)` filter them out; `getSeatsConsumed` excludes `bookingMode==='charter'`; `bkV2CharterBoatHeal` mirrors `trip.charterBoatId`→`ops.boatId`. Availability only drops if the charter reserves its boat in Boat-Op `TRIPS`.
-- Van/return job orders + per-date partner driver/phone/plate overrides live in `VANJOB_DRIVER[date::vanId]`; self-arrive pickup (`bk.pickupSelf`) and self-return drop-off (`bkV2RetInfo().selfRet`) drop a booking from the van job orders without changing the rate.
+- **Van group = one outbound van by design; return van is per-booking.** Disband must null both `vanId` and `vanReturnId`; `bookingV2VanGroupHeal` reconciles `vanId` only and must NOT spread `vanReturnId` across a group. Never auto-pick a van (`ห้ามเดา`) — detect and surface "รถปนกัน" conflicts instead.
+- **Charter boats are excluded from the seat pool.** `baCharterBoatIds(date)` / `baDayBoats(date)` filter them out; `getSeatsConsumed` excludes `bookingMode==='charter'`; `bookingV2CharterBoatHeal` mirrors `trip.charterBoatId`→`ops.boatId`. Availability only drops if the charter reserves its boat in Boat-Op `TRIPS`.
+- Van/return job orders + per-date partner driver/phone/plate overrides live in `VANJOB_DRIVER[date::vanId]`; self-arrive pickup (`bk.pickupSelf`) and self-return drop-off (`bookingV2RetInfo().selfRet`) drop a booking from the van job orders without changing the rate.
 
 **Fleet**
 - **Engine hours = `baseHours + (latest − first Daily-Log meter reading)`, skipping readings ≤ 0** (a `0` placeholder entry otherwise blows the total up). Service cycle = countdown vs `lastServiceHours`; reset it at maintenance-job close (`flMaintServiceReset`) or via the engine/gearbox detail button.
@@ -203,7 +203,7 @@ These bite repeatedly. Read the relevant one before touching that area; full con
 
 ## 7. Module map (where things live)
 
-Completed: Agent Info · Add-on Services · Renewal · Rate Types · Contract Document (P5) · Booking v2 (P6: `#view-booking`→`bkV2Render`, tabs cal/bytrip/all/locks/approvals) · Accounting (P7: invoices/payments/deposits/VAT/statements) · Demand/Market Intelligence (P8: `renderMarketData`, immigration `.xls` import, 6 tabs) · Daily PFM (Finexy skin) · Pickup Map (Leaflet) · Insurance · FOC Detail · Booking Flow · Consumable requisition · Fuel Intelligence.
+Completed: Agent Info · Add-on Services · Renewal · Rate Types · Contract Document (P5) · Booking v2 (P6: `#view-booking`→`bookingV2Render`, tabs cal/bytrip/all/locks/approvals) · Accounting (P7: invoices/payments/deposits/VAT/statements) · Demand/Market Intelligence (P8: `renderMarketData`, immigration `.xls` import, 6 tabs) · Daily PFM (Finexy skin) · Pickup Map (Leaflet) · Insurance · FOC Detail · Booking Flow · Consumable requisition · Fuel Intelligence.
 
 Fleet: Boat Operation (`renderOp`), Transfer Fleet (`renderVehicles`), Van Job Orders (`renderVanJobs`), Pickup Setup (`renderPickupSetup`), Maintenance/Incidents/Engines/Gearboxes/Propellers/Projects.
 

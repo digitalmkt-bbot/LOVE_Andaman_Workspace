@@ -28,9 +28,9 @@ A trip date `D` moves through these stages. Each row is one screen.
 |---|---|---|
 | D−30 … D−1 | **Deploy the fleet.** For each route × date, pick which boats run it. Only boats whose `getCurStatus()` is `available` on that date and whose pier matches the route's pier are offered. | Boat Operation `renderOp` `:11209` → `bop2AssignBoat` `:10266` |
 | any | **Sanity read** of a whole month (which boat is out, which is spare, which is in the shop, which route is weather-closed). Read-only — clicking a day jumps back to Boat Operation. | Fleet Calendar `renderFleetCal` `:10386`, `fcOpenDay` `:10327` |
-| D−n | **Weather cancel** a route × date → tags every affected booking `weatherResolve` for Sales to resolve. | popover button → `bkV2WeatherMark` `:59915` → `bkV2WeatherMarkConfirm` `:59929` |
+| D−n | **Weather cancel** a route × date → tags every affected booking `weatherResolve` for Sales to resolve. | popover button → `bookingV2WeatherMark` `:59915` → `bookingV2WeatherMarkConfirm` `:59929` |
 | D−3 … D−1 | **Check agent documents** (voucher / date / name / pax / route / payment) against the attached files, optionally OCR-assisted. | ตรวจเอกสาร `renderDocCheck` `:75902`, `docCheckRunPre` `:75217` |
-| D−2 … D−1 | **Assign bookings to boats.** Per route, drop each seat booking onto one of that route's deployed boats. Auto-assign fills first-fit. | Booking ▸ By-trip ▸ 🚤 Boat Assign mode (`bkV2ToggleBoatMode` `:45676`) → `bkV2AssignBoat` `:45500`; legacy standalone page `renderBoatAssign` `:55235` |
+| D−2 … D−1 | **Assign bookings to boats.** Per route, drop each seat booking onto one of that route's deployed boats. Auto-assign fills first-fit. | Booking ▸ By-trip ▸ 🚤 Boat Assign mode (`bookingV2ToggleBoatMode` `:45676`) → `bookingV2AssignBoat` `:45500`; legacy standalone page `renderBoatAssign` `:55235` |
 | D−1 | **Re-confirm** every agent's pickup list by WhatsApp/phone; print a per-agent sheet. | Re-confirm `renderReconfirm` `:44688`, `rcSheet` `:44618` |
 | D−1 | **Crew the boats** — captain / assistant / crew / island staff per boat, wristband colour, boat-specific notes; licence check per boat. | ใบงานเรือ `renderPierJob` `:82990` → `pjPick` `:82695` |
 | D−1 | **Assign guides** and issue the government guide job order (มัคคุเทศก์). | `goSetupOpen` `:50714` → `goSetupSave` `:50753`, sheet `goSheet` `:50540` |
@@ -56,7 +56,7 @@ Router: `nav(el)` at `allotment_v2.html:6027`; the four `po*` prefixes are match
 |---|---|---|---|
 | `#view-operation` | `Boat Operation` (`:4221`) | `renderOp` `:11209` (shell `bop2RenderShell` `:11216`) | Route × date heat-map; assign/unassign boats; weather-cancel. Host `#bop2-host` `:4700`. |
 | `#view-fleetcal` | `Fleet Calendar` (`:4225`) | `renderFleetCal` `:10386` | Read-only month calendar of the whole fleet per day. Host `#fc-host` `:4705`. |
-| `#view-boatassign` | *(none — not in `LA_NAV` `:411`)* | `renderBoatAssign` `:55235` | Legacy standalone booking→boat page. Superseded by By-trip "Boat Assign mode"; `bkV2GoBoatAssign` `:45683` redirects there. |
+| `#view-boatassign` | *(none — not in `LA_NAV` `:411`)* | `renderBoatAssign` `:55235` | Legacy standalone booking→boat page. Superseded by By-trip "Boat Assign mode"; `bookingV2GoBoatAssign` `:45683` redirects there. |
 | `#view-doccheck` | `ตรวจเอกสาร` (`:4217`) | `renderDocCheck` `:75902` | Verify B2B booking data against attached documents, with Tesseract OCR pre-check. |
 | `#view-reconfirm` | `Re-confirm` (`:4209`) | `renderReconfirm` `:44688` | Per-agent / per-trip re-confirmation of the day's bookings + printable sheet. |
 | `#view-vancheckin` | `เช็คอินรถ` (`:4241`) | `renderVanCheckin` `:48205` | Van-side check-in (adjacent domain; feeds `pckExpected`). |
@@ -95,7 +95,7 @@ Pier group headers (`Phuket` / `Tub Lamu` / `Ranong`) collapse via `poNavGroup` 
 **Validation / guards**
 - `bop2GuardPast(ds)` `:10261` — any date `< TODAY_STR` is hard-blocked with `'วันที่ … ผ่านมาแล้ว · แก้เรือที่ deploy ไม่ได้'`, because closed days already fed Daily Report / Travel Summary / trip P&L.
 - A boat carrying `charterBookingId` cannot be re-routed (`'Boat is chartered · cannot reassign'`, `:10270`) nor unassigned (`:10291`).
-- Re-routing or unassigning a boat that already has seat bookings on it prompts a confirm listing `baAssignedBookings(date, boatId)` count/pax (`:10274-10278`, `:10295-10299`); the bookings are **not** moved, they get flagged ⚠ "จัดเรือใหม่" on the assign screens via `bkV2BoatPulled` `:45465`.
+- Re-routing or unassigning a boat that already has seat bookings on it prompts a confirm listing `baAssignedBookings(date, boatId)` count/pax (`:10274-10278`, `:10295-10299`); the bookings are **not** moved, they get flagged ⚠ "จัดเรือใหม่" on the assign screens via `bookingV2BoatPulled` `:45465`.
 
 **Failure modes**
 - Assign a boat, then mark it `fixing` in Boat Status → `bop2RouteDaysNeedingBoats` `:10599` raises `reason:'boat_broken'` and the day is flagged even with 0 pax, because the schedule is now invalid.
@@ -125,8 +125,8 @@ flowchart TD
 **Trigger** — ⛈ button at the bottom of the Boat-Operation cell popover (`:10218-10220`); hidden on past dates.
 
 **Steps**
-1. `bkV2WeatherMark(routeId, date)` `:59915` opens a modal asking for a note (`'high waves 3m · port closed …'`).
-2. `bkV2WeatherMarkConfirm` `:59929` pushes `{routeId, date, reason:'weather', note, at}` into `SB_WEATHER_CLOSURES`, calls `bkV2WeatherTagBookings` `:59963`, persists with `sbWeatherPersist()` `:59906`, and re-renders Boat Operation + By-trip.
+1. `bookingV2WeatherMark(routeId, date)` `:59915` opens a modal asking for a note (`'high waves 3m · port closed …'`).
+2. `bookingV2WeatherMarkConfirm` `:59929` pushes `{routeId, date, reason:'weather', note, at}` into `SB_WEATHER_CLOSURES`, calls `bookingV2WeatherTagBookings` `:59963`, persists with `sbWeatherPersist()` `:59906`, and re-renders Boat Operation + By-trip.
 
 **Data written** — `SB_WEATHER_CLOSURES[]` (blob key `sb_weather`) and, per affected booking, `bk.weatherResolve` + a `Weather` history entry.
 
@@ -136,16 +136,16 @@ flowchart TD
 
 ### 4.3 Assign bookings to boats
 
-**Trigger** — Booking ▸ By-trip-date, header toggle 🚤 (`bkV2ToggleBoatMode` `:45676`), or the ⚠ chip "Boat · N" at `:72087`. The standalone `#view-boatassign` page still works but has no menu entry.
+**Trigger** — Booking ▸ By-trip-date, header toggle 🚤 (`bookingV2ToggleBoatMode` `:45676`), or the ⚠ chip "Boat · N" at `:72087`. The standalone `#view-boatassign` page still works but has no menu entry.
 
 **Steps**
 1. Per row the Boat cell is rendered by `baBoatCellHTML(bk, routeId, date, alloc)` `:45567`. A charter booking's cell is locked (`baBoatSplitCellHTML` `:45607`) — its boat is `trip.charterBoatId` and changing it means editing the booking.
-2. Pick a boat → `bkV2AssignBoat(bkId, boatId, date)` `:45500`.
-3. Bulk: tick rows (`bkV2BoatSelToggle` `:45534`) → `bkV2BoatAssignSelected(date, routeId, boatId)` `:45537`.
+2. Pick a boat → `bookingV2AssignBoat(bkId, boatId, date)` `:45500`.
+3. Bulk: tick rows (`bookingV2BoatSelToggle` `:45534`) → `bookingV2BoatAssignSelected(date, routeId, boatId)` `:45537`.
 4. Auto: `baAutoAssign(date, routeId)` `:55208` — keeps existing assignments, then first-fit into a boat with room ≤ `cap`, else the least-loaded boat that still fits within `cap + BA_CAP_TOL`, else leaves the booking unassigned.
-5. Emergency move: `bkV2BoatUpgrade(bkId)` `:55223` prompts reason + charge, writes `b.ops.upgrade`, and from then on the picker offers **every** boat running that day (`renderBoatAssign` pool switch at `:55247`).
+5. Emergency move: `bookingV2BoatUpgrade(bkId)` `:55223` prompts reason + charge, writes `b.ops.upgrade`, and from then on the picker offers **every** boat running that day (`renderBoatAssign` pool switch at `:55247`).
 
-**Data written** — `bkOpsFor(b, date).boatId` (`:45527`) — i.e. `b.ops.boatId` on the **first** travel day and `trip.ops.boatId` on any later day (see §9). `b.ops.upgrade = {reason, charge, by, at}` `:55231` + `bkV2AddHistory(...,'Edit')`. Persisted with `acctPersistBookings()` `:42877`.
+**Data written** — `bkOpsFor(b, date).boatId` (`:45527`) — i.e. `b.ops.boatId` on the **first** travel day and `trip.ops.boatId` on any later day (see §9). `b.ops.upgrade = {reason, charge, by, at}` `:55231` + `bookingV2AddHistory(...,'Edit')`. Persisted with `acctPersistBookings()` `:42877`.
 
 **Validation / guards**
 - Boat used as a charter on any of the booking's dates → hard alert, assignment refused (`:45508`).
@@ -154,14 +154,14 @@ flowchart TD
 - Picking one boat for a booking that is currently split across hulls asks for confirmation and deletes `ops.boatSplits` (`:45505`).
 
 **Failure modes**
-- Boat pulled out of `TRIPS` after assignment, or now serving another route, or chartered by someone else → `bkV2BoatPulled` `:45465` paints the cell red with ⚠ `เรือถูกถอดจาก Boat Operation · จัดเรือใหม่`. A charter's own boat and an OVN return leg are explicitly exempt (`:45476`, `:45483`).
+- Boat pulled out of `TRIPS` after assignment, or now serving another route, or chartered by someone else → `bookingV2BoatPulled` `:45465` paints the cell red with ⚠ `เรือถูกถอดจาก Boat Operation · จัดเรือใหม่`. A charter's own boat and an OVN return leg are explicitly exempt (`:45476`, `:45483`).
 - Nothing deployed on the route yet → auto-assign alerts `'No boat assigned to this route yet · assign boats in Boat Operation first'` (`:55209`).
 
 ### 4.4 Split one booking across several boats
 
 **Trigger** — ⇄ button on the boat cell, shown when the booking has ≥2 heads on that date or is already split (`:45581`).
 
-**Steps** — `bkV2BoatSplit(bkId, date)` `:46076` seeds a modal with the day's pax pool (`bkBoatPoolOn` `:46022`) split into parts; edit parts; save writes `ops.boatSplits`.
+**Steps** — `bookingV2BoatSplit(bkId, date)` `:46076` seeds a modal with the day's pax pool (`bkBoatPoolOn` `:46022`) split into parts; edit parts; save writes `ops.boatSplits`.
 
 **Data written** — `bkOpsFor(b,date).boatSplits = [{boatId, ad, chd, inf, foc}]`.
 
@@ -174,7 +174,7 @@ flowchart TD
 **Trigger** — pier staff open เช็คอินหน้าท่า for today.
 
 **Page build** (`renderPierCheckin` `:51256`)
-1. `bkV2CharterBoatHeal(date)` `:45435` mirrors `trip.charterBoatId` → `ops.boatId` for charters that were never assigned manually.
+1. `bookingV2CharterBoatHeal(date)` `:45435` mirrors `trip.charterBoatId` → `ops.boatId` for charters that were never assigned manually.
 2. Every non-cancelled booking with a trip on that date becomes a row `{b,t,O,booked,expect,ck,van,vanId,bid,arr,money,_vd}` (`:51271-51276`); OVN return legs go to a separate `ovnAll` bucket so their money is not counted twice (`:51280-51285`).
 3. Rows are expanded per hull (`pckExpandBoatSplits`) and nested **boat → trip(route) → arrival zone → van group → row** (`:51326-51344`, zone loop `:51413`). Zones: `PK` / `KL` / `OWN` (self-arrive or agent car) / `NOVAN` (`pckArrivalOf` `:48337`, labels `PCK_ARR_LBL` `:48343`).
 
@@ -380,7 +380,7 @@ They were removed from `po` (staff), `poj` (staff), `pol` (staff + licence types
 3. Per agent: `Send re-confirm` → `rcSendAgent(key)` `:44606` marks every one of that agent's non-cancelled bookings that day as done; `Undo` → `rcUnsendAgent` `:44611`.
 4. `Sheet` → `rcSheet(key)` `:44618` opens a printable A4-landscape per-agent sheet grouped by route (columns `#, Booking #, Customer, Phone, AD, CHD, INF, FOC, Pick-up, Hotel, Room, Zone, Add-on, Special request, Payment`), ref `RC-YYMMDD-<agentCode>`.
 
-**Data written** — `bk.ops.reconfirm = {status, via:'reconfirm', at, by}` (`:44515`) — the **same field** the By-trip "Re-Confirm mode" writes (`bkV2Reconfirm` `:45680` uses `via:'list'|'phone'`), so both surfaces stay in sync. History entries tagged `Notify`.
+**Data written** — `bk.ops.reconfirm = {status, via:'reconfirm', at, by}` (`:44515`) — the **same field** the By-trip "Re-Confirm mode" writes (`bookingV2Reconfirm` `:45680` uses `via:'list'|'phone'`), so both surfaces stay in sync. History entries tagged `Notify`.
 
 **States** — `RC_STATES` `:44504`: `''` Not started · `wa` WhatsApp sent · awaiting · `noans` Called · no answer · `off` Called · phone off · `callback` Call back later · `done` Confirmed. Only `done` counts as confirmed.
 
@@ -432,8 +432,8 @@ They were removed from `po` (staff), `poj` (staff), `pol` (staff + licence types
 | Store | Key / shape | Written by |
 |---|---|---|
 | `TRIPS` | `TRIPS[date][boatId] = {route, type:'normal'\|'charter', booked, charterBookingId?}` · blob key `trips` | `bop2AssignBoat` `:10266`, `bop2UnassignBoat` `:10287` |
-| `SB_WEATHER_CLOSURES` | `[{routeId, date, reason:'weather', note, at}]` · blob key `sb_weather` | `bkV2WeatherMarkConfirm` `:59929` |
-| booking `ops` (per day) | `.boatId`, `.boatSplits[]`, `.upgrade`, `.vanCheckin`, `.pierCheckin`, `.reconfirm` | `bkV2AssignBoat`, `ckWrite` `:47239`, `rcSetStatus` |
+| `SB_WEATHER_CLOSURES` | `[{routeId, date, reason:'weather', note, at}]` · blob key `sb_weather` | `bookingV2WeatherMarkConfirm` `:59929` |
+| booking `ops` (per day) | `.boatId`, `.boatSplits[]`, `.upgrade`, `.vanCheckin`, `.pierCheckin`, `.reconfirm` | `bookingV2AssignBoat`, `ckWrite` `:47239`, `rcSetStatus` |
 | booking fields | `bk.pierPayments[]`, `bk.docCheck{}`, `bk.history[]` | `pckPaySave` `:48596`, `docCheckSetStatus` `:75368` |
 | `TRAVEL_SUM` | `['date::bookingId'] = {decision, amount, note, by, at}` · blob key `travel_sum` | `tsSet` `:51546` |
 | `TS_COT` | `['date::bookingId'] = {mode, deduct, payout, ref, by, at}` · blob key `ts_cot` | `tsCotPick` `:51649` |
@@ -467,7 +467,7 @@ totalCapacity      = Σ boatCapFor(boat, date)   over TRIPS[date] boats on this 
 charterCapacity    = Σ cap of the chartered subset
 availableCapacity  = totalCapacity − charterCapacity
 seatsConsumed      = getSeatsConsumed(routeId, date)
-lockedSeats        = bkV2LockedTotal(routeId, date)
+lockedSeats        = bookingV2LockedTotal(routeId, date)
 seatsAvailable     = max(0, availableCapacity − seatsConsumed − lockedSeats)
 licenseAvailable   = max(0, licenseCapacity − seatsConsumed)
 state              = all-chartered | full | tight (fill ≥80%) | open | no-allotment
@@ -477,9 +477,9 @@ state              = all-chartered | full | tight (fill ≥80%) | open | no-allo
 1. `getSeatsConsumed` `:12046` skips `t.bookingMode==='charter'` (`:12058`) — a charter consumes a hull, not seats.
 2. `baDayBoats(date)` `:45445` filters out both `op.charterBookingId` **and** anything in `baCharterBoatIds(date)` `:45336`, so a chartered hull is never offered to a seat booking.
 3. `baCharterBoatMap(date)` `:45315` derives charter hulls from the **bookings**, not from `TRIPS`, because a split charter (`ops.boatSplits`) only ever flagged its first hull in Boat Operation; without this the 2nd hull was resold as seats (`:45312-45314`). `getAssignedBoatsForRouteDate` `:12096` applies the same map.
-4. `bkV2CharterBoatHeal(date)` `:45435` mirrors `trip.charterBoatId` → `ops.boatId` (idempotent, skips bookings that already have `boatSplits`) so charters count as "assigned" everywhere that keys off `ops.boatId`.
+4. `bookingV2CharterBoatHeal(date)` `:45435` mirrors `trip.charterBoatId` → `ops.boatId` (idempotent, skips bookings that already have `boatSplits`) so charters count as "assigned" everywhere that keys off `ops.boatId`.
 
-**Assignment tolerance** — `BA_CAP_TOL = 2` (`:45499`). A boat may be filled to `cap + 2`; beyond that `bkV2AssignBoat` refuses outright (`:45520`). `baAutoAssign` prefers a boat under `cap` and only uses the tolerance as a second pass (`:55217-55218`).
+**Assignment tolerance** — `BA_CAP_TOL = 2` (`:45499`). A boat may be filled to `cap + 2`; beyond that `bookingV2AssignBoat` refuses outright (`:45520`). `baAutoAssign` prefers a boat under `cap` and only uses the tolerance as a second pass (`:55217-55218`).
 
 **Over-cap → `pending_approval`** — set on the booking side, not here. What this domain must know is `bkPendHoldsSeat(bk)` `:12040`: a `pending_approval` booking whose `approval.over[]` is non-empty (or `totOver > 0`) **does not hold a seat** and is excluded from `getSeatsConsumed`. Any other pending booking does hold its seats.
 
@@ -526,7 +526,7 @@ The single most important contract (`§Per-trip ops`, block comment at `:45341-4
 
 Fields this domain owns inside `ops`: `boatId`, `boatSplits[]`, `upgrade`, `vanCheckin`, `pierCheckin`, `reconfirm`, `pfm`. Fields the van domain owns: `vanId`, `vanReturnId`, `returnSameVan`, `vanGroup`, `vanSeq`, `vanSplits[]`, `pickupTimeFinal`.
 
-> **Edit-preserve:** `bkV2CommitBooking` rebuilds a fresh booking object on edit. Its `if(editing)` block must carry `ops` over, or every boat/van assignment and both check-ins are wiped. See CLAUDE.md §3.4.
+> **Edit-preserve:** `bookingV2CommitBooking` rebuilds a fresh booking object on edit. Its `if(editing)` block must carry `ops` over, or every boat/van assignment and both check-ins are wiped. See CLAUDE.md §3.4.
 
 ### 8.2 Boat Operation → Booking
 
@@ -544,7 +544,7 @@ Fields this domain owns inside `ops`: `boatId`, `boatSplits[]`, `upgrade`, `vanC
 - `pckArrivalOf(r)` `:48337`: `OWN` when `bk.pickupSelf` or the effective zone is `NoTransfer`; `NOVAN` when a transfer zone has no van yet; otherwise `PK`/`KL`.
 - Van check-in no-shows flow into the pier via `pckExpected` `:48896`, unless the reason is "will come to the pier themselves" (`ckExpectAtPier` `:47161`) or the pier reinstates them (`ckPierReinstate` `:47169`).
 - OVN return legs read `ops.vanReturnId || ops.vanId` (`:51283`, `tsRows` `:51609`).
-- Van job order printing lives in the van domain: `bkV2VanJobOrder(date, vanId, routeId, leg)` `:55138`.
+- Van job order printing lives in the van domain: `bookingV2VanJobOrder(date, vanId, routeId, leg)` `:55138`.
 
 ### 8.5 This domain → Accounting
 
@@ -575,7 +575,7 @@ Guides are administered from the work-schedule page (`ทะเบียนไ�
 10. **The roster is derived too.** `PIER_SHIFT` holds only manually-touched cells; everything else re-reads `PIER_JOB` each render (`paDayIdx` `:80783`). Backfilling `PIER_SHIFT` for every cell would break the "job sheet changed → roster follows" behaviour.
 11. **The roster cycle is 26 → 25 by default**, spanning two months (`paCycleStart` `:80677`, `paCycle` `:80761`). Any month-based assumption in new roster code will be off.
 12. **Pier enum:** `tublamu` · `panwa` · `ranong` (+ the pseudo-pier `'shop'` returned by `getBoatCurrentPier`). `panwa` is displayed as "Phuket" in the sidebar and "ท่าวิสิษฐ์พันวา" in the popover — different labels, same value.
-13. **Dates:** build `YYYY-MM-DD` with `bkV2LocalYMD` / `poYMD` `:79733`. `bop2GetDates` `:10028` deliberately constructs month days at 12:00 to dodge the UTC shift (`:10033`); several older `dr*` helpers still use `toISOString().slice(0,10)` (`drDateShift` `:52758`) — a latent +07:00 bug.
+13. **Dates:** build `YYYY-MM-DD` with `bookingV2LocalYMD` / `poYMD` `:79733`. `bop2GetDates` `:10028` deliberately constructs month days at 12:00 to dodge the UTC shift (`:10033`); several older `dr*` helpers still use `toISOString().slice(0,10)` (`drDateShift` `:52758`) — a latent +07:00 bug.
 14. **`esc` is local.** `ckEsc` `:47196` and `poE` `:79730` are the shared helpers in this domain; a new top-level render function that calls a bare `esc(...)` throws silently on click.
 15. **Cancelled-status list is duplicated ~10 times** as a literal array. Grep `'cancelled_weather'` before adding a new aggregate and copy the same triple.
 16. **Guide roles:** only `guide` and `trainee` count as guides on the government form; `intern` and `staff` go to "อื่นๆ" (`goIsGuide` `:50450`, used at `:50547`). Data as of Aug 2026 had interns on 18 of 20 sheets, so this is not an edge case.
@@ -614,21 +614,21 @@ Guides are administered from the work-schedule page (`ทะเบียนไ�
 | `bkPendHoldsSeat` | 12040 | Whether a `pending_approval` booking still occupies seats |
 | `boatCapFor` | 47018 | Per-day effective cap (override-aware) |
 | `bkOpsRead` / `bkOpsFor` / `bkOpsClear` / `bkOpsDate` | 45392 / 45399 / 45407 / 45421 | Per-travel-day ops accessors |
-| `bkV2CharterBoatHeal` | 45435 | Mirror `trip.charterBoatId` → `ops.boatId` (idempotent) |
+| `bookingV2CharterBoatHeal` | 45435 | Mirror `trip.charterBoatId` → `ops.boatId` (idempotent) |
 | `baCharterBoatMap` / `baCharterBoatIds` | 45315 / 45336 | Which hulls are chartered that day, derived from bookings |
 | `baDayBoats` / `baBoatsForRoute` | 45445 / 45450 | Non-charter deployed boats for a date / route |
 | `baSeatBookingsForRoute` | 45451 | Seat bookings on a route×date |
 | `baAssignedPax` / `baAssignedBookings` | 45457 / 45489 | Load on a boat that day (split-aware) |
-| `bkV2BoatPulled` | 45465 | Flag "boat removed / re-routed / chartered by someone else" |
-| `bkV2AssignBoat` | 45500 | Assign one booking to a boat, with the cap+TOL guard |
-| `bkV2BoatAssignSelected` | 45537 | Bulk assign ticked rows; skips overflowing ones |
+| `bookingV2BoatPulled` | 45465 | Flag "boat removed / re-routed / chartered by someone else" |
+| `bookingV2AssignBoat` | 45500 | Assign one booking to a boat, with the cap+TOL guard |
+| `bookingV2BoatAssignSelected` | 45537 | Bulk assign ticked rows; skips overflowing ones |
 | `baAutoAssign` | 55208 | First-fit auto assignment per route |
-| `bkV2BoatUpgrade` | 55223 | Emergency upgrade; unlocks the all-boats picker |
-| `bkV2BoatSplit` | 46076 | Split one booking's pax across several hulls |
+| `bookingV2BoatUpgrade` | 55223 | Emergency upgrade; unlocks the all-boats picker |
+| `bookingV2BoatSplit` | 46076 | Split one booking's pax across several hulls |
 | `bkBoatIdsOn` / `bkBoatPaxOnBoat` | 46036 / 46042 | Split-aware hull and head lookups |
 | `renderBoatAssign` | 55235 | Legacy standalone Boat Assign page |
-| `bkV2GoBoatAssign` | 45683 | Redirect to Booking ▸ By-trip with boat mode on |
-| `bkV2WeatherMark` / `…Confirm` | 59915 / 59929 | Weather-cancel a route×date and tag its bookings |
+| `bookingV2GoBoatAssign` | 45683 | Redirect to Booking ▸ By-trip with boat mode on |
+| `bookingV2WeatherMark` / `…Confirm` | 59915 / 59929 | Weather-cancel a route×date and tag its bookings |
 | `renderPierCheckin` | 51256 | Pier check-in console (boat → trip → zone → van group) |
 | `pckStage` / `pckStageSet` | 47273 / 47392 | Stage of a booking and the stage state machine |
 | `ckToggle` / `ckStep` | 47755 / 47741 | Board/unboard; adjust the travelling count |

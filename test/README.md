@@ -22,7 +22,7 @@ node --test
 - `test/helpers/server.mjs` — spawns the real `server.js` as a child process, waits for it to
   listen, and returns a session-cookie-bound HTTP client (`loginClient`).
 - `test/e2e/booking-write-path.test.mjs` — the required end-to-end proof: logs in, `POST
-  /api/v1/_batch` a fixture booking (the same endpoint `bkV2CommitBooking` hits in the browser),
+  /api/v1/_batch` a fixture booking (the same endpoint `bookingV2CommitBooking` hits in the browser),
   then reads the row back with an independent Postgres connection.
 
 ## Why the e2e test currently skips

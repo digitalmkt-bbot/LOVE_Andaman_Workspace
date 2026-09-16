@@ -62,13 +62,13 @@ function _abAgentMap(){
 function _abSalesOf(ag){ return (ag && ag.sales) || ''; }
 /* §abAgPill · "สีเอเย่นต์คาดชื่อเอเย่นต์เลย เป็นเหมือนในหน้า By trip date"
    หน้า By trip date วาดชื่อเอเย่นต์เป็นบล็อกสีทึบ + ตัวหนังสือสีตัดกัน (.ck-agblk)
-   ทำแบบเดียวกันที่นี่ · ใช้ bkV2AgentColor + bkV2ContrastInk ตัวเดียวกันเป๊ะ
+   ทำแบบเดียวกันที่นี่ · ใช้ bookingV2AgentColor + bookingV2ContrastInk ตัวเดียวกันเป๊ะ
    จุดกลม (.ab-adot) เดิมเล็กเกินไป และสีอ่อน ๆ อย่าง #fff838 แทบมองไม่เห็นบนพื้นขาว */
 function _abAgPill(aid,name){
   var t=_abEsc(name||'');
   if(!aid) return '<b class="ab-apill none">'+t+'</b>';
-  var c=(typeof bkV2AgentColor==='function')?bkV2AgentColor(aid):'#8a857d';
-  var ink=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(c):'#fff';
+  var c=(typeof bookingV2AgentColor==='function')?bookingV2AgentColor(aid):'#8a857d';
+  var ink=(typeof bookingV2ContrastInk==='function')?bookingV2ContrastInk(c):'#fff';
   return '<b class="ab-apill" style="background:'+c+';color:'+ink+'" title="'+t+'">'+t+'</b>';
 }
 function _abSalesChip(sid){
@@ -129,10 +129,10 @@ function _abScan(){
     });
     (function(dsx,dx){
       Object.keys(byR).forEach(function(rid){
-        if(typeof bkV2IsRouteOpenOn==='function' && !bkV2IsRouteOpenOn(rid,dsx)) return;
+        if(typeof bookingV2IsRouteOpenOn==='function' && !bookingV2IsRouteOpenOn(rid,dsx)) return;
         var c={ rid:rid, ds:dsx, d:dx, boats:byR[rid], state:'open',
                 cap:0, sold:0, lock:0, free:0, fill:0 };
-        if(typeof bkV2IsWeatherClosed==='function' && bkV2IsWeatherClosed(rid,dsx)){
+        if(typeof bookingV2IsWeatherClosed==='function' && bookingV2IsWeatherClosed(rid,dsx)){
           c.state='wx';
         } else {
           var al=(typeof getAllotment==='function')?getAllotment(rid,dsx):null;
@@ -676,7 +676,7 @@ window.abSetSales=function(id){ window._abSales=(window._abSales===id)?'':(id||'
 window.abSetDays =function(n){ window._abDays=(+n===14?14:7); abRender(); };
 window.abSetPier =function(k){ window._abPier=(window._abPier===k)?'':(k||''); abRender(); };
 window.abSetBy   =function(k){ window._abBy=(k==='agent'?'agent':'sales'); abRender(); };
-window.abGoTrip  =function(rid,ds){ if(typeof bkV2OpenFiltered==='function') bkV2OpenFiltered(rid||'',ds); };
+window.abGoTrip  =function(rid,ds){ if(typeof bookingV2OpenFiltered==='function') bookingV2OpenFiltered(rid||'',ds); };
 window.abGoAgents=function(){ var el=document.querySelector('[data-view=agents]');
   if(el && typeof nav==='function') nav(el); };
 
@@ -764,11 +764,11 @@ function abRender(){
     });
     uCol['_']=_AB_AG_ETC;
   } else {
-    /* §abAgCol · ใช้สีประจำเอเย่นต์ตัวเดียวกับหน้า By trip date (bkV2AgentColor)
+    /* §abAgCol · ใช้สีประจำเอเย่นต์ตัวเดียวกับหน้า By trip date (bookingV2AgentColor)
        ซึ่งอ่าน agent.color ที่ตั้งเองไว้ก่อน ถ้าไม่มีค่อย hash เป็นสีคงที่
        เดิมผมแจกสีตามอันดับยอด ทำให้เอเย่นต์เดียวกันคนละสีกับหน้าอื่น */
     uRank.slice(0,_AB_AG_PAL.length).forEach(function(k,i){
-      uCol[k]=(k!=='_' && typeof bkV2AgentColor==='function') ? bkV2AgentColor(k) : _AB_AG_PAL[i];
+      uCol[k]=(k!=='_' && typeof bookingV2AgentColor==='function') ? bookingV2AgentColor(k) : _AB_AG_PAL[i];
     });
     uCol['_']=_AB_AG_ETC;
   }
@@ -950,7 +950,7 @@ function abRender(){
       /* §abAgDot · "สีประจำ Agent ไม่ขึ้น" · เดิมสีประจำเอเย่นต์โผล่เฉพาะแท่งในตาราง
          และต้องกด "By agent" ก่อน · ในการ์ดอันดับมีแต่จุดสีของ "เซลส์ผู้ดูแล" (.ab-sdot)
          ซึ่งอ่านผิดได้ว่าเป็นสีเอเย่นต์ · ใส่จุดสีเอเย่นต์ไว้หน้าชื่อทุกใบ
-         ใช้ bkV2AgentColor ตัวเดียวกับหน้า By trip date จึงตรงกันทุกหน้า */
+         ใช้ bookingV2AgentColor ตัวเดียวกับหน้า By trip date จึงตรงกันทุกหน้า */
       +'<span class="ab-ab"><span class="nm">'+_abAgPill(r.id,r.name)+'</span>'
         +'<span class="mt">'+(r.sales?_abSalesChip(r.sales):'')+(sub?('<span>'+sub+'</span>'):'')+'</span></span>'
       +'<span class="ab-an"><span class="v"'+(valCol?(' style="color:'+valCol+'"'):'')+'>'+val+'</span>'

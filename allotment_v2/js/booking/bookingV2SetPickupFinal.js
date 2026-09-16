@@ -1,0 +1,1 @@
+function bookingV2SetPickupFinal(bkId, val, date){ const b=SB_BOOKINGS.find(x=>x.id===bkId); if(!b) return; const _o=bkOpsFor(b, bkOpsDate(b,date)); _o.pickupTimeFinal=(val||'').trim(); acctPersistBookings(); }

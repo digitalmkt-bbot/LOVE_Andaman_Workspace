@@ -1,0 +1,1 @@
+function bookingV2VanGroupSetReturn(date, routeId, zone, gid, vanId){ _bkV2GrpApply(date,routeId,zone,gid,(b,s,o)=>{ if(s) s.vanReturnId=vanId||null; else o.vanReturnId=vanId||null; }); acctPersistBookings(); if(typeof bookingV2Render==='function') bookingV2Render(); }
