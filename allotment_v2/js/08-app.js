@@ -49174,6 +49174,9 @@ function bkV2CommitBooking(status){
     if(editing.rebook) newBk.rebook = editing.rebook;
     if(editing.invoiceId) newBk.invoiceId = editing.invoiceId;
     if(editing.paymentStatus) newBk.paymentStatus = editing.paymentStatus;
+    // §opsSync · id of this booking's mirror on operation-backend, if it has one — carry it over
+    //   so an edit PATCHes the same record instead of creating a duplicate every save.
+    if(editing.opsId) newBk.opsId = editing.opsId;
     // ⚠ Preserve operational assignments across edits — boat assign (ops.boatId), van group/van/return,
     //   reconfirm, final pickup time, upgrade, etc. were being WIPED on every edit (data-loss bug 2026-06-14).
     if(editing.ops) newBk.ops = editing.ops;
@@ -49376,6 +49379,8 @@ function bkV2CommitBooking(status){
     if(tripsModified) obj.trips = TRIPS;
     localStorage.setItem(lsKey, JSON.stringify(obj));
   } catch(e){ console.warn('Save failed', e); }
+  // §opsSync · mirror onto operation-backend, best-effort — see bkV2SyncToOpsBackend
+  try{ bkV2SyncToOpsBackend(newBk); }catch(e){}
 
   // Close form · go to detail page if editing · else All bookings tab
   const wasEditing = !!_bkV2.editingId;
@@ -49745,6 +49750,76 @@ function bkV2FocApprove(bookingId){
   bkV2PersistBookings();
   bkV2Render();
 }
+// §opsSync (2026-09-16) · best-effort mirror of a committed booking onto operation-backend — creates
+//   it if it has no opsId yet, PATCHes it if it does (opsId is carried over across edits, see the
+//   edit-preserve block above). Fire-and-forget: a slow/unreachable operation-backend must never
+//   block the booking form, so a failure only warns to console. This is what lets a booking survive
+//   a page refresh when server.js's blob sync is unavailable (window.LA_LEGACY_UNAVAILABLE) — the
+//   read side that repopulates SB_BOOKINGS from operation-backend on boot is bkV2LoadFromOpsBackend.
+function bkV2SyncToOpsBackend(bk){
+  if(typeof window.laOpsFetch!=='function' || !bk) return;
+  var payload = {
+    trips: (bk.trips||[]).map(function(t){
+      var o = { routeId:t.routeId, date:t.date, pax:t.pax||{} };
+      if(t.bookingMode==='charter'){ o.bookingMode='charter'; if(t.charterBoatId) o.charterBoatId=t.charterBoatId; }
+      return o;
+    }),
+    externalId: bk.id, status: bk.status
+  };
+  ['agentId','leadPax','leadNationality','leadPhone','leadEmail','hotelName','pickupAreaId','voucherRef','bookingDate'].forEach(function(k){
+    if(bk[k]!=null && bk[k]!=='') payload[k]=bk[k];
+  });
+  var method = bk.opsId ? 'PATCH' : 'POST';
+  var path = bk.opsId ? ('/v1/bookings/'+encodeURIComponent(bk.opsId)) : '/v1/bookings';
+  window.laOpsFetch(path, { method:method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) })
+    .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error((j&&j.message)||('HTTP '+r.status)); return j; }); })
+    .then(function(j){
+      if(!bk.opsId && j && j.id){ bk.opsId=j.id; try{ bkV2PersistBookings(); }catch(e){} }
+      try{ console.log('[opsSync] booking '+bk.id+' synced to operation-backend as '+(bk.opsId||'?')); }catch(e){}
+    })
+    .catch(function(e){ try{ console.warn('[opsSync] booking '+bk.id+' failed to sync to operation-backend: '+((e&&e.message)||e)); }catch(_){} });
+}
+// §opsSync · on boot, when server.js's blob is unavailable, SB_BOOKINGS starts empty (nothing loaded
+//   it) — this repopulates it from operation-backend's GET /v1/bookings so a refresh doesn't look like
+//   data loss. Only runs when window.LA_LEGACY_UNAVAILABLE is set (01-auth-sync.js, on /api/load 401);
+//   a normal server.js-backed session is untouched.
+function bkV2FromOpsBooking(ob){
+  var g=function(camel,snake){ return ob[camel]!==undefined ? ob[camel] : ob[snake]; };
+  return {
+    id: g('externalId','external_id') || ob.id,
+    opsId: ob.id,
+    agentId: g('agentId','agent_id') || null,
+    leadPax: g('leadPax','lead_pax') || '',
+    leadNationality: g('leadNationality','lead_nationality') || '',
+    leadPhone: g('leadPhone','lead_phone') || '',
+    leadEmail: g('leadEmail','lead_email') || '',
+    hotelName: g('hotelName','hotel_name') || '',
+    pickupAreaId: g('pickupAreaId','pickup_area_id') || null,
+    status: ob.status || 'confirmed',
+    bookingDate: g('bookingDate','booking_date') || '',
+    voucherRef: g('voucherRef','voucher_ref') || '',
+    trips: (ob.trips||[]).map(function(t){
+      var tg=function(camel,snake){ return t[camel]!==undefined ? t[camel] : t[snake]; };
+      return { routeId: tg('routeId','route_id'), date: t.date, bookingMode: tg('bookingMode','booking_mode')||'seat', pax: t.pax||{}, charterBoatId: tg('charterBoatId','charter_boat_id')||null };
+    }),
+    passengers: ob.passengers||[], addOns: [], adjustments: [], history: [], ops: {}, priceBreakdown: {}, total: 0,
+    _fromOpsBackend: true
+  };
+}
+function bkV2LoadFromOpsBackend(){
+  if(!window.LA_LEGACY_UNAVAILABLE || typeof window.laOpsFetch!=='function') return;
+  window.laOpsFetch('/v1/bookings').then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(j){
+      if(!j || !Array.isArray(j.bookings)) return;
+      var mapped = j.bookings.map(bkV2FromOpsBooking);
+      SB_BOOKINGS.length = 0;
+      Array.prototype.push.apply(SB_BOOKINGS, mapped);
+      try{ console.log('[opsSync] loaded '+mapped.length+' booking(s) from operation-backend'); }catch(e){}
+      try{ if(typeof bkV2Render==='function') bkV2Render(); }catch(e){}
+    })
+    .catch(function(e){ try{ console.warn('[opsSync] failed to load bookings from operation-backend: '+((e&&e.message)||e)); }catch(_){} });
+}
+try{ bkV2LoadFromOpsBackend(); }catch(e){}
 // Persist bookings (single source) · acctPersistBookings if present, else manual read-modify-write of sb_bookings
 function bkV2PersistBookings(){
   if(typeof acctPersistBookings==='function'){ acctPersistBookings(); return; }
