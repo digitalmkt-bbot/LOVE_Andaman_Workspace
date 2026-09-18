@@ -1,3 +1,13 @@
+// Defensive bootstrap for deployments where 08-app.js and the split booking
+// scripts are served from different cache generations.
+window._bkV2 = window._bkV2 || {
+  tab:'cal', view:'cal', cursor:new Date(), selected:null, avgMode:'week',
+  expanded:new Set(), panelHid:false, filterRoute:null, filterDate:null,
+  search:'', statusFilter:'all', page:1, pageSize:200, month:null,
+  newBooking:null, detailId:null, editingId:null,
+  boatAssignMode:false, vanAssignMode:false, reconfirmMode:false
+};
+
 // Main entry (called from renderBooking)
 function bookingV2Render(){
   const host = document.getElementById('bkv2-host');
