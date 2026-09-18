@@ -50,6 +50,17 @@
   // who's logged in for the sidebar. A 401 from any operation-backend call clears it and reloads
   // to the login screen (see laOpsFetch below).
   var OPS_BACKEND = 'https://operationbackend-production.up.railway.app';
+  // §legacyOff (2026-09-18) · does THIS deployment have a server.js blob backend behind /api?
+  //   Until now the answer was inferred from /api/load returning exactly 401, which quietly made
+  //   server.js load-bearing on a branch that calls it deprecated: delete it, or serve this app
+  //   from any plain static server, and /api/load answers 404 (or 0) instead — not 401 — so the
+  //   escape hatch below never fires and _laAsyncLoad hangs the app forever on the boot overlay,
+  //   retrying every 4s. State it outright instead of guessing from a status code.
+  //   false → server.js is never called: no boot blob, no version poll, no SSE, no save push.
+  //   Set back to true for a deployment that really does run server.js (lk-inbox), and the whole
+  //   legacy sync path behaves exactly as before.
+  var LA_LEGACY_SYNC = false;
+  window.LA_LEGACY_SYNC = LA_LEGACY_SYNC;
   var OPS_TOKEN_KEY = 'la_ops_token';
   function opsToken(){ try{ return sessionStorage.getItem(OPS_TOKEN_KEY)||''; }catch(e){ return ''; } }
   function opsSetToken(tok){ try{ sessionStorage.setItem(OPS_TOKEN_KEY, tok); }catch(e){} }
@@ -118,7 +129,12 @@
       lv.forEach(function(x){ if(x&&x.id!=null && !ids[String(x.id)]){ sv.push(x); g++; } }); } });
     return g; }
   var _ldT0=Date.now();
-  var ld=sx('GET','/api/load');
+  //   The call below is a SYNCHRONOUS XHR for a ~16 MB blob — it blocks boot before anything
+  //   renders, so skipping it outright is also the single biggest win on a legacy-less deploy.
+  var ld;
+  if(LA_LEGACY_SYNC){ ld=sx('GET','/api/load'); }
+  else { ld={status:0,json:null,text:''}; window.LA_LEGACY_UNAVAILABLE=true;
+    try{ console.warn('[boot] LA_LEGACY_SYNC=false — skipping /api/load entirely; server.js is not used by this deployment. Only operation-backend features carry data.'); }catch(e){} }
   /* §bootDiag · จดเวลาและขนาดไว้เสมอ · ปัญหา "ช้าเฉพาะบางช่วงเวลา" ต้องมีตัวเลขถึงจะตามได้
      ข้อมูลทั้งก้อนตอนนี้ ~16 MB (sb_bookings อย่างเดียว ~11 MB) โหลดใหม่ทุกครั้งที่เปิดหน้า */
   try{
@@ -209,7 +225,8 @@
   // blocking overlay; it means "server.js's legacy data (agents/rate types/accounting/fleet/vans/
   // pickup/...) is unavailable in this session, only operation-backend-covered features work." Log
   // it once and continue booting with an empty legacy state instead of hanging on the load screen.
-  if(ld.status===401){ window.LA_LEGACY_UNAVAILABLE=true;
+  if(window.LA_LEGACY_UNAVAILABLE){ /* §legacyOff · already decided above — do NOT arm _laAsyncLoad */ }
+  else if(ld.status===401){ window.LA_LEGACY_UNAVAILABLE=true;
     try{ console.warn('[boot] /api/load 401 — server.js legacy data unavailable (expected: this branch no longer authenticates to server.js). Only operation-backend features will work.'); }catch(e){} }
   else if(ld.status!==200 || !ld.json){ _laAsyncLoad(ld.status); }
   if(ld.status===200 && ld.json){
@@ -316,6 +333,11 @@
   // ปล่อยให้ diff เดินต่อคือเปิดทางลบข้อมูลทั้งระบบด้วยการเซฟครั้งเดียว
   function _laBlobUsable(cur){ return !!(cur && typeof cur==='object' && Object.keys(cur).length>0); }
   function save(v, forceLegacy){ var cur; try{cur=JSON.parse(v);}catch(e){return;}
+    // §opsAuth (2026-09-18) · no legacy session = this POST is a guaranteed 401, and the 401 branch
+    //   below raises "เซสชันหมดอายุ · กรุณาเข้าสู่ระบบใหม่" on EVERY edit — a false alarm, because the user IS
+    //   logged in, just to operation-backend. Bookings reach the server via bookingV2SyncToOpsBackend;
+    //   every other domain is local-only on this branch by design, not because a session expired.
+    if(window.LA_LEGACY_UNAVAILABLE){ _dirty=false; return; }
     if(!_laBlobUsable(cur)){ try{ console.warn('[sync] blob ว่าง — ไม่ส่งขึ้นเซิร์ฟเวอร์ (กันลบข้อมูลทั้งระบบ)'); }catch(e){} _dirty=false; return; }
     var d=computeDiff(BASE,cur); if(!d._changed){ _dirty=false; return; }
     var ops = forceLegacy ? null : laDiffToOps(d, cur);
@@ -329,7 +351,10 @@
     x.onerror=function(){ _laRetry('เชื่อมต่อระบบไม่ได้'); };
     try{ x.send(JSON.stringify(ops ? {baseVersion:VER, ops:ops} : {baseVersion:VER, diff:{sets:d.sets,cols:d.cols,objs:d.objs}})); }catch(e){} }
   // FLUSH pending change before the page unloads (refresh/close) so a fast refresh never loses the last edit
-  function _laFlush(){ if(!_dirty) return; try{ var cur=JSON.parse(localStorage.getItem(LS)||'{}');
+  // §opsAuth (2026-09-18) · the flush below is a SYNCHRONOUS XHR, so pointing it at a dead endpoint
+  //   stalls every page unload. No legacy session = nothing to flush there.
+  function _laFlush(){ if(!_dirty) return; if(window.LA_LEGACY_UNAVAILABLE){ _dirty=false; return; }
+  try{ var cur=JSON.parse(localStorage.getItem(LS)||'{}');
     if(!_laBlobUsable(cur)){ _dirty=false; return; }   // §emptyBlobGuard · ปิดหน้าตอน blob ว่าง = ไม่มีอะไรให้เซฟ ไม่ใช่คำสั่งลบ
     var d=computeDiff(BASE,cur); if(!d._changed){ _dirty=false; return; }
     var ops=laDiffToOps(d,cur);
@@ -465,7 +490,13 @@
   window._laSoftRefresh=_laSoftRefresh;   // expose for the banner button's inline onclick
   function _laTryRefresh(){ if(!_laPending) return; if(_laBusy()) showRefresh(_laPending); else _laSoftRefresh(); }
   // poll cloud version
-  setInterval(function(){ var x=new XMLHttpRequest(); x.open('GET',bust('/api/version'),true); x.onload=function(){ if(x.status===200){ var j={}; try{j=JSON.parse(x.responseText);}catch(e){} if((j.version||0)>VER){ _laPending=j; _laTryRefresh(); } try{ _laB2CHealth(j.b2c); }catch(e){} } }; try{x.send();}catch(e){} }, 10000);
+  // §opsAuth (2026-09-18) · the freshness layer (this poll + the SSE feed below) asks server.js
+  //   "has the shared blob's version counter gone up", then answers by re-downloading the whole blob.
+  //   With no legacy session it only ever 401s, so it is pure noise — and the SSE one is worse than
+  //   noise, because EventSource auto-reconnects on every failure. operation-backend has no blob and
+  //   no global version counter, so there is nothing to repoint these at; cross-tab freshness against
+  //   it needs its own design. Until that exists, stay off.
+  setInterval(function(){ if(window.LA_LEGACY_UNAVAILABLE) return; var x=new XMLHttpRequest(); x.open('GET',bust('/api/version'),true); x.onload=function(){ if(x.status===200){ var j={}; try{j=JSON.parse(x.responseText);}catch(e){} if((j.version||0)>VER){ _laPending=j; _laTryRefresh(); } try{ _laB2CHealth(j.b2c); }catch(e){} } }; try{x.send();}catch(e){} }, 10000);
   // §B2C sync-down alert (2026-07-31): a failed B2C sync is non-fatal on the server — it logs and moves
   // on — so without this the app looks perfectly healthy while orders silently stop arriving. Server
   // side only reports a fault after 3 consecutive failed runs (~2 min) or 10 min with no successful
@@ -495,7 +526,9 @@
   }
   window._laB2CHealth=_laB2CHealth;
   // Real-time push via SSE · server notifies instantly on any save (poll above is just a fallback)
-  function _laStartSSE(){ if(typeof EventSource==='undefined') return; try{ if(window.__laSSE) window.__laSSE.close(); var es=new EventSource('/api/events'); es.onmessage=function(e){ try{ var j=JSON.parse(e.data); if((j.version||0)>VER){ _laPending=j; _laTryRefresh(); } }catch(_){} }; window.__laSSE=es; }catch(e){} }
+  // §opsAuth (2026-09-18) · a 401 on /api/events turns into an endless EventSource reconnect loop.
+  function _laStartSSE(){ if(typeof EventSource==='undefined') return; if(window.LA_LEGACY_UNAVAILABLE) return;
+  try{ if(window.__laSSE) window.__laSSE.close(); var es=new EventSource('/api/events'); es.onmessage=function(e){ try{ var j=JSON.parse(e.data); if((j.version||0)>VER){ _laPending=j; _laTryRefresh(); } }catch(_){} }; window.__laSSE=es; }catch(e){} }
   _laStartSSE();
   // keep the saved screen fresh · once new data is pending, seamlessly refresh the moment the user goes idle
   setInterval(function(){ _laSaveView(); if(_laPending && !_laBusy()) _laSoftRefresh(); }, 3000);
