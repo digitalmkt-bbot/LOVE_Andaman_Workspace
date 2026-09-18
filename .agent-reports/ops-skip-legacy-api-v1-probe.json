@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "task": "ops-skip-legacy-api-v1-probe",
+  "title": "Skip legacy API resource probe",
+  "status": "completed",
+  "agent": {
+    "sessionId": "01a0b367-b4c2-77db-8516-47003bcf54a5",
+    "model": "openai-codex/gpt-5.6-terra"
+  },
+  "git": {
+    "base": "origin/integration/operation-backend",
+    "branch": "integration/operation-backend",
+    "worktree": "D:/projects/wt-operation-backend-integration",
+    "commit": "",
+    "pr": { "number": null, "url": "", "state": "none" }
+  },
+  "input": {
+    "requestedOutcome": "Remove the expected frontend-origin /api/v1 401 request.",
+    "acceptanceCriteria": ["Do not call /api/v1 when LA_LEGACY_SYNC is false.", "Retain the probe when LA_LEGACY_SYNC is true."],
+    "allowedScope": ["allotment_v2/js/01-auth-sync.js", "docs/development/tasks/ops-skip-legacy-api-v1-probe.md", ".agent-reports/ops-skip-legacy-api-v1-probe.json"],
+    "constraints": ["Do not change operation-backend bearer-token traffic.", "Do not change persisted data or schema."],
+    "assumptions": ["This branch runs with LA_LEGACY_SYNC=false.", "/api/v1 is a legacy server.js endpoint." ]
+  },
+  "output": {
+    "summary": "Guards the legacy resource-index probe behind LA_LEGACY_SYNC so operation-backend-only boot does not request frontend-origin /api/v1.",
+    "filesChanged": [
+      { "path": "allotment_v2/js/01-auth-sync.js", "change": "modified", "purpose": "Skip the obsolete legacy API resource-index probe when legacy sync is disabled." },
+      { "path": "docs/development/tasks/ops-skip-legacy-api-v1-probe.md", "change": "added", "purpose": "Record implementation and verification evidence." },
+      { "path": ".agent-reports/ops-skip-legacy-api-v1-probe.json", "change": "added", "purpose": "Provide machine-readable handoff." }
+    ],
+    "behaviorChanges": [
+      { "area": "Operation-backend-only boot", "before": "Always made GET /api/v1 and received a legacy-session 401.", "after": "Makes no /api/v1 request while LA_LEGACY_SYNC is false." }
+    ],
+    "interfaces": { "added": [], "changed": ["Legacy REST resource-index discovery is conditional on LA_LEGACY_SYNC."], "removed": ["Operation-backend-only frontend-origin GET /api/v1 probe."] },
+    "dataPersistence": { "impact": "none", "details": ["No database, schema, mapper, or write-path change."], "migrationRequired": false }
+  },
+  "verification": [
+    { "command": "node --check allotment_v2/js/01-auth-sync.js", "status": "passed", "evidence": "Exited successfully." },
+    { "command": "git diff --check", "status": "passed", "evidence": "Exited successfully." }
+  ],
+  "decisions": ["Use the existing LA_LEGACY_SYNC flag to preserve legacy compatibility."],
+  "risks": ["Other unmigrated legacy features remain unavailable in operation-backend-only sessions by design."],
+  "blockers": [],
+  "dependencies": ["Deploy this branch and reload the browser."],
+  "followUps": ["Migrate remaining legacy frontend data paths to operation-backend resources."],
+  "rollback": "Revert this commit to restore the unconditional legacy /api/v1 resource-index probe."
+}

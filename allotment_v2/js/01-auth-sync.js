@@ -262,8 +262,10 @@
   //    หน้าต่างอันตราย 4 วินาที แล้วหายเอง — เลยดูเหมือน "แปปเดียว")
   //   ไม่ได้ข้อมูล = ไม่มีสิทธิ์เขียนทับของบนเซิร์ฟเวอร์ · overlay บังจออยู่แล้ว ผู้ใช้แก้อะไรไม่ได้ระหว่างนี้
   _syncReady = (ld.status===200 && !!ld.json);
-  var REST_RESOURCES=null;                                              // {entity: 'array'|'map'} from GET /api/v1
-  (function(){ var ri=sx('GET','/api/v1'); if(ri.status===200&&ri.json&&ri.json.resources) REST_RESOURCES=ri.json.resources; })();
+  // The legacy REST resource index is relevant only when legacy cloud sync is enabled.
+  // Do not request frontend-origin /api/v1 in operation-backend-only sessions.
+  var REST_RESOURCES=null;
+  if(LA_LEGACY_SYNC){ (function(){ var ri=sx('GET','/api/v1'); if(ri.status===200&&ri.json&&ri.json.resources) REST_RESOURCES=ri.json.resources; })(); }
   function laDiffToOps(d, cur){
     if(!REST_RESOURCES) return null;
     var ops=[], ok=true;
