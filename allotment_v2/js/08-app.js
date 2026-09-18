@@ -36663,7 +36663,11 @@ function bkRenderRecent(){
 // ═══════════════════════════════════════════════════════════════
 // State (P1 rework · 3-tab + P2 New Booking form)
 var _bkV2CityTourOnly = false;   // §cityTourView · false = "Booking" (marine-only) · true = "Booking – Transfer / City Tour" (land-only, laIsLandRoute) — symmetric split, not just an added filter
-const _bkV2 = {
+// Keep the booking state on window as well as in the classic-script global scope.
+// The bookingV2* functions are split into separately loaded classic scripts; an
+// explicit window binding avoids a missing _bkV2 binding when an older cached
+// 08-app.js is mixed with the split function files during deployment.
+var _bkV2 = window._bkV2 || (window._bkV2 = {
   tab: 'cal',           // 'cal' | 'bytrip' | 'all'
   view: 'cal',          // 'cal' | 'mx' (only when tab === 'cal')
   cursor: new Date(),   // 1st of currently viewed month
@@ -36684,7 +36688,7 @@ const _bkV2 = {
   boatAssignMode: false,// By-trip-date "Boat Assign" mode → adds a Boat column + auto-assign
   vanAssignMode: false, // By-trip-date "Van Assign" mode → adds a Van column + pickup time + job order
   reconfirmMode: false  // By-trip-date "Re-Confirm" mode → confirm actual pickup times with the agent
-};
+});
 
 // Program families · 5 main groups · each containing 1-5 route variants
 const _BKV2_FAMILIES = [
