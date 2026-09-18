@@ -31,11 +31,29 @@ const OS_SCHEMA = 'operation_schemas';
 // e.g. allotment.users on prod). app_state + attachments stay unqualified in both modes.
 const USERS_T = DATA_BACKEND === 'relational' ? OS_SCHEMA + '.users' : 'users';
 // os_repo mapping engine + schema model — used by the relational save path AND the per-entity REST API.
-const osRepo  = require('./os-backend/src/mapping/os_repo.js');
+// §opsBackendBranch (2026-09-18) · os-backend/src/mapping/ was deleted on this branch: the frontend
+//   talks to operation_backend directly and no longer needs the blob mapper. An unconditional
+//   require() here killed the process at boot (MODULE_NOT_FOUND), which took the sandbox FRONTEND
+//   down too — it is served as static files by this same server. Degrade instead of dying: the
+//   mapper-backed paths (/api/load, /api/save, the /api/v1 REST index) throw a clear error when
+//   called, while static files, attachments, users and sessions keep serving. /api/load then
+//   answers 401 as it already does without a legacy session — exactly the signal the client reads
+//   as window.LA_LEGACY_UNAVAILABLE to fall back to operation-backend.
+let osRepo, osModel;
+try {
+  osRepo  = require('./os-backend/src/mapping/os_repo.js');
+  osModel = require('./os-backend/src/mapping/operation_schemas_model.json');
+} catch (err) {
+  // only swallow the mapping module being absent — a broken require INSIDE it must still be loud
+  if (err.code !== 'MODULE_NOT_FOUND' || !/os-backend[\/]src[\/]mapping/.test(err.message)) throw err;
+  const gone = () => { throw new Error('relational blob mapper unavailable: os-backend/src/mapping was removed on this branch — use operation_backend'); };
+  osRepo  = { _plan: {}, _children: {}, assembleBlob: gone, decomposeBlob: gone };
+  osModel = {};
+  console.warn('[map] os-backend/src/mapping absent — /api/load, /api/save and /api/v1 are disabled; static app, attachments and sessions still serve.');
+}
 const apiProxy= require('./api-proxy.js');   // backend switch · inert unless API_PROXY_URL is set
 const oidc    = require('./auth/oidc.js');   // Authentik SSO · inert unless AUTH_OIDC_* is configured
 const b2cCat  = require('./b2c-catalog.js'); // B2C → ops programme catalog · inert unless B2C_API_KEY is set
-const osModel = require('./os-backend/src/mapping/operation_schemas_model.json');
 const OS_TABLES = Object.keys(osModel);
 const OS_COLS = {};
 for (const t of OS_TABLES) OS_COLS[t] = osModel[t].columns.map(c => c.name);
@@ -70,7 +88,9 @@ const MAP_DRIFT = (() => {
       + 'and disappears on refresh, with no error. tables: ' + (tables.join(', ') || '-')
       + ' | columns: ' + (columns.join(', ') || '-')
       + ' — add them to os-backend/src/mapping/field_mapping.json');
-  else console.log('[map] field_mapping.json covers every table and column in operation_schemas_model.json');
+  else if (OS_TABLES.length) console.log('[map] field_mapping.json covers every table and column in operation_schemas_model.json');
+  // no tables at all = the mapper is absent (guarded require above), NOT a clean bill of health — saying
+  // 'covers everything' here would be the exact silent-data-loss reassurance §mapDrift exists to prevent
   return { tables, columns };
 })();
 function mapDriftSummary(){
