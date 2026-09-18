@@ -7,6 +7,20 @@ window._bkV2 = window._bkV2 || {
   newBooking:null, detailId:null, editingId:null,
   boatAssignMode:false, vanAssignMode:false, reconfirmMode:false
 };
+// Families were formerly only a top-level const in 08-app.js. Keep an explicit
+// global fallback so split scripts remain safe across mixed asset generations.
+window._BKV2_FAMILIES = window._BKV2_FAMILIES || [
+  {id:'similan',name:'Similan Islands',color:'#185fa5'},
+  {id:'surin',name:'Surin Islands',color:'#3B6D11'},
+  {id:'phiphi',name:'Phi Phi Bamboo',color:'#c0392b'},
+  {id:'krabi',name:'Krabi + Phang Nga',color:'#0F6E56'},
+  {id:'whaleshark',name:'Whale Shark Phi Phi Maiton',color:'#BA7517'},
+  {id:'selava',name:'Day Trip - Se La Va',color:'#BA7517'},
+  {id:'nyaung',name:'Day Trip - Nyaung Oo Phee Island',color:'#0F6E56'},
+  {id:'transfer',name:'Transfer',color:'#5B289A'},
+  {id:'citytour',name:'City Tour',color:'#7B4BB7'},
+  {id:'activity',name:'Activities',color:'#C77D1E'}
+];
 
 // Main entry (called from renderBooking)
 function bookingV2Render(){
