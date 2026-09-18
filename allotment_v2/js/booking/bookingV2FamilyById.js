@@ -5,5 +5,5 @@
 //   familyId === '' means "deliberately no family" and is respected · undefined/null = never set.
 function bookingV2FamilyById(fid){
   if(!fid) return null;
-  return _BKV2_FAMILIES.find(f => f.id === fid) || null;
+  return (window._BKV2_FAMILIES || []).find(f => f.id === fid) || null;
 }

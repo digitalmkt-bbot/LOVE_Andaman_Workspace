@@ -60,7 +60,7 @@ function bookingV2RenderTab2(){
   const rowsPier = rows.filter(r=>{ if(pierF==='all') return true; const rt=ROUTES.find(x=>x.id===r.routeId); return rt?.pier===pierF; });
   // program-family options available on this date under the current pier (+ families that have locks)
   const _lockFamIds = (typeof SB_SEAT_LOCKS!=='undefined') ? SB_SEAT_LOCKS.filter(l=>l.status==='active' && bookingV2LocksFor(l.routeId,date).includes(l)).map(l=>bookingV2RouteFamily(l.routeId)?.id) : [];
-  const famOpts = (typeof _BKV2_FAMILIES!=='undefined'?_BKV2_FAMILIES:[]).filter(f =>
+  const famOpts = (window._BKV2_FAMILIES || []).filter(f =>
     rowsPier.some(r=>bookingV2RouteFamily(r.routeId)?.id===f.id) ||
     (typeof ROUTES!=='undefined' && ROUTES.some(r=>bookingV2RouteFamily(r.id)?.id===f.id && bookingV2LocksFor(r.id,date).length>0 && (pierF==='all'||r.pier===pierF)))
   );
