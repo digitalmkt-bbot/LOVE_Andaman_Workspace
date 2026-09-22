@@ -21,3 +21,7 @@ function bookingV2LoadFromOpsBackend(options){
     })
     .catch(function(e){ try{ console.warn('[opsSync] failed to load bookings from operation-backend: '+((e&&e.message)||e)); }catch(_){} return null; });
 }
+
+// This file is loaded after 08-app.js, so the boot call there cannot see this
+// function yet. Start the operation-backend load after this script is defined.
+try{ bookingV2LoadFromOpsBackend(); }catch(e){}
