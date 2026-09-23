@@ -19896,8 +19896,9 @@ function pckSetGrp(v){ _pckGrp=v; try{ localStorage.setItem('pck_grp',v); }catch
 
 /* สายรัดข้อมือของลำนั้นในวันนั้น · คนที่ท่าเทียบสีกับข้อมือแขก ไม่ได้อ่านชื่อลำ */
 function pckWb(date, bid){
-  try{ var J=(typeof pjOf==='function')?pjOf(date,bid):null;
-       if(J && J.wbc) return {c:J.wbc, t:J.wb||''}; }catch(_){}
+  /* §pjWbCarry · ใบที่ยังไม่ได้ตั้งสีเองใช้สีล่าสุดของลำนั้น · หน้าท่าต้องเห็นสีเดียวกับใบงาน */
+  try{ var W=(typeof pjWbOf==='function')?pjWbOf(date,bid):null;
+       if(W && W.c) return {c:W.c, t:W.t||''}; }catch(_){}
   return null;
 }
 /* สายรัดสีอ่อนมาก (ขาว/เหลือง) เอามาทำพื้นจะกลายเป็นขาว แยกไม่ออกจากแถวที่ยังไม่ได้ทำ */
@@ -63369,6 +63370,67 @@ function pjSet(d,b,patch){
   delete cur._std;
   Object.keys(patch).forEach(function(x){ cur[x]=patch[x]; });
   PIER_JOB[k]=cur; poPersist();
+  _pjWbMemo={};                       /* §pjWbCarry · ของที่สืบทอดมาอาจเปลี่ยนไปแล้ว */
+}
+/* ══ §pjWbCarry (2026-09-23) · เปิดใบวันถัดไป ให้ได้สีสายรัดของลำนั้นติดมาด้วย ══
+   สายรัดซื้อมาเป็นล็อต · ล็อตหนึ่งใช้หลายวันจนหมดแล้วค่อยเปลี่ยน
+   ของเดิมใบวันใหม่ว่างเปล่าทุกวัน ต้องเลือกสีเดิมซ้ำทุกเช้า
+   ข้อมูลจริง 53 ใบ · Love2 ใช้ม่วงติดกัน 21 วันรวด · ลำอื่นสลับสองสีไปมา
+   แปลว่า "สีล่าสุดของลำนั้น" เดาถูกเกือบทุกวัน และแก้ทับได้อยู่แล้ว
+
+   ⚠ สืบทอดเฉย ๆ ไม่ได้เขียนลงใบวันใหม่ · เขียนเมื่อไหร่ใบเปล่าจะกลายเป็นใบที่ถูกแตะ
+      แล้วตัวกรอง "ซ่อนลำที่ยังไม่ได้วาง" (pjIsIdle) จะมองไม่เห็นใบเปล่าอีกเลย
+   ⚠ สีเป็นของ "ลำ" ไม่ใช่ของ "วัน" · 18 จาก 31 วันในข้อมูลจริงใช้หลายสีในวันเดียว
+      เพราะคนหน้าท่าต้องแยกออกว่าข้อมือสีนี้ลงลำไหน · จึงย้อนดูเฉพาะลำเดียวกัน */
+var _pjWbMemo={};
+var PJ_WB_BACK=14;                    /* ย้อนหลังไกลสุด · เรือไม่ได้ออกทุกวัน */
+function pjWbOf(date, bid){
+  var k=date+'::'+bid;
+  if(_pjWbMemo[k]) return _pjWbMemo[k];
+  var out={c:'', t:'', from:''};
+  try{
+    var own=(typeof pjRaw==='function')?pjRaw(date,bid):null;
+    if(own && (String(own.wbc||'').trim() || String(own.wb||'').trim())){
+      out={c:String(own.wbc||''), t:String(own.wb||''), from:''};
+    }else{
+      var d=new Date(date+'T12:00:00');
+      for(var i=0;i<PJ_WB_BACK;i++){
+        d.setDate(d.getDate()-1);
+        var ds=poYMD(d), o=(typeof pjRaw==='function')?pjRaw(ds,bid):null;
+        if(o && (String(o.wbc||'').trim() || String(o.wb||'').trim())){
+          out={c:String(o.wbc||''), t:String(o.wb||''), from:ds};
+          break;
+        }
+      }
+    }
+  }catch(_){}
+  _pjWbMemo[k]=out;
+  return out;
+}
+/* ══ §pjDone (2026-09-23) · "จัดไม่เสร็จ กดจัดเสร็จไม่ได้" ═══════════════════
+   ปุ่ม "จัดเสร็จแล้ว" คือคำสัญญาว่าใบนี้พร้อม · หน้าอื่นอ่านต่อจากตรงนี้
+   ของเดิมกดได้ตลอดแม้ใบยังว่างทั้งใบ · ปิดไปแล้วไม่มีใครกลับมาดูอีก
+   ⚠ เฉพาะลำที่ออกเรือวันนั้น · ลำที่จอด/ซ่อมไม่มีอะไรต้องครบ ปิดได้เหมือนเดิม
+   ⚠ ไม่เอาเรื่องใบอนุญาตมาปนที่นี่ · กล่องใบอนุญาตเตือนของมันเองอยู่แล้ว
+      และใบหมดอายุยังจ่ายงานได้ (ดู plCheckBoat) จึงไม่ใช่เงื่อนไขปิดใบ */
+function pjLockMiss(date, bid){
+  var out=[];
+  try{
+    var B=null;
+    try{ (pjAllBoats(date,_poPier)||[]).forEach(function(x){ if(x && x.bid===bid) B=x; }); }catch(_){}
+    if(!B || !B._st || B._st.k!=='run') return out;          /* ไม่ได้ออกเรือ · ไม่ต้องครบ */
+    var J=(typeof pjOf==='function')?pjOf(date,bid):null;
+    if(!J) return out;
+    if(!String(J.cap||'').trim()) out.push('\u0e01\u0e31\u0e1b\u0e15\u0e31\u0e19');
+    var W=pjWbOf(date,bid);
+    if(!W.c && !W.t) out.push('\u0e2a\u0e35\u0e2a\u0e32\u0e22\u0e23\u0e31\u0e14\u0e02\u0e49\u0e2d\u0e21\u0e37\u0e2d');
+    var GF=(typeof pjGuidesFull==='function')?pjGuidesFull(date,bid):null;
+    if(!GF || (!GF.length && !(+GF.other||0))) out.push('\u0e44\u0e01\u0e14\u0e4c');
+    var rid=(B.route&&B.route.id)||'';
+    var V=(typeof mvForTrip==='function')?mvForTrip(date,bid,rid):null;
+    if(!V) out.push('\u0e23\u0e49\u0e32\u0e19\u0e2d\u0e32\u0e2b\u0e32\u0e23');
+  }catch(_){}
+  return out;
 }
 /* ต่างจากทีมประจำกี่คน · ใช้ติดป้าย SUB */
 function pjSubList(d,b){
@@ -63969,6 +64031,14 @@ function pjCSS(){
      +'padding:3px 10px;font:800 10.5px inherit;cursor:pointer;white-space:nowrap;line-height:1.55}'
   +H+' .pj-lb:hover{background:#0B5744;border-color:#0B5744}'
   +H+' .pj-lb.ed{background:#FFF6E5;border-color:#EFD9AE;color:#8A5A00}'
+  /* §pjDone · ยังจัดไม่เสร็จ · ไม่ใช่ปุ่ม จึงไม่มี hover และเคอร์เซอร์ไม่เปลี่ยน */
+  +H+' .pj-lb.need{background:#FCEFEF;border-color:#EBC9C9;color:#A32D2D;cursor:default}'
+  +H+' .pj-wbfrom{margin-left:7px;font-size:9.5px;font-weight:700;color:#8A929E;'
+     +'background:#F2F4F7;border-radius:5px;padding:1px 6px;white-space:nowrap}'
+  +H+' .pj-need{display:flex;flex-wrap:wrap;align-items:center;gap:6px;'
+     +'padding:6px 15px;background:#FCEFEF;border-bottom:1px solid #F2DADA;'
+     +'font-size:10.5px;font-weight:700;color:#A32D2D;line-height:1.5}'
+  +H+' .pj-need b{background:#fff;border:1px solid #EBC9C9;border-radius:6px;padding:1px 7px;font-weight:800}'
   +H+' .pj-lb.ed:hover{background:#FBEDD3;border-color:#E3C88F;color:#7A4E00}'
   +H+' .pj-sub{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:2px 8px;background:#FFF0D8;color:#B4560A}'
   +H+' .pj-move{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:2px 8px;background:#E9EFF7;color:#20477E;white-space:nowrap}'
@@ -64514,6 +64584,8 @@ function pjKeep(fn){
 }
 function pjLockSet(bid,v){
   if(!poCanEdit()) return;
+  /* §pjDone · ด่านซ้ำอีกชั้น · ปุ่มบนการ์ดกันไว้แล้ว แต่ของที่เรียกจากที่อื่นต้องไม่ทะลุ */
+  if(v && pjLockMiss(_poDate,bid).length) return;
   pjSet(_poDate,bid,{lock:v?1:0});
   pjKeep(function(){ renderPierJob(); });
 }
@@ -64674,12 +64746,14 @@ function pjCard(B, pier, ro){
      ทุกช่องที่เขียนค่าลงใบงานใช้ lro · ส่วนจานสีของโปรแกรม/สถานะยังใช้ ro
      เพราะนั่นเป็นค่าของเส้นทาง ไม่ใช่ของใบงานลำนี้วันนี้ */
   var lk=!!J.lock, lro=(ro||lk);
+  var _miss=(typeof pjLockMiss==='function')?pjLockMiss(_poDate,bid):[];   /* §pjDone */
   var colRaw=(typeof pckBoatColor==='function')?pckBoatColor(bid):'#185FA5';
   var col=going?colRaw:pjMute(colRaw);
   var pcol=rt.color||'#5A6270';
   var pax=pjPax(_poDate,bid,pier), GF=pjGuidesFull(_poDate,bid), G=GF.map(function(x){ return x.name; });
   var langs=Object.keys(pax.langs);
-  var wbc=J.wbc||'', wbt=J.wb||'';
+  /* §pjWbCarry · สีที่ใบนี้ "ใช้จริง" · ของตัวเอง หรือสืบมาจากวันล่าสุดของลำนี้ */
+  var _W=pjWbOf(_poDate,bid), wbc=_W.c, wbt=_W.t, wbFrom=_W.from;
   var pid='pjpop-'+bid.replace(/[^A-Za-z0-9_-]/g,'_');
   var wid='pjwb-'+bid.replace(/[^A-Za-z0-9_-]/g,'_');
   /* §gdIdle (2026-09-07) · ปุ่ม "จัดไกด์" อยู่ทุกใบ ลำที่ไม่ได้ออกก็จ่ายไกด์ได้
@@ -64832,8 +64906,17 @@ function pjCard(B, pier, ro){
      +(ro?''
         :(lk
           ? ('<button class="pj-lb ed" onclick="pjLockSet(\''+bid+'\',0)" title="เปิดใบนี้ให้แก้ไขอีกครั้ง">&#9998; แก้ไข</button>')
-          : ('<button class="pj-lb" onclick="pjLockSet(\''+bid+'\',1)" title="ปิดใบนี้ · ต้องกดแก้ไขก่อนถึงจะเปลี่ยนคนได้">&#10003; จัดเสร็จแล้ว</button>')))
+          : (_miss.length
+             /* §pjDone · ไม่ใช่ปุ่ม · กดไม่ได้จริง ๆ ไม่ใช่กดแล้วเด้งเตือน
+                รายการที่ขาดอยู่ในแถบใต้แถบสถานะ เพราะแถบนี้กว้างไม่พอ
+                (§pjStaleFit · ของยาวในแถบนี้ถูก overflow ของการ์ดกลืนมาแล้วครั้งหนึ่ง) */
+             ? ('<span class="pj-lb need" title="'+poE('\u0e22\u0e31\u0e07\u0e02\u0e32\u0e14 '+_miss.join(' \u00b7 '))+'">&#9888; \u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e04\u0e23\u0e1a</span>')
+             : ('<button class="pj-lb" onclick="pjLockSet(\''+bid+'\',1)" title="ปิดใบนี้ · ต้องกดแก้ไขก่อนถึงจะเปลี่ยนคนได้">&#10003; จัดเสร็จแล้ว</button>'))))
    +'</div>'
+   +((!ro && !lk && _miss.length)
+      ? ('<div class="pj-need">&#9888; \u0e22\u0e31\u0e07\u0e08\u0e31\u0e14\u0e44\u0e21\u0e48\u0e40\u0e2a\u0e23\u0e47\u0e08 \u00b7 \u0e02\u0e32\u0e14'
+          + _miss.map(function(x){ return '<b>'+poE(x)+'</b>'; }).join('')+'</div>')
+      : '')
    /* §pjWork · ชื่อตำแหน่งเปลี่ยนตามงาน · ชื่อคนยังมาจากทะเบียนพนักงานท่าเรือชุดเดิม
       ช่องที่เก็บยังเป็น cap/asst/crew/island ชุดเดิม จึงไหลเข้าตารางการทำงานเองอยู่แล้ว */
    /* §pjSame · ชื่อหัวข้อเดิมเปลี่ยนตาม SM.work · ใบสองใบที่ไม่ได้ออกเหมือนกัน
@@ -64958,6 +65041,8 @@ function pjCard(B, pier, ro){
    +'<div class="pj-wbrow"><span class="k">Wristband</span>'
      +'<span class="pj-wb" onclick="'+(lro?'':'pjPopToggle(\''+wid+'\')')+'" style="position:relative">'
        +'<i style="background:'+(wbc||'#F0F0EC')+'"></i>'+(wbt?poE(wbt):'<span style="color:#C9CFD8;font-weight:500">ยังไม่ระบุ</span>')
+       /* §pjWbCarry · บอกด้วยว่าสีนี้ต่อมาจากวันไหน · ล็อตเปลี่ยนแล้วจะได้เห็นว่าต้องแก้ */
+       +(wbFrom?('<span class="pj-wbfrom" title="ใบนี้ยังไม่ได้ตั้งสีเอง · ใช้สีล่าสุดของลำนี้">ต่อจาก '+poE(pjDocDate(wbFrom))+'</span>'):'')
        +'<div class="pj-pop" id="'+wid+'" style="top:30px;left:0;right:auto;width:252px"><div class="ph">สีสายรัดข้อมือวันนี้</div>'
        +'<div class="pj-sws">'
        +PJ_WB.map(function(w){ return '<div class="pj-sw'+(w.c===wbc?' on':'')+'" title="'+w.t+'" style="background:'+w.c+'" onclick="pjWbSet(\''+bid+'\',\''+w.t+'\',\''+w.c+'\')"></div>'; }).join('')
@@ -65923,7 +66008,9 @@ function pjPrint(){
        สีล้วน ๆ แยก "ฟ้า TQ" กับ "น้ำเงิน" ไม่ออกบนจอที่ปรับสีเอง
        และคนสั่งของทางไลน์ต้องพิมพ์ชื่อสีได้ · โชว์ทั้งแถบสีและชื่อ */
     + row('WRISTBAND|\u0e2a\u0e32\u0e22\u0e23\u0e31\u0e14\u0e02\u0e49\u0e2d\u0e21\u0e37\u0e2d',function(B,i){
-        var c=String(J[i].wbc||'').trim(), nm=String(J[i].wb||'').trim();
+        /* §pjWbCarry · ใบที่ปริ้นต้องโชว์สีเดียวกับบนจอ รวมถึงสีที่สืบมาจากวันก่อน */
+        var _w=pjWbOf(_poDate, B.bid);
+        var c=String(_w.c||'').trim(), nm=String(_w.t||'').trim();
         if(/^#[0-9a-fA-F]{3,8}$/.test(c))
           return '<span class="wbc"><i style="background:'+c+'"></i>'
                + (nm?('<b>'+e(nm)+'</b>'):'') + '</span>';
@@ -66029,7 +66116,8 @@ function pjPrint(){
       /* §pjOver · ยอดเกินความจุ = จ่ายงานผิด ต้องรู้ตั้งแต่ก่อนออกเรือ
          ของเดิมพิมพ์ "120/65" ด้วยสีเดียวกับทุกช่อง อ่านผ่านได้ง่ายมาก */
       var over=(cap>0 && pax>cap) ? (pax-cap) : 0;
-      var wbc=(J[i]&&J[i].wbc)||'', wbn=(J[i]&&J[i].wb)||'';
+      var _wb2=pjWbOf(_poDate, B.bid);                  /* §pjWbCarry */
+      var wbc=_wb2.c||'', wbn=_wb2.t||'';
 
       /* ของที่ต้องเตรียมล่วงหน้า · รู้ได้ตั้งแต่ตอนออกใบ */
       return { dep:(dep||'~'), html:
