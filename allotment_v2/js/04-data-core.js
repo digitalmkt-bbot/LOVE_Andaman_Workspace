@@ -675,7 +675,8 @@ function nav(el){
   // fleet views
   if(view.startsWith('fl-')){
     const flView=view.replace('fl-','');
-    if(flView==='boatstatus') renderBoats();
+    if(flView==='deployment') flRenderDeployment();          /* §flDeploy */
+    else if(flView==='boatstatus') renderBoats();
     else if(flView==='dashboard') flRenderDashboard();
     else if(flView==='dailyreport') flRenderDR();
     else if(flView==='asset') flRenderAsset();

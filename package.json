@@ -39,7 +39,8 @@
     "test:pjdone": "node test/ui/t_pjdone.mjs",
     "test:pckwb": "node test/ui/t_pckwb.mjs",
     "test:assetver": "node test/ui/t_assetver.mjs",
-    "test:pjname": "node test/ui/t_pjname.mjs"
+    "test:pjname": "node test/ui/t_pjname.mjs",
+    "test:fldeploy": "node test/ui/t_fldeploy.mjs"
   },
   "dependencies": {
     "pg": "^8.13.1"
