@@ -64055,8 +64055,12 @@ function pjCSS(){
   +H+' .pj-shop{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:2px 8px;background:#F2EBFA;color:#5B3B96;white-space:nowrap}'
   +H+' .pj-std{display:inline-block;font-size:9.5px;font-weight:800;border-radius:5px;padding:2px 8px;background:#EDF3EF;color:#5E8B72}'
   +H+' .pj-gh{display:flex;align-items:center;gap:8px;padding:0 15px;height:28px;font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);background:var(--bg);color:var(--fg);box-shadow:inset 4px 0 0 var(--fg)}'
-  +H+' .pj-rw{display:flex;align-items:center;gap:8px;padding:0 15px;height:32px;border-bottom:1px solid #F4F5F8}'
-  +H+' .pj-rw .k{font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#9BA3B0;width:100px;flex:none}'
+  /* §pjName · แถวสูงตามเนื้อหา · ชื่อที่ยาวได้บรรทัดสองแทนที่จะโดนตัด
+     ยังตรึงขั้นต่ำ 32px ไว้ แถวที่ชื่อสั้นจะได้สูงเท่าเดิมทุกแถว */
+  +H+' .pj-rw{display:flex;align-items:center;gap:8px;padding:3px 15px;min-height:32px;border-bottom:1px solid #F4F5F8}'
+  /* ป้ายช่องแคบลงจาก 100px · ที่ได้คืนมาเป็นของชื่อคน
+     ป้ายยาวอย่าง ASST. CAPTAIN ตัดลงสองบรรทัดเองได้ ไม่ต้องย่อคำ */
+  +H+' .pj-rw .k{font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#9BA3B0;width:72px;flex:none;line-height:1.3;align-self:center}'
   +H+' .pj-rw .v{font-size:12px;font-weight:600;color:#242730;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
   +H+' .pj-rw .v.e{color:#CFD4DC;font-weight:400}'
   +H+' .pj-rw.sw2{background:#FFFCF3}'
@@ -64079,6 +64083,29 @@ function pjCSS(){
      +'font:600 12px inherit;font-family:inherit;color:#242730;padding:6px 8px;border-radius:6px;cursor:pointer}'
   +H+' .pj-pop.pj-addp button:hover{background:#EEF3FB;color:#20477E}'
   /* §pjRowFit · เว้นขวาให้ลูกศรของ select · ไม่งั้นชื่อยาววิ่งไปทับ */
+  /* ══ §pjName · ชื่อวาดเอง · select โปร่งใสทับอยู่ข้างบน ═══════════════════
+     ที่ต้องทับแทนที่จะทำ dropdown เอง เพราะเมนูของเบราว์เซอร์เลื่อนหาคนได้เร็วกว่า
+     มีกลุ่ม optgroup แยกท่า/ตำแหน่งอยู่แล้ว และพิมพ์ตัวแรกเพื่อกระโดดได้
+     เขียนใหม่เองแปลว่าต้องทำของพวกนั้นใหม่หมดโดยไม่ได้อะไรเพิ่ม */
+  +H+' .pj-sel{position:relative;flex:1;min-width:0;display:flex;align-items:center;gap:5px;'
+     +'border:1px solid transparent;border-radius:7px;padding:3px 6px;min-height:24px}'
+  +H+' .pj-sel:hover{border-color:#D9DDE4;background:#fff}'
+  +H+' .pj-sel:focus-within{border-color:#16265C;background:#fff}'
+  +H+' .pj-sel.ro:hover{border-color:transparent;background:none}'
+  /* ตัดบรรทัดที่ช่องว่างเป็นหลัก · ชื่อไทยเว้นวรรคระหว่างชื่อ สกุล และชื่อเล่นอยู่แล้ว
+     break-word ไว้เป็นทางสุดท้ายเผื่อเจอคำเดียวยาวเกินช่อง จะได้ไม่ล้นออกนอกการ์ด
+     ⚠ keep-all กัน Chrome ตัดกลางคำไทย · มันตัดตามพจนานุกรมเอง
+        ชื่อเล่นอย่าง (อัฟฟาน) จึงถูกหักเป็น (อัฟ / ฟาน) คนละครึ่งบรรทัด */
+  +H+' .pj-nm{flex:1;min-width:0;font-size:12px;font-weight:600;color:#242730;'
+     +'line-height:1.35;white-space:normal;word-break:keep-all;overflow-wrap:break-word}'
+  +H+' .pj-nm.e{color:#CFD4DC;font-weight:400}'
+  +H+' .pj-ro{font-style:normal;font-weight:500;color:#9BA3B0;font-size:11px}'
+  +H+' .pj-w{white-space:nowrap}'
+  +H+' .pj-ro:before{content:" \u00b7 "}'
+  +H+' .pj-cv{flex:none;color:#B6BDC8;font-size:9px;line-height:1;align-self:center}'
+  +H+' .pj-ov{position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;'
+     +'cursor:pointer;font:inherit;border:none;padding:0;margin:0}'
+  +H+' .pj-ov:disabled{cursor:default}'
   +H+' .pj-rw select{flex:1;min-width:0;border:1px solid transparent;background:transparent;border-radius:7px;'
      +'padding:3px 22px 3px 7px;font:600 12px inherit;color:#242730;cursor:pointer;text-overflow:ellipsis}'
   +H+' .pj-rw select:hover{border-color:#D9DDE4;background:#fff}'
@@ -64341,6 +64368,16 @@ function pjSlotVal(J, slot){
   return '';
 }
 /* แถวหนึ่งช่อง · เหมือน pjSelRow แต่ชื่อช่องพิมพ์ทับได้ และมีปุ่มเอาคนออก */
+/* §pjName · Chrome ตัดบรรทัดภาษาไทยด้วยพจนานุกรมของมันเอง
+   ชื่อเล่น (อัฟฟาน) จึงถูกหักเป็น (อัฟ / ฟาน) คนละบรรทัด ซึ่งอ่านแล้วสะดุด
+   word-break:keep-all ไม่ช่วย · Chrome ใช้กับ CJK เท่านั้น
+   ห่อทีละคำด้วย nowrap แทน · เบราว์เซอร์จึงตัดได้เฉพาะช่องว่างที่เราเลือกเอง
+   คำเดียวที่ยาวเกินช่องจะล้น ซึ่งเทสจับได้ (ข้อ "ชื่อล้นออกนอกการ์ด")
+   นามสกุลที่ยาวที่สุดในทะเบียนจริงกว้าง ~75px · ช่องกว้าง 145px */
+function pjWordSafe(t){
+  return String(t==null?'':t).split(/\s+/).filter(Boolean)
+    .map(function(w){ return '<span class="pj-w">'+poE(w)+'</span>'; }).join(' ');
+}
 function pjSlotRow(pier,bid,kind,slot,defLb,val,subOld,roles,ro,boat){
   var lb=pjSlotLb(kind,slot,defLb,bid);
   var kHtml = ro ? poE(lb)
@@ -64355,10 +64392,34 @@ function pjSlotRow(pier,bid,kind,slot,defLb,val,subOld,roles,ro,boat){
   var hp=val?pjHomePier(val):'';
   if(hp && hp!==pier) badge+='<span class="pj-away" title="มาช่วยจาก '+poE((PO_PIERS.filter(function(x){return x.k===hp;})[0]||{}).t||hp)+'">'+poE(pjPierShort(hp))+'</span>';
   var freeCaptain=slot==='cap' && boat && boat.ownership==='charter';
+  /* ══ §pjName (2026-09-23) · ชื่อในช่องเลือกคนขึ้นไม่เต็ม ═══════════════════
+     วัดจริงที่จอ 1600 การ์ด 4 ใบ · การ์ดกว้าง 302px ช่อง select เหลือ 141px
+     แต่ชื่อพนักงานจริงยาว 202px (กลาง) ถึง 329px (ยาวสุด) · ไม่มีใครพอสักคน
+     <select> เป็น element ของเบราว์เซอร์ ตัดคำเองไม่ได้ ดันให้กว้างกว่านี้ก็ไม่พอ
+     จึงเอาชื่อออกมาวาดเองข้างนอก แล้ววาง select โปร่งใสทับไว้
+     กดตรงไหนก็ยังเป็นเมนูของเบราว์เซอร์เหมือนเดิม ไม่ได้เขียน dropdown ใหม่
+     ชื่อตัดบรรทัดได้ที่ช่องว่าง (ชื่อไทยมีเว้นวรรคระหว่างชื่อ-สกุล-ชื่อเล่น)
+     ตำแหน่งในทะเบียนวางเป็นตัวจาง ต่อท้าย · ยาวไปก็ไหลลงบรรทัดสองเอง
+     ⚠ ไม่ตัดด้วย ellipsis อีกแล้ว · ชื่อคนบนใบจ่ายงานต้องอ่านได้ครบ */
+  var nmTxt=val?pjStaffName(val):'';
+  var roTxt='';
+  try{ var _st=(PIER_STAFF||[]).filter(function(x){ return x.id===val; })[0];
+       if(_st && _st.role) roTxt=String(_st.role); }catch(_){}
   var sel=(badge?('<span style="display:inline-flex;flex:none">'+badge+'</span>'):'')
     +(freeCaptain
       ? '<input class="pj-free" value="'+poE(val)+'" placeholder="พิมพ์ชื่อกัปตัน" onchange="pjFreePick(\''+bid+'\',\''+slot+'\',this)"'+(ro?' disabled':'')+'>'
-      : '<select onchange="pjPick(\''+bid+'\',\''+slot+'\',this.value)"'+(ro?' disabled':'')+'>'+pjOpts(pier,val,roles)+'</select>')
+      : ('<span class="pj-sel'+(ro?' ro':'')+'">'
+          +'<span class="pj-nm'+(val?'':' e')+'">'+(val?pjWordSafe(nmTxt):'— ว่าง —')
+            +(roTxt?('<i class="pj-ro">'+pjWordSafe(roTxt)+'</i>'):'')+'</span>'
+          /* ใบที่ปิดแล้ว/ดูอย่างเดียว · ไม่ต้องมี select เลย
+             ของเดิมวาด select disabled ทิ้งไว้พร้อมรายชื่อคนทั้งทะเบียนทุกช่อง
+             กดไม่ได้อยู่แล้ว แต่ยังกิน DOM เท่าเดิม · วันที่ปิดใบทั้งท่าคือหลายพันแถว */
+          +(ro?''
+            :('<span class="pj-cv" aria-hidden="true">&#9662;</span>'
+              +'<select class="pj-ov" title="'+poE(nmTxt||'ยังไม่ได้เลือก')+'"'
+              +' onchange="pjPick(\''+bid+'\',\''+slot+'\',this.value)">'
+              +pjOpts(pier,val,roles)+'</select>'))
+        +'</span>'))
     +((ro||!val)?'':('<button class="pj-rx" onclick="pjSlotDrop(\''+bid+'\',\''+slot+'\')" title="เอาคนออกจากช่องนี้">&#10005;</button>'));
   return '<div class="pj-rw'+(subOld?' sw2':'')+'"><div class="k">'+kHtml+'</div>'+sel
     +(subOld?('<span class="pj-tag">SUB</span><span class="pj-was" title="ปกติคือ '+poE(pjStaffName(subOld))+'">ปกติ '+poE(pjStaffName(subOld))+'</span>'):'')+'</div>';
