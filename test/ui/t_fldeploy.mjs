@@ -130,6 +130,133 @@ else if (R3.col !== R3.want)
 else ok('ย้าย ' + R3.name + ' · ' + R3.was + ' → ' + R3.to + ' · ออกใบ ' + R3.rec.type
       + ' ' + R3.rec.start + '→' + R3.rec.end + ' และการ์ดย้ายคอลัมน์ตาม');
 
+/* ══ 3b · วางท่าเป็นช่วง · โยกเดือนนี้แล้วเดือนหน้าต้องกลับ ══════
+   นี่คือหัวใจของเรื่องนี้ · ถ้าใบที่ออกครอบทั้งฤดู แผนโยกสลับจะทำไม่ได้เลย */
+const R3b = await page.evaluate(() => {
+  fdSetScope('month');
+  _fdWinIx = 0;
+  const W = fdWindows();
+  if (W.length < 2) return { skip: '\u0e24ดูนี้มีช่วงเดียว' };
+  const fleet = (BOATS || []).filter(b => b && !b.retired);
+  const b = fleet.find(x => getBoatCurrentPier(x, W[0].from) !== 'shop'
+                         && getBoatCurrentPier(x, W[1].from) !== 'shop');
+  if (!b) return { skip: '\u0e44ม่มีเรือที่ย้ายได้' };
+  const was = getBoatCurrentPier(b, W[0].from);
+  const to  = ['tublamu', 'panwa', 'ranong'].find(p => p !== was);
+  /* จดท่าของช่วงถัดไปไว้ก่อนย้าย · สิ่งที่ต้องพิสูจน์คือ "การย้ายไม่รั่วข้ามช่วง"
+     ไม่ใช่ "ช่วงถัดไปเท่ากับช่วงนี้" ซึ่งไม่จริงถ้ามีใบอื่นอยู่ก่อนแล้ว */
+  const nextBefore = getBoatCurrentPier(b, W[1].from);
+  _fdSel = b.id;
+  fdMove(to);
+  const a = (b.assignments || []).filter(x => x && x.src === 'fldeploy').pop() || {};
+  return {
+    name: b.name, was, to, nextBefore,
+    w0: W[0], w1: W[1],
+    inWin:  getBoatCurrentPier(b, W[0].from),
+    inWin2: getBoatCurrentPier(b, W[0].to),
+    next:   getBoatCurrentPier(b, W[1].from),
+    rec: { s: a.startDate, e: a.endDate }
+  };
+});
+if (R3b.skip) console.log('  ! ' + R3b.skip + ' · ข้ามข้อ 3b');
+else if (R3b.rec.s !== R3b.w0.from || R3b.rec.e !== R3b.w0.to)
+  fail('ใบที่ออกครอบ ' + R3b.rec.s + '→' + R3b.rec.e
+    + ' · ควรครอบแค่ช่วงที่เลือก ' + R3b.w0.from + '→' + R3b.w0.to);
+else if (R3b.inWin !== R3b.to || R3b.inWin2 !== R3b.to)
+  fail('ในช่วงที่เลือก เรือยังไม่อยู่ท่าใหม่ · ต้นช่วง=' + R3b.inWin + ' ท้ายช่วง=' + R3b.inWin2);
+else if (R3b.next !== R3b.nextBefore)
+  fail('ช่วงถัดไปเปลี่ยนจาก ' + R3b.nextBefore + ' เป็น ' + R3b.next
+    + ' — ใบรั่วไหลเกินช่วงที่ตั้งไว้');
+else ok('ย้ายเฉพาะช่วง ' + R3b.w0.lb + ' (' + R3b.rec.s + '→' + R3b.rec.e + ') · '
+    + R3b.name + ' อยู่ ' + R3b.to + ' ในช่วง · ' + R3b.w1.lb + ' ไม่ขยับ (ยังเป็น ' + R3b.nextBefore + ')');
+
+/* ══ 3c · ออกใบทับช่วงเดิมแล้วต้องไม่มีใบซ้อน ═════════
+   getBoatCurrentPier() หยิบใบแรกที่ครอบวันนั้น · สองใบซ้อน = คำตอบขึ้นกับลำดับใน array */
+const R3c = await page.evaluate(() => {
+  const W = fdWindows();
+  const fleet = (BOATS || []).filter(b => b && !b.retired);
+  const b = fleet.find(x => (x.assignments || []).some(a => a && a.src === 'fldeploy'));
+  if (!b || W.length < 3) return { skip: '\u0e22ังไม่มีใบที่ออกจากหน้านี้' };
+  /* ออกใบทั้งฤดูทับใบเดือนที่มีอยู่ */
+  const was = getBoatCurrentPier(b, W[2].from);
+  const to  = ['tublamu', 'panwa', 'ranong'].find(p => p !== was);
+  fdSetScope('season');
+  _fdSel = b.id;
+  fdMove(to);
+  const A = (b.assignments || []).filter(a => a && a.status !== 'cancelled' && a.startDate && a.endDate);
+  const overlaps = [];
+  for (let i = 0; i < A.length; i++)
+    for (let j = i + 1; j < A.length; j++)
+      if (A[i].startDate <= A[j].endDate && A[j].startDate <= A[i].endDate)
+        overlaps.push(A[i].startDate + '→' + A[i].endDate + ' กับ ' + A[j].startDate + '→' + A[j].endDate);
+  return { name: b.name, n: A.length, overlaps };
+});
+if (R3c.skip) console.log('  ! ' + R3c.skip + ' · ข้ามข้อ 3c');
+else if (R3c.overlaps.length)
+  fail('ใบย้ายท่าซ้อนกัน ' + R3c.overlaps.length + ' คู่ · ' + R3c.overlaps.slice(0, 2).join(' · ')
+    + ' — ท่าของเรือจะขึ้นกับลำดับใน array');
+else ok('ออกใบทับช่วงเดิมแล้วไม่มีใบซ้อนสักคู่ · ' + R3c.name + ' มี ' + R3c.n + ' ใบเรียงต่อกัน');
+
+/* ══ 3d · ลากวางและถอดคืนได้ ══════════════════════ */
+const R3d = await page.evaluate(() => {
+  fdSetScope('month'); _fdWinIx = 0;
+  flRenderDeployment();
+  const w = document.getElementById('fl-deploy-wrap');
+  const cards = [].slice.call(w.querySelectorAll('.fd-boat'));
+  const cols  = [].slice.call(w.querySelectorAll('.fd-col[data-pier]'));
+  const drag  = cards.filter(c => c.getAttribute('draggable') === 'true').length;
+  const drop  = cols.filter(c => c.getAttribute('ondrop')).length;
+  /* ลากจริง · เรียก fdDrop ด้วย event ปลอม เหมือนที่เบราว์เซอร์ส่งมา */
+  const W = fdWindows();
+  const fleet = (BOATS || []).filter(b => b && !b.retired);
+  /* เลือกลำที่ข้อก่อนหน้ายังไม่ได้แตะ · จะได้ไม่พัวกับใบที่ข้อก่อนหน้าสร้างค้างไว้ */
+  const b = fleet.find(x => getBoatCurrentPier(x, W[0].from) !== 'shop'
+                         && !(x.assignments || []).some(a => a && a.src === 'fldeploy'));
+  if (!b) return { drag, drop, cards: cards.length, cols: cols.length, skip: 1 };
+  const was = getBoatCurrentPier(b, W[0].from);
+  const to  = ['tublamu', 'panwa', 'ranong'].find(p => p !== was);
+  const col = cols.find(c => c.dataset.pier === to);
+  const n0 = (b.assignments || []).length;
+  fdDrop({ preventDefault(){}, dataTransfer:{ getData(){ return b.id; } } }, col);
+  const after = getBoatCurrentPier(b, W[0].from);
+  /* ถอดใบที่เพิ่งออกออก
+     ⚠ ไม่ได้แปลว่า "undo" · การออกใบใหม่ตัดใบเก่าที่ทับช่วงทิ้งไปแล้ว
+     ถอดแล้วเรือจึงกลับไปตาม "ใบที่เหลือ + ท่าบ้าน" ไม่ใช่ท่าก่อนกดเสมอไป
+     สิ่งที่ต้องจริงคือ ถอดแล้วต้องไม่อยู่ท่าที่ย้ายไปอีก และต้องตรงกับใบที่เหลืออยู่ */
+  const fresh = (b.assignments || []).filter(a => a && a.src === 'fldeploy').pop();
+  const nAfterDrop = (b.assignments || []).length;
+  let back = null, wantBack = null, still = null, nAfterUn = null;
+  if (fresh) {
+    fdUnmove(b.id, fresh.id);
+    nAfterUn = (b.assignments || []).length;
+    still = (b.assignments || []).some(a => a && a.id === fresh.id);
+    back = getBoatCurrentPier(b, W[0].from);
+    /* คำนวณเองจากใบที่เหลือ · ไม่มีใบไหนครอบ = ท่าบ้าน */
+    const cover = (b.assignments || []).filter(a => a && a.status !== 'cancelled'
+      && a.startDate <= W[0].from && a.endDate >= W[0].from);
+    wantBack = cover.length ? cover[0].toPier : (b.pier || 'tublamu');
+  }
+  return { drag, drop, cards: cards.length, cols: cols.length,
+           name: b.name, was, to, after, back, wantBack, still,
+           addedByDrop: nAfterDrop - n0, removedByUnmove: nAfterDrop - nAfterUn };
+});
+{
+  const bad3d = [];
+  if (R3d.drag !== R3d.cards) bad3d.push('การ์ดลากได้ ' + R3d.drag + ' จาก ' + R3d.cards + ' ใบ');
+  if (R3d.drop !== R3d.cols)  bad3d.push('คอลัมน์รับของที่ลากมา ' + R3d.drop + ' จาก ' + R3d.cols);
+  if (!R3d.skip) {
+    if (R3d.after !== R3d.to)  bad3d.push('ลากวางแล้วเรือยังอยู่ ' + R3d.after + ' · ควรเป็น ' + R3d.to);
+    if (R3d.addedByDrop !== 1)     bad3d.push('ลากวางแล้วใบเพิ่ม ' + R3d.addedByDrop + ' ใบ · ต้องเป็น 1');
+    if (R3d.still)                 bad3d.push('ถอดแล้วใบเดิมยังอยู่ในระบบ');
+    if (R3d.removedByUnmove !== 1) bad3d.push('ถอดใบแล้วจำนวนใบลดลง ' + R3d.removedByUnmove + ' · ต้องเป็น 1');
+    if (R3d.back !== R3d.wantBack) bad3d.push('ถอดใบแล้วเรืออยู่ ' + R3d.back
+      + ' · ใบที่เหลือบอกว่าควรเป็น ' + R3d.wantBack);
+  }
+  if (bad3d.length) fail('ลากวาง/ถอดคืน · ' + bad3d.join(' · '));
+  else ok('ลากวางได้ทุกใบ (' + R3d.cards + ' การ์ด / ' + R3d.cols
+      + ' คอลัมน์) · ลาก ' + R3d.name + ' → ' + R3d.to + ' แล้วถอดใบคืน เรือกลับไป ' + R3d.back);
+}
+
 /* ══ 4 · ปฏิทินต้องเคารพฤดูกาลของเส้นทาง ══════════════════════════════════ */
 const R4 = await page.evaluate(() => {
   fdTab('month');

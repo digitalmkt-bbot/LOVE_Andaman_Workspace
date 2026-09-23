@@ -24986,20 +24986,103 @@ function fdKpis(){
 }
 
 /* ══ แท็บ 1 · Pier Placement ══════════════════════════════════════════════ */
+/* ══ §flDeploy2 · กระดานท่าแบบคัมบัง · ลากวางได้ และแบ่งเป็นช่วงเวลา ════════
+   ที่มา (2026-09-23) · ผู้ใช้ชี้สองเรื่องหลังเห็นของจริง
+     1 อยากจับ-วาง-ถอด ได้เหมือนบอร์ดคัมบัง ไม่ใช่กดเลือกแล้วกดหัวคอลัมน์
+     2 การวางท่าไม่ใช่ของทั้งฤดู · ระหว่างฤดูมีแผนโยกเรือสลับกันไปมา
+       จึงต้องเลือกได้ว่ากำลังวาง "ทั้งฤดู / เดือนนี้ / สัปดาห์นี้"
+
+   วิธีคิด · ใบย้ายท่า (b.assignments) มี startDate/endDate อยู่แล้ว
+   หนึ่งใบ = เรือลำนั้นอยู่ท่านั้น ช่วงนั้น · หลายใบต่อกัน = แผนโยกทั้งฤดู
+   กระดานจึงเป็นแค่ "ภาพ ณ ช่วงที่เลือก" ของใบพวกนี้ ไม่ได้เก็บอะไรเพิ่มเอง
+
+   ⚠ ใบซ้อนกันคือปัญหาที่ต้องกันตั้งแต่ตอนเขียน
+     getBoatCurrentPier() หยิบใบแรกที่ครอบวันนั้น · ถ้ามีสองใบซ้อนกัน
+     คำตอบจะขึ้นกับลำดับใน array ซึ่งไม่มีใครควบคุม
+     ตอนออกใบใหม่จึงตัด/ผ่าใบเดิมที่ทับช่วงกันออกให้เรียบร้อยก่อนเสมอ
+   ═══════════════════════════════════════════════════════════════════════════ */
+var _fdScope = 'month';         /* season | month | week */
+var _fdWinIx = 0;               /* ช่วงที่กำลังดูอยู่ · นับจากต้นฤดู */
+
+function fdMonthStart(ds){ return ds.slice(0,7)+'-01'; }
+function fdMonthEnd(ds){
+  var y=+ds.slice(0,4), m=+ds.slice(5,7);
+  return ds.slice(0,7)+'-'+String(new Date(y,m,0).getDate()).padStart(2,'0');
+}
+function fdWeekStart(ds){                       /* จันทร์เป็นวันแรก · ตรงกับตารางเวรของท่า */
+  var d=new Date(ds), w=(d.getDay()+6)%7;
+  return fdAddDays(ds, -w);
+}
+function fdWindows(){
+  var S=fdSeason(), out=[];
+  if(_fdScope==='season') return [{from:S.from, to:S.to, lb:'ทั้งฤดู'}];
+  if(_fdScope==='month'){
+    var m=S.from.slice(0,7), guard=0;
+    while(m<=S.to.slice(0,7) && guard++<24){
+      var f=m+'-01', t=fdMonthEnd(f);
+      out.push({ from:(f<S.from?S.from:f), to:(t>S.to?S.to:t),
+                 lb:FD_MTH[+m.slice(5,7)-1]+' '+m.slice(0,4) });
+      var y=+m.slice(0,4), mo=+m.slice(5,7)+1; if(mo>12){ mo=1; y++; }
+      m=y+'-'+String(mo).padStart(2,'0');
+    }
+    return out;
+  }
+  var w=fdWeekStart(S.from), g=0;
+  while(w<=S.to && g++<120){
+    var wt=fdAddDays(w,6);
+    out.push({ from:(w<S.from?S.from:w), to:(wt>S.to?S.to:wt),
+               lb:'W'+fdNiceDate(w<S.from?S.from:w).replace(/ \d{4}$/,'') });
+    w=fdAddDays(w,7);
+  }
+  return out;
+}
+function fdWin(){
+  var W=fdWindows();
+  if(_fdWinIx<0) _fdWinIx=0;
+  if(_fdWinIx>W.length-1) _fdWinIx=W.length-1;
+  return W[_fdWinIx] || {from:fdSeason().from, to:fdSeason().to, lb:'ทั้งฤดู'};
+}
+function fdSetScope(s){ _fdScope=s; _fdWinIx=0; _fdSel=''; flRenderDeployment(); }
+function fdWinStep(n){ _fdWinIx+=n; _fdSel=''; flRenderDeployment(); }
+function fdWinPick(i){ _fdWinIx=+i; _fdSel=''; flRenderDeployment(); }
+/* ช่วงที่กำลังดูอยู่ครอบวันนี้หรือวันเปิดฤดูไหม · ใช้เลือกช่วงตั้งต้นให้ถูก */
+function fdWinHome(){
+  var W=fdWindows(), ref=(TODAY_STR>fdSeason().from)?TODAY_STR:fdSeason().from;
+  for(var i=0;i<W.length;i++) if(W[i].from<=ref && ref<=W[i].to) return i;
+  return 0;
+}
+
+/* ══ กระดาน ═══════════════════════════════════════════════════════════════ */
 function fdBoard(){
-  var S=fdSeason(), cols=FD_PIERS.concat(['shop']);
-  var h='<p class="fd-hint">กดเลือกเรือหนึ่งลำ แล้วกดหัวคอลัมน์ปลายทางเพื่อย้ายท่า · '
-    + 'การย้ายจะออกใบย้ายท่า (pier assignment) ช่วง '+fdNiceDate(S.from)+' – '+fdNiceDate(S.to)
-    + ' ซึ่งเป็นใบเดียวกับที่หน้า Boat Status ใช้</p><div class="fd-board">';
+  var Wn=fdWin(), cols=FD_PIERS.concat(['shop']);
+  var W=fdWindows();
+  var h='<div class="fd-scope">'
+    + '<span class="lb">วางท่าเป็นช่วง</span>'
+    + [['season','ทั้งฤดู'],['month','รายเดือน'],['week','รายสัปดาห์']].map(function(s){
+        return '<button class="fd-seg'+(_fdScope===s[0]?' on':'')+'" onclick="fdSetScope(\''+s[0]+'\')">'+s[1]+'</button>'; }).join('')
+    + (_fdScope==='season' ? '' :
+        '<span class="fd-nav">'
+        + '<button onclick="fdWinStep(-1)"'+(_fdWinIx<=0?' disabled':'')+'>‹</button>'
+        + '<select onchange="fdWinPick(this.value)">'
+          + W.map(function(x,i){ return '<option value="'+i+'"'+(i===_fdWinIx?' selected':'')+'>'
+              +fdE(x.lb)+' · '+fdE(x.from.slice(5))+'→'+fdE(x.to.slice(5))+'</option>'; }).join('')
+        + '</select>'
+        + '<button onclick="fdWinStep(1)"'+(_fdWinIx>=W.length-1?' disabled':'')+'>›</button></span>')
+    + '<span class="fd-winlb">กำลังวาง '+fdE(fdNiceDate(Wn.from))+' – '+fdE(fdNiceDate(Wn.to))+'</span>'
+    + '</div>';
+  h+='<p class="fd-hint">ลากการ์ดเรือข้ามคอลัมน์ได้เลย หรือกดเลือกลำหนึ่งแล้วกดหัวคอลัมน์ปลายทาง · '
+    + 'การย้ายจะออกใบย้ายท่าเฉพาะ<b>ช่วงที่เลือกไว้ข้างบน</b> ไม่ใช่ทั้งฤดู · '
+    + 'ใบที่ออกจากหน้านี้จะมีป้าย ✕ ให้ถอดคืนได้</p><div class="fd-board">';
   cols.forEach(function(k){
-    var list=fdBoatsAt(k, S.from);
-    var ready=list.filter(function(b){ return fdCanRun(b,S.from); });
+    var list=fdBoatsAt(k, Wn.from);
+    var ready=list.filter(function(b){ return fdCanRun(b,Wn.from); });
     var seats=ready.reduce(function(s,b){ return s+(b.cap||0); },0);
     var all=list.reduce(function(s,b){ return s+(b.cap||0); },0);
     var need=list.reduce(function(s,b){ return s+fdCrewOf(b); },0);
     var have=(k==='shop')?null:fdStaffAt(k).length;
     var caps=(k==='shop')?null:fdCapsAt(k);
-    h+='<div class="fd-col'+(k==='shop'?' shop':'')+'">'
+    h+='<div class="fd-col'+(k==='shop'?' shop':'')+'" data-pier="'+k+'"'
+      +' ondragover="fdDragOver(event,this)" ondragleave="fdDragOut(this)" ondrop="fdDrop(event,this)">'
       +'<div class="fd-colh" onclick="fdMove(\''+k+'\')">'
         +'<div class="nm">'+fdE(fdPierNm(k))+'<small>'+list.length+' ลำ</small></div>'
         +(k==='shop' ? '<div class="sm">เรือที่อยู่อู่ตามใบซ่อมที่เปิดค้างไว้ · ย้ายเข้าท่าได้เมื่อปิดงานซ่อมแล้ว</div>'
@@ -25010,19 +25093,54 @@ function fdBoard(){
             +'<span class="m'+(caps<ready.length?' warn':'')+'"><i>Captains</i><b>'+caps+'/'+ready.length+'</b></span>'
           +'</div>')
       +'</div><div class="fd-stack">';
-    if(!list.length) h+='<div class="fd-empty">ไม่มีเรือ</div>';
-    list.slice().sort(function(a,b){ return (fdCanRun(b,S.from)-fdCanRun(a,S.from))||((b.cap||0)-(a.cap||0)); })
-      .forEach(function(b){ h+=fdCard(b, S.from); });
+    if(!list.length) h+='<div class="fd-empty">ลากเรือมาวางที่นี่</div>';
+    list.slice().sort(function(a,b){ return (fdCanRun(b,Wn.from)-fdCanRun(a,Wn.from))||((b.cap||0)-(a.cap||0)); })
+      .forEach(function(b){ h+=fdCard(b, Wn.from); });
     h+='</div></div>';
   });
-  return h+'</div>'+fdBoardNote();
+  return h+'</div>'+fdRota()+fdBoardNote();
 }
+
+/* ══ แถบแผนโยกทั้งฤดู · เห็นการสลับเรือในภาพเดียว ══════════════════════════ */
+function fdRota(){
+  var W=fdWindows(), Wn=fdWin();
+  if(_fdScope==='season') return '';
+  var fleet=fdFleet().slice().sort(function(a,b){ return (b.cap||0)-(a.cap||0); });
+  var C={tublamu:'#2563EB', panwa:'#0F6E56', ranong:'#8A5410', shop:'#B6BDC8'};
+  var h='<div class="fd-rota"><div class="rh"><b>แผนโยกทั้งฤดู</b>'
+    + '<span>ช่องละหนึ่ง'+(_fdScope==='week'?'สัปดาห์':'เดือน')+' · สีคือท่าที่เรืออยู่ · กดช่องเพื่อกระโดดไปช่วงนั้น</span>'
+    + '<i>'+FD_PIERS.map(function(k){ return '<em style="background:'+C[k]+'"></em>'+fdE(fdPierNm(k)); }).join('')
+      + '<em style="background:'+C.shop+'"></em>อู่</i></div><div class="rb">';
+  fleet.forEach(function(b){
+    var cells=W.map(function(x,i){
+      var p=fdPierOf(b, x.from);
+      return '<span class="c'+(i===_fdWinIx?' on':'')+'" style="background:'+(C[p]||'#E7EAEF')+'" '
+        +'onclick="fdWinPick('+i+')" title="'+fdE(b.name+' · '+x.lb+' · '+fdPierNm(p))+'"></span>';
+    }).join('');
+    /* ลำที่อยู่ท่าเดียวทั้งฤดูไม่ต้องเน้น · ที่น่าดูคือลำที่สลับ */
+    var moves=0, prev='';
+    W.forEach(function(x){ var p=fdPierOf(b,x.from); if(prev && p!==prev) moves++; prev=p; });
+    h+='<div class="rr'+(moves?' moved':'')+'"><span class="nm">'+fdE(b.name)
+      +(moves?('<em>สลับ '+moves+' ครั้ง</em>'):'')+'</span><span class="cells">'+cells+'</span></div>';
+  });
+  return h+'</div></div>';
+}
+
+/* ══ การ์ดเรือ ═══════════════════════════════════════════════════════════ */
 function fdCard(b, ds){
   var st=fdStatOn(b, ds), j=fdJobsOf(b.id);
   var noEnd=j.filter(function(x){ return !x.endDate; });
   var lab={available:['พร้อมใช้','ok'],fixing:['อยู่ระหว่างซ่อม','wr'],unavailable:['ไม่พร้อมใช้','bad']}[st]
         || ['ไม่มีข้อมูลสถานะ','gy'];
   var flag='';
+  /* ใบย้ายท่าที่ครอบช่วงนี้ · ถอดคืนได้ทีละใบ */
+  (b.assignments||[]).forEach(function(a){
+    if(!a || a.status==='cancelled') return;
+    if(a.endDate < ds || a.startDate > ds) return;
+    flag+='<div class="fd-asn">ย้ายท่า '+fdE(fdPierNm(a.fromPier))+' → '+fdE(fdPierNm(a.toPier))
+      +' <small>'+fdE(a.startDate)+'→'+fdE(a.endDate)+'</small>'
+      +'<button onclick="event.stopPropagation();fdUnmove(\''+fdE(b.id)+'\',\''+fdE(a.id)+'\')" title="ถอดใบนี้">✕</button></div>';
+  });
   if(noEnd.length)
     flag+='<div class="fd-flag bad"><b>'+noEnd.length+' งานซ่อมยังไม่มีวันเสร็จ</b> · '
       +fdE(String(noEnd[0].no||''))+' '+fdE(String(noEnd[0].title||'').slice(0,38))+'</div>';
@@ -25031,9 +25149,10 @@ function fdCard(b, ds){
     flag+='<div class="fd-flag '+(late.length?'bad':'wr')+'">'+j.length+' งานซ่อม · เสร็จ '+fdE(j[0].endDate||'')
       +(late.length?' — เลยวันเปิดฤดู':'')+'</div>';
   }
-  if(!st) flag+='<div class="fd-flag gy">ไม่มีบันทึกสถานะคร่อมวันเปิดฤดู · ระบบเดาให้ไม่ได้</div>';
+  if(!st) flag+='<div class="fd-flag gy">ไม่มีบันทึกสถานะคร่อมช่วงนี้ · ระบบเดาให้ไม่ได้</div>';
   if(!b.crew) flag+='<div class="fd-flag gy">ยังไม่ได้กรอกอัตราลูกเรือของลำนี้</div>';
-  return '<div class="fd-boat'+(_fdSel===b.id?' sel':'')+'" onclick="fdPick(\''+b.id+'\')">'
+  return '<div class="fd-boat'+(_fdSel===b.id?' sel':'')+'" draggable="true" data-id="'+fdE(b.id)+'"'
+    +' ondragstart="fdDragStart(event,this)" ondragend="fdDragEnd(this)" onclick="fdPick(\''+fdE(b.id)+'\')">'
     +'<span class="bar" style="background:'+fdE(b.color||'#94A3B8')+'"></span>'
     +'<div class="r1"><span class="bn">'+fdE(b.name)+'</span><span class="fd-chip '+lab[1]+'">'+lab[0]+'</span></div>'
     +'<div class="r2"><span><b>'+(b.cap||0)+'</b> ที่นั่ง</span><span>ลูกเรือ <b>'+(b.crew||'—')+'</b></span>'
@@ -25041,53 +25160,114 @@ function fdCard(b, ds){
     + flag + '</div>';
 }
 function fdPick(id){ _fdSel=(_fdSel===id?'':id); flRenderDeployment(); }
-function fdBoardNote(){
-  return '<div class="fd-note"><b>อ่านกระดานนี้ยังไง</b><br>'
-    +'· <b>Seats ready</b> นับเฉพาะลำที่สถานะพร้อมใช้ ณ วันเปิดฤดู — ลำที่ยังซ่อมอยู่ไม่ถูกนับ เพราะขายไม่ได้จริง<br>'
-    +'· <b>Crew need/have</b> ฝั่ง need คืออัตราประจำเรือรวมกัน ฝั่ง have คือคนในทะเบียนพนักงานของท่านั้น<br>'
-    +'· คอลัมน์ <b>อู่ซ่อม / นอกท่า</b> ไม่ใช่ท่าจริง · เป็นเรือที่ใบซ่อมยังเปิดค้างและระบุอู่ไว้ '
-    +'ย้ายเข้าท่าโดยตรงไม่ได้ ต้องปิดงานซ่อมที่หน้า Maintenance ก่อน</div>';
+
+/* ลากวาง · เก็บ id ไว้ในตัวแปรด้วย เพราะ Safari บางรุ่นอ่าน dataTransfer ตอน dragover ไม่ได้ */
+var _fdDrag='';
+function fdDragStart(e, el){
+  _fdDrag=el.dataset.id; _fdSel=el.dataset.id;
+  try{ e.dataTransfer.setData('text/plain', _fdDrag); e.dataTransfer.effectAllowed='move'; }catch(_){}
+  el.classList.add('drag');
+}
+function fdDragEnd(el){ el.classList.remove('drag'); _fdDrag=''; }
+function fdDragOver(e, col){ e.preventDefault(); try{ e.dataTransfer.dropEffect='move'; }catch(_){} col.classList.add('drop'); }
+function fdDragOut(col){ col.classList.remove('drop'); }
+function fdDrop(e, col){
+  e.preventDefault(); col.classList.remove('drop');
+  var id=''; try{ id=e.dataTransfer.getData('text/plain'); }catch(_){}
+  _fdSel = id || _fdDrag;
+  _fdDrag='';
+  if(_fdSel) fdMove(col.dataset.pier);
 }
 
-/* ย้ายท่า · ออกใบ assignment แบบเดียวกับหน้า Boat Status (flSaveAssignment)
-   ที่ไม่เรียกตัวนั้นตรง ๆ เพราะมันอ่านค่าจากช่องในโมดัล ไม่ได้รับพารามิเตอร์ */
+function fdBoardNote(){
+  return '<div class="fd-note"><b>อ่านกระดานนี้ยังไง</b><br>'
+    +'· กระดานคือ<b>ภาพ ณ ช่วงที่เลือก</b> ไม่ใช่ของทั้งฤดู · เปลี่ยนช่วงข้างบนแล้วเรือจะสลับตำแหน่งตามแผนที่วางไว้<br>'
+    +'· <b>Seats ready</b> นับเฉพาะลำที่สถานะพร้อมใช้ในช่วงนั้น — ลำที่ยังซ่อมอยู่ไม่ถูกนับ เพราะขายไม่ได้จริง<br>'
+    +'· <b>Crew need/have</b> ฝั่ง need คืออัตราประจำเรือรวมกัน ฝั่ง have คือคนในทะเบียนพนักงานของท่านั้น<br>'
+    +'· คอลัมน์ <b>อู่ซ่อม / นอกท่า</b> ไม่ใช่ท่าจริง · เป็นเรือที่ใบซ่อมยังเปิดค้างและระบุอู่ไว้ '
+    +'ลากเข้าไม่ได้ ต้องปิดงานซ่อมที่หน้า Maintenance ก่อน<br>'
+    +'· ออกใบทับช่วงเดิมได้เลย · ระบบจะตัดหรือผ่าใบเก่าที่ทับกันให้เอง ไม่ปล่อยให้มีสองใบซ้อนวันเดียวกัน<br>'
+    +'· ปุ่ม <b>✕</b> บนใบคือถอดใบนั้นทิ้ง ไม่ใช่การย้อนกลับ · เรือจะไปอยู่ตามใบที่เหลือ '
+    +'ถ้าไม่มีใบไหนครอบช่วงนั้นก็กลับท่าบ้านของมัน</div>';
+}
+
+/* ══ ย้ายท่า · ออกใบเฉพาะช่วงที่เลือก ═════════════════════════════════════ */
 function fdMove(toPier){
   if(!_fdSel) return;
   if(typeof laGuardEdit==='function' && !laGuardEdit('fleet')) return;
   var b=fdFleet().filter(function(x){ return x.id===_fdSel; })[0];
   if(!b){ _fdSel=''; return; }
-  var S=fdSeason(), from=fdPierOf(b, S.from);
+  var Wn=fdWin(), from=fdPierOf(b, Wn.from);
   if(from===toPier){ _fdSel=''; flRenderDeployment(); return; }
   if(toPier==='shop'){
     alert('Cannot move a boat into the yard from here.\n\nA boat lands in the yard column on its own when an open maintenance job names a workshop. Open that job on the Maintenance page instead.');
-    return;
+    _fdSel=''; flRenderDeployment(); return;
   }
   if(from==='shop'){
     alert('This boat is still at a workshop under an open maintenance job.\n\nClose the job, or change the boat status, on the Maintenance page first.');
-    return;
+    _fdSel=''; flRenderDeployment(); return;
   }
   if(!confirm('Move '+b.name+'\n'+fdPierNm(from)+' -> '+fdPierNm(toPier)
-    +'\nSeason '+S.from+' to '+S.to
-    +'\n\nThis writes one temporary pier assignment. The sailing schedule at the old pier is not touched.'
+    +'\nWindow '+Wn.from+' to '+Wn.to
+    +'\n\nThis writes one pier assignment for that window only. Overlapping assignments are trimmed.'
     +'\nIf this boat still has days booked at the old pier, clear them on the Monthly Deployment tab.')) return;
   if(!Array.isArray(b.assignments)) b.assignments=[];
+  fdTrim(b, Wn.from, Wn.to);
   b.assignments.push({
-    id:'asn_'+Date.now(), type:'temporary',
-    fromPier:from, toPier:toPier, startDate:S.from, endDate:S.to,
+    id:'asn_'+Date.now()+'_'+Math.floor(Math.random()*1000),
+    type:'temporary', fromPier:from, toPier:toPier,
+    startDate:Wn.from, endDate:Wn.to,
     reason:'Season deployment', cost:0,
-    status:(S.from<=TODAY_STR && S.to>=TODAY_STR)?'active':'planned',
-    createdDate:TODAY_STR
+    status:(Wn.from<=TODAY_STR && Wn.to>=TODAY_STR)?'active':'planned',
+    createdDate:TODAY_STR, src:'fldeploy'
   });
   flSave();
   _fdSel='';
   flRenderDeployment();
-  if(typeof flShowToast==='function') flShowToast(b.name+' → '+fdPierNm(toPier));
+  if(typeof flShowToast==='function') flShowToast(b.name+' → '+fdPierNm(toPier)+' · '+Wn.lb);
+}
+
+/* ตัด/ผ่าใบเดิมที่ทับช่วง [f,t] ของเรือลำนี้ · กันใบซ้อนกันตั้งแต่ตอนเขียน
+   ใบที่จมอยู่ในช่วงทั้งใบ → ทิ้ง · โผล่หัว/ท้าย → หดให้พ้นช่วง · คร่อมทั้งช่วง → ผ่าเป็นสองใบ */
+function fdTrim(b, f, t){
+  var keep=[];
+  (b.assignments||[]).forEach(function(a){
+    if(!a || a.status==='cancelled' || !a.startDate || !a.endDate){ keep.push(a); return; }
+    if(a.endDate < f || a.startDate > t){ keep.push(a); return; }          /* ไม่ทับกัน */
+    if(a.startDate >= f && a.endDate <= t) return;                          /* จมทั้งใบ → ทิ้ง */
+    if(a.startDate < f && a.endDate > t){                                   /* คร่อม → ผ่าสองใบ */
+      var tail={}; for(var k in a) tail[k]=a[k];
+      tail.id=a.id+'_b'; tail.startDate=fdAddDays(t,1);
+      a.endDate=fdAddDays(f,-1);
+      keep.push(a); keep.push(tail); return;
+    }
+    if(a.startDate < f) a.endDate=fdAddDays(f,-1);                          /* โผล่หัว → หดท้าย */
+    else a.startDate=fdAddDays(t,1);                                        /* โผล่ท้าย → หดหัว */
+    keep.push(a);
+  });
+  b.assignments=keep;
+}
+
+/* ถอดใบย้ายท่าออกหนึ่งใบ · เรือจะกลับไปตามใบที่เหลือ หรือท่าบ้านของมัน */
+function fdUnmove(boatId, asnId){
+  if(typeof laGuardEdit==='function' && !laGuardEdit('fleet')) return;
+  var b=fdFleet().filter(function(x){ return x.id===boatId; })[0]; if(!b) return;
+  var a=(b.assignments||[]).filter(function(x){ return x && x.id===asnId; })[0]; if(!a) return;
+  if(!confirm('Remove this pier assignment?\n\n'+b.name+' · '+fdPierNm(a.fromPier)+' -> '+fdPierNm(a.toPier)
+    +'\n'+a.startDate+' to '+a.endDate)) return;
+  b.assignments=(b.assignments||[]).filter(function(x){ return x && x.id!==asnId; });
+  flSave();
+  flRenderDeployment();
+  if(typeof flShowToast==='function') flShowToast('ถอดใบย้ายท่าของ '+b.name+' แล้ว');
 }
 
 /* ══ แท็บ 2 · Monthly Deployment ══════════════════════════════════════════ */
 function fdMonth(){
   var S=fdSeason(), ds=fdMonthDays(_fdMonth);
-  var fleet=fdBoatsAt(_fdPier, S.from);
+  /* §flDeploy2 · อ้างท่าด้วยวันแรกของเดือนนั้น ไม่ใช่วันเปิดฤดู
+     เดือนที่มีแผนโยกเรือ ถ้าดูจากวันเปิดฤดูจะขึ้นเรือชุดเก่าทั้งเดือน */
+  var ref=(_fdMonth+'-01' < S.from) ? S.from : (_fdMonth+'-01');
+  var fleet=fdBoatsAt(_fdPier, ref);
   var used={}, seats=0, emptyDays=0, openDays=0, sick=0;
   ds.forEach(function(d){
     var op=fdOpenRoutes(_fdPier, d); if(!op.length) return;
@@ -25105,7 +25285,7 @@ function fdMonth(){
   var idle=fleet.filter(function(b){ return !used[b.id]; });
   var h='<div class="fd-segs">'
     + FD_PIERS.map(function(k){ return '<button class="fd-seg'+(k===_fdPier?' on':'')+'" onclick="fdSetPier(\''+k+'\')">'
-        +fdE(fdPierNm(k))+' <small>'+fdBoatsAt(k,S.from).length+'</small></button>'; }).join('')
+        +fdE(fdPierNm(k))+' <small>'+fdBoatsAt(k,ref).length+'</small></button>'; }).join('')
     + '<span class="fd-spacer"></span>'
     + fdMonths().map(function(m){ return '<button class="fd-seg'+(m===_fdMonth?' on':'')+'" onclick="fdSetMonth(\''+m+'\')">'
         +FD_MTH[+m.slice(5,7)-1]+' '+m.slice(0,4)+'</button>'; }).join('')
@@ -25119,7 +25299,7 @@ function fdMonth(){
     +'</div>';
   h+='<div class="fd-tray"><i>เรือของ'+fdE(fdPierNm(_fdPier))+' · กดชื่อเรือเพื่อดูว่าลำนั้นวิ่งวันไหนบ้าง</i>'
     + (fleet.length ? fleet.map(function(b){
-        return '<span class="fd-tb'+(_fdSel===b.id?' sel':'')+(fdCanRun(b,S.from)?'':' off')+'" onclick="fdPick(\''+b.id+'\')">'
+        return '<span class="fd-tb'+(_fdSel===b.id?' sel':'')+(fdCanRun(b,ref)?'':' off')+'" onclick="fdPick(\''+b.id+'\')">'
           +fdE(b.name)+' <small>'+(b.cap||0)+' ที่ · วิ่ง '+(used[b.id]||0)+' วัน</small></span>'; }).join('')
       : '<span class="fd-none">ท่านี้ยังไม่มีเรือ · ไปวางที่แท็บ Pier Placement ก่อน</span>')
     + '</div>';
@@ -25177,7 +25357,8 @@ function fdDayPanel(){
   if(!_fdDay) return '<div class="fd-dpe">กดวันในปฏิทิน เพื่อจับเรือใส่เส้นทางของวันนั้น</div>';
   var d=_fdDay, op=fdOpenRoutes(_fdPier, d);
   var t=(typeof TRIPS!=='undefined' && TRIPS[d]) ? TRIPS[d] : {};
-  var fleet=fdBoatsAt(_fdPier, fdSeason().from);
+  /* §flDeploy2 · ท่าของเรือในเดือนที่กำลังเปิดอยู่ ไม่ใช่วันเปิดฤดู */
+  var fleet=fdBoatsAt(_fdPier, (_fdMonth+'-01' < fdSeason().from) ? fdSeason().from : (_fdMonth+'-01'));
   var h='<div class="fd-dph"><b>'+fdNiceDate(d)+'</b><span>'+fdE(fdPierNm(_fdPier))+' · '
     +op.length+' โปรแกรมเปิดขาย</span><button onclick="fdOpenDay(\''+d+'\')">ปิด</button></div>';
   if(!op.length) return h+'<div class="fd-dpe">วันนี้ไม่มีโปรแกรมของท่านี้เปิดขาย (นอกช่วงฤดูกาลของเส้นทาง)</div>';
@@ -25304,6 +25485,39 @@ function fdCSS(){
      +'padding:7px 15px;border-radius:9px;cursor:pointer}'
   +H+' .fd-tab.on{background:#fff;color:#0F172A;box-shadow:0 1px 3px rgba(0,0,0,.08)}'
   +H+' .fd-hint{font-size:11.5px;color:#6B7280;line-height:1.7;margin:0 0 11px}'
+  /* §flDeploy2 · แถบเลือกช่วง + กระดานลากวาง + แถบแผนโยก */
+  +H+' .fd-scope{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:10px}'
+  +H+' .fd-scope .lb{font-size:10px;font-weight:700;letter-spacing:.05em;color:#9AA3AE;text-transform:uppercase}'
+  +H+' .fd-nav{display:inline-flex;gap:4px;align-items:center;margin-left:4px}'
+  +H+' .fd-nav button{border:1px solid #E7EAEF;background:#fff;color:#4A5360;border-radius:8px;width:26px;height:26px;'
+     +'font:700 13px inherit;font-family:inherit;cursor:pointer;line-height:1}'
+  +H+' .fd-nav button:disabled{opacity:.35;cursor:default}'
+  +H+' .fd-nav select{font-family:inherit;font-size:11.5px;font-weight:600;border:1px solid #E7EAEF;'
+     +'border-radius:8px;padding:4px 7px;background:#fff;color:#1F2937;max-width:210px}'
+  +H+' .fd-winlb{font-size:11px;color:#6B7280;margin-left:auto}'
+  +H+' .fd-col.drop{border-color:#0F172A;box-shadow:0 0 0 3px rgba(15,23,42,.08);background:#F8FAFC}'
+  +H+' .fd-boat{cursor:grab} '+H+' .fd-boat.drag{opacity:.4}'
+  +H+' .fd-asn{display:flex;align-items:center;gap:5px;margin-top:5px;font-size:10.5px;line-height:1.4;'
+     +'background:#EEF2FF;color:#3730A3;border:1px solid #C7D2FE;border-radius:7px;padding:3px 4px 3px 7px}'
+  +H+' .fd-asn small{color:#6366F1;font-weight:500}'
+  +H+' .fd-asn button{margin-left:auto;border:0;background:transparent;color:#4F46E5;cursor:pointer;'
+     +'font:700 12px inherit;font-family:inherit;line-height:1;padding:1px 4px;border-radius:5px}'
+  +H+' .fd-asn button:hover{background:#DDE3FE}'
+  +H+' .fd-rota{background:#fff;border:1px solid #E7EAEF;border-radius:13px;margin-top:13px;overflow:hidden}'
+  +H+' .fd-rota .rh{padding:10px 13px;border-bottom:1px solid #F1F3F6;display:flex;align-items:center;gap:9px;flex-wrap:wrap}'
+  +H+' .fd-rota .rh b{font-size:12.5px}'
+  +H+' .fd-rota .rh span{font-size:10.5px;color:#6B7280}'
+  +H+' .fd-rota .rh i{margin-left:auto;font-style:normal;font-size:10px;color:#6B7280;display:flex;gap:9px;align-items:center;flex-wrap:wrap}'
+  +H+' .fd-rota .rh em{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:4px;vertical-align:-1px}'
+  +H+' .fd-rota .rb{padding:7px 13px 11px;overflow-x:auto}'
+  +H+' .fd-rota .rr{display:flex;align-items:center;gap:9px;padding:2px 0}'
+  +H+' .fd-rota .rr .nm{width:150px;flex:none;font-size:11px;color:#4A5360;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  +H+' .fd-rota .rr.moved .nm{font-weight:700;color:#1F2937}'
+  +H+' .fd-rota .rr .nm em{font-style:normal;font-size:9.5px;color:#8A5410;margin-left:5px}'
+  +H+' .fd-rota .cells{display:flex;gap:2px;flex:1;min-width:0}'
+  +H+' .fd-rota .c{flex:1 1 0;min-width:7px;height:15px;border-radius:3px;cursor:pointer;opacity:.62}'
+  +H+' .fd-rota .c:hover{opacity:1}'
+  +H+' .fd-rota .c.on{opacity:1;box-shadow:0 0 0 2px #0F172A inset}'
   +H+' .fd-note{background:#fff;border:1px solid #E7EAEF;border-left:3px solid #0F172A;border-radius:11px;'
      +'padding:12px 15px;margin-top:14px;font-size:11.5px;color:#4A5360;line-height:1.8}'
   /* กระดานท่า */
