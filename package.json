@@ -37,7 +37,8 @@
     "test:pjwbsave": "node test/ui/t_pjwbsave.mjs",
     "test:ssecatch": "node test/ui/t_ssecatch.mjs",
     "test:pjdone": "node test/ui/t_pjdone.mjs",
-    "test:pckwb": "node test/ui/t_pckwb.mjs"
+    "test:pckwb": "node test/ui/t_pckwb.mjs",
+    "test:assetver": "node test/ui/t_assetver.mjs"
   },
   "dependencies": {
     "pg": "^8.13.1"
