@@ -64057,10 +64057,15 @@ function pjCSS(){
   +H+' .pj-gh{display:flex;align-items:center;gap:8px;padding:0 15px;height:28px;font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);background:var(--bg);color:var(--fg);box-shadow:inset 4px 0 0 var(--fg)}'
   /* §pjName · แถวสูงตามเนื้อหา · ชื่อที่ยาวได้บรรทัดสองแทนที่จะโดนตัด
      ยังตรึงขั้นต่ำ 32px ไว้ แถวที่ชื่อสั้นจะได้สูงเท่าเดิมทุกแถว */
-  +H+' .pj-rw{display:flex;align-items:center;gap:8px;padding:3px 15px;min-height:32px;border-bottom:1px solid #F4F5F8}'
-  /* ป้ายช่องแคบลงจาก 100px · ที่ได้คืนมาเป็นของชื่อคน
-     ป้ายยาวอย่าง ASST. CAPTAIN ตัดลงสองบรรทัดเองได้ ไม่ต้องย่อคำ */
-  +H+' .pj-rw .k{font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#9BA3B0;width:72px;flex:none;line-height:1.3;align-self:center}'
+  /* §pjName2 · flex-wrap + ขั้นต่ำของกล่องชื่อ · ที่ไม่พอให้ชิปตกลงไปก่อน
+     แถวไกด์มีป้าย "หัวหน้า" กับชิปภาษามาแย่งที่ · ไม่กำหนดขั้นต่ำ ชื่อจะถูกบีบจนตกสองบรรทัด
+     ชื่อสำคัญกว่าชิป · ชิปลงไปบรรทัดสองได้ ชื่อลงไม่ได้ */
+  +H+' .pj-rw{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:3px 15px;min-height:32px;border-bottom:1px solid #F4F5F8}'
+  /* ป้ายช่องแคบลงจาก 100px → 56px · ที่ได้คืนมาเป็นของชื่อคน
+     วัดกับทะเบียนจริง 40 คน · 100px → ล้น 40 คน · 72px → ล้น 9 คน · 56px → ล้น 2 คน
+     แคบกว่านี้ไม่ได้ · คำว่า CAPTAIN กว้าง 50px ตัดกลางคำไม่ได้
+     ASST. CAPTAIN ตัดลงสองบรรทัดเอง · สองบรรทัดของป้าย (25px) ยังเตี้ยกว่าขั้นต่ำ 32px */
+  +H+' .pj-rw .k{font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#9BA3B0;width:56px;flex:none;line-height:1.3;align-self:center}'
   +H+' .pj-rw .v{font-size:12px;font-weight:600;color:#242730;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
   +H+' .pj-rw .v.e{color:#CFD4DC;font-weight:400}'
   +H+' .pj-rw.sw2{background:#FFFCF3}'
@@ -64087,7 +64092,12 @@ function pjCSS(){
      ที่ต้องทับแทนที่จะทำ dropdown เอง เพราะเมนูของเบราว์เซอร์เลื่อนหาคนได้เร็วกว่า
      มีกลุ่ม optgroup แยกท่า/ตำแหน่งอยู่แล้ว และพิมพ์ตัวแรกเพื่อกระโดดได้
      เขียนใหม่เองแปลว่าต้องทำของพวกนั้นใหม่หมดโดยไม่ได้อะไรเพิ่ม */
-  +H+' .pj-sel{position:relative;flex:1;min-width:0;display:flex;align-items:center;gap:5px;'
+  /* §pjName2 · max-width คือตัวที่บังคับ "ป้าย + ชื่อ อยู่บรรทัดเดียวกัน"
+     flex ตัดบรรทัดด้วยขนาดสมมติ ซึ่งถูกครอบด้วย max-width ก่อน
+     ตั้ง = กว้างแถว − (ป้าย 56 + ช่องไฟ 8 + กันเศษ 6 · กว้างการ์ดมีเศษทศนิยม พอดีเก๊ะจะตกบรรทัด) → ป้ายกับกล่องเต็มบรรทัดแรกพอดี
+     ชิปภาษา/หัวหน้าจึงตกไปบรรทัดสองเอง แทนที่จะมาบีบชื่อ
+     ถ้าใช้ auto ล้วน ชื่อยาวจะดันกล่องทั้งกล่องตกไปบรรทัดสอง ป้ายค้างอยู่บนคนเดียว */
+  +H+' .pj-sel{position:relative;flex:1 1 auto;min-width:0;max-width:calc(100% - 70px);display:flex;align-items:center;gap:5px;'
      +'border:1px solid transparent;border-radius:7px;padding:3px 6px;min-height:24px}'
   +H+' .pj-sel:hover{border-color:#D9DDE4;background:#fff}'
   +H+' .pj-sel:focus-within{border-color:#16265C;background:#fff}'
@@ -64099,9 +64109,7 @@ function pjCSS(){
   +H+' .pj-nm{flex:1;min-width:0;font-size:12px;font-weight:600;color:#242730;'
      +'line-height:1.35;white-space:normal;word-break:keep-all;overflow-wrap:break-word}'
   +H+' .pj-nm.e{color:#CFD4DC;font-weight:400}'
-  +H+' .pj-ro{font-style:normal;font-weight:500;color:#9BA3B0;font-size:11px}'
   +H+' .pj-w{white-space:nowrap}'
-  +H+' .pj-ro:before{content:" \u00b7 "}'
   +H+' .pj-cv{flex:none;color:#B6BDC8;font-size:9px;line-height:1;align-self:center}'
   +H+' .pj-ov{position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;'
      +'cursor:pointer;font:inherit;border:none;padding:0;margin:0}'
@@ -64378,6 +64386,18 @@ function pjWordSafe(t){
   return String(t==null?'':t).split(/\s+/).filter(Boolean)
     .map(function(w){ return '<span class="pj-w">'+poE(w)+'</span>'; }).join(' ');
 }
+/* §pjName2 · กล่องเลือกคนของกลาง · ช่องลูกเรือกับช่องไกด์ใช้ตัวเดียวกัน
+   ของเดิมแยกกันอยู่ ช่องไกด์จึงยังเป็น <select> เปล่า และชื่อยังโดนตัดอยู่
+   แก้ที่เดียวไม่พอ · รวมมาไว้ที่เดียวแล้วเรียกสองที่ */
+function pjPickBox(nmTxt, optsHtml, onchangeJs, ro){
+  return '<span class="pj-sel'+(ro?' ro':'')+'">'
+    +'<span class="pj-nm'+(nmTxt?'':' e')+'">'+(nmTxt?pjWordSafe(nmTxt):'— ว่าง —')+'</span>'
+    +(ro?''
+      :('<span class="pj-cv" aria-hidden="true">&#9662;</span>'
+        +'<select class="pj-ov" title="'+poE(nmTxt||'ยังไม่ได้เลือก')+'"'
+        +' onchange="'+onchangeJs+'">'+optsHtml+'</select>'))
+  +'</span>';
+}
 function pjSlotRow(pier,bid,kind,slot,defLb,val,subOld,roles,ro,boat){
   var lb=pjSlotLb(kind,slot,defLb,bid);
   var kHtml = ro ? poE(lb)
@@ -64401,25 +64421,15 @@ function pjSlotRow(pier,bid,kind,slot,defLb,val,subOld,roles,ro,boat){
      ชื่อตัดบรรทัดได้ที่ช่องว่าง (ชื่อไทยมีเว้นวรรคระหว่างชื่อ-สกุล-ชื่อเล่น)
      ตำแหน่งในทะเบียนวางเป็นตัวจาง ต่อท้าย · ยาวไปก็ไหลลงบรรทัดสองเอง
      ⚠ ไม่ตัดด้วย ellipsis อีกแล้ว · ชื่อคนบนใบจ่ายงานต้องอ่านได้ครบ */
+  /* §pjName2 · ตำแหน่งในทะเบียนไม่ต้องขึ้นบนการ์ด · ป้ายช่องบอกอยู่แล้วว่าช่องนี้คืออะไร
+     มีให้เห็นตอนกดเลือกก็พอ (อยู่ในเมนูของ pjOpts แล้ว)
+     ที่ตัดออกเพราะมันกินที่จนชื่อคนต้องตกไปบรรทัดสอง · ชื่อสำคัญกว่า */
   var nmTxt=val?pjStaffName(val):'';
-  var roTxt='';
-  try{ var _st=(PIER_STAFF||[]).filter(function(x){ return x.id===val; })[0];
-       if(_st && _st.role) roTxt=String(_st.role); }catch(_){}
   var sel=(badge?('<span style="display:inline-flex;flex:none">'+badge+'</span>'):'')
     +(freeCaptain
       ? '<input class="pj-free" value="'+poE(val)+'" placeholder="พิมพ์ชื่อกัปตัน" onchange="pjFreePick(\''+bid+'\',\''+slot+'\',this)"'+(ro?' disabled':'')+'>'
-      : ('<span class="pj-sel'+(ro?' ro':'')+'">'
-          +'<span class="pj-nm'+(val?'':' e')+'">'+(val?pjWordSafe(nmTxt):'— ว่าง —')
-            +(roTxt?('<i class="pj-ro">'+pjWordSafe(roTxt)+'</i>'):'')+'</span>'
-          /* ใบที่ปิดแล้ว/ดูอย่างเดียว · ไม่ต้องมี select เลย
-             ของเดิมวาด select disabled ทิ้งไว้พร้อมรายชื่อคนทั้งทะเบียนทุกช่อง
-             กดไม่ได้อยู่แล้ว แต่ยังกิน DOM เท่าเดิม · วันที่ปิดใบทั้งท่าคือหลายพันแถว */
-          +(ro?''
-            :('<span class="pj-cv" aria-hidden="true">&#9662;</span>'
-              +'<select class="pj-ov" title="'+poE(nmTxt||'ยังไม่ได้เลือก')+'"'
-              +' onchange="pjPick(\''+bid+'\',\''+slot+'\',this.value)">'
-              +pjOpts(pier,val,roles)+'</select>'))
-        +'</span>'))
+      : pjPickBox(nmTxt, pjOpts(pier,val,roles),
+                  'pjPick(&#39;'+bid+'&#39;,&#39;'+slot+'&#39;,this.value)', ro))
     +((ro||!val)?'':('<button class="pj-rx" onclick="pjSlotDrop(\''+bid+'\',\''+slot+'\')" title="เอาคนออกจากช่องนี้">&#10005;</button>'));
   return '<div class="pj-rw'+(subOld?' sw2':'')+'"><div class="k">'+kHtml+'</div>'+sel
     +(subOld?('<span class="pj-tag">SUB</span><span class="pj-was" title="ปกติคือ '+poE(pjStaffName(subOld))+'">ปกติ '+poE(pjStaffName(subOld))+'</span>'):'')+'</div>';
@@ -64559,8 +64569,14 @@ function pjGdRow(label, bid, kind, idx, val, langs, taken, busy, extra, lead){
     +' data-o="'+poE(lb)+'"'
     +' onblur="pjSlotLbSet(\'gd\',\''+slot+'\',this.textContent,\''+poE(def)+'\',\''+poE(bid)+'\')">'
     +poE(lb)+'</span>';
+  /* §pjName2 · ช่องไกด์เคยตกหล่นไว้ · ยังเป็น <select> เปล่าและชื่อโดนตัด
+     ภาษากับป้าย "หัวหน้า" มีชิปของตัวเองท้ายแถวอยู่แล้ว ชื่อจึงเหลือแค่ชื่อ */
+  var gNm='';
+  try{ var _g=(typeof goGuide==='function')?goGuide(val):null;
+       if(_g) gNm=(_g.name||_g.id)+(_g.nick?(' ('+_g.nick+')'):''); }catch(_){}
   return '<div class="pj-rw"><div class="k">'+kHtml+'</div>'
-    +'<select onchange="'+call('this.value')+'">'+pjGdOpts(val, kind==='gd', taken, busy)+'</select>'
+    +pjPickBox(gNm, pjGdOpts(val, kind==='gd', taken, busy),
+               call('this.value').replace(/'/g,'&#39;'), false)
     +((val||extra)
        ? ('<button class="pj-rx" onclick="pjGdDrop(\''+poE(bid)+'\',\''+kind+'\','+idx+','+(val?1:0)+')"'
           +' title="'+(val?'เอาคนออกจากช่องนี้':'ปิดช่องว่างที่เปิดไว้')+'">&#10005;</button>')

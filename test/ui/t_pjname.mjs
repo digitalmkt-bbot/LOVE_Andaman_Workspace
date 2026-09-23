@@ -19,6 +19,8 @@
 //   7 ใบที่ปิดแล้ว (ดูอย่างเดียว) ต้องไม่มี select ให้กด แต่ชื่อยังอ่านครบ
 //   8 ห้ามตัดกลางคำ · Chrome ตัดภาษาไทยด้วยพจนานุกรมของมันเอง
 //     (อัฟฟาน) ถูกหักเป็น (อัฟ / ฟาน) มาแล้ว · อ่านแล้วสะดุดและดูเหมือนคนละชื่อ
+//   9 ชื่อส่วนใหญ่ต้องอยู่บรรทัดเดียว · ไม่ใช่แค่ "ไม่ถูกตัด" แต่ต้องอ่านรวดเดียวจบ
+//     วัดด้วยชื่อที่ยาวระดับ 80% ของทะเบียนจริง (ไม่ใช่ชื่อสั้นที่สุด)
 import { open } from './_harness.mjs';
 
 let bad = 0;
@@ -72,7 +74,13 @@ const read = () => page.evaluate(id => {
   if (!bc) return { err:'ไม่พบการ์ด' };
   const cr = bc.getBoundingClientRect();
   const rows = [].slice.call(bc.querySelectorAll('.pj-rw')).filter(r => r.querySelector('.pj-nm'));
+  /* ⚠ แถวที่มี select แต่ไม่มี .pj-nm = ยังเป็นของเดิมที่ชื่อโดนตัด
+     ถ้าไม่นับไว้ แถวนั้นจะหายจากการวัดไปเฉย ๆ แล้วเทสผ่านโดยไม่ได้วัดอะไร */
+  const withSel = [].slice.call(bc.querySelectorAll('.pj-rw')).filter(r => r.querySelector('select'));
   return { err:'', cardW:Math.round(cr.width),
+    nSel: withSel.length,
+    bare: withSel.filter(r => !r.querySelector('.pj-nm'))
+                 .map(r => ((r.querySelector('.k') || {}).textContent || '').trim()),
     rows: rows.map(r => {
       const nm = r.querySelector('.pj-nm'), ov = r.querySelector('select.pj-ov');
       const b = nm.getBoundingClientRect();
@@ -92,6 +100,26 @@ const read = () => page.evaluate(id => {
         hitIsOv: !!(hit && hit === ov),
         /* คำที่ถูกหักคนละบรรทัดจะมีกล่องมากกว่าหนึ่งใบ · นับตรง ๆ ได้เลย */
         words: nm.querySelectorAll('.pj-w').length,
+        /* ⚠ getClientRects() ของตัวกล่องเองคืนกล่องเดียวเสมอ ไม่ว่าข้อความจะกี่บรรทัด
+           (.pj-nm เป็น flex item = กล่องบล็อก) · เคยใช้แล้วเทสผ่านทั้งที่ตกสองบรรทัดจริง
+           นับจากขอบบนของคำแต่ละคำแทน · คำเป็น inline จึงตอบความจริง */
+        lines: new Set([].slice.call(nm.querySelectorAll('.pj-w'))
+                 .map(w => Math.round(w.getBoundingClientRect().top))).size || 1,
+        /* ป้ายช่องตกไปอยู่คนละบรรทัดกับชื่อหรือเปล่า · แถวเป็น flex-wrap
+           ที่ไม่พอป้ายจะขึ้นไปบรรทัดบนของมันเอง ชื่อยังบรรทัดเดียวแต่แถวสูงสองเท่า */
+        /* วัดที่กล่องนอก (.pj-sel) ไม่ใช่ตัวอักษรข้างใน
+           ตัวข้างในหัก padding กับลูกศรออกไปราว 20px · เทียบกับขั้นต่ำที่ตั้งไว้ไม่ตรง */
+        boxW: (function(){ const b = r.querySelector('.pj-sel');
+          return b ? Math.round(b.getBoundingClientRect().width) : 0; })(),
+        /* ⚠ เทียบที่ "กึ่งกลาง" ไม่ใช่ขอบบน · แถวเป็น align-items:center
+           ช่องที่ชื่อตกสองบรรทัดจะสูงกว่าป้าย ขอบบนจึงไม่ตรงกันทั้งที่อยู่แถวเดียวกัน
+           เคยรายงานว่าแถวไกด์พังทั้งที่เลย์เอาต์ถูก · วัดที่กึ่งกลางแทน */
+        stacked: (function(){
+          const k = r.querySelector('.k'), sel = r.querySelector('.pj-sel');
+          if (!k || !sel) return false;
+          const mid = e => { const q = e.getBoundingClientRect(); return q.top + q.height / 2; };
+          return Math.abs(mid(k) - mid(sel)) > 6;
+        })(),
         split: [].slice.call(nm.querySelectorAll('.pj-w'))
                  .filter(w => w.getClientRects().length > 1)
                  .map(w => (w.textContent || '').trim())
@@ -102,6 +130,15 @@ const read = () => page.evaluate(id => {
 let R = await read();
 if (R.err){ fail(R.err); console.log('\nพัง ' + bad); await close(); process.exit(1); }
 console.log('ปลูกเคส · ' + S.date + ' ท่า ' + S.pier + ' · ' + S.bid + ' · การ์ดกว้าง ' + R.cardW + 'px · ' + R.rows.length + ' ช่อง');
+
+/* ══ 0 · ทุกช่องเลือกคนต้องวาดชื่อไว้ข้างนอก ══════════════════════════════
+   ช่องไหนยังเป็น <select> เปล่า ชื่อจะโดนตัดที่ช่องนั้นและเทสข้ออื่นจะมองไม่เห็น
+   (ช่องไกด์เคยตกหล่นมาแล้วตอนแก้รอบแรก · ผู้ใช้เป็นคนเจอ ไม่ใช่เทส) */
+{
+  if (R.bare && R.bare.length)
+    fail('ยังมีช่องที่เป็น select เปล่า ' + R.bare.length + ' ช่อง · ' + R.bare.join(' · ') + ' — ชื่อจะโดนตัดตรงนั้น');
+  else ok('ทุกช่องเลือกคน (' + R.nSel + ' ช่อง) วาดชื่อไว้ข้างนอกครบ');
+}
 
 /* ══ 1 · ไม่มีชื่อไหนถูกตัด ════════════════════════════════════════════════ */
 {
@@ -221,7 +258,58 @@ console.log('ปลูกเคส · ' + S.date + ' ท่า ' + S.pier + ' ·
   else ok('ไม่มีคำไหนถูกหักคนละบรรทัด · ตัดเฉพาะที่ช่องว่าง');
 }
 
-/* ══ 9 · ไม่มี error บนหน้า ═══════════════════════════════════════════════ */
+/* ══ 9 · ชื่อส่วนใหญ่ต้องอยู่บรรทัดเดียว ═══════════════════════════════════
+   "ไม่ถูกตัด" ยังไม่พอ · สองบรรทัดอ่านสะดุดและทำให้การ์ดยาวขึ้นทั้งใบ
+   วัดด้วยชื่อที่ยาวระดับ 80% ของทะเบียนจริง · ไม่ใช่ชื่อสั้นที่สุดซึ่งผ่านอยู่แล้วแน่ ๆ
+   ที่ไม่วัดด้วยชื่อยาวที่สุด เพราะการ์ดกว้าง 302px · ชื่อ 203px ยังไงก็ต้องสองบรรทัด
+   ตราบใดที่ยังไม่ย่อฟอนต์ ซึ่งแลกไม่คุ้มสำหรับหน้าจอที่ใช้ตอนเช้ามืด */
+{
+  const P80 = await page.evaluate(a => {
+    const staff = (PIER_STAFF || []).filter(s => s.active !== false);
+    const nm = s => (s.name || s.nick || s.id) + (s.nick && s.name ? (' (' + s.nick + ')') : '');
+    const byLen = staff.slice().sort((x, z) => nm(x).length - nm(z).length);
+    const pick = byLen[Math.floor(byLen.length * 0.8)] || byLen[byLen.length - 1];
+    pjSet(a.d, a.b, { cap:pick.id, asst:pick.id, crew:[pick.id, pick.id, pick.id], lock:0 });
+    /* จ่ายไกด์ด้วย · แถวไกด์มีป้าย "หัวหน้า" กับชิปภาษามาแย่งที่กับชื่อ
+       เป็นแถวที่คับที่สุด · ไม่จ่ายไว้เทสจะมองไม่เห็นกรณีนี้เลย */
+    try{
+      let G=(typeof goGuides==='function')?goGuides().filter(g=>g.active!==false):[];
+      /* เลือกไกด์ที่บีบช่องชื่อมากที่สุด · ชื่อยาว + ภาษาหลายชิป
+         แถวแรกได้ป้าย "หัวหน้า" เพิ่มมาอีก · ตรงกับภาพที่ผู้ใช้ส่งมา */
+      const wt = g => (((g.name||'')+(g.nick||'')).length)
+                    + 8 * ((typeof goLangsOf==='function' ? (goLangsOf(g)||[]) : []).length);
+      G = G.slice().sort((x,z) => wt(z) - wt(x));
+      if(G.length>=2 && typeof goAsnSet==='function') goAsnSet(a.d, a.b, {g:[G[0].id,G[1].id], other:0});
+    }catch(_){}
+    renderPierJob(_poPier);
+    return { name:nm(pick), len:nm(pick).length };
+  }, { d:S.date, b:S.bid });
+  await page.waitForTimeout(400);
+  const R7 = await read();
+  /* ⚠ ไม่วัดด้วยความสูงของแถว · แถวไกด์สูงสองบรรทัดโดยตั้งใจ
+     เพราะป้ายหัวหน้า/ชิปภาษาถูกดันลงไป · ชื่อยังอยู่บรรทัดเดียวกับป้ายช่อง
+     สิ่งที่ต้องวัดคือ "ชื่อกินกี่บรรทัด" กับ "ป้ายถูกดันขึ้นไปบรรทัดบนหรือเปล่า" */
+  /* วัดเฉพาะชื่อที่ไม่ยาวเกินชื่อระดับ 80% ที่ปลูกไว้
+     การ์ดกว้าง 302px · หักป้ายช่องแล้วเหลือให้ชื่อ 208px
+     ชื่อ 35 ตัวกิน 208px → จะให้อยู่บรรทัดเดียวต้องย่อฟอนต์
+     ซึ่งหน้านี้ใช้ตอนเช้ามืดกลางแจ้ง · แลกไม่คุ้ม
+     ข้อบังคับจึงเป็น "ชื่อถึงระดับ 80% ต้องบรรทัดเดียว" · ที่ยาวกว่านั้นขอแค่อย่าให้ถูกตัด (ข้อ 1) */
+  const long    = R7.rows.filter(r => r.name && r.name.length > P80.len);
+  const multi   = R7.rows.filter(r => r.name && r.lines > 1 && r.name.length <= P80.len);
+  const stacked = R7.rows.filter(r => r.name && r.stacked);
+  if (multi.length)
+    fail('ชื่อระดับ 80% ("' + P80.name + '") ตกสองบรรทัด ' + multi.length + ' ช่อง · '
+      + multi.map(r => r.k + ' "' + r.name + '" กว้าง ' + r.boxW + 'px').join(' · '));
+  else if (stacked.length)
+    fail('ป้ายช่องถูกดันขึ้นไปคนละบรรทัดกับชื่อ ' + stacked.length + ' ช่อง · ' + stacked.map(r => r.k).join(' · '));
+  else ok('ชื่อระดับ 80% ของทะเบียน ("' + P80.name + '" ' + P80.len
+    + ' ตัว) อยู่บรรทัดเดียวกับป้ายช่องทุกช่อง · ช่องชื่อแคบสุด '
+    + Math.min(...R7.rows.filter(r => r.name).map(r => r.boxW)) + 'px'
+    + (long.length ? ('  (ยาวเกิน ' + P80.len + ' ตัว ' + long.length + ' ช่อง · ตกสองบรรทัด '
+        + long.filter(r => r.lines > 1).length + ' · ไม่ถูกตัด)') : ''));
+}
+
+/* ══ 10 · ไม่มี error บนหน้า ══════════════════════════════════════════════ */
 if (errors && errors.length) fail('มี error บนหน้า ' + errors.length + ' รายการ · ' + String(errors[0]).slice(0, 140));
 else ok('ไม่มี error บนหน้าระหว่างทดสอบ');
 
