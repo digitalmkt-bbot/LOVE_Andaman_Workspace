@@ -24957,6 +24957,56 @@ function fdTripsOn(d){
 function fdBoatsAt(pier, ds){
   return fdFleet().filter(function(b){ return fdInService(b, ds) && fdPierOf(b, ds)===pier; });
 }
+/* ══ §flDeployBook · ยอดจองที่เข้ามาแล้ว ══════════════════════════════════
+   ที่มา (2026-09-24) · วางกำลังโดยไม่เห็นยอดจองคือวางมั่ว
+   ลำที่วางไว้ 4 ลำ 225 ที่ จะรู้ว่าพอหรือไม่พอ ต้องเทียบกับที่ขายไปแล้ว
+
+   ⚠ ห้ามนับ pax เองเด็ดขาด · เรียก getSeatsConsumed ของระบบตัวเดียวกับ Booking Calendar
+     ตัวนั้นกันครบอยู่แล้วและกติกาเปลี่ยนบ่อย — ใบยกเลิก/ปฏิเสธ/ยกเลิกเพราะอากาศ
+     ใบรออนุมัติที่เกิน cap (ที่นั่งยังไม่มีอยู่จริง) · ขากลับของใบเหมาค้างเกาะ
+     และคนที่ No-show / CXL หน้างาน · เขียนสูตรที่สองตรงนี้ = ตัวเลขสองหน้าไม่ตรงกันแน่นอน */
+function fdBooked(routeId, ds){
+  if(!routeId || !ds) return 0;
+  return (typeof getSeatsConsumed==='function') ? (getSeatsConsumed(routeId, ds)||0) : 0;
+}
+/* เรือลำนี้ถูกเหมาทั้งลำวันนั้นไหม · เหมาลำกินทั้งลำ ไม่ได้กินทีละที่นั่ง
+   จึงต้องยกออกจากกองที่ขายรายที่ ไม่งั้น "ว่าง" จะบวมเกินจริงทั้งวัน
+   ร่างที่หน้านี้วางเองไม่เคยเป็นเหมาลำ · ธงเหมาอ่านจาก TRIPS จริงอย่างเดียว */
+function fdIsCharterTrip(boatId, ds, op){
+  if(op && (op.charterBookingId || op.type==='charter')) return true;
+  return (typeof isBoatChartered==='function') ? !!isBoatChartered(boatId, ds) : false;
+}
+/* สรุปวันหนึ่งของท่าหนึ่ง · ที่นั่งที่วางไว้ / ที่ขายไปแล้ว / ที่เหลือ / ส่วนที่ถูกเหมา
+   pool = กองที่ขายรายที่ได้จริง = ลำที่วางไว้และนับในแผน หักลำที่ถูกเหมาออก */
+function fdDayLoad(pier, ds){
+  var t=fdTripsOn(ds), seat=0, pool=0, chN=0, chSeat=0;
+  Object.keys(t).forEach(function(id){
+    var r=fdRoute(t[id].route); if(!r || (r.pier||'')!==pier) return;
+    var b=fdBoat(id); if(!b || !fdCanRun(b, ds)) return;
+    seat+=(b.cap||0);
+    if(fdIsCharterTrip(id, ds, t[id])){ chN++; chSeat+=(b.cap||0); }
+    else pool+=(b.cap||0);
+  });
+  var booked=0;
+  (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(function(r){
+    if(!r || (r.pier||'')!==pier) return;
+    booked += fdBooked(r.id, ds);
+  });
+  return { seat:seat, pool:pool, booked:booked, chN:chN, chSeat:chSeat,
+           free:Math.max(0, pool-booked), over:Math.max(0, booked-pool) };
+}
+/* เส้นทางเดียว วันเดียว · ใช้ในแผงขวา ที่ซึ่งคนกำลังจะเลือกว่าจะใส่เรือลำไหน */
+function fdRouteLoad(routeId, ds){
+  var t=fdTripsOn(ds), pool=0, chN=0;
+  Object.keys(t).forEach(function(id){
+    if(t[id].route!==routeId) return;
+    var b=fdBoat(id); if(!b || !fdCanRun(b, ds)) return;
+    if(fdIsCharterTrip(id, ds, t[id])) chN++; else pool+=(b.cap||0);
+  });
+  var booked=fdBooked(routeId, ds);
+  return { pool:pool, booked:booked, chN:chN,
+           free:Math.max(0, pool-booked), over:Math.max(0, booked-pool) };
+}
 function fdStatOn(b, ds){
   if(fdIsPlanBoat(b)) return 'available';        /* เรือที่ยังไม่มีจริง · สมมติว่าพร้อม */
   var st=(typeof boatEffStatus==='function') ? boatEffStatus(b, ds) : null;
@@ -25867,7 +25917,25 @@ function fdGrid(ds){
         +' <span>'+fdE(String(r.name||'').slice(0,15))+'</span></div>';
     });
     if(mine.length>4) h+='<div class="fd-more">+ อีก '+(mine.length-4)+' ลำ</div>';
-    if(op.length && !mine.length) h+='<div class="fd-warn">ยังไม่มีเรือ · '+op.length+' โปรแกรมเปิดขาย</div>';
+    /* §flDeployBook · ยอดจองที่เข้ามาแล้วของวันนั้น · แถบเต็มบอกว่ากำลังที่วางไว้พอไหม */
+    var L=fdDayLoad(_fdPier, d);
+    if(L.booked || L.chN){
+      var pct=L.pool ? Math.min(100, Math.round(L.booked/L.pool*100)) : (L.booked?100:0);
+      /* §flDeployBook · ยังไม่ได้ใส่เรือ ≠ จองเกิน · ก่อนเปิดฤดูปกติยังไม่มีเรือในปฏิทินเลย
+         ถ้าขึ้น "เกิน" ทุกวัน คำเตือนจะกลายเป็นเสียงรบกวนแล้วไม่มีใครอ่าน */
+      var none=(L.pool<=0 && !L.chN);
+      h+='<div class="fd-bk'+(none?' none':(L.over?' over':(pct>=80?' tight':'')))+'">'
+        +'<span class="bar"><i style="width:'+(none?0:pct)+'%"></i></span>'
+        +'<b>จอง '+L.booked+'</b>'
+        +(none ? '<u class="nb">ยังไม่ได้ใส่เรือ</u>'
+               : (L.over ? ('<u class="ov">เกิน '+L.over+'</u>') : ('<u>ว่าง '+L.free+'</u>')))
+        +(L.chN?('<s>เหมา '+L.chN+' ลำ</s>'):'')
+        +'</div>';
+    }
+    /* §flDeployBook · ถ้าแถบยอดจองบอกไปแล้วว่ายังไม่ได้ใส่เรือ ก็ไม่ต้องบอกซ้ำอีกบรรทัด */
+    if(op.length && !mine.length && !(L.booked && L.pool<=0 && !L.chN))
+      h+='<div class="fd-warn">ยังไม่มีเรือ · '+op.length+' โปรแกรมเปิดขาย</div>';
+    if(!op.length && L.booked) h+='<div class="fd-warn">ปิดฤดู แต่มีจองแล้ว '+L.booked+' ที่</div>';
     if(bad) h+='<div class="fd-warn">'+bad+' ลำไม่นับในแผน</div>';
     h+='</div>';
   });
@@ -25888,8 +25956,20 @@ function fdDayPanel(){
     var on=Object.keys(t).filter(function(id){ return t[id].route===r.id; });
     var seats=on.filter(function(id){ var b=fdBoat(id); return b && fdCanRun(b,d); })
       .reduce(function(s,id){ return s+((fdBoat(id)||{}).cap||0); },0);
+    /* §flDeployBook · ที่ขายไปแล้วของโปรแกรมนี้วันนี้ · คนกำลังจะเลือกว่าจะใส่เรือลำไหน
+       ถ้าไม่เห็นยอดจองตรงนี้ ก็ได้แต่เดาว่าจะใส่ลำใหญ่หรือลำเล็ก */
+    var RL=fdRouteLoad(r.id, d);
     h+='<div class="fd-dpr"><div class="rh"><b>'+fdE(r.name)+'</b><small>'
-      +fdE((r.times||[]).join(' · ')||'—')+'</small><i>'+seats+' ที่นั่ง</i></div><div class="sl">';
+      +fdE((r.times||[]).join(' · ')||'—')+'</small><i>'+seats+' ที่นั่ง</i></div>'
+      + ((RL.booked||RL.chN) ? (function(){
+          var none=(RL.pool<=0 && !RL.chN);
+          return '<div class="fd-rbk'+(none?' none':(RL.over?' over':(RL.pool&&RL.booked/RL.pool>=.8?' tight':'')))+'">'
+          +'<b>จองแล้ว '+RL.booked+'</b>'
+          +(none ? '<u class="nb">ยังไม่ได้ใส่เรือให้โปรแกรมนี้</u>'
+                 : (RL.over?('<u class="ov">เกินที่วางไว้ '+RL.over+'</u>'):('<u>ว่าง '+RL.free+'</u>')))
+          +(RL.chN?('<s>เหมาลำ '+RL.chN+' ลำ · ไม่นับในกองขายรายที่</s>'):'')
+          +'</div>'; })() : '')
+      + '<div class="sl">';
     on.forEach(function(id){
       var b=fdBoat(id)||{name:id};
       var ok=fdCanRun(b,d), ch=t[id].charterBookingId;
@@ -26278,6 +26358,25 @@ function fdCSS(){
   +H+' .fd-cc.me{background:#0F172A;color:#fff} '+H+' .fd-cc.me span{color:rgba(255,255,255,.8)}'
   +H+' .fd-more{font-size:9.5px;color:#9AA3AE;padding-left:3px}'
   +H+' .fd-warn{font-size:9.5px;color:#A32D2D;font-weight:700;margin-top:2px;line-height:1.35}'
+  /* §flDeployBook · แถบยอดจองในช่องวัน · แถบเต็มอ่านเร็วกว่าตัวเลขเวลากวาดตาทั้งเดือน */
+  +H+' .fd-bk{margin-top:3px;font-size:9px;display:flex;align-items:center;gap:4px;flex-wrap:wrap;color:#0F6E56}'
+  +H+' .fd-bk .bar{flex:1 1 100%;height:3px;background:#E7EAEF;border-radius:2px;overflow:hidden}'
+  +H+' .fd-bk .bar i{display:block;height:100%;background:#0F6E56}'
+  +H+' .fd-bk b{font-weight:700} '+H+' .fd-bk u{text-decoration:none;color:#9AA3AE}'
+  +H+' .fd-bk s{text-decoration:none;color:#8A5410;font-weight:700}'
+  +H+' .fd-bk.tight{color:#8A5410} '+H+' .fd-bk.tight .bar i{background:#8A5410}'
+  +H+' .fd-bk.over{color:#A32D2D} '+H+' .fd-bk.over .bar i{background:#A32D2D}'
+  +H+' .fd-bk u.ov{color:#A32D2D;font-weight:700}'
+  +H+' .fd-bk.none{color:#8A5410} '+H+' .fd-bk u.nb{color:#8A5410;font-weight:700}'
+  +H+' .fd-rbk{display:flex;gap:8px;flex-wrap:wrap;align-items:baseline;margin-top:5px;font-size:10.5px;'
+     +'background:#F1F8F5;border:1px solid #BEE0D2;border-radius:7px;padding:4px 8px;color:#0F6E56}'
+  +H+' .fd-rbk b{font-weight:700} '+H+' .fd-rbk u{text-decoration:none;color:#6B7280}'
+  +H+' .fd-rbk s{text-decoration:none;color:#8A5410;font-size:10px}'
+  +H+' .fd-rbk.tight{background:#FEF6E7;border-color:#EFD9AE;color:#8A5410}'
+  +H+' .fd-rbk.over{background:#FDF2F2;border-color:#F0C9C9;color:#A32D2D}'
+  +H+' .fd-rbk u.ov{color:#A32D2D;font-weight:700}'
+  +H+' .fd-rbk.none{background:#FEF6E7;border-color:#EFD9AE;color:#8A5410}'
+  +H+' .fd-rbk u.nb{color:#8A5410;font-weight:700}'
   /* แผงรายวัน */
   +H+' .fd-dph{padding:11px 13px;border-bottom:1px solid #F1F3F6;display:flex;align-items:center;gap:8px;flex-wrap:wrap}'
   +H+' .fd-dph b{font-size:13.5px} '+H+' .fd-dph span{font-size:11px;color:#6B7280}'
