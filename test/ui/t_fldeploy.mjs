@@ -377,6 +377,75 @@ const R3d = await page.evaluate(() => {
   else ok('ลากวางได้ทุกใบ (' + R3d.cards + ' การ์ด / ' + R3d.cols + ' คอลัมน์) · ลาก ' + R3d.name
       + ' → ' + R3d.to + ' เป็นร่าง แล้วกด ✕ เอาออก กลับไป ' + R3d.was + ' · ข้อมูลจริงไม่ถูกแตะ');
 }
+/* ══ 3g · เรือในอู่ต้องโยกมาวางบนกระดานได้ ═════════════
+   กระดานนี้คือการสมมติ "ถ้าซ่อมเสร็จทัน ลำนี้จะไปอยู่ท่าไหน"
+   กันไม่ให้ย้าย = วางแผนไม่ได้ · แต่ป้ายซ่อมต้องคาอยู่ และต้องขึ้นรายการที่ต้องไปเร่ง */
+const R3g = await page.evaluate(() => {
+  _fdPlan = { pier: [], drop: [], trip: {}, avail: {}, boats: [] }; fdPlanSave();
+  fdSetScope('month'); _fdWinIx = 0; fdSetOwn('all'); flRenderDeployment();
+  const W = fdWindows();
+  const inShop = fdBoatsAt('shop', W[0].from);
+  if (!inShop.length) return { skip: 'ชุดนี้ไม่มีเรืออยู่อู่' };
+  const b = inShop[0];
+  _fdSel = b.id; fdMove('tublamu');
+  const w = document.getElementById('fl-deploy-wrap');
+  let col = '';
+  [].slice.call(w.querySelectorAll('.fd-col')).forEach(c => {
+    if ([].slice.call(c.querySelectorAll('.fd-boat .bn')).some(x => x.textContent.trim() === b.name))
+      col = (c.dataset.pier || '');
+  });
+  const card = [].slice.call(w.querySelectorAll('.fd-boat'))
+    .find(c => ((c.querySelector('.bn') || {}).textContent || '').trim() === b.name);
+  const chase = [].slice.call(w.querySelectorAll('.fd-chase .ci'))
+    .find(x => x.textContent.indexOf(b.name) >= 0);
+  return {
+    name: b.name, col, pier: fdPierOf(b, W[0].from),
+    realPier: getBoatCurrentPier(b, W[0].from),
+    keepsFlag: !!(card && card.querySelector('.fd-flag.bad')),
+    inChase: !!chase,
+    chaseMoved: !!(chase && chase.classList.contains('moved')),
+    chaseN: w.querySelectorAll('.fd-chase .ci').length
+  };
+});
+if (R3g.skip) console.log('  ! ' + R3g.skip + ' · ข้ามข้อ 3g');
+else if (R3g.pier !== 'tublamu' || R3g.col !== 'tublamu')
+  fail('โยกเรือออกจากอู่ไม่ได้ · ' + R3g.name + ' ยังอยู่ ' + R3g.pier + ' คอลัมน์ ' + R3g.col);
+else if (R3g.realPier === 'tublamu') fail('โยกแล้วข้อมูลจริงขยับด้วย · ต้องเป็นร่างเท่านั้น');
+else if (!R3g.keepsFlag) fail('โยกออกจากอู่แล้วป้ายงานซ่อมหาย · ต้องติดอยู่เพื่อให้รู้ว่าต้องเร่ง');
+else if (!R3g.inChase) fail(R3g.name + ' ไม่ขึ้นในรายการเรือที่ต้องเร่งซ่อม');
+else if (!R3g.chaseMoved) fail(R3g.name + ' ขึ้นในรายการแต่ไม่ติดป้ายว่าย้ายมาในแผน');
+else ok('โยก ' + R3g.name + ' ออกจากอู่มา Tub Lamu ได้ · ป้ายซ่อมยังติด · '
+      + 'ขึ้นรายการต้องเร่งซ่อม (' + R3g.chaseN + ' ลำ) พร้อมป้าย ย้ายมาในแผน');
+
+/* ══ 3h · ที่พักเรือ ══════════════════════════════
+   กระดานเปล่าไว้พักเรือที่ยังไม่ตัดสิน · เรือที่พักไว้ต้องไม่ถูกนับเป็นที่นั่งของท่าไหน */
+const R3h = await page.evaluate(() => {
+  const W = fdWindows(), d = W[0].from;
+  const seatsAt = p => fdBoatsAt(p, d).filter(x => fdCanRun(x, d)).reduce((s, x) => s + (x.cap || 0), 0);
+  const pick = FD_PIERS.map(p => ({ p, list: fdBoatsAt(p, d).filter(x => fdCanRun(x, d)) }))
+                       .find(x => x.list.length);
+  if (!pick) return { skip: 'ไม่มีเรือพร้อมใช้ให้ย้าย' };
+  const b = pick.list[0], before = seatsAt(pick.p);
+  const w = document.getElementById('fl-deploy-wrap');
+  const tray = !!w.querySelector('.fd-hold[data-pier="hold"]');
+  _fdSel = b.id; fdMove('hold');
+  const after = seatsAt(pick.p);
+  const inTray = [].slice.call(document.querySelectorAll('#fl-deploy-wrap .fd-hold .hc'))
+    .some(x => x.textContent.indexOf(b.name) >= 0);
+  const anyPier = FD_PIERS.some(p => fdBoatsAt(p, d).some(x => x.id === b.id));
+  return { tray, name: b.name, pier: pick.p, cap: b.cap || 0, before, after, inTray, anyPier,
+           dropZone: !!w.querySelector('.fd-hold[ondrop]') };
+});
+if (R3h.skip) console.log('  ! ' + R3h.skip + ' · ข้ามข้อ 3h');
+else if (!R3h.tray)     fail('ไม่มีที่พักเรือบนกระดาน');
+else if (!R3h.dropZone) fail('ที่พักเรือรับของที่ลากมาไม่ได้');
+else if (!R3h.inTray)   fail(R3h.name + ' ไม่ไปโผล่ที่ที่พักเรือ');
+else if (R3h.anyPier)   fail(R3h.name + ' พักอยู่แต่ยังนับอยู่ในท่าด้วย');
+else if (R3h.before - R3h.after !== R3h.cap)
+  fail('พักเรือแล้วที่นั่งของ ' + R3h.pier + ' ลด ' + (R3h.before - R3h.after) + ' · ควรลด ' + R3h.cap);
+else ok('ที่พักเรือใช้งานได้ · พัก ' + R3h.name + ' จาก ' + R3h.pier
+      + ' → ที่นั่งท่านั้นลด ' + R3h.cap + ' และไม่ไปนับที่ท่าอื่น');
+
 /* ══ 4 · ปฏิทินต้องเคารพฤดูกาลของเส้นทาง ══════════════════════════════════ */
 const R4 = await page.evaluate(() => {
   fdTab('month');

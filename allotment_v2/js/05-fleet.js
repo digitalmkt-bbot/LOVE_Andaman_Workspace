@@ -24983,6 +24983,7 @@ function fdCapsAt(pier){ return fdStaffAt(pier).filter(function(p){ return /ก�
 function fdCrewOf(b){ return Number(b.crew)||0; }
 function fdPierNm(k){
   if(k==='shop') return 'อู่ซ่อม / นอกท่า';
+  if(k==='hold') return 'พักเรือ · ยังไม่กำหนดท่า';
   return (typeof PIER_LABELS!=='undefined' && PIER_LABELS[k]) ? PIER_LABELS[k] : k;
 }
 
@@ -25200,11 +25201,12 @@ function fdBoard(){
     var need=list.reduce(function(s,b){ return s+fdCrewOf(b); },0);
     var have=(k==='shop')?null:fdStaffAt(k).length;
     var caps=(k==='shop')?null:fdCapsAt(k);
-    h+='<div class="fd-col'+(k==='shop'?' shop':'')+'" data-pier="'+k+'"'
+    h+='<div class="fd-col'+(k==='shop'?' shop':(k==='hold'?' hold':''))+'" data-pier="'+k+'"'
       +' ondragover="fdDragOver(event,this)" ondragleave="fdDragOut(this)" ondrop="fdDrop(event,this)">'
       +'<div class="fd-colh" onclick="fdMove(\''+k+'\')">'
         +'<div class="nm">'+fdE(fdPierNm(k))+'<small>'+list.length+' ลำ</small></div>'
-        +(k==='shop' ? '<div class="sm">เรือที่อยู่อู่ตามใบซ่อมที่เปิดค้างไว้ · ย้ายเข้าท่าได้เมื่อปิดงานซ่อมแล้ว</div>'
+        +(k==='hold' ? '<div class="sm">ที่พักเรือระหว่างคิด · ลากมาวางไว้ก่อนได้ ไม่ถูกนับเป็นที่นั่งของท่าไหน</div>'
+          : k==='shop' ? '<div class="sm">เรือที่อยู่อู่ตามใบซ่อมที่เปิดค้างไว้ · ลากออกไปวางที่ท่าในแผนได้ ป้ายซ่อมจะติดไปด้วย</div>'
           : '<div class="fd-mini">'
             +'<span class="m'+(seats?' ok':' bad')+'"><i>Seats ready</i><b>'+seats+'</b></span>'
             +'<span class="m"><i>Seats total</i><b>'+all+'</b></span>'
@@ -25233,10 +25235,71 @@ function fdBoard(){
         + arr.map(function(b){ return fdCard(b, Wn.from); }).join('');
     };
     h+=grp('เรือบริษัท', own, 'own') + grp('เรือเช่า', chr, 'chr');
-    if(k!=='shop') h+=fdAddForm(k);
+    if(k!=='shop' && k!=='hold') h+=fdAddForm(k);
     h+='</div></div>';
   });
-  return h+'</div>'+fdRota()+fdBoardNote();
+  return h+'</div>'+fdHold()+fdChase()+fdRota()+fdBoardNote();
+}
+
+/* ══ ที่พักเรือ · แถบเต็มความกว้างใต้กระดาน ════════════════
+   ทำเป็นแถบแทนคอลัมน์ที่ห้า · ห้าคอลัมน์ในกรอบเดิมทำให้แต่ละคอลัมน์แคบจนอ่านตัวเลขไม่ออก
+   และที่พักเรือไม่ต้องมีตัวเลขที่นั่ง/ลูกเรือ เพราะยังไม่ได้อยู่ท่าไหน */
+function fdHold(){
+  var Wn=fdWin();
+  var list=fdBoatsAt('hold', Wn.from).filter(fdOwnOk)
+    .sort(function(a,b){ return (b.cap||0)-(a.cap||0); });
+  var seats=list.reduce(function(x,b){ return x+(b.cap||0); },0);
+  var h='<div class="fd-hold" data-pier="hold" ondragover="fdDragOver(event,this)" '
+    + 'ondragleave="fdDragOut(this)" ondrop="fdDrop(event,this)" onclick="if(_fdSel) fdMove(\'hold\')">'
+    + '<div class="hh"><b>ที่พักเรือ</b>'
+      + '<span>ลากมาวางไว้ก่อนได้ · เรือที่พักไว้ไม่ถูกนับเป็นที่นั่งของท่าไหน</span>'
+      + (list.length?('<i>'+list.length+' ลำ · '+seats+' ที่นั่ง</i>'):'')
+    + '</div><div class="hb">';
+  if(!list.length) h+='<div class="he">ลากเรือมาวางที่นี่ หรือกดเลือกลำหนึ่งแล้วกดตรงนี้</div>';
+  list.forEach(function(b){
+    var j=fdJobsOf(b.id), noEnd=j.filter(function(x){ return !x.endDate; }).length;
+    h+='<span class="hc'+(_fdSel===b.id?' sel':'')+'" draggable="true" data-id="'+fdE(b.id)+'"'
+      +' ondragstart="fdDragStart(event,this)" ondragend="fdDragEnd(this)"'
+      +' onclick="event.stopPropagation();fdPick(\''+fdE(b.id)+'\')">'
+      +'<em style="background:'+fdE(b.color||'#94A3B8')+'"></em>'+fdE(b.name)
+      +' <u>'+(b.cap||0)+' ที่</u>'
+      +(fdIsCharter(b)?'<s>เช่า</s>':'')
+      +(noEnd?('<b class="w">'+noEnd+' งานซ่อม</b>'):'')
+      +(fdIsPlanBoat(b)?('<button onclick="event.stopPropagation();fdDelPlanBoat(\''+fdE(b.id)+'\')">✕</button>'):'')
+      +'</span>';
+  });
+  return h+'</div></div>';
+}
+
+/* ══ เรือที่วางไว้แต่ยังซ่อมไม่เสร็จ · รายการที่ต้องไปเร่ง ═════════
+   นี่คือประโยชน์ของการยอมให้ลากเรือออกจากอู่มาวางได้
+   วางแผนได้เต็มที่ แล้วกระดานสรุปให้เองว่าต้องเร่งซ่อมลำไหนให้ทันวันไหน */
+function fdChase(){
+  var Wn=fdWin(), out=[];
+  FD_PIERS.forEach(function(k){
+    fdBoatsAt(k, Wn.from).filter(fdOwnOk).forEach(function(b){
+      if(fdCanRun(b, Wn.from)) return;
+      var moved=(_fdPlan.pier||[]).some(function(x){
+        return x && x.boatId===b.id && x.from<=Wn.from && Wn.from<=x.to; });
+      var j=fdJobsOf(b.id);
+      out.push({ b:b, pier:k, moved:moved, jobs:j,
+        noEnd:j.filter(function(x){ return !x.endDate; }).length,
+        late:j.filter(function(x){ return x.endDate && x.endDate>Wn.from; }).length });
+    });
+  });
+  if(!out.length) return '';
+  out.sort(function(a,b){ return (b.moved-a.moved) || ((b.b.cap||0)-(a.b.cap||0)); });
+  var seats=out.reduce(function(x,r){ return x+(r.b.cap||0); },0);
+  return '<div class="fd-chase"><div class="ch"><b>เรือที่วางไว้แต่ยังซ่อมไม่เสร็จ '+out.length+' ลำ</b>'
+    + '<span>รวม '+seats+' ที่นั่ง · ถ้าจะใช้แผนนี้ ต้องเร่งให้เสร็จก่อน '+fdE(fdNiceDate(Wn.from))+'</span></div>'
+    + '<div class="cl">'+out.map(function(r){
+        return '<span class="ci'+(r.moved?' moved':'')+'">'
+          +(r.moved?'<em>ย้ายมาในแผน</em>':'')
+          +fdE(r.b.name)+' <i>'+fdE(fdPierNm(r.pier))+'</i>'
+          +(r.jobs.length?(' <u>'+r.jobs.slice(0,3).map(function(j){ return fdE(j.no||''); }).join(' ')
+              +(r.jobs.length>3?(' +'+(r.jobs.length-3)):'')+'</u>'):'')
+          +(r.noEnd?('<s>'+r.noEnd+' ไม่มีวันเสร็จ</s>'):(r.late?'<s>เสร็จไม่ทัน</s>':''))
+          +'</span>'; }).join('')+'</div></div>';
 }
 
 /* ══ แถบแผนโยกทั้งฤดู · เห็นการสลับเรือในภาพเดียว ══════════════════════════ */
@@ -25380,14 +25443,9 @@ function fdMove(toPier){
   /* ⚠ ห้ามใช้ alert/confirm ในทางนี้เด็ดขาด
      ตัวนี้ถูกเรียกจาก drop event ด้วย · กล่องข้อความที่บล็อกระหว่างลากวาง
      ทำให้ Chrome ค้างสถานะลากไว้ กดอะไรต่อไม่ติดทั้งหน้า (ผู้ใช้เจอจริง) · ใช้ toast แทน */
-  if(toPier==='shop'){
-    if(typeof flShowToast==='function') flShowToast('ย้ายเข้าอู่ตรงนี้ไม่ได้ · เปิดใบซ่อมที่หน้า Maintenance แทน','warn');
-    flRenderDeployment(); return;
-  }
-  if(from==='shop'){
-    if(typeof flShowToast==='function') flShowToast(b.name+' ยังอยู่อู่ตามใบซ่อมที่เปิดค้าง · ปิดงานซ่อมก่อน','warn');
-    flRenderDeployment(); return;
-  }
+  /* §flDeployHold · เคยกันไม่ให้ย้ายเรือเข้า-ออกอู่ ซึ่งผิดสำหรับกระดานวางแผน
+     การวางแผนคือการสมมติ "ถ้าซ่อมเสร็จทัน ลำนี้จะไปอยู่ท่าไหน"
+     ป้ายซ่อมบนการ์ดยังอยู่ครบ และมีกล่อง "ต้องเร่งซ่อม" สรุปใต้กระดานให้อีกที */
   /* ร่างของเรือลำนี้ที่ทับช่วงนี้ถูกแทนที่ · ในร่างก็ห้ามซ้อนเหมือนกัน */
   _fdPlan.pier=(_fdPlan.pier||[]).filter(function(x){
     return !(x && x.boatId===b.id && x.from===Wn.from && x.to===Wn.to); });
@@ -25859,10 +25917,44 @@ function fdCSS(){
   +H+' .fd-note{background:#fff;border:1px solid #E7EAEF;border-left:3px solid #0F172A;border-radius:11px;'
      +'padding:12px 15px;margin-top:14px;font-size:11.5px;color:#4A5360;line-height:1.8}'
   /* กระดานท่า */
+  /* §flDeployHold · ห้าคอลัมน์ · สามท่า + อู่ + ที่พักเรือ */
   +H+' .fd-board{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:start}'
   +'@media(max-width:1180px){'+H+' .fd-board{grid-template-columns:repeat(2,minmax(0,1fr))}}'
   +H+' .fd-col{background:#fff;border:1px solid #E7EAEF;border-radius:14px;min-height:150px}'
   +H+' .fd-col.shop{background:#FAFAFB;border-style:dashed}'
+  +H+' .fd-hold{margin-top:12px;background:#F7F8FA;border:1px dashed #D6DCE5;border-radius:13px;padding:10px 13px}'
+  +H+' .fd-hold.drop{border-color:#0F172A;border-style:solid;background:#F8FAFC;box-shadow:0 0 0 3px rgba(15,23,42,.06)}'
+  +H+' .fd-hold .hh{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}'
+  +H+' .fd-hold .hh b{font-size:12.5px;color:#4A5360}'
+  +H+' .fd-hold .hh span{font-size:10.5px;color:#9AA3AE}'
+  +H+' .fd-hold .hh i{margin-left:auto;font-style:normal;font-size:11px;font-weight:700;color:#4A5360}'
+  +H+' .fd-hold .hb{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;min-height:34px;align-items:flex-start}'
+  +H+' .fd-hold .he{font-size:11px;color:#9AA3AE;padding:6px 2px}'
+  +H+' .fd-hold .hc{display:inline-flex;align-items:center;gap:5px;background:#fff;border:1px solid #E7EAEF;'
+     +'border-radius:999px;padding:5px 11px;font-size:11.5px;font-weight:700;color:#1F2937;cursor:grab}'
+  +H+' .fd-hold .hc.sel{border-color:#0F172A;box-shadow:0 0 0 3px rgba(15,23,42,.07)}'
+  +H+' .fd-hold .hc.drag{opacity:.4}'
+  +H+' .fd-hold .hc em{width:7px;height:7px;border-radius:50%;flex:none}'
+  +H+' .fd-hold .hc u{text-decoration:none;font-weight:500;color:#6B7280;font-size:10.5px}'
+  +H+' .fd-hold .hc s{text-decoration:none;font-size:9px;font-weight:700;background:#EEF2FF;color:#3730A3;'
+     +'border:1px solid #C7D2FE;border-radius:4px;padding:0 5px}'
+  +H+' .fd-hold .hc b.w{font-size:9px;font-weight:700;background:#FDF2F2;color:#A32D2D;'
+     +'border:1px solid #F0C9C9;border-radius:4px;padding:0 5px}'
+  +H+' .fd-hold .hc button{border:0;background:transparent;color:#A32D2D;cursor:pointer;font:700 11px inherit;'
+     +'font-family:inherit;padding:0 2px}'
+  +H+' .fd-chase{background:#FEF6E7;border:1px solid #EFD9AE;border-radius:12px;padding:10px 13px;margin-top:13px}'
+  +H+' .fd-chase .ch{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}'
+  +H+' .fd-chase .ch b{font-size:12.5px;color:#7A4A0E}'
+  +H+' .fd-chase .ch span{font-size:11px;color:#8A5410}'
+  +H+' .fd-chase .cl{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}'
+  +H+' .fd-chase .ci{display:inline-flex;align-items:center;gap:5px;background:#fff;border:1px solid #EFD9AE;'
+     +'border-radius:999px;padding:3px 10px;font-size:10.5px;font-weight:700;color:#7A4A0E}'
+  +H+' .fd-chase .ci.moved{border-color:#0F172A}'
+  +H+' .fd-chase .ci em{font-style:normal;font-size:9px;background:#0F172A;color:#fff;border-radius:4px;padding:1px 5px}'
+  +H+' .fd-chase .ci i{font-style:normal;font-weight:500;color:#A97A2A}'
+  +H+' .fd-chase .ci u{text-decoration:none;font-weight:500;color:#9AA3AE;font-size:10px}'
+  +H+' .fd-chase .ci s{text-decoration:none;font-size:9.5px;font-weight:700;background:#FDF2F2;color:#A32D2D;'
+     +'border:1px solid #F0C9C9;border-radius:4px;padding:0 5px}'
   +H+' .fd-colh{padding:11px 13px 9px;border-bottom:1px solid #F1F3F6;cursor:pointer}'
   +H+' .fd-colh .nm{font-size:13px;font-weight:700;display:flex;align-items:baseline;gap:7px}'
   +H+' .fd-colh .nm small{font-weight:500;font-size:10.5px;color:#9AA3AE}'
