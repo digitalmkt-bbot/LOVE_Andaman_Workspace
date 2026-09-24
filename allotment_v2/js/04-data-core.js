@@ -8819,15 +8819,40 @@ function toggleDayOverride(rid,dateStr){
   }
   save('config');renderSettings();
 }
+/* §closeNoWarn · สถานะของวันนั้น "หลังกดหนึ่งครั้ง" จะเป็นอะไร (2026-09-24)
+   จำลองโดยไม่แตะข้อมูลจริง · ล้าง override ชั่วคราวแล้วคืนทันที
+   ไม่มีฤดูกาลคร่อมเลย = เปิด · ตามกติกาเดิมของ getDayStatus ที่คืน null แล้วให้ผู้เรียกถือว่าเปิด */
+function _dayStatusAfterToggle(r, dateStr){
+  const had = r.overrides && Object.prototype.hasOwnProperty.call(r.overrides, dateStr);
+  if(had){
+    /* ล้าง override → กลับไปดูฤดูกาลข้างใต้ · ส่ง "สำเนาที่ตัดวันนั้นออก" ให้ getDayStatus คิด
+       จะได้ไม่ต้องเขียนกติกาหาฤดูกาลซ้ำอีกชุด (อ่านที่เดียว ใช้สองที่)
+       ⚠ ห้ามลบแล้วใส่คืนของจริง · ลำดับคีย์ในออบเจกต์จะสลับ แล้ว JSON ที่เซฟลงเซิร์ฟเวอร์
+         จะเปลี่ยนทุกครั้งที่แค่กดดู ทั้งที่เนื้อหาเท่าเดิม */
+    const c = {}; for(const k in r) c[k] = r[k];
+    c.overrides = {};
+    for(const k in (r.overrides || {})) if(k !== dateStr) c.overrides[k] = r.overrides[k];
+    const after = getDayStatus(c, dateStr);
+    return after ? after.type : 'open';
+  }
+  const cur = getDayStatus(r, dateStr);
+  return cur ? (cur.type === 'open' ? 'closed' : 'open') : 'open';
+}
 // Guarded · checks booking impact when toggling a day to CLOSED
 function toggleDayOverrideGuarded(rid, dateStr){
   if(!progEditMode) return; // must be in edit mode
   const r = ROUTES.find(x => x.id === rid); if(!r) return;
-  // Determine what the new status would be
+  /* §closeNoWarn · เคยข้ามคำเตือนทั้งดุ้นเมื่อวันนั้นมี override อยู่แล้ว
+     เหตุผลเดิมคือ "ล้าง override = ย้อนกลับ ย้อนกลับไม่เซอร์ไพรส์ใคร" ซึ่งไม่จริง
+     วันที่อยู่นอกทุกฤดูกาล (ช่องว่างระหว่างฤดู) ถูกเปิดขายด้วย override
+     การล้าง override จึงเท่ากับ "ปิดวันนั้น" เต็ม ๆ และเงียบสนิท
+     ของจริงที่เจอ · Whale Shark Phi Phi Maiton Sunset ช่วง 1–14 ต.ค. 2026
+     อยู่ในช่องว่างระหว่างฤดู 30 ก.ย. กับ 15 ต.ค. · เปิดไว้ด้วย override ทั้ง 14 วัน
+     มี booking ยืนยันแล้ว 8 ใบ 23 คน · กดปิดได้โดยไม่มีอะไรเตือนสักคำ
+     ตอนนี้จึงเทียบสถานะ "ก่อน → หลัง" ของการกด ไม่ได้ดูว่าการเปลี่ยนมาจากทางไหน */
   const status = getDayStatus(r, dateStr);
-  const willBeClosed = r.overrides && r.overrides[dateStr]
-    ? false // clearing override · will revert · skip warning (revert can't surprise)
-    : (status ? (status.type === 'open') : false); // toggling from open → closed
+  const before = status ? status.type : 'open';
+  const willBeClosed = (before === 'open') && (_dayStatusAfterToggle(r, dateStr) === 'closed');
   if(!willBeClosed){
     toggleDayOverride(rid, dateStr);
     return;
