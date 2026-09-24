@@ -808,6 +808,152 @@ else {
   }
 }
 
+/* ══ 3m · Factsheet ของรอบ ═════════════════════════════════════════════
+   ที่มา (2026-09-24) · "มันน่าจะต้องเป็นเหมือน Factsheet ที่เห็นว่าวันที่นี้ถึงวันที่นี้
+   มีเรืออะไรอยู่ท่าไหนบ้าง มีโปรแกรมอะไรบ้าง เรือแต่ละลำวิ่งโปรแกรมไหน
+   ที่นั่งมีเท่าไหร่ / รับได้เท่าไหร่ มีเรื่องอะไรที่ต้องให้ความสนใจ"
+   ข้อนี้กันสี่อย่าง
+     · ตาราง เรือ → โปรแกรม ตรงกับที่นับเองจาก TRIPS + ROUTES
+     · ที่นั่งที่รับได้ตลอดช่วง = ที่นั่ง × วันที่เปิดขายจริง ไม่ใช่คูณวันทั้งหมด
+     · ท่าที่ยังไม่เปิดขายต้องไม่ถูกเขียนว่า "ยังไม่ได้ลงโปรแกรม"
+     · เรือที่ลงโปรแกรมของท่าหนึ่งทั้งที่แผนวางไว้อีกท่า ต้องขึ้นในรายการที่ต้องสนใจ */
+const R3m = await page.evaluate(() => {
+  const snapB = JSON.stringify(BOATS), snapT = JSON.stringify(TRIPS);
+  _fdPlan = { pier: [], drop: [], trip: {}, avail: {}, boats: [], ready: {} }; fdPlanSave();
+  fdTab('pier'); fdSetOwn('all');
+  const S = fdSeason(), m = S.from.slice(0, 7);
+  fdSetScope('custom'); fdSetCustom('from', m + '-01'); fdSetCustom('to', fdMonthEnd(m + '-01'));
+  const W = fdWin();
+  const days = []; let d = W.from;
+  while (d <= W.to && days.length < 400) { days.push(d); d = fdAddDays(d, 1); }
+  /* จับเรือลงโปรแกรมให้มีทั้งลำที่วิ่งครบ วิ่งบางวัน และไม่ได้วิ่งเลย */
+  FD_PIERS.forEach(p => {
+    const fleet = fdBoatsAt(p, W.from);
+    days.forEach((x, i) => {
+      const rs = fdOpenRoutes(p, x); if (!rs.length) return;
+      if (fleet[0] && rs[0]) fdAssign(rs[0].id, x, fleet[0].id);
+      if (fleet[1] && rs[rs.length > 1 ? 1 : 0] && i % 2 === 0) fdAssign(rs[rs.length > 1 ? 1 : 0].id, x, fleet[1].id);
+    });
+  });
+  /* วางเรือไว้บนวันที่ปิดขายด้วย · ที่นั่งของวันนั้นต้องไม่ถูกนับเข้า "รับได้ตลอดช่วง"
+     ถ้าไม่วาง วันปิดขายจะว่างเปล่าอยู่แล้ว แยกไม่ออกว่าโค้ดคูณวันเปิดขายหรือคูณทุกวัน */
+  let shutPlant = null;
+  FD_PIERS.some(p => {
+    const sd = days.find(x => !fdOpenRoutes(p, x).length);
+    const any = (ROUTES || []).find(r => r && (r.pier || '') === p);
+    const b = fdBoatsAt(p, W.from)[0];
+    if (!sd || !any || !b) return false;
+    fdAssign(any.id, sd, b.id);
+    shutPlant = { pier: p, d: sd, boat: b.name, cap: b.cap || 0 };
+    return true;
+  });
+  /* วางเรือจากอู่ลงโปรแกรมของท่าหนึ่ง โดยไม่ย้ายมันเข้าท่า · ของสองตารางจะไม่ตรงกันโดยตั้งใจ */
+  let stray = null;
+  const shopB = fdBoatsAt('shop', W.from)[0];
+  if (shopB) {
+    const p = FD_PIERS.find(x => fdOpenRoutes(x, days[days.length - 1]).length);
+    if (p) { fdAssign(fdOpenRoutes(p, days[days.length - 1])[0].id, days[days.length - 1], shopB.id);
+             stray = { boat: shopB.name, pier: p }; }
+  }
+  fdTab('sheet'); flRenderDeployment();
+
+  /* ── คำนวณเองจาก TRIPS + ROUTES ── */
+  const want = {};
+  FD_PIERS.forEach(p => {
+    const open = days.filter(x => fdOpenRoutes(p, x).length > 0);
+    const list = fdBoatsAt(p, W.from);
+    const runs = {};
+    list.forEach(b => {
+      const by = {};
+      open.forEach(x => {
+        const t = fdTripsOn(x)[b.id]; if (!t) return;
+        const r = (ROUTES || []).find(y => y && y.id === t.route);
+        if (!r || (r.pier || '') !== p) return;
+        by[r.name] = (by[r.name] || 0) + 1;
+      });
+      runs[b.name] = by;
+    });
+    /* ที่นั่ง × วันที่เปิดขาย · นับเองวันต่อวัน */
+    let seatDay = 0;
+    open.forEach(x => {
+      const t = fdTripsOn(x);
+      Object.keys(t).forEach(id => {
+        const r = (ROUTES || []).find(y => y && y.id === t[id].route);
+        if (!r || (r.pier || '') !== p) return;
+        const b = fdBoat(id); if (!b || !fdCanRun(b, x)) return;
+        seatDay += (b.cap || 0);
+      });
+    });
+    want[p] = { open: open.length, runs, seatDay, n: list.length };
+  });
+
+  /* ── อ่านจากแผ่น ── */
+  const sheet = document.querySelector('#fl-deploy-wrap .fd-sheet');
+  if (!sheet) return { err: 'ไม่มีแผ่น Factsheet บนหน้า' };
+  const got = {};
+  [].slice.call(sheet.querySelectorAll('.fs-p')).forEach(sec => {
+    const nm = ((sec.querySelector('.ph b') || {}).textContent || '').trim();
+    const head = ((sec.querySelector('.ph span') || {}).textContent || '').replace(/\s+/g, ' ');
+    const mSd = /รับได้รวม\s*([\d,]+)/.exec(head);
+    const rows = {}, shutRows = [], idleRows = [];
+    const tb = sec.querySelector('.fs-t tbody');
+    if (tb) [].slice.call(tb.querySelectorAll('tr')).forEach(tr => {
+      const bn = ((tr.querySelector('td b') || {}).textContent || '').trim();
+      const by = {};
+      [].slice.call(tr.querySelectorAll('.rn')).forEach(x => {
+        const u = (x.querySelector('u') || {}).textContent || '0';
+        by[(x.childNodes[0].textContent || '').trim()] = +u;
+      });
+      rows[bn] = by;
+      if (/shut/.test(tr.className)) shutRows.push(bn);
+      if (/idle/.test(tr.className)) idleRows.push(bn);
+    });
+    got[nm] = { rows, shutRows, idleRows, seatDay: mSd ? +mSd[1].replace(/,/g, '') : null };
+  });
+  const att = [].slice.call(sheet.querySelectorAll('.fs-att li')).map(x => (x.textContent || '').trim());
+  return { want, got, att, stray, shutPlant, days: days.length,
+           labels: (typeof PIER_LABELS !== 'undefined') ? PIER_LABELS : {},
+           boatsSame: JSON.stringify(BOATS) === snapB, tripsSame: JSON.stringify(TRIPS) === snapT };
+});
+if (R3m.err) fail(R3m.err);
+else {
+  const bad3m = [];
+  Object.keys(R3m.want).forEach(p => {
+    const w = R3m.want[p], lbl = R3m.labels[p] || p, g = R3m.got[lbl];
+    if (!w.n) return;
+    if (!g) { bad3m.push(lbl + ' ไม่มีในแผ่น'); return; }
+    /* เรือ → โปรแกรม */
+    Object.keys(w.runs).forEach(bn => {
+      const a = JSON.stringify(w.runs[bn]), b = JSON.stringify(g.rows[bn] || {});
+      if (a !== b) bad3m.push(lbl + ' · ' + bn + ' แผ่นบอก ' + b + ' ควรเป็น ' + a);
+    });
+    /* ที่นั่ง × วัน */
+    if (g.seatDay !== w.seatDay)
+      bad3m.push(lbl + ' รับได้รวม ' + g.seatDay + ' · นับเองได้ ' + w.seatDay);
+    /* ท่าที่ยังไม่เปิดขาย ต้องเป็นแถวเทา ไม่ใช่แถวแดง */
+    if (!w.open) {
+      if (g.idleRows.length) bad3m.push(lbl + ' ยังไม่เปิดขายสักวัน แต่มีแถวขึ้นแดงว่าไม่ได้ลงโปรแกรม ' + g.idleRows.length);
+      if (g.shutRows.length !== w.n) bad3m.push(lbl + ' ยังไม่เปิดขาย แต่ทำเครื่องหมายไว้แค่ ' + g.shutRows.length + ' จาก ' + w.n);
+    } else {
+      const wantIdle = Object.keys(w.runs).filter(bn => !Object.keys(w.runs[bn]).length).sort().join(',');
+      if (g.idleRows.slice().sort().join(',') !== wantIdle)
+        bad3m.push(lbl + ' แถวที่ยังไม่ได้ลงโปรแกรม [' + g.idleRows.join(',') + '] ควรเป็น [' + wantIdle + ']');
+    }
+  });
+  if (R3m.stray && !R3m.att.some(t => /วางไว้ท่าอื่น/.test(t) && t.indexOf(R3m.stray.boat) >= 0))
+    bad3m.push('เรือ ' + R3m.stray.boat + ' ลงโปรแกรมของท่าอื่นแต่ไม่ขึ้นในรายการที่ต้องสนใจ');
+  if (!R3m.shutPlant)
+    bad3m.push('วางเรือบนวันที่ปิดขายไม่ได้ · พิสูจน์ไม่ได้ว่า "รับได้ตลอดช่วง" คูณเฉพาะวันที่เปิดขาย');
+  if (!R3m.boatsSame || !R3m.tripsSame) bad3m.push('เปิดแผ่นแล้ว BOATS หรือ TRIPS จริงเปลี่ยน');
+  if (bad3m.length) fail('Factsheet · ' + bad3m.slice(0, 3).join(' · '));
+  else ok('Factsheet ตรงกับที่นับเองจาก TRIPS ทุกท่า · ช่วง ' + R3m.days + ' วัน · '
+      + Object.keys(R3m.want).filter(p => R3m.want[p].n)
+          .map(p => p + ' ' + R3m.want[p].seatDay.toLocaleString() + ' ที่'). join(' · ')
+      + ' · รายการที่ต้องสนใจ ' + R3m.att.length + ' เรื่อง · '
+      + 'วาง ' + R3m.shutPlant.boat + ' ไว้บนวันปิดขาย ' + R3m.shutPlant.d + ' แล้วไม่ถูกนับ · '
+      + 'ข้อมูลจริงไม่ถูกแตะ');
+}
+
 /* ══ 4 · ปฏิทินต้องเคารพฤดูกาลของเส้นทาง ══════════════════════════════════ */
 const R4 = await page.evaluate(() => {
   fdTab('month');
