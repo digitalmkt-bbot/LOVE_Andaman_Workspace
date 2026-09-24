@@ -768,6 +768,88 @@ else if (R4b.back !== R4b.before) fail('กดกลับแล้วตัว�
 else ok('บนปฏิทินเลือกพร้อม/ไม่พร้อมได้ครบทั้ง ' + R4b.chips + ' ลำ · กดไม่นับ ' + R4b.name
       + ' แล้ว Seats this month ลด ' + (R4b.cap * R4b.days) + ' ตรงกับที่คำนวณเองจาก TRIPS');
 
+/* ══ 4c · "ไม่นับในแผน" กับ "อยู่นอกช่วงเช่า" ต้องแยกกัน ════════════════
+   ที่มา (2026-09-24) · ผู้ใช้ถามว่า "ไม่นับในแผน" แปลว่าอะไร · พอไปดูโค้ดพบว่า
+   ป้ายเดียวนี้ครอบสองสาเหตุที่ต้องทำคนละเรื่อง
+     คนกดเองว่าไม่เอาลำนี้        → กดกลับได้ตรงนั้น
+     วันนั้นเรือไม่ได้อยู่กับเรา  → กดปุ่มไม่ช่วย ต้องไปแก้ช่วงวัน
+   ถ้าเขียนเหมือนกัน คนจะกดปุ่มแล้วงงว่าทำไมตัวเลขไม่ขยับ */
+const R4c = await page.evaluate(() => {
+  _fdPlan = { pier: [], drop: [], trip: {}, avail: {}, boats: [], ready: {} }; fdPlanSave();
+  fdTab('month'); flRenderDeployment();
+  const month = _fdMonth, pier = _fdPier;
+  /* หาวันที่มีเรือวิ่งจริงในเดือนนี้ แล้วเลือกลำหนึ่งมาทดสอบทั้งสองสาเหตุ */
+  let hit = null;
+  for (let i = 1; i <= 31 && !hit; i++) {
+    const d = month + '-' + String(i).padStart(2, '0');
+    if (d.slice(0, 7) !== month) continue;
+    const t = (TRIPS || {})[d] || {};
+    const id = Object.keys(t).find(x => {
+      const r = (ROUTES || []).find(y => y && y.id === t[x].route);
+      if (!r || (r.pier || '') !== pier) return false;
+      const b = (BOATS || []).find(y => y && y.id === x);
+      return !!(b && !b.retired && (b.cap || 0) > 0);
+    });
+    if (id) hit = { d, id, i, boat: (BOATS.find(b => b.id === id) || {}).name };
+  }
+  if (!hit) return { skip: 'เดือนนี้ไม่มีเรือวิ่งในปฏิทิน' };
+  const cell = () => {
+    const c = [].slice.call(document.querySelectorAll('#fl-deploy-wrap .fd-day:not(.pad)'))[hit.i - 1];
+    const w = c && c.querySelector('.fd-warn');
+    return { warn: w ? (w.textContent || '').trim() : '',
+             seats: +(((c && c.querySelector('.dh i') || {}).textContent || '').match(/·\s*(\d+)\s*ที่/) || [0, 0])[1] };
+  };
+  const base = cell();
+  /* สาเหตุที่ 1 · กดปุ่มไม่เอาลำนี้ */
+  fdReadyToggle(hit.id);
+  const off = cell();
+  fdReadyToggle(hit.id);
+  /* สาเหตุที่ 2 · ตั้งช่วงที่เรืออยู่กับเราให้ไม่คร่อมวันนั้น */
+  fdAvailOn(hit.id);
+  fdSetAvail(hit.id, 'from', fdAddDays(hit.d, 5));
+  fdSetAvail(hit.id, 'to', fdAddDays(hit.d, 9));
+  const rent = cell();
+  /* แผงรายวันต้องบอกเหตุผลเดียวกัน */
+  _fdDay = ''; fdOpenDay(hit.d);
+  const chip = [].slice.call(document.querySelectorAll('#fl-deploy-wrap .fd-sb'))
+    .find(x => (x.textContent || '').indexOf(hit.boat) >= 0);
+  const chipTxt = chip ? (chip.textContent || '').trim() : '';
+  const chipBtn = chip ? ((chip.querySelector('.fd-rdy') || {}).className || '') : '';
+  /* ทั้งสองอย่างพร้อมกัน · ต้องบอก "นอกช่วงเช่า" เพราะกดปุ่มยังไงก็ไม่ช่วย
+     ถ้าบอกว่า "ไม่นับในแผน" คนจะไปกดปุ่มแล้วตัวเลขไม่ขยับ แล้วคิดว่าระบบเสีย */
+  fdReadyToggle(hit.id);
+  const both = cell();
+  fdReadyToggle(hit.id);
+  fdAvailOff(hit.id); _fdDay = ''; flRenderDeployment();
+  const back = cell();
+  return { ...hit, base, off, rent, both, back, chipTxt, chipBtn };
+});
+if (R4c.skip) console.log('  ! ' + R4c.skip + ' · ข้ามข้อ 4c');
+else {
+  const b4 = [];
+  if (!/ไม่นับในแผน/.test(R4c.off.warn))
+    b4.push('กดปุ่มไม่เอาแล้วช่องวันไม่ได้บอกว่า "ไม่นับในแผน" · ได้ "' + R4c.off.warn + '"');
+  if (!/นอกช่วงเช่า/.test(R4c.rent.warn))
+    b4.push('ตั้งช่วงไม่คร่อมวันนั้นแล้วยังบอกว่า "' + R4c.rent.warn + '" · ควรบอกว่าอยู่นอกช่วงเช่า');
+  if (/ไม่นับในแผน/.test(R4c.rent.warn))
+    b4.push('นอกช่วงเช่าแต่ไปเขียนว่าไม่นับในแผน · คนจะกดปุ่มแล้วงงว่าทำไมไม่ขยับ');
+  if (R4c.off.seats !== R4c.rent.seats)
+    b4.push('สองสาเหตุหักที่นั่งไม่เท่ากัน · ' + R4c.off.seats + ' กับ ' + R4c.rent.seats);
+  if (R4c.back.warn !== R4c.base.warn || R4c.back.seats !== R4c.base.seats)
+    b4.push('เอาช่วงออกแล้วไม่กลับเป็นเหมือนเดิม');
+  if (R4c.chipTxt && !/นอกช่วงเช่า/.test(R4c.chipTxt))
+    b4.push('แผงรายวันบอกคนละเรื่องกับช่องวัน · "' + R4c.chipTxt + '"');
+  if (R4c.chipBtn && !/rent/.test(R4c.chipBtn))
+    b4.push('ปุ่มในแผงรายวันยังกดได้ทั้งที่กดแล้วไม่ช่วยอะไร');
+  if (!/นอกช่วงเช่า/.test(R4c.both.warn))
+    b4.push('เป็นทั้งสองอย่างพร้อมกันแล้วบอกว่า "' + R4c.both.warn
+          + '" · ต้องบอกนอกช่วงเช่าก่อน เพราะกดปุ่มไม่ช่วย');
+  if (b4.length) fail('แยกสาเหตุที่ไม่ถูกนับ · ' + b4.join(' · '));
+  else ok('แยกสาเหตุได้ถูก · ' + R4c.boat + ' ' + R4c.d + ' · กดไม่เอา → "' + R4c.off.warn
+      + '" · นอกช่วงเช่า → "' + R4c.rent.warn + '" · หักที่นั่งเท่ากัน ' + (R4c.base.seats - R4c.off.seats)
+      + ' ที่ และแผงรายวันบอกตรงกัน · เป็นทั้งสองอย่างพร้อมกันบอก "' + R4c.both.warn + '"');
+}
+
 /* ══ 5 · ที่นั่งต่อวันต้องตรงกับที่คำนวณเองจาก TRIPS ══════════════════════
    §flDeployReady · นับทุกลำที่ถูกวางไว้ในวันนั้น เว้นลำที่คนกดไว้ว่าไม่นับในแผน
    (สถานะซ่อมไม่ได้กันอีกแล้ว · หน้านี้คือแผน ไม่ใช่รายงานสถานะวันนี้) */

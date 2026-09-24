@@ -25026,6 +25026,18 @@ function fdStatOn(b, ds){
 function fdRealReady(b, ds){ return fdStatOn(b, ds)==='available'; }
 function fdCounted(b){ return (_fdPlan.ready||{})[b.id]!==0; }
 function fdCanRun(b, ds){ return fdInService(b, ds) && fdCounted(b); }
+/* §flDeployWhy · ทำไมลำนี้ไม่ถูกนับเป็นกำลังของวันนั้น (2026-09-24)
+   ที่มา · ป้ายเดิมเขียน "ไม่นับในแผน" อย่างเดียว แต่สาเหตุมีสองอย่างที่ต้องทำคนละเรื่อง
+     off  · คนกดปุ่มบนการ์ดเองว่าไม่เอาลำนี้ → แก้ได้ด้วยการกดกลับ
+     rent · วันนั้นเรือไม่ได้อยู่กับเรา (นอกช่วงเช่า / นอกช่วงที่ตั้งไว้) → ต้องไปแก้ช่วงวัน
+   รวมสองอย่างไว้ป้ายเดียวแล้วคนอ่านไม่ออกว่าต้องไปกดตรงไหน */
+function fdWhyNot(b, ds){
+  if(!b) return '';
+  if(!fdInService(b, ds)) return 'rent';
+  if(!fdCounted(b)) return 'off';
+  return '';
+}
+var FD_WHY = { off:'ไม่นับในแผน', rent:'อยู่นอกช่วงเช่า' };
 function fdReadyToggle(id){
   var b=fdBoat(id); if(!b) return;
   _fdPlan.ready=_fdPlan.ready||{};
@@ -25504,6 +25516,11 @@ function fdCard(b, ds){
 /* §flDeployReady · ปุ่ม "นับในแผน / ไม่นับ" · ใช้ร่วมกันทั้งกระดานและปฏิทิน
    สีส้มคือกดนับไว้ทั้งที่ของจริงยังซ่อมอยู่ — ตั้งใจให้สะดุดตา ไม่ใช่ error */
 function fdReadyBtn(b, ds){
+  /* §flDeployWhy · นอกช่วงเช่าไม่ใช่เรื่องที่ปุ่มนี้แก้ได้ · กดกลับก็ยังไม่ถูกนับอยู่ดี
+     จึงบอกไปตรง ๆ ว่าต้องไปแก้ช่วงวัน ไม่ใช่ทำเป็นปุ่มให้กดแล้วไม่เกิดอะไร */
+  if(fdWhyNot(b, ds)==='rent')
+    return '<span class="fd-rdy rent" title="วันนี้เรือลำนี้ไม่ได้อยู่กับเรา · '
+      + 'แก้ช่วงวันได้ที่การ์ดเรือในแท็บ Pier Placement">อยู่นอกช่วงเช่า</span>';
   var on=fdCanRun(b, ds), real=fdRealReady(b, ds);
   var cls = on ? (real?'on':'on risk') : 'off';
   var lb  = on ? (real?'นับในแผน':'นับ · ยังซ่อมอยู่') : 'ไม่นับ';
@@ -25538,6 +25555,8 @@ function fdBoardNote(){
     +'ลำไหนไม่อยากนับ กดปุ่ม <b>นับในแผน</b> บนการ์ดให้เป็น <b>ไม่นับ</b> แล้วที่นั่งจะหายออกไป<br>'
     +'· <b>Seats placed</b> คือที่นั่งรวมของทุกลำในคอลัมน์ ไม่ว่าจะกดนับหรือไม่ · '
     +'ป้ายสถานะบนการ์ด (พร้อมใช้ / อยู่ระหว่างซ่อม) ยังเป็นของจริงจากใบซ่อมเสมอ กดไม่ได้<br>'
+    +'· ลำที่ไม่ถูกนับมีได้สองแบบ · <b>ไม่นับในแผน</b> คือคนกดเองว่าไม่เอาลำนี้ กดกลับได้ตลอด · '
+    +'<b>อยู่นอกช่วงเช่า</b> คือวันนั้นเรือไม่ได้อยู่กับเรา กดปุ่มไม่ช่วย ต้องไปแก้ช่วงวันบนการ์ดเรือ<br>'
     +'· <b>Crew need/have</b> ฝั่ง need คืออัตราประจำเรือรวมกัน ฝั่ง have คือคนในทะเบียนพนักงานของท่านั้น<br>'
     +'· เรียงการ์ดแบบ <b>คาตามารัน → สปีดโบ๊ท 4 เครื่อง → 3 เครื่อง</b> · ลำที่ยังไม่ได้กรอกจำนวนเครื่องอยู่ท้ายกลุ่ม<br>'
     +'· คอลัมน์ <b>อู่ซ่อม / นอกท่า</b> ไม่ใช่ท่าจริง · เป็นเรือที่ใบซ่อมยังเปิดค้างและระบุอู่ไว้ · '
@@ -25863,7 +25882,7 @@ function fdMonth(){
     +'<div class="cs'+(emptyDays?' bad':'')+'"><i>Days with no boat</i><b>'+emptyDays+'</b><span>จาก '+openDays+' วันที่มีโปรแกรมเปิดขาย</span></div>'
     +'<div class="cs'+(idle.length?' warn':'')+'"><i>Boats never used</i><b>'+idle.length+'</b><span>'
       +(idle.length? fdE(idle.map(function(b){ return b.name; }).join(' · ')) : 'ใช้ครบทุกลำ')+'</span></div>'
-    +'<div class="cs'+(sick?' bad':'')+'"><i>Booked while blocked</i><b>'+sick+'</b><span>ครั้งที่เรือถูกวางทั้งที่กดไว้ว่าไม่นับในแผน</span></div>'
+    +'<div class="cs'+(sick?' bad':'')+'"><i>Booked while blocked</i><b>'+sick+'</b><span>ครั้งที่เรือถูกวางในปฏิทิน ทั้งที่ไม่ได้นับเป็นกำลังของแผน</span></div>'
     +'</div>';
   /* §flDeployReady · บนปฏิทินก็ต้องเลือกเองได้ว่าลำไหนนับเป็นกำลังในแผน
      ตัวเลขทั้งแถวบน (Seats this month · Booked while blocked) เดินตามตัวเลือกนี้ */
@@ -25902,7 +25921,11 @@ function fdGrid(ds){
       var r=fdRoute(t[id].route); return r && (r.pier||'')===_fdPier; });
     var seats=mine.filter(function(id){ var b=fdBoat(id); return b && fdCanRun(b,d); })
       .reduce(function(s,id){ return s+((fdBoat(id)||{}).cap||0); },0);
-    var bad=mine.filter(function(id){ var b=fdBoat(id); return b && !fdCanRun(b,d); }).length;
+    /* §flDeployWhy · แยกสาเหตุ · กดไม่เอาเอง กับ วันนั้นเรือไม่ได้อยู่กับเรา คนละเรื่องกัน */
+    var why={};
+    mine.forEach(function(id){ var b=fdBoat(id); if(!b) return;
+      var w=fdWhyNot(b,d); if(w) why[w]=(why[w]||0)+1; });
+    var bad=Object.keys(why).reduce(function(n,k){ return n+why[k]; },0);
     var cls='fd-day';
     if(!op.length) cls+=' closed'; else if(!mine.length) cls+=' none';
     if(_fdDay===d) cls+=' on';
@@ -25936,7 +25959,8 @@ function fdGrid(ds){
     if(op.length && !mine.length && !(L.booked && L.pool<=0 && !L.chN))
       h+='<div class="fd-warn">ยังไม่มีเรือ · '+op.length+' โปรแกรมเปิดขาย</div>';
     if(!op.length && L.booked) h+='<div class="fd-warn">ปิดฤดู แต่มีจองแล้ว '+L.booked+' ที่</div>';
-    if(bad) h+='<div class="fd-warn">'+bad+' ลำไม่นับในแผน</div>';
+    if(bad) h+='<div class="fd-warn">'+Object.keys(why).map(function(k){
+      return why[k]+' ลำ'+FD_WHY[k]; }).join(' · ')+'</div>';
     h+='</div>';
   });
   return h+'</div>';
@@ -25975,14 +25999,14 @@ function fdDayPanel(){
       var ok=fdCanRun(b,d), ch=t[id].charterBookingId;
       h+='<span class="fd-sb'+(ok?'':' off')+'">'
         +'<u title="กดเพื่อถอดออก" onclick="fdUnassign(\''+d+'\',\''+id+'\')">'+fdE(b.name)
-        +' <small>'+(b.cap||0)+(ch?' · เหมาลำ':(ok?'':' · ไม่นับในแผน'))+'</small></u>'
+        +' <small>'+(b.cap||0)+(ch?' · เหมาลำ':(ok?'':(' · '+(FD_WHY[fdWhyNot(b,d)]||'ไม่นับในแผน'))))+'</small></u>'
         +(b.id?fdReadyBtn(b,d):'')+'</span>';
     });
     var free=fdSort(fleet.filter(function(b){ return !t[b.id]; }));
     h+='<select class="fd-add" onchange="fdAssign(\''+r.id+'\',\''+d+'\',this.value);this.value=\'\'">'
       +'<option value="">+ ใส่เรือ</option>'
       + free.map(function(b){ return '<option value="'+b.id+'">'+fdE(b.name)+' · '+(b.cap||0)+' ที่'
-          +(fdCanRun(b,d)?'':' · ไม่นับในแผน')+'</option>'; }).join('')
+          +(fdCanRun(b,d)?'':(' · '+(FD_WHY[fdWhyNot(b,d)]||'ไม่นับในแผน')))+'</option>'; }).join('')
       +'</select></div></div>';
   });
   return h;
@@ -26298,6 +26322,7 @@ function fdCSS(){
   +H+' .fd-rdy.on{background:#0F172A;border-color:#0F172A;color:#fff}'
   +H+' .fd-rdy.on.risk{background:#8A5410;border-color:#8A5410}'
   +H+' .fd-rdy.off{background:#F3F4F6;border-color:#E5E7EB;color:#9AA3AE;text-decoration:line-through}'
+  +H+' .fd-rdy.rent{background:#FEF6E7;border-color:#EFD9AE;color:#8A5410;cursor:default}'
   +H+' .fd-rdy:hover{box-shadow:0 0 0 2px rgba(15,23,42,.08)}'
   +H+' .fd-fixnote{margin-top:6px;font-size:10px;line-height:1.5;color:#8A5410;background:#FEF6E7;'
      +'border:1px solid #EFD9AE;border-radius:7px;padding:4px 7px}'
