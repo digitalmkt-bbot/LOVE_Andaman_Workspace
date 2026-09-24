@@ -692,6 +692,122 @@ else if (!R3j.offChase)
 else ok('กล่องต้องเร่งซ่อมอ่านของจริง · ' + R3j.name + ' (' + R3j.real + ') นับอยู่ในที่นั่ง '
       + R3j.cap + ' ที่ และยังขึ้นรายการ · กดไม่นับแล้วที่นั่งหายแต่ยังคาอยู่ในรายการ');
 
+/* ══ 3k · สรุปรอบที่กำลังวาง ═══════════════════════════════════════════
+   ที่มา (2026-09-24) · "จับวางแล้ว ตัวไหนเป็นตัวสรุปภาพรวมของรอบ
+   และเรือที่ยังไม่ได้เลือกให้วิ่งเส้นทางนั้นจะเป็นแบบไหน"
+   ของเดิมมีแต่สรุปทั้งฤดูกับทั้งเดือน · หน่วยที่คนทำงานจริงคือ "รอบ"
+   ข้อนี้กันสามอย่าง
+     · จำนวนวันที่แต่ละลำวิ่ง ต้องตรงกับที่นับเองจาก TRIPS
+     · ลำที่วิ่ง 0 วันต้องอยู่กลุ่ม "ยังไม่ได้ลงเส้นทางเลย"
+     · ท่าที่ยังไม่เปิดขายสักวันในช่วงนั้น ต้องแยกออก ไม่ปนกับลำที่ยังไม่ได้ใช้ */
+const R3k = await page.evaluate(() => {
+  _fdPlan = { pier: [], drop: [], trip: {}, avail: {}, boats: [], ready: {} }; fdPlanSave();
+  fdTab('pier'); fdSetOwn('all');
+  /* ตั้งช่วงให้คร่อมวันที่ปิดฤดูด้วย · ฤดูเปิดกลางเดือน ครึ่งแรกของเดือนจึงปิด
+     ถ้าเลือกช่วงที่เปิดหมดทุกวัน จะแยกไม่ออกว่า "วันที่เปิดขาย" กับ "ทุกวัน" ต่างกันตรงไหน */
+  const S = fdSeason();
+  const m = S.from.slice(0, 7);
+  fdSetScope('custom'); fdSetCustom('from', m + '-01'); fdSetCustom('to', fdMonthEnd(m + '-01'));
+  flRenderDeployment();
+  const W = fdWin();
+  const days = []; let d = W.from;
+  while (d <= W.to && days.length < 400) { days.push(d); d = fdAddDays(d, 1); }
+  /* วางเรือไว้บน "วันที่ปิดขาย" หนึ่งวัน · เป็นสภาพที่เกิดขึ้นจริงเวลาโปรแกรมถูกปิดทีหลัง
+     ตัวนับต้องไม่เอาวันนั้นมารวม · ถ้านับทุกวันแทนวันที่เปิดขาย ข้อนี้จะจับได้ */
+  let planted = null;
+  FD_PIERS.some(p => {
+    const shutDay = days.find(x => !fdOpenRoutes(p, x).length);
+    if (!shutDay) return false;
+    const anyRoute = (ROUTES || []).find(r => r && (r.pier || '') === p);
+    const b = fdBoatsAt(p, W.from)[0];
+    if (!anyRoute || !b) return false;
+    fdAssign(anyRoute.id, shutDay, b.id);
+    planted = { pier: p, d: shutDay, boat: b.name };
+    return true;
+  });
+  flRenderDeployment();
+  /* คำนวณเองจาก ROUTES + TRIPS · ไม่เรียกตัวสรุปของหน้ามาเทียบกับตัวเอง */
+  const want = {};
+  FD_PIERS.forEach(p => {
+    const open = days.filter(x => (ROUTES || []).some(r => r && (r.pier || '') === p &&
+      (() => { const st = getDayStatus(r, x); return !st || st.type === 'open'; })()));
+    const list = fdBoatsAt(p, W.from);
+    want[p] = { open: open.length, none: [], part: [], full: [], shut: [] };
+    list.forEach(b => {
+      const ran = open.filter(x => {
+        const t = fdTripsOn(x)[b.id]; if (!t) return false;
+        const r = (ROUTES || []).find(y => y && y.id === t.route);
+        return !!(r && (r.pier || '') === p);
+      }).length;
+      if (!open.length) want[p].shut.push(b.name);
+      else if (!ran) want[p].none.push(b.name);
+      else if (ran >= open.length) want[p].full.push(b.name + '|' + ran);
+      else want[p].part.push(b.name + '|' + ran);
+    });
+  });
+  /* อ่านจากหน้าจอ */
+  const box = document.querySelector('#fl-deploy-wrap .fd-sum');
+  if (!box) return { err: 'ไม่มีกล่องสรุปรอบบนหน้า' };
+  const got = {};
+  [].slice.call(box.querySelectorAll('.sr')).forEach(sr => {
+    const nm = ((sr.querySelector('.rh b') || {}).textContent || '').trim();
+    const rec = { none: [], part: [], full: [], shut: [] };
+    [].slice.call(sr.querySelectorAll('.sg')).forEach(sg => {
+      const k = /none/.test(sg.className) ? 'none' : /part/.test(sg.className) ? 'part'
+              : /full/.test(sg.className) ? 'full' : /shut/.test(sg.className) ? 'shut' : '';
+      if (!k) return;
+      [].slice.call(sg.querySelectorAll('span')).forEach(x => {
+        const u = (x.querySelector('u') || {}).textContent || '';
+        const name = (x.childNodes[0].textContent || '').trim();
+        const m = /(\d+)\/\d+/.exec(u);
+        rec[k].push(m ? (name + '|' + m[1]) : name);
+      });
+    });
+    got[nm] = rec;
+  });
+  const head = ((box.querySelector('.sb') || {}).textContent || '').replace(/\s+/g, ' ');
+  const mNone = /ยังไม่ได้ลงเส้นทางเลย\s*(\d+)/.exec(head);
+  return { want, got, days: days.length, w: W, planted,
+           labels: (typeof PIER_LABELS !== 'undefined') ? PIER_LABELS : {},
+           headNone: mNone ? +mNone[1] : null, head: head.slice(0, 160) };
+});
+if (R3k.err) fail(R3k.err);
+else {
+  const miss = [];
+  let wantHeadNone = 0;
+  Object.keys(R3k.want).forEach(p => {
+    const w = R3k.want[p], lbl = R3k.labels[p] || p, g = R3k.got[lbl];
+    const total = w.none.length + w.part.length + w.full.length + w.shut.length;
+    if (!total) return;
+    wantHeadNone += w.none.length;
+    if (!g) { miss.push(lbl + ' ไม่มีในกล่องสรุป'); return; }
+    ['none', 'part', 'full', 'shut'].forEach(k => {
+      const a = w[k].slice().sort().join(','), b = (g[k] || []).slice().sort().join(',');
+      if (a !== b) miss.push(lbl + ' กลุ่ม ' + k + ' · หน้าจอ [' + b + '] ควรเป็น [' + a + ']');
+    });
+  });
+  if (R3k.headNone !== wantHeadNone)
+    miss.push('พาดหัวบอก ' + R3k.headNone + ' ลำที่ยังไม่ได้ลงเส้นทาง · ควรเป็น ' + wantHeadNone
+            + ' (ท่าที่ยังไม่เปิดขายต้องไม่ถูกนับรวม)');
+  if (miss.length) fail('สรุปรอบ · ' + miss.slice(0, 3).join(' · '));
+  else {
+    /* ต้องมีอย่างน้อยหนึ่งท่าที่ "เปิดขายบางวัน ไม่ใช่ทุกวัน" และมีเรือวิ่งอยู่
+       ไม่งั้นการนับจากวันที่เปิดขายกับนับทุกวันให้ผลเท่ากัน แยกไม่ออกว่าโค้ดทำถูกไหม */
+    const probe = Object.keys(R3k.want).filter(p => {
+      const w = R3k.want[p];
+      return w.open > 0 && w.open < R3k.days && (w.part.length + w.full.length) > 0;
+    });
+    if (!probe.length)
+      fail('ไม่มีท่าไหนที่เปิดขายบางวันและมีเรือวิ่ง · แยกไม่ออกว่านับจากวันที่เปิดขายจริงหรือนับทุกวัน');
+    else if (!R3k.planted)
+      fail('วางเรือบนวันที่ปิดขายไม่ได้ · ข้อนี้พิสูจน์ไม่ได้ว่านับเฉพาะวันที่เปิดขาย');
+    else ok('สรุปรอบตรงกับที่นับเองจาก TRIPS ทุกท่า · ช่วง ' + R3k.w.from + '→' + R3k.w.to
+      + ' (' + R3k.days + ' วัน) · ' + probe.map(p => p + ' เปิดขาย ' + R3k.want[p].open + ' วัน').join(' · ')
+      + ' · ยังไม่ได้ลงเส้นทาง ' + wantHeadNone + ' ลำ · '
+      + 'วาง ' + R3k.planted.boat + ' ไว้บนวันที่ปิดขาย ' + R3k.planted.d + ' แล้วไม่ถูกนับ');
+  }
+}
+
 /* ══ 4 · ปฏิทินต้องเคารพฤดูกาลของเส้นทาง ══════════════════════════════════ */
 const R4 = await page.evaluate(() => {
   fdTab('month');

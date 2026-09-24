@@ -25345,7 +25345,7 @@ function fdBoard(){
     if(k!=='shop' && k!=='hold') h+=fdAddForm(k);
     h+='</div></div>';
   });
-  return h+'</div>'+fdHold()+fdChase()+fdRota()+fdBoardNote();
+  return h+'</div>'+fdHold()+fdRoundSum()+fdChase()+fdRota()+fdBoardNote();
 }
 
 /* ══ ที่พักเรือ · แถบเต็มความกว้างใต้กระดาน ════════════════
@@ -25375,6 +25375,115 @@ function fdHold(){
       +'</span>';
   });
   return h+'</div></div>';
+}
+
+/* ══ §flDeploySum · สรุปรอบที่วางอยู่ ══════════════════════════════════════
+   ที่มา (2026-09-24) · ผู้ใช้ถามตรง ๆ ว่า "จับวางแล้ว ตัวไหนเป็นตัวสรุปภาพรวมของรอบ
+   และเรือที่ยังไม่ได้เลือกให้วิ่งเส้นทางไหนจะเป็นแบบไหน"
+   คำตอบตอนนั้นคือ · ยังไม่มี · ที่มีคือสรุปทั้งฤดู (แผนโยก) กับสรุปทั้งเดือน (แท็บ 2)
+   แต่หน่วยที่คนทำงานจริงคือ "รอบ" — 15-31 ต.ค. ที่เพิ่งบันทึกไว้ ไม่ใช่เดือนหรือฤดู
+
+   ตัวนี้สรุปเฉพาะช่วงที่กำลังวางอยู่ · เปิดรอบที่บันทึกไว้ขึ้นมา ช่วงก็คือรอบนั้นพอดี
+   ของสำคัญที่สุดคือกล่อง "ยังไม่ได้ลงเส้นทางเลย" — เรือที่วางเข้าท่าแล้วแต่ไม่เคยถูก
+   จับใส่โปรแกรมสักวัน · ลำพวกนี้คือกำลังที่จ่ายค่าจอดค่าลูกเรือไปแล้วแต่ยังไม่ได้ใช้
+
+   อ้างท่าด้วยวันแรกของช่วง เหมือนกระดานข้างบน · ช่วงที่มีแผนโยกกลางคัน
+   ให้ดูทีละช่วงย่อยแทน (เลือกรายเดือน/รายสัปดาห์) จะได้ไม่ต้องเดา */
+function fdRoundSum(){
+  var Wn=fdWin(), days=[], d=Wn.from, guard=0;
+  while(d<=Wn.to && guard++<400){ days.push(d); d=fdAddDays(d,1); }
+  if(!days.length) return '';
+  /* รอบที่บันทึกไว้ซึ่งช่วงตรงกับที่กำลังดูอยู่ · เอาชื่อมาใส่หัวให้รู้ว่ากำลังดูรอบไหน */
+  var hit=fdSavedSorted().filter(function(r){ return r.from===Wn.from && r.to===Wn.to; })[0];
+  /* วันที่ท่านั้นมีโปรแกรมเปิดขาย · ลำที่วิ่ง 0 จากวันพวกนี้คือลำที่ยังไม่ได้ใช้ */
+  var openD={}; FD_PIERS.forEach(function(k){
+    openD[k]=days.filter(function(x){ return fdOpenRoutes(k,x).length>0; }); });
+  var rows=[], seatTot=0, boatTot=0;
+  FD_PIERS.forEach(function(k){
+    var list=fdBoatsAt(k, Wn.from).filter(fdOwnOk);
+    if(!list.length) return;
+    var od=openD[k], none=[], part=[], full=[], shut=[];
+    fdSort(list).forEach(function(b){
+      var ran=od.filter(function(x){
+        var t=fdTripsOn(x)[b.id]; if(!t) return false;
+        var r=fdRoute(t.route); return !!(r && (r.pier||'')===k);
+      }).length;
+      var rec={ b:b, ran:ran, of:od.length };
+      /* §flDeploySum · ท่าที่ยังไม่เปิดขายสักวันในช่วงนี้ ไม่ใช่ "ยังไม่ได้ลงเส้นทาง"
+         มันไม่มีเส้นทางให้ลงตั้งแต่ต้น · เช่น Ranong เปิด 1 พ.ย. แต่กำลังดูรอบ 15-31 ต.ค.
+         ถ้านับรวมเข้าไป ตัวเลขพาดหัวจะบวมด้วยลำที่ไม่มีทางวิ่งได้ แล้วคนจะเลิกเชื่อตัวเลข */
+      if(!od.length) shut.push(rec);
+      else if(!ran) none.push(rec);
+      else if(ran>=od.length) full.push(rec);
+      else part.push(rec);
+    });
+    var seats=list.filter(function(b){ return fdCanRun(b,Wn.from); })
+                  .reduce(function(n,b){ return n+(b.cap||0); },0);
+    seatTot+=seats; boatTot+=list.length;
+    rows.push({ pier:k, n:list.length, seats:seats, openDays:od.length,
+                none:none, part:part, full:full, shut:shut });
+  });
+  var held=fdBoatsAt('hold', Wn.from).filter(fdOwnOk);
+  if(!rows.length && !held.length) return '';
+  var nNone=rows.reduce(function(n,r){ return n+r.none.length; },0);
+  var nShut=rows.reduce(function(n,r){ return n+r.shut.length; },0);
+  var seatNone=rows.reduce(function(n,r){ return n+r.none.reduce(function(m,x){
+    return m+(fdCanRun(x.b,Wn.from)?(x.b.cap||0):0); },0); },0);
+
+  /* ยอดจองในช่วงนี้ · ตัวหารของ getSeatsConsumed คือทุกใบในระบบ จึงหนักเมื่อช่วงยาว
+     ช่วงยาวเกิน 62 วันข้ามไป แล้วบอกให้ไปดูทีละเดือนแทน ดีกว่าค้างไปเฉย ๆ */
+  var bkLine='';
+  if(days.length<=62){
+    var bk=0;
+    FD_PIERS.forEach(function(k){
+      (typeof ROUTES!=='undefined'?ROUTES:[]).forEach(function(r){
+        if(!r || (r.pier||'')!==k) return;
+        days.forEach(function(x){ bk+=fdBooked(r.id, x); });
+      });
+    });
+    if(bk) bkLine='<span class="si"><i>จองเข้ามาแล้ว</i><b>'+bk.toLocaleString()+'</b><u>ที่นั่ง ตลอดช่วงนี้</u></span>';
+  } else {
+    bkLine='<span class="si dim"><i>จองเข้ามาแล้ว</i><b>—</b><u>ช่วงยาวเกิน '+days.length+' วัน · ดูทีละเดือนที่แท็บ 2</u></span>';
+  }
+
+  var h='<div class="fd-sum"><div class="sh"><b>สรุปรอบที่กำลังวาง</b>'
+    + '<span>'+fdE(fdNiceDate(Wn.from))+' – '+fdE(fdNiceDate(Wn.to))+' · '+days.length+' วัน'
+    + (hit?(' · รอบที่บันทึกไว้ "'+fdE(hit.name)+'"'):' · ยังไม่ได้บันทึกเป็นรอบ')+'</span></div>'
+    + '<div class="sb">'
+      + '<span class="si"><i>เรือที่วางไว้</i><b>'+boatTot+'</b><u>ลำ · '+seatTot.toLocaleString()+' ที่นั่งตามแผน</u></span>'
+      + '<span class="si'+(nNone?' bad':'')+'"><i>ยังไม่ได้ลงเส้นทางเลย</i><b>'+nNone+'</b><u>'
+        +(nNone?('ลำ · '+seatNone.toLocaleString()+' ที่นั่งที่ยังไม่ได้ใช้'):'ทุกลำมีงานวิ่งแล้ว')+'</u></span>'
+      + (nShut?('<span class="si warn"><i>ท่ายังไม่เปิดขายในช่วงนี้</i><b>'+nShut+'</b><u>ลำ · ไม่มีเส้นทางให้ลง</u></span>'):'')
+      + (held.length?('<span class="si warn"><i>พักไว้ ยังไม่เข้าท่า</i><b>'+held.length+'</b><u>ลำ</u></span>'):'')
+      + bkLine
+    + '</div>';
+  rows.forEach(function(r){
+    h+='<div class="sr"><div class="rh"><b>'+fdE(fdPierNm(r.pier))+'</b>'
+      +'<span>'+r.n+' ลำ · '+r.seats.toLocaleString()+' ที่นั่ง · เปิดขาย '+r.openDays+' วัน</span></div>';
+    var grp=function(cls, ttl, arr, showN){
+      if(!arr.length) return '';
+      return '<div class="sg '+cls+'"><em>'+ttl+' '+arr.length+'</em>'
+        + arr.map(function(x){
+            return '<span>'+fdE(x.b.name)+(fdIsCharter(x.b)?'<s>เช่า</s>':'')
+              +(showN?('<u>'+x.ran+'/'+x.of+' วัน</u>'):'<u>'+(x.b.cap||0)+' ที่</u>')+'</span>'; }).join('')
+        + '</div>';
+    };
+    h+=grp('shut','ท่านี้ยังไม่เปิดขายในช่วงนี้', r.shut, false)
+     + grp('none','ยังไม่ได้ลงเส้นทางเลย', r.none, false)
+     + grp('part','ลงบางวัน', r.part, true)
+     + grp('full','ลงครบทุกวันที่เปิดขาย', r.full, true);
+    h+='</div>';
+  });
+  if(held.length){
+    h+='<div class="sr"><div class="rh"><b>'+fdE(fdPierNm('hold'))+'</b>'
+      +'<span>ยังไม่ได้ตัดสินว่าจะไปท่าไหน · ไม่ถูกนับเป็นกำลังของท่าใดเลย</span></div>'
+      +'<div class="sg none"><em>พักไว้ '+held.length+'</em>'
+      + fdSort(held).map(function(b){ return '<span>'+fdE(b.name)+'<u>'+(b.cap||0)+' ที่</u></span>'; }).join('')
+      +'</div></div>';
+  }
+  return h+'<div class="sf">อ้างท่าเรือด้วยวันแรกของช่วง เหมือนกระดานข้างบน · '
+    + 'ถ้าช่วงนี้มีแผนโยกเรือกลางคัน ให้สลับไปดูรายเดือนหรือรายสัปดาห์จะตรงกว่า · '
+    + 'จำนวนวันที่วิ่งนับเฉพาะวันที่ท่านั้นมีโปรแกรมเปิดขาย</div></div>';
 }
 
 /* ══ เรือที่วางไว้แต่ยังซ่อมไม่เสร็จ · รายการที่ต้องไปเร่ง ═════════
@@ -26254,6 +26363,36 @@ function fdCSS(){
      +'border:1px solid #F0C9C9;border-radius:4px;padding:0 5px}'
   +H+' .fd-hold .hc button{border:0;background:transparent;color:#A32D2D;cursor:pointer;font:700 11px inherit;'
      +'font-family:inherit;padding:0 2px}'
+  /* §flDeploySum · สรุปรอบ · กล่องกลาง ๆ ไม่แย่งสายตากระดาน แต่ตัวเลขต้องอ่านออกจากระยะห่าง */
+  +H+' .fd-sum{background:#fff;border:1px solid #E7EAEF;border-radius:13px;margin-top:13px;overflow:hidden}'
+  +H+' .fd-sum .sh{padding:10px 13px;border-bottom:1px solid #F1F3F6;display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}'
+  +H+' .fd-sum .sh b{font-size:13px} '+H+' .fd-sum .sh span{font-size:11px;color:#6B7280}'
+  +H+' .fd-sum .sb{display:flex;gap:8px;flex-wrap:wrap;padding:10px 13px;border-bottom:1px solid #F1F3F6}'
+  +H+' .fd-sum .si{flex:1 1 150px;background:#F7F8FA;border:1px solid #F1F3F6;border-radius:9px;padding:6px 9px}'
+  +H+' .fd-sum .si i{display:block;font-style:normal;font-size:9px;font-weight:700;letter-spacing:.03em;color:#9AA3AE}'
+  +H+' .fd-sum .si b{font-size:17px;font-weight:700;margin-right:5px}'
+  +H+' .fd-sum .si u{text-decoration:none;font-size:10.5px;color:#6B7280}'
+  +H+' .fd-sum .si.bad{background:#FDF2F2;border-color:#F0C9C9} '+H+' .fd-sum .si.bad b{color:#A32D2D}'
+  +H+' .fd-sum .si.warn{background:#FEF6E7;border-color:#EFD9AE} '+H+' .fd-sum .si.warn b{color:#8A5410}'
+  +H+' .fd-sum .si.dim b{color:#9AA3AE}'
+  +H+' .fd-sum .sr{padding:9px 13px;border-bottom:1px solid #F5F6F8}'
+  +H+' .fd-sum .sr .rh{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:6px}'
+  +H+' .fd-sum .sr .rh b{font-size:12px} '+H+' .fd-sum .sr .rh span{font-size:10.5px;color:#9AA3AE}'
+  +H+' .fd-sum .sg{display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-bottom:5px}'
+  +H+' .fd-sum .sg em{font-style:normal;font-size:9.5px;font-weight:700;letter-spacing:.03em;'
+     +'border-radius:5px;padding:2px 7px;margin-right:2px}'
+  +H+' .fd-sum .sg span{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;'
+     +'background:#fff;border:1px solid #E7EAEF;border-radius:7px;padding:3px 8px}'
+  +H+' .fd-sum .sg u{text-decoration:none;font-weight:500;font-size:10px;color:#9AA3AE}'
+  +H+' .fd-sum .sg s{text-decoration:none;font-size:9px;font-weight:700;background:#EEF2FF;color:#4338CA;'
+     +'border-radius:4px;padding:1px 4px}'
+  +H+' .fd-sum .sg.none em{background:#FDF2F2;color:#A32D2D}'
+  +H+' .fd-sum .sg.none span{border-color:#F0C9C9;background:#FFFBFB}'
+  +H+' .fd-sum .sg.shut em{background:#F3F4F6;color:#6B7280}'
+  +H+' .fd-sum .sg.shut span{border-style:dashed;color:#6B7280}'
+  +H+' .fd-sum .sg.part em{background:#FEF6E7;color:#8A5410}'
+  +H+' .fd-sum .sg.full em{background:#F1F8F5;color:#0F6E56}'
+  +H+' .fd-sum .sf{padding:8px 13px;font-size:10px;color:#9AA3AE;line-height:1.6}'
   +H+' .fd-chase{background:#FEF6E7;border:1px solid #EFD9AE;border-radius:12px;padding:10px 13px;margin-top:13px}'
   +H+' .fd-chase .ch{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap}'
   +H+' .fd-chase .ch b{font-size:12.5px;color:#7A4A0E}'
