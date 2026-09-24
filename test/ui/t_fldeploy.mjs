@@ -59,6 +59,35 @@ if (R1.onBoard !== R1.want)
 else if (R1.cols < 4) fail('กระดานมีแค่ ' + R1.cols + ' คอลัมน์ · ต้องมีสามท่า + อู่');
 else ok('เรือครบทุกลำบนกระดาน ' + R1.want + ' ลำ · ' + R1.cols + ' คอลัมน์');
 
+/* ══ 1b · เรือบริษัทกับเรือเช่าต้องแยกกันออก ════════════════
+   ลำบริษัทคือกำลังที่ต้องวางคนและรับภาระซ่อมเอง · ลำเช่าคือกำลังเสริมที่เพิ่ม-ถอนได้
+   นับรวมกันแล้ววางแผนกำลังคนผิดทันที */
+const R1b = await page.evaluate(() => {
+  const w = document.getElementById('fl-deploy-wrap');
+  const n = () => [].slice.call(w.querySelectorAll('.fd-boat')).length;
+  const fleet = (BOATS || []).filter(b => b && !b.retired);
+  const wantChr = fleet.filter(b => b.ownership === 'charter').length;
+  const wantOwn = fleet.length - wantChr;
+  fdSetOwn('all');     const all = n();
+  fdSetOwn('own');     const own = n(), ownTags = w.querySelectorAll('.fd-own-tag').length;
+  fdSetOwn('charter'); const chr = n(), chrTags = w.querySelectorAll('.fd-own-tag').length;
+  fdSetOwn('all');
+  return { all, own, chr, wantOwn, wantChr, ownTags, chrTags,
+           split: w.querySelectorAll('.fd-split').length };
+});
+if (!R1b.wantChr) console.log('  ! ชุดนี้ไม่มีเรือเช่า · ข้ามข้อ 1b');
+else if (R1b.own !== R1b.wantOwn || R1b.chr !== R1b.wantChr)
+  fail('ตัวกรองเจ้าของนับผิด · บริษัท ' + R1b.own + '/' + R1b.wantOwn
+    + ' · เช่า ' + R1b.chr + '/' + R1b.wantChr);
+else if (R1b.own + R1b.chr !== R1b.all)
+  fail('บริษัท ' + R1b.own + ' + เช่า ' + R1b.chr + ' ≠ ทั้งหมด ' + R1b.all + ' · มีลำที่นับซ้ำหรือหายไป');
+else if (R1b.ownTags !== 0)
+  fail('กรองเรือบริษัทแต่ยังมีป้าย "เช่า" โผล่ ' + R1b.ownTags + ' ใบ');
+else if (R1b.chrTags !== R1b.chr)
+  fail('กรองเรือเช่า ' + R1b.chr + ' ลำ แต่มีป้ายแค่ ' + R1b.chrTags + ' ใบ');
+else ok('แยกเรือบริษัท ' + R1b.wantOwn + ' ลำ / เรือเช่า ' + R1b.wantChr
+      + ' ลำ ได้ถูก · ป้าย "เช่า" ขึ้นเฉพาะลำเช่า · หัวคอลัมน์แยกตัวเลข ' + R1b.split + ' ท่า');
+
 /* ══ 2 · Seats ready ต้องนับเฉพาะลำที่พร้อมใช้ ════════════════════════════
    คำนวณเองจาก BOATS + boatEffStatus โดยไม่แตะฟังก์ชันของหน้า
    (ถ้านับลำที่ยังซ่อมเข้าไปด้วย ตัวเลขนี้จะบวมและถูกเอาไปตั้งโควตาขายเกินจริง) */
@@ -163,6 +192,43 @@ else if (R3b.inWin !== R3b.to)
 else if (R3b.next !== R3b.nextReal)
   fail('ช่วงถัดไปถูกร่างลากไปด้วย · กระดานเห็น ' + R3b.next + ' แต่ของจริงเป็น ' + R3b.nextReal);
 else ok('ร่างครอบแค่ ' + R3b.w0.lb + ' (' + R3b.rec.s + '→' + R3b.rec.e + ') · ' + R3b.w1.lb + ' ไม่ขยับ');
+
+/* ══ 3e · ช่วงกำหนดเอง ═════════════════════════════
+   เดือน/สัปดาห์ไม่พอ · เรือเช่ามา 10 วัน หรือโยกเรือกลางสัปดาห์ ก็ต้องกำหนดเองได้ */
+const R3e = await page.evaluate(() => {
+  const S = fdSeason();
+  const from = fdAddDays(S.from, 20), to = fdAddDays(S.from, 29);
+  fdSetScope('custom');
+  fdSetCustom('from', from);
+  fdSetCustom('to', to);
+  const win = fdWin();
+  const fleet = (BOATS || []).filter(b => b && !b.retired);
+  const b = fleet.find(x => fdPierOf(x, from) !== 'shop'
+                         && !(_fdPlan.pier || []).some(p => p.boatId === x.id));
+  if (!b) return { skip: 'ไม่มีเรือที่ย้ายได้', win, from, to };
+  const was = fdPierOf(b, from);
+  const dest = ['tublamu', 'panwa', 'ranong'].find(p => p !== was);
+  _fdSel = b.id; fdMove(dest);
+  const rec = (_fdPlan.pier || []).filter(p => p.boatId === b.id).pop() || {};
+  const out = { win, from, to, name: b.name, was, dest, rec: { s: rec.from, e: rec.to },
+    inside:  fdPierOf(b, to),
+    before:  fdPierOf(b, fdAddDays(from, -1)),
+    after:   fdPierOf(b, fdAddDays(to, 1)) };
+  if (rec.id) fdPlanDel(rec.id);
+  fdSetScope('month'); _fdWinIx = 0;
+  return out;
+});
+if (R3e.skip) console.log('  ! ' + R3e.skip + ' · ข้ามข้อ 3e');
+else if (R3e.win.from !== R3e.from || R3e.win.to !== R3e.to)
+  fail('ตั้งช่วงเอง ' + R3e.from + '→' + R3e.to + ' แต่หน้าใช้ ' + R3e.win.from + '→' + R3e.win.to);
+else if (R3e.rec.s !== R3e.from || R3e.rec.e !== R3e.to)
+  fail('ร่างครอบ ' + R3e.rec.s + '→' + R3e.rec.e + ' · ควรครอบวันที่ตั้งเอง ' + R3e.from + '→' + R3e.to);
+else if (R3e.inside !== R3e.dest)
+  fail('วันสุดท้ายของช่วงเรือหลุดไป ' + R3e.inside + ' · ควรเป็น ' + R3e.dest);
+else if (R3e.before === R3e.dest || R3e.after === R3e.dest)
+  fail('ร่างรั่วออกนอกช่วง · ก่อนหน้า=' + R3e.before + ' หลัง=' + R3e.after);
+else ok('ช่วงกำหนดเอง ' + R3e.from + '→' + R3e.to + ' (10 วัน) · '
+      + R3e.name + ' อยู่ ' + R3e.dest + ' เฉพาะในช่วง · ก่อนหน้าหลังไม่ขยับ');
 
 /* ══ 3c · กดบันทึกแล้วจึงเขียนจริง และต้องไม่มีใบซ้อน ═════════════════════ */
 const R3c = await page.evaluate(() => {

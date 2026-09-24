@@ -24905,6 +24905,10 @@ function fdMonthDays(m){
 
 /* ── ตัวอ่านของกลาง · ทุกอันยืมของที่มีอยู่แล้ว ไม่ได้คิดกติกาใหม่ ──────────── */
 function fdFleet(){ return (typeof BOATS!=='undefined'?BOATS:[]).filter(function(b){ return b && !b.retired; }); }
+/* §flDeployOwn · เรือเช่าดูจาก ownership==='charter' ตัวเดียวกับหน้า Boat Status
+   ไม่ได้ดูจากชื่อเจ้าของ · เรือเช่าหลายลำยังไม่ได้กรอกช่องเจ้าของไว้ */
+function fdIsCharter(b){ return !!(b && b.ownership==='charter'); }
+function fdOwnOk(b){ return _fdOwn==='all' || (_fdOwn==='charter' ? fdIsCharter(b) : !fdIsCharter(b)); }
 /* §flDeployPlan · ท่าตามร่างก่อน แล้วค่อยถามของจริง
    ใบที่ร่างสั่งถอนไว้ ไม่ได้ลบของจริง · แค่ส่งสำเนาที่ตัดใบนั้นออกให้ตัวเดิมคิด
    จะได้ไม่ต้องเขียนกติการหาท่าซ้ำเอง (อ่านที่เดียว ใช้สองที่) */
@@ -25002,7 +25006,8 @@ function fdKpis(){
   var crew=B.reduce(function(s,b){ return s+fdCrewOf(b); },0);
   var staff=(typeof PIER_STAFF!=='undefined'?PIER_STAFF:[]).filter(function(p){ return p && p.active!==false; }).length;
   var K=[
-    ['Boats', B.length, ready.length+' ready · '+(B.length-ready.length)+' blocked', ''],
+    ['Boats', B.length, B.filter(function(b){ return !fdIsCharter(b); }).length+' บริษัท · '
+      + B.filter(fdIsCharter).length+' เช่า · '+ready.length+' ready', ''],
     ['Seats ready', seatsOk.toLocaleString(), 'of '+seats.toLocaleString()+' · '+(seats-seatsOk).toLocaleString()+' tied up', (seatsOk/(seats||1)<.5?'bad':'ok')],
     ['Open repair jobs', jobs, noEnd+' with no finish date — cannot tell if they land before the season', (noEnd?'bad':'ok')],
     ['Crew needed', crew, 'per the crew rating on each boat · pier registry has '+staff, (crew>staff?'warn':'')]
@@ -25047,7 +25052,9 @@ function fdPlanLoad(){
 function fdPlanSave(){ try{ localStorage.setItem(FD_PLAN_KEY, JSON.stringify(_fdPlan)); }catch(_){} }
 function fdPlanN(){ return (_fdPlan.pier||[]).length + (_fdPlan.drop||[]).length + Object.keys(_fdPlan.trip||{}).length; }
 
-var _fdScope = 'month';         /* season | month | week */
+var _fdScope = 'month';         /* season | month | week | custom */
+var _fdCustom = null;           /* {from,to} · ช่วงที่ผู้ใช้กำหนดเอง */
+var _fdOwn = 'all';             /* all | own | charter · เรือบริษัท / เรือเช่า */
 var _fdWinIx = 0;               /* ช่วงที่กำลังดูอยู่ · นับจากต้นฤดู */
 
 function fdMonthStart(ds){ return ds.slice(0,7)+'-01'; }
@@ -25059,8 +25066,35 @@ function fdWeekStart(ds){                       /* จันทร์เป็�
   var d=new Date(ds), w=(d.getDay()+6)%7;
   return fdAddDays(ds, -w);
 }
+function fdCustom(){
+  if(!_fdCustom){ var W=fdWindows0(); var w=W[Math.min(_fdWinIx, W.length-1)]||fdSeason();
+    _fdCustom={ from:w.from, to:w.to }; }
+  if(_fdCustom.to < _fdCustom.from) _fdCustom.to=_fdCustom.from;
+  return _fdCustom;
+}
+function fdSetCustom(which, val){
+  if(!val) return;
+  fdCustom();
+  if(which==='from'){ _fdCustom.from=val; if(_fdCustom.to<val) _fdCustom.to=val; }
+  else _fdCustom.to=val;
+  flRenderDeployment();
+}
+/* ช่วงมาตรฐาน · แยกออกมาเพราะช่วงกำหนดเองต้องใช้มันตั้งค่าเริ่มต้น */
+function fdWindows0(){
+  var S=fdSeason(), out=[];
+  var m=S.from.slice(0,7), guard=0;
+  while(m<=S.to.slice(0,7) && guard++<24){
+    var f=m+'-01', t=fdMonthEnd(f);
+    out.push({ from:(f<S.from?S.from:f), to:(t>S.to?S.to:t),
+               lb:FD_MTH[+m.slice(5,7)-1]+' '+m.slice(0,4) });
+    var y=+m.slice(0,4), mo=+m.slice(5,7)+1; if(mo>12){ mo=1; y++; }
+    m=y+'-'+String(mo).padStart(2,'0');
+  }
+  return out;
+}
 function fdWindows(){
   var S=fdSeason(), out=[];
+  if(_fdScope==='custom'){ var c=fdCustom(); return [{from:c.from, to:c.to, lb:'กำหนดเอง'}]; }
   if(_fdScope==='season') return [{from:S.from, to:S.to, lb:'ทั้งฤดู'}];
   if(_fdScope==='month'){
     var m=S.from.slice(0,7), guard=0;
@@ -25088,7 +25122,8 @@ function fdWin(){
   if(_fdWinIx>W.length-1) _fdWinIx=W.length-1;
   return W[_fdWinIx] || {from:fdSeason().from, to:fdSeason().to, lb:'ทั้งฤดู'};
 }
-function fdSetScope(s){ _fdScope=s; _fdWinIx=0; _fdSel=''; flRenderDeployment(); }
+function fdSetScope(s){ _fdScope=s; if(s!=='custom') _fdWinIx=0; _fdSel=''; flRenderDeployment(); }
+function fdSetOwn(o){ _fdOwn=o; _fdSel=''; flRenderDeployment(); }
 function fdWinStep(n){ _fdWinIx+=n; _fdSel=''; flRenderDeployment(); }
 function fdWinPick(i){ _fdWinIx=+i; _fdSel=''; flRenderDeployment(); }
 /* ช่วงที่กำลังดูอยู่ครอบวันนี้หรือวันเปิดฤดูไหม · ใช้เลือกช่วงตั้งต้นให้ถูก */
@@ -25102,25 +25137,41 @@ function fdWinHome(){
 function fdBoard(){
   var Wn=fdWin(), cols=FD_PIERS.concat(['shop']);
   var W=fdWindows();
+  var c=fdCustom();
   var h='<div class="fd-scope">'
     + '<span class="lb">วางท่าเป็นช่วง</span>'
-    + [['season','ทั้งฤดู'],['month','รายเดือน'],['week','รายสัปดาห์']].map(function(s){
-        return '<button class="fd-seg'+(_fdScope===s[0]?' on':'')+'" onclick="fdSetScope(\''+s[0]+'\')">'+s[1]+'</button>'; }).join('')
-    + (_fdScope==='season' ? '' :
-        '<span class="fd-nav">'
+    + [['season','ทั้งฤดู'],['month','รายเดือน'],['week','รายสัปดาห์'],['custom','กำหนดเอง']].map(function(x){
+        return '<button class="fd-seg'+(_fdScope===x[0]?' on':'')+'" onclick="fdSetScope(\''+x[0]+'\')">'+x[1]+'</button>'; }).join('')
+    + (_fdScope==='custom'
+        ? ('<span class="fd-nav cus">'
+           + '<input type="date" value="'+fdE(c.from)+'" onchange="fdSetCustom(\'from\',this.value)">'
+           + '<i>→</i>'
+           + '<input type="date" value="'+fdE(c.to)+'" onchange="fdSetCustom(\'to\',this.value)">'
+           + '<b>'+(fdDays(c.from,c.to)+1)+' วัน</b></span>')
+        : _fdScope==='season' ? '' :
+        ('<span class="fd-nav">'
         + '<button onclick="fdWinStep(-1)"'+(_fdWinIx<=0?' disabled':'')+'>‹</button>'
         + '<select onchange="fdWinPick(this.value)">'
           + W.map(function(x,i){ return '<option value="'+i+'"'+(i===_fdWinIx?' selected':'')+'>'
               +fdE(x.lb)+' · '+fdE(x.from.slice(5))+'→'+fdE(x.to.slice(5))+'</option>'; }).join('')
         + '</select>'
-        + '<button onclick="fdWinStep(1)"'+(_fdWinIx>=W.length-1?' disabled':'')+'>›</button></span>')
+        + '<button onclick="fdWinStep(1)"'+(_fdWinIx>=W.length-1?' disabled':'')+'>›</button></span>'))
     + '<span class="fd-winlb">กำลังวาง '+fdE(fdNiceDate(Wn.from))+' – '+fdE(fdNiceDate(Wn.to))+'</span>'
+    + '</div>'
+    /* §flDeployOwn · เรือบริษัทกับเรือเช่าคิดกันคนละแบบ
+       ลำของบริษัทคือกำลังที่ต้องวางคนและรับภาระซ่อมเอง · ลำเช่าคือกำลังเสริมที่เพิ่ม-ถอนได้ */
+    + '<div class="fd-own">'
+    + [['all','ทั้งหมด'],['own','เรือบริษัท'],['charter','เรือเช่า']].map(function(x){
+        var n=fdFleet().filter(function(b){ return x[0]==='all' ? true
+          : (x[0]==='charter' ? fdIsCharter(b) : !fdIsCharter(b)); }).length;
+        return '<button class="fd-seg'+(_fdOwn===x[0]?' on':'')+'" onclick="fdSetOwn(\''+x[0]+'\')">'
+          +x[1]+' <small>'+n+'</small></button>'; }).join('')
     + '</div>';
   h+='<p class="fd-hint">ลากการ์ดเรือข้ามคอลัมน์ได้เลย หรือกดเลือกลำหนึ่งแล้วกดหัวคอลัมน์ปลายทาง · '
     + 'การย้ายจะออกใบย้ายท่าเฉพาะ<b>ช่วงที่เลือกไว้ข้างบน</b> ไม่ใช่ทั้งฤดู · '
     + 'ใบที่ออกจากหน้านี้จะมีป้าย ✕ ให้ถอดคืนได้</p><div class="fd-board">';
   cols.forEach(function(k){
-    var list=fdBoatsAt(k, Wn.from);
+    var list=fdBoatsAt(k, Wn.from).filter(fdOwnOk);
     var ready=list.filter(function(b){ return fdCanRun(b,Wn.from); });
     var seats=ready.reduce(function(s,b){ return s+(b.cap||0); },0);
     var all=list.reduce(function(s,b){ return s+(b.cap||0); },0);
@@ -25137,11 +25188,29 @@ function fdBoard(){
             +'<span class="m"><i>Seats total</i><b>'+all+'</b></span>'
             +'<span class="m'+(have!==null&&need>have?' bad':'')+'"><i>Crew need/have</i><b>'+need+'/'+have+'</b></span>'
             +'<span class="m'+(caps<ready.length?' warn':'')+'"><i>Captains</i><b>'+caps+'/'+ready.length+'</b></span>'
-          +'</div>')
+          +'</div>'
+          + (function(){
+              var o=list.filter(function(b){ return !fdIsCharter(b); });
+              var c2=list.filter(fdIsCharter);
+              if(!c2.length) return '';
+              var sc=function(a){ return a.filter(function(b){ return fdCanRun(b,Wn.from); })
+                                    .reduce(function(x,b){ return x+(b.cap||0); },0); };
+              return '<div class="fd-split"><span><em class="own"></em>บริษัท '+o.length+' ลำ · '+sc(o)+' ที่</span>'
+                + '<span><em class="chr"></em>เช่า '+c2.length+' ลำ · '+sc(c2)+' ที่</span></div>';
+            })())
       +'</div><div class="fd-stack">';
     if(!list.length) h+='<div class="fd-empty">ลากเรือมาวางที่นี่</div>';
-    list.slice().sort(function(a,b){ return (fdCanRun(b,Wn.from)-fdCanRun(a,Wn.from))||((b.cap||0)-(a.cap||0)); })
-      .forEach(function(b){ h+=fdCard(b, Wn.from); });
+    var srt=function(a,b){ return (fdCanRun(b,Wn.from)-fdCanRun(a,Wn.from))||((b.cap||0)-(a.cap||0)); };
+    var own=list.filter(function(b){ return !fdIsCharter(b); }).sort(srt);
+    var chr=list.filter(fdIsCharter).sort(srt);
+    var grp=function(ttl, arr, cls){
+      if(!arr.length) return '';
+      var sub=arr.filter(function(b){ return fdCanRun(b,Wn.from); }).reduce(function(x,b){ return x+(b.cap||0); },0);
+      /* หัวกลุ่มขึ้นเมื่อมีทั้งสองแบบปนกันเท่านั้น · กรองแล้วไม่ต้องมีหัว */
+      return ((own.length&&chr.length) ? ('<div class="fd-grp '+cls+'">'+ttl+'<span>'+arr.length+' ลำ · '+sub+' ที่พร้อม</span></div>') : '')
+        + arr.map(function(b){ return fdCard(b, Wn.from); }).join('');
+    };
+    h+=grp('เรือบริษัท', own, 'own') + grp('เรือเช่า', chr, 'chr');
     h+='</div></div>';
   });
   return h+'</div>'+fdRota()+fdBoardNote();
@@ -25149,9 +25218,11 @@ function fdBoard(){
 
 /* ══ แถบแผนโยกทั้งฤดู · เห็นการสลับเรือในภาพเดียว ══════════════════════════ */
 function fdRota(){
-  var W=fdWindows(), Wn=fdWin();
-  if(_fdScope==='season') return '';
-  var fleet=fdFleet().slice().sort(function(a,b){ return (b.cap||0)-(a.cap||0); });
+  /* ช่วงทั้งฤดู/กำหนดเองไม่มีช่องเป็นช่วง · ใช้เดือนเป็นช่องแทน จะได้เห็นภาพรวมทั้งฤดูเหมือนกัน */
+  var byWin=(_fdScope==='month'||_fdScope==='week');
+  var W=byWin ? fdWindows() : fdWindows0();
+  var fleet=fdFleet().filter(fdOwnOk).slice().sort(function(a,b){ return (b.cap||0)-(a.cap||0); });
+  if(!W.length || !fleet.length) return '';
   var C={tublamu:'#2563EB', panwa:'#0F6E56', ranong:'#8A5410', shop:'#B6BDC8'};
   var h='<div class="fd-rota"><div class="rh"><b>แผนโยกทั้งฤดู</b>'
     + '<span>ช่องละหนึ่ง'+(_fdScope==='week'?'สัปดาห์':'เดือน')+' · สีคือท่าที่เรืออยู่ · กดช่องเพื่อกระโดดไปช่วงนั้น</span>'
@@ -25160,13 +25231,15 @@ function fdRota(){
   fleet.forEach(function(b){
     var cells=W.map(function(x,i){
       var p=fdPierOf(b, x.from);
-      return '<span class="c'+(i===_fdWinIx?' on':'')+'" style="background:'+(C[p]||'#E7EAEF')+'" '
-        +'onclick="fdWinPick('+i+')" title="'+fdE(b.name+' · '+x.lb+' · '+fdPierNm(p))+'"></span>';
+      return '<span class="c'+((byWin&&i===_fdWinIx)?' on':'')+'" style="background:'+(C[p]||'#E7EAEF')+'" '
+        +'onclick="'+(byWin?('fdWinPick('+i+')'):('fdSetScope(\'month\');fdWinPick('+i+')'))+'" '
+        +'title="'+fdE(b.name+' · '+x.lb+' · '+fdPierNm(p))+'"></span>';
     }).join('');
     /* ลำที่อยู่ท่าเดียวทั้งฤดูไม่ต้องเน้น · ที่น่าดูคือลำที่สลับ */
     var moves=0, prev='';
     W.forEach(function(x){ var p=fdPierOf(b,x.from); if(prev && p!==prev) moves++; prev=p; });
-    h+='<div class="rr'+(moves?' moved':'')+'"><span class="nm">'+fdE(b.name)
+    h+='<div class="rr'+(moves?' moved':'')+'"><span class="nm">'
+      +(fdIsCharter(b)?'<u>เช่า</u>':'')+fdE(b.name)
       +(moves?('<em>สลับ '+moves+' ครั้ง</em>'):'')+'</span><span class="cells">'+cells+'</span></div>';
   });
   return h+'</div></div>';
@@ -25210,7 +25283,9 @@ function fdCard(b, ds){
   return '<div class="fd-boat'+(_fdSel===b.id?' sel':'')+'" draggable="true" data-id="'+fdE(b.id)+'"'
     +' ondragstart="fdDragStart(event,this)" ondragend="fdDragEnd(this)" onclick="fdPick(\''+fdE(b.id)+'\')">'
     +'<span class="bar" style="background:'+fdE(b.color||'#94A3B8')+'"></span>'
-    +'<div class="r1"><span class="bn">'+fdE(b.name)+'</span><span class="fd-chip '+lab[1]+'">'+lab[0]+'</span></div>'
+    +'<div class="r1"><span class="bn">'+fdE(b.name)+'</span>'
+      +(fdIsCharter(b)?'<span class="fd-own-tag">เช่า</span>':'')
+      +'<span class="fd-chip '+lab[1]+'">'+lab[0]+'</span></div>'
     +'<div class="r2"><span><b>'+(b.cap||0)+'</b> ที่นั่ง</span><span>ลูกเรือ <b>'+(b.crew||'—')+'</b></span>'
       +(b.engineCount?('<span>'+b.engineCount+' เครื่อง</span>'):'')+'</div>'
     + flag + '</div>';
@@ -25632,6 +25707,27 @@ function fdCSS(){
   +H+' .fd-nav select{font-family:inherit;font-size:11.5px;font-weight:600;border:1px solid #E7EAEF;'
      +'border-radius:8px;padding:4px 7px;background:#fff;color:#1F2937;max-width:210px}'
   +H+' .fd-winlb{font-size:11px;color:#6B7280;margin-left:auto}'
+  /* §flDeployOwn + ช่วงกำหนดเอง */
+  +H+' .fd-nav.cus{gap:6px}'
+  +H+' .fd-nav.cus input{font-family:inherit;font-size:12px;font-weight:600;border:1px solid #E7EAEF;'
+     +'border-radius:8px;padding:4px 8px;background:#fff;color:#1F2937}'
+  +H+' .fd-nav.cus i{font-style:normal;color:#9AA3AE}'
+  +H+' .fd-nav.cus b{font-size:11px;color:#6B7280;font-weight:700}'
+  +H+' .fd-own{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:-4px 0 11px}'
+  +H+' .fd-own small{color:#9AA3AE;font-weight:500}'
+  +H+' .fd-own .fd-seg.on small{color:rgba(255,255,255,.7)}'
+  +H+' .fd-own-tag{font-size:9px;font-weight:700;border-radius:5px;padding:1px 6px;background:#EEF2FF;'
+     +'color:#3730A3;border:1px solid #C7D2FE;white-space:nowrap}'
+  +H+' .fd-grp{display:flex;align-items:baseline;gap:6px;font-size:10px;font-weight:700;letter-spacing:.04em;'
+     +'color:#9AA3AE;text-transform:uppercase;padding:4px 2px 2px;border-top:1px solid #F1F3F6;margin-top:2px}'
+  +H+' .fd-grp:first-child{border-top:0;margin-top:0}'
+  +H+' .fd-grp span{font-weight:500;text-transform:none;letter-spacing:0;font-size:10px;color:#B6BDC8}'
+  +H+' .fd-grp.chr{color:#3730A3}'
+  +H+' .fd-split{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:10px;color:#6B7280}'
+  +H+' .fd-split em{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:4px;vertical-align:0}'
+  +H+' .fd-split em.own{background:#0F172A} '+H+' .fd-split em.chr{background:#6366F1}'
+  +H+' .fd-rota .rr .nm u{text-decoration:none;font-size:9px;font-weight:700;background:#EEF2FF;color:#3730A3;'
+     +'border-radius:4px;padding:0 4px;margin-right:5px}'
   +H+' .fd-col.drop{border-color:#0F172A;box-shadow:0 0 0 3px rgba(15,23,42,.08);background:#F8FAFC}'
   +H+' .fd-boat{cursor:grab} '+H+' .fd-boat.drag{opacity:.4}'
   +H+' .fd-asn{display:flex;align-items:center;gap:5px;margin-top:5px;font-size:10.5px;line-height:1.4;'
