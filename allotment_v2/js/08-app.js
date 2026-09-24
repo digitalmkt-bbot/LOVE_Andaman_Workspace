@@ -46960,6 +46960,36 @@ function bkV2RenderTab2(){
     });
   };
 
+  /* §btGhost (2026-09-24) · ทริปที่ "ค้างอยู่" บนกระดานทั้งที่ไม่เหลือ booking แล้ว
+     ผู้ใช้เจอเอง · โปรแกรมเคยวิ่งปกติ แล้วมีเหตุต้องปิด · พอเคลียร์ booking หมด
+     แถวยังคาอยู่ ขึ้น 0/0 กับป้ายแดง "full" ซึ่งอ่านว่า "เต็มแล้ว" — คนละเรื่องกับความจริง
+     ความจริงคือ "ไม่มีเรือ ไม่มีที่นั่ง" และมันยังอยู่เพราะมีอะไรสักอย่างค้างไว้
+     ทริปจะถูกดันขึ้นกระดานได้สามทาง (ดู _allRidsAll ข้างบน) · ล็อกที่นั่ง · ใบที่ย้ายวันออกไป
+     · ใบรออนุมัติ · ตัวนี้บอกว่าทางไหน คนจะได้รู้ว่าต้องไปปลดที่ไหน แทนที่จะเดา */
+  const _btWhy = rid => {
+    const live = (groups[rid]||[]).filter(r=>!r.cxl).length;
+    if(live) return null;                       /* ยังมีคนจองอยู่ · ไม่ใช่แถวค้าง */
+    const why = [];
+    const lks = (typeof bkV2LocksFor==='function') ? bkV2LocksFor(rid,date).filter(l=>!l.parentId) : [];
+    if(lks.length){
+      const left = lks.reduce((n,l)=>n+((typeof bkV2LockHeldRemaining==='function')?bkV2LockHeldRemaining(l,date):(+l.qty||0)),0);
+      const who  = [...new Set(lks.map(l=>(typeof bkV2LockHolderName==='function')?bkV2LockHolderName(l):(l.holderId||'')))]
+                    .filter(Boolean).slice(0,2).join(' · ');
+      why.push({k:'lock', t:'ล็อกที่นั่งค้างไว้ '+left+' ที่'+(who?(' · '+who):''), go:'bkV2SwitchTab(\'locks\')'});
+    }
+    if((pendGroups[rid]||[]).length)
+      why.push({k:'pend', t:'ใบรออนุมัติ '+(pendGroups[rid]||[]).length+' ใบ', go:'bkV2SwitchTab(\'approvals\')'});
+    if(reschedFromRouteIds.indexOf(rid)>=0)
+      why.push({k:'resch', t:'มีใบที่ย้ายวันออกจากวันนี้', go:''});
+    return why.length ? why : [{k:'none', t:'ไม่เหลือ booking แล้ว', go:''}];
+  };
+  const _btWhyHtml = rid => {
+    const w=_btWhy(rid); if(!w) return '';
+    return '<div class="bt-ghost">'+w.map(x=>
+      '<span class="g'+x.k+'"'+(x.go?(' onclick="event.stopPropagation();'+x.go+'" title="ไปจัดการ"'):'')+'>'
+      +esc(x.t)+(x.go?' &rarr;':'')+'</span>').join('')+'</div>';
+  };
+
   /* ══ กรอบซ้าย · โปรแกรมวันนี้ ════════════════════════════════════════════ */
   const _btPierBtn = (v,l)=>`<button class="bt-seg-b${pierF===v?' on':''}" onclick="bkV2Tab2SetPier('${v}')">${l}</button>`;
   const _btProgBody = _famList.map(a=>{
@@ -47056,12 +47086,12 @@ function bkV2RenderTab2(){
         ${nOver?`<span class="bt-cnt over">&#9888; ${nOver} over</span>`:''}</div>
       <div class="bt-bnm">${esc(rnm)}<span>${esc(_btDep(_btSelRid))}${_btPier(_btSelRid)?' · '+esc(_btPier(_btSelRid)):''}</span></div>
       <div class="bt-avrow">
-        <span class="bt-av"><span class="k">Free</span><span class="v ${av<=0?'full':(cp&&av/cp<0.2?'low':'')}">${av}</span></span><span class="bt-avs"></span>
+        <span class="bt-av"><span class="k">Free</span><span class="v ${cp<=0?(bkd>0?'full':'idle'):(av<=0?'full':(av/cp<0.2?'low':''))}">${cp<=0?'\u2014':av}</span></span><span class="bt-avs"></span>
         <span class="bt-av"><span class="k">Booked</span><span class="v">${bkd}</span></span><span class="bt-avs"></span>
         <span class="bt-av"><span class="k">Capacity</span><span class="v dim">${cp}</span></span><span class="bt-avs"></span>
         <span class="bt-av"><span class="k">Locked</span><span class="v lk">${lk}</span></span></div>
       <div class="bt-blist">${bl.length?bl.map(b=>`<span class="bt-brow${b.over?' over':''}"><span class="d" style="background:${b.col}"></span><span class="nm">${esc(b.name)}</span><span class="ld${b.ovn?' ovn':''}">${b.ovn?('\u0e04\u0e49\u0e32\u0e07\u0e40\u0e01\u0e32\u0e30 \u00b7 \u0e01\u0e25\u0e31\u0e1a '+ovnDayTh(b.ovn.to)):(b.pax+(b.cap?('/'+b.cap):'')+(b.over?(' +'+(b.pax-b.cap)):''))}</span></span>`).join(''):'<span class="bt-none2">No boat assigned to this trip</span>'}</div>
-      ${_btPrepHtml(_btSelRid)}</div>`;
+      ${_btWhyHtml(_btSelRid)}${_btPrepHtml(_btSelRid)}</div>`;
   } else {
     const _tg = routeIds.filter(rid=>(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(rid,date)).map(rid=>{
       const f=bkV2RouteFamily(rid)||{}, col=f.color||'#8b909c';
@@ -47071,9 +47101,9 @@ function bkV2RenderTab2(){
       const rnm=(((typeof getRoute==='function'&&getRoute(rid))||{}).name)||rid;
       return `<div class="bt-tgp" style="--tc:${col}" onclick="bkV2Tab2SetRoute('${rid}')" title="Select this trip">
         <div class="bt-tgh"><i></i><span class="nm">${esc(rnm)}</span><span class="tm">${esc(_btDep(rid))}${_btPier(rid)?' · '+esc(_btPier(rid)):''}</span>
-          <span class="sm">${bkd}/${cp}<em class="${av<=0?'full':(cp&&av/cp<0.2?'low':'ok')}">${av<=0?'full':(av+' free')}</em></span></div>
+          <span class="sm">${bkd}/${cp}<em class="${cp<=0?(bkd>0?'full':'idle'):(av<=0?'full':(av/cp<0.2?'low':'ok'))}">${cp<=0?(bkd>0?'\u0e44\u0e21\u0e48\u0e21\u0e35\u0e40\u0e23\u0e37\u0e2d':'\u0e44\u0e21\u0e48\u0e21\u0e35\u0e17\u0e35\u0e48\u0e19\u0e31\u0e48\u0e07'):(av<=0?'full':(av+' free'))}</em></span></div>
         <div class="bt-tgb">${bl.length?bl.map(b=>`<span class="bt-tbc${b.over?' over':''}"><i style="background:${b.col}"></i>${esc(b.name)}<s${b.ovn?' class="ovn"':''}>${b.ovn?('\u0e04\u0e49\u0e32\u0e07\u0e40\u0e01\u0e32\u0e30 \u00b7 \u0e01\u0e25\u0e31\u0e1a '+ovnDayTh(b.ovn.to)):(b.pax+(b.cap?('/'+b.cap):'')+(b.over?(' +'+(b.pax-b.cap)):''))}</s></span>`).join(''):'<span class="bt-tbc none">no boat</span>'}</div>
-        ${_btPrepHtml(rid)}</div>`;
+        ${_btWhyHtml(rid)}${_btPrepHtml(rid)}</div>`;
     }).join('');
     const _nB=routeIds.reduce((n,rid)=>n+_btBoats(rid).length,0);
     const _nT=routeIds.filter(rid=>(typeof bkV2IsRouteOpenOn!=='function')||bkV2IsRouteOpenOn(rid,date)).length;
@@ -48818,6 +48848,15 @@ function bkV2RenderTab2(){
     .bt-tgh .sm em.ok{background:#DCF4E8;color:#0C6B47}
     .bt-tgh .sm em.low{background:#FAEEDA;color:#854F0B}
     .bt-tgh .sm em.full{background:#FCEBEB;color:#A32D2D}
+    /* §btGhost · ไม่มีที่นั่งเลย ไม่ใช่ "เต็ม" · สีเทา ไม่ใช่สีแดง จะได้ไม่ปนกับทริปที่ขายหมดจริง */
+    .bt-tgh .sm em.idle{background:#F1EFEA;color:#7A756C}
+    .bt-av .v.idle{color:#a8a49c}
+    .bt-ghost{display:flex;flex-wrap:wrap;gap:5px;align-items:center;padding:5px 10px 8px}
+    .bt-ghost span{font-size:10px;font-weight:700;border-radius:6px;padding:2px 7px;
+      background:#F1EFEA;color:#6F6A62;border:1px solid #E3DFD7;line-height:1.5}
+    .bt-ghost span.glock{background:#EFEAFB;color:#5B289A;border-color:#DCCFF4;cursor:pointer}
+    .bt-ghost span.gpend{background:#FBEAE7;color:#A32D2D;border-color:#F2D4CE;cursor:pointer}
+    .bt-ghost span.gresch{background:#FAEEDA;color:#854F0B;border-color:#EFDDBC}
     .bt-tgb{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;padding-left:16px}
     .bt-tbc{display:inline-flex;align-items:center;gap:6px;border:1px solid #E6E2DB;border-radius:8px;
       padding:2px 8px;background:#fff;font-size:11px;font-weight:700;color:#3a3a36}
@@ -49505,71 +49544,44 @@ function bkV2CleanupNats(){
 }
 // Cheap heuristic · returns nationality code based on name keywords / scripts
 // ─── Nationality learning system · token-frequency from past bookings ───
-// §natBoot (2026-09-23) · loveandaman_v2 is the whole state blob (~23 MB). Every load used to
-//   JSON.parse it and every save parsed + stringified it again, once PER PASSENGER. On a browser that
-//   had never run the bootstrap that froze the main thread for minutes (the cs embed hung for good).
-//   Now: the parsed table is cached against the exact blob string (the Storage shim hands back the
-//   same _mem string until someone writes, so an unchanged blob is an O(1) identity check and any
-//   write, cloud refresh included, invalidates it), and records are batched into ONE save.
-let _natRaw = null, _natCache = null;
 function _natLearnLoad(){
-  try {
-    const raw = localStorage.getItem('loveandaman_v2');
-    if(_natCache && raw === _natRaw) return _natCache;
-    const d = JSON.parse(raw||'{}');
-    _natRaw = raw; _natCache = (d && d.nat_learn) || {};
-    return _natCache;
-  } catch(e){ return {}; }
+  try { const d = JSON.parse(localStorage.getItem('loveandaman_v2')||'{}'); return d.nat_learn || {}; }
+  catch(e){ return {}; }
 }
 function _natLearnSave(data){
   try {
     const d = JSON.parse(localStorage.getItem('loveandaman_v2')||'{}');
     d.nat_learn = data;
     localStorage.setItem('loveandaman_v2', JSON.stringify(d));
-    _natRaw = localStorage.getItem('loveandaman_v2'); _natCache = data;
-  } catch(e){ _natRaw = null; _natCache = null; console.warn('nat learn save failed', e); }
+  } catch(e){ console.warn('nat learn save failed', e); }
 }
 function _natTokenize(name){
   if(!name) return [];
   return String(name).toUpperCase().split(/[\s\-_,\.]+/).map(t => t.trim()).filter(t => t.length >= 2 && !/^(MR|MS|MRS|DR|JR|SR)$/.test(t));
 }
-// §natBoot · pairs = [[name, code], ...] · one load, one save, however many passengers
-function natLearnRecordMany(pairs){
-  let data = null, n = 0;
-  (pairs || []).forEach(pr => {
-    const name = pr && pr[0], code = pr && pr[1];
-    if(!name || !code || code === 'OTHER') return;
-    const tokens = _natTokenize(name);
-    if(tokens.length === 0) return;
-    if(!data) data = _natLearnLoad();
-    tokens.forEach(t => {
-      if(!data[t]) data[t] = {};
-      data[t][code] = (data[t][code] || 0) + 1;
-    });
-    n++;
+function natLearnRecord(name, code){
+  if(!name || !code || code === 'OTHER') return;
+  const tokens = _natTokenize(name);
+  if(tokens.length === 0) return;
+  const data = _natLearnLoad();
+  tokens.forEach(t => {
+    if(!data[t]) data[t] = {};
+    data[t][code] = (data[t][code] || 0) + 1;
   });
-  if(data) _natLearnSave(data);
-  return n;
-}
-function natLearnRecord(name, code){ natLearnRecordMany([[name, code]]); }
-// §natBoot · a booking's lead + passengers as record pairs
-function _natLearnPairs(lead, leadNat, passengers){
-  const out = [];
-  if(lead && leadNat) out.push([lead, leadNat]);
-  (passengers || []).forEach(p => { if(p && p.name && p.nationality) out.push([p.name, p.nationality]); });
-  return out;
+  _natLearnSave(data);
 }
 // One-time bootstrap · scan all existing SB_BOOKINGS to seed the learning table
 function natLearnBootstrap(){
   if(localStorage.getItem('_nat_bootstrap_done') === '1') return;
-  // §natBoot · embed / view-only sessions never sync the result, so there is nothing to seed
-  if(window.__laEmbed || (typeof laCanEdit === 'function' && !laCanEdit())) return;
   if(typeof SB_BOOKINGS === 'undefined' || !Array.isArray(SB_BOOKINGS)) return;
-  // §natBoot · mark done BEFORE the work: a tab closed mid-run must not start over on every load
+  let recorded = 0;
+  SB_BOOKINGS.forEach(bk => {
+    if(bk.leadPax && bk.leadNationality){ natLearnRecord(bk.leadPax, bk.leadNationality); recorded++; }
+    (bk.passengers || []).forEach(p => {
+      if(p.name && p.nationality){ natLearnRecord(p.name, p.nationality); recorded++; }
+    });
+  });
   localStorage.setItem('_nat_bootstrap_done', '1');
-  const pairs = [];
-  SB_BOOKINGS.forEach(bk => { if(bk) Array.prototype.push.apply(pairs, _natLearnPairs(bk.leadPax, bk.leadNationality, bk.passengers)); });
-  const recorded = natLearnRecordMany(pairs);
   if(recorded > 0) console.log('Nationality learning · bootstrap recorded ' + recorded + ' name-nationality pairs');
 }
 // Trigger bootstrap once DOM is ready
@@ -52604,7 +52616,10 @@ function bkV2CommitBooking(status){
       }
     }
     // Train the nationality guesser from what staff entered/confirmed → future auto-detect gets smarter
-    if(typeof natLearnRecordMany==='function') natLearnRecordMany(_natLearnPairs(d.leadPax, d.leadNationality, d.passengers));   // §natBoot · one save
+    if(typeof natLearnRecord==='function'){
+      if(d.leadPax && d.leadNationality) natLearnRecord(d.leadPax, d.leadNationality);
+      (d.passengers||[]).forEach(p=>{ if(p && p.name && p.nationality) natLearnRecord(p.name, p.nationality); });
+    }
     // ── Duplicate-booking guard (soft · warn, allow proceed) ──
     if(typeof bkV2FindDuplicateBookings==='function'){
       const _dups=bkV2FindDuplicateBookings(d, _bkV2.editingId||null);
@@ -53120,7 +53135,10 @@ function bkV2CommitBooking(status){
   }
 
   // ── Train nationality learning system · record name→code from this booking ──
-  natLearnRecordMany(_natLearnPairs(d.leadPax, d.leadNationality, newBk.passengers));   // §natBoot · one save
+  if(d.leadPax && d.leadNationality) natLearnRecord(d.leadPax, d.leadNationality);
+  (newBk.passengers || []).forEach(p => {
+    if(p.name && p.nationality) natLearnRecord(p.name, p.nationality);
+  });
 
   // ── Wire charter → TRIPS · lock boats for chartered trips ──
   /* §ovnSpan · ของเดิมจองเรือให้ "วันของ trip" วันเดียว · ใบค้างเกาะ 16→19
