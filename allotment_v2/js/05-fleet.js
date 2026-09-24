@@ -24904,7 +24904,22 @@ function fdMonthDays(m){
 }
 
 /* ── ตัวอ่านของกลาง · ทุกอันยืมของที่มีอยู่แล้ว ไม่ได้คิดกติกาใหม่ ──────────── */
-function fdFleet(){ return (typeof BOATS!=='undefined'?BOATS:[]).filter(function(b){ return b && !b.retired; }); }
+/* §flDeployFree · กองเรือบนกระดาน = ทะเบียนจริง + เรือสมมติที่เพิ่มในแผน
+   เรือสมมติมีเฉพาะในหน้านี้ · ไม่มีอยู่ใน BOATS จึงไม่หลุดไปหน้าไหน */
+function fdPlanBoats(){ return (_fdPlan.boats||[]).filter(Boolean); }
+function fdIsPlanBoat(b){ return !!(b && b._plan); }
+function fdFleet(){
+  var real=(typeof BOATS!=='undefined'?BOATS:[]).filter(function(b){ return b && !b.retired; });
+  return real.concat(fdPlanBoats());
+}
+/* ช่วงที่เรืออยู่กับเราจริง · เรือเช่าหลายลำเช่าแค่บางช่วง
+   นอกช่วงนั้นไม่ต้องโผล่บนกระดานเลย ไม่งั้นจะนับที่นั่งเกินจริง */
+function fdInService(b, ds){
+  if(fdIsPlanBoat(b)) return (!b.from || b.from<=ds) && (!b.to || ds<=b.to);
+  var a=(_fdPlan.avail||{})[b.id];
+  if(!a) return true;
+  return (!a.from || a.from<=ds) && (!a.to || ds<=a.to);
+}
 /* §flDeployOwn · เรือเช่าดูจาก ownership==='charter' ตัวเดียวกับหน้า Boat Status
    ไม่ได้ดูจากชื่อเจ้าของ · เรือเช่าหลายลำยังไม่ได้กรอกช่องเจ้าของไว้ */
 function fdIsCharter(b){ return !!(b && b.ownership==='charter'); }
@@ -24916,6 +24931,7 @@ function fdPierOf(b, ds){
   var hit=null;
   (_fdPlan.pier||[]).forEach(function(x){ if(x && x.boatId===b.id && x.from<=ds && ds<=x.to) hit=x; });
   if(hit) return hit.toPier;
+  if(fdIsPlanBoat(b)) return b.pier||'tublamu';
   if(typeof getBoatCurrentPier!=='function') return b.pier||'tublamu';
   var dropped=(_fdPlan.drop||[]).filter(function(d){ return d && d.boatId===b.id; })
                                  .map(function(d){ return d.asnId; });
@@ -24938,12 +24954,15 @@ function fdTripsOn(d){
   });
   return out;
 }
-function fdBoatsAt(pier, ds){ return fdFleet().filter(function(b){ return fdPierOf(b, ds)===pier; }); }
+function fdBoatsAt(pier, ds){
+  return fdFleet().filter(function(b){ return fdInService(b, ds) && fdPierOf(b, ds)===pier; });
+}
 function fdStatOn(b, ds){
+  if(fdIsPlanBoat(b)) return 'available';        /* เรือที่ยังไม่มีจริง · สมมติว่าพร้อม */
   var st=(typeof boatEffStatus==='function') ? boatEffStatus(b, ds) : null;
   return (st && st.s) || '';
 }
-function fdCanRun(b, ds){ return fdStatOn(b, ds)==='available'; }
+function fdCanRun(b, ds){ return fdInService(b, ds) && fdStatOn(b, ds)==='available'; }
 function fdOpenRoutes(pier, ds){
   return (typeof ROUTES!=='undefined'?ROUTES:[]).filter(function(r){
     if((r.pier||'')!==pier) return false;
@@ -24952,6 +24971,7 @@ function fdOpenRoutes(pier, ds){
   });
 }
 function fdJobsOf(id){
+  if(String(id||'').indexOf('plan_')===0) return [];
   return (typeof FL_MAINT!=='undefined'?FL_MAINT:[]).filter(function(m){
     return m && m.boatId===id && m.status!=='done' && m.status!=='cancelled'; });
 }
@@ -25041,16 +25061,18 @@ function fdKpis(){
    ร่างเก็บใน localStorage คนละคีย์กับข้อมูลจริง · shim ของชั้น sync
    ดักเฉพาะคีย์ LS_KEY คีย์อื่นผ่านไปตามปกติ → ร่างจึงอยู่ในเครื่องนี้เท่านั้น ไม่ขึ้นเซิร์ฟเวอร์ */
 var FD_PLAN_KEY = 'la_fd_plan';
-var _fdPlan = { pier:[], drop:[], trip:{} };
+var _fdPlan = { pier:[], drop:[], trip:{}, avail:{}, boats:[] };
 var _fdPlanUp = false;
 function fdPlanLoad(){
   if(_fdPlanUp) return; _fdPlanUp=true;
   try{ var raw=localStorage.getItem(FD_PLAN_KEY);
        if(raw){ var p=JSON.parse(raw);
-         if(p && typeof p==='object'){ _fdPlan={ pier:p.pier||[], drop:p.drop||[], trip:p.trip||{} }; } } }catch(_){}
+         if(p && typeof p==='object'){ _fdPlan={ pier:p.pier||[], drop:p.drop||[], trip:p.trip||{},
+           avail:p.avail||{}, boats:p.boats||[] }; } } }catch(_){}
 }
 function fdPlanSave(){ try{ localStorage.setItem(FD_PLAN_KEY, JSON.stringify(_fdPlan)); }catch(_){} }
-function fdPlanN(){ return (_fdPlan.pier||[]).length + (_fdPlan.drop||[]).length + Object.keys(_fdPlan.trip||{}).length; }
+function fdPlanN(){ return (_fdPlan.pier||[]).length + (_fdPlan.drop||[]).length
+  + Object.keys(_fdPlan.trip||{}).length + Object.keys(_fdPlan.avail||{}).length + (_fdPlan.boats||[]).length; }
 
 var _fdScope = 'month';         /* season | month | week | custom */
 var _fdCustom = null;           /* {from,to} · ช่วงที่ผู้ใช้กำหนดเอง */
@@ -25211,6 +25233,7 @@ function fdBoard(){
         + arr.map(function(b){ return fdCard(b, Wn.from); }).join('');
     };
     h+=grp('เรือบริษัท', own, 'own') + grp('เรือเช่า', chr, 'chr');
+    if(k!=='shop') h+=fdAddForm(k);
     h+='</div></div>';
   });
   return h+'</div>'+fdRota()+fdBoardNote();
@@ -25279,12 +25302,35 @@ function fdCard(b, ds){
       +(late.length?' — เลยวันเปิดฤดู':'')+'</div>';
   }
   if(!st) flag+='<div class="fd-flag gy">ไม่มีบันทึกสถานะคร่อมช่วงนี้ · ระบบเดาให้ไม่ได้</div>';
+  /* ช่วงที่เรืออยู่กับเรา · เรือสมมติใช้ช่วงของตัวเอง · เรือจริงตั้งเพิ่มได้ */
+  if(fdIsPlanBoat(b)){
+    flag+='<div class="fd-rent"><span>ช่วงเช่า</span>'
+      +'<input type="date" value="'+fdE(b.from||'')+'" onclick="event.stopPropagation()" '
+      +'onchange="event.stopPropagation();fdPlanBoatDate(\''+fdE(b.id)+'\',\'from\',this.value)">'
+      +'<i>→</i><input type="date" value="'+fdE(b.to||'')+'" onclick="event.stopPropagation()" '
+      +'onchange="event.stopPropagation();fdPlanBoatDate(\''+fdE(b.id)+'\',\'to\',this.value)"></div>';
+  } else {
+    var av=(_fdPlan.avail||{})[b.id];
+    if(av){
+      flag+='<div class="fd-rent"><span>อยู่กับเรา</span>'
+        +'<input type="date" value="'+fdE(av.from||'')+'" onclick="event.stopPropagation()" '
+        +'onchange="event.stopPropagation();fdSetAvail(\''+fdE(b.id)+'\',\'from\',this.value)">'
+        +'<i>→</i><input type="date" value="'+fdE(av.to||'')+'" onclick="event.stopPropagation()" '
+        +'onchange="event.stopPropagation();fdSetAvail(\''+fdE(b.id)+'\',\'to\',this.value)">'
+        +'<button onclick="event.stopPropagation();fdAvailOff(\''+fdE(b.id)+'\')" title="เอาช่วงออก">✕</button></div>';
+    } else if(fdIsCharter(b)){
+      flag+='<div class="fd-rent add"><button onclick="event.stopPropagation();fdAvailOn(\''+fdE(b.id)+'\')">'
+        +'+ ตั้งช่วงเช่า</button></div>';
+    }
+  }
   if(!b.crew) flag+='<div class="fd-flag gy">ยังไม่ได้กรอกอัตราลูกเรือของลำนี้</div>';
   return '<div class="fd-boat'+(_fdSel===b.id?' sel':'')+'" draggable="true" data-id="'+fdE(b.id)+'"'
     +' ondragstart="fdDragStart(event,this)" ondragend="fdDragEnd(this)" onclick="fdPick(\''+fdE(b.id)+'\')">'
     +'<span class="bar" style="background:'+fdE(b.color||'#94A3B8')+'"></span>'
     +'<div class="r1"><span class="bn">'+fdE(b.name)+'</span>'
-      +(fdIsCharter(b)?'<span class="fd-own-tag">เช่า</span>':'')
+      +(fdIsPlanBoat(b)?'<span class="fd-own-tag plan">เช่า (แผน)</span>'
+        :(fdIsCharter(b)?'<span class="fd-own-tag">เช่า</span>':''))
+      +(fdIsPlanBoat(b)?('<button class="fd-del" onclick="event.stopPropagation();fdDelPlanBoat(\''+fdE(b.id)+'\')" title="ลบออกจากแผน">✕</button>'):'')
       +'<span class="fd-chip '+lab[1]+'">'+lab[0]+'</span></div>'
     +'<div class="r2"><span><b>'+(b.cap||0)+'</b> ที่นั่ง</span><span>ลูกเรือ <b>'+(b.crew||'—')+'</b></span>'
       +(b.engineCount?('<span>'+b.engineCount+' เครื่อง</span>'):'')+'</div>'
@@ -25370,8 +25416,10 @@ function fdDropAsn(boatId, asnId){
 /* ══ แถบร่าง · ที่เดียวที่เขียนข้อมูลจริงได้ ═══════════════ */
 function fdPlanBar(){
   var n=fdPlanN();
-  if(!n) return '<div class="fd-planbar off">กระดานวางแผน · ทุกการย้ายที่ทำที่นี่เก็บเป็นร่างก่อน '
-    + '<b>ไม่กระทบหน้าอื่น</b> จนกว่าจะกดบันทึกลงระบบ</div>';
+  if(!n) return '<div class="fd-planbar off">กระดานวางแผน · '
+    + '<b>หน้านี้ไม่เขียนกลับระบบ</b> · '
+    + 'ลากวางเท่าไหร่ก็ได้ จะเพิ่มเรือเช่าสมมติขึ้นมาก็ได้ · '
+    + 'ทุกอย่างเก็บไว้ในเครื่องนี้เท่านั้น</div>';
   var P=_fdPlan;
   var li=(P.pier||[]).slice(0,6).map(function(x){
     return '<span class="pi">'+fdE(x.boat)+' <i>'+fdE(fdPierNm(x.fromPier))+'→'+fdE(fdPierNm(x.toPier))+'</i> '
@@ -25379,92 +25427,97 @@ function fdPlanBar(){
       +'<button onclick="fdPlanDel(\''+fdE(x.id)+'\')" title="เอาออกจากร่าง">✕</button></span>'; }).join('');
   if((P.pier||[]).length>6) li+='<span class="pi more">และอีก '+((P.pier||[]).length-6)+'</span>';
   return '<div class="fd-planbar on">'
-    + '<div class="ph"><b>แผนร่าง · ยังไม่ได้บันทึกลงระบบ</b>'
+    + '<div class="ph"><b>แผนที่วางไว้บนกระดานนี้</b>'
       + '<span>ย้ายท่า '+(P.pier||[]).length
-      + ((P.drop||[]).length?(' · ถอนใบเดิม '+(P.drop||[]).length):'')
+      + ((P.boats||[]).length?(' · เรือที่เพิ่มเอง '+(P.boats||[]).length):'')
+      + (Object.keys(P.avail||{}).length?(' · ตั้งช่วงเช่า '+Object.keys(P.avail||{}).length):'')
+      + ((P.drop||[]).length?(' · ไม่นับใบเดิม '+(P.drop||[]).length):'')
       + (Object.keys(P.trip||{}).length?(' · ตารางเดินเรือ '+Object.keys(P.trip||{}).length):'')
-      + ' · เก็บไว้ในเครื่องนี้เท่านั้น</span>'
-      + '<button class="ghost" onclick="fdPlanDiscard()">ล้างแผน</button>'
-      + '<button class="go" onclick="fdPlanApply()">บันทึกลงระบบ</button></div>'
+      + ' · เก็บไว้ในเครื่องนี้เท่านั้น · ไม่ขึ้นเซิร์ฟเวอร์</span>'
+      + '<button class="ghost" onclick="fdPlanDiscard()">ล้างแผน</button></div>'
     + (li?('<div class="pl">'+li+'</div>'):'') + '</div>';
 }
 function fdPlanDiscard(){
   if(!fdPlanN()) return;
-  if(!confirm('Discard the whole draft plan?\n\nNothing has been written to the system yet, so nothing is lost there.')) return;
-  _fdPlan={ pier:[], drop:[], trip:{} };
+  if(!confirm('Clear the whole board?\n\nThis only clears the plan on this page. Nothing was ever written to the system.')) return;
+  _fdPlan={ pier:[], drop:[], trip:{}, avail:{}, boats:[] };
   fdPlanSave(); flRenderDeployment();
   if(typeof flShowToast==='function') flShowToast('ล้างแผนร่างแล้ว');
 }
-/* บันทึกจริง · ที่เดียวที่แตะข้อมูลจริง · ตารางเดินเรือยังเรียกผ่าน Boat Operation เหมือนเดิม */
-function fdPlanApply(){
-  if(!fdPlanN()) return;
-  if(typeof laGuardEdit==='function' && !laGuardEdit('fleet')) return;
-  var P=_fdPlan;
-  var msg='Write this plan to the system?\n\n'
-    + '- pier moves: '+(P.pier||[]).length+'\n'
-    + '- assignments to remove: '+(P.drop||[]).length+'\n'
-    + '- sailing schedule changes: '+Object.keys(P.trip||{}).length+'\n\n'
-    + 'Other pages (Boat Status, pier job sheets, Boat Operation) will follow after this.';
-  if(!confirm(msg)) return;
-  /* 1 · ถอนใบเดิม */
-  (P.drop||[]).forEach(function(d){
-    var b=fdFleet().filter(function(x){ return x.id===d.boatId; })[0]; if(!b) return;
-    b.assignments=(b.assignments||[]).filter(function(a){ return a && a.id!==d.asnId; });
-  });
-  /* 2 · ออกใบย้ายท่า · เรียงตามช่วง และตัดใบที่ทับกันทุกครั้ง */
-  var nP=0;
-  (P.pier||[]).slice().sort(function(a,b){ return a.from<b.from?-1:1; }).forEach(function(x){
-    var b=fdFleet().filter(function(y){ return y.id===x.boatId; })[0]; if(!b) return;
-    if(!Array.isArray(b.assignments)) b.assignments=[];
-    fdTrim(b, x.from, x.to);
-    b.assignments.push({
-      id:'asn_'+Date.now()+'_'+Math.floor(Math.random()*1000),
-      type:'temporary', fromPier:x.fromPier, toPier:x.toPier,
-      startDate:x.from, endDate:x.to,
-      reason:'Season deployment', cost:0,
-      status:(x.from<=TODAY_STR && x.to>=TODAY_STR)?'active':'planned',
-      createdDate:TODAY_STR, src:'fldeploy' });
-    nP++;
-  });
-  if(nP || (P.drop||[]).length) flSave();
-  /* 3 · ตารางเดินเรือ · ต้องผ่านตัวเขียนของ Boat Operation เท่านั้น · ด่านกันอยู่ที่นั่น */
-  var nT=0, miss=0;
-  Object.keys(P.trip||{}).sort().forEach(function(key){
-    var p=key.split('|'), d=p[0], bid=p[1], rid=P.trip[key];
-    if(rid){ if(typeof bop2AssignBoat==='function') bop2AssignBoat(rid, d, bid); }
-    else   { if(typeof bop2UnassignBoat==='function') bop2UnassignBoat(d, bid); }
-    var now=(typeof TRIPS!=='undefined' && TRIPS[d]) ? TRIPS[d][bid] : null;
-    var okd = rid ? (now && now.route===rid) : !now;
-    if(okd) nT++; else miss++;
-  });
-  _fdPlan={ pier:[], drop:[], trip:{} };
-  fdPlanSave();
-  flRenderDeployment();
-  var m='บันทึกแล้ว · ย้ายท่า '+nP+' · ตารางเดินเรือ '+nT
-    + (miss?(' · ทำไม่ได้ '+miss+' รายการ (ติดด่านของ Boat Operation)'):'');
-  if(typeof flShowToast==='function') flShowToast(m, miss?'warn':'success');
+/* ══ ช่วงที่เรืออยู่กับเรา · เรือเช่าหลายลำเช่าแค่บางวัน ════════
+   นอกช่วงนี้เรือหายจากกระดานไปเลย ไม่งั้นจะนับที่นั่งเกินจริงทั้งฤดู */
+function fdSetAvail(boatId, which, val){
+  _fdPlan.avail=_fdPlan.avail||{};
+  var Wn=fdWin();
+  var a=_fdPlan.avail[boatId] || { from:Wn.from, to:Wn.to };
+  if(which==='from'){ a.from=val||''; if(a.to && a.from && a.to<a.from) a.to=a.from; }
+  else a.to=val||'';
+  _fdPlan.avail[boatId]=a;
+  fdPlanSave(); flRenderDeployment();
+}
+function fdAvailOn(boatId){
+  var Wn=fdWin();
+  _fdPlan.avail=_fdPlan.avail||{};
+  if(!_fdPlan.avail[boatId]) _fdPlan.avail[boatId]={ from:Wn.from, to:Wn.to };
+  fdPlanSave(); flRenderDeployment();
+}
+function fdAvailOff(boatId){
+  if(_fdPlan.avail) delete _fdPlan.avail[boatId];
+  fdPlanSave(); flRenderDeployment();
 }
 
-/* ตัด/ผ่าใบเดิมที่ทับช่วง [f,t] ของเรือลำนี้ · กันใบซ้อนกันตั้งแต่ตอนเขียน
-   ใบที่จมอยู่ในช่วงทั้งใบ → ทิ้ง · โผล่หัว/ท้าย → หดให้พ้นช่วง · คร่อมทั้งช่วง → ผ่าเป็นสองใบ */
-function fdTrim(b, f, t){
-  var keep=[];
-  (b.assignments||[]).forEach(function(a){
-    if(!a || a.status==='cancelled' || !a.startDate || !a.endDate){ keep.push(a); return; }
-    if(a.endDate < f || a.startDate > t){ keep.push(a); return; }          /* ไม่ทับกัน */
-    if(a.startDate >= f && a.endDate <= t) return;                          /* จมทั้งใบ → ทิ้ง */
-    if(a.startDate < f && a.endDate > t){                                   /* คร่อม → ผ่าสองใบ */
-      var tail={}; for(var k in a) tail[k]=a[k];
-      tail.id=a.id+'_b'; tail.startDate=fdAddDays(t,1);
-      a.endDate=fdAddDays(f,-1);
-      keep.push(a); keep.push(tail); return;
-    }
-    if(a.startDate < f) a.endDate=fdAddDays(f,-1);                          /* โผล่หัว → หดท้าย */
-    else a.startDate=fdAddDays(t,1);                                        /* โผล่ท้าย → หดหัว */
-    keep.push(a);
-  });
-  b.assignments=keep;
+/* ══ เพิ่มเรือสมมติ · ลำที่คิดจะเช่า ยังไม่มีในทะเบียน ═══════ */
+var _fdAddPier = '';
+function fdAddOpen(pier){ _fdAddPier=(_fdAddPier===pier?'':pier); flRenderDeployment(); }
+function fdAddSave(pier){
+  var g=function(id){ var el=document.getElementById(id); return el?String(el.value||'').trim():''; };
+  var nm=g('fd-nb-name'), cap=parseInt(g('fd-nb-cap'),10)||0, crew=parseInt(g('fd-nb-crew'),10)||0;
+  var f=g('fd-nb-from'), t=g('fd-nb-to');
+  if(!nm){ if(typeof flShowToast==='function') flShowToast('ใส่ชื่อเรือก่อน','warn'); return; }
+  if(t && f && t<f) t=f;
+  (_fdPlan.boats=_fdPlan.boats||[]).push({
+    _plan:1, id:'plan_'+Date.now()+'_'+Math.floor(Math.random()*1000),
+    name:nm, cap:cap, crew:crew||null, pier:pier,
+    ownership:'charter', color:'#6366F1',
+    from:f||'', to:t||'' });
+  _fdAddPier='';
+  fdPlanSave(); flRenderDeployment();
+  if(typeof flShowToast==='function') flShowToast('เพิ่ม '+nm+' ลงแผนแล้ว · เฉพาะในกระดานนี้');
 }
+function fdPlanBoatDate(id, which, val){
+  (_fdPlan.boats||[]).forEach(function(b){
+    if(!b || b.id!==id) return;
+    if(which==='from'){ b.from=val||''; if(b.to && b.from && b.to<b.from) b.to=b.from; }
+    else b.to=val||'';
+  });
+  fdPlanSave(); flRenderDeployment();
+}
+function fdDelPlanBoat(id){
+  _fdPlan.boats=(_fdPlan.boats||[]).filter(function(b){ return b && b.id!==id; });
+  _fdPlan.pier=(_fdPlan.pier||[]).filter(function(x){ return x && x.boatId!==id; });
+  Object.keys(_fdPlan.trip||{}).forEach(function(k){ if(k.split('|')[1]===id) delete _fdPlan.trip[k]; });
+  fdPlanSave(); flRenderDeployment();
+}
+/* ฟอร์มเพิ่มเรือ · วางท้ายคอลัมน์ ไม่ใช่โมดัล จะได้ไม่บล็อกหน้า */
+function fdAddForm(pier){
+  var Wn=fdWin();
+  if(_fdAddPier!==pier)
+    return '<button class="fd-addbtn" onclick="fdAddOpen(\''+pier+'\')">+ เพิ่มเรือเช่าในแผน</button>';
+  return '<div class="fd-addform">'
+    + '<div class="ttl">เรือเช่าสมมติ · '+fdE(fdPierNm(pier))+'</div>'
+    + '<input id="fd-nb-name" type="text" placeholder="ชื่อเรือ">'
+    + '<div class="row"><input id="fd-nb-cap" type="number" min="0" placeholder="ที่นั่ง">'
+      + '<input id="fd-nb-crew" type="number" min="0" placeholder="ลูกเรือ"></div>'
+    + '<div class="row"><input id="fd-nb-from" type="date" value="'+fdE(Wn.from)+'">'
+      + '<input id="fd-nb-to" type="date" value="'+fdE(Wn.to)+'"></div>'
+    + '<div class="row act"><button class="go" onclick="fdAddSave(\''+pier+'\')">เพิ่ม</button>'
+      + '<button onclick="fdAddOpen(\''+pier+'\')">ยกเลิก</button></div></div>';
+}
+
+/* §flDeployFree · หน้านี้ไม่มีทางเขียนกลับระบบเลย (2026-09-24)
+   เคยมีปุ่ม "บันทึกลงระบบ" กับ fdTrim() อยู่ ถอดออกตามที่ผู้ใช้สั่ง
+   เหตุผล · หน้านี้คือกระดาษทดลองวาง ลากอย่างไรก็ได้โดยไม่ต้องกลัวว่าจะไปโผล่ที่ไหน
+   ถ้าวันหนึ่งอยากผลักแผนเข้าระบบจริง ค่อยเติมทีหลัง · ตอนนี้จงใจที่จะไม่มี */
 
 /* ══ แท็บ 2 · Monthly Deployment ══════════════════════════════════════════ */
 function fdMonth(){
@@ -25718,6 +25771,35 @@ function fdCSS(){
   +H+' .fd-own .fd-seg.on small{color:rgba(255,255,255,.7)}'
   +H+' .fd-own-tag{font-size:9px;font-weight:700;border-radius:5px;padding:1px 6px;background:#EEF2FF;'
      +'color:#3730A3;border:1px solid #C7D2FE;white-space:nowrap}'
+  +H+' .fd-own-tag.plan{background:#FEF6E7;color:#8A5410;border-color:#EFD9AE;border-style:dashed}'
+  +H+' .fd-del{border:0;background:transparent;color:#A32D2D;cursor:pointer;font:700 11px inherit;'
+     +'font-family:inherit;padding:1px 4px;border-radius:5px;line-height:1}'
+  +H+' .fd-del:hover{background:#FDF2F2}'
+  /* ช่วงเช่า / ช่วงที่อยู่กับเรา */
+  +H+' .fd-rent{display:flex;align-items:center;gap:4px;margin-top:5px;font-size:10px;'
+     +'background:#F7F8FA;border:1px solid #E7EAEF;border-radius:7px;padding:3px 5px;flex-wrap:wrap}'
+  +H+' .fd-rent span{font-weight:700;color:#6B7280;white-space:nowrap}'
+  +H+' .fd-rent i{font-style:normal;color:#9AA3AE}'
+  +H+' .fd-rent input{font-family:inherit;font-size:10px;border:1px solid #E7EAEF;border-radius:5px;'
+     +'padding:2px 4px;background:#fff;color:#1F2937;min-width:0;flex:1 1 92px}'
+  +H+' .fd-rent button{margin-left:auto;border:0;background:transparent;color:#6B7280;cursor:pointer;'
+     +'font:700 11px inherit;font-family:inherit;padding:1px 4px}'
+  +H+' .fd-rent.add{background:transparent;border:0;padding:0}'
+  +H+' .fd-rent.add button{margin:0;border:1px dashed #D6DCE5;border-radius:7px;padding:3px 9px;'
+     +'font-size:10px;color:#6B7280;width:100%}'
+  +H+' .fd-addbtn{width:100%;margin-top:7px;border:1px dashed #D6DCE5;background:#fff;color:#6B7280;'
+     +'border-radius:10px;padding:8px;font:700 11px inherit;font-family:inherit;cursor:pointer}'
+  +H+' .fd-addbtn:hover{border-color:#6366F1;color:#4F46E5}'
+  +H+' .fd-addform{margin-top:7px;border:1px solid #C7D2FE;background:#F8F9FF;border-radius:10px;padding:9px;'
+     +'display:flex;flex-direction:column;gap:6px}'
+  +H+' .fd-addform .ttl{font-size:10.5px;font-weight:700;color:#3730A3}'
+  +H+' .fd-addform input{font-family:inherit;font-size:11px;border:1px solid #D6DCE5;border-radius:7px;'
+     +'padding:5px 7px;background:#fff;color:#1F2937;width:100%;min-width:0}'
+  +H+' .fd-addform .row{display:flex;gap:6px}'
+  +H+' .fd-addform .row.act{justify-content:flex-end}'
+  +H+' .fd-addform button{font-family:inherit;font-size:11px;font-weight:700;border-radius:7px;padding:5px 12px;'
+     +'cursor:pointer;border:1px solid #D6DCE5;background:#fff;color:#6B7280}'
+  +H+' .fd-addform button.go{background:#0F172A;border-color:#0F172A;color:#fff}'
   +H+' .fd-grp{display:flex;align-items:baseline;gap:6px;font-size:10px;font-weight:700;letter-spacing:.04em;'
      +'color:#9AA3AE;text-transform:uppercase;padding:4px 2px 2px;border-top:1px solid #F1F3F6;margin-top:2px}'
   +H+' .fd-grp:first-child{border-top:0;margin-top:0}'

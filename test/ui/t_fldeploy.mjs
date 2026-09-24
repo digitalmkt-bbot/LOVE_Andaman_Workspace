@@ -230,43 +230,109 @@ else if (R3e.before === R3e.dest || R3e.after === R3e.dest)
 else ok('ช่วงกำหนดเอง ' + R3e.from + '→' + R3e.to + ' (10 วัน) · '
       + R3e.name + ' อยู่ ' + R3e.dest + ' เฉพาะในช่วง · ก่อนหน้าหลังไม่ขยับ');
 
-/* ══ 3c · กดบันทึกแล้วจึงเขียนจริง และต้องไม่มีใบซ้อน ═════════════════════ */
+/* ══ 3c · หน้านี้ต้องไม่มีทางเขียนกลับระบบเลย ═════════════════════════════
+   ข้อนี้คือสัญญาหลักของหน้า · ลากอะไรก็ได้ กดอะไรก็ได้
+   BOATS กับ TRIPS ต้องเหมือนเดิมทุกตัวอักษร */
 const R3c = await page.evaluate(() => {
+  const snapB = JSON.stringify(BOATS);
+  const snapT = JSON.stringify(TRIPS);
   const W = fdWindows();
-  const p = (_fdPlan.pier || [])[0];
-  if (!p) return { skip: 'ไม่มีร่างให้บันทึก' };
-  const b = (BOATS || []).find(x => x.id === p.boatId);
-  const n0 = (b.assignments || []).length;
-  fdPlanApply();
-  /* รอบสอง · วางทับใบที่เพิ่งเขียนไป เพื่อบังคับให้ตัวตัดใบทำงานจริง
-     ถ้าไม่ทำขั้นนี้ จะมีแค่ใบเดียว แล้วข้อ "ไม่มีใบซ้อน" จะผ่านโดยไม่ได้วัดอะไร */
-  fdSetScope('season');
-  const was2 = fdPierOf(b, W[0].from);
-  const to2  = ['tublamu', 'panwa', 'ranong'].find(q => q !== was2);
-  _fdSel = b.id; fdMove(to2); fdPlanApply();
-  fdSetScope('month'); _fdWinIx = 0;
-  const A = (b.assignments || []).filter(a => a && a.status !== 'cancelled' && a.startDate && a.endDate);
-  const mine = A.filter(a => a.src === 'fldeploy').pop() || {};
-  const overlaps = [];
-  for (let i = 0; i < A.length; i++)
-    for (let j = i + 1; j < A.length; j++)
-      if (A[i].startDate <= A[j].endDate && A[j].startDate <= A[i].endDate)
-        overlaps.push(A[i].startDate + '→' + A[i].endDate + ' กับ ' + A[j].startDate + '→' + A[j].endDate);
-  return { name: b.name, grew: (b.assignments || []).length - n0, planN: fdPlanN(),
-           rec: { s: mine.startDate, e: mine.endDate, to: mine.toPier },
-           real: getBoatCurrentPier(b, W[0].from), want: to2, n: A.length, overlaps };
+  const fleet = (BOATS || []).filter(b => b && !b.retired);
+  const b = fleet.find(x => fdPierOf(x, W[0].from) !== 'shop');
+  /* กวนให้ครบทุกทาง · ย้ายท่า · ตั้งช่วงเช่า · เพิ่มเรือ · จัดเส้นทางในปฏิทิน */
+  if (b) {
+    const to = ['tublamu', 'panwa', 'ranong'].find(p => p !== fdPierOf(b, W[0].from));
+    _fdSel = b.id; fdMove(to);
+    fdSetScope('season'); _fdSel = b.id; fdMove(to === 'ranong' ? 'panwa' : 'ranong');
+    fdSetScope('month'); _fdWinIx = 0;
+    fdAvailOn(b.id); fdSetAvail(b.id, 'to', W[0].to);
+  }
+  _fdAddPier = 'tublamu'; flRenderDeployment();
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  set('fd-nb-name', 'ทดสอบไม่เขียนกลับ'); set('fd-nb-cap', '40');
+  fdAddSave('tublamu');
+  /* ปฏิทิน · ใส่และถอดเรือ */
+  fdTab('month');
+  const d = _fdMonth + '-20';
+  const r = (ROUTES || []).find(x => (x.pier || '') === _fdPier);
+  if (r && b) { fdOpenDay(d); fdAssign(r.id, d, b.id); fdUnassign(d, b.id); }
+  fdTab('pier');
+  return {
+    boatsSame: JSON.stringify(BOATS) === snapB,
+    tripsSame: JSON.stringify(TRIPS) === snapT,
+    noApply:   (typeof fdPlanApply === 'undefined'),
+    noTrim:    (typeof fdTrim === 'undefined'),
+    planN: fdPlanN(),
+    btns: [].slice.call(document.querySelectorAll('#fl-deploy-wrap .fd-planbar button'))
+            .map(x => x.textContent.trim())
+  };
 });
-if (R3c.skip) console.log('  ! ' + R3c.skip + ' · ข้ามข้อ 3c');
-else if (R3c.planN !== 0)   fail('บันทึกแล้วร่างยังเหลือ ' + R3c.planN + ' รายการ');
-else if (R3c.grew < 1)      fail('บันทึกแล้วใบย้ายท่าไม่เพิ่มเลย');
-else if (R3c.real !== R3c.want)
-  fail('บันทึกแล้ว getBoatCurrentPier ยังตอบ ' + R3c.real + ' · ควรเป็น ' + R3c.want);
-else if (R3c.overlaps.length)
-  fail('ใบย้ายท่าซ้อนกัน ' + R3c.overlaps.length + ' คู่ · ' + R3c.overlaps.slice(0, 2).join(' · ')
-    + ' — ท่าของเรือจะขึ้นกับลำดับใน array');
-else ok('กดบันทึกแล้วเขียนจริง · ' + R3c.name + ' ได้ใบ ' + R3c.rec.s + '→' + R3c.rec.e
-      + ' และไม่มีใบซ้อนสักคู่ (' + R3c.n + ' ใบเรียงต่อกัน)');
+if (!R3c.boatsSame) fail('ทำอะไรบนกระดานแล้ว BOATS จริงเปลี่ยน · หน้านี้ต้องไม่เขียนกลับระบบ');
+else if (!R3c.tripsSame) fail('ทำอะไรบนกระดานแล้ว TRIPS จริงเปลี่ยน · หน้านี้ต้องไม่เขียนกลับระบบ');
+else if (!R3c.noApply)  fail('ยังมีฟังก์ชัน fdPlanApply อยู่ · ทางเขียนกลับต้องถูกถอดออก');
+else if (!R3c.noTrim)   fail('ยังมีฟังก์ชัน fdTrim อยู่ · ตัวนี้มีไว้แก้ใบจริงเท่านั้น');
+else if (!R3c.planN)    fail('กวนไปตั้งหลายอย่างแต่ร่างว่าง · กระดานไม่ได้จำอะไรเลย');
+else if (R3c.btns.some(t => /บันทึก|save/i.test(t)))
+  fail('ยังมีปุ่มบันทึกอยู่บนแถบแผน · ' + R3c.btns.join(' / '));
+else ok('กวนครบทุกทาง (ย้ายท่า · ตั้งช่วงเช่า · เพิ่มเรือ · จัดเส้นทาง) รวม ' + R3c.planN
+      + ' รายการ · BOATS/TRIPS จริงไม่ขยับสักตัวอักษร · ไม่มีปุ่มบันทึกและไม่มีทางเขียนกลับ');
 
+/* ══ 3f · เรือเช่าที่เช่ามาแค่บางวัน ══════════════════════════════════════
+   สองทาง · ตั้งช่วงเช่าให้ลำที่มีในทะเบียน และเพิ่มลำใหม่ที่ยังไม่มี
+   นอกช่วงต้องหายจากกระดาน ไม่งั้นจะนับที่นั่งเกินจริงทั้งฤดู */
+const R3f = await page.evaluate(() => {
+  _fdPlan = { pier: [], drop: [], trip: {}, avail: {}, boats: [] }; fdPlanSave();
+  fdSetScope('month'); _fdWinIx = 0; flRenderDeployment();
+  const W = fdWindows();
+  const f = fdAddDays(W[0].from, 3), t = fdAddDays(W[0].from, 7);
+  const names = d => fdBoatsAt('tublamu', d).map(x => x.name);
+  const seats = d => fdBoatsAt('tublamu', d).filter(x => fdCanRun(x, d))
+                      .reduce((s, x) => s + (x.cap || 0), 0);
+  const seat0 = seats(f);
+
+  /* 1 · เพิ่มลำใหม่ที่ยังไม่มีในทะเบียน */
+  _fdAddPier = 'tublamu'; flRenderDeployment();
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  set('fd-nb-name', 'เรือเช่าทดสอบ'); set('fd-nb-cap', '48'); set('fd-nb-crew', '4');
+  set('fd-nb-from', f); set('fd-nb-to', t);
+  fdAddSave('tublamu');
+  const nb = (_fdPlan.boats || [])[0] || {};
+  const inReg = (BOATS || []).some(x => x && x.id === nb.id);
+
+  /* 2 · ตั้งช่วงเช่าให้เรือเช่าที่มีในทะเบียนอยู่แล้ว */
+  const chr = (BOATS || []).find(x => x && !x.retired && x.ownership === 'charter');
+  let chrIn = null, chrOut = null;
+  if (chr) {
+    fdAvailOn(chr.id); fdSetAvail(chr.id, 'from', f); fdSetAvail(chr.id, 'to', t);
+    const p = fdPierOf(chr, f);
+    chrIn  = fdBoatsAt(p, f).some(x => x.id === chr.id);
+    chrOut = fdBoatsAt(p, fdAddDays(t, 1)).some(x => x.id === chr.id);
+  }
+  return {
+    f, t, nb: nb.name, inReg,
+    inWin:  names(f).indexOf('เรือเช่าทดสอบ') >= 0,
+    before: names(fdAddDays(f, -1)).indexOf('เรือเช่าทดสอบ') >= 0,
+    after:  names(fdAddDays(t, 1)).indexOf('เรือเช่าทดสอบ') >= 0,
+    seatIn: seats(f) - seat0, seatOut: seats(fdAddDays(t, 1)) - seats(fdAddDays(t, 1)),
+    seatsAfter: seats(fdAddDays(t, 1)), seat0,
+    chr: chr && chr.name, chrIn, chrOut
+  };
+});
+{
+  const bad3f = [];
+  if (!R3f.inWin)  bad3f.push('เรือที่เพิ่มเองไม่โผล่ในช่วงเช่า');
+  if (R3f.before || R3f.after) bad3f.push('เรือที่เพิ่มเองโผล่นอกช่วงเช่าด้วย');
+  if (R3f.inReg)   bad3f.push('เรือที่เพิ่มเองหลุดเข้าไปอยู่ในทะเบียน BOATS จริง');
+  if (R3f.seatIn !== 48) bad3f.push('ที่นั่งในช่วงเพิ่มขึ้น ' + R3f.seatIn + ' · ควรเป็น 48');
+  if (R3f.seatsAfter !== R3f.seat0) bad3f.push('นอกช่วงที่นั่งไม่กลับเท่าเดิม');
+  if (R3f.chr) {
+    if (!R3f.chrIn)  bad3f.push(R3f.chr + ' หายจากกระดานทั้งที่อยู่ในช่วงเช่า');
+    if (R3f.chrOut)  bad3f.push(R3f.chr + ' ยังโผล่นอกช่วงเช่า');
+  }
+  if (bad3f.length) fail('เรือเช่าบางวัน · ' + bad3f.join(' · '));
+  else ok('เรือเช่าบางวันจัดการได้สองทาง · เพิ่ม "' + R3f.nb + '" 48 ที่ เช่า ' + R3f.f + '→' + R3f.t
+      + ' (โผล่เฉพาะในช่วง ไม่เข้าทะเบียนจริง) · ตั้งช่วงเช่าให้ ' + R3f.chr + ' แล้วนอกช่วงหายจากกระดาน');
+}
 /* ══ 3d · ลากวางได้ และเอาออกจากร่างได้ ══════════════════════════════════ */
 const R3d = await page.evaluate(() => {
   flRenderDeployment();
@@ -371,8 +437,7 @@ else if (R5.wrong.length)
 else ok('ที่นั่งต่อวันตรงกับที่คำนวณเองจาก TRIPS ทั้ง ' + R5.checked + ' วันที่เปิดขาย');
 
 /* ══ 6 · ตารางเดินเรือก็เป็นร่าง · ตอนบันทึกต้องผ่านตัวเขียนของ Boat Operation ══
-   ด่านที่ต้องยังอยู่คือ "วันที่ผ่านมาแล้วแก้ไม่ได้" · ถ้าหน้านี้เขียน TRIPS เอง
-   ด่านนั้นจะหายเงียบ ๆ แล้ววันเก่าที่ออกรายงานไปแล้วจะถูกแก้ได้ */
+   หน้านี้ไม่เขียน TRIPS เลย · ทุกอย่างเป็นร่างบนกระดานนี้เท่านั้น */
 const R6 = await page.evaluate(() => {
   const pier = _fdPier;
   const fleet = (BOATS || []).filter(b => b && !b.retired && fdPierOf(b, _fdFrom) === pier);
@@ -393,42 +458,19 @@ const R6 = await page.evaluate(() => {
   const draftOnly = JSON.stringify((TRIPS || {})[future] || {}) === snap;
   const onBoard = !!fdTripsOn(future)[b.id];
 
-  /* 2 · ใส่ร่างของวันเก่าเข้าไปด้วย แล้วกดบันทึกทีเดียว */
-  const back = [];
-  for (let i = 1; i <= 90; i++) {
-    const d = new Date(TODAY_STR); d.setDate(d.getDate() - i);
-    back.push(d.toISOString().slice(0, 10));
-  }
-  const anyRoute = (ROUTES || []).find(x => (x.pier || '') === pier);
-  const past = anyRoute ? back.find(d => !((TRIPS || {})[d] || {})[b.id]) : null;
-  if (past) fdAssign(anyRoute.id, past, b.id);
-
-  fdPlanApply();
-  const added   = !!(((TRIPS || {})[future] || {})[b.id]);
-  const route2  = added ? TRIPS[future][b.id].route === r.id : false;
-  const guarded = past ? !(((TRIPS || {})[past] || {})[b.id]) : null;
-
-  /* 3 · ถอดเรือออก = ร่างอีกรอบ แล้วบันทึก */
+  /* 3 · ถอดออกจากร่าง · ต้องหายจากกระดาน แต่ TRIPS จริงต้องเหมือนเดิมทั้งขาหน้าหลัง */
   fdUnassign(future, b.id);
-  const stillThere = !!(((TRIPS || {})[future] || {})[b.id]);
-  fdPlanApply();
-  const removed = !(((TRIPS || {})[future] || {})[b.id]);
-
-  return { future, past, boat: b.name, route: r.name,
-           draftOnly, onBoard, added, route2, guarded, stillThere, removed };
+  const offBoard = !fdTripsOn(future)[b.id];
+  const tripSame = JSON.stringify((TRIPS || {})[future] || {}) === snap;
+  return { future, boat: b.name, route: r.name, draftOnly, onBoard, offBoard, tripSame };
 });
 if (R6.skip) console.log('  ! ' + R6.skip + ' · ข้ามข้อ 6');
 else if (!R6.draftOnly) fail('ใส่เรือในปฏิทินแล้ว TRIPS จริงขยับทันที · ต้องเป็นร่างก่อน');
 else if (!R6.onBoard)   fail('ใส่เรือแล้วกระดานไม่เห็นร่างนั้น · ' + R6.boat + ' ' + R6.future);
-else if (!R6.added)     fail('กดบันทึกแล้ว TRIPS ไม่เปลี่ยน · ' + R6.boat + ' ' + R6.future);
-else if (!R6.route2)    fail('บันทึกแล้วได้เส้นทางผิด · ' + R6.future);
-else if (R6.stillThere !== true)
-  fail('ถอดเรือแล้ว TRIPS จริงหายทันที · ต้องเป็นร่างก่อนเหมือนกัน');
-else if (!R6.removed)   fail('บันทึกการถอดแล้วยังค้างอยู่ใน TRIPS · ' + R6.boat + ' ' + R6.future);
-else if (R6.guarded === false)
-  fail('บันทึกร่างของวันที่ผ่านมาแล้ว (' + R6.past + ') สำเร็จ · ด่านกันวันเก่าหายไป — แปลว่าไม่ได้เรียกผ่าน Boat Operation');
-else ok('ตารางเดินเรือเป็นร่างจนกว่าจะบันทึก · ' + R6.boat + ' → ' + R6.route + ' ' + R6.future
-      + ' · ถอดออกก็เป็นร่าง' + (R6.past ? (' · ด่านวันเก่ายังกัน ' + R6.past + ' ได้') : ''));
+else if (!R6.offBoard)  fail('ถอดเรือแล้วกระดานยังเห็นอยู่ · ' + R6.boat + ' ' + R6.future);
+else if (!R6.tripSame)  fail('ใส่/ถอดเรือในปฏิทินไปแตะ TRIPS จริงเข้าแล้ว');
+else ok('ตารางเดินเรือในปฏิทินเป็นร่างล้วน · ' + R6.boat + ' → ' + R6.route + ' ' + R6.future
+      + ' · ใส่ก็ร่าง ถอดก็ร่าง · TRIPS จริงไม่ขยับ');
 /* ══ 7 · คิวซ่อม · แถบต้องบอกความจริงเรื่องวันเสร็จ ═══════════════════════ */
 const R7 = await page.evaluate(() => {
   fdTab('fix');
