@@ -24962,7 +24962,43 @@ function fdStatOn(b, ds){
   var st=(typeof boatEffStatus==='function') ? boatEffStatus(b, ds) : null;
   return (st && st.s) || '';
 }
-function fdCanRun(b, ds){ return fdInService(b, ds) && fdStatOn(b, ds)==='available'; }
+/* §flDeployReady · "นับในแผน / ไม่นับ" เป็นการตัดสินใจของคนวางแผน ไม่ใช่สถานะจริง
+   ที่มา (2026-09-24) · ผู้ใช้ชี้สองเรื่องที่เป็นเรื่องเดียวกัน
+     · ที่นั่งควรนับตาม "ลำที่วางไว้" ไม่ใช่ตามใบซ่อมที่ยังเปิดค้างอยู่
+     · บนปฏิทินก็ต้องเลือกเองได้ว่าลำไหนพร้อมหรือไม่พร้อม
+   เพราะการวางแผนก่อนเปิดฤดูคือการสมมติว่า "ซ่อมจะเสร็จทัน" แล้วไปเร่งให้ทัน
+   ไม่ใช่การรายงานสถานะวันนี้ · ค่าตั้งต้นจึงเป็น "วางแล้ว = นับ"
+
+   ⚠ ความจริงต้องไม่หาย · สองทางที่ยังบอกอยู่เสมอ
+     1 ป้ายสถานะจริงบนการ์ด (fdStatOn) ไม่ถูกแตะเลย
+     2 กล่อง "เรือที่วางไว้แต่ยังซ่อมไม่เสร็จ" อ่านจาก fdRealReady ไม่ใช่ตัวเลือกของคน
+       ลำที่กดว่านับแล้วแต่ซ่อมยังไม่จบ จึงยังขึ้นรายการต้องเร่งครบทุกลำ */
+function fdRealReady(b, ds){ return fdStatOn(b, ds)==='available'; }
+function fdCounted(b){ return (_fdPlan.ready||{})[b.id]!==0; }
+function fdCanRun(b, ds){ return fdInService(b, ds) && fdCounted(b); }
+function fdReadyToggle(id){
+  var b=fdBoat(id); if(!b) return;
+  _fdPlan.ready=_fdPlan.ready||{};
+  if(fdCounted(b)) _fdPlan.ready[b.id]=0; else delete _fdPlan.ready[b.id];
+  fdPlanSave(); flRenderDeployment();
+}
+/* §flDeploySort · คาตามารันก่อน แล้วสปีดโบ๊ท 4 เครื่อง ตามด้วย 3 เครื่อง
+   ลำดับนี้คือลำดับที่ผู้ใช้จัดจริง · ลำใหญ่/เครื่องเยอะรับโปรแกรมได้กว้างกว่า
+   เรือเช่าหลายลำยังไม่ได้กรอกจำนวนเครื่อง จะตกไปท้ายกลุ่มของมันเอง */
+function fdTypeRank(b){
+  var t=String((b&&b.type)||'').toLowerCase();
+  if(t.indexOf('cata')>=0) return 0;
+  if(t.indexOf('speed')>=0) return 1;
+  return 2;
+}
+function fdSort(arr){
+  return (arr||[]).slice().sort(function(a,b){
+    return (fdTypeRank(a)-fdTypeRank(b))
+        || ((Number(b.engineCount)||0)-(Number(a.engineCount)||0))
+        || ((b.cap||0)-(a.cap||0))
+        || String(a.name||'').localeCompare(String(b.name||''));
+  });
+}
 function fdOpenRoutes(pier, ds){
   return (typeof ROUTES!=='undefined'?ROUTES:[]).filter(function(r){
     if((r.pier||'')!==pier) return false;
@@ -25008,6 +25044,7 @@ function flRenderDeployment(){
     + '</div>'
     + fdKpis()
     + fdPlanBar()
+    + fdSavedBar()
     + '<div class="fd-tabs">'+tabs.map(function(t){
         return '<button class="fd-tab'+(_fdTab===t[0]?' on':'')+'" onclick="fdTab(\''+t[0]+'\')">'+t[1]+'</button>'; }).join('')+'</div>'
     + (_fdTab==='pier' ? fdBoard() : _fdTab==='month' ? fdMonth() : fdRunway())
@@ -25029,7 +25066,8 @@ function fdKpis(){
   var K=[
     ['Boats', B.length, B.filter(function(b){ return !fdIsCharter(b); }).length+' บริษัท · '
       + B.filter(fdIsCharter).length+' เช่า · '+ready.length+' ready', ''],
-    ['Seats ready', seatsOk.toLocaleString(), 'of '+seats.toLocaleString()+' · '+(seats-seatsOk).toLocaleString()+' tied up', (seatsOk/(seats||1)<.5?'bad':'ok')],
+    ['Seats planned', seatsOk.toLocaleString(), 'of '+seats.toLocaleString()+' · '
+      + B.filter(function(b){ return !fdRealReady(b,S.from); }).length+' ลำยังซ่อมไม่เสร็จ', (seatsOk/(seats||1)<.5?'bad':'ok')],
     ['Open repair jobs', jobs, noEnd+' with no finish date — cannot tell if they land before the season', (noEnd?'bad':'ok')],
     ['Crew needed', crew, 'per the crew rating on each boat · pier registry has '+staff, (crew>staff?'warn':'')]
   ];
@@ -25062,18 +25100,20 @@ function fdKpis(){
    ร่างเก็บใน localStorage คนละคีย์กับข้อมูลจริง · shim ของชั้น sync
    ดักเฉพาะคีย์ LS_KEY คีย์อื่นผ่านไปตามปกติ → ร่างจึงอยู่ในเครื่องนี้เท่านั้น ไม่ขึ้นเซิร์ฟเวอร์ */
 var FD_PLAN_KEY = 'la_fd_plan';
-var _fdPlan = { pier:[], drop:[], trip:{}, avail:{}, boats:[] };
+var _fdPlan = { pier:[], drop:[], trip:{}, avail:{}, boats:[], ready:{} };
 var _fdPlanUp = false;
 function fdPlanLoad(){
   if(_fdPlanUp) return; _fdPlanUp=true;
   try{ var raw=localStorage.getItem(FD_PLAN_KEY);
        if(raw){ var p=JSON.parse(raw);
          if(p && typeof p==='object'){ _fdPlan={ pier:p.pier||[], drop:p.drop||[], trip:p.trip||{},
-           avail:p.avail||{}, boats:p.boats||[] }; } } }catch(_){}
+           avail:p.avail||{}, boats:p.boats||[], ready:p.ready||{} }; } } }catch(_){}
 }
 function fdPlanSave(){ try{ localStorage.setItem(FD_PLAN_KEY, JSON.stringify(_fdPlan)); }catch(_){} }
 function fdPlanN(){ return (_fdPlan.pier||[]).length + (_fdPlan.drop||[]).length
-  + Object.keys(_fdPlan.trip||{}).length + Object.keys(_fdPlan.avail||{}).length + (_fdPlan.boats||[]).length; }
+  + Object.keys(_fdPlan.trip||{}).length + Object.keys(_fdPlan.avail||{}).length + (_fdPlan.boats||[]).length
+  + Object.keys(_fdPlan.ready||{}).length; }
+function fdPlanBlank(){ return { pier:[], drop:[], trip:{}, avail:{}, boats:[], ready:{} }; }
 
 var _fdScope = 'month';         /* season | month | week | custom */
 var _fdCustom = null;           /* {from,to} · ช่วงที่ผู้ใช้กำหนดเอง */
@@ -25198,6 +25238,10 @@ function fdBoard(){
     var ready=list.filter(function(b){ return fdCanRun(b,Wn.from); });
     var seats=ready.reduce(function(s,b){ return s+(b.cap||0); },0);
     var all=list.reduce(function(s,b){ return s+(b.cap||0); },0);
+    /* §flDeployReady · ที่นั่งนับตามลำที่วางไว้ · ลำที่ยังซ่อมไม่เสร็จแยกบอกไว้ใต้แถบ */
+    var fix=list.filter(function(b){ return !fdRealReady(b,Wn.from); });
+    var fixSeat=fix.filter(function(b){ return fdCanRun(b,Wn.from); })
+                   .reduce(function(s,b){ return s+(b.cap||0); },0);
     var need=list.reduce(function(s,b){ return s+fdCrewOf(b); },0);
     var have=(k==='shop')?null:fdStaffAt(k).length;
     var caps=(k==='shop')?null:fdCapsAt(k);
@@ -25208,11 +25252,13 @@ function fdBoard(){
         +(k==='hold' ? '<div class="sm">ที่พักเรือระหว่างคิด · ลากมาวางไว้ก่อนได้ ไม่ถูกนับเป็นที่นั่งของท่าไหน</div>'
           : k==='shop' ? '<div class="sm">เรือที่อยู่อู่ตามใบซ่อมที่เปิดค้างไว้ · ลากออกไปวางที่ท่าในแผนได้ ป้ายซ่อมจะติดไปด้วย</div>'
           : '<div class="fd-mini">'
-            +'<span class="m'+(seats?' ok':' bad')+'"><i>Seats ready</i><b>'+seats+'</b></span>'
-            +'<span class="m"><i>Seats total</i><b>'+all+'</b></span>'
+            +'<span class="m'+(seats?' ok':' bad')+'"><i>Seats planned</i><b>'+seats+'</b></span>'
+            +'<span class="m"><i>Seats placed</i><b>'+all+'</b></span>'
             +'<span class="m'+(have!==null&&need>have?' bad':'')+'"><i>Crew need/have</i><b>'+need+'/'+have+'</b></span>'
             +'<span class="m'+(caps<ready.length?' warn':'')+'"><i>Captains</i><b>'+caps+'/'+ready.length+'</b></span>'
           +'</div>'
+          + (fix.length ? ('<div class="fd-fixnote">นับไว้ในแผนแล้วแต่ยังซ่อมไม่เสร็จ <b>'+fix.length+' ลำ</b>'
+              + (fixSeat?(' · '+fixSeat+' ที่นั่ง'):' · ไม่ได้นับที่นั่ง')+'</div>') : '')
           + (function(){
               var o=list.filter(function(b){ return !fdIsCharter(b); });
               var c2=list.filter(fdIsCharter);
@@ -25224,9 +25270,8 @@ function fdBoard(){
             })())
       +'</div><div class="fd-stack">';
     if(!list.length) h+='<div class="fd-empty">ลากเรือมาวางที่นี่</div>';
-    var srt=function(a,b){ return (fdCanRun(b,Wn.from)-fdCanRun(a,Wn.from))||((b.cap||0)-(a.cap||0)); };
-    var own=list.filter(function(b){ return !fdIsCharter(b); }).sort(srt);
-    var chr=list.filter(fdIsCharter).sort(srt);
+    var own=fdSort(list.filter(function(b){ return !fdIsCharter(b); }));
+    var chr=fdSort(list.filter(fdIsCharter));
     var grp=function(ttl, arr, cls){
       if(!arr.length) return '';
       var sub=arr.filter(function(b){ return fdCanRun(b,Wn.from); }).reduce(function(x,b){ return x+(b.cap||0); },0);
@@ -25246,8 +25291,7 @@ function fdBoard(){
    และที่พักเรือไม่ต้องมีตัวเลขที่นั่ง/ลูกเรือ เพราะยังไม่ได้อยู่ท่าไหน */
 function fdHold(){
   var Wn=fdWin();
-  var list=fdBoatsAt('hold', Wn.from).filter(fdOwnOk)
-    .sort(function(a,b){ return (b.cap||0)-(a.cap||0); });
+  var list=fdSort(fdBoatsAt('hold', Wn.from).filter(fdOwnOk));
   var seats=list.reduce(function(x,b){ return x+(b.cap||0); },0);
   var h='<div class="fd-hold" data-pier="hold" ondragover="fdDragOver(event,this)" '
     + 'ondragleave="fdDragOut(this)" ondrop="fdDrop(event,this)" onclick="if(_fdSel) fdMove(\'hold\')">'
@@ -25278,23 +25322,28 @@ function fdChase(){
   var Wn=fdWin(), out=[];
   FD_PIERS.forEach(function(k){
     fdBoatsAt(k, Wn.from).filter(fdOwnOk).forEach(function(b){
-      if(fdCanRun(b, Wn.from)) return;
+      /* §flDeployReady · อ่านสถานะจริง ไม่ใช่ตัวเลือก "นับในแผน" ของคนวางแผน
+         ลำที่กดนับไว้แล้วแต่ซ่อมยังไม่จบคือลำที่ต้องไปเร่งที่สุด · หายจากรายการนี้ไม่ได้ */
+      if(fdRealReady(b, Wn.from)) return;
       var moved=(_fdPlan.pier||[]).some(function(x){
         return x && x.boatId===b.id && x.from<=Wn.from && Wn.from<=x.to; });
       var j=fdJobsOf(b.id);
-      out.push({ b:b, pier:k, moved:moved, jobs:j,
+      out.push({ b:b, pier:k, moved:moved, jobs:j, counted:fdCanRun(b, Wn.from),
         noEnd:j.filter(function(x){ return !x.endDate; }).length,
         late:j.filter(function(x){ return x.endDate && x.endDate>Wn.from; }).length });
     });
   });
   if(!out.length) return '';
-  out.sort(function(a,b){ return (b.moved-a.moved) || ((b.b.cap||0)-(a.b.cap||0)); });
-  var seats=out.reduce(function(x,r){ return x+(r.b.cap||0); },0);
+  out.sort(function(a,b){ return (b.counted-a.counted) || (b.moved-a.moved) || ((b.b.cap||0)-(a.b.cap||0)); });
+  var seats=out.filter(function(r){ return r.counted; }).reduce(function(x,r){ return x+(r.b.cap||0); },0);
+  var nOff=out.filter(function(r){ return !r.counted; }).length;
   return '<div class="fd-chase"><div class="ch"><b>เรือที่วางไว้แต่ยังซ่อมไม่เสร็จ '+out.length+' ลำ</b>'
-    + '<span>รวม '+seats+' ที่นั่ง · ถ้าจะใช้แผนนี้ ต้องเร่งให้เสร็จก่อน '+fdE(fdNiceDate(Wn.from))+'</span></div>'
+    + '<span>นับเป็นที่นั่งในแผนไปแล้ว '+seats+' ที่ · ถ้าจะใช้แผนนี้ ต้องเร่งให้เสร็จก่อน '+fdE(fdNiceDate(Wn.from))
+    + (nOff?(' · อีก '+nOff+' ลำกดไว้ว่าไม่นับ'):'')+'</span></div>'
     + '<div class="cl">'+out.map(function(r){
-        return '<span class="ci'+(r.moved?' moved':'')+'">'
+        return '<span class="ci'+(r.moved?' moved':'')+(r.counted?'':' off')+'">'
           +(r.moved?'<em>ย้ายมาในแผน</em>':'')
+          +(r.counted?'':'<em class="no">ไม่นับในแผน</em>')
           +fdE(r.b.name)+' <i>'+fdE(fdPierNm(r.pier))+'</i>'
           +(r.jobs.length?(' <u>'+r.jobs.slice(0,3).map(function(j){ return fdE(j.no||''); }).join(' ')
               +(r.jobs.length>3?(' +'+(r.jobs.length-3)):'')+'</u>'):'')
@@ -25307,7 +25356,7 @@ function fdRota(){
   /* ช่วงทั้งฤดู/กำหนดเองไม่มีช่องเป็นช่วง · ใช้เดือนเป็นช่องแทน จะได้เห็นภาพรวมทั้งฤดูเหมือนกัน */
   var byWin=(_fdScope==='month'||_fdScope==='week');
   var W=byWin ? fdWindows() : fdWindows0();
-  var fleet=fdFleet().filter(fdOwnOk).slice().sort(function(a,b){ return (b.cap||0)-(a.cap||0); });
+  var fleet=fdSort(fdFleet().filter(fdOwnOk));
   if(!W.length || !fleet.length) return '';
   var C={tublamu:'#2563EB', panwa:'#0F6E56', ranong:'#8A5410', shop:'#B6BDC8'};
   var h='<div class="fd-rota"><div class="rh"><b>แผนโยกทั้งฤดู</b>'
@@ -25394,10 +25443,23 @@ function fdCard(b, ds){
       +(fdIsPlanBoat(b)?'<span class="fd-own-tag plan">เช่า (แผน)</span>'
         :(fdIsCharter(b)?'<span class="fd-own-tag">เช่า</span>':''))
       +(fdIsPlanBoat(b)?('<button class="fd-del" onclick="event.stopPropagation();fdDelPlanBoat(\''+fdE(b.id)+'\')" title="ลบออกจากแผน">✕</button>'):'')
-      +'<span class="fd-chip '+lab[1]+'">'+lab[0]+'</span></div>'
+      +'<span class="fd-chip '+lab[1]+'" title="สถานะจริงจากใบซ่อม · แก้ที่หน้า Maintenance">'+lab[0]+'</span>'
+      /* §flDeployReady · ป้ายซ้ายคือความจริง · ปุ่มนี้คือการตัดสินใจของแผน แยกกันคนละอัน */
+      + fdReadyBtn(b, ds)
+      +'</div>'
     +'<div class="r2"><span><b>'+(b.cap||0)+'</b> ที่นั่ง</span><span>ลูกเรือ <b>'+(b.crew||'—')+'</b></span>'
       +(b.engineCount?('<span>'+b.engineCount+' เครื่อง</span>'):'')+'</div>'
     + flag + '</div>';
+}
+/* §flDeployReady · ปุ่ม "นับในแผน / ไม่นับ" · ใช้ร่วมกันทั้งกระดานและปฏิทิน
+   สีส้มคือกดนับไว้ทั้งที่ของจริงยังซ่อมอยู่ — ตั้งใจให้สะดุดตา ไม่ใช่ error */
+function fdReadyBtn(b, ds){
+  var on=fdCanRun(b, ds), real=fdRealReady(b, ds);
+  var cls = on ? (real?'on':'on risk') : 'off';
+  var lb  = on ? (real?'นับในแผน':'นับ · ยังซ่อมอยู่') : 'ไม่นับ';
+  return '<button class="fd-rdy '+cls+'" title="กดเพื่อสลับว่าจะนับลำนี้เป็นกำลังในแผนหรือไม่ · '
+    + 'ไม่กระทบสถานะจริงของเรือ" onclick="event.stopPropagation();fdReadyToggle(\''+fdE(b.id)+'\')">'
+    + lb+'</button>';
 }
 function fdPick(id){ _fdSel=(_fdSel===id?'':id); flRenderDeployment(); }
 
@@ -25422,10 +25484,14 @@ function fdDrop(e, col){
 function fdBoardNote(){
   return '<div class="fd-note"><b>อ่านกระดานนี้ยังไง</b><br>'
     +'· กระดานคือ<b>ภาพ ณ ช่วงที่เลือก</b> ไม่ใช่ของทั้งฤดู · เปลี่ยนช่วงข้างบนแล้วเรือจะสลับตำแหน่งตามแผนที่วางไว้<br>'
-    +'· <b>Seats ready</b> นับเฉพาะลำที่สถานะพร้อมใช้ในช่วงนั้น — ลำที่ยังซ่อมอยู่ไม่ถูกนับ เพราะขายไม่ได้จริง<br>'
+    +'· <b>Seats planned</b> นับ<b>ทุกลำที่วางไว้</b>ในคอลัมน์นั้น เพราะการวางแผนคือการสมมติว่าซ่อมจะเสร็จทัน · '
+    +'ลำไหนไม่อยากนับ กดปุ่ม <b>นับในแผน</b> บนการ์ดให้เป็น <b>ไม่นับ</b> แล้วที่นั่งจะหายออกไป<br>'
+    +'· <b>Seats placed</b> คือที่นั่งรวมของทุกลำในคอลัมน์ ไม่ว่าจะกดนับหรือไม่ · '
+    +'ป้ายสถานะบนการ์ด (พร้อมใช้ / อยู่ระหว่างซ่อม) ยังเป็นของจริงจากใบซ่อมเสมอ กดไม่ได้<br>'
     +'· <b>Crew need/have</b> ฝั่ง need คืออัตราประจำเรือรวมกัน ฝั่ง have คือคนในทะเบียนพนักงานของท่านั้น<br>'
-    +'· คอลัมน์ <b>อู่ซ่อม / นอกท่า</b> ไม่ใช่ท่าจริง · เป็นเรือที่ใบซ่อมยังเปิดค้างและระบุอู่ไว้ '
-    +'ลากเข้าไม่ได้ ต้องปิดงานซ่อมที่หน้า Maintenance ก่อน<br>'
+    +'· เรียงการ์ดแบบ <b>คาตามารัน → สปีดโบ๊ท 4 เครื่อง → 3 เครื่อง</b> · ลำที่ยังไม่ได้กรอกจำนวนเครื่องอยู่ท้ายกลุ่ม<br>'
+    +'· คอลัมน์ <b>อู่ซ่อม / นอกท่า</b> ไม่ใช่ท่าจริง · เป็นเรือที่ใบซ่อมยังเปิดค้างและระบุอู่ไว้ · '
+    +'ลากออกมาวางที่ท่าในแผนได้ ป้ายซ่อมจะติดไปด้วย และจะไปโผล่ในกล่อง "ต้องเร่งซ่อม"<br>'
     +'· ออกใบทับช่วงเดิมได้เลย · ระบบจะตัดหรือผ่าใบเก่าที่ทับกันให้เอง ไม่ปล่อยให้มีสองใบซ้อนวันเดียวกัน<br>'
     +'· ปุ่ม <b>✕</b> บนใบคือถอดใบนั้นทิ้ง ไม่ใช่การย้อนกลับ · เรือจะไปอยู่ตามใบที่เหลือ '
     +'ถ้าไม่มีใบไหนครอบช่วงนั้นก็กลับท่าบ้านของมัน</div>';
@@ -25498,9 +25564,145 @@ function fdPlanBar(){
 function fdPlanDiscard(){
   if(!fdPlanN()) return;
   if(!confirm('Clear the whole board?\n\nThis only clears the plan on this page. Nothing was ever written to the system.')) return;
-  _fdPlan={ pier:[], drop:[], trip:{}, avail:{}, boats:[] };
+  _fdPlan=fdPlanBlank();
   fdPlanSave(); flRenderDeployment();
   if(typeof flShowToast==='function') flShowToast('ล้างแผนร่างแล้ว');
+}
+
+/* ══ §flDeploySave · เก็บ Mockup เป็นรอบ ๆ แล้วต่อกันเป็นฤดู ══════════════
+   ที่มา (2026-09-24) · ผู้ใช้อยากได้ "SAVE mockup" ที่เห็นว่ารอบนี้ครอบวันไหนถึงวันไหน
+   แล้ววางรอบถัดไปต่อจากนั้น จะได้เห็นภาพทั้งฤดูว่าต่อกันครบหรือยัง
+
+   ⚠ ยังไม่เขียนกลับระบบเหมือนเดิม · เก็บคนละคีย์กับข้อมูลจริง (la_fd_plans)
+     shim ใน 01-auth-sync.js ดักเฉพาะ LS_KEY คีย์อื่นลง localStorage ตรง ๆ
+     แปลว่าแผนที่เซฟไว้อยู่ในเครื่องนี้เท่านั้น ไม่ขึ้นเซิร์ฟเวอร์ ไม่ไปหาคนอื่น
+     ตรงนี้บอกไว้บนหน้าด้วย เพราะ "เซฟแล้ว" มักถูกเข้าใจว่าทีมเห็นด้วย */
+var FD_SAVE_KEY = 'la_fd_plans';
+var FD_SAVE_MAX = 24;
+var _fdSaved = null;
+var _fdSaveOpen = false;
+function fdSaved(){
+  if(_fdSaved) return _fdSaved;
+  _fdSaved=[];
+  try{ var raw=localStorage.getItem(FD_SAVE_KEY);
+       if(raw){ var a=JSON.parse(raw); if(Array.isArray(a)) _fdSaved=a.filter(Boolean); } }catch(_){}
+  return _fdSaved;
+}
+function fdSavedWrite(){ try{ localStorage.setItem(FD_SAVE_KEY, JSON.stringify(fdSaved())); }catch(_){} }
+/* ลอกแผนเป็นก้อนใหม่ · ใช้ทั้งตอนเซฟและตอนเปิดกลับมา จะได้ไม่มีใครแชร์ array กัน */
+function fdPlanCopy(p){
+  try{ return JSON.parse(JSON.stringify(p||{})); }catch(_){ return {}; }
+}
+function fdSavedSorted(){
+  return fdSaved().slice().sort(function(a,b){ return String(a.from||'').localeCompare(String(b.from||'')); });
+}
+function fdSaveOpen(){ _fdSaveOpen=!_fdSaveOpen; flRenderDeployment(); }
+function fdSaveDo(){
+  var g=function(id){ var el=document.getElementById(id); return el?String(el.value||'').trim():''; };
+  var Wn=fdWin();
+  var nm=g('fd-sv-name'), f=g('fd-sv-from')||Wn.from, t=g('fd-sv-to')||Wn.to;
+  if(t<f) t=f;
+  if(!nm) nm='รอบ '+fdNiceDate(f)+' – '+fdNiceDate(t);
+  var S=fdSaved();
+  if(S.length>=FD_SAVE_MAX){
+    if(typeof flShowToast==='function') flShowToast('เก็บได้สูงสุด '+FD_SAVE_MAX+' รอบ · ลบรอบเก่าออกก่อน','warn');
+    return;
+  }
+  S.push({ id:'sv'+Date.now()+Math.floor(Math.random()*1000), name:nm, from:f, to:t,
+           at:new Date().toISOString().slice(0,16).replace('T',' '),
+           plan:fdPlanCopy(_fdPlan) });
+  _fdSaveOpen=false;
+  fdSavedWrite(); flRenderDeployment();
+  if(typeof flShowToast==='function') flShowToast('บันทึก Mockup "'+nm+'" แล้ว · เก็บในเครื่องนี้เท่านั้น');
+}
+/* เปิดรอบที่เซฟไว้ขึ้นมาแก้ต่อ · ทับกระดานปัจจุบัน จึงถามก่อนถ้ามีของค้าง
+   กล่องนี้มาจากการกดปุ่ม ไม่ใช่ระหว่างลากวาง จึงใช้ confirm ได้ (ดู §flDeploy ที่ fdMove) */
+function fdSavedOpen(id){
+  var r=fdSaved().filter(function(x){ return x && x.id===id; })[0]; if(!r) return;
+  if(fdPlanN() && !confirm('Load this saved mockup?\n\nThe board you are on now will be replaced. Save it first if you want to keep it.')) return;
+  /* §flDeploySave · ต้องลอกออกมาเป็นก้อนใหม่ ไม่ใช่ชี้ไปที่ของในรอบที่เซฟ
+     ถ้าแชร์ array กัน · ลากต่ออีกทีหลังเปิดรอบ จะไปแก้รอบที่เซฟไว้ด้วยโดยไม่มีใครรู้ */
+  var p=fdPlanCopy(r.plan);
+  _fdPlan={ pier:p.pier||[], drop:p.drop||[], trip:p.trip||{}, avail:p.avail||{},
+            boats:p.boats||[], ready:p.ready||{} };
+  fdPlanSave();
+  _fdScope='custom'; _fdCustom={ from:r.from, to:r.to }; _fdWinIx=0; _fdSel='';
+  flRenderDeployment();
+  if(typeof flShowToast==='function') flShowToast('เปิด "'+r.name+'" ขึ้นมาแล้ว · '+r.from+'→'+r.to);
+}
+function fdSavedDel(id){
+  var r=fdSaved().filter(function(x){ return x && x.id===id; })[0]; if(!r) return;
+  if(!confirm('Delete this saved mockup?\n\nOnly the saved copy is removed. The board you are on is untouched.')) return;
+  _fdSaved=fdSaved().filter(function(x){ return x && x.id!==id; });
+  fdSavedWrite(); flRenderDeployment();
+}
+/* วางรอบถัดไป · เริ่มจากวันถัดจากรอบสุดท้ายที่เซฟไว้ · กระดานยังเป็นชุดเดิมให้แก้ต่อ */
+function fdSavedNext(){
+  var L=fdSavedSorted(), S=fdSeason();
+  var last=L.length ? L[L.length-1] : null;
+  var f=last ? fdAddDays(last.to,1) : S.from;
+  if(f>S.to) f=S.to;
+  var t=fdMonthEnd(f); if(t>S.to) t=S.to;
+  _fdScope='custom'; _fdCustom={ from:f, to:t }; _fdWinIx=0; _fdSel='';
+  _fdSaveOpen=false;      /* จัดกระดานให้เสร็จก่อน ค่อยกดบันทึก · เปิดฟอร์มค้างไว้แต่แรกทำให้กดเซฟรอบเปล่า */
+  _fdTab='pier';
+  flRenderDeployment();
+  if(typeof flShowToast==='function') flShowToast('เริ่มรอบถัดไป '+f+'→'+t+' · จัดเสร็จแล้วกดบันทึก');
+}
+/* แถบรอบที่เซฟไว้ · เส้นบนคือทั้งฤดู · บล็อกคือรอบที่วางไว้แล้ว · ช่องว่างคือช่วงที่ยังไม่มีแผน */
+function fdSavedBar(){
+  var L=fdSavedSorted(), S=fdSeason(), Wn=fdWin();
+  var span=Math.max(fdDays(S.from,S.to),1);
+  var pos=function(ds){ return Math.max(0, Math.min(100, fdDays(S.from,ds)/span*100)); };
+  var holes=[], overlap=0, cur=S.from;
+  L.forEach(function(r){
+    if(r.from>cur) holes.push({ from:cur, to:fdAddDays(r.from,-1) });
+    if(r.from<cur) overlap++;
+    if(r.to>=cur) cur=fdAddDays(r.to,1);
+  });
+  if(L.length && cur<=S.to) holes.push({ from:cur, to:S.to });
+  var form = _fdSaveOpen
+    ? ('<div class="sv-form">'
+       + '<input id="fd-sv-name" type="text" placeholder="ชื่อรอบ เช่น เปิดฤดู ครึ่งเดือนแรก">'
+       + '<input id="fd-sv-from" type="date" value="'+fdE(Wn.from)+'">'
+       + '<i>→</i><input id="fd-sv-to" type="date" value="'+fdE(Wn.to)+'">'
+       + '<button class="go" onclick="fdSaveDo()">บันทึกรอบนี้</button>'
+       + '<button onclick="fdSaveOpen()">ยกเลิก</button></div>')
+    : '';
+  var chips = L.map(function(r){
+    var mine=(_fdScope==='custom' && _fdCustom && _fdCustom.from===r.from && _fdCustom.to===r.to);
+    var p=r.plan||{};
+    var n=(p.pier||[]).length+(p.boats||[]).length+Object.keys(p.ready||{}).length
+        +Object.keys(p.trip||{}).length+Object.keys(p.avail||{}).length;
+    return '<span class="sv-i'+(mine?' on':'')+'" onclick="fdSavedOpen(\''+fdE(r.id)+'\')" '
+      +'title="'+fdE(r.name+' · บันทึก '+(r.at||''))+'"><b>'+fdE(r.name)+'</b>'
+      +'<i>'+fdE(fdNiceDate(r.from))+' → '+fdE(fdNiceDate(r.to))+'</i>'
+      +'<u>'+n+' รายการ</u>'
+      +'<button onclick="event.stopPropagation();fdSavedDel(\''+fdE(r.id)+'\')" title="ลบรอบนี้">✕</button></span>';
+  }).join('');
+  var track = L.map(function(r){
+    var l=pos(r.from), w=Math.max(pos(r.to)-l, 1.2);
+    return '<span class="b" style="left:'+l+'%;width:'+w+'%" title="'+fdE(r.name+' · '+r.from+'→'+r.to)+'"></span>';
+  }).join('') + holes.map(function(g){
+    var l=pos(g.from), w=Math.max(pos(g.to)-l, 1.2);
+    return '<span class="g" style="left:'+l+'%;width:'+w+'%" title="'+fdE('ยังไม่มีแผน '+g.from+'→'+g.to)+'"></span>';
+  }).join('');
+  var sum = !L.length ? 'ยังไม่ได้บันทึกรอบไหนไว้ · จัดกระดานให้เสร็จรอบหนึ่งแล้วกดบันทึก จะได้วางรอบถัดไปต่อได้'
+    : ('วางไว้แล้ว '+L.length+' รอบ · ครอบ '+fdE(fdNiceDate(L[0].from))+' → '+fdE(fdNiceDate(L[L.length-1].to))
+       + (holes.length ? (' · <b class="hole">ยังไม่มีแผน '+holes.length+' ช่วง · '
+           + holes.slice(0,2).map(function(g){ return fdE(fdNiceDate(g.from))+'–'+fdE(fdNiceDate(g.to)); }).join(' · ')
+           + (holes.length>2?' …':'')+'</b>') : ' · <b class="full">ต่อกันครบทั้งฤดู</b>')
+       + (overlap ? (' · <b class="hole">ทับกัน '+overlap+' รอบ</b>') : ''));
+  return '<div class="fd-saved">'
+    + '<div class="sh"><b>Mockup ที่บันทึกไว้</b><span>'+sum+'</span>'
+      + '<button class="go" onclick="fdSaveOpen()">'+(_fdSaveOpen?'ปิดฟอร์ม':'+ บันทึกกระดานนี้เป็นรอบ')+'</button>'
+      + (L.length?('<button onclick="fdSavedNext()">วางรอบถัดไป</button>'):'')
+    + '</div>'
+    + form
+    + (L.length?('<div class="sv-track">'+track+'</div><div class="sv-list">'+chips+'</div>'):'')
+    + '<div class="sv-note">เก็บไว้ในเครื่องนี้เท่านั้น · ไม่ขึ้นเซิร์ฟเวอร์และไม่ไปถึงคนอื่น · '
+      + 'เปิดรอบไหนขึ้นมา กระดานจะกลายเป็นรอบนั้น แต่ยังไม่เขียนอะไรกลับระบบเหมือนเดิม</div>'
+    + '</div>';
 }
 /* ══ ช่วงที่เรืออยู่กับเรา · เรือเช่าหลายลำเช่าแค่บางวัน ════════
    นอกช่วงนี้เรือหายจากกระดานไปเลย ไม่งั้นจะนับที่นั่งเกินจริงทั้งฤดู */
@@ -25611,12 +25813,16 @@ function fdMonth(){
     +'<div class="cs'+(emptyDays?' bad':'')+'"><i>Days with no boat</i><b>'+emptyDays+'</b><span>จาก '+openDays+' วันที่มีโปรแกรมเปิดขาย</span></div>'
     +'<div class="cs'+(idle.length?' warn':'')+'"><i>Boats never used</i><b>'+idle.length+'</b><span>'
       +(idle.length? fdE(idle.map(function(b){ return b.name; }).join(' · ')) : 'ใช้ครบทุกลำ')+'</span></div>'
-    +'<div class="cs'+(sick?' bad':'')+'"><i>Booked while blocked</i><b>'+sick+'</b><span>ครั้งที่เรือถูกวางทั้งที่วันนั้นยังไม่พร้อม</span></div>'
+    +'<div class="cs'+(sick?' bad':'')+'"><i>Booked while blocked</i><b>'+sick+'</b><span>ครั้งที่เรือถูกวางทั้งที่กดไว้ว่าไม่นับในแผน</span></div>'
     +'</div>';
-  h+='<div class="fd-tray"><i>เรือของ'+fdE(fdPierNm(_fdPier))+' · กดชื่อเรือเพื่อดูว่าลำนั้นวิ่งวันไหนบ้าง</i>'
-    + (fleet.length ? fleet.map(function(b){
+  /* §flDeployReady · บนปฏิทินก็ต้องเลือกเองได้ว่าลำไหนนับเป็นกำลังในแผน
+     ตัวเลขทั้งแถวบน (Seats this month · Booked while blocked) เดินตามตัวเลือกนี้ */
+  h+='<div class="fd-tray"><i>เรือของ'+fdE(fdPierNm(_fdPier))+' · กดชื่อเรือเพื่อดูว่าลำนั้นวิ่งวันไหนบ้าง · '
+    + 'กดปุ่มข้างชื่อเพื่อสลับว่าจะนับลำนั้นเป็นกำลังในแผนหรือไม่</i>'
+    + (fleet.length ? fdSort(fleet).map(function(b){
         return '<span class="fd-tb'+(_fdSel===b.id?' sel':'')+(fdCanRun(b,ref)?'':' off')+'" onclick="fdPick(\''+b.id+'\')">'
-          +fdE(b.name)+' <small>'+(b.cap||0)+' ที่ · วิ่ง '+(used[b.id]||0)+' วัน</small></span>'; }).join('')
+          +fdE(b.name)+' <small>'+(b.cap||0)+' ที่ · วิ่ง '+(used[b.id]||0)+' วัน</small>'
+          + fdReadyBtn(b, ref)+'</span>'; }).join('')
       : '<span class="fd-none">ท่านี้ยังไม่มีเรือ · ไปวางที่แท็บ Pier Placement ก่อน</span>')
     + '</div>';
   h+='<div class="fd-calwrap"><div class="fd-calmain">'+fdGrid(ds)+'</div>'
@@ -25662,7 +25868,7 @@ function fdGrid(ds){
     });
     if(mine.length>4) h+='<div class="fd-more">+ อีก '+(mine.length-4)+' ลำ</div>';
     if(op.length && !mine.length) h+='<div class="fd-warn">ยังไม่มีเรือ · '+op.length+' โปรแกรมเปิดขาย</div>';
-    if(bad) h+='<div class="fd-warn">'+bad+' ลำยังไม่พร้อม</div>';
+    if(bad) h+='<div class="fd-warn">'+bad+' ลำไม่นับในแผน</div>';
     h+='</div>';
   });
   return h+'</div>';
@@ -25687,14 +25893,16 @@ function fdDayPanel(){
     on.forEach(function(id){
       var b=fdBoat(id)||{name:id};
       var ok=fdCanRun(b,d), ch=t[id].charterBookingId;
-      h+='<span class="fd-sb'+(ok?'':' off')+'" title="กดเพื่อถอดออก" onclick="fdUnassign(\''+d+'\',\''+id+'\')">'
-        +fdE(b.name)+' <small>'+(b.cap||0)+(ch?' · เหมาลำ':(ok?'':' · ยังไม่พร้อม'))+'</small></span>';
+      h+='<span class="fd-sb'+(ok?'':' off')+'">'
+        +'<u title="กดเพื่อถอดออก" onclick="fdUnassign(\''+d+'\',\''+id+'\')">'+fdE(b.name)
+        +' <small>'+(b.cap||0)+(ch?' · เหมาลำ':(ok?'':' · ไม่นับในแผน'))+'</small></u>'
+        +(b.id?fdReadyBtn(b,d):'')+'</span>';
     });
-    var free=fleet.filter(function(b){ return !t[b.id]; });
+    var free=fdSort(fleet.filter(function(b){ return !t[b.id]; }));
     h+='<select class="fd-add" onchange="fdAssign(\''+r.id+'\',\''+d+'\',this.value);this.value=\'\'">'
       +'<option value="">+ ใส่เรือ</option>'
       + free.map(function(b){ return '<option value="'+b.id+'">'+fdE(b.name)+' · '+(b.cap||0)+' ที่'
-          +(fdCanRun(b,d)?'':' · ยังไม่พร้อม')+'</option>'; }).join('')
+          +(fdCanRun(b,d)?'':' · ไม่นับในแผน')+'</option>'; }).join('')
       +'</select></div></div>';
   });
   return h;
@@ -25950,7 +26158,35 @@ function fdCSS(){
   +H+' .fd-chase .ci{display:inline-flex;align-items:center;gap:5px;background:#fff;border:1px solid #EFD9AE;'
      +'border-radius:999px;padding:3px 10px;font-size:10.5px;font-weight:700;color:#7A4A0E}'
   +H+' .fd-chase .ci.moved{border-color:#0F172A}'
+  +H+' .fd-chase .ci.off{opacity:.6;border-style:dashed}'
   +H+' .fd-chase .ci em{font-style:normal;font-size:9px;background:#0F172A;color:#fff;border-radius:4px;padding:1px 5px}'
+  +H+' .fd-chase .ci em.no{background:#9AA3AE}'
+  /* §flDeploySave · แถบรอบที่บันทึกไว้ · แถบเส้นบนคือทั้งฤดู ช่องว่าง = ยังไม่มีแผน */
+  +H+' .fd-saved{background:#F5F7FB;border:1px solid #E2E8F2;border-radius:12px;padding:10px 13px;margin-bottom:13px}'
+  +H+' .fd-saved .sh{display:flex;align-items:center;gap:9px;flex-wrap:wrap}'
+  +H+' .fd-saved .sh b{font-size:12.5px;color:#1E3A5F}'
+  +H+' .fd-saved .sh>span{font-size:11px;color:#51637A;flex:1;min-width:180px}'
+  +H+' .fd-saved .sh b.hole{color:#A32D2D;font-size:11px} '+H+' .fd-saved .sh b.full{color:#0F6E56;font-size:11px}'
+  +H+' .fd-saved button{font-family:inherit;font-size:11.5px;font-weight:700;border-radius:8px;'
+     +'border:1px solid #C7D4E6;background:#fff;color:#1E3A5F;padding:5px 11px;cursor:pointer}'
+  +H+' .fd-saved button.go{background:#1E3A5F;border-color:#1E3A5F;color:#fff}'
+  +H+' .fd-saved .sv-form{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:9px}'
+  +H+' .fd-saved .sv-form input{font-family:inherit;font-size:11.5px;border:1px solid #C7D4E6;border-radius:8px;padding:5px 9px}'
+  +H+' .fd-saved .sv-form input[type=text]{flex:1;min-width:190px}'
+  +H+' .fd-saved .sv-form i{font-style:normal;color:#51637A}'
+  +H+' .fd-saved .sv-track{position:relative;height:9px;background:#E2E8F2;border-radius:5px;margin:10px 0 8px;overflow:hidden}'
+  +H+' .fd-saved .sv-track .b{position:absolute;top:0;bottom:0;background:#1E3A5F;border-radius:5px}'
+  +H+' .fd-saved .sv-track .g{position:absolute;top:0;bottom:0;background:repeating-linear-gradient('
+     +'45deg,#F0C9C9,#F0C9C9 3px,#FDF2F2 3px,#FDF2F2 6px);border-radius:5px}'
+  +H+' .fd-saved .sv-list{display:flex;gap:6px;flex-wrap:wrap}'
+  +H+' .fd-saved .sv-i{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #C7D4E6;'
+     +'border-radius:9px;padding:5px 9px;font-size:11px;cursor:pointer}'
+  +H+' .fd-saved .sv-i.on{border-color:#1E3A5F;box-shadow:0 0 0 2px rgba(30,58,95,.12)}'
+  +H+' .fd-saved .sv-i b{font-size:11.5px;color:#1E3A5F}'
+  +H+' .fd-saved .sv-i i{font-style:normal;color:#51637A}'
+  +H+' .fd-saved .sv-i u{text-decoration:none;font-size:9.5px;color:#9AA3AE}'
+  +H+' .fd-saved .sv-i button{border:0;background:transparent;padding:1px 4px;font-size:11px;color:#9AA3AE}'
+  +H+' .fd-saved .sv-note{font-size:10px;color:#8494A8;line-height:1.55;margin-top:8px}'
   +H+' .fd-chase .ci i{font-style:normal;font-weight:500;color:#A97A2A}'
   +H+' .fd-chase .ci u{text-decoration:none;font-weight:500;color:#9AA3AE;font-size:10px}'
   +H+' .fd-chase .ci s{text-decoration:none;font-size:9.5px;font-weight:700;background:#FDF2F2;color:#A32D2D;'
@@ -25969,10 +26205,22 @@ function fdCSS(){
   +H+' .fd-boat{position:relative;border:1px solid #E7EAEF;border-radius:11px;padding:8px 10px 8px 14px;background:#fff;cursor:pointer}'
   +H+' .fd-boat.sel{border-color:#0F172A;box-shadow:0 0 0 3px rgba(15,23,42,.07)}'
   +H+' .fd-boat .bar{position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:3px}'
-  +H+' .fd-boat .r1{display:flex;align-items:center;gap:6px}'
-  +H+' .fd-boat .bn{font-size:12.5px;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+  +H+' .fd-boat .r1{display:flex;align-items:center;gap:6px;flex-wrap:wrap}'
+  /* §flDeployReady · ชื่อเรือห้ามถูกตัด · พอเพิ่มปุ่มนับในแผนเข้ามา คอลัมน์แคบเคยตัดชื่อทิ้ง
+     ให้ขึ้นบรรทัดใหม่แทนการตัด · อ่านชื่อผิดลำคือวางแผนผิดลำ (บทเรียนเดียวกับ §pjName2) */
+  +H+' .fd-boat .bn{font-size:12.5px;font-weight:700;flex:1 1 auto;min-width:0;line-height:1.35;'
+     +'white-space:normal;overflow-wrap:anywhere}'
   +H+' .fd-boat .r2{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;font-size:11px;color:#6B7280}'
   +H+' .fd-boat .r2 b{color:#4A5360}'
+  /* §flDeployReady · ปุ่มนับในแผน · ต้องดูเป็นปุ่มกดได้ ไม่ใช่ป้ายสถานะข้าง ๆ */
+  +H+' .fd-rdy{font-family:inherit;font-size:9.5px;font-weight:700;border-radius:999px;padding:2px 8px;'
+     +'white-space:nowrap;cursor:pointer;border:1px solid #CBD5E1;background:#fff;color:#334155}'
+  +H+' .fd-rdy.on{background:#0F172A;border-color:#0F172A;color:#fff}'
+  +H+' .fd-rdy.on.risk{background:#8A5410;border-color:#8A5410}'
+  +H+' .fd-rdy.off{background:#F3F4F6;border-color:#E5E7EB;color:#9AA3AE;text-decoration:line-through}'
+  +H+' .fd-rdy:hover{box-shadow:0 0 0 2px rgba(15,23,42,.08)}'
+  +H+' .fd-fixnote{margin-top:6px;font-size:10px;line-height:1.5;color:#8A5410;background:#FEF6E7;'
+     +'border:1px solid #EFD9AE;border-radius:7px;padding:4px 7px}'
   +H+' .fd-chip{font-size:9.5px;font-weight:700;border-radius:999px;padding:2px 8px;white-space:nowrap}'
   +H+' .fd-chip.ok{background:#F1F8F5;color:#0F6E56;border:1px solid #BEE0D2}'
   +H+' .fd-chip.wr{background:#FEF6E7;color:#8A5410;border:1px solid #EFD9AE}'
@@ -26001,7 +26249,10 @@ function fdCSS(){
   +H+' .fd-tb{background:#fff;border:1px solid #E7EAEF;border-radius:999px;padding:4px 11px;font-size:11.5px;font-weight:700;cursor:pointer}'
   +H+' .fd-tb small{color:#6B7280;font-weight:500}'
   +H+' .fd-tb.sel{background:#0F172A;color:#fff;border-color:#0F172A} '+H+' .fd-tb.sel small{color:rgba(255,255,255,.75)}'
-  +H+' .fd-tb.off{opacity:.45}'
+  +H+' .fd-tb.off{opacity:.55;background:#F3F4F6}'
+  +H+' .fd-tb .fd-rdy{margin-left:7px;vertical-align:1px}'
+  +H+' .fd-sb{display:inline-flex;align-items:center;gap:6px}'
+  +H+' .fd-sb u{text-decoration:none;cursor:pointer}'
   +H+' .fd-none{font-size:11.5px;color:#9AA3AE}'
   +H+' .fd-calwrap{display:flex;gap:12px;align-items:flex-start}'
   +'@media(max-width:1100px){'+H+' .fd-calwrap{flex-direction:column} '+H+' .fd-calside{width:100%!important}}'

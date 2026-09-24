@@ -88,43 +88,161 @@ else if (R1b.chrTags !== R1b.chr)
 else ok('แยกเรือบริษัท ' + R1b.wantOwn + ' ลำ / เรือเช่า ' + R1b.wantChr
       + ' ลำ ได้ถูก · ป้าย "เช่า" ขึ้นเฉพาะลำเช่า · หัวคอลัมน์แยกตัวเลข ' + R1b.split + ' ท่า');
 
-/* ══ 2 · Seats ready ต้องนับเฉพาะลำที่พร้อมใช้ ════════════════════════════
-   คำนวณเองจาก BOATS + boatEffStatus โดยไม่แตะฟังก์ชันของหน้า
-   (ถ้านับลำที่ยังซ่อมเข้าไปด้วย ตัวเลขนี้จะบวมและถูกเอาไปตั้งโควตาขายเกินจริง) */
+/* ══ 2 · Seats planned ต้องนับตามลำที่วางไว้ · ไม่ใช่ตามใบซ่อม ════════════
+   ที่มา (2026-09-24) · ผู้ใช้ชี้ว่าตัวเลขควรนับตามลำที่วางไว้บนกระดาน
+   เพราะการวางแผนคือการสมมติว่าซ่อมจะเสร็จทัน แล้วไปเร่งให้ทัน
+   คำนวณเองจาก BOATS + getBoatCurrentPier โดยไม่แตะฟังก์ชันนับของหน้า */
 const R2 = await page.evaluate(() => {
+  _fdPlan = { pier: [], drop: [], trip: {}, avail: {}, boats: [], ready: {} };
+  fdPlanSave(); flRenderDeployment();
   const w = document.getElementById('fl-deploy-wrap');
   const from = w.querySelector('.fd-season input').value;
   const fleet = (BOATS || []).filter(b => b && !b.retired);
-  /* คาดหวัง · รวม cap ของลำที่สถานะวันเปิดฤดู = available เท่านั้น แยกตามท่า */
+  /* คาดหวัง · ทุกลำที่อยู่ท่านั้นถูกนับทั้ง planned และ placed */
   const want = {};
   fleet.forEach(b => {
     const p = getBoatCurrentPier(b, from);
-    const st = (boatEffStatus(b, from) || {}).s;
-    if (!want[p]) want[p] = { ready: 0, all: 0 };
+    if (!want[p]) want[p] = { ready: 0, all: 0, fix: 0 };
     want[p].all += (b.cap || 0);
-    if (st === 'available') want[p].ready += (b.cap || 0);
+    want[p].ready += (b.cap || 0);
+    if ((boatEffStatus(b, from) || {}).s !== 'available') want[p].fix++;
   });
-  const got = {};
-  [].slice.call(w.querySelectorAll('.fd-col')).forEach(c => {
-    const nm = (c.querySelector('.nm') || {}).textContent || '';
-    const m  = c.querySelectorAll('.fd-mini b');
-    if (m.length >= 2) got[nm.replace(/\d+\s*ลำ$/, '').trim()] = { ready: +m[0].textContent, all: +m[1].textContent };
-  });
-  return { from, want, got, labels: (typeof PIER_LABELS !== 'undefined') ? PIER_LABELS : {} };
+  const read = () => {
+    const got = {};
+    [].slice.call(document.querySelectorAll('#fl-deploy-wrap .fd-col')).forEach(c => {
+      const m = c.querySelectorAll('.fd-mini b');
+      if (m.length >= 2) got[c.dataset.pier] = { ready: +m[0].textContent, all: +m[1].textContent };
+    });
+    return got;
+  };
+  const got = read();
+  /* กดปุ่ม "นับในแผน" ของลำหนึ่งให้เป็นไม่นับ · planned ต้องลดเท่าที่นั่งลำนั้นพอดี */
+  const pk = FD_PIERS.map(p => ({ p, list: fdBoatsAt(p, from) })).find(x => x.list.length);
+  let off = null;
+  if (pk) {
+    const b = pk.list[0];
+    const btn = [].slice.call(document.querySelectorAll('#fl-deploy-wrap .fd-boat'))
+      .find(c => ((c.querySelector('.bn') || {}).textContent || '').trim() === b.name);
+    const rdy = btn && btn.querySelector('.fd-rdy');
+    const hadBtn = !!rdy;
+    if (rdy) rdy.click();
+    const after = read();
+    off = { pier: pk.p, name: b.name, cap: b.cap || 0, hadBtn,
+            dReady: got[pk.p].ready - after[pk.p].ready,
+            dAll:   got[pk.p].all   - after[pk.p].all,
+            statusChip: !!(btn && btn.querySelector('.fd-chip')) };
+    /* กดกลับ · ต้องกลับมาเท่าเดิม */
+    const rdy2 = [].slice.call(document.querySelectorAll('#fl-deploy-wrap .fd-boat'))
+      .find(c => ((c.querySelector('.bn') || {}).textContent || '').trim() === b.name);
+    if (rdy2 && rdy2.querySelector('.fd-rdy')) rdy2.querySelector('.fd-rdy').click();
+    off.back = read()[pk.p].ready;
+  }
+  return { from, want, got, off, labels: (typeof PIER_LABELS !== 'undefined') ? PIER_LABELS : {} };
 });
 {
   const miss = [];
   Object.keys(R2.want).forEach(k => {
     if (k === 'shop') return;                                  /* คอลัมน์อู่ไม่มีแถบตัวเลข */
-    const lbl = R2.labels[k] || k;
-    const g = R2.got[lbl];
-    if (!g) { miss.push(lbl + ' ไม่มีแถบตัวเลข'); return; }
-    if (g.ready !== R2.want[k].ready) miss.push(lbl + ' seats ready ' + g.ready + ' ควรเป็น ' + R2.want[k].ready);
-    if (g.all   !== R2.want[k].all)   miss.push(lbl + ' seats total ' + g.all + ' ควรเป็น ' + R2.want[k].all);
+    const g = R2.got[k];
+    if (!g) { miss.push(k + ' ไม่มีแถบตัวเลข'); return; }
+    if (g.ready !== R2.want[k].ready)
+      miss.push(k + ' seats planned ' + g.ready + ' ควรเป็น ' + R2.want[k].ready + ' (ทุกลำที่วางไว้)');
+    if (g.all !== R2.want[k].all) miss.push(k + ' seats placed ' + g.all + ' ควรเป็น ' + R2.want[k].all);
   });
-  if (miss.length) fail('ตัวเลขที่นั่งไม่ตรงกับที่คำนวณเอง · ' + miss.join(' · '));
-  else ok('Seats ready/total ตรงกับที่คำนวณเองทุกท่า ณ ' + R2.from);
+  const o = R2.off;
+  if (o) {
+    if (!o.hadBtn) miss.push('การ์ดเรือไม่มีปุ่มนับในแผนให้กด');
+    else if (o.dReady !== o.cap) miss.push('กดไม่นับ ' + o.name + ' แล้ว planned ลด ' + o.dReady + ' · ควรลด ' + o.cap);
+    else if (o.dAll !== 0) miss.push('กดไม่นับแล้ว seats placed ขยับ ' + o.dAll + ' · ต้องไม่ขยับ');
+    else if (o.back !== R2.got[o.pier].ready) miss.push('กดกลับแล้ว planned ไม่กลับเท่าเดิม');
+    else if (!o.statusChip) miss.push('ป้ายสถานะจริงหายจากการ์ด · ต้องอยู่คู่กับปุ่มเสมอ');
+  }
+  if (miss.length) fail('ตัวเลขที่นั่ง · ' + miss.join(' · '));
+  else ok('Seats planned นับทุกลำที่วางไว้ตรงกับที่คำนวณเองทุกท่า ณ ' + R2.from
+      + ' · กดไม่นับ ' + R2.off.name + ' แล้วลด ' + R2.off.cap + ' ที่ กดกลับแล้วเท่าเดิม · ป้ายสถานะจริงยังอยู่');
 }
+
+/* ══ 2b · เรียงการ์ด · คาตามารัน → สปีดโบ๊ท 4 เครื่อง → 3 เครื่อง ══════════
+   ลำดับนี้คือลำดับที่ผู้ใช้จัดจริง · อ่านชื่อจาก DOM แล้วเทียบกับลำดับที่คำนวณเองจาก BOATS */
+const R2b = await page.evaluate(() => {
+  const rank = b => {
+    const t = String((b && b.type) || '').toLowerCase();
+    return t.indexOf('cata') >= 0 ? 0 : (t.indexOf('speed') >= 0 ? 1 : 2);
+  };
+  const out = [];
+  [].slice.call(document.querySelectorAll('#fl-deploy-wrap .fd-col[data-pier]')).forEach(c => {
+    const names = [].slice.call(c.querySelectorAll('.fd-boat .bn')).map(x => x.textContent.trim());
+    if (names.length < 2) return;
+    const boats = names.map(n => (BOATS || []).find(b => b && b.name === n)).filter(Boolean);
+    if (boats.length !== names.length) return;                 /* มีเรือสมมติปน · ข้ามคอลัมน์นี้ */
+    /* กลุ่มบริษัท/เช่าแยกกันอยู่แล้ว · ตรวจลำดับภายในแต่ละกลุ่ม */
+    ['own', 'chr'].forEach(g => {
+      const grp = boats.filter(b => (g === 'chr') === (b.ownership === 'charter'));
+      for (let i = 1; i < grp.length; i++) {
+        const a = grp[i - 1], z = grp[i];
+        const ka = [rank(a), -(Number(a.engineCount) || 0), -(a.cap || 0)];
+        const kz = [rank(z), -(Number(z.engineCount) || 0), -(z.cap || 0)];
+        for (let j = 0; j < 3; j++) {
+          if (ka[j] < kz[j]) break;
+          if (ka[j] > kz[j]) { out.push(c.dataset.pier + ': ' + a.name + ' อยู่ก่อน ' + z.name); break; }
+        }
+      }
+    });
+  });
+  const first = [].slice.call(document.querySelectorAll('#fl-deploy-wrap .fd-col[data-pier] .fd-boat .bn'))
+                  .slice(0, 3).map(x => x.textContent.trim());
+  /* กองเรือจริงบังเอิญมีจำนวนเครื่องเรียงตามที่นั่งพอดี · การตัดกติกา "เครื่องก่อนที่นั่ง" ออก
+     จึงไม่เปลี่ยนลำดับเลยถ้าดูแต่ของจริง · ปั้นชุดที่ 3 เครื่องที่นั่งเยอะกว่า 4 เครื่องมาตรวจด้วย */
+  const mk = (n, t, e, c) => ({ id: 'x' + n, name: n, type: t, engineCount: e, cap: c });
+  const probe = [mk('S3big', 'Speedboat', 3, 99), mk('S4small', 'Speedboat', 4, 10),
+                 mk('Cat3', 'Catamaran', 3, 5), mk('Unknown', '', 4, 200)];
+  return { bad: out, first, probe: fdSort(probe).map(b => b.name) };
+});
+{
+  /* ลำดับที่ควรเป็น คิดจากกติกาที่ตกลงกันไว้ ไม่ได้ถามหน้าเอา
+     คาตามารันก่อน → สปีดโบ๊ทเรียงตามจำนวนเครื่อง → ชนิดที่ไม่รู้จักไว้ท้ายสุดแม้ที่นั่งจะเยอะ */
+  const wantProbe = ['Cat3', 'S4small', 'S3big', 'Unknown'];
+  if (R2b.bad.length) fail('เรียงเรือผิดลำดับ ' + R2b.bad.length + ' คู่ · ' + R2b.bad.slice(0, 3).join(' · '));
+  else if (String(R2b.probe) !== String(wantProbe))
+    fail('ชุดตรวจเรียงได้ ' + R2b.probe.join(' → ') + ' · ควรเป็น ' + wantProbe.join(' → '));
+  else ok('เรียงคาตามารัน → สปีดโบ๊ท 4 เครื่อง → 3 เครื่อง ถูกทุกคอลัมน์ · หัวแถว ' + R2b.first.join(' / ')
+      + ' · ชุดตรวจที่ 3 เครื่องที่นั่งเยอะกว่า 4 เครื่องก็ยังเรียงตามเครื่องก่อน');
+}
+
+/* ══ 2c · ชื่อเรือบนการ์ดห้ามถูกตัด ════════════════════════════════════
+   คอลัมน์แคบ + ป้ายหลายใบบนแถวเดียว = ชื่อโดนตัดเป็น "Andam…" ซึ่งอ่านผิดลำได้
+   วัดจริงจาก DOM · ข้อความที่วาดต้องเท่าชื่อเต็ม และกล่องต้องไม่ล้นจนถูกครอบ */
+const R2c = await page.evaluate(() => {
+  /* ตั้งสภาพให้แถวแน่นที่สุดก่อนวัด · เรือเช่ามีป้าย "เช่า" เพิ่มมาอีกใบบนแถวเดียวกัน
+     กองทุกลำเช่าไว้ท่าเดียว แล้วกดไม่นับบางลำ (ป้ายยาวขึ้นอีก) · นี่คือกรณีที่เคยตัดชื่อจริง */
+  _fdPlan = { pier: [], drop: [], trip: {}, avail: {}, boats: [], ready: {} }; fdPlanSave();
+  fdSetScope('month'); _fdWinIx = 0; fdSetOwn('all'); flRenderDeployment();
+  const d = fdWin().from;
+  (BOATS || []).filter(b => b && !b.retired && b.ownership === 'charter').forEach(b => {
+    if (fdPierOf(b, d) !== 'ranong') { _fdSel = b.id; fdMove('ranong'); }
+    if (!fdRealReady(b, d)) fdReadyToggle(b.id);
+  });
+  flRenderDeployment();
+  const cut = [], over = [];
+  [].slice.call(document.querySelectorAll('#fl-deploy-wrap .fd-boat')).forEach(c => {
+    const bn = c.querySelector('.bn'); if (!bn) return;
+    const id = c.dataset.id;
+    const b = (BOATS || []).find(x => x && x.id === id) || (_fdPlan.boats || []).find(x => x && x.id === id);
+    const shown = (bn.textContent || '').trim();
+    if (b && shown !== String(b.name || '').trim()) cut.push(shown + ' ≠ ' + b.name);
+    if (bn.scrollWidth > bn.clientWidth + 1) over.push(shown + ' (' + bn.scrollWidth + '>' + bn.clientWidth + ')');
+  });
+  const n = document.querySelectorAll('#fl-deploy-wrap .fd-boat .bn').length;
+  /* ชื่อที่ยาวที่สุดที่โผล่บนกระดาน · ไว้บอกในผลว่าเทสนี้เจอของจริงแค่ไหน */
+  const longest = [].slice.call(document.querySelectorAll('#fl-deploy-wrap .fd-boat .bn'))
+    .map(x => (x.textContent || '').trim()).sort((a, z) => z.length - a.length)[0] || '';
+  return { cut, over, n, longest };
+});
+if (R2c.cut.length)
+  fail('ชื่อเรือถูกตัด ' + R2c.cut.length + ' ใบ · ' + R2c.cut.slice(0, 3).join(' · '));
+else if (R2c.over.length)
+  fail('ชื่อเรือล้นกล่อง ' + R2c.over.length + ' ใบ · ' + R2c.over.slice(0, 3).join(' · '));
+else ok('ชื่อเรือบนการ์ดครบทุกตัวอักษรทั้ง ' + R2c.n + ' ใบ · ยาวสุด "' + R2c.longest + '"');
 
 /* ══ 3 · ย้ายท่าต้องเป็น "ร่าง" · ข้อมูลจริงห้ามขยับ ══════════════════════
    หน้านี้คือกระดานวางแผน · ลากเล่นดูภาพรวมต้องไม่ไปโผล่ที่ใบงานเรือ
@@ -446,6 +564,134 @@ else if (R3h.before - R3h.after !== R3h.cap)
 else ok('ที่พักเรือใช้งานได้ · พัก ' + R3h.name + ' จาก ' + R3h.pier
       + ' → ที่นั่งท่านั้นลด ' + R3h.cap + ' และไม่ไปนับที่ท่าอื่น');
 
+/* ══ 3i · SAVE mockup · เก็บเป็นรอบ แล้ววางรอบถัดไปต่อ ══════════════════
+   ที่มา (2026-09-24) · ผู้ใช้อยากเห็นว่ารอบนี้ครอบวันไหนถึงวันไหน แล้ววางรอบถัดไปต่อ
+   ข้อนี้กันสามอย่าง · เซฟแล้วเปิดกลับมาได้ครบ · คนละคีย์กับข้อมูลจริง · ยังไม่เขียนกลับระบบ */
+const R3i = await page.evaluate(() => {
+  const LS = 'loveandaman_v2';
+  const snapB = JSON.stringify(BOATS), snapT = JSON.stringify(TRIPS);
+  const realBefore = localStorage.getItem(LS);
+  try { localStorage.removeItem('la_fd_plans'); } catch (_) {}
+  _fdSaved = null;
+  _fdPlan = { pier: [], drop: [], trip: {}, avail: {}, boats: [], ready: {} }; fdPlanSave();
+  fdSetScope('custom'); fdSetCustom('from', fdSeason().from);
+  fdSetCustom('to', fdAddDays(fdSeason().from, 9));
+  const W1 = fdWin();
+  /* รอบที่ 1 · ย้ายเรือลำหนึ่ง แล้วกดไม่นับอีกลำ จะได้มีของให้เทียบตอนเปิดกลับมา */
+  const fleet = (BOATS || []).filter(b => b && !b.retired);
+  const b1 = fleet.find(x => fdPierOf(x, W1.from) !== 'shop');
+  const to = ['tublamu', 'panwa', 'ranong'].find(p => p !== fdPierOf(b1, W1.from));
+  _fdSel = b1.id; fdMove(to);
+  fdReadyToggle(b1.id);
+  const n1 = fdPlanN(), pier1 = fdPierOf(b1, W1.from), run1 = fdCanRun(b1, W1.from);
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  fdSaveOpen(); set('fd-sv-name', 'รอบทดสอบ 1'); fdSaveDo();
+  const savedN1 = fdSaved().length;
+
+  /* กดวางรอบถัดไป · ช่วงต้องเริ่มวันถัดจากรอบแรกพอดี ไม่ทับและไม่เว้น */
+  fdSavedNext();
+  const W2 = fdWin();
+  const gapless = (W2.from === fdAddDays(W1.to, 1));
+
+  /* รอบที่ 2 · จัดต่อบนกระดานเดิม (แบบที่คนใช้จริงทำ · เซฟแล้วลากต่อ)
+     ⚠ ตั้งใจไม่สร้าง _fdPlan ก้อนใหม่ · ถ้ารอบที่เซฟแชร์ array กับกระดาน
+     การลากต่อตรงนี้จะไปแก้รอบที่เซฟไว้ด้วย และข้อนี้ต้องจับได้ */
+  const b2 = fleet.find(x => x.id !== b1.id && fdPierOf(x, W2.from) !== 'shop');
+  if (b2) { _fdSel = b2.id; fdMove(['tublamu','panwa','ranong'].find(p => p !== fdPierOf(b2, W2.from))); }
+  const n2 = fdPlanN();
+  fdSaveOpen(); set('fd-sv-name', 'รอบทดสอบ 2'); fdSaveDo();
+  const savedN2 = fdSaved().length;
+
+  /* เปิดรอบแรกกลับมา · ต้องได้ของเดิมครบ ทั้งใบย้ายและปุ่มไม่นับ */
+  const ids = fdSaved().map(x => x.id);
+  fdSavedOpen(ids[0]);
+  const back = { n: fdPlanN(), pier: fdPierOf(b1, W1.from), run: fdCanRun(b1, W1.from),
+                 win: fdWin() };
+  /* เปิดมาแล้วแก้ต่ออีกที แล้วเปิดรอบเดิมซ้ำ · รอบที่เซฟต้องไม่โดนแก้ตาม
+     ใช้ปุ่มนับในแผน เพราะตัวนี้แก้ของในก้อนเดิมตรง ๆ (_fdPlan.ready[id]=0)
+     ถ้าตอนเปิดรอบไปชี้ก้อนเดียวกับที่เซฟไว้ รอบที่เซฟจะโตตามทันที */
+  if (b2) fdReadyToggle(b2.id);
+  fdSavedOpen(ids[0]);
+  const again = fdPlanN();
+
+  /* แถบรอบ · ต้องมีชิปครบและมีแถบเส้นเวลา */
+  const w = document.getElementById('fl-deploy-wrap');
+  const chips = w.querySelectorAll('.fd-saved .sv-i').length;
+  const track = w.querySelectorAll('.fd-saved .sv-track .b').length;
+  const holes = w.querySelectorAll('.fd-saved .sv-track .g').length;
+
+  /* คีย์ที่เขียน · ต้องเป็น la_fd_plans ไม่ใช่ blob จริง */
+  let raw = null; try { raw = localStorage.getItem('la_fd_plans'); } catch (_) {}
+  const realAfter = localStorage.getItem(LS);
+  return {
+    n1, pier1, run1, savedN1, savedN2, n2, gapless, again,
+    w1: { f: W1.from, t: W1.to }, w2: { f: W2.from, t: W2.to },
+    back, chips, track, holes,
+    wroteOwnKey: !!raw && raw.indexOf('รอบทดสอบ 1') >= 0,
+    realUntouched: realBefore === realAfter,
+    boatsSame: JSON.stringify(BOATS) === snapB,
+    tripsSame: JSON.stringify(TRIPS) === snapT
+  };
+});
+{
+  const bad = [];
+  if (R3i.savedN1 !== 1) bad.push('เซฟรอบแรกแล้วมี ' + R3i.savedN1 + ' รอบ · ควรเป็น 1');
+  if (R3i.savedN2 !== 2) bad.push('เซฟรอบสองแล้วมี ' + R3i.savedN2 + ' รอบ · ควรเป็น 2');
+  if (!R3i.gapless) bad.push('รอบถัดไปเริ่ม ' + R3i.w2.f + ' · ควรเริ่มวันถัดจาก ' + R3i.w1.t);
+  if (R3i.n2 <= R3i.n1) bad.push('ลากต่อหลังเซฟแล้วกระดานไม่เพิ่มรายการ · ทดสอบไม่ได้');
+  if (R3i.back.n !== R3i.n1)
+    bad.push('เปิดรอบแรกกลับมาได้ ' + R3i.back.n + ' รายการ · ตอนเซฟมี ' + R3i.n1
+           + ' — รอบที่เซฟโดนกระดานแก้ตาม');
+  if (R3i.again !== R3i.n1)
+    bad.push('เปิดรอบแรกซ้ำอีกครั้งได้ ' + R3i.again + ' รายการ · ควรเป็น ' + R3i.n1
+           + ' — เปิดรอบมาแล้วลากต่อ ไปแก้รอบที่เซฟไว้ด้วย');
+  if (R3i.back.pier !== R3i.pier1) bad.push('เปิดกลับมาแล้วเรืออยู่ ' + R3i.back.pier + ' · ตอนเซฟอยู่ ' + R3i.pier1);
+  if (R3i.back.run !== R3i.run1) bad.push('เปิดกลับมาแล้วปุ่มนับในแผนไม่เหมือนตอนเซฟ');
+  if (R3i.back.win.from !== R3i.w1.f || R3i.back.win.to !== R3i.w1.t)
+    bad.push('เปิดรอบแล้วช่วงบนกระดานไม่ตรงกับรอบนั้น · ' + R3i.back.win.from + '→' + R3i.back.win.to);
+  if (R3i.chips !== 2) bad.push('แถบรอบมีชิป ' + R3i.chips + ' · ควรมี 2');
+  if (R3i.track !== 2) bad.push('เส้นเวลามีบล็อก ' + R3i.track + ' · ควรมี 2');
+  if (!R3i.wroteOwnKey) bad.push('ไม่ได้เขียนลงคีย์ la_fd_plans');
+  if (!R3i.realUntouched) bad.push('เซฟรอบแล้ว blob ข้อมูลจริง (loveandaman_v2) ถูกแตะ');
+  if (!R3i.boatsSame || !R3i.tripsSame) bad.push('เซฟ/เปิดรอบแล้ว BOATS หรือ TRIPS จริงเปลี่ยน');
+  if (bad.length) fail('SAVE mockup · ' + bad.join(' · '));
+  else ok('เซฟ Mockup เป็นรอบได้ · รอบ 1 ' + R3i.w1.f + '→' + R3i.w1.t + ' (' + R3i.n1 + ' รายการ) · '
+      + 'กดวางรอบถัดไปได้ช่วง ' + R3i.w2.f + '→' + R3i.w2.t + ' ต่อกันพอดีไม่ทับ · '
+      + 'เปิดรอบแรกกลับมาได้ครบ · เขียนลง la_fd_plans อย่างเดียว blob จริงไม่ถูกแตะ'
+      + (R3i.holes ? (' · เส้นเวลาชี้ช่องว่าง ' + R3i.holes + ' ช่วง') : ''));
+}
+
+/* ══ 3j · กล่องต้องเร่งซ่อมอ่านของจริง ไม่ใช่ตัวเลือกของคนวางแผน ═══════════
+   ถ้ากดนับลำที่ยังซ่อมอยู่แล้วลำนั้นหายจากรายการ = แผนสวยขึ้นโดยไม่มีใครไปเร่ง */
+const R3j = await page.evaluate(() => {
+  _fdPlan = { pier: [], drop: [], trip: {}, avail: {}, boats: [], ready: {} }; fdPlanSave();
+  fdSetScope('month'); _fdWinIx = 0; fdSetOwn('all'); flRenderDeployment();
+  const d = fdWin().from;
+  /* หาลำที่ของจริงยังไม่พร้อม แล้ววางไว้ที่ท่า */
+  const sick = (BOATS || []).filter(b => b && !b.retired)
+    .find(b => (boatEffStatus(b, d) || {}).s !== 'available');
+  if (!sick) return { skip: 'ชุดนี้ไม่มีเรือที่ซ่อมค้าง' };
+  if (fdPierOf(sick, d) === 'shop') { _fdSel = sick.id; fdMove('tublamu'); }
+  const seats = () => fdBoatsAt(fdPierOf(sick, d), d).filter(x => fdCanRun(x, d))
+                        .reduce((s, x) => s + (x.cap || 0), 0);
+  const inChase = () => [].slice.call(document.querySelectorAll('#fl-deploy-wrap .fd-chase .ci'))
+                          .some(x => x.textContent.indexOf(sick.name) >= 0);
+  const countedSeats = seats(), countedChase = inChase();
+  fdReadyToggle(sick.id);
+  const offSeats = seats(), offChase = inChase();
+  return { name: sick.name, cap: sick.cap || 0, countedSeats, countedChase, offSeats, offChase,
+           real: (boatEffStatus(sick, d) || {}).s };
+});
+if (R3j.skip) console.log('  ! ' + R3j.skip + ' · ข้ามข้อ 3j');
+else if (!R3j.countedChase)
+  fail(R3j.name + ' ซ่อมค้างและวางไว้บนกระดาน แต่ไม่ขึ้นกล่องต้องเร่งซ่อม');
+else if (R3j.countedSeats - R3j.offSeats !== R3j.cap)
+  fail('กดไม่นับ ' + R3j.name + ' แล้วที่นั่งลด ' + (R3j.countedSeats - R3j.offSeats) + ' · ควรลด ' + R3j.cap);
+else if (!R3j.offChase)
+  fail(R3j.name + ' หายจากกล่องต้องเร่งซ่อมหลังกดไม่นับ · กล่องนี้ต้องอ่านสถานะจริงเสมอ');
+else ok('กล่องต้องเร่งซ่อมอ่านของจริง · ' + R3j.name + ' (' + R3j.real + ') นับอยู่ในที่นั่ง '
+      + R3j.cap + ' ที่ และยังขึ้นรายการ · กดไม่นับแล้วที่นั่งหายแต่ยังคาอยู่ในรายการ');
+
 /* ══ 4 · ปฏิทินต้องเคารพฤดูกาลของเส้นทาง ══════════════════════════════════ */
 const R4 = await page.evaluate(() => {
   fdTab('month');
@@ -473,8 +719,61 @@ else if (R4.wrongOpen.length)
   fail('ปฏิทินเปิดให้จัดเรือทั้งที่ยังไม่เปิดฤดู ' + R4.wrongOpen.length + ' วัน · ' + R4.wrongOpen.slice(0, 4).join(' · '));
 else ok('ปฏิทิน ' + R4.month + ' ท่า ' + R4.pier + ' · เปิด/ปิดฤดูตรงกับที่ตั้งไว้ในเส้นทางทั้ง ' + R4.n + ' วัน');
 
-/* ══ 5 · ที่นั่งต่อวันต้องตรงกับที่คำนวณเองจาก TRIPS ══════════════════════ */
+/* ══ 4b · บนปฏิทินก็ต้องเลือกเองได้ว่าลำไหนนับเป็นกำลังในแผน ═════════════
+   ที่มา (2026-09-24) · "หน้า Monthly Deployment เรือพร้อมหรือไม่พร้อม ควรเลือกได้
+   เพราะมันคือ Mockup วางแผน" · กดแล้วตัวเลขทั้งเดือนต้องขยับตาม */
+const R4b = await page.evaluate(() => {
+  _fdPlan = { pier: [], drop: [], trip: {}, avail: {}, boats: [], ready: {} }; fdPlanSave();
+  fdTab('month'); flRenderDeployment();
+  const w = document.getElementById('fl-deploy-wrap');
+  const chips = [].slice.call(w.querySelectorAll('.fd-tray .fd-tb'));
+  const withBtn = chips.filter(c => c.querySelector('.fd-rdy')).length;
+  if (!chips.length) return { skip: 'ท่านี้ไม่มีเรือในเดือนนี้' };
+  /* เลือกลำที่วิ่งจริงในเดือนนี้ จะได้เห็นตัวเลข Seats this month ขยับ */
+  const seatsNow = () => +((document.querySelector('#fl-deploy-wrap .fd-cstats .cs b') || {})
+                            .textContent || '0').replace(/,/g, '');
+  if (withBtn !== chips.length) return { chips: chips.length, withBtn, noBtn: 1 };
+  const pick = chips.find(c => !/วิ่ง 0 วัน/.test(c.textContent)) || chips[0];
+  const name = (pick.childNodes[0].textContent || '').trim();
+  const b = fdBoatsAt(_fdPier, _fdMonth + '-01' < fdSeason().from ? fdSeason().from : _fdMonth + '-01')
+              .find(x => x.name === name);
+  const before = seatsNow();
+  pick.querySelector('.fd-rdy').click();
+  const after = seatsNow();
+  const offCls = !![].slice.call(document.querySelectorAll('#fl-deploy-wrap .fd-tray .fd-tb'))
+    .find(c => c.textContent.indexOf(name) >= 0 && c.classList.contains('off'));
+  /* วันละกี่ครั้งที่ลำนี้วิ่ง · คำนวณเองจาก TRIPS แล้วเทียบผลต่างที่นั่ง */
+  let days = 0;
+  for (let i = 1; i <= 31; i++) {
+    const d = _fdMonth + '-' + String(i).padStart(2, '0');
+    if (d.slice(0, 7) !== _fdMonth) continue;
+    const t = (TRIPS || {})[d] || {};
+    if (!t[b.id]) continue;
+    const r = (ROUTES || []).find(x => x.id === t[b.id].route);
+    if (r && (r.pier || '') === _fdPier) days++;
+  }
+  [].slice.call(document.querySelectorAll('#fl-deploy-wrap .fd-tray .fd-tb'))
+    .find(c => c.textContent.indexOf(name) >= 0).querySelector('.fd-rdy').click();
+  return { chips: chips.length, withBtn, name, cap: b ? (b.cap || 0) : 0, before, after, days,
+           offCls, back: seatsNow() };
+});
+if (R4b.skip) console.log('  ! ' + R4b.skip + ' · ข้ามข้อ 4b');
+else if (R4b.withBtn !== R4b.chips)
+  fail('ปุ่มเลือกพร้อม/ไม่พร้อมมีแค่ ' + R4b.withBtn + ' จาก ' + R4b.chips + ' ลำบนปฏิทิน');
+else if (!R4b.offCls) fail('กดไม่นับ ' + R4b.name + ' แล้วชิปบนปฏิทินไม่เปลี่ยนสภาพ');
+else if (R4b.before - R4b.after !== R4b.cap * R4b.days)
+  fail('กดไม่นับ ' + R4b.name + ' แล้ว Seats this month ลด ' + (R4b.before - R4b.after)
+     + ' · ควรลด ' + (R4b.cap * R4b.days) + ' (' + R4b.cap + ' ที่ × ' + R4b.days + ' วัน)');
+else if (R4b.back !== R4b.before) fail('กดกลับแล้วตัวเลขไม่กลับเท่าเดิม');
+else ok('บนปฏิทินเลือกพร้อม/ไม่พร้อมได้ครบทั้ง ' + R4b.chips + ' ลำ · กดไม่นับ ' + R4b.name
+      + ' แล้ว Seats this month ลด ' + (R4b.cap * R4b.days) + ' ตรงกับที่คำนวณเองจาก TRIPS');
+
+/* ══ 5 · ที่นั่งต่อวันต้องตรงกับที่คำนวณเองจาก TRIPS ══════════════════════
+   §flDeployReady · นับทุกลำที่ถูกวางไว้ในวันนั้น เว้นลำที่คนกดไว้ว่าไม่นับในแผน
+   (สถานะซ่อมไม่ได้กันอีกแล้ว · หน้านี้คือแผน ไม่ใช่รายงานสถานะวันนี้) */
 const R5 = await page.evaluate(() => {
+  _fdPlan = { pier: [], drop: [], trip: {}, avail: {}, boats: [], ready: {} }; fdPlanSave();
+  flRenderDeployment();
   const w = document.getElementById('fl-deploy-wrap');
   const pier = _fdPier, month = _fdMonth;
   const cells = [].slice.call(w.querySelectorAll('.fd-day:not(.pad)'));
@@ -490,7 +789,7 @@ const R5 = await page.evaluate(() => {
       if (!r || (r.pier || '') !== pier) return;
       const b = (BOATS || []).find(x => x.id === id);
       if (!b || b.retired) return;
-      if (((boatEffStatus(b, day) || {}).s) === 'available') want += (b.cap || 0);
+      want += (b.cap || 0);
     });
     const txt = ((c.querySelector('.dh i') || {}).textContent || '');
     const m = /·\s*(\d+)\s*ที่/.exec(txt);
