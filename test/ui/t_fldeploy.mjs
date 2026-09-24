@@ -808,15 +808,18 @@ else {
   }
 }
 
-/* ══ 3m · Factsheet ของรอบ ═════════════════════════════════════════════
-   ที่มา (2026-09-24) · "มันน่าจะต้องเป็นเหมือน Factsheet ที่เห็นว่าวันที่นี้ถึงวันที่นี้
-   มีเรืออะไรอยู่ท่าไหนบ้าง มีโปรแกรมอะไรบ้าง เรือแต่ละลำวิ่งโปรแกรมไหน
-   ที่นั่งมีเท่าไหร่ / รับได้เท่าไหร่ มีเรื่องอะไรที่ต้องให้ความสนใจ"
-   ข้อนี้กันสี่อย่าง
-     · ตาราง เรือ → โปรแกรม ตรงกับที่นับเองจาก TRIPS + ROUTES
-     · ที่นั่งที่รับได้ตลอดช่วง = ที่นั่ง × วันที่เปิดขายจริง ไม่ใช่คูณวันทั้งหมด
-     · ท่าที่ยังไม่เปิดขายต้องไม่ถูกเขียนว่า "ยังไม่ได้ลงโปรแกรม"
-     · เรือที่ลงโปรแกรมของท่าหนึ่งทั้งที่แผนวางไว้อีกท่า ต้องขึ้นในรายการที่ต้องสนใจ */
+/* ══ 3m · Factsheet ของรอบ · สี่ส่วน ════════════════════════════════════
+   ที่มา (2026-09-24) · ผู้ใช้สั่งโครงมาเอง
+     1 เทียบสามท่าเรียงข้างกัน
+     2 โปรแกรม × เรือ เป็น Matrix พร้อมลูกค้าที่จองแล้วและที่นั่งว่าง
+     3 ตั้งแต่วันไหนถึงวันไหน เปิดกี่วัน ที่นั่งว่างเฉลี่ยเท่าไหร่
+     4 เรื่องที่ต้องให้ความสนใจ เช่น เรือลำไหนยังซ่อมอยู่
+   ข้อนี้กันห้าอย่าง · ตัวเลขทุกตัวคำนวณเองจาก TRIPS + ROUTES + BOATS ดิบ
+     · ช่องใน Matrix = จำนวนวันที่ลำนั้นวิ่งโปรแกรมนั้น
+     · ที่นั่งที่จัดลงจริง = ผลรวมรายวัน ไม่ใช่ที่นั่งต่อวันคูณจำนวนวัน
+     · ค่าเฉลี่ยหารด้วยวันที่เปิดขายจริงเท่านั้น
+     · ท่าที่ยังไม่เปิดขายต้องขึ้นขีด ไม่ใช่ศูนย์ที่ดูเหมือนแย่
+     · เรือที่ยังซ่อมอยู่ต้องโผล่ในส่วนที่ 4 */
 const R3m = await page.evaluate(() => {
   const snapB = JSON.stringify(BOATS), snapT = JSON.stringify(TRIPS);
   _fdPlan = { pier: [], drop: [], trip: {}, avail: {}, boats: [], ready: {} }; fdPlanSave();
@@ -826,7 +829,7 @@ const R3m = await page.evaluate(() => {
   const W = fdWin();
   const days = []; let d = W.from;
   while (d <= W.to && days.length < 400) { days.push(d); d = fdAddDays(d, 1); }
-  /* จับเรือลงโปรแกรมให้มีทั้งลำที่วิ่งครบ วิ่งบางวัน และไม่ได้วิ่งเลย */
+  /* จัดเรือลงโปรแกรมให้มีทั้งลำที่วิ่งครบ วิ่งบางวัน และไม่ได้วิ่งเลย */
   FD_PIERS.forEach(p => {
     const fleet = fdBoatsAt(p, W.from);
     days.forEach((x, i) => {
@@ -835,8 +838,7 @@ const R3m = await page.evaluate(() => {
       if (fleet[1] && rs[rs.length > 1 ? 1 : 0] && i % 2 === 0) fdAssign(rs[rs.length > 1 ? 1 : 0].id, x, fleet[1].id);
     });
   });
-  /* วางเรือไว้บนวันที่ปิดขายด้วย · ที่นั่งของวันนั้นต้องไม่ถูกนับเข้า "รับได้ตลอดช่วง"
-     ถ้าไม่วาง วันปิดขายจะว่างเปล่าอยู่แล้ว แยกไม่ออกว่าโค้ดคูณวันเปิดขายหรือคูณทุกวัน */
+  /* วางเรือไว้บนวันที่ปิดขายหนึ่งลำ · ที่นั่งของวันนั้นต้องไม่ถูกนับ */
   let shutPlant = null;
   FD_PIERS.some(p => {
     const sd = days.find(x => !fdOpenRoutes(p, x).length);
@@ -847,111 +849,148 @@ const R3m = await page.evaluate(() => {
     shutPlant = { pier: p, d: sd, boat: b.name, cap: b.cap || 0 };
     return true;
   });
-  /* วางเรือจากอู่ลงโปรแกรมของท่าหนึ่ง โดยไม่ย้ายมันเข้าท่า · ของสองตารางจะไม่ตรงกันโดยตั้งใจ */
-  let stray = null;
-  const shopB = fdBoatsAt('shop', W.from)[0];
-  if (shopB) {
-    const p = FD_PIERS.find(x => fdOpenRoutes(x, days[days.length - 1]).length);
-    if (p) { fdAssign(fdOpenRoutes(p, days[days.length - 1])[0].id, days[days.length - 1], shopB.id);
-             stray = { boat: shopB.name, pier: p }; }
-  }
   fdTab('sheet'); flRenderDeployment();
 
-  /* ── คำนวณเองจาก TRIPS + ROUTES ── */
+  /* ══ คำนวณเองจากข้อมูลดิบ ══ */
   const want = {};
   FD_PIERS.forEach(p => {
-    const open = days.filter(x => fdOpenRoutes(p, x).length > 0);
     const list = fdBoatsAt(p, W.from);
-    const runs = {};
-    list.forEach(b => {
-      const by = {};
-      open.forEach(x => {
-        const t = fdTripsOn(x)[b.id]; if (!t) return;
-        const r = (ROUTES || []).find(y => y && y.id === t.route);
-        if (!r || (r.pier || '') !== p) return;
-        by[r.name] = (by[r.name] || 0) + 1;
-      });
-      runs[b.name] = by;
-    });
-    /* ที่นั่ง × วันที่เปิดขาย · นับเองวันต่อวัน */
+    const routes = (ROUTES || []).filter(r => r && (r.pier || '') === p);
+    const open = days.filter(x => fdOpenRoutes(p, x).length > 0);
+    const progs = {};
     let seatDay = 0;
-    open.forEach(x => {
-      const t = fdTripsOn(x);
-      Object.keys(t).forEach(id => {
-        const r = (ROUTES || []).find(y => y && y.id === t[id].route);
-        if (!r || (r.pier || '') !== p) return;
-        const b = fdBoat(id); if (!b || !fdCanRun(b, x)) return;
-        seatDay += (b.cap || 0);
+    routes.forEach(r => {
+      const od = days.filter(x => { const st = getDayStatus(r, x); return !st || st.type === 'open'; });
+      const cells = {};
+      let seatSum = 0;
+      od.forEach(x => {
+        const t = fdTripsOn(x);
+        Object.keys(t).forEach(id => {
+          if (t[id].route !== r.id) return;
+          const b = fdBoat(id); if (!b) return;
+          cells[b.name] = (cells[b.name] || 0) + 1;
+          if (!fdCanRun(b, x)) return;
+          if (t[id].charterBookingId || t[id].type === 'charter') return;
+          seatSum += (b.cap || 0);
+        });
       });
+      if (!od.length && !Object.keys(cells).length) return;
+      progs[r.name] = { open: od.length, cells, seatSum,
+                        avgSeat: od.length ? Math.round(seatSum / od.length) : null };
+      seatDay += seatSum;
     });
-    want[p] = { open: open.length, runs, seatDay, n: list.length };
+    want[p] = { n: list.length, open: open.length, seatDay, progs,
+                seats: list.filter(b => fdCanRun(b, W.from)).reduce((n, b) => n + (b.cap || 0), 0),
+                sick: list.filter(b => !fdRealReady(b, W.from)).map(b => b.name) };
   });
 
-  /* ── อ่านจากแผ่น ── */
+  /* ══ อ่านจากแผ่น ══ */
   const sheet = document.querySelector('#fl-deploy-wrap .fd-sheet');
   if (!sheet) return { err: 'ไม่มีแผ่น Factsheet บนหน้า' };
-  const got = {};
-  [].slice.call(sheet.querySelectorAll('.fs-p')).forEach(sec => {
-    const nm = ((sec.querySelector('.ph b') || {}).textContent || '').trim();
-    const head = ((sec.querySelector('.ph span') || {}).textContent || '').replace(/\s+/g, ' ');
-    const mSd = /รับได้รวม\s*([\d,]+)/.exec(head);
-    const rows = {}, shutRows = [], idleRows = [];
-    const tb = sec.querySelector('.fs-t tbody');
-    if (tb) [].slice.call(tb.querySelectorAll('tr')).forEach(tr => {
-      const bn = ((tr.querySelector('td b') || {}).textContent || '').trim();
-      const by = {};
-      [].slice.call(tr.querySelectorAll('.rn')).forEach(x => {
-        const u = (x.querySelector('u') || {}).textContent || '0';
-        by[(x.childNodes[0].textContent || '').trim()] = +u;
-      });
-      rows[bn] = by;
-      if (/shut/.test(tr.className)) shutRows.push(bn);
-      if (/idle/.test(tr.className)) idleRows.push(bn);
+  const secs = [].slice.call(sheet.querySelectorAll('.fs-sec'));
+  /* ส่วนที่ 1 · ตารางเทียบท่า */
+  const cmp = sheet.querySelector('.fs-cmp');
+  const cmpCols = cmp ? [].slice.call(cmp.querySelectorAll('thead th')).slice(1).map(x => x.textContent.trim()) : [];
+  const cmpRows = {};
+  if (cmp) [].slice.call(cmp.querySelectorAll('tbody tr')).forEach(tr => {
+    const k = (tr.querySelector('th') || {}).textContent.trim();
+    cmpRows[k] = [].slice.call(tr.querySelectorAll('td')).map(td => {
+      const b = td.querySelector('b');
+      return (b ? b.textContent : td.textContent).trim();
     });
-    got[nm] = { rows, shutRows, idleRows, seatDay: mSd ? +mSd[1].replace(/,/g, '') : null };
+  });
+  /* ส่วนที่ 2 · Matrix */
+  const mx = [];
+  [].slice.call(sheet.querySelectorAll('.fs-mx')).forEach(tb => {
+    const cols = [].slice.call(tb.querySelectorAll('thead th.b'))
+      .map(x => (x.getAttribute('title') || '').split(' · ')[0]);
+    const rows = {};
+    [].slice.call(tb.querySelectorAll('tbody tr')).forEach(tr => {
+      const nm = ((tr.querySelector('td.pn b') || {}).textContent || '').trim();
+      const cells = {};
+      [].slice.call(tr.querySelectorAll('td.c')).forEach((td, i) => {
+        const v = td.textContent.trim();
+        if (v !== '·') cells[cols[i]] = +v;
+      });
+      const ns = [].slice.call(tr.querySelectorAll('td.n')).map(x => x.textContent.trim());
+      rows[nm] = { cells, open: +ns[0] };
+    });
+    mx.push({ cols, rows });
+  });
+  /* ส่วนที่ 3 · ค่าเฉลี่ย */
+  const rng = {};
+  const rt = sheet.querySelector('.fs-t.rng');
+  if (rt) [].slice.call(rt.querySelectorAll('tbody tr')).forEach(tr => {
+    const td = [].slice.call(tr.querySelectorAll('td')).map(x => x.textContent.trim());
+    rng[td[0] + '|' + td[1]] = { span: td[2], days: +td[3], avgSeat: +td[4].replace(/,/g, '') };
   });
   const att = [].slice.call(sheet.querySelectorAll('.fs-att li')).map(x => (x.textContent || '').trim());
-  return { want, got, att, stray, shutPlant, days: days.length,
-           labels: (typeof PIER_LABELS !== 'undefined') ? PIER_LABELS : {},
+  return { want, cmpCols, cmpRows, mx, rng, att, shutPlant, days: days.length,
+           secs: secs.length, labels: (typeof PIER_LABELS !== 'undefined') ? PIER_LABELS : {},
            boatsSame: JSON.stringify(BOATS) === snapB, tripsSame: JSON.stringify(TRIPS) === snapT };
 });
 if (R3m.err) fail(R3m.err);
 else {
   const bad3m = [];
-  Object.keys(R3m.want).forEach(p => {
-    const w = R3m.want[p], lbl = R3m.labels[p] || p, g = R3m.got[lbl];
-    if (!w.n) return;
-    if (!g) { bad3m.push(lbl + ' ไม่มีในแผ่น'); return; }
-    /* เรือ → โปรแกรม */
-    Object.keys(w.runs).forEach(bn => {
-      const a = JSON.stringify(w.runs[bn]), b = JSON.stringify(g.rows[bn] || {});
-      if (a !== b) bad3m.push(lbl + ' · ' + bn + ' แผ่นบอก ' + b + ' ควรเป็น ' + a);
-    });
-    /* ที่นั่ง × วัน */
-    if (g.seatDay !== w.seatDay)
-      bad3m.push(lbl + ' รับได้รวม ' + g.seatDay + ' · นับเองได้ ' + w.seatDay);
-    /* ท่าที่ยังไม่เปิดขาย ต้องเป็นแถวเทา ไม่ใช่แถวแดง */
-    if (!w.open) {
-      if (g.idleRows.length) bad3m.push(lbl + ' ยังไม่เปิดขายสักวัน แต่มีแถวขึ้นแดงว่าไม่ได้ลงโปรแกรม ' + g.idleRows.length);
-      if (g.shutRows.length !== w.n) bad3m.push(lbl + ' ยังไม่เปิดขาย แต่ทำเครื่องหมายไว้แค่ ' + g.shutRows.length + ' จาก ' + w.n);
-    } else {
-      const wantIdle = Object.keys(w.runs).filter(bn => !Object.keys(w.runs[bn]).length).sort().join(',');
-      if (g.idleRows.slice().sort().join(',') !== wantIdle)
-        bad3m.push(lbl + ' แถวที่ยังไม่ได้ลงโปรแกรม [' + g.idleRows.join(',') + '] ควรเป็น [' + wantIdle + ']');
-    }
+  if (R3m.secs !== 4) bad3m.push('แผ่นมี ' + R3m.secs + ' ส่วน · ควรมี 4');
+  /* ── ส่วนที่ 1 ── */
+  const shown = Object.keys(R3m.want).filter(p => R3m.want[p].n || R3m.want[p].open);
+  shown.forEach(p => {
+    const lbl = R3m.labels[p] || p;
+    const i = R3m.cmpCols.indexOf(lbl);
+    if (i < 0) { bad3m.push(lbl + ' ไม่มีในตารางเทียบท่า'); return; }
+    const w = R3m.want[p];
+    const gSeat = (R3m.cmpRows['ที่นั่งต่อวัน'] || [])[i];
+    const gDay  = (R3m.cmpRows['ที่นั่งที่จัดลงจริง'] || [])[i];
+    const gOpen = (R3m.cmpRows['วันที่เปิดขาย'] || [])[i];
+    if (gSeat !== w.seats.toLocaleString()) bad3m.push(lbl + ' ที่นั่งต่อวัน ' + gSeat + ' ควรเป็น ' + w.seats);
+    if (gDay !== w.seatDay.toLocaleString()) bad3m.push(lbl + ' ที่นั่งที่จัดลงจริง ' + gDay + ' ควรเป็น ' + w.seatDay);
+    if (+gOpen !== w.open) bad3m.push(lbl + ' วันที่เปิดขาย ' + gOpen + ' ควรเป็น ' + w.open);
+    /* ท่าที่ยังไม่เปิดขายต้องไม่โชว์ค่าเฉลี่ยเป็นเลข */
+    const gAvg = (R3m.cmpRows['ที่นั่งว่างเฉลี่ย/วัน'] || [])[i];
+    if (!w.open && gAvg !== '—') bad3m.push(lbl + ' ยังไม่เปิดขายแต่โชว์ค่าเฉลี่ย "' + gAvg + '" · ควรเป็นขีด');
   });
-  if (R3m.stray && !R3m.att.some(t => /วางไว้ท่าอื่น/.test(t) && t.indexOf(R3m.stray.boat) >= 0))
-    bad3m.push('เรือ ' + R3m.stray.boat + ' ลงโปรแกรมของท่าอื่นแต่ไม่ขึ้นในรายการที่ต้องสนใจ');
-  if (!R3m.shutPlant)
-    bad3m.push('วางเรือบนวันที่ปิดขายไม่ได้ · พิสูจน์ไม่ได้ว่า "รับได้ตลอดช่วง" คูณเฉพาะวันที่เปิดขาย');
+  /* ── ส่วนที่ 2 · Matrix ── */
+  shown.forEach(p => {
+    const w = R3m.want[p];
+    const names = Object.keys(w.progs);
+    if (!names.length) return;
+    const tb = R3m.mx.find(t => names.every(nm => nm in t.rows));
+    if (!tb) { bad3m.push((R3m.labels[p] || p) + ' ไม่มีตาราง Matrix'); return; }
+    /* เทียบแบบเรียงคีย์ · ลำดับคอลัมน์ไม่ใช่สาระ สาระคือค่าในช่อง */
+    const flat = o => Object.keys(o).sort().map(k => k + ':' + o[k]).join(',');
+    names.forEach(nm => {
+      const a = flat(w.progs[nm].cells), b = flat(tb.rows[nm].cells);
+      if (a !== b) bad3m.push(nm + ' · ช่อง Matrix [' + b + '] ควรเป็น [' + a + ']');
+      if (tb.rows[nm].open !== w.progs[nm].open)
+        bad3m.push(nm + ' · วันเปิดขาย ' + tb.rows[nm].open + ' ควรเป็น ' + w.progs[nm].open);
+    });
+  });
+  /* ── ส่วนที่ 3 · ค่าเฉลี่ย ── */
+  let nRng = 0;
+  shown.forEach(p => {
+    const lbl = R3m.labels[p] || p, w = R3m.want[p];
+    Object.keys(w.progs).forEach(nm => {
+      const pr = w.progs[nm]; if (!pr.open) return;
+      const g = R3m.rng[nm + '|' + lbl];
+      if (!g) { bad3m.push(nm + ' ไม่มีในตารางค่าเฉลี่ย'); return; }
+      nRng++;
+      if (g.days !== pr.open) bad3m.push(nm + ' ค่าเฉลี่ยหารด้วย ' + g.days + ' วัน · ควรเป็น ' + pr.open);
+      if (g.avgSeat !== pr.avgSeat)
+        bad3m.push(nm + ' ที่นั่ง/วัน ' + g.avgSeat + ' ควรเป็น ' + pr.avgSeat);
+    });
+  });
+  /* ── ส่วนที่ 4 ── */
+  const sickAll = shown.reduce((a, p) => a.concat(R3m.want[p].sick), []);
+  if (sickAll.length && !R3m.att.some(t => /ซ่อมไม่เสร็จ/.test(t)))
+    bad3m.push('มีเรือที่ยังซ่อมอยู่ ' + sickAll.length + ' ลำ แต่ไม่ขึ้นในส่วนที่ 4');
+  if (!R3m.shutPlant) bad3m.push('วางเรือบนวันปิดขายไม่ได้ · พิสูจน์ไม่ได้ว่าไม่นับวันปิด');
   if (!R3m.boatsSame || !R3m.tripsSame) bad3m.push('เปิดแผ่นแล้ว BOATS หรือ TRIPS จริงเปลี่ยน');
   if (bad3m.length) fail('Factsheet · ' + bad3m.slice(0, 3).join(' · '));
-  else ok('Factsheet ตรงกับที่นับเองจาก TRIPS ทุกท่า · ช่วง ' + R3m.days + ' วัน · '
-      + Object.keys(R3m.want).filter(p => R3m.want[p].n)
-          .map(p => p + ' ' + R3m.want[p].seatDay.toLocaleString() + ' ที่'). join(' · ')
-      + ' · รายการที่ต้องสนใจ ' + R3m.att.length + ' เรื่อง · '
-      + 'วาง ' + R3m.shutPlant.boat + ' ไว้บนวันปิดขาย ' + R3m.shutPlant.d + ' แล้วไม่ถูกนับ · '
-      + 'ข้อมูลจริงไม่ถูกแตะ');
+  else ok('Factsheet 4 ส่วนตรงกับที่นับเองทุกตัว · เทียบ ' + shown.length + ' ท่า · '
+      + 'Matrix ' + R3m.mx.length + ' ตาราง · ค่าเฉลี่ย ' + nRng + ' โปรแกรม · '
+      + 'เรือที่ยังซ่อม ' + sickAll.length + ' ลำขึ้นในส่วนที่ 4 · '
+      + 'วาง ' + R3m.shutPlant.boat + ' ไว้บนวันปิดขาย ' + R3m.shutPlant.d + ' แล้วไม่ถูกนับ');
 }
 
 /* ══ 4 · ปฏิทินต้องเคารพฤดูกาลของเส้นทาง ══════════════════════════════════ */
