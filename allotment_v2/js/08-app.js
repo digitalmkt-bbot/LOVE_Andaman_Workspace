@@ -46706,6 +46706,32 @@ function bkV2RenderTab2(){
     });
   }
   const _btLkCls = id => (_btLkSel && _btLkIds.has(String(id))) ? ' t2-lkhit' : '';
+  /* ══ §btLkBand · ใบไหนดึงที่นั่งมาจากล็อกของใคร ═══════════════════════════
+     ความสัมพันธ์อยู่ใน lock.log[] ({type:'draw', bookingId, tripDate}) เหมือนที่
+     §btLkHit ใช้อยู่ · อ่านที่เดียวกัน ไม่แก้โครงสร้างข้อมูล
+     ล็อกรายวันบาง log ไม่มี tripDate (ของเก่า) → ใช้ l.date ของตัวล็อกแทน      */
+  const _btDrawMap = {};
+  (typeof SB_SEAT_LOCKS!=='undefined'?SB_SEAT_LOCKS:[]).forEach(l=>{
+    if(!l) return;
+    (l.log||[]).forEach(e=>{
+      if(!e || e.type!=='draw' || !e.bookingId) return;
+      const d = e.tripDate || (l.scope==='day' ? (l.date||'') : '');
+      if(d !== date) return;
+      /* ใบเดียวดึงจากหลายล็อกได้ (ที่นั่งไม่พอใบเดียวก็ไล่ดึงต่อ) · เก็บเป็นรายการ
+         ไม่ใช่ทับกัน · ทับกันแล้วจะเห็นชื่อเจ้าเดียวทั้งที่ที่นั่งมาจากสองโควตา */
+      const k = String(e.bookingId), lk = String(l.id);
+      const arr = (_btDrawMap[k] = _btDrawMap[k] || []);
+      let hit = arr.find(x=>x.lk===lk);
+      if(!hit){ hit = { lk:lk, nm:(typeof bkV2LockHolderName==='function')?bkV2LockHolderName(l):String(l.holderId||''),
+                        c:(typeof bkV2LockHolderColor==='function')?bkV2LockHolderColor(l):'#9C9C95', q:0 };
+                arr.push(hit); }
+      hit.q += (Number(e.qty)||0);
+    });
+  });
+  const _btDrawTag = id => (_btDrawMap[String(id)]||[]).map(d=>{
+    const ink=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(d.c):'#fff';
+    return `<span class="t2-drawn" style="background:${d.c};color:${ink}" title="ที่นั่งใบนี้ดึงมาจากล็อกของ ${esc(d.nm)} ${d.q} ที่">&#128274; ${esc(d.nm)}</span>`;
+  }).join('');
 
   // ── Manifest column sort (click Agency / Zone header) ──
   const sortCol = _bkV2T2Sort.col, sortDir = _bkV2T2Sort.dir;
@@ -47667,7 +47693,7 @@ function bkV2RenderTab2(){
             <td>${(bk.voucherRef && bk.voucherRef.trim().toLowerCase()!==String(lead||'').trim().toLowerCase())?(a.split?`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)} · แยกรับหลายจุด (บุคกิ้งเดียวกัน)" style="color:${_bkV2SplitColor(bk.id)};font-weight:800;border:1px solid ${_bkV2SplitColor(bk.id)}55;background:${_bkV2SplitColor(bk.id)}12;border-radius:5px;padding:1px 5px">&#128279; ${esc(bk.id.startsWith('b2c_')?bkV2DisplayCode(bk):bk.voucherRef)}</span>`:`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)}">${esc(bk.id.startsWith('b2c_')?bkV2DisplayCode(bk):bk.voucherRef)}</span>`):'<span class="t2-dim">—</span>'}${bk.id.startsWith('b2c_')?'<div style="margin-top:3px"><span style="background:#E6F7F9;color:#0E7D8A;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.03em">'+bkV2B2CMark(11)+'Love Andaman</span></div>':''}</td>
             <td class="t2-ag" style="${bk.agentId?'padding:0':''}">${(bk.agentId && /^b2c_/.test(String(bk.id||'')))?`<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="Love Andaman &middot; ขายเอง (B2C)${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' &middot; ลูกค้าทักมาทาง '+_c.label):''; })()} &middot; คลิกเปลี่ยนสีประจำเอเยนต์ (ใช้ที่หน้าอื่น)" style="background:#fff;border:1px solid #E3E6EC;margin:2px 3px;padding:8px 10px;border-radius:8px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.08);max-width:180px;display:flex;align-items:center;justify-content:center">${bkV2B2CLogo(22)}</div>`:bk.agentId?(()=>{const _ac=bkV2AgentColor(bk.agentId);return `<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="${esc(norm.agentName)}${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' · ลูกค้าทักมาทาง '+_c.label):(/^b2c_/.test(String(bk.id||''))?' · ขายเอง (B2C)':''); })()} · คลิกเปลี่ยนสี · Alt+คลิก = สีอัตโนมัติ" style="background:${_ac};color:${bkV2ContrastInk(_ac)};margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;box-shadow:0 1px 2px rgba(0,0,0,.10)">${esc(norm.agentName)}</div>`;})():`<span class="t2-agency">${esc(norm.agentName)}</span>`}</td>
             <td class="t2-cu">
-              ${(function(){ var _rs=bk.ops&&bk.ops.reconfirm&&bk.ops.reconfirm.status; if(_rs){ var _c=(typeof rcStateColor==='function')?rcStateColor(_rs):'#F6E27A'; var _ik=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(_c):'#000'; var _sl=(typeof _rcStateOf==='function')?_rcStateOf(bk).l:''; return `<span class="t2-lead" style="background:${_c};color:${_ik};padding:1px 7px;border-radius:5px" title="Re-confirm: ${esc(_sl)}">${esc(lead)}</span>`; } return `<span class="t2-lead">${esc(lead)}</span>`; })()}${pcBadge}${(function(){var _el=(typeof bkV2EditLockActive==='function')&&bkV2EditLockActive(bk);return _el?`<span title="${esc(_el.by)} กำลังแก้ไขอยู่ (~${_el.mins} นาที)" style="background:#E7F0FC;color:#185FA5;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">&#9999; ${esc(_el.by)} แก้อยู่</span>`:'';})()}${bk.status==='pending_approval'?`<span title="เกิน capacity · รอผจก.อนุมัติ" style="background:#FCEBEB;color:#A32D2D;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">รออนุมัติ</span>`:''}${(bk.pickupSelf && r.zone!=='NoTransfer' && r.zone!=='NT')?`<span title="ติ๊ก self-arrive (ลูกค้ามาเอง) แต่โซนนี้เป็นโซนรับส่ง${(bk.ops&&(bk.ops.vanId||bk.ops.vanGroup))?' + จัดรถไว้แล้ว':''} — booking นี้จะไม่ขึ้นในใบงานรถขาไป · เช็คว่าติ๊กผิดหรือไม่" style="background:#F3E8FF;color:#5B289A;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:help">🚶 self-arrive?</span>`:''}${(function(){ if(r.cxl||!bk.agentId||typeof docCheckStatus!=='function') return ''; var _st=docCheckStatus(bk); var _nf=(bk.attachments||[]).length; var _m={verified:['#E6F5EA','#1B7F4B','✅','เอกสารตรวจแล้ว'],issue:['#FCEBEB','#B5271F','⚠','เอกสารมีปัญหา'],pending:['#FFF6E0','#8A5B00','📎','รอตรวจเอกสาร ('+_nf+' ไฟล์)']}[_st]; if(!_m) return ''; return `<span onclick="event.stopPropagation();tsGoDoc('${esc(bk.id)}','${esc(date)}')" title="${esc(_m[3])} · คลิกไปตรวจเอกสาร" style="background:${_m[0]};color:${_m[1]};font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:pointer">${_m[2]}${_st==='pending'?(' '+_nf):''}</span>`; })()}${(function(){ if(r.cxl||typeof bkV2FindDuplicateBookings!=='function')return''; const _dd=bkV2FindDuplicateBookings(bk,bk.id); if(!_dd.length)return''; const _vc=_dd.map(x=>x.bk.voucherRef||x.bk.code||x.bk.id).slice(0,3).join(', '); const _rs=[...new Set(_dd.reduce((a,x)=>a.concat(x.reasons),[]))].join(' · '); return `<span title="อาจเป็นการลงซ้ำกับ: ${esc(_vc)} (${esc(_rs)}) — ตรวจสอบ/ลบตัวซ้ำ" style="background:#FBE9D6;color:#9A5B00;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:help">&#9888; อาจซ้ำ</span>`; })()}${r.cxl?`<span class="t2-cxlbadge" title="${bk.cancellation?('Cancelled · '+(bk.cancellation.chargeType==='full'?'Full charge':bk.cancellation.chargeType==='partial'?'Partial charge':'No charge')+(bk.cancellation.reason?' · '+esc(bk.cancellation.reason):'')):'Cancelled'}">CXL</span>`:''}${(!r.cxl && typeof ckNoShowBadge==='function')?ckNoShowBadge(bk,date):''}
+              ${(function(){ var _rs=bk.ops&&bk.ops.reconfirm&&bk.ops.reconfirm.status; if(_rs){ var _c=(typeof rcStateColor==='function')?rcStateColor(_rs):'#F6E27A'; var _ik=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(_c):'#000'; var _sl=(typeof _rcStateOf==='function')?_rcStateOf(bk).l:''; return `<span class="t2-lead" style="background:${_c};color:${_ik};padding:1px 7px;border-radius:5px" title="Re-confirm: ${esc(_sl)}">${esc(lead)}</span>`; } return `<span class="t2-lead">${esc(lead)}</span>`; })()}${pcBadge}${(function(){var _el=(typeof bkV2EditLockActive==='function')&&bkV2EditLockActive(bk);return _el?`<span title="${esc(_el.by)} กำลังแก้ไขอยู่ (~${_el.mins} นาที)" style="background:#E7F0FC;color:#185FA5;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">&#9999; ${esc(_el.by)} แก้อยู่</span>`:'';})()}${bk.status==='pending_approval'?`<span title="เกิน capacity · รอผจก.อนุมัติ" style="background:#FCEBEB;color:#A32D2D;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">รออนุมัติ</span>`:''}${(bk.pickupSelf && r.zone!=='NoTransfer' && r.zone!=='NT')?`<span title="ติ๊ก self-arrive (ลูกค้ามาเอง) แต่โซนนี้เป็นโซนรับส่ง${(bk.ops&&(bk.ops.vanId||bk.ops.vanGroup))?' + จัดรถไว้แล้ว':''} — booking นี้จะไม่ขึ้นในใบงานรถขาไป · เช็คว่าติ๊กผิดหรือไม่" style="background:#F3E8FF;color:#5B289A;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:help">🚶 self-arrive?</span>`:''}${(function(){ if(r.cxl||!bk.agentId||typeof docCheckStatus!=='function') return ''; var _st=docCheckStatus(bk); var _nf=(bk.attachments||[]).length; var _m={verified:['#E6F5EA','#1B7F4B','✅','เอกสารตรวจแล้ว'],issue:['#FCEBEB','#B5271F','⚠','เอกสารมีปัญหา'],pending:['#FFF6E0','#8A5B00','📎','รอตรวจเอกสาร ('+_nf+' ไฟล์)']}[_st]; if(!_m) return ''; return `<span onclick="event.stopPropagation();tsGoDoc('${esc(bk.id)}','${esc(date)}')" title="${esc(_m[3])} · คลิกไปตรวจเอกสาร" style="background:${_m[0]};color:${_m[1]};font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:pointer">${_m[2]}${_st==='pending'?(' '+_nf):''}</span>`; })()}${(function(){ if(r.cxl||typeof bkV2FindDuplicateBookings!=='function')return''; const _dd=bkV2FindDuplicateBookings(bk,bk.id); if(!_dd.length)return''; const _vc=_dd.map(x=>x.bk.voucherRef||x.bk.code||x.bk.id).slice(0,3).join(', '); const _rs=[...new Set(_dd.reduce((a,x)=>a.concat(x.reasons),[]))].join(' · '); return `<span title="อาจเป็นการลงซ้ำกับ: ${esc(_vc)} (${esc(_rs)}) — ตรวจสอบ/ลบตัวซ้ำ" style="background:#FBE9D6;color:#9A5B00;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:help">&#9888; อาจซ้ำ</span>`; })()}${r.cxl?`<span class="t2-cxlbadge" title="${bk.cancellation?('Cancelled · '+(bk.cancellation.chargeType==='full'?'Full charge':bk.cancellation.chargeType==='partial'?'Partial charge':'No charge')+(bk.cancellation.reason?' · '+esc(bk.cancellation.reason):'')):'Cancelled'}">CXL</span>`:''}${(!r.cxl && typeof ckNoShowBadge==='function')?ckNoShowBadge(bk,date):''}${r.cxl?'':_btDrawTag(bk.id)}
               ${others.length?`<button class="t2-more" onclick="event.stopPropagation();bkV2Tab2TogglePax('${rowId}')"><span id="${rowId}-ic" style="display:inline-block">▾</span> +${others.length}</button>`:'<span class="t2-dim t2-leadonly">lead only</span>'}
             </td>
             ${a.split
@@ -47780,13 +47806,63 @@ function bkV2RenderTab2(){
     const _pbCol = (bkV2RouteFamily(rid)||{}).color || '#8b909c';
     const _pbPier= route?.pier ? (route.pier==='tublamu'?'Tub Lamu':route.pier==='panwa'?'Visit Panwa':route.pier==='ranong'?'Ranong':route.pier) : '';
     const _pbNB  = ((typeof baBoatsForRoute==='function')?baBoatsForRoute(date,rid):[]).length;
+    /* ══ §btLkBand (2026-09-25) · ที่นั่งที่ล็อกไว้ ลงมาอยู่ใน manifest ════════
+       ของเดิมล็อกอยู่แต่ในการ์ด Seat Lock มุมขวาบน · manifest ของทริปที่ยังไม่มี
+       booking จึงขึ้นแค่ "No bookings yet" ทั้งที่ที่นั่งถูกกันไว้ให้เอเยนต์อยู่จริง
+       คนอ่านใบงานต้องเงยไปดูอีกที่ และพอปริ้นใบงานออกมาก็หายไปเลย
+       ตอนนี้ล็อกเป็นแถบคาดในตาราง ชั้นเดียวกับแถบโซน · สีของแถบคือสีประจำเอเยนต์
+       ตัวเดียวกับที่ใช้ทั้งระบบ (bkV2LockHolderColor → bkV2AgentColor) จะได้จำสีเดียว
+       ตัวเลขทั้งหมดอ่านจากตัวเดิมของระบบ ไม่เขียนกติกาใหม่ซ้อน                    */
+    const trLocks = (typeof bkV2LocksFor==='function') ? bkV2LocksFor(rid, date) : [];
+    const trParents = trLocks.filter(l=>!l.parentId);   // parents/standalone only (children live inside)
+    const trLockedTotal = trParents.reduce((s,l)=> s + ((typeof bkV2LockPoolHold==='function')?bkV2LockPoolHold(l,date):bkV2LockRemaining(l,date)), 0);
+    /* §btLkBand · ล็อกที่ถูกดึงจนหมดแล้ว bkV2DrawLock ตีตรา depleted · bkV2LocksFor
+       จึงกรองทิ้ง · แต่ในใบงานต้องยังเห็น เพราะเป็นคำตอบของคำถามที่เอเยนต์โทรมาถาม
+       ("โควตาผมเหลือไหม") · เอามาโชว์เฉพาะใบที่ถูกดึงในวันนี้ และที่นั่งเหลือ 0
+       อยู่แล้ว จึงไม่กระทบยอด trLockedTotal ที่ไปหักที่ว่างขาย                     */
+    const trDrained = (typeof SB_SEAT_LOCKS!=='undefined'?SB_SEAT_LOCKS:[]).filter(l=>
+      l && !l.parentId && l.routeId===rid && l.status==='depleted'
+      && (l.log||[]).some(e=> e && e.type==='draw' && ((e.tripDate || (l.scope==='day'?(l.date||''):'')) === date)));
+    const lkShow = trParents.concat(trDrained);
     const _pband = `<tr class="t2-pband" style="--pc:${_pbCol}"><td colspan="${COLN}"><div class="pw">`
       + `<span class="pd"></span><span class="pn">${esc(route?.name || rid)}</span>`
       + `<span class="pt">${esc(dep)}${_pbPier?(' &middot; '+esc(_pbPier)):''}</span>`
       + (_pbNB?`<span class="pb">${_pbNB} boat${_pbNB===1?'':'s'}</span>`:'')
       + `<span class="ps">${_pbBk}/${_pbCap}<em class="${_pbCls}">${_pbAv<=0?'full':(_pbAv+' free')}</em></span>`
       + `</div></td></tr>`;
-    const zoneTable = zoneBlocks ? `
+    /* §btLkBand · ล็อกเกินความจุเรือ · เคสจริง 15 ต.ค. PG 08:00 เรือ 56 ที่ แต่ล็อก 58
+       หน้าจอเดิมขึ้นแค่ "full" จึงมองไม่เห็นว่าเกิน · พอเอาล็อกมาวางในตารางก็เห็นเอง */
+    const _lkOver = (_pbCap>0) ? Math.max(0, (_pbBk + trLockedTotal) - _pbCap) : 0;
+    const lockBlocks = lkShow.map(l=>{
+      const _c   = (typeof bkV2LockHolderColor==='function') ? bkV2LockHolderColor(l) : '#9C9C95';
+      const _ink = (typeof bkV2ContrastInk==='function') ? bkV2ContrastInk(_c) : '#fff';
+      const _nm  = (typeof bkV2LockHolderName==='function') ? bkV2LockHolderName(l) : String(l.holderId||'');
+      const _qty = Number(l.qty)||0;
+      const _used= (typeof bkV2LockUsedTotal==='function') ? bkV2LockUsedTotal(l, date) : (Number(l.used)||0);
+      const _held= (typeof bkV2LockHeldRemaining==='function') ? bkV2LockHeldRemaining(l, date) : bkV2LockRemaining(l, date);
+      const _kids= (typeof bkV2LockChildren==='function') ? bkV2LockChildren(l.id) : [];
+      const _cut = (typeof bkV2LockCutoffLabel==='function') ? bkV2LockCutoffLabel(l) : '';
+      const _band = `<tr class="t2-lband" data-rid="${esc(rid)}" data-lk="${esc(l.id)}" style="--lc:${_c}"><td colspan="${COLN}"><div class="zw">`
+        + `<span class="zkind">&#128274; ล็อกที่นั่ง</span>`
+        + `<span class="lnm" style="background:${_c};color:${_ink}">${esc(_nm)}</span>`
+        + `<span class="zsub">${_qty} ที่ &middot; ขายไปแล้ว <b>${_used}</b> &middot; เหลือกันไว้ <b>${_held}</b></span>`
+        + (_kids.length?`<span class="lksub">${_kids.map(k=>`<span>&#8627; ${esc(k.subName||'ย่อย')} ${bkV2LockRemaining(k,date)}</span>`).join('')}</span>`:'')
+        + (_cut?`<span class="lkrule">${esc(_cut)}</span>`:'')
+        + (bkV2LockSpansDays(l)?`<span class="lkrule">bulk</span>`:'')
+        + (_lkOver>0?`<span class="lkwarn" title="ที่นั่งที่ขายแล้วบวกที่ล็อกไว้ เกินความจุเรือที่เปิดอยู่">&#9888; ล็อกเกินความจุ ${_lkOver} ที่</span>`:'')
+        + `<button class="lkgo" onclick="event.stopPropagation();bkV2LockManageOpen('${l.id}')" title="จัดการล็อก · เพิ่มกรุ๊ปย่อย / ปล่อย">จัดการล็อก &#9662;</button>`
+        + `</div></td></tr>`;
+      /* แถวที่นั่งที่ยังกันไว้ · เป็น "ที่นั่ง" ไม่ใช่ "คน" — ไม่นับเป็น booking
+         ไม่เข้าใบงานรถ/เรือ และไม่เข้าทะเบียนอุทยาน จนกว่าจะมีชื่อจริง */
+      const _row = _held>0 ? `<tr class="t2-lrow" style="--lc:${_c}"><td colspan="${COLN}"><div class="lw">`
+        + `<span class="lkq">${_held}</span><span class="lkqu">ที่</span>`
+        + `<span class="lkhold">&#128274; กันไว้</span>`
+        + `<span class="lkwho">${esc(_nm)}</span>`
+        + `<span class="lkwait">${_used>0?'เหลือกันไว้ ยังไม่ส่งชื่อ':'ยังไม่ส่งชื่อผู้โดยสาร'}</span>`
+        + `</div></td></tr>` : '';
+      return _band + _row;
+    }).join('');
+    const zoneTable = (zoneBlocks || lockBlocks) ? `
         <div class="t2-tblscroll">
           <table class="t2-mtbl${vanMode?' t2-van':''}">
             <thead><tr>
@@ -47797,14 +47873,11 @@ function bkV2RenderTab2(){
               ${rcMode?`<th class="t2-c" style="color:#7A4A00;background:#FAEBD2;white-space:nowrap">&#9989; Re-confirm <button onclick="bkV2ReconfirmAll('${date}','${rid}','list')" title="ยืนยันทั้งหมด (list)" style="background:#7A4A00;color:#fff;border:none;border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:4px">all</button></th>`:''}
               ${wxClosed?'<th class="t2-c" style="color:#A32D2D;background:#FBE8E4;white-space:nowrap">&#9928; Manage</th>':''}
             </tr></thead>
-            <tbody>${_pband}${zoneBlocks}</tbody>
+            <tbody>${_pband}${lockBlocks}${zoneBlocks}</tbody>
           </table>
         </div>` : '';
 
-    // ── Seat locks held on this trip (route+date · incl. month-range) · manage inline (create / sub-group / release) ──
-    const trLocks = (typeof bkV2LocksFor==='function') ? bkV2LocksFor(rid, date) : [];
-    const trParents = trLocks.filter(l=>!l.parentId);   // parents/standalone only (children live inside)
-    const trLockedTotal = trParents.reduce((s,l)=> s + ((typeof bkV2LockPoolHold==='function')?bkV2LockPoolHold(l,date):bkV2LockRemaining(l,date)), 0);
+    // ── Seat locks held on this trip · อ่านไว้ข้างบนแล้ว (§btLkBand) ──
     const _subBtn='font-size:10px;font-weight:700;color:#534AB7;background:#EEEDFE;border:1px solid #CECBF6;border-radius:6px;padding:3px 8px;cursor:pointer;font-family:inherit';
     const _relBtn='font-size:10px;font-weight:700;color:#A32D2D;background:#FDECEA;border:1px solid #F5C9C4;border-radius:6px;padding:3px 8px;cursor:pointer;font-family:inherit';
     const lockChips = trParents.map(l=>{
@@ -48114,7 +48187,7 @@ function bkV2RenderTab2(){
         ${/* §btSlim · แถบล็อคที่นั่งรายทริปถูกยกไปอยู่การ์ด Seat Lock บนหัวหน้าแล้ว
               (ยุบตามเอเยนต์ + ปุ่มล็อคที่นั่ง + ทั้งหมด ครบเหมือนเดิม) */''}
         ${pendBlock}
-        ${(grp.length===0 && !_pendRows.length) ? '<div class="t2-nobk">No bookings yet · seats held by lock above</div>' : zoneTable}
+        ${(grp.length===0 && !_pendRows.length && !lockBlocks) ? '<div class="t2-nobk">ยังไม่มี booking และไม่มีที่นั่งที่ล็อกไว้</div>' : zoneTable}
         ${ghostBlock}
         ${cxlBlock}
         ${/* §btTune · แถบ "BOATS · ไกด์ · อาหารรายลำ" ท้ายตารางถูกตัดออก
@@ -48488,6 +48561,40 @@ function bkV2RenderTab2(){
     .t2-zband-ch .znm{color:#5B289A}
     .t2-zband .zsub{font-size:11px;color:#6a7180;font-weight:600}
     .t2-zband-ch .zsub{color:#7A6FA8}
+    /* ══ §btLkBand · แถบล็อกที่นั่ง · ชั้นเดียวกับแถบโซน ═══════════════════════
+       ไม่ทาสีเอเยนต์ทั้งแถบ · เอเยนต์บางเจ้าสีเข้มจัด ทาเต็มแถบแล้วแย่งสายตา
+       ไปจากแถวจริง · ใช้ขีดซ้าย + ป้ายชื่อเป็นสีของเจ้านั้น พื้นแถบเป็นครีมกลาง ๆ */
+    .t2-mtbl tr.t2-lband>td{background:#FBF6F0;border-top:2px solid #E7D8C6;
+      border-bottom:1px solid #EEE2D4;padding:7px 14px;box-shadow:inset 5px 0 0 var(--lc,#9C9C95)}
+    .t2-lband .zw{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+    .t2-lband .zkind{font-size:9px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#A98F72}
+    .t2-lband .lnm{font-size:12px;font-weight:800;border-radius:6px;padding:3px 10px;
+      max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .t2-lband .zsub{font-size:11px;color:#7a6a58;font-weight:600}
+    .t2-lband .zsub b{font-family:'DM Mono',monospace;font-weight:800;color:#5C4A36}
+    .t2-lband .lksub{display:inline-flex;gap:5px;flex-wrap:wrap}
+    .t2-lband .lksub span{font-size:10px;font-weight:700;color:#4A3FA0;background:#F3F2FB;
+      border:1px solid #DAD6F5;border-radius:6px;padding:2px 7px}
+    .t2-lband .lkrule{font-size:10px;font-weight:700;background:#fff;border:1px solid #E7D8C6;
+      color:#7A5A34;border-radius:6px;padding:2px 8px}
+    .t2-lband .lkwarn{font-size:10px;font-weight:800;background:#8E1B10;color:#fff;
+      border-radius:6px;padding:2px 8px}
+    .t2-lband .lkgo{margin-left:auto;font-size:10.5px;font-weight:700;color:#7A5A34;background:#fff;
+      border:1px solid #E7D8C6;border-radius:7px;padding:4px 10px;cursor:pointer;font-family:inherit}
+    .t2-lband .lkgo:hover{border-color:#B7946A}
+    /* แถวที่นั่งที่ยังกันไว้ · เส้นประบอกว่ายังไม่ใช่แถวของคนจริง */
+    .t2-mtbl tr.t2-lrow>td{background:#FFFCF8;border-bottom:1px dashed #E7D8C6;padding:7px 14px;
+      box-shadow:inset 5px 0 0 var(--lc,#9C9C95)}
+    .t2-lrow .lw{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .t2-lrow .lkq{font-family:'DM Mono',monospace;font-size:17px;font-weight:800;color:var(--lc,#9C9C95)}
+    .t2-lrow .lkqu{font-size:10px;font-weight:700;color:#A98F72;margin-left:-5px}
+    .t2-lrow .lkhold{font-size:10.5px;font-weight:700;color:#7A5A34;background:#fff;
+      border:1px solid #E7D8C6;border-radius:6px;padding:2px 8px}
+    .t2-lrow .lkwho{font-size:11.5px;font-weight:700;color:#5C4A36}
+    .t2-lrow .lkwait{font-size:11.5px;font-style:italic;color:#9a8b78}
+    /* ป้ายบนใบที่ดึงที่นั่งมาจากล็อก · สีของเจ้าของล็อก ตามรอยกลับได้ว่ามาจากโควตาใคร */
+    .t2-drawn{display:inline-block;font-size:9px;font-weight:800;border-radius:5px;
+      padding:1px 6px;margin-left:6px;vertical-align:middle;white-space:nowrap}
     .t2-zdot{width:8px;height:8px;border-radius:50%}
     .t2-zn{font-size:12px;font-weight:700}
     .t2-zc{font-size:11px;color:var(--ink-soft);font-family:'DM Mono',monospace}
