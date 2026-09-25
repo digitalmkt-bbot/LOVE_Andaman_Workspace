@@ -51,10 +51,13 @@
     // §bootRetry · 404 ที่ยังไม่หายหลังลองครบ = ไม่ใช่ช่วง deploy แล้ว · บอกให้ตรงว่าน่าจะเป็นอะไร
     bootFail(me.status===404?'auth /api/me · เซิร์ฟเวอร์อาจกำลังอัปเดต':'auth /api/me', me.status); return; }
   ME=me.json||{}; window.LA_ME=ME;                               // expose current user (edit-lock / audit)
-  // §per-user sidebar (accent colour + collapsible groups) · retry until the footer is mounted
-  //  (laSbInit ran once but the sidebar footer wasn't stable yet → picker dropped)
+  /* §per-user sidebar (พับ/กางกลุ่มเมนู) · ลองซ้ำจนกว่าเมนูซ้ายจะวาดเสร็จจริง
+     (laSbInit ทำงานรอบแรกได้ แต่ตอนนั้นเมนูยังไม่นิ่ง ตัวพับกลุ่มเลยไม่ติด)
+     §sbColorGone · เดิมเช็คว่าแถบเลือกสี (#la-sbcolor-sw) โผล่หรือยัง · แถบนั้นถูกตัดออกแล้ว
+     เปลี่ยนมาเช็คเครื่องหมาย data-acc ที่ laSbInit ติดไว้บนหัวกลุ่มแทน
+     ไม่งั้นลูปนี้จะวนครบ 25 รอบทุกครั้งที่เปิดหน้า เพราะรอของที่ไม่มีวันมา */
   onReady(function(){ var _t=0; (function _go(){ try{ if(typeof laSbInit==='function') laSbInit(); }catch(e){}
-    if(!(document.getElementById&&document.getElementById('la-sbcolor-sw')) && _t++<25) setTimeout(_go,180); })(); });
+    if(!(document.querySelector&&document.querySelector('.sidebar .nav-section[data-acc]')) && _t++<25) setTimeout(_go,180); })(); });
 
   // ── STATE STORE: in-memory, persisted to SQL (no localStorage blob mirror) ──
   //    The full app state (~6 MB) exceeds the browser localStorage quota (~5 MB); SQL (operation_schemas)

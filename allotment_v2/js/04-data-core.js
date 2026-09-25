@@ -580,29 +580,16 @@ function fillColor(pct){return pct>=85?'var(--red)':pct>=60?'var(--amber)':'var(
 // §Per-user sidebar personalization — accent colour + collapsible groups · stored in
 // localStorage keyed by username (per-device, no backend) · only the logged-in user sees theirs.
 function laSbUser(){ return (window.LA_ME && (LA_ME.username||LA_ME.name)) || 'guest'; }
-const LA_SB_COLORS=['#1683C7','#0F6E56','#D4537E','#854F0B','#534AB7','#A32D2D','#1f2937'];
-function laApplySidebarColor(){
-  let c=''; try{ c=localStorage.getItem('la_sbcolor_'+laSbUser())||''; }catch(e){}
-  let st=document.getElementById('la-sbcolor');
-  if(!c){ if(st) st.remove(); }
-  else { if(!st){ st=document.createElement('style'); st.id='la-sbcolor'; document.head.appendChild(st); }
-    st.textContent='.sidebar .nav-item.active{background:'+c+' !important;border-color:'+c+' !important}.sidebar .nav-item.active svg{color:#fff !important;opacity:1 !important}'; }
-  const box=document.getElementById('la-sbcolor-sw'); if(box) box.querySelectorAll('[data-c]').forEach(el=>el.style.boxShadow=(el.getAttribute('data-c')===c?'0 0 0 2px #888':'0 0 0 1px rgba(128,128,128,.35)'));
-}
-function laSetSidebarColor(c){ try{ localStorage.setItem('la_sbcolor_'+laSbUser(), c); }catch(e){} laApplySidebarColor(); }
-function laSbResetColor(){ try{ localStorage.removeItem('la_sbcolor_'+laSbUser()); }catch(e){} laApplySidebarColor(); }
-function laSbColorPickerHTML(){
-  return '<div style="padding:9px 4px 3px"><div onclick="laSbToggleColorPicker()" style="font-size:10px;color:#8a93a0;letter-spacing:.05em;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px">🎨 สีแท็บ<span id="la-sbcolor-ch" style="margin-left:auto;font-size:10px;opacity:.6;transition:transform .2s">⌄</span></div><div id="la-sbcolor-sw" style="display:none;gap:7px;flex-wrap:wrap;align-items:center;margin-top:8px">'
-    + LA_SB_COLORS.map(c=>'<span data-c="'+c+'" onclick="laSetSidebarColor(\''+c+'\')" title="'+c+'" style="width:18px;height:18px;border-radius:50%;background:'+c+';cursor:pointer;box-shadow:0 0 0 1px rgba(128,128,128,.35)"></span>').join('')
-    + '<span onclick="laSbResetColor()" title="ค่าเริ่มต้น" style="font-size:13px;color:#9aa3af;cursor:pointer;margin-left:2px">↺</span>'
-    + '</div></div>';
-}
-function laSbToggleColorPicker(){
-  const sw=document.getElementById('la-sbcolor-sw'); if(!sw) return;
-  const open=(sw.style.display==='none'||!sw.style.display);
-  sw.style.display=open?'flex':'none';
-  const ch=document.getElementById('la-sbcolor-ch'); if(ch) ch.style.transform=open?'rotate(180deg)':'none';
-}
+/* ══ §sbColorGone (2026-09-25) · แถบเลือกสีแท็บถูกตัดออก ═══════════════════
+   ที่มา · ผู้ใช้แจ้งเอง · "ตัดแถบเลือกสีออกได้เลย เหมือนตอนนี้ไม่มีผลแล้ว" — จริง
+   ของเดิมยัด <style> ว่า .sidebar .nav-item.active{background:<สี> !important}
+   แต่สกินอัตลักษณ์องค์กร (§sbPill) ใส่กฎที่เจาะจงกว่าไว้ทับ
+     html[data-sb-pill="cyan"] .sidebar .nav-item.active{background:var(--ci-cyan)!important}
+   ความเจาะจง (0,4,1) ชนะ (0,3,0) ไม่ว่าจะมาก่อนมาหลัง · กดสีไหนก็ไม่ขยับ
+   (วัดแล้ว · กด #D4537E พื้นเมนูที่เปิดอยู่ยังเป็น rgb(0,188,223) เหมือนเดิม)
+   ตัวที่ใช้เลือกหน้าตาเมนูตอนนี้คือปุ่มทรงพิล cyan/navy ข้างปุ่มธีมบนหัวแถบ
+   คีย์ la_sbcolor_<user> ที่เคยเก็บไว้ปล่อยค้างไว้เฉย ๆ ไม่มีใครอ่านแล้ว
+   ไม่ไล่ลบ เพราะเป็นของในเครื่องผู้ใช้และลบทิ้งเงียบ ๆ ไม่ใช่เรื่องที่ควรทำเอง */
 // ── collapsible groups (accordion) · coexists with permission auto-hide (inline display:none wins) ──
 function laSbCollapsed(){ try{ return JSON.parse(localStorage.getItem('la_sbacc_'+laSbUser())||'[]'); }catch(e){ return []; } }
 function laSbSetCollapsed(a){ try{ localStorage.setItem('la_sbacc_'+laSbUser(), JSON.stringify(a)); }catch(e){} }
@@ -654,16 +641,17 @@ function laSbInit(){
   if(!document.getElementById('la-sb-base')){ const s=document.createElement('style'); s.id='la-sb-base';
     s.textContent='.sidebar .nav-item.acc-hidden{display:none !important}.sidebar .nav-section{display:flex;align-items:center}.sidebar .nav-section.acc-collapsed .acc-ch{transform:rotate(-90deg)}';
     document.head.appendChild(s); }
-  const foot=document.querySelector('.sidebar .sidebar-footer');
-  if(foot && !document.getElementById('la-sbcolor-sw')){ const w=document.createElement('div'); w.innerHTML=laSbColorPickerHTML(); if(w.firstElementChild) foot.parentNode.insertBefore(w.firstElementChild, foot); }
   try{ laSbInitAccordion(); }catch(e){}
   try{ poNavGroupInit(); }catch(e){}
-  try{ laApplySidebarColor(); }catch(e){}
 }
 // ══════════════════════════════════════
 function nav(el){
   try{ if(typeof laNavClose==='function') laNavClose(); }catch(e){}   // §mobile · เลือกเมนูแล้วลิ้นชักต้องปิดเอง
-  try{ if(typeof laSbInit==='function' && !document.getElementById('la-sbcolor-sw')) laSbInit(); }catch(e){}   // §re-add sidebar picker if a re-render dropped it
+  /* §sbColorGone · เดิมใช้ "แถบเลือกสียังอยู่ไหม" เป็นตัวบอกว่าเมนูซ้ายถูกวาดใหม่หรือยัง
+     แถบนั้นถูกตัดออกแล้ว ต้องเปลี่ยนไปดูเครื่องหมายอื่นที่ laSbInit เป็นคนติดไว้ในเมนู
+     ใช้ data-acc ของหัวกลุ่ม (ตัวพับ/กาง) · วาดใหม่ทีไรก็หายไปพร้อมกัน
+     ถ้าเช็คด้วยของที่อยู่ใน <head> จะไม่มีวันหาย แล้วตัวพับกลุ่มจะตายหลังวาดใหม่ */
+  try{ if(typeof laSbInit==='function' && !document.querySelector('.sidebar .nav-section[data-acc]')) laSbInit(); }catch(e){}
   const view=el.dataset.view;
   // fl-boatstatus → unified view-boats
   const actualView=view==='fl-boatstatus'?'boats':view;
