@@ -23036,8 +23036,17 @@ function flRenderInventory(){
 
   function buildMemoTab(){
     // Split active vs archive
+    /* ══ §moCxl (2026-09-25) · ใบที่ยกเลิกเคยหายไปจากทั้งสองแท็บ ═══════════════
+       ที่มา · ผู้ใช้ถามว่า "รายการที่กดยกเลิกไป ในนี้ถูกย้ายไปไหน"
+       ของเดิม Active = created/pending/approved/ordered/received · Archive = paid
+       cancelled ไม่อยู่ในชุดไหนเลย · ใบที่กดยกเลิกจึงหายจากลิสต์ทั้งที่ยังอยู่ในระบบ
+       (ยอดบนแท็บ Memorandum นับทุกใบ จึงมากกว่า Active+Archive เสมอ)
+       ใบที่ผูกกับงานซ่อมยังเปิดดูได้จากแผงงานซ่อมนั้น แต่ใบที่ไม่ผูกกับอะไรเลย
+       เช่นค่าผ่านทาง/ค่าลากเรือ จะเข้าถึงไม่ได้อีกเลย
+       Archive คือ "จบแล้ว" · จ่ายแล้วกับยกเลิกแล้วเป็นปลายทางทั้งคู่ จึงอยู่ด้วยกัน
+       แล้วแยกดูด้วยปุ่มกรอง                                                       */
     const activeStatuses=new Set(['created','pending_approval','approved','ordered','received']);
-    const archiveStatuses=new Set(['paid']);
+    const archiveStatuses=new Set(['paid','cancelled']);
     const allActive=memos.filter(m=>activeStatuses.has(m.status));
     const allArchive=memos.filter(m=>archiveStatuses.has(m.status));
     const tabMemos=(_memoArchiveTab==='archive')?allArchive:allActive;
@@ -23054,7 +23063,7 @@ function flRenderInventory(){
     memoList.sort((a,b)=>_memoLastDate(b).localeCompare(_memoLastDate(a)));
     const compact=(_memoDensity==='compact');
 
-    const ST_STYLE={created:{bg:'#F4F2EE',color:'#666',label:'CREATED',stripe:'#999'},pending_approval:{bg:'#FAEEDA',color:'#854F0B',label:'PENDING',stripe:'#BA7517'},approved:{bg:'#E6F1FB',color:'#185FA5',label:'APPROVED',stripe:'#185FA5'},ordered:{bg:'#E6F1FB',color:'#185FA5',label:'ORDERED',stripe:'#185FA5'},received:{bg:'#1D9E75',color:'white',label:'RECEIVED',stripe:'#1D9E75'},paid:{bg:'#1D9E75',color:'white',label:'PAID',stripe:'#1D9E75'}};
+    const ST_STYLE={created:{bg:'#F4F2EE',color:'#666',label:'CREATED',stripe:'#999'},pending_approval:{bg:'#FAEEDA',color:'#854F0B',label:'PENDING',stripe:'#BA7517'},approved:{bg:'#E6F1FB',color:'#185FA5',label:'APPROVED',stripe:'#185FA5'},ordered:{bg:'#E6F1FB',color:'#185FA5',label:'ORDERED',stripe:'#185FA5'},received:{bg:'#1D9E75',color:'white',label:'RECEIVED',stripe:'#1D9E75'},paid:{bg:'#1D9E75',color:'white',label:'PAID',stripe:'#1D9E75'},cancelled:{bg:'#FCEBEB',color:'#A32D2D',label:'CANCELLED',stripe:'#C0392B'}};
 
     const stBtn=function(val,label,color){var isOn=_memoStFilter===val;return '<button onclick="memoFilterSt(\''+val+'\')" style="background:'+(isOn?dim.ink:'transparent')+';color:'+(isOn?'white':(color||dim.ink2))+';border:'+(isOn?'none':'1px solid rgba(0,0,0,.08)')+';border-radius:12px;padding:5px 12px;font-size:11px;font-weight:'+(isOn?600:500)+';cursor:pointer">'+label+'</button>'};
 
@@ -23071,7 +23080,7 @@ function flRenderInventory(){
     if(_memoArchiveTab==='active'){
       filterBtns=stBtn('all','All')+stBtn('pending_approval','Pending','#854F0B')+stBtn('approved','Approved','#185FA5')+stBtn('ordered','Ordered','#185FA5')+stBtn('received','Received','#0F6E56');
     } else {
-      filterBtns=stBtn('all','All')+stBtn('paid','Paid','#0F6E56');
+      filterBtns=stBtn('all','All')+stBtn('paid','Paid','#0F6E56')+stBtn('cancelled','Cancelled','#A32D2D');
     }
     const filterBar='<div style="display:flex;gap:6px;margin-bottom:14px;align-items:center;flex-wrap:wrap"><span style="font-size:11px;color:'+dim.ink3+';margin-right:6px;font-weight:500">filter</span>'+filterBtns+'</div>';
     const _densBtn=function(val,label){var on=_memoDensity===val;return '<button onclick="memoSetDensity(\''+val+'\')" style="background:'+(on?dim.ink:'transparent')+';color:'+(on?'white':dim.ink2)+';border:none;border-radius:10px;padding:4px 11px;font-size:10px;font-weight:'+(on?600:500)+';cursor:pointer">'+label+'</button>'};
@@ -23085,7 +23094,13 @@ function flRenderInventory(){
 
     const MEMO_TYPE_STYLE={parts:{bg:'#E6F1FB',color:'#185FA5',label:'Parts',dot:'#185FA5'},labor:{bg:'#FAEEDA',color:'#854F0B',label:'Labor',dot:'#BA7517'},mixed:{bg:'#EEEDF8',color:'#534AB7',label:'Mixed',dot:'#7F77DD'}};
     const _monthAgg={};
-    memoList.forEach(function(mm){var _k=_memoLastDate(mm).slice(0,7);if(!_monthAgg[_k])_monthAgg[_k]={c:0,t:0};_monthAgg[_k].c++;_monthAgg[_k].t+=(mm.amount||0);});
+    /* §moCxl · ยอดรวมรายเดือนต้องไม่นับเงินของใบที่ยกเลิก · เงินนั้นไม่ได้จ่ายจริง
+       (ตัวนับ spend ของทั้งหน้าก็กรอง cancelled ออกอยู่แล้ว · อ่านกติกาเดียวกัน)
+       แต่ยังนับ "จำนวนใบ" รวมไว้ แล้วบอกแยกว่ายกเลิกไปกี่ใบ */
+    memoList.forEach(function(mm){var _k=_memoLastDate(mm).slice(0,7);
+      if(!_monthAgg[_k])_monthAgg[_k]={c:0,t:0,x:0};
+      _monthAgg[_k].c++;
+      if(mm.status==='cancelled') _monthAgg[_k].x++; else _monthAgg[_k].t+=(mm.amount||0);});
     // §memoTable · โครงคอลัมน์ · โหมดกระชับตัด "ผู้ขอ" ออก (ที่เหลือตัดในระดับเซลล์)
     const _MCOL=compact
       ? [['',3],['MO',78],['เรื่อง',0],['เรือ · งานซ่อม',140],['วันที่',76],['รายการ',46,'c'],['ยอด',108,'r'],['สถานะ',104],['ถัดไป',150],['',102,'r']]
@@ -23107,10 +23122,10 @@ function flRenderInventory(){
       const _mk=_memoLastDate(m).slice(0,7);
       if(_mk!==_curMonth){
         _curMonth=_mk;
-        const _agg=_monthAgg[_mk]||{c:0,t:0};
+        const _agg=_monthAgg[_mk]||{c:0,t:0,x:0};
         const _ml=_mk?(MONTHS_EN[parseInt(_mk.slice(5,7),10)-1]+' '+_mk.slice(0,4)):'ไม่ระบุวันที่';
         // §memoTable · หัวเดือนกลายเป็นแถวคั่นในตาราง · ยอดรวมชิดขวาให้ตรงคอลัมน์ยอด
-        _divider='<tr><td colspan="'+_NCOL+'" style="background:'+dim.bg+';padding:7px 12px;border-bottom:1px solid #E5E1DA"><span style="font-size:11.5px;font-weight:700">'+_ml+'</span><span style="font-size:10px;color:'+dim.ink3+';margin-left:8px">'+_agg.c+' ใบ</span><span style="float:right;font-size:11px;font-weight:700;font-family:\'DM Mono\',monospace;color:'+dim.ink2+'">'+_mAmt(_agg.t)+'</span></td></tr>';
+        _divider='<tr><td colspan="'+_NCOL+'" style="background:'+dim.bg+';padding:7px 12px;border-bottom:1px solid #E5E1DA"><span style="font-size:11.5px;font-weight:700">'+_ml+'</span><span style="font-size:10px;color:'+dim.ink3+';margin-left:8px">'+_agg.c+' ใบ'+(_agg.x?(' · ยกเลิก '+_agg.x):'')+'</span><span title="'+(_agg.x?'ไม่รวมเงินของใบที่ยกเลิก '+_agg.x+' ใบ':'')+'" style="float:right;font-size:11px;font-weight:700;font-family:\'DM Mono\',monospace;color:'+dim.ink2+'">'+_mAmt(_agg.t)+'</span></td></tr>';
       }
       const ss=ST_STYLE[m.status]||ST_STYLE.created;
       const b=getBoat(m.boatId);
@@ -23162,9 +23177,20 @@ function flRenderInventory(){
         '</div>';
       }).join('');
 
+      /* §moCxl · ใบที่ยกเลิกแล้วไม่มีขั้นต่อไป · ของเดิม stepIdx หาไม่เจอแล้วตกเป็น 0
+         ปุ่มจึงขึ้น "ส่งขออนุมัติ" ให้ใบที่ยกเลิกไปแล้ว · ช่องนี้เปลี่ยนเป็นบอกเหตุผลแทน */
+      const isCxl = m.status==='cancelled';
       // Next action button
       let actionBtn='';
-      if(!isPaid){
+      if(isCxl){
+        var _cxlWho = m.cancelledBy ? (' · '+m.cancelledBy) : '';
+        var _cxlWhen = m.cancelledDate ? (' · '+fmtD(m.cancelledDate)) : '';
+        actionBtn='<span title="'+String((m.cancelReason||'')+_cxlWho+_cxlWhen).replace(/"/g,'&quot;')+'" '
+          +'style="display:inline-flex;align-items:center;gap:5px;background:#FCEBEB;color:#A32D2D;'
+          +'border:1px solid #F0C9C9;border-radius:14px;padding:4px 12px;font-size:11px;font-weight:600;'
+          +'max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:help">'
+          +'&#128683; '+(m.cancelReason?m.cancelReason:'ยกเลิกแล้ว')+'</span>';
+      } else if(!isPaid){
         const nextStep=STEPS[currentIdx+1];
         if(nextStep){
           const ACTION_STYLE={
@@ -23225,7 +23251,8 @@ function flRenderInventory(){
             +'display:inline-block;font-weight:700">รับบางส่วน '+_rs.done+'/'+_rs.n+' &middot; ขาด '+_rs.left+'</div>';
         }
       }catch(_){}
-      if(!compact) _stCell+='<div style="display:flex;align-items:center;gap:5px;margin-top:4px"><span style="width:52px;height:3px;background:#E9E5DE;border-radius:2px;overflow:hidden;display:inline-block"><span style="display:block;height:100%;width:'+_pctDone+'%;background:'+_barColor+'"></span></span><i style="font-style:normal;font-size:8.5px;color:'+dim.ink3+';font-family:\'DM Mono\',monospace">'+(currentIdx+1)+'/'+_totalSteps+'</i></div>';
+      if(isCxl) _stCell+='<div style="font-size:9px;color:#A32D2D;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">&#128683; '+(m.cancelledBy||'—')+(m.cancelledDate?(' · '+String(m.cancelledDate).slice(0,10)):'')+'</div>';
+      else if(!compact) _stCell+='<div style="display:flex;align-items:center;gap:5px;margin-top:4px"><span style="width:52px;height:3px;background:#E9E5DE;border-radius:2px;overflow:hidden;display:inline-block"><span style="display:block;height:100%;width:'+_pctDone+'%;background:'+_barColor+'"></span></span><i style="font-style:normal;font-size:8.5px;color:'+dim.ink3+';font-family:\'DM Mono\',monospace">'+(currentIdx+1)+'/'+_totalSteps+'</i></div>';
 
       const _tools='<div style="display:flex;gap:4px;justify-content:flex-end">'
         + _mIco("flViewMemo('"+m.id+"')",'รายละเอียด · แก้รายการ / ยกเลิก',_MICO.eye,'#E1F5EE','#0F6E56')
@@ -23236,10 +23263,13 @@ function flRenderInventory(){
 
       const _openJs="var r=this.nextElementSibling;if(!r||!r.hasAttribute('data-memo-items'))return;var o=r.style.display!=='none';r.style.display=o?'none':'table-row';var c=this.querySelector('[data-chev]');if(c)c.style.transform=o?'rotate(0deg)':'rotate(180deg)';";
 
-      let _row='<tr onclick="'+_openJs+'" onmouseover="this.style.background=\'#FCFBF8\'" onmouseout="this.style.background=\'\'" style="cursor:'+(items.length?'pointer':'default')+'">'
+      /* §moCxl · ใบที่ยกเลิกจางลงและขีดฆ่า · ตากวาดผ่านแล้วรู้ทันทีว่าไม่ใช่ใบที่ยังเดินอยู่ */
+      var _cxlRow = isCxl ? 'opacity:.62;' : '';
+      var _cxlCut = isCxl ? 'text-decoration:line-through;' : '';
+      let _row='<tr onclick="'+_openJs+'" onmouseover="this.style.background=\'#FCFBF8\'" onmouseout="this.style.background=\'\'" style="'+_cxlRow+'cursor:'+(items.length?'pointer':'default')+'">'
         +'<td style="width:3px;padding:0;background:'+ss.stripe+';border-bottom:0.5px solid rgba(0,0,0,.055)"></td>'
-        +'<td style="'+_mTd+'"><span style="font-size:11px;font-family:\'DM Mono\',monospace;color:'+dim.ink3+';font-weight:700">'+(m.no||'\u2014')+'</span></td>'
-        +'<td style="'+_mTd+'"><div style="font-size:12px;font-weight:600;line-height:1.35">'+(m.title||'\u2014')+' '+typeBadge+'</div>'
+        +'<td style="'+_mTd+'"><span style="font-size:11px;font-family:\'DM Mono\',monospace;color:'+dim.ink3+';font-weight:700;'+_cxlCut+'">'+(m.no||'\u2014')+'</span></td>'
+        +'<td style="'+_mTd+'"><div style="font-size:12px;font-weight:600;line-height:1.35;'+_cxlCut+'">'+(m.title||'\u2014')+' '+typeBadge+'</div>'
           +((!compact && items.length)?('<div style="font-size:9.5px;color:'+dim.ink3+';margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:330px">'+items.slice(0,3).map(x=>x.name).join(' · ')+(items.length>3?(' +'+(items.length-3)+' more'):'')+'</div>'):'')
           +'</td>'
         +'<td style="'+_mTd+'">'+_whoCell+'</td>'
