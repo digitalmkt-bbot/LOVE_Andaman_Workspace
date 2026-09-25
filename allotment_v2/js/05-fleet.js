@@ -7281,7 +7281,7 @@ function flStatusPill(s){
   const l={available:'Available',fixing:'Fixing',unavailable:'Unavailable',ready:'Ready',broken:'Broken',spare:'Spare',active:'Active'};
   return`<span class="pill ${m[s]||'pill-gray'}">${l[s]||s}</span>`;
 }
-function flFmtShort(s){if(!s)return'—';const d=new Date(s);return`${d.getDate()} ${['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][d.getMonth()]}`;}
+function flFmtShort(s){if(!s)return'—';const d=new Date(s);return`${d.getDate()} ${laMonAbbrTH()[d.getMonth()]}`;}
 
 // fl-boatstatus is handled by unified nav() above
 
@@ -9280,7 +9280,7 @@ function flRenderDR(){
         <span style="display:inline-flex;align-items:center;background:${SVG_PINK.accent};color:white;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">▴ ${totalTrips} trips</span>
         <span style="display:inline-flex;align-items:center;background:${SVG_PINK.soft};color:${SVG_PINK.text};padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">${operatingBoats} boats</span>
       </div>
-      <div style="font-size:11px;color:${dim.ink3}">${weekday} · ${dt.getDate()} ${['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][dt.getMonth()]} ${dt.getFullYear()+543} · ${operatingBoats}/${companyBoats.length} fleet</div>
+      <div style="font-size:11px;color:${dim.ink3}">${weekday} · ${dt.getDate()} ${laMonAbbrTH()[dt.getMonth()]} ${dt.getFullYear()+543} · ${operatingBoats}/${companyBoats.length} fleet</div>
     </div>
 
     <div style="grid-column:2;background:white;border-radius:14px;padding:11px 13px;border:1px solid ${dim.line};position:relative;cursor:pointer">
@@ -9373,7 +9373,7 @@ function flRenderDR(){
        (เดือนมีอยู่ที่ช่อง date เล็กๆ มุมขวาบนเท่านั้น ซึ่งไม่มีใครมอง)
        การ์ดนี้เกาะหัวแถบวัน · สัปดาห์คร่อม 2 เดือนก็โชว์ทั้งสอง เช่น "มิ.ย. – ก.ค." */
     const _THL=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
-    const _THS=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    const _THS=laMonAbbrTH();
     const _endOfWeek=new Date(startOfWeek); _endOfWeek.setDate(startOfWeek.getDate()+6);
     const _m1=startOfWeek.getMonth(), _m2=_endOfWeek.getMonth();
     const _mLbl=(_m1===_m2)?_THL[_m1]:(_THS[_m1]+' – '+_THS[_m2]);
@@ -18155,7 +18155,7 @@ function renderFuelIntel(){
   const pa=_fuelAgg(pmS);
   const cpp=a.pax>0?a.cost/a.pax:0, pcpp=pa.pax>0?pa.cost/pa.pax:0;
   const mom=pcpp>0?Math.round((cpp/pcpp-1)*100):null;
-  const THM=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][mm-1];
+  const THM=laMonAbbrTH()[mm-1];
   const THM_LONG=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'][mm-1];
   const dim=new Date(yy,mm,0).getDate();
   const isCur=_fuelMonth===((typeof TODAY_STR!=='undefined'?TODAY_STR:'').slice(0,7));
@@ -18384,7 +18384,7 @@ function renderFuelIntel(){
     </div>
   </div>`;
 }
-function THM_prev(ms){ const m=+ms.split('-')[1]; return ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][m-1]; }
+function THM_prev(ms){ const m=+ms.split('-')[1]; return laMonAbbrTH()[m-1]; }
 
 function flRenderInsights(){
   const wrap=document.getElementById('fl-insights-wrap');
@@ -23966,7 +23966,7 @@ function flSaveEditBoatStatus(){
 
 function flShowItemHistory(id){
   const item=FL_INVENTORY.find(x=>x.id===id);if(!item)return;
-  const MONTHS=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const MONTHS=laMonAbbrTH();
   const fmtD=s=>{if(!s)return'—';const d=new Date(s);return`${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()+543}`;};
   const isLow=item.qty<(item.minQty||0);
   document.getElementById('ihp-name').textContent=item.name;

@@ -657,12 +657,17 @@ function laTp(th){
 }
 /* ชื่อเดือนย่อ · เขียนไว้ที่เดียวแล้วใช้ทุกที่ที่ต้องย่อเดือน
    ก่อนหน้านี้ตารางนี้ถูกพิมพ์ซ้ำสองที่ในไฟล์เดียวกัน (TH_MON กับ TH_MON_H) */
+/* §monOne · ชื่อเดือนย่อภาษาไทย · ตารางเดียวของทั้งระบบ
+   ก่อนหน้านี้ตารางนี้ถูกพิมพ์เองซ้ำอยู่ 20 ที่ใน 4 ไฟล์ · แก้ที่หนึ่งอีก 19 ที่ไม่ตาม */
+function laMonAbbrTH(){
+  return ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+}
 function laMonAbbr(){
   return (laLangGet()==='en')
     ? ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-    : ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    : laMonAbbrTH();
 }
-window.laT=laT; window.laTp=laTp; window.laMonAbbr=laMonAbbr;
+window.laT=laT; window.laTp=laTp; window.laMonAbbr=laMonAbbr; window.laMonAbbrTH=laMonAbbrTH;
 window.laLangGet=laLangGet; window.laLangToggle=laLangToggle;
 window.laLangApplyNav=laLangApplyNav;
 
@@ -813,7 +818,40 @@ var LA_T_EN={
   'ปล่อย':'Releases', 'วันเดินทาง':'on the travel day', '{0} วันก่อน':'{0} days before',
   'กู้คืน':'Restore', 'กู้คืน booking (ยกเลิกการยกเลิก)':'Restore this booking (undo the cancellation)',
   'ยังไม่ได้ระบุจุดรับ · กดแก้ไขเพื่อเพิ่ม':'No pickup point yet · edit the booking to add one',
-  '{0} ที่':'{0} seats'
+  '{0} ที่':'{0} seats',
+  /* ── ป๊อปอัป "รายละเอียดทั้งวัน" ของ Dashboard · รอบสาม ─────────────────── */
+  'รายละเอียดใบจองทั้งวัน':'Bookings keyed in today',
+  'รายละเอียดใบจอง {0} วัน':'Bookings keyed in over {0} days',
+  'ทุกใบที่เข้าระบบวันนี้ · แยก B2C / B2B':'Every booking keyed in today, split B2C / B2B',
+  'ทุกใบที่เข้าระบบในช่วงนี้ · แยก B2C / B2B':'Every booking keyed in over this range, split B2C / B2B',
+  'ยอดช่วงนี้':'this range', 'เดือนนี้':'This month', 'ปิด':'Close',
+  'date|จาก':'From', 'date|ถึง':'To',
+  '{0} วัน':'{0} days', '{0} ใบ':'{0} bookings',
+  'ช่วงก่อนหน้า ({0} วัน)':'Previous range ({0} days)',
+  'ช่วงถัดไป ({0} วัน)':'Next range ({0} days)',
+  '{0}% ของยอดวันนี้':'{0}% of today', '{0}% ของยอดช่วงนี้':'{0}% of this range',
+  'ยอดขาย':'revenue', 'ไม่มีข้อมูล':'No data', 'ยังไม่มีใบจองเข้ามา':'No bookings keyed in yet',
+  '{0} เส้นทาง':'{0} routes', 'ช่องทางที่ลูกค้าทักเข้ามา':'How the customer reached us',
+  '{0} ช่องทาง':'{0} channels', '{0} เจ้า':'{0} agents',
+  'เดือนที่จะเดินทาง':'Travel month', '{0} เดือน':'{0} months',
+  'ใบที่เข้ามาแต่ละวัน':'Bookings keyed in per day', 'เวลาที่ใบเข้ามา':'Time of day keyed in',
+  'สัญชาติผู้จอง':'Booker nationality', '{0} สัญชาติ':'{0} nationalities',
+  'ใบจองทั้งหมดของวันนี้':'Every booking keyed in today',
+  'ใบจองทั้งหมดในช่วงนี้':'Every booking keyed in over this range',
+  'แสดง {0} จาก {1} ใบ · กดเพื่อดูทั้งหมด':'Showing {0} of {1} bookings · tap to see them all',
+  /* ── แท็บรออนุมัติ ────────────────────────────────────────────────────── */
+  '{0} รายการ · ต้องอนุมัติก่อนบุคกิ้งจะ confirm':
+    '{0} waiting · a booking cannot confirm until this is approved',
+  'เกิน Capacity':'Over capacity',
+  '{0} = เกินโควต้าบริษัท (ไม่เกินทะเบียนเรือ) → ผจก.อนุมัติ · {1} = มีส่วนลด → เซลล์ที่ดูแลยืนยันส่วนลดก่อน · ทั้งคู่จะยังไม่ confirm จนกว่าจะอนุมัติ':
+    '{0} = over the company quota (still within the boat licence) → a manager approves · {1} = a discount was given → the sales owner confirms it first · neither confirms until approved',
+  'ไม่มีรายการรออนุมัติ':'Nothing waiting for approval',
+  'ประวัติล่าสุด':'Recent decisions',
+  'เกิน cap +{0} ที่นั่ง':'over cap by {0} seats',
+  'ขายเข้ามาบนวันที่เส้นทางไม่ออก':'sold on a date the route does not run',
+  'ระบบพักไว้อัตโนมัติตอน B2C sync':'held automatically during the B2C sync',
+  'รอเซลล์{0}ยืนยันส่วนลด':'waiting for sales{0} to confirm the discount',
+  'ขอโดย':'requested by', 'ไม่อนุมัติ':'Reject'
 };
 
 
@@ -1390,23 +1428,23 @@ function _ddRgLabel(rg){
   if(rg.days<=1) return {num:String(a.getDate()), wk:WD[a.getDay()],
     mo:MO[a.getMonth()]+' '+a.getFullYear(), wide:false};
   if(a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth())
-    return {num:a.getDate()+'–'+b.getDate(), wk:rg.days+' วัน',
+    return {num:a.getDate()+'–'+b.getDate(), wk:laTp('{0} วัน', rg.days),
       mo:MO[a.getMonth()]+' '+a.getFullYear(), wide:true};
   if(a.getFullYear()===b.getFullYear())
     return {num:a.getDate()+' '+MS[a.getMonth()]+' – '+b.getDate()+' '+MS[b.getMonth()],
-      wk:rg.days+' วัน', mo:String(a.getFullYear()), wide:true};
+      wk:laTp('{0} วัน', rg.days), mo:String(a.getFullYear()), wide:true};
   return {num:a.getDate()+' '+MS[a.getMonth()]+' '+String(a.getFullYear()).slice(2)
       +' – '+b.getDate()+' '+MS[b.getMonth()]+' '+String(b.getFullYear()).slice(2),
-    wk:rg.days+' วัน', mo:'', wide:true};
+    wk:laTp('{0} วัน', rg.days), mo:'', wide:true};
 }
 /* ปุ่มลัด · ยึดกับ "วันนี้จริง" ไม่ใช่วันที่กำลังดูอยู่ — "7 วัน" ที่คนพูดถึง
    หมายถึงเจ็ดวันล่าสุดเสมอ · อยากย้อนไปช่วงก่อนหน้าใช้ปุ่ม ‹ เลื่อนทีละช่วง */
 function _ddPresets(){
   var t=TODAY_STR;
-  return [ {k:'d1',  n:'วันนี้',    from:t,                to:t},
-           {k:'d7',  n:'7 วัน',     from:_ddAddDays(t,-6), to:t},
-           {k:'d30', n:'30 วัน',    from:_ddAddDays(t,-29),to:t},
-           {k:'mtd', n:'เดือนนี้',  from:t.slice(0,8)+'01',to:t} ];
+  return [ {k:'d1',  n:laT('วันนี้'),   from:t,                to:t},
+           {k:'d7',  n:laT('7 วัน'),    from:_ddAddDays(t,-6), to:t},
+           {k:'d30', n:laT('30 วัน'),   from:_ddAddDays(t,-29),to:t},
+           {k:'mtd', n:laT('เดือนนี้'), from:t.slice(0,8)+'01',to:t} ];
 }
 window.dashDayDetailPreset=function(k){
   var p=_ddPresets().filter(function(x){return x.k===k;})[0]; if(!p) return;
@@ -1470,17 +1508,17 @@ function _ddBars(list,opt){
   opt=opt||{};
   var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
-  if(!list.length) return '<div class="dv-ddnone">ไม่มีข้อมูล</div>';
+  if(!list.length) return '<div class="dv-ddnone">'+laT('ไม่มีข้อมูล')+'</div>';
   var max=1; list.forEach(function(x){ if(x.val>max) max=x.val; });
   return list.slice(0,opt.top||8).map(function(x){
     var w=Math.max(2,Math.round(x.val/max*100));
     var c=x.col||opt.color||'#2E9B72';
     var lb=opt.label?opt.label(x.k):x.k;
-    return '<div class="dv-ddbr" title="'+esc(x.k)+' · '+x.n+' ใบ · '+x.pax+' pax · '
+    return '<div class="dv-ddbr" title="'+esc(x.k)+' · '+laTp('{0} ใบ', x.n)+' · '+x.pax+' pax · '
         +'฿'+Math.round(x.val).toLocaleString()+'">'
       +'<span class="l">'+esc(lb)+'</span>'
       +'<span class="tr"><i style="width:'+w+'%;background:'+c+'"></i></span>'
-      +'<span class="v">'+_dashMoneyShort(x.val)+'<em>'+x.n+' ใบ · '+x.pax+' pax</em></span></div>';
+      +'<span class="v">'+_dashMoneyShort(x.val)+'<em>'+laTp('{0} ใบ', x.n)+' · '+x.pax+' pax</em></span></div>';
   }).join('');
 }
 /* เวลาที่ใบเข้ามา · 06:00–23:00 พอ · ก่อนหกโมงแทบไม่มีและกินที่ฟรี */
@@ -1493,7 +1531,7 @@ function _ddDaily(rows,rg){
   var mx=1; ks.forEach(function(k){ if(m[k]>mx) mx=m[k]; });
   var every=Math.max(1,Math.ceil(ks.length/8)), out='';
   for(i=0;i<ks.length;i++){ var v=m[ks[i]];
-    out+='<span class="dv-ddhb'+(v?'':' z')+'" title="'+ks[i]+' · '+v+' ใบ">'
+    out+='<span class="dv-ddhb'+(v?'':' z')+'" title="'+ks[i]+' · '+laTp('{0} ใบ', v)+'">'
       +'<i style="height:'+(v?Math.max(8,Math.round(v/mx*100)):2)+'%"></i>'
       +'<u>'+((i%every===0)?ks[i].slice(8):'')+'</u></span>'; }
   return '<div class="dv-ddhr">'+out+'</div>';
@@ -1504,7 +1542,7 @@ function _ddHours(rows){
   var mx=1; for(i=6;i<=23;i++) if(h[i]>mx) mx=h[i];
   var out='';
   for(i=6;i<=23;i++){ var v=h[i];
-    out+='<span class="dv-ddhb'+(v?'':' z')+'" title="'+('0'+i).slice(-2)+':00 · '+v+' ใบ">'
+    out+='<span class="dv-ddhb'+(v?'':' z')+'" title="'+('0'+i).slice(-2)+':00 · '+laTp('{0} ใบ', v)+'">'
       +'<i style="height:'+(v?Math.max(8,Math.round(v/mx*100)):2)+'%"></i>'
       +'<u>'+(i%3===0?('0'+i).slice(-2):'')+'</u></span>'; }
   return '<div class="dv-ddhr">'+out+'</div>';
@@ -1512,7 +1550,7 @@ function _ddHours(rows){
 function _ddList(rows){
   var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
-  if(!rows.length) return '<div class="dv-ddnone" style="padding:22px 0">ยังไม่มีใบจองเข้ามา</div>';
+  if(!rows.length) return '<div class="dv-ddnone" style="padding:22px 0">'+laT('ยังไม่มีใบจองเข้ามา')+'</div>';
   return rows.map(function(r){
     var t0=r.trips[0]||{}; var more=r.trips.length>1?(' +'+(r.trips.length-1)):'';
     var ink=(r.agentColor&&typeof bkV2ContrastInk==='function')?bkV2ContrastInk(r.agentColor):'#5f5c56';
@@ -1526,7 +1564,7 @@ function _ddList(rows){
     return '<div class="dv-ddrow'+(r.cxl?' cx':'')+'" onclick="dashDayDetailGo(\''+r.id+'\')">'
       +'<span class="tm">'+tm+'</span><span class="mk">'+chip+'</span>'
       +'<span class="tx"><b style="color:'+_dvInk(t0.color)+'">'+esc(t0.route||'—')
-        +(r.cxl?' <em>· ยกเลิก</em>':'')+(t0.mode==='charter'?' <s>เหมาลำ</s>':'')+'</b>'
+        +(r.cxl?' <em>· '+laT('ยกเลิก')+'</em>':'')+(t0.mode==='charter'?' <s>'+laT('เหมาลำ')+'</s>':'')+'</b>'
         +'<i>'+esc(r.lead||'—')+(r.nat?(' · '+esc(r.nat)):'')
         +(r.hotel?(' · '+esc(r.hotel)):'')+'</i></span>'
       +'<span class="dt">'+_dashDateShort(t0.date)+more+'</span>'
@@ -1551,19 +1589,19 @@ function _ddSumCard(side,S,totVal,on){
                       :{ink:'#12518F',bg:'#E6F1FB',bar:'#3E7FBF'};
   var sh=totVal?Math.round(S.val/totVal*100):0;
   var last=(side==='b2c')
-    ? {v:S.cxl, k:'ยกเลิก', dim:!S.cxl}
-    : {v:S.ag,  k:'เอเย่นต์', dim:false};
+    ? {v:S.cxl, k:laT('ยกเลิก'), dim:!S.cxl}
+    : {v:S.ag,  k:laT('เอเย่นต์'), dim:false};
   return '<div class="dv-c dv-ddsum'+(on?' on':'')+'" data-side="'+side+'" '
       +'onclick="dashDayDetailPick(\''+side+'\')">'
     +'<div class="dv-ddsh"><span class="big" style="color:'+c.ink+'">'
-      +(side==='b2c'?'B2C · ขายเอง':'B2B · เอเย่นต์')+'</span>'
-      +'<span class="dv-cnt" style="background:'+c.bg+';color:'+c.ink+'">'+sh+'% ของยอด'
-        +(_ddRg().days>1?'ช่วงนี้':'วันนี้')+'</span></div>'
+      +(side==='b2c'?('B2C · '+laT('ขายเอง')):('B2B · '+laT('เอเย่นต์')))+'</span>'
+      +'<span class="dv-cnt" style="background:'+c.bg+';color:'+c.ink+'">'
+        +(_ddRg().days>1?laTp('{0}% ของยอดช่วงนี้', sh):laTp('{0}% ของยอดวันนี้', sh))+'</span></div>'
     +'<div class="dv-ddsv">'
-      +'<span class="s"><b>'+S.n+'</b><i>ใบ</i></span><span class="sep"></span>'
+      +'<span class="s"><b>'+S.n+'</b><i>'+laT('ใบ')+'</i></span><span class="sep"></span>'
       +'<span class="s"><b>'+S.pax+'</b><i>pax</i></span><span class="sep"></span>'
-      +'<span class="s"><b>'+_dashMoneyShort(S.val)+'</b><i>ยอดขาย</i></span><span class="sep"></span>'
-      +'<span class="s"><b>'+_dashMoneyShort(S.avg)+'</b><i>เฉลี่ย / ใบ</i></span><span class="sep"></span>'
+      +'<span class="s"><b>'+_dashMoneyShort(S.val)+'</b><i>'+laT('ยอดขาย')+'</i></span><span class="sep"></span>'
+      +'<span class="s"><b>'+_dashMoneyShort(S.avg)+'</b><i>'+laT('เฉลี่ย / ใบ')+'</i></span><span class="sep"></span>'
       +'<span class="s"><b'+(last.dim?' class="dim"':'')+'>'+last.v+'</b><i>'+last.k+'</i></span>'
     +'</div>'
     +'<div class="dv-ddshb"><i style="width:'+sh+'%;background:'+c.bar+'"></i></div></div>';
@@ -1589,32 +1627,33 @@ function _ddSideBlock(rows,side){
   /* ทุกใบในแถวนี้วัดด้วยไม้บรรทัดเดียวกัน = ยอดขาย · ความยาวแท่งจึงเทียบข้ามการ์ดได้
      สีเป็นของ "การ์ด" ไม่ใช่ของอันดับ — เส้นทางใช้สีเส้นทางจริง ที่เหลือใบละสี */
   return '<div class="dv-ddg4">'
-    +'<div class="dv-c dv-ddcard"><div class="dv-ddh">เส้นทาง<span>'+byRoute.length+' เส้นทาง</span></div>'
+    +'<div class="dv-c dv-ddcard"><div class="dv-ddh">'+laT('เส้นทาง')+'<span>'+laTp('{0} เส้นทาง', byRoute.length)+'</span></div>'
       +_ddBars(byRoute,{top:9})+'</div>'
     +'<div class="dv-c dv-ddcard"><div class="dv-ddh">'
-      +(side==='b2c'?'ช่องทางที่ลูกค้าทักเข้ามา':'เอเย่นต์')+'<span>'+byWho.length
-      +(side==='b2c'?' ช่องทาง':' เจ้า')+'</span></div>'
+      +(side==='b2c'?laT('ช่องทางที่ลูกค้าทักเข้ามา'):laT('เอเย่นต์'))+'<span>'
+      +(side==='b2c'?laTp('{0} ช่องทาง', byWho.length):laTp('{0} เจ้า', byWho.length))+'</span></div>'
       +_ddBars(byWho,{top:9,color:(side==='b2c'?'#C2557C':'#3E7FBF')})+'</div>'
     +'<div class="dv-c dv-ddcard">'
-      +'<div class="dv-ddh">เดือนที่จะเดินทาง<span>'+byMonth.length+' เดือน</span></div>'
+      +'<div class="dv-ddh">'+laT('เดือนที่จะเดินทาง')+'<span>'+laTp('{0} เดือน', byMonth.length)+'</span></div>'
       +_ddBars(byMonth,{top:9,color:'#2E9B72',label:moLbl})
-      +'<div class="dv-ddh2">'+(rg.days>1?'ใบที่เข้ามาแต่ละวัน':'เวลาที่ใบเข้ามา')+'</div>'
+      +'<div class="dv-ddh2">'+(rg.days>1?laT('ใบที่เข้ามาแต่ละวัน'):laT('เวลาที่ใบเข้ามา'))+'</div>'
       +(rg.days>1?_ddDaily(ok,rg):_ddHours(ok))
     +'</div>'
-    +'<div class="dv-c dv-ddcard"><div class="dv-ddh">สัญชาติผู้จอง<span>'+byNat.length
-      +' สัญชาติ</span></div>'
+    +'<div class="dv-c dv-ddcard"><div class="dv-ddh">'+laT('สัญชาติผู้จอง')+'<span>'
+      +laTp('{0} สัญชาติ', byNat.length)+'</span></div>'
       +_ddBars(byNat,{top:9,color:'#7C6BA8'})+'</div>'
     +'</div>'
     /* §ddRange · ช่วง 30 วันของจริงมีราวพันกว่าใบ · วาดทุกแถวทำให้กดสลับฝั่งหน่วง
        ตัดที่ _DD_CAP แล้วบอกตรง ๆ ว่าตัด พร้อมปุ่มให้กดดูทั้งหมดถ้าอยากได้จริง
        ตัวเลขสรุปข้างบนนับจากทุกใบเสมอ ไม่ได้นับแค่แถวที่วาด */
     +'<div class="dv-c dv-ddlist"><div class="dv-ddh">'
-      +(rg.days>1?'ใบจองทั้งหมดในช่วงนี้':'ใบจองทั้งหมดของวันนี้')
-      +'<span>'+all.length+' ใบ'
-      +((all.length-ok.length)?(' · ยกเลิก '+(all.length-ok.length)):'')+'</span></div>'
+      +(rg.days>1?laT('ใบจองทั้งหมดในช่วงนี้'):laT('ใบจองทั้งหมดของวันนี้'))
+      +'<span>'+laTp('{0} ใบ', all.length)
+      +((all.length-ok.length)?(' · '+laT('ยกเลิก')+' '+(all.length-ok.length)):'')+'</span></div>'
       +(shown.length<all.length
-        ? '<div class="dv-more" onclick="dashDayDetailShowAll()">แสดง <b>'+shown.length+'</b> จาก <b>'
-          +all.length+'</b> ใบ · กดเพื่อดูทั้งหมด</div>' : '')
+        ? '<div class="dv-more" onclick="dashDayDetailShowAll()">'
+          +laTp('แสดง {0} จาก {1} ใบ · กดเพื่อดูทั้งหมด',
+                '<b>'+shown.length+'</b>', '<b>'+all.length+'</b>')+'</div>' : '')
       +'<div class="dv-ddrows">'+_ddList(shown)+'</div></div>';
 }
 function _ddBodyHtml(){
@@ -1635,31 +1674,32 @@ function _ddHeadHtml(){
   var pres=_ddPresets().map(function(p){
     return '<span class="dv-ddpv'+((p.from===rg.from&&p.to===rg.to)?' on':'')+'" '
       +'onclick="dashDayDetailPreset(\''+p.k+'\')">'+p.n+'</span>'; }).join('');
-  var arw=rg.days>1?'ช่วงก่อนหน้า ('+rg.days+' วัน)':'วันก่อนหน้า';
-  var arwN=rg.days>1?'ช่วงถัดไป ('+rg.days+' วัน)':'วันถัดไป';
+  var arw=rg.days>1?laTp('ช่วงก่อนหน้า ({0} วัน)', rg.days):laT('วันก่อนหน้า');
+  var arwN=rg.days>1?laTp('ช่วงถัดไป ({0} วัน)', rg.days):laT('วันถัดไป');
   return '<div class="dv-ddhr1">'
     +'<button class="dv-arw" onclick="dashDayDetailShift(-1)" title="'+arw+'">&lsaquo;</button>'
     +'<span class="dv-ddnum'+(L.wide?' w':'')+'">'+L.num+'</span>'
     +'<span class="dv-dddgrp"><b class="dv-dddwk">'+L.wk+'</b>'
       +'<span class="dv-dddmo">'+L.mo+'</span></span>'
     +'<button class="dv-arw" onclick="dashDayDetailShift(1)" title="'+arwN+'">&rsaquo;</button>'
-    +'<span class="dv-ddttl">'+(rg.days>1?('รายละเอียดใบจอง '+rg.days+' วัน'):'รายละเอียดใบจองทั้งวัน')
-      +'<i>ทุกใบที่เข้าระบบ'+(rg.days>1?'ในช่วงนี้':'วันนี้')+' · แยก B2C / B2B</i></span>'
+    +'<span class="dv-ddttl">'+(rg.days>1?laTp('รายละเอียดใบจอง {0} วัน', rg.days):laT('รายละเอียดใบจองทั้งวัน'))
+      +'<i>'+(rg.days>1?laT('ทุกใบที่เข้าระบบในช่วงนี้ · แยก B2C / B2B')
+                       :laT('ทุกใบที่เข้าระบบวันนี้ · แยก B2C / B2B'))+'</i></span>'
     +'<span class="dv-ddkpi">'
-      +'<span class="dv-chip"><b>'+ok.length+'</b> ใบ</span>'
+      +'<span class="dv-chip"><b>'+ok.length+'</b> '+laT('ใบ')+'</span>'
       +'<span class="dv-chip"><b>'+pax+'</b> pax</span>'
-      +'<span class="dv-chip"><b>'+_dashMoneyShort(val)+'</b> ยอด'+(rg.days>1?'ช่วงนี้':'วันนี้')+'</span>'
-      +(cxl?('<span class="dv-chip warn"><b>'+cxl+'</b> ยกเลิก</span>'):'')
-      +'<button class="dv-ddx" onclick="dashDayDetailClose()" title="ปิด">&times;</button>'
+      +'<span class="dv-chip"><b>'+_dashMoneyShort(val)+'</b> '+(rg.days>1?laT('ยอดช่วงนี้'):laT('ยอดวันนี้'))+'</span>'
+      +(cxl?('<span class="dv-chip warn"><b>'+cxl+'</b> '+laT('ยกเลิก')+'</span>'):'')
+      +'<button class="dv-ddx" onclick="dashDayDetailClose()" title="'+laT('ปิด')+'">&times;</button>'
     +'</span></div>'
     /* §ddRange · แถวสอง · ปุ่มลัดซ้าย ช่องวันที่ขวา · ปุ่มลัดครอบสิ่งที่ถูกถามบ่อย
        ช่องวันที่ไว้สำหรับช่วงที่ปุ่มลัดไม่ครอบ (ปิดงบเดือนก่อน · เทียบไฮซีซัน) */
     +'<div class="dv-ddhr2">'
       +'<span class="dv-ddpre">'+pres+'</span>'
       +'<span class="dv-ddinp">'
-        +'<i>จาก</i><input type="date" value="'+rg.from+'" max="'+rg.to+'" '
+        +'<i>'+laT('จาก','date')+'</i><input type="date" value="'+rg.from+'" max="'+rg.to+'" '
           +'onchange="dashDayDetailSetRange(\'from\',this.value)">'
-        +'<i>ถึง</i><input type="date" value="'+rg.to+'" min="'+rg.from+'" '
+        +'<i>'+laT('ถึง','date')+'</i><input type="date" value="'+rg.to+'" min="'+rg.from+'" '
           +'onchange="dashDayDetailSetRange(\'to\',this.value)">'
       +'</span>'
     +'</div>';
@@ -3083,7 +3123,7 @@ let calYear=TODAY.getFullYear(),calMonth=TODAY.getMonth(),calPier='all';
 const WDS=['SUN','MON','TUE','WED','THU','FRI','SAT'];
 const MONTHS_TH=['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
 const MONTHS_EN=['January','February','March','April','May','June','July','August','September','October','November','December'];
-const MONTHS_TH_SHORT=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const MONTHS_TH_SHORT=laMonAbbrTH();
 
 function setCalPier(v){ calPier=v; renderCal(); }
 function setCalAvgMode(m){ window._calAvgMode=m; renderCal(); }
@@ -5597,7 +5637,7 @@ function renderFleetTab(b){
   const engs=FL_ENGINES.filter(e=>e.boatId===b.id);
   const maints=FL_MAINT.filter(m=>m.boatId===b.id);
   const incs=FL_INCIDENTS.filter(i=>i.boatId===b.id);
-  const fmtD=s=>{if(!s)return'—';const d=new Date(s);return`${d.getDate()} ${['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][d.getMonth()]} ${d.getFullYear()+543}`;};
+  const fmtD=s=>{if(!s)return'—';const d=new Date(s);return`${d.getDate()} ${laMonAbbrTH()[d.getMonth()]} ${d.getFullYear()+543}`;};
 
   const engsHtml=engs.length?engs.map(eng=>{
     const curH=flEngHours(eng.id);
@@ -6075,7 +6115,7 @@ function fmAddDoc(){
 }
 function fmRemoveDoc(i){fmBoatDocs.splice(i,1);fmRenderDocs();}
 function fmRenderDocs(){
-  const MONTHS=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const MONTHS=laMonAbbrTH();
   const fmtD=s=>{if(!s)return'ไม่กำหนด';const d=new Date(s);return`${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()+543}`;};
   document.getElementById('fm-boat-docs').innerHTML=fmBoatDocs.map((doc,i)=>
     `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--sand);border-radius:5px">

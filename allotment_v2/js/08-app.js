@@ -3035,7 +3035,7 @@ function bkV2LockFormFields(){
     return `<button onclick="bkV2LockToggleDow(${i})" style="width:40px;height:32px;border-radius:8px;border:1px solid ${on?'#5B3FA5':'var(--border)'};background:${on?'#5B3FA5':'#FBFAF7'};color:${on?'#fff':'var(--ink-soft)'};font-family:inherit;font-size:11.5px;font-weight:600;cursor:pointer">${d}</button>`;
   }).join('');
   // สรุปเป็นภาษาคน กันตีความผิดว่าเป็นโควตารวม
-  const _thMon=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const _thMon=laMonAbbrTH();
   const _dmy = ds => { if(!ds) return '—'; const p=String(ds).split('-'); return (+p[2])+' '+(_thMon[(+p[1])-1]||'')+' '+p[0]; };
   const dowTxt = f.dow.length ? f.dow.slice().sort((a,b)=>a-b).map(i=>DOWL[i]).join(' · ') : 'ทุกวัน';
   const summary = isBulk
@@ -4807,7 +4807,7 @@ function renderBookingFlow(){
   const slOf=b=>{ const sid=b.soldBy||((typeof sbGetAgent==='function'&&sbGetAgent(b.agentId))||{}).sales; const s=sid&&typeof sbGetSales==='function'?sbGetSales(sid):null; return {id:sid||'__none', name:s?(s.name||sid):'(ไม่ระบุเซลล์)', color:s?(s.color||'#185FA5'):'#B8B3C8'}; };
   const famOf=rid=>{ const f=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(rid):null; const r=(typeof getRoute==='function')?getRoute(rid):null; return {id:f?f.id:(rid||'-'), name:f?(f.name||rid):(r?r.name:rid), color:(r&&r.color)||(f&&f.color)||'#1683C7'}; };
   const FALL=['#E0457F','#185FA5','#0F6E56','#A05A1A','#8B5CF6','#19A7C9'];
-  const thMon=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const thMon=laMonAbbrTH();
 
   if(!B.length){ host.innerHTML='<div style="padding:40px;text-align:center;color:#9aa49c;font-size:13px;font-family:DM Sans,sans-serif">ยังไม่มีบุคกิ้ง · หน้านี้จะสรุปจากบุคกิ้งที่บันทึกแล้ว</div>'; return; }
 
@@ -5365,7 +5365,7 @@ function pmapAgName(){
   return (typeof pmChannelName==='function')?pmChannelName(String(_pmapAgFilter).replace(/^_/,'')):String(_pmapAgFilter);
 }
 const PHUKET_LL={'Panwa Pier':[7.8295,98.4045],'Patong':[7.896,98.296],'Karon':[7.846,98.294],'Kata':[7.820,98.298],'Kalim':[7.910,98.298],'Kamala':[7.955,98.281],'Panwa':[7.818,98.402],'Tritrang':[7.879,98.2845],'Phuket Town':[7.884,98.388],'Naithon':[8.085,98.293],'Bangtao':[8.000,98.296],'Laguna':[8.012,98.302],'Rawai':[7.778,98.325],'Maikhao':[8.150,98.300],'Kathu':[7.907,98.337],'Chalong':[7.846,98.337],'Cherngtalay':[7.990,98.305],'Nai Harn':[7.775,98.305],'Aopor':[7.990,98.390],'Aoyon':[7.830,98.420],'Surin':[7.975,98.279],'Layan':[8.040,98.298],'Naiyang':[8.105,98.300],'Ko Kaeo':[7.922,98.392],'Siray':[7.884,98.416],'Naiharn':[7.775,98.305]};
-const _PMTH=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const _PMTH=laMonAbbrTH();
 const _PM={map:null,canvas:null,hits:null,areas:[],mkTot:{},total:0,other:0,otherAreas:{}};
 const _PMCEN=[98.3406,7.9862];   // Phuket centroid [lng,lat] · pull coastal scatter inland
 const PM_LBLUP={'Kalim':1,'Panwa Pier':1};   // draw these labels ABOVE the cluster (avoid clashing with Patong / Panwa)
@@ -8491,7 +8491,7 @@ let VANJOB_SENT={};
 function vanJobsSentPersist(){ if(typeof window.laCanEditArea==='function' && !window.laCanEditArea('operations')) return;   /* §edit-guard · ดูอย่างเดียว → ไม่ persist */  try{ const lsKey=(typeof LS_KEY!=='undefined'?LS_KEY:'loveandaman_v2'); const d=JSON.parse(localStorage.getItem(lsKey)||'{}'); d.vanjob_sent=VANJOB_SENT; localStorage.setItem(lsKey,JSON.stringify(d)); }catch(_){} }
 function vanJobsSentAt(date,key){ return VANJOB_SENT[date+'::'+key]||null; }
 function vanJobsToggleSent(date,key){ const k=date+'::'+key; if(VANJOB_SENT[k]) delete VANJOB_SENT[k]; else VANJOB_SENT[k]=new Date().toISOString(); vanJobsSentPersist(); const sy=window.scrollY; renderVanJobs(); window.scrollTo(0,sy); }
-function vanJobsSentLbl(iso){ if(!iso)return ''; const dt=new Date(iso); const th=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.']; return dt.getDate()+' '+th[dt.getMonth()]+' '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0'); }
+function vanJobsSentLbl(iso){ if(!iso)return ''; const dt=new Date(iso); const th=laMonAbbrTH(); return dt.getDate()+' '+th[dt.getMonth()]+' '+String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0'); }
 function vanJobsSentCellInner(date,key){ var s=vanJobsSentAt(date,key); return '<label onclick="event.stopPropagation()" style="display:inline-flex;flex-direction:column;align-items:center;gap:1px;cursor:pointer"><input type="checkbox" '+(s?'checked':'')+' onchange="event.stopPropagation();vanJobsToggleSent(\''+date+'\',\''+key+'\')" style="width:17px;height:17px;cursor:pointer;accent-color:#0F6E56"><span style="font-size:8.5px;'+(s?'color:#0F6E56;font-weight:700':'color:#c2c0b7')+';white-space:nowrap;margin-top:1px">'+(s?vanJobsSentLbl(s):'ยังไม่ส่ง')+'</span></label>'; }
 /* ══ §vjRound · รถคันเดียววิ่งโปรแกรมเดิมได้หลายรอบใน 1 วัน ═══════════════════
    ของจริง: Love2 รับป่าตอง 07:30 · ส่งถึงท่า ~08:15 · แล้ววิ่งอีกรอบรับพันวา 08:20
@@ -11099,7 +11099,7 @@ function ckStrandSnap(b, date, O, t, to, why){
 function ckDayShortTh(ymd){
   var v=String(ymd||'');
   if(!/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
-  var M=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  var M=laMonAbbrTH();
   var p=v.split('-');
   return (+p[2])+' '+M[(+p[1])-1];
 }
@@ -11142,7 +11142,7 @@ function ckStrandMvDrop(key){
 function ckShortDay(iso){
   if(!iso) return '';
   var d=new Date(iso); if(isNaN(d)) return String(iso).slice(0,10);
-  var M=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  var M=laMonAbbrTH();
   return d.getDate()+' '+M[d.getMonth()]
     +' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
 }
@@ -22916,7 +22916,7 @@ function drTrend(date, nDays, back){
       mkt[m.id].tot+=px; by[m.id]=(by[m.id]||0)+px; tot+=px;
     });
     out.push({ date:ds, by:by, tot:tot, today:(ds===date),
-               lb:(d.getDate()+(i===0||d.getDate()===1?(' '+['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'][d.getMonth()]):'')) });
+               lb:(d.getDate()+(i===0||d.getDate()===1?(' '+laMonAbbrTH()[d.getMonth()]):'')) });
   }
   order.sort(function(a,b){ return mkt[b].tot-mkt[a].tot; });
   drPaint(order, mkt);
@@ -22934,7 +22934,7 @@ function drTrend(date, nDays, back){
 function drTrendBooked(date, nDays){
   nDays=nDays||14;
   var end=new Date(date+'T12:00:00'), map={}, days=[], i;
-  var TH=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  var TH=laMonAbbrTH();
   for(i=nDays-1;i>=0;i--){
     var d=new Date(end.getTime()); d.setDate(d.getDate()-i);
     var ds=d.toISOString().slice(0,10);
@@ -25785,7 +25785,7 @@ function vehDetailPanel(id, jobsT, today, initials, TYLBL){
     ${(function(){
       const cm=_vehCalMonth||today.slice(0,7); const [cy,cmo]=cm.split('-').map(Number);
       const first=new Date(cy,cmo-1,1); const startWd=(first.getDay()+6)%7; const dimN=new Date(cy,cmo,0).getDate();
-      const MONTHS=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+      const MONTHS=laMonAbbrTH();
       const SC={available:'#1D9E75',maintenance:'#BA7517',off:'#A32D2D'};
       const DOW=['จ','อ','พ','พฤ','ศ','ส','อา'];
       let cells=''; for(let i=0;i<startWd;i++) cells+='<div></div>';
@@ -26305,7 +26305,7 @@ function ctMonthEdges(ym){
   var last = new Date(y, m, 0).getDate();
   return { a:ym + '-01', b:ym + '-' + String(last).padStart(2, '0'), days:last };
 }
-var CT_MON_TH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+var CT_MON_TH = laMonAbbrTH();
 /* ══ §ctSeason · ไฮ/โลว์ซีซั่น ═══════════════════════════════════════════════════════════════════
    ฝั่งอันดามันตะวันตก · ไฮ ต.ค.–พ.ค. · โลว์ มิ.ย.–ก.ย. (มรสุม)
    ฉากเดียวคุมทั้งปีไม่มีความหมาย เพราะค่าเช่าจ่ายเท่ากันทุกเดือน แต่คนไม่ได้มาเท่ากัน
@@ -41053,7 +41053,7 @@ function ctDocFmtDate(iso, lang){
   if(!iso) return '—';
   const d = new Date(iso); if(isNaN(d)) return iso;
   if(lang === 'th'){
-    const mTh=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    const mTh=laMonAbbrTH();
     return `${String(d.getDate()).padStart(2,'0')} ${mTh[d.getMonth()]} ${String(d.getFullYear()+543).slice(2)}`;
   }
   const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -45224,29 +45224,29 @@ function bkV2RenderApprovals(){
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
         <span style="font-family:'DM Mono',monospace;font-weight:700;color:#1B2A55">${esc(b.id)}</span>
         <span style="font-size:12px;color:#555">${esc(b.leadPax||'—')} · ${esc(a?a.name:'')}</span>
-        ${hasCap?`<span style="font-size:11px;font-weight:700;color:#A32D2D;background:#FCEBEB;border-radius:6px;padding:2px 9px">เกิน cap +${ap.totOver||0} ที่นั่ง</span>`:''}
+        ${hasCap?`<span style="font-size:11px;font-weight:700;color:#A32D2D;background:#FCEBEB;border-radius:6px;padding:2px 9px">${laTp('เกิน cap +{0} ที่นั่ง', ap.totOver||0)}</span>`:''}
         ${(!hasCap&&!hasDisc)?(function(){ const w=ap.reason||((typeof bkV2PendReason==='function')?bkV2PendReason(b):'');
-            const cl=w==='closed_day'; return `<span style="font-size:11px;font-weight:700;color:${cl?'#A32D2D':'#7A4A00'};background:${cl?'#FCEBEB':'#FBF0DD'};border-radius:6px;padding:2px 9px" title="${cl?'ขายเข้ามาบนวันที่เส้นทางไม่ออก':'ระบบพักไว้อัตโนมัติตอน B2C sync'}">${esc(bkV2PendLabel(w))}</span>`; })():''}
-        ${hasDisc?`<span style="font-size:11px;font-weight:700;color:#854F0B;background:#FAEEDA;border-radius:6px;padding:2px 9px" title="รอเซลล์${ap.saleName?(' ('+esc(ap.saleName)+')'):''}ยืนยันส่วนลด">ส่วนลด ฿${(ap.discount||0).toLocaleString()} · รอเซลล์ยืนยัน</span>`:''}
-        <span style="margin-left:auto;font-size:10px;color:#999">ขอโดย ${esc(ap.requestedBy||'-')} · ${esc((ap.requestedAt||'').slice(0,10))}</span>
+            const cl=w==='closed_day'; return `<span style="font-size:11px;font-weight:700;color:${cl?'#A32D2D':'#7A4A00'};background:${cl?'#FCEBEB':'#FBF0DD'};border-radius:6px;padding:2px 9px" title="${cl?laT('ขายเข้ามาบนวันที่เส้นทางไม่ออก'):laT('ระบบพักไว้อัตโนมัติตอน B2C sync')}">${esc(bkV2PendLabel(w))}</span>`; })():''}
+        ${hasDisc?`<span style="font-size:11px;font-weight:700;color:#854F0B;background:#FAEEDA;border-radius:6px;padding:2px 9px" title="${laTp('รอเซลล์{0}ยืนยันส่วนลด', ap.saleName?(' ('+esc(ap.saleName)+')'):'')}">${laT('ส่วนลด')} &#3647;${(ap.discount||0).toLocaleString()} · ${laT('รอเซลล์ยืนยัน')}</span>`:''}
+        <span style="margin-left:auto;font-size:10px;color:#999">${laT('ขอโดย')} ${esc(ap.requestedBy||'-')} · ${esc((ap.requestedAt||'').slice(0,10))}</span>
       </div>
       ${rows?`<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:10px"><thead><tr style="color:#999;font-size:9px;text-transform:uppercase"><th style="padding:3px 8px;text-align:left">Program</th><th style="padding:3px 8px;text-align:left">Date</th><th style="padding:3px 8px;text-align:center">Need</th><th style="padding:3px 8px;text-align:center">Over cap</th><th style="padding:3px 8px;text-align:center">Real seats left</th></tr></thead><tbody>${rows}</tbody></table>`:'<div style="height:4px"></div>'}
       <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button onclick="bkV2OpenDetail('${esc(b.id)}')" style="background:#fff;border:1px solid #ddd;border-radius:7px;padding:6px 12px;font-size:11px;cursor:pointer;font-family:inherit;color:#185FA5">ดูรายละเอียด</button>
-        <button onclick="bkV2RejectBooking('${esc(b.id)}')" style="background:#fff;border:1px solid #E6C9C3;color:#A32D2D;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">ไม่อนุมัติ</button>
-        <button onclick="bkV2ApproveBooking('${esc(b.id)}')" style="background:#0F6E56;border:none;color:#fff;border-radius:7px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">&#10003; อนุมัติ</button>
+        <button onclick="bkV2OpenDetail('${esc(b.id)}')" style="background:#fff;border:1px solid #ddd;border-radius:7px;padding:6px 12px;font-size:11px;cursor:pointer;font-family:inherit;color:#185FA5">${laT('ดูรายละเอียด')}</button>
+        <button onclick="bkV2RejectBooking('${esc(b.id)}')" style="background:#fff;border:1px solid #E6C9C3;color:#A32D2D;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">${laT('ไม่อนุมัติ')}</button>
+        <button onclick="bkV2ApproveBooking('${esc(b.id)}')" style="background:#0F6E56;border:none;color:#fff;border-radius:7px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">&#10003; ${laT('อนุมัติ')}</button>
       </div>
     </div>`;
   };
-  const histRow=(b)=>{ const ap=b.approval||{}; const ok=ap.status==='approved'; return `<div style="display:flex;align-items:center;gap:9px;padding:6px 10px;border-top:1px solid #f0eee7;font-size:11px"><span style="font-family:'DM Mono',monospace;color:#1B2A55">${esc(b.id)}</span><span style="color:#666">${esc(b.leadPax||'—')}</span><span style="margin-left:auto;font-weight:700;color:${ok?'#0F6E56':'#A32D2D'}">${ok?'✓ อนุมัติ':'✕ ไม่อนุมัติ'}</span><span style="color:#999">${esc(ap.approvedBy||'')} · ${esc((ap.approvedAt||'').slice(0,10))}</span></div>`; };
+  const histRow=(b)=>{ const ap=b.approval||{}; const ok=ap.status==='approved'; return `<div style="display:flex;align-items:center;gap:9px;padding:6px 10px;border-top:1px solid #f0eee7;font-size:11px"><span style="font-family:'DM Mono',monospace;color:#1B2A55">${esc(b.id)}</span><span style="color:#666">${esc(b.leadPax||'—')}</span><span style="margin-left:auto;font-weight:700;color:${ok?'#0F6E56':'#A32D2D'}">${ok?('&#10003; '+laT('อนุมัติ')):('&#10007; '+laT('ไม่อนุมัติ'))}</span><span style="color:#999">${esc(ap.approvedBy||'')} · ${esc((ap.approvedAt||'').slice(0,10))}</span></div>`; };
   return `<div style="padding:16px 18px">
     <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:14px">
-      <span style="font-size:16px;font-weight:800;color:#A32D2D">รออนุมัติ</span>
-      <span style="font-size:12px;color:#8a8a82">${pend.length} รายการ · ต้องอนุมัติก่อนบุคกิ้งจะ confirm</span>
+      <span style="font-size:16px;font-weight:800;color:#A32D2D">${laT('รออนุมัติ')}</span>
+      <span style="font-size:12px;color:#8a8a82">${laTp('{0} รายการ · ต้องอนุมัติก่อนบุคกิ้งจะ confirm', pend.length)}</span>
     </div>
-    <div style="font-size:11px;color:#8a8a82;background:#FBF3E2;border:1px solid #EAD9B0;border-radius:8px;padding:8px 11px;margin-bottom:14px"><b>เกิน Capacity</b> = เกินโควต้าบริษัท (ไม่เกินทะเบียนเรือ) → ผจก.อนุมัติ · <b>ส่วนลด</b> = มีส่วนลด → เซลล์ที่ดูแลยืนยันส่วนลดก่อน · ทั้งคู่จะ "ยังไม่ confirm" จนกว่าจะอนุมัติ</div>
-    ${pend.length?pend.map(card).join(''):'<div style="text-align:center;color:#c7c5bb;font-size:13px;padding:30px">ไม่มีรายการรออนุมัติ</div>'}
-    ${recent.length?`<div style="margin-top:18px"><div style="font-size:11px;font-weight:700;color:#8a8a82;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">ประวัติล่าสุด</div>${recent.map(histRow).join('')}</div>`:''}
+    <div style="font-size:11px;color:#8a8a82;background:#FBF3E2;border:1px solid #EAD9B0;border-radius:8px;padding:8px 11px;margin-bottom:14px">${laTp('{0} = เกินโควต้าบริษัท (ไม่เกินทะเบียนเรือ) → ผจก.อนุมัติ · {1} = มีส่วนลด → เซลล์ที่ดูแลยืนยันส่วนลดก่อน · ทั้งคู่จะยังไม่ confirm จนกว่าจะอนุมัติ', '<b>'+laT('เกิน Capacity')+'</b>', '<b>'+laT('ส่วนลด')+'</b>')}</div>
+    ${pend.length?pend.map(card).join(''):`<div style="text-align:center;color:#c7c5bb;font-size:13px;padding:30px">${laT('ไม่มีรายการรออนุมัติ')}</div>`}
+    ${recent.length?`<div style="margin-top:18px"><div style="font-size:11px;font-weight:700;color:#8a8a82;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">${laT('ประวัติล่าสุด')}</div>${recent.map(histRow).join('')}</div>`:''}
   </div>`;
 }
 // §pendNoApproval (2026-07-31) · ปุ่ม อนุมัติ / ไม่อนุมัติ กดแล้วเงียบ ไม่มีอะไรเกิดขึ้น
