@@ -36,24 +36,33 @@ await page.waitForTimeout(1000);
    สร้างล็อกให้เอเยนต์ที่ตั้งสีไว้เอง แล้วดึงบางส่วนไปผูกกับ booking ใบนั้น */
 const SETUP = await page.evaluate(() => {
   const CXL = ['cancelled', 'rejected', 'cancelled_weather'];
+  const K = ['ad', 'chd', 'inf', 'foc'];
   /* เอเยนต์ที่ "ตั้งสีไว้เอง" · ต้องมี a.color จะได้เทียบกับสีบนจอได้ตรง ๆ */
   const ag = (typeof SB_AGENTS !== 'undefined' ? SB_AGENTS : []).find(a => a && a.color);
   if (!ag) return { err: 'ไม่มีเอเยนต์ที่ตั้งสีไว้ในชุดข้อมูลนี้' };
   /* หาใบที่ยังมีชีวิตบนวัน+เส้นทางเดียวกัน · เอาใบที่ pax มากพอให้ดึงล็อกได้ */
-  let hit = null;
-  (SB_BOOKINGS || []).some(b => {
-    if (!b || CXL.includes(b.status) || b.status === 'pending_approval') return false;
-    return (b.trips || []).some(t => {
-      if (!t || !t.routeId || !t.date) return false;
+  /* เลือกวัน+เส้นทางที่ "คนเยอะที่สุด" · ต้องมีอย่างน้อยสามใบ
+     ใบหนึ่งเอาไว้ดึงล็อก อีกสองใบทำเป็นใบรออนุมัติ
+     ต้องเป็นวันในอนาคตด้วย · ล็อกที่ตั้งเวลาปล่อยไว้จะถูกปล่อยไปแล้วถ้าเลือกวันที่ผ่านมา
+     แล้วจะหายจากกระดานทั้งที่ไม่เกี่ยวกับสิ่งที่เทสต์นี้ตรวจ */
+  const today = (typeof bkV2LocalYMD === 'function') ? bkV2LocalYMD(new Date())
+                                                     : new Date().toISOString().slice(0, 10);
+  const pool = {};
+  (SB_BOOKINGS || []).forEach(b => {
+    if (!b || CXL.includes(b.status) || b.status === 'pending_approval') return;
+    (b.trips || []).forEach(t => {
+      if (!t || !t.routeId || !t.date) return;
       const r = (ROUTES || []).find(x => x && x.id === t.routeId);
-      if (!r) return false;
+      if (!r) return;
       const st = (typeof getDayStatus === 'function') ? getDayStatus(r, t.date) : null;
-      if (st && st.type !== 'open') return false;
-      hit = { rid: t.routeId, date: t.date, bkId: b.id };
-      return true;
+      if (st && st.type !== 'open') return;
+      if (t.date <= today) return;
+      (pool[t.routeId + '|' + t.date] = pool[t.routeId + '|' + t.date] || []).push(b.id);
     });
   });
-  if (!hit) return { err: 'หาวัน+เส้นทางที่มี booking ไม่ได้' };
+  const key = Object.keys(pool).sort((a, b) => pool[b].length - pool[a].length)[0];
+  if (!key || pool[key].length < 3) return { err: 'หาวันในอนาคตที่มี booking ตั้งแต่ 3 ใบบนเส้นทางเดียวกันไม่ได้' };
+  const hit = { rid: key.split('|')[0], date: key.split('|')[1], bkId: pool[key][0] };
 
   /* ล็อกที่ 1 · บนเส้นทางที่มี booking · ดึงไป 3 ที่ผูกกับใบนั้น */
   const L1 = bkV2CreateLock({ scope: 'day', routeId: hit.rid, date: hit.date,
@@ -70,6 +79,28 @@ const SETUP = await page.evaluate(() => {
   const L2 = bkV2CreateLock({ scope: 'day', routeId: hit.rid, date: hit.date,
     holderType: 'agent', holderId: ag.id, qty: 2, reason: 'test drained' });
   const drew2 = bkV2DrawLock(L2.id, 2, hit.bkId, hit.date);
+
+  /* §btPendRow · ปลูกใบรออนุมัติสองใบบนทริปเดียวกัน · ใบหนึ่งกันที่นั่ง อีกใบเกิน cap
+     ต้องไม่ใช่ใบที่ใช้ดึงล็อก (hit.bkId) ไม่งั้นป้าย "จากล็อก" หายไปจาก manifest */
+  const pnIds = [];
+  (SB_BOOKINGS || []).forEach(b => {
+    if (pnIds.length >= 2) return;
+    if (!b || b.id === hit.bkId || CXL.includes(b.status) || b.status === 'pending_approval') return;
+    if (!(b.trips || []).some(t => t.routeId === hit.rid && t.date === hit.date)) return;
+    b.status = 'pending_approval';
+    b.approval = pnIds.length ? { reason: 'overcap', over: [1], totOver: 2 } : { reason: 'discount', discount: 500 };
+    pnIds.push(b.id);
+  });
+  const pnWant = pnIds.map(id => {
+    const b = SB_BOOKINGS.find(x => x.id === id);
+    const t = (b.trips || []).find(x => x.routeId === hit.rid && x.date === hit.date) || {};
+    const px = t.pax || {};
+    const ap = b.approval || {};
+    /* คิดเองว่าใบนี้กันที่นั่งไหม · เกิน cap = ที่นั่งไม่มีอยู่จริง จึงไม่กัน */
+    const overCap = (Array.isArray(ap.over) && ap.over.length > 0) || (+ap.totOver > 0);
+    return { id, code: b.voucherRef || b.code || b.id, held: !overCap,
+             pax: K.reduce((s2, k) => s2 + (Number(px[k]) || 0) + (Number(px[k + '_fr']) || 0) + (Number(px[k + '_th']) || 0), 0) };
+  });
 
   /* ล็อกที่ 5 · ล็อกแบบช่วง ที่ถูกดึงจนหมด "เฉพาะรอบวันนี้" · สถานะยังเป็น active
      (bkV2DrawLock ไม่ตีตรา depleted ให้ล็อกแบบช่วง เพราะรอบอื่นยังมีที่เหลือ)
@@ -128,8 +159,7 @@ const SETUP = await page.evaluate(() => {
 
   /* pax ของทริปนั้นจาก booking ดิบ · ล็อกต้องไม่ไปบวกเพิ่ม
      คีย์ pax แตกเป็นสามชั้น (ad / ad_fr / ad_th) ต้องบวกครบทั้งสาม
-     ไม่งั้นนับได้ศูนย์ทั้งที่มีคนจริง */
-  const K = ['ad', 'chd', 'inf', 'foc'];
+     ไม่งั้นนับได้ศูนย์ทั้งที่มีคนจริง · ใบรออนุมัติไม่นับในยอดของโซน */
   let paxRaw = 0;
   (SB_BOOKINGS || []).forEach(b => {
     if (!b || CXL.includes(b.status) || b.status === 'pending_approval') return;
@@ -149,7 +179,7 @@ const SETUP = await page.evaluate(() => {
 
   return { ...hit, bare, other, agId: ag.id, agName: ag.name || ag.id, agColor: String(ag.color).toLowerCase(),
            ids: { L1: L1.id, L2: L2.id, L3: L3 ? L3.id : '', L5: L5.id },
-           drew, drew2, drew5, kids, kidNames: [kidA, kidB].filter(Boolean).map(k => k.subName),
+           pnWant, drew, drew2, drew5, kids, kidNames: [kidA, kidB].filter(Boolean).map(k => k.subName),
            l5Status: L5.status, want, wantC, paxRaw };
 });
 if (SETUP.err) { console.log('  ✗ ' + SETUP.err); console.log('\nพัง 1'); await close(); process.exit(1); }
@@ -188,6 +218,32 @@ const GOT = await page.evaluate((RID) => {
   });
   /* แถบคาดของเดิมต้องไม่เหลืออยู่เลย */
   const oldBands = document.querySelectorAll('tr.t2-lband').length;
+  /* §btPendRow · ใบรออนุมัติ · ต้องอยู่ในตาราง ใต้ชื่อทริปของตัวเอง */
+  const pn = (function(){
+    const band = document.querySelector('tr.t2-pnband');
+    const tb = band && band.closest('table.t2-mtbl');
+    if (!tb) return { band: false, oldSec: document.querySelectorAll('.t2-pend-sec').length };
+    const rows = [].slice.call(tb.querySelectorAll('tbody>tr'));
+    const ix = c => rows.findIndex(r => r.classList.contains(c));
+    return { band: true, oldSec: document.querySelectorAll('.t2-pend-sec').length,
+      iTrip: ix('t2-pband'), iBand: ix('t2-pnband'), iZone: ix('t2-zband'),
+      head: (band.textContent || '').replace(/\s+/g, ' ').trim(),
+      th: tb.querySelectorAll('thead th').length,
+      real: (function(){ const x = tb.querySelector('tr.t2-row:not(.t2-pnrow):not(.t2-lrow)');
+        return x ? x.querySelectorAll('td').length : null; })(),
+      rows: [].slice.call(tb.querySelectorAll('tr.t2-pnrow')).map(r => {
+        const td = [].slice.call(r.querySelectorAll('td'));
+        const ths = [].slice.call(tb.querySelectorAll('thead th'));
+        const at = lbl => { const i = ths.findIndex(h => (h.textContent||'').trim().toUpperCase() === lbl);
+          return (i >= 0 && td[i]) ? (td[i].textContent || '').trim() : null; };
+        return { n: td.length, code: ((r.querySelector('.pnvc')||{}).textContent||'').trim(),
+          ad: at('AD'), chd: at('CHD'), inf: at('INF'), foc: at('FOC'),
+          hold: ((r.querySelector('.pnhold')||{}).textContent||'').trim(),
+          noHold: !!r.querySelector('.pnhold.no'),
+          why: ((r.querySelector('.pnwhy')||{}).textContent||'').trim(),
+          acts: r.querySelectorAll('.pnbtn').length };
+      }) };
+  })();
   /* ป้ายบนแถบโปรแกรม · ที่นั่งที่ล็อกไว้รวม + เตือนล็อกเกินความจุ */
   const pbands = [].slice.call(document.querySelectorAll('tr.t2-pband')).map(tr => ({
     lk: ((tr.querySelector('.plk') || {}).textContent || '').trim(),
@@ -227,7 +283,7 @@ const GOT = await page.evaluate((RID) => {
              adIx, adCell: adIx >= 0 && tds[adIx] ? !!tds[adIx].querySelector('.lkq') : false,
              adTxt: adIx >= 0 && tds[adIx] ? (tds[adIx].textContent || '').trim() : '' };
   });
-  return { bands, drawn, oldBands, pbands, nobk: document.querySelectorAll('.t2-nobk').length,
+  return { bands, drawn, oldBands, pbands, pn, nobk: document.querySelectorAll('.t2-nobk').length,
            lrows: document.querySelectorAll('tr.t2-lrow').length, grid, paxScreen: paxOfRid(RID) };
 }, SETUP.rid);
 
@@ -320,6 +376,41 @@ else {
                       ' มี "' + aBad.adTxt + '")');
   else ok('แถวที่นั่งเรียงตรงคอลัมน์ · ' + g[0].td + ' ช่องเท่าหัวตารางและเท่าแถวของคนจริง · ' +
           'จำนวนที่กันไว้อยู่ใต้ AD (ช่องที่ ' + (g[0].adIx + 1) + ') ทุกแถว ' + g.length + ' แถว');
+}
+
+/* ══ 5d · ใบรออนุมัติอยู่ในตาราง ใต้ชื่อทริปของตัวเอง ════════════════════
+   §btPendRow · ของเดิมเป็นกล่องลอยเหนือตาราง · พอชื่อทริปย้ายเข้าไปอยู่ในตาราง
+   กล่องนั้นก็ไปอยู่เหนือชื่อทริปที่มันสังกัด อ่านเหมือนเป็นของทริปก่อนหน้า */
+if (!SETUP.pnWant.length) fail('ปลูกใบรออนุมัติไม่สำเร็จ · พิสูจน์ลำดับไม่ได้');
+else if (!GOT.pn.band) fail('ไม่มีแถบรออนุมัติในตาราง · เหลือกล่องเดิมอยู่ ' + GOT.pn.oldSec + ' กล่อง');
+else if (GOT.pn.oldSec) fail('ยังมีกล่องรออนุมัติแบบเดิมลอยอยู่นอกตาราง ' + GOT.pn.oldSec + ' กล่อง');
+else if (!(GOT.pn.iTrip >= 0 && GOT.pn.iBand > GOT.pn.iTrip))
+  fail('แถบรออนุมัติอยู่ผิดที่ · ชื่อทริปแถวที่ ' + GOT.pn.iTrip + ' แถบรออนุมัติแถวที่ ' +
+       GOT.pn.iBand + ' · ต้องอยู่ "ใต้" ชื่อทริปของตัวเอง');
+else if (GOT.pn.iZone >= 0 && GOT.pn.iBand > GOT.pn.iZone)
+  fail('แถบรออนุมัติอยู่ใต้โซนแล้ว · ควรอยู่เหนือ manifest เพราะเป็นงานที่ต้องตัดสินใจก่อน');
+else if (GOT.pn.rows.some(r => r.n !== GOT.pn.th || (GOT.pn.real != null && r.n !== GOT.pn.real)))
+  fail('แถวรออนุมัติมี ' + GOT.pn.rows[0].n + ' ช่อง · หัวตารางมี ' + GOT.pn.th +
+       ' แถวคนจริงมี ' + GOT.pn.real);
+else {
+  const bad = [];
+  SETUP.pnWant.forEach(w => {
+    const got = GOT.pn.rows.find(r => r.code === w.code);
+    if (!got) { bad.push(w.code + ' ไม่มีแถว'); return; }
+    const n = (+got.ad || 0) + (+got.chd || 0) + (+got.inf || 0) + (+got.foc || 0);
+    if (n !== w.pax) bad.push(w.code + ' pax บนจอ ' + n + ' ควรเป็น ' + w.pax);
+    if (got.noHold === w.held)
+      bad.push(w.code + ' ป้ายกันที่นั่ง "' + got.hold + '" ไม่ตรงกับที่คิดเอง (' +
+               (w.held ? 'กันที่นั่ง' : 'เกิน cap จึงไม่กัน') + ')');
+    if (!got.acts) bad.push(w.code + ' ไม่มีปุ่ม View / อนุมัติ');
+  });
+  if (bad.length) fail('แถวรออนุมัติ · ' + bad.join(' · '));
+  else if (GOT.pn.head.indexOf(SETUP.pnWant.length + ' booking') < 0)
+    fail('หัวแถบรออนุมัติไม่บอกจำนวน ' + SETUP.pnWant.length + ' booking · "' + GOT.pn.head + '"');
+  else ok('ใบรออนุมัติ ' + SETUP.pnWant.length + ' ใบอยู่ในตาราง ใต้ชื่อทริปของตัวเอง ' +
+          '(ชื่อทริปแถวที่ ' + GOT.pn.iTrip + ' → รออนุมัติแถวที่ ' + GOT.pn.iBand + ' → โซนแถวที่ ' +
+          GOT.pn.iZone + ') · ช่องตรงคอลัมน์ ' + GOT.pn.th + ' ช่อง · pax ตรง · ' +
+          'ป้ายกันที่นั่งแยกถูกระหว่างใบที่กันกับใบที่เกิน cap');
 }
 
 /* ══ 6 · ล็อกที่ถูกดึงจนหมด ต้องหายไปจากใบงานทั้งแถบ ═══════════════════

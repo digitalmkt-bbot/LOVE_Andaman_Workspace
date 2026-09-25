@@ -47822,6 +47822,57 @@ function bkV2RenderTab2(){
        กรองด้วยที่นั่งคงเหลือ ไม่ใช่สถานะ · ล็อกแบบช่วงที่หมดเฉพาะรอบนี้
        สถานะยังเป็น active อยู่ แต่วันนี้ไม่เหลือที่ ก็ต้องหายเหมือนกัน            */
     const lkShow = trParents;
+    const _pendRows = pendGroups[rid] || [];
+    const _pendPax = _pendRows.reduce((s,r)=> s + P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'), 0);
+    /* ══ §btPendRow (2026-09-25) · ใบรออนุมัติย้ายเข้ามาอยู่ในตาราง ═══════════
+       ของเดิมเป็นกล่องครีมลอยอยู่ "เหนือ" ตาราง · ตั้งแต่ย้ายชื่อทริปเข้าไปเป็น
+       แถบแรกในตาราง (§btBand) กล่องนี้ก็เลยไปอยู่เหนือชื่อทริปที่มันสังกัด
+       บนจอจึงอ่านเหมือนเป็นของทริป "ก่อนหน้า" (วัดใน DOM · กล่องเป็นลูกตัวที่ 0
+       ตารางที่มีชื่อทริปเป็นลูกตัวที่ 1) · ย้ายเข้ามาเป็นแถบ + แถวในตารางเดียวกัน
+       อยู่ใต้ชื่อทริปของตัวเอง และช่องทุกช่องตรงคอลัมน์เหมือนแถวคนจริง          */
+    const _pdash = '<span class="t2-dim">&mdash;</span>';
+    const pendBlocks = _pendRows.length ? (
+      `<tr class="t2-pnband"><td colspan="${COLN}"><div class="zw">`
+      + `<span class="zkind">&#9203; รออนุมัติ</span>`
+      + `<span class="zsub"><b>${_pendRows.length}</b> booking &middot; <b>${_pendPax}</b> pax`
+      + ` &middot; ยังไม่นับในยอดของทริป &middot; ยังไม่เข้าใบงานรถ/เรือ</span>`
+      + `</div></td></tr>`
+      + _pendRows.map(r=>{
+          const bk=r.bk, norm=bkV2Norm(bk), ap=bk.approval||{};
+          const lead=bk.leadPax||bk.customerName||'—';
+          const overCap=(Array.isArray(ap.over)&&ap.over.length>0)||(+ap.totOver>0);
+          const why = overCap ? ('เกิน cap +'+(ap.totOver||0)+' ที่')
+                    : (+ap.discount>0) ? ('ส่วนลด &#3647;'+(+ap.discount).toLocaleString()+' · รอเซลล์ยืนยัน')
+                    : ((typeof bkV2PendLabel==='function' && (ap.reason||(typeof bkV2PendReason==='function'?bkV2PendReason(bk):'')))
+                        ? bkV2PendLabel(ap.reason||bkV2PendReason(bk)) : 'รอผู้จัดการอนุมัติ');
+          const held = (typeof bkPendHoldsSeat==='function') ? bkPendHoldsSeat(bk) : true;
+          const _pk = bk.hotelName || bk.pickup || '';
+          const _cell=k=>`<td class="t2-c t2-mono">${P(r.pax,k)||'<span class="t2-dim">0</span>'}</td>`;
+          return `<tr class="t2-row t2-pnrow" data-rid="${esc(rid)}">`
+            + `<td class="t2-vc"><span class="pnvc">${esc(bk.voucherRef||bk.code||bk.id)}</span></td>`
+            + `<td><span class="pnag">${esc(norm.agentName)}</span></td>`
+            + `<td class="t2-cu"><span class="pncu">${esc(lead)}</span>`
+              + `<span class="pnwhy" title="${esc(String(why).replace(/&#3647;/g,'฿'))}">${why}</span></td>`
+            + _cell('ad')+_cell('chd')+_cell('inf')+_cell('foc')
+            + `<td class="t2-mono">${r.pickupTime?esc(r.pickupTime):_pdash}</td>`
+            + (vanMode?`<td class="t2-c">${_pdash}</td>`:'')
+            + `<td class="t2-pk">${_pk?`<span class="pnclip" title="${esc(_pk)}">${esc(_pk)}</span>`:_pdash}</td>`
+            + `<td class="t2-c">${_pdash}</td>`
+            + `<td>${r.zone?`<span class="t2-zonetag">${bkV2ZoneLabel(r.zone)}</span>`:_pdash}</td>`
+            + `<td>${_pdash}</td>`
+            + (vanMode?'':`<td class="t2-req">${_pdash}</td>`)
+            + `<td class="t2-req">${_pdash}</td>`
+            /* ปุ่มอยู่ช่องเดียวกับปุ่ม VC ของแถวคนจริง (ช่องหัวว่าง = ช่องปุ่มประจำตาราง)
+               โหมดจัดรถไม่มีช่องนั้น ปุ่มจึงไปอยู่ช่อง Boat แทน ซึ่งใบรออนุมัติยังไม่มีเรือ */
+            + (vanMode?'':`<td><span class="pnhold${held?'':' no'}" title="${held?'ที่นั่งถูกกันไว้ระหว่างรออนุมัติ · นับอยู่ในที่นั่งที่ใช้ไปแล้วของทริป':'ที่นั่งเกิน cap อยู่แล้ว จึงไม่ถูกกันไว้'}">${held?'&#128274; กันที่นั่งไว้':'ไม่กันที่นั่ง'}</span></td>`
+                        + `<td class="t2-r t2-mono">&#3647;${bkV2FmtTHB(r.subtotal)}</td>`
+                        + `<td class="t2-c"><div class="pnacts"><button class="pnbtn" onclick="event.stopPropagation();bkV2OpenDetail('${esc(bk.id)}')" title="ดูรายละเอียด">View</button><button class="pnbtn ok" onclick="event.stopPropagation();bkV2ApproveBooking('${esc(bk.id)}')" title="อนุมัติ · แถวจะย้ายลงไปอยู่ใน manifest">&#10003; อนุมัติ</button></div></td>`)
+            + `<td class="t2-c">${vanMode?`<div class="pnacts"><button class="pnbtn" onclick="event.stopPropagation();bkV2OpenDetail('${esc(bk.id)}')" title="ดูรายละเอียด">View</button><button class="pnbtn ok" onclick="event.stopPropagation();bkV2ApproveBooking('${esc(bk.id)}')" title="อนุมัติ">&#10003;</button></div>`:_pdash}</td>`
+            + (rcMode?`<td class="t2-c">${_pdash}</td>`:'')
+            + (wxClosed?`<td class="t2-c">${_pdash}</td>`:'')
+            + `</tr>`;
+        }).join('')) : '';
+
     /* §btLkOne · ล็อกเกินความจุเรือ · เคสจริง 15 ต.ค. PG 08:00 เรือ 56 ที่ แต่ล็อก 58
        หน้าจอเดิมขึ้นแค่ "full" จึงมองไม่เห็นว่าเกิน · ป้ายอยู่บนแถบโปรแกรม
        เพราะเป็นเรื่องของทั้งทริป ไม่ใช่ของล็อกใบใดใบหนึ่ง (และล็อกยุบเหลือแถวเดียวแล้ว) */
@@ -47886,7 +47937,7 @@ function bkV2RenderTab2(){
         + `</tr>` : '';
       return _row;
     }).join('');
-    const zoneTable = (zoneBlocks || lockBlocks) ? `
+    const zoneTable = (zoneBlocks || lockBlocks || pendBlocks) ? `
         <div class="t2-tblscroll">
           <table class="t2-mtbl${vanMode?' t2-van':''}">
             <thead><tr>
@@ -47897,7 +47948,7 @@ function bkV2RenderTab2(){
               ${rcMode?`<th class="t2-c" style="color:#7A4A00;background:#FAEBD2;white-space:nowrap">&#9989; Re-confirm <button onclick="bkV2ReconfirmAll('${date}','${rid}','list')" title="ยืนยันทั้งหมด (list)" style="background:#7A4A00;color:#fff;border:none;border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:4px">all</button></th>`:''}
               ${wxClosed?'<th class="t2-c" style="color:#A32D2D;background:#FBE8E4;white-space:nowrap">&#9928; Manage</th>':''}
             </tr></thead>
-            <tbody>${_pband}${lockBlocks}${zoneBlocks}</tbody>
+            <tbody>${_pband}${pendBlocks}${lockBlocks}${zoneBlocks}</tbody>
           </table>
         </div>` : '';
 
@@ -47948,35 +47999,6 @@ function bkV2RenderTab2(){
 
     // ── Cancelled bookings · kept as a record in their own block · not counted in totals ──
     // §pendSeat · กลุ่มรออนุมัติของทริปนี้ · แสดงเหนือ manifest ไม่ปนกับคนที่จะเดินทางจริง
-    const _pendRows = pendGroups[rid] || [];
-    const _pendPax = _pendRows.reduce((s,r)=> s + P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc'), 0);
-    const pendBlock = _pendRows.length ? `
-      <div class="t2-pend-sec">
-        <div class="t2-pend-hd">&#9203; รออนุมัติ &middot; ${_pendRows.length} booking &middot; ${_pendPax} pax
-          <span style="font-weight:500;text-transform:none;color:#9a7a3a">(ยังไม่นับในยอดของทริป &middot; ยังไม่เข้าใบงานรถ/เรือ)</span></div>
-        ${_pendRows.map(r=>{
-          const bk=r.bk, norm=bkV2Norm(bk), ap=bk.approval||{};
-          const lead=bk.leadPax||bk.customerName||'—';
-          const ppax=P(r.pax,'ad')+P(r.pax,'chd')+P(r.pax,'inf')+P(r.pax,'foc');
-          const overCap=(Array.isArray(ap.over)&&ap.over.length>0)||(+ap.totOver>0);
-          const why = overCap ? ('เกิน cap +'+(ap.totOver||0)+' ที่')
-                    : (+ap.discount>0) ? ('ส่วนลด &#3647;'+(+ap.discount).toLocaleString()+' · รอเซลล์ยืนยัน')
-                    : ((typeof bkV2PendLabel==='function' && (ap.reason||(typeof bkV2PendReason==='function'?bkV2PendReason(bk):'')))
-                        ? bkV2PendLabel(ap.reason||bkV2PendReason(bk)) : 'รอผู้จัดการอนุมัติ');
-          const held = (typeof bkPendHoldsSeat==='function') ? bkPendHoldsSeat(bk) : true;
-          return `<div class="t2-pend-row">
-            <span class="t2-cxl-vc">${bk.voucherRef?esc(bk.voucherRef):esc(bk.code||bk.id)}</span>
-            <span class="t2-cxl-ag">${esc(norm.agentName)}</span>
-            <span class="t2-cxl-cu">${esc(lead)}</span>
-            <span class="t2-cxl-px">${ppax} pax</span>
-            <span class="t2-pend-why">${why}</span>
-            <span class="t2-pend-hold" title="${held?'ที่นั่งถูกกันไว้ระหว่างรออนุมัติ':'ที่นั่งเกิน cap อยู่แล้ว จึงไม่ถูกกันไว้'}">${held?'&#128274; กันที่นั่งไว้':'ไม่กันที่นั่ง'}</span>
-            <button class="t2-ghost-go" onclick="event.stopPropagation();bkV2OpenDetail('${esc(bk.id)}')" title="ดูรายละเอียด">View</button>
-            <button class="t2-ghost-go" style="color:#0F6E56;border-color:#9FE1CB" onclick="event.stopPropagation();bkV2ApproveBooking('${esc(bk.id)}')" title="อนุมัติ · แถวจะย้ายลงไปอยู่ใน manifest">&#10003; อนุมัติ</button>
-          </div>`;
-        }).join('')}
-      </div>` : '';
-
     const _cxlRows = grp.filter(r=>r.cxl);
     const cxlBlock = _cxlRows.length ? `
       <div class="t2-cxl-sec">
@@ -48210,8 +48232,7 @@ function bkV2RenderTab2(){
         ${rcStrip}
         ${/* §btSlim · แถบล็อคที่นั่งรายทริปถูกยกไปอยู่การ์ด Seat Lock บนหัวหน้าแล้ว
               (ยุบตามเอเยนต์ + ปุ่มล็อคที่นั่ง + ทั้งหมด ครบเหมือนเดิม) */''}
-        ${pendBlock}
-        ${(grp.length===0 && !_pendRows.length && !lockBlocks) ? '<div class="t2-nobk">ยังไม่มี booking และไม่มีที่นั่งที่ล็อกไว้</div>' : zoneTable}
+        ${(grp.length===0 && !pendBlocks && !lockBlocks) ? '<div class="t2-nobk">ยังไม่มี booking และไม่มีที่นั่งที่ล็อกไว้</div>' : zoneTable}
         ${ghostBlock}
         ${cxlBlock}
         ${/* §btTune · แถบ "BOATS · ไกด์ · อาหารรายลำ" ท้ายตารางถูกตัดออก
@@ -48585,6 +48606,35 @@ function bkV2RenderTab2(){
     .t2-zband-ch .znm{color:#5B289A}
     .t2-zband .zsub{font-size:11px;color:#6a7180;font-weight:600}
     .t2-zband-ch .zsub{color:#7A6FA8}
+    /* ══ §btPendRow · แถบ + แถวใบรออนุมัติ · อยู่ในตาราง ใต้ชื่อทริปของตัวเอง ══
+       โทนครีม-ทองเหมือนกล่องเดิมที่ถูกยุบ · แถวเป็น t2-row จะได้แช่แข็งคอลัมน์ซ้าย
+       เหมือนแถวอื่นตอนเลื่อนแนวนอน · เส้นประบอกว่ายังไม่ใช่แถวที่ยืนยันแล้ว */
+    .t2-mtbl tr.t2-pnband>td{background:#FDF6E8;border-top:2px solid #EAD9B0;
+      border-bottom:1px solid #F0E3C5;padding:7px 14px;box-shadow:inset 5px 0 0 #C9922A}
+    .t2-pnband .zw{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+    .t2-pnband .zkind{font-size:10px;font-weight:800;letter-spacing:.06em;color:#8A5B00}
+    .t2-pnband .zsub{font-size:11px;color:#8a7350;font-weight:600}
+    .t2-pnband .zsub b{font-family:'DM Mono',monospace;font-weight:800;color:#7A4A00}
+    .t2-mtbl tr.t2-pnrow.t2-row{background:#FFFCF4}
+    .t2-mtbl tr.t2-pnrow.t2-row>td{border-bottom:1px dashed #EAD9B0}
+    .t2-mtbl tr.t2-pnrow.t2-row>td:first-child{box-shadow:inset 4px 0 0 #C9922A}
+    table.t2-mtbl tr.t2-pnrow.t2-row:hover td{background:#FFF9EA}
+    .t2-pnrow .pnvc{font-family:'DM Mono',monospace;font-size:11.5px;color:#7a6338}
+    .t2-pnrow .pnag{font-size:11px;font-weight:600;color:#8a7350}
+    .t2-pnrow .pncu{font-weight:600;color:#5a4a2a}
+    .t2-pnrow .pnwhy{display:inline-block;font-size:9px;font-weight:700;background:#FBEEd2;
+      color:#8A5B00;border:1px solid #EAD9B0;border-radius:5px;padding:1px 6px;margin-left:6px;
+      max-width:118px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+    .t2-pnrow .pnclip{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .t2-pnrow .pnhold{display:inline-block;font-size:10px;font-weight:700;color:#7A4A00;background:#fff;
+      border:1px solid #EAD9B0;border-radius:5px;padding:2px 7px;white-space:nowrap}
+    .t2-pnrow .pnhold.no{color:#A32D2D;border-color:#F0C9C9;background:#FDF2F2}
+    .t2-pnrow .pnacts{display:flex;gap:4px;justify-content:center;flex-wrap:nowrap}
+    .t2-pnrow .pnbtn{font-size:10px;font-weight:700;color:#7A4A00;background:#fff;
+      border:1px solid #EAD9B0;border-radius:6px;padding:3px 8px;cursor:pointer;
+      font-family:inherit;white-space:nowrap}
+    .t2-pnrow .pnbtn.ok{color:#0F6E56;border-color:#9FE1CB}
+    .t2-pnrow .pnbtn:hover{background:#FFFDF6;border-color:#D8BE7E}
     /* ══ §btLkOne · ป้ายบนแถบโปรแกรม · ที่นั่งที่ล็อกไว้รวม + เตือนล็อกเกินความจุ
        ย้ายมาจากแถบล็อกเดิมที่ถูกยุบทิ้ง · เป็นเรื่องของทั้งทริป ไม่ใช่ของล็อกใบเดียว */
     .t2-pband .plk{font-size:10.5px;font-weight:800;color:#8E2B18;background:#FBEAE6;
