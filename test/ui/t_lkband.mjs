@@ -60,6 +60,11 @@ const SETUP = await page.evaluate(() => {
     holderType: 'agent', holderId: ag.id, qty: 10, reason: 'test band',
     releaseDaysBefore: 2, releaseTime: '18:00' });
   const drew = bkV2DrawLock(L1.id, 3, hit.bkId, hit.date);
+  /* แบ่งกรุ๊ปย่อยออกจากล็อกที่ 1 สองกรุ๊ป · บรรทัดเดียวกางชื่อทุกกรุ๊ปไม่ไหว
+     ต้องยุบเป็นตัวนับ "↳ N กรุ๊ป" แล้วเก็บรายชื่อเต็มไว้ใน title */
+  const kidA = bkV2CreateSubLock(L1.id, 'Poppy', 2);
+  const kidB = bkV2CreateSubLock(L1.id, 'Chiky', 1);
+  const kids = [kidA, kidB].filter(Boolean).length;
 
   /* ล็อกที่ 2 · ดึงจนหมดเกลี้ยง · แถวที่นั่งต้องหาย แต่แถบต้องอยู่ */
   const L2 = bkV2CreateLock({ scope: 'day', routeId: hit.rid, date: hit.date,
@@ -80,13 +85,13 @@ const SETUP = await page.evaluate(() => {
      ถ้าลืมกรองวัน ใบเดียวกันจะติดป้ายของทุกวันที่เคยดึง */
   const ag2 = (typeof SB_AGENTS !== 'undefined' ? SB_AGENTS : [])
     .find(a => a && a.color && a.id !== ag.id && (a.name || '') !== (ag.name || ''));
-  let other = null;
+  let other = null, L4 = null;
   if (ag2) {
     const d0 = new Date(hit.date + 'T00:00:00');
     const nx = new Date(d0); nx.setDate(nx.getDate() + 1);
     const ds = x => x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0');
     const to = new Date(d0); to.setDate(to.getDate() + 6);
-    const L4 = bkV2CreateLock({ scope: 'bulk', routeId: hit.rid, dateFrom: hit.date, dateTo: ds(to),
+    L4 = bkV2CreateLock({ scope: 'bulk', routeId: hit.rid, dateFrom: hit.date, dateTo: ds(to),
       holderType: 'agent', holderId: ag2.id, qty: 5, reason: 'test other day' });
     const n4 = bkV2DrawLock(L4.id, 2, hit.bkId, ds(nx));
     other = { name: ag2.name || ag2.id, drew: n4, day: ds(nx) };
@@ -110,7 +115,7 @@ const SETUP = await page.evaluate(() => {
   const usedOf = (l, d) => (l.log || []).reduce((s, e) =>
     s + ((e && e.type === 'draw' && (e.tripDate || l.date || '') === d) ? (Number(e.qty) || 0) : 0), 0);
   const want = {}, wantC = {};
-  [L1, L2, L3, L5].filter(Boolean).forEach(l => {
+  [L1, L2, L3, L4, L5].filter(Boolean).forEach(l => {
     const u = usedOf(l, hit.date);
     want[l.id] = { qty: l.qty, used: u, held: Math.max(0, l.qty - u), rid: l.routeId };
   });
@@ -144,7 +149,8 @@ const SETUP = await page.evaluate(() => {
 
   return { ...hit, bare, other, agId: ag.id, agName: ag.name || ag.id, agColor: String(ag.color).toLowerCase(),
            ids: { L1: L1.id, L2: L2.id, L3: L3 ? L3.id : '', L5: L5.id },
-           drew, drew2, drew5, l5Status: L5.status, want, wantC, paxRaw };
+           drew, drew2, drew5, kids, kidNames: [kidA, kidB].filter(Boolean).map(k => k.subName),
+           l5Status: L5.status, want, wantC, paxRaw };
 });
 if (SETUP.err) { console.log('  ✗ ' + SETUP.err); console.log('\nพัง 1'); await close(); process.exit(1); }
 await page.waitForTimeout(700);
@@ -157,26 +163,36 @@ const GOT = await page.evaluate((RID) => {
     if (m) return '#' + [1, 2, 3].map(i => (+m[i]).toString(16).padStart(2, '0')).join('');
     return s.toLowerCase();
   };
-  const bands = [].slice.call(document.querySelectorAll('tr.t2-lband')).map(tr => {
+  /* §btLkOne · ล็อกหนึ่งใบ = หนึ่งแถว · ทุกอย่างอยู่บนแถวเดียว ไม่มีแถบคาดแล้ว */
+  const bands = [].slice.call(document.querySelectorAll('tr.t2-lrow')).map(tr => {
     const td = tr.querySelector('td');
-    const nm = tr.querySelector('.lnm');
-    /* หาแถวที่นั่งที่ตามหลังแถบนี้ (ถ้ามี) · หยุดเมื่อเจอแถบถัดไป */
-    let held = null, n = tr.nextElementSibling;
-    if (n && n.classList.contains('t2-lrow')) held = (n.querySelector('.lkq') || {}).textContent.trim();
+    const nm = tr.querySelector('.lkwho');
     return {
-      txt: (td.textContent || '').replace(/\s+/g, ' ').trim(),
+      txt: (tr.textContent || '').replace(/\s+/g, ' ').trim(),
       who: ((nm || {}).textContent || '').trim(),
-      /* สีมาจาก --lc บน <tr> (ขีดซ้าย) และพื้นของป้ายชื่อ · ต้องเป็นสีเดียวกัน */
+      /* สีมาจาก --lc บน <tr> (ขีดซ้ายช่องแรก) และพื้นของป้ายชื่อ · ต้องเป็นสีเดียวกัน */
       lk: tr.getAttribute('data-lk') || '',
       lc: hex((tr.getAttribute('style') || '').replace(/^.*--lc:\s*/, '').replace(/[;\s].*$/, '')),
       chip: hex(nm ? getComputedStyle(nm).backgroundColor : ''),
       stripe: hex((getComputedStyle(td).boxShadow.match(/rgba?\([^)]+\)/) || [''])[0]),
-      held,
+      held: (tr.querySelector('.lkq') || {}).textContent || null,
+      /* เรื่องเล่าของโควตา (ล็อกไว้กี่ที่ · ขายไปแล้วกี่ที่) อยู่ในช่อง Pickup
+         อ่านจาก title ด้วย เพราะช่องแคบกว่าข้อความจะถูกตัดท้าย */
+      story: (function(){ const x = tr.querySelector('.t2-pk .lkclip');
+        return x ? ((x.getAttribute('title') || x.textContent || '').replace(/\s+/g, ' ').trim()) : ''; })(),
       inTable: !!tr.closest('table.t2-mtbl'),
-      warn: !!tr.querySelector('.lkwarn'),
+      manage: !!tr.querySelector('.lkgo'),
+      kid: ((tr.querySelector('.lkkid') || {}).getAttribute ? (tr.querySelector('.lkkid').getAttribute('title') || '') : ''),
       rule: ((tr.querySelector('.lkrule') || {}).textContent || '').trim()
     };
   });
+  /* แถบคาดของเดิมต้องไม่เหลืออยู่เลย */
+  const oldBands = document.querySelectorAll('tr.t2-lband').length;
+  /* ป้ายบนแถบโปรแกรม · ที่นั่งที่ล็อกไว้รวม + เตือนล็อกเกินความจุ */
+  const pbands = [].slice.call(document.querySelectorAll('tr.t2-pband')).map(tr => ({
+    lk: ((tr.querySelector('.plk') || {}).textContent || '').trim(),
+    over: ((tr.querySelector('.pover') || {}).textContent || '').trim(),
+    txt: (tr.textContent || '').replace(/\s+/g, ' ').trim() }));
   const drawn = [].slice.call(document.querySelectorAll('.t2-drawn')).map(x => ({
     txt: (x.textContent || '').replace(/\s+/g, ' ').trim(),
     bg: hex(getComputedStyle(x).backgroundColor),
@@ -185,7 +201,7 @@ const GOT = await page.evaluate((RID) => {
   /* ยอด pax ของ "ทริปที่ปลูกล็อกไว้" เท่านั้น · หาตารางจาก data-rid บนแถบล็อก
      หน้าเดียวมีหลายทริป ถ้าบวกทั้งหน้าจะไม่ตรงกับที่นับเองของเส้นทางเดียว */
   const paxOfRid = rid => {
-    const band = document.querySelector('tr.t2-lband[data-rid="' + rid + '"]');
+    const band = document.querySelector('tr.t2-lrow[data-rid="' + rid + '"]');
     const tb = band && band.closest('table.t2-mtbl');
     if (!tb) return null;
     let n = 0;
@@ -211,15 +227,22 @@ const GOT = await page.evaluate((RID) => {
              adIx, adCell: adIx >= 0 && tds[adIx] ? !!tds[adIx].querySelector('.lkq') : false,
              adTxt: adIx >= 0 && tds[adIx] ? (tds[adIx].textContent || '').trim() : '' };
   });
-  return { bands, drawn, nobk: document.querySelectorAll('.t2-nobk').length,
+  return { bands, drawn, oldBands, pbands, nobk: document.querySelectorAll('.t2-nobk').length,
            lrows: document.querySelectorAll('tr.t2-lrow').length, grid, paxScreen: paxOfRid(RID) };
 }, SETUP.rid);
 
 /* ══ 1 · แถบล็อกอยู่ในตาราง manifest จริง ═══════════════════════════════ */
 const nBand = GOT.bands.length;
-if (nBand < 2) fail('ปลูกล็อกไว้ ' + Object.keys(SETUP.want).length + ' ใบ แต่บนจอมีแถบล็อก ' + nBand + ' แถบ');
-else if (GOT.bands.some(b => !b.inTable)) fail('แถบล็อกบางแถบไม่ได้อยู่ในตาราง manifest');
-else ok('แถบล็อก ' + nBand + ' แถบอยู่ในตาราง manifest จริง (อยู่ใน table.t2-mtbl ปริ้นใบงานติดไปด้วย)');
+/* §btLkOne · ล็อกหนึ่งใบต้องกินแค่หนึ่งแถว · ไม่มีแถบคาดเพิ่มอีกแถว */
+const wantRows = Object.keys(SETUP.want).filter(id => SETUP.want[id].held > 0).length;
+if (nBand < 2) fail('ปลูกล็อกที่ยังเหลือที่นั่งไว้ ' + wantRows + ' ใบ แต่บนจอมีแถวล็อก ' + nBand + ' แถว');
+else if (GOT.bands.some(b => !b.inTable)) fail('แถวล็อกบางแถวไม่ได้อยู่ในตาราง manifest');
+else if (GOT.oldBands) fail('ยังมีแถบคาดของเดิมเหลืออยู่ ' + GOT.oldBands + ' แถบ · ล็อกใบหนึ่งกินสองบรรทัด');
+else if (nBand !== wantRows)
+  fail('ล็อกที่ยังเหลือที่นั่งมี ' + wantRows + ' ใบ แต่บนจอมี ' + nBand + ' แถว · ควรเป็นใบละแถวพอดี');
+else if (GOT.bands.some(b => !b.manage)) fail('แถวล็อกไม่มีปุ่มจัดการ');
+else ok('ล็อกใบละหนึ่งแถว · ' + nBand + ' ใบ ' + nBand + ' แถว ไม่มีแถบคาดเพิ่ม · ' +
+        'อยู่ในตาราง manifest จริงและมีปุ่มจัดการครบ');
 
 /* ══ 2 · สีของแถบ = สีเอเยนต์ที่ตั้งไว้เอง ═════════════════════════════ */
 const wantC = SETUP.agColor;
@@ -228,29 +251,29 @@ const wantC = SETUP.agColor;
 const colChk = GOT.bands.filter(b => SETUP.wantC[b.lk]);
 const colBad = colChk.filter(b => b.lc !== SETUP.wantC[b.lk] || b.chip !== SETUP.wantC[b.lk]);
 const colSet = new Set(colChk.map(b => SETUP.wantC[b.lk]));
-if (!GOT.bands.length) fail('ไม่มีแถบล็อกให้ตรวจสี');
-else if (!colChk.length) fail('แถบล็อกไม่มี data-lk · เทียบสีกับเจ้าของล็อกทีละใบไม่ได้');
+if (!GOT.bands.length) fail('ไม่มีแถวล็อกให้ตรวจสี');
+else if (!colChk.length) fail('แถวล็อกไม่มี data-lk · เทียบสีกับเจ้าของล็อกทีละใบไม่ได้');
 else if (colBad.length)
-  fail('สีแถบล็อก ' + colBad[0].lk + ' ควรเป็น ' + SETUP.wantC[colBad[0].lk] +
+  fail('สีแถวล็อก ' + colBad[0].lk + ' ควรเป็น ' + SETUP.wantC[colBad[0].lk] +
        ' (สีที่ตั้งไว้ให้เอเยนต์เจ้านั้น) · เจอ ขีด ' + colBad[0].lc + ' / ป้าย ' + colBad[0].chip);
 else if (colSet.size < 2)
-  fail('แถบล็อกที่ตรวจได้มีสีเดียว · พิสูจน์ไม่ได้ว่าสีผูกกับเอเยนต์จริง ไม่ใช่ทาสีตายตัว');
-else ok('สีแถบล็อกผูกกับเอเยนต์รายเจ้า · ตรวจ ' + colChk.length + ' แถบ ' + colSet.size +
+  fail('แถวล็อกที่ตรวจได้มีสีเดียว · พิสูจน์ไม่ได้ว่าสีผูกกับเอเยนต์จริง ไม่ใช่ทาสีตายตัว');
+else ok('สีแถวล็อกผูกกับเอเยนต์รายเจ้า · ตรวจ ' + colChk.length + ' แถว ' + colSet.size +
         ' สี (' + SETUP.agName + ' ' + wantC + ' ฯลฯ) ตรงทั้งขีดซ้ายและป้ายชื่อ');
 
 /* ══ 3+4 · ตัวเลข ล็อกไว้ / ขายไปแล้ว / เหลือ · และลดลงตามที่ดึง ══════════ */
 const w1 = SETUP.want[SETUP.ids.L1];
 const nz = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-const b1 = GOT.bands.find(b => b.txt.indexOf(w1.qty + ' ที่') >= 0 && b.txt.indexOf('ขายไปแล้ว ' + w1.used) >= 0);
+const b1 = GOT.bands.find(b => b.lk === SETUP.ids.L1);
 if (!SETUP.drew) fail('ดึงที่นั่งจากล็อกไม่ได้ · พิสูจน์ไม่ได้ว่าจำนวนลดลงตามที่ใช้');
-else if (!b1) fail('ไม่มีแถบที่บอก "' + w1.qty + ' ที่ · ขายไปแล้ว ' + w1.used + '" · เจอ [' +
+else if (!b1) fail('ไม่มีแถวของล็อก L1 (' + w1.qty + ' ที่ · ดึงไป ' + w1.used + ') · เจอ [' +
                    GOT.bands.map(b => b.txt).join(' | ') + ']');
-else if (b1.txt.indexOf('เหลือกันไว้ ' + w1.held) < 0)
-  fail('ล็อก ' + w1.qty + ' ดึงไป ' + w1.used + ' · แถบต้องบอกเหลือ ' + w1.held + ' · เจอ "' + b1.txt + '"');
+else if (b1.story.indexOf(w1.qty + ' ที่') < 0 || b1.story.indexOf('ขายไปแล้ว ' + w1.used) < 0)
+  fail('แถวล็อกต้องบอก "' + w1.qty + ' ที่ · ขายไปแล้ว ' + w1.used + '" · เจอ "' + b1.story + '"');
 else if (b1.held !== String(w1.held))
-  fail('แถวที่นั่งบอก ' + b1.held + ' ที่ · ควรเป็น ' + w1.held + ' (ล็อก ' + w1.qty + ' − ดึง ' + w1.used + ')');
+  fail('ช่องที่เหลือกันไว้บอก ' + b1.held + ' · ควรเป็น ' + w1.held + ' (ล็อก ' + w1.qty + ' − ดึง ' + w1.used + ')');
 else ok('ตัวเลขลดลงตามที่ใช้ · ล็อก ' + w1.qty + ' ที่ → ดึงไป ' + w1.used + ' → เหลือกันไว้ ' + w1.held +
-        ' ทั้งบนแถบและแถวที่นั่ง · ตรงกับที่นับเองจาก lock.log');
+        ' · อยู่บนแถวเดียวกันครบ ตรงกับที่นับเองจาก lock.log');
 
 /* ══ 5 · ใบที่ดึงจากล็อก ติดป้ายชื่อเจ้าของล็อก สีเดียวกัน ═══════════════ */
 const dHit = GOT.drawn.filter(d => d.txt.indexOf(SETUP.agName) >= 0);
@@ -264,6 +287,22 @@ else if (SETUP.other && SETUP.other.drew && GOT.drawn.some(d => d.txt.indexOf(SE
 else ok('ใบที่ดึงที่นั่งจากล็อกติดป้าย "' + SETUP.agName + '" สีเดียวกับแถบ · ' + dHit.length + ' ใบ' +
         ((SETUP.other && SETUP.other.drew) ? (' · ล็อกช่วงของ ' + SETUP.other.name + ' ที่ถูกดึงวันที่ ' +
           SETUP.other.day + ' ไม่มาติดป้ายผิดวัน') : ''));
+
+/* ══ 5c · กรุ๊ปย่อยยุบเป็นตัวนับ · รายชื่อเต็มอยู่ใน tooltip ═══════════════ */
+if (!SETUP.kids) fail('แบ่งกรุ๊ปย่อยไม่สำเร็จ · พิสูจน์ไม่ได้ว่าบรรทัดเดียวรับกรุ๊ปย่อยไหว');
+else {
+  const bk1 = GOT.bands.find(b => b.lk === SETUP.ids.L1);
+  const other = GOT.bands.filter(b => b.lk !== SETUP.ids.L1 && b.kid);
+  if (!bk1) fail('ไม่มีแถวของล็อกที่แบ่งกรุ๊ปย่อยไว้');
+  else if (!bk1.kid) fail('ล็อกมีกรุ๊ปย่อย ' + SETUP.kids + ' กรุ๊ป แต่แถวไม่บอกเลย');
+  else if (SETUP.kidNames.some(n => bk1.kid.indexOf(n) < 0))
+    fail('tooltip กรุ๊ปย่อย "' + bk1.kid + '" ควรมีครบทุกชื่อ [' + SETUP.kidNames.join(', ') + ']');
+  else if (other.length)
+    fail('ล็อกที่ไม่มีกรุ๊ปย่อยกลับขึ้นตัวนับกรุ๊ป · ' + other.length + ' แถว');
+  else ok('กรุ๊ปย่อย ' + SETUP.kids + ' กรุ๊ปยุบเป็นตัวนับบรรทัดเดียว · ' +
+          'รายชื่อเต็มอยู่ใน tooltip [' + SETUP.kidNames.join(', ') + '] · ' +
+          'ล็อกที่ไม่มีกรุ๊ปย่อยไม่ขึ้นตัวนับ');
+}
 
 /* ══ 5b · แถวที่นั่งเรียงตรงคอลัมน์ · กวาดตาลงคอลัมน์ AD ได้ไม่สะดุด ═══════ */
 if (!GOT.grid.length) fail('ไม่มีแถวที่นั่งให้ตรวจการเรียงคอลัมน์');
@@ -288,27 +327,27 @@ else {
    เพื่อบอกว่าไม่มีอะไร · ร่องรอยว่าที่นั่งมาจากโควตาใคร ยังอยู่ที่ป้ายบนใบจอง */
 const w2 = SETUP.want[SETUP.ids.L2];
 const b2 = GOT.bands.find(b => b.lk === SETUP.ids.L2);
-const zeroBand = GOT.bands.find(b => /เหลือกันไว้ 0(?!\d)/.test(b.txt));
+const zeroBand = GOT.bands.find(b => (b.held || '').trim() === '0');
 if (!w2 || w2.held !== 0) fail('ปลูกล็อกที่ดึงจนหมดไม่สำเร็จ (เหลือ ' + (w2 ? w2.held : '?') + ')');
-else if (b2) fail('ล็อกที่ใช้หมดแล้ว (' + w2.qty + ' ที่ · ขายครบ) ยังขึ้นแถบอยู่ · ควรหายไปทั้งแถบ');
-else if (zeroBand) fail('ยังมีแถบที่บอก "เหลือกันไว้ 0" อยู่ · "' + zeroBand.txt + '"');
+else if (b2) fail('ล็อกที่ใช้หมดแล้ว (' + w2.qty + ' ที่ · ขายครบ) ยังขึ้นแถวอยู่ · ควรหายไปทั้งแถว');
+else if (zeroBand) fail('ยังมีแถวล็อกที่เหลือ 0 อยู่ · "' + zeroBand.txt + '"');
 else if (!GOT.drawn.length) fail('ล็อกหายไปแล้ว และใบจองก็ไม่มีป้าย "จากล็อก" · ตามรอยโควตาไม่ได้เลย');
 else if (!SETUP.drew5 || SETUP.want[SETUP.ids.L5].held !== 0)
   fail('ปลูกล็อกแบบช่วงที่หมดเฉพาะรอบนี้ไม่สำเร็จ (ดึงได้ ' + SETUP.drew5 + ')');
 else if (SETUP.l5Status !== 'active')
   fail('ล็อกแบบช่วงถูกตีตรา ' + SETUP.l5Status + ' · เคสนี้ต้องยัง active ถึงจะพิสูจน์ได้ว่ากรองด้วยที่นั่ง ไม่ใช่สถานะ');
 else if (GOT.bands.find(b => b.lk === SETUP.ids.L5))
-  fail('ล็อกแบบช่วงที่หมดเฉพาะรอบวันนี้ยังขึ้นแถบ · สถานะยัง active แต่วันนี้ไม่เหลือที่แล้ว');
-else ok('ล็อกที่ใช้หมดแล้วหายไปทั้งแถบ · ทั้งล็อกรายวัน (ตีตรา depleted) และล็อกแบบช่วง ' +
-        'ที่หมดเฉพาะรอบวันนี้ (สถานะยัง active) · ไม่มีแถบ "เหลือกันไว้ 0" ค้างอยู่ ' +
+  fail('ล็อกแบบช่วงที่หมดเฉพาะรอบวันนี้ยังขึ้นแถว · สถานะยัง active แต่วันนี้ไม่เหลือที่แล้ว');
+else ok('ล็อกที่ใช้หมดแล้วหายไปทั้งแถว · ทั้งล็อกรายวัน (ตีตรา depleted) และล็อกแบบช่วง ' +
+        'ที่หมดเฉพาะรอบวันนี้ (สถานะยัง active) · ไม่มีแถวที่เหลือ 0 ค้างอยู่ ' +
         'แต่ยังตามรอยได้จากป้ายบนใบจอง ' + GOT.drawn.length + ' ใบ');
 
 /* ══ 7 · ทริปที่มีแต่ล็อก ไม่มี booking · ต้องขึ้นตาราง ═══════════════════ */
 if (!SETUP.bare) ok('ชุดข้อมูลนี้ไม่มีเส้นทางว่างให้ทดสอบทริปที่มีแต่ล็อก · ข้ามข้อนี้');
 else {
   const w3 = SETUP.want[SETUP.ids.L3];
-  const b3 = GOT.bands.find(b => b.txt.indexOf(w3.qty + ' ที่') >= 0 && b.held === String(w3.held));
-  if (!b3) fail('ทริปที่มีแต่ล็อก ' + w3.qty + ' ที่ ไม่ขึ้นแถบในตาราง');
+  const b3 = GOT.bands.find(b => b.lk === SETUP.ids.L3 && b.held === String(w3.held));
+  if (!b3) fail('ทริปที่มีแต่ล็อก ' + w3.qty + ' ที่ ไม่ขึ้นแถวในตาราง');
   else if (GOT.nobk) fail('ยังขึ้นข้อความ "ยังไม่มี booking" ทั้งที่มีที่นั่งล็อกอยู่ ' + w3.qty + ' ที่');
   else ok('ทริปที่ยังไม่มี booking เลย แต่มีล็อก ' + w3.qty + ' ที่ · ขึ้นตารางให้เห็น ไม่ใช่ข้อความว่าง');
 }

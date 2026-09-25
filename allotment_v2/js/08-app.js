@@ -47821,17 +47821,25 @@ function bkV2RenderTab2(){
        ที่นั่งมาจากโควตาใคร ยังตามได้จากป้าย "จากล็อก" บนใบจองที่ดึงไปแล้ว
        กรองด้วยที่นั่งคงเหลือ ไม่ใช่สถานะ · ล็อกแบบช่วงที่หมดเฉพาะรอบนี้
        สถานะยังเป็น active อยู่ แต่วันนี้ไม่เหลือที่ ก็ต้องหายเหมือนกัน            */
-    const lkShow = trParents.filter(l=>
-      ((typeof bkV2LockHeldRemaining==='function') ? bkV2LockHeldRemaining(l, date) : bkV2LockRemaining(l, date)) > 0);
+    const lkShow = trParents;
+    /* §btLkOne · ล็อกเกินความจุเรือ · เคสจริง 15 ต.ค. PG 08:00 เรือ 56 ที่ แต่ล็อก 58
+       หน้าจอเดิมขึ้นแค่ "full" จึงมองไม่เห็นว่าเกิน · ป้ายอยู่บนแถบโปรแกรม
+       เพราะเป็นเรื่องของทั้งทริป ไม่ใช่ของล็อกใบใดใบหนึ่ง (และล็อกยุบเหลือแถวเดียวแล้ว) */
+    const _lkOver = (_pbCap>0) ? Math.max(0, (_pbBk + trLockedTotal) - _pbCap) : 0;
     const _pband = `<tr class="t2-pband" style="--pc:${_pbCol}"><td colspan="${COLN}"><div class="pw">`
       + `<span class="pd"></span><span class="pn">${esc(route?.name || rid)}</span>`
       + `<span class="pt">${esc(dep)}${_pbPier?(' &middot; '+esc(_pbPier)):''}</span>`
       + (_pbNB?`<span class="pb">${_pbNB} boat${_pbNB===1?'':'s'}</span>`:'')
+      + (trLockedTotal>0?`<span class="plk" title="ที่นั่งที่กันไว้ให้เอเยนต์ · ยังไม่ถูกนับเป็น booking">&#128274; ${trLockedTotal}</span>`:'')
+      + (_lkOver>0?`<span class="pover" title="ที่นั่งที่ขายแล้วบวกที่ล็อกไว้ เกินความจุเรือที่เปิดอยู่">&#9888; ล็อกเกิน ${_lkOver} ที่</span>`:'')
       + `<span class="ps">${_pbBk}/${_pbCap}<em class="${_pbCls}">${_pbAv<=0?'full':(_pbAv+' free')}</em></span>`
       + `</div></td></tr>`;
-    /* §btLkBand · ล็อกเกินความจุเรือ · เคสจริง 15 ต.ค. PG 08:00 เรือ 56 ที่ แต่ล็อก 58
-       หน้าจอเดิมขึ้นแค่ "full" จึงมองไม่เห็นว่าเกิน · พอเอาล็อกมาวางในตารางก็เห็นเอง */
-    const _lkOver = (_pbCap>0) ? Math.max(0, (_pbBk + trLockedTotal) - _pbCap) : 0;
+    /* ══ §btLkOne (2026-09-25) · ล็อกหนึ่งใบ = หนึ่งบรรทัด ═══════════════════
+       ของเดิมใบละสองแถว · แถบคาดบอกตัวเลข แล้วตามด้วยแถวที่นั่ง
+       วันที่มีล็อกสามเจ้าก็กินไปหกบรรทัดก่อนจะเห็นชื่อคนแรก
+       ยุบมาเป็นแถวเดียว · ทุกอย่างลงช่องของตัวเองในตาราง
+       ที่เหลือกันไว้อยู่ใต้ AD · เรื่องเล่าของโควตาอยู่ช่อง Pickup ซึ่งกว้างที่สุด
+       ปุ่มจัดการไปอยู่ช่องเดียวกับปุ่ม VC ของแถวคนจริง                          */
     const lockBlocks = lkShow.map(l=>{
       const _c   = (typeof bkV2LockHolderColor==='function') ? bkV2LockHolderColor(l) : '#9C9C95';
       const _ink = (typeof bkV2ContrastInk==='function') ? bkV2ContrastInk(_c) : '#fff';
@@ -47841,48 +47849,42 @@ function bkV2RenderTab2(){
       const _held= (typeof bkV2LockHeldRemaining==='function') ? bkV2LockHeldRemaining(l, date) : bkV2LockRemaining(l, date);
       const _kids= (typeof bkV2LockChildren==='function') ? bkV2LockChildren(l.id) : [];
       const _cut = (typeof bkV2LockCutoffLabel==='function') ? bkV2LockCutoffLabel(l) : '';
-      const _band = `<tr class="t2-lband" data-rid="${esc(rid)}" data-lk="${esc(l.id)}" style="--lc:${_c}"><td colspan="${COLN}"><div class="zw">`
-        + `<span class="zkind">&#128274; ล็อกที่นั่ง</span>`
-        + `<span class="lnm" style="background:${_c};color:${_ink}">${esc(_nm)}</span>`
-        + `<span class="zsub">${_qty} ที่ &middot; ขายไปแล้ว <b>${_used}</b> &middot; เหลือกันไว้ <b>${_held}</b></span>`
-        + (_kids.length?`<span class="lksub">${_kids.map(k=>`<span>&#8627; ${esc(k.subName||'ย่อย')} ${bkV2LockRemaining(k,date)}</span>`).join('')}</span>`:'')
-        + (_cut?`<span class="lkrule">${esc(_cut)}</span>`:'')
-        + (bkV2LockSpansDays(l)?`<span class="lkrule">bulk</span>`:'')
-        + (_lkOver>0?`<span class="lkwarn" title="ที่นั่งที่ขายแล้วบวกที่ล็อกไว้ เกินความจุเรือที่เปิดอยู่">&#9888; ล็อกเกินความจุ ${_lkOver} ที่</span>`:'')
-        + `<button class="lkgo" onclick="event.stopPropagation();bkV2LockManageOpen('${l.id}')" title="จัดการล็อก · เพิ่มกรุ๊ปย่อย / ปล่อย">จัดการล็อก &#9662;</button>`
-        + `</div></td></tr>`;
-      /* แถวที่นั่งที่ยังกันไว้ · เป็น "ที่นั่ง" ไม่ใช่ "คน" — ไม่นับเป็น booking
-         ไม่เข้าใบงานรถ/เรือ และไม่เข้าทะเบียนอุทยาน จนกว่าจะมีชื่อจริง */
-      /* ══ §btLkCell · แถวที่นั่งเรียงตรงคอลัมน์จริง ════════════════════════
-         ของเดิมเป็นแถบยาวช่องเดียว (colspan) · ตาที่กำลังกวาดลงคอลัมน์ AD
-         มาเจอแถบขวางแล้วต้องเริ่มอ่านใหม่ทีละคำ · ตอนนี้ใช้ <td> จริงเรียงตาม
-         หัวตาราง จำนวนที่กันไว้จึงอยู่ใต้ AD ตรงกับตัวเลขของแถวคนจริง
-         ลำดับช่องต้องตรงกับ thead เป๊ะ ๆ รวมคอลัมน์ที่โผล่เฉพาะบางโหมด
-         (กลุ่ม เฉพาะโหมดจัดรถ · Add-on/Pay/Total/VC เฉพาะตอนไม่จัดรถ ฯลฯ) */
       const _dash = '<span class="t2-dim">&mdash;</span>';
       const _code = 'LK-' + String(_nm||'').replace(/\s+/g,'').slice(0,12).toUpperCase();
-      const _row = _held>0 ? `<tr class="t2-row t2-lrow" style="--lc:${_c}">`
-        + `<td class="t2-vc"><span class="lkcode">${esc(_code)}</span></td>`
+      /* กรุ๊ปย่อยขึ้นเป็นตัวนับ · เจ้าเดียวมีได้หกกรุ๊ป กางหมดแล้วบรรทัดเดียวไม่พอ
+         รายชื่อเต็มอยู่ใน title · กดปุ่มจัดการเพื่อดูและแก้ */
+      const _kidTip = _kids.map(k=>(k.subName||'ย่อย')+' '+bkV2LockRemaining(k,date)).join(' · ');
+      const _story = _qty + ' ที่ · ขายไปแล้ว ' + _used
+        + (bkV2LockSpansDays(l) ? ' · ล็อกแบบช่วง' : '')
+        + (l.reason ? (' · ' + l.reason) : '');
+      /* §btLkGone · ใช้หมดแล้วไม่ต้องขึ้นแถว · ตัดสินที่ "ที่นั่งคงเหลือของวันนั้น"
+         ที่เดียว ไม่ใช่สถานะ · ล็อกแบบช่วงที่หมดเฉพาะรอบนี้ สถานะยังเป็น active อยู่
+         (bkV2DrawLock ไม่ตีตรา depleted ให้ล็อกแบบช่วง เพราะรอบอื่นยังมีที่)
+         ร่องรอยว่าที่นั่งมาจากโควตาใคร ยังอยู่ที่ป้าย "จากล็อก" บนใบจอง        */
+      const _row = _held>0 ? `<tr class="t2-row t2-lrow" data-rid="${esc(rid)}" data-lk="${esc(l.id)}" style="--lc:${_c}">`
+        + `<td class="t2-vc"><span class="lkcode">&#128274; ${esc(_code)}</span></td>`
         + `<td><span class="lkwho" style="background:${_c};color:${_ink}">${esc(_nm)}</span></td>`
-        + `<td class="t2-cu"><span class="lkwait">&mdash; ${_used>0?'เหลือกันไว้ ยังไม่ส่งชื่อ':'ที่นั่งกันไว้ ยังไม่ส่งชื่อ'} &mdash;</span></td>`
+        + `<td class="t2-cu"><span class="lkwait">ล็อกที่นั่ง · ยังไม่ส่งชื่อ</span>`
+          + (_kids.length?`<span class="lkkid" title="กรุ๊ปย่อย · ${esc(_kidTip)}">&#8627; ${_kids.length} กรุ๊ป</span>`:'')
+          + `</td>`
         + `<td class="t2-c"><b class="lkq">${_held}</b></td>`
         + `<td class="t2-c">${_dash}</td><td class="t2-c">${_dash}</td><td class="t2-c">${_dash}</td>`
         + `<td>${_cut?`<span class="lkrule">${esc(_cut)}</span>`:_dash}</td>`
         + (vanMode?`<td class="t2-c">${_dash}</td>`:'')
-        + `<td class="t2-pk"><span class="lkwait">รอ rooming list</span></td>`
+        + `<td class="t2-pk"><span class="lkwait lkclip" title="${esc(_story)}">${esc(_story)}</span></td>`
         + `<td class="t2-c">${_dash}</td>`
         + `<td>${_dash}</td>`
         + `<td>${_dash}</td>`
         + (vanMode?'':`<td class="t2-req">${_dash}</td>`)
-        + `<td class="t2-req">${l.reason?`<span class="lkwait lkclip" title="${esc(l.reason)}">${esc(l.reason)}</span>`:_dash}</td>`
+        + `<td class="t2-req"><span class="lkwait">รอ rooming list</span></td>`
         + (vanMode?'':`<td><span class="lkhold">&#128274; กันไว้</span></td>`
                     + `<td class="t2-r">${_dash}</td>`
-                    + `<td class="t2-c">${_dash}</td>`)
+                    + `<td class="t2-c"><button class="lkgo" onclick="event.stopPropagation();bkV2LockManageOpen('${l.id}')" title="จัดการล็อก · เพิ่มกรุ๊ปย่อย / ปล่อย${_kids.length?(' · กรุ๊ปย่อย: '+esc(_kidTip)):''}">จัดการ</button></td>`)
         + `<td class="t2-c">${_dash}</td>`
         + (rcMode?`<td class="t2-c">${_dash}</td>`:'')
         + (wxClosed?`<td class="t2-c">${_dash}</td>`:'')
         + `</tr>` : '';
-      return _band + _row;
+      return _row;
     }).join('');
     const zoneTable = (zoneBlocks || lockBlocks) ? `
         <div class="t2-tblscroll">
@@ -48583,27 +48585,12 @@ function bkV2RenderTab2(){
     .t2-zband-ch .znm{color:#5B289A}
     .t2-zband .zsub{font-size:11px;color:#6a7180;font-weight:600}
     .t2-zband-ch .zsub{color:#7A6FA8}
-    /* ══ §btLkBand · แถบล็อกที่นั่ง · ชั้นเดียวกับแถบโซน ═══════════════════════
-       ไม่ทาสีเอเยนต์ทั้งแถบ · เอเยนต์บางเจ้าสีเข้มจัด ทาเต็มแถบแล้วแย่งสายตา
-       ไปจากแถวจริง · ใช้ขีดซ้าย + ป้ายชื่อเป็นสีของเจ้านั้น พื้นแถบเป็นครีมกลาง ๆ */
-    .t2-mtbl tr.t2-lband>td{background:#FBF6F0;border-top:2px solid #E7D8C6;
-      border-bottom:1px solid #EEE2D4;padding:7px 14px;box-shadow:inset 5px 0 0 var(--lc,#9C9C95)}
-    .t2-lband .zw{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-    .t2-lband .zkind{font-size:9px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#A98F72}
-    .t2-lband .lnm{font-size:12px;font-weight:800;border-radius:6px;padding:3px 10px;
-      max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .t2-lband .zsub{font-size:11px;color:#7a6a58;font-weight:600}
-    .t2-lband .zsub b{font-family:'DM Mono',monospace;font-weight:800;color:#5C4A36}
-    .t2-lband .lksub{display:inline-flex;gap:5px;flex-wrap:wrap}
-    .t2-lband .lksub span{font-size:10px;font-weight:700;color:#4A3FA0;background:#F3F2FB;
-      border:1px solid #DAD6F5;border-radius:6px;padding:2px 7px}
-    .t2-lband .lkrule{font-size:10px;font-weight:700;background:#fff;border:1px solid #E7D8C6;
-      color:#7A5A34;border-radius:6px;padding:2px 8px}
-    .t2-lband .lkwarn{font-size:10px;font-weight:800;background:#8E1B10;color:#fff;
+    /* ══ §btLkOne · ป้ายบนแถบโปรแกรม · ที่นั่งที่ล็อกไว้รวม + เตือนล็อกเกินความจุ
+       ย้ายมาจากแถบล็อกเดิมที่ถูกยุบทิ้ง · เป็นเรื่องของทั้งทริป ไม่ใช่ของล็อกใบเดียว */
+    .t2-pband .plk{font-size:10.5px;font-weight:800;color:#8E2B18;background:#FBEAE6;
+      border:1px solid #EAC6BF;border-radius:6px;padding:2px 8px;font-family:'DM Mono',monospace}
+    .t2-pband .pover{font-size:10px;font-weight:800;background:#8E1B10;color:#fff;
       border-radius:6px;padding:2px 8px}
-    .t2-lband .lkgo{margin-left:auto;font-size:10.5px;font-weight:700;color:#7A5A34;background:#fff;
-      border:1px solid #E7D8C6;border-radius:7px;padding:4px 10px;cursor:pointer;font-family:inherit}
-    .t2-lband .lkgo:hover{border-color:#B7946A}
     /* ══ §btLkCell · แถวที่นั่งที่ยังกันไว้ · เรียงตรงคอลัมน์จริง ══════════════
        เป็นแถวปกติ (t2-row) จะได้คอลัมน์ซ้ายแช่แข็งเหมือนแถวอื่นตอนเลื่อนแนวนอน
        เส้นประบอกว่ายังไม่ใช่แถวของคนจริง · ขีดสีเอเยนต์วาดเฉพาะช่องแรก */
@@ -48621,10 +48608,22 @@ function bkV2RenderTab2(){
     .t2-lrow .lkwait{font-size:11.5px;font-style:italic;color:#9a8b78}
     /* เหตุผลของล็อกยาวได้ไม่จำกัด · ช่อง Special request กว้าง 118px ตัดท้ายด้วยจุดสามจุด
        ไม่งั้นข้อความถูกตัดกลางคำเฉย ๆ อ่านไม่รู้ว่ามีต่อ (ตัวเต็มอยู่ใน title) */
-    .t2-lrow .lkclip{display:inline-block;max-width:110px;overflow:hidden;
-      text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+    /* ข้อความยาวได้ไม่จำกัด · ตัดท้ายตามความกว้างของช่องที่มันอยู่
+       (Pickup กว้าง · Special request แคบ 118px) ไม่ใช่ตัวเลขตายตัวตัวเดียว
+       ตัดท้ายด้วยจุดสามจุด ไม่งั้นถูกตัดกลางคำเฉย ๆ อ่านไม่รู้ว่ามีต่อ */
+    .t2-lrow .lkclip{display:block;max-width:100%;overflow:hidden;
+      text-overflow:ellipsis;white-space:nowrap}
     .t2-lrow .lkrule{font-size:10px;font-weight:700;background:#fff;border:1px solid #E7D8C6;
       color:#7A5A34;border-radius:5px;padding:2px 7px;white-space:nowrap}
+    /* กรุ๊ปย่อยขึ้นเป็นตัวนับ · เจ้าเดียวมีได้หลายกรุ๊ป กางหมดแล้วบรรทัดเดียวไม่พอ */
+    .t2-lrow .lkkid{display:inline-block;font-size:9.5px;font-weight:700;color:#4A3FA0;
+      background:#F3F2FB;border:1px solid #DAD6F5;border-radius:5px;padding:1px 6px;
+      margin-left:5px;cursor:help;vertical-align:middle;white-space:nowrap}
+    /* ปุ่มจัดการอยู่ช่องเดียวกับปุ่ม VC ของแถวคนจริง · ขนาดเท่ากันตาจะได้ไม่สะดุด */
+    .t2-lrow .lkgo{font-size:10px;font-weight:700;color:#7A5A34;background:#fff;
+      border:1px solid #E7D8C6;border-radius:6px;padding:3px 8px;cursor:pointer;
+      font-family:inherit;white-space:nowrap}
+    .t2-lrow .lkgo:hover{border-color:#B7946A;background:#FFFDFA}
     /* ป้ายบนใบที่ดึงที่นั่งมาจากล็อก · สีของเจ้าของล็อก ตามรอยกลับได้ว่ามาจากโควตาใคร */
     .t2-drawn{display:inline-block;font-size:9px;font-weight:800;border-radius:5px;
       padding:1px 6px;margin-left:6px;vertical-align:middle;white-space:nowrap}
