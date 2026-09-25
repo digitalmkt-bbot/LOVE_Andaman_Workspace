@@ -25796,7 +25796,16 @@ function fdPlanDiscard(){
 var FD_SAVE_KEY = 'la_fd_plans';
 var FD_SAVE_MAX = 24;
 var _fdSaved = null;
-var _fdSaveOpen = false;
+/* §flDeployEdit (2026-09-25) · แก้รอบที่บันทึกไว้แล้วได้
+   ที่มา · ผู้ใช้ถามเอง · "เราจะเข้าไปแก้ตัวที่เราบันทึกไว้แล้วได้ยังไง"
+   ของเดิมกดชิปแล้วรอบนั้นขึ้นมาบนกระดานจริง แก้ได้จริง แต่ไม่มีทางบันทึกทับ
+   fdSaveDo() push ใบใหม่เสมอ · กดเซฟหลังแก้เลยได้รอบซ้ำวันเดิมสองรอบ
+   แถบเวลาขึ้น "ทับกัน 1 รอบ" แล้วต้องไปลบรอบเก่าเอง
+   _fdSaveOpen · '' = ปิดฟอร์ม · 'new' = บันทึกเป็นรอบใหม่ · 'edit' = บันทึกทับรอบที่เปิดอยู่
+   _fdSaveCur · id ของรอบที่เปิดขึ้นมาบนกระดาน · ใช้ id ไม่ใช่เทียบวันที่
+   เพราะสองรอบอาจมีช่วงวันเดียวกันได้ */
+var _fdSaveOpen = '';
+var _fdSaveCur  = '';
 function fdSaved(){
   if(_fdSaved) return _fdSaved;
   _fdSaved=[];
@@ -25812,7 +25821,16 @@ function fdPlanCopy(p){
 function fdSavedSorted(){
   return fdSaved().slice().sort(function(a,b){ return String(a.from||'').localeCompare(String(b.from||'')); });
 }
-function fdSaveOpen(){ _fdSaveOpen=!_fdSaveOpen; flRenderDeployment(); }
+function fdSaveOpen(mode){
+  var m=mode||'new';
+  _fdSaveOpen = (_fdSaveOpen===m) ? '' : m;
+  flRenderDeployment();
+}
+/* รอบที่เปิดอยู่บนกระดาน · คืน null ถ้าถูกลบไปแล้วหรือยังไม่ได้เปิดรอบไหน */
+function fdSaveCurRec(){
+  if(!_fdSaveCur) return null;
+  return fdSaved().filter(function(x){ return x && x.id===_fdSaveCur; })[0] || null;
+}
 function fdSaveDo(){
   var g=function(id){ var el=document.getElementById(id); return el?String(el.value||'').trim():''; };
   var Wn=fdWin();
@@ -25820,14 +25838,35 @@ function fdSaveDo(){
   if(t<f) t=f;
   if(!nm) nm='รอบ '+fdNiceDate(f)+' – '+fdNiceDate(t);
   var S=fdSaved();
+  /* §flDeployEdit · บันทึกทับรอบที่เปิดอยู่ · ไม่สร้างใบใหม่ ไม่เปลี่ยน id
+     ประวัติเวลาบันทึกเก็บ "ครั้งแรก" ไว้ด้วย จะได้รู้ว่ารอบนี้ถูกแก้มากี่หน */
+  if(_fdSaveOpen==='edit'){
+    var cur=fdSaveCurRec();
+    if(!cur){
+      if(typeof flShowToast==='function') flShowToast('รอบที่เปิดอยู่ถูกลบไปแล้ว · กดบันทึกเป็นรอบใหม่แทน','warn');
+      _fdSaveOpen='new'; flRenderDeployment(); return;
+    }
+    cur.name=nm; cur.from=f; cur.to=t;
+    if(!cur.firstAt) cur.firstAt=cur.at||'';
+    cur.at=new Date().toISOString().slice(0,16).replace('T',' ');
+    cur.edits=(Number(cur.edits)||0)+1;
+    cur.plan=fdPlanCopy(_fdPlan);
+    _fdSaveOpen='';
+    _fdScope='custom'; _fdCustom={ from:f, to:t }; _fdWinIx=0;
+    fdSavedWrite(); flRenderDeployment();
+    if(typeof flShowToast==='function') flShowToast('บันทึกทับ "'+nm+'" แล้ว · แก้ครั้งที่ '+cur.edits);
+    return;
+  }
   if(S.length>=FD_SAVE_MAX){
     if(typeof flShowToast==='function') flShowToast('เก็บได้สูงสุด '+FD_SAVE_MAX+' รอบ · ลบรอบเก่าออกก่อน','warn');
     return;
   }
-  S.push({ id:'sv'+Date.now()+Math.floor(Math.random()*1000), name:nm, from:f, to:t,
+  var _nid='sv'+Date.now()+Math.floor(Math.random()*1000);
+  S.push({ id:_nid, name:nm, from:f, to:t,
            at:new Date().toISOString().slice(0,16).replace('T',' '),
            plan:fdPlanCopy(_fdPlan) });
-  _fdSaveOpen=false;
+  _fdSaveOpen='';
+  _fdSaveCur=_nid;   /* รอบที่เพิ่งบันทึกคือรอบที่กำลังแก้อยู่ · กดแก้ต่อได้ทันที */
   fdSavedWrite(); flRenderDeployment();
   if(typeof flShowToast==='function') flShowToast('บันทึก Mockup "'+nm+'" แล้ว · เก็บในเครื่องนี้เท่านั้น');
 }
@@ -25843,13 +25882,15 @@ function fdSavedOpen(id){
             boats:p.boats||[], ready:p.ready||{} };
   fdPlanSave();
   _fdScope='custom'; _fdCustom={ from:r.from, to:r.to }; _fdWinIx=0; _fdSel='';
+  _fdSaveCur=id; _fdSaveOpen='';   /* §flDeployEdit · จำไว้ว่ากำลังแก้รอบไหนอยู่ */
   flRenderDeployment();
-  if(typeof flShowToast==='function') flShowToast('เปิด "'+r.name+'" ขึ้นมาแล้ว · '+r.from+'→'+r.to);
+  if(typeof flShowToast==='function') flShowToast('เปิด "'+r.name+'" ขึ้นมาแล้ว · '+r.from+'→'+r.to+' · แก้แล้วกด "บันทึกทับรอบนี้" ได้เลย');
 }
 function fdSavedDel(id){
   var r=fdSaved().filter(function(x){ return x && x.id===id; })[0]; if(!r) return;
   if(!confirm('Delete this saved mockup?\n\nOnly the saved copy is removed. The board you are on is untouched.')) return;
   _fdSaved=fdSaved().filter(function(x){ return x && x.id!==id; });
+  if(_fdSaveCur===id){ _fdSaveCur=''; if(_fdSaveOpen==='edit') _fdSaveOpen=''; }
   fdSavedWrite(); flRenderDeployment();
 }
 /* วางรอบถัดไป · เริ่มจากวันถัดจากรอบสุดท้ายที่เซฟไว้ · กระดานยังเป็นชุดเดิมให้แก้ต่อ */
@@ -25860,7 +25901,8 @@ function fdSavedNext(){
   if(f>S.to) f=S.to;
   var t=fdMonthEnd(f); if(t>S.to) t=S.to;
   _fdScope='custom'; _fdCustom={ from:f, to:t }; _fdWinIx=0; _fdSel='';
-  _fdSaveOpen=false;      /* จัดกระดานให้เสร็จก่อน ค่อยกดบันทึก · เปิดฟอร์มค้างไว้แต่แรกทำให้กดเซฟรอบเปล่า */
+  _fdSaveOpen='';      /* จัดกระดานให้เสร็จก่อน ค่อยกดบันทึก · เปิดฟอร์มค้างไว้แต่แรกทำให้กดเซฟรอบเปล่า */
+  _fdSaveCur='';       /* §flDeployEdit · รอบถัดไปเป็นของใหม่ · กันกดบันทึกทับรอบก่อนหน้าโดยไม่ตั้งใจ */
   _fdTab='pier';
   flRenderDeployment();
   if(typeof flShowToast==='function') flShowToast('เริ่มรอบถัดไป '+f+'→'+t+' · จัดเสร็จแล้วกดบันทึก');
@@ -25877,23 +25919,35 @@ function fdSavedBar(){
     if(r.to>=cur) cur=fdAddDays(r.to,1);
   });
   if(L.length && cur<=S.to) holes.push({ from:cur, to:S.to });
+  /* §flDeployEdit · โหมดแก้ · ฟอร์มเดียวกัน แต่เติมชื่อกับช่วงวันของรอบที่เปิดอยู่มาให้
+     เปลี่ยนชื่อหรือขยับวันแล้วกดบันทึกทับได้เลย ไม่ต้องลบรอบเก่าแล้วสร้างใหม่ */
+  var cur = fdSaveCurRec();
+  var isEdit = (_fdSaveOpen==='edit' && cur);
   var form = _fdSaveOpen
-    ? ('<div class="sv-form">'
-       + '<input id="fd-sv-name" type="text" placeholder="ชื่อรอบ เช่น เปิดฤดู ครึ่งเดือนแรก">'
-       + '<input id="fd-sv-from" type="date" value="'+fdE(Wn.from)+'">'
-       + '<i>→</i><input id="fd-sv-to" type="date" value="'+fdE(Wn.to)+'">'
-       + '<button class="go" onclick="fdSaveDo()">บันทึกรอบนี้</button>'
-       + '<button onclick="fdSaveOpen()">ยกเลิก</button></div>')
+    ? ('<div class="sv-form'+(isEdit?' edit':'')+'">'
+       + (isEdit?'<em class="sv-tag">แก้รอบที่บันทึกไว้</em>':'')
+       + '<input id="fd-sv-name" type="text" placeholder="ชื่อรอบ เช่น เปิดฤดู ครึ่งเดือนแรก"'
+         + (isEdit?(' value="'+fdE(cur.name||'')+'"'):'')+'>'
+       + '<input id="fd-sv-from" type="date" value="'+fdE(isEdit?cur.from:Wn.from)+'">'
+       + '<i>→</i><input id="fd-sv-to" type="date" value="'+fdE(isEdit?cur.to:Wn.to)+'">'
+       + '<button class="go" onclick="fdSaveDo()">'+(isEdit?'บันทึกทับรอบนี้':'บันทึกรอบนี้')+'</button>'
+       + (isEdit?'<button onclick="fdSaveOpen(\'new\')" title="เก็บของเดิมไว้ แล้วแยกเป็นอีกรอบ">แยกเป็นรอบใหม่</button>':'')
+       + '<button onclick="fdSaveOpen(\''+(isEdit?'edit':'new')+'\')">ยกเลิก</button></div>')
     : '';
   var chips = L.map(function(r){
-    var mine=(_fdScope==='custom' && _fdCustom && _fdCustom.from===r.from && _fdCustom.to===r.to);
+    var mine=(_fdSaveCur===r.id)
+          || (!_fdSaveCur && _fdScope==='custom' && _fdCustom && _fdCustom.from===r.from && _fdCustom.to===r.to);
     var p=r.plan||{};
     var n=(p.pier||[]).length+(p.boats||[]).length+Object.keys(p.ready||{}).length
         +Object.keys(p.trip||{}).length+Object.keys(p.avail||{}).length;
     return '<span class="sv-i'+(mine?' on':'')+'" onclick="fdSavedOpen(\''+fdE(r.id)+'\')" '
-      +'title="'+fdE(r.name+' · บันทึก '+(r.at||''))+'"><b>'+fdE(r.name)+'</b>'
+      +'title="'+fdE(r.name+' · บันทึกล่าสุด '+(r.at||'')
+          +(r.edits?(' · แก้มาแล้ว '+r.edits+' ครั้ง · สร้างเมื่อ '+(r.firstAt||'')):'')
+          +' · คลิกเพื่อเปิดรอบนี้ขึ้นมาบนกระดานแล้วแก้ต่อ')+'"><b>'+fdE(r.name)+'</b>'
       +'<i>'+fdE(fdNiceDate(r.from))+' → '+fdE(fdNiceDate(r.to))+'</i>'
       +'<u>'+n+' รายการ</u>'
+      +(mine?'<s class="sv-now">กำลังแก้</s>':'')
+      +(r.edits?'<s class="sv-ed" title="แก้ทับมาแล้ว '+r.edits+' ครั้ง">✎'+r.edits+'</s>':'')
       +'<button onclick="event.stopPropagation();fdSavedDel(\''+fdE(r.id)+'\')" title="ลบรอบนี้">✕</button></span>';
   }).join('');
   var track = L.map(function(r){
@@ -25911,13 +25965,18 @@ function fdSavedBar(){
        + (overlap ? (' · <b class="hole">ทับกัน '+overlap+' รอบ</b>') : ''));
   return '<div class="fd-saved">'
     + '<div class="sh"><b>Mockup ที่บันทึกไว้</b><span>'+sum+'</span>'
-      + '<button class="go" onclick="fdSaveOpen()">'+(_fdSaveOpen?'ปิดฟอร์ม':'+ บันทึกกระดานนี้เป็นรอบ')+'</button>'
+      + (cur?('<button class="go edit" onclick="fdSaveOpen(\'edit\')" title="เขียนทับรอบที่เปิดอยู่ ไม่สร้างรอบซ้ำ">'
+              +(_fdSaveOpen==='edit'?'ปิดฟอร์ม':'&#9998; บันทึกทับ "'+fdE(fdShort(cur.name||''))+'"')+'</button>'):'')
+      + '<button class="go" onclick="fdSaveOpen(\'new\')">'+(_fdSaveOpen==='new'?'ปิดฟอร์ม':'+ บันทึกเป็นรอบใหม่')+'</button>'
       + (L.length?('<button onclick="fdSavedNext()">วางรอบถัดไป</button>'):'')
     + '</div>'
     + form
     + (L.length?('<div class="sv-track">'+track+'</div><div class="sv-list">'+chips+'</div>'):'')
     + '<div class="sv-note">เก็บไว้ในเครื่องนี้เท่านั้น · ไม่ขึ้นเซิร์ฟเวอร์และไม่ไปถึงคนอื่น · '
-      + 'เปิดรอบไหนขึ้นมา กระดานจะกลายเป็นรอบนั้น แต่ยังไม่เขียนอะไรกลับระบบเหมือนเดิม</div>'
+      + 'ยังไม่เขียนอะไรกลับระบบเหมือนเดิม<br>'
+      + '<b>แก้รอบที่บันทึกไว้</b> · คลิกที่ชิปรอบนั้น กระดานจะกลายเป็นรอบนั้น → ลากแก้ได้ตามปกติ → '
+      + 'กด <b>บันทึกทับ</b> เพื่อเขียนทับรอบเดิม (เปลี่ยนชื่อหรือขยับช่วงวันในฟอร์มได้ด้วย) '
+      + 'หรือกด <b>แยกเป็นรอบใหม่</b> ถ้าอยากเก็บของเดิมไว้ด้วย</div>'
     + '</div>';
 }
 /* ══ ช่วงที่เรืออยู่กับเรา · เรือเช่าหลายลำเช่าแค่บางวัน ════════
@@ -26968,6 +27027,15 @@ function fdCSS(){
   +H+' .fd-saved .sv-i i{font-style:normal;color:#51637A}'
   +H+' .fd-saved .sv-i u{text-decoration:none;font-size:9.5px;color:#9AA3AE}'
   +H+' .fd-saved .sv-i button{border:0;background:transparent;padding:1px 4px;font-size:11px;color:#9AA3AE}'
+  /* §flDeployEdit · ป้ายบนชิป · "กำลังแก้" บอกว่ารอบไหนอยู่บนกระดานตอนนี้
+     ✎N บอกว่ารอบนั้นถูกเขียนทับมากี่ครั้งแล้ว */
+  +H+' .fd-saved .sv-i s{text-decoration:none;font-size:9px;font-weight:800;border-radius:5px;padding:1px 6px}'
+  +H+' .fd-saved .sv-i s.sv-now{background:#1E3A5F;color:#fff}'
+  +H+' .fd-saved .sv-i s.sv-ed{background:#EEF2F7;color:#51637A}'
+  +H+' .fd-saved .sh .go.edit{background:#fff;color:#1E3A5F;border:1px solid #1E3A5F}'
+  +H+' .fd-saved .sv-form.edit{background:#F4F7FB;border:1px dashed #9FB6D1;border-radius:10px;padding:8px 10px}'
+  +H+' .fd-saved .sv-tag{font-style:normal;font-size:9.5px;font-weight:800;letter-spacing:.04em;'
+    +'background:#1E3A5F;color:#fff;border-radius:6px;padding:3px 8px;white-space:nowrap}'
   +H+' .fd-saved .sv-note{font-size:10px;color:#8494A8;line-height:1.55;margin-top:8px}'
   +H+' .fd-chase .ci i{font-style:normal;font-weight:500;color:#A97A2A}'
   +H+' .fd-chase .ci u{text-decoration:none;font-weight:500;color:#9AA3AE;font-size:10px}'

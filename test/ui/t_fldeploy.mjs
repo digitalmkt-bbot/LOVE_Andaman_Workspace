@@ -661,6 +661,104 @@ const R3i = await page.evaluate(() => {
       + (R3i.holes ? (' · เส้นเวลาชี้ช่องว่าง ' + R3i.holes + ' ช่วง') : ''));
 }
 
+/* ══ 3i2 · แก้รอบที่บันทึกไว้แล้ว · บันทึกทับได้ ไม่เกิดรอบซ้ำ ═══════════════
+   §flDeployEdit · ผู้ใช้ถามเอง "เราจะเข้าไปแก้ตัวที่เราบันทึกไว้แล้วได้ยังไง"
+   ของเดิมเปิดรอบขึ้นมาแก้ได้ แต่กดเซฟทีไรก็ได้รอบใหม่ทุกที · ช่วงวันเดียวกันสองรอบ
+   แถบเวลาขึ้น "ทับกัน" แล้วต้องไปลบรอบเก่าเอง                                   */
+const R3i2 = await page.evaluate(() => {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  const LS = 'loveandaman_v2';
+  const realBefore = localStorage.getItem(LS);
+  try { localStorage.removeItem('la_fd_plans'); } catch (_) {}
+  _fdSaved = null; _fdSaveCur = ''; _fdSaveOpen = '';
+  _fdPlan = { pier: [], drop: [], trip: {}, avail: {}, boats: [], ready: {} }; fdPlanSave();
+  fdSetScope('custom'); fdSetCustom('from', fdSeason().from);
+  fdSetCustom('to', fdAddDays(fdSeason().from, 9));
+  const W = fdWin();
+  const fleet = (BOATS || []).filter(b => b && !b.retired);
+  const a = fleet.find(x => fdPierOf(x, W.from) !== 'shop');
+  _fdSel = a.id; fdMove(['tublamu','panwa','ranong'].find(p => p !== fdPierOf(a, W.from)));
+  const nBefore = fdPlanN();
+  fdSaveOpen('new'); set('fd-sv-name', 'รอบเดิม'); fdSaveDo();
+  const rec0 = fdSaved()[0];
+  const id0 = rec0.id, at0 = rec0.at, cnt0 = fdSaved().length;
+
+  /* เปิดรอบนั้นขึ้นมา (แบบที่คนใช้กดชิป) แล้วลากเพิ่มอีกลำ
+     ล้างตัวชี้ก่อน · ให้ fdSavedOpen เป็นคนตั้งเอง ไม่ใช่ค่าที่ค้างมาจากตอนกดบันทึก */
+  _fdSaveCur = '';
+  fdSavedOpen(id0);
+  const curAfterOpen = _fdSaveCur;
+  const b = fleet.find(x => x.id !== a.id && fdPierOf(x, W.from) !== 'shop');
+  if (b) { _fdSel = b.id; fdMove(['tublamu','panwa','ranong'].find(p => p !== fdPierOf(b, W.from))); }
+  const nAfter = fdPlanN();
+
+  /* ปุ่ม "บันทึกทับ" ต้องมีให้กดจริงบนแถบ · ไม่ใช่เรียกฟังก์ชันเอาเองได้อย่างเดียว */
+  const w = document.getElementById('fl-deploy-wrap');
+  const editBtn = [].slice.call(w.querySelectorAll('.fd-saved .sh button'))
+    .filter(x => /fdSaveOpen\('edit'\)/.test(x.getAttribute('onclick') || '')).length;
+  /* ชิปของรอบที่เปิดอยู่ต้องติดป้ายว่ากำลังแก้ */
+  const nowTag = w.querySelectorAll('.fd-saved .sv-i .sv-now').length;
+
+  fdSaveOpen('edit');
+  /* ฟอร์มต้องเติมชื่อกับช่วงวันของรอบนั้นมาให้ ไม่ใช่ช่องว่าง */
+  const pre = { nm: (document.getElementById('fd-sv-name') || {}).value,
+                f: (document.getElementById('fd-sv-from') || {}).value,
+                t: (document.getElementById('fd-sv-to') || {}).value };
+  set('fd-sv-name', 'รอบเดิม แก้แล้ว');
+  fdSaveDo();
+
+  /* อ่านทันทีหลังกดบันทึกทับ · fdSaved() คืน array ตัวจริง ถ้าเก็บ reference ไว้
+     แล้วค่อยอ่าน .length ตอนท้าย จะได้ยอดหลังกด "แยกเป็นรอบใหม่" ไปแล้ว */
+  const afterEdit = fdSaved().length;
+  const rec = fdSaved().filter(x => x.id === id0)[0] || null;
+  const recName = rec ? rec.name : null;
+  const recEdits = rec ? rec.edits : null;
+  const recFirstAt = rec ? rec.firstAt : null;
+  const recAt = rec ? rec.at : null;
+  const planN = rec ? ((rec.plan.pier || []).length + (rec.plan.boats || []).length
+                     + Object.keys(rec.plan.ready || {}).length
+                     + Object.keys(rec.plan.trip || {}).length
+                     + Object.keys(rec.plan.avail || {}).length) : null;
+  /* กด "แยกเป็นรอบใหม่" ต้องได้อีกใบ ไม่ทับของเดิม */
+  fdSaveOpen('new'); set('fd-sv-name', 'แยกออกมา'); fdSaveDo();
+  const afterFork = fdSaved().length;
+  const rec2 = fdSaved().filter(x => x.id === id0)[0];
+
+  const realAfter = localStorage.getItem(LS);
+  return { cnt0, id0, at0, curAfterOpen, nBefore, nAfter, editBtn, nowTag, pre,
+    afterEdit, sameId: !!rec, name: recName,
+    edits: recEdits, atOk: !!(recAt && recFirstAt && recAt >= recFirstAt),
+    firstAt: recFirstAt, planN,
+    afterFork, forkKeptName: rec2 ? rec2.name : null,
+    realUntouched: realBefore === realAfter };
+});
+{
+  const bad = [];
+  if (R3i2.cnt0 !== 1) bad.push('เซฟรอบแรกแล้วมี ' + R3i2.cnt0 + ' รอบ');
+  if (R3i2.curAfterOpen !== R3i2.id0) bad.push('เปิดรอบแล้วระบบไม่จำว่ากำลังแก้รอบไหน');
+  if (!R3i2.editBtn) bad.push('ไม่มีปุ่ม "บันทึกทับ" ให้กดบนแถบ · ต้องเรียกฟังก์ชันเองถึงจะแก้ได้');
+  if (!R3i2.nowTag) bad.push('ชิปของรอบที่เปิดอยู่ไม่ติดป้ายว่ากำลังแก้ · ไม่รู้ว่ากดทับใบไหน');
+  if (R3i2.pre.nm !== 'รอบเดิม') bad.push('ฟอร์มแก้ไม่ได้เติมชื่อรอบเดิมมาให้ · เจอ "' + R3i2.pre.nm + '"');
+  if (!R3i2.pre.f || !R3i2.pre.t) bad.push('ฟอร์มแก้ไม่ได้เติมช่วงวันของรอบนั้นมาให้');
+  if (R3i2.nAfter <= R3i2.nBefore) bad.push('ลากเพิ่มหลังเปิดรอบแล้วกระดานไม่เพิ่ม · ทดสอบไม่ได้');
+  if (R3i2.afterEdit !== 1) bad.push('บันทึกทับแล้วมี ' + R3i2.afterEdit + ' รอบ · ควรยังเป็น 1 (ไม่สร้างรอบซ้ำ)');
+  if (!R3i2.sameId) bad.push('บันทึกทับแล้ว id ของรอบเปลี่ยน · ไม่ใช่การเขียนทับใบเดิม');
+  if (R3i2.name !== 'รอบเดิม แก้แล้ว') bad.push('เปลี่ยนชื่อตอนบันทึกทับไม่ติด · เจอ "' + R3i2.name + '"');
+  if (R3i2.planN !== R3i2.nAfter)
+    bad.push('รอบที่เขียนทับเก็บ ' + R3i2.planN + ' รายการ · กระดานตอนกดมี ' + R3i2.nAfter);
+  if (R3i2.edits !== 1) bad.push('ตัวนับจำนวนครั้งที่แก้เป็น ' + R3i2.edits + ' · ควรเป็น 1');
+  if (!R3i2.firstAt) bad.push('ไม่เก็บเวลาที่สร้างรอบครั้งแรกไว้');
+  if (!R3i2.atOk) bad.push('เวลาบันทึกล่าสุด (' + R3i2.atOk + ') เก่ากว่าเวลาที่สร้างครั้งแรก');
+  if (R3i2.afterFork !== 2) bad.push('กดแยกเป็นรอบใหม่แล้วมี ' + R3i2.afterFork + ' รอบ · ควรเป็น 2');
+  if (R3i2.forkKeptName !== 'รอบเดิม แก้แล้ว') bad.push('แยกรอบใหม่แล้วไปทับรอบเดิมด้วย');
+  if (!R3i2.realUntouched) bad.push('แก้รอบแล้ว blob ข้อมูลจริงถูกแตะ');
+  if (bad.length) fail('แก้รอบที่บันทึกไว้ · ' + bad.join(' · '));
+  else ok('แก้รอบที่บันทึกไว้ได้ · กดชิปเปิดรอบ → ลากเพิ่มจาก ' + R3i2.nBefore + ' เป็น ' + R3i2.nAfter
+        + ' รายการ → กด "บันทึกทับ" แล้วยังเป็นรอบเดียว id เดิม (แก้ครั้งที่ ' + R3i2.edits
+        + ' · เก็บเวลาสร้างครั้งแรกไว้) · เปลี่ยนชื่อได้ · ฟอร์มเติมชื่อกับช่วงวันเดิมมาให้ · '
+        + 'ชิปติดป้ายกำลังแก้ · กด "แยกเป็นรอบใหม่" ได้อีกใบโดยไม่ทับของเดิม');
+}
+
 /* ══ 3j · กล่องต้องเร่งซ่อมอ่านของจริง ไม่ใช่ตัวเลือกของคนวางแผน ═══════════
    ถ้ากดนับลำที่ยังซ่อมอยู่แล้วลำนั้นหายจากรายการ = แผนสวยขึ้นโดยไม่มีใครไปเร่ง */
 const R3j = await page.evaluate(() => {
