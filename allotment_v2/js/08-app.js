@@ -2675,7 +2675,7 @@ function bkV2LockCutoffLabel(l){
   if(!l || ((l.releaseDaysBefore==null||l.releaseDaysBefore==='') && !l.releaseTime)) return '';
   const d = Math.max(0, parseInt(l.releaseDaysBefore,10)||0);
   const t = l.releaseTime || '18:00';
-  return 'ปล่อย '+(d===0?'วันเดินทาง':(d+' วันก่อน'))+' '+t;
+  return laT('ปล่อย')+' '+(d===0?laT('วันเดินทาง'):laTp('{0} วันก่อน', d))+' '+t;
 }
 // Auto-release locks past expiry (called on load) · month locks expire only when the month RANGE ends
 function bkV2LockExpireSweep(){
@@ -31910,10 +31910,10 @@ function bkV2PayChip(bk){
     if(_held) pm=['On hold','#FCEBEB','#A32D2D','#E6C9C3'];
     else if(_appr) pm=['Extended','#E1F5EE','#0F6E56','#9FE1CB'];
     else if(!_unpaid && inv) pm=['Paid','#E1F5EE','#0F6E56','#9FE1CB'];
-    else if(_unpaid && _past) pm=['&#9888; เลย cutoff','#FCEBEB','#A32D2D','#E6C9C3'];
+    else if(_unpaid && _past) pm=['&#9888; '+laT('เลย cutoff'),'#FCEBEB','#A32D2D','#E6C9C3'];
     else if(inv) pm=['Awaiting','#FBF0DD','#7A4A00','#EAD7A8'];
     else pm=['Pro Forma','#FBF0DD','#7A4A00','#EAD7A8'];
-    return `<span class="t2-pay" style="background:${pm[1]};color:${pm[2]};border:1px solid ${pm[3]};cursor:pointer;font-weight:600" onclick="event.stopPropagation();bkV2RowPayAction('${bk.id}')" title="สถานะ PFM · จัดการที่หน้า Daily PFM (Extend/Hold) หรือคลิกเพื่อออก/รับเงิน">${pm[0]}</span>`;
+    return `<span class="t2-pay" style="background:${pm[1]};color:${pm[2]};border:1px solid ${pm[3]};cursor:pointer;font-weight:600" onclick="event.stopPropagation();bkV2RowPayAction('${bk.id}')" title="${laT('สถานะ PFM · จัดการที่หน้า Daily PFM (Extend/Hold) หรือคลิกเพื่อออก/รับเงิน')}">${pm[0]}</span>`;
   }
   if(inv){ const st=acctInvoiceState(inv); const m=({issued:['Awaiting','#FBF0DD','#7A4A00'],partial:['Partial','#E6F1FB','#185FA5'],paid:['Paid','#E1F5EE','#0F6E56'],void:['Void','#F1EFE8','#5F5E5A']})[st]||['—','#F1EFE8','#5F5E5A']; txt=m[0];bg=m[1];fg=m[2]; }
   else {
@@ -31946,7 +31946,7 @@ function bkV2PayChip(bk){
       }
     }
   }
-  return `<span class="t2-pay" style="background:${bg};color:${fg};border:1px solid ${bd};cursor:pointer;font-weight:600" onclick="event.stopPropagation();bkV2RowPayAction('${bk.id}')" title="จัดการการชำระเงิน">${txt}</span>${paidChip}`;
+  return `<span class="t2-pay" style="background:${bg};color:${fg};border:1px solid ${bd};cursor:pointer;font-weight:600" onclick="event.stopPropagation();bkV2RowPayAction('${bk.id}')" title="${laT('จัดการการชำระเงิน')}">${txt}</span>${paidChip}`;
 }
 // Cash-on-Tour chip for the Pay column · from structured cashOnTour OR a "cash on tour ..." line in notes
 function bkV2CotChip(bk, noteTxt){
@@ -45137,7 +45137,7 @@ function bkV2RenderTopbar(){
         <button class="bkv2-utab ${tab==='bytrip'?'on':''}" onclick="bkV2SwitchTab('bytrip')">By trip &middot; date</button>
         <button class="bkv2-utab ${tab==='all'?'on':''}" onclick="bkV2SwitchTab('all')">All bookings</button>
         <button class="bkv2-utab ${tab==='locks'?'on':''}" onclick="bkV2SwitchTab('locks')">Seat Locks</button>
-        ${(function(){ const n=(SB_BOOKINGS||[]).filter(b=>b.status==='pending_approval').length; return `<button class="bkv2-utab ${tab==='approvals'?'on':''}" onclick="bkV2SwitchTab('approvals')" style="${n>0?'color:#A32D2D':''}">รออนุมัติ${n>0?` <span style="background:#A32D2D;color:#fff;border-radius:9px;padding:0 6px;font-size:10px;font-weight:700;font-family:'DM Mono',monospace">${n}</span>`:''}</button>`; })()}
+        ${(function(){ const n=(SB_BOOKINGS||[]).filter(b=>b.status==='pending_approval').length; return `<button class="bkv2-utab ${tab==='approvals'?'on':''}" onclick="bkV2SwitchTab('approvals')" style="${n>0?'color:#A32D2D':''}">${laT('รออนุมัติ')}${n>0?` <span style="background:#A32D2D;color:#fff;border-radius:9px;padding:0 6px;font-size:10px;font-weight:700;font-family:'DM Mono',monospace">${n}</span>`:''}</button>`; })()}
         <button class="bkv2-utab ${tab==='cancel'?'on':''}" onclick="bkV2SwitchTab('cancel')">Cancellations</button>
       </div>
       ${tab==='cal' ? `
@@ -45180,10 +45180,10 @@ function bkV2TopbarMeta(){
     const active = SB_SEAT_LOCKS.filter(l=>l.status==='active' && !l.parentId);
     const dRem = active.filter(l=>!bkV2LockSpansDays(l)).reduce((s,l)=>s+bkV2LockHeldRemaining(l),0);
     const bRem = active.filter(l=>bkV2LockSpansDays(l)).reduce((s,l)=>s+(l.qty||0),0);
-    return `${active.length} active &middot; ${dRem} seats held &middot; ${bRem}/รอบ`;
+    return `${active.length} active &middot; ${dRem} seats held &middot; ${bRem}/${laT('รอบ')}`;
   } else if(_bkV2.tab === 'approvals'){
     const n = (SB_BOOKINGS||[]).filter(b=>b.status==='pending_approval').length;
-    return `${n} รออนุมัติ`;
+    return `${n} ${laT('รออนุมัติ')}`;
   } else if(_bkV2.tab === 'cancel'){
     const c = (SB_BOOKINGS||[]).filter(b=>b.status==='cancelled'||b.status==='cancelled_weather').length;
     return `${c} cancellation${c===1?'':'s'}`;
@@ -45263,9 +45263,9 @@ function bkV2PendReason(b){
   return /^b2c_/.test(String(b.id||'')) ? 'b2c_hold' : 'over_cap';
 }
 function bkV2PendLabel(reason){
-  return reason==='closed_day' ? 'ทริปไม่ออกวันนั้น'
-       : reason==='b2c_hold'   ? 'B2C · ระบบพักไว้'
-       : 'เกิน capacity';
+  return reason==='closed_day' ? laT('ทริปไม่ออกวันนั้น')
+       : reason==='b2c_hold'   ? 'B2C · '+laT('ระบบพักไว้')
+       : laT('เกิน capacity');
 }
 function bkV2EnsureApproval(b){
   if(!b) return null;
@@ -46353,7 +46353,7 @@ function laAgencyMark(bk, h, opt){
   opt = opt || {};
   var pad = opt.pad || '8px 10px', rad = opt.radius || '8px';
   // §markFit · inline = หดตามโลโก้ (ใช้ตอนอยู่ปนกับป้ายเล็ก ๆ) · ไม่ใส่ = ยืดเต็มช่องตาราง
-  return '<div title="Love Andaman \u00b7 \u0e02\u0e32\u0e22\u0e40\u0e2d\u0e07 (B2C)" style="background:#fff;border:1px solid #E3E6EC;'
+  return '<div title="Love Andaman \u00b7 '+laT('ขายเอง (B2C)')+'" style="background:#fff;border:1px solid #E3E6EC;'
     + (opt.margin===false?'':'margin:2px 3px;') + 'padding:'+pad+';border-radius:'+rad+';'
     + 'box-shadow:0 1px 2px rgba(0,0,0,.08);'
     + (opt.inline ? 'display:inline-flex;vertical-align:middle;' : 'max-width:180px;display:flex;')
@@ -46525,7 +46525,7 @@ function _btOtherSection(date, rows, rids){
     const _card = 'margin:2px 3px;padding:8px 10px;border-radius:8px;max-width:180px;box-shadow:0 1px 2px rgba(0,0,0,.10);white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
     const _clk  = b.agentId ? ` onclick="event.stopPropagation();bkV2AgentColorEdit('${esc(b.agentId)}',event)" style="cursor:pointer;` : ' style="';
     const agCell = b2c
-      ? `<div${_clk}background:#fff;border:1px solid #E3E6EC;${_card};display:flex;align-items:center;justify-content:center" title="Love Andaman &middot; ขายเอง (B2C)">${(typeof bkV2B2CLogo==='function')?bkV2B2CLogo(20):'Love Andaman'}</div>`
+      ? `<div${_clk}background:#fff;border:1px solid #E3E6EC;${_card};display:flex;align-items:center;justify-content:center" title="Love Andaman &middot; ${laT('ขายเอง (B2C)')}">${(typeof bkV2B2CLogo==='function')?bkV2B2CLogo(20):'Love Andaman'}</div>`
       : b.agentId
         ? `<div${_clk}background:${_acol};color:${_ink};${_card};font-weight:600" title="${esc(agName)}">${esc(agName)}</div>`
         : `<span class="t2-agency">${esc(agName)}</span>`;
@@ -46730,7 +46730,7 @@ function bkV2RenderTab2(){
   });
   const _btDrawTag = id => (_btDrawMap[String(id)]||[]).map(d=>{
     const ink=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(d.c):'#fff';
-    return `<span class="t2-drawn" style="background:${d.c};color:${ink}" title="ที่นั่งใบนี้ดึงมาจากล็อกของ ${esc(d.nm)} ${d.q} ที่">&#128274; ${esc(d.nm)}</span>`;
+    return `<span class="t2-drawn" style="background:${d.c};color:${ink}" title="${laT('ที่นั่งใบนี้ดึงมาจากล็อกของ')} ${esc(d.nm)} ${laTp('{0} ที่', d.q)}">&#128274; ${esc(d.nm)}</span>`;
   }).join('');
 
   // ── Manifest column sort (click Agency / Zone header) ──
@@ -46890,12 +46890,12 @@ function bkV2RenderTab2(){
   const _confLbl = _vanConf.map(c=>esc(_unRn(c.routeId))+' ก.'+c.gid).join(' · ');
   const _unassignBar = (_unBoatN>0||_unVanN>0||_unRetN>0||_vanConf.length>0||_unRcN>0) ? `
       <div class="t2-hd-warn">
-        <span class="t2-hd-warnico">&#9888;</span><span class="t2-hd-warntxt">ยังจัดไม่ครบ</span>
-        ${_unBoatN>0?`<button class="t2-hd-warnchip" style="background:#C0392B" onclick="if(!_bkV2.boatAssignMode)bkV2ToggleBoatMode()" title="ยังไม่จัดเรือ ${_unBoatN} booking · ${_unBoatPax} pax · คลิกเข้าโหมดจัดเรือ">Boat · ${_brkHtml(_unBoatR)}</button>`:''}
-        ${_unVanN>0?`<button class="t2-hd-warnchip" style="background:#E07C24" onclick="if(!_bkV2.vanAssignMode)bkV2ToggleVanMode()" title="ยังไม่จัดรถ(ขาไป) ${_unVanN} booking · ${_unVanPax} pax · คลิกเข้าโหมดจัดรถ">Van · ${_brkHtml(_unVanR)}</button>`:''}
-        ${_unRetN>0?`<button class="t2-hd-warnchip" style="background:#B8860B" onclick="if(!_bkV2.vanAssignMode)bkV2ToggleVanMode()" title="ยังไม่จัดรถกลับ (ส่งคนละที่) ${_unRetN} booking · ${_unRetPax} pax · คลิกเข้าโหมดจัดรถ">รถกลับ · ${_brkHtml(_unRetR)}</button>`:''}
-        ${_vanConf.length>0?`<button class="t2-hd-warnchip" style="background:#7A1FA2" onclick="if(!_bkV2.vanAssignMode)bkV2ToggleVanMode()" title="รถปนกันในกรุ๊ป (booking จะขึ้นใบงานผิดคัน) — เข้าโหมด Van แล้วเลือกรถของกรุ๊ปใหม่ให้เป็นคันเดียว · ${esc(_confTip)}">รถปนกัน · ${_confLbl}</button>`:''}
-        ${_unRcN>0?`<button class="t2-hd-warnchip" style="background:#185FA5" onclick="if(!_bkV2.reconfirmMode)bkV2ToggleReconfirmMode()" title="ยังไม่ได้ re-confirm ${_unRcN} booking · ${_unRcPax} pax · คลิกเข้าโหมด Re-Confirm">Re-confirm · ${_brkHtml(_unRcR)}</button>`:''}
+        <span class="t2-hd-warnico">&#9888;</span><span class="t2-hd-warntxt">${laT('ยังจัดไม่ครบ')}</span>
+        ${_unBoatN>0?`<button class="t2-hd-warnchip" style="background:#C0392B" onclick="if(!_bkV2.boatAssignMode)bkV2ToggleBoatMode()" title="${laTp('ยังไม่จัดเรือ {0} booking · {1} pax · คลิกเข้าโหมดจัดเรือ', _unBoatN, _unBoatPax)}">Boat · ${_brkHtml(_unBoatR)}</button>`:''}
+        ${_unVanN>0?`<button class="t2-hd-warnchip" style="background:#E07C24" onclick="if(!_bkV2.vanAssignMode)bkV2ToggleVanMode()" title="${laTp('ยังไม่จัดรถ (ขาไป) {0} booking · {1} pax · คลิกเข้าโหมดจัดรถ', _unVanN, _unVanPax)}">Van · ${_brkHtml(_unVanR)}</button>`:''}
+        ${_unRetN>0?`<button class="t2-hd-warnchip" style="background:#B8860B" onclick="if(!_bkV2.vanAssignMode)bkV2ToggleVanMode()" title="${laTp('ยังไม่จัดรถกลับ (ส่งคนละที่) {0} booking · {1} pax · คลิกเข้าโหมดจัดรถ', _unRetN, _unRetPax)}">${laT('รถกลับ')} · ${_brkHtml(_unRetR)}</button>`:''}
+        ${_vanConf.length>0?`<button class="t2-hd-warnchip" style="background:#7A1FA2" onclick="if(!_bkV2.vanAssignMode)bkV2ToggleVanMode()" title="${laT('รถปนกันในกรุ๊ป (booking จะขึ้นใบงานผิดคัน) — เข้าโหมด Van แล้วเลือกรถของกรุ๊ปใหม่ให้เป็นคันเดียว')} · ${esc(_confTip)}">${laT('รถปนกัน')} · ${_confLbl}</button>`:''}
+        ${_unRcN>0?`<button class="t2-hd-warnchip" style="background:#185FA5" onclick="if(!_bkV2.reconfirmMode)bkV2ToggleReconfirmMode()" title="${laTp('ยังไม่ได้ re-confirm {0} booking · {1} pax · คลิกเข้าโหมด Re-Confirm', _unRcN, _unRcPax)}">Re-confirm · ${_brkHtml(_unRcR)}</button>`:''}
       </div>` : '';
 
   // §Check-in status · สรุปผลจากหน้าเช็คอินรถ / เช็คอินหน้าท่า ของวันนี้ (อ่านอย่างเดียว · ไม่แตะยอดจอง)
@@ -46914,10 +46914,10 @@ function bkV2RenderTab2(){
     });
     if(!vD && !pD) return '';
     return `<div style="display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px;padding:4px 10px;background:#F1F8F5;border:1px solid #CFE7DC;border-radius:8px">
-      <span style="font-size:11px;font-weight:700;color:#0F6E56">&#10003; เช็คอินหน้างาน</span>
-      ${vD?`<button onclick="nav(document.querySelector('[data-view=vancheckin]'))" title="ไปหน้าเช็คอินรถ" style="font-size:10.5px;font-weight:700;color:#fff;background:#0F6E56;border:none;border-radius:6px;padding:3px 9px;cursor:pointer;font-family:inherit">รถ ${vD}/${vT}${vN>0?` · No-show ${vN}`:''}</button>`:''}
-      ${pD?`<button onclick="nav(document.querySelector('[data-view=piercheckin]'))" title="ไปหน้าเช็คอินหน้าท่า" style="font-size:10.5px;font-weight:700;color:#fff;background:#185FA5;border:none;border-radius:6px;padding:3px 9px;cursor:pointer;font-family:inherit">ท่าเรือ ${pD}/${pT}${pN>0?` · No-show ${pN}`:''}</button>`:''}
-      <span style="font-size:10px;color:#5F7A70">ป้าย No-show อยู่บนแถว booking · ยอดจอง/ราคาไม่ถูกแก้</span>
+      <span style="font-size:11px;font-weight:700;color:#0F6E56">&#10003; ${laT('เช็คอินหน้างาน')}</span>
+      ${vD?`<button onclick="nav(document.querySelector('[data-view=vancheckin]'))" title="${laT('ไปหน้าเช็คอินรถ')}" style="font-size:10.5px;font-weight:700;color:#fff;background:#0F6E56;border:none;border-radius:6px;padding:3px 9px;cursor:pointer;font-family:inherit">${laT('รถ')} ${vD}/${vT}${vN>0?` · No-show ${vN}`:''}</button>`:''}
+      ${pD?`<button onclick="nav(document.querySelector('[data-view=piercheckin]'))" title="${laT('ไปหน้าเช็คอินหน้าท่า')}" style="font-size:10.5px;font-weight:700;color:#fff;background:#185FA5;border:none;border-radius:6px;padding:3px 9px;cursor:pointer;font-family:inherit">${laT('ท่าเรือ')} ${pD}/${pT}${pN>0?` · No-show ${pN}`:''}</button>`:''}
+      <span style="font-size:10px;color:#5F7A70">${laT('ป้าย No-show อยู่บนแถว booking · ยอดจอง/ราคาไม่ถูกแก้')}</span>
     </div>`;
   })();
 
@@ -47001,18 +47001,18 @@ function bkV2RenderTab2(){
       const left = lks.reduce((n,l)=>n+((typeof bkV2LockHeldRemaining==='function')?bkV2LockHeldRemaining(l,date):(+l.qty||0)),0);
       const who  = [...new Set(lks.map(l=>(typeof bkV2LockHolderName==='function')?bkV2LockHolderName(l):(l.holderId||'')))]
                     .filter(Boolean).slice(0,2).join(' · ');
-      why.push({k:'lock', t:'ล็อกที่นั่งค้างไว้ '+left+' ที่'+(who?(' · '+who):''), go:'bkV2SwitchTab(\'locks\')'});
+      why.push({k:'lock', t:laTp('ล็อกที่นั่งค้างไว้ {0} ที่', left)+(who?(' · '+who):''), go:'bkV2SwitchTab(\'locks\')'});
     }
     if((pendGroups[rid]||[]).length)
-      why.push({k:'pend', t:'ใบรออนุมัติ '+(pendGroups[rid]||[]).length+' ใบ', go:'bkV2SwitchTab(\'approvals\')'});
+      why.push({k:'pend', t:laTp('ใบรออนุมัติ {0} ใบ', (pendGroups[rid]||[]).length), go:'bkV2SwitchTab(\'approvals\')'});
     if(reschedFromRouteIds.indexOf(rid)>=0)
-      why.push({k:'resch', t:'มีใบที่ย้ายวันออกจากวันนี้', go:''});
-    return why.length ? why : [{k:'none', t:'ไม่เหลือ booking แล้ว', go:''}];
+      why.push({k:'resch', t:laT('มีใบที่ย้ายวันออกจากวันนี้'), go:''});
+    return why.length ? why : [{k:'none', t:laT('ไม่เหลือ booking แล้ว'), go:''}];
   };
   const _btWhyHtml = rid => {
     const w=_btWhy(rid); if(!w) return '';
     return '<div class="bt-ghost">'+w.map(x=>
-      '<span class="g'+x.k+'"'+(x.go?(' onclick="event.stopPropagation();'+x.go+'" title="ไปจัดการ"'):'')+'>'
+      '<span class="g'+x.k+'"'+(x.go?(' onclick="event.stopPropagation();'+x.go+'" title="'+laT('ไปจัดการ')+'"'):'')+'>'
       +esc(x.t)+(x.go?' &rarr;':'')+'</span>').join('')+'</div>';
   };
 
@@ -47041,9 +47041,9 @@ function bkV2RenderTab2(){
       const lk=(typeof bkV2LockedTotal==='function')?bkV2LockedTotal(rid,date):0;
       const fr=cap>0?av/cap:0;
       const fc = av<=0 ? 'full' : (fr<0.20 ? 'low' : 'ok');
-      const _seatHtml = _noCap ? `<span class="bt-seat"><b>${bk}</b> booked</span><span class="bt-free none">ไม่จำกัด</span>`
+      const _seatHtml = _noCap ? `<span class="bt-seat"><b>${bk}</b> booked</span><span class="bt-free none">${laT('ไม่จำกัด')}</span>`
                                : `<span class="bt-seat"><b>${bk}</b>/${cap}</span><span class="bt-free ${fc}">${av<=0?'full':(av+' free')}</span>`;
-      const _seatTip = _noCap ? `booked ${bk} · ไม่ได้ตั้งโควตา (ขายได้ไม่จำกัด)` : `booked ${bk}/${cap} · ${av} free`;
+      const _seatTip = _noCap ? `booked ${bk} · ${laT('ไม่ได้ตั้งโควตา (ขายได้ไม่จำกัด)')}` : `booked ${bk}/${cap} · ${av} free`;
       return `<div class="bt-pgv${ron?' on':''}" onclick="bkV2Tab2SetRoute('${ron?'':rid}')" title="${esc(_btSub(rid))} · ${_seatTip}">
         <span class="vn">${nm}</span><span>${esc(dep)}${pr?' · '+esc(pr):''}</span>
         <span class="sp">${lk>0?`<span class="bt-lk">&#128274; ${lk}</span>`:''}${_seatHtml}</span></div>`;
@@ -47127,7 +47127,7 @@ function bkV2RenderTab2(){
       const rnm=(((typeof getRoute==='function'&&getRoute(rid))||{}).name)||rid;
       return `<div class="bt-tgp" style="--tc:${col}" onclick="bkV2Tab2SetRoute('${rid}')" title="Select this trip">
         <div class="bt-tgh"><i></i><span class="nm">${esc(rnm)}</span><span class="tm">${esc(_btDep(rid))}${_btPier(rid)?' · '+esc(_btPier(rid)):''}</span>
-          <span class="sm">${bkd}/${cp}<em class="${cp<=0?(bkd>0?'full':'idle'):(av<=0?'full':(av/cp<0.2?'low':'ok'))}">${cp<=0?(bkd>0?'\u0e44\u0e21\u0e48\u0e21\u0e35\u0e40\u0e23\u0e37\u0e2d':'\u0e44\u0e21\u0e48\u0e21\u0e35\u0e17\u0e35\u0e48\u0e19\u0e31\u0e48\u0e07'):(av<=0?'full':(av+' free'))}</em></span></div>
+          <span class="sm">${bkd}/${cp}<em class="${cp<=0?(bkd>0?'full':'idle'):(av<=0?'full':(av/cp<0.2?'low':'ok'))}">${cp<=0?(bkd>0?laT('ไม่มีเรือ'):laT('ไม่มีที่นั่ง')):(av<=0?'full':(av+' free'))}</em></span></div>
         <div class="bt-tgb">${bl.length?bl.map(b=>`<span class="bt-tbc${b.over?' over':''}"><i style="background:${b.col}"></i>${esc(b.name)}<s${b.ovn?' class="ovn"':''}>${b.ovn?('\u0e04\u0e49\u0e32\u0e07\u0e40\u0e01\u0e32\u0e30 \u00b7 \u0e01\u0e25\u0e31\u0e1a '+ovnDayTh(b.ovn.to)):(b.pax+(b.cap?('/'+b.cap):'')+(b.over?(' +'+(b.pax-b.cap)):''))}</s></span>`).join(''):'<span class="bt-tbc none">no boat</span>'}</div>
         ${_btWhyHtml(rid)}${_btPrepHtml(rid)}</div>`;
     }).join('');
@@ -47691,7 +47691,7 @@ function bkV2RenderTab2(){
         return {g:a.g, boat:_rowBid||'', html:`
           <tr class="t2-row${r.cxl?' t2-cxl':''}${_ckNsCls}${_unassignedCls}${_novanCls}${_btLkCls(bk.id)}"${_rowStyle}>
             <td>${(bk.voucherRef && bk.voucherRef.trim().toLowerCase()!==String(lead||'').trim().toLowerCase())?(a.split?`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)} · แยกรับหลายจุด (บุคกิ้งเดียวกัน)" style="color:${_bkV2SplitColor(bk.id)};font-weight:800;border:1px solid ${_bkV2SplitColor(bk.id)}55;background:${_bkV2SplitColor(bk.id)}12;border-radius:5px;padding:1px 5px">&#128279; ${esc(bk.id.startsWith('b2c_')?bkV2DisplayCode(bk):bk.voucherRef)}</span>`:`<span class="t2-mono t2-vch" title="${esc(bk.voucherRef)}">${esc(bk.id.startsWith('b2c_')?bkV2DisplayCode(bk):bk.voucherRef)}</span>`):'<span class="t2-dim">—</span>'}${bk.id.startsWith('b2c_')?'<div style="margin-top:3px"><span style="background:#E6F7F9;color:#0E7D8A;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;letter-spacing:.03em">'+bkV2B2CMark(11)+'Love Andaman</span></div>':''}</td>
-            <td class="t2-ag" style="${bk.agentId?'padding:0':''}">${(bk.agentId && /^b2c_/.test(String(bk.id||'')))?`<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="Love Andaman &middot; ขายเอง (B2C)${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' &middot; ลูกค้าทักมาทาง '+_c.label):''; })()} &middot; คลิกเปลี่ยนสีประจำเอเยนต์ (ใช้ที่หน้าอื่น)" style="background:#fff;border:1px solid #E3E6EC;margin:2px 3px;padding:8px 10px;border-radius:8px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.08);max-width:180px;display:flex;align-items:center;justify-content:center">${bkV2B2CLogo(22)}</div>`:bk.agentId?(()=>{const _ac=bkV2AgentColor(bk.agentId);return `<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="${esc(norm.agentName)}${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' · ลูกค้าทักมาทาง '+_c.label):(/^b2c_/.test(String(bk.id||''))?' · ขายเอง (B2C)':''); })()} · คลิกเปลี่ยนสี · Alt+คลิก = สีอัตโนมัติ" style="background:${_ac};color:${bkV2ContrastInk(_ac)};margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;box-shadow:0 1px 2px rgba(0,0,0,.10)">${esc(norm.agentName)}</div>`;})():`<span class="t2-agency">${esc(norm.agentName)}</span>`}</td>
+            <td class="t2-ag" style="${bk.agentId?'padding:0':''}">${(bk.agentId && /^b2c_/.test(String(bk.id||'')))?`<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="Love Andaman &middot; ${laT('ขายเอง (B2C)')}${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' &middot; '+laT('ลูกค้าทักมาทาง')+' '+_c.label):''; })()} &middot; ${laT('คลิกเปลี่ยนสีประจำเอเยนต์ (ใช้ที่หน้าอื่น)')}" style="background:#fff;border:1px solid #E3E6EC;margin:2px 3px;padding:8px 10px;border-radius:8px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.08);max-width:180px;display:flex;align-items:center;justify-content:center">${bkV2B2CLogo(22)}</div>`:bk.agentId?(()=>{const _ac=bkV2AgentColor(bk.agentId);return `<div onclick="event.stopPropagation();bkV2AgentColorEdit('${bk.agentId}',event)" title="${esc(norm.agentName)}${(function(){ if(typeof bkV2B2CChannel!=='function') return ''; const _c=bkV2B2CChannel(bk); return _c?(' · '+laT('ลูกค้าทักมาทาง')+' '+_c.label):(/^b2c_/.test(String(bk.id||''))?' · '+laT('ขายเอง (B2C)'):''); })()} · ${laT('คลิกเปลี่ยนสี · Alt+คลิก = สีอัตโนมัติ')}" style="background:${_ac};color:${bkV2ContrastInk(_ac)};margin:2px 3px;padding:11px 11px;border-radius:8px;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;box-shadow:0 1px 2px rgba(0,0,0,.10)">${esc(norm.agentName)}</div>`;})():`<span class="t2-agency">${esc(norm.agentName)}</span>`}</td>
             <td class="t2-cu">
               ${(function(){ var _rs=bk.ops&&bk.ops.reconfirm&&bk.ops.reconfirm.status; if(_rs){ var _c=(typeof rcStateColor==='function')?rcStateColor(_rs):'#F6E27A'; var _ik=(typeof bkV2ContrastInk==='function')?bkV2ContrastInk(_c):'#000'; var _sl=(typeof _rcStateOf==='function')?_rcStateOf(bk).l:''; return `<span class="t2-lead" style="background:${_c};color:${_ik};padding:1px 7px;border-radius:5px" title="Re-confirm: ${esc(_sl)}">${esc(lead)}</span>`; } return `<span class="t2-lead">${esc(lead)}</span>`; })()}${pcBadge}${(function(){var _el=(typeof bkV2EditLockActive==='function')&&bkV2EditLockActive(bk);return _el?`<span title="${esc(_el.by)} กำลังแก้ไขอยู่ (~${_el.mins} นาที)" style="background:#E7F0FC;color:#185FA5;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">&#9999; ${esc(_el.by)} แก้อยู่</span>`:'';})()}${bk.status==='pending_approval'?`<span title="เกิน capacity · รอผจก.อนุมัติ" style="background:#FCEBEB;color:#A32D2D;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px">รออนุมัติ</span>`:''}${(bk.pickupSelf && r.zone!=='NoTransfer' && r.zone!=='NT')?`<span title="ติ๊ก self-arrive (ลูกค้ามาเอง) แต่โซนนี้เป็นโซนรับส่ง${(bk.ops&&(bk.ops.vanId||bk.ops.vanGroup))?' + จัดรถไว้แล้ว':''} — booking นี้จะไม่ขึ้นในใบงานรถขาไป · เช็คว่าติ๊กผิดหรือไม่" style="background:#F3E8FF;color:#5B289A;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:help">🚶 self-arrive?</span>`:''}${(function(){ if(r.cxl||!bk.agentId||typeof docCheckStatus!=='function') return ''; var _st=docCheckStatus(bk); var _nf=(bk.attachments||[]).length; var _m={verified:['#E6F5EA','#1B7F4B','✅','เอกสารตรวจแล้ว'],issue:['#FCEBEB','#B5271F','⚠','เอกสารมีปัญหา'],pending:['#FFF6E0','#8A5B00','📎','รอตรวจเอกสาร ('+_nf+' ไฟล์)']}[_st]; if(!_m) return ''; return `<span onclick="event.stopPropagation();tsGoDoc('${esc(bk.id)}','${esc(date)}')" title="${esc(_m[3])} · คลิกไปตรวจเอกสาร" style="background:${_m[0]};color:${_m[1]};font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:pointer">${_m[2]}${_st==='pending'?(' '+_nf):''}</span>`; })()}${(function(){ if(r.cxl||typeof bkV2FindDuplicateBookings!=='function')return''; const _dd=bkV2FindDuplicateBookings(bk,bk.id); if(!_dd.length)return''; const _vc=_dd.map(x=>x.bk.voucherRef||x.bk.code||x.bk.id).slice(0,3).join(', '); const _rs=[...new Set(_dd.reduce((a,x)=>a.concat(x.reasons),[]))].join(' · '); return `<span title="อาจเป็นการลงซ้ำกับ: ${esc(_vc)} (${esc(_rs)}) — ตรวจสอบ/ลบตัวซ้ำ" style="background:#FBE9D6;color:#9A5B00;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;letter-spacing:.04em;margin-left:4px;cursor:help">&#9888; อาจซ้ำ</span>`; })()}${r.cxl?`<span class="t2-cxlbadge" title="${bk.cancellation?('Cancelled · '+(bk.cancellation.chargeType==='full'?'Full charge':bk.cancellation.chargeType==='partial'?'Partial charge':'No charge')+(bk.cancellation.reason?' · '+esc(bk.cancellation.reason):'')):'Cancelled'}">CXL</span>`:''}${(!r.cxl && typeof ckNoShowBadge==='function')?ckNoShowBadge(bk,date):''}${r.cxl?'':_btDrawTag(bk.id)}
               ${others.length?`<button class="t2-more" onclick="event.stopPropagation();bkV2Tab2TogglePax('${rowId}')"><span id="${rowId}-ic" style="display:inline-block">▾</span> +${others.length}</button>`:'<span class="t2-dim t2-leadonly">lead only</span>'}
@@ -47716,7 +47716,7 @@ function bkV2RenderTab2(){
                  return `<div style="font-weight:700;color:#0F6E56;line-height:1.25">${esc(fin)}</div>${orig?`<div style="font-size:9px;color:#b0b0a8;line-height:1.25;text-decoration:line-through" title="เวลารับเดิมก่อนแก้">${esc(orig)}</div>`:''}`; } return esc(orig||'—'); })()}${_vanChipHtml}</td>
             ${vanMode?`<td class="t2-c t2-gwrap" style="background:#F3FBF7">${(typeof bkV2VanCellHTML==='function')?bkV2VanCellHTML(bk, r.zone, date, groupColor, rid, a.key, a.g, a.split, a.first):''}</td>`:''}
             <td class="t2-pk">${(function(){ if(a.split && a.pick && !a.pick.main && (a.pick.hotel||a.pick.areaId)){ const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null; const _pl=a.pick.hotel||(_pa?_pa.name:'')||'—'; return `<span class="t2-pickcell" title="แยกรับ${a.pick.who?(' · '+esc(a.pick.who)):''} @ ${esc(_pl)}" style="color:#5B289A;font-weight:600">&#128652; ${esc(_pl)}</span>`; } if(_ovTrip && _ovTrip.ovnLeg) return '<span class="t2-pickcell" title="ขากลับ OVN · ลูกค้ากลับจากเกาะโดยเรือ · ไม่มีรถไปรับ" style="color:#8a5500;font-weight:600">&#8617; ไม่มีขารับ · มาจากเกาะ</span>';
-              return (bk.hotelName||bk.pickup)?`<span class="t2-pickcell" title="${esc(bk.hotelName||bk.pickup)}">${esc(bk.hotelName||bk.pickup)}</span>`:'<span class="t2-needpickup" title="ยังไม่ได้ระบุจุดรับ · กดแก้ไขเพื่อเพิ่ม">&#9888; no pickup</span>'; })()}</td>
+              return (bk.hotelName||bk.pickup)?`<span class="t2-pickcell" title="${esc(bk.hotelName||bk.pickup)}">${esc(bk.hotelName||bk.pickup)}</span>`:'<span class="t2-needpickup" title="'+laT('ยังไม่ได้ระบุจุดรับ · กดแก้ไขเพื่อเพิ่ม')+'">&#9888; no pickup</span>'; })()}</td>
             <td class="t2-c">${esc(bk.roomNumber||'')?`<span class="t2-mono t2-room">${esc(bk.roomNumber)}</span>`:'<span class="t2-dim">—</span>'}</td>
             <td>${(a.split&&a.pick&&!a.pick.main)?(function(){const _pa=a.pick.areaId&&typeof bkV2GetArea==='function'?bkV2GetArea(a.pick.areaId):null;const _zn=_pa?_pa.name:(a.pick.zone||'');return _zn?`<span class="t2-zonetag">${esc(_zn)}</span>`:'<span class="t2-dim">—</span>';})():(function(){
               // §Zone cell · เดิมอ่าน bk.pickupArea อย่างเดียว → booking B2C ที่ชื่อ area ไม่ตรงกับ sb_pickup_areas
@@ -47726,10 +47726,10 @@ function bkV2RenderTab2(){
               if(_pa&&_pa.name) return `<span class="t2-zonetag">${esc(_pa.name)}</span>`;
               const _raw=(bk.pickupArea||'').trim();
               if(!_raw) return '<span class="t2-dim">—</span>';
-              return `<span class="t2-zonetag" style="background:#F4F3EF;color:#8A887F;font-style:italic" title="จาก B2C · ยังไม่ผูกกับ pickup area ในระบบ · แก้ไข booking เพื่อเลือก area">${esc(_raw)}</span>`;
+              return `<span class="t2-zonetag" style="background:#F4F3EF;color:#8A887F;font-style:italic" title="${laT('จาก B2C · ยังไม่ผูกกับ pickup area ในระบบ · แก้ไข booking เพื่อเลือก area')}">${esc(_raw)}</span>`;
             })()}</td>
             <td>${sendBack==='—'?'<span class="t2-dim">—</span>':sendBack}</td>
-            ${vanMode?'':(_2nd?'<td class="t2-req"></td>':`<td class="t2-req"><div class="t2-addoncell"><div class="t2-addoncell-badges">${addonBadges.join('')}${extrasChips}${upgradeChips}${feeChips}</div><div class="t2-addoncell-acts"><button onclick="event.stopPropagation();bkV2ExtraAdd('${esc(bk.id)}')" title="เพิ่ม extra วันเดินทาง (ขายหน้างาน)" class="t2-addbtn" style="color:var(--ink-soft);font-weight:700">+</button><button onclick="event.stopPropagation();bkV2UpgradeOpen('${esc(bk.id)}')" title="อัพเกรด/ขายเพิ่มหน้างาน" class="t2-addbtn t2-addbtn-up">&#11014;</button></div></div></td>`)}
+            ${vanMode?'':(_2nd?'<td class="t2-req"></td>':`<td class="t2-req"><div class="t2-addoncell"><div class="t2-addoncell-badges">${addonBadges.join('')}${extrasChips}${upgradeChips}${feeChips}</div><div class="t2-addoncell-acts"><button onclick="event.stopPropagation();bkV2ExtraAdd('${esc(bk.id)}')" title="${laT('เพิ่ม extra วันเดินทาง (ขายหน้างาน)')}" class="t2-addbtn" style="color:var(--ink-soft);font-weight:700">+</button><button onclick="event.stopPropagation();bkV2UpgradeOpen('${esc(bk.id)}')" title="${laT('อัพเกรด/ขายเพิ่มหน้างาน')}" class="t2-addbtn t2-addbtn-up">&#11014;</button></div></div></td>`)}
             <td class="t2-req">
               ${_movedBadge}
               ${_splitBadge}
@@ -47741,7 +47741,7 @@ function bkV2RenderTab2(){
             </td>
             ${vanMode?'':(_2nd?'<td></td>':`<td><div class="t2-paywrap">${bkV2PayChip(bk)}${_cot.chip}${reschCashChip}</div></td>`)}
             ${vanMode?'':(_2nd?'<td class="t2-r t2-mono t2-dim" title="รวมอยู่ในแถวจุดหลัก">&#8629;</td>':`<td class="t2-r t2-mono">&#3647;${bkV2FmtTHB(r.subtotal)}</td>`)}
-            ${vanMode?'':(_2nd?'<td class="t2-c"></td>':`<td class="t2-c"><button class="t2-vcbtn" onclick="event.stopPropagation();bkV2OpenDetail('${esc(bk.id)}')" title="Voucher · ดูรายละเอียด booking" aria-label="Voucher">VC</button></td>`)}
+            ${vanMode?'':(_2nd?'<td class="t2-c"></td>':`<td class="t2-c"><button class="t2-vcbtn" onclick="event.stopPropagation();bkV2OpenDetail('${esc(bk.id)}')" title="Voucher · ${laT('ดูรายละเอียด booking')}" aria-label="Voucher">VC</button></td>`)}
             <td class="t2-c"${boatMode?' style="background:#F4F9FE"':''}>${boatMode ? `<div style="display:flex;align-items:center;gap:7px;justify-content:center"><input type="checkbox" ${(window._bkV2BoatSel||{})[bk.id]?'checked':''} onclick="event.stopPropagation();bkV2BoatSelToggle('${esc(bk.id)}')" title="ติ๊กเพื่อเลือกหลายแถว แล้วจัดลงเรือทีเดียว" style="width:15px;height:15px;cursor:pointer;flex:none;accent-color:#185FA5">${(typeof baBoatCellHTML==='function')?baBoatCellHTML(bk, rid, date, a):''}</div>` : ((_rowBid||r.charterBoatId)?(function(){const _bid=_rowBid||r.charterBoatId; const _bn=((typeof BOATS!=='undefined'?BOATS.find(b=>b.id===_bid):null)||{}).name||_bid; const _ac=bkV2BoatAvatarColor(_bid); const _pl=(typeof bkV2BoatPulled==='function')&&bkV2BoatPulled(bk,date); return `<span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap" title="${_pl?'เรือถูกถอดจาก Boat Operation · จัดเรือใหม่':'เรือที่ขึ้น'}"><span style="width:22px;height:22px;border-radius:50%;background:${_pl?'#C0392B':_ac};color:#fff;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;flex:none">${_pl?'&#9888;':esc(bkV2BoatInitials(_bn))}</span><span style="font-size:12px;font-weight:600;color:${_pl?'#A32D2D':'var(--ink)'}">${esc(_bn)}${(bk.ops&&bk.ops.upgrade)?' ⤴':''}${_pl?' <span style="font-size:9px;font-weight:700;color:#A32D2D;background:#FCEBEB;border:0.5px solid #E89A92;border-radius:4px;padding:0 4px">ถอดแล้ว</span>':''}</span></span>`;})():'<span class="t2-dim">—</span>')}</td>
             ${rcMode?`<td class="t2-c" style="background:#FDFAF1">${(function(){const rc=bk.ops&&bk.ops.reconfirm;if(rc&&rc.status==='done'){let tm='';try{tm=new Date(rc.at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});}catch(e){}return `<span style="display:inline-flex;align-items:center;gap:4px"><span style="background:#E1F5EE;color:#0F6E56;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px" title="re-confirmed ${esc(rc.via||'')} ${esc(tm)}">&#10003; ${rc.via==='phone'?'โทร':'list'}</span><button onclick="event.stopPropagation();bkV2ReconfirmClear('${esc(bk.id)}')" title="ยกเลิก" style="background:transparent;border:none;color:#A32D2D;font-size:11px;cursor:pointer">&times;</button></span>`;}return `<div style="display:flex;gap:3px;justify-content:center"><button onclick="event.stopPropagation();bkV2Reconfirm('${esc(bk.id)}','list')" style="background:#fff;border:1px solid #EAD9B0;color:#7A4A00;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">List</button><button onclick="event.stopPropagation();bkV2Reconfirm('${esc(bk.id)}','phone')" style="background:#fff;border:1px solid #EAD9B0;color:#7A4A00;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">โทร</button></div>`;})()}</td>`:''}
             ${wxClosed?`<td class="t2-c" style="background:#FBE8E4">${bkV2WeatherInlineCell(bk.id)}</td>`:''}
@@ -47775,18 +47775,18 @@ function bkV2RenderTab2(){
       const _isChtr = z==='__CHARTER__';
       const _zband = _isChtr
         ? `<tr class="t2-zband t2-zband-ch"><td colspan="${COLN}"><div class="zw">`
-          + `<span class="zkind">เหมาลำ</span><span class="znm">&#128676; CHARTER</span>`
-          + `<span class="zsub">${list.length} booking &middot; ${zpax} pax &middot; ทั้งลำ</span>`
+          + `<span class="zkind">${laT('เหมาลำ')}</span><span class="znm">&#128676; CHARTER</span>`
+          + `<span class="zsub">${list.length} booking &middot; ${zpax} pax &middot; ${laT('ทั้งลำ')}</span>`
           /* §btChBand · ชื่อเรือเคยอยู่บนแถบลอยเหนือตาราง (chtrStrip) ซึ่งเป็นซากของ
              ดีไซน์การ์ดทริปเดิม · พอทริปยุบเป็นแถบในตารางแล้ว (§btBand) มันเหลือลอยอยู่
              คนเดียวและพูดซ้ำกับแถบนี้ · ยุบมารวมเป็นแถบเดียว */
           + (_chtrItems.length ? `<span class="zboats">${_chtrItems.map(it=>
-              `<span class="zb"><b>&#128676; ${esc(it.bn||'ยังไม่ระบุเรือ')}</b>`
-              + (it.nOf?`<i>ลำ ${it.nOf}</i>`:'')
+              `<span class="zb"><b>&#128676; ${esc(it.bn||laT('ยังไม่ระบุเรือ'))}</b>`
+              + (it.nOf?`<i>${laTp('ลำ {0}', it.nOf)}</i>`:'')
               + `<s>${it.cap?(it.px+'/'+it.cap):(it.px+' pax')}</s></span>`).join('')}</span>` : '')
           + `</div></td></tr>`
         : `<tr class="t2-zband"><td colspan="${COLN}" style="--zc:${bkV2ZoneColor(z)}"><div class="zw">`
-          + `<span class="zkind">โซน</span><span class="znm">${bkV2ZoneLabel(z)}</span>`
+          + `<span class="zkind">${laT('โซน')}</span><span class="znm">${bkV2ZoneLabel(z)}</span>`
           + `<span class="zsub">${list.length} booking &middot; ${zpax} pax</span></div></td></tr>`;
       /* §btGap · เหมาลำกับลูกค้าจอยเป็นคนละเรื่องกัน · ติดกันแล้วอ่านเหมือนกลุ่มเดียว
          เว้นช่องว่างสองบรรทัดคั่นไว้ · ใส่เป็นแถวเปล่า เพราะทั้งหมดอยู่ในตารางเดียว
@@ -47833,18 +47833,18 @@ function bkV2RenderTab2(){
     const _pdash = '<span class="t2-dim">&mdash;</span>';
     const pendBlocks = _pendRows.length ? (
       `<tr class="t2-pnband"><td colspan="${COLN}"><div class="zw">`
-      + `<span class="zkind">&#9203; รออนุมัติ</span>`
+      + `<span class="zkind">&#9203; ${laT('รออนุมัติ')}</span>`
       + `<span class="zsub"><b>${_pendRows.length}</b> booking &middot; <b>${_pendPax}</b> pax`
-      + ` &middot; ยังไม่นับในยอดของทริป &middot; ยังไม่เข้าใบงานรถ/เรือ</span>`
+      + ` &middot; ${laT('ยังไม่นับในยอดของทริป')} &middot; ${laT('ยังไม่เข้าใบงานรถ/เรือ')}</span>`
       + `</div></td></tr>`
       + _pendRows.map(r=>{
           const bk=r.bk, norm=bkV2Norm(bk), ap=bk.approval||{};
           const lead=bk.leadPax||bk.customerName||'—';
           const overCap=(Array.isArray(ap.over)&&ap.over.length>0)||(+ap.totOver>0);
-          const why = overCap ? ('เกิน cap +'+(ap.totOver||0)+' ที่')
-                    : (+ap.discount>0) ? ('ส่วนลด &#3647;'+(+ap.discount).toLocaleString()+' · รอเซลล์ยืนยัน')
+          const why = overCap ? laTp('เกิน cap +{0} ที่', ap.totOver||0)
+                    : (+ap.discount>0) ? (laT('ส่วนลด')+' &#3647;'+(+ap.discount).toLocaleString()+' · '+laT('รอเซลล์ยืนยัน'))
                     : ((typeof bkV2PendLabel==='function' && (ap.reason||(typeof bkV2PendReason==='function'?bkV2PendReason(bk):'')))
-                        ? bkV2PendLabel(ap.reason||bkV2PendReason(bk)) : 'รอผู้จัดการอนุมัติ');
+                        ? bkV2PendLabel(ap.reason||bkV2PendReason(bk)) : laT('รอผู้จัดการอนุมัติ'));
           const held = (typeof bkPendHoldsSeat==='function') ? bkPendHoldsSeat(bk) : true;
           const _pk = bk.hotelName || bk.pickup || '';
           const _cell=k=>`<td class="t2-c t2-mono">${P(r.pax,k)||'<span class="t2-dim">0</span>'}</td>`;
@@ -47864,10 +47864,10 @@ function bkV2RenderTab2(){
             + `<td class="t2-req">${_pdash}</td>`
             /* ปุ่มอยู่ช่องเดียวกับปุ่ม VC ของแถวคนจริง (ช่องหัวว่าง = ช่องปุ่มประจำตาราง)
                โหมดจัดรถไม่มีช่องนั้น ปุ่มจึงไปอยู่ช่อง Boat แทน ซึ่งใบรออนุมัติยังไม่มีเรือ */
-            + (vanMode?'':`<td><span class="pnhold${held?'':' no'}" title="${held?'ที่นั่งถูกกันไว้ระหว่างรออนุมัติ · นับอยู่ในที่นั่งที่ใช้ไปแล้วของทริป':'ที่นั่งเกิน cap อยู่แล้ว จึงไม่ถูกกันไว้'}">${held?'&#128274; กันที่นั่งไว้':'ไม่กันที่นั่ง'}</span></td>`
+            + (vanMode?'':`<td><span class="pnhold${held?'':' no'}" title="${held?laT('ที่นั่งถูกกันไว้ระหว่างรออนุมัติ · นับอยู่ในที่นั่งที่ใช้ไปแล้วของทริป'):laT('ที่นั่งเกิน cap อยู่แล้ว จึงไม่ถูกกันไว้')}">${held?'&#128274; '+laT('กันที่นั่งไว้'):laT('ไม่กันที่นั่ง')}</span></td>`
                         + `<td class="t2-r t2-mono">&#3647;${bkV2FmtTHB(r.subtotal)}</td>`
-                        + `<td class="t2-c"><div class="pnacts"><button class="pnbtn" onclick="event.stopPropagation();bkV2OpenDetail('${esc(bk.id)}')" title="ดูรายละเอียด">View</button><button class="pnbtn ok" onclick="event.stopPropagation();bkV2ApproveBooking('${esc(bk.id)}')" title="อนุมัติ · แถวจะย้ายลงไปอยู่ใน manifest">&#10003; อนุมัติ</button></div></td>`)
-            + `<td class="t2-c">${vanMode?`<div class="pnacts"><button class="pnbtn" onclick="event.stopPropagation();bkV2OpenDetail('${esc(bk.id)}')" title="ดูรายละเอียด">View</button><button class="pnbtn ok" onclick="event.stopPropagation();bkV2ApproveBooking('${esc(bk.id)}')" title="อนุมัติ">&#10003;</button></div>`:_pdash}</td>`
+                        + `<td class="t2-c"><div class="pnacts"><button class="pnbtn" onclick="event.stopPropagation();bkV2OpenDetail('${esc(bk.id)}')" title="${laT('ดูรายละเอียด')}">View</button><button class="pnbtn ok" onclick="event.stopPropagation();bkV2ApproveBooking('${esc(bk.id)}')" title="${laT('อนุมัติ · แถวจะย้ายลงไปอยู่ใน manifest')}">&#10003; ${laT('อนุมัติ')}</button></div></td>`)
+            + `<td class="t2-c">${vanMode?`<div class="pnacts"><button class="pnbtn" onclick="event.stopPropagation();bkV2OpenDetail('${esc(bk.id)}')" title="${laT('ดูรายละเอียด')}">View</button><button class="pnbtn ok" onclick="event.stopPropagation();bkV2ApproveBooking('${esc(bk.id)}')" title="${laT('อนุมัติ')}">&#10003;</button></div>`:_pdash}</td>`
             + (rcMode?`<td class="t2-c">${_pdash}</td>`:'')
             + (wxClosed?`<td class="t2-c">${_pdash}</td>`:'')
             + `</tr>`;
@@ -47881,8 +47881,8 @@ function bkV2RenderTab2(){
       + `<span class="pd"></span><span class="pn">${esc(route?.name || rid)}</span>`
       + `<span class="pt">${esc(dep)}${_pbPier?(' &middot; '+esc(_pbPier)):''}</span>`
       + (_pbNB?`<span class="pb">${_pbNB} boat${_pbNB===1?'':'s'}</span>`:'')
-      + (trLockedTotal>0?`<span class="plk" title="ที่นั่งที่กันไว้ให้เอเยนต์ · ยังไม่ถูกนับเป็น booking">&#128274; ${trLockedTotal}</span>`:'')
-      + (_lkOver>0?`<span class="pover" title="ที่นั่งที่ขายแล้วบวกที่ล็อกไว้ เกินความจุเรือที่เปิดอยู่">&#9888; ล็อกเกิน ${_lkOver} ที่</span>`:'')
+      + (trLockedTotal>0?`<span class="plk" title="${laT('ที่นั่งที่กันไว้ให้เอเยนต์ · ยังไม่ถูกนับเป็น booking')}">&#128274; ${trLockedTotal}</span>`:'')
+      + (_lkOver>0?`<span class="pover" title="${laT('ที่นั่งที่ขายแล้วบวกที่ล็อกไว้ เกินความจุเรือที่เปิดอยู่')}">&#9888; ${laTp('ล็อกเกิน {0} ที่', _lkOver)}</span>`:'')
       + `<span class="ps">${_pbBk}/${_pbCap}<em class="${_pbCls}">${_pbAv<=0?'full':(_pbAv+' free')}</em></span>`
       + `</div></td></tr>`;
     /* ══ §btLkOne (2026-09-25) · ล็อกหนึ่งใบ = หนึ่งบรรทัด ═══════════════════
@@ -47904,9 +47904,9 @@ function bkV2RenderTab2(){
       const _code = 'LK-' + String(_nm||'').replace(/\s+/g,'').slice(0,12).toUpperCase();
       /* กรุ๊ปย่อยขึ้นเป็นตัวนับ · เจ้าเดียวมีได้หกกรุ๊ป กางหมดแล้วบรรทัดเดียวไม่พอ
          รายชื่อเต็มอยู่ใน title · กดปุ่มจัดการเพื่อดูและแก้ */
-      const _kidTip = _kids.map(k=>(k.subName||'ย่อย')+' '+bkV2LockRemaining(k,date)).join(' · ');
-      const _story = _qty + ' ที่ · ขายไปแล้ว ' + _used
-        + (bkV2LockSpansDays(l) ? ' · ล็อกแบบช่วง' : '')
+      const _kidTip = _kids.map(k=>(k.subName||laT('ย่อย'))+' '+bkV2LockRemaining(k,date)).join(' · ');
+      const _story = laTp('{0} ที่ · ขายไปแล้ว {1}', _qty, _used)
+        + (bkV2LockSpansDays(l) ? ' · '+laT('ล็อกแบบช่วง') : '')
         + (l.reason ? (' · ' + l.reason) : '');
       /* §btLkGone · ใช้หมดแล้วไม่ต้องขึ้นแถว · ตัดสินที่ "ที่นั่งคงเหลือของวันนั้น"
          ที่เดียว ไม่ใช่สถานะ · ล็อกแบบช่วงที่หมดเฉพาะรอบนี้ สถานะยังเป็น active อยู่
@@ -47915,8 +47915,8 @@ function bkV2RenderTab2(){
       const _row = _held>0 ? `<tr class="t2-row t2-lrow" data-rid="${esc(rid)}" data-lk="${esc(l.id)}" style="--lc:${_c}">`
         + `<td class="t2-vc"><span class="lkcode">&#128274; ${esc(_code)}</span></td>`
         + `<td><span class="lkwho" style="background:${_c};color:${_ink}">${esc(_nm)}</span></td>`
-        + `<td class="t2-cu"><span class="lkwait">ล็อกที่นั่ง · ยังไม่ส่งชื่อ</span>`
-          + (_kids.length?`<span class="lkkid" title="กรุ๊ปย่อย · ${esc(_kidTip)}">&#8627; ${_kids.length} กรุ๊ป</span>`:'')
+        + `<td class="t2-cu"><span class="lkwait">${laT('ล็อกที่นั่ง · ยังไม่ส่งชื่อ')}</span>`
+          + (_kids.length?`<span class="lkkid" title="${laT('กรุ๊ปย่อย')} · ${esc(_kidTip)}">&#8627; ${laTp('{0} กรุ๊ป', _kids.length)}</span>`:'')
           + `</td>`
         + `<td class="t2-c"><b class="lkq">${_held}</b></td>`
         + `<td class="t2-c">${_dash}</td><td class="t2-c">${_dash}</td><td class="t2-c">${_dash}</td>`
@@ -47927,10 +47927,10 @@ function bkV2RenderTab2(){
         + `<td>${_dash}</td>`
         + `<td>${_dash}</td>`
         + (vanMode?'':`<td class="t2-req">${_dash}</td>`)
-        + `<td class="t2-req"><span class="lkwait">รอ rooming list</span></td>`
-        + (vanMode?'':`<td><span class="lkhold">&#128274; กันไว้</span></td>`
+        + `<td class="t2-req"><span class="lkwait">${laT('รอ rooming list')}</span></td>`
+        + (vanMode?'':`<td><span class="lkhold">&#128274; ${laT('กันไว้')}</span></td>`
                     + `<td class="t2-r">${_dash}</td>`
-                    + `<td class="t2-c"><button class="lkgo" onclick="event.stopPropagation();bkV2LockManageOpen('${l.id}')" title="จัดการล็อก · เพิ่มกรุ๊ปย่อย / ปล่อย${_kids.length?(' · กรุ๊ปย่อย: '+esc(_kidTip)):''}">จัดการ</button></td>`)
+                    + `<td class="t2-c"><button class="lkgo" onclick="event.stopPropagation();bkV2LockManageOpen('${l.id}')" title="${laT('จัดการล็อก · เพิ่มกรุ๊ปย่อย / ปล่อย')}${_kids.length?(' · '+laT('กรุ๊ปย่อย')+': '+esc(_kidTip)):''}">${laT('จัดการ')}</button></td>`)
         + `<td class="t2-c">${_dash}</td>`
         + (rcMode?`<td class="t2-c">${_dash}</td>`:'')
         + (wxClosed?`<td class="t2-c">${_dash}</td>`:'')
@@ -47943,7 +47943,7 @@ function bkV2RenderTab2(){
             <thead><tr>
               <th class="t2-vc">Voucher</th>${agencyTh}<th class="t2-cu">Customer (lead)</th>
               <th class="t2-c">AD</th><th class="t2-c">CHD</th><th class="t2-c">INF</th><th class="t2-c">FOC</th>
-              <th>Time</th>${vanMode?`<th class="t2-c t2-gwrap" style="color:#0C6B47;background:#DCF0E7;white-space:nowrap" title="ติ๊กแถวที่จะไปด้วยกัน แล้วกดจับกลุ่ม">&#10003; กลุ่ม</th>`:''}<th class="t2-pk">Pickup</th><th class="t2-c">Room</th>${zoneTh}<th>Send back</th>${vanMode?'':'<th>Add-on</th>'}<th>Special request</th>${vanMode?'':'<th>Pay</th><th class="t2-r">Total</th><th class="t2-c"></th>'}
+              <th>Time</th>${vanMode?`<th class="t2-c t2-gwrap" style="color:#0C6B47;background:#DCF0E7;white-space:nowrap" title="${laT('ติ๊กแถวที่จะไปด้วยกัน แล้วกดจับกลุ่ม')}">&#10003; ${laT('กลุ่ม')}</th>`:''}<th class="t2-pk">Pickup</th><th class="t2-c">Room</th>${zoneTh}<th>Send back</th>${vanMode?'':'<th>Add-on</th>'}<th>Special request</th>${vanMode?'':'<th>Pay</th><th class="t2-r">Total</th><th class="t2-c"></th>'}
               <th class="t2-c"${boatMode?' style="color:#12518F;background:#E2EEFA;white-space:nowrap"':''}>&#128676; Boat${boatMode?` <button onclick="baAutoAssign('${date}','${rid}')" style="background:#185FA5;color:#fff;border:none;border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:4px">auto</button>`:''}</th>
               ${rcMode?`<th class="t2-c" style="color:#7A4A00;background:#FAEBD2;white-space:nowrap">&#9989; Re-confirm <button onclick="bkV2ReconfirmAll('${date}','${rid}','list')" title="ยืนยันทั้งหมด (list)" style="background:#7A4A00;color:#fff;border:none;border-radius:5px;padding:2px 7px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:4px">all</button></th>`:''}
               ${wxClosed?'<th class="t2-c" style="color:#A32D2D;background:#FBE8E4;white-space:nowrap">&#9928; Manage</th>':''}
@@ -48017,7 +48017,7 @@ function bkV2RenderTab2(){
             <span class="t2-cxl-ch">${chLbl}</span>
             <span class="t2-cxl-rs">${cc&&cc.reason?esc(cc.reason):''}</span>
             <button class="t2-ghost-go" onclick="event.stopPropagation();bkV2OpenDetail('${esc(bk.id)}')" title="View booking">View</button>
-            <button class="t2-ghost-go" style="color:#0F6E56;border-color:#9FE1CB" onclick="event.stopPropagation();bkV2RestoreBooking('${esc(bk.id)}')" title="กู้คืน booking (ยกเลิกการยกเลิก)">&#8634; กู้คืน</button>
+            <button class="t2-ghost-go" style="color:#0F6E56;border-color:#9FE1CB" onclick="event.stopPropagation();bkV2RestoreBooking('${esc(bk.id)}')" title="${laT('กู้คืน booking (ยกเลิกการยกเลิก)')}">&#8634; ${laT('กู้คืน')}</button>
           </div>`;
         }).join('')}
       </div>` : '';
@@ -48211,7 +48211,7 @@ function bkV2RenderTab2(){
             <div class="t2-availline">
               ${_seatLeft!=null?`<span class="t2-asg" title="ที่นั่งคงเหลือที่ยังรับได้ = ความจุเรือที่เปิดทั้งหมด − booking ที่นั่งที่จองแล้ว (ไม่นับเหมาลำ · ไม่ต้องรอจัดเรือ)"><span class="t2-asg-l">Availability</span><b class="t2-asg-v" style="color:${_seatLeft>0?'#0F6E56':'#A32D2D'}">${_seatLeft}</b></span><span class="t2-asg-div"></span>`:''}
               <span class="t2-asg"><span class="t2-asg-l">Total</span><b class="t2-asg-v" style="color:var(--coral)">${recv}</b><span class="t2-asg-bd">${_bdStr(ad,chd,inf,foc)}</span></span>
-              ${_chtrPax>0?`<span class="t2-asg-div"></span><span class="t2-asg"><span class="t2-asg-l">Charter · ${_chtrBoatSet.size} ลำ</span><b class="t2-asg-v" style="color:#5B289A">${_chtrPax}</b><span class="t2-asg-bd">${_bdStr(_cAd,_cChd,_cInf,_cFoc)}</span></span><span class="t2-asg-div"></span><span class="t2-asg"><span class="t2-asg-l">Seat</span><b class="t2-asg-v" style="color:#0F6E56">${_seatPax}</b><span class="t2-asg-bd">${_bdStr(_sAd,_sChd,_sInf,_sFoc)}</span></span>`:''}
+              ${_chtrPax>0?`<span class="t2-asg-div"></span><span class="t2-asg"><span class="t2-asg-l">${laTp('Charter · {0} ลำ', _chtrBoatSet.size)}</span><b class="t2-asg-v" style="color:#5B289A">${_chtrPax}</b><span class="t2-asg-bd">${_bdStr(_cAd,_cChd,_cInf,_cFoc)}</span></span><span class="t2-asg-div"></span><span class="t2-asg"><span class="t2-asg-l">Seat</span><b class="t2-asg-v" style="color:#0F6E56">${_seatPax}</b><span class="t2-asg-bd">${_bdStr(_sAd,_sChd,_sInf,_sFoc)}</span></span>`:''}
               ${trLockedTotal>0?`<span class="t2-asg-div"></span><span class="t2-asg"><span class="t2-asg-l">&#128274; Lock</span><b class="t2-asg-v" style="color:#C0392B">${trLockedTotal}</b></span>`:''}
             </div>
             `}

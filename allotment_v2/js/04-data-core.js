@@ -646,7 +646,24 @@ function laLangToggle(){
     if(a && typeof nav==='function') nav(a);
   }catch(e){}
 }
-window.laT=laT; window.laLangGet=laLangGet; window.laLangToggle=laLangToggle;
+/* ข้อความที่มีตัวเลขแทรกอยู่กลางประโยค · ห่อทีละท่อนแล้วต่อกันเองไม่ได้
+   เพราะอังกฤษเรียงคำไม่เหมือนไทย · เก็บคำแปลเป็นแบบมีช่อง {0} แล้วเสียบค่าเข้าไป
+   โหมดไทยก็เดินทางเดียวกัน · laT คืนไทยต้นฉบับซึ่งมีช่อง {0} อยู่แล้ว */
+function laTp(th){
+  var args=[].slice.call(arguments,1);
+  return String(laT(th)).replace(/\{(\d+)\}/g, function(_,i){
+    var v=args[+i]; return (v==null?'':String(v));
+  });
+}
+/* ชื่อเดือนย่อ · เขียนไว้ที่เดียวแล้วใช้ทุกที่ที่ต้องย่อเดือน
+   ก่อนหน้านี้ตารางนี้ถูกพิมพ์ซ้ำสองที่ในไฟล์เดียวกัน (TH_MON กับ TH_MON_H) */
+function laMonAbbr(){
+  return (laLangGet()==='en')
+    ? ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+    : ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+}
+window.laT=laT; window.laTp=laTp; window.laMonAbbr=laMonAbbr;
+window.laLangGet=laLangGet; window.laLangToggle=laLangToggle;
 window.laLangApplyNav=laLangApplyNav;
 
 /* ── พจนานุกรม ไทย → อังกฤษ · เฉพาะ "เปลือกโปรแกรม" ─────────────────────────
@@ -678,7 +695,125 @@ var LA_T_EN={
   'KPI ต่ำ':'Low KPI', 'FOC สูง · ลูกค้าน้อย':'High FOC · few paying pax',
   /* ── B2C Channels ── */
   'เปิดทุกช่องทาง':'All channels on', 'รายการล่าสุด':'Latest entries',
-  'รวมทุกช่องทาง':'All channels'
+  'รวมทุกช่องทาง':'All channels',
+  /* ── Dashboard · รอบสอง ── */
+  'วันนี้':'Today', 'วันก่อนหน้า':'Previous day', 'วันถัดไป':'Next day',
+  'วัน':'Day', 'เดือน':'Month', 'ปี':'Year', 'รวม':'Total',
+  'ใบ':'bookings', 'ที่นั่ง':'seats', 'ท่าเรือ':'Pier',
+  'ว่าง':'free', 'ความจุ':'capacity', 'เฉลี่ย':'Average', 'เอเย่นต์':'agents',
+  'ขายเอง':'direct', 'บาท':'baht', 'อื่น ๆ':'Other', 'เหมาลำ':'Charter',
+  /* การ์ด Boat Operating */
+  'พร้อม':'ready', 'ออกวันนี้':'Departing today', 'ออก':'Departing',
+  'จาก {0} ลำ':'of {0} boats', 'ที่นั่งว่าง':'seats free', 'ทั้งวัน':'all day',
+  'ไม่มีเรือออกวันนี้':'No boats departing today', 'ไม่มีเรือออก':'No boats departing',
+  'เรือที่ออกวันนี้':'Boats departing today', 'เรือที่ออก':'Boats departing',
+  'ลำ · เปิด Boat Operation':'boats · open Boat Operation',
+  /* ปฏิทินที่นั่งว่าง */
+  'ที่ว่าง / ความจุ':'Free / capacity', 'เต็ม':'Full', 'ขายดี':'Selling fast',
+  'กลาง ๆ':'Moderate', 'ขายได้น้อย':'Slow', 'ว่างเยอะ':'Wide open',
+  'เปิดวันนี้':'Open today',
+  /* การ์ด Live bookings */
+  'ใบวันนี้':'today', 'ยอดวันนี้':'today', 'เฉลี่ย / ใบ':'per booking',
+  'นับตามเวลาที่ใบเข้าระบบ':'Counted by the time the booking was keyed in',
+  'ยังไม่มีใบเข้ามา':'nothing keyed in yet',
+  'อัปเดตเองไม่ต้องรีเฟรช':'Updates itself · no refresh needed',
+  'รายละเอียดทั้งวัน':'Full day detail',
+  'ดูใบจองทั้งหมดของวันนี้ แยก B2C / B2B':'Every booking keyed in today, split B2C / B2B',
+  /* Bookings overview */
+  '30 วัน':'30 days', '12 เดือน':'12 months', 'เทียบเมื่อวาน':'vs yesterday',
+  'ที่นั่งวันนี้':'Seats today', 'เส้นทาง':'Routes', 'เส้นทางเด่น':'Top route',
+  'วันพีค':'Peak day', 'เดือนพีค':'Peak month',
+  'วันเงียบ':'Slowest day', 'เดือนเงียบ':'Slowest month',
+  'ยกเลิกจากอากาศ':'Weather cancellations',
+  /* การ์ด Bookings / day */
+  '7 วัน':'7 days', 'เลือกอยู่':'selected', 'pax / วัน':'pax / day',
+  'เฉลี่ย {0} วัน':'{0}-day average', '{0} วันก่อนหน้า':'previous {0} days',
+  /* ชิป KPI บนหัววันที่ */
+  'จองเข้า':'Keyed in', 'ต้องจัดการ':'Needs action',
+  'วันนี้เคลียร์':'Today is clear', 'เคลียร์แล้ว':'All clear', 'ยกเลิก':'cancelled',
+  /* ── Booking · By trip · รอบสอง ─────────────────────────────────────────── */
+  'รออนุมัติ':'Pending approval', 'รอบ':'departure',
+  /* การ์ดโปรแกรมฝั่งซ้าย */
+  'ไม่จำกัด':'unlimited',
+  'ไม่ได้ตั้งโควตา (ขายได้ไม่จำกัด)':'no quota set (sells without a cap)',
+  /* แถวที่ค้างบนกระดานทั้งที่ไม่เหลือ booking */
+  'ล็อกที่นั่งค้างไว้ {0} ที่':'{0} seats still locked',
+  'ใบรออนุมัติ {0} ใบ':'{0} bookings pending approval',
+  'มีใบที่ย้ายวันออกจากวันนี้':'a booking was moved off this date',
+  'ไม่เหลือ booking แล้ว':'no bookings left', 'ไปจัดการ':'Go and clear it',
+  /* แถบเตือน "ยังจัดไม่ครบ" */
+  'ยังจัดไม่ครบ':'Not fully assigned',
+  'ยังไม่จัดเรือ {0} booking · {1} pax · คลิกเข้าโหมดจัดเรือ':
+    'No boat yet for {0} bookings · {1} pax · click for boat-assign mode',
+  'ยังไม่จัดรถ (ขาไป) {0} booking · {1} pax · คลิกเข้าโหมดจัดรถ':
+    'No outbound van yet for {0} bookings · {1} pax · click for van-assign mode',
+  'ยังไม่จัดรถกลับ (ส่งคนละที่) {0} booking · {1} pax · คลิกเข้าโหมดจัดรถ':
+    'No return van yet (dropped elsewhere) for {0} bookings · {1} pax · click for van-assign mode',
+  'รถกลับ':'Return van',
+  'รถปนกันในกรุ๊ป (booking จะขึ้นใบงานผิดคัน) — เข้าโหมด Van แล้วเลือกรถของกรุ๊ปใหม่ให้เป็นคันเดียว':
+    'Vans mixed within a group (bookings would print on the wrong job sheet) — open Van mode and set one van for the whole group',
+  'รถปนกัน':'Vans mixed',
+  'ยังไม่ได้ re-confirm {0} booking · {1} pax · คลิกเข้าโหมด Re-Confirm':
+    'Not re-confirmed: {0} bookings · {1} pax · click for Re-Confirm mode',
+  /* แถบสรุปเช็คอินหน้างาน */
+  'เช็คอินหน้างาน':'Checked in on site', 'รถ':'Van',
+  'ไปหน้าเช็คอินรถ':'Open the van check-in page',
+  'ไปหน้าเช็คอินหน้าท่า':'Open the pier check-in page',
+  'ป้าย No-show อยู่บนแถว booking · ยอดจอง/ราคาไม่ถูกแก้':
+    'No-show tags sit on the booking rows · seat counts and prices are left untouched',
+  /* แถบโซน */
+  'โซน':'Zone', 'กลุ่ม':'Group',
+  'ติ๊กแถวที่จะไปด้วยกัน แล้วกดจับกลุ่ม':'Tick the rows travelling together, then group them',
+  /* แถวใบรออนุมัติ */
+  'ยังไม่นับในยอดของทริป':'not counted in the trip total',
+  'ยังไม่เข้าใบงานรถ/เรือ':'not on any van or boat job sheet',
+  'เกิน cap +{0} ที่':'over cap by {0} seats', 'ส่วนลด':'Discount',
+  'รอเซลล์ยืนยัน':'waiting for sales to confirm',
+  'รอผู้จัดการอนุมัติ':'waiting for manager approval',
+  'ที่นั่งถูกกันไว้ระหว่างรออนุมัติ · นับอยู่ในที่นั่งที่ใช้ไปแล้วของทริป':
+    'Seats are held while approval is pending · already counted in the seats this trip has used',
+  'ที่นั่งเกิน cap อยู่แล้ว จึงไม่ถูกกันไว้':'Already over cap, so no seats are held',
+  'กันที่นั่งไว้':'Seats held', 'ไม่กันที่นั่ง':'No seats held',
+  'ดูรายละเอียด':'View detail', 'อนุมัติ':'Approve',
+  'อนุมัติ · แถวจะย้ายลงไปอยู่ใน manifest':'Approve · the row moves down into the manifest',
+  /* แถวล็อกที่นั่ง */
+  'ที่นั่งที่กันไว้ให้เอเยนต์ · ยังไม่ถูกนับเป็น booking':
+    'Seats held for an agent · not counted as bookings yet',
+  'ที่นั่งที่ขายแล้วบวกที่ล็อกไว้ เกินความจุเรือที่เปิดอยู่':
+    'Seats sold plus seats locked exceed the capacity of the boats running',
+  'ล็อกเกิน {0} ที่':'locked over by {0}', 'ย่อย':'sub',
+  '{0} ที่ · ขายไปแล้ว {1}':'{0} seats · {1} sold',
+  'ล็อกแบบช่วง':'range lock',
+  'ล็อกที่นั่ง · ยังไม่ส่งชื่อ':'Seat lock · no names sent yet',
+  'กรุ๊ปย่อย':'Sub-groups', '{0} กรุ๊ป':'{0} groups',
+  'รอ rooming list':'awaiting rooming list', 'กันไว้':'held',
+  'จัดการล็อก · เพิ่มกรุ๊ปย่อย / ปล่อย':'Manage lock · add a sub-group / release',
+  'จัดการ':'Manage',
+  'ที่นั่งใบนี้ดึงมาจากล็อกของ':'These seats were drawn from the lock held by',
+  /* ปุ่ม / ป้าย ระดับแถว */
+  'ดูรายละเอียด booking':'view booking detail',
+  'เพิ่ม extra วันเดินทาง (ขายหน้างาน)':'Add an extra on the travel day (sold on site)',
+  'อัพเกรด/ขายเพิ่มหน้างาน':'Upgrade / upsell on site',
+  'จาก B2C · ยังไม่ผูกกับ pickup area ในระบบ · แก้ไข booking เพื่อเลือก area':
+    'From B2C · not linked to a pickup area yet · edit the booking to pick one',
+  'ขายเอง (B2C)':'direct (B2C)', 'ลูกค้าทักมาทาง':'customer came in via',
+  'คลิกเปลี่ยนสีประจำเอเยนต์ (ใช้ที่หน้าอื่น)':'click to change the colour for this agent (used on other pages)',
+  'คลิกเปลี่ยนสี · Alt+คลิก = สีอัตโนมัติ':'click to change colour · Alt+click = automatic',
+  /* ป้ายสถานะการจ่ายเงิน */
+  'เลย cutoff':'past cutoff',
+  'สถานะ PFM · จัดการที่หน้า Daily PFM (Extend/Hold) หรือคลิกเพื่อออก/รับเงิน':
+    'PFM status · managed on the Daily PFM page (Extend / Hold), or click to issue / take payment',
+  'จัดการการชำระเงิน':'Manage payment',
+  /* เก็บตกจากการวัดหน้าจริงในโหมดอังกฤษ */
+  'ไม่มีเรือ':'no boat', 'ไม่มีที่นั่ง':'no seats',
+  'Charter · {0} ลำ':'Charter · {0} boats', 'ลำ {0}':'boat {0}',
+  'ยังไม่ระบุเรือ':'boat not set yet', 'ทั้งลำ':'whole boat',
+  'ทริปไม่ออกวันนั้น':'trip does not run that day', 'ระบบพักไว้':'held by the system',
+  'เกิน capacity':'over capacity',
+  'ปล่อย':'Releases', 'วันเดินทาง':'on the travel day', '{0} วันก่อน':'{0} days before',
+  'กู้คืน':'Restore', 'กู้คืน booking (ยกเลิกการยกเลิก)':'Restore this booking (undo the cancellation)',
+  'ยังไม่ได้ระบุจุดรับ · กดแก้ไขเพื่อเพิ่ม':'No pickup point yet · edit the booking to add one',
+  '{0} ที่':'{0} seats'
 };
 
 
@@ -894,7 +1029,7 @@ function _dashSeatCalHtml(dx,F){
         +(a.wxN>0?' &middot; &#9928;'+a.wxN:'')+'</span>'; }
     var click=closedLike?'':(' onclick="bkV2OpenFiltered(\'\',\''+ds+'\')"');
     cells+='<div class="dv-cell"'+click+' style="'+ring+'background:'+col[0]+';'+(closedLike?'':'cursor:pointer')+'">'
-      +'<span class="d" style="color:'+col[1]+'">'+day+(today?' &middot; วันนี้':'')+'</span>'
+      +'<span class="d" style="color:'+col[1]+'">'+day+(today?' &middot; '+laT('วันนี้'):'')+'</span>'
       +'<span class="big"><span class="n" style="color:'+col[1]+'">'+num+'</span>'
       +'<span class="s" style="color:'+col[1]+'">'+sub+'</span></span>'
       +extraLine+'</div>';
@@ -911,23 +1046,23 @@ function _dashSeatCalHtml(dx,F){
         +'<span class="dv-calarw" onclick="dashCalMonthShift(1)">&#8250;</span>'
       +'</span>'
       +'<span class="sp"></span>'
-      +'<span class="dv-cnt">ที่ว่าง / ความจุ</span>'
+      +'<span class="dv-cnt">'+laT('ที่ว่าง / ความจุ')+'</span>'
     +'</div>'
     +'<div class="dv-chips">'+chips+'</div>'
     +'<div class="dv-lg">'
-      +'<span><i style="background:#CFE9AC"></i>เต็ม</span>'
-      +'<span><i style="background:#E8F5D8"></i>ขายดี</span>'
-      +'<span><i style="background:#FAF0C8"></i>กลาง ๆ</span>'
-      +'<span><i style="background:#FBE1C6"></i>ขายได้น้อย</span>'
-      +'<span><i style="background:#FBE9E9"></i>ว่างเยอะ</span>'
+      +'<span><i style="background:#CFE9AC"></i>'+laT('เต็ม')+'</span>'
+      +'<span><i style="background:#E8F5D8"></i>'+laT('ขายดี')+'</span>'
+      +'<span><i style="background:#FAF0C8"></i>'+laT('กลาง ๆ')+'</span>'
+      +'<span><i style="background:#FBE1C6"></i>'+laT('ขายได้น้อย')+'</span>'
+      +'<span><i style="background:#FBE9E9"></i>'+laT('ว่างเยอะ')+'</span>'
     +'</div>'
     /* §mobCal · กล่องเลื่อนของตารางวันโดยเฉพาะ · หัวเดือนกับปุ่มกรองอยู่กับที่
        บนจอกว้างกล่องนี้ไม่ทำอะไรเลย (ตารางพอดีอยู่แล้ว) */
     +'<div class="dv-calsc"><div class="dv-calg">'+wk+cells+'</div></div>'
     +'<div class="dv-calft">'
-      +'<span class="t">วันนี้'+(t.has?' &middot; <span style="color:#1B6AA6;background:#E4EFFA;border-radius:5px;padding:1px 7px;font-family:\'DM Mono\',ui-monospace,monospace">'+t.booked+' pax</span>':'')+'</span>'
-      +'<span class="r"><b>'+t.free+'</b> / '+t.cap+' ที่นั่งว่าง</span>'
-      +'<button onclick="bkV2OpenFiltered(\'\',\''+TODAY_STR+'\')">เปิดวันนี้</button>'
+      +'<span class="t">'+laT('วันนี้')+(t.has?' &middot; <span style="color:#1B6AA6;background:#E4EFFA;border-radius:5px;padding:1px 7px;font-family:\'DM Mono\',ui-monospace,monospace">'+t.booked+' pax</span>':'')+'</span>'
+      +'<span class="r"><b>'+t.free+'</b> / '+t.cap+' '+laT('ที่นั่งว่าง')+'</span>'
+      +'<button onclick="bkV2OpenFiltered(\'\',\''+TODAY_STR+'\')">'+laT('เปิดวันนี้')+'</button>'
     +'</div>'
   +'</div>';
 }
@@ -1128,7 +1263,7 @@ function _dashLiveFeedHtml(dx,F,side){
     rows+='<div class="dv-lv'+(cx?' cx':'')+'" onclick="dashOpenBooking(\''+b.id+'\')">'
       +'<span class="dv-lvm">'+mark+'</span>'
       +'<span class="dv-lvtx">'
-        +'<span class="rt" style="color:'+rcol+'">'+rn+(cx?' <em>· ยกเลิก</em>':'')+'</span>'
+        +'<span class="rt" style="color:'+rcol+'">'+rn+(cx?' <em>· '+laT('ยกเลิก')+'</em>':'')+'</span>'
         +'<span class="dt">'+dtxt+(_trs.length>1?(' +'+(_trs.length-1)):'')+' &middot; '+pax+' pax'
           +(vc?(' &middot; <b title="'+vcRaw.replace(/"/g,'&quot;')+'">'+vc+'</b>'):'')+'</span>'
       +'</span>'
@@ -1160,20 +1295,20 @@ function _dashLiveFeedHtml(dx,F,side){
   var _mShort=function(v){ v=+v||0; return v>=1000000?('฿'+(v/1000000).toFixed(1)+'M'):(v>=1000?('฿'+Math.round(v/1000)+'k'):('฿'+Math.round(v))); };
   var head=''
     +'<div class="dv-lvhd" onclick="dashOpenDayDetail(\''+side+'\')">'
-      +'<span class="s" title="'+('\u0e19\u0e31\u0e1a\u0e15\u0e32\u0e21\u0e40\u0e27\u0e25\u0e32\u0e17\u0e35\u0e48\u0e43\u0e1a\u0e40\u0e02\u0e49\u0e32\u0e23\u0e30\u0e1a\u0e1a \u00b7 '+(_sL.length
-          ? (_sL.join(' \u00b7 ')+' \u0e1a\u0e32\u0e17')
-          : '\u0e22\u0e31\u0e07\u0e44\u0e21\u0e48\u0e21\u0e35\u0e43\u0e1a\u0e40\u0e02\u0e49\u0e32\u0e21\u0e32')).replace(/"/g,'&quot;')
-        +'"><b>'+_sN+'</b><i>\u0e43\u0e1a\u0e27\u0e31\u0e19\u0e19\u0e35\u0e49</i></span><span class="sep"></span>'
+      +'<span class="s" title="'+(laT('นับตามเวลาที่ใบเข้าระบบ')+' \u00b7 '+(_sL.length
+          ? (_sL.join(' \u00b7 ')+' '+laT('บาท'))
+          : laT('ยังไม่มีใบเข้ามา'))).replace(/"/g,'&quot;')
+        +'"><b>'+_sN+'</b><i>'+laT('ใบวันนี้')+'</i></span><span class="sep"></span>'
       +'<span class="s"><b>'+_sP+'</b><i>pax</i></span><span class="sep"></span>'
-      +'<span class="s" title="'+Math.round(_sM).toLocaleString()+' \u0e1a\u0e32\u0e17'
+      +'<span class="s" title="'+Math.round(_sM).toLocaleString()+' '+laT('บาท')
         +(_sL.length?(' = '+_sL.join(' + ')):'')
-        +'"><b>'+_mShort(_sM)+'</b><i>\u0e22\u0e2d\u0e14\u0e27\u0e31\u0e19\u0e19\u0e35\u0e49</i></span><span class="sep"></span>'
-      +'<span class="s"><b>'+(side==='b2c'?_mShort(_sN?_sM/_sN:0):Object.keys(_sA).length)+'</b><i>'+(side==='b2c'?'เฉลี่ย / ใบ':'เอเย่นต์')+'</i></span>'
+        +'"><b>'+_mShort(_sM)+'</b><i>'+laT('ยอดวันนี้')+'</i></span><span class="sep"></span>'
+      +'<span class="s"><b>'+(side==='b2c'?_mShort(_sN?_sM/_sN:0):Object.keys(_sA).length)+'</b><i>'+(side==='b2c'?laT('เฉลี่ย / ใบ'):laT('เอเย่นต์'))+'</i></span>'
     +'</div>';
   return '<div class="dv-c" style="'+F+'padding:0 12px 12px">'
     +'<div class="dv-ct"><span class="big" style="color:'+(side==='b2c'?'#8C2D52':'#12518F')+'">Live bookings</span>'
-      +(side==='b2b'?'<span class="dv-cnt" style="background:#E6F1FB;color:#12518F">B2B &middot; เอเย่นต์</span>':'')
-      +(side==='b2c'?'<span class="dv-cnt" style="background:#FDE6EE;color:#8C2D52">B2C &middot; ขายเอง</span>':'')
+      +(side==='b2b'?'<span class="dv-cnt" style="background:#E6F1FB;color:#12518F">B2B &middot; '+laT('เอเย่นต์')+'</span>':'')
+      +(side==='b2c'?'<span class="dv-cnt" style="background:#FDE6EE;color:#8C2D52">B2C &middot; '+laT('ขายเอง')+'</span>':'')
       +'<span class="sp"></span>'
       +'<span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:800;color:#0F6E56;letter-spacing:0;text-transform:none"><span style="width:7px;height:7px;border-radius:50%;background:#2F9E5B;animation:dashlvpulse 1.4s infinite"></span>live</span>'
     +'</div>'
@@ -1181,9 +1316,9 @@ function _dashLiveFeedHtml(dx,F,side){
     +'<div class="dv-lvlist">'+rows+'</div>'
     /* §dayDetail · ทางเข้าป๊อปอัป · ท้ายการ์ดเป็นที่ของ "ข้อมูลเกี่ยวกับฟีดนี้" อยู่แล้ว
        ปุ่มอยู่ตรงนั้นถูกที่กว่าหัวการ์ด และไม่ไปเบียดป้าย B2B/B2C ให้ตกบรรทัด */
-    +'<div class="dv-sync"><span class="sy">'+DASH_ICO.sync+'อัปเดตเองไม่ต้องรีเฟรช</span>'
+    +'<div class="dv-sync"><span class="sy">'+DASH_ICO.sync+laT('อัปเดตเองไม่ต้องรีเฟรช')+'</span>'
       +'<span class="dv-ddbt" onclick="dashOpenDayDetail(\''+side+'\')" '
-      +'title="ดูใบจองทั้งหมดของวันนี้ แยก B2C / B2B">รายละเอียดทั้งวัน &rsaquo;</span></div></div>';
+      +'title="'+laT('ดูใบจองทั้งหมดของวันนี้ แยก B2C / B2B')+'">'+laT('รายละเอียดทั้งวัน')+' &rsaquo;</span></div></div>';
 }
 
 /* ══ §dayDetail · "รายละเอียดทั้งวัน" ที่ห้อยจากการ์ด Live bookings ═══════
@@ -2553,13 +2688,13 @@ function renderDash(){
   const EN_MON_LONG=['January','February','March','April','May','June','July','August','September','October','November','December'];
   const WD_EN_LONG=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
-  const TH_MON=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const TH_MON=laMonAbbr();          /* §i18n · อ่านที่เดียว ใช้สองที่ */
   /* §dashTdy2 · ทั้งหน้าเดินตามวันที่ที่เลือก · คำเรียกจึงต้องเดินตามด้วย
      "วันนี้" ใช้ได้เฉพาะตอนที่วันที่เลือกเป็นวันนี้จริง ๆ · ที่เหลือเขียนวันไปตรง ๆ
      ตัวเลขถูกมาตลอด ผิดแค่คำเรียก ซึ่งอ่านแล้วเข้าใจผิดว่าเป็นของวันนี้ */
   const _dsTdy=(_ds===TODAY_STR);
   const _dsDay=(new Date(_ds).getDate()+' '+TH_MON[new Date(_ds).getMonth()]);
-  const _dsLbl=_dsTdy?'วันนี้':_dsDay;
+  const _dsLbl=_dsTdy?laT('วันนี้'):_dsDay;
   const fmtTodoDate=(ds)=>{const d=new Date(ds);return `${d.getDate()} ${TH_MON[d.getMonth()]}`;};
 
   // Boat Operating stats card (replaces To do list)
@@ -2596,15 +2731,15 @@ function renderDash(){
   const todoCard=`<div class="dv-c">
     <div class="dv-ct"><span class="big">Boat Operating</span>
       <span class="sp"></span>
-      <span class="dv-cnt ${operatingCount>0?'go':''}">${operatingCount} / ${availTotal} พร้อม</span></div>
+      <span class="dv-cnt ${operatingCount>0?'go':''}">${operatingCount} / ${availTotal} ${laT('พร้อม')}</span></div>
     <div class="dv-avrow">
-      <div class="dv-av"><span class="v">${operatingCount}</span><span class="k">${_dsTdy?'ออกวันนี้':'ออก '+_dsDay}</span><span class="u">จาก ${availTotal} ลำ</span></div>
+      <div class="dv-av"><span class="v">${operatingCount}</span><span class="k">${_dsTdy?laT('ออกวันนี้'):laT('ออก')+' '+_dsDay}</span><span class="u">${laTp('จาก {0} ลำ', availTotal)}</span></div>
       <div class="dv-avs"></div>
       <div class="dv-av"><span class="v" style="color:#0C6B47">${fillPct}<span style="font-size:12px">%</span></span><span class="k">fill</span><span class="u">${totBooked}/${totAllot}</span></div>
       <div class="dv-avs"></div>
-      <div class="dv-av"><span class="v" style="color:${totFree>0?'#B4560A':'#3a3a36'}">${totFree}</span><span class="k">ที่นั่งว่าง</span><span class="u">ทั้งวัน</span></div>
+      <div class="dv-av"><span class="v" style="color:${totFree>0?'#B4560A':'#3a3a36'}">${totFree}</span><span class="k">${laT('ที่นั่งว่าง')}</span><span class="u">${laT('ทั้งวัน')}</span></div>
     </div>
-    ${pierRows?`<div class="dv-blist"><div class="dv-sec">ท่าเรือ</div>${pierRows}<!--§dashLeft:boatlist--></div>`:`<div class="dv-empty">ไม่มีเรือออก${_dsTdy?'วันนี้':_dsDay}</div>`}
+    ${pierRows?`<div class="dv-blist"><div class="dv-sec">${laT('ท่าเรือ')}</div>${pierRows}<!--§dashLeft:boatlist--></div>`:`<div class="dv-empty">${_dsTdy?laT('ไม่มีเรือออกวันนี้'):laT('ไม่มีเรือออก')+' '+_dsDay}</div>`}
     <!--§dashLeft:boatmore-->
   </div>`;
 
@@ -2621,7 +2756,7 @@ function renderDash(){
       <span class="pm" style="background:${ob.r.color||'#7d7a74'}">${ob.b.name.slice(0,2).toUpperCase()}</span>
       <span class="tx"><span class="n">${ob.b.name}</span>
         <span class="s">${({panwa:'VP',tublamu:'TL',ranong:'RN',other:'OT'})[ob.r.pier]||''} · ${ob.r.name}</span></span>
-      <span class="rt"><b style="color:${fillColor}">${ob.free}</b><i>ว่าง / ${ob.cap}</i></span>
+      <span class="rt"><b style="color:${fillColor}">${ob.free}</b><i>${laT('ว่าง')} / ${ob.cap}</i></span>
     </div>`;
   }).join('');
   /* §dashLeft · เดิมเป็นการ์ด "Boats operating" ของตัวเอง วางอยู่ใต้ Boat Operating พอดี
@@ -2629,12 +2764,12 @@ function renderDash(){
      (การ์ดบน + การ์ดนี้ + Today's headline) ยุบมาเป็นท้ายการ์ดเดิมแทน
      หัวเรือ/ท่า/ที่ว่าง ยังอยู่ครบ แค่ไม่ต้องมีกรอบของตัวเอง */
   const boatListSlot = opBoatRows
-    ? `<div class="dv-sec">${_dsTdy?'เรือที่ออกวันนี้':'เรือที่ออก '+_dsDay}</div>`+opBoatRows
+    ? `<div class="dv-sec">${_dsTdy?laT('เรือที่ออกวันนี้'):laT('เรือที่ออก')+' '+_dsDay}</div>`+opBoatRows
     : '';
   /* ปุ่มเปิดหน้าเต็มอยู่ "นอก" กรอบที่เลื่อน · ไม่งั้นต้องเลื่อนลงไปสุดก่อนถึงจะเห็น */
   const boatMoreSlot = opBoatsAll.length
     ? `<div class="dv-more" onclick="nav(document.querySelector('[data-view=op]'))">`
-      +`<b>${opBoatsAll.length}</b> ลำ · เปิด Boat Operation &rsaquo;</div>`
+      +`<b>${opBoatsAll.length}</b> ${laT('ลำ · เปิด Boat Operation')} &rsaquo;</div>`
     : '';
 
   // leftCol assembled below (after sched + filesCard are defined)
@@ -2726,18 +2861,18 @@ function renderDash(){
   // Legend (month/year only — day mode labels each bar directly)
   const _lgi=(col,lbl,val)=>`<span><i style="background:${col}"></i>${lbl}${val!=null?` <b>${val}</b>`:''}</span>`;
   const legendItems=(_bkMode==='day')?'':topRoutes.map(tr=>_lgi(tr.color,_shortName(tr.r.name),tr.total)).join('');
-  const otherLegend=(_bkMode!=='day'&&otherWeekTotal>0)?_lgi(segPalette[3],'อื่น ๆ',otherWeekTotal):'';
-  const charterLegend=(_bkMode!=='day'&&charterWeekTotal>0)?_lgi(CHARTER_COLOR,'เหมาลำ',charterWeekTotal):'';
-  const wxLegend=(_bkMode!=='day'&&wxWeekTotal>0)?`<span>&#9928; ยกเลิกจากอากาศ <b>${wxWeekTotal}</b></span>`:'';
-  const capLegend=(_bkMode==='day')?'':`<span><span style="display:inline-block;width:14px;height:8px;border:1.2px dashed #DAD5CC;border-radius:2px;margin-right:4px;vertical-align:-1px"></span>ความจุ</span>`;
+  const otherLegend=(_bkMode!=='day'&&otherWeekTotal>0)?_lgi(segPalette[3],laT('อื่น ๆ'),otherWeekTotal):'';
+  const charterLegend=(_bkMode!=='day'&&charterWeekTotal>0)?_lgi(CHARTER_COLOR,laT('เหมาลำ'),charterWeekTotal):'';
+  const wxLegend=(_bkMode!=='day'&&wxWeekTotal>0)?`<span>&#9928; ${laT('ยกเลิกจากอากาศ')} <b>${wxWeekTotal}</b></span>`:'';
+  const capLegend=(_bkMode==='day')?'':`<span><span style="display:inline-block;width:14px;height:8px;border:1.2px dashed #DAD5CC;border-radius:2px;margin-right:4px;vertical-align:-1px"></span>${laT('ความจุ')}</span>`;
   // ── period toggle (วัน / เดือน / ปี) ──
   const _bkSeg=(m,lbl)=>`<button class="${_bkMode===m?'on':''}" onclick="dashBkSetMode('${m}')">${lbl}</button>`;
-  const bkToggle=`<span class="dv-ovseg">${_bkSeg('day','วัน')}${_bkSeg('month','เดือน')}${_bkSeg('year','ปี')}</span>`;
+  const bkToggle=`<span class="dv-ovseg">${_bkSeg('day',laT('วัน'))}${_bkSeg('month',laT('เดือน'))}${_bkSeg('year',laT('ปี'))}</span>`;
   /* §dashTdy · โหมด "วัน" แสดงวันที่เลือกอยู่ · ใช้คำเรียกชุดเดียวกับทั้งหน้า */
   const _dsIsTdy=_dsTdy, _dayLbl=_dsLbl;
-  const bkTitle=_bkMode==='day'?('Bookings overview · '+_dayLbl):_bkMode==='month'?'Bookings overview · 30 วัน':'Bookings overview · 12 เดือน';
-  const _periodLbl=_bkMode==='day'?_dayLbl:_bkMode==='month'?'30 วัน':'12 เดือน';
-  const bkSub=`รวม <b>${fmtN(totalBookedWeek)}</b> ที่นั่ง${totalCapWeek>0?' / <b>'+fmtN(totalCapWeek)+'</b> ความจุ · <b style="color:#0C6B47">'+fillWeekPct+'%</b> fill':''} · ${_periodLbl} · ${deltaSign?'+':''}${deltaSeats} เทียบเมื่อวาน`;
+  const bkTitle='Bookings overview · '+(_bkMode==='day'?_dayLbl:_bkMode==='month'?laT('30 วัน'):laT('12 เดือน'));
+  const _periodLbl=_bkMode==='day'?_dayLbl:_bkMode==='month'?laT('30 วัน'):laT('12 เดือน');
+  const bkSub=`${laT('รวม')} <b>${fmtN(totalBookedWeek)}</b> ${laT('ที่นั่ง')}${totalCapWeek>0?' / <b>'+fmtN(totalCapWeek)+'</b> '+laT('ความจุ')+' · <b style="color:#0C6B47">'+fillWeekPct+'%</b> fill':''} · ${_periodLbl} · ${deltaSign?'+':''}${deltaSeats} ${laT('เทียบเมื่อวาน')}`;
   // ── stats footer (mode-aware) ──
   const _fmtDt=(dt)=> _bkMode==='year' ? TH_MON[dt.getMonth()] : dt.getDate()+' '+TH_MON[dt.getMonth()];
   // liquid-glass surfaces (inner cards + plot) — gradient sheen + inset highlight + depth shadow
@@ -2745,27 +2880,27 @@ function renderDash(){
   let statsHtml;
   if(_bkMode==='day'){
     statsHtml =
-      _statCard(_dsTdy?'ที่นั่งวันนี้':('ที่นั่ง '+_dsDay), fmtN(totalBookedWeek), '#3a3a36', 'seats booked')
+      _statCard(_dsTdy?laT('ที่นั่งวันนี้'):(laT('ที่นั่ง')+' '+_dsDay), fmtN(totalBookedWeek), '#3a3a36', 'seats booked')
     + '<div class="dv-avs"></div>'
     + _statCard('fill', fillWeekPct+'%', '#0C6B47', totalBookedWeek+' / '+(totalCapWeek||'-'))
     + '<div class="dv-avs"></div>'
-    + _statCard('เส้นทางเด่น', topRouteWeek?_shortName(topRouteWeek.r.name):'—', '#3a3a36', topRouteWeek?topRouteWeek.total+' ที่นั่ง':'')
+    + _statCard(laT('เส้นทางเด่น'), topRouteWeek?_shortName(topRouteWeek.r.name):'—', '#3a3a36', topRouteWeek?topRouteWeek.total+' '+laT('ที่นั่ง'):'')
     + '<div class="dv-avs"></div>'
-    + _statCard('เส้นทาง', dayRows.length, '#3a3a36', 'routes today');
+    + _statCard(laT('เส้นทาง'), dayRows.length, '#3a3a36', 'routes today');
   } else {
-    const perLbl=_bkMode==='year'?'เดือน':'วัน';
+    const perLbl=_bkMode==='year'?laT('เดือน'):laT('วัน');
     statsHtml =
-      _statCard(_bkMode==='year'?'เดือนพีค':'วันพีค', bestDay?_fmtDt(bestDay.dt):'—', '#0C6B47', bestDay?bestDay.pct+'% fill':'—')
+      _statCard(_bkMode==='year'?laT('เดือนพีค'):laT('วันพีค'), bestDay?_fmtDt(bestDay.dt):'—', '#0C6B47', bestDay?bestDay.pct+'% fill':'—')
     + '<div class="dv-avs"></div>'
-    + _statCard(_bkMode==='year'?'เดือนเงียบ':'วันเงียบ', slowDay?_fmtDt(slowDay.dt):'—', '#B4560A', slowDay?slowDay.pct+'% fill':'—')
+    + _statCard(_bkMode==='year'?laT('เดือนเงียบ'):laT('วันเงียบ'), slowDay?_fmtDt(slowDay.dt):'—', '#B4560A', slowDay?slowDay.pct+'% fill':'—')
     + '<div class="dv-avs"></div>'
-    + _statCard('เส้นทางเด่น', topRouteWeek?_shortName(topRouteWeek.r.name):'—', '#3a3a36', topRouteWeek?topRouteWeek.total+' ที่นั่ง':'')
+    + _statCard(laT('เส้นทางเด่น'), topRouteWeek?_shortName(topRouteWeek.r.name):'—', '#3a3a36', topRouteWeek?topRouteWeek.total+' '+laT('ที่นั่ง'):'')
     + '<div class="dv-avs"></div>'
-    + _statCard('เฉลี่ย / '+perLbl, fmtN(avgPerDay), '#3a3a36', 'ที่นั่ง');
+    + _statCard(laT('เฉลี่ย')+' / '+perLbl, fmtN(avgPerDay), '#3a3a36', laT('ที่นั่ง'));
   }
   const legendRow=(legendItems||otherLegend||charterLegend||wxLegend||capLegend)?`<div class="dv-ovlg">${legendItems}${otherLegend}${charterLegend}${wxLegend}${capLegend}</div>`:'';
   // day-mode weather note (chip next to title)
-  const dayWxChip=(_bkMode==='day'&&dayWx>0)?`<span class="dv-cnt" style="background:#FCEBEB;color:#A32D2D">&#9928; ยกเลิกจากอากาศ ${dayWx}</span>`:'';
+  const dayWxChip=(_bkMode==='day'&&dayWx>0)?`<span class="dv-cnt" style="background:#FCEBEB;color:#A32D2D">&#9928; ${laT('ยกเลิกจากอากาศ')} ${dayWx}</span>`:'';
   const proj=`<div class="dv-ov">
     <div class="dv-ct"><span class="big">${bkTitle}</span>${dayWxChip}<span class="sp"></span>${bkToggle}</div>
     <div class="dv-ovsub">${bkSub}</div>
@@ -2846,13 +2981,13 @@ function renderDash(){
       +`<span class="dv-bddd">${lbl?d.dt.getDate():'&nbsp;'}</span>`
       +`<span class="dv-bdbk">${_dvSlim?'&nbsp;':(d.bk+' bk')}</span>`
       +(tdy?'<span class="dv-bdtd">TODAY</span>'
-           :(sel?'<span class="dv-bdtd sel">เลือกอยู่</span>':''))
+           :(sel?'<span class="dv-bdtd sel">'+laT('เลือกอยู่')+'</span>':''))
       +`</div>`;
   }).join('');
   const _dvSeg=(n,lbl)=>`<b class="${_dvRange===n?'on':''}" onclick="dashBkDaySetRange(${n})">${lbl}</b>`;
   const ai=`<div class="dv-bd">
     <div class="dv-bdhd"><span class="dv-bdt">Bookings / day</span>
-      <span class="dv-bdseg">${_dvSeg(7,'7 วัน')}${_dvSeg(30,'30 วัน')}</span>
+      <span class="dv-bdseg">${_dvSeg(7,laT('7 วัน'))}${_dvSeg(30,laT('30 วัน'))}</span>
       <span class="dv-bdup ${_dvDelta>=0?'up':'dn'}">${_dvDelta>=0?'&#8599;':'&#8600;'} ${_dvDelta===0?'flat':(_dvDelta>0?'+':'−')+_dvPct+'%'}</span></div>
     <div class="dv-bdchart">
       <svg viewBox="0 0 ${_dvW} ${_dvH}" preserveAspectRatio="none">
@@ -2862,9 +2997,9 @@ function renderDash(){
       <div class="dv-bdcols">${_dvCols}</div>
     </div>
     <div class="dv-bdfoot">
-      <div class="s"><b>${_dvAvg}</b><i>เฉลี่ย ${_dvRange} วัน</i><u>pax / วัน</u></div><div class="sep"></div>
+      <div class="s"><b>${_dvAvg}</b><i>${laTp('เฉลี่ย {0} วัน', _dvRange)}</i><u>${laT('pax / วัน')}</u></div><div class="sep"></div>
       <div class="s"><b>${_dvTdy.pax}</b><i>${_dsLbl}</i><u>${_dvTdy.bk} bk</u></div><div class="sep"></div>
-      <div class="s"><b class="dim">${_dvPrevAvg}</b><i>${_dvRange} วันก่อนหน้า</i><u>vs prev</u></div>
+      <div class="s"><b class="dim">${_dvPrevAvg}</b><i>${laTp('{0} วันก่อนหน้า', _dvRange)}</i><u>vs prev</u></div>
     </div>
   </div>`;
 
@@ -2902,7 +3037,7 @@ function renderDash(){
    "ออกวันนี้" = ที่นั่งที่เดินทางวันนี้ · "จองเข้า" = ใบที่เปิดวันนี้ */
 function _dvHead(ds, dt, k){
   /* §dashTdy2 · ฟังก์ชันนี้อยู่นอก renderDash · ใช้ตัวช่วยข้างในไม่ได้ ประกาศเอง */
-  const TH_MON_H=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const TH_MON_H=laMonAbbr();        /* §i18n · ตารางเดียวกับข้างบน */
   const WD_L=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const MO_L=['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
   const isTdy = ds===TODAY_STR;
@@ -2921,21 +3056,21 @@ function _dvHead(ds, dt, k){
       ${_row('เอเย่นต์เครดิตเกิน',(d.crL||[]).slice(0,2).map(x=>x.n).join(' · ')||'ไม่มี',d.crN,'dashGoAgents()',_dashMoneyShort(d.crB))}
     </div>`;
   return `<div class="dv-hd"><div class="dv-hdtop">
-    <button class="dv-arw" onclick="dashDateShift(-1)" title="วันก่อนหน้า">&lsaquo;</button>
+    <button class="dv-arw" onclick="dashDateShift(-1)" title="${laT('วันก่อนหน้า')}">&lsaquo;</button>
     <span class="dv-dnum">${dt.getDate()}</span>
     <span class="dv-dgrp"><span class="dv-dwk">${WD_L[dt.getDay()]}</span>
       <span class="dv-dmo">${MO_L[dt.getMonth()]} ${dt.getFullYear()}
         <input type="date" value="${ds}" onchange="setDashDate(this.value)"></span></span>
-    <button class="dv-arw" onclick="dashDateShift(1)" title="วันถัดไป">&rsaquo;</button>
+    <button class="dv-arw" onclick="dashDateShift(1)" title="${laT('วันถัดไป')}">&rsaquo;</button>
     ${isTdy?'':`<button class="dv-today" onclick="resetDashDate()">TODAY</button>`}
     <span class="dv-brand">LOVE ANDAMAN</span>
     <span class="dv-kpi">
-      <span class="dv-chip">${isTdy?'ออกวันนี้':'ออก '+dt.getDate()+' '+TH_MON_H[dt.getMonth()]} <b>${k.pax}</b> pax</span>
+      <span class="dv-chip">${isTdy?laT('ออกวันนี้'):laT('ออก')+' '+dt.getDate()+' '+TH_MON_H[dt.getMonth()]} <b>${k.pax}</b> pax</span>
       <span class="dv-chip ok">fill <b>${k.fill}%</b></span>
-      <span class="dv-chip">ว่าง <b>${k.free}</b></span>
-      <span class="dv-chip">จองเข้า <b>${k.bk}</b> ใบ</span>
-      ${todo>0?`<span class="dv-chip warn" onclick="dashTodoToggle()">&#9888; ต้องจัดการ <b>${todo}</b> &rsaquo;</span>`
-              :`<span class="dv-chip ok">&#10003; ${isTdy?'วันนี้เคลียร์':'เคลียร์แล้ว'}</span>`}
+      <span class="dv-chip">${laT('ว่าง')} <b>${k.free}</b></span>
+      <span class="dv-chip">${laT('จองเข้า')} <b>${k.bk}</b> ${laT('ใบ')}</span>
+      ${todo>0?`<span class="dv-chip warn" onclick="dashTodoToggle()">&#9888; ${laT('ต้องจัดการ')} <b>${todo}</b> &rsaquo;</span>`
+              :`<span class="dv-chip ok">&#10003; ${isTdy?laT('วันนี้เคลียร์'):laT('เคลียร์แล้ว')}</span>`}
     </span>
     ${todo>0?pop:''}
   </div></div>`;

@@ -1,15 +1,18 @@
-// §i18n · ปุ่มสลับภาษา ไทย / อังกฤษ · รอบแรก (โครงระบบ + เมนู + หน้ากลุ่ม Sales)
+// §i18n · ปุ่มสลับภาษา ไทย / อังกฤษ
+//   รอบแรก  · โครงระบบ + เมนู + หน้ากลุ่ม Sales
+//   รอบสอง  · หน้า Dashboard + หน้า Booking · By trip (ที่ที่ Sales อยู่ทั้งวัน)
 //
 // ที่มา (2026-09-25) · ผู้ใช้ขอ · "สามารถทำปุ่มเปลี่ยนภาษาได้ไหม ไทยกับอังกฤษ"
 // คนที่ต้องใช้อังกฤษคือฝั่ง Sales · วัดหน้าจริงแล้วหน้ากลุ่ม Sales เป็นอังกฤษเกือบหมด
-// เหลือไทยหน้าละไม่กี่คำ · รอบนี้วางโครง laT() + ปุ่ม + แปลเมนูและหน้ากลุ่ม Sales
+// เหลือไทยหน้าละไม่กี่คำ · รอบแรกวางโครง laT() + ปุ่ม แล้วรอบสองไล่สองหน้าที่เหลือ
 //
 // กติกาที่ต้องไม่พัง
-//   - แปลได้เฉพาะ "เปลือกโปรแกรม" · ข้อมูลในฐานข้อมูล (ชื่อเอเยนต์ ชื่อโรงแรม) ห้ามถูกแปล
+//   - แปลได้เฉพาะ "เปลือกโปรแกรม" · ข้อมูลในฐานข้อมูล (ชื่อเอเยนต์ ชื่อลูกค้า) ห้ามถูกแปล
 //   - ไม่มีคำแปล = คืนไทยเหมือนเดิม · ห่อผิดที่ต้องไม่ทำให้หน้าพัง
 //   - พจนานุกรมต้องไม่เน่า · ทุกคำที่ใส่ไว้ต้องมีที่ใช้จริงในโค้ด
+//   - สลับกลับเป็นไทยต้องได้ของเดิมคำต่อคำ · ไม่ใช่ "คล้ายเดิม"
 //
-// เทสนี้กันแปดอย่าง
+// เทสนี้กันสิบสองอย่าง
 //   1 ปุ่ม TH/EN มีอยู่บนหัวแถบ และบอกภาษาที่ใช้อยู่ตอนนี้
 //   2 กดแล้วภาษาเปลี่ยนจริง และจำไว้ต่อผู้ใช้ใน localStorage
 //   3 เมนูซ้ายที่เป็นไทยแปลครบทุกอัน · สลับกลับแล้วได้ไทยเดิมคำต่อคำ
@@ -17,9 +20,14 @@
 //   5 ข้อมูลไม่ถูกแปล · ชื่อเอเยนต์ไทยยังเป็นไทยตอนอยู่โหมดอังกฤษ
 //   6 พจนานุกรมไม่เน่า · ทุกคำมีที่ใช้จริง (อ่านไฟล์ต้นฉบับมาตรวจ)
 //   7 laT คืนไทยเมื่อไม่มีคำแปล และเมื่ออยู่โหมดไทย
-//   8 ไม่มี error บนหน้า
+//   8 หน้า Dashboard · โหมดอังกฤษไม่เหลือตัวอักษรไทยเลย และสลับกลับได้ไทยเดิมทั้งหน้า
+//   9 หน้า By trip · โหมดอังกฤษเหลือไทยได้เฉพาะ "ชื่อคนจากฐานข้อมูล" เท่านั้น
+//  10 laTp · ข้อความที่มีเลขแทรก เสียบเลขได้ทั้งสองภาษา และไม่มี {0} ค้างบนจอ
+//  11 ชื่อเดือนย่อมาจากตารางเดียว (laMonAbbr) · ไม่ได้พิมพ์ซ้ำสองที่เหมือนเดิม
+//  12 ไม่มี error บนหน้า
 //
-// ⚠ ค่าที่คาดหวังคำนวณเองจาก DOM / SB_AGENTS / ไฟล์ต้นฉบับ ไม่ได้ถาม laT มาตอบตัวเอง
+// ⚠ ค่าที่คาดหวังคำนวณเองจาก DOM / SB_AGENTS / SB_BOOKINGS / ไฟล์ต้นฉบับ
+//   ไม่ได้ถาม laT หรือพจนานุกรมมาตอบตัวเอง
 import { open } from './_harness.mjs';
 
 let bad = 0;
@@ -159,8 +167,15 @@ const R6 = await page.evaluate(async () => {
   const rest = src.slice(0, i) + src.slice(j);
   const keys = (dict.match(/'((?:nav\|)?[^']+)'\s*:\s*'/g) || [])
     .map(x => x.replace(/'\s*:\s*'$/, '').replace(/^'/, ''));
-  const used = new Set((rest.match(/laT\(\s*'([^']+)'/g) || [])
-    .map(x => x.replace(/^laT\(\s*'/, '').replace(/'$/, '')));
+  /* ห่อได้สองทาง · laT('…') กับ laTp('… {0} …', n) สำหรับข้อความที่มีเลขแทรก
+     และอาจมีบริบทเป็นอาร์กิวเมนต์ที่สอง  laT('ว่าง','seat') → กุญแจ 'seat|ว่าง' */
+  const used = new Set();
+  (rest.match(/laTp?\(\s*'([^']+)'(?:\s*,\s*'([^']+)')?/g) || []).forEach(x => {
+    const m = /laTp?\(\s*'([^']+)'(?:\s*,\s*'([^']+)')?/.exec(x);
+    if (!m) return;
+    used.add(m[1]);
+    if (m[2]) used.add(m[2] + '|' + m[1]);
+  });
   const dead = keys.filter(k => !k.startsWith('nav|') && !used.has(k));
   return { total: keys.length, dead };
 });
@@ -188,7 +203,187 @@ else if (R7.th.has !== 'FOC ตามเส้นทาง' || R7.th.ctx !== '�
   fail('โหมดไทยแล้วยังแปล · ได้ "' + R7.th.has + '" / "' + R7.th.ctx + '"');
 else ok('laT คืนไทยเมื่อไม่มีคำแปล · แปลเมื่อมี · บริบท nav แยกได้ · โหมดไทยคืนไทยทุกกรณี');
 
-/* ══ 8 · ไม่มี error บนหน้า ═════════════════════════════════════════════ */
+/* ══ ตัวช่วยสำหรับข้อ 8-9 · ตัวอักษรไทย "จริง" ไม่นับ ฿ (U+0E3F อยู่ในช่วงไทย) ═══ */
+const TH_LETTER = '[\\u0E01-\\u0E2E\\u0E30-\\u0E3A\\u0E40-\\u0E4E]';
+const scanView = () => page.evaluate((re) => {
+  const TH = new RegExp(re);
+  const h = [].slice.call(document.querySelectorAll('[id^="view-"]'))
+              .filter(x => x.offsetParent !== null)[0];
+  if (!h) return { err: 'ไม่มีหน้าที่เปิดอยู่' };
+  const thai = [], tips = [];
+  const w = document.createTreeWalker(h, NodeFilter.SHOW_TEXT);
+  let n;
+  while ((n = w.nextNode())) {
+    const t = (n.nodeValue || '').trim();
+    if (!t || !TH.test(t)) continue;
+    const p = n.parentElement;
+    if (!p || p.tagName === 'STYLE' || p.tagName === 'SCRIPT' || p.closest('.sidebar')) continue;
+    thai.push(t.slice(0, 70));
+  }
+  h.querySelectorAll('[title]').forEach(e => {
+    const t = (e.getAttribute('title') || '').trim();
+    if (t && TH.test(t)) tips.push(t.slice(0, 70));
+  });
+  return { text: h.innerText, thai: [...new Set(thai)], tips: [...new Set(tips)],
+           brace: (h.innerText.match(/\{\d\}/g) || []).length };
+}, TH_LETTER);
+
+/* ══ 8 · หน้า Dashboard · อังกฤษไม่เหลือไทย · สลับกลับได้ไทยเดิมทั้งหน้า ══ */
+await page.evaluate(() => { if (laLangGet() !== 'th') sbLangToggle(); });
+await page.waitForTimeout(500);
+await goto('dashboard');
+const D_th1 = await scanView();
+await toggle(); await goto('dashboard');
+const D_en = await scanView();
+await toggle(); await goto('dashboard');
+const D_th2 = await scanView();
+if (D_th1.err || D_en.err) fail('เปิดหน้า Dashboard ไม่ได้');
+else if (!D_th1.thai.length) fail('โหมดไทยไม่เจอตัวอักษรไทยบนหน้า Dashboard เลย · ตรวจไม่ได้');
+else if (D_en.thai.length || D_en.tips.length)
+  fail('Dashboard โหมดอังกฤษยังเหลือไทย ' + D_en.thai.length + ' ก้อน · tooltip ' +
+       D_en.tips.length + ' ก้อน · ' + D_en.thai.concat(D_en.tips).slice(0, 3).join(' | '));
+else if (D_th2.text !== D_th1.text)
+  fail('Dashboard สลับกลับเป็นไทยแล้วไม่ตรงของเดิม · ' +
+       (function () { const A = D_th1.text.split('\n'), C = D_th2.text.split('\n');
+         for (let i = 0; i < Math.max(A.length, C.length); i++)
+           if (A[i] !== C[i]) return 'บรรทัด ' + i + ' เดิม "' + A[i] + '" ใหม่ "' + C[i] + '"';
+         return 'ยาวไม่เท่ากัน'; })());
+else ok('Dashboard · โหมดไทยมีไทย ' + D_th1.thai.length + ' ก้อน → โหมดอังกฤษเหลือ 0 ก้อน ' +
+        '(tooltip 0) → สลับกลับได้ไทยเดิมครบทั้งหน้าคำต่อคำ');
+
+/* ══ 9 · หน้า By trip · เหลือไทยได้เฉพาะชื่อคนจากฐานข้อมูล ═══════════════
+   ปลูกล็อก + ใบรออนุมัติลงวันที่มี booking เยอะสุด · แถวล็อกกับแถวรออนุมัติ
+   เป็นของใหม่จากรอบก่อน ๆ และเป็นไทยทั้งแถว ถ้าไม่ปลูกจะไม่ได้ตรวจเลย     */
+const B = await page.evaluate(() => {
+  const CXL = ['cancelled', 'rejected', 'cancelled_weather'];
+  const ag = (typeof SB_AGENTS !== 'undefined' ? SB_AGENTS : []).find(a => a && a.color);
+  if (!ag) return { err: 'ไม่มีเอเยนต์ที่ตั้งสีไว้' };
+  const today = (typeof bkV2LocalYMD === 'function') ? bkV2LocalYMD(new Date())
+                                                     : new Date().toISOString().slice(0, 10);
+  const pool = {};
+  (SB_BOOKINGS || []).forEach(b => {
+    if (!b || CXL.includes(b.status) || b.status === 'pending_approval') return;
+    (b.trips || []).forEach(t => {
+      if (!t || !t.routeId || !t.date || t.date <= today) return;
+      const r = (ROUTES || []).find(x => x && x.id === t.routeId);
+      if (!r) return;
+      const st = (typeof getDayStatus === 'function') ? getDayStatus(r, t.date) : null;
+      if (st && st.type !== 'open') return;
+      (pool[t.routeId + '|' + t.date] = pool[t.routeId + '|' + t.date] || []).push(b.id);
+    });
+  });
+  const key = Object.keys(pool).sort((a, b) => pool[b].length - pool[a].length)[0];
+  if (!key || pool[key].length < 3) return { err: 'หาวันในอนาคตที่มี booking 3 ใบบนเส้นทางเดียวกันไม่ได้' };
+  const rid = key.split('|')[0], date = key.split('|')[1], bkId = pool[key][0];
+  const L = bkV2CreateLock({ scope: 'day', routeId: rid, date: date, holderType: 'agent',
+    holderId: ag.id, qty: 10, reason: 'i18n', releaseDaysBefore: 2, releaseTime: '18:00' });
+  bkV2DrawLock(L.id, 3, bkId, date);
+  bkV2CreateSubLock(L.id, 'Poppy', 2);
+  /* ชื่อลูกค้าภาษาไทยจากข้อมูลดิบ · คิดเองจาก SB_BOOKINGS ไม่ได้อ่านจากหน้าจอ */
+  const TH = /[ก-ฮ]/;
+  const names = [];
+  let n = 0;
+  (SB_BOOKINGS || []).forEach(b => {
+    if (!b || CXL.includes(b.status)) return;
+    if (!(b.trips || []).some(t => t.routeId === rid && t.date === date)) return;
+    const nm = b.leadPax || b.customerName || '';
+    if (nm && TH.test(nm)) names.push(nm);
+    if (n < 2 && b.id !== bkId) { b.status = 'pending_approval'; n++; }
+  });
+  _bkV2.filterDate = date;
+  return { rid, date, pend: n, names: [...new Set(names)] };
+});
+const paintBT = async () => {
+  await page.evaluate(() => {
+    const e = document.querySelector('.nav-item[data-view="booking"]'); if (e) nav(e);
+    bkV2SwitchTab('bytrip');
+  });
+  await page.waitForTimeout(1300);
+};
+if (B.err) fail(B.err);
+else {
+  await paintBT();
+  const T_th1 = await scanView();
+  await toggle(); await paintBT();
+  const T_en = await scanView();
+  await toggle(); await paintBT();
+  const T_th2 = await scanView();
+  /* ไทยที่เหลือได้ = ชื่อคนจากฐานข้อมูลเท่านั้น · อย่างอื่นถือว่าลืมห่อ */
+  const isData = s => B.names.some(nm => s.indexOf(nm) >= 0 || nm.indexOf(s) >= 0);
+  const leak = T_en.thai.filter(s => !isData(s)).concat(T_en.tips.filter(s => !isData(s)));
+  const nameShown = B.names.filter(nm => T_en.text.indexOf(nm) >= 0).length;
+  if (!T_th1.thai.length) fail('โหมดไทยไม่เจอไทยบนหน้า By trip เลย · ตรวจไม่ได้');
+  else if (leak.length)
+    fail('By trip โหมดอังกฤษยังเหลือเปลือกโปรแกรมเป็นไทย ' + leak.length + ' ก้อน · ' +
+         leak.slice(0, 3).join(' | '));
+  else if (B.names.length && !nameShown)
+    fail('โหมดอังกฤษแล้วชื่อลูกค้าไทย ' + B.names.length + ' ชื่อหายไปจากหน้า By trip · ข้อมูลถูกแปลไปด้วย');
+  else if (T_th2.text !== T_th1.text)
+    fail('By trip สลับกลับเป็นไทยแล้วไม่ตรงของเดิม · ' +
+         (function () { const A = T_th1.text.split('\n'), C = T_th2.text.split('\n');
+           for (let i = 0; i < Math.max(A.length, C.length); i++)
+             if (A[i] !== C[i]) return 'บรรทัด ' + i + ' เดิม "' + A[i] + '" ใหม่ "' + C[i] + '"';
+           return 'ยาวไม่เท่ากัน'; })());
+  else ok('By trip (' + B.date + ' · ล็อก 1 ใบ + กรุ๊ปย่อย + ใบรออนุมัติ ' + B.pend + ' ใบ) · ' +
+          'โหมดไทยมีไทย ' + T_th1.thai.length + ' ก้อน → โหมดอังกฤษเหลือแต่ชื่อคนจากฐานข้อมูล ' +
+          nameShown + '/' + B.names.length + ' ชื่อ → สลับกลับได้ไทยเดิมทั้งหน้า');
+
+  /* ══ 10 · laTp · เลขถูกเสียบจริง ไม่มี {0} ค้างบนจอ ══════════════════════ */
+  const R10 = await page.evaluate(() => {
+    const probe = 'ยังไม่มีคำแปลแน่ ๆ {0} ที่ {1}';
+    const was = laLangGet();
+    laLangSet('en');
+    const en = { known: laTp('จาก {0} ลำ', 7), miss: laTp(probe, 4, 9) };
+    laLangSet('th');
+    const th = { known: laTp('จาก {0} ลำ', 7), miss: laTp(probe, 4, 9) };
+    laLangSet(was);
+    return { en, th };
+  });
+  const braceLeft = T_th1.brace + T_en.brace + D_en.brace + D_th1.brace;
+  if (/\{\d\}/.test(R10.en.known) || /\{\d\}/.test(R10.th.known))
+    fail('laTp ไม่เสียบเลขให้ · อังกฤษได้ "' + R10.en.known + '" ไทยได้ "' + R10.th.known + '"');
+  else if (R10.en.known.indexOf('7') < 0 || R10.th.known.indexOf('7') < 0)
+    fail('laTp เสียบเลขผิดช่อง · อังกฤษได้ "' + R10.en.known + '" ไทยได้ "' + R10.th.known + '"');
+  else if (R10.en.miss !== 'ยังไม่มีคำแปลแน่ ๆ 4 ที่ 9')
+    fail('ไม่มีคำแปลแล้ว laTp ต้องคืนไทยพร้อมเสียบเลข · ได้ "' + R10.en.miss + '"');
+  else if (braceLeft)
+    fail('มี {0} ค้างอยู่บนหน้าจอ ' + braceLeft + ' จุด · แปลว่าคำแปลบางคำช่องไม่ตรงกับไทย');
+  else ok('laTp เสียบเลขได้ทั้งสองภาษา ("' + R10.th.known + '" / "' + R10.en.known +
+          '") · ไม่มีคำแปลก็คืนไทยพร้อมเลข · ไม่มี {0} ค้างบนสองหน้าที่ทำรอบนี้');
+}
+
+/* ══ 11 · ชื่อเดือนย่อมาจากตารางเดียว ═══════════════════════════════════ */
+const R11 = await page.evaluate(async () => {
+  const was = laLangGet();
+  laLangSet('th'); const th = laMonAbbr();
+  laLangSet('en'); const en = laMonAbbr();
+  laLangSet(was);
+  /* หน้า Dashboard เคยพิมพ์ตารางเดือนไทยไว้สองที่ในไฟล์เดียว · TH_MON ใน renderDash
+     กับ TH_MON_H ใน _dvHead · แก้ที่หนึ่งแล้วอีกที่ไม่ตาม ทั้งสองต้องอ่านจาก laMonAbbr
+     (ที่อื่นในระบบยังพิมพ์ตารางนี้เองอีกหลายที่ · เป็นงานรอบถัดไป ไม่ใช่ของรอบนี้) */
+  let src = '';
+  try { src = await (await fetch('js/04-data-core.js')).text(); } catch (e) {}
+  const viaFn = (src.match(/const TH_MON(_H)?\s*=\s*laMonAbbr\(\)/g) || []).length;
+  const byHand = (src.match(/const TH_MON(_H)?\s*=\s*\['ม\.ค\.'/g) || []).length;
+  const inFn = /function laMonAbbr\(\)\{[\s\S]{0,400}?\['ม\.ค\.'/.test(src);
+  return { th, en, viaFn, byHand, inFn, hasFn: typeof laMonAbbr === 'function' };
+});
+if (!R11.hasFn) fail('ไม่มี laMonAbbr');
+else if (R11.th.length !== 12 || R11.en.length !== 12) fail('ตารางเดือนไม่ครบ 12 ช่อง');
+else if (R11.th[0] !== 'ม.ค.' || R11.th[11] !== 'ธ.ค.')
+  fail('โหมดไทยไม่ได้ชื่อเดือนไทย · ได้ ' + R11.th[0] + ' … ' + R11.th[11]);
+else if (R11.en[0] !== 'Jan' || R11.en[11] !== 'Dec')
+  fail('โหมดอังกฤษไม่ได้ชื่อเดือนอังกฤษ · ได้ ' + R11.en[0] + ' … ' + R11.en[11]);
+else if (!R11.inFn) fail('อ่านไฟล์ต้นฉบับแล้วไม่เจอตารางเดือนใน laMonAbbr');
+else if (R11.byHand)
+  fail('หน้า Dashboard ยังพิมพ์ตารางเดือนไทยเองอยู่ ' + R11.byHand + ' ที่ ' +
+       '(TH_MON / TH_MON_H) · ต้องอ่านจาก laMonAbbr ทั้งคู่ ไม่งั้นแก้ที่หนึ่งอีกที่ไม่ตาม');
+else if (R11.viaFn !== 2)
+  fail('เจอ TH_MON/TH_MON_H ที่อ่านจาก laMonAbbr แค่ ' + R11.viaFn + ' ที่ · ควรมีสองที่');
+else ok('ชื่อเดือนย่อของหน้า Dashboard อ่านจาก laMonAbbr ทั้งสองที่ (TH_MON · TH_MON_H) · ' +
+        'ไทย ' + R11.th[0] + '…' + R11.th[11] + ' · อังกฤษ ' + R11.en[0] + '…' + R11.en[11]);
+
+/* ══ 12 · ไม่มี error บนหน้า ════════════════════════════════════════════ */
 const errs = (errors || []).filter(e => !/favicon|fonts\.googleapis/i.test(String(e)));
 if (errs.length) fail('มี error บนหน้า ' + errs.length + ' ตัว · ' + String(errs[0]).slice(0, 150));
 else ok('ไม่มี error บนหน้าระหว่างทดสอบ');
