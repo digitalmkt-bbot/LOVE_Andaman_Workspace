@@ -26166,6 +26166,25 @@ function fdShort(nm){
   if(w.length>1 && w[0].length<=10) return w[0];
   return s.slice(0,9)+'…';
 }
+/* รหัสย่อของเรือสำหรับตารางรายวัน · ช่องกว้างไม่กี่ตัวอักษร ชื่อเต็มอยู่ใน title
+   ต้องไม่ชนกัน · Aluminous1 กับ Aluminous2 ตัดสามตัวแรกได้ "ALU" เหมือนกันทั้งคู่
+   จึงเอาเลขท้ายชื่อมาต่อ แล้วถ้ายังชนอีกค่อยเติมลำดับ */
+function fdCodes(list){
+  var used={}, out={};
+  (list||[]).forEach(function(b){
+    if(!b || out[b.id]) return;
+    var s=String(b.name||'').replace(/[^0-9A-Za-z\u0E00-\u0E7F]/g,'');
+    var m=/(\d+)$/.exec(s);
+    /* ไทยตัดสามตัวแล้วสระลอย · "เรือปลอม" เหลือ "เรื" · ตัดสี่ตัวอ่านออกกว่า */
+    var thai=/[\u0E00-\u0E7F]/.test(s);
+    var c=(m ? (s.slice(0,2)+m[1].slice(-1)) : s.slice(0, thai?4:3)).toUpperCase();
+    if(!c) c='B';
+    var base=c, i=2;
+    while(used[c]){ c=base.slice(0,2)+i; i++; }
+    used[c]=1; out[b.id]=c;
+  });
+  return out;
+}
 function fdSheetDays(){
   var Wn=fdWin(), out=[], d=Wn.from, g=0;
   while(d<=Wn.to && g++<400){ out.push(d); d=fdAddDays(d,1); }
@@ -26345,39 +26364,78 @@ function fdSheet(){
           return P.reduce(function(n,x){ return n+(x.openDays.length?x.idle.length:0); },0)+' ลำ';
         })()+'</td></tr>';
   });
-  h+='</tbody></table></div>';
+  h+='</tbody></table>'
+    /* รายชื่อเรือในแต่ละท่า · ตารางข้างบนบอกแต่ตัวเลข ไม่ได้บอกว่าลำไหนอยู่ไหน */
+    + '<div class="cmp-b">'+P.map(function(x){
+        return '<div class="cb"><div class="t">'+fdE(fdPierNm(x.k))+'<span>'+x.list.length+' ลำ</span></div>'
+          + (x.list.length ? fdSort(x.list).map(function(b){
+              var w=fdWhyNot(b, Wn.from), sick=!fdRealReady(b, Wn.from);
+              return '<span class="bc'+(w?' off':'')+(sick?' fix':'')+'" title="'
+                +fdE(b.name+' · '+(b.cap||0)+' ที่นั่ง · ลูกเรือ '+(b.crew||'—')
+                  +(sick?' · ยังซ่อมไม่เสร็จ':'')+(w?(' · '+FD_WHY[w]):''))+'">'
+                + fdE(b.name)+'<u>'+(b.cap||0)+'</u>'
+                + (fdIsCharter(b)?'<s>เช่า</s>':'')+(sick?'<s class="f">ซ่อม</s>':'')+'</span>';
+            }).join('') : '<span class="none">ยังไม่มีเรือในท่านี้</span>')
+          + '</div>'; }).join('')
+    + '</div></div>';
 
-  /* ── ส่วนที่ 2 · Matrix โปรแกรม × เรือ ต่อท่า ────────────────────────── */
-  h+='<div class="fs-sec"><div class="sc">2 · โปรแกรม × เรือ · ลูกค้าที่จองแล้ว และที่นั่งว่าง</div>';
-  P.forEach(function(x){
-    if(!x.progs.length){
-      h+='<div class="mx-h"><b>'+fdE(fdPierNm(x.k))+'</b><span>ยังไม่มีโปรแกรมในช่วงนี้</span></div>';
-      return;
-    }
-    h+='<div class="mx-h"><b>'+fdE(fdPierNm(x.k))+'</b>'
-      +'<span>'+x.progs.length+' โปรแกรม · เรือ '+x.col.length+' ลำ · ตัวเลขในช่องคือจำนวนวันที่ลำนั้นวิ่งโปรแกรมนั้น</span></div>'
-      +'<div class="mx-w"><table class="fs-mx"><thead><tr><th class="pn">โปรแกรม</th><th class="n">เปิด</th>'
-      + x.col.map(function(c){
-          return '<th class="b'+(c.stray?' stray':'')+'" title="'+fdE(c.b.name+' · '+(c.b.cap||0)+' ที่นั่ง'
-            +(c.stray?(' · แผนวางไว้ที่ '+fdPierNm(fdPierOf(c.b, Wn.from))):''))+'">'
-            + fdE(fdShort(c.b.name))+(c.stray?'<i>*</i>':'')+'<u>'+(c.b.cap||0)+'</u></th>'; }).join('')
-      + '<th class="n">ลูกค้า<u>รวมทั้งช่วง</u></th>'
-      + '<th class="n">ที่นั่งว่าง<u>รวมทั้งช่วง</u></th></tr></thead><tbody>';
-    x.progs.forEach(function(y){
-      var st=(!y.open?'shut':(!y.boats.length?'idle':(y.overDays?'over':'')));
-      h+='<tr class="'+st+'"><td class="pn"><b>'+fdE(y.r.name)+'</b>'
-        +'<u>'+fdE((y.r.times||[])[0]||'—')+'</u></td>'
-        +'<td class="n">'+y.open+'</td>'
-        + x.col.map(function(c){
-            var g=y.bset[c.b.id];
-            return '<td class="c'+(g?' on':'')+'">'+(g?g.days:'·')+'</td>'; }).join('')
-        +'<td class="n">'+(heavy?'—':nf(y.bkSum))+'</td>'
-        +'<td class="n'+(y.overDays?' bad':'')+'">'+(heavy?'—':nf(y.freeSum))
-        + (y.overDays?('<u>เกิน '+y.overDays+' วัน</u>'):'')+'</td></tr>';
+  /* ── ส่วนที่ 2 · Matrix โปรแกรม × วัน · กระจายเรือลงช่อง ──────────────
+     ที่มา (2026-09-25) · ผู้ใช้สั่งเปลี่ยนหัวคอลัมน์จาก "เรือ" เป็น "วันที่"
+     ของเดิมตอบว่า "ลำนี้วิ่งโปรแกรมนี้กี่วัน" ซึ่งดูแล้วยังไม่รู้ว่าวันไหน
+     ของใหม่ตอบว่า "วันที่ 18 โปรแกรมนี้ใครวิ่ง" — เป็นคำถามที่ใช้ตอนจัดจริง
+     ช่องว่างในวันที่เปิดขายจึงเห็นทันทีว่าเป็นวันไหน ไม่ใช่แค่รู้ว่าขาดไปกี่วัน */
+  var DOWX=['อา','จ','อ','พ','พฤ','ศ','ส'];
+  h+='<div class="fs-sec"><div class="sc">2 · โปรแกรม × วัน · เรือที่ลงแต่ละวัน</div>';
+  if(days.length>45){
+    h+='<div class="mx-f big">ช่วงนี้ยาว '+days.length+' วัน · ตารางรายวันจะกว้างเกินกว่าจะอ่านได้ '
+      + 'เลือกช่วงให้สั้นลงที่แท็บ 1 (รายเดือน / รายสัปดาห์ / กำหนดเอง) แล้วกลับมาดูตารางนี้</div>';
+  } else {
+    /* รหัสย่อของเรือ · ทำครั้งเดียวจากทุกลำที่จะโผล่ในตาราง กันรหัสชนกัน */
+    var allB=[], seenB={};
+    P.forEach(function(x){ x.col.forEach(function(c){ if(seenB[c.b.id]) return; seenB[c.b.id]=1; allB.push(c.b); }); });
+    var CODE=fdCodes(allB);
+    P.forEach(function(x){
+      if(!x.progs.length){
+        h+='<div class="mx-h"><b>'+fdE(fdPierNm(x.k))+'</b><span>ยังไม่มีโปรแกรมในช่วงนี้</span></div>';
+        return;
+      }
+      h+='<div class="mx-h"><b>'+fdE(fdPierNm(x.k))+'</b>'
+        +'<span>'+x.progs.length+' โปรแกรม · ช่องว่างสีแดงคือวันที่เปิดขายแต่ยังไม่มีเรือ · '
+        +'ช่องเทาคือวันที่ปิดฤดู</span></div>'
+        +'<div class="mx-w"><table class="fs-day"><thead><tr><th class="pn">โปรแกรม</th>'
+        + days.map(function(d){
+            var w=new Date(d).getDay();
+            return '<th class="d'+((w===0||w===6)?' we':'')+'"><u>'+DOWX[w]+'</u>'+(+d.slice(-2))+'</th>'; }).join('')
+        + '<th class="n">เปิด</th><th class="n">ลูกค้า</th><th class="n">ว่าง</th></tr></thead><tbody>';
+      x.progs.forEach(function(y){
+        var openSet={}; y.od.forEach(function(d){ openSet[d]=1; });
+        h+='<tr><td class="pn"><b>'+fdE(y.r.name)+'</b><u>'+fdE((y.r.times||[])[0]||'—')+'</u></td>'
+          + days.map(function(d){
+              if(!openSet[d]) return '<td class="dc shut"></td>';
+              var t=fdTripsOn(d), on=[];
+              Object.keys(t).forEach(function(id){
+                if(t[id].route!==y.r.id) return;
+                var b=fdBoat(id); if(!b) return;
+                on.push({ b:b, ok:fdCanRun(b,d), ch:fdIsCharterTrip(id,d,t[id]) });
+              });
+              if(!on.length) return '<td class="dc gap" title="'+fdE(fdNiceDate(d)+' · เปิดขายแต่ยังไม่มีเรือ')+'">–</td>';
+              return '<td class="dc on">'+on.map(function(o){
+                return '<span class="bg'+(o.ok?'':' off')+(o.ch?' ch':'')+'" title="'
+                  +fdE(o.b.name+' · '+fdNiceDate(d)+' · '+(o.b.cap||0)+' ที่นั่ง'
+                    +(o.ch?' · เหมาลำ':'')+(o.ok?'':' · '+(FD_WHY[fdWhyNot(o.b,d)]||'ไม่นับในแผน')))+'">'
+                  + fdE(CODE[o.b.id]||fdShort(o.b.name))+'</span>'; }).join('')+'</td>';
+            }).join('')
+          + '<td class="n">'+y.open+'</td>'
+          + '<td class="n">'+(heavy?'—':nf(y.bkSum))+'</td>'
+          + '<td class="n'+(y.overDays?' bad':'')+'">'+(heavy?'—':nf(y.freeSum))+'</td></tr>';
+      });
+      h+='</tbody></table></div>';
     });
-    h+='</tbody></table></div>';
-    if(x.stray.length) h+='<div class="mx-f">* แผนวางลำนี้ไว้ที่ท่าอื่น แต่ถูกจัดลงโปรแกรมของท่านี้</div>';
-  });
+    /* กุญแจรหัสเรือ · ไม่มีอันนี้ตารางอ่านไม่ออก */
+    h+='<div class="mx-key"><i>รหัสเรือ</i>'+allB.map(function(b){
+      return '<span title="'+fdE(b.name+' · '+(b.cap||0)+' ที่นั่ง')+'"><b>'+fdE(CODE[b.id])+'</b>'
+        + fdE(b.name)+'<u>'+(b.cap||0)+'</u></span>'; }).join('')+'</div>';
+  }
   h+='</div>';
 
   /* ── ส่วนที่ 3 · ช่วงวันและค่าเฉลี่ยต่อโปรแกรม ───────────────────────── */
@@ -26721,6 +26779,50 @@ function fdCSS(){
   +H+' .fd-sheet .fs-mx tr.over td{background:#FFF9F9}'
   +H+' .fd-sheet .fs-mx tr.shut td{background:#FAFAFB;color:#9AA3AE}'
   +H+' .fd-sheet .mx-f{font-size:10px;color:#9AA3AE;line-height:1.6;margin-top:6px}'
+  /* 1b · รายชื่อเรือในแต่ละท่า */
+  +H+' .fd-sheet .cmp-b{display:flex;gap:9px;flex-wrap:wrap;margin-top:11px}'
+  +H+' .fd-sheet .cb{flex:1 1 210px;background:#FAFBFC;border:1px solid #F1F3F6;border-radius:9px;padding:8px 10px}'
+  +H+' .fd-sheet .cb .t{font-size:11px;font-weight:700;color:#374151;margin-bottom:6px}'
+  +H+' .fd-sheet .cb .t span{font-weight:500;color:#9AA3AE;margin-left:5px}'
+  +H+' .fd-sheet .bc{display:inline-flex;align-items:center;gap:5px;background:#fff;border:1px solid #E7EAEF;'
+     +'border-radius:7px;padding:3px 7px;margin:0 4px 4px 0;font-size:11px;font-weight:700}'
+  +H+' .fd-sheet .bc u{text-decoration:none;font-weight:500;font-size:10px;color:#9AA3AE}'
+  +H+' .fd-sheet .bc s{text-decoration:none;font-size:8.5px;font-weight:700;background:#EEF2FF;color:#4338CA;'
+     +'border-radius:4px;padding:1px 4px}'
+  +H+' .fd-sheet .bc s.f{background:#FDF2F2;color:#A32D2D}'
+  +H+' .fd-sheet .bc.fix{border-color:#F0C9C9} '+H+' .fd-sheet .bc.off{opacity:.55;border-style:dashed}'
+  +H+' .fd-sheet .cb .none{font-size:11px;color:#9AA3AE}'
+  /* 2 · ตารางรายวัน */
+  +H+' .fd-sheet .fs-day{border-collapse:collapse;font-size:11px;min-width:100%}'
+  +H+' .fd-sheet .fs-day th{font-size:9px;font-weight:700;color:#6B7280;padding:3px 4px;'
+     +'border-bottom:2px solid #E7EAEF;white-space:nowrap;text-align:center}'
+  +H+' .fd-sheet .fs-day th.d{min-width:34px}'
+  +H+' .fd-sheet .fs-day th.d u{display:block;text-decoration:none;font-size:8px;color:#B6BDC8;font-weight:500}'
+  +H+' .fd-sheet .fs-day th.d.we{background:#FAFBFC}'
+  +H+' .fd-sheet .fs-day th.pn,'+H+' .fd-sheet .fs-day td.pn{position:sticky;left:0;background:#fff;'
+     +'text-align:left;min-width:158px;z-index:1;box-shadow:1px 0 0 #F1F3F6}'
+  +H+' .fd-sheet .fs-day th.n,'+H+' .fd-sheet .fs-day td.n{text-align:right;white-space:nowrap;padding-left:7px}'
+  +H+' .fd-sheet .fs-day td{padding:3px 3px;border-bottom:1px solid #F5F6F8;vertical-align:middle}'
+  +H+' .fd-sheet .fs-day td.pn b{font-size:11px} '
+  +H+' .fd-sheet .fs-day td.pn u{text-decoration:none;font-size:9.5px;color:#9AA3AE;margin-left:5px}'
+  +H+' .fd-sheet .fs-day td.dc{text-align:center}'
+  +H+' .fd-sheet .fs-day td.dc.shut{background:#F5F6F8}'
+  +H+' .fd-sheet .fs-day td.dc.gap{background:#FDF2F2;color:#A32D2D;font-weight:700}'
+  +H+' .fd-sheet .fs-day td.n.bad{color:#A32D2D;font-weight:700}'
+  +H+' .fd-sheet .bg{display:block;font-size:9.5px;font-weight:700;background:#EAF2FB;color:#1E3A5F;'
+     +'border-radius:4px;padding:1px 3px;margin:1px 0;letter-spacing:.02em}'
+  +H+' .fd-sheet .bg.off{background:#F3F4F6;color:#9AA3AE;text-decoration:line-through}'
+  +H+' .fd-sheet .bg.ch{background:#EFEAFB;color:#5B289A}'
+  +H+' .fd-sheet .mx-key{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px;'
+     +'padding-top:9px;border-top:1px solid #F1F3F6}'
+  +H+' .fd-sheet .mx-key i{font-style:normal;font-size:9px;font-weight:700;letter-spacing:.04em;'
+     +'color:#9AA3AE;text-transform:uppercase;margin-right:3px}'
+  +H+' .fd-sheet .mx-key span{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:#6B7280}'
+  +H+' .fd-sheet .mx-key b{font-size:9.5px;font-weight:700;background:#EAF2FB;color:#1E3A5F;'
+     +'border-radius:4px;padding:1px 4px}'
+  +H+' .fd-sheet .mx-key u{text-decoration:none;font-size:9.5px;color:#B6BDC8}'
+  +H+' .fd-sheet .mx-f.big{font-size:11.5px;color:#8A5410;background:#FEF6E7;border:1px solid #EFD9AE;'
+     +'border-radius:8px;padding:8px 11px;line-height:1.65}'
   /* 3 · ช่วงวันและค่าเฉลี่ย */
   +H+' .fd-sheet .fs-t{width:100%;border-collapse:collapse;font-size:11.5px}'
   +H+' .fd-sheet .fs-t th{text-align:left;font-size:9px;font-weight:700;letter-spacing:.04em;color:#9AA3AE;'
