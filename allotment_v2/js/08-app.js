@@ -47816,14 +47816,13 @@ function bkV2RenderTab2(){
     const trLocks = (typeof bkV2LocksFor==='function') ? bkV2LocksFor(rid, date) : [];
     const trParents = trLocks.filter(l=>!l.parentId);   // parents/standalone only (children live inside)
     const trLockedTotal = trParents.reduce((s,l)=> s + ((typeof bkV2LockPoolHold==='function')?bkV2LockPoolHold(l,date):bkV2LockRemaining(l,date)), 0);
-    /* §btLkBand · ล็อกที่ถูกดึงจนหมดแล้ว bkV2DrawLock ตีตรา depleted · bkV2LocksFor
-       จึงกรองทิ้ง · แต่ในใบงานต้องยังเห็น เพราะเป็นคำตอบของคำถามที่เอเยนต์โทรมาถาม
-       ("โควตาผมเหลือไหม") · เอามาโชว์เฉพาะใบที่ถูกดึงในวันนี้ และที่นั่งเหลือ 0
-       อยู่แล้ว จึงไม่กระทบยอด trLockedTotal ที่ไปหักที่ว่างขาย                     */
-    const trDrained = (typeof SB_SEAT_LOCKS!=='undefined'?SB_SEAT_LOCKS:[]).filter(l=>
-      l && !l.parentId && l.routeId===rid && l.status==='depleted'
-      && (l.log||[]).some(e=> e && e.type==='draw' && ((e.tripDate || (l.scope==='day'?(l.date||''):'')) === date)));
-    const lkShow = trParents.concat(trDrained);
+    /* §btLkGone · ล็อกที่ใช้หมดแล้วหายไปจากใบงาน · ไม่เหลือที่นั่งให้ใครแล้ว
+       แถบที่บอกว่า "เหลือ 0" กินพื้นที่เต็มแถวเพื่อบอกว่าไม่มีอะไร · ร่องรอยว่า
+       ที่นั่งมาจากโควตาใคร ยังตามได้จากป้าย "จากล็อก" บนใบจองที่ดึงไปแล้ว
+       กรองด้วยที่นั่งคงเหลือ ไม่ใช่สถานะ · ล็อกแบบช่วงที่หมดเฉพาะรอบนี้
+       สถานะยังเป็น active อยู่ แต่วันนี้ไม่เหลือที่ ก็ต้องหายเหมือนกัน            */
+    const lkShow = trParents.filter(l=>
+      ((typeof bkV2LockHeldRemaining==='function') ? bkV2LockHeldRemaining(l, date) : bkV2LockRemaining(l, date)) > 0);
     const _pband = `<tr class="t2-pband" style="--pc:${_pbCol}"><td colspan="${COLN}"><div class="pw">`
       + `<span class="pd"></span><span class="pn">${esc(route?.name || rid)}</span>`
       + `<span class="pt">${esc(dep)}${_pbPier?(' &middot; '+esc(_pbPier)):''}</span>`

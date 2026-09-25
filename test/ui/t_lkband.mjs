@@ -66,6 +66,15 @@ const SETUP = await page.evaluate(() => {
     holderType: 'agent', holderId: ag.id, qty: 2, reason: 'test drained' });
   const drew2 = bkV2DrawLock(L2.id, 2, hit.bkId, hit.date);
 
+  /* ล็อกที่ 5 · ล็อกแบบช่วง ที่ถูกดึงจนหมด "เฉพาะรอบวันนี้" · สถานะยังเป็น active
+     (bkV2DrawLock ไม่ตีตรา depleted ให้ล็อกแบบช่วง เพราะรอบอื่นยังมีที่เหลือ)
+     เคสนี้จึงพิสูจน์ว่าต้องกรองด้วย "ที่นั่งคงเหลือของวันนั้น" ไม่ใช่กรองด้วยสถานะ */
+  const L5 = bkV2CreateLock({ scope: 'bulk', routeId: hit.rid, dateFrom: hit.date,
+    dateTo: (() => { const d = new Date(hit.date + 'T00:00:00'); d.setDate(d.getDate() + 5);
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })(),
+    holderType: 'agent', holderId: ag.id, qty: 4, reason: 'test bulk round drained' });
+  const drew5 = bkV2DrawLock(L5.id, 4, hit.bkId, hit.date);
+
   /* ล็อกที่ 4 · ล็อกแบบช่วงของเอเยนต์อีกเจ้า · ดึงไปใช้ใน "วันอื่น" ของช่วงเดียวกัน
      ป้าย "จากล็อก" บนหน้านี้ต้องไม่ติดชื่อเจ้านี้ · ล็อก bulk ใบเดียวถูกดึงข้ามหลายวัน
      ถ้าลืมกรองวัน ใบเดียวกันจะติดป้ายของทุกวันที่เคยดึง */
@@ -99,9 +108,9 @@ const SETUP = await page.evaluate(() => {
 
   /* ══ นับเองจากข้อมูลดิบ · ไม่เรียกตัวที่หน้าจอใช้ ══ */
   const usedOf = (l, d) => (l.log || []).reduce((s, e) =>
-    s + ((e && e.type === 'draw' && (e.tripDate || l.date) === d) ? (Number(e.qty) || 0) : 0), 0);
+    s + ((e && e.type === 'draw' && (e.tripDate || l.date || '') === d) ? (Number(e.qty) || 0) : 0), 0);
   const want = {}, wantC = {};
-  [L1, L2, L3].filter(Boolean).forEach(l => {
+  [L1, L2, L3, L5].filter(Boolean).forEach(l => {
     const u = usedOf(l, hit.date);
     want[l.id] = { qty: l.qty, used: u, held: Math.max(0, l.qty - u), rid: l.routeId };
   });
@@ -134,7 +143,8 @@ const SETUP = await page.evaluate(() => {
   bkV2Tab2ClearFilters(); bkV2Tab2PickDay(hit.date);
 
   return { ...hit, bare, other, agId: ag.id, agName: ag.name || ag.id, agColor: String(ag.color).toLowerCase(),
-           ids: { L1: L1.id, L2: L2.id, L3: L3 ? L3.id : '' }, drew, drew2, want, wantC, paxRaw };
+           ids: { L1: L1.id, L2: L2.id, L3: L3 ? L3.id : '', L5: L5.id },
+           drew, drew2, drew5, l5Status: L5.status, want, wantC, paxRaw };
 });
 if (SETUP.err) { console.log('  ✗ ' + SETUP.err); console.log('\nพัง 1'); await close(); process.exit(1); }
 await page.waitForTimeout(700);
@@ -273,13 +283,25 @@ else {
           'จำนวนที่กันไว้อยู่ใต้ AD (ช่องที่ ' + (g[0].adIx + 1) + ') ทุกแถว ' + g.length + ' แถว');
 }
 
-/* ══ 6 · ล็อกที่ถูกดึงจนหมด · แถบยังอยู่ แต่ไม่มีแถวที่นั่งค้าง ══════════ */
+/* ══ 6 · ล็อกที่ถูกดึงจนหมด ต้องหายไปจากใบงานทั้งแถบ ═══════════════════
+   §btLkGone · ไม่เหลือที่นั่งให้ใครแล้ว แถบที่บอก "เหลือ 0" กินพื้นที่เต็มแถว
+   เพื่อบอกว่าไม่มีอะไร · ร่องรอยว่าที่นั่งมาจากโควตาใคร ยังอยู่ที่ป้ายบนใบจอง */
 const w2 = SETUP.want[SETUP.ids.L2];
-const b2 = GOT.bands.find(b => b.txt.indexOf(w2.qty + ' ที่') >= 0 && b.txt.indexOf('เหลือกันไว้ 0') >= 0);
+const b2 = GOT.bands.find(b => b.lk === SETUP.ids.L2);
+const zeroBand = GOT.bands.find(b => /เหลือกันไว้ 0(?!\d)/.test(b.txt));
 if (!w2 || w2.held !== 0) fail('ปลูกล็อกที่ดึงจนหมดไม่สำเร็จ (เหลือ ' + (w2 ? w2.held : '?') + ')');
-else if (!b2) fail('ล็อกที่ถูกดึงจนหมดหายไปจากตาราง · ควรยังอยู่เพื่อให้รู้ว่าโควตาถูกใช้ไปแล้ว');
-else if (b2.held !== null) fail('ล็อกเหลือ 0 แต่ยังมีแถวที่นั่งค้างอยู่ ' + b2.held + ' ที่');
-else ok('ล็อกที่ถูกดึงจนหมด · แถบยังอยู่และบอก "เหลือกันไว้ 0" แต่ไม่มีแถวที่นั่งค้าง');
+else if (b2) fail('ล็อกที่ใช้หมดแล้ว (' + w2.qty + ' ที่ · ขายครบ) ยังขึ้นแถบอยู่ · ควรหายไปทั้งแถบ');
+else if (zeroBand) fail('ยังมีแถบที่บอก "เหลือกันไว้ 0" อยู่ · "' + zeroBand.txt + '"');
+else if (!GOT.drawn.length) fail('ล็อกหายไปแล้ว และใบจองก็ไม่มีป้าย "จากล็อก" · ตามรอยโควตาไม่ได้เลย');
+else if (!SETUP.drew5 || SETUP.want[SETUP.ids.L5].held !== 0)
+  fail('ปลูกล็อกแบบช่วงที่หมดเฉพาะรอบนี้ไม่สำเร็จ (ดึงได้ ' + SETUP.drew5 + ')');
+else if (SETUP.l5Status !== 'active')
+  fail('ล็อกแบบช่วงถูกตีตรา ' + SETUP.l5Status + ' · เคสนี้ต้องยัง active ถึงจะพิสูจน์ได้ว่ากรองด้วยที่นั่ง ไม่ใช่สถานะ');
+else if (GOT.bands.find(b => b.lk === SETUP.ids.L5))
+  fail('ล็อกแบบช่วงที่หมดเฉพาะรอบวันนี้ยังขึ้นแถบ · สถานะยัง active แต่วันนี้ไม่เหลือที่แล้ว');
+else ok('ล็อกที่ใช้หมดแล้วหายไปทั้งแถบ · ทั้งล็อกรายวัน (ตีตรา depleted) และล็อกแบบช่วง ' +
+        'ที่หมดเฉพาะรอบวันนี้ (สถานะยัง active) · ไม่มีแถบ "เหลือกันไว้ 0" ค้างอยู่ ' +
+        'แต่ยังตามรอยได้จากป้ายบนใบจอง ' + GOT.drawn.length + ' ใบ');
 
 /* ══ 7 · ทริปที่มีแต่ล็อก ไม่มี booking · ต้องขึ้นตาราง ═══════════════════ */
 if (!SETUP.bare) ok('ชุดข้อมูลนี้ไม่มีเส้นทางว่างให้ทดสอบทริปที่มีแต่ล็อก · ข้ามข้อนี้');
