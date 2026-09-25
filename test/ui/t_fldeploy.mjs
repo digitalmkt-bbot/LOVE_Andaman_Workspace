@@ -894,17 +894,21 @@ const R3m = await page.evaluate(() => {
   const sheet = document.querySelector('#fl-deploy-wrap .fd-sheet');
   if (!sheet) return { err: 'ไม่มีแผ่น Factsheet บนหน้า' };
   const secs = [].slice.call(sheet.querySelectorAll('.fs-sec'));
-  /* ส่วนที่ 1 · ตารางเทียบท่า */
-  const cmp = sheet.querySelector('.fs-cmp');
-  const cmpCols = cmp ? [].slice.call(cmp.querySelectorAll('thead th')).slice(1).map(x => x.textContent.trim()) : [];
-  const cmpRows = {};
-  if (cmp) [].slice.call(cmp.querySelectorAll('tbody tr')).forEach(tr => {
-    const k = (tr.querySelector('th') || {}).textContent.trim();
-    cmpRows[k] = [].slice.call(tr.querySelectorAll('td')).map(td => {
-      const b = td.querySelector('b');
-      return (b ? b.textContent : td.textContent).trim();
+  /* ส่วนที่ 1 · การ์ดละท่า · อ่านค่าจากป้ายกำกับในการ์ด ไม่ใช่ตำแหน่งคอลัมน์ */
+  const cards = {};
+  [].slice.call(sheet.querySelectorAll('.pcard')).forEach(c => {
+    const nm = ((c.querySelector('.ph b') || {}).textContent || '').trim();
+    const st = {};
+    [].slice.call(c.querySelectorAll('.pv')).forEach(v => {
+      st[((v.querySelector('i') || {}).textContent || '').trim()] =
+        ((v.querySelector('b') || {}).textContent || '').trim();
     });
+    cards[nm] = { st,
+      boats: [].slice.call(c.querySelectorAll('.bc'))
+        .map(x => (x.getAttribute('title') || '').split(' · ')[0]).sort(),
+      tint: (c.getAttribute('style') || '') };
   });
+  const totStrip = sheet.querySelectorAll('.tot-strip span').length;
   /* ส่วนที่ 2 · Matrix รายวัน · คอลัมน์เป็นวันที่ · ในช่องเป็นเรือที่ลงวันนั้น
      อ่านชื่อเรือจาก title ของชิป ไม่ใช่จากรหัสย่อ · รหัสย่อเป็นเรื่องการแสดงผล */
   const mx = [];
@@ -933,17 +937,29 @@ const R3m = await page.evaluate(() => {
   const rt = sheet.querySelector('.fs-t.rng');
   if (rt) [].slice.call(rt.querySelectorAll('tbody tr')).forEach(tr => {
     const td = [].slice.call(tr.querySelectorAll('td')).map(x => x.textContent.trim());
-    rng[td[0] + '|' + td[1]] = { span: td[2], days: +td[3], avgSeat: +td[4].replace(/,/g, '') };
+    /* คอลัมน์แรกคือชิปเวลาออกเรือ · ชื่อโปรแกรมกับท่าจึงเลื่อนไปหนึ่งช่อง */
+    rng[td[1] + '|' + td[2]] = { span: td[3], days: +td[4], avgSeat: +td[5].replace(/,/g, '') };
   });
   const att = [].slice.call(sheet.querySelectorAll('.fs-att li')).map(x => (x.textContent || '').trim());
-  /* ส่วนที่ 1b · รายชื่อเรือในแต่ละท่า */
-  const cmpBoats = {};
-  [].slice.call(sheet.querySelectorAll('.cmp-b .cb')).forEach(cb => {
-    const t = ((cb.querySelector('.t') || {}).childNodes[0] || {}).textContent || '';
-    cmpBoats[t.trim()] = [].slice.call(cb.querySelectorAll('.bc'))
-      .map(x => (x.getAttribute('title') || '').split(' · ')[0]).sort();
+  /* §flDeployTime · เวลาออกเรือต้องเป็นชิปที่เห็นชัด · ตรวจทั้งสองตาราง
+     ตรวจว่าชิปมีจริงและตรงกับ times[0] ของเส้นทาง ไม่ใช่แค่มีกล่องเปล่า */
+  const tmOK = { mxMiss: [], rngMiss: [] };
+  [].slice.call(sheet.querySelectorAll('.fs-day tbody tr')).forEach(tr => {
+    const nm = ((tr.querySelector('td.pn b') || {}).textContent || '').trim();
+    const chip = ((tr.querySelector('td.pn .tm') || {}).textContent || '').trim();
+    const r = (ROUTES || []).find(x => x && x.name === nm);
+    const want = (r && (r.times || [])[0]) || '—';
+    if (chip !== want) tmOK.mxMiss.push(nm + ' ชิปเวลา "' + chip + '" ควรเป็น "' + want + '"');
   });
-  return { want, cmpCols, cmpRows, cmpBoats, mx, keyN, rng, att, shutPlant, days: days.length,
+  [].slice.call(sheet.querySelectorAll('.fs-t.rng tbody tr')).forEach(tr => {
+    const td = [].slice.call(tr.querySelectorAll('td'));
+    const chip = ((td[0] || {}).querySelector ? (td[0].querySelector('.tm') || {}).textContent : '') || '';
+    const nm = ((td[1] || {}).textContent || '').trim();
+    const r = (ROUTES || []).find(x => x && x.name === nm);
+    const want = (r && (r.times || [])[0]) || '—';
+    if (chip.trim() !== want) tmOK.rngMiss.push(nm + ' ชิปเวลา "' + chip.trim() + '" ควรเป็น "' + want + '"');
+  });
+  return { want, cards, totStrip, mx, keyN, rng, tmOK, att, shutPlant, days: days.length,
            secs: secs.length, labels: (typeof PIER_LABELS !== 'undefined') ? PIER_LABELS : {},
            boatsSame: JSON.stringify(BOATS) === snapB, tripsSame: JSON.stringify(TRIPS) === snapT };
 });
@@ -953,20 +969,23 @@ else {
   if (R3m.secs !== 4) bad3m.push('แผ่นมี ' + R3m.secs + ' ส่วน · ควรมี 4');
   /* ── ส่วนที่ 1 ── */
   const shown = Object.keys(R3m.want).filter(p => R3m.want[p].n || R3m.want[p].open);
+  if (!R3m.totStrip) bad3m.push('ไม่มีแถบรวมทุกท่าด้านบนส่วนที่ 1');
   shown.forEach(p => {
-    const lbl = R3m.labels[p] || p;
-    const i = R3m.cmpCols.indexOf(lbl);
-    if (i < 0) { bad3m.push(lbl + ' ไม่มีในตารางเทียบท่า'); return; }
-    const w = R3m.want[p];
-    const gSeat = (R3m.cmpRows['ที่นั่งต่อวัน'] || [])[i];
-    const gDay  = (R3m.cmpRows['ที่นั่งที่จัดลงจริง'] || [])[i];
-    const gOpen = (R3m.cmpRows['วันที่เปิดขาย'] || [])[i];
-    if (gSeat !== w.seats.toLocaleString()) bad3m.push(lbl + ' ที่นั่งต่อวัน ' + gSeat + ' ควรเป็น ' + w.seats);
-    if (gDay !== w.seatDay.toLocaleString()) bad3m.push(lbl + ' ที่นั่งที่จัดลงจริง ' + gDay + ' ควรเป็น ' + w.seatDay);
-    if (+gOpen !== w.open) bad3m.push(lbl + ' วันที่เปิดขาย ' + gOpen + ' ควรเป็น ' + w.open);
-    /* ท่าที่ยังไม่เปิดขายต้องไม่โชว์ค่าเฉลี่ยเป็นเลข */
-    const gAvg = (R3m.cmpRows['ที่นั่งว่างเฉลี่ย/วัน'] || [])[i];
-    if (!w.open && gAvg !== '—') bad3m.push(lbl + ' ยังไม่เปิดขายแต่โชว์ค่าเฉลี่ย "' + gAvg + '" · ควรเป็นขีด');
+    const lbl = R3m.labels[p] || p, w = R3m.want[p];
+    const c = R3m.cards[lbl];
+    if (!c) { bad3m.push(lbl + ' ไม่มีการ์ดในส่วนเทียบท่า'); return; }
+    if (c.st['ที่นั่งต่อวัน'] !== w.seats.toLocaleString())
+      bad3m.push(lbl + ' ที่นั่งต่อวัน ' + c.st['ที่นั่งต่อวัน'] + ' ควรเป็น ' + w.seats);
+    if (c.st['ที่นั่งที่จัดลงจริง'] !== w.seatDay.toLocaleString())
+      bad3m.push(lbl + ' ที่นั่งที่จัดลงจริง ' + c.st['ที่นั่งที่จัดลงจริง'] + ' ควรเป็น ' + w.seatDay);
+    if (+c.st['วันที่เปิดขาย'] !== w.open)
+      bad3m.push(lbl + ' วันที่เปิดขาย ' + c.st['วันที่เปิดขาย'] + ' ควรเป็น ' + w.open);
+    if (!w.open && c.st['ว่างเฉลี่ย/วัน'] !== '—')
+      bad3m.push(lbl + ' ยังไม่เปิดขายแต่โชว์ค่าเฉลี่ย "' + c.st['ว่างเฉลี่ย/วัน'] + '" · ควรเป็นขีด');
+    /* แต่ละท่าต้องมีสีประจำตัว ไม่งั้นแยกไม่ออกว่าอันไหนเป็นของใคร */
+    if (!/--pc:\s*#/.test(c.tint)) bad3m.push(lbl + ' การ์ดไม่มีสีประจำท่า');
+    const a = w.names.slice().sort().join(',');
+    if (c.boats.join(',') !== a) bad3m.push(lbl + ' รายชื่อเรือ [' + c.boats.join(',') + '] ควรเป็น [' + a + ']');
   });
   /* ── ส่วนที่ 2 · Matrix ── */
   shown.forEach(p => {
@@ -1003,15 +1022,12 @@ else {
         bad3m.push(nm + ' ที่นั่ง/วัน ' + g.avgSeat + ' ควรเป็น ' + pr.avgSeat);
     });
   });
-  /* ── ส่วนที่ 1b · รายชื่อเรือในแต่ละท่า ── */
-  shown.forEach(p => {
-    const lbl = R3m.labels[p] || p;
-    const g = R3m.cmpBoats[lbl];
-    if (!g) { bad3m.push(lbl + ' ไม่มีรายชื่อเรือใต้ตารางเทียบท่า'); return; }
-    const a = R3m.want[p].names.slice().sort().join(',');
-    if (g.join(',') !== a) bad3m.push(lbl + ' รายชื่อเรือ [' + g.join(',') + '] ควรเป็น [' + a + ']');
-  });
   if (!R3m.keyN) bad3m.push('ไม่มีกุญแจรหัสเรือใต้ Matrix · ตารางรายวันอ่านไม่ออก');
+  /* ── เวลาออกเรือ ── */
+  if (R3m.tmOK.mxMiss.length)
+    bad3m.push('ชิปเวลาใน Matrix ผิด ' + R3m.tmOK.mxMiss.length + ' แถว · ' + R3m.tmOK.mxMiss[0]);
+  if (R3m.tmOK.rngMiss.length)
+    bad3m.push('ชิปเวลาในตารางค่าเฉลี่ยผิด ' + R3m.tmOK.rngMiss.length + ' แถว · ' + R3m.tmOK.rngMiss[0]);
   /* ── ส่วนที่ 4 ── */
   const sickAll = shown.reduce((a, p) => a.concat(R3m.want[p].sick), []);
   if (sickAll.length && !R3m.att.some(t => /ซ่อมไม่เสร็จ/.test(t)))
@@ -1019,7 +1035,8 @@ else {
   if (!R3m.shutPlant) bad3m.push('วางเรือบนวันปิดขายไม่ได้ · พิสูจน์ไม่ได้ว่าไม่นับวันปิด');
   if (!R3m.boatsSame || !R3m.tripsSame) bad3m.push('เปิดแผ่นแล้ว BOATS หรือ TRIPS จริงเปลี่ยน');
   if (bad3m.length) fail('Factsheet · ' + bad3m.slice(0, 3).join(' · '));
-  else ok('Factsheet 4 ส่วนตรงกับที่นับเองทุกตัว · เทียบ ' + shown.length + ' ท่า พร้อมรายชื่อเรือ · '
+  else ok('Factsheet 4 ส่วนตรงกับที่นับเองทุกตัว · การ์ดท่า ' + shown.length + ' ใบ มีสีประจำท่าและรายชื่อเรือ · '
+      + 'ชิปเวลาออกเรือตรงทุกแถว · '
       + 'Matrix รายวัน ' + R3m.mx.length + ' ตาราง (' + R3m.days + ' คอลัมน์วัน · รหัสเรือ '
       + R3m.keyN + ' ลำ) · ค่าเฉลี่ย ' + nRng + ' โปรแกรม · '
       + 'เรือที่ยังซ่อม ' + sickAll.length + ' ลำขึ้นในส่วนที่ 4 · '

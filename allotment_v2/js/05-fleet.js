@@ -26325,58 +26325,69 @@ function fdSheet(){
       + '<div class="r">'+fdE(fdNiceDate(TODAY_STR))+'</div></div>';
 
   /* ── ส่วนที่ 1 · เทียบสามท่า ─────────────────────────────────────────── */
-  var R=[
-    ['เรือที่วางไว้',      function(x){ return x.list.length+' ลำ'; }, function(x){ return ''; }],
-    ['ที่นั่งต่อวัน',       function(x){ return nf(x.seats); },        function(x){ return 'เพดานทะเบียน '+nf(x.lic); }],
-    ['วันที่เปิดขาย',      function(x){ return x.openDays.length; },   function(x){ return 'จาก '+days.length+' วัน'; }],
-    ['ที่นั่งที่จัดลงจริง',  function(x){ return nf(x.seatDay); },
-      function(x){ return 'รวมทุกวันที่เปิดขาย'; }],
-    ['ลูกค้าที่จองแล้ว',   function(x){ return heavy?'—':nf(x.bkDay); },
-      function(x){ return heavy?'ช่วงยาวเกิน':(x.seatDay?Math.round(x.bkDay/x.seatDay*100)+'% ของกำลัง':''); }],
-    ['ที่นั่งว่างเฉลี่ย/วัน', function(x){ return (heavy||!x.openDays.length)?'—':nf(x.freeDay/x.openDays.length); },
-      function(x){ return (heavy||!x.openDays.length)?'':'รวมทั้งช่วง '+nf(x.freeDay); }],
-    ['ลูกเรือ ต้องใช้/มี',  function(x){ return x.need+' / '+x.have; },
-      function(x){ return x.need>x.have?('ขาด '+(x.need-x.have)):'พอ'; }],
-    ['กัปตันในทะเบียน',    function(x){ return x.caps; },             function(x){ return 'ต่อเรือ '+x.run.length+' ลำ'; }],
-    ['ยังไม่ได้ลงโปรแกรม',  function(x){ return x.openDays.length?(x.idle.length+' ลำ'):'—'; },
-      function(x){ return x.openDays.length?'':'ท่ายังไม่เปิดขาย'; }]
+  /* ── ส่วนที่ 1 · เทียบท่า · การ์ดละท่า มีสีประจำท่า ─────────────────────
+     ที่มา (2026-09-25) · ของเดิมเป็นตารางกว้างเต็มหน้า · มีสองท่าก็เหลือที่ว่างครึ่งจอ
+     และท่าแต่ละท่าแยกกันไม่ออกเพราะเป็นแค่หัวคอลัมน์ตัวเล็ก
+     ทำเป็นการ์ดเรียงข้างกัน · แถบสีบนหัวคือสีประจำท่าตัวเดียวกับแผนโยกทั้งฤดู
+     ตัวเลขอยู่ในตารางสองคอลัมน์ในการ์ด และรายชื่อเรืออยู่ในการ์ดเดียวกันเลย
+     ไม่ต้องกวาดสายตาข้ามหน้าไปหาว่าท่านี้มีเรืออะไร */
+  var PC={ tublamu:'#2563EB', panwa:'#0F6E56', ranong:'#8A5410' };
+  var ST=[
+    ['ที่นั่งต่อวัน',      function(x){ return nf(x.seats); },
+                          function(x){ return 'เพดานทะเบียน '+nf(x.lic); }, function(){ return ''; }],
+    ['วันที่เปิดขาย',     function(x){ return x.openDays.length; },
+                          function(x){ return 'จาก '+days.length+' วัน'; },
+                          function(x){ return x.openDays.length?'':'warn'; }],
+    ['ที่นั่งที่จัดลงจริง', function(x){ return nf(x.seatDay); },
+                          function(x){ return 'รวมทุกวันที่เปิดขาย'; }, function(){ return ''; }],
+    ['ลูกค้าที่จองแล้ว',  function(x){ return heavy?'—':nf(x.bkDay); },
+                          function(x){ return heavy?'ช่วงยาวเกิน':(x.seatDay?Math.round(x.bkDay/x.seatDay*100)+'% ของกำลัง':''); },
+                          function(){ return ''; }],
+    ['ว่างเฉลี่ย/วัน',    function(x){ return (heavy||!x.openDays.length)?'—':nf(x.freeDay/x.openDays.length); },
+                          function(x){ return (heavy||!x.openDays.length)?'':'รวม '+nf(x.freeDay); }, function(){ return ''; }],
+    ['ลูกเรือ ใช้/มี',    function(x){ return x.need+' / '+x.have; },
+                          function(x){ return x.need>x.have?('ขาด '+(x.need-x.have)):'พอ'; },
+                          function(x){ return x.need>x.have?'bad':''; }],
+    ['กัปตัน',            function(x){ return x.caps; },
+                          function(x){ return 'ต่อเรือ '+x.run.length+' ลำ'; },
+                          function(x){ return (x.caps<x.run.length)?'warn':''; }],
+    ['ยังไม่ได้ลงโปรแกรม', function(x){ return x.openDays.length?(x.idle.length+' ลำ'):'—'; },
+                          function(x){ return x.openDays.length?'':'ท่ายังไม่เปิดขาย'; },
+                          function(x){ return (x.openDays.length&&x.idle.length)?'bad':''; }]
   ];
+  var TB=P.reduce(function(n,x){ return n+x.list.length; },0);
+  var TS=P.reduce(function(n,x){ return n+x.seats; },0);
+  var TD=P.reduce(function(n,x){ return n+x.seatDay; },0);
+  var TK=P.reduce(function(n,x){ return n+x.bkDay; },0);
+  var TO=P.reduce(function(n,x){ return n+x.openDays.length; },0);
   h+='<div class="fs-sec"><div class="sc">1 · เทียบท่าเรือ</div>'
-    + '<table class="fs-cmp"><thead><tr><th></th>'
-    + P.map(function(x){ return '<th>'+fdE(fdPierNm(x.k))+'</th>'; }).join('')
-    + '<th class="tot">รวม</th></tr></thead><tbody>';
-  R.forEach(function(row,i){
-    h+='<tr><th>'+row[0]+'</th>'
-      + P.map(function(x){
-          var bad=(i===6 && x.need>x.have) || (i===8 && x.openDays.length && x.idle.length);
-          return '<td'+(bad?' class="bad"':'')+'><b>'+row[1](x)+'</b>'
-            + (row[2](x)?('<u>'+row[2](x)+'</u>'):'')+'</td>'; }).join('')
-      + '<td class="tot">'+(function(){
-          if(i===0) return P.reduce(function(n,x){ return n+x.list.length; },0)+' ลำ';
-          if(i===1) return nf(P.reduce(function(n,x){ return n+x.seats; },0));
-          if(i===2) return Math.max.apply(null, P.map(function(x){ return x.openDays.length; }));
-          if(i===3) return nf(P.reduce(function(n,x){ return n+x.seatDay; },0));
-          if(i===4) return heavy?'—':nf(P.reduce(function(n,x){ return n+x.bkDay; },0));
-          if(i===5){ var od=P.reduce(function(n,x){ return n+x.openDays.length; },0);
-                     return (heavy||!od)?'—':nf(P.reduce(function(n,x){ return n+x.freeDay; },0)/od); }
-          if(i===6) return P.reduce(function(n,x){ return n+x.need; },0)+' / '+P.reduce(function(n,x){ return n+x.have; },0);
-          if(i===7) return P.reduce(function(n,x){ return n+x.caps; },0);
-          return P.reduce(function(n,x){ return n+(x.openDays.length?x.idle.length:0); },0)+' ลำ';
-        })()+'</td></tr>';
-  });
-  h+='</tbody></table>'
-    /* รายชื่อเรือในแต่ละท่า · ตารางข้างบนบอกแต่ตัวเลข ไม่ได้บอกว่าลำไหนอยู่ไหน */
-    + '<div class="cmp-b">'+P.map(function(x){
-        return '<div class="cb"><div class="t">'+fdE(fdPierNm(x.k))+'<span>'+x.list.length+' ลำ</span></div>'
-          + (x.list.length ? fdSort(x.list).map(function(b){
-              var w=fdWhyNot(b, Wn.from), sick=!fdRealReady(b, Wn.from);
-              return '<span class="bc'+(w?' off':'')+(sick?' fix':'')+'" title="'
-                +fdE(b.name+' · '+(b.cap||0)+' ที่นั่ง · ลูกเรือ '+(b.crew||'—')
-                  +(sick?' · ยังซ่อมไม่เสร็จ':'')+(w?(' · '+FD_WHY[w]):''))+'">'
-                + fdE(b.name)+'<u>'+(b.cap||0)+'</u>'
-                + (fdIsCharter(b)?'<s>เช่า</s>':'')+(sick?'<s class="f">ซ่อม</s>':'')+'</span>';
-            }).join('') : '<span class="none">ยังไม่มีเรือในท่านี้</span>')
-          + '</div>'; }).join('')
+    + '<div class="tot-strip"><span><i>รวมทุกท่า</i><b>'+TB+'</b><u>ลำ</u></span>'
+      + '<span><i>ที่นั่งต่อวัน</i><b>'+nf(TS)+'</b><u>ที่นั่ง</u></span>'
+      + '<span><i>ที่นั่งที่จัดลงจริง</i><b>'+nf(TD)+'</b><u>รวมทั้งช่วง</u></span>'
+      + '<span'+((!heavy&&TD&&TK/TD>=1)?' class="bad"':'')+'><i>ลูกค้าที่จองแล้ว</i><b>'
+        +(heavy?'—':nf(TK))+'</b><u>'+((heavy||!TD)?'':Math.round(TK/TD*100)+'% ของกำลัง')+'</u></span>'
+      + '<span><i>ว่างเฉลี่ย/วัน</i><b>'+((heavy||!TO)?'—':nf(P.reduce(function(n,x){ return n+x.freeDay; },0)/TO))
+        +'</b><u>ทุกท่ารวมกัน</u></span>'
+    + '</div>'
+    + '<div class="pier-row">'+P.map(function(x){
+        var c=PC[x.k]||'#6B7280';
+        return '<div class="pcard" style="--pc:'+c+'">'
+          + '<div class="ph"><b>'+fdE(fdPierNm(x.k))+'</b>'
+            + '<span>'+x.list.length+' ลำ · '+nf(x.seats)+' ที่นั่ง/วัน</span></div>'
+          + '<div class="pg">'+ST.map(function(r){
+              var cls=r[3](x);
+              return '<div class="pv'+(cls?(' '+cls):'')+'"><i>'+r[0]+'</i><b>'+r[1](x)+'</b>'
+                + (r[2](x)?('<u>'+r[2](x)+'</u>'):'')+'</div>'; }).join('')+'</div>'
+          + '<div class="pb"><i>เรือในท่านี้</i>'
+            + (x.list.length ? fdSort(x.list).map(function(b){
+                var w=fdWhyNot(b, Wn.from), sick=!fdRealReady(b, Wn.from);
+                return '<span class="bc'+(w?' off':'')+(sick?' fix':'')+'" title="'
+                  +fdE(b.name+' · '+(b.cap||0)+' ที่นั่ง · ลูกเรือ '+(b.crew||'—')
+                    +(sick?' · ยังซ่อมไม่เสร็จ':'')+(w?(' · '+FD_WHY[w]):''))+'">'
+                  + fdE(b.name)+'<u>'+(b.cap||0)+'</u>'
+                  + (fdIsCharter(b)?'<s>เช่า</s>':'')+(sick?'<s class="f">ซ่อม</s>':'')+'</span>';
+              }).join('') : '<span class="none">ยังไม่มีเรือในท่านี้</span>')
+          + '</div></div>'; }).join('')
     + '</div></div>';
 
   /* ── ส่วนที่ 2 · Matrix โปรแกรม × วัน · กระจายเรือลงช่อง ──────────────
@@ -26396,20 +26407,25 @@ function fdSheet(){
     var CODE=fdCodes(allB);
     P.forEach(function(x){
       if(!x.progs.length){
-        h+='<div class="mx-h"><b>'+fdE(fdPierNm(x.k))+'</b><span>ยังไม่มีโปรแกรมในช่วงนี้</span></div>';
+        h+='<div class="mx-h" style="--pc:'+(PC[x.k]||'#6B7280')+'"><b>'+fdE(fdPierNm(x.k))
+          +'</b><span>ยังไม่มีโปรแกรมในช่วงนี้</span></div>';
         return;
       }
-      h+='<div class="mx-h"><b>'+fdE(fdPierNm(x.k))+'</b>'
+      h+='<div class="mx-h" style="--pc:'+(PC[x.k]||'#6B7280')+'"><b>'+fdE(fdPierNm(x.k))+'</b>'
         +'<span>'+x.progs.length+' โปรแกรม · ช่องว่างสีแดงคือวันที่เปิดขายแต่ยังไม่มีเรือ · '
         +'ช่องเทาคือวันที่ปิดฤดู</span></div>'
-        +'<div class="mx-w"><table class="fs-day"><thead><tr><th class="pn">โปรแกรม</th>'
+        +'<div class="mx-w"><table class="fs-day" style="--pc:'+(PC[x.k]||'#6B7280')+'">'
+        +'<thead><tr><th class="pn">โปรแกรม</th>'
         + days.map(function(d){
             var w=new Date(d).getDay();
             return '<th class="d'+((w===0||w===6)?' we':'')+'"><u>'+DOWX[w]+'</u>'+(+d.slice(-2))+'</th>'; }).join('')
         + '<th class="n">เปิด</th><th class="n">ลูกค้า</th><th class="n">ว่าง</th></tr></thead><tbody>';
       x.progs.forEach(function(y){
         var openSet={}; y.od.forEach(function(d){ openSet[d]=1; });
-        h+='<tr><td class="pn"><b>'+fdE(y.r.name)+'</b><u>'+fdE((y.r.times||[])[0]||'—')+'</u></td>'
+        /* §flDeployTime · เวลาออกเรือคือของที่คนหาเป็นอันดับแรกตอนจัดคิวท่า
+           ของเดิมเป็นตัวเทาเล็กติดชื่อโปรแกรม กวาดตาแล้วหาไม่เจอ · ทำเป็นชิปตัวหนามาก่อนชื่อ */
+        h+='<tr><td class="pn"><span class="tm">'+fdE((y.r.times||[])[0]||'—')+'</span>'
+          +'<b>'+fdE(y.r.name)+'</b></td>'
           + days.map(function(d){
               if(!openSet[d]) return '<td class="dc shut"></td>';
               var t=fdTripsOn(d), on=[];
@@ -26440,14 +26456,18 @@ function fdSheet(){
 
   /* ── ส่วนที่ 3 · ช่วงวันและค่าเฉลี่ยต่อโปรแกรม ───────────────────────── */
   h+='<div class="fs-sec"><div class="sc">3 · ช่วงวันที่เปิดขาย และค่าเฉลี่ยต่อวัน</div>'
-    + '<table class="fs-t rng"><thead><tr><th>โปรแกรม</th><th>ท่า</th><th>เปิดขายตั้งแต่ – ถึง</th>'
+    + '<table class="fs-t rng"><thead><tr><th class="tmh">ออกเรือ</th><th>โปรแกรม</th><th>ท่า</th>'
+    + '<th>เปิดขายตั้งแต่ – ถึง</th>'
     + '<th class="n">กี่วัน</th><th class="n">ที่นั่ง/วัน</th><th class="n">ลูกค้า/วัน</th>'
     + '<th class="n">ว่างเฉลี่ย/วัน</th></tr></thead><tbody>';
   P.forEach(function(x){
     x.progs.forEach(function(y){
       if(!y.open) return;
       var n=y.open;
-      h+='<tr><td><b>'+fdE(y.r.name)+'</b></td><td>'+fdE(fdPierNm(x.k))+'</td>'
+      h+='<tr><td class="tmh"><span class="tm" style="--pc:'+(PC[x.k]||'#6B7280')+'">'
+        +fdE((y.r.times||[])[0]||'—')+'</span></td>'
+        +'<td><b>'+fdE(y.r.name)+'</b></td>'
+        +'<td><em class="pdot" style="background:'+(PC[x.k]||'#6B7280')+'"></em>'+fdE(fdPierNm(x.k))+'</td>'
         +'<td>'+fdE(fdNiceDate(y.first))+' – '+fdE(fdNiceDate(y.last))+'</td>'
         +'<td class="n">'+n+'</td>'
         +'<td class="n">'+nf(y.seatSum/n)+'</td>'
@@ -26741,49 +26761,34 @@ function fdCSS(){
   +H+' .fd-sheet .sc{font-size:11px;font-weight:700;letter-spacing:.04em;color:#8494A8;'
      +'text-transform:uppercase;margin-bottom:9px;display:flex;gap:9px;align-items:baseline;flex-wrap:wrap}'
   +H+' .fd-sheet .sc span{text-transform:none;letter-spacing:0;font-weight:500;font-size:11px;color:#6B7280}'
-  /* 1 · เทียบท่า */
-  +H+' .fd-sheet .fs-cmp{width:100%;border-collapse:collapse;font-size:12px}'
-  +H+' .fd-sheet .fs-cmp thead th{font-size:12px;font-weight:700;text-align:right;padding:5px 9px;'
-     +'border-bottom:2px solid #E7EAEF;white-space:nowrap}'
-  +H+' .fd-sheet .fs-cmp thead th:first-child{text-align:left}'
-  +H+' .fd-sheet .fs-cmp thead th.tot{color:#6B7280;background:#FAFBFC}'
-  +H+' .fd-sheet .fs-cmp tbody th{text-align:left;font-size:11px;font-weight:600;color:#6B7280;'
-     +'padding:6px 9px;border-bottom:1px solid #F5F6F8;white-space:nowrap}'
-  +H+' .fd-sheet .fs-cmp td{text-align:right;padding:6px 9px;border-bottom:1px solid #F5F6F8;white-space:nowrap}'
-  +H+' .fd-sheet .fs-cmp td b{font-size:13.5px;font-weight:700}'
-  +H+' .fd-sheet .fs-cmp td u{display:block;text-decoration:none;font-size:9.5px;color:#9AA3AE;margin-top:1px}'
-  +H+' .fd-sheet .fs-cmp td.bad b{color:#A32D2D} '+H+' .fd-sheet .fs-cmp td.bad u{color:#C0736B}'
-  +H+' .fd-sheet .fs-cmp td.tot{background:#FAFBFC;color:#6B7280}'
-  +H+' .fd-sheet .fs-cmp td.tot b{color:#374151}'
-  /* 2 · Matrix */
-  +H+' .fd-sheet .mx-h{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin:10px 0 5px}'
-  +H+' .fd-sheet .mx-h b{font-size:12.5px} '+H+' .fd-sheet .mx-h span{font-size:10.5px;color:#9AA3AE}'
-  +H+' .fd-sheet .mx-w{overflow-x:auto}'
-  +H+' .fd-sheet .fs-mx{border-collapse:collapse;font-size:11.5px;min-width:100%}'
-  +H+' .fd-sheet .fs-mx th{font-size:9.5px;font-weight:700;color:#6B7280;padding:4px 6px;'
-     +'border-bottom:2px solid #E7EAEF;white-space:nowrap;vertical-align:bottom}'
-  +H+' .fd-sheet .fs-mx th.b{text-align:center;min-width:52px}'
-  +H+' .fd-sheet .fs-mx th.b u{display:block;text-decoration:none;font-size:9px;color:#9AA3AE;font-weight:500}'
-  +H+' .fd-sheet .fs-mx th.b i{font-style:normal;color:#8A5410}'
-  +H+' .fd-sheet .fs-mx th.b.stray{color:#8A5410}'
-  +H+' .fd-sheet .fs-mx th.n,'+H+' .fd-sheet .fs-mx td.n{text-align:right;white-space:nowrap}'
-  +H+' .fd-sheet .fs-mx th.n u{display:block;text-decoration:none;font-size:8.5px;color:#B6BDC8;font-weight:500}'
-  +H+' .fd-sheet .fs-mx td{padding:5px 6px;border-bottom:1px solid #F5F6F8}'
-  +H+' .fd-sheet .fs-mx td.pn{min-width:150px} '+H+' .fd-sheet .fs-mx td.pn b{font-size:11.5px}'
-  +H+' .fd-sheet .fs-mx td.pn u{text-decoration:none;font-size:9.5px;color:#9AA3AE;margin-left:5px}'
-  +H+' .fd-sheet .fs-mx td.c{text-align:center;color:#D6DAE0;font-weight:700}'
-  +H+' .fd-sheet .fs-mx td.c.on{color:#0F172A;background:#F1F8F5}'
-  +H+' .fd-sheet .fs-mx td.n u{display:block;text-decoration:none;font-size:9px;color:#A32D2D;font-weight:700}'
-  +H+' .fd-sheet .fs-mx td.n.bad{color:#A32D2D;font-weight:700}'
-  +H+' .fd-sheet .fs-mx tr.idle td{background:#FFFBFB} '+H+' .fd-sheet .fs-mx tr.idle td.pn b{color:#A32D2D}'
-  +H+' .fd-sheet .fs-mx tr.over td{background:#FFF9F9}'
-  +H+' .fd-sheet .fs-mx tr.shut td{background:#FAFAFB;color:#9AA3AE}'
-  +H+' .fd-sheet .mx-f{font-size:10px;color:#9AA3AE;line-height:1.6;margin-top:6px}'
-  /* 1b · รายชื่อเรือในแต่ละท่า */
-  +H+' .fd-sheet .cmp-b{display:flex;gap:9px;flex-wrap:wrap;margin-top:11px}'
-  +H+' .fd-sheet .cb{flex:1 1 210px;background:#FAFBFC;border:1px solid #F1F3F6;border-radius:9px;padding:8px 10px}'
-  +H+' .fd-sheet .cb .t{font-size:11px;font-weight:700;color:#374151;margin-bottom:6px}'
-  +H+' .fd-sheet .cb .t span{font-weight:500;color:#9AA3AE;margin-left:5px}'
+  /* 1 · เทียบท่า · การ์ดละท่า มีสีประจำท่า · แถบรวมอยู่บนสุด */
+  +H+' .fd-sheet .tot-strip{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:11px}'
+  +H+' .fd-sheet .tot-strip span{flex:1 1 130px;background:#F7F8FA;border:1px solid #F1F3F6;'
+     +'border-radius:9px;padding:7px 10px}'
+  +H+' .fd-sheet .tot-strip i{display:block;font-style:normal;font-size:9px;font-weight:700;'
+     +'letter-spacing:.03em;color:#9AA3AE}'
+  +H+' .fd-sheet .tot-strip b{font-size:18px;font-weight:700;margin-right:5px}'
+  +H+' .fd-sheet .tot-strip u{text-decoration:none;font-size:10px;color:#6B7280}'
+  +H+' .fd-sheet .tot-strip span.bad{background:#FDF2F2;border-color:#F0C9C9}'
+  +H+' .fd-sheet .tot-strip span.bad b{color:#A32D2D}'
+  +H+' .fd-sheet .pier-row{display:flex;gap:10px;flex-wrap:wrap;align-items:stretch}'
+  +H+' .fd-sheet .pcard{flex:1 1 280px;min-width:260px;border:1px solid #E7EAEF;border-radius:11px;'
+     +'overflow:hidden;display:flex;flex-direction:column;border-top:3px solid var(--pc)}'
+  +H+' .fd-sheet .pcard .ph{padding:8px 11px;background:color-mix(in srgb,var(--pc) 7%,#fff);'
+     +'border-bottom:1px solid #F1F3F6}'
+  +H+' .fd-sheet .pcard .ph b{font-size:13.5px;color:var(--pc);display:block}'
+  +H+' .fd-sheet .pcard .ph span{font-size:10.5px;color:#6B7280}'
+  +H+' .fd-sheet .pcard .pg{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#F1F3F6}'
+  +H+' .fd-sheet .pv{background:#fff;padding:6px 10px}'
+  +H+' .fd-sheet .pv i{display:block;font-style:normal;font-size:9px;font-weight:700;'
+     +'letter-spacing:.02em;color:#9AA3AE;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+  +H+' .fd-sheet .pv b{font-size:15px;font-weight:700;margin-right:4px}'
+  +H+' .fd-sheet .pv u{text-decoration:none;font-size:9.5px;color:#9AA3AE}'
+  +H+' .fd-sheet .pv.bad{background:#FDF2F2} '+H+' .fd-sheet .pv.bad b{color:#A32D2D}'
+  +H+' .fd-sheet .pv.warn{background:#FEF6E7} '+H+' .fd-sheet .pv.warn b{color:#8A5410}'
+  +H+' .fd-sheet .pcard .pb{padding:8px 10px 9px;border-top:1px solid #F1F3F6;background:#FCFCFD}'
+  +H+' .fd-sheet .pcard .pb>i{display:block;font-style:normal;font-size:9px;font-weight:700;'
+     +'letter-spacing:.03em;color:#9AA3AE;margin-bottom:5px}'
   +H+' .fd-sheet .bc{display:inline-flex;align-items:center;gap:5px;background:#fff;border:1px solid #E7EAEF;'
      +'border-radius:7px;padding:3px 7px;margin:0 4px 4px 0;font-size:11px;font-weight:700}'
   +H+' .fd-sheet .bc u{text-decoration:none;font-weight:500;font-size:10px;color:#9AA3AE}'
@@ -26791,7 +26796,14 @@ function fdCSS(){
      +'border-radius:4px;padding:1px 4px}'
   +H+' .fd-sheet .bc s.f{background:#FDF2F2;color:#A32D2D}'
   +H+' .fd-sheet .bc.fix{border-color:#F0C9C9} '+H+' .fd-sheet .bc.off{opacity:.55;border-style:dashed}'
-  +H+' .fd-sheet .cb .none{font-size:11px;color:#9AA3AE}'
+  +H+' .fd-sheet .pb .none{font-size:11px;color:#9AA3AE}'
+  /* §flDeployTime · ชิปเวลาออกเรือ · ต้องเห็นก่อนชื่อโปรแกรม */
+  +H+' .fd-sheet .tm{display:inline-block;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;'
+     +'background:color-mix(in srgb,var(--pc,#6B7280) 12%,#fff);color:var(--pc,#374151);'
+     +'border:1px solid color-mix(in srgb,var(--pc,#6B7280) 28%,#fff);'
+     +'border-radius:6px;padding:2px 7px;margin-right:7px;letter-spacing:.02em}'
+  +H+' .fd-sheet .pdot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px}'
+  +H+' .fd-sheet .fs-t th.tmh,'+H+' .fd-sheet .fs-t td.tmh{white-space:nowrap;width:1%}'
   /* 2 · ตารางรายวัน */
   +H+' .fd-sheet .fs-day{border-collapse:collapse;font-size:11px;min-width:100%}'
   +H+' .fd-sheet .fs-day th{font-size:9px;font-weight:700;color:#6B7280;padding:3px 4px;'
@@ -26813,6 +26825,13 @@ function fdCSS(){
      +'border-radius:4px;padding:1px 3px;margin:1px 0;letter-spacing:.02em}'
   +H+' .fd-sheet .bg.off{background:#F3F4F6;color:#9AA3AE;text-decoration:line-through}'
   +H+' .fd-sheet .bg.ch{background:#EFEAFB;color:#5B289A}'
+  /* หัวของแต่ละท่าใน Matrix · แถบสีซ้ายคือสีประจำท่าตัวเดียวกับการ์ดข้างบน */
+  +H+' .fd-sheet .mx-h{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin:14px 0 6px;'
+     +'padding-left:9px;border-left:3px solid var(--pc,#D6DAE0)}'
+  +H+' .fd-sheet .mx-h b{font-size:13px;color:var(--pc,#1F2937)}'
+  +H+' .fd-sheet .mx-h span{font-size:10.5px;color:#9AA3AE}'
+  +H+' .fd-sheet .mx-w{overflow-x:auto}'
+  +H+' .fd-sheet .mx-f{font-size:10px;color:#9AA3AE;line-height:1.6;margin-top:6px}'
   +H+' .fd-sheet .mx-key{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px;'
      +'padding-top:9px;border-top:1px solid #F1F3F6}'
   +H+' .fd-sheet .mx-key i{font-style:normal;font-size:9px;font-weight:700;letter-spacing:.04em;'
