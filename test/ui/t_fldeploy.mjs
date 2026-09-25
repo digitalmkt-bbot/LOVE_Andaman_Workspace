@@ -849,6 +849,16 @@ const R3m = await page.evaluate(() => {
     shutPlant = { pier: p, d: sd, boat: b.name, cap: b.cap || 0 };
     return true;
   });
+  /* §flDeployOwn · กดไม่นับหนึ่งลำก่อนเปิดแผ่น · ที่นั่งของกลุ่มที่ลำนั้นอยู่ต้องหดลง
+     ถ้าไม่ปลูกเคสนี้ ทุกลำในท่าวิ่งได้หมด แล้วโค้ดที่ลืมกรองก็ให้ตัวเลขเท่ากันพอดี */
+  let offBoat = null;
+  FD_PIERS.some(p => {
+    const own = fdBoatsAt(p, W.from).filter(b => String(b.ownership || '') !== 'charter');
+    if (own.length < 2) return false;
+    offBoat = { pier: p, name: own[own.length - 1].name, cap: own[own.length - 1].cap || 0 };
+    _fdPlan.ready[own[own.length - 1].id] = 0; fdPlanSave();
+    return true;
+  });
   fdTab('sheet'); flRenderDeployment();
 
   /* ══ คำนวณเองจากข้อมูลดิบ ══ */
@@ -884,9 +894,16 @@ const R3m = await page.evaluate(() => {
                         avgSeat: od.length ? Math.round(seatSum / od.length) : null };
       seatDay += seatSum;
     });
+    /* §flDeployOwn · แยกบริษัท/เช่าเองจาก ownership ดิบ · ไม่เรียก fdIsCharter
+       ถ้าเรียกตัวเดียวกับหน้าจอ เพี้ยนพร้อมกันทั้งคู่แล้วเทสต์ผ่านทั้งที่ผิด */
+    const isChr = b => String((b && b.ownership) || '') === 'charter';
+    const capOf = a => a.filter(b => fdCanRun(b, W.from)).reduce((n, b) => n + (b.cap || 0), 0);
+    const ownL = list.filter(b => !isChr(b)), chrL = list.filter(isChr);
     want[p] = { n: list.length, open: open.length, seatDay, progs,
                 names: list.map(b => b.name),
                 seats: list.filter(b => fdCanRun(b, W.from)).reduce((n, b) => n + (b.cap || 0), 0),
+                own: ownL.map(b => b.name).sort(), chr: chrL.map(b => b.name).sort(),
+                ownSeat: capOf(ownL), chrSeat: capOf(chrL),
                 sick: list.filter(b => !fdRealReady(b, W.from)).map(b => b.name) };
   });
 
@@ -898,17 +915,33 @@ const R3m = await page.evaluate(() => {
   const cards = {};
   [].slice.call(sheet.querySelectorAll('.pcard')).forEach(c => {
     const nm = ((c.querySelector('.ph b') || {}).textContent || '').trim();
-    const st = {};
+    const st = {}, sub = {};
     [].slice.call(c.querySelectorAll('.pv')).forEach(v => {
-      st[((v.querySelector('i') || {}).textContent || '').trim()] =
-        ((v.querySelector('b') || {}).textContent || '').trim();
+      const k = ((v.querySelector('i') || {}).textContent || '').trim();
+      st[k] = ((v.querySelector('b') || {}).textContent || '').trim();
+      sub[k] = ((v.querySelector('u') || {}).textContent || '').trim();
     });
-    cards[nm] = { st,
+    const grpOf = cls => {
+      const g = c.querySelector('.pb.' + cls);
+      if (!g) return null;
+      return { boats: [].slice.call(g.querySelectorAll('.bc'))
+                 .map(x => (x.getAttribute('title') || '').split(' · ')[0]).sort(),
+               head: ((g.querySelector('i') || {}).textContent || '').trim() };
+    };
+    cards[nm] = { st, sub,
       boats: [].slice.call(c.querySelectorAll('.bc'))
         .map(x => (x.getAttribute('title') || '').split(' · ')[0]).sort(),
+      own: grpOf('own'), chr: grpOf('chr'),
+      /* ป้ายในชิปบอกด้วยว่าลำนี้เป็นของบริษัทหรือเช่า · เผื่อคนอ่าน tooltip ทีละลำ */
+      chipChr: [].slice.call(c.querySelectorAll('.bc'))
+        .filter(x => /เรือเช่า/.test(x.getAttribute('title') || ''))
+        .map(x => (x.getAttribute('title') || '').split(' · ')[0]).sort(),
+      head: ((c.querySelector('.ph span') || {}).textContent || '').trim(),
       tint: (c.getAttribute('style') || '') };
   });
   const totStrip = sheet.querySelectorAll('.tot-strip span').length;
+  /* §flDeployOwn · แถบรวมทุกท่าต้องแยกสองแบบเหมือนกัน · ไม่ใช่แยกแค่ในการ์ด */
+  const totTxt = ((sheet.querySelector('.tot-strip') || {}).textContent || '').replace(/,/g, '');
   /* ส่วนที่ 2 · Matrix รายวัน · คอลัมน์เป็นวันที่ · ในช่องเป็นเรือที่ลงวันนั้น
      อ่านชื่อเรือจาก title ของชิป ไม่ใช่จากรหัสย่อ · รหัสย่อเป็นเรื่องการแสดงผล */
   const mx = [];
@@ -959,7 +992,7 @@ const R3m = await page.evaluate(() => {
     const want = (r && (r.times || [])[0]) || '—';
     if (chip.trim() !== want) tmOK.rngMiss.push(nm + ' ชิปเวลา "' + chip.trim() + '" ควรเป็น "' + want + '"');
   });
-  return { want, cards, totStrip, mx, keyN, rng, tmOK, att, shutPlant, days: days.length,
+  return { want, cards, totStrip, totTxt, mx, keyN, rng, tmOK, att, shutPlant, offBoat, days: days.length,
            secs: secs.length, labels: (typeof PIER_LABELS !== 'undefined') ? PIER_LABELS : {},
            boatsSame: JSON.stringify(BOATS) === snapB, tripsSame: JSON.stringify(TRIPS) === snapT };
 });
@@ -970,6 +1003,18 @@ else {
   /* ── ส่วนที่ 1 ── */
   const shown = Object.keys(R3m.want).filter(p => R3m.want[p].n || R3m.want[p].open);
   if (!R3m.totStrip) bad3m.push('ไม่มีแถบรวมทุกท่าด้านบนส่วนที่ 1');
+  else {
+    const TBo = shown.reduce((n, p) => n + R3m.want[p].own.length, 0);
+    const TBc = shown.reduce((n, p) => n + R3m.want[p].chr.length, 0);
+    const TSo = shown.reduce((n, p) => n + R3m.want[p].ownSeat, 0);
+    const TSc = shown.reduce((n, p) => n + R3m.want[p].chrSeat, 0);
+    [['บริษัท ' + TBo, 'จำนวนลำของบริษัท'], ['เช่า ' + TBc, 'จำนวนลำที่เช่า'],
+     ['บริษัท ' + TSo, 'ที่นั่งของบริษัท'], ['เช่า ' + TSc, 'ที่นั่งที่เช่า']]
+      .forEach(([need, what]) => {
+        if (R3m.totTxt.indexOf(need) < 0)
+          bad3m.push('แถบรวมทุกท่าไม่บอก' + what + ' (' + need + ')');
+      });
+  }
   shown.forEach(p => {
     const lbl = R3m.labels[p] || p, w = R3m.want[p];
     const c = R3m.cards[lbl];
@@ -986,6 +1031,32 @@ else {
     if (!/--pc:\s*#/.test(c.tint)) bad3m.push(lbl + ' การ์ดไม่มีสีประจำท่า');
     const a = w.names.slice().sort().join(',');
     if (c.boats.join(',') !== a) bad3m.push(lbl + ' รายชื่อเรือ [' + c.boats.join(',') + '] ควรเป็น [' + a + ']');
+    /* §flDeployOwn · สองกลุ่มต้องตรงกับที่คำนวณเอง · กลุ่มที่ไม่มีลำต้องไม่มีหัวข้อโล่ */
+    [['own', 'เรือบริษัท', w.own, w.ownSeat], ['chr', 'เรือเช่า', w.chr, w.chrSeat]]
+      .forEach(([k, ttl, wn, wseat]) => {
+        const g = c[k];
+        if (!wn.length) { if (g) bad3m.push(lbl + ' ไม่มี' + ttl + ' แต่ยังขึ้นหัวข้อ ' + ttl); return; }
+        if (!g) { bad3m.push(lbl + ' ไม่มีกลุ่ม ' + ttl + ' ทั้งที่มี ' + wn.length + ' ลำ'); return; }
+        if (g.boats.join(',') !== wn.join(','))
+          bad3m.push(lbl + ' ' + ttl + ' [' + g.boats.join(',') + '] ควรเป็น [' + wn.join(',') + ']');
+        if (g.head.indexOf(ttl) < 0) bad3m.push(lbl + ' หัวกลุ่มไม่ได้บอกว่า ' + ttl);
+        if (g.head.indexOf(wn.length + ' ลำ') < 0)
+          bad3m.push(lbl + ' หัวกลุ่ม ' + ttl + ' "' + g.head + '" ควรบอก ' + wn.length + ' ลำ');
+        if (g.head.replace(/,/g, '').indexOf(String(wseat) + ' ที่นั่ง') < 0)
+          bad3m.push(lbl + ' หัวกลุ่ม ' + ttl + ' "' + g.head + '" ควรบอก ' + wseat + ' ที่นั่ง');
+      });
+    if (c.chipChr.join(',') !== w.chr.join(','))
+      bad3m.push(lbl + ' ชิปที่ระบุว่าเรือเช่า [' + c.chipChr.join(',') + '] ควรเป็น [' + w.chr.join(',') + ']');
+    if (w.ownSeat + w.chrSeat !== w.seats)
+      bad3m.push(lbl + ' ที่นั่งบริษัท+เช่า ' + (w.ownSeat + w.chrSeat) + ' ไม่เท่ารวม ' + w.seats);
+    const hsub = (c.sub['ที่นั่งต่อวัน'] || '');
+    if (hsub.replace(/,/g, '').indexOf('บริษัท ' + w.ownSeat) < 0
+        || hsub.replace(/,/g, '').indexOf('เช่า ' + w.chrSeat) < 0)
+      bad3m.push(lbl + ' ใต้ที่นั่งต่อวัน "' + hsub + '" ควรแยกบริษัท ' + w.ownSeat + ' / เช่า ' + w.chrSeat);
+    if (c.head.indexOf('บริษัท ' + w.own.length + ' ลำ') < 0
+        || c.head.indexOf('เช่า ' + w.chr.length + ' ลำ') < 0)
+      bad3m.push(lbl + ' หัวการ์ด "' + c.head + '" ควรบอกบริษัท ' + w.own.length
+                 + ' ลำ · เช่า ' + w.chr.length + ' ลำ');
   });
   /* ── ส่วนที่ 2 · Matrix ── */
   shown.forEach(p => {
@@ -1033,9 +1104,24 @@ else {
   if (sickAll.length && !R3m.att.some(t => /ซ่อมไม่เสร็จ/.test(t)))
     bad3m.push('มีเรือที่ยังซ่อมอยู่ ' + sickAll.length + ' ลำ แต่ไม่ขึ้นในส่วนที่ 4');
   if (!R3m.shutPlant) bad3m.push('วางเรือบนวันปิดขายไม่ได้ · พิสูจน์ไม่ได้ว่าไม่นับวันปิด');
+  if (!R3m.offBoat || !R3m.offBoat.cap)
+    bad3m.push('กดไม่นับลำไหนไม่ได้ · พิสูจน์ไม่ได้ว่าที่นั่งของกลุ่มหักลำที่ไม่นับ');
+  else {
+    /* §flDeployOwn · ลำที่กดไม่นับต้องยังอยู่ในรายชื่อกลุ่ม แต่ที่นั่งต้องไม่ถูกนับ */
+    const lb = R3m.labels[R3m.offBoat.pier] || R3m.offBoat.pier, cc = R3m.cards[lb];
+    if (cc && cc.own && cc.own.boats.indexOf(R3m.offBoat.name) < 0)
+      bad3m.push(lb + ' ' + R3m.offBoat.name + ' กดไม่นับแล้วหลุดจากรายชื่อเรือบริษัท · ควรยังอยู่แต่จาง');
+    const ws = R3m.want[R3m.offBoat.pier];
+    if (ws && cc && cc.own
+        && cc.own.head.replace(/,/g, '').indexOf(String(ws.ownSeat + R3m.offBoat.cap) + ' ที่นั่ง') >= 0)
+      bad3m.push(lb + ' ที่นั่งเรือบริษัทยังรวม ' + R3m.offBoat.name + ' ที่กดไม่นับไว้');
+  }
   if (!R3m.boatsSame || !R3m.tripsSame) bad3m.push('เปิดแผ่นแล้ว BOATS หรือ TRIPS จริงเปลี่ยน');
   if (bad3m.length) fail('Factsheet · ' + bad3m.slice(0, 3).join(' · '));
-  else ok('Factsheet 4 ส่วนตรงกับที่นับเองทุกตัว · การ์ดท่า ' + shown.length + ' ใบ มีสีประจำท่าและรายชื่อเรือ · '
+  else ok('Factsheet 4 ส่วนตรงกับที่นับเองทุกตัว · การ์ดท่า ' + shown.length + ' ใบ มีสีประจำท่า · '
+    + 'แยกเรือบริษัท ' + shown.reduce((n, p) => n + R3m.want[p].own.length, 0) + ' ลำ / เรือเช่า '
+    + shown.reduce((n, p) => n + R3m.want[p].chr.length, 0) + ' ลำ พร้อมที่นั่งของแต่ละกลุ่ม · กด "ไม่นับในแผน" ให้ '
+    + R3m.offBoat.name + ' แล้วที่นั่งกลุ่มเรือบริษัทหักออก ' + R3m.offBoat.cap + ' ที่ แต่ยังอยู่ในรายชื่อ · '
       + 'ชิปเวลาออกเรือตรงทุกแถว · '
       + 'Matrix รายวัน ' + R3m.mx.length + ' ตาราง (' + R3m.days + ' คอลัมน์วัน · รหัสเรือ '
       + R3m.keyN + ' ลำ) · ค่าเฉลี่ย ' + nRng + ' โปรแกรม · '

@@ -25026,6 +25026,12 @@ function fdStatOn(b, ds){
 function fdRealReady(b, ds){ return fdStatOn(b, ds)==='available'; }
 function fdCounted(b){ return (_fdPlan.ready||{})[b.id]!==0; }
 function fdCanRun(b, ds){ return fdInService(b, ds) && fdCounted(b); }
+/* §flDeployOwn · ที่นั่งของกลุ่มเรือกลุ่มหนึ่ง · นับแค่ลำที่วิ่งได้จริงวันนั้น
+   อ่านที่เดียวใช้หลายที่ · ทั้งการ์ดท่าเรือและแถบรวมเรียกตัวนี้ตัวเดียวกัน */
+function fdCapOf(arr, ds){
+  return (arr||[]).filter(function(b){ return fdCanRun(b, ds); })
+                  .reduce(function(n,b){ return n+(b.cap||0); }, 0);
+}
 /* §flDeployWhy · ทำไมลำนี้ไม่ถูกนับเป็นกำลังของวันนั้น (2026-09-24)
    ที่มา · ป้ายเดิมเขียน "ไม่นับในแผน" อย่างเดียว แต่สาเหตุมีสองอย่างที่ต้องทำคนละเรื่อง
      off  · คนกดปุ่มบนการ์ดเองว่าไม่เอาลำนี้ → แก้ได้ด้วยการกดกลับ
@@ -26266,7 +26272,13 @@ function fdSheet(){
     var idle=list.filter(function(b){
       return openDays.length && !progs.some(function(x){ return x.bset[b.id]; }); });
 
+    /* §flDeployOwn · เรือบริษัทกับเรือเช่าคิดกันคนละแบบ · ลำของบริษัทคือกำลังที่ต้อง
+       วางคนและรับภาระซ่อมเอง · ลำเช่าคือกำลังเสริมที่เพิ่ม-ถอนได้ตามสถานการณ์
+       ตัวเลขรวมก้อนเดียวจึงตัดสินใจไม่ได้ว่าจะเพิ่มลำเช่าอีกหรือเร่งซ่อมลำของตัวเอง */
+    var ownL=list.filter(function(b){ return !fdIsCharter(b); });
+    var chrL=list.filter(fdIsCharter);
     P.push({ k:k, list:list, run:run, seats:seats, lic:lic, openDays:openDays,
+             ownL:ownL, chrL:chrL, ownSeat:fdCapOf(ownL, Wn.from), chrSeat:fdCapOf(chrL, Wn.from),
              progs:progs, col:col, stray:stray, idle:idle,
              seatDay:seatDay, bkDay:bkDay, freeDay:freeDay,
              need:list.reduce(function(n,b){ return n+fdCrewOf(b); },0),
@@ -26334,7 +26346,11 @@ function fdSheet(){
   var PC={ tublamu:'#2563EB', panwa:'#0F6E56', ranong:'#8A5410' };
   var ST=[
     ['ที่นั่งต่อวัน',      function(x){ return nf(x.seats); },
-                          function(x){ return 'เพดานทะเบียน '+nf(x.lic); }, function(){ return ''; }],
+                          function(x){ return 'บริษัท '+nf(x.ownSeat)+' · เช่า '+nf(x.chrSeat); },
+                          function(){ return ''; }],
+    ['เพดานทะเบียน',      function(x){ return nf(x.lic); },
+                          function(x){ return x.lic<x.seats?'ต่ำกว่าที่นั่งที่ตั้งไว้':'รวมทุกลำที่นับ'; },
+                          function(x){ return x.lic<x.seats?'bad':''; }],
     ['วันที่เปิดขาย',     function(x){ return x.openDays.length; },
                           function(x){ return 'จาก '+days.length+' วัน'; },
                           function(x){ return x.openDays.length?'':'warn'; }],
@@ -26360,9 +26376,14 @@ function fdSheet(){
   var TD=P.reduce(function(n,x){ return n+x.seatDay; },0);
   var TK=P.reduce(function(n,x){ return n+x.bkDay; },0);
   var TO=P.reduce(function(n,x){ return n+x.openDays.length; },0);
+  var TBo=P.reduce(function(n,x){ return n+x.ownL.length; },0);
+  var TBc=P.reduce(function(n,x){ return n+x.chrL.length; },0);
+  var TSo=P.reduce(function(n,x){ return n+x.ownSeat; },0);
+  var TSc=P.reduce(function(n,x){ return n+x.chrSeat; },0);
   h+='<div class="fs-sec"><div class="sc">1 · เทียบท่าเรือ</div>'
-    + '<div class="tot-strip"><span><i>รวมทุกท่า</i><b>'+TB+'</b><u>ลำ</u></span>'
-      + '<span><i>ที่นั่งต่อวัน</i><b>'+nf(TS)+'</b><u>ที่นั่ง</u></span>'
+    + '<div class="tot-strip"><span><i>รวมทุกท่า</i><b>'+TB+'</b><u>ลำ · '
+      + '<em class="od own"></em>บริษัท '+TBo+' · <em class="od chr"></em>เช่า '+TBc+'</u></span>'
+      + '<span><i>ที่นั่งต่อวัน</i><b>'+nf(TS)+'</b><u>บริษัท '+nf(TSo)+' · เช่า '+nf(TSc)+'</u></span>'
       + '<span><i>ที่นั่งที่จัดลงจริง</i><b>'+nf(TD)+'</b><u>รวมทั้งช่วง</u></span>'
       + '<span'+((!heavy&&TD&&TK/TD>=1)?' class="bad"':'')+'><i>ลูกค้าที่จองแล้ว</i><b>'
         +(heavy?'—':nf(TK))+'</b><u>'+((heavy||!TD)?'':Math.round(TK/TD*100)+'% ของกำลัง')+'</u></span>'
@@ -26373,21 +26394,34 @@ function fdSheet(){
         var c=PC[x.k]||'#6B7280';
         return '<div class="pcard" style="--pc:'+c+'">'
           + '<div class="ph"><b>'+fdE(fdPierNm(x.k))+'</b>'
-            + '<span>'+x.list.length+' ลำ · '+nf(x.seats)+' ที่นั่ง/วัน</span></div>'
+            + '<span><em class="od own"></em>บริษัท '+x.ownL.length+' ลำ'
+            + '<em class="od chr"></em>เช่า '+x.chrL.length+' ลำ'
+            + '<i>รวม '+nf(x.seats)+' ที่นั่ง/วัน</i></span></div>'
           + '<div class="pg">'+ST.map(function(r){
               var cls=r[3](x);
               return '<div class="pv'+(cls?(' '+cls):'')+'"><i>'+r[0]+'</i><b>'+r[1](x)+'</b>'
                 + (r[2](x)?('<u>'+r[2](x)+'</u>'):'')+'</div>'; }).join('')+'</div>'
-          + '<div class="pb"><i>เรือในท่านี้</i>'
-            + (x.list.length ? fdSort(x.list).map(function(b){
+          + (function(){
+              var chip=function(b){
                 var w=fdWhyNot(b, Wn.from), sick=!fdRealReady(b, Wn.from);
                 return '<span class="bc'+(w?' off':'')+(sick?' fix':'')+'" title="'
                   +fdE(b.name+' · '+(b.cap||0)+' ที่นั่ง · ลูกเรือ '+(b.crew||'—')
+                    +(fdIsCharter(b)?' · เรือเช่า':' · เรือบริษัท')
                     +(sick?' · ยังซ่อมไม่เสร็จ':'')+(w?(' · '+FD_WHY[w]):''))+'">'
                   + fdE(b.name)+'<u>'+(b.cap||0)+'</u>'
-                  + (fdIsCharter(b)?'<s>เช่า</s>':'')+(sick?'<s class="f">ซ่อม</s>':'')+'</span>';
-              }).join('') : '<span class="none">ยังไม่มีเรือในท่านี้</span>')
-          + '</div></div>'; }).join('')
+                  + (sick?'<s class="f">ซ่อม</s>':'')+'</span>';
+              };
+              if(!x.list.length)
+                return '<div class="pb"><i>เรือในท่านี้</i><span class="none">ยังไม่มีเรือในท่านี้</span></div>';
+              var grp=function(cls, ttl, arr){
+                if(!arr.length) return '';
+                return '<div class="pb '+cls+'"><i><em class="od '+cls+'"></em>'+ttl
+                  + ' <b>'+arr.length+' ลำ · '+nf(fdCapOf(arr, Wn.from))+' ที่นั่ง</b></i>'
+                  + fdSort(arr).map(chip).join('')+'</div>';
+              };
+              return grp('own','เรือบริษัท', x.ownL) + grp('chr','เรือเช่า', x.chrL);
+            })()
+          + '</div>'; }).join('')
     + '</div></div>';
 
   /* ── ส่วนที่ 2 · Matrix โปรแกรม × วัน · กระจายเรือลงช่อง ──────────────
@@ -26777,8 +26811,18 @@ function fdCSS(){
   +H+' .fd-sheet .pcard .ph{padding:8px 11px;background:color-mix(in srgb,var(--pc) 7%,#fff);'
      +'border-bottom:1px solid #F1F3F6}'
   +H+' .fd-sheet .pcard .ph b{font-size:13.5px;color:var(--pc);display:block}'
-  +H+' .fd-sheet .pcard .ph span{font-size:10.5px;color:#6B7280}'
+  +H+' .fd-sheet .pcard .ph span{font-size:10.5px;color:#6B7280;display:flex;align-items:center;'
+    +'gap:4px;flex-wrap:wrap;margin-top:2px}'
+  +H+' .fd-sheet .pcard .ph span i{font-style:normal;color:#9AA3AE;margin-left:2px}'
+  /* §flDeployOwn · จุดสีบอกกลุ่ม · ทึบคือเรือบริษัท กลวงคือเรือเช่า จำง่ายกว่าอ่านคำ */
+  +H+' .fd-sheet .od{display:inline-block;width:7px;height:7px;border-radius:2px;'
+    +'border:1.5px solid var(--pc,#6B7280);margin-right:3px;vertical-align:middle}'
+  +H+' .fd-sheet .od.own{background:var(--pc,#6B7280)}'
+  +H+' .fd-sheet .od.chr{background:#fff}'
+  +H+' .fd-sheet .tot-strip .od{--pc:#6B7280}'
   +H+' .fd-sheet .pcard .pg{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#F1F3F6}'
+  /* ช่องสุดท้ายเมื่อจำนวนเป็นเลขคี่ · กินเต็มแถวแทนที่จะเหลือครึ่งแถวโหว่ */
+  +H+' .fd-sheet .pcard .pg .pv:last-child:nth-child(odd){grid-column:1/-1}'
   +H+' .fd-sheet .pv{background:#fff;padding:6px 10px}'
   +H+' .fd-sheet .pv i{display:block;font-style:normal;font-size:9px;font-weight:700;'
      +'letter-spacing:.02em;color:#9AA3AE;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
@@ -26787,6 +26831,8 @@ function fdCSS(){
   +H+' .fd-sheet .pv.bad{background:#FDF2F2} '+H+' .fd-sheet .pv.bad b{color:#A32D2D}'
   +H+' .fd-sheet .pv.warn{background:#FEF6E7} '+H+' .fd-sheet .pv.warn b{color:#8A5410}'
   +H+' .fd-sheet .pcard .pb{padding:8px 10px 9px;border-top:1px solid #F1F3F6;background:#FCFCFD}'
+  +H+' .fd-sheet .pcard .pb.chr{border-top-style:dashed}'
+  +H+' .fd-sheet .pcard .pb>i b{font-size:9px;color:#6B7280;font-weight:700}'
   +H+' .fd-sheet .pcard .pb>i{display:block;font-style:normal;font-size:9px;font-weight:700;'
      +'letter-spacing:.03em;color:#9AA3AE;margin-bottom:5px}'
   +H+' .fd-sheet .bc{display:inline-flex;align-items:center;gap:5px;background:#fff;border:1px solid #E7EAEF;'
