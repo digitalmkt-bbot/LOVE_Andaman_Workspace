@@ -47854,12 +47854,35 @@ function bkV2RenderTab2(){
         + `</div></td></tr>`;
       /* แถวที่นั่งที่ยังกันไว้ · เป็น "ที่นั่ง" ไม่ใช่ "คน" — ไม่นับเป็น booking
          ไม่เข้าใบงานรถ/เรือ และไม่เข้าทะเบียนอุทยาน จนกว่าจะมีชื่อจริง */
-      const _row = _held>0 ? `<tr class="t2-lrow" style="--lc:${_c}"><td colspan="${COLN}"><div class="lw">`
-        + `<span class="lkq">${_held}</span><span class="lkqu">ที่</span>`
-        + `<span class="lkhold">&#128274; กันไว้</span>`
-        + `<span class="lkwho">${esc(_nm)}</span>`
-        + `<span class="lkwait">${_used>0?'เหลือกันไว้ ยังไม่ส่งชื่อ':'ยังไม่ส่งชื่อผู้โดยสาร'}</span>`
-        + `</div></td></tr>` : '';
+      /* ══ §btLkCell · แถวที่นั่งเรียงตรงคอลัมน์จริง ════════════════════════
+         ของเดิมเป็นแถบยาวช่องเดียว (colspan) · ตาที่กำลังกวาดลงคอลัมน์ AD
+         มาเจอแถบขวางแล้วต้องเริ่มอ่านใหม่ทีละคำ · ตอนนี้ใช้ <td> จริงเรียงตาม
+         หัวตาราง จำนวนที่กันไว้จึงอยู่ใต้ AD ตรงกับตัวเลขของแถวคนจริง
+         ลำดับช่องต้องตรงกับ thead เป๊ะ ๆ รวมคอลัมน์ที่โผล่เฉพาะบางโหมด
+         (กลุ่ม เฉพาะโหมดจัดรถ · Add-on/Pay/Total/VC เฉพาะตอนไม่จัดรถ ฯลฯ) */
+      const _dash = '<span class="t2-dim">&mdash;</span>';
+      const _code = 'LK-' + String(_nm||'').replace(/\s+/g,'').slice(0,12).toUpperCase();
+      const _row = _held>0 ? `<tr class="t2-row t2-lrow" style="--lc:${_c}">`
+        + `<td class="t2-vc"><span class="lkcode">${esc(_code)}</span></td>`
+        + `<td><span class="lkwho" style="background:${_c};color:${_ink}">${esc(_nm)}</span></td>`
+        + `<td class="t2-cu"><span class="lkwait">&mdash; ${_used>0?'เหลือกันไว้ ยังไม่ส่งชื่อ':'ที่นั่งกันไว้ ยังไม่ส่งชื่อ'} &mdash;</span></td>`
+        + `<td class="t2-c"><b class="lkq">${_held}</b></td>`
+        + `<td class="t2-c">${_dash}</td><td class="t2-c">${_dash}</td><td class="t2-c">${_dash}</td>`
+        + `<td>${_cut?`<span class="lkrule">${esc(_cut)}</span>`:_dash}</td>`
+        + (vanMode?`<td class="t2-c">${_dash}</td>`:'')
+        + `<td class="t2-pk"><span class="lkwait">รอ rooming list</span></td>`
+        + `<td class="t2-c">${_dash}</td>`
+        + `<td>${_dash}</td>`
+        + `<td>${_dash}</td>`
+        + (vanMode?'':`<td class="t2-req">${_dash}</td>`)
+        + `<td class="t2-req">${l.reason?`<span class="lkwait lkclip" title="${esc(l.reason)}">${esc(l.reason)}</span>`:_dash}</td>`
+        + (vanMode?'':`<td><span class="lkhold">&#128274; กันไว้</span></td>`
+                    + `<td class="t2-r">${_dash}</td>`
+                    + `<td class="t2-c">${_dash}</td>`)
+        + `<td class="t2-c">${_dash}</td>`
+        + (rcMode?`<td class="t2-c">${_dash}</td>`:'')
+        + (wxClosed?`<td class="t2-c">${_dash}</td>`:'')
+        + `</tr>` : '';
       return _band + _row;
     }).join('');
     const zoneTable = (zoneBlocks || lockBlocks) ? `
@@ -48582,16 +48605,27 @@ function bkV2RenderTab2(){
     .t2-lband .lkgo{margin-left:auto;font-size:10.5px;font-weight:700;color:#7A5A34;background:#fff;
       border:1px solid #E7D8C6;border-radius:7px;padding:4px 10px;cursor:pointer;font-family:inherit}
     .t2-lband .lkgo:hover{border-color:#B7946A}
-    /* แถวที่นั่งที่ยังกันไว้ · เส้นประบอกว่ายังไม่ใช่แถวของคนจริง */
-    .t2-mtbl tr.t2-lrow>td{background:#FFFCF8;border-bottom:1px dashed #E7D8C6;padding:7px 14px;
-      box-shadow:inset 5px 0 0 var(--lc,#9C9C95)}
-    .t2-lrow .lw{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-    .t2-lrow .lkq{font-family:'DM Mono',monospace;font-size:17px;font-weight:800;color:var(--lc,#9C9C95)}
-    .t2-lrow .lkqu{font-size:10px;font-weight:700;color:#A98F72;margin-left:-5px}
-    .t2-lrow .lkhold{font-size:10.5px;font-weight:700;color:#7A5A34;background:#fff;
-      border:1px solid #E7D8C6;border-radius:6px;padding:2px 8px}
-    .t2-lrow .lkwho{font-size:11.5px;font-weight:700;color:#5C4A36}
+    /* ══ §btLkCell · แถวที่นั่งที่ยังกันไว้ · เรียงตรงคอลัมน์จริง ══════════════
+       เป็นแถวปกติ (t2-row) จะได้คอลัมน์ซ้ายแช่แข็งเหมือนแถวอื่นตอนเลื่อนแนวนอน
+       เส้นประบอกว่ายังไม่ใช่แถวของคนจริง · ขีดสีเอเยนต์วาดเฉพาะช่องแรก */
+    .t2-mtbl tr.t2-lrow.t2-row{background:#FFFCF8}
+    .t2-mtbl tr.t2-lrow.t2-row>td{border-bottom:1px dashed #E7D8C6}
+    .t2-mtbl tr.t2-lrow.t2-row>td:first-child{box-shadow:inset 4px 0 0 var(--lc,#9C9C95)}
+    table.t2-mtbl tr.t2-lrow.t2-row:hover td{background:#FFF8F0;cursor:default}
+    .t2-lrow .lkcode{font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:#A98F72}
+    .t2-lrow .lkq{font-family:'DM Mono',monospace;font-size:15px;font-weight:800;color:var(--lc,#9C9C95)}
+    .t2-lrow .lkhold{display:inline-block;font-size:10px;font-weight:700;color:#7A5A34;background:#fff;
+      border:1px solid #E7D8C6;border-radius:5px;padding:2px 7px;white-space:nowrap}
+    .t2-lrow .lkwho{display:inline-block;font-size:10.5px;font-weight:700;border-radius:5px;
+      padding:3px 8px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+      vertical-align:middle}
     .t2-lrow .lkwait{font-size:11.5px;font-style:italic;color:#9a8b78}
+    /* เหตุผลของล็อกยาวได้ไม่จำกัด · ช่อง Special request กว้าง 118px ตัดท้ายด้วยจุดสามจุด
+       ไม่งั้นข้อความถูกตัดกลางคำเฉย ๆ อ่านไม่รู้ว่ามีต่อ (ตัวเต็มอยู่ใน title) */
+    .t2-lrow .lkclip{display:inline-block;max-width:110px;overflow:hidden;
+      text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+    .t2-lrow .lkrule{font-size:10px;font-weight:700;background:#fff;border:1px solid #E7D8C6;
+      color:#7A5A34;border-radius:5px;padding:2px 7px;white-space:nowrap}
     /* ป้ายบนใบที่ดึงที่นั่งมาจากล็อก · สีของเจ้าของล็อก ตามรอยกลับได้ว่ามาจากโควตาใคร */
     .t2-drawn{display:inline-block;font-size:9px;font-weight:800;border-radius:5px;
       padding:1px 6px;margin-left:6px;vertical-align:middle;white-space:nowrap}

@@ -185,8 +185,24 @@ const GOT = await page.evaluate((RID) => {
     });
     return n;
   };
+  /* §btLkCell · แถวที่นั่งต้องเป็นช่องจริงเรียงตรงคอลัมน์ · ไม่ใช่แถบยาวช่องเดียว
+     เทียบจำนวนช่องกับหัวตาราง และกับแถวของคนจริงในตารางเดียวกัน
+     แล้วเช็คว่าจำนวนที่กันไว้ตกอยู่ใต้คอลัมน์ AD พอดี                            */
+  const grid = [].slice.call(document.querySelectorAll('tr.t2-lrow')).map(tr => {
+    const tb = tr.closest('table.t2-mtbl');
+    if (!tb) return { err: 'ไม่ได้อยู่ในตาราง' };
+    const ths = [].slice.call(tb.querySelectorAll('thead th'));
+    const real = tb.querySelector('tr.t2-row:not(.t2-lrow)');
+    const adIx = ths.findIndex(t => (t.textContent || '').trim().toUpperCase() === 'AD');
+    const tds = [].slice.call(tr.querySelectorAll('td'));
+    return { th: ths.length, td: tds.length,
+             real: real ? real.querySelectorAll('td').length : null,
+             span: tds.some(t => +(t.getAttribute('colspan') || 1) > 1),
+             adIx, adCell: adIx >= 0 && tds[adIx] ? !!tds[adIx].querySelector('.lkq') : false,
+             adTxt: adIx >= 0 && tds[adIx] ? (tds[adIx].textContent || '').trim() : '' };
+  });
   return { bands, drawn, nobk: document.querySelectorAll('.t2-nobk').length,
-           lrows: document.querySelectorAll('tr.t2-lrow').length, paxScreen: paxOfRid(RID) };
+           lrows: document.querySelectorAll('tr.t2-lrow').length, grid, paxScreen: paxOfRid(RID) };
 }, SETUP.rid);
 
 /* ══ 1 · แถบล็อกอยู่ในตาราง manifest จริง ═══════════════════════════════ */
@@ -238,6 +254,24 @@ else if (SETUP.other && SETUP.other.drew && GOT.drawn.some(d => d.txt.indexOf(SE
 else ok('ใบที่ดึงที่นั่งจากล็อกติดป้าย "' + SETUP.agName + '" สีเดียวกับแถบ · ' + dHit.length + ' ใบ' +
         ((SETUP.other && SETUP.other.drew) ? (' · ล็อกช่วงของ ' + SETUP.other.name + ' ที่ถูกดึงวันที่ ' +
           SETUP.other.day + ' ไม่มาติดป้ายผิดวัน') : ''));
+
+/* ══ 5b · แถวที่นั่งเรียงตรงคอลัมน์ · กวาดตาลงคอลัมน์ AD ได้ไม่สะดุด ═══════ */
+if (!GOT.grid.length) fail('ไม่มีแถวที่นั่งให้ตรวจการเรียงคอลัมน์');
+else {
+  const g = GOT.grid;
+  const eBad = g.find(x => x.err);
+  const nBad = g.find(x => x.td !== x.th || (x.real != null && x.td !== x.real));
+  const sBad = g.find(x => x.span);
+  const aBad = g.find(x => !x.adCell);
+  if (eBad) fail('แถวที่นั่ง ' + eBad.err);
+  else if (sBad) fail('แถวที่นั่งยังใช้ช่องรวบ (colspan) · ตัวเลขไม่ตรงคอลัมน์ ตากวาดลงมาแล้วสะดุด');
+  else if (nBad) fail('แถวที่นั่งมี ' + nBad.td + ' ช่อง · หัวตารางมี ' + nBad.th +
+                      ' และแถวของคนจริงมี ' + nBad.real + ' · คอลัมน์จะเลื่อนไม่ตรงกัน');
+  else if (aBad) fail('จำนวนที่กันไว้ไม่ได้อยู่ใต้คอลัมน์ AD (ช่องที่ ' + (aBad.adIx + 1) +
+                      ' มี "' + aBad.adTxt + '")');
+  else ok('แถวที่นั่งเรียงตรงคอลัมน์ · ' + g[0].td + ' ช่องเท่าหัวตารางและเท่าแถวของคนจริง · ' +
+          'จำนวนที่กันไว้อยู่ใต้ AD (ช่องที่ ' + (g[0].adIx + 1) + ') ทุกแถว ' + g.length + ' แถว');
+}
 
 /* ══ 6 · ล็อกที่ถูกดึงจนหมด · แถบยังอยู่ แต่ไม่มีแถวที่นั่งค้าง ══════════ */
 const w2 = SETUP.want[SETUP.ids.L2];
