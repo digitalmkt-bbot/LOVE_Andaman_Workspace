@@ -590,6 +590,98 @@ function laSbUser(){ return (window.LA_ME && (LA_ME.username||LA_ME.name)) || 'g
    ตัวที่ใช้เลือกหน้าตาเมนูตอนนี้คือปุ่มทรงพิล cyan/navy ข้างปุ่มธีมบนหัวแถบ
    คีย์ la_sbcolor_<user> ที่เคยเก็บไว้ปล่อยค้างไว้เฉย ๆ ไม่มีใครอ่านแล้ว
    ไม่ไล่ลบ เพราะเป็นของในเครื่องผู้ใช้และลบทิ้งเงียบ ๆ ไม่ใช่เรื่องที่ควรทำเอง */
+/* ══ §i18n (2026-09-25) · ปุ่มสลับภาษา ไทย / อังกฤษ ═══════════════════════════
+   ที่มา · ผู้ใช้ขอ · คนที่ต้องใช้อังกฤษคือฝั่ง Sales
+   วัดหน้าจริงแล้ว · หน้ากลุ่ม Sales เป็นอังกฤษอยู่เกือบหมด เหลือไทยหน้าละไม่กี่คำ
+   รอบนี้จึงวางโครงให้ครบก่อน แล้วค่อยไล่ห่อข้อความทีละหน้า
+
+   กติกาที่เลือก · ห่อด้วยข้อความไทยต้นฉบับเป็นกุญแจ  laT('บันทึก') → 'Save'
+     - ไม่ต้องคิดชื่อคีย์ใหม่ให้ 12,000 ข้อความ · diff เล็ก อ่านโค้ดแล้วยังรู้เรื่อง
+     - ไม่มีคำแปล = คืนไทยเหมือนเดิม · ห่อผิดที่ก็ไม่พัง แค่ไม่แปล
+     - คำไทยคำเดียวกันแต่คนละความหมาย ใส่บริบทได้  laT('ว่าง','seat')
+   ⚠ แปลได้แค่ "เปลือกโปรแกรม" · ชื่อลูกค้า โรงแรม โซนรับ หมายเหตุที่พนักงานพิมพ์
+     เป็นข้อมูลในฐานข้อมูล ห้ามเอามาห่อ ไม่งั้นข้อมูลจริงจะเพี้ยนตามภาษาที่เลือก */
+function laLangGet(){
+  try{ return localStorage.getItem('la_lang_'+laSbUser())==='en' ? 'en' : 'th'; }
+  catch(e){ return 'th'; }
+}
+function laLangSet(l){
+  try{ localStorage.setItem('la_lang_'+laSbUser(), l==='en'?'en':'th'); }catch(e){}
+}
+function laT(th, ctx){
+  if(laLangGet()!=='en') return th;
+  var s=String(th==null?'':th);
+  if(ctx){ var c=LA_T_EN[ctx+'|'+s]; if(c!=null) return c; }
+  var v=LA_T_EN[s];
+  return (v==null) ? th : v;
+}
+/* ชื่อเมนูซ้าย · เมนูเป็น HTML คงที่ในไฟล์ ไม่ได้วาดด้วย JS จึงสลับที่ตัว DOM
+   เก็บไทยต้นฉบับไว้ใน dataset ครั้งแรก · สลับกลับได้โดยไม่ต้องมีพจนานุกรมย้อนกลับ */
+function laLangApplyNav(){
+  var en=(laLangGet()==='en');
+  document.querySelectorAll('.sidebar .nav-item[data-view]').forEach(function(el){
+    /* ป้ายชื่อคือ text node ตัวสุดท้ายที่มีตัวอักษร · ตัวแรกเป็น <svg> ไอคอน */
+    var node=null;
+    for(var i=el.childNodes.length-1;i>=0;i--){
+      var n=el.childNodes[i];
+      if(n.nodeType===3 && String(n.nodeValue||'').trim()){ node=n; break; }
+    }
+    if(!node) return;
+    if(!el.dataset.thLabel) el.dataset.thLabel=String(node.nodeValue).trim();
+    var th=el.dataset.thLabel;
+    /* บริบท 'nav' ก่อน · คำเดียวกันในเมนูกับในหน้าอาจแปลคนละแบบ
+       ไม่มีคำแปล = คืนไทยเหมือนเดิม เมนูที่เป็นอังกฤษอยู่แล้วจึงไม่ถูกแตะ */
+    var tr=en ? laT(th,'nav') : th;
+    node.nodeValue=' '+tr+' ';
+  });
+}
+function laLangToggle(){
+  laLangSet(laLangGet()==='en'?'th':'en');
+  try{ laLangApplyNav(); }catch(e){}
+  try{ if(typeof sbLangIcon==='function') sbLangIcon(); }catch(e){}
+  /* วาดหน้าที่เปิดอยู่ใหม่ · nav() เป็นทางเดียวที่วาดหน้าใหม่ทั้งระบบ
+     ยิงผ่านเมนูที่ active อยู่ จะได้ไม่ต้องรู้ว่าแต่ละหน้าใช้ฟังก์ชันวาดตัวไหน */
+  try{
+    var a=document.querySelector('.sidebar .nav-item.active');
+    if(a && typeof nav==='function') nav(a);
+  }catch(e){}
+}
+window.laT=laT; window.laLangGet=laLangGet; window.laLangToggle=laLangToggle;
+window.laLangApplyNav=laLangApplyNav;
+
+/* ── พจนานุกรม ไทย → อังกฤษ · เฉพาะ "เปลือกโปรแกรม" ─────────────────────────
+   เรียงตามหน้าที่ไล่ทำ · หน้าไหนยังไม่ได้ทำ ข้อความจะคืนไทยเหมือนเดิม */
+var LA_T_EN={
+  /* ── เมนูซ้าย · บริบท nav ── */
+  'nav|ตรวจเอกสาร':'Document Check', 'nav|ใบงานรถ (Van Jobs)':'Van Jobs',
+  'nav|เช็คอินรถ':'Van Check-in', 'nav|เช็คอินหน้าท่า':'Pier Check-in',
+  'nav|เช็คอิน City tour':'City Tour Check-in', 'nav|แผนที่จุดรับ':'Pickup Map',
+  'nav|ต้นทุน & จุดคุ้มทุน':'Cost & Break-even', 'nav|P&L รายทริป':'Trip P&L',
+  'nav|วางบิลรถร่วม':'Partner Van Billing', 'nav|เบิกของใช้ / น้ำมัน':'Supplies / Fuel',
+  'nav|Fuel · น้ำมัน':'Fuel',
+  /* เมนูย่อยของแต่ละท่าเรือ · ป้ายเดียวกันซ้ำสามท่า แปลชุดเดียวใช้ได้ทั้งหมด */
+  'nav|ใบงานเรือ':'Boat Job Sheet', 'nav|เบิก-คืนอุปกรณ์':'Equipment In / Out',
+  'nav|ตารางการทำงาน':'Work Schedule', 'nav|เงินสดย่อย':'Petty Cash',
+  'nav|ตั๋วอุทยาน':'Park Tickets', 'nav|ใบอนุญาต':'Licences',
+  /* ── Agent List ── */
+  'เลือก Agent จากเมนูด้านซ้ายเพื่อดูรายละเอียดและราคา':
+    'Pick an agent on the left to see details and rates',
+  /* ── Rate Types ── */
+  'แก้โค้ดให้ไม่ซ้ำ':'Fix duplicate codes',
+  'เปิดภาพรวม Rate Expiry':'Open Rate Expiry overview',
+  'จัดการชนิด Add-on':'Manage add-on types',
+  'Shared · กลาง':'Shared · common', 'เซลล์: ':'Sales: ',
+  'Longtail (เรือหางยาว)':'Longtail boat',
+  /* ── FOC Detail ── */
+  'FOC ตามเส้นทาง':'FOC by route',
+  'Top 5 ส่งเยอะสุด · ไม่รวม Guide':'Top 5 senders · excluding guides',
+  'KPI ต่ำ':'Low KPI', 'FOC สูง · ลูกค้าน้อย':'High FOC · few paying pax',
+  /* ── B2C Channels ── */
+  'เปิดทุกช่องทาง':'All channels on', 'รายการล่าสุด':'Latest entries',
+  'รวมทุกช่องทาง':'All channels'
+};
+
+
 // ── collapsible groups (accordion) · coexists with permission auto-hide (inline display:none wins) ──
 function laSbCollapsed(){ try{ return JSON.parse(localStorage.getItem('la_sbacc_'+laSbUser())||'[]'); }catch(e){ return []; } }
 function laSbSetCollapsed(a){ try{ localStorage.setItem('la_sbacc_'+laSbUser(), JSON.stringify(a)); }catch(e){} }

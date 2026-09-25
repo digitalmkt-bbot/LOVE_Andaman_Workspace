@@ -5215,14 +5215,14 @@ function renderFocDetail(){
     const _FB={similan:'#5B9BD5',surin:'#9CCC65',phiphi:'#EF6C6C',krabi:'#4DB6AC',whaleshark:'#E0A93C',other:'#B0BEC5'};
     const _famChips=FAM_ORDER.concat(['other']).filter(fid=>famFoc[fid]).map(fid=>{ const bc=_FB[fid]||'#9BB89B'; const pct=famPax[fid]>0?Math.round(famFoc[fid]/famPax[fid]*100):0; const pay=famPax[fid]-famFoc[fid]; const focVal=pay>0?Math.round(famFoc[fid]*(famVal[fid]/pay)):0; return `<div style="background:rgba(255,255,255,.06);border-radius:10px;border-left:3px solid ${bc};padding:5px 10px 6px;min-width:66px"><div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#a8c1ad;white-space:nowrap">${fid==='other'?'อื่นๆ':(famHdr[fid]||fid)}</div><div style="display:flex;align-items:baseline;gap:5px;margin-top:1px"><span style="font-size:16px;font-weight:700;color:#fff;font-variant-numeric:tabular-nums;line-height:1">${famFoc[fid]}</span><span style="font-size:9px;font-weight:700;color:${bc};font-variant-numeric:tabular-nums" title="FOC ${famFoc[fid]} จาก ${famPax[fid]} pax">${pct}%</span></div><div style="font-size:9px;font-weight:700;color:${bc};font-variant-numeric:tabular-nums;margin-top:2px" title="มูลค่า FOC ที่แจกฟรี ≈ FOC × ราคาเฉลี่ย/หัวที่จ่ายจริง">≈${fK(focVal)}</div></div>`; }).join('');
     const _totFocVal=FAM_ORDER.concat(['other']).reduce((s,fid)=>{ if(!famFoc[fid])return s; const pay=famPax[fid]-famFoc[fid]; return s+(pay>0?famFoc[fid]*(famVal[fid]/pay):0); },0);
-    const hero=`<div style="flex:1.5;min-width:160px;padding:14px 16px;background:#1F4D2C;border-radius:16px;display:flex;flex-direction:column;justify-content:flex-start;font-family:'DM Sans',sans-serif;${_glHero}"><div style="font-size:10px;color:#9BB89B;text-transform:uppercase;letter-spacing:.04em">FOC pax</div><div style="display:flex;align-items:baseline;gap:8px;margin-top:4px"><span style="font-size:30px;font-weight:700;line-height:1;letter-spacing:-1px;color:#fff">${gFoc}</span><span style="font-size:13px;color:#9BB89B">pax · ${focRecs.length} agents</span></div><div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span style="background:#C8F47C;color:#1F4D2C;padding:2px 9px;border-radius:14px;font-size:10px;font-weight:600">Agent ${agentFoc} · Staff ${staffFoc}</span><span style="background:rgba(212,83,126,.14);border:1.5px solid #E07A9E;color:#F6C2D4;padding:2px 10px;border-radius:14px;font-size:10px;font-weight:700" title="มูลค่ารวมของ FOC ที่แจกฟรี (ประมาณ)">มูลค่า FOC ≈ ${fK(_totFocVal)}</span></div>${_famChips?`<div style="font-size:8.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#7c9a82;margin:14px 0 6px">FOC ตามเส้นทาง</div><div style="display:flex;gap:6px;flex-wrap:wrap">${_famChips}</div>`:''}</div>`;
+    const hero=`<div style="flex:1.5;min-width:160px;padding:14px 16px;background:#1F4D2C;border-radius:16px;display:flex;flex-direction:column;justify-content:flex-start;font-family:'DM Sans',sans-serif;${_glHero}"><div style="font-size:10px;color:#9BB89B;text-transform:uppercase;letter-spacing:.04em">FOC pax</div><div style="display:flex;align-items:baseline;gap:8px;margin-top:4px"><span style="font-size:30px;font-weight:700;line-height:1;letter-spacing:-1px;color:#fff">${gFoc}</span><span style="font-size:13px;color:#9BB89B">pax · ${focRecs.length} agents</span></div><div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span style="background:#C8F47C;color:#1F4D2C;padding:2px 9px;border-radius:14px;font-size:10px;font-weight:600">Agent ${agentFoc} · Staff ${staffFoc}</span><span style="background:rgba(212,83,126,.14);border:1.5px solid #E07A9E;color:#F6C2D4;padding:2px 10px;border-radius:14px;font-size:10px;font-weight:700" title="มูลค่ารวมของ FOC ที่แจกฟรี (ประมาณ)">มูลค่า FOC ≈ ${fK(_totFocVal)}</span></div>${_famChips?`<div style="font-size:8.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#7c9a82;margin:14px 0 6px">${laT('FOC ตามเส้นทาง')}</div><div style="display:flex;gap:6px;flex-wrap:wrap">${_famChips}</div>`:''}</div>`;
     const wtile=(big,lab,sub,numc,bg)=>`<div style="flex:1;min-width:128px;padding:14px 17px;background:${bg};border:1px solid rgba(0,0,0,.06);border-radius:16px;display:flex;flex-direction:column;justify-content:center"><div style="font-size:9.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#6a7a70;margin-bottom:5px">${lab}</div><div style="font-size:26px;font-weight:800;font-variant-numeric:tabular-nums;color:${numc};line-height:1">${big}</div><div style="font-size:10.5px;color:#9aa49c;margin-top:5px">${sub}</div></div>`;
     const _agNG={}; BK.forEach(b=>{ if(b.status==='rejected'||isCancel(b))return; const a=sbGetAgent(b.agentId); if(a&&(a.code==='STAFF'||a.id==='a_staff'))return; const reason=((b.focApproval&&b.focApproval.reason)||b.focReason||'').trim(); if(/guide|ไกด์/i.test(reason))return; (b.trips||[]).forEach(t=>{ const f=(typeof bkV2PaxTot==='function')?bkV2PaxTot(t.pax,'foc'):0; if(f<=0)return; const key=b.agentId||('b2c:'+(b.b2cChannel||'walk-in')); const g=_agNG[key]=_agNG[key]||{name:a?(a.name||a.code||a.id):(b.b2cChannel||'B2C / Walk-in'), agentId:b.agentId, fc:0, reasons:{}}; g.fc+=f; if(reason)g.reasons[reason]=1; }); });
     const _agTotFoc={}; focRecs.forEach(r=>{ if(r.agentId)_agTotFoc[r.agentId]=r.fc; });
     const top5=Object.values(_agNG).filter(x=>x.fc>0).sort((a,b)=>b.fc-a.fc).slice(0,5).map(x=>({name:x.name, fc:x.fc, reason:Object.keys(x.reasons).join(', '), agentId:x.agentId}));
     const _VC='background:linear-gradient(#fff,#fff) padding-box,linear-gradient(150deg,rgba(255,255,255,.98),rgba(176,190,205,.55)) border-box;border:1.5px solid transparent;border-radius:12px;box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 4px 12px rgba(30,50,42,.06);padding:9px 7px 10px;display:flex;flex-direction:column;align-items:center;text-align:center;min-height:102px';
     const agentCards=top5.map((t,i)=>{ const o=A[t.agentId]; const tf=(_agTotFoc[t.agentId]!=null)?_agTotFoc[t.agentId]:t.fc; const px=o?(o.pax||0):tf; const kp=px>0?Math.round(tf/px*100):100; const kc=kp<=8?'#1D9E75':kp<=20?'#BA7517':'#E24B4A'; return `<div style="${_VC}"><span style="font-size:9px;font-weight:800;color:#3B6D11;background:rgba(99,153,34,.15);border-radius:6px;padding:1px 7px;align-self:flex-start">#${i+1}</span><div style="font-size:10.5px;font-weight:700;color:#26352e;margin-top:6px;line-height:1.2;min-height:24px;display:flex;align-items:center;justify-content:center;overflow:hidden">${esc(t.name)}</div><div style="font-size:23px;font-weight:800;font-variant-numeric:tabular-nums;color:#3B6D11;line-height:1;margin-top:2px">${t.fc}</div><div style="font-size:8px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#9aa49c;margin-top:1px">FOC</div><div style="margin-top:5px"><span style="font-size:8.5px;font-weight:800;font-variant-numeric:tabular-nums;color:${kc};background:${kc}1f;border-radius:6px;padding:1px 7px" title="KPI = FOC ÷ ลูกค้าทั้งหมด (${tf}/${px})">KPI ${kp}%</span></div><div style="font-size:8.5px;color:#9aa49c;margin-top:5px;line-height:1.28;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden" title="${esc(t.reason||'')}">${t.reason?esc(t.reason):'—'}</div></div>`; }).join('');
-    const agentDetail=`<div style="flex:2.5;min-width:330px;padding:13px 15px;${_glL('#EAF3DE')};border-radius:16px"><div style="display:flex;align-items:baseline;gap:9px;margin-bottom:10px;flex-wrap:wrap"><span style="font-size:25px;font-weight:800;font-variant-numeric:tabular-nums;color:#1F4D2C;line-height:1">${agentFoc}</span><span style="font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#3B6D11">Agent FOC</span><span style="font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#7e8a6f;margin-left:6px">Top 5 ส่งเยอะสุด · ไม่รวม Guide</span><span style="font-size:10px;color:#8a9a80;margin-left:auto">${grpAgent.length} agents</span></div><div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px">${agentCards}</div></div>`;
+    const agentDetail=`<div style="flex:2.5;min-width:330px;padding:13px 15px;${_glL('#EAF3DE')};border-radius:16px"><div style="display:flex;align-items:baseline;gap:9px;margin-bottom:10px;flex-wrap:wrap"><span style="font-size:25px;font-weight:800;font-variant-numeric:tabular-nums;color:#1F4D2C;line-height:1">${agentFoc}</span><span style="font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#3B6D11">Agent FOC</span><span style="font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#7e8a6f;margin-left:6px">${laT('Top 5 ส่งเยอะสุด · ไม่รวม Guide')}</span><span style="font-size:10px;color:#8a9a80;margin-left:auto">${grpAgent.length} agents</span></div><div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px">${agentCards}</div></div>`;
     const _staffInsp=[],_staffWel=[];
     BK.forEach(b=>{ if(b.status==='rejected'||isCancel(b))return; const a=sbGetAgent(b.agentId); if(!(a&&(a.code==='STAFF'||a.id==='a_staff')))return; const reason=((b.focApproval&&b.focApproval.reason)||b.focReason||'').trim(); const isInsp=/inspect|ตรวจ/i.test(reason); (b.trips||[]).forEach(t=>{ const f=(typeof bkV2PaxTot==='function')?bkV2PaxTot(t.pax,'foc'):0; if(f<=0)return; const fam=(typeof bkV2RouteFamily==='function')?bkV2RouteFamily(t.routeId):null; (isInsp?_staffInsp:_staffWel).push({date:t.date||'',fam:fam?fam.id:'other',fc:f,reason:reason||''}); }); });
     const _byDate=arr=>{ const m={}; arr.forEach(e=>{ const d=m[e.date]=m[e.date]||{date:e.date,fc:0,fams:{},reasons:{}}; d.fc+=e.fc; if(e.fam)d.fams[e.fam]=(d.fams[e.fam]||0)+e.fc; if(e.reason)d.reasons[e.reason]=1; }); return Object.values(m).sort((x,y)=>(x.date||'').localeCompare(y.date||'')); };
@@ -5234,7 +5234,7 @@ function renderFocDetail(){
     const staffDetail=`<div style="flex:1.6;min-width:215px;padding:13px 15px;${_glL('#fff')};border-radius:16px;display:flex;flex-direction:column"><div style="display:flex;align-items:baseline;gap:9px;margin-bottom:10px"><span style="font-size:25px;font-weight:800;font-variant-numeric:tabular-nums;color:#185FA5;line-height:1">${staffFoc}</span><span style="font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#185FA5">Staff FOC</span><span style="font-size:10px;color:#9aa49c;margin-left:auto">${grpStaff.length} staff</span></div><div style="flex:1;display:grid;grid-template-columns:repeat(2,1fr);gap:8px">${_staffMC('Welfare',welFc,welCards.length,'#3B6D11','#F2F7EA')}${_staffMC('Inspection',inspFc,inspCards.length,'#854F0B','#FAF3E6')}</div></div>`;
     const kpiAgents=grpAgent.map(r=>{ const o=A[r.agentId]; const paid=o?Math.max(0,(o.pax||0)-r.fc):0; const tot=paid+r.fc; const focPct=tot>0?(r.fc/tot*100):100; const a=sbGetAgent(r.agentId); const sp=SALES.find(s=>s.id===(a&&a.sales)); return {name:r.agentName, fc:r.fc, paid, focPct, sale:sp?sName(sp):'', saleColor:sp?(sp.color||'#888'):'#caa9a7'}; }).sort((a,b)=> b.focPct-a.focPct || a.paid-b.paid).slice(0,5);
     const lowKpiRows=kpiAgents.map((t,i)=>`<div style="display:flex;align-items:center;gap:7px;padding:6px 0;${i?'border-top:1px solid rgba(163,45,45,.14)':''}"><div style="flex:1;min-width:0;display:flex;align-items:baseline;gap:7px;white-space:nowrap;overflow:hidden"><span style="font-size:11px;font-weight:700;color:#6e1717;overflow:hidden;text-overflow:ellipsis;flex-shrink:1">${esc(t.name)}</span><span style="font-size:8.5px;color:#b58886;flex:none"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${t.saleColor};margin-right:3px;vertical-align:0"></span>${t.sale||'ไม่มีเซลล์'}</span></div><span style="font-size:9px;color:#bb8684;white-space:nowrap">FOC ${t.fc} · ลค ${t.paid}</span><span style="font-size:10.5px;font-weight:800;font-variant-numeric:tabular-nums;color:#fff;background:#E24B4A;border-radius:6px;padding:1px 7px">${Math.round(t.focPct)}%</span></div>`).join('');
-    const lowKpiCard=`<div style="flex:1.7;min-width:225px;padding:13px 15px;${_glRed};border-radius:16px;display:flex;flex-direction:column"><div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px"><span style="font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#A32D2D"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#E24B4A;margin-right:5px;vertical-align:1px"></span>KPI ต่ำ</span><span style="font-size:9px;color:#c08a88">FOC สูง · ลูกค้าน้อย</span><span style="font-size:10px;color:#c08a88;margin-left:auto">${kpiAgents.length} agent</span></div><div style="flex:1;display:flex;flex-direction:column;justify-content:center">${lowKpiRows||'<div style="font-size:10px;color:#c79a98;font-style:italic">—</div>'}</div></div>`;
+    const lowKpiCard=`<div style="flex:1.7;min-width:225px;padding:13px 15px;${_glRed};border-radius:16px;display:flex;flex-direction:column"><div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px"><span style="font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#A32D2D"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#E24B4A;margin-right:5px;vertical-align:1px"></span>${laT('KPI ต่ำ')}</span><span style="font-size:9px;color:#c08a88">${laT('FOC สูง · ลูกค้าน้อย')}</span><span style="font-size:10px;color:#c08a88;margin-left:auto">${kpiAgents.length} agent</span></div><div style="flex:1;display:flex;flex-direction:column;justify-content:center">${lowKpiRows||'<div style="font-size:10px;color:#c79a98;font-style:italic">—</div>'}</div></div>`;
     const kpis=`<div style="display:flex;gap:11px;flex-wrap:wrap;align-items:stretch;margin-bottom:13px">${hero}${agentDetail}${staffDetail}${lowKpiCard}</div>`;
     const thF=`font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--fd-ink-soft);font-weight:600;padding:0 6px 9px;border-bottom:1.5px solid #E5E2D8`;
     const kpiCol=p=> p<=8?['#0F6E56','#E1F5EE']:p<=20?['#854F0B','#FAEEDA']:['#A32D2D','#FCEBEB'];
@@ -33416,7 +33416,7 @@ function renderAgents(){
   if(_agSelected){
     agRenderDetail(_agSelected);
   } else {
-    document.getElementById('ag-main').innerHTML = '<div class="sb-empty">เลือก Agent จากเมนูด้านซ้ายเพื่อดูรายละเอียดและราคา</div>';
+    document.getElementById('ag-main').innerHTML = '<div class="sb-empty">'+laT('เลือก Agent จากเมนูด้านซ้ายเพื่อดูรายละเอียดและราคา')+'</div>';
   }
 }
 
@@ -33489,7 +33489,7 @@ function rtDupCodeBanner(){
       +'<span style="font-size:11.5px;color:#5A6270">'+G.length+' โค้ด · '+nRt+' ชุด · '+nAg+' เอเย่นต์ผูกอยู่</span>'
       +'<button onclick="rtDupCodeFix()" style="margin-left:auto;border:0;background:#0F172A;color:#fff;'
         +'border-radius:999px;padding:5px 14px;font:700 11px inherit;cursor:pointer;font-family:inherit;'
-        +'white-space:nowrap">แก้โค้ดให้ไม่ซ้ำ</button>'
+        +'white-space:nowrap">'+laT('แก้โค้ดให้ไม่ซ้ำ')+'</button>'
     +'</div>'
     +'<div style="font-size:11px;color:#6B7280;line-height:1.6;margin-top:3px">'
       +'ระบบคิดราคาด้วย id ราคาจึงไม่ได้ผิดอยู่ตอนนี้ · แต่<b>การนำเข้า Agent จาก Excel จับคู่เรทด้วยโค้ด</b> '
@@ -33910,7 +33910,7 @@ function rtExpBanner(){
     +(nBulk?('<span style="background:#E3F3EC;border:1px solid #BEE0D2;color:#0F6E56;border-radius:999px;'
       +'padding:2px 9px;font-size:10px;font-weight:800">ตั้งตารางให้ได้ทันที '+nBulk+' เจ้า</span>'):'')
     +'<span style="margin-left:auto;color:#5A6270;font-weight:600;text-decoration:underline">'
-    +'เปิดภาพรวม Rate Expiry</span></div>';
+    +laT('เปิดภาพรวม Rate Expiry')+'</span></div>';
 }
 function rtAdminGo(){
   var el=document.querySelector('.nav-item[data-view="rate-admin"]');
@@ -34313,7 +34313,7 @@ function rtForSales(salesId, keepId){
   });
   return {own:own, shared:shared, other:other, all:own.concat(shared,other), noSales:false};
 }
-function _rtOwnerLabel(rt){ const id=_rtOwnerId(rt); if(!id) return 'Shared · กลาง'; const s=(typeof sbGetSales==='function')?sbGetSales(id):null; return s?(s.name||id):id; }
+function _rtOwnerLabel(rt){ const id=_rtOwnerId(rt); if(!id) return laT('Shared · กลาง'); const s=(typeof sbGetSales==='function')?sbGetSales(id):null; return s?(s.name||id):id; }
 function _rtInScope(rt){ if(typeof laSalesScoped!=='function' || !laSalesScoped()) return true; const my=(typeof laMySalesId==='function')?laMySalesId():''; const o=_rtOwnerId(rt); return !o || o===my; }   // scoped sales เห็น: ของตัวเอง + Shared
 function rtSetOwner(rtId, salesId){
   if(typeof window.laIsAdmin==='function' && !window.laIsAdmin()){ alert('เฉพาะ admin กำหนดเจ้าของ Rate Type ได้'); return; }
@@ -34389,7 +34389,7 @@ function rtRenderList(){
     filtered.forEach(rt => { const o=_rtOwnerId(rt); (byOwner[o]=byOwner[o]||[]).push(rt); });   // filtered ถูก sort active-first + name มาแล้ว → ลำดับในกลุ่มคงเดิม
     const ownerIds = Object.keys(byOwner).filter(o=>o).sort((a,b)=>_rtOwnerLabel({owner:a}).localeCompare(_rtOwnerLabel({owner:b}),'en',{sensitivity:'base'}));
     const ordered = [...ownerIds]; if(byOwner['']) ordered.push('');   // Shared/กลาง ท้ายสุด
-    ordered.forEach(o => { const list=byOwner[o]; const s=o&&(typeof sbGetSales==='function')?sbGetSales(o):null; html += hd(o?('เซลล์: '+(s?(s.name||o):o)):'Shared · กลาง', list.length, s?(s.color||'#7a8fa3'):(o?'#7a8fa3':'#B0AEA6')); list.forEach(rt => { html += renderRow(rt); }); });
+    ordered.forEach(o => { const list=byOwner[o]; const s=o&&(typeof sbGetSales==='function')?sbGetSales(o):null; html += hd(o?(laT('เซลล์: ')+(s?(s.name||o):o)):laT('Shared · กลาง'), list.length, s?(s.color||'#7a8fa3'):(o?'#7a8fa3':'#B0AEA6')); list.forEach(rt => { html += renderRow(rt); }); });
   }
 
   host.innerHTML = html || '<div class="sb-empty" style="padding:30px 16px;color:var(--fd-ink-soft);font-size:12px">ยังไม่มี Rate Type — กดปุ่ม "+ New Rate Type" เพื่อสร้าง</div>';
@@ -34430,7 +34430,7 @@ function _rtAddonDetail_longtail(rt, subNo){
         <div style="margin-bottom:10px;padding-bottom:8px;border-bottom:1.5px solid #C8C6BF">
           <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
             <span style="display:inline-flex;align-items:center;justify-content:center;min-width:36px;height:20px;padding:0 8px;background:#5F5E5A;color:#fff;font-size:10px;font-weight:700;letter-spacing:.04em;border-radius:3px;font-variant-numeric:tabular-nums">3.${subNo}</span>
-            <span style="font-size:13.5px;font-weight:700;color:#0F1419;letter-spacing:-0.005em">Longtail (เรือหางยาว)</span>
+            <span style="font-size:13.5px;font-weight:700;color:#0F1419;letter-spacing:-0.005em">${laT('Longtail (เรือหางยาว)')}</span>
             <span style="font-size:10.5px;color:#7a7770">per route · Join + Charter · THB</span>
           </div>
         </div>
@@ -34914,7 +34914,7 @@ function rtAddonTypesOpen(){
   ov.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(15,20,25,.45);display:flex;align-items:center;justify-content:center;padding:24px';
   ov.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:86vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
     <div style="padding:16px 20px;border-bottom:1px solid var(--fd-line);display:flex;align-items:center;justify-content:space-between">
-      <div><div style="font-size:15px;font-weight:700;color:var(--fd-ink)">จัดการชนิด Add-on</div>
+      <div><div style="font-size:15px;font-weight:700;color:var(--fd-ink)">${laT('จัดการชนิด Add-on')}</div>
       <div style="font-size:11px;color:var(--fd-ink-soft);margin-top:2px">เพิ่มชนิดใหม่ → โผล่ในทุก Rate Type อัตโนมัติ</div></div>
       <button onclick="rtAddonTypesClose()" style="background:transparent;border:none;font-size:20px;color:var(--fd-ink-soft);cursor:pointer;padding:4px 8px;line-height:1">✕</button>
     </div>
@@ -40051,7 +40051,7 @@ function agClearExecute(){
   const n=ids.length;
   agClearClose();
   if(typeof renderAgents==='function') renderAgents();
-  const main=document.getElementById('ag-main'); if(main) main.innerHTML='<div class="sb-empty">เลือก Agent จากเมนูด้านซ้ายเพื่อดูรายละเอียดและราคา</div>';
+  const main=document.getElementById('ag-main'); if(main) main.innerHTML='<div class="sb-empty">'+laT('เลือก Agent จากเมนูด้านซ้ายเพื่อดูรายละเอียดและราคา')+'</div>';
   try{ alert('Cleared '+n+' agent(s) and linked data.'); }catch(e){}
 }
 
@@ -42709,10 +42709,10 @@ function renderB2C(){
     return new Date(c.validFrom)<=today && new Date(c.validTo)>=today;
   }).length;
   document.getElementById('b2c-kpi').innerHTML = `
-    <div class="sb-kpi"><div class="sb-kpi-lbl">Direct Channels</div><div class="sb-kpi-val">${channels.length}</div><div class="sb-kpi-sub">เปิดทุกช่องทาง</div></div>
+    <div class="sb-kpi"><div class="sb-kpi-lbl">Direct Channels</div><div class="sb-kpi-val">${channels.length}</div><div class="sb-kpi-sub">${laT('เปิดทุกช่องทาง')}</div></div>
     <div class="sb-kpi k-amber"><div class="sb-kpi-lbl">Active Campaigns</div><div class="sb-kpi-val">${activeCampaigns}</div><div class="sb-kpi-sub">/ ${campaigns.length} ทั้งหมด</div></div>
-    <div class="sb-kpi k-green"><div class="sb-kpi-lbl">B2C Bookings (7d)</div><div class="sb-kpi-val">${b2cBookings.length}</div><div class="sb-kpi-sub">รายการล่าสุด</div></div>
-    <div class="sb-kpi k-blue"><div class="sb-kpi-lbl">B2C Revenue (7d)</div><div class="sb-kpi-val">฿${sbFmtTHB(b2cRev/1000)}K</div><div class="sb-kpi-sub">รวมทุกช่องทาง</div></div>
+    <div class="sb-kpi k-green"><div class="sb-kpi-lbl">B2C Bookings (7d)</div><div class="sb-kpi-val">${b2cBookings.length}</div><div class="sb-kpi-sub">${laT('รายการล่าสุด')}</div></div>
+    <div class="sb-kpi k-blue"><div class="sb-kpi-lbl">B2C Revenue (7d)</div><div class="sb-kpi-val">฿${sbFmtTHB(b2cRev/1000)}K</div><div class="sb-kpi-sub">${laT('รวมทุกช่องทาง')}</div></div>
   `;
 
   // Channel cards

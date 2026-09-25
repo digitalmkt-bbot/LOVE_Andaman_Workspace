@@ -989,6 +989,20 @@ html[data-sb-theme="dark"] .sb-toggle:hover{ background:rgba(255,255,255,.24) !i
 /* ย่อแล้วเหลือที่แนวนอนไม่พอทั้งสองปุ่ม · ปุ่มธีมซ่อน กดกางก่อนค่อยสลับ */
 .sidebar.sb-collapsed .sb-theme{ display:none; }
 
+/* ── §i18n · ปุ่มสลับภาษา · ทรงเดียวกับปุ่มธีมแต่เป็นตัวหนังสือ TH/EN ── */
+/* §i18n · หัวแถบมีปุ่มเพิ่มมาอีกตัว · พื้นที่ฝั่งชื่อแคบลง
+   บังคับบรรทัดทักทายไม่ให้ตกบรรทัด แล้วปล่อยให้ชื่อยาวตัดท้ายด้วยจุดสามจุดแทน */
+.sb-greet{ white-space:nowrap; }
+/* กว้างเท่าปุ่มอื่น 26px พอดี · กว้างกว่านั้นชื่อผู้ใช้บนหัวแถบถูกบีบจนตกบรรทัด */
+.sb-lang{ height:26px; width:26px; flex:none; border:none; border-radius:8px;
+  background:rgba(255,255,255,.72); color:#5a6472; cursor:pointer;
+  font-family:'DM Mono',ui-monospace,monospace; font-size:9.5px; font-weight:700; letter-spacing:0;
+  display:flex; align-items:center; justify-content:center; padding:0; }
+.sb-lang:hover{ background:rgba(255,255,255,.95); }
+html[data-sb-theme="dark"] .sb-lang{ background:rgba(255,255,255,.12); color:#D6E2F5; }
+html[data-sb-theme="dark"] .sb-lang:hover{ background:rgba(255,255,255,.24); }
+.sidebar.sb-collapsed .sb-lang{ display:none; }
+
 /* พื้นหลังรอบ sidebar · ช่องซ้าย 14px บน 6px ล่าง 10px และร่อง 10px ก่อนถึงเนื้อหา
    เป็นพื้นของ body (ครีม #f5f2ed) · โหมดมืดจึงเห็นแผงกรมท่าลอยอยู่บนกรอบครีม
    ⚠ ไม่แตะ body{background} · นั่นคือพื้นของทั้งแอปทุกหน้า จะกลายเป็นดาร์กโหมดทั้งระบบ
@@ -1044,6 +1058,7 @@ html[data-sb-theme="light"] .sb-divider{ background:rgba(0,15,76,.12) !important
 html[data-sb-theme="light"] .sidebar-footer{ color:#5A6685 !important;
   border-top:1px solid rgba(0,15,76,.10) !important; }
 html[data-sb-theme="light"] .sb-theme,
+html[data-sb-theme="light"] .sb-lang,
 html[data-sb-theme="light"] .sb-pill,
 html[data-sb-theme="light"] .sb-toggle{ background:rgba(0,15,76,.07) !important; color:var(--ci-cyan-ink) !important; }
 html[data-sb-theme="light"] .sidebar.sb-collapsed .nav-section{ background:rgba(0,15,76,.09) !important; }
