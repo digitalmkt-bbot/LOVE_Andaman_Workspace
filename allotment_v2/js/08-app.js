@@ -61760,6 +61760,11 @@ function poStaffOpen(){
       +'<span style="font-size:10.5px;color:#8B93A1">วันที่ไม่ได้ลงเรือ</span>'
       +'<input value="'+poE(s.defCode||'')+'" placeholder="'+poE(typeof paDefFallback==='function'?paDefFallback():'SE')+'" title="รหัสตั้งต้นในตารางการทำงาน เมื่อวันนั้นมีใบงานแล้วแต่คนนี้ไม่ได้ลงเรือ" '
         +'oninput="poStaffDef(\''+s.id+'\',this.value)" style="width:74px;border:1px solid #D8D4CA;border-radius:8px;padding:5px 8px;font:700 12px inherit;text-align:center;font-family:inherit">'
+      /* §paPayFld · เบี้ยเที่ยวรายคน · เห็นเฉพาะคนที่ดูเงินได้ */
+      +((typeof paPayCan==='function' && paPayCan())
+        ? ('<span style="font-size:10.5px;color:#8B93A1">เบี้ยเที่ยว</span>'
+          +paPayInput(s.id,'poStaffPay','width:78px;border:1px solid #D8D4CA;border-radius:8px;padding:5px 8px;font:700 12px inherit;text-align:right;font-family:inherit'))
+        : '')
       +'<button class="po-btn" onclick="poStaffToggle(\''+s.id+'\')">'+(s.active===false?'เปิดใช้':'ปิดใช้')+'</button></div>';
   }).join('');
   body+='<div style="margin-top:14px;border-top:1px dashed #D8D4CA;padding-top:12px">'
@@ -61767,15 +61772,19 @@ function poStaffOpen(){
     +'<div style="display:flex;gap:7px;flex-wrap:wrap">'
     +poIn('postf_nick','','ชื่อเล่น',110)+poIn('postf_name','','ชื่อ-สกุล',180)
     +poIn('postf_role','','หน้าที่ เช่น อุปกรณ์',150)+poIn('postf_phone','','เบอร์',120)
+    +((typeof paPayCan==='function' && paPayCan())?poIn('postf_pay','','เบี้ยเที่ยว (บาท)',110):'')
     +poBtn('เพิ่ม','poStaffAdd()',1)+'</div></div>';
   poModal('ทะเบียนพนักงานท่าเรือ', body, poBtn('ปิด','poModalClose()'), 640);
 }
 function poStaffAdd(){
   var nick=poV('postf_nick').trim(), name=poV('postf_name').trim();
   if(!nick && !name){ alert('ใส่ชื่ออย่างน้อยหนึ่งช่อง'); return; }
-  PIER_STAFF.push({id:poUid('ps_'), pier:_poPier, nick:nick||name, name:name||nick,
+  var nid=poUid('ps_');
+  PIER_STAFF.push({id:nid, pier:_poPier, nick:nick||name, name:name||nick,
                    role:poV('postf_role').trim(), phone:poV('postf_phone').trim(), active:true});
-  poPersist(); poStaffOpen();
+  poPersist();
+  var pay=poV('postf_pay').trim(); if(pay && typeof paPayRateSet==='function') paPayRateSet(nid, pay);   // §paPayFld
+  poStaffOpen();
 }
 function poStaffPier(id,v){
   if(!poCanEdit()) return;
@@ -62359,9 +62368,12 @@ function paDayIdx(date){
     var wc=String(o.wc||'');   /* §pjWorkCode · รหัสที่ใบงานระบุไว้เอง · ชนะการเดาทุกกรณี */
     // §rtCode · เก็บเส้นทางของวันนั้นไว้ด้วย · ช่องในตารางจะได้บอกว่าลงสายไหน
     var rid=''; try{ var tp=(typeof TRIPS!=='undefined'&&TRIPS[date])?TRIPS[date][bid]:null; rid=(tp&&tp.route)||''; }catch(_){}
-    [o.cap,o.asst].concat(o.crew||[], o.island||[]).forEach(function(sid){
-      if(sid && !E.byStaff[sid]) E.byStaff[sid]={boat:(b&&b.name)||bid, pier:pk, kind:kind, rid:rid, wc:wc};
-    });
+    /* §paWsTier · จำไว้ด้วยว่าอยู่ช่องไหนในใบงาน · เบี้ยเที่ยว WS ขั้นต่ำต่างกันตามช่อง */
+    [[o.cap,'cap'],[o.asst,'crew']]
+      .concat((o.crew||[]).map(function(x){ return [x,'crew']; }), (o.island||[]).map(function(x){ return [x,'staff']; }))
+      .forEach(function(p){ var sid=p[0];
+        if(sid && !E.byStaff[sid]) E.byStaff[sid]={boat:(b&&b.name)||bid, pier:pk, kind:kind, rid:rid, wc:wc, slot:p[1]};
+      });
   });
   return E;
 }
@@ -62593,6 +62605,17 @@ function paCSS(){
      +"font:500 11px 'DM Mono',monospace;color:#7A4A00}"
   +H+' td.pa-sc.z{color:#DCD5C8}'
   +H+' td.pa-sc.tot{width:46px;min-width:46px;background:#F3E9D8;font-weight:700;color:#16233a}'
+  /* §paPay · คอลัมน์เงิน · เขียวแยกจากคอลัมน์นับวัน · ตัวเลขหลักหมื่นต้องไม่ตัดบรรทัด */
+  +H+' th.pa-sh.pay{width:62px;min-width:62px;background:#E6F2EC;color:#0F5B3F}'
+  +H+' td.pa-sc.pay{width:62px;min-width:62px;background:#F4FAF6;color:#0F5B3F;white-space:nowrap;padding:0 5px !important;text-align:right}'
+  +H+' td.pa-sc.pay.tot{width:84px;min-width:84px;background:#E3F1E9;font-weight:700;color:#0B3F2B}'
+  +H+' td.pa-sc.pay.z{color:#C9D8CF}'
+  +H+' td.pa-sc.pay.ed{padding:0 2px !important}'
+  +H+' td.pa-sc.pay.ed .pa-payi{width:100%;box-sizing:border-box;border:1px solid transparent;border-radius:5px;background:transparent;'
+     +"text-align:right;font:500 11px 'DM Mono',monospace;color:#0F5B3F;padding:3px 4px}"
+  +H+' td.pa-sc.pay.ed .pa-payi:hover,'+H+' td.pa-sc.pay.ed .pa-payi:focus{border-color:#9CC9B0;background:#fff;outline:none}'
+  +H+' td.pa-sc.pay.ed .pa-payi::placeholder{color:#C9D8CF;font-size:9px}'
+  +H+' td.pa-sc.pay.miss{font:700 10px inherit;color:#B4560A;background:#FFF4E5;cursor:pointer;text-align:center}'
   +H+' tr.pa-tot td{background:#F2F5F9;border-top:2px solid #DCE3EC}'
   +' .pa-pop .s{font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9AA3B0;padding:7px 8px 3px}'
   +H+' .pa-lg .i .rtag{font-size:9px;font-weight:700;color:#20477E;background:#EEF2F7;border-radius:4px;padding:1px 6px;margin-left:5px}'
@@ -62772,9 +62795,201 @@ function paEnsureMtCode(){
   }catch(_){}
 }
 /* §plMerge · แท็บที่กำลังดูอยู่ในหน้าตารางการทำงาน · roster | lic */
+/* ══ §paPay (2026-09-26) · เบี้ยเที่ยว · คิดเงินจากยอดวันในคอลัมน์ MONTHLY SUMMARY ══
+   คิดทีละคน จากแถวของคนนั้น · ไม่ใช่จากแถว TOTAL · ALL STAFF
+   แถวรวมเป็นผลรวมของหลายคน คูณด้วยเบี้ยเที่ยวอัตราเดียวได้ก็ต่อเมื่อทุกคนได้เท่ากัน
+   กฎของแต่ละรหัส:  เงิน = เบี้ยเที่ยว × x × วัน  +  d × วัน  +  f (ครั้งเดียว ถ้ามีวันของรหัสนี้)
+   ค่าตั้งต้นมาจากตารางของ HR:
+     KB = เบี้ยเที่ยว × วัน + 100 · PP = เบี้ยเที่ยว × วัน · WS = เบี้ยเที่ยว × วัน + วัน × 50
+     OV = เบี้ยเที่ยว × 2 × วัน · N = วัน × 200
+   เก็บใน PIER_CFG (payRules · payRate{staffId}) · pier_cfg เก็บค่าเป็น JSON ทั้งก้อน
+   จึงไม่ต้องเพิ่มคอลัมน์ในฐานข้อมูล · ค่าตั้งต้นไม่ถูกเขียนลงข้อมูลจนกว่าจะมีคนกดบันทึก */
+var PA_PAY_DEF={
+  KB:{x:1, d:0,   f:100},
+  PP:{x:1, d:0,   f:0},
+  WS:{x:1, d:50,  f:0},
+  'WS-LT':{x:1, d:50, f:0},   // §paWsLt · WS ที่ไปเรือหางยาว · คิดเหมือน WS · แยกรหัสไว้นับวัน
+  OV:{x:2, d:0,   f:0},
+  N: {x:0, d:200, f:0}
+};
+/* §paWsLt (2026-09-26) · รหัส WS-LT = Whale Shark ที่ไปเรือหางยาว
+   ใบงานเรือไม่รู้ว่าวันไหนไปหางยาว · คนวางตารางเลือกรหัสนี้ลงช่องวันเอง
+   เติมครั้งเดียวต่อข้อมูลชุดหนึ่ง (PIER_CFG.wsLtSeed) · ทั้งในทะเบียนรหัสและในสูตรเบี้ยเที่ยวที่เซฟไว้แล้ว
+   ต่างจาก paEnsureNightCode ตรงที่ลบทิ้งแล้วไม่เด้งกลับ · คนลบตั้งใจลบ */
+function paEnsureWsLt(){
+  try{
+    if(!Array.isArray(PIER_CODES) || !PIER_CODES.length || PIER_CFG.wsLtSeed) return;
+    var has=PIER_CODES.some(function(c){ return String(c.code||'').trim().toUpperCase()==='WS-LT'; });
+    if(!has){
+      var mx=PIER_CODES.reduce(function(a,c){ return Math.max(a,+c.ord||0); },0);
+      PIER_CODES.push({id:'c_wslt', code:'WS-LT', label:'Whale Shark · เรือหางยาว',
+                       color:'#0E6E86', bg:'#DDF1F5', kind:'work', ord:mx+1, active:true, userColor:1});
+    }
+    var R=PIER_CFG.payRules;
+    if(R && typeof R==='object' && Object.keys(R).length && !R['WS-LT']) R['WS-LT']={x:1, d:50, f:0};
+    PIER_CFG.wsLtSeed=1;
+    if(typeof poCanEdit==='function' && poCanEdit()) poPersist();
+  }catch(_){}
+}
+var _paPay=false;   /* แสดงคอลัมน์เงินไหม · ไม่เก็บลงข้อมูล · เปิดใหม่ทุกครั้งที่ต้องดู */
+function paPayRules(){
+  var r=PIER_CFG && PIER_CFG.payRules;
+  return (r && typeof r==='object' && Object.keys(r).length) ? r : PA_PAY_DEF;
+}
+function paPayRate(sid){
+  var m=(PIER_CFG && PIER_CFG.payRate && typeof PIER_CFG.payRate==='object') ? PIER_CFG.payRate : {};
+  var v=m[sid];
+  return (v===''||v==null||!isFinite(+v)) ? null : +v;
+}
+/* §paPay · ดูเงินได้เฉพาะคนที่แก้ตารางของท่านี้ได้ · ข้อมูลเงินเดือนไม่ควรโผล่ให้ทุกคนที่แค่ดูตาราง */
+function paPayCan(){ return poCanEdit(); }
+/* §paWsTier (2026-09-26) · วันที่ลงเรือ WS (อยู่บนเรือจริง) เบี้ยเที่ยวมีขั้นต่ำตามช่องในใบงาน
+     กัปตัน → อย่างน้อย 650 · ผู้ช่วยกัปตัน/ลูกเรือ → อย่างน้อย 450 · Island Staff → เบี้ยปกติ ไม่มีขั้นต่ำ
+   ขั้นต่ำใช้กับส่วนเบี้ยเที่ยวเท่านั้น · บาทต่อวันของ WS (+50) ยังบวกเหมือนเดิม
+   WS-LT (หางยาว) ไม่อยู่บนเรือ WS · ไม่มีขั้นต่ำ
+   ช่องที่พิมพ์ WS เองโดยไม่มีใบงาน ไม่รู้ว่าอยู่ช่องไหน → ดูจากตำแหน่งในทะเบียนแทน */
+var PA_WS_CODE='WS';
+var PA_WS_MIN_DEF={cap:650, crew:450};
+function paWsMin(){
+  var m=PIER_CFG && PIER_CFG.payWsMin;
+  return (m && typeof m==='object') ? {cap:+m.cap||0, crew:+m.crew||0} : PA_WS_MIN_DEF;
+}
+function paWsTier(on, st){
+  if(on && on.slot) return on.slot;
+  var r=String((st&&st.role)||'');
+  if(/asst|assist|ผู้ช่วย/i.test(r)) return 'crew';
+  if(/capt|กัปตัน|นายท้าย/i.test(r)) return 'cap';
+  if(/crew|ลูกเรือ|เด็กเรือ/i.test(r)) return 'crew';
+  return 'staff';
+}
+var PA_WS_TIER_TH={cap:'กัปตัน', crew:'ลูกเรือ', staff:'staff'};
+/* cnt = {รหัส: จำนวนวัน} ของคนนี้ในรอบนี้ · nights = จำนวนคืนที่เข้าเวร (คอลัมน์ N)
+   ws = {cap,crew,staff} วัน WS แยกตามช่อง · ไม่ส่งมา = นับเป็น staff ทั้งหมด (ไม่มีขั้นต่ำ) */
+function paPayOf(sid, cnt, nights, ws){
+  var R=paPayRules(), rate=paPayRate(sid), nc=paNightCode(), parts=[], tot=0, need=false, MIN=paWsMin();
+  Object.keys(R).forEach(function(code){
+    var r=R[code]||{}, x=+r.x||0, d=+r.d||0, f=+r.f||0;
+    var days=(code===nc) ? (+nights||0) : (+(cnt||{})[code]||0);
+    if(!days) return;
+    if(x && rate==null){ need=true; return; }
+    var amt, note='';
+    if(code===PA_WS_CODE && x){
+      var W=ws||{}, nCap=+W.cap||0, nCrew=+W.crew||0, nStaff=Math.max(0, days-nCap-nCrew);
+      amt = x*Math.max(rate, MIN.cap)*nCap + x*Math.max(rate, MIN.crew)*nCrew + x*rate*nStaff + d*days + f;
+      note=[nCap?(PA_WS_TIER_TH.cap+' '+nCap):'', nCrew?(PA_WS_TIER_TH.crew+' '+nCrew):'', (nCap||nCrew)&&nStaff?(PA_WS_TIER_TH.staff+' '+nStaff):'']
+        .filter(Boolean).join(' · ');
+    } else amt=(x?rate*x*days:0) + d*days + f;
+    parts.push({code:code, days:days, amt:amt, note:note}); tot+=amt;
+  });
+  return {total:tot, parts:parts, missing:need, rate:rate};
+}
+function paMoney(n){ return (Math.round((+n||0)*100)/100).toLocaleString('en-US',{maximumFractionDigits:2}); }
+/* §paPayFld · ช่องเบี้ยเที่ยวรายคน · พิมพ์อิสระ รับ "1,200" "฿500" ได้ · ว่าง = ลบค่าออก
+   คืน true ถ้าบันทึก · ไม่ใช่ตัวเลขแล้วเตือน ไม่เซฟเงียบ ๆ เป็น 0 */
+function paPayRateSet(sid, txt){
+  if(!paPayCan() || !poGuard()) return false;
+  var v=String(txt==null?'':txt).replace(/[,\s฿]/g,'');
+  var m=(PIER_CFG.payRate && typeof PIER_CFG.payRate==='object') ? PIER_CFG.payRate : {};
+  if(v===''){ if(!(sid in m)) return false; delete m[sid]; }
+  else if(!isFinite(+v) || +v<0){ alert('Trip allowance must be a number (0 or more): '+txt); return false; }
+  else { if(m[sid]===+v) return false; m[sid]=+v; }
+  PIER_CFG.payRate=m; poPersist();
+  return true;
+}
+/* ช่องพิมพ์เบี้ยเที่ยว · ใช้ทั้งทะเบียนพนักงานและคอลัมน์ RATE ในตาราง */
+function paPayInput(sid, onchg, css){
+  var v=paPayRate(sid);
+  return '<input type="text" inputmode="decimal" class="pa-payi" value="'+(v==null?'':v)+'" placeholder="เบี้ยเที่ยว" '
+    +'title="เบี้ยเที่ยวต่อวัน (บาท) · ว่าง = ยังไม่ได้ใส่" style="'+(css||'')+'" '
+    +'onchange="'+onchg+'(\''+poE(sid)+'\',this.value)">';
+}
+function paPayRateRow(sid, txt){ paPayRateSet(sid, txt); paKeep(function(){ renderPierAtt(); }); }
+function poStaffPay(sid, txt){ paPayRateSet(sid, txt); poStaffOpen(); }
+function paPayToggle(){
+  if(!paPayCan()) return;
+  _paPay=!_paPay;
+  paKeep(function(){ renderPierAtt(); });
+}
+function paPayOpen(){
+  if(!paPayCan()){ alert('View only - no permission to see or edit trip allowance'); return; }
+  var R=paPayRules(), nc=paNightCode();
+  var codes=Object.keys(R);
+  var body='<div style="font-size:12px;color:#6E7684;margin-bottom:12px;line-height:1.7">'
+    +'เงินของแต่ละรหัส = <b style="color:#16265C">เบี้ยเที่ยว × ตัวคูณ × วัน</b> + <b style="color:#16265C">บาทต่อวัน × วัน</b>'
+    +' + <b style="color:#16265C">บาทก้อนเดียว</b> (ได้ครั้งเดียวต่อรอบ ถ้ามีวันของรหัสนั้น)<br>'
+    +'จำนวนวันมาจากคอลัมน์ MONTHLY SUMMARY ของแต่ละคน · รหัส <b>'+poE(nc)+'</b> ใช้จำนวนคืนที่เข้าเวร</div>'
+    +'<table class="pl-t" id="pa-pay-rules"><thead><tr><th style="width:90px">รหัส</th><th>ตัวคูณเบี้ยเที่ยว</th>'
+    +'<th>บาทต่อวัน</th><th>บาทก้อนเดียว</th><th style="width:48px"></th></tr></thead><tbody>'
+    +codes.map(function(c){ return paPayRuleRow(c, R[c]); }).join('')
+    +'</tbody></table>'
+    +'<button class="po-btn" style="margin-top:8px" onclick="paPayRuleAdd()">+ เพิ่มรหัส</button>'
+    /* §paWsTier */
+    +(function(){ var M=paWsMin(), css='width:90px;text-align:right';
+      return '<div style="margin-top:16px;border-top:1px dashed #D9DDE4;padding-top:12px">'
+        +'<div style="font-size:12px;font-weight:800;color:#16265C;margin-bottom:6px">เบี้ยเที่ยวขั้นต่ำ วันที่ลงเรือ '+poE(PA_WS_CODE)+'</div>'
+        +'<div style="font-size:11.5px;color:#6E7684;margin-bottom:8px;line-height:1.6">ใครเบี้ยเที่ยวต่ำกว่านี้ วัน '+poE(PA_WS_CODE)+' จะได้เพิ่มจนถึงขั้นต่ำ · ดูจากช่องในใบงานเรือ<br>'
+        +'Island Staff และ WS-LT (หางยาว) ใช้เบี้ยปกติ · บาทต่อวันของ '+poE(PA_WS_CODE)+' ยังบวกเพิ่มเหมือนเดิม</div>'
+        +'<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:12px">'
+        +'<label>กัปตัน <input class="pl-f" id="pa_wsmin_cap" type="text" inputmode="decimal" style="'+css+'" value="'+M.cap+'"></label>'
+        +'<label>ผู้ช่วยกัปตัน / ลูกเรือ <input class="pl-f" id="pa_wsmin_crew" type="text" inputmode="decimal" style="'+css+'" value="'+M.crew+'"></label>'
+        +'</div></div>'; })();
+  var staff=(PIER_STAFF||[]).filter(function(s){ return s.pier===_poPier && s.active!==false; });
+  body+='<div style="margin-top:16px;border-top:1px dashed #D9DDE4;padding-top:12px">'
+    +'<div style="font-size:12px;font-weight:800;color:#16265C;margin-bottom:6px">เบี้ยเที่ยวรายคน (บาท) · ท่านี้</div>'
+    +'<div style="font-size:11.5px;color:#6E7684;margin-bottom:8px">เว้นว่าง = ยังไม่ได้ใส่ · ตารางจะขึ้น "ใส่เบี้ยเที่ยว" แทนยอดเงิน</div>'
+    +'<table class="pl-t"><thead><tr><th>ชื่อ</th><th>ตำแหน่ง</th><th style="width:130px">เบี้ยเที่ยว</th></tr></thead><tbody>'
+    +staff.map(function(s){ var v=paPayRate(s.id);
+      return '<tr><td>'+poE(s.name||s.nick||s.id)+(s.nick&&s.name?' <span style="color:#8B93A1">('+poE(s.nick)+')</span>':'')+'</td>'
+        +'<td>'+poE(s.role||'')+'</td>'
+        +'<td><input class="pl-f pa-pay-rate" type="number" min="0" step="any" data-sid="'+poE(s.id)+'" value="'+(v==null?'':v)+'"></td></tr>'; }).join('')
+    +'</tbody></table></div>';
+  poModal('เบี้ยเที่ยว · สูตรคิดเงิน', body,
+    poBtn('ใช้สูตรตั้งต้น','paPayReset()')+poBtn('ยกเลิก','poModalClose()')+poBtn('บันทึก','paPaySave()',1), 680);
+}
+function paPayRuleRow(code, r){
+  r=r||{};
+  function n(k,v){ return '<td><input class="pl-f" type="number" step="any" data-k="'+k+'" value="'+(v==null?'':v)+'"></td>'; }
+  return '<tr class="pa-pay-r"><td><input class="pl-f" data-k="code" value="'+poE(code||'')+'" placeholder="รหัส"></td>'
+    +n('x',r.x||0)+n('d',r.d||0)+n('f',r.f||0)
+    +'<td style="text-align:right"><button class="po-btn" onclick="this.closest(\'tr\').remove()">ลบ</button></td></tr>';
+}
+function paPayRuleAdd(){
+  var tb=document.querySelector('#pa-pay-rules tbody'); if(!tb) return;
+  tb.insertAdjacentHTML('beforeend', paPayRuleRow('', {}));
+}
+function paPayReset(){
+  var tb=document.querySelector('#pa-pay-rules tbody'); if(!tb) return;
+  tb.innerHTML=Object.keys(PA_PAY_DEF).map(function(c){ return paPayRuleRow(c, PA_PAY_DEF[c]); }).join('');
+  var a=document.getElementById('pa_wsmin_cap'), b=document.getElementById('pa_wsmin_crew');
+  if(a) a.value=PA_WS_MIN_DEF.cap; if(b) b.value=PA_WS_MIN_DEF.crew;
+}
+function paPaySave(){
+  if(!poGuard()) return;
+  var rules={}, dup='';
+  document.querySelectorAll('#pa-pay-rules tr.pa-pay-r').forEach(function(tr){
+    var g=function(k){ var el=tr.querySelector('[data-k="'+k+'"]'); return el?el.value:''; };
+    var code=String(g('code')).trim().toUpperCase(); if(!code) return;
+    if(rules[code]) dup=code;
+    rules[code]={x:+g('x')||0, d:+g('d')||0, f:+g('f')||0};
+  });
+  if(dup){ alert('Code '+dup+' appears twice - keep only one row per code'); return; }
+  var rate=(PIER_CFG.payRate && typeof PIER_CFG.payRate==='object') ? PIER_CFG.payRate : {};
+  document.querySelectorAll('.pa-pay-rate').forEach(function(el){
+    var sid=el.getAttribute('data-sid'), v=String(el.value).trim();
+    if(v===''){ delete rate[sid]; return; }
+    if(isFinite(+v) && +v>=0) rate[sid]=+v;
+  });
+  var mc=String(poV('pa_wsmin_cap')).replace(/[,\s฿]/g,''), mw=String(poV('pa_wsmin_crew')).replace(/[,\s฿]/g,'');
+  if(!isFinite(+mc) || !isFinite(+mw) || +mc<0 || +mw<0){ alert('WS minimum must be a number (0 or more)'); return; }
+  PIER_CFG.payWsMin={cap:+mc||0, crew:+mw||0};   // §paWsTier
+  PIER_CFG.payRules=rules; PIER_CFG.payRate=rate;
+  poPersist(); poModalClose();
+  paKeep(function(){ renderPierAtt(); });
+}
+
 var _paTab='roster';
 function renderPierAtt(pier){
-  paEnsureMtCode(); paEnsureNightCode(); paSkinApply();
+  paEnsureMtCode(); paEnsureNightCode(); paEnsureWsLt(); paSkinApply();
   if(pier) _poPier=pier;
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
   var host=document.getElementById('pa-host-'+P.k); if(!host) return;
@@ -62790,6 +63005,7 @@ function renderPierAtt(pier){
       .forEach(function(s){ plOf(s.id).forEach(function(l){ if(plState(l)==='bad') _licBad++; }); });
   }catch(_){}
   var ro=!poCanEdit(), CY=paCycle(_paDate), groups=paGroups(P.k), today=poYMD(new Date());
+  var pay=(_paPay && paPayCan());   // §paPay
   var ed=(!ro && _paEdit);   // §paEditLock · ช่องพิมพ์ทับเปิดเฉพาะตอนกด "แก้ไข" ค้างไว้
   var WD=['SUN','MON','TUE','WED','THU','FRI','SAT'];   // §paSheet · หัวข้อเป็นอังกฤษตามที่ตกลง
   var IDX=paIndex(CY.days);
@@ -62800,6 +63016,8 @@ function renderPierAtt(pier){
   var used={};
   groups.forEach(function(G){ G.rows.forEach(function(st){
     CY.days.forEach(function(d){ var v=paCell(d.s,P.k,st,IDX[d.s]); if(v.c) used[v.c]=1; }); }); });
+  /* §paWsTier · คอลัมน์ WS-LT (หางยาว) โชว์ตลอด แม้รอบนี้ยังไม่มีใครลง · ให้เห็นว่าแยกจาก WS */
+  if((PIER_CODES||[]).some(function(c){ return c.code==='WS-LT' && c.active!==false; })) used['WS-LT']=1;
   var SUMC=Object.keys(used).sort(function(a,b){
     var ma=paCodeMeta(a)||{}, mb=paCodeMeta(b)||{};
     var ra=ma.route?0:1, rb=mb.route?0:1;
@@ -62827,6 +63045,7 @@ function renderPierAtt(pier){
     + '<th class="pa-h0" colspan="4">CREW DUTY ROSTER &nbsp;&middot;&nbsp; '+poE(CY.from)+' – '+poE(CY.to)+' &nbsp;&middot;&nbsp; '+poE(String(P.n||P.t).toUpperCase())+'</th>'
     + spans.map(function(sp){ return '<th class="pa-mo" colspan="'+sp.n+'">'+MTH[sp.m]+' '+sp.y+'</th>'; }).join('')
     + '<th class="pa-mo sum" colspan="'+(SUMC.length+1+(nOn?1:0))+'">MONTHLY SUMMARY (DAYS)</th>'
+    + (pay?'<th class="pa-mo sum" colspan="2">TRIP ALLOWANCE (฿)</th>':'')
     + '<th class="pa-h0 nt">REMARKS</th></tr>'
     + '<tr><th class="pa-no">No.</th><th class="pa-nm2">Full name</th><th class="pa-nk">Nickname</th><th class="pa-rl">Position</th>'
     + CY.days.map(function(d){
@@ -62837,16 +63056,19 @@ function renderPierAtt(pier){
         return '<th class="pa-sh'+(m.route?' rt':'')+'" title="'+poE(m.label||c)+'">'+poE(c)+'</th>'; }).join('')
     + (nOn?('<th class="pa-sh ngt" title="จำนวนคืนที่เข้าเวร · นับที่วันเริ่มเวร">'
         +poE(paNightCode())+'</th>'):'')
-    + '<th class="pa-sh tot">TOTAL</th><th class="pa-nt">Notes</th></tr>';
+    + '<th class="pa-sh tot">TOTAL</th>'
+    + (pay?'<th class="pa-sh pay" title="เบี้ยเที่ยวต่อวันของคนนี้">RATE</th><th class="pa-sh pay tot" title="ยอดเงินรวมตามสูตรเบี้ยเที่ยว">AMOUNT</th>':'')
+    + '<th class="pa-nt">Notes</th></tr>';
 
-  var body='', totW=0, totO=0, totL=0, totAway=0, totTodo=0, gTot={}, _n=0;
+  var body='', totW=0, totO=0, totL=0, totAway=0, totTodo=0, gTot={}, _n=0, payTot=0, payMiss=0;
   groups.forEach(function(G){
     body+='<tr class="pa-band"><td class="pa-no"></td><td class="pa-nm2" colspan="3">'+poE(G.t)+'</td>'
-      +'<td colspan="'+(CY.days.length+SUMC.length+2+(nOn?1:0))+'"></td></tr>';
+      +'<td colspan="'+(CY.days.length+SUMC.length+2+(nOn?1:0)+(pay?2:0))+'"></td></tr>';
     G.rows.forEach(function(st){
-      var w=0,o=0,l=0,aw=0,cnt={};
+      var w=0,o=0,l=0,aw=0,cnt={},wsT={cap:0,crew:0,staff:0};
       var tds=CY.days.map(function(d){
         var E=IDX[d.s], v=paCell(d.s,P.k,st,E), k=paKindOf(v.c);
+        if(v.c===PA_WS_CODE) wsT[paWsTier(E.byStaff[st.id], st)]++;   // §paWsTier
         if(v.c){ cnt[v.c]=(cnt[v.c]||0)+1; gTot[v.c]=(gTot[v.c]||0)+1;
                  if(k==='work') w++; else if(k==='off') o++; else if(k==='leave') l++; }
         else if(v.src==='todo') totTodo++;   // §paLayers · ช่องค้าง · ต้องมีตัวเลขให้เห็น ไม่งั้นช่องว่างอ่านเป็น "ไม่มีอะไรต้องทำ"
@@ -62859,6 +63081,17 @@ function renderPierAtt(pier){
         return '<td class="pa-sc'+(v?'':' z')+'">'+(v||'·')+'</td>'; }).join('')
         + (nOn?('<td class="pa-sc ngt'+(_nc?'':' z')+'">'+(_nc||'·')+'</td>'):'')
         + '<td class="pa-sc tot">'+w+'</td>';
+      if(pay){   // §paPay · ยอดเงินของคนนี้ · ชี้ที่ตัวเลขเพื่อดูว่ามาจากรหัสไหนเท่าไหร่
+        var PY=paPayOf(st.id, cnt, _nc, wsT);
+        var tip=PY.parts.map(function(p){ return p.code+' '+p.days+' วัน'+(p.note?(' ('+p.note+')'):'')+' = '+paMoney(p.amt); }).join('\n');
+        sums+=(ro ? ('<td class="pa-sc pay'+(PY.rate==null?' z':'')+'">'+(PY.rate==null?'·':paMoney(PY.rate))+'</td>')
+                  : ('<td class="pa-sc pay ed">'+paPayInput(st.id,'paPayRateRow')+'</td>'));
+        if(PY.missing){ payMiss++;
+          sums+='<td class="pa-sc pay tot miss" title="มีวันที่ต้องคิดเบี้ยเที่ยว แต่ยังไม่ได้ใส่เบี้ยเที่ยวของคนนี้" onclick="paPayOpen()">ใส่เบี้ยเที่ยว</td>';
+        } else { payTot+=PY.total;
+          sums+='<td class="pa-sc pay tot'+(PY.total?'':' z')+'" title="'+poE(tip||'ไม่มีวันที่คิดเงิน')+'">'+(PY.total?paMoney(PY.total):'·')+'</td>';
+        }
+      }
       _n++;
       // §paEdit · สี่ช่องแรกพิมพ์ทับได้ตรงนี้ · ออกจากช่องแล้วบันทึกเลย
       var _aw=(aw?('<b class="pa-away" title="ไปลงเรือที่ท่าอื่น '+aw+' วัน · ยังนับเป็นวันทำงานของท่าประจำ">ช่วยท่าอื่น '+aw+'</b>'):'');
@@ -62886,7 +63119,11 @@ function renderPierAtt(pier){
     + CY.days.map(function(){ return '<td></td>'; }).join('')
     + SUMC.map(function(c){ return '<td class="pa-sc">'+(gTot[c]||0)+'</td>'; }).join('')
     + (nOn?('<td class="pa-sc ngt">'+nTot+'</td>'):'')
-    + '<td class="pa-sc tot">'+totW+'</td><td class="pa-nt"></td></tr>';
+    + '<td class="pa-sc tot">'+totW+'</td>'
+    + (pay?('<td class="pa-sc pay"></td><td class="pa-sc pay tot" title="'
+        +(payMiss?(payMiss+' คนยังไม่ได้ใส่เบี้ยเที่ยว · ยังไม่รวมในยอดนี้'):'รวมทุกคนในตาราง')+'">'
+        +paMoney(payTot)+(payMiss?'<sup style="color:#B4560A"> +'+payMiss+'?</sup>':'')+'</td>'):'')
+    + '<td class="pa-nt"></td></tr>';
 
   // §rtLegend · รหัสที่โผล่จริงในรอบนี้มาก่อน (รวมรหัสเส้นทาง) แล้วค่อยรหัสอื่นในทะเบียน
   var _lgSeen={};
@@ -62933,6 +63170,9 @@ function renderPierAtt(pier){
           +'title="เปิดให้พิมพ์แก้ ชื่อ · ชื่อเล่น · ตำแหน่ง · รหัสตั้งต้น · หมายเหตุ">'
           +(ed?'&#10003; แก้ไขอยู่ · กดเพื่อปิด':'&#9998; แก้ไข')+'</button>')
       +'<button class="gh" onclick="paRangeOpen()"'+(ro?' disabled':'')+'>วางงานเป็นช่วง</button>'
+      +(paPayCan()?('<button class="pa-edb'+(pay?' on':'')+'" onclick="paPayToggle()" title="แสดง/ซ่อนคอลัมน์เงินเบี้ยเที่ยว">'
+          +(pay?'&#10003; เบี้ยเที่ยว':'฿ เบี้ยเที่ยว')+'</button>'
+        +(pay?'<button onclick="paPayOpen()" title="สูตรของแต่ละรหัส · เบี้ยเที่ยวรายคน">ตั้งเบี้ยเที่ยว</button>':'')):'')
       /* §regHub · ทะเบียนทั้งหมดของท่าอยู่ตรงนี้ที่เดียว · ชื่อขึ้นต้น "ทะเบียน" เหมือนกันหมด */
       +'<span class="sep"></span>'
       +'<button onclick="poStaffOpen()" title="ชื่อ · ตำแหน่ง · ท่าประจำ · รหัสตั้งต้น">ทะเบียนพนักงาน</button>'
