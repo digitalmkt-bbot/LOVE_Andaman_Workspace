@@ -62807,11 +62807,27 @@ function paEnsureMtCode(){
 var PA_PAY_DEF={
   KB:{x:1, d:0,   f:100},
   PP:{x:1, d:0,   f:0},
-  WS:{x:1, d:50,  f:0},
-  'WS-LT':{x:1, d:50, f:0},   // §paWsLt · WS ที่ไปเรือหางยาว · คิดเหมือน WS · แยกรหัสไว้นับวัน
+  WS:{x:1, d:0,   f:0},
+  'WS-LT':{x:0, d:50, f:0},   // §paLtSplit · ค่าหางยาวของวัน WS · แยกออกจาก WS · วันนับเท่ากับวัน WS
   OV:{x:2, d:0,   f:0},
   N: {x:0, d:200, f:0}
 };
+/* §paLtSplit (2026-09-26) · ค่าหางยาว (+50/วัน) เดิมอยู่ใน WS · ย้ายไปเป็น WS-LT
+   สูตรที่ prod เซฟไว้แล้วเป็นชุดเก่า (WS x1 d50 · WS-LT x1 d50) · แปลงครั้งเดียว (PIER_CFG.ltSplit)
+   แปลงเฉพาะเมื่อยังเป็นค่าเดิมเป๊ะ · ถ้ามีคนแก้เองแล้ว ปล่อยไว้ ไม่ทับของที่ตั้งใจแก้ */
+function paEnsureLtSplit(){
+  try{
+    if(PIER_CFG.ltSplit) return;
+    var R=PIER_CFG.payRules;
+    if(R && typeof R==='object'){
+      var ws=R.WS||{}, lt=R['WS-LT']||{};
+      var same=function(r,x,d,f){ return (+r.x||0)===x && (+r.d||0)===d && (+r.f||0)===f; };
+      if(same(ws,1,50,0) && (!R['WS-LT'] || same(lt,1,50,0))){ R.WS={x:1,d:0,f:0}; R['WS-LT']={x:0,d:50,f:0}; }
+    }
+    PIER_CFG.ltSplit=1;
+    if(typeof poCanEdit==='function' && poCanEdit()) poPersist();
+  }catch(_){}
+}
 /* §paWsLt (2026-09-26) · รหัส WS-LT = Whale Shark ที่ไปเรือหางยาว
    ใบงานเรือไม่รู้ว่าวันไหนไปหางยาว · คนวางตารางเลือกรหัสนี้ลงช่องวันเอง
    เติมครั้งเดียวต่อข้อมูลชุดหนึ่ง (PIER_CFG.wsLtSeed) · ทั้งในทะเบียนรหัสและในสูตรเบี้ยเที่ยวที่เซฟไว้แล้ว
@@ -62826,7 +62842,7 @@ function paEnsureWsLt(){
                        color:'#0E6E86', bg:'#DDF1F5', kind:'work', ord:mx+1, active:true, userColor:1});
     }
     var R=PIER_CFG.payRules;
-    if(R && typeof R==='object' && Object.keys(R).length && !R['WS-LT']) R['WS-LT']={x:1, d:50, f:0};
+    if(R && typeof R==='object' && Object.keys(R).length && !R['WS-LT']) R['WS-LT']={x:0, d:50, f:0};
     PIER_CFG.wsLtSeed=1;
     if(typeof poCanEdit==='function' && poCanEdit()) poPersist();
   }catch(_){}
@@ -62928,7 +62944,7 @@ function paPayOpen(){
       return '<div style="margin-top:16px;border-top:1px dashed #D9DDE4;padding-top:12px">'
         +'<div style="font-size:12px;font-weight:800;color:#16265C;margin-bottom:6px">เบี้ยเที่ยวขั้นต่ำ วันที่ลงเรือ '+poE(PA_WS_CODE)+'</div>'
         +'<div style="font-size:11.5px;color:#6E7684;margin-bottom:8px;line-height:1.6">ใครเบี้ยเที่ยวต่ำกว่านี้ วัน '+poE(PA_WS_CODE)+' จะได้เพิ่มจนถึงขั้นต่ำ · ดูจากช่องในใบงานเรือ<br>'
-        +'Island Staff และ WS-LT (หางยาว) ใช้เบี้ยปกติ · บาทต่อวันของ '+poE(PA_WS_CODE)+' ยังบวกเพิ่มเหมือนเดิม</div>'
+        +'Island Staff ใช้เบี้ยปกติ · ค่าหางยาวอยู่ที่แถว WS-LT (นับวันเท่ากับวัน '+poE(PA_WS_CODE)+' ของแต่ละคน)</div>'
         +'<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:12px">'
         +'<label>กัปตัน <input class="pl-f" id="pa_wsmin_cap" type="text" inputmode="decimal" style="'+css+'" value="'+M.cap+'"></label>'
         +'<label>ผู้ช่วยกัปตัน / ลูกเรือ <input class="pl-f" id="pa_wsmin_crew" type="text" inputmode="decimal" style="'+css+'" value="'+M.crew+'"></label>'
@@ -62989,7 +63005,7 @@ function paPaySave(){
 
 var _paTab='roster';
 function renderPierAtt(pier){
-  paEnsureMtCode(); paEnsureNightCode(); paEnsureWsLt(); paSkinApply();
+  paEnsureMtCode(); paEnsureNightCode(); paEnsureWsLt(); paEnsureLtSplit(); paSkinApply();
   if(pier) _poPier=pier;
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
   var host=document.getElementById('pa-host-'+P.k); if(!host) return;
@@ -63017,7 +63033,7 @@ function renderPierAtt(pier){
   groups.forEach(function(G){ G.rows.forEach(function(st){
     CY.days.forEach(function(d){ var v=paCell(d.s,P.k,st,IDX[d.s]); if(v.c) used[v.c]=1; }); }); });
   /* §paWsTier · คอลัมน์ WS-LT (หางยาว) โชว์ตลอด แม้รอบนี้ยังไม่มีใครลง · ให้เห็นว่าแยกจาก WS */
-  if((PIER_CODES||[]).some(function(c){ return c.code==='WS-LT' && c.active!==false; })) used['WS-LT']=1;
+  used['WS-LT']=1;   // §paLtSplit · คอลัมน์ค่าหางยาว · นับเท่าวัน WS ของแต่ละคน
   var SUMC=Object.keys(used).sort(function(a,b){
     var ma=paCodeMeta(a)||{}, mb=paCodeMeta(b)||{};
     var ra=ma.route?0:1, rb=mb.route?0:1;
@@ -63025,6 +63041,9 @@ function renderPierAtt(pier){
     if(ra===0) return String(a).localeCompare(String(b));
     return ((ma.ord!=null?ma.ord:99)-(mb.ord!=null?mb.ord:99)) || String(a).localeCompare(String(b));
   });
+  /* §paLtSplit · WS-LT ต่อท้าย WS ทันที · อ่านคู่กัน */
+  (function(){ var i=SUMC.indexOf('WS-LT'), j=SUMC.indexOf(PA_WS_CODE);
+    if(i>=0 && j>=0){ SUMC.splice(i,1); j=SUMC.indexOf(PA_WS_CODE); SUMC.splice(j+1,0,'WS-LT'); } })();
 
   /* §paNight · รอบนี้มีเวรกลางคืนหรือเปล่า · มีแม้ช่องเดียวก็เปิดแถบล่างทั้งตาราง
      ไม่งั้นบางช่องสูงไม่เท่ากันแล้วอ่านเป็นตารางคนละอัน · นับจำนวนคืนของแต่ละคนไปเลยในรอบเดียว */
@@ -63075,6 +63094,9 @@ function renderPierAtt(pier){
         if(v.atPier && v.atPier!==P.k) aw++;
         return paCellHtml(d.s,P.k,st,d,hasJob[d.s],today,E,nOn);
       }).join('');
+      /* §paLtSplit · ทุกวันที่ลงเรือ WS มีหางยาวด้วย · WS-LT = วัน WS + ช่องที่ลง WS-LT เอง (ถ้ามี) */
+      var _wsd=cnt[PA_WS_CODE]||0;
+      if(_wsd){ cnt['WS-LT']=(cnt['WS-LT']||0)+_wsd; gTot['WS-LT']=(gTot['WS-LT']||0)+_wsd; }
       totW+=w; totO+=o; totL+=l; totAway+=aw;
       var _nc=nCnt[st.id]||0;
       var sums=SUMC.map(function(c){ var v=cnt[c]||0;
