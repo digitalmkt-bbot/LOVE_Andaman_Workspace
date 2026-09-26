@@ -434,9 +434,32 @@ const R10 = await page.evaluate(() => {
     gotWithRT = bkV2RouteDDOpts().length;
     ag.rateTypeId = '';
   }
+  /* ผู้ใช้เจอเองรอบสอง · ไปตั้ง Programs sold ให้บัญชีบ้าน รายการก็หดตาม
+     migration กันได้แค่เครื่องที่ยังไม่มีคนแก้ · ตัวจริงต้องหนีเองได้แม้มีคนตั้งไว้ */
+  const ppBak = ag.programPeriods, pgBak = ag.programs;
+  const twoIds = want.slice(0, 2).map(r => r.id);
+  ag.programs = twoIds.slice();
+  ag.programPeriods = twoIds.map(id => ({ routeId: id, bookFrom:'', bookTo:'', travelFrom:'', travelTo:'' }));
+  bkV2NewBooking();
+  bkV2SetBookingField('agentId', 'a_company');
+  const gotWithPP = bkV2RouteDDOpts().length;
+  /* ดูด้วยว่า agent ธรรมดายังถูก Programs sold จำกัดอยู่ · กันการแก้แบบเหวี่ยงที่เปิดทุกคน */
+  const other = (SB_AGENTS || []).find(a => a.id !== 'a_company' && (a.programPeriods || []).length &&
+                  (a.programPeriods || []).some(p => p && p.routeId));
+  let otherGot = null, otherWant = null;
+  if (other) {
+    otherWant = [...new Set(other.programPeriods.map(p => p && p.routeId).filter(Boolean))]
+      .map(id => all.find(r => r.id === id)).filter(Boolean)
+      .filter(r => (typeof laIsLandRoute !== 'function') || (laIsLandRoute(r.id) === landOnly)).length;
+    bkV2NewBooking();
+    bkV2SetBookingField('agentId', other.id);
+    otherGot = bkV2RouteDDOpts().length;
+  }
+  ag.programPeriods = ppBak; ag.programs = pgBak;
   return { nActive: all.length, want: want.length, got, blocked,
            pp: (ag.programPeriods || []).length, programs: (ag.programs || []).length,
-           gotWithRT, smallN, smallId: small && small.id };
+           gotWithRT, smallN, smallId: small && small.id,
+           gotWithPP, ppSet: twoIds.length, otherGot, otherWant, otherId: other && other.id };
 });
 if (R10.blocked) fail('เลือก agent บริษัทแล้วบล็อกทริปยังขึ้น "Pick an agent first" · ไม่มีอะไรให้เลือกเลย');
 else if (R10.pp) fail('a_company มี programPeriods ' + R10.pp + ' อัน · ช่วงโปรแกรมในสัญญามาก่อน rate type จะปิดกั้นรายการไว้แค่นั้น');
@@ -447,9 +470,16 @@ else if (R10.got !== R10.want)
 else if (R10.gotWithRT !== null && R10.gotWithRT !== R10.want)
   fail('ผูก rate type "' + R10.smallId + '" (ครอบ ' + R10.smallN + ' เส้นทาง) เข้าไป แล้วรายการหดเหลือ ' +
        R10.gotWithRT + ' · ใบบริษัทต้องไม่ถูกเรทจำกัด เพราะยอดมาจากช่อง Total');
+else if (R10.gotWithPP !== R10.want)
+  fail('ตั้ง Programs sold ให้บัญชีบ้าน ' + R10.ppSet + ' รายการ แล้วตัวเลือกหดเหลือ ' +
+       R10.gotWithPP + ' · ใบของบริษัทต้องข้าม Programs sold ไปเลย ไม่ใช่พึ่ง migration ที่ล้างครั้งเดียว');
+else if (R10.otherGot !== null && R10.otherGot !== R10.otherWant)
+  fail('agent ธรรมดา "' + R10.otherId + '" ควรได้ ' + R10.otherWant + ' เส้นทางตาม Programs sold · ได้จริง ' +
+       R10.otherGot + ' · ข้อยกเว้นของบัญชีบ้านกว้างไปโดนเอเยนต์ทั่วไป');
 else ok('ตัวเลือกทริปของ agent บริษัทครบ ' + R10.got + '/' + R10.want + ' เส้นทางตามที่คิดเอง · ' +
-        'ไม่มี programPeriods ปิดกั้น · ผูก rate type ที่ครอบแค่ ' + R10.smallN +
-        ' เส้นทางเข้าไปก็ยังครบ');
+        'ผูก rate type ที่ครอบแค่ ' + R10.smallN + ' เส้นทางเข้าไปก็ยังครบ · ' +
+        'ตั้ง Programs sold ให้ ' + R10.ppSet + ' รายการก็ยังครบ' +
+        (R10.otherId ? ' · ขณะที่ agent ธรรมดา "' + R10.otherId + '" ยังถูก Programs sold จำกัดไว้ที่ ' + R10.otherWant + ' ตามเดิม' : ''));
 
 /* ══ 11 · ฟอร์ม · ล็อก Manual และใบ ฿0 ไปต่อได้ ═══════════════════════════ */
 const R11 = await page.evaluate(() => {
