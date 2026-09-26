@@ -43811,6 +43811,10 @@ function bkV2RenderNewBooking(){
     // §b2cEdit · ใบ B2C ไม่ต้องมี Rate Type · ราคามาจากต้นทางโดยตรง · การไปผูกเรทให้เอเจนต์ B2C
     //   จะทำให้ระบบคิดราคาใหม่ทับยอดที่ลูกค้าจ่ายจริง ซึ่งผิดกว่าเดิม
     rtPreview = `<div class="bkv2-nb-rt-preview" style="background:#EEF5FF;border-color:#C3D8F2;color:#185FA5"><strong>ราคามาจาก B2C โดยตรง</strong><div class="meta">&#3647;${Number(d.manualTotal||0).toLocaleString()} &middot; ไม่ต้องผูก Rate Type &middot; ยอดเงิน ทริป และจำนวนคน แก้ที่ B2C เท่านั้น &middot; ที่แก้ได้ในหน้านี้คือจุดรับ-ส่ง ผู้ติดต่อ และข้อมูลปฏิบัติการ</div></div>`;
+  } else if(isCompany){
+    /* §internal · ใบของบริษัทไม่ต้องมี Rate Type · กล่องเตือนสีส้มเดิมสั่งให้ไปผูกเรท
+       ซึ่งเป็นทางที่ผิด · ผูกแล้วกลับจำกัดเส้นทางแทนที่จะช่วย */
+    rtPreview = `<div class="bkv2-nb-rt-preview" style="background:#FDF6E6;border-color:#E3D2A8;color:#7A5A12"><strong>ใบของบริษัท · ตั้งราคาเอง</strong><div class="meta">ไม่ต้องผูก Rate Type · คีย์ได้ทุกเส้นทางและทุกโซนรับ · ยอดมาจากช่อง Total ของใบ · ถ้ามีเรทผูกไว้ในหน้า Agent List ก็ไม่มีผล</div></div>`;
   } else if(d.agentId){
     rtPreview = `<div class="bkv2-nb-rt-preview" style="background:#FFF6E5;border-color:#EAD9B0;color:#633806"><strong>&#9888; No Rate Type bound</strong><div class="meta">This agent has no Rate Type assigned · go to Agent List to bind one before proceeding</div></div>`;
   }
@@ -44538,6 +44542,10 @@ function bkV2RenderTripsSection(){
               const rt = bkV2GetRT();
               const zoneAvailable = (z) => {
                 if(t.ovnLeg) return true;   // OVN return leg · ราคา 0 · เลือกได้ทุกโซน (โดยเฉพาะ No Transfer · ขึ้นเรือที่ท่าเกาะ)
+                /* §internal · ตั้งราคาเอง = ตารางราคาไม่เกี่ยว · ทุกโซนกดได้
+                   bkV2NoRateTrips กับแถบ NO RATE ยกเว้น manual ไว้อยู่แล้ว
+                   ตรงนี้เคยตก · ปุ่มจึงขีดฆ่าทั้งที่ใบนั้นไม่ได้ใช้ตารางราคาเลย */
+                if(d.priceMode === 'manual') return true;
                 if(!t.routeId || !rt) return true;
                 const sr = rt.seatRates?.[t.routeId]?.[z];
                 if(!sr) return false;
@@ -50799,7 +50807,7 @@ function bkV2PickAgentByText(txt){
   const trimmed = String(txt||'').trim();
   if(!trimmed){
     d.agentId = null;
-    d.rateTypeRef = null;
+    bkV2ApplyAgentRules(null);   /* §agentOne */
     if(prevAgentId) bkV2ResetAgentScopedData();
     bkV2Render(); return;
   }
@@ -50816,7 +50824,7 @@ function bkV2PickAgentByText(txt){
   if(a){
     const isNewAgent = prevAgentId !== a.id;
     d.agentId = a.id;
-    d.rateTypeRef = a.rateTypeId || null;
+    bkV2ApplyAgentRules(a);      /* §agentOne · เดิมที่นี่ตั้งแค่ rateTypeRef · priceMode จึงค้าง */
     if(isNewAgent) bkV2ResetAgentScopedData();
     bkV2Render();
   }
@@ -52691,26 +52699,31 @@ function bkV2HotelDDPick(label, isNew){
   bkV2HotelDDHide();
 }
 
+/* §agentOne · กติกาที่ต้องเกิดขึ้นทุกครั้งที่ agent ของใบเปลี่ยน · เขียนไว้ที่เดียว
+   เดิมกติกาชุดนี้อยู่ใน bkV2SetBookingField อย่างเดียว แต่หน้าจอจริงเลือก agent
+   ผ่านช่องค้นหา ซึ่งเข้า bkV2PickAgentByText ที่ไม่เคยเรียกฟังก์ชันนั้นเลย
+   ใบของบริษัทจึงค้างเป็น priceMode='rate' ทั้งที่ชิปบนจอเขียนว่า Manual
+   — จอบอกอย่าง ระบบคิดอีกอย่าง แล้วโซนกับปุ่มบันทึกก็ถูกล็อกตามกัน */
+function bkV2ApplyAgentRules(a){
+  const d = _bkV2 && _bkV2.newBooking; if(!d) return;
+  d.rateTypeRef = a?.rateTypeId || null;
+  // House accounts: walk-in keeps manual option · staff → free/manual; real agent → lock Rate type
+  const isWk = a && (a.code==='WALKIN' || a.id==='a_walkin');
+  const isSt = a && (a.code==='STAFF'  || a.id==='a_staff');
+  if(isSt){ d.soldBy=''; const insp=d.staffPurpose==='inspection'; d.priceMode = insp?'manual':'rate'; if(insp) d.manualTotal=0; }   // welfare → Staff Welfare rate (FOC free, over-quota priced) · inspection → ฿0
+  else if(isWk){ d.staffId=''; }
+  /* §internal · ใบบริษัทตั้งราคาเองเสมอ · ไม่มี rate type ให้อ้าง (ฟรีก็ได้ พิเศษก็ได้) */
+  else if(a && (a.code==='COMPANY' || a.id==='a_company')){
+    d.staffId=''; d.priceMode='manual';
+    if(d.manualTotal==null) d.manualTotal=0;
+  }
+  else { d.priceMode='rate'; d.soldBy=''; d.staffId=''; d.companyPurpose=''; }
+}
 function bkV2SetBookingField(key, val){
   if(!_bkV2.newBooking) return;
   _bkV2.newBooking[key] = val;
   // When agent changes · auto-fill rate type ref from agent
-  if(key === 'agentId'){
-    const a = val ? sbGetAgent(val) : null;
-    _bkV2.newBooking.rateTypeRef = a?.rateTypeId || null;
-    // House accounts: walk-in keeps manual option · staff → free/manual; real agent → lock Rate type
-    const isWk = a && (a.code==='WALKIN' || a.id==='a_walkin');
-    const isSt = a && (a.code==='STAFF'  || a.id==='a_staff');
-    if(isSt){ _bkV2.newBooking.soldBy=''; const insp=_bkV2.newBooking.staffPurpose==='inspection'; _bkV2.newBooking.priceMode = insp?'manual':'rate'; if(insp) _bkV2.newBooking.manualTotal=0; }   // welfare → Staff Welfare rate (FOC free, over-quota priced) · inspection → ฿0
-    else if(isWk){ _bkV2.newBooking.staffId=''; }
-    /* §internal · ใบบริษัทตั้งราคาเองเสมอ · ไม่มี rate type ให้อ้าง (ฟรีก็ได้ พิเศษก็ได้) */
-    else if(a && (a.code==='COMPANY' || a.id==='a_company')){
-      _bkV2.newBooking.staffId=''; _bkV2.newBooking.priceMode='manual';
-      if(_bkV2.newBooking.manualTotal==null) _bkV2.newBooking.manualTotal=0;
-    }
-    else { _bkV2.newBooking.priceMode='rate'; _bkV2.newBooking.soldBy=''; _bkV2.newBooking.staffId='';
-           _bkV2.newBooking.companyPurpose=''; }
-  }
+  if(key === 'agentId'){ bkV2ApplyAgentRules(val ? sbGetAgent(val) : null); }
   /* §internal · ใบของบริษัทเองเป็น Manual อย่างเดียว · ไม่มีเรทให้อ้าง
      ถ้าหลุดไปเป็น rate ยอดจะกลายเป็น ฿0 แบบเงียบ ๆ (ชุดราคาสังเคราะห์ไม่มีตารางราคา) */
   if(key === 'priceMode' && val !== 'manual'){

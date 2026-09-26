@@ -406,6 +406,18 @@ else ok('แท็บ Internal / Company ปี ' + R9.yr + ' · ' + R9.want.bk 
         ' (฿' + R9.want.money.toLocaleString() + ') ตรงกับที่คิดเองจากข้อมูลดิบ' +
         (R9.want.unset ? ' · เตือนใบที่ยังไม่ระบุเหตุผล ' + R9.want.unset + ' ใบ' : ''));
 
+/* เลือก agent ด้วยทางที่คนคลิกจริง · ไม่ใช่ bkV2SetBookingField
+   เทสชุดก่อนเรียก setBookingField ตรง ๆ ทั้งที่หน้าจอจริงเข้า bkV2AgentDDPick
+   กติกาใบบริษัทจึงผ่านเทส แต่พังของจริง · เทสที่ไม่เดินทางเดียวกับคน กันอะไรไม่ได้ */
+await page.evaluate(() => {
+  window._pickCo = () => {
+    bkV2NewBooking();
+    const o = (bkV2GetAgentDDOptions() || []).find(x => x.id === 'a_company');
+    if (!o) throw new Error('ไม่มีบัญชีบ้านในรายการ agent');
+    bkV2AgentDDPick(o.label);
+  };
+});
+
 /* ══ 10 · ตัวเลือกทริป ═══════════════════════════════════════════════════
    ผู้ใช้เจอเอง · เลือก agent บริษัทแล้ว "ยังไม่มีทริปให้เลือก"
    สามชั้นที่กั้นอยู่ · ตัวแรกทำให้บล็อกทริปไม่ถูกวาดเลย
@@ -419,7 +431,7 @@ const R10 = await page.evaluate(() => {
   const want = all.filter(r => (typeof laIsLandRoute !== 'function') || (laIsLandRoute(r.id) === landOnly));
   const ag = (SB_AGENTS || []).find(a => a.id === 'a_company') || {};
   bkV2NewBooking();
-  bkV2SetBookingField('agentId', 'a_company');
+  _pickCo();
   const blocked = /Pick an agent first/.test(String(bkV2RenderTripsSection() || ''));
   const got = (typeof bkV2RouteDDOpts === 'function') ? bkV2RouteDDOpts().length : -1;
   /* ผูกเรทที่ครอบน้อยเข้าไป · รายการต้องไม่หดตาม (ราคาใบนี้มาจากช่อง Total อยู่แล้ว) */
@@ -430,7 +442,7 @@ const R10 = await page.evaluate(() => {
     smallN = (small.routes || []).length;
     ag.rateTypeId = small.id;
     bkV2NewBooking();
-    bkV2SetBookingField('agentId', 'a_company');
+    _pickCo();
     gotWithRT = bkV2RouteDDOpts().length;
     ag.rateTypeId = '';
   }
@@ -441,7 +453,7 @@ const R10 = await page.evaluate(() => {
   ag.programs = twoIds.slice();
   ag.programPeriods = twoIds.map(id => ({ routeId: id, bookFrom:'', bookTo:'', travelFrom:'', travelTo:'' }));
   bkV2NewBooking();
-  bkV2SetBookingField('agentId', 'a_company');
+  _pickCo();
   const gotWithPP = bkV2RouteDDOpts().length;
   /* ดูด้วยว่า agent ธรรมดายังถูก Programs sold จำกัดอยู่ · กันการแก้แบบเหวี่ยงที่เปิดทุกคน */
   const other = (SB_AGENTS || []).find(a => a.id !== 'a_company' && (a.programPeriods || []).length &&
@@ -484,7 +496,7 @@ else ok('ตัวเลือกทริปของ agent บริษัท�
 /* ══ 11 · ฟอร์ม · ล็อก Manual และใบ ฿0 ไปต่อได้ ═══════════════════════════ */
 const R11 = await page.evaluate(() => {
   bkV2NewBooking();
-  bkV2SetBookingField('agentId', 'a_company');
+  _pickCo();
   const pmAfterPick = _bkV2.newBooking.priceMode;
   bkV2SetBookingField('priceMode', 'rate');          /* พยายามสลับกลับ */
   const pmAfterFlip = _bkV2.newBooking.priceMode;
@@ -507,10 +519,18 @@ const R11 = await page.evaluate(() => {
   const box = document.createElement('div'); box.innerHTML = nb;
   const dis = [].slice.call(box.querySelectorAll('button')).filter(b => b.disabled)
     .map(b => (b.textContent || '').trim());
+  /* โซนรับ · ชุดสังเคราะห์ไม่มีตารางราคา ถ้าเช็คตามเรท ทุกโซนจะขีดฆ่ากดไม่ได้ */
+  const zoneBtns = [].slice.call(box.querySelectorAll('button'))
+    .filter(b => /^(PK|KL|RN|No Transfer)/.test((b.textContent || '').trim()));
+  const zoneDead = zoneBtns.filter(b => b.disabled).map(b => (b.textContent || '').trim());
   return { pmAfterPick, pmAfterFlip, filledTrip: _o.length > 0,
            err: nb.indexOf('ERR ') === 0 ? nb.slice(0, 140) : null,
            hasRateBtn: /bkV2SetBookingField\('priceMode','rate'\)/.test(nb),
-           confirmDisabled: dis.some(x => /Confirm/i.test(x)) };
+           confirmDisabled: dis.some(x => /Confirm/i.test(x)),
+           nZone: zoneBtns.length, zoneDead,
+           noRateBanner: nb.indexOf('NO RATE') >= 0,
+           cannotSave: /cannot save/i.test(nb),
+           rtWarn: nb.indexOf('No Rate Type bound') >= 0 };
 });
 if (R11.err) fail('วาดฟอร์มไม่ได้ · ' + R11.err);
 else if (R11.pmAfterPick !== 'manual') fail('เลือก agent บริษัทแล้ว Pricing ไม่ได้เป็น manual · เป็น ' + R11.pmAfterPick);
@@ -518,14 +538,22 @@ else if (R11.pmAfterFlip !== 'manual')
   fail('สลับ Pricing กลับเป็น rate ได้ · ใบบริษัทไม่มีตารางราคา ยอดจะกลายเป็น ฿0 แบบเงียบ');
 else if (R11.hasRateBtn) fail('ยังมีปุ่มสลับไป Rate บนฟอร์มใบบริษัท · มีไว้ให้กดผิด');
 else if (!R11.filledTrip) fail('ไม่มีเส้นทางให้เลือก · ตรวจข้อนี้ไม่ได้');
-else ok('ฟอร์มใบบริษัทล็อก Pricing เป็น Manual · สลับกลับไม่ได้ ไม่มีปุ่มให้กดผิด · ' +
-        'วาดฟอร์มใบ ฿0 ได้ไม่พัง (ใบ ฿0 บันทึกได้จริงหรือไม่ อยู่ในข้อ 12)');
+else if (!R11.nZone) fail('หาปุ่มโซนรับในฟอร์มไม่เจอ · ตรวจข้อนี้ไม่ได้');
+else if (R11.zoneDead.length)
+  fail('โซนรับกดไม่ได้ ' + R11.zoneDead.length + '/' + R11.nZone + ' ปุ่ม (' + R11.zoneDead.join(', ') +
+       ') · ชุดราคาสังเคราะห์ไม่มีตารางราคา จึงต้องข้ามการเช็คเรทไป ไม่งั้นคีย์ต่อไม่ได้');
+else if (R11.noRateBanner || R11.cannotSave)
+  fail('ฟอร์มขึ้น NO RATE / cannot save · ใบตั้งราคาเองไม่ต้องมีเรทครอบ');
+else if (R11.rtWarn)
+  fail('ฟอร์มขึ้น "No Rate Type bound" · สั่งให้ไปผูกเรททั้งที่ผูกแล้วกลับจำกัดเส้นทาง');
+else ok('ฟอร์มใบบริษัท (เลือก agent ทางเดียวกับที่คนคลิก) ล็อก Pricing เป็น Manual · สลับกลับไม่ได้ · ' +
+        'โซนรับกดได้ครบ ' + R11.nZone + ' ปุ่ม · ไม่มี NO RATE / cannot save / No Rate Type bound');
 
 /* ══ 12 · บันทึกจริง ═════════════════════════════════════════════════════
    ไล่ทั้งเส้นแบบที่คนคีย์ · หาใบใหม่ด้วยผลต่างของชุด id เพราะใบใหม่ไปอยู่หัวรายการ
    และรหัสใบถูกสร้างใหม่ตอน commit (เทียบด้วย code ไม่ได้ · ลองแล้วหาไม่เจอ)   */
 const R12 = await page.evaluate(() => {
-  bkV2NewBooking(); bkV2SetBookingField('agentId', 'a_company');
+  bkV2NewBooking(); _pickCo();
   const opts = bkV2RouteDDOpts();
   if (!opts.length) return { err: 'ไม่มีเส้นทางให้เลือก' };
   let hit = null;
@@ -539,7 +567,7 @@ const R12 = await page.evaluate(() => {
   if (!hit) return { err: 'หาวันที่เส้นทางออกจริงไม่ได้' };
   const mk = (purpose, total, pax, focReason) => {
     bkV2NewBooking();
-    bkV2SetBookingField('agentId', 'a_company');
+    _pickCo();
     bkV2SetBookingField('companyPurpose', purpose);
     bkV2SetBookingField('leadPax', 'ทดสอบ ' + purpose);
     bkV2SetBookingField('manualTotal', total);
