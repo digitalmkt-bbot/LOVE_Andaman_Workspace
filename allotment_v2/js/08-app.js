@@ -108,6 +108,10 @@ function sbMarketsPersist(){ if(typeof window.laCanEditArea==='function' && !win
 // One-time seed: Staff / Internal market (welfare + inspection trips · excluded from sales revenue)
 (function(){ try{ if(Array.isArray(SB_MARKETS) && !SB_MARKETS.some(m=>m.id==='staff')){ SB_MARKETS.push({id:'staff', name:'Staff / Internal', color:'#6c5ce7', subs:['Welfare','Inspection']}); if(typeof sbMarketsPersist==='function') sbMarketsPersist(); console.log('[seed] added Staff / Internal market'); } }catch(e){ console.warn('staff market seed failed',e); } })();
 
+// One-time seed: House / Company market · ใบของบริษัทเอง (แขกบริษัท · PR · ราคาพิเศษ)
+// แยกถังจาก Staff / Internal ตามที่ผู้ใช้เลือก · พนักงานกินโควตาสวัสดิการ แต่แขกบริษัท/PR เป็นค่าการตลาด
+(function(){ try{ if(Array.isArray(SB_MARKETS) && !SB_MARKETS.some(m=>m.id==='house')){ SB_MARKETS.push({id:'house', name:'House / Company', color:'#B8860B', subs:['Company guest','PR / Influencer','Special price']}); if(typeof sbMarketsPersist==='function') sbMarketsPersist(); console.log('[seed] added House / Company market'); } }catch(e){ console.warn('house market seed failed',e); } })();
+
 const SB_PAYMENT_TYPES = [
   {id:'proforma', name:'Pro forma Invoice (Pre-paid)', short:'PF',  needCredit:false, cot:false},
   {id:'invoice',  name:'Invoice (Credit)',             short:'INV', needCredit:true,  cot:false},
@@ -281,7 +285,7 @@ function staffWelfareUsed(staffId, year){
 }
 function staffRemaining(id, year){ return staffQuota(id,year) - staffWelfareUsed(id,year); }
 let _staffYear = new Date().getFullYear();
-let _staffTab = 'roster';   // 'roster' | 'trips'
+let _staffTab = 'roster';   // 'roster' | 'trips' | 'internal'
 function staffSetTab(t){ _staffTab = t; renderStaff(); }
 function staffSetYear(delta){ _staffYear += delta; renderStaff(); }
 // Collect this-year staff trips (welfare + inspection) as flat rows: {bk, staff, t, route, purpose, foc, paid, head}
@@ -300,6 +304,169 @@ function staffTripsFor(year){
   });
   out.sort((a,b)=>(a.t.date||'').localeCompare(b.t.date||''));
   return out;
+}
+/* ══ §internal · รายงานใบของบริษัทเอง ══════════════════════════════════════
+   หนึ่งแถว = หนึ่งทริปของหนึ่งใบ · แยกเดือน/เส้นทางได้จากตรงนี้
+   ⚠ เงินเป็นของ "ใบ" ไม่ใช่ของ "ทริป" · ใบที่มีสองทริปถ้าใส่เงินทั้งสองแถว
+     ยอดจะถูกนับสองรอบ · จึงติดธง money ไว้แค่แถวของทริปแรกสุดของใบนั้น
+     (pax นับทุกแถวได้ เพราะคนไปจริงทุกทริป)                                  */
+function laInternalRows(year){
+  var CXL=['cancelled','rejected','cancelled_weather'];
+  var out=[];
+  (typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]).forEach(function(b){
+    if(!b || CXL.indexOf(b.status)>=0) return;
+    if(typeof laIsInternalBk!=='function' || !laIsInternalBk(b)) return;
+    var trs=(b.trips||[]).filter(function(t){ return t && t.date && String(t.date).slice(0,4)===String(year); });
+    if(!trs.length) return;
+    trs.sort(function(x,y){ return String(x.date).localeCompare(String(y.date)); });
+    var money=(typeof laBkMoney==='function')?laBkMoney(b):(+b.total||0);
+    var free=(typeof laIsInternalFree==='function')?laIsInternalFree(b):(money<=0);
+    trs.forEach(function(t,i){
+      var pax=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0;
+      var foc=(typeof bkV2PaxTot==='function')?bkV2PaxTot(t.pax||{},'foc'):0;
+      out.push({ bk:b, t:t, date:t.date,
+        route:(typeof getRoute==='function')?(getRoute(t.routeId)||null):null,
+        purpose:b.purpose||'', lbl:(typeof laInternalLabel==='function')?laInternalLabel(b):'',
+        unset:!(typeof LA_INTERNAL_PURPOSE!=='undefined' && LA_INTERNAL_PURPOSE[b.purpose]),
+        pax:pax, foc:foc, free:free,
+        money:(i===0?money:0), moneyHere:(i===0) });
+    });
+  });
+  out.sort(function(a,b){ return String(a.date).localeCompare(String(b.date)); });
+  return out;
+}
+function laInternalReport(yr){
+  var esc=function(x){return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
+  var rows=laInternalRows(yr);
+  if(!rows.length) return '<div style="background:#fff;border:1px dashed rgba(0,0,0,.15);border-radius:12px;'
+    +'padding:40px;text-align:center;color:#8a8a82;font-size:13px">ยังไม่มีใบของบริษัทเองในปี '+yr
+    +'<br><span style="font-size:11px">คีย์ใบใหม่แล้วเลือก Agent = Love Andaman · Company</span></div>';
+  var bkIds={}; rows.forEach(function(r){ bkIds[r.bk.id]=r; });
+  var nBk=Object.keys(bkIds).length;
+  var pax=0, focN=0, freeBk=0, paidBk=0, money=0;
+  rows.forEach(function(r){ pax+=r.pax; focN+=r.foc; if(r.moneyHere){ if(r.free) freeBk++; else { paidBk++; money+=r.money; } } });
+  var unsetRows=rows.filter(function(r){ return r.unset && r.moneyHere; });
+
+  /* ── กล่องเตือนใบที่ยังไม่ระบุเหตุผล · นี่คือของที่ต้องไปเติม ──
+     วัดจากข้อมูลจริงตอนออกแบบ · มี 6 ใบบน a_staff ที่ purpose ว่างทั้งหมด
+     ระบบเห็นว่าเป็นใบของบริษัท (จาก market) แต่บอกไม่ได้ว่าเพราะอะไร        */
+  var warn = unsetRows.length ? '<div class="laint-warn" style="background:#FBF0DD;border:1px solid #EAD9B0;border-radius:10px;'
+      +'padding:11px 14px;margin-bottom:14px;font-size:12px;color:#7A4A00">'
+      +'<b>&#9888; '+unsetRows.length+' ใบยังไม่ระบุเหตุผล</b> &middot; ระบบรู้ว่าเป็นใบของบริษัท (จาก market ของ agent) '
+      +'แต่ไม่รู้ว่าเพราะอะไร จึงแยกรายงานให้ไม่ได้'
+      +'<div style="margin-top:6px;font-family:\'DM Mono\',monospace;font-size:10.5px;color:#8a8a82">'
+      +unsetRows.slice(0,12).map(function(r){ return esc(r.bk.voucherRef||r.bk.code||r.bk.id); }).join(' &middot; ')
+      +(unsetRows.length>12?(' &middot; +'+(unsetRows.length-12)):'')+'</div></div>' : '';
+
+  var kpi=function(lab,val,col,sub){ return '<div style="background:#fff;border:1px solid rgba(0,0,0,.08);'
+    +'border-radius:10px;padding:12px 15px;min-width:118px"><div style="font-size:10px;font-weight:700;'
+    +'letter-spacing:.06em;text-transform:uppercase;color:#8a8a82">'+lab+'</div>'
+    +'<div style="font-family:\'DM Mono\',monospace;font-size:20px;font-weight:700;color:'+(col||'#1B2A55')+'">'+val+'</div>'
+    +(sub?('<div style="font-size:10.5px;color:#8a8a82;margin-top:2px">'+sub+'</div>'):'')+'</div>'; };
+
+  /* ── ตารางเหตุผล × เก็บเงิน/ไม่เก็บเงิน · สองมิติที่ตั้งใจแยกกันตั้งแต่ออกแบบ ── */
+  var ORDER=['company_guest','pr_foc','company_special','staff_welfare','staff_inspection'];
+  var agg={};
+  rows.forEach(function(r){
+    var k=r.purpose||'(ไม่ระบุ)';
+    var o=(agg[k]=agg[k]||{free:{bk:0,pax:0},paid:{bk:0,pax:0,money:0}});
+    var side=r.free?o.free:o.paid;
+    side.pax+=r.pax;
+    if(r.moneyHere){ side.bk++; if(!r.free) side.money+=r.money; }
+  });
+  var keys=ORDER.filter(function(k){ return agg[k]; })
+    .concat(Object.keys(agg).filter(function(k){ return ORDER.indexOf(k)<0; }));
+  var th='padding:7px 10px;text-align:left;font-size:9.5px;color:#8a8a82;font-weight:700;letter-spacing:.06em;'
+    +'text-transform:uppercase;border-bottom:1px solid rgba(0,0,0,.08)';
+  var td='padding:6px 10px;font-size:12px;border-bottom:0.5px solid rgba(0,0,0,.05)';
+  var tdn=td+';text-align:right;font-family:\'DM Mono\',monospace';
+  var purposeRows=keys.map(function(k){
+    var o=agg[k];
+    var nm=(typeof LA_INTERNAL_PURPOSE!=='undefined' && LA_INTERNAL_PURPOSE[k]) ? LA_INTERNAL_PURPOSE[k] : k;
+    return '<tr><td style="'+td+'"><b>'+esc(nm)+'</b>'
+      +'<div style="font-size:9.5px;color:#b4b2a9;font-family:\'DM Mono\',monospace">'+esc(k)+'</div></td>'
+      +'<td style="'+tdn+'">'+(o.free.bk||'—')+'</td><td style="'+tdn+'">'+(o.free.pax||'—')+'</td>'
+      +'<td style="'+tdn+'">'+(o.paid.bk||'—')+'</td><td style="'+tdn+'">'+(o.paid.pax||'—')+'</td>'
+      +'<td style="'+tdn+';font-weight:700;color:#0F6E56">'+(o.paid.money?('&#3647;'+Math.round(o.paid.money).toLocaleString()):'—')+'</td></tr>';
+  }).join('');
+
+  /* ── แยกตามเดือน · เงินนับแถวที่ติดธงไว้เท่านั้น ── */
+  var MN=(typeof laMonAbbrTH==='function')?laMonAbbrTH():['1','2','3','4','5','6','7','8','9','10','11','12'];
+  var mo={};
+  rows.forEach(function(r){ var m=+String(r.date).slice(5,7);
+    var o=(mo[m]=mo[m]||{pax:0,freeBk:0,paidBk:0,money:0});
+    o.pax+=r.pax; if(r.moneyHere){ if(r.free) o.freeBk++; else { o.paidBk++; o.money+=r.money; } } });
+  var moRows=Object.keys(mo).sort(function(a,b){return a-b;}).map(function(m){ var o=mo[m];
+    return '<tr><td style="'+td+'">'+esc(MN[m-1]||m)+'</td>'
+      +'<td style="'+tdn+'">'+o.pax+'</td><td style="'+tdn+'">'+(o.freeBk||'—')+'</td>'
+      +'<td style="'+tdn+'">'+(o.paidBk||'—')+'</td>'
+      +'<td style="'+tdn+'">'+(o.money?('&#3647;'+Math.round(o.money).toLocaleString()):'—')+'</td></tr>'; }).join('');
+
+  /* ── แยกตามเส้นทาง · เรียงตามที่นั่ง เพราะต้นทุนเดินตามที่นั่ง ── */
+  var rt={};
+  rows.forEach(function(r){ var k=(r.route&&r.route.name)||r.t.routeId||'—';
+    var o=(rt[k]=rt[k]||{pax:0,bk:0,money:0}); o.pax+=r.pax; o.bk++; o.money+=r.money; });
+  var rtRows=Object.keys(rt).sort(function(a,b){ return rt[b].pax-rt[a].pax; }).slice(0,12).map(function(k){
+    var o=rt[k];
+    return '<tr><td style="'+td+'">'+esc(k)+'</td><td style="'+tdn+'">'+o.pax+'</td>'
+      +'<td style="'+tdn+'">'+o.bk+'</td>'
+      +'<td style="'+tdn+'">'+(o.money?('&#3647;'+Math.round(o.money).toLocaleString()):'—')+'</td></tr>'; }).join('');
+
+  /* ── รายการใบ · เรียงตามวันเดินทาง ── */
+  var listRows=rows.map(function(r){
+    var nm=r.lbl||'(ไม่ระบุ)';
+    return '<tr><td style="'+td+';font-family:\'DM Mono\',monospace;font-size:10.5px">'
+        +esc(r.bk.voucherRef||r.bk.code||r.bk.id)+'</td>'
+      +'<td style="'+td+';font-family:\'DM Mono\',monospace;font-size:11px">'+esc(r.date)+'</td>'
+      +'<td style="'+td+'">'+esc((r.route&&r.route.name)||r.t.routeId||'—')+'</td>'
+      +'<td style="'+td+'">'+esc(r.bk.leadPax||r.bk.customerName||'—')+'</td>'
+      +'<td style="'+td+'"><span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:5px;'
+        +(r.unset?'background:#FBF0DD;color:#7A4A00':'background:#EDE7FB;color:#5B289A')+'">'+esc(nm)+'</span></td>'
+      +'<td style="'+tdn+'">'+r.pax+(r.foc?('<span style="font-size:9.5px;color:#8a8a82"> · FOC '+r.foc+'</span>'):'')+'</td>'
+      +'<td style="'+tdn+'">'+(r.moneyHere
+          ? (r.free?'<span style="color:#8a8a82">ฟรี</span>':('&#3647;'+Math.round(r.money).toLocaleString()))
+          : '<span style="color:#c7c5bb">↑ ใบเดียวกัน</span>')+'</td></tr>';
+  }).join('');
+
+  var card=function(title,head,body){ return '<div style="background:#fff;border:1px solid rgba(0,0,0,.08);'
+    +'border-radius:12px;overflow:hidden;margin-bottom:14px">'
+    +'<div style="padding:10px 14px;border-bottom:1px solid rgba(0,0,0,.06);background:#fafafa;'
+    +'font-size:13px;font-weight:700;color:#1B2A55">'+title+'</div>'
+    +'<table style="width:100%;border-collapse:collapse"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div>'; };
+
+  return warn
+    +'<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">'
+      +kpi('ใบทั้งหมด', nBk, '#1B2A55', pax+' ที่นั่ง'+(focN?(' · FOC '+focN):''))
+      +kpi('ไม่เก็บเงิน', freeBk, '#8A5B00', 'ไม่นับเป็นยอดขาย')
+      +kpi('เก็บเงิน', paidBk, '#0F6E56', 'นับเป็นยอดขายเต็ม')
+      +kpi('ยอดที่เก็บได้', '&#3647;'+Math.round(money).toLocaleString(), '#0F6E56',
+           paidBk?('เฉลี่ย &#3647;'+Math.round(money/paidBk).toLocaleString()+'/ใบ'):'—')
+    +'</div>'
+    +card('เหตุผล &times; เก็บเงิน / ไม่เก็บเงิน',
+      '<th style="'+th+'">เหตุผล</th><th style="'+th+';text-align:right">ฟรี · ใบ</th>'
+      +'<th style="'+th+';text-align:right">ฟรี · ที่นั่ง</th><th style="'+th+';text-align:right">เก็บเงิน · ใบ</th>'
+      +'<th style="'+th+';text-align:right">เก็บเงิน · ที่นั่ง</th><th style="'+th+';text-align:right">ยอด</th>',
+      purposeRows)
+    +'<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px">'
+      +card('แยกตามเดือน',
+        '<th style="'+th+'">เดือน</th><th style="'+th+';text-align:right">ที่นั่ง</th>'
+        +'<th style="'+th+';text-align:right">ฟรี</th><th style="'+th+';text-align:right">เก็บเงิน</th>'
+        +'<th style="'+th+';text-align:right">ยอด</th>', moRows)
+      +card('แยกตามเส้นทาง',
+        '<th style="'+th+'">เส้นทาง</th><th style="'+th+';text-align:right">ที่นั่ง</th>'
+        +'<th style="'+th+';text-align:right">ทริป</th><th style="'+th+';text-align:right">ยอด</th>', rtRows)
+    +'</div>'
+    +card('รายการใบ &middot; '+yr,
+      '<th style="'+th+'">Voucher</th><th style="'+th+'">วันเดินทาง</th><th style="'+th+'">เส้นทาง</th>'
+      +'<th style="'+th+'">ชื่อ</th><th style="'+th+'">เหตุผล</th>'
+      +'<th style="'+th+';text-align:right">ที่นั่ง</th><th style="'+th+';text-align:right">ยอด</th>', listRows)
+    +'<div style="font-size:11px;color:#8a8a82;margin-top:4px;line-height:1.6">'
+      +'ใบที่ไม่เก็บเงินไม่ถูกนับในยอดขาย จำนวนใบ และค่าเฉลี่ยต่อใบ &middot; '
+      +'แต่ยังนับใน <b>ที่นั่ง · fill% · ความจุเรือ · ต้นทุน</b> และขึ้นใบงานเรือ/รถ ตามปกติ'
+      +'<br>ใบที่เก็บเงิน (ราคาพิเศษ) นับเป็นยอดขายเต็มจำนวนตามเงินที่เก็บจริง'
+      +'<br>เงินเป็นของ "ใบ" ไม่ใช่ของ "ทริป" &middot; ใบที่มีหลายทริปจึงลงยอดไว้ที่ทริปแรกเท่านั้น (ไม่นับซ้ำ)'
+    +'</div>';
 }
 function staffTripsReport(yr){
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -380,12 +547,13 @@ function renderStaff(){
           <button onclick="staffSetYear(1)" style="border:none;background:transparent;cursor:pointer;font-size:15px;color:#666;padding:0 6px">&rsaquo;</button>
         </div>
       </div>
-      <div style="font-size:12px;color:#8a8a82;margin-bottom:18px">ทะเบียนพนักงาน + โควต้าเที่ยวฟรี (สวัสดิการ) · นับเป็น <b>ที่นั่งต่อปี</b> · ปรับโควต้าได้ตามนโยบายแต่ละปี · พาครอบครัวได้ (หักตามจำนวนหัว)</div>
+      <div style="font-size:12px;color:#8a8a82;margin-bottom:18px">ทะเบียนพนักงาน + โควต้าเที่ยวฟรี (สวัสดิการ) · นับเป็น <b>ที่นั่งต่อปี</b> · ปรับโควต้าได้ตามนโยบายแต่ละปี · พาครอบครัวได้ (หักตามจำนวนหัว)<br>แท็บ <b>ของบริษัท</b> รวมใบที่ไม่ใช่เอเยนต์และไม่ใช่ B2C ทั้งหมด · แขกบริษัท · PR / Influencer · ราคาพิเศษ · ทริปพนักงาน</div>
       <div style="display:inline-flex;gap:3px;background:#eef0f3;border-radius:10px;padding:3px;margin-bottom:16px">
-        <button onclick="staffSetTab('roster')" style="border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;${_staffTab!=='trips'?'background:#185FA5;color:#fff':'background:transparent;color:#666'}">ทะเบียน · Roster</button>
-        <button onclick="staffSetTab('trips')" style="border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;${_staffTab==='trips'?'background:#185FA5;color:#fff':'background:transparent;color:#666'}">ทริป · Trips report</button>
+        <button onclick="staffSetTab('roster')" style="border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;${_staffTab==='roster'?'background:#185FA5;color:#fff':'background:transparent;color:#666'}">ทะเบียน · Roster</button>
+        <button onclick="staffSetTab('trips')" style="border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;${_staffTab==='trips'?'background:#185FA5;color:#fff':'background:transparent;color:#666'}">ทริปพนักงาน · Staff trips</button>
+        <button onclick="staffSetTab('internal')" style="border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;${_staffTab==='internal'?'background:#B8860B;color:#fff':'background:transparent;color:#666'}">ของบริษัท · Internal / Company</button>
       </div>
-      ${_staffTab==='trips' ? staffTripsReport(yr) : `
+      ${_staffTab==='internal' ? laInternalReport(yr) : _staffTab==='trips' ? staffTripsReport(yr) : `
       <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
         ${kpi('Active staff', totStaff+'<span style="font-size:13px;color:#8a8a82">/'+totAll+'</span>')}
         ${kpi('Quota seats · '+yr, totQuota, '#185FA5')}
@@ -546,6 +714,12 @@ function agLog(agentId, kind, text){
     // migrate existing staff house agent → Staff Welfare rate type
     const _sa = SB_AGENTS.find(x=>x.id==='a_staff'||x.code==='STAFF');
     if(_sa && _sa.rateTypeId!=='rt_staff'){ _sa.rateTypeId='rt_staff'; if(typeof sbAgentsPersist==='function') sbAgentsPersist(); console.log('[migrate] a_staff rateTypeId -> rt_staff'); }
+  }
+  // House agent for company-own bookings · pick this + choose a reason (guest / PR / special price)
+  if(!SB_AGENTS.some(x=>x.id==='a_company'||x.code==='COMPANY')){
+    SB_AGENTS.push({id:'a_company',code:'COMPANY',name:'Love Andaman \u00b7 Company',market:'house',sub:'Company guest',sales:'',payType:'cot',creditDays:0,creditLimit:0,contact:'',email:'-',phone:'-',note:'House account \u00b7 company-own bookings \u00b7 a reason is required on every booking (guest / PR / special price) \u00b7 free or charged',programs:['r5','r6','r10','r12'],rateTypeId:'',vatMode:'include'});
+    if(typeof sbAgentsPersist==='function') sbAgentsPersist();
+    console.log('[seed] added House / Company house agent (a_company)');
   }
   // House agent for B2C online bookings (auto-synced from the B2C site; sync sets agentId='a_b2c')
   if(!SB_AGENTS.some(x=>x.id==='a_b2c'||x.code==='B2C')){
@@ -4593,7 +4767,10 @@ function mdTabSales(days){
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const isCancel=b=>b.status==='cancelled'||b.status==='cancelled_weather';
   const paxOf=b=>(b.trips||[]).reduce((s,t)=>s+((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0),0);
-  const valOf=b=>(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0);
+  const valOf=b=>(typeof laBkMoney==='function')?laBkMoney(b):(b.total||0);
+  /* §internal · ใบของบริษัทเองที่ไม่เก็บเงินไม่ใช่ยอดขาย · ออกจากรายงานนี้ทั้งใบ
+     ไม่ตัด = เซลล์จะมีใบ 0 บาทมาถ่วงทั้งยอด ทั้ง Pax sold และค่าเฉลี่ย */
+  const skipFree=b=>(typeof laIsInternalFree==='function') && laIsInternalFree(b);
   const ownerOf=b=>{ if(b.soldBy) return b.soldBy; const a=sbGetAgent(b.agentId); return a?(a.sales||''):''; };
   const invOf=b=>(typeof acctBookingInvoice==='function')?acctBookingInvoice(b.id):null;
   const bkDate=b=> b.bookingDate || ((b.trips||[]).map(t=>t.date).filter(Boolean).sort()[0])||'';
@@ -4607,7 +4784,7 @@ function mdTabSales(days){
   // per-sales
   const P={}; SALES.forEach(s=>P[s.id]={s,val:0,pax:0,bk:0,tot:0,cancel:0,noShow:0,paid:0,ar:0,cur:0,prev:0});
   let tVal=0,tPax=0,tBk=0,tTot=0,tCancel=0,tNoShow=0,tPaid=0,tAr=0;
-  BK.forEach(b=>{ if(b.status==='rejected')return; const sid=ownerOf(b); const p=P[sid]; tTot++; if(p)p.tot++;
+  BK.forEach(b=>{ if(b.status==='rejected')return; if(skipFree(b))return;   /* §internal */ const sid=ownerOf(b); const p=P[sid]; tTot++; if(p)p.tot++;
     if(isCancel(b)){ tCancel++; if(p)p.cancel++; if(b.cancelCategory==='no_show'){tNoShow++; if(p)p.noShow++;} return; }
     const v=valOf(b), px=paxOf(b); tVal+=v; tPax+=px; tBk++;
     if(p){ p.val+=v; p.pax+=px; p.bk++; const ym=ymOf(bkDate(b)); if(ym===curYM)p.cur+=v; else if(ym===prevYM)p.prev+=v; }
@@ -4648,7 +4825,7 @@ function mdTabSales(days){
   // ── top agents ──
   const famShort=id=>({similan:'Similan',surin:'Surin',phiphi:'Phi Phi',krabi:'Krabi',whaleshark:'Whale Shark'}[id]||id);
   const FAM_ORDER=['similan','surin','phiphi','krabi','whaleshark']; const famHdr={similan:'Similan',surin:'Surin',phiphi:'Phi Phi',krabi:'Krabi',whaleshark:'Whale'}; const famCol={similan:'#185fa5',surin:'#3B6D11',phiphi:'#c0392b',krabi:'#0F6E56',whaleshark:'#BA7517'};
-  const A={}; BK.forEach(b=>{ if(b.status==='rejected')return; const a=sbGetAgent(b.agentId); if(!a)return; const o=(A[a.id]=A[a.id]||{a,val:0,pax:0,cancel:0,tot:0,paid:0,ar:0,fam:{}}); o.tot++; if(isCancel(b)){o.cancel++;return;} o.val+=valOf(b); o.pax+=paxOf(b); (b.trips||[]).forEach(t=>{ const f=bkV2RouteFamily(t.routeId); if(f){ o.fam[f.id]=o.fam[f.id]||{id:f.id,color:f.color,pax:0}; o.fam[f.id].pax+=bkV2PaxAllTot(t.pax||{}); } }); const iv=invOf(b); if(iv){o.paid+=Math.max(0,acctInvoicePaid(iv)); o.ar+=acctInvoiceBalance(iv);} });
+  const A={}; BK.forEach(b=>{ if(b.status==='rejected')return; if(skipFree(b))return;   /* §internal */ const a=sbGetAgent(b.agentId); if(!a)return; const o=(A[a.id]=A[a.id]||{a,val:0,pax:0,cancel:0,tot:0,paid:0,ar:0,fam:{}}); o.tot++; if(isCancel(b)){o.cancel++;return;} o.val+=valOf(b); o.pax+=paxOf(b); (b.trips||[]).forEach(t=>{ const f=bkV2RouteFamily(t.routeId); if(f){ o.fam[f.id]=o.fam[f.id]||{id:f.id,color:f.color,pax:0}; o.fam[f.id].pax+=bkV2PaxAllTot(t.pax||{}); } }); const iv=invOf(b); if(iv){o.paid+=Math.max(0,acctInvoicePaid(iv)); o.ar+=acctInvoiceBalance(iv);} });
   const topA=Object.values(A).sort((x,y)=>y.val-x.val).slice(0,8);
   const aRows=topA.map(o=>{ const own=SALES.find(s=>s.id===o.a.sales); const coll=pf(o.paid,o.paid+o.ar), cr=pf(o.cancel,o.tot);
     const fams=Object.values(o.fam||{}).sort((x,y)=>y.pax-x.pax); const tf=fams[0];
@@ -4742,14 +4919,18 @@ function mdTabSales(days){
       return `<tr>${dateCell}${famR}${reasonCell}</tr>`;
     }).join('');
   };
-  const isStaffRec=r=>{ const a=sbGetAgent(r.agentId); return !!(a&&(a.code==='STAFF'||a.id==='a_staff')); };
+  const isStaffRec=r=>{ /* §internal · เดิมเช็คแค่ a_staff · ตอนนี้รวมใบของบริษัทเอง (PR/แขก) ด้วย
+      ไม่งั้น FOC ของ PR จะไปโผล่ในอันดับ "เอเยนต์ส่ง FOC เยอะสุด" ซึ่งไม่ใช่เอเยนต์ */
+    const a=sbGetAgent(r.agentId); if(!a) return false;
+    const m=String(a.market||'').toLowerCase();
+    return m==='staff' || m==='house' || a.code==='STAFF' || a.id==='a_staff'; };
   const grpAgent=focRecs.filter(r=>!isStaffRec(r));
   const grpStaff=focRecs.filter(r=>isStaffRec(r));
   let _focAi=0;
   const focSecHdr=(label,recs)=>{ const fc=recs.reduce((s,x)=>s+x.fc,0); return `<tr><td colspan="13" style="padding:9px 12px 7px;background:#F1EFE8;border-top:2px solid #DAD5C6;font-size:10.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#6B6456">${esc(label)} <span style="font-weight:600;color:#9a9486;letter-spacing:.02em;text-transform:none">· ${recs.length} agent${recs.length===1?'':'s'} · ${fc} FOC</span></td></tr>`; };
   const focBody=[
     grpAgent.length?focSecHdr('Agent',grpAgent)+grpAgent.map(r=>renderRec(r,_focAi++)).join(''):'',
-    grpStaff.length?focSecHdr('Staff',grpStaff)+grpStaff.map(r=>renderRec(r,_focAi++)).join(''):''
+    grpStaff.length?focSecHdr('Internal / Company',grpStaff)+grpStaff.map(r=>renderRec(r,_focAi++)).join(''):''
   ].join('');
   const thF=`${th};padding-bottom:9px;border-bottom:1.5px solid #E5E2D8`;
   const focDetail=focRecs.length?`<div class="md-card" style="margin-bottom:12px"><div style="font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#E0A23C"></span>FOC detail <span style="font-weight:400;color:var(--fd-ink-soft)">· ${focRecs.length} agent${focRecs.length===1?'':'s'} · ${gFoc} FOC pax</span></div>
@@ -5165,7 +5346,10 @@ function renderFocDetail(){
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const isCancel=b=>b.status==='cancelled'||b.status==='cancelled_weather';
   const paxOf=b=>(b.trips||[]).reduce((s,t)=>s+((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0),0);
-  const valOf=b=>(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0);
+  const valOf=b=>(typeof laBkMoney==='function')?laBkMoney(b):(b.total||0);
+  /* §internal · ใบของบริษัทเองที่ไม่เก็บเงินไม่ใช่ยอดขาย · ตัดออกก่อนจัดอันดับ
+     ไม่ตัด = เซลล์/เอเยนต์บ้านจะมีใบ 0 บาทมาถ่วงค่าเฉลี่ยและอันดับ */
+  const skipFree=b=>(typeof laIsInternalFree==='function') && laIsInternalFree(b);
   const invOf=b=>(typeof acctBookingInvoice==='function')?acctBookingInvoice(b.id):null;
   const fK=n=>{ n=Math.round(n||0); return n>=1e6?'฿'+(n/1e6).toFixed(2)+'M':n>=1e3?'฿'+Math.round(n/1e3)+'k':'฿'+n; };
   const pf=(n,d)=>d>0?Math.round(n/d*1000)/10:0;
@@ -5200,7 +5384,11 @@ function renderFocDetail(){
     if(!focRecs.length) return '';
     const gFoc=focRecs.reduce((s,r)=>s+r.fc,0);
     const fmtFocD=ds=>{ if(!ds)return'—'; const dt=new Date(ds+'T00:00:00'); if(isNaN(dt))return ds; return dt.getDate()+'/'+(dt.getMonth()+1); };
-    const isStaffRec=r=>{ const a=sbGetAgent(r.agentId); return !!(a&&(a.code==='STAFF'||a.id==='a_staff')); };
+    const isStaffRec=r=>{ /* §internal · เดิมเช็คแค่ a_staff · ตอนนี้รวมใบของบริษัทเอง (PR/แขก) ด้วย
+      ไม่งั้น FOC ของ PR จะไปโผล่ในอันดับ "เอเยนต์ส่ง FOC เยอะสุด" ซึ่งไม่ใช่เอเยนต์ */
+    const a=sbGetAgent(r.agentId); if(!a) return false;
+    const m=String(a.market||'').toLowerCase();
+    return m==='staff' || m==='house' || a.code==='STAFF' || a.id==='a_staff'; };
     const grpAgent=focRecs.filter(r=>!isStaffRec(r)), grpStaff=focRecs.filter(r=>isStaffRec(r));
     let pendingFoc=0,nPend=0; focRecs.forEach(r=>{ let rp=false; Object.values(r.byDate).forEach(D=>{ if(D.anyPending){pendingFoc+=D.total;rp=true;} }); if(rp)nPend++; });
     const agentFoc=grpAgent.reduce((s,r)=>s+r.fc,0), staffFoc=grpStaff.reduce((s,r)=>s+r.fc,0);
@@ -5270,7 +5458,7 @@ function renderFocDetail(){
     const focSecHdr=(label,recs)=>{ const fc=recs.reduce((s,x)=>s+x.fc,0); return `<tr><td colspan="4" style="padding:9px 12px 7px;background:#F1EFE8;border-top:2px solid #DAD5C6;font-size:10.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#6B6456">${esc(label)} <span style="font-weight:600;color:#9a9486;letter-spacing:.02em;text-transform:none">· ${recs.length} agent${recs.length===1?'':'s'} · ${fc} FOC</span></td></tr>`; };
     const focBody=[
       grpAgent.length?focSecHdr('Agent',grpAgent)+grpAgent.map(r=>renderRec(r,_focAi++)).join(''):'',
-      grpStaff.length?focSecHdr('Staff',grpStaff)+grpStaff.map(r=>renderRec(r,_focAi++)).join(''):''
+      grpStaff.length?focSecHdr('Internal / Company',grpStaff)+grpStaff.map(r=>renderRec(r,_focAi++)).join(''):''
     ].join('');
     return `<div style="margin-top:14px;font-family:Manrope,-apple-system,system-ui,sans-serif;background:#fafbfb;border-radius:20px;padding:20px;border:1px solid rgba(0,0,0,.04)">
       <div style="font-size:15px;font-weight:800;margin-bottom:3px;display:flex;align-items:center;gap:8px;color:#26352e"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#E0A23C"></span>FOC detail <span style="font-weight:500;color:#7d8c84;font-size:12px">· ที่นั่งฟรี แยกตามเอเจ้น · วันเดินทาง · โปรแกรม</span></div>
@@ -5292,7 +5480,10 @@ function mdTabAgents(days){
   const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const isCancel=b=>b.status==='cancelled'||b.status==='cancelled_weather';
   const paxOf=b=>(b.trips||[]).reduce((s,t)=>s+((typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0),0);
-  const valOf=b=>(typeof acctBookingTotal==='function')?acctBookingTotal(b):(b.total||0);
+  const valOf=b=>(typeof laBkMoney==='function')?laBkMoney(b):(b.total||0);
+  /* §internal · ใบของบริษัทเองที่ไม่เก็บเงินไม่ใช่ยอดขาย · ตัดออกก่อนจัดอันดับ
+     ไม่ตัด = เซลล์/เอเยนต์บ้านจะมีใบ 0 บาทมาถ่วงค่าเฉลี่ยและอันดับ */
+  const skipFree=b=>(typeof laIsInternalFree==='function') && laIsInternalFree(b);
   const invOf=b=>(typeof acctBookingInvoice==='function')?acctBookingInvoice(b.id):null;
   const fK=n=>{ n=Math.round(n||0); return n>=1e6?'฿'+(n/1e6).toFixed(2)+'M':n>=1e3?'฿'+Math.round(n/1e3)+'k':'฿'+n; };
   const pf=(n,d)=>d>0?Math.round(n/d*1000)/10:0;
@@ -5300,7 +5491,7 @@ function mdTabAgents(days){
   if(!BK.length) return mdNote('No bookings yet — agent stats populate from bookings.');
   const FAM_ORDER=['similan','surin','phiphi','krabi','whaleshark']; const famHdr={similan:'Similan',surin:'Surin',phiphi:'Phi Phi',krabi:'Krabi',whaleshark:'Whale'}; const famCol={similan:'#185fa5',surin:'#3B6D11',phiphi:'#c0392b',krabi:'#0F6E56',whaleshark:'#BA7517'};
   const A={};
-  BK.forEach(b=>{ if(b.status==='rejected')return; const a=sbGetAgent(b.agentId); if(!a)return; const o=(A[a.id]=A[a.id]||{a,val:0,pax:0,cancel:0,tot:0,paid:0,ar:0,fam:{},area:{}}); o.tot++; if(isCancel(b)){o.cancel++;return;} o.val+=valOf(b); o.pax+=paxOf(b);
+  BK.forEach(b=>{ if(b.status==='rejected')return; if(skipFree(b))return;   /* §internal */ const a=sbGetAgent(b.agentId); if(!a)return; const o=(A[a.id]=A[a.id]||{a,val:0,pax:0,cancel:0,tot:0,paid:0,ar:0,fam:{},area:{}}); o.tot++; if(isCancel(b)){o.cancel++;return;} o.val+=valOf(b); o.pax+=paxOf(b);
     const aid=b.pickupAreaId||'';   // configured pickup area (Phuket Town, Patong, …) · booking-level
     (b.trips||[]).forEach(t=>{ const px=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; const f=bkV2RouteFamily(t.routeId); if(f) o.fam[f.id]=(o.fam[f.id]||0)+px; const k=aid||('_z'+String(t.zone||b.pickupZone||'NT').toUpperCase()); o.area[k]=(o.area[k]||0)+px; });
     const iv=invOf(b); if(iv){o.paid+=Math.max(0,acctInvoicePaid(iv)); o.ar+=acctInvoiceBalance(iv);} });
@@ -43586,7 +43777,8 @@ function bkV2RenderNewBooking(){
   const agent = d.agentId ? sbGetAgent(d.agentId) : null;
   const isWalkin = !!(agent && (agent.code==='WALKIN' || agent.id==='a_walkin'));   // direct/walk-in house account
   const isStaff  = !!(agent && (agent.code==='STAFF'  || agent.id==='a_staff'));    // staff welfare/inspection house account
-  const isHouse  = isWalkin || isStaff;   // house accounts → Sold-by/Staff picker + manual price option
+  const isCompany= !!(agent && (agent.code==='COMPANY'|| agent.id==='a_company')); // company-own house account
+  const isHouse  = isWalkin || isStaff || isCompany;   // house accounts → Sold-by/Staff picker + manual price option
   let rtPreview = '';
   if(rt){
     /* §bkRouteSrc · เลขตรงนี้เคยนับจาก Rate Type อย่างเดียว ทั้งที่ตัวที่คุม
@@ -43668,6 +43860,20 @@ function bkV2RenderNewBooking(){
             ${d.staffId&&sp==='welfare'?`<div style="font-size:10.5px;margin-top:3px;color:${rem<=0?'#A32D2D':'#0F6E56'}">โควต้าฟรีเหลือ ${rem} ที่นั่ง (ปี ${yr})</div>`:''}
             ${sp==='welfare'?`<div style="font-size:10px;margin-top:3px;color:#8a8a82;line-height:1.4">ใช้สิทธิ์ฟรี → ใส่เป็น <b>FOC</b> (หักโควต้า) · เกินโควต้า/จ่ายเงิน → ใส่เป็น <b>ผู้ใหญ่/เด็ก</b> คิดตามเรท <b>Staff Welfare</b></div>`:''}
             ${sp==='inspection'?`<div style="font-size:10.5px;margin-top:3px;color:#6c5ce7">ตรวจงาน · นับที่นั่งใน manifest · ไม่หักโควต้า</div>`:''}
+          </div>`; })() : ''}
+          ${isCompany ? (function(){ const cp=d.companyPurpose||'';
+            /* §internal · ต้องเลือกเหตุผลทุกครั้ง · ค่าเริ่มต้นเป็นว่าง ไม่ใช่ค่าใดค่าหนึ่ง
+               เพราะถ้าตั้งค่าเริ่มต้นไว้ คนจะกดผ่านแล้วได้เหตุผลผิดทั้งระบบ
+               (บทเรียนจากทริปพนักงาน 6 ใบในระบบที่ purpose ว่างทั้งหมด) */
+            return `<div class="bkv2-nb-field">
+            <label class="bkv2-nb-label">เหตุผล <em style="font-weight:500;color:#A32D2D;font-style:normal">\u00b7 ต้องเลือก</em></label>
+            <select class="bkv2-nb-input" onchange="bkV2SetBookingField('companyPurpose', this.value)">
+              <option value="" ${cp?'':'selected'}>\u2014 เลือกเหตุผล \u2014</option>
+              <option value="company_guest" ${cp==='company_guest'?'selected':''}>แขกบริษัท \u00b7 Company guest</option>
+              <option value="pr_foc" ${cp==='pr_foc'?'selected':''}>PR / Influencer</option>
+              <option value="company_special" ${cp==='company_special'?'selected':''}>ราคาพิเศษ \u00b7 Special price</option>
+            </select>
+            <div style="font-size:10px;margin-top:3px;color:#8a8a82;line-height:1.4">ฟรี = ใส่ Total 0 \u00b7 เก็บเงิน = ใส่ยอดจริง<br>ยอด 0 จะไม่ถูกนับเป็นยอดขาย แต่ที่นั่งกับต้นทุนยังนับ</div>
           </div>`; })() : ''}
           <div class="bkv2-nb-field">
             <label class="bkv2-nb-label">Submitted by</label>
@@ -52473,7 +52679,13 @@ function bkV2SetBookingField(key, val){
     const isSt = a && (a.code==='STAFF'  || a.id==='a_staff');
     if(isSt){ _bkV2.newBooking.soldBy=''; const insp=_bkV2.newBooking.staffPurpose==='inspection'; _bkV2.newBooking.priceMode = insp?'manual':'rate'; if(insp) _bkV2.newBooking.manualTotal=0; }   // welfare → Staff Welfare rate (FOC free, over-quota priced) · inspection → ฿0
     else if(isWk){ _bkV2.newBooking.staffId=''; }
-    else { _bkV2.newBooking.priceMode='rate'; _bkV2.newBooking.soldBy=''; _bkV2.newBooking.staffId=''; }
+    /* §internal · ใบบริษัทตั้งราคาเองเสมอ · ไม่มี rate type ให้อ้าง (ฟรีก็ได้ พิเศษก็ได้) */
+    else if(a && (a.code==='COMPANY' || a.id==='a_company')){
+      _bkV2.newBooking.staffId=''; _bkV2.newBooking.priceMode='manual';
+      if(_bkV2.newBooking.manualTotal==null) _bkV2.newBooking.manualTotal=0;
+    }
+    else { _bkV2.newBooking.priceMode='rate'; _bkV2.newBooking.soldBy=''; _bkV2.newBooking.staffId='';
+           _bkV2.newBooking.companyPurpose=''; }
   }
   // Staff trip purpose toggle · inspection = always ฿0 (manual 0) · welfare = Staff Welfare rate
   if(key === 'staffPurpose'){
@@ -52726,6 +52938,10 @@ function bkV2CommitBooking(status){
     const _isStaff = !!(_ag && (_ag.code==='STAFF' || _ag.id==='a_staff'));
     if(_isStaff){
       if(!d.staffId){ alert('Please choose a Staff member for this booking'); return; }
+    }
+    /* §internal · ไม่เลือกเหตุผล = บันทึกไม่ได้ · นี่คือสิ่งเดียวที่ทำให้รายงานไม่ว่างเปล่า */
+    if(_ag && (_ag.code==='COMPANY' || _ag.id==='a_company') && !d.companyPurpose){
+      alert('Please choose a reason for this company booking (guest / PR / special price)'); return;
     }
     if(_isStaff && (d.staffPurpose||'welfare')==='welfare'){
       const exclId = _bkV2.editingId || null;
@@ -53082,7 +53298,12 @@ function bkV2CommitBooking(status){
     soldBy: d.soldBy || null,   // salesperson credit override (walk-in/direct sale)
     priceMode: d.priceMode || 'rate',
     manualTotal: d.priceMode==='manual' ? (Math.max(0,Number(d.manualTotal)||0)) : null,
-    purpose: (function(){ const _a=d.agentId?sbGetAgent(d.agentId):null; if(_a&&(_a.code==='STAFF'||_a.id==='a_staff')) return (d.staffPurpose==='inspection')?'staff_inspection':'staff_welfare'; return 'sale'; })(),
+    purpose: (function(){ const _a=d.agentId?sbGetAgent(d.agentId):null;
+      if(_a&&(_a.code==='STAFF'||_a.id==='a_staff')) return (d.staffPurpose==='inspection')?'staff_inspection':'staff_welfare';
+      /* §internal · เหตุผลของใบบริษัท · ฟอร์มบังคับเลือกไว้แล้ว ตกมาถึงนี่ต้องมีค่า */
+      if(_a&&(_a.code==='COMPANY'||_a.id==='a_company')) return d.companyPurpose || 'company_guest';
+      return 'sale'; })(),
+    companyPurpose: d.companyPurpose || null,
     staffId: d.staffId || null,   // staff member for welfare/inspection bookings
     staffPurpose: d.staffPurpose || null,
     note: d.note || ''

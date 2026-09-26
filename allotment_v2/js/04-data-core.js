@@ -819,6 +819,12 @@ var LA_T_EN={
   'กู้คืน':'Restore', 'กู้คืน booking (ยกเลิกการยกเลิก)':'Restore this booking (undo the cancellation)',
   'ยังไม่ได้ระบุจุดรับ · กดแก้ไขเพื่อเพิ่ม':'No pickup point yet · edit the booking to add one',
   '{0} ที่':'{0} seats',
+  /* ── §internal · ใบของบริษัทเอง ── */
+  'ไม่นับยอด':'not in revenue', 'ของบริษัท':'company',
+  'ไม่นับเป็นยอดขาย · ที่นั่งกับต้นทุนยังนับ':
+    'Not counted as revenue · seats and cost still count',
+  'ใบของบริษัทเองที่ไม่เก็บเงิน · ยังอยู่ในรายการและยังกินที่นั่ง แต่ไม่นับเป็นยอดขาย':
+    'Company-own bookings with no charge · still listed and still take seats, but not counted as revenue',
   /* ── ป๊อปอัป "รายละเอียดทั้งวัน" ของ Dashboard · รอบสาม ─────────────────── */
   'รายละเอียดใบจองทั้งวัน':'Bookings keyed in today',
   'รายละเอียดใบจอง {0} วัน':'Bookings keyed in over {0} days',
@@ -1238,6 +1244,56 @@ function laIsB2C(b){
             || String(_a.market||'').toLowerCase()==='b2c')) return true;
   return !_a;
 }
+/* ══ §internal (2026-09-26) · ใบของบริษัทเอง · ไม่ใช่เอเยนต์ และไม่ใช่ B2C ══════
+   ที่มา · ผู้ใช้ถามเอง · "Booking ที่เป็นของบริษัทเอง ไม่มี Agent และก็ไม่ได้เป็น B2C
+   ซึ่งอาจจะมีเก็บเงินหรือไม่เก็บเงินก็ได้ ... อยากได้การ Track ข้อมูลส่วนนี้แยกกัน"
+
+   สองมิติที่ต้องแยกกัน · ห้ามผูกเข้าด้วยกัน
+     เหตุผล  อยู่ที่ purpose        แขกบริษัท / PR / ราคาพิเศษ / สวัสดิการ / ตรวจงาน
+     เก็บเงินหรือไม่ อยู่ที่ยอดเงิน
+   เพราะเหตุผลเดียวกันเก็บเงินก็ได้ ไม่เก็บก็ได้ · ถ้าเอามารวมเป็นค่าเดียวจะได้
+   purpose บานปลายเป็นสิบค่าและยังตอบ "PR ที่เก็บเงินพิเศษ" ไม่ได้อยู่ดี
+
+   ⚠ ตัวที่ถูกตัดออกจากยอดขายคือ "ใบของบริษัทเองที่ไม่เก็บเงิน" เท่านั้น
+     ใบของเอเยนต์ปกติที่เป็น 0 บาท ไม่ตัด — นั่นคือข้อผิดพลาดของข้อมูลที่ต้องมองเห็น
+     ไม่ใช่ทริปฟรี · ตัดให้ก็เท่ากับช่วยซ่อนของเสีย
+   ⚠ ที่นั่ง · fill% · ความจุ · ต้นทุน · ใบงานเรือ/รถ · ทะเบียนอุทยาน ยังนับทุกใบ
+     คนขึ้นเรือจริง กินที่นั่งจริง มีต้นทุนอาหาร/น้ำมันจริง
+   ⚠ ใบแจ้งหนี้ · การรับเงิน · PFM ห้ามแตะ · ต้องโชว์เงินที่ค้างจริงเสมอ            */
+var LA_INTERNAL_PURPOSE = {
+  company_guest:   'แขกบริษัท',
+  pr_foc:          'PR / Influencer',
+  company_special: 'ราคาพิเศษ',
+  staff_welfare:   'สวัสดิการพนักงาน',
+  staff_inspection:'ตรวจงาน'
+};
+/* ใบนี้เป็นของบริษัทเองไหม · ดูสามทาง เพราะใบเก่าในระบบมีแต่ agent ยังไม่มี purpose
+   (วัดจากข้อมูลจริง · 6 ใบบน a_staff ที่ purpose กับ staffId ว่างทั้งคู่)      */
+function laIsInternalBk(b){
+  if(!b) return false;
+  if(LA_INTERNAL_PURPOSE[b.purpose]) return true;
+  if(b.staffId) return true;
+  var a=(typeof sbGetAgent==='function') ? sbGetAgent(b.agentId) : null;
+  if(!a) return false;
+  var m=String(a.market||'').toLowerCase();
+  return m==='house' || m==='staff';
+}
+/* ยอดเงินของใบ · ของเดิมบรรทัดนี้ถูกพิมพ์ซ้ำอยู่สิบกว่าที่ · รวมมาไว้ที่เดียว */
+function laBkMoney(b){
+  if(!b) return 0;
+  return (typeof acctBookingTotal==='function') ? (+acctBookingTotal(b)||0) : (+b.total||0);
+}
+function laIsInternalFree(b){ return laIsInternalBk(b) && laBkMoney(b)<=0; }
+function laInternalLabel(b){
+  if(!b) return '';
+  var p=LA_INTERNAL_PURPOSE[b.purpose];
+  if(p) return p;
+  return laIsInternalBk(b) ? 'ของบริษัท (ยังไม่ระบุเหตุผล)' : '';
+}
+window.LA_INTERNAL_PURPOSE=LA_INTERNAL_PURPOSE; window.laIsInternalBk=laIsInternalBk;
+window.laBkMoney=laBkMoney; window.laIsInternalFree=laIsInternalFree;
+window.laInternalLabel=laInternalLabel;
+
 function _dashLiveFeedHtml(dx,F,side){
   var BK=(typeof SB_BOOKINGS!=='undefined'?SB_BOOKINGS:[]); var CXL=['cancelled','rejected','cancelled_weather'];
   var _isB2C=laIsB2C;
@@ -1312,6 +1368,7 @@ function _dashLiveFeedHtml(dx,F,side){
   if(!rows) rows='<div style="font-size:12px;color:#9a958c;text-align:center;padding:14px 0">ยังไม่มี booking</div>';
   /* แถบสรุปหัวฟีด · จำนวนใบ / pax / ยอดเงิน ของ "วันที่เลือกอยู่" ไม่ใช่ทั้งกอง */
   var _sd=(window._dashDate||TODAY_STR), _sN=0,_sP=0,_sM=0,_sA={}, _sL=[];
+  var _sX=0;   /* §internal · ใบของบริษัทเองที่ไม่เก็บเงิน · ถูกตัดออกจากยอด */
   BK.forEach(function(b){
     if(!(b.schemaVer===2 && CXL.indexOf(b.status)<0)) return;
     if(side==='b2b' && _isB2C(b)) return;
@@ -1320,8 +1377,11 @@ function _dashLiveFeedHtml(dx,F,side){
     /* §livePax · เหมือนกับในแถว · รวมหัวคนทุกทริปของใบนั้น */
     (b.trips||[]).forEach(function(t){
       _sP+=(typeof bkV2PaxAllTot==='function')?bkV2PaxAllTot(t.pax||{}):0; });
+    /* §internal · ใบของบริษัทเองที่ไม่เก็บเงิน ไม่ใช่ยอดขาย · ไม่นับทั้งตัวตั้งและตัวหาร
+       ยังอยู่ในรายการข้างล่างและยังกินที่นั่งตามปกติ · นับไว้เพื่อบอกบนจอว่าตัดไปกี่ใบ */
+    if(typeof laIsInternalFree==='function' && laIsInternalFree(b)){ _sX++; return; }
     _sN++;
-    var _bv=(typeof acctBookingTotal==='function')?(+acctBookingTotal(b)||0):(+b.total||0);
+    var _bv=(typeof laBkMoney==='function')?laBkMoney(b):(+b.total||0);
     _sM+=_bv;
     if(b.agentId) _sA[b.agentId]=1;
     /* §liveAudit · รายการข้างล่างเป็น "12 ใบล่าสุด" ไม่ได้กรองวัน และรวมใบที่ยกเลิกด้วย
@@ -1341,6 +1401,9 @@ function _dashLiveFeedHtml(dx,F,side){
       +'<span class="s" title="'+Math.round(_sM).toLocaleString()+' '+laT('บาท')
         +(_sL.length?(' = '+_sL.join(' + ')):'')
         +'"><b>'+_mShort(_sM)+'</b><i>'+laT('ยอดวันนี้')+'</i></span><span class="sep"></span>'
+      /* §internal · ถ้าไม่บอกว่าตัดไปกี่ใบ เลขบนหัวจะไม่ตรงกับแถวที่เห็นข้างล่าง */
+      +(_sX?('<span class="s" title="'+laT('ใบของบริษัทเองที่ไม่เก็บเงิน · ยังอยู่ในรายการและยังกินที่นั่ง แต่ไม่นับเป็นยอดขาย').replace(/"/g,'&quot;')
+        +'"><b class="dim">'+_sX+'</b><i>'+laT('ไม่นับยอด')+'</i></span><span class="sep"></span>'):'')
       +'<span class="s"><b>'+(side==='b2c'?_mShort(_sN?_sM/_sN:0):Object.keys(_sA).length)+'</b><i>'+(side==='b2c'?laT('เฉลี่ย / ใบ'):laT('เอเย่นต์'))+'</i></span>'
     +'</div>';
   return '<div class="dv-c" style="'+F+'padding:0 12px 12px">'
@@ -1487,7 +1550,11 @@ function _ddRows(){
       hotel:b.hotelName||b.pickupArea||'',
       cxl:CXL.indexOf(b.status)>=0, ts:_dashBkTs(b),
       pax:trs.reduce(function(s,t){return s+t.pax;},0),
-      val:(typeof acctBookingTotal==='function')?(+acctBookingTotal(b)||0):(+b.total||0),
+      val:(typeof laBkMoney==='function')?laBkMoney(b):(+b.total||0),
+      /* §internal · ติดธงไว้ที่แถว · ตัวสรุปข้างบนข้ามแถวพวกนี้ แต่ตารางยังโชว์
+         (เห็นใบได้ แต่ไม่ถูกนับเป็นยอดขาย) · ป้ายบอกเหตุผลอยู่บนแถวด้วย */
+      intFree:(typeof laIsInternalFree==='function')?laIsInternalFree(b):false,
+      intLbl:(typeof laInternalLabel==='function')?laInternalLabel(b):'',
       trips:trs});
   });
   out.sort(function(x,y){return y.ts-x.ts;});
@@ -1564,7 +1631,10 @@ function _ddList(rows){
     return '<div class="dv-ddrow'+(r.cxl?' cx':'')+'" onclick="dashDayDetailGo(\''+r.id+'\')">'
       +'<span class="tm">'+tm+'</span><span class="mk">'+chip+'</span>'
       +'<span class="tx"><b style="color:'+_dvInk(t0.color)+'">'+esc(t0.route||'—')
-        +(r.cxl?' <em>· '+laT('ยกเลิก')+'</em>':'')+(t0.mode==='charter'?' <s>'+laT('เหมาลำ')+'</s>':'')+'</b>'
+        +(r.cxl?' <em>· '+laT('ยกเลิก')+'</em>':'')+(t0.mode==='charter'?' <s>'+laT('เหมาลำ')+'</s>':'')
+        /* §internal · ป้ายบอกว่าใบนี้เป็นของบริษัทเองและไม่ถูกนับเป็นยอดขาย
+           ถ้าไม่บอก คนจะเห็นแถว ฿0 แล้วคิดว่าระบบคิดเงินพลาด */
+        +(r.intFree?' <s class="ddint" title="'+laT('ไม่นับเป็นยอดขาย · ที่นั่งกับต้นทุนยังนับ').replace(/"/g,'&quot;')+'">'+esc(r.intLbl||laT('ของบริษัท'))+'</s>':'')+'</b>'
         +'<i>'+esc(r.lead||'—')+(r.nat?(' · '+esc(r.nat)):'')
         +(r.hotel?(' · '+esc(r.hotel)):'')+'</i></span>'
       +'<span class="dt">'+_dashDateShort(t0.date)+more+'</span>'
@@ -1574,10 +1644,13 @@ function _ddList(rows){
   }).join('');
 }
 function _ddSum(rows,side){
-  var ok=rows.filter(function(r){return r.side===side && !r.cxl;});
+  /* §internal · ยอดขาย/จำนวนใบ/เฉลี่ย ไม่นับใบของบริษัทเองที่ไม่เก็บเงิน
+     ตัวหารต้องลดตามด้วย ไม่งั้นเฉลี่ยต่อใบจะเพี้ยนไปอีกทาง */
+  var free=rows.filter(function(r){return r.side===side && !r.cxl && r.intFree;}).length;
+  var ok=rows.filter(function(r){return r.side===side && !r.cxl && !r.intFree;});
   var ag={}; ok.forEach(function(r){ if(r.agentId) ag[r.agentId]=1; });
   var val=0,pax=0; ok.forEach(function(r){ val+=r.val; pax+=r.pax; });
-  return {n:ok.length, pax:pax, val:val, avg:ok.length?val/ok.length:0,
+  return {n:ok.length, pax:pax, val:val, avg:ok.length?val/ok.length:0, free:free,
     ag:Object.keys(ag).length,
     cxl:rows.filter(function(r){return r.side===side && r.cxl;}).length};
 }
@@ -1603,6 +1676,9 @@ function _ddSumCard(side,S,totVal,on){
       +'<span class="s"><b>'+_dashMoneyShort(S.val)+'</b><i>'+laT('ยอดขาย')+'</i></span><span class="sep"></span>'
       +'<span class="s"><b>'+_dashMoneyShort(S.avg)+'</b><i>'+laT('เฉลี่ย / ใบ')+'</i></span><span class="sep"></span>'
       +'<span class="s"><b'+(last.dim?' class="dim"':'')+'>'+last.v+'</b><i>'+last.k+'</i></span>'
+      /* §internal · ตัวเลขบนการ์ดไม่นับใบพวกนี้ · ต้องบอกว่าตัดไปกี่ใบ ไม่งั้นจะขัดกับตารางข้างล่าง */
+      +(S.free?('<span class="sep"></span><span class="s" title="'+laT('ไม่นับเป็นยอดขาย · ที่นั่งกับต้นทุนยังนับ').replace(/"/g,'&quot;')
+        +'"><b class="dim">'+S.free+'</b><i>'+laT('ไม่นับยอด')+'</i></span>'):'')
     +'</div>'
     +'<div class="dv-ddshb"><i style="width:'+sh+'%;background:'+c.bar+'"></i></div></div>';
 }
@@ -2213,6 +2289,8 @@ const DV_CSS=`<style>
   .dv-ddbt:hover{background:#DEEAF7}
   .dv-lvhd{cursor:pointer}
   .dv-lvhd:hover .s b{color:#12518F}
+  .dv-ddrow .ddint{font-size:9.5px;font-weight:700;color:#8A5B00;background:#FBF0DD;
+    border:1px solid #EAD9B0;border-radius:5px;padding:0 5px;margin-left:5px;text-decoration:none;white-space:nowrap}
   .dv-ddov{display:none;position:fixed;inset:0;z-index:9000;overflow:hidden;
     background:rgba(8,16,44,.62);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
   .dv-ddov *{box-sizing:border-box}
