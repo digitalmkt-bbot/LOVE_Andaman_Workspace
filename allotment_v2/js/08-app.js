@@ -63790,16 +63790,24 @@ function paRangeApply(){
 /* ── Export CSV ── */
 function paExport(){
   var P=PO_PIERS.filter(function(p){ return p.k===_poPier; })[0]||PO_PIERS[0];
-  var CY=paCycle(_paDate), IDX=paIndex(CY.days), rows=[];
+  var CY=paCycle(_paDate), IDX=paIndex(CY.days), rows=[], canPay=paPayCan();   // §paXlsxPay · เงินใส่เฉพาะคนที่ดูเงินได้
   rows.push(['ท่าประจำ','ชื่อ','ชื่อเล่น','ตำแหน่ง'].concat(CY.days.map(function(d){ return d.s; }))
-    .concat(['วันทำงาน','วันหยุด','วันลา','ไปช่วยท่าอื่น']));
+    .concat(['วันทำงาน','วันหยุด','วันลา','ไปช่วยท่าอื่น']).concat(canPay?['RATE','AMOUNT']:[]));
   paGroups(P.k).forEach(function(G){ G.rows.forEach(function(st){
-    var w=0,o=0,l=0,aw=0;
-    var cells=CY.days.map(function(d){ var v=paCell(d.s,P.k,st,IDX[d.s]), k=paKindOf(v.c);
-      if(v.c){ if(k==='work') w++; else if(k==='off') o++; else if(k==='leave') l++; }
+    var w=0,o=0,l=0,aw=0,cnt={},wsT={cap:0,crew:0,staff:0},nights=0;
+    var cells=CY.days.map(function(d){ var E=IDX[d.s], v=paCell(d.s,P.k,st,E), k=paKindOf(v.c);
+      if(v.c){ cnt[v.c]=(cnt[v.c]||0)+1; if(k==='work') w++; else if(k==='off') o++; else if(k==='leave') l++; }
+      if(v.c===PA_WS_CODE) wsT[paWsTier(E.byStaff[st.id], st)]++;
+      if(paNight(d.s, st.id)) nights++;
       if(v.atPier && v.atPier!==P.k){ aw++; return v.c+'@'+pjPierShort(v.atPier); }
       return v.c; });
-    rows.push([P.n||P.t, st.name||'', st.nick||'', st.role||''].concat(cells).concat([w,o,l,aw]));
+    var pay=[];
+    if(canPay){
+      if(cnt[PA_WS_CODE]) cnt['WS-LT']=(cnt['WS-LT']||0)+cnt[PA_WS_CODE];   // §paLtSplit · เหมือนบนจอ
+      var PY=paPayOf(st.id, cnt, nights, wsT);
+      pay=[PY.rate==null?'':PY.rate, PY.missing?'ใส่เบี้ยเที่ยว':PY.total];
+    }
+    rows.push([P.n||P.t, st.name||'', st.nick||'', st.role||''].concat(cells).concat([w,o,l,aw]).concat(pay));
   }); });
   var csv=rows.map(function(r){ return r.map(function(x){
     var s=String(x==null?'':x); return /[",\n]/.test(s)?('"'+s.replace(/"/g,'""')+'"'):s; }).join(','); }).join('\r\n');
@@ -63823,7 +63831,7 @@ function paExportXlsx(){
     CY.days.forEach(function(d){ if(paNight(d.s, st.id)) nOn=true; }); }); });
   var title='CREW DUTY ROSTER · '+CY.from+' – '+CY.to+' · '+String(P.n||P.t);
   var hd=['No.','Full name','Nickname','Position'].concat(CY.days.map(function(d){ return d.s.slice(8)+'/'+d.s.slice(5,7); }))
-    .concat(SUMC).concat(nOn?[nc+' (nights)']:[]).concat(['TOTAL','Notes']);
+    .concat(SUMC).concat(nOn?[nc+' (nights)']:[]).concat(['TOTAL']).concat(canPay?['RATE','AMOUNT']:[]).concat(['Notes']);
   var rows=[[title],hd], pay=[[title+' · TRIP ALLOWANCE']];
   var ph=['No.','Full name','Nickname','Position','Rate'];
   payCodes.forEach(function(c){ ph.push(c+' days', c+' ฿'); });
@@ -63843,11 +63851,15 @@ function paExportXlsx(){
       var wsd=cnt[PA_WS_CODE]||0;   // §paLtSplit · เหมือนบนจอ
       if(wsd){ cnt['WS-LT']=(cnt['WS-LT']||0)+wsd; gTot['WS-LT']=(gTot['WS-LT']||0)+wsd; }
       totW+=w; nTot+=nights; n++;
+      var PY=canPay ? paPayOf(st.id, cnt, nights, wsT) : null;
+      /* §paXlsxPay · RATE + AMOUNT ในชีต Roster ด้วย เหมือนบนจอ · เดิมอยู่แค่ชีตที่สอง คนเปิดไม่เจอ */
       rows.push([n, st.name||'', st.nick||'', st.role||''].concat(cells)
         .concat(SUMC.map(function(c){ return cnt[c]||0; })).concat(nOn?[nights]:[])
-        .concat([paRowTotal(w,cnt), paCycNote(CY.from, st.id)]));
+        .concat([paRowTotal(w,cnt)])
+        .concat(canPay?[PY.rate==null?'':PY.rate, PY.missing?'ใส่เบี้ยเที่ยว':PY.total]:[])
+        .concat([paCycNote(CY.from, st.id)]));
       if(canPay){
-        var PY=paPayOf(st.id, cnt, nights, wsT), by={};
+        var by={};
         PY.parts.forEach(function(p){ by[p.code]=p; });
         var r=[++pn, st.name||'', st.nick||'', st.role||'', PY.rate==null?'':PY.rate];
         payCodes.forEach(function(c){ var p=by[c]; var d=(c===nc)?nights:(cnt[c]||0);
@@ -63860,11 +63872,13 @@ function paExportXlsx(){
     });
   });
   rows.push(['','TOTAL · ALL STAFF','',''].concat(CY.days.map(function(){ return ''; }))
-    .concat(SUMC.map(function(c){ return gTot[c]||0; })).concat(nOn?[nTot]:[]).concat([paRowTotal(totW,gTot),'']));
+    .concat(SUMC.map(function(c){ return gTot[c]||0; })).concat(nOn?[nTot]:[]).concat([paRowTotal(totW,gTot)])
+    .concat(canPay?['',payTot]:[]).concat(['']));
   var wb=XLSX.utils.book_new();
   var ws1=XLSX.utils.aoa_to_sheet(rows);
   ws1['!cols']=[{wch:5},{wch:24},{wch:12},{wch:14}].concat(CY.days.map(function(){ return {wch:6}; }))
-    .concat(SUMC.map(function(){ return {wch:7}; })).concat(nOn?[{wch:9}]:[]).concat([{wch:7},{wch:24}]);
+    .concat(SUMC.map(function(){ return {wch:7}; })).concat(nOn?[{wch:9}]:[]).concat([{wch:7}])
+    .concat(canPay?[{wch:8},{wch:12}]:[]).concat([{wch:24}]);
   ws1['!views']=[{state:'frozen', xSplit:4, ySplit:2}];
   XLSX.utils.book_append_sheet(wb, ws1, 'Roster');
   if(canPay){
