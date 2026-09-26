@@ -61539,6 +61539,11 @@ function poStaffOpen(){
       +'<span style="font-size:10.5px;color:#8B93A1">วันที่ไม่ได้ลงเรือ</span>'
       +'<input value="'+poE(s.defCode||'')+'" placeholder="'+poE(typeof paDefFallback==='function'?paDefFallback():'SE')+'" title="รหัสตั้งต้นในตารางการทำงาน เมื่อวันนั้นมีใบงานแล้วแต่คนนี้ไม่ได้ลงเรือ" '
         +'oninput="poStaffDef(\''+s.id+'\',this.value)" style="width:74px;border:1px solid #D8D4CA;border-radius:8px;padding:5px 8px;font:700 12px inherit;text-align:center;font-family:inherit">'
+      /* §paPayFld · เบี้ยเที่ยวรายคน · เห็นเฉพาะคนที่ดูเงินได้ */
+      +((typeof paPayCan==='function' && paPayCan())
+        ? ('<span style="font-size:10.5px;color:#8B93A1">เบี้ยเที่ยว</span>'
+          +paPayInput(s.id,'poStaffPay','width:78px;border:1px solid #D8D4CA;border-radius:8px;padding:5px 8px;font:700 12px inherit;text-align:right;font-family:inherit'))
+        : '')
       +'<button class="po-btn" onclick="poStaffToggle(\''+s.id+'\')">'+(s.active===false?'เปิดใช้':'ปิดใช้')+'</button></div>';
   }).join('');
   body+='<div style="margin-top:14px;border-top:1px dashed #D8D4CA;padding-top:12px">'
@@ -61546,15 +61551,19 @@ function poStaffOpen(){
     +'<div style="display:flex;gap:7px;flex-wrap:wrap">'
     +poIn('postf_nick','','ชื่อเล่น',110)+poIn('postf_name','','ชื่อ-สกุล',180)
     +poIn('postf_role','','หน้าที่ เช่น อุปกรณ์',150)+poIn('postf_phone','','เบอร์',120)
+    +((typeof paPayCan==='function' && paPayCan())?poIn('postf_pay','','เบี้ยเที่ยว (บาท)',110):'')
     +poBtn('เพิ่ม','poStaffAdd()',1)+'</div></div>';
   poModal('ทะเบียนพนักงานท่าเรือ', body, poBtn('ปิด','poModalClose()'), 640);
 }
 function poStaffAdd(){
   var nick=poV('postf_nick').trim(), name=poV('postf_name').trim();
   if(!nick && !name){ alert('ใส่ชื่ออย่างน้อยหนึ่งช่อง'); return; }
-  PIER_STAFF.push({id:poUid('ps_'), pier:_poPier, nick:nick||name, name:name||nick,
+  var nid=poUid('ps_');
+  PIER_STAFF.push({id:nid, pier:_poPier, nick:nick||name, name:name||nick,
                    role:poV('postf_role').trim(), phone:poV('postf_phone').trim(), active:true});
-  poPersist(); poStaffOpen();
+  poPersist();
+  var pay=poV('postf_pay').trim(); if(pay && typeof paPayRateSet==='function') paPayRateSet(nid, pay);   // §paPayFld
+  poStaffOpen();
 }
 function poStaffPier(id,v){
   if(!poCanEdit()) return;
@@ -62377,6 +62386,11 @@ function paCSS(){
   +H+' td.pa-sc.pay{width:62px;min-width:62px;background:#F4FAF6;color:#0F5B3F;white-space:nowrap;padding:0 5px !important;text-align:right}'
   +H+' td.pa-sc.pay.tot{width:84px;min-width:84px;background:#E3F1E9;font-weight:700;color:#0B3F2B}'
   +H+' td.pa-sc.pay.z{color:#C9D8CF}'
+  +H+' td.pa-sc.pay.ed{padding:0 2px !important}'
+  +H+' td.pa-sc.pay.ed .pa-payi{width:100%;box-sizing:border-box;border:1px solid transparent;border-radius:5px;background:transparent;'
+     +"text-align:right;font:500 11px 'DM Mono',monospace;color:#0F5B3F;padding:3px 4px}"
+  +H+' td.pa-sc.pay.ed .pa-payi:hover,'+H+' td.pa-sc.pay.ed .pa-payi:focus{border-color:#9CC9B0;background:#fff;outline:none}'
+  +H+' td.pa-sc.pay.ed .pa-payi::placeholder{color:#C9D8CF;font-size:9px}'
   +H+' td.pa-sc.pay.miss{font:700 10px inherit;color:#B4560A;background:#FFF4E5;cursor:pointer;text-align:center}'
   +H+' tr.pa-tot td{background:#F2F5F9;border-top:2px solid #DCE3EC}'
   +' .pa-pop .s{font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9AA3B0;padding:7px 8px 3px}'
@@ -62599,6 +62613,27 @@ function paPayOf(sid, cnt, nights){
   return {total:tot, parts:parts, missing:need, rate:rate};
 }
 function paMoney(n){ return (Math.round((+n||0)*100)/100).toLocaleString('en-US',{maximumFractionDigits:2}); }
+/* §paPayFld · ช่องเบี้ยเที่ยวรายคน · พิมพ์อิสระ รับ "1,200" "฿500" ได้ · ว่าง = ลบค่าออก
+   คืน true ถ้าบันทึก · ไม่ใช่ตัวเลขแล้วเตือน ไม่เซฟเงียบ ๆ เป็น 0 */
+function paPayRateSet(sid, txt){
+  if(!paPayCan() || !poGuard()) return false;
+  var v=String(txt==null?'':txt).replace(/[,\s฿]/g,'');
+  var m=(PIER_CFG.payRate && typeof PIER_CFG.payRate==='object') ? PIER_CFG.payRate : {};
+  if(v===''){ if(!(sid in m)) return false; delete m[sid]; }
+  else if(!isFinite(+v) || +v<0){ alert('Trip allowance must be a number (0 or more): '+txt); return false; }
+  else { if(m[sid]===+v) return false; m[sid]=+v; }
+  PIER_CFG.payRate=m; poPersist();
+  return true;
+}
+/* ช่องพิมพ์เบี้ยเที่ยว · ใช้ทั้งทะเบียนพนักงานและคอลัมน์ RATE ในตาราง */
+function paPayInput(sid, onchg, css){
+  var v=paPayRate(sid);
+  return '<input type="text" inputmode="decimal" class="pa-payi" value="'+(v==null?'':v)+'" placeholder="เบี้ยเที่ยว" '
+    +'title="เบี้ยเที่ยวต่อวัน (บาท) · ว่าง = ยังไม่ได้ใส่" style="'+(css||'')+'" '
+    +'onchange="'+onchg+'(\''+poE(sid)+'\',this.value)">';
+}
+function paPayRateRow(sid, txt){ paPayRateSet(sid, txt); paKeep(function(){ renderPierAtt(); }); }
+function poStaffPay(sid, txt){ paPayRateSet(sid, txt); poStaffOpen(); }
 function paPayToggle(){
   if(!paPayCan()) return;
   _paPay=!_paPay;
@@ -62760,7 +62795,8 @@ function renderPierAtt(pier){
       if(pay){   // §paPay · ยอดเงินของคนนี้ · ชี้ที่ตัวเลขเพื่อดูว่ามาจากรหัสไหนเท่าไหร่
         var PY=paPayOf(st.id, cnt, _nc);
         var tip=PY.parts.map(function(p){ return p.code+' '+p.days+' วัน = '+paMoney(p.amt); }).join('\n');
-        sums+='<td class="pa-sc pay'+(PY.rate==null?' z':'')+'">'+(PY.rate==null?'·':paMoney(PY.rate))+'</td>';
+        sums+=(ro ? ('<td class="pa-sc pay'+(PY.rate==null?' z':'')+'">'+(PY.rate==null?'·':paMoney(PY.rate))+'</td>')
+                  : ('<td class="pa-sc pay ed">'+paPayInput(st.id,'paPayRateRow')+'</td>'));
         if(PY.missing){ payMiss++;
           sums+='<td class="pa-sc pay tot miss" title="มีวันที่ต้องคิดเบี้ยเที่ยว แต่ยังไม่ได้ใส่เบี้ยเที่ยวของคนนี้" onclick="paPayOpen()">ใส่เบี้ยเที่ยว</td>';
         } else { payTot+=PY.total;
