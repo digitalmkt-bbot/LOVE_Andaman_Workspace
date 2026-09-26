@@ -1284,6 +1284,14 @@ function laBkMoney(b){
   return (typeof acctBookingTotal==='function') ? (+acctBookingTotal(b)||0) : (+b.total||0);
 }
 function laIsInternalFree(b){ return laIsInternalBk(b) && laBkMoney(b)<=0; }
+/* บัญชีบ้าน "ของบริษัท" ตัวเดียว · แคบกว่า laIsInternalBk ซึ่งคลุมทริปพนักงานด้วย
+   (ทริปพนักงานใช้เรท rt_staff จริง · ใบบริษัทตั้งราคาเองทุกใบ สองอย่างนี้ต่างกัน) */
+function laIsCompanyBk(b){
+  if(!b || !b.agentId) return false;
+  if(b.agentId==='a_company') return true;
+  var a=(typeof sbGetAgent==='function') ? sbGetAgent(b.agentId) : null;
+  return !!(a && (a.code==='COMPANY' || a.id==='a_company'));
+}
 function laInternalLabel(b){
   if(!b) return '';
   var p=LA_INTERNAL_PURPOSE[b.purpose];
@@ -1292,6 +1300,7 @@ function laInternalLabel(b){
 }
 window.LA_INTERNAL_PURPOSE=LA_INTERNAL_PURPOSE; window.laIsInternalBk=laIsInternalBk;
 window.laBkMoney=laBkMoney; window.laIsInternalFree=laIsInternalFree;
+window.laIsCompanyBk=laIsCompanyBk;
 window.laInternalLabel=laInternalLabel;
 
 function _dashLiveFeedHtml(dx,F,side){

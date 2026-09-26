@@ -717,9 +717,20 @@ function agLog(agentId, kind, text){
   }
   // House agent for company-own bookings · pick this + choose a reason (guest / PR / special price)
   if(!SB_AGENTS.some(x=>x.id==='a_company'||x.code==='COMPANY')){
-    SB_AGENTS.push({id:'a_company',code:'COMPANY',name:'Love Andaman \u00b7 Company',market:'house',sub:'Company guest',sales:'',payType:'cot',creditDays:0,creditLimit:0,contact:'',email:'-',phone:'-',note:'House account \u00b7 company-own bookings \u00b7 a reason is required on every booking (guest / PR / special price) \u00b7 free or charged',programs:['r5','r6','r10','r12'],rateTypeId:'',vatMode:'include'});
+    SB_AGENTS.push({id:'a_company',code:'COMPANY',name:'Love Andaman \u00b7 Company',market:'house',sub:'Company guest',sales:'',payType:'cot',creditDays:0,creditLimit:0,contact:'',email:'-',phone:'-',note:'House account \u00b7 company-own bookings \u00b7 a reason is required on every booking (guest / PR / special price) \u00b7 free or charged \u00b7 no programs on purpose: contract program periods would cap which routes can be booked',programs:[],rateTypeId:'',vatMode:'include'});
     if(typeof sbAgentsPersist==='function') sbAgentsPersist();
     console.log('[seed] added House / Company house agent (a_company)');
+  } else {
+    /* §internal · seed รอบแรกใส่ programs:['r5','r6','r10','r12'] ไว้ (ก็อปมาจาก a_b2c)
+       ระบบแปลงเป็น programPeriods แล้วรายการนั้นมาก่อน rate type → คีย์ได้แค่ 4 โปรแกรม
+       ผู้ใช้เจอเอง · ล้างให้เฉพาะเครื่องที่ยังเป็นชุด seed เดิม ไม่แตะที่แก้เองไว้ */
+    const _co = SB_AGENTS.find(x=>x.id==='a_company'||x.code==='COMPANY');
+    const _seeded = ['r5','r6','r10','r12'].join(',');
+    if(_co && (_co.programs||[]).slice().sort().join(',') === _seeded.split(',').sort().join(',')){
+      _co.programs=[]; _co.programPeriods=[];
+      if(typeof sbAgentsPersist==='function') sbAgentsPersist();
+      console.log('[migrate] a_company programs cleared (were capping bookable routes to 4)');
+    }
   }
   // House agent for B2C online bookings (auto-synced from the B2C site; sync sets agentId='a_b2c')
   if(!SB_AGENTS.some(x=>x.id==='a_b2c'||x.code==='B2C')){
@@ -43809,7 +43820,13 @@ function bkV2RenderNewBooking(){
   const createdStr = createdAt.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
 
   // §b2cEdit · ใบ B2C ผ่านได้โดยไม่ต้องมีเรทและไม่ต้องมียอด (ใบ ฿0 ก็ยังต้องแก้จุดรับได้)
+  /* §internal · ใบของบริษัทเองที่ไม่เก็บเงินมียอดเป็น 0 โดยตั้งใจ · เงื่อนไข manualTotal>0
+     จะกันมันออก จึงใส่ข้อยกเว้นแบบเดียวกับที่ B2C มีอยู่แล้ว
+     ⚠ ตัวแปรนี้ถูกคำนวณแล้วไม่มีใครเรียกใช้ (ค้างอยู่ในไฟล์) · ใส่ไว้เพื่อให้ถูกตั้งแต่ตอนนี้
+       ถ้าวันหนึ่งมีคนเอาไปต่อกับปุ่ม ใบ ฿0 จะได้ไม่ถูกบล็อก · ไม่ใช่การแก้อาการที่เกิดจริง
+       (เทสข้อ 12 พิสูจน์แล้วว่าใบ ฿0 บันทึกได้จริง ไม่เคยมีอาการนี้) */
   const canContinue = d.agentId && d.leadPax && (d.rateTypeRef || (d.priceMode==='manual' && Number(d.manualTotal)>0)
+    || (typeof laIsInternalBk==='function' && laIsInternalBk(d) && d.priceMode==='manual')
     || (typeof bkV2IsB2CBk==='function' && bkV2IsB2CBk(d)));
 
   return `
@@ -43887,10 +43904,11 @@ function bkV2RenderNewBooking(){
         ${rtPreview}
         ${isHouse ? `<div style="margin-top:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <span class="bkv2-nb-label" style="margin:0">Pricing</span>
+          ${isCompany ? `<span style="display:inline-flex;align-items:center;gap:7px;background:#FDF6E6;border:1px solid #E8D8A8;border-radius:9px;padding:5px 12px;font-size:11px;font-weight:600;color:#8A5B00" title="ใบของบริษัทเองตั้งราคาเองทุกใบ · ฟรีใส่ 0 · เก็บเงินใส่ยอดจริง">Manual \u00b7 \u0e15\u0e31\u0e49\u0e07\u0e23\u0e32\u0e04\u0e32\u0e40\u0e2d\u0e07</span>` : `
           <div style="display:inline-flex;gap:3px;background:var(--sand-mid);border-radius:9px;padding:3px">
             <button type="button" onclick="bkV2SetBookingField('priceMode','rate')" style="border:none;border-radius:7px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;${d.priceMode!=='manual'?'background:var(--bk-navy);color:#fff':'background:transparent;color:var(--ink-soft)'}">Rate type</button>
             <button type="button" onclick="bkV2SetBookingField('priceMode','manual')" style="border:none;border-radius:7px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;${d.priceMode==='manual'?'background:var(--bk-navy);color:#fff':'background:transparent;color:var(--ink-soft)'}">Manual · walk-in</button>
-          </div>
+          </div>`}
           ${d.priceMode==='manual' ? `<div style="display:flex;align-items:center;gap:6px"><span class="bkv2-nb-label" style="margin:0">Total &#3647;</span><input class="bkv2-nb-input" type="number" min="0" style="width:130px" value="${escapeHTML(String(d.manualTotal||0))}" onchange="bkV2SetBookingField('manualTotal', this.value)"></div>` : ''}
         </div>` : ''}
       </div>
@@ -49747,6 +49765,7 @@ function bkV2NewBooking(){
     soldBy: '',                 // salesperson credited (override · for walk-in/direct sales · blank = derive from agent.sales)
     priceMode: 'rate',          // 'rate' (from Rate Type) | 'manual' (free-style · type total · walk-in)
     manualTotal: 0,             // used when priceMode==='manual'
+    companyPurpose: '',         // §internal · เหตุผลของใบบริษัท (when agent = Love Andaman · Company) · ว่าง = บันทึกไม่ผ่าน
     staffId: '',                // staff member (when agent = Staff/Welfare house account)
     staffPurpose: 'welfare',    // 'welfare' (uses yearly quota) | 'inspection' (no quota · counts seat)
     agentId: null,
@@ -52687,6 +52706,12 @@ function bkV2SetBookingField(key, val){
     else { _bkV2.newBooking.priceMode='rate'; _bkV2.newBooking.soldBy=''; _bkV2.newBooking.staffId='';
            _bkV2.newBooking.companyPurpose=''; }
   }
+  /* §internal · ใบของบริษัทเองเป็น Manual อย่างเดียว · ไม่มีเรทให้อ้าง
+     ถ้าหลุดไปเป็น rate ยอดจะกลายเป็น ฿0 แบบเงียบ ๆ (ชุดราคาสังเคราะห์ไม่มีตารางราคา) */
+  if(key === 'priceMode' && val !== 'manual'){
+    var _ca = _bkV2.newBooking.agentId ? sbGetAgent(_bkV2.newBooking.agentId) : null;
+    if(_ca && (_ca.code==='COMPANY' || _ca.id==='a_company')) _bkV2.newBooking.priceMode='manual';
+  }
   // Staff trip purpose toggle · inspection = always ฿0 (manual 0) · welfare = Staff Welfare rate
   if(key === 'staffPurpose'){
     if(val === 'inspection'){ _bkV2.newBooking.priceMode='manual'; _bkV2.newBooking.manualTotal=0; }
@@ -53658,7 +53683,28 @@ function laSaveToast(o){
 }
 
 // ── Quote calculation helpers ──
+/* §internal · ใบของบริษัทเองตั้งราคาเองทุกใบ จึงไม่มี rate type ให้อ้าง
+   แต่ตัวเลือกทริปอ่านรายการเส้นทางจาก rt.routes เท่านั้น · ไม่มี rt = ไม่มีทริปให้เลือกเลย
+   (ผู้ใช้เจอเอง · เลือก agent บริษัทแล้วช่องทริปว่างเปล่า)
+   คืนชุดสังเคราะห์ที่ครอบ "ทุกเส้นทางที่ยังเปิดใช้" · ไม่ได้เอาไปคิดเงิน
+   bkV2CalcQuote คืนค่าออกก่อนถึงตารางราคาเมื่อ priceMode เป็น manual (ยอดมาจากช่อง Total)
+   ⚠ ต้องครอบทุกเส้นทาง ไม่ใช่ยืม routes ของเรทใดเรทหนึ่ง · วัดข้อมูลจริงแล้วมี 57 เส้นทาง
+     แต่เรทที่มีอยู่ครอบกันแค่ 6 เส้นทาง · แขกบริษัท/PR ไปโปรแกรมไหนก็ได้ ห้ามถูกจำกัด */
+function laManualRT(){
+  var routes=(typeof ROUTES!=='undefined'?ROUTES:[])
+    .filter(function(r){ return r && r.id && r.active!==false; })
+    .map(function(r){ return r.id; });
+  return { id:'__manual__', code:'MANUAL', name:'ราคาใส่มือ · ใบของบริษัท',
+           note:'ชุดสังเคราะห์ ไม่มีตารางราคา · ยอดมาจากช่อง Total ของใบ',
+           color:'#B8860B', active:true, validFrom:'', validTo:'',
+           routes:routes, seatRates:{}, routeBundles:{}, addOns:{} };
+}
 function bkV2GetRT(){
+  /* §internal · ใบของบริษัทเองใช้ชุดสังเคราะห์เสมอ ต่อให้มีคนไปผูก rate type ไว้ในหน้า Agent List
+     เพราะราคาของใบพวกนี้มาจากช่อง Total ทุกใบ (ปุ่ม Pricing ล็อกเป็น Manual แล้ว)
+     เรทที่ผูกไว้จึงมีผลอย่างเดียวคือ "จำกัดรายการเส้นทาง" ซึ่งไม่ควรเกิด
+     วัดเรทจริงแล้ว ชุดที่ครอบมากสุดได้ 7 เส้นทางจาก 57 ที่เปิดใช้ · แขก/PR ไปโปรแกรมไหนก็ได้ */
+  if(typeof laIsCompanyBk==='function' && laIsCompanyBk(_bkV2.newBooking)) return laManualRT();
   if(!_bkV2.newBooking?.rateTypeRef) return null;
   return (SB_RATE_TYPES||[]).find(r => r.id === _bkV2.newBooking.rateTypeRef) || null;
 }

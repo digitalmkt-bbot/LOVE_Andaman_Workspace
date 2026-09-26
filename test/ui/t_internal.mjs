@@ -18,7 +18,7 @@
 //   ⚠ ที่นั่ง · fill% · ความจุ · ต้นทุน ยังนับทุกใบ · คนขึ้นเรือจริง
 //   ⚠ ใบแจ้งหนี้ / การรับเงิน / PFM ห้ามแตะ · ต้องโชว์เงินที่ค้างจริง
 //
-// เทสนี้กันสิบอย่าง
+// เทสนี้กันสิบสามอย่าง
 //   1 market House / Company + house agent a_company มีจริง และเป็นบัญชีบ้าน
 //   2 กฎจับใบของบริษัทได้แม้ใบเก่าจะไม่มี purpose (จับจาก market ของ agent)
 //   3 ตัดเฉพาะ internal ที่ ฿0 · ใบเอเยนต์ ฿0 ไม่ถูกตัด
@@ -28,7 +28,10 @@
 //   7 ที่นั่งยังนับตามปกติ · ที่นั่งที่ใช้ไปของทริปต้องรวมคนของใบ internal
 //   8 ฟอร์ม · เลือก agent บริษัทแล้วไม่เลือกเหตุผล บันทึกไม่ผ่าน
 //   9 แท็บ Internal / Company · ตัวเลขตรง และเตือนใบที่ยังไม่ระบุเหตุผล
-//  10 ไม่มี error บนหน้า
+//  10 ตัวเลือกทริป · agent บริษัทต้องคีย์ได้ทุกโปรแกรม ไม่ถูกจำกัดด้วยเรทหรือ programPeriods
+//  11 ฟอร์ม · Pricing ล็อก Manual ไม่มีปุ่มสลับกลับ Rate
+//  12 บันทึกจริง · ใบฟรีและใบเก็บเงิน ได้ purpose และยอดถูกต้อง
+//  13 ไม่มี error บนหน้า
 //
 // ⚠ ค่าที่คาดหวังคำนวณเองจาก SB_BOOKINGS / SB_AGENTS ดิบ ๆ ทุกข้อ
 //   ไม่ได้เรียก laIsInternalBk / laIsInternalFree มาตอบตัวเอง
@@ -403,7 +406,145 @@ else ok('แท็บ Internal / Company ปี ' + R9.yr + ' · ' + R9.want.bk 
         ' (฿' + R9.want.money.toLocaleString() + ') ตรงกับที่คิดเองจากข้อมูลดิบ' +
         (R9.want.unset ? ' · เตือนใบที่ยังไม่ระบุเหตุผล ' + R9.want.unset + ' ใบ' : ''));
 
-/* ══ 10 · ไม่มี error บนหน้า ═════════════════════════════════════════════ */
+/* ══ 10 · ตัวเลือกทริป ═══════════════════════════════════════════════════
+   ผู้ใช้เจอเอง · เลือก agent บริษัทแล้ว "ยังไม่มีทริปให้เลือก"
+   สามชั้นที่กั้นอยู่ · ตัวแรกทำให้บล็อกทริปไม่ถูกวาดเลย
+     1 bkV2RenderTripsSection คืนค่าออกทันทีเมื่อไม่มี rate type
+     2 bkV2BookableRoutes ใช้ programPeriods ของ agent ก่อน (seed แรกใส่ไว้ 4 อัน)
+     3 ไม่มี programPeriods ก็ตกไปใช้ routes ของ rate type · เรทจริงครอบมากสุด 7 จาก 57 */
+const R10 = await page.evaluate(() => {
+  const all = (ROUTES || []).filter(r => r && r.id && r.active !== false);
+  /* คิดเองว่าหน้านี้ควรเสนอกี่เส้นทาง · หน้าเรือเสนอเฉพาะเส้นทางทะเล */
+  const landOnly = (typeof _bkV2CityTourOnly !== 'undefined') ? _bkV2CityTourOnly : false;
+  const want = all.filter(r => (typeof laIsLandRoute !== 'function') || (laIsLandRoute(r.id) === landOnly));
+  const ag = (SB_AGENTS || []).find(a => a.id === 'a_company') || {};
+  bkV2NewBooking();
+  bkV2SetBookingField('agentId', 'a_company');
+  const blocked = /Pick an agent first/.test(String(bkV2RenderTripsSection() || ''));
+  const got = (typeof bkV2RouteDDOpts === 'function') ? bkV2RouteDDOpts().length : -1;
+  /* ผูกเรทที่ครอบน้อยเข้าไป · รายการต้องไม่หดตาม (ราคาใบนี้มาจากช่อง Total อยู่แล้ว) */
+  const small = (SB_RATE_TYPES || []).slice()
+    .sort((a, b) => (a.routes || []).length - (b.routes || []).length)[0];
+  let gotWithRT = null, smallN = null;
+  if (small) {
+    smallN = (small.routes || []).length;
+    ag.rateTypeId = small.id;
+    bkV2NewBooking();
+    bkV2SetBookingField('agentId', 'a_company');
+    gotWithRT = bkV2RouteDDOpts().length;
+    ag.rateTypeId = '';
+  }
+  return { nActive: all.length, want: want.length, got, blocked,
+           pp: (ag.programPeriods || []).length, programs: (ag.programs || []).length,
+           gotWithRT, smallN, smallId: small && small.id };
+});
+if (R10.blocked) fail('เลือก agent บริษัทแล้วบล็อกทริปยังขึ้น "Pick an agent first" · ไม่มีอะไรให้เลือกเลย');
+else if (R10.pp) fail('a_company มี programPeriods ' + R10.pp + ' อัน · ช่วงโปรแกรมในสัญญามาก่อน rate type จะปิดกั้นรายการไว้แค่นั้น');
+else if (R10.programs) fail('a_company มี programs ' + R10.programs + ' รายการ · ระบบจะแปลงเป็น programPeriods แล้วปิดกั้นรายการ');
+else if (R10.got !== R10.want)
+  fail('ตัวเลือกทริปมี ' + R10.got + ' เส้นทาง · คิดเองจาก ROUTES ได้ ' + R10.want +
+       ' (จากที่เปิดใช้ ' + R10.nActive + ')');
+else if (R10.gotWithRT !== null && R10.gotWithRT !== R10.want)
+  fail('ผูก rate type "' + R10.smallId + '" (ครอบ ' + R10.smallN + ' เส้นทาง) เข้าไป แล้วรายการหดเหลือ ' +
+       R10.gotWithRT + ' · ใบบริษัทต้องไม่ถูกเรทจำกัด เพราะยอดมาจากช่อง Total');
+else ok('ตัวเลือกทริปของ agent บริษัทครบ ' + R10.got + '/' + R10.want + ' เส้นทางตามที่คิดเอง · ' +
+        'ไม่มี programPeriods ปิดกั้น · ผูก rate type ที่ครอบแค่ ' + R10.smallN +
+        ' เส้นทางเข้าไปก็ยังครบ');
+
+/* ══ 11 · ฟอร์ม · ล็อก Manual และใบ ฿0 ไปต่อได้ ═══════════════════════════ */
+const R11 = await page.evaluate(() => {
+  bkV2NewBooking();
+  bkV2SetBookingField('agentId', 'a_company');
+  const pmAfterPick = _bkV2.newBooking.priceMode;
+  bkV2SetBookingField('priceMode', 'rate');          /* พยายามสลับกลับ */
+  const pmAfterFlip = _bkV2.newBooking.priceMode;
+  bkV2SetBookingField('companyPurpose', 'company_guest');
+  bkV2SetBookingField('leadPax', 'ทดสอบ แขกบริษัท');
+  bkV2SetBookingField('manualTotal', 0);
+  /* ต้องกรอกทริปให้ครบก่อน · ปุ่ม Confirm ถูกปิดด้วยเหตุอื่นได้ด้วย (ยังไม่เลือกเส้นทาง)
+     ถ้าไม่กรอก เราจะอ่านผลผิดว่า "ยอด 0 ทำให้กดไม่ได้" ทั้งที่เป็นเพราะยังไม่มีทริป */
+  const _o = (typeof bkV2RouteDDOpts === 'function') ? bkV2RouteDDOpts() : [];
+  if (_o.length) {
+    bkV2PickRouteByText(0, _o[0].label);
+    const _t = _bkV2.newBooking.trips[0];
+    _t.date = bkV2LocalYMD(new Date(Date.now() + 21 * 864e5));
+    _t.pax = { foc: 2 }; _t.zone = 'NoTransfer';
+    _bkV2.newBooking.guides = { english: true };
+    _bkV2.newBooking.pickupSelf = true;
+  }
+  let nb = '';
+  try { nb = String(bkV2RenderNewBooking() || ''); } catch (e) { nb = 'ERR ' + e.message; }
+  const box = document.createElement('div'); box.innerHTML = nb;
+  const dis = [].slice.call(box.querySelectorAll('button')).filter(b => b.disabled)
+    .map(b => (b.textContent || '').trim());
+  return { pmAfterPick, pmAfterFlip, filledTrip: _o.length > 0,
+           err: nb.indexOf('ERR ') === 0 ? nb.slice(0, 140) : null,
+           hasRateBtn: /bkV2SetBookingField\('priceMode','rate'\)/.test(nb),
+           confirmDisabled: dis.some(x => /Confirm/i.test(x)) };
+});
+if (R11.err) fail('วาดฟอร์มไม่ได้ · ' + R11.err);
+else if (R11.pmAfterPick !== 'manual') fail('เลือก agent บริษัทแล้ว Pricing ไม่ได้เป็น manual · เป็น ' + R11.pmAfterPick);
+else if (R11.pmAfterFlip !== 'manual')
+  fail('สลับ Pricing กลับเป็น rate ได้ · ใบบริษัทไม่มีตารางราคา ยอดจะกลายเป็น ฿0 แบบเงียบ');
+else if (R11.hasRateBtn) fail('ยังมีปุ่มสลับไป Rate บนฟอร์มใบบริษัท · มีไว้ให้กดผิด');
+else if (!R11.filledTrip) fail('ไม่มีเส้นทางให้เลือก · ตรวจข้อนี้ไม่ได้');
+else ok('ฟอร์มใบบริษัทล็อก Pricing เป็น Manual · สลับกลับไม่ได้ ไม่มีปุ่มให้กดผิด · ' +
+        'วาดฟอร์มใบ ฿0 ได้ไม่พัง (ใบ ฿0 บันทึกได้จริงหรือไม่ อยู่ในข้อ 12)');
+
+/* ══ 12 · บันทึกจริง ═════════════════════════════════════════════════════
+   ไล่ทั้งเส้นแบบที่คนคีย์ · หาใบใหม่ด้วยผลต่างของชุด id เพราะใบใหม่ไปอยู่หัวรายการ
+   และรหัสใบถูกสร้างใหม่ตอน commit (เทียบด้วย code ไม่ได้ · ลองแล้วหาไม่เจอ)   */
+const R12 = await page.evaluate(() => {
+  bkV2NewBooking(); bkV2SetBookingField('agentId', 'a_company');
+  const opts = bkV2RouteDDOpts();
+  if (!opts.length) return { err: 'ไม่มีเส้นทางให้เลือก' };
+  let hit = null;
+  for (const o of opts) {
+    for (let i = 7; i < 70 && !hit; i++) {
+      const ds = bkV2LocalYMD(new Date(Date.now() + i * 864e5));
+      if (typeof bkV2IsRouteOpenOn !== 'function' || bkV2IsRouteOpenOn(o.id, ds)) hit = { o, ds };
+    }
+    if (hit) break;
+  }
+  if (!hit) return { err: 'หาวันที่เส้นทางออกจริงไม่ได้' };
+  const mk = (purpose, total, pax, focReason) => {
+    bkV2NewBooking();
+    bkV2SetBookingField('agentId', 'a_company');
+    bkV2SetBookingField('companyPurpose', purpose);
+    bkV2SetBookingField('leadPax', 'ทดสอบ ' + purpose);
+    bkV2SetBookingField('manualTotal', total);
+    bkV2PickRouteByText(0, hit.o.label);
+    const t = _bkV2.newBooking.trips[0];
+    t.date = hit.ds; t.pax = pax; t.zone = 'NoTransfer';
+    _bkV2.newBooking.guides = { english: true };
+    _bkV2.newBooking.pickupSelf = true; _bkV2.newBooking.hotelName = '';
+    if (focReason) { _bkV2.newBooking.focReason = focReason; t.focReason = focReason; }
+    const idsBefore = new Set((SB_BOOKINGS || []).map(b => b && b.id));
+    bkV2SubmitBooking();
+    const sv = (SB_BOOKINGS || []).find(b => b && !idsBefore.has(b.id));
+    return sv ? { purpose: sv.purpose, total: acctBookingTotal(sv), priceMode: sv.priceMode,
+                  internal: laIsInternalBk(sv), free: laIsInternalFree(sv),
+                  seats: (sv.trips || []).reduce((s, x) => s + bkV2PaxAllTot(x.pax || {}), 0) }
+                : null;
+  };
+  return { route: hit.o.label, date: hit.ds,
+           free: mk('pr_foc', 0, { foc: 2 }, 'PR trip'),
+           paid: mk('company_special', 4500, { ad: 2 }, null) };
+});
+if (R12.err) fail(R12.err);
+else if (!R12.free) fail('บันทึกใบบริษัทที่ไม่เก็บเงินไม่สำเร็จ');
+else if (!R12.paid) fail('บันทึกใบบริษัทที่เก็บเงินไม่สำเร็จ');
+else if (R12.free.purpose !== 'pr_foc' || R12.paid.purpose !== 'company_special')
+  fail('เหตุผลที่บันทึกลงใบไม่ตรง · ฟรีได้ "' + R12.free.purpose + '" เก็บเงินได้ "' + R12.paid.purpose + '"');
+else if (R12.free.total !== 0) fail('ใบที่ใส่ 0 บันทึกแล้วยอดเป็น ' + R12.free.total + ' · ไม่ได้ใช้ยอดที่กรอก');
+else if (R12.paid.total !== 4500) fail('ใบที่ใส่ 4500 บันทึกแล้วยอดเป็น ' + R12.paid.total);
+else if (!R12.free.free) fail('ใบ ฿0 ที่บันทึกแล้วไม่ถูกจัดเป็นใบบริษัทที่ไม่เก็บเงิน');
+else if (R12.paid.free) fail('ใบที่เก็บเงิน 4500 ถูกจัดเป็นใบไม่เก็บเงิน · จะถูกตัดออกจากยอดผิด');
+else if (!R12.free.seats || !R12.paid.seats) fail('ใบที่บันทึกแล้วไม่มีที่นั่งติดไปด้วย');
+else ok('บันทึกจริงได้ทั้งสองแบบบน "' + R12.route + '" ' + R12.date + ' · ฟรี purpose=pr_foc ยอด ฿0 ' +
+        R12.free.seats + ' ที่นั่ง · เก็บเงิน purpose=company_special ยอด ฿4,500 ' + R12.paid.seats + ' ที่นั่ง');
+
+/* ══ 13 · ไม่มี error บนหน้า ═════════════════════════════════════════════ */
 const errs = (errors || []).filter(e => !/favicon|fonts\.googleapis|cdnjs|ERR_TUNNEL|404/i.test(String(e)));
 if (errs.length) fail('มี error บนหน้า ' + errs.length + ' ตัว · ' + String(errs[0]).slice(0, 160));
 else ok('ไม่มี error บนหน้าระหว่างทดสอบ');
